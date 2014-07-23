@@ -22,34 +22,34 @@
  */
 
 #include "config.h"
+#include "dynamic_cfg.h"
+#include "filter.h"
+#include "json/jansson.h"
 #include "main.h"
 #include "map.h"
-#include "filter.h"
-#include "dynamic_cfg.h"
-#include "json/jansson.h"
 
 struct dynamic_cfg_symbol {
-	gchar						   *name;
-	gdouble						    value;
+	gchar *name;
+	gdouble value;
 };
 
 struct dynamic_cfg_action {
-	enum rspamd_metric_action	    action;
-	gdouble						    value;
+	enum rspamd_metric_action action;
+	gdouble value;
 };
 
 struct dynamic_cfg_metric {
-	GList 						   *symbols;
-	struct dynamic_cfg_action       actions[METRIC_ACTION_MAX];
-	gchar						   *name;
+	GList *symbols;
+	struct dynamic_cfg_action actions[METRIC_ACTION_MAX];
+	gchar *name;
 };
 
 struct config_json_buf {
-	gchar                          *buf;
-	gchar                          *pos;
-	size_t                          buflen;
-	struct rspamd_config             *cfg;
-	GList						   *config_metrics;
+	gchar *buf;
+	gchar *pos;
+	size_t buflen;
+	struct rspamd_config *cfg;
+	GList *config_metrics;
 };
 
 /**
@@ -59,9 +59,9 @@ struct config_json_buf {
 static void
 dynamic_cfg_free (GList *conf_metrics)
 {
-	GList								*cur, *cur_elt;
-	struct dynamic_cfg_metric			*metric;
-	struct dynamic_cfg_symbol			*sym;
+	GList *cur, *cur_elt;
+	struct dynamic_cfg_metric *metric;
+	struct dynamic_cfg_symbol *sym;
 
 	if (conf_metrics) {
 		cur = conf_metrics;
@@ -91,44 +91,50 @@ dynamic_cfg_free (GList *conf_metrics)
 static void
 apply_dynamic_conf (GList *conf_metrics, struct rspamd_config *cfg)
 {
-	GList								*cur, *cur_elt;
-	struct dynamic_cfg_metric			*metric;
-	struct dynamic_cfg_symbol			*sym;
-	struct dynamic_cfg_action			*act;
-	struct metric						*real_metric;
-	struct metric_action				*real_act;
-	gdouble								*w;
-	gint                                 i, j;
+	GList *cur, *cur_elt;
+	struct dynamic_cfg_metric *metric;
+	struct dynamic_cfg_symbol *sym;
+	struct dynamic_cfg_action *act;
+	struct metric *real_metric;
+	struct metric_action *real_act;
+	gdouble *w;
+	gint i, j;
 
 	cur = conf_metrics;
 	while (cur) {
 		metric = cur->data;
-		if ((real_metric = g_hash_table_lookup (cfg->metrics, metric->name)) != NULL) {
+		if ((real_metric =
+			g_hash_table_lookup (cfg->metrics, metric->name)) != NULL) {
 			cur_elt = metric->symbols;
 			while (cur_elt) {
 				sym = cur_elt->data;
-				if ((w = g_hash_table_lookup (real_metric->symbols, sym->name)) != NULL) {
+				if ((w =
+					g_hash_table_lookup (real_metric->symbols,
+					sym->name)) != NULL) {
 					*w = sym->value;
 				}
 				else {
-					msg_info ("symbol %s is not found in the main configuration", sym->name);
+					msg_info (
+						"symbol %s is not found in the main configuration",
+						sym->name);
 				}
 				cur_elt = g_list_next (cur_elt);
 			}
 
-			for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
+			for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
 				act = &metric->actions[i];
 				if (act->value < 0) {
 					continue;
 				}
-				for (j = METRIC_ACTION_REJECT; j < METRIC_ACTION_MAX; j ++) {
+				for (j = METRIC_ACTION_REJECT; j < METRIC_ACTION_MAX; j++) {
 					real_act = &real_metric->actions[j];
 					if (real_act->action == act->action) {
 						real_act->score = act->value;
 					}
 					/* Update required score accordingly to metric's action */
 					if (act->action == METRIC_ACTION_REJECT) {
-						real_metric->actions[METRIC_ACTION_REJECT].score = act->value;
+						real_metric->actions[METRIC_ACTION_REJECT].score =
+							act->value;
 					}
 				}
 			}
@@ -138,11 +144,14 @@ apply_dynamic_conf (GList *conf_metrics, struct rspamd_config *cfg)
 }
 
 /* Callbacks for reading json dynamic rules */
-gchar                         *
-json_config_read_cb (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
+gchar *
+json_config_read_cb (rspamd_mempool_t * pool,
+	gchar * chunk,
+	gint len,
+	struct map_cb_data *data)
 {
-	struct config_json_buf				*jb;
-	gint								 free, off;
+	struct config_json_buf *jb;
+	gint free, off;
 
 	if (data->cur_data == NULL) {
 		jb = g_malloc (sizeof (struct config_json_buf));
@@ -182,14 +191,14 @@ json_config_read_cb (rspamd_mempool_t * pool, gchar * chunk, gint len, struct ma
 void
 json_config_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
-	struct config_json_buf				*jb;
-	guint								 nelts, i, j, selts;
-	gint								 test_act;
-	json_t								*js, *cur_elt, *cur_nm, *it_val;
-	json_error_t						 je;
-	struct dynamic_cfg_metric			*cur_metric;
-	struct dynamic_cfg_symbol			*cur_symbol;
-	struct dynamic_cfg_action			*cur_action;
+	struct config_json_buf *jb;
+	guint nelts, i, j, selts;
+	gint test_act;
+	json_t *js, *cur_elt, *cur_nm, *it_val;
+	json_error_t je;
+	struct dynamic_cfg_metric *cur_metric;
+	struct dynamic_cfg_symbol *cur_symbol;
+	struct dynamic_cfg_action *cur_action;
 
 	if (data->prev_data) {
 		jb = data->prev_data;
@@ -217,7 +226,9 @@ json_config_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 
 	js = json_loads (jb->buf, &je);
 	if (!js) {
-		msg_err ("cannot load json data: parse error %s, on line %d", je.text, je.line);
+		msg_err ("cannot load json data: parse error %s, on line %d",
+			je.text,
+			je.line);
 		return;
 	}
 
@@ -242,11 +253,12 @@ json_config_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 
 		cur_nm = json_object_get (cur_elt, "metric");
 		if (!cur_nm || !json_is_string (cur_nm)) {
-			msg_err ("loaded json metric object element has no 'metric' attribute");
+			msg_err (
+				"loaded json metric object element has no 'metric' attribute");
 			continue;
 		}
 		cur_metric = g_slice_alloc0 (sizeof (struct dynamic_cfg_metric));
-		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
+		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
 			cur_metric->actions[i].value = -1.0;
 		}
 		cur_metric->name = g_strdup (json_string_value (cur_nm));
@@ -254,18 +266,27 @@ json_config_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 		/* Parse symbols */
 		if (cur_nm && json_is_array (cur_nm)) {
 			selts = json_array_size (cur_nm);
-			for (j = 0; j < selts; j ++) {
+			for (j = 0; j < selts; j++) {
 				it_val = json_array_get (cur_nm, j);
 				if (it_val && json_is_object (it_val)) {
-					if (json_object_get (it_val, "name") && json_object_get (it_val, "value")) {
-						cur_symbol = g_slice_alloc0 (sizeof (struct dynamic_cfg_symbol));
-						cur_symbol->name = g_strdup (json_string_value (json_object_get (it_val, "name")));
-						cur_symbol->value = json_number_value (json_object_get (it_val, "value"));
+					if (json_object_get (it_val,
+						"name") && json_object_get (it_val, "value")) {
+						cur_symbol =
+							g_slice_alloc0 (sizeof (struct dynamic_cfg_symbol));
+						cur_symbol->name =
+							g_strdup (json_string_value (json_object_get (it_val,
+								"name")));
+						cur_symbol->value =
+							json_number_value (json_object_get (it_val,
+								"value"));
 						/* Insert symbol */
-						cur_metric->symbols = g_list_prepend (cur_metric->symbols, cur_symbol);
+						cur_metric->symbols = g_list_prepend (
+							cur_metric->symbols,
+							cur_symbol);
 					}
 					else {
-						msg_info ("json symbol object has no mandatory 'name' and 'value' attributes");
+						msg_info (
+							"json symbol object has no mandatory 'name' and 'value' attributes");
 					}
 				}
 			}
@@ -274,21 +295,29 @@ json_config_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 		/* Parse actions */
 		if (cur_nm && json_is_array (cur_nm)) {
 			selts = json_array_size (cur_nm);
-			for (j = 0; j < selts; j ++) {
+			for (j = 0; j < selts; j++) {
 				it_val = json_array_get (cur_nm, j);
 				if (it_val && json_is_object (it_val)) {
-					if (json_object_get (it_val, "name") && json_object_get (it_val, "value")) {
-						if (!check_action_str (json_string_value (json_object_get (it_val, "name")), &test_act)) {
-							msg_err ("unknown action: %s", json_string_value (json_object_get (it_val, "name")));
-							g_slice_free1 (sizeof (struct dynamic_cfg_action), cur_action);
+					if (json_object_get (it_val,
+						"name") && json_object_get (it_val, "value")) {
+						if (!check_action_str (json_string_value (
+								json_object_get (it_val, "name")), &test_act)) {
+							msg_err ("unknown action: %s",
+								json_string_value (json_object_get (it_val,
+								"name")));
+							g_slice_free1 (sizeof (struct dynamic_cfg_action),
+								cur_action);
 							continue;
 						}
 						cur_action = &cur_metric->actions[test_act];
 						cur_action->action = test_act;
-						cur_action->value = json_number_value (json_object_get (it_val, "value"));
+						cur_action->value =
+							json_number_value (json_object_get (it_val,
+								"value"));
 					}
 					else {
-						msg_info ("json symbol object has no mandatory 'name' and 'value' attributes");
+						msg_info (
+							"json symbol object has no mandatory 'name' and 'value' attributes");
 					}
 				}
 			}
@@ -314,7 +343,7 @@ json_config_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 void
 init_dynamic_config (struct rspamd_config *cfg)
 {
-	struct config_json_buf				*jb, **pjb;
+	struct config_json_buf *jb, **pjb;
 
 	if (cfg->dynamic_conf == NULL) {
 		/* No dynamic conf has been specified, so do not try to load it */
@@ -327,7 +356,8 @@ init_dynamic_config (struct rspamd_config *cfg)
 	jb->buf = NULL;
 	jb->cfg = cfg;
 	*pjb = jb;
-	if (!add_map (cfg, cfg->dynamic_conf, "Dynamic configuration map", json_config_read_cb, json_config_fin_cb, (void **)pjb)) {
+	if (!add_map (cfg, cfg->dynamic_conf, "Dynamic configuration map",
+		json_config_read_cb, json_config_fin_cb, (void **)pjb)) {
 		msg_err ("cannot add map for configuration %s", cfg->dynamic_conf);
 	}
 }
@@ -335,13 +365,13 @@ init_dynamic_config (struct rspamd_config *cfg)
 static gboolean
 dump_dynamic_list (gint fd, GList *rules)
 {
-	GList								*cur, *cur_elt;
-	struct dynamic_cfg_metric			*metric;
-	struct dynamic_cfg_symbol			*sym;
-	struct dynamic_cfg_action			*act;
-	FILE								*f;
-	gint                                 i;
-	gboolean                             start = TRUE;
+	GList *cur, *cur_elt;
+	struct dynamic_cfg_metric *metric;
+	struct dynamic_cfg_symbol *sym;
+	struct dynamic_cfg_action *act;
+	FILE *f;
+	gint i;
+	gboolean start = TRUE;
 
 	/* Open buffered stream for the descriptor */
 	if ((f = fdopen (fd, "a+")) == NULL) {
@@ -363,10 +393,16 @@ dump_dynamic_list (gint fd, GList *rules)
 					sym = cur_elt->data;
 					cur_elt = g_list_next (cur_elt);
 					if (cur_elt) {
-						fprintf (f, "    {\"name\": \"%s\",\"value\": %.2f},\n", sym->name, sym->value);
+						fprintf (f,
+							"    {\"name\": \"%s\",\"value\": %.2f},\n",
+							sym->name,
+							sym->value);
 					}
 					else {
-						fprintf (f, "    {\"name\": \"%s\",\"value\": %.2f}\n", sym->name, sym->value);
+						fprintf (f,
+							"    {\"name\": \"%s\",\"value\": %.2f}\n",
+							sym->name,
+							sym->value);
 					}
 				}
 				if (metric->actions) {
@@ -379,13 +415,14 @@ dump_dynamic_list (gint fd, GList *rules)
 
 			if (metric->actions) {
 				fprintf (f, "  \"actions\": [\n");
-				for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
+				for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
 					act = &metric->actions[i];
 					if (act->value < 0) {
 						continue;
 					}
 					fprintf (f, "    %s{\"name\": \"%s\",\"value\": %.2f}\n",
-							(start ? "" : ","), str_action_metric (act->action), act->value);
+						(start ? "" : ","), str_action_metric (
+							act->action), act->value);
 					if (start) {
 						start = FALSE;
 					}
@@ -414,9 +451,9 @@ dump_dynamic_list (gint fd, GList *rules)
 gboolean
 dump_dynamic_config (struct rspamd_config *cfg)
 {
-	struct stat							 st;
-	gchar								*dir, pathbuf[PATH_MAX];
-	gint								 fd;
+	struct stat st;
+	gchar *dir, pathbuf[PATH_MAX];
+	gint fd;
 
 	if (cfg->dynamic_conf == NULL || cfg->current_dynamic_conf == NULL) {
 		/* No dynamic conf has been specified, so do not try to dump it */
@@ -434,15 +471,20 @@ dump_dynamic_config (struct rspamd_config *cfg)
 	}
 
 	if (stat (cfg->dynamic_conf, &st) == -1) {
-		msg_debug ("%s is unavailable: %s", cfg->dynamic_conf, strerror (errno));
-		st.st_mode = S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH;
+		msg_debug ("%s is unavailable: %s", cfg->dynamic_conf,
+			strerror (errno));
+		st.st_mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 	}
 	if (access (dir, W_OK | R_OK) == -1) {
 		msg_warn ("%s is inaccessible: %s", dir, strerror (errno));
 		g_free (dir);
 		return FALSE;
 	}
-	rspamd_snprintf (pathbuf, sizeof (pathbuf), "%s%crconf-XXXXXX", dir, G_DIR_SEPARATOR);
+	rspamd_snprintf (pathbuf,
+		sizeof (pathbuf),
+		"%s%crconf-XXXXXX",
+		dir,
+		G_DIR_SEPARATOR);
 	g_free (dir);
 #ifdef HAVE_MKSTEMP
 	/* Umask is set before */
@@ -490,11 +532,14 @@ dump_dynamic_config (struct rspamd_config *cfg)
  * @return
  */
 gboolean
-add_dynamic_symbol (struct rspamd_config *cfg, const gchar *metric_name, const gchar *symbol, gdouble value)
+add_dynamic_symbol (struct rspamd_config *cfg,
+	const gchar *metric_name,
+	const gchar *symbol,
+	gdouble value)
 {
-	GList								*cur;
-	struct dynamic_cfg_metric			*metric = NULL;
-	struct dynamic_cfg_symbol			*sym = NULL;
+	GList *cur;
+	struct dynamic_cfg_metric *metric = NULL;
+	struct dynamic_cfg_symbol *sym = NULL;
 
 	if (cfg->dynamic_conf == NULL) {
 		msg_info ("dynamic conf is disabled");
@@ -541,7 +586,8 @@ add_dynamic_symbol (struct rspamd_config *cfg, const gchar *metric_name, const g
 		sym->value = value;
 		metric->symbols = g_list_prepend (metric->symbols, sym);
 		metric->name = g_strdup (metric_name);
-		cfg->current_dynamic_conf = g_list_prepend (cfg->current_dynamic_conf, metric);
+		cfg->current_dynamic_conf = g_list_prepend (cfg->current_dynamic_conf,
+				metric);
 		msg_debug ("create metric %s for symbol %s", metric_name, symbol);
 	}
 
@@ -560,10 +606,13 @@ add_dynamic_symbol (struct rspamd_config *cfg, const gchar *metric_name, const g
  * @return
  */
 gboolean
-add_dynamic_action (struct rspamd_config *cfg, const gchar *metric_name, guint action, gdouble value)
+add_dynamic_action (struct rspamd_config *cfg,
+	const gchar *metric_name,
+	guint action,
+	gdouble value)
 {
-	GList								*cur;
-	struct dynamic_cfg_metric			*metric = NULL;
+	GList *cur;
+	struct dynamic_cfg_metric *metric = NULL;
 
 	if (cfg->dynamic_conf == NULL) {
 		msg_info ("dynamic conf is disabled");
@@ -589,7 +638,8 @@ add_dynamic_action (struct rspamd_config *cfg, const gchar *metric_name, guint a
 		metric = g_slice_alloc0 (sizeof (struct dynamic_cfg_metric));
 		metric->actions[action].value = value;
 		metric->name = g_strdup (metric_name);
-		cfg->current_dynamic_conf = g_list_prepend (cfg->current_dynamic_conf, metric);
+		cfg->current_dynamic_conf = g_list_prepend (cfg->current_dynamic_conf,
+				metric);
 		msg_debug ("create metric %s for action %d", metric_name, action);
 	}
 

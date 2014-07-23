@@ -38,9 +38,9 @@ struct rspamd_async_session {
  * @param user_data abstract user data
  * @return
  */
-struct rspamd_async_session *new_async_session (rspamd_mempool_t *pool,
-		session_finalizer_t fin, event_finalizer_t restore,
-		event_finalizer_t cleanup, void *user_data);
+struct rspamd_async_session * new_async_session (rspamd_mempool_t *pool,
+	session_finalizer_t fin, event_finalizer_t restore,
+	event_finalizer_t cleanup, void *user_data);
 
 /**
  * Insert new event to the session
@@ -50,7 +50,7 @@ struct rspamd_async_session *new_async_session (rspamd_mempool_t *pool,
  * @param forced unused
  */
 void register_async_event (struct rspamd_async_session *session,
-		event_finalizer_t fin, void *user_data, GQuark subsystem);
+	event_finalizer_t fin, void *user_data, GQuark subsystem);
 
 /**
  * Remove normal event
@@ -58,11 +58,13 @@ void register_async_event (struct rspamd_async_session *session,
  * @param fin final callback
  * @param ud user data object
  */
-void remove_normal_event (struct rspamd_async_session *session, event_finalizer_t fin, void *ud); 
+void remove_normal_event (struct rspamd_async_session *session,
+	event_finalizer_t fin,
+	void *ud);
 
 /**
  * Must be called at the end of session, it calls fin functions for all non-forced callbacks
- * @return true if the whole session was destroyed and false if there are forced events 
+ * @return true if the whole session was destroyed and false if there are forced events
  */
 gboolean destroy_session (struct rspamd_async_session *session);
 

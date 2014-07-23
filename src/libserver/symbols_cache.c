@@ -22,12 +22,12 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "cfg_file.h"
 #include "config.h"
-#include "util.h"
 #include "main.h"
 #include "message.h"
 #include "symbols_cache.h"
-#include "cfg_file.h"
+#include "util.h"
 
 #define WEIGHT_MULT 4.0
 #define FREQUENCY_MULT 10.0
@@ -41,13 +41,13 @@
 
 #define MIN_CACHE 17
 
-static guint64                 total_frequency = 0;
-static guint32                 nsymbols = 0;
+static guint64 total_frequency = 0;
+static guint32 nsymbols = 0;
 
 gint
 cache_cmp (const void *p1, const void *p2)
 {
-	const struct cache_item        *i1 = p1, *i2 = p2;
+	const struct cache_item *i1 = p1, *i2 = p2;
 
 	return strcmp (i1->s->symbol, i2->s->symbol);
 }
@@ -55,20 +55,24 @@ cache_cmp (const void *p1, const void *p2)
 gint
 cache_logic_cmp (const void *p1, const void *p2)
 {
-	const struct cache_item        *i1 = p1, *i2 = p2;
-	double                          w1, w2;
-	double                          weight1, weight2;
-	double                          f1 = 0, f2 = 0;
+	const struct cache_item *i1 = p1, *i2 = p2;
+	double w1, w2;
+	double weight1, weight2;
+	double f1 = 0, f2 = 0;
 
 	if (i1->priority == 0 && i2->priority == 0) {
 		if (total_frequency > 0) {
-			f1 = ((double)i1->s->frequency * nsymbols) / (double)total_frequency;
-			f2 = ((double)i2->s->frequency * nsymbols) / (double)total_frequency;
+			f1 =
+				((double)i1->s->frequency * nsymbols) / (double)total_frequency;
+			f2 =
+				((double)i2->s->frequency * nsymbols) / (double)total_frequency;
 		}
 		weight1 = i1->metric_weight == 0 ? i1->s->weight : i1->metric_weight;
 		weight2 = i2->metric_weight == 0 ? i2->s->weight : i2->metric_weight;
-		w1 = abs (weight1) * WEIGHT_MULT + f1 * FREQUENCY_MULT + i1->s->avg_time * TIME_MULT;
-		w2 = abs (weight2) * WEIGHT_MULT + f2 * FREQUENCY_MULT + i2->s->avg_time * TIME_MULT;
+		w1 = abs (weight1) * WEIGHT_MULT + f1 * FREQUENCY_MULT +
+			i1->s->avg_time * TIME_MULT;
+		w2 = abs (weight2) * WEIGHT_MULT + f2 * FREQUENCY_MULT +
+			i2->s->avg_time * TIME_MULT;
 	}
 	else {
 		/* Strict sorting */
@@ -79,12 +83,12 @@ cache_logic_cmp (const void *p1, const void *p2)
 	return (gint)w2 - w1;
 }
 
-static GChecksum               *
+static GChecksum *
 get_mem_cksum (struct symbols_cache *cache)
 {
-	GChecksum                      *result;
-	GList                          *cur, *l;
-	struct cache_item              *item;
+	GChecksum *result;
+	GList *cur, *l;
+	struct cache_item *item;
 
 	result = g_checksum_new (G_CHECKSUM_SHA1);
 
@@ -94,7 +98,8 @@ get_mem_cksum (struct symbols_cache *cache)
 	while (cur) {
 		item = cur->data;
 		if (item->s->symbol[0] != '\0') {
-			g_checksum_update (result, item->s->symbol, strlen (item->s->symbol));
+			g_checksum_update (result, item->s->symbol,
+				strlen (item->s->symbol));
 		}
 		cur = g_list_next (cur);
 	}
@@ -107,7 +112,8 @@ get_mem_cksum (struct symbols_cache *cache)
 	while (cur) {
 		item = cur->data;
 		if (item->s->symbol[0] != '\0') {
-			g_checksum_update (result, item->s->symbol, strlen (item->s->symbol));
+			g_checksum_update (result, item->s->symbol,
+				strlen (item->s->symbol));
 		}
 		total_frequency += item->s->frequency;
 		cur = g_list_next (cur);
@@ -121,8 +127,8 @@ get_mem_cksum (struct symbols_cache *cache)
 static void
 post_cache_init (struct symbols_cache *cache)
 {
-	GList                          *cur;
-	struct cache_item              *item;
+	GList *cur;
+	struct cache_item *item;
 
 	total_frequency = 0;
 	nsymbols = cache->used_items;
@@ -139,7 +145,8 @@ post_cache_init (struct symbols_cache *cache)
 		cur = g_list_next (cur);
 	}
 
-	cache->negative_items = g_list_sort (cache->negative_items, cache_logic_cmp);
+	cache->negative_items =
+		g_list_sort (cache->negative_items, cache_logic_cmp);
 	cache->static_items = g_list_sort (cache->static_items, cache_logic_cmp);
 }
 
@@ -147,22 +154,27 @@ post_cache_init (struct symbols_cache *cache)
 static void
 unmap_cache_file (gpointer arg)
 {
-	struct symbols_cache           *cache = arg;
-	
+	struct symbols_cache *cache = arg;
+
 	/* A bit ugly usage */
 	munmap (cache->map, cache->used_items * sizeof (struct saved_cache_item));
 }
 
-static                          gboolean
+static gboolean
 mmap_cache_file (struct symbols_cache *cache, gint fd, rspamd_mempool_t *pool)
 {
-	guint8                         *map;
-	gint                            i;
-	GList                          *cur;
-	struct cache_item              *item;
+	guint8 *map;
+	gint i;
+	GList *cur;
+	struct cache_item *item;
 
 	if (cache->used_items > 0) {
-		map = mmap (NULL, cache->used_items * sizeof (struct saved_cache_item), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+		map = mmap (NULL,
+				cache->used_items * sizeof (struct saved_cache_item),
+				PROT_READ | PROT_WRITE,
+				MAP_SHARED,
+				fd,
+				0);
 		if (map == MAP_FAILED) {
 			msg_err ("cannot mmap cache file: %d, %s", errno, strerror (errno));
 			close (fd);
@@ -176,16 +188,20 @@ mmap_cache_file (struct symbols_cache *cache, gint fd, rspamd_mempool_t *pool)
 		cur = g_list_first (cache->negative_items);
 		while (cur) {
 			item = cur->data;
-			item->s = (struct saved_cache_item *)(map + i * sizeof (struct saved_cache_item));
+			item->s =
+				(struct saved_cache_item *)(map + i *
+				sizeof (struct saved_cache_item));
 			cur = g_list_next (cur);
-			i ++;
+			i++;
 		}
 		cur = g_list_first (cache->static_items);
 		while (cur) {
 			item = cur->data;
-			item->s = (struct saved_cache_item *)(map + i * sizeof (struct saved_cache_item));
+			item->s =
+				(struct saved_cache_item *)(map + i *
+				sizeof (struct saved_cache_item));
 			cur = g_list_next (cur);
-			i ++;
+			i++;
 		}
 
 		post_cache_init (cache);
@@ -195,14 +211,17 @@ mmap_cache_file (struct symbols_cache *cache, gint fd, rspamd_mempool_t *pool)
 }
 
 /* Fd must be opened for writing, after creating file is mmapped */
-static                          gboolean
-create_cache_file (struct symbols_cache *cache, const gchar *filename, gint fd, rspamd_mempool_t *pool)
+static gboolean
+create_cache_file (struct symbols_cache *cache,
+	const gchar *filename,
+	gint fd,
+	rspamd_mempool_t *pool)
 {
-	GChecksum                      *cksum;
-	u_char                         *digest;
-	gsize                           cklen;
-	GList                          *cur;
-	struct cache_item              *item;
+	GChecksum *cksum;
+	u_char *digest;
+	gsize cklen;
+	GList *cur;
+	struct cache_item *item;
 
 	/* Calculate checksum */
 	cksum = get_mem_cksum (cache);
@@ -269,23 +288,33 @@ enum rspamd_symbol_type {
 };
 
 static void
-register_symbol_common (struct symbols_cache **cache, const gchar *name, double weight, gint priority,
-		symbol_func_t func, gpointer user_data, enum rspamd_symbol_type type)
+register_symbol_common (struct symbols_cache **cache,
+	const gchar *name,
+	double weight,
+	gint priority,
+	symbol_func_t func,
+	gpointer user_data,
+	enum rspamd_symbol_type type)
 {
-	struct cache_item              *item = NULL;
-	struct symbols_cache           *pcache = *cache;
-	GList                         **target;
-	double                         *w;  
+	struct cache_item *item = NULL;
+	struct symbols_cache *pcache = *cache;
+	GList **target;
+	double *w;
 
 	if (*cache == NULL) {
 		pcache = g_new0 (struct symbols_cache, 1);
 		*cache = pcache;
-		pcache->static_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
-		pcache->items_by_symbol = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+		pcache->static_pool =
+			rspamd_mempool_new (rspamd_mempool_suggest_size ());
+		pcache->items_by_symbol = g_hash_table_new (rspamd_str_hash,
+				rspamd_str_equal);
 	}
-	
-	item = rspamd_mempool_alloc0 (pcache->static_pool, sizeof (struct cache_item));
-	item->s = rspamd_mempool_alloc0 (pcache->static_pool, sizeof (struct saved_cache_item));
+
+	item = rspamd_mempool_alloc0 (pcache->static_pool,
+			sizeof (struct cache_item));
+	item->s =
+		rspamd_mempool_alloc0 (pcache->static_pool,
+			sizeof (struct saved_cache_item));
 	rspamd_strlcpy (item->s->symbol, name, sizeof (item->s->symbol));
 	item->func = func;
 	item->user_data = user_data;
@@ -303,7 +332,10 @@ register_symbol_common (struct symbols_cache **cache, const gchar *name, double 
 	}
 
 	/* Handle weight using default metric */
-	if (pcache->cfg && pcache->cfg->default_metric && (w = g_hash_table_lookup (pcache->cfg->default_metric->symbols, name)) != NULL) {
+	if (pcache->cfg && pcache->cfg->default_metric &&
+		(w =
+		g_hash_table_lookup (pcache->cfg->default_metric->symbols,
+		name)) != NULL) {
 		item->s->weight = weight * (*w);
 	}
 	else {
@@ -339,58 +371,100 @@ register_symbol_common (struct symbols_cache **cache, const gchar *name, double 
 
 void
 register_symbol (struct symbols_cache **cache, const gchar *name, double weight,
-		symbol_func_t func, gpointer user_data)
+	symbol_func_t func, gpointer user_data)
 {
-	register_symbol_common (cache, name, weight, 0, func, user_data, SYMBOL_TYPE_NORMAL);
+	register_symbol_common (cache,
+		name,
+		weight,
+		0,
+		func,
+		user_data,
+		SYMBOL_TYPE_NORMAL);
 }
 
 void
-register_virtual_symbol (struct symbols_cache **cache, const gchar *name, double weight)
+register_virtual_symbol (struct symbols_cache **cache,
+	const gchar *name,
+	double weight)
 {
-	register_symbol_common (cache, name, weight, 0, NULL, NULL, SYMBOL_TYPE_VIRTUAL);
+	register_symbol_common (cache,
+		name,
+		weight,
+		0,
+		NULL,
+		NULL,
+		SYMBOL_TYPE_VIRTUAL);
 }
 
 void
-register_callback_symbol (struct symbols_cache **cache, const gchar *name, double weight,
-		symbol_func_t func, gpointer user_data)
+register_callback_symbol (struct symbols_cache **cache,
+	const gchar *name,
+	double weight,
+	symbol_func_t func,
+	gpointer user_data)
 {
-	register_symbol_common (cache, name, weight, 0, func, user_data, SYMBOL_TYPE_CALLBACK);
+	register_symbol_common (cache,
+		name,
+		weight,
+		0,
+		func,
+		user_data,
+		SYMBOL_TYPE_CALLBACK);
 }
 
 void
-register_callback_symbol_priority (struct symbols_cache **cache, const gchar *name, double weight, gint priority,
-		symbol_func_t func, gpointer user_data)
+register_callback_symbol_priority (struct symbols_cache **cache,
+	const gchar *name,
+	double weight,
+	gint priority,
+	symbol_func_t func,
+	gpointer user_data)
 {
-	register_symbol_common (cache, name, weight, priority, func, user_data, SYMBOL_TYPE_CALLBACK);
+	register_symbol_common (cache,
+		name,
+		weight,
+		priority,
+		func,
+		user_data,
+		SYMBOL_TYPE_CALLBACK);
 }
 
 void
-register_dynamic_symbol (rspamd_mempool_t *dynamic_pool, struct symbols_cache **cache,
-		const gchar *name, double weight, symbol_func_t func, 
-		gpointer user_data, GList *networks)
+register_dynamic_symbol (rspamd_mempool_t *dynamic_pool,
+	struct symbols_cache **cache,
+	const gchar *name,
+	double weight,
+	symbol_func_t func,
+	gpointer user_data,
+	GList *networks)
 {
-	struct cache_item              *item = NULL;
-	struct symbols_cache           *pcache = *cache;
-	GList                          *t, *cur;
-	uintptr_t                       r;
-	double                         *w;  
-	guint32                         mask = 0xFFFFFFFF;
-	struct dynamic_map_item        *it;
-	gint                            rr;
+	struct cache_item *item = NULL;
+	struct symbols_cache *pcache = *cache;
+	GList *t, *cur;
+	uintptr_t r;
+	double *w;
+	guint32 mask = 0xFFFFFFFF;
+	struct dynamic_map_item *it;
+	gint rr;
 
 	if (*cache == NULL) {
 		pcache = g_new0 (struct symbols_cache, 1);
 		*cache = pcache;
-		pcache->static_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
+		pcache->static_pool =
+			rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	}
-	
+
 	item = rspamd_mempool_alloc0 (dynamic_pool, sizeof (struct cache_item));
-	item->s = rspamd_mempool_alloc (dynamic_pool, sizeof (struct saved_cache_item));
+	item->s =
+		rspamd_mempool_alloc (dynamic_pool, sizeof (struct saved_cache_item));
 	rspamd_strlcpy (item->s->symbol, name, sizeof (item->s->symbol));
 	item->func = func;
 	item->user_data = user_data;
 	/* Handle weight using default metric */
-	if (pcache->cfg && pcache->cfg->default_metric && (w = g_hash_table_lookup (pcache->cfg->default_metric->symbols, name)) != NULL) {
+	if (pcache->cfg && pcache->cfg->default_metric &&
+		(w =
+		g_hash_table_lookup (pcache->cfg->default_metric->symbols,
+		name)) != NULL) {
 		item->s->weight = weight * (*w);
 	}
 	else {
@@ -402,7 +476,7 @@ register_dynamic_symbol (rspamd_mempool_t *dynamic_pool, struct symbols_cache **
 	pcache->used_items++;
 	msg_debug ("used items: %d, added symbol: %s", (*cache)->used_items, name);
 	rspamd_set_counter (item->s->symbol, 0);
-	
+
 	g_hash_table_insert (pcache->items_by_symbol, item->s->symbol, item);
 
 	if (networks == NULL) {
@@ -420,50 +494,81 @@ register_dynamic_symbol (rspamd_mempool_t *dynamic_pool, struct symbols_cache **
 			r = ntohl (it->addr.s_addr & mask);
 			if (it->negative) {
 				/* For negatve items insert into list and into negative cache map */
-				if ((r = radix32tree_find (pcache->negative_dynamic_map, r)) != RADIX_NO_VALUE) {
+				if ((r =
+					radix32tree_find (pcache->negative_dynamic_map,
+					r)) != RADIX_NO_VALUE) {
 					t = (GList *)((gpointer)r);
 					t = g_list_prepend (t, item);
 					/* Replace pointers in radix tree and in destructor function */
-					rspamd_mempool_replace_destructor (dynamic_pool, (rspamd_mempool_destruct_t)g_list_free, (gpointer)r, t);
-					rr = radix32tree_replace (pcache->negative_dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
+					rspamd_mempool_replace_destructor (dynamic_pool,
+						(rspamd_mempool_destruct_t)g_list_free, (gpointer)r, t);
+					rr = radix32tree_replace (pcache->negative_dynamic_map,
+							ntohl (it->addr.s_addr),
+							mask,
+							(uintptr_t)t);
 					if (rr == -1) {
-						msg_warn ("cannot replace ip to tree: %s, mask %X", inet_ntoa (it->addr), mask);
+						msg_warn ("cannot replace ip to tree: %s, mask %X",
+							inet_ntoa (it->addr),
+							mask);
 					}
 				}
 				else {
 					t = g_list_prepend (NULL, item);
-					rspamd_mempool_add_destructor (dynamic_pool, (rspamd_mempool_destruct_t)g_list_free, t);
-					rr = radix32tree_insert (pcache->negative_dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
+					rspamd_mempool_add_destructor (dynamic_pool,
+						(rspamd_mempool_destruct_t)g_list_free, t);
+					rr = radix32tree_insert (pcache->negative_dynamic_map,
+							ntohl (it->addr.s_addr),
+							mask,
+							(uintptr_t)t);
 					if (rr == -1) {
-						msg_warn ("cannot insert ip to tree: %s, mask %X", inet_ntoa (it->addr), mask);
+						msg_warn ("cannot insert ip to tree: %s, mask %X",
+							inet_ntoa (it->addr),
+							mask);
 					}
 					else if (rr == 1) {
-						msg_warn ("ip %s, mask %X, value already exists", inet_ntoa (it->addr), mask);
+						msg_warn ("ip %s, mask %X, value already exists",
+							inet_ntoa (it->addr),
+							mask);
 					}
 				}
 				/* Insert into list */
-				pcache->dynamic_items = g_list_prepend (pcache->dynamic_items, item);
+				pcache->dynamic_items = g_list_prepend (pcache->dynamic_items,
+						item);
 			}
 			else {
-				if ((r = radix32tree_find (pcache->dynamic_map, r)) != RADIX_NO_VALUE) {
+				if ((r =
+					radix32tree_find (pcache->dynamic_map,
+					r)) != RADIX_NO_VALUE) {
 					t = (GList *)((gpointer)r);
 					t = g_list_prepend (t, item);
 					/* Replace pointers in radix tree and in destructor function */
-					rspamd_mempool_replace_destructor (dynamic_pool, (rspamd_mempool_destruct_t)g_list_free, (gpointer)r, t);
-					rr = radix32tree_replace (pcache->dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
+					rspamd_mempool_replace_destructor (dynamic_pool,
+						(rspamd_mempool_destruct_t)g_list_free, (gpointer)r, t);
+					rr =
+						radix32tree_replace (pcache->dynamic_map,
+							ntohl (it->addr.s_addr), mask, (uintptr_t)t);
 					if (rr == -1) {
-						msg_warn ("cannot replace ip to tree: %s, mask %X", inet_ntoa (it->addr), mask);
+						msg_warn ("cannot replace ip to tree: %s, mask %X",
+							inet_ntoa (it->addr),
+							mask);
 					}
 				}
 				else {
 					t = g_list_prepend (NULL, item);
-					rspamd_mempool_add_destructor (dynamic_pool, (rspamd_mempool_destruct_t)g_list_free, t);
-					rr = radix32tree_insert (pcache->dynamic_map, ntohl (it->addr.s_addr), mask, (uintptr_t)t);
+					rspamd_mempool_add_destructor (dynamic_pool,
+						(rspamd_mempool_destruct_t)g_list_free, t);
+					rr =
+						radix32tree_insert (pcache->dynamic_map,
+							ntohl (it->addr.s_addr), mask, (uintptr_t)t);
 					if (rr == -1) {
-						msg_warn ("cannot insert ip to tree: %s, mask %X", inet_ntoa (it->addr), mask);
+						msg_warn ("cannot insert ip to tree: %s, mask %X",
+							inet_ntoa (it->addr),
+							mask);
 					}
 					else if (rr == 1) {
-						msg_warn ("ip %s, mask %X, value already exists", inet_ntoa (it->addr), mask);
+						msg_warn ("ip %s, mask %X, value already exists",
+							inet_ntoa (it->addr),
+							mask);
 					}
 				}
 			}
@@ -493,8 +598,8 @@ remove_dynamic_rules (struct symbols_cache *cache)
 static void
 free_cache (gpointer arg)
 {
-	struct symbols_cache           *cache = arg;
-	
+	struct symbols_cache *cache = arg;
+
 	if (cache->map != NULL) {
 		unmap_cache_file (cache);
 	}
@@ -521,15 +626,18 @@ free_cache (gpointer arg)
 }
 
 gboolean
-init_symbols_cache (rspamd_mempool_t * pool, struct symbols_cache *cache, struct rspamd_config *cfg,
-		const gchar *filename, gboolean ignore_checksum)
+init_symbols_cache (rspamd_mempool_t * pool,
+	struct symbols_cache *cache,
+	struct rspamd_config *cfg,
+	const gchar *filename,
+	gboolean ignore_checksum)
 {
-	struct stat                     st;
-	gint                            fd;
-	GChecksum                      *cksum;
-	u_char                         *mem_sum, *file_sum;
-	gsize                           cklen;
-	gboolean                        res;
+	struct stat st;
+	gint fd;
+	GChecksum *cksum;
+	u_char *mem_sum, *file_sum;
+	gsize cklen;
+	gboolean res;
 
 	if (cache == NULL) {
 		return FALSE;
@@ -545,14 +653,19 @@ init_symbols_cache (rspamd_mempool_t * pool, struct symbols_cache *cache, struct
 		post_cache_init (cache);
 		return TRUE;
 	}
-	
+
 	/* First of all try to stat file */
 	if (stat (filename, &st) == -1) {
 		/* Check errno */
 		if (errno == ENOENT) {
 			/* Try to create file */
-			if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
-				msg_info ("cannot create file %s, error %d, %s", filename, errno, strerror (errno));
+			if ((fd =
+				open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR |
+				S_IRUSR)) == -1) {
+				msg_info ("cannot create file %s, error %d, %s",
+					filename,
+					errno,
+					strerror (errno));
 				return FALSE;
 			}
 			else {
@@ -560,13 +673,19 @@ init_symbols_cache (rspamd_mempool_t * pool, struct symbols_cache *cache, struct
 			}
 		}
 		else {
-			msg_info ("cannot stat file %s, error %d, %s", filename, errno, strerror (errno));
+			msg_info ("cannot stat file %s, error %d, %s",
+				filename,
+				errno,
+				strerror (errno));
 			return FALSE;
 		}
 	}
 	else {
 		if ((fd = open (filename, O_RDWR)) == -1) {
-			msg_info ("cannot open file %s, error %d, %s", filename, errno, strerror (errno));
+			msg_info ("cannot open file %s, error %d, %s",
+				filename,
+				errno,
+				strerror (errno));
 			return FALSE;
 		}
 	}
@@ -589,8 +708,13 @@ init_symbols_cache (rspamd_mempool_t * pool, struct symbols_cache *cache, struct
 			if (errno == EINVAL) {
 				/* Try to create file */
 				msg_info ("recreate cache file");
-				if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
-					msg_info ("cannot create file %s, error %d, %s", filename, errno, strerror (errno));
+				if ((fd =
+					open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR |
+					S_IRUSR)) == -1) {
+					msg_info ("cannot create file %s, error %d, %s",
+						filename,
+						errno,
+						strerror (errno));
 					return FALSE;
 				}
 				else {
@@ -600,7 +724,8 @@ init_symbols_cache (rspamd_mempool_t * pool, struct symbols_cache *cache, struct
 			close (fd);
 			g_free (mem_sum);
 			g_checksum_free (cksum);
-			msg_err ("cannot seek to read checksum, %d, %s", errno, strerror (errno));
+			msg_err ("cannot seek to read checksum, %d, %s", errno,
+				strerror (errno));
 			return FALSE;
 		}
 		file_sum = g_malloc (cklen);
@@ -620,8 +745,13 @@ init_symbols_cache (rspamd_mempool_t * pool, struct symbols_cache *cache, struct
 			g_checksum_free (cksum);
 			msg_info ("checksum mismatch, recreating file");
 			/* Reopen with rw permissions */
-			if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
-				msg_info ("cannot create file %s, error %d, %s", filename, errno, strerror (errno));
+			if ((fd =
+				open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR |
+				S_IRUSR)) == -1) {
+				msg_info ("cannot create file %s, error %d, %s",
+					filename,
+					errno,
+					strerror (errno));
 				return FALSE;
 			}
 			else {
@@ -636,7 +766,9 @@ init_symbols_cache (rspamd_mempool_t * pool, struct symbols_cache *cache, struct
 	/* MMap cache file and copy saved_cache structures */
 	res = mmap_cache_file (cache, fd, pool);
 
-	rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t)free_cache, cache);
+	rspamd_mempool_add_destructor (pool,
+		(rspamd_mempool_destruct_t)free_cache,
+		cache);
 
 	return res;
 }
@@ -648,10 +780,12 @@ check_dynamic_item (struct rspamd_task *task, struct symbols_cache *cache)
 	/* TODO: radix doesn't support ipv6 addrs */
 	return NULL;
 #else
-	GList                          *res = NULL;
-	uintptr_t                       r;
+	GList *res = NULL;
+	uintptr_t r;
 	if (cache->dynamic_map != NULL && task->from_addr.s_addr != INADDR_NONE) {
-		if ((r = radix32tree_find (cache->dynamic_map, ntohl (task->from_addr.s_addr))) != RADIX_NO_VALUE) {
+		if ((r =
+			radix32tree_find (cache->dynamic_map,
+			ntohl (task->from_addr.s_addr))) != RADIX_NO_VALUE) {
 			res = (GList *)((gpointer)r);
 			return res;
 		}
@@ -664,18 +798,23 @@ check_dynamic_item (struct rspamd_task *task, struct symbols_cache *cache)
 }
 
 static gboolean
-check_negative_dynamic_item (struct rspamd_task *task, struct symbols_cache *cache, struct cache_item *item)
+check_negative_dynamic_item (struct rspamd_task *task,
+	struct symbols_cache *cache,
+	struct cache_item *item)
 {
 
 #ifdef HAVE_INET_PTON
 	/* TODO: radix doesn't support ipv6 addrs */
 	return FALSE;
 #else
-	GList                          *res = NULL;
-	uintptr_t                       r;
+	GList *res = NULL;
+	uintptr_t r;
 
-	if (cache->negative_dynamic_map != NULL && task->from_addr.s_addr != INADDR_NONE) {
-		if ((r = radix32tree_find (cache->negative_dynamic_map, ntohl (task->from_addr.s_addr))) != RADIX_NO_VALUE) {
+	if (cache->negative_dynamic_map != NULL && task->from_addr.s_addr !=
+		INADDR_NONE) {
+		if ((r =
+			radix32tree_find (cache->negative_dynamic_map,
+			ntohl (task->from_addr.s_addr))) != RADIX_NO_VALUE) {
 			res = (GList *)((gpointer)r);
 			while (res) {
 				if (res->data == (gpointer)item) {
@@ -693,7 +832,7 @@ check_negative_dynamic_item (struct rspamd_task *task, struct symbols_cache *cac
 static gboolean
 check_debug_symbol (struct rspamd_config *cfg, const gchar *symbol)
 {
-	GList                         *cur;
+	GList *cur;
 
 	cur = cfg->debug_symbols;
 	while (cur) {
@@ -736,11 +875,13 @@ rspamd_symbols_cache_metric_cb (gpointer k, gpointer v, gpointer ud)
 }
 
 gboolean
-validate_cache (struct symbols_cache *cache, struct rspamd_config *cfg, gboolean strict)
+validate_cache (struct symbols_cache *cache,
+	struct rspamd_config *cfg,
+	gboolean strict)
 {
-	struct cache_item              *item;
-	GList                          *cur, *p, *metric_symbols;
-	gboolean                        res;
+	struct cache_item *item;
+	GList *cur, *p, *metric_symbols;
+	gboolean res;
 
 	if (cache == NULL) {
 		msg_err ("empty cache is invalid");
@@ -752,13 +893,16 @@ validate_cache (struct symbols_cache *cache, struct rspamd_config *cfg, gboolean
 	while (cur) {
 		item = cur->data;
 		if (!item->is_callback) {
-			if (g_hash_table_lookup (cfg->metrics_symbols, item->s->symbol) == NULL) {
+			if (g_hash_table_lookup (cfg->metrics_symbols,
+				item->s->symbol) == NULL) {
 				if (strict) {
-					msg_warn ("no weight registered for symbol %s", item->s->symbol);
+					msg_warn ("no weight registered for symbol %s",
+						item->s->symbol);
 					return FALSE;
 				}
 				else {
-					msg_info ("no weight registered for symbol %s", item->s->symbol);
+					msg_info ("no weight registered for symbol %s",
+						item->s->symbol);
 				}
 			}
 		}
@@ -768,13 +912,16 @@ validate_cache (struct symbols_cache *cache, struct rspamd_config *cfg, gboolean
 	while (cur) {
 		item = cur->data;
 		if (!item->is_callback) {
-			if (g_hash_table_lookup (cfg->metrics_symbols, item->s->symbol) == NULL) {
+			if (g_hash_table_lookup (cfg->metrics_symbols,
+				item->s->symbol) == NULL) {
 				if (strict) {
-					msg_warn ("no weight registered for symbol %s", item->s->symbol);
+					msg_warn ("no weight registered for symbol %s",
+						item->s->symbol);
 					return FALSE;
 				}
 				else {
-					msg_info ("no weight registered for symbol %s", item->s->symbol);
+					msg_info ("no weight registered for symbol %s",
+						item->s->symbol);
 				}
 			}
 		}
@@ -807,7 +954,9 @@ validate_cache (struct symbols_cache *cache, struct rspamd_config *cfg, gboolean
 			}
 		}
 		if (!res) {
-			msg_warn ("symbol '%s' is registered in metric but not found in cache", cur->data);
+			msg_warn (
+				"symbol '%s' is registered in metric but not found in cache",
+				cur->data);
 			if (strict) {
 				return FALSE;
 			}
@@ -819,10 +968,14 @@ validate_cache (struct symbols_cache *cache, struct rspamd_config *cfg, gboolean
 
 	/* Now adjust symbol weights according to default metric */
 	if (cfg->default_metric != NULL) {
-		g_hash_table_foreach (cfg->default_metric->symbols, rspamd_symbols_cache_metric_cb, cache);
+		g_hash_table_foreach (cfg->default_metric->symbols,
+			rspamd_symbols_cache_metric_cb,
+			cache);
 		/* Resort caches */
-		cache->negative_items = g_list_sort (cache->negative_items, cache_logic_cmp);
-		cache->static_items = g_list_sort (cache->static_items, cache_logic_cmp);
+		cache->negative_items = g_list_sort (cache->negative_items,
+				cache_logic_cmp);
+		cache->static_items =
+			g_list_sort (cache->static_items, cache_logic_cmp);
 	}
 
 	return TRUE;
@@ -840,16 +993,18 @@ struct symbol_callback_data {
 };
 
 gboolean
-call_symbol_callback (struct rspamd_task * task, struct symbols_cache * cache, gpointer *save)
+call_symbol_callback (struct rspamd_task * task,
+	struct symbols_cache * cache,
+	gpointer *save)
 {
 #ifdef HAVE_CLOCK_GETTIME
-	struct timespec                 ts1, ts2;
+	struct timespec ts1, ts2;
 #else
-	struct timeval                  tv1, tv2;
+	struct timeval tv1, tv2;
 #endif
-	guint64                         diff;
-	struct cache_item              *item = NULL;
-	struct symbol_callback_data    *s = *save;
+	guint64 diff;
+	struct cache_item *item = NULL;
+	struct symbol_callback_data *s = *save;
 
 	if (s == NULL) {
 		if (cache == NULL) {
@@ -863,14 +1018,17 @@ call_symbol_callback (struct rspamd_task * task, struct symbols_cache * cache, g
 			post_cache_init (cache);
 			rspamd_mempool_wunlock_rwlock (cache->lock);
 		}
-		s = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct symbol_callback_data));
+		s =
+			rspamd_mempool_alloc0 (task->task_pool,
+				sizeof (struct symbol_callback_data));
 		*save = s;
 		if (cache->negative_items != NULL) {
 			s->list_pointer = g_list_first (cache->negative_items);
 			s->saved_item = s->list_pointer->data;
 			s->state = CACHE_STATE_NEGATIVE;
 		}
-		else if ((s->list_pointer = check_dynamic_item (task, cache)) || cache->dynamic_items != NULL) {
+		else if ((s->list_pointer =
+			check_dynamic_item (task, cache)) || cache->dynamic_items != NULL) {
 			if (s->list_pointer == NULL) {
 				s->list_pointer = g_list_first (cache->dynamic_items);
 				s->saved_item = s->list_pointer->data;
@@ -898,62 +1056,84 @@ call_symbol_callback (struct rspamd_task * task, struct symbols_cache * cache, g
 			return FALSE;
 		}
 		switch (s->state) {
-			case CACHE_STATE_NEGATIVE:
-				s->list_pointer = g_list_next (s->list_pointer);
-				if (s->list_pointer == NULL) {
-					if ((s->list_pointer = check_dynamic_item (task, cache)) || cache->dynamic_items != NULL) {
-						if (s->list_pointer == NULL) {
-							s->list_pointer = g_list_first (cache->dynamic_items);
-							s->saved_item = s->list_pointer->data;
-							s->state = CACHE_STATE_DYNAMIC;
-						}
-						else {
-							s->saved_item = s->list_pointer->data;
-							s->state = CACHE_STATE_DYNAMIC_MAP;
-						}
-					}
-					else {
-						s->state = CACHE_STATE_STATIC;
-						s->list_pointer = g_list_first (cache->static_items);
-						if (s->list_pointer) {
-							s->saved_item = s->list_pointer->data;
-						}
-						else {
-							return FALSE;
-						}
-					}
-				}
-				else {
-					s->saved_item = s->list_pointer->data;
-				}
-				item = s->saved_item;
-				break;
-			case CACHE_STATE_DYNAMIC_MAP:
-				s->list_pointer = g_list_next (s->list_pointer);
-				if (s->list_pointer == NULL) {
-					s->list_pointer = g_list_first (cache->dynamic_items);
-					if (s->list_pointer) {
+		case CACHE_STATE_NEGATIVE:
+			s->list_pointer = g_list_next (s->list_pointer);
+			if (s->list_pointer == NULL) {
+				if ((s->list_pointer =
+					check_dynamic_item (task,
+					cache)) || cache->dynamic_items != NULL) {
+					if (s->list_pointer == NULL) {
+						s->list_pointer = g_list_first (cache->dynamic_items);
 						s->saved_item = s->list_pointer->data;
 						s->state = CACHE_STATE_DYNAMIC;
 					}
 					else {
-						s->state = CACHE_STATE_STATIC;
-						s->list_pointer = g_list_first (cache->static_items);
-						if (s->list_pointer) {
-							s->saved_item = s->list_pointer->data;
-						}
-						else {
-							return FALSE;
-						}
+						s->saved_item = s->list_pointer->data;
+						s->state = CACHE_STATE_DYNAMIC_MAP;
 					}
 				}
 				else {
+					s->state = CACHE_STATE_STATIC;
+					s->list_pointer = g_list_first (cache->static_items);
+					if (s->list_pointer) {
+						s->saved_item = s->list_pointer->data;
+					}
+					else {
+						return FALSE;
+					}
+				}
+			}
+			else {
+				s->saved_item = s->list_pointer->data;
+			}
+			item = s->saved_item;
+			break;
+		case CACHE_STATE_DYNAMIC_MAP:
+			s->list_pointer = g_list_next (s->list_pointer);
+			if (s->list_pointer == NULL) {
+				s->list_pointer = g_list_first (cache->dynamic_items);
+				if (s->list_pointer) {
+					s->saved_item = s->list_pointer->data;
+					s->state = CACHE_STATE_DYNAMIC;
+				}
+				else {
+					s->state = CACHE_STATE_STATIC;
+					s->list_pointer = g_list_first (cache->static_items);
+					if (s->list_pointer) {
+						s->saved_item = s->list_pointer->data;
+					}
+					else {
+						return FALSE;
+					}
+				}
+			}
+			else {
+				s->saved_item = s->list_pointer->data;
+			}
+			item = s->saved_item;
+			break;
+		case CACHE_STATE_DYNAMIC:
+			s->list_pointer = g_list_next (s->list_pointer);
+			if (s->list_pointer == NULL) {
+				s->state = CACHE_STATE_STATIC;
+				s->list_pointer = g_list_first (cache->static_items);
+				if (s->list_pointer) {
 					s->saved_item = s->list_pointer->data;
 				}
-				item = s->saved_item;
-				break;
-			case CACHE_STATE_DYNAMIC:
-				s->list_pointer = g_list_next (s->list_pointer);
+				else {
+					return FALSE;
+				}
+			}
+			else {
+				s->saved_item = s->list_pointer->data;
+				/* Skip items that are in negative map */
+				while (s->list_pointer != NULL &&
+					check_negative_dynamic_item (task, cache, s->saved_item)) {
+					s->list_pointer = g_list_next (s->list_pointer);
+					if (s->list_pointer != NULL) {
+						s->saved_item = s->list_pointer->data;
+					}
+				}
 				if (s->list_pointer == NULL) {
 					s->state = CACHE_STATE_STATIC;
 					s->list_pointer = g_list_first (cache->static_items);
@@ -964,39 +1144,20 @@ call_symbol_callback (struct rspamd_task * task, struct symbols_cache * cache, g
 						return FALSE;
 					}
 				}
-				else {
-					s->saved_item = s->list_pointer->data;
-					/* Skip items that are in negative map */
-					while (s->list_pointer != NULL && check_negative_dynamic_item (task, cache, s->saved_item)) {
-						s->list_pointer = g_list_next (s->list_pointer);
-						if (s->list_pointer != NULL) {
-							s->saved_item = s->list_pointer->data;
-						}
-					}
-					if (s->list_pointer == NULL) {
-						s->state = CACHE_STATE_STATIC;
-						s->list_pointer = g_list_first (cache->static_items);
-						if (s->list_pointer) {
-							s->saved_item = s->list_pointer->data;
-						}
-						else {
-							return FALSE;
-						}
-					}
-				}
-				item = s->saved_item;
-				break;
-			case CACHE_STATE_STATIC:
-				/* Next pointer */
-				s->list_pointer = g_list_next (s->list_pointer);
-				if (s->list_pointer) {
-					s->saved_item = s->list_pointer->data;
-				}
-				else {
-					return FALSE;
-				}
-				item = s->saved_item;
-				break;
+			}
+			item = s->saved_item;
+			break;
+		case CACHE_STATE_STATIC:
+			/* Next pointer */
+			s->list_pointer = g_list_next (s->list_pointer);
+			if (s->list_pointer) {
+				s->saved_item = s->list_pointer->data;
+			}
+			else {
+				return FALSE;
+			}
+			item = s->saved_item;
+			break;
 		}
 	}
 	if (!item) {
@@ -1007,9 +1168,9 @@ call_symbol_callback (struct rspamd_task * task, struct symbols_cache * cache, g
 # ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
 		clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts1);
 # elif defined(HAVE_CLOCK_VIRTUAL)
-		clock_gettime (CLOCK_VIRTUAL, &ts1);
+		clock_gettime (CLOCK_VIRTUAL,			 &ts1);
 # else
-		clock_gettime (CLOCK_REALTIME, &ts1);
+		clock_gettime (CLOCK_REALTIME,			 &ts1);
 # endif
 #else
 		if (gettimeofday (&tv1, NULL) == -1) {
@@ -1030,9 +1191,9 @@ call_symbol_callback (struct rspamd_task * task, struct symbols_cache * cache, g
 # ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
 		clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts2);
 # elif defined(HAVE_CLOCK_VIRTUAL)
-		clock_gettime (CLOCK_VIRTUAL, &ts2);
+		clock_gettime (CLOCK_VIRTUAL,			 &ts2);
 # else
-		clock_gettime (CLOCK_REALTIME, &ts2);
+		clock_gettime (CLOCK_REALTIME,			 &ts2);
 # endif
 #else
 		if (gettimeofday (&tv2, NULL) == -1) {
@@ -1041,9 +1202,12 @@ call_symbol_callback (struct rspamd_task * task, struct symbols_cache * cache, g
 #endif
 
 #ifdef HAVE_CLOCK_GETTIME
-		diff = (ts2.tv_sec - ts1.tv_sec) * 1000000 + (ts2.tv_nsec - ts1.tv_nsec) / 1000;
+		diff =
+			(ts2.tv_sec -
+			ts1.tv_sec) * 1000000 + (ts2.tv_nsec - ts1.tv_nsec) / 1000;
 #else
-		diff = (tv2.tv_sec - tv1.tv_sec) * 1000000 + (tv2.tv_usec - tv1.tv_usec);
+		diff =
+			(tv2.tv_sec - tv1.tv_sec) * 1000000 + (tv2.tv_usec - tv1.tv_usec);
 #endif
 		item->s->avg_time = rspamd_set_counter (item->s->symbol, diff);
 	}

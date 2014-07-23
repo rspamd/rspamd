@@ -21,12 +21,12 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "task.h"
-#include "main.h"
 #include "filter.h"
-#include "protocol.h"
-#include "message.h"
 #include "lua/lua_common.h"
+#include "main.h"
+#include "message.h"
+#include "protocol.h"
+#include "task.h"
 
 /*
  * Destructor for recipients list in a task
@@ -34,7 +34,7 @@
 static void
 rcpt_destruct (void *pointer)
 {
-	struct rspamd_task             *task = (struct rspamd_task *) pointer;
+	struct rspamd_task *task = (struct rspamd_task *) pointer;
 
 	if (task->rcpt) {
 		g_list_free (task->rcpt);
@@ -44,10 +44,10 @@ rcpt_destruct (void *pointer)
 /*
  * Create new task
  */
-struct rspamd_task             *
+struct rspamd_task *
 rspamd_task_new (struct rspamd_worker *worker)
 {
-	struct rspamd_task             *new_task;
+	struct rspamd_task *new_task;
 
 	new_task = g_slice_alloc0 (sizeof (struct rspamd_task));
 
@@ -60,9 +60,9 @@ rspamd_task_new (struct rspamd_worker *worker)
 # ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
 	clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &new_task->ts);
 # elif defined(HAVE_CLOCK_VIRTUAL)
-	clock_gettime (CLOCK_VIRTUAL, &new_task->ts);
+	clock_gettime (CLOCK_VIRTUAL,			 &new_task->ts);
 # else
-	clock_gettime (CLOCK_REALTIME, &new_task->ts);
+	clock_gettime (CLOCK_REALTIME,			 &new_task->ts);
 # endif
 #endif
 	if (gettimeofday (&new_task->tv, NULL) == -1) {
@@ -73,27 +73,28 @@ rspamd_task_new (struct rspamd_worker *worker)
 
 	/* Add destructor for recipients list (it would be better to use anonymous function here */
 	rspamd_mempool_add_destructor (new_task->task_pool,
-			(rspamd_mempool_destruct_t) rcpt_destruct, new_task);
+		(rspamd_mempool_destruct_t) rcpt_destruct, new_task);
 	new_task->results = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	rspamd_mempool_add_destructor (new_task->task_pool,
-			(rspamd_mempool_destruct_t) g_hash_table_destroy,
-			new_task->results);
+		(rspamd_mempool_destruct_t) g_hash_table_destroy,
+		new_task->results);
 	new_task->re_cache = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	rspamd_mempool_add_destructor (new_task->task_pool,
-			(rspamd_mempool_destruct_t) g_hash_table_destroy,
-			new_task->re_cache);
-	new_task->raw_headers = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+		(rspamd_mempool_destruct_t) g_hash_table_destroy,
+		new_task->re_cache);
+	new_task->raw_headers = g_hash_table_new (rspamd_strcase_hash,
+			rspamd_strcase_equal);
 	rspamd_mempool_add_destructor (new_task->task_pool,
-				(rspamd_mempool_destruct_t) g_hash_table_destroy,
-				new_task->raw_headers);
+		(rspamd_mempool_destruct_t) g_hash_table_destroy,
+		new_task->raw_headers);
 	new_task->emails = g_tree_new (compare_email_func);
 	rspamd_mempool_add_destructor (new_task->task_pool,
-				(rspamd_mempool_destruct_t) g_tree_destroy,
-				new_task->emails);
+		(rspamd_mempool_destruct_t) g_tree_destroy,
+		new_task->emails);
 	new_task->urls = g_tree_new (compare_url_func);
 	rspamd_mempool_add_destructor (new_task->task_pool,
-					(rspamd_mempool_destruct_t) g_tree_destroy,
-					new_task->urls);
+		(rspamd_mempool_destruct_t) g_tree_destroy,
+		new_task->urls);
 	new_task->sock = -1;
 	new_task->is_mime = TRUE;
 	new_task->is_json = TRUE;
@@ -123,7 +124,7 @@ rspamd_task_reply (struct rspamd_task *task)
 gboolean
 rspamd_task_fin (void *arg)
 {
-	struct rspamd_task              *task = (struct rspamd_task *) arg;
+	struct rspamd_task *task = (struct rspamd_task *) arg;
 	gint r;
 	GError *err = NULL;
 
@@ -205,7 +206,7 @@ rspamd_task_fin (void *arg)
 void
 rspamd_task_restore (void *arg)
 {
-	struct rspamd_task             *task = (struct rspamd_task *) arg;
+	struct rspamd_task *task = (struct rspamd_task *) arg;
 
 	/* Call post filters */
 	if (task->state == WAIT_POST_FILTER && !task->skip_extra_filters) {
@@ -220,8 +221,8 @@ rspamd_task_restore (void *arg)
 void
 rspamd_task_free (struct rspamd_task *task, gboolean is_soft)
 {
-	GList                          *part;
-	struct mime_part               *p;
+	GList *part;
+	struct mime_part *p;
 
 	if (task) {
 		debug_task ("free pointer %p", task);
@@ -257,14 +258,16 @@ rspamd_task_free (struct rspamd_task *task, gboolean is_soft)
 	}
 }
 
-void rspamd_task_free_hard (gpointer ud)
+void
+rspamd_task_free_hard (gpointer ud)
 {
 	struct rspamd_task *task = ud;
 
 	rspamd_task_free (task, FALSE);
 }
 
-void rspamd_task_free_soft (gpointer ud)
+void
+rspamd_task_free_soft (gpointer ud)
 {
 	struct rspamd_task *task = ud;
 
@@ -274,8 +277,8 @@ void rspamd_task_free_soft (gpointer ud)
 
 gboolean
 rspamd_task_process (struct rspamd_task *task,
-		struct rspamd_http_message *msg, GThreadPool *classify_pool,
-		gboolean process_extra_filters)
+	struct rspamd_http_message *msg, GThreadPool *classify_pool,
+	gboolean process_extra_filters)
 {
 	gint r;
 	GError *err = NULL;

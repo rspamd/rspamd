@@ -26,12 +26,12 @@
  * Winnow classifier
  */
 
-#include "classifiers.h"
-#include "tokenizers/tokenizers.h"
-#include "main.h"
-#include "filter.h"
 #include "cfg_file.h"
+#include "classifiers.h"
+#include "filter.h"
 #include "lua/lua_common.h"
+#include "main.h"
+#include "tokenizers/tokenizers.h"
 
 #define WINNOW_PROMOTION 1.23
 #define WINNOW_DEMOTION 0.83
@@ -51,40 +51,42 @@ winnow_error_quark (void)
 }
 
 struct winnow_callback_data {
-	statfile_pool_t                *pool;
-	struct classifier_ctx          *ctx;
-	stat_file_t                    *file;
-	stat_file_t                    *learn_file;
-	long double                     sum;
-	long double 					start;
-	double                          multiplier;
-	guint32                         count;
-	guint32                         new_blocks;
-	gboolean                        in_class;
-	gboolean                        do_demote;
-	gboolean                        fresh_run;
-	time_t                          now;
+	statfile_pool_t *pool;
+	struct classifier_ctx *ctx;
+	stat_file_t *file;
+	stat_file_t *learn_file;
+	long double sum;
+	long double start;
+	double multiplier;
+	guint32 count;
+	guint32 new_blocks;
+	gboolean in_class;
+	gboolean do_demote;
+	gboolean fresh_run;
+	time_t now;
 };
 
 static const double max_common_weight = MAX_WEIGHT * WINNOW_DEMOTION;
 
 
 
-static                          gboolean
+static gboolean
 winnow_classify_callback (gpointer key, gpointer value, gpointer data)
 {
-	token_node_t                   *node = key;
-	struct winnow_callback_data    *cd = data;
-	double                           v;
+	token_node_t *node = key;
+	struct winnow_callback_data *cd = data;
+	double v;
 
 	/* Consider that not found blocks have value 1 */
-	v = statfile_pool_get_block (cd->pool, cd->file, node->h1, node->h2, cd->now);
+	v =
+		statfile_pool_get_block (cd->pool, cd->file, node->h1, node->h2,
+			cd->now);
 	if (fabs (v) > ALPHA) {
 		cd->sum += v;
 	}
 	else {
 		cd->sum += 1.0;
-		cd->new_blocks ++;
+		cd->new_blocks++;
 	}
 
 	cd->count++;
@@ -92,24 +94,32 @@ winnow_classify_callback (gpointer key, gpointer value, gpointer data)
 	return FALSE;
 }
 
-static                          gboolean
+static gboolean
 winnow_learn_callback (gpointer key, gpointer value, gpointer data)
 {
-	token_node_t                   *node = key;
-	struct winnow_callback_data    *cd = data;
-	double                          v, c;
-	
-	c = (cd->in_class) ? WINNOW_PROMOTION * cd->multiplier : WINNOW_DEMOTION / cd->multiplier;
+	token_node_t *node = key;
+	struct winnow_callback_data *cd = data;
+	double v, c;
+
+	c = (cd->in_class) ? WINNOW_PROMOTION * cd->multiplier : WINNOW_DEMOTION /
+		cd->multiplier;
 
 	/* Consider that not found blocks have value 1 */
-	v = statfile_pool_get_block (cd->pool, cd->file, node->h1, node->h2, cd->now);
+	v =
+		statfile_pool_get_block (cd->pool, cd->file, node->h1, node->h2,
+			cd->now);
 	if (fabs (v) < ALPHA) {
 		/* Block not found, insert new */
 		cd->start += 1;
 		if (cd->file == cd->learn_file) {
-			statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, c);
+			statfile_pool_set_block (cd->pool,
+				cd->file,
+				node->h1,
+				node->h2,
+				cd->now,
+				c);
 			node->value = c;
-			cd->new_blocks ++;
+			cd->new_blocks++;
 		}
 	}
 	else {
@@ -119,18 +129,23 @@ winnow_learn_callback (gpointer key, gpointer value, gpointer data)
 			node->extra = 0;
 		}
 		else {
-			node->extra ++;
+			node->extra++;
 		}
 		node->value = v;
-		
+
 		if (node->extra > 1) {
-			/* 
+			/*
 			 * Assume that this node is common for several statfiles, so
 			 * decrease its weight proportianally
 			 */
 			if (node->value > max_common_weight) {
 				/* Static fluctuation */
-				statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, 0.);
+				statfile_pool_set_block (cd->pool,
+					cd->file,
+					node->h1,
+					node->h2,
+					cd->now,
+					0.);
 				node->value = 0.;
 			}
 			else if (node->value > WINNOW_PROMOTION * cd->multiplier) {
@@ -141,7 +156,7 @@ winnow_learn_callback (gpointer key, gpointer value, gpointer data)
 						node->value *= c;
 					}
 					else {
-						/* 
+						/*
 						 * Too high token value that exists also in other
 						 * statfiles, may be statistic error, so decrease it
 						 * slightly
@@ -152,8 +167,13 @@ winnow_learn_callback (gpointer key, gpointer value, gpointer data)
 				else {
 					node->value = WINNOW_DEMOTION / cd->multiplier;
 				}
-				statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, node->value);
-			} 
+				statfile_pool_set_block (cd->pool,
+					cd->file,
+					node->h1,
+					node->h2,
+					cd->now,
+					node->value);
+			}
 		}
 		else if (cd->file == cd->learn_file) {
 			/* New block or block that is in only one statfile */
@@ -164,12 +184,22 @@ winnow_learn_callback (gpointer key, gpointer value, gpointer data)
 			else {
 				node->value *= c;
 			}
-			statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, node->value);
+			statfile_pool_set_block (cd->pool,
+				cd->file,
+				node->h1,
+				node->h2,
+				cd->now,
+				node->value);
 		}
 		else if (cd->do_demote) {
 			/* Demote blocks in file */
 			node->value *= WINNOW_DEMOTION / cd->multiplier;
-			statfile_pool_set_block (cd->pool, cd->file, node->h1, node->h2, cd->now, node->value);
+			statfile_pool_set_block (cd->pool,
+				cd->file,
+				node->h1,
+				node->h2,
+				cd->now,
+				node->value);
 		}
 	}
 
@@ -181,10 +211,11 @@ winnow_learn_callback (gpointer key, gpointer value, gpointer data)
 	return FALSE;
 }
 
-struct classifier_ctx          *
+struct classifier_ctx *
 winnow_init (rspamd_mempool_t * pool, struct rspamd_classifier_config *cfg)
 {
-	struct classifier_ctx          *ctx = rspamd_mempool_alloc (pool, sizeof (struct classifier_ctx));
+	struct classifier_ctx *ctx =
+		rspamd_mempool_alloc (pool, sizeof (struct classifier_ctx));
 
 	ctx->pool = pool;
 	ctx->cfg = cfg;
@@ -193,14 +224,18 @@ winnow_init (rspamd_mempool_t * pool, struct rspamd_classifier_config *cfg)
 }
 
 gboolean
-winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * input, struct rspamd_task *task, lua_State *L)
+winnow_classify (struct classifier_ctx *ctx,
+	statfile_pool_t * pool,
+	GTree * input,
+	struct rspamd_task *task,
+	lua_State *L)
 {
-	struct winnow_callback_data     data;
-	char                           *sumbuf, *value;
-	long double                     res = 0., max = 0.;
-	GList                          *cur;
-	struct rspamd_statfile_config                *st, *sel = NULL;
-	int                             nodes, minnodes;
+	struct winnow_callback_data data;
+	char *sumbuf, *value;
+	long double res = 0., max = 0.;
+	GList *cur;
+	struct rspamd_statfile_config *st, *sel = NULL;
+	int nodes, minnodes;
 
 	g_assert (pool != NULL);
 	g_assert (ctx != NULL);
@@ -208,22 +243,27 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 	data.pool = pool;
 	data.now = time (NULL);
 	data.ctx = ctx;
-    
-	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "min_tokens")) != NULL) {
+
+	if (ctx->cfg->opts &&
+		(value = g_hash_table_lookup (ctx->cfg->opts, "min_tokens")) != NULL) {
 		minnodes = strtol (value, NULL, 10);
 		nodes = g_tree_nnodes (input);
 		if (nodes > FEATURE_WINDOW_SIZE) {
 			nodes = nodes / FEATURE_WINDOW_SIZE + FEATURE_WINDOW_SIZE;
 		}
 		if (nodes < minnodes) {
-			msg_info ("do not classify message as it has too few tokens: %d, while %d min", nodes, minnodes);
+			msg_info (
+				"do not classify message as it has too few tokens: %d, while %d min",
+				nodes,
+				minnodes);
 			return FALSE;
 		}
 	}
 
 	cur = call_classifier_pre_callbacks (ctx->cfg, task, FALSE, FALSE, L);
 	if (cur) {
-		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)g_list_free, cur);
+		rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t)g_list_free, cur);
 	}
 	else {
 		cur = ctx->cfg->statfiles;
@@ -235,7 +275,8 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 		data.count = 0;
 		data.new_blocks = 0;
 		if ((data.file = statfile_pool_is_open (pool, st->path)) == NULL) {
-			if ((data.file = statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
+			if ((data.file =
+				statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
 				msg_warn ("cannot open %s, skip it", st->path);
 				cur = g_list_next (cur);
 				continue;
@@ -261,16 +302,16 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 
 	if (sel != NULL) {
 #ifdef WITH_LUA
-        max = call_classifier_post_callbacks (ctx->cfg, task, max, L);
+		max = call_classifier_post_callbacks (ctx->cfg, task, max, L);
 #endif
 #ifdef HAVE_TANHL
-        max = tanhl (max);
+		max = tanhl (max);
 #else
-        /*
-         * As some implementations of libm does not support tanhl, try to use
-         * tanh
-         */
-        max = tanh ((double) max);
+		/*
+		 * As some implementations of libm does not support tanhl, try to use
+		 * tanh
+		 */
+		max = tanh ((double) max);
 #endif
 		sumbuf = rspamd_mempool_alloc (task->task_pool, 32);
 		rspamd_snprintf (sumbuf, 32, "%.2F", max);
@@ -282,15 +323,18 @@ winnow_classify (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inp
 }
 
 GList *
-winnow_weights (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * input, struct rspamd_task *task)
+winnow_weights (struct classifier_ctx *ctx,
+	statfile_pool_t * pool,
+	GTree * input,
+	struct rspamd_task *task)
 {
-	struct winnow_callback_data     data;
-	long double                     res = 0.;
-	GList                          *cur, *resl = NULL;
-	struct rspamd_statfile_config                *st;
-	struct classify_weight         *w;
-	char                           *value;
-	int                             nodes, minnodes;
+	struct winnow_callback_data data;
+	long double res = 0.;
+	GList *cur, *resl = NULL;
+	struct rspamd_statfile_config *st;
+	struct classify_weight *w;
+	char *value;
+	int nodes, minnodes;
 
 	g_assert (pool != NULL);
 	g_assert (ctx != NULL);
@@ -299,25 +343,30 @@ winnow_weights (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inpu
 	data.now = time (NULL);
 	data.ctx = ctx;
 
-	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "min_tokens")) != NULL) {
+	if (ctx->cfg->opts &&
+		(value = g_hash_table_lookup (ctx->cfg->opts, "min_tokens")) != NULL) {
 		minnodes = strtol (value, NULL, 10);
 		nodes = g_tree_nnodes (input);
 		if (nodes > FEATURE_WINDOW_SIZE) {
 			nodes = nodes / FEATURE_WINDOW_SIZE + FEATURE_WINDOW_SIZE;
 		}
 		if (nodes < minnodes) {
-			msg_info ("do not classify message as it has too few tokens: %d, while %d min", nodes, minnodes);
+			msg_info (
+				"do not classify message as it has too few tokens: %d, while %d min",
+				nodes,
+				minnodes);
 			return NULL;
 		}
 	}
-    
+
 	cur = ctx->cfg->statfiles;
 	while (cur) {
 		st = cur->data;
 		data.sum = 0;
 		data.count = 0;
 		if ((data.file = statfile_pool_is_open (pool, st->path)) == NULL) {
-			if ((data.file = statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
+			if ((data.file =
+				statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
 				msg_warn ("cannot open %s, skip it", st->path);
 				cur = g_list_next (cur);
 				continue;
@@ -328,7 +377,9 @@ winnow_weights (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inpu
 			g_tree_foreach (input, winnow_classify_callback, &data);
 		}
 
-		w = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct classify_weight));
+		w =
+			rspamd_mempool_alloc0 (task->task_pool,
+				sizeof (struct classify_weight));
 		if (data.count != 0) {
 			res = data.sum / (double)data.count;
 		}
@@ -340,9 +391,10 @@ winnow_weights (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inpu
 		resl = g_list_prepend (resl, w);
 		cur = g_list_next (cur);
 	}
-	
+
 	if (resl != NULL) {
-		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)g_list_free, resl);
+		rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t)g_list_free, resl);
 	}
 
 	return resl;
@@ -351,21 +403,27 @@ winnow_weights (struct classifier_ctx *ctx, statfile_pool_t * pool, GTree * inpu
 
 
 gboolean
-winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *symbol,
-		GTree * input, int in_class, double *sum, double multiplier, GError **err)
+winnow_learn (struct classifier_ctx *ctx,
+	statfile_pool_t *pool,
+	const char *symbol,
+	GTree * input,
+	int in_class,
+	double *sum,
+	double multiplier,
+	GError **err)
 {
-	struct winnow_callback_data     data = {
+	struct winnow_callback_data data = {
 		.file = NULL,
 		.multiplier = multiplier
 	};
-	char                           *value;
-	int                             nodes, minnodes, iterations = 0;
-	struct rspamd_statfile_config                *st, *sel_st = NULL;
-	stat_file_t                    *sel = NULL, *to_learn;
-	long double                     res = 0., max = 0., start_value = 0., end_value = 0.;
-	double                          learn_threshold = 0.0;
-	GList                          *cur, *to_demote = NULL;
-	gboolean                        force_learn = FALSE;
+	char *value;
+	int nodes, minnodes, iterations = 0;
+	struct rspamd_statfile_config *st, *sel_st = NULL;
+	stat_file_t *sel = NULL, *to_learn;
+	long double res = 0., max = 0., start_value = 0., end_value = 0.;
+	double learn_threshold = 0.0;
+	GList *cur, *to_demote = NULL;
+	gboolean force_learn = FALSE;
 
 	g_assert (pool != NULL);
 	g_assert (ctx != NULL);
@@ -376,29 +434,35 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 	data.ctx = ctx;
 
 
-	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "min_tokens")) != NULL) {
+	if (ctx->cfg->opts &&
+		(value = g_hash_table_lookup (ctx->cfg->opts, "min_tokens")) != NULL) {
 		minnodes = strtol (value, NULL, 10);
 		nodes = g_tree_nnodes (input);
 		if (nodes > FEATURE_WINDOW_SIZE) {
 			nodes = nodes / FEATURE_WINDOW_SIZE + FEATURE_WINDOW_SIZE;
 		}
 		if (nodes < minnodes) {
-			msg_info ("do not learn message as it has too few tokens: %d, while %d min", nodes, minnodes);
+			msg_info (
+				"do not learn message as it has too few tokens: %d, while %d min",
+				nodes,
+				minnodes);
 			if (sum != NULL) {
 				*sum = 0;
 			}
 			g_set_error (err,
-	                   winnow_error_quark(),		/* error domain */
-	                   1,            				/* error code */
-	                   "message contains too few tokens: %d, while min is %d",
-	                   nodes, minnodes);
+				winnow_error_quark (),              /* error domain */
+				1,                                  /* error code */
+				"message contains too few tokens: %d, while min is %d",
+				nodes, minnodes);
 			return FALSE;
 		}
 	}
-	if (ctx->cfg->opts && (value = g_hash_table_lookup (ctx->cfg->opts, "learn_threshold")) != NULL) {
+	if (ctx->cfg->opts &&
+		(value =
+		g_hash_table_lookup (ctx->cfg->opts, "learn_threshold")) != NULL) {
 		learn_threshold = strtod (value, NULL);
 	}
-	
+
 	if (learn_threshold <= 1.0 && learn_threshold >= 0) {
 		/* Classify message and check target statfile score */
 		cur = ctx->cfg->statfiles;
@@ -406,24 +470,27 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 			/* Open or create all statfiles inside classifier */
 			st = cur->data;
 			if (statfile_pool_is_open (pool, st->path) == NULL) {
-				if (statfile_pool_open (pool, st->path, st->size, FALSE) == NULL) {
+				if (statfile_pool_open (pool, st->path, st->size,
+					FALSE) == NULL) {
 					msg_warn ("cannot open %s", st->path);
 					if (statfile_pool_create (pool, st->path, st->size) == -1) {
 						msg_err ("cannot create statfile %s", st->path);
 						g_set_error (err,
-								winnow_error_quark(),		/* error domain */
-								1,            				/* error code */
-								"cannot create statfile: %s",
-								st->path);
+							winnow_error_quark (),          /* error domain */
+							1,                              /* error code */
+							"cannot create statfile: %s",
+							st->path);
 						return FALSE;
 					}
-					if (statfile_pool_open (pool, st->path, st->size, FALSE) == NULL) {
+					if (statfile_pool_open (pool, st->path, st->size,
+						FALSE) == NULL) {
 						g_set_error (err,
-								winnow_error_quark(),		/* error domain */
-								1,            				/* error code */
-								"open statfile %s after creation",
-								st->path);
-						msg_err ("cannot open statfile %s after creation", st->path);
+							winnow_error_quark (),          /* error domain */
+							1,                              /* error code */
+							"open statfile %s after creation",
+							st->path);
+						msg_err ("cannot open statfile %s after creation",
+							st->path);
 						return FALSE;
 					}
 				}
@@ -437,10 +504,10 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 
 		if (sel_st == NULL) {
 			g_set_error (err,
-					winnow_error_quark(),		/* error domain */
-					1,            				/* error code */
-					"cannot find statfile for symbol %s",
-					symbol);
+				winnow_error_quark (),          /* error domain */
+				1,                              /* error code */
+				"cannot find statfile for symbol %s",
+				symbol);
 			msg_err ("cannot find statfile for symbol %s", symbol);
 			return FALSE;
 		}
@@ -448,10 +515,10 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 		to_learn = statfile_pool_is_open (pool, sel_st->path);
 		if (to_learn == NULL) {
 			g_set_error (err,
-					winnow_error_quark(),		/* error domain */
-					1,            				/* error code */
-					"statfile %s is not opened this maybe if your statfile pool is too small to handle all statfiles",
-					sel_st->path);
+				winnow_error_quark (),          /* error domain */
+				1,                              /* error code */
+				"statfile %s is not opened this maybe if your statfile pool is too small to handle all statfiles",
+				sel_st->path);
 			return FALSE;
 		}
 		/* Check target statfile */
@@ -477,10 +544,10 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 			data.count = 0;
 			if ((data.file = statfile_pool_is_open (pool, st->path)) == NULL) {
 				g_set_error (err,
-						winnow_error_quark(),		/* error domain */
-						1,            				/* error code */
-						"statfile %s is not opened this maybe if your statfile pool is too small to handle all statfiles",
-						st->path);
+					winnow_error_quark (),          /* error domain */
+					1,                              /* error code */
+					"statfile %s is not opened this maybe if your statfile pool is too small to handle all statfiles",
+					st->path);
 				return FALSE;
 			}
 			g_tree_foreach (input, winnow_classify_callback, &data);
@@ -498,18 +565,22 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 		}
 	}
 	else {
-		msg_err ("learn threshold is more than 1 or less than 0, so cannot do learn, please check your configuration");
+		msg_err (
+			"learn threshold is more than 1 or less than 0, so cannot do learn, please check your configuration");
 		g_set_error (err,
-				winnow_error_quark(),		/* error domain */
-				1,            				/* error code */
-				"bad learn_threshold setting: %.2f",
-				learn_threshold);
+			winnow_error_quark (),          /* error domain */
+			1,                              /* error code */
+			"bad learn_threshold setting: %.2f",
+			learn_threshold);
 		return FALSE;
 	}
 	/* If to_demote list is empty this message is already classified correctly */
 	if (max > WINNOW_PROMOTION && to_demote == NULL && !force_learn) {
-		msg_info ("this message is already of class %s with threshold %.2f and weight %.2F",
-				sel_st->symbol, learn_threshold, max);
+		msg_info (
+			"this message is already of class %s with threshold %.2f and weight %.2F",
+			sel_st->symbol,
+			learn_threshold,
+			max);
 		goto end;
 	}
 	data.learn_file = to_learn;
@@ -526,7 +597,8 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 			if ((data.file = statfile_pool_is_open (pool, st->path)) == NULL) {
 				return FALSE;
 			}
-			if (to_demote != NULL && g_list_find (to_demote, data.file) != NULL) {
+			if (to_demote != NULL &&
+				g_list_find (to_demote, data.file) != NULL) {
 				data.do_demote = TRUE;
 			}
 			else {
@@ -557,48 +629,66 @@ winnow_learn (struct classifier_ctx *ctx, statfile_pool_t *pool, const char *sym
 		}
 
 		data.multiplier *= WINNOW_PROMOTION;
-		msg_info ("learn iteration %d for statfile %s: %G -> %G, multiplier: %.2f", iterations + 1, symbol,
-				start_value, end_value, data.multiplier);
-	} while ((in_class ? sel != to_learn : sel == to_learn)  && iterations ++ < MAX_LEARN_ITERATIONS);
-	
+		msg_info (
+			"learn iteration %d for statfile %s: %G -> %G, multiplier: %.2f",
+			iterations + 1,
+			symbol,
+			start_value,
+			end_value,
+			data.multiplier);
+	} while ((in_class ? sel != to_learn : sel ==
+		to_learn)  && iterations++ < MAX_LEARN_ITERATIONS);
+
 	if (iterations >= MAX_LEARN_ITERATIONS) {
-		msg_warn ("learning statfile %s  was not fully successfull: iterations count is limited to %d, final sum is %G", 
-				sel_st->symbol, MAX_LEARN_ITERATIONS, max);
+		msg_warn (
+			"learning statfile %s  was not fully successfull: iterations count is limited to %d, final sum is %G",
+			sel_st->symbol,
+			MAX_LEARN_ITERATIONS,
+			max);
 		g_set_error (err,
-				winnow_error_quark(),		/* error domain */
-				1,            				/* error code */
-				"learning statfile %s  was not fully successfull: iterations count is limited to %d",
-				sel_st->symbol, MAX_LEARN_ITERATIONS);
+			winnow_error_quark (),          /* error domain */
+			1,                              /* error code */
+			"learning statfile %s  was not fully successfull: iterations count is limited to %d",
+			sel_st->symbol, MAX_LEARN_ITERATIONS);
 		return FALSE;
 	}
 	else {
-		msg_info ("learned statfile %s successfully with %d iterations and sum %G", sel_st->symbol, iterations + 1, max);
+		msg_info (
+			"learned statfile %s successfully with %d iterations and sum %G",
+			sel_st->symbol,
+			iterations + 1,
+			max);
 	}
 
 
 end:
 	if (sum) {
 #ifdef HAVE_TANHL
-        *sum = (double)tanhl (max);
+		*sum = (double)tanhl (max);
 #else
-        /*
-         * As some implementations of libm does not support tanhl, try to use
-         * tanh
-         */
-        *sum = tanh ((double) max);
+		/*
+		 * As some implementations of libm does not support tanhl, try to use
+		 * tanh
+		 */
+		*sum = tanh ((double) max);
 #endif
 	}
 	return TRUE;
 }
 
 gboolean
-winnow_learn_spam (struct classifier_ctx* ctx, statfile_pool_t *pool,
-		GTree *input, struct rspamd_task *task, gboolean is_spam, lua_State *L, GError **err)
+winnow_learn_spam (struct classifier_ctx * ctx,
+	statfile_pool_t *pool,
+	GTree *input,
+	struct rspamd_task *task,
+	gboolean is_spam,
+	lua_State *L,
+	GError **err)
 {
 	g_set_error (err,
-					winnow_error_quark(),		/* error domain */
-					1,            				/* error code */
-					"learn spam is not supported for winnow"
-					);
+		winnow_error_quark (),                  /* error domain */
+		1,                                      /* error code */
+		"learn spam is not supported for winnow"
+		);
 	return FALSE;
 }

@@ -23,13 +23,13 @@
  */
 
 #include "config.h"
-#include "main.h"
 #include "events.h"
+#include "main.h"
 
 static gboolean
 rspamd_event_equal (gconstpointer a, gconstpointer b)
 {
-	const struct rspamd_async_event  *ev1 = a, *ev2 = b;
+	const struct rspamd_async_event *ev1 = a, *ev2 = b;
 
 	if (ev1->fin == ev2->fin) {
 		return ev1->user_data == ev2->user_data;
@@ -41,7 +41,7 @@ rspamd_event_equal (gconstpointer a, gconstpointer b)
 static guint
 rspamd_event_hash (gconstpointer a)
 {
-	const struct rspamd_async_event  *ev = a;
+	const struct rspamd_async_event *ev = a;
 
 	return GPOINTER_TO_UINT (ev->user_data);
 }
@@ -50,7 +50,7 @@ rspamd_event_hash (gconstpointer a)
 static void
 event_mutex_free (gpointer data)
 {
-	GMutex						   *mtx = data;
+	GMutex *mtx = data;
 
 	g_mutex_free (mtx);
 }
@@ -58,17 +58,17 @@ event_mutex_free (gpointer data)
 static void
 event_cond_free (gpointer data)
 {
-	GCond						   *cond = data;
+	GCond *cond = data;
 
 	g_cond_free (cond);
 }
 #endif
 
-struct rspamd_async_session    *
+struct rspamd_async_session *
 new_async_session (rspamd_mempool_t * pool, session_finalizer_t fin,
-		event_finalizer_t restore, event_finalizer_t cleanup, void *user_data)
+	event_finalizer_t restore, event_finalizer_t cleanup, void *user_data)
 {
-	struct rspamd_async_session    *new;
+	struct rspamd_async_session *new;
 
 	new = rspamd_mempool_alloc (pool, sizeof (struct rspamd_async_session));
 	new->pool = pool;
@@ -81,27 +81,40 @@ new_async_session (rspamd_mempool_t * pool, session_finalizer_t fin,
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
 	new->mtx = g_mutex_new ();
 	new->cond = g_cond_new ();
-	rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) event_mutex_free, new->mtx);
-	rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) event_cond_free, new->cond);
+	rspamd_mempool_add_destructor (pool,
+		(rspamd_mempool_destruct_t) event_mutex_free,
+		new->mtx);
+	rspamd_mempool_add_destructor (pool,
+		(rspamd_mempool_destruct_t) event_cond_free,
+		new->cond);
 #else
 	new->mtx = rspamd_mempool_alloc (pool, sizeof (GMutex));
 	g_mutex_init (new->mtx);
 	new->cond = rspamd_mempool_alloc (pool, sizeof (GCond));
 	g_cond_init (new->cond);
-	rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) g_mutex_clear, new->mtx);
-	rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) g_cond_clear, new->cond);
+	rspamd_mempool_add_destructor (pool,
+		(rspamd_mempool_destruct_t) g_mutex_clear,
+		new->mtx);
+	rspamd_mempool_add_destructor (pool,
+		(rspamd_mempool_destruct_t) g_cond_clear,
+		new->cond);
 #endif
 	new->threads = 0;
 
-	rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) g_hash_table_destroy, new->events);
+	rspamd_mempool_add_destructor (pool,
+		(rspamd_mempool_destruct_t) g_hash_table_destroy,
+		new->events);
 
 	return new;
 }
 
 void
-register_async_event (struct rspamd_async_session *session, event_finalizer_t fin, void *user_data, GQuark subsystem)
+register_async_event (struct rspamd_async_session *session,
+	event_finalizer_t fin,
+	void *user_data,
+	GQuark subsystem)
 {
-	struct rspamd_async_event      *new;
+	struct rspamd_async_event *new;
 
 	if (session == NULL) {
 		msg_info ("session is NULL");
@@ -109,23 +122,28 @@ register_async_event (struct rspamd_async_session *session, event_finalizer_t fi
 	}
 
 	g_mutex_lock (session->mtx);
-	new = rspamd_mempool_alloc (session->pool, sizeof (struct rspamd_async_event));
+	new = rspamd_mempool_alloc (session->pool,
+			sizeof (struct rspamd_async_event));
 	new->fin = fin;
 	new->user_data = user_data;
 	new->subsystem = subsystem;
 
 	g_hash_table_insert (session->events, new, new);
 
-	msg_debug ("added event: %p, pending %d events, subsystem: %s", user_data, g_hash_table_size (session->events),
-			g_quark_to_string (subsystem));
+	msg_debug ("added event: %p, pending %d events, subsystem: %s",
+		user_data,
+		g_hash_table_size (session->events),
+		g_quark_to_string (subsystem));
 
 	g_mutex_unlock (session->mtx);
 }
 
 void
-remove_normal_event (struct rspamd_async_session *session, event_finalizer_t fin, void *ud)
+remove_normal_event (struct rspamd_async_session *session,
+	event_finalizer_t fin,
+	void *ud)
 {
-	struct rspamd_async_event       search_ev, *found_ev;
+	struct rspamd_async_event search_ev, *found_ev;
 
 	if (session == NULL) {
 		msg_info ("session is NULL");
@@ -136,10 +154,12 @@ remove_normal_event (struct rspamd_async_session *session, event_finalizer_t fin
 	/* Search for event */
 	search_ev.fin = fin;
 	search_ev.user_data = ud;
-	if ((found_ev = g_hash_table_lookup (session->events, &search_ev)) != NULL) {
+	if ((found_ev =
+		g_hash_table_lookup (session->events, &search_ev)) != NULL) {
 		g_hash_table_remove (session->events, found_ev);
 		msg_debug ("removed event: %p, subsystem: %s, pending %d events", ud,
-			g_quark_to_string (found_ev->subsystem), g_hash_table_size (session->events));
+			g_quark_to_string (found_ev->subsystem),
+			g_hash_table_size (session->events));
 		/* Remove event */
 		fin (ud);
 	}
@@ -151,11 +171,11 @@ remove_normal_event (struct rspamd_async_session *session, event_finalizer_t fin
 static gboolean
 rspamd_session_destroy (gpointer k, gpointer v, gpointer unused)
 {
-	struct rspamd_async_event      *ev = v;
+	struct rspamd_async_event *ev = v;
 
 	/* Call event's finalizer */
 	msg_debug ("removed event on destroy: %p, subsystem: %s", ev->user_data,
-			g_quark_to_string (ev->subsystem));
+		g_quark_to_string (ev->subsystem));
 
 	if (ev->fin != NULL) {
 		ev->fin (ev->user_data);
@@ -174,14 +194,16 @@ destroy_session (struct rspamd_async_session *session)
 
 	g_mutex_lock (session->mtx);
 	if (session->threads > 0) {
-	/* Wait for conditional variable to finish processing */
+		/* Wait for conditional variable to finish processing */
 		g_mutex_unlock (session->mtx);
 		g_cond_wait (session->cond, session->mtx);
 	}
 
 	session->wanna_die = TRUE;
 
-	g_hash_table_foreach_remove (session->events, rspamd_session_destroy, session);
+	g_hash_table_foreach_remove (session->events,
+		rspamd_session_destroy,
+		session);
 
 	/* Mutex can be destroyed here */
 	g_mutex_unlock (session->mtx);
@@ -204,7 +226,7 @@ check_session_pending (struct rspamd_async_session *session)
 		}
 		if (session->fin != NULL) {
 			g_mutex_unlock (session->mtx);
-			if (! session->fin (session->user_data)) {
+			if (!session->fin (session->user_data)) {
 				/* Session finished incompletely, perform restoration */
 				if (session->restore != NULL) {
 					session->restore (session->user_data);

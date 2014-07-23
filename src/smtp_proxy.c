@@ -21,16 +21,16 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "config.h"
-#include "main.h"
 #include "cfg_file.h"
-#include "util.h"
-#include "smtp_proto.h"
+#include "config.h"
+#include "dns.h"
+#include "main.h"
 #include "map.h"
 #include "message.h"
-#include "dns.h"
-#include "upstream.h"
 #include "proxy.h"
+#include "smtp_proto.h"
+#include "upstream.h"
+#include "util.h"
 
 /*
  * SMTP proxy is a simple smtp proxy worker for dns resolving and
@@ -53,14 +53,14 @@ gpointer init_smtp_proxy (struct rspamd_config *cfg);
 void start_smtp_proxy (struct rspamd_worker *worker);
 
 worker_t smtp_proxy_worker = {
-	"smtp_proxy",				/* Name */
-	init_smtp_proxy,			/* Init function */
-	start_smtp_proxy,			/* Start function */
-	TRUE,						/* Has socket */
-	FALSE,						/* Non unique */
-	FALSE,						/* Non threaded */
-	TRUE,						/* Killable */
-	SOCK_STREAM					/* TCP socket */
+	"smtp_proxy",               /* Name */
+	init_smtp_proxy,            /* Init function */
+	start_smtp_proxy,           /* Start function */
+	TRUE,                       /* Has socket */
+	FALSE,                      /* Non unique */
+	FALSE,                      /* Non threaded */
+	TRUE,                       /* Killable */
+	SOCK_STREAM                 /* TCP socket */
 };
 
 struct smtp_proxy_ctx {
@@ -140,7 +140,7 @@ struct smtp_proxy_session {
 static void
 free_smtp_proxy_session (gpointer arg)
 {
-	struct smtp_proxy_session            *session = arg;
+	struct smtp_proxy_session *session = arg;
 	static const char fatal_smtp_error[] = "521 5.2.1 Internal error" CRLF;
 
 	if (session) {
@@ -152,17 +152,23 @@ free_smtp_proxy_session (gpointer arg)
 			g_string_free (session->upstream_greeting, TRUE);
 		}
 
-		if (session->state != SMTP_PROXY_STATE_PROXY && session->state != SMTP_PROXY_STATE_REJECT &&
-				session->state != SMTP_PROXY_STATE_REJECT_EMULATE) {
+		if (session->state != SMTP_PROXY_STATE_PROXY && session->state !=
+			SMTP_PROXY_STATE_REJECT &&
+			session->state != SMTP_PROXY_STATE_REJECT_EMULATE) {
 			/* Send 521 fatal error */
-			if (write (session->sock, fatal_smtp_error, sizeof (fatal_smtp_error)) == -1) {
+			if (write (session->sock, fatal_smtp_error,
+				sizeof (fatal_smtp_error)) == -1) {
 				msg_err ("write error to client failed: %s", strerror (errno));
 			}
 		}
-		else if ((session->state == SMTP_PROXY_STATE_REJECT || session->state == SMTP_PROXY_STATE_REJECT_EMULATE) &&
-				session->from && session->rcpt && session->dnsbl_applied) {
-			msg_info ("reject by %s mail from <%s> to <%s>, ip: %s", session->dnsbl_applied,
-					session->from, session->rcpt, inet_ntoa (session->client_addr));
+		else if ((session->state == SMTP_PROXY_STATE_REJECT || session->state ==
+			SMTP_PROXY_STATE_REJECT_EMULATE) &&
+			session->from && session->rcpt && session->dnsbl_applied) {
+			msg_info ("reject by %s mail from <%s> to <%s>, ip: %s",
+				session->dnsbl_applied,
+				session->from,
+				session->rcpt,
+				inet_ntoa (session->client_addr));
 		}
 
 		close (session->sock);
@@ -185,7 +191,7 @@ free_smtp_proxy_session (gpointer arg)
 static void
 smtp_proxy_err_proxy (GError * err, void *arg)
 {
-	struct smtp_proxy_session            *session = arg;
+	struct smtp_proxy_session *session = arg;
 
 	if (err) {
 		g_error_free (err);
@@ -204,7 +210,7 @@ smtp_proxy_err_proxy (GError * err, void *arg)
 static gint
 check_valid_smtp_greeting (GString *s)
 {
-	gchar								*p;
+	gchar *p;
 
 	p = s->str + s->len - 1;
 	if (s->len < 6 || (*p != '\n' || *(p - 1) != '\r')) {
@@ -222,10 +228,10 @@ check_valid_smtp_greeting (GString *s)
 			return 0;
 		}
 		else if ((*p == '5' || *p == '4' || *p == '3') &&
-				g_ascii_isdigit (p[1]) && g_ascii_isdigit (p[2]) && p[3] == ' ') {
+			g_ascii_isdigit (p[1]) && g_ascii_isdigit (p[2]) && p[3] == ' ') {
 			return -1;
 		}
-		p --;
+		p--;
 	}
 
 	return 1;
@@ -238,9 +244,9 @@ check_valid_smtp_greeting (GString *s)
 static void
 smtp_proxy_greeting_handler (gint fd, short what, void *arg)
 {
-	struct smtp_proxy_session           *session = arg;
-	gint								 r;
-	gchar								 read_buf[BUFSIZ];
+	struct smtp_proxy_session *session = arg;
+	gint r;
+	gchar read_buf[BUFSIZ];
 
 	if (what == EV_READ) {
 		if (session->state == SMTP_PROXY_STATE_GREETING) {
@@ -253,16 +259,23 @@ smtp_proxy_greeting_handler (gint fd, short what, void *arg)
 				if (r == 1) {
 					/* Send xclient */
 					if (session->ctx->use_xclient) {
-						r = rspamd_snprintf (read_buf, sizeof (read_buf), "XCLIENT NAME=%s ADDR=%s" CRLF,
-								session->hostname, inet_ntoa (session->client_addr));
+						r = rspamd_snprintf (read_buf,
+								sizeof (read_buf),
+								"XCLIENT NAME=%s ADDR=%s" CRLF,
+								session->hostname,
+								inet_ntoa (session->client_addr));
 						r = write (session->upstream_sock, read_buf, r);
 
 						if (r < 0 && errno == EAGAIN) {
 							/* Add write event */
 							event_del (&session->upstream_ev);
-							event_set (&session->upstream_ev, session->upstream_sock,
-									EV_WRITE, smtp_proxy_greeting_handler, session);
-							event_base_set (session->ev_base, &session->upstream_ev);
+							event_set (&session->upstream_ev,
+								session->upstream_sock,
+								EV_WRITE,
+								smtp_proxy_greeting_handler,
+								session);
+							event_base_set (session->ev_base,
+								&session->upstream_ev);
 							event_add (&session->upstream_ev, NULL);
 						}
 						else if (r > 0) {
@@ -270,35 +283,49 @@ smtp_proxy_greeting_handler (gint fd, short what, void *arg)
 							session->state = SMTP_PROXY_STATE_XCLIENT;
 						}
 						else {
-							msg_info ("connection with %s got write error: %s", inet_ntoa (session->client_addr), strerror (errno));
+							msg_info ("connection with %s got write error: %s",
+								inet_ntoa (session->client_addr),
+								strerror (errno));
 							destroy_session (session->s);
 						}
 					}
 					else {
 						event_del (&session->upstream_ev);
 						/* Start direct proxy */
-						r = write (session->sock, session->upstream_greeting->str, session->upstream_greeting->len);
+						r = write (session->sock,
+								session->upstream_greeting->str,
+								session->upstream_greeting->len);
 						/* TODO: handle client's error here */
 						if (r > 0) {
-							session->proxy = rspamd_create_proxy (session->sock, session->upstream_sock, session->pool,
-								session->ev_base, session->ctx->proxy_buf_len,
-								&session->ctx->smtp_timeout, smtp_proxy_err_proxy, session);
+							session->proxy = rspamd_create_proxy (session->sock,
+									session->upstream_sock,
+									session->pool,
+									session->ev_base,
+									session->ctx->proxy_buf_len,
+									&session->ctx->smtp_timeout,
+									smtp_proxy_err_proxy,
+									session);
 							session->state = SMTP_PROXY_STATE_PROXY;
 						}
 						else {
-							msg_info ("connection with %s got write error: %s", inet_ntoa (session->client_addr), strerror (errno));
+							msg_info ("connection with %s got write error: %s",
+								inet_ntoa (session->client_addr),
+								strerror (errno));
 							destroy_session (session->s);
 						}
 					}
 				}
 				else if (r == -1) {
 					/* Proxy sent 500 error */
-					msg_info ("connection with %s got smtp error for greeting", session->upstream->name);
+					msg_info ("connection with %s got smtp error for greeting",
+						session->upstream->name);
 					destroy_session (session->s);
 				}
 			}
 			else {
-				msg_info ("connection with %s got read error: %s", session->upstream->name, strerror (errno));
+				msg_info ("connection with %s got read error: %s",
+					session->upstream->name,
+					strerror (errno));
 				destroy_session (session->s);
 			}
 		}
@@ -312,43 +339,58 @@ smtp_proxy_greeting_handler (gint fd, short what, void *arg)
 				if (r == 1) {
 					event_del (&session->upstream_ev);
 					/* Start direct proxy */
-					r = write (session->sock, session->upstream_greeting->str, session->upstream_greeting->len);
+					r = write (session->sock,
+							session->upstream_greeting->str,
+							session->upstream_greeting->len);
 					/* TODO: handle client's error here */
 					if (r > 0) {
-						session->proxy = rspamd_create_proxy (session->sock, session->upstream_sock, session->pool,
-								session->ev_base, session->ctx->proxy_buf_len,
-								&session->ctx->smtp_timeout, smtp_proxy_err_proxy, session);
+						session->proxy = rspamd_create_proxy (session->sock,
+								session->upstream_sock,
+								session->pool,
+								session->ev_base,
+								session->ctx->proxy_buf_len,
+								&session->ctx->smtp_timeout,
+								smtp_proxy_err_proxy,
+								session);
 						session->state = SMTP_PROXY_STATE_PROXY;
 					}
 					else {
-						msg_info ("connection with %s got write error: %s", inet_ntoa (session->client_addr), strerror (errno));
+						msg_info ("connection with %s got write error: %s",
+							inet_ntoa (session->client_addr),
+							strerror (errno));
 						destroy_session (session->s);
 					}
 				}
 				else if (r == -1) {
 					/* Proxy sent 500 error */
-					msg_info ("connection with %s got smtp error for xclient", session->upstream->name);
+					msg_info ("connection with %s got smtp error for xclient",
+						session->upstream->name);
 					destroy_session (session->s);
 				}
 			}
 		}
 		else {
-			msg_info ("connection with %s got read event at improper state: %d", session->upstream->name, session->state);
+			msg_info ("connection with %s got read event at improper state: %d",
+				session->upstream->name,
+				session->state);
 			destroy_session (session->s);
 		}
 	}
 	else if (what == EV_WRITE) {
 		if (session->state == SMTP_PROXY_STATE_GREETING) {
 			/* Send xclient again */
-			r = rspamd_snprintf (read_buf, sizeof (read_buf), "XCLIENT NAME=%s ADDR=%s" CRLF,
-					session->hostname, inet_ntoa (session->client_addr));
+			r = rspamd_snprintf (read_buf,
+					sizeof (read_buf),
+					"XCLIENT NAME=%s ADDR=%s" CRLF,
+					session->hostname,
+					inet_ntoa (session->client_addr));
 			r = write (session->upstream_sock, read_buf, r);
 
 			if (r < 0 && errno == EAGAIN) {
 				/* Add write event */
 				event_del (&session->upstream_ev);
 				event_set (&session->upstream_ev, session->upstream_sock,
-						EV_WRITE, smtp_proxy_greeting_handler, session);
+					EV_WRITE, smtp_proxy_greeting_handler, session);
 				event_base_set (session->ev_base, &session->upstream_ev);
 				event_add (&session->upstream_ev, NULL);
 			}
@@ -357,17 +399,22 @@ smtp_proxy_greeting_handler (gint fd, short what, void *arg)
 				session->state = SMTP_PROXY_STATE_XCLIENT;
 				event_del (&session->upstream_ev);
 				event_set (&session->upstream_ev, session->upstream_sock,
-						EV_READ | EV_PERSIST, smtp_proxy_greeting_handler, session);
+					EV_READ | EV_PERSIST, smtp_proxy_greeting_handler, session);
 				event_base_set (session->ev_base, &session->upstream_ev);
 				event_add (&session->upstream_ev, NULL);
 			}
 			else {
-				msg_info ("connection with %s got write error: %s", session->upstream->name, strerror (errno));
+				msg_info ("connection with %s got write error: %s",
+					session->upstream->name,
+					strerror (errno));
 				destroy_session (session->s);
 			}
 		}
 		else {
-			msg_info ("connection with %s got write event at improper state: %d", session->upstream->name, session->state);
+			msg_info (
+				"connection with %s got write event at improper state: %d",
+				session->upstream->name,
+				session->state);
 			destroy_session (session->s);
 		}
 	}
@@ -381,12 +428,17 @@ smtp_proxy_greeting_handler (gint fd, short what, void *arg)
 static gboolean
 create_smtp_proxy_upstream_connection (struct smtp_proxy_session *session)
 {
-	struct smtp_upstream              	*selected;
+	struct smtp_upstream *selected;
 
 	/* Try to select upstream */
-	selected = (struct smtp_upstream *)get_upstream_round_robin (session->ctx->upstreams,
-			session->ctx->upstream_num, sizeof (struct smtp_upstream),
-			time (NULL), DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS);
+	selected = (struct smtp_upstream *)get_upstream_round_robin (
+		session->ctx->upstreams,
+		session->ctx->upstream_num,
+		sizeof (struct smtp_upstream),
+		time (NULL),
+		DEFAULT_UPSTREAM_ERROR_TIME,
+		DEFAULT_UPSTREAM_DEAD_TIME,
+		DEFAULT_UPSTREAM_MAXERRORS);
 	if (selected == NULL) {
 		msg_err ("no upstreams suitable found");
 		return FALSE;
@@ -395,7 +447,12 @@ create_smtp_proxy_upstream_connection (struct smtp_proxy_session *session)
 	session->upstream = selected;
 
 	/* Now try to create socket */
-	session->upstream_sock = make_universal_socket (selected->name, selected->port, SOCK_STREAM, TRUE, FALSE, FALSE);
+	session->upstream_sock = make_universal_socket (selected->name,
+			selected->port,
+			SOCK_STREAM,
+			TRUE,
+			FALSE,
+			FALSE);
 	if (session->upstream_sock == -1) {
 		msg_err ("cannot make a connection to %s", selected->name);
 		upstream_fail (&selected->up, time (NULL));
@@ -406,7 +463,11 @@ create_smtp_proxy_upstream_connection (struct smtp_proxy_session *session)
 	/* First of all get upstream's greeting */
 	session->state = SMTP_PROXY_STATE_GREETING;
 
-	event_set (&session->upstream_ev, session->upstream_sock, EV_READ | EV_PERSIST, smtp_proxy_greeting_handler, session);
+	event_set (&session->upstream_ev,
+		session->upstream_sock,
+		EV_READ | EV_PERSIST,
+		smtp_proxy_greeting_handler,
+		session);
 	event_base_set (session->ev_base, &session->upstream_ev);
 	event_add (&session->upstream_ev, &session->ctx->smtp_timeout);
 
@@ -418,16 +479,17 @@ create_smtp_proxy_upstream_connection (struct smtp_proxy_session *session)
 static void
 smtp_dnsbl_cb (struct rdns_reply *reply, void *arg)
 {
-	struct smtp_proxy_session 						*session = arg;
-	const gchar										*p;
-	gint											 dots = 0;
-	const struct rdns_request_name					*req_name;
+	struct smtp_proxy_session *session = arg;
+	const gchar *p;
+	gint dots = 0;
+	const struct rdns_request_name *req_name;
 
-	session->rbl_requests --;
+	session->rbl_requests--;
 
 	req_name = rdns_request_get_name (reply->request, NULL);
 
-	msg_debug ("got reply for %s: %s", req_name[0].name, rdns_strerror (reply->code));
+	msg_debug ("got reply for %s: %s", req_name[0].name,
+		rdns_strerror (reply->code));
 
 	if (session->state != SMTP_PROXY_STATE_REJECT) {
 
@@ -436,13 +498,13 @@ smtp_dnsbl_cb (struct rdns_reply *reply, void *arg)
 			p = req_name[0].name;
 			while (*p) {
 				if (*p == '.') {
-					dots ++;
+					dots++;
 				}
 				if (dots == 4) {
 					session->dnsbl_applied = (gchar *)p + 1;
 					break;
 				}
-				p ++;
+				p++;
 			}
 			session->state = SMTP_PROXY_STATE_REJECT;
 		}
@@ -458,19 +520,22 @@ smtp_dnsbl_cb (struct rdns_reply *reply, void *arg)
 		else {
 			if (session->ctx->instant_reject) {
 				msg_info ("reject %s is denied by dnsbl: %s",
-						inet_ntoa (session->client_addr), session->dnsbl_applied);
+					inet_ntoa (session->client_addr), session->dnsbl_applied);
 				if (!rspamd_dispatcher_write (session->dispatcher,
-						make_smtp_error (session->pool, 521, "%s Client denied by %s", "5.2.1", session->dnsbl_applied),
-						0, FALSE, TRUE)) {
+					make_smtp_error (session->pool, 521,
+					"%s Client denied by %s", "5.2.1", session->dnsbl_applied),
+					0, FALSE, TRUE)) {
 					msg_err ("cannot write smtp error");
 				}
 			}
 			else {
 				/* Emulate fake smtp session */
-				rspamd_set_dispatcher_policy (session->dispatcher, BUFFER_LINE, 0);
+				rspamd_set_dispatcher_policy (session->dispatcher,
+					BUFFER_LINE,
+					0);
 				if (!rspamd_dispatcher_write (session->dispatcher,
-						make_smtp_error (session->pool, 220, "smtp ready"),
-						0, FALSE, TRUE)) {
+					make_smtp_error (session->pool, 220, "smtp ready"),
+					0, FALSE, TRUE)) {
 					msg_err ("cannot write smtp reply");
 				}
 			}
@@ -485,9 +550,9 @@ smtp_dnsbl_cb (struct rdns_reply *reply, void *arg)
 static void
 make_rbl_requests (struct smtp_proxy_session *session)
 {
-	GList									*cur;
-	gchar									*p, *dst;
-	guint									 len;
+	GList *cur;
+	gchar *p, *dst;
+	guint len;
 
 	cur = session->ctx->rbls;
 	while (cur) {
@@ -496,10 +561,10 @@ make_rbl_requests (struct smtp_proxy_session *session)
 		/* Print ipv4 addr */
 		p = (gchar *)&session->client_addr.s_addr;
 		rspamd_snprintf (dst, len, "%ud.%ud.%ud.%ud.%s", (guint)p[3],
-				(guint)p[2], (guint)p[1], (guint)p[0], cur->data);
+			(guint)p[2], (guint)p[1], (guint)p[0], cur->data);
 		if (make_dns_request (session->resolver, session->s, session->pool,
-								smtp_dnsbl_cb, session, RDNS_REQUEST_A, dst)) {
-			session->rbl_requests ++;
+			smtp_dnsbl_cb, session, RDNS_REQUEST_A, dst)) {
+			session->rbl_requests++;
 			msg_debug ("send request to %s", dst);
 		}
 		cur = g_list_next (cur);
@@ -507,7 +572,7 @@ make_rbl_requests (struct smtp_proxy_session *session)
 
 	if (session->rbl_requests == 0) {
 		/* Create proxy */
-		if (! create_smtp_proxy_upstream_connection (session)) {
+		if (!create_smtp_proxy_upstream_connection (session)) {
 			rspamd_dispatcher_restore (session->dispatcher);
 		}
 	}
@@ -520,10 +585,10 @@ make_rbl_requests (struct smtp_proxy_session *session)
 static void
 smtp_delay_handler (gint fd, short what, void *arg)
 {
-	struct smtp_proxy_session 				*session = arg;
+	struct smtp_proxy_session *session = arg;
 
 	remove_normal_event (session->s, (event_finalizer_t) event_del,
-			session->delay_timer);
+		session->delay_timer);
 	if (session->state == SMTP_PROXY_STATE_DELAY) {
 		/* TODO: Create upstream connection here */
 		if (session->ctx->rbls) {
@@ -539,8 +604,9 @@ smtp_delay_handler (gint fd, short what, void *arg)
 		/* TODO: Write error here */
 		session->state = SMTP_PROXY_STATE_REJECT;
 		if (!rspamd_dispatcher_write (session->dispatcher,
-				make_smtp_error (session->pool, 521, "%s Improper use of SMTP command pipelining", "5.2.1"),
-				0, FALSE, TRUE)) {
+			make_smtp_error (session->pool, 521,
+			"%s Improper use of SMTP command pipelining", "5.2.1"),
+			0, FALSE, TRUE)) {
 			msg_err ("cannot write smtp error");
 		}
 		rspamd_dispatcher_restore (session->dispatcher);
@@ -553,11 +619,12 @@ smtp_delay_handler (gint fd, short what, void *arg)
 static void
 smtp_make_delay (struct smtp_proxy_session *session)
 {
-	struct event 							*tev;
-	struct timeval 							*tv;
-	gint32 									 jitter;
+	struct event *tev;
+	struct timeval *tv;
+	gint32 jitter;
 
-	if (session->ctx->smtp_delay != 0 && session->state == SMTP_PROXY_STATE_DELAY) {
+	if (session->ctx->smtp_delay != 0 && session->state ==
+		SMTP_PROXY_STATE_DELAY) {
 		tev = rspamd_mempool_alloc (session->pool, sizeof(struct event));
 		tv = rspamd_mempool_alloc (session->pool, sizeof(struct timeval));
 		if (session->ctx->delay_jitter != 0) {
@@ -571,7 +638,7 @@ smtp_make_delay (struct smtp_proxy_session *session)
 		evtimer_set (tev, smtp_delay_handler, session);
 		evtimer_add (tev, tv);
 		register_async_event (session->s, (event_finalizer_t) event_del, tev,
-				g_quark_from_static_string ("smtp proxy"));
+			g_quark_from_static_string ("smtp proxy"));
 		session->delay_timer = tev;
 	}
 	else if (session->state == SMTP_PROXY_STATE_DELAY) {
@@ -593,10 +660,10 @@ smtp_make_delay (struct smtp_proxy_session *session)
 static void
 smtp_dns_cb (struct rdns_reply *reply, void *arg)
 {
-	struct smtp_proxy_session 						*session = arg;
-	gint 											 res = 0;
-	struct rdns_reply_entry 						*elt;
-	GList 											*cur;
+	struct smtp_proxy_session *session = arg;
+	gint res = 0;
+	struct rdns_reply_entry *elt;
+	GList *cur;
 
 	switch (session->state)
 	{
@@ -604,8 +671,8 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 		/* Parse reverse reply and start resolve of this ip */
 		if (reply->code != RDNS_RC_NOERROR) {
 			rspamd_conditional_debug (rspamd_main->logger,
-					NULL, __FUNCTION__, "DNS error: %s",
-					rdns_strerror (reply->code));
+				NULL, __FUNCTION__, "DNS error: %s",
+				rdns_strerror (reply->code));
 
 			if (reply->code == RDNS_RC_NXDOMAIN) {
 				session->hostname = rspamd_mempool_strdup (session->pool,
@@ -625,7 +692,7 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 						elt->content.ptr.name);
 				session->state = SMTP_PROXY_STATE_RESOLVE_NORMAL;
 				make_dns_request (session->resolver, session->s, session->pool,
-						smtp_dns_cb, session, RDNS_REQUEST_A, session->hostname);
+					smtp_dns_cb, session, RDNS_REQUEST_A, session->hostname);
 
 			}
 		}
@@ -633,8 +700,8 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 	case SMTP_PROXY_STATE_RESOLVE_NORMAL:
 		if (reply->code != RDNS_RC_NOERROR) {
 			rspamd_conditional_debug (rspamd_main->logger,
-					NULL, __FUNCTION__, "DNS error: %s",
-					rdns_strerror (reply->code));
+				NULL, __FUNCTION__, "DNS error: %s",
+				rdns_strerror (reply->code));
 
 			if (reply->code == RDNS_RC_NXDOMAIN) {
 				session->hostname = rspamd_mempool_strdup (session->pool,
@@ -649,9 +716,10 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 		}
 		else {
 			res = 0;
-			LL_FOREACH (reply->entries, elt) {
+			LL_FOREACH (reply->entries, elt)
+			{
 				if (memcmp (&session->client_addr, &elt->content.a.addr,
-						sizeof(struct in_addr)) == 0) {
+					sizeof(struct in_addr)) == 0) {
 					res = 1;
 					session->resolved = TRUE;
 					break;
@@ -660,9 +728,10 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 			}
 
 			if (res == 0) {
-				msg_info(
-						"cannot find address for hostname: %s, ip: %s", session->hostname,
-						inet_ntoa (session->client_addr));
+				msg_info (
+					"cannot find address for hostname: %s, ip: %s",
+					session->hostname,
+					inet_ntoa (session->client_addr));
 				session->hostname = rspamd_mempool_strdup (session->pool,
 						XCLIENT_HOST_UNAVAILABLE);
 			}
@@ -679,37 +748,41 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 static void
 proxy_parse_smtp_input (f_str_t *line, struct smtp_proxy_session *session)
 {
-	gchar								 *p, *c, *end;
-	gsize								  len;
+	gchar *p, *c, *end;
+	gsize len;
 
 	p = line->begin;
 	end = line->begin + line->len;
-	if (line->len >= sizeof("rcpt to: ") - 1 && (*p == 'r' || *p == 'R') && session->rcpt == NULL) {
-		if (g_ascii_strncasecmp (p, "rcpt to: ", sizeof ("rcpt to: ") - 1) == 0) {
+	if (line->len >= sizeof("rcpt to: ") - 1 &&
+		(*p == 'r' || *p == 'R') && session->rcpt == NULL) {
+		if (g_ascii_strncasecmp (p, "rcpt to: ",
+			sizeof ("rcpt to: ") - 1) == 0) {
 			p += sizeof ("rcpt to: ") - 1;
 			/* Skip spaces */
 			while ((g_ascii_isspace (*p) || *p == '<') && p < end) {
-				p ++;
+				p++;
 			}
 			c = p;
 			while (!(g_ascii_isspace (*p) || *p == '>') && p < end) {
-				p ++;
+				p++;
 			}
 			len = p - c;
 			session->rcpt = rspamd_mempool_alloc (session->pool, len + 1);
 			rspamd_strlcpy (session->rcpt, c, len + 1);
 		}
 	}
-	else if (line->len >= sizeof("mail from: ") - 1 && (*p == 'm' || *p == 'M') && session->from == NULL) {
-		if (g_ascii_strncasecmp (p, "mail from: ", sizeof ("mail from: ") - 1) == 0) {
+	else if (line->len >= sizeof("mail from: ") - 1 &&
+		(*p == 'm' || *p == 'M') && session->from == NULL) {
+		if (g_ascii_strncasecmp (p, "mail from: ", sizeof ("mail from: ") -
+			1) == 0) {
 			p += sizeof ("mail from: ") - 1;
 			/* Skip spaces */
 			while ((g_ascii_isspace (*p) || *p == '<') && p < end) {
-				p ++;
+				p++;
 			}
 			c = p;
 			while (!(g_ascii_isspace (*p) || *p == '>') && p < end) {
-				p ++;
+				p++;
 			}
 			len = p - c;
 			session->from = rspamd_mempool_alloc (session->pool, len + 1);
@@ -726,18 +799,19 @@ proxy_parse_smtp_input (f_str_t *line, struct smtp_proxy_session *session)
 /*
  * Callback that is called when there is data to read in buffer
  */
-static                          gboolean
+static gboolean
 smtp_proxy_read_socket (f_str_t * in, void *arg)
 {
-	struct smtp_proxy_session            *session = arg;
-	gchar								 *p;
+	struct smtp_proxy_session *session = arg;
+	gchar *p;
 
 	if (session->state != SMTP_PROXY_STATE_REJECT_EMULATE) {
 		/* This can be called only if client is using invalid pipelining */
 		session->state = SMTP_PROXY_STATE_REJECT;
 		if (!rspamd_dispatcher_write (session->dispatcher,
-				make_smtp_error (session->pool, 521, "%s Improper use of SMTP command pipelining", "5.2.1"),
-				0, FALSE, TRUE)) {
+			make_smtp_error (session->pool, 521,
+			"%s Improper use of SMTP command pipelining", "5.2.1"),
+			0, FALSE, TRUE)) {
 			msg_err ("cannot write smtp error");
 		}
 		destroy_session (session->s);
@@ -745,10 +819,11 @@ smtp_proxy_read_socket (f_str_t * in, void *arg)
 	else {
 		/* Try to extract data */
 		p = in->begin;
-		if (in->len >= sizeof ("helo") - 1 && (*p == 'h' || *p == 'H' || *p == 'e' || *p == 'E')) {
+		if (in->len >= sizeof ("helo") - 1 &&
+			(*p == 'h' || *p == 'H' || *p == 'e' || *p == 'E')) {
 			return rspamd_dispatcher_write (session->dispatcher,
-					"220 smtp ready" CRLF,
-					0, FALSE, TRUE);
+					   "220 smtp ready" CRLF,
+					   0, FALSE, TRUE);
 		}
 		else if (in->len > 0) {
 			proxy_parse_smtp_input (in, session);
@@ -756,32 +831,36 @@ smtp_proxy_read_socket (f_str_t * in, void *arg)
 		if (session->state == SMTP_PROXY_STATE_REJECT) {
 			/* Received QUIT command */
 			if (!rspamd_dispatcher_write (session->dispatcher,
-					"221 2.0.0 Bye" CRLF,
-					0, FALSE, TRUE)) {
+				"221 2.0.0 Bye" CRLF,
+				0, FALSE, TRUE)) {
 				msg_err ("cannot write smtp error");
 			}
 			destroy_session (session->s);
 			return FALSE;
 		}
 		if (session->rcpt != NULL) {
-			session->errors ++;
+			session->errors++;
 			if (session->errors > SMTP_MAXERRORS) {
 				if (!rspamd_dispatcher_write (session->dispatcher,
-						"521 5.2.1 Maximum errors reached" CRLF,
-						0, FALSE, TRUE)) {
+					"521 5.2.1 Maximum errors reached" CRLF,
+					0, FALSE, TRUE)) {
 					msg_err ("cannot write smtp error");
 				}
 				destroy_session (session->s);
 				return FALSE;
 			}
 			return rspamd_dispatcher_write (session->dispatcher,
-					make_smtp_error (session->pool, 521, "%s Client denied by %s", "5.2.1", session->dnsbl_applied),
-					0, FALSE, TRUE);
+					   make_smtp_error (session->pool,
+					   521,
+					   "%s Client denied by %s",
+					   "5.2.1",
+					   session->dnsbl_applied),
+					   0, FALSE, TRUE);
 		}
 		else {
 			return rspamd_dispatcher_write (session->dispatcher,
-					"250 smtp ready" CRLF,
-					0, FALSE, TRUE);
+					   "250 smtp ready" CRLF,
+					   0, FALSE, TRUE);
 		}
 	}
 
@@ -791,10 +870,10 @@ smtp_proxy_read_socket (f_str_t * in, void *arg)
 /*
  * Actually called only if something goes wrong
  */
-static                          gboolean
+static gboolean
 smtp_proxy_write_socket (void *arg)
 {
-	struct smtp_proxy_session            *session = arg;
+	struct smtp_proxy_session *session = arg;
 
 	if (session->ctx->instant_reject) {
 		destroy_session (session->s);
@@ -813,14 +892,14 @@ smtp_proxy_write_socket (void *arg)
 static void
 smtp_proxy_err_socket (GError * err, void *arg)
 {
-	struct smtp_proxy_session            *session = arg;
+	struct smtp_proxy_session *session = arg;
 
 	if (err) {
 		if (err->code == ETIMEDOUT) {
 			/* Write smtp error */
 			if (!rspamd_dispatcher_write (session->dispatcher,
-					"421 4.4.2 Error: timeout exceeded" CRLF,
-					0, FALSE, TRUE)) {
+				"421 4.4.2 Error: timeout exceeded" CRLF,
+				0, FALSE, TRUE)) {
 				msg_err ("cannot write smtp error");
 			}
 		}
@@ -837,16 +916,16 @@ smtp_proxy_err_socket (GError * err, void *arg)
 static void
 accept_socket (gint fd, short what, void *arg)
 {
-	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
-	struct smtp_proxy_session      *session;
-	struct smtp_proxy_ctx          *ctx;
-	rspamd_inet_addr_t               addr;
-	gint                             nfd;
+	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
+	struct smtp_proxy_session *session;
+	struct smtp_proxy_ctx *ctx;
+	rspamd_inet_addr_t addr;
+	gint nfd;
 
 	ctx = worker->ctx;
 
 	if ((nfd =
-			rspamd_accept_from_socket (fd, &addr)) == -1) {
+		rspamd_accept_from_socket (fd, &addr)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
 		return;
 	}
@@ -856,8 +935,8 @@ accept_socket (gint fd, short what, void *arg)
 	}
 
 	msg_info ("accepted connection from %s port %d",
-			rspamd_inet_address_to_string (&addr),
-			rspamd_inet_address_get_port (&addr));
+		rspamd_inet_address_to_string (&addr),
+		rspamd_inet_address_get_port (&addr));
 
 	ctx = worker->ctx;
 	session = g_slice_alloc0 (sizeof (struct smtp_proxy_session));
@@ -870,24 +949,34 @@ accept_socket (gint fd, short what, void *arg)
 	session->resolver = ctx->resolver;
 	session->ev_base = ctx->ev_base;
 	session->upstream_sock = -1;
-	session->ptr_str = rdns_generate_ptr_from_str (rspamd_inet_address_to_string (&addr));
+	session->ptr_str = rdns_generate_ptr_from_str (rspamd_inet_address_to_string (
+				&addr));
 	worker->srv->stat->connections_count++;
 
 	/* Resolve client's addr */
 	/* Set up async session */
-	session->s = new_async_session (session->pool, NULL, NULL, free_smtp_proxy_session, session);
+	session->s = new_async_session (session->pool,
+			NULL,
+			NULL,
+			free_smtp_proxy_session,
+			session);
 	session->state = SMTP_PROXY_STATE_RESOLVE_REVERSE;
-	if (! make_dns_request (session->resolver, session->s, session->pool,
-			smtp_dns_cb, session, RDNS_REQUEST_PTR, session->ptr_str)) {
+	if (!make_dns_request (session->resolver, session->s, session->pool,
+		smtp_dns_cb, session, RDNS_REQUEST_PTR, session->ptr_str)) {
 		msg_err ("cannot resolve %s", inet_ntoa (session->client_addr));
 		g_slice_free1 (sizeof (struct smtp_proxy_session), session);
 		close (nfd);
 		return;
 	}
 	else {
-		session->dispatcher = rspamd_create_dispatcher (session->ev_base, nfd, BUFFER_ANY,
-								smtp_proxy_read_socket, smtp_proxy_write_socket, smtp_proxy_err_socket,
-								&session->ctx->smtp_timeout, session);
+		session->dispatcher = rspamd_create_dispatcher (session->ev_base,
+				nfd,
+				BUFFER_ANY,
+				smtp_proxy_read_socket,
+				smtp_proxy_write_socket,
+				smtp_proxy_err_socket,
+				&session->ctx->smtp_timeout,
+				session);
 		session->dispatcher->peer_addr = session->client_addr.s_addr;
 	}
 }
@@ -895,8 +984,8 @@ accept_socket (gint fd, short what, void *arg)
 gpointer
 init_smtp_proxy (struct rspamd_config *cfg)
 {
-	struct smtp_proxy_ctx         		*ctx;
-	GQuark								type;
+	struct smtp_proxy_ctx *ctx;
+	GQuark type;
 
 	type = g_quark_try_string ("smtp_proxy");
 
@@ -909,36 +998,40 @@ init_smtp_proxy (struct rspamd_config *cfg)
 	ctx->instant_reject = TRUE;
 
 	rspamd_rcl_register_worker_option (cfg, type, "upstreams",
-			rspamd_rcl_parse_struct_string, ctx,
-			G_STRUCT_OFFSET (struct smtp_proxy_ctx, upstreams_str), 0);
+		rspamd_rcl_parse_struct_string, ctx,
+		G_STRUCT_OFFSET (struct smtp_proxy_ctx, upstreams_str), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "timeout",
-			rspamd_rcl_parse_struct_time, ctx,
-			G_STRUCT_OFFSET (struct smtp_proxy_ctx, smtp_timeout_raw), RSPAMD_CL_FLAG_TIME_UINT_32);
+		rspamd_rcl_parse_struct_time, ctx,
+		G_STRUCT_OFFSET (struct smtp_proxy_ctx,
+		smtp_timeout_raw), RSPAMD_CL_FLAG_TIME_UINT_32);
 
 	rspamd_rcl_register_worker_option (cfg, type, "delay",
-			rspamd_rcl_parse_struct_time, ctx,
-			G_STRUCT_OFFSET (struct smtp_proxy_ctx, smtp_delay), RSPAMD_CL_FLAG_TIME_UINT_32);
+		rspamd_rcl_parse_struct_time, ctx,
+		G_STRUCT_OFFSET (struct smtp_proxy_ctx,
+		smtp_delay), RSPAMD_CL_FLAG_TIME_UINT_32);
 
 	rspamd_rcl_register_worker_option (cfg, type, "jitter",
-			rspamd_rcl_parse_struct_time, ctx,
-			G_STRUCT_OFFSET (struct smtp_proxy_ctx, delay_jitter), RSPAMD_CL_FLAG_TIME_UINT_32);
+		rspamd_rcl_parse_struct_time, ctx,
+		G_STRUCT_OFFSET (struct smtp_proxy_ctx,
+		delay_jitter), RSPAMD_CL_FLAG_TIME_UINT_32);
 
 	rspamd_rcl_register_worker_option (cfg, type, "xclient",
-			rspamd_rcl_parse_struct_boolean, ctx,
-			G_STRUCT_OFFSET (struct smtp_proxy_ctx, use_xclient), 0);
+		rspamd_rcl_parse_struct_boolean, ctx,
+		G_STRUCT_OFFSET (struct smtp_proxy_ctx, use_xclient), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "instant_reject",
-			rspamd_rcl_parse_struct_boolean, ctx,
-			G_STRUCT_OFFSET (struct smtp_proxy_ctx, instant_reject), 0);
+		rspamd_rcl_parse_struct_boolean, ctx,
+		G_STRUCT_OFFSET (struct smtp_proxy_ctx, instant_reject), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "proxy_buffer",
-			rspamd_rcl_parse_struct_integer, ctx,
-			G_STRUCT_OFFSET (struct smtp_proxy_ctx, proxy_buf_len), RSPAMD_CL_FLAG_INT_32);
+		rspamd_rcl_parse_struct_integer, ctx,
+		G_STRUCT_OFFSET (struct smtp_proxy_ctx,
+		proxy_buf_len), RSPAMD_CL_FLAG_INT_32);
 
 	rspamd_rcl_register_worker_option (cfg, type, "dnsbl",
-			rspamd_rcl_parse_struct_string_list, ctx,
-			G_STRUCT_OFFSET (struct smtp_proxy_ctx, rbls), 0);
+		rspamd_rcl_parse_struct_string_list, ctx,
+		G_STRUCT_OFFSET (struct smtp_proxy_ctx, rbls), 0);
 
 	return ctx;
 }
@@ -947,15 +1040,16 @@ init_smtp_proxy (struct rspamd_config *cfg)
 static gboolean
 config_smtp_proxy_worker (struct rspamd_worker *worker)
 {
-	struct smtp_proxy_ctx         *ctx = worker->ctx;
-	gchar                         *value;
+	struct smtp_proxy_ctx *ctx = worker->ctx;
+	gchar *value;
 
 	/* Init timeval */
 	msec_to_tv (ctx->smtp_timeout_raw, &ctx->smtp_timeout);
 
 	/* Init upstreams */
 	if ((value = ctx->upstreams_str) != NULL) {
-		if (!parse_upstreams_line (ctx->pool, ctx->upstreams, value, &ctx->upstream_num)) {
+		if (!parse_upstreams_line (ctx->pool, ctx->upstreams, value,
+			&ctx->upstream_num)) {
 			return FALSE;
 		}
 	}
@@ -977,7 +1071,7 @@ config_smtp_proxy_worker (struct rspamd_worker *worker)
 void
 start_smtp_proxy (struct rspamd_worker *worker)
 {
-	struct smtp_proxy_ctx         *ctx = worker->ctx;
+	struct smtp_proxy_ctx *ctx = worker->ctx;
 
 	ctx->ev_base = rspamd_prepare_worker (worker, "smtp_proxy", accept_socket);
 
@@ -988,7 +1082,9 @@ start_smtp_proxy (struct rspamd_worker *worker)
 	}
 
 	/* DNS resolver */
-	ctx->resolver = dns_resolver_init (worker->srv->logger, ctx->ev_base, worker->srv->cfg);
+	ctx->resolver = dns_resolver_init (worker->srv->logger,
+			ctx->ev_base,
+			worker->srv->cfg);
 
 	/* Set umask */
 	umask (S_IWGRP | S_IWOTH | S_IROTH | S_IRGRP);

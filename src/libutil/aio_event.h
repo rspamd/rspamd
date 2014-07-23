@@ -35,12 +35,13 @@ struct aio_context;
 /**
  * Callback for notifying
  */
-typedef void (*rspamd_aio_cb) (gint fd, gint res, guint64 len, gpointer data, gpointer ud);
+typedef void (*rspamd_aio_cb) (gint fd, gint res, guint64 len, gpointer data,
+	gpointer ud);
 
 /**
  * Initialize aio with specified event base
  */
-struct aio_context* rspamd_aio_init (struct event_base *base);
+struct aio_context * rspamd_aio_init (struct event_base *base);
 
 /**
  * Open file for aio
@@ -51,13 +52,13 @@ gint rspamd_aio_open (struct aio_context *ctx, const gchar *path, int flags);
  * Asynchronous read of file
  */
 gint rspamd_aio_read (gint fd, gpointer buf, guint64 len, guint64 offset,
-		struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud);
+	struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud);
 
 /**
  * Asynchronous write of file
  */
 gint rspamd_aio_write (gint fd, gpointer buf, guint64 len, guint64 offset,
-		struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud);
+	struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud);
 
 /**
  * Close of aio operations

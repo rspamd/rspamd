@@ -24,15 +24,15 @@
 
 
 #include "config.h"
-#include "radix.h"
 #include "mem_pool.h"
+#include "radix.h"
 
-static void                    *radix_alloc (radix_tree_t * tree);
+static void * radix_alloc (radix_tree_t * tree);
 
-radix_tree_t                   *
+radix_tree_t *
 radix_tree_create (void)
 {
-	radix_tree_t                   *tree;
+	radix_tree_t *tree;
 
 	tree = g_malloc (sizeof (radix_tree_t));
 	if (tree == NULL) {
@@ -62,10 +62,14 @@ enum radix_insert_type {
 };
 
 static uintptr_t
-radix32tree_insert_common (radix_tree_t * tree, guint32 key, guint32 mask, uintptr_t value, enum radix_insert_type type)
+radix32tree_insert_common (radix_tree_t * tree,
+	guint32 key,
+	guint32 mask,
+	uintptr_t value,
+	enum radix_insert_type type)
 {
-	guint32                         bit;
-	radix_node_t                   *node, *next;
+	guint32 bit;
+	radix_node_t *node, *next;
 
 	bit = 0x80000000;
 
@@ -92,14 +96,14 @@ radix32tree_insert_common (radix_tree_t * tree, guint32 key, guint32 mask, uintp
 		if (node->value != RADIX_NO_VALUE) {
 			/* Value was found, switch on insert type */
 			switch (type) {
-				case RADIX_INSERT:
-					return 1;
-				case RADIX_ADD:
-					node->value += value;
-					return value;
-				case RADIX_REPLACE:
-					node->value = value;
-					return 1;
+			case RADIX_INSERT:
+				return 1;
+			case RADIX_ADD:
+				node->value += value;
+				return value;
+			case RADIX_REPLACE:
+				node->value = value;
+				return 1;
 			}
 		}
 
@@ -137,22 +141,33 @@ radix32tree_insert_common (radix_tree_t * tree, guint32 key, guint32 mask, uintp
 	return 0;
 }
 
-gint 
-radix32tree_insert (radix_tree_t *tree, guint32 key, guint32 mask, uintptr_t value)
+gint
+radix32tree_insert (radix_tree_t *tree,
+	guint32 key,
+	guint32 mask,
+	uintptr_t value)
 {
-	return (gint)radix32tree_insert_common (tree, key, mask, value, RADIX_INSERT);
+	return (gint)radix32tree_insert_common (tree, key, mask, value,
+			   RADIX_INSERT);
 }
 
-uintptr_t 
+uintptr_t
 radix32tree_add (radix_tree_t *tree, guint32 key, guint32 mask, uintptr_t value)
 {
 	return radix32tree_insert_common (tree, key, mask, value, RADIX_ADD);
 }
 
-gint 
-radix32tree_replace (radix_tree_t *tree, guint32 key, guint32 mask, uintptr_t value)
+gint
+radix32tree_replace (radix_tree_t *tree,
+	guint32 key,
+	guint32 mask,
+	uintptr_t value)
 {
-	return (gint)radix32tree_insert_common (tree, key, mask, value, RADIX_REPLACE);
+	return (gint)radix32tree_insert_common (tree,
+			   key,
+			   mask,
+			   value,
+			   RADIX_REPLACE);
 }
 
 /*
@@ -162,14 +177,17 @@ radix32tree_replace (radix_tree_t *tree, guint32 key, guint32 mask, uintptr_t va
  * 5 words total in stack
  */
 static gboolean
-radix_recurse_nodes (radix_node_t *node, radix_tree_traverse_func func, void *user_data, gint level)
+radix_recurse_nodes (radix_node_t *node,
+	radix_tree_traverse_func func,
+	void *user_data,
+	gint level)
 {
 	if (node->left) {
 		if (radix_recurse_nodes (node->left, func, user_data, level + 1)) {
 			return TRUE;
 		}
 	}
-	
+
 	if (node->value != RADIX_NO_VALUE) {
 		if (func (node->key, level, node->value, user_data)) {
 			return TRUE;
@@ -186,17 +204,19 @@ radix_recurse_nodes (radix_node_t *node, radix_tree_traverse_func func, void *us
 }
 
 void
-radix32tree_traverse (radix_tree_t *tree, radix_tree_traverse_func func, void *user_data)
+radix32tree_traverse (radix_tree_t *tree,
+	radix_tree_traverse_func func,
+	void *user_data)
 {
-	radix_recurse_nodes (tree->root, func, user_data, 0); 
+	radix_recurse_nodes (tree->root, func, user_data, 0);
 }
 
 
 gint
 radix32tree_delete (radix_tree_t * tree, guint32 key, guint32 mask)
 {
-	guint32                         bit;
-	radix_node_t                   *node;
+	guint32 bit;
+	radix_node_t *node;
 
 	bit = 0x80000000;
 	node = tree->root;
@@ -226,7 +246,7 @@ radix32tree_delete (radix_tree_t * tree, guint32 key, guint32 mask)
 		return -1;
 	}
 
-	for (;;) {
+	for (;; ) {
 		if (node->parent->right == node) {
 			node->parent->right = NULL;
 
@@ -257,9 +277,9 @@ radix32tree_delete (radix_tree_t * tree, guint32 key, guint32 mask)
 uintptr_t
 radix32tree_find (radix_tree_t * tree, guint32 key)
 {
-	guint32                         bit;
-	uintptr_t                       value;
-	radix_node_t                   *node;
+	guint32 bit;
+	uintptr_t value;
+	radix_node_t *node;
 
 	bit = 0x80000000;
 	value = RADIX_NO_VALUE;
@@ -285,10 +305,10 @@ radix32tree_find (radix_tree_t * tree, guint32 key)
 }
 
 
-static void                    *
+static void *
 radix_alloc (radix_tree_t * tree)
 {
-	gchar                           *p;
+	gchar *p;
 
 	p = rspamd_mempool_alloc (tree->pool, sizeof (radix_node_t));
 
@@ -316,6 +336,6 @@ radix32_tree_find_addr (radix_tree_t *tree, rspamd_inet_addr_t *addr)
 	return radix32tree_find (tree, ntohl (addr->addr.s4.sin_addr.s_addr));
 }
 
-/* 
- * vi:ts=4 
+/*
+ * vi:ts=4
  */

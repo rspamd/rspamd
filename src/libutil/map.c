@@ -26,33 +26,33 @@
  * Implementation of map files handling
  */
 #include "config.h"
-#include "map.h"
 #include "http.h"
 #include "main.h"
-#include "util.h"
+#include "map.h"
 #include "mem_pool.h"
+#include "util.h"
 
-static const gchar             *hash_fill = "1";
+static const gchar *hash_fill = "1";
 
 /* Http reply */
 struct http_reply {
-	gint                            code;
-	GHashTable                     *headers;
-	gchar                          *cur_header;
-	gint                            parser_state;
+	gint code;
+	GHashTable *headers;
+	gchar *cur_header;
+	gint parser_state;
 };
 
 struct http_callback_data {
-	struct event                    ev;
-	struct event_base			   *ev_base;
-	struct timeval                  tv;
-	struct rspamd_map              *map;
-	struct http_map_data           *data;
-	struct http_reply              *reply;
-	struct map_cb_data              cbdata;
+	struct event ev;
+	struct event_base *ev_base;
+	struct timeval tv;
+	struct rspamd_map *map;
+	struct http_map_data *data;
+	struct http_reply *reply;
+	struct map_cb_data cbdata;
 
-	gint                            state;
-	gint                            fd;
+	gint state;
+	gint fd;
 };
 
 /* Value in seconds after whitch we would try to do stat on list file */
@@ -65,12 +65,17 @@ struct http_callback_data {
  * Helper for HTTP connection establishment
  */
 static gint
-connect_http (struct rspamd_map *map, struct http_map_data *data, gboolean is_async)
+connect_http (struct rspamd_map *map,
+	struct http_map_data *data,
+	gboolean is_async)
 {
-	gint                            sock;
+	gint sock;
 
 	if ((sock = make_tcp_socket (data->addr, FALSE, is_async)) == -1) {
-		msg_info ("cannot connect to http server %s: %d, %s", data->host, errno, strerror (errno));
+		msg_info ("cannot connect to http server %s: %d, %s",
+			data->host,
+			errno,
+			strerror (errno));
 		return -1;
 	}
 
@@ -81,17 +86,27 @@ connect_http (struct rspamd_map *map, struct http_map_data *data, gboolean is_as
  * Write HTTP request
  */
 static void
-write_http_request (struct rspamd_map *map, struct http_map_data *data, gint sock)
+write_http_request (struct rspamd_map *map,
+	struct http_map_data *data,
+	gint sock)
 {
-	gchar                           outbuf[BUFSIZ], datebuf[128];
-	gint                            r;
-	struct tm			 			*tm;
+	gchar outbuf[BUFSIZ], datebuf[128];
+	gint r;
+	struct tm *tm;
 
 	tm = gmtime (&data->last_checked);
 	strftime (datebuf, sizeof (datebuf), "%a, %d %b %Y %H:%M:%S %Z", tm);
-	r = rspamd_snprintf (outbuf, sizeof (outbuf), "GET %s%s HTTP/1.1" CRLF "Connection: close" CRLF "Host: %s" CRLF, (*data->path == '/') ? "" : "/", data->path, data->host);
+	r = rspamd_snprintf (outbuf,
+			sizeof (outbuf),
+			"GET %s%s HTTP/1.1" CRLF "Connection: close" CRLF "Host: %s" CRLF,
+			(*data->path == '/') ? "" : "/",
+			data->path,
+			data->host);
 	if (data->last_checked != 0) {
-		r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "If-Modified-Since: %s" CRLF, datebuf);
+		r += rspamd_snprintf (outbuf + r,
+				sizeof (outbuf) - r,
+				"If-Modified-Since: %s" CRLF,
+				datebuf);
 	}
 
 	r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, CRLF);
@@ -104,16 +119,16 @@ write_http_request (struct rspamd_map *map, struct http_map_data *data, gint soc
 /**
  * FSM for parsing HTTP reply
  */
-static gchar                  *
+static gchar *
 parse_http_reply (gchar * chunk, gint len, struct http_reply *reply)
 {
-	gchar                         *s, *p, *err_str, *tmp;
+	gchar *s, *p, *err_str, *tmp;
 	p = chunk;
 	s = chunk;
 
 	while (p - chunk < len) {
 		switch (reply->parser_state) {
-			/* Search status code */
+		/* Search status code */
 		case 0:
 			/* Search for status code */
 			if (*p != ' ') {
@@ -131,7 +146,7 @@ parse_http_reply (gchar * chunk, gint len, struct http_reply *reply)
 				continue;
 			}
 			break;
-			/* Skip to end of line */
+		/* Skip to end of line */
 		case 1:
 			if (*p == '\n') {
 				/* Switch to read header state */
@@ -140,7 +155,7 @@ parse_http_reply (gchar * chunk, gint len, struct http_reply *reply)
 			/* Each skipped symbol is proceeded */
 			s = ++p;
 			break;
-			/* Read header value */
+		/* Read header value */
 		case 2:
 			if (*p == ':') {
 				reply->cur_header = g_malloc (p - s + 1);
@@ -153,7 +168,7 @@ parse_http_reply (gchar * chunk, gint len, struct http_reply *reply)
 			}
 			p++;
 			break;
-			/* Skip spaces after header name */
+		/* Skip spaces after header name */
 		case 3:
 			if (*p != ' ') {
 				s = p;
@@ -163,13 +178,14 @@ parse_http_reply (gchar * chunk, gint len, struct http_reply *reply)
 				p++;
 			}
 			break;
-			/* Read header value */
+		/* Read header value */
 		case 4:
 			if (*p == '\r') {
 				if (reply->cur_header != NULL) {
 					tmp = g_malloc (p - s + 1);
 					rspamd_strlcpy (tmp, s, p - s + 1);
-					g_hash_table_insert (reply->headers, reply->cur_header, tmp);
+					g_hash_table_insert (reply->headers, reply->cur_header,
+						tmp);
 					reply->cur_header = NULL;
 				}
 				reply->parser_state = 1;
@@ -198,13 +214,14 @@ parse_http_reply (gchar * chunk, gint len, struct http_reply *reply)
 static gint
 read_chunk_header (gchar * buf, gint len, struct http_map_data *data)
 {
-	gchar                           chunkbuf[32], *p, *c, *err_str;
-	gint                            skip = 0;
+	gchar chunkbuf[32], *p, *c, *err_str;
+	gint skip = 0;
 
 	p = chunkbuf;
 	c = buf;
 	/* Find hex digits */
-	while (g_ascii_isxdigit (*c) && p - chunkbuf < (gint)(sizeof (chunkbuf) - 1) && skip < len) {
+	while (g_ascii_isxdigit (*c) && p - chunkbuf <
+		(gint)(sizeof (chunkbuf) - 1) && skip < len) {
 		*p++ = *c++;
 		skip++;
 	}
@@ -231,11 +248,15 @@ read_chunk_header (gchar * buf, gint len, struct http_map_data *data)
 /**
  * Helper callback for reading chunked reply
  */
-static                          gboolean
-read_http_chunked (gchar * buf, size_t len, struct rspamd_map *map, struct http_map_data *data, struct map_cb_data *cbdata)
+static gboolean
+read_http_chunked (gchar * buf,
+	size_t len,
+	struct rspamd_map *map,
+	struct http_map_data *data,
+	struct map_cb_data *cbdata)
 {
-	gchar                          *p = buf, *remain;
-	gint                            skip = 0;
+	gchar *p = buf, *remain;
+	gint skip = 0;
 
 	if (data->chunked == 1) {
 		/* Read first chunk data */
@@ -301,14 +322,20 @@ read_http_chunked (gchar * buf, size_t len, struct rspamd_map *map, struct http_
 /**
  * Callback for reading HTTP reply
  */
-static                          gboolean
-read_http_common (struct rspamd_map *map, struct http_map_data *data, struct http_reply *reply, struct map_cb_data *cbdata, gint fd)
+static gboolean
+read_http_common (struct rspamd_map *map,
+	struct http_map_data *data,
+	struct http_reply *reply,
+	struct map_cb_data *cbdata,
+	gint fd)
 {
-	gchar                         *remain, *pos;
-	ssize_t                         r;
-	gchar                           *te, *date;
-	
-	if ((r = read (fd, data->read_buf + data->rlen, sizeof (data->read_buf) - data->rlen)) > 0) {
+	gchar *remain, *pos;
+	ssize_t r;
+	gchar *te, *date;
+
+	if ((r =
+		read (fd, data->read_buf + data->rlen, sizeof (data->read_buf) -
+		data->rlen)) > 0) {
 		r += data->rlen;
 		data->rlen = 0;
 		remain = parse_http_reply (data->read_buf, r, reply);
@@ -325,7 +352,9 @@ read_http_common (struct rspamd_map *map, struct http_map_data *data, struct htt
 		if (reply->parser_state == 6) {
 			/* If reply header is parsed successfully, try to read further data */
 			if (reply->code != 200 && reply->code != 304) {
-				msg_err ("got error reply from server %s, %d", data->host, reply->code);
+				msg_err ("got error reply from server %s, %d",
+					data->host,
+					reply->code);
 				return FALSE;
 			}
 			else if (reply->code == 304) {
@@ -335,7 +364,9 @@ read_http_common (struct rspamd_map *map, struct http_map_data *data, struct htt
 			pos = data->read_buf;
 			/* Check for chunked */
 			if (data->chunked == 0) {
-				if ((te = g_hash_table_lookup (reply->headers, "Transfer-Encoding")) != NULL) {
+				if ((te =
+					g_hash_table_lookup (reply->headers,
+					"Transfer-Encoding")) != NULL) {
 					if (g_ascii_strcasecmp (te, "chunked") == 0) {
 						data->chunked = 1;
 					}
@@ -381,9 +412,9 @@ read_http_common (struct rspamd_map *map, struct http_map_data *data, struct htt
 static void
 read_http_sync (struct rspamd_map *map, struct http_map_data *data)
 {
-	struct map_cb_data              cbdata;
-	gint                            fd;
-	struct http_reply              *repl;
+	struct map_cb_data cbdata;
+	gint fd;
+	struct http_reply *repl;
 
 	if (map->read_callback == NULL || map->fin_callback == NULL) {
 		msg_err ("bad callback for reading map file");
@@ -404,9 +435,12 @@ read_http_sync (struct rspamd_map *map, struct http_map_data *data)
 	repl = g_malloc (sizeof (struct http_reply));
 	repl->parser_state = 0;
 	repl->code = 404;
-	repl->headers = g_hash_table_new_full (rspamd_strcase_hash, rspamd_strcase_equal, g_free, g_free);
+	repl->headers = g_hash_table_new_full (rspamd_strcase_hash,
+			rspamd_strcase_equal,
+			g_free,
+			g_free);
 
-	while (read_http_common (map, data, repl, &cbdata, fd));
+	while (read_http_common (map, data, repl, &cbdata, fd)) ;
 
 	close (fd);
 
@@ -426,10 +460,10 @@ read_http_sync (struct rspamd_map *map, struct http_map_data *data)
 static void
 read_map_file (struct rspamd_map *map, struct file_map_data *data)
 {
-	struct map_cb_data              cbdata;
-	gchar                          buf[BUFSIZ], *remain;
-	ssize_t                         r;
-	gint                            fd, rlen;
+	struct map_cb_data cbdata;
+	gchar buf[BUFSIZ], *remain;
+	ssize_t r;
+	gint fd, rlen;
 
 	if (map->read_callback == NULL || map->fin_callback == NULL) {
 		msg_err ("bad callback for reading map file");
@@ -437,7 +471,8 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 	}
 
 	if ((fd = open (data->filename, O_RDONLY)) == -1) {
-		msg_warn ("cannot open file '%s': %s", data->filename, strerror (errno));
+		msg_warn ("cannot open file '%s': %s", data->filename,
+			strerror (errno));
 		return;
 	}
 
@@ -467,10 +502,14 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 /**
  * FSM for parsing lists
  */
-gchar                  *
-abstract_parse_kv_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data, insert_func func)
+gchar *
+abstract_parse_kv_list (rspamd_mempool_t * pool,
+	gchar * chunk,
+	gint len,
+	struct map_cb_data *data,
+	insert_func func)
 {
-	gchar                         *c, *p, *key = NULL, *value = NULL;
+	gchar *c, *p, *key = NULL, *value = NULL;
 
 	p = chunk;
 	c = p;
@@ -526,7 +565,7 @@ abstract_parse_kv_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct
 				}
 			}
 			else {
-				p ++;
+				p++;
 			}
 			break;
 		case 2:
@@ -536,7 +575,7 @@ abstract_parse_kv_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct
 				data->state = 0;
 			}
 			else {
-				p ++;
+				p++;
 			}
 			break;
 		case 99:
@@ -557,7 +596,7 @@ abstract_parse_kv_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct
 		case 100:
 			/* Skip \r\n and whitespaces */
 			if (*p == '\r' || *p == '\n' || g_ascii_isspace (*p)) {
-				p ++;
+				p++;
 			}
 			else {
 				c = p;
@@ -571,10 +610,14 @@ abstract_parse_kv_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct
 	return c;
 }
 
-gchar                  *
-abstract_parse_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data, insert_func func)
+gchar *
+abstract_parse_list (rspamd_mempool_t * pool,
+	gchar * chunk,
+	gint len,
+	struct map_cb_data *data,
+	insert_func func)
 {
-	gchar                         *s, *p, *str, *start;
+	gchar *s, *p, *str, *start;
 
 	p = chunk;
 	start = p;
@@ -584,7 +627,7 @@ abstract_parse_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct ma
 
 	while (p - chunk < len) {
 		switch (data->state) {
-			/* READ_SYMBOL */
+		/* READ_SYMBOL */
 		case 0:
 			if (*p == '#') {
 				/* Got comment */
@@ -623,7 +666,7 @@ abstract_parse_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct ma
 				p++;
 			}
 			break;
-			/* SKIP_COMMENT */
+		/* SKIP_COMMENT */
 		case 1:
 			/* Skip comment till end of line */
 			if (*p == '\r' || *p == '\n') {
@@ -652,13 +695,13 @@ abstract_parse_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct ma
 static void
 radix_tree_insert_helper (gpointer st, gconstpointer key, gpointer value)
 {
-	radix_tree_t                   *tree = st;
+	radix_tree_t *tree = st;
 
-	guint32                         mask = 0xFFFFFFFF;
-	guint32                         ip;
-	gchar                           *token, *ipnet, *err_str, **strv, **cur;
-	struct in_addr                  ina;
-	gint                            k;
+	guint32 mask = 0xFFFFFFFF;
+	guint32 ip;
+	gchar *token, *ipnet, *err_str, **strv, **cur;
+	struct in_addr ina;
+	gint k;
 
 	/* Split string if there are multiple items inside a single string */
 	strv = g_strsplit_set ((gchar *)key, " ,;", 0);
@@ -677,7 +720,10 @@ radix_tree_insert_helper (gpointer st, gconstpointer key, gpointer value)
 			/* Get mask */
 			k = strtoul (ipnet, &err_str, 10);
 			if (errno != 0) {
-				msg_warn ("invalid netmask, error detected on symbol: %s, erorr: %s", err_str, strerror (errno));
+				msg_warn (
+					"invalid netmask, error detected on symbol: %s, erorr: %s",
+					err_str,
+					strerror (errno));
 				k = 32;
 			}
 			else if (k > 32 || k < 0) {
@@ -698,10 +744,12 @@ radix_tree_insert_helper (gpointer st, gconstpointer key, gpointer value)
 		ip = ntohl ((guint32) ina.s_addr);
 		k = radix32tree_insert (tree, ip, mask, 1);
 		if (k == -1) {
-			msg_warn ("cannot insert ip to tree: %s, mask %X", inet_ntoa (ina), mask);
+			msg_warn ("cannot insert ip to tree: %s, mask %X", inet_ntoa (
+					ina), mask);
 		}
 		else if (k == 1) {
-			msg_warn ("ip %s, mask %X, value already exists", inet_ntoa (ina), mask);
+			msg_warn ("ip %s, mask %X, value already exists", inet_ntoa (
+					ina), mask);
 		}
 		cur++;
 	}
@@ -710,13 +758,21 @@ radix_tree_insert_helper (gpointer st, gconstpointer key, gpointer value)
 }
 
 /* Helpers */
-gchar                         *
-read_host_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
+gchar *
+read_host_list (rspamd_mempool_t * pool,
+	gchar * chunk,
+	gint len,
+	struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
-		data->cur_data = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+		data->cur_data = g_hash_table_new (rspamd_strcase_hash,
+				rspamd_strcase_equal);
 	}
-	return abstract_parse_list (pool, chunk, len, data, (insert_func) g_hash_table_insert);
+	return abstract_parse_list (pool,
+			   chunk,
+			   len,
+			   data,
+			   (insert_func) g_hash_table_insert);
 }
 
 void
@@ -727,13 +783,21 @@ fin_host_list (rspamd_mempool_t * pool, struct map_cb_data *data)
 	}
 }
 
-gchar                         *
-read_kv_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
+gchar *
+read_kv_list (rspamd_mempool_t * pool,
+	gchar * chunk,
+	gint len,
+	struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
-		data->cur_data = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+		data->cur_data = g_hash_table_new (rspamd_strcase_hash,
+				rspamd_strcase_equal);
 	}
-	return abstract_parse_kv_list (pool, chunk, len, data, (insert_func) g_hash_table_insert);
+	return abstract_parse_kv_list (pool,
+			   chunk,
+			   len,
+			   data,
+			   (insert_func) g_hash_table_insert);
 }
 
 void
@@ -744,13 +808,20 @@ fin_kv_list (rspamd_mempool_t * pool, struct map_cb_data *data)
 	}
 }
 
-gchar                         *
-read_radix_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
+gchar *
+read_radix_list (rspamd_mempool_t * pool,
+	gchar * chunk,
+	gint len,
+	struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
 		data->cur_data = radix_tree_create ();
 	}
-	return abstract_parse_list (pool, chunk, len, data, (insert_func) radix_tree_insert_helper);
+	return abstract_parse_list (pool,
+			   chunk,
+			   len,
+			   data,
+			   (insert_func) radix_tree_insert_helper);
 }
 
 void
@@ -767,24 +838,28 @@ fin_radix_list (rspamd_mempool_t * pool, struct map_cb_data *data)
 static void
 file_callback (gint fd, short what, void *ud)
 {
-	struct rspamd_map              *map = ud;
-	struct file_map_data           *data = map->map_data;
-	struct stat                     st;
-	gdouble							jittered_sec;
+	struct rspamd_map *map = ud;
+	struct file_map_data *data = map->map_data;
+	struct stat st;
+	gdouble jittered_sec;
 
 	/* Plan event again with jitter */
 	evtimer_del (&map->ev);
-	jittered_sec = (map->cfg->map_timeout + g_random_double () * map->cfg->map_timeout);
+	jittered_sec =
+		(map->cfg->map_timeout + g_random_double () * map->cfg->map_timeout);
 	double_to_tv (jittered_sec, &map->tv);
 
 	evtimer_add (&map->ev, &map->tv);
 
 	if (g_atomic_int_get (map->locked)) {
-		msg_info ("don't try to reread map as it is locked by other process, will reread it later");
+		msg_info (
+			"don't try to reread map as it is locked by other process, will reread it later");
 		return;
 	}
 
-	if (stat (data->filename, &st) != -1 && (st.st_mtime > data->st.st_mtime || data->st.st_mtime == -1)) {
+	if (stat (data->filename,
+		&st) != -1 &&
+		(st.st_mtime > data->st.st_mtime || data->st.st_mtime == -1)) {
 		/* File was modified since last check */
 		memcpy (&data->st, &st, sizeof (struct stat));
 	}
@@ -818,7 +893,7 @@ free_http_cbdata (struct http_callback_data *cbd)
 static void
 http_async_callback (gint fd, short what, void *ud)
 {
-	struct http_callback_data      *cbd = ud;
+	struct http_callback_data *cbd = ud;
 
 	/* Begin of connection */
 	if (what == EV_WRITE) {
@@ -826,7 +901,11 @@ http_async_callback (gint fd, short what, void *ud)
 			/* Can write request */
 			write_http_request (cbd->map, cbd->data, fd);
 			/* Plan reading */
-			event_set (&cbd->ev, cbd->fd, EV_READ | EV_PERSIST, http_async_callback, cbd);
+			event_set (&cbd->ev,
+				cbd->fd,
+				EV_READ | EV_PERSIST,
+				http_async_callback,
+				cbd);
 			event_base_set (cbd->ev_base, &cbd->ev);
 			cbd->tv.tv_sec = HTTP_READ_TIMEOUT;
 			cbd->tv.tv_usec = 0;
@@ -835,7 +914,10 @@ http_async_callback (gint fd, short what, void *ud)
 			cbd->reply = g_malloc (sizeof (struct http_reply));
 			cbd->reply->parser_state = 0;
 			cbd->reply->code = 404;
-			cbd->reply->headers = g_hash_table_new_full (rspamd_strcase_hash, rspamd_strcase_equal, g_free, g_free);
+			cbd->reply->headers = g_hash_table_new_full (rspamd_strcase_hash,
+					rspamd_strcase_equal,
+					g_free,
+					g_free);
 			cbd->cbdata.state = 0;
 			cbd->cbdata.prev_data = *cbd->map->user_data;
 			cbd->cbdata.cur_data = NULL;
@@ -857,13 +939,15 @@ http_async_callback (gint fd, short what, void *ud)
 	/* Got reply, parse it */
 	else if (what == EV_READ) {
 		if (cbd->state >= 1) {
-			if (!read_http_common (cbd->map, cbd->data, cbd->reply, &cbd->cbdata, cbd->fd)) {
+			if (!read_http_common (cbd->map, cbd->data, cbd->reply,
+				&cbd->cbdata, cbd->fd)) {
 				/* Handle Not-Modified in a special way */
 				if (cbd->reply->code == 304) {
 					if (cbd->data->last_checked == (time_t)-1) {
 						cbd->data->last_checked = time (NULL);
 					}
-					msg_info ("data is not modified for server %s", cbd->data->host);
+					msg_info ("data is not modified for server %s",
+						cbd->data->host);
 				}
 				else if (cbd->cbdata.cur_data != NULL) {
 					/* Destroy old data and start reading request data */
@@ -900,20 +984,22 @@ http_async_callback (gint fd, short what, void *ud)
 static void
 http_callback (gint fd, short what, void *ud)
 {
-	struct rspamd_map              *map = ud;
-	struct http_map_data           *data = map->map_data;
-	gint                            sock;
-	struct http_callback_data      *cbd;
-	gdouble							jittered_sec;
+	struct rspamd_map *map = ud;
+	struct http_map_data *data = map->map_data;
+	gint sock;
+	struct http_callback_data *cbd;
+	gdouble jittered_sec;
 
 	/* Plan event again with jitter */
 	evtimer_del (&map->ev);
-	jittered_sec = (map->cfg->map_timeout + g_random_double () * map->cfg->map_timeout);
+	jittered_sec =
+		(map->cfg->map_timeout + g_random_double () * map->cfg->map_timeout);
 	double_to_tv (jittered_sec, &map->tv);
 	evtimer_add (&map->ev, &map->tv);
 
 	if (g_atomic_int_get (map->locked)) {
-		msg_info ("don't try to reread map as it is locked by other process, will reread it later");
+		msg_info (
+			"don't try to reread map as it is locked by other process, will reread it later");
 		return;
 	}
 
@@ -945,10 +1031,10 @@ http_callback (gint fd, short what, void *ud)
 void
 start_map_watch (struct rspamd_config *cfg, struct event_base *ev_base)
 {
-	GList                          *cur = cfg->maps;
-	struct rspamd_map              *map;
-	struct file_map_data           *fdata;
-	gdouble							jittered_sec;
+	GList *cur = cfg->maps;
+	struct rspamd_map *map;
+	struct file_map_data *fdata;
+	gdouble jittered_sec;
 
 	/* First of all do synced read of data */
 	while (cur) {
@@ -964,7 +1050,9 @@ start_map_watch (struct rspamd_config *cfg, struct event_base *ev_base)
 				read_map_file (map, map->map_data);
 			}
 			/* Plan event with jitter */
-			jittered_sec = (map->cfg->map_timeout + g_random_double ()  * map->cfg->map_timeout) / 2.;
+			jittered_sec =
+				(map->cfg->map_timeout + g_random_double () *
+				map->cfg->map_timeout) / 2.;
 			double_to_tv (jittered_sec, &map->tv);
 			evtimer_add (&map->ev, &map->tv);
 		}
@@ -974,7 +1062,9 @@ start_map_watch (struct rspamd_config *cfg, struct event_base *ev_base)
 			/* Read initial data */
 			read_http_sync (map, map->map_data);
 			/* Plan event with jitter */
-			jittered_sec = (map->cfg->map_timeout + g_random_double () * map->cfg->map_timeout);
+			jittered_sec =
+				(map->cfg->map_timeout + g_random_double () *
+				map->cfg->map_timeout);
 			double_to_tv (jittered_sec, &map->tv);
 			evtimer_add (&map->ev, &map->tv);
 		}
@@ -982,7 +1072,7 @@ start_map_watch (struct rspamd_config *cfg, struct event_base *ev_base)
 	}
 }
 
-void 
+void
 remove_all_maps (struct rspamd_config *cfg)
 {
 	g_list_free (cfg->maps);
@@ -996,13 +1086,15 @@ remove_all_maps (struct rspamd_config *cfg)
 gboolean
 check_map_proto (const gchar *map_line, gint *res, const gchar **pos)
 {
-	if (g_ascii_strncasecmp (map_line, "http://", sizeof ("http://") - 1) == 0) {
+	if (g_ascii_strncasecmp (map_line, "http://",
+		sizeof ("http://") - 1) == 0) {
 		if (res && pos) {
 			*res = MAP_PROTO_HTTP;
 			*pos = map_line + sizeof ("http://") - 1;
 		}
 	}
-	else if (g_ascii_strncasecmp (map_line, "file://", sizeof ("file://") - 1) == 0) {
+	else if (g_ascii_strncasecmp (map_line, "file://", sizeof ("file://") -
+		1) == 0) {
 		if (res && pos) {
 			*res = MAP_PROTO_FILE;
 			*pos = map_line + sizeof ("file://") - 1;
@@ -1022,17 +1114,21 @@ check_map_proto (const gchar *map_line, gint *res, const gchar **pos)
 }
 
 gboolean
-add_map (struct rspamd_config *cfg, const gchar *map_line, const gchar *description,
-		map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data)
+add_map (struct rspamd_config *cfg,
+	const gchar *map_line,
+	const gchar *description,
+	map_cb_t read_callback,
+	map_fin_cb_t fin_callback,
+	void **user_data)
 {
-	struct rspamd_map              *new_map;
-	enum fetch_proto                proto;
-	const gchar                    *def, *p, *hostend;
-	struct file_map_data           *fdata;
-	struct http_map_data           *hdata;
-	gchar                           portbuf[6];
-	gint                            i, s, r;
-	struct addrinfo                hints, *res;
+	struct rspamd_map *new_map;
+	enum fetch_proto proto;
+	const gchar *def, *p, *hostend;
+	struct file_map_data *fdata;
+	struct http_map_data *hdata;
+	gchar portbuf[6];
+	gint i, s, r;
+	struct addrinfo hints, *res;
 
 	/* First of all detect protocol line */
 	if (!check_map_proto (map_line, (int *)&proto, &def)) {
@@ -1049,7 +1145,8 @@ add_map (struct rspamd_config *cfg, const gchar *map_line, const gchar *descript
 	new_map->protocol = proto;
 	new_map->cfg = cfg;
 	new_map->id = g_random_int ();
-	new_map->locked = rspamd_mempool_alloc0_shared (cfg->cfg_pool, sizeof (gint));
+	new_map->locked =
+		rspamd_mempool_alloc0_shared (cfg->cfg_pool, sizeof (gint));
 
 	if (proto == MAP_PROTO_FILE) {
 		new_map->uri = rspamd_mempool_strdup (cfg->cfg_pool, def);
@@ -1059,19 +1156,24 @@ add_map (struct rspamd_config *cfg, const gchar *map_line, const gchar *descript
 		new_map->uri = rspamd_mempool_strdup (cfg->cfg_pool, map_line);
 	}
 	if (description != NULL) {
-		new_map->description = rspamd_mempool_strdup (cfg->cfg_pool, description);
+		new_map->description =
+			rspamd_mempool_strdup (cfg->cfg_pool, description);
 	}
 
 	/* Now check for each proto separately */
 	if (proto == MAP_PROTO_FILE) {
-		fdata = rspamd_mempool_alloc0 (cfg->map_pool, sizeof (struct file_map_data));
+		fdata =
+			rspamd_mempool_alloc0 (cfg->map_pool,
+				sizeof (struct file_map_data));
 		if (access (def, R_OK) == -1) {
 			if (errno != ENOENT) {
 				msg_err ("cannot open file '%s': %s", def, strerror (errno));
 				return FALSE;
 
 			}
-			msg_info ("map '%s' is not found, but it can be loaded automatically later", def);
+			msg_info (
+				"map '%s' is not found, but it can be loaded automatically later",
+				def);
 			/* We still can add this file */
 			fdata->st.st_mtime = -1;
 		}
@@ -1082,7 +1184,9 @@ add_map (struct rspamd_config *cfg, const gchar *map_line, const gchar *descript
 		new_map->map_data = fdata;
 	}
 	else if (proto == MAP_PROTO_HTTP) {
-		hdata = rspamd_mempool_alloc0 (cfg->map_pool, sizeof (struct http_map_data));
+		hdata =
+			rspamd_mempool_alloc0 (cfg->map_pool,
+				sizeof (struct http_map_data));
 		/* Try to search port */
 		if ((p = strchr (def, ':')) != NULL) {
 			hostend = p;
@@ -1125,15 +1229,21 @@ add_map (struct rspamd_config *cfg, const gchar *map_line, const gchar *descript
 
 		if ((r = getaddrinfo (hdata->host, portbuf, &hints, &res)) == 0) {
 			hdata->addr = res;
-			rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)freeaddrinfo, hdata->addr);
+			rspamd_mempool_add_destructor (cfg->cfg_pool,
+				(rspamd_mempool_destruct_t)freeaddrinfo, hdata->addr);
 		}
 		else {
-			msg_err ("address resolution for %s failed: %s", hdata->host, gai_strerror (r));
+			msg_err ("address resolution for %s failed: %s",
+				hdata->host,
+				gai_strerror (r));
 			return FALSE;
 		}
 		/* Now try to connect */
 		if ((s = make_tcp_socket (hdata->addr, FALSE, FALSE)) == -1) {
-			msg_info ("cannot connect to http server %s: %d, %s", hdata->host, errno, strerror (errno));
+			msg_info ("cannot connect to http server %s: %d, %s",
+				hdata->host,
+				errno,
+				strerror (errno));
 			return FALSE;
 		}
 		close (s);

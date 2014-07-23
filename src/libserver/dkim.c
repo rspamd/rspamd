@@ -22,26 +22,63 @@
  */
 
 #include "config.h"
-#include "main.h"
-#include "message.h"
 #include "dkim.h"
 #include "dns.h"
+#include "main.h"
+#include "message.h"
 
 /* Parser of dkim params */
-typedef gboolean (*dkim_parse_param_f) (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err);
+typedef gboolean (*dkim_parse_param_f) (rspamd_dkim_context_t * ctx,
+	const gchar *param, gsize len, GError **err);
 
-static gboolean rspamd_dkim_parse_signature (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err);
-static gboolean rspamd_dkim_parse_signalg (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err);
-static gboolean rspamd_dkim_parse_domain (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err);
-static gboolean rspamd_dkim_parse_canonalg (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err);
-static gboolean rspamd_dkim_parse_ignore (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err);
-static gboolean rspamd_dkim_parse_selector (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err);
-static gboolean rspamd_dkim_parse_hdrlist (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err);
-static gboolean rspamd_dkim_parse_version (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err);
-static gboolean rspamd_dkim_parse_timestamp (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err);
-static gboolean rspamd_dkim_parse_expiration (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err);
-static gboolean rspamd_dkim_parse_bodyhash (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err);
-static gboolean rspamd_dkim_parse_bodylength (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err);
+static gboolean rspamd_dkim_parse_signature (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err);
+static gboolean rspamd_dkim_parse_signalg (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err);
+static gboolean rspamd_dkim_parse_domain (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err);
+static gboolean rspamd_dkim_parse_canonalg (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err);
+static gboolean rspamd_dkim_parse_ignore (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err);
+static gboolean rspamd_dkim_parse_selector (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err);
+static gboolean rspamd_dkim_parse_hdrlist (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err);
+static gboolean rspamd_dkim_parse_version (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err);
+static gboolean rspamd_dkim_parse_timestamp (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err);
+static gboolean rspamd_dkim_parse_expiration (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err);
+static gboolean rspamd_dkim_parse_bodyhash (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err);
+static gboolean rspamd_dkim_parse_bodylength (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err);
 
 
 static const dkim_parse_param_f parser_funcs[] = {
@@ -75,7 +112,10 @@ dkim_error_quark (void)
 
 /* Parsers implementation */
 static gboolean
-rspamd_dkim_parse_signature (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err)
+rspamd_dkim_parse_signature (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err)
 {
 	ctx->b = rspamd_mempool_alloc (ctx->pool, len + 1);
 	rspamd_strlcpy (ctx->b, param, len + 1);
@@ -93,7 +133,10 @@ rspamd_dkim_parse_signature (rspamd_dkim_context_t* ctx, const gchar *param, gsi
 }
 
 static gboolean
-rspamd_dkim_parse_signalg (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err)
+rspamd_dkim_parse_signalg (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err)
 {
 	if (len == 8) {
 		if (memcmp (param, "rsa-sha1", len) == 0) {
@@ -108,12 +151,18 @@ rspamd_dkim_parse_signalg (rspamd_dkim_context_t* ctx, const gchar *param, gsize
 		}
 	}
 
-	g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_INVALID_A, "invalid dkim sign algorithm");
+	g_set_error (err,
+		DKIM_ERROR,
+		DKIM_SIGERROR_INVALID_A,
+		"invalid dkim sign algorithm");
 	return FALSE;
 }
 
 static gboolean
-rspamd_dkim_parse_domain (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err)
+rspamd_dkim_parse_domain (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err)
 {
 	ctx->domain = rspamd_mempool_alloc (ctx->pool, len + 1);
 	rspamd_strlcpy (ctx->domain, param, len + 1);
@@ -121,10 +170,13 @@ rspamd_dkim_parse_domain (rspamd_dkim_context_t* ctx, const gchar *param, gsize 
 }
 
 static gboolean
-rspamd_dkim_parse_canonalg (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err)
+rspamd_dkim_parse_canonalg (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err)
 {
-	const gchar						*p, *slash = NULL, *end = param + len;
-	gsize							 sl = 0;
+	const gchar *p, *slash = NULL, *end = param + len;
+	gsize sl = 0;
 
 	p = param;
 	while (p != end) {
@@ -132,8 +184,8 @@ rspamd_dkim_parse_canonalg (rspamd_dkim_context_t* ctx, const gchar *param, gsiz
 			slash = p;
 			break;
 		}
-		p ++;
-		sl ++;
+		p++;
+		sl++;
 	}
 
 	if (slash == NULL) {
@@ -160,7 +212,7 @@ rspamd_dkim_parse_canonalg (rspamd_dkim_context_t* ctx, const gchar *param, gsiz
 		}
 		/* Check body */
 		len -= sl + 1;
-		slash ++;
+		slash++;
 		if (len == 6 && memcmp (slash, "simple", len) == 0) {
 			ctx->body_canon_type = DKIM_CANON_SIMPLE;
 			return TRUE;
@@ -172,32 +224,41 @@ rspamd_dkim_parse_canonalg (rspamd_dkim_context_t* ctx, const gchar *param, gsiz
 	}
 
 err:
-	g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_INVALID_A, "invalid dkim canonization algorithm");
+	g_set_error (err,
+		DKIM_ERROR,
+		DKIM_SIGERROR_INVALID_A,
+		"invalid dkim canonization algorithm");
 	return FALSE;
 }
 
 static gboolean
-rspamd_dkim_parse_ignore (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err)
+rspamd_dkim_parse_ignore (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err)
 {
 	/* Just ignore unused params */
 	return TRUE;
 }
 
 static gboolean
-rspamd_dkim_parse_selector (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err)
+rspamd_dkim_parse_selector (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err)
 {
 	ctx->selector = rspamd_mempool_alloc (ctx->pool, len + 1);
 	rspamd_strlcpy (ctx->selector, param, len + 1);
 	return TRUE;
 }
 
-static struct rspamd_dkim_header*
+static struct rspamd_dkim_header *
 rspamd_dkim_find_header (GPtrArray *arr, const gchar *name, gsize len)
 {
-	guint							 i;
-	struct rspamd_dkim_header		*h;
+	guint i;
+	struct rspamd_dkim_header *h;
 
-	for (i = 0; i < arr->len; i ++) {
+	for (i = 0; i < arr->len; i++) {
 		h = g_ptr_array_index (arr, i);
 		if (g_ascii_strncasecmp (h->name, name, len) == 0) {
 			return h;
@@ -210,26 +271,29 @@ rspamd_dkim_find_header (GPtrArray *arr, const gchar *name, gsize len)
 static void
 rspamd_dkim_hlist_free (void *ud)
 {
-	GPtrArray						*a = ud;
+	GPtrArray *a = ud;
 
 	g_ptr_array_free (a, TRUE);
 }
 
 static gboolean
-rspamd_dkim_parse_hdrlist (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err)
+rspamd_dkim_parse_hdrlist (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err)
 {
-	const gchar						*c, *p, *end = param + len;
-	gchar							*h;
-	gboolean						 from_found = FALSE;
-	guint							 count = 0;
-	struct rspamd_dkim_header		*new;
+	const gchar *c, *p, *end = param + len;
+	gchar *h;
+	gboolean from_found = FALSE;
+	guint count = 0;
+	struct rspamd_dkim_header *new;
 
 	p = param;
 	while (p <= end) {
 		if ((*p == ':' || p == end)) {
-			count ++;
+			count++;
 		}
-		p ++;
+		p++;
 	}
 
 	if (count > 0) {
@@ -243,12 +307,15 @@ rspamd_dkim_parse_hdrlist (rspamd_dkim_context_t* ctx, const gchar *param, gsize
 	p = param;
 	while (p <= end) {
 		if ((*p == ':' || p == end) && p - c > 0) {
-			if ((new = rspamd_dkim_find_header (ctx->hlist, c, p - c)) != NULL) {
-				new->count ++;
+			if ((new =
+				rspamd_dkim_find_header (ctx->hlist, c, p - c)) != NULL) {
+				new->count++;
 			}
 			else {
 				/* Insert new header to the list */
-				new = rspamd_mempool_alloc (ctx->pool, sizeof (struct rspamd_dkim_header));
+				new =
+					rspamd_mempool_alloc (ctx->pool,
+						sizeof (struct rspamd_dkim_header));
 				h = rspamd_mempool_alloc (ctx->pool, p - c + 1);
 				rspamd_strlcpy (h, c, p - c + 1);
 				g_strstrip (h);
@@ -261,35 +328,49 @@ rspamd_dkim_parse_hdrlist (rspamd_dkim_context_t* ctx, const gchar *param, gsize
 				g_ptr_array_add (ctx->hlist, new);
 			}
 			c = p + 1;
-			p ++;
+			p++;
 		}
 		else {
-			p ++;
+			p++;
 		}
 	}
 
 	if (!ctx->hlist) {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_INVALID_H, "invalid dkim header list");
+		g_set_error (err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_INVALID_H,
+			"invalid dkim header list");
 		return FALSE;
 	}
 	else {
 		if (!from_found) {
 			g_ptr_array_free (ctx->hlist, TRUE);
-			g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_INVALID_H, "invalid dkim header list, from header is missing");
+			g_set_error (err,
+				DKIM_ERROR,
+				DKIM_SIGERROR_INVALID_H,
+				"invalid dkim header list, from header is missing");
 			return FALSE;
 		}
 		/* Reverse list */
-		rspamd_mempool_add_destructor (ctx->pool, (rspamd_mempool_destruct_t)rspamd_dkim_hlist_free, ctx->hlist);
+		rspamd_mempool_add_destructor (ctx->pool,
+			(rspamd_mempool_destruct_t)rspamd_dkim_hlist_free,
+			ctx->hlist);
 	}
 
 	return TRUE;
 }
 
 static gboolean
-rspamd_dkim_parse_version (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err)
+rspamd_dkim_parse_version (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err)
 {
 	if (len != 1 || *param != '1') {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_VERSION, "invalid dkim version");
+		g_set_error (err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_VERSION,
+			"invalid dkim version");
 		return FALSE;
 	}
 
@@ -298,12 +379,18 @@ rspamd_dkim_parse_version (rspamd_dkim_context_t* ctx, const gchar *param, gsize
 }
 
 static gboolean
-rspamd_dkim_parse_timestamp (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err)
+rspamd_dkim_parse_timestamp (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err)
 {
-	gulong							 val;
+	gulong val;
 
 	if (!rspamd_strtoul (param, len, &val)) {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_UNKNOWN, "invalid dkim timestamp");
+		g_set_error (err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_UNKNOWN,
+			"invalid dkim timestamp");
 		return FALSE;
 	}
 	ctx->timestamp = val;
@@ -312,12 +399,18 @@ rspamd_dkim_parse_timestamp (rspamd_dkim_context_t* ctx, const gchar *param, gsi
 }
 
 static gboolean
-rspamd_dkim_parse_expiration (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err)
+rspamd_dkim_parse_expiration (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err)
 {
-	gulong							 val;
+	gulong val;
 
 	if (!rspamd_strtoul (param, len, &val)) {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_UNKNOWN, "invalid dkim expiration");
+		g_set_error (err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_UNKNOWN,
+			"invalid dkim expiration");
 		return FALSE;
 	}
 	ctx->expiration = val;
@@ -326,7 +419,10 @@ rspamd_dkim_parse_expiration (rspamd_dkim_context_t* ctx, const gchar *param, gs
 }
 
 static gboolean
-rspamd_dkim_parse_bodyhash (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err)
+rspamd_dkim_parse_bodyhash (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err)
 {
 	ctx->bh = rspamd_mempool_alloc (ctx->pool, len + 1);
 	rspamd_strlcpy (ctx->bh, param, len + 1);
@@ -344,12 +440,18 @@ rspamd_dkim_parse_bodyhash (rspamd_dkim_context_t* ctx, const gchar *param, gsiz
 }
 
 static gboolean
-rspamd_dkim_parse_bodylength (rspamd_dkim_context_t* ctx, const gchar *param, gsize len, GError **err)
+rspamd_dkim_parse_bodylength (rspamd_dkim_context_t * ctx,
+	const gchar *param,
+	gsize len,
+	GError **err)
 {
-	gulong							 val;
+	gulong val;
 
 	if (!rspamd_strtoul (param, len, &val)) {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_INVALID_L, "invalid dkim body length");
+		g_set_error (err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_INVALID_L,
+			"invalid dkim body length");
 		return FALSE;
 	}
 	ctx->len = val;
@@ -364,21 +466,24 @@ rspamd_dkim_parse_bodylength (rspamd_dkim_context_t* ctx, const gchar *param, gs
  * @param err pointer to error object
  * @return new context or NULL
  */
-rspamd_dkim_context_t*
-rspamd_create_dkim_context (const gchar *sig, rspamd_mempool_t *pool, guint time_jitter, GError **err)
+rspamd_dkim_context_t *
+rspamd_create_dkim_context (const gchar *sig,
+	rspamd_mempool_t *pool,
+	guint time_jitter,
+	GError **err)
 {
-	const gchar						*p, *c, *tag = NULL, *end;
-	gsize							 taglen;
-	gint							 param = DKIM_PARAM_UNKNOWN;
-	time_t							 now;
-	rspamd_dkim_context_t			*new;
+	const gchar *p, *c, *tag = NULL, *end;
+	gsize taglen;
+	gint param = DKIM_PARAM_UNKNOWN;
+	time_t now;
+	rspamd_dkim_context_t *new;
 	enum {
 		DKIM_STATE_TAG = 0,
 		DKIM_STATE_AFTER_TAG,
 		DKIM_STATE_VALUE,
 		DKIM_STATE_SKIP_SPACES = 99,
 		DKIM_STATE_ERROR = 100
-	}								 state, next_state;
+	}                                state, next_state;
 
 
 	new = rspamd_mempool_alloc0 (pool, sizeof (rspamd_dkim_context_t));
@@ -400,17 +505,20 @@ rspamd_create_dkim_context (const gchar *sig, rspamd_mempool_t *pool, guint time
 				taglen = p - c;
 				while (*p && g_ascii_isspace (*p)) {
 					/* Skip spaces before '=' sign */
-					p ++;
+					p++;
 				}
 				if (*p != '=') {
-					g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_UNKNOWN, "invalid dkim param");
+					g_set_error (err,
+						DKIM_ERROR,
+						DKIM_SIGERROR_UNKNOWN,
+						"invalid dkim param");
 					state = DKIM_STATE_ERROR;
 				}
 				else {
 					state = DKIM_STATE_SKIP_SPACES;
 					next_state = DKIM_STATE_AFTER_TAG;
 					param = DKIM_PARAM_UNKNOWN;
-					p ++;
+					p++;
 					tag = c;
 				}
 			}
@@ -418,19 +526,22 @@ rspamd_create_dkim_context (const gchar *sig, rspamd_mempool_t *pool, guint time
 				state = DKIM_STATE_SKIP_SPACES;
 				next_state = DKIM_STATE_AFTER_TAG;
 				param = DKIM_PARAM_UNKNOWN;
-				p ++;
+				p++;
 				tag = c;
 			}
 			else {
-				taglen ++;
-				p ++;
+				taglen++;
+				p++;
 			}
 			break;
 		case DKIM_STATE_AFTER_TAG:
 			/* We got tag at tag and len at taglen */
 			switch (taglen) {
 			case 0:
-				g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_UNKNOWN, "zero length dkim param");
+				g_set_error (err,
+					DKIM_ERROR,
+					DKIM_SIGERROR_UNKNOWN,
+					"zero length dkim param");
 				state = DKIM_STATE_ERROR;
 				break;
 			case 1:
@@ -476,7 +587,11 @@ rspamd_create_dkim_context (const gchar *sig, rspamd_mempool_t *pool, guint time
 					param = DKIM_PARAM_COPIEDHDRS;
 					break;
 				default:
-					g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_UNKNOWN, "invalid dkim param: %c", *tag);
+					g_set_error (err,
+						DKIM_ERROR,
+						DKIM_SIGERROR_UNKNOWN,
+						"invalid dkim param: %c",
+						*tag);
 					state = DKIM_STATE_ERROR;
 					break;
 				}
@@ -486,12 +601,21 @@ rspamd_create_dkim_context (const gchar *sig, rspamd_mempool_t *pool, guint time
 					param = DKIM_PARAM_BODYHASH;
 				}
 				else {
-					g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_UNKNOWN, "invalid dkim param: %c%c", tag[0], tag[1]);
+					g_set_error (err,
+						DKIM_ERROR,
+						DKIM_SIGERROR_UNKNOWN,
+						"invalid dkim param: %c%c",
+						tag[0],
+						tag[1]);
 					state = DKIM_STATE_ERROR;
 				}
 				break;
 			default:
-				g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_UNKNOWN, "invalid dkim param length: %zd", taglen);
+				g_set_error (err,
+					DKIM_ERROR,
+					DKIM_SIGERROR_UNKNOWN,
+					"invalid dkim param length: %zd",
+					taglen);
 				state = DKIM_STATE_ERROR;
 				break;
 			}
@@ -503,32 +627,34 @@ rspamd_create_dkim_context (const gchar *sig, rspamd_mempool_t *pool, guint time
 			break;
 		case DKIM_STATE_VALUE:
 			if (*p == ';') {
-				if (param == DKIM_PARAM_UNKNOWN || !parser_funcs[param](new, c, p - c, err)) {
+				if (param == DKIM_PARAM_UNKNOWN ||
+					!parser_funcs[param](new, c, p - c, err)) {
 					state = DKIM_STATE_ERROR;
 				}
 				else {
 					state = DKIM_STATE_SKIP_SPACES;
 					next_state = DKIM_STATE_TAG;
-					p ++;
+					p++;
 					taglen = 0;
 				}
 			}
 			else if (p == end) {
-				if (param == DKIM_PARAM_UNKNOWN || !parser_funcs[param](new, c, p - c + 1, err)) {
+				if (param == DKIM_PARAM_UNKNOWN ||
+					!parser_funcs[param](new, c, p - c + 1, err)) {
 					state = DKIM_STATE_ERROR;
 				}
 				else {
 					/* Finish processing */
-					p ++;
+					p++;
 				}
 			}
 			else {
-				p ++;
+				p++;
 			}
 			break;
 		case DKIM_STATE_SKIP_SPACES:
 			if (g_ascii_isspace (*p)) {
-				p ++;
+				p++;
 			}
 			else {
 				c = p;
@@ -550,62 +676,105 @@ rspamd_create_dkim_context (const gchar *sig, rspamd_mempool_t *pool, guint time
 
 	/* Now check validity of signature */
 	if (new->b == NULL) {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_EMPTY_B, "b parameter missing");
+		g_set_error (err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_EMPTY_B,
+			"b parameter missing");
 		return NULL;
 	}
 	if (new->bh == NULL) {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_EMPTY_BH, "bh parameter missing");
+		g_set_error (err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_EMPTY_BH,
+			"bh parameter missing");
 		return NULL;
 	}
 	if (new->domain == NULL) {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_EMPTY_D, "domain parameter missing");
+		g_set_error (err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_EMPTY_D,
+			"domain parameter missing");
 		return NULL;
 	}
 	if (new->selector == NULL) {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_EMPTY_S, "selector parameter missing");
+		g_set_error (err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_EMPTY_S,
+			"selector parameter missing");
 		return NULL;
 	}
 	if (new->ver == 0) {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_EMPTY_V, "v parameter missing");
+		g_set_error (err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_EMPTY_V,
+			"v parameter missing");
 		return NULL;
 	}
 	if (new->hlist == NULL) {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_EMPTY_H, "h parameter missing");
+		g_set_error (err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_EMPTY_H,
+			"h parameter missing");
 		return NULL;
 	}
 	if (new->sig_alg == DKIM_SIGN_UNKNOWN) {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_EMPTY_S, "s parameter missing");
+		g_set_error (err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_EMPTY_S,
+			"s parameter missing");
 		return NULL;
 	}
 	if (new->sig_alg == DKIM_SIGN_RSASHA1) {
 		/* Check bh length */
 		if (new->bhlen != (guint)g_checksum_type_get_length (G_CHECKSUM_SHA1)) {
-			g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_BADSIG, "signature has incorrect length: %ud", new->bhlen);
+			g_set_error (err,
+				DKIM_ERROR,
+				DKIM_SIGERROR_BADSIG,
+				"signature has incorrect length: %ud",
+				new->bhlen);
 			return NULL;
 		}
 
 	}
 	else if (new->sig_alg == DKIM_SIGN_RSASHA256) {
-		if (new->bhlen != (guint)g_checksum_type_get_length (G_CHECKSUM_SHA256)) {
-			g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_BADSIG, "signature has incorrect length: %ud", new->bhlen);
+		if (new->bhlen !=
+			(guint)g_checksum_type_get_length (G_CHECKSUM_SHA256)) {
+			g_set_error (err,
+				DKIM_ERROR,
+				DKIM_SIGERROR_BADSIG,
+				"signature has incorrect length: %ud",
+				new->bhlen);
 			return NULL;
 		}
 	}
 	/* Check expiration */
 	now = time (NULL);
-	if (new->timestamp && now < new->timestamp && new->timestamp - now > (gint)time_jitter) {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_FUTURE, "signature was made in future, ignoring");
+	if (new->timestamp && now < new->timestamp && new->timestamp - now >
+		(gint)time_jitter) {
+		g_set_error (err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_FUTURE,
+			"signature was made in future, ignoring");
 		return NULL;
 	}
 	if (new->expiration && new->expiration < now) {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_EXPIRED, "signature has expired");
+		g_set_error (err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_EXPIRED,
+			"signature has expired");
 		return NULL;
 	}
 
 	/* Now create dns key to request further */
-	taglen = strlen (new->domain) + strlen (new->selector) + sizeof (DKIM_DNSKEYNAME) + 2;
+	taglen = strlen (new->domain) + strlen (new->selector) +
+		sizeof (DKIM_DNSKEYNAME) + 2;
 	new->dns_key = rspamd_mempool_alloc (new->pool, taglen);
-	rspamd_snprintf (new->dns_key, taglen, "%s.%s.%s", new->selector, DKIM_DNSKEYNAME, new->domain);
+	rspamd_snprintf (new->dns_key,
+		taglen,
+		"%s.%s.%s",
+		new->selector,
+		DKIM_DNSKEYNAME,
+		new->domain);
 
 	/* Create checksums for further operations */
 	if (new->sig_alg == DKIM_SIGN_RSASHA1) {
@@ -617,12 +786,19 @@ rspamd_create_dkim_context (const gchar *sig, rspamd_mempool_t *pool, guint time
 		new->headers_hash = g_checksum_new (G_CHECKSUM_SHA256);
 	}
 	else {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_BADSIG, "signature has unsupported signature algorithm");
+		g_set_error (err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_BADSIG,
+			"signature has unsupported signature algorithm");
 		return NULL;
 	}
 
-	rspamd_mempool_add_destructor (new->pool, (rspamd_mempool_destruct_t)g_checksum_free, new->body_hash);
-	rspamd_mempool_add_destructor (new->pool, (rspamd_mempool_destruct_t)g_checksum_free, new->headers_hash);
+	rspamd_mempool_add_destructor (new->pool,
+		(rspamd_mempool_destruct_t)g_checksum_free,
+		new->body_hash);
+	rspamd_mempool_add_destructor (new->pool,
+		(rspamd_mempool_destruct_t)g_checksum_free,
+		new->headers_hash);
 
 	return new;
 }
@@ -633,10 +809,10 @@ struct rspamd_dkim_key_cbdata {
 	gpointer ud;
 };
 
-static rspamd_dkim_key_t*
+static rspamd_dkim_key_t *
 rspamd_dkim_make_key (const gchar *keydata, guint keylen, GError **err)
 {
-	rspamd_dkim_key_t							*key = NULL;
+	rspamd_dkim_key_t *key = NULL;
 
 	if (keylen < 3) {
 		msg_err ("DKIM key is too short to be valid");
@@ -660,21 +836,30 @@ rspamd_dkim_make_key (const gchar *keydata, guint keylen, GError **err)
 #ifdef HAVE_OPENSSL
 	key->key_bio = BIO_new_mem_buf (key->keydata, key->decoded_len);
 	if (key->key_bio == NULL) {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_KEYFAIL, "cannot make ssl bio from key");
+		g_set_error (err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_KEYFAIL,
+			"cannot make ssl bio from key");
 		rspamd_dkim_key_free (key);
 		return NULL;
 	}
 
 	key->key_evp = d2i_PUBKEY_bio (key->key_bio, NULL);
 	if (key->key_evp == NULL) {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_KEYFAIL, "cannot extract pubkey from bio");
+		g_set_error (err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_KEYFAIL,
+			"cannot extract pubkey from bio");
 		rspamd_dkim_key_free (key);
 		return NULL;
 	}
 
 	key->key_rsa = EVP_PKEY_get1_RSA (key->key_evp);
 	if (key->key_rsa == NULL) {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_KEYFAIL, "cannot extract rsa key from evp key");
+		g_set_error (err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_KEYFAIL,
+			"cannot extract rsa key from evp key");
 		rspamd_dkim_key_free (key);
 		return NULL;
 	}
@@ -699,16 +884,16 @@ rspamd_dkim_key_free (rspamd_dkim_key_t *key)
 		BIO_free (key->key_bio);
 	}
 #endif
-	g_slice_free1 (key->keylen, key->keydata);
+	g_slice_free1 (key->keylen,				   key->keydata);
 	g_slice_free1 (sizeof (rspamd_dkim_key_t), key);
 }
 
-static rspamd_dkim_key_t*
+static rspamd_dkim_key_t *
 rspamd_dkim_parse_key (const gchar *txt, gsize *keylen, GError **err)
 {
-	const gchar									*c, *p, *end;
-	gint										 state = 0;
-	gsize										 len;
+	const gchar *c, *p, *end;
+	gint state = 0;
+	gsize len;
 
 	c = txt;
 	p = txt;
@@ -725,7 +910,7 @@ rspamd_dkim_parse_key (const gchar *txt, gsize *keylen, GError **err)
 			}
 			else {
 				/* Ignore everything */
-				p ++;
+				p++;
 			}
 			break;
 		case 1:
@@ -735,17 +920,21 @@ rspamd_dkim_parse_key (const gchar *txt, gsize *keylen, GError **err)
 				return rspamd_dkim_make_key (c, len, err);
 			}
 			else {
-				p ++;
+				p++;
 			}
 			break;
 		}
 	}
 
 	if (p - c == 0) {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_KEYREVOKED, "key was revoked");
+		g_set_error (err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_KEYREVOKED,
+			"key was revoked");
 	}
 	else {
-		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_KEYFAIL, "key was not found");
+		g_set_error (err, DKIM_ERROR, DKIM_SIGERROR_KEYFAIL,
+			"key was not found");
 	}
 
 	return NULL;
@@ -755,21 +944,28 @@ rspamd_dkim_parse_key (const gchar *txt, gsize *keylen, GError **err)
 static void
 rspamd_dkim_dns_cb (struct rdns_reply *reply, gpointer arg)
 {
-	struct rspamd_dkim_key_cbdata				*cbdata = arg;
-	rspamd_dkim_key_t							*key = NULL;
-	GError										*err = NULL;
-	struct rdns_reply_entry					*elt;
-	gsize										 keylen = 0;
+	struct rspamd_dkim_key_cbdata *cbdata = arg;
+	rspamd_dkim_key_t *key = NULL;
+	GError *err = NULL;
+	struct rdns_reply_entry *elt;
+	gsize keylen = 0;
 
 	if (reply->code != RDNS_RC_NOERROR) {
-		g_set_error (&err, DKIM_ERROR, DKIM_SIGERROR_NOKEY, "dns request to %s failed: %s", cbdata->ctx->dns_key,
-				rdns_strerror (reply->code));
+		g_set_error (&err,
+			DKIM_ERROR,
+			DKIM_SIGERROR_NOKEY,
+			"dns request to %s failed: %s",
+			cbdata->ctx->dns_key,
+			rdns_strerror (reply->code));
 		cbdata->handler (NULL, 0, cbdata->ctx, cbdata->ud, err);
 	}
 	else {
-		LL_FOREACH (reply->entries, elt) {
+		LL_FOREACH (reply->entries, elt)
+		{
 			if (elt->type == RDNS_REQUEST_TXT) {
-				key = rspamd_dkim_parse_key (elt->content.txt.data, &keylen, &err);
+				key = rspamd_dkim_parse_key (elt->content.txt.data,
+						&keylen,
+						&err);
 				if (key) {
 					key->ttl = elt->ttl;
 					break;
@@ -793,30 +989,41 @@ rspamd_dkim_dns_cb (struct rdns_reply *reply, gpointer arg)
  * @return
  */
 gboolean
-rspamd_get_dkim_key (rspamd_dkim_context_t *ctx, struct rspamd_dns_resolver *resolver,
-		struct rspamd_async_session *s, dkim_key_handler_f handler, gpointer ud)
+rspamd_get_dkim_key (rspamd_dkim_context_t *ctx,
+	struct rspamd_dns_resolver *resolver,
+	struct rspamd_async_session *s,
+	dkim_key_handler_f handler,
+	gpointer ud)
 {
-	struct rspamd_dkim_key_cbdata				*cbdata;
+	struct rspamd_dkim_key_cbdata *cbdata;
 
-	g_return_val_if_fail (ctx != NULL, FALSE);
+	g_return_val_if_fail (ctx != NULL,			FALSE);
 	g_return_val_if_fail (ctx->dns_key != NULL, FALSE);
 
-	cbdata = rspamd_mempool_alloc (ctx->pool, sizeof (struct rspamd_dkim_key_cbdata));
+	cbdata =
+		rspamd_mempool_alloc (ctx->pool,
+			sizeof (struct rspamd_dkim_key_cbdata));
 	cbdata->ctx = ctx;
 	cbdata->handler = handler;
 	cbdata->ud = ud;
 
-	return make_dns_request (resolver, s, ctx->pool, rspamd_dkim_dns_cb, cbdata, RDNS_REQUEST_TXT, ctx->dns_key);
+	return make_dns_request (resolver,
+			   s,
+			   ctx->pool,
+			   rspamd_dkim_dns_cb,
+			   cbdata,
+			   RDNS_REQUEST_TXT,
+			   ctx->dns_key);
 }
 
 static gboolean
 rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint remain)
 {
-	const gchar									*h;
-	static gchar								 buf[BUFSIZ];
-	gchar										*t;
-	guint										 len, inlen;
-	gboolean									 got_sp, finished = FALSE;
+	const gchar *h;
+	static gchar buf[BUFSIZ];
+	gchar *t;
+	guint len, inlen;
+	gboolean got_sp, finished = FALSE;
 
 	if (remain > sizeof (buf)) {
 		len = sizeof (buf);
@@ -835,16 +1042,16 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint remain)
 			/* Ignore spaces at the end of line */
 			if (got_sp) {
 				got_sp = FALSE;
-				t --;
+				t--;
 			}
 			/* Replace a single \n or \r with \r\n */
 			if (*h == '\n' && *(h - 1) != '\r') {
-				*t ++ = '\r';
-				inlen --;
+				*t++ = '\r';
+				inlen--;
 			}
 			else if (*h == '\r' && *(h + 1) != '\n') {
-				*t ++ = *h ++;
-				*t ++ = '\n';
+				*t++ = *h++;
+				*t++ = '\n';
 				if (inlen > 1) {
 					inlen -= 2;
 				}
@@ -852,22 +1059,22 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint remain)
 					/* It is safe as inlen = sizeof (buf) - 1 */
 					inlen = 0;
 				}
-				len --;
+				len--;
 				continue;
 			}
 		}
 		else if (g_ascii_isspace (*h)) {
 			if (got_sp) {
 				/* Ignore multiply spaces */
-				h ++;
-				len --;
+				h++;
+				len--;
 				continue;
 			}
 			else {
 				*t++ = ' ';
-				h ++;
-				inlen --;
-				len --;
+				h++;
+				inlen--;
+				len--;
 				got_sp = TRUE;
 				continue;
 			}
@@ -876,15 +1083,15 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint remain)
 			got_sp = FALSE;
 		}
 		*t++ = *h++;
-		inlen --;
-		len --;
+		inlen--;
+		len--;
 	}
 
 	*start = h;
 
 	if (!finished && *(t - 1) == ' ' && g_ascii_isspace (*h)) {
 		/* Avoid border problems */
-		t --;
+		t--;
 	}
 #if 0
 	msg_debug ("update signature with buffer: %*s", t - buf, buf);
@@ -897,11 +1104,11 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint remain)
 static gboolean
 rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint remain)
 {
-	const gchar									*h;
-	static gchar								 buf[BUFSIZ];
-	gchar										*t;
-	guint										 len, inlen;
-	gboolean									 finished = FALSE;
+	const gchar *h;
+	static gchar buf[BUFSIZ];
+	gchar *t;
+	guint len, inlen;
+	gboolean finished = FALSE;
 
 	if (remain > sizeof (buf)) {
 		len = sizeof (buf);
@@ -918,12 +1125,12 @@ rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint remain)
 		if (*h == '\r' || *h == '\n') {
 			/* Replace a single \n or \r with \r\n */
 			if (*h == '\n' && *(h - 1) != '\r') {
-				*t ++ = '\r';
-				inlen --;
+				*t++ = '\r';
+				inlen--;
 			}
 			else if (*h == '\r' && *(h + 1) != '\n') {
-				*t ++ = *h ++;
-				*t ++ = '\n';
+				*t++ = *h++;
+				*t++ = '\n';
 				if (inlen > 1) {
 					inlen -= 2;
 				}
@@ -931,13 +1138,13 @@ rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint remain)
 					/* It is safe as inlen = sizeof (buf) - 1 */
 					inlen = 0;
 				}
-				len --;
+				len--;
 				continue;
 			}
 		}
 		*t++ = *h++;
-		inlen --;
-		len --;
+		inlen--;
+		len--;
 	}
 
 	*start = h;
@@ -951,7 +1158,9 @@ rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint remain)
 }
 
 static gboolean
-rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx, const gchar *start, const gchar *end)
+rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx,
+	const gchar *start,
+	const gchar *end)
 {
 	const gchar *p;
 
@@ -972,10 +1181,10 @@ rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx, const gchar *start, const
 				p -= 2;
 			}
 			else if (*p == '\n' && *(p - 1) == '\n') {
-				p --;
+				p--;
 			}
 			else if (*p == '\r' && *(p - 1) == '\r') {
-				p --;
+				p--;
 			}
 			else {
 				break;
@@ -994,10 +1203,12 @@ rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx, const gchar *start, const
 		else {
 			if (ctx->body_canon_type == DKIM_CANON_SIMPLE) {
 				/* Simple canonization */
-				while (rspamd_dkim_simple_body_step (ctx->body_hash, &start, end - start));
+				while (rspamd_dkim_simple_body_step (ctx->body_hash, &start,
+					end - start)) ;
 			}
 			else {
-				while (rspamd_dkim_relaxed_body_step (ctx->body_hash, &start, end - start));
+				while (rspamd_dkim_relaxed_body_step (ctx->body_hash, &start,
+					end - start)) ;
 			}
 		}
 		return TRUE;
@@ -1011,29 +1222,29 @@ rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx, const gchar *start, const
 static void
 rspamd_dkim_hash_update (GChecksum *ck, const gchar *begin, gsize len)
 {
-	const gchar									*p, *c, *end;
+	const gchar *p, *c, *end;
 
 	end = begin + len;
 	p = begin;
 	c = p;
 	while (p != end) {
 		if (*p == '\r') {
-			g_checksum_update (ck, c, p - c);
+			g_checksum_update (ck, c,	 p - c);
 			g_checksum_update (ck, CRLF, sizeof (CRLF) - 1);
-			p ++;
+			p++;
 			if (*p == '\n') {
-				p ++;
+				p++;
 			}
 			c = p;
 		}
 		else if (*p == '\n') {
-			g_checksum_update (ck, c, p - c);
+			g_checksum_update (ck, c,	 p - c);
 			g_checksum_update (ck, CRLF, sizeof (CRLF) - 1);
-			p ++;
+			p++;
 			c = p;
 		}
 		else {
-			p ++;
+			p++;
 		}
 	}
 	if (p != c) {
@@ -1043,10 +1254,12 @@ rspamd_dkim_hash_update (GChecksum *ck, const gchar *begin, gsize len)
 
 /* Update hash by signature value (ignoring b= tag) */
 static void
-rspamd_dkim_signature_update (rspamd_dkim_context_t *ctx, const gchar *begin, guint len)
+rspamd_dkim_signature_update (rspamd_dkim_context_t *ctx,
+	const gchar *begin,
+	guint len)
 {
-	const gchar									*p, *c, *end;
-	gboolean									 tag, skip;
+	const gchar *p, *c, *end;
+	gboolean tag, skip;
 
 	end = begin + len;
 	p = begin;
@@ -1057,7 +1270,9 @@ rspamd_dkim_signature_update (rspamd_dkim_context_t *ctx, const gchar *begin, gu
 	while (p < end) {
 		if (tag && p[0] == 'b' && p[1] == '=') {
 			/* Add to signature */
-			msg_debug ("initial update hash with signature part: %*s", p - c + 2, c);
+			msg_debug ("initial update hash with signature part: %*s",
+				p - c + 2,
+				c);
 			rspamd_dkim_hash_update (ctx->headers_hash, c, p - c + 2);
 			skip = TRUE;
 		}
@@ -1071,13 +1286,13 @@ rspamd_dkim_signature_update (rspamd_dkim_context_t *ctx, const gchar *begin, gu
 		else if (tag && *p == '=') {
 			tag = FALSE;
 		}
-		p ++;
+		p++;
 	}
 
-	p --;
+	p--;
 	/* Skip \r\n at the end */
 	while ((*p == '\r' || *p == '\n') && p >= c) {
-		p --;
+		p--;
 	}
 
 	if (p - c + 1 > 0) {
@@ -1087,12 +1302,15 @@ rspamd_dkim_signature_update (rspamd_dkim_context_t *ctx, const gchar *begin, gu
 }
 
 static gboolean
-rspamd_dkim_canonize_header_relaxed (rspamd_dkim_context_t *ctx, const gchar *header, const gchar *header_name, gboolean is_sign)
+rspamd_dkim_canonize_header_relaxed (rspamd_dkim_context_t *ctx,
+	const gchar *header,
+	const gchar *header_name,
+	gboolean is_sign)
 {
-	const gchar									*h;
-	gchar										*t, *buf;
-	guint										 inlen;
-	gboolean									 got_sp, allocated = FALSE;
+	const gchar *h;
+	gchar *t, *buf;
+	guint inlen;
+	gboolean got_sp, allocated = FALSE;
 
 	inlen = strlen (header) + strlen (header_name) + sizeof (":" CRLF);
 	if (inlen > BUFSIZ) {
@@ -1108,7 +1326,7 @@ rspamd_dkim_canonize_header_relaxed (rspamd_dkim_context_t *ctx, const gchar *he
 	t = buf;
 	h = header_name;
 	while (*h) {
-		*t ++ = g_ascii_tolower (*h++);
+		*t++ = g_ascii_tolower (*h++);
 	}
 	*t++ = ':';
 
@@ -1116,30 +1334,30 @@ rspamd_dkim_canonize_header_relaxed (rspamd_dkim_context_t *ctx, const gchar *he
 	h = header;
 	/* Skip spaces at the beginning */
 	while (g_ascii_isspace (*h)) {
-		h ++;
+		h++;
 	}
 	got_sp = FALSE;
 
 	while (*h) {
 		if (g_ascii_isspace (*h)) {
 			if (got_sp) {
-				h ++;
+				h++;
 				continue;
 			}
 			else {
 				got_sp = TRUE;
-				*t ++ = ' ';
-				h ++;
+				*t++ = ' ';
+				h++;
 				continue;
 			}
 		}
 		else {
 			got_sp = FALSE;
 		}
-		*t ++ = *h ++;
+		*t++ = *h++;
 	}
 	if (g_ascii_isspace (*(t - 1))) {
-		t --;
+		t--;
 	}
 	*t++ = '\r';
 	*t++ = '\n';
@@ -1167,18 +1385,25 @@ struct rspamd_dkim_sign_chunk {
 };
 
 static gboolean
-rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx, const gchar *headers,
-		const gchar *header_name, guint count, gboolean is_sign)
+rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx,
+	const gchar *headers,
+	const gchar *header_name,
+	guint count,
+	gboolean is_sign)
 {
-	const gchar									*p, *c;
-	gint										 state = 0, hlen;
-	gboolean									 found = FALSE;
-	GArray										*to_sign;
-	struct rspamd_dkim_sign_chunk				 chunk, *elt;
-	gint										 i;
+	const gchar *p, *c;
+	gint state = 0, hlen;
+	gboolean found = FALSE;
+	GArray *to_sign;
+	struct rspamd_dkim_sign_chunk chunk, *elt;
+	gint i;
 
 	/* This process is very similar to raw headers processing */
-	to_sign = g_array_sized_new (FALSE, FALSE, sizeof (struct rspamd_dkim_sign_chunk), count);
+	to_sign =
+		g_array_sized_new (FALSE,
+			FALSE,
+			sizeof (struct rspamd_dkim_sign_chunk),
+			count);
 	p = headers;
 	c = p;
 	hlen = strlen (header_name);
@@ -1204,7 +1429,7 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx, const gchar *hea
 					state = 1;
 				}
 			}
-			p ++;
+			p++;
 			break;
 		case 1:
 			/* Skip header state */
@@ -1213,7 +1438,7 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx, const gchar *hea
 				state = 0;
 				c = p + 1;
 			}
-			p ++;
+			p++;
 			break;
 		case 2:
 			/* c contains the beginning of header */
@@ -1233,7 +1458,7 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx, const gchar *hea
 				state = 0;
 				found = TRUE;
 			}
-			p ++;
+			p++;
 			break;
 		}
 	}
@@ -1241,16 +1466,25 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx, const gchar *hea
 	if (found) {
 		if (!is_sign) {
 
-			for (i = to_sign->len - 1; i >= 0 && count > 0; i --, count --) {
-				elt = &g_array_index (to_sign, struct rspamd_dkim_sign_chunk, i);
+			for (i = to_sign->len - 1; i >= 0 && count > 0; i--, count--) {
+				elt =
+					&g_array_index (to_sign, struct rspamd_dkim_sign_chunk, i);
 
 				if (!chunk.append_crlf) {
-					msg_debug ("update signature with header: %*s", elt->len, elt->begin);
-					rspamd_dkim_hash_update (ctx->headers_hash, elt->begin, elt->len);
+					msg_debug ("update signature with header: %*s",
+						elt->len,
+						elt->begin);
+					rspamd_dkim_hash_update (ctx->headers_hash,
+						elt->begin,
+						elt->len);
 				}
 				else {
-					msg_debug ("update signature with header: %*s", elt->len + 1, elt->begin);
-					rspamd_dkim_hash_update (ctx->headers_hash, elt->begin, elt->len + 1);
+					msg_debug ("update signature with header: %*s",
+						elt->len + 1,
+						elt->begin);
+					rspamd_dkim_hash_update (ctx->headers_hash,
+						elt->begin,
+						elt->len + 1);
 				}
 			}
 		}
@@ -1271,15 +1505,22 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx, const gchar *hea
 }
 
 static gboolean
-rspamd_dkim_canonize_header (rspamd_dkim_context_t *ctx, struct rspamd_task *task, const gchar *header_name,
-		guint count, gboolean is_sig)
+rspamd_dkim_canonize_header (rspamd_dkim_context_t *ctx,
+	struct rspamd_task *task,
+	const gchar *header_name,
+	guint count,
+	gboolean is_sig)
 {
-	struct raw_header 							*rh, *rh_iter;
-	guint										 rh_num = 0;
-	GList										*nh = NULL, *cur;
+	struct raw_header *rh, *rh_iter;
+	guint rh_num = 0;
+	GList *nh = NULL, *cur;
 
 	if (ctx->header_canon_type == DKIM_CANON_SIMPLE) {
-		return rspamd_dkim_canonize_header_simple (ctx, task->raw_headers_str, header_name, count, is_sig);
+		return rspamd_dkim_canonize_header_simple (ctx,
+				   task->raw_headers_str,
+				   header_name,
+				   count,
+				   is_sig);
 	}
 	else {
 		rh = g_hash_table_lookup (task->raw_headers, header_name);
@@ -1287,7 +1528,7 @@ rspamd_dkim_canonize_header (rspamd_dkim_context_t *ctx, struct rspamd_task *tas
 			if (!is_sig) {
 				rh_iter = rh;
 				while (rh_iter) {
-					rh_num ++;
+					rh_num++;
 					rh_iter = rh_iter->next;
 				}
 
@@ -1301,7 +1542,7 @@ rspamd_dkim_canonize_header (rspamd_dkim_context_t *ctx, struct rspamd_task *tas
 				rh_iter = rh;
 				while (rh_num) {
 					rh_iter = rh_iter->next;
-					rh_num --;
+					rh_num--;
 				}
 				/* Now insert required headers */
 				while (rh_iter) {
@@ -1311,7 +1552,8 @@ rspamd_dkim_canonize_header (rspamd_dkim_context_t *ctx, struct rspamd_task *tas
 				cur = nh;
 				while (cur) {
 					rh = cur->data;
-					if (! rspamd_dkim_canonize_header_relaxed (ctx, rh->value, header_name, is_sig)) {
+					if (!rspamd_dkim_canonize_header_relaxed (ctx, rh->value,
+						header_name, is_sig)) {
 						g_list_free (nh);
 						return FALSE;
 					}
@@ -1323,7 +1565,10 @@ rspamd_dkim_canonize_header (rspamd_dkim_context_t *ctx, struct rspamd_task *tas
 			}
 			else {
 				/* For signature check just use the first dkim header */
-				rspamd_dkim_canonize_header_relaxed (ctx, rh->value, header_name, is_sig);
+				rspamd_dkim_canonize_header_relaxed (ctx,
+					rh->value,
+					header_name,
+					is_sig);
 			}
 			return TRUE;
 		}
@@ -1341,21 +1586,23 @@ rspamd_dkim_canonize_header (rspamd_dkim_context_t *ctx, struct rspamd_task *tas
  * @return
  */
 gint
-rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct rspamd_task *task)
+rspamd_dkim_check (rspamd_dkim_context_t *ctx,
+	rspamd_dkim_key_t *key,
+	struct rspamd_task *task)
 {
-	const gchar									*p, *headers_end = NULL, *end, *body_end;
-	gboolean									 got_cr = FALSE, got_crlf = FALSE, got_lf = FALSE;
-	gchar										*digest;
-	gsize										 dlen;
-	gint										 res = DKIM_CONTINUE;
-	guint										 i;
-	struct rspamd_dkim_header					*dh;
+	const gchar *p, *headers_end = NULL, *end, *body_end;
+	gboolean got_cr = FALSE, got_crlf = FALSE, got_lf = FALSE;
+	gchar *digest;
+	gsize dlen;
+	gint res = DKIM_CONTINUE;
+	guint i;
+	struct rspamd_dkim_header *dh;
 #ifdef HAVE_OPENSSL
-	gint										 nid;
+	gint nid;
 #endif
 
-	g_return_val_if_fail (ctx != NULL, DKIM_ERROR);
-	g_return_val_if_fail (key != NULL, DKIM_ERROR);
+	g_return_val_if_fail (ctx != NULL,		 DKIM_ERROR);
+	g_return_val_if_fail (key != NULL,		 DKIM_ERROR);
 	g_return_val_if_fail (task->msg != NULL, DKIM_ERROR);
 
 	/* First of all find place of body */
@@ -1422,7 +1669,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct rs
 			got_cr = FALSE;
 			got_crlf = FALSE;
 		}
-		p ++;
+		p++;
 	}
 
 	/* Start canonization of body part */
@@ -1442,7 +1689,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx, rspamd_dkim_key_t *key, struct rs
 		return DKIM_RECORD_ERROR;
 	}
 	/* Now canonize headers */
-	for (i = 0; i < ctx->hlist->len; i ++) {
+	for (i = 0; i < ctx->hlist->len; i++) {
 		dh = g_ptr_array_index (ctx->hlist, i);
 		rspamd_dkim_canonize_header (ctx, task, dh->name, dh->count, FALSE);
 	}

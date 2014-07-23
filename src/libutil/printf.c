@@ -21,9 +21,9 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "printf.h"
 #include "fstring.h"
 #include "main.h"
+#include "printf.h"
 
 /**
  * From FreeBSD libutil code
@@ -90,13 +90,13 @@ rspamd_humanize_number (gchar *buf, gchar *last, gint64 num, gboolean bytes)
 
 static gchar *
 rspamd_sprintf_num (gchar *buf, gchar *last, guint64 ui64, gchar zero,
-	guint                           hexadecimal, guint width)
+	guint hexadecimal, guint width)
 {
-	gchar		   *p, temp[sizeof ("18446744073709551615")];
-	size_t		    len;
-	guint32                         ui32;
-	static gchar   hex[] = "0123456789abcdef";
-	static gchar   HEX[] = "0123456789ABCDEF";
+	gchar *p, temp[sizeof ("18446744073709551615")];
+	size_t len;
+	guint32 ui32;
+	static gchar hex[] = "0123456789abcdef";
+	static gchar HEX[] = "0123456789ABCDEF";
 
 	p = temp + sizeof(temp);
 
@@ -220,7 +220,7 @@ rspamd_printf_append_gstring (const gchar *buf, glong buflen, gpointer ud)
 glong
 rspamd_fprintf (FILE *f, const gchar *fmt, ...)
 {
-	va_list   args;
+	va_list args;
 	glong r;
 
 	va_start (args, fmt);
@@ -233,7 +233,7 @@ rspamd_fprintf (FILE *f, const gchar *fmt, ...)
 glong
 rspamd_printf (const gchar *fmt, ...)
 {
-	va_list   args;
+	va_list args;
 	glong r;
 
 	va_start (args, fmt);
@@ -246,7 +246,7 @@ rspamd_printf (const gchar *fmt, ...)
 glong
 rspamd_log_fprintf (FILE *f, const gchar *fmt, ...)
 {
-	va_list   args;
+	va_list args;
 	glong r;
 
 	va_start (args, fmt);
@@ -299,31 +299,34 @@ rspamd_printf_gstring (GString *s, const gchar *fmt, ...)
 	return r;
 }
 
-#define RSPAMD_PRINTF_APPEND(buf, len)											\
-    do {																		\
-    wr = func ((buf), (len), apd);												\
-    if (wr < (__typeof(wr))(len)) {											\
-        goto oob;																\
-    }																			\
-    written += wr;																\
-    fmt ++;																		\
-    buf_start = fmt;															\
-    } while(0)
+#define RSPAMD_PRINTF_APPEND(buf, len)                                          \
+	do {                                                                        \
+		wr = func ((buf), (len), apd);                                              \
+		if (wr < (__typeof (wr))(len)) {                                         \
+			goto oob;                                                               \
+		}                                                                           \
+		written += wr;                                                              \
+		fmt++;                                                                     \
+		buf_start = fmt;                                                            \
+	} while (0)
 
 glong
-rspamd_vprintf_common (rspamd_printf_append_func func, gpointer apd, const gchar *fmt, va_list args)
+rspamd_vprintf_common (rspamd_printf_append_func func,
+	gpointer apd,
+	const gchar *fmt,
+	va_list args)
 {
-	gchar               zero, numbuf[G_ASCII_DTOSTR_BUF_SIZE], *p, *last, c;
-	const gchar        *buf_start = fmt;
-	gint                d;
-	long double         f, scale;
-	glong               written = 0, wr, slen;
-	gint64              i64;
-	guint64             ui64;
-	guint               width, sign, hex, humanize, bytes, frac_width, i;
-	f_str_t			   *v;
-	GString            *gs;
-	gboolean            bv;
+	gchar zero, numbuf[G_ASCII_DTOSTR_BUF_SIZE], *p, *last, c;
+	const gchar *buf_start = fmt;
+	gint d;
+	long double f, scale;
+	glong written = 0, wr, slen;
+	gint64 i64;
+	guint64 ui64;
+	guint width, sign, hex, humanize, bytes, frac_width, i;
+	f_str_t *v;
+	GString *gs;
+	gboolean bv;
 
 	while (*fmt) {
 
@@ -360,7 +363,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func, gpointer apd, const gchar
 			}
 
 
-			for ( ;; ) {
+			for (;; ) {
 				switch (*fmt) {
 
 				case 'u':
@@ -387,12 +390,12 @@ rspamd_vprintf_common (rspamd_printf_append_func func, gpointer apd, const gchar
 					humanize = 1;
 					bytes = 1;
 					sign = 0;
-					fmt ++;
+					fmt++;
 					continue;
 				case 'h':
 					humanize = 1;
 					sign = 0;
-					fmt ++;
+					fmt++;
 					continue;
 				case '.':
 					fmt++;
@@ -482,17 +485,17 @@ rspamd_vprintf_common (rspamd_printf_append_func func, gpointer apd, const gchar
 
 			case 'l':
 				if (sign) {
-					i64 = (gint64) va_arg(args, glong);
+					i64 = (gint64) va_arg (args, glong);
 				} else {
-					ui64 = (guint64) va_arg(args, gulong);
+					ui64 = (guint64) va_arg (args, gulong);
 				}
 				break;
 
 			case 'D':
 				if (sign) {
-					i64 = (gint64) va_arg(args, gint32);
+					i64 = (gint64) va_arg (args, gint32);
 				} else {
-					ui64 = (guint64) va_arg(args, guint32);
+					ui64 = (guint64) va_arg (args, guint32);
 				}
 				break;
 
@@ -540,9 +543,9 @@ rspamd_vprintf_common (rspamd_printf_append_func func, gpointer apd, const gchar
 					}
 
 					/*
-					* (gint64) cast is required for msvc6:
-					* it can not convert guint64 to double
-					*/
+					 * (gint64) cast is required for msvc6:
+					 * it can not convert guint64 to double
+					 */
 					ui64 = (guint64) ((f - (gint64) ui64) * scale);
 
 					p = rspamd_sprintf_num (p, last, ui64, '0', 0, frac_width);
@@ -620,7 +623,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func, gpointer apd, const gchar
 			if (sign) {
 				if (i64 < 0) {
 					*p++ = '-';
-					ui64 = (guint64) -i64;
+					ui64 = (guint64) - i64;
 
 				} else {
 					ui64 = (guint64) i64;

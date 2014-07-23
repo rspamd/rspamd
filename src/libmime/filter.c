@@ -22,18 +22,18 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "binlog.h"
+#include "cfg_file.h"
+#include "classifiers/classifiers.h"
 #include "config.h"
-#include "mem_pool.h"
+#include "diff.h"
+#include "expressions.h"
 #include "filter.h"
 #include "main.h"
+#include "mem_pool.h"
 #include "message.h"
-#include "cfg_file.h"
-#include "util.h"
-#include "expressions.h"
-#include "binlog.h"
-#include "diff.h"
-#include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
+#include "util.h"
 
 #ifdef WITH_LUA
 #   include "lua/lua_common.h"
@@ -44,44 +44,56 @@
 #ifndef PARAM_H_HAS_BITSET
 /* Bit map related macros. */
 #define NBBY    8               /* number of bits in a byte */
-#define setbit(a,i)     (((unsigned char *)(a))[(i)/NBBY] |= 1<<((i)%NBBY))
-#define clrbit(a,i)     (((unsigned char *)(a))[(i)/NBBY] &= ~(1<<((i)%NBBY)))
+#define setbit(a, \
+		i)     (((unsigned char *)(a))[(i) / NBBY] |= 1 << ((i) % NBBY))
+#define clrbit(a, \
+		i)     (((unsigned char *)(a))[(i) / NBBY] &= ~(1 << ((i) % NBBY)))
 #define isset(a,i)                                                      \
-        (((const unsigned char *)(a))[(i)/NBBY] & (1<<((i)%NBBY)))
+	(((const unsigned char *)(a))[(i) / NBBY] & (1 << ((i) % NBBY)))
 #define isclr(a,i)                                                      \
-        ((((const unsigned char *)(a))[(i)/NBBY] & (1<<((i)%NBBY))) == 0)
+	((((const unsigned char *)(a))[(i) / NBBY] & (1 << ((i) % NBBY))) == 0)
 #endif
-#define BITSPERBYTE	(8*sizeof (gchar))
-#define NBYTES(nbits)	(((nbits) + BITSPERBYTE - 1) / BITSPERBYTE)
+#define BITSPERBYTE (8 * sizeof (gchar))
+#define NBYTES(nbits)   (((nbits) + BITSPERBYTE - 1) / BITSPERBYTE)
 
-static inline                   GQuark
+static inline GQuark
 filter_error_quark (void)
 {
 	return g_quark_from_static_string ("g-filter-error-quark");
 }
 
 static void
-insert_metric_result (struct rspamd_task *task, struct metric *metric, const gchar *symbol,
-		double flag, GList * opts, gboolean single)
+insert_metric_result (struct rspamd_task *task,
+	struct metric *metric,
+	const gchar *symbol,
+	double flag,
+	GList * opts,
+	gboolean single)
 {
-	struct metric_result           *metric_res;
-	struct symbol                  *s;
-	gdouble                        *weight, w;
+	struct metric_result *metric_res;
+	struct symbol *s;
+	gdouble *weight, w;
 
 	metric_res = g_hash_table_lookup (task->results, metric->name);
 
 	if (metric_res == NULL) {
 		/* Create new metric chain */
-		metric_res = rspamd_mempool_alloc (task->task_pool, sizeof (struct metric_result));
-		metric_res->symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+		metric_res =
+			rspamd_mempool_alloc (task->task_pool,
+				sizeof (struct metric_result));
+		metric_res->symbols = g_hash_table_new (rspamd_str_hash,
+				rspamd_str_equal);
 		metric_res->checked = FALSE;
-		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_hash_table_unref, metric_res->symbols);
+		rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) g_hash_table_unref,
+			metric_res->symbols);
 		metric_res->metric = metric;
 		metric_res->grow_factor = 0;
 		metric_res->score = 0;
-		g_hash_table_insert (task->results, (gpointer) metric->name, metric_res);
+		g_hash_table_insert (task->results, (gpointer) metric->name,
+			metric_res);
 	}
-	
+
 	weight = g_hash_table_lookup (metric->symbols, symbol);
 	if (weight == NULL) {
 		w = 0.0;
@@ -94,7 +106,7 @@ insert_metric_result (struct rspamd_task *task, struct metric *metric, const gch
 	if ((s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
 		if (s->options && opts && opts != s->options) {
 			/* Append new options */
-			s->options = g_list_concat (s->options, g_list_copy(opts));
+			s->options = g_list_concat (s->options, g_list_copy (opts));
 			/*
 			 * Note that there is no need to add new destructor of GList as elements of appended
 			 * GList are used directly, so just free initial GList
@@ -102,7 +114,8 @@ insert_metric_result (struct rspamd_task *task, struct metric *metric, const gch
 		}
 		else if (opts) {
 			s->options = g_list_copy (opts);
-			rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_list_free, s->options);
+			rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t) g_list_free, s->options);
 		}
 		if (!single) {
 			/* Handle grow factor */
@@ -139,7 +152,8 @@ insert_metric_result (struct rspamd_task *task, struct metric *metric, const gch
 
 		if (opts) {
 			s->options = g_list_copy (opts);
-			rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_list_free, s->options);
+			rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t) g_list_free, s->options);
 		}
 		else {
 			s->options = NULL;
@@ -147,22 +161,30 @@ insert_metric_result (struct rspamd_task *task, struct metric *metric, const gch
 
 		g_hash_table_insert (metric_res->symbols, (gpointer) symbol, s);
 	}
-	debug_task ("symbol %s, score %.2f, metric %s, factor: %f", symbol, s->score, metric->name, w);
-	
+	debug_task ("symbol %s, score %.2f, metric %s, factor: %f",
+		symbol,
+		s->score,
+		metric->name,
+		w);
+
 }
 
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
-static GStaticMutex result_mtx =  G_STATIC_MUTEX_INIT;
+static GStaticMutex result_mtx = G_STATIC_MUTEX_INIT;
 #else
 G_LOCK_DEFINE (result_mtx);
 #endif
 
 static void
-insert_result_common (struct rspamd_task *task, const gchar *symbol, double flag, GList * opts, gboolean single)
+insert_result_common (struct rspamd_task *task,
+	const gchar *symbol,
+	double flag,
+	GList * opts,
+	gboolean single)
 {
-	struct metric                  *metric;
-	struct cache_item              *item;
-	GList                          *cur, *metric_list;
+	struct metric *metric;
+	struct cache_item *item;
+	GList *cur, *metric_list;
 
 	/* Avoid concurrenting inserting of results */
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
@@ -173,7 +195,7 @@ insert_result_common (struct rspamd_task *task, const gchar *symbol, double flag
 	metric_list = g_hash_table_lookup (task->cfg->metrics_symbols, symbol);
 	if (metric_list) {
 		cur = metric_list;
-		
+
 		while (cur) {
 			metric = cur->data;
 			insert_metric_result (task, metric, symbol, flag, opts, single);
@@ -182,7 +204,12 @@ insert_result_common (struct rspamd_task *task, const gchar *symbol, double flag
 	}
 	else {
 		/* Insert symbol to default metric */
-		insert_metric_result (task, task->cfg->default_metric, symbol, flag, opts, single);
+		insert_metric_result (task,
+			task->cfg->default_metric,
+			symbol,
+			flag,
+			opts,
+			single);
 	}
 
 	/* Process cache item */
@@ -206,21 +233,27 @@ insert_result_common (struct rspamd_task *task, const gchar *symbol, double flag
 
 /* Insert result that may be increased on next insertions */
 void
-insert_result (struct rspamd_task *task, const gchar *symbol, double flag, GList * opts)
+insert_result (struct rspamd_task *task,
+	const gchar *symbol,
+	double flag,
+	GList * opts)
 {
 	insert_result_common (task, symbol, flag, opts, task->cfg->one_shot_mode);
 }
 
 /* Insert result as a single option */
 void
-insert_result_single (struct rspamd_task *task, const gchar *symbol, double flag, GList * opts)
+insert_result_single (struct rspamd_task *task,
+	const gchar *symbol,
+	double flag,
+	GList * opts)
 {
 	insert_result_common (task, symbol, flag, opts, TRUE);
 }
 
 static gboolean
 check_metric_settings (struct rspamd_task *task, struct metric *metric,
-		double *score)
+	double *score)
 {
 	const ucl_object_t *mobj, *reject;
 	double val;
@@ -243,11 +276,11 @@ check_metric_settings (struct rspamd_task *task, struct metric *metric,
 }
 
 /* Return true if metric has score that is more than spam score for it */
-static                          gboolean
+static gboolean
 check_metric_is_spam (struct rspamd_task *task, struct metric *metric)
 {
-	struct metric_result           *res;
-	double                          ms;
+	struct metric_result *res;
+	double ms;
 
 	/* Avoid concurrency while checking results */
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
@@ -280,9 +313,9 @@ check_metric_is_spam (struct rspamd_task *task, struct metric *metric)
 gint
 process_filters (struct rspamd_task *task)
 {
-	GList                          *cur;
-	struct metric                  *metric;
-	gpointer                        item = NULL;
+	GList *cur;
+	struct metric *metric;
+	gpointer item = NULL;
 
 	/* Process metrics symbols */
 	while (call_symbol_callback (task, task->cfg->cache, &item)) {
@@ -291,8 +324,8 @@ process_filters (struct rspamd_task *task)
 		while (cur) {
 			metric = cur->data;
 			if (!task->pass_all_filters &&
-						metric->actions[METRIC_ACTION_REJECT].score > 0 &&
-						check_metric_is_spam (task, metric)) {
+				metric->actions[METRIC_ACTION_REJECT].score > 0 &&
+				check_metric_is_spam (task, metric)) {
 				task->state = WRITE_REPLY;
 				return 1;
 			}
@@ -307,22 +340,22 @@ process_filters (struct rspamd_task *task)
 
 
 struct composites_data {
-	struct rspamd_task             *task;
-	struct metric_result           *metric_res;
-	GTree                          *symbols_to_remove;
-	guint8						   *checked;
+	struct rspamd_task *task;
+	struct metric_result *metric_res;
+	GTree *symbols_to_remove;
+	guint8 *checked;
 };
 
 struct symbol_remove_data {
-	struct symbol                  *ms;
-	gboolean                        remove_weight;
-	gboolean                        remove_symbol;
+	struct symbol *ms;
+	gboolean remove_weight;
+	gboolean remove_symbol;
 };
 
 static gint
 remove_compare_data (gconstpointer a, gconstpointer b)
 {
-	const gchar                    *ca = a, *cb = b;
+	const gchar *ca = a, *cb = b;
 
 	return strcmp (ca, cb);
 }
@@ -330,16 +363,16 @@ remove_compare_data (gconstpointer a, gconstpointer b)
 static void
 composites_foreach_callback (gpointer key, gpointer value, void *data)
 {
-	struct composites_data         *cd = (struct composites_data *)data;
-	struct rspamd_composite        *composite = value, *ncomp;
-	struct expression              *expr;
-	GQueue                         *stack;
-	GList                          *symbols = NULL, *s;
-	gsize                           cur, op1, op2;
-	gchar                           logbuf[256], *sym, *check_sym;
-	gint                            r;
-	struct symbol                  *ms;
-	struct symbol_remove_data      *rd;
+	struct composites_data *cd = (struct composites_data *)data;
+	struct rspamd_composite *composite = value, *ncomp;
+	struct expression *expr;
+	GQueue *stack;
+	GList *symbols = NULL, *s;
+	gsize cur, op1, op2;
+	gchar logbuf[256], *sym, *check_sym;
+	gint r;
+	struct symbol *ms;
+	struct symbol_remove_data *rd;
 
 
 	expr = composite->expr;
@@ -355,16 +388,19 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 			/* Find corresponding symbol */
 			sym = expr->content.operand;
 			if (*sym == '~' || *sym == '-') {
-				sym ++;
+				sym++;
 			}
 			if (g_hash_table_lookup (cd->metric_res->symbols, sym) == NULL) {
 				cur = 0;
-				if ((ncomp = g_hash_table_lookup (cd->task->cfg->composite_symbols, sym)) != NULL) {
+				if ((ncomp =
+					g_hash_table_lookup (cd->task->cfg->composite_symbols,
+					sym)) != NULL) {
 					/* Set checked for this symbol to avoid cyclic references */
 					if (isclr (cd->checked, ncomp->id)) {
 						setbit (cd->checked, composite->id);
 						composites_foreach_callback (sym, ncomp, cd);
-						if (g_hash_table_lookup (cd->metric_res->symbols, sym) != NULL) {
+						if (g_hash_table_lookup (cd->metric_res->symbols,
+							sym) != NULL) {
 							cur = 1;
 						}
 					}
@@ -412,7 +448,11 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 		if (op1) {
 			/* Remove all symbols that are in composite symbol */
 			s = g_list_first (symbols);
-			r = rspamd_snprintf (logbuf, sizeof (logbuf), "<%s>, insert symbol %s instead of symbols: ", cd->task->message_id, key);
+			r = rspamd_snprintf (logbuf,
+					sizeof (logbuf),
+					"<%s>, insert symbol %s instead of symbols: ",
+					cd->task->message_id,
+					key);
 			while (s) {
 				sym = s->data;
 				if (*sym == '~' || *sym == '-') {
@@ -425,18 +465,23 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 
 				if (ms == NULL) {
 					/* Try to process other composites */
-					if ((ncomp = g_hash_table_lookup (cd->task->cfg->composite_symbols, check_sym)) != NULL) {
+					if ((ncomp =
+						g_hash_table_lookup (cd->task->cfg->composite_symbols,
+						check_sym)) != NULL) {
 						/* Set checked for this symbol to avoid cyclic references */
 						if (isclr (cd->checked, ncomp->id)) {
 							setbit (cd->checked, composite->id);
 							composites_foreach_callback (check_sym, ncomp, cd);
-							ms = g_hash_table_lookup (cd->metric_res->symbols, check_sym);
+							ms = g_hash_table_lookup (cd->metric_res->symbols,
+									check_sym);
 						}
 					}
 				}
 
 				if (ms != NULL) {
-					rd = rspamd_mempool_alloc (cd->task->task_pool, sizeof (struct symbol_remove_data));
+					rd =
+						rspamd_mempool_alloc (cd->task->task_pool,
+							sizeof (struct symbol_remove_data));
 					rd->ms = ms;
 					if (G_UNLIKELY (*sym == '~')) {
 						rd->remove_weight = FALSE;
@@ -451,7 +496,9 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 						rd->remove_weight = TRUE;
 					}
 					if (!g_tree_lookup (cd->symbols_to_remove, rd)) {
-						g_tree_insert (cd->symbols_to_remove, (gpointer)ms->name, rd);
+						g_tree_insert (cd->symbols_to_remove,
+							(gpointer)ms->name,
+							rd);
 					}
 				}
 				else {
@@ -459,10 +506,16 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 				}
 
 				if (s->next) {
-					r += rspamd_snprintf (logbuf + r, sizeof (logbuf) -r, "%s, ", s->data);
+					r += rspamd_snprintf (logbuf + r,
+							sizeof (logbuf) - r,
+							"%s, ",
+							s->data);
 				}
 				else {
-					r += rspamd_snprintf (logbuf + r, sizeof (logbuf) -r, "%s", s->data);
+					r += rspamd_snprintf (logbuf + r,
+							sizeof (logbuf) - r,
+							"%s",
+							s->data);
 				}
 				s = g_list_next (s);
 			}
@@ -479,12 +532,13 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 	return;
 }
 
-static                          gboolean
-check_autolearn (struct statfile_autolearn_params *params, struct rspamd_task *task)
+static gboolean
+check_autolearn (struct statfile_autolearn_params *params,
+	struct rspamd_task *task)
 {
-	gchar                          *metric_name = DEFAULT_METRIC;
-	struct metric_result           *metric_res;
-	GList                          *cur;
+	gchar *metric_name = DEFAULT_METRIC;
+	struct metric_result *metric_res;
+	GList *cur;
 
 	if (params->metric != NULL) {
 		metric_name = (gchar *)params->metric;
@@ -502,12 +556,16 @@ check_autolearn (struct statfile_autolearn_params *params, struct rspamd_task *t
 	}
 	else {
 		/* Process score of metric */
-		if ((params->threshold_min != 0 && metric_res->score > params->threshold_min) || (params->threshold_max != 0 && metric_res->score < params->threshold_max)) {
+		if ((params->threshold_min != 0 && metric_res->score >
+			params->threshold_min) ||
+			(params->threshold_max != 0 && metric_res->score <
+			params->threshold_max)) {
 			/* Now check for specific symbols */
 			if (params->symbols) {
 				cur = params->symbols;
 				while (cur) {
-					if (g_hash_table_lookup (metric_res->symbols, cur->data) == NULL) {
+					if (g_hash_table_lookup (metric_res->symbols,
+						cur->data) == NULL) {
 						return FALSE;
 					}
 					cur = g_list_next (cur);
@@ -522,28 +580,47 @@ check_autolearn (struct statfile_autolearn_params *params, struct rspamd_task *t
 }
 
 void
-process_autolearn (struct rspamd_statfile_config *st, struct rspamd_task *task, GTree * tokens, struct classifier *classifier, gchar *filename, struct classifier_ctx *ctx)
+process_autolearn (struct rspamd_statfile_config *st,
+	struct rspamd_task *task,
+	GTree * tokens,
+	struct classifier *classifier,
+	gchar *filename,
+	struct classifier_ctx *ctx)
 {
-	stat_file_t                    *statfile;
-	struct rspamd_statfile_config                *unused;
+	stat_file_t *statfile;
+	struct rspamd_statfile_config *unused;
 
 	if (check_autolearn (st->autolearn, task)) {
 		if (tokens) {
 			/* Take care of subject */
 			tokenize_subject (task, &tokens);
-			msg_info ("message with id <%s> autolearned statfile '%s'", task->message_id, filename);
-			
+			msg_info ("message with id <%s> autolearned statfile '%s'",
+				task->message_id,
+				filename);
+
 			/* Get or create statfile */
-			statfile = get_statfile_by_symbol (task->worker->srv->statfile_pool, ctx->cfg,
-						st->symbol, &unused, TRUE);
-			
+			statfile = get_statfile_by_symbol (task->worker->srv->statfile_pool,
+					ctx->cfg,
+					st->symbol,
+					&unused,
+					TRUE);
+
 			if (statfile == NULL) {
 				return;
 			}
 
-			classifier->learn_func (ctx, task->worker->srv->statfile_pool, st->symbol, tokens, TRUE, NULL, 1., NULL);
+			classifier->learn_func (ctx,
+				task->worker->srv->statfile_pool,
+				st->symbol,
+				tokens,
+				TRUE,
+				NULL,
+				1.,
+				NULL);
 			maybe_write_binlog (ctx->cfg, st, statfile, tokens);
-			statfile_pool_plan_invalidate (task->worker->srv->statfile_pool, DEFAULT_STATFILE_INVALIDATE_TIME, DEFAULT_STATFILE_INVALIDATE_JITTER);
+			statfile_pool_plan_invalidate (task->worker->srv->statfile_pool,
+				DEFAULT_STATFILE_INVALIDATE_TIME,
+				DEFAULT_STATFILE_INVALIDATE_JITTER);
 		}
 	}
 }
@@ -551,8 +628,8 @@ process_autolearn (struct rspamd_statfile_config *st, struct rspamd_task *task, 
 static gboolean
 composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 {
-	struct composites_data         *cd = data;
-	struct symbol_remove_data      *rd = value;
+	struct composites_data *cd = data;
+	struct symbol_remove_data *rd = value;
 
 	if (rd->remove_symbol) {
 		g_hash_table_remove (cd->metric_res->symbols, key);
@@ -567,17 +644,22 @@ composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 static void
 composites_metric_callback (gpointer key, gpointer value, gpointer data)
 {
-	struct rspamd_task             *task = (struct rspamd_task *)data;
-	struct composites_data         *cd = rspamd_mempool_alloc (task->task_pool, sizeof (struct composites_data));
-	struct metric_result           *metric_res = (struct metric_result *)value;
+	struct rspamd_task *task = (struct rspamd_task *)data;
+	struct composites_data *cd =
+		rspamd_mempool_alloc (task->task_pool, sizeof (struct composites_data));
+	struct metric_result *metric_res = (struct metric_result *)value;
 
 	cd->task = task;
 	cd->metric_res = (struct metric_result *)metric_res;
 	cd->symbols_to_remove = g_tree_new (remove_compare_data);
-	cd->checked = rspamd_mempool_alloc0 (task->task_pool, NBYTES (g_hash_table_size (task->cfg->composite_symbols)));
+	cd->checked =
+		rspamd_mempool_alloc0 (task->task_pool,
+			NBYTES (g_hash_table_size (task->cfg->composite_symbols)));
 
 	/* Process hash table */
-	g_hash_table_foreach (task->cfg->composite_symbols, composites_foreach_callback, cd);
+	g_hash_table_foreach (task->cfg->composite_symbols,
+		composites_foreach_callback,
+		cd);
 
 	/* Remove symbols that are in composites */
 	g_tree_foreach (cd->symbols_to_remove, composites_remove_symbols, cd);
@@ -599,30 +681,32 @@ struct classifiers_cbdata {
 static void
 classifiers_callback (gpointer value, void *arg)
 {
-	struct classifiers_cbdata	   *cbdata = arg;
-	struct rspamd_task             *task;
-	struct rspamd_classifier_config       *cl = value;
-	struct classifier_ctx          *ctx;
-	struct mime_text_part          *text_part, *p1, *p2;
-	struct rspamd_statfile_config                *st;
-	GTree                          *tokens = NULL;
-	GList                          *cur;
-	f_str_t                         c;
-	gchar                          *header = NULL;
-	gint                           *dist = NULL, diff;
-	gboolean                        is_twopart = FALSE;
-	
+	struct classifiers_cbdata *cbdata = arg;
+	struct rspamd_task *task;
+	struct rspamd_classifier_config *cl = value;
+	struct classifier_ctx *ctx;
+	struct mime_text_part *text_part, *p1, *p2;
+	struct rspamd_statfile_config *st;
+	GTree *tokens = NULL;
+	GList *cur;
+	f_str_t c;
+	gchar *header = NULL;
+	gint *dist = NULL, diff;
+	gboolean is_twopart = FALSE;
+
 	task = cbdata->task;
 
 	if ((header = g_hash_table_lookup (cl->opts, "header")) != NULL) {
-		cur = message_get_header (task->task_pool, task->message, header, FALSE);
+		cur =
+			message_get_header (task->task_pool, task->message, header, FALSE);
 		if (cur) {
-			rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)g_list_free, cur);
+			rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t)g_list_free, cur);
 		}
 	}
 	else {
 		cur = g_list_first (task->text_parts);
-		dist =  rspamd_mempool_get_variable (task->task_pool, "parts_distance");
+		dist = rspamd_mempool_get_variable (task->task_pool, "parts_distance");
 		if (cur != NULL && cur->next != NULL && cur->next->next == NULL) {
 			is_twopart = TRUE;
 		}
@@ -635,7 +719,8 @@ classifiers_callback (gpointer value, void *arg)
 				c.len = strlen (cur->data);
 				if (c.len > 0) {
 					c.begin = cur->data;
-					if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens, FALSE, FALSE, NULL)) {
+					if (!cl->tokenizer->tokenize_func (cl->tokenizer,
+						task->task_pool, &c, &tokens, FALSE, FALSE, NULL)) {
 						msg_info ("cannot tokenize input");
 						return;
 					}
@@ -651,7 +736,9 @@ classifiers_callback (gpointer value, void *arg)
 					/* Compare part's content */
 
 					if (*dist >= COMMON_PART_FACTOR) {
-						msg_info ("message <%s> has two common text parts, ignore the last one", task->message_id);
+						msg_info (
+							"message <%s> has two common text parts, ignore the last one",
+							task->message_id);
 						break;
 					}
 				}
@@ -659,21 +746,25 @@ classifiers_callback (gpointer value, void *arg)
 					p1 = cur->prev->data;
 					p2 = text_part;
 					if (p1->diff_str != NULL && p2->diff_str != NULL) {
-						diff = compare_diff_distance (p1->diff_str, p2->diff_str);
+						diff =
+							compare_diff_distance (p1->diff_str, p2->diff_str);
 					}
 					else {
 						diff = fuzzy_compare_parts (p1, p2);
 					}
 					if (diff >= COMMON_PART_FACTOR) {
-						msg_info ("message <%s> has two common text parts, ignore the last one", task->message_id);
+						msg_info (
+							"message <%s> has two common text parts, ignore the last one",
+							task->message_id);
 						break;
 					}
 				}
 				c.begin = (gchar *)text_part->content->data;
 				c.len = text_part->content->len;
 				/* Tree would be freed at task pool freeing */
-				if (!cl->tokenizer->tokenize_func (cl->tokenizer, task->task_pool, &c, &tokens,
-						FALSE, text_part->is_utf, text_part->urls_offset)) {
+				if (!cl->tokenizer->tokenize_func (cl->tokenizer,
+					task->task_pool, &c, &tokens,
+					FALSE, text_part->is_utf, text_part->urls_offset)) {
 					msg_info ("cannot tokenize input");
 					return;
 				}
@@ -692,12 +783,20 @@ classifiers_callback (gpointer value, void *arg)
 
 	if (cbdata->nL != NULL) {
 		rspamd_mutex_lock (cbdata->nL->m);
-		cl->classifier->classify_func (ctx, task->worker->srv->statfile_pool, tokens, task, cbdata->nL->L);
+		cl->classifier->classify_func (ctx,
+			task->worker->srv->statfile_pool,
+			tokens,
+			task,
+			cbdata->nL->L);
 		rspamd_mutex_unlock (cbdata->nL->m);
 	}
 	else {
 		/* Non-threaded case */
-		cl->classifier->classify_func (ctx, task->worker->srv->statfile_pool, tokens, task, task->cfg->lua_state);
+		cl->classifier->classify_func (ctx,
+			task->worker->srv->statfile_pool,
+			tokens,
+			task,
+			task->cfg->lua_state);
 	}
 
 	/* Autolearning */
@@ -707,7 +806,12 @@ classifiers_callback (gpointer value, void *arg)
 		if (st->autolearn) {
 			if (check_autolearn (st->autolearn, task)) {
 				/* Process autolearn */
-				process_autolearn (st, task, tokens, cl->classifier, st->path, ctx);
+				process_autolearn (st,
+					task,
+					tokens,
+					cl->classifier,
+					st->path,
+					ctx);
 			}
 		}
 		cur = g_list_next (cur);
@@ -718,7 +822,7 @@ classifiers_callback (gpointer value, void *arg)
 void
 process_statfiles (struct rspamd_task *task)
 {
-	struct classifiers_cbdata		cbdata;
+	struct classifiers_cbdata cbdata;
 
 	if (task->is_skipped) {
 		return;
@@ -726,7 +830,8 @@ process_statfiles (struct rspamd_task *task)
 
 	if (task->tokens == NULL) {
 		task->tokens = g_hash_table_new (g_direct_hash, g_direct_equal);
-		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)g_hash_table_unref, task->tokens);
+		rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t)g_hash_table_unref, task->tokens);
 	}
 	cbdata.task = task;
 	cbdata.nL = NULL;
@@ -739,9 +844,9 @@ process_statfiles (struct rspamd_task *task)
 void
 process_statfiles_threaded (gpointer data, gpointer user_data)
 {
-	struct rspamd_task             *task = (struct rspamd_task *)data;
-	struct lua_locked_state 	   *nL = user_data;
-	struct classifiers_cbdata		cbdata;
+	struct rspamd_task *task = (struct rspamd_task *)data;
+	struct lua_locked_state *nL = user_data;
+	struct classifiers_cbdata cbdata;
 
 	if (task->is_skipped) {
 		remove_async_thread (task->s);
@@ -750,7 +855,8 @@ process_statfiles_threaded (gpointer data, gpointer user_data)
 
 	if (task->tokens == NULL) {
 		task->tokens = g_hash_table_new (g_direct_hash, g_direct_equal);
-		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)g_hash_table_unref, task->tokens);
+		rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t)g_hash_table_unref, task->tokens);
 	}
 
 	cbdata.task = task;
@@ -760,18 +866,22 @@ process_statfiles_threaded (gpointer data, gpointer user_data)
 }
 
 static void
-insert_metric_header (gpointer metric_name, gpointer metric_value, gpointer data)
+insert_metric_header (gpointer metric_name, gpointer metric_value,
+	gpointer data)
 {
 #ifndef GLIB_HASH_COMPAT
-	struct rspamd_task             *task = (struct rspamd_task *)data;
-	gint                            r = 0;
+	struct rspamd_task *task = (struct rspamd_task *)data;
+	gint r = 0;
 	/* Try to be rfc2822 compatible and avoid long headers with folding */
-	gchar                           header_name[128], outbuf[1000];
-	GList                          *symbols = NULL, *cur;
-	struct metric_result           *metric_res = (struct metric_result *)metric_value;
-	double                          ms;
+	gchar header_name[128], outbuf[1000];
+	GList *symbols = NULL, *cur;
+	struct metric_result *metric_res = (struct metric_result *)metric_value;
+	double ms;
 
-	rspamd_snprintf (header_name, sizeof (header_name), "X-Spam-%s", metric_res->metric->name);
+	rspamd_snprintf (header_name,
+		sizeof (header_name),
+		"X-Spam-%s",
+		metric_res->metric->name);
 
 	if (!check_metric_settings (task, metric_res->metric, &ms)) {
 		ms = metric_res->metric->actions[METRIC_ACTION_REJECT].score;
@@ -800,7 +910,8 @@ insert_metric_header (gpointer metric_name, gpointer metric_value, gpointer data
 	}
 	g_list_free (symbols);
 #ifdef GMIME24
-	g_mime_object_append_header (GMIME_OBJECT (task->message), header_name, outbuf);
+	g_mime_object_append_header (GMIME_OBJECT (
+			task->message), header_name, outbuf);
 #else
 	g_mime_message_add_header (task->message, header_name, outbuf);
 #endif
@@ -820,13 +931,16 @@ check_action_str (const gchar *data, gint *result)
 	if (g_ascii_strncasecmp (data, "reject", sizeof ("reject") - 1) == 0) {
 		*result = METRIC_ACTION_REJECT;
 	}
-	else if (g_ascii_strncasecmp (data, "greylist", sizeof ("greylist") - 1) == 0) {
+	else if (g_ascii_strncasecmp (data, "greylist",
+		sizeof ("greylist") - 1) == 0) {
 		*result = METRIC_ACTION_GREYLIST;
 	}
-	else if (g_ascii_strncasecmp (data, "add_header", sizeof ("add_header") - 1) == 0) {
+	else if (g_ascii_strncasecmp (data, "add_header", sizeof ("add_header") -
+		1) == 0) {
 		*result = METRIC_ACTION_ADD_HEADER;
 	}
-	else if (g_ascii_strncasecmp (data, "rewrite_subject", sizeof ("rewrite_subject") - 1) == 0) {
+	else if (g_ascii_strncasecmp (data, "rewrite_subject",
+		sizeof ("rewrite_subject") - 1) == 0) {
 		*result = METRIC_ACTION_REWRITE_SUBJECT;
 	}
 	else {
@@ -861,9 +975,9 @@ str_action_metric (enum rspamd_metric_action action)
 gint
 check_metric_action (double score, double required_score, struct metric *metric)
 {
-	struct metric_action           *action, *selected_action = NULL;
-	double                          max_score = 0;
-	int                             i;
+	struct metric_action *action, *selected_action = NULL;
+	double max_score = 0;
+	int i;
 
 	if (score >= required_score) {
 		return METRIC_ACTION_REJECT;
@@ -872,7 +986,7 @@ check_metric_action (double score, double required_score, struct metric *metric)
 		return METRIC_ACTION_NOACTION;
 	}
 	else {
-		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
+		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
 			action = &metric->actions[i];
 			if (action->score < 0) {
 				continue;
@@ -894,24 +1008,26 @@ check_metric_action (double score, double required_score, struct metric *metric)
 gboolean
 learn_task (const gchar *statfile, struct rspamd_task *task, GError **err)
 {
-	GList                          *cur, *ex;
-	struct rspamd_classifier_config       *cl;
-	struct classifier_ctx          *cls_ctx;
-	gchar                          *s;
-	f_str_t                         c;
-	GTree                          *tokens = NULL;
-	struct rspamd_statfile_config                *st;
-	stat_file_t                    *stf;
-	gdouble                         sum;
-	struct mime_text_part          *part, *p1, *p2;
-	gboolean                        is_utf = FALSE, is_twopart = FALSE;
-	gint                            diff;
+	GList *cur, *ex;
+	struct rspamd_classifier_config *cl;
+	struct classifier_ctx *cls_ctx;
+	gchar *s;
+	f_str_t c;
+	GTree *tokens = NULL;
+	struct rspamd_statfile_config *st;
+	stat_file_t *stf;
+	gdouble sum;
+	struct mime_text_part *part, *p1, *p2;
+	gboolean is_utf = FALSE, is_twopart = FALSE;
+	gint diff;
 
 
 	/* Load classifier by symbol */
 	cl = g_hash_table_lookup (task->cfg->classifiers_symbols, statfile);
 	if (cl == NULL) {
-		g_set_error (err, filter_error_quark(), 1, "Statfile %s is not configured in any classifier", statfile);
+		g_set_error (err,
+			filter_error_quark (), 1, "Statfile %s is not configured in any classifier",
+			statfile);
 		return FALSE;
 	}
 
@@ -919,7 +1035,8 @@ learn_task (const gchar *statfile, struct rspamd_task *task, GError **err)
 	if ((s = g_hash_table_lookup (cl->opts, "header")) != NULL) {
 		cur = message_get_header (task->task_pool, task->message, s, FALSE);
 		if (cur) {
-			rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)g_list_free, cur);
+			rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t)g_list_free, cur);
 		}
 	}
 	else {
@@ -959,7 +1076,9 @@ learn_task (const gchar *statfile, struct rspamd_task *task, GError **err)
 					diff = fuzzy_compare_parts (p1, p2);
 				}
 				if (diff >= COMMON_PART_FACTOR) {
-					msg_info ("message <%s> has two common text parts, ignore the last one", task->message_id);
+					msg_info (
+						"message <%s> has two common text parts, ignore the last one",
+						task->message_id);
 					break;
 				}
 			}
@@ -968,7 +1087,8 @@ learn_task (const gchar *statfile, struct rspamd_task *task, GError **err)
 		if (!cl->tokenizer->tokenize_func (
 				cl->tokenizer, task->task_pool,
 				&c, &tokens, FALSE, is_utf, ex)) {
-			g_set_error (err, filter_error_quark(), 2, "Cannot tokenize message");
+			g_set_error (err,
+				filter_error_quark (), 2, "Cannot tokenize message");
 			return FALSE;
 		}
 		cur = g_list_next (cur);
@@ -976,8 +1096,10 @@ learn_task (const gchar *statfile, struct rspamd_task *task, GError **err)
 
 	/* Handle messages without text */
 	if (tokens == NULL) {
-		g_set_error (err, filter_error_quark(), 3, "Cannot tokenize message, no text data");
-		msg_info ("learn failed for message <%s>, no tokens to extract", task->message_id);
+		g_set_error (err,
+			filter_error_quark (), 3, "Cannot tokenize message, no text data");
+		msg_info ("learn failed for message <%s>, no tokens to extract",
+			task->message_id);
 		return FALSE;
 	}
 
@@ -986,7 +1108,7 @@ learn_task (const gchar *statfile, struct rspamd_task *task, GError **err)
 
 	/* Init classifier */
 	cls_ctx = cl->classifier->init_func (
-			task->task_pool, cl);
+		task->task_pool, cl);
 	/* Get or create statfile */
 	stf = get_statfile_by_symbol (task->worker->srv->statfile_pool,
 			cl, statfile, &st, TRUE);
@@ -997,12 +1119,17 @@ learn_task (const gchar *statfile, struct rspamd_task *task, GError **err)
 			statfile, tokens, TRUE, &sum,
 			1.0, err)) {
 		if (*err) {
-			msg_info ("learn failed for message <%s>, learn error: %s", task->message_id, (*err)->message);
+			msg_info ("learn failed for message <%s>, learn error: %s",
+				task->message_id,
+				(*err)->message);
 			return FALSE;
 		}
 		else {
-			g_set_error (err, filter_error_quark(), 4, "Learn failed, unknown learn classifier error");
-			msg_info ("learn failed for message <%s>, unknown learn error", task->message_id);
+			g_set_error (err,
+				filter_error_quark (), 4,
+				"Learn failed, unknown learn classifier error");
+			msg_info ("learn failed for message <%s>, unknown learn error",
+				task->message_id);
 			return FALSE;
 		}
 	}
@@ -1010,25 +1137,31 @@ learn_task (const gchar *statfile, struct rspamd_task *task, GError **err)
 	task->worker->srv->stat->messages_learned++;
 
 	maybe_write_binlog (cl, st, stf, tokens);
-	msg_info ("learn success for message <%s>, for statfile: %s, sum weight: %.2f",
-			task->message_id, statfile, sum);
+	msg_info (
+		"learn success for message <%s>, for statfile: %s, sum weight: %.2f",
+		task->message_id,
+		statfile,
+		sum);
 	statfile_pool_plan_invalidate (task->worker->srv->statfile_pool,
-			DEFAULT_STATFILE_INVALIDATE_TIME,
-			DEFAULT_STATFILE_INVALIDATE_JITTER);
+		DEFAULT_STATFILE_INVALIDATE_TIME,
+		DEFAULT_STATFILE_INVALIDATE_JITTER);
 
 	return TRUE;
 }
 
 gboolean
-learn_task_spam (struct rspamd_classifier_config *cl, struct rspamd_task *task, gboolean is_spam, GError **err)
+learn_task_spam (struct rspamd_classifier_config *cl,
+	struct rspamd_task *task,
+	gboolean is_spam,
+	GError **err)
 {
-	GList                          *cur, *ex;
-	struct classifier_ctx          *cls_ctx;
-	f_str_t                         c;
-	GTree                          *tokens = NULL;
-	struct mime_text_part          *part, *p1, *p2;
-	gboolean                        is_utf = FALSE, is_twopart = FALSE;
-	gint                            diff;
+	GList *cur, *ex;
+	struct classifier_ctx *cls_ctx;
+	f_str_t c;
+	GTree *tokens = NULL;
+	struct mime_text_part *part, *p1, *p2;
+	gboolean is_utf = FALSE, is_twopart = FALSE;
+	gint diff;
 
 	cur = g_list_first (task->text_parts);
 	if (cur != NULL && cur->next != NULL && cur->next->next == NULL) {
@@ -1061,7 +1194,9 @@ learn_task_spam (struct rspamd_classifier_config *cl, struct rspamd_task *task, 
 				diff = fuzzy_compare_parts (p1, p2);
 			}
 			if (diff >= COMMON_PART_FACTOR) {
-				msg_info ("message <%s> has two common text parts, ignore the last one", task->message_id);
+				msg_info (
+					"message <%s> has two common text parts, ignore the last one",
+					task->message_id);
 				break;
 			}
 		}
@@ -1069,7 +1204,8 @@ learn_task_spam (struct rspamd_classifier_config *cl, struct rspamd_task *task, 
 		if (!cl->tokenizer->tokenize_func (
 				cl->tokenizer, task->task_pool,
 				&c, &tokens, FALSE, is_utf, ex)) {
-			g_set_error (err, filter_error_quark(), 2, "Cannot tokenize message");
+			g_set_error (err,
+				filter_error_quark (), 2, "Cannot tokenize message");
 			return FALSE;
 		}
 		cur = g_list_next (cur);
@@ -1077,8 +1213,10 @@ learn_task_spam (struct rspamd_classifier_config *cl, struct rspamd_task *task, 
 
 	/* Handle messages without text */
 	if (tokens == NULL) {
-		g_set_error (err, filter_error_quark(), 3, "Cannot tokenize message, no text data");
-		msg_info ("learn failed for message <%s>, no tokens to extract", task->message_id);
+		g_set_error (err,
+			filter_error_quark (), 3, "Cannot tokenize message, no text data");
+		msg_info ("learn failed for message <%s>, no tokens to extract",
+			task->message_id);
 		return FALSE;
 	}
 
@@ -1087,18 +1225,23 @@ learn_task_spam (struct rspamd_classifier_config *cl, struct rspamd_task *task, 
 
 	/* Init classifier */
 	cls_ctx = cl->classifier->init_func (
-			task->task_pool, cl);
+		task->task_pool, cl);
 	/* Learn */
 	if (!cl->classifier->learn_spam_func (
 			cls_ctx, task->worker->srv->statfile_pool,
 			tokens, task, is_spam, task->cfg->lua_state, err)) {
 		if (*err) {
-			msg_info ("learn failed for message <%s>, learn error: %s", task->message_id, (*err)->message);
+			msg_info ("learn failed for message <%s>, learn error: %s",
+				task->message_id,
+				(*err)->message);
 			return FALSE;
 		}
 		else {
-			g_set_error (err, filter_error_quark(), 4, "Learn failed, unknown learn classifier error");
-			msg_info ("learn failed for message <%s>, unknown learn error", task->message_id);
+			g_set_error (err,
+				filter_error_quark (), 4,
+				"Learn failed, unknown learn classifier error");
+			msg_info ("learn failed for message <%s>, unknown learn error",
+				task->message_id);
 			return FALSE;
 		}
 	}
@@ -1106,14 +1249,14 @@ learn_task_spam (struct rspamd_classifier_config *cl, struct rspamd_task *task, 
 	task->worker->srv->stat->messages_learned++;
 
 	msg_info ("learn success for message <%s>",
-			task->message_id);
+		task->message_id);
 	statfile_pool_plan_invalidate (task->worker->srv->statfile_pool,
-			DEFAULT_STATFILE_INVALIDATE_TIME,
-			DEFAULT_STATFILE_INVALIDATE_JITTER);
+		DEFAULT_STATFILE_INVALIDATE_TIME,
+		DEFAULT_STATFILE_INVALIDATE_JITTER);
 
 	return TRUE;
 }
 
-/* 
- * vi:ts=4 
+/*
+ * vi:ts=4
  */

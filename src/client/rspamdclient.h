@@ -39,12 +39,12 @@ struct rspamd_http_message;
  * @param err error pointer
  */
 typedef void (*rspamd_client_callback) (
-		struct rspamd_client_connection *conn,
-		struct rspamd_http_message *msg,
-		const gchar *name,
-		ucl_object_t *result,
-		gpointer ud,
-		GError *err);
+	struct rspamd_client_connection *conn,
+	struct rspamd_http_message *msg,
+	const gchar *name,
+	ucl_object_t *result,
+	gpointer ud,
+	GError *err);
 
 /**
  * Start rspamd worker or controller command
@@ -54,11 +54,11 @@ typedef void (*rspamd_client_callback) (
  * @param timeout timeout in seconds
  * @return
  */
-struct rspamd_client_connection* rspamd_client_init (
-		struct event_base *ev_base,
-		const gchar *name,
-		guint16 port,
-		gdouble timeout);
+struct rspamd_client_connection * rspamd_client_init (
+	struct event_base *ev_base,
+	const gchar *name,
+	guint16 port,
+	gdouble timeout);
 
 /**
  *
@@ -71,13 +71,13 @@ struct rspamd_client_connection* rspamd_client_init (
  * @return
  */
 gboolean rspamd_client_command (
-		struct rspamd_client_connection *conn,
-		const gchar *command,
-		GHashTable *attrs,
-		FILE *in,
-		rspamd_client_callback cb,
-		gpointer ud,
-		GError **err);
+	struct rspamd_client_connection *conn,
+	const gchar *command,
+	GHashTable *attrs,
+	FILE *in,
+	rspamd_client_callback cb,
+	gpointer ud,
+	GError **err);
 
 /**
  * Destroy a connection to rspamd

@@ -26,9 +26,9 @@
 #include "config.h"
 #include "dns.h"
 #include "main.h"
-#include "utlist.h"
-#include "uthash.h"
 #include "rdns_event.h"
+#include "uthash.h"
+#include "utlist.h"
 
 struct rspamd_dns_resolver {
 	struct rdns_resolver *r;
@@ -48,7 +48,7 @@ static void
 rspamd_dns_fin_cb (gpointer arg)
 {
 	struct rdns_request *req = arg;
-	
+
 	rdns_request_release (req);
 }
 
@@ -67,25 +67,33 @@ rspamd_dns_callback (struct rdns_reply *reply, gpointer ud)
 	remove_normal_event (reqdata->session, rspamd_dns_fin_cb, reqdata->req);
 }
 
-gboolean 
+gboolean
 make_dns_request (struct rspamd_dns_resolver *resolver,
-		struct rspamd_async_session *session, rspamd_mempool_t *pool, dns_callback_type cb,
-		gpointer ud, enum rdns_request_type type, const char *name)
+	struct rspamd_async_session *session,
+	rspamd_mempool_t *pool,
+	dns_callback_type cb,
+	gpointer ud,
+	enum rdns_request_type type,
+	const char *name)
 {
 	struct rdns_request *req;
 	struct rspamd_dns_request_ud *reqdata;
-	
-	reqdata = rspamd_mempool_alloc (pool, sizeof (struct rspamd_dns_request_ud));
+
+	reqdata =
+		rspamd_mempool_alloc (pool, sizeof (struct rspamd_dns_request_ud));
 	reqdata->session = session;
 	reqdata->cb = cb;
 	reqdata->ud = ud;
 
 	req = rdns_make_request_full (resolver->r, rspamd_dns_callback, reqdata,
-			resolver->request_timeout, resolver->max_retransmits, 1, name, type);
+			resolver->request_timeout, resolver->max_retransmits, 1, name,
+			type);
 
 	if (req != NULL) {
-		register_async_event (session, (event_finalizer_t)rspamd_dns_fin_cb, req,
-				g_quark_from_static_string ("dns resolver"));
+		register_async_event (session,
+			(event_finalizer_t)rspamd_dns_fin_cb,
+			req,
+			g_quark_from_static_string ("dns resolver"));
 		reqdata->req = req;
 	}
 	else {
@@ -97,13 +105,15 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 
 
 struct rspamd_dns_resolver *
-dns_resolver_init (rspamd_logger_t *logger, struct event_base *ev_base, struct rspamd_config *cfg)
+dns_resolver_init (rspamd_logger_t *logger,
+	struct event_base *ev_base,
+	struct rspamd_config *cfg)
 {
-	GList                          *cur;
-	struct rspamd_dns_resolver     *new;
-	gchar                          *begin, *p, *err;
-	gint                            priority;
-	
+	GList *cur;
+	struct rspamd_dns_resolver *new;
+	gchar *begin, *p, *err;
+	gint priority;
+
 	new = g_slice_alloc0 (sizeof (struct rspamd_dns_resolver));
 	new->ev_base = ev_base;
 	new->request_timeout = cfg->dns_timeout;
@@ -112,12 +122,15 @@ dns_resolver_init (rspamd_logger_t *logger, struct event_base *ev_base, struct r
 	new->r = rdns_resolver_new ();
 	rdns_bind_libevent (new->r, new->ev_base);
 	rdns_resolver_set_log_level (new->r, cfg->log_level);
-	rdns_resolver_set_logger (new->r, (rdns_log_function)rspamd_common_logv, logger);
+	rdns_resolver_set_logger (new->r,
+		(rdns_log_function)rspamd_common_logv,
+		logger);
 
 	if (cfg->nameservers == NULL) {
 		/* Parse resolv.conf */
 		if (!rdns_resolver_parse_resolv_conf (new->r, "/etc/resolv.conf")) {
-			msg_err ("cannot parse resolv.conf and no nameservers defined, so no ways to resolve addresses");
+			msg_err (
+				"cannot parse resolv.conf and no nameservers defined, so no ways to resolve addresses");
 			return new;
 		}
 	}
@@ -128,16 +141,19 @@ dns_resolver_init (rspamd_logger_t *logger, struct event_base *ev_base, struct r
 			p = strchr (begin, ':');
 			if (p != NULL) {
 				*p = '\0';
-				p ++;
+				p++;
 				priority = strtoul (p, &err, 10);
 				if (err != NULL && *err != '\0') {
-					msg_info ("bad character '%x', must be 'm' or 's' or a numeric priority", *err);
+					msg_info (
+						"bad character '%x', must be 'm' or 's' or a numeric priority",
+						*err);
 				}
 			}
 			else {
 				priority = 0;
 			}
-			if (!rdns_resolver_add_server (new->r, begin, 53, priority, cfg->dns_io_per_server)) {
+			if (!rdns_resolver_add_server (new->r, begin, 53, priority,
+				cfg->dns_io_per_server)) {
 				msg_warn ("cannot parse ip address of nameserver: %s", begin);
 				cur = g_list_next (cur);
 				continue;

@@ -1,9 +1,9 @@
 #ifndef RSPAMD_MODULE_SURBL
 #define RSPAMD_MODULE_SURBL
 
+#include "cfg_file.h"
 #include "config.h"
 #include "main.h"
-#include "cfg_file.h"
 #include "trie.h"
 
 #define DEFAULT_REDIRECTOR_PORT 8080

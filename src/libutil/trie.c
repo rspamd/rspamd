@@ -25,10 +25,10 @@
 #include "mem_pool.h"
 #include "trie.h"
 
-rspamd_trie_t*
+rspamd_trie_t *
 rspamd_trie_create (gboolean icase)
 {
-	rspamd_trie_t                 *new;
+	rspamd_trie_t *new;
 
 	new = g_malloc (sizeof (rspamd_trie_t));
 
@@ -48,20 +48,25 @@ rspamd_trie_create (gboolean icase)
  * Insert a single character as the specified level of the suffix tree
  */
 static struct rspamd_trie_state *
-rspamd_trie_insert_char (rspamd_trie_t *trie, guint depth, struct rspamd_trie_state *pos, gchar c)
+rspamd_trie_insert_char (rspamd_trie_t *trie,
+	guint depth,
+	struct rspamd_trie_state *pos,
+	gchar c)
 {
-	struct rspamd_trie_match     *new_match;
-	struct rspamd_trie_state     *new_pos;
+	struct rspamd_trie_match *new_match;
+	struct rspamd_trie_state *new_pos;
 
 	/* New match is inserted before pos */
-	new_match = rspamd_mempool_alloc (trie->pool, sizeof (struct rspamd_trie_match));
+	new_match =
+		rspamd_mempool_alloc (trie->pool, sizeof (struct rspamd_trie_match));
 	new_match->next = pos->match;
 	new_match->c = c;
 
 	/* Now set match link */
 	pos->match = new_match;
 
-	new_match->state = rspamd_mempool_alloc (trie->pool, sizeof (struct rspamd_trie_state));
+	new_match->state =
+		rspamd_mempool_alloc (trie->pool, sizeof (struct rspamd_trie_state));
 	new_pos = new_match->state;
 	new_pos->match = NULL;
 	new_pos->fail = &trie->root;
@@ -86,7 +91,7 @@ rspamd_trie_insert_char (rspamd_trie_t *trie, guint depth, struct rspamd_trie_st
 static inline struct rspamd_trie_match *
 check_match (struct rspamd_trie_state *s, gchar c)
 {
-	struct rspamd_trie_match         *match = s->match;
+	struct rspamd_trie_match *match = s->match;
 
 	while (match && match->c != c) {
 		match = match->next;
@@ -98,11 +103,11 @@ check_match (struct rspamd_trie_state *s, gchar c)
 void
 rspamd_trie_insert (rspamd_trie_t *trie, const gchar *pattern, gint pattern_id)
 {
-	const guchar               *p =  pattern;
-	struct rspamd_trie_state   *q, *q1, *r, *cur_node;
-	struct rspamd_trie_match   *m, *n;
-	guint                       i, depth = 0;
-	gchar                       c;
+	const guchar *p = pattern;
+	struct rspamd_trie_state *q, *q1, *r, *cur_node;
+	struct rspamd_trie_match *m, *n;
+	guint i, depth = 0;
+	gchar c;
 
 	/* Insert pattern to the trie */
 
@@ -118,8 +123,8 @@ rspamd_trie_insert (rspamd_trie_t *trie, const gchar *pattern, gint pattern_id)
 		else {
 			cur_node = m->state;
 		}
-		p ++;
-		depth ++;
+		p++;
+		depth++;
 	}
 
 	cur_node->final = depth;
@@ -165,13 +170,16 @@ rspamd_trie_insert (rspamd_trie_t *trie, const gchar *pattern, gint pattern_id)
 	}
 }
 
-const gchar*
-rspamd_trie_lookup (rspamd_trie_t *trie, const gchar *buffer, gsize buflen, gint *matched_id)
+const gchar *
+rspamd_trie_lookup (rspamd_trie_t *trie,
+	const gchar *buffer,
+	gsize buflen,
+	gint *matched_id)
 {
-	const guchar               *p = buffer, *prev, *ret;
-	struct rspamd_trie_state   *cur_node;
-	struct rspamd_trie_match   *m = NULL;
-	gchar                       c;
+	const guchar *p = buffer, *prev, *ret;
+	struct rspamd_trie_state *cur_node;
+	struct rspamd_trie_match *m = NULL;
+	gchar c;
 
 
 	cur_node = &trie->root;
@@ -195,9 +203,9 @@ rspamd_trie_lookup (rspamd_trie_t *trie, const gchar *buffer, gsize buflen, gint
 			/* We have tried the pattern but eventually it was not found */
 			cur_node = &trie->root;
 			ret = p;
-			p ++;
+			p++;
 			prev = p;
-			buflen --;
+			buflen--;
 			continue;
 		}
 
@@ -213,9 +221,9 @@ rspamd_trie_lookup (rspamd_trie_t *trie, const gchar *buffer, gsize buflen, gint
 				return (const gchar *) ret;
 			}
 		}
-		p ++;
+		p++;
 		prev = p;
-		buflen --;
+		buflen--;
 	}
 
 	return NULL;

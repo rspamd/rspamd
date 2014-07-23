@@ -27,7 +27,7 @@ struct metric;
  * @return
  */
 gboolean rspamd_protocol_handle_headers (struct rspamd_task *task,
-		struct rspamd_http_message *msg);
+	struct rspamd_http_message *msg);
 
 /**
  * Process HTTP request to the task structure
@@ -36,7 +36,7 @@ gboolean rspamd_protocol_handle_headers (struct rspamd_task *task,
  * @return
  */
 gboolean rspamd_protocol_handle_request (struct rspamd_task *task,
-		struct rspamd_http_message *msg);
+	struct rspamd_http_message *msg);
 
 /**
  * Write task results to http message
@@ -44,7 +44,7 @@ gboolean rspamd_protocol_handle_request (struct rspamd_task *task,
  * @param task
  */
 void rspamd_protocol_http_reply (struct rspamd_http_message *msg,
-		struct rspamd_task *task);
+	struct rspamd_task *task);
 
 /**
  * Write reply for specified task command

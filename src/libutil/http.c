@@ -23,10 +23,10 @@
 
 #include "config.h"
 #include "http.h"
-#include "utlist.h"
-#include "util.h"
-#include "printf.h"
 #include "logger.h"
+#include "printf.h"
+#include "util.h"
+#include "utlist.h"
 
 struct rspamd_http_connection_private {
 	GString *buf;
@@ -65,9 +65,9 @@ static const struct _rspamd_http_magic {
 	[HTTP_MAGIC_JPG] = { "jpg", "image/jpeg" },
 };
 
-static gchar  *http_week[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
-static gchar  *http_month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-							"Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+static gchar *http_week[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+static gchar *http_month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+							   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 
 
 #define HTTP_ERROR http_error_quark ()
@@ -228,13 +228,13 @@ rspamd_http_parse_date (const gchar *header, gsize len)
 
 	if (fmt == rfc822) {
 		if (*p < '0' || *p > '9' || *(p + 1) < '0' || *(p + 1) > '9'
-		|| *(p + 2) < '0' || *(p + 2) > '9' || *(p + 3) < '0'
-		|| *(p + 3) > '9') {
+			|| *(p + 2) < '0' || *(p + 2) > '9' || *(p + 3) < '0'
+			|| *(p + 3) > '9') {
 			return (time_t)-1;
 		}
 
 		year = (*p - '0') * 1000 + (*(p + 1) - '0') * 100
-				+ (*(p + 2) - '0') * 10 + *(p + 3) - '0';
+			+ (*(p + 2) - '0') * 10 + *(p + 3) - '0';
 		p += 4;
 
 	}
@@ -312,13 +312,13 @@ rspamd_http_parse_date (const gchar *header, gsize len)
 		}
 
 		if (*p < '0' || *p > '9' || *(p + 1) < '0' || *(p + 1) > '9'
-		|| *(p + 2) < '0' || *(p + 2) > '9' || *(p + 3) < '0'
-		|| *(p + 3) > '9') {
+			|| *(p + 2) < '0' || *(p + 2) > '9' || *(p + 3) < '0'
+			|| *(p + 3) > '9') {
 			return (time_t)-1;
 		}
 
 		year = (*p - '0') * 1000 + (*(p + 1) - '0') * 100
-				+ (*(p + 2) - '0') * 10 + *(p + 3) - '0';
+			+ (*(p + 2) - '0') * 10 + *(p + 3) - '0';
 	}
 
 	if (hour > 23 || min > 59 || sec > 59) {
@@ -348,24 +348,24 @@ rspamd_http_parse_date (const gchar *header, gsize len)
 	/* Gauss' formula for Gregorian days since March 1, 1 BC */
 
 	time = (guint64) (
-			/* days in years including leap years since March 1, 1 BC */
+	    /* days in years including leap years since March 1, 1 BC */
 
-			365 * year + year / 4 - year / 100 + year / 400
+		365 * year + year / 4 - year / 100 + year / 400
 
-			/* days before the month */
+	    /* days before the month */
 
-			+ 367 * month / 12 - 30
+		+ 367 * month / 12 - 30
 
-			/* days before the day */
+	    /* days before the day */
 
-			+ day - 1
+		+ day - 1
 
-			/*
-			 * 719527 days were between March 1, 1 BC and March 1, 1970,
-			 * 31 and 28 days were in January and February 1970
-			 */
+	    /*
+	     * 719527 days were between March 1, 1 BC and March 1, 1970,
+	     * 31 and 28 days were in January and February 1970
+	     */
 
-			- 719527 + 31 + 28) * 86400 + hour * 3600 + min * 60 + sec;
+		- 719527 + 31 + 28) * 86400 + hour * 3600 + min * 60 + sec;
 
 	return (time_t) time;
 }
@@ -380,9 +380,10 @@ rspamd_http_check_date (struct rspamd_http_connection_private *priv)
 }
 
 static gint
-rspamd_http_on_url (http_parser* parser, const gchar *at, size_t length)
+rspamd_http_on_url (http_parser * parser, const gchar *at, size_t length)
 {
-	struct rspamd_http_connection *conn = (struct rspamd_http_connection *)parser->data;
+	struct rspamd_http_connection *conn =
+		(struct rspamd_http_connection *)parser->data;
 	struct rspamd_http_connection_private *priv;
 
 	priv = conn->priv;
@@ -393,9 +394,10 @@ rspamd_http_on_url (http_parser* parser, const gchar *at, size_t length)
 }
 
 static gint
-rspamd_http_on_status (http_parser* parser, const gchar *at, size_t length)
+rspamd_http_on_status (http_parser * parser, const gchar *at, size_t length)
 {
-	struct rspamd_http_connection *conn = (struct rspamd_http_connection *)parser->data;
+	struct rspamd_http_connection *conn =
+		(struct rspamd_http_connection *)parser->data;
 	struct rspamd_http_connection_private *priv;
 
 	priv = conn->priv;
@@ -411,9 +413,12 @@ rspamd_http_on_status (http_parser* parser, const gchar *at, size_t length)
 }
 
 static gint
-rspamd_http_on_header_field (http_parser* parser, const gchar *at, size_t length)
+rspamd_http_on_header_field (http_parser * parser,
+	const gchar *at,
+	size_t length)
 {
-	struct rspamd_http_connection *conn = (struct rspamd_http_connection *)parser->data;
+	struct rspamd_http_connection *conn =
+		(struct rspamd_http_connection *)parser->data;
 	struct rspamd_http_connection_private *priv;
 
 	priv = conn->priv;
@@ -438,9 +443,12 @@ rspamd_http_on_header_field (http_parser* parser, const gchar *at, size_t length
 }
 
 static gint
-rspamd_http_on_header_value (http_parser* parser, const gchar *at, size_t length)
+rspamd_http_on_header_value (http_parser * parser,
+	const gchar *at,
+	size_t length)
 {
-	struct rspamd_http_connection *conn = (struct rspamd_http_connection *)parser->data;
+	struct rspamd_http_connection *conn =
+		(struct rspamd_http_connection *)parser->data;
 	struct rspamd_http_connection_private *priv;
 
 	priv = conn->priv;
@@ -457,9 +465,10 @@ rspamd_http_on_header_value (http_parser* parser, const gchar *at, size_t length
 }
 
 static int
-rspamd_http_on_headers_complete (http_parser* parser)
+rspamd_http_on_headers_complete (http_parser * parser)
 {
-	struct rspamd_http_connection *conn = (struct rspamd_http_connection *)parser->data;
+	struct rspamd_http_connection *conn =
+		(struct rspamd_http_connection *)parser->data;
 	struct rspamd_http_connection_private *priv;
 
 	priv = conn->priv;
@@ -484,9 +493,10 @@ rspamd_http_on_headers_complete (http_parser* parser)
 }
 
 static int
-rspamd_http_on_body (http_parser* parser, const gchar *at, size_t length)
+rspamd_http_on_body (http_parser * parser, const gchar *at, size_t length)
 {
-	struct rspamd_http_connection *conn = (struct rspamd_http_connection *)parser->data;
+	struct rspamd_http_connection *conn =
+		(struct rspamd_http_connection *)parser->data;
 	struct rspamd_http_connection_private *priv;
 
 	priv = conn->priv;
@@ -501,9 +511,10 @@ rspamd_http_on_body (http_parser* parser, const gchar *at, size_t length)
 }
 
 static int
-rspamd_http_on_message_complete (http_parser* parser)
+rspamd_http_on_message_complete (http_parser * parser)
 {
-	struct rspamd_http_connection *conn = (struct rspamd_http_connection *)parser->data;
+	struct rspamd_http_connection *conn =
+		(struct rspamd_http_connection *)parser->data;
 	struct rspamd_http_connection_private *priv;
 	int ret = 0;
 
@@ -515,7 +526,10 @@ rspamd_http_on_message_complete (http_parser* parser)
 			ret = conn->body_handler (conn, priv->msg, NULL, 0);
 		}
 		else {
-			ret = conn->body_handler (conn, priv->msg, priv->msg->body->str, priv->msg->body->len);
+			ret = conn->body_handler (conn,
+					priv->msg,
+					priv->msg->body->str,
+					priv->msg->body->len);
 		}
 		rspamd_http_connection_unref (conn);
 	}
@@ -557,13 +571,13 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 	start = &priv->out[0];
 	niov = priv->outlen;
 	remain = priv->wr_pos;
-	for (i = 0; i < priv->outlen && remain > 0; i ++) {
+	for (i = 0; i < priv->outlen && remain > 0; i++) {
 		/* Find out the first iov required */
 		start = &priv->out[i];
 		if (start->iov_len <= remain) {
 			remain -= start->iov_len;
 			start = &priv->out[i + 1];
-			niov --;
+			niov--;
 		}
 		else {
 			start->iov_base = (void *)((char *)start->iov_base + remain);
@@ -575,7 +589,9 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 	r = writev (conn->fd, start, MIN (IOV_MAX, niov));
 
 	if (r == -1) {
-		err = g_error_new (HTTP_ERROR, errno, "IO write error: %s", strerror (errno));
+		err =
+			g_error_new (HTTP_ERROR, errno, "IO write error: %s", strerror (
+					errno));
 		rspamd_http_connection_ref (conn);
 		conn->error_handler (conn, err);
 		rspamd_http_connection_unref (conn);
@@ -613,7 +629,10 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 	if (what == EV_READ) {
 		r = read (fd, buf->str, buf->allocated_len);
 		if (r == -1) {
-			err = g_error_new (HTTP_ERROR, errno, "IO read error: %s", strerror (errno));
+			err = g_error_new (HTTP_ERROR,
+					errno,
+					"IO read error: %s",
+					strerror (errno));
 			conn->error_handler (conn, err);
 			g_error_free (err);
 			return;
@@ -624,7 +643,9 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 				return;
 			}
 			else {
-				err = g_error_new (HTTP_ERROR, errno, "IO read error: unexpected EOF");
+				err = g_error_new (HTTP_ERROR,
+						errno,
+						"IO read error: unexpected EOF");
 				conn->error_handler (conn, err);
 				g_error_free (err);
 				return;
@@ -633,9 +654,11 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 		else {
 			buf->len = r;
 			rspamd_http_connection_ref (conn);
-			if (http_parser_execute (&priv->parser, &priv->parser_cb, buf->str, r) != (size_t)r) {
+			if (http_parser_execute (&priv->parser, &priv->parser_cb, buf->str,
+				r) != (size_t)r) {
 				err = g_error_new (HTTP_ERROR, priv->parser.http_errno,
-						"HTTP parser error: %s", http_errno_description (priv->parser.http_errno));
+						"HTTP parser error: %s",
+						http_errno_description (priv->parser.http_errno));
 				conn->error_handler (conn, err);
 				g_error_free (err);
 				rspamd_http_connection_unref (conn);
@@ -658,12 +681,12 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 	}
 }
 
-struct rspamd_http_connection*
+struct rspamd_http_connection *
 rspamd_http_connection_new (rspamd_http_body_handler_t body_handler,
-		rspamd_http_error_handler_t error_handler,
-		rspamd_http_finish_handler_t finish_handler,
-		enum rspamd_http_options opts,
-		enum rspamd_http_connection_type type)
+	rspamd_http_error_handler_t error_handler,
+	rspamd_http_finish_handler_t finish_handler,
+	enum rspamd_http_options opts,
+	enum rspamd_http_connection_type type)
 {
 	struct rspamd_http_connection *new;
 	struct rspamd_http_connection_private *priv;
@@ -684,7 +707,8 @@ rspamd_http_connection_new (rspamd_http_body_handler_t body_handler,
 
 	/* Init priv */
 	priv = g_slice_alloc0 (sizeof (struct rspamd_http_connection_private));
-	http_parser_init (&priv->parser, type == RSPAMD_HTTP_SERVER ? HTTP_REQUEST : HTTP_RESPONSE);
+	http_parser_init (&priv->parser,
+		type == RSPAMD_HTTP_SERVER ? HTTP_REQUEST : HTTP_RESPONSE);
 	priv->parser.data = new;
 	priv->parser_cb.on_url = rspamd_http_on_url;
 	priv->parser_cb.on_status = rspamd_http_on_status;
@@ -734,19 +758,20 @@ rspamd_http_connection_free (struct rspamd_http_connection *conn)
 	priv = conn->priv;
 	rspamd_http_connection_reset (conn);
 	g_slice_free1 (sizeof (struct rspamd_http_connection_private), priv);
-	g_slice_free1 (sizeof (struct rspamd_http_connection), conn);
+	g_slice_free1 (sizeof (struct rspamd_http_connection),		   conn);
 }
 
 void
 rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
-		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
+	gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
 {
 	struct rspamd_http_connection_private *priv = conn->priv;
 	struct rspamd_http_message *req;
 
 	conn->fd = fd;
 	conn->ud = ud;
-	req = rspamd_http_new_message (conn->type == RSPAMD_HTTP_SERVER ? HTTP_REQUEST : HTTP_RESPONSE);
+	req = rspamd_http_new_message (
+		conn->type == RSPAMD_HTTP_SERVER ? HTTP_REQUEST : HTTP_RESPONSE);
 	priv->msg = req;
 
 	if (timeout == NULL) {
@@ -760,15 +785,19 @@ rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
 	priv->buf = g_string_sized_new (BUFSIZ);
 	priv->new_header = TRUE;
 
-	event_set (&priv->ev, fd, EV_READ | EV_PERSIST, rspamd_http_event_handler, conn);
+	event_set (&priv->ev,
+		fd,
+		EV_READ | EV_PERSIST,
+		rspamd_http_event_handler,
+		conn);
 	event_base_set (base, &priv->ev);
 	event_add (&priv->ev, priv->ptv);
 }
 
 void
 rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
-		struct rspamd_http_message *msg, const gchar *host, const gchar *mime_type,
-		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
+	struct rspamd_http_message *msg, const gchar *host, const gchar *mime_type,
+	gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
 {
 	struct rspamd_http_connection_private *priv = conn->priv;
 	struct rspamd_http_header *hdr;
@@ -820,29 +849,32 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		if (msg->method < HTTP_SYMBOLS) {
 			ptm = gmtime (&msg->date);
 			t = *ptm;
-			rspamd_snprintf (datebuf, sizeof (datebuf), "%s, %02d %s %4d %02d:%02d:%02d GMT",
-					http_week[t.tm_wday],
-					t.tm_mday,
-					http_month[t.tm_mon],
-					t.tm_year + 1900,
-					t.tm_hour,
-					t.tm_min,
-					t.tm_sec);
+			rspamd_snprintf (datebuf,
+				sizeof (datebuf),
+				"%s, %02d %s %4d %02d:%02d:%02d GMT",
+				http_week[t.tm_wday],
+				t.tm_mday,
+				http_month[t.tm_mon],
+				t.tm_year + 1900,
+				t.tm_hour,
+				t.tm_min,
+				t.tm_sec);
 			if (mime_type == NULL) {
 				mime_type = "text/plain";
 			}
 			rspamd_printf_gstring (priv->buf, "HTTP/1.1 %d %s\r\n"
-					"Connection: close\r\n"
-					"Server: %s\r\n"
-					"Date: %s\r\n"
-					"Content-Length: %z\r\n"
-					"Content-Type: %s\r\n",
-					msg->code,
-					msg->status ? msg->status->str : rspamd_http_code_to_str (msg->code),
-					"rspamd/" RVERSION,
-					datebuf,
-					bodylen,
-					mime_type);
+				"Connection: close\r\n"
+				"Server: %s\r\n"
+				"Date: %s\r\n"
+				"Content-Length: %z\r\n"
+				"Content-Type: %s\r\n",
+				msg->code,
+				msg->status ? msg->status->str : rspamd_http_code_to_str (msg->
+				code),
+				"rspamd/" RVERSION,
+				datebuf,
+				bodylen,
+				mime_type);
 		}
 		else {
 			/* Legacy spamd reply */
@@ -853,21 +885,22 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		/* Format request */
 		if (host != NULL) {
 			rspamd_printf_gstring (priv->buf, "%s %v HTTP/1.1\r\n"
-					"Connection: close\r\n"
-					"Host: %s\r\n"
-					"Content-Length: %z\r\n",
+				"Connection: close\r\n"
+				"Host: %s\r\n"
+				"Content-Length: %z\r\n",
 				http_method_str (msg->method), msg->url, host, bodylen);
 		}
 		else {
 			/* Fallback to HTTP/1.0 */
 			rspamd_printf_gstring (priv->buf, "%s %v HTTP/1.0\r\n"
-					"Content-Length: %z\r\n",
+				"Content-Length: %z\r\n",
 				http_method_str (msg->method), msg->url, bodylen);
 		}
 	}
 	/* Allocate iov */
 	priv->wr_total = bodylen + priv->buf->len + 2;
-	DL_FOREACH (msg->headers, hdr) {
+	DL_FOREACH (msg->headers, hdr)
+	{
 		/* <name><: ><value><\r\n> */
 		priv->wr_total += hdr->name->len + hdr->value->len + 4;
 		priv->outlen += 4;
@@ -879,7 +912,8 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	priv->out[0].iov_base = priv->buf->str;
 	priv->out[0].iov_len = priv->buf->len;
 	i = 1;
-	LL_FOREACH (msg->headers, hdr) {
+	LL_FOREACH (msg->headers, hdr)
+	{
 		priv->out[i].iov_base = hdr->name->str;
 		priv->out[i++].iov_len = hdr->name->len;
 		priv->out[i].iov_base = ": ";
@@ -907,7 +941,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	event_add (&priv->ev, priv->ptv);
 }
 
-struct rspamd_http_message*
+struct rspamd_http_message *
 rspamd_http_new_message (enum http_parser_type type)
 {
 	struct rspamd_http_message *new;
@@ -935,8 +969,9 @@ rspamd_http_message_free (struct rspamd_http_message *msg)
 {
 	struct rspamd_http_header *hdr, *tmp_hdr;
 
-	LL_FOREACH_SAFE (msg->headers, hdr, tmp_hdr) {
-		g_string_free (hdr->name, TRUE);
+	LL_FOREACH_SAFE (msg->headers, hdr, tmp_hdr)
+	{
+		g_string_free (hdr->name,  TRUE);
 		g_string_free (hdr->value, TRUE);
 		g_slice_free1 (sizeof (struct rspamd_http_header), hdr);
 	}
@@ -952,9 +987,10 @@ rspamd_http_message_free (struct rspamd_http_message *msg)
 	g_slice_free1 (sizeof (struct rspamd_http_message), msg);
 }
 
-void rspamd_http_message_add_header (struct rspamd_http_message *msg,
-		const gchar *name,
-		const gchar *value)
+void
+rspamd_http_message_add_header (struct rspamd_http_message *msg,
+	const gchar *name,
+	const gchar *value)
 {
 	struct rspamd_http_header *hdr;
 
@@ -966,15 +1002,17 @@ void rspamd_http_message_add_header (struct rspamd_http_message *msg,
 	}
 }
 
-const gchar*
-rspamd_http_message_find_header (struct rspamd_http_message *msg, const gchar *name)
+const gchar *
+rspamd_http_message_find_header (struct rspamd_http_message *msg,
+	const gchar *name)
 {
 	struct rspamd_http_header *hdr;
 	const gchar *res = NULL;
 	guint slen = strlen (name);
 
 	if (msg != NULL) {
-		LL_FOREACH (msg->headers, hdr) {
+		LL_FOREACH (msg->headers, hdr)
+		{
 			if (hdr->name->len == slen) {
 				if (memcmp (hdr->name->str, name, slen) == 0) {
 					res = hdr->value->str;
@@ -1005,7 +1043,8 @@ rspamd_http_entry_free (struct rspamd_http_connection_entry *entry)
 }
 
 static void
-rspamd_http_router_error_handler (struct rspamd_http_connection *conn, GError *err)
+rspamd_http_router_error_handler (struct rspamd_http_connection *conn,
+	GError *err)
 {
 	struct rspamd_http_connection_entry *entry = conn->ud;
 	struct rspamd_http_message *msg;
@@ -1027,8 +1066,14 @@ rspamd_http_router_error_handler (struct rspamd_http_connection *conn, GError *e
 		msg->code = err->code;
 		msg->body = g_string_new (err->message);
 		rspamd_http_connection_reset (entry->conn);
-		rspamd_http_connection_write_message (entry->conn, msg, NULL,
-					"text/plain", entry, entry->conn->fd, entry->rt->ptv, entry->rt->ev_base);
+		rspamd_http_connection_write_message (entry->conn,
+			msg,
+			NULL,
+			"text/plain",
+			entry,
+			entry->conn->fd,
+			entry->rt->ptv,
+			entry->rt->ev_base);
 		entry->is_reply = TRUE;
 	}
 }
@@ -1043,9 +1088,9 @@ rspamd_http_router_detect_ct (const gchar *path)
 	if (dot == NULL) {
 		return http_file_types[HTTP_MAGIC_PLAIN].ct;
 	}
-	dot ++;
+	dot++;
 
-	for (i = 0; i < G_N_ELEMENTS (http_file_types); i ++) {
+	for (i = 0; i < G_N_ELEMENTS (http_file_types); i++) {
 		if (strcmp (http_file_types[i].ext, dot) == 0) {
 			return http_file_types[i].ct;
 		}
@@ -1065,11 +1110,11 @@ rspamd_http_router_is_subdir (const gchar *parent, const gchar *sub)
 		if (*sub != *parent) {
 			return FALSE;
 		}
-		parent ++;
-		sub ++;
+		parent++;
+		sub++;
 	}
 
-	parent --;
+	parent--;
 	if (*parent == G_DIR_SEPARATOR) {
 		return TRUE;
 	}
@@ -1079,7 +1124,7 @@ rspamd_http_router_is_subdir (const gchar *parent, const gchar *sub)
 
 static gboolean
 rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
-		struct rspamd_http_message *msg, gboolean expand_path)
+	struct rspamd_http_message *msg, gboolean expand_path)
 {
 	struct stat st;
 	gint fd;
@@ -1087,17 +1132,17 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 	struct rspamd_http_message *reply_msg;
 
 	rspamd_snprintf (filebuf, sizeof (filebuf), "%s%c%v",
-			entry->rt->default_fs_path, G_DIR_SEPARATOR, msg->url);
+		entry->rt->default_fs_path, G_DIR_SEPARATOR, msg->url);
 
 	if (realpath (filebuf, realbuf) == NULL ||
-			lstat (realbuf, &st) == -1) {
+		lstat (realbuf, &st) == -1) {
 		return FALSE;
 	}
 
 	if (S_ISDIR (st.st_mode) && expand_path) {
 		/* Try to append 'index.html' to the url */
 		g_string_append_printf (msg->url, "%c%s", G_DIR_SEPARATOR,
-				"index.html");
+			"index.html");
 		return rspamd_http_router_try_file (entry, msg, FALSE);
 	}
 	else if (!S_ISREG (st.st_mode)) {
@@ -1107,8 +1152,9 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 	/* We also need to ensure that file is inside the defined dir */
 	rspamd_strlcpy (filebuf, realbuf, sizeof (filebuf));
 	dir = dirname (filebuf);
-	if (dir == NULL || !rspamd_http_router_is_subdir (entry->rt->default_fs_path,
-			dir)) {
+	if (dir == NULL ||
+		!rspamd_http_router_is_subdir (entry->rt->default_fs_path,
+		dir)) {
 		return FALSE;
 	}
 
@@ -1136,15 +1182,15 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 
 	/* XXX: detect content type */
 	rspamd_http_connection_write_message (entry->conn, reply_msg, NULL,
-			rspamd_http_router_detect_ct (realbuf), entry, entry->conn->fd,
-			entry->rt->ptv, entry->rt->ev_base);
+		rspamd_http_router_detect_ct (realbuf), entry, entry->conn->fd,
+		entry->rt->ptv, entry->rt->ev_base);
 
 	return TRUE;
 }
 
 static int
 rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
-		struct rspamd_http_message *msg)
+	struct rspamd_http_message *msg)
 {
 	struct rspamd_http_connection_entry *entry = conn->ud;
 	rspamd_http_router_handler_t handler = NULL;
@@ -1152,7 +1198,8 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 	struct rspamd_http_message *err_msg;
 	GError *err;
 
-	G_STATIC_ASSERT (sizeof (rspamd_http_router_handler_t) == sizeof (gpointer));
+	G_STATIC_ASSERT (sizeof (rspamd_http_router_handler_t) ==
+		sizeof (gpointer));
 
 	if (entry->is_reply) {
 		/* Request is finished, it is safe to free a connection */
@@ -1170,7 +1217,7 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 		}
 		else {
 			if (entry->rt->default_fs_path == NULL ||
-					!rspamd_http_router_try_file (entry, msg, TRUE)) {
+				!rspamd_http_router_try_file (entry, msg, TRUE)) {
 				err = g_error_new (HTTP_ERROR, 404,
 						"Not found");
 				if (entry->rt->error_handler != NULL) {
@@ -1181,9 +1228,14 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 				err_msg->code = err->code;
 				err_msg->body = g_string_new (err->message);
 				rspamd_http_connection_reset (entry->conn);
-				rspamd_http_connection_write_message (entry->conn, err_msg, NULL,
-						"text/plain", entry, entry->conn->fd,
-						entry->rt->ptv, entry->rt->ev_base);
+				rspamd_http_connection_write_message (entry->conn,
+					err_msg,
+					NULL,
+					"text/plain",
+					entry,
+					entry->conn->fd,
+					entry->rt->ptv,
+					entry->rt->ev_base);
 				g_error_free (err);
 			}
 		}
@@ -1192,13 +1244,13 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 	return 0;
 }
 
-struct rspamd_http_connection_router*
+struct rspamd_http_connection_router *
 rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
-		rspamd_http_router_finish_handler_t fh,
-		struct timeval *timeout, struct event_base *base,
-		const char *default_fs_path)
+	rspamd_http_router_finish_handler_t fh,
+	struct timeval *timeout, struct event_base *base,
+	const char *default_fs_path)
 {
-	struct rspamd_http_connection_router* new;
+	struct rspamd_http_connection_router * new;
 	struct stat st;
 
 	new = g_slice_alloc (sizeof (struct rspamd_http_connection_router));
@@ -1235,10 +1287,11 @@ rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 
 void
 rspamd_http_router_add_path (struct rspamd_http_connection_router *router,
-		const gchar *path, rspamd_http_router_handler_t handler)
+	const gchar *path, rspamd_http_router_handler_t handler)
 {
 	gpointer ptr;
-	G_STATIC_ASSERT (sizeof (rspamd_http_router_handler_t) == sizeof (gpointer));
+	G_STATIC_ASSERT (sizeof (rspamd_http_router_handler_t) ==
+		sizeof (gpointer));
 
 	if (path != NULL && handler != NULL && router != NULL) {
 		memcpy (&ptr, &handler, sizeof (ptr));
@@ -1248,7 +1301,7 @@ rspamd_http_router_add_path (struct rspamd_http_connection_router *router,
 
 void
 rspamd_http_router_handle_socket (struct rspamd_http_connection_router *router,
-		gint fd, gpointer ud)
+	gint fd, gpointer ud)
 {
 	struct rspamd_http_connection_entry *conn;
 
@@ -1257,11 +1310,14 @@ rspamd_http_router_handle_socket (struct rspamd_http_connection_router *router,
 	conn->ud = ud;
 	conn->is_reply = FALSE;
 
-	conn->conn = rspamd_http_connection_new (NULL, rspamd_http_router_error_handler,
-			rspamd_http_router_finish_handler, 0, RSPAMD_HTTP_SERVER);
+	conn->conn = rspamd_http_connection_new (NULL,
+			rspamd_http_router_error_handler,
+			rspamd_http_router_finish_handler,
+			0,
+			RSPAMD_HTTP_SERVER);
 
 	rspamd_http_connection_read_message (conn->conn, conn, fd, router->ptv,
-			router->ev_base);
+		router->ev_base);
 	LL_PREPEND (router->conns, conn);
 }
 
@@ -1271,7 +1327,8 @@ rspamd_http_router_free (struct rspamd_http_connection_router *router)
 	struct rspamd_http_connection_entry *conn, *tmp;
 
 	if (router) {
-		LL_FOREACH_SAFE (router->conns, conn, tmp) {
+		LL_FOREACH_SAFE (router->conns, conn, tmp)
+		{
 			rspamd_http_entry_free (conn);
 		}
 

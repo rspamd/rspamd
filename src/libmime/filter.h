@@ -14,7 +14,8 @@ struct rspamd_task;
 struct rspamd_settings;
 struct rspamd_classifier_config;
 
-typedef double (*metric_cons_func)(struct rspamd_task *task, const gchar *metric_name, const gchar *func_name);
+typedef double (*metric_cons_func)(struct rspamd_task *task,
+	const gchar *metric_name, const gchar *func_name);
 typedef void (*filter_func)(struct rspamd_task *task);
 
 enum filter_type { C_FILTER, PERL_FILTER };
@@ -23,17 +24,17 @@ enum filter_type { C_FILTER, PERL_FILTER };
  * Filter structure
  */
 struct filter {
-	gchar *func_name;								/**< function name							*/
-	enum filter_type type;							/**< filter type (c or perl)				*/
-    module_t *module;
+	gchar *func_name;                               /**< function name							*/
+	enum filter_type type;                          /**< filter type (c or perl)				*/
+	module_t *module;
 };
 
 /**
  * Rspamd symbol
  */
 struct symbol {
-	double score;									/**< symbol's score							*/
-	GList *options;									/**< list of symbol's options				*/
+	double score;                                   /**< symbol's score							*/
+	GList *options;                                 /**< list of symbol's options				*/
 	const gchar *name;
 };
 
@@ -46,25 +47,25 @@ struct metric_action {
  * Common definition of metric
  */
 struct metric {
-	const gchar *name;								/**< name of metric									*/
-	gchar *func_name;								/**< name of consolidation function					*/
-	metric_cons_func func;							/**< c consolidation function						*/
-	double grow_factor;								/**< grow factor for metric							*/
-	GHashTable *symbols;							/**< weights of symbols in metric					*/
-	GHashTable *descriptions;						/**< descriptions of symbols in metric				*/
+	const gchar *name;                              /**< name of metric									*/
+	gchar *func_name;                               /**< name of consolidation function					*/
+	metric_cons_func func;                          /**< c consolidation function						*/
+	double grow_factor;                             /**< grow factor for metric							*/
+	GHashTable *symbols;                            /**< weights of symbols in metric					*/
+	GHashTable *descriptions;                       /**< descriptions of symbols in metric				*/
 	struct metric_action actions[METRIC_ACTION_MAX]; /**< all actions of the metric					*/
-	gchar *subject;									/**< subject rewrite string							*/
+	gchar *subject;                                 /**< subject rewrite string							*/
 };
 
 /**
  * Result of metric processing
  */
 struct metric_result {
-	struct metric *metric;							/**< pointer to metric structure			*/
-	double score;									/**< total score							*/
-	GHashTable *symbols;							/**< symbols of metric						*/
-	gboolean checked;								/**< whether metric result is consolidated  */
-	double grow_factor;								/**< current grow factor					*/
+	struct metric *metric;                          /**< pointer to metric structure			*/
+	double score;                                   /**< total score							*/
+	GHashTable *symbols;                            /**< symbols of metric						*/
+	gboolean checked;                               /**< whether metric result is consolidated  */
+	double grow_factor;                             /**< current grow factor					*/
 };
 
 /**
@@ -102,7 +103,10 @@ void process_statfiles_threaded (gpointer data, gpointer user_data);
  * @param flag numeric weight for symbol
  * @param opts list of symbol's options
  */
-void insert_result (struct rspamd_task *task, const gchar *symbol, double flag, GList *opts);
+void insert_result (struct rspamd_task *task,
+	const gchar *symbol,
+	double flag,
+	GList *opts);
 
 /**
  * Insert a single result to task
@@ -112,7 +116,10 @@ void insert_result (struct rspamd_task *task, const gchar *symbol, double flag, 
  * @param flag numeric weight for symbol
  * @param opts list of symbol's options
  */
-void insert_result_single (struct rspamd_task *task, const gchar *symbol, double flag, GList *opts);
+void insert_result_single (struct rspamd_task *task,
+	const gchar *symbol,
+	double flag,
+	GList *opts);
 
 /**
  * Process all results and form composite metrics from existent metrics as it is defined in config
@@ -121,13 +128,15 @@ void insert_result_single (struct rspamd_task *task, const gchar *symbol, double
 void make_composites (struct rspamd_task *task);
 
 /**
- * Default consolidation function for metric, it get all symbols and multiply symbol 
+ * Default consolidation function for metric, it get all symbols and multiply symbol
  * weight by some factor that is specified in config. Default factor is 1.
  * @param task worker's task that present message from user
  * @param metric_name name of metric
  * @return result metric weight
  */
-double factor_consolidation_func (struct rspamd_task *task, const gchar *metric_name, const gchar *unused);
+double factor_consolidation_func (struct rspamd_task *task,
+	const gchar *metric_name,
+	const gchar *unused);
 
 /*
  * Learn specified statfile with message in a task
@@ -136,7 +145,9 @@ double factor_consolidation_func (struct rspamd_task *task, const gchar *metric_
  * @param err pointer to GError
  * @return true if learn succeed
  */
-gboolean learn_task (const gchar *statfile, struct rspamd_task *task, GError **err);
+gboolean learn_task (const gchar *statfile,
+	struct rspamd_task *task,
+	GError **err);
 
 /*
  * Learn specified statfile with message in a task
@@ -145,7 +156,10 @@ gboolean learn_task (const gchar *statfile, struct rspamd_task *task, GError **e
  * @param err pointer to GError
  * @return true if learn succeed
  */
-gboolean learn_task_spam (struct rspamd_classifier_config *cl, struct rspamd_task *task, gboolean is_spam, GError **err);
+gboolean learn_task_spam (struct rspamd_classifier_config *cl,
+	struct rspamd_task *task,
+	gboolean is_spam,
+	GError **err);
 
 /*
  * Get action from a string
@@ -155,11 +169,13 @@ gboolean check_action_str (const gchar *data, gint *result);
 /*
  * Return textual representation of action enumeration
  */
-const gchar *str_action_metric (enum rspamd_metric_action action);
+const gchar * str_action_metric (enum rspamd_metric_action action);
 
 /*
  * Get action for specific metric
  */
-gint check_metric_action (double score, double required_score, struct metric *metric);
+gint check_metric_action (double score,
+	double required_score,
+	struct metric *metric);
 
 #endif

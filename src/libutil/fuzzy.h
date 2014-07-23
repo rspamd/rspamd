@@ -7,17 +7,17 @@
 #define RSPAMD_FUZZY_H
 
 #include "config.h"
-#include "mem_pool.h"
 #include "fstring.h"
+#include "mem_pool.h"
 
 #define FUZZY_HASHLEN 64
 
 typedef struct fuzzy_hash_s {
-	gchar hash_pipe[FUZZY_HASHLEN];		/**< result hash					*/
-	guint32 block_size;					/**< current blocksize				*/
-	guint32 rh;							/**< roll hash value				*/
-	guint32 h;								/**< hash of block					*/
-	guint32 hi;							/**< current index in hash pipe		*/
+	gchar hash_pipe[FUZZY_HASHLEN];     /**< result hash					*/
+	guint32 block_size;                 /**< current blocksize				*/
+	guint32 rh;                         /**< roll hash value				*/
+	guint32 h;                              /**< hash of block					*/
+	guint32 hi;                         /**< current index in hash pipe		*/
 } fuzzy_hash_t;
 
 struct mime_text_part;
@@ -44,13 +44,15 @@ fuzzy_hash_t * fuzzy_init_byte_array (GByteArray *in, rspamd_mempool_t *pool);
  * @param max_diff maximum text length to use diff algorithm in comparasions
  * @return fuzzy_hash object allocated in pool
  */
-void fuzzy_init_part (struct mime_text_part *part, rspamd_mempool_t *pool, gsize max_diff);
+void fuzzy_init_part (struct mime_text_part *part,
+	rspamd_mempool_t *pool,
+	gsize max_diff);
 
 /**
- * Compare score of difference between two hashes 
+ * Compare score of difference between two hashes
  * @param h1 first hash
  * @param h2 second hash
- * @return result in percents 0 - different hashes, 100 - identical hashes 
+ * @return result in percents 0 - different hashes, 100 - identical hashes
  */
 gint fuzzy_compare_hashes (fuzzy_hash_t *h1, fuzzy_hash_t *h2);
 

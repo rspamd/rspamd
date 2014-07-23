@@ -24,30 +24,31 @@
 
 
 #include "config.h"
-#include "mem_pool.h"
 #include "fstring.h"
 #include "fuzzy.h"
+#include "main.h"
+#include "mem_pool.h"
 #include "message.h"
 #include "url.h"
-#include "main.h"
 
 #define ROLL_WINDOW_SIZE 9
 #define MIN_FUZZY_BLOCK_SIZE 3
 #define HASH_INIT      0x28021967
 
-static const char *b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+static const char *b64 =
+	"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 struct roll_state {
-	guint32                         h[3];
-	gchar                           window[ROLL_WINDOW_SIZE];
-	gint                            n;
+	guint32 h[3];
+	gchar window[ROLL_WINDOW_SIZE];
+	gint n;
 };
 
-static struct roll_state        rs;
+static struct roll_state rs;
 
 
 /* Rolling hash function based on Adler-32 checksum */
-static                          guint32
+static guint32
 fuzzy_roll_hash (guint c)
 {
 	/* Check window position */
@@ -72,19 +73,20 @@ fuzzy_roll_hash (guint c)
 }
 
 /* A simple non-rolling hash, based on the FNV hash */
-static                          guint32
+static guint32
 fuzzy_fnv_hash (guint c, guint32 hval)
 {
 	hval ^= c;
-	hval += (hval << 1) + (hval << 4) + (hval << 7) + (hval << 8) + (hval << 24);
+	hval +=
+		(hval << 1) + (hval << 4) + (hval << 7) + (hval << 8) + (hval << 24);
 	return hval;
 }
 
 /* Calculate blocksize depending on length of input */
-static                          guint32
+static guint32
 fuzzy_blocksize (guint32 len)
 {
-	guint32                     nlen = MIN_FUZZY_BLOCK_SIZE;
+	guint32 nlen = MIN_FUZZY_BLOCK_SIZE;
 
 	while (nlen * (FUZZY_HASHLEN - 1) < len) {
 		nlen *= 2;
@@ -141,12 +143,12 @@ fuzzy_update2 (fuzzy_hash_t * h1, fuzzy_hash_t *h2, guint c)
 guint32
 lev_distance (gchar *s1, gint len1, gchar *s2, gint len2)
 {
-	gint                            i;
-	gint                            *row;	/* we only need to keep one row of costs */
-	gint                            *end;
-	gint                            half, nx;
-	gchar                           *sx, *char2p, char1;
-	gint                            *p, D, x, offset, c3;
+	gint i;
+	gint *row;                              /* we only need to keep one row of costs */
+	gint *end;
+	gint half, nx;
+	gchar *sx, *char2p, char1;
+	gint *p, D, x, offset, c3;
 
 	/* strip common prefix */
 	while (len1 > 0 && len2 > 0 && *s1 == *s2) {
@@ -252,13 +254,13 @@ lev_distance (gchar *s1, gint len1, gchar *s2, gint len2)
 }
 
 /* Calculate fuzzy hash for specified string */
-fuzzy_hash_t                   *
+fuzzy_hash_t *
 fuzzy_init (f_str_t * in, rspamd_mempool_t * pool)
 {
-	fuzzy_hash_t                   *new;
-	guint                           i, repeats = 0;
-	gchar                          *c = in->begin, last = '\0';
-	gsize                           real_len = 0;
+	fuzzy_hash_t *new;
+	guint i, repeats = 0;
+	gchar *c = in->begin, last = '\0';
+	gsize real_len = 0;
 
 	new = rspamd_mempool_alloc0 (pool, sizeof (fuzzy_hash_t));
 	bzero (&rs, sizeof (rs));
@@ -270,7 +272,7 @@ fuzzy_init (f_str_t * in, rspamd_mempool_t * pool)
 			repeats = 0;
 		}
 		if (!g_ascii_isspace (*c) && !g_ascii_ispunct (*c) && repeats < 3) {
-			real_len ++;
+			real_len++;
 		}
 		last = *c;
 		c++;
@@ -301,10 +303,10 @@ fuzzy_init (f_str_t * in, rspamd_mempool_t * pool)
 	return new;
 }
 
-fuzzy_hash_t                   *
+fuzzy_hash_t *
 fuzzy_init_byte_array (GByteArray * in, rspamd_mempool_t * pool)
 {
-	f_str_t                         f;
+	f_str_t f;
 
 	f.begin = (gchar *)in->data;
 	f.len = in->len;
@@ -313,15 +315,17 @@ fuzzy_init_byte_array (GByteArray * in, rspamd_mempool_t * pool)
 }
 
 void
-fuzzy_init_part (struct mime_text_part *part, rspamd_mempool_t *pool, gsize max_diff)
+fuzzy_init_part (struct mime_text_part *part,
+	rspamd_mempool_t *pool,
+	gsize max_diff)
 {
-	fuzzy_hash_t                   *new, *new2;
-	gchar                          *c, *end, *begin;
-	gsize                           real_len = 0, len = part->content->len;
-	GList                          *cur_offset;
-	struct process_exception       *cur_ex = NULL;
-	gunichar                        uc;
-	gboolean                        write_diff = FALSE;
+	fuzzy_hash_t *new, *new2;
+	gchar *c, *end, *begin;
+	gsize real_len = 0, len = part->content->len;
+	GList *cur_offset;
+	struct process_exception *cur_ex = NULL;
+	gunichar uc;
+	gboolean write_diff = FALSE;
 
 	cur_offset = part->urls_offset;
 	if (cur_offset != NULL) {
@@ -347,7 +351,7 @@ fuzzy_init_part (struct mime_text_part *part, rspamd_mempool_t *pool, gsize max_
 			else {
 				uc = g_utf8_get_char (c);
 				if (g_unichar_isalnum (uc)) {
-					real_len ++;
+					real_len++;
 				}
 				c = g_utf8_next_char (c);
 			}
@@ -364,7 +368,7 @@ fuzzy_init_part (struct mime_text_part *part, rspamd_mempool_t *pool, gsize max_
 			}
 			else {
 				if (!g_ascii_isspace (*c) && !g_ascii_ispunct (*c)) {
-					real_len ++;
+					real_len++;
 				}
 				c++;
 			}
@@ -450,7 +454,7 @@ fuzzy_init_part (struct mime_text_part *part, rspamd_mempool_t *pool, gsize max_
 gint
 fuzzy_compare_hashes (fuzzy_hash_t * h1, fuzzy_hash_t * h2)
 {
-	gint                            res, l1, l2;
+	gint res, l1, l2;
 
 	/* If we have hashes of different size, input strings are too different */
 	if (h1->block_size != h2->block_size) {
@@ -493,6 +497,6 @@ fuzzy_compare_parts (struct mime_text_part *p1, struct mime_text_part *p2)
 	return 0;
 }
 
-/* 
- * vi:ts=4 
+/*
+ * vi:ts=4
  */

@@ -1,20 +1,20 @@
 #ifndef UPSTREAM_H
 #define UPSTREAM_H
 
-#include <sys/types.h>
 #include <stdint.h>
+#include <sys/types.h>
 
 /**
  * Structure of generic upstream
  */
 struct upstream {
-	guint errors;						/**< Errors for this upstream 	*/
-	time_t time;						/**< Time of marking 			*/
-	guint dead;							/**< Dead flag					*/
-	guint priority;						/**< Fixed priority				*/
-	gint16 weight;						/**< Dynamic weight				*/
-	guint32 *ketama_points;				/**< Ketama points array		*/
-	size_t ketama_points_size;			/**< Ketama array size			*/
+	guint errors;                       /**< Errors for this upstream   */
+	time_t time;                        /**< Time of marking            */
+	guint dead;                         /**< Dead flag					*/
+	guint priority;                     /**< Fixed priority				*/
+	gint16 weight;                      /**< Dynamic weight				*/
+	guint32 *ketama_points;             /**< Ketama points array		*/
+	size_t ketama_points_size;          /**< Ketama array size			*/
 };
 
 /**
@@ -43,7 +43,10 @@ void revive_all_upstreams (void *ups, size_t members, size_t msize);
 /**
  * Add ketama points for upstream
  */
-gint upstream_ketama_add (struct upstream *up, gchar *up_key, size_t keylen, size_t keypoints);
+gint upstream_ketama_add (struct upstream *up,
+	gchar *up_key,
+	size_t keylen,
+	size_t keypoints);
 
 /**
  * Get a random upstream from array of upstreams
@@ -55,9 +58,9 @@ gint upstream_ketama_add (struct upstream *up, gchar *up_key, size_t keylen, siz
  * @param revive_timeout time during which we counts upstream dead
  * @param max_errors maximum errors during error_timeout to mark upstream dead
  */
-struct upstream* get_random_upstream   (void *ups, size_t members, size_t msize, 
-										time_t now, time_t error_timeout, 
-										time_t revive_timeout, size_t max_errors);
+struct upstream * get_random_upstream (void *ups, size_t members, size_t msize,
+	time_t now, time_t error_timeout,
+	time_t revive_timeout, size_t max_errors);
 
 /**
  * Get upstream based on hash from array of upstreams
@@ -71,10 +74,10 @@ struct upstream* get_random_upstream   (void *ups, size_t members, size_t msize,
  * @param key key for hashing
  * @param keylen length of the key
  */
-struct upstream* get_upstream_by_hash  (void *ups, size_t members, size_t msize, 
-										time_t now,  time_t error_timeout, 
-										time_t revive_timeout, size_t max_errors,
-										const gchar *key, size_t keylen);
+struct upstream * get_upstream_by_hash (void *ups, size_t members, size_t msize,
+	time_t now,  time_t error_timeout,
+	time_t revive_timeout, size_t max_errors,
+	const gchar *key, size_t keylen);
 
 /**
  * Get an upstream from array of upstreams based on its current weight
@@ -86,9 +89,13 @@ struct upstream* get_upstream_by_hash  (void *ups, size_t members, size_t msize,
  * @param revive_timeout time during which we counts upstream dead
  * @param max_errors maximum errors during error_timeout to mark upstream dead
  */
-struct upstream* get_upstream_round_robin (void *ups, size_t members, size_t msize, 
-										time_t now, time_t error_timeout, 
-										time_t revive_timeout, size_t max_errors);
+struct upstream * get_upstream_round_robin (void *ups,
+	size_t members,
+	size_t msize,
+	time_t now,
+	time_t error_timeout,
+	time_t revive_timeout,
+	size_t max_errors);
 
 /**
  * Get upstream based on hash from array of upstreams, this functions is using ketama algorithm
@@ -102,9 +109,15 @@ struct upstream* get_upstream_round_robin (void *ups, size_t members, size_t msi
  * @param key key for hashing
  * @param keylen length of the key
  */
-struct upstream* get_upstream_by_hash_ketama (void *ups, size_t members, size_t msize, time_t now, 
-										time_t error_timeout, time_t revive_timeout, size_t max_errors,
-										const gchar *key, size_t keylen);
+struct upstream * get_upstream_by_hash_ketama (void *ups,
+	size_t members,
+	size_t msize,
+	time_t now,
+	time_t error_timeout,
+	time_t revive_timeout,
+	size_t max_errors,
+	const gchar *key,
+	size_t keylen);
 
 /**
  * Get an upstream from array of upstreams based on its current priority (not weight)
@@ -116,12 +129,16 @@ struct upstream* get_upstream_by_hash_ketama (void *ups, size_t members, size_t 
  * @param revive_timeout time during which we counts upstream dead
  * @param max_errors maximum errors during error_timeout to mark upstream dead
  */
-struct upstream* get_upstream_master_slave (void *ups, size_t members, size_t msize,
-										time_t now, time_t error_timeout,
-										time_t revive_timeout, size_t max_errors);
+struct upstream * get_upstream_master_slave (void *ups,
+	size_t members,
+	size_t msize,
+	time_t now,
+	time_t error_timeout,
+	time_t revive_timeout,
+	size_t max_errors);
 
 
 #endif /* UPSTREAM_H */
-/* 
- * vi:ts=4 
+/*
+ * vi:ts=4
  */

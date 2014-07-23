@@ -22,20 +22,20 @@
  */
 
 
+#include "cfg_file.h"
+#include "classifiers/classifiers.h"
 #include "config.h"
-#include "util.h"
-#include "main.h"
+#include "dns.h"
+#include "dynamic_cfg.h"
 #include "http.h"
+#include "main.h"
+#include "map.h"
 #include "message.h"
 #include "protocol.h"
-#include "upstream.h"
-#include "cfg_file.h"
-#include "map.h"
-#include "dns.h"
-#include "tokenizers/tokenizers.h"
-#include "classifiers/classifiers.h"
-#include "dynamic_cfg.h"
 #include "rrd.h"
+#include "tokenizers/tokenizers.h"
+#include "upstream.h"
+#include "util.h"
 
 #ifdef WITH_GPERF_TOOLS
 #   include <glib/gprintf.h>
@@ -75,25 +75,25 @@ gpointer init_controller_worker (struct rspamd_config *cfg);
 void start_controller_worker (struct rspamd_worker *worker);
 
 worker_t controller_worker = {
-	"controller",					/* Name */
-	init_controller_worker,			/* Init function */
-	start_controller_worker,		/* Start function */
-	TRUE,					/* Has socket */
-	TRUE,					/* Non unique */
-	FALSE,					/* Non threaded */
-	TRUE,					/* Killable */
-	SOCK_STREAM				/* TCP socket */
+	"controller",                   /* Name */
+	init_controller_worker,         /* Init function */
+	start_controller_worker,        /* Start function */
+	TRUE,                   /* Has socket */
+	TRUE,                   /* Non unique */
+	FALSE,                  /* Non threaded */
+	TRUE,                   /* Killable */
+	SOCK_STREAM             /* TCP socket */
 };
 /*
  * Worker's context
  */
 struct rspamd_controller_worker_ctx {
-	guint32                         timeout;
-	struct timeval                  io_tv;
+	guint32 timeout;
+	struct timeval io_tv;
 	/* DNS resolver */
-	struct rspamd_dns_resolver     *resolver;
+	struct rspamd_dns_resolver *resolver;
 	/* Events base */
-	struct event_base              *ev_base;
+	struct event_base *ev_base;
 	/* Whether we use ssl for this server */
 	gboolean use_ssl;
 	/* Webui password */
@@ -138,11 +138,11 @@ struct rspamd_controller_session {
 /* Check for password if it is required by configuration */
 static gboolean
 rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
-		struct rspamd_controller_session *session, struct rspamd_http_message *msg,
-		gboolean is_enable)
+	struct rspamd_controller_session *session, struct rspamd_http_message *msg,
+	gboolean is_enable)
 {
-	const gchar								*password, *check;
-	struct rspamd_controller_worker_ctx			*ctx = session->ctx;
+	const gchar *password, *check;
+	struct rspamd_controller_worker_ctx *ctx = session->ctx;
 	gboolean ret = TRUE;
 
 	/* Access list logic */
@@ -151,9 +151,9 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 		return TRUE;
 	}
 	else if (ctx->secure_map && radix32_tree_find_addr (ctx->secure_map,
-			&session->from_addr) != RADIX_NO_VALUE) {
+		&session->from_addr) != RADIX_NO_VALUE) {
 		msg_info ("allow unauthorized connection from a trusted IP %s",
-				rspamd_inet_address_to_string (&session->from_addr));
+			rspamd_inet_address_to_string (&session->from_addr));
 		return TRUE;
 	}
 
@@ -163,7 +163,8 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 		password = rspamd_http_message_find_header (msg, "Password");
 		if (ctx->enable_password == NULL) {
 			/* Use just a password (legacy mode) */
-			msg_info ("using password as enable_password for a privileged command");
+			msg_info (
+				"using password as enable_password for a privileged command");
 			check = ctx->password;
 		}
 		else {
@@ -176,7 +177,8 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 			}
 		}
 		else {
-			msg_warn ("no password to check while executing a privileged command");
+			msg_warn (
+				"no password to check while executing a privileged command");
 			if (ctx->secure_map) {
 				msg_info ("deny unauthorized connection");
 				ret = FALSE;
@@ -227,13 +229,13 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
  */
 static int
 rspamd_controller_handle_auth (struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg)
+	struct rspamd_http_message *msg)
 {
-	struct rspamd_controller_session 			*session = conn_ent->ud;
-	struct rspamd_stat						*st;
-	int64_t									 uptime;
-	gulong									 data[4];
-	ucl_object_t							*obj;
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct rspamd_stat *st;
+	int64_t uptime;
+	gulong data[4];
+	ucl_object_t *obj;
 
 	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
@@ -242,22 +244,32 @@ rspamd_controller_handle_auth (struct rspamd_http_connection_entry *conn_ent,
 	obj = ucl_object_typed_new (UCL_OBJECT);
 	st = session->ctx->srv->stat;
 	data[0] = st->actions_stat[METRIC_ACTION_NOACTION];
-	data[1] = st->actions_stat[METRIC_ACTION_ADD_HEADER] + st->actions_stat[METRIC_ACTION_REWRITE_SUBJECT];
+	data[1] = st->actions_stat[METRIC_ACTION_ADD_HEADER] +
+		st->actions_stat[METRIC_ACTION_REWRITE_SUBJECT];
 	data[2] = st->actions_stat[METRIC_ACTION_GREYLIST];
 	data[3] = st->actions_stat[METRIC_ACTION_REJECT];
 
 	/* Get uptime */
 	uptime = time (NULL) - session->ctx->start_time;
 
-	ucl_object_insert_key (obj, ucl_object_fromstring (RVERSION), "version", 0, false);
-	ucl_object_insert_key (obj, ucl_object_fromstring ("ok"), "auth", 0, false);
-	ucl_object_insert_key (obj, ucl_object_fromint (uptime), "uptime", 0, false);
-	ucl_object_insert_key (obj, ucl_object_fromint (data[0]), "clean", 0, false);
-	ucl_object_insert_key (obj, ucl_object_fromint (data[1]), "probable", 0, false);
-	ucl_object_insert_key (obj, ucl_object_fromint (data[2]), "greylist", 0, false);
-	ucl_object_insert_key (obj, ucl_object_fromint (data[3]), "reject", 0, false);
-	ucl_object_insert_key (obj, ucl_object_fromint (st->messages_scanned), "scanned", 0, false);
-	ucl_object_insert_key (obj, ucl_object_fromint (st->messages_learned), "learned", 0, false);
+	ucl_object_insert_key (obj, ucl_object_fromstring (
+			RVERSION),			   "version",  0, false);
+	ucl_object_insert_key (obj, ucl_object_fromstring (
+			"ok"),				   "auth",	   0, false);
+	ucl_object_insert_key (obj,	   ucl_object_fromint (
+			uptime),			   "uptime",   0, false);
+	ucl_object_insert_key (obj,	   ucl_object_fromint (
+			data[0]),			   "clean",	   0, false);
+	ucl_object_insert_key (obj,	   ucl_object_fromint (
+			data[1]),			   "probable", 0, false);
+	ucl_object_insert_key (obj,	   ucl_object_fromint (
+			data[2]),			   "greylist", 0, false);
+	ucl_object_insert_key (obj,	   ucl_object_fromint (
+			data[3]),			   "reject",   0, false);
+	ucl_object_insert_key (obj,	   ucl_object_fromint (
+			st->messages_scanned), "scanned",  0, false);
+	ucl_object_insert_key (obj,	   ucl_object_fromint (
+			st->messages_learned), "learned",  0, false);
 
 	rspamd_controller_send_ucl (conn_ent, obj);
 	ucl_object_unref (obj);
@@ -269,26 +281,26 @@ rspamd_controller_handle_auth (struct rspamd_http_connection_entry *conn_ent,
  * Symbols command handler:
  * request: /symbols
  * reply: json [{
- * 	"name": "group_name",
- * 	"symbols": [
- * 		{
- * 		"name": "name",
- * 		"weight": 0.1,
- * 		"description": "description of symbol"
- * 		},
- * 		{...}
+ *  "name": "group_name",
+ *  "symbols": [
+ *      {
+ *      "name": "name",
+ *      "weight": 0.1,
+ *      "description": "description of symbol"
+ *      },
+ *      {...}
  * },
  * {...}]
  */
 static int
 rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg)
+	struct rspamd_http_message *msg)
 {
-	struct rspamd_controller_session 			*session = conn_ent->ud;
-	GList									*cur_gr, *cur_sym;
-	struct rspamd_symbols_group					*gr;
-	struct rspamd_symbol_def						*sym;
-	ucl_object_t							*obj, *top, *sym_obj;
+	struct rspamd_controller_session *session = conn_ent->ud;
+	GList *cur_gr, *cur_sym;
+	struct rspamd_symbols_group *gr;
+	struct rspamd_symbol_def *sym;
+	ucl_object_t *obj, *top, *sym_obj;
 
 	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
@@ -301,7 +313,8 @@ rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 	while (cur_gr) {
 		gr = cur_gr->data;
 		obj = ucl_object_typed_new (UCL_OBJECT);
-		ucl_object_insert_key (obj, ucl_object_fromstring (gr->name), "group", 0, false);
+		ucl_object_insert_key (obj, ucl_object_fromstring (
+				gr->name), "group", 0, false);
 		/* Iterate through all symbols */
 		cur_sym = gr->symbols;
 		while (cur_sym) {
@@ -309,11 +322,13 @@ rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 			sym = cur_sym->data;
 
 			ucl_object_insert_key (sym_obj, ucl_object_fromstring (sym->name),
-					"symbol", 0, false);
-			ucl_object_insert_key (sym_obj, ucl_object_fromdouble (*sym->weight_ptr),
-					"weight", 0, false);
+				"symbol", 0, false);
+			ucl_object_insert_key (sym_obj,
+				ucl_object_fromdouble (*sym->weight_ptr),
+				"weight", 0, false);
 			if (sym->description) {
-				ucl_object_insert_key (sym_obj, ucl_object_fromstring (sym->description),
+				ucl_object_insert_key (sym_obj,
+					ucl_object_fromstring (sym->description),
 					"description", 0, false);
 			}
 
@@ -334,20 +349,20 @@ rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
  * Actions command handler:
  * request: /actions
  * reply: json [{
- * 	"action": "no action",
- * 	"value": 1.1
+ *  "action": "no action",
+ *  "value": 1.1
  * },
  * {...}]
  */
 static int
 rspamd_controller_handle_actions (struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg)
+	struct rspamd_http_message *msg)
 {
-	struct rspamd_controller_session 			*session = conn_ent->ud;
-	struct metric							*metric;
-	struct metric_action					*act;
-	gint									 i;
-	ucl_object_t							*obj, *top;
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct metric *metric;
+	struct metric_action *act;
+	gint i;
+	ucl_object_t *obj, *top;
 
 	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
@@ -358,13 +373,15 @@ rspamd_controller_handle_actions (struct rspamd_http_connection_entry *conn_ent,
 	/* Get actions for default metric */
 	metric = g_hash_table_lookup (session->ctx->cfg->metrics, DEFAULT_METRIC);
 	if (metric != NULL) {
-		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
+		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
 			act = &metric->actions[i];
 			if (act->score > 0) {
 				obj = ucl_object_typed_new (UCL_OBJECT);
 				ucl_object_insert_key (obj,
-						ucl_object_fromstring (str_action_metric (act->action)), "action", 0, false);
-				ucl_object_insert_key (obj, ucl_object_fromdouble (act->score), "value", 0, false);
+					ucl_object_fromstring (str_action_metric (
+						act->action)), "action", 0, false);
+				ucl_object_insert_key (obj, ucl_object_fromdouble (
+						act->score), "value", 0, false);
 				ucl_array_append (top, obj);
 			}
 		}
@@ -380,23 +397,23 @@ rspamd_controller_handle_actions (struct rspamd_http_connection_entry *conn_ent,
  * request: /maps
  * headers: Password
  * reply: json [
- * 		{
- * 		"map": "name",
- * 		"description": "description",
- * 		"editable": true
- * 		},
- * 		{...}
+ *      {
+ *      "map": "name",
+ *      "description": "description",
+ *      "editable": true
+ *      },
+ *      {...}
  * ]
  */
 static int
 rspamd_controller_handle_maps (struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg)
+	struct rspamd_http_message *msg)
 {
-	struct rspamd_controller_session 			*session = conn_ent->ud;
-	GList									*cur, *tmp = NULL;
-	struct rspamd_map						*map;
-	gboolean								 editable;
-	ucl_object_t							*obj, *top;
+	struct rspamd_controller_session *session = conn_ent->ud;
+	GList *cur, *tmp = NULL;
+	struct rspamd_map *map;
+	gboolean editable;
+	ucl_object_t *obj, *top;
 
 
 	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
@@ -422,12 +439,12 @@ rspamd_controller_handle_maps (struct rspamd_http_connection_entry *conn_ent,
 		editable = (access (map->uri, W_OK) == 0);
 
 		obj = ucl_object_typed_new (UCL_OBJECT);
-		ucl_object_insert_key (obj, ucl_object_fromint (map->id),
-				"map", 0, false);
+		ucl_object_insert_key (obj,	   ucl_object_fromint (map->id),
+			"map", 0, false);
 		ucl_object_insert_key (obj, ucl_object_fromstring (map->description),
-				"description", 0, false);
-		ucl_object_insert_key (obj, ucl_object_frombool (editable),
-				"editable", 0, false);
+			"description", 0, false);
+		ucl_object_insert_key (obj,	  ucl_object_frombool (editable),
+			"editable", 0, false);
 		ucl_array_append (top, obj);
 
 		cur = g_list_next (cur);
@@ -451,18 +468,18 @@ rspamd_controller_handle_maps (struct rspamd_http_connection_entry *conn_ent,
  */
 static int
 rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg)
+	struct rspamd_http_message *msg)
 {
-	struct rspamd_controller_session 			*session = conn_ent->ud;
-	GList									*cur;
-	struct rspamd_map						*map;
-	const gchar								*idstr;
-	gchar									*errstr;
-	struct stat								 st;
-	gint									 fd;
-	guint32									 id;
-	gboolean								 found = FALSE;
-	struct rspamd_http_message				*reply;
+	struct rspamd_controller_session *session = conn_ent->ud;
+	GList *cur;
+	struct rspamd_map *map;
+	const gchar *idstr;
+	gchar *errstr;
+	struct stat st;
+	gint fd;
+	guint32 id;
+	gboolean found = FALSE;
+	struct rspamd_http_message *reply;
 
 
 	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
@@ -528,8 +545,8 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 
 	rspamd_http_connection_reset (conn_ent->conn);
 	rspamd_http_connection_write_message (conn_ent->conn, reply, NULL,
-			"text/plain", conn_ent, conn_ent->conn->fd,
-			conn_ent->rt->ptv, conn_ent->rt->ev_base);
+		"text/plain", conn_ent, conn_ent->conn->fd,
+		conn_ent->rt->ptv, conn_ent->rt->ev_base);
 	conn_ent->is_reply = TRUE;
 
 	return 0;
@@ -541,20 +558,20 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
  * request: /graph
  * headers: Password
  * reply: json [
- * 		{ label: "Foo", data: [ [10, 1], [17, -14], [30, 5] ] },
- * 		{ label: "Bar", data: [ [10, 1], [17, -14], [30, 5] ] },
- * 		{...}
+ *      { label: "Foo", data: [ [10, 1], [17, -14], [30, 5] ] },
+ *      { label: "Bar", data: [ [10, 1], [17, -14], [30, 5] ] },
+ *      {...}
  * ]
  */
 /* XXX: now this function returns only random data */
 static void
 rspamd_controller_handle_graph (struct evhttp_request *req, gpointer arg)
 {
-	struct rspamd_controller_worker_ctx 			*ctx = arg;
-	struct evbuffer							*evb;
-	gint									 i, seed;
-	time_t									 now, t;
-	double									 vals[5][100];
+	struct rspamd_controller_worker_ctx *ctx = arg;
+	struct evbuffer *evb;
+	gint i, seed;
+	time_t now, t;
+	double vals[5][100];
 
 	if (!http_check_password (ctx, req)) {
 		return;
@@ -572,8 +589,10 @@ rspamd_controller_handle_graph (struct evhttp_request *req, gpointer arg)
 
 	/* XXX: simple and stupid set */
 	seed = g_random_int ();
-	for (i = 0; i < 100; i ++, seed ++) {
-		vals[0][i] = fabs ((sin (seed * 0.1 * M_PI_2) + 1) * 40. + ((gint)(g_random_int () % 2) - 1));
+	for (i = 0; i < 100; i++, seed++) {
+		vals[0][i] =
+			fabs ((sin (seed * 0.1 *
+				M_PI_2) + 1) * 40. + ((gint)(g_random_int () % 2) - 1));
 		vals[1][i] = vals[0][i] * 0.5;
 		vals[2][i] = vals[0][i] * 0.1;
 		vals[3][i] = vals[0][i] * 0.3;
@@ -584,50 +603,75 @@ rspamd_controller_handle_graph (struct evhttp_request *req, gpointer arg)
 
 	/* Ham label */
 	t = now - 6000;
-	evbuffer_add_printf (evb, "{\"label\": \"Clean messages\", \"lines\": {\"fill\": false}, \"color\": \""
-			COLOR_CLEAN "\", \"data\":[");
-	for (i = 0; i < 100; i ++, t += 60) {
-		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[0][i], i == 99 ? "]" : "],");
+	evbuffer_add_printf (evb,
+		"{\"label\": \"Clean messages\", \"lines\": {\"fill\": false}, \"color\": \""
+		COLOR_CLEAN "\", \"data\":[");
+	for (i = 0; i < 100; i++, t += 60) {
+		evbuffer_add_printf (evb,
+			"[%llu,%.2f%s",
+			(long long unsigned)t * 1000,
+			vals[0][i],
+			i == 99 ? "]" : "],");
 	}
 	evbuffer_add (evb, "]},", 3);
 
 	/* Probable spam label */
 	t = now - 6000;
-	evbuffer_add_printf (evb, "{\"label\": \"Probable spam messages\", \"lines\": {\"fill\": false}, \"color\": \""
-			COLOR_PROBABLE_SPAM "\", \"data\":[");
-	for (i = 0; i < 100; i ++, t += 60) {
-		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[1][i], i == 99 ? "]" : "],");
+	evbuffer_add_printf (evb,
+		"{\"label\": \"Probable spam messages\", \"lines\": {\"fill\": false}, \"color\": \""
+		COLOR_PROBABLE_SPAM "\", \"data\":[");
+	for (i = 0; i < 100; i++, t += 60) {
+		evbuffer_add_printf (evb,
+			"[%llu,%.2f%s",
+			(long long unsigned)t * 1000,
+			vals[1][i],
+			i == 99 ? "]" : "],");
 	}
 	evbuffer_add (evb, "]},", 3);
 
 	/* Greylist label */
 	t = now - 6000;
-	evbuffer_add_printf (evb, "{\"label\": \"Greylisted messages\", \"lines\": {\"fill\": false}, \"color\": \""
-			COLOR_GREYLIST "\", \"data\":[");
-	for (i = 0; i < 100; i ++, t += 60) {
-		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[2][i], i == 99 ? "]" : "],");
+	evbuffer_add_printf (evb,
+		"{\"label\": \"Greylisted messages\", \"lines\": {\"fill\": false}, \"color\": \""
+		COLOR_GREYLIST "\", \"data\":[");
+	for (i = 0; i < 100; i++, t += 60) {
+		evbuffer_add_printf (evb,
+			"[%llu,%.2f%s",
+			(long long unsigned)t * 1000,
+			vals[2][i],
+			i == 99 ? "]" : "],");
 	}
 	evbuffer_add (evb, "]},", 3);
 
 	/* Reject label */
 	t = now - 6000;
-	evbuffer_add_printf (evb, "{\"label\": \"Rejected messages\", \"lines\": {\"fill\": false}, \"color\": \""
-			COLOR_REJECT "\", \"data\":[");
-	for (i = 0; i < 100; i ++, t += 60) {
-		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[3][i], i == 99 ? "]" : "],");
+	evbuffer_add_printf (evb,
+		"{\"label\": \"Rejected messages\", \"lines\": {\"fill\": false}, \"color\": \""
+		COLOR_REJECT "\", \"data\":[");
+	for (i = 0; i < 100; i++, t += 60) {
+		evbuffer_add_printf (evb,
+			"[%llu,%.2f%s",
+			(long long unsigned)t * 1000,
+			vals[3][i],
+			i == 99 ? "]" : "],");
 	}
 	evbuffer_add (evb, "]},", 3);
 
 	/* Total label */
 	t = now - 6000;
-	evbuffer_add_printf (evb, "{\"label\": \"Total messages\", \"lines\": {\"fill\": false}, \"color\": \""
-			COLOR_TOTAL "\", \"data\":[");
-	for (i = 0; i < 100; i ++, t += 60) {
-		evbuffer_add_printf (evb, "[%llu,%.2f%s", (long long unsigned)t * 1000, vals[4][i], i == 99 ? "]" : "],");
+	evbuffer_add_printf (evb,
+		"{\"label\": \"Total messages\", \"lines\": {\"fill\": false}, \"color\": \""
+		COLOR_TOTAL "\", \"data\":[");
+	for (i = 0; i < 100; i++, t += 60) {
+		evbuffer_add_printf (evb,
+			"[%llu,%.2f%s",
+			(long long unsigned)t * 1000,
+			vals[4][i],
+			i == 99 ? "]" : "],");
 	}
-	evbuffer_add (evb, "]}", 2);
+	evbuffer_add (evb, "]}",	  2);
 
-	evbuffer_add (evb, "]" CRLF, 3);
+	evbuffer_add (evb,	"]" CRLF, 3);
 
 	evhttp_add_header (req->output_headers, "Connection", "close");
 	http_calculate_content_length (evb, req);
@@ -641,19 +685,20 @@ rspamd_controller_handle_graph (struct evhttp_request *req, gpointer arg)
  * request: /pie
  * headers: Password
  * reply: json [
- * 		{ label: "Foo", data: 11 },
- * 		{ label: "Bar", data: 20 },
- * 		{...}
+ *      { label: "Foo", data: 11 },
+ *      { label: "Bar", data: 20 },
+ *      {...}
  * ]
  */
 static int
-rspamd_controller_handle_pie_chart (struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg)
+rspamd_controller_handle_pie_chart (
+	struct rspamd_http_connection_entry *conn_ent,
+	struct rspamd_http_message *msg)
 {
-	struct rspamd_controller_session 			*session = conn_ent->ud;
-	struct rspamd_controller_worker_ctx			*ctx;
-	gdouble									 data[4], total;
-	ucl_object_t							*top, *obj;
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct rspamd_controller_worker_ctx *ctx;
+	gdouble data[4], total;
+	ucl_object_t *top, *obj;
 
 	ctx = session->ctx;
 
@@ -666,31 +711,36 @@ rspamd_controller_handle_pie_chart (struct rspamd_http_connection_entry *conn_en
 	if (total != 0) {
 		obj = ucl_object_typed_new (UCL_ARRAY);
 
-		data[0] = ctx->srv->stat->actions_stat[METRIC_ACTION_NOACTION] / total * 100.;
+		data[0] = ctx->srv->stat->actions_stat[METRIC_ACTION_NOACTION] / total *
+			100.;
 		data[1] = (ctx->srv->stat->actions_stat[METRIC_ACTION_ADD_HEADER] +
-				ctx->srv->stat->actions_stat[METRIC_ACTION_REWRITE_SUBJECT]) / total * 100.;
-		data[2] = ctx->srv->stat->actions_stat[METRIC_ACTION_GREYLIST] / total * 100.;
-		data[3] = ctx->srv->stat->actions_stat[METRIC_ACTION_REJECT] / total * 100.;
+			ctx->srv->stat->actions_stat[METRIC_ACTION_REWRITE_SUBJECT]) /
+			total * 100.;
+		data[2] = ctx->srv->stat->actions_stat[METRIC_ACTION_GREYLIST] / total *
+			100.;
+		data[3] = ctx->srv->stat->actions_stat[METRIC_ACTION_REJECT] / total *
+			100.;
 
 		ucl_array_append (obj, ucl_object_fromstring ("Clean messages"));
 		ucl_array_append (obj, ucl_object_fromdouble (data[0]));
-		ucl_array_append (top, obj);
-		ucl_array_append (obj, ucl_object_fromstring ("Probable spam messages"));
+		ucl_array_append (top,					 obj);
+		ucl_array_append (obj,
+			ucl_object_fromstring ("Probable spam messages"));
 		ucl_array_append (obj, ucl_object_fromdouble (data[1]));
-		ucl_array_append (top, obj);
+		ucl_array_append (top,					 obj);
 		ucl_array_append (obj, ucl_object_fromstring ("Greylisted messages"));
 		ucl_array_append (obj, ucl_object_fromdouble (data[2]));
-		ucl_array_append (top, obj);
+		ucl_array_append (top,					 obj);
 		ucl_array_append (obj, ucl_object_fromstring ("Rejected messages"));
 		ucl_array_append (obj, ucl_object_fromdouble (data[3]));
-		ucl_array_append (top, obj);
+		ucl_array_append (top,					 obj);
 	}
 	else {
 		obj = ucl_object_typed_new (UCL_ARRAY);
 
 		ucl_array_append (obj, ucl_object_fromstring ("Scanned messages"));
 		ucl_array_append (obj, ucl_object_fromdouble (0));
-		ucl_array_append (top, obj);
+		ucl_array_append (top,					 obj);
 	}
 
 	rspamd_controller_send_ucl (conn_ent, top);
@@ -704,24 +754,24 @@ rspamd_controller_handle_pie_chart (struct rspamd_http_connection_entry *conn_en
  * request: /history
  * headers: Password
  * reply: json [
- * 		{ label: "Foo", data: 11 },
- * 		{ label: "Bar", data: 20 },
- * 		{...}
+ *      { label: "Foo", data: 11 },
+ *      { label: "Bar", data: 20 },
+ *      {...}
  * ]
  */
 static int
 rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg)
+	struct rspamd_http_message *msg)
 {
-	struct rspamd_controller_session 			*session = conn_ent->ud;
-	struct rspamd_controller_worker_ctx			*ctx;
-	struct roll_history_row					*row;
-	struct roll_history						 copied_history;
-	gint									 i, rows_proc, row_num;
-	struct tm								*tm;
-	gchar									 timebuf[32];
-	gchar									 ip_buf[INET6_ADDRSTRLEN];
-	ucl_object_t							*top, *obj;
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct rspamd_controller_worker_ctx *ctx;
+	struct roll_history_row *row;
+	struct roll_history copied_history;
+	gint i, rows_proc, row_num;
+	struct tm *tm;
+	gchar timebuf[32];
+	gchar ip_buf[INET6_ADDRSTRLEN];
+	ucl_object_t *top, *obj;
 
 	ctx = session->ctx;
 
@@ -740,7 +790,7 @@ rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
 
 	/* Go through all rows */
 	row_num = copied_history.cur_row;
-	for (i = 0, rows_proc = 0; i < HISTORY_MAX_ROWS; i ++, row_num ++) {
+	for (i = 0, rows_proc = 0; i < HISTORY_MAX_ROWS; i++, row_num++) {
 		if (row_num == HISTORY_MAX_ROWS) {
 			row_num = 0;
 		}
@@ -751,30 +801,44 @@ rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
 			strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", tm);
 #ifdef HAVE_INET_PTON
 			if (row->from_addr.ipv6) {
-				inet_ntop (AF_INET6, &row->from_addr.d.in6, ip_buf, sizeof (ip_buf));
+				inet_ntop (AF_INET6, &row->from_addr.d.in6, ip_buf,
+					sizeof (ip_buf));
 			}
 			else {
-				inet_ntop (AF_INET, &row->from_addr.d.in4, ip_buf, sizeof (ip_buf));
+				inet_ntop (AF_INET, &row->from_addr.d.in4, ip_buf,
+					sizeof (ip_buf));
 			}
 #else
-			rspamd_strlcpy (ip_buf, inet_ntoa (task->from_addr), sizeof (ip_buf));
+			rspamd_strlcpy (ip_buf, inet_ntoa (task->from_addr),
+				sizeof (ip_buf));
 #endif
 			obj = ucl_object_typed_new (UCL_OBJECT);
-			ucl_object_insert_key (obj, ucl_object_fromstring (timebuf), "time", 0, false);
-			ucl_object_insert_key (obj, ucl_object_fromstring (row->message_id), "id", 0, false);
-			ucl_object_insert_key (obj, ucl_object_fromstring (ip_buf), "ip", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromstring (
+					timebuf),		  "time", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromstring (
+					row->message_id), "id",	  0, false);
+			ucl_object_insert_key (obj, ucl_object_fromstring (
+					ip_buf),		  "ip",	  0, false);
 			ucl_object_insert_key (obj,
-					ucl_object_fromstring (str_action_metric (row->action)), "action", 0, false);
-			ucl_object_insert_key (obj, ucl_object_fromdouble (row->score), "score", 0, false);
-			ucl_object_insert_key (obj, ucl_object_fromdouble (row->required_score), "required_score", 0, false);
-			ucl_object_insert_key (obj, ucl_object_fromstring (row->symbols), "symbols", 0, false);
-			ucl_object_insert_key (obj, ucl_object_fromint (row->len), "size", 0, false);
-			ucl_object_insert_key (obj, ucl_object_fromint (row->scan_time), "scan_time", 0, false);
+				ucl_object_fromstring (str_action_metric (
+					row->action)), "action", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromdouble (
+					row->score),		  "score",			0, false);
+			ucl_object_insert_key (obj,
+				ucl_object_fromdouble (
+					row->required_score), "required_score", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromstring (
+					row->symbols),		  "symbols",		0, false);
+			ucl_object_insert_key (obj,	   ucl_object_fromint (
+					row->len),			  "size",			0, false);
+			ucl_object_insert_key (obj,	   ucl_object_fromint (
+					row->scan_time),	  "scan_time",		0, false);
 			if (row->user[0] != '\0') {
-				ucl_object_insert_key (obj, ucl_object_fromstring (row->user), "user", 0, false);
+				ucl_object_insert_key (obj, ucl_object_fromstring (
+						row->user), "user", 0, false);
 			}
 			ucl_array_append (top, obj);
-			rows_proc ++;
+			rows_proc++;
 		}
 	}
 
@@ -787,10 +851,10 @@ rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
 static gboolean
 rspamd_controller_learn_fin_task (void *ud)
 {
-	struct rspamd_task						*task = ud;
-	struct rspamd_controller_session 			*session;
-	struct rspamd_http_connection_entry		*conn_ent;
-	GError									*err = NULL;
+	struct rspamd_task *task = ud;
+	struct rspamd_controller_session *session;
+	struct rspamd_http_connection_entry *conn_ent;
+	GError *err = NULL;
 
 	conn_ent = task->fin_arg;
 	session = conn_ent->ud;
@@ -808,8 +872,8 @@ rspamd_controller_learn_fin_task (void *ud)
 static gboolean
 rspamd_controller_check_fin_task (void *ud)
 {
-	struct rspamd_task						*task = ud;
-	struct rspamd_http_connection_entry		*conn_ent;
+	struct rspamd_task *task = ud;
+	struct rspamd_http_connection_entry *conn_ent;
 	struct rspamd_http_message *msg;
 
 	conn_ent = task->fin_arg;
@@ -819,22 +883,24 @@ rspamd_controller_check_fin_task (void *ud)
 	rspamd_protocol_http_reply (msg, task);
 	rspamd_http_connection_reset (conn_ent->conn);
 	rspamd_http_connection_write_message (conn_ent->conn, msg, NULL,
-			"application/json", conn_ent, conn_ent->conn->fd, conn_ent->rt->ptv,
-			conn_ent->rt->ev_base);
+		"application/json", conn_ent, conn_ent->conn->fd, conn_ent->rt->ptv,
+		conn_ent->rt->ev_base);
 	conn_ent->is_reply = TRUE;
 
 	return TRUE;
 }
 
 static int
-rspamd_controller_handle_learn_common (struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg, gboolean is_spam)
+rspamd_controller_handle_learn_common (
+	struct rspamd_http_connection_entry *conn_ent,
+	struct rspamd_http_message *msg,
+	gboolean is_spam)
 {
-	struct rspamd_controller_session 			*session = conn_ent->ud;
-	struct rspamd_controller_worker_ctx			*ctx;
-	struct rspamd_classifier_config				*cl;
-	struct rspamd_task						*task;
-	const gchar								*classifier;
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct rspamd_controller_worker_ctx *ctx;
+	struct rspamd_classifier_config *cl;
+	struct rspamd_task *task;
+	const gchar *classifier;
 
 	ctx = session->ctx;
 
@@ -844,11 +910,14 @@ rspamd_controller_handle_learn_common (struct rspamd_http_connection_entry *conn
 
 	if (msg->body == NULL || msg->body->len == 0) {
 		msg_err ("got zero length body, cannot continue");
-		rspamd_controller_send_error (conn_ent, 400, "Empty body is not permitted");
+		rspamd_controller_send_error (conn_ent,
+			400,
+			"Empty body is not permitted");
 		return 0;
 	}
 
-	if ((classifier = rspamd_http_message_find_header (msg, "Classifier")) == NULL) {
+	if ((classifier =
+		rspamd_http_message_find_header (msg, "Classifier")) == NULL) {
 		classifier = "bayes";
 	}
 
@@ -865,8 +934,11 @@ rspamd_controller_handle_learn_common (struct rspamd_http_connection_entry *conn
 	task->ev_base = ctx->ev_base;
 
 
-	task->s = new_async_session (session->pool, rspamd_controller_learn_fin_task, NULL,
-			rspamd_task_free_hard, task);
+	task->s = new_async_session (session->pool,
+			rspamd_controller_learn_fin_task,
+			NULL,
+			rspamd_task_free_hard,
+			task);
 	task->s->wanna_die = TRUE;
 	task->fin_arg = conn_ent;
 	task->http_conn = rspamd_http_connection_ref (conn_ent->conn);;
@@ -895,8 +967,9 @@ rspamd_controller_handle_learn_common (struct rspamd_http_connection_entry *conn
  * reply: json {"success":true} or {"error":"error message"}
  */
 static int
-rspamd_controller_handle_learnspam (struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg)
+rspamd_controller_handle_learnspam (
+	struct rspamd_http_connection_entry *conn_ent,
+	struct rspamd_http_message *msg)
 {
 	return rspamd_controller_handle_learn_common (conn_ent, msg, TRUE);
 }
@@ -908,8 +981,9 @@ rspamd_controller_handle_learnspam (struct rspamd_http_connection_entry *conn_en
  * reply: json {"success":true} or {"error":"error message"}
  */
 static int
-rspamd_controller_handle_learnham (struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg)
+rspamd_controller_handle_learnham (
+	struct rspamd_http_connection_entry *conn_ent,
+	struct rspamd_http_message *msg)
 {
 	return rspamd_controller_handle_learn_common (conn_ent, msg, TRUE);
 }
@@ -923,11 +997,11 @@ rspamd_controller_handle_learnham (struct rspamd_http_connection_entry *conn_ent
  */
 static int
 rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg)
+	struct rspamd_http_message *msg)
 {
-	struct rspamd_controller_session 			*session = conn_ent->ud;
-	struct rspamd_controller_worker_ctx			*ctx;
-	struct rspamd_task						*task;
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct rspamd_controller_worker_ctx *ctx;
+	struct rspamd_task *task;
 
 	ctx = session->ctx;
 
@@ -937,7 +1011,9 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 
 	if (msg->body == NULL || msg->body->len == 0) {
 		msg_err ("got zero length body, cannot continue");
-		rspamd_controller_send_error (conn_ent, 400, "Empty body is not permitted");
+		rspamd_controller_send_error (conn_ent,
+			400,
+			"Empty body is not permitted");
 		return 0;
 	}
 
@@ -948,8 +1024,11 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;
 
-	task->s = new_async_session (session->pool, rspamd_controller_check_fin_task, NULL,
-			rspamd_task_free_hard, task);
+	task->s = new_async_session (session->pool,
+			rspamd_controller_check_fin_task,
+			NULL,
+			rspamd_task_free_hard,
+			task);
 	task->s->wanna_die = TRUE;
 	task->fin_arg = conn_ent;
 	task->http_conn = rspamd_http_connection_ref (conn_ent->conn);
@@ -975,18 +1054,19 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
  * reply: json {"success":true} or {"error":"error message"}
  */
 static int
-rspamd_controller_handle_saveactions (struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg)
+rspamd_controller_handle_saveactions (
+	struct rspamd_http_connection_entry *conn_ent,
+	struct rspamd_http_message *msg)
 {
-	struct rspamd_controller_session 			*session = conn_ent->ud;
-	struct ucl_parser						*parser;
-	struct metric							*metric;
-	ucl_object_t							*obj, *cur;
-	struct rspamd_controller_worker_ctx 			*ctx;
-	const gchar								*error;
-	gdouble									 score;
-	gint									 i;
-	enum rspamd_metric_action				 act;
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct ucl_parser *parser;
+	struct metric *metric;
+	ucl_object_t *obj, *cur;
+	struct rspamd_controller_worker_ctx *ctx;
+	const gchar *error;
+	gdouble score;
+	gint i;
+	enum rspamd_metric_action act;
 
 	ctx = session->ctx;
 
@@ -996,21 +1076,26 @@ rspamd_controller_handle_saveactions (struct rspamd_http_connection_entry *conn_
 
 	if (msg->body == NULL || msg->body->len == 0) {
 		msg_err ("got zero length body, cannot continue");
-		rspamd_controller_send_error (conn_ent, 400, "Empty body is not permitted");
+		rspamd_controller_send_error (conn_ent,
+			400,
+			"Empty body is not permitted");
 		return 0;
 	}
 
 	metric = g_hash_table_lookup (ctx->cfg->metrics, DEFAULT_METRIC);
 	if (metric == NULL) {
 		msg_err ("cannot find default metric");
-		rspamd_controller_send_error (conn_ent, 500, "Default metric is absent");
+		rspamd_controller_send_error (conn_ent, 500,
+			"Default metric is absent");
 		return 0;
 	}
 
 	/* Now check for dynamic config */
 	if (!ctx->cfg->dynamic_conf) {
 		msg_err ("dynamic conf has not been defined");
-		rspamd_controller_send_error (conn_ent, 500, "No dynamic_rules setting defined");
+		rspamd_controller_send_error (conn_ent,
+			500,
+			"No dynamic_rules setting defined");
 		return 0;
 	}
 
@@ -1035,8 +1120,8 @@ rspamd_controller_handle_saveactions (struct rspamd_http_connection_entry *conn_
 	}
 
 	cur = obj->value.av;
-	for (i = 0; i < 3 && cur != NULL; i ++, cur = cur->next) {
-		switch(i) {
+	for (i = 0; i < 3 && cur != NULL; i++, cur = cur->next) {
+		switch (i) {
 		case 0:
 			act = METRIC_ACTION_REJECT;
 			break;
@@ -1068,19 +1153,20 @@ rspamd_controller_handle_saveactions (struct rspamd_http_connection_entry *conn_
  * reply: json {"success":true} or {"error":"error message"}
  */
 static int
-rspamd_controller_handle_savesymbols (struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg)
+rspamd_controller_handle_savesymbols (
+	struct rspamd_http_connection_entry *conn_ent,
+	struct rspamd_http_message *msg)
 {
-	struct rspamd_controller_session 			*session = conn_ent->ud;
-	struct ucl_parser						*parser;
-	struct metric							*metric;
-	ucl_object_t							*obj;
-	const ucl_object_t						*cur, *jname, *jvalue;
-	ucl_object_iter_t						 iter = NULL;
-	struct rspamd_controller_worker_ctx 			*ctx;
-	const gchar								*error;
-	gdouble									 val;
-	struct symbol							*sym;
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct ucl_parser *parser;
+	struct metric *metric;
+	ucl_object_t *obj;
+	const ucl_object_t *cur, *jname, *jvalue;
+	ucl_object_iter_t iter = NULL;
+	struct rspamd_controller_worker_ctx *ctx;
+	const gchar *error;
+	gdouble val;
+	struct symbol *sym;
 
 	ctx = session->ctx;
 
@@ -1090,21 +1176,26 @@ rspamd_controller_handle_savesymbols (struct rspamd_http_connection_entry *conn_
 
 	if (msg->body == NULL || msg->body->len == 0) {
 		msg_err ("got zero length body, cannot continue");
-		rspamd_controller_send_error (conn_ent, 400, "Empty body is not permitted");
+		rspamd_controller_send_error (conn_ent,
+			400,
+			"Empty body is not permitted");
 		return 0;
 	}
 
 	metric = g_hash_table_lookup (ctx->cfg->metrics, DEFAULT_METRIC);
 	if (metric == NULL) {
 		msg_err ("cannot find default metric");
-		rspamd_controller_send_error (conn_ent, 500, "Default metric is absent");
+		rspamd_controller_send_error (conn_ent, 500,
+			"Default metric is absent");
 		return 0;
 	}
 
 	/* Now check for dynamic config */
 	if (!ctx->cfg->dynamic_conf) {
 		msg_err ("dynamic conf has not been defined");
-		rspamd_controller_send_error (conn_ent, 500, "No dynamic_rules setting defined");
+		rspamd_controller_send_error (conn_ent,
+			500,
+			"No dynamic_rules setting defined");
 		return 0;
 	}
 
@@ -1138,12 +1229,15 @@ rspamd_controller_handle_savesymbols (struct rspamd_http_connection_entry *conn_
 		jname = ucl_object_find_key (cur, "name");
 		jvalue = ucl_object_find_key (cur, "value");
 		val = ucl_object_todouble (jvalue);
-		sym = g_hash_table_lookup (metric->symbols, ucl_object_tostring (jname));
+		sym =
+			g_hash_table_lookup (metric->symbols, ucl_object_tostring (jname));
 		if (sym && fabs (sym->score - val) > 0.01) {
 			if (!add_dynamic_symbol (ctx->cfg, DEFAULT_METRIC,
-					ucl_object_tostring (jname), val)) {
-				msg_err ("add symbol failed for %s", ucl_object_tostring (jname));
-				rspamd_controller_send_error (conn_ent, 506, "Add symbol failed");
+				ucl_object_tostring (jname), val)) {
+				msg_err ("add symbol failed for %s",
+					ucl_object_tostring (jname));
+				rspamd_controller_send_error (conn_ent, 506,
+					"Add symbol failed");
 				ucl_object_unref (obj);
 				return 0;
 			}
@@ -1166,17 +1260,17 @@ rspamd_controller_handle_savesymbols (struct rspamd_http_connection_entry *conn_
  */
 static int
 rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg)
+	struct rspamd_http_message *msg)
 {
-	struct rspamd_controller_session 			*session = conn_ent->ud;
-	GList									*cur;
-	struct rspamd_map						*map;
-	struct rspamd_controller_worker_ctx 			*ctx;
-	const gchar								*idstr;
-	gchar									*errstr;
-	guint32									 id;
-	gboolean								 found = FALSE;
-	gint									 fd;
+	struct rspamd_controller_session *session = conn_ent->ud;
+	GList *cur;
+	struct rspamd_map *map;
+	struct rspamd_controller_worker_ctx *ctx;
+	const gchar *idstr;
+	gchar *errstr;
+	guint32 id;
+	gboolean found = FALSE;
+	gint fd;
 
 	ctx = session->ctx;
 
@@ -1186,7 +1280,9 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 
 	if (msg->body == NULL || msg->body->len == 0) {
 		msg_err ("got zero length body, cannot continue");
-		rspamd_controller_send_error (conn_ent, 400, "Empty body is not permitted");
+		rspamd_controller_send_error (conn_ent,
+			400,
+			"Empty body is not permitted");
 		return 0;
 	}
 
@@ -1262,8 +1358,10 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
  * reply: json data
  */
 static int
-rspamd_controller_handle_stat_common (struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg, gboolean do_reset)
+rspamd_controller_handle_stat_common (
+	struct rspamd_http_connection_entry *conn_ent,
+	struct rspamd_http_message *msg,
+	gboolean do_reset)
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	ucl_object_t *top, *sub;
@@ -1282,13 +1380,14 @@ rspamd_controller_handle_stat_common (struct rspamd_http_connection_entry *conn_
 	stat = &stat_copy;
 	top = ucl_object_typed_new (UCL_OBJECT);
 
-	ucl_object_insert_key (top, ucl_object_fromint (stat->messages_scanned), "scanned", 0, false);
+	ucl_object_insert_key (top, ucl_object_fromint (
+			stat->messages_scanned), "scanned", 0, false);
 	if (stat->messages_scanned > 0) {
 		sub = ucl_object_typed_new (UCL_OBJECT);
-		for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i ++) {
+		for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
 			ucl_object_insert_key (sub,
-					ucl_object_fromint (stat->actions_stat[i]),
-					str_action_metric (i), 0, false);
+				ucl_object_fromint (stat->actions_stat[i]),
+				str_action_metric (i), 0, false);
 			if (i < METRIC_ACTION_GREYLIST) {
 				spam += stat->actions_stat[i];
 			}
@@ -1302,35 +1401,42 @@ rspamd_controller_handle_stat_common (struct rspamd_http_connection_entry *conn_
 		ucl_object_insert_key (top, sub, "actions", 0, false);
 	}
 
-	ucl_object_insert_key (top, ucl_object_fromint (spam), "spam_count", 0, false);
-	ucl_object_insert_key (top, ucl_object_fromint (ham), "ham_count", 0, false);
+	ucl_object_insert_key (top, ucl_object_fromint (
+			spam), "spam_count", 0, false);
+	ucl_object_insert_key (top, ucl_object_fromint (
+			ham),  "ham_count",	 0, false);
 	ucl_object_insert_key (top,
-			ucl_object_fromint (stat->messages_learned), "learned", 0, false);
+		ucl_object_fromint (stat->messages_learned), "learned", 0, false);
 	ucl_object_insert_key (top,
-			ucl_object_fromint (stat->connections_count), "connections", 0, false);
+		ucl_object_fromint (stat->connections_count), "connections", 0, false);
 	ucl_object_insert_key (top,
-			ucl_object_fromint (stat->control_connections_count),
-			"control_connections", 0, false);
+		ucl_object_fromint (stat->control_connections_count),
+		"control_connections", 0, false);
 
 	ucl_object_insert_key (top,
-			ucl_object_fromint (mem_st.pools_allocated), "pools_allocated", 0, false);
+		ucl_object_fromint (mem_st.pools_allocated), "pools_allocated", 0,
+		false);
 	ucl_object_insert_key (top,
-			ucl_object_fromint (mem_st.pools_freed), "pools_freed", 0, false);
+		ucl_object_fromint (mem_st.pools_freed), "pools_freed", 0, false);
 	ucl_object_insert_key (top,
-			ucl_object_fromint (mem_st.bytes_allocated), "bytes_allocated", 0, false);
+		ucl_object_fromint (mem_st.bytes_allocated), "bytes_allocated", 0,
+		false);
 	ucl_object_insert_key (top,
-			ucl_object_fromint (mem_st.chunks_allocated), "chunks_allocated", 0, false);
+		ucl_object_fromint (
+			mem_st.chunks_allocated), "chunks_allocated", 0, false);
 	ucl_object_insert_key (top,
-			ucl_object_fromint (mem_st.shared_chunks_allocated),
-			"shared_chunks_allocated", 0, false);
+		ucl_object_fromint (mem_st.shared_chunks_allocated),
+		"shared_chunks_allocated", 0, false);
 	ucl_object_insert_key (top,
-			ucl_object_fromint (mem_st.chunks_freed), "chunks_freed", 0, false);
+		ucl_object_fromint (mem_st.chunks_freed), "chunks_freed", 0, false);
 	ucl_object_insert_key (top,
-			ucl_object_fromint (mem_st.oversized_chunks), "chunks_oversized", 0, false);
+		ucl_object_fromint (
+			mem_st.oversized_chunks), "chunks_oversized", 0, false);
 	ucl_object_insert_key (top,
-			ucl_object_fromint (stat->fuzzy_hashes), "fuzzy_stored", 0, false);
+		ucl_object_fromint (stat->fuzzy_hashes), "fuzzy_stored", 0, false);
 	ucl_object_insert_key (top,
-			ucl_object_fromint (stat->fuzzy_hashes_expired), "fuzzy_expired", 0, false);
+		ucl_object_fromint (
+			stat->fuzzy_hashes_expired), "fuzzy_expired", 0, false);
 
 	/* Now write statistics for each statfile */
 	cur_cl = g_list_first (session->ctx->cfg->classifiers);
@@ -1340,8 +1446,9 @@ rspamd_controller_handle_stat_common (struct rspamd_http_connection_entry *conn_
 		cur_st = g_list_first (ccf->statfiles);
 		while (cur_st) {
 			st = cur_st->data;
-			if ((statfile = statfile_pool_is_open (session->ctx->srv->statfile_pool,
-					st->path)) == NULL) {
+			if ((statfile =
+				statfile_pool_is_open (session->ctx->srv->statfile_pool,
+				st->path)) == NULL) {
 				statfile = statfile_pool_open (session->ctx->srv->statfile_pool,
 						st->path, st->size, FALSE);
 			}
@@ -1352,14 +1459,17 @@ rspamd_controller_handle_stat_common (struct rspamd_http_connection_entry *conn_
 				total = statfile_get_total_blocks (statfile);
 				statfile_get_revision (statfile, &rev, &ti);
 				ucl_object_insert_key (obj,
-						ucl_object_fromstring (st->symbol), "symbol", 0, false);
+					ucl_object_fromstring (st->symbol), "symbol", 0, false);
 				if (st->label != NULL) {
 					ucl_object_insert_key (obj,
-							ucl_object_fromstring (st->label), "label", 0, false);
+						ucl_object_fromstring (st->label), "label", 0, false);
 				}
-				ucl_object_insert_key (obj, ucl_object_fromint (rev), "revision", 0, false);
-				ucl_object_insert_key (obj, ucl_object_fromint (used), "used", 0, false);
-				ucl_object_insert_key (obj, ucl_object_fromint (total), "total", 0, false);
+				ucl_object_insert_key (obj, ucl_object_fromint (
+						rev),	"revision", 0, false);
+				ucl_object_insert_key (obj, ucl_object_fromint (
+						used),	"used",		0, false);
+				ucl_object_insert_key (obj, ucl_object_fromint (
+						total), "total",	0, false);
 
 				ucl_array_append (sub, obj);
 			}
@@ -1386,9 +1496,9 @@ rspamd_controller_handle_stat_common (struct rspamd_http_connection_entry *conn_
 
 static int
 rspamd_controller_handle_stat (struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg)
+	struct rspamd_http_message *msg)
 {
-	struct rspamd_controller_session 			*session = conn_ent->ud;
+	struct rspamd_controller_session *session = conn_ent->ud;
 
 	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
@@ -1398,10 +1508,11 @@ rspamd_controller_handle_stat (struct rspamd_http_connection_entry *conn_ent,
 }
 
 static int
-rspamd_controller_handle_statreset (struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg)
+rspamd_controller_handle_statreset (
+	struct rspamd_http_connection_entry *conn_ent,
+	struct rspamd_http_message *msg)
 {
-	struct rspamd_controller_session 			*session = conn_ent->ud;
+	struct rspamd_controller_session *session = conn_ent->ud;
 
 	if (!rspamd_controller_check_password (conn_ent, session, msg, TRUE)) {
 		return 0;
@@ -1413,17 +1524,17 @@ rspamd_controller_handle_statreset (struct rspamd_http_connection_entry *conn_en
 static ucl_object_t *
 rspamd_controller_cache_item_to_ucl (struct cache_item *item)
 {
-	ucl_object_t							*obj;
+	ucl_object_t *obj;
 
 	obj = ucl_object_typed_new (UCL_OBJECT);
 	ucl_object_insert_key (obj, ucl_object_fromstring (item->s->symbol),
-			"symbol", 0, false);
+		"symbol", 0, false);
 	ucl_object_insert_key (obj, ucl_object_fromdouble (item->s->weight),
-			"weight", 0, false);
-	ucl_object_insert_key (obj, ucl_object_fromint (item->s->frequency),
-			"frequency", 0, false);
+		"weight", 0, false);
+	ucl_object_insert_key (obj,	   ucl_object_fromint (item->s->frequency),
+		"frequency", 0, false);
 	ucl_object_insert_key (obj, ucl_object_fromdouble (item->s->avg_time),
-			"time", 0, false);
+		"time", 0, false);
 
 	return obj;
 }
@@ -1435,14 +1546,15 @@ rspamd_controller_cache_item_to_ucl (struct cache_item *item)
  * reply: json array of all counters
  */
 static int
-rspamd_controller_handle_counters (struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg)
+rspamd_controller_handle_counters (
+	struct rspamd_http_connection_entry *conn_ent,
+	struct rspamd_http_message *msg)
 {
-	struct rspamd_controller_session 			*session = conn_ent->ud;
-	ucl_object_t							*top;
-	GList									*cur;
-	struct cache_item						*item;
-	struct symbols_cache					*cache;
+	struct rspamd_controller_session *session = conn_ent->ud;
+	ucl_object_t *top;
+	GList *cur;
+	struct cache_item *item;
+	struct symbols_cache *cache;
 
 	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
@@ -1455,7 +1567,8 @@ rspamd_controller_handle_counters (struct rspamd_http_connection_entry *conn_ent
 		while (cur) {
 			item = cur->data;
 			if (!item->is_callback) {
-				ucl_array_append (top, rspamd_controller_cache_item_to_ucl (item));
+				ucl_array_append (top, rspamd_controller_cache_item_to_ucl (
+						item));
 			}
 			cur = g_list_next (cur);
 		}
@@ -1463,7 +1576,8 @@ rspamd_controller_handle_counters (struct rspamd_http_connection_entry *conn_ent
 		while (cur) {
 			item = cur->data;
 			if (!item->is_callback) {
-				ucl_array_append (top, rspamd_controller_cache_item_to_ucl (item));
+				ucl_array_append (top, rspamd_controller_cache_item_to_ucl (
+						item));
 			}
 			cur = g_list_next (cur);
 		}
@@ -1476,10 +1590,10 @@ rspamd_controller_handle_counters (struct rspamd_http_connection_entry *conn_ent
 
 static int
 rspamd_controller_handle_custom (struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg)
+	struct rspamd_http_message *msg)
 {
-	struct rspamd_controller_session 			*session = conn_ent->ud;
-	struct rspamd_custom_controller_command	*cmd;
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct rspamd_custom_controller_command *cmd;
 
 	cmd = g_hash_table_lookup (session->ctx->custom_commands, msg->url->str);
 	if (cmd == NULL || cmd->handler == NULL) {
@@ -1488,12 +1602,15 @@ rspamd_controller_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	if (!rspamd_controller_check_password (conn_ent, session, msg, cmd->privilleged)) {
+	if (!rspamd_controller_check_password (conn_ent, session, msg,
+		cmd->privilleged)) {
 		return 0;
 	}
 	if (cmd->require_message && (msg->body == NULL || msg->body->len == 0)) {
 		msg_err ("got zero length body, cannot continue");
-		rspamd_controller_send_error (conn_ent, 400, "Empty body is not permitted");
+		rspamd_controller_send_error (conn_ent,
+			400,
+			"Empty body is not permitted");
 		return 0;
 	}
 
@@ -1501,7 +1618,8 @@ rspamd_controller_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 }
 
 static void
-rspamd_controller_error_handler (struct rspamd_http_connection_entry *conn_ent, GError *err)
+rspamd_controller_error_handler (struct rspamd_http_connection_entry *conn_ent,
+	GError *err)
 {
 	msg_err ("http error occurred: %s", err->message);
 }
@@ -1509,7 +1627,7 @@ rspamd_controller_error_handler (struct rspamd_http_connection_entry *conn_ent, 
 static void
 rspamd_controller_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 {
-	struct rspamd_controller_session 		*session = conn_ent->ud;
+	struct rspamd_controller_session *session = conn_ent->ud;
 
 	if (session->task != NULL) {
 		destroy_session (session->task->s);
@@ -1524,16 +1642,16 @@ rspamd_controller_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 static void
 rspamd_controller_accept_socket (gint fd, short what, void *arg)
 {
-	struct rspamd_worker				*worker = (struct rspamd_worker *) arg;
-	struct rspamd_controller_worker_ctx		*ctx;
-	struct rspamd_controller_session			*nsession;
-	rspamd_inet_addr_t					 addr;
-	gint								 nfd;
+	struct rspamd_worker *worker = (struct rspamd_worker *) arg;
+	struct rspamd_controller_worker_ctx *ctx;
+	struct rspamd_controller_session *nsession;
+	rspamd_inet_addr_t addr;
+	gint nfd;
 
 	ctx = worker->ctx;
 
 	if ((nfd =
-			rspamd_accept_from_socket (fd, &addr)) == -1) {
+		rspamd_accept_from_socket (fd, &addr)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
 		return;
 	}
@@ -1543,8 +1661,8 @@ rspamd_controller_accept_socket (gint fd, short what, void *arg)
 	}
 
 	msg_info ("accepted connection from %s port %d",
-			rspamd_inet_address_to_string (&addr),
-			rspamd_inet_address_get_port (&addr));
+		rspamd_inet_address_to_string (&addr),
+		rspamd_inet_address_get_port (&addr));
 
 	nsession = g_slice_alloc0 (sizeof (struct rspamd_controller_session));
 	nsession->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
@@ -1558,8 +1676,8 @@ rspamd_controller_accept_socket (gint fd, short what, void *arg)
 gpointer
 init_controller_worker (struct rspamd_config *cfg)
 {
-	struct rspamd_controller_worker_ctx		*ctx;
-	GQuark								type;
+	struct rspamd_controller_worker_ctx *ctx;
+	GQuark type;
 
 	type = g_quark_try_string ("controller");
 
@@ -1568,35 +1686,37 @@ init_controller_worker (struct rspamd_config *cfg)
 	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;
 
 	rspamd_rcl_register_worker_option (cfg, type, "password",
-			rspamd_rcl_parse_struct_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, password), 0);
+		rspamd_rcl_parse_struct_string, ctx,
+		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, password), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "enable_password",
-			rspamd_rcl_parse_struct_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, password), 0);
+		rspamd_rcl_parse_struct_string, ctx,
+		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, password), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "ssl",
-			rspamd_rcl_parse_struct_boolean, ctx,
-			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, use_ssl), 0);
+		rspamd_rcl_parse_struct_boolean, ctx,
+		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, use_ssl), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "ssl_cert",
-			rspamd_rcl_parse_struct_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, ssl_cert), 0);
+		rspamd_rcl_parse_struct_string, ctx,
+		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, ssl_cert), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "ssl_key",
-			rspamd_rcl_parse_struct_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, ssl_key), 0);
+		rspamd_rcl_parse_struct_string, ctx,
+		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, ssl_key), 0);
 	rspamd_rcl_register_worker_option (cfg, type, "timeout",
-			rspamd_rcl_parse_struct_time, ctx,
-			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, timeout), RSPAMD_CL_FLAG_TIME_INTEGER);
+		rspamd_rcl_parse_struct_time, ctx,
+		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
+		timeout), RSPAMD_CL_FLAG_TIME_INTEGER);
 
 	rspamd_rcl_register_worker_option (cfg, type, "secure_ip",
-			rspamd_rcl_parse_struct_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, secure_ip), 0);
+		rspamd_rcl_parse_struct_string, ctx,
+		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, secure_ip), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "static_dir",
-			rspamd_rcl_parse_struct_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, static_files_dir), 0);
+		rspamd_rcl_parse_struct_string, ctx,
+		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
+		static_files_dir), 0);
 
 	return ctx;
 }
@@ -1615,7 +1735,9 @@ start_controller_worker (struct rspamd_worker *worker)
 	gpointer key, value;
 
 
-	ctx->ev_base = rspamd_prepare_worker (worker, "controller", rspamd_controller_accept_socket);
+	ctx->ev_base = rspamd_prepare_worker (worker,
+			"controller",
+			rspamd_controller_accept_socket);
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
 
 	ctx->start_time = time (NULL);
@@ -1625,10 +1747,13 @@ start_controller_worker (struct rspamd_worker *worker)
 	ctx->custom_commands = g_hash_table_new (rspamd_strcase_hash,
 			rspamd_strcase_equal);
 	if (ctx->secure_ip != NULL) {
-		if (!add_map (worker->srv->cfg, ctx->secure_ip, "Allow webui access from the specified IP",
-				read_radix_list, fin_radix_list, (void **)&ctx->secure_map)) {
-			if (!rspamd_config_parse_ip_list (ctx->secure_ip, &ctx->secure_map)) {
-				msg_warn ("cannot load or parse ip list from '%s'", ctx->secure_ip);
+		if (!add_map (worker->srv->cfg, ctx->secure_ip,
+			"Allow webui access from the specified IP",
+			read_radix_list, fin_radix_list, (void **)&ctx->secure_map)) {
+			if (!rspamd_config_parse_ip_list (ctx->secure_ip,
+				&ctx->secure_map)) {
+				msg_warn ("cannot load or parse ip list from '%s'",
+					ctx->secure_ip);
 			}
 		}
 	}
@@ -1638,23 +1763,57 @@ start_controller_worker (struct rspamd_worker *worker)
 			ctx->static_files_dir);
 
 	/* Add callbacks for different methods */
-	rspamd_http_router_add_path (ctx->http, PATH_AUTH, rspamd_controller_handle_auth);
-	rspamd_http_router_add_path (ctx->http, PATH_SYMBOLS, rspamd_controller_handle_symbols);
-	rspamd_http_router_add_path (ctx->http, PATH_ACTIONS, rspamd_controller_handle_actions);
-	rspamd_http_router_add_path (ctx->http, PATH_MAPS, rspamd_controller_handle_maps);
-	rspamd_http_router_add_path (ctx->http, PATH_GET_MAP, rspamd_controller_handle_get_map);
-	rspamd_http_router_add_path (ctx->http, PATH_PIE_CHART, rspamd_controller_handle_pie_chart);
-	rspamd_http_router_add_path (ctx->http, PATH_HISTORY, rspamd_controller_handle_history);
-	rspamd_http_router_add_path (ctx->http, PATH_LEARN_SPAM, rspamd_controller_handle_learnspam);
-	rspamd_http_router_add_path (ctx->http, PATH_LEARN_HAM, rspamd_controller_handle_learnham);
-	rspamd_http_router_add_path (ctx->http, PATH_SAVE_ACTIONS, rspamd_controller_handle_saveactions);
-	rspamd_http_router_add_path (ctx->http, PATH_SAVE_SYMBOLS, rspamd_controller_handle_savesymbols);
-	rspamd_http_router_add_path (ctx->http, PATH_SAVE_MAP, rspamd_controller_handle_savemap);
-	rspamd_http_router_add_path (ctx->http, PATH_SCAN, rspamd_controller_handle_scan);
-	rspamd_http_router_add_path (ctx->http, PATH_CHECK, rspamd_controller_handle_scan);
-	rspamd_http_router_add_path (ctx->http, PATH_STAT, rspamd_controller_handle_stat);
-	rspamd_http_router_add_path (ctx->http, PATH_STAT_RESET, rspamd_controller_handle_statreset);
-	rspamd_http_router_add_path (ctx->http, PATH_COUNTERS, rspamd_controller_handle_counters);
+	rspamd_http_router_add_path (ctx->http,
+				PATH_AUTH,
+		rspamd_controller_handle_auth);
+	rspamd_http_router_add_path (ctx->http,
+			 PATH_SYMBOLS,
+		rspamd_controller_handle_symbols);
+	rspamd_http_router_add_path (ctx->http,
+			 PATH_ACTIONS,
+		rspamd_controller_handle_actions);
+	rspamd_http_router_add_path (ctx->http,
+				PATH_MAPS,
+		rspamd_controller_handle_maps);
+	rspamd_http_router_add_path (ctx->http,
+			 PATH_GET_MAP,
+		rspamd_controller_handle_get_map);
+	rspamd_http_router_add_path (ctx->http,
+		   PATH_PIE_CHART,
+		rspamd_controller_handle_pie_chart);
+	rspamd_http_router_add_path (ctx->http,
+			 PATH_HISTORY,
+		rspamd_controller_handle_history);
+	rspamd_http_router_add_path (ctx->http,
+		  PATH_LEARN_SPAM,
+		rspamd_controller_handle_learnspam);
+	rspamd_http_router_add_path (ctx->http,
+		   PATH_LEARN_HAM,
+		rspamd_controller_handle_learnham);
+	rspamd_http_router_add_path (ctx->http,
+		PATH_SAVE_ACTIONS,
+		rspamd_controller_handle_saveactions);
+	rspamd_http_router_add_path (ctx->http,
+		PATH_SAVE_SYMBOLS,
+		rspamd_controller_handle_savesymbols);
+	rspamd_http_router_add_path (ctx->http,
+			PATH_SAVE_MAP,
+		rspamd_controller_handle_savemap);
+	rspamd_http_router_add_path (ctx->http,
+				PATH_SCAN,
+		rspamd_controller_handle_scan);
+	rspamd_http_router_add_path (ctx->http,
+			   PATH_CHECK,
+		rspamd_controller_handle_scan);
+	rspamd_http_router_add_path (ctx->http,
+				PATH_STAT,
+		rspamd_controller_handle_stat);
+	rspamd_http_router_add_path (ctx->http,
+		  PATH_STAT_RESET,
+		rspamd_controller_handle_statreset);
+	rspamd_http_router_add_path (ctx->http,
+			PATH_COUNTERS,
+		rspamd_controller_handle_counters);
 
 	/* Attach plugins */
 	cur = g_list_first (ctx->cfg->filters);
@@ -1662,21 +1821,29 @@ start_controller_worker (struct rspamd_worker *worker)
 		f = cur->data;
 		mctx = g_hash_table_lookup (ctx->cfg->c_modules, f->module->name);
 		if (mctx != NULL && f->module->module_attach_controller_func != NULL) {
-			f->module->module_attach_controller_func (mctx, ctx->custom_commands);
+			f->module->module_attach_controller_func (mctx,
+				ctx->custom_commands);
 		}
 		cur = g_list_next (cur);
 	}
 
 	g_hash_table_iter_init (&iter, ctx->custom_commands);
 	while (g_hash_table_iter_next (&iter, &key, &value)) {
-		rspamd_http_router_add_path (ctx->http, key, rspamd_controller_handle_custom);
+		rspamd_http_router_add_path (ctx->http,
+			key,
+			rspamd_controller_handle_custom);
 	}
 
 #if 0
-	rspamd_http_router_add_path (ctx->http, PATH_GRAPH, rspamd_controller_handle_graph, ctx);
+	rspamd_http_router_add_path (ctx->http,
+		PATH_GRAPH,
+		rspamd_controller_handle_graph,
+		ctx);
 #endif
 
-	ctx->resolver = dns_resolver_init (worker->srv->logger, ctx->ev_base, worker->srv->cfg);
+	ctx->resolver = dns_resolver_init (worker->srv->logger,
+			ctx->ev_base,
+			worker->srv->cfg);
 
 	/* Maps events */
 	start_map_watch (worker->srv->cfg, ctx->ev_base);

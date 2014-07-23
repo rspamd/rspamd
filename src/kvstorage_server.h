@@ -25,9 +25,9 @@
 #ifndef KVSTORAGE_SERVER_H_
 #define KVSTORAGE_SERVER_H_
 
+#include "buffer.h"
 #include "config.h"
 #include "mem_pool.h"
-#include "buffer.h"
 
 /* Configuration context for kvstorage worker */
 struct kvstorage_worker_ctx {

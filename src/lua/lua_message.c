@@ -26,35 +26,35 @@
 #include "lua_common.h"
 #include "message.h"
 
-#define LUA_GMIME_BRIDGE_GET(class, name, mime_class)									\
-static gint																				\
-lua_##class##_##name(lua_State *L)														\
-{																						\
-	GMime##mime_class *obj = lua_check_##class(L);										\
-	if (obj != NULL) {																	\
-		lua_pushstring (L, g_mime_##class##_##name(obj));								\
-	}																					\
-	else {																				\
-		lua_pushnil (L);																\
-	}																					\
-	return 1;																			\
-}
+#define LUA_GMIME_BRIDGE_GET(class, name, mime_class)                                   \
+	static gint                                                                             \
+	lua_ ## class ## _ ## name (lua_State * L)                                                      \
+	{                                                                                       \
+		GMime ## mime_class * obj = lua_check_ ## class (L);                                      \
+		if (obj != NULL) {                                                                  \
+			lua_pushstring (L, g_mime_ ## class ## _ ## name (obj));                               \
+		}                                                                                   \
+		else {                                                                              \
+			lua_pushnil (L);                                                                \
+		}                                                                                   \
+		return 1;                                                                           \
+	}
 
-#define LUA_GMIME_BRIDGE_SET(class, name, mime_class)									\
-static gint																				\
-lua_##class##_##name(lua_State *L)														\
-{																						\
-	const gchar *str;																	\
-	GMime##mime_class *obj = lua_check_##class(L);										\
-	if (obj != NULL) {																	\
-		str = luaL_checkstring (L, 2);													\
-		g_mime_##class##_##name(obj, str);												\
-	}																					\
-	else {																				\
-		lua_pushnil (L);																\
-	}																					\
-	return 1;																			\
-}
+#define LUA_GMIME_BRIDGE_SET(class, name, mime_class)                                   \
+	static gint                                                                             \
+	lua_ ## class ## _ ## name (lua_State * L)                                                      \
+	{                                                                                       \
+		const gchar *str;                                                                   \
+		GMime ## mime_class * obj = lua_check_ ## class (L);                                      \
+		if (obj != NULL) {                                                                  \
+			str = luaL_checkstring (L, 2);                                                  \
+			g_mime_ ## class ## _ ## name (obj, str);                                              \
+		}                                                                                   \
+		else {                                                                              \
+			lua_pushnil (L);                                                                \
+		}                                                                                   \
+		return 1;                                                                           \
+	}
 
 /*  Message methods */
 LUA_FUNCTION_DEF (message, get_subject);
@@ -70,7 +70,7 @@ LUA_FUNCTION_DEF (message, get_header_strong);
 LUA_FUNCTION_DEF (message, set_header);
 LUA_FUNCTION_DEF (message, get_date);
 
-static const struct luaL_reg    msglib_m[] = {
+static const struct luaL_reg msglib_m[] = {
 	LUA_INTERFACE_DEF (message, get_subject),
 	LUA_INTERFACE_DEF (message, set_subject),
 	LUA_INTERFACE_DEF (message, get_message_id),
@@ -89,10 +89,10 @@ static const struct luaL_reg    msglib_m[] = {
 
 
 
-static GMimeMessage            *
+static GMimeMessage *
 lua_check_message (lua_State * L)
 {
-	void                           *ud = luaL_checkudata (L, 1, "rspamd{message}");
+	void *ud = luaL_checkudata (L, 1, "rspamd{message}");
 	luaL_argcheck (L, ud != NULL, 1, "'message' expected");
 	return ud ? *((GMimeMessage **) ud) : NULL;
 }
@@ -112,10 +112,10 @@ LUA_GMIME_BRIDGE_SET (message, set_reply_to, Message)
 static gint
 lua_message_get_header_common (lua_State * L, gboolean strong)
 {
-	const gchar                     *headern;
-	GMimeMessage                   *obj = lua_check_message (L);
-	GList                          *res = NULL, *cur;
-	gint                            i = 1;
+	const gchar *headern;
+	GMimeMessage *obj = lua_check_message (L);
+	GList *res = NULL, *cur;
+	gint i = 1;
 
 	if (obj != NULL) {
 		headern = luaL_checkstring (L, 2);
@@ -162,8 +162,8 @@ lua_message_get_header_strong (lua_State * L)
 static gint
 lua_message_set_header (lua_State * L)
 {
-	const gchar                     *headern, *headerv;
-	GMimeMessage                   *obj = lua_check_message (L);
+	const gchar *headern, *headerv;
+	GMimeMessage *obj = lua_check_message (L);
 
 	if (obj != NULL) {
 		headern = luaL_checkstring (L, 2);
@@ -185,9 +185,9 @@ lua_message_set_header (lua_State * L)
 static gint
 lua_message_get_date (lua_State * L)
 {
-	GMimeMessage                   *obj = lua_check_message (L);
-	time_t                          msg_time;
-	int                             offset;
+	GMimeMessage *obj = lua_check_message (L);
+	time_t msg_time;
+	int offset;
 
 	if (obj != NULL) {
 		g_mime_message_get_date (obj, &msg_time, &offset);
