@@ -33,15 +33,19 @@
 #define RECURSION_LIMIT 30
 #define UTF8_CHARSET "UTF-8"
 
-GByteArray                     *
-strip_html_tags (struct rspamd_task *task, rspamd_mempool_t * pool, struct mime_text_part *part, GByteArray * src, gint *stateptr)
+GByteArray *
+strip_html_tags (struct rspamd_task *task,
+	rspamd_mempool_t * pool,
+	struct mime_text_part *part,
+	GByteArray * src,
+	gint *stateptr)
 {
-	uint8_t                        *p, *rp, *tbegin = NULL, *end, c, lc;
-	gint                            br, i = 0, depth = 0, in_q = 0;
-	gint                            state = 0;
-	GByteArray                     *buf;
-	GNode                          *level_ptr = NULL;
-	gboolean                        erase = FALSE;
+	uint8_t *p, *rp, *tbegin = NULL, *end, c, lc;
+	gint br, i = 0, depth = 0, in_q = 0;
+	gint state = 0;
+	GByteArray *buf;
+	GNode *level_ptr = NULL;
+	gboolean erase = FALSE;
 
 	if (stateptr)
 		state = *stateptr;
@@ -71,11 +75,11 @@ strip_html_tags (struct rspamd_task *task, rspamd_mempool_t * pool, struct mime_
 			}
 			else if (state == 1) {
 				/* Opening bracket without closing one */
-				p --;
+				p--;
 				while (g_ascii_isspace (*p) && p > src->data) {
-					p --;
+					p--;
 				}
-				p ++;
+				p++;
 				goto unbreak_tag;
 			}
 			break;
@@ -115,13 +119,19 @@ strip_html_tags (struct rspamd_task *task, rspamd_mempool_t * pool, struct mime_
 			}
 unbreak_tag:
 			switch (state) {
-			case 1:			/* HTML/XML */
+			case 1:         /* HTML/XML */
 				lc = '>';
 				in_q = state = 0;
-				erase = !add_html_node (task, pool, part, tbegin, p - tbegin, end - tbegin, &level_ptr);
+				erase = !add_html_node (task,
+						pool,
+						part,
+						tbegin,
+						p - tbegin,
+						end - tbegin,
+						&level_ptr);
 				break;
 
-			case 2:			/* PHP */
+			case 2:         /* PHP */
 				if (!br && lc != '\"' && *(p - 1) == '?') {
 					in_q = state = 0;
 				}
@@ -131,7 +141,7 @@ unbreak_tag:
 				in_q = state = 0;
 				break;
 
-			case 4:			/* JavaScript/CSS/etc... */
+			case 4:         /* JavaScript/CSS/etc... */
 				if (p >= src->data + 2 && *(p - 1) == '-' && *(p - 2) == '-') {
 					in_q = state = 0;
 				}
@@ -158,7 +168,8 @@ unbreak_tag:
 			else if (state == 0 && !erase) {
 				*(rp++) = c;
 			}
-			if (state && p != src->data && *(p - 1) != '\\' && (!in_q || *p == in_q)) {
+			if (state && p != src->data && *(p - 1) != '\\' &&
+				(!in_q || *p == in_q)) {
 				if (in_q) {
 					in_q = 0;
 				}
@@ -182,7 +193,8 @@ unbreak_tag:
 			break;
 
 		case '-':
-			if (state == 3 && p >= src->data + 2 && *(p - 1) == '-' && *(p - 2) == '!') {
+			if (state == 3 && p >= src->data + 2 && *(p - 1) == '-' &&
+				*(p - 2) == '!') {
 				state = 4;
 			}
 			else {
@@ -204,11 +216,14 @@ unbreak_tag:
 			if (state == 3 && p > src->data + 6
 				&& g_ascii_tolower (*(p - 1)) == 'p'
 				&& g_ascii_tolower (*(p - 2)) == 'y'
-				&& g_ascii_tolower (*(p - 3)) == 't' && g_ascii_tolower (*(p - 4)) == 'c' && g_ascii_tolower (*(p - 5)) == 'o' && g_ascii_tolower (*(p - 6)) == 'd') {
+				&& g_ascii_tolower (*(p - 3)) == 't' &&
+				g_ascii_tolower (*(p - 4)) == 'c' &&
+				g_ascii_tolower (*(p - 5)) == 'o' &&
+				g_ascii_tolower (*(p - 6)) == 'd') {
 				state = 1;
 				break;
 			}
-			/* fall-through */
+		/* fall-through */
 
 		case 'l':
 
@@ -216,14 +231,15 @@ unbreak_tag:
 			 * state == 2 (PHP). Switch back to HTML.
 			 */
 
-			if (state == 2 && p > src->data + 2 && *(p - 1) == 'm' && *(p - 2) == 'x') {
+			if (state == 2 && p > src->data + 2 && *(p - 1) == 'm' &&
+				*(p - 2) == 'x') {
 				state = 1;
 				break;
 			}
 
-			/* fall-through */
+		/* fall-through */
 		default:
-		  reg_char:
+reg_char:
 			if (state == 0 && !erase) {
 				*(rp++) = c;
 			}
@@ -252,9 +268,11 @@ unbreak_tag:
 }
 
 static void
-parse_qmail_recv (rspamd_mempool_t * pool, gchar *line, struct received_header *r)
+parse_qmail_recv (rspamd_mempool_t * pool,
+	gchar *line,
+	struct received_header *r)
 {
-	gchar                           *s, *p, t;
+	gchar *s, *p, t;
 
 	/* We are interested only with received from network headers */
 	if ((p = strstr (line, "from network")) == NULL) {
@@ -269,7 +287,7 @@ parse_qmail_recv (rspamd_mempool_t * pool, gchar *line, struct received_header *
 	/* format is ip/host */
 	s = p;
 	if (*p) {
-		while (g_ascii_isdigit (*++p) || *p == '.');
+		while (g_ascii_isdigit (*++p) || *p == '.') ;
 		if (*p != '/') {
 			r->is_error = 1;
 			return;
@@ -280,7 +298,8 @@ parse_qmail_recv (rspamd_mempool_t * pool, gchar *line, struct received_header *
 			*p = '/';
 			/* Now try to parse hostname */
 			s = ++p;
-			while (g_ascii_isalnum (*p) || *p == '.' || *p == '-' || *p == '_') {
+			while (g_ascii_isalnum (*p) || *p == '.' || *p == '-' || *p ==
+				'_') {
 				p++;
 			}
 			t = *p;
@@ -292,9 +311,11 @@ parse_qmail_recv (rspamd_mempool_t * pool, gchar *line, struct received_header *
 }
 
 static void
-parse_recv_header (rspamd_mempool_t * pool, gchar *line, struct received_header *r)
+parse_recv_header (rspamd_mempool_t * pool,
+	gchar *line,
+	struct received_header *r)
 {
-	gchar                           *p, *s, t, **res = NULL;
+	gchar *p, *s, t, **res = NULL;
 	enum {
 		RSPAMD_RECV_STATE_INIT = 0,
 		RSPAMD_RECV_STATE_FROM,
@@ -305,8 +326,8 @@ parse_recv_header (rspamd_mempool_t * pool, gchar *line, struct received_header 
 		RSPAMD_RECV_STATE_SKIP_SPACES,
 		RSPAMD_RECV_STATE_ERROR
 	}                               state = RSPAMD_RECV_STATE_INIT,
-	                                next_state = RSPAMD_RECV_STATE_INIT;
-	gboolean                        is_exim = FALSE;
+		next_state = RSPAMD_RECV_STATE_INIT;
+	gboolean is_exim = FALSE;
 
 	g_strstrip (line);
 	p = line;
@@ -314,16 +335,18 @@ parse_recv_header (rspamd_mempool_t * pool, gchar *line, struct received_header 
 
 	while (*p) {
 		switch (state) {
-			/* Initial state, search for from */
+		/* Initial state, search for from */
 		case RSPAMD_RECV_STATE_INIT:
 			if (*p == 'f' || *p == 'F') {
-				if (g_ascii_tolower (*++p) == 'r' && g_ascii_tolower (*++p) == 'o' && g_ascii_tolower (*++p) == 'm') {
+				if (g_ascii_tolower (*++p) == 'r' && g_ascii_tolower (*++p) ==
+					'o' && g_ascii_tolower (*++p) == 'm') {
 					p++;
 					state = RSPAMD_RECV_STATE_SKIP_SPACES;
 					next_state = RSPAMD_RECV_STATE_FROM;
 				}
 			}
-			else if (g_ascii_tolower (*p) == 'b' && g_ascii_tolower (*(p + 1)) == 'y') {
+			else if (g_ascii_tolower (*p) == 'b' &&
+				g_ascii_tolower (*(p + 1)) == 'y') {
 				state = RSPAMD_RECV_STATE_IP_BLOCK;
 			}
 			else {
@@ -332,7 +355,7 @@ parse_recv_header (rspamd_mempool_t * pool, gchar *line, struct received_header 
 				return;
 			}
 			break;
-			/* Read hostname */
+		/* Read hostname */
 		case RSPAMD_RECV_STATE_FROM:
 			if (*p == '[') {
 				/* This should be IP address */
@@ -341,7 +364,8 @@ parse_recv_header (rspamd_mempool_t * pool, gchar *line, struct received_header 
 				next_state = RSPAMD_RECV_STATE_IP_BLOCK;
 				s = ++p;
 			}
-			else if (g_ascii_isalnum (*p) || *p == '.' || *p == '-' || *p == '_') {
+			else if (g_ascii_isalnum (*p) || *p == '.' || *p == '-' || *p ==
+				'_') {
 				p++;
 			}
 			else {
@@ -353,10 +377,11 @@ parse_recv_header (rspamd_mempool_t * pool, gchar *line, struct received_header 
 				next_state = RSPAMD_RECV_STATE_IP_BLOCK;
 			}
 			break;
-			/* Try to extract additional info */
+		/* Try to extract additional info */
 		case RSPAMD_RECV_STATE_IP_BLOCK:
 			/* Try to extract ip or () info or by */
-			if (g_ascii_tolower (*p) == 'b' && g_ascii_tolower (*(p + 1)) == 'y') {
+			if (g_ascii_tolower (*p) == 'b' && g_ascii_tolower (*(p + 1)) ==
+				'y') {
 				p += 2;
 				/* Skip spaces after by */
 				state = RSPAMD_RECV_STATE_SKIP_SPACES;
@@ -378,11 +403,11 @@ parse_recv_header (rspamd_mempool_t * pool, gchar *line, struct received_header 
 				p++;
 			}
 			break;
-			/* We are in () block. Here can be found real hostname and real ip, this is written by some MTA */
+		/* We are in () block. Here can be found real hostname and real ip, this is written by some MTA */
 		case RSPAMD_RECV_STATE_BRACES_BLOCK:
 			/* End of block */
 			if (g_ascii_isalnum (*p) || *p == '.' || *p == '-' ||
-					*p == '_' || *p == ':') {
+				*p == '_' || *p == ':') {
 				p++;
 			}
 			else if (*p == '[') {
@@ -404,41 +429,45 @@ parse_recv_header (rspamd_mempool_t * pool, gchar *line, struct received_header 
 							next_state = RSPAMD_RECV_STATE_BRACES_BLOCK;
 						}
 						else if (p - s == 4 && memcmp (s, "helo=", 5) == 0) {
-							p ++;
+							p++;
 							is_exim = TRUE;
-							if (r->real_hostname == NULL && r->from_hostname != NULL) {
+							if (r->real_hostname == NULL && r->from_hostname !=
+								NULL) {
 								r->real_hostname = r->from_hostname;
 							}
 							s = p;
-							while (*p != ')' && !g_ascii_isspace (*p) && *p != '\0') {
-								p ++;
+							while (*p != ')' && !g_ascii_isspace (*p) && *p !=
+								'\0') {
+								p++;
 							}
 							if (p > s) {
-								r->from_hostname = rspamd_mempool_alloc (pool, p - s + 1);
+								r->from_hostname = rspamd_mempool_alloc (pool,
+										p - s + 1);
 								rspamd_strlcpy (r->from_hostname, s, p - s + 1);
 							}
 						}
 						else if (p - s == 4 && memcmp (s, "port=", 5) == 0) {
-							p ++;
+							p++;
 							is_exim = TRUE;
 							while (g_ascii_isdigit (*p)) {
-								p ++;
+								p++;
 							}
 							state = RSPAMD_RECV_STATE_SKIP_SPACES;
 							next_state = RSPAMD_RECV_STATE_BRACES_BLOCK;
 						}
 						else if (*p == '=' && is_exim) {
 							/* Just skip unknown pairs */
-							p ++;
-							while (!g_ascii_isspace (*p) && *p != ')' && *p != '\0') {
-								p ++;
+							p++;
+							while (!g_ascii_isspace (*p) && *p != ')' && *p !=
+								'\0') {
+								p++;
 							}
 							state = RSPAMD_RECV_STATE_SKIP_SPACES;
 							next_state = RSPAMD_RECV_STATE_BRACES_BLOCK;
 						}
 						else {
 							/* skip all  */
-							while (*p++ != ')' && *p != '\0');
+							while (*p++ != ')' && *p != '\0') ;
 							state = RSPAMD_RECV_STATE_IP_BLOCK;
 						}
 					}
@@ -457,13 +486,13 @@ parse_recv_header (rspamd_mempool_t * pool, gchar *line, struct received_header 
 						continue;
 					}
 					if (*p == ')') {
-						p ++;
+						p++;
 						state = RSPAMD_RECV_STATE_SKIP_SPACES;
 						next_state = RSPAMD_RECV_STATE_IP_BLOCK;
 					}
 				}
 				else if (*p == ')') {
-					p ++;
+					p++;
 					state = RSPAMD_RECV_STATE_SKIP_SPACES;
 					next_state = RSPAMD_RECV_STATE_IP_BLOCK;
 				}
@@ -473,11 +502,11 @@ parse_recv_header (rspamd_mempool_t * pool, gchar *line, struct received_header 
 				}
 			}
 			break;
-			/* Got by word */
+		/* Got by word */
 		case RSPAMD_RECV_STATE_BY_BLOCK:
 			/* Here can be only hostname */
 			if ((g_ascii_isalnum (*p) || *p == '.' || *p == '-'
-					|| *p == '_') && p[1] != '\0') {
+				|| *p == '_') && p[1] != '\0') {
 				p++;
 			}
 			else {
@@ -499,7 +528,8 @@ parse_recv_header (rspamd_mempool_t * pool, gchar *line, struct received_header 
 					}
 					else if (r->from_ip == NULL && r->real_ip != NULL) {
 						r->from_ip = r->real_ip;
-						if (r->real_hostname == NULL && r->from_hostname != NULL) {
+						if (r->real_hostname == NULL && r->from_hostname !=
+							NULL) {
 							r->real_hostname = r->from_hostname;
 						}
 					}
@@ -508,10 +538,10 @@ parse_recv_header (rspamd_mempool_t * pool, gchar *line, struct received_header 
 			}
 			break;
 
-			/* Extract ip */
+		/* Extract ip */
 		case RSPAMD_RECV_STATE_PARSE_IP:
 			while (g_ascii_isxdigit (*p) || *p == '.' || *p == ':') {
-				p ++;
+				p++;
 			}
 			if (*p != ']') {
 				/* Not an ip in fact */
@@ -527,7 +557,7 @@ parse_recv_header (rspamd_mempool_t * pool, gchar *line, struct received_header 
 			}
 			break;
 
-			/* Skip spaces */
+		/* Skip spaces */
 		case RSPAMD_RECV_STATE_SKIP_SPACES:
 			if (!g_ascii_isspace (*p)) {
 				state = next_state;
@@ -552,10 +582,10 @@ parse_recv_header (rspamd_mempool_t * pool, gchar *line, struct received_header 
 static void
 process_raw_headers (struct rspamd_task *task)
 {
-	struct raw_header              *new = NULL, *lp;
-	gchar                          *p, *c, *tmp, *tp;
-	gint                            state = 0, l, next_state = 100, err_state = 100, t_state;
-	gboolean                        valid_folding = FALSE;
+	struct raw_header *new = NULL, *lp;
+	gchar *p, *c, *tmp, *tp;
+	gint state = 0, l, next_state = 100, err_state = 100, t_state;
+	gboolean valid_folding = FALSE;
 
 	p = task->raw_headers_str;
 	c = p;
@@ -577,13 +607,15 @@ process_raw_headers (struct rspamd_task *task)
 		case 1:
 			/* We got something like header's name */
 			if (*p == ':') {
-				new = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct raw_header));
+				new =
+					rspamd_mempool_alloc0 (task->task_pool,
+						sizeof (struct raw_header));
 				l = p - c;
 				tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
 				rspamd_strlcpy (tmp, c, l + 1);
 				new->name = tmp;
 				new->empty_separator = TRUE;
-				p ++;
+				p++;
 				state = 2;
 				c = p;
 			}
@@ -593,7 +625,7 @@ process_raw_headers (struct rspamd_task *task)
 				next_state = 0;
 			}
 			else {
-				p ++;
+				p++;
 			}
 			break;
 		case 2:
@@ -601,11 +633,11 @@ process_raw_headers (struct rspamd_task *task)
 			if (*p == '\t') {
 				new->tab_separated = TRUE;
 				new->empty_separator = FALSE;
-				p ++;
+				p++;
 			}
 			else if (*p == ' ') {
 				new->empty_separator = FALSE;
-				p ++;
+				p++;
 			}
 			else if (*p == '\n' || *p == '\r') {
 				/* Process folding */
@@ -643,7 +675,7 @@ process_raw_headers (struct rspamd_task *task)
 				state = 4;
 			}
 			else {
-				p ++;
+				p++;
 			}
 			break;
 		case 4:
@@ -652,16 +684,16 @@ process_raw_headers (struct rspamd_task *task)
 			tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
 			tp = tmp;
 			t_state = 0;
-			while (l --) {
+			while (l--) {
 				if (t_state == 0) {
 					/* Before folding */
 					if (*c == '\n' || *c == '\r') {
 						t_state = 1;
-						c ++;
-						*tp ++ = ' ';
+						c++;
+						*tp++ = ' ';
 					}
 					else {
-						*tp ++ = *c ++;
+						*tp++ = *c++;
 					}
 				}
 				else if (t_state == 1) {
@@ -671,18 +703,19 @@ process_raw_headers (struct rspamd_task *task)
 					}
 					else {
 						t_state = 0;
-						*tp ++ = *c ++;
+						*tp++ = *c++;
 					}
 				}
 			}
 			/* Strip last space that can be added by \r\n parsing */
 			if (*(tp - 1) == ' ') {
-				tp --;
+				tp--;
 			}
 			*tp = '\0';
 			new->value = tmp;
 			new->next = NULL;
-			if ((lp = g_hash_table_lookup (task->raw_headers, new->name)) != NULL) {
+			if ((lp =
+				g_hash_table_lookup (task->raw_headers, new->name)) != NULL) {
 				while (lp->next != NULL) {
 					lp = lp->next;
 				}
@@ -698,7 +731,8 @@ process_raw_headers (struct rspamd_task *task)
 			/* Header has only name, no value */
 			new->next = NULL;
 			new->value = "";
-			if ((lp = g_hash_table_lookup (task->raw_headers, new->name)) != NULL) {
+			if ((lp =
+				g_hash_table_lookup (task->raw_headers, new->name)) != NULL) {
 				while (lp->next != NULL) {
 					lp = lp->next;
 				}
@@ -717,12 +751,12 @@ process_raw_headers (struct rspamd_task *task)
 			}
 			else {
 				if (*p == '\r' || *p == '\n') {
-					p ++;
+					p++;
 					valid_folding = FALSE;
 				}
 				else if (*p == '\t' || *p == ' ') {
 					/* Valid folding */
-					p ++;
+					p++;
 					valid_folding = TRUE;
 				}
 				else {
@@ -742,24 +776,24 @@ process_raw_headers (struct rspamd_task *task)
 			/* Fail state, skip line */
 			if (*p == '\r') {
 				if (*(p + 1) == '\n') {
-					p ++;
+					p++;
 				}
-				p ++;
+				p++;
 				state = next_state;
 			}
 			else if (*p == '\n') {
 				if (*(p + 1) == '\r') {
-					p ++;
+					p++;
 				}
-				p ++;
+				p++;
 				state = next_state;
 			}
 			else if (*(p + 1) == '\0') {
 				state = next_state;
-				p ++;
+				p++;
 			}
 			else {
-				p ++;
+				p++;
 			}
 			break;
 		}
@@ -769,45 +803,62 @@ process_raw_headers (struct rspamd_task *task)
 static void
 free_byte_array_callback (void *pointer)
 {
-	GByteArray                     *arr = (GByteArray *) pointer;
+	GByteArray *arr = (GByteArray *) pointer;
 	g_byte_array_free (arr, TRUE);
 }
 
-static GByteArray              *
-convert_text_to_utf (struct rspamd_task *task, GByteArray * part_content, GMimeContentType * type, struct mime_text_part *text_part)
+static GByteArray *
+convert_text_to_utf (struct rspamd_task *task,
+	GByteArray * part_content,
+	GMimeContentType * type,
+	struct mime_text_part *text_part)
 {
-	GError                         *err = NULL;
-	gsize                           read_bytes, write_bytes;
-	const gchar                     *charset;
-	gchar                          *res_str;
-	GByteArray                     *result_array;
+	GError *err = NULL;
+	gsize read_bytes, write_bytes;
+	const gchar *charset;
+	gchar *res_str;
+	GByteArray *result_array;
 
 	if (task->cfg->raw_mode) {
 		text_part->is_raw = TRUE;
 		return part_content;
 	}
 
-	if ((charset = g_mime_content_type_get_parameter (type, "charset")) == NULL) {
+	if ((charset =
+		g_mime_content_type_get_parameter (type, "charset")) == NULL) {
 		text_part->is_raw = TRUE;
 		return part_content;
 	}
 
-	if (g_ascii_strcasecmp (charset, "utf-8") == 0 || g_ascii_strcasecmp (charset, "utf8") == 0) {
+	if (g_ascii_strcasecmp (charset,
+		"utf-8") == 0 || g_ascii_strcasecmp (charset, "utf8") == 0) {
 		if (g_utf8_validate (part_content->data, part_content->len, NULL)) {
 			text_part->is_raw = FALSE;
 			text_part->is_utf = TRUE;
 			return part_content;
 		}
 		else {
-			msg_info ("<%s>: contains invalid utf8 characters, assume it as raw", task->message_id);
+			msg_info (
+				"<%s>: contains invalid utf8 characters, assume it as raw",
+				task->message_id);
 			text_part->is_raw = TRUE;
 			return part_content;
 		}
 	}
 
-	res_str = g_convert_with_fallback (part_content->data, part_content->len, UTF8_CHARSET, charset, NULL, &read_bytes, &write_bytes, &err);
+	res_str = g_convert_with_fallback (part_content->data,
+			part_content->len,
+			UTF8_CHARSET,
+			charset,
+			NULL,
+			&read_bytes,
+			&write_bytes,
+			&err);
 	if (res_str == NULL) {
-		msg_warn ("<%s>: cannot convert from %s to utf8: %s", task->message_id, charset, err ? err->message : "unknown problem");
+		msg_warn ("<%s>: cannot convert from %s to utf8: %s",
+			task->message_id,
+			charset,
+			err ? err->message : "unknown problem");
 		text_part->is_raw = TRUE;
 		return part_content;
 	}
@@ -815,7 +866,9 @@ convert_text_to_utf (struct rspamd_task *task, GByteArray * part_content, GMimeC
 	result_array = rspamd_mempool_alloc (task->task_pool, sizeof (GByteArray));
 	result_array->data = res_str;
 	result_array->len = write_bytes;
-	rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_free, res_str);
+	rspamd_mempool_add_destructor (task->task_pool,
+		(rspamd_mempool_destruct_t) g_free,
+		res_str);
 	text_part->is_raw = FALSE;
 	text_part->is_utf = TRUE;
 
@@ -823,31 +876,43 @@ convert_text_to_utf (struct rspamd_task *task, GByteArray * part_content, GMimeC
 }
 
 static void
-process_text_part (struct rspamd_task *task, GByteArray *part_content, GMimeContentType *type,
-		GMimeObject *part, GMimeObject *parent, gboolean is_empty)
+process_text_part (struct rspamd_task *task,
+	GByteArray *part_content,
+	GMimeContentType *type,
+	GMimeObject *part,
+	GMimeObject *parent,
+	gboolean is_empty)
 {
-	struct mime_text_part          *text_part;
-	const gchar                     *cd;
+	struct mime_text_part *text_part;
+	const gchar *cd;
 
 	/* Skip attachements */
 #ifndef GMIME24
 	cd = g_mime_part_get_content_disposition (GMIME_PART (part));
-	if (cd && g_ascii_strcasecmp (cd, "attachment") == 0 && !task->cfg->check_text_attachements) {
+	if (cd &&
+		g_ascii_strcasecmp (cd,
+		"attachment") == 0 && !task->cfg->check_text_attachements) {
 		debug_task ("skip attachments for checking as text parts");
 		return;
 	}
 #else
 	cd = g_mime_object_get_disposition (GMIME_OBJECT (part));
-	if (cd && g_ascii_strcasecmp (cd, GMIME_DISPOSITION_ATTACHMENT) == 0 && !task->cfg->check_text_attachements) {
+	if (cd &&
+		g_ascii_strcasecmp (cd,
+		GMIME_DISPOSITION_ATTACHMENT) == 0 &&
+		!task->cfg->check_text_attachements) {
 		debug_task ("skip attachments for checking as text parts");
 		return;
 	}
 #endif
 
-	if (g_mime_content_type_is_type (type, "text", "html") || g_mime_content_type_is_type (type, "text", "xhtml")) {
+	if (g_mime_content_type_is_type (type, "text",
+		"html") || g_mime_content_type_is_type (type, "text", "xhtml")) {
 		debug_task ("got urls from text/html part");
 
-		text_part = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct mime_text_part));
+		text_part =
+			rspamd_mempool_alloc0 (task->task_pool,
+				sizeof (struct mime_text_part));
 		text_part->is_html = TRUE;
 		if (is_empty) {
 			text_part->is_empty = TRUE;
@@ -856,18 +921,26 @@ process_text_part (struct rspamd_task *task, GByteArray *part_content, GMimeCont
 			task->text_parts = g_list_prepend (task->text_parts, text_part);
 			return;
 		}
-		text_part->orig = convert_text_to_utf (task, part_content, type, text_part);
+		text_part->orig = convert_text_to_utf (task,
+				part_content,
+				type,
+				text_part);
 		text_part->is_balanced = TRUE;
 		text_part->html_nodes = NULL;
 		text_part->parent = parent;
 
-		text_part->content = strip_html_tags (task, task->task_pool, text_part, text_part->orig, NULL);
+		text_part->content = strip_html_tags (task,
+				task->task_pool,
+				text_part,
+				text_part->orig,
+				NULL);
 
 		if (text_part->html_nodes == NULL) {
 			url_parse_text (task->task_pool, task, text_part, FALSE);
 		}
 		else {
-			decode_entitles (text_part->content->data, &text_part->content->len);
+			decode_entitles (text_part->content->data,
+				&text_part->content->len);
 			url_parse_text (task->task_pool, task, text_part, FALSE);
 #if 0
 			url_parse_text (task->task_pool, task, text_part, TRUE);
@@ -875,13 +948,17 @@ process_text_part (struct rspamd_task *task, GByteArray *part_content, GMimeCont
 		}
 
 		fuzzy_init_part (text_part, task->task_pool, task->cfg->max_diff);
-		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) free_byte_array_callback, text_part->content);
+		rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) free_byte_array_callback,
+			text_part->content);
 		task->text_parts = g_list_prepend (task->text_parts, text_part);
 	}
 	else if (g_mime_content_type_is_type (type, "text", "*")) {
 		debug_task ("got urls from text/plain part");
 
-		text_part = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct mime_text_part));
+		text_part =
+			rspamd_mempool_alloc0 (task->task_pool,
+				sizeof (struct mime_text_part));
 		text_part->is_html = FALSE;
 		text_part->parent = parent;
 		if (is_empty) {
@@ -891,7 +968,10 @@ process_text_part (struct rspamd_task *task, GByteArray *part_content, GMimeCont
 			task->text_parts = g_list_prepend (task->text_parts, text_part);
 			return;
 		}
-		text_part->orig = convert_text_to_utf (task, part_content, type, text_part);
+		text_part->orig = convert_text_to_utf (task,
+				part_content,
+				type,
+				text_part);
 		text_part->content = text_part->orig;
 		url_parse_text (task->task_pool, task, text_part, FALSE);
 		fuzzy_init_part (text_part, task->task_pool, task->cfg->max_diff);
@@ -901,18 +981,20 @@ process_text_part (struct rspamd_task *task, GByteArray *part_content, GMimeCont
 
 #ifdef GMIME24
 static void
-mime_foreach_callback (GMimeObject * parent, GMimeObject * part, gpointer user_data)
+mime_foreach_callback (GMimeObject * parent,
+	GMimeObject * part,
+	gpointer user_data)
 #else
 static void
 mime_foreach_callback (GMimeObject * part, gpointer user_data)
 #endif
 {
-	struct rspamd_task             *task = (struct rspamd_task *)user_data;
-	struct mime_part               *mime_part;
-	GMimeContentType               *type;
-	GMimeDataWrapper               *wrapper;
-	GMimeStream                    *part_stream;
-	GByteArray                     *part_content;
+	struct rspamd_task *task = (struct rspamd_task *)user_data;
+	struct mime_part *mime_part;
+	GMimeContentType *type;
+	GMimeDataWrapper *wrapper;
+	GMimeStream *part_stream;
+	GByteArray *part_content;
 
 	task->parts_count++;
 
@@ -921,7 +1003,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 	/* find out what class 'part' is... */
 	if (GMIME_IS_MESSAGE_PART (part)) {
 		/* message/rfc822 or message/news */
-		GMimeMessage                   *message;
+		GMimeMessage *message;
 
 		/* g_mime_message_foreach_part() won't descend into
 		   child message parts, so if we want to count any
@@ -957,11 +1039,13 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 	else if (GMIME_IS_MULTIPART (part)) {
 		/* multipart/mixed, multipart/alternative, multipart/related, multipart/signed, multipart/encrypted, etc... */
 		task->parser_parent_part = part;
-#ifndef GMIME24	
+#ifndef GMIME24
 		debug_task ("detected multipart part");
 		/* we'll get to finding out if this is a signed/encrypted multipart later... */
 		if (task->parser_recursion++ < RECURSION_LIMIT) {
-			g_mime_multipart_foreach ((GMimeMultipart *) part, mime_foreach_callback, task);
+			g_mime_multipart_foreach ((GMimeMultipart *) part,
+				mime_foreach_callback,
+				task);
 		}
 		else {
 			msg_err ("endless recursion detected: %d", task->parser_recursion);
@@ -972,17 +1056,21 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 	else if (GMIME_IS_PART (part)) {
 		/* a normal leaf part, could be text/plain or image/jpeg etc */
 #ifdef GMIME24
-		type = (GMimeContentType *) g_mime_object_get_content_type (GMIME_OBJECT (part));
+		type = (GMimeContentType *) g_mime_object_get_content_type (GMIME_OBJECT (
+					part));
 #else
-		type = (GMimeContentType *) g_mime_part_get_content_type (GMIME_PART (part));
+		type =
+			(GMimeContentType *) g_mime_part_get_content_type (GMIME_PART (part));
 #endif
 		if (type == NULL) {
 			msg_warn ("type of part is unknown, assume text/plain");
 			type = g_mime_content_type_new ("text", "plain");
 #ifdef GMIME24
-			rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_object_unref, type);
+			rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t) g_object_unref,				 type);
 #else
-			rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_mime_content_type_destroy, type);
+			rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t) g_mime_content_type_destroy, type);
 #endif
 		}
 		wrapper = g_mime_part_get_content_object (GMIME_PART (part));
@@ -992,29 +1080,45 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 		if (wrapper != NULL) {
 #endif
 			part_stream = g_mime_stream_mem_new ();
-			if (g_mime_data_wrapper_write_to_stream (wrapper, part_stream) != -1) {
-				g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (part_stream), FALSE);
-				part_content = g_mime_stream_mem_get_byte_array (GMIME_STREAM_MEM (part_stream));
+			if (g_mime_data_wrapper_write_to_stream (wrapper,
+				part_stream) != -1) {
+				g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (
+						part_stream), FALSE);
+				part_content = g_mime_stream_mem_get_byte_array (GMIME_STREAM_MEM (
+							part_stream));
 				g_object_unref (part_stream);
-				mime_part = rspamd_mempool_alloc (task->task_pool, sizeof (struct mime_part));
+				mime_part =
+					rspamd_mempool_alloc (task->task_pool,
+						sizeof (struct mime_part));
 				mime_part->type = type;
 				mime_part->content = part_content;
 				mime_part->parent = task->parser_parent_part;
-				mime_part->filename = g_mime_part_get_filename (GMIME_PART (part));
-				debug_task ("found part with content-type: %s/%s", type->type, type->subtype);
+				mime_part->filename = g_mime_part_get_filename (GMIME_PART (
+							part));
+				debug_task ("found part with content-type: %s/%s",
+					type->type,
+					type->subtype);
 				task->parts = g_list_prepend (task->parts, mime_part);
 				/* Skip empty parts */
-				process_text_part (task, part_content, type, part, task->parser_parent_part, (part_content->len <= 0));
+				process_text_part (task,
+					part_content,
+					type,
+					part,
+					task->parser_parent_part,
+					(part_content->len <= 0));
 			}
 			else {
-				msg_warn ("write to stream failed: %d, %s", errno, strerror (errno));
+				msg_warn ("write to stream failed: %d, %s", errno,
+					strerror (errno));
 			}
 #ifndef GMIME24
 			g_object_unref (wrapper);
 #endif
 		}
 		else {
-			msg_warn ("cannot get wrapper for mime part, type of part: %s/%s", type->type, type->subtype);
+			msg_warn ("cannot get wrapper for mime part, type of part: %s/%s",
+				type->type,
+				type->subtype);
 		}
 	}
 	else {
@@ -1025,7 +1129,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 static void
 destroy_message (void *pointer)
 {
-	GMimeMessage                   *msg = pointer;
+	GMimeMessage *msg = pointer;
 
 	msg_debug ("freeing pointer %p", msg);
 	g_object_unref (msg);
@@ -1034,33 +1138,34 @@ destroy_message (void *pointer)
 gint
 process_message (struct rspamd_task *task)
 {
-	GMimeMessage                   *message;
-	GMimeParser                    *parser;
-	GMimeStream                    *stream;
-	GByteArray                     *tmp;
-	GList                          *first, *cur;
-	GMimePart                      *part;
-	GMimeDataWrapper               *wrapper;
-	struct received_header         *recv;
-	gchar                          *mid, *url_str, *p, *end, *url_end;
-	struct uri                     *subject_url;
-	gsize                           len;
-	gint                            rc;
+	GMimeMessage *message;
+	GMimeParser *parser;
+	GMimeStream *stream;
+	GByteArray *tmp;
+	GList *first, *cur;
+	GMimePart *part;
+	GMimeDataWrapper *wrapper;
+	struct received_header *recv;
+	gchar *mid, *url_str, *p, *end, *url_end;
+	struct uri *subject_url;
+	gsize len;
+	gint rc;
 
 	tmp = rspamd_mempool_alloc (task->task_pool, sizeof (GByteArray));
 	tmp->data = task->msg->str;
 	tmp->len = task->msg->len;
 
 	stream = g_mime_stream_mem_new_with_byte_array (tmp);
-	/* 
-	* This causes g_mime_stream not to free memory by itself as it is memory allocated by
-	* pool allocator
-	*/
+	/*
+	 * This causes g_mime_stream not to free memory by itself as it is memory allocated by
+	 * pool allocator
+	 */
 	g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (stream), FALSE);
 
 	if (task->is_mime) {
 
-		debug_task ("construct mime parser from string length %d", (gint)task->msg->len);
+		debug_task ("construct mime parser from string length %d",
+			(gint)task->msg->len);
 		/* create a new parser object to parse the stream */
 		parser = g_mime_parser_new_with_stream (stream);
 		g_object_unref (stream);
@@ -1074,7 +1179,8 @@ process_message (struct rspamd_task *task)
 		}
 
 		task->message = message;
-		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) destroy_message, task->message);
+		rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) destroy_message, task->message);
 
 		/* Save message id for future use */
 		task->message_id = g_mime_message_get_message_id (task->message);
@@ -1101,7 +1207,8 @@ process_message (struct rspamd_task *task)
 		}
 
 #ifdef GMIME24
-		task->raw_headers_str = g_mime_object_get_headers (GMIME_OBJECT (task->message));
+		task->raw_headers_str =
+			g_mime_object_get_headers (GMIME_OBJECT (task->message));
 #else
 		task->raw_headers_str = g_mime_message_get_headers (task->message);
 #endif
@@ -1109,10 +1216,13 @@ process_message (struct rspamd_task *task)
 		process_images (task);
 
 		/* Parse received headers */
-		first = message_get_header (task->task_pool, message, "Received", FALSE);
+		first =
+			message_get_header (task->task_pool, message, "Received", FALSE);
 		cur = first;
 		while (cur) {
-			recv = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct received_header));
+			recv =
+				rspamd_mempool_alloc0 (task->task_pool,
+					sizeof (struct received_header));
 			parse_recv_header (task->task_pool, cur->data, recv);
 			task->received = g_list_prepend (task->received, recv);
 			cur = g_list_next (cur);
@@ -1122,16 +1232,21 @@ process_message (struct rspamd_task *task)
 		}
 
 		if (task->raw_headers_str) {
-			rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_free, task->raw_headers_str);
+			rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t) g_free, task->raw_headers_str);
 			process_raw_headers (task);
 		}
 
 		task->rcpts = g_mime_message_get_all_recipients (message);
 		if (task->rcpts) {
 #ifdef GMIME24
-			rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_object_unref, task->rcpts);
+			rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t) g_object_unref,
+				task->rcpts);
 #else
-			rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) internet_address_list_destroy, task->rcpts);
+			rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t) internet_address_list_destroy,
+				task->rcpts);
 #endif
 		}
 
@@ -1149,26 +1264,33 @@ process_message (struct rspamd_task *task)
 		/* Construct part for it */
 		part = g_mime_part_new_with_type ("text", "html");
 #ifdef GMIME24
-		wrapper = g_mime_data_wrapper_new_with_stream (stream, GMIME_CONTENT_ENCODING_8BIT);
+		wrapper = g_mime_data_wrapper_new_with_stream (stream,
+				GMIME_CONTENT_ENCODING_8BIT);
 #else
-		wrapper = g_mime_data_wrapper_new_with_stream (stream, GMIME_PART_ENCODING_8BIT);
+		wrapper = g_mime_data_wrapper_new_with_stream (stream,
+				GMIME_PART_ENCODING_8BIT);
 #endif
 		g_mime_part_set_content_object (part, wrapper);
 		g_mime_message_set_mime_part (task->message, GMIME_OBJECT (part));
 		/* Register destructors */
-		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_object_unref, wrapper);
-		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_object_unref, part);
-		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) destroy_message, task->message);
+		rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) g_object_unref,	 wrapper);
+		rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) g_object_unref,	 part);
+		rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) destroy_message, task->message);
 		/* Now parse in a normal way */
 		task->parser_recursion = 0;
 #ifdef GMIME24
 		g_mime_message_foreach (task->message, mime_foreach_callback, task);
 #else
-		g_mime_message_foreach_part (task->message, mime_foreach_callback, task);
+		g_mime_message_foreach_part (task->message, mime_foreach_callback,
+			task);
 #endif
 		/* Generate message ID */
 		mid = g_mime_utils_generate_message_id ("localhost.localdomain");
-		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_free, mid);
+		rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) g_free, mid);
 		g_mime_message_set_message_id (task->message, mid);
 		task->message_id = mid;
 		task->queue_id = mid;
@@ -1182,7 +1304,10 @@ process_message (struct rspamd_task *task)
 		if (task->rcpt) {
 			cur = task->rcpt;
 			while (cur) {
-				g_mime_message_add_recipient (task->message, GMIME_RECIPIENT_TYPE_TO, NULL, (gchar *)cur->data);
+				g_mime_message_add_recipient (task->message,
+					GMIME_RECIPIENT_TYPE_TO,
+					NULL,
+					(gchar *)cur->data);
 				cur = g_list_next (cur);
 			}
 		}
@@ -1198,22 +1323,29 @@ process_message (struct rspamd_task *task)
 
 		while (p < end) {
 			/* Search to the end of url */
-			if (url_try_text (task->task_pool, p, end - p, NULL, &url_end, &url_str, FALSE)) {
+			if (url_try_text (task->task_pool, p, end - p, NULL, &url_end,
+				&url_str, FALSE)) {
 				if (url_str != NULL) {
-					subject_url = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct uri));
+					subject_url = rspamd_mempool_alloc0 (task->task_pool,
+							sizeof (struct uri));
 					if (subject_url != NULL) {
 						/* Try to parse url */
 						rc = parse_uri (subject_url, url_str, task->task_pool);
-						if ((rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES || rc == URI_ERRNO_NO_HOST_SLASH) &&
-								subject_url->hostlen > 0) {
+						if ((rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES ||
+							rc == URI_ERRNO_NO_HOST_SLASH) &&
+							subject_url->hostlen > 0) {
 							if (subject_url->protocol != PROTOCOL_MAILTO) {
 								if (!g_tree_lookup (task->urls, subject_url)) {
-									g_tree_insert (task->urls, subject_url, subject_url);
+									g_tree_insert (task->urls,
+										subject_url,
+										subject_url);
 								}
 							}
 						}
 						else if (rc != URI_ERRNO_OK) {
-							msg_info ("extract of url '%s' failed: %s", url_str, url_strerror (rc));
+							msg_info ("extract of url '%s' failed: %s",
+								url_str,
+								url_strerror (rc));
 						}
 					}
 				}
@@ -1231,15 +1363,15 @@ process_message (struct rspamd_task *task)
 }
 
 struct gmime_raw_header {
-	struct raw_header              *next;
-	gchar                           *name;
-	gchar                           *value;
+	struct raw_header *next;
+	gchar *name;
+	gchar *value;
 };
 
 typedef struct _GMimeHeader {
-	GHashTable                     *hash;
-	GHashTable                     *writers;
-	struct raw_header              *headers;
+	GHashTable *hash;
+	GHashTable *writers;
+	struct raw_header *headers;
 } local_GMimeHeader;
 
 
@@ -1261,13 +1393,20 @@ enum {
  */
 #ifndef GMIME24
 static void
-header_iterate (rspamd_mempool_t * pool, struct gmime_raw_header *h, GList ** ret, const gchar *field, gboolean strong)
+header_iterate (rspamd_mempool_t * pool,
+	struct gmime_raw_header *h,
+	GList ** ret,
+	const gchar *field,
+	gboolean strong)
 {
 	while (h) {
 		if (G_LIKELY (!strong)) {
-			if (h->value && !g_ascii_strncasecmp (field, h->name, strlen (field))) {
+			if (h->value &&
+				!g_ascii_strncasecmp (field, h->name, strlen (field))) {
 				if (pool != NULL) {
-					*ret = g_list_prepend (*ret, rspamd_mempool_strdup (pool, h->value));
+					*ret =
+						g_list_prepend (*ret,
+							rspamd_mempool_strdup (pool, h->value));
 				}
 				else {
 					*ret = g_list_prepend (*ret, g_strdup (h->value));
@@ -1277,7 +1416,9 @@ header_iterate (rspamd_mempool_t * pool, struct gmime_raw_header *h, GList ** re
 		else {
 			if (h->value && !strncmp (field, h->name, strlen (field))) {
 				if (pool != NULL) {
-					*ret = g_list_prepend (*ret, rspamd_mempool_strdup (pool, h->value));
+					*ret =
+						g_list_prepend (*ret,
+							rspamd_mempool_strdup (pool, h->value));
 				}
 				else {
 					*ret = g_list_prepend (*ret, g_strdup (h->value));
@@ -1289,11 +1430,15 @@ header_iterate (rspamd_mempool_t * pool, struct gmime_raw_header *h, GList ** re
 }
 #else
 static void
-header_iterate (rspamd_mempool_t * pool, GMimeHeaderList * ls, GList ** ret, const gchar *field, gboolean strong)
+header_iterate (rspamd_mempool_t * pool,
+	GMimeHeaderList * ls,
+	GList ** ret,
+	const gchar *field,
+	gboolean strong)
 {
 	/* Use iterator in case of gmime 2.4 */
-	GMimeHeaderIter                *iter;
-	const gchar                     *name;
+	GMimeHeaderIter *iter;
+	const gchar *name;
 
 	if (ls == NULL) {
 		*ret = NULL;
@@ -1301,27 +1446,38 @@ header_iterate (rspamd_mempool_t * pool, GMimeHeaderList * ls, GList ** ret, con
 	}
 
 	iter = g_mime_header_iter_new ();
-	if (g_mime_header_list_get_iter (ls, iter) && g_mime_header_iter_first (iter)) {
+	if (g_mime_header_list_get_iter (ls,
+		iter) && g_mime_header_iter_first (iter)) {
 		/* Iterate throught headers */
 		while (g_mime_header_iter_is_valid (iter)) {
 			name = g_mime_header_iter_get_name (iter);
 			if (G_LIKELY (!strong)) {
 				if (!g_ascii_strncasecmp (field, name, strlen (name))) {
 					if (pool != NULL) {
-						*ret = g_list_prepend (*ret, rspamd_mempool_strdup (pool, g_mime_header_iter_get_value (iter)));
+						*ret =
+							g_list_prepend (*ret,
+								rspamd_mempool_strdup (pool,
+								g_mime_header_iter_get_value (iter)));
 					}
 					else {
-						*ret = g_list_prepend (*ret, g_strdup (g_mime_header_iter_get_value (iter)));
+						*ret =
+							g_list_prepend (*ret,
+								g_strdup (g_mime_header_iter_get_value (iter)));
 					}
 				}
 			}
 			else {
 				if (!strncmp (field, name, strlen (name))) {
 					if (pool != NULL) {
-						*ret = g_list_prepend (*ret, rspamd_mempool_strdup (pool, g_mime_header_iter_get_value (iter)));
+						*ret =
+							g_list_prepend (*ret,
+								rspamd_mempool_strdup (pool,
+								g_mime_header_iter_get_value (iter)));
 					}
 					else {
-						*ret = g_list_prepend (*ret, g_strdup (g_mime_header_iter_get_value (iter)));
+						*ret =
+							g_list_prepend (*ret,
+								g_strdup (g_mime_header_iter_get_value (iter)));
 					}
 				}
 			}
@@ -1336,12 +1492,12 @@ header_iterate (rspamd_mempool_t * pool, GMimeHeaderList * ls, GList ** ret, con
 
 
 struct multipart_cb_data {
-	GList                          *ret;
-	rspamd_mempool_t                  *pool;
-	const gchar                     *field;
-	gboolean                        try_search;
-	gboolean                        strong;
-	gint                            rec;
+	GList *ret;
+	rspamd_mempool_t *pool;
+	const gchar *field;
+	gboolean try_search;
+	gboolean strong;
+	gint rec;
 };
 
 #define MAX_REC 10
@@ -1353,21 +1509,21 @@ multipart_iterate (GMimeObject * parent, GMimeObject * part, gpointer user_data)
 multipart_iterate (GMimeObject * part, gpointer user_data)
 #endif
 {
-	struct multipart_cb_data       *data = user_data;
+	struct multipart_cb_data *data = user_data;
 #ifndef GMIME24
-	struct gmime_raw_header              *h;
+	struct gmime_raw_header *h;
 #endif
-	GList                          *l = NULL;
+	GList *l = NULL;
 
 	if (data->try_search && part != NULL && GMIME_IS_PART (part)) {
 #ifdef GMIME24
-		GMimeHeaderList                *ls;
+		GMimeHeaderList *ls;
 
 		ls = g_mime_object_get_header_list (GMIME_OBJECT (part));
 		header_iterate (data->pool, ls, &l, data->field, data->strong);
 #else
 		h = (struct gmime_raw_header *)part->headers->headers;
-		header_iterate (data->pool, h, &l, data->field, data->strong);
+		header_iterate (data->pool, h,	&l, data->field, data->strong);
 #endif
 		if (l == NULL) {
 			/* Header not found, abandon search results */
@@ -1382,21 +1538,26 @@ multipart_iterate (GMimeObject * part, gpointer user_data)
 	else if (data->try_search && GMIME_IS_MULTIPART (part)) {
 		/* Maybe endless recursion here ? */
 		if (data->rec++ < MAX_REC) {
-			g_mime_multipart_foreach (GMIME_MULTIPART (part), multipart_iterate, data);
+			g_mime_multipart_foreach (GMIME_MULTIPART (
+					part), multipart_iterate, data);
 		}
 		else {
-			msg_info ("maximum recurse limit is over, stop recursing, %d", data->rec);
+			msg_info ("maximum recurse limit is over, stop recursing, %d",
+				data->rec);
 			data->try_search = FALSE;
 		}
 	}
 }
 
-static GList                   *
-local_message_get_header (rspamd_mempool_t * pool, GMimeMessage * message, const gchar *field, gboolean strong)
+static GList *
+local_message_get_header (rspamd_mempool_t * pool,
+	GMimeMessage * message,
+	const gchar *field,
+	gboolean strong)
 {
-	GList                          *gret = NULL;
-	GMimeObject                    *part;
-	struct multipart_cb_data        cb = {
+	GList *gret = NULL;
+	GMimeObject *part;
+	struct multipart_cb_data cb = {
 		.try_search = TRUE,
 		.rec = 0,
 		.ret = NULL,
@@ -1406,7 +1567,7 @@ local_message_get_header (rspamd_mempool_t * pool, GMimeMessage * message, const
 	cb.strong = strong;
 
 #ifndef GMIME24
-	struct gmime_raw_header       *h;
+	struct gmime_raw_header *h;
 
 	if (field == NULL) {
 		return NULL;
@@ -1418,14 +1579,18 @@ local_message_get_header (rspamd_mempool_t * pool, GMimeMessage * message, const
 
 	if (gret == NULL) {
 		/* Try to iterate with mime part headers */
-		msg_debug ("iterate over headers of mime part to find header %s", field);
+		msg_debug ("iterate over headers of mime part to find header %s",
+			field);
 		part = g_mime_message_get_mime_part (message);
 		if (part) {
 			h = (struct gmime_raw_header *)part->headers->headers;
 			header_iterate (pool, h, &gret, field, strong);
 			if (gret == NULL && GMIME_IS_MULTIPART (part)) {
-				msg_debug ("iterate over headers of each multipart's subparts %s", field);
-				g_mime_multipart_foreach (GMIME_MULTIPART (part), multipart_iterate, &cb);
+				msg_debug (
+					"iterate over headers of each multipart's subparts %s",
+					field);
+				g_mime_multipart_foreach (GMIME_MULTIPART (
+						part), multipart_iterate, &cb);
 				if (cb.ret != NULL) {
 					gret = cb.ret;
 				}
@@ -1438,7 +1603,7 @@ local_message_get_header (rspamd_mempool_t * pool, GMimeMessage * message, const
 
 	return gret;
 #else
-	GMimeHeaderList                *ls;
+	GMimeHeaderList *ls;
 
 	ls = g_mime_object_get_header_list (GMIME_OBJECT (message));
 	header_iterate (pool, ls, &gret, field, strong);
@@ -1449,7 +1614,8 @@ local_message_get_header (rspamd_mempool_t * pool, GMimeMessage * message, const
 			ls = g_mime_object_get_header_list (GMIME_OBJECT (part));
 			header_iterate (pool, ls, &gret, field, strong);
 			if (gret == NULL && GMIME_IS_MULTIPART (part)) {
-				g_mime_multipart_foreach (GMIME_MULTIPART (part), multipart_iterate, &cb);
+				g_mime_multipart_foreach (GMIME_MULTIPART (
+						part), multipart_iterate, &cb);
 				if (cb.ret != NULL) {
 					gret = cb.ret;
 				}
@@ -1466,17 +1632,18 @@ local_message_get_header (rspamd_mempool_t * pool, GMimeMessage * message, const
 }
 
 /**
-* g_mime_message_set_date_from_string: Set the message sent-date
-* @message: MIME Message
-* @string: A string of date
-* 
-* Set the sent-date on a MIME Message.
-**/
+ * g_mime_message_set_date_from_string: Set the message sent-date
+ * @message: MIME Message
+ * @string: A string of date
+ *
+ * Set the sent-date on a MIME Message.
+ **/
 void
-local_mime_message_set_date_from_string (GMimeMessage * message, const gchar * string)
+local_mime_message_set_date_from_string (GMimeMessage * message,
+	const gchar * string)
 {
-	time_t                          date;
-	gint                            offset = 0;
+	time_t date;
+	gint offset = 0;
 
 	date = g_mime_utils_header_decode_date (string, &offset);
 	g_mime_message_set_date (message, date, offset);
@@ -1485,14 +1652,14 @@ local_mime_message_set_date_from_string (GMimeMessage * message, const gchar * s
 /*
  * Replacements for standart gmime functions but converting adresses to IA
  */
-static const gchar              *
+static const gchar *
 local_message_get_sender (GMimeMessage * message)
 {
-	gchar                           *res;
-	const gchar                     *from = g_mime_message_get_sender (message);
-	InternetAddressList            *ia;
+	gchar *res;
+	const gchar *from = g_mime_message_get_sender (message);
+	InternetAddressList *ia;
 
-#ifndef	GMIME24
+#ifndef GMIME24
 	ia = internet_address_parse_string (from);
 #else
 	ia = internet_address_list_parse_string (from);
@@ -1501,7 +1668,7 @@ local_message_get_sender (GMimeMessage * message)
 		return NULL;
 	}
 	res = internet_address_list_to_string (ia, FALSE);
-#ifndef	GMIME24
+#ifndef GMIME24
 	internet_address_list_destroy (ia);
 #else
 	g_object_unref (ia);
@@ -1510,14 +1677,14 @@ local_message_get_sender (GMimeMessage * message)
 	return res;
 }
 
-static const gchar              *
+static const gchar *
 local_message_get_reply_to (GMimeMessage * message)
 {
-	gchar                           *res;
-	const gchar                     *from = g_mime_message_get_reply_to (message);
-	InternetAddressList            *ia;
+	gchar *res;
+	const gchar *from = g_mime_message_get_reply_to (message);
+	InternetAddressList *ia;
 
-#ifndef	GMIME24
+#ifndef GMIME24
 	ia = internet_address_parse_string (from);
 #else
 	ia = internet_address_list_parse_string (from);
@@ -1526,7 +1693,7 @@ local_message_get_reply_to (GMimeMessage * message)
 		return NULL;
 	}
 	res = internet_address_list_to_string (ia, FALSE);
-#ifndef	GMIME24
+#ifndef GMIME24
 	internet_address_list_destroy (ia);
 #else
 	g_object_unref (ia);
@@ -1537,122 +1704,161 @@ local_message_get_reply_to (GMimeMessage * message)
 
 #ifdef GMIME24
 
-#   define ADD_RECIPIENT_TEMPLATE(type,def)														\
-static void																						\
-local_message_add_recipients_from_string_##type (GMimeMessage *message, const gchar *string, const gchar *value)	\
-{																								\
-	InternetAddressList *il, *new;																\
-																								\
-	il = g_mime_message_get_recipients (message, (def));										\
-	new = internet_address_list_parse_string (string);											\
-	internet_address_list_append (il, new);														\
-}																								\
+#   define ADD_RECIPIENT_TEMPLATE(type,def)                                                     \
+	static void                                                                                     \
+	local_message_add_recipients_from_string_ ## type (GMimeMessage * message, \
+		const gchar * string, \
+		const gchar * value)    \
+	{                                                                                               \
+		InternetAddressList *il, *new;                                                              \
+                                                                                                \
+		il = g_mime_message_get_recipients (message, (def));                                        \
+		new = internet_address_list_parse_string (string);                                          \
+		internet_address_list_append (il, new);                                                     \
+	}                                                                                               \
 
-ADD_RECIPIENT_TEMPLATE (to, GMIME_RECIPIENT_TYPE_TO)
-	ADD_RECIPIENT_TEMPLATE (cc, GMIME_RECIPIENT_TYPE_CC)
-	ADD_RECIPIENT_TEMPLATE (bcc, GMIME_RECIPIENT_TYPE_BCC)
-#   define GET_RECIPIENT_TEMPLATE(type,def)														\
-static InternetAddressList*																		\
-local_message_get_recipients_##type (GMimeMessage *message, const gchar *unused)					\
-{																								\
-	return g_mime_message_get_recipients (message, (def));										\
-}
-	GET_RECIPIENT_TEMPLATE (to, GMIME_RECIPIENT_TYPE_TO)
-	GET_RECIPIENT_TEMPLATE (cc, GMIME_RECIPIENT_TYPE_CC)
-	GET_RECIPIENT_TEMPLATE (bcc, GMIME_RECIPIENT_TYPE_BCC)
+ADD_RECIPIENT_TEMPLATE (to,	 GMIME_RECIPIENT_TYPE_TO)
+ADD_RECIPIENT_TEMPLATE (cc,	 GMIME_RECIPIENT_TYPE_CC)
+ADD_RECIPIENT_TEMPLATE (bcc, GMIME_RECIPIENT_TYPE_BCC)
+#   define GET_RECIPIENT_TEMPLATE(type,def)                                                     \
+	static InternetAddressList *                                                                     \
+	local_message_get_recipients_ ## type (GMimeMessage * message, \
+		const gchar * unused)                    \
+	{                                                                                               \
+		return g_mime_message_get_recipients (message, (def));                                      \
+	}
+GET_RECIPIENT_TEMPLATE (to,	 GMIME_RECIPIENT_TYPE_TO)
+GET_RECIPIENT_TEMPLATE (cc,	 GMIME_RECIPIENT_TYPE_CC)
+GET_RECIPIENT_TEMPLATE (bcc, GMIME_RECIPIENT_TYPE_BCC)
 #endif
 /* different declarations for different types of set and get functions */
-  typedef const gchar             *(*GetFunc) (GMimeMessage * message);
-  typedef InternetAddressList    *(*GetRcptFunc) (GMimeMessage * message, const gchar *type);
-  typedef GList                  *(*GetListFunc) (rspamd_mempool_t * pool, GMimeMessage * message, const gchar *type, gboolean strong);
-  typedef void                    (*SetFunc) (GMimeMessage * message, const gchar *value);
-  typedef void                    (*SetListFunc) (GMimeMessage * message, const gchar *field, const gchar *value);
+typedef const gchar *(*GetFunc) (GMimeMessage * message);
+typedef InternetAddressList *(*GetRcptFunc) (GMimeMessage * message,
+	const gchar *type);
+typedef GList *(*GetListFunc) (rspamd_mempool_t * pool, GMimeMessage * message,
+	const gchar *type, gboolean strong);
+typedef void (*SetFunc) (GMimeMessage * message, const gchar *value);
+typedef void (*SetListFunc) (GMimeMessage * message, const gchar *field,
+	const gchar *value);
 
 /** different types of functions
-*
-* FUNC_CHARPTR
-*	- function with no arguments
-*	- get returns gchar*
-*
-* FUNC_IA (from Internet Address)
-*	- function with additional "field" argument from the fieldfunc table,
-*	- get returns Glist*
-*
-* FUNC_LIST
-*	- function with additional "field" argument (given arbitrary header field name)
-*	- get returns Glist*
-**/
-  enum {
-	  FUNC_CHARPTR = 0,
-	  FUNC_CHARFREEPTR,
-	  FUNC_IA,
-	  FUNC_LIST
-  };
+ *
+ * FUNC_CHARPTR
+ *	- function with no arguments
+ *	- get returns gchar*
+ *
+ * FUNC_IA (from Internet Address)
+ *	- function with additional "field" argument from the fieldfunc table,
+ *	- get returns Glist*
+ *
+ * FUNC_LIST
+ *	- function with additional "field" argument (given arbitrary header field name)
+ *	- get returns Glist*
+ **/
+enum {
+	FUNC_CHARPTR = 0,
+	FUNC_CHARFREEPTR,
+	FUNC_IA,
+	FUNC_LIST
+};
 
 /**
-* fieldfunc struct: structure of MIME fields and corresponding get and set
-* functions.
-**/
-  static struct {
-	  gchar                           *name;
-	  GetFunc                         func;
-	  GetRcptFunc                     rcptfunc;
-	  GetListFunc                     getlistfunc;
-	  SetFunc                         setfunc;
-	  SetListFunc                     setlfunc;
-	  gint                            functype;
-  } fieldfunc[] =
+ * fieldfunc struct: structure of MIME fields and corresponding get and set
+ * functions.
+ **/
+static struct {
+	gchar *name;
+	GetFunc func;
+	GetRcptFunc rcptfunc;
+	GetListFunc getlistfunc;
+	SetFunc setfunc;
+	SetListFunc setlfunc;
+	gint functype;
+} fieldfunc[] =
 {
 	{
-	"From", local_message_get_sender, NULL, NULL, g_mime_message_set_sender, NULL, FUNC_CHARFREEPTR}, {
-	"Reply-To", local_message_get_reply_to, NULL, NULL, g_mime_message_set_reply_to, NULL, FUNC_CHARFREEPTR},
+		"From", local_message_get_sender, NULL, NULL, g_mime_message_set_sender,
+		NULL, FUNC_CHARFREEPTR
+	}, {
+		"Reply-To", local_message_get_reply_to, NULL, NULL,
+		g_mime_message_set_reply_to, NULL, FUNC_CHARFREEPTR
+	},
 #ifndef GMIME24
 	{
-	"To", NULL, (GetRcptFunc) g_mime_message_get_recipients, NULL, NULL, (SetListFunc) g_mime_message_add_recipients_from_string, FUNC_IA}, {
-	"Cc", NULL, (GetRcptFunc) g_mime_message_get_recipients, NULL, NULL, (SetListFunc) g_mime_message_add_recipients_from_string, FUNC_IA}, {
-	"Bcc", NULL, (GetRcptFunc) g_mime_message_get_recipients, NULL, NULL, (SetListFunc) g_mime_message_add_recipients_from_string, FUNC_IA}, {
-	"Date", (GetFunc) g_mime_message_get_date_string, NULL, NULL, local_mime_message_set_date_from_string, NULL, FUNC_CHARFREEPTR},
+		"To", NULL, (GetRcptFunc) g_mime_message_get_recipients, NULL, NULL,
+		(SetListFunc) g_mime_message_add_recipients_from_string, FUNC_IA
+	}, {
+		"Cc", NULL, (GetRcptFunc) g_mime_message_get_recipients, NULL, NULL,
+		(SetListFunc) g_mime_message_add_recipients_from_string, FUNC_IA
+	}, {
+		"Bcc", NULL, (GetRcptFunc) g_mime_message_get_recipients, NULL, NULL,
+		(SetListFunc) g_mime_message_add_recipients_from_string, FUNC_IA
+	}, {
+		"Date", (GetFunc) g_mime_message_get_date_string, NULL, NULL,
+		local_mime_message_set_date_from_string, NULL, FUNC_CHARFREEPTR
+	},
 #else
 	{
-	"To", NULL, local_message_get_recipients_to, NULL, NULL, local_message_add_recipients_from_string_to, FUNC_IA}, {
-	"Cc", NULL, local_message_get_recipients_cc, NULL, NULL, local_message_add_recipients_from_string_cc, FUNC_IA}, {
-	"Bcc", NULL, local_message_get_recipients_bcc, NULL, NULL, local_message_add_recipients_from_string_bcc, FUNC_IA}, {
-	"Date", (GetFunc)g_mime_message_get_date_as_string, NULL, NULL, local_mime_message_set_date_from_string, NULL, FUNC_CHARFREEPTR},
+		"To", NULL, local_message_get_recipients_to, NULL, NULL,
+		local_message_add_recipients_from_string_to, FUNC_IA
+	}, {
+		"Cc", NULL, local_message_get_recipients_cc, NULL, NULL,
+		local_message_add_recipients_from_string_cc, FUNC_IA
+	}, {
+		"Bcc", NULL, local_message_get_recipients_bcc, NULL, NULL,
+		local_message_add_recipients_from_string_bcc, FUNC_IA
+	}, {
+		"Date", (GetFunc)g_mime_message_get_date_as_string, NULL, NULL,
+		local_mime_message_set_date_from_string, NULL, FUNC_CHARFREEPTR
+	},
 #endif
 	{
-	"Subject", g_mime_message_get_subject, NULL, NULL, g_mime_message_set_subject, NULL, FUNC_CHARPTR}, {
-	"Message-Id", g_mime_message_get_message_id, NULL, NULL, g_mime_message_set_message_id, NULL, FUNC_CHARPTR},
+		"Subject", g_mime_message_get_subject, NULL, NULL,
+		g_mime_message_set_subject, NULL, FUNC_CHARPTR
+	}, {
+		"Message-Id", g_mime_message_get_message_id, NULL, NULL,
+		g_mime_message_set_message_id, NULL, FUNC_CHARPTR
+	},
 #ifndef GMIME24
 	{
-	NULL, NULL, NULL, local_message_get_header, NULL, g_mime_message_add_header, FUNC_LIST}
+		NULL, NULL, NULL, local_message_get_header, NULL,
+		g_mime_message_add_header, FUNC_LIST
+	}
 #else
 	{
-	NULL, NULL, NULL, local_message_get_header, NULL, (SetListFunc)g_mime_object_append_header, FUNC_LIST}
+		NULL, NULL, NULL, local_message_get_header, NULL,
+		(SetListFunc)g_mime_object_append_header, FUNC_LIST
+	}
 #endif
 };
 
 /**
-* message_set_header: set header of any type excluding special (Content- and MIME-Version:)
-**/
+ * message_set_header: set header of any type excluding special (Content- and MIME-Version:)
+ **/
 void
-message_set_header (GMimeMessage * message, const gchar *field, const gchar *value)
+message_set_header (GMimeMessage * message,
+	const gchar *field,
+	const gchar *value)
 {
-	gint                            i;
+	gint i;
 
-	if (!g_ascii_strcasecmp (field, "MIME-Version:") || !g_ascii_strncasecmp (field, "Content-", 8)) {
+	if (!g_ascii_strcasecmp (field,
+		"MIME-Version:") || !g_ascii_strncasecmp (field, "Content-", 8)) {
 		return;
 	}
 	for (i = 0; i <= HEADER_UNKNOWN; ++i) {
-		if (!fieldfunc[i].name || !g_ascii_strncasecmp (field, fieldfunc[i].name, strlen (fieldfunc[i].name))) {
+		if (!fieldfunc[i].name ||
+			!g_ascii_strncasecmp (field, fieldfunc[i].name,
+			strlen (fieldfunc[i].name))) {
 			switch (fieldfunc[i].functype) {
 			case FUNC_CHARPTR:
-				(*(fieldfunc[i].setfunc)) (message, value);
+				(*(fieldfunc[i].setfunc))(message, value);
 				break;
 			case FUNC_IA:
-				(*(fieldfunc[i].setlfunc)) (message, fieldfunc[i].name, value);
+				(*(fieldfunc[i].setlfunc))(message, fieldfunc[i].name, value);
 				break;
 			case FUNC_LIST:
-				(*(fieldfunc[i].setlfunc)) (message, field, value);
+				(*(fieldfunc[i].setlfunc))(message, field, value);
 				break;
 			}
 			break;
@@ -1662,37 +1868,45 @@ message_set_header (GMimeMessage * message, const gchar *field, const gchar *val
 
 
 /**
-* message_get_header: returns the list of 'any header' values
-* (except of unsupported yet Content- and MIME-Version special headers)
-*
-* You should free the GList list by yourself.
-**/
-GList                          *
-message_get_header (rspamd_mempool_t * pool, GMimeMessage * message, const gchar *field, gboolean strong)
+ * message_get_header: returns the list of 'any header' values
+ * (except of unsupported yet Content- and MIME-Version special headers)
+ *
+ * You should free the GList list by yourself.
+ **/
+GList *
+message_get_header (rspamd_mempool_t * pool,
+	GMimeMessage * message,
+	const gchar *field,
+	gboolean strong)
 {
-	gint                            i;
-	gchar                           *ret = NULL, *ia_string;
-	GList                          *gret = NULL;
-	InternetAddressList            *ia_list = NULL, *ia;
+	gint i;
+	gchar *ret = NULL, *ia_string;
+	GList *gret = NULL;
+	InternetAddressList *ia_list = NULL, *ia;
 
 	for (i = 0; i <= HEADER_UNKNOWN; ++i) {
-		if (!fieldfunc[i].name || !g_ascii_strncasecmp (field, fieldfunc[i].name, strlen (fieldfunc[i].name))) {
+		if (!fieldfunc[i].name ||
+			!g_ascii_strncasecmp (field, fieldfunc[i].name,
+			strlen (fieldfunc[i].name))) {
 			switch (fieldfunc[i].functype) {
 			case FUNC_CHARFREEPTR:
-				ret = (gchar *)(*(fieldfunc[i].func)) (message);
+				ret = (gchar *)(*(fieldfunc[i].func))(message);
 				break;
 			case FUNC_CHARPTR:
-				ret = (gchar *)(*(fieldfunc[i].func)) (message);
+				ret = (gchar *)(*(fieldfunc[i].func))(message);
 				break;
 			case FUNC_IA:
-				ia_list = (*(fieldfunc[i].rcptfunc)) (message, field);
+				ia_list = (*(fieldfunc[i].rcptfunc))(message, field);
 				ia = ia_list;
 #ifndef GMIME24
 				while (ia && ia->address) {
 
-					ia_string = internet_address_to_string ((InternetAddress *) ia->address, FALSE);
+					ia_string = internet_address_to_string (
+						(InternetAddress *) ia->address,
+						FALSE);
 					if (pool != NULL) {
-						rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) g_free, ia_string);
+						rspamd_mempool_add_destructor (pool,
+							(rspamd_mempool_destruct_t) g_free, ia_string);
 					}
 					gret = g_list_prepend (gret, ia_string);
 					ia = ia->next;
@@ -1700,16 +1914,21 @@ message_get_header (rspamd_mempool_t * pool, GMimeMessage * message, const gchar
 #else
 				i = internet_address_list_length (ia);
 				while (--i >= 0) {
-					ia_string = internet_address_to_string (internet_address_list_get_address (ia, i), FALSE);
+					ia_string = internet_address_to_string (internet_address_list_get_address (
+								ia,
+								i),
+							FALSE);
 					if (pool != NULL) {
-						rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) g_free, ia_string);
+						rspamd_mempool_add_destructor (pool,
+							(rspamd_mempool_destruct_t) g_free, ia_string);
 					}
 					gret = g_list_prepend (gret, ia_string);
 				}
 #endif
 				break;
 			case FUNC_LIST:
-				gret = (*(fieldfunc[i].getlistfunc)) (pool, message, field, strong);
+				gret =
+					(*(fieldfunc[i].getlistfunc))(pool, message, field, strong);
 				break;
 			}
 			break;
@@ -1730,11 +1949,13 @@ message_get_header (rspamd_mempool_t * pool, GMimeMessage * message, const gchar
 	return gret;
 }
 
-GList*
-message_get_raw_header (struct rspamd_task *task, const gchar *field, gboolean strong)
+GList *
+message_get_raw_header (struct rspamd_task *task,
+	const gchar *field,
+	gboolean strong)
 {
-	GList                               *gret = NULL;
-	struct raw_header                   *rh;
+	GList *gret = NULL;
+	struct raw_header *rh;
 
 	rh = g_hash_table_lookup (task->raw_headers, field);
 
@@ -1757,7 +1978,8 @@ message_get_raw_header (struct rspamd_task *task, const gchar *field, gboolean s
 	}
 
 	if (gret != NULL) {
-		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t)g_list_free, gret);
+		rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t)g_list_free, gret);
 	}
 
 	return gret;

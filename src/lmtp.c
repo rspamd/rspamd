@@ -32,21 +32,21 @@
 #include "url.h"
 #include "message.h"
 
-static gchar                     greetingbuf[1024];
-static struct timeval           io_tv;
+static gchar greetingbuf[1024];
+static struct timeval io_tv;
 
-static gboolean                 lmtp_write_socket (void *arg);
+static gboolean lmtp_write_socket (void *arg);
 
 void start_lmtp (struct rspamd_worker *worker);
 
 worker_t lmtp_worker = {
-	"controller",				/* Name */
-	NULL,						/* Init function */
-	start_lmtp,					/* Start function */
-	TRUE,						/* Has socket */
-	FALSE,						/* Non unique */
-	FALSE,						/* Non threaded */
-	TRUE						/* Killable */
+	"controller",               /* Name */
+	NULL,                       /* Init function */
+	start_lmtp,                 /* Start function */
+	TRUE,                       /* Has socket */
+	FALSE,                      /* Non unique */
+	FALSE,                      /* Non threaded */
+	TRUE                        /* Killable */
 };
 
 #ifndef HAVE_SA_SIGINFO
@@ -71,15 +71,16 @@ sig_handler (gint signo, siginfo_t *info, void *unused)
 static void
 sigusr2_handler (gint fd, short what, void *arg)
 {
-	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
+	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
 	/* Do not accept new connections, preparing to end worker's process */
-	struct timeval                  tv;
+	struct timeval tv;
 	tv.tv_sec = SOFT_SHUTDOWN_TIME;
 	tv.tv_usec = 0;
 	event_del (&worker->sig_ev_usr1);
 	event_del (&worker->sig_ev_usr2);
 	event_del (&worker->bind_ev);
-	msg_info ("lmtp worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
+	msg_info ("lmtp worker's shutdown is pending in %d sec",
+		SOFT_SHUTDOWN_TIME);
 	event_loopexit (&tv);
 	return;
 }
@@ -90,7 +91,7 @@ sigusr2_handler (gint fd, short what, void *arg)
 static void
 sigusr1_handler (gint fd, short what, void *arg)
 {
-	struct rspamd_worker           *worker = (struct rspamd_worker *) arg;
+	struct rspamd_worker *worker = (struct rspamd_worker *) arg;
 
 	reopen_log (worker->srv->logger);
 
@@ -103,7 +104,7 @@ sigusr1_handler (gint fd, short what, void *arg)
 static void
 rcpt_destruct (void *pointer)
 {
-	struct rspamd_task             *task = (struct rspamd_task *)pointer;
+	struct rspamd_task *task = (struct rspamd_task *)pointer;
 
 	if (task->rcpt) {
 		g_list_free (task->rcpt);
@@ -116,9 +117,9 @@ rcpt_destruct (void *pointer)
 static void
 free_lmtp_task (struct rspamd_lmtp_proto *lmtp, gboolean is_soft)
 {
-	GList                          *part;
-	struct mime_part               *p;
-	struct rspamd_task             *task = lmtp->task;
+	GList *part;
+	struct mime_part *p;
+	struct rspamd_task *task = lmtp->task;
 
 	if (lmtp) {
 		debug_task ("free pointer %p", lmtp->task);
@@ -145,12 +146,12 @@ free_lmtp_task (struct rspamd_lmtp_proto *lmtp, gboolean is_soft)
 /*
  * Callback that is called when there is data to read in buffer
  */
-static                          gboolean
+static gboolean
 lmtp_read_socket (f_str_t * in, void *arg)
 {
-	struct rspamd_lmtp_proto       *lmtp = (struct rspamd_lmtp_proto *)arg;
-	struct rspamd_task             *task = lmtp->task;
-	ssize_t                         r;
+	struct rspamd_lmtp_proto *lmtp = (struct rspamd_lmtp_proto *)arg;
+	struct rspamd_task *task = lmtp->task;
+	ssize_t r;
 
 	switch (task->state) {
 	case READ_COMMAND:
@@ -181,7 +182,8 @@ lmtp_read_socket (f_str_t * in, void *arg)
 		}
 		break;
 	default:
-		debug_task ("invalid state while reading from socket %d", lmtp->task->state);
+		debug_task ("invalid state while reading from socket %d",
+			lmtp->task->state);
 		break;
 	}
 
@@ -191,11 +193,11 @@ lmtp_read_socket (f_str_t * in, void *arg)
 /*
  * Callback for socket writing
  */
-static                          gboolean
+static gboolean
 lmtp_write_socket (void *arg)
 {
-	struct rspamd_lmtp_proto       *lmtp = (struct rspamd_lmtp_proto *)arg;
-	struct rspamd_task             *task = lmtp->task;
+	struct rspamd_lmtp_proto *lmtp = (struct rspamd_lmtp_proto *)arg;
+	struct rspamd_task *task = lmtp->task;
 
 	switch (lmtp->task->state) {
 	case WRITE_REPLY:
@@ -216,7 +218,8 @@ lmtp_write_socket (void *arg)
 		return FALSE;
 		break;
 	default:
-		debug_task ("invalid state while writing to socket %d", lmtp->task->state);
+		debug_task ("invalid state while writing to socket %d",
+			lmtp->task->state);
 		break;
 	}
 
@@ -229,7 +232,7 @@ lmtp_write_socket (void *arg)
 static void
 lmtp_err_socket (GError * err, void *arg)
 {
-	struct rspamd_lmtp_proto       *lmtp = (struct rspamd_lmtp_proto *)arg;
+	struct rspamd_lmtp_proto *lmtp = (struct rspamd_lmtp_proto *)arg;
 	msg_info ("abnormally closing connection, error: %s", err->message);
 	/* Free buffers */
 	free_lmtp_task (lmtp, FALSE);
@@ -241,14 +244,15 @@ lmtp_err_socket (GError * err, void *arg)
 static void
 accept_socket (gint fd, short what, void *arg)
 {
-	struct rspamd_worker           *worker = (struct rspamd_worker *)arg;
-	union sa_union                  su;
-	struct rspamd_task             *new_task;
-	struct rspamd_lmtp_proto       *lmtp;
-	socklen_t                       addrlen = sizeof (su.ss);
-	gint                            nfd;
+	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
+	union sa_union su;
+	struct rspamd_task *new_task;
+	struct rspamd_lmtp_proto *lmtp;
+	socklen_t addrlen = sizeof (su.ss);
+	gint nfd;
 
-	if ((nfd = accept_from_socket (fd, (struct sockaddr *)&su.ss, &addrlen)) == -1) {
+	if ((nfd =
+		accept_from_socket (fd, (struct sockaddr *)&su.ss, &addrlen)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
 		return;
 	}
@@ -262,26 +266,38 @@ accept_socket (gint fd, short what, void *arg)
 		new_task->client_addr.s_addr = INADDR_NONE;
 	}
 	else if (su.ss.ss_family == AF_INET) {
-		msg_info ("accepted connection from %s port %d", inet_ntoa (su.s4.sin_addr), ntohs (su.s4.sin_port));
-		memcpy (&new_task->client_addr, &su.s4.sin_addr, sizeof (struct in_addr));
+		msg_info ("accepted connection from %s port %d",
+			inet_ntoa (su.s4.sin_addr), ntohs (su.s4.sin_port));
+		memcpy (&new_task->client_addr, &su.s4.sin_addr,
+			sizeof (struct in_addr));
 	}
 
 	new_task->sock = nfd;
 	new_task->cfg = worker->srv->cfg;
 	new_task->task_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	/* Add destructor for recipients list (it would be better to use anonymous function here */
-	rspamd_mempool_add_destructor (new_task->task_pool, (rspamd_mempool_destruct_t) rcpt_destruct, new_task);
+	rspamd_mempool_add_destructor (new_task->task_pool,
+		(rspamd_mempool_destruct_t) rcpt_destruct,		  new_task);
 	new_task->results = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	new_task->ev_base = worker->ctx;
-	rspamd_mempool_add_destructor (new_task->task_pool, (rspamd_mempool_destruct_t) g_hash_table_destroy, new_task->results);
+	rspamd_mempool_add_destructor (new_task->task_pool,
+		(rspamd_mempool_destruct_t) g_hash_table_destroy, new_task->results);
 	worker->srv->stat->connections_count++;
 	lmtp->task = new_task;
 	lmtp->state = LMTP_READ_LHLO;
 
 	/* Set up dispatcher */
-	new_task->dispatcher = rspamd_create_dispatcher (new_task->ev_base, nfd, BUFFER_LINE, lmtp_read_socket, lmtp_write_socket, lmtp_err_socket, &io_tv, (void *)lmtp);
+	new_task->dispatcher = rspamd_create_dispatcher (new_task->ev_base,
+			nfd,
+			BUFFER_LINE,
+			lmtp_read_socket,
+			lmtp_write_socket,
+			lmtp_err_socket,
+			&io_tv,
+			(void *)lmtp);
 	new_task->dispatcher->peer_addr = new_task->client_addr.s_addr;
-	if (! rspamd_dispatcher_write (lmtp->task->dispatcher, greetingbuf, strlen (greetingbuf), FALSE, FALSE)) {
+	if (!rspamd_dispatcher_write (lmtp->task->dispatcher, greetingbuf,
+		strlen (greetingbuf), FALSE, FALSE)) {
 		msg_warn ("cannot write greeting");
 	}
 }
@@ -292,10 +308,10 @@ accept_socket (gint fd, short what, void *arg)
 void
 start_lmtp (struct rspamd_worker *worker)
 {
-	struct sigaction                signals;
-	gchar                          *hostbuf;
-	gsize                           hostmax;
-	module_t					  **mod;
+	struct sigaction signals;
+	gchar *hostbuf;
+	gsize hostmax;
+	module_t **mod;
 
 	worker->srv->pid = getpid ();
 	worker->ctx = event_init ();
@@ -305,17 +321,23 @@ start_lmtp (struct rspamd_worker *worker)
 	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 
 	/* SIGUSR2 handler */
-	signal_set (&worker->sig_ev_usr2, SIGUSR2, sigusr2_handler, (void *) worker);
+	signal_set (&worker->sig_ev_usr2, SIGUSR2, sigusr2_handler,
+		(void *) worker);
 	event_base_set (worker->ctx, &worker->sig_ev_usr2);
 	signal_add (&worker->sig_ev_usr2, NULL);
 
 	/* SIGUSR1 handler */
-	signal_set (&worker->sig_ev_usr1, SIGUSR1, sigusr1_handler, (void *) worker);
+	signal_set (&worker->sig_ev_usr1, SIGUSR1, sigusr1_handler,
+		(void *) worker);
 	event_base_set (worker->ctx, &worker->sig_ev_usr1);
 	signal_add (&worker->sig_ev_usr1, NULL);
 
 	/* Accept event */
-	event_set (&worker->bind_ev, worker->cf->listen_sock, EV_READ | EV_PERSIST, accept_socket, (void *)worker);
+	event_set (&worker->bind_ev,
+		worker->cf->listen_sock,
+		EV_READ | EV_PERSIST,
+		accept_socket,
+		(void *)worker);
 	event_base_set (worker->ctx, &worker->bind_ev);
 	event_add (&worker->bind_ev, NULL);
 
@@ -323,7 +345,7 @@ start_lmtp (struct rspamd_worker *worker)
 	mod = &modules[0];
 	while (*mod) {
 		(*mod)->module_config_func (worker->srv->cfg);
-		mod ++;
+		mod++;
 	}
 
 	/* Fill hostname buf */
@@ -331,7 +353,12 @@ start_lmtp (struct rspamd_worker *worker)
 	hostbuf = alloca (hostmax);
 	gethostname (hostbuf, hostmax);
 	hostbuf[hostmax - 1] = '\0';
-	rspamd_snprintf (greetingbuf, sizeof (greetingbuf), "%d rspamd version %s LMTP on %s Ready\r\n", LMTP_OK, RVERSION, hostbuf);
+	rspamd_snprintf (greetingbuf,
+		sizeof (greetingbuf),
+		"%d rspamd version %s LMTP on %s Ready\r\n",
+		LMTP_OK,
+		RVERSION,
+		hostbuf);
 
 	io_tv.tv_sec = 60000;
 	io_tv.tv_usec = 0;
@@ -342,6 +369,6 @@ start_lmtp (struct rspamd_worker *worker)
 	exit (EXIT_SUCCESS);
 }
 
-/* 
- * vi:ts=4 
+/*
+ * vi:ts=4
  */

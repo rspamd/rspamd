@@ -78,7 +78,7 @@ gboolean resolve_spf (struct rspamd_task *task, spf_cb_t callback);
 /*
  * Get a domain for spf for specified task
  */
-gchar *get_spf_domain (struct rspamd_task *task);
+gchar * get_spf_domain (struct rspamd_task *task);
 
 
 #endif

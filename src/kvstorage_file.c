@@ -40,14 +40,14 @@ struct file_op {
 
 /* Main file structure */
 struct rspamd_file_backend {
-	backend_init init_func;						/*< this callback is called on kv storage initialization */
-	backend_insert insert_func;					/*< this callback is called when element is inserted */
-	backend_replace replace_func;				/*< this callback is called when element is replaced */
-	backend_lookup lookup_func;					/*< this callback is used for lookup of element */
-	backend_delete delete_func;					/*< this callback is called when an element is deleted */
-	backend_sync sync_func;						/*< this callback is called when backend need to be synced */
-	backend_incref incref_func;					/*< this callback is called when element must be ref'd */
-	backend_destroy destroy_func;				/*< this callback is used for destroying all elements inside backend */
+	backend_init init_func;                     /*< this callback is called on kv storage initialization */
+	backend_insert insert_func;                 /*< this callback is called when element is inserted */
+	backend_replace replace_func;               /*< this callback is called when element is replaced */
+	backend_lookup lookup_func;                 /*< this callback is used for lookup of element */
+	backend_delete delete_func;                 /*< this callback is called when an element is deleted */
+	backend_sync sync_func;                     /*< this callback is called when backend need to be synced */
+	backend_incref incref_func;                 /*< this callback is called when element must be ref'd */
+	backend_destroy destroy_func;               /*< this callback is used for destroying all elements inside backend */
 	gchar *filename;
 	gchar *dirname;
 	guint dirlen;
@@ -60,15 +60,21 @@ struct rspamd_file_backend {
 	gboolean initialized;
 };
 
-static const gchar hexdigits[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+static const gchar hexdigits[] =
+{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e',
+	 'f'};
 
 /* Generate file name for operation */
 static gboolean
-get_file_name (struct rspamd_file_backend *db, gchar *key, guint keylen, gchar *filebuf, guint buflen)
+get_file_name (struct rspamd_file_backend *db,
+	gchar *key,
+	guint keylen,
+	gchar *filebuf,
+	guint buflen)
 {
-	gchar										*p = filebuf, *end = filebuf + buflen,
-												*k = key, t;
-	guint										 i;
+	gchar *p = filebuf, *end = filebuf + buflen,
+	*k = key, t;
+	guint i;
 
 	/* First copy backend dirname to file buf */
 	if (buflen <= db->dirlen) {
@@ -77,7 +83,7 @@ get_file_name (struct rspamd_file_backend *db, gchar *key, guint keylen, gchar *
 	memcpy (p, db->dirname, db->dirlen);
 	p += db->dirlen;
 	*p++ = G_DIR_SEPARATOR;
-	for (i = 0; i < MIN (keylen, db->levels); i ++) {
+	for (i = 0; i < MIN (keylen, db->levels); i++) {
 		if (p == end) {
 			/* Filebuf is not large enough */
 			return FALSE;
@@ -85,7 +91,7 @@ get_file_name (struct rspamd_file_backend *db, gchar *key, guint keylen, gchar *
 		t = *k;
 		*p++ = hexdigits[(t & 0xf) ^ ((t & 0xf0) >> 4)];
 		*p++ = G_DIR_SEPARATOR;
-		k ++;
+		k++;
 	}
 	/* Now we have directory, append base64 encoded filename */
 	k = key;
@@ -99,7 +105,7 @@ get_file_name (struct rspamd_file_backend *db, gchar *key, guint keylen, gchar *
 		t = *k;
 		*p++ = hexdigits[(t >> 4) & 0xf];
 		*p++ = hexdigits[t & 0xf];
-		k ++;
+		k++;
 	}
 	*p = '\0';
 
@@ -110,7 +116,7 @@ get_file_name (struct rspamd_file_backend *db, gchar *key, guint keylen, gchar *
 static guint32
 file_get_ref (gint fd)
 {
-	guint32										 target;
+	guint32 target;
 
 	if (read (fd, &target, sizeof (guint32)) != sizeof (guint32)) {
 		return 0;
@@ -136,12 +142,12 @@ file_set_ref (gint fd, guint32 ref)
 static gint
 file_open_fd (const gchar *path, gsize *len, gint flags)
 {
-	gint										 fd;
-	struct stat									 st;
+	gint fd;
+	struct stat st;
 
 	if ((flags & O_CREAT) != 0) {
 		/* Open file */
-		if ((fd = open (path, flags, S_IRUSR|S_IWUSR|S_IRGRP)) != -1) {
+		if ((fd = open (path, flags, S_IRUSR | S_IWUSR | S_IRGRP)) != -1) {
 			rspamd_fallocate (fd, 0, *len);
 #ifdef HAVE_FADVISE
 			posix_fadvise (fd, 0, *len, POSIX_FADV_SEQUENTIAL);
@@ -170,16 +176,19 @@ file_open_fd (const gchar *path, gsize *len, gint flags)
 
 /* Process single file operation */
 static gboolean
-file_process_single_op (struct rspamd_file_backend *db, struct file_op *op, gint *pfd)
+file_process_single_op (struct rspamd_file_backend *db,
+	struct file_op *op,
+	gint *pfd)
 {
-	gchar										 filebuf[PATH_MAX];
-	gint										 fd;
-	gsize										 len;
-	struct iovec								 iov[2];
-	guint32										 ref;
+	gchar filebuf[PATH_MAX];
+	gint fd;
+	gsize len;
+	struct iovec iov[2];
+	guint32 ref;
 
 	/* Get filename */
-	if (!get_file_name (db, ELT_KEY (op->elt), op->elt->keylen, filebuf, sizeof (filebuf))) {
+	if (!get_file_name (db, ELT_KEY (op->elt), op->elt->keylen, filebuf,
+		sizeof (filebuf))) {
 		return FALSE;
 	}
 
@@ -205,7 +214,7 @@ file_process_single_op (struct rspamd_file_backend *db, struct file_op *op, gint
 			else {
 				/* Decrease ref */
 				lseek (fd, 0, SEEK_SET);
-				if (! file_set_ref (fd, --ref)) {
+				if (!file_set_ref (fd, --ref)) {
 					*pfd = fd;
 					return FALSE;
 				}
@@ -217,7 +226,8 @@ file_process_single_op (struct rspamd_file_backend *db, struct file_op *op, gint
 		}
 	}
 	else {
-		if ((fd = file_open_fd (filebuf, &len, O_CREAT|O_WRONLY|O_TRUNC)) == -1) {
+		if ((fd =
+			file_open_fd (filebuf, &len, O_CREAT | O_WRONLY | O_TRUNC)) == -1) {
 			*pfd = -1;
 			return FALSE;
 		}
@@ -249,9 +259,9 @@ file_process_single_op (struct rspamd_file_backend *db, struct file_op *op, gint
 static void
 file_sync_fds (gint *fds, gint len, gboolean do_fsync)
 {
-	gint										 i, fd;
+	gint i, fd;
 
-	for (i = 0; i < len; i ++) {
+	for (i = 0; i < len; i++) {
 		fd = fds[i];
 		if (fd != -1) {
 			if (do_fsync) {
@@ -270,10 +280,10 @@ file_sync_fds (gint *fds, gint len, gboolean do_fsync)
 static gboolean
 file_process_queue (struct rspamd_kv_backend *backend)
 {
-	struct rspamd_file_backend					*db = (struct rspamd_file_backend *)backend;
-	struct file_op								*op;
-	GList										*cur;
-	gint										*fds, i = 0, len;
+	struct rspamd_file_backend *db = (struct rspamd_file_backend *)backend;
+	struct file_op *op;
+	GList *cur;
+	gint *fds, i = 0, len;
 
 	len = g_queue_get_length (db->ops_queue);
 	if (len == 0) {
@@ -285,12 +295,12 @@ file_process_queue (struct rspamd_kv_backend *backend)
 	cur = db->ops_queue->head;
 	while (cur) {
 		op = cur->data;
-		if (! file_process_single_op (db, op, &fds[i])) {
+		if (!file_process_single_op (db, op, &fds[i])) {
 			file_sync_fds (fds, i, db->do_fsync);
 			g_slice_free1 (len * sizeof (gint), fds);
 			return FALSE;
 		}
-		i ++;
+		i++;
 		cur = g_list_next (cur);
 	}
 
@@ -302,8 +312,9 @@ file_process_queue (struct rspamd_kv_backend *backend)
 	cur = db->ops_queue->head;
 	while (cur) {
 		op = cur->data;
-		if (op->op == FILE_OP_DELETE || ((op->elt->flags & KV_ELT_NEED_FREE) != 0 &&
-				(op->elt->flags & KV_ELT_NEED_INSERT) == 0)) {
+		if (op->op == FILE_OP_DELETE ||
+			((op->elt->flags & KV_ELT_NEED_FREE) != 0 &&
+			(op->elt->flags & KV_ELT_NEED_INSERT) == 0)) {
 			/* Also clean memory */
 			g_slice_free1 (ELT_SIZE (op->elt), op->elt);
 		}
@@ -326,16 +337,17 @@ file_process_queue (struct rspamd_kv_backend *backend)
 static gboolean
 rspamd_recursive_mkdir (guint levels)
 {
-	guint									i;
-	gchar									nbuf[5];
+	guint i;
+	gchar nbuf[5];
 
 	/* Create directories for backend */
 	if (levels > 0) {
 		/* Create 16 directories */
-		for (i = 0; i < 16; i ++) {
+		for (i = 0; i < 16; i++) {
 			rspamd_snprintf (nbuf, sizeof (nbuf), "./%c", hexdigits[i]);
 			if (mkdir (nbuf, 0755) != 0 && errno != EEXIST) {
-				msg_info ("cannot create directory %s: %s", nbuf, strerror (errno));
+				msg_info ("cannot create directory %s: %s", nbuf,
+					strerror (errno));
 				return FALSE;
 			}
 			else if (levels > 1) {
@@ -343,7 +355,7 @@ rspamd_recursive_mkdir (guint levels)
 					msg_err ("chdir to %s failed: %s", nbuf, strerror (errno));
 					return FALSE;
 				}
-				if (! rspamd_recursive_mkdir (levels - 1)) {
+				if (!rspamd_recursive_mkdir (levels - 1)) {
 					return FALSE;
 				}
 				if (chdir ("../") == -1) {
@@ -361,8 +373,8 @@ rspamd_recursive_mkdir (guint levels)
 static void
 rspamd_file_init (struct rspamd_kv_backend *backend)
 {
-	struct rspamd_file_backend				*db = (struct rspamd_file_backend *)backend;
-	gchar									 pathbuf[PATH_MAX];
+	struct rspamd_file_backend *db = (struct rspamd_file_backend *)backend;
+	gchar pathbuf[PATH_MAX];
 
 	/* Save current directory */
 	if (getcwd (pathbuf, sizeof (pathbuf) - 1) == NULL) {
@@ -397,11 +409,14 @@ err:
 }
 
 static gboolean
-rspamd_file_insert (struct rspamd_kv_backend *backend, gpointer key, guint keylen, struct rspamd_kv_element *elt)
+rspamd_file_insert (struct rspamd_kv_backend *backend,
+	gpointer key,
+	guint keylen,
+	struct rspamd_kv_element *elt)
 {
-	struct rspamd_file_backend					*db = (struct rspamd_file_backend *)backend;
-	struct file_op								*op;
-	struct rspamd_kv_element			 		 search_elt;
+	struct rspamd_file_backend *db = (struct rspamd_file_backend *)backend;
+	struct file_op *op;
+	struct rspamd_kv_element search_elt;
 
 	search_elt.keylen = keylen;
 	search_elt.p = key;
@@ -412,13 +427,14 @@ rspamd_file_insert (struct rspamd_kv_backend *backend, gpointer key, guint keyle
 
 	if ((op = g_hash_table_lookup (db->ops_hash, &search_elt)) != NULL) {
 		/* We found another op with such key in this queue */
-		if (op->op == FILE_OP_DELETE || (op->elt->flags & KV_ELT_NEED_FREE) != 0) {
+		if (op->op == FILE_OP_DELETE || (op->elt->flags & KV_ELT_NEED_FREE) !=
+			0) {
 			/* Also clean memory */
 			g_hash_table_steal (db->ops_hash, &search_elt);
 			g_slice_free1 (ELT_SIZE (op->elt), op->elt);
 		}
 		op->op = FILE_OP_INSERT;
-		op->ref ++;
+		op->ref++;
 		op->elt = elt;
 		elt->flags |= KV_ELT_DIRTY;
 		g_hash_table_insert (db->ops_hash, elt, op);
@@ -434,7 +450,8 @@ rspamd_file_insert (struct rspamd_kv_backend *backend, gpointer key, guint keyle
 		g_hash_table_insert (db->ops_hash, elt, op);
 	}
 
-	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >= db->sync_ops) {
+	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >=
+		db->sync_ops) {
 		return file_process_queue (backend);
 	}
 
@@ -442,11 +459,14 @@ rspamd_file_insert (struct rspamd_kv_backend *backend, gpointer key, guint keyle
 }
 
 static gboolean
-rspamd_file_replace (struct rspamd_kv_backend *backend, gpointer key, guint keylen, struct rspamd_kv_element *elt)
+rspamd_file_replace (struct rspamd_kv_backend *backend,
+	gpointer key,
+	guint keylen,
+	struct rspamd_kv_element *elt)
 {
-	struct rspamd_file_backend					*db = (struct rspamd_file_backend *)backend;
-	struct file_op								*op;
-	struct rspamd_kv_element			 		 search_elt;
+	struct rspamd_file_backend *db = (struct rspamd_file_backend *)backend;
+	struct file_op *op;
+	struct rspamd_kv_element search_elt;
 
 	search_elt.keylen = keylen;
 	search_elt.p = key;
@@ -456,7 +476,8 @@ rspamd_file_replace (struct rspamd_kv_backend *backend, gpointer key, guint keyl
 	}
 	if ((op = g_hash_table_lookup (db->ops_hash, &search_elt)) != NULL) {
 		/* We found another op with such key in this queue */
-		if (op->op == FILE_OP_DELETE || (op->elt->flags & KV_ELT_NEED_FREE) != 0) {
+		if (op->op == FILE_OP_DELETE || (op->elt->flags & KV_ELT_NEED_FREE) !=
+			0) {
 			/* Also clean memory */
 			g_hash_table_steal (db->ops_hash, &search_elt);
 			g_slice_free1 (ELT_SIZE (op->elt), op->elt);
@@ -477,23 +498,26 @@ rspamd_file_replace (struct rspamd_kv_backend *backend, gpointer key, guint keyl
 		g_hash_table_insert (db->ops_hash, elt, op);
 	}
 
-	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >= db->sync_ops) {
+	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >=
+		db->sync_ops) {
 		return file_process_queue (backend);
 	}
 
 	return TRUE;
 }
 
-static struct rspamd_kv_element*
-rspamd_file_lookup (struct rspamd_kv_backend *backend, gpointer key, guint keylen)
+static struct rspamd_kv_element *
+rspamd_file_lookup (struct rspamd_kv_backend *backend,
+	gpointer key,
+	guint keylen)
 {
-	struct rspamd_file_backend					*db = (struct rspamd_file_backend *)backend;
-	struct file_op								*op;
-	struct rspamd_kv_element					*elt = NULL;
-	gchar										 filebuf[PATH_MAX];
-	gint										 fd;
-	struct rspamd_kv_element			 		 search_elt;
-	gsize										 len;
+	struct rspamd_file_backend *db = (struct rspamd_file_backend *)backend;
+	struct file_op *op;
+	struct rspamd_kv_element *elt = NULL;
+	gchar filebuf[PATH_MAX];
+	gint fd;
+	struct rspamd_kv_element search_elt;
+	gsize len;
 
 	search_elt.keylen = keylen;
 	search_elt.p = key;
@@ -533,21 +557,23 @@ rspamd_file_lookup (struct rspamd_kv_backend *backend, gpointer key, guint keyle
 
 	close (fd);
 
-	elt->flags &= ~(KV_ELT_DIRTY|KV_ELT_NEED_FREE);
+	elt->flags &= ~(KV_ELT_DIRTY | KV_ELT_NEED_FREE);
 
 	return elt;
 }
 
 static void
-rspamd_file_delete (struct rspamd_kv_backend *backend, gpointer key, guint keylen)
+rspamd_file_delete (struct rspamd_kv_backend *backend,
+	gpointer key,
+	guint keylen)
 {
-	struct rspamd_file_backend					*db = (struct rspamd_file_backend *)backend;
-	gchar										 filebuf[PATH_MAX];
-	struct rspamd_kv_element			 		 search_elt;
-	struct file_op								*op;
-	gsize										 len;
-	gint										 fd;
-	guint32										 ref;
+	struct rspamd_file_backend *db = (struct rspamd_file_backend *)backend;
+	gchar filebuf[PATH_MAX];
+	struct rspamd_kv_element search_elt;
+	struct file_op *op;
+	gsize len;
+	gint fd;
+	guint32 ref;
 
 	if (!db->initialized) {
 		return;
@@ -559,7 +585,7 @@ rspamd_file_delete (struct rspamd_kv_backend *backend, gpointer key, guint keyle
 	if ((op = g_hash_table_lookup (db->ops_hash, &search_elt)) != NULL) {
 		op->op = FILE_OP_DELETE;
 		if (op->ref > 0) {
-			op->ref --;
+			op->ref--;
 		}
 		return;
 	}
@@ -589,15 +615,17 @@ rspamd_file_delete (struct rspamd_kv_backend *backend, gpointer key, guint keyle
 }
 
 static gboolean
-rspamd_file_incref (struct rspamd_kv_backend *backend, gpointer key, guint keylen)
+rspamd_file_incref (struct rspamd_kv_backend *backend,
+	gpointer key,
+	guint keylen)
 {
-	struct rspamd_file_backend					*db = (struct rspamd_file_backend *)backend;
-	gchar										 filebuf[PATH_MAX];
-	struct rspamd_kv_element			 		 search_elt;
-	struct file_op								*op;
-	gsize										 len;
-	gint										 fd;
-	guint32										 ref;
+	struct rspamd_file_backend *db = (struct rspamd_file_backend *)backend;
+	gchar filebuf[PATH_MAX];
+	struct rspamd_kv_element search_elt;
+	struct file_op *op;
+	gsize len;
+	gint fd;
+	guint32 ref;
 
 	if (!db->initialized) {
 		return FALSE;
@@ -610,7 +638,7 @@ rspamd_file_incref (struct rspamd_kv_backend *backend, gpointer key, guint keyle
 	search_elt.p = key;
 	/* First search in ops queue */
 	if ((op = g_hash_table_lookup (db->ops_hash, &search_elt)) != NULL) {
-		op->ref ++;
+		op->ref++;
 		if (op->op == FILE_OP_DELETE) {
 			op->op = FILE_OP_INSERT;
 		}
@@ -644,7 +672,7 @@ rspamd_file_incref (struct rspamd_kv_backend *backend, gpointer key, guint keyle
 static void
 rspamd_file_destroy (struct rspamd_kv_backend *backend)
 {
-	struct rspamd_file_backend					*db = (struct rspamd_file_backend *)backend;
+	struct rspamd_file_backend *db = (struct rspamd_file_backend *)backend;
 
 	if (db->initialized) {
 		file_process_queue (backend);
@@ -661,11 +689,15 @@ rspamd_file_destroy (struct rspamd_kv_backend *backend)
 
 /* Create new file backend */
 struct rspamd_kv_backend *
-rspamd_kv_file_new (const gchar *filename, guint sync_ops, guint levels, gboolean do_fsync, gboolean do_ref)
+rspamd_kv_file_new (const gchar *filename,
+	guint sync_ops,
+	guint levels,
+	gboolean do_fsync,
+	gboolean do_ref)
 {
-	struct rspamd_file_backend			 		*new;
-	struct stat 								 st;
-	gchar										*dirname;
+	struct rspamd_file_backend *new;
+	struct stat st;
+	gchar *dirname;
 
 	if (filename == NULL) {
 		return NULL;

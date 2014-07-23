@@ -33,51 +33,53 @@
 #define OUTBUFSIZ 1000
 
 /* LMTP commands */
-static f_str_t                  lhlo_command = {
+static f_str_t lhlo_command = {
 	.begin = "LHLO",
 	.len = sizeof ("LHLO") - 1
 };
 
-static f_str_t                  mail_command = {
+static f_str_t mail_command = {
 	.begin = "MAIL FROM:",
 	.len = sizeof ("MAIL FROM:") - 1
 };
 
-static f_str_t                  rcpt_command = {
+static f_str_t rcpt_command = {
 	.begin = "RCPT TO:",
 	.len = sizeof ("RCPT TO:") - 1
 };
 
-static f_str_t                  data_command = {
+static f_str_t data_command = {
 	.begin = "DATA",
 	.len = sizeof ("DATA") - 1
 };
 
-static f_str_t                  data_dot = {
+static f_str_t data_dot = {
 	.begin = ".\r\n",
 	.len = sizeof (".\r\n") - 1
 };
 
-static const gchar              *mail_regexp = "[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?";
-static GRegex                  *mail_re = NULL;
+static const gchar *mail_regexp =
+	"[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?";
+static GRegex *mail_re = NULL;
 
 /*
- * Extract e-mail from read line 
+ * Extract e-mail from read line
  * return <> if no valid address detected
  */
-static gchar                    *
+static gchar *
 extract_mail (rspamd_mempool_t * pool, f_str_t * line)
 {
-	GError                         *err = NULL;
-	gchar                           *match;
-	GMatchInfo                     *info;
+	GError *err = NULL;
+	gchar *match;
+	GMatchInfo *info;
 
 	if (mail_re == NULL) {
 		/* Compile regexp */
 		mail_re = g_regex_new (mail_regexp, G_REGEX_RAW, 0, &err);
 	}
 
-	if (g_regex_match_full (mail_re, line->begin, line->len, 0, 0, &info, NULL) == TRUE) {
+	if (g_regex_match_full (mail_re, line->begin, line->len, 0, 0, &info,
+		NULL) == TRUE) {
 		match = rspamd_mempool_strdup (pool, g_match_info_fetch (info, 0));
 		g_match_info_free (info);
 	}
@@ -91,16 +93,18 @@ extract_mail (rspamd_mempool_t * pool, f_str_t * line)
 static gboolean
 out_lmtp_reply (struct rspamd_task *task, gint code, gchar *rcode, gchar *msg)
 {
-	gchar                           outbuf[OUTBUFSIZ];
-	gint                            r;
+	gchar outbuf[OUTBUFSIZ];
+	gint r;
 
 	if (*rcode == '\0') {
 		r = rspamd_snprintf (outbuf, OUTBUFSIZ, "%d %s\r\n", code, msg);
 	}
 	else {
-		r = rspamd_snprintf (outbuf, OUTBUFSIZ, "%d %s %s\r\n", code, rcode, msg);
+		r =
+			rspamd_snprintf (outbuf, OUTBUFSIZ, "%d %s %s\r\n", code, rcode,
+				msg);
 	}
-	if (! rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE)) {
+	if (!rspamd_dispatcher_write (task->dispatcher, outbuf, r, FALSE, FALSE)) {
 		return FALSE;
 	}
 	return TRUE;
@@ -109,16 +113,19 @@ out_lmtp_reply (struct rspamd_task *task, gint code, gchar *rcode, gchar *msg)
 gint
 read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 {
-	gchar                           *c, *rcpt;
-	f_str_t                         fstr;
-	gint                            i = 0, l = 0, size;
+	gchar *c, *rcpt;
+	f_str_t fstr;
+	gint i = 0, l = 0, size;
 
 	switch (lmtp->state) {
 	case LMTP_READ_LHLO:
 		/* Search LHLO line */
 		if ((i = fstrstri (line, &lhlo_command)) == -1) {
 			msg_info ("LHLO expected but not found");
-			(void)out_lmtp_reply (lmtp->task, LMTP_BAD_CMD, "5.0.0", "Need LHLO here");
+			(void)out_lmtp_reply (lmtp->task,
+				LMTP_BAD_CMD,
+				"5.0.0",
+				"Need LHLO here");
 			return -1;
 		}
 		else {
@@ -129,11 +136,12 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 				i++;
 				c++;
 			}
-			lmtp->task->helo = rspamd_mempool_alloc (lmtp->task->task_pool, line->len - i + 1);
+			lmtp->task->helo = rspamd_mempool_alloc (lmtp->task->task_pool,
+					line->len - i + 1);
 			/* Strlcpy makes string null terminated by design */
 			rspamd_strlcpy (lmtp->task->helo, c, line->len - i + 1);
 			lmtp->state = LMTP_READ_FROM;
-			if (! out_lmtp_reply (lmtp->task, LMTP_OK, "", "Ok")) {
+			if (!out_lmtp_reply (lmtp->task, LMTP_OK, "", "Ok")) {
 				return -1;
 			}
 			return 0;
@@ -143,7 +151,10 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 		/* Search MAIL FROM: line */
 		if ((i = fstrstri (line, &mail_command)) == -1) {
 			msg_info ("MAIL expected but not found");
-			(void)out_lmtp_reply (lmtp->task, LMTP_BAD_CMD, "5.0.0", "Need MAIL here");
+			(void)out_lmtp_reply (lmtp->task,
+				LMTP_BAD_CMD,
+				"5.0.0",
+				"Need MAIL here");
 			return -1;
 		}
 		else {
@@ -153,7 +164,7 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 			fstr.len = line->len - i;
 			lmtp->task->from = extract_mail (lmtp->task->task_pool, &fstr);
 			lmtp->state = LMTP_READ_RCPT;
-			if (! out_lmtp_reply (lmtp->task, LMTP_OK, "2.1.0", "Sender ok")) {
+			if (!out_lmtp_reply (lmtp->task, LMTP_OK, "2.1.0", "Sender ok")) {
 				return -1;
 			}
 			return 0;
@@ -163,7 +174,10 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 		/* Search RCPT_TO: line */
 		if ((i = fstrstri (line, &rcpt_command)) == -1) {
 			msg_info ("RCPT expected but not found");
-			(void)out_lmtp_reply (lmtp->task, LMTP_NO_RCPT, "5.5.4", "Need RCPT here");
+			(void)out_lmtp_reply (lmtp->task,
+				LMTP_NO_RCPT,
+				"5.5.4",
+				"Need RCPT here");
 			return -1;
 		}
 		else {
@@ -175,13 +189,17 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 			if (*rcpt == '<' && *(rcpt + 1) == '>') {
 				/* Invalid or empty rcpt not allowed */
 				msg_info ("bad recipient");
-				(void)out_lmtp_reply (lmtp->task, LMTP_NO_RCPT, "5.5.4", "Bad recipient");
+				(void)out_lmtp_reply (lmtp->task,
+					LMTP_NO_RCPT,
+					"5.5.4",
+					"Bad recipient");
 				return -1;
 			}
 			/* Strlcpy makes string null terminated by design */
 			lmtp->task->rcpt = g_list_prepend (lmtp->task->rcpt, rcpt);
 			lmtp->state = LMTP_READ_DATA;
-			if (! out_lmtp_reply (lmtp->task, LMTP_OK, "2.1.0", "Recipient ok")) {
+			if (!out_lmtp_reply (lmtp->task, LMTP_OK, "2.1.0",
+				"Recipient ok")) {
 				return -1;
 			}
 			return 0;
@@ -191,7 +209,10 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 		/* Search DATA line */
 		if ((i = fstrstri (line, &data_command)) == -1) {
 			msg_info ("DATA expected but not found");
-			(void)out_lmtp_reply (lmtp->task, LMTP_BAD_CMD, "5.0.0", "Need DATA here");
+			(void)out_lmtp_reply (lmtp->task,
+				LMTP_BAD_CMD,
+				"5.0.0",
+				"Need DATA here");
 			return -1;
 		}
 		else {
@@ -201,12 +222,14 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 			while (g_ascii_isspace (*c++)) {
 				i++;
 			}
-			rcpt = rspamd_mempool_alloc (lmtp->task->task_pool, line->len - i + 1);
+			rcpt = rspamd_mempool_alloc (lmtp->task->task_pool,
+					line->len - i + 1);
 			/* Strlcpy makes string null terminated by design */
 			rspamd_strlcpy (rcpt, c, line->len - i + 1);
 			lmtp->task->rcpt = g_list_prepend (lmtp->task->rcpt, rcpt);
 			lmtp->state = LMTP_READ_MESSAGE;
-			if (! out_lmtp_reply (lmtp->task, LMTP_DATA, "", "Enter message, ending with \".\" on a line by itself")) {
+			if (!out_lmtp_reply (lmtp->task, LMTP_DATA, "",
+				"Enter message, ending with \".\" on a line by itself")) {
 				return -1;
 			}
 			lmtp->task->msg = fstralloc (lmtp->task->task_pool, BUFSIZ);
@@ -231,17 +254,19 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 					/* size *= 2 */
 					size <<= 1;
 				}
-				lmtp->task->msg = fstrgrow (lmtp->task->task_pool, lmtp->task->msg, size);
+				lmtp->task->msg = fstrgrow (lmtp->task->task_pool,
+						lmtp->task->msg,
+						size);
 			}
 			fstrcat (lmtp->task->msg, line);
 			return 0;
 		}
 		break;
 	case LMTP_READ_DOT:
-		/* We have some input after reading dot, close connection as we have no currently support of multiply 
+		/* We have some input after reading dot, close connection as we have no currently support of multiply
 		 * messages per session
 		 */
-		if (! out_lmtp_reply (lmtp->task, LMTP_QUIT, "", "Bye")) {
+		if (!out_lmtp_reply (lmtp->task, LMTP_QUIT, "", "Bye")) {
 			return -1;
 		}
 		return 0;
@@ -252,8 +277,8 @@ read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t * line)
 }
 
 struct mta_callback_data {
-	struct rspamd_task             *task;
-	rspamd_io_dispatcher_t         *dispatcher;
+	struct rspamd_task *task;
+	rspamd_io_dispatcher_t *dispatcher;
 	enum {
 		LMTP_WANT_GREETING,
 		LMTP_WANT_MAIL,
@@ -264,18 +289,20 @@ struct mta_callback_data {
 	} state;
 };
 
-static                          gboolean
+static gboolean
 parse_mta_str (f_str_t * in, struct mta_callback_data *cd)
 {
-	gint                            r;
-	static f_str_t                  okres1 = {
+	gint r;
+	static f_str_t okres1 = {
 		.begin = "250 ",
 		.len = sizeof ("250 ") - 1,
 	}
 	, okres2 = {
-	.begin = "220 ",.len = sizeof ("220 ") - 1,}
+		.begin = "220 ",.len = sizeof ("220 ") - 1,
+	}
 	, datares = {
-	.begin = "354 ",.len = sizeof ("354 ") - 1,};
+		.begin = "354 ",.len = sizeof ("354 ") - 1,
+	};
 
 	switch (cd->state) {
 	case LMTP_WANT_GREETING:
@@ -301,12 +328,12 @@ close_mta_connection (struct mta_callback_data *cd, gboolean is_success)
 {
 	cd->task->state = CLOSING_CONNECTION;
 	if (is_success) {
-		if (! out_lmtp_reply (cd->task, LMTP_OK, "", "Delivery completed")) {
+		if (!out_lmtp_reply (cd->task, LMTP_OK, "", "Delivery completed")) {
 			return;
 		}
 	}
 	else {
-		if (! out_lmtp_reply (cd->task, LMTP_FAILURE, "", "Delivery failure")) {
+		if (!out_lmtp_reply (cd->task, LMTP_FAILURE, "", "Delivery failure")) {
 			return;
 		}
 	}
@@ -316,19 +343,20 @@ close_mta_connection (struct mta_callback_data *cd, gboolean is_success)
 /*
  * Callback that is called when there is data to read in buffer
  */
-static                          gboolean
+static gboolean
 mta_read_socket (f_str_t * in, void *arg)
 {
-	struct mta_callback_data       *cd = (struct mta_callback_data *)arg;
-	gchar                           outbuf[1024], *hostbuf, *c;
-	gint                            hostmax, r;
-	GList                          *cur;
-	static f_str_t                  contres1 = {
+	struct mta_callback_data *cd = (struct mta_callback_data *)arg;
+	gchar outbuf[1024], *hostbuf, *c;
+	gint hostmax, r;
+	GList *cur;
+	static f_str_t contres1 = {
 		.begin = "250-",
 		.len = sizeof ("250-") - 1,
 	}
 	, contres2 = {
-	.begin = "220-",.len = sizeof ("220-") - 1,};
+		.begin = "220-",.len = sizeof ("220-") - 1,
+	};
 
 	if (fstrstr (in, &contres1) != -1 || fstrstr (in, &contres2) != -1) {
 		/* Skip such lines */
@@ -347,12 +375,19 @@ mta_read_socket (f_str_t * in, void *arg)
 		gethostname (hostbuf, hostmax);
 		hostbuf[hostmax - 1] = '\0';
 		if (cd->task->cfg->deliver_lmtp) {
-			r = rspamd_snprintf (outbuf, sizeof (outbuf), "LHLO %s" CRLF, hostbuf);
+			r = rspamd_snprintf (outbuf,
+					sizeof (outbuf),
+					"LHLO %s" CRLF,
+					hostbuf);
 		}
 		else {
-			r = rspamd_snprintf (outbuf, sizeof (outbuf), "HELO %s" CRLF, hostbuf);
+			r = rspamd_snprintf (outbuf,
+					sizeof (outbuf),
+					"HELO %s" CRLF,
+					hostbuf);
 		}
-		if (! rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE)) {
+		if (!rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE,
+			FALSE)) {
 			return FALSE;
 		}
 		cd->state = LMTP_WANT_MAIL;
@@ -363,8 +398,12 @@ mta_read_socket (f_str_t * in, void *arg)
 			close_mta_connection (cd, FALSE);
 			return FALSE;
 		}
-		r = rspamd_snprintf (outbuf, sizeof (outbuf), "MAIL FROM: <%s>" CRLF, cd->task->from);
-		if (! rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE)) {
+		r = rspamd_snprintf (outbuf,
+				sizeof (outbuf),
+				"MAIL FROM: <%s>" CRLF,
+				cd->task->from);
+		if (!rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE,
+			FALSE)) {
 			return FALSE;
 		}
 		cd->state = LMTP_WANT_RCPT;
@@ -378,11 +417,15 @@ mta_read_socket (f_str_t * in, void *arg)
 		cur = g_list_first (cd->task->rcpt);
 		r = 0;
 		while (cur) {
-			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r, "RCPT TO: <%s>" CRLF, (gchar *)cur->data);
+			r += rspamd_snprintf (outbuf + r,
+					sizeof (outbuf) - r,
+					"RCPT TO: <%s>" CRLF,
+					(gchar *)cur->data);
 			cur = g_list_next (cur);
 		}
 
-		if (! rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE)) {
+		if (!rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE,
+			FALSE)) {
 			return FALSE;
 		}
 		cd->state = LMTP_WANT_DATA;
@@ -394,7 +437,8 @@ mta_read_socket (f_str_t * in, void *arg)
 			return FALSE;
 		}
 		r = rspamd_snprintf (outbuf, sizeof (outbuf), "DATA" CRLF);
-		if (! rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE)) {
+		if (!rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE,
+			FALSE)) {
 			return FALSE;
 		}
 		cd->state = LMTP_WANT_DOT;
@@ -407,12 +451,14 @@ mta_read_socket (f_str_t * in, void *arg)
 		}
 		c = g_mime_object_to_string ((GMimeObject *) cd->task->message);
 		r = strlen (c);
-		if (! rspamd_dispatcher_write (cd->task->dispatcher, c, r, TRUE, TRUE)) {
+		if (!rspamd_dispatcher_write (cd->task->dispatcher, c, r, TRUE, TRUE)) {
 			return FALSE;
 		}
-		rspamd_mempool_add_destructor (cd->task->task_pool, (rspamd_mempool_destruct_t) g_free, c);
+		rspamd_mempool_add_destructor (cd->task->task_pool,
+			(rspamd_mempool_destruct_t) g_free, c);
 		r = rspamd_snprintf (outbuf, sizeof (outbuf), CRLF "." CRLF);
-		if (! rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE, FALSE)) {
+		if (!rspamd_dispatcher_write (cd->task->dispatcher, outbuf, r, FALSE,
+			FALSE)) {
 			return FALSE;
 		}
 		cd->state = LMTP_WANT_CLOSING;
@@ -436,7 +482,7 @@ mta_read_socket (f_str_t * in, void *arg)
 static void
 mta_err_socket (GError * err, void *arg)
 {
-	struct mta_callback_data       *cd = (struct mta_callback_data *)arg;
+	struct mta_callback_data *cd = (struct mta_callback_data *)arg;
 	msg_info ("abnormaly terminating connection with MTA");
 	close_mta_connection (cd, FALSE);
 }
@@ -447,36 +493,54 @@ mta_err_socket (GError * err, void *arg)
 static gint
 lmtp_deliver_mta (struct rspamd_task *task)
 {
-	gint                            sock;
-	struct sockaddr_un             *un;
-	struct mta_callback_data       *cd;
+	gint sock;
+	struct sockaddr_un *un;
+	struct mta_callback_data *cd;
 
 	if (task->cfg->deliver_family == AF_UNIX) {
 		un = alloca (sizeof (struct sockaddr_un));
-		sock = make_unix_socket (task->cfg->deliver_host, un, SOCK_STREAM, FALSE, TRUE);
+		sock = make_unix_socket (task->cfg->deliver_host,
+				un,
+				SOCK_STREAM,
+				FALSE,
+				TRUE);
 	}
 	else {
-		sock = make_universal_socket (task->cfg->deliver_host, task->cfg->deliver_port,
-				SOCK_STREAM, TRUE, FALSE, TRUE);
+		sock = make_universal_socket (task->cfg->deliver_host,
+				task->cfg->deliver_port,
+				SOCK_STREAM,
+				TRUE,
+				FALSE,
+				TRUE);
 	}
 	if (sock == -1) {
-		msg_warn ("cannot create socket for %s, %s", task->cfg->deliver_host, strerror (errno));
+		msg_warn ("cannot create socket for %s, %s",
+			task->cfg->deliver_host,
+			strerror (errno));
 	}
 
-	cd = rspamd_mempool_alloc (task->task_pool, sizeof (struct mta_callback_data));
+	cd = rspamd_mempool_alloc (task->task_pool,
+			sizeof (struct mta_callback_data));
 	cd->task = task;
 	cd->state = LMTP_WANT_GREETING;
-	cd->dispatcher = rspamd_create_dispatcher (task->ev_base, sock, BUFFER_LINE, mta_read_socket, NULL, mta_err_socket, NULL, (void *)cd);
+	cd->dispatcher = rspamd_create_dispatcher (task->ev_base,
+			sock,
+			BUFFER_LINE,
+			mta_read_socket,
+			NULL,
+			mta_err_socket,
+			NULL,
+			(void *)cd);
 	return 0;
 }
 
-static gchar                    *
+static gchar *
 format_lda_args (struct rspamd_task *task)
 {
-	gchar                           *res, *c, *r;
-	size_t                          len;
-	GList                          *rcpt;
-	gboolean                        got_args = FALSE;
+	gchar *res, *c, *r;
+	size_t len;
+	GList *rcpt;
+	gboolean got_args = FALSE;
 
 	c = task->cfg->deliver_agent_path;
 	/* Find first arg */
@@ -557,10 +621,10 @@ format_lda_args (struct rspamd_task *task)
 static gint
 lmtp_deliver_lda (struct rspamd_task *task)
 {
-	gchar                           *args, **argv;
-	GMimeStream                    *stream;
-	gint                            rc, ecode, p[2], argc;
-	pid_t                           cpid, pid;
+	gchar *args, **argv;
+	GMimeStream *stream;
+	gint rc, ecode, p[2], argc;
+	pid_t cpid, pid;
 
 	if ((args = format_lda_args (task)) == NULL) {
 		return -1;
@@ -609,7 +673,8 @@ lmtp_deliver_lda (struct rspamd_task *task)
 	close (p[0]);
 	stream = g_mime_stream_fs_new (p[1]);
 
-	if (g_mime_object_write_to_stream ((GMimeObject *) task->message, stream) == -1) {
+	if (g_mime_object_write_to_stream ((GMimeObject *) task->message,
+		stream) == -1) {
 		g_strfreev (argv);
 		msg_info ("cannot write stream to lda");
 		return -1;
@@ -667,12 +732,13 @@ lmtp_deliver_message (struct rspamd_task *task)
 gint
 write_lmtp_reply (struct rspamd_lmtp_proto *lmtp)
 {
-	gint                            r;
-	struct rspamd_task             *task = lmtp->task;
+	gint r;
+	struct rspamd_task *task = lmtp->task;
 
 	debug_task ("writing reply to client");
 	if (lmtp->task->error_code != 0) {
-		if (! out_lmtp_reply (lmtp->task, lmtp->task->error_code, "", lmtp->task->last_error)) {
+		if (!out_lmtp_reply (lmtp->task, lmtp->task->error_code, "",
+			lmtp->task->last_error)) {
 			return -1;
 		}
 	}
@@ -683,7 +749,8 @@ write_lmtp_reply (struct rspamd_lmtp_proto *lmtp)
 			return -1;
 		}
 		else if (r == 0) {
-			if (! out_lmtp_reply (lmtp->task, LMTP_OK, "", "Delivery completed")) {
+			if (!out_lmtp_reply (lmtp->task, LMTP_OK, "",
+				"Delivery completed")) {
 				return -1;
 			}
 		}
@@ -695,6 +762,6 @@ write_lmtp_reply (struct rspamd_lmtp_proto *lmtp)
 	return 0;
 }
 
-/* 
- * vi:ts=4 
+/*
+ * vi:ts=4
  */

@@ -42,17 +42,17 @@ typedef union {
 
 struct rrd_file_head {
 	/* Data Base Identification Section ** */
-	gchar      cookie[4];    /* RRD */
-	gchar      version[5];   /* version of the format */
-	gdouble    float_cookie; /* is it the correct double representation ?  */
+	gchar cookie[4];         /* RRD */
+	gchar version[5];        /* version of the format */
+	gdouble float_cookie;    /* is it the correct double representation ?  */
 
 	/* Data Base Structure Definition **** */
 	gulong ds_cnt;   /* how many different ds provid input to the rrd */
 	gulong rra_cnt;  /* how many rras will be maintained in the rrd */
 	gulong pdp_step; /* pdp interval in seconds */
 
-	rrd_value_t   par[10];  /* global parameters ... unused
-                           at the moment */
+	rrd_value_t par[10];    /* global parameters ... unused
+	                           at the moment */
 };
 
 enum rrd_dst_type {
@@ -66,9 +66,9 @@ enum rrd_ds_param {
 	RRD_DS_mrhb_cnt = 0, /* minimum required heartbeat */
 	RRD_DS_min_val,         /* the processed input of a ds must */
 	RRD_DS_max_val,         /* be between max_val and min_val
-	 	 	 	 	 	 * both can be set to UNKNOWN if you
-	 	 	 	 	 	 * do not care. Data outside the limits
-	 	 	 	 	 	 * set to UNKNOWN */
+	                         * both can be set to UNKNOWN if you
+	                         * do not care. Data outside the limits
+	                         * set to UNKNOWN */
 	RRD_DS_cdef = RRD_DS_mrhb_cnt
 };                      /* pointer to encoded rpn expression only applies to DST_CDEF */
 
@@ -117,8 +117,8 @@ enum rrd_cf_type {
 
 enum rrd_rra_param {
 	RRA_cdp_xff_val = 0,  /* what part of the consolidated
- * datapoint must be known, to produce a
- * valid entry in the rra */
+	                       * datapoint must be known, to produce a
+	                       * valid entry in the rra */
 	/* CF_HWPREDICT: */
 	RRA_hw_alpha = 1,
 	/* exponential smoothing parameter for the intercept in
@@ -161,18 +161,18 @@ enum rrd_rra_param {
 	/* RRA_dependent_rra_idx = 3, */
 	RRA_window_len = 4,
 	RRA_failure_threshold = 5
-	/* For CF_FAILURES, number of violations within the last
-	 * window required to mark a failure. */
+	    /* For CF_FAILURES, number of violations within the last
+	     * window required to mark a failure. */
 };
 
 
 #define RRD_CF_NAM_SIZE   20
 
 struct rrd_rra_def {
-	gchar  cf_nam[RRD_CF_NAM_SIZE];  /* consolidation function (null term) */
+	gchar cf_nam[RRD_CF_NAM_SIZE];   /* consolidation function (null term) */
 	gulong row_cnt;  /* number of entries in the store */
 	gulong pdp_cnt;  /* how many primary data points are
-	 	 	 	 	  * required for a consolidated data point?*/
+	                  * required for a consolidated data point?*/
 	rrd_value_t par[MAX_RRA_PAR_EN];  /* index see rra_param_en */
 
 };
@@ -186,17 +186,17 @@ struct rrd_live_head {
 
 enum rrd_pdp_param {
 	PDP_unkn_sec_cnt = 0, /* how many seconds of the current
-	 * pdp value is unknown data? */
+	                       * pdp value is unknown data? */
 	PDP_val
 };                      /* current value of the pdp.
                            this depends on dst */
 
 struct rrd_pdp_prep {
 	gchar last_ds[RRD_LAST_DS_LEN]; /* the last reading from the data
-	 	 	 	 	 	 	 	 	 * source.  this is stored in ASCII
-	 	 	 	 	 	 	 	 	 * to cater for very large counters
-	 	 	 	 	 	 	 	 	 * we might encounter in connection
-	 	 	 	 	 	 	 	 	 * with SNMP. */
+	                                 * source.  this is stored in ASCII
+	                                 * to cater for very large counters
+	                                 * we might encounter in connection
+	                                 * with SNMP. */
 	rrd_value_t scratch[10];  /* contents according to pdp_par_en */
 };
 
@@ -249,9 +249,9 @@ enum rrd_cdp_param {
 };
 
 struct rrd_cdp_prep {
-    rrd_value_t scratch[RRD_MAX_CDP_PAR_EN];
-    /* contents according to cdp_par_en *
-     * init state should be NAN */
+	rrd_value_t scratch[RRD_MAX_CDP_PAR_EN];
+	/* contents according to cdp_par_en *
+	 * init state should be NAN */
 };
 
 struct rrd_rra_ptr {
@@ -270,7 +270,7 @@ struct rspamd_rrd_file {
 	gdouble *rrd_value; /* list of rrd values */
 
 	gchar *filename;
-	guint8* map; /* mmapped area */
+	guint8 * map; /* mmapped area */
 	gsize size; /* its size */
 	gboolean finalized;
 };
@@ -284,7 +284,7 @@ struct rspamd_rrd_file {
  * @param err error pointer
  * @return rrd file structure
  */
-struct rspamd_rrd_file* rspamd_rrd_open (const gchar *filename, GError **err);
+struct rspamd_rrd_file * rspamd_rrd_open (const gchar *filename, GError **err);
 
 /**
  * Create basic header for rrd file
@@ -295,7 +295,11 @@ struct rspamd_rrd_file* rspamd_rrd_open (const gchar *filename, GError **err);
  * @param err error pointer
  * @return TRUE if file has been created
  */
-struct rspamd_rrd_file* rspamd_rrd_create (const gchar *filename, gulong ds_count, gulong rra_count, gulong pdp_step, GError **err);
+struct rspamd_rrd_file * rspamd_rrd_create (const gchar *filename,
+	gulong ds_count,
+	gulong rra_count,
+	gulong pdp_step,
+	GError **err);
 
 /**
  * Add data sources to rrd file
@@ -304,7 +308,9 @@ struct rspamd_rrd_file* rspamd_rrd_create (const gchar *filename, gulong ds_coun
  * @param err error pointer
  * @return TRUE if data sources were added
  */
-gboolean rspamd_rrd_add_ds (struct rspamd_rrd_file* file, GArray *ds, GError **err);
+gboolean rspamd_rrd_add_ds (struct rspamd_rrd_file * file,
+	GArray *ds,
+	GError **err);
 
 /**
  * Add round robin archives to rrd file
@@ -313,7 +319,9 @@ gboolean rspamd_rrd_add_ds (struct rspamd_rrd_file* file, GArray *ds, GError **e
  * @param err error pointer
  * @return TRUE if archives were added
  */
-gboolean rspamd_rrd_add_rra (struct rspamd_rrd_file *file, GArray *rra, GError **err);
+gboolean rspamd_rrd_add_rra (struct rspamd_rrd_file *file,
+	GArray *rra,
+	GError **err);
 
 /**
  * Finalize rrd file header and initialize all RRA in the file
@@ -330,14 +338,16 @@ gboolean rspamd_rrd_finalize (struct rspamd_rrd_file *file, GError **err);
  * @param err error pointer
  * @return TRUE if a row has been added
  */
-gboolean rspamd_rrd_add_record (struct rspamd_rrd_file* file, GArray *points, GError **err);
+gboolean rspamd_rrd_add_record (struct rspamd_rrd_file * file,
+	GArray *points,
+	GError **err);
 
 /**
  * Close rrd file
  * @param file
  * @return
  */
-gint rspamd_rrd_close (struct rspamd_rrd_file* file);
+gint rspamd_rrd_close (struct rspamd_rrd_file * file);
 
 /*
  * Conversion functions
@@ -350,7 +360,7 @@ enum rrd_dst_type rrd_dst_from_string (const gchar *str);
 /**
  * Convert numeric presentation of dst to string
  */
-const gchar* rrd_dst_to_string (enum rrd_dst_type type);
+const gchar * rrd_dst_to_string (enum rrd_dst_type type);
 /**
  * Convert rrd consolidation function type from string to numeric value
  */
@@ -358,17 +368,22 @@ enum rrd_cf_type rrd_cf_from_string (const gchar *str);
 /**
  * Convert numeric presentation of cf to string
  */
-const gchar* rrd_cf_to_string (enum rrd_cf_type type);
+const gchar * rrd_cf_to_string (enum rrd_cf_type type);
 
 /* Default RRA and DS */
 
 /**
  * Create default RRA
  */
-void rrd_make_default_rra (const gchar *cf_name, gulong pdp_cnt, gulong rows, struct rrd_rra_def *rra);
+void rrd_make_default_rra (const gchar *cf_name,
+	gulong pdp_cnt,
+	gulong rows,
+	struct rrd_rra_def *rra);
 
 /**
  * Create default DS
  */
-void rrd_make_default_ds (const gchar *name, gulong pdp_step, struct rrd_ds_def *ds);
+void rrd_make_default_ds (const gchar *name,
+	gulong pdp_step,
+	struct rrd_ds_def *ds);
 #endif /* RRD_H_ */

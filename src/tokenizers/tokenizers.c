@@ -30,11 +30,11 @@
 #include "main.h"
 #include "tokenizers.h"
 
-struct tokenizer                tokenizers[] = {
+struct tokenizer tokenizers[] = {
 	{"osb-text", osb_tokenize_text, get_next_word},
 };
 
-const int                       primes[] = {
+const int primes[] = {
 	1, 7,
 	3, 13,
 	5, 29,
@@ -48,38 +48,38 @@ const int                       primes[] = {
 };
 
 const gchar t_delimiters[255] = {
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-		1, 0, 0, 1, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 1, 0, 1, 1, 1, 1, 1, 0,
-		1, 1, 1, 1, 1, 1, 1, 1, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
-		1, 1, 1, 1, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 1, 1, 1, 1, 1, 1, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 1, 1, 1, 1, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+	1, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 1, 0, 1, 1, 1, 1, 1, 0,
+	1, 1, 1, 1, 1, 1, 1, 1, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+	1, 1, 1, 1, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 1, 1, 1, 1, 1, 1, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 1, 1, 1, 1, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0
 };
 
-struct tokenizer               *
+struct tokenizer *
 get_tokenizer (const char *name)
 {
-	guint                            i;
+	guint i;
 
 	for (i = 0; i < sizeof (tokenizers) / sizeof (tokenizers[0]); i++) {
 		if (strcmp (tokenizers[i].name, name) == 0) {
@@ -93,7 +93,7 @@ get_tokenizer (const char *name)
 int
 token_node_compare_func (gconstpointer a, gconstpointer b)
 {
-	const token_node_t             *aa = a, *bb = b;
+	const token_node_t *aa = a, *bb = b;
 
 	if (aa->h1 == bb->h1) {
 		return aa->h2 - bb->h2;
@@ -106,9 +106,9 @@ token_node_compare_func (gconstpointer a, gconstpointer b)
 gchar *
 get_next_word (f_str_t * buf, f_str_t * token, GList **exceptions)
 {
-	gsize                           remain, pos;
-	guchar                         *p;
-	struct process_exception	   *ex = NULL;
+	gsize remain, pos;
+	guchar *p;
+	struct process_exception *ex = NULL;
 
 	if (buf == NULL) {
 		return NULL;
@@ -165,7 +165,7 @@ get_next_word (f_str_t * buf, f_str_t * token, GList **exceptions)
 		token->len++;
 		pos++;
 		remain--;
-		p ++;
+		p++;
 	}
 
 	if (remain == 0) {
@@ -177,30 +177,34 @@ get_next_word (f_str_t * buf, f_str_t * token, GList **exceptions)
 
 /* Struct to access gmime headers */
 struct raw_header {
-	struct raw_header              *next;
-	char                           *name;
-	char                           *value;
+	struct raw_header *next;
+	char *name;
+	char *value;
 };
 
 typedef struct _GMimeHeader {
-	GHashTable                     *hash;
-	GHashTable                     *writers;
-	struct raw_header              *headers;
+	GHashTable *hash;
+	GHashTable *writers;
+	struct raw_header *headers;
 } local_GMimeHeader;
 
 int
-tokenize_headers (rspamd_mempool_t * pool, struct rspamd_task *task, GTree ** tree)
+tokenize_headers (rspamd_mempool_t * pool,
+	struct rspamd_task *task,
+	GTree ** tree)
 {
-	token_node_t                   *new = NULL;
-	f_str_t                         headername;
-	f_str_t                         headervalue;
+	token_node_t *new = NULL;
+	f_str_t headername;
+	f_str_t headervalue;
 
 	if (*tree == NULL) {
 		*tree = g_tree_new (token_node_compare_func);
-		rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) g_tree_destroy, *tree);
+		rspamd_mempool_add_destructor (pool,
+			(rspamd_mempool_destruct_t) g_tree_destroy,
+			*tree);
 	}
 #ifndef GMIME24
-	struct raw_header              *h;
+	struct raw_header *h;
 
 	h = GMIME_OBJECT (task->message)->headers->headers;
 	while (h) {
@@ -219,10 +223,10 @@ tokenize_headers (rspamd_mempool_t * pool, struct rspamd_task *task, GTree ** tr
 		h = h->next;
 	}
 #else
-	GMimeHeaderList                *ls;
-	GMimeHeaderIter                *iter;
-	const char                     *name;
-	const char                     *value;
+	GMimeHeaderList *ls;
+	GMimeHeaderIter *iter;
+	const char *name;
+	const char *value;
 
 	ls = GMIME_OBJECT (task->message)->headers;
 	iter = g_mime_header_iter_new ();
@@ -254,13 +258,14 @@ tokenize_headers (rspamd_mempool_t * pool, struct rspamd_task *task, GTree ** tr
 void
 tokenize_subject (struct rspamd_task *task, GTree ** tree)
 {
-	f_str_t                         subject;
-	const gchar                    *sub;
-	struct tokenizer               *osb_tokenizer;
+	f_str_t subject;
+	const gchar *sub;
+	struct tokenizer *osb_tokenizer;
 
 	if (*tree == NULL) {
 		*tree = g_tree_new (token_node_compare_func);
-		rspamd_mempool_add_destructor (task->task_pool, (rspamd_mempool_destruct_t) g_tree_destroy, *tree);
+		rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) g_tree_destroy, *tree);
 	}
 
 	osb_tokenizer = get_tokenizer ("osb-text");
@@ -269,12 +274,24 @@ tokenize_subject (struct rspamd_task *task, GTree ** tree)
 	if (task->subject != NULL) {
 		subject.begin = task->subject;
 		subject.len = strlen (task->subject);
-		osb_tokenizer->tokenize_func (osb_tokenizer, task->task_pool, &subject, tree, FALSE, TRUE, NULL);
+		osb_tokenizer->tokenize_func (osb_tokenizer,
+			task->task_pool,
+			&subject,
+			tree,
+			FALSE,
+			TRUE,
+			NULL);
 	}
 	if ((sub = g_mime_message_get_subject (task->message)) != NULL) {
 		subject.begin = (gchar *)sub;
 		subject.len = strlen (sub);
-		osb_tokenizer->tokenize_func (osb_tokenizer, task->task_pool, &subject, tree, FALSE, TRUE, NULL);
+		osb_tokenizer->tokenize_func (osb_tokenizer,
+			task->task_pool,
+			&subject,
+			tree,
+			FALSE,
+			TRUE,
+			NULL);
 	}
 }
 

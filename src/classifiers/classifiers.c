@@ -28,29 +28,29 @@
 
 #include "classifiers.h"
 
-struct classifier               classifiers[] = {
-		{
-			.name = "winnow",
-			.init_func = winnow_init,
-			.classify_func = winnow_classify,
-			.learn_func = winnow_learn,
-			.learn_spam_func = winnow_learn_spam,
-			.weights_func = winnow_weights
-		},
-		{
-			.name = "bayes",
-			.init_func = bayes_init,
-			.classify_func = bayes_classify,
-			.learn_func = bayes_learn,
-			.learn_spam_func = bayes_learn_spam,
-			.weights_func = bayes_weights
-		}
+struct classifier classifiers[] = {
+	{
+		.name = "winnow",
+		.init_func = winnow_init,
+		.classify_func = winnow_classify,
+		.learn_func = winnow_learn,
+		.learn_spam_func = winnow_learn_spam,
+		.weights_func = winnow_weights
+	},
+	{
+		.name = "bayes",
+		.init_func = bayes_init,
+		.classify_func = bayes_classify,
+		.learn_func = bayes_learn,
+		.learn_spam_func = bayes_learn_spam,
+		.weights_func = bayes_weights
+	}
 };
 
-struct classifier              *
+struct classifier *
 get_classifier (const char *name)
 {
-	guint                             i;
+	guint i;
 
 	for (i = 0; i < sizeof (classifiers) / sizeof (classifiers[0]); i++) {
 		if (strcmp (classifiers[i].name, name) == 0) {

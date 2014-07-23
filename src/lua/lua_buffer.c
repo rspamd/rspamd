@@ -25,7 +25,7 @@
 #include "buffer.h"
 
 /* Public prototypes */
-struct rspamd_io_dispatcher_s *lua_check_io_dispatcher (lua_State * L);
+struct rspamd_io_dispatcher_s * lua_check_io_dispatcher (lua_State * L);
 gint luaopen_io_dispatcher (lua_State * L);
 
 /* Lua bindings */
@@ -36,7 +36,7 @@ LUA_FUNCTION_DEF (io_dispatcher, pause);
 LUA_FUNCTION_DEF (io_dispatcher, restore);
 LUA_FUNCTION_DEF (io_dispatcher, destroy);
 
-static const struct luaL_reg    io_dispatcherlib_m[] = {
+static const struct luaL_reg io_dispatcherlib_m[] = {
 	LUA_INTERFACE_DEF (io_dispatcher, set_policy),
 	LUA_INTERFACE_DEF (io_dispatcher, write),
 	LUA_INTERFACE_DEF (io_dispatcher, pause),
@@ -46,7 +46,7 @@ static const struct luaL_reg    io_dispatcherlib_m[] = {
 	{NULL, NULL}
 };
 
-static const struct luaL_reg    io_dispatcherlib_f[] = {
+static const struct luaL_reg io_dispatcherlib_f[] = {
 	LUA_INTERFACE_DEF (io_dispatcher, create),
 	{NULL, NULL}
 };
@@ -60,10 +60,10 @@ struct lua_dispatcher_cbdata {
 	gint cbref_err;
 };
 
-struct rspamd_io_dispatcher_s      *
+struct rspamd_io_dispatcher_s *
 lua_check_io_dispatcher (lua_State * L)
 {
-	void								*ud = luaL_checkudata (L, 1, "rspamd{io_dispatcher}");
+	void *ud = luaL_checkudata (L, 1, "rspamd{io_dispatcher}");
 	luaL_argcheck (L, ud != NULL, 1, "'io_dispatcher' expected");
 	return ud ? *((struct rspamd_io_dispatcher_s **)ud) : NULL;
 }
@@ -71,29 +71,31 @@ lua_check_io_dispatcher (lua_State * L)
 struct event_base *
 lua_check_event_base (lua_State *L)
 {
-	void								*ud = luaL_checkudata (L, 1, "rspamd{ev_base}");
+	void *ud = luaL_checkudata (L, 1, "rspamd{ev_base}");
 	luaL_argcheck (L, ud != NULL, 1, "'ev_base' expected");
 	return ud ? *((struct event_base **)ud) : NULL;
 }
 
 /* Dispatcher callbacks */
 
-static                          gboolean
+static gboolean
 lua_io_read_cb (f_str_t * in, void *arg)
 {
-	struct lua_dispatcher_cbdata					*cbdata = arg;
-	gboolean								 		  res;
-	rspamd_io_dispatcher_t							**pdispatcher;
+	struct lua_dispatcher_cbdata *cbdata = arg;
+	gboolean res;
+	rspamd_io_dispatcher_t **pdispatcher;
 
 	/* callback (dispatcher, data) */
 	lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_read);
-	pdispatcher = lua_newuserdata (cbdata->L, sizeof (struct rspamd_io_dispatcher_s *));
+	pdispatcher =
+		lua_newuserdata (cbdata->L, sizeof (struct rspamd_io_dispatcher_s *));
 	lua_setclass (cbdata->L, "rspamd{io_dispatcher}", -1);
 	*pdispatcher = cbdata->d;
 	lua_pushlstring (cbdata->L, in->begin, in->len);
 
 	if (lua_pcall (cbdata->L, 2, 1, 0) != 0) {
-		msg_info ("call to session finalizer failed: %s", lua_tostring (cbdata->L, -1));
+		msg_info ("call to session finalizer failed: %s",
+			lua_tostring (cbdata->L, -1));
 	}
 
 	res = lua_toboolean (cbdata->L, -1);
@@ -102,23 +104,26 @@ lua_io_read_cb (f_str_t * in, void *arg)
 	return res;
 }
 
-static                          gboolean
+static gboolean
 lua_io_write_cb (void *arg)
 {
-	struct lua_dispatcher_cbdata					*cbdata = arg;
-	gboolean										  res = FALSE;
-	rspamd_io_dispatcher_t							**pdispatcher;
+	struct lua_dispatcher_cbdata *cbdata = arg;
+	gboolean res = FALSE;
+	rspamd_io_dispatcher_t **pdispatcher;
 
 	if (cbdata->cbref_write) {
 		lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_read);
 		/* callback (dispatcher) */
-		pdispatcher = lua_newuserdata (cbdata->L, sizeof (struct rspamd_io_dispatcher_s *));
+		pdispatcher =
+			lua_newuserdata (cbdata->L,
+				sizeof (struct rspamd_io_dispatcher_s *));
 		lua_setclass (cbdata->L, "rspamd{io_dispatcher}", -1);
 		*pdispatcher = cbdata->d;
 
 
 		if (lua_pcall (cbdata->L, 1, 1, 0) != 0) {
-			msg_info ("call to session finalizer failed: %s", lua_tostring (cbdata->L, -1));
+			msg_info ("call to session finalizer failed: %s",
+				lua_tostring (cbdata->L, -1));
 		}
 
 		res = lua_toboolean (cbdata->L, -1);
@@ -131,18 +136,20 @@ lua_io_write_cb (void *arg)
 static void
 lua_io_err_cb (GError * err, void *arg)
 {
-	struct lua_dispatcher_cbdata					*cbdata = arg;
-	rspamd_io_dispatcher_t							**pdispatcher;
+	struct lua_dispatcher_cbdata *cbdata = arg;
+	rspamd_io_dispatcher_t **pdispatcher;
 
 	/* callback (dispatcher, err) */
 	lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_err);
-	pdispatcher = lua_newuserdata (cbdata->L, sizeof (struct rspamd_io_dispatcher_s *));
+	pdispatcher =
+		lua_newuserdata (cbdata->L, sizeof (struct rspamd_io_dispatcher_s *));
 	lua_setclass (cbdata->L, "rspamd{io_dispatcher}", -1);
 	*pdispatcher = cbdata->d;
 	lua_pushstring (cbdata->L, err->message);
 
 	if (lua_pcall (cbdata->L, 2, 0, 0) != 0) {
-		msg_info ("call to session finalizer failed: %s", lua_tostring (cbdata->L, -1));
+		msg_info ("call to session finalizer failed: %s",
+			lua_tostring (cbdata->L, -1));
 	}
 
 	/* Unref callbacks */
@@ -162,11 +169,11 @@ lua_io_err_cb (GError * err, void *arg)
 static int
 lua_io_dispatcher_create (lua_State *L)
 {
-	struct rspamd_io_dispatcher_s					*io_dispatcher, **pdispatcher;
-	gint											 fd;
-	struct lua_dispatcher_cbdata					*cbdata;
-	struct timeval									 tv = {0, 0};
-	double											 tv_num, tmp;
+	struct rspamd_io_dispatcher_s *io_dispatcher, **pdispatcher;
+	gint fd;
+	struct lua_dispatcher_cbdata *cbdata;
+	struct timeval tv = {0, 0};
+	double tv_num, tmp;
 
 	if (lua_gettop (L) >= 5 && lua_isfunction (L, 3) && lua_isfunction (L, 5)) {
 		cbdata = g_slice_alloc0 (sizeof (struct lua_dispatcher_cbdata));
@@ -193,20 +200,36 @@ lua_io_dispatcher_create (lua_State *L)
 			tv_num = lua_tonumber (L, 6);
 			tv.tv_sec = trunc (tv_num);
 			tv.tv_usec = modf (tv_num, &tmp) * 1000.;
-			io_dispatcher = rspamd_create_dispatcher (cbdata->base, fd, BUFFER_LINE, lua_io_read_cb, lua_io_write_cb, lua_io_err_cb, &tv, cbdata);
+			io_dispatcher = rspamd_create_dispatcher (cbdata->base,
+					fd,
+					BUFFER_LINE,
+					lua_io_read_cb,
+					lua_io_write_cb,
+					lua_io_err_cb,
+					&tv,
+					cbdata);
 		}
 		else {
-			io_dispatcher = rspamd_create_dispatcher (cbdata->base, fd, BUFFER_LINE, lua_io_read_cb, lua_io_write_cb, lua_io_err_cb, NULL, cbdata);
+			io_dispatcher = rspamd_create_dispatcher (cbdata->base,
+					fd,
+					BUFFER_LINE,
+					lua_io_read_cb,
+					lua_io_write_cb,
+					lua_io_err_cb,
+					NULL,
+					cbdata);
 		}
 
 		cbdata->d = io_dispatcher;
 		/* Push result */
-		pdispatcher = lua_newuserdata (L, sizeof (struct rspamd_io_dispatcher_s *));
+		pdispatcher =
+			lua_newuserdata (L, sizeof (struct rspamd_io_dispatcher_s *));
 		lua_setclass (L, "rspamd{io_dispatcher}", -1);
 		*pdispatcher = io_dispatcher;
 	}
 	else {
-		msg_err ("invalid number of arguments to io_dispatcher.create: %d", lua_gettop (L));
+		msg_err ("invalid number of arguments to io_dispatcher.create: %d",
+			lua_gettop (L));
 		lua_pushnil (L);
 	}
 
@@ -216,8 +239,8 @@ lua_io_dispatcher_create (lua_State *L)
 static int
 lua_io_dispatcher_set_policy (lua_State *L)
 {
-	struct rspamd_io_dispatcher_s					*io_dispatcher = lua_check_io_dispatcher (L);
-	gint											 policy, limit = -1;
+	struct rspamd_io_dispatcher_s *io_dispatcher = lua_check_io_dispatcher (L);
+	gint policy, limit = -1;
 
 	if (io_dispatcher) {
 		policy = lua_tonumber (L, 2);
@@ -242,14 +265,15 @@ lua_io_dispatcher_set_policy (lua_State *L)
 static int
 lua_io_dispatcher_write (lua_State *L)
 {
-	struct rspamd_io_dispatcher_s					*io_dispatcher = lua_check_io_dispatcher (L);
-	gboolean										 delayed = FALSE, res;
-	const gchar										*data;
-	size_t											 len;
+	struct rspamd_io_dispatcher_s *io_dispatcher = lua_check_io_dispatcher (L);
+	gboolean delayed = FALSE, res;
+	const gchar *data;
+	size_t len;
 
 	if (io_dispatcher) {
 		if (lua_gettop (L) < 2) {
-			msg_err ("invalid number of arguments to io_dispatcher.create: %d", lua_gettop (L));
+			msg_err ("invalid number of arguments to io_dispatcher.create: %d",
+				lua_gettop (L));
 			lua_pushboolean (L, FALSE);
 		}
 		else {
@@ -257,7 +281,11 @@ lua_io_dispatcher_write (lua_State *L)
 			if (lua_gettop (L) > 2) {
 				delayed = lua_toboolean (L, 3);
 			}
-			res = rspamd_dispatcher_write (io_dispatcher, (void *)data, len, delayed, FALSE);
+			res = rspamd_dispatcher_write (io_dispatcher,
+					(void *)data,
+					len,
+					delayed,
+					FALSE);
 			lua_pushboolean (L, res);
 		}
 	}
@@ -271,7 +299,7 @@ lua_io_dispatcher_write (lua_State *L)
 static int
 lua_io_dispatcher_pause (lua_State *L)
 {
-	struct rspamd_io_dispatcher_s					*io_dispatcher = lua_check_io_dispatcher (L);
+	struct rspamd_io_dispatcher_s *io_dispatcher = lua_check_io_dispatcher (L);
 
 	if (io_dispatcher) {
 		rspamd_dispatcher_pause (io_dispatcher);
@@ -287,7 +315,7 @@ lua_io_dispatcher_pause (lua_State *L)
 static int
 lua_io_dispatcher_restore (lua_State *L)
 {
-	struct rspamd_io_dispatcher_s					*io_dispatcher = lua_check_io_dispatcher (L);
+	struct rspamd_io_dispatcher_s *io_dispatcher = lua_check_io_dispatcher (L);
 
 	if (io_dispatcher) {
 		rspamd_dispatcher_restore (io_dispatcher);
@@ -303,7 +331,7 @@ lua_io_dispatcher_restore (lua_State *L)
 static int
 lua_io_dispatcher_destroy (lua_State *L)
 {
-	struct rspamd_io_dispatcher_s					*io_dispatcher = lua_check_io_dispatcher (L);
+	struct rspamd_io_dispatcher_s *io_dispatcher = lua_check_io_dispatcher (L);
 
 	if (io_dispatcher) {
 		rspamd_remove_dispatcher (io_dispatcher);
@@ -329,16 +357,16 @@ luaopen_io_dispatcher (lua_State * L)
 	lua_pushstring (L, "rspamd{io_dispatcher}");
 	lua_rawset (L, -3);
 
-	luaL_register (L, NULL, io_dispatcherlib_m);
+	luaL_register (L, NULL,					  io_dispatcherlib_m);
 	luaL_register (L, "rspamd_io_dispatcher", io_dispatcherlib_f);
 
-	lua_pop(L, 1);                      /* remove metatable from stack */
+	lua_pop (L, 1);                      /* remove metatable from stack */
 
 	/* Simple event class */
 	lua_newclass (L, "rspamd{ev_base}", null_reg);
 	luaL_register (L, "rspamd_ev_base", null_reg);
 
-	lua_pop(L, 1);                      /* remove metatable from stack */
+	lua_pop (L, 1);                      /* remove metatable from stack */
 
 	/* Set buffer types globals */
 	lua_pushnumber (L, BUFFER_LINE);
@@ -347,5 +375,5 @@ luaopen_io_dispatcher (lua_State * L)
 	lua_setglobal (L, "IO_BUFFER_CHARACTER");
 	lua_pushnumber (L, BUFFER_ANY);
 	lua_setglobal (L, "IO_BUFFER_ANY");
-	return 1;	
+	return 1;
 }

@@ -43,24 +43,24 @@ struct uri {
 	guint fragmentlen;
 
 	/* Flags */
-	gboolean ipv6;	/* URI contains IPv6 host */
-	gboolean form;	/* URI originated from form */
+	gboolean ipv6;  /* URI contains IPv6 host */
+	gboolean form;  /* URI originated from form */
 	gboolean is_phished; /* URI maybe phishing */
 };
 
 enum uri_errno {
-	URI_ERRNO_OK,			/* Parsing went well */
-	URI_ERRNO_EMPTY,		/* The URI string was empty */
-	URI_ERRNO_INVALID_PROTOCOL,	/* No protocol was found */
-	URI_ERRNO_NO_SLASHES,		/* Slashes after protocol missing */
-	URI_ERRNO_TOO_MANY_SLASHES,	/* Too many slashes after protocol */
-	URI_ERRNO_TRAILING_DOTS,	/* '.' after host */
-	URI_ERRNO_NO_HOST,		/* Host part is missing */
-	URI_ERRNO_NO_PORT_COLON,	/* ':' after host without port */
-	URI_ERRNO_NO_HOST_SLASH,	/* Slash after host missing */
-	URI_ERRNO_IPV6_SECURITY,	/* IPv6 security bug detected */
-	URI_ERRNO_INVALID_PORT,		/* Port number is bad */
-	URI_ERRNO_INVALID_PORT_RANGE	/* Port number is not within 0-65535 */
+	URI_ERRNO_OK,           /* Parsing went well */
+	URI_ERRNO_EMPTY,        /* The URI string was empty */
+	URI_ERRNO_INVALID_PROTOCOL, /* No protocol was found */
+	URI_ERRNO_NO_SLASHES,       /* Slashes after protocol missing */
+	URI_ERRNO_TOO_MANY_SLASHES, /* Too many slashes after protocol */
+	URI_ERRNO_TRAILING_DOTS,    /* '.' after host */
+	URI_ERRNO_NO_HOST,      /* Host part is missing */
+	URI_ERRNO_NO_PORT_COLON,    /* ':' after host without port */
+	URI_ERRNO_NO_HOST_SLASH,    /* Slash after host missing */
+	URI_ERRNO_IPV6_SECURITY,    /* IPv6 security bug detected */
+	URI_ERRNO_INVALID_PORT,     /* Port number is bad */
+	URI_ERRNO_INVALID_PORT_RANGE    /* Port number is not within 0-65535 */
 };
 
 enum protocol {
@@ -81,7 +81,10 @@ enum protocol {
  * @param part current text part
  * @param is_html turn on html euristic
  */
-void url_parse_text (rspamd_mempool_t *pool, struct rspamd_task *task, struct mime_text_part *part, gboolean is_html);
+void url_parse_text (rspamd_mempool_t *pool,
+	struct rspamd_task *task,
+	struct mime_text_part *part,
+	gboolean is_html);
 
 /*
  * Parse a single url into an uri structure
@@ -89,7 +92,9 @@ void url_parse_text (rspamd_mempool_t *pool, struct rspamd_task *task, struct mi
  * @param uristring text form of url
  * @param uri url object, must be pre allocated
  */
-enum uri_errno parse_uri(struct uri *uri, gchar *uristring, rspamd_mempool_t *pool);
+enum uri_errno parse_uri (struct uri *uri,
+	gchar *uristring,
+	rspamd_mempool_t *pool);
 
 /*
  * Try to extract url from a text
@@ -101,11 +106,17 @@ enum uri_errno parse_uri(struct uri *uri, gchar *uristring, rspamd_mempool_t *po
  * @param url_str storage for url string(or NULL)
  * @return TRUE if url is found in specified text
  */
-gboolean url_try_text (rspamd_mempool_t *pool, const gchar *begin, gsize len, gchar **start, gchar **end, gchar **url_str, gboolean is_html);
+gboolean url_try_text (rspamd_mempool_t *pool,
+	const gchar *begin,
+	gsize len,
+	gchar **start,
+	gchar **end,
+	gchar **url_str,
+	gboolean is_html);
 
 /*
  * Return text representation of url parsing error
  */
-const gchar* url_strerror (enum uri_errno err);
+const gchar * url_strerror (enum uri_errno err);
 
 #endif

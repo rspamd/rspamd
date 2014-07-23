@@ -53,7 +53,7 @@
 gint
 make_socket_nonblocking (gint fd)
 {
-	gint                            ofl;
+	gint ofl;
 
 	ofl = fcntl (fd, F_GETFL, 0);
 
@@ -67,7 +67,7 @@ make_socket_nonblocking (gint fd)
 gint
 make_socket_blocking (gint fd)
 {
-	gint                            ofl;
+	gint ofl;
 
 	ofl = fcntl (fd, F_GETFL, 0);
 
@@ -81,8 +81,8 @@ make_socket_blocking (gint fd)
 gint
 poll_sync_socket (gint fd, gint timeout, short events)
 {
-	gint                            r;
-	struct pollfd                   fds[1];
+	gint r;
+	struct pollfd fds[1];
 
 	fds->fd = fd;
 	fds->events = events;
@@ -98,10 +98,10 @@ poll_sync_socket (gint fd, gint timeout, short events)
 
 static gint
 make_inet_socket (gint type, struct addrinfo *addr, gboolean is_server,
-		gboolean async, GList **list)
+	gboolean async, GList **list)
 {
-	gint                            fd, r, optlen, on = 1, s_error;
-	struct addrinfo               *cur;
+	gint fd, r, optlen, on = 1, s_error;
+	struct addrinfo *cur;
 
 	cur = addr;
 	while (cur) {
@@ -123,10 +123,18 @@ make_inet_socket (gint type, struct addrinfo *addr, gboolean is_server,
 		}
 
 		if (is_server) {
-			setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (gint));
+			setsockopt (fd,
+				SOL_SOCKET,
+				SO_REUSEADDR,
+				(const void *)&on,
+				sizeof (gint));
 #ifdef HAVE_IPV6_V6ONLY
 			if (cur->ai_family == AF_INET6) {
-				setsockopt (fd, IPPROTO_IPV6, IPV6_V6ONLY, (const void *)&on, sizeof (gint));
+				setsockopt (fd,
+					IPPROTO_IPV6,
+					IPV6_V6ONLY,
+					(const void *)&on,
+					sizeof (gint));
 			}
 #endif
 			r = bind (fd, cur->ai_addr, cur->ai_addrlen);
@@ -137,12 +145,14 @@ make_inet_socket (gint type, struct addrinfo *addr, gboolean is_server,
 
 		if (r == -1) {
 			if (errno != EINPROGRESS) {
-				msg_warn ("bind/connect failed: %d, '%s'", errno, strerror (errno));
+				msg_warn ("bind/connect failed: %d, '%s'", errno,
+					strerror (errno));
 				goto out;
 			}
 			if (!async) {
 				/* Try to poll */
-				if (poll_sync_socket (fd, CONNECT_TIMEOUT * 1000, POLLOUT) <= 0) {
+				if (poll_sync_socket (fd, CONNECT_TIMEOUT * 1000,
+					POLLOUT) <= 0) {
 					errno = ETIMEDOUT;
 					msg_warn ("bind/connect failed: timeout");
 					goto out;
@@ -196,10 +206,14 @@ make_udp_socket (struct addrinfo *addr, gboolean is_server, gboolean async)
 }
 
 gint
-make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboolean is_server, gboolean async)
+make_unix_socket (const gchar *path,
+	struct sockaddr_un *addr,
+	gint type,
+	gboolean is_server,
+	gboolean async)
 {
-	gint                            fd = -1, s_error, r, optlen, serrno, on = 1;
-	struct stat                     st;
+	gint fd = -1, s_error, r, optlen, serrno, on = 1;
+	struct stat st;
 
 	if (path == NULL)
 		return -1;
@@ -216,7 +230,10 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboole
 		if (lstat (addr->sun_path, &st) != -1) {
 			if (S_ISSOCK (st.st_mode)) {
 				if (unlink (addr->sun_path) == -1) {
-					msg_warn ("unlink %s failed: %d, '%s'", addr->sun_path, errno, strerror (errno));
+					msg_warn ("unlink %s failed: %d, '%s'",
+						addr->sun_path,
+						errno,
+						strerror (errno));
 					goto out;
 				}
 			}
@@ -229,7 +246,10 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboole
 	fd = socket (PF_LOCAL, type, 0);
 
 	if (fd == -1) {
-		msg_warn ("socket failed %s: %d, '%s'", addr->sun_path, errno, strerror (errno));
+		msg_warn ("socket failed %s: %d, '%s'",
+			addr->sun_path,
+			errno,
+			strerror (errno));
 		return -1;
 	}
 
@@ -239,11 +259,13 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboole
 
 	/* Set close on exec */
 	if (fcntl (fd, F_SETFD, FD_CLOEXEC) == -1) {
-		msg_warn ("fcntl failed %s: %d, '%s'", addr->sun_path, errno, strerror (errno));
+		msg_warn ("fcntl failed %s: %d, '%s'", addr->sun_path, errno,
+			strerror (errno));
 		goto out;
 	}
 	if (is_server) {
-		setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (gint));
+		setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on,
+			sizeof (gint));
 		r = bind (fd, (struct sockaddr *)addr, SUN_LEN (addr));
 	}
 	else {
@@ -252,7 +274,10 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboole
 
 	if (r == -1) {
 		if (errno != EINPROGRESS) {
-			msg_warn ("bind/connect failed %s: %d, '%s'", addr->sun_path, errno, strerror (errno));
+			msg_warn ("bind/connect failed %s: %d, '%s'",
+				addr->sun_path,
+				errno,
+				strerror (errno));
 			goto out;
 		}
 		if (!async) {
@@ -283,7 +308,7 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboole
 
 	return (fd);
 
-  out:
+out:
 	serrno = errno;
 	if (fd != -1) {
 		close (fd);
@@ -302,13 +327,13 @@ make_unix_socket (const gchar *path, struct sockaddr_un *addr, gint type, gboole
  */
 gint
 make_universal_socket (const gchar *credits, guint16 port,
-		gint type, gboolean async, gboolean is_server, gboolean try_resolve)
+	gint type, gboolean async, gboolean is_server, gboolean try_resolve)
 {
-	struct sockaddr_un              un;
-	struct stat                     st;
-	struct addrinfo                 hints, *res;
-	gint                             r;
-	gchar                            portbuf[8];
+	struct sockaddr_un un;
+	struct stat st;
+	struct addrinfo hints, *res;
+	gint r;
+	gchar portbuf[8];
 
 	if (*credits == '/') {
 		if (is_server) {
@@ -328,7 +353,11 @@ make_universal_socket (const gchar *credits, guint16 port,
 					return -1;
 				}
 				else {
-					return make_unix_socket (credits, &un, type, is_server, async);
+					return make_unix_socket (credits,
+							   &un,
+							   type,
+							   is_server,
+							   async);
 				}
 			}
 		}
@@ -355,7 +384,9 @@ make_universal_socket (const gchar *credits, guint16 port,
 			return r;
 		}
 		else {
-			msg_err ("address resolution for %s failed: %s", credits, gai_strerror (r));
+			msg_err ("address resolution for %s failed: %s",
+				credits,
+				gai_strerror (r));
 			return FALSE;
 		}
 	}
@@ -369,16 +400,16 @@ make_universal_socket (const gchar *credits, guint16 port,
  * @param is_server make this socket as server socket
  * @param try_resolve try name resolution for a socket (BLOCKING)
  */
-GList*
+GList *
 make_universal_sockets_list (const gchar *credits, guint16 port,
-		gint type, gboolean async, gboolean is_server, gboolean try_resolve)
+	gint type, gboolean async, gboolean is_server, gboolean try_resolve)
 {
-	struct sockaddr_un              un;
-	struct stat                     st;
-	struct addrinfo                 hints, *res;
-	gint                             r, fd, serrno;
-	gchar                            portbuf[8], **strv, **cur;
-	GList                           *result = NULL, *rcur;
+	struct sockaddr_un un;
+	struct stat st;
+	struct addrinfo hints, *res;
+	gint r, fd, serrno;
+	gchar portbuf[8], **strv, **cur;
+	GList *result = NULL, *rcur;
 
 	strv = g_strsplit_set (credits, ",", -1);
 	if (strv == NULL) {
@@ -405,7 +436,11 @@ make_universal_sockets_list (const gchar *credits, guint16 port,
 						goto err;
 					}
 					else {
-						fd = make_unix_socket (credits, &un, type, is_server, async);
+						fd = make_unix_socket (credits,
+								&un,
+								type,
+								is_server,
+								async);
 					}
 				}
 			}
@@ -440,11 +475,13 @@ make_universal_sockets_list (const gchar *credits, guint16 port,
 				}
 			}
 			else {
-				msg_err ("address resolution for %s failed: %s", credits, gai_strerror (r));
+				msg_err ("address resolution for %s failed: %s",
+					credits,
+					gai_strerror (r));
 				goto err;
 			}
 		}
-		cur ++;
+		cur++;
 	}
 
 	g_strfreev (strv);
@@ -472,12 +509,13 @@ err:
 gint
 make_socketpair (gint pair[2])
 {
-	gint                            r;
+	gint r;
 
 	r = socketpair (AF_LOCAL, SOCK_STREAM, 0, pair);
 
 	if (r == -1) {
-		msg_warn ("socketpair failed: %d, '%s'", errno, strerror (errno), pair[0], pair[1]);
+		msg_warn ("socketpair failed: %d, '%s'", errno, strerror (
+				errno), pair[0], pair[1]);
 		return -1;
 	}
 	/* Set close on exec */
@@ -501,7 +539,7 @@ out:
 gint
 write_pid (struct rspamd_main *main)
 {
-	pid_t                           pid;
+	pid_t pid;
 
 	if (main->cfg->pid_file == NULL) {
 		return -1;
@@ -519,7 +557,8 @@ write_pid (struct rspamd_main *main)
 #else
 		if (fchown (main->pfh->pf_fd, 0, 0) == -1) {
 #endif
-			msg_err ("cannot chown of pidfile %s to 0:0 user", main->cfg->pid_file);
+			msg_err ("cannot chown of pidfile %s to 0:0 user",
+				main->cfg->pid_file);
 		}
 	}
 
@@ -530,13 +569,15 @@ write_pid (struct rspamd_main *main)
 
 #ifdef HAVE_SA_SIGINFO
 void
-init_signals (struct sigaction *signals, void (*sig_handler)(gint, siginfo_t *, void *))
+init_signals (struct sigaction *signals, void (*sig_handler)(gint,
+	siginfo_t *,
+	void *))
 #else
 void
 init_signals (struct sigaction *signals, void (*sig_handler)(gint))
 #endif
 {
-	struct sigaction                sigpipe_act;
+	struct sigaction sigpipe_act;
 	/* Setting up signal handlers */
 	/* SIGUSR1 - reopen config file */
 	/* SIGUSR2 - worker is ready for accept */
@@ -559,8 +600,8 @@ init_signals (struct sigaction *signals, void (*sig_handler)(gint))
 	signals->sa_flags = 0;
 #endif
 	sigaction (SIGTERM, signals, NULL);
-	sigaction (SIGINT, signals, NULL);
-	sigaction (SIGHUP, signals, NULL);
+	sigaction (SIGINT,	signals, NULL);
+	sigaction (SIGHUP,	signals, NULL);
 	sigaction (SIGCHLD, signals, NULL);
 	sigaction (SIGUSR1, signals, NULL);
 	sigaction (SIGUSR2, signals, NULL);
@@ -577,8 +618,8 @@ init_signals (struct sigaction *signals, void (*sig_handler)(gint))
 static void
 pass_signal_cb (gpointer key, gpointer value, gpointer ud)
 {
-	struct rspamd_worker           *cur = value;
-    gint                            signo = GPOINTER_TO_INT (ud);
+	struct rspamd_worker *cur = value;
+	gint signo = GPOINTER_TO_INT (ud);
 
 	kill (cur->pid, signo);
 }
@@ -586,7 +627,7 @@ pass_signal_cb (gpointer key, gpointer value, gpointer ud)
 void
 pass_signal_worker (GHashTable * workers, gint signo)
 {
-    g_hash_table_foreach (workers, pass_signal_cb, GINT_TO_POINTER (signo));
+	g_hash_table_foreach (workers, pass_signal_cb, GINT_TO_POINTER (signo));
 }
 
 void
@@ -600,9 +641,9 @@ convert_to_lowercase (gchar *str, guint size)
 
 #ifndef HAVE_SETPROCTITLE
 
-static gchar                    *title_buffer = 0;
-static size_t                   title_buffer_size = 0;
-static gchar                    *title_progname, *title_progname_full;
+static gchar *title_buffer = 0;
+static size_t title_buffer_size = 0;
+static gchar *title_progname, *title_progname_full;
 
 gint
 setproctitle (const gchar *fmt, ...)
@@ -614,24 +655,33 @@ setproctitle (const gchar *fmt, ...)
 
 	memset (title_buffer, '\0', title_buffer_size);
 
-	ssize_t                         written;
+	ssize_t written;
 
 	if (fmt) {
-		ssize_t                         written2;
-		va_list                         ap;
+		ssize_t written2;
+		va_list ap;
 
-		written = snprintf (title_buffer, title_buffer_size, "%s: ", title_progname);
+		written = snprintf (title_buffer,
+				title_buffer_size,
+				"%s: ",
+				title_progname);
 		if (written < 0 || (size_t) written >= title_buffer_size)
 			return -1;
 
 		va_start (ap, fmt);
-		written2 = vsnprintf (title_buffer + written, title_buffer_size - written, fmt, ap);
+		written2 = vsnprintf (title_buffer + written,
+				title_buffer_size - written,
+				fmt,
+				ap);
 		va_end (ap);
 		if (written2 < 0 || (size_t) written2 >= title_buffer_size - written)
 			return -1;
 	}
 	else {
-		written = snprintf (title_buffer, title_buffer_size, "%s", title_progname);
+		written = snprintf (title_buffer,
+				title_buffer_size,
+				"%s",
+				title_progname);
 		if (written < 0 || (size_t) written >= title_buffer_size)
 			return -1;
 	}
@@ -643,9 +693,9 @@ setproctitle (const gchar *fmt, ...)
 }
 
 /*
-  It has to be _init function, because __attribute__((constructor))
-  functions gets called without arguments.
-*/
+   It has to be _init function, because __attribute__((constructor))
+   functions gets called without arguments.
+ */
 
 gint
 init_title (gint argc, gchar *argv[], gchar *envp[])
@@ -654,8 +704,8 @@ init_title (gint argc, gchar *argv[], gchar *envp[])
 	/* XXX: try to handle these OSes too */
 	return 0;
 #else
-	gchar                           *begin_of_buffer = 0, *end_of_buffer = 0;
-	gint                            i;
+	gchar *begin_of_buffer = 0, *end_of_buffer = 0;
+	gint i;
 
 	for (i = 0; i < argc; ++i) {
 		if (!begin_of_buffer)
@@ -674,7 +724,7 @@ init_title (gint argc, gchar *argv[], gchar *envp[])
 	if (!end_of_buffer)
 		return 0;
 
-	gchar                           **new_environ = g_malloc ((i + 1) * sizeof (envp[0]));
+	gchar **new_environ = g_malloc ((i + 1) * sizeof (envp[0]));
 
 	if (!new_environ)
 		return 0;
@@ -691,7 +741,7 @@ init_title (gint argc, gchar *argv[], gchar *envp[])
 		if (!title_progname_full)
 			goto cleanup_enomem;
 
-		gchar                           *p = strrchr (title_progname_full, '/');
+		gchar *p = strrchr (title_progname_full, '/');
 
 		if (p)
 			title_progname = p + 1;
@@ -708,7 +758,7 @@ init_title (gint argc, gchar *argv[], gchar *envp[])
 
 	return 0;
 
-  cleanup_enomem:
+cleanup_enomem:
 	for (--i; i >= 0; --i) {
 		g_free (new_environ[i]);
 	}
@@ -719,13 +769,13 @@ init_title (gint argc, gchar *argv[], gchar *envp[])
 #endif
 
 #ifndef HAVE_PIDFILE
-extern gchar                    *__progname;
-static gint                      _rspamd_pidfile_remove (rspamd_pidfh_t *pfh, gint freeit);
+extern gchar *__progname;
+static gint _rspamd_pidfile_remove (rspamd_pidfh_t *pfh, gint freeit);
 
 static gint
 rspamd_pidfile_verify (rspamd_pidfh_t *pfh)
 {
-	struct stat                     sb;
+	struct stat sb;
 
 	if (pfh == NULL || pfh->pf_fd == -1)
 		return (-1);
@@ -742,15 +792,15 @@ rspamd_pidfile_verify (rspamd_pidfh_t *pfh)
 static gint
 rspamd_pidfile_read (const gchar *path, pid_t * pidptr)
 {
-	gchar                           buf[16], *endptr;
-	gint                            error, fd, i;
+	gchar buf[16], *endptr;
+	gint error, fd, i;
 
 	fd = open (path, O_RDONLY);
 	if (fd == -1)
 		return (errno);
 
 	i = read (fd, buf, sizeof (buf) - 1);
-	error = errno;				/* Remember errno in case close() wants to change it. */
+	error = errno;              /* Remember errno in case close() wants to change it. */
 	close (fd);
 	if (i == -1)
 		return error;
@@ -765,20 +815,23 @@ rspamd_pidfile_read (const gchar *path, pid_t * pidptr)
 	return 0;
 }
 
-rspamd_pidfh_t                   *
+rspamd_pidfh_t *
 rspamd_pidfile_open (const gchar *path, mode_t mode, pid_t * pidptr)
 {
-	rspamd_pidfh_t                 *pfh;
-	struct stat                     sb;
-	gint                            error, fd, len, count;
-	struct timespec                 rqtp;
+	rspamd_pidfh_t *pfh;
+	struct stat sb;
+	gint error, fd, len, count;
+	struct timespec rqtp;
 
 	pfh = g_malloc (sizeof (*pfh));
 	if (pfh == NULL)
 		return NULL;
 
 	if (path == NULL)
-		len = snprintf (pfh->pf_path, sizeof (pfh->pf_path), "/var/run/%s.pid", g_get_prgname ());
+		len = snprintf (pfh->pf_path,
+				sizeof (pfh->pf_path),
+				"/var/run/%s.pid",
+				g_get_prgname ());
 	else
 		len = snprintf (pfh->pf_path, sizeof (pfh->pf_path), "%s", path);
 	if (len >= (gint)sizeof (pfh->pf_path)) {
@@ -800,7 +853,7 @@ rspamd_pidfile_open (const gchar *path, mode_t mode, pid_t * pidptr)
 		rqtp.tv_sec = 0;
 		rqtp.tv_nsec = 5000000;
 		if (errno == EWOULDBLOCK && pidptr != NULL) {
-		  again:
+again:
 			errno = rspamd_pidfile_read (pfh->pf_path, pidptr);
 			if (errno == 0)
 				errno = EEXIST;
@@ -837,8 +890,8 @@ rspamd_pidfile_open (const gchar *path, mode_t mode, pid_t * pidptr)
 gint
 rspamd_pidfile_write (rspamd_pidfh_t *pfh)
 {
-	gchar                           pidstr[16];
-	gint                            error, fd;
+	gchar pidstr[16];
+	gint error, fd;
 
 	/*
 	 * Check remembered descriptor, so we don't overwrite some other
@@ -877,7 +930,7 @@ rspamd_pidfile_write (rspamd_pidfh_t *pfh)
 gint
 rspamd_pidfile_close (rspamd_pidfh_t *pfh)
 {
-	gint                            error;
+	gint error;
 
 	error = rspamd_pidfile_verify (pfh);
 	if (error != 0) {
@@ -898,7 +951,7 @@ rspamd_pidfile_close (rspamd_pidfh_t *pfh)
 static gint
 _rspamd_pidfile_remove (rspamd_pidfh_t *pfh, gint freeit)
 {
-	gint                            error;
+	gint error;
 
 	error = rspamd_pidfile_verify (pfh);
 	if (error != 0) {
@@ -936,12 +989,15 @@ rspamd_pidfile_remove (rspamd_pidfh_t *pfh)
 #endif
 
 /* Replace %r with rcpt value and %f with from value, new string is allocated in pool */
-gchar                           *
-resolve_stat_filename (rspamd_mempool_t * pool, gchar *pattern, gchar *rcpt, gchar *from)
+gchar *
+resolve_stat_filename (rspamd_mempool_t * pool,
+	gchar *pattern,
+	gchar *rcpt,
+	gchar *from)
 {
-	gint                            need_to_format = 0, len = 0;
-	gint                            rcptlen, fromlen;
-	gchar                           *c = pattern, *new, *s;
+	gint need_to_format = 0, len = 0;
+	gint rcptlen, fromlen;
+	gchar *c = pattern, *new, *s;
 
 	if (rcpt) {
 		rcptlen = strlen (rcpt);
@@ -1007,39 +1063,43 @@ resolve_stat_filename (rspamd_mempool_t * pool, gchar *pattern, gchar *rcpt, gch
 }
 
 #ifdef HAVE_CLOCK_GETTIME
-const gchar                     *
-calculate_check_time (struct timeval *tv, struct timespec *begin, gint resolution, guint32 *scan_time)
+const gchar *
+calculate_check_time (struct timeval *tv,
+	struct timespec *begin,
+	gint resolution,
+	guint32 *scan_time)
 #else
-const gchar                     *
-calculate_check_time (struct timeval *begin, gint resolution, guint32 *scan_time)
+const gchar *
+calculate_check_time (struct timeval *begin, gint resolution,
+	guint32 *scan_time)
 #endif
 {
-	double                          vdiff, diff;
-	static gchar                     res[64];
-	static gchar                     fmt[sizeof ("%.10f ms real, %.10f ms virtual")];
-	struct timeval                  tv_now;
+	double vdiff, diff;
+	static gchar res[64];
+	static gchar fmt[sizeof ("%.10f ms real, %.10f ms virtual")];
+	struct timeval tv_now;
 
 	if (gettimeofday (&tv_now, NULL) == -1) {
 		msg_warn ("gettimeofday failed: %s", strerror (errno));
 	}
 #ifdef HAVE_CLOCK_GETTIME
-	struct timespec                 ts;
+	struct timespec ts;
 
-	diff = (tv_now.tv_sec - tv->tv_sec) * 1000. +	/* Seconds */
-		(tv_now.tv_usec - tv->tv_usec) / 1000.;	/* Microseconds */
+	diff = (tv_now.tv_sec - tv->tv_sec) * 1000. +   /* Seconds */
+		(tv_now.tv_usec - tv->tv_usec) / 1000.; /* Microseconds */
 #ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
 	clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts);
 #elif defined(HAVE_CLOCK_VIRTUAL)
-	clock_gettime (CLOCK_VIRTUAL, &ts);
+	clock_gettime (CLOCK_VIRTUAL,			 &ts);
 #else
-	clock_gettime (CLOCK_REALTIME, &ts);
+	clock_gettime (CLOCK_REALTIME,			 &ts);
 #endif
 
-	vdiff = (ts.tv_sec - begin->tv_sec) * 1000. +	/* Seconds */
-		(ts.tv_nsec - begin->tv_nsec) / 1000000.;	/* Nanoseconds */
+	vdiff = (ts.tv_sec - begin->tv_sec) * 1000. +   /* Seconds */
+		(ts.tv_nsec - begin->tv_nsec) / 1000000.;   /* Nanoseconds */
 #else
-	diff = (tv_now.tv_sec - begin->tv_sec) * 1000. +	/* Seconds */
-		(tv_now.tv_usec - begin->tv_usec) / 1000.;	/* Microseconds */
+	diff = (tv_now.tv_sec - begin->tv_sec) * 1000. +    /* Seconds */
+		(tv_now.tv_usec - begin->tv_usec) / 1000.;  /* Microseconds */
 
 	vdiff = diff;
 #endif
@@ -1071,9 +1131,9 @@ rspamd_strcase_equal (gconstpointer v, gconstpointer v2)
 guint
 rspamd_strcase_hash (gconstpointer key)
 {
-	const gchar                     *p = key;
-	gchar							 buf[256];
-	guint                            h = 0, i = 0;
+	const gchar *p = key;
+	gchar buf[256];
+	guint h = 0, i = 0;
 
 
 	while (*p != '\0') {
@@ -1096,7 +1156,7 @@ rspamd_strcase_hash (gconstpointer key)
 guint
 rspamd_str_hash (gconstpointer key)
 {
-	gsize							len;
+	gsize len;
 
 	len = strlen ((const gchar *)key);
 
@@ -1113,7 +1173,8 @@ gboolean
 fstr_strcase_equal (gconstpointer v, gconstpointer v2)
 {
 	const f_str_t *f1 = v, *f2 = v2;
-	if (f1->len == f2->len && g_ascii_strncasecmp (f1->begin, f2->begin, f1->len) == 0) {
+	if (f1->len == f2->len &&
+		g_ascii_strncasecmp (f1->begin, f2->begin, f1->len) == 0) {
 		return TRUE;
 	}
 
@@ -1124,11 +1185,11 @@ fstr_strcase_equal (gconstpointer v, gconstpointer v2)
 guint
 fstr_strcase_hash (gconstpointer key)
 {
-	const f_str_t                   *f = key;
-	const gchar                     *p;
-	guint                            h = 0, i = 0;
-	gchar							 buf[256];
-	
+	const f_str_t *f = key;
+	const gchar *p;
+	guint h = 0, i = 0;
+	gchar buf[256];
+
 	p = f->begin;
 	while (p - f->begin < (gint)f->len) {
 		buf[i] = g_ascii_tolower (*p);
@@ -1151,7 +1212,7 @@ void
 gperf_profiler_init (struct rspamd_config *cfg, const gchar *descr)
 {
 #if defined(WITH_GPERF_TOOLS)
-	gchar                           prof_path[PATH_MAX];
+	gchar prof_path[PATH_MAX];
 
 	if (getenv ("CPUPROFILE")) {
 
@@ -1160,10 +1221,16 @@ gperf_profiler_init (struct rspamd_config *cfg, const gchar *descr)
 	}
 	/* Try to create temp directory for gmon.out and chdir to it */
 	if (cfg->profile_path == NULL) {
-		cfg->profile_path = g_strdup_printf ("%s/rspamd-profile", cfg->temp_dir);
+		cfg->profile_path =
+			g_strdup_printf ("%s/rspamd-profile", cfg->temp_dir);
 	}
 
-	snprintf (prof_path, sizeof (prof_path), "%s-%s.%d", cfg->profile_path, descr, (gint)getpid ());
+	snprintf (prof_path,
+		sizeof (prof_path),
+		"%s-%s.%d",
+		cfg->profile_path,
+		descr,
+		(gint)getpid ());
 	if (ProfilerStart (prof_path)) {
 		/* start ITIMER_PROF timer */
 		ProfilerRegisterThread ();
@@ -1177,94 +1244,94 @@ gperf_profiler_init (struct rspamd_config *cfg, const gchar *descr)
 
 #ifdef HAVE_FLOCK
 /* Flock version */
-gboolean 
+gboolean
 lock_file (gint fd, gboolean async)
 {
-    gint                            flags;
+	gint flags;
 
-    if (async) {
-        flags = LOCK_EX | LOCK_NB;
-    }
-    else {
-        flags = LOCK_EX;
-    }
+	if (async) {
+		flags = LOCK_EX | LOCK_NB;
+	}
+	else {
+		flags = LOCK_EX;
+	}
 
-    if (flock (fd, flags) == -1) {
-        if (async && errno == EAGAIN) {
-            return FALSE;
-        }
-        msg_warn ("lock on file failed: %s", strerror (errno));
-        return FALSE;
-    }
+	if (flock (fd, flags) == -1) {
+		if (async && errno == EAGAIN) {
+			return FALSE;
+		}
+		msg_warn ("lock on file failed: %s", strerror (errno));
+		return FALSE;
+	}
 
-    return TRUE;
+	return TRUE;
 }
 
-gboolean 
+gboolean
 unlock_file (gint fd, gboolean async)
 {
-    gint                            flags;
+	gint flags;
 
-    if (async) {
-        flags = LOCK_UN | LOCK_NB;
-    }
-    else {
-        flags = LOCK_UN;
-    }
+	if (async) {
+		flags = LOCK_UN | LOCK_NB;
+	}
+	else {
+		flags = LOCK_UN;
+	}
 
-    if (flock (fd, flags) == -1) {
-        if (async && errno == EAGAIN) {
-            return FALSE;
-        }
-        msg_warn ("lock on file failed: %s", strerror (errno));
-        return FALSE;
-    }
+	if (flock (fd, flags) == -1) {
+		if (async && errno == EAGAIN) {
+			return FALSE;
+		}
+		msg_warn ("lock on file failed: %s", strerror (errno));
+		return FALSE;
+	}
 
-    return TRUE;
+	return TRUE;
 
 }
 #else /* HAVE_FLOCK */
 /* Fctnl version */
-gboolean 
+gboolean
 lock_file (gint fd, gboolean async)
 {
-    struct flock fl = {
-        .l_type = F_WRLCK,
-        .l_whence = SEEK_SET,
-        .l_start = 0,
-        .l_len = 0
-    };
+	struct flock fl = {
+		.l_type = F_WRLCK,
+		.l_whence = SEEK_SET,
+		.l_start = 0,
+		.l_len = 0
+	};
 
-    if (fcntl (fd, async ? F_SETLK : F_SETLKW, &fl) == -1) {
-        if (async && (errno == EAGAIN || errno == EACCES)) {
-            return FALSE;
-        }
-        msg_warn ("lock on file failed: %s", strerror (errno));
-        return FALSE;
-    }
+	if (fcntl (fd, async ? F_SETLK : F_SETLKW, &fl) == -1) {
+		if (async && (errno == EAGAIN || errno == EACCES)) {
+			return FALSE;
+		}
+		msg_warn ("lock on file failed: %s", strerror (errno));
+		return FALSE;
+	}
 
-    return TRUE;
+	return TRUE;
 }
 
-gboolean 
+gboolean
 unlock_file (gint fd, gboolean async)
 {
-    struct flock fl = {
-        .l_type = F_UNLCK,
-        .l_whence = SEEK_SET,
-        .l_start = 0,
-        .l_len = 0
-    };
+	struct flock fl = {
+		.l_type = F_UNLCK,
+		.l_whence = SEEK_SET,
+		.l_start = 0,
+		.l_len = 0
+	};
 
-    if (fcntl (fd, async ? F_SETLK : F_SETLKW, &fl) == -1) {
-        if (async && (errno == EAGAIN || errno == EACCES)) {
-            return FALSE;
-        }
-        msg_warn ("lock on file failed: %s", strerror (errno));
-        return FALSE;
-    }
+	if (fcntl (fd, async ? F_SETLK : F_SETLKW, &fl) == -1) {
+		if (async && (errno == EAGAIN || errno == EACCES)) {
+			return FALSE;
+		}
+		msg_warn ("lock on file failed: %s", strerror (errno));
+		return FALSE;
+	}
 
-    return TRUE;
+	return TRUE;
 
 }
 #endif /* HAVE_FLOCK */
@@ -1339,14 +1406,14 @@ rspamd_strlcpy_tolower (gchar *dst, const gchar *src, gsize siz)
 gint
 compare_email_func (gconstpointer a, gconstpointer b)
 {
-	const struct uri               *u1 = a, *u2 = b;
-	gint                            r;
+	const struct uri *u1 = a, *u2 = b;
+	gint r;
 
 	if (u1->hostlen != u2->hostlen || u1->hostlen == 0) {
 		return u1->hostlen - u2->hostlen;
 	}
 	else {
-		if ((r = g_ascii_strncasecmp (u1->host, u2->host, u1->hostlen)) == 0){
+		if ((r = g_ascii_strncasecmp (u1->host, u2->host, u1->hostlen)) == 0) {
 			if (u1->userlen != u2->userlen || u1->userlen == 0) {
 				return u1->userlen - u2->userlen;
 			}
@@ -1365,8 +1432,8 @@ compare_email_func (gconstpointer a, gconstpointer b)
 gint
 compare_url_func (gconstpointer a, gconstpointer b)
 {
-	const struct uri               *u1 = a, *u2 = b;
-	int                             r;
+	const struct uri *u1 = a, *u2 = b;
+	int r;
 
 	if (u1->hostlen != u2->hostlen || u1->hostlen == 0) {
 		return u1->hostlen - u2->hostlen;
@@ -1388,15 +1455,15 @@ compare_url_func (gconstpointer a, gconstpointer b)
 gchar *
 rspamd_strncasestr (const gchar *s, const gchar *find, gint len)
 {
-	gchar                           c, sc;
-	gsize                           mlen;
+	gchar c, sc;
+	gsize mlen;
 
 	if ((c = *find++) != 0) {
 		c = g_ascii_tolower (c);
 		mlen = strlen (find);
 		do {
 			do {
-				if ((sc = *s++) == 0 || len -- == 0)
+				if ((sc = *s++) == 0 || len-- == 0)
 					return (NULL);
 			} while (g_ascii_tolower (sc) != c);
 		} while (g_ascii_strncasecmp (s, find, mlen) != 0);
@@ -1411,16 +1478,16 @@ rspamd_strncasestr (const gchar *s, const gchar *find, gint len)
 gboolean
 rspamd_strtol (const gchar *s, gsize len, glong *value)
 {
-	const gchar                    *p = s, *end = s + len;
-	gchar							c;
-	glong							v = 0;
-	const glong						cutoff = G_MAXLONG / 10, cutlim = G_MAXLONG % 10;
-	gboolean                        neg;
+	const gchar *p = s, *end = s + len;
+	gchar c;
+	glong v = 0;
+	const glong cutoff = G_MAXLONG / 10, cutlim = G_MAXLONG % 10;
+	gboolean neg;
 
 	/* Case negative values */
 	if (*p == '-') {
 		neg = TRUE;
-		p ++;
+		p++;
 	}
 	else {
 		neg = FALSE;
@@ -1444,7 +1511,7 @@ rspamd_strtol (const gchar *s, gsize len, glong *value)
 		else {
 			return FALSE;
 		}
-		p ++;
+		p++;
 	}
 
 	*value = neg ? -(v) : v;
@@ -1457,10 +1524,10 @@ rspamd_strtol (const gchar *s, gsize len, glong *value)
 gboolean
 rspamd_strtoul (const gchar *s, gsize len, gulong *value)
 {
-	const gchar                    *p = s, *end = s + len;
-	gchar							c;
-	gulong							v = 0;
-	const gulong					cutoff = G_MAXULONG / 10, cutlim = G_MAXULONG % 10;
+	const gchar *p = s, *end = s + len;
+	gchar c;
+	gulong v = 0;
+	const gulong cutoff = G_MAXULONG / 10, cutlim = G_MAXULONG % 10;
 
 	/* Some preparations for range errors */
 	while (p < end) {
@@ -1480,7 +1547,7 @@ rspamd_strtoul (const gchar *s, gsize len, gulong *value)
 		else {
 			return FALSE;
 		}
-		p ++;
+		p++;
 	}
 
 	*value = v;
@@ -1505,10 +1572,10 @@ rspamd_fallocate (gint fd, off_t offset, off_t len)
  * Create new mutex
  * @return mutex or NULL
  */
-inline rspamd_mutex_t*
+inline rspamd_mutex_t *
 rspamd_mutex_new (void)
 {
-	rspamd_mutex_t					*new;
+	rspamd_mutex_t *new;
 
 	new = g_slice_alloc (sizeof (rspamd_mutex_t));
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
@@ -1561,10 +1628,10 @@ rspamd_mutex_free (rspamd_mutex_t *mtx)
  * Create new rwlock
  * @return
  */
-rspamd_rwlock_t*
+rspamd_rwlock_t *
 rspamd_rwlock_new (void)
 {
-	rspamd_rwlock_t					*new;
+	rspamd_rwlock_t *new;
 
 	new = g_malloc (sizeof (rspamd_rwlock_t));
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 30))
@@ -1651,8 +1718,8 @@ struct rspamd_thread_data {
 static gpointer
 rspamd_thread_func (gpointer ud)
 {
-	struct rspamd_thread_data		*td = ud;
-	sigset_t						 s_mask;
+	struct rspamd_thread_data *td = ud;
+	sigset_t s_mask;
 
 	/* Ignore signals in thread */
 	sigemptyset (&s_mask);
@@ -1682,13 +1749,16 @@ rspamd_thread_func (gpointer ud)
  * @param err error pointer
  * @return new thread object that can be joined
  */
-GThread*
-rspamd_create_thread (const gchar *name, GThreadFunc func, gpointer data, GError **err)
+GThread *
+rspamd_create_thread (const gchar *name,
+	GThreadFunc func,
+	gpointer data,
+	GError **err)
 {
-	GThread							*new;
-	struct rspamd_thread_data		*td;
-	static gint32					 id;
-	guint							 r;
+	GThread *new;
+	struct rspamd_thread_data *td;
+	static gint32 id;
+	guint r;
 
 	r = strlen (name);
 	td = g_malloc (sizeof (struct rspamd_thread_data));
@@ -1712,15 +1782,15 @@ murmur32_hash (const guint8 *in, gsize len)
 {
 
 
-	const guint32 			 c1 = 0xcc9e2d51;
-	const guint32 			 c2 = 0x1b873593;
+	const guint32 c1 = 0xcc9e2d51;
+	const guint32 c2 = 0x1b873593;
 
-	const int				 nblocks = len / 4;
-	const guint32 			*blocks = (const guint32 *)(in);
-	const guint8 			*tail;
-	guint32 				 h = 0;
-	gint 					 i;
-	guint32 				 k;
+	const int nblocks = len / 4;
+	const guint32 *blocks = (const guint32 *)(in);
+	const guint8 *tail;
+	guint32 h = 0;
+	gint i;
+	guint32 k;
 
 	if (in == NULL || len == 0) {
 		return 0;
@@ -1768,15 +1838,15 @@ murmur32_hash (const guint8 *in, gsize len)
 void
 murmur128_hash (const guint8 *in, gsize len, guint64 out[])
 {
-	const guint64 			 c1 = 0x87c37b91114253d5ULL;
-	const guint64 			 c2 = 0x4cf5ad432745937fULL;
-	const gint 				 nblocks = len / 16;
-	const guint64 			*blocks = (const guint64 *)(in);
-	const guint8 			*tail;
-	guint64 				 h1 = 0;
-	guint64 				 h2 = 0;
-	int 					 i;
-	guint64 				 k1, k2;
+	const guint64 c1 = 0x87c37b91114253d5ULL;
+	const guint64 c2 = 0x4cf5ad432745937fULL;
+	const gint nblocks = len / 16;
+	const guint64 *blocks = (const guint64 *)(in);
+	const guint8 *tail;
+	guint64 h1 = 0;
+	guint64 h2 = 0;
+	int i;
+	guint64 k1, k2;
 
 	if (in == NULL || len == 0 || out == NULL) {
 		return;
@@ -1785,26 +1855,26 @@ murmur128_hash (const guint8 *in, gsize len, guint64 out[])
 	tail = (const guint8 *)(in + (nblocks * 16));
 
 	for (i = 0; i < nblocks; i++) {
-		k1 = blocks[i*2+0];
-		k2 = blocks[i*2+1];
+		k1 = blocks[i * 2 + 0];
+		k2 = blocks[i * 2 + 1];
 
 		k1 *= c1;
-		k1  = (k1 << 31) | (k1 >> (64 - 31));
+		k1 = (k1 << 31) | (k1 >> (64 - 31));
 		k1 *= c2;
 		h1 ^= k1;
 
 		h1 = (h1 << 27) | (h1 >> (64 - 27));
 		h1 += h2;
-		h1 = h1*5+0x52dce729;
+		h1 = h1 * 5 + 0x52dce729;
 
 		k2 *= c2;
-		k2  = (k2 << 33) | (k2 >> (64 - 33));
+		k2 = (k2 << 33) | (k2 >> (64 - 33));
 		k2 *= c1;
 		h2 ^= k2;
 
 		h2 = (h2 << 31) | (h2 >> (64 - 31));
 		h2 += h1;
-		h2 = h2*5+0x38495ab5;
+		h2 = h2 * 5 + 0x38495ab5;
 	}
 
 	k1 = k2 = 0;
@@ -1824,7 +1894,7 @@ murmur128_hash (const guint8 *in, gsize len, guint64 out[])
 	case  9:
 		k2 ^= (guint64)(tail[ 8]) << 0;
 		k2 *= c2;
-		k2  = (k2 << 33) | (k2 >> (64 - 33));
+		k2 = (k2 << 33) | (k2 >> (64 - 33));
 		k2 *= c1;
 		h2 ^= k2;
 
@@ -1845,7 +1915,7 @@ murmur128_hash (const guint8 *in, gsize len, guint64 out[])
 	case  1:
 		k1 ^= (guint64)(tail[ 0]) << 0;
 		k1 *= c1;
-		k1  = (k1 << 31) | (k1 >> (64 - 31));
+		k1 = (k1 << 31) | (k1 >> (64 - 31));
 		k1 *= c2;
 		h1 ^= k1;
 	};
@@ -1888,11 +1958,13 @@ struct hash_copy_callback_data {
 static void
 copy_foreach_callback (gpointer key, gpointer value, gpointer ud)
 {
-	struct hash_copy_callback_data		*cb = ud;
-	gpointer							 nkey, nvalue;
+	struct hash_copy_callback_data *cb = ud;
+	gpointer nkey, nvalue;
 
 	nkey = cb->key_copy_func ? cb->key_copy_func (key, cb->ud) : (gpointer)key;
-	nvalue = cb->value_copy_func ? cb->value_copy_func (value, cb->ud) : (gpointer)value;
+	nvalue =
+		cb->value_copy_func ? cb->value_copy_func (value,
+			cb->ud) : (gpointer)value;
 	g_hash_table_insert (cb->dst, nkey, nvalue);
 }
 /**
@@ -1903,12 +1975,13 @@ copy_foreach_callback (gpointer key, gpointer value, gpointer ud)
  * @param value_copy_func function called to copy or modify values (or NULL)
  * @param ud user data for copy functions
  */
-void rspamd_hash_table_copy (GHashTable *src, GHashTable *dst,
-		gpointer (*key_copy_func)(gconstpointer data, gpointer ud),
-		gpointer (*value_copy_func)(gconstpointer data, gpointer ud),
-		gpointer ud)
+void
+rspamd_hash_table_copy (GHashTable *src, GHashTable *dst,
+	gpointer (*key_copy_func)(gconstpointer data, gpointer ud),
+	gpointer (*value_copy_func)(gconstpointer data, gpointer ud),
+	gpointer ud)
 {
-	struct hash_copy_callback_data		 cb;
+	struct hash_copy_callback_data cb;
 	if (src != NULL && dst != NULL) {
 		cb.key_copy_func = key_copy_func;
 		cb.value_copy_func = value_copy_func;
@@ -1927,7 +2000,7 @@ void rspamd_hash_table_copy (GHashTable *src, GHashTable *dst,
 gpointer
 rspamd_str_pool_copy (gconstpointer data, gpointer ud)
 {
-	rspamd_mempool_t						*pool = ud;
+	rspamd_mempool_t *pool = ud;
 
 	return data ? rspamd_mempool_strdup (pool, data) : NULL;
 }
@@ -1941,7 +2014,8 @@ parse_ipmask_v4 (const char *line, struct in_addr *ina, int *mask)
 	bzero (ip_buf, sizeof (ip_buf));
 
 	if ((pos = strchr (line, '/')) != NULL) {
-		rspamd_strlcpy (ip_buf, line, MIN ((gsize)(pos - line), sizeof (ip_buf)));
+		rspamd_strlcpy (ip_buf, line,
+			MIN ((gsize)(pos - line), sizeof (ip_buf)));
 		rspamd_strlcpy (mask_buf, pos + 1, sizeof (mask_buf));
 	}
 	else {
@@ -1971,7 +2045,8 @@ parse_ipmask_v4 (const char *line, struct in_addr *ina, int *mask)
 static volatile sig_atomic_t saved_signo[NSIG];
 
 static
-void read_pass_tmp_sig_handler (int s)
+void
+read_pass_tmp_sig_handler (int s)
 {
 
 	saved_signo[s] = 1;
@@ -1988,7 +2063,8 @@ rspamd_read_passphrase (gchar *buf, gint size, gint rwflag, gpointer key)
 	gint len = 0;
 	gchar pass[BUFSIZ];
 
-	if (readpassphrase ("Enter passphrase: ", buf, size, RPP_ECHO_OFF | RPP_REQUIRE_TTY) == NULL) {
+	if (readpassphrase ("Enter passphrase: ", buf, size, RPP_ECHO_OFF |
+		RPP_REQUIRE_TTY) == NULL) {
 		return 0;
 	}
 
@@ -2014,16 +2090,17 @@ restart:
 		errno = ENOTTY;
 		return 0;
 	}
-	memcpy(&term, &oterm, sizeof(term));
+	memcpy (&term, &oterm, sizeof(term));
 	term.c_lflag &= ~(ECHO | ECHONL);
-	(void)tcsetattr(input, TCSAFLUSH, &term);
-	(void)write (output, "Enter passphrase: ", sizeof ("Enter passphrase: ") - 1);
+	(void)tcsetattr (input, TCSAFLUSH, &term);
+	(void)write (output, "Enter passphrase: ", sizeof ("Enter passphrase: ") -
+		1);
 
 	/* Save the current sighandler */
 	for (i = 0; i < NSIG; i++) {
 		saved_signo[i] = 0;
 	}
-	sigemptyset(&sa.sa_mask);
+	sigemptyset (&sa.sa_mask);
 	sa.sa_flags = 0;
 	sa.sa_handler = read_pass_tmp_sig_handler;
 	(void)sigaction (SIGALRM, &sa, &savealrm);
@@ -2050,7 +2127,7 @@ restart:
 	/* Restore terminal state */
 	if (memcmp (&term, &oterm, sizeof (term)) != 0) {
 		while (tcsetattr (input, TCSAFLUSH, &oterm) == -1 &&
-				errno == EINTR && !saved_signo[SIGTTOU]);
+			errno == EINTR && !saved_signo[SIGTTOU]) ;
 	}
 
 	/* Restore signal handlers */
@@ -2069,7 +2146,7 @@ restart:
 	/* Send signals pending */
 	for (i = 0; i < NSIG; i++) {
 		if (saved_signo[i]) {
-			kill(getpid(), i);
+			kill (getpid (), i);
 			switch (i) {
 			case SIGTSTP:
 			case SIGTTIN:
@@ -2092,15 +2169,16 @@ rspamd_ip_is_valid (rspamd_inet_addr_t *addr)
 	gboolean ret = FALSE;
 
 	if (G_LIKELY (addr->af == AF_INET)) {
-		if (memcmp (&addr->addr.s4.sin_addr, &ip4_any, sizeof (struct in_addr)) != 0 &&
-				memcmp (&addr->addr.s4.sin_addr, &ip4_none,
-						sizeof (struct in_addr)) != 0) {
+		if (memcmp (&addr->addr.s4.sin_addr, &ip4_any,
+			sizeof (struct in_addr)) != 0 &&
+			memcmp (&addr->addr.s4.sin_addr, &ip4_none,
+			sizeof (struct in_addr)) != 0) {
 			ret = TRUE;
 		}
 	}
 	else if (G_UNLIKELY (addr->af == AF_INET6)) {
 		if (memcmp (&addr->addr.s6.sin6_addr, &ip6_any,
-				sizeof (struct in6_addr)) != 0) {
+			sizeof (struct in6_addr)) != 0) {
 			ret = TRUE;
 		}
 	}
@@ -2173,7 +2251,9 @@ rspamd_gstring_append_double (double val, void *ud)
 }
 
 void
-rspamd_ucl_emit_gstring (ucl_object_t *obj, enum ucl_emitter emit_type, GString *target)
+rspamd_ucl_emit_gstring (ucl_object_t *obj,
+	enum ucl_emitter emit_type,
+	GString *target)
 {
 	struct ucl_emitter_functions func = {
 		.ucl_emitter_append_character = rspamd_gstring_append_character,
@@ -2214,7 +2294,7 @@ rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t *addr)
 
 	return (nfd);
 
-  out:
+out:
 	serrno = errno;
 	close (nfd);
 	errno = serrno;
@@ -2243,7 +2323,7 @@ rspamd_parse_inet_address (rspamd_inet_addr_t *target, const char *src)
 	return ret;
 }
 
-const char*
+const char *
 rspamd_inet_address_to_string (rspamd_inet_addr_t *addr)
 {
 	static char addr_str[INET6_ADDRSTRLEN + 1];
@@ -2251,10 +2331,10 @@ rspamd_inet_address_to_string (rspamd_inet_addr_t *addr)
 	switch (addr->af) {
 	case AF_INET:
 		return inet_ntop (addr->af, &addr->addr.s4.sin_addr, addr_str,
-				sizeof (addr_str));
+				   sizeof (addr_str));
 	case AF_INET6:
 		return inet_ntop (addr->af, &addr->addr.s6.sin6_addr, addr_str,
-				sizeof (addr_str));
+				   sizeof (addr_str));
 	case AF_UNIX:
 		return addr->addr.su.sun_path;
 	}

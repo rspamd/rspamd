@@ -32,7 +32,7 @@
  * @param type
  * @return worker's control structure or NULL
  */
-worker_t* rspamd_get_worker_by_type (GQuark type);
+worker_t * rspamd_get_worker_by_type (GQuark type);
 
 /**
  * Set counter for a symbol
@@ -57,7 +57,7 @@ struct rspamd_worker;
  */
 struct event_base *
 rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
-		void (*accept_handler)(int, short, void *));
+	void (*accept_handler)(int, short, void *));
 
 /**
  * Stop accepting new connections for a worker
@@ -66,9 +66,9 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 void rspamd_worker_stop_accept (struct rspamd_worker *worker);
 
 typedef gint (*rspamd_controller_func_t) (
-		struct rspamd_http_connection_entry *conn_ent,
-		struct rspamd_http_message *msg,
-		struct module_ctx *ctx);
+	struct rspamd_http_connection_entry *conn_ent,
+	struct rspamd_http_message *msg,
+	struct module_ctx *ctx);
 
 struct rspamd_custom_controller_command {
 	const gchar *command;
@@ -85,8 +85,8 @@ struct rspamd_custom_controller_command {
  * @param error_msg error message
  */
 void rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
-		gint code,
-		const gchar *error_msg);
+	gint code,
+	const gchar *error_msg);
 
 /**
  * Send a custom string using HTTP
@@ -94,7 +94,7 @@ void rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
  * @param str string to send
  */
 void rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
-		const gchar *str);
+	const gchar *str);
 
 /**
  * Send UCL using HTTP and JSON serialization
@@ -102,6 +102,6 @@ void rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
  * @param obj object to send
  */
 void rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
-		ucl_object_t *obj);
+	ucl_object_t *obj);
 
 #endif /* WORKER_UTIL_H_ */

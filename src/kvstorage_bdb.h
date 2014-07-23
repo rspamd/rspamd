@@ -31,7 +31,8 @@
 #ifdef WITH_DB
 
 /* Create new bdb backend */
-struct rspamd_kv_backend* rspamd_kv_bdb_new (const gchar *filename, guint sync_ops);
+struct rspamd_kv_backend * rspamd_kv_bdb_new (const gchar *filename,
+	guint sync_ops);
 
 #endif
 

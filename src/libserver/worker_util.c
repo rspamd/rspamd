@@ -26,24 +26,24 @@
 #include "message.h"
 #include "lua/lua_common.h"
 
-extern struct rspamd_main			*rspamd_main;
+extern struct rspamd_main *rspamd_main;
 
 /**
  * Return worker's control structure by its type
  * @param type
  * @return worker's control structure or NULL
  */
-worker_t*
+worker_t *
 rspamd_get_worker_by_type (GQuark type)
 {
-	worker_t						**cur;
+	worker_t **cur;
 
 	cur = &workers[0];
 	while (*cur) {
 		if (g_quark_from_string ((*cur)->name) == type) {
 			return *cur;
 		}
-		cur ++;
+		cur++;
 	}
 
 	return NULL;
@@ -52,18 +52,21 @@ rspamd_get_worker_by_type (GQuark type)
 double
 rspamd_set_counter (const gchar *name, guint32 value)
 {
-	struct counter_data            *cd;
-	double                          alpha;
-	gchar                           *key;
+	struct counter_data *cd;
+	double alpha;
+	gchar *key;
 
 	cd = rspamd_hash_lookup (rspamd_main->counters, (gpointer) name);
 
 	if (cd == NULL) {
-		cd = rspamd_mempool_alloc_shared (rspamd_main->counters->pool, sizeof (struct counter_data));
+		cd =
+			rspamd_mempool_alloc_shared (rspamd_main->counters->pool,
+				sizeof (struct counter_data));
 		cd->value = value;
 		cd->number = 0;
 		key = rspamd_mempool_strdup_shared (rspamd_main->counters->pool, name);
-		rspamd_hash_insert (rspamd_main->counters, (gpointer) key, (gpointer) cd);
+		rspamd_hash_insert (rspamd_main->counters, (gpointer) key,
+			(gpointer) cd);
 	}
 	else {
 		/* Calculate new value */
@@ -88,7 +91,7 @@ static void
 worker_sig_handler (gint signo, siginfo_t * info, void *unused)
 #endif
 {
-	struct timeval                  tv;
+	struct timeval tv;
 
 	switch (signo) {
 	case SIGINT:
@@ -113,9 +116,9 @@ worker_sig_handler (gint signo, siginfo_t * info, void *unused)
 static void
 worker_sigusr2_handler (gint fd, short what, void *arg)
 {
-	struct rspamd_worker           *worker = (struct rspamd_worker *) arg;
+	struct rspamd_worker *worker = (struct rspamd_worker *) arg;
 	/* Do not accept new connections, preparing to end worker's process */
-	struct timeval                  tv;
+	struct timeval tv;
 
 	if (!wanna_die) {
 		tv.tv_sec = SOFT_SHUTDOWN_TIME;
@@ -135,7 +138,7 @@ worker_sigusr2_handler (gint fd, short what, void *arg)
 static void
 worker_sigusr1_handler (gint fd, short what, void *arg)
 {
-	struct rspamd_worker           *worker = (struct rspamd_worker *) arg;
+	struct rspamd_worker *worker = (struct rspamd_worker *) arg;
 
 	reopen_log (worker->srv->logger);
 
@@ -144,16 +147,16 @@ worker_sigusr1_handler (gint fd, short what, void *arg)
 
 struct event_base *
 rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
-		void (*accept_handler)(int, short, void *))
+	void (*accept_handler)(int, short, void *))
 {
-	struct event_base                *ev_base;
-	struct event                     *accept_event;
-	struct sigaction                  signals;
-	GList                             *cur;
-	gint                               listen_socket;
+	struct event_base *ev_base;
+	struct event *accept_event;
+	struct sigaction signals;
+	GList *cur;
+	gint listen_socket;
 
 #ifdef WITH_PROFILER
-	extern void                     _start (void), etext (void);
+	extern void _start (void), etext (void);
 	monstartup ((u_long) & _start, (u_long) & etext);
 #endif
 
@@ -173,23 +176,24 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 		if (listen_socket != -1) {
 			accept_event = g_slice_alloc0 (sizeof (struct event));
 			event_set (accept_event, listen_socket, EV_READ | EV_PERSIST,
-					accept_handler, worker);
+				accept_handler, worker);
 			event_base_set (ev_base, accept_event);
 			event_add (accept_event, NULL);
-			worker->accept_events = g_list_prepend (worker->accept_events, accept_event);
+			worker->accept_events = g_list_prepend (worker->accept_events,
+					accept_event);
 		}
 		cur = g_list_next (cur);
 	}
 
 	/* SIGUSR2 handler */
 	signal_set (&worker->sig_ev_usr2, SIGUSR2, worker_sigusr2_handler,
-			(void *) worker);
+		(void *) worker);
 	event_base_set (ev_base, &worker->sig_ev_usr2);
 	signal_add (&worker->sig_ev_usr2, NULL);
 
 	/* SIGUSR1 handler */
 	signal_set (&worker->sig_ev_usr1, SIGUSR1, worker_sigusr1_handler,
-			(void *) worker);
+		(void *) worker);
 	event_base_set (ev_base, &worker->sig_ev_usr1);
 	signal_add (&worker->sig_ev_usr1, NULL);
 
@@ -199,8 +203,8 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 void
 rspamd_worker_stop_accept (struct rspamd_worker *worker)
 {
-	GList                             *cur;
-	struct event                     *event;
+	GList *cur;
+	struct event *event;
 
 	/* Remove all events */
 	cur = worker->accept_events;
@@ -218,8 +222,8 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 
 void
 rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
-		gint code,
-		const gchar *error_msg)
+	gint code,
+	const gchar *error_msg)
 {
 	struct rspamd_http_message *msg;
 
@@ -230,14 +234,20 @@ rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
 	msg->status = g_string_new (error_msg);
 	rspamd_printf_gstring (msg->body, "{\"error\":\"%s\"}", error_msg);
 	rspamd_http_connection_reset (entry->conn);
-	rspamd_http_connection_write_message (entry->conn, msg, NULL,
-			"application/json", entry, entry->conn->fd, entry->rt->ptv, entry->rt->ev_base);
+	rspamd_http_connection_write_message (entry->conn,
+		msg,
+		NULL,
+		"application/json",
+		entry,
+		entry->conn->fd,
+		entry->rt->ptv,
+		entry->rt->ev_base);
 	entry->is_reply = TRUE;
 }
 
 void
 rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
-		const gchar *str)
+	const gchar *str)
 {
 	struct rspamd_http_message *msg;
 
@@ -246,14 +256,20 @@ rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
 	msg->code = 200;
 	msg->body = g_string_new (str);
 	rspamd_http_connection_reset (entry->conn);
-	rspamd_http_connection_write_message (entry->conn, msg, NULL,
-			"application/json", entry, entry->conn->fd, entry->rt->ptv, entry->rt->ev_base);
+	rspamd_http_connection_write_message (entry->conn,
+		msg,
+		NULL,
+		"application/json",
+		entry,
+		entry->conn->fd,
+		entry->rt->ptv,
+		entry->rt->ev_base);
 	entry->is_reply = TRUE;
 }
 
 void
 rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
-		ucl_object_t *obj)
+	ucl_object_t *obj)
 {
 	struct rspamd_http_message *msg;
 
@@ -263,7 +279,13 @@ rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
 	msg->body = g_string_sized_new (BUFSIZ);
 	rspamd_ucl_emit_gstring (obj, UCL_EMIT_JSON_COMPACT, msg->body);
 	rspamd_http_connection_reset (entry->conn);
-	rspamd_http_connection_write_message (entry->conn, msg, NULL,
-			"application/json", entry, entry->conn->fd, entry->rt->ptv, entry->rt->ev_base);
+	rspamd_http_connection_write_message (entry->conn,
+		msg,
+		NULL,
+		"application/json",
+		entry,
+		entry->conn->fd,
+		entry->rt->ptv,
+		entry->rt->ev_base);
 	entry->is_reply = TRUE;
 }

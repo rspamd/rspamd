@@ -30,7 +30,7 @@ struct mime_text_part {
 	GByteArray *orig;
 	GByteArray *content;
 	GNode *html_nodes;
-	GList *urls_offset;										    /**< list of offsets of urls						*/
+	GList *urls_offset;                                         /**< list of offsets of urls						*/
 	fuzzy_hash_t *fuzzy;
 	fuzzy_hash_t *double_fuzzy;
 	GMimeObject *parent;
@@ -57,7 +57,7 @@ struct raw_header {
 };
 
 /**
- * Process message with all filters/statfiles, extract mime parts, urls and 
+ * Process message with all filters/statfiles, extract mime parts, urls and
  * call metrics consolidation functions
  * @param task worker_task object
  * @return 0 if we have delayed filters to process and 1 if we have finished with processing
@@ -67,7 +67,9 @@ gint process_message (struct rspamd_task *task);
 /*
  * Set header with specified name and value
  */
-void message_set_header (GMimeMessage *message, const gchar *field, const gchar *value);
+void message_set_header (GMimeMessage *message,
+	const gchar *field,
+	const gchar *value);
 
 /*
  * Get a list of header's values with specified header's name
@@ -77,7 +79,10 @@ void message_set_header (GMimeMessage *message, const gchar *field, const gchar 
  * @param strong if this flag is TRUE header's name is case sensitive, otherwise it is not
  * @return A list of header's values or NULL. If list is not NULL it MUST be freed. If pool is NULL elements must be freed as well.
  */
-GList* message_get_header (rspamd_mempool_t *pool, GMimeMessage *message, const gchar *field, gboolean strong);
+GList * message_get_header (rspamd_mempool_t *pool,
+	GMimeMessage *message,
+	const gchar *field,
+	gboolean strong);
 
 /*
  * Get a list of header's values with specified header's name using raw headers
@@ -86,6 +91,8 @@ GList* message_get_header (rspamd_mempool_t *pool, GMimeMessage *message, const 
  * @param strong if this flag is TRUE header's name is case sensitive, otherwise it is not
  * @return A list of header's values or NULL. Unlike previous function it is NOT required to free list or values. I should rework one of these functions some time.
  */
-GList* message_get_raw_header (struct rspamd_task *task, const gchar *field, gboolean strong);
+GList * message_get_raw_header (struct rspamd_task *task,
+	const gchar *field,
+	gboolean strong);
 
 #endif

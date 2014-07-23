@@ -47,7 +47,8 @@
 # define SYS_io_submit      209
 # define SYS_io_cancel      210
 #else
-# warning "aio is not supported on this platform, please contact author for details"
+# warning \
+	"aio is not supported on this platform, please contact author for details"
 # define SYS_io_setup       0
 # define SYS_io_destroy     0
 # define SYS_io_getevents   0
@@ -101,7 +102,7 @@ typedef enum io_iocb_cmd {
 struct iocb {
 	/* these are internal to the kernel/libc. */
 	guint64 aio_data; /* data to be returned in event's data */
-	guint32 PADDED(aio_key, aio_reserved1);
+	guint32 PADDED (aio_key, aio_reserved1);
 	/* the kernel sets aio_key to the req # */
 
 	/* common fields */
@@ -127,27 +128,31 @@ struct iocb {
 };
 
 struct io_event {
-	guint64  data;  /* the data field from the iocb */
-	guint64  obj;   /* what iocb this event came from */
-	gint64   res;   /* result code for this event */
-	gint64   res2;  /* secondary result */
+	guint64 data;   /* the data field from the iocb */
+	guint64 obj;    /* what iocb this event came from */
+	gint64 res;     /* result code for this event */
+	gint64 res2;    /* secondary result */
 };
 
 /* Linux specific io calls */
 static int
 io_setup (guint nr_reqs, aio_context_t *ctx)
 {
-    return syscall (SYS_io_setup, nr_reqs, ctx);
+	return syscall (SYS_io_setup, nr_reqs, ctx);
 }
 
 static int
 io_destroy (aio_context_t ctx)
 {
-    return syscall (SYS_io_destroy, ctx);
+	return syscall (SYS_io_destroy, ctx);
 }
 
 static int
-io_getevents (aio_context_t ctx, long min_nr, long nr, struct io_event *events, struct timespec *tmo)
+io_getevents (aio_context_t ctx,
+	long min_nr,
+	long nr,
+	struct io_event *events,
+	struct timespec *tmo)
 {
 	return syscall (SYS_io_getevents, ctx, min_nr, nr, events, tmo);
 }
@@ -155,13 +160,13 @@ io_getevents (aio_context_t ctx, long min_nr, long nr, struct io_event *events, 
 static int
 io_submit (aio_context_t ctx, long n, struct iocb **paiocb)
 {
-    return syscall (SYS_io_submit, ctx, n, paiocb);
+	return syscall (SYS_io_submit, ctx, n, paiocb);
 }
 
 static int
 io_cancel (aio_context_t ctx, struct iocb *iocb, struct io_event *result)
 {
-    return syscall (SYS_io_cancel, ctx, iocb, result);
+	return syscall (SYS_io_cancel, ctx, iocb, result);
 }
 
 # ifndef HAVE_SYS_EVENTFD_H
@@ -179,7 +184,7 @@ eventfd (guint initval, guint flags)
  */
 struct aio_context {
 	struct event_base *base;
-	gboolean has_aio;		/**< Whether we have aio support on a system */
+	gboolean has_aio;       /**< Whether we have aio support on a system */
 #ifdef LINUX
 	/* Eventfd variant */
 	gint event_fd;
@@ -196,12 +201,12 @@ struct aio_context {
 static void
 rspamd_eventfdcb (gint fd, gshort what, gpointer ud)
 {
-	struct aio_context					*ctx = ud;
-	guint64								 ready;
-	gint								 done, i;
-	struct io_event   					 event[32];
-	struct timespec   					 ts;
-	struct io_cbdata					*ev_data;
+	struct aio_context *ctx = ud;
+	guint64 ready;
+	gint done, i;
+	struct io_event event[32];
+	struct timespec ts;
+	struct io_cbdata *ev_data;
 
 	/* Eventfd returns number of events ready got from kernel */
 	if (read (fd, &ready, 8) != 8) {
@@ -221,10 +226,14 @@ rspamd_eventfdcb (gint fd, gshort what, gpointer ud)
 		if (done > 0) {
 			ready -= done;
 
-			for (i = 0; i < done; i ++) {
+			for (i = 0; i < done; i++) {
 				ev_data = (struct io_cbdata *) (uintptr_t) event[i].data;
 				/* Call this callback */
-				ev_data->cb (ev_data->fd, event[i].res, ev_data->len, ev_data->buf, ev_data->ud);
+				ev_data->cb (ev_data->fd,
+					event[i].res,
+					ev_data->len,
+					ev_data->buf,
+					ev_data->ud);
 				if (ev_data->io_buf) {
 					free (ev_data->io_buf);
 				}
@@ -247,10 +256,10 @@ rspamd_eventfdcb (gint fd, gshort what, gpointer ud)
 /**
  * Initialize aio with specified event base
  */
-struct aio_context*
+struct aio_context *
 rspamd_aio_init (struct event_base *base)
 {
-	struct aio_context					*new;
+	struct aio_context *new;
 
 	/* First of all we need to detect which type of aio we can try to use */
 	new = g_malloc0 (sizeof (struct aio_context));
@@ -269,7 +278,11 @@ rspamd_aio_init (struct event_base *base)
 			close (new->event_fd);
 		}
 		else {
-			event_set (&new->eventfd_ev, new->event_fd, EV_READ|EV_PERSIST, rspamd_eventfdcb, new);
+			event_set (&new->eventfd_ev,
+				new->event_fd,
+				EV_READ | EV_PERSIST,
+				rspamd_eventfdcb,
+				new);
 			event_base_set (new->base, &new->eventfd_ev);
 			event_add (&new->eventfd_ev, NULL);
 			if (io_setup (MAX_AIO_EV, &new->io_ctx) == -1) {
@@ -294,7 +307,7 @@ rspamd_aio_init (struct event_base *base)
 gint
 rspamd_aio_open (struct aio_context *ctx, const gchar *path, int flags)
 {
-	gint										fd = -1;
+	gint fd = -1;
 	/* Fallback */
 	if (!ctx->has_aio) {
 		return open (path, flags);
@@ -315,14 +328,20 @@ rspamd_aio_open (struct aio_context *ctx, const gchar *path, int flags)
  * Asynchronous read of file
  */
 gint
-rspamd_aio_read (gint fd, gpointer buf, guint64 len, guint64 offset, struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud)
+rspamd_aio_read (gint fd,
+	gpointer buf,
+	guint64 len,
+	guint64 offset,
+	struct aio_context *ctx,
+	rspamd_aio_cb cb,
+	gpointer ud)
 {
-	struct io_cbdata							*cbdata;
-	gint										 r = -1;
+	struct io_cbdata *cbdata;
+	gint r = -1;
 
 	if (ctx->has_aio) {
 #ifdef LINUX
-		struct iocb								*iocb[1];
+		struct iocb *iocb[1];
 
 		cbdata = g_slice_alloc (sizeof (struct io_cbdata));
 		cbdata->cb = cb;
@@ -385,14 +404,20 @@ blocking:
  * Asynchronous write of file
  */
 gint
-rspamd_aio_write (gint fd, gpointer buf, guint64 len, guint64 offset, struct aio_context *ctx, rspamd_aio_cb cb, gpointer ud)
+rspamd_aio_write (gint fd,
+	gpointer buf,
+	guint64 len,
+	guint64 offset,
+	struct aio_context *ctx,
+	rspamd_aio_cb cb,
+	gpointer ud)
 {
-	struct io_cbdata							*cbdata;
-	gint										 r = -1;
+	struct io_cbdata *cbdata;
+	gint r = -1;
 
 	if (ctx->has_aio) {
 #ifdef LINUX
-		struct iocb								 *iocb[1];
+		struct iocb *iocb[1];
 
 		cbdata = g_slice_alloc (sizeof (struct io_cbdata));
 		cbdata->cb = cb;
@@ -461,12 +486,12 @@ blocking:
 gint
 rspamd_aio_close (gint fd, struct aio_context *ctx)
 {
-	gint										 r = -1;
+	gint r = -1;
 
 	if (ctx->has_aio) {
 #ifdef LINUX
-		struct iocb								 iocb;
-		struct io_event							 ev;
+		struct iocb iocb;
+		struct io_event ev;
 
 		memset (&iocb, 0, sizeof (struct iocb));
 		iocb.aio_fildes = fd;

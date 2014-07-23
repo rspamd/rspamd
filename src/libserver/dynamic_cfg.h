@@ -49,7 +49,10 @@ gboolean dump_dynamic_config (struct rspamd_config *cfg);
  * @param value value of symbol
  * @return
  */
-gboolean add_dynamic_symbol (struct rspamd_config *cfg, const gchar *metric, const gchar *symbol, gdouble value);
+gboolean add_dynamic_symbol (struct rspamd_config *cfg,
+	const gchar *metric,
+	const gchar *symbol,
+	gdouble value);
 
 
 /**
@@ -60,7 +63,10 @@ gboolean add_dynamic_symbol (struct rspamd_config *cfg, const gchar *metric, con
  * @param value value of symbol
  * @return
  */
-gboolean add_dynamic_action (struct rspamd_config *cfg, const gchar *metric, guint action, gdouble value);
+gboolean add_dynamic_action (struct rspamd_config *cfg,
+	const gchar *metric,
+	guint action,
+	gdouble value);
 
 
 #endif /* DYNAMIC_CFG_H_ */

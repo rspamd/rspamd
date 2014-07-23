@@ -25,41 +25,41 @@
  * Common statfile header
  */
 struct stat_file_header {
-	u_char magic[3];						/**< magic signature ('r' 's' 'd') 		*/
-	u_char version[2];						/**< version of statfile				*/
-	u_char padding[3];						/**< padding							*/
-	guint64 create_time;					/**< create time (time_t->guint64)		*/
-	guint64 revision;						/**< revision number					*/
-	guint64 rev_time;						/**< revision time						*/
-	guint64 used_blocks;					/**< used blocks number					*/
-	guint64 total_blocks;					/**< total number of blocks				*/
-	u_char unused[239];						/**< some bytes that can be used in future */
+	u_char magic[3];                        /**< magic signature ('r' 's' 'd')      */
+	u_char version[2];                      /**< version of statfile				*/
+	u_char padding[3];                      /**< padding							*/
+	guint64 create_time;                    /**< create time (time_t->guint64)		*/
+	guint64 revision;                       /**< revision number					*/
+	guint64 rev_time;                       /**< revision time						*/
+	guint64 used_blocks;                    /**< used blocks number					*/
+	guint64 total_blocks;                   /**< total number of blocks				*/
+	u_char unused[239];                     /**< some bytes that can be used in future */
 };
 
 /**
  * Section header
  */
 struct stat_file_section {
-	guint64 code;							/**< section's code						*/
-	guint64 length;						/**< section's length in blocks			*/
+	guint64 code;                           /**< section's code						*/
+	guint64 length;                     /**< section's length in blocks			*/
 };
 
 /**
  * Block of data in statfile
  */
 struct stat_file_block {
-	guint32 hash1;							/**< hash1 (also acts as index)			*/				
-	guint32 hash2;							/**< hash2								*/
-	double value; 							/**< double value 						*/
+	guint32 hash1;                          /**< hash1 (also acts as index)			*/
+	guint32 hash2;                          /**< hash2								*/
+	double value;                           /**< double value                       */
 };
 
 /**
  * Statistic file
  */
 struct stat_file {
-	struct stat_file_header header;			/**< header								*/
-	struct stat_file_section section;		/**< first section						*/
-	struct stat_file_block blocks[1];		/**< first block of data				*/
+	struct stat_file_header header;         /**< header								*/
+	struct stat_file_section section;       /**< first section						*/
+	struct stat_file_block blocks[1];       /**< first block of data				*/
 };
 
 /**
@@ -67,32 +67,32 @@ struct stat_file {
  */
 typedef struct stat_file_s {
 #ifdef HAVE_PATH_MAX
-	gchar filename[PATH_MAX];				/**< name of file						*/
+	gchar filename[PATH_MAX];               /**< name of file						*/
 #else
-	gchar filename[MAXPATHLEN];				/**< name of file						*/
+	gchar filename[MAXPATHLEN];             /**< name of file						*/
 #endif
-	gint fd;									/**< descriptor							*/
-	void *map;								/**< mmaped area						*/
-	off_t seek_pos;							/**< current seek position				*/
-	struct stat_file_section cur_section;	/**< current section					*/
-	time_t open_time;						/**< time when file was opened			*/
-	time_t access_time;						/**< last access time					*/
-	size_t len;								/**< length of file(in bytes)			*/
-	rspamd_mempool_mutex_t *lock;				/**< mutex								*/
+	gint fd;                                    /**< descriptor							*/
+	void *map;                              /**< mmaped area						*/
+	off_t seek_pos;                         /**< current seek position				*/
+	struct stat_file_section cur_section;   /**< current section					*/
+	time_t open_time;                       /**< time when file was opened			*/
+	time_t access_time;                     /**< last access time					*/
+	size_t len;                             /**< length of file(in bytes)			*/
+	rspamd_mempool_mutex_t *lock;               /**< mutex								*/
 } stat_file_t;
 
 /**
  * Statfiles pool
  */
 typedef struct statfile_pool_s {
-	stat_file_t *files;						/**< hash table of opened files indexed by name	*/
-	void **maps;							/**< shared hash table of mmaped areas indexed by name	*/
-	gint opened;								/**< number of opened files				*/
-	rspamd_mempool_t *pool;					/**< memory pool object					*/
-	rspamd_mempool_mutex_t *lock;				/**< mutex								*/
-	struct event  *invalidate_event;        /**< event for pool invalidation        */
+	stat_file_t *files;                     /**< hash table of opened files indexed by name	*/
+	void **maps;                            /**< shared hash table of mmaped areas indexed by name	*/
+	gint opened;                                /**< number of opened files				*/
+	rspamd_mempool_t *pool;                 /**< memory pool object					*/
+	rspamd_mempool_mutex_t *lock;               /**< mutex								*/
+	struct event *invalidate_event;         /**< event for pool invalidation        */
 	struct timeval invalidate_tv;
-	gboolean mlock_ok;						/**< whether it is possible to use mlock (2) to avoid statfiles unloading */
+	gboolean mlock_ok;                      /**< whether it is possible to use mlock (2) to avoid statfiles unloading */
 } statfile_pool_t;
 
 /* Forwarded declarations */
@@ -104,7 +104,8 @@ struct rspamd_statfile_config;
  * @param max_size maximum size
  * @return statfile pool object
  */
-statfile_pool_t* statfile_pool_new (rspamd_mempool_t *pool, gboolean use_mlock);
+statfile_pool_t * statfile_pool_new (rspamd_mempool_t *pool,
+	gboolean use_mlock);
 
 /**
  * Open statfile and attach it to pool
@@ -112,7 +113,10 @@ statfile_pool_t* statfile_pool_new (rspamd_mempool_t *pool, gboolean use_mlock);
  * @param filename name of statfile to open
  * @return 0 if specified statfile is attached and -1 in case of error
  */
-stat_file_t* statfile_pool_open (statfile_pool_t *pool, gchar *filename, size_t len, gboolean forced);
+stat_file_t * statfile_pool_open (statfile_pool_t *pool,
+	gchar *filename,
+	size_t len,
+	gboolean forced);
 
 /**
  * Create new statfile but DOES NOT attach it to pool, use @see statfile_pool_open for attaching
@@ -130,7 +134,9 @@ gint statfile_pool_create (statfile_pool_t *pool, gchar *filename, size_t len);
  * @param remove_hash remove filename from opened files hash also
  * @return 0 if file was closed and -1 if statfile was not opened
  */
-gint statfile_pool_close (statfile_pool_t *pool, stat_file_t *file, gboolean keep_sorted);
+gint statfile_pool_close (statfile_pool_t *pool,
+	stat_file_t *file,
+	gboolean keep_sorted);
 
 /**
  * Delete statfile pool and close all attached statfiles
@@ -167,7 +173,11 @@ void statfile_pool_unlock_file (statfile_pool_t *pool, stat_file_t *file);
  * @param now current time
  * @return block value or 0 if block is not found
  */
-double statfile_pool_get_block (statfile_pool_t *pool, stat_file_t *file, guint32 h1, guint32 h2, time_t now);
+double statfile_pool_get_block (statfile_pool_t *pool,
+	stat_file_t *file,
+	guint32 h1,
+	guint32 h2,
+	time_t now);
 
 /**
  * Set specified block in statfile
@@ -178,7 +188,12 @@ double statfile_pool_get_block (statfile_pool_t *pool, stat_file_t *file, guint3
  * @param now current time
  * @param value value of block
  */
-void statfile_pool_set_block (statfile_pool_t *pool, stat_file_t *file, guint32 h1, guint32 h2, time_t now, double value);
+void statfile_pool_set_block (statfile_pool_t *pool,
+	stat_file_t *file,
+	guint32 h1,
+	guint32 h2,
+	time_t now,
+	double value);
 
 /**
  * Check whether statfile is opened
@@ -186,7 +201,7 @@ void statfile_pool_set_block (statfile_pool_t *pool, stat_file_t *file, guint32 
  * @param filename name of statfile
  * @return TRUE if specified statfile is opened and FALSE otherwise
  */
-stat_file_t* statfile_pool_is_open (statfile_pool_t *pool, gchar *filename);
+stat_file_t * statfile_pool_is_open (statfile_pool_t *pool, gchar *filename);
 
 /**
  * Returns current statfile section
@@ -204,7 +219,10 @@ guint32 statfile_pool_get_section (statfile_pool_t *pool, stat_file_t *file);
  * @param from_begin search for section from begin of file if true
  * @return TRUE if section was set and FALSE otherwise
  */
-gboolean statfile_pool_set_section (statfile_pool_t *pool, stat_file_t *file, guint32 code, gboolean from_begin);
+gboolean statfile_pool_set_section (statfile_pool_t *pool,
+	stat_file_t *file,
+	guint32 code,
+	gboolean from_begin);
 
 /**
  * Add new section to statfile
@@ -214,7 +232,10 @@ gboolean statfile_pool_set_section (statfile_pool_t *pool, stat_file_t *file, gu
  * @param length length in blocks of new section
  * @return TRUE if section was successfully added and FALSE in case of error
  */
-gboolean statfile_pool_add_section (statfile_pool_t *pool, stat_file_t *file, guint32 code, guint64 length);
+gboolean statfile_pool_add_section (statfile_pool_t *pool,
+	stat_file_t *file,
+	guint32 code,
+	guint64 length);
 
 
 /**
@@ -268,7 +289,9 @@ guint64 statfile_get_total_blocks (stat_file_t *file);
 /**
  * Plan statfile pool invalidation
  */
-void statfile_pool_plan_invalidate (statfile_pool_t *pool, time_t seconds, time_t jitter);
+void statfile_pool_plan_invalidate (statfile_pool_t *pool,
+	time_t seconds,
+	time_t jitter);
 
 /**
  * Get a statfile by symbol
@@ -278,7 +301,10 @@ void statfile_pool_plan_invalidate (statfile_pool_t *pool, time_t seconds, time_
  * @param st statfile to get
  * @param try_create whether we need to create statfile if it is absent
  */
-stat_file_t* get_statfile_by_symbol (statfile_pool_t *pool, struct rspamd_classifier_config *ccf,
-		const gchar *symbol, struct rspamd_statfile_config **st, gboolean try_create);
+stat_file_t * get_statfile_by_symbol (statfile_pool_t *pool,
+	struct rspamd_classifier_config *ccf,
+	const gchar *symbol,
+	struct rspamd_statfile_config **st,
+	gboolean try_create);
 
 #endif

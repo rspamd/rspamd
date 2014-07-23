@@ -44,7 +44,11 @@ gint make_udp_socket (struct addrinfo *, gboolean is_server, gboolean async);
 /*
  * Create and bind or connect unix socket
  */
-gint make_unix_socket (const gchar *, struct sockaddr_un *, gint type, gboolean is_server, gboolean async);
+gint make_unix_socket (const gchar *,
+	struct sockaddr_un *,
+	gint type,
+	gboolean is_server,
+	gboolean async);
 
 /**
  * Make a universal socket
@@ -56,7 +60,7 @@ gint make_unix_socket (const gchar *, struct sockaddr_un *, gint type, gboolean 
  * @param try_resolve try name resolution for a socket (BLOCKING)
  */
 gint make_universal_socket (const gchar *credits, guint16 port, gint type,
-		gboolean async, gboolean is_server, gboolean try_resolve);
+	gboolean async, gboolean is_server, gboolean try_resolve);
 
 /**
  * Make a universal sockets
@@ -67,8 +71,12 @@ gint make_universal_socket (const gchar *credits, guint16 port, gint type,
  * @param is_server make this socket as server socket
  * @param try_resolve try name resolution for a socket (BLOCKING)
  */
-GList* make_universal_sockets_list (const gchar *credits, guint16 port, gint type,
-		gboolean async, gboolean is_server, gboolean try_resolve);
+GList * make_universal_sockets_list (const gchar *credits,
+	guint16 port,
+	gint type,
+	gboolean async,
+	gboolean is_server,
+	gboolean try_resolve);
 /*
  * Create socketpair
  */
@@ -97,7 +105,9 @@ gint poll_sync_socket (gint fd, gint timeout, short events);
  * Init signals
  */
 #ifdef HAVE_SA_SIGINFO
-void init_signals (struct sigaction *sa, void (*sig_handler)(gint, siginfo_t *, void *));
+void init_signals (struct sigaction *sa, void (*sig_handler)(gint,
+	siginfo_t *,
+	void *));
 #else
 void init_signals (struct sigaction *sa, void (*sig_handler)(gint));
 #endif
@@ -115,8 +125,8 @@ void convert_to_lowercase (gchar *str, guint size);
 /*
  * Process title utility functions
  */
-gint init_title(gint argc, gchar *argv[], gchar *envp[]);
-gint setproctitle(const gchar *fmt, ...);
+gint init_title (gint argc, gchar *argv[], gchar *envp[]);
+gint setproctitle (const gchar *fmt, ...);
 #endif
 
 #ifndef HAVE_PIDFILE
@@ -126,19 +136,21 @@ gint setproctitle(const gchar *fmt, ...);
 typedef struct rspamd_pidfh_s {
 	gint pf_fd;
 #ifdef HAVE_PATH_MAX
-	gchar    pf_path[PATH_MAX + 1];
+	gchar pf_path[PATH_MAX + 1];
 #elif defined(HAVE_MAXPATHLEN)
-	gchar    pf_path[MAXPATHLEN + 1];
+	gchar pf_path[MAXPATHLEN + 1];
 #else
-	gchar    pf_path[1024 + 1];
+	gchar pf_path[1024 + 1];
 #endif
- 	dev_t pf_dev;
- 	ino_t   pf_ino;
+	dev_t pf_dev;
+	ino_t pf_ino;
 } rspamd_pidfh_t;
-rspamd_pidfh_t *rspamd_pidfile_open(const gchar *path, mode_t mode, pid_t *pidptr);
-gint rspamd_pidfile_write(rspamd_pidfh_t *pfh);
-gint rspamd_pidfile_close(rspamd_pidfh_t *pfh);
-gint rspamd_pidfile_remove(rspamd_pidfh_t *pfh);
+rspamd_pidfh_t * rspamd_pidfile_open (const gchar *path,
+	mode_t mode,
+	pid_t *pidptr);
+gint rspamd_pidfile_write (rspamd_pidfh_t *pfh);
+gint rspamd_pidfile_close (rspamd_pidfh_t *pfh);
+gint rspamd_pidfile_remove (rspamd_pidfh_t *pfh);
 #else
 typedef struct pidfh rspamd_pidfh_t;
 #define rspamd_pidfile_open pidfile_open
@@ -150,14 +162,22 @@ typedef struct pidfh rspamd_pidfh_t;
 /*
  * Replace %r with rcpt value and %f with from value, new string is allocated in pool
  */
-gchar* resolve_stat_filename (rspamd_mempool_t *pool, gchar *pattern, gchar *rcpt, gchar *from);
+gchar * resolve_stat_filename (rspamd_mempool_t *pool,
+	gchar *pattern,
+	gchar *rcpt,
+	gchar *from);
 #ifdef HAVE_CLOCK_GETTIME
 /*
  * Calculate check time with specified resolution of timer
  */
-const gchar* calculate_check_time (struct timeval *tv, struct timespec *begin, gint resolution, guint32 *scan_ms);
+const gchar * calculate_check_time (struct timeval *tv,
+	struct timespec *begin,
+	gint resolution,
+	guint32 *scan_ms);
 #else
-const gchar* calculate_check_time (struct timeval *begin, gint resolution, guint32 *scan_ms);
+const gchar * calculate_check_time (struct timeval *begin,
+	gint resolution,
+	guint32 *scan_ms);
 #endif
 
 /*
@@ -225,8 +245,12 @@ gsize rspamd_strlcpy_tolower (gchar *dst, const gchar *src, gsize siz);
 /*
  * Convert milliseconds to timeval fields
  */
-#define msec_to_tv(msec, tv) do { (tv)->tv_sec = (msec) / 1000; (tv)->tv_usec = ((msec) - (tv)->tv_sec * 1000) * 1000; } while(0)
-#define double_to_tv(dbl, tv) do { (tv)->tv_sec = (int)(dbl); (tv)->tv_usec = ((dbl) - (int)(dbl))*1000*1000; } while(0)
+#define msec_to_tv(msec, tv) do { (tv)->tv_sec = (msec) / 1000; (tv)->tv_usec = \
+									  ((msec) - (tv)->tv_sec * 1000) * 1000; \
+} while (0)
+#define double_to_tv(dbl, tv) do { (tv)->tv_sec = (int)(dbl); (tv)->tv_usec = \
+									   ((dbl) - (int)(dbl)) * 1000 * 1000; \
+} while (0)
 #define tv_to_msec(tv) (tv)->tv_sec * 1000 + (tv)->tv_usec / 1000
 
 /* Compare two emails for building emails tree */
@@ -238,7 +262,7 @@ gint compare_url_func (gconstpointer a, gconstpointer b);
 /*
  * Find string find in string s ignoring case
  */
-gchar* rspamd_strncasestr (const gchar *s, const gchar *find, gint len);
+gchar * rspamd_strncasestr (const gchar *s, const gchar *find, gint len);
 
 /*
  * Try to convert string of length to long
@@ -283,7 +307,7 @@ typedef struct rspamd_rwlock_s {
  * Create new mutex
  * @return mutex or NULL
  */
-rspamd_mutex_t* rspamd_mutex_new (void);
+rspamd_mutex_t * rspamd_mutex_new (void);
 
 /**
  * Lock mutex
@@ -307,7 +331,7 @@ void rspamd_mutex_free (rspamd_mutex_t *mtx);
  * Create new rwloc
  * @return
  */
-rspamd_rwlock_t* rspamd_rwlock_new (void);
+rspamd_rwlock_t * rspamd_rwlock_new (void);
 
 /**
  * Lock rwlock for writing
@@ -357,7 +381,10 @@ rspamd_cond_wait (GCond *cond, rspamd_mutex_t *mtx)
  * @param err error pointer
  * @return new thread object that can be joined
  */
-GThread* rspamd_create_thread (const gchar *name, GThreadFunc func, gpointer data, GError **err);
+GThread * rspamd_create_thread (const gchar *name,
+	GThreadFunc func,
+	gpointer data,
+	GError **err);
 
 /**
  * Return 32bit murmur hash value for specified input
@@ -403,9 +430,9 @@ void murmur128_hash (const guint8 *in, gsize len, guint64 out[]);
  * @param ud user data for copy functions
  */
 void rspamd_hash_table_copy (GHashTable *src, GHashTable *dst,
-		gpointer (*key_copy_func)(gconstpointer data, gpointer ud),
-		gpointer (*value_copy_func)(gconstpointer data, gpointer ud),
-		gpointer ud);
+	gpointer (*key_copy_func)(gconstpointer data, gpointer ud),
+	gpointer (*value_copy_func)(gconstpointer data, gpointer ud),
+	gpointer ud);
 
 /**
  * Utility function to provide mem_pool copy for rspamd_hash_table_copy function
@@ -448,7 +475,9 @@ gboolean rspamd_ip_is_valid (rspamd_inet_addr_t *addr);
  * @param emit_type emitter type
  * @param target target string
  */
-void rspamd_ucl_emit_gstring (ucl_object_t *obj, enum ucl_emitter emit_type, GString *target);
+void rspamd_ucl_emit_gstring (ucl_object_t *obj,
+	enum ucl_emitter emit_type,
+	GString *target);
 
 /**
  * Accept from listening socket filling addr structure
@@ -464,14 +493,15 @@ gint rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t *addr);
  * @param src IP string representation
  * @return TRUE if addr has been parsed
  */
-gboolean rspamd_parse_inet_address (rspamd_inet_addr_t *target, const char *src);
+gboolean rspamd_parse_inet_address (rspamd_inet_addr_t *target,
+	const char *src);
 
 /**
  * Returns string representation of inet address
  * @param addr
  * @return statically allocated string pointer (not thread safe)
  */
-const char* rspamd_inet_address_to_string (rspamd_inet_addr_t *addr);
+const char * rspamd_inet_address_to_string (rspamd_inet_addr_t *addr);
 
 /**
  * Returns port number for the specified inet address in host byte order

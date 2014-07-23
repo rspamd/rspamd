@@ -39,8 +39,8 @@
 #include "diff.h"
 
 
-#define FV(k) _v(ctx, (k), 0)
-#define RV(k) _v(ctx, (k), 1)
+#define FV(k) _v (ctx, (k), 0)
+#define RV(k) _v (ctx, (k), 1)
 
 #define MAX_DIFF 1024
 
@@ -58,7 +58,8 @@ struct middle_snake
 };
 
 static
-void maybe_resize_array(GArray *arr, guint k)
+void
+maybe_resize_array (GArray *arr, guint k)
 {
 	if (k > arr->len) {
 		g_array_set_size (arr, k);
@@ -67,7 +68,7 @@ void maybe_resize_array(GArray *arr, guint k)
 }
 
 static void
-_setv(struct _ctx *ctx, gint k, gint r, gint val)
+_setv (struct _ctx *ctx, gint k, gint r, gint val)
 {
 	gint j;
 	gint *i;
@@ -81,7 +82,7 @@ _setv(struct _ctx *ctx, gint k, gint r, gint val)
 }
 
 static gint
-_v(struct _ctx *ctx, gint k, gint r)
+_v (struct _ctx *ctx, gint k, gint r)
 {
 	gint j;
 
@@ -91,8 +92,8 @@ _v(struct _ctx *ctx, gint k, gint r)
 }
 
 static gint
-_find_middle_snake(const void *a, gint aoff, gint n, const void *b,
-		gint boff, gint m, struct _ctx *ctx, struct middle_snake *ms)
+_find_middle_snake (const void *a, gint aoff, gint n, const void *b,
+	gint boff, gint m, struct _ctx *ctx, struct middle_snake *ms)
 {
 	gint delta, odd, mid, d;
 
@@ -101,7 +102,7 @@ _find_middle_snake(const void *a, gint aoff, gint n, const void *b,
 	mid = (n + m) / 2;
 	mid += odd;
 
-	_setv (ctx, 1, 0, 0);
+	_setv (ctx, 1,		   0, 0);
 	_setv (ctx, delta - 1, 1, n);
 
 	for (d = 0; d <= mid; d++) {
@@ -112,11 +113,11 @@ _find_middle_snake(const void *a, gint aoff, gint n, const void *b,
 		}
 
 		for (k = d; k >= -d; k -= 2) {
-			if (k == -d || (k != d && FV(k - 1) < FV(k + 1))) {
-				x = FV(k + 1);
+			if (k == -d || (k != d && FV (k - 1) < FV (k + 1))) {
+				x = FV (k + 1);
 			}
 			else {
-				x = FV(k - 1) + 1;
+				x = FV (k - 1) + 1;
 			}
 			y = x - k;
 
@@ -131,7 +132,7 @@ _find_middle_snake(const void *a, gint aoff, gint n, const void *b,
 			_setv (ctx, k, 0, x);
 
 			if (odd && k >= (delta - (d - 1)) && k <= (delta + (d - 1))) {
-				if (x >= RV(k)) {
+				if (x >= RV (k)) {
 					ms->u = x;
 					ms->v = y;
 					return 2 * d - 1;
@@ -141,11 +142,11 @@ _find_middle_snake(const void *a, gint aoff, gint n, const void *b,
 		for (k = d; k >= -d; k -= 2) {
 			gint kr = (n - m) + k;
 
-			if (k == d || (k != -d && RV(kr - 1) < RV(kr + 1))) {
-				x = RV(kr - 1);
+			if (k == d || (k != -d && RV (kr - 1) < RV (kr + 1))) {
+				x = RV (kr - 1);
 			}
 			else {
-				x = RV(kr + 1) - 1;
+				x = RV (kr + 1) - 1;
 			}
 			y = x - kr;
 
@@ -160,7 +161,7 @@ _find_middle_snake(const void *a, gint aoff, gint n, const void *b,
 			_setv (ctx, kr, 1, x);
 
 			if (!odd && kr >= -d && kr <= d) {
-				if (x <= FV(kr)) {
+				if (x <= FV (kr)) {
 					ms->x = x;
 					ms->y = y;
 					return 2 * d;
@@ -175,7 +176,7 @@ _find_middle_snake(const void *a, gint aoff, gint n, const void *b,
 }
 
 static void
-_edit(struct _ctx *ctx, gint op, gint off, gint len)
+_edit (struct _ctx *ctx, gint op, gint off, gint len)
 {
 	struct diff_edit *e = NULL, newe;
 
@@ -201,8 +202,8 @@ _edit(struct _ctx *ctx, gint op, gint off, gint len)
 }
 
 static gint
-_ses(const void *a, gint aoff, gint n, const void *b, gint boff,
-		gint m, struct _ctx *ctx)
+_ses (const void *a, gint aoff, gint n, const void *b, gint boff,
+	gint m, struct _ctx *ctx)
 {
 	struct middle_snake ms = {
 		.x = 0,
@@ -269,22 +270,22 @@ _ses(const void *a, gint aoff, gint n, const void *b, gint boff,
 
 			if (m > n) {
 				if (x == u) {
-					_edit (ctx, DIFF_MATCH, aoff, n);
+					_edit (ctx, DIFF_MATCH,	 aoff,			 n);
 					_edit (ctx, DIFF_INSERT, boff + (m - 1), 1);
 				}
 				else {
 					_edit (ctx, DIFF_INSERT, boff, 1);
-					_edit (ctx, DIFF_MATCH, aoff, n);
+					_edit (ctx, DIFF_MATCH,	 aoff, n);
 				}
 			}
 			else {
 				if (x == u) {
-					_edit (ctx, DIFF_MATCH, aoff, m);
+					_edit (ctx, DIFF_MATCH,	 aoff,			 m);
 					_edit (ctx, DIFF_DELETE, aoff + (n - 1), 1);
 				}
 				else {
-					_edit (ctx, DIFF_DELETE, aoff, 1);
-					_edit (ctx, DIFF_MATCH, aoff + 1, m);
+					_edit (ctx, DIFF_DELETE, aoff,	   1);
+					_edit (ctx, DIFF_MATCH,	 aoff + 1, m);
 				}
 			}
 		}
@@ -294,8 +295,8 @@ _ses(const void *a, gint aoff, gint n, const void *b, gint boff,
 }
 
 gint
-rspamd_diff(const void *a, gint aoff, gint n, const void *b, gint boff, gint m,
-		gint dmax, GArray *ses, gint *sn)
+rspamd_diff (const void *a, gint aoff, gint n, const void *b, gint boff, gint m,
+	gint dmax, GArray *ses, gint *sn)
 {
 	struct _ctx ctx;
 	gint d, x, y;
@@ -345,14 +346,14 @@ compare_diff_distance_unnormalized (f_str_t *s1, f_str_t *s2)
 	ses = g_array_sized_new (FALSE, TRUE, sizeof (struct diff_edit), MAX_DIFF);
 
 	if (rspamd_diff (s1->begin, 0, s1->len,
-			s2->begin, 0, s2->len, MAX_DIFF, ses, NULL) == -1) {
+		s2->begin, 0, s2->len, MAX_DIFF, ses, NULL) == -1) {
 		/* Diff failed, strings are different */
 		g_array_free (ses, TRUE);
 		return 0;
 	}
 
-	for (i = 0; i < ses->len; i ++) {
-		e = &g_array_index(ses, struct diff_edit, i);
+	for (i = 0; i < ses->len; i++) {
+		e = &g_array_index (ses, struct diff_edit, i);
 		if (e->op != DIFF_MATCH) {
 			distance += e->len;
 		}
@@ -367,7 +368,10 @@ guint32
 compare_diff_distance (f_str_t *s1, f_str_t *s2)
 {
 
-	return 100 - (2 * compare_diff_distance_unnormalized (s1, s2) * 100) / (s1->len + s2->len);
+	return 100 -
+		   (2 *
+		   compare_diff_distance_unnormalized (s1,
+		   s2) * 100) / (s1->len + s2->len);
 }
 
 
@@ -394,9 +398,9 @@ compare_diff_distance_normalized (f_str_t *s1, f_str_t *s2)
 			if (!g_ascii_isspace (*h)) {
 				*t++ = g_ascii_tolower (*h);
 			}
-			h ++;
-			p1 ++;
-			r1 --;
+			h++;
+			p1++;
+			r1--;
 		}
 
 		t1.begin = b1;
@@ -409,9 +413,9 @@ compare_diff_distance_normalized (f_str_t *s1, f_str_t *s2)
 			if (!g_ascii_isspace (*h)) {
 				*t++ = g_ascii_tolower (*h);
 			}
-			h ++;
-			p2 ++;
-			r2 --;
+			h++;
+			p2++;
+			r2--;
 		}
 
 		t2.begin = b2;
@@ -424,20 +428,20 @@ compare_diff_distance_normalized (f_str_t *s1, f_str_t *s2)
 		h = p1;
 		while (r1 > 0) {
 			if (!g_ascii_isspace (*h)) {
-				cur_diff ++;
+				cur_diff++;
 			}
-			r1 --;
-			h ++;
+			r1--;
+			h++;
 		}
 	}
 	else if (r2 > 0) {
 		h = p2;
 		while (r2 > 0) {
 			if (!g_ascii_isspace (*h)) {
-				cur_diff ++;
+				cur_diff++;
 			}
-			r2 --;
-			h ++;
+			r2--;
+			h++;
 		}
 	}
 

@@ -30,7 +30,7 @@
 ssize_t
 fstrchr (f_str_t * src, gchar c)
 {
-	register size_t                cur = 0;
+	register size_t cur = 0;
 
 	while (cur < src->len) {
 		if (*(src->begin + cur) == c) {
@@ -48,7 +48,7 @@ fstrchr (f_str_t * src, gchar c)
 ssize_t
 fstrrchr (f_str_t * src, gchar c)
 {
-	register ssize_t                cur = src->len;
+	register ssize_t cur = src->len;
 
 	while (cur > 0) {
 		if (*(src->begin + cur) == c) {
@@ -66,7 +66,7 @@ fstrrchr (f_str_t * src, gchar c)
 ssize_t
 fstrstr (f_str_t * orig, f_str_t * pattern)
 {
-	register size_t                cur = 0, pcur = 0;
+	register size_t cur = 0, pcur = 0;
 
 	if (pattern->len > orig->len) {
 		return -1;
@@ -97,16 +97,18 @@ fstrstr (f_str_t * orig, f_str_t * pattern)
 ssize_t
 fstrstri (f_str_t * orig, f_str_t * pattern)
 {
-	register size_t                cur = 0, pcur = 0;
+	register size_t cur = 0, pcur = 0;
 
 	if (pattern->len > orig->len) {
 		return -1;
 	}
 
 	while (cur < orig->len) {
-		if (g_ascii_tolower (*(orig->begin + cur)) == g_ascii_tolower (*pattern->begin)) {
+		if (g_ascii_tolower (*(orig->begin + cur)) ==
+			g_ascii_tolower (*pattern->begin)) {
 			while (cur < orig->len && pcur < pattern->len) {
-				if (g_ascii_tolower (*(orig->begin + cur)) != g_ascii_tolower (*(pattern->begin + pcur))) {
+				if (g_ascii_tolower (*(orig->begin + cur)) !=
+					g_ascii_tolower (*(pattern->begin + pcur))) {
 					pcur = 0;
 					break;
 				}
@@ -127,14 +129,14 @@ fstrstri (f_str_t * orig, f_str_t * pattern)
  * word contains parsed word
  *
  * Return: -1 - no new words can be extracted
- * 			1 - word was extracted and there are more words
- * 			0 - last word extracted
+ *          1 - word was extracted and there are more words
+ *          0 - last word extracted
  */
 gint
 fstrtok (f_str_t * text, const gchar *sep, f_tok_t * state)
 {
-	register size_t                 cur;
-	const gchar                     *csep = sep;
+	register size_t cur;
+	const gchar *csep = sep;
 
 	if (state->pos >= text->len) {
 		return -1;
@@ -170,7 +172,7 @@ fstrtok (f_str_t * text, const gchar *sep, f_tok_t * state)
 size_t
 fstrcpy (f_str_t * dest, f_str_t * src)
 {
-	register size_t                 cur = 0;
+	register size_t cur = 0;
 
 	if (dest->size < src->len) {
 		return 0;
@@ -190,8 +192,8 @@ fstrcpy (f_str_t * dest, f_str_t * src)
 size_t
 fstrcat (f_str_t * dest, f_str_t * src)
 {
-	register size_t                 cur = 0;
-	gchar                           *p = dest->begin + dest->len;
+	register size_t cur = 0;
+	gchar *p = dest->begin + dest->len;
 
 	if (dest->size < src->len + dest->len) {
 		return 0;
@@ -212,10 +214,10 @@ fstrcat (f_str_t * dest, f_str_t * src)
 /*
  * Make copy of string to 0-terminated string
  */
-gchar                           *
+gchar *
 fstrcstr (f_str_t * str, rspamd_mempool_t * pool)
 {
-	gchar                           *res;
+	gchar *res;
 	res = rspamd_mempool_alloc (pool, str->len + 1);
 
 	/* Do not allow multiply \0 characters */
@@ -247,7 +249,7 @@ fstrpush (f_str_t * dest, gchar c)
 gint
 fstrpush_unichar (f_str_t * dest, gunichar c)
 {
-	int                            l;
+	int l;
 	if (dest->size < dest->len) {
 		/* Need to reallocate string */
 		return 0;
@@ -261,10 +263,10 @@ fstrpush_unichar (f_str_t * dest, gunichar c)
 /*
  * Allocate memory for f_str_t
  */
-f_str_t                        *
+f_str_t *
 fstralloc (rspamd_mempool_t * pool, size_t len)
 {
-	f_str_t                        *res = rspamd_mempool_alloc (pool, sizeof (f_str_t));
+	f_str_t *res = rspamd_mempool_alloc (pool, sizeof (f_str_t));
 
 	res->begin = rspamd_mempool_alloc (pool, len);
 
@@ -276,10 +278,10 @@ fstralloc (rspamd_mempool_t * pool, size_t len)
 /*
  * Allocate memory for f_str_t from temporary pool
  */
-f_str_t                        *
+f_str_t *
 fstralloc_tmp (rspamd_mempool_t * pool, size_t len)
 {
-	f_str_t                        *res = rspamd_mempool_alloc_tmp (pool, sizeof (f_str_t));
+	f_str_t *res = rspamd_mempool_alloc_tmp (pool, sizeof (f_str_t));
 
 	res->begin = rspamd_mempool_alloc_tmp (pool, len);
 
@@ -291,10 +293,10 @@ fstralloc_tmp (rspamd_mempool_t * pool, size_t len)
 /*
  * Truncate string to its len
  */
-f_str_t                        *
+f_str_t *
 fstrtruncate (rspamd_mempool_t * pool, f_str_t * orig)
 {
-	f_str_t                        *res;
+	f_str_t *res;
 
 	if (orig == NULL || orig->len == 0 || orig->size <= orig->len) {
 		return orig;
@@ -312,10 +314,10 @@ fstrtruncate (rspamd_mempool_t * pool, f_str_t * orig)
 /*
  * Enlarge string to new size
  */
-f_str_t                        *
+f_str_t *
 fstrgrow (rspamd_mempool_t * pool, f_str_t * orig, size_t newlen)
 {
-	f_str_t                        *res;
+	f_str_t *res;
 
 	if (orig == NULL || orig->len == 0 || orig->size >= newlen) {
 		return orig;
@@ -333,7 +335,7 @@ fstrgrow (rspamd_mempool_t * pool, f_str_t * orig, size_t newlen)
 static guint32
 fstrhash_c (gchar c, guint32 hval)
 {
-	guint32                         tmp;
+	guint32 tmp;
 	/*
 	 * xor in the current byte against each byte of hval
 	 * (which alone gaurantees that every bit of input will have
@@ -364,9 +366,9 @@ fstrhash_c (gchar c, guint32 hval)
 guint32
 fstrhash (f_str_t * str)
 {
-	size_t                          i;
-	guint32                         hval;
-	gchar                           *c = str->begin;
+	size_t i;
+	guint32 hval;
+	gchar *c = str->begin;
 
 	if (str == NULL) {
 		return 0;
@@ -385,11 +387,11 @@ fstrhash (f_str_t * str)
 guint32
 fstrhash_lowercase (f_str_t * str, gboolean is_utf)
 {
-	gsize                           i;
-	guint32                         j, hval;
-	const gchar                    *p = str->begin, *end = NULL;
-	gchar                           t;
-	gunichar                        uc;
+	gsize i;
+	guint32 j, hval;
+	const gchar *p = str->begin, *end = NULL;
+	gchar t;
+	gunichar uc;
 
 	if (str == NULL) {
 		return 0;
@@ -403,7 +405,7 @@ fstrhash_lowercase (f_str_t * str, gboolean is_utf)
 			}
 			while (p < end) {
 				uc = g_unichar_tolower (g_utf8_get_char (p));
-				for (j = 0; j < sizeof (gunichar); j ++) {
+				for (j = 0; j < sizeof (gunichar); j++) {
 					t = (uc >> (j * 8)) & 0xff;
 					if (t != 0) {
 						hval = fstrhash_c (t, hval);
@@ -427,8 +429,8 @@ fstrhash_lowercase (f_str_t * str, gboolean is_utf)
 void
 fstrstrip (f_str_t * str)
 {
-	gchar                           *p = str->begin;
-	guint                            r = 0;
+	gchar *p = str->begin;
+	guint r = 0;
 
 	while (r < str->len) {
 		if (g_ascii_isspace (*p)) {

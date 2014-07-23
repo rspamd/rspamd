@@ -34,7 +34,7 @@ LUA_FUNCTION_DEF (ip, destroy);
 LUA_FUNCTION_DEF (ip, get_version);
 LUA_FUNCTION_DEF (ip, is_valid);
 
-static const struct luaL_reg    iplib_m[] = {
+static const struct luaL_reg iplib_m[] = {
 	LUA_INTERFACE_DEF (ip, to_string),
 	LUA_INTERFACE_DEF (ip, to_table),
 	LUA_INTERFACE_DEF (ip, to_number),
@@ -47,13 +47,13 @@ static const struct luaL_reg    iplib_m[] = {
 	{NULL, NULL}
 };
 
-static const struct luaL_reg    iplib_f[] = {
+static const struct luaL_reg iplib_f[] = {
 	LUA_INTERFACE_DEF (ip, from_string),
 	LUA_INTERFACE_DEF (ip, from_number),
 	{NULL, NULL}
 };
 
-static struct rspamd_lua_ip	*
+static struct rspamd_lua_ip *
 lua_check_ip (lua_State * L, gint pos)
 {
 	void *ud = luaL_checkudata (L, pos, "rspamd{ip}");
@@ -80,7 +80,7 @@ lua_ip_to_table (lua_State *L)
 			ptr = (guint8 *)&ip->addr.addr.s6.sin6_addr;
 		}
 
-		for (i = 1; i <= max; i ++, ptr ++) {
+		for (i = 1; i <= max; i++, ptr++) {
 			lua_pushnumber (L, *ptr);
 			lua_rawseti (L, -2, i);
 		}
@@ -111,19 +111,22 @@ lua_ip_str_octets (lua_State *L)
 			ptr = (guint8 *)&ip->addr.addr.s6.sin6_addr;
 		}
 
-		for (i = 1; i <= max; i ++, ptr ++) {
+		for (i = 1; i <= max; i++, ptr++) {
 			if (ip->addr.af == AF_INET) {
 				rspamd_snprintf (numbuf, sizeof (numbuf), "%d", *ptr);
 				lua_pushstring (L, numbuf);
 				lua_rawseti (L, -2, i);
 			}
 			else {
-				rspamd_snprintf (numbuf, sizeof (numbuf), "%xd", (*ptr & 0xf0) >> 4);
+				rspamd_snprintf (numbuf,
+					sizeof (numbuf),
+					"%xd",
+					(*ptr & 0xf0) >> 4);
 				lua_pushstring (L, numbuf);
-				lua_rawseti (L, -2, i*2 - 1);
+				lua_rawseti (L, -2, i * 2 - 1);
 				rspamd_snprintf (numbuf, sizeof (numbuf), "%xd", *ptr & 0x0f);
 				lua_pushstring (L, numbuf);
-				lua_rawseti (L, -2, i*2);
+				lua_rawseti (L, -2, i * 2);
 			}
 		}
 	}
@@ -154,7 +157,7 @@ lua_ip_inversed_str_octets (lua_State *L)
 		}
 
 		ptr += max - 1;
-		for (i = 1; i <= max; i ++, ptr --) {
+		for (i = 1; i <= max; i++, ptr--) {
 			if (ip->addr.af == AF_INET) {
 				rspamd_snprintf (numbuf, sizeof (numbuf), "%d", *ptr);
 				lua_pushstring (L, numbuf);
@@ -163,10 +166,13 @@ lua_ip_inversed_str_octets (lua_State *L)
 			else {
 				rspamd_snprintf (numbuf, sizeof (numbuf), "%xd", *ptr & 0x0f);
 				lua_pushstring (L, numbuf);
-				lua_rawseti (L, -2, i*2 - 1);
-				rspamd_snprintf (numbuf, sizeof (numbuf), "%xd", (*ptr & 0xf0) >> 4);
+				lua_rawseti (L, -2, i * 2 - 1);
+				rspamd_snprintf (numbuf,
+					sizeof (numbuf),
+					"%xd",
+					(*ptr & 0xf0) >> 4);
 				lua_pushstring (L, numbuf);
-				lua_rawseti (L, -2, i*2);
+				lua_rawseti (L, -2, i * 2);
 			}
 		}
 	}
@@ -226,9 +232,10 @@ lua_ip_to_number (lua_State *L)
 		}
 		else {
 			/* 4 integers in host byte order */
-			G_STATIC_ASSERT (sizeof (ip->addr.addr.s6.sin6_addr) >= sizeof (dst));
+			G_STATIC_ASSERT (sizeof (ip->addr.addr.s6.sin6_addr) >=
+				sizeof (dst));
 			memcpy (dst, &ip->addr.addr.s6.sin6_addr, sizeof (dst));
-			for (i = 0; i < G_N_ELEMENTS (dst); i ++) {
+			for (i = 0; i < G_N_ELEMENTS (dst); i++) {
 				lua_pushinteger (L, ntohl (dst[i]));
 			}
 			return 4;
@@ -260,7 +267,7 @@ lua_ip_from_number (lua_State *L)
 	}
 	else if (lua_gettop (L) == 4 && lua_isnumber (L, 1)) {
 		/* Ipv6 version */
-		for (i = 0; i < 4; i ++) {
+		for (i = 0; i < 4; i++) {
 			src[i] = htonl (lua_tonumber (L, i + 1));
 		}
 		G_STATIC_ASSERT (sizeof (ip->addr.addr.s6.sin6_addr) >= sizeof (src));
@@ -370,7 +377,7 @@ luaopen_ip (lua_State * L)
 	lua_pushstring (L, "rspamd{ip}");
 	lua_rawset (L, -3);
 
-	luaL_register (L, NULL, iplib_m);
+	luaL_register (L, NULL,		   iplib_m);
 	luaL_register (L, "rspamd_ip", iplib_f);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
