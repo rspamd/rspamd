@@ -34,7 +34,7 @@ struct http_map_data {
 	gchar *host;
 	time_t last_checked;
 	gshort chunked;
-	gchar read_buf[BUFSIZ];
+	gchar  read_buf[BUFSIZ];
 	guint32 rlen;
 	guint32 chunk;
 	guint32 chunk_remain;
@@ -45,8 +45,7 @@ struct map_cb_data;
 /**
  * Callback types
  */
-typedef gchar * (*map_cb_t)(rspamd_mempool_t *pool, gchar *chunk, gint len,
-	struct map_cb_data *data);
+typedef gchar* (*map_cb_t)(rspamd_mempool_t *pool, gchar *chunk, gint len, struct map_cb_data *data);
 typedef void (*map_fin_cb_t)(rspamd_mempool_t *pool, struct map_cb_data *data);
 
 /**
@@ -90,12 +89,8 @@ gboolean check_map_proto (const gchar *map_line, gint *res, const gchar **pos);
 /**
  * Add map from line
  */
-gboolean add_map (struct rspamd_config *cfg,
-	const gchar *map_line,
-	const gchar *description,
-	map_cb_t read_callback,
-	map_fin_cb_t fin_callback,
-	void **user_data);
+gboolean add_map (struct rspamd_config *cfg, const gchar *map_line, const gchar *description,
+		map_cb_t read_callback, map_fin_cb_t fin_callback, void **user_data);
 
 /**
  * Start watching of maps by adding events to libevent event loop
@@ -107,8 +102,7 @@ void start_map_watch (struct rspamd_config *cfg, struct event_base *ev_base);
  */
 void remove_all_maps (struct rspamd_config *cfg);
 
-typedef void (*insert_func) (gpointer st, gconstpointer key,
-	gconstpointer value);
+typedef void                    (*insert_func) (gpointer st, gconstpointer key, gconstpointer value);
 
 /**
  * Common callbacks for frequent types of lists
@@ -117,37 +111,24 @@ typedef void (*insert_func) (gpointer st, gconstpointer key,
 /**
  * Radix list is a list like ip/mask
  */
-gchar * read_radix_list (rspamd_mempool_t *pool,
-	gchar *chunk,
-	gint len,
-	struct map_cb_data *data);
+gchar* read_radix_list (rspamd_mempool_t *pool, gchar *chunk, gint len, struct map_cb_data *data);
 void fin_radix_list (rspamd_mempool_t *pool, struct map_cb_data *data);
 
 /**
  * Host list is an ordinal list of hosts or domains
  */
-gchar * read_host_list (rspamd_mempool_t *pool,
-	gchar *chunk,
-	gint len,
-	struct map_cb_data *data);
+gchar* read_host_list (rspamd_mempool_t *pool, gchar *chunk, gint len, struct map_cb_data *data);
 void fin_host_list (rspamd_mempool_t *pool, struct map_cb_data *data);
 
 /**
  * Kv list is an ordinal list of keys and values separated by whitespace
  */
-gchar * read_kv_list (rspamd_mempool_t *pool,
-	gchar *chunk,
-	gint len,
-	struct map_cb_data *data);
+gchar* read_kv_list (rspamd_mempool_t *pool, gchar *chunk, gint len, struct map_cb_data *data);
 void fin_kv_list (rspamd_mempool_t *pool, struct map_cb_data *data);
 
 /**
  * FSM for lists parsing (support comments, blank lines and partial replies)
  */
-gchar * abstract_parse_list (rspamd_mempool_t * pool,
-	gchar * chunk,
-	gint len,
-	struct map_cb_data *data,
-	insert_func func);
+gchar * abstract_parse_list (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data, insert_func func);
 
 #endif

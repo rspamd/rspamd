@@ -21,10 +21,10 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "cfg_file.h"
 #include "config.h"
 #include "lua_common.h"
 #include "upstream.h"
+#include "cfg_file.h"
 
 /* Upstream timeouts */
 #define DEFAULT_UPSTREAM_ERROR_TIME 10
@@ -41,7 +41,7 @@ LUA_FUNCTION_DEF (upstream_list, get_upstream_by_hash);
 LUA_FUNCTION_DEF (upstream_list, get_upstream_round_robin);
 LUA_FUNCTION_DEF (upstream_list, get_upstream_master_slave);
 
-static const struct luaL_reg upstream_list_m[] = {
+static const struct luaL_reg  upstream_list_m[] = {
 
 	LUA_INTERFACE_DEF (upstream_list, get_upstream_by_hash),
 	LUA_INTERFACE_DEF (upstream_list, get_upstream_round_robin),
@@ -50,7 +50,7 @@ static const struct luaL_reg upstream_list_m[] = {
 	{"__gc", lua_upstream_list_destroy},
 	{NULL, NULL}
 };
-static const struct luaL_reg upstream_list_f[] = {
+static const struct luaL_reg  upstream_list_f[] = {
 	LUA_INTERFACE_DEF (upstream_list, create),
 	{NULL, NULL}
 };
@@ -65,7 +65,7 @@ LUA_FUNCTION_DEF (upstream, get_port);
 LUA_FUNCTION_DEF (upstream, get_ip_string);
 LUA_FUNCTION_DEF (upstream, get_priority);
 
-static const struct luaL_reg upstream_m[] = {
+static const struct luaL_reg  upstream_m[] = {
 	LUA_INTERFACE_DEF (upstream, ok),
 	LUA_INTERFACE_DEF (upstream, fail),
 	LUA_INTERFACE_DEF (upstream, get_ip),
@@ -76,7 +76,7 @@ static const struct luaL_reg upstream_m[] = {
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
-static const struct luaL_reg upstream_f[] = {
+static const struct luaL_reg  upstream_f[] = {
 	LUA_INTERFACE_DEF (upstream, create),
 	{NULL, NULL}
 };
@@ -89,10 +89,10 @@ struct lua_upstream {
 	gchar *addr;
 };
 
-static struct lua_upstream *
+static struct lua_upstream	*
 lua_check_upstream (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{upstream}");
+	void									*ud = luaL_checkudata (L, 1, "rspamd{upstream}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'upstream' expected");
 	return ud ? *((struct lua_upstream **)ud) : NULL;
@@ -106,16 +106,15 @@ lua_check_upstream (lua_State * L)
 static gint
 lua_upstream_create (lua_State *L)
 {
-	struct lua_upstream *new, **pnew;
-	const gchar *def;
+	struct lua_upstream						*new, **pnew;
+	const gchar								*def;
 
 	def = luaL_checkstring (L, 1);
 	if (def) {
 		new = g_slice_alloc0 (sizeof (struct lua_upstream));
 		new->def = g_strdup (def);
 		new->addr = g_malloc (INET6_ADDRSTRLEN);
-		if (!rspamd_parse_host_port_priority (NULL, new->def, &new->addr,
-			&new->port, &new->up.priority)) {
+		if (!rspamd_parse_host_port_priority (NULL, new->def, &new->addr, &new->port, &new->up.priority)) {
 			g_free (new->def);
 			g_slice_free1 (sizeof (struct lua_upstream), new);
 			lua_pushnil (L);
@@ -138,7 +137,7 @@ lua_upstream_create (lua_State *L)
 static gint
 lua_upstream_destroy (lua_State *L)
 {
-	struct lua_upstream *up = lua_check_upstream (L);
+	struct lua_upstream						*up = lua_check_upstream (L);
 
 	if (up) {
 		g_free (up->def);
@@ -157,7 +156,7 @@ lua_upstream_destroy (lua_State *L)
 static gint
 lua_upstream_get_ip (lua_State *L)
 {
-	struct lua_upstream *up = lua_check_upstream (L);
+	struct lua_upstream						*up = lua_check_upstream (L);
 
 	if (up) {
 		lua_pushstring (L, up->addr);
@@ -177,7 +176,7 @@ lua_upstream_get_ip (lua_State *L)
 static gint
 lua_upstream_get_ip_string (lua_State *L)
 {
-	struct lua_upstream *up = lua_check_upstream (L);
+	struct lua_upstream						*up = lua_check_upstream (L);
 
 	if (up) {
 		lua_pushstring (L, up->addr);
@@ -197,7 +196,7 @@ lua_upstream_get_ip_string (lua_State *L)
 static gint
 lua_upstream_get_port (lua_State *L)
 {
-	struct lua_upstream *up = lua_check_upstream (L);
+	struct lua_upstream						*up = lua_check_upstream (L);
 
 	if (up) {
 		lua_pushinteger (L, up->port);
@@ -217,7 +216,7 @@ lua_upstream_get_port (lua_State *L)
 static gint
 lua_upstream_get_priority (lua_State *L)
 {
-	struct lua_upstream *up = lua_check_upstream (L);
+	struct lua_upstream						*up = lua_check_upstream (L);
 
 	if (up) {
 		lua_pushinteger (L, up->up.priority);
@@ -237,8 +236,8 @@ lua_upstream_get_priority (lua_State *L)
 static gint
 lua_upstream_fail (lua_State *L)
 {
-	struct lua_upstream *up = lua_check_upstream (L);
-	time_t now;
+	struct lua_upstream						*up = lua_check_upstream (L);
+	time_t									 now;
 
 	if (up) {
 		if (lua_gettop (L) >= 2) {
@@ -261,8 +260,8 @@ lua_upstream_fail (lua_State *L)
 static gint
 lua_upstream_ok (lua_State *L)
 {
-	struct lua_upstream *up = lua_check_upstream (L);
-	time_t now;
+	struct lua_upstream						*up = lua_check_upstream (L);
+	time_t									 now;
 
 	if (up) {
 		if (lua_gettop (L) >= 2) {
@@ -283,10 +282,10 @@ struct lua_upstream_list {
 	guint count;
 };
 
-static struct lua_upstream_list *
+static struct lua_upstream_list	*
 lua_check_upstream_list (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{upstream_list}");
+	void									*ud = luaL_checkudata (L, 1, "rspamd{upstream_list}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'upstream_list' expected");
 	return ud ? *((struct lua_upstream_list **)ud) : NULL;
@@ -300,11 +299,11 @@ lua_check_upstream_list (lua_State * L)
 static gint
 lua_upstream_list_create (lua_State *L)
 {
-	struct lua_upstream_list *new, **pnew;
-	struct lua_upstream *cur;
-	const gchar *def;
-	char **tokens;
-	guint i, default_port = 0;
+	struct lua_upstream_list				*new, **pnew;
+	struct lua_upstream						*cur;
+	const gchar								*def;
+	char									**tokens;
+	guint									 i, default_port = 0;
 
 	def = luaL_checkstring (L, 1);
 	if (def) {
@@ -318,14 +317,12 @@ lua_upstream_list_create (lua_State *L)
 			goto err;
 		}
 		new->count = g_strv_length (tokens);
-		new->upstreams =
-			g_slice_alloc0 (new->count * sizeof (struct lua_upstream));
+		new->upstreams = g_slice_alloc0 (new->count * sizeof (struct lua_upstream));
 
-		for (i = 0; i < new->count; i++) {
+		for (i = 0; i < new->count; i ++) {
 			cur = &new->upstreams[i];
 			cur->addr = g_malloc (INET6_ADDRSTRLEN);
-			if (!rspamd_parse_host_port_priority (NULL, tokens[i], &cur->addr,
-				&cur->port, &cur->up.priority)) {
+			if (!rspamd_parse_host_port_priority (NULL, tokens[i], &cur->addr, &cur->port, &cur->up.priority)) {
 				goto err;
 			}
 			if (cur->port == 0) {
@@ -343,14 +340,13 @@ err:
 		g_strfreev (tokens);
 	}
 	if (new->upstreams) {
-		for (i = 0; i < new->count; i++) {
+		for (i = 0; i < new->count; i ++) {
 			cur = &new->upstreams[i];
 			if (cur->addr) {
 				g_free (cur->addr);
 			}
 		}
-		g_slice_free1 (new->count * sizeof (struct lua_upstream),
-			new->upstreams);
+		g_slice_free1 (new->count * sizeof (struct lua_upstream), new->upstreams);
 	}
 	g_slice_free1 (sizeof (struct lua_upstream_list), new);
 	lua_pushnil (L);
@@ -365,20 +361,19 @@ err:
 static gint
 lua_upstream_list_destroy (lua_State *L)
 {
-	struct lua_upstream_list *upl = lua_check_upstream_list (L);
-	struct lua_upstream *cur;
-	guint i;
+	struct lua_upstream_list					*upl = lua_check_upstream_list (L);
+	struct lua_upstream							*cur;
+	guint									 	 i;
 
 	if (upl) {
 		if (upl->upstreams) {
-			for (i = 0; i < upl->count; i++) {
+			for (i = 0; i < upl->count; i ++) {
 				cur = &upl->upstreams[i];
 				if (cur->addr) {
 					g_free (cur->addr);
 				}
 			}
-			g_slice_free1 (upl->count * sizeof (struct lua_upstream),
-				upl->upstreams);
+			g_slice_free1 (upl->count * sizeof (struct lua_upstream), upl->upstreams);
 		}
 		g_slice_free1 (sizeof (struct lua_upstream_list), upl);
 	}
@@ -394,10 +389,10 @@ lua_upstream_list_destroy (lua_State *L)
 static gint
 lua_upstream_list_get_upstream_by_hash (lua_State *L)
 {
-	struct lua_upstream_list *upl;
-	struct lua_upstream *selected, **pselected;
-	time_t now;
-	const gchar *key;
+	struct lua_upstream_list					*upl;
+	struct lua_upstream							*selected, **pselected;
+	time_t										 now;
+	const gchar									*key;
 
 	upl = lua_check_upstream_list (L);
 	if (upl) {
@@ -409,16 +404,10 @@ lua_upstream_list_get_upstream_by_hash (lua_State *L)
 			else {
 				now = time (NULL);
 			}
-			selected = (struct lua_upstream *)get_upstream_by_hash (
-				upl->upstreams,
-				upl->count,
-				sizeof (struct lua_upstream),
-				now,
-				DEFAULT_UPSTREAM_ERROR_TIME,
-				DEFAULT_UPSTREAM_DEAD_TIME,
-				DEFAULT_UPSTREAM_MAXERRORS,
-				key,
-				0);
+			selected = (struct lua_upstream *)get_upstream_by_hash (upl->upstreams, upl->count,
+					sizeof (struct lua_upstream), now,
+					DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS,
+					key, 0);
 			if (selected) {
 				pselected = lua_newuserdata (L, sizeof (struct lua_upstream *));
 				lua_setclass (L, "rspamd{upstream}", -1);
@@ -447,9 +436,9 @@ lua_upstream_list_get_upstream_by_hash (lua_State *L)
 static gint
 lua_upstream_list_get_upstream_round_robin (lua_State *L)
 {
-	struct lua_upstream_list *upl;
-	struct lua_upstream *selected, **pselected;
-	time_t now;
+	struct lua_upstream_list					*upl;
+	struct lua_upstream							*selected, **pselected;
+	time_t										 now;
 
 	upl = lua_check_upstream_list (L);
 	if (upl) {
@@ -459,14 +448,9 @@ lua_upstream_list_get_upstream_round_robin (lua_State *L)
 		else {
 			now = time (NULL);
 		}
-		selected = (struct lua_upstream *)get_upstream_round_robin (
-			upl->upstreams,
-			upl->count,
-			sizeof (struct lua_upstream),
-			now,
-			DEFAULT_UPSTREAM_ERROR_TIME,
-			DEFAULT_UPSTREAM_DEAD_TIME,
-			DEFAULT_UPSTREAM_MAXERRORS);
+		selected = (struct lua_upstream *)get_upstream_round_robin (upl->upstreams, upl->count,
+				sizeof (struct lua_upstream), now,
+				DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS);
 		if (selected) {
 			pselected = lua_newuserdata (L, sizeof (struct lua_upstream *));
 			lua_setclass (L, "rspamd{upstream}", -1);
@@ -491,9 +475,9 @@ lua_upstream_list_get_upstream_round_robin (lua_State *L)
 static gint
 lua_upstream_list_get_upstream_master_slave (lua_State *L)
 {
-	struct lua_upstream_list *upl;
-	struct lua_upstream *selected, **pselected;
-	time_t now;
+	struct lua_upstream_list					*upl;
+	struct lua_upstream							*selected, **pselected;
+	time_t										 now;
 
 	upl = lua_check_upstream_list (L);
 	if (upl) {
@@ -503,14 +487,9 @@ lua_upstream_list_get_upstream_master_slave (lua_State *L)
 		else {
 			now = time (NULL);
 		}
-		selected = (struct lua_upstream *)get_upstream_master_slave (
-			upl->upstreams,
-			upl->count,
-			sizeof (struct lua_upstream),
-			now,
-			DEFAULT_UPSTREAM_ERROR_TIME,
-			DEFAULT_UPSTREAM_DEAD_TIME,
-			DEFAULT_UPSTREAM_MAXERRORS);
+		selected = (struct lua_upstream *)get_upstream_master_slave (upl->upstreams, upl->count,
+				sizeof (struct lua_upstream), now,
+				DEFAULT_UPSTREAM_ERROR_TIME, DEFAULT_UPSTREAM_DEAD_TIME, DEFAULT_UPSTREAM_MAXERRORS);
 		if (selected) {
 			pselected = lua_newuserdata (L, sizeof (struct lua_upstream *));
 			lua_setclass (L, "rspamd{upstream}", -1);
@@ -540,7 +519,7 @@ luaopen_upstream (lua_State * L)
 	lua_pushstring (L, "rspamd{upstream_list}");
 	lua_rawset (L, -3);
 
-	luaL_register (L, NULL,			   upstream_list_m);
+	luaL_register (L, NULL, upstream_list_m);
 	luaL_register (L, "upstream_list", upstream_list_f);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
@@ -554,7 +533,7 @@ luaopen_upstream (lua_State * L)
 	lua_pushstring (L, "rspamd{upstream}");
 	lua_rawset (L, -3);
 
-	luaL_register (L, NULL,		  upstream_m);
+	luaL_register (L, NULL, upstream_m);
 	luaL_register (L, "upstream", upstream_f);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */

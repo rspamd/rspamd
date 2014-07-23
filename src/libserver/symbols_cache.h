@@ -32,7 +32,7 @@ struct cache_item {
 	struct dynamic_map_item *networks;
 	guint32 networks_number;
 	gboolean is_dynamic;
-
+	
 	/* Callback data */
 	symbol_func_t func;
 	gpointer user_data;
@@ -53,7 +53,7 @@ struct symbols_cache {
 
 	/* Items that have negative weights */
 	GList *negative_items;
-
+	
 	/* Radix map of dynamic rules with ip mappings */
 	radix_tree_t *dynamic_map;
 	radix_tree_t *negative_dynamic_map;
@@ -77,11 +77,8 @@ struct symbols_cache {
 /**
  * Load symbols cache from file, must be called _after_ init_symbols_cache
  */
-gboolean init_symbols_cache (rspamd_mempool_t *pool,
-	struct symbols_cache *cache,
-	struct rspamd_config *cfg,
-	const gchar *filename,
-	gboolean ignore_checksum);
+gboolean init_symbols_cache (rspamd_mempool_t *pool, struct symbols_cache *cache, struct rspamd_config *cfg,
+		const gchar *filename, gboolean ignore_checksum);
 
 /**
  * Register function for symbols parsing
@@ -89,20 +86,15 @@ gboolean init_symbols_cache (rspamd_mempool_t *pool,
  * @param func pointer to handler
  * @param user_data pointer to user_data
  */
-void register_symbol (struct symbols_cache **cache,
-	const gchar *name,
-	double weight,
-	symbol_func_t func,
-	gpointer user_data);
+void register_symbol (struct symbols_cache **cache, const gchar *name, double weight,
+		symbol_func_t func, gpointer user_data);
 
 
 /**
  * Register virtual symbol
  * @param name name of symbol
  */
-void register_virtual_symbol (struct symbols_cache **cache,
-	const gchar *name,
-	double weight);
+void register_virtual_symbol (struct symbols_cache **cache, const gchar *name, double weight);
 
 /**
  * Register callback function for symbols parsing
@@ -110,11 +102,8 @@ void register_virtual_symbol (struct symbols_cache **cache,
  * @param func pointer to handler
  * @param user_data pointer to user_data
  */
-void register_callback_symbol (struct symbols_cache **cache,
-	const gchar *name,
-	double weight,
-	symbol_func_t func,
-	gpointer user_data);
+void register_callback_symbol (struct symbols_cache **cache, const gchar *name, double weight,
+		symbol_func_t func, gpointer user_data);
 
 /**
  * Register function for symbols parsing with strict priority
@@ -122,12 +111,8 @@ void register_callback_symbol (struct symbols_cache **cache,
  * @param func pointer to handler
  * @param user_data pointer to user_data
  */
-void register_callback_symbol_priority (struct symbols_cache **cache,
-	const gchar *name,
-	double weight,
-	gint priority,
-	symbol_func_t func,
-	gpointer user_data);
+void register_callback_symbol_priority (struct symbols_cache **cache, const gchar *name, double weight,
+		gint priority, symbol_func_t func, gpointer user_data);
 
 /**
  * Register function for dynamic symbols parsing
@@ -135,13 +120,9 @@ void register_callback_symbol_priority (struct symbols_cache **cache,
  * @param func pointer to handler
  * @param user_data pointer to user_data
  */
-void register_dynamic_symbol (rspamd_mempool_t *pool,
-	struct symbols_cache **cache,
-	const gchar *name,
-	double weight,
-	symbol_func_t func,
-	gpointer user_data,
-	GList *networks);
+void register_dynamic_symbol (rspamd_mempool_t *pool, struct symbols_cache **cache, const gchar *name, 
+						double weight, symbol_func_t func, 
+						gpointer user_data, GList *networks);
 
 /**
  * Call function for cached symbol using saved callback
@@ -149,9 +130,7 @@ void register_dynamic_symbol (rspamd_mempool_t *pool,
  * @param cache symbols cache
  * @param saved_item pointer to currently saved item
  */
-gboolean call_symbol_callback (struct rspamd_task *task,
-	struct symbols_cache *cache,
-	gpointer *save);
+gboolean call_symbol_callback (struct rspamd_task *task, struct symbols_cache *cache, gpointer *save);
 
 /**
  * Remove all dynamic rules from cache
@@ -165,9 +144,7 @@ void remove_dynamic_rules (struct symbols_cache *cache);
  * @param cfg configuration
  * @param strict do strict checks - symbols MUST be described in metrics
  */
-gboolean validate_cache (struct symbols_cache *cache,
-	struct rspamd_config *cfg,
-	gboolean strict);
+gboolean validate_cache (struct symbols_cache *cache, struct rspamd_config *cfg, gboolean strict);
 
 
 #endif

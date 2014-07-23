@@ -31,8 +31,7 @@
 #ifdef WITH_SQLITE
 
 /* Create new sqlite backend */
-struct rspamd_kv_backend * rspamd_kv_sqlite_new (const gchar *filename,
-	guint sync_ops);
+struct rspamd_kv_backend* rspamd_kv_sqlite_new (const gchar *filename, guint sync_ops);
 
 #endif
 

@@ -27,9 +27,9 @@
 #define RSPAMD_DNS_H
 
 #include "config.h"
+#include "mem_pool.h"
 #include "events.h"
 #include "logger.h"
-#include "mem_pool.h"
 #include "rdns.h"
 
 struct rspamd_dns_resolver;
@@ -39,8 +39,8 @@ struct rspamd_dns_resolver;
 /**
  * Init DNS resolver, params are obtained from a config file or system file /etc/resolv.conf
  */
-struct rspamd_dns_resolver * dns_resolver_init (rspamd_logger_t *logger,
-	struct event_base *ev_base, struct rspamd_config *cfg);
+struct rspamd_dns_resolver *dns_resolver_init (rspamd_logger_t *logger,
+		struct event_base *ev_base, struct rspamd_config *cfg);
 
 /**
  * Make a DNS request
@@ -53,12 +53,8 @@ struct rspamd_dns_resolver * dns_resolver_init (rspamd_logger_t *logger,
  * @param ... string or ip address based on a request type
  * @return TRUE if request was sent.
  */
-gboolean make_dns_request (struct rspamd_dns_resolver *resolver,
-	struct rspamd_async_session *session,
-	rspamd_mempool_t *pool,
-	dns_callback_type cb,
-	gpointer ud,
-	enum rdns_request_type type,
-	const char *name);
+gboolean make_dns_request (struct rspamd_dns_resolver *resolver, 
+		struct rspamd_async_session *session, rspamd_mempool_t *pool,
+		dns_callback_type cb, gpointer ud, enum rdns_request_type type, const char *name);
 
 #endif

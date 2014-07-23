@@ -26,13 +26,13 @@
 #include "config.h"
 
 #include "cfg_file.h"
-#include "classifiers/classifiers.h"
-#include "dynamic_cfg.h"
-#include "filter.h"
-#include "kvstorage_config.h"
-#include "lua/lua_common.h"
 #include "main.h"
+#include "filter.h"
+#include "classifiers/classifiers.h"
+#include "lua/lua_common.h"
+#include "kvstorage_config.h"
 #include "map.h"
+#include "dynamic_cfg.h"
 
 #define DEFAULT_SCORE 10.0
 
@@ -44,22 +44,18 @@ struct rspamd_ucl_map_cbdata {
 	struct rspamd_config *cfg;
 	GString *buf;
 };
-static gchar * rspamd_ucl_read_cb (rspamd_mempool_t * pool,
-	gchar * chunk,
-	gint len,
-	struct map_cb_data *data);
-static void rspamd_ucl_fin_cb (rspamd_mempool_t * pool,
-	struct map_cb_data *data);
+static gchar* rspamd_ucl_read_cb (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data);
+static void rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data);
 
 static gboolean
 parse_host_port_priority_strv (rspamd_mempool_t *pool, gchar **tokens,
-	gchar **addr, guint16 *port, guint *priority, guint default_port)
+		gchar **addr, guint16 *port, guint *priority, guint default_port)
 {
-	gchar *err_str, portbuf[8];
-	const gchar *cur_tok, *cur_port;
-	struct addrinfo hints, *res;
-	guint port_parsed, priority_parsed, saved_errno = errno;
-	gint r;
+	gchar                          *err_str, portbuf[8];
+	const gchar                    *cur_tok, *cur_port;
+	struct addrinfo                hints, *res;
+	guint                           port_parsed, priority_parsed, saved_errno = errno;
+	gint							r;
 	union {
 		struct sockaddr_in v4;
 		struct sockaddr_in6 v6;
@@ -94,18 +90,12 @@ parse_host_port_priority_strv (rspamd_mempool_t *pool, gchar **tokens,
 			errno = 0;
 			port_parsed = strtoul (tokens[1], &err_str, 10);
 			if (*err_str != '\0' || errno != 0) {
-				msg_warn ("cannot parse port: %s, at symbol %c, error: %s",
-					tokens[1],
-					*err_str,
-					strerror (errno));
+				msg_warn ("cannot parse port: %s, at symbol %c, error: %s", tokens[1], *err_str, strerror (errno));
 				hints.ai_flags ^= AI_NUMERICSERV;
 			}
 			else if (port_parsed > G_MAXUINT16) {
 				errno = ERANGE;
-				msg_warn ("cannot parse port: %s, error: %s",
-					tokens[1],
-					*err_str,
-					strerror (errno));
+				msg_warn ("cannot parse port: %s, error: %s", tokens[1], *err_str, strerror (errno));
 				hints.ai_flags ^= AI_NUMERICSERV;
 			}
 			else {
@@ -124,11 +114,7 @@ parse_host_port_priority_strv (rspamd_mempool_t *pool, gchar **tokens,
 				errno = 0;
 				priority_parsed = strtoul (cur_tok, &err_str, 10);
 				if (*err_str != '\0' || errno != 0) {
-					msg_warn (
-						"cannot parse priority: %s, at symbol %c, error: %s",
-						tokens[1],
-						*err_str,
-						strerror (errno));
+					msg_warn ("cannot parse priority: %s, at symbol %c, error: %s", tokens[1], *err_str, strerror (errno));
 				}
 				else {
 					*priority = priority_parsed;
@@ -145,32 +131,23 @@ parse_host_port_priority_strv (rspamd_mempool_t *pool, gchar **tokens,
 	}
 
 	if ((r = getaddrinfo (cur_tok, cur_port, &hints, &res)) == 0) {
-		memcpy (&addr_holder, res->ai_addr,
-			MIN (sizeof (addr_holder), res->ai_addrlen));
+		memcpy (&addr_holder, res->ai_addr, MIN (sizeof (addr_holder), res->ai_addrlen));
 		if (res->ai_family == AF_INET) {
 			if (pool != NULL) {
 				*addr = rspamd_mempool_alloc (pool, INET_ADDRSTRLEN + 1);
 			}
-			inet_ntop (res->ai_family,
-				&addr_holder.v4.sin_addr,
-				*addr,
-				INET_ADDRSTRLEN + 1);
+			inet_ntop (res->ai_family, &addr_holder.v4.sin_addr, *addr, INET_ADDRSTRLEN + 1);
 		}
 		else {
 			if (pool != NULL) {
 				*addr = rspamd_mempool_alloc (pool, INET6_ADDRSTRLEN + 1);
 			}
-			inet_ntop (res->ai_family,
-				&addr_holder.v6.sin6_addr,
-				*addr,
-				INET6_ADDRSTRLEN + 1);
+			inet_ntop (res->ai_family, &addr_holder.v6.sin6_addr, *addr, INET6_ADDRSTRLEN + 1);
 		}
 		freeaddrinfo (res);
 	}
 	else {
-		msg_err ("address resolution for %s failed: %s",
-			tokens[0],
-			gai_strerror (r));
+		msg_err ("address resolution for %s failed: %s", tokens[0], gai_strerror (r));
 		goto err;
 	}
 
@@ -184,14 +161,10 @@ err:
 }
 
 gboolean
-rspamd_parse_host_port_priority (rspamd_mempool_t *pool,
-	const gchar *str,
-	gchar **addr,
-	guint16 *port,
-	guint *priority)
+rspamd_parse_host_port_priority (rspamd_mempool_t *pool, const gchar *str, gchar **addr, guint16 *port, guint *priority)
 {
-	gchar **tokens;
-	gboolean ret;
+	gchar                          **tokens;
+	gboolean                         ret;
 
 	tokens = g_strsplit_set (str, ":", 0);
 	if (!tokens || !tokens[0]) {
@@ -206,27 +179,19 @@ rspamd_parse_host_port_priority (rspamd_mempool_t *pool,
 }
 
 gboolean
-rspamd_parse_host_port (rspamd_mempool_t *pool,
-	const gchar *str,
-	gchar **addr,
-	guint16 *port)
+rspamd_parse_host_port (rspamd_mempool_t *pool, const gchar *str, gchar **addr, guint16 *port)
 {
 	return rspamd_parse_host_port_priority (pool, str, addr, port, NULL);
 }
 
 gboolean
-rspamd_parse_host_priority (rspamd_mempool_t *pool,
-	const gchar *str,
-	gchar **addr,
-	guint *priority)
+rspamd_parse_host_priority (rspamd_mempool_t *pool, const gchar *str, gchar **addr, guint *priority)
 {
 	return rspamd_parse_host_port_priority (pool, str, addr, NULL, priority);
 }
 
 gboolean
-rspamd_parse_bind_line (struct rspamd_config *cfg,
-	struct rspamd_worker_conf *cf,
-	const gchar *str)
+rspamd_parse_bind_line (struct rspamd_config *cfg, struct rspamd_worker_conf *cf, const gchar *str)
 {
 	struct rspamd_worker_bind_conf *cnf;
 	gchar **tokens, *tmp, *err;
@@ -241,9 +206,7 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 		return FALSE;
 	}
 
-	cnf =
-		rspamd_mempool_alloc0 (cfg->cfg_pool,
-			sizeof (struct rspamd_worker_bind_conf));
+	cnf = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_bind_conf));
 	cnf->bind_port = DEFAULT_BIND_PORT;
 	cnf->bind_host = rspamd_mempool_strdup (cfg->cfg_pool, str);
 	cnf->ai = AF_UNSPEC;
@@ -258,18 +221,16 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 		tokens[0] = "*v4";
 		cnf->ai = AF_INET;
 		if ((ret = parse_host_port_priority_strv (cfg->cfg_pool, tokens,
-			&cnf->bind_host, &cnf->bind_port, NULL, DEFAULT_BIND_PORT))) {
+				&cnf->bind_host, &cnf->bind_port, NULL, DEFAULT_BIND_PORT))) {
 			LL_PREPEND (cf->bind_conf, cnf);
 		}
-		cnf =
-			rspamd_mempool_alloc0 (cfg->cfg_pool,
-				sizeof (struct rspamd_worker_bind_conf));
+		cnf = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_bind_conf));
 		cnf->bind_port = DEFAULT_BIND_PORT;
 		cnf->bind_host = rspamd_mempool_strdup (cfg->cfg_pool, str);
 		cnf->ai = AF_INET6;
 		tokens[0] = "*v6";
 		if ((ret &= parse_host_port_priority_strv (cfg->cfg_pool, tokens,
-			&cnf->bind_host, &cnf->bind_port, NULL, DEFAULT_BIND_PORT))) {
+				&cnf->bind_host, &cnf->bind_port, NULL, DEFAULT_BIND_PORT))) {
 			LL_PREPEND (cf->bind_conf, cnf);
 		}
 		tokens[0] = tmp;
@@ -326,10 +287,8 @@ rspamd_config_defaults (struct rspamd_config *cfg)
 
 	cfg->metrics = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->c_modules = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-	cfg->composite_symbols =
-		g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-	cfg->classifiers_symbols = g_hash_table_new (rspamd_str_hash,
-			rspamd_str_equal);
+	cfg->composite_symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+	cfg->classifiers_symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->cfg_params = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->metrics_symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 
@@ -342,8 +301,8 @@ rspamd_config_defaults (struct rspamd_config *cfg)
 void
 rspamd_config_free (struct rspamd_config *cfg)
 {
-	GList *cur;
-	struct rspamd_symbols_group *gr;
+	GList							*cur;
+	struct rspamd_symbols_group			*gr;
 
 	remove_all_maps (cfg);
 	ucl_obj_unref (cfg->rcl_obj);
@@ -378,10 +337,8 @@ rspamd_config_free (struct rspamd_config *cfg)
 	rspamd_mempool_delete (cfg->cfg_pool);
 }
 
-const ucl_object_t *
-rspamd_config_get_module_opt (struct rspamd_config *cfg,
-	const gchar *module_name,
-	const gchar *opt_name)
+const ucl_object_t        *
+rspamd_config_get_module_opt (struct rspamd_config *cfg, const gchar *module_name, const gchar *opt_name)
 {
 	const ucl_object_t *res = NULL, *sec;
 
@@ -396,8 +353,8 @@ rspamd_config_get_module_opt (struct rspamd_config *cfg,
 guint64
 rspamd_config_parse_limit (const gchar *limit, guint len)
 {
-	guint64 result = 0;
-	const gchar *err_str;
+	guint64                        result = 0;
+	const gchar                   *err_str;
 
 	if (!limit || *limit == '\0' || len == 0) {
 		return 0;
@@ -420,9 +377,7 @@ rspamd_config_parse_limit (const gchar *limit, guint len)
 			result *= 1073741824L;
 		}
 		else if (len > 0 && err_str - limit != (gint)len) {
-			msg_warn ("invalid limit value '%s' at position '%s'",
-				limit,
-				err_str);
+			msg_warn ("invalid limit value '%s' at position '%s'", limit, err_str);
 			result = 0;
 		}
 	}
@@ -433,8 +388,8 @@ rspamd_config_parse_limit (const gchar *limit, guint len)
 gchar
 rspamd_config_parse_flag (const gchar *str)
 {
-	guint len;
-	gchar c;
+	guint							 len;
+	gchar							 c;
 
 	if (!str || !*str) {
 		return -1;
@@ -484,16 +439,15 @@ rspamd_config_parse_flag (const gchar *str)
 }
 
 gboolean
-rspamd_config_calculate_checksum (struct rspamd_config *cfg)
+rspamd_config_calculate_checksum (struct rspamd_config *cfg) 
 {
-	gint fd;
-	void *map;
-	struct stat st;
+	gint                            fd;
+	void                           *map;
+	struct stat                     st;
 
 	/* Compute checksum for config file that should be used by xml dumper */
 	if ((fd = open (cfg->cfg_name, O_RDONLY)) == -1) {
-		msg_err (
-			"config file %s is no longer available, cannot calculate checksum");
+		msg_err ("config file %s is no longer available, cannot calculate checksum");
 		return FALSE;
 	}
 	if (stat (cfg->cfg_name, &st) == -1) {
@@ -502,40 +456,37 @@ rspamd_config_calculate_checksum (struct rspamd_config *cfg)
 	}
 
 	/* Now mmap this file to simplify reading process */
-	if ((map =
-		mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
+	if ((map = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
 		msg_err ("cannot mmap %s: %s", cfg->cfg_name, strerror (errno));
 		close (fd);
 		return FALSE;
 	}
 	close (fd);
-
+	
 	/* Get checksum for a file */
-	cfg->checksum = g_compute_checksum_for_string (G_CHECKSUM_MD5,
-			map,
-			st.st_size);
+	cfg->checksum = g_compute_checksum_for_string (G_CHECKSUM_MD5, map, st.st_size);
 	munmap (map, st.st_size);
-
+	
 	return TRUE;
 }
-/*
+/* 
  * Perform post load actions
  */
 void
 rspamd_config_post_load (struct rspamd_config *cfg)
 {
 #ifdef HAVE_CLOCK_GETTIME
-	struct timespec ts;
+	struct timespec                 ts;
 #endif
-	struct metric *def_metric;
+	struct metric                  *def_metric;
 
 #ifdef HAVE_CLOCK_GETTIME
 #ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
 	clock_getres (CLOCK_PROCESS_CPUTIME_ID, &ts);
 # elif defined(HAVE_CLOCK_VIRTUAL)
-	clock_getres (CLOCK_VIRTUAL,			&ts);
+	clock_getres (CLOCK_VIRTUAL, &ts);
 # else
-	clock_getres (CLOCK_REALTIME,			&ts);
+	clock_getres (CLOCK_REALTIME, &ts);
 # endif
 
 	cfg->clock_res = (gint)log10 (1000000 / ts.tv_nsec);
@@ -545,13 +496,12 @@ rspamd_config_post_load (struct rspamd_config *cfg)
 	if (cfg->clock_res > 3) {
 		cfg->clock_res = 3;
 	}
-#else
+#else 
 	/* For gettimeofday */
 	cfg->clock_res = 1;
 #endif
 
-	if ((def_metric =
-		g_hash_table_lookup (cfg->metrics, DEFAULT_METRIC)) == NULL) {
+	if ((def_metric = g_hash_table_lookup (cfg->metrics, DEFAULT_METRIC)) == NULL) {
 		def_metric = rspamd_config_new_metric (cfg, NULL);
 		def_metric->name = DEFAULT_METRIC;
 		def_metric->actions[METRIC_ACTION_REJECT].score = DEFAULT_SCORE;
@@ -570,18 +520,14 @@ rspamd_config_post_load (struct rspamd_config *cfg)
 void
 parse_err (const gchar *fmt, ...)
 {
-	va_list aq;
-	gchar logbuf[BUFSIZ], readbuf[32];
-	gint r;
+	va_list                         aq;
+	gchar                            logbuf[BUFSIZ], readbuf[32];
+	gint                            r;
 
 	va_start (aq, fmt);
 	rspamd_strlcpy (readbuf, yytext, sizeof (readbuf));
 
-	r = snprintf (logbuf,
-			sizeof (logbuf),
-			"config file parse error! line: %d, text: %s, reason: ",
-			yylineno,
-			readbuf);
+	r = snprintf (logbuf, sizeof (logbuf), "config file parse error! line: %d, text: %s, reason: ", yylineno, readbuf);
 	r += vsnprintf (logbuf + r, sizeof (logbuf) - r, fmt, aq);
 
 	va_end (aq);
@@ -591,18 +537,14 @@ parse_err (const gchar *fmt, ...)
 void
 parse_warn (const gchar *fmt, ...)
 {
-	va_list aq;
-	gchar logbuf[BUFSIZ], readbuf[32];
-	gint r;
+	va_list                         aq;
+	gchar                            logbuf[BUFSIZ], readbuf[32];
+	gint                            r;
 
 	va_start (aq, fmt);
 	rspamd_strlcpy (readbuf, yytext, sizeof (readbuf));
 
-	r = snprintf (logbuf,
-			sizeof (logbuf),
-			"config file parse warning! line: %d, text: %s, reason: ",
-			yylineno,
-			readbuf);
+	r = snprintf (logbuf, sizeof (logbuf), "config file parse warning! line: %d, text: %s, reason: ", yylineno, readbuf);
 	r += vsnprintf (logbuf + r, sizeof (logbuf) - r, fmt, aq);
 
 	va_end (aq);
@@ -613,7 +555,7 @@ parse_warn (const gchar *fmt, ...)
 void
 rspamd_config_unescape_quotes (gchar *line)
 {
-	gchar *c = line, *t;
+	gchar                           *c = line, *t;
 
 	while (*c) {
 		if (*c == '\\' && *(c + 1) == '"') {
@@ -627,12 +569,12 @@ rspamd_config_unescape_quotes (gchar *line)
 	}
 }
 
-GList *
+GList                          *
 rspamd_config_parse_comma_list (rspamd_mempool_t * pool, const gchar *line)
 {
-	GList *res = NULL;
-	const gchar *c, *p;
-	gchar *str;
+	GList                          *res = NULL;
+	const gchar                    *c, *p;
+	gchar                          *str;
 
 	c = line;
 	p = c;
@@ -643,57 +585,42 @@ rspamd_config_parse_comma_list (rspamd_mempool_t * pool, const gchar *line)
 			rspamd_strlcpy (str, c, p - c + 1);
 			res = g_list_prepend (res, str);
 			/* Skip spaces */
-			while (g_ascii_isspace (*(++p))) ;
+			while (g_ascii_isspace (*(++p)));
 			c = p;
 			continue;
 		}
 		p++;
 	}
 	if (res != NULL) {
-		rspamd_mempool_add_destructor (pool,
-			(rspamd_mempool_destruct_t) g_list_free,
-			res);
+		rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) g_list_free, res);
 	}
 
 	return res;
 }
 
-struct rspamd_classifier_config *
-rspamd_config_new_classifier (struct rspamd_config *cfg,
-	struct rspamd_classifier_config *c)
+struct rspamd_classifier_config       *
+rspamd_config_new_classifier (struct rspamd_config *cfg, struct rspamd_classifier_config *c)
 {
 	if (c == NULL) {
-		c =
-			rspamd_mempool_alloc0 (cfg->cfg_pool,
-				sizeof (struct rspamd_classifier_config));
+		c = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_classifier_config));
 	}
 	if (c->opts == NULL) {
 		c->opts = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t) g_hash_table_destroy,
-			c->opts);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t) g_hash_table_destroy, c->opts);
 	}
 	if (c->labels == NULL) {
-		c->labels = g_hash_table_new_full (rspamd_str_hash,
-				rspamd_str_equal,
-				NULL,
-				(GDestroyNotify)g_list_free);
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t) g_hash_table_destroy,
-			c->labels);
+		c->labels = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal, NULL, (GDestroyNotify)g_list_free);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t) g_hash_table_destroy, c->labels);
 	}
 
 	return c;
 }
 
-struct rspamd_statfile_config *
-rspamd_config_new_statfile (struct rspamd_config *cfg,
-	struct rspamd_statfile_config *c)
+struct rspamd_statfile_config*
+rspamd_config_new_statfile (struct rspamd_config *cfg, struct rspamd_statfile_config *c)
 {
 	if (c == NULL) {
-		c =
-			rspamd_mempool_alloc0 (cfg->cfg_pool,
-				sizeof (struct rspamd_statfile_config));
+		c = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_statfile_config));
 	}
 
 	return c;
@@ -708,36 +635,25 @@ rspamd_config_new_metric (struct rspamd_config *cfg, struct metric *c)
 		c->grow_factor = 1.0;
 		c->symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		c->descriptions = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
+		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
 			c->actions[i].score = -1.0;
 		}
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t) g_hash_table_destroy,
-			c->symbols);
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t) g_hash_table_destroy,
-			c->descriptions);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t) g_hash_table_destroy, c->symbols);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t) g_hash_table_destroy, c->descriptions);
 	}
 
 	return c;
 }
 
 struct rspamd_worker_conf *
-rspamd_config_new_worker (struct rspamd_config *cfg,
-	struct rspamd_worker_conf *c)
+rspamd_config_new_worker (struct rspamd_config *cfg, struct rspamd_worker_conf *c)
 {
 	if (c == NULL) {
-		c =
-			rspamd_mempool_alloc0 (cfg->cfg_pool,
-				sizeof (struct rspamd_worker_conf));
+		c = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_worker_conf));
 		c->params = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 		c->active_workers = g_queue_new ();
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)g_hash_table_destroy,
-			c->params);
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)g_queue_free,
-			c->active_workers);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)g_hash_table_destroy, c->params);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)g_queue_free, c->active_workers);
 #ifdef HAVE_SC_NPROCESSORS_ONLN
 		c->count = sysconf (_SC_NPROCESSORS_ONLN);
 #else
@@ -746,13 +662,13 @@ rspamd_config_new_worker (struct rspamd_config *cfg,
 		c->rlimit_nofile = DEFAULT_RLIMIT_NOFILE;
 		c->rlimit_maxcore = DEFAULT_RLIMIT_MAXCORE;
 	}
-
+	
 	return c;
 }
 
 
 static bool
-rspamd_include_map_handler (const guchar *data, gsize len, void * ud)
+rspamd_include_map_handler (const guchar *data, gsize len, void* ud)
 {
 	struct rspamd_config *cfg = (struct rspamd_config *)ud;
 	struct rspamd_ucl_map_cbdata *cbdata, **pcbdata;
@@ -767,12 +683,7 @@ rspamd_include_map_handler (const guchar *data, gsize len, void * ud)
 	cbdata->cfg = cfg;
 	*pcbdata = cbdata;
 
-	return add_map (cfg,
-			   map_line,
-			   "ucl include",
-			   rspamd_ucl_read_cb,
-			   rspamd_ucl_fin_cb,
-			   (void **)pcbdata);
+	return add_map (cfg, map_line, "ucl include", rspamd_ucl_read_cb, rspamd_ucl_fin_cb, (void **)pcbdata);
 }
 
 /*
@@ -798,45 +709,32 @@ rspamd_include_map_handler (const guchar *data, gsize len, void * ud)
 static void
 rspamd_ucl_add_conf_variables (struct ucl_parser *parser)
 {
-	ucl_parser_register_variable (parser,
-										 RSPAMD_CONFDIR_MACRO,
-																RSPAMD_CONFDIR);
-	ucl_parser_register_variable (parser, RSPAMD_RUNDIR_MACRO,
-																RSPAMD_RUNDIR);
-	ucl_parser_register_variable (parser,  RSPAMD_DBDIR_MACRO,
-																RSPAMD_DBDIR);
-	ucl_parser_register_variable (parser, RSPAMD_LOGDIR_MACRO,
-																RSPAMD_LOGDIR);
-	ucl_parser_register_variable (parser,
-		RSPAMD_PLUGINSDIR_MACRO,
-																RSPAMD_PLUGINSDIR);
-	ucl_parser_register_variable (parser,  RSPAMD_WWWDIR_MACRO,
-																RSPAMD_WWWDIR);
-	ucl_parser_register_variable (parser,  RSPAMD_PREFIX_MACRO,
-																RSPAMD_PREFIX);
+	ucl_parser_register_variable (parser, RSPAMD_CONFDIR_MACRO, RSPAMD_CONFDIR);
+	ucl_parser_register_variable (parser, RSPAMD_RUNDIR_MACRO, RSPAMD_RUNDIR);
+	ucl_parser_register_variable (parser, RSPAMD_DBDIR_MACRO, RSPAMD_DBDIR);
+	ucl_parser_register_variable (parser, RSPAMD_LOGDIR_MACRO, RSPAMD_LOGDIR);
+	ucl_parser_register_variable (parser, RSPAMD_PLUGINSDIR_MACRO, RSPAMD_PLUGINSDIR);
+	ucl_parser_register_variable (parser, RSPAMD_WWWDIR_MACRO, RSPAMD_WWWDIR);
+	ucl_parser_register_variable (parser, RSPAMD_PREFIX_MACRO, RSPAMD_PREFIX);
 	ucl_parser_register_variable (parser, RSPAMD_VERSION_MACRO, RVERSION);
 }
 
 static void
-rspamd_ucl_add_conf_macros (struct ucl_parser *parser,
-	struct rspamd_config *cfg)
+rspamd_ucl_add_conf_macros (struct ucl_parser *parser, struct rspamd_config *cfg)
 {
-	ucl_parser_register_macro (parser,
-		"include_map",
-		rspamd_include_map_handler,
-		cfg);
+	ucl_parser_register_macro (parser, "include_map", rspamd_include_map_handler, cfg);
 }
 
 gboolean
 rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
-	const gchar *convert_to, rspamd_rcl_section_fin_t logger_fin,
-	gpointer logger_ud)
+		const gchar *convert_to, rspamd_rcl_section_fin_t logger_fin,
+		gpointer logger_ud)
 {
-	struct stat st;
-	gint fd;
-	gchar *data;
-	GError *err = NULL;
-	struct rspamd_rcl_section *top, *logger;
+	struct stat                     st;
+	gint                            fd;
+	gchar                          *data;
+	GError                         *err = NULL;
+	struct rspamd_rcl_section     *top, *logger;
 	gboolean res;
 	struct ucl_parser *parser;
 
@@ -847,11 +745,10 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	if ((fd = open (filename, O_RDONLY)) == -1) {
 		msg_err ("cannot open %s: %s", filename, strerror (errno));
 		return FALSE;
-
+	
 	}
 	/* Now mmap this file to simplify reading process */
-	if ((data =
-		mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
+	if ((data = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
 		msg_err ("cannot mmap %s: %s", filename, strerror (errno));
 		close (fd);
 		return FALSE;
@@ -879,7 +776,7 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	top = rspamd_rcl_config_init ();
 	err = NULL;
 
-	HASH_FIND_STR (top, "logging", logger);
+	HASH_FIND_STR(top, "logging", logger);
 	if (logger != NULL) {
 		logger->fin = logger_fin;
 		logger->fin_ud = logger_ud;
@@ -896,7 +793,7 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 static void
 symbols_classifiers_callback (gpointer key, gpointer value, gpointer ud)
 {
-	struct rspamd_config *cfg = ud;
+	struct rspamd_config             *cfg = ud;
 
 	register_virtual_symbol (&cfg->cache, key, 1.0);
 }
@@ -904,16 +801,14 @@ symbols_classifiers_callback (gpointer key, gpointer value, gpointer ud)
 void
 rspamd_config_insert_classify_symbols (struct rspamd_config *cfg)
 {
-	g_hash_table_foreach (cfg->classifiers_symbols,
-		symbols_classifiers_callback,
-		cfg);
+	g_hash_table_foreach (cfg->classifiers_symbols, symbols_classifiers_callback, cfg);
 }
 
-struct rspamd_classifier_config *
+struct rspamd_classifier_config*
 rspamd_config_find_classifier (struct rspamd_config *cfg, const gchar *name)
 {
-	GList *cur;
-	struct rspamd_classifier_config *cf;
+	GList                          *cur;
+	struct rspamd_classifier_config       *cf;
 
 	if (name == NULL) {
 		return NULL;
@@ -936,9 +831,9 @@ rspamd_config_find_classifier (struct rspamd_config *cfg, const gchar *name)
 gboolean
 rspamd_config_check_statfiles (struct rspamd_classifier_config *cf)
 {
-	struct rspamd_statfile_config *st;
-	gboolean has_other = FALSE, res = FALSE, cur_class;
-	GList *cur;
+	struct rspamd_statfile_config                *st;
+	gboolean                        has_other = FALSE, res = FALSE, cur_class;
+	GList                          *cur;
 
 	/* First check classes directly */
 	cur = cf->statfiles;
@@ -989,11 +884,8 @@ rspamd_config_check_statfiles (struct rspamd_classifier_config *cf)
 	return res;
 }
 
-static gchar *
-rspamd_ucl_read_cb (rspamd_mempool_t * pool,
-	gchar * chunk,
-	gint len,
-	struct map_cb_data *data)
+static gchar*
+rspamd_ucl_read_cb (rspamd_mempool_t * pool, gchar * chunk, gint len, struct map_cb_data *data)
 {
 	struct rspamd_ucl_map_cbdata *cbdata = data->cur_data, *prev;
 
@@ -1013,8 +905,7 @@ rspamd_ucl_read_cb (rspamd_mempool_t * pool,
 static void
 rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
-	struct rspamd_ucl_map_cbdata *cbdata = data->cur_data, *prev =
-		data->prev_data;
+	struct rspamd_ucl_map_cbdata *cbdata = data->cur_data, *prev = data->prev_data;
 	ucl_object_t *obj;
 	struct ucl_parser *parser;
 	guint32 checksum;
@@ -1035,11 +926,8 @@ rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 	if (data->map->checksum != checksum) {
 		/* New data available */
 		parser = ucl_parser_new (0);
-		if (!ucl_parser_add_chunk (parser, cbdata->buf->str,
-			cbdata->buf->len)) {
-			msg_err ("cannot parse map %s: %s",
-				data->map->uri,
-				ucl_parser_get_error (parser));
+		if (!ucl_parser_add_chunk (parser, cbdata->buf->str, cbdata->buf->len)) {
+			msg_err ("cannot parse map %s: %s", data->map->uri, ucl_parser_get_error (parser));
 			ucl_parser_free (parser);
 		}
 		else {
@@ -1051,18 +939,16 @@ rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 		}
 	}
 	else {
-		msg_info ("do not reload map %s, checksum is the same: %d",
-			data->map->uri,
-			checksum);
+		msg_info ("do not reload map %s, checksum is the same: %d", data->map->uri, checksum);
 	}
 }
 
 gboolean
 rspamd_config_parse_ip_list (const gchar *ip_list, radix_tree_t **tree)
 {
-	gchar **strvec, **cur;
-	struct in_addr ina;
-	guint32 mask;
+	gchar                           **strvec, **cur;
+	struct in_addr                   ina;
+	guint32                           mask;
 
 	strvec = g_strsplit_set (ip_list, ",", 0);
 	cur = strvec;
@@ -1075,7 +961,7 @@ rspamd_config_parse_ip_list (const gchar *ip_list, radix_tree_t **tree)
 			}
 			radix32tree_add (*tree, htonl (ina.s_addr), mask, 1);
 		}
-		cur++;
+		cur ++;
 	}
 
 	return (*tree != NULL);

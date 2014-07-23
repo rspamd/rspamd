@@ -22,16 +22,16 @@
  */
 
 
-#include "cfg_file.h"
 #include "config.h"
-#include "dns.h"
+#include "util.h"
 #include "main.h"
-#include "map.h"
-#include "message.h"
 #include "protocol.h"
 #include "upstream.h"
+#include "cfg_file.h"
 #include "url.h"
-#include "util.h"
+#include "message.h"
+#include "map.h"
+#include "dns.h"
 
 #include "lua/lua_common.h"
 
@@ -46,14 +46,14 @@ gpointer init_lua_worker (struct rspamd_config *cfg);
 void start_lua_worker (struct rspamd_worker *worker);
 
 worker_t lua_worker = {
-	"lua",                  /* Name */
-	init_lua_worker,        /* Init function */
-	start_lua_worker,       /* Start function */
-	TRUE,                   /* Has socket */
-	FALSE,                  /* Non unique */
-	FALSE,                  /* Non threaded */
-	TRUE,                   /* Killable */
-	SOCK_STREAM             /* TCP socket */
+	"lua",					/* Name */
+	init_lua_worker,		/* Init function */
+	start_lua_worker,		/* Start function */
+	TRUE,					/* Has socket */
+	FALSE,					/* Non unique */
+	FALSE,					/* Non threaded */
+	TRUE,					/* Killable */
+	SOCK_STREAM				/* TCP socket */
 };
 
 /*
@@ -61,23 +61,23 @@ worker_t lua_worker = {
  */
 struct rspamd_lua_worker_ctx {
 	/* DNS resolver */
-	struct rspamd_dns_resolver *resolver;
+	struct rspamd_dns_resolver     *resolver;
 	/* Events base */
-	struct event_base *ev_base;
+	struct event_base              *ev_base;
 	/* Other params */
-	GHashTable *params;
+	GHashTable					   *params;
 	/* Lua script to load */
-	gchar *file;
+	gchar						   *file;
 	/* Lua state */
-	lua_State *L;
+	lua_State					   *L;
 	/* Callback for accept */
-	gint cbref_accept;
+	gint							cbref_accept;
 	/* Callback for finishing */
-	gint cbref_fin;
+	gint							cbref_fin;
 	/* Config file */
-	struct rspamd_config *cfg;
+	struct rspamd_config 			   *cfg;
 	/* The rest options */
-	ucl_object_t *opts;
+	ucl_object_t				   *opts;
 };
 
 /* Lua bindings */
@@ -88,7 +88,7 @@ LUA_FUNCTION_DEF (worker, get_option);
 LUA_FUNCTION_DEF (worker, get_resolver);
 LUA_FUNCTION_DEF (worker, get_cfg);
 
-static const struct luaL_reg lua_workerlib_m[] = {
+static const struct luaL_reg    lua_workerlib_m[] = {
 	LUA_INTERFACE_DEF (worker, get_ev_base),
 	LUA_INTERFACE_DEF (worker, register_accept_callback),
 	LUA_INTERFACE_DEF (worker, register_exit_callback),
@@ -111,10 +111,10 @@ luaopen_lua_worker (lua_State * L)
 	return 1;
 }
 
-struct rspamd_lua_worker_ctx *
+struct rspamd_lua_worker_ctx      *
 lua_check_lua_worker (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{worker}");
+	void								*ud = luaL_checkudata (L, 1, "rspamd{worker}");
 	luaL_argcheck (L, ud != NULL, 1, "'worker' expected");
 	return ud ? *((struct rspamd_lua_worker_ctx **)ud) : NULL;
 }
@@ -122,8 +122,8 @@ lua_check_lua_worker (lua_State * L)
 static int
 lua_worker_get_ev_base (lua_State *L)
 {
-	struct rspamd_lua_worker_ctx *ctx = lua_check_lua_worker (L);
-	struct event_base **pbase;
+	struct rspamd_lua_worker_ctx					*ctx = lua_check_lua_worker (L);
+	struct event_base								**pbase;
 
 	if (ctx) {
 		pbase = lua_newuserdata (L, sizeof (struct event_base *));
@@ -140,7 +140,7 @@ lua_worker_get_ev_base (lua_State *L)
 static int
 lua_worker_register_accept_callback (lua_State *L)
 {
-	struct rspamd_lua_worker_ctx *ctx = lua_check_lua_worker (L);
+	struct rspamd_lua_worker_ctx					*ctx = lua_check_lua_worker (L);
 
 	if (ctx) {
 		if (!lua_isfunction (L, 2)) {
@@ -163,7 +163,7 @@ lua_worker_register_accept_callback (lua_State *L)
 static int
 lua_worker_register_exit_callback (lua_State *L)
 {
-	struct rspamd_lua_worker_ctx *ctx = lua_check_lua_worker (L);
+	struct rspamd_lua_worker_ctx					*ctx = lua_check_lua_worker (L);
 
 	if (ctx) {
 		if (!lua_isfunction (L, 2)) {
@@ -187,9 +187,9 @@ lua_worker_register_exit_callback (lua_State *L)
 static int
 lua_worker_get_option (lua_State *L)
 {
-	struct rspamd_lua_worker_ctx *ctx = lua_check_lua_worker (L);
-	const ucl_object_t *val;
-	const gchar *name;
+	struct rspamd_lua_worker_ctx					*ctx = lua_check_lua_worker (L);
+	const ucl_object_t									*val;
+	const gchar										*name;
 
 	if (ctx) {
 		name = luaL_checkstring (L, 2);
@@ -217,8 +217,8 @@ lua_worker_get_option (lua_State *L)
 static int
 lua_worker_get_resolver (lua_State *L)
 {
-	struct rspamd_lua_worker_ctx *ctx = lua_check_lua_worker (L);
-	struct rspamd_dns_resolver **presolver;
+	struct rspamd_lua_worker_ctx					*ctx = lua_check_lua_worker (L);
+	struct rspamd_dns_resolver						**presolver;
 
 	if (ctx) {
 		presolver = lua_newuserdata (L, sizeof (gpointer));
@@ -235,8 +235,8 @@ lua_worker_get_resolver (lua_State *L)
 static int
 lua_worker_get_cfg (lua_State *L)
 {
-	struct rspamd_lua_worker_ctx *ctx = lua_check_lua_worker (L);
-	struct rspamd_config **pcfg;
+	struct rspamd_lua_worker_ctx					*ctx = lua_check_lua_worker (L);
+	struct rspamd_config								**pcfg;
 
 	if (ctx) {
 		pcfg = lua_newuserdata (L, sizeof (gpointer));
@@ -258,17 +258,17 @@ lua_worker_get_cfg (lua_State *L)
 static void
 lua_accept_socket (gint fd, short what, void *arg)
 {
-	struct rspamd_worker *worker = (struct rspamd_worker *) arg;
-	struct rspamd_lua_worker_ctx *ctx, **pctx;
-	gint nfd;
-	lua_State *L;
-	rspamd_inet_addr_t addr;
+	struct rspamd_worker           *worker = (struct rspamd_worker *) arg;
+	struct rspamd_lua_worker_ctx   *ctx, **pctx;
+	gint                            nfd;
+	lua_State					   *L;
+	rspamd_inet_addr_t              addr;
 
 	ctx = worker->ctx;
 	L = ctx->L;
 
 	if ((nfd =
-		rspamd_accept_from_socket (fd, &addr)) == -1) {
+			rspamd_accept_from_socket (fd, &addr)) == -1) {
 		msg_warn ("accept failed: %s", strerror (errno));
 		return;
 	}
@@ -278,8 +278,8 @@ lua_accept_socket (gint fd, short what, void *arg)
 	}
 
 	msg_info ("accepted connection from %s port %d",
-		rspamd_inet_address_to_string (&addr),
-		rspamd_inet_address_get_port (&addr));
+				rspamd_inet_address_to_string (&addr),
+				rspamd_inet_address_get_port (&addr));
 
 	/* Call finalizer function */
 	lua_rawgeti (L, LUA_REGISTRYINDEX, ctx->cbref_accept);
@@ -299,7 +299,7 @@ lua_accept_socket (gint fd, short what, void *arg)
 static gboolean
 rspamd_lua_worker_parser (ucl_object_t *obj, gpointer ud)
 {
-	struct rspamd_lua_worker_ctx *ctx = ud;
+	struct rspamd_lua_worker_ctx       *ctx = ud;
 
 	ctx->opts = obj;
 
@@ -309,24 +309,20 @@ rspamd_lua_worker_parser (ucl_object_t *obj, gpointer ud)
 gpointer
 init_lua_worker (struct rspamd_config *cfg)
 {
-	struct rspamd_lua_worker_ctx *ctx;
-	GQuark type;
+	struct rspamd_lua_worker_ctx       *ctx;
+	GQuark								type;
 
 	type = g_quark_try_string ("lua");
 
 	ctx = g_malloc0 (sizeof (struct rspamd_lua_worker_ctx));
-	ctx->params = g_hash_table_new_full (rspamd_str_hash,
-			rspamd_str_equal,
-			g_free,
-			(GDestroyNotify)g_list_free);
+	ctx->params = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal, g_free, (GDestroyNotify)g_list_free);
 
 
 	rspamd_rcl_register_worker_option (cfg, type, "file",
-		rspamd_rcl_parse_struct_string, ctx,
-		G_STRUCT_OFFSET (struct rspamd_lua_worker_ctx, file), 0);
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_lua_worker_ctx, file), 0);
 
-	rspamd_rcl_register_worker_parser (cfg, type, rspamd_lua_worker_parser,
-		ctx);
+	rspamd_rcl_register_worker_parser (cfg, type, rspamd_lua_worker_parser, ctx);
 
 	return ctx;
 }
@@ -337,25 +333,21 @@ init_lua_worker (struct rspamd_config *cfg)
 void
 start_lua_worker (struct rspamd_worker *worker)
 {
-	struct rspamd_lua_worker_ctx *ctx = worker->ctx, **pctx;
-	lua_State *L;
+	struct rspamd_lua_worker_ctx   *ctx = worker->ctx, **pctx;
+	lua_State					   *L;
 
 #ifdef WITH_PROFILER
-	extern void _start (void), etext (void);
+	extern void                     _start (void), etext (void);
 	monstartup ((u_long) & _start, (u_long) & etext);
 #endif
 
-	ctx->ev_base = rspamd_prepare_worker (worker,
-			"lua_worker",
-			lua_accept_socket);
+	ctx->ev_base = rspamd_prepare_worker (worker, "lua_worker", lua_accept_socket);
 
 	L = worker->srv->cfg->lua_state;
 	ctx->L = L;
 	ctx->cfg = worker->srv->cfg;
 
-	ctx->resolver = dns_resolver_init (worker->srv->logger,
-			ctx->ev_base,
-			worker->srv->cfg);
+	ctx->resolver = dns_resolver_init (worker->srv->logger, ctx->ev_base, worker->srv->cfg);
 
 	/* Open worker's lib */
 	luaopen_lua_worker (L);
@@ -365,8 +357,7 @@ start_lua_worker (struct rspamd_worker *worker)
 		exit (EXIT_SUCCESS);
 	}
 	if (access (ctx->file, R_OK) == -1) {
-		msg_err ("Error reading lua script %s: %s", ctx->file,
-			strerror (errno));
+		msg_err ("Error reading lua script %s: %s", ctx->file, strerror (errno));
 		exit (EXIT_SUCCESS);
 	}
 
@@ -376,8 +367,7 @@ start_lua_worker (struct rspamd_worker *worker)
 	*pctx = ctx;
 
 	if (luaL_dofile (L, ctx->file) != 0) {
-		msg_err ("Error executing lua script %s: %s", ctx->file,
-			lua_tostring (L, -1));
+		msg_err ("Error executing lua script %s: %s", ctx->file, lua_tostring (L, -1));
 		exit (EXIT_SUCCESS);
 	}
 
@@ -398,8 +388,7 @@ start_lua_worker (struct rspamd_worker *worker)
 		lua_setclass (L, "rspamd{worker}", -1);
 		*pctx = ctx;
 		if (lua_pcall (L, 1, 0, 0) != 0) {
-			msg_info ("call to worker finalizer failed: %s", lua_tostring (L,
-				-1));
+			msg_info ("call to worker finalizer failed: %s", lua_tostring (L, -1));
 		}
 		/* Free resources */
 		luaL_unref (L, LUA_REGISTRYINDEX, ctx->cbref_fin);

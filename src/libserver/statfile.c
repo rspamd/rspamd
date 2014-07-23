@@ -24,8 +24,8 @@
 
 #include "config.h"
 
-#include "main.h"
 #include "statfile.h"
+#include "main.h"
 
 #define RSPAMD_STATFILE_VERSION {'1', '2'}
 #define BACKUP_SUFFIX ".old"
@@ -33,33 +33,33 @@
 /* Maximum number of statistics files */
 #define STATFILES_MAX 255
 static void statfile_pool_set_block_common (
-	statfile_pool_t * pool, stat_file_t * file,
-	guint32 h1, guint32 h2,
-	time_t t, double value,
-	gboolean from_now);
+				statfile_pool_t * pool, stat_file_t * file, 
+				guint32                         h1, guint32 h2, 
+				time_t t, double value, 
+				gboolean from_now);
 
 static gint
 cmpstatfile (const void *a, const void *b)
 {
-	const stat_file_t *s1 = a, *s2 = b;
+	const stat_file_t              *s1 = a, *s2 = b;
 
 	return g_ascii_strcasecmp (s1->filename, s2->filename);
 }
 
 /* Convert statfile version 1.0 to statfile version 1.2, saving backup */
 struct stat_file_header_10 {
-	u_char magic[3];                        /**< magic signature ('r' 's' 'd')      */
-	u_char version[2];                      /**< version of statfile				*/
-	u_char padding[3];                      /**< padding							*/
-	guint64 create_time;                                            /**< create time (time_t->guint64)		*/
+	u_char magic[3];						/**< magic signature ('r' 's' 'd') 		*/
+	u_char version[2];						/**< version of statfile				*/
+	u_char padding[3];						/**< padding							*/
+	guint64                         create_time;					/**< create time (time_t->guint64)		*/
 };
 
 static gboolean
 convert_statfile_10 (stat_file_t * file)
 {
-	gchar *backup_name;
+	gchar                           *backup_name;
 	struct stat st;
-	struct stat_file_header header = {
+	struct stat_file_header         header = {
 		.magic = {'r', 's', 'd'},
 		.version = RSPAMD_STATFILE_VERSION,
 		.padding = {0, 0, 0},
@@ -70,12 +70,9 @@ convert_statfile_10 (stat_file_t * file)
 
 	/* Format backup name */
 	backup_name = g_strdup_printf ("%s.%s", file->filename, BACKUP_SUFFIX);
-
-	msg_info ("convert old statfile %s to version %c.%c, backup in %s",
-		file->filename,
-		header.version[0],
-		header.version[1],
-		backup_name);
+	
+	msg_info ("convert old statfile %s to version %c.%c, backup in %s", file->filename, 
+			header.version[0], header.version[1], backup_name);
 
 	if (stat (backup_name, &st) != -1) {
 		msg_info ("replace old %s", backup_name);
@@ -88,51 +85,31 @@ convert_statfile_10 (stat_file_t * file)
 	/* XXX: maybe race condition here */
 	unlock_file (file->fd, FALSE);
 	close (file->fd);
-	if ((file->fd =
-		open (file->filename, O_RDWR | O_TRUNC | O_CREAT,
-		S_IWUSR | S_IRUSR)) == -1) {
-		msg_info ("cannot create file %s, error %d, %s",
-			file->filename,
-			errno,
-			strerror (errno));
+	if ((file->fd = open (file->filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
+		msg_info ("cannot create file %s, error %d, %s", file->filename, errno, strerror (errno));
 		return FALSE;
 	}
 	lock_file (file->fd, FALSE);
 	/* Now make new header and copy it to new file */
 	if (write (file->fd, &header, sizeof (header)) == -1) {
-		msg_info ("cannot write to file %s, error %d, %s",
-			file->filename,
-			errno,
-			strerror (errno));
+		msg_info ("cannot write to file %s, error %d, %s", file->filename, errno, strerror (errno));
 		return FALSE;
 	}
 	/* Now write old map to new file */
-	if (write (file->fd,
-		((u_char *)file->map + sizeof (struct stat_file_header_10)),
-		file->len - sizeof (struct stat_file_header_10)) == -1) {
-		msg_info ("cannot write to file %s, error %d, %s",
-			file->filename,
-			errno,
-			strerror (errno));
+	if (write (file->fd, ((u_char *)file->map + sizeof (struct stat_file_header_10)),
+						file->len - sizeof (struct stat_file_header_10)) == -1) {
+		msg_info ("cannot write to file %s, error %d, %s", file->filename, errno, strerror (errno));
 		return FALSE;
 	}
 	/* Unmap old memory and map new */
 	munmap (file->map, file->len);
-	file->len = file->len + sizeof (struct stat_file_header) -
-		sizeof (struct stat_file_header_10);
+	file->len = file->len + sizeof (struct stat_file_header) - sizeof (struct stat_file_header_10);
 #ifdef HAVE_MMAP_NOCORE
-	if ((file->map =
-		mmap (NULL, file->len, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_NOCORE,
-		file->fd, 0)) == MAP_FAILED) {
+	if ((file->map = mmap (NULL, file->len, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_NOCORE, file->fd, 0)) == MAP_FAILED) {
 #else
-	if ((file->map =
-		mmap (NULL, file->len, PROT_READ | PROT_WRITE, MAP_SHARED, file->fd,
-		0)) == MAP_FAILED) {
+	if ((file->map = mmap (NULL, file->len, PROT_READ | PROT_WRITE, MAP_SHARED, file->fd, 0)) == MAP_FAILED) {
 #endif
-		msg_info ("cannot mmap file %s, error %d, %s",
-			file->filename,
-			errno,
-			strerror (errno));
+		msg_info ("cannot mmap file %s, error %d, %s", file->filename, errno, strerror (errno));
 		return FALSE;
 	}
 
@@ -143,9 +120,9 @@ convert_statfile_10 (stat_file_t * file)
 static gint
 statfile_pool_check (stat_file_t * file)
 {
-	struct stat_file *f;
-	gchar *c;
-	static gchar valid_version[] = RSPAMD_STATFILE_VERSION;
+	struct stat_file               *f;
+	gchar                           *c;
+	static gchar                     valid_version[] = RSPAMD_STATFILE_VERSION;
 
 
 	if (!file || !file->map) {
@@ -153,9 +130,7 @@ statfile_pool_check (stat_file_t * file)
 	}
 
 	if (file->len < sizeof (struct stat_file)) {
-		msg_info ("file %s is too short to be stat file: %z",
-			file->filename,
-			file->len);
+		msg_info ("file %s is too short to be stat file: %z", file->filename, file->len);
 		return -1;
 	}
 
@@ -175,40 +150,31 @@ statfile_pool_check (stat_file_t * file)
 	}
 	else if (memcmp (c, valid_version, sizeof (valid_version)) != 0) {
 		/* Unknown version */
-		msg_info ("file %s has invalid version %c.%c",
-			file->filename,
-			'0' + *c,
-			'0' + *(c + 1));
+		msg_info ("file %s has invalid version %c.%c", file->filename, '0' + *c, '0' + *(c + 1));
 		return -1;
 	}
 
 	/* Check first section and set new offset */
 	file->cur_section.code = f->section.code;
 	file->cur_section.length = f->section.length;
-	if (file->cur_section.length * sizeof (struct stat_file_block) >
-		file->len) {
-		msg_info ("file %s is truncated: %z, must be %z",
-			file->filename,
-			file->len,
-			file->cur_section.length * sizeof (struct stat_file_block));
+	if (file->cur_section.length * sizeof (struct stat_file_block) > file->len) {
+		msg_info ("file %s is truncated: %z, must be %z", file->filename, file->len, file->cur_section.length * sizeof (struct stat_file_block));
 		return -1;
 	}
-	file->seek_pos = sizeof (struct stat_file) -
-		sizeof (struct stat_file_block);
+	file->seek_pos = sizeof (struct stat_file) - sizeof (struct stat_file_block);
 
 	return 0;
 }
 
 
-statfile_pool_t *
+statfile_pool_t                *
 statfile_pool_new (rspamd_mempool_t *pool, gboolean use_mlock)
 {
-	statfile_pool_t *new;
+	statfile_pool_t                *new;
 
 	new = rspamd_mempool_alloc0 (pool, sizeof (statfile_pool_t));
 	new->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
-	new->files =
-		rspamd_mempool_alloc0 (new->pool, STATFILES_MAX * sizeof (stat_file_t));
+	new->files = rspamd_mempool_alloc0 (new->pool, STATFILES_MAX * sizeof (stat_file_t));
 	new->lock = rspamd_mempool_get_mutex (new->pool);
 	new->mlock_ok = use_mlock;
 
@@ -216,24 +182,18 @@ statfile_pool_new (rspamd_mempool_t *pool, gboolean use_mlock)
 }
 
 static stat_file_t *
-statfile_pool_reindex (statfile_pool_t * pool,
-	gchar *filename,
-	size_t old_size,
-	size_t size)
+statfile_pool_reindex (statfile_pool_t * pool, gchar *filename, size_t old_size, size_t size)
 {
-	gchar *backup;
-	gint fd;
-	stat_file_t *new;
-	u_char *map, *pos;
-	struct stat_file_block *block;
-	struct stat_file_header *header;
+	gchar                           *backup;
+	gint                            fd;
+	stat_file_t                    *new;
+	u_char                         *map, *pos;
+	struct stat_file_block         *block;
+	struct stat_file_header        *header;
 
 	if (size <
-		sizeof (struct stat_file_header) + sizeof (struct stat_file_section) +
-		sizeof (block)) {
-		msg_err ("file %s is too small to carry any statistic: %z",
-			filename,
-			size);
+			sizeof (struct stat_file_header) + sizeof (struct stat_file_section) + sizeof (block)) {
+		msg_err ("file %s is too small to carry any statistic: %z", filename, size);
 		return NULL;
 	}
 
@@ -242,8 +202,7 @@ statfile_pool_reindex (statfile_pool_t * pool,
 
 	backup = g_strconcat (filename, ".old", NULL);
 	if (rename (filename, backup) == -1) {
-		msg_err ("cannot rename %s to %s: %s", filename, backup, strerror (
-				errno));
+		msg_err ("cannot rename %s to %s: %s", filename, backup, strerror (errno));
 		g_free (backup);
 		rspamd_mempool_unlock_mutex (pool->lock);
 		return NULL;
@@ -268,8 +227,7 @@ statfile_pool_reindex (statfile_pool_t * pool,
 	}
 
 	/* Now start reading blocks from old statfile */
-	if ((map =
-		mmap (NULL, old_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
+	if ((map = mmap (NULL, old_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
 		msg_err ("cannot mmap file: %s", strerror (errno));
 		close (fd);
 		g_free (backup);
@@ -280,20 +238,14 @@ statfile_pool_reindex (statfile_pool_t * pool,
 	while (old_size - (pos - map) >= sizeof (struct stat_file_block)) {
 		block = (struct stat_file_block *)pos;
 		if (block->hash1 != 0 && block->value != 0) {
-			statfile_pool_set_block_common (pool,
-				new,
-				block->hash1,
-				block->hash2,
-				0,
-				block->value,
-				FALSE);
+			statfile_pool_set_block_common (pool, new, block->hash1, block->hash2, 0, block->value, FALSE);
 		}
 		pos += sizeof (block);
 	}
 
 	header = (struct stat_file_header *)map;
 	statfile_set_revision (new, header->revision, header->rev_time);
-
+	
 	munmap (map, old_size);
 	close (fd);
 	unlink (backup);
@@ -309,9 +261,9 @@ statfile_pool_reindex (statfile_pool_t * pool,
 static void
 statfile_preload (stat_file_t *file)
 {
-	guint8 *pos, *end;
-	volatile guint8 t;
-	gsize size;
+	guint8                         *pos, *end;
+	volatile guint8					t;
+	gsize                           size;
 
 	pos = (guint8 *)file->map;
 	end = (guint8 *)file->map + file->len;
@@ -334,66 +286,50 @@ statfile_preload (stat_file_t *file)
 	}
 }
 
-stat_file_t *
-statfile_pool_open (statfile_pool_t * pool,
-	gchar *filename,
-	size_t size,
-	gboolean forced)
+stat_file_t                    *
+statfile_pool_open (statfile_pool_t * pool, gchar *filename, size_t size, gboolean forced)
 {
-	struct stat st;
-	stat_file_t *new_file;
+	struct stat                     st;
+	stat_file_t                    *new_file;
 
 	if ((new_file = statfile_pool_is_open (pool, filename)) != NULL) {
 		return new_file;
 	}
 
 	if (pool->opened >= STATFILES_MAX - 1) {
-		msg_err ("reached hard coded limit of statfiles opened: %d",
-			STATFILES_MAX);
+		msg_err ("reached hard coded limit of statfiles opened: %d", STATFILES_MAX);
 		return NULL;
 	}
 
 	if (stat (filename, &st) == -1) {
-		msg_info ("cannot stat file %s, error %s, %d", filename, strerror (
-				errno), errno);
+		msg_info ("cannot stat file %s, error %s, %d", filename, strerror (errno), errno);
 		return NULL;
 	}
 
 	rspamd_mempool_lock_mutex (pool->lock);
-	if (!forced &&
-		labs (size - st.st_size) > (long)sizeof (struct stat_file) * 2
-		&& size > sizeof (struct stat_file)) {
+	if (!forced && labs (size - st.st_size) > (long)sizeof (struct stat_file) * 2
+			&& size > sizeof (struct stat_file)) {
 		rspamd_mempool_unlock_mutex (pool->lock);
-		msg_warn ("need to reindex statfile old size: %Hz, new size: %Hz",
-			(size_t)st.st_size, size);
+		msg_warn ("need to reindex statfile old size: %Hz, new size: %Hz", (size_t)st.st_size, size);
 		return statfile_pool_reindex (pool, filename, st.st_size, size);
 	}
 	else if (size < sizeof (struct stat_file)) {
-		msg_err ("requested to shrink statfile to %Hz but it is too small",
-			size);
+		msg_err ("requested to shrink statfile to %Hz but it is too small", size);
 	}
 
 	new_file = &pool->files[pool->opened++];
 	bzero (new_file, sizeof (stat_file_t));
 	if ((new_file->fd = open (filename, O_RDWR)) == -1) {
-		msg_info ("cannot open file %s, error %d, %s",
-			filename,
-			errno,
-			strerror (errno));
+		msg_info ("cannot open file %s, error %d, %s", filename, errno, strerror (errno));
 		rspamd_mempool_unlock_mutex (pool->lock);
 		pool->opened--;
 		return NULL;
 	}
 
-	if ((new_file->map =
-		mmap (NULL, st.st_size, PROT_READ | PROT_WRITE, MAP_SHARED,
-		new_file->fd, 0)) == MAP_FAILED) {
+	if ((new_file->map = mmap (NULL, st.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, new_file->fd, 0)) == MAP_FAILED) {
 		close (new_file->fd);
 		rspamd_mempool_unlock_mutex (pool->lock);
-		msg_info ("cannot mmap file %s, error %d, %s",
-			filename,
-			errno,
-			strerror (errno));
+		msg_info ("cannot mmap file %s, error %d, %s", filename, errno, strerror (errno));
 		pool->opened--;
 		return NULL;
 
@@ -404,9 +340,7 @@ statfile_pool_open (statfile_pool_t * pool,
 	/* Try to lock pages in RAM */
 	if (pool->mlock_ok) {
 		if (mlock (new_file->map, new_file->len) == -1) {
-			msg_warn (
-				"mlock of statfile failed, maybe you need to increase RLIMIT_MEMLOCK limit for a process: %s",
-				strerror (errno));
+			msg_warn ("mlock of statfile failed, maybe you need to increase RLIMIT_MEMLOCK limit for a process: %s", strerror (errno));
 			pool->mlock_ok = FALSE;
 		}
 	}
@@ -416,7 +350,7 @@ statfile_pool_open (statfile_pool_t * pool,
 		pool->opened--;
 		rspamd_mempool_unlock_mutex (pool->lock);
 		unlock_file (new_file->fd, FALSE);
-		munmap (new_file->map, st.st_size);
+        munmap (new_file->map, st.st_size);
 		return NULL;
 	}
 	unlock_file (new_file->fd, FALSE);
@@ -433,11 +367,9 @@ statfile_pool_open (statfile_pool_t * pool,
 }
 
 gint
-statfile_pool_close (statfile_pool_t * pool,
-	stat_file_t * file,
-	gboolean keep_sorted)
+statfile_pool_close (statfile_pool_t * pool, stat_file_t * file, gboolean keep_sorted)
 {
-	stat_file_t *pos;
+	stat_file_t                    *pos;
 
 	if ((pos = statfile_pool_is_open (pool, file->filename)) == NULL) {
 		msg_info ("file %s is not opened", file->filename);
@@ -456,7 +388,7 @@ statfile_pool_close (statfile_pool_t * pool,
 	}
 	/* Move the remain statfiles */
 	memmove (pos, ((guint8 *)pos) + sizeof (stat_file_t),
-		(--pool->opened - (pos - pool->files)) * sizeof (stat_file_t));
+			(--pool->opened - (pos - pool->files)) * sizeof (stat_file_t));
 
 	rspamd_mempool_unlock_mutex (pool->lock);
 
@@ -466,7 +398,7 @@ statfile_pool_close (statfile_pool_t * pool,
 gint
 statfile_pool_create (statfile_pool_t * pool, gchar *filename, size_t size)
 {
-	struct stat_file_header header = {
+	struct stat_file_header         header = {
 		.magic = {'r', 's', 'd'},
 		.version = RSPAMD_STATFILE_VERSION,
 		.padding = {0, 0, 0},
@@ -474,13 +406,13 @@ statfile_pool_create (statfile_pool_t * pool, gchar *filename, size_t size)
 		.rev_time = 0,
 		.used_blocks = 0
 	};
-	struct stat_file_section section = {
+	struct stat_file_section        section = {
 		.code = STATFILE_SECTION_COMMON,
 	};
-	struct stat_file_block block = { 0, 0, 0 };
-	gint fd;
-	guint buflen = 0, nblocks;
-	gchar *buf = NULL;
+	struct stat_file_block          block = { 0, 0, 0 };
+	gint                            fd;
+	guint                           buflen = 0, nblocks;
+	gchar                           *buf = NULL;
 
 	if (statfile_pool_is_open (pool, filename) != NULL) {
 		msg_info ("file %s is already opened", filename);
@@ -488,40 +420,26 @@ statfile_pool_create (statfile_pool_t * pool, gchar *filename, size_t size)
 	}
 
 	if (size <
-		sizeof (struct stat_file_header) + sizeof (struct stat_file_section) +
-		sizeof (block)) {
-		msg_err ("file %s is too small to carry any statistic: %z",
-			filename,
-			size);
+			sizeof (struct stat_file_header) + sizeof (struct stat_file_section) + sizeof (block)) {
+		msg_err ("file %s is too small to carry any statistic: %z", filename, size);
 		return -1;
 	}
 
 	rspamd_mempool_lock_mutex (pool->lock);
-	nblocks =
-		(size - sizeof (struct stat_file_header) -
-		sizeof (struct stat_file_section)) / sizeof (struct stat_file_block);
+	nblocks = (size - sizeof (struct stat_file_header) - sizeof (struct stat_file_section)) / sizeof (struct stat_file_block);
 	header.total_blocks = nblocks;
 
-	if ((fd =
-		open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
-		msg_info ("cannot create file %s, error %d, %s",
-			filename,
-			errno,
-			strerror (errno));
+	if ((fd = open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR | S_IRUSR)) == -1) {
+		msg_info ("cannot create file %s, error %d, %s", filename, errno, strerror (errno));
 		rspamd_mempool_unlock_mutex (pool->lock);
 		return -1;
 	}
 
-	rspamd_fallocate (fd,
-		0,
-		sizeof (header) + sizeof (section) + sizeof (block) * nblocks);
+	rspamd_fallocate (fd, 0, sizeof (header) + sizeof (section) + sizeof (block) * nblocks);
 
 	header.create_time = (guint64) time (NULL);
 	if (write (fd, &header, sizeof (header)) == -1) {
-		msg_info ("cannot write header to file %s, error %d, %s",
-			filename,
-			errno,
-			strerror (errno));
+		msg_info ("cannot write header to file %s, error %d, %s", filename, errno, strerror (errno));
 		close (fd);
 		rspamd_mempool_unlock_mutex (pool->lock);
 		return -1;
@@ -529,15 +447,12 @@ statfile_pool_create (statfile_pool_t * pool, gchar *filename, size_t size)
 
 	section.length = (guint64) nblocks;
 	if (write (fd, &section, sizeof (section)) == -1) {
-		msg_info ("cannot write section header to file %s, error %d, %s",
-			filename,
-			errno,
-			strerror (errno));
+		msg_info ("cannot write section header to file %s, error %d, %s", filename, errno, strerror (errno));
 		close (fd);
 		rspamd_mempool_unlock_mutex (pool->lock);
 		return -1;
 	}
-
+	
 	/* Buffer for write 256 blocks at once */
 	if (nblocks > 256) {
 		buflen = sizeof (block) * 256;
@@ -548,10 +463,7 @@ statfile_pool_create (statfile_pool_t * pool, gchar *filename, size_t size)
 		if (nblocks > 256) {
 			/* Just write buffer */
 			if (write (fd, buf, buflen) == -1) {
-				msg_info ("cannot write blocks buffer to file %s, error %d, %s",
-					filename,
-					errno,
-					strerror (errno));
+				msg_info ("cannot write blocks buffer to file %s, error %d, %s", filename, errno, strerror (errno));
 				close (fd);
 				rspamd_mempool_unlock_mutex (pool->lock);
 				g_free (buf);
@@ -561,10 +473,7 @@ statfile_pool_create (statfile_pool_t * pool, gchar *filename, size_t size)
 		}
 		else {
 			if (write (fd, &block, sizeof (block)) == -1) {
-				msg_info ("cannot write block to file %s, error %d, %s",
-					filename,
-					errno,
-					strerror (errno));
+				msg_info ("cannot write block to file %s, error %d, %s", filename, errno, strerror (errno));
 				close (fd);
 				if (buf) {
 					g_free (buf);
@@ -572,7 +481,7 @@ statfile_pool_create (statfile_pool_t * pool, gchar *filename, size_t size)
 				rspamd_mempool_unlock_mutex (pool->lock);
 				return -1;
 			}
-			nblocks--;
+			nblocks --;
 		}
 	}
 
@@ -589,7 +498,7 @@ statfile_pool_create (statfile_pool_t * pool, gchar *filename, size_t size)
 void
 statfile_pool_delete (statfile_pool_t * pool)
 {
-	gint i;
+	gint                            i;
 
 	for (i = 0; i < pool->opened; i++) {
 		statfile_pool_close (pool, &pool->files[i], FALSE);
@@ -612,15 +521,11 @@ statfile_pool_unlock_file (statfile_pool_t * pool, stat_file_t * file)
 }
 
 double
-statfile_pool_get_block (statfile_pool_t * pool,
-	stat_file_t * file,
-	guint32 h1,
-	guint32 h2,
-	time_t now)
+statfile_pool_get_block (statfile_pool_t * pool, stat_file_t * file, guint32 h1, guint32 h2, time_t now)
 {
-	struct stat_file_block *block;
-	guint i, blocknum;
-	u_char *c;
+	struct stat_file_block         *block;
+	guint                           i, blocknum;
+	u_char                         *c;
 
 
 	file->access_time = now;
@@ -629,8 +534,7 @@ statfile_pool_get_block (statfile_pool_t * pool,
 	}
 
 	blocknum = h1 % file->cur_section.length;
-	c = (u_char *) file->map + file->seek_pos + blocknum *
-		sizeof (struct stat_file_block);
+	c = (u_char *) file->map + file->seek_pos + blocknum * sizeof (struct stat_file_block);
 	block = (struct stat_file_block *)c;
 
 	for (i = 0; i < CHAIN_LENGTH; i++) {
@@ -649,19 +553,13 @@ statfile_pool_get_block (statfile_pool_t * pool,
 }
 
 static void
-statfile_pool_set_block_common (statfile_pool_t * pool,
-	stat_file_t * file,
-	guint32 h1,
-	guint32 h2,
-	time_t t,
-	double value,
-	gboolean from_now)
+statfile_pool_set_block_common (statfile_pool_t * pool, stat_file_t * file, guint32 h1, guint32 h2, time_t t, double value, gboolean from_now)
 {
-	struct stat_file_block *block, *to_expire = NULL;
-	struct stat_file_header *header;
-	guint i, blocknum;
-	u_char *c;
-	double min = G_MAXDOUBLE;
+	struct stat_file_block         *block, *to_expire = NULL;
+	struct stat_file_header        *header;
+	guint                           i, blocknum;
+	u_char                         *c;
+    double                          min = G_MAXDOUBLE;
 
 	if (from_now) {
 		file->access_time = t;
@@ -672,16 +570,13 @@ statfile_pool_set_block_common (statfile_pool_t * pool,
 
 	blocknum = h1 % file->cur_section.length;
 	header = (struct stat_file_header *)file->map;
-	c = (u_char *) file->map + file->seek_pos + blocknum *
-		sizeof (struct stat_file_block);
+	c = (u_char *) file->map + file->seek_pos + blocknum * sizeof (struct stat_file_block);
 	block = (struct stat_file_block *)c;
 
 	for (i = 0; i < CHAIN_LENGTH; i++) {
 		if (i + blocknum >= file->cur_section.length) {
 			/* Need to expire some block in chain */
-			msg_info ("chain %ud is full in statfile %s, starting expire",
-				blocknum,
-				file->filename);
+			msg_info ("chain %ud is full in statfile %s, starting expire", blocknum, file->filename);
 			break;
 		}
 		/* First try to find block in chain */
@@ -692,19 +587,15 @@ statfile_pool_set_block_common (statfile_pool_t * pool,
 		/* Check whether we have a free block in chain */
 		if (block->hash1 == 0 && block->hash2 == 0) {
 			/* Write new block here */
-			msg_debug ("found free block %ud in chain %ud, set h1=%ud, h2=%ud",
-				i,
-				blocknum,
-				h1,
-				h2);
+			msg_debug ("found free block %ud in chain %ud, set h1=%ud, h2=%ud", i, blocknum, h1, h2);
 			block->hash1 = h1;
 			block->hash2 = h2;
 			block->value = value;
-			header->used_blocks++;
+			header->used_blocks ++;
 
 			return;
 		}
-
+		
 		/* Expire block with minimum value otherwise */
 		if (block->value < min) {
 			to_expire = block;
@@ -720,8 +611,7 @@ statfile_pool_set_block_common (statfile_pool_t * pool,
 	}
 	else {
 		/* Expire first block in chain */
-		c = (u_char *) file->map + file->seek_pos + blocknum *
-			sizeof (struct stat_file_block);
+		c = (u_char *) file->map + file->seek_pos + blocknum * sizeof (struct stat_file_block);
 		block = (struct stat_file_block *)c;
 	}
 
@@ -731,26 +621,17 @@ statfile_pool_set_block_common (statfile_pool_t * pool,
 }
 
 void
-statfile_pool_set_block (statfile_pool_t * pool,
-	stat_file_t * file,
-	guint32 h1,
-	guint32 h2,
-	time_t now,
-	double value)
+statfile_pool_set_block (statfile_pool_t * pool, stat_file_t * file, guint32 h1, guint32 h2, time_t now, double value)
 {
 	statfile_pool_set_block_common (pool, file, h1, h2, now, value, TRUE);
 }
 
-stat_file_t *
+stat_file_t                    *
 statfile_pool_is_open (statfile_pool_t * pool, gchar *filename)
 {
-	static stat_file_t f, *ret;
+	static stat_file_t              f, *ret;
 	rspamd_strlcpy (f.filename, filename, sizeof (f.filename));
-	ret = lfind (&f,
-			pool->files,
-			(size_t *)&pool->opened,
-			sizeof (stat_file_t),
-			cmpstatfile);
+	ret = lfind (&f, pool->files, (size_t *)&pool->opened, sizeof (stat_file_t), cmpstatfile);
 	return ret;
 }
 
@@ -762,13 +643,10 @@ statfile_pool_get_section (statfile_pool_t * pool, stat_file_t * file)
 }
 
 gboolean
-statfile_pool_set_section (statfile_pool_t * pool,
-	stat_file_t * file,
-	guint32 code,
-	gboolean from_begin)
+statfile_pool_set_section (statfile_pool_t * pool, stat_file_t * file, guint32 code, gboolean from_begin)
 {
-	struct stat_file_section *sec;
-	off_t cur_offset;
+	struct stat_file_section       *sec;
+	off_t                           cur_offset;
 
 
 	/* Try to find section */
@@ -793,19 +671,13 @@ statfile_pool_set_section (statfile_pool_t * pool,
 }
 
 gboolean
-statfile_pool_add_section (statfile_pool_t * pool,
-	stat_file_t * file,
-	guint32 code,
-	guint64 length)
+statfile_pool_add_section (statfile_pool_t * pool, stat_file_t * file, guint32 code, guint64 length)
 {
-	struct stat_file_section sect;
-	struct stat_file_block block = { 0, 0, 0 };
+	struct stat_file_section        sect;
+	struct stat_file_block          block = { 0, 0, 0 };
 
 	if (lseek (file->fd, 0, SEEK_END) == -1) {
-		msg_info ("cannot lseek file %s, error %d, %s",
-			file->filename,
-			errno,
-			strerror (errno));
+		msg_info ("cannot lseek file %s, error %d, %s", file->filename, errno, strerror (errno));
 		return FALSE;
 	}
 
@@ -813,19 +685,13 @@ statfile_pool_add_section (statfile_pool_t * pool,
 	sect.length = length;
 
 	if (write (file->fd, &sect, sizeof (sect)) == -1) {
-		msg_info ("cannot write block to file %s, error %d, %s",
-			file->filename,
-			errno,
-			strerror (errno));
+		msg_info ("cannot write block to file %s, error %d, %s", file->filename, errno, strerror (errno));
 		return FALSE;
 	}
 
 	while (length--) {
 		if (write (file->fd, &block, sizeof (block)) == -1) {
-			msg_info ("cannot write block to file %s, error %d, %s",
-				file->filename,
-				errno,
-				strerror (errno));
+			msg_info ("cannot write block to file %s, error %d, %s", file->filename, errno, strerror (errno));
 			return FALSE;
 		}
 	}
@@ -836,13 +702,8 @@ statfile_pool_add_section (statfile_pool_t * pool,
 	fsync (file->fd);
 	file->len += length;
 
-	if ((file->map =
-		mmap (NULL, file->len, PROT_READ | PROT_WRITE, MAP_SHARED, file->fd,
-		0)) == NULL) {
-		msg_info ("cannot mmap file %s, error %d, %s",
-			file->filename,
-			errno,
-			strerror (errno));
+	if ((file->map = mmap (NULL, file->len, PROT_READ | PROT_WRITE, MAP_SHARED, file->fd, 0)) == NULL) {
+		msg_info ("cannot mmap file %s, error %d, %s", file->filename, errno, strerror (errno));
 		return FALSE;
 	}
 	statfile_pool_unlock_file (pool, file);
@@ -870,15 +731,15 @@ statfile_get_section_by_name (const gchar *name)
 	return 0;
 }
 
-gboolean
+gboolean 
 statfile_set_revision (stat_file_t *file, guint64 rev, time_t time)
 {
-	struct stat_file_header *header;
+	struct stat_file_header        *header;
 
 	if (file == NULL || file->map == NULL) {
 		return FALSE;
 	}
-
+	
 	header = (struct stat_file_header *)file->map;
 
 	header->revision = rev;
@@ -887,10 +748,10 @@ statfile_set_revision (stat_file_t *file, guint64 rev, time_t time)
 	return TRUE;
 }
 
-gboolean
+gboolean 
 statfile_inc_revision (stat_file_t *file)
 {
-	struct stat_file_header *header;
+	struct stat_file_header        *header;
 
 	if (file == NULL || file->map == NULL) {
 		return FALSE;
@@ -898,7 +759,7 @@ statfile_inc_revision (stat_file_t *file)
 
 	header = (struct stat_file_header *)file->map;
 
-	header->revision++;
+	header->revision ++;
 
 	return TRUE;
 }
@@ -906,12 +767,12 @@ statfile_inc_revision (stat_file_t *file)
 gboolean
 statfile_get_revision (stat_file_t *file, guint64 *rev, time_t *time)
 {
-	struct stat_file_header *header;
+	struct stat_file_header        *header;
 
 	if (file == NULL || file->map == NULL) {
 		return FALSE;
 	}
-
+	
 	header = (struct stat_file_header *)file->map;
 
 	if (rev != NULL) {
@@ -924,29 +785,29 @@ statfile_get_revision (stat_file_t *file, guint64 *rev, time_t *time)
 	return TRUE;
 }
 
-guint64
+guint64 
 statfile_get_used_blocks (stat_file_t *file)
 {
-	struct stat_file_header *header;
+	struct stat_file_header        *header;
 
 	if (file == NULL || file->map == NULL) {
-		return (guint64) - 1;
+		return (guint64)-1;
 	}
-
+	
 	header = (struct stat_file_header *)file->map;
 
 	return header->used_blocks;
 }
 
-guint64
+guint64 
 statfile_get_total_blocks (stat_file_t *file)
 {
-	struct stat_file_header *header;
+	struct stat_file_header        *header;
 
 	if (file == NULL || file->map == NULL) {
-		return (guint64) - 1;
+		return (guint64)-1;
 	}
-
+	
 	header = (struct stat_file_header *)file->map;
 
 	/* If total blocks is 0 we have old version of header, so set total blocks correctly */
@@ -960,13 +821,13 @@ statfile_get_total_blocks (stat_file_t *file)
 static void
 statfile_pool_invalidate_callback (gint fd, short what, void *ud)
 {
-	statfile_pool_t *pool = ud;
-	stat_file_t *file;
-	gint i;
+	statfile_pool_t                *pool = ud;
+	stat_file_t                    *file;
+	gint                            i;
 
 	msg_info ("invalidating %d statfiles", pool->opened);
 
-	for (i = 0; i < pool->opened; i++) {
+	for (i = 0; i < pool->opened; i ++) {
 		file = &pool->files[i];
 		msync (file->map, file->len, MS_ASYNC);
 	}
@@ -975,54 +836,44 @@ statfile_pool_invalidate_callback (gint fd, short what, void *ud)
 
 
 void
-statfile_pool_plan_invalidate (statfile_pool_t *pool,
-	time_t seconds,
-	time_t jitter)
+statfile_pool_plan_invalidate (statfile_pool_t *pool, time_t seconds, time_t jitter)
 {
-	gboolean pending;
+	gboolean                        pending;
 
 
 	if (pool->invalidate_event != NULL) {
 		pending = evtimer_pending (pool->invalidate_event, NULL);
 		if (pending) {
 			/* Replan event */
-			pool->invalidate_tv.tv_sec = seconds +
-				g_random_int_range (0, jitter);
+			pool->invalidate_tv.tv_sec = seconds + g_random_int_range (0, jitter);
 			pool->invalidate_tv.tv_usec = 0;
 			evtimer_add (pool->invalidate_event, &pool->invalidate_tv);
 		}
 	}
 	else {
-		pool->invalidate_event =
-			rspamd_mempool_alloc (pool->pool, sizeof (struct event));
+		pool->invalidate_event = rspamd_mempool_alloc (pool->pool, sizeof (struct event));
 		pool->invalidate_tv.tv_sec = seconds + g_random_int_range (0, jitter);
 		pool->invalidate_tv.tv_usec = 0;
-		evtimer_set (pool->invalidate_event,
-			statfile_pool_invalidate_callback,
-			pool);
+		evtimer_set (pool->invalidate_event, statfile_pool_invalidate_callback, pool);
 		evtimer_add (pool->invalidate_event, &pool->invalidate_tv);
-		msg_info ("invalidate of statfile pool is planned in %d seconds",
-			(gint)pool->invalidate_tv.tv_sec);
+		msg_info ("invalidate of statfile pool is planned in %d seconds", (gint)pool->invalidate_tv.tv_sec);
 	}
 }
 
 
 stat_file_t *
-get_statfile_by_symbol (statfile_pool_t *pool,
-	struct rspamd_classifier_config *ccf,
-	const gchar *symbol,
-	struct rspamd_statfile_config **st,
-	gboolean try_create)
+get_statfile_by_symbol (statfile_pool_t *pool, struct rspamd_classifier_config *ccf,
+        const gchar *symbol, struct rspamd_statfile_config **st, gboolean try_create)
 {
-	stat_file_t *res = NULL;
-	GList *cur;
+    stat_file_t *res = NULL;
+    GList *cur;
 
-	if (pool == NULL || ccf == NULL || symbol == NULL) {
+    if (pool == NULL || ccf == NULL || symbol == NULL) {
 		msg_err ("invalid input arguments");
-		return NULL;
-	}
+        return NULL;
+    }
 
-	cur = g_list_first (ccf->statfiles);
+    cur = g_list_first (ccf->statfiles);
 	while (cur) {
 		*st = cur->data;
 		if (strcmp (symbol, (*st)->symbol) == 0) {
@@ -1031,33 +882,28 @@ get_statfile_by_symbol (statfile_pool_t *pool,
 		*st = NULL;
 		cur = g_list_next (cur);
 	}
-	if (*st == NULL) {
+    if (*st == NULL) {
 		msg_info ("cannot find statfile with symbol %s", symbol);
-		return NULL;
-	}
+        return NULL;
+    }
 
-	if ((res = statfile_pool_is_open (pool, (*st)->path)) == NULL) {
-		if ((res =
-			statfile_pool_open (pool, (*st)->path, (*st)->size,
-			FALSE)) == NULL) {
+    if ((res = statfile_pool_is_open (pool, (*st)->path)) == NULL) {
+		if ((res = statfile_pool_open (pool, (*st)->path, (*st)->size, FALSE)) == NULL) {
 			msg_warn ("cannot open %s", (*st)->path);
-			if (try_create) {
-				if (statfile_pool_create (pool, (*st)->path,
-					(*st)->size) == -1) {
+            if (try_create) {
+                if (statfile_pool_create (pool, (*st)->path, (*st)->size) == -1) {
 					msg_err ("cannot create statfile %s", (*st)->path);
 					return NULL;
 				}
-				res =
-					statfile_pool_open (pool, (*st)->path, (*st)->size, FALSE);
+                res = statfile_pool_open (pool, (*st)->path, (*st)->size, FALSE);
 				if (res == NULL) {
-					msg_err ("cannot open statfile %s after creation",
-						(*st)->path);
+					msg_err ("cannot open statfile %s after creation", (*st)->path);
 				}
-			}
+            }
 		}
 	}
 
-	return res;
+    return res;
 }
 
 void
@@ -1067,12 +913,10 @@ statfile_pool_lockall (statfile_pool_t *pool)
 	gint i;
 
 	if (pool->mlock_ok) {
-		for (i = 0; i < pool->opened; i++) {
+		for (i = 0; i < pool->opened; i ++) {
 			file = &pool->files[i];
 			if (mlock (file->map, file->len) == -1) {
-				msg_warn (
-					"mlock of statfile failed, maybe you need to increase RLIMIT_MEMLOCK limit for a process: %s",
-					strerror (errno));
+				msg_warn ("mlock of statfile failed, maybe you need to increase RLIMIT_MEMLOCK limit for a process: %s", strerror (errno));
 				pool->mlock_ok = FALSE;
 				return;
 			}

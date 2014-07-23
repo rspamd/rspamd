@@ -22,59 +22,48 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "bloom.h"
 #include "config.h"
+#include "bloom.h"
 #include "xxhash.h"
 
 /* 4 bits are used for counting (implementing delete operation) */
 #define SIZE_BIT 4
 
 /* These macroes are for 4 bits for counting element */
-#define INCBIT(a, n, acc) do {                                                              \
-		acc = \
-			a[n * SIZE_BIT / CHAR_BIT] & (0xF << \
-			(n % (CHAR_BIT / SIZE_BIT) * SIZE_BIT));     \
-		acc ++;                                                                                 \
-		acc &= 0xF;                                                                             \
-                                                                                            \
-		a[n * SIZE_BIT / \
-		CHAR_BIT] &= (0xF << (4 - (n % (CHAR_BIT / SIZE_BIT) * SIZE_BIT)));      \
-		a[n * SIZE_BIT / \
-		CHAR_BIT] |= (acc << (n % (CHAR_BIT / SIZE_BIT) * SIZE_BIT));            \
+#define INCBIT(a, n, acc) do {																\
+	acc = a[n * SIZE_BIT / CHAR_BIT] & (0xF << (n % (CHAR_BIT / SIZE_BIT) * SIZE_BIT));		\
+	acc ++;																					\
+	acc &= 0xF;																				\
+																							\
+	a[n * SIZE_BIT / CHAR_BIT] &= (0xF << (4 - (n % (CHAR_BIT/SIZE_BIT) * SIZE_BIT)));		\
+	a[n * SIZE_BIT / CHAR_BIT] |= (acc << (n % (CHAR_BIT/SIZE_BIT) * SIZE_BIT));			\
 } while (0);
 
-#define DECBIT(a, n, acc) do {                                                              \
-		acc = \
-			a[n * SIZE_BIT / CHAR_BIT] & (0xF << \
-			(n % (CHAR_BIT / SIZE_BIT) * SIZE_BIT));     \
-		acc --;                                                                                 \
-		acc &= 0xF;                                                                             \
-                                                                                            \
-		a[n * SIZE_BIT / \
-		CHAR_BIT] &= (0xF << (4 - (n % (CHAR_BIT / SIZE_BIT) * SIZE_BIT)));      \
-		a[n * SIZE_BIT / \
-		CHAR_BIT] |= (acc << (n % (CHAR_BIT / SIZE_BIT) * SIZE_BIT));            \
+#define DECBIT(a, n, acc) do {																\
+	acc = a[n * SIZE_BIT / CHAR_BIT] & (0xF << (n % (CHAR_BIT / SIZE_BIT) * SIZE_BIT));		\
+	acc --;																					\
+	acc &= 0xF;																				\
+																							\
+	a[n * SIZE_BIT / CHAR_BIT] &= (0xF << (4 - (n % (CHAR_BIT/SIZE_BIT) * SIZE_BIT)));		\
+	a[n * SIZE_BIT / CHAR_BIT] |= (acc << (n % (CHAR_BIT/SIZE_BIT) * SIZE_BIT));			\
 } while (0);
 
-#define GETBIT(a, \
-		n) (a[n * SIZE_BIT / CHAR_BIT] & (0xF << \
-	(n % (CHAR_BIT / SIZE_BIT) * SIZE_BIT)))
+#define GETBIT(a, n) (a[n * SIZE_BIT / CHAR_BIT] & (0xF << (n % (CHAR_BIT/SIZE_BIT) * SIZE_BIT)))
 
 /* Common hash functions */
 
 
-rspamd_bloom_filter_t *
+rspamd_bloom_filter_t                 *
 rspamd_bloom_create (size_t size, size_t nfuncs, ...)
 {
-	rspamd_bloom_filter_t *bloom;
-	va_list l;
-	gsize n;
+	rspamd_bloom_filter_t                 *bloom;
+	va_list                         l;
+	gsize                           n;
 
 	if (!(bloom = g_malloc (sizeof (rspamd_bloom_filter_t)))) {
 		return NULL;
 	}
-	if (!(bloom->a =
-		g_new0 (gchar, (size + CHAR_BIT - 1) / CHAR_BIT * SIZE_BIT))) {
+	if (!(bloom->a = g_new0 (gchar,  (size + CHAR_BIT - 1) / CHAR_BIT * SIZE_BIT))) {
 		g_free (bloom);
 		return NULL;
 	}
@@ -107,9 +96,9 @@ rspamd_bloom_destroy (rspamd_bloom_filter_t * bloom)
 gboolean
 rspamd_bloom_add (rspamd_bloom_filter_t * bloom, const gchar *s)
 {
-	size_t n, len;
-	u_char t;
-	guint v;
+	size_t                          n, len;
+	u_char                          t;
+	guint                           v;
 
 	if (s == NULL) {
 		return FALSE;
@@ -126,9 +115,9 @@ rspamd_bloom_add (rspamd_bloom_filter_t * bloom, const gchar *s)
 gboolean
 rspamd_bloom_del (rspamd_bloom_filter_t * bloom, const gchar *s)
 {
-	size_t n, len;
-	u_char t;
-	guint v;
+	size_t                          n, len;
+	u_char                          t;
+	guint                           v;
 
 	if (s == NULL) {
 		return FALSE;
@@ -146,8 +135,8 @@ rspamd_bloom_del (rspamd_bloom_filter_t * bloom, const gchar *s)
 gboolean
 rspamd_bloom_check (rspamd_bloom_filter_t * bloom, const gchar *s)
 {
-	size_t n, len;
-	guint v;
+	size_t                          n, len;
+	guint                           v;
 
 	if (s == NULL) {
 		return FALSE;

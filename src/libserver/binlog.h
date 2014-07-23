@@ -58,15 +58,12 @@ struct rspamd_classifier_config;
 /*
  * Open binlog at specified path with specified rotate params
  */
-struct rspamd_binlog * binlog_open (rspamd_mempool_t *pool,
-	const gchar *path,
-	time_t rotate_time,
-	gint rotate_jitter);
+struct rspamd_binlog* binlog_open (rspamd_mempool_t *pool, const gchar *path, time_t rotate_time, gint rotate_jitter);
 
 /*
  * Get and open binlog for specified statfile
  */
-struct rspamd_binlog * get_binlog_by_statfile (struct rspamd_statfile_config *st);
+struct rspamd_binlog* get_binlog_by_statfile (struct rspamd_statfile_config *st);
 
 /*
  * Close binlog
@@ -86,17 +83,11 @@ gboolean binlog_insert (struct rspamd_binlog *log, GTree *nodes);
  * @param rep a portion of changes for revision is stored here
  * @return TRUE if there are more revisions to get and FALSE if synchronization is complete
  */
-gboolean binlog_sync (struct rspamd_binlog *log,
-	guint64 from_rev,
-	guint64 *from_time,
-	GByteArray **rep);
+gboolean binlog_sync (struct rspamd_binlog *log, guint64 from_rev, guint64 *from_time, GByteArray **rep);
 
 /*
  * Conditional write to a binlog for specified statfile
  */
-gboolean maybe_write_binlog (struct rspamd_classifier_config *ccf,
-	struct rspamd_statfile_config *st,
-	stat_file_t *file,
-	GTree *nodes);
+gboolean maybe_write_binlog (struct rspamd_classifier_config *ccf, struct rspamd_statfile_config *st, stat_file_t *file, GTree *nodes);
 
 #endif

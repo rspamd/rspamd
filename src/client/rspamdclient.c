@@ -21,9 +21,9 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "http.h"
 #include "rspamdclient.h"
 #include "util.h"
+#include "http.h"
 
 #ifdef HAVE_FETCH_H
 #include <fetch.h>
@@ -62,8 +62,8 @@ rspamd_client_error_quark (void)
 
 static gint
 rspamd_client_body_handler (struct rspamd_http_connection *conn,
-	struct rspamd_http_message *msg,
-	const gchar *chunk, gsize len)
+		struct rspamd_http_message *msg,
+		const gchar *chunk, gsize len)
 {
 	/* Do nothing here */
 	return 0;
@@ -72,8 +72,7 @@ rspamd_client_body_handler (struct rspamd_http_connection *conn,
 static void
 rspamd_client_error_handler (struct rspamd_http_connection *conn, GError *err)
 {
-	struct rspamd_client_request *req =
-		(struct rspamd_client_request *)conn->ud;
+	struct rspamd_client_request *req = (struct rspamd_client_request *)conn->ud;
 	struct rspamd_client_connection *c;
 
 	c = req->conn;
@@ -82,10 +81,9 @@ rspamd_client_error_handler (struct rspamd_http_connection *conn, GError *err)
 
 static gint
 rspamd_client_finish_handler (struct rspamd_http_connection *conn,
-	struct rspamd_http_message *msg)
+		struct rspamd_http_message *msg)
 {
-	struct rspamd_client_request *req =
-		(struct rspamd_client_request *)conn->ud;
+	struct rspamd_client_request *req = (struct rspamd_client_request *)conn->ud;
 	struct rspamd_client_connection *c;
 	struct ucl_parser *parser;
 	GError *err;
@@ -95,18 +93,13 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 	if (!c->req_sent) {
 		c->req_sent = TRUE;
 		rspamd_http_connection_reset (c->http_conn);
-		rspamd_http_connection_read_message (c->http_conn,
-			c->req,
-			c->fd,
-			&c->timeout,
-			c->ev_base);
+		rspamd_http_connection_read_message (c->http_conn, c->req, c->fd, &c->timeout, c->ev_base);
 		return 0;
 	}
 	else {
 		if (msg->body == NULL || msg->body->len == 0 || msg->code != 200) {
 			err = g_error_new (RCLIENT_ERROR, msg->code, "HTTP error: %d, %s",
-					msg->code,
-					msg->status ? msg->status->str : "unknown error");
+					msg->code, msg->status ? msg->status->str : "unknown error");
 			req->cb (c, msg, c->server_name->str, NULL, req->ud, err);
 			g_error_free (err);
 			return -1;
@@ -122,8 +115,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 			return -1;
 		}
 
-		req->cb (c, msg, c->server_name->str, ucl_parser_get_object (
-				parser), req->ud, NULL);
+		req->cb (c, msg, c->server_name->str, ucl_parser_get_object (parser), req->ud, NULL);
 		ucl_parser_free (parser);
 	}
 
@@ -132,7 +124,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 
 struct rspamd_client_connection *
 rspamd_client_init (struct event_base *ev_base, const gchar *name,
-	guint16 port, gdouble timeout)
+		guint16 port, gdouble timeout)
 {
 	struct rspamd_client_connection *conn;
 	gint fd;
@@ -147,10 +139,7 @@ rspamd_client_init (struct event_base *ev_base, const gchar *name,
 	conn->fd = fd;
 	conn->req_sent = FALSE;
 	conn->http_conn = rspamd_http_connection_new (rspamd_client_body_handler,
-			rspamd_client_error_handler,
-			rspamd_client_finish_handler,
-			0,
-			RSPAMD_HTTP_CLIENT);
+			rspamd_client_error_handler, rspamd_client_finish_handler, 0, RSPAMD_HTTP_CLIENT);
 	conn->server_name = g_string_new (name);
 	if (port != 0) {
 		rspamd_printf_gstring (conn->server_name, ":%d", (int)port);
@@ -163,9 +152,9 @@ rspamd_client_init (struct event_base *ev_base, const gchar *name,
 
 gboolean
 rspamd_client_command (struct rspamd_client_connection *conn,
-	const gchar *command, GHashTable *attrs,
-	FILE *in, rspamd_client_callback cb,
-	gpointer ud, GError **err)
+		const gchar *command, GHashTable *attrs,
+		FILE *in, rspamd_client_callback cb,
+		gpointer ud, GError **err)
 {
 	struct rspamd_client_request *req;
 	gchar *p, *hn, *hv;
@@ -197,8 +186,7 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 			}
 		}
 		if (ferror (in) != 0) {
-			g_set_error (err, RCLIENT_ERROR, ferror (
-					in), "input IO error: %s", strerror (ferror (in)));
+			g_set_error (err, RCLIENT_ERROR, ferror (in), "input IO error: %s", strerror (ferror (in)));
 			g_slice_free1 (sizeof (struct rspamd_client_request), req);
 			return FALSE;
 		}
@@ -219,7 +207,7 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 	conn->req = req;
 
 	rspamd_http_connection_write_message (conn->http_conn, req->msg, NULL,
-		"text/plain", req, conn->fd, &conn->timeout, conn->ev_base);
+			"text/plain", req, conn->fd, &conn->timeout, conn->ev_base);
 
 	return TRUE;
 }

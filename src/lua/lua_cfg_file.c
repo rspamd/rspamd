@@ -22,26 +22,26 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "expressions.h"
 #include "lua_common.h"
+#include "expressions.h"
 #include "symbols_cache.h"
 #ifdef HAVE_SYS_UTSNAME_H
 #include <sys/utsname.h>
 #endif
 
-/*
- * This is implementation of lua routines to handle config file params
+/* 
+ * This is implementation of lua routines to handle config file params 
  */
 
 /* Process a single item in 'metrics' table */
 static void
 lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 {
-	GList *metric_list;
-	gchar *symbol, *old_desc;
-	const gchar *desc;
-	struct metric *metric;
-	gdouble *score, *old_score;
+	GList                               *metric_list;
+	gchar                               *symbol, *old_desc;
+	const gchar                         *desc;
+	struct metric                       *metric;
+	gdouble                             *score, *old_score;
 
 	/* Get module opt structure */
 	if ((metric = g_hash_table_lookup (cfg->metrics, name)) == NULL) {
@@ -50,18 +50,16 @@ lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 	}
 
 	/* Now iterate throught module table */
-	for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+	for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
 		/* key - -2, value - -1 */
-		symbol =
-			rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, -2));
+		symbol = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, -2));
 		if (symbol != NULL) {
 			if (lua_istable (L, -1)) {
 				/* We got a table, so extract individual attributes */
 				lua_pushstring (L, "weight");
 				lua_gettable (L, -2);
 				if (lua_isnumber (L, -1)) {
-					score =
-						rspamd_mempool_alloc (cfg->cfg_pool, sizeof (double));
+					score = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (double));
 					*score = lua_tonumber (L, -1);
 				}
 				else {
@@ -73,19 +71,15 @@ lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 				lua_gettable (L, -2);
 				if (lua_isstring (L, -1)) {
 					desc = lua_tostring (L, -1);
-					old_desc =
-						g_hash_table_lookup (metric->descriptions, symbol);
+					old_desc = g_hash_table_lookup (metric->descriptions, symbol);
 					if (old_desc) {
-						msg_info ("replacing description for symbol %s",
-							symbol);
+						msg_info ("replacing description for symbol %s", symbol);
 						g_hash_table_replace (metric->descriptions,
-							symbol,
-							rspamd_mempool_strdup (cfg->cfg_pool, desc));
+							symbol, rspamd_mempool_strdup (cfg->cfg_pool, desc));
 					}
 					else {
 						g_hash_table_insert (metric->descriptions,
-							symbol,
-							rspamd_mempool_strdup (cfg->cfg_pool, desc));
+							symbol, rspamd_mempool_strdup (cfg->cfg_pool, desc));
 					}
 				}
 				lua_pop (L, 1);
@@ -100,23 +94,17 @@ lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 				continue;
 			}
 			/* Insert symbol */
-			if ((old_score =
-				g_hash_table_lookup (metric->symbols, symbol)) != NULL) {
-				msg_info ("replacing weight for symbol %s: %.2f -> %.2f",
-					symbol,
-					*old_score,
-					*score);
+			if ((old_score = g_hash_table_lookup (metric->symbols, symbol)) != NULL) {
+				msg_info ("replacing weight for symbol %s: %.2f -> %.2f", symbol, *old_score, *score);
 				g_hash_table_replace (metric->symbols, symbol, score);
 			}
 			else {
 				g_hash_table_insert (metric->symbols, symbol, score);
 			}
 
-			if ((metric_list =
-				g_hash_table_lookup (cfg->metrics_symbols, symbol)) == NULL) {
+			if ((metric_list = g_hash_table_lookup (cfg->metrics_symbols, symbol)) == NULL) {
 				metric_list = g_list_prepend (NULL, metric);
-				rspamd_mempool_add_destructor (cfg->cfg_pool,
-					(rspamd_mempool_destruct_t)g_list_free, metric_list);
+				rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)g_list_free, metric_list);
 				g_hash_table_insert (cfg->metrics_symbols, symbol, metric_list);
 			}
 			else {
@@ -133,30 +121,26 @@ lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 void
 lua_post_load_config (struct rspamd_config *cfg)
 {
-	lua_State *L = cfg->lua_state;
-	const gchar *name, *val;
-	gchar *sym;
-	struct expression *expr, *old_expr;
-	ucl_object_t *obj;
-	gsize keylen;
+	lua_State                            *L = cfg->lua_state;
+	const gchar                          *name, *val;
+	gchar                                *sym;
+	struct expression                    *expr, *old_expr;
+	ucl_object_t                   *obj;
+	gsize                                 keylen;
 
 	/* First check all module options that may be overriden in 'config' global */
 	lua_getglobal (L, "config");
 
 	if (lua_istable (L, -1)) {
 		/* Iterate */
-		for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+		for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
 			/* 'key' is at index -2 and 'value' is at index -1 */
 			/* Key must be a string and value must be a table */
 			name = luaL_checklstring (L, -2, &keylen);
 			if (name != NULL && lua_istable (L, -1)) {
 				obj = ucl_object_lua_import (L, lua_gettop (L));
 				if (obj != NULL) {
-					ucl_object_insert_key_merged (cfg->rcl_obj,
-						obj,
-						name,
-						keylen,
-						true);
+					ucl_object_insert_key_merged (cfg->rcl_obj, obj, name, keylen, true);
 				}
 			}
 		}
@@ -167,7 +151,7 @@ lua_post_load_config (struct rspamd_config *cfg)
 
 	if (lua_istable (L, -1)) {
 		/* Iterate */
-		for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+		for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
 			/* 'key' is at index -2 and 'value' is at index -1 */
 			/* Key must be a string and value must be a table */
 			name = luaL_checkstring (L, -2);
@@ -182,23 +166,19 @@ lua_post_load_config (struct rspamd_config *cfg)
 
 	if (lua_istable (L, -1)) {
 		/* Iterate */
-		for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+		for (lua_pushnil(L); lua_next(L, -2); lua_pop(L, 1)) {
 			/* 'key' is at index -2 and 'value' is at index -1 */
 			/* Key must be a string and value must be a table */
 			name = luaL_checkstring (L, -2);
 			if (name != NULL && lua_isstring (L, -1)) {
 				val = lua_tostring (L, -1);
-				sym = rspamd_mempool_strdup (cfg->cfg_pool, name);
-				if ((expr =
-					parse_expression (cfg->cfg_pool,
-					rspamd_mempool_strdup (cfg->cfg_pool, val))) == NULL) {
+				sym = rspamd_mempool_strdup(cfg->cfg_pool, name);
+				if ((expr = parse_expression (cfg->cfg_pool, rspamd_mempool_strdup(cfg->cfg_pool, val))) == NULL) {
 					msg_err ("cannot parse composite expression: %s", val);
 					continue;
 				}
 				/* Now check hash table for this composite */
-				if ((old_expr =
-					g_hash_table_lookup (cfg->composite_symbols,
-					name)) != NULL) {
+				if ((old_expr = g_hash_table_lookup (cfg->composite_symbols, name)) != NULL) {
 					msg_info ("replacing composite symbol %s", name);
 					g_hash_table_replace (cfg->composite_symbols, sym, expr);
 				}
@@ -213,14 +193,10 @@ lua_post_load_config (struct rspamd_config *cfg)
 
 /* Handle lua dynamic config param */
 gboolean
-lua_handle_param (struct rspamd_task *task,
-	gchar *mname,
-	gchar *optname,
-	enum lua_var_type expected_type,
-	gpointer *res)
+lua_handle_param (struct rspamd_task *task, gchar *mname, gchar *optname, enum lua_var_type expected_type, gpointer *res)
 {
 	/* xxx: Adopt this for rcl */
-
+	
 	/* Option not found */
 	*res = NULL;
 	return FALSE;
@@ -230,12 +206,12 @@ lua_handle_param (struct rspamd_task *task,
 gboolean
 lua_check_condition (struct rspamd_config *cfg, const gchar *condition)
 {
-	lua_State *L = cfg->lua_state;
-	gchar *hostbuf, *condbuf;
-	gsize hostlen;
-	gboolean res;
+	lua_State                            *L = cfg->lua_state;
+	gchar                                *hostbuf, *condbuf;
+	gsize                                 hostlen;
+	gboolean                              res;
 #ifdef HAVE_SYS_UTSNAME_H
-	struct utsname uts;
+	struct utsname                        uts;
 #endif
 
 	/* Set some globals for condition */
@@ -274,12 +250,12 @@ lua_check_condition (struct rspamd_config *cfg, const gchar *condition)
 
 	/* Rspamd paths */
 	lua_newtable (L);
-	lua_set_table_index (L, "confdir",	  RSPAMD_CONFDIR);
-	lua_set_table_index (L, "rundir",	  RSPAMD_RUNDIR);
-	lua_set_table_index (L, "dbdir",	  RSPAMD_DBDIR);
-	lua_set_table_index (L, "logdir",	  RSPAMD_LOGDIR);
+	lua_set_table_index (L, "confdir", RSPAMD_CONFDIR);
+	lua_set_table_index (L, "rundir", RSPAMD_RUNDIR);
+	lua_set_table_index (L, "dbdir", RSPAMD_DBDIR);
+	lua_set_table_index (L, "logdir", RSPAMD_LOGDIR);
 	lua_set_table_index (L, "pluginsdir", RSPAMD_PLUGINSDIR);
-	lua_set_table_index (L, "prefix",	  RSPAMD_PREFIX);
+	lua_set_table_index (L, "prefix", RSPAMD_PREFIX);
 	lua_setglobal (L, "rspamd_paths");
 
 	/* Make fake string */
@@ -295,11 +271,10 @@ lua_check_condition (struct rspamd_config *cfg, const gchar *condition)
 	}
 	/* Get global variable res to get result */
 	lua_getglobal (L, FAKE_RES_VAR);
-	if (!lua_isboolean (L, -1)) {
-		msg_err ("bad string evaluated: %s, type: %s", condbuf,
-			lua_typename (L, lua_type (L, -1)));
+	if (! lua_isboolean (L, -1)) {
+		msg_err ("bad string evaluated: %s, type: %s", condbuf, lua_typename (L, lua_type (L, -1)));
 		g_free (condbuf);
-		return FALSE;
+			return FALSE;
 	}
 
 	res = lua_toboolean (L, -1);

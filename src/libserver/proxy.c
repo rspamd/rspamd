@@ -28,7 +28,7 @@
 static void rspamd_proxy_backend_handler (gint fd, gshort what, gpointer data);
 static void rspamd_proxy_client_handler (gint fd, gshort what, gpointer data);
 
-static inline GQuark
+static inline                   GQuark
 proxy_error_quark (void)
 {
 	return g_quark_from_static_string ("proxy-error");
@@ -50,9 +50,9 @@ rspamd_proxy_close (rspamd_proxy_t *proxy)
 static void
 rspamd_proxy_client_handler (gint fd, gshort what, gpointer data)
 {
-	rspamd_proxy_t *proxy = data;
-	gint r;
-	GError *err = NULL;
+	rspamd_proxy_t						*proxy = data;
+	gint								 r;
+	GError								*err = NULL;
 
 	if (what == EV_READ) {
 		/* Got data from client */
@@ -63,20 +63,14 @@ rspamd_proxy_client_handler (gint fd, gshort what, gpointer data)
 			proxy->read_len = r;
 			proxy->buf_offset = 0;
 			event_del (&proxy->backend_ev);
-			event_set (&proxy->backend_ev,
-				proxy->bfd,
-				EV_WRITE,
-				rspamd_proxy_backend_handler,
-				proxy);
+			event_set (&proxy->backend_ev, proxy->bfd, EV_WRITE, rspamd_proxy_backend_handler, proxy);
 			event_add (&proxy->backend_ev, proxy->tv);
 		}
 		else {
 			/* Error case or zero reply */
 			if (r < 0) {
 				/* Error case */
-				g_set_error (&err,
-					proxy_error_quark (), r, "Client read error: %s",
-					strerror (errno));
+				g_set_error (&err, proxy_error_quark(), r, "Client read error: %s", strerror (errno));
 				rspamd_proxy_close (proxy);
 				proxy->err_cb (err, proxy->user_data);
 			}
@@ -89,27 +83,17 @@ rspamd_proxy_client_handler (gint fd, gshort what, gpointer data)
 	}
 	else if (what == EV_WRITE) {
 		/* Can write to client */
-		r = write (proxy->cfd,
-				proxy->buf + proxy->buf_offset,
-				proxy->read_len - proxy->buf_offset);
+		r = write (proxy->cfd, proxy->buf + proxy->buf_offset, proxy->read_len - proxy->buf_offset);
 		if (r > 0) {
 			/* We wrote something */
-			proxy->buf_offset += r;
+			proxy->buf_offset +=r;
 			if (proxy->buf_offset == proxy->read_len) {
 				/* We wrote everything */
 				event_del (&proxy->client_ev);
-				event_set (&proxy->client_ev,
-					proxy->cfd,
-					EV_READ,
-					rspamd_proxy_client_handler,
-					proxy);
+				event_set (&proxy->client_ev, proxy->cfd, EV_READ, rspamd_proxy_client_handler, proxy);
 				event_add (&proxy->client_ev, proxy->tv);
 				event_del (&proxy->backend_ev);
-				event_set (&proxy->backend_ev,
-					proxy->bfd,
-					EV_READ,
-					rspamd_proxy_backend_handler,
-					proxy);
+				event_set (&proxy->backend_ev, proxy->bfd, EV_READ, rspamd_proxy_backend_handler, proxy);
 				event_add (&proxy->backend_ev, proxy->tv);
 			}
 			else {
@@ -121,9 +105,7 @@ rspamd_proxy_client_handler (gint fd, gshort what, gpointer data)
 			/* Error case or zero reply */
 			if (r < 0) {
 				/* Error case */
-				g_set_error (&err,
-					proxy_error_quark (), r, "Client write error: %s",
-					strerror (errno));
+				g_set_error (&err, proxy_error_quark(), r, "Client write error: %s", strerror (errno));
 				rspamd_proxy_close (proxy);
 				proxy->err_cb (err, proxy->user_data);
 			}
@@ -136,7 +118,7 @@ rspamd_proxy_client_handler (gint fd, gshort what, gpointer data)
 	}
 	else {
 		/* Got timeout */
-		g_set_error (&err, proxy_error_quark (), ETIMEDOUT, "Client timeout");
+		g_set_error (&err, proxy_error_quark(), ETIMEDOUT, "Client timeout");
 		rspamd_proxy_close (proxy);
 		proxy->err_cb (err, proxy->user_data);
 	}
@@ -145,9 +127,9 @@ rspamd_proxy_client_handler (gint fd, gshort what, gpointer data)
 static void
 rspamd_proxy_backend_handler (gint fd, gshort what, gpointer data)
 {
-	rspamd_proxy_t *proxy = data;
-	gint r;
-	GError *err = NULL;
+	rspamd_proxy_t						*proxy = data;
+	gint								 r;
+	GError								*err = NULL;
 
 	if (what == EV_READ) {
 		/* Got data from backend */
@@ -158,20 +140,14 @@ rspamd_proxy_backend_handler (gint fd, gshort what, gpointer data)
 			proxy->read_len = r;
 			proxy->buf_offset = 0;
 			event_del (&proxy->client_ev);
-			event_set (&proxy->client_ev,
-				proxy->bfd,
-				EV_WRITE,
-				rspamd_proxy_client_handler,
-				proxy);
+			event_set (&proxy->client_ev, proxy->bfd, EV_WRITE, rspamd_proxy_client_handler, proxy);
 			event_add (&proxy->client_ev, proxy->tv);
 		}
 		else {
 			/* Error case or zero reply */
 			if (r < 0) {
 				/* Error case */
-				g_set_error (&err,
-					proxy_error_quark (), r, "Backend read error: %s",
-					strerror (errno));
+				g_set_error (&err, proxy_error_quark(), r, "Backend read error: %s", strerror (errno));
 				rspamd_proxy_close (proxy);
 				proxy->err_cb (err, proxy->user_data);
 			}
@@ -184,27 +160,17 @@ rspamd_proxy_backend_handler (gint fd, gshort what, gpointer data)
 	}
 	else if (what == EV_WRITE) {
 		/* Can write to backend */
-		r = write (proxy->bfd,
-				proxy->buf + proxy->buf_offset,
-				proxy->read_len - proxy->buf_offset);
+		r = write (proxy->bfd, proxy->buf + proxy->buf_offset, proxy->read_len - proxy->buf_offset);
 		if (r > 0) {
 			/* We wrote something */
-			proxy->buf_offset += r;
+			proxy->buf_offset +=r;
 			if (proxy->buf_offset == proxy->read_len) {
 				/* We wrote everything */
 				event_del (&proxy->backend_ev);
-				event_set (&proxy->backend_ev,
-					proxy->bfd,
-					EV_READ,
-					rspamd_proxy_backend_handler,
-					proxy);
+				event_set (&proxy->backend_ev, proxy->bfd, EV_READ, rspamd_proxy_backend_handler, proxy);
 				event_add (&proxy->backend_ev, proxy->tv);
 				event_del (&proxy->client_ev);
-				event_set (&proxy->client_ev,
-					proxy->cfd,
-					EV_READ,
-					rspamd_proxy_client_handler,
-					proxy);
+				event_set (&proxy->client_ev, proxy->cfd, EV_READ, rspamd_proxy_client_handler, proxy);
 				event_add (&proxy->client_ev, proxy->tv);
 			}
 			else {
@@ -216,9 +182,7 @@ rspamd_proxy_backend_handler (gint fd, gshort what, gpointer data)
 			/* Error case or zero reply */
 			if (r < 0) {
 				/* Error case */
-				g_set_error (&err,
-					proxy_error_quark (), r, "Backend write error: %s",
-					strerror (errno));
+				g_set_error (&err, proxy_error_quark(), r, "Backend write error: %s", strerror (errno));
 				rspamd_proxy_close (proxy);
 				proxy->err_cb (err, proxy->user_data);
 			}
@@ -231,7 +195,7 @@ rspamd_proxy_backend_handler (gint fd, gshort what, gpointer data)
 	}
 	else {
 		/* Got timeout */
-		g_set_error (&err, proxy_error_quark (), ETIMEDOUT, "Client timeout");
+		g_set_error (&err, proxy_error_quark(), ETIMEDOUT, "Client timeout");
 		rspamd_proxy_close (proxy);
 		proxy->err_cb (err, proxy->user_data);
 	}
@@ -246,17 +210,11 @@ rspamd_proxy_backend_handler (gint fd, gshort what, gpointer data)
  * @param ud user data for callback
  * @return new proxy object
  */
-rspamd_proxy_t *
-rspamd_create_proxy (gint cfd,
-	gint bfd,
-	rspamd_mempool_t *pool,
-	struct event_base *base,
-	gsize bufsize,
-	struct timeval *tv,
-	dispatcher_err_callback_t err_cb,
-	gpointer ud)
+rspamd_proxy_t*
+rspamd_create_proxy (gint cfd, gint bfd, rspamd_mempool_t *pool, struct event_base *base,
+		gsize bufsize, struct timeval *tv, dispatcher_err_callback_t err_cb, gpointer ud)
 {
-	rspamd_proxy_t *new;
+	rspamd_proxy_t						*new;
 
 	new = rspamd_mempool_alloc0 (pool, sizeof (rspamd_proxy_t));
 
@@ -271,19 +229,11 @@ rspamd_create_proxy (gint cfd,
 	new->tv = tv;
 
 	/* Set client's and backend's interfaces to read events */
-	event_set (&new->client_ev,
-		new->cfd,
-		EV_READ,
-		rspamd_proxy_client_handler,
-		new);
+	event_set (&new->client_ev, new->cfd, EV_READ, rspamd_proxy_client_handler, new);
 	event_base_set (new->base, &new->client_ev);
 	event_add (&new->client_ev, new->tv);
 
-	event_set (&new->backend_ev,
-		new->bfd,
-		EV_READ,
-		rspamd_proxy_backend_handler,
-		new);
+	event_set (&new->backend_ev, new->bfd, EV_READ, rspamd_proxy_backend_handler, new);
 	event_base_set (new->base, &new->backend_ev);
 	event_add (&new->backend_ev, new->tv);
 

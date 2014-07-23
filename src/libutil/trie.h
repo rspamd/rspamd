@@ -58,7 +58,7 @@ typedef struct rspamd_trie_s {
 /*
  * Create a new suffix trie
  */
-rspamd_trie_t * rspamd_trie_create (gboolean icase);
+rspamd_trie_t*	rspamd_trie_create (gboolean icase);
 
 /*
  * Insert a pattern into the trie
@@ -66,9 +66,7 @@ rspamd_trie_t * rspamd_trie_create (gboolean icase);
  * @param pattern text of element
  * @param pattern_id id of element
  */
-void rspamd_trie_insert (rspamd_trie_t *trie,
-	const gchar *pattern,
-	gint pattern_id);
+void rspamd_trie_insert (rspamd_trie_t *trie, const gchar *pattern, gint pattern_id);
 
 /*
  * Search for a text using suffix trie
@@ -78,10 +76,7 @@ void rspamd_trie_insert (rspamd_trie_t *trie,
  * @param mached_id on a successfull search here would be stored id of pattern found
  * @return Position in a text where pattern was found or NULL if no patterns were found
  */
-const gchar * rspamd_trie_lookup (rspamd_trie_t *trie,
-	const gchar *buffer,
-	gsize buflen,
-	gint *matched_id);
+const gchar* rspamd_trie_lookup (rspamd_trie_t *trie, const gchar *buffer, gsize buflen, gint *matched_id);
 
 /*
  * Deallocate suffix trie

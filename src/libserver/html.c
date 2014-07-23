@@ -23,15 +23,15 @@
  */
 
 #include "config.h"
-#include "html.h"
+#include "util.h"
 #include "main.h"
 #include "message.h"
+#include "html.h"
 #include "url.h"
-#include "util.h"
 
-static sig_atomic_t tags_sorted = 0;
+static sig_atomic_t                    tags_sorted = 0;
 
-static struct html_tag tag_defs[] = {
+static struct html_tag          tag_defs[] = {
 	/* W3C defined elements */
 	{Tag_A, "a", (CM_INLINE)},
 	{Tag_ABBR, "abbr", (CM_INLINE)},
@@ -93,8 +93,7 @@ static struct html_tag tag_defs[] = {
 	{Tag_META, "meta", (CM_HEAD | CM_EMPTY)},
 	{Tag_NOFRAMES, "noframes", (CM_BLOCK | CM_FRAMES)},
 	{Tag_NOSCRIPT, "noscript", (CM_BLOCK | CM_INLINE | CM_MIXED)},
-	{Tag_OBJECT, "object",
-	 (CM_OBJECT | CM_HEAD | CM_IMG | CM_INLINE | CM_PARAM)},
+	{Tag_OBJECT, "object", (CM_OBJECT | CM_HEAD | CM_IMG | CM_INLINE | CM_PARAM)},
 	{Tag_OL, "ol", (CM_BLOCK)},
 	{Tag_OPTGROUP, "optgroup", (CM_FIELD | CM_OPT)},
 	{Tag_OPTION, "option", (CM_FIELD | CM_OPT)},
@@ -157,21 +156,21 @@ static struct html_tag tag_defs[] = {
 	{Tag_WBR, "wbr", (CM_INLINE | CM_EMPTY)},
 };
 
-static sig_atomic_t entities_sorted = 0;
+static sig_atomic_t                    entities_sorted = 0;
 struct _entity;
-typedef struct _entity entity;
+typedef struct _entity          entity;
 
 struct _entity {
-	gchar *name;
-	uint code;
-	gchar *replacement;
+	gchar                           *name;
+	uint                            code;
+	gchar                           *replacement;
 };
 
 
-static entity entities_defs[] = {
+static entity                   entities_defs[] = {
 	/*
-	** Markup pre-defined character entities
-	*/
+	 ** Markup pre-defined character entities
+	 */
 	{"quot", 34, "\""},
 	{"amp", 38, "&"},
 	{"apos", 39, "'"},
@@ -179,8 +178,8 @@ static entity entities_defs[] = {
 	{"gt", 62, ">"},
 
 	/*
-	** Latin-1 character entities
-	*/
+	 ** Latin-1 character entities
+	 */
 	{"nbsp", 160, " "},
 	{"iexcl", 161, "!"},
 	{"cent", 162, "cent"},
@@ -279,8 +278,8 @@ static entity entities_defs[] = {
 	{"yuml", 255, "y"},
 
 	/*
-	** Extended Entities defined in HTML 4: Symbols
-	*/
+	 ** Extended Entities defined in HTML 4: Symbols 
+	 */
 	{"fnof", 402, "f"},
 	{"Alpha", 913, "alpha"},
 	{"Beta", 914, "beta"},
@@ -407,8 +406,8 @@ static entity entities_defs[] = {
 	{"diams", 9830, NULL},
 
 	/*
-	** Extended Entities defined in HTML 4: Special (less Markup at top)
-	*/
+	 ** Extended Entities defined in HTML 4: Special (less Markup at top)
+	 */
 	{"OElig", 338, NULL},
 	{"oelig", 339, NULL},
 	{"Scaron", 352, NULL},
@@ -444,8 +443,8 @@ static entity entities_defs_num[ (G_N_ELEMENTS (entities_defs)) ];
 static gint
 tag_cmp (const void *m1, const void *m2)
 {
-	const struct html_tag *p1 = m1;
-	const struct html_tag *p2 = m2;
+	const struct html_tag          *p1 = m1;
+	const struct html_tag          *p2 = m2;
 
 	return g_ascii_strcasecmp (p1->name, p2->name);
 }
@@ -453,8 +452,8 @@ tag_cmp (const void *m1, const void *m2)
 static gint
 entity_cmp (const void *m1, const void *m2)
 {
-	const entity *p1 = m1;
-	const entity *p2 = m2;
+	const entity                   *p1 = m1;
+	const entity                   *p2 = m2;
 
 	return g_ascii_strcasecmp (p1->name, p2->name);
 }
@@ -462,19 +461,19 @@ entity_cmp (const void *m1, const void *m2)
 static gint
 entity_cmp_num (const void *m1, const void *m2)
 {
-	const entity *p1 = m1;
-	const entity *p2 = m2;
+	const entity                   *p1 = m1;
+	const entity                   *p2 = m2;
 
 	return p1->code - p2->code;
 }
 
-static GNode *
+static GNode                   *
 construct_html_node (rspamd_mempool_t * pool, gchar *text, gsize tag_len)
 {
-	struct html_node *html;
-	GNode *n = NULL;
-	struct html_tag key, *found;
-	gchar t;
+	struct html_node               *html;
+	GNode                          *n = NULL;
+	struct html_tag                 key, *found;
+	gchar                           t;
 
 	if (text == NULL || *text == '\0') {
 		return NULL;
@@ -488,8 +487,7 @@ construct_html_node (rspamd_mempool_t * pool, gchar *text, gsize tag_len)
 	}
 
 	/* Check xml tag */
-	if (*text == '?' &&
-		g_ascii_strncasecmp (text + 1, "xml", sizeof ("xml") - 1) == 0) {
+	if (*text == '?' && g_ascii_strncasecmp (text + 1, "xml", sizeof ("xml") - 1) == 0) {
 		html->flags |= FL_XML;
 		html->tag = NULL;
 	}
@@ -501,15 +499,13 @@ construct_html_node (rspamd_mempool_t * pool, gchar *text, gsize tag_len)
 
 		/* Find end of tag name */
 		key.name = text;
-		while (*text && g_ascii_isalnum (*(++text))) ;
+		while (*text && g_ascii_isalnum (*(++text)));
 
 		t = *text;
 		*text = '\0';
 
 		/* Match tag id by tag name */
-		if ((found =
-			bsearch (&key, tag_defs, G_N_ELEMENTS (tag_defs),
-			sizeof (struct html_tag), tag_cmp)) != NULL) {
+		if ((found = bsearch (&key, tag_defs, G_N_ELEMENTS (tag_defs), sizeof (struct html_tag), tag_cmp)) != NULL) {
 			*text = t;
 			html->tag = found;
 		}
@@ -524,20 +520,18 @@ construct_html_node (rspamd_mempool_t * pool, gchar *text, gsize tag_len)
 	return n;
 }
 
-static gboolean
+static                          gboolean
 check_balance (GNode * node, GNode ** cur_level)
 {
-	struct html_node *arg = node->data, *tmp;
-	GNode *cur;
+	struct html_node               *arg = node->data, *tmp;
+	GNode                          *cur;
 
 	if (arg->flags & FL_CLOSING) {
 		/* First of all check whether this tag is closing tag for parent node */
 		cur = node->parent;
 		while (cur && cur->data) {
 			tmp = cur->data;
-			if ((tmp->tag &&
-				arg->tag) && tmp->tag->id == arg->tag->id &&
-				(tmp->flags & FL_CLOSED) == 0) {
+			if ((tmp->tag && arg->tag) && tmp->tag->id == arg->tag->id && (tmp->flags & FL_CLOSED) == 0) {
 				tmp->flags |= FL_CLOSED;
 				/* Destroy current node as we find corresponding parent node */
 				g_node_destroy (node);
@@ -555,28 +549,27 @@ check_balance (GNode * node, GNode ** cur_level)
 	return FALSE;
 }
 
-struct html_tag *
+struct html_tag                *
 get_tag_by_name (const gchar *name)
 {
-	struct html_tag key;
+	struct html_tag                 key;
 
 	key.name = name;
 
-	return bsearch (&key, tag_defs, G_N_ELEMENTS (tag_defs),
-			   sizeof (struct html_tag), tag_cmp);
+	return bsearch (&key, tag_defs, G_N_ELEMENTS (tag_defs), sizeof (struct html_tag), tag_cmp);
 }
 
 /* Decode HTML entitles in text */
 void
 decode_entitles (gchar *s, guint * len)
 {
-	guint l, rep_len;
-	gchar *t = s;                           /* t - tortoise */
-	gchar *h = s;                           /* h - hare     */
-	gchar *e = s;
-	gchar *end_ptr;
-	gint state = 0, val, base;
-	entity *found, key;
+	guint                           l, rep_len;
+	gchar                           *t = s;	/* t - tortoise */
+	gchar                           *h = s;	/* h - hare     */
+	gchar                           *e = s;
+	gchar                           *end_ptr;
+	gint                            state = 0, val, base;
+	entity                         *found, key;
 
 	if (len == NULL || *len == 0) {
 		l = strlen (s);
@@ -587,7 +580,7 @@ decode_entitles (gchar *s, guint * len)
 
 	while (h - s < (gint)l) {
 		switch (state) {
-		/* Out of entitle */
+			/* Out of entitle */
 		case 0:
 			if (*h == '&') {
 				state = 1;
@@ -608,10 +601,7 @@ decode_entitles (gchar *s, guint * len)
 
 				key.name = e + 1;
 				*h = '\0';
-				if (*(e + 1) != '#' &&
-					(found =
-					bsearch (&key, entities_defs, G_N_ELEMENTS (entities_defs),
-					sizeof (entity), entity_cmp)) != NULL) {
+				if (*(e + 1) != '#' && (found = bsearch (&key, entities_defs, G_N_ELEMENTS (entities_defs), sizeof (entity), entity_cmp)) != NULL) {
 					if (found->replacement) {
 						rep_len = strlen (found->replacement);
 						memcpy (t, found->replacement, rep_len);
@@ -641,10 +631,7 @@ decode_entitles (gchar *s, guint * len)
 					else {
 						/* Search for a replacement */
 						key.code = val;
-						found =
-							bsearch (&key, entities_defs_num, G_N_ELEMENTS (
-									entities_defs), sizeof (entity),
-								entity_cmp_num);
+						found = bsearch (&key, entities_defs_num, G_N_ELEMENTS (entities_defs), sizeof (entity), entity_cmp_num);
 						if (found) {
 							if (found->replacement) {
 								rep_len = strlen (found->replacement);
@@ -669,19 +656,15 @@ decode_entitles (gchar *s, guint * len)
 }
 
 static void
-check_phishing (struct rspamd_task *task,
-	struct uri *href_url,
-	const gchar *url_text,
-	gsize remain,
-	tag_id_t id)
+check_phishing (struct rspamd_task *task, struct uri *href_url, const gchar *url_text, gsize remain, tag_id_t id)
 {
-	struct uri *new;
-	gchar *url_str;
-	const gchar *p, *c;
-	gchar tagbuf[128];
-	struct html_tag *tag;
-	gsize len = 0;
-	gint rc;
+	struct uri                     *new;
+	gchar                          *url_str;
+	const gchar                    *p, *c;
+	gchar                           tagbuf[128];
+	struct html_tag                *tag;
+	gsize                           len = 0;
+	gint                            rc;
 
 	p = url_text;
 	while (len < remain) {
@@ -695,8 +678,8 @@ check_phishing (struct rspamd_task *task,
 			}
 			while (len < remain) {
 				if (!g_ascii_isspace (*p) && *p != '>') {
-					p++;
-					len++;
+					p ++;
+					len ++;
 				}
 				else {
 					break;
@@ -710,11 +693,11 @@ check_phishing (struct rspamd_task *task,
 				else if (tag->id == Tag_IMG) {
 					/* We should ignore IMG tag here */
 					while (len < remain && *p != '>' && *p != '<') {
-						p++;
-						len++;
+						p ++;
+						len ++;
 					}
 					if (*p == '>' && len < remain) {
-						p++;
+						p ++;
 					}
 
 					remain -= p - url_text;
@@ -724,21 +707,19 @@ check_phishing (struct rspamd_task *task,
 				}
 			}
 		}
-		len++;
-		p++;
+		len ++;
+		p ++;
 	}
 
-	if (url_try_text (task->task_pool, url_text, len, NULL, NULL, &url_str,
-		TRUE) && url_str != NULL) {
+	if (url_try_text (task->task_pool, url_text, len, NULL, NULL, &url_str, TRUE) && url_str != NULL) {
 		new = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct uri));
 		if (new != NULL) {
 			g_strstrip (url_str);
 			rc = parse_uri (new, url_str, task->task_pool);
 
-			if (rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES || rc ==
-				URI_ERRNO_NO_HOST_SLASH) {
+			if (rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES || rc == URI_ERRNO_NO_HOST_SLASH) {
 				if (g_ascii_strncasecmp (href_url->host, new->host,
-					MAX (href_url->hostlen, new->hostlen)) != 0) {
+						MAX (href_url->hostlen, new->hostlen)) != 0) {
 					/* Special check for urls beginning with 'www' */
 					if (new->hostlen > 4 && href_url->hostlen > 4) {
 						p = new->host;
@@ -781,9 +762,7 @@ check_phishing (struct rspamd_task *task,
 				}
 			}
 			else {
-				msg_info ("extract of url '%s' failed: %s",
-					url_str,
-					url_strerror (rc));
+				msg_info ("extract of url '%s' failed: %s", url_str, url_strerror (rc));
 			}
 		}
 	}
@@ -791,17 +770,13 @@ check_phishing (struct rspamd_task *task,
 }
 
 static void
-parse_tag_url (struct rspamd_task *task,
-	struct mime_text_part *part,
-	tag_id_t id,
-	gchar *tag_text,
-	gsize tag_len,
-	gsize remain)
+parse_tag_url (struct rspamd_task *task, struct mime_text_part *part, tag_id_t id,
+		gchar *tag_text, gsize tag_len, gsize remain)
 {
-	gchar *c = NULL, *p, *url_text;
-	gint len, rc;
-	struct uri *url;
-	gboolean got_single_quote = FALSE, got_double_quote = FALSE;
+	gchar                           *c = NULL, *p, *url_text;
+	gint                            len, rc;
+	struct uri                     *url;
+	gboolean                        got_single_quote = FALSE, got_double_quote = FALSE;
 
 	/* For A tags search for href= and for IMG tags search for src= */
 	if (id == Tag_A) {
@@ -839,8 +814,7 @@ parse_tag_url (struct rspamd_task *task,
 					len++;
 				}
 			}
-			else if (g_ascii_isspace (*p) || *p == '>' ||
-				(*p == '/' && *(p + 1) == '>') || *p == '\r' || *p == '\n') {
+			else if (g_ascii_isspace (*p) || *p == '>' || (*p == '/' && *(p + 1) == '>') || *p == '\r' || *p == '\n') {
 				break;
 			}
 			else {
@@ -869,27 +843,22 @@ parse_tag_url (struct rspamd_task *task,
 		rspamd_strlcpy (url_text, c, len + 1);
 		decode_entitles (url_text, NULL);
 
-		if (g_ascii_strncasecmp (url_text, "http://",
-			sizeof ("http://") - 1) != 0 &&
-			g_ascii_strncasecmp (url_text, "www",
-			sizeof ("www") - 1) != 0 &&
-			g_ascii_strncasecmp (url_text, "ftp://",
-			sizeof ("ftp://") - 1) != 0 &&
-			g_ascii_strncasecmp (url_text, "mailto:",
-			sizeof ("mailto:") - 1) != 0) {
+		if (g_ascii_strncasecmp (url_text, "http://", sizeof ("http://") - 1) != 0 &&
+				g_ascii_strncasecmp (url_text, "www", sizeof ("www") - 1) != 0 &&
+				g_ascii_strncasecmp (url_text, "ftp://", sizeof ("ftp://") - 1) != 0 &&
+				g_ascii_strncasecmp (url_text, "mailto:", sizeof ("mailto:") - 1) != 0) {
 			return;
 		}
 
 		url = rspamd_mempool_alloc (task->task_pool, sizeof (struct uri));
 		rc = parse_uri (url, url_text, task->task_pool);
 
-		if (rc != URI_ERRNO_EMPTY && rc != URI_ERRNO_NO_HOST && url->hostlen !=
-			0) {
+		if (rc != URI_ERRNO_EMPTY && rc != URI_ERRNO_NO_HOST && url->hostlen != 0) {
 			/*
 			 * Check for phishing
 			 */
 			if ((p = strchr (c, '>')) != NULL && id == Tag_A) {
-				p++;
+				p ++;
 				check_phishing (task, url, p, remain - (p - tag_text), id);
 			}
 			if (g_tree_lookup (task->urls, url) == NULL) {
@@ -900,28 +869,20 @@ parse_tag_url (struct rspamd_task *task,
 }
 
 gboolean
-add_html_node (struct rspamd_task *task,
-	rspamd_mempool_t * pool,
-	struct mime_text_part *part,
-	gchar *tag_text,
-	gsize tag_len,
-	gsize remain,
-	GNode ** cur_level)
+add_html_node (struct rspamd_task *task, rspamd_mempool_t * pool, struct mime_text_part *part,
+		gchar *tag_text, gsize tag_len, gsize remain, GNode ** cur_level)
 {
-	GNode *new;
-	struct html_node *data;
+	GNode                          *new;
+	struct html_node               *data;
 
 	if (!tags_sorted) {
-		qsort (tag_defs, G_N_ELEMENTS (
-				tag_defs), sizeof (struct html_tag), tag_cmp);
+		qsort (tag_defs, G_N_ELEMENTS (tag_defs), sizeof (struct html_tag), tag_cmp);
 		tags_sorted = 1;
 	}
 	if (!entities_sorted) {
-		qsort (entities_defs, G_N_ELEMENTS (
-				entities_defs), sizeof (entity), entity_cmp);
+		qsort (entities_defs, G_N_ELEMENTS (entities_defs), sizeof (entity), entity_cmp);
 		memcpy (entities_defs_num, entities_defs, sizeof (entities_defs));
-		qsort (entities_defs_num, G_N_ELEMENTS (
-				entities_defs), sizeof (entity), entity_cmp_num);
+		qsort (entities_defs_num, G_N_ELEMENTS (entities_defs), sizeof (entity), entity_cmp_num);
 		entities_sorted = 1;
 	}
 
@@ -931,32 +892,19 @@ add_html_node (struct rspamd_task *task,
 		new = g_node_new (NULL);
 		*cur_level = new;
 		part->html_nodes = new;
-		rspamd_mempool_add_destructor (pool,
-			(rspamd_mempool_destruct_t) g_node_destroy,
-			part->html_nodes);
+		rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t) g_node_destroy, part->html_nodes);
 		/* Call once again with root node */
-		return add_html_node (task,
-				   pool,
-				   part,
-				   tag_text,
-				   tag_len,
-				   remain,
-				   cur_level);
+		return add_html_node (task, pool, part, tag_text, tag_len, remain, cur_level);
 	}
 	else {
 		new = construct_html_node (pool, tag_text, tag_len);
 		if (new == NULL) {
-			debug_task ("cannot construct HTML node for text '%*s'",
-				tag_len,
-				tag_text);
+			debug_task ("cannot construct HTML node for text '%*s'", tag_len, tag_text);
 			return FALSE;
 		}
 		data = new->data;
-		if (data->tag &&
-			(data->tag->id == Tag_A ||
-			data->tag->id == Tag_IMG) && ((data->flags & FL_CLOSING) == 0)) {
-			parse_tag_url (task, part, data->tag->id, tag_text, tag_len,
-				remain);
+		if (data->tag && (data->tag->id == Tag_A || data->tag->id == Tag_IMG) && ((data->flags & FL_CLOSING) == 0)) {
+			parse_tag_url (task, part, data->tag->id, tag_text, tag_len, remain);
 		}
 
 		if (data->flags & FL_CLOSING) {
@@ -966,8 +914,7 @@ add_html_node (struct rspamd_task *task,
 			}
 			g_node_append (*cur_level, new);
 			if (!check_balance (new, cur_level)) {
-				debug_task (
-					"mark part as unbalanced as it has not pairable closing tags");
+				debug_task ("mark part as unbalanced as it has not pairable closing tags");
 				part->is_balanced = FALSE;
 			}
 		}
@@ -979,9 +926,9 @@ add_html_node (struct rspamd_task *task,
 			}
 			/* Skip some tags */
 			if (data->tag && (data->tag->id == Tag_STYLE ||
-				data->tag->id == Tag_SCRIPT ||
-				data->tag->id == Tag_OBJECT ||
-				data->tag->id == Tag_TITLE)) {
+							  data->tag->id == Tag_SCRIPT ||
+							  data->tag->id == Tag_OBJECT ||
+							  data->tag->id == Tag_TITLE)) {
 				return FALSE;
 			}
 		}

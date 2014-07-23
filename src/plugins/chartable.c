@@ -31,11 +31,11 @@
  *   (e.g. if threshold is 0.1 than charset change should occure more often than in 10 symbols), default: 0.1
  */
 
-#include "cfg_file.h"
 #include "config.h"
-#include "expressions.h"
 #include "main.h"
 #include "message.h"
+#include "cfg_file.h"
+#include "expressions.h"
 
 #define DEFAULT_SYMBOL "R_CHARSET_MIXED"
 #define DEFAULT_THRESHOLD 0.1
@@ -54,17 +54,17 @@ module_t chartable_module = {
 };
 
 struct chartable_ctx {
-	gint (*filter) (struct rspamd_task * task);
-	const gchar *symbol;
-	double threshold;
+	gint                            (*filter) (struct rspamd_task * task);
+	const gchar                    *symbol;
+	double                          threshold;
 
-	rspamd_mempool_t *chartable_pool;
+	rspamd_mempool_t                  *chartable_pool;
 };
 
-static struct chartable_ctx *chartable_module_ctx = NULL;
+static struct chartable_ctx    *chartable_module_ctx = NULL;
 
-static gint chartable_mime_filter (struct rspamd_task *task);
-static void chartable_symbol_callback (struct rspamd_task *task, void *unused);
+static gint                      chartable_mime_filter (struct rspamd_task *task);
+static void                     chartable_symbol_callback (struct rspamd_task *task, void *unused);
 
 gint
 chartable_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
@@ -72,8 +72,7 @@ chartable_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 	chartable_module_ctx = g_malloc (sizeof (struct chartable_ctx));
 
 	chartable_module_ctx->filter = chartable_mime_filter;
-	chartable_module_ctx->chartable_pool = rspamd_mempool_new (
-		rspamd_mempool_suggest_size ());
+	chartable_module_ctx->chartable_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
 	*ctx = (struct module_ctx *)chartable_module_ctx;
 
@@ -84,18 +83,16 @@ chartable_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 gint
 chartable_module_config (struct rspamd_config *cfg)
 {
-	const ucl_object_t *value;
-	gint res = TRUE;
+	const ucl_object_t             *value;
+	gint                            res = TRUE;
 
-	if ((value =
-		rspamd_config_get_module_opt (cfg, "chartable", "symbol")) != NULL) {
+	if ((value = rspamd_config_get_module_opt (cfg, "chartable", "symbol")) != NULL) {
 		chartable_module_ctx->symbol = ucl_obj_tostring (value);
 	}
 	else {
 		chartable_module_ctx->symbol = DEFAULT_SYMBOL;
-	}
-	if ((value =
-		rspamd_config_get_module_opt (cfg, "chartable", "threshold")) != NULL) {
+	} 
+	if ((value = rspamd_config_get_module_opt (cfg, "chartable", "threshold")) != NULL) {
 		if (!ucl_obj_todouble_safe (value, &chartable_module_ctx->threshold)) {
 			msg_warn ("invalid numeric value");
 			chartable_module_ctx->threshold = DEFAULT_THRESHOLD;
@@ -105,11 +102,7 @@ chartable_module_config (struct rspamd_config *cfg)
 		chartable_module_ctx->threshold = DEFAULT_THRESHOLD;
 	}
 
-	register_symbol (&cfg->cache,
-		chartable_module_ctx->symbol,
-		1,
-		chartable_symbol_callback,
-		NULL);
+	register_symbol (&cfg->cache, chartable_module_ctx->symbol, 1, chartable_symbol_callback, NULL);
 
 	return res;
 }
@@ -123,31 +116,27 @@ chartable_module_reconfig (struct rspamd_config *cfg)
 	return chartable_module_config (cfg);
 }
 
-static gboolean
+static                          gboolean
 check_part (struct mime_text_part *part, gboolean raw_mode)
 {
-	guchar *p, *p1;
-	gunichar c, t;
-	GUnicodeScript scc, sct;
-	guint32 mark = 0, total = 0, max = 0, i;
-	guint32 remain = part->content->len;
-	guint32 scripts[G_UNICODE_SCRIPT_NKO];
-	GUnicodeScript sel = 0;
+	guchar                          *p, *p1;
+	gunichar                        c, t;
+	GUnicodeScript                  scc, sct;
+	guint32                         mark = 0, total = 0, max = 0, i;
+	guint32                         remain = part->content->len;
+	guint32                         scripts[G_UNICODE_SCRIPT_NKO];
+	GUnicodeScript                  sel = 0;
 
 	p = part->content->data;
 
 	if (part->is_raw || raw_mode) {
 		while (remain > 1) {
-			if ((g_ascii_isalpha (*p) &&
-				(*(p + 1) & 0x80)) ||
-				((*p & 0x80) && g_ascii_isalpha (*(p + 1)))) {
+			if ((g_ascii_isalpha (*p) && (*(p + 1) & 0x80)) || ((*p & 0x80) && g_ascii_isalpha (*(p + 1)))) {
 				mark++;
 				total++;
 			}
 			/* Current and next symbols are of one class */
-			else if (((*p & 0x80) &&
-				(*(p + 1) & 0x80)) ||
-				(g_ascii_isalpha (*p) && g_ascii_isalpha (*(p + 1)))) {
+			else if (((*p & 0x80) && (*(p + 1) & 0x80)) || (g_ascii_isalpha (*p) && g_ascii_isalpha (*(p + 1)))) {
 				total++;
 			}
 			p++;
@@ -158,14 +147,14 @@ check_part (struct mime_text_part *part, gboolean raw_mode)
 		memset (&scripts, 0, sizeof (scripts));
 		while (remain > 0) {
 			c = g_utf8_get_char_validated (p, remain);
-			if (c == (gunichar) - 2 || c == (gunichar) - 1) {
+			if (c == (gunichar) -2 || c == (gunichar) -1) {
 				/* Invalid characters detected, stop processing */
 				return FALSE;
 			}
 
 			scc = g_unichar_get_script (c);
 			if (scc < (gint)G_N_ELEMENTS (scripts)) {
-				scripts[scc]++;
+				scripts[scc] ++;
 			}
 			p1 = g_utf8_next_char (p);
 			remain -= p1 - p;
@@ -173,7 +162,7 @@ check_part (struct mime_text_part *part, gboolean raw_mode)
 
 			if (remain > 0) {
 				t = g_utf8_get_char_validated (p, remain);
-				if (t == (gunichar) - 2 || t == (gunichar) - 1) {
+				if (t == (gunichar) -2 || t == (gunichar) -1) {
 					/* Invalid characters detected, stop processing */
 					return FALSE;
 				}
@@ -191,7 +180,7 @@ check_part (struct mime_text_part *part, gboolean raw_mode)
 			}
 		}
 		/* Detect the mostly charset of this part */
-		for (i = 0; i < G_N_ELEMENTS (scripts); i++) {
+		for (i = 0; i < G_N_ELEMENTS (scripts); i ++) {
 			if (scripts[i] > max) {
 				max = scripts[i];
 				sel = i;
@@ -210,8 +199,8 @@ check_part (struct mime_text_part *part, gboolean raw_mode)
 static void
 chartable_symbol_callback (struct rspamd_task *task, void *unused)
 {
-	GList *cur;
-	struct mime_text_part *part;
+	GList                          *cur;
+	struct mime_text_part          *part;
 
 	cur = g_list_first (task->text_parts);
 	while (cur) {

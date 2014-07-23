@@ -2,8 +2,8 @@
 #define RSPAMD_FUZZY_STORAGE_H
 
 #include "config.h"
-#include "fuzzy.h"
 #include "main.h"
+#include "fuzzy.h"
 
 /* Commands for fuzzy storage */
 #define FUZZY_CHECK 0

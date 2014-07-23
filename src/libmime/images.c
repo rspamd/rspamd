@@ -32,20 +32,19 @@ static const guint8 jpg_sig2[] = {'J', 'F', 'I', 'F'};
 static const guint8 gif_signature[] = {'G', 'I', 'F', '8'};
 static const guint8 bmp_signature[] = {'B', 'M'};
 
-static void process_image (struct rspamd_task *task, struct mime_part *part);
+static void                     process_image (struct rspamd_task *task, struct mime_part *part);
 
 
 void
 process_images (struct rspamd_task *task)
 {
-	GList *cur;
-	struct mime_part *part;
+	GList                          *cur;
+	struct mime_part			   *part;
 
 	cur = task->parts;
 	while (cur) {
 		part = cur->data;
-		if (g_mime_content_type_is_type (part->type, "image",
-			"*") && part->content->len > 0) {
+		if (g_mime_content_type_is_type (part->type, "image", "*") && part->content->len > 0) {
 			process_image (task, part);
 		}
 		cur = g_list_next (cur);
@@ -86,9 +85,9 @@ detect_image_type (GByteArray *data)
 static struct rspamd_image *
 process_png_image (struct rspamd_task *task, GByteArray *data)
 {
-	struct rspamd_image *img;
-	guint32 t;
-	guint8 *p;
+	struct rspamd_image             *img;
+	guint32                          t;
+	guint8                          *p;
 
 	if (data->len < 24) {
 		msg_info ("bad png detected (maybe striped): <%s>", task->message_id);
@@ -120,10 +119,10 @@ process_png_image (struct rspamd_task *task, GByteArray *data)
 static struct rspamd_image *
 process_jpg_image (struct rspamd_task *task, GByteArray *data)
 {
-	guint8 *p;
-	guint16 t;
-	gsize remain;
-	struct rspamd_image *img;
+	guint8                          *p;
+	guint16                          t;
+	gsize                            remain;
+	struct rspamd_image             *img;
 
 	img = rspamd_mempool_alloc (task->task_pool, sizeof (struct rspamd_image));
 	img->type = IMAGE_TYPE_JPG;
@@ -132,16 +131,15 @@ process_jpg_image (struct rspamd_task *task, GByteArray *data)
 	p = data->data;
 	remain = data->len;
 	/* In jpeg we should find any data stream (ff c0 .. ff c3) and extract its height and width */
-	while (remain--) {
-		if (*p == 0xFF && remain > 8 &&
-			(*(p + 1) >= 0xC0 && *(p + 1) <= 0xC3)) {
+	while (remain --) {
+		if (*p == 0xFF && remain > 8 && (*(p + 1) >= 0xC0 && *(p + 1) <= 0xC3)) {
 			memcpy (&t, p + 5, sizeof (guint16));
 			img->height = ntohs (t);
 			memcpy (&t, p + 7, sizeof (guint16));
 			img->width = ntohs (t);
 			return img;
 		}
-		p++;
+		p ++;
 	}
 
 	return NULL;
@@ -150,9 +148,9 @@ process_jpg_image (struct rspamd_task *task, GByteArray *data)
 static struct rspamd_image *
 process_gif_image (struct rspamd_task *task, GByteArray *data)
 {
-	struct rspamd_image *img;
-	guint8 *p;
-	guint16 t;
+	struct rspamd_image             *img;
+	guint8                          *p;
+	guint16                          t;
 
 	if (data->len < 10) {
 		msg_info ("bad gif detected (maybe striped): <%s>", task->message_id);
@@ -164,7 +162,7 @@ process_gif_image (struct rspamd_task *task, GByteArray *data)
 	img->data = data;
 
 	p = data->data + 6;
-	memcpy (&t, p,	   sizeof (guint16));
+	memcpy (&t, p, sizeof (guint16));
 	img->width = GUINT16_FROM_LE (t);
 	memcpy (&t, p + 2, sizeof (guint16));
 	img->height = GUINT16_FROM_LE (t);
@@ -175,9 +173,9 @@ process_gif_image (struct rspamd_task *task, GByteArray *data)
 static struct rspamd_image *
 process_bmp_image (struct rspamd_task *task, GByteArray *data)
 {
-	struct rspamd_image *img;
-	gint32 t;
-	guint8 *p;
+	struct rspamd_image             *img;
+	gint32                           t;
+	guint8                          *p;
 
 
 
@@ -190,7 +188,7 @@ process_bmp_image (struct rspamd_task *task, GByteArray *data)
 	img->type = IMAGE_TYPE_BMP;
 	img->data = data;
 	p = data->data + 18;
-	memcpy (&t, p,	   sizeof (gint32));
+	memcpy (&t, p, sizeof (gint32));
 	img->width = abs (GINT32_FROM_LE (t));
 	memcpy (&t, p + 4, sizeof (gint32));
 	img->height = abs (GINT32_FROM_LE (t));
@@ -201,8 +199,8 @@ process_bmp_image (struct rspamd_task *task, GByteArray *data)
 static void
 process_image (struct rspamd_task *task, struct mime_part *part)
 {
-	enum known_image_types type;
-	struct rspamd_image *img = NULL;
+	enum known_image_types          type;
+	struct rspamd_image            *img = NULL;
 	if ((type = detect_image_type (part->content)) != IMAGE_TYPE_UNKNOWN) {
 		switch (type) {
 		case IMAGE_TYPE_PNG:
@@ -225,9 +223,9 @@ process_image (struct rspamd_task *task, struct mime_part *part)
 
 	if (img != NULL) {
 		debug_task ("detected %s image of size %ud x %ud in message <%s>",
-			image_type_str (img->type),
-			img->width, img->height,
-			task->message_id);
+				image_type_str (img->type),
+				img->width, img->height,
+				task->message_id);
 		img->filename = part->filename;
 		task->images = g_list_prepend (task->images, img);
 	}

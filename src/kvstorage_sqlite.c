@@ -25,15 +25,13 @@
 #include "config.h"
 #include "kvstorage.h"
 #include "kvstorage_sqlite.h"
-#include "main.h"
 #include "util.h"
+#include "main.h"
 #include <sqlite3.h>
 
 #define TABLE_NAME "kvstorage"
-#define CREATE_TABLE_SQL "CREATE TABLE " TABLE_NAME \
-	" (key TEXT CONSTRAINT _key PRIMARY KEY, data BLOB)"
-#define SET_SQL "INSERT OR REPLACE INTO " TABLE_NAME \
-	" (key, data) VALUES (?1, ?2)"
+#define CREATE_TABLE_SQL "CREATE TABLE " TABLE_NAME " (key TEXT CONSTRAINT _key PRIMARY KEY, data BLOB)"
+#define SET_SQL "INSERT OR REPLACE INTO " TABLE_NAME " (key, data) VALUES (?1, ?2)"
 #define GET_SQL "SELECT data FROM " TABLE_NAME " WHERE key = ?1"
 #define DELETE_SQL "DELETE FROM " TABLE_NAME " WHERE key = ?1"
 
@@ -48,13 +46,13 @@ struct sqlite_op {
 
 /* Main sqlite structure */
 struct rspamd_sqlite_backend {
-	backend_init init_func;                     /*< this callback is called on kv storage initialization */
-	backend_insert insert_func;                 /*< this callback is called when element is inserted */
-	backend_replace replace_func;               /*< this callback is called when element is replaced */
-	backend_lookup lookup_func;                 /*< this callback is used for lookup of element */
-	backend_delete delete_func;                 /*< this callback is called when an element is deleted */
-	backend_sync sync_func;                     /*< this callback is called when backend need to be synced */
-	backend_destroy destroy_func;               /*< this callback is used for destroying all elements inside backend */
+	backend_init init_func;						/*< this callback is called on kv storage initialization */
+	backend_insert insert_func;					/*< this callback is called when element is inserted */
+	backend_replace replace_func;				/*< this callback is called when element is replaced */
+	backend_lookup lookup_func;					/*< this callback is used for lookup of element */
+	backend_delete delete_func;					/*< this callback is called when an element is deleted */
+	backend_sync sync_func;						/*< this callback is called when backend need to be synced */
+	backend_destroy destroy_func;				/*< this callback is used for destroying all elements inside backend */
 	sqlite3 *dbp;
 	gchar *filename;
 	gchar *dirname;
@@ -69,19 +67,16 @@ struct rspamd_sqlite_backend {
 
 /* Process single sqlite operation */
 static gboolean
-sqlite_process_single_op (struct rspamd_sqlite_backend *db,
-	struct sqlite_op *op)
+sqlite_process_single_op (struct rspamd_sqlite_backend *db, struct sqlite_op *op)
 {
-	gboolean res = FALSE;
+	gboolean									 res = FALSE;
 
 	op->elt->flags &= ~KV_ELT_DIRTY;
 	switch (op->op) {
 	case SQLITE_OP_INSERT:
 	case SQLITE_OP_REPLACE:
-		if (sqlite3_bind_text (db->set_stmt, 1, ELT_KEY (op->elt),
-			op->elt->keylen, SQLITE_STATIC) == SQLITE_OK &&
-			sqlite3_bind_blob (db->set_stmt, 2, op->elt, ELT_SIZE (op->elt),
-			SQLITE_STATIC) == SQLITE_OK) {
+		if (sqlite3_bind_text (db->set_stmt, 1, ELT_KEY (op->elt), op->elt->keylen, SQLITE_STATIC) == SQLITE_OK &&
+				sqlite3_bind_blob (db->set_stmt, 2, op->elt, ELT_SIZE (op->elt), SQLITE_STATIC) == SQLITE_OK) {
 			if (sqlite3_step (db->set_stmt) == SQLITE_DONE) {
 				res = TRUE;
 			}
@@ -89,8 +84,7 @@ sqlite_process_single_op (struct rspamd_sqlite_backend *db,
 		sqlite3_reset (db->set_stmt);
 		break;
 	case SQLITE_OP_DELETE:
-		if (sqlite3_bind_text (db->delete_stmt, 1, ELT_KEY (op->elt),
-			op->elt->keylen, SQLITE_STATIC) == SQLITE_OK) {
+		if (sqlite3_bind_text (db->delete_stmt, 1, ELT_KEY (op->elt), op->elt->keylen, SQLITE_STATIC) == SQLITE_OK) {
 			if (sqlite3_step (db->delete_stmt) == SQLITE_DONE) {
 				res = TRUE;
 			}
@@ -109,14 +103,14 @@ sqlite_process_single_op (struct rspamd_sqlite_backend *db,
 static gboolean
 sqlite_process_queue (struct rspamd_kv_backend *backend)
 {
-	struct rspamd_sqlite_backend *db = (struct rspamd_sqlite_backend *)backend;
-	struct sqlite_op *op;
-	GList *cur;
+	struct rspamd_sqlite_backend				*db = (struct rspamd_sqlite_backend *)backend;
+	struct sqlite_op							*op;
+	GList										*cur;
 
 	cur = db->ops_queue->head;
 	while (cur) {
 		op = cur->data;
-		if (!sqlite_process_single_op (db, op)) {
+		if (! sqlite_process_single_op (db, op)) {
 			return FALSE;
 		}
 		cur = g_list_next (cur);
@@ -126,8 +120,7 @@ sqlite_process_queue (struct rspamd_kv_backend *backend)
 	cur = db->ops_queue->head;
 	while (cur) {
 		op = cur->data;
-		if (op->op == SQLITE_OP_DELETE || (op->elt->flags & KV_ELT_NEED_FREE) !=
-			0) {
+		if (op->op == SQLITE_OP_DELETE || (op->elt->flags & KV_ELT_NEED_FREE) != 0) {
 			/* Also clean memory */
 			g_slice_free1 (ELT_SIZE (op->elt), op->elt);
 		}
@@ -146,15 +139,10 @@ sqlite_process_queue (struct rspamd_kv_backend *backend)
 static gboolean
 rspamd_sqlite_create_table (struct rspamd_sqlite_backend *db)
 {
-	gint ret;
-	sqlite3_stmt *stmt = NULL;
+	gint										 ret;
+	sqlite3_stmt								*stmt = NULL;
 
-	ret =
-		sqlite3_prepare_v2 (db->dbp,
-			CREATE_TABLE_SQL,
-			sizeof (CREATE_TABLE_SQL) - 1,
-			&stmt,
-			NULL);
+	ret = sqlite3_prepare_v2 (db->dbp, CREATE_TABLE_SQL, sizeof (CREATE_TABLE_SQL) - 1, &stmt, NULL);
 	if (ret != SQLITE_OK) {
 		if (stmt != NULL) {
 			sqlite3_finalize (stmt);
@@ -176,11 +164,11 @@ rspamd_sqlite_create_table (struct rspamd_sqlite_backend *db)
 static void
 rspamd_sqlite_init (struct rspamd_kv_backend *backend)
 {
-	struct rspamd_sqlite_backend *db = (struct rspamd_sqlite_backend *)backend;
-	guint32 flags;
-	gint ret, r;
-	gchar sqlbuf[BUFSIZ];
-	sqlite3_stmt *stmt = NULL;
+	struct rspamd_sqlite_backend				*db = (struct rspamd_sqlite_backend *)backend;
+	guint32										 flags;
+	gint										 ret, r;
+	gchar										 sqlbuf[BUFSIZ];
+	sqlite3_stmt								*stmt = NULL;
 
 	/* Set multi-threaded mode */
 	if (sqlite3_config (SQLITE_CONFIG_MULTITHREAD) != SQLITE_OK) {
@@ -188,8 +176,8 @@ rspamd_sqlite_init (struct rspamd_kv_backend *backend)
 	}
 
 	flags = SQLITE_OPEN_READWRITE |
-		SQLITE_OPEN_CREATE |
-		SQLITE_OPEN_NOMUTEX;
+			SQLITE_OPEN_CREATE    |
+			SQLITE_OPEN_NOMUTEX;
 
 	ret = sqlite3_open_v2 (db->filename, &db->dbp, flags, NULL);
 
@@ -197,9 +185,7 @@ rspamd_sqlite_init (struct rspamd_kv_backend *backend)
 		goto err;
 	}
 	/* Now check if we have table */
-	r = rspamd_snprintf (sqlbuf,
-			sizeof (sqlbuf),
-			"SELECT * FROM " TABLE_NAME " LIMIT 1");
+	r = rspamd_snprintf (sqlbuf, sizeof (sqlbuf), "SELECT * FROM " TABLE_NAME " LIMIT 1");
 	ret = sqlite3_prepare_v2 (db->dbp, sqlbuf, r, &stmt, NULL);
 
 	if (ret == SQLITE_ERROR) {
@@ -223,27 +209,15 @@ rspamd_sqlite_init (struct rspamd_kv_backend *backend)
 	sqlite3_finalize (stmt);
 
 	/* Prepare required statements */
-	ret = sqlite3_prepare_v2 (db->dbp,
-			GET_SQL,
-			sizeof (GET_SQL) - 1,
-			&db->get_stmt,
-			NULL);
+	ret = sqlite3_prepare_v2 (db->dbp, GET_SQL, sizeof (GET_SQL) - 1, &db->get_stmt, NULL);
 	if (ret != SQLITE_OK) {
 		goto err;
 	}
-	ret = sqlite3_prepare_v2 (db->dbp,
-			SET_SQL,
-			sizeof (SET_SQL) - 1,
-			&db->set_stmt,
-			NULL);
+	ret = sqlite3_prepare_v2 (db->dbp, SET_SQL, sizeof (SET_SQL) - 1, &db->set_stmt, NULL);
 	if (ret != SQLITE_OK) {
 		goto err;
 	}
-	ret = sqlite3_prepare_v2 (db->dbp,
-			DELETE_SQL,
-			sizeof (DELETE_SQL) - 1,
-			&db->delete_stmt,
-			NULL);
+	ret = sqlite3_prepare_v2 (db->dbp, DELETE_SQL, sizeof (DELETE_SQL) - 1, &db->delete_stmt, NULL);
 	if (ret != SQLITE_OK) {
 		goto err;
 	}
@@ -271,14 +245,11 @@ err:
 }
 
 static gboolean
-rspamd_sqlite_insert (struct rspamd_kv_backend *backend,
-	gpointer key,
-	guint keylen,
-	struct rspamd_kv_element *elt)
+rspamd_sqlite_insert (struct rspamd_kv_backend *backend, gpointer key, guint keylen, struct rspamd_kv_element *elt)
 {
-	struct rspamd_sqlite_backend *db = (struct rspamd_sqlite_backend *)backend;
-	struct sqlite_op *op;
-	struct rspamd_kv_element search_elt;
+	struct rspamd_sqlite_backend				*db = (struct rspamd_sqlite_backend *)backend;
+	struct sqlite_op							*op;
+	struct rspamd_kv_element			 		 search_elt;
 
 	search_elt.keylen = keylen;
 	search_elt.p = key;
@@ -289,8 +260,7 @@ rspamd_sqlite_insert (struct rspamd_kv_backend *backend,
 
 	if ((op = g_hash_table_lookup (db->ops_hash, &search_elt)) != NULL) {
 		/* We found another op with such key in this queue */
-		if (op->op == SQLITE_OP_DELETE || (op->elt->flags & KV_ELT_NEED_FREE) !=
-			0) {
+		if (op->op == SQLITE_OP_DELETE || (op->elt->flags & KV_ELT_NEED_FREE) != 0) {
 			/* Also clean memory */
 			g_slice_free1 (ELT_SIZE (op->elt), op->elt);
 		}
@@ -307,8 +277,7 @@ rspamd_sqlite_insert (struct rspamd_kv_backend *backend,
 		g_hash_table_insert (db->ops_hash, elt, op);
 	}
 
-	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >=
-		db->sync_ops) {
+	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >= db->sync_ops) {
 		return sqlite_process_queue (backend);
 	}
 
@@ -316,21 +285,17 @@ rspamd_sqlite_insert (struct rspamd_kv_backend *backend,
 }
 
 static gboolean
-rspamd_sqlite_replace (struct rspamd_kv_backend *backend,
-	gpointer key,
-	guint keylen,
-	struct rspamd_kv_element *elt)
+rspamd_sqlite_replace (struct rspamd_kv_backend *backend, gpointer key, guint keylen, struct rspamd_kv_element *elt)
 {
-	struct rspamd_sqlite_backend *db = (struct rspamd_sqlite_backend *)backend;
-	struct sqlite_op *op;
+	struct rspamd_sqlite_backend				*db = (struct rspamd_sqlite_backend *)backend;
+	struct sqlite_op							*op;
 
 	if (!db->initialized) {
 		return FALSE;
 	}
 	if ((op = g_hash_table_lookup (db->ops_hash, elt)) != NULL) {
 		/* We found another op with such key in this queue */
-		if (op->op == SQLITE_OP_DELETE || (op->elt->flags & KV_ELT_NEED_FREE) !=
-			0) {
+		if (op->op == SQLITE_OP_DELETE || (op->elt->flags & KV_ELT_NEED_FREE) != 0) {
 			/* Also clean memory */
 			g_slice_free1 (ELT_SIZE (op->elt), op->elt);
 		}
@@ -347,25 +312,22 @@ rspamd_sqlite_replace (struct rspamd_kv_backend *backend,
 		g_hash_table_insert (db->ops_hash, elt, op);
 	}
 
-	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >=
-		db->sync_ops) {
+	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >= db->sync_ops) {
 		return sqlite_process_queue (backend);
 	}
 
 	return TRUE;
 }
 
-static struct rspamd_kv_element *
-rspamd_sqlite_lookup (struct rspamd_kv_backend *backend,
-	gpointer key,
-	guint keylen)
+static struct rspamd_kv_element*
+rspamd_sqlite_lookup (struct rspamd_kv_backend *backend, gpointer key, guint keylen)
 {
-	struct rspamd_sqlite_backend *db = (struct rspamd_sqlite_backend *)backend;
-	struct sqlite_op *op;
-	struct rspamd_kv_element *elt = NULL;
-	gint l;
-	gconstpointer d;
-	struct rspamd_kv_element search_elt;
+	struct rspamd_sqlite_backend				*db = (struct rspamd_sqlite_backend *)backend;
+	struct sqlite_op							*op;
+	struct rspamd_kv_element					*elt = NULL;
+	gint										 l;
+	gconstpointer								 d;
+	struct rspamd_kv_element			 		 search_elt;
 
 	search_elt.keylen = keylen;
 	search_elt.p = key;
@@ -382,8 +344,7 @@ rspamd_sqlite_lookup (struct rspamd_kv_backend *backend,
 		return op->elt;
 	}
 
-	if (sqlite3_bind_text (db->get_stmt, 1, key, keylen,
-		SQLITE_STATIC) == SQLITE_OK) {
+	if (sqlite3_bind_text (db->get_stmt, 1, key, keylen, SQLITE_STATIC) == SQLITE_OK) {
 		if (sqlite3_step (db->get_stmt) == SQLITE_ROW) {
 			l = sqlite3_column_bytes (db->get_stmt, 0);
 			elt = g_malloc (l);
@@ -398,14 +359,12 @@ rspamd_sqlite_lookup (struct rspamd_kv_backend *backend,
 }
 
 static void
-rspamd_sqlite_delete (struct rspamd_kv_backend *backend,
-	gpointer key,
-	guint keylen)
+rspamd_sqlite_delete (struct rspamd_kv_backend *backend, gpointer key, guint keylen)
 {
-	struct rspamd_sqlite_backend *db = (struct rspamd_sqlite_backend *)backend;
-	struct sqlite_op *op;
-	struct rspamd_kv_element *elt;
-	struct rspamd_kv_element search_elt;
+	struct rspamd_sqlite_backend				*db = (struct rspamd_sqlite_backend *)backend;
+	struct sqlite_op							*op;
+	struct rspamd_kv_element					*elt;
+	struct rspamd_kv_element			 		 search_elt;
 
 	search_elt.keylen = keylen;
 	search_elt.p = key;
@@ -431,8 +390,7 @@ rspamd_sqlite_delete (struct rspamd_kv_backend *backend,
 	g_queue_push_head (db->ops_queue, op);
 	g_hash_table_insert (db->ops_hash, elt, op);
 
-	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >=
-		db->sync_ops) {
+	if (db->sync_ops > 0 && g_queue_get_length (db->ops_queue) >= db->sync_ops) {
 		sqlite_process_queue (backend);
 	}
 
@@ -442,7 +400,7 @@ rspamd_sqlite_delete (struct rspamd_kv_backend *backend,
 static void
 rspamd_sqlite_destroy (struct rspamd_kv_backend *backend)
 {
-	struct rspamd_sqlite_backend *db = (struct rspamd_sqlite_backend *)backend;
+	struct rspamd_sqlite_backend				*db = (struct rspamd_sqlite_backend *)backend;
 
 	if (db->initialized) {
 		sqlite_process_queue (backend);
@@ -468,9 +426,9 @@ rspamd_sqlite_destroy (struct rspamd_kv_backend *backend)
 struct rspamd_kv_backend *
 rspamd_kv_sqlite_new (const gchar *filename, guint sync_ops)
 {
-	struct rspamd_sqlite_backend *new;
-	struct stat st;
-	gchar *dirname;
+	struct rspamd_sqlite_backend			 	*new;
+	struct stat 								 st;
+	gchar										*dirname;
 
 	if (filename == NULL) {
 		return NULL;

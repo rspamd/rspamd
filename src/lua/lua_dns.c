@@ -21,11 +21,11 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "dns.h"
 #include "lua_common.h"
+#include "dns.h"
 
 /* Public prototypes */
-struct rspamd_dns_resolver * lua_check_dns_resolver (lua_State * L);
+struct rspamd_dns_resolver *lua_check_dns_resolver (lua_State * L);
 gint luaopen_dns_resolver (lua_State * L);
 
 /* Lua bindings */
@@ -36,12 +36,12 @@ LUA_FUNCTION_DEF (dns_resolver, resolve_txt);
 LUA_FUNCTION_DEF (dns_resolver, resolve_mx);
 LUA_FUNCTION_DEF (dns_resolver, resolve);
 
-static const struct luaL_reg dns_resolverlib_f[] = {
+static const struct luaL_reg    dns_resolverlib_f[] = {
 	LUA_INTERFACE_DEF (dns_resolver, init),
 	{NULL, NULL}
 };
 
-static const struct luaL_reg dns_resolverlib_m[] = {
+static const struct luaL_reg    dns_resolverlib_m[] = {
 	LUA_INTERFACE_DEF (dns_resolver, resolve_a),
 	LUA_INTERFACE_DEF (dns_resolver, resolve_ptr),
 	LUA_INTERFACE_DEF (dns_resolver, resolve_txt),
@@ -51,20 +51,20 @@ static const struct luaL_reg dns_resolverlib_m[] = {
 	{NULL, NULL}
 };
 
-struct rspamd_dns_resolver *
+struct rspamd_dns_resolver      *
 lua_check_dns_resolver (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{resolver}");
+	void								*ud = luaL_checkudata (L, 1, "rspamd{resolver}");
 	luaL_argcheck (L, ud != NULL, 1, "'resolver' expected");
 	return ud ? *((struct rspamd_dns_resolver **)ud) : NULL;
 }
 
 struct lua_dns_cbdata {
-	lua_State *L;
-	struct rspamd_dns_resolver *resolver;
-	gint cbref;
-	const gchar *to_resolve;
-	const gchar *user_str;
+	lua_State                      *L;
+	struct rspamd_dns_resolver	   *resolver;
+	gint							cbref;
+	const gchar                    *to_resolve;
+	const gchar                    *user_str;
 };
 
 static int
@@ -86,11 +86,11 @@ lua_dns_get_type (lua_State *L, int argno)
 static void
 lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 {
-	struct lua_dns_cbdata *cd = arg;
-	gint i = 0;
-	struct rspamd_dns_resolver **presolver;
-	struct rdns_reply_entry *elt;
-	rspamd_inet_addr_t addr;
+	struct lua_dns_cbdata   	   *cd = arg;
+	gint                            i = 0;
+	struct rspamd_dns_resolver    **presolver;
+	struct rdns_reply_entry        *elt;
+	rspamd_inet_addr_t               addr;
 
 	lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->cbref);
 	presolver = lua_newuserdata (cd->L, sizeof (gpointer));
@@ -104,14 +104,13 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 	 */
 	if (reply->code == RDNS_RC_NOERROR) {
 		lua_newtable (cd->L);
-		LL_FOREACH (reply->entries, elt)
-		{
+		LL_FOREACH (reply->entries, elt) {
 			switch (elt->type) {
 			case RDNS_REQUEST_A:
 				addr.af = AF_INET;
 				addr.slen = sizeof (addr.addr.s4);
 				memcpy (&addr.addr.s4.sin_addr, &elt->content.a.addr,
-					sizeof (addr.addr.s4.sin_addr));
+						sizeof (addr.addr.s4.sin_addr));
 				lua_ip_push (cd->L, &addr);
 				lua_rawseti (cd->L, -2, ++i);
 				break;
@@ -119,7 +118,7 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 				addr.af = AF_INET6;
 				addr.slen = sizeof (addr.addr.s6);
 				memcpy (&addr.addr.s6.sin6_addr, &elt->content.aaa.addr,
-					sizeof (addr.addr.s6.sin6_addr));
+						sizeof (addr.addr.s6.sin6_addr));
 				lua_ip_push (cd->L, &addr);
 				lua_rawseti (cd->L, -2, ++i);
 				break;
@@ -169,16 +168,16 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 static int
 lua_dns_resolver_init (lua_State *L)
 {
-	struct rspamd_dns_resolver *resolver, **presolver;
-	struct rspamd_config *cfg, **pcfg;
-	struct event_base *base, **pbase;
+	struct rspamd_dns_resolver					*resolver, **presolver;
+	struct rspamd_config 							*cfg, **pcfg;
+	struct event_base							*base, **pbase;
 
 	/* Check args */
 	pbase = luaL_checkudata (L, 1, "rspamd{ev_base}");
 	luaL_argcheck (L, pbase != NULL, 1, "'ev_base' expected");
 	base = pbase ? *(pbase) : NULL;
 	pcfg = luaL_checkudata (L, 2, "rspamd{config}");
-	luaL_argcheck (L, pcfg != NULL,	 2, "'config' expected");
+	luaL_argcheck (L, pcfg != NULL, 2, "'config' expected");
 	cfg = pcfg ? *(pcfg) : NULL;
 
 	if (base != NULL && cfg != NULL) {
@@ -200,27 +199,24 @@ lua_dns_resolver_init (lua_State *L)
 }
 
 static int
-lua_dns_resolver_resolve_common (lua_State *L,
-	struct rspamd_dns_resolver *resolver,
-	enum rdns_request_type type,
-	int first)
+lua_dns_resolver_resolve_common (lua_State *L, struct rspamd_dns_resolver *resolver,
+		enum rdns_request_type type, int first)
 {
-	struct rspamd_async_session *session, **psession;
-	rspamd_mempool_t *pool, **ppool;
-	const gchar *to_resolve;
-	struct lua_dns_cbdata *cbdata;
+	struct rspamd_async_session					*session, **psession;
+	rspamd_mempool_t								*pool, **ppool;
+	const gchar									*to_resolve;
+	struct lua_dns_cbdata						*cbdata;
 
 	/* Check arguments */
 	psession = luaL_checkudata (L, first, "rspamd{session}");
-	luaL_argcheck (L, psession != NULL, first,	   "'session' expected");
+	luaL_argcheck (L, psession != NULL, first, "'session' expected");
 	session = psession ? *(psession) : NULL;
 	ppool = luaL_checkudata (L, first + 1, "rspamd{mempool}");
-	luaL_argcheck (L, ppool != NULL,	first + 1, "'mempool' expected");
+	luaL_argcheck (L, ppool != NULL, first + 1, "'mempool' expected");
 	pool = ppool ? *(ppool) : NULL;
 	to_resolve = luaL_checkstring (L, first + 2);
 
-	if (pool != NULL && session != NULL && to_resolve != NULL &&
-		lua_isfunction (L, first + 3)) {
+	if (pool != NULL && session != NULL && to_resolve != NULL && lua_isfunction (L, first + 3)) {
 		cbdata = rspamd_mempool_alloc (pool, sizeof (struct lua_dns_cbdata));
 		cbdata->L = L;
 		cbdata->resolver = resolver;
@@ -247,13 +243,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 		else {
 			cbdata->user_str = NULL;
 		}
-		make_dns_request (resolver,
-			session,
-			pool,
-			lua_dns_callback,
-			cbdata,
-			type,
-			to_resolve);
+		make_dns_request (resolver, session, pool, lua_dns_callback, cbdata, type, to_resolve);
 		lua_pushboolean (L, TRUE);
 	}
 	else {
@@ -268,13 +258,10 @@ lua_dns_resolver_resolve_common (lua_State *L,
 static int
 lua_dns_resolver_resolve_a (lua_State *L)
 {
-	struct rspamd_dns_resolver *dns_resolver = lua_check_dns_resolver (L);
+	struct rspamd_dns_resolver					*dns_resolver = lua_check_dns_resolver (L);
 
 	if (dns_resolver) {
-		return lua_dns_resolver_resolve_common (L,
-				   dns_resolver,
-				   RDNS_REQUEST_A,
-				   2);
+		return lua_dns_resolver_resolve_common (L, dns_resolver, RDNS_REQUEST_A, 2);
 	}
 	else {
 		lua_pushnil (L);
@@ -286,13 +273,10 @@ lua_dns_resolver_resolve_a (lua_State *L)
 static int
 lua_dns_resolver_resolve_ptr (lua_State *L)
 {
-	struct rspamd_dns_resolver *dns_resolver = lua_check_dns_resolver (L);
+	struct rspamd_dns_resolver					*dns_resolver = lua_check_dns_resolver (L);
 
 	if (dns_resolver) {
-		return lua_dns_resolver_resolve_common (L,
-				   dns_resolver,
-				   RDNS_REQUEST_PTR,
-				   2);
+		return lua_dns_resolver_resolve_common (L, dns_resolver, RDNS_REQUEST_PTR, 2);
 	}
 	else {
 		lua_pushnil (L);
@@ -304,13 +288,10 @@ lua_dns_resolver_resolve_ptr (lua_State *L)
 static int
 lua_dns_resolver_resolve_txt (lua_State *L)
 {
-	struct rspamd_dns_resolver *dns_resolver = lua_check_dns_resolver (L);
+	struct rspamd_dns_resolver					*dns_resolver = lua_check_dns_resolver (L);
 
 	if (dns_resolver) {
-		return lua_dns_resolver_resolve_common (L,
-				   dns_resolver,
-				   RDNS_REQUEST_TXT,
-				   2);
+		return lua_dns_resolver_resolve_common (L, dns_resolver, RDNS_REQUEST_TXT, 2);
 	}
 	else {
 		lua_pushnil (L);
@@ -322,13 +303,10 @@ lua_dns_resolver_resolve_txt (lua_State *L)
 static int
 lua_dns_resolver_resolve_mx (lua_State *L)
 {
-	struct rspamd_dns_resolver *dns_resolver = lua_check_dns_resolver (L);
+	struct rspamd_dns_resolver					*dns_resolver = lua_check_dns_resolver (L);
 
 	if (dns_resolver) {
-		return lua_dns_resolver_resolve_common (L,
-				   dns_resolver,
-				   RDNS_REQUEST_MX,
-				   2);
+		return lua_dns_resolver_resolve_common (L, dns_resolver, RDNS_REQUEST_MX, 2);
 	}
 	else {
 		lua_pushnil (L);
@@ -340,7 +318,7 @@ lua_dns_resolver_resolve_mx (lua_State *L)
 static int
 lua_dns_resolver_resolve (lua_State *L)
 {
-	struct rspamd_dns_resolver *dns_resolver = lua_check_dns_resolver (L);
+	struct rspamd_dns_resolver					*dns_resolver = lua_check_dns_resolver (L);
 	int type;
 
 	type = lua_dns_get_type (L, 2);
@@ -369,18 +347,18 @@ luaopen_dns_resolver (lua_State * L)
 	lua_rawset (L, -3);
 
 	{
-		LUA_ENUM (L, RDNS_REQUEST_A,	 RDNS_REQUEST_A);
-		LUA_ENUM (L, RDNS_REQUEST_PTR, RDNS_REQUEST_PTR);
-		LUA_ENUM (L, RDNS_REQUEST_MX,	RDNS_REQUEST_MX);
-		LUA_ENUM (L, RDNS_REQUEST_TXT, RDNS_REQUEST_TXT);
-		LUA_ENUM (L, RDNS_REQUEST_SRV, RDNS_REQUEST_SRV);
-		LUA_ENUM (L, RDNS_REQUEST_SPF, RDNS_REQUEST_SRV);
-		LUA_ENUM (L, RDNS_REQUEST_AAA, RDNS_REQUEST_SRV);
+		LUA_ENUM(L, RDNS_REQUEST_A, RDNS_REQUEST_A);
+		LUA_ENUM(L, RDNS_REQUEST_PTR, RDNS_REQUEST_PTR);
+		LUA_ENUM(L, RDNS_REQUEST_MX, RDNS_REQUEST_MX);
+		LUA_ENUM(L, RDNS_REQUEST_TXT, RDNS_REQUEST_TXT);
+		LUA_ENUM(L, RDNS_REQUEST_SRV, RDNS_REQUEST_SRV);
+		LUA_ENUM(L, RDNS_REQUEST_SPF, RDNS_REQUEST_SRV);
+		LUA_ENUM(L, RDNS_REQUEST_AAA, RDNS_REQUEST_SRV);
 	}
 
-	luaL_register (L, NULL,				 dns_resolverlib_m);
+	luaL_register (L, NULL, dns_resolverlib_m);
 	luaL_register (L, "rspamd_resolver", dns_resolverlib_f);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
-	return 1;
+	return 1;	
 }

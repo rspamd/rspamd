@@ -22,24 +22,24 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "cfg_file.h"
 #include "config.h"
+#include "main.h"
+#include "cfg_file.h"
+#include "util.h"
+#include "lmtp.h"
+#include "smtp.h"
+#include "map.h"
 #include "fuzzy_storage.h"
 #include "kvstorage_server.h"
-#include "lmtp.h"
-#include "lua/lua_common.h"
-#include "main.h"
-#include "map.h"
-#include "ottery.h"
-#include "smtp.h"
 #include "symbols_cache.h"
-#include "util.h"
+#include "lua/lua_common.h"
+#include "ottery.h"
 #ifdef HAVE_OPENSSL
+#include <openssl/rand.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
-#include <openssl/pem.h>
-#include <openssl/rand.h>
 #include <openssl/rsa.h>
+#include <openssl/pem.h>
 #endif
 #ifdef HAVE_LOCALE_H
 #include <locale.h>
@@ -52,73 +52,59 @@
 /* 10 seconds after getting termination signal to terminate all workers with SIGKILL */
 #define HARD_TERMINATION_TIME 10
 
-static struct rspamd_worker * fork_worker (struct rspamd_main *,
-	struct rspamd_worker_conf *);
-static gboolean load_rspamd_config (struct rspamd_config *cfg,
-	gboolean init_modules);
-static void init_cfg_cache (struct rspamd_config *cfg);
+static struct rspamd_worker    *fork_worker (struct rspamd_main *, struct rspamd_worker_conf *);
+static gboolean                 load_rspamd_config (struct rspamd_config *cfg, gboolean init_modules);
+static void                     init_cfg_cache (struct rspamd_config *cfg);
 
-sig_atomic_t do_restart = 0;
-sig_atomic_t do_reopen_log = 0;
-sig_atomic_t do_terminate = 0;
-sig_atomic_t child_dead = 0;
-sig_atomic_t got_alarm = 0;
+sig_atomic_t                    do_restart = 0;
+sig_atomic_t                    do_reopen_log = 0;
+sig_atomic_t                    do_terminate = 0;
+sig_atomic_t                    child_dead = 0;
+sig_atomic_t                    got_alarm = 0;
 
 #ifdef HAVE_SA_SIGINFO
-GQueue *signals_info = NULL;
+GQueue                         *signals_info = NULL;
 #endif
 
-static gboolean config_test = FALSE;
-static gboolean no_fork = FALSE;
-static gchar **cfg_names = NULL;
-static gchar **lua_tests = NULL;
-static gchar **sign_configs = NULL;
-static gchar *privkey = NULL;
-static gchar *rspamd_user = NULL;
-static gchar *rspamd_group = NULL;
-static gchar *rspamd_pidfile = NULL;
-static gboolean dump_cache = FALSE;
-static gboolean is_debug = FALSE;
-static gboolean is_insecure = FALSE;
+static gboolean                 config_test = FALSE;
+static gboolean                 no_fork = FALSE;
+static gchar                  **cfg_names = NULL;
+static gchar                  **lua_tests = NULL;
+static gchar                  **sign_configs = NULL;
+static gchar                   *privkey = NULL;
+static gchar                   *rspamd_user = NULL;
+static gchar                   *rspamd_group = NULL;
+static gchar                   *rspamd_pidfile = NULL;
+static gboolean                 dump_cache = FALSE;
+static gboolean                 is_debug = FALSE;
+static gboolean                 is_insecure = FALSE;
 /* List of workers that are pending to start */
-static GList *workers_pending = NULL;
+static GList                   *workers_pending = NULL;
 
 /* List of unrelated forked processes */
-static GArray *other_workers = NULL;
+static GArray                  *other_workers = NULL;
 
 /* List of active listen sockets indexed by worker type */
-static GHashTable *listen_sockets = NULL;
+static GHashTable              *listen_sockets = NULL;
 
-struct rspamd_main *rspamd_main;
+struct rspamd_main             *rspamd_main;
 
 /* Commandline options */
-static GOptionEntry entries[] =
+static GOptionEntry entries[] = 
 {
-	{ "config-test", 't', 0, G_OPTION_ARG_NONE, &config_test,
-	  "Do config test and exit", NULL },
-	{ "no-fork", 'f', 0, G_OPTION_ARG_NONE, &no_fork,
-	  "Do not daemonize main process", NULL },
-	{ "config", 'c', 0, G_OPTION_ARG_FILENAME_ARRAY, &cfg_names,
-	  "Specify config file(s)", NULL },
-	{ "user", 'u', 0, G_OPTION_ARG_STRING, &rspamd_user,
-	  "User to run rspamd as", NULL },
-	{ "group", 'g', 0, G_OPTION_ARG_STRING, &rspamd_group,
-	  "Group to run rspamd as", NULL },
-	{ "pid", 'p', 0, G_OPTION_ARG_STRING, &rspamd_pidfile, "Path to pidfile",
-	  NULL },
-	{ "dump-cache", 'C', 0, G_OPTION_ARG_NONE, &dump_cache,
-	  "Dump symbols cache stats and exit", NULL },
-	{ "debug", 'd', 0, G_OPTION_ARG_NONE, &is_debug, "Force debug output",
-	  NULL },
-	{ "insecure", 'i', 0, G_OPTION_ARG_NONE, &is_insecure,
-	  "Ignore running workers as privileged users (insecure)", NULL },
-	{ "test-lua", 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &lua_tests,
-	  "Specify lua file(s) to test", NULL },
-	{ "sign-config", 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &sign_configs,
-	  "Specify config file(s) to sign", NULL },
-	{ "private-key", 0, 0, G_OPTION_ARG_FILENAME, &privkey,
-	  "Specify private key to sign", NULL },
-	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
+  { "config-test", 't', 0, G_OPTION_ARG_NONE, &config_test, "Do config test and exit", NULL },
+  { "no-fork", 'f', 0, G_OPTION_ARG_NONE, &no_fork, "Do not daemonize main process", NULL },
+  { "config", 'c', 0, G_OPTION_ARG_FILENAME_ARRAY, &cfg_names, "Specify config file(s)", NULL },
+  { "user", 'u', 0, G_OPTION_ARG_STRING, &rspamd_user, "User to run rspamd as", NULL },
+  { "group", 'g', 0, G_OPTION_ARG_STRING, &rspamd_group, "Group to run rspamd as", NULL },
+  { "pid", 'p', 0, G_OPTION_ARG_STRING, &rspamd_pidfile, "Path to pidfile", NULL },
+  { "dump-cache", 'C', 0, G_OPTION_ARG_NONE, &dump_cache, "Dump symbols cache stats and exit", NULL },
+  { "debug", 'd', 0, G_OPTION_ARG_NONE, &is_debug, "Force debug output", NULL },
+  { "insecure", 'i', 0, G_OPTION_ARG_NONE, &is_insecure, "Ignore running workers as privileged users (insecure)", NULL },
+  { "test-lua", 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &lua_tests, "Specify lua file(s) to test", NULL },
+  { "sign-config", 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &sign_configs, "Specify config file(s) to sign", NULL },
+  { "private-key", 0, 0, G_OPTION_ARG_FILENAME, &privkey, "Specify private key to sign", NULL },
+  { NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
 
@@ -166,17 +152,17 @@ static const gchar *
 chldsigcode (gint code) {
 	switch (code) {
 #ifdef CLD_EXITED
-	case CLD_EXITED:
-		return "Child exited normally";
-	case CLD_KILLED:
-		return "Child has terminated abnormally but did not create a core file";
-	case CLD_DUMPED:
-		return "Child has terminated abnormally and created a core file";
-	case CLD_TRAPPED:
-		return "Traced child has trapped";
+		case CLD_EXITED:
+			return "Child exited normally";
+		case CLD_KILLED:
+			return "Child has terminated abnormally but did not create a core file";
+		case CLD_DUMPED:
+			return "Child has terminated abnormally and created a core file";
+		case CLD_TRAPPED:
+			return "Traced child has trapped";
 #endif
-	default:
-		return "Unknown reason";
+		default:
+			return "Unknown reason";
 	}
 }
 
@@ -189,11 +175,11 @@ print_signals_info (void)
 	while ((inf = g_queue_pop_head (signals_info))) {
 		if (inf->si_signo == SIGCHLD) {
 			msg_info ("got SIGCHLD from child: %P; reason: '%s'",
-				inf->si_pid, chldsigcode (inf->si_code));
+					inf->si_pid, chldsigcode (inf->si_code));
 		}
 		else {
 			msg_info ("got signal: '%s'; received from pid: %P; uid: %ul",
-				g_strsignal (inf->si_signo), inf->si_pid, (gulong)inf->si_uid);
+					g_strsignal (inf->si_signo), inf->si_pid, (gulong)inf->si_uid);
 		}
 		g_free (inf);
 	}
@@ -204,14 +190,13 @@ print_signals_info (void)
 static void
 read_cmd_line (gint argc, gchar **argv, struct rspamd_config *cfg)
 {
-	GError *error = NULL;
-	GOptionContext *context;
-	guint i, cfg_num;
-	pid_t r;
+	GError                         *error = NULL;
+	GOptionContext                 *context;
+	guint							i, cfg_num;
+	pid_t							r;
 
 	context = g_option_context_new ("- run rspamd daemon");
-	g_option_context_set_summary (context,
-		"Summary:\n  Rspamd daemon version " RVERSION "\n  Release id: " RID);
+	g_option_context_set_summary (context, "Summary:\n  Rspamd daemon version " RVERSION "\n  Release id: " RID);
 	g_option_context_add_main_entries (context, entries, NULL);
 	if (!g_option_context_parse (context, &argc, &argv, &error)) {
 		fprintf (stderr, "option parsing failed: %s\n", error->message);
@@ -228,7 +213,7 @@ read_cmd_line (gint argc, gchar **argv, struct rspamd_config *cfg)
 	else {
 		cfg->cfg_name = cfg_names[0];
 	}
-	for (i = 1; i < cfg_num; i++) {
+	for (i = 1; i < cfg_num; i ++) {
 		r = fork ();
 		if (r == 0) {
 			/* Spawning new main process */
@@ -236,10 +221,7 @@ read_cmd_line (gint argc, gchar **argv, struct rspamd_config *cfg)
 			(void)setsid ();
 		}
 		else if (r == -1) {
-			fprintf (stderr,
-				"fork failed while spawning process for %s configuration file: %s\n",
-				cfg_names[i],
-				strerror (errno));
+			fprintf (stderr, "fork failed while spawning process for %s configuration file: %s\n", cfg_names[i], strerror (errno));
 		}
 		else {
 			/* Save pid to the list of other main processes, we need it to ignore SIGCHLD from them */
@@ -253,16 +235,15 @@ read_cmd_line (gint argc, gchar **argv, struct rspamd_config *cfg)
 static void
 detect_priv (struct rspamd_main *rspamd)
 {
-	struct passwd *pwd;
-	struct group *grp;
-	uid_t euid;
+	struct passwd                  *pwd;
+	struct group                   *grp;
+	uid_t                           euid;
 
 	euid = geteuid ();
 
 	if (euid == 0) {
 		if (!rspamd->cfg->rspamd_user && !is_insecure) {
-			msg_err (
-				"cannot run rspamd workers as root user, please add -u and -g options to select a proper unprivilleged user or specify --insecure flag");
+			msg_err ("cannot run rspamd workers as root user, please add -u and -g options to select a proper unprivilleged user or specify --insecure flag");
 			exit (EXIT_FAILURE);
 		}
 		else if (is_insecure) {
@@ -274,15 +255,13 @@ detect_priv (struct rspamd_main *rspamd)
 			rspamd->is_privilleged = TRUE;
 			pwd = getpwnam (rspamd->cfg->rspamd_user);
 			if (pwd == NULL) {
-				msg_err ("user specified does not exists (%s), aborting",
-					strerror (errno));
+				msg_err ("user specified does not exists (%s), aborting", strerror (errno));
 				exit (-errno);
 			}
 			if (rspamd->cfg->rspamd_group) {
 				grp = getgrnam (rspamd->cfg->rspamd_group);
 				if (grp == NULL) {
-					msg_err ("group specified does not exists (%s), aborting",
-						strerror (errno));
+					msg_err ("group specified does not exists (%s), aborting", strerror (errno));
 					exit (-errno);
 				}
 				rspamd->workers_gid = grp->gr_gid;
@@ -305,20 +284,16 @@ drop_priv (struct rspamd_main *rspamd)
 {
 	if (rspamd->is_privilleged) {
 		if (setgid (rspamd->workers_gid) == -1) {
-			msg_err ("cannot setgid to %d (%s), aborting",
-				(gint)rspamd->workers_gid,
-				strerror (errno));
+			msg_err ("cannot setgid to %d (%s), aborting", (gint)rspamd->workers_gid, strerror (errno));
 			exit (-errno);
 		}
 		if (rspamd->cfg->rspamd_user &&
-			initgroups (rspamd->cfg->rspamd_user, rspamd->workers_gid) == -1) {
+				initgroups (rspamd->cfg->rspamd_user, rspamd->workers_gid) == -1) {
 			msg_err ("initgroups failed (%s), aborting", strerror (errno));
 			exit (-errno);
 		}
 		if (setuid (rspamd->workers_uid) == -1) {
-			msg_err ("cannot setuid to %d (%s), aborting",
-				(gint)rspamd->workers_uid,
-				strerror (errno));
+			msg_err ("cannot setuid to %d (%s), aborting", (gint)rspamd->workers_uid, strerror (errno));
 			exit (-errno);
 		}
 	}
@@ -344,9 +319,9 @@ config_logger (struct rspamd_config *cfg, gpointer ud)
 static void
 parse_filters_str (struct rspamd_config *cfg, const gchar *str)
 {
-	gchar **strvec, **p;
-	struct filter *cur;
-	module_t **pmodule;
+	gchar                         **strvec, **p;
+	struct filter                  *cur;
+	module_t					  **pmodule;
 
 	if (str == NULL) {
 		return;
@@ -364,10 +339,8 @@ parse_filters_str (struct rspamd_config *cfg, const gchar *str)
 		pmodule = &modules[0];
 		while (*pmodule) {
 			g_strstrip (*p);
-			if ((*pmodule)->name != NULL &&
-				g_ascii_strcasecmp ((*pmodule)->name, *p) == 0) {
-				cur = rspamd_mempool_alloc (cfg->cfg_pool,
-						sizeof (struct filter));
+			if ((*pmodule)->name != NULL && g_ascii_strcasecmp ((*pmodule)->name, *p) == 0) {
+				cur = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct filter));
 				cur->type = C_FILTER;
 				msg_debug ("found C filter %s", *p);
 				cur->func_name = rspamd_mempool_strdup (cfg->cfg_pool, *p);
@@ -376,7 +349,7 @@ parse_filters_str (struct rspamd_config *cfg, const gchar *str)
 
 				break;
 			}
-			pmodule++;
+			pmodule ++;
 		}
 		if (cur != NULL) {
 			/* Go to next iteration */
@@ -392,27 +365,24 @@ parse_filters_str (struct rspamd_config *cfg, const gchar *str)
 static void
 reread_config (struct rspamd_main *rspamd)
 {
-	struct rspamd_config *tmp_cfg;
-	gchar *cfg_file;
-	GList *l;
-	struct filter *filt;
+	struct rspamd_config             *tmp_cfg;
+	gchar                           *cfg_file;
+	GList                          *l;
+	struct filter                  *filt;
 
 	tmp_cfg = (struct rspamd_config *)g_malloc (sizeof (struct rspamd_config));
 	if (tmp_cfg) {
 		bzero (tmp_cfg, sizeof (struct rspamd_config));
 		tmp_cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 		rspamd_config_defaults (tmp_cfg);
-		cfg_file = rspamd_mempool_strdup (tmp_cfg->cfg_pool,
-				rspamd->cfg->cfg_name);
+		cfg_file = rspamd_mempool_strdup (tmp_cfg->cfg_pool, rspamd->cfg->cfg_name);
 		/* Save some variables */
 		tmp_cfg->cfg_name = cfg_file;
 		tmp_cfg->lua_state = init_lua (tmp_cfg);
-		rspamd_mempool_add_destructor (tmp_cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)lua_close, tmp_cfg->lua_state);
+		rspamd_mempool_add_destructor (tmp_cfg->cfg_pool, (rspamd_mempool_destruct_t)lua_close, tmp_cfg->lua_state);
 
-		if (!load_rspamd_config (tmp_cfg, FALSE)) {
-			rspamd_set_logger (rspamd_main->cfg, g_quark_try_string (
-					"main"), rspamd_main);
+		if (! load_rspamd_config (tmp_cfg, FALSE)) {
+			rspamd_set_logger (rspamd_main->cfg, g_quark_try_string ("main"), rspamd_main);
 			msg_err ("cannot parse new config file, revert to old one");
 			rspamd_config_free (tmp_cfg);
 		}
@@ -428,12 +398,9 @@ reread_config (struct rspamd_main *rspamd)
 			}
 			/* Pre-init of cache */
 			rspamd->cfg->cache = g_new0 (struct symbols_cache, 1);
-			rspamd->cfg->cache->static_pool = rspamd_mempool_new (
-				rspamd_mempool_suggest_size ());
+			rspamd->cfg->cache->static_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 			rspamd->cfg->cache->cfg = rspamd->cfg;
-			rspamd_main->cfg->cache->items_by_symbol = g_hash_table_new (
-				rspamd_str_hash,
-				rspamd_str_equal);
+			rspamd_main->cfg->cache->items_by_symbol = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 			/* Perform modules configuring */
 			l = g_list_first (rspamd->cfg->filters);
 
@@ -455,35 +422,31 @@ reread_config (struct rspamd_main *rspamd)
 static void
 set_worker_limits (struct rspamd_worker_conf *cf)
 {
-	struct rlimit rlmt;
+	struct rlimit                   rlmt;
 
 	if (cf->rlimit_nofile != 0) {
 		rlmt.rlim_cur = (rlim_t) cf->rlimit_nofile;
 		rlmt.rlim_max = (rlim_t) cf->rlimit_nofile;
 
-		if (setrlimit (RLIMIT_NOFILE, &rlmt) == -1) {
-			msg_warn ("cannot set files rlimit: %d, %s",
-				cf->rlimit_nofile,
-				strerror (errno));
-		}
+		if (setrlimit(RLIMIT_NOFILE, &rlmt) == -1) {
+			msg_warn ("cannot set files rlimit: %d, %s", cf->rlimit_nofile, strerror (errno));
+        }
 	}
 
 	if (cf->rlimit_maxcore != 0) {
 		rlmt.rlim_cur = (rlim_t) cf->rlimit_maxcore;
 		rlmt.rlim_max = (rlim_t) cf->rlimit_maxcore;
 
-		if (setrlimit (RLIMIT_CORE, &rlmt) == -1) {
-			msg_warn ("cannot set max core rlimit: %d, %s",
-				cf->rlimit_maxcore,
-				strerror (errno));
-		}
+		if (setrlimit(RLIMIT_CORE, &rlmt) == -1) {
+			msg_warn ("cannot set max core rlimit: %d, %s", cf->rlimit_maxcore, strerror (errno));
+        }
 	}
 }
 
-static struct rspamd_worker *
+static struct rspamd_worker    *
 fork_worker (struct rspamd_main *rspamd, struct rspamd_worker_conf *cf)
 {
-	struct rspamd_worker *cur;
+	struct rspamd_worker           *cur;
 	/* Starting worker process */
 	cur = (struct rspamd_worker *)g_malloc (sizeof (struct rspamd_worker));
 	if (cur) {
@@ -530,8 +493,7 @@ fork_worker (struct rspamd_main *rspamd, struct rspamd_worker_conf *cf)
 			break;
 		default:
 			/* Insert worker into worker's table, pid is index */
-			g_hash_table_insert (rspamd->workers, GSIZE_TO_POINTER (
-					cur->pid), cur);
+			g_hash_table_insert (rspamd->workers, GSIZE_TO_POINTER (cur->pid), cur);
 			break;
 		}
 	}
@@ -543,7 +505,7 @@ static void
 set_alarm (guint seconds)
 {
 #ifdef HAVE_SETITIMER
-	static struct itimerval itv;
+	static struct itimerval         itv;
 
 	itv.it_interval.tv_sec = 0;
 	itv.it_interval.tv_usec = 0;
@@ -568,15 +530,10 @@ delay_fork (struct rspamd_worker_conf *cf)
 static GList *
 create_listen_socket (const gchar *addr, gint port, gint listen_type)
 {
-	gint listen_sock = -1;
-	GList *result, *cur;
+	gint                            listen_sock = -1;
+	GList                          *result, *cur;
 	/* Create listen sockets */
-	result = make_universal_sockets_list (addr,
-			port,
-			listen_type,
-			TRUE,
-			TRUE,
-			TRUE);
+	result = make_universal_sockets_list (addr, port, listen_type, TRUE, TRUE, TRUE);
 
 	cur = result;
 	while (cur != NULL) {
@@ -636,8 +593,8 @@ systemd_get_socket (gint number)
 static void
 fork_delayed (struct rspamd_main *rspamd)
 {
-	GList *cur;
-	struct rspamd_worker_conf *cf;
+	GList                          *cur;
+	struct rspamd_worker_conf             *cf;
 
 	while (workers_pending != NULL) {
 		cur = workers_pending;
@@ -652,7 +609,7 @@ fork_delayed (struct rspamd_main *rspamd)
 static inline uintptr_t
 make_listen_key (gint ai, const gchar *addr, gint port)
 {
-	uintptr_t res = 0;
+	uintptr_t                       res = 0;
 
 	res = murmur32_hash (addr, strlen (addr));
 	res += murmur32_hash ((guchar *)&ai, sizeof (gint));
@@ -664,10 +621,10 @@ make_listen_key (gint ai, const gchar *addr, gint port)
 static void
 spawn_workers (struct rspamd_main *rspamd)
 {
-	GList *cur, *ls;
-	struct rspamd_worker_conf *cf;
-	gint i, key;
-	gpointer p;
+	GList                          *cur, *ls;
+	struct rspamd_worker_conf             *cf;
+	gint                            i, key;
+	gpointer                        p;
 	struct rspamd_worker_bind_conf *bcf;
 
 	cur = rspamd->cfg->workers;
@@ -680,31 +637,22 @@ spawn_workers (struct rspamd_main *rspamd)
 		}
 		else {
 			if (cf->worker->has_socket) {
-				LL_FOREACH (cf->bind_conf, bcf)
-				{
-					key = make_listen_key (bcf->ai,
-							bcf->bind_host,
-							bcf->bind_port);
-					if ((p =
-						g_hash_table_lookup (listen_sockets,
-						GINT_TO_POINTER (key))) == NULL) {
+				LL_FOREACH (cf->bind_conf, bcf) {
+					key = make_listen_key (bcf->ai, bcf->bind_host, bcf->bind_port);
+					if ((p = g_hash_table_lookup (listen_sockets, GINT_TO_POINTER (key))) == NULL) {
 						if (!bcf->is_systemd) {
 							/* Create listen socket */
-							ls = create_listen_socket (bcf->bind_host,
-									bcf->bind_port,
+							ls = create_listen_socket (bcf->bind_host, bcf->bind_port,
 									cf->worker->listen_type);
 						}
 						else {
 							ls = systemd_get_socket (bcf->ai);
 						}
 						if (ls == NULL) {
-							msg_err ("cannot listen on socket %s: %s",
-								bcf->bind_host,
-								strerror (errno));
+							msg_err ("cannot listen on socket %s: %s", bcf->bind_host, strerror (errno));
 							exit (-errno);
 						}
-						g_hash_table_insert (listen_sockets,
-							GINT_TO_POINTER (key), ls);
+						g_hash_table_insert (listen_sockets, GINT_TO_POINTER (key), ls);
 					}
 					else {
 						/* We had socket for this type of worker */
@@ -719,8 +667,7 @@ spawn_workers (struct rspamd_main *rspamd)
 
 			if (cf->worker->unique) {
 				if (cf->count > 1) {
-					msg_err ("cannot spawn more than 1 %s worker, so spawn one",
-						cf->worker->name);
+					msg_err ("cannot spawn more than 1 %s worker, so spawn one", cf->worker->name);
 				}
 				fork_worker (rspamd, cf);
 			}
@@ -741,7 +688,7 @@ spawn_workers (struct rspamd_main *rspamd)
 static void
 kill_old_workers (gpointer key, gpointer value, gpointer unused)
 {
-	struct rspamd_worker *w = value;
+	struct rspamd_worker         *w = value;
 
 	kill (w->pid, SIGUSR2);
 	msg_info ("send signal to worker %P", w->pid);
@@ -750,8 +697,8 @@ kill_old_workers (gpointer key, gpointer value, gpointer unused)
 static gboolean
 wait_for_workers (gpointer key, gpointer value, gpointer unused)
 {
-	struct rspamd_worker *w = value;
-	gint res = 0;
+	struct rspamd_worker          *w = value;
+	gint                            res = 0;
 
 	if (got_alarm) {
 		got_alarm = 0;
@@ -774,9 +721,8 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 		}
 	}
 
-	msg_info ("%s process %P terminated %s", g_quark_to_string (
-			w->type), w->pid,
-		got_alarm ? "hardly" : "softly");
+	msg_info ("%s process %P terminated %s", g_quark_to_string (w->type), w->pid,
+			got_alarm ? "hardly" : "softly");
 	g_free (w->cf);
 	g_free (w);
 
@@ -786,7 +732,7 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 static void
 reopen_log_handler (gpointer key, gpointer value, gpointer unused)
 {
-	struct rspamd_worker *w = value;
+	struct rspamd_worker          *w = value;
 
 	if (kill (w->pid, SIGUSR1) == -1) {
 		msg_err ("kill failed for pid %P: %s", w->pid, strerror (errno));
@@ -796,10 +742,10 @@ reopen_log_handler (gpointer key, gpointer value, gpointer unused)
 static void
 preload_statfiles (struct rspamd_main *rspamd)
 {
-	struct rspamd_classifier_config *cf;
-	struct rspamd_statfile_config *st;
-	stat_file_t *stf;
-	GList *cur_cl, *cur_st;
+	struct rspamd_classifier_config       *cf;
+	struct rspamd_statfile_config                *st;
+	stat_file_t                    *stf;
+	GList                          *cur_cl, *cur_st;
 
 	cur_cl = rspamd->cfg->classifiers;
 	while (cur_cl) {
@@ -809,10 +755,7 @@ preload_statfiles (struct rspamd_main *rspamd)
 		cur_st = cf->statfiles;
 		while (cur_st) {
 			st = cur_st->data;
-			stf = statfile_pool_open (rspamd->statfile_pool,
-					st->path,
-					st->size,
-					FALSE);
+			stf = statfile_pool_open (rspamd->statfile_pool, st->path, st->size, FALSE);
 			if (stf == NULL) {
 				msg_warn ("preload of %s from %s failed", st->symbol, st->path);
 			}
@@ -826,20 +769,19 @@ preload_statfiles (struct rspamd_main *rspamd)
 static gboolean
 load_rspamd_config (struct rspamd_config *cfg, gboolean init_modules)
 {
-	GList *l;
-	struct filter *filt;
-	struct module_ctx *cur_module = NULL;
+	GList                          *l;
+	struct filter                  *filt;
+	struct module_ctx              *cur_module = NULL;
 
-	if (!rspamd_config_read (cfg, cfg->cfg_name, NULL,
-		config_logger, rspamd_main)) {
+	if (! rspamd_config_read (cfg, cfg->cfg_name, NULL,
+			config_logger, rspamd_main)) {
 		return FALSE;
 	}
 
 	/* Strictly set temp dir */
 	if (!cfg->temp_dir) {
 		msg_warn ("tempdir is not set, trying to use $TMPDIR");
-		cfg->temp_dir =
-			rspamd_mempool_strdup (cfg->cfg_pool, getenv ("TMPDIR"));
+		cfg->temp_dir = rspamd_mempool_strdup (cfg->cfg_pool, getenv ("TMPDIR"));
 
 		if (!cfg->temp_dir) {
 			msg_warn ("$TMPDIR is empty too, using /tmp as default");
@@ -850,7 +792,7 @@ load_rspamd_config (struct rspamd_config *cfg, gboolean init_modules)
 	/* Do post-load actions */
 	rspamd_config_post_load (cfg);
 	parse_filters_str (cfg, cfg->filters_str);
-
+	
 	if (init_modules) {
 		/* Init C modules */
 		l = g_list_first (cfg->filters);
@@ -858,102 +800,80 @@ load_rspamd_config (struct rspamd_config *cfg, gboolean init_modules)
 		while (l) {
 			filt = l->data;
 			if (filt->module) {
-				cur_module =
-					rspamd_mempool_alloc (cfg->cfg_pool,
-						sizeof (struct module_ctx));
+				cur_module = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct module_ctx));
 				if (filt->module->module_init_func (cfg, &cur_module) == 0) {
-					g_hash_table_insert (cfg->c_modules,
-						(gpointer) filt->module->name,
-						cur_module);
+					g_hash_table_insert (cfg->c_modules, (gpointer) filt->module->name, cur_module);
 				}
 			}
 			l = g_list_next (l);
 		}
 	}
-
+	
 	return TRUE;
 }
 
 static void
-init_cfg_cache (struct rspamd_config *cfg)
+init_cfg_cache (struct rspamd_config *cfg) 
 {
 
-	if (!init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg,
-		cfg->cache_filename, FALSE)) {
+	if (!init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg, cfg->cache_filename, FALSE)) {
 		exit (EXIT_FAILURE);
 	}
 }
 
 static void
-print_symbols_cache (struct rspamd_config *cfg)
+print_symbols_cache (struct rspamd_config *cfg) 
 {
-	GList *cur;
-	struct cache_item *item;
-	gint i;
+	GList                          *cur;
+	struct cache_item              *item;
+	gint                            i;
 
-	if (!init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg,
-		cfg->cache_filename, TRUE)) {
+	if (!init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg, cfg->cache_filename, TRUE)) {
 		exit (EXIT_FAILURE);
 	}
 	if (cfg->cache) {
 		printf ("Symbols cache\n");
-		printf (
-			"-----------------------------------------------------------------\n");
-		printf (
-			"| Pri  | Symbol                | Weight | Frequency | Avg. time |\n");
+		printf ("-----------------------------------------------------------------\n");
+		printf ("| Pri  | Symbol                | Weight | Frequency | Avg. time |\n");
 		i = 0;
 		cur = cfg->cache->negative_items;
 		while (cur) {
 			item = cur->data;
 			if (!item->is_callback) {
-				printf (
-						"-----------------------------------------------------------------\n");
-				printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n",
-					i,
-					item->s->symbol,
-					item->s->weight,
-					item->s->frequency,
-					item->s->avg_time);
+				printf ("-----------------------------------------------------------------\n");
+				printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n", i, item->s->symbol, item->s->weight, item->s->frequency, item->s->avg_time);
 			}
 			cur = g_list_next (cur);
-			i++;
+			i ++;
 		}
 		cur = cfg->cache->static_items;
 		while (cur) {
 			item = cur->data;
 			if (!item->is_callback) {
-				printf (
-						"-----------------------------------------------------------------\n");
-				printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n",
-					i,
-					item->s->symbol,
-					item->s->weight,
-					item->s->frequency,
-					item->s->avg_time);
+				printf ("-----------------------------------------------------------------\n");
+				printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n", i, item->s->symbol, item->s->weight, item->s->frequency, item->s->avg_time);
 			}
 			cur = g_list_next (cur);
-			i++;
+			i ++;
 		}
 
-		printf (
-			"-----------------------------------------------------------------\n");
+		printf ("-----------------------------------------------------------------\n");
 	}
 }
 
 static gint
 perform_lua_tests (struct rspamd_config *cfg)
 {
-	gint i, tests_num, res = EXIT_SUCCESS;
-	gchar *cur_script;
-	lua_State *L = cfg->lua_state;
+	gint                            i, tests_num, res = EXIT_SUCCESS;
+	gchar                          *cur_script;
+	lua_State                      *L = cfg->lua_state;
 
 	tests_num = g_strv_length (lua_tests);
 
-	for (i = 0; i < tests_num; i++) {
+	for (i = 0; i < tests_num; i ++) {
 
 		if (luaL_loadfile (L, lua_tests[i]) != 0) {
-			msg_err ("load of %s failed: %s", lua_tests[i],
-				lua_tostring (L, -1));
+			msg_err ("load of %s failed: %s", lua_tests[i], lua_tostring (L, -1));
 			res = EXIT_FAILURE;
 			continue;
 		}
@@ -967,15 +887,13 @@ perform_lua_tests (struct rspamd_config *cfg)
 
 		/* do the call (0 arguments, N result) */
 		if (lua_pcall (L, 0, LUA_MULTRET, 0) != 0) {
-			msg_info ("init of %s failed: %s", lua_tests[i], lua_tostring (L,
-				-1));
+			msg_info ("init of %s failed: %s", lua_tests[i], lua_tostring (L, -1));
 			res = EXIT_FAILURE;
 			continue;
 		}
 		if (lua_gettop (L) != 0) {
 			if (lua_tonumber (L, -1) == -1) {
-				msg_info ("%s returned -1 that indicates configuration error",
-					lua_tests[i]);
+				msg_info ("%s returned -1 that indicates configuration error", lua_tests[i]);
 				res = EXIT_FAILURE;
 				continue;
 			}
@@ -997,51 +915,51 @@ perform_configs_sign (void)
 	msg_err ("must have openssl at least 1.0.0 to perform this action");
 	return EXIT_FAILURE;
 # else
-	gint i, tests_num, res = EXIT_SUCCESS, fd;
-	guint diglen;
-	gchar *cur_file, in_file[PATH_MAX],
-		out_file[PATH_MAX], dig[EVP_MAX_MD_SIZE];
-	gsize siglen;
-	struct stat st;
-	gpointer map, sig;
-	EVP_PKEY *key = NULL;
-	BIO *fbio;
-	EVP_PKEY_CTX *key_ctx = NULL;
-	EVP_MD_CTX *sign_ctx = NULL;
+	gint                            i, tests_num, res = EXIT_SUCCESS, fd;
+	guint                           diglen;
+	gchar                          *cur_file, in_file[PATH_MAX],
+	                                out_file[PATH_MAX], dig[EVP_MAX_MD_SIZE];
+	gsize                           siglen;
+	struct stat                    st;
+	gpointer                        map, sig;
+	EVP_PKEY                       *key = NULL;
+	BIO                            *fbio;
+	EVP_PKEY_CTX                   *key_ctx = NULL;
+	EVP_MD_CTX                     *sign_ctx = NULL;
 
 	/* Load private key */
 	fbio = BIO_new_file (privkey, "r");
 	if (fbio == NULL) {
 		msg_err ("cannot open private key %s, %s", privkey,
-			ERR_error_string (ERR_get_error (), NULL));
+				ERR_error_string (ERR_get_error (), NULL));
 		return ERR_get_error ();
 	}
 	if (!PEM_read_bio_PrivateKey (fbio, &key, rspamd_read_passphrase, NULL)) {
 		msg_err ("cannot read private key %s, %s", privkey,
-			ERR_error_string (ERR_get_error (), NULL));
+				ERR_error_string (ERR_get_error (), NULL));
 		return ERR_get_error ();
 	}
 
 	key_ctx = EVP_PKEY_CTX_new (key, NULL);
 	if (key_ctx == NULL) {
 		msg_err ("cannot parse private key %s, %s", privkey,
-			ERR_error_string (ERR_get_error (), NULL));
+				ERR_error_string (ERR_get_error (), NULL));
 		return ERR_get_error ();
 	}
 
 	if (EVP_PKEY_sign_init (key_ctx) <= 0) {
 		msg_err ("cannot parse private key %s, %s", privkey,
-			ERR_error_string (ERR_get_error (), NULL));
+				ERR_error_string (ERR_get_error (), NULL));
 		return ERR_get_error ();
 	}
 	if (EVP_PKEY_CTX_set_rsa_padding (key_ctx, RSA_PKCS1_PADDING) <= 0) {
 		msg_err ("cannot init private key %s, %s", privkey,
-			ERR_error_string (ERR_get_error (), NULL));
+				ERR_error_string (ERR_get_error (), NULL));
 		return ERR_get_error ();
 	}
 	if (EVP_PKEY_CTX_set_signature_md (key_ctx, EVP_sha256 ()) <= 0) {
 		msg_err ("cannot init signature private key %s, %s", privkey,
-			ERR_error_string (ERR_get_error (), NULL));
+				ERR_error_string (ERR_get_error (), NULL));
 		return ERR_get_error ();
 	}
 
@@ -1049,7 +967,7 @@ perform_configs_sign (void)
 
 	tests_num = g_strv_length (sign_configs);
 
-	for (i = 0; i < tests_num; i++) {
+	for (i = 0; i < tests_num; i ++) {
 		cur_file = sign_configs[i];
 		if (realpath (cur_file, in_file) == NULL) {
 			msg_err ("cannot resolve %s: %s", cur_file, strerror (errno));
@@ -1064,9 +982,7 @@ perform_configs_sign (void)
 			continue;
 		}
 
-		if ((map =
-			mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd,
-			0)) == MAP_FAILED) {
+		if ((map = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
 			close (fd);
 			msg_err ("cannot mmap %s: %s", in_file, strerror (errno));
 			continue;
@@ -1081,19 +997,15 @@ perform_configs_sign (void)
 		munmap (map, st.st_size);
 
 		if (EVP_PKEY_sign (key_ctx, NULL, &siglen, dig, diglen) <= 0) {
-			msg_err ("cannot sign %s using private key %s, %s",
-				in_file,
-				privkey,
-				ERR_error_string (ERR_get_error (), NULL));
+			msg_err ("cannot sign %s using private key %s, %s", in_file, privkey,
+					ERR_error_string (ERR_get_error (), NULL));
 			continue;
 		}
 
 		sig = OPENSSL_malloc (siglen);
 		if (EVP_PKEY_sign (key_ctx, sig, &siglen, dig, diglen) <= 0) {
-			msg_err ("cannot sign %s using private key %s, %s",
-				in_file,
-				privkey,
-				ERR_error_string (ERR_get_error (), NULL));
+			msg_err ("cannot sign %s using private key %s, %s", in_file, privkey,
+					ERR_error_string (ERR_get_error (), NULL));
 			OPENSSL_free (sig);
 			continue;
 		}
@@ -1101,14 +1013,12 @@ perform_configs_sign (void)
 		rspamd_snprintf (out_file, sizeof (out_file), "%s.sig", in_file);
 		fd = open (out_file, O_WRONLY | O_CREAT | O_TRUNC, 00644);
 		if (fd == -1) {
-			msg_err ("cannot open output file %s: %s", out_file, strerror (
-					errno));
+			msg_err ("cannot open output file %s: %s", out_file, strerror (errno));
 			OPENSSL_free (sig);
 			continue;
 		}
 		if (write (fd, sig, siglen) == -1) {
-			msg_err ("cannot write to output file %s: %s", out_file,
-				strerror (errno));
+			msg_err ("cannot write to output file %s: %s", out_file, strerror (errno));
 		}
 		OPENSSL_free (sig);
 		close (fd);
@@ -1128,15 +1038,15 @@ perform_configs_sign (void)
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
-	gint res = 0, i;
-	struct sigaction signals;
-	struct rspamd_worker *cur;
-	struct rlimit rlim;
-	struct filter *filt;
-	pid_t wrk;
-	GList *l;
-	worker_t **pworker;
-	GQuark type;
+	gint                             res = 0, i;
+	struct sigaction                signals;
+	struct rspamd_worker           *cur;
+	struct rlimit                   rlim;
+	struct filter                  *filt;
+	pid_t                            wrk;
+	GList                           *l;
+	worker_t                       **pworker;
+	GQuark                           type;
 
 #ifdef HAVE_SA_SIGINFO
 	signals_info = g_queue_new ();
@@ -1145,10 +1055,8 @@ main (gint argc, gchar **argv, gchar **env)
 	g_thread_init (NULL);
 #endif
 	rspamd_main = (struct rspamd_main *)g_malloc0 (sizeof (struct rspamd_main));
-	rspamd_main->server_pool = rspamd_mempool_new (
-		rspamd_mempool_suggest_size ());
-	rspamd_main->cfg =
-		(struct rspamd_config *)g_malloc0 (sizeof (struct rspamd_config));
+	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
+	rspamd_main->cfg = (struct rspamd_config *)g_malloc0 (sizeof (struct rspamd_config));
 
 	if (!rspamd_main || !rspamd_main->cfg) {
 		fprintf (stderr, "Cannot allocate memory\n");
@@ -1159,12 +1067,10 @@ main (gint argc, gchar **argv, gchar **env)
 	init_title (argc, argv, env);
 #endif
 
-	rspamd_main->stat = rspamd_mempool_alloc_shared (rspamd_main->server_pool,
-			sizeof (struct rspamd_stat));
+	rspamd_main->stat = rspamd_mempool_alloc_shared (rspamd_main->server_pool, sizeof (struct rspamd_stat));
 	memset (rspamd_main->stat, 0, sizeof (struct rspamd_stat));
 
-	rspamd_main->cfg->cfg_pool = rspamd_mempool_new (
-		rspamd_mempool_suggest_size ());
+	rspamd_main->cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	rspamd_config_defaults (rspamd_main->cfg);
 
 	memset (&signals, 0, sizeof (struct sigaction));
@@ -1184,10 +1090,10 @@ main (gint argc, gchar **argv, gchar **env)
 
 #ifdef HAVE_SETLOCALE
 	/* Set locale setting to C locale to avoid problems in future */
-	setlocale (LC_ALL,		"C");
-	setlocale (LC_CTYPE,	"C");
+	setlocale (LC_ALL, "C");
+	setlocale (LC_CTYPE, "C");
 	setlocale (LC_MESSAGES, "C");
-	setlocale (LC_TIME,		"C");
+	setlocale (LC_TIME, "C");
 #endif
 
 #ifdef HAVE_OPENSSL
@@ -1208,32 +1114,25 @@ main (gint argc, gchar **argv, gchar **env)
 
 	detect_priv (rspamd_main);
 	rspamd_main->cfg->lua_state = init_lua (rspamd_main->cfg);
-	rspamd_mempool_add_destructor (rspamd_main->cfg->cfg_pool,
-		(rspamd_mempool_destruct_t)lua_close, rspamd_main->cfg->lua_state);
+	rspamd_mempool_add_destructor (rspamd_main->cfg->cfg_pool, (rspamd_mempool_destruct_t)lua_close, rspamd_main->cfg->lua_state);
 
 	pworker = &workers[0];
 	while (*pworker) {
 		/* Init string quarks */
 		(void)g_quark_from_static_string ((*pworker)->name);
-		pworker++;
+		pworker ++;
 	}
 
 	/* Init counters */
-	rspamd_main->counters = rspamd_hash_new_shared (rspamd_main->server_pool,
-			rspamd_str_hash,
-			rspamd_str_equal,
-			64);
+	rspamd_main->counters = rspamd_hash_new_shared (rspamd_main->server_pool, rspamd_str_hash, rspamd_str_equal, 64);
 	/* Init listen sockets hash */
 	listen_sockets = g_hash_table_new (g_direct_hash, g_direct_equal);
 
 	/* Pre-init of cache */
 	rspamd_main->cfg->cache = g_new0 (struct symbols_cache, 1);
-	rspamd_main->cfg->cache->static_pool = rspamd_mempool_new (
-		rspamd_mempool_suggest_size ());
+	rspamd_main->cfg->cache->static_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	rspamd_main->cfg->cache->cfg = rspamd_main->cfg;
-	rspamd_main->cfg->cache->items_by_symbol = g_hash_table_new (
-		rspamd_str_hash,
-		rspamd_str_equal);
+	rspamd_main->cfg->cache->items_by_symbol = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 
 	/* If we want to test lua skip everything except it */
 	if (lua_tests != NULL && lua_tests[0] != NULL) {
@@ -1246,7 +1145,7 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	/* Load config */
-	if (!load_rspamd_config (rspamd_main->cfg, TRUE)) {
+	if (! load_rspamd_config (rspamd_main->cfg, TRUE)) {
 		exit (EXIT_FAILURE);
 	}
 
@@ -1254,7 +1153,7 @@ main (gint argc, gchar **argv, gchar **env)
 	if (rspamd_pidfile != NULL) {
 		rspamd_main->cfg->pid_file = rspamd_pidfile;
 	}
-
+	
 	/* Force debug log */
 	if (is_debug) {
 		rspamd_main->cfg->log_level = G_LOG_LEVEL_DEBUG;
@@ -1264,7 +1163,7 @@ main (gint argc, gchar **argv, gchar **env)
 		/* Init events to test modules */
 		event_init ();
 		res = TRUE;
-		if (!init_lua_filters (rspamd_main->cfg)) {
+		if (! init_lua_filters (rspamd_main->cfg)) {
 			res = FALSE;
 		}
 		/* Perform modules configuring */
@@ -1282,8 +1181,7 @@ main (gint argc, gchar **argv, gchar **env)
 		/* Insert classifiers symbols */
 		(void)rspamd_config_insert_classify_symbols (rspamd_main->cfg);
 
-		if (!validate_cache (rspamd_main->cfg->cache, rspamd_main->cfg,
-			FALSE)) {
+		if (! validate_cache (rspamd_main->cfg->cache, rspamd_main->cfg, FALSE)) {
 			res = FALSE;
 		}
 		if (dump_cache) {
@@ -1303,9 +1201,7 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->history = rspamd_roll_history_new (rspamd_main->server_pool);
 
 	msg_info ("rspamd " RVERSION " is starting, build id: " RID);
-	rspamd_main->cfg->cfg_name = rspamd_mempool_strdup (
-		rspamd_main->cfg->cfg_pool,
-		rspamd_main->cfg->cfg_name);
+	rspamd_main->cfg->cfg_name = rspamd_mempool_strdup (rspamd_main->cfg->cfg_pool, rspamd_main->cfg->cfg_name);
 
 	/* Daemonize */
 	if (!rspamd_main->cfg->no_fork && daemon (0, 0) == -1) {
@@ -1330,14 +1226,13 @@ main (gint argc, gchar **argv, gchar **env)
 	setproctitle ("main process");
 
 	/* Init statfile pool */
-	rspamd_main->statfile_pool = statfile_pool_new (rspamd_main->server_pool,
-			rspamd_main->cfg->mlock_statfile_pool);
+	rspamd_main->statfile_pool = statfile_pool_new (rspamd_main->server_pool, rspamd_main->cfg->mlock_statfile_pool);
 
 	event_init ();
 	g_mime_init (0);
 
 	/* Init lua filters */
-	if (!init_lua_filters (rspamd_main->cfg)) {
+	if (! init_lua_filters (rspamd_main->cfg)) {
 		msg_err ("error loading lua plugins");
 		exit (EXIT_FAILURE);
 	}
@@ -1373,8 +1268,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Maybe read roll history */
 	if (rspamd_main->cfg->history_file) {
-		rspamd_roll_history_load (rspamd_main->history,
-			rspamd_main->cfg->history_file);
+		rspamd_roll_history_load (rspamd_main->history, rspamd_main->cfg->history_file);
 	}
 
 	/* Spawn workers */
@@ -1382,7 +1276,7 @@ main (gint argc, gchar **argv, gchar **env)
 	spawn_workers (rspamd_main);
 
 	/* Signal processing cycle */
-	for (;; ) {
+	for (;;) {
 		msg_debug ("calling sigsuspend");
 		sigemptyset (&signals.sa_mask);
 		sigsuspend (&signals.sa_mask);
@@ -1400,32 +1294,21 @@ main (gint argc, gchar **argv, gchar **env)
 			msg_debug ("catch SIGCHLD signal, finding terminated worker");
 			/* Remove dead child form children list */
 			wrk = waitpid (0, &res, 0);
-			if ((cur =
-				g_hash_table_lookup (rspamd_main->workers,
-				GSIZE_TO_POINTER (wrk))) != NULL) {
+			if ((cur = g_hash_table_lookup (rspamd_main->workers, GSIZE_TO_POINTER (wrk))) != NULL) {
 				/* Unlink dead process from queue and hash table */
 
-				g_hash_table_remove (rspamd_main->workers, GSIZE_TO_POINTER (
-						wrk));
+				g_hash_table_remove (rspamd_main->workers, GSIZE_TO_POINTER (wrk));
 
 				if (WIFEXITED (res) && WEXITSTATUS (res) == 0) {
 					/* Normal worker termination, do not fork one more */
-					msg_info ("%s process %P terminated normally",
-						g_quark_to_string (cur->type),
-						cur->pid);
+					msg_info ("%s process %P terminated normally", g_quark_to_string (cur->type), cur->pid);
 				}
 				else {
 					if (WIFSIGNALED (res)) {
-						msg_warn (
-							"%s process %P terminated abnormally by signal: %d",
-							g_quark_to_string (cur->type),
-							cur->pid,
-							WTERMSIG (res));
+						msg_warn ("%s process %P terminated abnormally by signal: %d", g_quark_to_string (cur->type), cur->pid, WTERMSIG (res));
 					}
 					else {
-						msg_warn ("%s process %P terminated abnormally",
-							g_quark_to_string (cur->type),
-							cur->pid);
+						msg_warn ("%s process %P terminated abnormally", g_quark_to_string (cur->type), cur->pid);
 					}
 					/* Fork another worker in replace of dead one */
 					delay_fork (cur->cf);
@@ -1434,7 +1317,7 @@ main (gint argc, gchar **argv, gchar **env)
 				g_free (cur);
 			}
 			else {
-				for (i = 0; i < (gint)other_workers->len; i++) {
+				for (i = 0; i < (gint)other_workers->len; i ++) {
 					if (g_array_index (other_workers, pid_t, i) == wrk) {
 						g_array_remove_index_fast (other_workers, i);
 						msg_info ("related process %P terminated", wrk);
@@ -1444,9 +1327,7 @@ main (gint argc, gchar **argv, gchar **env)
 		}
 		if (do_restart) {
 			do_restart = 0;
-			reopen_log_priv (rspamd_main->logger,
-				rspamd_main->workers_uid,
-				rspamd_main->workers_gid);
+			reopen_log_priv (rspamd_main->logger, rspamd_main->workers_uid, rspamd_main->workers_gid);
 			msg_info ("rspamd " RVERSION " is restarting");
 			g_hash_table_foreach (rspamd_main->workers, kill_old_workers, NULL);
 			remove_all_maps (rspamd_main->cfg);
@@ -1455,11 +1336,8 @@ main (gint argc, gchar **argv, gchar **env)
 		}
 		if (do_reopen_log) {
 			do_reopen_log = 0;
-			reopen_log_priv (rspamd_main->logger,
-				rspamd_main->workers_uid,
-				rspamd_main->workers_gid);
-			g_hash_table_foreach (rspamd_main->workers, reopen_log_handler,
-				NULL);
+			reopen_log_priv (rspamd_main->logger, rspamd_main->workers_uid, rspamd_main->workers_gid);
+			g_hash_table_foreach (rspamd_main->workers, reopen_log_handler, NULL);
 		}
 		if (got_alarm) {
 			got_alarm = 0;
@@ -1474,7 +1352,7 @@ main (gint argc, gchar **argv, gchar **env)
 	sigaddset (&signals.sa_mask, SIGTERM);
 	sigaction (SIGALRM, &signals, NULL);
 	sigaction (SIGTERM, &signals, NULL);
-	sigaction (SIGINT,	&signals, NULL);
+	sigaction (SIGINT, &signals, NULL);
 	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 	/* Set alarm for hard termination */
 	set_alarm (HARD_TERMINATION_TIME);
@@ -1483,8 +1361,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Maybe save roll history */
 	if (rspamd_main->cfg->history_file) {
-		rspamd_roll_history_save (rspamd_main->history,
-			rspamd_main->cfg->history_file);
+		rspamd_roll_history_save (rspamd_main->history, rspamd_main->cfg->history_file);
 	}
 
 	msg_info ("terminating...");
@@ -1505,6 +1382,6 @@ main (gint argc, gchar **argv, gchar **env)
 	return (res);
 }
 
-/*
- * vi:ts=4
+/* 
+ * vi:ts=4 
  */

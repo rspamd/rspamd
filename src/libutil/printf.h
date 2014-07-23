@@ -62,20 +62,15 @@
  * @param ud opaque pointer
  * @return number of characters written
  */
-typedef glong (*rspamd_printf_append_func)(const gchar *buf, glong buflen,
-	gpointer ud);
+typedef glong (*rspamd_printf_append_func)(const gchar *buf, glong buflen, gpointer ud);
 
 glong rspamd_fprintf (FILE *f, const gchar *fmt, ...);
 glong rspamd_printf (const gchar *fmt, ...);
 glong rspamd_log_fprintf (FILE *f, const gchar *fmt, ...);
 glong rspamd_snprintf (gchar *buf, glong max, const gchar *fmt, ...);
-gchar * rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt,
-	va_list args);
+gchar *rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt, va_list args);
 glong rspamd_printf_gstring (GString *s, const gchar *fmt, ...);
 
-glong rspamd_vprintf_common (rspamd_printf_append_func func,
-	gpointer apd,
-	const gchar *fmt,
-	va_list args);
+glong rspamd_vprintf_common (rspamd_printf_append_func func, gpointer apd, const gchar *fmt, va_list args);
 
 #endif /* PRINTF_H_ */

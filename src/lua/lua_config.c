@@ -23,13 +23,13 @@
  */
 
 
-#include "classifiers/classifiers.h"
-#include "expressions.h"
 #include "lua_common.h"
+#include "expressions.h"
 #include "map.h"
 #include "message.h"
 #include "radix.h"
 #include "trie.h"
+#include "classifiers/classifiers.h"
 
 /* Config file methods */
 LUA_FUNCTION_DEF (config, get_module_opt);
@@ -51,7 +51,7 @@ LUA_FUNCTION_DEF (config, register_post_filter);
 LUA_FUNCTION_DEF (config, register_module_option);
 LUA_FUNCTION_DEF (config, get_api_version);
 
-static const struct luaL_reg configlib_m[] = {
+static const struct luaL_reg    configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
 	LUA_INTERFACE_DEF (config, get_mempool),
 	LUA_INTERFACE_DEF (config, get_all_opt),
@@ -78,7 +78,7 @@ static const struct luaL_reg configlib_m[] = {
 /* Radix tree */
 LUA_FUNCTION_DEF (radix, get_key);
 
-static const struct luaL_reg radixlib_m[] = {
+static const struct luaL_reg    radixlib_m[] = {
 	LUA_INTERFACE_DEF (radix, get_key),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
@@ -87,7 +87,7 @@ static const struct luaL_reg radixlib_m[] = {
 /* Hash table */
 LUA_FUNCTION_DEF (hash_table, get_key);
 
-static const struct luaL_reg hashlib_m[] = {
+static const struct luaL_reg    hashlib_m[] = {
 	LUA_INTERFACE_DEF (hash_table, get_key),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
@@ -99,46 +99,46 @@ LUA_FUNCTION_DEF (trie, add_pattern);
 LUA_FUNCTION_DEF (trie, search_text);
 LUA_FUNCTION_DEF (trie, search_task);
 
-static const struct luaL_reg trielib_m[] = {
+static const struct luaL_reg    trielib_m[] = {
 	LUA_INTERFACE_DEF (trie, add_pattern),
 	LUA_INTERFACE_DEF (trie, search_text),
 	LUA_INTERFACE_DEF (trie, search_task),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
-static const struct luaL_reg trielib_f[] = {
+static const struct luaL_reg    trielib_f[] = {
 	LUA_INTERFACE_DEF (trie, create),
 	{NULL, NULL}
 };
 
-static struct rspamd_config *
+static struct rspamd_config      *
 lua_check_config (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{config}");
+	void                           *ud = luaL_checkudata (L, 1, "rspamd{config}");
 	luaL_argcheck (L, ud != NULL, 1, "'config' expected");
 	return ud ? *((struct rspamd_config **)ud) : NULL;
 }
 
-static radix_tree_t *
+static radix_tree_t           *
 lua_check_radix (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{radix}");
+	void                           *ud = luaL_checkudata (L, 1, "rspamd{radix}");
 	luaL_argcheck (L, ud != NULL, 1, "'radix' expected");
 	return ud ? **((radix_tree_t ***)ud) : NULL;
 }
 
-static GHashTable *
+static GHashTable           *
 lua_check_hash_table (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{hash_table}");
+	void                           *ud = luaL_checkudata (L, 1, "rspamd{hash_table}");
 	luaL_argcheck (L, ud != NULL, 1, "'hash_table' expected");
 	return ud ? **((GHashTable ***)ud) : NULL;
 }
 
-static rspamd_trie_t *
+static rspamd_trie_t          *
 lua_check_trie (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{trie}");
+	void                           *ud = luaL_checkudata (L, 1, "rspamd{trie}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'trie' expected");
 	return ud ? *((rspamd_trie_t **)ud) : NULL;
@@ -155,9 +155,9 @@ lua_config_get_api_version (lua_State *L)
 static gint
 lua_config_get_module_opt (lua_State * L)
 {
-	struct rspamd_config *cfg = lua_check_config (L);
-	const gchar *mname, *optname;
-	const ucl_object_t *obj;
+	struct rspamd_config             *cfg = lua_check_config (L);
+	const gchar                     *mname, *optname;
+	const ucl_object_t              *obj;
 
 	if (cfg) {
 		mname = luaL_checkstring (L, 2);
@@ -177,8 +177,8 @@ lua_config_get_module_opt (lua_State * L)
 static int
 lua_config_get_mempool (lua_State * L)
 {
-	rspamd_mempool_t **ppool;
-	struct rspamd_config *cfg = lua_check_config (L);
+	rspamd_mempool_t                  **ppool;
+	struct rspamd_config             *cfg = lua_check_config (L);
 
 	if (cfg != NULL) {
 		ppool = lua_newuserdata (L, sizeof (rspamd_mempool_t *));
@@ -191,9 +191,9 @@ lua_config_get_mempool (lua_State * L)
 static gint
 lua_config_get_all_opt (lua_State * L)
 {
-	struct rspamd_config *cfg = lua_check_config (L);
-	const gchar *mname;
-	const ucl_object_t *obj;
+	struct rspamd_config             *cfg = lua_check_config (L);
+	const gchar                     *mname;
+	const ucl_object_t              *obj;
 
 	if (cfg) {
 		mname = luaL_checkstring (L, 2);
@@ -213,10 +213,10 @@ lua_config_get_all_opt (lua_State * L)
 static gint
 lua_config_get_classifier (lua_State * L)
 {
-	struct rspamd_config *cfg = lua_check_config (L);
-	struct rspamd_classifier_config *clc = NULL, **pclc = NULL;
-	const gchar *name;
-	GList *cur;
+	struct rspamd_config             *cfg = lua_check_config (L);
+	struct rspamd_classifier_config       *clc = NULL, **pclc = NULL;
+	const gchar                     *name;
+	GList                          *cur;
 
 	if (cfg) {
 		name = luaL_checkstring (L, 2);
@@ -231,8 +231,7 @@ lua_config_get_classifier (lua_State * L)
 			cur = g_list_next (cur);
 		}
 		if (pclc) {
-			pclc = lua_newuserdata (L,
-					sizeof (struct rspamd_classifier_config *));
+			pclc = lua_newuserdata (L, sizeof (struct rspamd_classifier_config *));
 			lua_setclass (L, "rspamd{classifier}", -1);
 			*pclc = clc;
 			return 1;
@@ -246,12 +245,12 @@ lua_config_get_classifier (lua_State * L)
 
 struct lua_callback_data {
 	union {
-		gchar *name;
-		gint ref;
+		gchar						*name;
+		gint						 ref;
 	} callback;
-	gboolean cb_is_ref;
-	lua_State *L;
-	gchar *symbol;
+	gboolean						 cb_is_ref;
+	lua_State						*L;
+	gchar 							*symbol;
 };
 
 /*
@@ -260,7 +259,7 @@ struct lua_callback_data {
 static void
 lua_destroy_cfg_symbol (gpointer ud)
 {
-	struct lua_callback_data *cd = ud;
+	struct lua_callback_data       *cd = ud;
 
 	/* Unref callback */
 	if (cd->cb_is_ref) {
@@ -269,16 +268,14 @@ lua_destroy_cfg_symbol (gpointer ud)
 }
 
 static gboolean
-lua_config_function_callback (struct rspamd_task *task,
-	GList *args,
-	void *user_data)
+lua_config_function_callback (struct rspamd_task *task, GList *args, void *user_data)
 {
-	struct lua_callback_data *cd = user_data;
-	struct rspamd_task **ptask;
-	gint i = 1;
-	struct expression_argument *arg;
-	GList *cur;
-	gboolean res = FALSE;
+	struct lua_callback_data       *cd = user_data;
+	struct rspamd_task            **ptask;
+	gint                            i = 1;
+	struct expression_argument     *arg;
+	GList                          *cur;
+	gboolean                        res = FALSE;
 
 	if (cd->cb_is_ref) {
 		lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->callback.ref);
@@ -295,15 +292,13 @@ lua_config_function_callback (struct rspamd_task *task,
 		arg = get_function_arg (cur->data, task, TRUE);
 		lua_pushstring (cd->L, (const gchar *)arg->data);
 		cur = g_list_next (cur);
-		i++;
+		i ++;
 	}
 
 	if (lua_pcall (cd->L, i, 1, 0) != 0) {
-		msg_info ("error processing symbol %s: call to %s failed: %s",
-			cd->symbol,
-			cd->cb_is_ref ? "local function" :
-			cd->callback.name,
-			lua_tostring (cd->L, -1));
+		msg_info ("error processing symbol %s: call to %s failed: %s", cd->symbol,
+						cd->cb_is_ref ? "local function" :
+						cd->callback.name, lua_tostring (cd->L, -1));
 	}
 	else {
 		if (lua_isboolean (cd->L, 1)) {
@@ -318,19 +313,16 @@ lua_config_function_callback (struct rspamd_task *task,
 static gint
 lua_config_register_function (lua_State *L)
 {
-	struct rspamd_config *cfg = lua_check_config (L);
-	gchar *name;
-	struct lua_callback_data *cd;
-
+	struct rspamd_config             *cfg = lua_check_config (L);
+	gchar                          *name;
+	struct lua_callback_data       *cd;
+	
 	if (cfg) {
 		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
-		cd =
-			rspamd_mempool_alloc (cfg->cfg_pool,
-				sizeof (struct lua_callback_data));
+		cd = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
 
 		if (lua_type (L, 3) == LUA_TSTRING) {
-			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool,
-					luaL_checkstring (L, 3));
+			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 3));
 			cd->cb_is_ref = FALSE;
 		}
 		else {
@@ -342,12 +334,9 @@ lua_config_register_function (lua_State *L)
 		if (name) {
 			cd->L = L;
 			cd->symbol = name;
-			register_expression_function (name, lua_config_function_callback,
-				cd);
+			register_expression_function (name, lua_config_function_callback, cd);
 		}
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
-			cd);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)lua_destroy_cfg_symbol, cd);
 	}
 	return 1;
 }
@@ -361,9 +350,9 @@ lua_config_register_module_option (lua_State *L)
 void
 lua_call_post_filters (struct rspamd_task *task)
 {
-	struct lua_callback_data *cd;
-	struct rspamd_task **ptask;
-	GList *cur;
+	struct lua_callback_data       *cd;
+	struct rspamd_task            **ptask;
+	GList                          *cur;
 
 	cur = task->cfg->post_filters;
 	while (cur) {
@@ -379,10 +368,8 @@ lua_call_post_filters (struct rspamd_task *task)
 		*ptask = task;
 
 		if (lua_pcall (cd->L, 1, 0, 0) != 0) {
-			msg_info ("call to %s failed: %s",
-				cd->cb_is_ref ? "local function" :
-				cd->callback.name,
-				lua_tostring (cd->L, -1));
+			msg_info ("call to %s failed: %s", cd->cb_is_ref ? "local function" :
+							cd->callback.name, lua_tostring (cd->L, -1));
 		}
 		cur = g_list_next (cur);
 	}
@@ -391,16 +378,13 @@ lua_call_post_filters (struct rspamd_task *task)
 static gint
 lua_config_register_post_filter (lua_State *L)
 {
-	struct rspamd_config *cfg = lua_check_config (L);
-	struct lua_callback_data *cd;
+	struct rspamd_config             *cfg = lua_check_config (L);
+	struct lua_callback_data       *cd;
 
 	if (cfg) {
-		cd =
-			rspamd_mempool_alloc (cfg->cfg_pool,
-				sizeof (struct lua_callback_data));
+		cd = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
 		if (lua_type (L, 2) == LUA_TSTRING) {
-			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool,
-					luaL_checkstring (L, 2));
+			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
 			cd->cb_is_ref = FALSE;
 		}
 		else {
@@ -411,9 +395,7 @@ lua_config_register_post_filter (lua_State *L)
 		}
 		cd->L = L;
 		cfg->post_filters = g_list_prepend (cfg->post_filters, cd);
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
-			cd);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)lua_destroy_cfg_symbol, cd);
 	}
 	return 1;
 }
@@ -421,9 +403,9 @@ lua_config_register_post_filter (lua_State *L)
 void
 lua_call_pre_filters (struct rspamd_task *task)
 {
-	struct lua_callback_data *cd;
-	struct rspamd_task **ptask;
-	GList *cur;
+	struct lua_callback_data       *cd;
+	struct rspamd_task            **ptask;
+	GList                          *cur;
 
 	cur = task->cfg->pre_filters;
 	while (cur) {
@@ -439,10 +421,8 @@ lua_call_pre_filters (struct rspamd_task *task)
 		*ptask = task;
 
 		if (lua_pcall (cd->L, 1, 0, 0) != 0) {
-			msg_info ("call to %s failed: %s",
-				cd->cb_is_ref ? "local function" :
-				cd->callback.name,
-				lua_tostring (cd->L, -1));
+			msg_info ("call to %s failed: %s", cd->cb_is_ref ? "local function" :
+							cd->callback.name, lua_tostring (cd->L, -1));
 		}
 		cur = g_list_next (cur);
 	}
@@ -451,16 +431,13 @@ lua_call_pre_filters (struct rspamd_task *task)
 static gint
 lua_config_register_pre_filter (lua_State *L)
 {
-	struct rspamd_config *cfg = lua_check_config (L);
-	struct lua_callback_data *cd;
+	struct rspamd_config             *cfg = lua_check_config (L);
+	struct lua_callback_data       *cd;
 
 	if (cfg) {
-		cd =
-			rspamd_mempool_alloc (cfg->cfg_pool,
-				sizeof (struct lua_callback_data));
+		cd = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
 		if (lua_type (L, 2) == LUA_TSTRING) {
-			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool,
-					luaL_checkstring (L, 2));
+			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
 			cd->cb_is_ref = FALSE;
 		}
 		else {
@@ -471,9 +448,7 @@ lua_config_register_pre_filter (lua_State *L)
 		}
 		cd->L = L;
 		cfg->pre_filters = g_list_prepend (cfg->pre_filters, cd);
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
-			cd);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)lua_destroy_cfg_symbol, cd);
 	}
 	return 1;
 }
@@ -481,17 +456,16 @@ lua_config_register_pre_filter (lua_State *L)
 static gint
 lua_config_add_radix_map (lua_State *L)
 {
-	struct rspamd_config *cfg = lua_check_config (L);
-	const gchar *map_line, *description;
-	radix_tree_t **r, ***ud;
+	struct rspamd_config             *cfg = lua_check_config (L);
+	const gchar                     *map_line, *description;
+	radix_tree_t                   **r, ***ud;
 
 	if (cfg) {
 		map_line = luaL_checkstring (L, 2);
 		description = lua_tostring (L, 3);
 		r = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (radix_tree_t *));
 		*r = radix_tree_create ();
-		if (!add_map (cfg, map_line, description, read_radix_list,
-			fin_radix_list, (void **)r)) {
+		if (!add_map (cfg, map_line, description, read_radix_list, fin_radix_list, (void **)r)) {
 			msg_warn ("invalid radix map %s", map_line);
 			radix_tree_free (*r);
 			lua_pushnil (L);
@@ -512,25 +486,22 @@ lua_config_add_radix_map (lua_State *L)
 static gint
 lua_config_add_hash_map (lua_State *L)
 {
-	struct rspamd_config *cfg = lua_check_config (L);
-	const gchar *map_line, *description;
-	GHashTable **r, ***ud;
+	struct rspamd_config             *cfg = lua_check_config (L);
+	const gchar                     *map_line, *description;
+	GHashTable                    **r, ***ud;
 
 	if (cfg) {
 		map_line = luaL_checkstring (L, 2);
 		description = lua_tostring (L, 3);
 		r = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (GHashTable *));
 		*r = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
-		if (!add_map (cfg, map_line, description, read_host_list, fin_host_list,
-			(void **)r)) {
+		if (!add_map (cfg, map_line, description, read_host_list, fin_host_list, (void **)r)) {
 			msg_warn ("invalid hash map %s", map_line);
 			g_hash_table_destroy (*r);
 			lua_pushnil (L);
 			return 1;
 		}
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)g_hash_table_destroy,
-			*r);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)g_hash_table_destroy, *r);
 		ud = lua_newuserdata (L, sizeof (GHashTable *));
 		*ud = r;
 		lua_setclass (L, "rspamd{hash_table}", -1);
@@ -546,25 +517,22 @@ lua_config_add_hash_map (lua_State *L)
 static gint
 lua_config_add_kv_map (lua_State *L)
 {
-	struct rspamd_config *cfg = lua_check_config (L);
-	const gchar *map_line, *description;
-	GHashTable **r, ***ud;
+	struct rspamd_config             *cfg = lua_check_config (L);
+	const gchar                     *map_line, *description;
+	GHashTable                    **r, ***ud;
 
 	if (cfg) {
 		map_line = luaL_checkstring (L, 2);
 		description = lua_tostring (L, 3);
 		r = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (GHashTable *));
 		*r = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
-		if (!add_map (cfg, map_line, description, read_kv_list, fin_kv_list,
-			(void **)r)) {
+		if (!add_map (cfg, map_line, description, read_kv_list, fin_kv_list, (void **)r)) {
 			msg_warn ("invalid hash map %s", map_line);
 			g_hash_table_destroy (*r);
 			lua_pushnil (L);
 			return 1;
 		}
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)g_hash_table_destroy,
-			*r);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)g_hash_table_destroy, *r);
 		ud = lua_newuserdata (L, sizeof (GHashTable *));
 		*ud = r;
 		lua_setclass (L, "rspamd{hash_table}", -1);
@@ -585,7 +553,7 @@ struct lua_map_callback_data {
 
 static gchar *
 lua_map_read (rspamd_mempool_t *pool, gchar *chunk, gint len,
-	struct map_cb_data *data)
+		struct map_cb_data *data)
 {
 	struct lua_map_callback_data *cbdata, *old;
 
@@ -637,7 +605,7 @@ lua_map_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 
 		if (lua_pcall (cbdata->L, 1, 0, 0) != 0) {
 			msg_info ("call to %s failed: %s", "local function",
-				lua_tostring (cbdata->L, -1));
+					lua_tostring (cbdata->L, -1));
 		}
 	}
 }
@@ -645,9 +613,9 @@ lua_map_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 static gint
 lua_config_add_map (lua_State *L)
 {
-	struct rspamd_config *cfg = lua_check_config (L);
-	const gchar *map_line, *description;
-	struct lua_map_callback_data *cbdata, **pcbdata;
+	struct rspamd_config            *cfg = lua_check_config (L);
+	const gchar                     *map_line, *description;
+	struct lua_map_callback_data    *cbdata, **pcbdata;
 
 	if (cfg) {
 		map_line = luaL_checkstring (L, 2);
@@ -663,7 +631,7 @@ lua_config_add_map (lua_State *L)
 			pcbdata = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (cbdata));
 			*pcbdata = cbdata;
 			if (!add_map (cfg, map_line, description, lua_map_read, lua_map_fin,
-				(void **)pcbdata)) {
+					(void **)pcbdata)) {
 				msg_warn ("invalid hash map %s", map_line);
 				lua_pushboolean (L, false);
 			}
@@ -689,8 +657,8 @@ lua_config_add_map (lua_State *L)
 static void
 lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 {
-	struct lua_callback_data *cd = ud;
-	struct rspamd_task **ptask;
+	struct lua_callback_data       *cd = ud;
+	struct rspamd_task            **ptask;
 
 	if (cd->cb_is_ref) {
 		lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->callback.ref);
@@ -704,27 +672,24 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 
 	if (lua_pcall (cd->L, 1, 0, 0) != 0) {
 		msg_info ("call to %s failed: %s", cd->cb_is_ref ? "local function" :
-			cd->callback.name, lua_tostring (cd->L, -1));
+									cd->callback.name, lua_tostring (cd->L, -1));
 	}
 }
 
 static gint
 lua_config_register_symbol (lua_State * L)
 {
-	struct rspamd_config *cfg = lua_check_config (L);
-	gchar *name;
-	double weight;
-	struct lua_callback_data *cd;
+	struct rspamd_config             *cfg = lua_check_config (L);
+	gchar                          *name;
+	double                          weight;
+	struct lua_callback_data       *cd;
 
 	if (cfg) {
 		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
 		weight = luaL_checknumber (L, 3);
-		cd =
-			rspamd_mempool_alloc (cfg->cfg_pool,
-				sizeof (struct lua_callback_data));
+		cd = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
 		if (lua_type (L, 4) == LUA_TSTRING) {
-			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool,
-					luaL_checkstring (L, 4));
+			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 4));
 			cd->cb_is_ref = FALSE;
 		}
 		else {
@@ -736,15 +701,9 @@ lua_config_register_symbol (lua_State * L)
 		if (name) {
 			cd->symbol = name;
 			cd->L = L;
-			register_symbol (&cfg->cache,
-				name,
-				weight,
-				lua_metric_symbol_callback,
-				cd);
+			register_symbol (&cfg->cache, name, weight, lua_metric_symbol_callback, cd);
 		}
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
-			cd);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)lua_destroy_cfg_symbol, cd);
 	}
 	return 0;
 }
@@ -752,23 +711,20 @@ lua_config_register_symbol (lua_State * L)
 static gint
 lua_config_register_symbols (lua_State *L)
 {
-	struct rspamd_config *cfg = lua_check_config (L);
-	struct lua_callback_data *cd;
-	gint i, top;
-	gchar *sym;
-	gdouble weight = 1.0;
+	struct rspamd_config             *cfg = lua_check_config (L);
+	struct lua_callback_data       *cd;
+	gint                             i, top;
+	gchar                           *sym;
+	gdouble                          weight = 1.0;
 
 	if (lua_gettop (L) < 3) {
 		msg_err ("not enough arguments to register a function");
 		return 0;
 	}
 	if (cfg) {
-		cd =
-			rspamd_mempool_alloc (cfg->cfg_pool,
-				sizeof (struct lua_callback_data));
+		cd = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
 		if (lua_type (L, 2) == LUA_TSTRING) {
-			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool,
-					luaL_checkstring (L, 2));
+			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
 			cd->cb_is_ref = FALSE;
 		}
 		else {
@@ -787,15 +743,9 @@ lua_config_register_symbols (lua_State *L)
 		sym = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, top));
 		cd->symbol = sym;
 		cd->L = L;
-		register_symbol (&cfg->cache,
-			sym,
-			weight,
-			lua_metric_symbol_callback,
-			cd);
-		for (i = top; i < lua_gettop (L); i++) {
-			sym =
-				rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L,
-					i + 1));
+		register_symbol (&cfg->cache, sym, weight, lua_metric_symbol_callback, cd);
+		for (i = top; i < lua_gettop (L); i ++) {
+			sym = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, i + 1));
 			register_virtual_symbol (&cfg->cache, sym, weight);
 		}
 	}
@@ -806,9 +756,9 @@ lua_config_register_symbols (lua_State *L)
 static gint
 lua_config_register_virtual_symbol (lua_State * L)
 {
-	struct rspamd_config *cfg = lua_check_config (L);
-	gchar *name;
-	double weight;
+	struct rspamd_config             *cfg = lua_check_config (L);
+	gchar                          *name;
+	double                          weight;
 
 	if (cfg) {
 		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
@@ -823,20 +773,17 @@ lua_config_register_virtual_symbol (lua_State * L)
 static gint
 lua_config_register_callback_symbol (lua_State * L)
 {
-	struct rspamd_config *cfg = lua_check_config (L);
-	gchar *name;
-	double weight;
-	struct lua_callback_data *cd;
+	struct rspamd_config             *cfg = lua_check_config (L);
+	gchar                          *name;
+	double                          weight;
+	struct lua_callback_data       *cd;
 
 	if (cfg) {
 		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
 		weight = luaL_checknumber (L, 3);
-		cd =
-			rspamd_mempool_alloc (cfg->cfg_pool,
-				sizeof (struct lua_callback_data));
+		cd = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
 		if (lua_type (L, 4) == LUA_TSTRING) {
-			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool,
-					luaL_checkstring (L, 4));
+			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 4));
 			cd->cb_is_ref = FALSE;
 		}
 		else {
@@ -848,15 +795,9 @@ lua_config_register_callback_symbol (lua_State * L)
 		if (name) {
 			cd->symbol = name;
 			cd->L = L;
-			register_callback_symbol (&cfg->cache,
-				name,
-				weight,
-				lua_metric_symbol_callback,
-				cd);
+			register_callback_symbol (&cfg->cache, name, weight, lua_metric_symbol_callback, cd);
 		}
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
-			cd);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)lua_destroy_cfg_symbol, cd);
 	}
 	return 0;
 }
@@ -864,22 +805,19 @@ lua_config_register_callback_symbol (lua_State * L)
 static gint
 lua_config_register_callback_symbol_priority (lua_State * L)
 {
-	struct rspamd_config *cfg = lua_check_config (L);
-	gchar *name;
-	double weight;
-	gint priority;
-	struct lua_callback_data *cd;
+	struct rspamd_config             *cfg = lua_check_config (L);
+	gchar                          *name;
+	double                          weight;
+	gint                            priority;
+	struct lua_callback_data       *cd;
 
 	if (cfg) {
 		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
 		weight = luaL_checknumber (L, 3);
 		priority = luaL_checknumber (L, 4);
-		cd =
-			rspamd_mempool_alloc (cfg->cfg_pool,
-				sizeof (struct lua_callback_data));
+		cd = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct lua_callback_data));
 		if (lua_type (L, 5) == LUA_TSTRING) {
-			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool,
-					luaL_checkstring (L, 5));
+			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 5));
 			cd->cb_is_ref = FALSE;
 		}
 		else {
@@ -892,16 +830,9 @@ lua_config_register_callback_symbol_priority (lua_State * L)
 		if (name) {
 			cd->L = L;
 			cd->symbol = name;
-			register_callback_symbol_priority (&cfg->cache,
-				name,
-				weight,
-				priority,
-				lua_metric_symbol_callback,
-				cd);
+			register_callback_symbol_priority (&cfg->cache, name, weight, priority, lua_metric_symbol_callback, cd);
 		}
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
-			cd);
+		rspamd_mempool_add_destructor (cfg->cfg_pool, (rspamd_mempool_destruct_t)lua_destroy_cfg_symbol, cd);
 
 	}
 	return 0;
@@ -912,8 +843,8 @@ lua_config_register_callback_symbol_priority (lua_State * L)
 static gint
 lua_radix_get_key (lua_State * L)
 {
-	radix_tree_t *radix = lua_check_radix (L);
-	guint32 key;
+	radix_tree_t                  *radix = lua_check_radix (L);
+	guint32                         key;
 
 	if (radix) {
 		key = luaL_checkint (L, 2);
@@ -931,8 +862,8 @@ lua_radix_get_key (lua_State * L)
 static gint
 lua_hash_table_get_key (lua_State * L)
 {
-	GHashTable *tbl = lua_check_hash_table (L);
-	const gchar *key, *value;
+	GHashTable                    *tbl = lua_check_hash_table (L);
+	const gchar                    *key, *value;
 
 	if (tbl) {
 		key = luaL_checkstring (L, 2);
@@ -951,8 +882,8 @@ lua_hash_table_get_key (lua_State * L)
 static gint
 lua_trie_create (lua_State *L)
 {
-	rspamd_trie_t *trie, **ptrie;
-	gboolean icase = FALSE;
+	rspamd_trie_t                 *trie, **ptrie;
+	gboolean                       icase = FALSE;
 
 	if (lua_gettop (L) == 1) {
 		icase = lua_toboolean (L, 1);
@@ -970,12 +901,12 @@ lua_trie_create (lua_State *L)
 static gint
 lua_trie_add_pattern (lua_State *L)
 {
-	rspamd_trie_t *trie = lua_check_trie (L);
-	const gchar *pattern;
-	gint id;
+	rspamd_trie_t                 *trie = lua_check_trie (L);
+	const gchar                   *pattern;
+	gint                           id;
 
 	if (trie) {
-		pattern = luaL_checkstring (L, 2);
+		pattern  = luaL_checkstring (L, 2);
 		id = luaL_checknumber (L, 3);
 
 		if (pattern != NULL) {
@@ -992,11 +923,11 @@ lua_trie_add_pattern (lua_State *L)
 static gint
 lua_trie_search_text (lua_State *L)
 {
-	rspamd_trie_t *trie = lua_check_trie (L);
-	const gchar *text, *pos;
-	gint id, i = 1;
-	gsize len;
-	gboolean found = FALSE;
+	rspamd_trie_t                 *trie = lua_check_trie (L);
+	const gchar                   *text, *pos;
+	gint                           id, i = 1;
+	gsize                          len;
+	gboolean                       found = FALSE;
 
 	if (trie) {
 		text = luaL_checkstring (L, 2);
@@ -1004,12 +935,11 @@ lua_trie_search_text (lua_State *L)
 		if (text) {
 			lua_newtable (L);
 			pos = text;
-			while (pos < text + len &&
-				(pos = rspamd_trie_lookup (trie, pos, len, &id)) != NULL) {
+			while (pos < text + len && (pos = rspamd_trie_lookup (trie, pos, len, &id)) != NULL) {
 				lua_pushinteger (L, i);
 				lua_pushinteger (L, id);
 				lua_settable (L, -3);
-				i++;
+				i ++;
 				found = TRUE;
 				break;
 			}
@@ -1028,14 +958,14 @@ lua_trie_search_text (lua_State *L)
 static gint
 lua_trie_search_task (lua_State *L)
 {
-	rspamd_trie_t *trie = lua_check_trie (L);
-	struct rspamd_task *task;
-	struct mime_text_part *part;
-	GList *cur;
-	const gchar *pos, *end;
-	gint id, i = 1;
-	void *ud;
-	gboolean found = FALSE;
+	rspamd_trie_t                 *trie = lua_check_trie (L);
+	struct rspamd_task            *task;
+	struct mime_text_part         *part;
+	GList                         *cur;
+	const gchar                   *pos, *end;
+	gint                           id, i = 1;
+	void                          *ud;
+	gboolean                       found = FALSE;
 
 	if (trie) {
 		ud = luaL_checkudata (L, 2, "rspamd{task}");
@@ -1049,14 +979,11 @@ lua_trie_search_task (lua_State *L)
 				if (!part->is_empty && part->content != NULL) {
 					pos = (const gchar *)part->content->data;
 					end = pos + part->content->len;
-					while (pos < end &&
-						(pos =
-						rspamd_trie_lookup (trie, pos, part->content->len,
-						&id)) != NULL) {
+					while (pos < end && (pos = rspamd_trie_lookup (trie, pos, part->content->len, &id)) != NULL) {
 						lua_pushinteger (L, i);
 						lua_pushinteger (L, id);
 						lua_settable (L, -3);
-						i++;
+						i ++;
 						found = TRUE;
 						break;
 					}
@@ -1122,7 +1049,7 @@ luaopen_trie (lua_State * L)
 	lua_pushstring (L, "rspamd{trie}");
 	lua_rawset (L, -3);
 
-	luaL_register (L, NULL,			 trielib_m);
+	luaL_register (L, NULL, trielib_m);
 	luaL_register (L, "rspamd_trie", trielib_f);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */

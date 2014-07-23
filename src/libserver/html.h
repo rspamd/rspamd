@@ -11,129 +11,129 @@
 /* Known HTML tags */
 typedef enum
 {
-	Tag_UNKNOWN, /**< Unknown tag! */
-	Tag_A,      /**< A */
-	Tag_ABBR,   /**< ABBR */
-	Tag_ACRONYM, /**< ACRONYM */
-	Tag_ADDRESS, /**< ADDRESS */
-	Tag_ALIGN,  /**< ALIGN */
-	Tag_APPLET, /**< APPLET */
-	Tag_AREA,   /**< AREA */
-	Tag_B,      /**< B */
-	Tag_BASE,   /**< BASE */
-	Tag_BASEFONT, /**< BASEFONT */
-	Tag_BDO,    /**< BDO */
-	Tag_BGSOUND, /**< BGSOUND */
-	Tag_BIG,    /**< BIG */
-	Tag_BLINK,  /**< BLINK */
-	Tag_BLOCKQUOTE, /**< BLOCKQUOTE */
-	Tag_BODY,   /**< BODY */
-	Tag_BR,     /**< BR */
-	Tag_BUTTON, /**< BUTTON */
-	Tag_CAPTION, /**< CAPTION */
-	Tag_CENTER, /**< CENTER */
-	Tag_CITE,   /**< CITE */
-	Tag_CODE,   /**< CODE */
-	Tag_COL,    /**< COL */
-	Tag_COLGROUP, /**< COLGROUP */
-	Tag_COMMENT, /**< COMMENT */
-	Tag_DD,     /**< DD */
-	Tag_DEL,    /**< DEL */
-	Tag_DFN,    /**< DFN */
-	Tag_DIR,    /**< DIR */
-	Tag_DIV,    /**< DIF */
-	Tag_DL,     /**< DL */
-	Tag_DT,     /**< DT */
-	Tag_EM,     /**< EM */
-	Tag_EMBED,  /**< EMBED */
-	Tag_FIELDSET, /**< FIELDSET */
-	Tag_FONT,   /**< FONT */
-	Tag_FORM,   /**< FORM */
-	Tag_FRAME,  /**< FRAME */
-	Tag_FRAMESET, /**< FRAMESET */
-	Tag_H1,     /**< H1 */
-	Tag_H2,     /**< H2 */
-	Tag_H3,     /**< H3 */
-	Tag_H4,     /**< H4 */
-	Tag_H5,     /**< H5 */
-	Tag_H6,     /**< H6 */
-	Tag_HEAD,   /**< HEAD */
-	Tag_HR,     /**< HR */
-	Tag_HTML,   /**< HTML */
-	Tag_I,      /**< I */
-	Tag_IFRAME, /**< IFRAME */
-	Tag_ILAYER, /**< ILAYER */
-	Tag_IMG,    /**< IMG */
-	Tag_INPUT,  /**< INPUT */
-	Tag_INS,    /**< INS */
-	Tag_ISINDEX, /**< ISINDEX */
-	Tag_KBD,    /**< KBD */
-	Tag_KEYGEN, /**< KEYGEN */
-	Tag_LABEL,  /**< LABEL */
-	Tag_LAYER,  /**< LAYER */
-	Tag_LEGEND, /**< LEGEND */
-	Tag_LI,     /**< LI */
-	Tag_LINK,   /**< LINK */
-	Tag_LISTING, /**< LISTING */
-	Tag_MAP,    /**< MAP */
-	Tag_MARQUEE, /**< MARQUEE */
-	Tag_MENU,   /**< MENU */
-	Tag_META,   /**< META */
-	Tag_MULTICOL, /**< MULTICOL */
-	Tag_NOBR,   /**< NOBR */
-	Tag_NOEMBED, /**< NOEMBED */
-	Tag_NOFRAMES, /**< NOFRAMES */
-	Tag_NOLAYER, /**< NOLAYER */
-	Tag_NOSAVE, /**< NOSAVE */
-	Tag_NOSCRIPT, /**< NOSCRIPT */
-	Tag_OBJECT, /**< OBJECT */
-	Tag_OL,     /**< OL */
-	Tag_OPTGROUP, /**< OPTGROUP */
-	Tag_OPTION, /**< OPTION */
-	Tag_P,      /**< P */
-	Tag_PARAM,  /**< PARAM */
-	Tag_PLAINTEXT, /**< PLAINTEXT */
-	Tag_PRE,    /**< PRE */
-	Tag_Q,      /**< Q */
-	Tag_RB,     /**< RB */
-	Tag_RBC,    /**< RBC */
-	Tag_RP,     /**< RP */
-	Tag_RT,     /**< RT */
-	Tag_RTC,    /**< RTC */
-	Tag_RUBY,   /**< RUBY */
-	Tag_S,      /**< S */
-	Tag_SAMP,   /**< SAMP */
-	Tag_SCRIPT, /**< SCRIPT */
-	Tag_SELECT, /**< SELECT */
-	Tag_SERVER, /**< SERVER */
-	Tag_SERVLET, /**< SERVLET */
-	Tag_SMALL,  /**< SMALL */
-	Tag_SPACER, /**< SPACER */
-	Tag_SPAN,   /**< SPAN */
-	Tag_STRIKE, /**< STRIKE */
-	Tag_STRONG, /**< STRONG */
-	Tag_STYLE,  /**< STYLE */
-	Tag_SUB,    /**< SUB */
-	Tag_SUP,    /**< SUP */
-	Tag_TABLE,  /**< TABLE */
-	Tag_TBODY,  /**< TBODY */
-	Tag_TD,     /**< TD */
-	Tag_TEXTAREA, /**< TEXTAREA */
-	Tag_TFOOT,  /**< TFOOT */
-	Tag_TH,     /**< TH */
-	Tag_THEAD,  /**< THEAD */
-	Tag_TITLE,  /**< TITLE */
-	Tag_TR,     /**< TR */
-	Tag_TT,     /**< TT */
-	Tag_U,      /**< U */
-	Tag_UL,     /**< UL */
-	Tag_VAR,    /**< VAR */
-	Tag_WBR,    /**< WBR */
-	Tag_XMP,    /**< XMP */
-	Tag_XML,    /**< XML */
-	Tag_NEXTID, /**< NEXTID */
+  Tag_UNKNOWN,  /**< Unknown tag! */
+  Tag_A,        /**< A */
+  Tag_ABBR,     /**< ABBR */
+  Tag_ACRONYM,  /**< ACRONYM */
+  Tag_ADDRESS,  /**< ADDRESS */
+  Tag_ALIGN,    /**< ALIGN */
+  Tag_APPLET,   /**< APPLET */
+  Tag_AREA,     /**< AREA */
+  Tag_B,        /**< B */
+  Tag_BASE,     /**< BASE */
+  Tag_BASEFONT, /**< BASEFONT */
+  Tag_BDO,      /**< BDO */
+  Tag_BGSOUND,  /**< BGSOUND */
+  Tag_BIG,      /**< BIG */
+  Tag_BLINK,    /**< BLINK */
+  Tag_BLOCKQUOTE,   /**< BLOCKQUOTE */
+  Tag_BODY,     /**< BODY */
+  Tag_BR,       /**< BR */
+  Tag_BUTTON,   /**< BUTTON */
+  Tag_CAPTION,  /**< CAPTION */
+  Tag_CENTER,   /**< CENTER */
+  Tag_CITE,     /**< CITE */
+  Tag_CODE,     /**< CODE */
+  Tag_COL,      /**< COL */
+  Tag_COLGROUP, /**< COLGROUP */
+  Tag_COMMENT,  /**< COMMENT */
+  Tag_DD,       /**< DD */
+  Tag_DEL,      /**< DEL */
+  Tag_DFN,      /**< DFN */
+  Tag_DIR,      /**< DIR */
+  Tag_DIV,      /**< DIF */
+  Tag_DL,       /**< DL */
+  Tag_DT,       /**< DT */
+  Tag_EM,       /**< EM */
+  Tag_EMBED,    /**< EMBED */
+  Tag_FIELDSET, /**< FIELDSET */
+  Tag_FONT,     /**< FONT */
+  Tag_FORM,     /**< FORM */
+  Tag_FRAME,    /**< FRAME */
+  Tag_FRAMESET, /**< FRAMESET */
+  Tag_H1,       /**< H1 */
+  Tag_H2,       /**< H2 */
+  Tag_H3,       /**< H3 */
+  Tag_H4,       /**< H4 */
+  Tag_H5,       /**< H5 */
+  Tag_H6,       /**< H6 */
+  Tag_HEAD,     /**< HEAD */
+  Tag_HR,       /**< HR */
+  Tag_HTML,     /**< HTML */
+  Tag_I,        /**< I */
+  Tag_IFRAME,   /**< IFRAME */
+  Tag_ILAYER,   /**< ILAYER */
+  Tag_IMG,      /**< IMG */
+  Tag_INPUT,    /**< INPUT */
+  Tag_INS,      /**< INS */
+  Tag_ISINDEX,  /**< ISINDEX */
+  Tag_KBD,      /**< KBD */
+  Tag_KEYGEN,   /**< KEYGEN */
+  Tag_LABEL,    /**< LABEL */
+  Tag_LAYER,    /**< LAYER */
+  Tag_LEGEND,   /**< LEGEND */
+  Tag_LI,       /**< LI */
+  Tag_LINK,     /**< LINK */
+  Tag_LISTING,  /**< LISTING */
+  Tag_MAP,      /**< MAP */
+  Tag_MARQUEE,  /**< MARQUEE */
+  Tag_MENU,     /**< MENU */
+  Tag_META,     /**< META */
+  Tag_MULTICOL, /**< MULTICOL */
+  Tag_NOBR,     /**< NOBR */
+  Tag_NOEMBED,  /**< NOEMBED */
+  Tag_NOFRAMES, /**< NOFRAMES */
+  Tag_NOLAYER,  /**< NOLAYER */
+  Tag_NOSAVE,   /**< NOSAVE */
+  Tag_NOSCRIPT, /**< NOSCRIPT */
+  Tag_OBJECT,   /**< OBJECT */
+  Tag_OL,       /**< OL */
+  Tag_OPTGROUP, /**< OPTGROUP */
+  Tag_OPTION,   /**< OPTION */
+  Tag_P,        /**< P */
+  Tag_PARAM,    /**< PARAM */
+  Tag_PLAINTEXT,/**< PLAINTEXT */
+  Tag_PRE,      /**< PRE */
+  Tag_Q,        /**< Q */
+  Tag_RB,       /**< RB */
+  Tag_RBC,      /**< RBC */
+  Tag_RP,       /**< RP */
+  Tag_RT,       /**< RT */
+  Tag_RTC,      /**< RTC */
+  Tag_RUBY,     /**< RUBY */
+  Tag_S,        /**< S */
+  Tag_SAMP,     /**< SAMP */
+  Tag_SCRIPT,   /**< SCRIPT */
+  Tag_SELECT,   /**< SELECT */
+  Tag_SERVER,   /**< SERVER */
+  Tag_SERVLET,  /**< SERVLET */
+  Tag_SMALL,    /**< SMALL */
+  Tag_SPACER,   /**< SPACER */
+  Tag_SPAN,     /**< SPAN */
+  Tag_STRIKE,   /**< STRIKE */
+  Tag_STRONG,   /**< STRONG */
+  Tag_STYLE,    /**< STYLE */
+  Tag_SUB,      /**< SUB */
+  Tag_SUP,      /**< SUP */
+  Tag_TABLE,    /**< TABLE */
+  Tag_TBODY,    /**< TBODY */
+  Tag_TD,       /**< TD */
+  Tag_TEXTAREA, /**< TEXTAREA */
+  Tag_TFOOT,    /**< TFOOT */
+  Tag_TH,       /**< TH */
+  Tag_THEAD,    /**< THEAD */
+  Tag_TITLE,    /**< TITLE */
+  Tag_TR,       /**< TR */
+  Tag_TT,       /**< TT */
+  Tag_U,        /**< U */
+  Tag_UL,       /**< UL */
+  Tag_VAR,      /**< VAR */
+  Tag_WBR,      /**< WBR */
+  Tag_XMP,      /**< XMP */
+  Tag_XML,		/**< XML */
+  Tag_NEXTID,   /**< NEXTID */
 
-	N_TAGS      /**< Must be last */
+  N_TAGS        /**< Must be last */
 } tag_id_t;
 
 #define CM_UNKNOWN      0
@@ -175,7 +175,7 @@ typedef enum
 #define CM_IMG          (1 << 16)
 /* Elements with inline and block model. Used to avoid calling InlineDup. */
 #define CM_MIXED        (1 << 17)
-/* Elements whose content needs to be indented only if containing one
+/* Elements whose content needs to be indented only if containing one 
    CM_BLOCK element. */
 #define CM_NO_INDENT    (1 << 18)
 /* Elements that are obsolete (such as "dir", "menu"). */
@@ -187,11 +187,11 @@ typedef enum
 #define CM_OMITST       (1 << 21)
 
 /* XML tag */
-#define FL_XML          (1 << 0)
+#define FL_XML			(1 << 0)
 /* Closing tag */
-#define FL_CLOSING      (1 << 1)
+#define FL_CLOSING		(1 << 1)
 /* Fully closed tag (e.g. <a attrs />) */
-#define FL_CLOSED       (1 << 2)
+#define FL_CLOSED		(1 << 2)
 
 struct html_tag {
 	tag_id_t id;
@@ -210,13 +210,8 @@ struct rspamd_task;
 /*
  * Add a single node to the tags tree
  */
-gboolean add_html_node (struct rspamd_task *task,
-	rspamd_mempool_t *pool,
-	struct mime_text_part *part,
-	gchar *tag_text,
-	gsize tag_len,
-	gsize remain,
-	GNode **cur_level);
+gboolean add_html_node (struct rspamd_task *task, rspamd_mempool_t *pool,
+		struct mime_text_part *part, gchar *tag_text, gsize tag_len, gsize remain, GNode **cur_level);
 
 /*
  * Get tag structure by its name (binary search is used)

@@ -7,30 +7,29 @@
 
 #define RADIX_NO_VALUE   (uintptr_t)-1
 
-typedef struct radix_node_s radix_node_t;
+typedef struct radix_node_s  radix_node_t;
 
 struct radix_node_s {
-	radix_node_t *right;
-	radix_node_t *left;
-	radix_node_t *parent;
-	uintptr_t value;
+    radix_node_t *right;
+    radix_node_t *left;
+    radix_node_t *parent;
+    uintptr_t value;
 	guint32 key;
 };
 
 
 typedef struct {
-	radix_node_t *root;
-	size_t size;
+    radix_node_t  *root;
+    size_t         size;
 	rspamd_mempool_t *pool;
 } radix_tree_t;
 
-typedef gboolean (*radix_tree_traverse_func)(guint32 key, guint32 mask,
-	uintptr_t value, void *user_data);
+typedef gboolean (*radix_tree_traverse_func)(guint32 key, guint32 mask, uintptr_t value, void *user_data);
 
 /**
  * Create new radix tree
  */
-radix_tree_t * radix_tree_create (void);
+radix_tree_t *radix_tree_create (void);
 
 /**
  * Insert value to radix tree
@@ -38,10 +37,7 @@ radix_tree_t * radix_tree_create (void);
  *          0 if operation was successfull
  *          -1 if there was some error
  */
-gint radix32tree_insert (radix_tree_t *tree,
-	guint32 key,
-	guint32 mask,
-	uintptr_t value);
+gint radix32tree_insert (radix_tree_t *tree, guint32 key, guint32 mask, uintptr_t value);
 
 /**
  * Add value to radix tree or insert it if value does not exists
@@ -49,10 +45,7 @@ gint radix32tree_insert (radix_tree_t *tree,
  *          0 if value was inserted
  *          -1 if there was some error
  */
-uintptr_t radix32tree_add (radix_tree_t *tree,
-	guint32 key,
-	guint32 mask,
-	uintptr_t value);
+uintptr_t radix32tree_add (radix_tree_t *tree, guint32 key, guint32 mask, uintptr_t value);
 
 /**
  * Replace value in radix tree or insert it if value does not exists
@@ -60,10 +53,7 @@ uintptr_t radix32tree_add (radix_tree_t *tree,
  *          0 if value was inserted
  *          -1 if there was some error
  */
-gint radix32tree_replace (radix_tree_t *tree,
-	guint32 key,
-	guint32 mask,
-	uintptr_t value);
+gint radix32tree_replace (radix_tree_t *tree, guint32 key, guint32 mask, uintptr_t value);
 
 /**
  * Delete value from radix tree
@@ -91,9 +81,7 @@ uintptr_t radix32_tree_find_addr (radix_tree_t *tree, rspamd_inet_addr_t *addr);
 /**
  * Traverse via the whole tree calling specified callback
  */
-void radix32tree_traverse (radix_tree_t *tree,
-	radix_tree_traverse_func func,
-	void *user_data);
+void radix32tree_traverse (radix_tree_t *tree, radix_tree_traverse_func func, void *user_data);
 
 /**
  * Frees radix tree

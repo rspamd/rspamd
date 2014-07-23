@@ -8,8 +8,7 @@
 #include "config.h"
 #include "mem_pool.h"
 
-#define update_buf_size(x) (x)->free = (x)->buf->size - \
-		((x)->pos - (x)->buf->begin); (x)->buf->len = (x)->pos - (x)->buf->begin
+#define update_buf_size(x) (x)->free = (x)->buf->size - ((x)->pos - (x)->buf->begin); (x)->buf->len = (x)->pos - (x)->buf->begin
 
 typedef struct f_str_s {
 	gchar *begin;
@@ -77,22 +76,22 @@ gint fstrpush_unichar (f_str_t *dest, gunichar c);
 /*
  * Allocate memory for f_str_t
  */
-f_str_t * fstralloc (rspamd_mempool_t *pool, size_t len);
+f_str_t* fstralloc (rspamd_mempool_t *pool, size_t len);
 
 /*
  * Allocate memory for f_str_t from temporary pool
  */
-f_str_t * fstralloc_tmp (rspamd_mempool_t *pool, size_t len);
+f_str_t* fstralloc_tmp (rspamd_mempool_t *pool, size_t len);
 
 /*
  * Truncate string to its len
  */
-f_str_t * fstrtruncate (rspamd_mempool_t *pool, f_str_t *orig);
+f_str_t* fstrtruncate (rspamd_mempool_t *pool, f_str_t *orig);
 
 /*
  * Enlarge string to new size
  */
-f_str_t * fstrgrow (rspamd_mempool_t *pool, f_str_t *orig, size_t newlen);
+f_str_t* fstrgrow (rspamd_mempool_t *pool, f_str_t *orig, size_t newlen);
 
 /*
  * Return specified character
@@ -111,7 +110,7 @@ guint32 fstrhash_lowercase (f_str_t *str, gboolean is_utf);
 /*
  * Make copy of string to 0-terminated string
  */
-gchar * fstrcstr (f_str_t *str, rspamd_mempool_t *pool);
+gchar* fstrcstr (f_str_t *str, rspamd_mempool_t *pool);
 
 /*
  * Strip fstr string from space symbols

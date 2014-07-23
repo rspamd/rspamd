@@ -55,15 +55,8 @@ struct diff_edit
  * @param sn here would be stored a number of differences between a and b
  * @return distance between strings or -1 in case of error
  */
-gint rspamd_diff (const void *a,
-	gint aoff,
-	gint n,
-	const void *b,
-	gint boff,
-	gint m,
-	gint dmax,
-	GArray *ses,
-	gint *sn);
+gint rspamd_diff(const void *a, gint aoff, gint n, const void *b, gint boff, gint m,
+		gint dmax, GArray *ses, gint *sn);
 
 /*
  * Calculate distance between two strings (in percentage) using diff algorithm.
@@ -75,7 +68,7 @@ guint32 compare_diff_distance (f_str_t *s1, f_str_t *s2);
  * Calculate distance between two strings (in percentage) using diff algorithm. Strings are normalized before:
  * all spaces are removed and all characters are lowercased.
  * @return 100 in case of identical strings and 0 in case of totally different strings.
- */
+*/
 guint32 compare_diff_distance_normalized (f_str_t *s1, f_str_t *s2);
 
 #endif /* DIFF_H_ */

@@ -4,10 +4,10 @@
 #include "config.h"
 
 typedef struct rspamd_bloom_filter_s {
-	size_t asize;
-	gchar *a;
-	size_t nfuncs;
-	guint32 *seeds;
+	size_t          asize;
+	gchar          *a;
+	size_t          nfuncs;
+	guint32        *seeds;
 } rspamd_bloom_filter_t;
 
 
@@ -23,7 +23,7 @@ typedef struct rspamd_bloom_filter_s {
  * @param nfuncs number of hash functions
  * @param ... hash functions list
  */
-rspamd_bloom_filter_t * rspamd_bloom_create (size_t size, size_t nfuncs, ...);
+rspamd_bloom_filter_t* rspamd_bloom_create (size_t size, size_t nfuncs, ...);
 
 /*
  * Destroy bloom filter

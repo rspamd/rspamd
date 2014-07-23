@@ -24,7 +24,7 @@
 #include "lua_common.h"
 
 /* Public prototypes */
-struct rspamd_async_session * lua_check_session (lua_State * L);
+struct rspamd_async_session *lua_check_session (lua_State * L);
 gint luaopen_session (lua_State * L);
 
 /* Lua bindings */
@@ -34,7 +34,7 @@ LUA_FUNCTION_DEF (session, check_session_pending);
 LUA_FUNCTION_DEF (session, create);
 LUA_FUNCTION_DEF (session, delete);
 
-static const struct luaL_reg sessionlib_m[] = {
+static const struct luaL_reg    sessionlib_m[] = {
 	LUA_INTERFACE_DEF (session, register_async_event),
 	LUA_INTERFACE_DEF (session, remove_normal_event),
 	LUA_INTERFACE_DEF (session, check_session_pending),
@@ -43,12 +43,12 @@ static const struct luaL_reg sessionlib_m[] = {
 	{NULL, NULL}
 };
 
-static const struct luaL_reg sessionlib_f[] = {
+static const struct luaL_reg    sessionlib_f[] = {
 	LUA_INTERFACE_DEF (session, create),
 	{NULL, NULL}
 };
 
-static const struct luaL_reg eventlib_m[] = {
+static const struct luaL_reg    eventlib_m[] = {
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -67,18 +67,18 @@ struct lua_event_udata {
 	struct rspamd_async_session *session;
 };
 
-struct rspamd_async_session *
+struct rspamd_async_session      *
 lua_check_session (lua_State * L)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{session}");
+	void								*ud = luaL_checkudata (L, 1, "rspamd{session}");
 	luaL_argcheck (L, ud != NULL, 1, "'session' expected");
 	return ud ? *((struct rspamd_async_session **)ud) : NULL;
 }
 
-struct rspamd_async_event *
+struct rspamd_async_event      *
 lua_check_event (lua_State * L, gint pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{event}");
+	void								*ud = luaL_checkudata (L, pos, "rspamd{event}");
 	luaL_argcheck (L, ud != NULL, 1, "'event' expected");
 	return ud ? *((struct rspamd_async_event **)ud) : NULL;
 }
@@ -88,14 +88,13 @@ lua_check_event (lua_State * L, gint pos)
 static gboolean
 lua_session_finalizer (gpointer ud)
 {
-	struct lua_session_udata *cbdata = ud;
-	gboolean res;
+	struct lua_session_udata					*cbdata = ud;
+	gboolean								 	 res;
 
 	/* Call finalizer function */
 	lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_fin);
 	if (lua_pcall (cbdata->L, 0, 1, 0) != 0) {
-		msg_info ("call to session finalizer failed: %s",
-			lua_tostring (cbdata->L, -1));
+		msg_info ("call to session finalizer failed: %s", lua_tostring (cbdata->L, -1));
 	}
 	res = lua_toboolean (cbdata->L, -1);
 	lua_pop (cbdata->L, 1);
@@ -108,15 +107,14 @@ lua_session_finalizer (gpointer ud)
 static void
 lua_session_restore (gpointer ud)
 {
-	struct lua_session_udata *cbdata = ud;
+	struct lua_session_udata					*cbdata = ud;
 
 	if (cbdata->cbref_restore) {
 
 		/* Call restorer function */
 		lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_restore);
 		if (lua_pcall (cbdata->L, 0, 0, 0) != 0) {
-			msg_info ("call to session restorer failed: %s",
-				lua_tostring (cbdata->L, -1));
+			msg_info ("call to session restorer failed: %s", lua_tostring (cbdata->L, -1));
 		}
 		luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_restore);
 	}
@@ -125,15 +123,14 @@ lua_session_restore (gpointer ud)
 static void
 lua_session_cleanup (gpointer ud)
 {
-	struct lua_session_udata *cbdata = ud;
+	struct lua_session_udata					*cbdata = ud;
 
 	if (cbdata->cbref_cleanup) {
 
 		/* Call restorer function */
 		lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_cleanup);
 		if (lua_pcall (cbdata->L, 0, 0, 0) != 0) {
-			msg_info ("call to session cleanup failed: %s",
-				lua_tostring (cbdata->L, -1));
+			msg_info ("call to session cleanup failed: %s", lua_tostring (cbdata->L, -1));
 		}
 		luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_cleanup);
 	}
@@ -144,9 +141,9 @@ lua_session_cleanup (gpointer ud)
 static int
 lua_session_create (lua_State *L)
 {
-	struct rspamd_async_session *session, **psession;
-	struct lua_session_udata *cbdata;
-	rspamd_mempool_t *mempool;
+	struct rspamd_async_session					*session, **psession;
+	struct lua_session_udata					*cbdata;
+	rspamd_mempool_t								*mempool;
 
 
 
@@ -189,11 +186,7 @@ lua_session_create (lua_State *L)
 			cbdata->cbref_cleanup = luaL_ref (L, LUA_REGISTRYINDEX);
 		}
 	}
-	session = new_async_session (mempool,
-			lua_session_finalizer,
-			lua_session_restore,
-			lua_session_cleanup,
-			cbdata);
+	session = new_async_session (mempool, lua_session_finalizer, lua_session_restore, lua_session_cleanup, cbdata);
 	cbdata->session = session;
 	psession = lua_newuserdata (L, sizeof (struct rspamd_async_session *));
 	lua_setclass (L, "rspamd{session}", -1);
@@ -205,7 +198,7 @@ lua_session_create (lua_State *L)
 static int
 lua_session_delete (lua_State *L)
 {
-	struct rspamd_async_session *session = lua_check_session (L);
+	struct rspamd_async_session					*session = lua_check_session (L);
 
 	if (session) {
 		destroy_session (session);
@@ -221,14 +214,13 @@ lua_session_delete (lua_State *L)
 static void
 lua_event_fin (gpointer ud)
 {
-	struct lua_event_udata *cbdata = ud;
+	struct lua_event_udata						*cbdata = ud;
 
 	if (cbdata->cbref) {
 		/* Call restorer function */
 		lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref);
 		if (lua_pcall (cbdata->L, 0, 0, 0) != 0) {
-			msg_info ("call to event finalizer failed: %s",
-				lua_tostring (cbdata->L, -1));
+			msg_info ("call to event finalizer failed: %s", lua_tostring (cbdata->L, -1));
 		}
 		luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref);
 	}
@@ -237,23 +229,18 @@ lua_event_fin (gpointer ud)
 static int
 lua_session_register_async_event (lua_State *L)
 {
-	struct rspamd_async_session *session = lua_check_session (L);
-	struct lua_event_udata *cbdata;
-	gpointer *pdata;
+	struct rspamd_async_session					*session = lua_check_session (L);
+	struct lua_event_udata						*cbdata;
+	gpointer									*pdata;
 
 	if (session) {
 		if (lua_isfunction (L, 1)) {
-			cbdata =
-				rspamd_mempool_alloc (session->pool,
-					sizeof (struct lua_event_udata));
+			cbdata = rspamd_mempool_alloc (session->pool, sizeof (struct lua_event_udata));
 			cbdata->L = L;
 			lua_pushvalue (L, 1);
 			cbdata->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 			cbdata->session = session;
-			register_async_event (session,
-				lua_event_fin,
-				cbdata,
-				g_quark_from_static_string ("lua event"));
+			register_async_event (session, lua_event_fin, cbdata, g_quark_from_static_string ("lua event"));
 			pdata = lua_newuserdata (L, sizeof (gpointer));
 			lua_setclass (L, "rspamd{event}", -1);
 			*pdata = cbdata;
@@ -270,8 +257,8 @@ lua_session_register_async_event (lua_State *L)
 static int
 lua_session_remove_normal_event (lua_State *L)
 {
-	struct rspamd_async_session *session = lua_check_session (L);
-	gpointer data;
+	struct rspamd_async_session					*session = lua_check_session (L);
+	gpointer									 data;
 
 	if (session) {
 		data = lua_check_event (L, 2);
@@ -290,10 +277,10 @@ lua_session_remove_normal_event (lua_State *L)
 static int
 lua_session_check_session_pending (lua_State *L)
 {
-	struct rspamd_async_session *session = lua_check_session (L);
+	struct rspamd_async_session					*session = lua_check_session (L);
 
 	if (session) {
-
+		
 	}
 	else {
 		lua_pushnil (L);
@@ -314,7 +301,7 @@ luaopen_session (lua_State * L)
 	lua_pushstring (L, "rspamd{session}");
 	lua_rawset (L, -3);
 
-	luaL_register (L, NULL,				sessionlib_m);
+	luaL_register (L, NULL, sessionlib_m);
 	luaL_register (L, "rspamd_session", sessionlib_f);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
@@ -325,5 +312,5 @@ luaopen_session (lua_State * L)
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 
-	return 1;
+	return 1;	
 }

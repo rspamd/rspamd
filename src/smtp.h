@@ -3,8 +3,8 @@
 
 #include "config.h"
 #include "main.h"
-#include "smtp_utils.h"
 #include "upstream.h"
+#include "smtp_utils.h"
 
 struct rspamd_dns_resolver;
 
@@ -23,7 +23,7 @@ struct smtp_worker_ctx {
 	struct smtp_upstream upstreams[MAX_SMTP_UPSTREAMS];
 	gsize upstream_num;
 	gchar *upstreams_str;
-
+	
 	rspamd_mempool_t *pool;
 	gchar *smtp_banner;
 	gchar *smtp_banner_str;
@@ -90,7 +90,7 @@ struct smtp_session {
 	GList *cur_rcpt;
 
 	guint errors;
-
+	
 	struct rspamd_async_session *s;
 	rspamd_io_dispatcher_t *dispatcher;
 	rspamd_io_dispatcher_t *upstream_dispatcher;
@@ -105,8 +105,7 @@ struct smtp_session {
 	struct event_base *ev_base;
 };
 
-typedef gboolean (*smtp_filter_t)(struct smtp_session *session,
-	gpointer filter_data);
+typedef gboolean (*smtp_filter_t)(struct smtp_session *session, gpointer filter_data);
 
 struct smtp_filter {
 	smtp_filter_t filter;
@@ -117,9 +116,6 @@ struct smtp_filter {
  * Register new SMTP filter
  * XXX: work is still in progress
  */
-void register_smtp_filter (struct smtp_worker_ctx *ctx,
-	enum rspamd_smtp_stage stage,
-	smtp_filter_t filter,
-	gpointer filter_data);
+void register_smtp_filter (struct smtp_worker_ctx *ctx, enum rspamd_smtp_stage stage, smtp_filter_t filter, gpointer filter_data);
 
 #endif

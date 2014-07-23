@@ -67,7 +67,7 @@ struct rspamd_http_message {
  * Options for HTTP connection
  */
 enum rspamd_http_options {
-	RSPAMD_HTTP_BODY_PARTIAL = 0x1 //!< RSPAMD_HTTP_BODY_PARTIAL
+	RSPAMD_HTTP_BODY_PARTIAL = 0x1//!< RSPAMD_HTTP_BODY_PARTIAL
 };
 
 struct rspamd_http_connection_private;
@@ -76,24 +76,20 @@ struct rspamd_http_connection_router;
 struct rspamd_http_connection_entry;
 
 typedef int (*rspamd_http_body_handler_t) (struct rspamd_http_connection *conn,
-	struct rspamd_http_message *msg,
-	const gchar *chunk,
-	gsize len);
+		struct rspamd_http_message *msg,
+		const gchar *chunk,
+		gsize len);
 
-typedef void (*rspamd_http_error_handler_t) (struct rspamd_http_connection *conn,
-	GError *err);
+typedef void (*rspamd_http_error_handler_t) (struct rspamd_http_connection *conn, GError *err);
 
 typedef int (*rspamd_http_finish_handler_t) (struct rspamd_http_connection *conn,
-	struct rspamd_http_message *msg);
+		struct rspamd_http_message *msg);
 
-typedef int (*rspamd_http_router_handler_t) (struct rspamd_http_connection_entry
-	*conn_ent,
-	struct rspamd_http_message *msg);
-typedef void (*rspamd_http_router_error_handler_t) (struct
-	rspamd_http_connection_entry *conn_ent,
-	GError *err);
-typedef void (*rspamd_http_router_finish_handler_t) (struct
-	rspamd_http_connection_entry *conn_ent);
+typedef int (*rspamd_http_router_handler_t) (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg);
+typedef void (*rspamd_http_router_error_handler_t) (struct rspamd_http_connection_entry *conn_ent,
+		GError *err);
+typedef void (*rspamd_http_router_finish_handler_t) (struct rspamd_http_connection_entry *conn_ent);
 
 /**
  * HTTP connection structure
@@ -136,12 +132,12 @@ struct rspamd_http_connection_router {
  * @param opts options
  * @return new connection structure
  */
-struct rspamd_http_connection * rspamd_http_connection_new (
-	rspamd_http_body_handler_t body_handler,
-	rspamd_http_error_handler_t error_handler,
-	rspamd_http_finish_handler_t finish_handler,
-	enum rspamd_http_options opts,
-	enum rspamd_http_connection_type type);
+struct rspamd_http_connection* rspamd_http_connection_new (
+		rspamd_http_body_handler_t body_handler,
+		rspamd_http_error_handler_t error_handler,
+		rspamd_http_finish_handler_t finish_handler,
+		enum rspamd_http_options opts,
+		enum rspamd_http_connection_type type);
 
 /**
  * Handle a request using socket fd and user data ud
@@ -150,11 +146,11 @@ struct rspamd_http_connection * rspamd_http_connection_new (
  * @param fd fd to read/write
  */
 void rspamd_http_connection_read_message (
-	struct rspamd_http_connection *conn,
-	gpointer ud,
-	gint fd,
-	struct timeval *timeout,
-	struct event_base *base);
+		struct rspamd_http_connection *conn,
+		gpointer ud,
+		gint fd,
+		struct timeval *timeout,
+		struct event_base *base);
 
 /**
  * Send reply using initialised connection
@@ -164,14 +160,14 @@ void rspamd_http_connection_read_message (
  * @param fd fd to read/write
  */
 void rspamd_http_connection_write_message (
-	struct rspamd_http_connection *conn,
-	struct rspamd_http_message *msg,
-	const gchar *host,
-	const gchar *mime_type,
-	gpointer ud,
-	gint fd,
-	struct timeval *timeout,
-	struct event_base *base);
+		struct rspamd_http_connection *conn,
+		struct rspamd_http_message *msg,
+		const gchar *host,
+		const gchar *mime_type,
+		gpointer ud,
+		gint fd,
+		struct timeval *timeout,
+		struct event_base *base);
 
 /**
  * Free connection structure
@@ -187,7 +183,7 @@ void rspamd_http_connection_free (struct rspamd_http_connection *conn);
 static inline struct rspamd_http_connection *
 rspamd_http_connection_ref (struct rspamd_http_connection *conn)
 {
-	conn->ref++;
+	conn->ref ++;
 	return conn;
 }
 
@@ -214,7 +210,7 @@ void rspamd_http_connection_reset (struct rspamd_http_connection *conn);
  * @param code code to pass
  * @return new reply object
  */
-struct rspamd_http_message * rspamd_http_new_message (enum http_parser_type type);
+struct rspamd_http_message* rspamd_http_new_message (enum http_parser_type type);
 
 /**
  * Append a header to reply
@@ -222,17 +218,14 @@ struct rspamd_http_message * rspamd_http_new_message (enum http_parser_type type
  * @param name
  * @param value
  */
-void rspamd_http_message_add_header (struct rspamd_http_message *rep,
-	const gchar *name,
-	const gchar *value);
+void rspamd_http_message_add_header (struct rspamd_http_message *rep, const gchar *name, const gchar *value);
 
 /**
  * Search for a specified header in message
  * @param rep message
  * @param name name of header
  */
-const gchar * rspamd_http_message_find_header (struct rspamd_http_message *rep,
-	const gchar *name);
+const gchar* rspamd_http_message_find_header (struct rspamd_http_message *rep, const gchar *name);
 
 /**
  * Free HTTP reply
@@ -256,18 +249,18 @@ time_t rspamd_http_parse_date (const gchar *header, gsize len);
  * the specified directory
  * @return
  */
-struct rspamd_http_connection_router * rspamd_http_router_new (
-	rspamd_http_router_error_handler_t eh,
-	rspamd_http_router_finish_handler_t fh,
-	struct timeval *timeout,
-	struct event_base *base,
-	const char *default_fs_path);
+struct rspamd_http_connection_router* rspamd_http_router_new (
+		rspamd_http_router_error_handler_t eh,
+		rspamd_http_router_finish_handler_t fh,
+		struct timeval *timeout,
+		struct event_base *base,
+		const char *default_fs_path);
 
 /**
  * Add new path to the router
  */
 void rspamd_http_router_add_path (struct rspamd_http_connection_router *router,
-	const gchar *path, rspamd_http_router_handler_t handler);
+		const gchar *path, rspamd_http_router_handler_t handler);
 
 /**
  * Handle new accepted socket
@@ -275,10 +268,8 @@ void rspamd_http_router_add_path (struct rspamd_http_connection_router *router,
  * @param fd server socket
  * @param ud opaque userdata
  */
-void rspamd_http_router_handle_socket (
-	struct rspamd_http_connection_router *router,
-	gint fd,
-	gpointer ud);
+void rspamd_http_router_handle_socket (struct rspamd_http_connection_router *router,
+		gint fd, gpointer ud);
 
 /**
  * Free router and all connections associated

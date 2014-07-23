@@ -27,7 +27,7 @@
 LUA_FUNCTION_DEF (xmlrpc, parse_reply);
 LUA_FUNCTION_DEF (xmlrpc, make_request);
 
-static const struct luaL_reg xmlrpclib_m[] = {
+static const struct luaL_reg    xmlrpclib_m[] = {
 	LUA_INTERFACE_DEF (xmlrpc, parse_reply),
 	LUA_INTERFACE_DEF (xmlrpc, make_request),
 	{"__tostring", lua_class_tostring},
@@ -42,24 +42,13 @@ struct lua_xmlrpc_ud {
 	lua_State *L;
 };
 
-static void xmlrpc_start_element (GMarkupParseContext *context,
-	const gchar *name,
-	const gchar **attribute_names,
-	const gchar **attribute_values,
-	gpointer user_data,
-	GError **error);
-static void xmlrpc_end_element (GMarkupParseContext *context,
-	const gchar *element_name,
-	gpointer user_data,
-	GError **error);
-static void xmlrpc_error (GMarkupParseContext *context,
-	GError *error,
-	gpointer user_data);
-static void xmlrpc_text (GMarkupParseContext *context,
-	const gchar *text,
-	gsize text_len,
-	gpointer user_data,
-	GError **error);
+static void xmlrpc_start_element (GMarkupParseContext *context, const gchar *name, const gchar **attribute_names,
+								const gchar **attribute_values, gpointer user_data, GError **error);
+static void xmlrpc_end_element (GMarkupParseContext	*context, const gchar *element_name, gpointer user_data,
+								GError **error);
+static void xmlrpc_error (GMarkupParseContext *context, GError *error, gpointer user_data);
+static void xmlrpc_text (GMarkupParseContext *context, const gchar *text, gsize text_len, gpointer user_data,
+								GError **error);
 
 static GMarkupParser xmlrpc_parser = {
 	.start_element = xmlrpc_start_element,
@@ -76,15 +65,11 @@ xmlrpc_error_quark (void)
 }
 
 static void
-xmlrpc_start_element (GMarkupParseContext *context,
-	const gchar *name,
-	const gchar **attribute_names,
-	const gchar **attribute_values,
-	gpointer user_data,
-	GError **error)
+xmlrpc_start_element (GMarkupParseContext *context, const gchar *name, const gchar **attribute_names,
+								const gchar **attribute_values, gpointer user_data, GError **error)
 {
-	struct lua_xmlrpc_ud *ud = user_data;
-	int last_state;
+	struct lua_xmlrpc_ud           *ud = user_data;
+	int                             last_state;
 
 	last_state = ud->parser_state;
 
@@ -138,7 +123,7 @@ xmlrpc_start_element (GMarkupParseContext *context,
 			ud->parser_state = 5;
 			/* Create new param of table type */
 			lua_newtable (ud->L);
-			ud->depth++;
+			ud->depth ++;
 		}
 		else if (g_ascii_strcasecmp (name, "string") == 0) {
 			ud->parser_state = 11;
@@ -208,7 +193,7 @@ xmlrpc_start_element (GMarkupParseContext *context,
 			ud->parser_state = 5;
 			/* Create new param of table type */
 			lua_newtable (ud->L);
-			ud->depth++;
+			ud->depth ++;
 		}
 		else {
 			/* Error state */
@@ -218,20 +203,16 @@ xmlrpc_start_element (GMarkupParseContext *context,
 	}
 
 	if (ud->parser_state == 99) {
-		g_set_error (error,
-			xmlrpc_error_quark (), 1, "xmlrpc parse error on state: %d, while parsing start tag: %s",
-			last_state, name);
+		g_set_error (error, xmlrpc_error_quark(), 1, "xmlrpc parse error on state: %d, while parsing start tag: %s",
+				last_state, name);
 	}
 }
 
 static void
-xmlrpc_end_element (GMarkupParseContext *context,
-	const gchar *name,
-	gpointer user_data,
-	GError **error)
+xmlrpc_end_element (GMarkupParseContext	*context, const gchar *name, gpointer user_data, GError **error)
 {
-	struct lua_xmlrpc_ud *ud = user_data;
-	int last_state;
+	struct lua_xmlrpc_ud           *ud = user_data;
+	int                             last_state;
 
 	last_state = ud->parser_state;
 
@@ -291,7 +272,7 @@ xmlrpc_end_element (GMarkupParseContext *context,
 		/* Got tag struct */
 		if (g_ascii_strcasecmp (name, "struct") == 0) {
 			ud->parser_state = 4;
-			ud->depth--;
+			ud->depth --;
 		}
 		else {
 			/* Error state */
@@ -359,30 +340,25 @@ xmlrpc_end_element (GMarkupParseContext *context,
 	}
 
 	if (ud->parser_state == 99) {
-		g_set_error (error,
-			xmlrpc_error_quark (), 1, "xmlrpc parse error on state: %d, while parsing end tag: %s",
-			last_state, name);
+		g_set_error (error, xmlrpc_error_quark(), 1, "xmlrpc parse error on state: %d, while parsing end tag: %s",
+				last_state, name);
 	}
 }
 
 static void
-xmlrpc_text (GMarkupParseContext *context,
-	const gchar *text,
-	gsize text_len,
-	gpointer user_data,
-	GError **error)
+xmlrpc_text (GMarkupParseContext *context, const gchar *text, gsize text_len, gpointer user_data, GError **error)
 {
-	struct lua_xmlrpc_ud *ud = user_data;
-	gint num;
-	gdouble dnum;
+	struct lua_xmlrpc_ud           *ud = user_data;
+	gint                            num;
+	gdouble                         dnum;
 
 	/* Strip line */
 	while (text_len > 0 && g_ascii_isspace (*text)) {
-		text++;
-		text_len--;
+		text ++;
+		text_len --;
 	}
 	while (text_len > 0 && g_ascii_isspace (text[text_len - 1])) {
-		text_len--;
+		text_len --;
 	}
 
 	if (text_len > 0) {
@@ -414,7 +390,7 @@ xmlrpc_text (GMarkupParseContext *context,
 static void
 xmlrpc_error (GMarkupParseContext *context, GError *error, gpointer user_data)
 {
-	struct lua_xmlrpc_ud *ud = user_data;
+	struct lua_xmlrpc_ud           *ud = user_data;
 
 	msg_err ("xmlrpc parser error: %s", error->message, ud->parser_state);
 }
@@ -422,12 +398,12 @@ xmlrpc_error (GMarkupParseContext *context, GError *error, gpointer user_data)
 static gint
 lua_xmlrpc_parse_reply (lua_State *L)
 {
-	const gchar *data;
-	GMarkupParseContext *ctx;
-	GError *err = NULL;
-	struct lua_xmlrpc_ud ud;
-	gsize s;
-	gboolean res;
+	const gchar                    *data;
+	GMarkupParseContext            *ctx;
+	GError                         *err = NULL;
+	struct lua_xmlrpc_ud            ud;
+	gsize                           s;
+	gboolean                        res;
 
 	data = luaL_checklstring (L, 1, &s);
 
@@ -442,7 +418,7 @@ lua_xmlrpc_parse_reply (lua_State *L)
 		res = g_markup_parse_context_parse (ctx, data, s, &err);
 
 		g_markup_parse_context_free (ctx);
-		if (!res) {
+		if (! res) {
 			lua_pushnil (L);
 		}
 	}
@@ -455,14 +431,10 @@ lua_xmlrpc_parse_reply (lua_State *L)
 }
 
 static gint
-lua_xmlrpc_parse_table (lua_State *L,
-	gint pos,
-	gchar *databuf,
-	gint pr,
-	gsize size)
+lua_xmlrpc_parse_table (lua_State *L, gint pos, gchar *databuf, gint pr, gsize size)
 {
-	gint r = pr, num;
-	double dnum;
+	gint                           r = pr, num;
+	double                         dnum;
 
 	r += rspamd_snprintf (databuf + r, size - r, "<struct>");
 	lua_pushnil (L);  /* first key */
@@ -470,12 +442,10 @@ lua_xmlrpc_parse_table (lua_State *L,
 		/* uses 'key' (at index -2) and 'value' (at index -1) */
 		if (lua_type (L, -2) != LUA_TSTRING) {
 			/* Ignore non sting keys */
-			lua_pop (L, 1);
+			lua_pop(L, 1);
 			continue;
 		}
-		r += rspamd_snprintf (databuf + r,
-				size - r,
-				"<member><name>%s</name><value>",
+		r += rspamd_snprintf (databuf + r, size - r, "<member><name>%s</name><value>",
 				lua_tostring (L, -2));
 		switch (lua_type (L, -1)) {
 		case LUA_TNUMBER:
@@ -484,22 +454,16 @@ lua_xmlrpc_parse_table (lua_State *L,
 
 			/* Try to avoid conversion errors */
 			if (dnum != (double)num) {
-				r += rspamd_snprintf (databuf + r,
-						sizeof (databuf) - r,
-						"<double>%f</double>",
+				r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "<double>%f</double>",
 						dnum);
 			}
 			else {
-				r += rspamd_snprintf (databuf + r,
-						sizeof (databuf) - r,
-						"<int>%d</int>",
+				r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "<int>%d</int>",
 						num);
 			}
 			break;
 		case LUA_TBOOLEAN:
-			r += rspamd_snprintf (databuf + r,
-					size - r,
-					"<boolean>%d</boolean>",
+			r += rspamd_snprintf (databuf + r, size - r, "<boolean>%d</boolean>",
 					lua_toboolean (L, -1) ? 1 : 0);
 			break;
 		case LUA_TSTRING:
@@ -513,7 +477,7 @@ lua_xmlrpc_parse_table (lua_State *L,
 		}
 		r += rspamd_snprintf (databuf + r, size - r, "</value></member>");
 		/* removes 'value'; keeps 'key' for next iteration */
-		lua_pop (L, 1);
+		lua_pop(L, 1);
 	}
 	r += rspamd_snprintf (databuf + r, size - r, "</struct>");
 
@@ -527,10 +491,10 @@ lua_xmlrpc_parse_table (lua_State *L,
 static gint
 lua_xmlrpc_make_request (lua_State *L)
 {
-	gchar databuf[BUFSIZ * 2];
-	const gchar *func;
-	gint r, top, i, num;
-	double dnum;
+	gchar                          databuf[BUFSIZ * 2];
+	const gchar                   *func;
+	gint                           r, top, i, num;
+	double                         dnum;
 
 	func = luaL_checkstring (L, 1);
 
@@ -543,9 +507,7 @@ lua_xmlrpc_make_request (lua_State *L)
 		top = lua_gettop (L);
 		/* Get additional options */
 		for (i = 2; i <= top; i++) {
-			r += rspamd_snprintf (databuf + r,
-					sizeof (databuf) - r,
-					"<param><value>");
+			r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "<param><value>");
 			switch (lua_type (L, i)) {
 			case LUA_TNUMBER:
 				num = lua_tointeger (L, i);
@@ -553,43 +515,30 @@ lua_xmlrpc_make_request (lua_State *L)
 
 				/* Try to avoid conversion errors */
 				if (dnum != (double)num) {
-					r += rspamd_snprintf (databuf + r,
-							sizeof (databuf) - r,
-							"<double>%f</double>",
-							dnum);
+					r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "<double>%f</double>",
+											dnum);
 				}
 				else {
-					r += rspamd_snprintf (databuf + r,
-							sizeof (databuf) - r,
-							"<int>%d</int>",
-							num);
+					r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "<int>%d</int>",
+						num);
 				}
 				break;
 			case LUA_TBOOLEAN:
-				r += rspamd_snprintf (databuf + r,
-						sizeof (databuf) - r,
-						"<boolean>%d</boolean>",
+				r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "<boolean>%d</boolean>",
 						lua_toboolean (L, i) ? 1 : 0);
 				break;
 			case LUA_TSTRING:
-				r += rspamd_snprintf (databuf + r,
-						sizeof (databuf) - r,
-						"<string>%s</string>",
+				r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "<string>%s</string>",
 						lua_tostring (L, i));
 				break;
 			case LUA_TTABLE:
-				r +=
-					lua_xmlrpc_parse_table (L, i, databuf, r, sizeof (databuf));
+				r += lua_xmlrpc_parse_table (L, i, databuf, r, sizeof (databuf));
 				break;
 			}
-			r += rspamd_snprintf (databuf + r,
-					sizeof (databuf) - r,
-					"</value></param>");
+			r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "</value></param>");
 		}
 
-		r += rspamd_snprintf (databuf + r,
-				sizeof (databuf) - r,
-				"</params></methodCall>");
+		r += rspamd_snprintf (databuf + r, sizeof (databuf) - r, "</params></methodCall>");
 		lua_pushlstring (L, databuf, r);
 	}
 	else {
