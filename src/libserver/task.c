@@ -55,6 +55,7 @@ rspamd_task_new (struct rspamd_worker *worker)
 	new_task->state = READ_MESSAGE;
 	if (worker) {
 		new_task->cfg = worker->srv->cfg;
+		new_task->pass_all_filters = new_task->cfg->check_all_filters;
 	}
 #ifdef HAVE_CLOCK_GETTIME
 # ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID

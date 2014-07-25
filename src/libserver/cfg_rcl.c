@@ -1286,6 +1286,11 @@ rspamd_rcl_config_init (void)
 		rspamd_rcl_parse_struct_boolean,
 		G_STRUCT_OFFSET (struct rspamd_config, strict_protocol_headers),
 		0);
+	rspamd_rcl_add_default_handler (sub,
+		"check_all_filters",
+		rspamd_rcl_parse_struct_boolean,
+		G_STRUCT_OFFSET (struct rspamd_config, check_all_filters),
+		0);
 
 	/**
 	 * Metric section

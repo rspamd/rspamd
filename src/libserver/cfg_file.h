@@ -265,6 +265,7 @@ struct rspamd_config {
 	gboolean check_text_attachements;               /**< check text attachements as text					*/
 	gboolean convert_config;                        /**< convert config to XML format						*/
 	gboolean strict_protocol_headers;               /**< strictly check protocol headers					*/
+	gboolean check_all_filters;                     /**< check all filters									*/
 
 	gsize max_diff;                                 /**< maximum diff size for text parts					*/
 
