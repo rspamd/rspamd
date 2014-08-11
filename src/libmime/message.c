@@ -935,17 +935,11 @@ process_text_part (struct rspamd_task *task,
 				text_part->orig,
 				NULL);
 
-		if (text_part->html_nodes == NULL) {
-			url_parse_text (task->task_pool, task, text_part, FALSE);
-		}
-		else {
+		if (text_part->html_nodes != NULL) {
 			decode_entitles (text_part->content->data,
 				&text_part->content->len);
-			url_parse_text (task->task_pool, task, text_part, FALSE);
-#if 0
-			url_parse_text (task->task_pool, task, text_part, TRUE);
-#endif
 		}
+		url_parse_text (task->task_pool, task, text_part, TRUE);
 
 		fuzzy_init_part (text_part, task->task_pool, task->cfg->max_diff);
 		rspamd_mempool_add_destructor (task->task_pool,
