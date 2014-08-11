@@ -2,24 +2,34 @@ Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: rspamd
 Source: https://github.com/vstakhov/rspamd
 
+Files: *
+Copyright: 2008-2014 Vsevolod Stakhov <vsevolod@highsecure.ru>
+License: BSD-2-Clause
+
 Files: contrib/lgpl/*
-Copyright: 1999, 2000  Scott Wimer,
-           2004        Matthias Clasen <mclasen@redhat.com>,
-           2005 - 2007 Marco Barisione <marco@barisione.org>
+Copyright: 1999 - 2000 Tom Tromey
+           2000,  2005 Red Hat, Inc.
+           2007        Emmanuele Bassi  <ebassi@gnome.org>
 License: LGPL-2+
 
+Files: contrib/lgpl/gregex.*
+Copyright: 1999 - 2000 Scott Wimer
+           2004        Matthias Clasen <mclasen@redhat.com>,
+           2005 - 2007 Marco Barisione <marco@barisione.org>
+License: LGPL-2.1+
+
 Files: contrib/hiredis/*
-Copyright: 2009 - 2011 Salvatore Sanfilippo <antirez at gmail dot com>
+Copyright: 2006 - 2011 Salvatore Sanfilippo <antirez at gmail dot com>
            2010 - 2011 Pieter Noordhuis <pcnoordhuis at gmail dot com>
-License: BSD-3-clause-Redis
+License: BSD-3-Clause-Redis
 
 Files: compat/queue.h
 Copyright: 1991, 1993 The Regents of the University of California.
-License: BSD-3-clause-RotUoC
+License: BSD-3-Clause-RotUoC
 
 Files: contrib/uthash/*
 Copyright: 2003-2013 Troy D. Hanson http://troydhanson.github.com/uthash/
-License: BSD-1-clause
+License: BSD-1-Clause
 
 Files: src/json/*
 Copyright: 2009 Petri Lehtinen <petri@digip.org>
@@ -27,40 +37,46 @@ License: Expat
 
 Files: conf/lua/regexp/*
 Copyright: 2000-2012 The Apache Software Foundation
-License: Apache 2.0
-
-Files: src/json/*
-Copyright: 2009 Petri Lehtinen <petri@digip.org>
-License: Expat
+License: Apache-2.0
 
 Files: contrib/http-parser/*
 Copyright: 2002-2014 Igor Sysoev 
            Joyent, Inc. and other Node contributors
-License: MIT
+License: Expat
 
 Files: contrib/libottery/*
 Copyright: Nick Mathewson
 License: CC0
 
+Files: contrib/libottery/chacha_crovetz.c
+       contrib/libottery/chacha_merged.c
+Copyright: Ted Krovetz <ted@krovetz.net>
+           D. J. Bernstein
+License: public-domain
+
 Files: contrib/xxhash/xxhash.*
 Copyright: 2012-2013, Yann Collet.
 License: BSD-2-Clause
 
-Files: src/diff.c
+Files: src/libutil/diff.c
 Copyright: 2004 Michael B. Allen <mba2000 ioplex.com>
            2010-2014 Vsevolod Stakhov <vsevolod@highsecure.ru>
-License: MIT
-
-Files: *
-Copyright: 2008-2013 Vsevolod Stakhov <vsevolod@highsecure.ru>
-License: BSD-2-clause
+License: Expat
 
 Files: debian/*
 Copyright: 2011-2012 Vsevolod Stakhov <vsevolod@highsecure.ru>
  2014 Mikhail Gusarov <dottedmag@dottedmag.net>
-License: BSD-2-clause
+License: BSD-2-Clause
 
-License: BSD-1-clause
+Files: src/cdb/cdb*
+Copyright: Michael Tokarev <mjt@corpit.ru>
+License: public-domain
+ The code is in public domain, that is, you may do anything you want with it.
+Comment:
+ The exact meaning of "Public domain" mentioned in the file headers was taken from:
+ http://www.corpit.ru/mjt/tinycdb.html
+
+License: BSD-1-Clause
  Redistribution and use in source and binary forms, with or without
  modification, are permitted provided that the following conditions
  are met:
@@ -80,7 +96,7 @@ License: BSD-1-clause
  OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  SUCH DAMAGE.
 
-License: BSD-2-clause
+License: BSD-2-Clause
  Redistribution and use in source and binary forms, with or without
  modification, are permitted provided that the following conditions are met:
  .
@@ -103,7 +119,7 @@ License: BSD-2-clause
  OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  SUCH DAMAGE.
 
-License: BSD-3-clause-RotUoC
+License: BSD-3-Clause-RotUoC
  Redistribution and use in source and binary forms, with or without
  modification, are permitted provided that the following conditions
  are met:
@@ -131,7 +147,7 @@ License: BSD-3-clause-RotUoC
  OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  SUCH DAMAGE.
 
-License: BSD-3-clause-Redis
+License: BSD-3-Clause-Redis
  Redistribution and use in source and binary forms, with or without
  modification, are permitted provided that the following conditions are met:
  .
@@ -198,7 +214,26 @@ License: LGPL-2+
  License version 2 can be found in the file
  `/usr/share/common-licenses/LGPL-2'.
 
-License: Apache 2.0
+License: LGPL-2.1+
+ This library is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Lesser General Public
+ License as published by the Free Software Foundation; either
+ version 2.1 of the License, or (at your option) any later version.
+ .
+ This library is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ Lesser General Public License for more details.
+ .
+ You should have received a copy of the GNU Lesser General Public
+ License along with this library; if not, write to the Free Software
+ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ .
+ On Debian systems, the full text of the GNU Library General Public
+ License version 2 can be found in the file
+ `/usr/share/common-licenses/LGPL-2.1'.
+
+License: Apache-2.0
  On Debian GNU/Linux system you can find the complete text of the
  Apache-2.0 license in `/usr/share/common-licenses/Apache-2.0'
 
@@ -213,22 +248,3 @@ License: CC0
  You should have received a copy of the CC0 legalcode along with this
  work in doc/cc0.txt.  If not, see
  <http://creativecommons.org/publicdomain/zero/1.0/>.
-
-License: MIT
- Permission is hereby granted, free of charge, to any person obtaining a
- copy of this software and associated documentation files (the "Software"),
- to deal in the Software without restriction, including without limitation
- the rights to use, copy, modify, merge, publish, distribute, sublicense,
- and/or sell copies of the Software, and to permit persons to whom the
- Software is furnished to do so, subject to the following conditions:
- .
- The above copyright notice and this permission notice shall be included
- in all copies or substantial portions of the Software.
- .
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
- THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
- OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- OTHER DEALINGS IN THE SOFTWARE.
