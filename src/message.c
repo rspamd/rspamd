@@ -863,16 +863,10 @@ process_text_part (struct worker_task *task, GByteArray *part_content, GMimeCont
 
 		text_part->content = strip_html_tags (task, task->task_pool, text_part, text_part->orig, NULL);
 
-		if (text_part->html_nodes == NULL) {
-			url_parse_text (task->task_pool, task, text_part, FALSE);
-		}
-		else {
+		if (text_part->html_nodes != NULL) {
 			decode_entitles (text_part->content->data, &text_part->content->len);
-			url_parse_text (task->task_pool, task, text_part, FALSE);
-#if 0
-			url_parse_text (task->task_pool, task, text_part, TRUE);
-#endif
 		}
+		url_parse_text (task->task_pool, task, text_part, TRUE);
 
 		fuzzy_init_part (text_part, task->task_pool, task->cfg->max_diff);
 		memory_pool_add_destructor (task->task_pool, (pool_destruct_func) free_byte_array_callback, text_part->content);
