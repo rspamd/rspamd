@@ -137,11 +137,12 @@ get_next_word (f_str_t * buf, f_str_t * token, GList **exceptions)
 
 	token->len = 0;
 
-	remain = buf->len - (token->begin - buf->begin);
-	if (remain == 0) {
+	pos = token->begin - buf->begin;
+	if (pos >= buf->len) {
 		return NULL;
 	}
-	pos = token->begin - buf->begin;
+
+	remain = buf->len - pos;
 	p = token->begin;
 	/* Skip non delimiters symbols */
 	do {
