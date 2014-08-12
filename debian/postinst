@@ -20,7 +20,9 @@ case "$1" in
        chown $SERVER_USER: $SERVER_HOME $SERVER_LOG
 
        # Remove accidentally created directory (<= 05.05.2014)
-       rmdir /_rspamd:_rspamd
+       if [ -d /_rspamd:_rspamd ]; then
+           rmdir /_rspamd:_rspamd
+       fi
     ;;
 
     abort-*)
