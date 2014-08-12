@@ -2,4 +2,4 @@ rspamd (0.6.10) unstable; urgency=low
 
   * Initial release (Closes: #683746)
 
- -- Mikhail Gusarov <dottedmag@debian.org>  Mon, 05 May 2014 10:48:52 +0200
+ -- Mikhail Gusarov <dottedmag@debian.org>  Wed, 13 Aug 2014 00:28:21 +0200
