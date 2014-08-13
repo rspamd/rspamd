@@ -53,6 +53,7 @@ Files: contrib/libottery/chacha_crovetz.c
 Copyright: Ted Krovetz <ted@krovetz.net>
            D. J. Bernstein
 License: public-domain
+ Public domain.
 
 Files: contrib/xxhash/xxhash.*
 Copyright: 2012-2013, Yann Collet.
