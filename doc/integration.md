@@ -85,7 +85,7 @@ For using dlfunc please visit <http://mta.org.ua/exim-4.70-conf/dlfunc/rspamd/> 
 
 ## Using rspamd with postfix MTA
 
-For using rspamd in postfix it is required to use milter. I'd recommend to use special milter that support rspamd checks - rmilter. Rmilter can be obtained from bitbucket as well: <http://bitbucket.org/vstakhov/rmilter>.
+For using rspamd in postfix it is required to use milter. I'd recommend to use special milter that support rspamd checks - rmilter. Rmilter can be obtained from github as well: <http://github.com/vstakhov/rmilter>.
 
 ### Configuring rmilter to work with rspamd
 
@@ -94,6 +94,7 @@ First of all build and install rmilter:
 	% ./configure
 	% make
 	# make install
+
 Then copy rmilter.conf.sample to rmilter.conf and edit parameters. All parameters are described in rmilter.8 manual page. Here is an example of configuration of rspamd:
 
 {% highlight nginx %}

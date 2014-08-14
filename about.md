@@ -25,4 +25,4 @@ accurate spam filtering.
 ## References
 
 * Home site: <https://rspamd.com>
-* Wiki: <https://bitbucket.org/vstakhov/rspamd/wiki/>
+* Development: <https://github.com/vstakhov/rspamd>

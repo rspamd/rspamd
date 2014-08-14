@@ -4,7 +4,13 @@ title: Downloads
 ---
 
 # Obtaining rspamd
-Rspamd runs on Unix-like operating systems. FreeBSD users can use ports
+
+Rspamd uses [github](https://github.com) as the main development platform. Should you have any questions
+about rspamd development then you can visit:
+
+<https://github.com/vstakhov/rspamd>
+
+Rspamd is intended to run on Unix-like operating systems only. FreeBSD users can use ports
 collection (mail/rspamd) for rspamd installation. Ubuntu users can use launchpad PPA:
 
 <https://launchpad.net/~vsevolod-n/+archive/rspamd>
@@ -14,7 +20,7 @@ various versions of ubuntu:
 
 <http://software.opensuse.org/download.html?project=home%3Acebka&package=rspamd>
 
-Users of other OSes can use sources to build and install rspamd. The recent version of rspamd is
+Users of other OSes can use sources to build and install rspamd. The most recent stable version of rspamd is
 0.6.10.
 
 <p><a class="btn btn-primary" href="/downloads/rspamd-0.6.10.tar.xz">Download rspamd-0.6.10</a></p>

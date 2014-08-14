@@ -20,5 +20,4 @@ For immediate help and discussions you can use IRC channel *#rspamd* in <http://
 
 If you find a bug in rspamd or would like to request a feature you can use issue trackers for rspamd project:
 
-* <https://bitbucket.org/vstakhov/rspamd/issues>
 * <https://github.com/vstakhov/rspamd/issues>
