@@ -1,5 +1,18 @@
 # Rspamd user settings
 
+## Table of Contents
+
+* [Options](options.md)
+* [Logging](logging.md)
+* [Metrics](metrics.md)
+* [Composites](composites.md)
+* [User settings](settings.md)
+* [Statistic configuration](statistic.md)
+* [Workers](../workers/index.md)
+* [Modules](../modules/index.md)
+
+## Introduction
+
 Rspamd allows to specify custom settings according to incoming messages. Each setting define some set
 of custom metric weights, symbols or actions. An administrator can also skip spam checks for certain
 messages completely. Unlike the most of configuration options, rspamd settings can be loaded dynamically

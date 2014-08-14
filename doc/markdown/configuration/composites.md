@@ -1,4 +1,17 @@
-# Rspamd composite rules
+# Rspamd composite symbols
+
+## Table of Contents
+
+* [Options](options.md)
+* [Logging](logging.md)
+* [Metrics](metrics.md)
+* [Composites](composites.md)
+* [User settings](settings.md)
+* [Statistic configuration](statistic.md)
+* [Workers](../workers/index.md)
+* [Modules](../modules/index.md)
+
+## Introduction
 
 Rspamd composites are used to combine rules and create more complex rules.
 Composite rules are defined by `composite` keys. The value of this key should be
