@@ -4,6 +4,17 @@ Rspamd uses UCL for its configuration. UCL format is described in details in
 this [document](ucl.md). Rspamd defines several variables and macros to extend
 UCL functionality.
 
+## Table of Contents
+
+* [Options](options.md)
+* [Logging](logging.md)
+* [Metrics](metrics.md)
+* [Composites](composites.md)
+* [User settings](settings.md)
+* [Statistic configuration](statistic.md)
+* [Workers](../workers/index.md)
+* [Modules](../modules/index.md)
+
 ## Rspamd variables
 
 - *CONFDIR*: configuration directory for rspamd, it is $PREFIX/etc/rspamd/
@@ -50,7 +61,7 @@ metric settings, including rules weights and rspamd actions. [Workers](workers.m
 section specifies rspamd workers settings. [Composites](composites.md) is an utility
 section that describes composite symbols. Statistical filters are defined in 
 [statistic](statistic.md) section. Rspamd stores modules configuration (for both lua
-and internal modules) in [modules](modules.md) section while modules itself are
+and internal modules) in [modules](../modules/index.md) section while modules itself are
 loaded from the following portion of configuration:
 
 ~~~nginx
@@ -65,7 +76,7 @@ If directory is used then all files with suffix `.lua` are loaded as lua plugins
 
 This configuration is not intended to be changed by user, but you can include your
 own configuration in further. To redefine symbols weight and actions rspamd encourages
-to use [dynamic configuration](dynamic_conf.md). Nevertheless, rspamd installation
+to use [dynamic configuration](settings.md). Nevertheless, rspamd installation
 script will never rewrite user's configuration if it exists already. So please 
 read ChangeLog carefully if you upgrade rspamd to a new version for all incompatible
 configuration changes.
