@@ -21,10 +21,10 @@ Rspamd has a number of logging variants. First of all there are three types of l
 
 Also it is possible to turn on debug messages for specific ip addresses. This ability is usefull for testing. For each logging type there are special mandatory parameters: log facility for syslog (read `syslog(3)` manual page for details about facilities), log file for file logging. Also file logging may be buffered for speeding up. For reducing logging noise rspamd detects for sequential identic log messages and replace them with total number of repeats:
 
-~~~
+```
 #81123(fuzzy): May 11 19:41:54 rspamd file_log_function: Last message repeated 155 times
 #81123(fuzzy): May 11 19:41:54 rspamd process_write_command: fuzzy hash was successfully added
-~~~
+```
 
 ## Configuration parameters
 
