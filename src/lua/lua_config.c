@@ -50,6 +50,7 @@ LUA_FUNCTION_DEF (config, register_pre_filter);
 LUA_FUNCTION_DEF (config, register_post_filter);
 LUA_FUNCTION_DEF (config, register_module_option);
 LUA_FUNCTION_DEF (config, get_api_version);
+LUA_FUNCTION_DEF (config, get_key);
 
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
@@ -70,6 +71,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_pre_filter),
 	LUA_INTERFACE_DEF (config, register_post_filter),
 	LUA_INTERFACE_DEF (config, get_api_version),
+	LUA_INTERFACE_DEF (config, get_key),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -575,6 +577,31 @@ lua_config_add_kv_map (lua_State *L)
 	lua_pushnil (L);
 	return 1;
 
+}
+
+static gint
+lua_config_get_key (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L);
+	const char *name;
+	size_t namelen;
+	const ucl_object_t *val;
+
+	name = luaL_checklstring(L, 2, &namelen);
+	if (name && cfg) {
+		val = ucl_object_find_keyl(cfg->rcl_obj, name, namelen);
+		if (val != NULL) {
+			ucl_object_push_lua (L, val, val->type != UCL_ARRAY);
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
 }
 
 struct lua_map_callback_data {
