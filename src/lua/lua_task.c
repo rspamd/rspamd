@@ -39,12 +39,6 @@
 #include "statfile_sync.h"
 #include "diff.h"
 
-extern stat_file_t * get_statfile_by_symbol (statfile_pool_t *pool,
-	struct rspamd_classifier_config *ccf,
-	const gchar *symbol,
-	struct rspamd_statfile_config **st,
-	gboolean try_create);
-
 /* Task creation */
 LUA_FUNCTION_DEF (task, create_empty);
 LUA_FUNCTION_DEF (task, create_from_buffer);
