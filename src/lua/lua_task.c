@@ -51,6 +51,7 @@ LUA_FUNCTION_DEF (task, create_from_buffer);
 /* Task methods */
 LUA_FUNCTION_DEF (task, get_message);
 LUA_FUNCTION_DEF (task, process_message);
+LUA_FUNCTION_DEF (task, get_cfg);
 LUA_FUNCTION_DEF (task, set_cfg);
 LUA_FUNCTION_DEF (task, destroy);
 LUA_FUNCTION_DEF (task, get_mempool);
@@ -105,6 +106,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, destroy),
 	LUA_INTERFACE_DEF (task, process_message),
 	LUA_INTERFACE_DEF (task, set_cfg),
+	LUA_INTERFACE_DEF (task, get_cfg),
 	LUA_INTERFACE_DEF (task, get_mempool),
 	LUA_INTERFACE_DEF (task, get_session),
 	LUA_INTERFACE_DEF (task, get_ev_base),
@@ -316,6 +318,20 @@ lua_task_process_message (lua_State *L)
 
 	return 1;
 }
+
+static int
+lua_task_get_cfg (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_config **pcfg;
+
+	pcfg = lua_newuserdata (L, sizeof (gpointer));
+	lua_setclass (L, "rspamd{config}", -1);
+	*pcfg = task->cfg;
+
+	return 1;
+}
+
 static int
 lua_task_set_cfg (lua_State *L)
 {
