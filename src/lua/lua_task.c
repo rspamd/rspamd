@@ -92,6 +92,7 @@ LUA_FUNCTION_DEF (task, get_timeval);
 LUA_FUNCTION_DEF (task, get_metric_score);
 LUA_FUNCTION_DEF (task, get_metric_action);
 LUA_FUNCTION_DEF (task, learn);
+LUA_FUNCTION_DEF (task, set_settings);
 
 static const struct luaL_reg tasklib_f[] = {
 	LUA_INTERFACE_DEF (task, create_empty),
@@ -143,6 +144,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_metric_score),
 	LUA_INTERFACE_DEF (task, get_metric_action),
 	LUA_INTERFACE_DEF (task, learn),
+	LUA_INTERFACE_DEF (task, set_settings),
 	{"__tostring", lua_class_tostring},
 	{NULL, NULL}
 };
@@ -1334,6 +1336,20 @@ lua_task_learn (lua_State *L)
 	}
 
 	return ret;
+}
+
+static gint
+lua_task_set_settings (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L);
+	ucl_object_t *settings;
+
+	settings = ucl_object_lua_import (L, 2);
+	if (settings != NULL) {
+		task->settings = settings;
+	}
+
+	return 0;
 }
 
 static gint
