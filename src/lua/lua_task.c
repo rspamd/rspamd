@@ -789,14 +789,29 @@ lua_push_internet_address (lua_State *L, InternetAddress *ia)
 	return FALSE;
 #else
 	InternetAddressMailbox *iamb;
+	const char *addr, *at;
 	if (ia && INTERNET_ADDRESS_IS_MAILBOX (ia)) {
 		lua_newtable (L);
 		iamb = INTERNET_ADDRESS_MAILBOX (ia);
-		lua_set_table_index (L, "name", internet_address_get_name (ia));
-		lua_set_table_index (L, "addr",
-			internet_address_mailbox_get_addr (iamb));
-		return TRUE;
+		addr = internet_address_mailbox_get_addr (iamb);
+		if (addr) {
+			lua_set_table_index (L, "name", internet_address_get_name (ia));
+			lua_set_table_index (L, "addr", addr);
+			/* Set optional fields */
+
+			at = strchr (addr, '@');
+			if (at != NULL) {
+				lua_pushstring(L, "user");
+				lua_pushlstring(L, addr, at - addr);
+				lua_settable (L, -3);
+				lua_pushstring(L, "domain");
+				lua_pushstring(L, at + 1);
+				lua_settable (L, -3);
+			}
+			return TRUE;
+		}
 	}
+
 	return FALSE;
 #endif
 }
