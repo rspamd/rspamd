@@ -611,6 +611,7 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 {
 	struct lua_callback_data *cd = ud;
 	struct rspamd_task **ptask;
+	gint level = lua_gettop (cd->L), nresults;
 
 	if (cd->cb_is_ref) {
 		lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->callback.ref);
@@ -622,9 +623,34 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 	rspamd_lua_setclass (cd->L, "rspamd{task}", -1);
 	*ptask = task;
 
-	if (lua_pcall (cd->L, 1, 0, 0) != 0) {
-		msg_info ("call to %s failed: %s", cd->cb_is_ref ? "local function" :
-			cd->callback.name, lua_tostring (cd->L, -1));
+	if (lua_pcall (cd->L, 1, LUA_MULTRET, 0) != 0) {
+		msg_info ("call to (%s)%s failed: %s", cd->symbol,
+			cd->cb_is_ref ? "local function" : cd->callback.name,
+			lua_tostring (cd->L, -1));
+	}
+
+	nresults = lua_gettop (cd->L) - level;
+	if (nresults >= 1) {
+		/* Function returned boolean, so maybe we need to insert result? */
+		gboolean res;
+		GList *opts = NULL;
+		gint i;
+
+		if (lua_type (cd->L, level + 1) == LUA_TBOOLEAN) {
+			res = lua_toboolean (cd->L, level + 1);
+			if (res) {
+				for (i = lua_gettop (cd->L); i > level + 1; i --) {
+					if (lua_type (cd->L, i) == LUA_TSTRING) {
+						const char *opt = lua_tostring (cd->L, i);
+
+						opts = g_list_prepend (opts,
+							rspamd_mempool_strdup (task->task_pool, opt));
+					}
+				}
+				insert_result (task, cd->symbol, 1.0, opts);
+			}
+		}
+		lua_pop (cd->L, nresults);
 	}
 }
 
@@ -639,11 +665,14 @@ rspamd_register_symbol_fromlua (lua_State *L,
 {
 	struct lua_callback_data *cd;
 
-	cd = rspamd_mempool_alloc (cfg->cfg_pool,
+	cd = rspamd_mempool_alloc0 (cfg->cfg_pool,
 		sizeof (struct lua_callback_data));
 	cd->cb_is_ref = TRUE;
 	cd->callback.ref = ref;
 	cd->L = L;
+	if (name) {
+		cd->symbol = rspamd_mempool_strdup (cfg->cfg_pool, name);
+	}
 
 	register_symbol_common (&cfg->cache,
 					name,
