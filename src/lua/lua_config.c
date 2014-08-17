@@ -643,6 +643,7 @@ rspamd_register_symbol_fromlua (lua_State *L,
 		sizeof (struct lua_callback_data));
 	cd->cb_is_ref = TRUE;
 	cd->callback.ref = ref;
+	cd->L = L;
 
 	register_symbol_common (&cfg->cache,
 					name,
