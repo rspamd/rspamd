@@ -751,6 +751,15 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	if (!task->no_log) {
 		rspamd_roll_history_update (task->worker->srv->history, task);
 	}
+
+	/* Write custom headers */
+	g_hash_table_iter_init (&hiter, task->reply_headers);
+	while (g_hash_table_iter_next (&hiter, &h, &v)) {
+		GString *hn = (GString *)h, *hv = (GString *)v;
+
+		rspamd_http_message_add_header (msg, hn->str, hv->str);
+	}
+
 	g_hash_table_iter_init (&hiter, task->results);
 
 	top = ucl_object_typed_new (UCL_OBJECT);
