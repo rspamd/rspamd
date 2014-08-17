@@ -33,6 +33,8 @@ struct cache_item {
 	guint32 networks_number;
 	gboolean is_dynamic;
 
+	gboolean is_skipped;
+
 	/* Callback data */
 	symbol_func_t func;
 	gpointer user_data;
@@ -40,6 +42,7 @@ struct cache_item {
 	/* Flags of virtual symbols */
 	gboolean is_virtual;
 	gboolean is_callback;
+
 
 	/* Priority */
 	gint priority;

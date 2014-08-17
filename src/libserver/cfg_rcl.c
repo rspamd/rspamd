@@ -329,6 +329,7 @@ rspamd_rcl_metric_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 	gdouble action_score, grow_factor;
 	gint action_value;
 	gboolean new = TRUE, have_actions = FALSE;
+	gdouble unknown_weight;
 	ucl_object_iter_t it = NULL;
 
 	val = ucl_object_find_key (obj, "name");
@@ -463,10 +464,20 @@ rspamd_rcl_metric_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 		metric->subject = (gchar *)subject_name;
 	}
 
+	val = ucl_object_find_key (obj, "unknown_weight");
+	if (val && ucl_object_todouble_safe (val, &unknown_weight) &&
+		unknown_weight != 0.) {
+		metric->unknown_weight = unknown_weight;
+		metric->accept_unknown_symbols = TRUE;
+	}
+
 	/* Insert the resulting metric */
 	if (new) {
 		g_hash_table_insert (cfg->metrics, (void *)metric->name, metric);
 		cfg->metrics_list = g_list_prepend (cfg->metrics_list, metric);
+		if (strcmp (metric->name, DEFAULT_METRIC) == 0) {
+			cfg->default_metric = metric;
+		}
 	}
 
 	return TRUE;

@@ -50,7 +50,9 @@ struct metric {
 	const gchar *name;                              /**< name of metric									*/
 	gchar *func_name;                               /**< name of consolidation function					*/
 	metric_cons_func func;                          /**< c consolidation function						*/
-	double grow_factor;                             /**< grow factor for metric							*/
+	gboolean accept_unknown_symbols;                /**< if true unknown symbols are registered here	*/
+	gdouble unknown_weight;                         /**< weight of unknown symbols						*/
+	gdouble grow_factor;                            /**< grow factor for metric							*/
 	GHashTable *symbols;                            /**< weights of symbols in metric					*/
 	GHashTable *descriptions;                       /**< descriptions of symbols in metric				*/
 	struct metric_action actions[METRIC_ACTION_MAX]; /**< all actions of the metric					*/
