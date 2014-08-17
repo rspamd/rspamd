@@ -51,6 +51,7 @@ LUA_FUNCTION_DEF (config, register_post_filter);
 LUA_FUNCTION_DEF (config, register_module_option);
 LUA_FUNCTION_DEF (config, get_api_version);
 LUA_FUNCTION_DEF (config, get_key);
+LUA_FUNCTION_DEF (config, newindex);
 
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
@@ -73,6 +74,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_api_version),
 	LUA_INTERFACE_DEF (config, get_key),
 	{"__tostring", rspamd_lua_class_tostring},
+	{"__newindex", lua_config_newindex},
 	{NULL, NULL}
 };
 
@@ -583,7 +585,7 @@ static gint
 lua_config_get_key (lua_State *L)
 {
 	struct rspamd_config *cfg = lua_check_config (L);
-	const char *name;
+	const gchar *name;
 	size_t namelen;
 	const ucl_object_t *val;
 
@@ -602,6 +604,309 @@ lua_config_get_key (lua_State *L)
 	}
 
 	return 1;
+}
+
+static void
+lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
+{
+	struct lua_callback_data *cd = ud;
+	struct rspamd_task **ptask;
+
+	if (cd->cb_is_ref) {
+		lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->callback.ref);
+	}
+	else {
+		lua_getglobal (cd->L, cd->callback.name);
+	}
+	ptask = lua_newuserdata (cd->L, sizeof (struct rspamd_task *));
+	rspamd_lua_setclass (cd->L, "rspamd{task}", -1);
+	*ptask = task;
+
+	if (lua_pcall (cd->L, 1, 0, 0) != 0) {
+		msg_info ("call to %s failed: %s", cd->cb_is_ref ? "local function" :
+			cd->callback.name, lua_tostring (cd->L, -1));
+	}
+}
+
+static void
+rspamd_register_symbol_fromlua (lua_State *L,
+		struct rspamd_config *cfg,
+		const gchar *name,
+		gint ref,
+		gdouble weight,
+		gint priority,
+		enum rspamd_symbol_type type)
+{
+	struct lua_callback_data *cd;
+
+	cd = rspamd_mempool_alloc (cfg->cfg_pool,
+		sizeof (struct lua_callback_data));
+	cd->cb_is_ref = TRUE;
+	cd->callback.ref = ref;
+
+	register_symbol_common (&cfg->cache,
+					name,
+					weight,
+					priority,
+					lua_metric_symbol_callback,
+					cd,
+					type);
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+		(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
+		cd);
+}
+
+static gint
+lua_config_register_symbol (lua_State * L)
+{
+	struct rspamd_config *cfg = lua_check_config (L);
+	gchar *name;
+	double weight;
+
+	if (cfg) {
+		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+		weight = luaL_checknumber (L, 3);
+
+		if (lua_type (L, 4) == LUA_TSTRING) {
+			lua_getglobal (L, luaL_checkstring (L, 4));
+		}
+		else {
+			lua_pushvalue (L, 4);
+		}
+		if (name) {
+			rspamd_register_symbol_fromlua (L,
+					cfg,
+					name,
+					luaL_ref (L, LUA_REGISTRYINDEX),
+					weight,
+					0,
+					SYMBOL_TYPE_NORMAL);
+		}
+	}
+
+	return 0;
+}
+
+static gint
+lua_config_register_symbols (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L);
+	gint i, top, idx;
+	gchar *sym;
+	gdouble weight = 1.0;
+
+	if (lua_gettop (L) < 3) {
+		msg_err ("not enough arguments to register a function");
+		return 0;
+	}
+	if (cfg) {
+		if (lua_type (L, 2) == LUA_TSTRING) {
+			lua_getglobal (L, luaL_checkstring (L, 2));
+		}
+		else {
+			lua_pushvalue (L, 2);
+		}
+		idx = luaL_ref (L, LUA_REGISTRYINDEX);
+
+		if (lua_type (L, 3) == LUA_TNUMBER) {
+			weight = lua_tonumber (L, 3);
+			top = 4;
+		}
+		else {
+			top = 3;
+		}
+		sym = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, top));
+		rspamd_register_symbol_fromlua (L,
+				cfg,
+				sym,
+				idx,
+				weight,
+				0,
+				SYMBOL_TYPE_NORMAL);
+		for (i = top; i < lua_gettop (L); i++) {
+			sym =
+				rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L,
+					i + 1));
+			register_virtual_symbol (&cfg->cache, sym, weight);
+		}
+	}
+
+	return 0;
+}
+
+static gint
+lua_config_register_virtual_symbol (lua_State * L)
+{
+	struct rspamd_config *cfg = lua_check_config (L);
+	gchar *name;
+	double weight;
+
+	if (cfg) {
+		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+		weight = luaL_checknumber (L, 3);
+		if (name) {
+			register_virtual_symbol (&cfg->cache, name, weight);
+		}
+	}
+	return 0;
+}
+
+static gint
+lua_config_register_callback_symbol (lua_State * L)
+{
+	struct rspamd_config *cfg = lua_check_config (L);
+	gchar *name;
+	double weight;
+
+	if (cfg) {
+		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+		weight = luaL_checknumber (L, 3);
+
+		if (lua_type (L, 4) == LUA_TSTRING) {
+			lua_getglobal (L, luaL_checkstring (L, 4));
+		}
+		else {
+			lua_pushvalue (L, 4);
+		}
+		if (name) {
+			rspamd_register_symbol_fromlua (L,
+					cfg,
+					name,
+					luaL_ref (L, LUA_REGISTRYINDEX),
+					weight,
+					0,
+					SYMBOL_TYPE_CALLBACK);
+		}
+	}
+
+	return 0;
+}
+
+static gint
+lua_config_register_callback_symbol_priority (lua_State * L)
+{
+	struct rspamd_config *cfg = lua_check_config (L);
+	gchar *name;
+	double weight;
+	gint priority;
+
+	if (cfg) {
+		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+		weight = luaL_checknumber (L, 3);
+		priority = luaL_checknumber (L, 4);
+
+		if (lua_type (L, 5) == LUA_TSTRING) {
+			lua_getglobal (L, luaL_checkstring (L, 5));
+		}
+		else {
+			lua_pushvalue (L, 5);
+		}
+		if (name) {
+			rspamd_register_symbol_fromlua (L,
+					cfg,
+					name,
+					luaL_ref (L, LUA_REGISTRYINDEX),
+					weight,
+					priority,
+					SYMBOL_TYPE_CALLBACK);
+		}
+	}
+
+	return 0;
+}
+
+
+static gint
+lua_config_newindex (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L);
+	const gchar *name;
+
+	name = luaL_checkstring (L, 2);
+
+	if (name != NULL && lua_gettop (L) > 2) {
+		if (lua_type (L, 3) == LUA_TFUNCTION) {
+			/* Normal symbol from just a function */
+			lua_pushvalue (L, 3);
+			rspamd_register_symbol_fromlua (L,
+					cfg,
+					name,
+					luaL_ref (L, LUA_REGISTRYINDEX),
+					1.0,
+					0,
+					SYMBOL_TYPE_NORMAL);
+		}
+		else if (lua_type (L, 3) == LUA_TTABLE) {
+			gint type = SYMBOL_TYPE_NORMAL, priority = 0, idx;
+			gdouble weight = 1.0;
+			const char *type_str;
+
+			/*
+			 * Table can have the following attributes:
+			 * "callback" - should be a callback function
+			 * "weight" - optional weight
+			 * "priority" - optional priority
+			 * "type" - optional type (normal, virtual, callback)
+			 */
+			lua_pushstring (L, "callback");
+			lua_gettable (L, -2);
+
+			if (lua_type (L, -1) != LUA_TFUNCTION) {
+				lua_pop (L, 1);
+				msg_info ("cannot find callback definition for %s", name);
+				return 0;
+			}
+			idx = luaL_ref (L, LUA_REGISTRYINDEX);
+
+			/* Optional fields */
+			lua_pushstring (L, "weight");
+			lua_gettable (L, -2);
+
+			if (lua_type (L, -1) == LUA_TNUMBER) {
+				weight = lua_tonumber (L, -1);
+			}
+			lua_pop (L, 1);
+
+			lua_pushstring (L, "priority");
+			lua_gettable (L, -2);
+
+			if (lua_type (L, -1) == LUA_TNUMBER) {
+				priority = lua_tonumber (L, -1);
+			}
+			lua_pop (L, 1);
+
+			lua_pushstring (L, "type");
+			lua_gettable (L, -2);
+
+			if (lua_type (L, -1) == LUA_TSTRING) {
+				type_str = lua_tostring (L, -1);
+				if (strcmp (type_str, "normal") == 0) {
+					type = SYMBOL_TYPE_NORMAL;
+				}
+				else if (strcmp (type_str, "virtual") == 0) {
+					type = SYMBOL_TYPE_VIRTUAL;
+				}
+				else if (strcmp (type_str, "callback") == 0) {
+					type = SYMBOL_TYPE_CALLBACK;
+				}
+				else {
+					msg_info ("unknown type: %s", type_str);
+				}
+
+			}
+			lua_pop (L, 1);
+
+			rspamd_register_symbol_fromlua (L,
+					cfg,
+					name,
+					idx,
+					weight,
+					priority,
+					type);
+		}
+	}
+
+	return 0;
 }
 
 struct lua_map_callback_data {
@@ -709,231 +1014,6 @@ lua_config_add_map (lua_State *L)
 
 	return 1;
 }
-
-/*** Metric functions ***/
-
-
-static void
-lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
-{
-	struct lua_callback_data *cd = ud;
-	struct rspamd_task **ptask;
-
-	if (cd->cb_is_ref) {
-		lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->callback.ref);
-	}
-	else {
-		lua_getglobal (cd->L, cd->callback.name);
-	}
-	ptask = lua_newuserdata (cd->L, sizeof (struct rspamd_task *));
-	rspamd_lua_setclass (cd->L, "rspamd{task}", -1);
-	*ptask = task;
-
-	if (lua_pcall (cd->L, 1, 0, 0) != 0) {
-		msg_info ("call to %s failed: %s", cd->cb_is_ref ? "local function" :
-			cd->callback.name, lua_tostring (cd->L, -1));
-	}
-}
-
-static gint
-lua_config_register_symbol (lua_State * L)
-{
-	struct rspamd_config *cfg = lua_check_config (L);
-	gchar *name;
-	double weight;
-	struct lua_callback_data *cd;
-
-	if (cfg) {
-		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
-		weight = luaL_checknumber (L, 3);
-		cd =
-			rspamd_mempool_alloc (cfg->cfg_pool,
-				sizeof (struct lua_callback_data));
-		if (lua_type (L, 4) == LUA_TSTRING) {
-			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool,
-					luaL_checkstring (L, 4));
-			cd->cb_is_ref = FALSE;
-		}
-		else {
-			lua_pushvalue (L, 4);
-			/* Get a reference */
-			cd->callback.ref = luaL_ref (L, LUA_REGISTRYINDEX);
-			cd->cb_is_ref = TRUE;
-		}
-		if (name) {
-			cd->symbol = name;
-			cd->L = L;
-			register_symbol (&cfg->cache,
-				name,
-				weight,
-				lua_metric_symbol_callback,
-				cd);
-		}
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
-			cd);
-	}
-	return 0;
-}
-
-static gint
-lua_config_register_symbols (lua_State *L)
-{
-	struct rspamd_config *cfg = lua_check_config (L);
-	struct lua_callback_data *cd;
-	gint i, top;
-	gchar *sym;
-	gdouble weight = 1.0;
-
-	if (lua_gettop (L) < 3) {
-		msg_err ("not enough arguments to register a function");
-		return 0;
-	}
-	if (cfg) {
-		cd =
-			rspamd_mempool_alloc (cfg->cfg_pool,
-				sizeof (struct lua_callback_data));
-		if (lua_type (L, 2) == LUA_TSTRING) {
-			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool,
-					luaL_checkstring (L, 2));
-			cd->cb_is_ref = FALSE;
-		}
-		else {
-			lua_pushvalue (L, 2);
-			/* Get a reference */
-			cd->callback.ref = luaL_ref (L, LUA_REGISTRYINDEX);
-			cd->cb_is_ref = TRUE;
-		}
-		if (lua_type (L, 3) == LUA_TNUMBER) {
-			weight = lua_tonumber (L, 3);
-			top = 4;
-		}
-		else {
-			top = 3;
-		}
-		sym = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, top));
-		cd->symbol = sym;
-		cd->L = L;
-		register_symbol (&cfg->cache,
-			sym,
-			weight,
-			lua_metric_symbol_callback,
-			cd);
-		for (i = top; i < lua_gettop (L); i++) {
-			sym =
-				rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L,
-					i + 1));
-			register_virtual_symbol (&cfg->cache, sym, weight);
-		}
-	}
-
-	return 0;
-}
-
-static gint
-lua_config_register_virtual_symbol (lua_State * L)
-{
-	struct rspamd_config *cfg = lua_check_config (L);
-	gchar *name;
-	double weight;
-
-	if (cfg) {
-		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
-		weight = luaL_checknumber (L, 3);
-		if (name) {
-			register_virtual_symbol (&cfg->cache, name, weight);
-		}
-	}
-	return 0;
-}
-
-static gint
-lua_config_register_callback_symbol (lua_State * L)
-{
-	struct rspamd_config *cfg = lua_check_config (L);
-	gchar *name;
-	double weight;
-	struct lua_callback_data *cd;
-
-	if (cfg) {
-		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
-		weight = luaL_checknumber (L, 3);
-		cd =
-			rspamd_mempool_alloc (cfg->cfg_pool,
-				sizeof (struct lua_callback_data));
-		if (lua_type (L, 4) == LUA_TSTRING) {
-			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool,
-					luaL_checkstring (L, 4));
-			cd->cb_is_ref = FALSE;
-		}
-		else {
-			lua_pushvalue (L, 4);
-			/* Get a reference */
-			cd->callback.ref = luaL_ref (L, LUA_REGISTRYINDEX);
-			cd->cb_is_ref = TRUE;
-		}
-		if (name) {
-			cd->symbol = name;
-			cd->L = L;
-			register_callback_symbol (&cfg->cache,
-				name,
-				weight,
-				lua_metric_symbol_callback,
-				cd);
-		}
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
-			cd);
-	}
-	return 0;
-}
-
-static gint
-lua_config_register_callback_symbol_priority (lua_State * L)
-{
-	struct rspamd_config *cfg = lua_check_config (L);
-	gchar *name;
-	double weight;
-	gint priority;
-	struct lua_callback_data *cd;
-
-	if (cfg) {
-		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
-		weight = luaL_checknumber (L, 3);
-		priority = luaL_checknumber (L, 4);
-		cd =
-			rspamd_mempool_alloc (cfg->cfg_pool,
-				sizeof (struct lua_callback_data));
-		if (lua_type (L, 5) == LUA_TSTRING) {
-			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool,
-					luaL_checkstring (L, 5));
-			cd->cb_is_ref = FALSE;
-		}
-		else {
-			lua_pushvalue (L, 5);
-			/* Get a reference */
-			cd->callback.ref = luaL_ref (L, LUA_REGISTRYINDEX);
-			cd->cb_is_ref = TRUE;
-		}
-
-		if (name) {
-			cd->L = L;
-			cd->symbol = name;
-			register_callback_symbol_priority (&cfg->cache,
-				name,
-				weight,
-				priority,
-				lua_metric_symbol_callback,
-				cd);
-		}
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
-			cd);
-
-	}
-	return 0;
-}
-
 
 /* Radix and hash table functions */
 static gint

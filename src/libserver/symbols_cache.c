@@ -281,13 +281,7 @@ create_cache_file (struct symbols_cache *cache,
 	return mmap_cache_file (cache, fd, pool);
 }
 
-enum rspamd_symbol_type {
-	SYMBOL_TYPE_NORMAL,
-	SYMBOL_TYPE_VIRTUAL,
-	SYMBOL_TYPE_CALLBACK
-};
-
-static void
+void
 register_symbol_common (struct symbols_cache **cache,
 	const gchar *name,
 	double weight,

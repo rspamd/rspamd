@@ -49,6 +49,11 @@ struct cache_item {
 	gdouble metric_weight;
 };
 
+enum rspamd_symbol_type {
+	SYMBOL_TYPE_NORMAL,
+	SYMBOL_TYPE_VIRTUAL,
+	SYMBOL_TYPE_CALLBACK
+};
 
 struct symbols_cache {
 	/* Normal cache items */
@@ -145,6 +150,25 @@ void register_dynamic_symbol (rspamd_mempool_t *pool,
 	symbol_func_t func,
 	gpointer user_data,
 	GList *networks);
+
+/**
+ * Generic function to register a symbol
+ * @param cache
+ * @param name
+ * @param weight
+ * @param priority
+ * @param func
+ * @param user_data
+ * @param type
+ */
+void
+register_symbol_common (struct symbols_cache **cache,
+	const gchar *name,
+	double weight,
+	gint priority,
+	symbol_func_t func,
+	gpointer user_data,
+	enum rspamd_symbol_type type);
 
 /**
  * Call function for cached symbol using saved callback
