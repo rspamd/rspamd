@@ -635,11 +635,20 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 		gboolean res;
 		GList *opts = NULL;
 		gint i;
+		gdouble flag = 1.0;
 
 		if (lua_type (cd->L, level + 1) == LUA_TBOOLEAN) {
 			res = lua_toboolean (cd->L, level + 1);
 			if (res) {
-				for (i = lua_gettop (cd->L); i > level + 1; i --) {
+				gint first_opt = 2;
+
+				if (lua_type (cd->L, level + 2) == LUA_TNUMBER) {
+					flag = lua_tonumber (cd->L, level + 2);
+					/* Shift opt index */
+					first_opt = 3;
+				}
+
+				for (i = lua_gettop (cd->L); i >= level + first_opt; i --) {
 					if (lua_type (cd->L, i) == LUA_TSTRING) {
 						const char *opt = lua_tostring (cd->L, i);
 
@@ -647,7 +656,7 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 							rspamd_mempool_strdup (task->task_pool, opt));
 					}
 				}
-				insert_result (task, cd->symbol, 1.0, opts);
+				insert_result (task, cd->symbol, flag, opts);
 			}
 		}
 		lua_pop (cd->L, nresults);
