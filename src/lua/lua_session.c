@@ -39,7 +39,7 @@ static const struct luaL_reg sessionlib_m[] = {
 	LUA_INTERFACE_DEF (session, remove_normal_event),
 	LUA_INTERFACE_DEF (session, check_session_pending),
 	LUA_INTERFACE_DEF (session, delete),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -49,7 +49,7 @@ static const struct luaL_reg sessionlib_f[] = {
 };
 
 static const struct luaL_reg eventlib_m[] = {
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -156,7 +156,7 @@ lua_session_create (lua_State *L)
 		return 1;
 	}
 
-	mempool = lua_check_mempool (L);
+	mempool = rspamd_lua_check_mempool (L);
 	if (mempool == NULL) {
 		msg_err ("invalid mempool argument to rspamd_session.create");
 		lua_pushnil (L);
@@ -196,7 +196,7 @@ lua_session_create (lua_State *L)
 			cbdata);
 	cbdata->session = session;
 	psession = lua_newuserdata (L, sizeof (struct rspamd_async_session *));
-	lua_setclass (L, "rspamd{session}", -1);
+	rspamd_lua_setclass (L, "rspamd{session}", -1);
 	*psession = session;
 
 	return 1;
@@ -255,7 +255,7 @@ lua_session_register_async_event (lua_State *L)
 				cbdata,
 				g_quark_from_static_string ("lua event"));
 			pdata = lua_newuserdata (L, sizeof (gpointer));
-			lua_setclass (L, "rspamd{event}", -1);
+			rspamd_lua_setclass (L, "rspamd{event}", -1);
 			*pdata = cbdata;
 		}
 		else {
@@ -320,7 +320,7 @@ luaopen_session (lua_State * L)
 	lua_pop (L, 1);                      /* remove metatable from stack */
 
 	/* Simple event class */
-	lua_newclass (L, "rspamd{event}", eventlib_m);
+	rspamd_lua_new_class (L, "rspamd{event}", eventlib_m);
 	luaL_register (L, "rspamd_event", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */

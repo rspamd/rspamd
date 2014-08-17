@@ -141,7 +141,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_metric_action),
 	LUA_INTERFACE_DEF (task, learn),
 	LUA_INTERFACE_DEF (task, set_settings),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -162,7 +162,7 @@ static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, get_fuzzy),
 	LUA_INTERFACE_DEF (textpart, get_language),
 	LUA_INTERFACE_DEF (textpart, compare_distance),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -177,7 +177,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_length),
 	LUA_INTERFACE_DEF (mimepart, get_type),
 	LUA_INTERFACE_DEF (mimepart, get_filename),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -195,7 +195,7 @@ static const struct luaL_reg imagelib_m[] = {
 	LUA_INTERFACE_DEF (image, get_type),
 	LUA_INTERFACE_DEF (image, get_filename),
 	LUA_INTERFACE_DEF (image, get_size),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -216,7 +216,7 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF (url, get_text),
 	LUA_INTERFACE_DEF (url, is_phished),
 	LUA_INTERFACE_DEF (url, get_phished),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -270,7 +270,7 @@ lua_task_create_empty (lua_State *L)
 
 	task = rspamd_task_new (NULL);
 	ptask = lua_newuserdata (L, sizeof (gpointer));
-	lua_setclass (L, "rspamd{task}", -1);
+	rspamd_lua_setclass (L, "rspamd{task}", -1);
 	*ptask = task;
 	return 1;
 }
@@ -286,7 +286,7 @@ lua_task_create_from_buffer (lua_State *L)
 	if (data) {
 		task = rspamd_task_new (NULL);
 		ptask = lua_newuserdata (L, sizeof (gpointer));
-		lua_setclass (L, "rspamd{task}", -1);
+		rspamd_lua_setclass (L, "rspamd{task}", -1);
 		*ptask = task;
 		task->msg = g_string_new_len (data, len);
 	}
@@ -320,7 +320,7 @@ lua_task_get_cfg (lua_State *L)
 	struct rspamd_config **pcfg;
 
 	pcfg = lua_newuserdata (L, sizeof (gpointer));
-	lua_setclass (L, "rspamd{config}", -1);
+	rspamd_lua_setclass (L, "rspamd{config}", -1);
 	*pcfg = task->cfg;
 
 	return 1;
@@ -357,7 +357,7 @@ lua_task_get_message (lua_State * L)
 
 	if (task != NULL && task->message != NULL) {
 		pmsg = lua_newuserdata (L, sizeof (GMimeMessage *));
-		lua_setclass (L, "rspamd{message}", -1);
+		rspamd_lua_setclass (L, "rspamd{message}", -1);
 		*pmsg = task->message;
 	}
 	else {
@@ -374,7 +374,7 @@ lua_task_get_mempool (lua_State * L)
 
 	if (task != NULL) {
 		ppool = lua_newuserdata (L, sizeof (rspamd_mempool_t *));
-		lua_setclass (L, "rspamd{mempool}", -1);
+		rspamd_lua_setclass (L, "rspamd{mempool}", -1);
 		*ppool = task->task_pool;
 	}
 	else {
@@ -391,7 +391,7 @@ lua_task_get_session (lua_State * L)
 
 	if (task != NULL) {
 		psession = lua_newuserdata (L, sizeof (void *));
-		lua_setclass (L, "rspamd{session}", -1);
+		rspamd_lua_setclass (L, "rspamd{session}", -1);
 		*psession = task->s;
 	}
 	else {
@@ -408,7 +408,7 @@ lua_task_get_ev_base (lua_State * L)
 
 	if (task != NULL) {
 		pbase = lua_newuserdata (L, sizeof (struct event_base *));
-		lua_setclass (L, "rspamd{ev_base}", -1);
+		rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
 		*pbase = task->ev_base;
 	}
 	else {
@@ -480,7 +480,7 @@ lua_tree_url_callback (gpointer key, gpointer value, gpointer ud)
 	struct lua_tree_cb_data *cb = ud;
 
 	purl = lua_newuserdata (cb->L, sizeof (struct uri *));
-	lua_setclass (cb->L, "rspamd{url}", -1);
+	rspamd_lua_setclass (cb->L, "rspamd{url}", -1);
 	*purl = value;
 	lua_rawseti (cb->L, -2, cb->i++);
 
@@ -538,7 +538,7 @@ lua_task_get_text_parts (lua_State * L)
 			part = cur->data;
 			ppart = lua_newuserdata (L, sizeof (struct mime_text_part *));
 			*ppart = part;
-			lua_setclass (L, "rspamd{textpart}", -1);
+			rspamd_lua_setclass (L, "rspamd{textpart}", -1);
 			/* Make it array */
 			lua_rawseti (L, -2, i++);
 			cur = g_list_next (cur);
@@ -564,7 +564,7 @@ lua_task_get_parts (lua_State * L)
 			part = cur->data;
 			ppart = lua_newuserdata (L, sizeof (struct mime_part *));
 			*ppart = part;
-			lua_setclass (L, "rspamd{mimepart}", -1);
+			rspamd_lua_setclass (L, "rspamd{mimepart}", -1);
 			/* Make it array */
 			lua_rawseti (L, -2, i++);
 			cur = g_list_next (cur);
@@ -632,15 +632,15 @@ lua_task_get_raw_header_common (lua_State * L, gboolean strong)
 			}
 			/* Create new associated table for a header */
 			lua_newtable (L);
-			lua_set_table_index (L, "name",	 rh->name);
-			lua_set_table_index (L, "value", rh->value);
+			rspamd_lua_table_set (L, "name",	 rh->name);
+			rspamd_lua_table_set (L, "value", rh->value);
 			lua_pushstring (L, "tab_separated");
 			lua_pushboolean (L, rh->tab_separated);
 			lua_settable (L, -3);
 			lua_pushstring (L, "empty_separator");
 			lua_pushboolean (L, rh->empty_separator);
 			lua_settable (L, -3);
-			lua_set_table_index (L, "separator", rh->separator);
+			rspamd_lua_table_set (L, "separator", rh->separator);
 			lua_rawseti (L, -2, i++);
 			/* Process next element */
 			rh = rh->next;
@@ -687,15 +687,15 @@ lua_task_get_received_headers (lua_State * L)
 				continue;
 			}
 			lua_newtable (L);
-			lua_set_table_index (L, "from_hostname", rh->from_hostname);
+			rspamd_lua_table_set (L, "from_hostname", rh->from_hostname);
 			lua_pushstring (L, "from_ip");
-			lua_ip_push_fromstring (L, rh->from_ip);
+			rspamd_lua_ip_push_fromstring (L, rh->from_ip);
 			lua_settable (L, -3);
-			lua_set_table_index (L, "real_hostname", rh->real_hostname);
+			rspamd_lua_table_set (L, "real_hostname", rh->real_hostname);
 			lua_pushstring (L, "real_ip");
-			lua_ip_push_fromstring (L, rh->real_ip);
+			rspamd_lua_ip_push_fromstring (L, rh->real_ip);
 			lua_settable (L, -3);
-			lua_set_table_index (L, "by_hostname", rh->by_hostname);
+			rspamd_lua_table_set (L, "by_hostname", rh->by_hostname);
 			lua_rawseti (L, -2, i++);
 			cur = g_list_next (cur);
 		}
@@ -715,7 +715,7 @@ lua_task_get_resolver (lua_State *L)
 
 	if (task != NULL && task->resolver != NULL) {
 		presolver = lua_newuserdata (L, sizeof (void *));
-		lua_setclass (L, "rspamd{resolver}", -1);
+		rspamd_lua_setclass (L, "rspamd{resolver}", -1);
 		*presolver = task->resolver;
 	}
 	else {
@@ -782,8 +782,8 @@ lua_push_internet_address (lua_State *L, InternetAddress *ia)
 #ifndef GMIME24
 	if (internet_address_get_type (ia) == INTERNET_ADDRESS_NAME) {
 		lua_newtable (L);
-		lua_set_table_index (L, "name", internet_address_get_name (ia));
-		lua_set_table_index (L, "addr", internet_address_get_addr (ia));
+		rspamd_lua_table_set (L, "name", internet_address_get_name (ia));
+		rspamd_lua_table_set (L, "addr", internet_address_get_addr (ia));
 		return TRUE;
 	}
 	return FALSE;
@@ -795,8 +795,8 @@ lua_push_internet_address (lua_State *L, InternetAddress *ia)
 		iamb = INTERNET_ADDRESS_MAILBOX (ia);
 		addr = internet_address_mailbox_get_addr (iamb);
 		if (addr) {
-			lua_set_table_index (L, "name", internet_address_get_name (ia));
-			lua_set_table_index (L, "addr", addr);
+			rspamd_lua_table_set (L, "name", internet_address_get_name (ia));
+			rspamd_lua_table_set (L, "addr", addr);
 			/* Set optional fields */
 
 			at = strchr (addr, '@');
@@ -1034,7 +1034,7 @@ lua_task_get_from_ip (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L);
 
 	if (task) {
-		lua_ip_push (L, &task->from_addr);
+		rspamd_lua_ip_push (L, &task->from_addr);
 	}
 	else {
 		lua_pushnil (L);
@@ -1064,7 +1064,7 @@ lua_task_get_client_ip_num (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L);
 
 	if (task) {
-		lua_ip_push (L, &task->client_addr);
+		rspamd_lua_ip_push (L, &task->client_addr);
 	}
 	else {
 		lua_pushnil (L);
@@ -1166,7 +1166,7 @@ lua_task_get_images (lua_State *L)
 			lua_newtable (L);
 			while (cur) {
 				pimg = lua_newuserdata (L, sizeof (struct rspamd_image *));
-				lua_setclass (L, "rspamd{image}", -1);
+				rspamd_lua_setclass (L, "rspamd{image}", -1);
 				*pimg = cur->data;
 				lua_rawseti (L, -2, i++);
 				cur = g_list_next (cur);
@@ -1911,7 +1911,7 @@ lua_url_get_phished (lua_State *L)
 	if (url) {
 		if (url->is_phished && url->phished_url != NULL) {
 			purl = lua_newuserdata (L, sizeof (struct uri *));
-			lua_setclass (L, "rspamd{url}", -1);
+			rspamd_lua_setclass (L, "rspamd{url}", -1);
 			*purl = url->phished_url;
 
 			return 1;
@@ -1926,7 +1926,7 @@ lua_url_get_phished (lua_State *L)
 gint
 luaopen_task (lua_State * L)
 {
-	lua_newclass_full (L, "rspamd{task}", "rspamd_task", tasklib_m, tasklib_f);
+	rspamd_lua_new_class_full (L, "rspamd{task}", "rspamd_task", tasklib_m, tasklib_f);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 
@@ -1936,7 +1936,7 @@ luaopen_task (lua_State * L)
 gint
 luaopen_textpart (lua_State * L)
 {
-	lua_newclass (L, "rspamd{textpart}", textpartlib_m);
+	rspamd_lua_new_class (L, "rspamd{textpart}", textpartlib_m);
 	luaL_register (L, "rspamd_textpart", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
@@ -1947,7 +1947,7 @@ luaopen_textpart (lua_State * L)
 gint
 luaopen_mimepart (lua_State * L)
 {
-	lua_newclass (L, "rspamd{mimepart}", mimepartlib_m);
+	rspamd_lua_new_class (L, "rspamd{mimepart}", mimepartlib_m);
 	luaL_register (L, "rspamd_mimepart", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
@@ -1958,7 +1958,7 @@ luaopen_mimepart (lua_State * L)
 gint
 luaopen_image (lua_State * L)
 {
-	lua_newclass (L, "rspamd{image}", imagelib_m);
+	rspamd_lua_new_class (L, "rspamd{image}", imagelib_m);
 	luaL_register (L, "rspamd_image", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
@@ -1969,7 +1969,7 @@ luaopen_image (lua_State * L)
 gint
 luaopen_url (lua_State * L)
 {
-	lua_newclass (L, "rspamd{url}", urllib_m);
+	rspamd_lua_new_class (L, "rspamd{url}", urllib_m);
 	luaL_register (L, "rspamd_url", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */

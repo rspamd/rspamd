@@ -230,7 +230,7 @@ rspamd_task_restore (void *arg)
 
 	/* Call post filters */
 	if (task->state == WAIT_POST_FILTER && !task->skip_extra_filters) {
-		lua_call_post_filters (task);
+		rspamd_lua_call_post_filters (task);
 	}
 	task->s->wanna_die = TRUE;
 }
@@ -354,7 +354,7 @@ rspamd_task_process (struct rspamd_task *task,
 		}
 	}
 	else {
-		lua_call_pre_filters (task);
+		rspamd_lua_call_pre_filters (task);
 		/* We want fin_task after pre filters are processed */
 		task->s->wanna_die = TRUE;
 		task->state = WAIT_PRE_FILTER;

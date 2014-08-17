@@ -95,7 +95,7 @@ static const struct luaL_reg lua_workerlib_m[] = {
 	LUA_INTERFACE_DEF (worker, get_option),
 	LUA_INTERFACE_DEF (worker, get_resolver),
 	LUA_INTERFACE_DEF (worker, get_cfg),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -103,7 +103,7 @@ static const struct luaL_reg lua_workerlib_m[] = {
 static gint
 luaopen_lua_worker (lua_State * L)
 {
-	lua_newclass (L, "rspamd{worker}", lua_workerlib_m);
+	rspamd_lua_new_class (L, "rspamd{worker}", lua_workerlib_m);
 	luaL_register (L, "rspamd_worker", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
@@ -127,7 +127,7 @@ lua_worker_get_ev_base (lua_State *L)
 
 	if (ctx) {
 		pbase = lua_newuserdata (L, sizeof (struct event_base *));
-		lua_setclass (L, "rspamd{ev_base}", -1);
+		rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
 		*pbase = ctx->ev_base;
 	}
 	else {
@@ -222,7 +222,7 @@ lua_worker_get_resolver (lua_State *L)
 
 	if (ctx) {
 		presolver = lua_newuserdata (L, sizeof (gpointer));
-		lua_setclass (L, "rspamd{resolver}", -1);
+		rspamd_lua_setclass (L, "rspamd{resolver}", -1);
 		*presolver = ctx->resolver;
 	}
 	else {
@@ -240,7 +240,7 @@ lua_worker_get_cfg (lua_State *L)
 
 	if (ctx) {
 		pcfg = lua_newuserdata (L, sizeof (gpointer));
-		lua_setclass (L, "rspamd{config}", -1);
+		rspamd_lua_setclass (L, "rspamd{config}", -1);
 		*pcfg = ctx->cfg;
 	}
 	else {
@@ -284,7 +284,7 @@ lua_accept_socket (gint fd, short what, void *arg)
 	/* Call finalizer function */
 	lua_rawgeti (L, LUA_REGISTRYINDEX, ctx->cbref_accept);
 	pctx = lua_newuserdata (L, sizeof (gpointer));
-	lua_setclass (L, "rspamd{worker}", -1);
+	rspamd_lua_setclass (L, "rspamd{worker}", -1);
 	*pctx = ctx;
 	lua_pushinteger (L, nfd);
 	lua_pushstring (L, rspamd_inet_address_to_string (&addr));
@@ -371,7 +371,7 @@ start_lua_worker (struct rspamd_worker *worker)
 	}
 
 	pctx = lua_newuserdata (L, sizeof (gpointer));
-	lua_setclass (L, "rspamd{worker}", -1);
+	rspamd_lua_setclass (L, "rspamd{worker}", -1);
 	lua_setglobal (L, "rspamd_worker");
 	*pctx = ctx;
 
@@ -395,7 +395,7 @@ start_lua_worker (struct rspamd_worker *worker)
 		/* Call finalizer function */
 		lua_rawgeti (L, LUA_REGISTRYINDEX, ctx->cbref_fin);
 		pctx = lua_newuserdata (L, sizeof (gpointer));
-		lua_setclass (L, "rspamd{worker}", -1);
+		rspamd_lua_setclass (L, "rspamd{worker}", -1);
 		*pctx = ctx;
 		if (lua_pcall (L, 1, 0, 0) != 0) {
 			msg_info ("call to worker finalizer failed: %s", lua_tostring (L,

@@ -131,7 +131,7 @@ lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 
 /* Do post load initialization based on lua */
 void
-lua_post_load_config (struct rspamd_config *cfg)
+rspamd_lua_post_load_config (struct rspamd_config *cfg)
 {
 	lua_State *L = cfg->lua_state;
 	const gchar *name, *val;
@@ -213,7 +213,7 @@ lua_post_load_config (struct rspamd_config *cfg)
 
 /* Handle lua dynamic config param */
 gboolean
-lua_handle_param (struct rspamd_task *task,
+rspamd_lua_handle_param (struct rspamd_task *task,
 	gchar *mname,
 	gchar *optname,
 	enum lua_var_type expected_type,
@@ -228,7 +228,7 @@ lua_handle_param (struct rspamd_task *task,
 
 #define FAKE_RES_VAR "rspamd_res"
 gboolean
-lua_check_condition (struct rspamd_config *cfg, const gchar *condition)
+rspamd_lua_check_condition (struct rspamd_config *cfg, const gchar *condition)
 {
 	lua_State *L = cfg->lua_state;
 	gchar *hostbuf, *condbuf;
@@ -274,12 +274,12 @@ lua_check_condition (struct rspamd_config *cfg, const gchar *condition)
 
 	/* Rspamd paths */
 	lua_newtable (L);
-	lua_set_table_index (L, "confdir",	  RSPAMD_CONFDIR);
-	lua_set_table_index (L, "rundir",	  RSPAMD_RUNDIR);
-	lua_set_table_index (L, "dbdir",	  RSPAMD_DBDIR);
-	lua_set_table_index (L, "logdir",	  RSPAMD_LOGDIR);
-	lua_set_table_index (L, "pluginsdir", RSPAMD_PLUGINSDIR);
-	lua_set_table_index (L, "prefix",	  RSPAMD_PREFIX);
+	rspamd_lua_table_set (L, "confdir",	  RSPAMD_CONFDIR);
+	rspamd_lua_table_set (L, "rundir",	  RSPAMD_RUNDIR);
+	rspamd_lua_table_set (L, "dbdir",	  RSPAMD_DBDIR);
+	rspamd_lua_table_set (L, "logdir",	  RSPAMD_LOGDIR);
+	rspamd_lua_table_set (L, "pluginsdir", RSPAMD_PLUGINSDIR);
+	rspamd_lua_table_set (L, "prefix",	  RSPAMD_PREFIX);
 	lua_setglobal (L, "rspamd_paths");
 
 	/* Make fake string */

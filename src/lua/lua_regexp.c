@@ -36,7 +36,7 @@ static const struct luaL_reg regexplib_m[] = {
 	LUA_INTERFACE_DEF (regexp, match),
 	LUA_INTERFACE_DEF (regexp, split),
 	LUA_INTERFACE_DEF (regexp, destroy),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 static const struct luaL_reg regexplib_f[] = {
@@ -121,7 +121,7 @@ lua_regexp_create (lua_State *L)
 		new->re_flags = regexp_flags;
 		new->re_pattern = g_strdup (string);
 		pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
-		lua_setclass (L, "rspamd{regexp}", -1);
+		rspamd_lua_setclass (L, "rspamd{regexp}", -1);
 		*pnew = new;
 		re_cache_add (new->re_pattern, new, regexp_static_pool);
 	}
@@ -139,7 +139,7 @@ lua_regexp_get_cached (lua_State *L)
 	new = re_cache_check (line, regexp_static_pool);
 	if (new) {
 		pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
-		lua_setclass (L, "rspamd{regexp}", -1);
+		rspamd_lua_setclass (L, "rspamd{regexp}", -1);
 		*pnew = new;
 	}
 	else {

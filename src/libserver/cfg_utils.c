@@ -562,7 +562,7 @@ rspamd_config_post_load (struct rspamd_config *cfg)
 	cfg->default_metric = def_metric;
 
 	/* Lua options */
-	(void)lua_post_load_config (cfg);
+	(void)rspamd_lua_post_load_config (cfg);
 	init_dynamic_config (cfg);
 }
 

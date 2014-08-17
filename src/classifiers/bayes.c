@@ -251,7 +251,7 @@ bayes_classify (struct classifier_ctx * ctx,
 		}
 	}
 
-	cur = call_classifier_pre_callbacks (ctx->cfg, task, FALSE, FALSE, L);
+	cur = rspamd_lua_call_cls_pre_callbacks (ctx->cfg, task, FALSE, FALSE, L);
 	if (cur) {
 		rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t)g_list_free, cur);
@@ -511,7 +511,7 @@ bayes_learn_spam (struct classifier_ctx * ctx,
 		}
 	}
 
-	cur = call_classifier_pre_callbacks (ctx->cfg, task, TRUE, is_spam, L);
+	cur = rspamd_lua_call_cls_pre_callbacks (ctx->cfg, task, TRUE, is_spam, L);
 	if (cur) {
 		skip_labels = FALSE;
 		rspamd_mempool_add_destructor (task->task_pool,

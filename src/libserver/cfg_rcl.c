@@ -611,7 +611,7 @@ rspamd_rcl_set_lua_globals (struct rspamd_config *cfg, lua_State *L)
 	}
 
 	pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
-	lua_setclass (L, "rspamd{config}", -1);
+	rspamd_lua_setclass (L, "rspamd{config}", -1);
 	*pcfg = cfg;
 	lua_setglobal (L, "rspamd_config");
 

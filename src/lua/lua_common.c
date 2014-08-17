@@ -29,7 +29,7 @@
 #define MODULE_INIT_FUNC "module_init"
 
 const luaL_reg null_reg[] = {
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -44,7 +44,7 @@ static const struct luaL_reg loggerlib_f[] = {
 	LUA_INTERFACE_DEF (logger, warn),
 	LUA_INTERFACE_DEF (logger, info),
 	LUA_INTERFACE_DEF (logger, debug),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -57,7 +57,7 @@ static const struct luaL_reg loggerlib_f[] = {
  * @param func table of class methods
  */
 void
-lua_newclass (lua_State * L,
+rspamd_lua_new_class (lua_State * L,
 	const gchar *classname,
 	const struct luaL_reg *methods)
 {
@@ -76,18 +76,18 @@ lua_newclass (lua_State * L,
  * Create and register new class with static methods and store metatable on top of the stack
  */
 void
-lua_newclass_full (lua_State *L,
+rspamd_lua_new_class_full (lua_State *L,
 	const gchar *classname,
 	const gchar *static_name,
 	const struct luaL_reg *methods,
 	const struct luaL_reg *func)
 {
-	lua_newclass (L, classname, methods);
+	rspamd_lua_new_class (L, classname, methods);
 	luaL_register (L, static_name, func);
 }
 
 gint
-lua_class_tostring (lua_State * L)
+rspamd_lua_class_tostring (lua_State * L)
 {
 	gchar buf[32];
 
@@ -121,7 +121,7 @@ error:
 
 
 void
-lua_setclass (lua_State * L, const gchar *classname, gint objidx)
+rspamd_lua_setclass (lua_State * L, const gchar *classname, gint objidx)
 {
 	luaL_getmetatable (L, classname);
 	if (objidx < 0) {
@@ -132,7 +132,7 @@ lua_setclass (lua_State * L, const gchar *classname, gint objidx)
 
 /* assume that table is at the top */
 void
-lua_set_table_index (lua_State * L, const gchar *index, const gchar *value)
+rspamd_lua_table_set (lua_State * L, const gchar *index, const gchar *value)
 {
 
 	lua_pushstring (L, index);
@@ -146,7 +146,7 @@ lua_set_table_index (lua_State * L, const gchar *index, const gchar *value)
 }
 
 const gchar *
-lua_get_table_index_str (lua_State *L, const gchar *index)
+rspamd_lua_table_get (lua_State *L, const gchar *index)
 {
 	const gchar *result;
 
@@ -287,7 +287,7 @@ lua_add_actions_global (lua_State *L)
 }
 
 lua_State *
-init_lua (struct rspamd_config *cfg)
+rspamd_lua_init (struct rspamd_config *cfg)
 {
 	lua_State *L;
 
@@ -330,12 +330,12 @@ init_lua (struct rspamd_config *cfg)
  * Initialize new locked lua_State structure
  */
 struct lua_locked_state *
-init_lua_locked (struct rspamd_config *cfg)
+rspamd_init_lua_locked (struct rspamd_config *cfg)
 {
 	struct lua_locked_state *new;
 
 	new = g_slice_alloc (sizeof (struct lua_locked_state));
-	new->L = init_lua (cfg);
+	new->L = rspamd_lua_init (cfg);
 	new->m = rspamd_mutex_new ();
 
 	return new;
@@ -346,7 +346,7 @@ init_lua_locked (struct rspamd_config *cfg)
  * Free locked state structure
  */
 void
-free_lua_locked (struct lua_locked_state *st)
+rspamd_free_lua_locked (struct lua_locked_state *st)
 {
 	g_assert (st != NULL);
 
@@ -358,7 +358,7 @@ free_lua_locked (struct lua_locked_state *st)
 }
 
 gboolean
-init_lua_filters (struct rspamd_config *cfg)
+rspamd_init_lua_filters (struct rspamd_config *cfg)
 {
 	struct rspamd_config **pcfg;
 	GList *cur, *tmp;
@@ -379,7 +379,7 @@ init_lua_filters (struct rspamd_config *cfg)
 
 			/* Initialize config structure */
 			pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
-			lua_setclass (L, "rspamd{config}", -1);
+			rspamd_lua_setclass (L, "rspamd{config}", -1);
 			*pcfg = cfg;
 			lua_setglobal (L, "rspamd_config");
 
@@ -405,7 +405,7 @@ init_lua_filters (struct rspamd_config *cfg)
 	cur = g_list_first (cfg->statfiles);
 	while (cur) {
 		st = cur->data;
-		if (st->normalizer == lua_normalizer_func) {
+		if (st->normalizer == rspamd_lua_normalize) {
 			tmp = st->normalizer_data;
 			if (tmp && (tmp = g_list_next (tmp))) {
 				if (tmp->data) {
@@ -428,7 +428,7 @@ init_lua_filters (struct rspamd_config *cfg)
 /* Callback functions */
 
 gint
-lua_call_filter (const gchar *function, struct rspamd_task *task)
+rspamd_lua_call_filter (const gchar *function, struct rspamd_task *task)
 {
 	gint result;
 	struct rspamd_task **ptask;
@@ -436,7 +436,7 @@ lua_call_filter (const gchar *function, struct rspamd_task *task)
 
 	lua_getglobal (L, function);
 	ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
-	lua_setclass (L, "rspamd{task}", -1);
+	rspamd_lua_setclass (L, "rspamd{task}", -1);
 	*ptask = task;
 
 	if (lua_pcall (L, 1, 1, 0) != 0) {
@@ -454,7 +454,7 @@ lua_call_filter (const gchar *function, struct rspamd_task *task)
 }
 
 gint
-lua_call_chain_filter (const gchar *function,
+rspamd_lua_call_chain_filter (const gchar *function,
 	struct rspamd_task *task,
 	gint *marks,
 	guint number)
@@ -484,7 +484,7 @@ lua_call_chain_filter (const gchar *function,
 
 /* Call custom lua function in rspamd expression */
 gboolean
-lua_call_expression_func (gpointer lua_data,
+rspamd_lua_call_expression_func (gpointer lua_data,
 	struct rspamd_task *task, GList *args, gboolean *res)
 {
 	lua_State *L = task->cfg->lua_state;
@@ -496,7 +496,7 @@ lua_call_expression_func (gpointer lua_data,
 	lua_rawgeti (L, LUA_REGISTRYINDEX, GPOINTER_TO_INT (lua_data));
 	/* Now we got function in top of stack */
 	ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
-	lua_setclass (L, "rspamd{task}", -1);
+	rspamd_lua_setclass (L, "rspamd{task}", -1);
 	*ptask = task;
 
 	/* Now push all arguments */
@@ -574,7 +574,7 @@ lua_consolidation_callback (gpointer key, gpointer value, gpointer arg)
 }
 
 double
-lua_consolidation_func (struct rspamd_task *task,
+rspamd_lua_consolidation_func (struct rspamd_task *task,
 	const gchar *metric_name,
 	const gchar *function_name)
 {
@@ -598,7 +598,7 @@ lua_consolidation_func (struct rspamd_task *task,
 }
 
 double
-lua_normalizer_func (struct rspamd_config *cfg, long double score, void *params)
+rspamd_lua_normalize (struct rspamd_config *cfg, long double score, void *params)
 {
 	GList *p = params;
 	long double res = score;
@@ -629,7 +629,7 @@ lua_normalizer_func (struct rspamd_config *cfg, long double score, void *params)
 
 
 void
-lua_dumpstack (lua_State *L)
+rspamd_lua_dumpstack (lua_State *L)
 {
 	gint i, t, r = 0;
 	gint top = lua_gettop (L);
@@ -675,7 +675,7 @@ lua_dumpstack (lua_State *L)
 }
 
 gpointer
-lua_check_class (lua_State *L, gint index, const gchar *name)
+rspamd_lua_check_class (lua_State *L, gint index, const gchar *name)
 {
 	gpointer p;
 

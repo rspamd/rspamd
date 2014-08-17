@@ -34,7 +34,7 @@ LUA_FUNCTION_DEF (http, make_get_request);
 static const struct luaL_reg httplib_m[] = {
 	LUA_INTERFACE_DEF (http, make_post_request),
 	LUA_INTERFACE_DEF (http, make_get_request),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -88,7 +88,7 @@ lua_http_push_error (gint code, struct lua_http_ud *ud)
 	if (ud->callback) {
 		lua_getglobal (ud->L, ud->callback);
 		ptask = lua_newuserdata (ud->L, sizeof (struct rspamd_task *));
-		lua_setclass (ud->L, "rspamd{task}", -1);
+		rspamd_lua_setclass (ud->L, "rspamd{task}", -1);
 		*ptask = ud->task;
 		num = 4;
 	}
@@ -131,7 +131,7 @@ lua_http_push_reply (f_str_t *in, struct lua_http_ud *ud)
 		/* Push error */
 		lua_getglobal (ud->L, ud->callback);
 		ptask = lua_newuserdata (ud->L, sizeof (struct rspamd_task *));
-		lua_setclass (ud->L, "rspamd{task}", -1);
+		rspamd_lua_setclass (ud->L, "rspamd{task}", -1);
 
 		*ptask = ud->task;
 		num = 4;
@@ -582,7 +582,7 @@ lua_http_make_post_request (lua_State *L)
 
 
 	/* Check whether we have a task object */
-	ptask = lua_check_class (L, 1, "rspamd{task}");
+	ptask = rspamd_lua_check_class (L, 1, "rspamd{task}");
 	task = ptask ? *(ptask) : NULL;
 
 	if (!task) {
@@ -661,7 +661,7 @@ lua_http_make_get_request (lua_State *L)
 
 
 	/* Check whether we have a task object */
-	ptask = lua_check_class (L, 1, "rspamd{task}");
+	ptask = rspamd_lua_check_class (L, 1, "rspamd{task}");
 	task = ptask ? *(ptask) : NULL;
 
 	if (!task) {

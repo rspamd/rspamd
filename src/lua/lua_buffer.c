@@ -42,7 +42,7 @@ static const struct luaL_reg io_dispatcherlib_m[] = {
 	LUA_INTERFACE_DEF (io_dispatcher, pause),
 	LUA_INTERFACE_DEF (io_dispatcher, restore),
 	LUA_INTERFACE_DEF (io_dispatcher, destroy),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -89,7 +89,7 @@ lua_io_read_cb (f_str_t * in, void *arg)
 	lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_read);
 	pdispatcher =
 		lua_newuserdata (cbdata->L, sizeof (struct rspamd_io_dispatcher_s *));
-	lua_setclass (cbdata->L, "rspamd{io_dispatcher}", -1);
+	rspamd_lua_setclass (cbdata->L, "rspamd{io_dispatcher}", -1);
 	*pdispatcher = cbdata->d;
 	lua_pushlstring (cbdata->L, in->begin, in->len);
 
@@ -117,7 +117,7 @@ lua_io_write_cb (void *arg)
 		pdispatcher =
 			lua_newuserdata (cbdata->L,
 				sizeof (struct rspamd_io_dispatcher_s *));
-		lua_setclass (cbdata->L, "rspamd{io_dispatcher}", -1);
+		rspamd_lua_setclass (cbdata->L, "rspamd{io_dispatcher}", -1);
 		*pdispatcher = cbdata->d;
 
 
@@ -143,7 +143,7 @@ lua_io_err_cb (GError * err, void *arg)
 	lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_err);
 	pdispatcher =
 		lua_newuserdata (cbdata->L, sizeof (struct rspamd_io_dispatcher_s *));
-	lua_setclass (cbdata->L, "rspamd{io_dispatcher}", -1);
+	rspamd_lua_setclass (cbdata->L, "rspamd{io_dispatcher}", -1);
 	*pdispatcher = cbdata->d;
 	lua_pushstring (cbdata->L, err->message);
 
@@ -224,7 +224,7 @@ lua_io_dispatcher_create (lua_State *L)
 		/* Push result */
 		pdispatcher =
 			lua_newuserdata (L, sizeof (struct rspamd_io_dispatcher_s *));
-		lua_setclass (L, "rspamd{io_dispatcher}", -1);
+		rspamd_lua_setclass (L, "rspamd{io_dispatcher}", -1);
 		*pdispatcher = io_dispatcher;
 	}
 	else {
@@ -363,7 +363,7 @@ luaopen_io_dispatcher (lua_State * L)
 	lua_pop (L, 1);                      /* remove metatable from stack */
 
 	/* Simple event class */
-	lua_newclass (L, "rspamd{ev_base}", null_reg);
+	rspamd_lua_new_class (L, "rspamd{ev_base}", null_reg);
 	luaL_register (L, "rspamd_ev_base", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */

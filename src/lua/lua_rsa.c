@@ -66,7 +66,7 @@ static const struct luaL_reg rsapubkeylib_f[] = {
 };
 
 static const struct luaL_reg rsapubkeylib_m[] = {
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{"__gc", lua_rsa_pubkey_gc},
 	{NULL, NULL}
 };
@@ -78,7 +78,7 @@ static const struct luaL_reg rsaprivkeylib_f[] = {
 };
 
 static const struct luaL_reg rsaprivkeylib_m[] = {
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{"__gc", lua_rsa_privkey_gc},
 	{NULL, NULL}
 };
@@ -91,7 +91,7 @@ static const struct luaL_reg rsasignlib_f[] = {
 
 static const struct luaL_reg rsasignlib_m[] = {
 	LUA_INTERFACE_DEF (rsa_signature, save),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{"__gc", lua_rsa_signature_gc},
 	{NULL, NULL}
 };
@@ -147,7 +147,7 @@ lua_rsa_pubkey_load (lua_State *L)
 			}
 			else {
 				prsa = lua_newuserdata (L, sizeof (RSA *));
-				lua_setclass (L, "rspamd{rsa_pubkey}", -1);
+				rspamd_lua_setclass (L, "rspamd{rsa_pubkey}", -1);
 				*prsa = rsa;
 			}
 			fclose (f);
@@ -177,7 +177,7 @@ lua_rsa_pubkey_create (lua_State *L)
 		}
 		else {
 			prsa = lua_newuserdata (L, sizeof (RSA *));
-			lua_setclass (L, "rspamd{rsa_pubkey}", -1);
+			rspamd_lua_setclass (L, "rspamd{rsa_pubkey}", -1);
 			*prsa = rsa;
 		}
 		BIO_free (bp);
@@ -224,7 +224,7 @@ lua_rsa_privkey_load (lua_State *L)
 			}
 			else {
 				prsa = lua_newuserdata (L, sizeof (RSA *));
-				lua_setclass (L, "rspamd{rsa_privkey}", -1);
+				rspamd_lua_setclass (L, "rspamd{rsa_privkey}", -1);
 				*prsa = rsa;
 			}
 			fclose (f);
@@ -254,7 +254,7 @@ lua_rsa_privkey_create (lua_State *L)
 		}
 		else {
 			prsa = lua_newuserdata (L, sizeof (RSA *));
-			lua_setclass (L, "rspamd{rsa_privkey}", -1);
+			rspamd_lua_setclass (L, "rspamd{rsa_privkey}", -1);
 			*prsa = rsa;
 		}
 		BIO_free (bp);
@@ -309,7 +309,7 @@ lua_rsa_signature_load (lua_State *L)
 				sig->begin = g_malloc (sig->len);
 				memcpy (sig->begin, data, sig->len);
 				psig = lua_newuserdata (L, sizeof (f_str_t *));
-				lua_setclass (L, "rspamd{rsa_signature}", -1);
+				rspamd_lua_setclass (L, "rspamd{rsa_signature}", -1);
 				*psig = sig;
 				munmap (data, st.st_size);
 			}
@@ -387,7 +387,7 @@ lua_rsa_signature_create (lua_State *L)
 		sig->begin = g_malloc (sig->len);
 		memcpy (sig->begin, data, sig->len);
 		psig = lua_newuserdata (L, sizeof (f_str_t *));
-		lua_setclass (L, "rspamd{rsa_signature}", -1);
+		rspamd_lua_setclass (L, "rspamd{rsa_signature}", -1);
 		*psig = sig;
 	}
 
@@ -557,7 +557,7 @@ lua_rsa_sign_memory (lua_State *L)
 		}
 		else {
 			psig = lua_newuserdata (L, sizeof (f_str_t *));
-			lua_setclass (L, "rspamd{rsa_signature}", -1);
+			rspamd_lua_setclass (L, "rspamd{rsa_signature}", -1);
 			*psig = signature;
 		}
 		g_free (data_sig);
@@ -625,7 +625,7 @@ lua_rsa_sign_file (lua_State *L)
 				}
 				else {
 					psig = lua_newuserdata (L, sizeof (f_str_t *));
-					lua_setclass (L, "rspamd{rsa_signature}", -1);
+					rspamd_lua_setclass (L, "rspamd{rsa_signature}", -1);
 					*psig = signature;
 				}
 				g_free (data_sig);

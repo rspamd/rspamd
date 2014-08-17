@@ -34,7 +34,7 @@ LUA_FUNCTION_DEF (cdb, destroy);
 static const struct luaL_reg cdblib_m[] = {
 	LUA_INTERFACE_DEF (cdb, lookup),
 	LUA_INTERFACE_DEF (cdb, get_name),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{"__gc", lua_cdb_destroy},
 	{NULL, NULL}
 };
@@ -80,7 +80,7 @@ lua_cdb_create (lua_State *L)
 		}
 		else {
 			pcdb = lua_newuserdata (L, sizeof (struct cdb *));
-			lua_setclass (L, "rspamd{cdb}", -1);
+			rspamd_lua_setclass (L, "rspamd{cdb}", -1);
 			*pcdb = cdb;
 		}
 	}

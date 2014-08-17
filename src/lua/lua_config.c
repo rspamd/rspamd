@@ -72,7 +72,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_post_filter),
 	LUA_INTERFACE_DEF (config, get_api_version),
 	LUA_INTERFACE_DEF (config, get_key),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -82,7 +82,7 @@ LUA_FUNCTION_DEF (radix, get_key);
 
 static const struct luaL_reg radixlib_m[] = {
 	LUA_INTERFACE_DEF (radix, get_key),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -91,7 +91,7 @@ LUA_FUNCTION_DEF (hash_table, get_key);
 
 static const struct luaL_reg hashlib_m[] = {
 	LUA_INTERFACE_DEF (hash_table, get_key),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -105,7 +105,7 @@ static const struct luaL_reg trielib_m[] = {
 	LUA_INTERFACE_DEF (trie, add_pattern),
 	LUA_INTERFACE_DEF (trie, search_text),
 	LUA_INTERFACE_DEF (trie, search_task),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 static const struct luaL_reg trielib_f[] = {
@@ -184,7 +184,7 @@ lua_config_get_mempool (lua_State * L)
 
 	if (cfg != NULL) {
 		ppool = lua_newuserdata (L, sizeof (rspamd_mempool_t *));
-		lua_setclass (L, "rspamd{mempool}", -1);
+		rspamd_lua_setclass (L, "rspamd{mempool}", -1);
 		*ppool = cfg->cfg_pool;
 	}
 	return 1;
@@ -235,7 +235,7 @@ lua_config_get_classifier (lua_State * L)
 		if (pclc) {
 			pclc = lua_newuserdata (L,
 					sizeof (struct rspamd_classifier_config *));
-			lua_setclass (L, "rspamd{classifier}", -1);
+			rspamd_lua_setclass (L, "rspamd{classifier}", -1);
 			*pclc = clc;
 			return 1;
 		}
@@ -289,7 +289,7 @@ lua_config_function_callback (struct rspamd_task *task,
 		lua_getglobal (cd->L, cd->callback.name);
 	}
 	ptask = lua_newuserdata (cd->L, sizeof (struct rspamd_task *));
-	lua_setclass (cd->L, "rspamd{task}", -1);
+	rspamd_lua_setclass (cd->L, "rspamd{task}", -1);
 	*ptask = task;
 	/* Now push all arguments */
 	cur = args;
@@ -361,7 +361,7 @@ lua_config_register_module_option (lua_State *L)
 }
 
 void
-lua_call_post_filters (struct rspamd_task *task)
+rspamd_lua_call_post_filters (struct rspamd_task *task)
 {
 	struct lua_callback_data *cd;
 	struct rspamd_task **ptask;
@@ -377,7 +377,7 @@ lua_call_post_filters (struct rspamd_task *task)
 			lua_getglobal (cd->L, cd->callback.name);
 		}
 		ptask = lua_newuserdata (cd->L, sizeof (struct rspamd_task *));
-		lua_setclass (cd->L, "rspamd{task}", -1);
+		rspamd_lua_setclass (cd->L, "rspamd{task}", -1);
 		*ptask = task;
 
 		if (lua_pcall (cd->L, 1, 0, 0) != 0) {
@@ -421,7 +421,7 @@ lua_config_register_post_filter (lua_State *L)
 }
 
 void
-lua_call_pre_filters (struct rspamd_task *task)
+rspamd_lua_call_pre_filters (struct rspamd_task *task)
 {
 	struct lua_callback_data *cd;
 	struct rspamd_task **ptask;
@@ -437,7 +437,7 @@ lua_call_pre_filters (struct rspamd_task *task)
 			lua_getglobal (cd->L, cd->callback.name);
 		}
 		ptask = lua_newuserdata (cd->L, sizeof (struct rspamd_task *));
-		lua_setclass (cd->L, "rspamd{task}", -1);
+		rspamd_lua_setclass (cd->L, "rspamd{task}", -1);
 		*ptask = task;
 
 		if (lua_pcall (cd->L, 1, 0, 0) != 0) {
@@ -501,7 +501,7 @@ lua_config_add_radix_map (lua_State *L)
 		}
 		ud = lua_newuserdata (L, sizeof (radix_tree_t *));
 		*ud = r;
-		lua_setclass (L, "rspamd{radix}", -1);
+		rspamd_lua_setclass (L, "rspamd{radix}", -1);
 
 		return 1;
 	}
@@ -535,7 +535,7 @@ lua_config_add_hash_map (lua_State *L)
 			*r);
 		ud = lua_newuserdata (L, sizeof (GHashTable *));
 		*ud = r;
-		lua_setclass (L, "rspamd{hash_table}", -1);
+		rspamd_lua_setclass (L, "rspamd{hash_table}", -1);
 
 		return 1;
 	}
@@ -569,7 +569,7 @@ lua_config_add_kv_map (lua_State *L)
 			*r);
 		ud = lua_newuserdata (L, sizeof (GHashTable *));
 		*ud = r;
-		lua_setclass (L, "rspamd{hash_table}", -1);
+		rspamd_lua_setclass (L, "rspamd{hash_table}", -1);
 
 		return 1;
 	}
@@ -726,7 +726,7 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 		lua_getglobal (cd->L, cd->callback.name);
 	}
 	ptask = lua_newuserdata (cd->L, sizeof (struct rspamd_task *));
-	lua_setclass (cd->L, "rspamd{task}", -1);
+	rspamd_lua_setclass (cd->L, "rspamd{task}", -1);
 	*ptask = task;
 
 	if (lua_pcall (cd->L, 1, 0, 0) != 0) {
@@ -988,7 +988,7 @@ lua_trie_create (lua_State *L)
 	trie = rspamd_trie_create (icase);
 
 	ptrie = lua_newuserdata (L, sizeof (rspamd_trie_t *));
-	lua_setclass (L, "rspamd{trie}", -1);
+	rspamd_lua_setclass (L, "rspamd{trie}", -1);
 	*ptrie = trie;
 
 	return 1;
@@ -1107,7 +1107,7 @@ lua_trie_search_task (lua_State *L)
 gint
 luaopen_config (lua_State * L)
 {
-	lua_newclass (L, "rspamd{config}", configlib_m);
+	rspamd_lua_new_class (L, "rspamd{config}", configlib_m);
 	luaL_register (L, "rspamd_config", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
@@ -1118,7 +1118,7 @@ luaopen_config (lua_State * L)
 gint
 luaopen_radix (lua_State * L)
 {
-	lua_newclass (L, "rspamd{radix}", radixlib_m);
+	rspamd_lua_new_class (L, "rspamd{radix}", radixlib_m);
 	luaL_register (L, "rspamd_radix", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
@@ -1129,7 +1129,7 @@ luaopen_radix (lua_State * L)
 gint
 luaopen_hash_table (lua_State * L)
 {
-	lua_newclass (L, "rspamd{hash_table}", hashlib_m);
+	rspamd_lua_new_class (L, "rspamd{hash_table}", hashlib_m);
 	luaL_register (L, "rspamd_hash_table", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */

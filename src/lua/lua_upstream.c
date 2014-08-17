@@ -46,7 +46,7 @@ static const struct luaL_reg upstream_list_m[] = {
 	LUA_INTERFACE_DEF (upstream_list, get_upstream_by_hash),
 	LUA_INTERFACE_DEF (upstream_list, get_upstream_round_robin),
 	LUA_INTERFACE_DEF (upstream_list, get_upstream_master_slave),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{"__gc", lua_upstream_list_destroy},
 	{NULL, NULL}
 };
@@ -73,7 +73,7 @@ static const struct luaL_reg upstream_m[] = {
 	LUA_INTERFACE_DEF (upstream, get_port),
 	LUA_INTERFACE_DEF (upstream, get_priority),
 	LUA_INTERFACE_DEF (upstream, destroy),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 static const struct luaL_reg upstream_f[] = {
@@ -122,7 +122,7 @@ lua_upstream_create (lua_State *L)
 		}
 		else {
 			pnew = lua_newuserdata (L, sizeof (struct lua_upstream *));
-			lua_setclass (L, "rspamd{upstream}", -1);
+			rspamd_lua_setclass (L, "rspamd{upstream}", -1);
 			*pnew = new;
 		}
 	}
@@ -333,7 +333,7 @@ lua_upstream_list_create (lua_State *L)
 			}
 		}
 		pnew = lua_newuserdata (L, sizeof (struct upstream_list *));
-		lua_setclass (L, "rspamd{upstream_list}", -1);
+		rspamd_lua_setclass (L, "rspamd{upstream_list}", -1);
 		*pnew = new;
 	}
 
@@ -421,7 +421,7 @@ lua_upstream_list_get_upstream_by_hash (lua_State *L)
 				0);
 			if (selected) {
 				pselected = lua_newuserdata (L, sizeof (struct lua_upstream *));
-				lua_setclass (L, "rspamd{upstream}", -1);
+				rspamd_lua_setclass (L, "rspamd{upstream}", -1);
 				*pselected = selected;
 			}
 			else {
@@ -469,7 +469,7 @@ lua_upstream_list_get_upstream_round_robin (lua_State *L)
 			DEFAULT_UPSTREAM_MAXERRORS);
 		if (selected) {
 			pselected = lua_newuserdata (L, sizeof (struct lua_upstream *));
-			lua_setclass (L, "rspamd{upstream}", -1);
+			rspamd_lua_setclass (L, "rspamd{upstream}", -1);
 			*pselected = selected;
 		}
 		else {
@@ -513,7 +513,7 @@ lua_upstream_list_get_upstream_master_slave (lua_State *L)
 			DEFAULT_UPSTREAM_MAXERRORS);
 		if (selected) {
 			pselected = lua_newuserdata (L, sizeof (struct lua_upstream *));
-			lua_setclass (L, "rspamd{upstream}", -1);
+			rspamd_lua_setclass (L, "rspamd{upstream}", -1);
 			*pselected = selected;
 		}
 		else {

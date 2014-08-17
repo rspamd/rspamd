@@ -47,7 +47,7 @@ static const struct luaL_reg dns_resolverlib_m[] = {
 	LUA_INTERFACE_DEF (dns_resolver, resolve_txt),
 	LUA_INTERFACE_DEF (dns_resolver, resolve_mx),
 	LUA_INTERFACE_DEF (dns_resolver, resolve),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -94,7 +94,7 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 
 	lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->cbref);
 	presolver = lua_newuserdata (cd->L, sizeof (gpointer));
-	lua_setclass (cd->L, "rspamd{resolver}", -1);
+	rspamd_lua_setclass (cd->L, "rspamd{resolver}", -1);
 
 	*presolver = cd->resolver;
 	lua_pushstring (cd->L, cd->to_resolve);
@@ -112,7 +112,7 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 				addr.slen = sizeof (addr.addr.s4);
 				memcpy (&addr.addr.s4.sin_addr, &elt->content.a.addr,
 					sizeof (addr.addr.s4.sin_addr));
-				lua_ip_push (cd->L, &addr);
+				rspamd_lua_ip_push (cd->L, &addr);
 				lua_rawseti (cd->L, -2, ++i);
 				break;
 			case RDNS_REQUEST_AAAA:
@@ -120,7 +120,7 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 				addr.slen = sizeof (addr.addr.s6);
 				memcpy (&addr.addr.s6.sin6_addr, &elt->content.aaa.addr,
 					sizeof (addr.addr.s6.sin6_addr));
-				lua_ip_push (cd->L, &addr);
+				rspamd_lua_ip_push (cd->L, &addr);
 				lua_rawseti (cd->L, -2, ++i);
 				break;
 			case RDNS_REQUEST_PTR:
@@ -135,7 +135,7 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 			case RDNS_REQUEST_MX:
 				/* mx['name'], mx['priority'] */
 				lua_newtable (cd->L);
-				lua_set_table_index (cd->L, "name", elt->content.mx.name);
+				rspamd_lua_table_set (cd->L, "name", elt->content.mx.name);
 				lua_pushstring (cd->L, "priority");
 				lua_pushnumber (cd->L, elt->content.mx.priority);
 				lua_settable (cd->L, -3);
@@ -185,7 +185,7 @@ lua_dns_resolver_init (lua_State *L)
 		resolver = dns_resolver_init (rspamd_main->logger, base, cfg);
 		if (resolver) {
 			presolver = lua_newuserdata (L, sizeof (gpointer));
-			lua_setclass (L, "rspamd{resolver}", -1);
+			rspamd_lua_setclass (L, "rspamd{resolver}", -1);
 			*presolver = resolver;
 		}
 		else {

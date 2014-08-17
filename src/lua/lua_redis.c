@@ -43,7 +43,7 @@ LUA_FUNCTION_DEF (redis, make_request);
 
 static const struct luaL_reg redislib_m[] = {
 	LUA_INTERFACE_DEF (redis, make_request),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -102,7 +102,7 @@ lua_redis_push_error (const gchar *err,
 	/* Push error */
 	lua_rawgeti (ud->L, LUA_REGISTRYINDEX, ud->cbref);
 	ptask = lua_newuserdata (ud->L, sizeof (struct rspamd_task *));
-	lua_setclass (ud->L, "rspamd{task}", -1);
+	rspamd_lua_setclass (ud->L, "rspamd{task}", -1);
 
 	*ptask = ud->task;
 	/* String of error */
@@ -132,7 +132,7 @@ lua_redis_push_data (const redisReply *r, struct lua_redis_userdata *ud)
 	/* Push error */
 	lua_rawgeti (ud->L, LUA_REGISTRYINDEX, ud->cbref);
 	ptask = lua_newuserdata (ud->L, sizeof (struct rspamd_task *));
-	lua_setclass (ud->L, "rspamd{task}", -1);
+	rspamd_lua_setclass (ud->L, "rspamd{task}", -1);
 
 	*ptask = ud->task;
 	/* Error is nil */

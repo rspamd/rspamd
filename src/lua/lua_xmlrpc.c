@@ -30,7 +30,7 @@ LUA_FUNCTION_DEF (xmlrpc, make_request);
 static const struct luaL_reg xmlrpclib_m[] = {
 	LUA_INTERFACE_DEF (xmlrpc, parse_reply),
 	LUA_INTERFACE_DEF (xmlrpc, make_request),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 

@@ -319,7 +319,7 @@ process_smtp_data (struct smtp_session *session)
 			}
 		}
 		else {
-			lua_call_pre_filters (session->task);
+			rspamd_lua_call_pre_filters (session->task);
 			/* We want fin_task after pre filters are processed */
 			session->task->s->wanna_die = TRUE;
 			session->task->state = WAIT_PRE_FILTER;

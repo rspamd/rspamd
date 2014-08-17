@@ -76,7 +76,7 @@ LUA_FUNCTION_DEF (regexp, match);
 
 static const struct luaL_reg regexplib_m[] = {
 	LUA_INTERFACE_DEF (regexp, match),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -1227,7 +1227,7 @@ maybe_call_lua_function (const gchar *name,
 	lua_getglobal (L, name);
 	if (lua_isfunction (L, -1)) {
 		ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
-		lua_setclass (L, "rspamd{task}", -1);
+		rspamd_lua_setclass (L, "rspamd{task}", -1);
 		*ptask = task;
 		/* Call function */
 		if (lua_pcall (L, 1, 1, 0) != 0) {
@@ -1505,7 +1505,7 @@ process_regexp_item (struct rspamd_task *task, void *user_data)
 					sizeof (GMutex));
 			g_mutex_init (workers_mtx);
 #endif
-			nL = init_lua_locked (task->cfg);
+			nL = rspamd_init_lua_locked (task->cfg);
 			luaopen_regexp (nL->L);
 			regexp_module_ctx->workers = g_thread_pool_new (
 				process_regexp_item_threaded,
@@ -1538,7 +1538,7 @@ process_regexp_item (struct rspamd_task *task, void *user_data)
 		/* Non-threaded version */
 		if (item->lua_function) {
 			/* Just call function */
-			if (lua_call_expression_func (item->lua_function, task, NULL,
+			if (rspamd_lua_call_expression_func (item->lua_function, task, NULL,
 				&res) && res) {
 				insert_result (task, item->symbol, 1, NULL);
 			}

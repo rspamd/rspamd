@@ -83,7 +83,7 @@ static const struct luaL_reg msglib_m[] = {
 	LUA_INTERFACE_DEF (message, get_header_strong),
 	LUA_INTERFACE_DEF (message, set_header),
 	LUA_INTERFACE_DEF (message, get_date),
-	{"__tostring", lua_class_tostring},
+	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
@@ -203,7 +203,7 @@ lua_message_get_date (lua_State * L)
 gint
 luaopen_message (lua_State * L)
 {
-	lua_newclass (L, "rspamd{message}", msglib_m);
+	rspamd_lua_new_class (L, "rspamd{message}", msglib_m);
 	luaL_register (L, "rspamd_message", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */

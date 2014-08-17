@@ -406,7 +406,7 @@ reread_config (struct rspamd_main *rspamd)
 				rspamd->cfg->cfg_name);
 		/* Save some variables */
 		tmp_cfg->cfg_name = cfg_file;
-		tmp_cfg->lua_state = init_lua (tmp_cfg);
+		tmp_cfg->lua_state = rspamd_lua_init (tmp_cfg);
 		rspamd_mempool_add_destructor (tmp_cfg->cfg_pool,
 			(rspamd_mempool_destruct_t)lua_close, tmp_cfg->lua_state);
 
@@ -445,7 +445,7 @@ reread_config (struct rspamd_main *rspamd)
 				}
 				l = g_list_next (l);
 			}
-			init_lua_filters (rspamd->cfg);
+			rspamd_init_lua_filters (rspamd->cfg);
 			init_cfg_cache (rspamd->cfg);
 			msg_info ("config rereaded successfully");
 		}
@@ -1207,7 +1207,7 @@ main (gint argc, gchar **argv, gchar **env)
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 
 	detect_priv (rspamd_main);
-	rspamd_main->cfg->lua_state = init_lua (rspamd_main->cfg);
+	rspamd_main->cfg->lua_state = rspamd_lua_init (rspamd_main->cfg);
 	rspamd_mempool_add_destructor (rspamd_main->cfg->cfg_pool,
 		(rspamd_mempool_destruct_t)lua_close, rspamd_main->cfg->lua_state);
 
@@ -1264,7 +1264,7 @@ main (gint argc, gchar **argv, gchar **env)
 		/* Init events to test modules */
 		event_init ();
 		res = TRUE;
-		if (!init_lua_filters (rspamd_main->cfg)) {
+		if (!rspamd_init_lua_filters (rspamd_main->cfg)) {
 			res = FALSE;
 		}
 		/* Perform modules configuring */
@@ -1337,7 +1337,7 @@ main (gint argc, gchar **argv, gchar **env)
 	g_mime_init (0);
 
 	/* Init lua filters */
-	if (!init_lua_filters (rspamd_main->cfg)) {
+	if (!rspamd_init_lua_filters (rspamd_main->cfg)) {
 		msg_err ("error loading lua plugins");
 		exit (EXIT_FAILURE);
 	}
