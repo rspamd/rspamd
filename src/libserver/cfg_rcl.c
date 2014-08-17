@@ -1129,7 +1129,12 @@ rspamd_rcl_config_init (void)
 {
 	struct rspamd_rcl_section *new = NULL, *sub, *ssub;
 
-	/* TODO: add all known rspamd sections here */
+	/*
+	 * Important notice:
+	 * the order of parsing is equal to order of this initialization, therefore
+	 * it is possible to init some portions of config prior to others
+	 */
+
 	/**
 	 * Logging section
 	 */
@@ -1339,16 +1344,6 @@ rspamd_rcl_config_init (void)
 		RSPAMD_CL_FLAG_INT_32);
 
 	/**
-	 * Lua handler
-	 */
-	sub = rspamd_rcl_add_section (&new,
-			"lua",
-			rspamd_rcl_lua_handler,
-			UCL_STRING,
-			FALSE,
-			TRUE);
-
-	/**
 	 * Modules handler
 	 */
 	sub = rspamd_rcl_add_section (&new,
@@ -1406,6 +1401,16 @@ rspamd_rcl_config_init (void)
 			"composite",
 			rspamd_rcl_composite_handler,
 			UCL_OBJECT,
+			FALSE,
+			TRUE);
+
+	/**
+	 * Lua handler
+	 */
+	sub = rspamd_rcl_add_section (&new,
+			"lua",
+			rspamd_rcl_lua_handler,
+			UCL_STRING,
 			FALSE,
 			TRUE);
 
