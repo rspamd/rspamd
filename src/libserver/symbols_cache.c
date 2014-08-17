@@ -298,8 +298,10 @@ register_symbol_common (struct symbols_cache **cache,
 {
 	struct cache_item *item = NULL;
 	struct symbols_cache *pcache = *cache;
-	GList **target;
+	GList **target, *cur;
+	struct metric *m;
 	double *w;
+	gboolean skipped;
 
 	if (*cache == NULL) {
 		pcache = g_new0 (struct symbols_cache, 1);
@@ -340,6 +342,44 @@ register_symbol_common (struct symbols_cache **cache,
 	}
 	else {
 		item->s->weight = weight;
+	}
+
+	/* Check whether this item is skipped */
+	skipped = TRUE;
+	if (!item->is_callback &&
+			g_hash_table_lookup (pcache->cfg->metrics_symbols, name) == NULL) {
+		cur = g_list_first (pcache->cfg->metrics_list);
+		while (cur) {
+			m = cur->data;
+
+			if (m->accept_unknown_symbols) {
+				GList *mlist;
+
+				skipped = FALSE;
+
+				item->s->weight = weight * (m->unknown_weight);
+				g_hash_table_insert (m->symbols, item->s->symbol,
+						&item->s->weight);
+				mlist = g_hash_table_lookup (pcache->cfg->metrics_symbols, name);
+				mlist = g_list_prepend (mlist, m);
+				g_hash_table_insert (pcache->cfg->metrics_symbols,
+						item->s->symbol, mlist);
+
+				msg_info ("adding unknown symbol %s to metric %s", name,
+						m->name);
+			}
+
+			cur = g_list_next (cur);
+		}
+	}
+	else {
+		skipped = FALSE;
+	}
+
+	item->is_skipped = skipped;
+	if (skipped) {
+		msg_warn ("symbol %s is not registered in any metric, so skip its check",
+				name);
 	}
 
 	/* If we have undefined priority determine list according to weight */
@@ -887,46 +927,6 @@ validate_cache (struct symbols_cache *cache,
 		msg_err ("empty cache is invalid");
 		return FALSE;
 	}
-
-	/* Check each symbol in a cache and find its weight definition */
-	cur = cache->negative_items;
-	while (cur) {
-		item = cur->data;
-		if (!item->is_callback) {
-			if (g_hash_table_lookup (cfg->metrics_symbols,
-				item->s->symbol) == NULL) {
-				if (strict) {
-					msg_warn ("no weight registered for symbol %s",
-						item->s->symbol);
-					return FALSE;
-				}
-				else {
-					msg_info ("no weight registered for symbol %s",
-						item->s->symbol);
-				}
-			}
-		}
-		cur = g_list_next (cur);
-	}
-	cur = cache->static_items;
-	while (cur) {
-		item = cur->data;
-		if (!item->is_callback) {
-			if (g_hash_table_lookup (cfg->metrics_symbols,
-				item->s->symbol) == NULL) {
-				if (strict) {
-					msg_warn ("no weight registered for symbol %s",
-						item->s->symbol);
-					return FALSE;
-				}
-				else {
-					msg_info ("no weight registered for symbol %s",
-						item->s->symbol);
-				}
-			}
-		}
-		cur = g_list_next (cur);
-	}
 #ifndef GLIB_HASH_COMPAT
 	/* Now check each metric item and find corresponding symbol in a cache */
 	metric_symbols = g_hash_table_get_keys (cfg->metrics_symbols);
@@ -1163,7 +1163,7 @@ call_symbol_callback (struct rspamd_task * task,
 	if (!item) {
 		return FALSE;
 	}
-	if (!item->is_virtual) {
+	if (!item->is_virtual && !item->is_skipped) {
 #ifdef HAVE_CLOCK_GETTIME
 # ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
 		clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts1);
