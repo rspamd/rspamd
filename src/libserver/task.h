@@ -91,6 +91,8 @@ struct rspamd_task {
 	gchar *user;                                                    /**< user to deliver								*/
 	gchar *subject;                                             /**< subject (for non-mime)							*/
 	gchar *hostname;                                            /**< hostname reported by MTA						*/
+	GHashTable *request_headers;                                /**< HTTP headers in a request						*/
+	GHashTable *reply_headers;                                  /**< Custom reply headers							*/
 	GString *msg;                                               /**< message buffer									*/
 	struct rspamd_http_connection *http_conn;                   /**< HTTP server connection							*/
 	struct rspamd_async_session * s;                             /**< async session object							*/

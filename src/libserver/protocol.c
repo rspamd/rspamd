@@ -230,12 +230,13 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 	struct rspamd_http_message *msg)
 {
 	gchar *headern, *err, *tmp;
-	gboolean res = TRUE;
+	gboolean res = TRUE, validh;
 	struct rspamd_http_header *h;
 
 	LL_FOREACH (msg->headers, h)
 	{
 		headern = h->name->str;
+		validh = TRUE;
 
 		switch (headern[0]) {
 		case 'd':
@@ -247,7 +248,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			}
 			else {
 				debug_task ("wrong header: %s", headern);
-				res = FALSE;
+				validh = FALSE;
 			}
 			break;
 		case 'h':
@@ -262,7 +263,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			}
 			else {
 				debug_task ("wrong header: %s", headern);
-				res = FALSE;
+				validh = FALSE;
 			}
 			break;
 		case 'f':
@@ -273,7 +274,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			}
 			else {
 				debug_task ("wrong header: %s", headern);
-				res = FALSE;
+				validh = FALSE;
 			}
 			break;
 		case 'j':
@@ -283,7 +284,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			}
 			else {
 				debug_task ("wrong header: %s", headern);
-				res = FALSE;
+				validh = FALSE;
 			}
 			break;
 		case 'q':
@@ -294,7 +295,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			}
 			else {
 				debug_task ("wrong header: %s", headern);
-				res = FALSE;
+				validh = FALSE;
 			}
 			break;
 		case 'r':
@@ -310,7 +311,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			}
 			else {
 				msg_info ("wrong header: %s", headern);
-				res = FALSE;
+				validh = FALSE;
 			}
 			break;
 		case 'i':
@@ -325,7 +326,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			}
 			else {
 				debug_task ("wrong header: %s", headern);
-				res = FALSE;
+				validh = FALSE;
 			}
 			break;
 		case 'p':
@@ -338,7 +339,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				}
 			}
 			else {
-				res = FALSE;
+				validh = FALSE;
 			}
 			break;
 		case 's':
@@ -347,7 +348,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				task->subject = h->value->str;
 			}
 			else {
-				res = FALSE;
+				validh = FALSE;
 			}
 			break;
 		case 'u':
@@ -356,7 +357,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				task->user = h->value->str;
 			}
 			else {
-				res = FALSE;
+				validh = FALSE;
 			}
 			break;
 		case 'l':
@@ -367,13 +368,20 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				}
 			}
 			else {
-				res = FALSE;
+				validh = FALSE;
 			}
 			break;
 		default:
-			debug_task ("wrong header: %s", headern);
-			res = FALSE;
+			debug_task ("unknown header: %s", headern);
+			validh = FALSE;
 			break;
+		}
+
+		if (!validh) {
+			res = FALSE;
+			g_hash_table_replace (task->request_headers,
+				g_string_new_len(h->name->str, h->name->len),
+				g_string_new_len(h->value->str, h->value->len));
 		}
 	}
 

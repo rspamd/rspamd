@@ -41,6 +41,15 @@ rcpt_destruct (void *pointer)
 	}
 }
 
+
+static void
+gstring_destruct (gpointer ptr)
+{
+	GString *s = (GString *)ptr;
+
+	g_string_free (s, TRUE);
+}
+
 /*
  * Create new task
  */
@@ -77,16 +86,26 @@ rspamd_task_new (struct rspamd_worker *worker)
 		(rspamd_mempool_destruct_t) rcpt_destruct, new_task);
 	new_task->results = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	rspamd_mempool_add_destructor (new_task->task_pool,
-		(rspamd_mempool_destruct_t) g_hash_table_destroy,
+		(rspamd_mempool_destruct_t) g_hash_table_unref,
 		new_task->results);
 	new_task->re_cache = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	rspamd_mempool_add_destructor (new_task->task_pool,
-		(rspamd_mempool_destruct_t) g_hash_table_destroy,
+		(rspamd_mempool_destruct_t) g_hash_table_unref,
 		new_task->re_cache);
 	new_task->raw_headers = g_hash_table_new (rspamd_strcase_hash,
 			rspamd_strcase_equal);
+	new_task->request_headers = g_hash_table_new_full ((GHashFunc)g_string_hash,
+		(GEqualFunc)g_string_equal, gstring_destruct, gstring_destruct);
 	rspamd_mempool_add_destructor (new_task->task_pool,
-		(rspamd_mempool_destruct_t) g_hash_table_destroy,
+		(rspamd_mempool_destruct_t) g_hash_table_unref,
+		new_task->request_headers);
+	new_task->reply_headers = g_hash_table_new_full ((GHashFunc)g_string_hash,
+		(GEqualFunc)g_string_equal, gstring_destruct, gstring_destruct);
+	rspamd_mempool_add_destructor (new_task->task_pool,
+		(rspamd_mempool_destruct_t) g_hash_table_unref,
+		new_task->reply_headers);
+	rspamd_mempool_add_destructor (new_task->task_pool,
+		(rspamd_mempool_destruct_t) g_hash_table_unref,
 		new_task->raw_headers);
 	new_task->emails = g_tree_new (compare_email_func);
 	rspamd_mempool_add_destructor (new_task->task_pool,
