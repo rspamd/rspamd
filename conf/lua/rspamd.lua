@@ -24,7 +24,7 @@ reconf['R_FLASH_REDIR_IMGSHACK'] = '/^(?:http:\\/\\/)?img\\d{1,5}\\.imageshack\\
 -- Different text parts
 reconf['R_PARTS_DIFFER'] = 'compare_parts_distance(50)';
 
-reconf['R_EMPTY_IMAGE'] = function (task)
+rspamd_config.R_EMPTY_IMAGE = function (task)
 	parts = task:get_text_parts()
 	if parts then
 		for _,part in ipairs(parts) do
@@ -41,7 +41,7 @@ reconf['R_EMPTY_IMAGE'] = function (task)
 end
 
 -- Date issues
-reconf['DATE_IN_FUTURE'] = function(task)
+rspamd_config.DATE_IN_FUTURE = function(task)
 	if rspamd_config:get_api_version() >= 5 then
 		local m = task:get_message()
 		local dm = m:get_date()
@@ -54,7 +54,7 @@ reconf['DATE_IN_FUTURE'] = function(task)
 	
 	return false
 end
-reconf['DATE_IN_PAST'] = function(task)
+rspamd_config.DATE_IN_PAST = function(task)
 	if rspamd_config:get_api_version() >= 5 then
 		local m = task:get_message()
 		local dm = m:get_date()
