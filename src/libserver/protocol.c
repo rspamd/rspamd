@@ -229,10 +229,10 @@ gboolean
 rspamd_protocol_handle_headers (struct rspamd_task *task,
 	struct rspamd_http_message *msg)
 {
-	gchar *headern, *err, *tmp;
+	gchar *headern, *tmp;
 	gboolean res = TRUE, validh;
 	struct rspamd_http_header *h;
-	InternetAddressList *tmp;
+	InternetAddressList *tmp_addr;
 
 	LL_FOREACH (msg->headers, h)
 	{
@@ -317,14 +317,14 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				if (task->rcpt_envelope == NULL) {
 					task->rcpt_envelope = internet_address_list_new ();
 				}
-				tmp = internet_address_list_parse_string (h->value->str);
-				internet_address_list_append (task->rcpt_envelope, tmp);
+				tmp_addr = internet_address_list_parse_string (h->value->str);
+				internet_address_list_append (task->rcpt_envelope, tmp_addr);
 #ifdef GMIME24
-				g_object_unref (tmp);
+				g_object_unref (tmp_addr);
 #else
-				internet_address_list_destroy (tmp);
+				internet_address_list_destroy (tmp_addr);
 #endif
-				debug_task ("read rcpt header, value: %s", tmp);
+				debug_task ("read rcpt header, value: %v", h->value);
 			}
 			else {
 				msg_info ("wrong header: %s", headern);
@@ -484,7 +484,7 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 		msg_info ("<%s> URL: %s - %s: %s",
 			cb->task->message_id,
 			cb->task->user ?
-			cb->task->user : (cb->task->from ? cb->task->from : "unknown"),
+			cb->task->user : "unknown",
 			rspamd_inet_address_to_string (&cb->task->from_addr),
 			struri (url));
 	}

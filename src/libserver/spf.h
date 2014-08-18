@@ -60,7 +60,7 @@ struct spf_record {
 
 	GList *addrs;
 	gchar *cur_domain;
-	gchar *sender;
+	const gchar *sender;
 	gchar *sender_domain;
 	gchar *local_part;
 	struct rspamd_task *task;

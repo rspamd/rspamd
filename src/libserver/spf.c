@@ -1551,35 +1551,14 @@ gchar *
 get_spf_domain (struct rspamd_task *task)
 {
 	gchar *domain, *res = NULL;
-	GList *domains;
+	const gchar *sender;
 
-	if (task->from &&
-		(domain = strchr (task->from, '@')) != NULL && *domain == '@') {
-		res = rspamd_mempool_strdup (task->task_pool, domain + 1);
-		if ((domain = strchr (res, '>')) != NULL) {
-			*domain = '\0';
-		}
-	}
-	else {
-		/* Extract from header */
-		domains = message_get_header (task->task_pool,
-				task->message,
-				"From",
-				FALSE);
+	sender = rspamd_task_get_sender (task);
 
-		if (domains != NULL) {
-			res = rspamd_mempool_strdup (task->task_pool, domains->data);
-
-			if ((domain = strrchr (res, '@')) == NULL) {
-				g_list_free (domains);
-				return NULL;
-			}
+	if (sender != NULL) {
+		domain = strchr (sender, '@');
+		if (domain) {
 			res = rspamd_mempool_strdup (task->task_pool, domain + 1);
-			g_list_free (domains);
-
-			if ((domain = strchr (res, '>')) != NULL) {
-				*domain = '\0';
-			}
 		}
 	}
 
@@ -1591,31 +1570,27 @@ resolve_spf (struct rspamd_task *task, spf_cb_t callback)
 {
 	struct spf_record *rec;
 	gchar *domain;
-	GList *domains;
+	const gchar *sender;
+
+	sender = rspamd_task_get_sender (task);
 
 	rec = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct spf_record));
 	rec->task = task;
 	rec->callback = callback;
+
 	/* Add destructor */
 	rspamd_mempool_add_destructor (task->task_pool,
 		(rspamd_mempool_destruct_t)spf_record_destructor,
 		rec);
 
 	/* Extract from data */
-	if (task->from &&
-		(domain = strchr (task->from, '@')) != NULL && *domain == '@') {
-		rec->sender = task->from;
+	if (sender != NULL && (domain = strchr (sender, '@')) != NULL) {
+		rec->sender = sender;
 
-		rec->local_part = rspamd_mempool_strdup (task->task_pool, task->from);
-		*(rec->local_part + (domain - task->from)) = '\0';
-		if (*rec->local_part == '<') {
-			memmove (rec->local_part, rec->local_part + 1,
-				strlen (rec->local_part));
-		}
+		rec->local_part = rspamd_mempool_alloc (task->task_pool,
+				domain - sender);
+		rspamd_strlcpy (rec->local_part, sender, domain - sender);
 		rec->cur_domain = rspamd_mempool_strdup (task->task_pool, domain + 1);
-		if ((domain = strchr (rec->cur_domain, '>')) != NULL) {
-			*domain = '\0';
-		}
 		rec->sender_domain = rec->cur_domain;
 
 		if (make_dns_request (task->resolver, task->s, task->task_pool,
@@ -1624,44 +1599,6 @@ resolve_spf (struct rspamd_task *task, spf_cb_t callback)
 			task->dns_requests++;
 			rec->requests_inflight++;
 			return TRUE;
-		}
-	}
-	else {
-		/* Extract from header */
-		domains = message_get_header (task->task_pool,
-				task->message,
-				"From",
-				FALSE);
-
-		if (domains != NULL) {
-			rec->cur_domain = rspamd_mempool_strdup (task->task_pool,
-					domains->data);
-			g_list_free (domains);
-
-			if ((domain = strrchr (rec->cur_domain, '@')) == NULL) {
-				return FALSE;
-			}
-			rec->sender = rspamd_mempool_strdup (task->task_pool,
-					rec->cur_domain);
-			rec->local_part = rec->cur_domain;
-			*domain = '\0';
-			rec->cur_domain = domain + 1;
-
-			if ((domain = strchr (rec->local_part, '<')) != NULL) {
-				memmove (rec->local_part, domain + 1, strlen (domain));
-			}
-
-			if ((domain = strchr (rec->cur_domain, '>')) != NULL) {
-				*domain = '\0';
-			}
-			rec->sender_domain = rec->cur_domain;
-			if (make_dns_request (task->resolver, task->s, task->task_pool,
-				spf_dns_callback, (void *)rec, RDNS_REQUEST_TXT,
-				rec->cur_domain)) {
-				task->dns_requests++;
-				rec->requests_inflight++;
-				return TRUE;
-			}
 		}
 	}
 
