@@ -47,6 +47,7 @@ local function check_specific_limit (task, limit, key)
 	--- Called when value was set on server
 	local function rate_set_key_cb(task, err, data)
 		if err then
+		  rspamd_logger.info('got error while getting limit: ' .. err)
 			upstream:fail()
 		else
 			upstream:ok()
@@ -74,6 +75,7 @@ local function check_specific_limit (task, limit, key)
 			end
 		end
 		if err then
+		  rspamd_logger.info('got error while getting limit: ' .. err)
 			upstream:fail()
 		end	
 	end
@@ -88,6 +90,7 @@ local function set_specific_limit (task, limit, key)
 	--- Called when value was set on server
 	local function rate_set_key_cb(task, err, data)
 		if err then
+		  rspamd_logger.info('got error while setting limit: ' .. err)
 			upstream:fail()
 		else
 			upstream:ok()
@@ -112,6 +115,7 @@ local function set_specific_limit (task, limit, key)
 			rspamd_redis.make_request(task, upstream:get_ip_string(), upstream:get_port(), rate_set_key_cb, 
 							'SET %b %b', key, lstr)
 		elseif err then
+		  rspamd_logger.info('got error while setting limit: ' .. err)
 			upstream:fail()
 		end
 	end
@@ -147,17 +151,6 @@ end
 
 --- Check or update ratelimit
 local function rate_test_set(task, func)
-	
-	-- Returns local part component of address
-	local function get_local_part(str)
-		pos,_ = string.find(str, '@', 0, true)
-		if not pos then
-			return str
-		else
-			return string.sub(str, 1, pos - 1)
-		end
-	end
-	
 	-- Get initial task data
 	local ip = task:get_from_ip()
 	if ip and whitelisted_ip then
@@ -169,9 +162,6 @@ local function rate_test_set(task, func)
 	-- Parse all rcpts 
 	local rcpts = task:get_recipients()
 	local rcpts_user = {}
-	if not rcpts then
-		rcpts = task:get_recipients_headers()
-	end
 	if rcpts then
 		if table.maxn(rcpts) > max_rcpt then
 			rspamd_logger.info(string.format('message <%s> contains %d recipients, maximum is %d',
@@ -179,24 +169,21 @@ local function rate_test_set(task, func)
 			return
 		end
 		for i,r in ipairs(rcpts) do
-			rcpts_user[i] = get_local_part(r['addr'])
+			rcpts_user[i] = r['user']
 		end
 	end
 	-- Parse from
 	local from = task:get_from()
 	local from_user = ''
-	if not from then
-		from = task:get_from_headers()
-	end
 	if from then
-		from_user = get_local_part(from[1]['addr'])
+		from_user = from[1]['user']
 	end
 	-- Get user (authuser)
 	local auser = task:get_user()
 	if auser then
 		func(task, settings['user'], make_rate_key (auser, '<auth>', nil))
 	end
-	
+
 	if not from_user or not rcpts_user[1] then
 		-- Nothing to check
 		return

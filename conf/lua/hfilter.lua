@@ -229,7 +229,7 @@ local function hfilter(task)
     end
 
     -- MAILFROM checks --
-    local from = task:get_from()
+    local from = task:get_from(1)
     if from then
         --FROM host check
         for _,fr in ipairs(from) do

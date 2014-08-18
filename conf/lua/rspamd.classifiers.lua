@@ -14,7 +14,7 @@ local function get_specific_statfiles(classifier, task)
 	-- More 5 recipients
 	local st_many = classifier:get_statfile_by_label(many_recipients_label)
 	if st_many then
-		rcpt = task:get_recipients()
+		rcpt = task:get_recipients(2)
 		if rcpt and table.maxn(rcpt) > 5 then
 			print(table.maxn(rcpt))
 			table.foreach(st_many, function(i,v) table.insert(spec_st,v) end)
@@ -23,7 +23,7 @@ local function get_specific_statfiles(classifier, task)
 	-- Undisclosed
 	local st_undisc = classifier:get_statfile_by_label(undisclosed_recipients_label)
 	if st_undisc then
-		rcpt = task:get_recipients()
+		rcpt = task:get_recipients(2)
 		if rcpt and table.maxn(rcpt) == 0 then
 			table.foreach(st_undisc, function(i,v) table.insert(spec_st,v) end)
 		end

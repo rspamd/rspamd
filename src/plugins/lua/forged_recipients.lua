@@ -6,11 +6,11 @@ local symbol_sender = 'FORGED_SENDER'
 
 function check_forged_headers(task)
 	local msg = task:get_message()
-	local smtp_rcpt = task:get_recipients()
+	local smtp_rcpt = task:get_recipients(1)
 	local res = false
 	
 	if smtp_rcpt then
-		local mime_rcpt = task:get_recipients_headers()
+		local mime_rcpt = task:get_recipients(2)
 		local count = 0
 		if mime_rcpt then 
 			count = table.maxn(mime_rcpt)
@@ -36,9 +36,9 @@ function check_forged_headers(task)
 		end
 	end
 	-- Check sender
-	local smtp_from = task:get_from()
+	local smtp_from = task:get_from(1)
 	if smtp_from then
-		local mime_from = task:get_from_headers()
+		local mime_from = task:get_from(2)
 		if not mime_from or not (string.lower(mime_from[1]['addr']) == string.lower(smtp_from[1]['addr'])) then
 			task:insert_result(symbol_sender, 1)
 		end

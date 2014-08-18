@@ -108,40 +108,6 @@ local function check_multimap(task)
 						end
 					end	
 				end
-			else
-				-- Get from headers
-				local rcpts = task:get_recipients_headers()
-				if rcpts then
-					for _,r in ipairs(rcpts) do
-						if r['addr'] then
-							if rule['pattern'] then
-								-- extract a part from header
-								local _,_,ext = string.find(r['addr'], rule['pattern'])
-								if ext then
-									if rule['cdb'] then
-										if rule['hash']:lookup(ext) then
-											task:insert_result(rule['symbol'], 1)
-										end
-									else
-										if rule['hash']:get_key(ext) then
-											task:insert_result(rule['symbol'], 1)
-										end
-									end
-								end
-							else
-								if rule['cdb'] then
-									if rule['hash']:lookup(r['addr']) then
-										task:insert_result(rule['symbol'], 1)
-									end
-								else
-									if rule['hash']:get_key(r['addr']) then
-										task:insert_result(rule['symbol'], 1)
-									end
-								end
-							end
-						end	
-					end
-				end
 			end
 		elseif rule['type'] == 'from' then
 			-- First try to get from field
@@ -175,40 +141,6 @@ local function check_multimap(task)
 							end
 						end
 					end	
-				end
-			else
-				-- Get from headers
-				local from = task:get_from_headers()
-				if from then
-					for _,r in ipairs(from) do
-						if r['addr'] then
-							if rule['pattern'] then
-								-- extract a part from header
-								local _,_,ext = string.find(r['addr'], rule['pattern'])
-								if ext then
-									if rule['cdb'] then
-										if rule['hash']:lookup(ext) then
-											task:insert_result(rule['symbol'], 1)
-										end
-									else
-										if rule['hash']:get_key(ext) then
-											task:insert_result(rule['symbol'], 1)
-										end
-									end
-								end
-							else
-								if rule['cdb'] then
-									if rule['hash']:lookup(r['addr']) then
-										task:insert_result(rule['symbol'], 1)
-									end
-								else
-									if rule['hash']:get_key(r['addr']) then
-										task:insert_result(rule['symbol'], 1)
-									end
-								end
-							end
-						end	
-					end
 				end
 			end
  		end
