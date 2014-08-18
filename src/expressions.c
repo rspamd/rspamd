@@ -1140,9 +1140,9 @@ rspamd_recipients_distance (struct worker_task *task, GList * args, void *unused
 #ifdef GMIME24
 	for (i = 0; i < num; i ++) {
 		addr = internet_address_list_get_address (cur, i);
-		ar[i].name = memory_pool_strdup (task->task_pool, internet_address_get_name (addr));
+		ar[i].name = internet_address_mailbox_get_addr (
+						INTERNET_ADDRESS_MAILBOX (addr));
 		if (ar[i].name != NULL && (c = strchr (ar[i].name, '@')) != NULL) {
-			*c = '\0';
 			ar[i].addr = c + 1;
 		}
 	}
