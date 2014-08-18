@@ -80,11 +80,9 @@ struct rspamd_task {
 	gboolean is_skipped;                                        /**< whether message was skipped by configuration   */
 
 	gchar *helo;                                                    /**< helo header value								*/
-	gchar *from;                                                    /**< from header value								*/
 	gchar *queue_id;                                                /**< queue id if specified							*/
 	const gchar *message_id;                                        /**< message id										*/
-	GList *rcpt;                                                    /**< recipients list								*/
-	guint nrcpt;                                            /**< number of recipients							*/
+
 	rspamd_inet_addr_t from_addr;                               /**< from addr for a task							*/
 	rspamd_inet_addr_t client_addr;                             /**< address of connected socket					*/
 	gchar *deliver_to;                                          /**< address to deliver								*/
@@ -99,7 +97,6 @@ struct rspamd_task {
 	gint parts_count;                                           /**< mime parts count								*/
 	GMimeMessage *message;                                      /**< message, parsed with GMime						*/
 	GMimeObject *parser_parent_part;                            /**< current parent part							*/
-	InternetAddressList *rcpts;                                 /**< list of all recipients                         */
 	GList *parts;                                               /**< list of parsed parts							*/
 	GList *text_parts;                                          /**< list of text parts								*/
 	gchar *raw_headers_str;                                         /**< list of raw headers							*/
@@ -112,6 +109,12 @@ struct rspamd_task {
 	                                                             *    metric's name									*/
 	GHashTable *tokens;                                         /**< hash table of tokens indexed by tokenizer
 	                                                             *    pointer                                       */
+
+	InternetAddressList *rcpt_mime;                         	/**< list of all recipients                         */
+	InternetAddressList *rcpt_envelope;                         /**< list of all recipients                         */
+	InternetAddressList *from_mime;
+	InternetAddressList *from_envelope;
+
 	GList *messages;                                            /**< list of messages that would be reported		*/
 	GHashTable *re_cache;                                       /**< cache for matched or not matched regexps		*/
 	struct rspamd_config *cfg;                                  /**< pointer to config object						*/
@@ -177,5 +180,12 @@ gboolean rspamd_task_fin (void *arg);
 gboolean rspamd_task_process (struct rspamd_task *task,
 	struct rspamd_http_message *msg, GThreadPool *classify_pool,
 	gboolean process_extra_filters);
+
+/**
+ * Return address of sender or NULL
+ * @param task
+ * @return
+ */
+const gchar *rspamd_task_get_sender (struct rspamd_task *task);
 
 #endif /* TASK_H_ */

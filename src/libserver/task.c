@@ -28,20 +28,6 @@
 #include "message.h"
 #include "lua/lua_common.h"
 
-/*
- * Destructor for recipients list in a task
- */
-static void
-rcpt_destruct (void *pointer)
-{
-	struct rspamd_task *task = (struct rspamd_task *) pointer;
-
-	if (task->rcpt) {
-		g_list_free (task->rcpt);
-	}
-}
-
-
 static void
 gstring_destruct (gpointer ptr)
 {
@@ -81,9 +67,6 @@ rspamd_task_new (struct rspamd_worker *worker)
 
 	new_task->task_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
-	/* Add destructor for recipients list (it would be better to use anonymous function here */
-	rspamd_mempool_add_destructor (new_task->task_pool,
-		(rspamd_mempool_destruct_t) rcpt_destruct, new_task);
 	new_task->results = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	rspamd_mempool_add_destructor (new_task->task_pool,
 		(rspamd_mempool_destruct_t) g_hash_table_unref,
@@ -363,4 +346,21 @@ rspamd_task_process (struct rspamd_task *task,
 	check_session_pending (task->s);
 
 	return TRUE;
+}
+
+const gchar *
+rspamd_task_get_sender (struct rspamd_task *task)
+{
+	InternetAddressMailbox *imb = NULL;
+
+	if (task->from_envelope != NULL) {
+		imb = INTERNET_ADDRESS_MAILBOX(internet_address_list_get_address (
+				task->from_envelope, 0));
+	}
+	else if (task->from_mime != NULL) {
+		imb = INTERNET_ADDRESS_MAILBOX(internet_address_list_get_address (
+				task->from_mime, 0));
+	}
+
+	return internet_address_mailbox_get_addr (imb);
 }

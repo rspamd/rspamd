@@ -232,6 +232,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 	gchar *headern, *err, *tmp;
 	gboolean res = TRUE, validh;
 	struct rspamd_http_header *h;
+	InternetAddressList *tmp;
 
 	LL_FOREACH (msg->headers, h)
 	{
@@ -269,8 +270,20 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		case 'f':
 		case 'F':
 			if (g_ascii_strcasecmp (headern, FROM_HEADER) == 0) {
-				task->from = rspamd_protocol_escape_braces (h->value);
-				debug_task ("read from header, value: %s", task->from);
+				task->from_envelope = internet_address_list_parse_string (
+						h->value->str);
+				if (task->from_envelope) {
+#ifdef GMIME24
+					rspamd_mempool_add_destructor (task->task_pool,
+							(rspamd_mempool_destruct_t) g_object_unref,
+							task->from_envelope);
+#else
+					rspamd_mempool_add_destructor (task->task_pool,
+							(rspamd_mempool_destruct_t) internet_address_list_destroy,
+							task->from_envelope);
+#endif
+				}
+				debug_task ("read from header, value: %v", h->value);
 			}
 			else {
 				debug_task ("wrong header: %s", headern);
@@ -301,13 +314,17 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		case 'r':
 		case 'R':
 			if (g_ascii_strcasecmp (headern, RCPT_HEADER) == 0) {
-				tmp = rspamd_protocol_escape_braces (h->value);
-				task->rcpt = g_list_prepend (task->rcpt, tmp);
+				if (task->rcpt_envelope == NULL) {
+					task->rcpt_envelope = internet_address_list_new ();
+				}
+				tmp = internet_address_list_parse_string (h->value->str);
+				internet_address_list_append (task->rcpt_envelope, tmp);
+#ifdef GMIME24
+				g_object_unref (tmp);
+#else
+				internet_address_list_destroy (tmp);
+#endif
 				debug_task ("read rcpt header, value: %s", tmp);
-			}
-			else if (g_ascii_strcasecmp (headern, NRCPT_HEADER) == 0) {
-				task->nrcpt = strtoul (h->value->str, &err, 10);
-				debug_task ("read rcpt header, value: %d", (gint)task->nrcpt);
 			}
 			else {
 				msg_info ("wrong header: %s", headern);

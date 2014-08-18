@@ -1231,20 +1231,6 @@ process_message (struct rspamd_task *task)
 			process_raw_headers (task);
 		}
 
-		task->rcpts = g_mime_message_get_all_recipients (message);
-		if (task->rcpts) {
-#ifdef GMIME24
-			rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t) g_object_unref,
-				task->rcpts);
-#else
-			rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t) internet_address_list_destroy,
-				task->rcpts);
-#endif
-		}
-
-
 		/* free the parser (and the stream) */
 		g_object_unref (parser);
 	}
@@ -1252,8 +1238,9 @@ process_message (struct rspamd_task *task)
 		/* We got only message, no mime headers or anything like this */
 		/* Construct fake message for it */
 		task->message = g_mime_message_new (TRUE);
-		if (task->from) {
-			g_mime_message_set_sender (task->message, task->from);
+		if (task->from_envelope) {
+			g_mime_message_set_sender (task->message,
+					rspamd_task_get_sender (task));
 		}
 		/* Construct part for it */
 		part = g_mime_part_new_with_type ("text", "html");
@@ -1292,19 +1279,32 @@ process_message (struct rspamd_task *task)
 		if (task->subject) {
 			g_mime_message_set_subject (task->message, task->subject);
 		}
+	}
 
-		/* Add recipients */
-#ifndef GMIME24
-		if (task->rcpt) {
-			cur = task->rcpt;
-			while (cur) {
-				g_mime_message_add_recipient (task->message,
-					GMIME_RECIPIENT_TYPE_TO,
-					NULL,
-					(gchar *)cur->data);
-				cur = g_list_next (cur);
-			}
-		}
+	/* Set mime recipients and sender for the task */
+	task->rcpt_mime = g_mime_message_get_all_recipients (message);
+	if (task->rcpt_mime) {
+#ifdef GMIME24
+		rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) g_object_unref,
+			task->rcpt_mime);
+#else
+		rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) internet_address_list_destroy,
+			task->rcpt_mime);
+#endif
+	}
+	task->from_mime = internet_address_list_parse_string(
+			g_mime_message_get_sender (message));
+	if (task->from_mime) {
+#ifdef GMIME24
+		rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t) g_object_unref,
+				task->from_mime);
+#else
+		rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t) internet_address_list_destroy,
+				task->from_mime);
 #endif
 	}
 
