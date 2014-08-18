@@ -33,6 +33,8 @@ LUA_FUNCTION_DEF (ip, from_string);
 LUA_FUNCTION_DEF (ip, destroy);
 LUA_FUNCTION_DEF (ip, get_version);
 LUA_FUNCTION_DEF (ip, is_valid);
+LUA_FUNCTION_DEF (ip, apply_mask);
+LUA_FUNCTION_DEF (ip, equal);
 
 static const struct luaL_reg iplib_m[] = {
 	LUA_INTERFACE_DEF (ip, to_string),
@@ -42,7 +44,9 @@ static const struct luaL_reg iplib_m[] = {
 	LUA_INTERFACE_DEF (ip, inversed_str_octets),
 	LUA_INTERFACE_DEF (ip, get_version),
 	LUA_INTERFACE_DEF (ip, is_valid),
+	LUA_INTERFACE_DEF (ip, apply_mask),
 	{"__tostring", lua_ip_to_string},
+	{"__eq", lua_ip_equal},
 	{"__gc", lua_ip_destroy},
 	{NULL, NULL}
 };
@@ -324,6 +328,62 @@ lua_ip_is_valid (lua_State *L)
 	else {
 		lua_pushnil (L);
 	}
+
+	return 1;
+}
+
+static gint
+lua_ip_apply_mask (lua_State *L)
+{
+	struct rspamd_lua_ip *ip = lua_check_ip (L, 1);
+	gint mask;
+	guint32 umsk, *p;
+
+	mask = lua_tonumber (L, 2);
+	if (mask > 0 && ip->is_valid) {
+		if (ip->addr.af == AF_INET && mask <= 32) {
+			umsk = htonl (G_MAXUINT32 << (32 - mask));
+			ip->addr.addr.s4.sin_addr.s_addr &= umsk;
+		}
+		else if (ip->addr.af == AF_INET && mask <= 128) {
+			p = (uint32_t *)&ip->addr.addr.s6.sin6_addr;
+			p += 3;
+			while (mask > 0) {
+				umsk = htonl (G_MAXUINT32 << (32 - (mask > 32 ? 32 : mask)));
+				*p &= umsk;
+				p --;
+				mask -= 32;
+			}
+		}
+	}
+
+	return 0;
+}
+
+static gint
+lua_ip_equal (lua_State *L)
+{
+	struct rspamd_lua_ip *ip1 = lua_check_ip (L, 1),
+		*ip2 = lua_check_ip (L, 2);
+	gboolean res = FALSE;
+
+	if (ip1->is_valid && ip2->is_valid) {
+		if (ip1->addr.af == ip2->addr.af) {
+			if (ip1->addr.af == AF_INET) {
+				if (memcmp(&ip1->addr.addr.s4.sin_addr,
+					&ip2->addr.addr.s4.sin_addr, sizeof (struct in_addr)) == 0) {
+					res = TRUE;
+				}
+			}
+			else if (ip1->addr.af == AF_INET6) {
+				if (memcmp(&ip1->addr.addr.s6.sin6_addr,
+					&ip2->addr.addr.s6.sin6_addr, sizeof (struct in6_addr)) == 0) {
+					res = TRUE;
+				}
+			}
+		}
+	}
+	lua_pushboolean (L, res);
 
 	return 1;
 }
