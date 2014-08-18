@@ -255,7 +255,7 @@ static gboolean
 check_metric_settings (struct rspamd_task *task, struct metric *metric,
 	double *score)
 {
-	const ucl_object_t *mobj, *reject;
+	const ucl_object_t *mobj, *reject, *act;
 	double val;
 
 	if (task->settings == NULL) {
@@ -264,11 +264,14 @@ check_metric_settings (struct rspamd_task *task, struct metric *metric,
 
 	mobj = ucl_object_find_key (task->settings, metric->name);
 	if (mobj != NULL) {
-		reject = ucl_object_find_key (mobj,
-				str_action_metric (METRIC_ACTION_REJECT));
-		if (reject != NULL && ucl_object_todouble_safe (reject, &val)) {
-			*score = val;
-			return TRUE;
+		act = ucl_object_find_key (mobj, "actions");
+		if (act != NULL) {
+			reject = ucl_object_find_key (act,
+					str_action_metric (METRIC_ACTION_REJECT));
+			if (reject != NULL && ucl_object_todouble_safe (reject, &val)) {
+				*score = val;
+				return TRUE;
+			}
 		}
 	}
 
