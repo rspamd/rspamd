@@ -1237,7 +1237,8 @@ process_message (struct rspamd_task *task)
 	else {
 		/* We got only message, no mime headers or anything like this */
 		/* Construct fake message for it */
-		task->message = g_mime_message_new (TRUE);
+		message = g_mime_message_new (TRUE);
+		task->message = message;
 		if (task->from_envelope) {
 			g_mime_message_set_sender (task->message,
 					rspamd_task_get_sender (task));

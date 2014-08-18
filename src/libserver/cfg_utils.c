@@ -292,6 +292,7 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 		cnf->bind_host = rspamd_mempool_strdup (cfg->cfg_pool, tokens[0]);
 		if (tokens[1] == NULL) {
 			cnf->bind_port = DEFAULT_BIND_PORT;
+			err = NULL;
 		}
 		else {
 			cnf->bind_port = strtoul (tokens[1], &err, 10);

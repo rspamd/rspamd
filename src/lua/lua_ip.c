@@ -62,7 +62,7 @@ static const struct luaL_reg iplib_f[] = {
 
 #define NEW_IP(n, o, p)	do {						\
     (n) = g_slice_alloc (sizeof (struct rspamd_lua_ip));	\
-    if (o != NULL) { memcpy ((n), (o) ? (o) : (n), sizeof (struct rspamd_lua_ip)); }	\
+    if ((o) != NULL) { memcpy ((n), (o) ? (o) : (n), sizeof (struct rspamd_lua_ip)); }	\
     (p) = lua_newuserdata (L, sizeof (struct rspamd_lua_ip *));	\
     rspamd_lua_setclass (L, "rspamd{ip}", -1);	\
     *(p) = (n);	\
@@ -403,7 +403,6 @@ lua_ip_copy (lua_State *L)
 {
 	struct rspamd_lua_ip *ip = lua_check_ip (L, 1),
 			*nip, **pip;
-	const gchar *ip_str;
 
 	if (ip) {
 		NEW_IP(nip, ip, pip);
