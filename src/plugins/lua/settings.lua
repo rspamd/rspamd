@@ -46,7 +46,7 @@ local function process_settings_table(tbl)
   end
    
   -- Check the setting element internal data
-  local process_setting_elt = function(elt)
+  local process_setting_elt = function(name, elt)
     -- Process IP address
     local function process_ip(ip)
       local out = {}
@@ -69,7 +69,7 @@ local function process_settings_table(tbl)
             return nil
           end
         else
-          local res = rspamd_ip.from_string(string.sub(ip, 1, slash))
+          local res = rspamd_ip.from_string(string.sub(ip, 1, slash - 1))
           local mask = tonumber(string.sub(ip, slash + 1))
           
           if res:is_valid() then
@@ -86,21 +86,18 @@ local function process_settings_table(tbl)
       return out
     end
     
-    local process_addr = function(addr)
-      local out = {
-        name = {},
-        user = {},
-        domain = {},
-        regexp = {}
-      }
+    local function process_addr(addr)
+      local out = {}
+      
       if type(addr) == "table" then
         for i,v in ipairs(addr) do 
           table.insert(out, process_addr(v))
         end
       elseif type(addr) == "string" then
-        if addr[1] == '/' then
+        local start = string.sub(addr, 1, 1)
+        if start == '/' then
           -- It is a regexp
-          local re = rspamd_regexp.create(string.sub(addr, 2))
+          local re = regexp.create(string.sub(addr, 2))
           if re then
             out['regexp'] = re
             setmetatable(out, {
@@ -108,9 +105,10 @@ local function process_settings_table(tbl)
             })
           else
             rspamd_logger.err("bad regexp: " .. addr)
+            return nil
           end
           
-        elseif addr[1] == '@' then
+        elseif start == '@' then
           -- It is a domain if form @domain
           out['domain'] = string.sub(addr, 2)
         else
@@ -132,31 +130,51 @@ local function process_settings_table(tbl)
     end
     
     
-    local out = {
-      ip = {},
-      rcpt = {},
-      from = {}
-    }
+    local out = {}
+    
     if elt['ip'] then
       local ip = process_ip(elt['ip'])
       
       if ip then
-        table.insert(out['ip'], ip)
+        if not out['ip'] then 
+          out['ip'] = {ip} 
+        else
+          table.insert(out['ip'], ip)
+        end
       end
     end
     if elt['from'] then
       local from = process_addr(elt['from'])
       
       if from then
-        table.insert(out['from'], from)
+       if not out['from'] then 
+          out['from'] = {from} 
+        else
+          table.insert(out['from'], from)
+        end
       end
     end
     if elt['rcpt'] then
       local rcpt = process_addr(elt['rcpt'])
       
       if rcpt then
-        table.insert(out['rcpt'], rcpt)
+        if not out['rcpt'] then 
+          out['rcpt'] = {rcpt} 
+        else
+          table.insert(out['rcpt'], rcpt)
+        end
       end
+    end
+    
+    -- Now we must process actions
+    if elt['apply'] then
+      -- Just insert all metric results to the action key
+      out['apply'] = elt['apply']
+    elseif elt['whitelist'] or elt['want_spam'] then
+      out['whitelist'] = true
+    else
+      rspamd_logger.err("no actions in settings: " .. name)
+      return nil
     end
     
     return out
@@ -179,11 +197,13 @@ local function process_settings_table(tbl)
     if not settings[pri] then
       settings[pri] = {}
     end
-    local s = process_setting_elt(v)
+    local s = process_setting_elt(k, v)
     if s then
       settings[pri][k] = s
     end
   end
+  --local dumper = require 'pl.pretty'.dump
+  --dumper(settings)
 end
 
 -- Parse settings map from the ucl line
