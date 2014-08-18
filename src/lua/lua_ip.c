@@ -35,6 +35,7 @@ LUA_FUNCTION_DEF (ip, get_version);
 LUA_FUNCTION_DEF (ip, is_valid);
 LUA_FUNCTION_DEF (ip, apply_mask);
 LUA_FUNCTION_DEF (ip, equal);
+LUA_FUNCTION_DEF (ip, copy);
 
 static const struct luaL_reg iplib_m[] = {
 	LUA_INTERFACE_DEF (ip, to_string),
@@ -45,6 +46,7 @@ static const struct luaL_reg iplib_m[] = {
 	LUA_INTERFACE_DEF (ip, get_version),
 	LUA_INTERFACE_DEF (ip, is_valid),
 	LUA_INTERFACE_DEF (ip, apply_mask),
+	LUA_INTERFACE_DEF (ip, copy),
 	{"__tostring", lua_ip_to_string},
 	{"__eq", lua_ip_equal},
 	{"__gc", lua_ip_destroy},
@@ -54,8 +56,17 @@ static const struct luaL_reg iplib_m[] = {
 static const struct luaL_reg iplib_f[] = {
 	LUA_INTERFACE_DEF (ip, from_string),
 	LUA_INTERFACE_DEF (ip, from_number),
+	{"from_ip", lua_ip_copy},
 	{NULL, NULL}
 };
+
+#define NEW_IP(n, o, p)	do {						\
+    (n) = g_slice_alloc (sizeof (struct rspamd_lua_ip));	\
+    if (o != NULL) { memcpy ((n), (o) ? (o) : (n), sizeof (struct rspamd_lua_ip)); }	\
+    (p) = lua_newuserdata (L, sizeof (struct rspamd_lua_ip *));	\
+    rspamd_lua_setclass (L, "rspamd{ip}", -1);	\
+    *(p) = (n);	\
+} while(0)
 
 static struct rspamd_lua_ip *
 lua_check_ip (lua_State * L, gint pos)
@@ -210,11 +221,8 @@ lua_ip_from_string (lua_State *L)
 
 	ip_str = luaL_checkstring (L, 1);
 	if (ip_str) {
-		ip = g_slice_alloc (sizeof (struct rspamd_lua_ip));
+		NEW_IP(ip, NULL, pip);
 		ip->is_valid = rspamd_parse_inet_address (&ip->addr, ip_str);
-		pip = lua_newuserdata (L, sizeof (struct rspamd_lua_ip *));
-		rspamd_lua_setclass (L, "rspamd{ip}", -1);
-		*pip = ip;
 	}
 	else {
 		lua_pushnil (L);
@@ -260,14 +268,11 @@ lua_ip_from_number (lua_State *L)
 
 	if (lua_gettop (L) == 1 && lua_isnumber (L, 1)) {
 		/* Ipv4 version */
-		ip = g_slice_alloc (sizeof (struct rspamd_lua_ip));
+		NEW_IP(ip, NULL, pip);
 		src[0] = lua_tointeger (L, 1);
 		ip->addr.af = AF_INET;
 		ip->is_valid = TRUE;
 		ip->addr.addr.s4.sin_addr.s_addr = htonl (src[0]);
-		pip = lua_newuserdata (L, sizeof (struct rspamd_lua_ip *));
-		rspamd_lua_setclass (L, "rspamd{ip}", -1);
-		*pip = ip;
 	}
 	else if (lua_gettop (L) == 4 && lua_isnumber (L, 1)) {
 		/* Ipv6 version */
@@ -275,13 +280,10 @@ lua_ip_from_number (lua_State *L)
 			src[i] = htonl (lua_tonumber (L, i + 1));
 		}
 		G_STATIC_ASSERT (sizeof (ip->addr.addr.s6.sin6_addr) >= sizeof (src));
-		ip = g_slice_alloc (sizeof (struct rspamd_lua_ip));
+		NEW_IP(ip, NULL, pip);
 		ip->addr.af = AF_INET6;
 		ip->is_valid = TRUE;
 		memcpy (&ip->addr.addr.s6.sin6_addr, src, sizeof (src));
-		pip = lua_newuserdata (L, sizeof (struct rspamd_lua_ip *));
-		rspamd_lua_setclass (L, "rspamd{ip}", -1);
-		*pip = ip;
 	}
 	else {
 		lua_pushnil (L);
@@ -335,18 +337,20 @@ lua_ip_is_valid (lua_State *L)
 static gint
 lua_ip_apply_mask (lua_State *L)
 {
-	struct rspamd_lua_ip *ip = lua_check_ip (L, 1);
+	struct rspamd_lua_ip *ip = lua_check_ip (L, 1), *nip, **pip;
 	gint mask;
 	guint32 umsk, *p;
 
 	mask = lua_tonumber (L, 2);
 	if (mask > 0 && ip->is_valid) {
 		if (ip->addr.af == AF_INET && mask <= 32) {
+			NEW_IP(nip, ip, pip);
 			umsk = htonl (G_MAXUINT32 << (32 - mask));
-			ip->addr.addr.s4.sin_addr.s_addr &= umsk;
+			nip->addr.addr.s4.sin_addr.s_addr &= umsk;
 		}
 		else if (ip->addr.af == AF_INET && mask <= 128) {
-			p = (uint32_t *)&ip->addr.addr.s6.sin6_addr;
+			NEW_IP(nip, ip, pip);
+			p = (uint32_t *)&nip->addr.addr.s6.sin6_addr;
 			p += 3;
 			while (mask > 0) {
 				umsk = htonl (G_MAXUINT32 << (32 - (mask > 32 ? 32 : mask)));
@@ -355,9 +359,15 @@ lua_ip_apply_mask (lua_State *L)
 				mask -= 32;
 			}
 		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		lua_pushnil (L);
 	}
 
-	return 0;
+	return 1;
 }
 
 static gint
@@ -384,6 +394,23 @@ lua_ip_equal (lua_State *L)
 		}
 	}
 	lua_pushboolean (L, res);
+
+	return 1;
+}
+
+static gint
+lua_ip_copy (lua_State *L)
+{
+	struct rspamd_lua_ip *ip = lua_check_ip (L, 1),
+			*nip, **pip;
+	const gchar *ip_str;
+
+	if (ip) {
+		NEW_IP(nip, ip, pip);
+	}
+	else {
+		lua_pushnil (L);
+	}
 
 	return 1;
 }

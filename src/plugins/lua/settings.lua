@@ -54,8 +54,12 @@ local function check_settings(task)
   end
   
   local function check_ip_setting(rule, ip)
-    -- XXX: check mask
-    if ip:to_string() == rule[0] then
+    if rule[1] ~= nil then
+      local nip = ip:apply_mask(rule[1])
+      if nip and nip == rule[0] then
+        return true
+      end
+    elseif ip == rule[0] then
       return true
     end
     
