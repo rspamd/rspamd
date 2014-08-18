@@ -66,11 +66,8 @@ LUA_FUNCTION_DEF (task, inc_dns_req);
 LUA_FUNCTION_DEF (task, call_rspamd_function);
 LUA_FUNCTION_DEF (task, get_recipients);
 LUA_FUNCTION_DEF (task, get_from);
-LUA_FUNCTION_DEF (task, set_from);
 LUA_FUNCTION_DEF (task, get_user);
 LUA_FUNCTION_DEF (task, set_user);
-LUA_FUNCTION_DEF (task, get_recipients_headers);
-LUA_FUNCTION_DEF (task, get_from_headers);
 LUA_FUNCTION_DEF (task, get_from_ip);
 LUA_FUNCTION_DEF (task, set_from_ip);
 LUA_FUNCTION_DEF (task, get_from_ip_num);
@@ -119,11 +116,8 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, call_rspamd_function),
 	LUA_INTERFACE_DEF (task, get_recipients),
 	LUA_INTERFACE_DEF (task, get_from),
-	LUA_INTERFACE_DEF (task, set_from),
 	LUA_INTERFACE_DEF (task, get_user),
 	LUA_INTERFACE_DEF (task, set_user),
-	LUA_INTERFACE_DEF (task, get_recipients_headers),
-	LUA_INTERFACE_DEF (task, get_from_headers),
 	LUA_INTERFACE_DEF (task, get_from_ip),
 	LUA_INTERFACE_DEF (task, set_from_ip),
 	LUA_INTERFACE_DEF (task, get_from_ip_num),
@@ -859,42 +853,46 @@ static gint
 lua_task_get_recipients (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L);
-	GList *cur;
 	InternetAddressList *addrs;
-	gint idx = 1;
+	gint what = 0;
 
 	if (task) {
-		cur = task->rcpt;
-		if (cur != NULL) {
-			lua_newtable (L);
-			while (cur) {
-#ifndef GMIME24
-				addrs = internet_address_parse_string (cur->data);
-				if (addrs) {
-					if (lua_push_internet_address (L,
-						internet_address_list_get_address (addrs))) {
-						lua_rawseti (L, -2, idx++);
-					}
-					internet_address_list_destroy (addrs);
-				}
-#else
+		if (lua_gettop (L) == 2) {
+			/* Get what value */
+			what = lua_tonumber (L, 2);
+		}
 
-				addrs = internet_address_list_parse_string (cur->data);
-				if (addrs) {
-					if (lua_push_internet_address (L,
-						internet_address_list_get_address (addrs, 0))) {
-						lua_rawseti (L, -2, idx++);
-					}
-					g_object_unref (addrs);
-				}
-#endif
-				cur = g_list_next (cur);
+		switch (what) {
+		case 1:
+			/* Here we check merely envelope rcpt */
+			addrs = task->rcpt_envelope;
+			break;
+		case 2:
+			/* Here we check merely mime rcpt */
+			addrs = task->rcpt_mime;
+			break;
+		case 0:
+		default:
+			if (task->rcpt_envelope) {
+				addrs = task->rcpt_envelope;
 			}
-			return 1;
+			else {
+				addrs = task->rcpt_mime;
+			}
+			break;
+		}
+
+		if (addrs) {
+			lua_push_internet_address_list (L, addrs);
+		}
+		else {
+			lua_pushnil (L);
 		}
 	}
+	else {
+		lua_pushnil (L);
+	}
 
-	lua_pushnil (L);
 	return 1;
 }
 
@@ -903,48 +901,46 @@ lua_task_get_from (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L);
 	InternetAddressList *addrs;
+	gint what = 0;
 
 	if (task) {
-		if (task->from != NULL) {
-#ifndef GMIME24
-			addrs = internet_address_parse_string (task->from);
-#else
-			addrs = internet_address_list_parse_string (task->from);
-#endif
-			if (addrs != NULL) {
-				lua_push_internet_address_list (L, addrs);
-#ifndef GMIME24
-				internet_address_list_destroy (addrs);
-#else
-				g_object_unref (addrs);
-#endif
+		if (lua_gettop (L) == 2) {
+			/* Get what value */
+			what = lua_tonumber (L, 2);
+		}
+
+		switch (what) {
+		case 1:
+			/* Here we check merely envelope rcpt */
+			addrs = task->from_envelope;
+			break;
+		case 2:
+			/* Here we check merely mime rcpt */
+			addrs = task->from_mime;
+			break;
+		case 0:
+		default:
+			if (task->from_envelope) {
+				addrs = task->from_envelope;
 			}
 			else {
-				lua_pushnil (L);
+				addrs = task->from_mime;
 			}
+			break;
+		}
 
-			return 1;
+		if (addrs) {
+			lua_push_internet_address_list (L, addrs);
+		}
+		else {
+			lua_pushnil (L);
 		}
 	}
+	else {
+		lua_pushnil (L);
+	}
 
-	lua_pushnil (L);
 	return 1;
-}
-
-static gint
-lua_task_set_from (lua_State *L)
-{
-	struct rspamd_task *task = lua_check_task (L);
-	const gchar *new_from;
-
-	if (task) {
-		new_from = luaL_checkstring (L, 2);
-		if (new_from) {
-			task->from = rspamd_mempool_strdup (task->task_pool, new_from);
-		}
-	}
-
-	return 0;
 }
 
 static gint
@@ -975,57 +971,6 @@ lua_task_set_user (lua_State *L)
 	}
 
 	return 0;
-}
-
-/*
- * Headers versions
- */
-static gint
-lua_task_get_recipients_headers (lua_State *L)
-{
-	struct rspamd_task *task = lua_check_task (L);
-
-	if (task && task->rcpts) {
-		lua_push_internet_address_list (L, task->rcpts);
-		return 1;
-	}
-
-	lua_pushnil (L);
-	return 1;
-}
-
-static gint
-lua_task_get_from_headers (lua_State *L)
-{
-	struct rspamd_task *task = lua_check_task (L);
-	InternetAddressList *addrs;
-
-	if (task && task->message != NULL) {
-#ifndef GMIME24
-		addrs =
-			internet_address_parse_string (g_mime_message_get_sender (
-					task->message));
-#else
-		addrs =
-			internet_address_list_parse_string (g_mime_message_get_sender (task
-				->message));
-#endif
-		if (addrs) {
-			lua_push_internet_address_list (L, addrs);
-#ifndef GMIME24
-			internet_address_list_destroy (addrs);
-#else
-			g_object_unref (addrs);
-#endif
-		}
-		else {
-			lua_pushnil (L);
-		}
-		return 1;
-	}
-
-	lua_pushnil (L);
-	return 1;
 }
 
 static gint
