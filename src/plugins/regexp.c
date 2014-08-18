@@ -1723,8 +1723,8 @@ static gboolean
 rspamd_check_smtp_data (struct rspamd_task *task, GList * args, void *unused)
 {
 	struct expression_argument *arg;
-	GList *cur, *rcpt_list = NULL;
-	gchar *type, *what = NULL;
+	InternetAddressList *ia;
+	const gchar *type, *what = NULL;
 
 	if (args == NULL) {
 		msg_warn ("no parameters to function");
@@ -1743,7 +1743,7 @@ rspamd_check_smtp_data (struct rspamd_task *task, GList * args, void *unused)
 		case 'f':
 		case 'F':
 			if (g_ascii_strcasecmp (type, "from") == 0) {
-				what = task->from;
+				what = rspamd_task_get_sender (task);
 			}
 			else {
 				msg_warn ("bad argument to function: %s", type);
@@ -1783,7 +1783,7 @@ rspamd_check_smtp_data (struct rspamd_task *task, GList * args, void *unused)
 		case 'r':
 		case 'R':
 			if (g_ascii_strcasecmp (type, "rcpt") == 0) {
-				rcpt_list = task->rcpt;
+				ia = task->rcpt_mime;
 			}
 			else {
 				msg_warn ("bad argument to function: %s", type);
@@ -1796,7 +1796,7 @@ rspamd_check_smtp_data (struct rspamd_task *task, GList * args, void *unused)
 		}
 	}
 
-	if (what == NULL && rcpt_list == NULL) {
+	if (what == NULL && ia == NULL) {
 		/* Not enough data so regexp would NOT be found anyway */
 		return FALSE;
 	}

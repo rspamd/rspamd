@@ -144,7 +144,7 @@ parse_host_port_priority_strv (rspamd_mempool_t *pool, gchar **tokens,
 		cur_port = NULL;
 	}
 
-	if ((r = getaddrinfo (cur_tok, cur_port, &hints, &res)) == 0) {
+	if ((r = getaddrinfo (tokens[0], cur_port, &hints, &res)) == 0) {
 		memcpy (&addr_holder, res->ai_addr,
 			MIN (sizeof (addr_holder), res->ai_addrlen));
 		if (res->ai_family == AF_INET) {
