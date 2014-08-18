@@ -113,20 +113,22 @@ parse_host_port_priority_strv (rspamd_mempool_t *pool, gchar **tokens,
 			}
 		}
 		if (priority != NULL) {
+			const gchar *tok;
+
 			if (port != NULL) {
-				cur_tok = tokens[2];
+				tok = tokens[2];
 			}
 			else {
-				cur_tok = tokens[1];
+				tok = tokens[1];
 			}
-			if (cur_tok != NULL) {
+			if (tok != NULL) {
 				/* Priority part */
 				errno = 0;
-				priority_parsed = strtoul (cur_tok, &err_str, 10);
+				priority_parsed = strtoul (tok, &err_str, 10);
 				if (*err_str != '\0' || errno != 0) {
 					msg_warn (
 						"cannot parse priority: %s, at symbol %c, error: %s",
-						tokens[1],
+						tok,
 						*err_str,
 						strerror (errno));
 				}
@@ -144,7 +146,7 @@ parse_host_port_priority_strv (rspamd_mempool_t *pool, gchar **tokens,
 		cur_port = NULL;
 	}
 
-	if ((r = getaddrinfo (tokens[0], cur_port, &hints, &res)) == 0) {
+	if ((r = getaddrinfo (cur_tok, cur_port, &hints, &res)) == 0) {
 		memcpy (&addr_holder, res->ai_addr,
 			MIN (sizeof (addr_holder), res->ai_addrlen));
 		if (res->ai_family == AF_INET) {
