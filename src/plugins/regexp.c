@@ -1725,6 +1725,8 @@ rspamd_check_smtp_data (struct rspamd_task *task, GList * args, void *unused)
 	struct expression_argument *arg;
 	InternetAddressList *ia;
 	const gchar *type, *what = NULL;
+	GList *cur;
+	gint i;
 
 	if (args == NULL) {
 		msg_warn ("no parameters to function");
@@ -1810,11 +1812,17 @@ rspamd_check_smtp_data (struct rspamd_task *task, GList * args, void *unused)
 				return match_smtp_data (task, arg->data, what);
 			}
 			else {
-				while (rcpt_list) {
-					if (match_smtp_data (task, arg->data, rcpt_list->data)) {
-						return TRUE;
+				if (ia != NULL) {
+					for (i = 0; i < internet_address_list_length(ia); i ++) {
+						InternetAddressMailbox *iamb =
+							INTERNET_ADDRESS_MAILBOX (
+							internet_address_list_get_address(ia, i));
+						if (iamb &&
+							match_smtp_data (task, arg->data,
+								internet_address_mailbox_get_addr(iamb))) {
+							return TRUE;
+						}
 					}
-					rcpt_list = g_list_next (rcpt_list);
 				}
 			}
 		}
@@ -1826,13 +1834,19 @@ rspamd_check_smtp_data (struct rspamd_task *task, GList * args, void *unused)
 				}
 			}
 			else {
-				while (rcpt_list) {
-					if (process_regexp_expression (arg->data,
-						"regexp_check_smtp_data", task, rcpt_list->data,
-						NULL)) {
-						return TRUE;
+				if (ia != NULL) {
+					for (i = 0; i < internet_address_list_length(ia); i ++) {
+						InternetAddressMailbox *iamb =
+								INTERNET_ADDRESS_MAILBOX (
+									internet_address_list_get_address(ia, i));
+						if (iamb &&
+								process_regexp_expression (arg->data,
+									"regexp_check_smtp_data", task,
+									internet_address_mailbox_get_addr(iamb),
+									NULL)) {
+							return TRUE;
+						}
 					}
-					rcpt_list = g_list_next (rcpt_list);
 				}
 			}
 		}
