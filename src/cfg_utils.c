@@ -105,18 +105,19 @@ parse_host_port_priority_strv (memory_pool_t *pool, gchar **tokens,
 			}
 		}
 		if (priority != NULL) {
+			const gchar *tok;
 			if (port != NULL) {
-				cur_tok = tokens[2];
+				tok = tokens[2];
 			}
 			else {
-				cur_tok = tokens[1];
+				tok = tokens[1];
 			}
-			if (cur_tok != NULL) {
+			if (tok != NULL) {
 				/* Priority part */
 				errno = 0;
-				priority_parsed = strtoul (cur_tok, &err_str, 10);
+				priority_parsed = strtoul (tok, &err_str, 10);
 				if (*err_str != '\0' || errno != 0) {
-					msg_warn ("cannot parse priority: %s, at symbol %c, error: %s", tokens[1], *err_str, strerror (errno));
+					msg_warn ("cannot parse priority: %s, at symbol %c, error: %s", tok, *err_str, strerror (errno));
 				}
 				else {
 					*priority = priority_parsed;
