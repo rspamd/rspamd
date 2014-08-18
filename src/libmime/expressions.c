@@ -1259,10 +1259,10 @@ rspamd_recipients_distance (struct rspamd_task *task, GList * args,
 		return FALSE;
 	}
 
-	if (!task->rcpts) {
+	if (!task->rcpt_mime) {
 		return FALSE;
 	}
-	num = internet_address_list_length (task->rcpts);
+	num = internet_address_list_length (task->rcpt_mime);
 	if (num < MIN_RCPT_TO_COMPARE) {
 		return FALSE;
 	}
@@ -1271,14 +1271,13 @@ rspamd_recipients_distance (struct rspamd_task *task, GList * args,
 			sizeof (struct addr_list));
 
 	/* Fill array */
-	cur = task->rcpts;
+	cur = task->rcpt_mime;
 #ifdef GMIME24
 	for (i = 0; i < num; i++) {
 		addr = internet_address_list_get_address (cur, i);
-		ar[i].name = rspamd_mempool_strdup (task->task_pool,
-				internet_address_get_name (addr));
+		ar[i].name = internet_address_mailbox_get_addr (
+				INTERNET_ADDRESS_MAILBOX (addr));
 		if (ar[i].name != NULL && (c = strchr (ar[i].name, '@')) != NULL) {
-			*c = '\0';
 			ar[i].addr = c + 1;
 		}
 	}
