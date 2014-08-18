@@ -4,6 +4,7 @@
 
 local set_section = rspamd_config:get_key("settings")
 local settings = {}
+local settings_initialized = false
 
 -- Functional utilities
 local function filter(func, tbl)
@@ -18,7 +19,110 @@ end
 
 -- Check limit for a task
 local function check_settings(task)
-
+  local function check_addr_setting(rule, addr)
+    local function check_specific_addr(elt) 
+      if rule['name'] then
+        if elt['addr'] == rule['name'] then
+          return true
+        end
+      end
+      if rule['user'] then
+        if rule['user'] == elt['user'] then
+          return true
+        end
+      end
+      if rule['domain'] then
+        if rule['domain'] == elt['domain'] then
+          return true
+        end
+      end
+      if rule['regexp'] then
+        if rule['regexp']:match(elt['addr']) then
+          return true
+        end
+      end
+      return false
+    end
+    
+    for _, e in ipairs(addr) do
+      if check_specific_addr(e) then
+        return true
+      end
+    end
+    
+    return false
+  end
+  
+  local function check_ip_setting(rule, ip)
+    -- XXX: check mask
+    if ip:to_string() == rule[0] then
+      return true
+    end
+    
+    return false
+  end
+  
+  local function check_specific_setting(name, rule, ip, from, rcpt)
+    local res = false
+    
+    if rule['ip'] and ip then
+      for _, i in ipairs(rule['ip']) do
+        res = check_ip_setting(i, ip)
+        if res then
+          break
+        end
+      end
+    end
+    
+    if not res and rule['from'] and from then
+      for _, i in ipairs(rule['from']) do
+        res = check_addr_setting(i, from)
+        if res then
+          break
+        end
+      end
+    end
+    
+    if not res and rule['rcpt'] and rcpt then
+      for _, i in ipairs(rule['rcpt']) do
+        res = check_addr_setting(i, rcpt)
+        if res then
+          break
+        end
+      end
+    end
+    
+    if res then
+      if rule['whitelist'] then
+        return {whitelist = true}
+      else
+        return rule['apply']
+      end
+    end
+    
+    return nil
+  end
+  
+  -- Do not waste resources
+  if not settings_initialized then
+    return
+  end
+  
+  rspamd_logger.info("check for settings")
+  local ip = task:get_from_ip()
+  local from = task:get_from()
+  local rcpt = task:get_recipients()
+  
+  -- Match rules according their order
+  for i,v in ipairs(settings) do
+    for name, rule in pairs(v) do
+      local rule = check_specific_setting(name, rule, ip, from, rcpt)
+      if rule then
+        task:set_settings(rule)
+      end
+    end
+  end
+  
 end
 
 -- Process settings based on their priority
@@ -180,6 +284,7 @@ local function process_settings_table(tbl)
     return out
   end
   
+  settings_initialized = false
   -- filter trash in the input
   local ft = filter(
     function(elt)
@@ -202,8 +307,11 @@ local function process_settings_table(tbl)
       settings[pri][k] = s
     end
   end
+  settings_initialized = true
   --local dumper = require 'pl.pretty'.dump
   --dumper(settings)
+  
+  return true
 end
 
 -- Parse settings map from the ucl line
