@@ -36,7 +36,7 @@ static const struct luaL_reg regexplib_m[] = {
 	LUA_INTERFACE_DEF (regexp, match),
 	LUA_INTERFACE_DEF (regexp, split),
 	LUA_INTERFACE_DEF (regexp, destroy),
-	{"__tostring", rspamd_lua_class_tostring},
+	{"__tostring", lua_regexp_get_pattern},
 	{NULL, NULL}
 };
 static const struct luaL_reg regexplib_f[] = {
@@ -68,7 +68,8 @@ lua_regexp_create (lua_State *L)
 	gint regexp_flags = 0;
 	GRegex *re;
 	struct rspamd_lua_regexp *new, **pnew;
-	const gchar *string, *flags_str = NULL;
+	const gchar *string, *flags_str = NULL, *slash;
+	gchar *pattern;
 	GError *err = NULL;
 
 	string = luaL_checkstring (L, 1);
@@ -76,7 +77,23 @@ lua_regexp_create (lua_State *L)
 		flags_str = luaL_checkstring (L, 2);
 	}
 
-	if (flags_str) {
+	if (string[0] == '/') {
+		/* We have likely slashed regexp */
+		slash = strrchr (string, '/');
+		if (slash != NULL && slash != string) {
+			flags_str = slash + 1;
+			pattern = g_malloc (slash - string - 1);
+			rspamd_strlcpy (pattern, string + 1, slash - string - 1);
+		}
+		else {
+			pattern = g_strdup (string);
+		}
+	}
+	else {
+		pattern = g_strdup (string);
+	}
+
+	if (flags_str && flags_str != '\0') {
 		while (*flags_str) {
 			switch (*flags_str) {
 			case 'i':
@@ -108,8 +125,9 @@ lua_regexp_create (lua_State *L)
 		}
 	}
 
-	re = g_regex_new (string, regexp_flags, 0, &err);
+	re = g_regex_new (pattern, regexp_flags, 0, &err);
 	if (re == NULL) {
+		g_free (pattern);
 		lua_pushnil (L);
 		msg_info ("cannot parse regexp: %s, error: %s",
 			string,
@@ -119,7 +137,7 @@ lua_regexp_create (lua_State *L)
 		new = g_slice_alloc (sizeof (struct rspamd_lua_regexp));
 		new->re = re;
 		new->re_flags = regexp_flags;
-		new->re_pattern = g_strdup (string);
+		new->re_pattern = pattern;
 		pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
 		rspamd_lua_setclass (L, "rspamd{regexp}", -1);
 		*pnew = new;

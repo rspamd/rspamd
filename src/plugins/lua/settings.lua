@@ -209,7 +209,7 @@ local function process_settings_table(tbl)
         local start = string.sub(addr, 1, 1)
         if start == '/' then
           -- It is a regexp
-          local re = regexp.create(string.sub(addr, 2))
+          local re = regexp.create(addr)
           if re then
             out['regexp'] = re
             setmetatable(out, {
