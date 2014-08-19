@@ -129,10 +129,8 @@ rspamd_roll_history_update (struct roll_history *history,
 	}
 	else {
 		row->score = metric_res->score;
-		row->required_score =
-			metric_res->metric->actions[METRIC_ACTION_REJECT].score;
-		row->action = check_metric_action (metric_res->score,
-				metric_res->metric->actions[METRIC_ACTION_REJECT].score,
+		row->action = check_metric_action (task, metric_res->score,
+				&row->required_score,
 				metric_res->metric);
 		cbdata.pos = row->symbols;
 		cbdata.remain = sizeof (row->symbols);

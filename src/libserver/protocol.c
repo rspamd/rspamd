@@ -625,18 +625,17 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	struct metric *m;
 	gboolean is_spam;
 	enum rspamd_metric_action action = METRIC_ACTION_NOACTION;
-	ucl_object_t *obj = NULL, *sobj;
-	gdouble required_score;
+	ucl_object_t *obj = NULL, *sobj;;
 	gpointer h, v;
+	double required_score;
 	const gchar *subject;
 	gchar action_char;
 
 	m = mres->metric;
 
 	/* XXX: handle settings */
-	required_score = m->actions[METRIC_ACTION_REJECT].score;
-	is_spam = (mres->score >= required_score);
-	action = check_metric_action (mres->score, required_score, m);
+	action = check_metric_action (task, mres->score, &required_score, m);
+	is_spam = (action == METRIC_ACTION_REJECT);
 	if (task->is_skipped) {
 		action_char = 'S';
 	}
@@ -822,9 +821,7 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	/* Update stat for default metric */
 	metric_res = g_hash_table_lookup (task->results, DEFAULT_METRIC);
 	if (metric_res != NULL) {
-		required_score =
-			metric_res->metric->actions[METRIC_ACTION_REJECT].score;
-		action = check_metric_action (metric_res->score, required_score,
+		action = check_metric_action (task, metric_res->score, &required_score,
 				metric_res->metric);
 		if (action <= METRIC_ACTION_NOACTION) {
 			task->worker->srv->stat->actions_stat[action]++;

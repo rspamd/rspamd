@@ -176,8 +176,9 @@ const gchar * str_action_metric (enum rspamd_metric_action action);
 /*
  * Get action for specific metric
  */
-gint check_metric_action (double score,
-	double required_score,
+gint check_metric_action (struct rspamd_task *task,
+	double score,
+	double *rscore,
 	struct metric *metric);
 
 #endif

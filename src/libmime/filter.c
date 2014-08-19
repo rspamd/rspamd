@@ -1001,37 +1001,64 @@ str_action_metric (enum rspamd_metric_action action)
 	return "unknown action";
 }
 
+static double
+get_specific_action_score (const ucl_object_t *metric,
+		struct metric_action *action)
+{
+	const ucl_object_t *act, *sact;
+	double score;
+
+	if (metric) {
+		act = ucl_object_find_key (metric, "actions");
+		if (act) {
+			sact = ucl_object_find_key (act, str_action_metric (action->action));
+			if (sact != NULL && ucl_object_todouble_safe (sact, &score)) {
+				return score;
+			}
+		}
+	}
+
+	return action->score;
+}
+
 gint
-check_metric_action (double score, double required_score, struct metric *metric)
+check_metric_action (struct rspamd_task *task,
+		double score, double *rscore, struct metric *metric)
 {
 	struct metric_action *action, *selected_action = NULL;
 	double max_score = 0;
+	const ucl_object_t *ms = NULL;
 	int i;
 
-	if (score >= required_score) {
-		return METRIC_ACTION_REJECT;
-	}
-	else if (metric->actions == NULL) {
-		return METRIC_ACTION_NOACTION;
-	}
-	else {
+	if (metric->actions != NULL) {
+		if (task->settings) {
+			ms = ucl_object_find_key (task->settings, metric->name);
+		}
+
 		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
+			double sc;
+
 			action = &metric->actions[i];
-			if (action->score < 0) {
+			sc = get_specific_action_score (ms, action);
+
+			if (sc < 0) {
 				continue;
 			}
-			if (score >= action->score && action->score > max_score) {
+			if (score >= sc && sc > max_score) {
 				selected_action = action;
-				max_score = action->score;
+				max_score = sc;
+			}
+
+			if (rscore != NULL && i == METRIC_ACTION_REJECT) {
+				*rscore = sc;
 			}
 		}
-		if (selected_action) {
-			return selected_action->action;
-		}
-		else {
-			return METRIC_ACTION_NOACTION;
-		}
 	}
+	if (selected_action) {
+		return selected_action->action;
+	}
+
+	return METRIC_ACTION_NOACTION;
 }
 
 gboolean

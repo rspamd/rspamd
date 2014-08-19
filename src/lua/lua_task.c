@@ -1366,8 +1366,8 @@ lua_task_get_metric_action (lua_State *L)
 	if (task && metric_name) {
 		if ((metric_res =
 			g_hash_table_lookup (task->results, metric_name)) != NULL) {
-			action = check_metric_action (metric_res->score,
-					metric_res->metric->actions[METRIC_ACTION_REJECT].score,
+			action = check_metric_action (task, metric_res->score,
+					NULL,
 					metric_res->metric);
 			lua_pushstring (L, str_action_metric (action));
 		}
