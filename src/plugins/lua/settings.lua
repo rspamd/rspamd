@@ -5,6 +5,7 @@
 local set_section = rspamd_config:get_key("settings")
 local settings = {}
 local settings_initialized = false
+local max_pri = 0
 
 -- Functional utilities
 local function filter(func, tbl)
@@ -117,13 +118,15 @@ local function check_settings(task)
   local from = task:get_from()
   local rcpt = task:get_recipients()
   -- Match rules according their order
-  for i,v in pairs(settings) do
-    for name, rule in pairs(v) do
-      local rule = check_specific_setting(name, rule, ip, from, rcpt)
-      if rule then
-        rspamd_logger.info(string.format("<%s> apply settings according to rule %s",
-          task:get_message_id(), name))
-        task:set_settings(rule)
+  for pri = max_pri,1,-1 do
+    if settings[pri] then
+      for name, rule in pairs(settings[pri]) do
+        local rule = check_specific_setting(name, rule, ip, from, rcpt)
+        if rule then
+          rspamd_logger.info(string.format("<%s> apply settings according to rule %s",
+            task:get_message_id(), name))
+          task:set_settings(rule)
+        end
       end
     end
   end
@@ -288,10 +291,12 @@ local function process_settings_table(tbl)
     end, tbl)
   -- clear all settings
   
+  max_pri = 0
   for k,v in pairs(settings) do settings[k]=nil end
   -- fill new settings by priority
   for k,v in pairs(ft) do
     local pri = get_priority(v)
+    if pri > max_pri then max_pri = pri end
     if not settings[pri] then
       settings[pri] = {}
     end
@@ -300,6 +305,7 @@ local function process_settings_table(tbl)
       settings[pri][k] = s
     end
   end
+  
   settings_initialized = true
   --local dumper = require 'pl.pretty'.dump
   --dumper(settings)
