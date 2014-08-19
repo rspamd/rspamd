@@ -35,7 +35,6 @@
 #include "util.h"
 #include "expressions.h"
 #include "lua/lua_common.h"
-#include "json/jansson.h"
 
 #define DEFAULT_STATFILE_PREFIX "./"
 
@@ -46,29 +45,13 @@ struct regexp_module_item {
 	gpointer lua_function;
 };
 
-struct autolearn_data {
-	gchar *statfile_name;
-	gchar *symbol;
-	float weight;
-};
-
 struct regexp_ctx {
-	gint (*filter) (struct rspamd_task * task);
-	GHashTable *autolearn_symbols;
 	gchar *statfile_prefix;
 
 	rspamd_mempool_t *regexp_pool;
-	rspamd_mempool_t *dynamic_pool;
 	gsize max_size;
 	gsize max_threads;
 	GThreadPool *workers;
-};
-
-struct regexp_json_buf {
-	gchar *buf;
-	gchar *pos;
-	size_t buflen;
-	struct rspamd_config *cfg;
 };
 
 /* Lua regexp module for checking rspamd regexps */
@@ -83,7 +66,6 @@ static const struct luaL_reg regexplib_m[] = {
 static struct regexp_ctx *regexp_module_ctx = NULL;
 static GMutex *workers_mtx = NULL;
 
-static gint regexp_common_filter (struct rspamd_task *task);
 static void process_regexp_item_threaded (gpointer data, gpointer user_data);
 static gboolean rspamd_regexp_match_number (struct rspamd_task *task,
 	GList * args,
@@ -201,14 +183,6 @@ luaopen_regexp (lua_State * L)
 	return 1;
 }
 
-static void
-regexp_dynamic_insert_result (struct rspamd_task *task, void *user_data)
-{
-	gchar *symbol = user_data;
-
-	insert_result (task, symbol, 1, NULL);
-}
-
 /*
  * Utility functions for matching exact number of regexps
  */
@@ -237,92 +211,6 @@ static gboolean
 op_less_equal (gint a, gint b)
 {
 	return a <= b;
-}
-
-/*
- * Process ip and mask of dynamic regexp
- */
-static gboolean
-parse_regexp_ipmask (const gchar *begin, struct dynamic_map_item *addr)
-{
-	const gchar *pos;
-	gchar ip_buf[sizeof ("255.255.255.255")], mask_buf[3], *p;
-	gint state = 0, dots = 0;
-
-	bzero (ip_buf,	 sizeof (ip_buf));
-	bzero (mask_buf, sizeof (mask_buf));
-	pos = begin;
-	p = ip_buf;
-
-	if (*pos == '!') {
-		addr->negative = TRUE;
-		pos++;
-	}
-	else {
-		addr->negative = FALSE;
-	}
-
-	while (*pos) {
-		switch (state) {
-		case 0:
-			state = 1;
-			p = ip_buf;
-			dots = 0;
-			break;
-		case 1:
-			/* Begin parse ip */
-			if (p - ip_buf >= (gint)sizeof (ip_buf) || dots > 3) {
-				return FALSE;
-			}
-			if (g_ascii_isdigit (*pos)) {
-				*p++ = *pos++;
-			}
-			else if (*pos == '.') {
-				*p++ = *pos++;
-				dots++;
-			}
-			else if (*pos == '/') {
-				pos++;
-				p = mask_buf;
-				state = 2;
-			}
-			else {
-				/* Invalid character */
-				return FALSE;
-			}
-			break;
-		case 2:
-			/* Parse mask */
-			if (p - mask_buf > 2) {
-				return FALSE;
-			}
-			if (g_ascii_isdigit (*pos)) {
-				*p++ = *pos++;
-			}
-			else {
-				return FALSE;
-			}
-			break;
-		}
-	}
-
-	if (!inet_aton (ip_buf, &addr->addr)) {
-		return FALSE;
-	}
-	if (state == 2) {
-		/* Also parse mask */
-		addr->mask = (mask_buf[0] - '0') * 10 + mask_buf[1] - '0';
-		if (addr->mask > 32) {
-			msg_info ("bad ipmask value: '%s'", begin);
-			return FALSE;
-		}
-	}
-	else {
-		addr->mask = 32;
-	}
-
-	return TRUE;
-
 }
 
 /* Process regexp expression */
@@ -362,203 +250,6 @@ read_regexp_expression (rspamd_mempool_t * pool,
 }
 
 
-/* Callbacks for reading json dynamic rules */
-gchar *
-json_regexp_read_cb (rspamd_mempool_t * pool,
-	gchar * chunk,
-	gint len,
-	struct map_cb_data *data)
-{
-	struct regexp_json_buf *jb;
-	gint free, off;
-
-	if (data->cur_data == NULL) {
-		jb = g_malloc (sizeof (struct regexp_json_buf));
-		jb->cfg = ((struct regexp_json_buf *)data->prev_data)->cfg;
-		jb->buf = NULL;
-		jb->pos = NULL;
-		data->cur_data = jb;
-	}
-	else {
-		jb = data->cur_data;
-	}
-
-	if (jb->buf == NULL) {
-		/* Allocate memory for buffer */
-		jb->buflen = len * 2;
-		jb->buf = g_malloc (jb->buflen);
-		jb->pos = jb->buf;
-	}
-
-	off = jb->pos - jb->buf;
-	free = jb->buflen - off;
-
-	if (free < len) {
-		jb->buflen = MAX (jb->buflen * 2, jb->buflen + len * 2);
-		jb->buf = g_realloc (jb->buf, jb->buflen);
-		jb->pos = jb->buf + off;
-	}
-
-	memcpy (jb->pos, chunk, len);
-	jb->pos += len;
-
-	/* Say not to copy any part of this buffer */
-	return NULL;
-}
-
-void
-json_regexp_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
-{
-	struct regexp_json_buf *jb;
-	guint nelts, i, j;
-	json_t *js, *cur_elt, *cur_nm, *it_val;
-	json_error_t je;
-	gchar *cur_rule, *cur_symbol;
-	double score;
-	struct regexp_module_item *cur_item;
-	GList *cur_networks = NULL;
-	struct dynamic_map_item *cur_nitem;
-	rspamd_mempool_t *new_pool;
-
-	if (data->prev_data) {
-		jb = data->prev_data;
-		/* Clean prev data */
-		if (jb->buf) {
-			g_free (jb->buf);
-		}
-		g_free (jb);
-	}
-
-	/* Now parse json */
-	if (data->cur_data) {
-		jb = data->cur_data;
-	}
-	else {
-		msg_err ("no data read");
-		return;
-	}
-	if (jb->buf == NULL) {
-		msg_err ("no data read");
-		return;
-	}
-	/* NULL terminate current buf */
-	*jb->pos = '\0';
-
-	js = json_loads (jb->buf, &je);
-	if (!js) {
-		msg_err ("cannot load json data: parse error %s, on line %d",
-			je.text,
-			je.line);
-		return;
-	}
-
-	if (!json_is_array (js)) {
-		json_decref (js);
-		msg_err ("loaded json is not an array");
-		return;
-	}
-
-	new_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
-
-	remove_dynamic_rules (jb->cfg->cache);
-	if (regexp_module_ctx->dynamic_pool != NULL) {
-		rspamd_mempool_delete (regexp_module_ctx->dynamic_pool);
-	}
-	regexp_module_ctx->dynamic_pool = new_pool;
-
-	nelts = json_array_size (js);
-	for (i = 0; i < nelts; i++) {
-		cur_networks = NULL;
-		cur_rule = NULL;
-
-		cur_elt = json_array_get (js, i);
-		if (!cur_elt || !json_is_object (cur_elt)) {
-			msg_err ("loaded json is not an object");
-			continue;
-		}
-		/* Factor param */
-		cur_nm = json_object_get (cur_elt, "factor");
-		if (cur_nm == NULL || !json_is_number (cur_nm)) {
-			msg_err ("factor is not a number or not exists, but is required");
-			continue;
-		}
-		score = json_number_value (cur_nm);
-		/* Symbol param */
-		cur_nm = json_object_get (cur_elt, "symbol");
-		if (cur_nm == NULL || !json_is_string (cur_nm)) {
-			msg_err ("symbol is not a string or not exists, but is required");
-			continue;
-		}
-		cur_symbol =
-			rspamd_mempool_strdup (new_pool, json_string_value (cur_nm));
-		/* Enabled flag */
-		cur_nm = json_object_get (cur_elt, "enabled");
-		if (cur_nm != NULL && json_is_boolean (cur_nm)) {
-			if (json_is_false (cur_nm)) {
-				msg_info ("rule %s is disabled in json", cur_symbol);
-				continue;
-			}
-		}
-		/* Now check other settings */
-		/* Rule */
-		cur_nm = json_object_get (cur_elt, "rule");
-		if (cur_nm != NULL && json_is_string (cur_nm)) {
-			cur_rule =
-				rspamd_mempool_strdup (new_pool, json_string_value (cur_nm));
-		}
-		/* Networks array */
-		cur_nm = json_object_get (cur_elt, "networks");
-		if (cur_nm != NULL && json_is_array (cur_nm)) {
-			for (j = 0; j < json_array_size (cur_nm); j++) {
-				it_val = json_array_get (cur_nm, i);
-				if (it_val && json_is_string (it_val)) {
-					cur_nitem =
-						rspamd_mempool_alloc (new_pool,
-							sizeof (struct dynamic_map_item));
-					if (parse_regexp_ipmask (json_string_value (it_val),
-						cur_nitem)) {
-						cur_networks = g_list_prepend (cur_networks, cur_nitem);
-					}
-				}
-			}
-		}
-		if (cur_rule) {
-			/* Dynamic rule has rule option */
-			cur_item =
-				rspamd_mempool_alloc0 (new_pool,
-					sizeof (struct regexp_module_item));
-			cur_item->symbol = cur_symbol;
-			if (read_regexp_expression (new_pool, cur_item, cur_symbol,
-				cur_rule, jb->cfg->raw_mode)) {
-				register_dynamic_symbol (new_pool,
-					&jb->cfg->cache,
-					cur_symbol,
-					score,
-					process_regexp_item,
-					cur_item,
-					cur_networks);
-			}
-			else {
-				msg_warn ("cannot parse dynamic rule");
-			}
-		}
-		else {
-			/* Just rule that is allways true (for whitelisting for example) */
-			register_dynamic_symbol (new_pool,
-				&jb->cfg->cache,
-				cur_symbol,
-				score,
-				regexp_dynamic_insert_result,
-				cur_symbol,
-				cur_networks);
-		}
-		if (cur_networks) {
-			g_list_free (cur_networks);
-		}
-	}
-	json_decref (js);
-}
-
 /* Init function */
 gint
 regexp_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
@@ -567,9 +258,6 @@ regexp_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 
 	regexp_module_ctx->regexp_pool = rspamd_mempool_new (
 		rspamd_mempool_suggest_size ());
-	regexp_module_ctx->dynamic_pool = NULL;
-	regexp_module_ctx->autolearn_symbols = g_hash_table_new (rspamd_str_hash,
-			rspamd_str_equal);
 	regexp_module_ctx->workers = NULL;
 
 	*ctx = (struct module_ctx *)regexp_module_ctx;
@@ -609,44 +297,6 @@ regexp_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 	return 0;
 }
 
-
-/*
- * Parse string in format:
- * SYMBOL:statfile:weight
- */
-void
-parse_autolearn_param (const gchar *param,
-	const gchar *value,
-	struct rspamd_config *cfg)
-{
-	struct autolearn_data *d;
-	gchar *p;
-
-	p = rspamd_mempool_strdup (regexp_module_ctx->regexp_pool, value);
-	d =
-		rspamd_mempool_alloc (regexp_module_ctx->regexp_pool,
-			sizeof (struct autolearn_data));
-
-	d->symbol = strsep (&p, ":");
-	if (d->symbol) {
-		d->statfile_name = strsep (&p, ":");
-		if (d->statfile_name) {
-			if (p != NULL && *p != '\0') {
-				d->weight = strtod (p, NULL);
-				g_hash_table_insert (regexp_module_ctx->autolearn_symbols,
-					d->symbol,
-					d);
-			}
-		}
-		else {
-			msg_warn ("cannot extract statfile name from %s", p);
-		}
-	}
-	else {
-		msg_warn ("cannot extract symbol name from %s", p);
-	}
-}
-
 gint
 regexp_module_config (struct rspamd_config *cfg)
 {
@@ -654,8 +304,6 @@ regexp_module_config (struct rspamd_config *cfg)
 	const ucl_object_t *sec, *value;
 	ucl_object_iter_t it = NULL;
 	gint res = TRUE;
-	struct regexp_json_buf *jb, **pjb;
-
 
 	sec = ucl_object_find_key (cfg->rcl_obj, "regexp");
 	if (sec == NULL) {
@@ -668,25 +316,7 @@ regexp_module_config (struct rspamd_config *cfg)
 	regexp_module_ctx->workers = NULL;
 
 	while ((value = ucl_iterate_object (sec, &it, true)) != NULL) {
-		if (g_ascii_strncasecmp (ucl_object_key (value), "autolearn",
-			sizeof ("autolearn") - 1) == 0) {
-			parse_autolearn_param (ucl_object_key (value),
-				ucl_obj_tostring (value), cfg);
-		}
-		else if (g_ascii_strncasecmp (ucl_object_key (value), "dynamic_rules",
-			sizeof ("dynamic_rules") - 1) == 0) {
-			jb = g_malloc (sizeof (struct regexp_json_buf));
-			pjb = g_malloc (sizeof (struct regexp_json_buf *));
-			jb->buf = NULL;
-			jb->cfg = cfg;
-			*pjb = jb;
-			if (!add_map (cfg, ucl_obj_tostring (value),
-				"Dynamic regexp rules", json_regexp_read_cb, json_regexp_fin_cb,
-				(void **)pjb)) {
-				msg_err ("cannot add map %s", ucl_obj_tostring (value));
-			}
-		}
-		else if (g_ascii_strncasecmp (ucl_object_key (value), "max_size",
+		if (g_ascii_strncasecmp (ucl_object_key (value), "max_size",
 			sizeof ("max_size") - 1) == 0) {
 			regexp_module_ctx->max_size = ucl_obj_toint (value);
 		}
