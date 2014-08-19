@@ -73,6 +73,7 @@ insert_metric_result (struct rspamd_task *task,
 	struct metric_result *metric_res;
 	struct symbol *s;
 	gdouble *weight, w;
+	const ucl_object_t *mobj, *sobj;
 
 	metric_res = g_hash_table_lookup (task->results, metric->name);
 
@@ -100,6 +101,20 @@ insert_metric_result (struct rspamd_task *task,
 	}
 	else {
 		w = (*weight) * flag;
+	}
+
+	if (task->settings) {
+		mobj = ucl_object_find_key (task->settings, metric->name);
+		if (mobj) {
+			gdouble corr;
+
+			sobj = ucl_object_find_key (mobj, symbol);
+			if (sobj != NULL && ucl_object_todouble_safe (sobj, &corr)) {
+				msg_debug ("settings: changed weight of symbol %s from %.2f to %.2f",
+						symbol, w, corr);
+				w = corr * flag;
+			}
+		}
 	}
 
 	/* Add metric score */
@@ -319,6 +334,17 @@ process_filters (struct rspamd_task *task)
 	GList *cur;
 	struct metric *metric;
 	gpointer item = NULL;
+
+	if (task->settings) {
+		const ucl_object_t *wl;
+
+		wl = ucl_object_find_key (task->settings, "whitelist");
+		if (wl != NULL) {
+			msg_info ("<%s> is whitelisted", task->message_id);
+			task->is_skipped = TRUE;
+			return 0;
+		}
+	}
 
 	/* Process metrics symbols */
 	while (call_symbol_callback (task, task->cfg->cache, &item)) {
