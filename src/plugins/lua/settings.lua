@@ -21,7 +21,7 @@ end
 -- Check limit for a task
 local function check_settings(task)
   local function check_addr_setting(rule, addr)
-    local function check_specific_addr(elt) 
+    local function check_specific_addr(elt)
       if rule['name'] then
         if elt['addr'] == rule['name'] then
           return true
@@ -44,16 +44,16 @@ local function check_settings(task)
       end
       return false
     end
-    
+
     for _, e in ipairs(addr) do
       if check_specific_addr(e) then
         return true
       end
     end
-    
+
     return false
   end
-  
+
   local function check_ip_setting(rule, ip)
     if rule[2] ~= 0 then
       local nip = ip:apply_mask(rule[2])
@@ -63,13 +63,13 @@ local function check_settings(task)
     elseif ip == rule[1] then
       return true
     end
-    
+
     return false
   end
-  
+
   local function check_specific_setting(name, rule, ip, from, rcpt)
     local res = false
-    
+
     if rule['ip'] and ip then
       for _, i in ipairs(rule['ip']) do
         res = check_ip_setting(i, ip)
@@ -78,7 +78,7 @@ local function check_settings(task)
         end
       end
     end
-    
+
     if not res and rule['from'] and from then
       for _, i in ipairs(rule['from']) do
         res = check_addr_setting(i, from)
@@ -87,7 +87,7 @@ local function check_settings(task)
         end
       end
     end
-    
+
     if not res and rule['rcpt'] and rcpt then
       for _, i in ipairs(rule['rcpt']) do
         res = check_addr_setting(i, rcpt)
@@ -96,7 +96,7 @@ local function check_settings(task)
         end
       end
     end
-    
+
     if res then
       if rule['whitelist'] then
         return {whitelist = true}
@@ -104,15 +104,15 @@ local function check_settings(task)
         return rule['apply']
       end
     end
-    
+
     return nil
   end
-  
+
   -- Do not waste resources
   if not settings_initialized then
     return
   end
-  
+
   rspamd_logger.info("check for settings")
   local ip = task:get_from_ip()
   local from = task:get_from()
@@ -130,7 +130,7 @@ local function check_settings(task)
       end
     end
   end
-  
+
 end
 
 -- Process settings based on their priority
@@ -146,34 +146,34 @@ local function process_settings_table(tbl)
           elseif p == "medium" then
             return 2
           end
-          
+
         end
-        
+
       end
-      
+
       return 1
-     end
-     
-     return pri_tonum(elt['priority'])
+    end
+
+    return pri_tonum(elt['priority'])
   end
-   
+
   -- Check the setting element internal data
   local process_setting_elt = function(name, elt)
     -- Process IP address
     local function process_ip(ip)
       local out = {}
-      
+
       if type(ip) == "table" then
-        for i,v in ipairs(ip) do 
+        for i,v in ipairs(ip) do
           table.insert(out, process_ip(v))
         end
       elseif type(ip) == "string" then
         local slash = string.find(ip, '/')
-        
+
         if not slash then
           -- Just a plain IP address
           local res = rspamd_ip.from_string(ip)
-          
+
           if res:is_valid() then
             table.insert(out, {res, 0})
           else
@@ -183,7 +183,7 @@ local function process_settings_table(tbl)
         else
           local res = rspamd_ip.from_string(string.sub(ip, 1, slash - 1))
           local mask = tonumber(string.sub(ip, slash + 1))
-          
+
           if res:is_valid() then
             table.insert(out, {res, mask})
           else
@@ -194,15 +194,15 @@ local function process_settings_table(tbl)
       else
         return nil
       end
-      
+
       return out
     end
-    
+
     local function process_addr(addr)
       local out = {}
-      
+
       if type(addr) == "table" then
-        for i,v in ipairs(addr) do 
+        for i,v in ipairs(addr) do
           table.insert(out, process_addr(v))
         end
       elseif type(addr) == "string" then
@@ -213,13 +213,13 @@ local function process_settings_table(tbl)
           if re then
             out['regexp'] = re
             setmetatable(out, {
-              __gc = function(t) t['regexp']:destroy() end 
+              __gc = function(t) t['regexp']:destroy() end
             })
           else
             rspamd_logger.err("bad regexp: " .. addr)
             return nil
           end
-          
+
         elseif start == '@' then
           -- It is a domain if form @domain
           out['domain'] = string.sub(addr, 2)
@@ -237,35 +237,35 @@ local function process_settings_table(tbl)
       else
         return nil
       end
-      
+
       return out
     end
-    
-    
+
+
     local out = {}
-    
+
     if elt['ip'] then
       local ip = process_ip(elt['ip'])
-      
+
       if ip then
-        out['ip'] = ip 
+        out['ip'] = ip
       end
     end
     if elt['from'] then
       local from = process_addr(elt['from'])
-      
+
       if from then
-        out['from'] = from 
+        out['from'] = from
       end
     end
     if elt['rcpt'] then
       local rcpt = process_addr(elt['rcpt'])
-      
-      if rcpt then 
+
+      if rcpt then
         out['rcpt'] = rcpt
       end
     end
-    
+
     -- Now we must process actions
     if elt['apply'] then
       -- Just insert all metric results to the action key
@@ -276,10 +276,10 @@ local function process_settings_table(tbl)
       rspamd_logger.err("no actions in settings: " .. name)
       return nil
     end
-    
+
     return out
   end
-  
+
   settings_initialized = false
   -- filter trash in the input
   local ft = filter(
@@ -290,7 +290,7 @@ local function process_settings_table(tbl)
       return false
     end, tbl)
   -- clear all settings
-  
+
   max_pri = 0
   for k,v in pairs(settings) do settings[k]=nil end
   -- fill new settings by priority
@@ -305,11 +305,11 @@ local function process_settings_table(tbl)
       settings[pri][k] = s
     end
   end
-  
+
   settings_initialized = true
   --local dumper = require 'pl.pretty'.dump
   --dumper(settings)
-  
+
   return true
 end
 
