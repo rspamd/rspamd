@@ -26,7 +26,6 @@
 #include "map.h"
 #include "filter.h"
 #include "dynamic_cfg.h"
-#include "json/jansson.h"
 
 struct dynamic_cfg_symbol {
 	gchar *name;
@@ -192,10 +191,12 @@ void
 json_config_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
 	struct config_json_buf *jb;
-	guint nelts, i, j, selts;
 	gint test_act;
-	json_t *js, *cur_elt, *cur_nm, *it_val;
-	json_error_t je;
+	const ucl_object_t *cur_elt, *cur_nm, *it_val;
+	ucl_object_iter_t it = NULL;
+	ucl_object_t *top;
+	struct ucl_parser *parser;
+
 	struct dynamic_cfg_metric *cur_metric;
 	struct dynamic_cfg_symbol *cur_symbol;
 	struct dynamic_cfg_action *cur_action;
@@ -224,16 +225,19 @@ json_config_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 	/* NULL terminate current buf */
 	*jb->pos = '\0';
 
-	js = json_loads (jb->buf, &je);
-	if (!js) {
-		msg_err ("cannot load json data: parse error %s, on line %d",
-			je.text,
-			je.line);
+	parser = ucl_parser_new (0);
+	if (!ucl_parser_add_string (parser, jb->buf, 0)) {
+		msg_err ("cannot load json data: parse error %s",
+				ucl_parser_get_error (parser));
+		ucl_parser_free (parser);
 		return;
 	}
 
-	if (!json_is_array (js)) {
-		json_decref (js);
+	top = ucl_parser_get_object (parser);
+	ucl_parser_free (parser);
+
+	if (!ucl_object_type (top) != UCL_ARRAY) {
+		ucl_object_unref (top);
 		msg_err ("loaded json is not an array");
 		return;
 	}
@@ -243,87 +247,82 @@ json_config_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 	jb->config_metrics = NULL;
 
 	/* Parse configuration */
-	nelts = json_array_size (js);
-	for (i = 0; i < nelts; i++) {
-		cur_elt = json_array_get (js, i);
-		if (!cur_elt || !json_is_object (cur_elt)) {
+	while ((cur_elt = ucl_iterate_object (top, &it, true))) {
+		if (ucl_object_type (cur_elt) != UCL_OBJECT) {
 			msg_err ("loaded json array element is not an object");
 			continue;
 		}
 
-		cur_nm = json_object_get (cur_elt, "metric");
-		if (!cur_nm || !json_is_string (cur_nm)) {
+		cur_nm = ucl_object_find_key (cur_elt, "metric");
+		if (!cur_nm || ucl_object_type (cur_nm) != UCL_OBJECT) {
 			msg_err (
 				"loaded json metric object element has no 'metric' attribute");
 			continue;
 		}
 		cur_metric = g_slice_alloc0 (sizeof (struct dynamic_cfg_metric));
-		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
+		for (int i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
 			cur_metric->actions[i].value = -1.0;
 		}
-		cur_metric->name = g_strdup (json_string_value (cur_nm));
-		cur_nm = json_object_get (cur_elt, "symbols");
+		cur_metric->name = g_strdup (ucl_object_tostring (cur_nm));
+		cur_nm = ucl_object_find_key (cur_elt, "symbols");
 		/* Parse symbols */
-		if (cur_nm && json_is_array (cur_nm)) {
-			selts = json_array_size (cur_nm);
-			for (j = 0; j < selts; j++) {
-				it_val = json_array_get (cur_nm, j);
-				if (it_val && json_is_object (it_val)) {
-					if (json_object_get (it_val,
-						"name") && json_object_get (it_val, "value")) {
-						cur_symbol =
+		if (cur_nm && ucl_object_type (cur_nm) == UCL_ARRAY) {
+			ucl_object_iter_t nit = NULL;
+
+			while ((it_val = ucl_iterate_object (cur_nm, &nit, true))) {
+				if (ucl_object_find_key (it_val, "name") &&
+						ucl_object_find_key (it_val, "value")) {
+					cur_symbol =
 							g_slice_alloc0 (sizeof (struct dynamic_cfg_symbol));
-						cur_symbol->name =
-							g_strdup (json_string_value (json_object_get (it_val,
-								"name")));
-						cur_symbol->value =
-							json_number_value (json_object_get (it_val,
-								"value"));
-						/* Insert symbol */
-						cur_metric->symbols = g_list_prepend (
+					cur_symbol->name =
+							g_strdup (ucl_object_tostring (ucl_object_find_key (
+									it_val,
+									"name")));
+					cur_symbol->value = ucl_object_todouble (
+							ucl_object_find_key (it_val,
+									"value"));
+					/* Insert symbol */
+					cur_metric->symbols = g_list_prepend (
 							cur_metric->symbols,
 							cur_symbol);
-					}
-					else {
-						msg_info (
+				}
+				else {
+					msg_info (
 							"json symbol object has no mandatory 'name' and 'value' attributes");
-					}
 				}
 			}
 		}
-		cur_nm = json_object_get (cur_elt, "actions");
+		cur_nm = ucl_object_find_key (cur_elt, "actions");
 		/* Parse actions */
-		if (cur_nm && json_is_array (cur_nm)) {
-			selts = json_array_size (cur_nm);
-			for (j = 0; j < selts; j++) {
-				it_val = json_array_get (cur_nm, j);
-				if (it_val && json_is_object (it_val)) {
-					if (json_object_get (it_val,
-						"name") && json_object_get (it_val, "value")) {
-						if (!check_action_str (json_string_value (
-								json_object_get (it_val, "name")), &test_act)) {
-							msg_err ("unknown action: %s",
-								json_string_value (json_object_get (it_val,
-								"name")));
-							g_slice_free1 (sizeof (struct dynamic_cfg_action),
+		if (cur_nm && ucl_object_type (cur_nm) == UCL_ARRAY) {
+			ucl_object_iter_t nit = NULL;
+
+			while ((it_val = ucl_iterate_object (cur_nm, &nit, true))) {
+				if (ucl_object_find_key (it_val, "name") &&
+						ucl_object_find_key (it_val, "value")) {
+					if (!check_action_str (ucl_object_tostring (
+							ucl_object_find_key (it_val, "name")), &test_act)) {
+						msg_err ("unknown action: %s",
+								ucl_object_tostring (ucl_object_find_key (it_val,
+										"name")));
+						g_slice_free1 (sizeof (struct dynamic_cfg_action),
 								cur_action);
-							continue;
-						}
-						cur_action = &cur_metric->actions[test_act];
-						cur_action->action = test_act;
-						cur_action->value =
-							json_number_value (json_object_get (it_val,
-								"value"));
+						continue;
 					}
-					else {
-						msg_info (
+					cur_action = &cur_metric->actions[test_act];
+					cur_action->action = test_act;
+					cur_action->value =
+							ucl_object_todouble (ucl_object_find_key (it_val,
+									"value"));
+				}
+				else {
+					msg_info (
 							"json symbol object has no mandatory 'name' and 'value' attributes");
-					}
 				}
 			}
 		}
-		jb->config_metrics = g_list_prepend (jb->config_metrics, cur_metric);
 	}
+	jb->config_metrics = g_list_prepend (jb->config_metrics, cur_metric);
 	/*
 	 * Note about thread safety: we are updating values that are gdoubles so it is not atomic in general case
 	 * but on the other hand all that data is used only in the main thread, so why it is *likely* safe
@@ -333,7 +332,7 @@ json_config_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 
 	jb->cfg->current_dynamic_conf = jb->config_metrics;
 
-	json_decref (js);
+	ucl_object_unref (top);
 }
 
 /**
