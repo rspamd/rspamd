@@ -54,12 +54,12 @@ local function check_settings(task)
   end
   
   local function check_ip_setting(rule, ip)
-    if rule[1] ~= nil then
-      local nip = ip:apply_mask(rule[1])
-      if nip and nip == rule[0] then
+    if rule[2] ~= 0 then
+      local nip = ip:apply_mask(rule[2])
+      if nip and nip == rule[1] then
         return true
       end
-    elseif ip == rule[0] then
+    elseif ip == rule[1] then
       return true
     end
     
@@ -116,12 +116,13 @@ local function check_settings(task)
   local ip = task:get_from_ip()
   local from = task:get_from()
   local rcpt = task:get_recipients()
-  
   -- Match rules according their order
-  for i,v in ipairs(settings) do
+  for i,v in pairs(settings) do
     for name, rule in pairs(v) do
       local rule = check_specific_setting(name, rule, ip, from, rcpt)
       if rule then
+        rspamd_logger.info(string.format("<%s> apply settings according to rule %s",
+          task:get_message_id(), name))
         task:set_settings(rule)
       end
     end
@@ -244,33 +245,21 @@ local function process_settings_table(tbl)
       local ip = process_ip(elt['ip'])
       
       if ip then
-        if not out['ip'] then 
-          out['ip'] = {ip} 
-        else
-          table.insert(out['ip'], ip)
-        end
+        out['ip'] = ip 
       end
     end
     if elt['from'] then
       local from = process_addr(elt['from'])
       
       if from then
-       if not out['from'] then 
-          out['from'] = {from} 
-        else
-          table.insert(out['from'], from)
-        end
+        out['from'] = from 
       end
     end
     if elt['rcpt'] then
       local rcpt = process_addr(elt['rcpt'])
       
-      if rcpt then
-        if not out['rcpt'] then 
-          out['rcpt'] = {rcpt} 
-        else
-          table.insert(out['rcpt'], rcpt)
-        end
+      if rcpt then 
+        out['rcpt'] = rcpt
       end
     end
     
