@@ -411,11 +411,10 @@ lua_ip_equal (lua_State *L)
 static gint
 lua_ip_copy (lua_State *L)
 {
-	struct rspamd_lua_ip *ip = lua_check_ip (L, 1),
-			*nip;
+	struct rspamd_lua_ip *ip = lua_check_ip (L, 1);
 
 	if (ip) {
-		nip = lua_ip_new (L, ip);
+		lua_ip_new (L, ip);
 	}
 	else {
 		lua_pushnil (L);
