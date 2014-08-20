@@ -15,31 +15,6 @@ enum fetch_proto {
 	MAP_PROTO_FILE,
 	MAP_PROTO_HTTP,
 };
-
-/**
- * Data specific to file maps
- */
-struct file_map_data {
-	const gchar *filename;
-	struct stat st;
-};
-
-/**
- * Data specific to HTTP maps
- */
-struct http_map_data {
-	struct addrinfo *addr;
-	guint16 port;
-	gchar *path;
-	gchar *host;
-	time_t last_checked;
-	gshort chunked;
-	gchar read_buf[BUFSIZ];
-	guint32 rlen;
-	guint32 chunk;
-	guint32 chunk_remain;
-};
-
 struct map_cb_data;
 
 /**
