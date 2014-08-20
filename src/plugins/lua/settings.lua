@@ -326,7 +326,7 @@ end
 
 if type(set_section) == "string" then
   -- Just a map of ucl
-  if rspamd_config:add_map(set_section, process_settings_map) then
+  if rspamd_config:add_map(set_section, "settings map", process_settings_map) then
     rspamd_config:register_pre_filter(check_settings)
   end
 elseif type(set_section) == "table" then
