@@ -28,6 +28,8 @@
 #include "printf.h"
 #include "logger.h"
 
+#include <limits.h>
+
 struct rspamd_http_connection_private {
 	GString *buf;
 	gboolean new_header;
@@ -550,6 +552,18 @@ rspamd_http_on_message_complete (http_parser * parser)
 }
 
 static void
+rspamd_http_simple_client_helper (struct rspamd_http_connection *conn)
+{
+	struct event_base *base;
+
+	base = event_get_base (&conn->priv->ev);
+	rspamd_http_connection_reset (conn);
+	/* Plan read message */
+	rspamd_http_connection_read_message (conn, conn->ud, conn->fd,
+			conn->priv->ptv, base);
+}
+
+static void
 rspamd_http_write_helper (struct rspamd_http_connection *conn)
 {
 	struct rspamd_http_connection_private *priv;
@@ -562,10 +576,7 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 	priv = conn->priv;
 
 	if (priv->wr_pos == priv->wr_total) {
-		rspamd_http_connection_ref (conn);
-		conn->finish_handler (conn, priv->msg);
-		rspamd_http_connection_unref (conn);
-		return;
+		goto call_finish_handler;
 	}
 
 	start = &priv->out[0];
@@ -603,14 +614,25 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 	}
 
 	if (priv->wr_pos >= priv->wr_total) {
+		goto call_finish_handler;
+	}
+	else {
+		/* Want to write more */
+		event_add (&priv->ev, priv->ptv);
+	}
+
+	return;
+
+call_finish_handler:
+	if ((conn->opts & RSPAMD_HTTP_CLIENT_SIMPLE) == 0) {
 		rspamd_http_connection_ref (conn);
 		conn->finish_handler (conn, priv->msg);
 		conn->finished = TRUE;
 		rspamd_http_connection_unref (conn);
 	}
 	else {
-		/* Want to write more */
-		event_add (&priv->ev, priv->ptv);
+		/* Plan read message */
+		rspamd_http_simple_client_helper (conn);
 	}
 }
 
@@ -685,7 +707,7 @@ struct rspamd_http_connection *
 rspamd_http_connection_new (rspamd_http_body_handler_t body_handler,
 	rspamd_http_error_handler_t error_handler,
 	rspamd_http_finish_handler_t finish_handler,
-	enum rspamd_http_options opts,
+	unsigned opts,
 	enum rspamd_http_connection_type type)
 {
 	struct rspamd_http_connection *new;

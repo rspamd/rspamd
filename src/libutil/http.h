@@ -67,7 +67,8 @@ struct rspamd_http_message {
  * Options for HTTP connection
  */
 enum rspamd_http_options {
-	RSPAMD_HTTP_BODY_PARTIAL = 0x1 //!< RSPAMD_HTTP_BODY_PARTIAL
+	RSPAMD_HTTP_BODY_PARTIAL = 0x1, /**< Call body handler on all body data portions */
+	RSPAMD_HTTP_CLIENT_SIMPLE = 0x2 /**< Read HTTP client reply automatically */
 };
 
 struct rspamd_http_connection_private;
@@ -104,7 +105,7 @@ struct rspamd_http_connection {
 	rspamd_http_error_handler_t error_handler;
 	rspamd_http_finish_handler_t finish_handler;
 	gpointer ud;
-	enum rspamd_http_options opts;
+	unsigned opts;
 	enum rspamd_http_connection_type type;
 	gboolean finished;
 	gint fd;
@@ -140,7 +141,7 @@ struct rspamd_http_connection * rspamd_http_connection_new (
 	rspamd_http_body_handler_t body_handler,
 	rspamd_http_error_handler_t error_handler,
 	rspamd_http_finish_handler_t finish_handler,
-	enum rspamd_http_options opts,
+	unsigned opts,
 	enum rspamd_http_connection_type type);
 
 /**
