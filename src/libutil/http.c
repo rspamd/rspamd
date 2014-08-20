@@ -524,10 +524,7 @@ rspamd_http_on_message_complete (http_parser * parser)
 
 	if (conn->body_handler != NULL) {
 		rspamd_http_connection_ref (conn);
-		if (conn->opts & RSPAMD_HTTP_BODY_PARTIAL) {
-			ret = conn->body_handler (conn, priv->msg, NULL, 0);
-		}
-		else {
+		if ((conn->opts & RSPAMD_HTTP_BODY_PARTIAL) == 0) {
 			ret = conn->body_handler (conn,
 					priv->msg,
 					priv->msg->body->str,
