@@ -99,10 +99,7 @@ connect_http (struct rspamd_map *map,
  * Write HTTP request
  */
 static void
-write_http_request (struct rspamd_map *map,
-	struct http_map_data *data,
-	gint sock,
-	struct timeval *tv)
+write_http_request (struct http_callback_data *cbd)
 {
 	gchar datebuf[128];
 	struct tm *tm;
@@ -110,16 +107,16 @@ write_http_request (struct rspamd_map *map,
 
 	msg = rspamd_http_new_message (HTTP_REQUEST);
 
-	msg->url = g_string_new (data->path);
-	if (data->last_checked != 0) {
-		tm = gmtime (&data->last_checked);
+	msg->url = g_string_new (cbd->data->path);
+	if (cbd->data->last_checked != 0) {
+		tm = gmtime (&cbd->data->last_checked);
 		strftime (datebuf, sizeof (datebuf), "%a, %d %b %Y %H:%M:%S %Z", tm);
 
 		rspamd_http_message_add_header (msg, "If-Modified-Since", datebuf);
 	}
 
-	rspamd_http_connection_write_message (data->conn, msg, data->host, NULL,
-		map, sock, tv, map->ev_base);
+	rspamd_http_connection_write_message (cbd->data->conn, msg, cbd->data->host,
+		NULL, cbd, cbd->fd, &cbd->tv, cbd->ev_base);
 }
 
 /**
@@ -135,7 +132,7 @@ free_http_cbdata (struct http_callback_data *cbd)
 
 	rspamd_http_connection_reset (cbd->data->conn);
 	close (cbd->fd);
-	g_free (cbd);
+	g_slice_free1 (sizeof (struct http_callback_data), cbd);
 }
 
 /*
@@ -159,8 +156,8 @@ http_map_finish (struct rspamd_http_connection *conn,
 	struct http_callback_data *cbd = conn->ud;
 	struct rspamd_map *map;
 
+	map = cbd->map;
 	if (msg->code == 200) {
-		map = cbd->map;
 		if (cbd->remain_buf != NULL) {
 			map->read_callback (map->pool, cbd->remain_buf->str,
 					cbd->remain_buf->len, &cbd->cbdata);
@@ -174,6 +171,10 @@ http_map_finish (struct rspamd_http_connection *conn,
 		msg_info ("data is not modified for server %s",
 				cbd->data->host);
 		cbd->data->last_checked = msg->date;
+	}
+	else {
+		msg_info ("cannot load map %s from %s: HTTP error %d",
+				map->uri, cbd->data->host, msg->code);
 	}
 
 	free_http_cbdata (cbd);
@@ -344,18 +345,21 @@ http_callback (gint fd, short what, void *ud)
 	}
 	else {
 		/* Plan event */
-		cbd = g_malloc (sizeof (struct http_callback_data));
+		cbd = g_slice_alloc (sizeof (struct http_callback_data));
 		cbd->ev_base = map->ev_base;
 		cbd->map = map;
+		cbd->data = data;
+		cbd->remain_buf = NULL;
 		cbd->cbdata.state = 0;
 		cbd->cbdata.prev_data = *cbd->map->user_data;
 		cbd->cbdata.cur_data = NULL;
 		cbd->cbdata.map = cbd->map;
 		cbd->tv.tv_sec = HTTP_CONNECT_TIMEOUT;
 		cbd->tv.tv_usec = 0;
+		cbd->fd = sock;
 		data->conn->ud = cbd;
-		msg_info ("rereading map data from %s", data->host);
-		write_http_request (map, data, sock, &cbd->tv);
+		msg_info ("reading map data from %s", data->host);
+		write_http_request (cbd);
 	}
 }
 
@@ -574,7 +578,9 @@ add_map (struct rspamd_config *cfg,
 		}
 		close (s);
 		hdata->conn = rspamd_http_connection_new (http_map_read, http_map_error,
-			http_map_finish, RSPAMD_HTTP_BODY_PARTIAL, RSPAMD_HTTP_CLIENT);
+			http_map_finish,
+			RSPAMD_HTTP_BODY_PARTIAL | RSPAMD_HTTP_CLIENT_SIMPLE,
+			RSPAMD_HTTP_CLIENT);
 		new_map->map_data = hdata;
 	}
 	/* Temp pool */
