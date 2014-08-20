@@ -703,6 +703,23 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 	}
 }
 
+static void
+rspamd_http_parser_reset (struct rspamd_http_connection *conn)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+
+	http_parser_init (&priv->parser,
+		conn->type == RSPAMD_HTTP_SERVER ? HTTP_REQUEST : HTTP_RESPONSE);
+
+	priv->parser_cb.on_url = rspamd_http_on_url;
+	priv->parser_cb.on_status = rspamd_http_on_status;
+	priv->parser_cb.on_header_field = rspamd_http_on_header_field;
+	priv->parser_cb.on_header_value = rspamd_http_on_header_value;
+	priv->parser_cb.on_headers_complete = rspamd_http_on_headers_complete;
+	priv->parser_cb.on_body = rspamd_http_on_body;
+	priv->parser_cb.on_message_complete = rspamd_http_on_message_complete;
+}
+
 struct rspamd_http_connection *
 rspamd_http_connection_new (rspamd_http_body_handler_t body_handler,
 	rspamd_http_error_handler_t error_handler,
@@ -729,18 +746,10 @@ rspamd_http_connection_new (rspamd_http_body_handler_t body_handler,
 
 	/* Init priv */
 	priv = g_slice_alloc0 (sizeof (struct rspamd_http_connection_private));
-	http_parser_init (&priv->parser,
-		type == RSPAMD_HTTP_SERVER ? HTTP_REQUEST : HTTP_RESPONSE);
-	priv->parser.data = new;
-	priv->parser_cb.on_url = rspamd_http_on_url;
-	priv->parser_cb.on_status = rspamd_http_on_status;
-	priv->parser_cb.on_header_field = rspamd_http_on_header_field;
-	priv->parser_cb.on_header_value = rspamd_http_on_header_value;
-	priv->parser_cb.on_headers_complete = rspamd_http_on_headers_complete;
-	priv->parser_cb.on_body = rspamd_http_on_body;
-	priv->parser_cb.on_message_complete = rspamd_http_on_message_complete;
-
 	new->priv = priv;
+
+	rspamd_http_parser_reset (new);
+	priv->parser.data = new;
 
 	return new;
 }
@@ -766,6 +775,9 @@ rspamd_http_connection_reset (struct rspamd_http_connection *conn)
 		g_string_free (priv->buf, TRUE);
 		priv->buf = NULL;
 	}
+
+	rspamd_http_parser_reset (conn);
+
 	if (priv->out != NULL) {
 		g_slice_free1 (sizeof (struct iovec) * priv->outlen, priv->out);
 		priv->out = NULL;
