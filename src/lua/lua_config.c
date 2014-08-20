@@ -961,10 +961,11 @@ lua_map_read (rspamd_mempool_t *pool, gchar *chunk, gint len,
 	struct lua_map_callback_data *cbdata, *old;
 
 	if (data->cur_data == NULL) {
-		cbdata = g_slice_alloc (sizeof (*cbdata));
+		cbdata = g_slice_alloc0 (sizeof (*cbdata));
 		old = (struct lua_map_callback_data *)data->prev_data;
 		cbdata->L = old->L;
 		cbdata->ref = old->ref;
+		data->cur_data = cbdata;
 	}
 	else {
 		cbdata = (struct lua_map_callback_data *)data->cur_data;
@@ -992,6 +993,7 @@ lua_map_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 			g_string_free (old->data, TRUE);
 		}
 		g_slice_free1 (sizeof (*old), old);
+		data->prev_data = NULL;
 	}
 
 	if (data->cur_data) {
