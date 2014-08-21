@@ -41,15 +41,19 @@ struct rspamd_dns_request_ud {
 	struct rspamd_async_session *session;
 	dns_callback_type cb;
 	gpointer ud;
+	rspamd_mempool_t *pool;
 	struct rdns_request *req;
 };
 
 static void
 rspamd_dns_fin_cb (gpointer arg)
 {
-	struct rdns_request *req = arg;
+	struct rspamd_dns_request_ud *reqdata = (struct rspamd_dns_request_ud *)arg;
 
-	rdns_request_release (req);
+	rdns_request_release (reqdata->req);
+	if (reqdata->pool == NULL) {
+		g_slice_free1 (sizeof (struct rspamd_dns_request_ud), reqdata);
+	}
 }
 
 static void
@@ -67,6 +71,9 @@ rspamd_dns_callback (struct rdns_reply *reply, gpointer ud)
 	if (reqdata->session) {
 		remove_normal_event (reqdata->session, rspamd_dns_fin_cb, reqdata->req);
 	}
+	if (reqdata->pool == NULL) {
+		g_slice_free1 (sizeof (struct rspamd_dns_request_ud), reqdata);
+	}
 }
 
 gboolean
@@ -79,10 +86,16 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	const char *name)
 {
 	struct rdns_request *req;
-	struct rspamd_dns_request_ud *reqdata;
+	struct rspamd_dns_request_ud *reqdata = NULL;
 
-	reqdata =
-		rspamd_mempool_alloc (pool, sizeof (struct rspamd_dns_request_ud));
+	if (pool != NULL) {
+		reqdata =
+			rspamd_mempool_alloc (pool, sizeof (struct rspamd_dns_request_ud));
+	}
+	else {
+		reqdata = g_slice_alloc (sizeof (struct rspamd_dns_request_ud));
+	}
+	reqdata->pool = pool;
 	reqdata->session = session;
 	reqdata->cb = cb;
 	reqdata->ud = ud;
@@ -90,18 +103,22 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	req = rdns_make_request_full (resolver->r, rspamd_dns_callback, reqdata,
 			resolver->request_timeout, resolver->max_retransmits, 1, name,
 			type);
+	reqdata->req = req;
 
 	if (session) {
 		if (req != NULL) {
 			register_async_event (session,
 					(event_finalizer_t)rspamd_dns_fin_cb,
-					req,
+					reqdata,
 					g_quark_from_static_string ("dns resolver"));
-			reqdata->req = req;
 		}
-		else {
-			return FALSE;
+	}
+
+	if (req == NULL) {
+		if (pool == NULL) {
+			g_slice_free1 (sizeof (struct rspamd_dns_request_ud), reqdata);
 		}
+		return FALSE;
 	}
 
 	return TRUE;
