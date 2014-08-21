@@ -821,7 +821,9 @@ rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
 		EV_READ | EV_PERSIST,
 		rspamd_http_event_handler,
 		conn);
-	event_base_set (base, &priv->ev);
+	if (base != NULL) {
+		event_base_set (base, &priv->ev);
+	}
 	event_add (&priv->ev, priv->ptv);
 }
 
@@ -968,7 +970,9 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	}
 
 	event_set (&priv->ev, fd, EV_WRITE, rspamd_http_event_handler, conn);
-	event_base_set (base, &priv->ev);
+	if (base != NULL) {
+		event_base_set (base, &priv->ev);
+	}
 	event_add (&priv->ev, priv->ptv);
 }
 
