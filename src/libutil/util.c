@@ -97,7 +97,34 @@ poll_sync_socket (gint fd, gint timeout, short events)
 }
 
 static gint
-make_inet_socket (gint type, struct addrinfo *addr, gboolean is_server,
+rspamd_socket_create (gint af, gint type, gint protocol, gboolean async)
+{
+	gint fd;
+
+	fd = socket (af, type, protocol);
+	if (fd == -1) {
+		msg_warn ("socket failed: %d, '%s'", errno, strerror (errno));
+		return -1;
+	}
+
+	/* Set close on exec */
+	if (fcntl (fd, F_SETFD, FD_CLOEXEC) == -1) {
+		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
+		close (fd);
+		return -1;
+	}
+	if (async) {
+		if (make_socket_nonblocking (fd) == -1) {
+			close (fd);
+			return -1;
+		}
+	}
+
+	return fd;
+}
+
+static gint
+rspamd_inet_socket_create (gint type, struct addrinfo *addr, gboolean is_server,
 	gboolean async, GList **list)
 {
 	gint fd, r, optlen, on = 1, s_error;
@@ -106,19 +133,8 @@ make_inet_socket (gint type, struct addrinfo *addr, gboolean is_server,
 	cur = addr;
 	while (cur) {
 		/* Create socket */
-		fd = socket (cur->ai_family, type, 0);
+		fd = rspamd_socket_create (cur->ai_family, type, cur->ai_protocol, TRUE);
 		if (fd == -1) {
-			msg_warn ("socket failed: %d, '%s'", errno, strerror (errno));
-			goto out;
-		}
-
-		if (make_socket_nonblocking (fd) < 0) {
-			goto out;
-		}
-
-		/* Set close on exec */
-		if (fcntl (fd, F_SETFD, FD_CLOEXEC) == -1) {
-			msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
 			goto out;
 		}
 
@@ -196,13 +212,13 @@ out:
 gint
 make_tcp_socket (struct addrinfo *addr, gboolean is_server, gboolean async)
 {
-	return make_inet_socket (SOCK_STREAM, addr, is_server, async, NULL);
+	return rspamd_inet_socket_create (SOCK_STREAM, addr, is_server, async, NULL);
 }
 
 gint
 make_udp_socket (struct addrinfo *addr, gboolean is_server, gboolean async)
 {
-	return make_inet_socket (SOCK_DGRAM, addr, is_server, async, NULL);
+	return rspamd_inet_socket_create (SOCK_DGRAM, addr, is_server, async, NULL);
 }
 
 gint
@@ -379,7 +395,7 @@ make_universal_socket (const gchar *credits, guint16 port,
 
 		rspamd_snprintf (portbuf, sizeof (portbuf), "%d", (int)port);
 		if ((r = getaddrinfo (credits, portbuf, &hints, &res)) == 0) {
-			r = make_inet_socket (type, res, is_server, async, NULL);
+			r = rspamd_inet_socket_create (type, res, is_server, async, NULL);
 			freeaddrinfo (res);
 			return r;
 		}
@@ -468,7 +484,7 @@ make_universal_sockets_list (const gchar *credits, guint16 port,
 
 			rspamd_snprintf (portbuf, sizeof (portbuf), "%d", (int)port);
 			if ((r = getaddrinfo (credits, portbuf, &hints, &res)) == 0) {
-				r = make_inet_socket (type, res, is_server, async, &result);
+				r = rspamd_inet_socket_create (type, res, is_server, async, &result);
 				freeaddrinfo (res);
 				if (result == NULL) {
 					goto err;
@@ -2353,4 +2369,33 @@ rspamd_inet_address_get_port (rspamd_inet_addr_t *addr)
 	}
 
 	return 0;
+}
+
+int
+rspamd_inet_address_connect (rspamd_inet_addr_t *addr, gint type,
+		gboolean async)
+{
+	int fd, r;
+
+	if (addr == NULL) {
+		return -1;
+	}
+
+	fd = rspamd_socket_create (addr->af, type, 0, async);
+	if (fd == -1) {
+		return -1;
+	}
+
+	r = connect (fd, &addr->addr.sa, addr->slen);
+
+	if (r == -1) {
+		if (!async || errno != EINPROGRESS) {
+			close (fd);
+			msg_warn ("connect failed: %d, '%s'", errno,
+						strerror (errno));
+			return -1;
+		}
+	}
+
+	return fd;
 }
