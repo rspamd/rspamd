@@ -116,22 +116,33 @@ dns_resolver_init (rspamd_logger_t *logger,
 
 	new = g_slice_alloc0 (sizeof (struct rspamd_dns_resolver));
 	new->ev_base = ev_base;
-	new->request_timeout = cfg->dns_timeout;
-	new->max_retransmits = cfg->dns_retransmits;
+	if (cfg != NULL) {
+		new->request_timeout = cfg->dns_timeout;
+		new->max_retransmits = cfg->dns_retransmits;
+	}
+	else {
+		new->request_timeout = 1;
+		new->max_retransmits = 2;
+	}
 
 	new->r = rdns_resolver_new ();
 	rdns_bind_libevent (new->r, new->ev_base);
-	rdns_resolver_set_log_level (new->r, cfg->log_level);
+
+	if (cfg != NULL) {
+		rdns_resolver_set_log_level (new->r, cfg->log_level);
+	}
 	rdns_resolver_set_logger (new->r,
 		(rdns_log_function)rspamd_common_logv,
 		logger);
 
-	if (cfg->nameservers == NULL) {
+	if (cfg == NULL || cfg->nameservers == NULL) {
 		/* Parse resolv.conf */
 		if (!rdns_resolver_parse_resolv_conf (new->r, "/etc/resolv.conf")) {
 			msg_err (
 				"cannot parse resolv.conf and no nameservers defined, so no ways to resolve addresses");
-			return new;
+			rdns_resolver_release (new->r);
+			g_slice_free1 (sizeof (struct rspamd_dns_resolver), new);
+			return NULL;
 		}
 	}
 	else {
