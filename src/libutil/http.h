@@ -53,6 +53,8 @@ struct rspamd_http_header {
  */
 struct rspamd_http_message {
 	GString *url;
+	GString *host;
+	unsigned port;
 	GString *status;
 	struct rspamd_http_header *headers;
 	GString *body;
@@ -211,11 +213,18 @@ rspamd_http_connection_unref (struct rspamd_http_connection *conn)
 void rspamd_http_connection_reset (struct rspamd_http_connection *conn);
 
 /**
- * Create new HTTP reply
- * @param code code to pass
- * @return new reply object
+ * Create new HTTP message
+ * @param type request or response
+ * @return new http message
  */
 struct rspamd_http_message * rspamd_http_new_message (enum http_parser_type type);
+
+/**
+ * Create HTTP message from URL
+ * @param url
+ * @return new message or NULL
+ */
+struct rspamd_http_message* rspamd_http_message_from_url (const gchar *url);
 
 /**
  * Append a header to reply

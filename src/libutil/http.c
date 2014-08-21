@@ -916,18 +916,20 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	}
 	else {
 		/* Format request */
-		if (host != NULL) {
+		if (host == NULL && msg->host == NULL) {
+			/* Fallback to HTTP/1.0 */
+			rspamd_printf_gstring (priv->buf, "%s %v HTTP/1.0\r\n"
+					"Content-Length: %z\r\n",
+					http_method_str (msg->method), msg->url, bodylen);
+		}
+		else {
 			rspamd_printf_gstring (priv->buf, "%s %v HTTP/1.1\r\n"
 				"Connection: close\r\n"
 				"Host: %s\r\n"
 				"Content-Length: %z\r\n",
-				http_method_str (msg->method), msg->url, host, bodylen);
-		}
-		else {
-			/* Fallback to HTTP/1.0 */
-			rspamd_printf_gstring (priv->buf, "%s %v HTTP/1.0\r\n"
-				"Content-Length: %z\r\n",
-				http_method_str (msg->method), msg->url, bodylen);
+				http_method_str (msg->method), msg->url,
+				host != NULL ? host : msg->host->str,
+				bodylen);
 		}
 	}
 	/* Allocate iov */
@@ -993,10 +995,60 @@ rspamd_http_new_message (enum http_parser_type type)
 	new->date = 0;
 	new->body = NULL;
 	new->status = NULL;
+	new->host = NULL;
+	new->port = 80;
 	new->type = type;
 	new->method = HTTP_GET;
 
 	return new;
+}
+
+struct rspamd_http_message*
+rspamd_http_message_from_url (const gchar *url)
+{
+	struct http_parser_url pu;
+	struct rspamd_http_message *msg;
+	const gchar *host, *path;
+	size_t pathlen;
+
+	if (url == NULL) {
+		return NULL;
+	}
+
+	memset (&pu, 0, sizeof (pu));
+	if (http_parser_parse_url (url, strlen (url), TRUE, &pu) != 0) {
+		msg_warn ("cannot parse URL: %s", url);
+		return NULL;
+	}
+
+	if ((pu.field_set & (1 << UF_HOST)) == 0) {
+		msg_warn ("no host argument in URL: %s", url);
+		return NULL;
+	}
+	if ((pu.field_set & (1 << UF_PATH)) == 0) {
+		path = "/";
+		pathlen = 1;
+	}
+	else {
+		path = url + pu.field_data[UF_PATH].off;
+		pathlen = pu.field_data[UF_PATH].len;
+	}
+
+	msg = rspamd_http_new_message (HTTP_REQUEST);
+	host = url + pu.field_data[UF_HOST].off;
+
+	if ((pu.field_set & (1 << UF_PORT)) != 0) {
+		msg->port = pu.port;
+	}
+	else {
+		/* XXX: magic constant */
+		msg->port = 80;
+	}
+
+	msg->host = g_string_new_len (host, pu.field_data[UF_HOST].len);
+	g_string_append_len (msg->url, path, pathlen);
+
+	return msg;
 }
 
 void
