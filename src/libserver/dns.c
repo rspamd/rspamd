@@ -64,7 +64,9 @@ rspamd_dns_callback (struct rdns_reply *reply, gpointer ud)
 	 * event removing
 	 */
 	rdns_request_retain (reply->request);
-	remove_normal_event (reqdata->session, rspamd_dns_fin_cb, reqdata->req);
+	if (reqdata->session) {
+		remove_normal_event (reqdata->session, rspamd_dns_fin_cb, reqdata->req);
+	}
 }
 
 gboolean
@@ -89,15 +91,17 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 			resolver->request_timeout, resolver->max_retransmits, 1, name,
 			type);
 
-	if (req != NULL) {
-		register_async_event (session,
-			(event_finalizer_t)rspamd_dns_fin_cb,
-			req,
-			g_quark_from_static_string ("dns resolver"));
-		reqdata->req = req;
-	}
-	else {
-		return FALSE;
+	if (session) {
+		if (req != NULL) {
+			register_async_event (session,
+					(event_finalizer_t)rspamd_dns_fin_cb,
+					req,
+					g_quark_from_static_string ("dns resolver"));
+			reqdata->req = req;
+		}
+		else {
+			return FALSE;
+		}
 	}
 
 	return TRUE;
