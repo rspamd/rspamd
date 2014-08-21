@@ -511,6 +511,11 @@ const char * rspamd_inet_address_to_string (rspamd_inet_addr_t *addr);
 uint16_t rspamd_inet_address_get_port (rspamd_inet_addr_t *addr);
 
 /**
+ * Set port for inet address
+ */
+void rspamd_inet_address_set_port (rspamd_inet_addr_t *addr, uint16_t port);
+
+/**
  * Connect to inet_addr address
  * @param addr
  * @param async perform operations asynchronously

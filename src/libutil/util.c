@@ -2371,6 +2371,19 @@ rspamd_inet_address_get_port (rspamd_inet_addr_t *addr)
 	return 0;
 }
 
+void
+rspamd_inet_address_set_port (rspamd_inet_addr_t *addr, uint16_t port)
+{
+	switch (addr->af) {
+	case AF_INET:
+		addr->addr.s4.sin_port = htons (port);
+		break;
+	case AF_INET6:
+		addr->addr.s6.sin6_port = htons (port);
+		break;
+	}
+}
+
 int
 rspamd_inet_address_connect (rspamd_inet_addr_t *addr, gint type,
 		gboolean async)
