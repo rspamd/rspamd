@@ -63,15 +63,15 @@ rspamd_dns_callback (struct rdns_reply *reply, gpointer ud)
 
 	reqdata->cb (reply, reqdata->ud);
 
-	/*
-	 * Ref event to avoid double unref by
-	 * event removing
-	 */
-	rdns_request_retain (reply->request);
 	if (reqdata->session) {
-		remove_normal_event (reqdata->session, rspamd_dns_fin_cb, reqdata->req);
+		/*
+		 * Ref event to avoid double unref by
+		 * event removing
+		 */
+		rdns_request_retain (reply->request);
+		remove_normal_event (reqdata->session, rspamd_dns_fin_cb, reqdata);
 	}
-	if (reqdata->pool == NULL) {
+	else if (reqdata->pool == NULL) {
 		g_slice_free1 (sizeof (struct rspamd_dns_request_ud), reqdata);
 	}
 }
