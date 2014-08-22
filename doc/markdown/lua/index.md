@@ -26,6 +26,7 @@ config['regexp'] = {
 
 -- Insert by index
 config['regexp']['RULE_NAME2'] = '/more_re/'
+
 ~~~
 
 - *metrics* - a global table of metrics definitions. This variable is a table that is indexed by metric name and provide ability to set up symbols' properties:
@@ -95,11 +96,13 @@ classifiers['bayes'] = function(classifier, task, is_learn, is_spam)
 end
 ~~~
 
+* *rspamd_config* - is a global object that allows you to modify configuration and register new symbols.
+
 ### Writing complex rules
 So by using these two tables it is possible to configure rules and metrics. Also note that it is possible to use any lua functions and rspamd libraries:
 
 ~~~lua
--- Declare variable that contains rule definition
+-- Declare variable that contains regexp rule definition
 local rulebody = string.format('%s & !%s', '/re1/', '/re2')
 -- Set global table element
 config['regexp']['test_rule'] = rulebody
@@ -110,20 +113,25 @@ rspamd_logger.info('Loaded test rule: ' .. rulebody)
 Also it is possible to declare functions and use `closures` when defining rspamd rules:
 
 ~~~lua
-local reconf = config['regexp']
-reconf['R_EMPTY_IMAGE'] = function (task)
-        -- Get text parts from message
+-- Insert generic symbol
+rspamd_config.TEST_SYMBOL = function(task)
+        local dumper = require 'pl.pretty'.dump
+        return true, "hui", 1.0, "pezda";
+end
+rspamd_config.R_EMPTY_IMAGE = function (task)
+    -- Get text parts from message
 	parts = task:get_text_parts()
-        -- Iterate through all text parts
+    -- Iterate through all text parts
 	if parts then
 		for _,part in ipairs(parts) do
-                        -- Find empty parts
+            -- Find empty parts
 			if part:is_empty() then
-                                -- Get all images
+                -- Get all images
 				images = task:get_images()
 				if images then
-                                        -- We have images and empty part, insert symbol
-					return true
+                    -- We have images and empty part, insert symbol with image 
+                    -- filename as an option
+					return true, image[1]:get_filename()
 				end
 				return false
 			end
@@ -131,6 +139,7 @@ reconf['R_EMPTY_IMAGE'] = function (task)
 	end
 	return false
 end
+
 -- Here is a sample of using other function inside rule
 local function check_headers_tab(task, header_name)
          -- Extract raw headers from message
@@ -140,16 +149,16 @@ local function check_headers_tab(task, header_name)
              for _,rh in ipairs(raw_headers) do
                  if rh['tab_separated'] then
                      -- We have header value separated by tab symbol
-                     return true
+                     return true,rh['name']
                  end
              end
          end
          return false
 end 
 
-reconf['HEADER_TAB_FROM_WHITELISTED'] = function(task) return check_headers_tab(task, "From") end
-reconf['HEADER_TAB_TO_WHITELISTED'] = function(task) return check_headers_tab(task, "To") end
-reconf['HEADER_TAB_DATE_WHITELISTED'] = function(task) return check_headers_tab(task, "Date") end
+rspamd_config.HEADER_TAB_FROM_WHITELISTED = function(task) return check_headers_tab(task, "From") end
+rspamd_config.HEADER_TAB_TO_WHITELISTED = function(task) return check_headers_tab(task, "To") end
+rspamd_config.HEADER_TAB_DATE_WHITELISTED = function(task) return check_headers_tab(task, "Date") end
 ~~~
 
 Using lua in rules provides many abilities to write complex mail filtering rules.
@@ -188,7 +197,7 @@ local opts =  rspamd_config:get_all_opt('sample')
 if opts then
 	if opts['config'] then
 		config_param = opts['config'] 
-                -- Register callback
+        -- Register callback
 		rspamd_config:register_symbol('some_symbol', 1.0, 'sample_callback')
 	end
 end
@@ -202,7 +211,7 @@ It is often required to make DNS requests for messages checks. Here is an exampl
 
 ~~~lua
 -- Function-callback of rspamd rule
-function symbol_cb(task)
+local function symbol_cb(task)
 		-- Task is now local variable
 		local function dns_cb(resolver, to_resolve, results, err, str)
 			-- Increase total count of dns requests
@@ -223,10 +232,16 @@ Maps can hold dynamically loaded data like lists or ip trees. It is possible to 
 
 ~~~lua
 -- Add two maps in configuration section
-local hash_map = rspamd_config:add_hash_map ('file:///path/to/file')
-local radix_tree = rspamd_config:add_radix_map ('http://somehost.com/test.dat')
+local hash_map = rspamd_config:add_hash_map ('file:///path/to/file', 'sample map')
+local radix_tree = rspamd_config:add_radix_map ('http://somehost.com/test.dat', 'sample ip map')
+local generic_map = rspamd_config:add_map ('file:///path/to/file', 'sample generic map', 
+	function(str)
+		-- This callback is called when map is loaded or changed
+		-- Str contains map content
+		rspamd_logger.info('Got generic map content: ' .. str)
+	end)
 
-function sample_symbol_cb(task)
+local function sample_symbol_cb(task)
         -- Check whether hash map contains from address of message
         if hash_map:get_key(task:get_from()) then 
                 -- Check whether radix map contains client's ip
@@ -239,10 +254,9 @@ end
 
 ## Conclusions
 
-Lua plugins is a powerful tool for creating complex filters that can access practically all features of rspamd. Lua plugins can be used for writing custom tests that can be configured from XML, can use maps and make DNS requests. Rspamd is shipped with a couple of lua plugins that can be a good example for writing own plugins.
+Lua plugins is a powerful tool for creating complex filters that can access practically all features of rspamd. Lua plugins can be used for writing custom tests that can be configured from `XML`, can use maps and make DNS requests. Rspamd is shipped with a couple of lua plugins that can be a good example for writing own plugins.
 
 ## References
 
-- [Rspamd lua API reference](reference.md)
 - [Lua manual](http://www.lua.org/manual/5.2/)
 - [Programming in lua](http://www.lua.org/pil/)
