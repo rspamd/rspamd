@@ -21,7 +21,7 @@ config['module'] = {}
 
 -- Rewrite module configuration
 config['regexp'] = {
-  RULE_NAME = '/some_re/'
+    RULE_NAME = '/some_re/'
 }
 
 -- Insert by index
@@ -34,10 +34,10 @@ config['regexp']['RULE_NAME2'] = '/more_re/'
 ~~~lua
 
 metrics['default'] = {
--- Set weight and description
- SYMBOL = { weight = 9.0, description = 'description'},
--- Just set weight
- SYMBOL2 = 9.0,
+    -- Set weight and description
+    SYMBOL = { weight = 9.0, description = 'description'},
+    -- Just set weight
+    SYMBOL2 = 9.0,
 }
 -- Add symbol definition
 metrics['default']['SYMBOL3'] = { weight = 1, description = 'description' }
@@ -50,49 +50,49 @@ metrics['default']['SYMBOL3'] = { weight = 1, description = 'description' }
 -- Detect language of message and selects appropriate statfiles for it
 
 classifiers['bayes'] = function(classifier, task, is_learn, is_spam)
-	-- Subfunction for detection of message's language
-	local detect_language = function(task)
-		local parts = task:get_text_parts()
-		for _,p in ipairs(parts) do
-			local l = p:get_language()
-			if l then
-				return l
-			end
-		end
-		return nil
-	end
+    -- Subfunction for detection of message's language
+    local detect_language = function(task)
+        local parts = task:get_text_parts()
+        for _,p in ipairs(parts) do
+            local l = p:get_language()
+            if l then
+                return l
+            end
+        end
+        return nil
+    end
 
-	-- Main procedure
-	language = detect_language(task)
-	if language then
-		-- Find statfiles with specified language
-		local selected = {}
-		for _,st in pairs(classifier:get_statfiles()) do
-			local st_l = st:get_param('language')
-			if st_l and st_l == language then
-			    -- Insert statfile with specified language    
-			    table.insert(selected, st)
-			end
-		end
-		if table.maxn(selected) > 1 then
-			return selected
-		end
-	else
-		-- Language not detected
-		local selected = {}
-		for _,st in ipairs(classifier:get_statfiles()) do
-			local st_l = st:get_param('language')
-			-- Insert only statfiles without language
-			if not st_l then
-				table.insert(selected, st)
-			end
-		end
-		if table.maxn(selected) > 1 then
-			return selected
-		end
-	end
+    -- Main procedure
+    language = detect_language(task)
+    if language then
+        -- Find statfiles with specified language
+        local selected = {}
+        for _,st in pairs(classifier:get_statfiles()) do
+            local st_l = st:get_param('language')
+            if st_l and st_l == language then
+                -- Insert statfile with specified language    
+                table.insert(selected, st)
+            end
+        end
+        if table.maxn(selected) > 1 then
+            return selected
+        end
+    else
+        -- Language not detected
+        local selected = {}
+        for _,st in ipairs(classifier:get_statfiles()) do
+            local st_l = st:get_param('language')
+            -- Insert only statfiles without language
+            if not st_l then
+                table.insert(selected, st)
+            end
+        end
+        if table.maxn(selected) > 1 then
+            return selected
+        end
+    end
 
-	return nil
+    return nil
 end
 ~~~
 
@@ -104,8 +104,7 @@ So by using these two tables it is possible to configure rules and metrics. Also
 ~~~lua
 -- Declare variable that contains regexp rule definition
 local rulebody = string.format('%s & !%s', '/re1/', '/re2')
--- Set global table element
-config['regexp']['test_rule'] = rulebody
+-- Set global table element config['regexp']['test_rule'] = rulebody
 -- Write message to log
 rspamd_logger.info('Loaded test rule: ' .. rulebody)
 ~~~
@@ -114,46 +113,42 @@ Also it is possible to declare functions and use `closures` when defining rspamd
 
 ~~~lua
 -- Insert generic symbol
-rspamd_config.TEST_SYMBOL = function(task)
-        local dumper = require 'pl.pretty'.dump
-        return true, "hui", 1.0, "pezda";
-end
 rspamd_config.R_EMPTY_IMAGE = function (task)
     -- Get text parts from message
-	parts = task:get_text_parts()
+    parts = task:get_text_parts()
     -- Iterate through all text parts
-	if parts then
-		for _,part in ipairs(parts) do
+    if parts then
+        for _,part in ipairs(parts) do
             -- Find empty parts
-			if part:is_empty() then
+            if part:is_empty() then
                 -- Get all images
-				images = task:get_images()
-				if images then
+                images = task:get_images()
+                if images then
                     -- We have images and empty part, insert symbol with image 
                     -- filename as an option
-					return true, image[1]:get_filename()
-				end
-				return false
-			end
-		end
-	end
-	return false
+                    return true, image[1]:get_filename()
+                end
+                return false
+            end
+        end
+    end
+    return false
 end
 
 -- Here is a sample of using other function inside rule
 local function check_headers_tab(task, header_name)
-         -- Extract raw headers from message
-         local raw_headers = task:get_raw_header(header_name)
-         -- Make match of headers, that are separated with tabs, not spaces      
-         if raw_headers then
-             for _,rh in ipairs(raw_headers) do
-                 if rh['tab_separated'] then
-                     -- We have header value separated by tab symbol
-                     return true,rh['name']
-                 end
-             end
-         end
-         return false
+    -- Extract raw headers from message
+    local raw_headers = task:get_raw_header(header_name)
+    -- Make match of headers, that are separated with tabs, not spaces      
+    if raw_headers then
+        for _,rh in ipairs(raw_headers) do
+            if rh['tab_separated'] then
+                -- We have header value separated by tab symbol
+                return true,rh['name']
+            end
+        end
+    end
+    return false
 end 
 
 rspamd_config.HEADER_TAB_FROM_WHITELISTED = function(task) return check_headers_tab(task, "From") end
@@ -180,26 +175,28 @@ Here is a simple plugin example:
 ~~~lua
 local config_param = 'default'
 
-function sample_callback(task)
+local function sample_callback(task)
 end
 
 -- Registration
+
 -- Check API version
 if type(rspamd_config.get_api_version) ~= 'nil' then
-	if rspamd_config:get_api_version() >= 1 then
-		rspamd_config:register_module_option('maillist', 'symbol', 'string')
-	end
+    if rspamd_config:get_api_version() >= 1 then
+        rspamd_config:register_module_option('maillist', 'symbol', 'string')
+    end
 end
 
 -- Reading configuration
+
 -- Get all options for this plugin
 local opts =  rspamd_config:get_all_opt('sample')
 if opts then
-	if opts['config'] then
-		config_param = opts['config'] 
+    if opts['config'] then
+        config_param = opts['config'] 
         -- Register callback
-		rspamd_config:register_symbol('some_symbol', 1.0, 'sample_callback')
-	end
+        rspamd_config:register_symbol('some_symbol', 1.0, sample_callback)
+    end
 end
 ~~~
 
@@ -212,49 +209,56 @@ It is often required to make DNS requests for messages checks. Here is an exampl
 ~~~lua
 -- Function-callback of rspamd rule
 local function symbol_cb(task)
-		-- Task is now local variable
-		local function dns_cb(resolver, to_resolve, results, err, str)
-			-- Increase total count of dns requests
-			task:inc_dns_req()
-			if results then
-				task:insert_result('symbol', 1, str)
-			end
-		end
-		-- Resolve 'example.com' using primitives from the task passed
-		task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), 
-				'example.com', dns_cb, 'sample string')
+    -- Task is now local variable
+
+    local function dns_cb(resolver, to_resolve, results, err, str)
+        -- Increase total count of dns requests
+        task:inc_dns_req()
+        if results then
+            task:insert_result('symbol', 1, str)
+        end
+    end
+    -- Resolve 'example.com' using primitives from the task passed
+    task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), 
+            'example.com', dns_cb, 'sample string')
 end
 ~~~
 
 ### Using maps from lua plugin
 
-Maps can hold dynamically loaded data like lists or ip trees. It is possible to use 2 types of maps: **radix_tree** that stores ip addresses and **hash_map** that stores plain strings (domains usually). Here is a sample of using maps from lua API:
+Maps hold dynamically loaded data like lists or ip trees. It is possible to use 3 types of maps:
+
+* **radix_tree** stores ip addresses 
+* **hash_map** stores plain strings (domains usually)
+* **callback** call for a specified lua callback when a map is loaded or changed, map's content is passed to that callback as a parameter
+
+Here is a sample of using maps from lua API:
 
 ~~~lua
 -- Add two maps in configuration section
-local hash_map = rspamd_config:add_hash_map ('file:///path/to/file', 'sample map')
-local radix_tree = rspamd_config:add_radix_map ('http://somehost.com/test.dat', 'sample ip map')
-local generic_map = rspamd_config:add_map ('file:///path/to/file', 'sample generic map', 
-	function(str)
-		-- This callback is called when map is loaded or changed
-		-- Str contains map content
-		rspamd_logger.info('Got generic map content: ' .. str)
-	end)
+local hash_map = rspamd_config:add_hash_map('file:///path/to/file', 'sample map')
+local radix_tree = rspamd_config:add_radix_map('http://somehost.com/test.dat', 'sample ip map')
+local generic_map = rspamd_config:add_map('file:///path/to/file', 'sample generic map', 
+    function(str)
+        -- This callback is called when a map is loaded or changed
+        -- Str contains map content
+        rspamd_logger.info('Got generic map content: ' .. str)
+    end)
 
 local function sample_symbol_cb(task)
-        -- Check whether hash map contains from address of message
-        if hash_map:get_key(task:get_from()) then 
-                -- Check whether radix map contains client's ip
-                if radix_map:get_key(task:get_from_ip_num()) then
-                ...
-                end
+    -- Check whether hash map contains from address of message
+    if hash_map:get_key(task:get_from()) then 
+        -- Check whether radix map contains client's ip
+        if radix_map:get_key(task:get_from_ip_num()) then
+        ...
         end
+    end
 end
 ~~~
 
 ## Conclusions
 
-Lua plugins is a powerful tool for creating complex filters that can access practically all features of rspamd. Lua plugins can be used for writing custom tests that can be configured from `XML`, can use maps and make DNS requests. Rspamd is shipped with a couple of lua plugins that can be a good example for writing own plugins.
+Lua plugins is a powerful tool for creating complex filters that can access practically all features of rspamd. Lua plugins can be used for writing custom rules and interact with rspamd in many ways, can use maps and make DNS requests. Rspamd is shipped with a couple of lua plugins that can be used as examples while writing your own plugins.
 
 ## References
 
