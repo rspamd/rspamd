@@ -1,0 +1,45 @@
+{% include top.html %}	 
+	 <div class="container">
+
+	 <div class="row">
+	 <div class="col-sm-3">
+	 <!-- Docs navigation -->
+	 	<ul data-spy="affix" class="nav nav-pills nav-stacked" role="navigation">
+			<li class="nav-header"><h4>Rspamd documentation</h4></li>
+			<li><a  href="/doc/index.html">Documentation index</a></li>
+			<li><a  href="/doc/lua/">Rspamd lua API quick start</a></li>
+			<li class="divider"></li>
+			<li class="nav-header">Rspamd specific lua modules reference</li>
+			<li><a  href="/doc/lua/task.html">Rspamd task module</a></li>
+			<li><a  href="/doc/lua/config.html">Rspamd configuration module</a></li>
+			<li class="divider"></li>
+			<li class="nav-header">Generic lua modules reference</li>
+			<li><a  href="/doc/lua/message.html">Lua mime message module</a></li>
+			<li><a  href="/doc/lua/regexp.html">Lua regexp message module</a></li>
+			<li><a  href="/doc/lua/ip.html">Lua ip module</a></li>
+			<li><a  href="/doc/lua/http.html">Lua http module</a></li>
+			<li><a  href="/doc/lua/dns.html">Lua dns module</a></li>
+			<li><a  href="/doc/lua/classifier.html">Lua classifier module</a></li>
+		</ul>
+	 </div>
+
+	 <div class="col-sm-9">
+     <div class="body-content">
+                {{ content }}
+      </div>
+	 </div>
+
+	 </div> <!-- row -->
+
+      <!-- Site footer -->
+	  <hr>
+	  <footer>
+	    <p class="pull-right"><a href="#top">Back to top</a></p> 
+		<!--
+        <p>Code licensed under the <a href="http://www.apache.org/licenses/LICENSE-2.0">Apache License v2.0</a>.</p>
+        <p>Based on <a href="http://getbootstrap.com">Bootstrap</a>. Icons from <a href="http://fortawesome.github.io/Font-Awesome/">Font Awesome</a>. Web fonts from <a href="http://www.google.com/webfonts">Google</a>.</p>
+		-->
+      </footer>
+
+    </div> <!-- /container -->
+{% include bottom.html %}
