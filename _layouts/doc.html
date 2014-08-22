@@ -1,73 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="">
-    <meta name="author" content="">
-
-    <title>{{ page.title }}</title>
-
-    <!-- Bootstrap core CSS -->
-	<!--
-	<link href="//netdna.bootstrapcdn.com/bootstrap/3.0.0-rc1/css/bootstrap.min.css" rel="stylesheet">
-	-->
-
-	<link href="/css/bootstrap.min.css" rel="stylesheet">
-	<link href="//netdna.bootstrapcdn.com/font-awesome/3.2.1/css/font-awesome.min.css" rel="stylesheet">
-	<!-- syntax highlighting CSS -->
-	<link rel="stylesheet" href="/css/main.css">
-	<link rel="stylesheet" href="/css/syntax.css">
-	<link rel="icon" type="image/png" href="//rspamd.com/favicon.png">
-	<script>
-		(function(i,s,o,g,r,a,m){i['googleanalyticsobject']=r;i[r]=i[r]||function(){
-		(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new date();a=s.createelement(o),
-		m=s.getelementsbytagname(o)[0];a.async=1;a.src=g;m.parentnode.insertbefore(a,m)
-		})(window,document,'script','//www.google-analytics.com/analytics.js','ga');
-
-		ga('create', 'ua-5492966-5', 'rspamd.com');
-		ga('send', 'pageview');
-	</script>
-
-  </head>
-
-  <body style="padding-top: 50px">
-
-	<div class="navbar navbar-fixed-top">
-      <div class="container">
-        <a href="/" class="navbar-brand">Rspamd</a>
-		<button class="navbar-toggle" type="button" data-toggle="collapse" data-target="#navbar-main">
-          <span class="icon-bar"></span>
-          <span class="icon-bar"></span>
-          <span class="icon-bar"></span>
-        </button>
-		<div id="navbar-main" class="nav-collapse collapse">
-        <ul class="nav navbar-nav">
-  			<li>
-        		<a href="/about.html">About</a>
-       		</li>
-  			<li>
-        		<a href="/downloads.html">Downloads</a>
-        	</li>
-			<li>
-				<a href="/doc/">Documentation</a>
-			</li>
-  			<li>
-        		<a href="/blog/">News</a>
-        	</li>
-  			<li>
-        		<a href="/support.html">Support</a>
-        	</li>
-			</ul>
-			<ul class="nav navbar-nav pull-right">
-            <li><a href="/webui/">WebUI</a></li>
-            <li><a href="https://github.com/vstakhov/rspamd" target="_blank">Fork me on github</a></li>
-        </ul>
-	  	</div>
-      </div>
-	</div>
-	
-
+{% include top.html %}	 
 	 <div class="container">
 
 	 <div class="row">
@@ -110,9 +41,4 @@
       </footer>
 
     </div> <!-- /container -->
-
-	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
-	<script src="//netdna.bootstrapcdn.com/bootstrap/3.0.0-rc1/js/bootstrap.min.js"></script>
-
-  </body>
-</html>
+{% include bottom.html %}
