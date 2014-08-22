@@ -425,7 +425,7 @@ rspamd_controller_handle_maps (struct rspamd_http_connection_entry *conn_ent,
 	cur = session->ctx->cfg->maps;
 	while (cur) {
 		map = cur->data;
-		if (map->protocol == MAP_PROTO_FILE && map->description != NULL) {
+		if (map->protocol == MAP_PROTO_FILE) {
 			if (access (map->uri, R_OK) == 0) {
 				tmp = g_list_prepend (tmp, map);
 			}
@@ -441,8 +441,10 @@ rspamd_controller_handle_maps (struct rspamd_http_connection_entry *conn_ent,
 		obj = ucl_object_typed_new (UCL_OBJECT);
 		ucl_object_insert_key (obj,	   ucl_object_fromint (map->id),
 			"map", 0, false);
-		ucl_object_insert_key (obj, ucl_object_fromstring (map->description),
-			"description", 0, false);
+		if (map->description) {
+			ucl_object_insert_key (obj, ucl_object_fromstring (map->description),
+					"description", 0, false);
+		}
 		ucl_object_insert_key (obj,	  ucl_object_frombool (editable),
 			"editable", 0, false);
 		ucl_array_append (top, obj);
@@ -531,7 +533,7 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	reply->body = g_string_sized_new (st.st_size);
 
 	/* Read the whole buffer */
-	if (read (fd, msg->body->str, st.st_size) == -1) {
+	if (read (fd, reply->body->str, st.st_size) == -1) {
 		rspamd_http_message_free (reply);
 		msg_err ("cannot read map %s: %s", map->uri, strerror (errno));
 		rspamd_controller_send_error (conn_ent, 500, "500 map read error");
