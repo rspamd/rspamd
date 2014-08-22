@@ -1021,6 +1021,8 @@ rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 	ucl_object_t *obj;
 	struct ucl_parser *parser;
 	guint32 checksum;
+	ucl_object_iter_t it = NULL;
+	const ucl_object_t *cur;
 
 	if (prev != NULL) {
 		if (prev->buf != NULL) {
@@ -1048,7 +1050,12 @@ rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 		else {
 			obj = ucl_parser_get_object (parser);
 			ucl_parser_free (parser);
-			/* XXX: add replace objects code */
+			it = NULL;
+
+			while ((cur = ucl_iterate_object (obj, &it, true))) {
+				ucl_object_replace_key (cbdata->cfg->rcl_obj, (ucl_object_t *)cur,
+						cur->key, cur->keylen, false);
+			}
 			ucl_object_unref (obj);
 			data->map->checksum = checksum;
 		}
