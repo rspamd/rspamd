@@ -15,13 +15,26 @@
 
 Rspamd allows to specify custom settings according to incoming messages. Each setting define some set
 of custom metric weights, symbols or actions. An administrator can also skip spam checks for certain
-messages completely. Unlike the most of configuration options, rspamd settings can be loaded dynamically
-and thus they are updated automatically if a corresponding file or URL has changed since last update.
+messages completely. Rspamd settings can be loaded as dynamic map
+and updated automatically if a corresponding file or URL has changed since last update.
 
-To load rspamd settings one may specify `.include_map "</file|url>"` or use the ordinary `.include` macro:
+To load settings as dynamic map, you can set 'settings' to a map string:
 
 ~~~nginx
-.include_map "$CONFDIR/settings.conf"
+settings = "http://host/url"
+~~~
+
+If you don't want dynamic updates then you can set settings to an object:
+
+~~~nginx
+settings {
+	setting1 = {
+	...
+	}
+	setting2 = {
+	...
+	}
+}
 ~~~
 
 ## Settings structure
@@ -70,7 +83,7 @@ Match section performs `AND` operation on different matches, for example, if you
 For the same matches `OR` rule applies. Therefore, if you have multiple `rcpt` matches, then any of
 these `rcpt` will trigger the rule. If a setting applies no more rules are matched.
 
-Regexp rules are slow and should not be used intensively. All other rules are matched very quickly.
+Regexp rules are slow and should not be used intensively. All other rules are matched fast enough.
 
 The picture below describes the architecture of settings matching.
 
