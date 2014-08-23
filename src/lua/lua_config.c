@@ -1021,16 +1021,25 @@ lua_config_add_map (lua_State *L)
 	struct rspamd_config *cfg = lua_check_config (L);
 	const gchar *map_line, *description;
 	struct lua_map_callback_data *cbdata, **pcbdata;
+	int cbidx;
 
 	if (cfg) {
 		map_line = luaL_checkstring (L, 2);
-		description = lua_tostring (L, 3);
 
-		if (lua_type (L, 4) == LUA_TFUNCTION) {
+		if (lua_gettop (L) == 4) {
+			description = lua_tostring (L, 3);
+			cbidx = 4;
+		}
+		else {
+			description = NULL;
+			cbidx = 3;
+		}
+
+		if (lua_type (L, cbidx) == LUA_TFUNCTION) {
 			cbdata = g_slice_alloc (sizeof (*cbdata));
 			cbdata->L = L;
 			cbdata->data = NULL;
-			lua_pushvalue (L, 4);
+			lua_pushvalue (L, cbidx);
 			/* Get a reference */
 			cbdata->ref = luaL_ref (L, LUA_REGISTRYINDEX);
 			pcbdata = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (cbdata));
