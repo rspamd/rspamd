@@ -31,6 +31,8 @@
 #include "filter.h"
 #include "message.h"
 
+#include "xxhash.h"
+
 #ifdef HAVE_OPENSSL
 #include <openssl/rand.h>
 #include <openssl/err.h>
@@ -1149,24 +1151,25 @@ rspamd_strcase_hash (gconstpointer key)
 {
 	const gchar *p = key;
 	gchar buf[256];
-	guint h = 0, i = 0;
+	guint i = 0;
+	gpointer xxh;
 
-
+	xxh = XXH32_init (0);
 	while (*p != '\0') {
 		buf[i] = g_ascii_tolower (*p);
 		i++;
 		p++;
 		if (i == sizeof (buf)) {
-			h ^= murmur32_hash (buf, i);
+			XXH32_update (xxh, buf, i);
 			i = 0;
 		}
 	}
 
 	if (i > 0) {
-		h ^= murmur32_hash (buf, i);
+		XXH32_update (xxh, buf, i);
 	}
 
-	return h;
+	return XXH32_digest (xxh);
 }
 
 guint
@@ -1176,7 +1179,7 @@ rspamd_str_hash (gconstpointer key)
 
 	len = strlen ((const gchar *)key);
 
-	return murmur32_hash (key, len);
+	return XXH32 (key, len, 0);
 }
 
 gboolean
@@ -1203,25 +1206,27 @@ fstr_strcase_hash (gconstpointer key)
 {
 	const f_str_t *f = key;
 	const gchar *p;
-	guint h = 0, i = 0;
+	guint i = 0;
 	gchar buf[256];
+	gpointer xxh;
 
+	xxh = XXH32_init (0);
 	p = f->begin;
 	while (p - f->begin < (gint)f->len) {
 		buf[i] = g_ascii_tolower (*p);
 		i++;
 		p++;
 		if (i == sizeof (buf)) {
-			h ^= murmur32_hash (buf, i);
+			XXH32_update (xxh, buf, i);
 			i = 0;
 		}
 	}
 
 	if (i > 0) {
-		h ^= murmur32_hash (buf, i);
+		XXH32_update (xxh, buf, i);
 	}
 
-	return h;
+	return XXH32_digest (xxh);
 }
 
 void
