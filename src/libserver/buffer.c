@@ -28,6 +28,7 @@
 #ifdef HAVE_SYS_SENDFILE_H
 #include <sys/sendfile.h>
 #endif
+#include "utlist.h"
 
 #define G_DISPATCHER_ERROR dispatcher_error_quark ()
 #define debug_ip(...) rspamd_conditional_debug (rspamd_main->logger, \

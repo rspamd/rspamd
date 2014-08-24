@@ -11,7 +11,6 @@
 #include "upstream.h"
 #include "symbols_cache.h"
 #include "cfg_rcl.h"
-#include "utlist.h"
 #include "ucl.h"
 
 #define DEFAULT_BIND_PORT 11333
@@ -209,21 +208,6 @@ struct rspamd_worker_bind_conf {
 	gint ai;
 	gboolean is_systemd;
 	struct rspamd_worker_bind_conf *next;
-};
-
-struct rspamd_worker_param_parser {
-	rspamd_rcl_handler_t handler;                   /**< handler function									*/
-	struct rspamd_rcl_struct_parser parser;         /**< parser attributes									*/
-	const gchar *name;                              /**< parameter's name									*/
-	UT_hash_handle hh;                              /**< hash by name										*/
-};
-
-struct rspamd_worker_cfg_parser {
-	struct rspamd_worker_param_parser *parsers;     /**< parsers hash										*/
-	gint type;                                      /**< workers quark										*/
-	gboolean (*def_obj_parser)(const ucl_object_t *obj, gpointer ud);   /**< default object parser								*/
-	gpointer def_ud;
-	UT_hash_handle hh;                              /**< hash by type										*/
 };
 
 /**
@@ -497,6 +481,11 @@ struct rspamd_classifier_config * rspamd_config_find_classifier (
  */
 gboolean rspamd_config_parse_ip_list (const gchar *ip_list,
 	radix_tree_t **tree);
+
+void rspamd_ucl_add_conf_macros (struct ucl_parser *parser,
+	struct rspamd_config *cfg);
+
+void rspamd_ucl_add_conf_variables (struct ucl_parser *parser);
 
 #endif /* ifdef CFG_FILE_H */
 /*

@@ -31,6 +31,7 @@
 #include "dns.h"
 #include "upstream.h"
 #include "proxy.h"
+#include "utlist.h"
 
 /*
  * SMTP proxy is a simple smtp proxy worker for dns resolving and

@@ -35,6 +35,7 @@
 #include "lua/lua_common.h"
 #include "ottery.h"
 #include "xxhash.h"
+#include "utlist.h"
 #ifdef HAVE_OPENSSL
 #include <openssl/rand.h>
 #include <openssl/err.h>

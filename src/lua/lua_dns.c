@@ -23,6 +23,7 @@
 
 #include "lua_common.h"
 #include "dns.h"
+#include "utlist.h"
 
 /* Public prototypes */
 struct rspamd_dns_resolver * lua_check_dns_resolver (lua_State * L);

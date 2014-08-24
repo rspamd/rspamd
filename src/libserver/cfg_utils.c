@@ -27,13 +27,14 @@
 
 #include "cfg_file.h"
 #include "main.h"
+#include "uthash_strcase.h"
 #include "filter.h"
 #include "classifiers/classifiers.h"
 #include "lua/lua_common.h"
 #include "kvstorage_config.h"
 #include "map.h"
 #include "dynamic_cfg.h"
-#include "xxhash.h"
+#include "utlist.h"
 
 #define DEFAULT_SCORE 10.0
 
@@ -799,7 +800,7 @@ rspamd_include_map_handler (const guchar *data, gsize len, void * ud)
 #define RSPAMD_PREFIX_MACRO "PREFIX"
 #define RSPAMD_VERSION_MACRO "VERSION"
 
-static void
+void
 rspamd_ucl_add_conf_variables (struct ucl_parser *parser)
 {
 	ucl_parser_register_variable (parser,
@@ -821,7 +822,7 @@ rspamd_ucl_add_conf_variables (struct ucl_parser *parser)
 	ucl_parser_register_variable (parser, RSPAMD_VERSION_MACRO, RVERSION);
 }
 
-static void
+void
 rspamd_ucl_add_conf_macros (struct ucl_parser *parser,
 	struct rspamd_config *cfg)
 {
@@ -829,72 +830,6 @@ rspamd_ucl_add_conf_macros (struct ucl_parser *parser,
 		"include_map",
 		rspamd_include_map_handler,
 		cfg);
-}
-
-gboolean
-rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
-	const gchar *convert_to, rspamd_rcl_section_fin_t logger_fin,
-	gpointer logger_ud)
-{
-	struct stat st;
-	gint fd;
-	gchar *data;
-	GError *err = NULL;
-	struct rspamd_rcl_section *top, *logger;
-	gboolean res;
-	struct ucl_parser *parser;
-
-	if (stat (filename, &st) == -1) {
-		msg_err ("cannot stat %s: %s", filename, strerror (errno));
-		return FALSE;
-	}
-	if ((fd = open (filename, O_RDONLY)) == -1) {
-		msg_err ("cannot open %s: %s", filename, strerror (errno));
-		return FALSE;
-
-	}
-	/* Now mmap this file to simplify reading process */
-	if ((data =
-		mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
-		msg_err ("cannot mmap %s: %s", filename, strerror (errno));
-		close (fd);
-		return FALSE;
-	}
-	close (fd);
-
-	parser = ucl_parser_new (0);
-	rspamd_ucl_add_conf_variables (parser);
-	rspamd_ucl_add_conf_macros (parser, cfg);
-	if (!ucl_parser_add_chunk (parser, data, st.st_size)) {
-		msg_err ("ucl parser error: %s", ucl_parser_get_error (parser));
-		ucl_parser_free (parser);
-		munmap (data, st.st_size);
-		return FALSE;
-	}
-	munmap (data, st.st_size);
-	cfg->rcl_obj = ucl_parser_get_object (parser);
-	ucl_parser_free (parser);
-	res = TRUE;
-
-	if (!res) {
-		return FALSE;
-	}
-
-	top = rspamd_rcl_config_init ();
-	err = NULL;
-
-	HASH_FIND_STR (top, "logging", logger);
-	if (logger != NULL) {
-		logger->fin = logger_fin;
-		logger->fin_ud = logger_ud;
-	}
-
-	if (!rspamd_read_rcl_config (top, cfg, cfg->rcl_obj, &err)) {
-		msg_err ("rcl parse error: %s", err->message);
-		return FALSE;
-	}
-
-	return TRUE;
 }
 
 static void

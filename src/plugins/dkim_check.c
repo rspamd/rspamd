@@ -216,8 +216,7 @@ dkim_module_config (struct rspamd_config *cfg)
 			dkim_module_ctx->symbol_allow,
 			1);
 
-		dkim_module_ctx->dkim_hash = rspamd_lru_hash_new (rspamd_strcase_hash,
-				rspamd_strcase_equal,
+		dkim_module_ctx->dkim_hash = rspamd_lru_hash_new (
 				cache_size,
 				cache_expire,
 				g_free,

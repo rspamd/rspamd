@@ -25,8 +25,7 @@
 #define CFG_RCL_H_
 
 #include "config.h"
-#include "ucl/include/ucl.h"
-#include "uthash.h"
+#include "ucl.h"
 
 #define CFG_RCL_ERROR cfg_rcl_error_quark ()
 static inline GQuark
@@ -37,6 +36,7 @@ cfg_rcl_error_quark (void)
 
 struct rspamd_rcl_section;
 struct rspamd_config;
+struct rspamd_rcl_default_handler_data;
 
 struct rspamd_rcl_struct_parser {
 	gpointer user_struct;
@@ -75,25 +75,7 @@ typedef gboolean (*rspamd_rcl_handler_t) (struct rspamd_config *cfg,
 typedef void (*rspamd_rcl_section_fin_t)(struct rspamd_config *cfg,
 	gpointer ud);
 
-struct rspamd_rcl_default_handler_data {
-	struct rspamd_rcl_struct_parser pd;
-	const gchar *key;
-	rspamd_rcl_handler_t handler;
-	UT_hash_handle hh;
-};
 
-struct rspamd_rcl_section {
-	const gchar *name;                  /**< name of section */
-	rspamd_rcl_handler_t handler;       /**< handler of section attributes */
-	enum ucl_type type;         /**< type of attribute */
-	gboolean required;                  /**< whether this param is required */
-	gboolean strict_type;               /**< whether we need strict type */
-	UT_hash_handle hh;                  /** hash handle */
-	struct rspamd_rcl_section *subsections; /**< hash table of subsections */
-	struct rspamd_rcl_default_handler_data *default_parser; /**< generic parsing fields */
-	rspamd_rcl_section_fin_t fin; /** called at the end of section parsing */
-	gpointer fin_ud;
-};
 
 /**
  * Init common sections known to rspamd

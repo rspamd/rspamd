@@ -26,6 +26,7 @@
 #include "message.h"
 #include "dkim.h"
 #include "dns.h"
+#include "utlist.h"
 
 /* Parser of dkim params */
 typedef gboolean (*dkim_parse_param_f) (rspamd_dkim_context_t * ctx,

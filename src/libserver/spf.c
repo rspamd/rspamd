@@ -28,6 +28,7 @@
 #include "main.h"
 #include "message.h"
 #include "filter.h"
+#include "utlist.h"
 
 #define SPF_VER1_STR "v=spf1"
 #define SPF_VER2_STR "spf2."

@@ -14,7 +14,6 @@
 #include "protocol.h"
 #include "filter.h"
 #include "buffer.h"
-#include "hash.h"
 #include "events.h"
 #include "util.h"
 #include "logger.h"
@@ -101,17 +100,11 @@ struct rspamd_main {
 	rspamd_mempool_t *server_pool;                                  /**< server's memory pool							*/
 	statfile_pool_t *statfile_pool;                             /**< shared statfiles pool							*/
 	GHashTable *workers;                                        /**< workers pool indexed by pid                    */
-	rspamd_hash_t *counters;                                    /**< symbol cache counters							*/
 	rspamd_logger_t *logger;
 	uid_t workers_uid;                                          /**< worker's uid running to                        */
 	gid_t workers_gid;                                          /**< worker's gid running to						*/
 	gboolean is_privilleged;                                    /**< true if run in privilleged mode                */
 	struct roll_history *history;                               /**< rolling history								*/
-};
-
-struct counter_data {
-	guint64 value;
-	gint number;
 };
 
 /**

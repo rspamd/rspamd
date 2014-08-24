@@ -154,8 +154,7 @@ spf_module_config (struct rspamd_config *cfg)
 	register_virtual_symbol (&cfg->cache, spf_module_ctx->symbol_softfail, 1);
 	register_virtual_symbol (&cfg->cache, spf_module_ctx->symbol_allow,	   1);
 
-	spf_module_ctx->spf_hash = rspamd_lru_hash_new (rspamd_strcase_hash,
-			rspamd_strcase_equal,
+	spf_module_ctx->spf_hash = rspamd_lru_hash_new (
 			cache_size,
 			cache_expire,
 			g_free,

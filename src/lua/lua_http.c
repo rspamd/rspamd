@@ -25,6 +25,7 @@
 #include "buffer.h"
 #include "dns.h"
 #include "http.h"
+#include "utlist.h"
 
 #define MAX_HEADERS_SIZE 8192
 

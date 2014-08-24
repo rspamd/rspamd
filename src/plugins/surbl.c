@@ -50,6 +50,7 @@
 #include "map.h"
 #include "dns.h"
 #include "hash.h"
+#include "utlist.h"
 
 #include "surbl.h"
 

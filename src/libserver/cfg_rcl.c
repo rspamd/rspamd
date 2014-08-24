@@ -23,11 +23,49 @@
 
 #include "cfg_rcl.h"
 #include "main.h"
+#include "uthash_strcase.h"
+#include "utlist.h"
 #include "cfg_file.h"
 #include "lua/lua_common.h"
 #include "expressions.h"
 #include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
+
+
+struct rspamd_rcl_default_handler_data {
+	struct rspamd_rcl_struct_parser pd;
+	const gchar *key;
+	rspamd_rcl_handler_t handler;
+	UT_hash_handle hh;
+};
+
+struct rspamd_rcl_section {
+	const gchar *name;                  /**< name of section */
+	rspamd_rcl_handler_t handler;       /**< handler of section attributes */
+	enum ucl_type type;         /**< type of attribute */
+	gboolean required;                  /**< whether this param is required */
+	gboolean strict_type;               /**< whether we need strict type */
+	UT_hash_handle hh;                  /** hash handle */
+	struct rspamd_rcl_section *subsections; /**< hash table of subsections */
+	struct rspamd_rcl_default_handler_data *default_parser; /**< generic parsing fields */
+	rspamd_rcl_section_fin_t fin; /** called at the end of section parsing */
+	gpointer fin_ud;
+};
+
+struct rspamd_worker_param_parser {
+	rspamd_rcl_handler_t handler;                   /**< handler function									*/
+	struct rspamd_rcl_struct_parser parser;         /**< parser attributes									*/
+	const gchar *name;                              /**< parameter's name									*/
+	UT_hash_handle hh;                              /**< hash by name										*/
+};
+
+struct rspamd_worker_cfg_parser {
+	struct rspamd_worker_param_parser *parsers;     /**< parsers hash										*/
+	gint type;                                      /**< workers quark										*/
+	gboolean (*def_obj_parser)(const ucl_object_t *obj, gpointer ud);   /**< default object parser								*/
+	gpointer def_ud;
+	UT_hash_handle hh;                              /**< hash by type										*/
+};
 
 /*
  * Common section handlers
@@ -1890,4 +1928,70 @@ rspamd_rcl_register_worker_parser (struct rspamd_config *cfg, gint type,
 
 	nparser->def_obj_parser = func;
 	nparser->def_ud = ud;
+}
+
+gboolean
+rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
+	const gchar *convert_to, rspamd_rcl_section_fin_t logger_fin,
+	gpointer logger_ud)
+{
+	struct stat st;
+	gint fd;
+	gchar *data;
+	GError *err = NULL;
+	struct rspamd_rcl_section *top, *logger;
+	gboolean res;
+	struct ucl_parser *parser;
+
+	if (stat (filename, &st) == -1) {
+		msg_err ("cannot stat %s: %s", filename, strerror (errno));
+		return FALSE;
+	}
+	if ((fd = open (filename, O_RDONLY)) == -1) {
+		msg_err ("cannot open %s: %s", filename, strerror (errno));
+		return FALSE;
+
+	}
+	/* Now mmap this file to simplify reading process */
+	if ((data =
+		mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
+		msg_err ("cannot mmap %s: %s", filename, strerror (errno));
+		close (fd);
+		return FALSE;
+	}
+	close (fd);
+
+	parser = ucl_parser_new (UCL_PARSER_KEY_LOWERCASE);
+	rspamd_ucl_add_conf_variables (parser);
+	rspamd_ucl_add_conf_macros (parser, cfg);
+	if (!ucl_parser_add_chunk (parser, data, st.st_size)) {
+		msg_err ("ucl parser error: %s", ucl_parser_get_error (parser));
+		ucl_parser_free (parser);
+		munmap (data, st.st_size);
+		return FALSE;
+	}
+	munmap (data, st.st_size);
+	cfg->rcl_obj = ucl_parser_get_object (parser);
+	ucl_parser_free (parser);
+	res = TRUE;
+
+	if (!res) {
+		return FALSE;
+	}
+
+	top = rspamd_rcl_config_init ();
+	err = NULL;
+
+	HASH_FIND_STR (top, "logging", logger);
+	if (logger != NULL) {
+		logger->fin = logger_fin;
+		logger->fin_ud = logger_ud;
+	}
+
+	if (!rspamd_read_rcl_config (top, cfg, cfg->rcl_obj, &err)) {
+		msg_err ("rcl parse error: %s", err->message);
+		return FALSE;
+	}
+
+	return TRUE;
 }

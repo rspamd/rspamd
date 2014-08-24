@@ -27,6 +27,7 @@
 #include "util.h"
 #include "cfg_file.h"
 #include "message.h"
+#include "utlist.h"
 
 /* Max line size */
 #define OUTBUFSIZ BUFSIZ

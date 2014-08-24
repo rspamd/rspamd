@@ -24,6 +24,7 @@
 
 #include "config.h"
 #include "hash.h"
+#define HASH_CASELESS
 #include "uthash_strcase.h"
 #include "utlist.h"
 
@@ -194,7 +195,7 @@ rspamd_lru_hash_insert (rspamd_lru_hash_t *hash, gpointer key, gpointer value,
 	}
 
 	res = rspamd_lru_create_node (hash, key, value, now, ttl);
-	HASH_ADD (hh, hash->elements, key, strlen (key), res);
+	HASH_ADD_KEYPTR (hh, hash->elements, key, strlen (key), res);
 }
 
 void
