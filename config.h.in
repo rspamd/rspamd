@@ -211,11 +211,6 @@
 
 #cmakedefine HAVE_CTYPE_H        1
 
-#if (defined(__i386__) || defined(__x86_64__)  || defined(_M_IX86))
-/* Use murmur hash for UTHash for these platforms */
-#define HASH_FUNCTION HASH_MUR
-#define HASH_USING_NO_STRICT_ALIASING
-#endif
 /* Configure allocator */
 #define uthash_malloc(sz) g_slice_alloc(sz)
 #define uthash_free(ptr,sz) g_slice_free1(sz, ptr)
