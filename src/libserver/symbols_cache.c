@@ -83,6 +83,27 @@ cache_logic_cmp (const void *p1, const void *p2)
 	return (gint)w2 - w1;
 }
 
+/**
+ * Set counter for a symbol
+ */
+static double
+rspamd_set_counter (struct cache_item *item, guint32 value)
+{
+	struct counter_data *cd;
+	double alpha;
+	cd = item->cd;
+
+	/* Calculate new value */
+	rspamd_mempool_lock_mutex (item->mtx);
+
+	alpha = 2. / (++cd->number + 1);
+	cd->value = cd->value * (1. - alpha) + value * alpha;
+
+	rspamd_mempool_unlock_mutex (item->mtx);
+
+	return cd->value;
+}
+
 static GChecksum *
 get_mem_cksum (struct symbols_cache *cache)
 {
@@ -309,8 +330,13 @@ register_symbol_common (struct symbols_cache **cache,
 	item = rspamd_mempool_alloc0 (pcache->static_pool,
 			sizeof (struct cache_item));
 	item->s =
-		rspamd_mempool_alloc0 (pcache->static_pool,
+		rspamd_mempool_alloc0_shared (pcache->static_pool,
 			sizeof (struct saved_cache_item));
+	item->cd = rspamd_mempool_alloc0_shared (pcache->static_pool,
+			sizeof (struct counter_data));
+
+	item->mtx = rspamd_mempool_get_mutex (pcache->static_pool);
+
 	rspamd_strlcpy (item->s->symbol, name, sizeof (item->s->symbol));
 	item->func = func;
 	item->user_data = user_data;
@@ -398,7 +424,7 @@ register_symbol_common (struct symbols_cache **cache,
 	pcache->used_items++;
 	g_hash_table_insert (pcache->items_by_symbol, item->s->symbol, item);
 	msg_debug ("used items: %d, added symbol: %s", (*cache)->used_items, name);
-	rspamd_set_counter (item->s->symbol, 0);
+	rspamd_set_counter (item, 0);
 
 	*target = g_list_prepend (*target, item);
 }
@@ -509,7 +535,7 @@ register_dynamic_symbol (rspamd_mempool_t *dynamic_pool,
 
 	pcache->used_items++;
 	msg_debug ("used items: %d, added symbol: %s", (*cache)->used_items, name);
-	rspamd_set_counter (item->s->symbol, 0);
+	rspamd_set_counter (item, 0);
 
 	g_hash_table_insert (pcache->items_by_symbol, item->s->symbol, item);
 
@@ -676,9 +702,6 @@ init_symbols_cache (rspamd_mempool_t * pool,
 	if (cache == NULL) {
 		return FALSE;
 	}
-
-	/* Init locking */
-	cache->lock = rspamd_mempool_get_rwlock (pool);
 
 	cache->cfg = cfg;
 
@@ -1006,11 +1029,9 @@ call_symbol_callback (struct rspamd_task * task,
 		}
 		if (cache->uses++ >= MAX_USES) {
 			msg_info ("resort symbols cache");
-			rspamd_mempool_wlock_rwlock (cache->lock);
 			cache->uses = 0;
 			/* Resort while having write lock */
 			post_cache_init (cache);
-			rspamd_mempool_wunlock_rwlock (cache->lock);
 		}
 		s =
 			rspamd_mempool_alloc0 (task->task_pool,
@@ -1203,7 +1224,7 @@ call_symbol_callback (struct rspamd_task * task,
 		diff =
 			(tv2.tv_sec - tv1.tv_sec) * 1000000 + (tv2.tv_usec - tv1.tv_usec);
 #endif
-		item->s->avg_time = rspamd_set_counter (item->s->symbol, diff);
+		item->s->avg_time = rspamd_set_counter (item, diff);
 	}
 
 	s->saved_item = item;

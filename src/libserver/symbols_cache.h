@@ -24,9 +24,17 @@ struct dynamic_map_item {
 	gboolean negative;
 };
 
+struct counter_data {
+	gdouble value;
+	gint number;
+};
+
 struct cache_item {
 	/* Static item's data */
 	struct saved_cache_item *s;
+	struct counter_data *cd;
+
+	rspamd_mempool_mutex_t *mtx;
 
 	/* For dynamic rules */
 	struct dynamic_map_item *networks;
@@ -42,7 +50,6 @@ struct cache_item {
 	/* Flags of virtual symbols */
 	gboolean is_virtual;
 	gboolean is_callback;
-
 
 	/* Priority */
 	gint priority;
@@ -78,7 +85,6 @@ struct symbols_cache {
 	guint used_items;
 	guint uses;
 	gpointer map;
-	rspamd_mempool_rwlock_t *lock;
 	struct rspamd_config *cfg;
 };
 

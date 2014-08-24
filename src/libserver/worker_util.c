@@ -48,39 +48,6 @@ rspamd_get_worker_by_type (GQuark type)
 
 	return NULL;
 }
-
-double
-rspamd_set_counter (const gchar *name, guint32 value)
-{
-	struct counter_data *cd;
-	double alpha;
-	gchar *key;
-
-	cd = rspamd_hash_lookup (rspamd_main->counters, (gpointer) name);
-
-	if (cd == NULL) {
-		cd =
-			rspamd_mempool_alloc_shared (rspamd_main->counters->pool,
-				sizeof (struct counter_data));
-		cd->value = value;
-		cd->number = 0;
-		key = rspamd_mempool_strdup_shared (rspamd_main->counters->pool, name);
-		rspamd_hash_insert (rspamd_main->counters, (gpointer) key,
-			(gpointer) cd);
-	}
-	else {
-		/* Calculate new value */
-		rspamd_mempool_wlock_rwlock (rspamd_main->counters->lock);
-
-		alpha = 2. / (++cd->number + 1);
-		cd->value = cd->value * (1. - alpha) + value * alpha;
-
-		rspamd_mempool_wunlock_rwlock (rspamd_main->counters->lock);
-	}
-
-	return cd->value;
-}
-
 sig_atomic_t wanna_die = 0;
 
 #ifndef HAVE_SA_SIGINFO

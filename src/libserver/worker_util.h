@@ -34,11 +34,6 @@
  */
 worker_t * rspamd_get_worker_by_type (GQuark type);
 
-/**
- * Set counter for a symbol
- */
-double rspamd_set_counter (const gchar *name, guint32 value);
-
 #ifndef HAVE_SA_SIGINFO
 typedef void (*rspamd_sig_handler_t) (gint);
 #else
