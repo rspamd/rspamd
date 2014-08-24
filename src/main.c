@@ -233,6 +233,7 @@ read_cmd_line (gint argc, gchar **argv, struct rspamd_config *cfg)
 		r = fork ();
 		if (r == 0) {
 			/* Spawning new main process */
+			ottery_init (NULL);
 			cfg->cfg_name = cfg_names[i];
 			(void)setsid ();
 		}
@@ -502,6 +503,7 @@ fork_worker (struct rspamd_main *rspamd, struct rspamd_worker_conf *cf)
 			update_log_pid (cf->type, rspamd->logger);
 			/* Lock statfile pool if possible */
 			statfile_pool_lockall (rspamd->statfile_pool);
+			ottery_init (NULL);
 			/* Drop privilleges */
 			drop_priv (rspamd);
 			/* Set limits */
@@ -1310,6 +1312,7 @@ main (gint argc, gchar **argv, gchar **env)
 		exit (-errno);
 	}
 
+	ottery_init (NULL);
 	/* Write info */
 	rspamd_main->pid = getpid ();
 	rspamd_main->type = type;
