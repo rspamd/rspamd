@@ -387,41 +387,6 @@ GThread * rspamd_create_thread (const gchar *name,
 	GError **err);
 
 /**
- * Return 32bit murmur hash value for specified input
- * @param in input data
- * @param len length of the input data
- * @code
- *  MurmurHash3 was created by Austin Appleby  in 2008. The cannonical
- *  implementations are in C++ and placed in the public.
- *
- *    https://sites.google.com/site/murmurhash/
- *
- *  Seungyoung Kim has ported it's cannonical implementation to C language
- *  in 2012 and published it as a part of qLibc component.
- * @endcode
- * @return
- */
-guint32 murmur32_hash (const guint8 *in, gsize len);
-
-/**
- * Return 32bit murmur hash value for specified input
- * @param in input data
- * @param len length of the input data
- * @param out array of 2 guint64 variables
- * @code
- *  MurmurHash3 was created by Austin Appleby  in 2008. The cannonical
- *  implementations are in C++ and placed in the public.
- *
- *    https://sites.google.com/site/murmurhash/
- *
- *  Seungyoung Kim has ported it's cannonical implementation to C language
- *  in 2012 and published it as a part of qLibc component.
- * @endcode
- * @return
- */
-void murmur128_hash (const guint8 *in, gsize len, guint64 out[]);
-
-/**
  * Deep copy of one hash table to another
  * @param src source hash
  * @param dst destination hash

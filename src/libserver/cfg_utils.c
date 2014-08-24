@@ -33,6 +33,7 @@
 #include "kvstorage_config.h"
 #include "map.h"
 #include "dynamic_cfg.h"
+#include "xxhash.h"
 
 #define DEFAULT_SCORE 10.0
 
@@ -1036,7 +1037,7 @@ rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 		return;
 	}
 
-	checksum = murmur32_hash (cbdata->buf->str, cbdata->buf->len);
+	checksum = XXH32 (cbdata->buf->str, cbdata->buf->len, 0xdead);
 	if (data->map->checksum != checksum) {
 		/* New data available */
 		parser = ucl_parser_new (0);

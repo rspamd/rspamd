@@ -34,6 +34,7 @@
 #include "symbols_cache.h"
 #include "lua/lua_common.h"
 #include "ottery.h"
+#include "xxhash.h"
 #ifdef HAVE_OPENSSL
 #include <openssl/rand.h>
 #include <openssl/err.h>
@@ -652,13 +653,14 @@ fork_delayed (struct rspamd_main *rspamd)
 static inline uintptr_t
 make_listen_key (gint ai, const gchar *addr, gint port)
 {
-	uintptr_t res = 0;
+	gpointer xxh;
 
-	res = murmur32_hash (addr, strlen (addr));
-	res += murmur32_hash ((guchar *)&ai, sizeof (gint));
-	res += murmur32_hash ((guchar *)&port, sizeof (gint));
+	xxh = XXH32_init (0xbeef);
+	XXH32_update (xxh, addr, strlen (addr));
+	XXH32_update (xxh, (guchar *)&ai, sizeof (gint));
+	XXH32_update (xxh, (guchar *)&port, sizeof (gint));
 
-	return res;
+	return XXH32_digest (xxh);
 }
 
 static void
@@ -1218,11 +1220,6 @@ main (gint argc, gchar **argv, gchar **env)
 		pworker++;
 	}
 
-	/* Init counters */
-	rspamd_main->counters = rspamd_hash_new_shared (rspamd_main->server_pool,
-			rspamd_str_hash,
-			rspamd_str_equal,
-			64);
 	/* Init listen sockets hash */
 	listen_sockets = g_hash_table_new (g_direct_hash, g_direct_equal);
 
