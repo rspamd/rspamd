@@ -5,6 +5,7 @@ local symbol_from = nil
 
 local r = nil
 local h = nil  -- radix tree and hash table
+local rspamd_logger = require "rspamd_logger"
 
 local function check_whitelist (task)
 	if symbol_ip then
