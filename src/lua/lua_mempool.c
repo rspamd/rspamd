@@ -26,7 +26,7 @@
 
 /* Public prototypes */
 struct memory_pool_s * rspamd_lua_check_mempool (lua_State * L);
-gint luaopen_mempool (lua_State * L);
+void luaopen_mempool (lua_State * L);
 
 /* Lua bindings */
 LUA_FUNCTION_DEF (mempool, create);
@@ -221,7 +221,16 @@ lua_mempool_memory_pool_get_variable (lua_State *L)
 	return 1;
 }
 
-gint
+static gint
+lua_load_mempool (lua_State * L)
+{
+	lua_newtable (L);
+	luaL_register (L, NULL, mempoollib_f);
+
+	return 1;
+}
+
+void
 luaopen_mempool (lua_State * L)
 {
 	luaL_newmetatable (L, "rspamd{mempool}");
@@ -234,9 +243,7 @@ luaopen_mempool (lua_State * L)
 	lua_rawset (L, -3);
 
 	luaL_register (L, NULL,				mempoollib_m);
-	luaL_register (L, "rspamd_mempool", mempoollib_f);
+	rspamd_lua_add_preload (L, "rspamd_mempool", lua_load_mempool);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
-
-	return 1;
 }

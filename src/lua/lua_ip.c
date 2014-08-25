@@ -460,7 +460,16 @@ rspamd_lua_ip_push_fromstring (lua_State *L, const gchar *ip_str)
 	}
 }
 
-gint
+static gint
+lua_load_ip (lua_State * L)
+{
+	lua_newtable (L);
+	luaL_register (L, NULL, iplib_f);
+
+	return 1;
+}
+
+void
 luaopen_ip (lua_State * L)
 {
 	luaL_newmetatable (L, "rspamd{ip}");
@@ -473,9 +482,7 @@ luaopen_ip (lua_State * L)
 	lua_rawset (L, -3);
 
 	luaL_register (L, NULL,		   iplib_m);
-	luaL_register (L, "rspamd_ip", iplib_f);
+	rspamd_lua_add_preload (L, "rspamd_ip", lua_load_ip);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
-
-	return 1;
 }

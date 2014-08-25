@@ -249,24 +249,19 @@ lua_logger_debug (lua_State * L)
 
 /*** Init functions ***/
 
-gint
-luaopen_rspamd (lua_State * L)
+static gint
+lua_load_logger (lua_State *L)
 {
-	luaL_register (L, "rspamd", null_reg);
-	/* make version string available to scripts */
-	lua_pushstring (L, "_VERSION");
-	lua_pushstring (L, RVERSION);
-	lua_rawset (L, -3);
+	lua_newtable (L);
+	luaL_register (L, NULL, loggerlib_f);
 
 	return 1;
 }
 
-static gint
+static void
 luaopen_logger (lua_State * L)
 {
-
-	luaL_register (L, "rspamd_logger", loggerlib_f);
-	return 1;
+	rspamd_lua_add_preload (L, "rspamd_logger", lua_load_logger);
 }
 
 
@@ -294,34 +289,34 @@ rspamd_lua_init (struct rspamd_config *cfg)
 	L = luaL_newstate ();
 	luaL_openlibs (L);
 
-	(void)luaopen_rspamd (L);
-	(void)luaopen_logger (L);
-	(void)luaopen_mempool (L);
-	(void)luaopen_config (L);
-	(void)luaopen_radix (L);
-	(void)luaopen_hash_table (L);
-	(void)luaopen_trie (L);
-	(void)luaopen_task (L);
-	(void)luaopen_textpart (L);
-	(void)luaopen_mimepart (L);
-	(void)luaopen_image (L);
-	(void)luaopen_url (L);
-	(void)luaopen_message (L);
-	(void)luaopen_classifier (L);
-	(void)luaopen_statfile (L);
-	(void)luaopen_glib_regexp (L);
-	(void)luaopen_cdb (L);
-	(void)luaopen_xmlrpc (L);
-	(void)luaopen_http (L);
-	(void)luaopen_redis (L);
-	(void)luaopen_upstream (L);
-	(void)lua_add_actions_global (L);
-	(void)luaopen_session (L);
-	(void)luaopen_io_dispatcher (L);
-	(void)luaopen_dns_resolver (L);
-	(void)luaopen_rsa (L);
-	(void)luaopen_ip (L);
-	(void)luaopen_ucl (L);
+	luaopen_logger (L);
+	luaopen_mempool (L);
+	luaopen_config (L);
+	luaopen_radix (L);
+	luaopen_hash_table (L);
+	luaopen_trie (L);
+	luaopen_task (L);
+	luaopen_textpart (L);
+	luaopen_mimepart (L);
+	luaopen_image (L);
+	luaopen_url (L);
+	luaopen_message (L);
+	luaopen_classifier (L);
+	luaopen_statfile (L);
+	luaopen_glib_regexp (L);
+	luaopen_cdb (L);
+	luaopen_xmlrpc (L);
+	luaopen_http (L);
+	luaopen_redis (L);
+	luaopen_upstream (L);
+	lua_add_actions_global (L);
+	luaopen_session (L);
+	luaopen_io_dispatcher (L);
+	luaopen_dns_resolver (L);
+	luaopen_rsa (L);
+	luaopen_ip (L);
+
+	rspamd_lua_add_preload (L, "ucl", luaopen_ucl);
 
 	return L;
 }
@@ -701,4 +696,16 @@ rspamd_lua_typerror (lua_State *L, int narg, const char *tname)
 	const char *msg = lua_pushfstring (L, "%s expected, got %s", tname,
 			luaL_typename (L, narg));
 	return luaL_argerror (L, narg, msg);
+}
+
+
+void
+rspamd_lua_add_preload (lua_State *L, const gchar *name, lua_CFunction func)
+{
+	lua_getglobal (L, "package");
+	lua_pushstring (L, "preload");
+	lua_gettable (L, -2);
+	lua_pushcfunction (L, func);
+	lua_setfield (L, -2, name);
+	lua_pop (L, 1);
 }

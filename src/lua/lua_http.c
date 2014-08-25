@@ -355,11 +355,17 @@ lua_http_request (lua_State *L)
 	return 1;
 }
 
-gint
-luaopen_http (lua_State * L)
+static gint
+lua_load_http (lua_State * L)
 {
-
-	luaL_register (L, "rspamd_http", httplib_m);
+	lua_newtable (L);
+	luaL_register (L, NULL, httplib_m);
 
 	return 1;
+}
+
+void
+luaopen_http (lua_State * L)
+{
+	rspamd_lua_add_preload (L, "rspamd_http", lua_load_http);
 }

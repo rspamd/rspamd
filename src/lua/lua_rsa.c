@@ -641,7 +641,43 @@ lua_rsa_sign_file (lua_State *L)
 	return 1;
 }
 
-gint
+static gint
+lua_load_pubkey (lua_State * L)
+{
+	lua_newtable (L);
+	luaL_register (L, NULL, rsapubkeylib_f);
+
+	return 1;
+}
+
+static gint
+lua_load_privkey (lua_State * L)
+{
+	lua_newtable (L);
+	luaL_register (L, NULL, rsaprivkeylib_f);
+
+	return 1;
+}
+
+static gint
+lua_load_signature (lua_State * L)
+{
+	lua_newtable (L);
+	luaL_register (L, NULL, rsasignlib_f);
+
+	return 1;
+}
+
+static gint
+lua_load_rsa (lua_State * L)
+{
+	lua_newtable (L);
+	luaL_register (L, NULL, rsalib_f);
+
+	return 1;
+}
+
+void
 luaopen_rsa (lua_State * L)
 {
 	luaL_newmetatable (L, "rspamd{rsa_pubkey}");
@@ -653,8 +689,8 @@ luaopen_rsa (lua_State * L)
 	lua_pushstring (L, "rspamd{rsa_pubkey}");
 	lua_rawset (L, -3);
 
-	luaL_register (L, NULL,			rsapubkeylib_m);
-	luaL_register (L, "rsa_pubkey", rsapubkeylib_f);
+	luaL_register (L, NULL, rsapubkeylib_m);
+	rspamd_lua_add_preload (L, "rspamd_rsa_pubkey", lua_load_pubkey);
 
 	luaL_newmetatable (L, "rspamd{rsa_privkey}");
 	lua_pushstring (L, "__index");
@@ -665,8 +701,8 @@ luaopen_rsa (lua_State * L)
 	lua_pushstring (L, "rspamd{rsa_privkey}");
 	lua_rawset (L, -3);
 
-	luaL_register (L, NULL,			 rsaprivkeylib_m);
-	luaL_register (L, "rsa_privkey", rsaprivkeylib_f);
+	luaL_register (L, NULL, rsaprivkeylib_m);
+	rspamd_lua_add_preload (L, "rspamd_rsa_privkey", lua_load_privkey);
 
 	luaL_newmetatable (L, "rspamd{rsa_signature}");
 	lua_pushstring (L, "__index");
@@ -677,22 +713,19 @@ luaopen_rsa (lua_State * L)
 	lua_pushstring (L, "rspamd{rsa_signature}");
 	lua_rawset (L, -3);
 
-	luaL_register (L, NULL,			   rsasignlib_m);
-	luaL_register (L, "rsa_signature", rsasignlib_f);
+	luaL_register (L, NULL, rsasignlib_m);
+	rspamd_lua_add_preload (L, "rspamd_rsa_signature", lua_load_signature);
 
-	luaL_register (L, "rsa",			   rsalib_f);
+	rspamd_lua_add_preload (L, "rspamd_rsa", lua_load_rsa);
 
-	return 1;
+	lua_settop (L, 0);
 }
 
 #else
-gint
+void
 luaopen_rsa (lua_State * L)
 {
 	msg_info ("this rspamd version is not linked against openssl, therefore no "
 		"RSA support is available");
-
-	return 1;
-
 }
 #endif

@@ -527,8 +527,25 @@ lua_upstream_list_get_upstream_master_slave (lua_State *L)
 	return 1;
 }
 
+static gint
+lua_load_upstream (lua_State * L)
+{
+	lua_newtable (L);
+	luaL_register (L, NULL, upstream_f);
 
-gint
+	return 1;
+}
+
+static gint
+lua_load_upstream_list (lua_State * L)
+{
+	lua_newtable (L);
+	luaL_register (L, NULL, upstream_list_f);
+
+	return 1;
+}
+
+void
 luaopen_upstream (lua_State * L)
 {
 	luaL_newmetatable (L, "rspamd{upstream_list}");
@@ -541,7 +558,7 @@ luaopen_upstream (lua_State * L)
 	lua_rawset (L, -3);
 
 	luaL_register (L, NULL,			   upstream_list_m);
-	luaL_register (L, "upstream_list", upstream_list_f);
+	rspamd_lua_add_preload (L, "upstream_list", lua_load_upstream_list);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 
@@ -555,9 +572,7 @@ luaopen_upstream (lua_State * L)
 	lua_rawset (L, -3);
 
 	luaL_register (L, NULL,		  upstream_m);
-	luaL_register (L, "upstream", upstream_f);
+	rspamd_lua_add_preload (L, "upstream", lua_load_upstream);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
-
-	return 1;
 }

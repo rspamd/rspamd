@@ -27,7 +27,7 @@
 
 /* Public prototypes */
 struct rspamd_dns_resolver * lua_check_dns_resolver (lua_State * L);
-gint luaopen_dns_resolver (lua_State * L);
+void luaopen_dns_resolver (lua_State * L);
 
 /* Lua bindings */
 LUA_FUNCTION_DEF (dns_resolver, init);
@@ -356,7 +356,16 @@ lua_dns_resolver_resolve (lua_State *L)
 	return 1;
 }
 
-gint
+static gint
+lua_load_dns (lua_State * L)
+{
+	lua_newtable (L);
+	luaL_register (L, NULL, dns_resolverlib_f);
+
+	return 1;
+}
+
+void
 luaopen_dns_resolver (lua_State * L)
 {
 
@@ -379,9 +388,8 @@ luaopen_dns_resolver (lua_State * L)
 		LUA_ENUM (L, RDNS_REQUEST_AAA, RDNS_REQUEST_SRV);
 	}
 
-	luaL_register (L, NULL,				 dns_resolverlib_m);
-	luaL_register (L, "rspamd_resolver", dns_resolverlib_f);
+	luaL_register (L, NULL, dns_resolverlib_m);
+	rspamd_lua_add_preload (L, "rspamd_resolver", lua_load_dns);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
-	return 1;
 }

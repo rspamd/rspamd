@@ -1868,57 +1868,52 @@ lua_url_get_phished (lua_State *L)
 }
 
 /* Init part */
-gint
-luaopen_task (lua_State * L)
-{
-	rspamd_lua_new_class_full (L, "rspamd{task}", "rspamd_task", tasklib_m, tasklib_f);
 
-	lua_pop (L, 1);                      /* remove metatable from stack */
+static gint
+lua_load_task (lua_State * L)
+{
+	lua_newtable (L);
+	luaL_register (L, NULL, tasklib_f);
 
 	return 1;
 }
 
-gint
+void
+luaopen_task (lua_State * L)
+{
+	rspamd_lua_new_class (L, "rspamd{task}", tasklib_m);
+	lua_pop (L, 1);                      /* remove metatable from stack */
+
+	rspamd_lua_add_preload (L, "rspamd_task", lua_load_task);
+}
+
+void
 luaopen_textpart (lua_State * L)
 {
 	rspamd_lua_new_class (L, "rspamd{textpart}", textpartlib_m);
 	luaL_register (L, "rspamd_textpart", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
-
-	return 1;
 }
 
-gint
+void
 luaopen_mimepart (lua_State * L)
 {
 	rspamd_lua_new_class (L, "rspamd{mimepart}", mimepartlib_m);
-	luaL_register (L, "rspamd_mimepart", null_reg);
-
 	lua_pop (L, 1);                      /* remove metatable from stack */
-
-	return 1;
 }
 
-gint
+void
 luaopen_image (lua_State * L)
 {
 	rspamd_lua_new_class (L, "rspamd{image}", imagelib_m);
-	luaL_register (L, "rspamd_image", null_reg);
-
 	lua_pop (L, 1);                      /* remove metatable from stack */
-
-	return 1;
 }
 
-gint
+void
 luaopen_url (lua_State * L)
 {
 	rspamd_lua_new_class (L, "rspamd{url}", urllib_m);
-	luaL_register (L, "rspamd_url", null_reg);
-
 	lua_pop (L, 1);                      /* remove metatable from stack */
-
-	return 1;
 }
 

@@ -599,12 +599,18 @@ lua_xmlrpc_make_request (lua_State *L)
 	return 1;
 }
 
-gint
-luaopen_xmlrpc (lua_State * L)
+static gint
+lua_load_xmlrpc (lua_State * L)
 {
-
-	luaL_register (L, "rspamd_xmlrpc", xmlrpclib_m);
+	lua_newtable (L);
+	luaL_register (L, NULL, xmlrpclib_m);
 
 	return 1;
+}
+
+void
+luaopen_xmlrpc (lua_State * L)
+{
+	rspamd_lua_add_preload (L, "rspamd_xmlrpc", lua_load_xmlrpc);
 }
 

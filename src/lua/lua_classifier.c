@@ -428,25 +428,17 @@ lua_check_statfile (lua_State * L)
 
 /* Open functions */
 
-gint
+void
 luaopen_classifier (lua_State * L)
 {
 	rspamd_lua_new_class (L, "rspamd{classifier}", classifierlib_m);
-	luaL_register (L, "rspamd_classifier", null_reg);
-
 	lua_pop (L, 1);                      /* remove metatable from stack */
-
-	return 1;
 }
 
-gint
+void
 luaopen_statfile (lua_State * L)
 {
 	rspamd_lua_new_class (L, "rspamd{statfile}", statfilelib_m);
-	luaL_register (L, "rspamd_statfile", null_reg);
-
 	lua_pop (L, 1);                      /* remove metatable from stack */
-
-	return 1;
 }
 

@@ -274,7 +274,16 @@ lua_regexp_destroy (lua_State *L)
 	return 0;
 }
 
-gint
+static gint
+lua_load_regexp (lua_State * L)
+{
+	lua_newtable (L);
+	luaL_register (L, NULL, regexplib_f);
+
+	return 1;
+}
+
+void
 luaopen_glib_regexp (lua_State * L)
 {
 	luaL_newmetatable (L, "rspamd{regexp}");
@@ -286,10 +295,8 @@ luaopen_glib_regexp (lua_State * L)
 	lua_pushstring (L, "rspamd{regexp}");
 	lua_rawset (L, -3);
 
-	luaL_register (L, NULL,		regexplib_m);
-	luaL_register (L, "regexp", regexplib_f);
+	luaL_register (L, NULL, regexplib_m);
+	rspamd_lua_add_preload (L, "regexp", lua_load_regexp);
 
 	regexp_static_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
-
-	return 1;
 }

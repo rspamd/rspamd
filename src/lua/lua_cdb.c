@@ -146,7 +146,16 @@ lua_cdb_destroy (lua_State *L)
 	return 0;
 }
 
-gint
+static gint
+lua_load_cdb (lua_State *L)
+{
+	lua_newtable (L);
+	luaL_register (L, NULL, cdblib_f);
+
+	return 1;
+}
+
+void
 luaopen_cdb (lua_State * L)
 {
 	luaL_newmetatable (L, "rspamd{cdb}");
@@ -159,9 +168,7 @@ luaopen_cdb (lua_State * L)
 	lua_rawset (L, -3);
 
 	luaL_register (L, NULL,	 cdblib_m);
-	luaL_register (L, "cdb", cdblib_f);
-
 	lua_pop (L, 1);                      /* remove metatable from stack */
 
-	return 1;
+	rspamd_lua_add_preload (L, "rspamd_cdb", lua_load_cdb);
 }

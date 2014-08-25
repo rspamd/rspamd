@@ -366,16 +366,21 @@ lua_redis_make_request (lua_State *L)
 	return 1;
 }
 
+static gint
+lua_load_redis (lua_State * L)
+{
+	lua_newtable (L);
+	luaL_register (L, NULL, redislib_m);
+
+	return 1;
+}
 /**
  * Open redis library
  * @param L lua stack
  * @return
  */
-gint
+void
 luaopen_redis (lua_State * L)
 {
-
-	luaL_register (L, "rspamd_redis", redislib_m);
-
-	return 1;
+	rspamd_lua_add_preload (L, "rspamd_redis", lua_load_redis);
 }

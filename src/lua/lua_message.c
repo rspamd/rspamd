@@ -200,13 +200,9 @@ lua_message_get_date (lua_State * L)
 	return 1;
 }
 
-gint
+void
 luaopen_message (lua_State * L)
 {
 	rspamd_lua_new_class (L, "rspamd{message}", msglib_m);
-	luaL_register (L, "rspamd_message", null_reg);
-
 	lua_pop (L, 1);                      /* remove metatable from stack */
-
-	return 1;
 }

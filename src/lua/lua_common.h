@@ -143,31 +143,37 @@ struct rspamd_lua_ip {
 /**
  * Open libraries functions
  */
-gint luaopen_message (lua_State *L);
-gint luaopen_task (lua_State *L);
-gint luaopen_config (lua_State *L);
-gint luaopen_metric (lua_State *L);
-gint luaopen_radix (lua_State *L);
-gint luaopen_hash_table (lua_State *L);
-gint luaopen_trie (lua_State * L);
-gint luaopen_textpart (lua_State *L);
-gint luaopen_mimepart (lua_State *L);
-gint luaopen_image (lua_State *L);
-gint luaopen_url (lua_State *L);
-gint luaopen_classifier (lua_State *L);
-gint luaopen_statfile (lua_State * L);
-gint luaopen_glib_regexp (lua_State *L);
-gint luaopen_cdb (lua_State *L);
-gint luaopen_xmlrpc (lua_State * L);
-gint luaopen_http (lua_State * L);
-gint luaopen_redis (lua_State * L);
-gint luaopen_upstream (lua_State * L);
-gint luaopen_mempool (lua_State * L);
-gint luaopen_session (lua_State * L);
-gint luaopen_io_dispatcher (lua_State * L);
-gint luaopen_dns_resolver (lua_State * L);
-gint luaopen_rsa (lua_State * L);
-gint luaopen_ip (lua_State * L);
+
+/**
+ * Add preload function
+ */
+void rspamd_lua_add_preload (lua_State *L, const gchar *name, lua_CFunction func);
+
+void luaopen_message (lua_State *L);
+void luaopen_task (lua_State *L);
+void luaopen_config (lua_State *L);
+void luaopen_metric (lua_State *L);
+void luaopen_radix (lua_State *L);
+void luaopen_hash_table (lua_State *L);
+void luaopen_trie (lua_State * L);
+void luaopen_textpart (lua_State *L);
+void luaopen_mimepart (lua_State *L);
+void luaopen_image (lua_State *L);
+void luaopen_url (lua_State *L);
+void luaopen_classifier (lua_State *L);
+void luaopen_statfile (lua_State * L);
+void luaopen_glib_regexp (lua_State *L);
+void luaopen_cdb (lua_State *L);
+void luaopen_xmlrpc (lua_State * L);
+void luaopen_http (lua_State * L);
+void luaopen_redis (lua_State * L);
+void luaopen_upstream (lua_State * L);
+void luaopen_mempool (lua_State * L);
+void luaopen_session (lua_State * L);
+void luaopen_io_dispatcher (lua_State * L);
+void luaopen_dns_resolver (lua_State * L);
+void luaopen_rsa (lua_State * L);
+void luaopen_ip (lua_State * L);
 
 gint rspamd_lua_call_filter (const gchar *function, struct rspamd_task *task);
 gint rspamd_lua_call_chain_filter (const gchar *function,

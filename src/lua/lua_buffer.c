@@ -26,7 +26,7 @@
 
 /* Public prototypes */
 struct rspamd_io_dispatcher_s * lua_check_io_dispatcher (lua_State * L);
-gint luaopen_io_dispatcher (lua_State * L);
+void luaopen_io_dispatcher (lua_State * L);
 
 /* Lua bindings */
 LUA_FUNCTION_DEF (io_dispatcher, create);
@@ -344,8 +344,17 @@ lua_io_dispatcher_destroy (lua_State *L)
 	return 1;
 }
 
+static gint
+lua_load_dispatcher (lua_State *L)
+{
+	lua_newtable (L);
+	luaL_register (L, NULL, io_dispatcherlib_f);
 
-gint
+	return 1;
+}
+
+
+void
 luaopen_io_dispatcher (lua_State * L)
 {
 	luaL_newmetatable (L, "rspamd{io_dispatcher}");
@@ -358,14 +367,11 @@ luaopen_io_dispatcher (lua_State * L)
 	lua_rawset (L, -3);
 
 	luaL_register (L, NULL,					  io_dispatcherlib_m);
-	luaL_register (L, "rspamd_io_dispatcher", io_dispatcherlib_f);
-
 	lua_pop (L, 1);                      /* remove metatable from stack */
+	rspamd_lua_add_preload (L, "rspamd_io_dispatcher", lua_load_dispatcher);
 
 	/* Simple event class */
 	rspamd_lua_new_class (L, "rspamd{ev_base}", null_reg);
-	luaL_register (L, "rspamd_ev_base", null_reg);
-
 	lua_pop (L, 1);                      /* remove metatable from stack */
 
 	/* Set buffer types globals */
@@ -375,5 +381,4 @@ luaopen_io_dispatcher (lua_State * L)
 	lua_setglobal (L, "IO_BUFFER_CHARACTER");
 	lua_pushnumber (L, BUFFER_ANY);
 	lua_setglobal (L, "IO_BUFFER_ANY");
-	return 1;
 }

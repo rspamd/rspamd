@@ -1234,40 +1234,41 @@ lua_trie_search_task (lua_State *L)
 }
 /* Init functions */
 
-gint
+void
 luaopen_config (lua_State * L)
 {
 	rspamd_lua_new_class (L, "rspamd{config}", configlib_m);
-	luaL_register (L, "rspamd_config", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
-
-	return 1;
 }
 
-gint
+void
 luaopen_radix (lua_State * L)
 {
 	rspamd_lua_new_class (L, "rspamd{radix}", radixlib_m);
-	luaL_register (L, "rspamd_radix", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
-
-	return 1;
 }
 
-gint
+void
 luaopen_hash_table (lua_State * L)
 {
 	rspamd_lua_new_class (L, "rspamd{hash_table}", hashlib_m);
 	luaL_register (L, "rspamd_hash_table", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
+}
+
+static gint
+lua_load_trie (lua_State *L)
+{
+	lua_newtable (L);
+	luaL_register (L, NULL, trielib_f);
 
 	return 1;
 }
 
-gint
+void
 luaopen_trie (lua_State * L)
 {
 	luaL_newmetatable (L, "rspamd{trie}");
@@ -1280,9 +1281,7 @@ luaopen_trie (lua_State * L)
 	lua_rawset (L, -3);
 
 	luaL_register (L, NULL,			 trielib_m);
-	luaL_register (L, "rspamd_trie", trielib_f);
+	rspamd_lua_add_preload (L, "rspamd_trie", lua_load_trie);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
-
-	return 1;
 }

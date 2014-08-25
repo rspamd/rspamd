@@ -25,7 +25,7 @@
 
 /* Public prototypes */
 struct rspamd_async_session * lua_check_session (lua_State * L);
-gint luaopen_session (lua_State * L);
+void luaopen_session (lua_State * L);
 
 /* Lua bindings */
 LUA_FUNCTION_DEF (session, register_async_event);
@@ -302,7 +302,16 @@ lua_session_check_session_pending (lua_State *L)
 	return 1;
 }
 
-gint
+static gint
+lua_load_session (lua_State * L)
+{
+	lua_newtable (L);
+	luaL_register (L, NULL, sessionlib_f);
+
+	return 1;
+}
+
+void
 luaopen_session (lua_State * L)
 {
 	luaL_newmetatable (L, "rspamd{session}");
@@ -315,15 +324,12 @@ luaopen_session (lua_State * L)
 	lua_rawset (L, -3);
 
 	luaL_register (L, NULL,				sessionlib_m);
-	luaL_register (L, "rspamd_session", sessionlib_f);
+	rspamd_lua_add_preload (L, "rspamd_session", lua_load_session);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 
 	/* Simple event class */
 	rspamd_lua_new_class (L, "rspamd{event}", eventlib_m);
-	luaL_register (L, "rspamd_event", null_reg);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
-
-	return 1;
 }
