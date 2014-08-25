@@ -807,6 +807,40 @@ free_byte_array_callback (void *pointer)
 	g_byte_array_free (arr, TRUE);
 }
 
+static gboolean
+charset_validate (rspamd_mempool_t *pool, const gchar *in, gchar **out)
+{
+	/*
+	 * This is a simple routine to validate input charset
+	 * we just check that charset starts with alphanumeric and ends
+	 * with alphanumeric
+	 */
+	const gchar *begin, *end;
+	gboolean changed = FALSE;
+
+	begin = in;
+
+	while (!g_ascii_isalnum (*begin)) {
+		begin ++;
+		changed = TRUE;
+	}
+	end = begin + strlen (begin) - 1;
+	while (!g_ascii_isalnum (*end)) {
+		end --;
+		changed = TRUE;
+	}
+
+	if (!changed) {
+		*out = (gchar *)in;
+	}
+	else {
+		*out = rspamd_mempool_alloc (pool, end - begin + 2);
+		rspamd_strlcpy (*out, begin, end - begin + 2);
+	}
+
+	return TRUE;
+}
+
 static GByteArray *
 convert_text_to_utf (struct rspamd_task *task,
 	GByteArray * part_content,
@@ -816,7 +850,7 @@ convert_text_to_utf (struct rspamd_task *task,
 	GError *err = NULL;
 	gsize read_bytes, write_bytes;
 	const gchar *charset;
-	gchar *res_str;
+	gchar *res_str, *ocharset;
 	GByteArray *result_array;
 
 	if (task->cfg->raw_mode) {
@@ -829,9 +863,15 @@ convert_text_to_utf (struct rspamd_task *task,
 		text_part->is_raw = TRUE;
 		return part_content;
 	}
-
-	if (g_ascii_strcasecmp (charset,
-		"utf-8") == 0 || g_ascii_strcasecmp (charset, "utf8") == 0) {
+	if (!charset_validate (task->task_pool, charset, &ocharset)) {
+		msg_info (
+			"<%s>: has invalid charset",
+			task->message_id);
+		text_part->is_raw = TRUE;
+		return part_content;
+	}
+	if (g_ascii_strcasecmp (ocharset,
+		"utf-8") == 0 || g_ascii_strcasecmp (ocharset, "utf8") == 0) {
 		if (g_utf8_validate (part_content->data, part_content->len, NULL)) {
 			text_part->is_raw = FALSE;
 			text_part->is_utf = TRUE;
@@ -849,7 +889,7 @@ convert_text_to_utf (struct rspamd_task *task,
 	res_str = g_convert_with_fallback (part_content->data,
 			part_content->len,
 			UTF8_CHARSET,
-			charset,
+			ocharset,
 			NULL,
 			&read_bytes,
 			&write_bytes,
@@ -857,7 +897,7 @@ convert_text_to_utf (struct rspamd_task *task,
 	if (res_str == NULL) {
 		msg_warn ("<%s>: cannot convert from %s to utf8: %s",
 			task->message_id,
-			charset,
+			ocharset,
 			err ? err->message : "unknown problem");
 		text_part->is_raw = TRUE;
 		return part_content;
