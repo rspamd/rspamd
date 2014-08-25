@@ -28,6 +28,10 @@ local whitelisted_ip = nil
 local max_rcpt = 5
 local upstreams = nil
 
+local rspamd_logger = require "rspamd_logger"
+local rspamd_redis = require "rspamd_redis"
+local upstream_list = require "rspamd_upstream_list"
+
 --- Parse atime and bucket of limit
 local function parse_limit_data(str)
 	local pos,_ = string.find(str, ':')
