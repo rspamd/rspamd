@@ -1,5 +1,7 @@
 local rbls = {}
 
+local rspamd_logger = require "rspamd_logger"
+
 local function ip_to_rbl(ip, rbl)
 	return table.concat(ip:inversed_str_octets(), ".") .. '.' .. rbl
 end
