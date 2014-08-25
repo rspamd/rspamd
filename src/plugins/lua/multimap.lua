@@ -1,6 +1,8 @@
 -- Multimap is rspamd module designed to define and operate with different maps
 
 local rules = {}
+local rspamd_logger = require "rspamd_logger"
+local rspamd_cdb = require "rspamd_cdb"
 
 local function ip_to_rbl(ip, rbl)
 	return table.concat(ip:inversed_str_octets(), ".") .. '.' .. rbl
