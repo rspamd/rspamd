@@ -6,6 +6,9 @@ local set_section = rspamd_config:get_key("settings")
 local settings = {}
 local settings_initialized = false
 local max_pri = 0
+local rspamd_logger = require "rspamd_logger"
+local rspamd_ip = require "rspamd_ip"
+local rspamd_regexp = require "rspamd_regexp"
 
 -- Functional utilities
 local function filter(func, tbl)
@@ -209,7 +212,7 @@ local function process_settings_table(tbl)
         local start = string.sub(addr, 1, 1)
         if start == '/' then
           -- It is a regexp
-          local re = regexp.create(addr)
+          local re = rspamd_regexp.create(addr)
           if re then
             out['regexp'] = re
             setmetatable(out, {
