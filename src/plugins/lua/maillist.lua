@@ -1,7 +1,7 @@
 -- Module for checking mail list headers
 
 local symbol = 'MAILLIST'
-
+local rspamd_logger = require "rspamd_logger"
 -- EZMLM
 -- Mailing-List: .*run by ezmlm
 -- Precedence: bulk
@@ -9,7 +9,7 @@ local symbol = 'MAILLIST'
 -- List-Help: <mailto:
 -- List-Unsubscribe: <mailto:[a-zA-Z\.-]+-unsubscribe@
 -- List-Subscribe: <mailto:[a-zA-Z\.-]+-subscribe@
-function check_ml_ezmlm(task)
+local function check_ml_ezmlm(task)
 	local message = task:get_message()
 	-- Mailing-List
 	local header = message:get_header('mailing-list')
@@ -52,7 +52,7 @@ end
 -- List-Unsubscribe: .*<mailto:.*=unsubscribe>
 -- List-Archive: 
 -- X-Mailman-Version: \d
-function check_ml_mailman(task)
+local function check_ml_mailman(task)
 	local message = task:get_message()
 	-- Mailing-List
 	local header = message:get_header('x-mailman-version')
@@ -114,7 +114,7 @@ end
 -- List-Archive:  <http://subscribe.ru/archive/.*>
 -- List-Owner: <mailto:.*-owner@subscribe.ru>
 -- List-Post: NO
-function check_ml_subscriberu(task)
+local function check_ml_subscriberu(task)
 	local message = task:get_message()
 	-- List-Id
 	local header = message:get_header('list-id')
@@ -154,7 +154,7 @@ function check_ml_subscriberu(task)
 end
 
 -- RFC 2369 headers
-function check_rfc2369(task)
+local function check_rfc2369(task)
 	local message = task:get_message()
 	local header = message:get_header('List-Id')
 	if not header then
@@ -173,7 +173,7 @@ function check_rfc2369(task)
 end
 
 -- RFC 2919 headers
-function check_rfc2919(task)
+local function check_rfc2919(task)
 	local message = task:get_message()
 	local header = message:get_header('List-Id')
 	if not header or not string.find(header[1], '^<.+>$') then
@@ -187,7 +187,7 @@ end
 -- header exists X-Google-Loop
 -- RFC 2919 headers exist
 --
-function check_ml_googlegroup(task)
+local function check_ml_googlegroup(task)
 	local message = task:get_message()
 	local header = message:get_header('X-Google-Loop')
 	
@@ -203,7 +203,7 @@ end
 -- Check Precendence for 'Bulk' or 'List'
 --
 -- And nothing more can be extracted :(
-function check_ml_majordomo(task)
+local function check_ml_majordomo(task)
 	local message = task:get_message()
 	local header = message:get_header('Sender')
 	if not header or (not string.find(header[1], '^owner-.*$') and not string.find(header[1], '^.*-owner$')) then
@@ -222,7 +222,7 @@ end
 -- X-Listserver = CommuniGate Pro LIST
 -- RFC 2919 headers exist
 --
-function check_ml_cgp(task)
+local function check_ml_cgp(task)
 	local message = task:get_message()
 	local header = message:get_header('X-Listserver')
 	
@@ -233,7 +233,7 @@ function check_ml_cgp(task)
 	return check_rfc2919(task)
 end
 
-function check_maillist(task)
+local function check_maillist(task)
 	if check_ml_ezmlm(task) then
 		task:insert_result(symbol, 1, 'ezmlm')
 	elseif check_ml_mailman(task) then
@@ -258,6 +258,6 @@ end
 local opts =  rspamd_config:get_all_opt('maillist')if opts then
 	if opts['symbol'] then
 		symbol = opts['symbol'] 
-		rspamd_config:register_symbol(symbol, 1.0, 'check_maillist')
+		rspamd_config:register_symbol(symbol, 1.0, check_maillist)
 	end
 end
