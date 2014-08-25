@@ -5,6 +5,7 @@ local symbol = 'ONCE_RECEIVED'
 local symbol_strict = nil
 local bad_hosts = {}
 local good_hosts = {}
+local rspamd_logger = require "rspamd_logger"
 
 local function check_quantity_received (task)
 	local function recv_dns_cb(resolver, to_resolve, results, err)
