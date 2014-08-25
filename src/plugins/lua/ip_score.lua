@@ -12,6 +12,8 @@ local symbol = 'IP_SCORE'
 local normalize_score = 100 
 local whitelist = nil
 local expire = 240
+local rspamd_redis = require "rspamd_redis"
+local rspamd_logger = require "rspamd_logger"
 
 -- Set score based on metric's action
 local ip_score_set = function(task)
