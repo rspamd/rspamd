@@ -4,6 +4,7 @@
 local symbol = 'PHISHED_URL'
 local domains = nil
 local strict_domains = {}
+local rspamd_logger = require "rspamd_logger"
 
 function phishing_cb (task)
 	local urls = task:get_urls();
