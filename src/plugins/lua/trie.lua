@@ -1,6 +1,8 @@
 -- Trie is rspamd module designed to define and operate with suffix trie
 
 local tries = {}
+local rspamd_logger = require "rspamd_logger"
+local rspamd_trie = require "rspamd_trie"
 
 local function split(str, delim, maxNb)
 	-- Eliminate bad cases...
@@ -33,7 +35,7 @@ local function add_trie(params)
 	file = io.open(params[2])
 	if file then
 		local trie = {}
-		trie['trie'] = rspamd_trie:create(true)
+		trie['trie'] = rspamd_trie.create(true)
 		num = 0
 		for line in file:lines() do
 			trie['trie']:add_pattern(line, num)
@@ -49,7 +51,7 @@ local function add_trie(params)
 	else
 		local patterns = split(params[2], ',')
 		local trie = {}
-		trie['trie'] = rspamd_trie:create(true)
+		trie['trie'] = rspamd_trie.create(true)
 		for num,pattern in ipairs(patterns) do
 			trie['trie']:add_pattern(pattern, num)
 		end
