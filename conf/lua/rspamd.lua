@@ -79,7 +79,7 @@ local function file_exists(filename)
 end
 
 if file_exists('hfilter.lua') then
-    dofile('hfilter.lua')
+  dofile('hfilter.lua')
 end
 
 if file_exists('rspamd.local.lua') then

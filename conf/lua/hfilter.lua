@@ -6,6 +6,8 @@
 
 -- Weight for checks_hellohost and checks_hello: 5 - very hard, 4 - hard, 3 - meduim, 2 - low, 1 - very low.
 -- From HFILTER_HELO_* and HFILTER_HOSTNAME_* symbols the maximum weight is selected in case of their actuating.
+
+local rspamd_regexp = require "rspamd_regexp"
 local checks_hellohost = {
 ['[.-]dynamic[.-]'] = 5, ['dynamic[.-][0-9]'] = 5, ['[0-9][.-]?dynamic'] = 5, 
 ['[.-]dyn[.-]'] = 5, ['dyn[.-][0-9]'] = 5, ['[0-9][.-]?dyn'] = 5, 
@@ -53,8 +55,8 @@ local function trim1(s)
 end
 
 local function check_regexp(str, regexp_text)
-    local re = regexp.get_cached(regexp_text)
-    if not re then re = regexp.create(regexp_text, 'i') end
+    local re = rspamd_regexp.get_cached(regexp_text)
+    if not re then re = rspamd_regexp.create(regexp_text, 'i') end
     if re:match(str) then return true end
 return false
 end
