@@ -4,13 +4,14 @@
 -- symbol = sym, map = file:///path/to/file, domain_only = yes
 -- symbol = sym2, dnsbl = bl.somehost.com, domain_only = no
 local rules = {}
+local logger = require "rspamd_logger"
 
 -- Check rule for a single email
 local function check_email_rule(task, rule, addr)
 	local function emails_dns_cb(resolver, to_resolve, results, err)
 		task:inc_dns_req()
 		if results then
-			rspamd_logger.info(string.format('<%s> email: [%s] resolved for symbol: %s', 
+			logger.info(string.format('<%s> email: [%s] resolved for symbol: %s', 
 				task:get_message():get_message_id(), to_resolve, rule['symbol']))
 			task:insert_result(rule['symbol'], 1)
 		end
@@ -29,14 +30,14 @@ local function check_email_rule(task, rule, addr)
 			local key = addr:get_host()
 			if rule['map']:get_key(key) then
 				task:insert_result(rule['symbol'], 1)
-				rspamd_logger.info(string.format('<%s> email: \'%s\' is found in list: %s', 
+				logger.info(string.format('<%s> email: \'%s\' is found in list: %s', 
 					task:get_message():get_message_id(), key, rule['symbol']))
 			end
 		else
 			local key = string.format('%s@%s', addr:get_user(), addr:get_host())
 			if rule['map']:get_key(key) then
 				task:insert_result(rule['symbol'], 1)
-				rspamd_logger.info(string.format('<%s> email: \'%s\' is found in list: %s', 
+				logger.info(string.format('<%s> email: \'%s\' is found in list: %s', 
 					task:get_message():get_message_id(), key, rule['symbol']))
 			end
 		end
@@ -66,7 +67,7 @@ if type(rspamd_config.get_api_version) ~= 'nil' then
 	if rspamd_config:get_api_version() >= 2 then
 		rspamd_config:register_module_option('emails', 'rule', 'string')
 	else
-		rspamd_logger.err('Invalid rspamd version for this plugin')
+		logger.err('Invalid rspamd version for this plugin')
 	end
 end
 
@@ -83,7 +84,7 @@ if opts and type(opts) == 'table' then
 				rule['map'] = rspamd_config:add_hash_map (rule['name'])
 			end
 			if not rule['symbol'] or (not rule['map'] and not rule['dnsbl']) then
-				rspamd_logger.err('incomplete rule')
+				logger.err('incomplete rule')
 			else
 				table.insert(rules, rule)
 				rspamd_config:register_virtual_symbol(rule['symbol'], 1.0)
