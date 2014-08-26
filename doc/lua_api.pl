@@ -64,10 +64,10 @@ EOD
 			if ($f->{'params'} && scalar @{$f->{'params'}} > 0) {
 				foreach (@{$f->{'params'}}) {
 					if ($_->{'type'}) {
-						print "\t- `$_->{'name'} \{$_->{'type'}\}`: $_->{'description'}\n";
+						print "- `$_->{'name'} \{$_->{'type'}\}`: $_->{'description'}\n";
 					}
 					else {
-						print "\t- `$_->{'name'}`: $_->{'description'}\n";
+						print "- `$_->{'name'}`: $_->{'description'}\n";
 					}
 				}
 			}
@@ -78,10 +78,10 @@ EOD
 			if ($f->{'return'} && $f->{'return'}->{'description'}) {
 				$_ = $f->{'return'};
 				if ($_->{'type'}) {
-					print "\t- `\{$_->{'type'}\}`: $_->{'description'}\n";
+					print "- `\{$_->{'type'}\}`: $_->{'description'}\n";
 				}
 				else {
-					print "\t- $_->{'description'}\n";
+					print "- $_->{'description'}\n";
 				}
 			}
 			else {
