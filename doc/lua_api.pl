@@ -16,6 +16,25 @@ my %functions = ();
 my %modules = ();
 my $cur_module;
 
+sub sort_func {
+	my ($a, $b) = @_;
+
+	if ($a =~ /^rspamd_[a-z]+\..*$/) {
+		if ($b =~ /^rspamd_[a-z]+\..*$/) {
+			# All module names
+			return $a cmp $b;
+		}
+		else {
+			return -1;
+		}
+	}
+	elsif ($b =~ /^rspamd_[a-z]+\..*$/) {
+		return 1;
+	}
+	
+	return $a cmp $b;
+}
+
 sub print_markdown {
 	while (my ($mname, $m) = each %modules) {
 		print <<EOD;
@@ -33,30 +52,36 @@ $m->{'example'}
 ~~~
 EOD
 		}
-		print "##Methods\n\nThe module defines the following methods.\n\n";
-		while (my ($fname, $f) = each %{$m->{'functions'}}) {
+		print "\n##Methods\n\nThe module defines the following methods.\n\n";
+		foreach my $fname (sort {sort_func($a, $b)} keys %{$m->{'functions'}}) {
+			my $f = $m->{'functions'}{$fname};
 			print <<EOD;
 ##`$fname`
 
 $f->{'data'}
 EOD
-			print "\n*Parameters*\n";
-			foreach (@{$f->{'params'}}) {
-				if ($_->{'type'}) {
-					print "\t`$_->{'name'} \{$_->{'type'}\}` $_->{'description'}\n";
-				}
-				else {
-					print "\t`$_->{'name'}` $_->{'description'}\n";
+			print "\n**Parameters:**\n\n";
+			if ($f->{'params'} && scalar @{$f->{'params'}} > 0) {
+				foreach (@{$f->{'params'}}) {
+					if ($_->{'type'}) {
+						print "\t- `$_->{'name'} \{$_->{'type'}\}`: $_->{'description'}\n";
+					}
+					else {
+						print "\t- `$_->{'name'}`: $_->{'description'}\n";
+					}
 				}
 			}
-			print "\n*Returns*\n";
+			else {
+				print "\tnothing\n";
+			}
+			print "\n**Returns:**\n\n";
 			if ($f->{'return'} && $f->{'return'}->{'description'}) {
 				$_ = $f->{'return'};
 				if ($_->{'type'}) {
-					print "\t`\{$_->{'type'}\}` $_->{'description'}\n";
+					print "\t- `\{$_->{'type'}\}`: $_->{'description'}\n";
 				}
 				else {
-					print "\t$_->{'description'}\n";
+					print "\t- $_->{'description'}\n";
 				}
 			}
 			else {
@@ -66,16 +91,16 @@ EOD
 				print <<EOD;
 
 Example:
-m
+
 ~~~lua
 $f->{'example'}
 ~~~
 EOD
 			}
-			print "\nBack to [module description](#mod_$mname).\n";
+			print "\nBack to [module description](#mod_$mname).\n\n";
 			
 		}
-		print "\nBack to [top](#).\n";
+		print "\nBack to [top](#).\n\n";
 	}
 }
 
@@ -90,11 +115,11 @@ sub parse_function {
 	my $example = 0;
 
 	foreach(@data) {
-		if (/^\@param\s*(?:\{([a-zA-Z])\})?\s*(\S+)\s*(.+)?\s*$/) {
+		if (/^\@param\s*(?:\{([^}]+)\})?\s*(\S+)\s*(.+)?\s*$/) {
 			my $p = { name => $2, type => $1, description => $3};
 			push @{$f->{'params'}}, $p;
 		}
-		elsif (/^\@return\s*(?:\{([a-zA-Z])\})?\s*(.+)?\s*$/) {
+		elsif (/^\@return\s*(?:\{([^}]+)\})?\s*(.+)?\s*$/) {
 			my $r = { type => $1, description => $2 };
 			$f->{'return'} = $r;
 		}
@@ -190,4 +215,5 @@ while(<>) {
 }
 
 $cur_module->{'functions'} = dclone(\%functions);
+#print Dumper(\%modules);
 print_markdown;
