@@ -235,6 +235,8 @@ Maps hold dynamically loaded data like lists or ip trees. It is possible to use 
 Here is a sample of using maps from lua API:
 
 ~~~lua
+local rspamd_logger = require "rspamd_logger"
+
 -- Add two maps in configuration section
 local hash_map = rspamd_config:add_hash_map('file:///path/to/file', 'sample map')
 local radix_tree = rspamd_config:add_radix_map('http://somehost.com/test.dat', 'sample ip map')
