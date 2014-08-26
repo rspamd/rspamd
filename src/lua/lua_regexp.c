@@ -24,6 +24,26 @@
 #include "lua_common.h"
 #include "expressions.h"
 
+/***
+ * Rspamd regexp is an utility module that handles rspamd perl compatible
+ * regular expressions
+ * @module rspamd_regexp
+ * @example
+ * local rspamd_regexp = require "rspamd_regexp"
+ *
+ * local re = rspamd_regexp.create_cached('/^\\s*some_string\\s*^/i')
+ * re:match('some_string')
+ * -- Required since regexp are optimized to be stored in the cache
+ * re:destroy()
+ *
+ * -- Or it is possible to use metatable if re is an element of some table
+ * local tbl = {}
+ * tbl['key'] = rspamd_regexp.create_cached('.*')
+ * setmetatable(tbl, {
+ * 	__gc = function(t) t:destroy() end
+ * })
+ */
+
 LUA_FUNCTION_DEF (regexp, create);
 LUA_FUNCTION_DEF (regexp, create_cached);
 LUA_FUNCTION_DEF (regexp, get_cached);
@@ -64,6 +84,17 @@ lua_check_regexp (lua_State * L)
 	return ud ? *((struct rspamd_lua_regexp **)ud) : NULL;
 }
 
+/***
+ * @function rspamd_regexp.create(pattern[, flags])
+ * Creates new rspamd_regexp
+ * @param {string} pattern pattern to build regexp. If this pattern is enclosed in `//` then it is possible to specify flags after it
+ * @param {string} flags optional flags to create regular expression
+ * @return {regexp} regexp argument that is *not* automatically destroyed
+ * @example
+ * local regexp = require "rspamd_regexp"
+ *
+ * local re = regexp.create('/^test.*[0-9]\\s*$/i')
+ */
 static int
 lua_regexp_create (lua_State *L)
 {
@@ -149,6 +180,14 @@ lua_regexp_create (lua_State *L)
 	return 1;
 }
 
+/***
+ * @function rspamd_regexp.get_cached(pattern)
+ * This function gets cached and pre-compiled regexp created by either `create`
+ * or `create_cached` methods. If no cached regexp is found then `nil` is returned.
+ *
+ * @param {string} pattern regexp pattern
+ * @return {regexp} cached regexp structure or `nil`
+ */
 static int
 lua_regexp_get_cached (lua_State *L)
 {
@@ -169,6 +208,21 @@ lua_regexp_get_cached (lua_State *L)
 	return 1;
 }
 
+/***
+ * @function rspamd_regexp.create_cached(pattern[, flags])
+ * This function is similar to `create` but it tries to search for regexp in the
+ * cache first.
+ * @param {string} pattern pattern to build regexp. If this pattern is enclosed in `//` then it is possible to specify flags after it
+ * @param {string} flags optional flags to create regular expression
+ * @return {regexp} regexp argument that is *not* automatically destroyed
+ * @example
+ * local regexp = require "rspamd_regexp"
+ *
+ * local re = regexp.create_cached('/^test.*[0-9]\\s*$/i')
+ * ...
+ * -- This doesn't create new regexp object
+ * local other_re = regexp.create_cached('/^test.*[0-9]\\s*$/i')
+ */
 static int
 lua_regexp_create_cached (lua_State *L)
 {
@@ -189,6 +243,11 @@ lua_regexp_create_cached (lua_State *L)
 	return 1;
 }
 
+/***
+ * @function re:get_pattern()
+ * Get a pattern for specified regexp object
+ * @return {string} pattern line
+ */
 static int
 lua_regexp_get_pattern (lua_State *L)
 {
@@ -201,6 +260,21 @@ lua_regexp_get_pattern (lua_State *L)
 	return 1;
 }
 
+/***
+ * @function re:match(line)
+ * Match line against regular expression object. If line matches then this
+ * function returns the table of captured strings. Otherwise, nil is returned.
+ *
+ * @param {string} line match the specified line against regexp object
+ * @return {table or nil} table of strings matched or nil
+ * @example
+ * local re = regexp.create_cached('/^\s*([0-9]+)\s*$/')
+ * -- returns nil
+ * local m1 = re:match('blah')
+ * local m2 = re:match('   190   ')
+ * -- prints '190'
+ * print(m2[1])
+ */
 static int
 lua_regexp_match (lua_State *L)
 {
@@ -241,6 +315,17 @@ lua_regexp_match (lua_State *L)
 	return 1;
 }
 
+/***
+ * @function re:split(line)
+ * Split line using the specified regular expression.
+ * Breaks the string on the pattern, and returns an array of the tokens.
+ * If the pattern contains capturing parentheses, then the text for each
+ * of the substrings will also be returned. If the pattern does not match
+ * anywhere in the string, then the whole string is returned as the first
+ * token.
+ * @param {string} line line to split
+ * @return {table} table of split line portions
+ */
 static int
 lua_regexp_split (lua_State *L)
 {
@@ -274,12 +359,11 @@ lua_regexp_split (lua_State *L)
 	return 1;
 }
 
-/*
- * We are not using __gc metamethod as it is usually good idea to have
- * compiled regexps to be stored permamently, so this method can be used
+/***
+ * @function re:destroy()
+ * We are not using `__gc` meta-method as it is usually good idea to have
+ * compiled regexps to be stored permanently, so this method can be used
  * for avoiding memory leaks for temporary regexps
- *
- *
  */
 static gint
 lua_regexp_destroy (lua_State *L)
