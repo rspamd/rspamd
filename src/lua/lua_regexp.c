@@ -25,6 +25,7 @@
 #include "expressions.h"
 
 LUA_FUNCTION_DEF (regexp, create);
+LUA_FUNCTION_DEF (regexp, create_cached);
 LUA_FUNCTION_DEF (regexp, get_cached);
 LUA_FUNCTION_DEF (regexp, get_pattern);
 LUA_FUNCTION_DEF (regexp, match);
@@ -42,6 +43,7 @@ static const struct luaL_reg regexplib_m[] = {
 static const struct luaL_reg regexplib_f[] = {
 	LUA_INTERFACE_DEF (regexp, create),
 	LUA_INTERFACE_DEF (regexp, get_cached),
+	LUA_INTERFACE_DEF (regexp, create_cached),
 	{NULL, NULL}
 };
 
@@ -162,6 +164,26 @@ lua_regexp_get_cached (lua_State *L)
 	}
 	else {
 		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static int
+lua_regexp_create_cached (lua_State *L)
+{
+	const gchar *line;
+	struct rspamd_lua_regexp *new, **pnew;
+
+	line = luaL_checkstring (L, 1);
+	new = re_cache_check (line, regexp_static_pool);
+	if (new) {
+		pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
+		rspamd_lua_setclass (L, "rspamd{regexp}", -1);
+		*pnew = new;
+	}
+	else {
+		return lua_regexp_create (L);
 	}
 
 	return 1;
