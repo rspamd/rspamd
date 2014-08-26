@@ -55,8 +55,7 @@ local function trim1(s)
 end
 
 local function check_regexp(str, regexp_text)
-    local re = rspamd_regexp.get_cached(regexp_text)
-    if not re then re = rspamd_regexp.create(regexp_text, 'i') end
+    local re = rspamd_regexp.create_cached(regexp_text, 'i')
     if re:match(str) then return true end
 return false
 end

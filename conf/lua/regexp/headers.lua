@@ -229,8 +229,7 @@ local kmail_msgid_common = 'Message-Id=/^\\s*\\d+\\.\\d+\\.\\S+\\@\\S+$/mH'
 function kmail_msgid (task)
 	local msg = task:get_message()
 	local regexp_text = '<(\\S+)>\\|(19[789]\\d|20\\d\\d)(0\\d|1[012])([012]\\d|3[01])([0-5]\\d)([0-5]\\d)\\.\\d+\\.\\1$'
-	local re = rspamd_regexp.get_cached(regexp_text)
-	if not re then re = rspamd_regexp.create(regexp_text, '') end
+	local re = rspamd_regexp.create_cached(regexp_text)
 	local header_msgid = msg:get_header('Message-Id')
 	if header_msgid then
 		for _,header_from in ipairs(msg:get_header('From')) do
@@ -435,8 +434,7 @@ reconf['FORGED_GENERIC_RECEIVED4'] =	'Received=/^\\s*(.+\\n)*from localhost by \
 
 rspamd_config.FORGED_GENERIC_RECEIVED5 = function (task)
 	local regexp_text = '^\\s*from \\[(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\\].*\\n(.+\\n)*\\s*from \\1 by \\S+;\\s+\\w{3}, \\d+ \\w{3} 20\\d\\d \\d\\d\\:\\d\\d\\:\\d\\d [+-]\\d\\d\\d0$'
-	local re = rspamd_regexp.get_cached(regexp_text)
-	if not re then re = rspamd_regexp.create(regexp_text, 'i') end
+	local re = rspamd_regexp.create_cached(regexp_text, 'i')
 	local headers_recv = task:get_raw_header('Received')
 	if headers_recv then
 		for _,header_r in ipairs(headers_recv) do
@@ -456,8 +454,7 @@ rspamd_config.INVALID_EXIM_RECEIVED = function (task)
 	if headers_to then
 		local headers_recv = task:get_raw_header('Received')
 		local regexp_text = '^[^\\n]*?<?\\S+?\\@(\\S+)>?\\|.*from \\d+\\.\\d+\\.\\d+\\.\\d+ \\(HELO \\S+\\)[\\s\\r\\n]*by \\1 with esmtp \\(\\S*?[\\?\\@\\(\\)\\s\\.\\+\\*\'\'\\/\\\\,]\\S*\\)[\\s\\r\\n]+id \\S*?[\\)\\(<>\\/\\\\,\\-:=]'
-		local re = rspamd_regexp.get_cached(regexp_text)
-		if not re then re = rspamd_regexp.create(regexp_text, 's') end
+		local re = rspamd_regexp.create_cached(regexp_text, 's')
 		if headers_recv then
 			for _,header_to in ipairs(headers_to) do
 				for _,header_r in ipairs(headers_recv) do
@@ -482,8 +479,7 @@ rspamd_config.INVALID_EXIM_RECEIVED2 = function (task)
 	if headers_to then
 		local headers_recv = task:get_raw_header('Received')
 		local regexp_text = '^[^\\n]*?<?\\S+?\\@(\\S+)>?\\|.*from \\d+\\.\\d+\\.\\d+\\.\\d+ \\(HELO \\S+\\)[\\s\\r\\n]*by \\1 with esmtp \\([A-Z]{9,12} [A-Z]{5,6}\\)[\\s\\r\\n]+id [a-zA-Z\\d]{6}-[a-zA-Z\\d]{6}-[a-zA-Z\\d]{2}[\\s\\r\\n]+'
-		local re = rspamd_regexp.get_cached(regexp_text)
-		if not re then re = rspamd_regexp.create(regexp_text, 's') end
+		local re = rspamd_regexp.create_cached(regexp_text, 's')
 		if headers_recv then
 			for _,header_to in ipairs(headers_to) do
 				for _,header_r in ipairs(headers_recv) do
