@@ -19,7 +19,7 @@ sub print_module_markdown {
 	my ( $mname, $m ) = @_;
 
 	print <<EOD;
-# Module `$mname`  {#$m->{'id'}}
+## Module `$mname`  {#$m->{'id'}}
 
 $m->{'data'}
 EOD
@@ -41,22 +41,22 @@ EOD
 		print ": [`$name`](#$id)\n";
 	}
 	
-	print "\nBrief content:\n\n";
-	print "Functions:\n";
+	print "\n###Brief content:\n\n";
+	print "**Functions**:\n";
 	foreach (@{$m->{'functions'}}) {
 		print_func($_);
 	}
-	print "\n\nMethods:\n";
+	print "\n\n**Methods**:\n";
 	foreach (@{$m->{'methods'}}) {
 		print_func($_);
 	}
 }
 
 sub print_function_markdown {
-	my ( $fname, $f ) = @_;
+	my ( $type, $fname, $f ) = @_;
 
 	print <<EOD;
-## `$fname`  {#$f->{'id'}}
+### $type `$fname`  {#$f->{'id'}}
 
 $f->{'data'}
 EOD
@@ -104,15 +104,15 @@ sub print_markdown {
 	while ( my ( $mname, $m ) = each %modules ) {
 		print_module_markdown( $mname, $m );
 
-		print "\n## Functions\n\nThe module defines the following functions.\n\n";
+		print "\n## Functions\n\nThe module `$mname` defines the following functions.\n\n";
 		foreach ( @{ $m->{'functions'} } ) {
-			print_function_markdown( $_->{'name'}, $_ );
+			print_function_markdown( "Function", $_->{'name'}, $_ );
 			print "\nBack to [module description](#$m->{'id'}).\n\n";
 
 		}
-		print "\n## Methods\n\nThe module defines the following methods.\n\n";
+		print "\n## Methods\n\nThe module `$mname` defines the following methods.\n\n";
 		foreach ( @{ $m->{'methods'} } ) {
-			print_function_markdown( $_->{'name'}, $_ );
+			print_function_markdown( "Method", $_->{'name'}, $_ );
 			print "\nBack to [module description](#$m->{'id'}).\n\n";
 
 		}
