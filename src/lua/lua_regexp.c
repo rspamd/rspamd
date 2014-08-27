@@ -244,7 +244,7 @@ lua_regexp_create_cached (lua_State *L)
 }
 
 /***
- * @function re:get_pattern()
+ * @method re:get_pattern()
  * Get a pattern for specified regexp object
  * @return {string} pattern line
  */
@@ -261,7 +261,7 @@ lua_regexp_get_pattern (lua_State *L)
 }
 
 /***
- * @function re:match(line)
+ * @method re:match(line)
  * Match line against regular expression object. If line matches then this
  * function returns the table of captured strings. Otherwise, nil is returned.
  *
@@ -316,7 +316,7 @@ lua_regexp_match (lua_State *L)
 }
 
 /***
- * @function re:split(line)
+ * @method re:split(line)
  * Split line using the specified regular expression.
  * Breaks the string on the pattern, and returns an array of the tokens.
  * If the pattern contains capturing parentheses, then the text for each
@@ -360,7 +360,7 @@ lua_regexp_split (lua_State *L)
 }
 
 /***
- * @function re:destroy()
+ * @method re:destroy()
  * We are not using `__gc` meta-method as it is usually good idea to have
  * compiled regexps to be stored permanently, so this method can be used
  * for avoiding memory leaks for temporary regexps
