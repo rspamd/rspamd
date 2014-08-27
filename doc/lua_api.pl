@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 use Data::Dumper;
-use Storable qw/dclone/;
+use Digest::MD5 qw(md5_hex);
 
 use constant {
 	STATE_READ_SKIP    => 0,
@@ -19,7 +19,7 @@ sub print_module_markdown {
 	my ( $mname, $m ) = @_;
 
 	print <<EOD;
-#Module `$mname` {#mod_$mname}
+# Module `$mname`  {#$m->{'id'}}
 
 $m->{'data'}
 EOD
@@ -33,13 +33,30 @@ $m->{'example'}
 ~~~
 EOD
 	}
+	sub print_func {
+		my ($f) = @_;
+		
+		my $name = $f->{'name'};
+		my $id = $f->{'id'};
+		print ": [`$name`](#$id)\n";
+	}
+	
+	print "\nBrief content:\n\n";
+	print "Functions:\n";
+	foreach (@{$m->{'functions'}}) {
+		print_func($_);
+	}
+	print "\n\nMethods:\n";
+	foreach (@{$m->{'methods'}}) {
+		print_func($_);
+	}
 }
 
 sub print_function_markdown {
 	my ( $fname, $f ) = @_;
 
 	print <<EOD;
-##`$fname`
+## `$fname`  {#$f->{'id'}}
 
 $f->{'data'}
 EOD
@@ -87,16 +104,16 @@ sub print_markdown {
 	while ( my ( $mname, $m ) = each %modules ) {
 		print_module_markdown( $mname, $m );
 
-		print "\n##Functions\n\nThe module defines the following functions.\n\n";
+		print "\n## Functions\n\nThe module defines the following functions.\n\n";
 		foreach ( @{ $m->{'functions'} } ) {
 			print_function_markdown( $_->{'name'}, $_ );
-			print "\nBack to [module description](#mod_$mname).\n\n";
+			print "\nBack to [module description](#$m->{'id'}).\n\n";
 
 		}
-		print "\n##Methods\n\nThe module defines the following methods.\n\n";
+		print "\n## Methods\n\nThe module defines the following methods.\n\n";
 		foreach ( @{ $m->{'methods'} } ) {
 			print_function_markdown( $_->{'name'}, $_ );
-			print "\nBack to [module description](#mod_$mname).\n\n";
+			print "\nBack to [module description](#$m->{'id'}).\n\n";
 
 		}
 		print "\nBack to [top](#).\n\n";
@@ -112,9 +129,10 @@ sub parse_function {
 		name    => $name,
 		data    => '',
 		example => undef,
+		id => substr('f' . md5_hex($name), 0, 5),
 	};
 	my $example = 0;
-
+	
 	foreach (@data) {
 		if (/^\@param\s*(?:\{([^}]+)\})?\s*(\S+)\s*(.+)?\s*$/) {
 			my $p = { name => $2, type => $1, description => $3 };
@@ -161,6 +179,7 @@ sub parse_module {
 		methods   => [],
 		data      => '',
 		example   => undef,
+		id => substr('m' . md5_hex($name), 0, 5),
 	};
 	my $f       = $modules{$name};
 	my $example = 0;
