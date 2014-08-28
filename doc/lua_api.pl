@@ -233,7 +233,7 @@ while (<>) {
 			$content = "";
 		}
 		else {
-			my ($line) = ( $_ =~ /^\s*(?:\*\s?)(.+)\s*$/ );
+			my ($line) = ( $_ =~ /^(?:\s*\*\s)?(.+)\s*$/ );
 			if ($line) {
 				$content .= $line . "\n";
 			}
