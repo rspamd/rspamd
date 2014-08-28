@@ -39,15 +39,15 @@ EOD
 
 		my $name = $f->{'name'};
 		my $id   = $f->{'id'};
-		print ": [`$name`](#$id)\n";
+		print "> [`$name`](#$id)\n\n";
 	}
 
 	print "\n###Brief content:\n\n";
-	print "**Functions**:\n";
+	print "**Functions**:\n\n";
 	foreach ( @{ $m->{'functions'} } ) {
 		print_func($_);
 	}
-	print "\n\n**Methods**:\n";
+	print "\n\n**Methods**:\n\n";
 	foreach ( @{ $m->{'methods'} } ) {
 		print_func($_);
 	}
