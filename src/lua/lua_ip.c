@@ -23,18 +23,144 @@
 
 #include "lua_common.h"
 
+/***
+ * `rspamd_ip` is a helper module to simplify IP addresses manipulations.
+ * @module rspamd_ip
+ * @example
+local print_octets = function(ip)
+        print('Normal order octets:')
+        for _,o in ipairs(ip:str_octets()) do
+                print(o)
+        end
+        print('Reversed order octets:')
+        for _,o in ipairs(ip:inversed_str_octets()) do
+                print(o)
+        end
+        print('Numeric octets:')
+        for _,o in ipairs(ip:to_table()) do
+                print(o)
+        end
+end
+
+local rspamd_ip = require "rspamd_ip"
+-- Create ipv4
+local ip4 = rspamd_ip.from_string('127.0.0.1')
+-- Implicit conversion to string
+print(ip4)
+-- Numeric version
+print(ip4:get_version())
+print_octets(ip4)
+
+-- Create a sample ipv6 address
+local ip6 = rspamd_ip.from_string('2001:41d0:8:dd9a::100')
+print(ip6)
+print(ip6:get_version())
+print_octets(ip6)
+ */
+
+/***
+ * @method ip:to_string()
+ * Converts valid IP address to string
+ * @return {string or nil} string representation of IP or `nil` if IP is invalid
+ */
 LUA_FUNCTION_DEF (ip, to_string);
+/***
+ * @method ip:to_number()
+ * Converts valid IP address to number or list of numbers in case of IPv6
+ * @return {integer(s) or nil} numeric representation of IP in *host* byte order or `nil` if IP is invalid
+ */
 LUA_FUNCTION_DEF (ip, to_number);
+/***
+ * @function rspamd_ip.from_number(num[, num, num, num])
+ * @param {integer} num one or four numbers that represents IPv4 and IPv6 accordingly (in *host* byte order)
+ * @return {ip} new ip object
+ */
 LUA_FUNCTION_DEF (ip, from_number);
+/***
+ * @method ip:to_table()
+ * Converts valid IP address to the table of numeric octets
+ * @return {table or nil} numeric octets of IP address or `nil` if IP is invalid
+ * @example
+local ip = rspamd_ip.from_string('127.0.0.1')
+for _,o in ipairs(ip:to_table()) do
+    print(o)
+end
+-- Output:
+-- 127
+-- 0
+-- 0
+-- 1
+ */
 LUA_FUNCTION_DEF (ip, to_table);
+/***
+ * @method ip:str_octets()
+ * Converts valid IP address to the table of string octets. The difference from
+ * @see ip:to_table() is that this method returns just hex strings for ipv6
+ * addresses.
+ * @return {table or nil} string octets of IP address or `nil` if IP is invalid
+ */
 LUA_FUNCTION_DEF (ip, str_octets);
+/***
+ * @method ip:str_octets()
+ * Converts valid IP address to the table of string octets in reversed order. The difference from
+ * @see ip:to_table() is that this method returns just hex strings for ipv6
+ * addresses.
+ * @return {table or nil} string octets of IP address or `nil` if IP is invalid
+ * @example
+local ip = rspamd_ip.from_string('127.0.0.1')
+for _,o in ipairs(ip:to_table()) do
+    print(o)
+end
+-- Output:
+-- 1
+-- 0
+-- 0
+-- 127
+ */
 LUA_FUNCTION_DEF (ip, inversed_str_octets);
+/***
+ * @function rspamd_ip.from_string(line)
+ * Create IP address from its string representation.
+ * @param {string} line valid IP address string (either ipv4 or ipv6)
+ * @return {ip} new ip object or `nil` if input is invalid
+ */
 LUA_FUNCTION_DEF (ip, from_string);
+/***
+ * @method ip:__gc()
+ * Automatically destroys IP object.
+ */
 LUA_FUNCTION_DEF (ip, destroy);
+/***
+ * @method ip:get_version()
+ * Gets numeric version of ip address
+ * @return {number} `4` for IPv4 and `6` for IPv6
+ */
 LUA_FUNCTION_DEF (ip, get_version);
+/***
+ * @method ip:is_valid()
+ * Checks if an IP object is a valid IP address.
+ * @return {boolean} `true` if IP is valid and `false` otherwise
+ */
 LUA_FUNCTION_DEF (ip, is_valid);
+/***
+ * @method ip:apply_mask(mask)
+ * Applies mask to IP address, reseting up to `mask` least significant bits to zero.
+ * @param {integer} mask how many bits to reset
+ * @return {ip} new IP object with `mask` bits reset
+ */
 LUA_FUNCTION_DEF (ip, apply_mask);
+/***
+ * @method ip:__eq(other)
+ * Compares two IP addresses
+ * @param {ip} other IP to compare
+ * @return {boolean} `true` if two objects are the same
+ */
 LUA_FUNCTION_DEF (ip, equal);
+/***
+ * @method ip:copy()
+ * Performs deep copy of IP address.
+ * @return {ip} a fresh copy of IP address
+ */
 LUA_FUNCTION_DEF (ip, copy);
 
 static const struct luaL_reg iplib_m[] = {
