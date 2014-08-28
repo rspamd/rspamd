@@ -33,21 +33,22 @@ $m->{'example'}
 ~~~
 EOD
 	}
+
 	sub print_func {
 		my ($f) = @_;
-		
+
 		my $name = $f->{'name'};
-		my $id = $f->{'id'};
+		my $id   = $f->{'id'};
 		print ": [`$name`](#$id)\n";
 	}
-	
+
 	print "\n###Brief content:\n\n";
 	print "**Functions**:\n";
-	foreach (@{$m->{'functions'}}) {
+	foreach ( @{ $m->{'functions'} } ) {
 		print_func($_);
 	}
 	print "\n\n**Methods**:\n";
-	foreach (@{$m->{'methods'}}) {
+	foreach ( @{ $m->{'methods'} } ) {
 		print_func($_);
 	}
 }
@@ -104,13 +105,15 @@ sub print_markdown {
 	while ( my ( $mname, $m ) = each %modules ) {
 		print_module_markdown( $mname, $m );
 
-		print "\n## Functions\n\nThe module `$mname` defines the following functions.\n\n";
+		print
+"\n## Functions\n\nThe module `$mname` defines the following functions.\n\n";
 		foreach ( @{ $m->{'functions'} } ) {
 			print_function_markdown( "Function", $_->{'name'}, $_ );
 			print "\nBack to [module description](#$m->{'id'}).\n\n";
 
 		}
-		print "\n## Methods\n\nThe module `$mname` defines the following methods.\n\n";
+		print
+"\n## Methods\n\nThe module `$mname` defines the following methods.\n\n";
 		foreach ( @{ $m->{'methods'} } ) {
 			print_function_markdown( "Method", $_->{'name'}, $_ );
 			print "\nBack to [module description](#$m->{'id'}).\n\n";
@@ -118,6 +121,28 @@ sub print_markdown {
 		}
 		print "\nBack to [top](#).\n\n";
 	}
+}
+
+sub make_id {
+	my ( $name, $prefix ) = @_;
+
+	if ( !$prefix ) {
+		$prefix = "f";
+	}
+	$name =~ /^(\S+).*$/;
+	return substr( $prefix . md5_hex($1), 0, 6 );
+}
+
+sub substitute_data_keywords {
+	my ($line) = @_;
+
+	if ( $line =~ /^.*\@see\s+(\S+)\s*.*$/ ) {
+		my $name = $1;
+		my $id   = make_id($name);
+		return $line =~ s/\@see\s+\S+/[`$name`](#$id)/r;
+	}
+
+	return $line;
 }
 
 sub parse_function {
@@ -129,10 +154,10 @@ sub parse_function {
 		name    => $name,
 		data    => '',
 		example => undef,
-		id => substr('f' . md5_hex($name), 0, 5),
+		id      => make_id($name),
 	};
 	my $example = 0;
-	
+
 	foreach (@data) {
 		if (/^\@param\s*(?:\{([^}]+)\})?\s*(\S+)\s*(.+)?\s*$/) {
 			my $p = { name => $2, type => $1, description => $3 };
@@ -150,7 +175,7 @@ sub parse_function {
 				$f->{'example'} .= $_;
 			}
 			else {
-				$f->{'data'} .= $_;
+				$f->{'data'} .= substitute_data_keywords($_);
 			}
 		}
 	}
@@ -179,7 +204,7 @@ sub parse_module {
 		methods   => [],
 		data      => '',
 		example   => undef,
-		id => substr('m' . md5_hex($name), 0, 5),
+		id        => make_id( $name, 'm' ),
 	};
 	my $f       = $modules{$name};
 	my $example = 0;
@@ -193,7 +218,7 @@ sub parse_module {
 				$f->{'example'} .= $_;
 			}
 			else {
-				$f->{'data'} .= $_;
+				$f->{'data'} .= substitute_data_keywords($_);
 			}
 		}
 	}
