@@ -244,6 +244,34 @@ MACRO(ProcessPackage var _name0)
     ENDIF(${var}_FOUND)
 ENDMACRO(ProcessPackage name)
 
+MACRO(ADD_PRECOMPILED_HEADER _target _input)
+	GET_FILENAME_COMPONENT(_name ${_input} NAME)
+	SET(_outdir "${CMAKE_BINARY_DIR}/${_name}.pch")
+	MAKE_DIRECTORY(${_outdir})
+	SET(_output "${_outdir}/${_name}.pch")
+	STRING(TOUPPER "CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE}" _flags_var_name)
+	SET(_compiler_FLAGS ${${_flags_var_name}})
+	GET_DIRECTORY_PROPERTY(_directory_flags INCLUDE_DIRECTORIES)
+	FOREACH(item ${_directory_flags})
+		LIST(APPEND _compiler_FLAGS "-I${item}")
+	ENDFOREACH(item)
+
+	INCLUDE_DIRECTORIES(${_outdir})
+	IF("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
+		IF(NOT TARGET ${_name}_pch)
+			MESSAGE("${CMAKE_C_COMPILER} -DPCHCOMPILE ${CMAKE_C_FLAGS} -x c-header -o ${_output} ${_input}")
+			ADD_CUSTOM_COMMAND(OUTPUT ${_output}
+				COMMAND ${CMAKE_C_COMPILER} -DPCHCOMPILE ${_compiler_FLAGS} -x c-header -o ${_output} ${_input}
+				DEPENDS ${_input})
+			ADD_CUSTOM_TARGET(${_name}_pch DEPENDS ${_output})
+		ENDIF()
+
+		ADD_CUSTOM_TARGET(${_target}_pch DEPENDS ${_name}_pch)
+		ADD_DEPENDENCIES(${_target} ${_target}_pch)
+		SET_TARGET_PROPERTIES(${_target} PROPERTIES COMPILE_FLAGS "-include ${_name} -Winvalid-pch")
+	ENDIF()
+ENDMACRO()
+
 ############################# CONFIG SECTION #############################################
 # Initial set
 
