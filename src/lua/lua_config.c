@@ -31,26 +31,247 @@
 #include "trie.h"
 #include "classifiers/classifiers.h"
 
+/***
+ * This module is used to configure rspamd and is normally available as global
+ * variable named `rspamd_config`. Unlike other modules, it is not necessary to
+ * require it before usage.
+ * @module rspamd_config
+ * @example
+-- Register some callback symbol
+local function foo(task)
+    -- do something
+end
+rspamd_config:register_symbol('SYMBOL', 1.0, foo)
+
+-- Get configuration
+local tab = rspamd_config:get_all_opt('module') -- get table for module's options
+local opts = rspamd_config:get_key('options') -- get content of the specified key in rspamd configuration
+ */
+
 /* Config file methods */
+/***
+ * @method rspamd_config:get_module_opt(mname, optname)
+ * Returns value of specified option `optname` for a module `mname`,
+ * @param {string} mname name of module
+ * @param {string} optname option to get
+ * @return {string or table} value of the option or `nil` if option is not found
+ */
 LUA_FUNCTION_DEF (config, get_module_opt);
+/***
+ * @method rspamd_config:get_all_opt(mname)
+ * Returns value of all options for a module `mname`,
+ * @param {string} mname name of module
+ * @return {table} table of all options for `mname` or `nil` if a module's configuration is not found
+ */
 LUA_FUNCTION_DEF (config, get_all_opt);
+/***
+ * @method rspamd_config:get_mempool()
+ * Returns static configuration memory pool.
+ * @return {mempool} [memory pool](mempool.md) object
+ */
 LUA_FUNCTION_DEF (config, get_mempool);
+/***
+ * @method rspamd_config:register_function(name, callback)
+ * Registers new rspamd function that could be used in symbols expressions
+ * @param {string} name name of function
+ * @param {function} callback callback to be called
+ * @example
+
+local function lua_header_exists(task, hname)
+	if task:get_raw_header(hname) then
+		return true
+	end
+
+	return false
+end
+
+rspamd_config:register_function('lua_header_exists', lua_header_exists)
+
+-- Further in configuration it would be possible to define symbols like:
+-- HAS_CONTENT_TYPE = 'lua_header_exists(Content-Type)'
+ */
 LUA_FUNCTION_DEF (config, register_function);
+/***
+ * @method rspamd_config:add_radix_map(mapline[, description])
+ * Creates new dynamic map of IP/mask addresses.
+ * @param {string} mapline URL for a map
+ * @param {string} description optional map description
+ * @return {radix} radix tree object
+ * @example
+local ip_map = rspamd_config:add_radix_map ('file:///path/to/file', 'my radix map')
+...
+local function foo(task)
+	local ip = task:get_from_ip()
+	if ip_map:get_key(ip) then
+		return true
+	end
+	return false
+end
+ */
 LUA_FUNCTION_DEF (config, add_radix_map);
+/***
+ * @method rspamd_config:add_hash_map(mapline[, description])
+ * Creates new dynamic map string objects.
+ * @param {string} mapline URL for a map
+ * @param {string} description optional map description
+ * @return {hash} hash set object
+ * @example
+local hash_map = rspamd_config:add_hash_map ('file:///path/to/file', 'my hash map')
+...
+local function foo(task)
+	local from = task:get_from()
+	if hash_map:get_key(from['user']) then
+		return true
+	end
+	return false
+end
+ */
 LUA_FUNCTION_DEF (config, add_hash_map);
+/***
+ * @method rspamd_config:add_kv_map(mapline[, description])
+ * Creates new dynamic map of key/values associations.
+ * @param {string} mapline URL for a map
+ * @param {string} description optional map description
+ * @return {hash} hash table object
+ * @example
+local kv_map = rspamd_config:add_kv_map ('file:///path/to/file', 'my kv map')
+...
+local function foo(task)
+	local from = task:get_from()
+	if from then
+		local value = kv_map:get_key(from['user'])
+		if value then
+			return true,value
+		end
+	end
+	return false
+end
+ */
 LUA_FUNCTION_DEF (config, add_kv_map);
+/***
+ * @method rspamd_config:add_map(mapline[, description], callback)
+ * Creates new dynamic map with free-form callback
+ * @param {string} mapline URL for a map
+ * @param {string} description optional map description
+ * @param {function} callback function to be called on map load and/or update
+ * @return {bool} `true` if map has been added
+ * @example
+
+local str = ''
+local function process_map(in)
+	str = in
+end
+
+rspamd_config:add_map('http://example.com/map', "settings map", process_map)
+ */
 LUA_FUNCTION_DEF (config, add_map);
+/***
+ * @method rspamd_config:get_classifier(name)
+ * Returns classifier config.
+ * @param {string} name name of classifier (e.g. `bayes`)
+ * @return {classifier} classifier object or `nil`
+ */
 LUA_FUNCTION_DEF (config, get_classifier);
+/***
+ * @method rspamd_config:register_symbol(name, weight, callback)
+ * Register callback function to be called for a specified symbol with initial weight.
+ * @param {string} name symbol's name
+ * @param {number} weight initial weight of symbol (can be less than zero to specify non-spam symbols)
+ * @param {function} callback callback function to be called for a specified symbol
+ */
 LUA_FUNCTION_DEF (config, register_symbol);
+/***
+ * @method rspamd_config:register_symbols(weight, callback, symbol[, symbol, ...])
+ * Register callback function to be called for a set of symbols with initial weight.
+ * @param {number} weight initial weight of symbol (can be less than zero to specify non-spam symbols)
+ * @param {function} callback callback function to be called for a specified symbol
+ * @param {list of strings} symbol list of symbols registered by this function
+ */
 LUA_FUNCTION_DEF (config, register_symbols);
+/***
+ * @method rspamd_config:register_virtual_symbol(name, weight,)
+ * Register virtual symbol that is not associated with any callback.
+ * @param {string} virtual name symbol's name
+ * @param {number} weight initial weight of symbol (can be less than zero to specify non-spam symbols)
+ */
 LUA_FUNCTION_DEF (config, register_virtual_symbol);
+/***
+ * @method rspamd_config:register_callback_symbol(name, weight, callback)
+ * Register callback function to be called for a specified symbol with initial weight. Symbol itself is
+ * not registered in the metric and is not intended to be visible by a user.
+ * @param {string} name symbol's name (just for unique id purposes)
+ * @param {number} weight initial weight of symbol (can be less than zero to specify non-spam symbols)
+ * @param {function} callback callback function to be called for a specified symbol
+ */
 LUA_FUNCTION_DEF (config, register_callback_symbol);
 LUA_FUNCTION_DEF (config, register_callback_symbol_priority);
+/***
+ * @method rspamd_config:register_pre_filter(callback)
+ * Register function to be called prior to symbols processing.
+ * @param {function} callback callback function
+ * @example
+local function check_function(task)
+	-- It is possible to manipulate the task object here: set settings, set pre-action and so on
+	...
+end
+
+rspamd_config:register_pre_filter(check_function)
+ */
 LUA_FUNCTION_DEF (config, register_pre_filter);
+/***
+ * @method rspamd_config:register_pre_filter(callback)
+ * Register function to be called after symbols are processed.
+ * @param {function} callback callback function
+ */
 LUA_FUNCTION_DEF (config, register_post_filter);
+/* XXX: obsoleted */
 LUA_FUNCTION_DEF (config, register_module_option);
+/* XXX: not needed now */
 LUA_FUNCTION_DEF (config, get_api_version);
+/***
+ * @method rspamd_config:get_key(name)
+ * Returns configuration section with the specified `name`.
+ * @param {string} name name of config section
+ * @return {variant} specific value of section
+ * @example
+
+local set_section = rspamd_config:get_key("settings")
+if type(set_section) == "string" then
+  -- Just a map of ucl
+  if rspamd_config:add_map(set_section, "settings map", process_settings_map) then
+    rspamd_config:register_pre_filter(check_settings)
+  end
+elseif type(set_section) == "table" then
+  if process_settings_table(set_section) then
+    rspamd_config:register_pre_filter(check_settings)
+  end
+end
+ */
 LUA_FUNCTION_DEF (config, get_key);
+/***
+ * @method rspamd_config:__newindex(name, callback)
+ * This metamethod is called if new indicies are added to the `rspamd_config` object.
+ * Technically, it is the equialent of @see rspamd_config:register_symbol where `weight` is 1.0.
+ * @param {string} name index name
+ * @param {function} callback callback to be called
+ * @example
+rspamd_config.R_EMPTY_IMAGE = function (task)
+	parts = task:get_text_parts()
+	if parts then
+		for _,part in ipairs(parts) do
+			if part:is_empty() then
+				images = task:get_images()
+				if images then
+					-- Symbol `R_EMPTY_IMAGE` is inserted
+					return true
+				end
+				return false
+			end
+		end
+	end
+	return false
+end
+ */
 LUA_FUNCTION_DEF (config, newindex);
 
 static const struct luaL_reg configlib_m[] = {
