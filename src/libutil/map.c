@@ -272,6 +272,26 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 	*map->user_data = cbdata.cur_data;
 }
 
+static void
+jitter_timeout_event (struct rspamd_map *map, gboolean locked)
+{
+	gdouble jittered_sec;
+
+	/* Plan event again with jitter */
+	evtimer_del (&map->ev);
+	jittered_sec = map->cfg->map_timeout;
+	if (locked) {
+		/* Add bigger jitter */
+		jittered_sec += g_random_double () * map->cfg->map_timeout * 4;
+	}
+	else {
+		jittered_sec += g_random_double () * map->cfg->map_timeout;
+	}
+	double_to_tv (jittered_sec, &map->tv);
+
+	evtimer_add (&map->ev, &map->tv);
+}
+
 /**
  * Common file callback
  */
@@ -281,22 +301,16 @@ file_callback (gint fd, short what, void *ud)
 	struct rspamd_map *map = ud;
 	struct file_map_data *data = map->map_data;
 	struct stat st;
-	gdouble jittered_sec;
-
-	/* Plan event again with jitter */
-	evtimer_del (&map->ev);
-	jittered_sec =
-		(map->cfg->map_timeout + g_random_double () * map->cfg->map_timeout);
-	double_to_tv (jittered_sec, &map->tv);
-
-	evtimer_add (&map->ev, &map->tv);
 
 	if (g_atomic_int_get (map->locked)) {
 		msg_info (
 			"don't try to reread map as it is locked by other process, will reread it later");
+		jitter_timeout_event (map, TRUE);
 		return;
 	}
 
+	g_atomic_int_inc (map->locked);
+	jitter_timeout_event (map, FALSE);
 	if (stat (data->filename,
 		&st) != -1 &&
 		(st.st_mtime > data->st.st_mtime || data->st.st_mtime == -1)) {
@@ -304,11 +318,13 @@ file_callback (gint fd, short what, void *ud)
 		memcpy (&data->st, &st, sizeof (struct stat));
 	}
 	else {
+		g_atomic_int_set (map->locked, 0);
 		return;
 	}
 
 	msg_info ("rereading map file %s", data->filename);
 	read_map_file (map, data);
+	g_atomic_int_set (map->locked, 0);
 }
 
 /**
@@ -321,23 +337,16 @@ http_callback (gint fd, short what, void *ud)
 	struct http_map_data *data = map->map_data;
 	gint sock;
 	struct http_callback_data *cbd;
-	gdouble jittered_sec;
-
-	/* Plan event again with jitter */
-	evtimer_del (&map->ev);
-	jittered_sec =
-		(map->cfg->map_timeout + g_random_double () * map->cfg->map_timeout);
-	double_to_tv (jittered_sec, &map->tv);
-	evtimer_add (&map->ev, &map->tv);
 
 	if (g_atomic_int_get (map->locked)) {
 		msg_info (
 			"don't try to reread map as it is locked by other process, will reread it later");
+		jitter_timeout_event (map, TRUE);
 		return;
 	}
 
 	g_atomic_int_inc (map->locked);
-
+	jitter_timeout_event (map, FALSE);
 	/* Connect asynced */
 	if ((sock = connect_http (map, data, TRUE)) == -1) {
 		g_atomic_int_set (map->locked, 0);
