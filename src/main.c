@@ -504,7 +504,9 @@ fork_worker (struct rspamd_main *rspamd, struct rspamd_worker_conf *cf)
 			update_log_pid (cf->type, rspamd->logger);
 			/* Lock statfile pool if possible */
 			statfile_pool_lockall (rspamd->statfile_pool);
+			/* Init PRNG after fork */
 			ottery_init (NULL);
+			g_random_set_seed (ottery_rand_uint32 ());
 			/* Drop privilleges */
 			drop_priv (rspamd);
 			/* Set limits */
