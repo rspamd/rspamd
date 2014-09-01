@@ -358,12 +358,14 @@ new_dynamic_metric (const gchar *metric_name, ucl_object_t *top)
 
 	metric = ucl_object_typed_new (UCL_OBJECT);
 
-	ucl_object_insert_key (top, metric,
-			metric_name, strlen (metric_name), true);
+	ucl_object_insert_key (metric, ucl_object_fromstring (metric_name),
+			"metric", sizeof ("metric") - 1, true);
 	ucl_object_insert_key (metric, ucl_object_typed_new (UCL_ARRAY),
 			"actions", sizeof ("actions") - 1, false);
 	ucl_object_insert_key (metric, ucl_object_typed_new (UCL_ARRAY),
 			"symbols", sizeof ("symbols") - 1, false);
+
+	ucl_array_append (top, metric);
 
 	return metric;
 }
@@ -380,6 +382,25 @@ dynamic_metric_find_elt (const ucl_object_t *arr, const gchar *name)
 			if (n && n->type == UCL_STRING &&
 				strcmp (name, ucl_object_tostring (n)) == 0) {
 				return (ucl_object_t *)ucl_object_find_key (cur, "value");
+			}
+		}
+	}
+
+	return NULL;
+}
+
+static ucl_object_t *
+dynamic_metric_find_metric (const ucl_object_t *arr, const gchar *metric)
+{
+	ucl_object_iter_t it = NULL;
+	const ucl_object_t *cur, *n;
+
+	while ((cur = ucl_iterate_object (arr, &it, true)) != NULL) {
+		if (cur->type == UCL_OBJECT) {
+			n = ucl_object_find_key (cur, "metric");
+			if (n && n->type == UCL_STRING &&
+				strcmp (metric, ucl_object_tostring (n)) == 0) {
+				return (ucl_object_t *)cur;
 			}
 		}
 	}
@@ -424,14 +445,13 @@ add_dynamic_symbol (struct rspamd_config *cfg,
 		return FALSE;
 	}
 
-	metric = (ucl_object_t *)ucl_object_find_key (cfg->current_dynamic_conf,
+	metric = dynamic_metric_find_metric (cfg->current_dynamic_conf,
 			metric_name);
 	if (metric == NULL) {
 		metric = new_dynamic_metric (metric_name, cfg->current_dynamic_conf);
 	}
 
-	syms = (ucl_object_t *)ucl_object_find_key (cfg->current_dynamic_conf,
-			"symbols");
+	syms = (ucl_object_t *)ucl_object_find_key (metric, "symbols");
 	if (syms != NULL) {
 		ucl_object_t *sym;
 
@@ -472,14 +492,13 @@ add_dynamic_action (struct rspamd_config *cfg,
 		return FALSE;
 	}
 
-	metric = (ucl_object_t *)ucl_object_find_key (cfg->current_dynamic_conf,
+	metric = dynamic_metric_find_metric (cfg->current_dynamic_conf,
 			metric_name);
 	if (metric == NULL) {
 		metric = new_dynamic_metric (metric_name, cfg->current_dynamic_conf);
 	}
 
-	acts = (ucl_object_t *)ucl_object_find_key (cfg->current_dynamic_conf,
-			"actions");
+	acts = (ucl_object_t *)ucl_object_find_key (metric, "actions");
 	if (acts != NULL) {
 		ucl_object_t *act;
 

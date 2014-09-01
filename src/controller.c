@@ -375,7 +375,7 @@ rspamd_controller_handle_actions (struct rspamd_http_connection_entry *conn_ent,
 	if (metric != NULL) {
 		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
 			act = &metric->actions[i];
-			if (act->score > 0) {
+			if (act->score >= 0) {
 				obj = ucl_object_typed_new (UCL_OBJECT);
 				ucl_object_insert_key (obj,
 					ucl_object_fromstring (str_action_metric (
