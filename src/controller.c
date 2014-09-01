@@ -1214,8 +1214,8 @@ rspamd_controller_handle_savesymbols (
 	obj = ucl_parser_get_object (parser);
 	ucl_parser_free (parser);
 
-	if (obj->type != UCL_ARRAY || obj->len != 3) {
-		msg_err ("input is not an array of 3 elements");
+	if (obj->type != UCL_ARRAY) {
+		msg_err ("input is not an array");
 		rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
 		ucl_object_unref (obj);
 		return 0;
