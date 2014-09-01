@@ -16,27 +16,32 @@ viewing statistic and learning.
 It is required to configure dynamic settings to store configured values.
 Basically this can be done by providing the following line in options settings:
 
-{% highlight xml %}
-<options>
- <dynamic_conf>/var/lib/rspamd/rspamd_dynamic</dynamic_conf>
-</options>
+{% highlight nginx %}
+options {
+ dynamic_conf = "/var/lib/rspamd/rspamd_dynamic";
+}
 {% endhighlight %}
 
 Please note that this path must have write access for rspamd user.
 
-Then webui worker should be configured:
+Then controller worker should be configured:
 
-{% highlight xml %}
-<worker>
-  <type>webui</type>
-  <bind_socket>localhost:11336</bind_socket>
-  <password>q1</password>
-</worker>
+{% highlight nginx %}
+worker {
+	type = "controller";
+	bind_socket = "localhost:11334";
+	count = 1;
+	# Password for normal commands
+	password = "q1";
+	# Password for privilleged commands
+	enable_password = "q2";
+	# Path to webiu static files
+	static_dir = "${WWWDIR}";
+}
 {% endhighlight %}
 
 Basically, this worker should be accessed by some proxying HTTP server
-like nginx or apache, since HTTP part of rspamd is quite poor to interact
-with real world.
+like nginx or apache, but rspamd could be used as a standalone HTTP server as well.
 
 Password option should be changed for sure for your specific configuration.
 
@@ -55,12 +60,8 @@ Here is a sample setup for nginx:
 server {
 	listen 10.0.0.1;
 	server_name example.com;
-	root /home/rspamdui/rspamd-interface;
-	index index.html;
 
-	location /rspamd/ {
-		proxy_pass http://10.0.0.2:11336/;
-	}
+	proxy_pass http://10.0.0.2:11336/;
 }
 {% endhighlight %}
 
