@@ -273,19 +273,20 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 }
 
 static void
-jitter_timeout_event (struct rspamd_map *map, gboolean locked)
+jitter_timeout_event (struct rspamd_map *map, gboolean locked, gboolean initial)
 {
 	gdouble jittered_sec;
+	gdouble timeout = initial ? 1.0 : map->cfg->map_timeout;
 
 	/* Plan event again with jitter */
 	evtimer_del (&map->ev);
-	jittered_sec = map->cfg->map_timeout;
+	jittered_sec = timeout;
 	if (locked) {
 		/* Add bigger jitter */
-		jittered_sec += g_random_double () * map->cfg->map_timeout * 4;
+		jittered_sec += g_random_double () * timeout * 4;
 	}
 	else {
-		jittered_sec += g_random_double () * map->cfg->map_timeout;
+		jittered_sec += g_random_double () * timeout;
 	}
 	double_to_tv (jittered_sec, &map->tv);
 
@@ -305,12 +306,12 @@ file_callback (gint fd, short what, void *ud)
 	if (g_atomic_int_get (map->locked)) {
 		msg_info (
 			"don't try to reread map as it is locked by other process, will reread it later");
-		jitter_timeout_event (map, TRUE);
+		jitter_timeout_event (map, TRUE, FALSE);
 		return;
 	}
 
 	g_atomic_int_inc (map->locked);
-	jitter_timeout_event (map, FALSE);
+	jitter_timeout_event (map, FALSE, FALSE);
 	if (stat (data->filename,
 		&st) != -1 &&
 		(st.st_mtime > data->st.st_mtime || data->st.st_mtime == -1)) {
@@ -341,12 +342,17 @@ http_callback (gint fd, short what, void *ud)
 	if (g_atomic_int_get (map->locked)) {
 		msg_info (
 			"don't try to reread map as it is locked by other process, will reread it later");
-		jitter_timeout_event (map, TRUE);
+		if (data->conn->ud == NULL) {
+			jitter_timeout_event (map, TRUE, TRUE);
+		}
+		else {
+			jitter_timeout_event (map, TRUE, FALSE);
+		}
 		return;
 	}
 
 	g_atomic_int_inc (map->locked);
-	jitter_timeout_event (map, FALSE);
+	jitter_timeout_event (map, FALSE, FALSE);
 	/* Connect asynced */
 	if ((sock = connect_http (map, data, TRUE)) == -1) {
 		g_atomic_int_set (map->locked, 0);
@@ -379,15 +385,14 @@ start_map_watch (struct rspamd_config *cfg, struct event_base *ev_base)
 	GList *cur = cfg->maps;
 	struct rspamd_map *map;
 	struct file_map_data *fdata;
-	gdouble jittered_sec;
 
 	/* First of all do synced read of data */
 	while (cur) {
 		map = cur->data;
 		map->ev_base = ev_base;
+		event_base_set (map->ev_base, &map->ev);
 		if (map->protocol == MAP_PROTO_FILE) {
 			evtimer_set (&map->ev, file_callback, map);
-			event_base_set (map->ev_base, &map->ev);
 			/* Read initial data */
 			fdata = map->map_data;
 			if (fdata->st.st_mtime != -1) {
@@ -395,18 +400,11 @@ start_map_watch (struct rspamd_config *cfg, struct event_base *ev_base)
 				read_map_file (map, map->map_data);
 			}
 			/* Plan event with jitter */
-			jittered_sec =
-				(map->cfg->map_timeout + g_random_double () *
-				map->cfg->map_timeout) / 2.;
-			double_to_tv (jittered_sec, &map->tv);
-			evtimer_add (&map->ev, &map->tv);
+			jitter_timeout_event (map, FALSE, TRUE);
 		}
 		else if (map->protocol == MAP_PROTO_HTTP) {
 			evtimer_set (&map->ev, http_callback, map);
-			event_base_set (map->ev_base, &map->ev);
-			map->tv.tv_sec = 0;
-			map->tv.tv_usec = 0;
-			evtimer_add (&map->ev, &map->tv);
+			jitter_timeout_event (map, FALSE, TRUE);
 		}
 		cur = g_list_next (cur);
 	}
