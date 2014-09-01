@@ -27,118 +27,113 @@
 #include "filter.h"
 #include "dynamic_cfg.h"
 
-struct dynamic_cfg_symbol {
-	gchar *name;
-	gdouble value;
-};
-
-struct dynamic_cfg_action {
-	enum rspamd_metric_action action;
-	gdouble value;
-};
-
-struct dynamic_cfg_metric {
-	GList *symbols;
-	struct dynamic_cfg_action actions[METRIC_ACTION_MAX];
-	gchar *name;
-};
-
 struct config_json_buf {
 	gchar *buf;
 	gchar *pos;
 	size_t buflen;
 	struct rspamd_config *cfg;
-	GList *config_metrics;
+	ucl_object_t *obj;
 };
 
-/**
- * Free dynamic configuration
- * @param conf_metrics
- */
-static void
-dynamic_cfg_free (GList *conf_metrics)
-{
-	GList *cur, *cur_elt;
-	struct dynamic_cfg_metric *metric;
-	struct dynamic_cfg_symbol *sym;
-
-	if (conf_metrics) {
-		cur = conf_metrics;
-		while (cur) {
-			metric = cur->data;
-			if (metric->symbols) {
-				cur_elt = metric->symbols;
-				while (cur_elt) {
-					sym = cur_elt->data;
-					g_free (sym->name);
-					g_slice_free1 (sizeof (struct dynamic_cfg_symbol), sym);
-					cur_elt = g_list_next (cur_elt);
-				}
-				g_list_free (metric->symbols);
-			}
-			g_slice_free1 (sizeof (struct dynamic_cfg_metric), metric);
-			cur = g_list_next (cur);
-		}
-		g_list_free (conf_metrics);
-	}
-}
 /**
  * Apply configuration to the specified configuration
  * @param conf_metrics
  * @param cfg
  */
 static void
-apply_dynamic_conf (GList *conf_metrics, struct rspamd_config *cfg)
+apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 {
-	GList *cur, *cur_elt;
-	struct dynamic_cfg_metric *metric;
-	struct dynamic_cfg_symbol *sym;
-	struct dynamic_cfg_action *act;
+	gint test_act;
+	const ucl_object_t *cur_elt, *cur_nm, *it_val;
+	ucl_object_iter_t it = NULL;
 	struct metric *real_metric;
-	struct metric_action *real_act;
+	struct metric_action *cur_action;
 	gdouble *w;
-	gint i, j;
 
-	cur = conf_metrics;
-	while (cur) {
-		metric = cur->data;
-		if ((real_metric =
-			g_hash_table_lookup (cfg->metrics, metric->name)) != NULL) {
-			cur_elt = metric->symbols;
-			while (cur_elt) {
-				sym = cur_elt->data;
-				if ((w =
-					g_hash_table_lookup (real_metric->symbols,
-					sym->name)) != NULL) {
-					*w = sym->value;
+	while ((cur_elt = ucl_iterate_object (top, &it, true))) {
+		if (ucl_object_type (cur_elt) != UCL_OBJECT) {
+			msg_err ("loaded json array element is not an object");
+			continue;
+		}
+
+		cur_nm = ucl_object_find_key (cur_elt, "metric");
+		if (!cur_nm || ucl_object_type (cur_nm) != UCL_STRING) {
+			msg_err (
+					"loaded json metric object element has no 'metric' attribute");
+			continue;
+		}
+		real_metric = g_hash_table_lookup (cfg->metrics,
+							ucl_object_tostring (cur_nm));
+		if (real_metric == NULL) {
+			msg_warn ("cannot find metric %s", ucl_object_tostring (cur_nm));
+			continue;
+		}
+
+		cur_nm = ucl_object_find_key (cur_elt, "symbols");
+		/* Parse symbols */
+		if (cur_nm && ucl_object_type (cur_nm) == UCL_ARRAY) {
+			ucl_object_iter_t nit = NULL;
+
+			while ((it_val = ucl_iterate_object (cur_nm, &nit, true))) {
+				if (ucl_object_find_key (it_val, "name") &&
+						ucl_object_find_key (it_val, "value")) {
+					const ucl_object_t *n =
+							ucl_object_find_key (it_val, "name");
+					const ucl_object_t *v =
+							ucl_object_find_key (it_val, "value");
+
+					if((w = g_hash_table_lookup (real_metric->symbols,
+							ucl_object_tostring (n))) != NULL) {
+						*w = ucl_object_todouble (v);
+					}
 				}
 				else {
 					msg_info (
-						"symbol %s is not found in the main configuration",
-						sym->name);
-				}
-				cur_elt = g_list_next (cur_elt);
-			}
-
-			for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
-				act = &metric->actions[i];
-				if (act->value < 0) {
-					continue;
-				}
-				for (j = METRIC_ACTION_REJECT; j < METRIC_ACTION_MAX; j++) {
-					real_act = &real_metric->actions[j];
-					if (real_act->action == act->action) {
-						real_act->score = act->value;
-					}
-					/* Update required score accordingly to metric's action */
-					if (act->action == METRIC_ACTION_REJECT) {
-						real_metric->actions[METRIC_ACTION_REJECT].score =
-							act->value;
-					}
+							"json symbol object has no mandatory 'name' and 'value' attributes");
 				}
 			}
 		}
-		cur = g_list_next (cur);
+		else {
+			ucl_object_t *arr;
+
+			arr = ucl_object_typed_new (UCL_ARRAY);
+			ucl_object_insert_key ((ucl_object_t *)cur_elt, arr, "symbols",
+					sizeof ("symbols") - 1, false);
+		}
+		cur_nm = ucl_object_find_key (cur_elt, "actions");
+		/* Parse actions */
+		if (cur_nm && ucl_object_type (cur_nm) == UCL_ARRAY) {
+			ucl_object_iter_t nit = NULL;
+
+			while ((it_val = ucl_iterate_object (cur_nm, &nit, true))) {
+				if (ucl_object_find_key (it_val, "name") &&
+						ucl_object_find_key (it_val, "value")) {
+					if (!check_action_str (ucl_object_tostring (
+							ucl_object_find_key (it_val, "name")), &test_act)) {
+						msg_err ("unknown action: %s",
+								ucl_object_tostring (ucl_object_find_key (it_val,
+										"name")));
+						continue;
+					}
+					cur_action = &real_metric->actions[test_act];
+					cur_action->action = test_act;
+					cur_action->score =
+							ucl_object_todouble (ucl_object_find_key (it_val,
+									"value"));
+				}
+				else {
+					msg_info (
+							"json action object has no mandatory 'name' and 'value' attributes");
+				}
+			}
+		}
+		else {
+			ucl_object_t *arr;
+
+			arr = ucl_object_typed_new (UCL_ARRAY);
+			ucl_object_insert_key ((ucl_object_t *)cur_elt, arr, "actions",
+					sizeof ("actions") - 1, false);
+		}
 	}
 }
 
@@ -157,7 +152,7 @@ json_config_read_cb (rspamd_mempool_t * pool,
 		jb->cfg = ((struct config_json_buf *)data->prev_data)->cfg;
 		jb->buf = NULL;
 		jb->pos = NULL;
-		jb->config_metrics = NULL;
+		jb->obj = NULL;
 		data->cur_data = jb;
 	}
 	else {
@@ -191,15 +186,8 @@ void
 json_config_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
 	struct config_json_buf *jb;
-	gint test_act;
-	const ucl_object_t *cur_elt, *cur_nm, *it_val;
-	ucl_object_iter_t it = NULL;
 	ucl_object_t *top;
 	struct ucl_parser *parser;
-
-	struct dynamic_cfg_metric *cur_metric;
-	struct dynamic_cfg_symbol *cur_symbol;
-	struct dynamic_cfg_action *cur_action;
 
 	if (data->prev_data) {
 		jb = data->prev_data;
@@ -226,7 +214,7 @@ json_config_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 	*jb->pos = '\0';
 
 	parser = ucl_parser_new (0);
-	if (!ucl_parser_add_string (parser, jb->buf, 0)) {
+	if (!ucl_parser_add_chunk (parser, jb->buf, jb->pos - jb->buf)) {
 		msg_err ("cannot load json data: parse error %s",
 				ucl_parser_get_error (parser));
 		ucl_parser_free (parser);
@@ -236,103 +224,24 @@ json_config_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 	top = ucl_parser_get_object (parser);
 	ucl_parser_free (parser);
 
-	if (!ucl_object_type (top) != UCL_ARRAY) {
+	if (ucl_object_type (top) != UCL_ARRAY) {
 		ucl_object_unref (top);
 		msg_err ("loaded json is not an array");
 		return;
 	}
 
 	jb->cfg->current_dynamic_conf = NULL;
-	dynamic_cfg_free (jb->config_metrics);
-	jb->config_metrics = NULL;
+	ucl_object_unref (jb->obj);
+	jb->obj = top;
 
-	/* Parse configuration */
-	while ((cur_elt = ucl_iterate_object (top, &it, true))) {
-		if (ucl_object_type (cur_elt) != UCL_OBJECT) {
-			msg_err ("loaded json array element is not an object");
-			continue;
-		}
-
-		cur_nm = ucl_object_find_key (cur_elt, "metric");
-		if (!cur_nm || ucl_object_type (cur_nm) != UCL_OBJECT) {
-			msg_err (
-				"loaded json metric object element has no 'metric' attribute");
-			continue;
-		}
-		cur_metric = g_slice_alloc0 (sizeof (struct dynamic_cfg_metric));
-		for (int i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
-			cur_metric->actions[i].value = -1.0;
-		}
-		cur_metric->name = g_strdup (ucl_object_tostring (cur_nm));
-		cur_nm = ucl_object_find_key (cur_elt, "symbols");
-		/* Parse symbols */
-		if (cur_nm && ucl_object_type (cur_nm) == UCL_ARRAY) {
-			ucl_object_iter_t nit = NULL;
-
-			while ((it_val = ucl_iterate_object (cur_nm, &nit, true))) {
-				if (ucl_object_find_key (it_val, "name") &&
-						ucl_object_find_key (it_val, "value")) {
-					cur_symbol =
-							g_slice_alloc0 (sizeof (struct dynamic_cfg_symbol));
-					cur_symbol->name =
-							g_strdup (ucl_object_tostring (ucl_object_find_key (
-									it_val,
-									"name")));
-					cur_symbol->value = ucl_object_todouble (
-							ucl_object_find_key (it_val,
-									"value"));
-					/* Insert symbol */
-					cur_metric->symbols = g_list_prepend (
-							cur_metric->symbols,
-							cur_symbol);
-				}
-				else {
-					msg_info (
-							"json symbol object has no mandatory 'name' and 'value' attributes");
-				}
-			}
-		}
-		cur_nm = ucl_object_find_key (cur_elt, "actions");
-		/* Parse actions */
-		if (cur_nm && ucl_object_type (cur_nm) == UCL_ARRAY) {
-			ucl_object_iter_t nit = NULL;
-
-			while ((it_val = ucl_iterate_object (cur_nm, &nit, true))) {
-				if (ucl_object_find_key (it_val, "name") &&
-						ucl_object_find_key (it_val, "value")) {
-					if (!check_action_str (ucl_object_tostring (
-							ucl_object_find_key (it_val, "name")), &test_act)) {
-						msg_err ("unknown action: %s",
-								ucl_object_tostring (ucl_object_find_key (it_val,
-										"name")));
-						g_slice_free1 (sizeof (struct dynamic_cfg_action),
-								cur_action);
-						continue;
-					}
-					cur_action = &cur_metric->actions[test_act];
-					cur_action->action = test_act;
-					cur_action->value =
-							ucl_object_todouble (ucl_object_find_key (it_val,
-									"value"));
-				}
-				else {
-					msg_info (
-							"json symbol object has no mandatory 'name' and 'value' attributes");
-				}
-			}
-		}
-	}
-	jb->config_metrics = g_list_prepend (jb->config_metrics, cur_metric);
 	/*
 	 * Note about thread safety: we are updating values that are gdoubles so it is not atomic in general case
 	 * but on the other hand all that data is used only in the main thread, so why it is *likely* safe
 	 * to do this task in this way without explicit lock.
 	 */
-	apply_dynamic_conf (jb->config_metrics, jb->cfg);
+	apply_dynamic_conf (jb->obj, jb->cfg);
 
-	jb->cfg->current_dynamic_conf = jb->config_metrics;
-
-	ucl_object_unref (top);
+	jb->cfg->current_dynamic_conf = jb->obj;
 }
 
 /**
@@ -359,87 +268,6 @@ init_dynamic_config (struct rspamd_config *cfg)
 		json_config_read_cb, json_config_fin_cb, (void **)pjb)) {
 		msg_err ("cannot add map for configuration %s", cfg->dynamic_conf);
 	}
-}
-
-static gboolean
-dump_dynamic_list (gint fd, GList *rules)
-{
-	GList *cur, *cur_elt;
-	struct dynamic_cfg_metric *metric;
-	struct dynamic_cfg_symbol *sym;
-	struct dynamic_cfg_action *act;
-	FILE *f;
-	gint i;
-	gboolean start = TRUE;
-
-	/* Open buffered stream for the descriptor */
-	if ((f = fdopen (fd, "a+")) == NULL) {
-		msg_err ("fdopen failed: %s", strerror (errno));
-		return FALSE;
-	}
-
-
-	if (rules) {
-		fprintf (f, "[\n");
-		cur = rules;
-		while (cur) {
-			metric = cur->data;
-			fprintf (f, "{\n  \"metric\": \"%s\",\n", metric->name);
-			if (metric->symbols) {
-				fprintf (f, "  \"symbols\": [\n");
-				cur_elt = metric->symbols;
-				while (cur_elt) {
-					sym = cur_elt->data;
-					cur_elt = g_list_next (cur_elt);
-					if (cur_elt) {
-						fprintf (f,
-							"    {\"name\": \"%s\",\"value\": %.2f},\n",
-							sym->name,
-							sym->value);
-					}
-					else {
-						fprintf (f,
-							"    {\"name\": \"%s\",\"value\": %.2f}\n",
-							sym->name,
-							sym->value);
-					}
-				}
-				if (metric->actions) {
-					fprintf (f, "  ],\n");
-				}
-				else {
-					fprintf (f, "  ]\n");
-				}
-			}
-
-			if (metric->actions) {
-				fprintf (f, "  \"actions\": [\n");
-				for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
-					act = &metric->actions[i];
-					if (act->value < 0) {
-						continue;
-					}
-					fprintf (f, "    %s{\"name\": \"%s\",\"value\": %.2f}\n",
-						(start ? "" : ","), str_action_metric (
-							act->action), act->value);
-					if (start) {
-						start = FALSE;
-					}
-				}
-				fprintf (f, "  ]\n");
-			}
-			cur = g_list_next (cur);
-			if (cur) {
-				fprintf (f, "},\n");
-			}
-			else {
-				fprintf (f, "}\n]\n");
-			}
-		}
-	}
-	fclose (f);
-
-	return TRUE;
 }
 
 /**
@@ -497,9 +325,10 @@ dump_dynamic_config (struct rspamd_config *cfg)
 		return FALSE;
 	}
 
-	if (!dump_dynamic_list (fd, cfg->current_dynamic_conf)) {
+	if (!ucl_object_emit_full (cfg->current_dynamic_conf, UCL_EMIT_JSON,
+			ucl_object_emit_fd_funcs (fd))) {
+		msg_err ("cannot emit ucl object: %s", strerror (errno));
 		close (fd);
-		unlink (pathbuf);
 		return FALSE;
 	}
 
@@ -522,6 +351,58 @@ dump_dynamic_config (struct rspamd_config *cfg)
 	return TRUE;
 }
 
+static ucl_object_t*
+new_dynamic_metric (const gchar *metric_name, ucl_object_t *top)
+{
+	ucl_object_t *metric;
+
+	metric = ucl_object_typed_new (UCL_OBJECT);
+
+	ucl_object_insert_key (top, metric,
+			metric_name, strlen (metric_name), true);
+	ucl_object_insert_key (metric, ucl_object_typed_new (UCL_ARRAY),
+			"actions", sizeof ("actions") - 1, false);
+	ucl_object_insert_key (metric, ucl_object_typed_new (UCL_ARRAY),
+			"symbols", sizeof ("symbols") - 1, false);
+
+	return metric;
+}
+
+static ucl_object_t *
+dynamic_metric_find_elt (const ucl_object_t *arr, const gchar *name)
+{
+	ucl_object_iter_t it = NULL;
+	const ucl_object_t *cur, *n;
+
+	while ((cur = ucl_iterate_object (arr, &it, true)) != NULL) {
+		if (cur->type == UCL_OBJECT) {
+			n = ucl_object_find_key (cur, "name");
+			if (n && n->type == UCL_STRING &&
+				strcmp (name, ucl_object_tostring (n)) == 0) {
+				return (ucl_object_t *)ucl_object_find_key (cur, "value");
+			}
+		}
+	}
+
+	return NULL;
+}
+
+static ucl_object_t *
+new_dynamic_elt (ucl_object_t *arr, const gchar *name, gdouble value)
+{
+	ucl_object_t *n;
+
+	n = ucl_object_typed_new (UCL_OBJECT);
+	ucl_object_insert_key (n, ucl_object_fromstring (name), "name",
+		sizeof ("name") - 1, false);
+	ucl_object_insert_key (n, ucl_object_fromdouble (value), "value",
+		sizeof ("value") - 1, false);
+
+	ucl_array_append (arr, n);
+
+	return n;
+}
+
 /**
  * Add symbol for specified metric
  * @param cfg config file object
@@ -536,58 +417,31 @@ add_dynamic_symbol (struct rspamd_config *cfg,
 	const gchar *symbol,
 	gdouble value)
 {
-	GList *cur;
-	struct dynamic_cfg_metric *metric = NULL;
-	struct dynamic_cfg_symbol *sym = NULL;
+	ucl_object_t *metric, *syms;
 
 	if (cfg->dynamic_conf == NULL) {
 		msg_info ("dynamic conf is disabled");
 		return FALSE;
 	}
 
-	cur = cfg->current_dynamic_conf;
-	while (cur) {
-		metric = cur->data;
-		if (g_ascii_strcasecmp (metric->name, metric_name) == 0) {
-			break;
-		}
-		metric = NULL;
-		cur = g_list_next (cur);
+	metric = (ucl_object_t *)ucl_object_find_key (cfg->current_dynamic_conf,
+			metric_name);
+	if (metric == NULL) {
+		metric = new_dynamic_metric (metric_name, cfg->current_dynamic_conf);
 	}
 
-	if (metric != NULL) {
-		/* Search for a symbol */
-		cur = metric->symbols;
-		while (cur) {
-			sym = cur->data;
-			if (g_ascii_strcasecmp (sym->name, symbol) == 0) {
-				sym->value = value;
-				msg_debug ("change value of action %s to %.2f", symbol, value);
-				break;
-			}
-			sym = NULL;
-			cur = g_list_next (cur);
+	syms = (ucl_object_t *)ucl_object_find_key (cfg->current_dynamic_conf,
+			"symbols");
+	if (syms != NULL) {
+		ucl_object_t *sym;
+
+		sym = dynamic_metric_find_elt (syms, symbol);
+		if (sym) {
+			sym->value.dv = value;
 		}
-		if (sym == NULL) {
-			/* Symbol not found, insert it */
-			sym = g_slice_alloc (sizeof (struct dynamic_cfg_symbol));
-			sym->name = g_strdup (symbol);
-			sym->value = value;
-			metric->symbols = g_list_prepend (metric->symbols, sym);
-			msg_debug ("create symbol %s in metric %s", symbol, metric_name);
+		else {
+			new_dynamic_elt (syms, symbol, value);
 		}
-	}
-	else {
-		/* Metric not found, create it */
-		metric = g_slice_alloc0 (sizeof (struct dynamic_cfg_metric));
-		sym = g_slice_alloc (sizeof (struct dynamic_cfg_symbol));
-		sym->name = g_strdup (symbol);
-		sym->value = value;
-		metric->symbols = g_list_prepend (metric->symbols, sym);
-		metric->name = g_strdup (metric_name);
-		cfg->current_dynamic_conf = g_list_prepend (cfg->current_dynamic_conf,
-				metric);
-		msg_debug ("create metric %s for symbol %s", metric_name, symbol);
 	}
 
 	apply_dynamic_conf (cfg->current_dynamic_conf, cfg);
@@ -610,36 +464,32 @@ add_dynamic_action (struct rspamd_config *cfg,
 	guint action,
 	gdouble value)
 {
-	GList *cur;
-	struct dynamic_cfg_metric *metric = NULL;
+	ucl_object_t *metric, *acts;
+	const gchar *action_name = str_action_metric (action);
 
 	if (cfg->dynamic_conf == NULL) {
 		msg_info ("dynamic conf is disabled");
 		return FALSE;
 	}
 
-	cur = cfg->current_dynamic_conf;
-	while (cur) {
-		metric = cur->data;
-		if (g_ascii_strcasecmp (metric->name, metric_name) == 0) {
-			break;
-		}
-		metric = NULL;
-		cur = g_list_next (cur);
+	metric = (ucl_object_t *)ucl_object_find_key (cfg->current_dynamic_conf,
+			metric_name);
+	if (metric == NULL) {
+		metric = new_dynamic_metric (metric_name, cfg->current_dynamic_conf);
 	}
 
-	if (metric != NULL) {
-		/* Search for an action */
-		metric->actions[action].value = value;
-	}
-	else {
-		/* Metric not found, create it */
-		metric = g_slice_alloc0 (sizeof (struct dynamic_cfg_metric));
-		metric->actions[action].value = value;
-		metric->name = g_strdup (metric_name);
-		cfg->current_dynamic_conf = g_list_prepend (cfg->current_dynamic_conf,
-				metric);
-		msg_debug ("create metric %s for action %d", metric_name, action);
+	acts = (ucl_object_t *)ucl_object_find_key (cfg->current_dynamic_conf,
+			"actions");
+	if (acts != NULL) {
+		ucl_object_t *act;
+
+		act = dynamic_metric_find_elt (acts, action_name);
+		if (act) {
+			act->value.dv = value;
+		}
+		else {
+			new_dynamic_elt (acts, action_name, value);
+		}
 	}
 
 	apply_dynamic_conf (cfg->current_dynamic_conf, cfg);

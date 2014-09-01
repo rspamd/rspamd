@@ -297,7 +297,7 @@ struct rspamd_config {
 	GList *pre_filters;                             /**< list of pre-processing lua filters					*/
 	GList *post_filters;                            /**< list of post-processing lua filters				*/
 	gchar *dynamic_conf;                            /**< path to dynamic configuration						*/
-	GList *current_dynamic_conf;                    /**< currently loaded dynamic configuration				*/
+	ucl_object_t *current_dynamic_conf;              /**< currently loaded dynamic configuration				*/
 	GHashTable * domain_settings;                    /**< settings per-domains                               */
 	GHashTable * user_settings;                      /**< settings per-user                                  */
 	gchar * domain_settings_str;                     /**< string representation of settings					*/
