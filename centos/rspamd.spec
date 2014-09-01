@@ -4,6 +4,7 @@
 %define rspamd_logdir    %{_localstatedir}/log/rspamd
 %define rspamd_confdir   %{_sysconfdir}/rspamd
 %define rspamd_pluginsdir   %{_datadir}/rspamd
+%define rspamd_wwwdir   %{_datadir}/rspamd/www
 
 %if 0%{?suse_version}
 %define __cmake cmake
@@ -13,7 +14,7 @@
 %endif
 
 Name:           rspamd
-Version:        0.6.7
+Version:        0.7.0
 Release:        1
 Summary:        Rapid spam filtering system
 Group:          System Environment/Daemons   
@@ -46,7 +47,7 @@ Requires(preun):        chkconfig, initscripts
 Requires(postun):       initscripts
 %endif
 
-Source0:        https://rspamd.com/downloads/%{name}-%{version}.tar.gz
+Source0:        https://rspamd.com/downloads/%{name}-%{version}.tar.xz
 %if 0%{?suse_version}
 %if 0%{?suse_version} >= 1300
 Source1:        %{name}.service
@@ -191,6 +192,7 @@ fi
 %dir %{rspamd_confdir}
 %dir %{rspamd_pluginsdir}/lua
 %dir %{rspamd_pluginsdir}
+%dir %{rspamd_wwwdir}
 %config(noreplace) %{rspamd_confdir}/2tld.inc
 %config(noreplace) %{rspamd_confdir}/surbl-whitelist.inc
 %{rspamd_pluginsdir}/lua/forged_recipients.lua
@@ -204,6 +206,7 @@ fi
 %{rspamd_pluginsdir}/lua/trie.lua
 %{rspamd_pluginsdir}/lua/emails.lua
 %{rspamd_pluginsdir}/lua/ip_score.lua
+%{rspamd_pluginsdir}/lua/settings.lua
 %{rspamd_confdir}/lua/regexp/drugs.lua
 %{rspamd_confdir}/lua/regexp/fraud.lua
 %{rspamd_confdir}/lua/regexp/headers.lua
@@ -211,8 +214,12 @@ fi
 %{rspamd_confdir}/lua/rspamd.lua
 %{rspamd_confdir}/lua/hfilter.lua
 %{rspamd_confdir}/lua/rspamd.classifiers.lua
+%{rspamd_wwwdir}/*
 
 %changelog
+* Mon Sep 1 2014 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.7.0-1
+- Update to 0.7.0
+
 * Fri Jan 10 2014 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.6.7-1
 - Update to 0.6.7.
 

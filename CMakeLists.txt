@@ -38,6 +38,7 @@ OPTION(ENABLE_URL_INCLUDE  "Enable urls in ucl includes (requires libcurl or lib
 OPTION(NO_SHARED           "Build internal libs static [default: OFF]"          OFF)
 OPTION(FORCE_GMIME24       "Link with gmime2.4 [default: OFF]"                  OFF)
 OPTION(INSTALL_EXAMPLES    "Install examples [default: OFF]"                    OFF)
+OPTION(INSTALL_WEBUI       "Install web interface [default: ON]"                ON)
 
 # Build optimized code for following CPU (default i386)
 #SET(CPU_TUNE               "i686")
@@ -920,3 +921,8 @@ ENDIF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 # Manual pages
 INSTALL(FILES "doc/rspamd.8" DESTINATION ${MANDIR}/man8)
 INSTALL(FILES "doc/rspamc.1" DESTINATION ${MANDIR}/man1)
+
+# Install webui
+IF(INSTALL_WEBUI MATCHES "ON")
+	INSTALL(DIRECTORY "interface/" DESTINATION ${WWWDIR} PATTERN ".git" EXCLUDE)
+ENDIF(INSTALL_WEBUI MATCHES "ON")
