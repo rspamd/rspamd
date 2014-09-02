@@ -989,7 +989,7 @@ rspamd_controller_handle_learnham (
 	struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message *msg)
 {
-	return rspamd_controller_handle_learn_common (conn_ent, msg, TRUE);
+	return rspamd_controller_handle_learn_common (conn_ent, msg, FALSE);
 }
 
 /*
