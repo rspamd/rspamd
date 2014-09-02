@@ -166,9 +166,10 @@ http_map_finish (struct rspamd_http_connection *conn,
 		map->fin_callback (map->pool, &cbd->cbdata);
 		*map->user_data = cbd->cbdata.cur_data;
 		cbd->data->last_checked = msg->date;
+		msg_info ("read map data from %s", cbd->data->host);
 	}
 	else if (msg->code == 304) {
-		msg_info ("data is not modified for server %s",
+		msg_debug ("data is not modified for server %s",
 				cbd->data->host);
 		cbd->data->last_checked = msg->date;
 	}
@@ -373,7 +374,7 @@ http_callback (gint fd, short what, void *ud)
 		cbd->tv.tv_usec = 0;
 		cbd->fd = sock;
 		data->conn->ud = cbd;
-		msg_info ("reading map data from %s", data->host);
+		msg_debug ("reading map data from %s", data->host);
 		write_http_request (cbd);
 	}
 }
