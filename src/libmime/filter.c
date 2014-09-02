@@ -972,6 +972,14 @@ check_action_str (const gchar *data, gint *result)
 		sizeof ("rewrite_subject") - 1) == 0) {
 		*result = METRIC_ACTION_REWRITE_SUBJECT;
 	}
+	else if (g_ascii_strncasecmp (data, "add header", sizeof ("add header") -
+			1) == 0) {
+		*result = METRIC_ACTION_ADD_HEADER;
+	}
+	else if (g_ascii_strncasecmp (data, "rewrite subject",
+			sizeof ("rewrite subject") - 1) == 0) {
+		*result = METRIC_ACTION_REWRITE_SUBJECT;
+	}
 	else {
 		return FALSE;
 	}
