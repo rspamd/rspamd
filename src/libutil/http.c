@@ -1267,7 +1267,7 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 
 	rspamd_http_connection_reset (entry->conn);
 
-	msg_info ("requested file %s", realbuf);
+	msg_debug ("requested file %s", realbuf);
 	rspamd_http_connection_write_message (entry->conn, reply_msg, NULL,
 		rspamd_http_router_detect_ct (realbuf), entry, entry->conn->fd,
 		entry->rt->ptv, entry->rt->ev_base);
@@ -1297,7 +1297,7 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 		if (msg->url != NULL && msg->url->len != 0) {
 			found = g_hash_table_lookup (entry->rt->paths, msg->url->str);
 			memcpy (&handler, &found, sizeof (found));
-			msg_info ("requested known path: %v", msg->url);
+			msg_debug ("requested known path: %v", msg->url);
 		}
 		entry->is_reply = TRUE;
 		if (handler != NULL) {
@@ -1311,7 +1311,7 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 				if (entry->rt->error_handler != NULL) {
 					entry->rt->error_handler (entry, err);
 				}
-				msg_info ("requested unknown path: %v", msg->url);
+				msg_info ("path: %v not found", msg->url);
 				err_msg = rspamd_http_new_message (HTTP_RESPONSE);
 				err_msg->date = time (NULL);
 				err_msg->code = err->code;

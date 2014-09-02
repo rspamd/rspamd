@@ -488,7 +488,6 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-
 	idstr = rspamd_http_message_find_header (msg, "Map");
 
 	if (idstr == NULL) {
@@ -866,6 +865,9 @@ rspamd_controller_learn_fin_task (void *ud)
 		return TRUE;
 	}
 	/* Successful learn */
+	msg_info ("<%s> learned message: %s",
+		rspamd_inet_address_to_string (&session->from_addr),
+		task->message_id);
 	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
 
 	return TRUE;
@@ -1067,7 +1069,7 @@ rspamd_controller_handle_saveactions (
 	struct rspamd_controller_worker_ctx *ctx;
 	const gchar *error;
 	gdouble score;
-	gint i;
+	gint i, added = 0;
 	enum rspamd_metric_action act;
 
 	ctx = session->ctx;
@@ -1137,10 +1139,14 @@ rspamd_controller_handle_saveactions (
 		score = ucl_object_todouble (cur);
 		if (metric->actions[act].score != score) {
 			add_dynamic_action (ctx->cfg, DEFAULT_METRIC, act, score);
+			added ++;
 		}
 	}
 
 	dump_dynamic_config (ctx->cfg);
+	msg_info ("<%s> modified %d actions",
+		rspamd_inet_address_to_string (&session->from_addr),
+		added);
 
 	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
 
@@ -1169,6 +1175,7 @@ rspamd_controller_handle_savesymbols (
 	const gchar *error;
 	gdouble val;
 	struct symbol *sym;
+	int added = 0;
 
 	ctx = session->ctx;
 
@@ -1243,10 +1250,14 @@ rspamd_controller_handle_savesymbols (
 				ucl_object_unref (obj);
 				return 0;
 			}
+			added ++;
 		}
 	}
 
 	dump_dynamic_config (ctx->cfg);
+	msg_info ("<%s> modified %d symbols",
+			rspamd_inet_address_to_string (&session->from_addr),
+			added);
 
 	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
 
@@ -1344,6 +1355,9 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
+	msg_info ("<%s>, map %s saved",
+		rspamd_inet_address_to_string (&session->from_addr),
+		map->uri);
 	/* Close and unlock */
 	close (fd);
 	g_atomic_int_set (map->locked, 0);
@@ -1520,6 +1534,8 @@ rspamd_controller_handle_statreset (
 		return 0;
 	}
 
+	msg_info ("<%s> reset stat",
+			rspamd_inet_address_to_string (&session->from_addr));
 	return rspamd_controller_handle_stat_common (conn_ent, msg, TRUE);
 }
 
@@ -1661,10 +1677,6 @@ rspamd_controller_accept_socket (gint fd, short what, void *arg)
 	if (nfd == 0) {
 		return;
 	}
-
-	msg_info ("accepted connection from %s port %d",
-		rspamd_inet_address_to_string (&addr),
-		rspamd_inet_address_get_port (&addr));
 
 	nsession = g_slice_alloc0 (sizeof (struct rspamd_controller_session));
 	nsession->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
