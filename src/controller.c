@@ -880,6 +880,7 @@ rspamd_controller_check_fin_task (void *ud)
 	struct rspamd_http_connection_entry *conn_ent;
 	struct rspamd_http_message *msg;
 
+	process_statfiles (task);
 	conn_ent = task->fin_arg;
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 	msg->date = time (NULL);
