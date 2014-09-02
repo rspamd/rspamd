@@ -328,7 +328,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				debug_task ("read rcpt header, value: %v", h->value);
 			}
 			else {
-				msg_info ("wrong header: %s", headern);
+				debug_task ("wrong header: %s", headern);
 				validh = FALSE;
 			}
 			break;
