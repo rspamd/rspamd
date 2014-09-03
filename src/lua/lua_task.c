@@ -583,7 +583,9 @@ lua_task_push_header (lua_State * L,
 	gint i = 1;
 	const gchar *val;
 
-	lua_newtable (L);
+	if (full) {
+		lua_newtable (L);
+	}
 	rh = g_hash_table_lookup (task->raw_headers, name);
 
 	if (rh == NULL) {
