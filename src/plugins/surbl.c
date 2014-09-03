@@ -834,7 +834,6 @@ static void
 dns_callback (struct rdns_reply *reply, gpointer arg)
 {
 	struct dns_param *param = (struct dns_param *)arg;
-	struct rspamd_task *task = param->task;
 	struct rdns_reply_entry *elt;
 
 	debug_task ("in surbl request callback");
@@ -869,7 +868,6 @@ static void
 redirector_callback (gint fd, short what, void *arg)
 {
 	struct redirector_param *param = (struct redirector_param *)arg;
-	struct rspamd_task *task = param->task;
 	gchar url_buf[512];
 	gint r;
 	struct timeval *timeout;
