@@ -65,7 +65,7 @@ local function check_ml_mailman(task)
 	-- For reminders we have other headers than for normal messages
 	header = task:get_header('x-list-administrivia')
 	local subject = task:get_header('subject')
-	if (header and string.find(header, 'yes')) or (subject and string.find(subject[1], 'mailing list memberships reminder$')) then
+	if (header and string.find(header, 'yes')) or (subject and string.find(subject, 'mailing list memberships reminder$')) then
 		if not task:get_header('errors-to') or not task:get_header('x-beenthere') then
 			return false
 		end
