@@ -300,7 +300,6 @@ rspamd_lua_init (struct rspamd_config *cfg)
 	luaopen_mimepart (L);
 	luaopen_image (L);
 	luaopen_url (L);
-	luaopen_message (L);
 	luaopen_classifier (L);
 	luaopen_statfile (L);
 	luaopen_glib_regexp (L);
