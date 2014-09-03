@@ -29,6 +29,7 @@
 #include "cfg_file.h"
 #include "html.h"
 #include "images.h"
+#include "utlist.h"
 
 #define RECURSION_LIMIT 30
 #define UTF8_CHARSET "UTF-8"
@@ -578,16 +579,34 @@ parse_recv_header (rspamd_mempool_t * pool,
 	return;
 }
 
+static void
+append_raw_header (struct rspamd_task *task, struct raw_header *rh)
+{
+	struct raw_header *lp;
+
+	rh->next = NULL;
+	rh->prev = rh;
+	if ((lp =
+			g_hash_table_lookup (task->raw_headers, rh->name)) != NULL) {
+		DL_APPEND (lp, rh);
+	}
+	else {
+		g_hash_table_insert (task->raw_headers, rh->name, rh);
+	}
+	debug_task ("add raw header %s: %s", rh->name, rh->value);
+}
+
 /* Convert raw headers to a list of struct raw_header * */
 static void
-process_raw_headers (struct rspamd_task *task)
+process_raw_headers (struct rspamd_task *task, const gchar *in)
 {
-	struct raw_header *new = NULL, *lp;
-	gchar *p, *c, *tmp, *tp;
+	struct raw_header *new = NULL;
+	const gchar *p, *c;
+	gchar *tmp, *tp;
 	gint state = 0, l, next_state = 100, err_state = 100, t_state;
 	gboolean valid_folding = FALSE;
 
-	p = task->raw_headers_str;
+	p = in;
 	c = p;
 	while (*p) {
 		/* FSM for processing headers */
@@ -610,6 +629,7 @@ process_raw_headers (struct rspamd_task *task)
 				new =
 					rspamd_mempool_alloc0 (task->task_pool,
 						sizeof (struct raw_header));
+				new->prev = new;
 				l = p - c;
 				tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
 				rspamd_strlcpy (tmp, c, l + 1);
@@ -713,36 +733,18 @@ process_raw_headers (struct rspamd_task *task)
 			}
 			*tp = '\0';
 			new->value = tmp;
-			new->next = NULL;
-			if ((lp =
-				g_hash_table_lookup (task->raw_headers, new->name)) != NULL) {
-				while (lp->next != NULL) {
-					lp = lp->next;
-				}
-				lp->next = new;
-			}
-			else {
-				g_hash_table_insert (task->raw_headers, new->name, new);
-			}
-			debug_task ("add raw header %s: %s", new->name, new->value);
+			new->decoded = g_mime_utils_header_decode_text (new->value);
+			rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t)g_free, new->decoded);
+			append_raw_header (task, new);
 			state = 0;
 			break;
 		case 5:
 			/* Header has only name, no value */
-			new->next = NULL;
 			new->value = "";
-			if ((lp =
-				g_hash_table_lookup (task->raw_headers, new->name)) != NULL) {
-				while (lp->next != NULL) {
-					lp = lp->next;
-				}
-				lp->next = new;
-			}
-			else {
-				g_hash_table_insert (task->raw_headers, new->name, new);
-			}
+			new->decoded = NULL;
+			append_raw_header (task, new);
 			state = 0;
-			debug_task ("add raw header %s: %s", new->name, new->value);
 			break;
 		case 99:
 			/* Folding state */
@@ -925,6 +927,7 @@ process_text_part (struct rspamd_task *task,
 {
 	struct mime_text_part *text_part;
 	const gchar *cd;
+	gchar *raw_headers;
 
 	/* Skip attachements */
 #ifndef GMIME24
@@ -943,6 +946,12 @@ process_text_part (struct rspamd_task *task,
 		!task->cfg->check_text_attachements) {
 		debug_task ("skip attachments for checking as text parts");
 		return;
+	}
+
+	raw_headers = g_mime_object_get_headers (GMIME_OBJECT (part));
+	if (raw_headers) {
+		process_raw_headers (task, raw_headers);
+		g_free (raw_headers);
 	}
 #endif
 
@@ -1247,11 +1256,16 @@ process_message (struct rspamd_task *task)
 		task->raw_headers_str = g_mime_message_get_headers (task->message);
 #endif
 
+		if (task->raw_headers_str) {
+			rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t) g_free, task->raw_headers_str);
+			process_raw_headers (task, task->raw_headers_str);
+		}
 		process_images (task);
 
 		/* Parse received headers */
 		first =
-			message_get_header (task->task_pool, message, "Received", FALSE);
+			message_get_raw_header (task, "Received", FALSE);
 		cur = first;
 		while (cur) {
 			recv =
@@ -1260,15 +1274,6 @@ process_message (struct rspamd_task *task)
 			parse_recv_header (task->task_pool, cur->data, recv);
 			task->received = g_list_prepend (task->received, recv);
 			cur = g_list_next (cur);
-		}
-		if (first) {
-			g_list_free (first);
-		}
-
-		if (task->raw_headers_str) {
-			rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t) g_free, task->raw_headers_str);
-			process_raw_headers (task);
 		}
 
 		/* free the parser (and the stream) */
@@ -1350,7 +1355,7 @@ process_message (struct rspamd_task *task)
 	}
 
 	/* Parse urls inside Subject header */
-	cur = message_get_header (task->task_pool, task->message, "Subject", FALSE);
+	cur = message_get_raw_header (task, "Subject", FALSE);
 	if (cur) {
 		p = cur->data;
 		len = strlen (p);
@@ -1390,8 +1395,6 @@ process_message (struct rspamd_task *task)
 			}
 			p = url_end + 1;
 		}
-		/* Free header's list */
-		g_list_free (cur);
 	}
 
 	return 0;
@@ -2035,9 +2038,7 @@ message_get_raw_header (struct rspamd_task *task,
 			}
 		}
 		else {
-			if (g_ascii_strcasecmp (rh->name, field) == 0) {
-				gret = g_list_prepend (gret, rh);
-			}
+			gret = g_list_prepend (gret, rh);
 		}
 		rh = rh->next;
 	}

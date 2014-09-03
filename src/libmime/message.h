@@ -53,7 +53,8 @@ struct raw_header {
 	gboolean tab_separated;
 	gboolean empty_separator;
 	gchar *separator;
-	struct raw_header *next;
+	gchar *decoded;
+	struct raw_header *prev, *next;
 };
 
 /**
