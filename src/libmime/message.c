@@ -29,6 +29,7 @@
 #include "cfg_file.h"
 #include "html.h"
 #include "images.h"
+#include "utlist.h"
 
 #define RECURSION_LIMIT 30
 #define UTF8_CHARSET "UTF-8"
@@ -578,16 +579,34 @@ parse_recv_header (rspamd_mempool_t * pool,
 	return;
 }
 
+static void
+append_raw_header (struct rspamd_task *task, struct raw_header *rh)
+{
+	struct raw_header *lp;
+
+	rh->next = NULL;
+	rh->prev = rh;
+	if ((lp =
+			g_hash_table_lookup (task->raw_headers, rh->name)) != NULL) {
+		DL_APPEND (lp, rh);
+	}
+	else {
+		g_hash_table_insert (task->raw_headers, rh->name, rh);
+	}
+	debug_task ("add raw header %s: %s", rh->name, rh->value);
+}
+
 /* Convert raw headers to a list of struct raw_header * */
 static void
-process_raw_headers (struct rspamd_task *task)
+process_raw_headers (struct rspamd_task *task, const gchar *in)
 {
-	struct raw_header *new = NULL, *lp;
-	gchar *p, *c, *tmp, *tp;
+	struct raw_header *new = NULL;
+	const gchar *p, *c;
+	gchar *tmp, *tp;
 	gint state = 0, l, next_state = 100, err_state = 100, t_state;
 	gboolean valid_folding = FALSE;
 
-	p = task->raw_headers_str;
+	p = in;
 	c = p;
 	while (*p) {
 		/* FSM for processing headers */
@@ -610,6 +629,7 @@ process_raw_headers (struct rspamd_task *task)
 				new =
 					rspamd_mempool_alloc0 (task->task_pool,
 						sizeof (struct raw_header));
+				new->prev = new;
 				l = p - c;
 				tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
 				rspamd_strlcpy (tmp, c, l + 1);
@@ -713,36 +733,18 @@ process_raw_headers (struct rspamd_task *task)
 			}
 			*tp = '\0';
 			new->value = tmp;
-			new->next = NULL;
-			if ((lp =
-				g_hash_table_lookup (task->raw_headers, new->name)) != NULL) {
-				while (lp->next != NULL) {
-					lp = lp->next;
-				}
-				lp->next = new;
-			}
-			else {
-				g_hash_table_insert (task->raw_headers, new->name, new);
-			}
-			debug_task ("add raw header %s: %s", new->name, new->value);
+			new->decoded = g_mime_utils_header_decode_text (new->value);
+			rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t)g_free, new->decoded);
+			append_raw_header (task, new);
 			state = 0;
 			break;
 		case 5:
 			/* Header has only name, no value */
-			new->next = NULL;
 			new->value = "";
-			if ((lp =
-				g_hash_table_lookup (task->raw_headers, new->name)) != NULL) {
-				while (lp->next != NULL) {
-					lp = lp->next;
-				}
-				lp->next = new;
-			}
-			else {
-				g_hash_table_insert (task->raw_headers, new->name, new);
-			}
+			new->decoded = NULL;
+			append_raw_header (task, new);
 			state = 0;
-			debug_task ("add raw header %s: %s", new->name, new->value);
 			break;
 		case 99:
 			/* Folding state */
@@ -925,6 +927,7 @@ process_text_part (struct rspamd_task *task,
 {
 	struct mime_text_part *text_part;
 	const gchar *cd;
+	gchar *raw_headers;
 
 	/* Skip attachements */
 #ifndef GMIME24
@@ -943,6 +946,12 @@ process_text_part (struct rspamd_task *task,
 		!task->cfg->check_text_attachements) {
 		debug_task ("skip attachments for checking as text parts");
 		return;
+	}
+
+	raw_headers = g_mime_object_get_headers (GMIME_OBJECT (part));
+	if (raw_headers) {
+		process_raw_headers (task, raw_headers);
+		g_free (raw_headers);
 	}
 #endif
 
@@ -1247,11 +1256,16 @@ process_message (struct rspamd_task *task)
 		task->raw_headers_str = g_mime_message_get_headers (task->message);
 #endif
 
+		if (task->raw_headers_str) {
+			rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t) g_free, task->raw_headers_str);
+			process_raw_headers (task, task->raw_headers_str);
+		}
 		process_images (task);
 
 		/* Parse received headers */
 		first =
-			message_get_header (task->task_pool, message, "Received", FALSE);
+			message_get_header (task, "Received", FALSE);
 		cur = first;
 		while (cur) {
 			recv =
@@ -1260,15 +1274,6 @@ process_message (struct rspamd_task *task)
 			parse_recv_header (task->task_pool, cur->data, recv);
 			task->received = g_list_prepend (task->received, recv);
 			cur = g_list_next (cur);
-		}
-		if (first) {
-			g_list_free (first);
-		}
-
-		if (task->raw_headers_str) {
-			rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t) g_free, task->raw_headers_str);
-			process_raw_headers (task);
 		}
 
 		/* free the parser (and the stream) */
@@ -1350,7 +1355,7 @@ process_message (struct rspamd_task *task)
 	}
 
 	/* Parse urls inside Subject header */
-	cur = message_get_header (task->task_pool, task->message, "Subject", FALSE);
+	cur = message_get_header (task, "Subject", FALSE);
 	if (cur) {
 		p = cur->data;
 		len = strlen (p);
@@ -1390,632 +1395,15 @@ process_message (struct rspamd_task *task)
 			}
 			p = url_end + 1;
 		}
-		/* Free header's list */
-		g_list_free (cur);
 	}
 
 	return 0;
 }
 
-struct gmime_raw_header {
-	struct raw_header *next;
-	gchar *name;
-	gchar *value;
-};
 
-typedef struct _GMimeHeader {
-	GHashTable *hash;
-	GHashTable *writers;
-	struct raw_header *headers;
-} local_GMimeHeader;
-
-
-/* known header field types */
-enum {
-	HEADER_FROM = 0,
-	HEADER_REPLY_TO,
-	HEADER_TO,
-	HEADER_CC,
-	HEADER_BCC,
-	HEADER_SUBJECT,
-	HEADER_DATE,
-	HEADER_MESSAGE_ID,
-	HEADER_UNKNOWN
-};
-
-/*
- * Iterate throught all headers and make a list
- */
-#ifndef GMIME24
-static void
-header_iterate (rspamd_mempool_t * pool,
-	struct gmime_raw_header *h,
-	GList ** ret,
-	const gchar *field,
-	gboolean strong)
-{
-	while (h) {
-		if (G_LIKELY (!strong)) {
-			if (h->value &&
-				!g_ascii_strncasecmp (field, h->name, strlen (field))) {
-				if (pool != NULL) {
-					*ret =
-						g_list_prepend (*ret,
-							rspamd_mempool_strdup (pool, h->value));
-				}
-				else {
-					*ret = g_list_prepend (*ret, g_strdup (h->value));
-				}
-			}
-		}
-		else {
-			if (h->value && !strncmp (field, h->name, strlen (field))) {
-				if (pool != NULL) {
-					*ret =
-						g_list_prepend (*ret,
-							rspamd_mempool_strdup (pool, h->value));
-				}
-				else {
-					*ret = g_list_prepend (*ret, g_strdup (h->value));
-				}
-			}
-		}
-		h = (struct gmime_raw_header *)h->next;
-	}
-}
-#else
-static void
-header_iterate (rspamd_mempool_t * pool,
-	GMimeHeaderList * ls,
-	GList ** ret,
-	const gchar *field,
-	gboolean strong)
-{
-	/* Use iterator in case of gmime 2.4 */
-	GMimeHeaderIter *iter;
-	const gchar *name;
-
-	if (ls == NULL) {
-		*ret = NULL;
-		return;
-	}
-
-	iter = g_mime_header_iter_new ();
-	if (g_mime_header_list_get_iter (ls,
-		iter) && g_mime_header_iter_first (iter)) {
-		/* Iterate throught headers */
-		while (g_mime_header_iter_is_valid (iter)) {
-			name = g_mime_header_iter_get_name (iter);
-			if (G_LIKELY (!strong)) {
-				if (!g_ascii_strncasecmp (field, name, strlen (name))) {
-					if (pool != NULL) {
-						*ret =
-							g_list_prepend (*ret,
-								rspamd_mempool_strdup (pool,
-								g_mime_header_iter_get_value (iter)));
-					}
-					else {
-						*ret =
-							g_list_prepend (*ret,
-								g_strdup (g_mime_header_iter_get_value (iter)));
-					}
-				}
-			}
-			else {
-				if (!strncmp (field, name, strlen (name))) {
-					if (pool != NULL) {
-						*ret =
-							g_list_prepend (*ret,
-								rspamd_mempool_strdup (pool,
-								g_mime_header_iter_get_value (iter)));
-					}
-					else {
-						*ret =
-							g_list_prepend (*ret,
-								g_strdup (g_mime_header_iter_get_value (iter)));
-					}
-				}
-			}
-			if (!g_mime_header_iter_next (iter)) {
-				break;
-			}
-		}
-	}
-	g_mime_header_iter_free (iter);
-}
-#endif
-
-
-struct multipart_cb_data {
-	GList *ret;
-	rspamd_mempool_t *pool;
-	const gchar *field;
-	gboolean try_search;
-	gboolean strong;
-	gint rec;
-};
-
-#define MAX_REC 10
-
-static void
-#ifdef GMIME24
-multipart_iterate (GMimeObject * parent, GMimeObject * part, gpointer user_data)
-#else
-multipart_iterate (GMimeObject * part, gpointer user_data)
-#endif
-{
-	struct multipart_cb_data *data = user_data;
-#ifndef GMIME24
-	struct gmime_raw_header *h;
-#endif
-	GList *l = NULL;
-
-	if (data->try_search && part != NULL && GMIME_IS_PART (part)) {
-#ifdef GMIME24
-		GMimeHeaderList *ls;
-
-		ls = g_mime_object_get_header_list (GMIME_OBJECT (part));
-		header_iterate (data->pool, ls, &l, data->field, data->strong);
-#else
-		h = (struct gmime_raw_header *)part->headers->headers;
-		header_iterate (data->pool, h,	&l, data->field, data->strong);
-#endif
-		if (l == NULL) {
-			/* Header not found, abandon search results */
-			data->try_search = FALSE;
-			g_list_free (data->ret);
-			data->ret = NULL;
-		}
-		else {
-			data->ret = g_list_concat (l, data->ret);
-		}
-	}
-	else if (data->try_search && GMIME_IS_MULTIPART (part)) {
-		/* Maybe endless recursion here ? */
-		if (data->rec++ < MAX_REC) {
-			g_mime_multipart_foreach (GMIME_MULTIPART (
-					part), multipart_iterate, data);
-		}
-		else {
-			msg_info ("maximum recurse limit is over, stop recursing, %d",
-				data->rec);
-			data->try_search = FALSE;
-		}
-	}
-}
-
-static GList *
-local_message_get_header (rspamd_mempool_t * pool,
-	GMimeMessage * message,
-	const gchar *field,
-	gboolean strong)
-{
-	GList *gret = NULL;
-	GMimeObject *part;
-	struct multipart_cb_data cb = {
-		.try_search = TRUE,
-		.rec = 0,
-		.ret = NULL,
-	};
-	cb.pool = pool;
-	cb.field = field;
-	cb.strong = strong;
-
-#ifndef GMIME24
-	struct gmime_raw_header *h;
-
-	if (field == NULL) {
-		return NULL;
-	}
-
-	msg_debug ("iterate over headers to find header %s", field);
-	h = (struct gmime_raw_header *) (GMIME_OBJECT (message)->headers->headers);
-	header_iterate (pool, h, &gret, field, strong);
-
-	if (gret == NULL) {
-		/* Try to iterate with mime part headers */
-		msg_debug ("iterate over headers of mime part to find header %s",
-			field);
-		part = g_mime_message_get_mime_part (message);
-		if (part) {
-			h = (struct gmime_raw_header *)part->headers->headers;
-			header_iterate (pool, h, &gret, field, strong);
-			if (gret == NULL && GMIME_IS_MULTIPART (part)) {
-				msg_debug (
-					"iterate over headers of each multipart's subparts %s",
-					field);
-				g_mime_multipart_foreach (GMIME_MULTIPART (
-						part), multipart_iterate, &cb);
-				if (cb.ret != NULL) {
-					gret = cb.ret;
-				}
-			}
-#ifndef GMIME24
-			g_object_unref (part);
-#endif
-		}
-	}
-
-	return gret;
-#else
-	GMimeHeaderList *ls;
-
-	ls = g_mime_object_get_header_list (GMIME_OBJECT (message));
-	header_iterate (pool, ls, &gret, field, strong);
-	if (gret == NULL) {
-		/* Try to iterate with mime part headers */
-		part = g_mime_message_get_mime_part (message);
-		if (part) {
-			ls = g_mime_object_get_header_list (GMIME_OBJECT (part));
-			header_iterate (pool, ls, &gret, field, strong);
-			if (gret == NULL && GMIME_IS_MULTIPART (part)) {
-				g_mime_multipart_foreach (GMIME_MULTIPART (
-						part), multipart_iterate, &cb);
-				if (cb.ret != NULL) {
-					gret = cb.ret;
-				}
-			}
-#ifndef GMIME24
-			g_object_unref (part);
-#endif
-		}
-	}
-
-
-	return gret;
-#endif
-}
-
-/**
- * g_mime_message_set_date_from_string: Set the message sent-date
- * @message: MIME Message
- * @string: A string of date
- *
- * Set the sent-date on a MIME Message.
- **/
-void
-local_mime_message_set_date_from_string (GMimeMessage * message,
-	const gchar * string)
-{
-	time_t date;
-	gint offset = 0;
-
-	date = g_mime_utils_header_decode_date (string, &offset);
-	g_mime_message_set_date (message, date, offset);
-}
-
-/*
- * Replacements for standart gmime functions but converting adresses to IA
- */
-static const gchar *
-local_message_get_sender (GMimeMessage * message)
-{
-	gchar *res;
-	const gchar *from = g_mime_message_get_sender (message);
-	InternetAddressList *ia;
-
-#ifndef GMIME24
-	ia = internet_address_parse_string (from);
-#else
-	ia = internet_address_list_parse_string (from);
-#endif
-	if (!ia) {
-		return NULL;
-	}
-	res = internet_address_list_to_string (ia, FALSE);
-#ifndef GMIME24
-	internet_address_list_destroy (ia);
-#else
-	g_object_unref (ia);
-#endif
-
-	return res;
-}
-
-#ifdef GMIME24
-static const gchar*
-local_message_get_content_type (GMimeMessage * message)
-{
-	GMimeContentType *ct;
-
-	ct = g_mime_object_get_content_type (GMIME_OBJECT (message));
-	if (ct) {
-		return g_mime_content_type_to_string (ct);
-	}
-	return NULL;
-}
-static void
-local_message_set_content_type (GMimeMessage * message, const gchar *in)
-{
-	GMimeContentType *ct;
-
-	ct = g_mime_content_type_new_from_string (in);
-	if (ct) {
-		g_mime_object_set_content_type (GMIME_OBJECT (message), ct);
-	}
-}
-#endif
-
-static const gchar *
-local_message_get_reply_to (GMimeMessage * message)
-{
-	gchar *res;
-	const gchar *from = g_mime_message_get_reply_to (message);
-	InternetAddressList *ia;
-
-#ifndef GMIME24
-	ia = internet_address_parse_string (from);
-#else
-	ia = internet_address_list_parse_string (from);
-#endif
-	if (!ia) {
-		return NULL;
-	}
-	res = internet_address_list_to_string (ia, FALSE);
-#ifndef GMIME24
-	internet_address_list_destroy (ia);
-#else
-	g_object_unref (ia);
-#endif
-
-	return res;
-}
-
-#ifdef GMIME24
-
-#   define ADD_RECIPIENT_TEMPLATE(type,def)                                                     \
-	static void                                                                                     \
-	local_message_add_recipients_from_string_ ## type (GMimeMessage * message, \
-		const gchar * string, \
-		const gchar * value)    \
-	{                                                                                               \
-		InternetAddressList *il, *new;                                                              \
-                                                                                                \
-		il = g_mime_message_get_recipients (message, (def));                                        \
-		new = internet_address_list_parse_string (string);                                          \
-		internet_address_list_append (il, new);                                                     \
-	}                                                                                               \
-
-ADD_RECIPIENT_TEMPLATE (to,	 GMIME_RECIPIENT_TYPE_TO)
-ADD_RECIPIENT_TEMPLATE (cc,	 GMIME_RECIPIENT_TYPE_CC)
-ADD_RECIPIENT_TEMPLATE (bcc, GMIME_RECIPIENT_TYPE_BCC)
-#   define GET_RECIPIENT_TEMPLATE(type,def)                                                     \
-	static InternetAddressList *                                                                     \
-	local_message_get_recipients_ ## type (GMimeMessage * message, \
-		const gchar * unused)                    \
-	{                                                                                               \
-		return g_mime_message_get_recipients (message, (def));                                      \
-	}
-GET_RECIPIENT_TEMPLATE (to,	 GMIME_RECIPIENT_TYPE_TO)
-GET_RECIPIENT_TEMPLATE (cc,	 GMIME_RECIPIENT_TYPE_CC)
-GET_RECIPIENT_TEMPLATE (bcc, GMIME_RECIPIENT_TYPE_BCC)
-#endif
-/* different declarations for different types of set and get functions */
-typedef const gchar *(*GetFunc) (GMimeMessage * message);
-typedef InternetAddressList *(*GetRcptFunc) (GMimeMessage * message,
-	const gchar *type);
-typedef GList *(*GetListFunc) (rspamd_mempool_t * pool, GMimeMessage * message,
-	const gchar *type, gboolean strong);
-typedef void (*SetFunc) (GMimeMessage * message, const gchar *value);
-typedef void (*SetListFunc) (GMimeMessage * message, const gchar *field,
-	const gchar *value);
-
-/** different types of functions
- *
- * FUNC_CHARPTR
- *	- function with no arguments
- *	- get returns gchar*
- *
- * FUNC_IA (from Internet Address)
- *	- function with additional "field" argument from the fieldfunc table,
- *	- get returns Glist*
- *
- * FUNC_LIST
- *	- function with additional "field" argument (given arbitrary header field name)
- *	- get returns Glist*
- **/
-enum {
-	FUNC_CHARPTR = 0,
-	FUNC_CHARFREEPTR,
-	FUNC_IA,
-	FUNC_LIST
-};
-
-/**
- * fieldfunc struct: structure of MIME fields and corresponding get and set
- * functions.
- **/
-static struct {
-	gchar *name;
-	GetFunc func;
-	GetRcptFunc rcptfunc;
-	GetListFunc getlistfunc;
-	SetFunc setfunc;
-	SetListFunc setlfunc;
-	gint functype;
-} fieldfunc[] =
-{
-	{
-		"From", local_message_get_sender, NULL, NULL, g_mime_message_set_sender,
-		NULL, FUNC_CHARFREEPTR
-	}, {
-		"Reply-To", local_message_get_reply_to, NULL, NULL,
-		g_mime_message_set_reply_to, NULL, FUNC_CHARFREEPTR
-	},
-#ifndef GMIME24
-	{
-		"To", NULL, (GetRcptFunc) g_mime_message_get_recipients, NULL, NULL,
-		(SetListFunc) g_mime_message_add_recipients_from_string, FUNC_IA
-	}, {
-		"Cc", NULL, (GetRcptFunc) g_mime_message_get_recipients, NULL, NULL,
-		(SetListFunc) g_mime_message_add_recipients_from_string, FUNC_IA
-	}, {
-		"Bcc", NULL, (GetRcptFunc) g_mime_message_get_recipients, NULL, NULL,
-		(SetListFunc) g_mime_message_add_recipients_from_string, FUNC_IA
-	}, {
-		"Date", (GetFunc) g_mime_message_get_date_string, NULL, NULL,
-		local_mime_message_set_date_from_string, NULL, FUNC_CHARFREEPTR
-	},
-#else
-	{
-		"To", NULL, local_message_get_recipients_to, NULL, NULL,
-		local_message_add_recipients_from_string_to, FUNC_IA
-	}, {
-		"Cc", NULL, local_message_get_recipients_cc, NULL, NULL,
-		local_message_add_recipients_from_string_cc, FUNC_IA
-	}, {
-		"Bcc", NULL, local_message_get_recipients_bcc, NULL, NULL,
-		local_message_add_recipients_from_string_bcc, FUNC_IA
-	}, {
-		"Date", (GetFunc)g_mime_message_get_date_as_string, NULL, NULL,
-		local_mime_message_set_date_from_string, NULL, FUNC_CHARFREEPTR
-	}, {
-		"Content-Type", local_message_get_content_type, NULL, NULL,
-		local_message_set_content_type, NULL, FUNC_CHARFREEPTR
-	},
-#endif
-	{
-		"Subject", g_mime_message_get_subject, NULL, NULL,
-		g_mime_message_set_subject, NULL, FUNC_CHARPTR
-	}, {
-		"Message-Id", g_mime_message_get_message_id, NULL, NULL,
-		g_mime_message_set_message_id, NULL, FUNC_CHARPTR
-	},
-#ifndef GMIME24
-	{
-		NULL, NULL, NULL, local_message_get_header, NULL,
-		g_mime_message_add_header, FUNC_LIST
-	}
-#else
-	{
-		NULL, NULL, NULL, local_message_get_header, NULL,
-		(SetListFunc)g_mime_object_append_header, FUNC_LIST
-	}
-#endif
-};
-
-/**
- * message_set_header: set header of any type excluding special (Content- and MIME-Version:)
- **/
-void
-message_set_header (GMimeMessage * message,
-	const gchar *field,
-	const gchar *value)
-{
-	gint i;
-
-	if (!g_ascii_strcasecmp (field,
-		"MIME-Version:") || !g_ascii_strncasecmp (field, "Content-", 8)) {
-		return;
-	}
-	for (i = 0; i <= HEADER_UNKNOWN; ++i) {
-		if (!fieldfunc[i].name ||
-			!g_ascii_strncasecmp (field, fieldfunc[i].name,
-			strlen (fieldfunc[i].name))) {
-			switch (fieldfunc[i].functype) {
-			case FUNC_CHARPTR:
-			case FUNC_CHARFREEPTR:
-				if (fieldfunc[i].setfunc) {
-					(*(fieldfunc[i].setfunc))(message, value);
-				}
-				break;
-			case FUNC_IA:
-				(*(fieldfunc[i].setlfunc))(message, fieldfunc[i].name, value);
-				break;
-			case FUNC_LIST:
-				(*(fieldfunc[i].setlfunc))(message, field, value);
-				break;
-			}
-			break;
-		}
-	}
-}
-
-
-/**
- * message_get_header: returns the list of 'any header' values
- * (except of unsupported yet Content- and MIME-Version special headers)
- *
- * You should free the GList list by yourself.
- **/
-GList *
-message_get_header (rspamd_mempool_t * pool,
-	GMimeMessage * message,
-	const gchar *field,
-	gboolean strong)
-{
-	gint i;
-	gchar *ret = NULL, *ia_string;
-	GList *gret = NULL;
-	InternetAddressList *ia_list = NULL, *ia;
-
-	for (i = 0; i <= HEADER_UNKNOWN; ++i) {
-		if (!fieldfunc[i].name ||
-			!g_ascii_strncasecmp (field, fieldfunc[i].name,
-			strlen (fieldfunc[i].name))) {
-			switch (fieldfunc[i].functype) {
-			case FUNC_CHARFREEPTR:
-				ret = (gchar *)(*(fieldfunc[i].func))(message);
-				break;
-			case FUNC_CHARPTR:
-				ret = (gchar *)(*(fieldfunc[i].func))(message);
-				break;
-			case FUNC_IA:
-				ia_list = (*(fieldfunc[i].rcptfunc))(message, field);
-				ia = ia_list;
-#ifndef GMIME24
-				while (ia && ia->address) {
-
-					ia_string = internet_address_to_string (
-						(InternetAddress *) ia->address,
-						FALSE);
-					if (pool != NULL) {
-						rspamd_mempool_add_destructor (pool,
-							(rspamd_mempool_destruct_t) g_free, ia_string);
-					}
-					gret = g_list_prepend (gret, ia_string);
-					ia = ia->next;
-				}
-#else
-				i = internet_address_list_length (ia);
-				while (--i >= 0) {
-					ia_string = internet_address_to_string (internet_address_list_get_address (
-								ia,
-								i),
-							FALSE);
-					if (pool != NULL) {
-						rspamd_mempool_add_destructor (pool,
-							(rspamd_mempool_destruct_t) g_free, ia_string);
-					}
-					gret = g_list_prepend (gret, ia_string);
-				}
-#endif
-				break;
-			case FUNC_LIST:
-				gret =
-					(*(fieldfunc[i].getlistfunc))(pool, message, field, strong);
-				break;
-			}
-			break;
-		}
-	}
-	if (gret == NULL && ret != NULL) {
-		if (pool != NULL) {
-			gret = g_list_prepend (gret, rspamd_mempool_strdup (pool, ret));
-		}
-		else {
-			gret = g_list_prepend (gret, g_strdup (ret));
-		}
-	}
-	if (fieldfunc[i].functype == FUNC_CHARFREEPTR && ret) {
-		g_free (ret);
-	}
-
-	return gret;
-}
 
 GList *
-message_get_raw_header (struct rspamd_task *task,
+message_get_header (struct rspamd_task *task,
 	const gchar *field,
 	gboolean strong)
 {
@@ -2035,9 +1423,7 @@ message_get_raw_header (struct rspamd_task *task,
 			}
 		}
 		else {
-			if (g_ascii_strcasecmp (rh->name, field) == 0) {
-				gret = g_list_prepend (gret, rh);
-			}
+			gret = g_list_prepend (gret, rh);
 		}
 		rh = rh->next;
 	}

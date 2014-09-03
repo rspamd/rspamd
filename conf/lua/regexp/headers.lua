@@ -227,16 +227,12 @@ local kmail_mua = 'User-Agent=/^\\s*KMail\\/1\\.\\d+\\.\\d+/H'
 -- KMail common Message-ID template
 local kmail_msgid_common = 'Message-Id=/^\\s*\\d+\\.\\d+\\.\\S+\\@\\S+$/mH'
 function kmail_msgid (task)
-	local msg = task:get_message()
 	local regexp_text = '<(\\S+)>\\|(19[789]\\d|20\\d\\d)(0\\d|1[012])([012]\\d|3[01])([0-5]\\d)([0-5]\\d)\\.\\d+\\.\\1$'
 	local re = rspamd_regexp.create_cached(regexp_text)
-	local header_msgid = msg:get_header('Message-Id')
+	local header_msgid = task:get_header('Message-Id')
 	if header_msgid then
-		for _,header_from in ipairs(msg:get_header('From')) do
-	    		if re:match(header_from.."|"..header_msgid[1]) then
-				return true
-			end
-		end
+		local header_from = task:get_header('From')
+	  if re:match(header_from.."|"..header_msgid) then return true end
 	end
 	return false
 end
@@ -371,7 +367,7 @@ local yandex_received = 'Received=/^\\s*from \\S+\\.(yandex\\.ru|yandex\\.net)/m
 local yandex = string.format('(%s) & ((%s) | (%s) | (%s))', yandex_received, yandex_from, yandex_x_envelope_from, yandex_return_path)
 -- Tabs as delimiters between header names and header values
 function check_header_delimiter_tab(task, header_name)
-	for _,rh in ipairs(task:get_raw_header(header_name)) do
+	for _,rh in ipairs(task:get_header_full(header_name)) do
 		if rh['tab_separated'] then return true end
 	end
 	return false
@@ -383,7 +379,7 @@ reconf['HEADER_REPLYTO_DELIMITER_TAB'] = string.format('(%s) & !(%s)', 'check_he
 reconf['HEADER_DATE_DELIMITER_TAB'] = string.format('(%s) & !(%s)', 'check_header_delimiter_tab(Date)', yandex)
 -- Empty delimiters between header names and header values
 function check_header_delimiter_empty(task, header_name)
-	for _,rh in ipairs(task:get_raw_header(header_name)) do
+	for _,rh in ipairs(task:get_header_full(header_name)) do
 		if rh['empty_separator'] then return true end
 	end
 	return false
@@ -435,7 +431,7 @@ reconf['FORGED_GENERIC_RECEIVED4'] =	'Received=/^\\s*(.+\\n)*from localhost by \
 rspamd_config.FORGED_GENERIC_RECEIVED5 = function (task)
 	local regexp_text = '^\\s*from \\[(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\\].*\\n(.+\\n)*\\s*from \\1 by \\S+;\\s+\\w{3}, \\d+ \\w{3} 20\\d\\d \\d\\d\\:\\d\\d\\:\\d\\d [+-]\\d\\d\\d0$'
 	local re = rspamd_regexp.create_cached(regexp_text, 'i')
-	local headers_recv = task:get_raw_header('Received')
+	local headers_recv = task:get_header_full('Received')
 	if headers_recv then
 		for _,header_r in ipairs(headers_recv) do
 			if re:match(header_r['value']) then
@@ -450,15 +446,15 @@ reconf['INVALID_POSTFIX_RECEIVED'] =	'Received=/ \\(Postfix\\) with ESMTP id [A-
 
 rspamd_config.INVALID_EXIM_RECEIVED = function (task)
 	local checked = 0
-	local headers_to = task:get_message():get_header('To')
+	local headers_to = task:get_header_full('To')
 	if headers_to then
-		local headers_recv = task:get_raw_header('Received')
+		local headers_recv = task:get_header_full('Received')
 		local regexp_text = '^[^\\n]*?<?\\S+?\\@(\\S+)>?\\|.*from \\d+\\.\\d+\\.\\d+\\.\\d+ \\(HELO \\S+\\)[\\s\\r\\n]*by \\1 with esmtp \\(\\S*?[\\?\\@\\(\\)\\s\\.\\+\\*\'\'\\/\\\\,]\\S*\\)[\\s\\r\\n]+id \\S*?[\\)\\(<>\\/\\\\,\\-:=]'
 		local re = rspamd_regexp.create_cached(regexp_text, 's')
 		if headers_recv then
 			for _,header_to in ipairs(headers_to) do
 				for _,header_r in ipairs(headers_recv) do
-					if re:match(header_to.."|"..header_r['value']) then
+					if re:match(header_to['value'].."|"..header_r['value']) then
         		        return true
         			end
 				end
@@ -475,15 +471,15 @@ end
 
 rspamd_config.INVALID_EXIM_RECEIVED2 = function (task)
 	local checked = 0
-	local headers_to = task:get_message():get_header('To')
+	local headers_to = task:get_header_full('To')
 	if headers_to then
-		local headers_recv = task:get_raw_header('Received')
+		local headers_recv = task:get_header_full('Received')
 		local regexp_text = '^[^\\n]*?<?\\S+?\\@(\\S+)>?\\|.*from \\d+\\.\\d+\\.\\d+\\.\\d+ \\(HELO \\S+\\)[\\s\\r\\n]*by \\1 with esmtp \\([A-Z]{9,12} [A-Z]{5,6}\\)[\\s\\r\\n]+id [a-zA-Z\\d]{6}-[a-zA-Z\\d]{6}-[a-zA-Z\\d]{2}[\\s\\r\\n]+'
 		local re = rspamd_regexp.create_cached(regexp_text, 's')
 		if headers_recv then
 			for _,header_to in ipairs(headers_to) do
 				for _,header_r in ipairs(headers_recv) do
-					if re:match(header_to.."|"..header_r['value']) then
+					if re:match(header_to['value'].."|"..header_r['value']) then
         		        return true
         			end
 				end

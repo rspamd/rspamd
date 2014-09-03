@@ -417,6 +417,7 @@ process_regexp (struct rspamd_regexp *re,
 	gsize clen;
 	gint r, passed = 0, start, end, old;
 	gboolean matched = FALSE;
+	const gchar *in;
 
 	GList *cur, *headerlist;
 	GRegex *regexp;
@@ -468,8 +469,9 @@ process_regexp (struct rspamd_regexp *re,
 	case REGEXP_NONE:
 		msg_warn ("bad error detected: %s has invalid regexp type",
 			re->regexp_text);
-		return 0;
+		break;
 	case REGEXP_HEADER:
+	case REGEXP_RAW_HEADER:
 		/* Check header's name */
 		if (re->header == NULL) {
 			msg_info ("header regexp without header name: '%s'",
@@ -477,13 +479,13 @@ process_regexp (struct rspamd_regexp *re,
 			task_cache_add (task, re, 0);
 			return 0;
 		}
-		debug_task ("checking header regexp: %s = %s",
+		debug_task ("checking %s header regexp: %s = %s",
+			re->type == REGEXP_RAW_HEADER ? "raw" : "decoded",
 			re->header,
 			re->regexp_text);
 
 		/* Get list of specified headers */
-		headerlist = message_get_header (task->task_pool,
-				task->message,
+		headerlist = message_get_header (task,
 				re->header,
 				re->is_strong);
 		if (headerlist == NULL) {
@@ -498,8 +500,6 @@ process_regexp (struct rspamd_regexp *re,
 			return 0;
 		}
 		else {
-			rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t)g_list_free, headerlist);
 			/* Check whether we have regexp for it */
 			if (re->regexp == NULL) {
 				debug_task ("regexp contains only header and it is found %s",
@@ -510,26 +510,32 @@ process_regexp (struct rspamd_regexp *re,
 			/* Iterate throught headers */
 			cur = headerlist;
 			while (cur) {
+				rh = cur->data;
 				debug_task ("found header \"%s\" with value \"%s\"",
-					re->header,
-					(const gchar *)cur->data);
+					re->header, rh->decoded);
+				if (re->type == REGEXP_RAW_HEADER) {
+					in = rh->value;
+				}
+				else {
+					in = rh->decoded;
+				}
 				/* Try to match regexp */
 				if (!re->is_raw) {
 					/* Validate input */
-					if (!cur->data || !g_utf8_validate (cur->data, -1, NULL)) {
+					if (!in || !g_utf8_validate (in, -1, NULL)) {
 						cur = g_list_next (cur);
 						continue;
 					}
 				}
-				if (cur->data &&
-					g_regex_match_full (re->regexp, cur->data, -1, 0, 0, NULL,
+				if (in &&
+					g_regex_match_full (re->regexp, in, -1, 0, 0, NULL,
 					&err) == TRUE) {
 					if (G_UNLIKELY (re->is_test)) {
 						msg_info (
 							"process test regexp %s for header %s with value '%s' returned TRUE",
 							re->regexp_text,
 							re->header,
-							(const gchar *)cur->data);
+							in);
 					}
 					if (f != NULL && limit > 1) {
 						/* If we have limit count, increase passed count and compare with limit */
@@ -548,7 +554,7 @@ process_regexp (struct rspamd_regexp *re,
 						"process test regexp %s for header %s with value '%s' returned FALSE",
 						re->regexp_text,
 						re->header,
-						(const gchar *)cur->data);
+						in);
 				}
 				if (err != NULL) {
 					msg_info (
@@ -657,7 +663,7 @@ process_regexp (struct rspamd_regexp *re,
 			cur = g_list_next (cur);
 		}
 		task_cache_add (task, re, 0);
-		return 0;
+		break;
 	case REGEXP_MESSAGE:
 		debug_task ("checking message regexp: %s", re->regexp_text);
 		regexp = re->raw_regexp;
@@ -724,7 +730,7 @@ process_regexp (struct rspamd_regexp *re,
 				err->message);
 		}
 		task_cache_add (task, re, 0);
-		return 0;
+		break;
 	case REGEXP_URL:
 		debug_task ("checking url regexp: %s", re->regexp_text);
 		if (f != NULL && limit > 1) {
@@ -745,101 +751,10 @@ process_regexp (struct rspamd_regexp *re,
 		if (callback_param.found == FALSE) {
 			task_cache_add (task, re, 0);
 		}
-		return 0;
-	case REGEXP_RAW_HEADER:
-		debug_task ("checking for raw header: %s with regexp: %s",
-			re->header,
-			re->regexp_text);
-		/* Check header's name */
-		if (re->header == NULL) {
-			msg_info ("header regexp without header name: '%s'",
-				re->regexp_text);
-			task_cache_add (task, re, 0);
-			return 0;
-		}
-		debug_task ("checking header regexp: %s = %s",
-			re->header,
-			re->regexp_text);
-
-		/* Get list of specified headers */
-		headerlist = message_get_raw_header (task, re->header, re->is_strong);
-		if (headerlist == NULL) {
-			/* Header is not found */
-			if (G_UNLIKELY (re->is_test)) {
-				msg_info (
-					"process test regexp %s for header %s returned FALSE: no header found",
-					re->regexp_text,
-					re->header);
-			}
-			task_cache_add (task, re, 0);
-			return 0;
-		}
-		else {
-			/* Check whether we have regexp for it */
-			if (re->regexp == NULL) {
-				debug_task ("regexp contains only header and it is found %s",
-					re->header);
-				task_cache_add (task, re, 1);
-				return 1;
-			}
-			/* Iterate throught headers */
-			cur = headerlist;
-			while (cur) {
-				debug_task ("found header \"%s\" with value \"%s\"",
-					re->header,
-					(const gchar *)cur->data);
-				rh = cur->data;
-				/* Try to match regexp */
-				if (!re->is_raw) {
-					/* Validate input */
-					if (!rh->value || !g_utf8_validate (rh->value, -1, NULL)) {
-						cur = g_list_next (cur);
-						continue;
-					}
-				}
-				if (rh->value &&
-					g_regex_match_full (re->regexp, rh->value, -1, 0, 0, NULL,
-					&err) == TRUE) {
-					if (G_UNLIKELY (re->is_test)) {
-						msg_info (
-							"process test regexp %s for header %s with value '%s' returned TRUE",
-							re->regexp_text,
-							re->header,
-							(const gchar *)cur->data);
-					}
-					if (f != NULL && limit > 1) {
-						/* If we have limit count, increase passed count and compare with limit */
-						if (f (++passed, limit)) {
-							task_cache_add (task, re, 1);
-							return 1;
-						}
-					}
-					else {
-						task_cache_add (task, re, 1);
-						return 1;
-					}
-				}
-				else if (G_UNLIKELY (re->is_test)) {
-					msg_info (
-						"process test regexp %s for header %s with value '%s' returned FALSE",
-						re->regexp_text,
-						re->header,
-						(const gchar *)cur->data);
-				}
-				if (err != NULL) {
-					msg_info (
-						"error occured while processing regexp \"%s\": %s",
-						re->regexp_text,
-						err->message);
-				}
-				cur = g_list_next (cur);
-			}
-			task_cache_add (task, re, 0);
-			return 0;
-		}
 		break;
 	default:
 		msg_warn ("bad error detected: %p is not a valid regexp object", re);
+		break;
 	}
 
 	/* Not reached */

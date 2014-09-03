@@ -149,7 +149,6 @@ struct rspamd_lua_ip {
  */
 void rspamd_lua_add_preload (lua_State *L, const gchar *name, lua_CFunction func);
 
-void luaopen_message (lua_State *L);
 void luaopen_task (lua_State *L);
 void luaopen_config (lua_State *L);
 void luaopen_metric (lua_State *L);

@@ -1049,12 +1049,10 @@ rspamd_header_exists (struct rspamd_task * task, GList * args, void *unused)
 	}
 
 	debug_task ("try to get header %s", (gchar *)arg->data);
-	headerlist = message_get_header (task->task_pool,
-			task->message,
+	headerlist = message_get_header (task,
 			(gchar *)arg->data,
 			FALSE);
 	if (headerlist) {
-		g_list_free (headerlist);
 		return TRUE;
 	}
 	return FALSE;

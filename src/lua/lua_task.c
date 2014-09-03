@@ -57,9 +57,9 @@ LUA_FUNCTION_DEF (task, get_urls);
 LUA_FUNCTION_DEF (task, get_emails);
 LUA_FUNCTION_DEF (task, get_text_parts);
 LUA_FUNCTION_DEF (task, get_parts);
-LUA_FUNCTION_DEF (task, get_raw_headers);
-LUA_FUNCTION_DEF (task, get_raw_header);
-LUA_FUNCTION_DEF (task, get_raw_header_strong);
+LUA_FUNCTION_DEF (task, get_header);
+LUA_FUNCTION_DEF (task, get_header_raw);
+LUA_FUNCTION_DEF (task, get_header_full);
 LUA_FUNCTION_DEF (task, get_received_headers);
 LUA_FUNCTION_DEF (task, get_resolver);
 LUA_FUNCTION_DEF (task, inc_dns_req);
@@ -107,9 +107,9 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_emails),
 	LUA_INTERFACE_DEF (task, get_text_parts),
 	LUA_INTERFACE_DEF (task, get_parts),
-	LUA_INTERFACE_DEF (task, get_raw_headers),
-	LUA_INTERFACE_DEF (task, get_raw_header),
-	LUA_INTERFACE_DEF (task, get_raw_header_strong),
+	LUA_INTERFACE_DEF (task, get_header),
+	LUA_INTERFACE_DEF (task, get_header_raw),
+	LUA_INTERFACE_DEF (task, get_header_full),
 	LUA_INTERFACE_DEF (task, get_received_headers),
 	LUA_INTERFACE_DEF (task, get_resolver),
 	LUA_INTERFACE_DEF (task, inc_dns_req),
@@ -571,63 +571,49 @@ lua_task_get_parts (lua_State * L)
 
 
 static gint
-lua_task_get_raw_headers (lua_State * L)
+lua_task_push_header (lua_State * L,
+		struct rspamd_task *task,
+		const gchar *name,
+		gboolean strong,
+		gboolean full,
+		gboolean raw)
 {
-	struct rspamd_task *task = lua_check_task (L);
 
-	if (task) {
-		lua_pushstring (L, task->raw_headers_str);
-	}
-	else {
-		lua_pushnil (L);
-	}
-
-	return 1;
-}
-
-static gint
-lua_task_get_raw_header_common (lua_State * L, gboolean strong)
-{
-	struct rspamd_task *task = lua_check_task (L);
 	struct raw_header *rh;
 	gint i = 1;
-	const gchar *name;
+	const gchar *val;
 
-	if (task) {
-		name = luaL_checkstring (L, 2);
-		if (name == NULL) {
-			lua_pushnil (L);
-			return 1;
-		}
+	if (full) {
 		lua_newtable (L);
-		rh = g_hash_table_lookup (task->raw_headers, name);
+	}
+	rh = g_hash_table_lookup (task->raw_headers, name);
 
-		if (rh == NULL) {
-			return 1;
+	if (rh == NULL) {
+		return 1;
+	}
+
+	while (rh) {
+		if (rh->name == NULL) {
+			rh = rh->next;
+			continue;
 		}
-
-		while (rh) {
-			if (rh->name == NULL) {
+		/* Check case sensivity */
+		if (strong) {
+			if (strcmp (rh->name, name) != 0) {
 				rh = rh->next;
 				continue;
 			}
-			/* Check case sensivity */
-			if (strong) {
-				if (strcmp (rh->name, name) != 0) {
-					rh = rh->next;
-					continue;
-				}
-			}
-			else {
-				if (g_ascii_strcasecmp (rh->name, name) != 0) {
-					rh = rh->next;
-					continue;
-				}
-			}
+		}
+		if (full) {
 			/* Create new associated table for a header */
 			lua_newtable (L);
 			rspamd_lua_table_set (L, "name",	 rh->name);
-			rspamd_lua_table_set (L, "value", rh->value);
+			if (rh->value) {
+				rspamd_lua_table_set (L, "value", rh->value);
+			}
+			if (rh->decoded) {
+				rspamd_lua_table_set (L, "decoded", rh->value);
+			}
 			lua_pushstring (L, "tab_separated");
 			lua_pushboolean (L, rh->tab_separated);
 			lua_settable (L, -3);
@@ -639,24 +625,61 @@ lua_task_get_raw_header_common (lua_State * L, gboolean strong)
 			/* Process next element */
 			rh = rh->next;
 		}
-	}
-	else {
-		lua_pushnil (L);
+		else {
+			if (raw) {
+				val = rh->decoded;
+			}
+			else {
+				val = rh->value;
+			}
+			if (val) {
+				lua_pushstring (L, val);
+			}
+			else {
+				lua_pushnil (L);
+			}
+			return 1;
+		}
 	}
 
 	return 1;
 }
 
 static gint
-lua_task_get_raw_header (lua_State * L)
+lua_task_get_header_common (lua_State *L, gboolean full, gboolean raw)
 {
-	return lua_task_get_raw_header_common (L, FALSE);
+	gboolean strong = FALSE;
+	struct rspamd_task *task = lua_check_task (L);
+	const gchar *name;
+
+	name = luaL_checkstring (L, 2);
+
+	if (name && task) {
+		if (lua_gettop (L) == 3) {
+			strong = lua_toboolean (L, 3);
+		}
+		return lua_task_push_header (L, task, name, strong, full, raw);
+	}
+	lua_pushnil (L);
+	return 1;
 }
 
 static gint
-lua_task_get_raw_header_strong (lua_State * L)
+lua_task_get_header_full (lua_State * L)
 {
-	return lua_task_get_raw_header_common (L, TRUE);
+	return lua_task_get_header_common (L, TRUE, TRUE);
+}
+
+static gint
+lua_task_get_header (lua_State * L)
+{
+	return lua_task_get_header_common (L, FALSE, FALSE);
+}
+
+static gint
+lua_task_get_header_raw (lua_State * L)
+{
+	return lua_task_get_header_common (L, FALSE, TRUE);
 }
 
 static gint

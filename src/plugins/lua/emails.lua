@@ -12,7 +12,7 @@ local function check_email_rule(task, rule, addr)
 		task:inc_dns_req()
 		if results then
 			logger.info(string.format('<%s> email: [%s] resolved for symbol: %s', 
-				task:get_message():get_message_id(), to_resolve, rule['symbol']))
+				task:get_message_id(), to_resolve, rule['symbol']))
 			task:insert_result(rule['symbol'], 1)
 		end
 	end
@@ -31,14 +31,14 @@ local function check_email_rule(task, rule, addr)
 			if rule['map']:get_key(key) then
 				task:insert_result(rule['symbol'], 1)
 				logger.info(string.format('<%s> email: \'%s\' is found in list: %s', 
-					task:get_message():get_message_id(), key, rule['symbol']))
+					task:get_message_id(), key, rule['symbol']))
 			end
 		else
 			local key = string.format('%s@%s', addr:get_user(), addr:get_host())
 			if rule['map']:get_key(key) then
 				task:insert_result(rule['symbol'], 1)
 				logger.info(string.format('<%s> email: \'%s\' is found in list: %s', 
-					task:get_message():get_message_id(), key, rule['symbol']))
+					task:get_message_id(), key, rule['symbol']))
 			end
 		end
 	end

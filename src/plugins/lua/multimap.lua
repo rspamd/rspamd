@@ -36,12 +36,12 @@ local function check_multimap(task)
 				end
 			end
 		elseif rule['type'] == 'header' then
-			local headers = task:get_message():get_header(rule['header'])
+			local headers = task:get_header_full(rule['header'])
 			if headers then
 				for _,hv in ipairs(headers) do
 					if rule['pattern'] then
 						-- extract a part from header
-						local _,_,ext = string.find(hv, rule['pattern'])
+						local _,_,ext = string.find(hv['decoded'], rule['pattern'])
 						if ext then
 							if rule['cdb'] then
 								if rule['hash']:lookup(ext) then
@@ -55,11 +55,11 @@ local function check_multimap(task)
 						end
 					else
 						if rule['cdb'] then
-							if rule['hash']:lookup(hv) then
+							if rule['hash']:lookup(hv['decoded']) then
 								task:insert_result(rule['symbol'], 1)
 							end
 						else
-							if rule['hash']:get_key(hv) then
+							if rule['hash']:get_key(hv['decoded']) then
 								task:insert_result(rule['symbol'], 1)
 							end
 						end
