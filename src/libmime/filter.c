@@ -721,17 +721,15 @@ classifiers_callback (gpointer value, void *arg)
 	f_str_t c;
 	gchar *header = NULL;
 	gint *dist = NULL, diff;
-	gboolean is_twopart = FALSE;
+	gboolean is_twopart = FALSE, is_headers = FALSE;
+	struct raw_header *rh;
 
 	task = cbdata->task;
 
 	if ((header = g_hash_table_lookup (cl->opts, "header")) != NULL) {
 		cur =
-			message_get_header (task->task_pool, task->message, header, FALSE);
-		if (cur) {
-			rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t)g_list_free, cur);
-		}
+			message_get_header (task, header, FALSE);
+		is_headers = TRUE;
 	}
 	else {
 		cur = g_list_first (task->text_parts);
@@ -744,10 +742,15 @@ classifiers_callback (gpointer value, void *arg)
 
 	if ((tokens = g_hash_table_lookup (task->tokens, cl->tokenizer)) == NULL) {
 		while (cur != NULL) {
-			if (header) {
-				c.len = strlen (cur->data);
+			if (is_headers) {
+				rh = (struct raw_header *)cur->data;
+				if (rh->decoded == NULL) {
+					cur = g_list_next (cur);
+					continue;
+				}
+				c.len = strlen (rh->decoded);
 				if (c.len > 0) {
-					c.begin = cur->data;
+					c.begin = rh->decoded;
 					if (!cl->tokenizer->tokenize_func (cl->tokenizer,
 						task->task_pool, &c, &tokens, FALSE, FALSE, NULL)) {
 						msg_info ("cannot tokenize input");
@@ -1084,7 +1087,7 @@ learn_task (const gchar *statfile, struct rspamd_task *task, GError **err)
 	struct mime_text_part *part, *p1, *p2;
 	gboolean is_utf = FALSE, is_twopart = FALSE;
 	gint diff;
-
+	struct raw_header *rh;
 
 	/* Load classifier by symbol */
 	cl = g_hash_table_lookup (task->cfg->classifiers_symbols, statfile);
@@ -1097,11 +1100,7 @@ learn_task (const gchar *statfile, struct rspamd_task *task, GError **err)
 
 	/* If classifier has 'header' option just classify header of this type */
 	if ((s = g_hash_table_lookup (cl->opts, "header")) != NULL) {
-		cur = message_get_header (task->task_pool, task->message, s, FALSE);
-		if (cur) {
-			rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t)g_list_free, cur);
-		}
+		cur = message_get_header (task, s, FALSE);
 	}
 	else {
 		/* Classify message otherwise */
@@ -1114,8 +1113,13 @@ learn_task (const gchar *statfile, struct rspamd_task *task, GError **err)
 	/* Get tokens from each element */
 	while (cur) {
 		if (s != NULL) {
-			c.len = strlen (cur->data);
-			c.begin = cur->data;
+			rh = (struct raw_header *)cur->data;
+			if (rh->decoded == NULL) {
+				cur = g_list_next (cur);
+				continue;
+			}
+			c.len = strlen (rh->decoded);
+			c.begin = rh->decoded;
 			ex = NULL;
 		}
 		else {
