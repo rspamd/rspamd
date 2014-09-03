@@ -31,26 +31,26 @@ local function get_specific_statfiles(classifier, task)
 	-- Maillist
 	local st_maillist = classifier:get_statfile_by_label(list_label)
 	if st_maillist then
-		local unsub_header = task:get_raw_header('List-Unsubscribe')
-		if unsub_header and unsub_header[1] then
+		local unsub_header = task:get_header_raw('List-Unsubscribe')
+		if unsub_header then
 			table.foreach(st_maillist, function(i,v) table.insert(spec_st,v) end)
 		end
 	end
 	-- Long subject
 	local st_longsubj = classifier:get_statfile_by_label(long_subject_label)
 	if st_longsubj then
-		local subj = task:get_raw_header('Subject')
-		if subj and subj[1] and string.len(subj[1]['value']) > 150 then
+		local subj = task:get_header_raw('Subject')
+		if subj and string.len(subj['value']) > 150 then
 			table.foreach(st_longsubj, function(i,v) table.insert(spec_st,v) end)
 		end
 	end
 	-- Reply-To != To
 	local st_replyto = classifier:get_statfile_by_label(different_reply_to_label)
 	if st_replyto then
-		local to = task:get_raw_header('To')
-		local reply_to = task:get_raw_header('Reply-To')
-		if to and to[1] and reply_to and reply_to[1] then
-			if string.lower(to[1]['value']) ~= string.lower(reply_to[1]['value']) then
+		local to = task:get_header_raw('To')
+		local reply_to = task:get_header_raw('Reply-To')
+		if to and reply_to then
+			if string.lower(to['value']) ~= string.lower(reply_to['value']) then
 				table.foreach(st_replyto, function(i,v) table.insert(spec_st,v) end)
 			end
 		end
@@ -58,8 +58,8 @@ local function get_specific_statfiles(classifier, task)
 	-- Has In-Reply-To header
 	local st_reply = classifier:get_statfile_by_label(has_in_reply_label)
 	if st_reply then
-		local inrep_header = task:get_raw_header('In-Reply-To')
-		if inrep_header and inrep_header[1] then
+		local inrep_header = task:get_header_raw('In-Reply-To')
+		if inrep_header then
 			table.foreach(st_reply, function(i,v) table.insert(spec_st,v) end)
 		end
 	end

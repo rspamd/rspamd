@@ -174,9 +174,6 @@ local function hfilter(task)
     --HELO--
     local helo = task:get_helo()
     
-    --MESSAGE--
-    local message = task:get_message()
-    
     --RULES--RULES--RULES--
 
     -- Check's HELO
