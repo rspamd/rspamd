@@ -5,7 +5,6 @@ local symbol_rcpt = 'FORGED_RECIPIENTS'
 local symbol_sender = 'FORGED_SENDER'
 
 function check_forged_headers(task)
-	local msg = task:get_message()
 	local smtp_rcpt = task:get_recipients(1)
 	local res = false
 	
