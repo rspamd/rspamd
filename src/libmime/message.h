@@ -65,25 +65,6 @@ struct raw_header {
  */
 gint process_message (struct rspamd_task *task);
 
-/*
- * Set header with specified name and value
- */
-void message_set_header (GMimeMessage *message,
-	const gchar *field,
-	const gchar *value);
-
-/*
- * Get a list of header's values with specified header's name
- * @param pool if not NULL this pool would be used for storing header's values
- * @param message g_mime_message object
- * @param field header's name
- * @param strong if this flag is TRUE header's name is case sensitive, otherwise it is not
- * @return A list of header's values or NULL. If list is not NULL it MUST be freed. If pool is NULL elements must be freed as well.
- */
-GList * message_get_header (rspamd_mempool_t *pool,
-	GMimeMessage *message,
-	const gchar *field,
-	gboolean strong);
 
 /*
  * Get a list of header's values with specified header's name using raw headers
@@ -92,7 +73,7 @@ GList * message_get_header (rspamd_mempool_t *pool,
  * @param strong if this flag is TRUE header's name is case sensitive, otherwise it is not
  * @return A list of header's values or NULL. Unlike previous function it is NOT required to free list or values. I should rework one of these functions some time.
  */
-GList * message_get_raw_header (struct rspamd_task *task,
+GList * message_get_header (struct rspamd_task *task,
 	const gchar *field,
 	gboolean strong);
 
