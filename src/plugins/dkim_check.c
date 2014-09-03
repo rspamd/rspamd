@@ -360,10 +360,10 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 	rspamd_dkim_context_t *ctx;
 	rspamd_dkim_key_t *key;
 	GError *err = NULL;
+	struct raw_header *rh;
 	/* First check if a message has its signature */
 
-	hlist = message_get_header (task->task_pool,
-			task->message,
+	hlist = message_get_header (task,
 			DKIM_SIGNHEADER,
 			FALSE);
 	if (hlist != NULL) {
@@ -388,7 +388,8 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 				}
 			}
 			hlist = g_list_last (hlist);
-			ctx = rspamd_create_dkim_context (hlist->data,
+			rh = (struct raw_header *)hlist->data;
+			ctx = rspamd_create_dkim_context (rh->decoded,
 					task->task_pool,
 					dkim_module_ctx->time_jitter,
 					&err);
