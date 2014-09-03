@@ -1712,6 +1712,30 @@ local_message_get_sender (GMimeMessage * message)
 	return res;
 }
 
+#ifdef GMIME24
+static const gchar*
+local_message_get_content_type (GMimeMessage * message)
+{
+	GMimeContentType *ct;
+
+	ct = g_mime_object_get_content_type (GMIME_OBJECT (message));
+	if (ct) {
+		return g_mime_content_type_to_string (ct);
+	}
+	return NULL;
+}
+static void
+local_message_set_content_type (GMimeMessage * message, const gchar *in)
+{
+	GMimeContentType *ct;
+
+	ct = g_mime_content_type_new_from_string (in);
+	if (ct) {
+		g_mime_object_set_content_type (GMIME_OBJECT (message), ct);
+	}
+}
+#endif
+
 static const gchar *
 local_message_get_reply_to (GMimeMessage * message)
 {
@@ -1845,6 +1869,9 @@ static struct {
 	}, {
 		"Date", (GetFunc)g_mime_message_get_date_as_string, NULL, NULL,
 		local_mime_message_set_date_from_string, NULL, FUNC_CHARFREEPTR
+	}, {
+		"Content-Type", local_message_get_content_type, NULL, NULL,
+		local_message_set_content_type, NULL, FUNC_CHARFREEPTR
 	},
 #endif
 	{
@@ -1887,7 +1914,10 @@ message_set_header (GMimeMessage * message,
 			strlen (fieldfunc[i].name))) {
 			switch (fieldfunc[i].functype) {
 			case FUNC_CHARPTR:
-				(*(fieldfunc[i].setfunc))(message, value);
+			case FUNC_CHARFREEPTR:
+				if (fieldfunc[i].setfunc) {
+					(*(fieldfunc[i].setfunc))(message, value);
+				}
 				break;
 			case FUNC_IA:
 				(*(fieldfunc[i].setlfunc))(message, fieldfunc[i].name, value);
