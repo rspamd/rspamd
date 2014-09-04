@@ -43,9 +43,8 @@ end
 -- Date issues
 rspamd_config.DATE_IN_FUTURE = function(task)
 	if rspamd_config:get_api_version() >= 5 then
-		local m = task:get_message()
-		local dm = m:get_date()
-		local dt = task:get_date()
+		local dm = task:get_date{format = 'message'}
+		local dt = task:get_date{format = 'connect'}
 		-- An hour
 		if dm - dt > 3600 then
 			return true
@@ -56,9 +55,8 @@ rspamd_config.DATE_IN_FUTURE = function(task)
 end
 rspamd_config.DATE_IN_PAST = function(task)
 	if rspamd_config:get_api_version() >= 5 then
-		local m = task:get_message()
-		local dm = m:get_date()
-		local dt = task:get_date()
+    local dm = task:get_date{format = 'message', gmt = true}
+    local dt = task:get_date{format = 'connect', gmt = true}
 		-- A day
 		if dt - dm > 86400 then
 			return true
