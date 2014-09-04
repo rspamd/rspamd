@@ -78,7 +78,7 @@ struct redirector_param {
 
 struct surbl_bit_item {
 	guint32 bit;
-	const gchar *symbol;
+	gchar *symbol;
 };
 
 #endif

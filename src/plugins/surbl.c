@@ -476,6 +476,8 @@ surbl_module_config (struct rspamd_config *cfg)
 					ucl_iterate_object (cur, &it, true)) != NULL) {
 					if (ucl_object_key (cur_bit) != NULL && cur_bit->type ==
 						UCL_INT) {
+						gchar *p;
+
 						bit = ucl_obj_toint (cur_bit);
 						new_bit = rspamd_mempool_alloc (
 							surbl_module_ctx->surbl_pool,
@@ -484,6 +486,13 @@ surbl_module_config (struct rspamd_config *cfg)
 						new_bit->symbol = rspamd_mempool_strdup (
 							surbl_module_ctx->surbl_pool,
 							ucl_object_key (cur_bit));
+						/* Convert to uppercase */
+						p = new_bit->symbol;
+						while (*p) {
+							*p = g_ascii_toupper (*p);
+							p ++;
+						}
+
 						msg_debug ("add new bit suffix: %d with symbol: %s",
 							(gint)new_bit->bit, new_bit->symbol);
 						new_suffix->bits = g_list_prepend (new_suffix->bits,
