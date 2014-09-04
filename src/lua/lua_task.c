@@ -1298,7 +1298,7 @@ lua_task_get_date (lua_State *L)
 		}
 		/* Get GMT date and store it to time_t */
 		if (type == DATE_CONNECT || type == DATE_CONNECT_STRING) {
-			tim = tv_to_msec (&task->tv) / 1000.;
+			tim = (tv_to_msec (&task->tv)) / 1000.;
 
 			if (!gmt) {
 				struct tm t;
@@ -1306,18 +1306,21 @@ lua_task_get_date (lua_State *L)
 
 				tt = tim;
 				localtime_r (&tt, &t);
+				t.tm_gmtoff = 0;
+				t.tm_isdst = 0;
 				tim = mktime (&t);
 			}
 		}
 		else {
 			if (task->message) {
-				time_t tim;
+				time_t tt;
 				gint offset;
-				g_mime_message_get_date (task->message, &tim, &offset);
+				g_mime_message_get_date (task->message, &tt, &offset);
 
 				if (!gmt) {
-					tim += (offset * 60 * 60) / 100 + (offset * 60 * 60) % 100;
+					tt += (offset * 60 * 60) / 100 + (offset * 60 * 60) % 100;
 				}
+				tim = tt;
 			}
 			else {
 				tim = 0.0;
