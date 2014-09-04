@@ -1234,16 +1234,107 @@ lua_task_get_symbol (lua_State *L)
 	return 1;
 }
 
+enum lua_date_type {
+	DATE_CONNECT = 0,
+	DATE_MESSAGE,
+	DATE_CONNECT_STRING,
+	DATE_MESSAGE_STRING
+};
+
+static enum lua_date_type
+lua_task_detect_date_type (lua_State *L, gint idx, gboolean *gmt)
+{
+	enum lua_date_type type = DATE_CONNECT;
+
+	if (lua_type (L, idx) == LUA_TNUMBER) {
+		gint num = lua_tonumber (L, idx);
+		if (num >= DATE_CONNECT && num <= DATE_MESSAGE_STRING) {
+			return num;
+		}
+	}
+	else if (lua_type (L, idx) == LUA_TTABLE) {
+		const gchar *str;
+
+		lua_pushvalue (L, idx);
+		lua_pushstring (L, "format");
+		lua_gettable (L, -2);
+		str = lua_tostring (L, -1);
+		if (g_ascii_strcasecmp (str, "message") == 0) {
+			type = DATE_MESSAGE;
+		}
+		else if (g_ascii_strcasecmp (str, "connect_str") == 0) {
+			type = DATE_CONNECT_STRING;
+		}
+		else if (g_ascii_strcasecmp (str, "message_str") == 0) {
+			type = DATE_MESSAGE_STRING;
+		}
+		lua_pop (L, 1);
+
+		lua_pushstring (L, "gmt");
+		lua_gettable (L, -2);
+
+		if (lua_type (L, -1) == LUA_TBOOLEAN) {
+			*gmt = lua_toboolean (L, -1);
+		}
+
+		/* Value and table */
+		lua_pop (L, 2);
+	}
+
+	return type;
+}
+
 static gint
 lua_task_get_date (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L);
-	time_t task_time;
+	gdouble tim;
+	enum lua_date_type type = DATE_CONNECT;
+	gboolean gmt = TRUE;
 
 	if (task != NULL) {
+		if (lua_gettop (L) > 1) {
+			type = lua_task_detect_date_type (L, 2, &gmt);
+		}
 		/* Get GMT date and store it to time_t */
-		task_time = task->tv.tv_sec;
-		lua_pushnumber (L, task_time);
+		if (type == DATE_CONNECT || type == DATE_CONNECT_STRING) {
+			tim = tv_to_msec (&task->tv) / 1000.;
+
+			if (!gmt) {
+				struct tm t;
+				time_t tt;
+
+				tt = tim;
+				localtime_r (&tt, &t);
+				tim = mktime (&t);
+			}
+		}
+		else {
+			if (task->message) {
+				time_t tim;
+				gint offset;
+				g_mime_message_get_date (task->message, &tim, &offset);
+
+				if (!gmt) {
+					tim += (offset * 60 * 60) / 100 + (offset * 60 * 60) % 100;
+				}
+			}
+			else {
+				tim = 0.0;
+			}
+		}
+		if (type == DATE_CONNECT || type == DATE_MESSAGE) {
+			lua_pushnumber (L, tim);
+		}
+		else {
+			GTimeVal tv;
+			gchar *out;
+
+			double_to_tv (tim, &tv);
+			out = g_time_val_to_iso8601 (&tv);
+			lua_pushstring (L, out);
+			g_free (out);
+		}
 	}
 	else {
 		lua_pushnil (L);
