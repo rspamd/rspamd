@@ -57,6 +57,9 @@ pthread_mutex_t stat_mtx = PTHREAD_MUTEX_INITIALIZER;
 
 /* Internal statistic */
 static rspamd_mempool_stat_t *mem_pool_stat = NULL;
+/* Environment variable */
+static gboolean env_checked = FALSE;
+static gboolean always_malloc = FALSE;
 
 /**
  * Function that return free space in pool page
@@ -207,6 +210,17 @@ rspamd_mempool_new (gsize size)
 		memset (map, 0, sizeof (rspamd_mempool_stat_t));
 	}
 
+	if (!env_checked) {
+		/* Check G_SLICE=always-malloc to allow memory pool debug */
+		const char *g_slice;
+
+		g_slice = getenv ("G_SLICE");
+		if (g_slice != NULL && g_ascii_strcasecmp (g_slice, "always-malloc") == 0) {
+			always_malloc = TRUE;
+		}
+		env_checked = TRUE;
+	}
+
 	new = g_slice_alloc (sizeof (rspamd_mempool_t));
 	if (new == NULL) {
 		msg_err ("cannot allocate %z bytes, aborting",
@@ -238,6 +252,15 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size, gboolean is_tmp)
 
 	if (pool) {
 		POOL_MTX_LOCK ();
+		if (always_malloc) {
+			void *ptr;
+
+			ptr = g_malloc (size);
+			POOL_MTX_UNLOCK ();
+			rspamd_mempool_add_destructor (pool, g_free, ptr);
+
+			return ptr;
+		}
 #ifdef MEMORY_GREEDY
 		if (is_tmp) {
 			cur = pool->first_pool_tmp;
@@ -564,7 +587,15 @@ rspamd_mempool_add_destructor_full (rspamd_mempool_t * pool,
 {
 	struct _pool_destructors *cur;
 
-	cur = rspamd_mempool_alloc (pool, sizeof (struct _pool_destructors));
+	if (always_malloc) {
+		/* Ugly workaround */
+		always_malloc = FALSE;
+		cur = rspamd_mempool_alloc (pool, sizeof (struct _pool_destructors));
+		always_malloc = TRUE;
+	}
+	else {
+		cur = rspamd_mempool_alloc (pool, sizeof (struct _pool_destructors));
+	}
 	if (cur) {
 		POOL_MTX_LOCK ();
 		cur->func = func;
