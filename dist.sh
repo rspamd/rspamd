@@ -5,7 +5,7 @@ if [ $# -ne 1 ] ; then
 	exit 1
 fi
 
-FNAME=shift
+FNAME=$1
 PREFIX=`basename $FNAME | sed -e 's/\.tar.*$//'`
 
 OUT=""
@@ -21,5 +21,5 @@ for sub in $SUBMODULES ; do
 	(cd $sub && git ls-files | sed -e "s|^|$sub/|" >> $OUT)
 done
 
-tar -c --no-recursion --transform "s|^|$PREFIX/|" -a -T $OUT -v -f $FNAME
+tar -c --exclude='.[^/]*' --exclude='*.xz' --exclude='*.gz' --no-recursion --transform "s|^|$PREFIX/|" -a -T $OUT -v -f $FNAME
 rm -f $OUT
