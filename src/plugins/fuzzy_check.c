@@ -120,6 +120,7 @@ struct fuzzy_learn_session {
 	gint flag;
 	gint *saved;
 	GError **err;
+	struct fuzzy_mapping *map;
 	struct timeval tv;
 	struct rspamd_http_connection_entry *http_entry;
 	struct storage_server *server;
@@ -639,7 +640,7 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 	struct fuzzy_learn_session *session = arg;
 	struct fuzzy_cmd cmd;
 	gchar buf[512];
-	const gchar *cmd_name;
+	const gchar *cmd_name, *symbol;
 
 	cmd_name = (session->cmd == FUZZY_WRITE ? "add" : "delete");
 	if (what == EV_WRITE) {
@@ -665,11 +666,17 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 		}
 	}
 	else if (what == EV_READ) {
+		if (session->map) {
+			symbol = session->map->symbol;
+		}
+		else {
+			symbol = session->rule->symbol;
+		}
 		if (read (fd, buf, sizeof (buf)) == -1) {
 			msg_info ("cannot %s fuzzy hash for message <%s>, list %s:%d",
 				cmd_name,
 				session->task->message_id,
-				session->rule->symbol,
+				symbol,
 				session->flag);
 			if (*(session->err) == NULL) {
 				g_set_error (session->err,
@@ -682,7 +689,7 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 			msg_info ("%s fuzzy hash '%s', list: %s:%d for message <%s>",
 				cmd_name,
 				fuzzy_to_string (session->h),
-				session->rule->symbol,
+				symbol,
 				session->flag,
 				session->task->message_id);
 			goto ok;
@@ -692,7 +699,7 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 				cmd_name,
 				fuzzy_to_string (session->h),
 				session->task->message_id,
-				session->rule->symbol,
+				symbol,
 				session->flag);
 			if (*(session->err) == NULL) {
 				g_set_error (session->err,
@@ -983,6 +990,8 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 			s->fd = sock;
 			s->err = err;
 			s->rule = rule;
+			s->map = g_hash_table_lookup (rule->mappings,
+					GINT_TO_POINTER (flag));
 			/* We ref connection to avoid freeing before we process fuzzy rule */
 			rspamd_http_connection_ref (entry->conn);
 			event_add (&s->ev, &s->tv);
