@@ -1961,7 +1961,7 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	}
 	close (fd);
 
-	parser = ucl_parser_new (UCL_PARSER_KEY_LOWERCASE);
+	parser = ucl_parser_new (0);
 	rspamd_ucl_add_conf_variables (parser);
 	rspamd_ucl_add_conf_macros (parser, cfg);
 	if (!ucl_parser_add_chunk (parser, data, st.st_size)) {
