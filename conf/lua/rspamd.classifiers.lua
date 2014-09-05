@@ -10,6 +10,11 @@ local has_in_reply_label = 'reply message'
 
 -- Get specific statfiles set based on message rules
 local function get_specific_statfiles(classifier, task)
+	if not table.foreach then
+		table.foreach = function(t, f)
+			for k, v in pairs(t) do f(k, v) end
+		end
+	end
 	local spec_st = {}
 	-- More 5 recipients
 	local st_many = classifier:get_statfile_by_label(many_recipients_label)
