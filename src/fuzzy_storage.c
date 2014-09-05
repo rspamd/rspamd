@@ -524,7 +524,7 @@ check_hash_node (GQueue *hash, fuzzy_hash_t *s, gint update_value,
 				return NULL;
 			}
 			else if (h->h.block_size== s->block_size) {
-				msg_debug ("fuzzy hash was found in judy tree");
+				msg_debug ("fuzzy hash was found in tree");
 				if (update_value) {
 					h->value += update_value;
 				}
@@ -973,6 +973,10 @@ init_fuzzy (struct rspamd_config *cfg)
 #endif
 
 	rspamd_rcl_register_worker_option (cfg, type, "hashfile",
+		rspamd_rcl_parse_struct_string, ctx,
+		G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "hash_file",
 		rspamd_rcl_parse_struct_string, ctx,
 		G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
 
