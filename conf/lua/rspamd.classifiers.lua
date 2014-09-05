@@ -45,7 +45,7 @@ local function get_specific_statfiles(classifier, task)
 	local st_longsubj = classifier:get_statfile_by_label(long_subject_label)
 	if st_longsubj then
 		local subj = task:get_header_raw('Subject')
-		if subj and string.len(subj['value']) > 150 then
+		if subj and string.len(subj) > 150 then
 			table.foreach(st_longsubj, function(i,v) table.insert(spec_st,v) end)
 		end
 	end
@@ -55,7 +55,7 @@ local function get_specific_statfiles(classifier, task)
 		local to = task:get_header_raw('To')
 		local reply_to = task:get_header_raw('Reply-To')
 		if to and reply_to then
-			if string.lower(to['value']) ~= string.lower(reply_to['value']) then
+			if string.lower(to) ~= string.lower(reply_to) then
 				table.foreach(st_replyto, function(i,v) table.insert(spec_st,v) end)
 			end
 		end
