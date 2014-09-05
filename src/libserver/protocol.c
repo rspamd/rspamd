@@ -317,6 +317,15 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			if (g_ascii_strcasecmp (headern, RCPT_HEADER) == 0) {
 				if (task->rcpt_envelope == NULL) {
 					task->rcpt_envelope = internet_address_list_new ();
+#ifdef GMIME24
+					rspamd_mempool_add_destructor (task->task_pool,
+							(rspamd_mempool_destruct_t) g_object_unref,
+							task->rcpt_envelope);
+#else
+					rspamd_mempool_add_destructor (task->task_pool,
+							(rspamd_mempool_destruct_t) internet_address_list_destroy,
+							task->rcpt_envelope);
+#endif
 				}
 				tmp_addr = internet_address_list_parse_string (h->value->str);
 				internet_address_list_append (task->rcpt_envelope, tmp_addr);
@@ -838,7 +847,6 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 {
 	struct rspamd_http_message *msg;
 	const gchar *ctype = "application/json";
-	ucl_object_t *top = NULL;
 
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 	if (!task->is_json) {
@@ -849,9 +857,11 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 
 	task->state = CLOSING_CONNECTION;
 
-	top = ucl_object_typed_new (UCL_OBJECT);
 	debug_task ("writing reply to client");
 	if (task->error_code != 0) {
+		ucl_object_t *top = NULL;
+
+		top = ucl_object_typed_new (UCL_OBJECT);
 		msg->code = 500 + task->error_code % 100;
 		msg->status = g_string_new (task->last_error);
 		ucl_object_insert_key (top, ucl_object_fromstring (task->last_error),
