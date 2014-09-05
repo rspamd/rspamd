@@ -313,10 +313,11 @@ parse_qmail_recv (rspamd_mempool_t * pool,
 
 static void
 parse_recv_header (rspamd_mempool_t * pool,
-	gchar *line,
+	struct raw_header *rh,
 	struct received_header *r)
 {
 	gchar *p, *s, t, **res = NULL;
+	gchar *line;
 	enum {
 		RSPAMD_RECV_STATE_INIT = 0,
 		RSPAMD_RECV_STATE_FROM,
@@ -329,6 +330,11 @@ parse_recv_header (rspamd_mempool_t * pool,
 	}                               state = RSPAMD_RECV_STATE_INIT,
 		next_state = RSPAMD_RECV_STATE_INIT;
 	gboolean is_exim = FALSE;
+
+	line = rh->decoded;
+	if (line == NULL) {
+		return;
+	}
 
 	g_strstrip (line);
 	p = line;
