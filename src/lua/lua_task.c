@@ -81,7 +81,7 @@ LUA_FUNCTION_DEF (task, process_message);
 /***
  * @method task:get_cfg()
  * Get configuration object for a task.
- * @return {rspamd_config} [config.md](configuration object) for the task
+ * @return {rspamd_config} (config.md)[configuration object] for the task
  */
 LUA_FUNCTION_DEF (task, get_cfg);
 LUA_FUNCTION_DEF (task, set_cfg);
