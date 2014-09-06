@@ -142,7 +142,8 @@ LUA_FUNCTION_DEF (task, set_pre_result);
  * @method task:get_urls()
  * Get all URLs found in a message.
  * @return {table rspamd_url} list of all urls found
-function phishing_cb (task)
+@example
+local function phishing_cb(task)
 	local urls = task:get_urls();
 
 	if urls then
