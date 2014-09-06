@@ -215,6 +215,21 @@ function check_header_delimiter_tab(task, header_name)
 end
  */
 LUA_FUNCTION_DEF (task, get_header_full);
+/***
+ * @method task:get_received_headers()
+ * Returns a list of tables of parsed received headers. A tables returned have
+ * the following structure:
+ *
+ * - `from_hostname` - string that represents hostname provided by a peer
+ * - `from_ip` - string representation of IP address as provided by a peer
+ * - `real_hostname` - hostname as resolved by MTA
+ * - `real_ip` - string representation of IP as resolved by PTR request of MTA
+ * - `by_hostname` - MTA hostname
+ *
+ * Please note that in some situations rspamd cannot parse all the fields of received headers.
+ * In that case you should check all strings for validity.
+ * @return {table of tables} list of received headers described above
+ */
 LUA_FUNCTION_DEF (task, get_received_headers);
 LUA_FUNCTION_DEF (task, get_resolver);
 LUA_FUNCTION_DEF (task, inc_dns_req);
