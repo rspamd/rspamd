@@ -1,7 +1,7 @@
 # A simple makefile to generate documentation from .md using pandoc
 
 PANDOC ?= pandoc
-LUADOC ?= ./lua_api.pl
+LUADOC ?= doxydown/doxydown.pl
 
 all: man
 
