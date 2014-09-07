@@ -39,27 +39,198 @@
 #include "statfile_sync.h"
 #include "diff.h"
 
+/***
+ * @module rspamd_task
+ * This module provides routines for tasks manipulation in rspamd. Tasks usually
+ * represent messages being scanned, and this API provides access to such elements
+ * as headers, symbols, metrics and so on and so forth. Normally, task objects
+ * are passed to the lua callbacks allowing to check specific properties of messages
+ * and add the corresponding symbols to the scan's results.
+@example
+rspamd_config.DATE_IN_PAST = function(task)
+	if rspamd_config:get_api_version() >= 5 then
+	local dm = task:get_date{format = 'message', gmt = true}
+	local dt = task:get_date{format = 'connect', gmt = true}
+		-- A day
+		if dt - dm > 86400 then
+			return true
+		end
+	end
+
+	return false
+end
+ */
+
 /* Task creation */
+/***
+ * @function rspamd_task.create_empty()
+ * Creates new empty task object.
+ * @return {rspamd_task} task object
+ */
 LUA_FUNCTION_DEF (task, create_empty);
+/***
+ * @function rspamd_task.create_from_buffer(input)
+ * Creates new task object and load its content from the string provided.
+ * @param {string} input string that contains MIME message
+ * @return {rspamd_task} task object
+ */
 LUA_FUNCTION_DEF (task, create_from_buffer);
 /* Task methods */
 LUA_FUNCTION_DEF (task, get_message);
 LUA_FUNCTION_DEF (task, process_message);
+/***
+ * @method task:get_cfg()
+ * Get configuration object for a task.
+ * @return {rspamd_config} (config.md)[configuration object] for the task
+ */
 LUA_FUNCTION_DEF (task, get_cfg);
 LUA_FUNCTION_DEF (task, set_cfg);
 LUA_FUNCTION_DEF (task, destroy);
+/***
+ * @method task:get_mempool()
+ * Returns memory pool valid for a lifetime of task. It is used internally by
+ * many rspamd routines.
+ * @return {rspamd_mempool} memory pool object
+ */
 LUA_FUNCTION_DEF (task, get_mempool);
+/***
+ * @method task:get_session()
+ * Returns asynchronous session object that is used by many rspamd asynchronous
+ * utilities internally.
+ * @return {rspamd_session} session object
+ */
 LUA_FUNCTION_DEF (task, get_session);
+/***
+ * @method task:get_ev_base()
+ * Return asynchronous event base for using in callbacks and resolver.
+ * @return {rspamd_ev_base} event base
+ */
 LUA_FUNCTION_DEF (task, get_ev_base);
+/***
+ * @method task:insert_result(symbol, weigth[, option1, ...])
+ * Insert specific symbol to the tasks scanning results assigning the initial
+ * weight to it.
+ * @param {string} symbol symbol to insert
+ * @param {number} weight initial weight (this weight is multiplied by the metric weight)
+ * @param {string} options list of optional options attached to a symbol inserted
+@example
+local function cb(task)
+	if task:get_header('Some header') then
+		task:insert_result('SOME_HEADER', 1.0, 'Got some header')
+	end
+end
+ */
 LUA_FUNCTION_DEF (task, insert_result);
+/***
+ * @method task:set_pre_results(action, description)
+ * Sets pre-result for a task. It is used in pre-filters to specify early results
+ * of the task scanned. If a pre-filter sets  some result, then further processing
+ * may be skipped. For selecting action it is possible to use global table
+ * `rspamd_actions`.
+ * @param {rspamd_action} action a numeric action value
+ * @param {string} description string description
+@example
+local function cb(task)
+	local gr = task:get_header('Greylist')
+	if gr and gr == 'greylist' then
+		task:set_pre_result(rspamd_actions['greylist'], 'Greylisting required')
+	end
+end
+ */
 LUA_FUNCTION_DEF (task, set_pre_result);
+/***
+ * @method task:get_urls()
+ * Get all URLs found in a message.
+ * @return {table rspamd_url} list of all urls found
+@example
+local function phishing_cb(task)
+	local urls = task:get_urls();
+
+	if urls then
+		for _,url in ipairs(urls) do
+			if url:is_phished() then
+				return true
+			end
+		end
+	end
+	return false
+end
+ */
 LUA_FUNCTION_DEF (task, get_urls);
+/***
+ * @method task:get_urls()
+ * Get all email addresses found in a message.
+ * @return {table rspamd_url} list of all email addresses found
+ */
 LUA_FUNCTION_DEF (task, get_emails);
+/***
+ * @method task:get_text_parts()
+ * Get all text (and HTML) parts found in a message
+ * @return {table rspamd_text_part} list of text parts
+ */
 LUA_FUNCTION_DEF (task, get_text_parts);
+/***
+ * @method task:get_parts()
+ * Get all mime parts found in a message
+ * @return {table rspamd_mime_part} list of mime parts
+ */
 LUA_FUNCTION_DEF (task, get_parts);
+/***
+ * @method task:get_header(name[, case_sensitive])
+ * Get decoded value of a header specified with optional case_sensitive flag.
+ * By default headers are searched in caseless matter.
+ * @param {string} name name of header to get
+ * @param {boolean} case_sensitive case sensitiveness flag to search for a header
+ * @return {string} decoded value of a header
+ */
 LUA_FUNCTION_DEF (task, get_header);
+/***
+ * @method task:get_raw_header(name[, case_sensitive])
+ * Get raw value of a header specified with optional case_sensitive flag.
+ * By default headers are searched in caseless matter.
+ * @param {string} name name of header to get
+ * @param {boolean} case_sensitive case sensitiveness flag to search for a header
+ * @return {string} raw value of a header
+ */
 LUA_FUNCTION_DEF (task, get_header_raw);
+/***
+ * @method task:get_header_full(name[, case_sensitive])
+ * Get raw value of a header specified with optional case_sensitive flag.
+ * By default headers are searched in caseless matter. This method returns more
+ * information about the header as a list of tables with the following structure:
+ *
+ * - `name` - name of a header
+ * - `value` - raw value of a header
+ * - `decoded` - decoded value of a header
+ * - `tab_separated` - `true` if a header and a value are separated by `tab` character
+ * - `empty_separator` - `true` if there are no separator between a header and a value
+ * @param {string} name name of header to get
+ * @param {boolean} case_sensitive case sensitiveness flag to search for a header
+ * @return {list of tables} all values of a header as specified above
+@example
+function check_header_delimiter_tab(task, header_name)
+	for _,rh in ipairs(task:get_header_full(header_name)) do
+		if rh['tab_separated'] then return true end
+	end
+	return false
+end
+ */
 LUA_FUNCTION_DEF (task, get_header_full);
+/***
+ * @method task:get_received_headers()
+ * Returns a list of tables of parsed received headers. A tables returned have
+ * the following structure:
+ *
+ * - `from_hostname` - string that represents hostname provided by a peer
+ * - `from_ip` - string representation of IP address as provided by a peer
+ * - `real_hostname` - hostname as resolved by MTA
+ * - `real_ip` - string representation of IP as resolved by PTR request of MTA
+ * - `by_hostname` - MTA hostname
+ *
+ * Please note that in some situations rspamd cannot parse all the fields of received headers.
+ * In that case you should check all strings for validity.
+ * @return {table of tables} list of received headers described above
+ */
 LUA_FUNCTION_DEF (task, get_received_headers);
 LUA_FUNCTION_DEF (task, get_resolver);
 LUA_FUNCTION_DEF (task, inc_dns_req);

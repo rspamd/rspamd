@@ -153,8 +153,8 @@ reconf['CC_EXCESS_QP'] = string.format('%s & !%s', cc_encoded_qp, cc_needs_mime)
 -- OE X-Mailer header
 local oe_mua = 'X-Mailer=/\\bOutlook Express [456]\\./H'
 -- OE Message ID format
-local oe_msgid_1 = 'Message-Id=/^[A-Za-z0-9-]{7}[A-Za-z0-9]{20}\\@hotmail\\.com$/mH'
-local oe_msgid_2 = 'Message-Id=/^(?:[0-9a-f]{8}|[0-9a-f]{12})\\$[0-9a-f]{8}\\$[0-9a-f]{8}\\@\\S+$/mH'
+local oe_msgid_1 = 'Message-Id=/^<?[A-Za-z0-9-]{7}[A-Za-z0-9]{20}\\@hotmail\\.com>?$/mH'
+local oe_msgid_2 = 'Message-Id=/^<?(?:[0-9a-f]{8}|[0-9a-f]{12})\\$[0-9a-f]{8}\\$[0-9a-f]{8}\\@\\S+>?$/mH'
 -- EZLM remail of message
 local lyris_ezml_remailer = 'List-Unsubscribe=/<mailto:(?:leave-\\S+|\\S+-unsubscribe)\\@\\S+>$/H'
 -- Header of wacky sendmail
@@ -162,9 +162,9 @@ local wacky_sendmail_version = 'Received=/\\/CWT\\/DCE\\)/H'
 -- Iplanet received header
 local iplanet_messaging_server = 'Received=/iPlanet Messaging Server/H'
 -- Hotmail message id
-local hotmail_baydav_msgid = 'Message-Id=/^BAY\\d+-DAV\\d+[A-Z0-9]{25}\\@phx\\.gbl$/mH'
+local hotmail_baydav_msgid = 'Message-Id=/^<?BAY\\d+-DAV\\d+[A-Z0-9]{25}\\@phx\\.gbl?>$/mH'
 -- Sympatico message id
-local sympatico_msgid = 'Message-Id=/^BAYC\\d+-PASMTP\\d+[A-Z0-9]{25}\\@CEZ\\.ICE$/mH'
+local sympatico_msgid = 'Message-Id=/^<?BAYC\\d+-PASMTP\\d+[A-Z0-9]{25}\\@CEZ\\.ICE>?$/mH'
 -- Mailman message id
 local mailman_msgid = 'Message-ID=/^<mailman\\.\\d+\\.\\d+\\.\\d+\\..+\\@\\S+>$/XS'
 -- Message id seems to be forged
@@ -174,9 +174,9 @@ local unusable_msgid = string.format('(%s | %s | %s | %s | %s | %s)',
 local forged_oe = string.format('(%s & !%s & !%s & !%s)', oe_mua, oe_msgid_1, oe_msgid_2, unusable_msgid)
 -- Outlook specific headers
 local outlook_dollars_mua = 'X-Mailer=/^Microsoft Outlook(?: 8| CWS, Build 9|, Build 10)\\./H'
-local outlook_dollars_other = 'Message-Id=/^\\!\\~\\!/mH'
-local vista_msgid = 'Message-Id=/^[A-F\\d]{32}\\@\\S+$/mH'
-local ims_msgid = 'Message-Id=/^[A-F\\d]{36,40}\\@\\S+$/mH'
+local outlook_dollars_other = 'Message-Id=/^<?\\!\\~\\!>?/mH'
+local vista_msgid = 'Message-Id=/^<?[A-F\\d]{32}\\@\\S+>?$/mH'
+local ims_msgid = 'Message-Id=/^<?[A-F\\d]{36,40}\\@\\S+>?$/mH'
 -- Forged outlook headers
 local forged_outlook_dollars = string.format('(%s & !%s & !%s & !%s & !%s & !%s',
 					outlook_dollars_mua, oe_msgid_2, outlook_dollars_other, vista_msgid, ims_msgid, unusable_msgid)
@@ -212,9 +212,9 @@ reconf['SUSPICIOUS_BOUNDARY4']	= string.format('(%s) & (%s)', suspicious_boundar
 -- The Bat! X-Mailer header
 local thebat_mua_any = 'X-Mailer=/^\\s*The Bat!/H'
 -- The Bat! common Message-ID template
-local thebat_msgid_common = 'Message-ID=/^\\d+\\.\\d+\\@\\S+$/mH'
+local thebat_msgid_common = 'Message-ID=/^<?\\d+\\.\\d+\\@\\S+>?$/mH'
 -- Correct The Bat! Message-ID template
-local thebat_msgid = 'Message-ID=/^\\d+\\.(19[789]\\d|20\\d\\d)(0\\d|1[012])([012]\\d|3[01])([0-5]\\d)([0-5]\\d)([0-5]\\d)\\@\\S+/mH'
+local thebat_msgid = 'Message-ID=/^<?\\d+\\.(19[789]\\d|20\\d\\d)(0\\d|1[012])([012]\\d|3[01])([0-5]\\d)([0-5]\\d)([0-5]\\d)\\@\\S+>?/mH'
 -- Summary rule for forged The Bat! Message-ID header
 reconf['FORGED_MUA_THEBAT_MSGID'] = string.format('(%s) & !(%s) & (%s) & !(%s)', thebat_mua_any, thebat_msgid, thebat_msgid_common, unusable_msgid)
 -- Summary rule for forged The Bat! Message-ID header with unknown template
@@ -225,7 +225,7 @@ reconf['FORGED_MUA_THEBAT_MSGID_UNKNOWN'] = string.format('(%s) & !(%s) & !(%s) 
 -- KMail User-Agent header
 local kmail_mua = 'User-Agent=/^\\s*KMail\\/1\\.\\d+\\.\\d+/H'
 -- KMail common Message-ID template
-local kmail_msgid_common = 'Message-Id=/^\\s*\\d+\\.\\d+\\.\\S+\\@\\S+$/mH'
+local kmail_msgid_common = 'Message-Id=/^<?\\s*\\d+\\.\\d+\\.\\S+\\@\\S+>?$/mH'
 function kmail_msgid (task)
 	local regexp_text = '<(\\S+)>\\|(19[789]\\d|20\\d\\d)(0\\d|1[012])([012]\\d|3[01])([0-5]\\d)([0-5]\\d)\\.\\d+\\.\\1$'
 	local re = rspamd_regexp.create_cached(regexp_text)
@@ -245,11 +245,11 @@ reconf['FORGED_MUA_KMAIL_MSGID_UNKNOWN'] = string.format('(%s) & !(%s) & !(%s)',
 -- Opera Mail User-Agent header
 local opera1x_mua = 'User-Agent=/^\\s*Opera Mail\\/1[01]\\.\\d+ /H'
 -- Opera Mail Message-ID template
-local opera1x_msgid = 'Message-ID=/^op\\.[a-z\\d]{14}\\@\\S+$/mHS'
+local opera1x_msgid = 'Message-ID=/^<?op\\.[a-z\\d]{14}\\@\\S+>?$/mHS'
 -- Suspicious Opera Mail User-Agent header
 local suspicious_opera10w_mua = 'User-Agent=/^\\s*Opera Mail\\/10\\.\\d+ \\(Windows\\)$/H'
 -- Suspicious Opera Mail Message-ID, apparently from KMail
-local suspicious_opera10w_msgid = 'Message-Id=/^2009\\d{8}\\.\\d+\\.\\S+\\@\\S+$/mHS'
+local suspicious_opera10w_msgid = 'Message-Id=/^<?2009\\d{8}\\.\\d+\\.\\S+\\@\\S+?>$/mHS'
 -- Summary rule for forged Opera Mail User-Agent header and Message-ID header from KMail
 reconf['SUSPICIOUS_OPERA_10W_MSGID'] = string.format('(%s) & (%s)', suspicious_opera10w_mua, suspicious_opera10w_msgid)
 -- Summary rule for forged Opera Mail Message-ID header
@@ -277,7 +277,7 @@ reconf['FORGED_MUA_SEAMONKEY_MSGID_UNKNOWN'] = string.format('(%s) & !(%s) & !(%
 
 
 -- Message id validity
-local sane_msgid = 'Message-Id=/^[^<>\\\\ \\t\\n\\r\\x0b\\x80-\\xff]+\\@[^<>\\\\ \\t\\n\\r\\x0b\\x80-\\xff]+\\s*$/mH'
+local sane_msgid = 'Message-Id=/^<?[^<>\\\\ \\t\\n\\r\\x0b\\x80-\\xff]+\\@[^<>\\\\ \\t\\n\\r\\x0b\\x80-\\xff]+>?\\s*$/mH'
 local msgid_comment = 'Message-Id=/\\(.*\\)/mH'
 reconf['INVALID_MSGID'] = string.format('(%s) & !((%s) | (%s))', has_mid, sane_msgid, msgid_comment)
 
