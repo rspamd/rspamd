@@ -38,8 +38,8 @@ worker {
 
 There are many changes in lua API and some of them are unfortunately breaking ones.
 
-* remove many superglobals: now rspamd modules need to be loaded explicitly,
-the only global remaining is `rspamd_config`. This affects the follwing modules:
+* many superglobals are removed: now rspamd modules need to be loaded explicitly,
+the only global remaining is `rspamd_config`. This affects the following modules:
 	- `rspamd_logger`
 	- `rspamd_ip`
 	- `rspamd_http`
@@ -73,22 +73,22 @@ rspamd_config.SYMBOL = function(task)
 end
 ~~~
 
-* `rspamd_message` is **removed** completely, you should use task methods to
+`rspamd_message` is **removed** completely, you should use task methods to
 access message's data. This includes such methods as:
-	- `get_date` - now this method can return date for task and message based
-	on the arguments:
+
+* `get_date` - now this method can return date for task and message based on the arguments:
 
 ~~~lua
 local dm = task:get_date{format = 'message'} -- MIME message date
 local dt = task:get_date{format = 'connect'} -- check date
 ~~~
 	
-	- `get_header` - this function is now totally reworked. Now `get_header` version
-	returns just a decoded string, `get_header_raw` returns undecoded string and
-	`get_header_full` returns the full list of tables. Please consult with the
-	corresponding [documentation](https://rspamd.com/doc/lua/task.html) for details.
-	You also might want to correct old invocation of task:get_header to new one.
-	Old version:
+* `get_header` - this function is now totally reworked. Now `get_header` version
+returns just a decoded string, `get_header_raw` returns undecoded string and
+`get_header_full` returns the full list of tables. Please consult with the
+corresponding [documentation](https://rspamd.com/doc/lua/task.html) for details.
+You also might want to correct old invocation of task:get_header to new one.
+Old version:
 
 ~~~lua
 function kmail_msgid (task)
@@ -104,7 +104,7 @@ function kmail_msgid (task)
 end
 ~~~
 	
-	new one:
+new one:
 
 ~~~lua
 function kmail_msgid (task)
@@ -117,7 +117,7 @@ function kmail_msgid (task)
 end
 ~~~
 
-	or with the full version:
+or with the full version:
 	
 ~~~lua
 rspamd_config.FORGED_GENERIC_RECEIVED5 = function (task)
@@ -134,16 +134,16 @@ rspamd_config.FORGED_GENERIC_RECEIVED5 = function (task)
 end
 ~~~
 
-	- `get_from` and `get_recipients` now accepts optional numeric argument that
-	specifies where to get a sender and recipients for a message. By default this
-	argument is `0` which means that data is initially checked in SMTP envelope
-	(meaning `MAIL FROM` and `RCPT TO` SMTP commands) and if envelope data is
-	unaccessible then it is grabbed from MIME headers. Value `1` means that data
-	is checked on envelope only, whilst `2` switches mode to MIME headers. Here is
-	an example from `forged_recipients` module:
+* `get_from` and `get_recipients` now accepts optional numeric argument that
+specifies where to get a sender and recipients for a message. By default this
+argument is `0` which means that data is initially checked in SMTP envelope
+(meaning `MAIL FROM` and `RCPT TO` SMTP commands) and if envelope data is
+unaccessible then it is grabbed from MIME headers. Value `1` means that data
+is checked on envelope only, whilst `2` switches mode to MIME headers. Here is
+an example from `forged_recipients` module:
 
 ~~~lua
-	-- Check sender
+-- Check sender
 local smtp_from = task:get_from(1)
 if smtp_from then
 	local mime_from = task:get_from(2)
