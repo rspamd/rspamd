@@ -553,134 +553,17 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	return 0;
 }
 
-#if 0
-/*
- * Graph command handler:
- * request: /graph
- * headers: Password
- * reply: json [
- *      { label: "Foo", data: [ [10, 1], [17, -14], [30, 5] ] },
- *      { label: "Bar", data: [ [10, 1], [17, -14], [30, 5] ] },
- *      {...}
- * ]
- */
-/* XXX: now this function returns only random data */
-static void
-rspamd_controller_handle_graph (struct evhttp_request *req, gpointer arg)
+static ucl_object_t *
+rspamd_controller_pie_element(const char *label, gdouble data)
 {
-	struct rspamd_controller_worker_ctx *ctx = arg;
-	struct evbuffer *evb;
-	gint i, seed;
-	time_t now, t;
-	double vals[5][100];
+	ucl_object_t *res = ucl_object_typed_new (UCL_OBJECT);
 
-	if (!http_check_password (ctx, req)) {
-		return;
-	}
+	ucl_object_insert_key (res, ucl_object_fromstring (label), "label", 0, false);
+	ucl_object_insert_key (res, ucl_object_fromdouble (data), "data", 0, false);
 
-	evb = evbuffer_new ();
-	if (!evb) {
-		msg_err ("cannot allocate evbuffer for reply");
-		evhttp_send_reply (req, HTTP_INTERNAL, "500 insufficient memory", NULL);
-		return;
-	}
-
-	/* Trailer */
-	evbuffer_add (evb, "[", 1);
-
-	/* XXX: simple and stupid set */
-	seed = g_random_int ();
-	for (i = 0; i < 100; i++, seed++) {
-		vals[0][i] =
-			fabs ((sin (seed * 0.1 *
-				M_PI_2) + 1) * 40. + ((gint)(g_random_int () % 2) - 1));
-		vals[1][i] = vals[0][i] * 0.5;
-		vals[2][i] = vals[0][i] * 0.1;
-		vals[3][i] = vals[0][i] * 0.3;
-		vals[4][i] = vals[0][i] * 1.9;
-	}
-
-	now = time (NULL);
-
-	/* Ham label */
-	t = now - 6000;
-	evbuffer_add_printf (evb,
-		"{\"label\": \"Clean messages\", \"lines\": {\"fill\": false}, \"color\": \""
-		COLOR_CLEAN "\", \"data\":[");
-	for (i = 0; i < 100; i++, t += 60) {
-		evbuffer_add_printf (evb,
-			"[%llu,%.2f%s",
-			(long long unsigned)t * 1000,
-			vals[0][i],
-			i == 99 ? "]" : "],");
-	}
-	evbuffer_add (evb, "]},", 3);
-
-	/* Probable spam label */
-	t = now - 6000;
-	evbuffer_add_printf (evb,
-		"{\"label\": \"Probable spam messages\", \"lines\": {\"fill\": false}, \"color\": \""
-		COLOR_PROBABLE_SPAM "\", \"data\":[");
-	for (i = 0; i < 100; i++, t += 60) {
-		evbuffer_add_printf (evb,
-			"[%llu,%.2f%s",
-			(long long unsigned)t * 1000,
-			vals[1][i],
-			i == 99 ? "]" : "],");
-	}
-	evbuffer_add (evb, "]},", 3);
-
-	/* Greylist label */
-	t = now - 6000;
-	evbuffer_add_printf (evb,
-		"{\"label\": \"Greylisted messages\", \"lines\": {\"fill\": false}, \"color\": \""
-		COLOR_GREYLIST "\", \"data\":[");
-	for (i = 0; i < 100; i++, t += 60) {
-		evbuffer_add_printf (evb,
-			"[%llu,%.2f%s",
-			(long long unsigned)t * 1000,
-			vals[2][i],
-			i == 99 ? "]" : "],");
-	}
-	evbuffer_add (evb, "]},", 3);
-
-	/* Reject label */
-	t = now - 6000;
-	evbuffer_add_printf (evb,
-		"{\"label\": \"Rejected messages\", \"lines\": {\"fill\": false}, \"color\": \""
-		COLOR_REJECT "\", \"data\":[");
-	for (i = 0; i < 100; i++, t += 60) {
-		evbuffer_add_printf (evb,
-			"[%llu,%.2f%s",
-			(long long unsigned)t * 1000,
-			vals[3][i],
-			i == 99 ? "]" : "],");
-	}
-	evbuffer_add (evb, "]},", 3);
-
-	/* Total label */
-	t = now - 6000;
-	evbuffer_add_printf (evb,
-		"{\"label\": \"Total messages\", \"lines\": {\"fill\": false}, \"color\": \""
-		COLOR_TOTAL "\", \"data\":[");
-	for (i = 0; i < 100; i++, t += 60) {
-		evbuffer_add_printf (evb,
-			"[%llu,%.2f%s",
-			(long long unsigned)t * 1000,
-			vals[4][i],
-			i == 99 ? "]" : "],");
-	}
-	evbuffer_add (evb, "]}",	  2);
-
-	evbuffer_add (evb,	"]" CRLF, 3);
-
-	evhttp_add_header (req->output_headers, "Connection", "close");
-	http_calculate_content_length (evb, req);
-
-	evhttp_send_reply (req, HTTP_OK, "OK", evb);
-	evbuffer_free (evb);
+	return res;
 }
-#endif
+
 /*
  * Pie chart command handler:
  * request: /pie
@@ -699,7 +582,7 @@ rspamd_controller_handle_pie_chart (
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct rspamd_controller_worker_ctx *ctx;
 	gdouble data[4], total;
-	ucl_object_t *top, *obj;
+	ucl_object_t *top;
 
 	ctx = session->ctx;
 
@@ -710,7 +593,6 @@ rspamd_controller_handle_pie_chart (
 	top = ucl_object_typed_new (UCL_ARRAY);
 	total = ctx->srv->stat->messages_scanned;
 	if (total != 0) {
-		obj = ucl_object_typed_new (UCL_ARRAY);
 
 		data[0] = ctx->srv->stat->actions_stat[METRIC_ACTION_NOACTION] / total *
 			100.;
@@ -722,26 +604,27 @@ rspamd_controller_handle_pie_chart (
 		data[3] = ctx->srv->stat->actions_stat[METRIC_ACTION_REJECT] / total *
 			100.;
 
-		ucl_array_append (obj, ucl_object_fromstring ("Clean messages"));
-		ucl_array_append (obj, ucl_object_fromdouble (data[0]));
-		ucl_array_append (top,					 obj);
-		ucl_array_append (obj,
-			ucl_object_fromstring ("Probable spam messages"));
-		ucl_array_append (obj, ucl_object_fromdouble (data[1]));
-		ucl_array_append (top,					 obj);
-		ucl_array_append (obj, ucl_object_fromstring ("Greylisted messages"));
-		ucl_array_append (obj, ucl_object_fromdouble (data[2]));
-		ucl_array_append (top,					 obj);
-		ucl_array_append (obj, ucl_object_fromstring ("Rejected messages"));
-		ucl_array_append (obj, ucl_object_fromdouble (data[3]));
-		ucl_array_append (top,					 obj);
+		ucl_array_append (top, rspamd_controller_pie_element ("Clean messages",
+				data[0]));
+		ucl_array_append (top, rspamd_controller_pie_element ("Probable spam messages",
+				data[1]));
+		ucl_array_append (top, rspamd_controller_pie_element ("Greylisted messages",
+				data[2]));
+		ucl_array_append (top, rspamd_controller_pie_element ("Rejected messages",
+				data[3]));
 	}
 	else {
-		obj = ucl_object_typed_new (UCL_ARRAY);
 
-		ucl_array_append (obj, ucl_object_fromstring ("Scanned messages"));
-		ucl_array_append (obj, ucl_object_fromdouble (0));
-		ucl_array_append (top,					 obj);
+		memset (data, 0, sizeof (data));
+
+		ucl_array_append (top, rspamd_controller_pie_element ("Clean messages",
+				data[0]));
+		ucl_array_append (top, rspamd_controller_pie_element ("Probable spam messages",
+				data[1]));
+		ucl_array_append (top, rspamd_controller_pie_element ("Greylisted messages",
+				data[2]));
+		ucl_array_append (top, rspamd_controller_pie_element ("Rejected messages",
+				data[3]));
 	}
 
 	rspamd_controller_send_ucl (conn_ent, top);
