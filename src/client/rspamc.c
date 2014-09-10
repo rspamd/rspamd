@@ -25,6 +25,9 @@
 #include "config.h"
 #include "util.h"
 #include "http.h"
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <dirent.h>
 #include "rspamdclient.h"
 #include "utlist.h"
 
@@ -714,6 +717,50 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 	}
 }
 
+static void
+rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
+	const gchar *name, GHashTable *attrs)
+{
+	DIR *d;
+	gint cur_req = 0;
+	struct dirent *ent;
+	FILE *in;
+	char filebuf[PATH_MAX];
+
+	d = opendir (name);
+
+	if (d != NULL) {
+		while ((ent = readdir (d))) {
+			if (ent->d_type == DT_REG || ent->d_type == DT_UNKNOWN) {
+				rspamd_snprintf (filebuf, sizeof (filebuf), "%s%c%s",
+						name, G_DIR_SEPARATOR, ent->d_name);
+				if (access (filebuf, R_OK) != -1) {
+					in = fopen (filebuf, "r");
+					if (in == NULL) {
+						fprintf (stderr, "cannot open file %s\n", filebuf);
+						exit (EXIT_FAILURE);
+					}
+					rspamc_process_input (ev_base, cmd, in, filebuf, attrs);
+					cur_req++;
+					fclose (in);
+					if (cur_req >= max_requests) {
+						cur_req = 0;
+						/* Wait for completion */
+						event_base_loop (ev_base, 0);
+					}
+				}
+			}
+		}
+	}
+	else {
+		fprintf (stderr, "cannot open directory %s\n", name);
+		exit (EXIT_FAILURE);
+	}
+
+	closedir (d);
+	event_base_loop (ev_base, 0);
+}
+
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
@@ -722,6 +769,7 @@ main (gint argc, gchar **argv, gchar **env)
 	struct rspamc_command *cmd;
 	FILE *in = NULL;
 	struct event_base *ev_base;
+	struct stat st;
 
 	kwattrs = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 
@@ -751,11 +799,6 @@ main (gint argc, gchar **argv, gchar **env)
 		else {
 			cmd = check_rspamc_command ("symbols"); /* Symbols command */
 			start_argc = 1;
-			in = fopen (argv[1], "r");
-			if (in == NULL) {
-				fprintf (stderr, "cannot open file %s\n", argv[1]);
-				exit (EXIT_FAILURE);
-			}
 		}
 	}
 	else {
@@ -796,14 +839,25 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 	else {
 		for (i = start_argc; i < argc; i++) {
-			in = fopen (argv[i], "r");
-			if (in == NULL) {
-				fprintf (stderr, "cannot open file %s\n", argv[i]);
+			if (stat (argv[i], &st) == -1) {
+				fprintf (stderr, "cannot stat file %s\n", argv[i]);
 				exit (EXIT_FAILURE);
 			}
-			rspamc_process_input (ev_base, cmd, in, argv[i], kwattrs);
-			cur_req++;
-			fclose (in);
+			if (S_ISDIR (st.st_mode)) {
+				/* Directories are processed with a separate limit */
+				rspamc_process_dir (ev_base, cmd, argv[i], kwattrs);
+				cur_req = 0;
+			}
+			else {
+				in = fopen (argv[i], "r");
+				if (in == NULL) {
+					fprintf (stderr, "cannot open file %s\n", argv[i]);
+					exit (EXIT_FAILURE);
+				}
+				rspamc_process_input (ev_base, cmd, in, argv[i], kwattrs);
+				cur_req++;
+				fclose (in);
+			}
 			if (cur_req >= max_requests) {
 				cur_req = 0;
 				/* Wait for completion */
