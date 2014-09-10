@@ -320,7 +320,7 @@ fuzzy_init_part (struct mime_text_part *part,
 	gsize max_diff)
 {
 	fuzzy_hash_t *new, *new2;
-	gchar *c, *end, *begin;
+	gchar *c, *end, *begin, *p;
 	gsize real_len = 0, len = part->content->len;
 	GList *cur_offset;
 	struct process_exception *cur_ex = NULL;
@@ -351,9 +351,13 @@ fuzzy_init_part (struct mime_text_part *part,
 			else {
 				uc = g_utf8_get_char (c);
 				if (g_unichar_isalnum (uc)) {
-					real_len++;
+					p = g_utf8_next_char (c);
+					real_len += p - c;
 				}
-				c = g_utf8_next_char (c);
+				else {
+					p = g_utf8_next_char (c);
+				}
+				c = p;
 			}
 		}
 	}
@@ -378,7 +382,7 @@ fuzzy_init_part (struct mime_text_part *part,
 	write_diff = real_len > 0 && real_len < max_diff;
 
 	if (write_diff) {
-		part->diff_str = fstralloc (pool, real_len);
+		part->diff_str = fstralloc (pool, real_len + 1);
 	}
 	else {
 		part->diff_str = NULL;
