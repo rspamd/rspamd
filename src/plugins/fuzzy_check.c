@@ -724,12 +724,13 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 err:
 	msg_err ("got error in IO with server %s, %d, %s",
 		session->server->name, errno, strerror (errno));
+
+ok:
 	rspamd_http_connection_unref (session->http_entry->conn);
 	rspamd_task_free (session->task, TRUE);
 	event_del (&session->ev);
 	close (session->fd);
 
-ok:
 	if (--(*(session->saved)) == 0) {
 		if (*(session->err) != NULL) {
 			rspamd_controller_send_error (session->http_entry,
