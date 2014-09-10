@@ -727,7 +727,6 @@ err:
 
 ok:
 	rspamd_http_connection_unref (session->http_entry->conn);
-	rspamd_task_free (session->task, TRUE);
 	event_del (&session->ev);
 	close (session->fd);
 
@@ -741,6 +740,7 @@ ok:
 			rspamd_controller_send_string (session->http_entry,
 				"{\"success\":true}");
 		}
+		rspamd_task_free (session->task, TRUE);
 	}
 }
 
