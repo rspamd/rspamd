@@ -569,6 +569,7 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 	gsize remain;
 	gssize r;
 	GError *err;
+	struct iovec *cur_iov;
 
 	priv = conn->priv;
 
@@ -579,12 +580,15 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 	start = &priv->out[0];
 	niov = priv->outlen;
 	remain = priv->wr_pos;
+	/* We know that niov is small enough for that */
+	cur_iov = alloca (niov * sizeof (struct iovec));
+	memcpy (cur_iov, priv->out, niov * sizeof (struct iovec));
 	for (i = 0; i < priv->outlen && remain > 0; i++) {
 		/* Find out the first iov required */
-		start = &priv->out[i];
+		start = &cur_iov[i];
 		if (start->iov_len <= remain) {
 			remain -= start->iov_len;
-			start = &priv->out[i + 1];
+			start = &cur_iov[i + 1];
 			niov--;
 		}
 		else {
