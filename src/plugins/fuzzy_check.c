@@ -1114,7 +1114,6 @@ fuzzy_process_rule (struct rspamd_http_connection_entry *entry,
 	return processed;
 
 err:
-	rspamd_task_free (task, FALSE);
 	return -1;
 }
 
@@ -1178,14 +1177,14 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 
 	if (res == -1) {
 		msg_warn ("cannot send fuzzy request: %s", strerror (errno));
-		rspamd_task_free (task, FALSE);
 		rspamd_controller_send_error (conn_ent, 400, "Message sending error");
+		rspamd_task_free (task, FALSE);
 		return;
 	}
 	else if (!processed) {
 		msg_warn ("no rules to match fuzzy with flag %d", flag);
-		rspamd_task_free (task, FALSE);
 		rspamd_controller_send_error (conn_ent, 404, "No fuzzy rules matched");
+		rspamd_task_free (task, FALSE);
 		return;
 	}
 
