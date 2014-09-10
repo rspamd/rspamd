@@ -2081,7 +2081,7 @@ lua_url_get_user (lua_State *L)
 {
 	struct uri *url = lua_check_url (L);
 
-	if (url != NULL) {
+	if (url != NULL && url->user != NULL) {
 		lua_pushlstring (L, url->user, url->userlen);
 	}
 	else {
