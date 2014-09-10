@@ -824,13 +824,17 @@ charset_validate (rspamd_mempool_t *pool, const gchar *in, gchar **out)
 	 * with alphanumeric
 	 */
 	const gchar *begin, *end;
-	gboolean changed = FALSE;
+	gboolean changed = FALSE, to_uppercase = FALSE;
 
 	begin = in;
 
 	while (!g_ascii_isalnum (*begin)) {
 		begin ++;
 		changed = TRUE;
+	}
+	if (!g_ascii_islower(*begin)) {
+		changed = TRUE;
+		to_uppercase = TRUE;
 	}
 	end = begin + strlen (begin) - 1;
 	while (!g_ascii_isalnum (*end)) {
@@ -843,7 +847,22 @@ charset_validate (rspamd_mempool_t *pool, const gchar *in, gchar **out)
 	}
 	else {
 		*out = rspamd_mempool_alloc (pool, end - begin + 2);
-		rspamd_strlcpy (*out, begin, end - begin + 2);
+		if (to_uppercase) {
+			gchar *o = *out;
+
+			while (begin != end + 1) {
+				if (g_ascii_islower (*begin)) {
+					*o++ = g_ascii_toupper (*begin ++);
+				}
+				else {
+					*o++ = *begin++;
+				}
+			}
+			*o = '\0';
+		}
+		else {
+			rspamd_strlcpy (*out, begin, end - begin + 2);
+		}
 	}
 
 	return TRUE;
@@ -908,6 +927,7 @@ convert_text_to_utf (struct rspamd_task *task,
 			ocharset,
 			err ? err->message : "unknown problem");
 		text_part->is_raw = TRUE;
+		g_error_free (err);
 		return part_content;
 	}
 
