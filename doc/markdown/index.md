@@ -20,3 +20,4 @@ parts:
 - [Modules](modules/) chapter lists rspamd modules and defines their configuration attributes
 - [Workers](workers/) section describes workers that are implemented in the rspamd
 - [Lua API](lua/) explains how to extend rspamd with own lua modules
+- [Migration](migration.md) section contains the list of incompatible changes between rspamd versions and recommendations of how to update your rspamd system. 

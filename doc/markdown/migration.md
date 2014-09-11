@@ -34,6 +34,14 @@ worker {
 }
 ~~~
 
+### Settings changes
+
+Settings system has been completely reworked. It is now a lua plugin that
+registers pre-filter and assign settings according to some dynamic map or
+a static configuration. Should you want to use the new settings system then
+please check the recent [documentation](https://rspamd.com/doc/configuration/settings.html).
+The old settings have been completely removed from rspamd.
+
 ### Lua changes
 
 There are many changes in lua API and some of them are unfortunately breaking ones.
@@ -154,3 +162,10 @@ if smtp_from then
 	end
 end
 ~~~
+
+### Protocol changes
+
+Rspamd now uses `HTTP` protocols for all operations, therefore an additional
+client library is unlikely needed. The fallback to old `spamc` protocol has also
+been implemented automatically to be compatible with `rmilter` and other software
+that uses `rspamc` protocol.
