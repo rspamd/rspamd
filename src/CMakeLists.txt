@@ -103,7 +103,6 @@ TARGET_LINK_LIBRARIES(rspamd rspamd-mime)
 TARGET_LINK_LIBRARIES(rspamd rspamd-server)
 TARGET_LINK_LIBRARIES(rspamd rspamd-util)
 TARGET_LINK_LIBRARIES(rspamd rspamd-lua)
-ADD_PRECOMPILED_HEADER(rspamd "${CMAKE_BINARY_DIR}/src/config.h")
 
 TARGET_LINK_LIBRARIES(rspamd event)
 IF(HAVE_LIBEVENT2)

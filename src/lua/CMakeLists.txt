@@ -18,7 +18,6 @@ SET(LUASRC			  lua_common.c
 					  lua_ip.c)
 
 ADD_LIBRARY(rspamd-lua ${LINK_TYPE} ${LUASRC})
-ADD_PRECOMPILED_HEADER(rspamd-lua "${CMAKE_BINARY_DIR}/src/config.h")
 SET_TARGET_PROPERTIES(rspamd-lua PROPERTIES VERSION ${RSPAMD_VERSION})
 TARGET_LINK_LIBRARIES(rspamd-lua rspamd-util)
 TARGET_LINK_LIBRARIES(rspamd-lua hiredis)
