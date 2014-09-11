@@ -1,3 +1,32 @@
+0.7.0:
+	* Use HTTP protocol for all operatiosn
+	* Webui worker is now removed and controller works as webui
+	* Allow to serve static files via controller by option `static_dir`
+	* Rspamd interface is now a part of rspamd
+	* Rspamc client has been rewritten to use HTTP and non-blocking mode
+	allowing to start multiple operations simultaneously (see `-n` option)
+	* Lua API was completely reworked to satisfy modern standards of LUA:
+		* Module `lua-message` was removed
+		* Reduced number of superglobals registered by rspamd
+		* Many functions has been redesigned
+		* Symbols registration is now more convenient
+	* Users settings has been rewritten as lua plugin
+	* Reworked headers system as gmime's based one misses many headers and is
+	very slow to get headers values
+	* Reorganized code and removed embedded jannsson by using UCL for all json
+	parsing
+	* Migrated to `librdns` for DNS resolving that improves concurrency for
+	DNS requests significantly
+	* Fixed tonns of bugs in MIME processing
+	* Improved metrcis and default symbol's weights
+	* Added new RBL's
+	* Fixed a number of issues in the modules
+	* Removed several memory leaks found
+	* Fix unicode processing
+	* Fix fuzzy checking for unicode parts
+	* Significantly improve documentation and especially LUA API docs
+	* See migration notes at https://rspamd.com/doc/migration.html
+
 0.6.8:
 	* Controller now listen for localhost and not for 127.0.0.1 by default
 	* Allow FCrDNS-style RBL lookups (by @fatalbanana)
