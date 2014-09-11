@@ -21,11 +21,11 @@ various versions of ubuntu:
 <http://software.opensuse.org/download.html?project=home%3Acebka&package=rspamd>
 
 Users of other OSes can use sources to build and install rspamd. The most recent stable version of rspamd is
-0.6.10.
+0.7.0.
 
-<p><a class="btn btn-primary" href="/downloads/rspamd-0.6.10.tar.xz">Download rspamd-0.6.10</a></p>
+<p><a class="btn btn-primary" href="/downloads/rspamd-0.7.0.tar.xz">Download rspamd-0.7.0</a></p>
 
-[Signature](/downloads/rspamd-0.6.10.tar.gz.asc)
+[Signature](/downloads/rspamd-0.7.0.tar.gz.asc)
 
 [My GPG key](https://rspamd.com/vsevolod.pubkey)
 
