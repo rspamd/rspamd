@@ -1367,6 +1367,8 @@ rspamd_controller_handle_stat_common (
 				ucl_object_insert_key (obj, ucl_object_fromint (
 						rev),	"revision", 0, false);
 				ucl_object_insert_key (obj, ucl_object_fromint (
+						st->size),	"size", 0, false);
+				ucl_object_insert_key (obj, ucl_object_fromint (
 						used),	"used",		0, false);
 				ucl_object_insert_key (obj, ucl_object_fromint (
 						total), "total",	0, false);
