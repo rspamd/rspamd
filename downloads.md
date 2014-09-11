@@ -25,7 +25,7 @@ Users of other OSes can use sources to build and install rspamd. The most recent
 
 <p><a class="btn btn-primary" href="/downloads/rspamd-0.7.0.tar.xz">Download rspamd-0.7.0</a></p>
 
-[Signature](/downloads/rspamd-0.7.0.tar.gz.asc)
+[Signature](/downloads/rspamd-0.7.0.tar.xz.asc)
 
 [My GPG key](https://rspamd.com/vsevolod.pubkey)
 
