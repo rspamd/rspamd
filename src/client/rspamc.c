@@ -99,6 +99,8 @@ static GOptionEntry entries[] =
 	  NULL },
 	{ "raw", 0, 0, G_OPTION_ARG_NONE, &raw, "Output raw reply from rspamd",
 	  NULL },
+	{ "ucl", 0, 0, G_OPTION_ARG_NONE, &raw, "Output ucl reply from rspamd",
+	  NULL },
 	{ "max-requests", 'n', 0, G_OPTION_ARG_INT, &max_requests,
 	  "Maximum count of parallel requests to rspamd", NULL },
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
@@ -687,7 +689,7 @@ rspamc_stat_output (ucl_object_t *obj)
 		ucl_object_toint (ucl_object_find_key (obj, "pools_allocated")));
 	rspamd_printf_gstring (out, "Pools freed: %L\n",
 		ucl_object_toint (ucl_object_find_key (obj, "pools_freed")));
-	rspamd_printf_gstring (out, "Bytes allocated: %L\n",
+	rspamd_printf_gstring (out, "Bytes allocated: %HL\n",
 		ucl_object_toint (ucl_object_find_key (obj, "bytes_allocated")));
 	rspamd_printf_gstring (out, "Memory chunks allocated: %L\n",
 		ucl_object_toint (ucl_object_find_key (obj, "chunks_allocated")));
