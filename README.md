@@ -60,52 +60,55 @@ You can either install them from sources or (recommended) install using package 
 Build process
 -------------
 
-Building of rspamd is simple:
+To build rspamd from the sources please follow these steps:
 
+1. Clone rspamd repository:
 
-    $ cmake .
-    $ make
-    # make install
+~~~
+$ git clone --recurse-submodules https://github.com/vstakhov/rspamd.git
+~~~
 
+2. Install all dependencies and create a build directory:
+
+~~~
+$ mkdir rspamd.build
+~~~
+
+3. From rspamd build directory run `cmake` with specifying the path to the source
+directory, for example:
+
+~~~
+$ cmake ../rspamd
+~~~
+
+4. After configure process has finished you can build rspamd using `make`:
+
+~~~
+$ make
+# make install
+~~~
 
 After installation binaries, rules, plugins and a sample configuration will be
-installed in the target directories (prefixed by */usr/local* by default). To
-start working with rspamd you should do several steps (please note that this is
-not applicable to an installation based on packages, as such an installation
-have everything ready for using):
-
-1. Copy a sample configuration $PREFIX/etc/rspamd.xml.sample to
-$PREFIX/etc/rspamd.xml
-2. Edit rspamd.xml according to your system (described
-later). 
-3. Make a directory for rspamd pid file and data (/var/run/rspamd by
-default) and make rspamd user (nobody by default) as the owner of rspamd data
-directory. 
-4. Make a directory for rspamd logs (or setup syslog to accept
-rspamd log messages).
-5. Install start script to a proper place.
-6. Start rspamd using start script.
-
-If start script is not suitable for your system (now rspamd shipped with start
-script for FreeBSD, Debian and RedHat like operational systems) you should
-write a start script suitable for your system.
+installed in the target directories (prefixed by */usr/local* by default).
 
 Further Actions
 ===============
 
-You can improve quality of rspamd by learning its statistic module. The easiest
+You can improve the quality of rspamd filtering by learning its statistical module. The easiest
 way to do it is to use rspamc client (you can setup a custom email alias to
 pipe messages to rspamc)
 
-    $ rspamc -P 'q1' -c bayes learn_spam [ file1 [file2 [...]]]
-    $ rspamc -P 'q1' -c bayes learn_ham [ file1 [file2 [...]]]
+~~~
+$ rspamc -P 'q1' learn_spam [ file1 [file2 [...]]]
+$ rspamc -P 'q1' learn_ham [ file1 [file2 [...]]]
+~~~
 
-Note: you should consider to change default controller's password 'q1' to yours
+Note: you should consider to change default controller's password `q1` to a more secure
 one specified in the controller section of configuration.
 
-Also a system administrator may want to customize rule's weights or actions
-thresholds. This can be easily done by editing metric section in the
+Also a system administrator might want to customize rule's weights or actions
+thresholds. This can be done easily by editing `metrics.conf`
 configuration file.
 
-For writing new rules you can examine the main rspamd documentation and lua api
+For writing new rules you can examine the main [rspamd documentation](https://rspamd.com/doc/) and [lua api](https://rspamd.com/doc/lua/)
 guide and reference.
