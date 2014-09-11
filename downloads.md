@@ -55,21 +55,29 @@ To build rspamd from the sources please follow these steps:
 
 1. Clone rspamd repository:
 
-    $ git clone --recurse-submodules https://github.com/vstakhov/rspamd.git
+~~~
+$ git clone --recurse-submodules https://github.com/vstakhov/rspamd.git
+~~~
 
 2. Install all dependencies and create a build directory:
 
-    $ mkdir rspamd.build
+~~~
+$ mkdir rspamd.build
+~~~
 
 3. From rspamd build directory run `cmake` with specifying the path to the source
 directory, for example:
 
-    $ cmake ../rspamd
+~~~
+$ cmake ../rspamd
+~~~
 
 4. After configure process has finished you can build rspamd using `make`:
 
-    $ make
-    # make install
+~~~
+$ make
+# make install
+~~~
 
 After installation binaries, rules, plugins and a sample configuration will be
 installed in the target directories (prefixed by */usr/local* by default).
