@@ -843,7 +843,10 @@ static void
 dns_callback (struct rdns_reply *reply, gpointer arg)
 {
 	struct dns_param *param = (struct dns_param *)arg;
+	struct rspamd_task *task;
 	struct rdns_reply_entry *elt;
+
+	task = param->task;
 
 	debug_task ("in surbl request callback");
 	/* If we have result from DNS server, this url exists in SURBL, so increase score */
@@ -880,8 +883,11 @@ redirector_callback (gint fd, short what, void *arg)
 	gchar url_buf[512];
 	gint r;
 	struct timeval *timeout;
+	struct rspamd_task *task;
 	gchar *p, *c;
 	gboolean found = FALSE;
+
+	task = param->task;
 
 	switch (param->state) {
 	case STATE_CONNECT:
