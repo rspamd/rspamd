@@ -107,6 +107,7 @@ static GOptionEntry entries[] =
 static void rspamc_symbols_output (ucl_object_t *obj);
 static void rspamc_uptime_output (ucl_object_t *obj);
 static void rspamc_counters_output (ucl_object_t *obj);
+static void rspamc_stat_output (ucl_object_t *obj);
 
 enum rspamc_command_type {
 	RSPAMC_COMMAND_UNKNOWN = 0,
@@ -193,7 +194,7 @@ struct rspamc_command {
 		.is_controller = TRUE,
 		.is_privileged = FALSE,
 		.need_input = FALSE,
-		.command_output_func = NULL
+		.command_output_func = rspamc_stat_output,
 	},
 	{
 		.cmd = RSPAMC_COMMAND_STAT_RESET,
@@ -203,7 +204,7 @@ struct rspamc_command {
 		.is_controller = TRUE,
 		.is_privileged = TRUE,
 		.need_input = FALSE,
-		.command_output_func = NULL
+		.command_output_func = rspamc_stat_output
 	},
 	{
 		.cmd = RSPAMC_COMMAND_COUNTERS,
@@ -605,6 +606,111 @@ rspamc_counters_output (ucl_object_t *obj)
 		i++;
 	}
 	printf (" %s \n", dash_buf);
+}
+
+static void
+rspamc_stat_actions (ucl_object_t *obj, GString *out, gint64 scanned)
+{
+	const ucl_object_t *actions = ucl_object_find_key (obj, "actions"), *cur;
+	ucl_object_iter_t iter = NULL;
+	gint64 spam, ham;
+
+	if (actions && ucl_object_type (actions) == UCL_OBJECT) {
+		while ((cur = ucl_iterate_object (actions, &iter, true)) != NULL) {
+			gint64 cnt = ucl_object_toint (cur);
+			rspamd_printf_gstring (out, "Messages with action %s: %L"
+				", %.2f%%\n", ucl_object_key (cur), cnt,
+				(gdouble)cnt / (gdouble)scanned);
+		}
+	}
+
+	spam = ucl_object_toint (ucl_object_find_key (obj, "spam_count"));
+	ham = ucl_object_toint (ucl_object_find_key (obj, "ham_count"));
+	rspamd_printf_gstring (out, "Messages treated as spam: %" G_GINT64_FORMAT
+		", %.2f%%\n", spam,
+		(gdouble)spam / (gdouble)scanned);
+	rspamd_printf_gstring (out, "Messages treated as ham: %" G_GINT64_FORMAT
+		", %.2f%%\n", ham,
+		(gdouble)ham / (gdouble)scanned);
+}
+
+static void
+rspamc_stat_statfile (const ucl_object_t *obj, GString *out)
+{
+	gint64 version, size, blocks, used_blocks;
+	const gchar *label, *symbol;
+
+	version = ucl_object_toint (ucl_object_find_key (obj, "revision"));
+	size = ucl_object_toint (ucl_object_find_key (obj, "size"));
+	blocks = ucl_object_toint (ucl_object_find_key (obj, "total"));
+	used_blocks = ucl_object_toint (ucl_object_find_key (obj, "used"));
+	label = ucl_object_tostring (ucl_object_find_key (obj, "label"));
+	symbol = ucl_object_tostring (ucl_object_find_key (obj, "symbol"));
+
+	if (label) {
+		rspamd_printf_gstring (out, "Statfile: %s <%s> ", symbol, label);
+	}
+	else {
+		rspamd_printf_gstring (out, "Statfile: %s ", symbol);
+	}
+	rspamd_printf_gstring (out, "length: %HL; free blocks: %HL; total blocks: %HL; "
+		"free: %.2f%%\n", size, blocks - used_blocks, blocks,
+		(blocks - used_blocks) * 100.0 / (gdouble)blocks);
+}
+
+static void
+rspamc_stat_output (ucl_object_t *obj)
+{
+	GString *out;
+	ucl_object_iter_t iter = NULL;
+	const ucl_object_t *st, *cur;
+	gint64 scanned;
+
+	out = g_string_sized_new (BUFSIZ);
+
+	scanned = ucl_object_toint (ucl_object_find_key (obj, "scanned"));
+	rspamd_printf_gstring (out, "Messages scanned: %L\n",
+		scanned);
+
+	if (scanned > 0) {
+		rspamc_stat_actions (obj, out, scanned);
+	}
+
+	rspamd_printf_gstring (out, "Messages learned: %L\n",
+		ucl_object_toint (ucl_object_find_key (obj, "learned")));
+	rspamd_printf_gstring (out, "Connections count: %L\n",
+		ucl_object_toint (ucl_object_find_key (obj, "connections")));
+	rspamd_printf_gstring (out, "Control connections count: %L\n",
+		ucl_object_toint (ucl_object_find_key (obj, "control_connections")));
+	/* Pools */
+	rspamd_printf_gstring (out, "Pools allocated: %L\n",
+		ucl_object_toint (ucl_object_find_key (obj, "pools_allocated")));
+	rspamd_printf_gstring (out, "Pools freed: %L\n",
+		ucl_object_toint (ucl_object_find_key (obj, "pools_freed")));
+	rspamd_printf_gstring (out, "Bytes allocated: %L\n",
+		ucl_object_toint (ucl_object_find_key (obj, "bytes_allocated")));
+	rspamd_printf_gstring (out, "Memory chunks allocated: %L\n",
+		ucl_object_toint (ucl_object_find_key (obj, "chunks_allocated")));
+	rspamd_printf_gstring (out, "Shared chunks allocated: %L\n",
+		ucl_object_toint (ucl_object_find_key (obj, "shared_chunks_allocated")));
+	rspamd_printf_gstring (out, "Chunks freed: %L\n",
+		ucl_object_toint (ucl_object_find_key (obj, "chunks_freed")));
+	rspamd_printf_gstring (out, "Oversized chunks: %L\n",
+		ucl_object_toint (ucl_object_find_key (obj, "chunks_oversized")));
+	/* Fuzzy */
+	rspamd_printf_gstring (out, "Fuzzy hashes stored: %L\n",
+		ucl_object_toint (ucl_object_find_key (obj, "fuzzy_stored")));
+	rspamd_printf_gstring (out, "Fuzzy hashes expired: %L\n",
+		ucl_object_toint (ucl_object_find_key (obj, "fuzzy_expired")));
+
+	st = ucl_object_find_key (obj, "statfiles");
+	if (st != NULL && ucl_object_type (st) == UCL_ARRAY) {
+		while ((cur = ucl_iterate_object (st, &iter, true)) != NULL) {
+			rspamc_stat_statfile (cur, out);
+		}
+	}
+
+	rspamd_fprintf (stdout, "%v", out);
 }
 
 static void
