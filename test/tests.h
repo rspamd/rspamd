@@ -20,6 +20,9 @@ void rspamd_fuzzy_test_func (void);
 /* Stat file */
 void rspamd_statfile_test_func (void);
 
+/* Radix test */
+void rspamd_radix_test_func (void);
+
 /* DNS resolving */
 void rspamd_dns_test_func (void);
 

@@ -49,6 +49,7 @@ main (int argc, char **argv)
 	g_test_add_func ("/rspamd/url", rspamd_url_test_func);
 	g_test_add_func ("/rspamd/expression", rspamd_expression_test_func);
 	g_test_add_func ("/rspamd/statfile", rspamd_statfile_test_func);
+	g_test_add_func ("/rspamd/radix", rspamd_radix_test_func);
 	g_test_add_func ("/rspamd/dns", rspamd_dns_test_func);
 	g_test_add_func ("/rspamd/aio", rspamd_async_test_func);
 	g_test_add_func ("/rspamd/dkim", rspamd_dkim_test_func);

@@ -2,12 +2,13 @@ SET(TESTSRC		rspamd_expression_test.c
 				rspamd_mem_pool_test.c
 				rspamd_statfile_test.c
 				rspamd_fuzzy_test.c
-				rspamd_test_suite.c
 				rspamd_url_test.c
 				rspamd_dns_test.c
 				rspamd_async_test.c
 				rspamd_dkim_test.c
-				rspamd_rrd_test.c)
+				rspamd_rrd_test.c
+				rspamd_radix_test.c
+				rspamd_test_suite.c)
 
 ADD_EXECUTABLE(rspamd-test EXCLUDE_FROM_ALL ${TESTSRC})
 SET_TARGET_PROPERTIES(rspamd-test PROPERTIES LINKER_LANGUAGE C)
