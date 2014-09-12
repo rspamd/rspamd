@@ -29,6 +29,20 @@
 
 static void * radix_alloc (radix_tree_t * tree);
 
+struct radix_node_s {
+	radix_node_t *right;
+	radix_node_t *left;
+	radix_node_t *parent;
+	uintptr_t value;
+	guint32 key;
+};
+
+struct radix_tree_s {
+	radix_node_t *root;
+	size_t size;
+	rspamd_mempool_t *pool;
+};
+
 radix_tree_t *
 radix_tree_create (void)
 {

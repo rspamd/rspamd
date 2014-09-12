@@ -8,21 +8,7 @@
 #define RADIX_NO_VALUE   (uintptr_t)-1
 
 typedef struct radix_node_s radix_node_t;
-
-struct radix_node_s {
-	radix_node_t *right;
-	radix_node_t *left;
-	radix_node_t *parent;
-	uintptr_t value;
-	guint32 key;
-};
-
-
-typedef struct {
-	radix_node_t *root;
-	size_t size;
-	rspamd_mempool_t *pool;
-} radix_tree_t;
+typedef struct radix_tree_s radix_tree_t;
 
 typedef gboolean (*radix_tree_traverse_func)(guint32 key, guint32 mask,
 	uintptr_t value, void *user_data);
