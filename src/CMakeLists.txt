@@ -61,8 +61,6 @@ SET(SLAVE_BUILD 1)
 ADD_SUBDIRECTORY(rdns)
 UNSET(SLAVE_BUILD)
 
-INCLUDE_DIRECTORIES(libutil libserver libmime)
-
 # Rspamd core components
 ADD_SUBDIRECTORY(lua)
 ADD_SUBDIRECTORY(libutil)

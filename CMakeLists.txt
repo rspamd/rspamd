@@ -276,6 +276,8 @@ ENDMACRO()
 ############################# CONFIG SECTION #############################################
 # Initial set
 
+INCLUDE_DIRECTORIES(src/libutil src/libserver src/libmime)
+
 IF(CMAKE_INSTALL_PREFIX)
     SET(PREFIX ${CMAKE_INSTALL_PREFIX})
 ENDIF(CMAKE_INSTALL_PREFIX)
