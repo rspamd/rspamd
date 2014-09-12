@@ -1,6 +1,6 @@
-#include "../src/config.h"
-#include "../src/main.h"
-#include "../src/cfg_file.h"
+#include "config.h"
+#include "main.h"
+#include "cfg_file.h"
 #include "tests.h"
 
 struct rspamd_main             *rspamd_main = NULL;
@@ -38,15 +38,12 @@ main (int argc, char **argv)
 	else {
 		cfg->log_level = G_LOG_LEVEL_INFO;
 	}
+	cfg->log_type = RSPAMD_LOG_CONSOLE;
 	/* First set logger to console logger */
-	rspamd_set_logger (RSPAMD_LOG_CONSOLE, g_quark_from_static_string("rspamd-test"), rspamd_main);
+	rspamd_set_logger (cfg, g_quark_from_static_string("rspamd-test"), rspamd_main);
 	(void)open_log (rspamd_main->logger);
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 
-#if 0
-	g_test_add_func ("/rspamd/memcached", rspamd_memcached_test_func);
-#endif
-	g_test_add_func ("/rspamd/rcl", rspamd_rcl_test_func);
 	g_test_add_func ("/rspamd/mem_pool", rspamd_mem_pool_test_func);
 	g_test_add_func ("/rspamd/fuzzy", rspamd_fuzzy_test_func);
 	g_test_add_func ("/rspamd/url", rspamd_url_test_func);

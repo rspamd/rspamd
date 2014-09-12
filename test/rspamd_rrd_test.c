@@ -60,7 +60,7 @@ rspamd_rrd_test_func ()
 	/* Reopen */
 	g_assert ((rrd = rspamd_rrd_open (tmpfile, &err)) != NULL);
 	/* Add some points */
-	for (i = 0; i < 100; i += 10) {
+	for (i = 0; i < 20; i += 10) {
 		sleep (1);
 		t = i;
 		ar.data = &t;

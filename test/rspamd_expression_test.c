@@ -1,7 +1,7 @@
-#include "../src/config.h"
-#include "../src/main.h"
-#include "../src/cfg_file.h"
-#include "../src/expressions.h"
+#include "config.h"
+#include "main.h"
+#include "cfg_file.h"
+#include "expressions.h"
 #include "tests.h"
 
 /* Vector of test expressions */

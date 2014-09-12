@@ -1,6 +1,6 @@
-#include "../src/config.h"
-#include "../src/main.h"
-#include "../src/fuzzy.h"
+#include "config.h"
+#include "main.h"
+#include "fuzzy.h"
 #include "tests.h"
 
 static char *s1 = "This is sample test text.\r\n"

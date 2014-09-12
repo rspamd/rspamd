@@ -1,7 +1,8 @@
-#include "../src/config.h"
-#include "../src/main.h"
-#include "../src/statfile.h"
+#include "config.h"
+#include "main.h"
+#include "statfile.h"
 #include "tests.h"
+#include "ottery.h"
 
 #define TEST_FILENAME "/tmp/rspamd_test.stat"
 #define HASHES_NUM 256
@@ -13,17 +14,14 @@ rspamd_statfile_test_func ()
 	rspamd_mempool_t *p;
 	stat_file_t *st;
 	uint32_t random_hashes[HASHES_NUM], i, v;
-	time_t now;
+	time_t now = time (NULL);
 	
 	p = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	umask (S_IWGRP | S_IWOTH);
-	pool = statfile_pool_new (p, 10 * 1024 * 1024, TRUE);
+	pool = statfile_pool_new (p, TRUE);
 
-	now = time (NULL);
-	/* Fill random array */
-	srand (now);
 	for (i = 0; i < HASHES_NUM; i ++) {
-		random_hashes[i] = rand ();
+		random_hashes[i] = ottery_rand_uint32 ();
 	}
 
 	/* Create new file */

@@ -1,7 +1,7 @@
-#include "../src/config.h"
-#include "../src/main.h"
-#include "../src/cfg_file.h"
-#include "../src/url.h"
+#include "config.h"
+#include "main.h"
+#include "cfg_file.h"
+#include "url.h"
 #include "tests.h"
 
 const char *test_text =

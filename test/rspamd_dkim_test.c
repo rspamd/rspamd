@@ -26,14 +26,13 @@
 #include "main.h"
 #include "dkim.h"
 
-static const gchar test_dkim_sig[] = "v=1; a=rsa-sha256; c=relaxed/relaxed; d=gmail.com; s=20120113; h=mime-version:date:message-id:subject:from:to:content-type; "
-		"bh=xTpleJNUaXMzaRU2xnfInn4n9hf/UHzWSuYzJ3s2WBc=; "
-        "b=cPya7FKbcJnCqMlCETci4ZlQTI/Tfw8y1/+AUSU+YBaDgLhsZMDPQMO0zzMvQM+c+E"
-        "i/J+BAckB9JRyPr9xXtV0ORSmUkFgeMyURopwdNzKQ9UB/JnGHj6i11ceV3b20UAYiIu"
-        "qrXhJD+YEgHYXVtfzTC4OLTJGjEQguEn2+RtlZV60aWsPizK+mqlVO4G57RGklp0vnqB"
-        "oc2XUGMVmOaCvVpQkJdJud1r5aKLhr9Bs0sM8/MaYugwmdSk2rLJUMfUPRyUmIGv3BAG"
-        "bwdvXghyl7HNOqPYwXvk/B8C7++k0VUUOix5M/XrcBMNyJu2fMZJMD8KSn3udFjp9vZ6"
-        "pRqg==";
+static const gchar test_dkim_sig[] = "v=1; a=rsa-sha256; c=relaxed/relaxed; "
+		"d=highsecure.ru; s=dkim; t=1410516996; "
+		"bh=guFoWYHWVzFRqVyAQebnvPcdm7bUQo7pRHt/uIHD7gs=; "
+		"h=Message-ID:Date:From:MIME-Version:To:Subject:Content-Type:Content-Transfer-Encoding; "
+		"b=PCiECkOaPFb99DW+gApgfmdlTUo6XN6YXjnj52Cxoz2FoA857B0ZHFgeQe4JAKHuhW"
+		"oq3BLHap0GcMTTpSOgfQOKa8Df35Ns11JoOFjdBQ8GpM99kOrJP+vZcT8b7AMfthYm0Kwy"
+		"D9TjlkpScuoY5LjsWVnijh9dSNVLFqLatzg=;";
 
 extern struct event_base *base;
 
@@ -72,12 +71,12 @@ rspamd_dkim_test_func ()
 	cfg = (struct rspamd_config *)g_malloc (sizeof (struct rspamd_config));
 	bzero (cfg, sizeof (struct rspamd_config));
 	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
-	cfg->dns_retransmits = 10;
-	cfg->dns_timeout = 1000;
+	cfg->dns_retransmits = 2;
+	cfg->dns_timeout = 0.5;
 
 	pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
-	resolver = dns_resolver_init (base, cfg);
+	resolver = dns_resolver_init (NULL, base, cfg);
 
 	g_assert (resolver != NULL);
 

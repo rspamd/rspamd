@@ -1,7 +1,5 @@
-
-
-#include "../src/config.h"
-#include "../src/mem_pool.h"
+#include "config.h"
+#include "mem_pool.h"
 #include "tests.h"
 
 #define TEST_BUF "test bufffer"
