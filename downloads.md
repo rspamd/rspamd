@@ -3,57 +3,60 @@ layout: default
 title: Downloads
 ---
 
-# Obtaining rspamd
+# Downloading rspamd
 
-Rspamd uses [github](https://github.com) as the main development platform. Should you have any questions
-about rspamd development then you can visit:
+<p><a class="btn btn-primary btn-lg" href="/downloads/rspamd-0.7.0.tar.xz">Download rspamd-0.7.0</a></p>
+<p><iframe src="https://rspamd.com/github-btn.html?user=vstakhov&repo=rspamd&type=watch&count=true&size=large"
+  allowtransparency="true" frameborder="0" scrolling="0" width="170" height="30"></iframe></p>
 
-<https://github.com/vstakhov/rspamd>
+
+## Using your OS resources
 
 Rspamd is intended to run on Unix-like operating systems only. FreeBSD users can use ports
-collection (mail/rspamd) for rspamd installation. Ubuntu users can use launchpad PPA:
+collection via [mail/rspamd](http://www.freshports.org/mail/rspamd) for installation.
 
-<https://launchpad.net/~vsevolod-n/+archive/rspamd>
+[Debian](http://www.debian.org) users can install rspamd directly from the official repositories for
+[testing](https://packages.debian.org/source/testing/rspamd) and [unstable](https://packages.debian.org/source/unstable/rspamd) distributions.
+
+These packages are also tested on the recent Ubuntu 14.04 LTS. However, you might want to fix `systemd` specific routines 
+in `/etc/rspamd/workers.conf` and `/etc/rspamd/logging.conf`.
 
 Also there are pre-built packages at the OpenSUSE build service for debian, fedora, opensuse and
 various versions of ubuntu:
 
 <http://software.opensuse.org/download.html?project=home%3Acebka&package=rspamd>
 
-Users of other OSes can use sources to build and install rspamd. The most recent stable version of rspamd is
-0.7.0.
+If you want to check the integrity of your source archive downloaded, then you could use the following [GPG signature](/downloads/rspamd-0.7.0.tar.xz.asc).
+This signature can be verified against my [GPG public key](https://rspamd.com/vsevolod.pubkey). 
 
-<p><a class="btn btn-primary" href="/downloads/rspamd-0.7.0.tar.xz">Download rspamd-0.7.0</a></p>
 
-[Signature](/downloads/rspamd-0.7.0.tar.xz.asc)
+## Building from the sources
 
-[My GPG key](https://rspamd.com/vsevolod.pubkey)
-
-There are packages for debian and CentOS/RHEL distribution. Debian users could
-use `debuild` utility to create the binary packages of rspamd. CentOS/RHEL
-users could use spec file and other RedHat specific stuff from `centos`
-folder.  The users of other systems could try to adopt some package or just to
-build from sources.
-
-Build requirements
-------------------
+### Build requirements
 
 Rspamd requires several 3-rd party software packages to build and run:
 
-* libevent - asynchronous event library
-* glib - common purposes library
-* gmime - mime parser
-* lua - extendable scripting language
-* cmake - advanced software build system 
+* [libevent](http://libevent.org) - asynchronous event library
+* [glib](http://gnome.org) - common purposes library
+* [gmime](http://spruce.sourceforge.net/gmime/) - mime parser
+* [lua](http://lua.org) - extendable scripting language
+* [cmake](http://cmake.org) - advanced software build system 
 
 You can either install them from sources or (recommended) install using package manager of your system.
 
-Build process
--------------
+### Build process
 
 To build rspamd from the sources please follow these steps:
 
-1. Clone rspamd repository:
+1. Extract rspamd source archive:
+
+~~~
+$ tar xf rspamd-0.7.0.tar.xz
+~~~
+
+-OR-
+
+Clone rspamd repository:
 
 ~~~
 $ git clone --recurse-submodules https://github.com/vstakhov/rspamd.git
@@ -81,3 +84,10 @@ $ make
 
 After installation binaries, rules, plugins and a sample configuration will be
 installed in the target directories (prefixed by */usr/local* by default).
+
+## Development resources
+
+Rspamd uses [github](https://github.com) as the main development platform. Should you have any questions
+about rspamd development then you can visit:
+
+<https://github.com/vstakhov/rspamd>
