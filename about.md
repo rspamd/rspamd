@@ -4,7 +4,7 @@ title: About rspamd
 ---
 
 ## Introduction
-Rspamd is a complex spam filter that allows evaluation of messages by a number of
+Rspamd is an advanced spam filtering system that allows evaluation of messages by a number of
 rules including regular expressions, statistical analysis and custom services
 such as URL black lists. Each message is analysed by rspamd and given a `spam score`. 
 
@@ -69,7 +69,7 @@ You have many choices to write your definitions, so use whatever you like (even 
 
 ## Performance {#performance}
 
-Rspamd was designed to be fast. The core of rspamd is written in `C` and uses event's driven model that allows to process multiple messages simultaenously and without blocking.
+Rspamd was designed to be fast. The core of rspamd is written in `C` and uses event-driven model that allows to process multiple messages simultaenously and without blocking.
 Moreover, a set of techniques was used in rspamd to process messages faster:
 
 * **Finite state machines processing** - rspamd uses specialized finite state machines for the performance critical tasks to process input faster than a set of regular expressions.
