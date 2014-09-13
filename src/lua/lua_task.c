@@ -232,19 +232,91 @@ LUA_FUNCTION_DEF (task, get_header_full);
  * @return {table of tables} list of received headers described above
  */
 LUA_FUNCTION_DEF (task, get_received_headers);
+/***
+ * @method task:get_resolver()
+ * Returns ready to use rspamd_resolver object suitable for making asynchronous DNS requests.
+ * @return {rspamd_resolver} resolver object associated with the task's session
+ * @example
+local logger = require "rspamd_logger"
+
+local function task_cb(task)
+	local function dns_cb(resolver, to_resolve, results, err)
+		-- task object is available due to closure
+		task:inc_dns_req()
+		if results then
+			logger.info(string.format('<%s> [%s] resolved for symbol: %s',
+				task:get_message_id(), to_resolve, 'EXAMPLE_SYMBOL'))
+			task:insert_result('EXAMPLE_SYMBOL', 1)
+		end
+	end
+	local r = task:get_resolver()
+	r:resolve_a(task:get_session(), task:get_mempool(), 'example.com', dns_cb)
+end
+ */
 LUA_FUNCTION_DEF (task, get_resolver);
+/***
+ * @method task:inc_dns_req()
+ * Increment number of DNS requests for the task. Is used just for logging purposes.
+ */
 LUA_FUNCTION_DEF (task, inc_dns_req);
+/***
+ * @method task:call_rspamd_function(function[, param, param...])
+ * Calls rspamd expression function `func` with the specified parameters.
+ * It returns the boolean result of function invocation.
+ * @param {string} function name of internal or registered lua function to call
+ * @param {list of strings} params parameters for a function
+ * @return {bool} true or false returned by expression function
+ */
 LUA_FUNCTION_DEF (task, call_rspamd_function);
+/***
+ * @method task:get_recipients([type])
+ * Return SMTP or MIME recipients for a task. This function returns list of internet addresses each one is a table with the following structure:
+ *
+ * - `name` - name of internet address in UTF8, e.g. for `Vsevolod Stakhov <blah@foo.com>` it returns `Vsevolod Stakhov`
+ * - `addr` - address part of the address
+ * - `user` - user part (if present) of the address, e.g. `blah`
+ * - `domain` - domain part (if present), e.g. `foo.com`
+ * @param {integer} type if specified has the following meaning: `0` means try SMTP recipients and fallback to MIME if failed, `1` means checking merely SMTP recipients and `2` means MIME recipients only
+ * @return {list of addresses} list of recipients or `nil`
+ */
 LUA_FUNCTION_DEF (task, get_recipients);
+/***
+ * @method task:get_from([type])
+ * Return SMTP or MIME sender for a task. This function returns list of internet addresses each one is a table with the following structure:
+ *
+ * - `name` - name of internet address in UTF8, e.g. for `Vsevolod Stakhov <blah@foo.com>` it returns `Vsevolod Stakhov`
+ * - `addr` - address part of the address
+ * - `user` - user part (if present) of the address, e.g. `blah`
+ * - `domain` - domain part (if present), e.g. `foo.com`
+ * @param {integer} type if specified has the following meaning: `0` means try SMTP sender and fallback to MIME if failed, `1` means checking merely SMTP sender and `2` means MIME `From:` only
+ * @return {list of addresses} list of recipients or `nil`
+ */
 LUA_FUNCTION_DEF (task, get_from);
+/***
+ * @method task:get_user()
+ * Returns authenticated user name for this task if specified by an MTA.
+ * @return {string} username or nil
+ */
 LUA_FUNCTION_DEF (task, get_user);
 LUA_FUNCTION_DEF (task, set_user);
+/***
+ * @method task:get_from_ip()
+ * Returns [ip_addr](ip.md) object of a sender that is provided by MTA
+ */
 LUA_FUNCTION_DEF (task, get_from_ip);
 LUA_FUNCTION_DEF (task, set_from_ip);
 LUA_FUNCTION_DEF (task, get_from_ip_num);
 LUA_FUNCTION_DEF (task, get_client_ip_num);
+/***
+ * @method task:get_helo()
+ * Returns the value of SMTP helo provided by MTA.
+ */
 LUA_FUNCTION_DEF (task, get_helo);
 LUA_FUNCTION_DEF (task, set_helo);
+/***
+ * @method task:get_hostname()
+ * Returns the value of sender's hostname provided by MTA
+ */
 LUA_FUNCTION_DEF (task, get_hostname);
 LUA_FUNCTION_DEF (task, set_hostname);
 LUA_FUNCTION_DEF (task, get_images);
