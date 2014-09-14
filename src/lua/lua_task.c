@@ -302,31 +302,118 @@ LUA_FUNCTION_DEF (task, set_user);
 /***
  * @method task:get_from_ip()
  * Returns [ip_addr](ip.md) object of a sender that is provided by MTA
+ * @return {rspamd_ip} ip address object
  */
 LUA_FUNCTION_DEF (task, get_from_ip);
 LUA_FUNCTION_DEF (task, set_from_ip);
 LUA_FUNCTION_DEF (task, get_from_ip_num);
-LUA_FUNCTION_DEF (task, get_client_ip_num);
+/***
+ * @method task:get_client_ip()
+ * Returns [ip_addr](ip.md) object of a client connected to rspamd (normally, it is an IP address of MTA)
+ * @return {rspamd_ip} ip address object
+ */
+LUA_FUNCTION_DEF (task, get_client_ip);
 /***
  * @method task:get_helo()
  * Returns the value of SMTP helo provided by MTA.
+ * @return {string} HELO value
  */
 LUA_FUNCTION_DEF (task, get_helo);
 LUA_FUNCTION_DEF (task, set_helo);
 /***
  * @method task:get_hostname()
  * Returns the value of sender's hostname provided by MTA
+ * @return {string} hostname value
  */
 LUA_FUNCTION_DEF (task, get_hostname);
 LUA_FUNCTION_DEF (task, set_hostname);
+/***
+ * @method task:get_images()
+ * Returns list of all images found in a task as a table of `rspamd_image`.
+ * @return {list of rspamd_image} images found in a message
+ */
 LUA_FUNCTION_DEF (task, get_images);
+/***
+ * @method task:get_symbol(name)
+ * Searches for a symbol `name` in all metrics results and returns a list of tables
+ * one per metric that describes the symbol inserted. Please note that this function
+ * is intended to return values for **inserted** symbols, so if this symbol was not
+ * inserted it won't be in the function's output. This method is useful for post-filters mainly.
+ * The symbols are returned as the list of the following tables:
+ *
+ * - `metric` - name of metric
+ * - `score` - score of a symbol in that metric
+ * - `options` - a table of strings representing options of a symbol
+ * @param {string} name symbol's name
+ * @return {list of tables} list of tables or nil if symbol was not found in any metric
+ */
 LUA_FUNCTION_DEF (task, get_symbol);
+/***
+ * @method task:get_date(type[, gmt])
+ * Returns timestamp for a connection or for a MIME message. This function can be called with a
+ * single table arguments with the following fields:
+ *
+ * * `format` - a format of date returned:
+ * 	- `message` - returns a mime date as integer (unix timestamp)
+ * 	- `message_str` - returns a mime date as string (UTC format)
+ * 	- `connect` - returns a unix timestamp of a connection to rspamd
+ * 	- `connect_str` - returns connection time in UTC format
+ * * `gmt` - returns date in `GMT` timezone (normal for unix timestamps)
+ *
+ * By default this function returns connection time in numeric format.
+ * @param {string} type date format as described above
+ * @param {boolean} gmt gmt flag as described above
+ * @return {string/number} date representation according to format
+ * @example
+rspamd_config.DATE_IN_PAST = function(task)
+	local dm = task:get_date{format = 'message', gmt = true}
+	local dt = task:get_date{format = 'connect', gmt = true}
+	-- A day
+	if dt - dm > 86400 then
+		return true
+	end
+
+	return false
+end
+ */
 LUA_FUNCTION_DEF (task, get_date);
+/***
+ * @method task:get_message_id()
+ * Returns message id of the specified task
+ * @return {string} if of a message
+ */
 LUA_FUNCTION_DEF (task, get_message_id);
 LUA_FUNCTION_DEF (task, get_timeval);
+/***
+ * @method task:get_metric_score(name)
+ * Get the current score of metric `name`. Should be used in post-filters only.
+ * @param {string} name name of a metric
+ * @return {number} the current score of the metric
+ */
 LUA_FUNCTION_DEF (task, get_metric_score);
+/***
+ * @method task:get_metric_action(name)
+ * Get the current action of metric `name`. Should be used in post-filters only.
+ * @param {string} name name of a metric
+ * @return {string} the current action of the metric as a string
+ */
 LUA_FUNCTION_DEF (task, get_metric_action);
+/***
+ * @method task:learn(is_spam[, classifier)
+ * Learn classifier `classifier` with the task. If `is_spam` is true then message
+ * is learnt as spam. Otherwise HAM is learnt. By default, this function learns
+ * `bayes` classifier.
+ * @param {boolean} is_spam learn spam or ham
+ * @param {string} classifier classifier's name
+ * @return {boolean} `true` if classifier has been learnt successfully
+ */
 LUA_FUNCTION_DEF (task, learn);
+/***
+ * @method task:set_settings(obj)
+ * Set users settings object for a task. The format of this object is described
+ * [here](https://rspamd.com/doc/configuration/settings.html).
+ * @param {any} obj any lua object that corresponds to the settings format
+ */
 LUA_FUNCTION_DEF (task, set_settings);
 
 static const struct luaL_reg tasklib_f[] = {
@@ -364,7 +451,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_from_ip),
 	LUA_INTERFACE_DEF (task, set_from_ip),
 	LUA_INTERFACE_DEF (task, get_from_ip_num),
-	LUA_INTERFACE_DEF (task, get_client_ip_num),
+	LUA_INTERFACE_DEF (task, get_client_ip),
 	LUA_INTERFACE_DEF (task, get_helo),
 	LUA_INTERFACE_DEF (task, set_helo),
 	LUA_INTERFACE_DEF (task, get_hostname),
@@ -1270,7 +1357,7 @@ lua_task_get_from_ip_num (lua_State *L)
 }
 
 static gint
-lua_task_get_client_ip_num (lua_State *L)
+lua_task_get_client_ip (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L);
 
