@@ -26,7 +26,51 @@
 #include "radix.h"
 #include "ottery.h"
 
-const gsize max_elts = 50 * 1024 * 1024;
+const gsize max_elts = 5 * 1024 * 1024;
+
+struct _tv {
+	const char *ip;
+	const char *m;
+	guint32 mask;
+	guint32 addr;
+} test_vec[] = {
+	{"192.168.1.1", "32", 0, 0},
+	{"192.168.1.1", "24", 0, 0},
+	{"192.168.1.1", "8", 0, 0},
+	{"172.16.1.1", "8", 0, 0},
+	{"172.16.1.1", "16", 0, 0},
+	{"172.16.1.1", "24", 0, 0},
+	{"8.8.8.8", "1", 0, 0},
+	{NULL, NULL, 0, 0}
+};
+
+static void
+rspamd_radix_text_vec (void)
+{
+	radix_compressed_t *tree = radix_tree_create_compressed ();
+	struct _tv *t = &test_vec[0];
+	struct in_addr ina;
+
+	while (t->ip != NULL) {
+		inet_aton (t->ip, &ina);
+		t->addr = ina.s_addr;
+		t->mask = strtoul (t->m, NULL, 10);
+		t ++;
+	}
+	t = &test_vec[0];
+
+	while (t->ip != NULL) {
+		radix_insert_compressed (tree, &t->addr, sizeof (guint32), 32 - t->mask, 1);
+		t ++;
+	}
+
+	t = &test_vec[0];
+	while (t->ip != NULL) {
+		g_assert (radix_find_compressed (tree, &t->addr, sizeof (guint32))
+						!= RADIX_NO_VALUE);
+		t ++;
+	}
+}
 
 void
 rspamd_radix_test_func (void)
@@ -47,12 +91,13 @@ rspamd_radix_test_func (void)
 
 	for (i = 0; i < nelts; i ++) {
 		addrs[i].addr = ottery_rand_uint32 ();
-		addrs[i].mask = ottery_rand_range (32) + 1;
+		addrs[i].mask = ottery_rand_range (32);
 	}
 
 	clock_gettime (CLOCK_MONOTONIC, &ts1);
 	for (i = 0; i < nelts; i ++) {
-		radix32tree_insert (tree, addrs[i].addr, addrs[i].mask, 1);
+		guint32 mask = G_MAXUINT32 << (32 - addrs[i].mask);
+		radix32tree_insert (tree, addrs[i].addr, mask, 1);
 	}
 	clock_gettime (CLOCK_MONOTONIC, &ts2);
 	diff = (ts2.tv_sec - ts1.tv_sec) * 1000. +   /* Seconds */
@@ -79,7 +124,32 @@ rspamd_radix_test_func (void)
 			(ts2.tv_nsec - ts1.tv_nsec) / 1000000.;  /* Nanoseconds */
 
 	msg_info ("Deleted %z elements in %.6f ms", nelts, diff);
-	g_free (addrs);
 
 	radix_tree_free (tree);
+	rspamd_radix_text_vec ();
+	radix_compressed_t *comp_tree = radix_tree_create_compressed ();
+
+	clock_gettime (CLOCK_MONOTONIC, &ts1);
+	for (i = 0; i < nelts; i ++) {
+		radix_insert_compressed (comp_tree, &addrs[i].addr, sizeof (guint32),
+				32 - addrs[i].mask, 1);
+	}
+	clock_gettime (CLOCK_MONOTONIC, &ts2);
+	diff = (ts2.tv_sec - ts1.tv_sec) * 1000. +   /* Seconds */
+			(ts2.tv_nsec - ts1.tv_nsec) / 1000000.;  /* Nanoseconds */
+
+	msg_info ("Added %z elements in %.6f ms", nelts, diff);
+
+	clock_gettime (CLOCK_MONOTONIC, &ts1);
+	for (i = 0; i < nelts; i ++) {
+		g_assert (radix_find_compressed (comp_tree, &addrs[i].addr, sizeof (guint32))
+				!= RADIX_NO_VALUE);
+	}
+	clock_gettime (CLOCK_MONOTONIC, &ts2);
+	diff = (ts2.tv_sec - ts1.tv_sec) * 1000. +   /* Seconds */
+			(ts2.tv_nsec - ts1.tv_nsec) / 1000000.;  /* Nanoseconds */
+
+	msg_info ("Checked %z elements in %.6f ms", nelts, diff);
+
+	g_free (addrs);
 }
