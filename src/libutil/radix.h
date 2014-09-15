@@ -9,6 +9,13 @@
 
 typedef struct radix_node_s radix_node_t;
 typedef struct radix_tree_s radix_tree_t;
+typedef struct radix_tree_compressed radix_compressed_t;
+
+enum radix_insert_type {
+	RADIX_INSERT,
+	RADIX_ADD,
+	RADIX_REPLACE
+};
 
 typedef gboolean (*radix_tree_traverse_func)(guint32 key, guint32 mask,
 	uintptr_t value, void *user_data);
@@ -85,5 +92,16 @@ void radix32tree_traverse (radix_tree_t *tree,
  * Frees radix tree
  */
 void radix_tree_free (radix_tree_t *tree);
+
+uintptr_t
+radix_insert_compressed (radix_compressed_t * tree,
+	guint8 *key, gsize keylen,
+	gsize masklen,
+	uintptr_t value);
+
+uintptr_t radix_find_compressed (radix_compressed_t * tree, guint8 *key,
+		gsize keylen);
+
+radix_compressed_t *radix_tree_create_compressed (void);
 
 #endif
