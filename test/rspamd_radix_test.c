@@ -30,18 +30,20 @@ const gsize max_elts = 5 * 1024 * 1024;
 
 struct _tv {
 	const char *ip;
+	const char *nip;
 	const char *m;
 	guint32 mask;
-	guint32 addr;
+	guint8 *addr;
+	guint8 *naddr;
+	gsize len;
 } test_vec[] = {
-	{"192.168.1.1", "32", 0, 0},
-	{"192.168.1.1", "24", 0, 0},
-	{"192.168.1.1", "8", 0, 0},
-	{"172.16.1.1", "8", 0, 0},
-	{"172.16.1.1", "16", 0, 0},
-	{"172.16.1.1", "24", 0, 0},
-	{"8.8.8.8", "1", 0, 0},
-	{NULL, NULL, 0, 0}
+	{"192.168.1.1", "192.168.1.2", "32", 0, 0, 0, 0},
+	{"192.168.1.0", "192.168.2.1", "24", 0, 0, 0, 0},
+	{"192.0.0.0", "193.167.2.1", "8", 0, 0, 0, 0},
+	{"172.16.1.1", "171.16.1.0", "8", 0, 0, 0, 0},
+	{"172.16.1.1", "127.0.0.1", "16", 0, 0, 0, 0},
+	{"172.16.1.1", "10.0.0.1", "24", 0, 0, 0, 0},
+	{NULL, NULL, NULL, 0, 0, 0, 0}
 };
 
 static void
@@ -50,24 +52,34 @@ rspamd_radix_text_vec (void)
 	radix_compressed_t *tree = radix_tree_create_compressed ();
 	struct _tv *t = &test_vec[0];
 	struct in_addr ina;
+	gulong i, val;
 
 	while (t->ip != NULL) {
+		t->addr = g_malloc (sizeof (ina));
+		t->naddr = g_malloc (sizeof (ina));
 		inet_aton (t->ip, &ina);
-		t->addr = ina.s_addr;
-		t->mask = strtoul (t->m, NULL, 10);
+		memcpy (t->addr, &ina, sizeof (ina));
+		inet_aton (t->nip, &ina);
+		memcpy (t->naddr, &ina, sizeof (ina));
+		t->len = sizeof (ina);
+		t->mask = t->len * NBBY - strtoul (t->m, NULL, 10);
 		t ++;
 	}
 	t = &test_vec[0];
 
+	i = 0;
 	while (t->ip != NULL) {
-		radix_insert_compressed (tree, &t->addr, sizeof (guint32), 32 - t->mask, 1);
+		radix_insert_compressed (tree, t->addr, t->len, t->mask, ++i);
 		t ++;
 	}
 
+	i = 0;
 	t = &test_vec[0];
 	while (t->ip != NULL) {
-		g_assert (radix_find_compressed (tree, &t->addr, sizeof (guint32))
-						!= RADIX_NO_VALUE);
+		val = radix_find_compressed (tree, t->addr, t->len);
+		g_assert (val == ++i);
+		val = radix_find_compressed (tree, t->naddr, t->len);
+		g_assert (val != i);
 		t ++;
 	}
 }
@@ -76,6 +88,7 @@ void
 rspamd_radix_test_func (void)
 {
 	radix_tree_t *tree = radix_tree_create ();
+	radix_compressed_t *comp_tree = radix_tree_create_compressed ();
 	struct {
 		guint32 addr;
 		guint32 mask;
@@ -83,6 +96,9 @@ rspamd_radix_test_func (void)
 	gsize nelts, i;
 	struct timespec ts1, ts2;
 	double diff;
+
+	/* Test suite for the compressed trie */
+	rspamd_radix_text_vec ();
 
 	g_assert (tree != NULL);
 	nelts = max_elts;
@@ -126,8 +142,6 @@ rspamd_radix_test_func (void)
 	msg_info ("Deleted %z elements in %.6f ms", nelts, diff);
 
 	radix_tree_free (tree);
-	rspamd_radix_text_vec ();
-	radix_compressed_t *comp_tree = radix_tree_create_compressed ();
 
 	clock_gettime (CLOCK_MONOTONIC, &ts1);
 	for (i = 0; i < nelts; i ++) {
