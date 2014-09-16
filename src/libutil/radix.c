@@ -430,6 +430,7 @@ radix_uncompress_path (struct radix_compressed_node *node,
 	node->skipped = FALSE;
 
 	msg_debug ("uncompress %ud levels of tree", levels_uncompress);
+
 	while (levels_uncompress) {
 		next = g_slice_alloc (sizeof (*node));
 
@@ -457,6 +458,7 @@ radix_uncompress_path (struct radix_compressed_node *node,
 	}
 
 	/* Attach leaf node */
+	msg_debug ("attach leaf node with value %p", leaf->value);
 	if (*nkey & bit) {
 		node->d.n.right = leaf;
 		node->d.n.left = NULL;
@@ -490,6 +492,7 @@ radix_make_leaf_node (guint8 *key, gsize keylen, gsize masklen,
 		memset (node, 0, sizeof (*node));
 	}
 	node->value = value;
+	msg_debug ("insert new leaf node with value %p", value);
 
 	return node;
 }
@@ -532,6 +535,7 @@ radix_uncompress_node (struct radix_compressed_node *node,
 		/* Nodes are equal */
 		uintptr_t oldval = node->value;
 		node->value = value;
+		msg_debug ("replace leaf node with: %p, old value: %p", value, oldval);
 		return oldval;
 	}
 	else {
@@ -551,11 +555,12 @@ radix_uncompress_node (struct radix_compressed_node *node,
 		 * - otherwise we insert new compressed leaf node
 		 */
 		if (cur_level == target_level) {
+			msg_debug ("insert detached leaf node with value: %p", value);
 			nnode->value = value;
 		}
 		else {
-			node = radix_make_leaf_node (key, keylen, value,
-					keylen - target_level / NBBY, TRUE);
+			node = radix_make_leaf_node (key, keylen,
+					keylen - target_level / NBBY, value, TRUE);
 			if (nnode->d.n.left == NULL) {
 				nnode->d.n.left = node;
 			}
@@ -586,6 +591,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 	node = tree->root;
 
 	g_assert (keybits >= masklen);
+	msg_debug ("want insert value %p with mask %z", value, masklen);
 
 	node = tree->root;
 	prev = &tree->root;
