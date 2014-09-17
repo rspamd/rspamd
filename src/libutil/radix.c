@@ -30,6 +30,12 @@
 
 static void * radix_alloc (radix_tree_t * tree);
 
+#undef RADIX_DEBUG
+#ifndef RADIX_DEBUG
+#undef msg_debug
+#define msg_debug(...) do {} while (0)
+#endif
+
 struct radix_node_s {
 	radix_node_t *right;
 	radix_node_t *left;
@@ -56,8 +62,8 @@ struct radix_compressed_node {
 			guint level;
 		} s;
 	} d;
-	gboolean skipped;
 	uintptr_t value;
+	gboolean skipped;
 };
 
 
@@ -369,36 +375,52 @@ radix32_tree_find_addr (radix_tree_t *tree, rspamd_inet_addr_t *addr)
 
 static gboolean
 radix_compare_compressed (struct radix_compressed_node *node,
-		guint8 *key, guint keylen)
+		guint8 *key, guint keylen, guint cur_level)
 {
 	guint8 *nk;
 	guint8 *k;
 	guint8 bit;
-	guint shift, rbits;
+	guint shift, rbits, skip;
 
 	if (node->d.s.keylen > keylen) {
 		/* Obvious case */
 		return FALSE;
 	}
 
+
 	/* Compare byte aligned levels of a compressed node */
 	shift = node->d.s.level / NBBY;
-	if (shift > 0 && memcmp (node->d.s.key, key, shift) != 0) {
-		return FALSE;
-	}
-
-	/* Precisely compare remaining bits */
-	nk = node->d.s.key + shift;
-	k = key + shift;
-	rbits = node->d.s.level % NBBY;
-	bit = 1 << 7;
-
-	while (rbits > 0) {
-		if ((*nk & bit) != (*k & bit)) {
+	/*
+	 * We know that at least of cur_level bits are the same,
+	 * se we can optimize search slightly
+	 */
+	if (shift > 0) {
+		skip = cur_level / NBBY;
+		if (shift > skip &&
+				memcmp (node->d.s.key + skip, key + skip, shift - skip) != 0) {
 			return FALSE;
 		}
-		bit >>= 1;
-		rbits --;
+		else {
+			/* We already know that we checked all elements prior to this one */
+			return TRUE;
+		}
+	}
+
+	rbits = node->d.s.level % NBBY;
+	if (rbits > 0) {
+		/* Precisely compare remaining bits */
+		nk = node->d.s.key + shift;
+		k = key + shift;
+
+		bit = 1 << 7;
+
+		while (rbits > 0) {
+			if ((*nk & bit) != (*k & bit)) {
+				return FALSE;
+			}
+			bit >>= 1;
+			rbits --;
+		}
 	}
 
 	return TRUE;
@@ -408,21 +430,22 @@ uintptr_t
 radix_find_compressed (radix_compressed_t * tree, guint8 *key, gsize keylen)
 {
 	struct radix_compressed_node *node;
-	guint8 bit;
-	gsize kremain = keylen;
+	guint32 bit;
+	gsize kremain = keylen / sizeof (guint32);
 	uintptr_t value;
-	guint8 *k = key;
+	guint32 *k = (guint32 *)key;
+	guint32 kv = ntohl (*k);
 	guint cur_level = 0;
 
-	bit = 1 << 7;
+	bit = 1U << 31;
 	value = RADIX_NO_VALUE;
 	node = tree->root;
 
-	msg_debug("trying to find key");
+	msg_debug ("trying to find key");
 	while (node && kremain) {
 		if (node->skipped) {
 			/* It is obviously a leaf node */
-			if (radix_compare_compressed (node, key, keylen)) {
+			if (radix_compare_compressed (node, key, keylen, cur_level)) {
 				return node->value;
 			}
 			else {
@@ -433,10 +456,10 @@ radix_find_compressed (radix_compressed_t * tree, guint8 *key, gsize keylen)
 			value = node->value;
 		}
 
-		msg_debug ("finding value at %ud level, cur value: %ul, left: %p, "
-						"right: %p, go %s", cur_level, value, node->d.n.left,
+		msg_debug ("finding value cur value: %ul, left: %p, "
+						"right: %p, go %s", value, node->d.n.left,
 						node->d.n.right, (*k & bit) ? "right" : "left");
-		if (*k & bit) {
+		if (kv & bit) {
 			node = node->d.n.right;
 		}
 		else {
@@ -446,7 +469,8 @@ radix_find_compressed (radix_compressed_t * tree, guint8 *key, gsize keylen)
 		bit >>= 1;
 		if (bit == 0) {
 			k ++;
-			bit = 1 << 7;
+			bit = 1U << 31;
+			kv = ntohl (*k);
 			kremain --;
 		}
 		cur_level ++;
