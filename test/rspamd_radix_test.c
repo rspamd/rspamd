@@ -26,7 +26,7 @@
 #include "radix.h"
 #include "ottery.h"
 
-const gsize max_elts = 5 * 1024 * 1024;
+const gsize max_elts = 3 * 1024 * 1024;
 
 struct _tv {
 	const char *ip;
@@ -111,6 +111,7 @@ rspamd_radix_test_func (void)
 		addrs[i].mask = ottery_rand_range (32);
 	}
 
+	msg_info ("old radix performance (%z elts)", nelts);
 	clock_gettime (CLOCK_MONOTONIC, &ts1);
 	for (i = 0; i < nelts; i ++) {
 		guint32 mask = G_MAXUINT32 << (32 - addrs[i].mask);
@@ -144,6 +145,7 @@ rspamd_radix_test_func (void)
 
 	radix_tree_free (tree);
 
+	msg_info ("new radix performance (%z elts)", nelts);
 	clock_gettime (CLOCK_MONOTONIC, &ts1);
 	for (i = 0; i < nelts; i ++) {
 		radix_insert_compressed (comp_tree, &addrs[i].addr, sizeof (guint32),
