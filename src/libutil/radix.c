@@ -560,6 +560,37 @@ radix_move_up_compressed_leaf (struct radix_compressed_node *leaf,
 }
 
 static uintptr_t
+radix_replace_node (struct radix_compressed_node *node,
+		guint8 *key, gsize keylen,
+		uintptr_t value)
+{
+	uintptr_t oldval;
+
+	if (node->skipped) {
+		/*
+		 * For leaf nodes we have to deal with the keys as well, since
+		 * we might find that keys are different for the same leaf node
+		 */
+		g_slice_free1 (node->d.s.keylen, node->d.s.key);
+		node->d.s.keylen = keylen;
+		node->d.s.key = g_slice_alloc (node->d.s.keylen);
+		memcpy (node->d.s.key, key, node->d.s.keylen);
+		oldval = node->value;
+		node->value = value;
+		msg_debug ("replace value for leaf node with: %p, old value: %p",
+				value, oldval);
+	}
+	else {
+		oldval = node->value;
+		node->value = value;
+		msg_debug ("replace value for node with: %p, old value: %p",
+							value, oldval);
+	}
+
+	return oldval;
+}
+
+static uintptr_t
 radix_uncompress_node (struct radix_compressed_node *node,
 		guint8 *key, gsize keylen,
 		uintptr_t value,
@@ -582,15 +613,16 @@ radix_uncompress_node (struct radix_compressed_node *node,
 		guint8 kb = *k & bit;
 		guint8 nb = *nkey & bit;
 
-		if (kb != nb) {
-			msg_debug ("found available path at level %ud", cur_level);
-			break;
-		}
-		else if (cur_level >= node->d.s.level) {
+		if (cur_level >= node->d.s.level) {
 			msg_debug ("found available masked path at level %ud", cur_level);
 			masked = TRUE;
 			break;
 		}
+		if (kb != nb) {
+			msg_debug ("found available path at level %ud", cur_level);
+			break;
+		}
+
 		cur_level ++;
 		levels_uncompress ++;
 		bit >>= 1;
@@ -604,10 +636,7 @@ radix_uncompress_node (struct radix_compressed_node *node,
 
 	if (kremain == 0) {
 		/* Nodes are equal */
-		uintptr_t oldval = node->value;
-		node->value = value;
-		msg_debug ("replace leaf node with: %p, old value: %p", value, oldval);
-		return oldval;
+		return radix_replace_node (node, key, keylen, value);
 	}
 	else {
 		/*
@@ -734,18 +763,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 			 * is equal to the target level
 			 */
 			if (next->d.s.level == target_level) {
-				/*
-				 * For leaf nodes we have to deal with the keys as well, since
-				 * we might find that keys are different for the same leaf node
-				 */
-				g_slice_free1 (next->d.s.keylen, next->d.s.key);
-				next->d.s.keylen = keylen;
-				next->d.s.key = g_slice_alloc (next->d.s.keylen);
-				memcpy (next->d.s.key, key, next->d.s.keylen);
-				oldval = next->value;
-				next->value = value;
-				msg_debug ("replace value for node with: %p, old value: %p",
-						value, oldval);
+				oldval = radix_replace_node (next, key, keylen, value);
 			}
 			else if (next->d.s.level > target_level) {
 				/*
@@ -788,10 +806,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 			}
 		}
 		else {
-			oldval = next->value;
-			next->value = value;
-			msg_debug ("replace value for node with: %p, old value: %p",
-					value, oldval);
+			oldval = radix_replace_node (next, key, keylen, value);
 		}
 		return oldval;
 	}
