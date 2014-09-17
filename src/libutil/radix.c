@@ -367,6 +367,43 @@ radix32_tree_find_addr (radix_tree_t *tree, rspamd_inet_addr_t *addr)
 	return radix32tree_find (tree, ntohl (addr->addr.s4.sin_addr.s_addr));
 }
 
+static gboolean
+radix_compare_compressed (struct radix_compressed_node *node,
+		guint8 *key, guint keylen)
+{
+	guint8 *nk;
+	guint8 *k;
+	guint8 bit;
+	guint shift, rbits;
+
+	if (node->d.s.keylen > keylen) {
+		/* Obvious case */
+		return FALSE;
+	}
+
+	/* Compare byte aligned levels of a compressed node */
+	shift = node->d.s.level / NBBY;
+	if (memcmp (node->d.s.key, key, shift) != 0) {
+		return FALSE;
+	}
+
+	/* Precisely compare remaining bits */
+	nk = node->d.s.key + shift;
+	k = key + shift;
+	rbits = node->d.s.level % NBBY;
+	bit = 1 << (7 - rbits);
+
+	while (rbits > 0) {
+		if ((*nk & bit) != (*k & bit)) {
+			return FALSE;
+		}
+		bit >>= 1;
+		rbits --;
+	}
+
+	return TRUE;
+}
+
 uintptr_t
 radix_find_compressed (radix_compressed_t * tree, guint8 *key, gsize keylen)
 {
@@ -385,8 +422,7 @@ radix_find_compressed (radix_compressed_t * tree, guint8 *key, gsize keylen)
 	while (node && kremain) {
 		if (node->skipped) {
 			/* It is obviously a leaf node */
-			if (node->d.s.keylen <= keylen &&
-					memcmp (node->d.s.key, key, node->d.s.keylen) == 0) {
+			if (radix_compare_compressed (node, key, keylen)) {
 				return node->value;
 			}
 			else {
@@ -698,6 +734,14 @@ radix_insert_compressed (radix_compressed_t * tree,
 			 * is equal to the target level
 			 */
 			if (next->d.s.level == target_level) {
+				/*
+				 * For leaf nodes we have to deal with the keys as well, since
+				 * we might find that keys are different for the same leaf node
+				 */
+				g_slice_free1 (next->d.s.keylen, next->d.s.key);
+				next->d.s.keylen = keylen;
+				next->d.s.key = g_slice_alloc (next->d.s.keylen);
+				memcpy (next->d.s.key, key, next->d.s.keylen);
 				oldval = next->value;
 				next->value = value;
 				msg_debug ("replace value for node with: %p, old value: %p",
