@@ -44,6 +44,21 @@ struct _tv {
 	{"172.16.0.1", "127.0.0.1", "16", 0, 0, 0, 0},
 	{"172.17.1.0", "10.0.0.1", "27", 0, 0, 0, 0},
 	{"172.17.1.1", "0.0.0.1", "32", 0, 0, 0, 0},
+
+	/* Some bad data known to cause problem in the past */
+	{"191.245.170.246", NULL, "19", 0, 0, 0, 0},
+	{"227.88.150.170", NULL, "23", 0, 0, 0, 0},
+	{"105.225.182.92", NULL, "24", 0, 0, 0, 0},
+	{"223.167.155.240", NULL, "29", 0, 0, 0, 0},
+	{"125.241.220.172", NULL, "2", 0, 0, 0, 0},
+
+	/* Mask = 0 */
+	{"143.105.181.13", NULL, "8", 0, 0, 0, 0},
+	{"113.241.233.86", NULL, "26", 0, 0, 0, 0},
+	{"185.187.122.222", NULL, "8", 0, 0, 0, 0},
+	{"109.206.26.202", NULL, "12", 0, 0, 0, 0},
+	{"130.244.233.150", NULL, "0", 0, 0, 0, 0},
+
 	{NULL, NULL, NULL, 0, 0, 0, 0}
 };
 
@@ -60,8 +75,10 @@ rspamd_radix_text_vec (void)
 		t->naddr = g_malloc (sizeof (ina));
 		inet_aton (t->ip, &ina);
 		memcpy (t->addr, &ina, sizeof (ina));
-		inet_aton (t->nip, &ina);
-		memcpy (t->naddr, &ina, sizeof (ina));
+		if (t->nip) {
+			inet_aton (t->nip, &ina);
+			memcpy (t->naddr, &ina, sizeof (ina));
+		}
 		t->len = sizeof (ina);
 		t->mask = t->len * NBBY - strtoul (t->m, NULL, 10);
 		t ++;
@@ -79,8 +96,11 @@ rspamd_radix_text_vec (void)
 	while (t->ip != NULL) {
 		val = radix_find_compressed (tree, t->addr, t->len);
 		g_assert (val == ++i);
-		val = radix_find_compressed (tree, t->naddr, t->len);
-		g_assert (val != i);
+		//g_assert (val != RADIX_NO_VALUE);
+		if (t->nip != NULL) {
+			val = radix_find_compressed (tree, t->naddr, t->len);
+			g_assert (val != i);
+		}
 		t ++;
 	}
 }
@@ -95,6 +115,7 @@ rspamd_radix_test_func (void)
 		guint32 mask;
 	} *addrs;
 	gsize nelts, i;
+	gboolean all_good = TRUE;
 	struct timespec ts1, ts2;
 	double diff;
 
@@ -159,9 +180,18 @@ rspamd_radix_test_func (void)
 
 	clock_gettime (CLOCK_MONOTONIC, &ts1);
 	for (i = 0; i < nelts; i ++) {
-		g_assert (radix_find_compressed (comp_tree, &addrs[i].addr, sizeof (guint32))
-				!= RADIX_NO_VALUE);
+#if 0
+		/* Used to write bad random vector */
+		msg_info("{\"%s\", NULL, \"%ud\", 0, 0, 0, 0},",
+				inet_ntoa(*(struct in_addr *)&addrs[i].addr),
+				addrs[i].mask);
+#endif
+		if (radix_find_compressed (comp_tree, &addrs[i].addr, sizeof (guint32))
+				== RADIX_NO_VALUE) {
+			all_good = FALSE;
+		}
 	}
+	g_assert (all_good);
 	clock_gettime (CLOCK_MONOTONIC, &ts2);
 	diff = (ts2.tv_sec - ts1.tv_sec) * 1000. +   /* Seconds */
 			(ts2.tv_nsec - ts1.tv_nsec) / 1000000.;  /* Nanoseconds */

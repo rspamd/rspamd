@@ -15,8 +15,6 @@ main (int argc, char **argv)
 
 	g_test_init (&argc, &argv, NULL);
 
-	g_mem_set_vtable (glib_mem_profiler_table);
-
 	rspamd_main = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
 
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
