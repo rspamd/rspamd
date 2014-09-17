@@ -383,7 +383,7 @@ radix_compare_compressed (struct radix_compressed_node *node,
 
 	/* Compare byte aligned levels of a compressed node */
 	shift = node->d.s.level / NBBY;
-	if (memcmp (node->d.s.key, key, shift) != 0) {
+	if (shift > 0 && memcmp (node->d.s.key, key, shift) != 0) {
 		return FALSE;
 	}
 
@@ -391,7 +391,7 @@ radix_compare_compressed (struct radix_compressed_node *node,
 	nk = node->d.s.key + shift;
 	k = key + shift;
 	rbits = node->d.s.level % NBBY;
-	bit = 1 << (7 - rbits);
+	bit = 1 << 7;
 
 	while (rbits > 0) {
 		if ((*nk & bit) != (*k & bit)) {
