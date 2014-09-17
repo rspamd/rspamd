@@ -26,14 +26,19 @@
 #include "radix.h"
 #include "ottery.h"
 
-const gsize max_elts = 1 * 1024 * 1024;
+const gsize max_elts = 20 * 1024;
+const gint lookup_cycles = 1 * 1024;
 
 const uint masks[] = {
 		8,
 		16,
 		24,
 		32,
-		27
+		27,
+		29,
+		19,
+		13,
+		22
 };
 
 struct _tv {
@@ -123,6 +128,7 @@ rspamd_radix_test_func (void)
 		guint32 mask;
 	} *addrs;
 	gsize nelts, i;
+	gint lc;
 	gboolean all_good = TRUE;
 	struct timespec ts1, ts2;
 	double diff;
@@ -153,8 +159,10 @@ rspamd_radix_test_func (void)
 	msg_info ("Added %z elements in %.6f ms", nelts, diff);
 
 	clock_gettime (CLOCK_MONOTONIC, &ts1);
-	for (i = 0; i < nelts; i ++) {
-		g_assert (radix32tree_find (tree, addrs[i].addr) != RADIX_NO_VALUE);
+	for (lc = 0; lc < lookup_cycles; lc ++) {
+		for (i = 0; i < nelts; i ++) {
+			g_assert (radix32tree_find (tree, addrs[i].addr) != RADIX_NO_VALUE);
+		}
 	}
 	clock_gettime (CLOCK_MONOTONIC, &ts2);
 	diff = (ts2.tv_sec - ts1.tv_sec) * 1000. +   /* Seconds */
@@ -187,16 +195,18 @@ rspamd_radix_test_func (void)
 	msg_info ("Added %z elements in %.6f ms", nelts, diff);
 
 	clock_gettime (CLOCK_MONOTONIC, &ts1);
-	for (i = 0; i < nelts; i ++) {
+	for (lc = 0; lc < lookup_cycles; lc ++) {
+		for (i = 0; i < nelts; i ++) {
 #if 0
-		/* Used to write bad random vector */
-		msg_info("{\"%s\", NULL, \"%ud\", 0, 0, 0, 0},",
-				inet_ntoa(*(struct in_addr *)&addrs[i].addr),
-				addrs[i].mask);
+			/* Used to write bad random vector */
+			msg_info("{\"%s\", NULL, \"%ud\", 0, 0, 0, 0},",
+					inet_ntoa(*(struct in_addr *)&addrs[i].addr),
+					addrs[i].mask);
 #endif
-		if (radix_find_compressed (comp_tree, &addrs[i].addr, sizeof (guint32))
-				== RADIX_NO_VALUE) {
-			all_good = FALSE;
+			if (radix_find_compressed (comp_tree, &addrs[i].addr, sizeof (guint32))
+					== RADIX_NO_VALUE) {
+				all_good = FALSE;
+			}
 		}
 	}
 	g_assert (all_good);
