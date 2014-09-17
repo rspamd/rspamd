@@ -374,16 +374,13 @@ radix_find_compressed (radix_compressed_t * tree, guint8 *key, gsize keylen)
 	guint8 bit;
 	gsize kremain = keylen;
 	uintptr_t value;
+	guint8 *k = key;
 
 	bit = 1 << 7;
 	value = RADIX_NO_VALUE;
 	node = tree->root;
 
 	while (node && kremain) {
-		if (node->value != RADIX_NO_VALUE) {
-			value = node->value;
-		}
-
 		if (node->skipped) {
 			/* It is obviously a leaf node */
 			if (node->d.s.keylen <= keylen &&
@@ -394,8 +391,11 @@ radix_find_compressed (radix_compressed_t * tree, guint8 *key, gsize keylen)
 				return value;
 			}
 		}
+		if (node->value != RADIX_NO_VALUE) {
+			value = node->value;
+		}
 
-		if (*key & bit) {
+		if (*k & bit) {
 			node = node->d.n.right;
 		}
 		else {
@@ -404,7 +404,7 @@ radix_find_compressed (radix_compressed_t * tree, guint8 *key, gsize keylen)
 
 		bit >>= 1;
 		if (bit == 0) {
-			key ++;
+			k ++;
 			bit = 1 << 7;
 			kremain --;
 		}
@@ -420,7 +420,7 @@ radix_uncompress_path (struct radix_compressed_node *node,
 		guint levels_uncompress)
 {
 	guint8 *nkey = node->d.s.key + start_level / NBBY;
-	guint8 bit = 1 << (8 - start_level % NBBY);
+	guint8 bit = 1 << (7 - start_level % NBBY);
 	struct radix_compressed_node *leaf, *next;
 
 	/* Make compressed leaf */
@@ -428,6 +428,7 @@ radix_uncompress_path (struct radix_compressed_node *node,
 	memcpy (leaf, node, sizeof (*node));
 
 	node->skipped = FALSE;
+	node->value = RADIX_NO_VALUE;
 
 	msg_debug ("uncompress %ud levels of tree", levels_uncompress);
 
@@ -458,7 +459,8 @@ radix_uncompress_path (struct radix_compressed_node *node,
 	}
 
 	/* Attach leaf node */
-	msg_debug ("attach leaf node with value %p", leaf->value);
+	msg_debug ("attach leaf node to %s with value %p", (*nkey & bit) ? "right" : "left",
+			leaf->value);
 	if (*nkey & bit) {
 		node->d.n.right = leaf;
 		node->d.n.left = NULL;
@@ -586,6 +588,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 	guint cur_level = 0;
 	guint8 bit;
 	gsize kremain = keylen;
+	uintptr_t oldval;
 
 	bit = 1 << 7;
 	node = tree->root;
@@ -631,6 +634,16 @@ radix_insert_compressed (radix_compressed_t * tree,
 		next = radix_make_leaf_node (key, keylen, masklen, value,
 				TRUE);
 		*prev = next;
+	}
+	else if (next->value == RADIX_NO_VALUE) {
+		msg_debug ("insert value node with %p", value);
+		next->value = value;
+	}
+	else {
+		oldval = next->value;
+		next->value = value;
+		msg_debug ("replace value for node with: %p, old value: %p", value, oldval);
+		return oldval;
 	}
 
 	return next->value;
