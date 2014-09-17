@@ -397,7 +397,7 @@ radix_find_compressed (radix_compressed_t * tree, guint8 *key, gsize keylen)
 			value = node->value;
 		}
 
-		msg_debug ("finding value at %ud level, cur value: %p, left: %p, "
+		msg_debug ("finding value at %ud level, cur value: %ul, left: %p, "
 						"right: %p, go %s", cur_level, value, node->d.n.left,
 						node->d.n.right, (*k & bit) ? "right" : "left");
 		if (*k & bit) {
@@ -508,6 +508,21 @@ radix_make_leaf_node (guint8 *key, guint keylen, guint level,
 	return node;
 }
 
+static void
+radix_move_up_compressed_leaf (struct radix_compressed_node *leaf,
+		struct radix_compressed_node *parent, uintptr_t value,
+		guint8 *key, guint keylen, guint leaf_level)
+{
+	parent->value = leaf->value;
+
+	leaf->value = value;
+	g_slice_free1 (leaf->d.s.keylen, leaf->d.s.key);
+	leaf->d.s.keylen = keylen;
+	leaf->d.s.key = g_slice_alloc (leaf->d.s.keylen);
+	memcpy (leaf->d.s.key, key, keylen);
+	leaf->d.s.level = leaf_level;
+}
+
 static uintptr_t
 radix_uncompress_node (struct radix_compressed_node *node,
 		guint8 *key, gsize keylen,
@@ -589,16 +604,11 @@ radix_uncompress_node (struct radix_compressed_node *node,
 			else {
 				leaf = nnode->d.n.right;
 			}
-			nnode->value = leaf->value;
 			msg_debug ("move leaf node with value: %p, to level %ud, "
 					"set leaf node value to %p and level %ud", nnode->value,
 					cur_level, value, target_level);
-			leaf->value = value;
-			g_slice_free1 (leaf->d.s.keylen, leaf->d.s.key);
-			leaf->d.s.keylen = keylen;
-			leaf->d.s.key = g_slice_alloc (leaf->d.s.keylen);
-			memcpy (leaf->d.s.key, key, keylen);
-			leaf->d.s.level = target_level;
+			radix_move_up_compressed_leaf (leaf, nnode, value, key, keylen,
+					target_level);
 		}
 		else {
 			node = radix_make_leaf_node (key, keylen,
@@ -628,7 +638,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 	guint cur_level = 0;
 	guint8 bit, *k = key;
 	gsize kremain = keylen;
-	uintptr_t oldval;
+	uintptr_t oldval = RADIX_NO_VALUE;
 
 	bit = 1 << 7;
 	node = tree->root;
@@ -637,6 +647,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 	msg_debug ("want insert value %p with mask %z", value, masklen);
 
 	node = tree->root;
+	next = node;
 	prev = &tree->root;
 
 	/* Search for the place to insert element */
@@ -679,12 +690,65 @@ radix_insert_compressed (radix_compressed_t * tree,
 	else if (next->value == RADIX_NO_VALUE) {
 		msg_debug ("insert value node with %p", value);
 		next->value = value;
-		tree->size ++;
 	}
 	else {
-		oldval = next->value;
-		next->value = value;
-		msg_debug ("replace value for node with: %p, old value: %p", value, oldval);
+		if (next->skipped) {
+			/*
+			 * For skipped node we replace value if the level of skipped node
+			 * is equal to the target level
+			 */
+			if (next->d.s.level == target_level) {
+				oldval = next->value;
+				next->value = value;
+				msg_debug ("replace value for node with: %p, old value: %p",
+						value, oldval);
+			}
+			else if (next->d.s.level > target_level) {
+				/*
+				 * Here we must create new normal node and insert compressed leaf
+				 * one level below
+				 */
+				node = radix_make_leaf_node (key, keylen, target_level, value,
+						FALSE);
+				*prev = node;
+				if (*k & bit) {
+					node->d.n.right = next;
+				}
+				else {
+					node->d.n.left = next;
+				}
+				oldval = next->value;
+			}
+			else {
+				/*
+				 * We must convert old compressed node to a normal node and
+				 * create new compressed leaf attached to that normal node
+				 */
+				node = radix_make_leaf_node (key, keylen, target_level, value,
+						TRUE);
+				*prev = next;
+				msg_debug ("move leaf node with value: %p, to level %ud, "
+						"set leaf node value to %p and level %ud", next->value,
+						cur_level, value, target_level);
+				g_slice_free1 (next->d.s.keylen, next->d.s.key);
+				next->skipped = FALSE;
+				if (*k & bit) {
+					next->d.n.right = node;
+					next->d.n.left = NULL;
+				}
+				else {
+					next->d.n.left = node;
+					next->d.n.right = NULL;
+				}
+				oldval = next->value;
+			}
+		}
+		else {
+			oldval = next->value;
+			next->value = value;
+			msg_debug ("replace value for node with: %p, old value: %p",
+					value, oldval);
+		}
 		return oldval;
 	}
 
