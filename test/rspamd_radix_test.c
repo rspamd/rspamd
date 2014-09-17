@@ -26,7 +26,15 @@
 #include "radix.h"
 #include "ottery.h"
 
-const gsize max_elts = 3 * 1024 * 1024;
+const gsize max_elts = 1 * 1024 * 1024;
+
+const uint masks[] = {
+		8,
+		16,
+		24,
+		32,
+		27
+};
 
 struct _tv {
 	const char *ip;
@@ -129,7 +137,7 @@ rspamd_radix_test_func (void)
 
 	for (i = 0; i < nelts; i ++) {
 		addrs[i].addr = ottery_rand_uint32 ();
-		addrs[i].mask = ottery_rand_range (32);
+		addrs[i].mask = masks[ottery_rand_range(G_N_ELEMENTS (masks) - 1)];
 	}
 
 	msg_info ("old radix performance (%z elts)", nelts);
