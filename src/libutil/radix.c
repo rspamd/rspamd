@@ -413,7 +413,7 @@ radix_compare_compressed (struct radix_compressed_node *node,
 		nk = node->d.s.key + shift;
 		k = key + shift;
 
-		bit = 1 << 7;
+		bit = 1U << 7;
 
 		while (rbits > 0) {
 			if ((*nk & bit) != (*k & bit)) {
@@ -488,7 +488,7 @@ radix_uncompress_path (radix_compressed_t *tree,
 		guint levels_uncompress)
 {
 	guint8 *nkey = node->d.s.key + start_level / NBBY;
-	guint8 bit = 1 << (7 - start_level % NBBY);
+	guint8 bit = 1U << (7 - start_level % NBBY);
 	struct radix_compressed_node *leaf, *next;
 
 	/* Make compressed leaf */
@@ -522,7 +522,7 @@ radix_uncompress_path (radix_compressed_t *tree,
 		bit >>= 1;
 		if (bit == 0) {
 			nkey ++;
-			bit = 1 << 7;
+			bit = 1U << 7;
 		}
 		node = next;
 		levels_uncompress --;
@@ -659,7 +659,7 @@ radix_uncompress_node (radix_compressed_t *tree,
 		if (bit == 0) {
 			k ++;
 			nkey ++;
-			bit = 1 << 7;
+			bit = 1U << 7;
 			kremain --;
 		}
 	}
@@ -735,7 +735,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 	gsize kremain = keylen;
 	uintptr_t oldval = RADIX_NO_VALUE;
 
-	bit = 1 << 7;
+	bit = 1U << 7;
 	node = tree->root;
 
 	g_assert (keybits >= masklen);
@@ -769,7 +769,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 		bit >>= 1;
 		if (bit == 0) {
 			k ++;
-			bit = 1 << 7;
+			bit = 1U << 7;
 			kremain --;
 		}
 		cur_level ++;
@@ -849,7 +849,7 @@ radix_tree_create_compressed (void)
 {
 	radix_compressed_t *tree;
 
-	tree = g_slice_alloc (sizeof (radix_tree_t));
+	tree = g_slice_alloc (sizeof (*tree));
 	if (tree == NULL) {
 		return NULL;
 	}
