@@ -116,6 +116,8 @@ rspamd_radix_text_vec (void)
 		}
 		t ++;
 	}
+
+	radix_tree_destroy_compressed (tree);
 }
 
 void

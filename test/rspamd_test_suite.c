@@ -21,6 +21,7 @@ main (int argc, char **argv)
 	g_thread_init (NULL);
 #endif
 
+	g_mime_init (0);
 	memset (rspamd_main, 0, sizeof (struct rspamd_main));
 	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	rspamd_main->cfg = (struct rspamd_config *)g_malloc (sizeof (struct rspamd_config));
@@ -54,6 +55,8 @@ main (int argc, char **argv)
 	g_test_add_func ("/rspamd/rrd", rspamd_rrd_test_func);
 
 	g_test_run ();
+
+	g_mime_shutdown ();
 
 	return 0;
 }

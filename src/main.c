@@ -1337,14 +1337,17 @@ main (gint argc, gchar **argv, gchar **env)
 			rspamd_main->cfg->mlock_statfile_pool);
 
 	event_init ();
+#ifdef GMIME_ENABLE_RFC2047_WORKAROUNDS
+	g_mime_init (GMIME_ENABLE_RFC2047_WORKAROUNDS);
+#else
 	g_mime_init (0);
+#endif
 
 	/* Init lua filters */
 	if (!rspamd_init_lua_filters (rspamd_main->cfg)) {
 		msg_err ("error loading lua plugins");
 		exit (EXIT_FAILURE);
 	}
-
 
 	/* Insert classifiers symbols */
 	(void)rspamd_config_insert_classify_symbols (rspamd_main->cfg);
@@ -1499,6 +1502,8 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_config_free (rspamd_main->cfg);
 	g_free (rspamd_main->cfg);
 	g_free (rspamd_main);
+
+	g_mime_shutdown ();
 
 #ifdef HAVE_OPENSSL
 	EVP_cleanup ();

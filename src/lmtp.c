@@ -315,7 +315,6 @@ start_lmtp (struct rspamd_worker *worker)
 
 	worker->srv->pid = getpid ();
 	worker->ctx = event_init ();
-	g_mime_init (0);
 
 	init_signals (&signals, sig_handler);
 	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
