@@ -86,13 +86,13 @@ typedef struct memory_pool_s {
  * Statistics structure
  */
 typedef struct memory_pool_stat_s {
-	gsize pools_allocated;              /**< total number of allocated pools					*/
-	gsize pools_freed;                  /**< number of freed pools								*/
-	gsize bytes_allocated;              /**< bytes that are allocated with pool allocator		*/
-	gsize chunks_allocated;             /**< number of chunks that are allocated				*/
-	gsize shared_chunks_allocated;      /**< shared chunks allocated							*/
-	gsize chunks_freed;                 /**< chunks freed										*/
-	gsize oversized_chunks;             /**< oversized chunks									*/
+	guint pools_allocated;              /**< total number of allocated pools					*/
+	guint pools_freed;                  /**< number of freed pools								*/
+	guint bytes_allocated;              /**< bytes that are allocated with pool allocator		*/
+	guint chunks_allocated;             /**< number of chunks that are allocated				*/
+	guint shared_chunks_allocated;      /**< shared chunks allocated							*/
+	guint chunks_freed;                 /**< chunks freed										*/
+	guint oversized_chunks;             /**< oversized chunks									*/
 } rspamd_mempool_stat_t;
 
 /**

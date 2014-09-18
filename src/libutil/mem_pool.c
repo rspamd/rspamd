@@ -33,15 +33,6 @@
 #define MUTEX_SLEEP_TIME 10000000L
 #define MUTEX_SPIN_COUNT 100
 
-#ifdef _THREAD_SAFE
-pthread_mutex_t stat_mtx = PTHREAD_MUTEX_INITIALIZER;
-#   define STAT_LOCK() do { pthread_mutex_lock (&stat_mtx); } while (0)
-#   define STAT_UNLOCK() do { pthread_mutex_unlock (&stat_mtx); } while (0)
-#else
-#   define STAT_LOCK() do {} while (0)
-#   define STAT_UNLOCK() do {} while (0)
-#endif
-
 #define POOL_MTX_LOCK() do { rspamd_mutex_lock (pool->mtx); } while (0)
 #define POOL_MTX_UNLOCK()   do { rspamd_mutex_unlock (pool->mtx); } while (0)
 
@@ -95,10 +86,8 @@ pool_chain_new (gsize size)
 	chain->pos = align_ptr (chain->begin, MEM_ALIGNMENT);
 	chain->len = size;
 	chain->next = NULL;
-	STAT_LOCK ();
-	mem_pool_stat->bytes_allocated += size;
-	mem_pool_stat->chunks_allocated++;
-	STAT_UNLOCK ();
+	g_atomic_int_add (&mem_pool_stat->bytes_allocated, size);
+	g_atomic_int_inc (&mem_pool_stat->chunks_allocated);
 
 	return chain;
 }
@@ -151,10 +140,9 @@ pool_chain_new_shared (gsize size)
 	chain->len = size;
 	chain->lock = NULL;
 	chain->next = NULL;
-	STAT_LOCK ();
-	mem_pool_stat->shared_chunks_allocated++;
-	mem_pool_stat->bytes_allocated += size;
-	STAT_UNLOCK ();
+
+	g_atomic_int_inc (&mem_pool_stat->shared_chunks_allocated);
+	g_atomic_int_add (&mem_pool_stat->bytes_allocated, size);
 
 	return chain;
 }
@@ -414,17 +402,14 @@ rspamd_mempool_alloc_shared (rspamd_mempool_t * pool, gsize size)
 			/* Attach new pool to chain */
 			cur->next = new;
 			new->pos += size;
-			STAT_LOCK ();
-			mem_pool_stat->bytes_allocated += size;
-			STAT_UNLOCK ();
-			POOL_MTX_UNLOCK ()
-			;
+			g_atomic_int_add (&mem_pool_stat->bytes_allocated, size);
+
+			POOL_MTX_UNLOCK ();
 			return new->begin;
 		}
 		tmp = align_ptr (cur->pos, MEM_ALIGNMENT);
 		cur->pos = tmp + size;
-		POOL_MTX_UNLOCK ()
-		;
+		POOL_MTX_UNLOCK ();
 		return tmp;
 	}
 	return NULL;
@@ -517,13 +502,10 @@ __mutex_spin (rspamd_mempool_mutex_t * mutex)
 		/* Spin again */
 		g_atomic_int_set (&mutex->spin, MUTEX_SPIN_COUNT);
 	}
-#ifdef HAVE_ASM_PAUSE
-	__asm __volatile ("pause");
-#elif defined(HAVE_SCHED_YIELD)
-	(void)sched_yield ();
-#endif
 
-#if defined(HAVE_NANOSLEEP)
+#ifdef HAVE_SCHED_YIELD
+	(void)sched_yield ();
+#elif defined(HAVE_NANOSLEEP)
 	struct timespec ts;
 	ts.tv_sec = 0;
 	ts.tv_nsec = MUTEX_SLEEP_TIME;
@@ -648,10 +630,8 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 	while (cur) {
 		tmp = cur;
 		cur = cur->next;
-		STAT_LOCK ();
-		mem_pool_stat->chunks_freed++;
-		mem_pool_stat->bytes_allocated -= tmp->len;
-		STAT_UNLOCK ();
+		g_atomic_int_inc (&mem_pool_stat->chunks_freed);
+		g_atomic_int_add (&mem_pool_stat->bytes_allocated, -tmp->len);
 		g_slice_free1 (tmp->len, tmp->begin);
 		g_slice_free (struct _pool_chain, tmp);
 	}
@@ -660,10 +640,8 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 	while (cur) {
 		tmp = cur;
 		cur = cur->next;
-		STAT_LOCK ();
-		mem_pool_stat->chunks_freed++;
-		mem_pool_stat->bytes_allocated -= tmp->len;
-		STAT_UNLOCK ();
+		g_atomic_int_inc (&mem_pool_stat->chunks_freed);
+		g_atomic_int_add (&mem_pool_stat->bytes_allocated, -tmp->len);
 		g_slice_free1 (tmp->len, tmp->begin);
 		g_slice_free (struct _pool_chain, tmp);
 	}
@@ -671,10 +649,8 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 	while (cur_shared) {
 		tmp_shared = cur_shared;
 		cur_shared = cur_shared->next;
-		STAT_LOCK ();
-		mem_pool_stat->chunks_freed++;
-		mem_pool_stat->bytes_allocated -= tmp_shared->len;
-		STAT_UNLOCK ();
+		g_atomic_int_inc (&mem_pool_stat->chunks_freed);
+		g_atomic_int_add (&mem_pool_stat->bytes_allocated, -tmp_shared->len);
 		munmap ((void *)tmp_shared, tmp_shared->len +
 			sizeof (struct _pool_chain_shared));
 	}
@@ -682,7 +658,7 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 		g_hash_table_destroy (pool->variables);
 	}
 
-	mem_pool_stat->pools_freed++;
+	g_atomic_int_inc (&mem_pool_stat->pools_freed);
 	POOL_MTX_UNLOCK ();
 	rspamd_mutex_free (pool->mtx);
 	g_slice_free (rspamd_mempool_t, pool);
@@ -698,14 +674,12 @@ rspamd_mempool_cleanup_tmp (rspamd_mempool_t * pool)
 	while (cur) {
 		tmp = cur;
 		cur = cur->next;
-		STAT_LOCK ();
-		mem_pool_stat->chunks_freed++;
-		mem_pool_stat->bytes_allocated -= tmp->len;
-		STAT_UNLOCK ();
+		g_atomic_int_inc (&mem_pool_stat->chunks_freed);
+		g_atomic_int_add (&mem_pool_stat->bytes_allocated, -tmp->len);
 		g_slice_free1 (tmp->len, tmp->begin);
 		g_slice_free (struct _pool_chain, tmp);
 	}
-	mem_pool_stat->pools_freed++;
+	g_atomic_int_inc (&mem_pool_stat->pools_freed);
 	POOL_MTX_UNLOCK ();
 }
 
