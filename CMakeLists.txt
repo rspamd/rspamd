@@ -747,6 +747,7 @@ CHECK_SYMBOL_EXISTS(fdatasync unistd.h HAVE_FDATASYNC)
 CHECK_SYMBOL_EXISTS(_SC_NPROCESSORS_ONLN unistd.h HAVE_SC_NPROCESSORS_ONLN)
 CHECK_SYMBOL_EXISTS(setbit sys/param.h PARAM_H_HAS_BITSET)
 CHECK_SYMBOL_EXISTS(getaddrinfo "sys/types.h;sys/socket.h;netdb.h" HAVE_GETADDRINFO)
+CHECK_SYMBOL_EXISTS(sched_yield "sched.h" HAVE_SCHED_YIELD)
 
 IF(NOT HAVE_GETADDRINFO)
 	MESSAGE(FATAL_ERROR "Your system does not support getaddrinfo call, please consider upgrading it to run rspamd")

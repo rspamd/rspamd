@@ -210,6 +210,7 @@
 #cmakedefine HAVE_IPV6_V6ONLY    1
 
 #cmakedefine HAVE_CTYPE_H        1
+#cmakedefine HAVE_SCHED_YEILD    1
 
 /* Configure allocator */
 #define uthash_malloc(sz) g_slice_alloc(sz)
@@ -418,6 +419,10 @@
 
 #ifdef WITH_GPERF_TOOLS
 #include <google/profiler.h>
+#endif
+
+#ifdef HAVE_SCHED_YIELD
+#include <sched.h>
 #endif
 
 #include <errno.h>
