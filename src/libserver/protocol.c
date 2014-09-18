@@ -855,7 +855,7 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 	}
 	msg->date = time (NULL);
 
-	task->state = CLOSING_CONNECTION;
+	task->state = WRITING_REPLY;
 
 	debug_task ("writing reply to client");
 	if (task->error_code != 0) {

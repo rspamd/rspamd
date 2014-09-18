@@ -69,6 +69,7 @@ struct rspamd_task {
 		WAIT_FILTER,
 		WAIT_POST_FILTER,
 		WRITE_REPLY,
+		WRITING_REPLY,
 		CLOSING_CONNECTION
 	} state;                                                    /**< current session state							*/
 	enum rspamd_command cmd;                                    /**< command										*/

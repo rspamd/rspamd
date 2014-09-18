@@ -335,6 +335,7 @@ rspamd_task_process (struct rspamd_task *task,
 			/* Call write_socket to write reply and exit */
 			task->state = WRITE_REPLY;
 		}
+		task->s->wanna_die = TRUE;
 	}
 	else {
 		rspamd_lua_call_pre_filters (task);

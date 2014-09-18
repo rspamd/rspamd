@@ -141,7 +141,7 @@ rspamd_worker_error_handler (struct rspamd_http_connection *conn, GError *err)
 
 	msg_info ("abnormally closing connection from: %s, error: %s",
 		rspamd_inet_address_to_string (&task->client_addr), err->message);
-	if (task->state != CLOSING_CONNECTION) {
+	if (task->state != CLOSING_CONNECTION && task->state != WRITING_REPLY) {
 		/* We still need to write a reply */
 		task->error_code = err->code;
 		task->last_error =
@@ -166,13 +166,19 @@ rspamd_worker_finish_handler (struct rspamd_http_connection *conn,
 			rspamd_inet_address_to_string (&task->client_addr));
 		destroy_session (task->s);
 	}
-	else {
+	else if (task->state != WRITING_REPLY) {
 		/*
 		 * If all filters have finished their tasks, this function will trigger
 		 * writing a reply.
 		 */
 		task->s->wanna_die = TRUE;
 		check_session_pending (task->s);
+	}
+	else {
+		/*
+		 * We are going to write a reply to a client
+		 */
+		task->state = CLOSING_CONNECTION;
 	}
 
 	return 0;
