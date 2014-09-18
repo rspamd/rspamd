@@ -215,6 +215,7 @@ rspamd_radix_test_func (void)
 			(ts2.tv_nsec - ts1.tv_nsec) / 1000000.;  /* Nanoseconds */
 
 	msg_info ("Checked %z elements in %.6f ms", nelts, diff);
+	radix_tree_destroy_compressed (comp_tree);
 
 	g_free (addrs);
 }

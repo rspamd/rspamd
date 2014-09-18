@@ -102,6 +102,8 @@ radix_insert_compressed (radix_compressed_t * tree,
 uintptr_t radix_find_compressed (radix_compressed_t * tree, guint8 *key,
 		gsize keylen);
 
+void radix_tree_destroy_compressed (radix_compressed_t *tree);
+
 radix_compressed_t *radix_tree_create_compressed (void);
 
 #endif

@@ -69,6 +69,7 @@ struct radix_compressed_node {
 
 struct radix_tree_compressed {
 	struct radix_compressed_node *root;
+	rspamd_mempool_t *pool;
 	size_t size;
 };
 
@@ -481,7 +482,8 @@ radix_find_compressed (radix_compressed_t * tree, guint8 *key, gsize keylen)
 
 
 static struct radix_compressed_node *
-radix_uncompress_path (struct radix_compressed_node *node,
+radix_uncompress_path (radix_compressed_t *tree,
+		struct radix_compressed_node *node,
 		guint start_level,
 		guint levels_uncompress)
 {
@@ -490,7 +492,7 @@ radix_uncompress_path (struct radix_compressed_node *node,
 	struct radix_compressed_node *leaf, *next;
 
 	/* Make compressed leaf */
-	leaf = g_slice_alloc (sizeof (*node));
+	leaf = rspamd_mempool_alloc (tree->pool, sizeof (*node));
 	memcpy (leaf, node, sizeof (*node));
 
 	/* Make compressed node as uncompressed */
@@ -501,7 +503,7 @@ radix_uncompress_path (struct radix_compressed_node *node,
 
 	/* Uncompress the desired path */
 	while (levels_uncompress) {
-		next = g_slice_alloc (sizeof (*node));
+		next = rspamd_mempool_alloc (tree->pool, sizeof (*node));
 
 		next->skipped = FALSE;
 		next->d.n.right = NULL;
@@ -544,17 +546,18 @@ radix_uncompress_path (struct radix_compressed_node *node,
 
 
 static struct radix_compressed_node *
-radix_make_leaf_node (guint8 *key, guint keylen, guint level,
+radix_make_leaf_node (radix_compressed_t *tree,
+		guint8 *key, guint keylen, guint level,
 		uintptr_t value,
 		gboolean compressed)
 {
 	struct radix_compressed_node *node;
 
-	node = g_slice_alloc (sizeof (struct radix_compressed_node));
+	node = rspamd_mempool_alloc (tree->pool, sizeof (struct radix_compressed_node));
 	if (compressed) {
 		node->skipped = TRUE;
 		node->d.s.keylen = keylen;
-		node->d.s.key = g_slice_alloc (node->d.s.keylen);
+		node->d.s.key = rspamd_mempool_alloc (tree->pool, node->d.s.keylen);
 		node->d.s.level = level;
 		memcpy (node->d.s.key, key, node->d.s.keylen);
 	}
@@ -569,22 +572,24 @@ radix_make_leaf_node (guint8 *key, guint keylen, guint level,
 }
 
 static void
-radix_move_up_compressed_leaf (struct radix_compressed_node *leaf,
+radix_move_up_compressed_leaf (radix_compressed_t *tree,
+		struct radix_compressed_node *leaf,
 		struct radix_compressed_node *parent, uintptr_t value,
 		guint8 *key, guint keylen, guint leaf_level)
 {
 	parent->value = leaf->value;
 
 	leaf->value = value;
-	g_slice_free1 (leaf->d.s.keylen, leaf->d.s.key);
+	//g_slice_free1 (leaf->d.s.keylen, leaf->d.s.key);
 	leaf->d.s.keylen = keylen;
-	leaf->d.s.key = g_slice_alloc (leaf->d.s.keylen);
+	leaf->d.s.key = rspamd_mempool_alloc (tree->pool, leaf->d.s.keylen);
 	memcpy (leaf->d.s.key, key, keylen);
 	leaf->d.s.level = leaf_level;
 }
 
 static uintptr_t
-radix_replace_node (struct radix_compressed_node *node,
+radix_replace_node (radix_compressed_t *tree,
+		struct radix_compressed_node *node,
 		guint8 *key, gsize keylen,
 		uintptr_t value)
 {
@@ -595,9 +600,9 @@ radix_replace_node (struct radix_compressed_node *node,
 		 * For leaf nodes we have to deal with the keys as well, since
 		 * we might find that keys are different for the same leaf node
 		 */
-		g_slice_free1 (node->d.s.keylen, node->d.s.key);
+		//g_slice_free1 (node->d.s.keylen, node->d.s.key);
 		node->d.s.keylen = keylen;
-		node->d.s.key = g_slice_alloc (node->d.s.keylen);
+		node->d.s.key = rspamd_mempool_alloc (tree->pool, node->d.s.keylen);
 		memcpy (node->d.s.key, key, node->d.s.keylen);
 		oldval = node->value;
 		node->value = value;
@@ -615,7 +620,8 @@ radix_replace_node (struct radix_compressed_node *node,
 }
 
 static uintptr_t
-radix_uncompress_node (struct radix_compressed_node *node,
+radix_uncompress_node (radix_compressed_t *tree,
+		struct radix_compressed_node *node,
 		guint8 *key, gsize keylen,
 		uintptr_t value,
 		guint cur_level,
@@ -660,7 +666,7 @@ radix_uncompress_node (struct radix_compressed_node *node,
 
 	if (kremain == 0) {
 		/* Nodes are equal */
-		return radix_replace_node (node, key, keylen, value);
+		return radix_replace_node (tree, node, key, keylen, value);
 	}
 	else {
 		/*
@@ -668,7 +674,7 @@ radix_uncompress_node (struct radix_compressed_node *node,
 		 */
 		struct radix_compressed_node *nnode;
 
-		nnode = radix_uncompress_path (node, start_level, levels_uncompress);
+		nnode = radix_uncompress_path (tree, node, start_level, levels_uncompress);
 
 		/*
 		 * Now nnode is the last uncompressed node with compressed leaf inside
@@ -696,11 +702,11 @@ radix_uncompress_node (struct radix_compressed_node *node,
 			msg_debug ("move leaf node with value: %p, to level %ud, "
 					"set leaf node value to %p and level %ud", nnode->value,
 					cur_level, value, target_level);
-			radix_move_up_compressed_leaf (leaf, nnode, value, key, keylen,
+			radix_move_up_compressed_leaf (tree, leaf, nnode, value, key, keylen,
 					target_level);
 		}
 		else {
-			node = radix_make_leaf_node (key, keylen,
+			node = radix_make_leaf_node (tree, key, keylen,
 					target_level, value, TRUE);
 			if (nnode->d.n.left == NULL) {
 				nnode->d.n.left = node;
@@ -743,8 +749,8 @@ radix_insert_compressed (radix_compressed_t * tree,
 	while (node && cur_level < target_level) {
 		if (node->skipped) {
 			/* We have found skipped node and we need to uncompress it */
-			return radix_uncompress_node (node, key, keylen, value, cur_level,
-					target_level, bit);
+			return radix_uncompress_node (tree, node, key, keylen, value,
+					cur_level, target_level, bit);
 		}
 		if (*k & bit) {
 			next = node->d.n.right;
@@ -771,7 +777,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 	}
 
 	if (next == NULL) {
-		next = radix_make_leaf_node (key, keylen, target_level, value,
+		next = radix_make_leaf_node (tree, key, keylen, target_level, value,
 				TRUE);
 		*prev = next;
 		tree->size ++;
@@ -787,15 +793,15 @@ radix_insert_compressed (radix_compressed_t * tree,
 			 * is equal to the target level
 			 */
 			if (next->d.s.level == target_level) {
-				oldval = radix_replace_node (next, key, keylen, value);
+				oldval = radix_replace_node (tree, next, key, keylen, value);
 			}
 			else if (next->d.s.level > target_level) {
 				/*
 				 * Here we must create new normal node and insert compressed leaf
 				 * one level below
 				 */
-				node = radix_make_leaf_node (key, keylen, target_level, value,
-						FALSE);
+				node = radix_make_leaf_node (tree, key, keylen,
+						target_level, value, FALSE);
 				*prev = node;
 				if (*k & bit) {
 					node->d.n.right = next;
@@ -810,13 +816,12 @@ radix_insert_compressed (radix_compressed_t * tree,
 				 * We must convert old compressed node to a normal node and
 				 * create new compressed leaf attached to that normal node
 				 */
-				node = radix_make_leaf_node (key, keylen, target_level, value,
-						TRUE);
+				node = radix_make_leaf_node (tree, key, keylen,
+						target_level, value, TRUE);
 				*prev = next;
 				msg_debug ("move leaf node with value: %p, to level %ud, "
 						"set leaf node value to %p and level %ud", next->value,
 						cur_level, value, target_level);
-				g_slice_free1 (next->d.s.keylen, next->d.s.key);
 				next->skipped = FALSE;
 				if (*k & bit) {
 					next->d.n.right = node;
@@ -830,7 +835,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 			}
 		}
 		else {
-			oldval = radix_replace_node (next, key, keylen, value);
+			oldval = radix_replace_node (tree, next, key, keylen, value);
 		}
 		return oldval;
 	}
@@ -849,10 +854,18 @@ radix_tree_create_compressed (void)
 		return NULL;
 	}
 
+	tree->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	tree->size = 0;
 	tree->root = NULL;
 
 	return tree;
+}
+
+void
+radix_tree_destroy_compressed (radix_compressed_t *tree)
+{
+	rspamd_mempool_delete (tree->pool);
+	g_slice_free1 (sizeof (*tree), tree);
 }
 
 /*
