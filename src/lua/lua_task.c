@@ -1898,14 +1898,18 @@ static gint
 lua_textpart_get_fuzzy (lua_State * L)
 {
 	struct mime_text_part *part = lua_check_textpart (L);
+	gchar *out;
 
 	if (part == NULL || part->is_empty) {
 		lua_pushnil (L);
 		return 1;
 	}
 
-	lua_pushlstring (L, part->fuzzy->hash_pipe,
-		sizeof (part->fuzzy->hash_pipe));
+	out = rspamd_encode_base32 (part->fuzzy->hash_pipe,
+			strlen (part->fuzzy->hash_pipe));
+	lua_pushstring (L, out);
+	g_free (out);
+
 	return 1;
 }
 
