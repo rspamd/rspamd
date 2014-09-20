@@ -1829,6 +1829,33 @@ lua_task_get_metric_action (lua_State *L)
 
 /**** Textpart implementation *****/
 
+/***
+ * @module mime_textpart
+ * This module provides different methods to manipulate text parts data. Text parts
+ * could be obtained from the `rspamd_task` by using of method `task:get_text_parts()`
+@example
+rspamd_config.R_EMPTY_IMAGE = function (task)
+	parts = task:get_text_parts()
+	if parts then
+		for _,part in ipairs(parts) do
+			if part:is_empty() then
+				images = task:get_images()
+				if images then
+					return true
+				end
+				return false
+			end
+		end
+	end
+	return false
+end
+ */
+
+/***
+ * @method text_part:get_content()
+ * Get the text of the part
+ * @return {string} `UTF8` encoded content of the part
+ */
 static gint
 lua_textpart_get_content (lua_State * L)
 {
@@ -1844,6 +1871,11 @@ lua_textpart_get_content (lua_State * L)
 	return 1;
 }
 
+/***
+ * @method text_part:get_length()
+ * Get length of the text of the part
+ * @return {integer} length of part in **bytes**
+ */
 static gint
 lua_textpart_get_length (lua_State * L)
 {
@@ -1864,6 +1896,11 @@ lua_textpart_get_length (lua_State * L)
 	return 1;
 }
 
+/***
+ * @method text_part:is_empty()
+ * Returns `true` if the specified part is empty
+ * @return {bool} whether a part is empty
+ */
 static gint
 lua_textpart_is_empty (lua_State * L)
 {
@@ -1878,7 +1915,11 @@ lua_textpart_is_empty (lua_State * L)
 
 	return 1;
 }
-
+/***
+ * @method text_part:is_html()
+ * Returns `true` if the specified part has HTML content
+ * @return {bool} whether a part is HTML part
+ */
 static gint
 lua_textpart_is_html (lua_State * L)
 {
@@ -1894,6 +1935,11 @@ lua_textpart_is_html (lua_State * L)
 	return 1;
 }
 
+/***
+ * @method text_part:get_fuzzy()
+ * Returns base32 encoded value of fuzzy hash of the specified part
+ * @return {string} fuzzy hash value
+ */
 static gint
 lua_textpart_get_fuzzy (lua_State * L)
 {
@@ -1913,6 +1959,11 @@ lua_textpart_get_fuzzy (lua_State * L)
 	return 1;
 }
 
+/***
+ * @method text_part:is_language()
+ * Returns the code of the most used unicode script in the text part. Does not work with raw parts
+ * @return {string} short abbreviation (such as `ru`) for the script's language
+ */
 static gint
 lua_textpart_get_language (lua_State * L)
 {
@@ -2014,6 +2065,15 @@ lua_textpart_get_language (lua_State * L)
 	return 1;
 }
 
+/***
+ * @method text_part:compare_distance(other)
+ * Calculates the difference to another text part.  This function is intended to work with
+ * the parts of `multipart/alternative` container only. If the two parts are not the parts of the
+ * same `multipart/alternative` container, then they are considered as unrelated and
+ * `-1` is returned.
+ * @param {text_part} other text part to compare
+ * @return {integer} commodity percentage (e.g. the same strings give `100`, different give `0` and unrelated give `-1`)
+ */
 static gint
 lua_textpart_compare_distance (lua_State * L)
 {
