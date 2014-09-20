@@ -2246,3 +2246,67 @@ rspamd_inet_address_connect (rspamd_inet_addr_t *addr, gint type,
 
 	return fd;
 }
+
+/*
+ * We use here z-base32 encoding described here:
+ * http://philzimmermann.com/docs/human-oriented-base-32-encoding.txt
+ */
+
+gchar *
+rspamd_encode_base32(guchar *in, gsize inlen)
+{
+	gint remain = -1, r, x;
+	gsize i;
+	gsize outlen = inlen * 8 / 5 + 1;
+	gchar *out;
+	static const char b32[]="ybndrfg8ejkmcpqxot1uwisza345h769";
+
+	out = g_malloc (outlen);
+	for (i = 0, r = 0; i < inlen; i++) {
+		switch (i % 5) {
+		case 0:
+			/* 8 bits of input and 3 to remain */
+			x = in[i];
+			remain = in[i] >> 5;
+			out[r++] = b32[x & 0x1F];
+			break;
+		case 1:
+			/* 11 bits of input, 1 to remain */
+			x = remain | in[i] << 3;
+			out[r++] = b32[x & 0x1F];
+			out[r++] = b32[x >> 5 & 0x1F];
+			remain = x >> 10;
+			break;
+		case 2:
+			/* 9 bits of input, 4 to remain */
+			x = remain | in[i] << 1;
+			out[r++] = b32[x & 0x1F];
+			remain = x >> 5;
+			break;
+		case 3:
+			/* 12 bits of input, 2 to remain */
+			x = remain | in[i] << 4;
+			out[r++] = b32[x & 0x1F];
+			out[r++] = b32[x >> 5 & 0x1F];
+			remain = x >> 10 & 0x3;
+			break;
+		case 4:
+			/* 10 bits of output, nothing to remain */
+			x = remain | in[i] << 2;
+			out[r++] = b32[x & 0x1F];
+			out[r++] = b32[x >> 5 & 0x1F];
+			remain = -1;
+			break;
+		default:
+			/* Not to be happen */
+			break;
+		}
+
+	}
+	if (remain >= 0)
+		out[r++] = b32[remain];
+
+	out[r] = 0;
+
+	return out;
+}

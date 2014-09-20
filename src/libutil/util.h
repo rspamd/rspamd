@@ -489,4 +489,12 @@ void rspamd_inet_address_set_port (rspamd_inet_addr_t *addr, uint16_t port);
 int rspamd_inet_address_connect (rspamd_inet_addr_t *addr, gint type,
 	gboolean async);
 
+/**
+ * Encode string using base32 encoding
+ * @param in input
+ * @param inlen input length
+ * @return freshly allocated base32 encoding of a specified string
+ */
+gchar * rspamd_encode_base32(guchar *in, gsize inlen);
+
 #endif
