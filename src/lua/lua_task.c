@@ -585,8 +585,6 @@ lua_check_url (lua_State * L)
 	return ud ? *((struct uri **)ud) : NULL;
 }
 
-/*** Task interface	***/
-
 static int
 lua_task_create_empty (lua_State *L)
 {
@@ -1826,8 +1824,6 @@ lua_task_get_metric_action (lua_State *L)
 
 	return 0;
 }
-
-/**** Textpart implementation *****/
 
 /***
  * @module mime_textpart
