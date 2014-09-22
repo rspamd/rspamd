@@ -344,8 +344,6 @@ rspamd_task_process (struct rspamd_task *task,
 		task->state = WAIT_PRE_FILTER;
 	}
 
-	check_session_pending (task->s);
-
 	return TRUE;
 }
 

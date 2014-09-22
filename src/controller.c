@@ -843,6 +843,7 @@ rspamd_controller_handle_learn_common (
 	session->task = task;
 	session->cl = cl;
 	session->is_spam = is_spam;
+	check_session_pending (task->s);
 
 	return 0;
 }
@@ -930,6 +931,7 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	session->task = task;
+	check_session_pending (task->s);
 
 	return 0;
 }
