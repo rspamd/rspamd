@@ -419,7 +419,6 @@ reread_config (struct rspamd_main *rspamd)
 		else {
 			msg_debug ("replacing config");
 			rspamd_config_free (rspamd->cfg);
-			close_log (rspamd->logger);
 			g_free (rspamd->cfg);
 
 			rspamd->cfg = tmp_cfg;
