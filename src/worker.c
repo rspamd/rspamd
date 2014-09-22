@@ -128,7 +128,7 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 	}
 
 	if (!rspamd_task_process (task, msg, ctx->classify_pool, TRUE)) {
-		rspamd_protocol_write_reply (task);
+		task->state = WRITE_REPLY;
 	}
 
 	return 0;
@@ -141,18 +141,8 @@ rspamd_worker_error_handler (struct rspamd_http_connection *conn, GError *err)
 
 	msg_info ("abnormally closing connection from: %s, error: %s",
 		rspamd_inet_address_to_string (&task->client_addr), err->message);
-	if (task->state != WRITING_REPLY && task->state != CLOSING_CONNECTION) {
-		/* We still need to write a reply */
-		task->error_code = err->code;
-		task->last_error =
-			rspamd_mempool_strdup (task->task_pool, err->message);
-		task->state = WRITE_REPLY;
-		rspamd_protocol_write_reply (task);
-	}
-	else {
-		/* Terminate session immediately */
-		destroy_session (task->s);
-	}
+	/* Terminate session immediately */
+	destroy_session (task->s);
 }
 
 static gint
@@ -161,11 +151,23 @@ rspamd_worker_finish_handler (struct rspamd_http_connection *conn,
 {
 	struct rspamd_task *task = (struct rspamd_task *) conn->ud;
 
-	if (msg->type == HTTP_RESPONSE) {
+	if (task->state == CLOSING_CONNECTION || task->state == WRITING_REPLY) {
 		/* We are done here */
 		msg_debug ("normally closing connection from: %s",
 			rspamd_inet_address_to_string (&task->client_addr));
 		destroy_session (task->s);
+	}
+	else if (task->state == WRITE_REPLY) {
+		/*
+		 * We can come here if no filters has delayed their job and we want to
+		 * write reply immediately. But this handler is executed when message
+		 * is read
+		 */
+		msg_debug ("want write message to the wire: %s",
+			rspamd_inet_address_to_string (&task->client_addr));
+		rspamd_protocol_write_reply (task);
+		/* Forcefully set the state */
+		task->state = CLOSING_CONNECTION;
 	}
 	else {
 		/*
