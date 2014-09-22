@@ -27,11 +27,15 @@
 #include "util.h"
 #include "printf.h"
 #include "logger.h"
+#include "ref.h"
 
 #include <limits.h>
 
 struct rspamd_http_connection_private {
-	GString *buf;
+	struct _rspamd_http_privbuf {
+		GString *data;
+		ref_entry_t ref;
+	} *buf;
 	gboolean new_header;
 	struct rspamd_http_header *header;
 	struct http_parser parser;
@@ -77,6 +81,17 @@ GQuark
 http_error_quark (void)
 {
 	return g_quark_from_static_string ("http-error-quark");
+}
+
+static void
+rspamd_http_privbuf_dtor (gpointer ud)
+{
+	struct _rspamd_http_privbuf *p = (struct _rspamd_http_privbuf *)ud;
+
+	if (p->data) {
+		g_string_free (p->data, TRUE);
+	}
+	g_slice_free1 (sizeof (struct _rspamd_http_privbuf), p);
 }
 
 static const gchar *
@@ -642,12 +657,16 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 {
 	struct rspamd_http_connection *conn = (struct rspamd_http_connection *)ud;
 	struct rspamd_http_connection_private *priv;
+	struct _rspamd_http_privbuf *pbuf;
 	GString *buf;
 	gssize r;
 	GError *err;
 
 	priv = conn->priv;
-	buf = priv->buf;
+	pbuf = priv->buf;
+	REF_RETAIN (pbuf);
+	rspamd_http_connection_ref (conn);
+	buf = priv->buf->data;
 
 	if (what == EV_READ) {
 		r = read (fd, buf->str, buf->allocated_len);
@@ -658,10 +677,15 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 					strerror (errno));
 			conn->error_handler (conn, err);
 			g_error_free (err);
+
+			REF_RELEASE (pbuf);
+			rspamd_http_connection_unref (conn);
+
 			return;
 		}
 		else if (r == 0) {
 			if (conn->finished) {
+				REF_RELEASE (pbuf);
 				rspamd_http_connection_unref (conn);
 				return;
 			}
@@ -671,12 +695,16 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 						"IO read error: unexpected EOF");
 				conn->error_handler (conn, err);
 				g_error_free (err);
+
+				REF_RELEASE (pbuf);
+				rspamd_http_connection_unref (conn);
+
 				return;
 			}
 		}
 		else {
 			buf->len = r;
-			rspamd_http_connection_ref (conn);
+
 			if (http_parser_execute (&priv->parser, &priv->parser_cb, buf->str,
 				r) != (size_t)r) {
 				err = g_error_new (HTTP_ERROR, priv->parser.http_errno,
@@ -684,10 +712,12 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 						http_errno_description (priv->parser.http_errno));
 				conn->error_handler (conn, err);
 				g_error_free (err);
+
+				REF_RELEASE (pbuf);
 				rspamd_http_connection_unref (conn);
+
 				return;
 			}
-			rspamd_http_connection_unref (conn);
 		}
 	}
 	else if (what == EV_TIMEOUT) {
@@ -695,13 +725,19 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 				"IO timeout");
 		rspamd_http_connection_ref (conn);
 		conn->error_handler (conn, err);
-		rspamd_http_connection_unref (conn);
 		g_error_free (err);
+
+		REF_RELEASE (pbuf);
+		rspamd_http_connection_unref (conn);
+
 		return;
 	}
 	else if (what == EV_WRITE) {
 		rspamd_http_write_helper (conn);
 	}
+
+	REF_RELEASE (pbuf);
+	rspamd_http_connection_unref (conn);
 }
 
 static void
@@ -773,8 +809,7 @@ rspamd_http_connection_reset (struct rspamd_http_connection *conn)
 	/* Clear priv */
 	event_del (&priv->ev);
 	if (priv->buf != NULL) {
-		g_string_free (priv->buf, TRUE);
-		priv->buf = NULL;
+		REF_RELEASE (priv->buf);
 	}
 
 	rspamd_http_parser_reset (conn);
@@ -817,7 +852,9 @@ rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
 		priv->ptv = &priv->tv;
 	}
 	priv->header = NULL;
-	priv->buf = g_string_sized_new (BUFSIZ);
+	priv->buf = g_slice_alloc0 (sizeof (*priv->buf));
+	REF_INIT_RETAIN (priv->buf, rspamd_http_privbuf_dtor);
+	priv->buf->data = g_string_sized_new (BUFSIZ);
 	priv->new_header = TRUE;
 
 	event_set (&priv->ev,
@@ -842,6 +879,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	gchar datebuf[64], *pbody;
 	gint i;
 	gsize bodylen;
+	GString *buf;
 
 	conn->fd = fd;
 	conn->ud = ud;
@@ -855,7 +893,10 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		priv->ptv = &priv->tv;
 	}
 	priv->header = NULL;
-	priv->buf = g_string_sized_new (128);
+	priv->buf = g_slice_alloc0 (sizeof (*priv->buf));
+	REF_INIT_RETAIN (priv->buf, rspamd_http_privbuf_dtor);
+	priv->buf->data = g_string_sized_new (128);
+	buf = priv->buf->data;
 
 	if (msg->method < HTTP_SYMBOLS) {
 		if (msg->body == NULL || msg->body->len == 0) {
@@ -899,7 +940,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 			if (mime_type == NULL) {
 				mime_type = "text/plain";
 			}
-			rspamd_printf_gstring (priv->buf, "HTTP/1.1 %d %s\r\n"
+			rspamd_printf_gstring (buf, "HTTP/1.1 %d %s\r\n"
 				"Connection: close\r\n"
 				"Server: %s\r\n"
 				"Date: %s\r\n"
@@ -915,19 +956,19 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		}
 		else {
 			/* Legacy spamd reply */
-			rspamd_printf_gstring (priv->buf, "RSPAMD/1.3 0 EX_OK\r\n");
+			rspamd_printf_gstring (buf, "RSPAMD/1.3 0 EX_OK\r\n");
 		}
 	}
 	else {
 		/* Format request */
 		if (host == NULL && msg->host == NULL) {
 			/* Fallback to HTTP/1.0 */
-			rspamd_printf_gstring (priv->buf, "%s %v HTTP/1.0\r\n"
+			rspamd_printf_gstring (buf, "%s %v HTTP/1.0\r\n"
 					"Content-Length: %z\r\n",
 					http_method_str (msg->method), msg->url, bodylen);
 		}
 		else {
-			rspamd_printf_gstring (priv->buf, "%s %v HTTP/1.1\r\n"
+			rspamd_printf_gstring (buf, "%s %v HTTP/1.1\r\n"
 				"Connection: close\r\n"
 				"Host: %s\r\n"
 				"Content-Length: %z\r\n",
@@ -937,7 +978,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		}
 	}
 	/* Allocate iov */
-	priv->wr_total = bodylen + priv->buf->len + 2;
+	priv->wr_total = bodylen + buf->len + 2;
 	DL_FOREACH (msg->headers, hdr)
 	{
 		/* <name><: ><value><\r\n> */
@@ -948,8 +989,8 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	priv->wr_pos = 0;
 
 	/* Now set up all iov */
-	priv->out[0].iov_base = priv->buf->str;
-	priv->out[0].iov_len = priv->buf->len;
+	priv->out[0].iov_base = buf->str;
+	priv->out[0].iov_len = buf->len;
 	i = 1;
 	LL_FOREACH (msg->headers, hdr)
 	{

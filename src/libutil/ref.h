@@ -36,34 +36,46 @@ typedef struct ref_entry_s {
 } ref_entry_t;
 
 #define REF_INIT(obj, dtor_cb) do {								\
+	if ((obj) != NULL) {											\
 	(obj)->ref.refcount = 0;										\
 	(obj)->ref.dtor = (ref_dtor_cb_t)(dtor_cb);						\
+	}																\
 } while (0)
 
 #define REF_INIT_RETAIN(obj, dtor_cb) do {							\
+	if ((obj) != NULL) {											\
 	(obj)->ref.refcount = 1;										\
 	(obj)->ref.dtor = (ref_dtor_cb_t)(dtor_cb);						\
+	}																\
 } while (0)
 
 #ifdef HAVE_ATOMIC_BUILTINS
 #define REF_RETAIN(obj) do {										\
+	if ((obj) != NULL) {											\
     __sync_add_and_fetch (&(obj)->ref.refcount, 1);					\
+	}																\
 } while (0)
 
 #define REF_RELEASE(obj) do {										\
-	unsigned int rc = __sync_sub_and_fetch (&(obj)->ref.refcount, 1); \
-	if (rc == 0 && (obj)->ref.dtor) {								\
+	if ((obj) != NULL) {											\
+	unsigned int _rc_priv = __sync_sub_and_fetch (&(obj)->ref.refcount, 1); \
+	if (_rc_priv == 0 && (obj)->ref.dtor) {								\
 		(obj)->ref.dtor (obj);										\
+	}																\
 	}																\
 } while (0)
 #else
 #define REF_RETAIN(obj) do {										\
+	if ((obj) != NULL) {											\
 	(obj)->ref.refcount ++;											\
+	}																\
 } while (0)
 
 #define REF_RELEASE(obj) do {										\
+	if ((obj) != NULL) {											\
 	if (--(obj)->ref.refcount == 0 && (obj)->ref.dtor) {			\
 		(obj)->ref.dtor (obj);										\
+	}																\
 	}																\
 } while (0)
 #endif
