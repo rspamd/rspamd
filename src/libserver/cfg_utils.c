@@ -716,6 +716,7 @@ rspamd_config_new_metric (struct rspamd_config *cfg, struct metric *c)
 		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
 			c->actions[i].score = -1.0;
 		}
+		c->subject = SPAM_SUBJECT;
 		rspamd_mempool_add_destructor (cfg->cfg_pool,
 			(rspamd_mempool_destruct_t) g_hash_table_destroy,
 			c->symbols);

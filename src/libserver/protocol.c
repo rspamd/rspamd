@@ -551,11 +551,15 @@ static const gchar *
 make_rewritten_subject (struct metric *metric, struct rspamd_task *task)
 {
 	static gchar subj_buf[1024];
-	gchar *p = subj_buf, *end, *c, *res;
-	const gchar *s;
+	gchar *p = subj_buf, *end, *res;
+	const gchar *s, *c;
 
 	end = p + sizeof(subj_buf);
 	c = metric->subject;
+	if (c == NULL) {
+		c = SPAM_SUBJECT;
+	}
+
 	s = g_mime_message_get_subject (task->message);
 
 	while (p < end) {
