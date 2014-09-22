@@ -59,6 +59,7 @@ static struct rspamd_worker * fork_worker (struct rspamd_main *,
 static gboolean load_rspamd_config (struct rspamd_config *cfg,
 	gboolean init_modules);
 static void init_cfg_cache (struct rspamd_config *cfg);
+static void rspamd_init_cfg (struct rspamd_config *cfg);
 
 sig_atomic_t do_restart = 0;
 sig_atomic_t do_reopen_log = 0;
@@ -400,18 +401,14 @@ reread_config (struct rspamd_main *rspamd)
 	GList *l;
 	struct filter *filt;
 
-	tmp_cfg = (struct rspamd_config *)g_malloc (sizeof (struct rspamd_config));
+	tmp_cfg = (struct rspamd_config *)g_malloc0 (sizeof (struct rspamd_config));
 	if (tmp_cfg) {
-		bzero (tmp_cfg, sizeof (struct rspamd_config));
-		tmp_cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
-		rspamd_config_defaults (tmp_cfg);
+
+		rspamd_init_cfg (tmp_cfg);
 		cfg_file = rspamd_mempool_strdup (tmp_cfg->cfg_pool,
 				rspamd->cfg->cfg_name);
 		/* Save some variables */
 		tmp_cfg->cfg_name = cfg_file;
-		tmp_cfg->lua_state = rspamd_lua_init (tmp_cfg);
-		rspamd_mempool_add_destructor (tmp_cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)lua_close, tmp_cfg->lua_state);
 
 		if (!load_rspamd_config (tmp_cfg, FALSE)) {
 			rspamd_set_logger (rspamd_main->cfg, g_quark_try_string (
@@ -424,19 +421,12 @@ reread_config (struct rspamd_main *rspamd)
 			rspamd_config_free (rspamd->cfg);
 			close_log (rspamd->logger);
 			g_free (rspamd->cfg);
+
 			rspamd->cfg = tmp_cfg;
 			/* Force debug log */
 			if (is_debug) {
 				rspamd->cfg->log_level = G_LOG_LEVEL_DEBUG;
 			}
-			/* Pre-init of cache */
-			rspamd->cfg->cache = g_new0 (struct symbols_cache, 1);
-			rspamd->cfg->cache->static_pool = rspamd_mempool_new (
-				rspamd_mempool_suggest_size ());
-			rspamd->cfg->cache->cfg = rspamd->cfg;
-			rspamd_main->cfg->cache->items_by_symbol = g_hash_table_new (
-				rspamd_str_hash,
-				rspamd_str_equal);
 			/* Perform modules configuring */
 			l = g_list_first (rspamd->cfg->filters);
 
@@ -1132,13 +1122,80 @@ perform_configs_sign (void)
 #endif
 }
 
+static void
+rspamd_init_cfg (struct rspamd_config *cfg)
+{
+	cfg->cfg_pool = rspamd_mempool_new (
+			rspamd_mempool_suggest_size ());
+	rspamd_config_defaults (cfg);
+
+	cfg->lua_state = rspamd_lua_init (cfg);
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+		(rspamd_mempool_destruct_t)lua_close, cfg->lua_state);
+
+	/* Pre-init of cache */
+	cfg->cache = g_new0 (struct symbols_cache, 1);
+	cfg->cache->static_pool = rspamd_mempool_new (
+		rspamd_mempool_suggest_size ());
+	cfg->cache->cfg = cfg;
+	cfg->cache->items_by_symbol = g_hash_table_new (
+		rspamd_str_hash,
+		rspamd_str_equal);
+}
+
+static void
+rspamd_init_main (struct rspamd_main *rspamd)
+{
+	rspamd->server_pool = rspamd_mempool_new (
+		rspamd_mempool_suggest_size ());
+	rspamd_main->stat = rspamd_mempool_alloc0_shared (rspamd_main->server_pool,
+		sizeof (struct rspamd_stat));
+	/* Create rolling history */
+	rspamd_main->history = rspamd_roll_history_new (rspamd_main->server_pool);
+}
+
+static void
+rspamd_init_libs ()
+{
+	struct rlimit rlim;
+
+	ottery_init (NULL);
+#ifdef HAVE_SETLOCALE
+	/* Set locale setting to C locale to avoid problems in future */
+	setlocale (LC_ALL, "C");
+	setlocale (LC_CTYPE, "C");
+	setlocale (LC_MESSAGES, "C");
+	setlocale (LC_TIME, "C");
+#endif
+
+#ifdef HAVE_OPENSSL
+	ERR_load_crypto_strings ();
+
+	OpenSSL_add_all_algorithms ();
+	OpenSSL_add_all_digests ();
+	OpenSSL_add_all_ciphers ();
+#endif
+	g_random_set_seed (ottery_rand_uint32 ());
+
+	/* Set stack size for pcre */
+	getrlimit (RLIMIT_STACK, &rlim);
+	rlim.rlim_cur = 100 * 1024 * 1024;
+	setrlimit (RLIMIT_STACK, &rlim);
+
+	event_init ();
+#ifdef GMIME_ENABLE_RFC2047_WORKAROUNDS
+	g_mime_init (GMIME_ENABLE_RFC2047_WORKAROUNDS);
+#else
+	g_mime_init (0);
+#endif
+}
+
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
 	gint res = 0, i;
 	struct sigaction signals;
 	struct rspamd_worker *cur;
-	struct rlimit rlim;
 	struct filter *filt;
 	pid_t wrk;
 	GList *l;
@@ -1152,8 +1209,7 @@ main (gint argc, gchar **argv, gchar **env)
 	g_thread_init (NULL);
 #endif
 	rspamd_main = (struct rspamd_main *)g_malloc0 (sizeof (struct rspamd_main));
-	rspamd_main->server_pool = rspamd_mempool_new (
-		rspamd_mempool_suggest_size ());
+
 	rspamd_main->cfg =
 		(struct rspamd_config *)g_malloc0 (sizeof (struct rspamd_config));
 
@@ -1166,13 +1222,9 @@ main (gint argc, gchar **argv, gchar **env)
 	init_title (argc, argv, env);
 #endif
 
-	rspamd_main->stat = rspamd_mempool_alloc_shared (rspamd_main->server_pool,
-			sizeof (struct rspamd_stat));
-	memset (rspamd_main->stat, 0, sizeof (struct rspamd_stat));
-
-	rspamd_main->cfg->cfg_pool = rspamd_mempool_new (
-		rspamd_mempool_suggest_size ());
-	rspamd_config_defaults (rspamd_main->cfg);
+	rspamd_init_libs ();
+	rspamd_init_main (rspamd_main);
+	rspamd_init_cfg (rspamd_main->cfg);
 
 	memset (&signals, 0, sizeof (struct sigaction));
 
@@ -1189,24 +1241,6 @@ main (gint argc, gchar **argv, gchar **env)
 
 	type = g_quark_from_static_string ("main");
 
-#ifdef HAVE_SETLOCALE
-	/* Set locale setting to C locale to avoid problems in future */
-	setlocale (LC_ALL,		"C");
-	setlocale (LC_CTYPE,	"C");
-	setlocale (LC_MESSAGES, "C");
-	setlocale (LC_TIME,		"C");
-#endif
-
-#ifdef HAVE_OPENSSL
-	ERR_load_crypto_strings ();
-
-	OpenSSL_add_all_algorithms ();
-	OpenSSL_add_all_digests ();
-	OpenSSL_add_all_ciphers ();
-#endif
-
-	g_random_set_seed (ottery_rand_uint32 ());
-
 	/* First set logger to console logger */
 	rspamd_main->cfg->log_type = RSPAMD_LOG_CONSOLE;
 	rspamd_set_logger (rspamd_main->cfg, type, rspamd_main);
@@ -1214,9 +1248,6 @@ main (gint argc, gchar **argv, gchar **env)
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 
 	detect_priv (rspamd_main);
-	rspamd_main->cfg->lua_state = rspamd_lua_init (rspamd_main->cfg);
-	rspamd_mempool_add_destructor (rspamd_main->cfg->cfg_pool,
-		(rspamd_mempool_destruct_t)lua_close, rspamd_main->cfg->lua_state);
 
 	pworker = &workers[0];
 	while (*pworker) {
@@ -1227,15 +1258,6 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Init listen sockets hash */
 	listen_sockets = g_hash_table_new (g_direct_hash, g_direct_equal);
-
-	/* Pre-init of cache */
-	rspamd_main->cfg->cache = g_new0 (struct symbols_cache, 1);
-	rspamd_main->cfg->cache->static_pool = rspamd_mempool_new (
-		rspamd_mempool_suggest_size ());
-	rspamd_main->cfg->cache->cfg = rspamd_main->cfg;
-	rspamd_main->cfg->cache->items_by_symbol = g_hash_table_new (
-		rspamd_str_hash,
-		rspamd_str_equal);
 
 	/* If we want to test lua skip everything except it */
 	if (lua_tests != NULL && lua_tests[0] != NULL) {
@@ -1296,14 +1318,6 @@ main (gint argc, gchar **argv, gchar **env)
 		return res ? EXIT_SUCCESS : EXIT_FAILURE;
 	}
 
-	/* Set stack size for pcre */
-	getrlimit (RLIMIT_STACK, &rlim);
-	rlim.rlim_cur = 100 * 1024 * 1024;
-	setrlimit (RLIMIT_STACK, &rlim);
-
-	/* Create rolling history */
-	rspamd_main->history = rspamd_roll_history_new (rspamd_main->server_pool);
-
 	msg_info ("rspamd " RVERSION " is starting, build id: " RID);
 	rspamd_main->cfg->cfg_name = rspamd_mempool_strdup (
 		rspamd_main->cfg->cfg_pool,
@@ -1315,7 +1329,6 @@ main (gint argc, gchar **argv, gchar **env)
 		exit (-errno);
 	}
 
-	ottery_init (NULL);
 	/* Write info */
 	rspamd_main->pid = getpid ();
 	rspamd_main->type = type;
@@ -1335,13 +1348,6 @@ main (gint argc, gchar **argv, gchar **env)
 	/* Init statfile pool */
 	rspamd_main->statfile_pool = statfile_pool_new (rspamd_main->server_pool,
 			rspamd_main->cfg->mlock_statfile_pool);
-
-	event_init ();
-#ifdef GMIME_ENABLE_RFC2047_WORKAROUNDS
-	g_mime_init (GMIME_ENABLE_RFC2047_WORKAROUNDS);
-#else
-	g_mime_init (0);
-#endif
 
 	/* Init lua filters */
 	if (!rspamd_init_lua_filters (rspamd_main->cfg)) {
