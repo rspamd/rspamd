@@ -62,6 +62,35 @@ filter_error_quark (void)
 	return g_quark_from_static_string ("g-filter-error-quark");
 }
 
+static struct metric_result *
+create_metric_result (struct rspamd_task *task, const gchar *name)
+{
+	struct metric_result *metric_res;
+	struct metric *metric;
+
+	metric = g_hash_table_lookup (task->cfg->metrics, name);
+	if (metric == NULL) {
+		return NULL;
+	}
+
+	metric_res =
+			rspamd_mempool_alloc (task->task_pool,
+					sizeof (struct metric_result));
+	metric_res->symbols = g_hash_table_new (rspamd_str_hash,
+			rspamd_str_equal);
+	metric_res->checked = FALSE;
+	rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) g_hash_table_unref,
+			metric_res->symbols);
+	metric_res->metric = metric;
+	metric_res->grow_factor = 0;
+	metric_res->score = 0;
+	g_hash_table_insert (task->results, (gpointer) metric->name,
+			metric_res);
+
+	return metric_res;
+}
+
 static void
 insert_metric_result (struct rspamd_task *task,
 	struct metric *metric,
@@ -79,20 +108,7 @@ insert_metric_result (struct rspamd_task *task,
 
 	if (metric_res == NULL) {
 		/* Create new metric chain */
-		metric_res =
-			rspamd_mempool_alloc (task->task_pool,
-				sizeof (struct metric_result));
-		metric_res->symbols = g_hash_table_new (rspamd_str_hash,
-				rspamd_str_equal);
-		metric_res->checked = FALSE;
-		rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t) g_hash_table_unref,
-			metric_res->symbols);
-		metric_res->metric = metric;
-		metric_res->grow_factor = 0;
-		metric_res->score = 0;
-		g_hash_table_insert (task->results, (gpointer) metric->name,
-			metric_res);
+		metric_res = create_metric_result (task, metric->name);
 	}
 
 	weight = g_hash_table_lookup (metric->symbols, symbol);
@@ -335,6 +351,8 @@ process_filters (struct rspamd_task *task)
 	struct metric *metric;
 	gpointer item = NULL;
 
+	/* Insert default metric to be sure that it exists all the time */
+	create_metric_result (task, DEFAULT_METRIC);
 	if (task->settings) {
 		const ucl_object_t *wl;
 
