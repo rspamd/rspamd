@@ -70,7 +70,7 @@ local function check_specific_limit (task, limit, key)
 				rspamd_redis.make_request(task, upstream:get_ip_string(), upstream:get_port(), rate_set_key_cb, 
 							'SET %b %b', key, lstr)
 				if bucket > limit[1] then
-					task:set_pre_result(rspamd_actions['reject'], 'Ratelimit exceeded: ' .. key)
+					task:set_pre_result('soft reject', 'Ratelimit exceeded: ' .. key)
 				end
 			else
 				rspamd_redis.make_request(task, upstream:get_ip_string(), upstream:get_port(), rate_set_key_cb, 
