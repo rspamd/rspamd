@@ -474,8 +474,8 @@ rspamc_metric_output (const ucl_object_t *obj)
 static void
 rspamc_symbols_output (ucl_object_t *obj)
 {
-	ucl_object_iter_t it = NULL;
-	const ucl_object_t *cur;
+	ucl_object_iter_t it = NULL, mit = NULL;
+	const ucl_object_t *cur, *cmesg;
 	gchar *emitted;
 
 	while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
@@ -501,9 +501,14 @@ rspamc_symbols_output (ucl_object_t *obj)
 			rspamd_fprintf (stdout, "Scan error: %s\n", ucl_object_tostring (
 					cur));
 		}
-		else if (g_ascii_strcasecmp (ucl_object_key (cur), "reason") == 0) {
-			rspamd_fprintf (stdout, "Reason: %s\n", ucl_object_tostring (
-					cur));
+		else if (g_ascii_strcasecmp (ucl_object_key (cur), "messages") == 0) {
+			if (cur->type == UCL_ARRAY) {
+				mit = NULL;
+				while ((cmesg = ucl_iterate_object (cur, &mit, true)) != NULL) {
+					rspamd_fprintf (stdout, "Message: %s\n",
+							ucl_object_tostring (cmesg));
+				}
+			}
 		}
 		else if (cur->type == UCL_OBJECT) {
 			/* Parse metric */
