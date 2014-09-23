@@ -501,6 +501,10 @@ rspamc_symbols_output (ucl_object_t *obj)
 			rspamd_fprintf (stdout, "Scan error: %s\n", ucl_object_tostring (
 					cur));
 		}
+		else if (g_ascii_strcasecmp (ucl_object_key (cur), "reason") == 0) {
+			rspamd_fprintf (stdout, "Reason: %s\n", ucl_object_tostring (
+					cur));
+		}
 		else if (cur->type == UCL_OBJECT) {
 			/* Parse metric */
 			rspamc_metric_output (cur);

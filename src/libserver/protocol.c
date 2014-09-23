@@ -790,6 +790,7 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 		rspamd_http_message_add_header (msg, hn->str, hv->str);
 	}
 
+
 	g_hash_table_iter_init (&hiter, task->results);
 
 	top = ucl_object_typed_new (UCL_OBJECT);
@@ -798,6 +799,11 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 		metric_res = (struct metric_result *)v;
 		obj = rspamd_metric_result_ucl (task, metric_res, logbuf);
 		ucl_object_insert_key (top, obj, h, 0, false);
+	}
+
+	if (task->pre_result.str != NULL) {
+		ucl_object_insert_key (top, ucl_object_fromstring (task->pre_result.str),
+				"reason", 0, false);
 	}
 
 	if (task->messages != NULL) {
