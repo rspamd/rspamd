@@ -795,16 +795,17 @@ lua_task_set_pre_result (lua_State * L)
 				mres->score = mres->metric->actions[action].score;
 			}
 			task->pre_result.action = action;
-			msg_info ("<%s>: set pre-result according to lua pre-filter to %s",
-					task->message_id, rspamd_action_to_str (action));
 			if (lua_gettop (L) >= 3) {
 				action_str = rspamd_mempool_strdup (task->task_pool,
 						luaL_checkstring (L, 3));
 				task->pre_result.str = action_str;
 			}
 			else {
-				task->pre_result.str = NULL;
+				task->pre_result.str = "unknown";
 			}
+			msg_info ("<%s>: set pre-result to %s: '%s'",
+						task->message_id, rspamd_action_to_str (action),
+						task->pre_result.str);
 		}
 	}
 	return 0;
