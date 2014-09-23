@@ -1002,6 +1002,14 @@ rspamd_action_from_str (const gchar *data, gint *result)
 			sizeof ("rewrite subject") - 1) == 0) {
 		*result = METRIC_ACTION_REWRITE_SUBJECT;
 	}
+	else if (g_ascii_strncasecmp (data, "soft_reject",
+			sizeof ("soft_reject") - 1) == 0) {
+		*result = METRIC_ACTION_SOFT_REJECT;
+	}
+	else if (g_ascii_strncasecmp (data, "soft reject",
+			sizeof ("soft reject") - 1) == 0) {
+		*result = METRIC_ACTION_SOFT_REJECT;
+	}
 	else {
 		return FALSE;
 	}
