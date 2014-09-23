@@ -167,7 +167,7 @@ lmtp_read_socket (f_str_t * in, void *arg)
 		break;
 	case READ_MESSAGE:
 		r = process_message (lmtp->task);
-		r = process_filters (lmtp->task);
+		r = rspamd_process_filters (lmtp->task);
 		if (r == -1) {
 			return FALSE;
 		}
@@ -176,7 +176,7 @@ lmtp_read_socket (f_str_t * in, void *arg)
 			rspamd_dispatcher_pause (lmtp->task->dispatcher);
 		}
 		else {
-			process_statfiles (lmtp->task);
+			rspamd_process_statistics (lmtp->task);
 			task->state = WRITE_REPLY;
 			lmtp_write_socket (lmtp);
 		}

@@ -378,7 +378,7 @@ rspamd_controller_handle_actions (struct rspamd_http_connection_entry *conn_ent,
 			if (act->score >= 0) {
 				obj = ucl_object_typed_new (UCL_OBJECT);
 				ucl_object_insert_key (obj,
-					ucl_object_fromstring (str_action_metric (
+					ucl_object_fromstring (rspamd_action_to_str (
 						act->action)), "action", 0, false);
 				ucl_object_insert_key (obj, ucl_object_fromdouble (
 						act->score), "value", 0, false);
@@ -704,7 +704,7 @@ rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
 			ucl_object_insert_key (obj, ucl_object_fromstring (
 					ip_buf),		  "ip",	  0, false);
 			ucl_object_insert_key (obj,
-				ucl_object_fromstring (str_action_metric (
+				ucl_object_fromstring (rspamd_action_to_str (
 					row->action)), "action", 0, false);
 			ucl_object_insert_key (obj, ucl_object_fromdouble (
 					row->score),		  "score",			0, false);
@@ -743,7 +743,7 @@ rspamd_controller_learn_fin_task (void *ud)
 	conn_ent = task->fin_arg;
 	session = conn_ent->ud;
 
-	if (!learn_task_spam (session->cl, task, session->is_spam, &err)) {
+	if (!rspamd_learn_task_spam (session->cl, task, session->is_spam, &err)) {
 		rspamd_controller_send_error (conn_ent, 500 + err->code, err->message);
 		return TRUE;
 	}
@@ -763,7 +763,7 @@ rspamd_controller_check_fin_task (void *ud)
 	struct rspamd_http_connection_entry *conn_ent;
 	struct rspamd_http_message *msg;
 
-	process_statfiles (task);
+	rspamd_process_statistics (task);
 	conn_ent = task->fin_arg;
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 	msg->date = time (NULL);
@@ -1289,7 +1289,7 @@ rspamd_controller_handle_stat_common (
 		for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
 			ucl_object_insert_key (sub,
 				ucl_object_fromint (stat->actions_stat[i]),
-				str_action_metric (i), 0, false);
+				rspamd_action_to_str (i), 0, false);
 			if (i < METRIC_ACTION_GREYLIST) {
 				spam += stat->actions_stat[i];
 			}

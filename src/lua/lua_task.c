@@ -761,7 +761,7 @@ lua_task_insert_result (lua_State * L)
 					rspamd_mempool_strdup (task->task_pool, param));
 		}
 
-		insert_result (task, symbol_name, flag, params);
+		rspamd_task_insert_result (task, symbol_name, flag, params);
 	}
 	return 0;
 }
@@ -1738,7 +1738,7 @@ lua_task_learn (lua_State *L)
 		ret = 2;
 	}
 	else {
-		if (!learn_task_spam (cl, task, is_spam, &err)) {
+		if (!rspamd_learn_task_spam (cl, task, is_spam, &err)) {
 			lua_pushboolean (L, FALSE);
 			if (err != NULL) {
 				lua_pushstring (L, err->message);
@@ -1811,10 +1811,10 @@ lua_task_get_metric_action (lua_State *L)
 	if (task && metric_name) {
 		if ((metric_res =
 			g_hash_table_lookup (task->results, metric_name)) != NULL) {
-			action = check_metric_action (task, metric_res->score,
+			action = rspamd_check_action_metric (task, metric_res->score,
 					NULL,
 					metric_res->metric);
-			lua_pushstring (L, str_action_metric (action));
+			lua_pushstring (L, rspamd_action_to_str (action));
 		}
 		else {
 			lua_pushnil (L);

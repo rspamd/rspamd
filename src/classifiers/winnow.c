@@ -316,7 +316,7 @@ winnow_classify (struct classifier_ctx *ctx,
 		sumbuf = rspamd_mempool_alloc (task->task_pool, 32);
 		rspamd_snprintf (sumbuf, 32, "%.2F", max);
 		cur = g_list_prepend (NULL, sumbuf);
-		insert_result (task, sel->symbol, max, cur);
+		rspamd_task_insert_result (task, sel->symbol, max, cur);
 	}
 
 	return TRUE;

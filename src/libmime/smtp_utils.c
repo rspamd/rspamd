@@ -195,7 +195,7 @@ smtp_metric_callback (gpointer key, gpointer value, gpointer ud)
 				"(%s: %c (%s): [%.2f/%.2f/%.2f] [",
 				(gchar *)key,
 				is_spam ? 'T' : 'F',
-				str_action_metric (action),
+				rspamd_action_to_str (action),
 				metric_res->score,
 				ms,
 				rs);

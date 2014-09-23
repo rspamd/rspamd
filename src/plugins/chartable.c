@@ -217,7 +217,7 @@ chartable_symbol_callback (struct rspamd_task *task, void *unused)
 	while (cur) {
 		part = cur->data;
 		if (!part->is_empty && check_part (part, task->cfg->raw_mode)) {
-			insert_result (task, chartable_module_ctx->symbol, 1, NULL);
+			rspamd_task_insert_result (task, chartable_module_ctx->symbol, 1, NULL);
 		}
 		cur = g_list_next (cur);
 	}

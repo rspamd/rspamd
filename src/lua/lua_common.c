@@ -273,7 +273,7 @@ lua_add_actions_global (lua_State *L)
 	lua_newtable (L);
 
 	for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
-		lua_pushstring (L, str_action_metric (i));
+		lua_pushstring (L, rspamd_action_to_str (i));
 		lua_pushinteger (L, i);
 		lua_settable (L, -3);
 	}

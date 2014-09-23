@@ -610,7 +610,7 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 					flag,
 					value,
 					nval);
-				insert_result_single (session->task,
+				rspamd_task_insert_result_single (session->task,
 					symbol,
 					nval,
 					g_list_prepend (NULL,

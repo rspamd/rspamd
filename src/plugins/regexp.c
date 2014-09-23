@@ -1018,7 +1018,7 @@ process_regexp_item_threaded (gpointer data, gpointer user_data)
 	if (process_regexp_expression (ud->item->expr, ud->item->symbol, ud->task,
 		NULL, nL)) {
 		g_mutex_lock (workers_mtx);
-		insert_result (ud->task, ud->item->symbol, 1, NULL);
+		rspamd_task_insert_result (ud->task, ud->item->symbol, 1, NULL);
 		g_mutex_unlock (workers_mtx);
 	}
 	remove_async_thread (ud->task->s);
@@ -1085,14 +1085,14 @@ process_regexp_item (struct rspamd_task *task, void *user_data)
 			/* Just call function */
 			if (rspamd_lua_call_expression_func (item->lua_function, task, NULL,
 				&res) && res) {
-				insert_result (task, item->symbol, 1, NULL);
+				rspamd_task_insert_result (task, item->symbol, 1, NULL);
 			}
 		}
 		else {
 			/* Process expression */
 			if (process_regexp_expression (item->expr, item->symbol, task, NULL,
 				NULL)) {
-				insert_result (task, item->symbol, 1, NULL);
+				rspamd_task_insert_result (task, item->symbol, 1, NULL);
 			}
 		}
 	}

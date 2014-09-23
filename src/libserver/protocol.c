@@ -648,7 +648,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	m = mres->metric;
 
 	/* XXX: handle settings */
-	action = check_metric_action (task, mres->score, &required_score, m);
+	action = rspamd_check_action_metric (task, mres->score, &required_score, m);
 	is_spam = (action == METRIC_ACTION_REJECT);
 	if (task->is_skipped) {
 		action_char = 'S';
@@ -661,7 +661,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	}
 	rspamd_printf_gstring (logbuf, "(%s: %c (%s): [%.2f/%.2f] [",
 		m->name, action_char,
-		str_action_metric (action),
+		rspamd_action_to_str (action),
 		mres->score, required_score);
 
 	obj = ucl_object_typed_new (UCL_OBJECT);
@@ -674,7 +674,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	ucl_object_insert_key (obj, ucl_object_fromdouble (required_score),
 		"required_score", 0, false);
 	ucl_object_insert_key (obj,
-		ucl_object_fromstring (str_action_metric (action)),
+		ucl_object_fromstring (rspamd_action_to_str (action)),
 		"action", 0, false);
 
 	if (action == METRIC_ACTION_REWRITE_SUBJECT) {
@@ -835,7 +835,7 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	/* Update stat for default metric */
 	metric_res = g_hash_table_lookup (task->results, DEFAULT_METRIC);
 	if (metric_res != NULL) {
-		action = check_metric_action (task, metric_res->score, &required_score,
+		action = rspamd_check_action_metric (task, metric_res->score, &required_score,
 				metric_res->metric);
 		if (action <= METRIC_ACTION_NOACTION) {
 			task->worker->srv->stat->actions_stat[action]++;

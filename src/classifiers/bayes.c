@@ -345,7 +345,7 @@ bayes_classify (struct classifier_ctx * ctx,
 			}
 			rspamd_snprintf (sumbuf, 32, "%.2f%%", final_prob * 100.);
 			cur = g_list_prepend (NULL, sumbuf);
-			insert_result (task,
+			rspamd_task_insert_result (task,
 				data.statfiles[selected_st].st->symbol,
 				final_prob,
 				cur);

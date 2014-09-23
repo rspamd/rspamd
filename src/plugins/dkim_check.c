@@ -308,13 +308,13 @@ dkim_module_check (struct rspamd_task *task,
 	}
 
 	if (res == DKIM_REJECT) {
-		insert_result (task, dkim_module_ctx->symbol_reject, score_deny, NULL);
+		rspamd_task_insert_result (task, dkim_module_ctx->symbol_reject, score_deny, NULL);
 	}
 	else if (res == DKIM_TRYAGAIN) {
-		insert_result (task, dkim_module_ctx->symbol_tempfail, 1, NULL);
+		rspamd_task_insert_result (task, dkim_module_ctx->symbol_tempfail, 1, NULL);
 	}
 	else if (res == DKIM_CONTINUE) {
-		insert_result (task, dkim_module_ctx->symbol_allow, score_allow, NULL);
+		rspamd_task_insert_result (task, dkim_module_ctx->symbol_allow, score_allow, NULL);
 	}
 }
 
@@ -339,13 +339,13 @@ dkim_module_key_handler (rspamd_dkim_key_t *key,
 		/* Insert tempfail symbol */
 		msg_info ("cannot get key for domain %s", ctx->dns_key);
 		if (err != NULL) {
-			insert_result (task, dkim_module_ctx->symbol_tempfail, 1,
+			rspamd_task_insert_result (task, dkim_module_ctx->symbol_tempfail, 1,
 				g_list_prepend (NULL,
 				rspamd_mempool_strdup (task->task_pool, err->message)));
 
 		}
 		else {
-			insert_result (task, dkim_module_ctx->symbol_tempfail, 1, NULL);
+			rspamd_task_insert_result (task, dkim_module_ctx->symbol_tempfail, 1, NULL);
 		}
 	}
 

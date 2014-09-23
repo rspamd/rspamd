@@ -108,7 +108,7 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 			while ((it_val = ucl_iterate_object (cur_nm, &nit, true))) {
 				if (ucl_object_find_key (it_val, "name") &&
 						ucl_object_find_key (it_val, "value")) {
-					if (!check_action_str (ucl_object_tostring (
+					if (!rspamd_action_from_str (ucl_object_tostring (
 							ucl_object_find_key (it_val, "name")), &test_act)) {
 						msg_err ("unknown action: %s",
 								ucl_object_tostring (ucl_object_find_key (it_val,
@@ -485,7 +485,7 @@ add_dynamic_action (struct rspamd_config *cfg,
 	gdouble value)
 {
 	ucl_object_t *metric, *acts;
-	const gchar *action_name = str_action_metric (action);
+	const gchar *action_name = rspamd_action_to_str (action);
 
 	if (cfg->dynamic_conf == NULL) {
 		msg_info ("dynamic conf is disabled");

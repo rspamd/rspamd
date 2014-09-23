@@ -825,7 +825,7 @@ process_dns_results (struct rspamd_task *task,
 				(gint)ntohl (bit->bit),
 				(gint)bit->bit & (gint)ntohl (addr));
 			if (((gint)bit->bit & (gint)ntohl (addr)) != 0) {
-				insert_result (task, bit->symbol, 1,
+				rspamd_task_insert_result (task, bit->symbol, 1,
 					g_list_prepend (NULL,
 					rspamd_mempool_strdup (task->task_pool, url)));
 			}
@@ -833,7 +833,7 @@ process_dns_results (struct rspamd_task *task,
 		}
 	}
 	else {
-		insert_result (task, suffix->symbol, 1,
+		rspamd_task_insert_result (task, suffix->symbol, 1,
 			g_list_prepend (NULL,
 			rspamd_mempool_strdup (task->task_pool, url)));
 	}
@@ -1108,7 +1108,7 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 						g_regex_match (re, url->string, 0, NULL))) {
 						/* If no regexp found or founded regexp matches url string register redirector's call */
 						if (surbl_module_ctx->redirector_symbol != NULL) {
-							insert_result (param->task,
+							rspamd_task_insert_result (param->task,
 								surbl_module_ctx->redirector_symbol,
 								1,
 								g_list_prepend (NULL, red_domain));

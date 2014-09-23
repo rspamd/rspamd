@@ -63,7 +63,7 @@ filter_error_quark (void)
 }
 
 struct metric_result *
-create_metric_result (struct rspamd_task *task, const gchar *name)
+rspamd_create_metric_result (struct rspamd_task *task, const gchar *name)
 {
 	struct metric_result *metric_res;
 	struct metric *metric;
@@ -110,7 +110,7 @@ insert_metric_result (struct rspamd_task *task,
 	gdouble *weight, w;
 	const ucl_object_t *mobj, *sobj;
 
-	metric_res = create_metric_result (task, metric->name);
+	metric_res = rspamd_create_metric_result (task, metric->name);
 
 	weight = g_hash_table_lookup (metric->symbols, symbol);
 	if (weight == NULL) {
@@ -265,7 +265,7 @@ insert_result_common (struct rspamd_task *task,
 
 /* Insert result that may be increased on next insertions */
 void
-insert_result (struct rspamd_task *task,
+rspamd_task_insert_result (struct rspamd_task *task,
 	const gchar *symbol,
 	double flag,
 	GList * opts)
@@ -275,7 +275,7 @@ insert_result (struct rspamd_task *task,
 
 /* Insert result as a single option */
 void
-insert_result_single (struct rspamd_task *task,
+rspamd_task_insert_result_single (struct rspamd_task *task,
 	const gchar *symbol,
 	double flag,
 	GList * opts)
@@ -299,7 +299,7 @@ check_metric_settings (struct rspamd_task *task, struct metric *metric,
 		act = ucl_object_find_key (mobj, "actions");
 		if (act != NULL) {
 			reject = ucl_object_find_key (act,
-					str_action_metric (METRIC_ACTION_REJECT));
+					rspamd_action_to_str (METRIC_ACTION_REJECT));
 			if (reject != NULL && ucl_object_todouble_safe (reject, &val)) {
 				*score = val;
 				return TRUE;
@@ -346,14 +346,14 @@ check_metric_is_spam (struct rspamd_task *task, struct metric *metric)
 }
 
 gint
-process_filters (struct rspamd_task *task)
+rspamd_process_filters (struct rspamd_task *task)
 {
 	GList *cur;
 	struct metric *metric;
 	gpointer item = NULL;
 
 	/* Insert default metric to be sure that it exists all the time */
-	create_metric_result (task, DEFAULT_METRIC);
+	rspamd_create_metric_result (task, DEFAULT_METRIC);
 	if (task->settings) {
 		const ucl_object_t *wl;
 
@@ -568,7 +568,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 				s = g_list_next (s);
 			}
 			/* Add new symbol */
-			insert_result_single (cd->task, key, 1.0, NULL);
+			rspamd_task_insert_result_single (cd->task, key, 1.0, NULL);
 			msg_info ("%s", logbuf);
 		}
 	}
@@ -716,7 +716,7 @@ composites_metric_callback (gpointer key, gpointer value, gpointer data)
 }
 
 void
-make_composites (struct rspamd_task *task)
+rspamd_make_composites (struct rspamd_task *task)
 {
 	g_hash_table_foreach (task->results, composites_metric_callback, task);
 }
@@ -871,7 +871,7 @@ classifiers_callback (gpointer value, void *arg)
 
 
 void
-process_statfiles (struct rspamd_task *task)
+rspamd_process_statistics (struct rspamd_task *task)
 {
 	struct classifiers_cbdata cbdata;
 
@@ -889,11 +889,11 @@ process_statfiles (struct rspamd_task *task)
 	g_list_foreach (task->cfg->classifiers, classifiers_callback, &cbdata);
 
 	/* Process results */
-	make_composites (task);
+	rspamd_make_composites (task);
 }
 
 void
-process_statfiles_threaded (gpointer data, gpointer user_data)
+rspamd_process_statistic_threaded (gpointer data, gpointer user_data)
 {
 	struct rspamd_task *task = (struct rspamd_task *)data;
 	struct lua_locked_state *nL = user_data;
@@ -977,7 +977,7 @@ insert_headers (struct rspamd_task *task)
 }
 
 gboolean
-check_action_str (const gchar *data, gint *result)
+rspamd_action_from_str (const gchar *data, gint *result)
 {
 	if (g_ascii_strncasecmp (data, "reject", sizeof ("reject") - 1) == 0) {
 		*result = METRIC_ACTION_REJECT;
@@ -1009,7 +1009,7 @@ check_action_str (const gchar *data, gint *result)
 }
 
 const gchar *
-str_action_metric (enum rspamd_metric_action action)
+rspamd_action_to_str (enum rspamd_metric_action action)
 {
 	switch (action) {
 	case METRIC_ACTION_REJECT:
@@ -1041,7 +1041,7 @@ get_specific_action_score (const ucl_object_t *metric,
 	if (metric) {
 		act = ucl_object_find_key (metric, "actions");
 		if (act) {
-			sact = ucl_object_find_key (act, str_action_metric (action->action));
+			sact = ucl_object_find_key (act, rspamd_action_to_str (action->action));
 			if (sact != NULL && ucl_object_todouble_safe (sact, &score)) {
 				return score;
 			}
@@ -1052,7 +1052,7 @@ get_specific_action_score (const ucl_object_t *metric,
 }
 
 gint
-check_metric_action (struct rspamd_task *task,
+rspamd_check_action_metric (struct rspamd_task *task,
 		double score, double *rscore, struct metric *metric)
 {
 	struct metric_action *action, *selected_action = NULL;
@@ -1092,7 +1092,7 @@ check_metric_action (struct rspamd_task *task,
 }
 
 gboolean
-learn_task (const gchar *statfile, struct rspamd_task *task, GError **err)
+rspamd_learn_task (const gchar *statfile, struct rspamd_task *task, GError **err)
 {
 	GList *cur, *ex;
 	struct rspamd_classifier_config *cl;
@@ -1237,7 +1237,7 @@ learn_task (const gchar *statfile, struct rspamd_task *task, GError **err)
 }
 
 gboolean
-learn_task_spam (struct rspamd_classifier_config *cl,
+rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
 	struct rspamd_task *task,
 	gboolean is_spam,
 	GError **err)

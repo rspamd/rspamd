@@ -877,7 +877,7 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 							rspamd_mempool_strdup (task->task_pool, opt));
 					}
 				}
-				insert_result (task, cd->symbol, flag, opts);
+				rspamd_task_insert_result (task, cd->symbol, flag, opts);
 			}
 		}
 		lua_pop (cd->L, nresults);

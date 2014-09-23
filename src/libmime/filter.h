@@ -84,7 +84,7 @@ struct rspamd_composite {
  * @param name name of metric
  * @return metric result or NULL if metric `name` has not been found
  */
-struct metric_result * create_metric_result (struct rspamd_task *task,
+struct metric_result * rspamd_create_metric_result (struct rspamd_task *task,
 		const gchar *name);
 
 /**
@@ -92,19 +92,19 @@ struct metric_result * create_metric_result (struct rspamd_task *task,
  * @param task worker's task that present message from user
  * @return 0 - if there is non-finished tasks and 1 if processing is completed
  */
-gint process_filters (struct rspamd_task *task);
+gint rspamd_process_filters (struct rspamd_task *task);
 
 /**
  * Process message with statfiles
  * @param task worker's task that present message from user
  */
-void process_statfiles (struct rspamd_task *task);
+void rspamd_process_statistics (struct rspamd_task *task);
 
 /**
  * Process message with statfiles threaded
  * @param data worker's task that present message from user
  */
-void process_statfiles_threaded (gpointer data, gpointer user_data);
+void rspamd_process_statistic_threaded (gpointer data, gpointer user_data);
 
 /**
  * Insert a result to task
@@ -114,7 +114,7 @@ void process_statfiles_threaded (gpointer data, gpointer user_data);
  * @param flag numeric weight for symbol
  * @param opts list of symbol's options
  */
-void insert_result (struct rspamd_task *task,
+void rspamd_task_insert_result (struct rspamd_task *task,
 	const gchar *symbol,
 	double flag,
 	GList *opts);
@@ -127,7 +127,7 @@ void insert_result (struct rspamd_task *task,
  * @param flag numeric weight for symbol
  * @param opts list of symbol's options
  */
-void insert_result_single (struct rspamd_task *task,
+void rspamd_task_insert_result_single (struct rspamd_task *task,
 	const gchar *symbol,
 	double flag,
 	GList *opts);
@@ -136,7 +136,7 @@ void insert_result_single (struct rspamd_task *task,
  * Process all results and form composite metrics from existent metrics as it is defined in config
  * @param task worker's task that present message from user
  */
-void make_composites (struct rspamd_task *task);
+void rspamd_make_composites (struct rspamd_task *task);
 
 /**
  * Default consolidation function for metric, it get all symbols and multiply symbol
@@ -145,7 +145,7 @@ void make_composites (struct rspamd_task *task);
  * @param metric_name name of metric
  * @return result metric weight
  */
-double factor_consolidation_func (struct rspamd_task *task,
+double rspamd_factor_consolidation_func (struct rspamd_task *task,
 	const gchar *metric_name,
 	const gchar *unused);
 
@@ -156,7 +156,7 @@ double factor_consolidation_func (struct rspamd_task *task,
  * @param err pointer to GError
  * @return true if learn succeed
  */
-gboolean learn_task (const gchar *statfile,
+gboolean rspamd_learn_task (const gchar *statfile,
 	struct rspamd_task *task,
 	GError **err);
 
@@ -167,7 +167,7 @@ gboolean learn_task (const gchar *statfile,
  * @param err pointer to GError
  * @return true if learn succeed
  */
-gboolean learn_task_spam (struct rspamd_classifier_config *cl,
+gboolean rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
 	struct rspamd_task *task,
 	gboolean is_spam,
 	GError **err);
@@ -175,17 +175,17 @@ gboolean learn_task_spam (struct rspamd_classifier_config *cl,
 /*
  * Get action from a string
  */
-gboolean check_action_str (const gchar *data, gint *result);
+gboolean rspamd_action_from_str (const gchar *data, gint *result);
 
 /*
  * Return textual representation of action enumeration
  */
-const gchar * str_action_metric (enum rspamd_metric_action action);
+const gchar * rspamd_action_to_str (enum rspamd_metric_action action);
 
 /*
  * Get action for specific metric
  */
-gint check_metric_action (struct rspamd_task *task,
+gint rspamd_check_action_metric (struct rspamd_task *task,
 	double score,
 	double *rscore,
 	struct metric *metric);

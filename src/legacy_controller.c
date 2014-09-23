@@ -504,7 +504,7 @@ process_stat_command (struct controller_session *session, gboolean do_reset)
 		for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
 			rspamd_printf_gstring (out,
 				"Messages with action %s: %ud, %.2f%%" CRLF,
-				str_action_metric (
+				rspamd_action_to_str (
 					i),
 				stat->actions_stat[i],
 				(double)stat->actions_stat[i] / (double)stat->messages_scanned *
@@ -708,7 +708,7 @@ process_dynamic_conf_command (gchar **cmd_args,
 	}
 
 	if (is_action) {
-		if (!check_action_str (name, &real_act)) {
+		if (!rspamd_action_from_str (name, &real_act)) {
 			msg_info ("invalid action string: %s", name);
 			res = FALSE;
 		}
@@ -1658,7 +1658,7 @@ controller_read_socket (f_str_t * in, void *arg)
 			return FALSE;
 		}
 
-		if (!learn_task (session->learn_symbol, task, &err)) {
+		if (!rspamd_learn_task (session->learn_symbol, task, &err)) {
 			rspamd_task_free (task, FALSE);
 			if (err) {
 				if (session->restful) {
@@ -1759,7 +1759,7 @@ controller_read_socket (f_str_t * in, void *arg)
 		session->learn_task = task;
 		session->state = STATE_LEARN_SPAM;
 		rspamd_dispatcher_pause (session->dispatcher);
-		r = process_filters (task);
+		r = rspamd_process_filters (task);
 		if (r == -1) {
 			rspamd_dispatcher_restore (session->dispatcher);
 			session->state = STATE_REPLY;
@@ -1966,7 +1966,7 @@ controller_write_socket (void *arg)
 			}
 		}
 		else {
-			if (!learn_task_spam (session->learn_classifier,
+			if (!rspamd_learn_task_spam (session->learn_classifier,
 				session->learn_task, session->in_class, &err)) {
 				if (err) {
 					if (session->restful) {

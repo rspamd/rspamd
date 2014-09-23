@@ -142,11 +142,11 @@ rspamd_task_fin (void *arg)
 		/* Process all statfiles */
 		if (task->classify_pool == NULL) {
 			/* Non-threaded version */
-			process_statfiles (task);
+			rspamd_process_statistics (task);
 		}
 		else {
 			/* Just process composites */
-			make_composites (task);
+			rspamd_make_composites (task);
 		}
 		if (task->cfg->post_filters) {
 			/* More to process */
@@ -173,7 +173,7 @@ rspamd_task_fin (void *arg)
 		}
 		else {
 			task->state = WAIT_FILTER;
-			r = process_filters (task);
+			r = rspamd_process_filters (task);
 			if (r == -1) {
 				task->last_error = "Filter processing error";
 				task->error_code = RSPAMD_FILTER_ERROR;
@@ -311,7 +311,7 @@ rspamd_task_process (struct rspamd_task *task,
 	}
 	task->skip_extra_filters = !process_extra_filters;
 	if (!process_extra_filters || task->cfg->pre_filters == NULL) {
-		r = process_filters (task);
+		r = rspamd_process_filters (task);
 		if (r == -1) {
 			task->last_error = "filter processing error";
 			task->error_code = RSPAMD_FILTER_ERROR;

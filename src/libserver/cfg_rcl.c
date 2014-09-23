@@ -393,7 +393,7 @@ rspamd_rcl_metric_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 			return FALSE;
 		}
 		while ((cur = ucl_iterate_object (val, &it, true)) != NULL) {
-			if (!check_action_str (ucl_object_key (cur), &action_value) ||
+			if (!rspamd_action_from_str (ucl_object_key (cur), &action_value) ||
 				!ucl_object_todouble_safe (cur, &action_score)) {
 				g_set_error (err,
 					CFG_RCL_ERROR,
@@ -423,7 +423,7 @@ rspamd_rcl_metric_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 				act_str = ucl_object_tostring (cur);
 				semicolon = strchr (act_str, ':');
 				if (semicolon != NULL) {
-					if (check_action_str (act_str, &action_value)) {
+					if (rspamd_action_from_str (act_str, &action_value)) {
 						action_score = strtod (semicolon + 1, NULL);
 						action = &metric->actions[action_value];
 						action->action = action_value;

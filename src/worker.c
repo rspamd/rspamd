@@ -322,7 +322,7 @@ start_worker (struct rspamd_worker *worker)
 	ctx->classify_pool = NULL;
 	if (ctx->classify_threads > 1) {
 		nL = rspamd_init_lua_locked (worker->srv->cfg);
-		ctx->classify_pool = g_thread_pool_new (process_statfiles_threaded,
+		ctx->classify_pool = g_thread_pool_new (rspamd_process_statistic_threaded,
 				nL,
 				ctx->classify_threads,
 				TRUE,

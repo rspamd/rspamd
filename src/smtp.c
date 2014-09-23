@@ -311,7 +311,7 @@ process_smtp_data (struct smtp_session *session)
 			goto err;
 		}
 		if (session->task->cfg->pre_filters == NULL) {
-			r = process_filters (session->task);
+			r = rspamd_process_filters (session->task);
 			if (r == -1) {
 				msg_err ("cannot process message");
 				munmap (session->task->msg->str, st.st_size);
