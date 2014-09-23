@@ -725,7 +725,7 @@ rspamd_ucl_tolegacy_output (struct rspamd_task *task,
 	GString *out)
 {
 	const ucl_object_t *metric, *score,
-	*required_score, *is_spam, *elt;
+	*required_score, *is_spam, *elt, *cur;
 	ucl_object_iter_t iter = NULL;
 
 	metric = ucl_object_find_key (top, DEFAULT_METRIC);
@@ -761,6 +761,18 @@ rspamd_ucl_tolegacy_output (struct rspamd_task *task,
 				ucl_object_tostring (elt));
 		}
 	}
+
+	elt = ucl_object_find_key (top, "messages");
+	if (elt != NULL) {
+		iter = NULL;
+		while ((cur = ucl_iterate_object (elt, &iter, true)) != NULL) {
+			if (cur->type == UCL_STRING) {
+				g_string_append_printf (out, "Message: %s\r\n",
+						ucl_object_tostring (cur));
+			}
+		}
+	}
+
 	g_string_append_printf (out, "Message-ID: %s\r\n", task->message_id);
 }
 
@@ -807,11 +819,6 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 		metric_res = (struct metric_result *)v;
 		obj = rspamd_metric_result_ucl (task, metric_res, logbuf);
 		ucl_object_insert_key (top, obj, h, 0, false);
-	}
-
-	if (task->pre_result.str != NULL) {
-		ucl_object_insert_key (top, ucl_object_fromstring (task->pre_result.str),
-				"reason", 0, false);
 	}
 
 	if (task->messages != NULL) {

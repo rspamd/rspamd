@@ -800,6 +800,7 @@ lua_task_set_pre_result (lua_State * L)
 				action_str = rspamd_mempool_strdup (task->task_pool,
 						luaL_checkstring (L, 3));
 				task->pre_result.str = action_str;
+				task->messages = g_list_prepend (task->messages, action_str);
 			}
 			else {
 				task->pre_result.str = "unknown";
