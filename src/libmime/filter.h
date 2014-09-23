@@ -79,6 +79,15 @@ struct rspamd_composite {
 };
 
 /**
+ * Create or return existing result for the specified metric name
+ * @param task task object
+ * @param name name of metric
+ * @return metric result or NULL if metric `name` has not been found
+ */
+struct metric_result * create_metric_result (struct rspamd_task *task,
+		const gchar *name);
+
+/**
  * Process all filters
  * @param task worker's task that present message from user
  * @return 0 - if there is non-finished tasks and 1 if processing is completed

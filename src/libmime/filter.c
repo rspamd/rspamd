@@ -62,11 +62,17 @@ filter_error_quark (void)
 	return g_quark_from_static_string ("g-filter-error-quark");
 }
 
-static struct metric_result *
+struct metric_result *
 create_metric_result (struct rspamd_task *task, const gchar *name)
 {
 	struct metric_result *metric_res;
 	struct metric *metric;
+
+	metric_res = g_hash_table_lookup (task->results, name);
+
+	if (metric_res != NULL) {
+		return metric_res;
+	}
 
 	metric = g_hash_table_lookup (task->cfg->metrics, name);
 	if (metric == NULL) {
@@ -104,12 +110,7 @@ insert_metric_result (struct rspamd_task *task,
 	gdouble *weight, w;
 	const ucl_object_t *mobj, *sobj;
 
-	metric_res = g_hash_table_lookup (task->results, metric->name);
-
-	if (metric_res == NULL) {
-		/* Create new metric chain */
-		metric_res = create_metric_result (task, metric->name);
-	}
+	metric_res = create_metric_result (task, metric->name);
 
 	weight = g_hash_table_lookup (metric->symbols, symbol);
 	if (weight == NULL) {
