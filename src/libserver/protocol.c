@@ -648,8 +648,16 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	m = mres->metric;
 
 	/* XXX: handle settings */
-	action = rspamd_check_action_metric (task, mres->score, &required_score, m);
+	if (mres->action == METRIC_ACTION_MAX) {
+		mres->action = rspamd_check_action_metric (task, mres->score,
+				&required_score, m);
+	}
+	else {
+		required_score = mres->metric->actions[mres->action].score;
+	}
+	action = mres->action;
 	is_spam = (action == METRIC_ACTION_REJECT);
+
 	if (task->is_skipped) {
 		action_char = 'S';
 	}
@@ -659,6 +667,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	else {
 		action_char = 'F';
 	}
+
 	rspamd_printf_gstring (logbuf, "(%s: %c (%s): [%.2f/%.2f] [",
 		m->name, action_char,
 		rspamd_action_to_str (action),
@@ -789,7 +798,6 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 
 		rspamd_http_message_add_header (msg, hn->str, hv->str);
 	}
-
 
 	g_hash_table_iter_init (&hiter, task->results);
 

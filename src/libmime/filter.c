@@ -93,6 +93,7 @@ rspamd_create_metric_result (struct rspamd_task *task, const gchar *name)
 	metric_res->score = 0;
 	g_hash_table_insert (task->results, (gpointer) metric->name,
 			metric_res);
+	metric_res->action = METRIC_ACTION_MAX;
 
 	return metric_res;
 }

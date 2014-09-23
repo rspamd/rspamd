@@ -793,6 +793,7 @@ lua_task_set_pre_result (lua_State * L)
 			mres = rspamd_create_metric_result (task, DEFAULT_METRIC);
 			if (mres != NULL) {
 				mres->score = mres->metric->actions[action].score;
+				mres->action = action;
 			}
 			task->pre_result.action = action;
 			if (lua_gettop (L) >= 3) {
