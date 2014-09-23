@@ -126,9 +126,14 @@ LUA_FUNCTION_DEF (task, insert_result);
  * Sets pre-result for a task. It is used in pre-filters to specify early results
  * of the task scanned. If a pre-filter sets  some result, then further processing
  * may be skipped. For selecting action it is possible to use global table
- * `rspamd_actions`.
- * @param {rspamd_action} action a numeric action value
- * @param {string} description string description
+ * `rspamd_actions` or a string value:
+ *
+ * - `reject`: reject message permanently
+ * - `add header`: add spam header
+ * - `rewrite subject`: rewrite subject to spam subject
+ * - `greylist`: greylist message
+ * @param {rspamd_action or string} action a numeric or string action value
+ * @param {string} description optional descripton
 @example
 local function cb(task)
 	local gr = task:get_header('Greylist')
@@ -770,13 +775,28 @@ static gint
 lua_task_set_pre_result (lua_State * L)
 {
 	struct rspamd_task *task = lua_check_task (L);
+	struct metric_result *mres;
 	gchar *action_str;
-	guint action;
+	gint action = METRIC_ACTION_MAX;
 
 	if (task != NULL) {
-		action = luaL_checkinteger (L, 2);
-		if (action < task->pre_result.action) {
+		if (lua_type (L, 2) == LUA_TNUMBER) {
+			action = lua_tointeger (L, 2);
+		}
+		else if (lua_type (L, 2) == LUA_TSTRING) {
+			rspamd_action_from_str (lua_tostring (L, 2), &action);
+		}
+		if (action < (gint)task->pre_result.action &&
+				action < METRIC_ACTION_MAX &&
+				action >= METRIC_ACTION_REJECT) {
+			/* We also need to set the default metric to that result */
+			mres = rspamd_create_metric_result (task, DEFAULT_METRIC);
+			if (mres != NULL) {
+				mres->score = mres->metric->actions[action].score;
+			}
 			task->pre_result.action = action;
+			msg_info ("<%s>: set pre-result according to lua pre-filter to %s",
+					task->message_id, rspamd_action_to_str (action));
 			if (lua_gettop (L) >= 3) {
 				action_str = rspamd_mempool_strdup (task->task_pool,
 						luaL_checkstring (L, 3));
