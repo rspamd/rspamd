@@ -28,13 +28,11 @@
 
 
 #include "config.h"
-#include "main.h"
-#include "message.h"
-#include "cfg_file.h"
-#include "map.h"
-#include "util.h"
-#include "expressions.h"
+#include "libmime/message.h"
+#include "libmime/expressions.h"
+#include "libutil/map.h"
 #include "lua/lua_common.h"
+#include "main.h"
 
 #define DEFAULT_STATFILE_PREFIX "./"
 

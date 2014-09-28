@@ -32,10 +32,9 @@
  */
 
 #include "config.h"
+#include "libmime/message.h"
+#include "libmime/expressions.h"
 #include "main.h"
-#include "message.h"
-#include "cfg_file.h"
-#include "expressions.h"
 
 #define DEFAULT_SYMBOL "R_CHARSET_MIXED"
 #define DEFAULT_THRESHOLD 0.1

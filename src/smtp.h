@@ -2,9 +2,10 @@
 #define RSPAMD_SMTP_H
 
 #include "config.h"
+#include "libutil/upstream.h"
+#include "libmime/smtp_utils.h"
+#include "libmime/smtp_proto.h"
 #include "main.h"
-#include "upstream.h"
-#include "smtp_utils.h"
 
 struct rspamd_dns_resolver;
 

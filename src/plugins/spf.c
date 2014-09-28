@@ -33,14 +33,12 @@
  */
 
 #include "config.h"
+#include "libmime/message.h"
+#include "libmime/expressions.h"
+#include "libserver/spf.h"
+#include "libutil/hash.h"
+#include "libutil/map.h"
 #include "main.h"
-#include "message.h"
-#include "cfg_file.h"
-#include "expressions.h"
-#include "util.h"
-#include "map.h"
-#include "spf.h"
-#include "hash.h"
 
 #define DEFAULT_SYMBOL_FAIL "R_SPF_FAIL"
 #define DEFAULT_SYMBOL_SOFTFAIL "R_SPF_SOFTFAIL"

@@ -40,15 +40,13 @@
  */
 
 #include "config.h"
-#include "main.h"
-#include "message.h"
-#include "cfg_file.h"
-#include "expressions.h"
-#include "util.h"
-#include "map.h"
-#include "images.h"
+#include "libmime/message.h"
+#include "libmime/expressions.h"
+#include "libutil/map.h"
+#include "libmime/images.h"
 #include "fuzzy_storage.h"
 #include "utlist.h"
+#include "main.h"
 
 #define DEFAULT_SYMBOL "R_FUZZY_HASH"
 #define DEFAULT_UPSTREAM_ERROR_TIME 10

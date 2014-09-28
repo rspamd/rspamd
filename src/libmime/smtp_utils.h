@@ -2,8 +2,6 @@
 #define SMTP_UTILS_H_
 
 #include "config.h"
-#include "main.h"
-#include "smtp.h"
 
 /**
  * @file smtp_utils.h

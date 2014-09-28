@@ -23,19 +23,12 @@
 
 
 #include "config.h"
-#include "util.h"
-#include "main.h"
-#include "http.h"
-#include "message.h"
-#include "protocol.h"
-#include "upstream.h"
-#include "cfg_file.h"
-#include "map.h"
-#include "dns.h"
 #include "tokenizers/tokenizers.h"
 #include "classifiers/classifiers.h"
-#include "dynamic_cfg.h"
-#include "rrd.h"
+#include "libserver/dynamic_cfg.h"
+#include "libutil/rrd.h"
+#include "libutil/map.h"
+#include "main.h"
 
 #ifdef WITH_GPERF_TOOLS
 #   include <glib/gprintf.h>

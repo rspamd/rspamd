@@ -2,7 +2,6 @@
 #define RSPAMD_SMTP_PROTO_H
 
 #include "config.h"
-#include "smtp.h"
 
 /* SMTP errors */
 #define SMTP_ERROR_BAD_COMMAND "500 Syntax error, command unrecognized" CRLF

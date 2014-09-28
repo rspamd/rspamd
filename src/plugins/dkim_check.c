@@ -38,14 +38,12 @@
  */
 
 #include "config.h"
+#include "libmime/message.h"
+#include "libmime/expressions.h"
+#include "libserver/dkim.h"
+#include "libutil/hash.h"
+#include "libutil/map.h"
 #include "main.h"
-#include "message.h"
-#include "cfg_file.h"
-#include "expressions.h"
-#include "util.h"
-#include "map.h"
-#include "dkim.h"
-#include "hash.h"
 
 #define DEFAULT_SYMBOL_REJECT "R_DKIM_REJECT"
 #define DEFAULT_SYMBOL_TEMPFAIL "R_DKIM_TEMPFAIL"

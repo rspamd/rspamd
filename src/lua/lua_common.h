@@ -4,13 +4,13 @@
 #include "config.h"
 #ifdef WITH_LUA
 
-#include "main.h"
-#include "cfg_file.h"
-#include "ucl.h"
-#include "lua_ucl.h"
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
+
+#include "main.h"
+#include "ucl.h"
+#include "lua_ucl.h"
 
 #ifndef lua_open
 #define lua_open()  luaL_newstate ()

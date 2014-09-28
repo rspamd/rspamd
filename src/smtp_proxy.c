@@ -22,16 +22,10 @@
  */
 
 #include "config.h"
-#include "main.h"
-#include "cfg_file.h"
-#include "util.h"
-#include "smtp_proto.h"
-#include "map.h"
-#include "message.h"
-#include "dns.h"
-#include "upstream.h"
-#include "proxy.h"
 #include "utlist.h"
+#include "libserver/proxy.h"
+#include "main.h"
+#include "smtp.h"
 
 /*
  * SMTP proxy is a simple smtp proxy worker for dns resolving and

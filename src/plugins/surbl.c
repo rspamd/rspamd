@@ -42,17 +42,14 @@
  */
 
 #include "config.h"
+#include "libmime/message.h"
+#include "libmime/expressions.h"
+#include "libutil/hash.h"
+#include "libutil/map.h"
 #include "main.h"
-#include "message.h"
-#include "cfg_file.h"
-#include "expressions.h"
-#include "util.h"
-#include "map.h"
-#include "dns.h"
-#include "hash.h"
-#include "utlist.h"
-
 #include "surbl.h"
+
+#include "utlist.h"
 
 static struct surbl_ctx *surbl_module_ctx = NULL;
 

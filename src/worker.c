@@ -27,15 +27,15 @@
  */
 
 #include "config.h"
-#include "util.h"
+#include "libutil/util.h"
+#include "libutil/map.h"
+#include "libutil/upstream.h"
+#include "libserver/protocol.h"
+#include "libserver/cfg_file.h"
+#include "libserver/url.h"
+#include "libserver/dns.h"
+#include "libmime/message.h"
 #include "main.h"
-#include "protocol.h"
-#include "upstream.h"
-#include "cfg_file.h"
-#include "url.h"
-#include "message.h"
-#include "map.h"
-#include "dns.h"
 
 #include "lua/lua_common.h"
 
