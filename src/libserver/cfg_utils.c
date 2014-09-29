@@ -234,7 +234,7 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 {
 	struct rspamd_worker_bind_conf *cnf;
 	gchar **tokens, *tmp, *err;
-	gboolean ret = TRUE;
+	gboolean ret = TRUE, rc;
 
 	if (str == NULL) {
 		return FALSE;
@@ -272,7 +272,7 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 		cnf->bind_host = rspamd_mempool_strdup (cfg->cfg_pool, str);
 		cnf->ai = AF_INET6;
 		tokens[0] = "*v6";
-		if ((ret &= parse_host_port_priority_strv (cfg->cfg_pool, tokens,
+		if ((rc = parse_host_port_priority_strv (cfg->cfg_pool, tokens,
 			&cnf->bind_host, &cnf->bind_port, NULL, DEFAULT_BIND_PORT))) {
 			LL_PREPEND (cf->bind_conf, cnf);
 		}
