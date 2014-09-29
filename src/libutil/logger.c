@@ -28,6 +28,7 @@
 #include "util.h"
 #include "main.h"
 #include "map.h"
+#include "xxhash.h"
 
 /* How much message should be repeated before it is count to be repeated one */
 #define REPEATS_MIN 3
@@ -83,20 +84,7 @@ file_log_function (const gchar * log_domain, const gchar *function,
 static inline guint32
 rspamd_log_calculate_cksum (const gchar *message, size_t mlen)
 {
-	const gchar *bp = message;
-	const gchar *be = bp + mlen;
-	guint32 hval = 0;
-
-	while (bp < be) {
-		hval +=
-			(hval <<
-			1) + (hval << 4) + (hval << 7) + (hval << 8) + (hval << 24);
-		hval ^= (guint32) * bp++;
-	}
-
-	/* return our new hash value */
-	return hval;
-
+	return XXH32 (message, mlen, 0xdeadbeef);
 }
 
 /*
