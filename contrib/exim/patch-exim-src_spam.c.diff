@@ -1,21 +1,8 @@
-diff --git a/src/OS/os.h-Linux b/src/OS/os.h-Linux
-index 3fead17..03fea75 100644
---- a/src/OS/os.h-Linux
-+++ b/src/OS/os.h-Linux
-@@ -20,7 +20,7 @@ performance on outgoing mail a bit. Note: With older glibc versions
- this setting will conflict with the _FILE_OFFSET_BITS=64 setting
- defined as part of the Linux CFLAGS. */
- 
--/* #define HAVE_LINUX_SENDFILE */
-+#define HAVE_LINUX_SENDFILE 
- 
- #define F_FREESP     O_TRUNC
- typedef struct flock flock_t;
-diff --git a/src/src/expand.c b/src/src/expand.c
-index 1da2225..7da567a 100644
---- a/src/src/expand.c
-+++ b/src/src/expand.c
-@@ -618,6 +618,7 @@ static var_entry var_table[] = {
+diff --git a/src/expand.c b/src/expand.c
+index 8e94c3e..45f446d 100644
+--- a/src/expand.c
++++ b/src/expand.c
+@@ -644,6 +644,7 @@ static var_entry var_table[] = {
    { "sn8",                 vtype_filter_int,  &filter_sn[8] },
    { "sn9",                 vtype_filter_int,  &filter_sn[9] },
  #ifdef WITH_CONTENT_SCAN
@@ -23,11 +10,11 @@ index 1da2225..7da567a 100644
    { "spam_bar",            vtype_stringptr,   &spam_bar },
    { "spam_report",         vtype_stringptr,   &spam_report },
    { "spam_score",          vtype_stringptr,   &spam_score },
-diff --git a/src/src/globals.c b/src/src/globals.c
-index 74b6edb..e6f02fb 100644
---- a/src/src/globals.c
-+++ b/src/src/globals.c
-@@ -1212,6 +1212,7 @@ BOOL    smtp_use_size          = FALSE;
+diff --git a/src/globals.c b/src/globals.c
+index 22bd69e..0ecda99 100644
+--- a/src/globals.c
++++ b/src/globals.c
+@@ -1269,6 +1269,7 @@ BOOL    smtp_use_size          = FALSE;
  uschar *spamd_address          = US"127.0.0.1 783";
  uschar *spam_bar               = NULL;
  uschar *spam_report            = NULL;
@@ -35,11 +22,11 @@ index 74b6edb..e6f02fb 100644
  uschar *spam_score             = NULL;
  uschar *spam_score_int         = NULL;
  #endif
-diff --git a/src/src/globals.h b/src/src/globals.h
-index db436c0..fc4d9f6 100644
---- a/src/src/globals.h
-+++ b/src/src/globals.h
-@@ -769,6 +769,7 @@ extern BOOL    smtp_use_size;          /* Global for passed connections */
+diff --git a/src/globals.h b/src/globals.h
+index 800ec9c..3a30a5a 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -811,6 +811,7 @@ extern BOOL    smtp_use_size;          /* Global for passed connections */
  extern uschar *spamd_address;          /* address for the spamassassin daemon */
  extern uschar *spam_bar;               /* the spam "bar" (textual representation of spam_score) */
  extern uschar *spam_report;            /* the spamd report (multiline) */
@@ -47,10 +34,10 @@ index db436c0..fc4d9f6 100644
  extern uschar *spam_score;             /* the spam score (float) */
  extern uschar *spam_score_int;         /* spam_score * 10 (int) */
  #endif
-diff --git a/src/src/spam.c b/src/src/spam.c
-index 63395f2..41fd4ac 100644
---- a/src/src/spam.c
-+++ b/src/src/spam.c
+diff --git a/src/spam.c b/src/spam.c
+index 7eb6fbf..11951a7 100644
+--- a/src/spam.c
++++ b/src/spam.c
 @@ -14,12 +14,20 @@
  uschar spam_score_buffer[16];
  uschar spam_score_int_buffer[16];
@@ -69,10 +56,10 @@ index 63395f2..41fd4ac 100644
 +/* poll socket to obtain write readiness */
 +static int spam_poll_socket (int sock, time_t start);
 +
- int spam(uschar **listptr) {
-   int sep = 0;
-   uschar *list = *listptr;
-@@ -29,10 +37,11 @@ int spam(uschar **listptr) {
+ int
+ spam(uschar **listptr)
+ {
+@@ -31,10 +39,11 @@ spam(uschar **listptr)
    FILE *mbox_file;
    int spamd_sock = -1;
    uschar spamd_buffer[32600];
@@ -86,7 +73,7 @@ index 63395f2..41fd4ac 100644
    int spamd_report_offset;
    uschar *p,*q;
    int override = 0;
-@@ -126,8 +135,15 @@ int spam(uschar **listptr) {
+@@ -128,8 +137,15 @@ spam(uschar **listptr)
        spamd_address_container *this_spamd =
          (spamd_address_container *)store_get(sizeof(spamd_address_container));
  
@@ -103,7 +90,7 @@ index 63395f2..41fd4ac 100644
          log_write(0, LOG_MAIN,
            "spam acl condition: warning - invalid spamd address: '%s'", address);
          continue;
-@@ -171,6 +187,7 @@ int spam(uschar **listptr) {
+@@ -173,6 +189,7 @@ spam(uschar **listptr)
                        spamd_address_vector[current_server]->tcp_port,
                        5 ) > -1) {
          /* connection OK */
@@ -111,7 +98,7 @@ index 63395f2..41fd4ac 100644
          break;
        };
  
-@@ -207,12 +224,28 @@ int spam(uschar **listptr) {
+@@ -209,12 +226,28 @@ spam(uschar **listptr)
      }
  
      server.sun_family = AF_UNIX;
@@ -142,7 +129,7 @@ index 63395f2..41fd4ac 100644
        (void)fclose(mbox_file);
        (void)close(spamd_sock);
        return DEFER;
-@@ -228,22 +261,67 @@ int spam(uschar **listptr) {
+@@ -230,22 +263,67 @@ spam(uschar **listptr)
      return DEFER;
    }
  
@@ -225,99 +212,7 @@ index 63395f2..41fd4ac 100644
  
    /* now send the file */
    /* spamd sometimes accepts conections but doesn't read data off
-@@ -255,41 +333,53 @@ int spam(uschar **listptr) {
-    * Note: poll() is not supported in OSX 10.2 and is reported to be
-    *       broken in more recent versions (up to 10.4).
-    */
--#ifndef NO_POLL_H
--  pollfd.fd = spamd_sock;
--  pollfd.events = POLLOUT;
--#endif
--  (void)fcntl(spamd_sock, F_SETFL, O_NONBLOCK);
-+#ifdef HAVE_LINUX_SENDFILE
-+  ssize_t copied = 0;
-+  int mbox_fd;
-+  off_t off = 0, size;
-+  struct stat st;
-+
-+  mbox_fd = fileno(mbox_file);
-+  if( fstat(mbox_fd, &st) == -1 ) {
-+    log_write(0, LOG_MAIN|LOG_PANIC,
-+      "spam acl condition: %s on scan file", strerror(errno));
-+    (void)close(spamd_sock);
-+    (void)fclose(mbox_file);
-+    return DEFER;
-+  }
-+  size = st.st_size;
-+  for (;;) {
-+    if (spam_poll_socket(spamd_sock, start) == -1) {
-+      (void)close(spamd_sock);
-+      (void)fclose(mbox_file);
-+      return DEFER;
-+    }
-+    copied = sendfile(spamd_sock, mbox_fd, &offset, (size - offset));
-+    if (copied < 0) {
-+      if (errno == EINTR)
-+        continue;
-+
-+      log_write(0, LOG_MAIN|LOG_PANIC,
-+        "spam acl condition: %s on spamd socket", strerror(errno));
-+      (void)close(spamd_sock);
-+      (void)fclose(mbox_file);
-+      return DEFER;
-+    }
-+    else {
-+      size -= copied;
-+      if (size == 0) {
-+        /* the whole file has been sent */
-+        break;
-+      }
-+    }
-+  }
-+#else
-   do {
-     read = fread(spamd_buffer,1,sizeof(spamd_buffer),mbox_file);
-     if (read > 0) {
-       offset = 0;
- again:
--#ifndef NO_POLL_H
--      result = poll(&pollfd, 1, 1000);
--
--/* Patch posted by Erik ? for OS X and applied by PH */
--#else
--      select_tv.tv_sec = 1;
--      select_tv.tv_usec = 0;
--      FD_ZERO(&select_fd);
--      FD_SET(spamd_sock, &select_fd);
--      result = select(spamd_sock+1, NULL, &select_fd, NULL, &select_tv);
--#endif
--/* End Erik's patch */
--
--      if (result == -1 && errno == EINTR)
--        goto again;
--      else if (result < 1) {
--        if (result == -1)
--          log_write(0, LOG_MAIN|LOG_PANIC,
--            "spam acl condition: %s on spamd socket", strerror(errno));
--        else {
--          if (time(NULL) - start < SPAMD_TIMEOUT)
--          goto again;
--          log_write(0, LOG_MAIN|LOG_PANIC,
--            "spam acl condition: timed out writing spamd socket");
--        }
-+      if (spam_poll_socket(spamd_sock, start) == -1) {
-         (void)close(spamd_sock);
-         (void)fclose(mbox_file);
-         return DEFER;
-@@ -318,6 +408,7 @@ again:
-     (void)fclose(mbox_file);
-     return DEFER;
-   }
-+#endif /* HAVE_LINUX_SENDFILE */
- 
-   (void)fclose(mbox_file);
- 
-@@ -346,60 +437,103 @@ again:
+@@ -348,60 +426,93 @@ again:
    /* reading done */
    (void)close(spamd_sock);
  
@@ -328,13 +223,7 @@ index 63395f2..41fd4ac 100644
 +    /* dig in the spamd output and put the report in a multiline header, if requested */
 +    if( sscanf(CS spamd_buffer,"SPAMD/%7s 0 EX_OK\r\nContent-length: %*u\r\n\r\n%lf/%lf\r\n%n",
 +                spamd_version,&spamd_score,&spamd_threshold,&spamd_report_offset) != 3 ) {
- 
--    /* try to fall back to pre-2.50 spamd output */
--    if( sscanf(CS spamd_buffer,"SPAMD/%7s 0 EX_OK\r\nSpam: %*s ; %lf / %lf\r\n\r\n%n",
--               spamd_version,&spamd_score,&spamd_threshold,&spamd_report_offset) != 3 ) {
--      log_write(0, LOG_MAIN|LOG_PANIC,
--         "spam acl condition: cannot parse spamd output");
--      return DEFER;
++
 +        /* try to fall back to pre-2.50 spamd output */
 +        if( sscanf(CS spamd_buffer,"SPAMD/%7s 0 EX_OK\r\nSpam: %*s ; %lf / %lf\r\n\r\n%n",
 +                spamd_version,&spamd_score,&spamd_threshold,&spamd_report_offset) != 3 ) {
@@ -342,62 +231,11 @@ index 63395f2..41fd4ac 100644
 +            "spam acl condition: cannot parse spamd output");
 +        return DEFER;
 +        };
-     };
--  };
- 
--  /* Create report. Since this is a multiline string,
--  we must hack it into shape first */
--  p = &spamd_buffer[spamd_report_offset];
--  q = spam_report_buffer;
--  while (*p != '\0') {
--    /* skip \r */
--    if (*p == '\r') {
--      p++;
--      continue;
--    };
--    *q = *p;
--    q++;
--    if (*p == '\n') {
--      /* add an extra space after the newline to ensure
--      that it is treated as a header continuation line */
--      *q = ' ';
--      q++;
-+    /* Create report. Since this is a multiline string,
-+    we must hack it into shape first */
-+    p = &spamd_buffer[spamd_report_offset];
-+    q = spam_report_buffer;
-+    while (*p != '\0') {
-+        /* skip \r */
-+        if (*p == '\r') {
-+        p++;
-+        continue;
-+        };
-+        *q = *p;
-+        q++;
-+        if (*p == '\n') {
-+        /* add an extra space after the newline to ensure
-+        that it is treated as a header continuation line */
-+        *q = ' ';
-+        q++;
-+        };
-+        p++;
-     };
--    p++;
--  };
--  /* NULL-terminate */
--  *q = '\0';
--  q--;
--  /* cut off trailing leftovers */
--  while (*q <= ' ') {
-+    /* NULL-terminate */
-     *q = '\0';
-     q--;
--  };
-+    /* cut off trailing leftovers */
-+    while (*q <= ' ') {
-+        *q = '\0';
-+        q--;
 +    };
+ 
+-    /* try to fall back to pre-2.50 spamd output */
+-    if( sscanf(CS spamd_buffer,"SPAMD/%7s 0 EX_OK\r\nSpam: %*s ; %lf / %lf\r\n\r\n%n",
+-               spamd_version,&spamd_score,&spamd_threshold,&spamd_report_offset) != 3 ) {
 +    if( spamd_score >= spamd_threshold ) {
 +      Ustrcpy(spam_action_buffer, "reject");
 +    }
@@ -410,10 +248,12 @@ index 63395f2..41fd4ac 100644
 +    int r;
 +    if( (r = sscanf(CS spamd_buffer,"RSPAMD/%7s 0 EX_OK\r\nMetric: default; %7s %lf / %lf / %lf\r\n%n",
 +        spamd_version,spamd_short_result,&spamd_score,&spamd_threshold,&spamd_reject_score,&spamd_report_offset)) != 5 ) {
-+      log_write(0, LOG_MAIN|LOG_PANIC,
+       log_write(0, LOG_MAIN|LOG_PANIC,
+-         "spam acl condition: cannot parse spamd output");
 +            "spam acl condition: cannot parse spamd output: %d", r);
-+      return DEFER;
-+    };
+       return DEFER;
+     };
+-  };
 +    /* now parse action */
 +    p = &spamd_buffer[spamd_report_offset];
 +
@@ -425,18 +265,52 @@ index 63395f2..41fd4ac 100644
 +      }
 +      *q = '\0';
 +    }
-+    /* make a simple report */
-+    if( spamd_score >= spamd_threshold ) {
-+      p = "likely spam";
-+    }
-+    else if ( Ustrcmp (spam_action_buffer, "no action") == 0 ) {
-+      p = "unlikely spam";
-+    }
-+    else {
-+      p = "probably spam";
-+    }
-+    string_format(spam_report_buffer, sizeof(spam_report_buffer), "This message is %s.", p);
 +  }
+ 
+   /* Create report. Since this is a multiline string,
+   we must hack it into shape first */
+   p = &spamd_buffer[spamd_report_offset];
+   q = spam_report_buffer;
+   while (*p != '\0') {
+-    /* skip \r */
+-    if (*p == '\r') {
+-      p++;
+-      continue;
+-    };
+-    *q = *p;
+-    q++;
+-    if (*p == '\n') {
+-      /* add an extra space after the newline to ensure
+-      that it is treated as a header continuation line */
+-      *q = ' ';
+-      q++;
+-    };
+-    p++;
++	  /* skip \r */
++	  if (*p == '\r') {
++	  p++;
++	  continue;
++	  };
++	  *q = *p;
++	  q++;
++	  if (*p == '\n') {
++	  /* add an extra space after the newline to ensure
++	  that it is treated as a header continuation line */
++	  *q = ' ';
++	  q++;
++	  };
++	  p++;
+   };
+   /* NULL-terminate */
+   *q = '\0';
+   q--;
+   /* cut off trailing leftovers */
+   while (*q <= ' ') {
+-    *q = '\0';
+-    q--;
++	  *q = '\0';
++	  q--;
+   };
 +
 +  /* common spamd actions */
    spam_report = spam_report_buffer;
@@ -460,7 +334,7 @@ index 63395f2..41fd4ac 100644
    }
    spam_bar_buffer[i] = '\0';
    spam_bar = spam_bar_buffer;
-@@ -415,12 +549,12 @@ again:
+@@ -417,12 +528,12 @@ again:
  
    /* compare threshold against score */
    if (spamd_score >= spamd_threshold) {
@@ -477,7 +351,7 @@ index 63395f2..41fd4ac 100644
    };
  
    /* remember expanded spamd_address if needed */
-@@ -440,4 +574,126 @@ again:
+@@ -442,4 +553,126 @@ again:
    };
  }
  
@@ -604,10 +478,10 @@ index 63395f2..41fd4ac 100644
 +}
 +
  #endif
-diff --git a/src/src/spam.h b/src/src/spam.h
+diff --git a/src/spam.h b/src/spam.h
 index ba700c8..6047c59 100644
---- a/src/src/spam.h
-+++ b/src/src/spam.h
+--- a/src/spam.h
++++ b/src/spam.h
 @@ -22,7 +22,8 @@
  
  typedef struct spamd_address_container {
