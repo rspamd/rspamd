@@ -1,3 +1,29 @@
+0.7.1:
+	* Fix typo in stat output.
+	* Fix issues with includes crossing with the system includes
+	* Restore testing framework
+	* Add radix trie test suite
+	* Implement new path-compressed radix trie.
+	    - The performance benefit over the old algorithm is about 1.5 times.
+		- Memory usage is significantly lower as well.
+	    - Now radix trie can accept any IPv4/IPv6 values
+	* Various improvements to the memory pools code
+	* Fix writing reply to a client when no filters are defined
+	* Write base32 encoded fuzzy
+	* Fix 'soft reject' action
+	* Fix rspamd reload and modules reconfiguration
+	* Fix subject rewriting for the default subject
+	* Fix states for processing task and pre-filters
+	* Fix issues with connection closing
+	* Fix crashes in rdns
+	* Fix ratelimit pre-filter
+	* Update exim patch.
+		- Update to the recent exim version
+		- Strip extra leading src/ from the patch
+		- Remove sendfile since it was broken
+		- Fix rspamd spam report for exim
+	* Improve documentation
+
 0.7.0:
 	* Use HTTP protocol for all operatiosn
 	* Webui worker is now removed and controller works as webui

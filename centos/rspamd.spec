@@ -217,6 +217,9 @@ fi
 %{rspamd_wwwdir}/*
 
 %changelog
+* Mon Sep 30 2014 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.7.1-1
+- Update to 0.7.1
+
 * Mon Sep 1 2014 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.7.0-1
 - Update to 0.7.0
 
