@@ -6,7 +6,7 @@ title: Downloads
 # Downloading rspamd
 
 <p><a class="btn btn-primary btn-lg" href="/downloads/rspamd-0.7.1.tar.xz">Download rspamd-0.7.1</a></p>
-<p><iframe src="https://rspamd.com/github-btn.html?user=vstakhov&repo=rspamd&type=watch&count=true&size=large"
+<p><iframe src="//rspamd.com/github-btn.html?user=vstakhov&repo=rspamd&type=watch&count=true&size=large"
   allowtransparency="true" frameborder="0" scrolling="0" width="170" height="30"></iframe></p>
 
 
