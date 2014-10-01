@@ -93,7 +93,7 @@ struct rspamd_fuzzy_storage_ctx {
 	gdouble expire;
 	guint32 frequent_score;
 	guint32 max_mods;
-	radix_tree_t *update_ips;
+	radix_compressed_t *update_ips;
 	gchar *update_map;
 	struct event_base *ev_base;
 	rspamd_rwlock_t *tree_lock;
@@ -114,14 +114,8 @@ struct fuzzy_session {
 	struct fuzzy_cmd cmd;
 	gint fd;
 	u_char *pos;
-	socklen_t salen;
 	guint64 time;
-	union {
-		struct sockaddr ss;
-		struct sockaddr_storage sa;
-		struct sockaddr_in s4;
-		struct sockaddr_in6 v6;
-	} client_addr;
+	rspamd_inet_addr_t addr;
 	struct rspamd_fuzzy_storage_ctx *ctx;
 };
 
@@ -775,13 +769,8 @@ static gboolean
 check_fuzzy_client (struct fuzzy_session *session)
 {
 	if (session->ctx->update_ips != NULL) {
-		/* XXX: cannot work with ipv6 addresses */
-		if (session->client_addr.ss.sa_family != AF_INET) {
-			return FALSE;
-		}
-		if (radix32tree_find (session->ctx->update_ips,
-			ntohl (session->client_addr.s4.sin_addr.s_addr)) ==
-			RADIX_NO_VALUE) {
+		if (radix_find_compressed_addr (session->ctx->update_ips,
+			&session->addr) == RADIX_NO_VALUE) {
 			return FALSE;
 		}
 	}
@@ -789,21 +778,21 @@ check_fuzzy_client (struct fuzzy_session *session)
 	return TRUE;
 }
 
-#define CMD_PROCESS(x)                                                                          \
-	do {                                                                                            \
-		if (process_ ## x ## _command (&session->cmd, session->time, \
-			session->worker->ctx)) {               \
-			if (sendto (session->fd, "OK" CRLF, sizeof ("OK" CRLF) - 1, 0, \
-				&session->client_addr.ss, session->salen) == -1) {                           \
-				msg_err ("error while writing reply: %s", strerror (errno));        \
-			}                                                                                           \
-		}                                                                                               \
-		else {                                                                                          \
-			if (sendto (session->fd, "ERR" CRLF, sizeof ("ERR" CRLF) - 1, 0, \
-				&session->client_addr.ss, session->salen) == -1) {                     \
-				msg_err ("error while writing reply: %s", strerror (errno));        \
-			}                                                                                           \
-		}                                                                                               \
+#define CMD_PROCESS(x)                                                         \
+	do {                                                                       \
+		if (process_ ## x ## _command (&session->cmd, session->time,           \
+			session->worker->ctx)) {                                           \
+			if (sendto (session->fd, "OK" CRLF, sizeof ("OK" CRLF) - 1, 0,     \
+					&session->addr.addr.sa, session->addr.slen) == -1) {       \
+				msg_err ("error while writing reply: %s", strerror (errno));   \
+			}                                                                  \
+		}                                                                      \
+		else {                                                                 \
+			if (sendto (session->fd, "ERR" CRLF, sizeof ("ERR" CRLF) - 1, 0,   \
+					&session->addr.addr.sa, session->addr.slen) == -1) {       \
+				msg_err ("error while writing reply: %s", strerror (errno));   \
+			}                                                                  \
+		}                                                                      \
 	} while (0)
 
 static void
@@ -821,13 +810,13 @@ process_fuzzy_command (struct fuzzy_session *session)
 		if (r != 0) {
 			r = rspamd_snprintf (buf, sizeof (buf), "OK %d %d" CRLF, r, flag);
 			if (sendto (session->fd, buf, r, 0,
-				&session->client_addr.ss, session->salen) == -1) {
+				&session->addr.addr.sa, session->addr.slen) == -1) {
 				msg_err ("error while writing reply: %s", strerror (errno));
 			}
 		}
 		else {
 			if (sendto (session->fd, "ERR" CRLF, sizeof ("ERR" CRLF) - 1, 0,
-				&session->client_addr.ss, session->salen) == -1) {
+					&session->addr.addr.sa, session->addr.slen) == -1) {
 				msg_err ("error while writing reply: %s", strerror (errno));
 			}
 		}
@@ -837,7 +826,7 @@ process_fuzzy_command (struct fuzzy_session *session)
 			msg_info ("try to insert a hash from an untrusted address");
 			if (sendto (session->fd, "UNAUTH" CRLF, sizeof ("UNAUTH" CRLF) - 1,
 				0,
-				&session->client_addr.ss, session->salen) == -1) {
+				&session->addr.addr.sa, session->addr.slen) == -1) {
 				msg_err ("error while writing reply: %s", strerror (errno));
 			}
 		}
@@ -850,7 +839,7 @@ process_fuzzy_command (struct fuzzy_session *session)
 			msg_info ("try to delete a hash from an untrusted address");
 			if (sendto (session->fd, "UNAUTH" CRLF, sizeof ("UNAUTH" CRLF) - 1,
 				0,
-				&session->client_addr.ss, session->salen) == -1) {
+				&session->addr.addr.sa, session->addr.slen) == -1) {
 				msg_err ("error while writing reply: %s", strerror (errno));
 			}
 		}
@@ -860,7 +849,7 @@ process_fuzzy_command (struct fuzzy_session *session)
 		break;
 	default:
 		if (sendto (session->fd, "ERR" CRLF, sizeof ("ERR" CRLF) - 1, 0,
-			&session->client_addr.ss, session->salen) == -1) {
+				&session->addr.addr.sa, session->addr.slen) == -1) {
 			msg_err ("error while writing reply: %s", strerror (errno));
 		}
 		break;
@@ -890,14 +879,14 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 	session.worker = worker;
 	session.fd = fd;
 	session.pos = (u_char *) &session.cmd;
-	session.salen = sizeof (session.client_addr);
+	session.addr.slen = sizeof (session.addr.addr);
 	session.ctx = worker->ctx;
 	session.time = (guint64)time (NULL);
 
 	/* Got some data */
 	if (what == EV_READ) {
 		while ((r = recvfrom (fd, session.pos, sizeof (struct fuzzy_cmd),
-			MSG_WAITALL, &session.client_addr.ss, &session.salen)) == -1) {
+			MSG_WAITALL, &session.addr.addr.sa, &session.addr.slen)) == -1) {
 			if (errno == EINTR) {
 				continue;
 			}
@@ -906,6 +895,7 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 				strerror (errno));
 			return;
 		}
+		session.addr.af = session.addr.addr.sa.sa_family;
 		if (r == sizeof (struct fuzzy_cmd)) {
 			/* Assume that the whole command was read */
 			process_fuzzy_command (&session);

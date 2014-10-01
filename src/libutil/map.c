@@ -917,7 +917,7 @@ read_radix_list (rspamd_mempool_t * pool,
 	struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
-		data->cur_data = radix_tree_create_compressed ();
+		data->cur_data = radix_create_compressed ();
 	}
 	return abstract_parse_list (pool,
 			   chunk,
@@ -930,6 +930,6 @@ void
 fin_radix_list (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
 	if (data->prev_data) {
-		radix_tree_destroy_compressed (data->prev_data);
+		radix_destroy_compressed (data->prev_data);
 	}
 }

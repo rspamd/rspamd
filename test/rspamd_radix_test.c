@@ -78,7 +78,7 @@ struct _tv {
 static void
 rspamd_radix_text_vec (void)
 {
-	radix_compressed_t *tree = radix_tree_create_compressed ();
+	radix_compressed_t *tree = radix_create_compressed ();
 	struct _tv *t = &test_vec[0];
 	struct in_addr ina;
 	struct in6_addr in6a;
@@ -134,14 +134,14 @@ rspamd_radix_text_vec (void)
 		t ++;
 	}
 
-	radix_tree_destroy_compressed (tree);
+	radix_destroy_compressed (tree);
 }
 
 void
 rspamd_radix_test_func (void)
 {
 	radix_tree_t *tree = radix_tree_create ();
-	radix_compressed_t *comp_tree = radix_tree_create_compressed ();
+	radix_compressed_t *comp_tree = radix_create_compressed ();
 	struct {
 		guint32 addr;
 		guint32 mask;
@@ -245,7 +245,7 @@ rspamd_radix_test_func (void)
 			(ts2.tv_nsec - ts1.tv_nsec) / 1000000.;  /* Nanoseconds */
 
 	msg_info ("Checked %z elements in %.6f ms", nelts, diff);
-	radix_tree_destroy_compressed (comp_tree);
+	radix_destroy_compressed (comp_tree);
 
 	g_free (addrs);
 }

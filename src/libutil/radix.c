@@ -845,7 +845,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 
 
 radix_compressed_t *
-radix_tree_create_compressed (void)
+radix_create_compressed (void)
 {
 	radix_compressed_t *tree;
 
@@ -862,7 +862,7 @@ radix_tree_create_compressed (void)
 }
 
 void
-radix_tree_destroy_compressed (radix_compressed_t *tree)
+radix_destroy_compressed (radix_compressed_t *tree)
 {
 	rspamd_mempool_delete (tree->pool);
 	g_slice_free1 (sizeof (*tree), tree);
