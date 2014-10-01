@@ -56,7 +56,7 @@ struct rspamd_logger_s {
 	enum rspamd_log_type type;
 	pid_t pid;
 	GQuark process_type;
-	radix_tree_t *debug_ip;
+	radix_compressed_t *debug_ip;
 	guint32 last_line_cksum;
 	guint32 repeats;
 	gchar *saved_message;
@@ -290,11 +290,6 @@ rspamd_set_logger (struct rspamd_config *cfg,
 	GQuark ptype,
 	struct rspamd_main *rspamd)
 {
-	gchar **strvec, *p, *err;
-	gint num, i, k;
-	struct in_addr addr;
-	guint32 mask = 0xFFFFFFFF;
-
 	if (rspamd->logger == NULL) {
 		rspamd->logger = g_malloc (sizeof (rspamd_logger_t));
 		memset (rspamd->logger, 0, sizeof (rspamd_logger_t));
@@ -340,45 +335,19 @@ rspamd_set_logger (struct rspamd_config *cfg,
 	if (rspamd->cfg->debug_ip_map != NULL) {
 		/* Try to add it as map first of all */
 		if (rspamd->logger->debug_ip) {
-			radix_tree_free (rspamd->logger->debug_ip);
+			radix_destroy_compressed (rspamd->logger->debug_ip);
 		}
-		rspamd->logger->debug_ip = radix_tree_create ();
+		rspamd->logger->debug_ip = radix_create_compressed ();
 		if (!add_map (rspamd->cfg, rspamd->cfg->debug_ip_map,
 			"IP addresses for which debug logs are enabled",
 			read_radix_list, fin_radix_list,
 			(void **)&rspamd->logger->debug_ip)) {
-			/* Try to parse it as list */
-			strvec = g_strsplit_set (rspamd->cfg->debug_ip_map, ",; ", 0);
-			num = g_strv_length (strvec);
-
-			for (i = 0; i < num; i++) {
-				g_strstrip (strvec[i]);
-
-				if ((p = strchr (strvec[i], '/')) != NULL) {
-					/* Try to extract mask */
-					*p = '\0';
-					p++;
-					errno = 0;
-					k = strtoul (p, &err, 10);
-					if (errno != 0 || *err != '\0' || k > 32) {
-						continue;
-					}
-				}
-				else {
-					k = 32;
-				}
-				if (inet_aton (strvec[i], &addr)) {
-					/* Check ip */
-					mask = mask << (32 - k);
-					radix32tree_insert (rspamd->logger->debug_ip,
-						ntohl (addr.s_addr), mask, 1);
-				}
-			}
-			g_strfreev (strvec);
+			rspamd_config_parse_ip_list (rspamd->cfg->debug_ip_map,
+					&rspamd->logger->debug_ip);
 		}
 	}
 	else if (rspamd->logger->debug_ip) {
-		radix_tree_free (rspamd->logger->debug_ip);
+		radix_destroy_compressed (rspamd->logger->debug_ip);
 		rspamd->logger->debug_ip = NULL;
 	}
 
@@ -815,8 +784,8 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
 	if (rspamd_log->cfg->log_level >= G_LOG_LEVEL_DEBUG ||
 		rspamd_log->is_debug) {
 		if (rspamd_log->debug_ip && addr != NULL) {
-			if (addr->af == AF_INET && radix32tree_find (rspamd_log->debug_ip,
-				ntohl (addr->addr.s4.sin_addr.s_addr)) == RADIX_NO_VALUE) {
+			if (radix_find_compressed_addr (rspamd_log->debug_ip, addr)
+					== RADIX_NO_VALUE) {
 				return;
 			}
 		}

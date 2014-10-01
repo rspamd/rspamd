@@ -28,27 +28,6 @@
 #include "main.h"
 #include "mem_pool.h"
 
-static void * radix_alloc (radix_tree_t * tree);
-
-#undef RADIX_DEBUG
-#ifndef RADIX_DEBUG
-#undef msg_debug
-#define msg_debug(...) do {} while (0)
-#endif
-
-struct radix_node_s {
-	radix_node_t *right;
-	radix_node_t *left;
-	radix_node_t *parent;
-	uintptr_t value;
-	guint32 key;
-};
-
-struct radix_tree_s {
-	radix_node_t *root;
-	size_t size;
-	rspamd_mempool_t *pool;
-};
 
 struct radix_compressed_node {
 	union {
@@ -71,6 +50,29 @@ struct radix_tree_compressed {
 	struct radix_compressed_node *root;
 	rspamd_mempool_t *pool;
 	size_t size;
+};
+
+
+#ifdef LEGACY_RADIX
+static void * radix_alloc (radix_tree_t * tree);
+
+#undef RADIX_DEBUG
+#ifndef RADIX_DEBUG
+#undef msg_debug
+#define msg_debug(...) do {} while (0)
+#endif
+
+struct radix_node_s {
+	radix_node_t *right;
+	radix_node_t *left;
+	radix_node_t *parent;
+	uintptr_t value;
+	guint32 key;
+};
+struct radix_tree_s {
+	radix_node_t *root;
+	size_t size;
+	rspamd_mempool_t *pool;
 };
 
 radix_tree_t *
@@ -373,6 +375,7 @@ radix32_tree_find_addr (radix_tree_t *tree, rspamd_inet_addr_t *addr)
 
 	return radix32tree_find (tree, ntohl (addr->addr.s4.sin_addr.s_addr));
 }
+#endif /* Old radix code */
 
 static gboolean
 radix_compare_compressed (struct radix_compressed_node *node,
