@@ -26,7 +26,7 @@
 #include "radix.h"
 #include "ottery.h"
 
-const gsize max_elts = 20 * 1024;
+const gsize max_elts = 50 * 1024;
 const gint lookup_cycles = 1 * 1024;
 
 const uint masks[] = {
@@ -81,18 +81,35 @@ rspamd_radix_text_vec (void)
 	radix_compressed_t *tree = radix_tree_create_compressed ();
 	struct _tv *t = &test_vec[0];
 	struct in_addr ina;
+	struct in6_addr in6a;
 	gulong i, val;
 
 	while (t->ip != NULL) {
-		t->addr = g_malloc (sizeof (ina));
-		t->naddr = g_malloc (sizeof (ina));
-		inet_aton (t->ip, &ina);
-		memcpy (t->addr, &ina, sizeof (ina));
-		if (t->nip) {
-			inet_aton (t->nip, &ina);
-			memcpy (t->naddr, &ina, sizeof (ina));
+		t->addr = g_malloc (sizeof (in6a));
+		t->naddr = g_malloc (sizeof (in6a));
+		if (inet_pton (AF_INET, t->ip, &ina) == 1) {
+			memcpy (t->addr, &ina, sizeof (ina));
+			t->len = sizeof (ina);
 		}
-		t->len = sizeof (ina);
+		else if (inet_pton (AF_INET6, t->ip, &in6a) == 1) {
+			memcpy (t->addr, &in6a, sizeof (in6a));
+			t->len = sizeof (in6a);
+		}
+		else {
+			g_assert (0);
+		}
+		if (t->nip) {
+			if (inet_pton (AF_INET, t->nip, &ina) == 1) {
+				memcpy (t->naddr, &ina, sizeof (ina));
+			}
+			else if (inet_pton (AF_INET6, t->nip, &in6a) == 1) {
+				memcpy (t->naddr, &in6a, sizeof (in6a));
+			}
+			else {
+				g_assert (0);
+			}
+		}
+
 		t->mask = t->len * NBBY - strtoul (t->m, NULL, 10);
 		t ++;
 	}
@@ -128,6 +145,8 @@ rspamd_radix_test_func (void)
 	struct {
 		guint32 addr;
 		guint32 mask;
+		guint8 addr6[16];
+		guint32 mask6;
 	} *addrs;
 	gsize nelts, i;
 	gint lc;
@@ -146,6 +165,8 @@ rspamd_radix_test_func (void)
 	for (i = 0; i < nelts; i ++) {
 		addrs[i].addr = ottery_rand_uint32 ();
 		addrs[i].mask = masks[ottery_rand_range(G_N_ELEMENTS (masks) - 1)];
+		ottery_rand_bytes (addrs[i].addr6, sizeof(addrs[i].addr6));
+		addrs[i].mask6 = ottery_rand_range(128);
 	}
 
 	msg_info ("old radix performance (%z elts)", nelts);
@@ -187,8 +208,8 @@ rspamd_radix_test_func (void)
 	msg_info ("new radix performance (%z elts)", nelts);
 	clock_gettime (CLOCK_MONOTONIC, &ts1);
 	for (i = 0; i < nelts; i ++) {
-		radix_insert_compressed (comp_tree, &addrs[i].addr, sizeof (guint32),
-				32 - addrs[i].mask, 1);
+		radix_insert_compressed (comp_tree, addrs[i].addr6, sizeof (addrs[i].addr6),
+				128 - addrs[i].mask6, i);
 	}
 	clock_gettime (CLOCK_MONOTONIC, &ts2);
 	diff = (ts2.tv_sec - ts1.tv_sec) * 1000. +   /* Seconds */
@@ -199,18 +220,25 @@ rspamd_radix_test_func (void)
 	clock_gettime (CLOCK_MONOTONIC, &ts1);
 	for (lc = 0; lc < lookup_cycles; lc ++) {
 		for (i = 0; i < nelts; i ++) {
-#if 0
-			/* Used to write bad random vector */
-			msg_info("{\"%s\", NULL, \"%ud\", 0, 0, 0, 0},",
-					inet_ntoa(*(struct in_addr *)&addrs[i].addr),
-					addrs[i].mask);
-#endif
-			if (radix_find_compressed (comp_tree, &addrs[i].addr, sizeof (guint32))
+			if (radix_find_compressed (comp_tree, addrs[i].addr6, sizeof (addrs[i].addr6))
 					== RADIX_NO_VALUE) {
 				all_good = FALSE;
 			}
 		}
 	}
+#if 1
+	if (!all_good) {
+		for (i = 0; i < nelts; i ++) {
+			/* Used to write bad random vector */
+			char ipbuf[INET6_ADDRSTRLEN + 1];
+			inet_ntop(AF_INET6, addrs[i].addr6, ipbuf, sizeof(ipbuf));
+			msg_info("{\"%s\", NULL, \"%ud\", 0, 0, 0, 0},",
+					ipbuf,
+					addrs[i].mask6);
+		}
+	}
+#endif
+
 	g_assert (all_good);
 	clock_gettime (CLOCK_MONOTONIC, &ts2);
 	diff = (ts2.tv_sec - ts1.tv_sec) * 1000. +   /* Seconds */
