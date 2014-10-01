@@ -82,6 +82,15 @@ uintptr_t radix32tree_find (radix_tree_t *tree, guint32 key);
 uintptr_t radix32_tree_find_addr (radix_tree_t *tree, rspamd_inet_addr_t *addr);
 
 /**
+ * Find specified address in tree (works for any address)
+ * @param tree
+ * @param addr
+ * @return
+ */
+uintptr_t radix_find_compressed_addr (radix_compressed_t *tree,
+		rspamd_inet_addr_t *addr);
+
+/**
  * Traverse via the whole tree calling specified callback
  */
 void radix32tree_traverse (radix_tree_t *tree,
