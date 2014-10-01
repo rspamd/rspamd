@@ -92,7 +92,7 @@ struct fuzzy_ctx {
 	struct rspamd_config *cfg;
 	const gchar *default_symbol;
 	guint32 min_hash_len;
-	radix_tree_t *whitelist;
+	radix_compressed_t *whitelist;
 	guint32 min_bytes;
 	guint32 min_height;
 	guint32 min_width;
@@ -482,11 +482,12 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "fuzzy_check",
 		"whitelist")) != NULL) {
-		fuzzy_module_ctx->whitelist = radix_tree_create ();
+		fuzzy_module_ctx->whitelist = radix_create_compressed ();
 		if (!add_map (cfg, ucl_obj_tostring (value),
 			"Fuzzy whitelist", read_radix_list, fin_radix_list,
 			(void **)&fuzzy_module_ctx->whitelist)) {
-			msg_err ("cannot add whitelist '%s'", ucl_obj_tostring (value));
+			rspamd_config_parse_ip_list (ucl_obj_tostring (value),
+					&fuzzy_module_ctx->whitelist);
 		}
 	}
 	else {
@@ -913,10 +914,9 @@ fuzzy_symbol_callback (struct rspamd_task *task, void *unused)
 	GList *cur;
 
 	/* Check whitelist */
-	if (fuzzy_module_ctx->whitelist && task->from_addr.af == AF_INET) {
-		if (radix32tree_find (fuzzy_module_ctx->whitelist,
-			ntohl (task->from_addr.addr.s4.sin_addr.s_addr)) !=
-			RADIX_NO_VALUE) {
+	if (fuzzy_module_ctx->whitelist) {
+		if (radix_find_compressed_addr (fuzzy_module_ctx->whitelist,
+				&task->from_addr) != RADIX_NO_VALUE) {
 			msg_info ("<%s>, address %s is whitelisted, skip fuzzy check",
 				task->message_id,
 				rspamd_inet_address_to_string (&task->from_addr));

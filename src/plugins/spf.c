@@ -53,7 +53,7 @@ struct spf_ctx {
 	const gchar *symbol_allow;
 
 	rspamd_mempool_t *spf_pool;
-	radix_tree_t *whitelist_ip;
+	radix_compressed_t *whitelist_ip;
 	rspamd_lru_hash_t *spf_hash;
 };
 
@@ -97,7 +97,7 @@ spf_module_config (struct rspamd_config *cfg)
 	gint res = TRUE;
 	guint cache_size, cache_expire;
 
-	spf_module_ctx->whitelist_ip = radix_tree_create ();
+	spf_module_ctx->whitelist_ip = radix_create_compressed ();
 
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "spf", "symbol_fail")) != NULL) {
@@ -140,7 +140,8 @@ spf_module_config (struct rspamd_config *cfg)
 		if (!add_map (cfg, ucl_obj_tostring (value),
 			"SPF whitelist", read_radix_list, fin_radix_list,
 			(void **)&spf_module_ctx->whitelist_ip)) {
-			msg_warn ("cannot load whitelist from %s", value);
+			rspamd_config_parse_ip_list (ucl_obj_tostring (value),
+				&spf_module_ctx->whitelist_ip);
 		}
 	}
 
@@ -165,7 +166,7 @@ gint
 spf_module_reconfig (struct rspamd_config *cfg)
 {
 	rspamd_mempool_delete (spf_module_ctx->spf_pool);
-	radix_tree_free (spf_module_ctx->whitelist_ip);
+	radix_destroy_compressed (spf_module_ctx->whitelist_ip);
 	memset (spf_module_ctx, 0, sizeof (*spf_module_ctx));
 	spf_module_ctx->spf_pool = rspamd_mempool_new (
 		rspamd_mempool_suggest_size ());
@@ -324,7 +325,8 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 	gchar *domain;
 	GList *l;
 
-	if (task->from_addr.af != AF_UNIX) {
+	if (radix_find_compressed_addr (spf_module_ctx->whitelist_ip,
+			&task->from_addr) == RADIX_NO_VALUE) {
 		domain = get_spf_domain (task);
 		if (domain) {
 			if ((l =
