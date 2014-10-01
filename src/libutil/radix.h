@@ -117,4 +117,14 @@ void radix_destroy_compressed (radix_compressed_t *tree);
 
 radix_compressed_t *radix_create_compressed (void);
 
+/**
+ * Insert list of ip addresses and masks to the radix tree
+ * @param list string line of addresses
+ * @param separators string of characters used as separators
+ * @param tree target tree
+ * @return number of elements inserted
+ */
+gint rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
+		radix_compressed_t *tree);
+
 #endif

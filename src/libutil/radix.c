@@ -887,6 +887,78 @@ radix_find_compressed_addr (radix_compressed_t *tree, rspamd_inet_addr_t *addr)
 	return RADIX_NO_VALUE;
 }
 
+gint
+rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
+		radix_compressed_t *tree)
+{
+	gchar *token, *ipnet, *err_str, **strv, **cur;
+	struct in_addr ina;
+	struct in6_addr ina6;
+	guint k = 0;
+	gint af;
+	gint res = 0;
+
+	/* Split string if there are multiple items inside a single string */
+	strv = g_strsplit_set (list, separators, 0);
+	cur = strv;
+	while (*cur) {
+		af = AF_UNSPEC;
+		if (**cur == '\0') {
+			cur++;
+			continue;
+		}
+		/* Extract ipnet */
+		ipnet = *cur;
+		token = strsep (&ipnet, "/");
+
+		if (ipnet != NULL) {
+			errno = 0;
+			/* Get mask */
+			k = strtoul (ipnet, &err_str, 10);
+			if (errno != 0) {
+				msg_warn (
+						"invalid netmask, error detected on symbol: %s, erorr: %s",
+						err_str,
+						strerror (errno));
+				k = 32;
+			}
+		}
+
+		/* Check IP */
+		if (inet_pton (AF_INET, token, &ina) == 1) {
+			af = AF_INET;
+		}
+		else if (inet_pton (AF_INET6, token, &ina6) == 1) {
+			af = AF_INET6;
+		}
+		else {
+			msg_warn ("invalid IP address: %s", token);
+		}
+
+		if (af == AF_INET) {
+			if (k > 32) {
+				k = 32;
+			}
+			radix_insert_compressed (tree, (guint8 *)&ina, sizeof (ina),
+					32 - k, 1);
+			res ++;
+		}
+		else if (af == AF_INET6){
+			if (k > 128) {
+				k = 128;
+			}
+			radix_insert_compressed (tree, (guint8 *)&ina6, sizeof (ina6),
+					128 - k, 1);
+			res ++;
+		}
+		cur++;
+	}
+
+	g_strfreev (strv);
+
+	return res;
+}
+
 /*
  * vi:ts=4
  */

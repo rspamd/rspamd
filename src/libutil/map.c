@@ -798,65 +798,7 @@ radix_tree_insert_helper (gpointer st, gconstpointer key, gpointer value)
 {
 	radix_compressed_t *tree = (radix_compressed_t *)st;
 
-	gchar *token, *ipnet, *err_str, **strv, **cur;
-	struct in_addr ina;
-	struct in6_addr ina6;
-	guint k = 0;
-	gint af;
-
-	/* Split string if there are multiple items inside a single string */
-	strv = g_strsplit_set ((gchar *)key, " ,;", 0);
-	cur = strv;
-	while (*cur) {
-		af = AF_UNSPEC;
-		if (**cur == '\0') {
-			cur++;
-			continue;
-		}
-		/* Extract ipnet */
-		ipnet = *cur;
-		token = strsep (&ipnet, "/");
-
-		if (ipnet != NULL) {
-			errno = 0;
-			/* Get mask */
-			k = strtoul (ipnet, &err_str, 10);
-			if (errno != 0) {
-				msg_warn (
-					"invalid netmask, error detected on symbol: %s, erorr: %s",
-					err_str,
-					strerror (errno));
-				k = 32;
-			}
-		}
-
-		/* Check IP */
-		if (inet_pton (AF_INET, token, &ina) == 1) {
-			af = AF_INET;
-		}
-		else if (inet_pton (AF_INET6, token, &ina6) == 1) {
-			af = AF_INET6;
-		}
-		else {
-			msg_warn ("invalid IP address: %s", token);
-		}
-
-		if (af == AF_INET) {
-			if (k > 32) {
-				k = 32;
-			}
-			radix_insert_compressed (tree, (guint8 *)&ina, sizeof (ina), 32 - k, 1);
-		}
-		else if (af == AF_INET6){
-			if (k > 128) {
-				k = 128;
-			}
-			radix_insert_compressed (tree, (guint8 *)&ina6, sizeof (ina6), 128 - k, 1);
-		}
-		cur++;
-	}
-
-	g_strfreev (strv);
+	rspamd_radix_add_iplist ((gchar *)key, " ,;", tree);
 }
 
 /* Helpers */
