@@ -130,4 +130,11 @@ radix_compressed_t *radix_create_compressed (void);
 gint rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 		radix_compressed_t *tree);
 
+/**
+ * Generic version of @see rspamd_radix_add_iplist. This function creates tree
+ * if `tree` is NULL.
+ */
+gboolean radix_add_generic_iplist (const gchar *ip_list,
+		radix_compressed_t **tree);
+
 #endif

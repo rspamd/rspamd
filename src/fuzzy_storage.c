@@ -1058,7 +1058,7 @@ start_fuzzy (struct rspamd_worker *worker)
 		if (!add_map (worker->srv->cfg, ctx->update_map,
 			"Allow fuzzy updates from specified addresses",
 			read_radix_list, fin_radix_list, (void **)&ctx->update_ips)) {
-			if (!rspamd_config_parse_ip_list (ctx->update_map,
+			if (!radix_add_generic_iplist (ctx->update_map,
 				&ctx->update_ips)) {
 				msg_warn ("cannot load or parse ip list from '%s'",
 					ctx->update_map);

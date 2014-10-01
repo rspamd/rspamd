@@ -962,6 +962,16 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 	return res;
 }
 
+gboolean
+radix_add_generic_iplist (const gchar *ip_list, radix_compressed_t **tree)
+{
+	if (*tree == NULL) {
+		*tree = radix_create_compressed ();
+	}
+
+	return (rspamd_radix_add_iplist (ip_list, ",; ", *tree) > 0);
+}
+
 /*
  * vi:ts=4
  */

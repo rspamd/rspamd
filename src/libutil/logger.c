@@ -342,7 +342,7 @@ rspamd_set_logger (struct rspamd_config *cfg,
 			"IP addresses for which debug logs are enabled",
 			read_radix_list, fin_radix_list,
 			(void **)&rspamd->logger->debug_ip)) {
-			rspamd_config_parse_ip_list (rspamd->cfg->debug_ip_map,
+			radix_add_generic_iplist (rspamd->cfg->debug_ip_map,
 					&rspamd->logger->debug_ip);
 		}
 	}

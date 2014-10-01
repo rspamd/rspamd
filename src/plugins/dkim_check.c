@@ -59,7 +59,7 @@ struct dkim_ctx {
 	const gchar *symbol_allow;
 
 	rspamd_mempool_t *dkim_pool;
-	radix_tree_t *whitelist_ip;
+	radix_compressed_t *whitelist_ip;
 	GHashTable *dkim_domains;
 	guint strict_multiplier;
 	guint time_jitter;
@@ -106,7 +106,7 @@ dkim_module_config (struct rspamd_config *cfg)
 	guint cache_size, cache_expire;
 	gboolean got_trusted = FALSE;
 
-	dkim_module_ctx->whitelist_ip = radix_tree_create ();
+	dkim_module_ctx->whitelist_ip = radix_create_compressed ();
 
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim", "symbol_reject")) != NULL) {
@@ -158,8 +158,8 @@ dkim_module_config (struct rspamd_config *cfg)
 		if (!add_map (cfg, ucl_obj_tostring (value),
 			"DKIM whitelist", read_radix_list, fin_radix_list,
 			(void **)&dkim_module_ctx->whitelist_ip)) {
-			msg_warn ("cannot load whitelist from %s",
-				ucl_obj_tostring (value));
+			radix_add_generic_iplist (ucl_obj_tostring (value),
+				&dkim_module_ctx->whitelist_ip);
 		}
 	}
 	if ((value =
@@ -234,7 +234,7 @@ gint
 dkim_module_reconfig (struct rspamd_config *cfg)
 {
 	rspamd_mempool_delete (dkim_module_ctx->dkim_pool);
-	radix_tree_free (dkim_module_ctx->whitelist_ip);
+	radix_destroy_compressed (dkim_module_ctx->whitelist_ip);
 	if (dkim_module_ctx->dkim_domains) {
 		g_hash_table_destroy (dkim_module_ctx->dkim_domains);
 	}
@@ -368,10 +368,8 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 	if (hlist != NULL) {
 		/* Check whitelist */
 		msg_debug ("dkim signature found");
-		if (task->from_addr.af == AF_INET ||
-			radix32tree_find (dkim_module_ctx->whitelist_ip,
-			ntohl (task->from_addr.addr.s4.sin_addr.s_addr)) ==
-			RADIX_NO_VALUE) {
+		if (radix_find_compressed_addr (dkim_module_ctx->whitelist_ip,
+				&task->from_addr) == RADIX_NO_VALUE) {
 			/* Parse signature */
 			msg_debug ("create dkim signature");
 			/*

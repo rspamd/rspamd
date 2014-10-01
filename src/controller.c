@@ -1645,7 +1645,7 @@ start_controller_worker (struct rspamd_worker *worker)
 		if (!add_map (worker->srv->cfg, ctx->secure_ip,
 			"Allow webui access from the specified IP",
 			read_radix_list, fin_radix_list, (void **)&ctx->secure_map)) {
-			if (!rspamd_config_parse_ip_list (ctx->secure_ip,
+			if (!radix_add_generic_iplist (ctx->secure_ip,
 				&ctx->secure_map)) {
 				msg_warn ("cannot load or parse ip list from '%s'",
 					ctx->secure_ip);

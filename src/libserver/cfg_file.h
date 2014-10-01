@@ -476,12 +476,6 @@ struct rspamd_classifier_config * rspamd_config_find_classifier (
 	struct rspamd_config *cfg,
 	const gchar *name);
 
-/*
- * Parse input `ip_list` to radix tree `tree`. Now supports only IPv4 addresses.
- */
-gboolean rspamd_config_parse_ip_list (const gchar *ip_list,
-		radix_compressed_t **tree);
-
 void rspamd_ucl_add_conf_macros (struct ucl_parser *parser,
 	struct rspamd_config *cfg);
 

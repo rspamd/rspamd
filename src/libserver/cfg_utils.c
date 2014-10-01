@@ -1004,16 +1004,6 @@ rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 	}
 }
 
-gboolean
-rspamd_config_parse_ip_list (const gchar *ip_list, radix_compressed_t **tree)
-{
-	if (*tree == NULL) {
-		*tree = radix_create_compressed ();
-	}
-
-	return (rspamd_radix_add_iplist (ip_list, ",; ", *tree) > 0);
-}
-
 /*
  * vi:ts=4
  */

@@ -486,7 +486,7 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 		if (!add_map (cfg, ucl_obj_tostring (value),
 			"Fuzzy whitelist", read_radix_list, fin_radix_list,
 			(void **)&fuzzy_module_ctx->whitelist)) {
-			rspamd_config_parse_ip_list (ucl_obj_tostring (value),
+			radix_add_generic_iplist (ucl_obj_tostring (value),
 					&fuzzy_module_ctx->whitelist);
 		}
 	}
