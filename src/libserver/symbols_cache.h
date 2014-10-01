@@ -69,13 +69,6 @@ struct symbols_cache {
 	/* Items that have negative weights */
 	GList *negative_items;
 
-	/* Radix map of dynamic rules with ip mappings */
-	radix_tree_t *dynamic_map;
-	radix_tree_t *negative_dynamic_map;
-
-	/* Common dynamic rules */
-	GList *dynamic_items;
-
 	/* Hash table for fast access */
 	GHashTable *items_by_symbol;
 

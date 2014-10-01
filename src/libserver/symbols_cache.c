@@ -489,171 +489,7 @@ register_callback_symbol_priority (struct symbols_cache **cache,
 		SYMBOL_TYPE_CALLBACK);
 }
 
-void
-register_dynamic_symbol (rspamd_mempool_t *dynamic_pool,
-	struct symbols_cache **cache,
-	const gchar *name,
-	double weight,
-	symbol_func_t func,
-	gpointer user_data,
-	GList *networks)
-{
-	struct cache_item *item = NULL;
-	struct symbols_cache *pcache = *cache;
-	GList *t, *cur;
-	uintptr_t r;
-	double *w;
-	guint32 mask = 0xFFFFFFFF;
-	struct dynamic_map_item *it;
-	gint rr;
 
-	if (*cache == NULL) {
-		pcache = g_new0 (struct symbols_cache, 1);
-		*cache = pcache;
-		pcache->static_pool =
-			rspamd_mempool_new (rspamd_mempool_suggest_size ());
-	}
-
-	item = rspamd_mempool_alloc0 (dynamic_pool, sizeof (struct cache_item));
-	item->s =
-		rspamd_mempool_alloc (dynamic_pool, sizeof (struct saved_cache_item));
-	rspamd_strlcpy (item->s->symbol, name, sizeof (item->s->symbol));
-	item->func = func;
-	item->user_data = user_data;
-	/* Handle weight using default metric */
-	if (pcache->cfg && pcache->cfg->default_metric &&
-		(w =
-		g_hash_table_lookup (pcache->cfg->default_metric->symbols,
-		name)) != NULL) {
-		item->s->weight = weight * (*w);
-	}
-	else {
-		item->s->weight = weight;
-	}
-	item->is_dynamic = TRUE;
-	item->priority = 0;
-
-	pcache->used_items++;
-	msg_debug ("used items: %d, added symbol: %s", (*cache)->used_items, name);
-	rspamd_set_counter (item, 0);
-
-	g_hash_table_insert (pcache->items_by_symbol, item->s->symbol, item);
-
-	if (networks == NULL) {
-		pcache->dynamic_items = g_list_prepend (pcache->dynamic_items, item);
-	}
-	else {
-		if (pcache->dynamic_map == NULL) {
-			pcache->dynamic_map = radix_tree_create ();
-			pcache->negative_dynamic_map = radix_tree_create ();
-		}
-		cur = networks;
-		while (cur) {
-			it = cur->data;
-			mask = mask << (32 - it->mask);
-			r = ntohl (it->addr.s_addr & mask);
-			if (it->negative) {
-				/* For negatve items insert into list and into negative cache map */
-				if ((r =
-					radix32tree_find (pcache->negative_dynamic_map,
-					r)) != RADIX_NO_VALUE) {
-					t = (GList *)((gpointer)r);
-					t = g_list_prepend (t, item);
-					/* Replace pointers in radix tree and in destructor function */
-					rspamd_mempool_replace_destructor (dynamic_pool,
-						(rspamd_mempool_destruct_t)g_list_free, (gpointer)r, t);
-					rr = radix32tree_replace (pcache->negative_dynamic_map,
-							ntohl (it->addr.s_addr),
-							mask,
-							(uintptr_t)t);
-					if (rr == -1) {
-						msg_warn ("cannot replace ip to tree: %s, mask %X",
-							inet_ntoa (it->addr),
-							mask);
-					}
-				}
-				else {
-					t = g_list_prepend (NULL, item);
-					rspamd_mempool_add_destructor (dynamic_pool,
-						(rspamd_mempool_destruct_t)g_list_free, t);
-					rr = radix32tree_insert (pcache->negative_dynamic_map,
-							ntohl (it->addr.s_addr),
-							mask,
-							(uintptr_t)t);
-					if (rr == -1) {
-						msg_warn ("cannot insert ip to tree: %s, mask %X",
-							inet_ntoa (it->addr),
-							mask);
-					}
-					else if (rr == 1) {
-						msg_warn ("ip %s, mask %X, value already exists",
-							inet_ntoa (it->addr),
-							mask);
-					}
-				}
-				/* Insert into list */
-				pcache->dynamic_items = g_list_prepend (pcache->dynamic_items,
-						item);
-			}
-			else {
-				if ((r =
-					radix32tree_find (pcache->dynamic_map,
-					r)) != RADIX_NO_VALUE) {
-					t = (GList *)((gpointer)r);
-					t = g_list_prepend (t, item);
-					/* Replace pointers in radix tree and in destructor function */
-					rspamd_mempool_replace_destructor (dynamic_pool,
-						(rspamd_mempool_destruct_t)g_list_free, (gpointer)r, t);
-					rr =
-						radix32tree_replace (pcache->dynamic_map,
-							ntohl (it->addr.s_addr), mask, (uintptr_t)t);
-					if (rr == -1) {
-						msg_warn ("cannot replace ip to tree: %s, mask %X",
-							inet_ntoa (it->addr),
-							mask);
-					}
-				}
-				else {
-					t = g_list_prepend (NULL, item);
-					rspamd_mempool_add_destructor (dynamic_pool,
-						(rspamd_mempool_destruct_t)g_list_free, t);
-					rr =
-						radix32tree_insert (pcache->dynamic_map,
-							ntohl (it->addr.s_addr), mask, (uintptr_t)t);
-					if (rr == -1) {
-						msg_warn ("cannot insert ip to tree: %s, mask %X",
-							inet_ntoa (it->addr),
-							mask);
-					}
-					else if (rr == 1) {
-						msg_warn ("ip %s, mask %X, value already exists",
-							inet_ntoa (it->addr),
-							mask);
-					}
-				}
-			}
-			cur = g_list_next (cur);
-		}
-	}
-}
-
-void
-remove_dynamic_rules (struct symbols_cache *cache)
-{
-	if (cache->dynamic_items) {
-		g_list_free (cache->dynamic_items);
-		cache->dynamic_items = NULL;
-	}
-
-	if (cache->dynamic_map) {
-		radix_tree_free (cache->dynamic_map);
-		cache->dynamic_map = NULL;
-	}
-	if (cache->negative_dynamic_map) {
-		radix_tree_free (cache->negative_dynamic_map);
-		cache->negative_dynamic_map = NULL;
-	}
-}
 
 static void
 free_cache (gpointer arg)
@@ -669,15 +505,6 @@ free_cache (gpointer arg)
 	}
 	if (cache->negative_items) {
 		g_list_free (cache->negative_items);
-	}
-	if (cache->dynamic_items) {
-		g_list_free (cache->dynamic_items);
-	}
-	if (cache->dynamic_map) {
-		radix_tree_free (cache->dynamic_map);
-	}
-	if (cache->negative_dynamic_map) {
-		radix_tree_free (cache->negative_dynamic_map);
 	}
 	g_hash_table_destroy (cache->items_by_symbol);
 	rspamd_mempool_delete (cache->static_pool);
@@ -830,62 +657,6 @@ init_symbols_cache (rspamd_mempool_t * pool,
 	return res;
 }
 
-static GList *
-check_dynamic_item (struct rspamd_task *task, struct symbols_cache *cache)
-{
-#ifdef HAVE_INET_PTON
-	/* TODO: radix doesn't support ipv6 addrs */
-	return NULL;
-#else
-	GList *res = NULL;
-	uintptr_t r;
-	if (cache->dynamic_map != NULL && task->from_addr.s_addr != INADDR_NONE) {
-		if ((r =
-			radix32tree_find (cache->dynamic_map,
-			ntohl (task->from_addr.s_addr))) != RADIX_NO_VALUE) {
-			res = (GList *)((gpointer)r);
-			return res;
-		}
-		else {
-			return NULL;
-		}
-	}
-	return res;
-#endif
-}
-
-static gboolean
-check_negative_dynamic_item (struct rspamd_task *task,
-	struct symbols_cache *cache,
-	struct cache_item *item)
-{
-
-#ifdef HAVE_INET_PTON
-	/* TODO: radix doesn't support ipv6 addrs */
-	return FALSE;
-#else
-	GList *res = NULL;
-	uintptr_t r;
-
-	if (cache->negative_dynamic_map != NULL && task->from_addr.s_addr !=
-		INADDR_NONE) {
-		if ((r =
-			radix32tree_find (cache->negative_dynamic_map,
-			ntohl (task->from_addr.s_addr))) != RADIX_NO_VALUE) {
-			res = (GList *)((gpointer)r);
-			while (res) {
-				if (res->data == (gpointer)item) {
-					return TRUE;
-				}
-				res = g_list_next (res);
-			}
-		}
-	}
-	return FALSE;
-#endif
-
-}
-
 static gboolean
 check_debug_symbol (struct rspamd_config *cfg, const gchar *symbol)
 {
@@ -1001,8 +772,6 @@ validate_cache (struct symbols_cache *cache,
 struct symbol_callback_data {
 	enum {
 		CACHE_STATE_NEGATIVE,
-		CACHE_STATE_DYNAMIC_MAP,
-		CACHE_STATE_DYNAMIC,
 		CACHE_STATE_STATIC
 	} state;
 	struct cache_item *saved_item;
@@ -1042,18 +811,6 @@ call_symbol_callback (struct rspamd_task * task,
 			s->saved_item = s->list_pointer->data;
 			s->state = CACHE_STATE_NEGATIVE;
 		}
-		else if ((s->list_pointer =
-			check_dynamic_item (task, cache)) || cache->dynamic_items != NULL) {
-			if (s->list_pointer == NULL) {
-				s->list_pointer = g_list_first (cache->dynamic_items);
-				s->saved_item = s->list_pointer->data;
-				s->state = CACHE_STATE_DYNAMIC;
-			}
-			else {
-				s->saved_item = s->list_pointer->data;
-				s->state = CACHE_STATE_DYNAMIC_MAP;
-			}
-		}
 		else {
 			s->state = CACHE_STATE_STATIC;
 			s->list_pointer = g_list_first (cache->static_items);
@@ -1074,62 +831,6 @@ call_symbol_callback (struct rspamd_task * task,
 		case CACHE_STATE_NEGATIVE:
 			s->list_pointer = g_list_next (s->list_pointer);
 			if (s->list_pointer == NULL) {
-				if ((s->list_pointer =
-					check_dynamic_item (task,
-					cache)) || cache->dynamic_items != NULL) {
-					if (s->list_pointer == NULL) {
-						s->list_pointer = g_list_first (cache->dynamic_items);
-						s->saved_item = s->list_pointer->data;
-						s->state = CACHE_STATE_DYNAMIC;
-					}
-					else {
-						s->saved_item = s->list_pointer->data;
-						s->state = CACHE_STATE_DYNAMIC_MAP;
-					}
-				}
-				else {
-					s->state = CACHE_STATE_STATIC;
-					s->list_pointer = g_list_first (cache->static_items);
-					if (s->list_pointer) {
-						s->saved_item = s->list_pointer->data;
-					}
-					else {
-						return FALSE;
-					}
-				}
-			}
-			else {
-				s->saved_item = s->list_pointer->data;
-			}
-			item = s->saved_item;
-			break;
-		case CACHE_STATE_DYNAMIC_MAP:
-			s->list_pointer = g_list_next (s->list_pointer);
-			if (s->list_pointer == NULL) {
-				s->list_pointer = g_list_first (cache->dynamic_items);
-				if (s->list_pointer) {
-					s->saved_item = s->list_pointer->data;
-					s->state = CACHE_STATE_DYNAMIC;
-				}
-				else {
-					s->state = CACHE_STATE_STATIC;
-					s->list_pointer = g_list_first (cache->static_items);
-					if (s->list_pointer) {
-						s->saved_item = s->list_pointer->data;
-					}
-					else {
-						return FALSE;
-					}
-				}
-			}
-			else {
-				s->saved_item = s->list_pointer->data;
-			}
-			item = s->saved_item;
-			break;
-		case CACHE_STATE_DYNAMIC:
-			s->list_pointer = g_list_next (s->list_pointer);
-			if (s->list_pointer == NULL) {
 				s->state = CACHE_STATE_STATIC;
 				s->list_pointer = g_list_first (cache->static_items);
 				if (s->list_pointer) {
@@ -1141,24 +842,6 @@ call_symbol_callback (struct rspamd_task * task,
 			}
 			else {
 				s->saved_item = s->list_pointer->data;
-				/* Skip items that are in negative map */
-				while (s->list_pointer != NULL &&
-					check_negative_dynamic_item (task, cache, s->saved_item)) {
-					s->list_pointer = g_list_next (s->list_pointer);
-					if (s->list_pointer != NULL) {
-						s->saved_item = s->list_pointer->data;
-					}
-				}
-				if (s->list_pointer == NULL) {
-					s->state = CACHE_STATE_STATIC;
-					s->list_pointer = g_list_first (cache->static_items);
-					if (s->list_pointer) {
-						s->saved_item = s->list_pointer->data;
-					}
-					else {
-						return FALSE;
-					}
-				}
 			}
 			item = s->saved_item;
 			break;
