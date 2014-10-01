@@ -107,7 +107,7 @@ struct rspamd_controller_worker_ctx {
 	gchar *ssl_key;
 	/* A map of secure IP */
 	gchar *secure_ip;
-	radix_tree_t *secure_map;
+	radix_compressed_t *secure_map;
 
 	/* Static files dir */
 	gchar *static_files_dir;
@@ -143,7 +143,7 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 		msg_info ("allow unauthorized connection from a unix socket");
 		return TRUE;
 	}
-	else if (ctx->secure_map && radix32_tree_find_addr (ctx->secure_map,
+	else if (ctx->secure_map && radix_find_compressed_addr (ctx->secure_map,
 		&session->from_addr) != RADIX_NO_VALUE) {
 		msg_info ("allow unauthorized connection from a trusted IP %s",
 			rspamd_inet_address_to_string (&session->from_addr));
