@@ -1273,10 +1273,16 @@ rspamd_recipients_distance (struct rspamd_task *task, GList * args,
 #ifdef GMIME24
 	for (i = 0; i < num; i++) {
 		addr = internet_address_list_get_address (cur, i);
-		ar[i].name = internet_address_mailbox_get_addr (
-				INTERNET_ADDRESS_MAILBOX (addr));
-		if (ar[i].name != NULL && (c = strchr (ar[i].name, '@')) != NULL) {
-			ar[i].addr = c + 1;
+		InternetAddress *iaelt =
+			internet_address_list_get_address(cur, i);
+		InternetAddressMailbox *iamb =
+			INTERNET_ADDRESS_IS_MAILBOX(iaelt) ?
+			INTERNET_ADDRESS_MAILBOX (iaelt) : NULL;
+		if (iamb) {
+			ar[i].name = internet_address_mailbox_get_addr (iamb);
+			if (ar[i].name != NULL && (c = strchr (ar[i].name, '@')) != NULL) {
+				ar[i].addr = c + 1;
+			}
 		}
 	}
 #else

@@ -1357,9 +1357,11 @@ rspamd_check_smtp_data (struct rspamd_task *task, GList * args, void *unused)
 			else {
 				if (ia != NULL) {
 					for (i = 0; i < internet_address_list_length(ia); i ++) {
+						InternetAddress *iaelt =
+								internet_address_list_get_address(ia, i);
 						InternetAddressMailbox *iamb =
-							INTERNET_ADDRESS_MAILBOX (
-							internet_address_list_get_address(ia, i));
+							INTERNET_ADDRESS_IS_MAILBOX(iaelt) ?
+							INTERNET_ADDRESS_MAILBOX (iaelt) : NULL;
 						if (iamb &&
 							match_smtp_data (task, arg->data,
 								internet_address_mailbox_get_addr(iamb))) {
@@ -1379,9 +1381,11 @@ rspamd_check_smtp_data (struct rspamd_task *task, GList * args, void *unused)
 			else {
 				if (ia != NULL) {
 					for (i = 0; i < internet_address_list_length(ia); i ++) {
+						InternetAddress *iaelt =
+								internet_address_list_get_address(ia, i);
 						InternetAddressMailbox *iamb =
-								INTERNET_ADDRESS_MAILBOX (
-									internet_address_list_get_address(ia, i));
+								INTERNET_ADDRESS_IS_MAILBOX(iaelt) ?
+								INTERNET_ADDRESS_MAILBOX (iaelt) : NULL;
 						if (iamb &&
 								process_regexp_expression (arg->data,
 									"regexp_check_smtp_data", task,

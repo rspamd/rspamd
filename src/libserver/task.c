@@ -350,16 +350,18 @@ rspamd_task_process (struct rspamd_task *task,
 const gchar *
 rspamd_task_get_sender (struct rspamd_task *task)
 {
-	InternetAddressMailbox *imb = NULL;
+	InternetAddressMailbox *imb;
+	InternetAddress *iaelt = NULL;
+
 
 	if (task->from_envelope != NULL) {
-		imb = INTERNET_ADDRESS_MAILBOX(internet_address_list_get_address (
-				task->from_envelope, 0));
+		iaelt = internet_address_list_get_address (task->from_envelope, 0);
 	}
 	else if (task->from_mime != NULL) {
-		imb = INTERNET_ADDRESS_MAILBOX(internet_address_list_get_address (
-				task->from_mime, 0));
+		iaelt = internet_address_list_get_address (task->from_mime, 0);
 	}
+	imb = INTERNET_ADDRESS_IS_MAILBOX(iaelt) ?
+			INTERNET_ADDRESS_MAILBOX (iaelt) : NULL;
 
-	return internet_address_mailbox_get_addr (imb);
+	return (imb ? internet_address_mailbox_get_addr (imb) : NULL);
 }
