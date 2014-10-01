@@ -7,10 +7,12 @@
 
 #define RADIX_NO_VALUE   (uintptr_t)-1
 
-typedef struct radix_node_s radix_node_t;
-typedef struct radix_tree_s radix_tree_t;
+
 typedef struct radix_tree_compressed radix_compressed_t;
 
+#ifdef LEGACY_RADIX
+typedef struct radix_node_s radix_node_t;
+typedef struct radix_tree_s radix_tree_t;
 enum radix_insert_type {
 	RADIX_INSERT,
 	RADIX_ADD,
@@ -94,6 +96,7 @@ void radix32tree_traverse (radix_tree_t *tree,
  * Frees radix tree
  */
 void radix_tree_free (radix_tree_t *tree);
+#endif
 
 uintptr_t
 radix_insert_compressed (radix_compressed_t * tree,
