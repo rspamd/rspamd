@@ -344,12 +344,12 @@ lua_check_config (lua_State * L)
 	return ud ? *((struct rspamd_config **)ud) : NULL;
 }
 
-static radix_tree_t *
+static radix_compressed_t *
 lua_check_radix (lua_State * L)
 {
 	void *ud = luaL_checkudata (L, 1, "rspamd{radix}");
 	luaL_argcheck (L, ud != NULL, 1, "'radix' expected");
-	return ud ? **((radix_tree_t ***)ud) : NULL;
+	return ud ? **((radix_compressed_t ***)ud) : NULL;
 }
 
 static GHashTable *
@@ -708,21 +708,21 @@ lua_config_add_radix_map (lua_State *L)
 {
 	struct rspamd_config *cfg = lua_check_config (L);
 	const gchar *map_line, *description;
-	radix_tree_t **r, ***ud;
+	radix_compressed_t **r, ***ud;
 
 	if (cfg) {
 		map_line = luaL_checkstring (L, 2);
 		description = lua_tostring (L, 3);
-		r = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (radix_tree_t *));
-		*r = radix_tree_create ();
+		r = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (radix_compressed_t *));
+		*r = radix_create_compressed ();
 		if (!add_map (cfg, map_line, description, read_radix_list,
 			fin_radix_list, (void **)r)) {
 			msg_warn ("invalid radix map %s", map_line);
-			radix_tree_free (*r);
+			radix_destroy_compressed (*r);
 			lua_pushnil (L);
 			return 1;
 		}
-		ud = lua_newuserdata (L, sizeof (radix_tree_t *));
+		ud = lua_newuserdata (L, sizeof (radix_compressed_t *));
 		*ud = r;
 		rspamd_lua_setclass (L, "rspamd{radix}", -1);
 
@@ -1290,13 +1290,14 @@ lua_config_add_map (lua_State *L)
 static gint
 lua_radix_get_key (lua_State * L)
 {
-	radix_tree_t *radix = lua_check_radix (L);
+	radix_compressed_t *radix = lua_check_radix (L);
 	guint32 key;
 
 	if (radix) {
 		key = luaL_checkint (L, 2);
 
-		if (radix32tree_find (radix, key) != RADIX_NO_VALUE) {
+		if (radix_find_compressed (radix, (guint8 *)&key, sizeof (key))
+				!= RADIX_NO_VALUE) {
 			lua_pushboolean (L, 1);
 			return 1;
 		}
