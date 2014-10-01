@@ -796,18 +796,19 @@ abstract_parse_list (rspamd_mempool_t * pool,
 static void
 radix_tree_insert_helper (gpointer st, gconstpointer key, gpointer value)
 {
-	radix_tree_t *tree = st;
+	radix_compressed_t *tree = (radix_compressed_t *)st;
 
-	guint32 mask = 0xFFFFFFFF;
-	guint32 ip;
 	gchar *token, *ipnet, *err_str, **strv, **cur;
 	struct in_addr ina;
-	gint k;
+	struct in6_addr ina6;
+	guint k = 0;
+	gint af;
 
 	/* Split string if there are multiple items inside a single string */
 	strv = g_strsplit_set ((gchar *)key, " ,;", 0);
 	cur = strv;
 	while (*cur) {
+		af = AF_UNSPEC;
 		if (**cur == '\0') {
 			cur++;
 			continue;
@@ -827,30 +828,30 @@ radix_tree_insert_helper (gpointer st, gconstpointer key, gpointer value)
 					strerror (errno));
 				k = 32;
 			}
-			else if (k > 32 || k < 0) {
-				msg_warn ("invalid netmask value: %d", k);
-				k = 32;
-			}
-			/* Calculate mask based on CIDR presentation */
-			mask = mask << (32 - k);
 		}
 
 		/* Check IP */
-		if (inet_aton (token, &ina) == 0) {
-			msg_err ("invalid ip address: %s", token);
-			return;
+		if (inet_pton (AF_INET, token, &ina) == 1) {
+			af = AF_INET;
+		}
+		else if (inet_pton (AF_INET6, token, &ina6) == 1) {
+			af = AF_INET6;
+		}
+		else {
+			msg_warn ("invalid IP address: %s", token);
 		}
 
-		/* Insert ip in a tree */
-		ip = ntohl ((guint32) ina.s_addr);
-		k = radix32tree_insert (tree, ip, mask, 1);
-		if (k == -1) {
-			msg_warn ("cannot insert ip to tree: %s, mask %X", inet_ntoa (
-					ina), mask);
+		if (af == AF_INET) {
+			if (k > 32) {
+				k = 32;
+			}
+			radix_insert_compressed (tree, (guint8 *)&ina, sizeof (ina), 32 - k, 1);
 		}
-		else if (k == 1) {
-			msg_warn ("ip %s, mask %X, value already exists", inet_ntoa (
-					ina), mask);
+		else if (af == AF_INET6){
+			if (k > 128) {
+				k = 128;
+			}
+			radix_insert_compressed (tree, (guint8 *)&ina6, sizeof (ina6), 128 - k, 1);
 		}
 		cur++;
 	}
@@ -916,7 +917,7 @@ read_radix_list (rspamd_mempool_t * pool,
 	struct map_cb_data *data)
 {
 	if (data->cur_data == NULL) {
-		data->cur_data = radix_tree_create ();
+		data->cur_data = radix_tree_create_compressed ();
 	}
 	return abstract_parse_list (pool,
 			   chunk,
@@ -929,6 +930,6 @@ void
 fin_radix_list (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
 	if (data->prev_data) {
-		radix_tree_free (data->prev_data);
+		radix_tree_destroy_compressed (data->prev_data);
 	}
 }
