@@ -1047,9 +1047,12 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint size,
 				t--;
 			}
 			/* Replace a single \n or \r with \r\n */
-			if (*h == '\n' && *(h - 1) != '\r') {
+			if (*h == '\n' && h != *start && *(h - 1) != '\r') {
 				*t++ = '\r';
 				inlen--;
+				if (inlen == 0) {
+					break;
+				}
 			}
 			else if (*h == '\r' && *(h + 1) != '\n') {
 				*t++ = *h++;
@@ -1095,13 +1098,15 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint size,
 		/* Avoid border problems */
 		t--;
 	}
-#if 0
-	msg_debug ("update signature with buffer: %*s", t - buf, buf);
-#endif
+
 	if (*remain > 0) {
 		size_t cklen = MIN(t - buf, *remain);
 		g_checksum_update (ck, buf, cklen);
 		*remain = *remain - cklen;
+#if 0
+		msg_debug ("update signature with buffer (%ud size, %ud remain): %*s",
+				cklen, *remain, cklen, buf);
+#endif
 	}
 
 	return !finished;
@@ -1704,7 +1709,8 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 
 	/* Check bh field */
 	if (memcmp (ctx->bh, digest, dlen) != 0) {
-		msg_debug ("bh value missmatch");
+		msg_debug ("bh value missmatch: %*xs versus %*xs", dlen, ctx->bh,
+				dlen, digest);
 		return DKIM_REJECT;
 	}
 
