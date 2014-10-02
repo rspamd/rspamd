@@ -47,6 +47,7 @@
  *	%V						    f_str_t *
  *	%v                          GString *
  *	%s						    null-terminated string
+ *	%xs                         hex encoded string
  *	%*s					        length and string
  *	%Z						    '\0'
  *	%N						    '\n'

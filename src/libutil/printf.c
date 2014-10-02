@@ -29,6 +29,8 @@
  * From FreeBSD libutil code
  */
 static const int maxscale = 6;
+static const gchar _hex[] = "0123456789abcdef";
+static const gchar _HEX[] = "0123456789ABCDEF";
 
 static gchar *
 rspamd_humanize_number (gchar *buf, gchar *last, gint64 num, gboolean bytes)
@@ -95,8 +97,6 @@ rspamd_sprintf_num (gchar *buf, gchar *last, guint64 ui64, gchar zero,
 	gchar *p, temp[sizeof ("18446744073709551615")];
 	size_t len;
 	guint32 ui32;
-	static gchar hex[] = "0123456789abcdef";
-	static gchar HEX[] = "0123456789ABCDEF";
 
 	p = temp + sizeof(temp);
 
@@ -136,7 +136,7 @@ rspamd_sprintf_num (gchar *buf, gchar *last, guint64 ui64, gchar zero,
 		do {
 
 			/* the "(guint32)" cast disables the BCC's warning */
-			*--p = hex[(guint32) (ui64 & 0xf)];
+			*--p = _hex[(guint32) (ui64 & 0xf)];
 
 		} while (ui64 >>= 4);
 
@@ -145,7 +145,7 @@ rspamd_sprintf_num (gchar *buf, gchar *last, guint64 ui64, gchar zero,
 		do {
 
 			/* the "(guint32)" cast disables the BCC's warning */
-			*--p = HEX[(guint32) (ui64 & 0xf)];
+			*--p = _HEX[(guint32) (ui64 & 0xf)];
 
 		} while (ui64 >>= 4);
 	}
@@ -299,15 +299,20 @@ rspamd_printf_gstring (GString *s, const gchar *fmt, ...)
 	return r;
 }
 
-#define RSPAMD_PRINTF_APPEND(buf, len)                                          \
-	do {                                                                        \
-		wr = func ((buf), (len), apd);                                              \
-		if (wr < (__typeof (wr))(len)) {                                         \
-			goto oob;                                                               \
-		}                                                                           \
-		written += wr;                                                              \
-		fmt++;                                                                     \
-		buf_start = fmt;                                                            \
+#define RSPAMD_PRINTF_APPEND(buf, len)                                         \
+	do {                                                                       \
+		RSPAMD_PRINTF_APPEND_BUF(buf, len);                                    \
+		fmt++;                                                                 \
+		buf_start = fmt;                                                       \
+	} while (0)
+
+#define RSPAMD_PRINTF_APPEND_BUF(buf, len)                                     \
+	do {                                                                       \
+		wr = func ((buf), (len), apd);                                         \
+		if (wr < (__typeof (wr))(len)) {                                       \
+			goto oob;                                                          \
+		}                                                                      \
+		written += wr;                                                         \
 	} while (0)
 
 glong
@@ -448,7 +453,24 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 					/* NULL terminated string */
 					slen = strlen (p);
 				}
-				RSPAMD_PRINTF_APPEND (p, slen);
+
+				if (G_LIKELY(hex == 0)) {
+					RSPAMD_PRINTF_APPEND (p, slen);
+				}
+				else {
+					gchar hexbuf[2];
+					while (slen) {
+						hexbuf[0] = hex == 2 ? _HEX[*p & 0xf] : _hex[*p & 0xf];
+						hexbuf[1] = hex == 2 ? _HEX[(*p >> 8) & 0xf] :
+								_hex[(*p >> 8) & 0xf];
+						RSPAMD_PRINTF_APPEND_BUF (hexbuf, 2);
+						p ++;
+						slen --;
+					}
+					fmt ++;
+					buf_start = fmt;
+
+				}
 
 				continue;
 
