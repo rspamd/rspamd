@@ -1018,7 +1018,8 @@ rspamd_get_dkim_key (rspamd_dkim_context_t *ctx,
 }
 
 static gboolean
-rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint remain)
+rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint size,
+		guint *remain)
 {
 	const gchar *h;
 	static gchar buf[BUFSIZ];
@@ -1026,11 +1027,11 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint remain)
 	guint len, inlen;
 	gboolean got_sp, finished = FALSE;
 
-	if (remain > sizeof (buf)) {
+	if (size > sizeof (buf)) {
 		len = sizeof (buf);
 	}
 	else {
-		len = remain;
+		len = size;
 		finished = TRUE;
 	}
 	inlen = sizeof (buf) - 1;
@@ -1097,13 +1098,18 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint remain)
 #if 0
 	msg_debug ("update signature with buffer: %*s", t - buf, buf);
 #endif
-	g_checksum_update (ck, buf, t - buf);
+	if (*remain > 0) {
+		size_t cklen = MIN(t - buf, *remain);
+		g_checksum_update (ck, buf, cklen);
+		*remain = *remain - cklen;
+	}
 
 	return !finished;
 }
 
 static gboolean
-rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint remain)
+rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint size,
+		guint *remain)
 {
 	const gchar *h;
 	static gchar buf[BUFSIZ];
@@ -1111,11 +1117,11 @@ rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint remain)
 	guint len, inlen;
 	gboolean finished = FALSE;
 
-	if (remain > sizeof (buf)) {
+	if (size > sizeof (buf)) {
 		len = sizeof (buf);
 	}
 	else {
-		len = remain;
+		len = size;
 		finished = TRUE;
 	}
 	inlen = sizeof (buf) - 1;
@@ -1153,7 +1159,11 @@ rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint remain)
 #if 0
 	msg_debug ("update signature with buffer: %*s", t - buf, buf);
 #endif
-	g_checksum_update (ck, buf, t - buf);
+	if (*remain > 0) {
+		size_t cklen = MIN(t - buf, *remain);
+		g_checksum_update (ck, buf, cklen);
+		*remain = *remain - cklen;
+	}
 
 	return !finished;
 }
@@ -1164,6 +1174,7 @@ rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx,
 	const gchar *end)
 {
 	const gchar *p;
+	guint remain = ctx->len ? ctx->len : end - start;
 
 	if (start == NULL) {
 		/* Empty body */
@@ -1205,11 +1216,11 @@ rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx,
 			if (ctx->body_canon_type == DKIM_CANON_SIMPLE) {
 				/* Simple canonization */
 				while (rspamd_dkim_simple_body_step (ctx->body_hash, &start,
-					end - start)) ;
+					end - start, &remain)) ;
 			}
 			else {
 				while (rspamd_dkim_relaxed_body_step (ctx->body_hash, &start,
-					end - start)) ;
+					end - start, &remain)) ;
 			}
 		}
 		return TRUE;
@@ -1674,18 +1685,7 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	}
 
 	/* Start canonization of body part */
-	if (headers_end) {
-		if (ctx->len == 0 || (gint)ctx->len > end - headers_end) {
-			body_end = end;
-		}
-		else {
-			/* Strip message */
-			body_end = headers_end + ctx->len;
-		}
-	}
-	else {
-		body_end = end;
-	}
+	body_end = end;
 	if (!rspamd_dkim_canonize_body (ctx, headers_end, body_end)) {
 		return DKIM_RECORD_ERROR;
 	}
