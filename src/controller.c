@@ -1528,6 +1528,7 @@ rspamd_controller_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 
+	session->ctx->worker->srv->stat->control_connections_count++;
 	if (session->task != NULL) {
 		destroy_session (session->task->s);
 	}
