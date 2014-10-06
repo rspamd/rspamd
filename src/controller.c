@@ -1730,13 +1730,6 @@ start_controller_worker (struct rspamd_worker *worker)
 			rspamd_controller_handle_custom);
 	}
 
-#if 0
-	rspamd_http_router_add_path (ctx->http,
-		PATH_GRAPH,
-		rspamd_controller_handle_graph,
-		ctx);
-#endif
-
 	ctx->resolver = dns_resolver_init (worker->srv->logger,
 			ctx->ev_base,
 			worker->srv->cfg);
