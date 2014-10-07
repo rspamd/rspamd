@@ -1199,7 +1199,7 @@ fuzzy_controller_handler (struct rspamd_http_connection_entry *conn_ent,
 	gint value = 1, flag = 0;
 
 	/* Get size */
-	arg = rspamd_http_message_find_header (msg, "Value");
+	arg = rspamd_http_message_find_header (msg, "Weight");
 	if (arg) {
 		errno = 0;
 		value = strtol (arg, &err_str, 10);
