@@ -255,6 +255,7 @@ rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
 	struct rspamd_symbols_group *sym_group;
 	struct rspamd_symbol_def *sym_def;
 	GList *metric_list, *group_list;
+	gboolean one_shot = FALSE;
 
 	/*
 	 * We allow two type of definitions:
@@ -264,6 +265,7 @@ rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
 	 *	weight = ...;
 	 *	description = ...;
 	 *	group = ...;
+	 *	one_shot = true/false;
 	 * }
 	 */
 	if (is_legacy) {
@@ -298,6 +300,10 @@ rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
 		if (val != NULL) {
 			ucl_object_tostring_safe (val, &group);
 		}
+		val = ucl_object_find_key (obj, "one_shot");
+		if (val != NULL) {
+			one_shot = ucl_object_toboolean (val);
+		}
 	}
 	else {
 		g_set_error (err,
@@ -316,8 +322,9 @@ rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
 	sym_def->weight_ptr = score_ptr;
 	sym_def->name = rspamd_mempool_strdup (cfg->cfg_pool, sym_name);
 	sym_def->description = (gchar *)description;
+	sym_def->one_shot = one_shot;
 
-	g_hash_table_insert (metric->symbols, sym_def->name, score_ptr);
+	g_hash_table_insert (metric->symbols, sym_def->name, sym_def);
 
 	if ((metric_list =
 		g_hash_table_lookup (cfg->metrics_symbols, sym_def->name)) == NULL) {

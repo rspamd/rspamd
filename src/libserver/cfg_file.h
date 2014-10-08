@@ -119,6 +119,7 @@ struct rspamd_symbol_def {
 	gchar *name;
 	gchar *description;
 	gdouble *weight_ptr;
+	gboolean one_shot;
 };
 
 /**
