@@ -252,7 +252,7 @@ struct rspamc_command {
 
 struct rspamc_callback_data {
 	struct rspamc_command *cmd;
-	const gchar *filename;
+	gchar *filename;
 };
 
 /*
@@ -778,6 +778,7 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 	fflush (stdout);
 
 	rspamd_client_destroy (conn);
+	g_free (cbdata->filename);
 	g_slice_free1 (sizeof (struct rspamc_callback_data), cbdata);
 }
 
@@ -815,7 +816,7 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 	if (conn != NULL) {
 		cbdata = g_slice_alloc (sizeof (struct rspamc_callback_data));
 		cbdata->cmd = cmd;
-		cbdata->filename = name;
+		cbdata->filename = g_strdup (name);
 		if (cmd->need_input) {
 			rspamd_client_command (conn, cmd->path, attrs, in, rspamc_client_cb,
 				cbdata, &err);
