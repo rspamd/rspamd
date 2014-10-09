@@ -48,7 +48,7 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 	ucl_object_iter_t it = NULL;
 	struct metric *real_metric;
 	struct metric_action *cur_action;
-	gdouble *w;
+	struct rspamd_symbol_def *s;
 
 	while ((cur_elt = ucl_iterate_object (top, &it, true))) {
 		if (ucl_object_type (cur_elt) != UCL_OBJECT) {
@@ -82,9 +82,9 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 					const ucl_object_t *v =
 							ucl_object_find_key (it_val, "value");
 
-					if((w = g_hash_table_lookup (real_metric->symbols,
+					if((s = g_hash_table_lookup (real_metric->symbols,
 							ucl_object_tostring (n))) != NULL) {
-						*w = ucl_object_todouble (v);
+						*s->weight_ptr = ucl_object_todouble (v);
 					}
 				}
 				else {

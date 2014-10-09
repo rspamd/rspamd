@@ -315,7 +315,7 @@ register_symbol_common (struct symbols_cache **cache,
 	struct symbols_cache *pcache = *cache;
 	GList **target, *cur;
 	struct metric *m;
-	double *w;
+	struct rspamd_symbol_def *s;
 	gboolean skipped;
 
 	if (*cache == NULL) {
@@ -355,10 +355,10 @@ register_symbol_common (struct symbols_cache **cache,
 
 	/* Handle weight using default metric */
 	if (pcache->cfg && pcache->cfg->default_metric &&
-		(w =
+		(s =
 		g_hash_table_lookup (pcache->cfg->default_metric->symbols,
 		name)) != NULL) {
-		item->s->weight = weight * (*w);
+		item->s->weight = weight * (*s->weight_ptr);
 	}
 	else {
 		item->s->weight = weight;
@@ -679,9 +679,11 @@ rspamd_symbols_cache_metric_cb (gpointer k, gpointer v, gpointer ud)
 	struct symbols_cache *cache = (struct symbols_cache *)ud;
 	GList *cur;
 	const gchar *sym = k;
-	gdouble weight = *(gdouble *)v;
+	struct rspamd_symbol_def *s = (struct rspamd_symbol_def *)v;
+	gdouble weight;
 	struct cache_item *item;
 
+	weight = *s->weight_ptr;
 	cur = cache->negative_items;
 	while (cur) {
 		item = cur->data;

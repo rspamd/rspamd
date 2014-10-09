@@ -108,17 +108,18 @@ insert_metric_result (struct rspamd_task *task,
 {
 	struct metric_result *metric_res;
 	struct symbol *s;
-	gdouble *weight, w;
+	gdouble w;
+	struct rspamd_symbol_def *sdef;
 	const ucl_object_t *mobj, *sobj;
 
 	metric_res = rspamd_create_metric_result (task, metric->name);
 
-	weight = g_hash_table_lookup (metric->symbols, symbol);
-	if (weight == NULL) {
+	sdef = g_hash_table_lookup (metric->symbols, symbol);
+	if (sdef == NULL) {
 		w = 0.0;
 	}
 	else {
-		w = (*weight) * flag;
+		w = (*sdef->weight_ptr) * flag;
 	}
 
 	if (task->settings) {

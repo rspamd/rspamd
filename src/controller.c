@@ -1053,7 +1053,7 @@ rspamd_controller_handle_savesymbols (
 	struct rspamd_controller_worker_ctx *ctx;
 	const gchar *error;
 	gdouble val;
-	struct symbol *sym;
+	struct rspamd_symbol_def *sym;
 	int added = 0;
 
 	ctx = session->ctx;
@@ -1119,7 +1119,7 @@ rspamd_controller_handle_savesymbols (
 		val = ucl_object_todouble (jvalue);
 		sym =
 			g_hash_table_lookup (metric->symbols, ucl_object_tostring (jname));
-		if (sym && fabs (sym->score - val) > 0.01) {
+		if (sym && fabs (*sym->weight_ptr - val) > 0.01) {
 			if (!add_dynamic_symbol (ctx->cfg, DEFAULT_METRIC,
 				ucl_object_tostring (jname), val)) {
 				msg_err ("add symbol failed for %s",

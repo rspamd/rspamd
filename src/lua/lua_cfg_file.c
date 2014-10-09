@@ -41,7 +41,8 @@ lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 	gchar *symbol, *old_desc;
 	const gchar *desc;
 	struct metric *metric;
-	gdouble *score, *old_score;
+	gdouble *score;
+	struct rspamd_symbol_def *s;
 
 	/* Get module opt structure */
 	if ((metric = g_hash_table_lookup (cfg->metrics, name)) == NULL) {
@@ -100,16 +101,19 @@ lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 				continue;
 			}
 			/* Insert symbol */
-			if ((old_score =
+			if ((s =
 				g_hash_table_lookup (metric->symbols, symbol)) != NULL) {
 				msg_info ("replacing weight for symbol %s: %.2f -> %.2f",
 					symbol,
-					*old_score,
+					*s->weight_ptr,
 					*score);
-				g_hash_table_replace (metric->symbols, symbol, score);
+				s->weight_ptr = score;
 			}
 			else {
-				g_hash_table_insert (metric->symbols, symbol, score);
+				s = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (*s));
+				s->name = symbol;
+				s->weight_ptr = score;
+				g_hash_table_insert (metric->symbols, symbol, s);
 			}
 
 			if ((metric_list =
