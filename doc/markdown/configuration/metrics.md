@@ -98,6 +98,7 @@ Symbols are defined by an object with the following properties:
 * `name` - symbolic name for a symbol (mandatory attribute)
 * `group` - a group of symbol, for example `DNSBL symbols` (as shown in webui)
 * `description` - optional symbolic description for webui
+* `one_shot` - normally, rspamd inserts a symbol as much time as the corresponding rule mathes for the specific message, however, if `one_shot` is `true` then only **maximum** weight is added to the metric. `grow_factor` is correspondingly not modified by a repeated triggering of `one_shot` rules.
 
 So far, the symbol definition looks like this one:
 
