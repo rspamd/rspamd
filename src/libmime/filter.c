@@ -138,6 +138,13 @@ insert_metric_result (struct rspamd_task *task,
 
 	/* Add metric score */
 	if ((s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
+		if (sdef && sdef->one_shot) {
+			/*
+			 * For one shot symbols we do not need to add them again, so
+			 * we just force single behaviour here
+			 */
+			single = TRUE;
+		}
 		if (s->options && opts && opts != s->options) {
 			/* Append new options */
 			s->options = g_list_concat (s->options, g_list_copy (opts));
