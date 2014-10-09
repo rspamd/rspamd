@@ -58,8 +58,12 @@ It is also possible to define some generic attributes for the metric:
 
 * `grow_factor` - the multiplicator applied for the subsequent symbols inserting by the follwing rule:
 
-	score = score + grow_factor * symbol_weight
-	grow_factor = grow_factor * grow_factor
+$$
+\begin{align*}
+	score = score + grow\_factor * symbol\_weight
+	grow\_factor = grow\_factor * grow\_factor
+\end{align*}
+$$
 
 by default this value is `1.0` meaning that no weight growing is defined. By increasing this value you
 increase the efficient score of messages with multiple `spam` rules matched. This value
