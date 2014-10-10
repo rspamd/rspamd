@@ -378,8 +378,12 @@ register_symbol_common (struct symbols_cache **cache,
 				skipped = FALSE;
 
 				item->s->weight = weight * (m->unknown_weight);
+				s = rspamd_mempool_alloc0 (pcache->static_pool,
+						sizeof (*s));
+				s->name = item->s->symbol;
+				s->weight_ptr = &item->s->weight;
 				g_hash_table_insert (m->symbols, item->s->symbol,
-						&item->s->weight);
+						s);
 				mlist = g_hash_table_lookup (pcache->cfg->metrics_symbols, name);
 				mlist = g_list_prepend (mlist, m);
 				g_hash_table_insert (pcache->cfg->metrics_symbols,
