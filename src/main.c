@@ -408,6 +408,8 @@ reread_config (struct rspamd_main *rspamd)
 		/* Save some variables */
 		tmp_cfg->cfg_name = cfg_file;
 
+		tmp_cfg->c_modules = g_hash_table_ref (rspamd->cfg->c_modules);
+
 		if (!load_rspamd_config (tmp_cfg, FALSE)) {
 			rspamd_set_logger (rspamd_main->cfg, g_quark_try_string (
 					"main"), rspamd_main);
@@ -852,9 +854,7 @@ load_rspamd_config (struct rspamd_config *cfg, gboolean init_modules)
 		while (l) {
 			filt = l->data;
 			if (filt->module) {
-				cur_module =
-					rspamd_mempool_alloc (cfg->cfg_pool,
-						sizeof (struct module_ctx));
+				cur_module = g_slice_alloc0 (sizeof (struct module_ctx));
 				if (filt->module->module_init_func (cfg, &cur_module) == 0) {
 					g_hash_table_insert (cfg->c_modules,
 						(gpointer) filt->module->name,
