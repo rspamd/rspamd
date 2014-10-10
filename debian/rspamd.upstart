@@ -1,0 +1,8 @@
+description "rspamd - rapid spam filtering system"
+author "Cameron Norman <camerontnorman@gmail.com>"
+
+start on filesystem
+stop on runlevel [016] or unmounting-filesystem
+
+pre-start exec install -m 700 -o _rspamd -g _rspamd -d /run/rspamd
+exec /usr/bin/rspamd -u _rspamd -g _rspamd -f -c /etc/rspamd/rspamd.conf
