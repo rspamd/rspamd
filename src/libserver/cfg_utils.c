@@ -750,8 +750,8 @@ rspamd_config_new_worker (struct rspamd_config *cfg,
 #else
 		c->count = DEFAULT_WORKERS_NUM;
 #endif
-		c->rlimit_nofile = DEFAULT_RLIMIT_NOFILE;
-		c->rlimit_maxcore = DEFAULT_RLIMIT_MAXCORE;
+		c->rlimit_nofile = 0;
+		c->rlimit_maxcore = 0;
 	}
 
 	return c;
