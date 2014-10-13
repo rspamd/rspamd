@@ -897,7 +897,7 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 	gchar *token, *ipnet, *err_str, **strv, **cur;
 	struct in_addr ina;
 	struct in6_addr ina6;
-	guint k = 0;
+	guint k = G_MAXINT;
 	gint af;
 	gint res = 0;
 
@@ -923,7 +923,7 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 						"invalid netmask, error detected on symbol: %s, erorr: %s",
 						err_str,
 						strerror (errno));
-				k = 32;
+				k = G_MAXINT;
 			}
 		}
 
