@@ -1032,7 +1032,7 @@ fuzzy_process_rule (struct rspamd_http_connection_entry *entry,
 			fuzzy_module_ctx->min_bytes)) {
 			/* Skip empty parts */
 			msg_info ("<%s>: part %Xd is too short for fuzzy process, skip it",
-				task->message_id, part->fuzzy->h);
+				task->message_id, part->fuzzy ? part->fuzzy->h : 0);
 			cur = g_list_next (cur);
 			continue;
 		}
