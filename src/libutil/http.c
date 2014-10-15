@@ -650,8 +650,8 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 call_finish_handler:
 	if ((conn->opts & RSPAMD_HTTP_CLIENT_SIMPLE) == 0) {
 		rspamd_http_connection_ref (conn);
-		conn->finish_handler (conn, priv->msg);
 		conn->finished = TRUE;
+		conn->finish_handler (conn, priv->msg);
 		rspamd_http_connection_unref (conn);
 	}
 	else {
@@ -694,6 +694,8 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 		else if (r == 0) {
 			if (conn->finished) {
 				REF_RELEASE (pbuf);
+				rspamd_http_connection_unref (conn);
+				/* Double unref to avoid dangling connections */
 				rspamd_http_connection_unref (conn);
 				return;
 			}
