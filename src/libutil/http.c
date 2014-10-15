@@ -581,10 +581,12 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 	struct rspamd_http_connection_private *priv;
 	struct iovec *start;
 	guint niov, i;
+	gint flags = 0;
 	gsize remain;
 	gssize r;
 	GError *err;
 	struct iovec *cur_iov;
+	struct msghdr msg;
 
 	priv = conn->priv;
 
@@ -613,7 +615,13 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 		}
 	}
 
-	r = writev (conn->fd, start, MIN (IOV_MAX, niov));
+	memset (&msg, 0, sizeof (msg));
+	msg.msg_iov = start;
+	msg.msg_iovlen = MIN (IOV_MAX, niov);
+#ifdef MSG_NOSIGNAL
+	flags = MSG_NOSIGNAL;
+#endif
+	r = sendmsg (conn->fd, &msg, flags);
 
 	if (r == -1) {
 		err =
