@@ -47,7 +47,7 @@ static gchar *classifier = "bayes";
 static gchar *local_addr = NULL;
 static gint weight = 0;
 static gint flag = 0;
-static gint max_requests = 1024;
+static gint max_requests = 8;
 static gdouble timeout = 5.0;
 static gboolean pass_all;
 static gboolean tty = FALSE;

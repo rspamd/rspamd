@@ -100,7 +100,7 @@ requires input.
 :	Output HTTP headers from a reply
 
 -n *parallel_count*, \--max-requests=*parallel_count*
-:	Maximum number of requests to rspamd executed in parallel (1 by default)
+:	Maximum number of requests to rspamd executed in parallel (8 by default)
 
 \--commands
 :	List available commands
