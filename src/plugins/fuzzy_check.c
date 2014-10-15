@@ -1031,6 +1031,8 @@ fuzzy_process_rule (struct rspamd_http_connection_entry *entry,
 			(fuzzy_module_ctx->min_bytes > 0 && part->content->len <
 			fuzzy_module_ctx->min_bytes)) {
 			/* Skip empty parts */
+			msg_info ("<%s>: part %Xd is too short for fuzzy process, skip it",
+				task->message_id, part->fuzzy->h);
 			cur = g_list_next (cur);
 			continue;
 		}
@@ -1126,7 +1128,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	GList *cur;
 	struct rspamd_task *task;
 	GError **err;
-	gint r, *saved;
+	gint r, *saved, rules = 0;
 
 	/* Prepare task */
 	task = rspamd_task_new (NULL);
@@ -1139,7 +1141,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	err = rspamd_mempool_alloc0 (task->task_pool, sizeof (GError *));
 	r = process_message (task);
 	if (r == -1) {
-		msg_warn ("cannot process message for fuzzy");
+		msg_warn ("<%s>: cannot process message for fuzzy", task->message_id);
 		rspamd_task_free (task, FALSE);
 		rspamd_controller_send_error (conn_ent, 400,
 			"Message processing error");
@@ -1160,7 +1162,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 			cur = g_list_next (cur);
 			continue;
 		}
-
+		rules ++;
 		res = fuzzy_process_rule (conn_ent, rule, task, err, cmd, flag,
 				value, saved);
 
@@ -1175,14 +1177,24 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	if (res == -1) {
-		msg_warn ("cannot send fuzzy request: %s", strerror (errno));
+		msg_warn ("<%s>: cannot send fuzzy request: %s", task->message_id,
+				strerror (errno));
 		rspamd_controller_send_error (conn_ent, 400, "Message sending error");
 		rspamd_task_free (task, FALSE);
 		return;
 	}
 	else if (!processed) {
-		msg_warn ("no rules to match fuzzy with flag %d", flag);
-		rspamd_controller_send_error (conn_ent, 404, "No fuzzy rules matched");
+		if (rules) {
+			msg_warn ("<%s>: no content to generate fuzzy", task->message_id);
+			rspamd_controller_send_error (conn_ent, 404,
+				"No content to generate fuzzy for flag %d", flag);
+		}
+		else {
+			msg_warn ("<%s>: no fuzzy rules found for flag %d", task->message_id,
+				flag);
+			rspamd_controller_send_error (conn_ent, 404,
+				"No fuzzy rules matched for flag %d", flag);
+		}
 		rspamd_task_free (task, FALSE);
 		return;
 	}
