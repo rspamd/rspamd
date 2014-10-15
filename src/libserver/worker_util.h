@@ -80,8 +80,7 @@ struct rspamd_custom_controller_command {
  * @param error_msg error message
  */
 void rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
-	gint code,
-	const gchar *error_msg);
+	gint code, const gchar *error_msg, ...);
 
 /**
  * Send a custom string using HTTP

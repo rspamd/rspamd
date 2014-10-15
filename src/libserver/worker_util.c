@@ -189,17 +189,22 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 
 void
 rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
-	gint code,
-	const gchar *error_msg)
+	gint code, const gchar *error_msg, ...)
 {
 	struct rspamd_http_message *msg;
+	va_list args;
 
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
+
+	va_start (args, error_msg);
+	msg->status = g_string_sized_new (128);
+	rspamd_vprintf_gstring (msg->status, error_msg, args);
+	va_end (args);
+
 	msg->date = time (NULL);
 	msg->code = code;
 	msg->body = g_string_sized_new (128);
-	msg->status = g_string_new (error_msg);
-	rspamd_printf_gstring (msg->body, "{\"error\":\"%s\"}", error_msg);
+	rspamd_printf_gstring (msg->body, "{\"error\":\"%v\"}", msg->status);
 	rspamd_http_connection_reset (entry->conn);
 	rspamd_http_connection_write_message (entry->conn,
 		msg,
