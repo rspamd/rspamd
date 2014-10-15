@@ -1,3 +1,29 @@
+0.7.2:
+	* Convert all maps to the compressed radix trie
+	* Allow IPv6 addresses in IP maps
+	* Remove dynamic items support from symbols cache
+	* Allow hex encoded output of strings
+	* Fix bug with control connections count
+	* Process fuzzy weight correctly (reported by @fatalbanana)
+	* Remove extra reference retain of http connection on error
+	* Remove deprecated options from the default config
+	* Add `one_shot` attr to metric's symbols
+	* Doc: add documentation for metrics
+	* Add Upstart job to debian packaging (by @CameronNemo)
+	* Config: improve SURBL symbols descriptions (by @citrin)
+	* Config: reflect SURBL changes (by @citrin):
+    	- Outblaze removed, malware moved to separate list:
+    	http://www.surbl.org/news/internal/MW-malware-sublist-added-to-multi
+    * Fix C modules initialization on restart
+    * Treat single IP as a single IP in radix lists (reported by @citrin)
+    * Do not touch file and core limits if not asked explicitly (reported by @citrin)
+    * Improve logging for fuzzy errors
+    * Block SIGPIPE for HTTP writing
+    * Doc: update manual pages
+    * Fix HTTP connection termination
+    * Reduce default number of parallel requests to 8
+    * Sync with libucl include features
+
 0.7.1:
 	* Fix typo in stat output.
 	* Fix issues with includes crossing with the system includes
