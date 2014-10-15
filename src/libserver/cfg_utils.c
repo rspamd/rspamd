@@ -759,7 +759,8 @@ rspamd_config_new_worker (struct rspamd_config *cfg,
 
 
 static bool
-rspamd_include_map_handler (const guchar *data, gsize len, void * ud)
+rspamd_include_map_handler (const guchar *data, gsize len,
+		const ucl_object_t *args, void * ud)
 {
 	struct rspamd_config *cfg = (struct rspamd_config *)ud;
 	struct rspamd_ucl_map_cbdata *cbdata, **pcbdata;
