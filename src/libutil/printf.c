@@ -293,10 +293,16 @@ rspamd_printf_gstring (GString *s, const gchar *fmt, ...)
 	glong r;
 
 	va_start (args, fmt);
-	r = rspamd_vprintf_common (rspamd_printf_append_gstring, s, fmt, args);
+	r = rspamd_vprintf_gstring (s, fmt, args);
 	va_end (args);
 
 	return r;
+}
+
+glong
+rspamd_vprintf_gstring (GString *s, const gchar *fmt, va_list args)
+{
+	return rspamd_vprintf_common (rspamd_printf_append_gstring, s, fmt, args);
 }
 
 #define RSPAMD_PRINTF_APPEND(buf, len)                                         \
