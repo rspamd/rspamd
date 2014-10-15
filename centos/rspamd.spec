@@ -14,7 +14,7 @@
 %endif
 
 Name:           rspamd
-Version:        0.7.0
+Version:        0.7.2
 Release:        1
 Summary:        Rapid spam filtering system
 Group:          System Environment/Daemons   
@@ -217,6 +217,9 @@ fi
 %{rspamd_wwwdir}/*
 
 %changelog
+* Wed Oct 15 2014 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.7.2-1
+- Update to 0.7.2
+
 * Mon Sep 30 2014 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.7.1-1
 - Update to 0.7.1
 
