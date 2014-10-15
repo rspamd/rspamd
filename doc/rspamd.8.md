@@ -55,8 +55,6 @@ Rspamd is designed to process connections completely asynchronous and do not blo
 \--private-key=*path*
 :	Specify private key to sign
 
-\--convert-config=*path*
-:	Convert configuration to UCL
 
 # EXAMPLES
 
@@ -79,10 +77,6 @@ Test lua scripts using rspamd API:
 Sign config files for `.includes` macro:
 
 	rspamd --private-key=sign.key --sign-config=rspamd.conf
-
-Convert old `XML` config to the `UCL` format (since 0.6.0):
-
-	rspamd -c /etc/rspamd.xml --convert-config=/etc/rspamd/rspamd.conf
 
 # SEE ALSO
 

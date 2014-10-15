@@ -40,10 +40,10 @@ requires input.
 # OPTIONS
 
 -h *host[:port]*, \--connect=*host[:port]*
-	Specify host and port
+:	Specify host and port
 	
 -P *password*, \--password=*password*
-	Specify control password
+:	Specify control password
 	
 -c *name*, \--classifier=*name*
 :	Classifier to learn spam or ham (bayes is used by default)
@@ -82,10 +82,25 @@ requires input.
 :	Imitate hostname passing from MTA (rspamd assumes that it is verified by MTA)
 
 -t *seconds*, \--timeout=*seconds*
-:	Timeout for waiting for a reply
+:	Timeout for waiting for a reply (can be floating point number, e.g. 0.1)
 
 -b *host:port*, \--bind=*host:port*
 :	Bind to specified ip address
+
+-j, \--json
+:	Output formatted JSON
+
+\--ucl
+:	Output UCL
+
+\--raw
+:	Output raw data received from rspamd (compacted JSON)
+
+\--headers
+:	Output HTTP headers from a reply
+
+-n *parallel_count*, \--max-requests=*parallel_count*
+:	Maximum number of requests to rspamd executed in parallel (1 by default)
 
 \--commands
 :	List available commands
