@@ -568,7 +568,7 @@ rspamd_http_simple_client_helper (struct rspamd_http_connection *conn)
 {
 	struct event_base *base;
 
-	base = event_get_base (&conn->priv->ev);
+	base = conn->priv->ev.ev_base;
 	rspamd_http_connection_reset (conn);
 	/* Plan read message */
 	rspamd_http_connection_read_message (conn, conn->ud, conn->fd,
