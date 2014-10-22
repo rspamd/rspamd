@@ -549,6 +549,7 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 	const gchar *symbol;
 	gint value = 0, flag = 0, r;
 	double nval;
+	gint ret = 0;
 
 	if (what == EV_WRITE) {
 		/* Send command to storage */
@@ -559,7 +560,7 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 		cmd.cmd = FUZZY_CHECK;
 		cmd.flag = 0;
 		if (write (fd, &cmd, sizeof (struct fuzzy_cmd)) == -1) {
-			goto err;
+			ret = -1;
 		}
 		else {
 			event_del (&session->ev);
@@ -570,7 +571,7 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 	else if (what == EV_READ) {
 		/* Got reply */
 		if ((r = read (fd, buf, sizeof (buf) - 1)) == -1) {
-			goto err;
+			ret = -1;
 		}
 		else if (buf[0] == 'O' && buf[1] == 'K') {
 			buf[r] = 0;
@@ -616,21 +617,27 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 					rspamd_mempool_strdup (session->task->task_pool, buf)));
 			}
 		}
-		goto ok;
+		ret = 1;
 	}
 	else {
 		errno = ETIMEDOUT;
-		goto err;
+		ret = -1;
 	}
 
-	return;
+	if (ret == 0) {
+		return;
+	}
+	else if (ret == -1) {
+		msg_err ("got error on IO with server %s, %d, %s",
+			session->server->name,
+			errno,
+			strerror (errno));
+		upstream_fail (&session->server->up, time (NULL));
+	}
+	else {
+		upstream_ok (&session->server->up, 0);
+	}
 
-err:
-	msg_err ("got error on IO with server %s, %d, %s",
-		session->server->name,
-		errno,
-		strerror (errno));
-ok:
 	remove_normal_event (session->task->s, fuzzy_io_fin, session);
 }
 
@@ -641,6 +648,7 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 	struct fuzzy_cmd cmd;
 	gchar buf[512];
 	const gchar *cmd_name, *symbol;
+	gint ret = 0;
 
 	cmd_name = (session->cmd == FUZZY_WRITE ? "add" : "delete");
 	if (what == EV_WRITE) {
@@ -656,7 +664,7 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 					g_quark_from_static_string ("fuzzy check"),
 					errno, "write socket error: %s", strerror (errno));
 			}
-			goto err;
+			ret = -1;
 		}
 		else {
 			event_del (&session->ev);
@@ -683,7 +691,7 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 					g_quark_from_static_string ("fuzzy check"),
 					errno, "read socket error: %s", strerror (errno));
 			}
-			goto err;
+			ret = -1;
 		}
 		else if (buf[0] == 'O' && buf[1] == 'K') {
 			msg_info ("%s fuzzy hash '%s', list: %s:%d for message <%s>",
@@ -692,7 +700,7 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 				symbol,
 				session->flag,
 				session->task->message_id);
-			goto ok;
+			ret = 1;
 		}
 		else {
 			msg_info ("cannot %s fuzzy hash '%s' for message <%s>, list %s:%d",
@@ -706,7 +714,7 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 					g_quark_from_static_string (
 						"fuzzy check"), EINVAL, "%s fuzzy error", cmd_name);
 			}
-			goto ok;
+			ret = 1;
 		}
 	}
 	else {
@@ -716,16 +724,21 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 				g_quark_from_static_string (
 					"fuzzy check"), EINVAL, "%s fuzzy, IO timeout", cmd_name);
 		}
-		goto err;
+		ret = -1;
 	}
 
-	return;
+	if (ret == 0) {
+		return;
+	}
+	else if (ret == -1) {
+		msg_err ("got error in IO with server %s, %d, %s",
+				session->server->name, errno, strerror (errno));
+		upstream_fail (&session->server->up, time (NULL));
+	}
+	else {
+		upstream_ok (&session->server->up, 0);
+	}
 
-err:
-	msg_err ("got error in IO with server %s, %d, %s",
-		session->server->name, errno, strerror (errno));
-
-ok:
 	rspamd_http_connection_unref (session->http_entry->conn);
 	event_del (&session->ev);
 	close (session->fd);
