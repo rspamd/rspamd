@@ -855,7 +855,6 @@ parse_spf_mx (struct rspamd_task *task,
 	cb = rspamd_mempool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
 	cb->rec = rec;
 	cb->addr = addr;
-	memset (&addr->data.normal, 0, sizeof (addr->data.normal));
 	cb->cur_action = SPF_RESOLVE_MX;
 	cb->in_include = rec->in_include;
 	if (make_dns_request (task->resolver, task->s, task->task_pool,
