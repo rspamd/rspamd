@@ -806,7 +806,6 @@ parse_spf_ptr (struct rspamd_task *task,
 	cb = rspamd_mempool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
 	cb->rec = rec;
 	cb->addr = addr;
-	memset (&addr->data.normal, 0, sizeof (addr->data.normal));
 	cb->cur_action = SPF_RESOLVE_PTR;
 	cb->in_include = rec->in_include;
 	cb->ptr_host = host;
