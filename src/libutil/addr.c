@@ -185,7 +185,7 @@ rspamd_inet_address_connect (rspamd_inet_addr_t *addr, gint type,
 
 gboolean
 rspamd_parse_host_port_priority_strv (gchar **tokens,
-	rspamd_inet_addr_t *addr, guint *priority, guint default_port)
+	rspamd_inet_addr_t *addr, guint *priority, gchar **name, guint default_port)
 {
 	gchar *err_str, portbuf[8];
 	const gchar *cur_tok, *cur_port;
@@ -267,6 +267,7 @@ rspamd_parse_host_port_priority_strv (gchar **tokens,
 	if ((r = getaddrinfo (cur_tok, cur_port, &hints, &res)) == 0) {
 		memcpy (&addr->addr, res->ai_addr,
 			MIN (sizeof (addr->addr), res->ai_addrlen));
+		addr->af = res->ai_family;
 		freeaddrinfo (res);
 	}
 	else {
@@ -277,6 +278,9 @@ rspamd_parse_host_port_priority_strv (gchar **tokens,
 	}
 
 	/* Restore errno */
+	if (name != NULL) {
+		*name = g_strdup (tokens[0]);
+	}
 	errno = saved_errno;
 	return TRUE;
 
@@ -290,6 +294,7 @@ rspamd_parse_host_port_priority (
 	const gchar *str,
 	rspamd_inet_addr_t *addr,
 	guint *priority,
+	gchar **name,
 	guint default_port)
 {
 	gchar **tokens;
@@ -300,7 +305,8 @@ rspamd_parse_host_port_priority (
 		return FALSE;
 	}
 
-	ret = rspamd_parse_host_port_priority_strv (tokens, addr, priority, default_port);
+	ret = rspamd_parse_host_port_priority_strv (tokens, addr, priority, name,
+			default_port);
 
 	g_strfreev (tokens);
 
@@ -310,7 +316,8 @@ rspamd_parse_host_port_priority (
 gboolean
 rspamd_parse_host_port (const gchar *str,
 	rspamd_inet_addr_t *addr,
+	gchar **name,
 	guint default_port)
 {
-	return rspamd_parse_host_port_priority (str, addr, NULL, default_port);
+	return rspamd_parse_host_port_priority (str, addr, NULL, name, default_port);
 }
