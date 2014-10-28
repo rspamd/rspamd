@@ -20,7 +20,8 @@ struct upstream_list;
  * Init upstreams library
  * @param resolver
  */
-void rspamd_upstreams_library_init (struct rdns_resolver *resolver);
+void rspamd_upstreams_library_init (struct rdns_resolver *resolver,
+		struct event_base *base);
 
 /**
  * Upstream error logic
@@ -33,12 +34,12 @@ void rspamd_upstreams_library_init (struct rdns_resolver *resolver);
 /**
  * Add an error to an upstream
  */
-void upstream_fail (struct upstream *up);
+void rspamd_upstream_fail (struct upstream *up);
 
 /**
  * Increase upstream successes count
  */
-void upstream_ok (struct upstream *up);
+void rspamd_upstream_ok (struct upstream *up);
 
 /**
  * Create new list of upstreams
