@@ -1,5 +1,7 @@
 # Librspamd-util
-SET(LIBRSPAMDUTILSRC			aio_event.c
+SET(LIBRSPAMDUTILSRC			
+								addr.c
+								aio_event.c
 								bloom.c
 								diff.c
 								fstring.c

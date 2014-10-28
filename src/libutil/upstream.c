@@ -24,616 +24,460 @@
 
 #include "config.h"
 #include "upstream.h"
+#include "ottery.h"
+#include "ref.h"
+#include "rdns.h"
+#include "xxhash.h"
+#include "utlist.h"
 
-
-#ifdef _THREAD_SAFE
-pthread_rwlock_t upstream_mtx = PTHREAD_RWLOCK_INITIALIZER;
-#   define U_RLOCK() do { pthread_rwlock_rdlock (&upstream_mtx); } while (0)
-#   define U_WLOCK() do { pthread_rwlock_wrlock (&upstream_mtx); } while (0)
-#   define U_UNLOCK() do { pthread_rwlock_unlock (&upstream_mtx); } while (0)
-#else
-#   define U_RLOCK() do {} while (0)
-#   define U_WLOCK() do {} while (0)
-#   define U_UNLOCK() do {} while (0)
-#endif
-
-#define MAX_TRIES 20
-#define HASH_COMPAT
-
-/*
- * Poly: 0xedb88320
- * Init: 0x0
- */
-
-static const guint32 crc32lookup[256] = {
-	0x00000000U, 0x77073096U, 0xee0e612cU, 0x990951baU, 0x076dc419U,
-	0x706af48fU,
-	0xe963a535U, 0x9e6495a3U, 0x0edb8832U, 0x79dcb8a4U, 0xe0d5e91eU,
-	0x97d2d988U,
-	0x09b64c2bU, 0x7eb17cbdU, 0xe7b82d07U, 0x90bf1d91U, 0x1db71064U,
-	0x6ab020f2U,
-	0xf3b97148U, 0x84be41deU, 0x1adad47dU, 0x6ddde4ebU, 0xf4d4b551U,
-	0x83d385c7U,
-	0x136c9856U, 0x646ba8c0U, 0xfd62f97aU, 0x8a65c9ecU, 0x14015c4fU,
-	0x63066cd9U,
-	0xfa0f3d63U, 0x8d080df5U, 0x3b6e20c8U, 0x4c69105eU, 0xd56041e4U,
-	0xa2677172U,
-	0x3c03e4d1U, 0x4b04d447U, 0xd20d85fdU, 0xa50ab56bU, 0x35b5a8faU,
-	0x42b2986cU,
-	0xdbbbc9d6U, 0xacbcf940U, 0x32d86ce3U, 0x45df5c75U, 0xdcd60dcfU,
-	0xabd13d59U,
-	0x26d930acU, 0x51de003aU, 0xc8d75180U, 0xbfd06116U, 0x21b4f4b5U,
-	0x56b3c423U,
-	0xcfba9599U, 0xb8bda50fU, 0x2802b89eU, 0x5f058808U, 0xc60cd9b2U,
-	0xb10be924U,
-	0x2f6f7c87U, 0x58684c11U, 0xc1611dabU, 0xb6662d3dU, 0x76dc4190U,
-	0x01db7106U,
-	0x98d220bcU, 0xefd5102aU, 0x71b18589U, 0x06b6b51fU, 0x9fbfe4a5U,
-	0xe8b8d433U,
-	0x7807c9a2U, 0x0f00f934U, 0x9609a88eU, 0xe10e9818U, 0x7f6a0dbbU,
-	0x086d3d2dU,
-	0x91646c97U, 0xe6635c01U, 0x6b6b51f4U, 0x1c6c6162U, 0x856530d8U,
-	0xf262004eU,
-	0x6c0695edU, 0x1b01a57bU, 0x8208f4c1U, 0xf50fc457U, 0x65b0d9c6U,
-	0x12b7e950U,
-	0x8bbeb8eaU, 0xfcb9887cU, 0x62dd1ddfU, 0x15da2d49U, 0x8cd37cf3U,
-	0xfbd44c65U,
-	0x4db26158U, 0x3ab551ceU, 0xa3bc0074U, 0xd4bb30e2U, 0x4adfa541U,
-	0x3dd895d7U,
-	0xa4d1c46dU, 0xd3d6f4fbU, 0x4369e96aU, 0x346ed9fcU, 0xad678846U,
-	0xda60b8d0U,
-	0x44042d73U, 0x33031de5U, 0xaa0a4c5fU, 0xdd0d7cc9U, 0x5005713cU,
-	0x270241aaU,
-	0xbe0b1010U, 0xc90c2086U, 0x5768b525U, 0x206f85b3U, 0xb966d409U,
-	0xce61e49fU,
-	0x5edef90eU, 0x29d9c998U, 0xb0d09822U, 0xc7d7a8b4U, 0x59b33d17U,
-	0x2eb40d81U,
-	0xb7bd5c3bU, 0xc0ba6cadU, 0xedb88320U, 0x9abfb3b6U, 0x03b6e20cU,
-	0x74b1d29aU,
-	0xead54739U, 0x9dd277afU, 0x04db2615U, 0x73dc1683U, 0xe3630b12U,
-	0x94643b84U,
-	0x0d6d6a3eU, 0x7a6a5aa8U, 0xe40ecf0bU, 0x9309ff9dU, 0x0a00ae27U,
-	0x7d079eb1U,
-	0xf00f9344U, 0x8708a3d2U, 0x1e01f268U, 0x6906c2feU, 0xf762575dU,
-	0x806567cbU,
-	0x196c3671U, 0x6e6b06e7U, 0xfed41b76U, 0x89d32be0U, 0x10da7a5aU,
-	0x67dd4accU,
-	0xf9b9df6fU, 0x8ebeeff9U, 0x17b7be43U, 0x60b08ed5U, 0xd6d6a3e8U,
-	0xa1d1937eU,
-	0x38d8c2c4U, 0x4fdff252U, 0xd1bb67f1U, 0xa6bc5767U, 0x3fb506ddU,
-	0x48b2364bU,
-	0xd80d2bdaU, 0xaf0a1b4cU, 0x36034af6U, 0x41047a60U, 0xdf60efc3U,
-	0xa867df55U,
-	0x316e8eefU, 0x4669be79U, 0xcb61b38cU, 0xbc66831aU, 0x256fd2a0U,
-	0x5268e236U,
-	0xcc0c7795U, 0xbb0b4703U, 0x220216b9U, 0x5505262fU, 0xc5ba3bbeU,
-	0xb2bd0b28U,
-	0x2bb45a92U, 0x5cb36a04U, 0xc2d7ffa7U, 0xb5d0cf31U, 0x2cd99e8bU,
-	0x5bdeae1dU,
-	0x9b64c2b0U, 0xec63f226U, 0x756aa39cU, 0x026d930aU, 0x9c0906a9U,
-	0xeb0e363fU,
-	0x72076785U, 0x05005713U, 0x95bf4a82U, 0xe2b87a14U, 0x7bb12baeU,
-	0x0cb61b38U,
-	0x92d28e9bU, 0xe5d5be0dU, 0x7cdcefb7U, 0x0bdbdf21U, 0x86d3d2d4U,
-	0xf1d4e242U,
-	0x68ddb3f8U, 0x1fda836eU, 0x81be16cdU, 0xf6b9265bU, 0x6fb077e1U,
-	0x18b74777U,
-	0x88085ae6U, 0xff0f6a70U, 0x66063bcaU, 0x11010b5cU, 0x8f659effU,
-	0xf862ae69U,
-	0x616bffd3U, 0x166ccf45U, 0xa00ae278U, 0xd70dd2eeU, 0x4e048354U,
-	0x3903b3c2U,
-	0xa7672661U, 0xd06016f7U, 0x4969474dU, 0x3e6e77dbU, 0xaed16a4aU,
-	0xd9d65adcU,
-	0x40df0b66U, 0x37d83bf0U, 0xa9bcae53U, 0xdebb9ec5U, 0x47b2cf7fU,
-	0x30b5ffe9U,
-	0xbdbdf21cU, 0xcabac28aU, 0x53b39330U, 0x24b4a3a6U, 0xbad03605U,
-	0xcdd70693U,
-	0x54de5729U, 0x23d967bfU, 0xb3667a2eU, 0xc4614ab8U, 0x5d681b02U,
-	0x2a6f2b94U,
-	0xb40bbe37U, 0xc30c8ea1U, 0x5a05df1bU, 0x2d02ef8dU
+struct upstream_inet_addr_entry {
+	rspamd_inet_addr_t addr;
+	struct upstream_inet_addr_entry *next;
 };
 
-/*
- * Check upstream parameters and mark it whether valid or dead
- */
+struct upstream {
+	guint weight;
+	guint cur_weight;
+	guint errors;
+	gint active_idx;
+	gchar *name;
+	struct event ev;
+	struct timeval tv;
+	gpointer ud;
+	struct upstream_list *ls;
+
+	struct {
+		rspamd_inet_addr_t *addr;
+		guint count;
+		guint cur;
+	} addrs;
+
+	struct upstream_inet_addr_entry *new_addrs;
+	rspamd_mutex_t *lock;
+
+	ref_entry_t ref;
+};
+
+struct upstream_list {
+	GPtrArray *ups;
+	GPtrArray *alive;
+	rspamd_mutex_t *lock;
+	guint64 hash_seed;
+};
+
+static struct rdns_resolver *res = NULL;
+static struct event_base *ev_base = NULL;
+/* 4 errors in 10 seconds */
+const guint default_max_errors = 4;
+const guint default_revive_time = 60;
+const guint default_error_time = 10;
+const gdouble default_dns_timeout = 1.0;
+const guint default_dns_retransmits = 2;
+const guint default_max_addresses = 1024;
+
 static void
-check_upstream (struct upstream *up,
-	time_t now,
-	time_t error_timeout,
-	time_t revive_timeout,
-	size_t max_errors)
+rspamd_upstream_set_active (struct upstream_list *ls, struct upstream *up)
 {
-	if (up->dead) {
-		if (now - up->time >= revive_timeout) {
-			U_WLOCK ();
-			up->dead = 0;
-			up->errors = 0;
-			up->time = 0;
-			up->weight = up->priority;
-			U_UNLOCK ();
-		}
-	}
-	else {
-		if (now - up->time >= error_timeout && up->errors >= max_errors) {
-			U_WLOCK ();
-			up->dead = 1;
-			up->time = now;
-			up->weight = 0;
-			U_UNLOCK ();
-		}
-	}
+	rspamd_mutex_lock (ls->lock);
+	g_ptr_array_add (ls->alive, up);
+	up->active_idx = ls->alive->len - 1;
+	rspamd_mutex_unlock (ls->lock);
 }
 
-/*
- * Call this function after failed upstream request
- */
-void
-upstream_fail (struct upstream *up, time_t now)
+static void
+rspamd_upstream_dns_cb (struct rdns_reply *reply, void *arg)
 {
-	if (up->time != 0) {
-		up->errors++;
+	struct upstream *up = (struct upstream *)arg;
+	struct rdns_reply_entry *entry;
+	struct upstream_inet_addr_entry *up_ent;
+
+	if (reply->code == RDNS_RC_NOERROR) {
+		entry = reply->entries;
+
+		rspamd_mutex_lock (up->lock);
+		while (entry) {
+
+			if (entry->type == RDNS_REQUEST_A) {
+				up_ent = g_malloc (sizeof (*up_ent));
+
+				up_ent->addr.addr.s4.sin_addr = entry->content.a.addr;
+				up_ent->addr.af = AF_INET;
+				up_ent->addr.slen = sizeof (up_ent->addr.addr.s4);
+				LL_PREPEND (up->new_addrs, up_ent);
+			}
+			else if (entry->type == RDNS_REQUEST_AAAA) {
+				up_ent = g_malloc (sizeof (*up_ent));
+
+				memcpy (&up_ent->addr.addr.s6.sin6_addr,
+						&entry->content.aaa.addr, sizeof (struct in6_addr));
+				up_ent->addr.af = AF_INET6;
+				up_ent->addr.slen = sizeof (up_ent->addr.addr.s6);
+				LL_PREPEND (up->new_addrs, up_ent);
+			}
+			entry = entry->next;
+		}
+		rspamd_mutex_unlock (up->lock);
 	}
-	else {
-		U_WLOCK ();
-		up->time = now;
-		up->errors++;
-		U_UNLOCK ();
-	}
+
+	REF_RELEASE (up);
 }
 
-/*
- * Call this function after successfull upstream request
- */
-void
-upstream_ok (struct upstream *up, time_t now)
+static void
+rspamd_upstream_update_addrs (struct upstream *up)
 {
-	if (up->errors != 0) {
-		U_WLOCK ();
+	guint16 port;
+	guint addr_cnt;
+	struct upstream_inet_addr_entry *cur, *tmp;
+	rspamd_inet_addr_t *new_addrs, *old;
+
+	/*
+	 * We need first of all get the saved port, since DNS gives us no
+	 * idea about what port has been used previously
+	 */
+	if (up->addrs.count > 0 && up->new_addrs) {
+		port = rspamd_inet_address_get_port (&up->addrs.addr[0]);
+
+		/* Now calculate new addrs count */
+		addr_cnt = 0;
+		LL_FOREACH (up->new_addrs, cur) {
+			addr_cnt ++;
+		}
+		new_addrs = g_new (rspamd_inet_addr_t, addr_cnt);
+
+		/* Copy addrs back */
+		addr_cnt = 0;
+		LL_FOREACH (up->new_addrs, cur) {
+			memcpy (&new_addrs[addr_cnt], cur, sizeof (rspamd_inet_addr_t));
+			rspamd_inet_address_set_port (&new_addrs[addr_cnt], port);
+			addr_cnt ++;
+		}
+
+		old = up->addrs.addr;
+		up->addrs.cur = 0;
+		up->addrs.count = addr_cnt;
+		up->addrs.addr = new_addrs;
+		g_free (old);
+	}
+
+	LL_FOREACH_SAFE (up->new_addrs, cur, tmp) {
+		g_free (cur);
+	}
+	up->new_addrs = NULL;
+}
+
+static void
+rspamd_upstream_revive_cb (int fd, short what, void *arg)
+{
+	struct upstream *up = (struct upstream *)arg;
+
+	rspamd_mutex_lock (up->lock);
+	event_del (&up->ev);
+	if (up->ls) {
+		rspamd_upstream_set_active (up->ls, up);
+
+		if (up->new_addrs) {
+			rspamd_upstream_update_addrs (up);
+		}
+	}
+
+	rspamd_mutex_unlock (up->lock);
+	REF_RELEASE (up);
+}
+
+static void
+rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
+{
+	rspamd_mutex_lock (ls->lock);
+	g_ptr_array_remove_index (ls->alive, up->active_idx);
+	up->active_idx = -1;
+
+	/* Resolve name of the upstream one more time */
+	if (up->name[0] != '/') {
+		REF_RETAIN (up);
+		rdns_make_request_full (res, rspamd_upstream_dns_cb, up,
+			default_dns_timeout, default_dns_retransmits,
+			RDNS_REQUEST_A, up->name);
+		REF_RETAIN (up);
+		rdns_make_request_full (res, rspamd_upstream_dns_cb, up,
+			default_dns_timeout, default_dns_retransmits,
+			RDNS_REQUEST_AAAA, up->name);
+	}
+
+	REF_RETAIN (up);
+	evtimer_set (&up->ev, rspamd_upstream_revive_cb, up);
+	event_base_set (ev_base, &up->ev);
+	up->tv.tv_sec = default_revive_time;
+	up->tv.tv_usec = 0;
+	event_add (&up->ev, &up->tv);
+
+	rspamd_mutex_unlock (ls->lock);
+}
+
+void
+rspamd_upstreams_library_init (struct rdns_resolver *resolver,
+		struct event_base *base)
+{
+	res = resolver;
+	ev_base = base;
+}
+
+void
+rspamd_upstream_fail (struct upstream *up)
+{
+	struct timeval tv;
+	gdouble error_rate, max_error_rate;
+
+	rspamd_mutex_lock (up->lock);
+	if (g_atomic_int_compare_and_exchange (&up->errors, 0, 1)) {
+		gettimeofday (&up->tv, NULL);
+		up->errors ++;
+	}
+	else {
+		g_atomic_int_inc (&up->errors);
+	}
+
+	gettimeofday (&tv, NULL);
+
+	error_rate = ((gdouble)up->errors) / (tv.tv_sec - up->tv.tv_sec);
+	max_error_rate = (gdouble)default_max_errors / (gdouble)default_error_time;
+
+	if (error_rate > max_error_rate) {
+		/* Remove upstream from the active list */
+		rspamd_upstream_set_inactive (up->ls, up);
+	}
+	rspamd_mutex_unlock (up->lock);
+}
+
+void
+rspamd_upstream_ok (struct upstream *up)
+{
+	rspamd_mutex_lock (up->lock);
+	if (up->errors > 0) {
 		up->errors = 0;
-		up->time = 0;
-		U_UNLOCK ();
+		rspamd_upstream_set_active (up->ls, up);
 	}
 
-	up->weight--;
+	rspamd_mutex_unlock (up->lock);
 }
 
-/*
- * Mark all upstreams as active. This function is used when all upstreams are marked as inactive
- */
+struct upstream_list*
+rspamd_upstreams_create (void)
+{
+	struct upstream_list *ls;
+
+	ls = g_slice_alloc (sizeof (*ls));
+	ottery_rand_bytes (&ls->hash_seed, sizeof (ls->hash_seed));
+	ls->ups = g_ptr_array_new ();
+	ls->alive = g_ptr_array_new ();
+	ls->lock = rspamd_mutex_new ();
+
+	return ls;
+}
+
+static void
+rspamd_upstream_dtor (struct upstream *up)
+{
+	struct upstream_inet_addr_entry *cur, *tmp;
+
+	if (up->new_addrs) {
+		LL_FOREACH_SAFE(up->new_addrs, cur, tmp) {
+			g_free (cur);
+		}
+	}
+
+	rspamd_mutex_free (up->lock);
+	g_free (up->name);
+	g_slice_free1 (sizeof (*up), up);
+}
+
+rspamd_inet_addr_t*
+rspamd_upstream_addr (struct upstream *up)
+{
+	return &up->addrs.addr[up->addrs.cur++ % up->addrs.count];
+}
+
+gboolean
+rspamd_upstreams_add_upstream (struct upstream_list *ups,
+		const gchar *str, guint16 def_port, void *data)
+{
+	struct upstream *up;
+
+	up = g_slice_alloc0 (sizeof (*up));
+
+	up->addrs.count = default_max_addresses;
+	if (!rspamd_parse_host_port_priority (str, &up->addrs.addr,
+			&up->addrs.count, &up->weight,
+			&up->name, def_port)) {
+		g_slice_free1 (sizeof (*up), up);
+		return FALSE;
+	}
+
+	g_ptr_array_add (ups->ups, up);
+	up->ud = data;
+	up->cur_weight = up->weight;
+	REF_INIT_RETAIN (up, rspamd_upstream_dtor);
+	up->lock = rspamd_mutex_new ();
+
+	rspamd_upstream_set_active (ups, up);
+
+	return TRUE;
+}
+
 void
-revive_all_upstreams (void *ups, size_t members, size_t msize)
+rspamd_upstreams_destroy (struct upstream_list *ups)
 {
 	guint i;
-	struct upstream *cur;
-	guchar *p;
+	struct upstream *up;
 
-	U_WLOCK ();
-	p = ups;
-	for (i = 0; i < members; i++) {
-		cur = (struct upstream *)p;
-		cur->time = 0;
-		cur->errors = 0;
-		cur->dead = 0;
-		cur->weight = cur->priority;
-		p += msize;
+	g_ptr_array_free (ups->alive, TRUE);
+
+	for (i = 0; i < ups->ups->len; i ++) {
+		up = g_ptr_array_index (ups->ups, i);
+		up->ls = NULL;
+		REF_RELEASE (up);
 	}
-	U_UNLOCK ();
+
+	g_ptr_array_free (ups->ups, TRUE);
+	rspamd_mutex_free (ups->lock);
+	g_slice_free1 (sizeof (*ups), ups);
+}
+
+static void
+rspamd_upstream_restore_cb (gpointer elt, gpointer ls)
+{
+	struct upstream *up = (struct upstream *)elt;
+	struct upstream_list *ups = (struct upstream_list *)ls;
+
+	/* Here the upstreams list is already locked */
+	rspamd_mutex_lock (up->lock);
+	event_del (&up->ev);
+
+	if (up->new_addrs) {
+		rspamd_upstream_update_addrs (up);
+	}
+
+	g_ptr_array_add (ups->alive, up);
+	up->active_idx = ups->alive->len - 1;
+	rspamd_mutex_lock (up->lock);
+	/* For revive event */
+	REF_RELEASE (up);
+}
+
+static struct upstream*
+rspamd_upstream_get_random (struct upstream_list *ups)
+{
+	guint idx = ottery_rand_range (ups->alive->len - 1);
+
+	return g_ptr_array_index (ups->alive, idx);
+}
+
+static struct upstream*
+rspamd_upstream_get_round_robin (struct upstream_list *ups, gboolean use_cur)
+{
+	guint max_weight = 0;
+	struct upstream *up, *selected;
+	guint i;
+
+	/* Select upstream with the maximum cur_weight */
+	rspamd_mutex_lock (ups->lock);
+	for (i = 0; i < ups->alive->len; i ++) {
+		up = g_ptr_array_index (ups->alive, i);
+		if (use_cur) {
+			if (up->cur_weight > max_weight) {
+				selected = up;
+				max_weight = up->cur_weight;
+			}
+		}
+		else {
+			if (up->weight > max_weight) {
+				selected = up;
+				max_weight = up->weight;
+			}
+		}
+	}
+
+	if (use_cur) {
+		if (selected->cur_weight > 0) {
+			selected->cur_weight--;
+		}
+		else {
+			selected->cur_weight = selected->weight;
+		}
+	}
+	rspamd_mutex_unlock (ups->lock);
+
+	return selected;
 }
 
 /*
- * Scan all upstreams for errors and mark upstreams dead or alive depends on conditions,
- * return number of alive upstreams
- */
-static gint
-rescan_upstreams (void *ups,
-	size_t members,
-	size_t msize,
-	time_t now,
-	time_t error_timeout,
-	time_t revive_timeout,
-	size_t max_errors)
-{
-	guint i, alive;
-	struct upstream *cur;
-	guchar *p;
-
-	/* Recheck all upstreams */
-	p = ups;
-	alive = members;
-	for (i = 0; i < members; i++) {
-		cur = (struct upstream *)p;
-		check_upstream (cur, now, error_timeout, revive_timeout, max_errors);
-		alive -= cur->dead;
-		p += msize;
-	}
-
-	/* All upstreams are dead */
-	if (alive == 0) {
-		revive_all_upstreams (ups, members, msize);
-		alive = members;
-	}
-
-
-	return alive;
-
-}
-
-/* Return alive upstream by its number */
-static struct upstream *
-get_upstream_by_number (void *ups, size_t members, size_t msize, gint selected)
-{
-	guint i;
-	u_char *p, *c;
-	struct upstream *cur;
-
-	i = 0;
-	p = ups;
-	c = ups;
-	U_RLOCK ();
-	for (;; ) {
-		/* Out of range, return NULL */
-		if (p > c + members * msize) {
-			break;
-		}
-
-		cur = (struct upstream *)p;
-		p += msize;
-
-		if (cur->dead) {
-			/* Skip inactive upstreams */
-			continue;
-		}
-		/* Return selected upstream */
-		if ((gint)i == selected) {
-			U_UNLOCK ();
-			return cur;
-		}
-		i++;
-	}
-	U_UNLOCK ();
-
-	/* Error */
-	return NULL;
-
-}
-
-/*
- * Get hash key for specified key (perl hash)
+ * The key idea of this function is obtained from the following paper:
+ * A Fast, Minimal Memory, Consistent Hash Algorithm
+ * John Lamping, Eric Veach
+ *
+ * http://arxiv.org/abs/1406.2294
  */
 static guint32
-get_hash_for_key (guint32 hash, const gchar *key, size_t keylen)
+rspamd_consistent_hash (guint64 key, guint32 nbuckets)
 {
-	guint32 h, index;
-	const gchar *end = key + keylen;
+	gint64 b = -1, j = 0;
 
-	h = ~hash;
-
-	if (end != key) {
-		while (key < end) {
-			index = (h ^ (u_char) * key) & 0x000000ffU;
-			h = (h >> 8) ^ crc32lookup[index];
-			++key;
-		}
-	}
-	else {
-		while (*key) {
-			index = (h ^ (u_char) * key) & 0x000000ffU;
-			h = (h >> 8) ^ crc32lookup[index];
-			++key;
-		}
+	while (j < nbuckets) {
+		b = j;
+		key *= 2862933555777941757ULL + 1;
+		j = (b + 1) * (double)(1ULL << 31) / (double)((key >> 33) + 1ULL);
 	}
 
-	return (~h);
+	return b;
 }
 
-/*
- * Recheck all upstreams and return random active upstream
- */
-struct upstream *
-get_random_upstream (void *ups,
-	size_t members,
-	size_t msize,
-	time_t now,
-	time_t error_timeout,
-	time_t revive_timeout,
-	size_t max_errors)
+static struct upstream*
+rspamd_upstream_get_hashed (struct upstream_list *ups, const guint8 *key, guint keylen)
 {
-	gint alive, selected;
+	union {
+		guint64 k64;
+		guint32 k32[2];
+	} h;
 
-	alive = rescan_upstreams (ups,
-			members,
-			msize,
-			now,
-			error_timeout,
-			revive_timeout,
-			max_errors);
-	selected = rand () % alive;
+	guint32 idx;
 
-	return get_upstream_by_number (ups, members, msize, selected);
+	/* Generate 64 bits input key */
+	h.k32[0] = XXH32 (key, keylen, ((guint32*)&ups->hash_seed)[0]);
+	h.k32[1] = XXH32 (key, keylen, ((guint32*)&ups->hash_seed)[1]);
+
+	rspamd_mutex_lock (ups->lock);
+	idx = rspamd_consistent_hash (h.k64, ups->alive->len);
+	rspamd_mutex_unlock (ups->lock);
+
+	return g_ptr_array_index (ups->alive, idx);
 }
 
-/*
- * Return upstream by hash, that is calculated from active upstreams number
- */
-struct upstream *
-get_upstream_by_hash (void *ups,
-	size_t members,
-	size_t msize,
-	time_t now,
-	time_t error_timeout,
-	time_t revive_timeout,
-	size_t max_errors,
-	const gchar *key,
-	size_t keylen)
+struct upstream*
+rspamd_upstream_get (struct upstream_list *ups,
+		enum rspamd_upstream_rotation type, ...)
 {
-	gint alive, tries = 0, r;
-	guint32 h = 0, ht;
-	gchar *p, numbuf[4];
-	struct upstream *cur;
+	va_list ap;
+	const guint8 *key;
+	guint keylen;
 
-	alive = rescan_upstreams (ups,
-			members,
-			msize,
-			now,
-			error_timeout,
-			revive_timeout,
-			max_errors);
-
-	if (alive == 0) {
-		return NULL;
+	rspamd_mutex_lock (ups->lock);
+	if (ups->alive->len == 0) {
+		/* We have no upstreams alive */
+		g_ptr_array_foreach (ups->ups, rspamd_upstream_restore_cb, ups);
 	}
+	rspamd_mutex_unlock (ups->lock);
 
-	h = get_hash_for_key (0, key, keylen);
-#ifdef HASH_COMPAT
-	h = (h >> 16) & 0x7fff;
-#endif
-	h %= members;
-
-	for (;; ) {
-		p = (gchar *)ups + msize * h;
-		cur = (struct upstream *)p;
-		if (!cur->dead) {
-			break;
-		}
-		r = snprintf (numbuf, sizeof (numbuf), "%d", tries);
-		ht = get_hash_for_key (0, numbuf, r);
-		ht = get_hash_for_key (ht, key, keylen);
-#ifdef HASH_COMPAT
-		h += (ht >> 16) & 0x7fff;
-#else
-		h += ht;
-#endif
-		h %= members;
-		tries++;
-		if (tries > MAX_TRIES) {
-			return NULL;
-		}
+	switch (type) {
+	case RSPAMD_UPSTREAM_RANDOM:
+		return rspamd_upstream_get_random (ups);
+	case RSPAMD_UPSTREAM_HASHED:
+		va_start (ap, type);
+		key = va_arg (ap, const guint8 *);
+		keylen = va_arg (ap, guint);
+		va_end (ap);
+		return rspamd_upstream_get_hashed (ups, key, keylen);
+	case RSPAMD_UPSTREAM_ROUND_ROBIN:
+		return rspamd_upstream_get_round_robin (ups, TRUE);
+	case RSPAMD_UPSTREAM_MASTER_SLAVE:
+		return rspamd_upstream_get_round_robin (ups, FALSE);
 	}
-
-	U_RLOCK ();
-	p = ups;
-	U_UNLOCK ();
-	return cur;
 }
-
-/*
- * Recheck all upstreams and return upstream in round-robin order according to weight and priority
- */
-struct upstream *
-get_upstream_round_robin (void *ups,
-	size_t members,
-	size_t msize,
-	time_t now,
-	time_t error_timeout,
-	time_t revive_timeout,
-	size_t max_errors)
-{
-	guint max_weight, i;
-	struct upstream *cur, *selected = NULL;
-	u_char *p;
-
-	/* Recheck all upstreams */
-	(void)rescan_upstreams (ups,
-		members,
-		msize,
-		now,
-		error_timeout,
-		revive_timeout,
-		max_errors);
-
-	p = ups;
-	max_weight = 0;
-	selected = (struct upstream *)p;
-	U_RLOCK ();
-	for (i = 0; i < members; i++) {
-		cur = (struct upstream *)p;
-		if (!cur->dead) {
-			if (max_weight < (guint)cur->weight) {
-				max_weight = cur->weight;
-				selected = cur;
-			}
-		}
-		p += msize;
-	}
-	U_UNLOCK ();
-
-	if (max_weight == 0) {
-		p = ups;
-		U_WLOCK ();
-		for (i = 0; i < members; i++) {
-			cur = (struct upstream *)p;
-			cur->weight = cur->priority;
-			if (!cur->dead) {
-				if (max_weight < cur->priority) {
-					max_weight = cur->priority;
-					selected = cur;
-				}
-			}
-			p += msize;
-		}
-		U_UNLOCK ();
-	}
-
-	return selected;
-}
-
-/*
- * Recheck all upstreams and return upstream in round-robin order according to only priority (master-slaves)
- */
-struct upstream *
-get_upstream_master_slave (void *ups,
-	size_t members,
-	size_t msize,
-	time_t now,
-	time_t error_timeout,
-	time_t revive_timeout,
-	size_t max_errors)
-{
-	guint max_weight, i;
-	struct upstream *cur, *selected = NULL;
-	u_char *p;
-
-	/* Recheck all upstreams */
-	(void)rescan_upstreams (ups,
-		members,
-		msize,
-		now,
-		error_timeout,
-		revive_timeout,
-		max_errors);
-
-	p = ups;
-	max_weight = 0;
-	selected = (struct upstream *)p;
-	U_RLOCK ();
-	for (i = 0; i < members; i++) {
-		cur = (struct upstream *)p;
-		if (!cur->dead) {
-			if (max_weight < cur->priority) {
-				max_weight = cur->priority;
-				selected = cur;
-			}
-		}
-		p += msize;
-	}
-	U_UNLOCK ();
-
-	return selected;
-}
-
-/*
- * Ketama manipulation functions
- */
-
-static gint
-ketama_sort_cmp (const void *a1, const void *a2)
-{
-	return *((guint32 *) a1) - *((guint32 *) a2);
-}
-
-/*
- * Add ketama points for specified upstream
- */
-gint
-upstream_ketama_add (struct upstream *up,
-	gchar *up_key,
-	size_t keylen,
-	size_t keypoints)
-{
-	guint32 h = 0;
-	gchar tmp[4];
-	guint i;
-
-	/* Allocate ketama points array */
-	if (up->ketama_points == NULL) {
-		up->ketama_points_size = keypoints;
-		up->ketama_points = malloc (sizeof (guint32) * up->ketama_points_size);
-		if (up->ketama_points == NULL) {
-			return -1;
-		}
-	}
-
-	h = get_hash_for_key (h, up_key, keylen);
-
-	for (i = 0; i < keypoints; i++) {
-		tmp[0] = i & 0xff;
-		tmp[1] = (i >> 8) & 0xff;
-		tmp[2] = (i >> 16) & 0xff;
-		tmp[3] = (i >> 24) & 0xff;
-
-		h = get_hash_for_key (h, tmp, sizeof (tmp) * sizeof (gchar));
-		up->ketama_points[i] = h;
-	}
-	/* Keep points sorted */
-	qsort (up->ketama_points, keypoints, sizeof (guint32), ketama_sort_cmp);
-
-	return 0;
-}
-
-/*
- * Return upstream by hash and find nearest ketama point in some server
- */
-struct upstream *
-get_upstream_by_hash_ketama (void *ups,
-	size_t members,
-	size_t msize,
-	time_t now,
-	time_t error_timeout,
-	time_t revive_timeout,
-	size_t max_errors,
-	const gchar *key,
-	size_t keylen)
-{
-	guint alive, i;
-	guint32 h = 0, step, middle, d, min_diff = UINT_MAX;
-	gchar *p;
-	struct upstream *cur = NULL, *nearest = NULL;
-
-	alive = rescan_upstreams (ups,
-			members,
-			msize,
-			now,
-			error_timeout,
-			revive_timeout,
-			max_errors);
-
-	if (alive == 0) {
-		return NULL;
-	}
-
-	h = get_hash_for_key (h, key, keylen);
-
-	U_RLOCK ();
-	p = ups;
-	nearest = (struct upstream *)p;
-	for (i = 0; i < members; i++) {
-		cur = (struct upstream *)p;
-		if (!cur->dead && cur->ketama_points != NULL) {
-			/* Find nearest ketama point for this key */
-			step = cur->ketama_points_size / 2;
-			middle = step;
-			while (step != 1) {
-				d = cur->ketama_points[middle] - h;
-				if (abs (d) < (gint)min_diff) {
-					min_diff = abs (d);
-					nearest = cur;
-				}
-				step /= 2;
-				if (d > 0) {
-					middle -= step;
-				}
-				else {
-					middle += step;
-				}
-			}
-		}
-	}
-	U_UNLOCK ();
-	return nearest;
-}
-
-#undef U_LOCK
-#undef U_UNLOCK
-/*
- * vi:ts=4
- */
