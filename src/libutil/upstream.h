@@ -1,21 +1,26 @@
 #ifndef UPSTREAM_H
 #define UPSTREAM_H
 
-#include <sys/types.h>
-#include <stdint.h>
+#include "config.h"
+#include "util.h"
+#include "rdns.h"
+
+enum rspamd_upstream_rotation {
+	RSPAMD_UPSTREAM_RANDOM,
+	RSPAMD_UPSTREAM_HASHED,
+	RSPAMD_UPSTREAM_ROUND_ROBIN,
+	RSPAMD_UPSTREAM_MASTER_SLAVE
+};
+
+/* Opaque upstream structures */
+struct upstream;
+struct upstream_list;
 
 /**
- * Structure of generic upstream
+ * Init upstreams library
+ * @param resolver
  */
-struct upstream {
-	guint errors;                       /**< Errors for this upstream   */
-	time_t time;                        /**< Time of marking            */
-	guint dead;                         /**< Dead flag					*/
-	guint priority;                     /**< Fixed priority				*/
-	gint16 weight;                      /**< Dynamic weight				*/
-	guint32 *ketama_points;             /**< Ketama points array		*/
-	size_t ketama_points_size;          /**< Ketama array size			*/
-};
+void rspamd_upstreams_library_init (struct rdns_resolver *resolver);
 
 /**
  * Upstream error logic
@@ -28,115 +33,49 @@ struct upstream {
 /**
  * Add an error to an upstream
  */
-void upstream_fail (struct upstream *up, time_t now);
+void upstream_fail (struct upstream *up);
 
 /**
  * Increase upstream successes count
  */
-void upstream_ok (struct upstream *up, time_t now);
+void upstream_ok (struct upstream *up);
 
 /**
- * Make all upstreams alive
+ * Create new list of upstreams
+ * @return
  */
-void revive_all_upstreams (void *ups, size_t members, size_t msize);
+struct upstream_list* rspamd_upstreams_create (void);
+/**
+ * Destroy list of upstreams
+ * @param ups
+ */
+void rspamd_upstreams_destroy (struct upstream_list *ups);
+/**
+ * Add upstream from the string
+ * @param ups upstream list
+ * @param str string in format "name[:port[:priority]]
+ * @param def_port default port number
+ * @param data optional userdata
+ * @return TRUE if upstream has been added
+ */
+gboolean rspamd_upstreams_add_upstream (struct upstream_list *ups,
+		const gchar *str, guint16 def_port, void *data);
 
 /**
- * Add ketama points for upstream
+ * Returns the current IP address of the upstream
+ * @param up
+ * @return
  */
-gint upstream_ketama_add (struct upstream *up,
-	gchar *up_key,
-	size_t keylen,
-	size_t keypoints);
+rspamd_inet_addr_t* rspamd_upstream_addr (struct upstream *up);
 
 /**
- * Get a random upstream from array of upstreams
- * @param ups array of structures that contains struct upstream as their first element
- * @param members number of elements in array
- * @param msize size of each member
- * @param now current time
- * @param error_timeout time during which we are counting errors
- * @param revive_timeout time during which we counts upstream dead
- * @param max_errors maximum errors during error_timeout to mark upstream dead
+ * Get new upstream from the list
+ * @param ups upstream list
+ * @param type type of rotation algorithm, for `RSPAMD_UPSTREAM_HASHED` it is required to specify `key` and `keylen` as arguments
+ * @return
  */
-struct upstream * get_random_upstream (void *ups, size_t members, size_t msize,
-	time_t now, time_t error_timeout,
-	time_t revive_timeout, size_t max_errors);
-
-/**
- * Get upstream based on hash from array of upstreams
- * @param ups array of structures that contains struct upstream as their first element
- * @param members number of elements in array
- * @param msize size of each member
- * @param now current time
- * @param error_timeout time during which we are counting errors
- * @param revive_timeout time during which we counts upstream dead
- * @param max_errors maximum errors during error_timeout to mark upstream dead
- * @param key key for hashing
- * @param keylen length of the key
- */
-struct upstream * get_upstream_by_hash (void *ups, size_t members, size_t msize,
-	time_t now,  time_t error_timeout,
-	time_t revive_timeout, size_t max_errors,
-	const gchar *key, size_t keylen);
-
-/**
- * Get an upstream from array of upstreams based on its current weight
- * @param ups array of structures that contains struct upstream as their first element
- * @param members number of elements in array
- * @param msize size of each member
- * @param now current time
- * @param error_timeout time during which we are counting errors
- * @param revive_timeout time during which we counts upstream dead
- * @param max_errors maximum errors during error_timeout to mark upstream dead
- */
-struct upstream * get_upstream_round_robin (void *ups,
-	size_t members,
-	size_t msize,
-	time_t now,
-	time_t error_timeout,
-	time_t revive_timeout,
-	size_t max_errors);
-
-/**
- * Get upstream based on hash from array of upstreams, this functions is using ketama algorithm
- * @param ups array of structures that contains struct upstream as their first element
- * @param members number of elements in array
- * @param msize size of each member
- * @param now current time
- * @param error_timeout time during which we are counting errors
- * @param revive_timeout time during which we counts upstream dead
- * @param max_errors maximum errors during error_timeout to mark upstream dead
- * @param key key for hashing
- * @param keylen length of the key
- */
-struct upstream * get_upstream_by_hash_ketama (void *ups,
-	size_t members,
-	size_t msize,
-	time_t now,
-	time_t error_timeout,
-	time_t revive_timeout,
-	size_t max_errors,
-	const gchar *key,
-	size_t keylen);
-
-/**
- * Get an upstream from array of upstreams based on its current priority (not weight)
- * @param ups array of structures that contains struct upstream as their first element
- * @param members number of elements in array
- * @param msize size of each member
- * @param now current time
- * @param error_timeout time during which we are counting errors
- * @param revive_timeout time during which we counts upstream dead
- * @param max_errors maximum errors during error_timeout to mark upstream dead
- */
-struct upstream * get_upstream_master_slave (void *ups,
-	size_t members,
-	size_t msize,
-	time_t now,
-	time_t error_timeout,
-	time_t revive_timeout,
-	size_t max_errors);
-
+struct upstream* rspamd_upstream_get (struct upstream_list *ups,
+		enum rspamd_upstream_rotation type, ...);
 
 #endif /* UPSTREAM_H */
 /*
