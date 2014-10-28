@@ -185,11 +185,17 @@ rspamd_inet_address_connect (rspamd_inet_addr_t *addr, gint type,
 
 gboolean
 rspamd_parse_host_port_priority_strv (gchar **tokens,
-	rspamd_inet_addr_t *addr, guint *priority, gchar **name, guint default_port)
+	rspamd_inet_addr_t **addr,
+	guint *max_addrs,
+	guint *priority,
+	gchar **name,
+	guint default_port)
 {
 	gchar *err_str, portbuf[8];
 	const gchar *cur_tok, *cur_port;
-	struct addrinfo hints, *res;
+	struct addrinfo hints, *res, *cur;
+	rspamd_inet_addr_t *cur_addr;
+	guint addr_cnt;
 	guint port_parsed, priority_parsed, saved_errno = errno;
 	gint r;
 
@@ -265,9 +271,29 @@ rspamd_parse_host_port_priority_strv (gchar **tokens,
 	}
 
 	if ((r = getaddrinfo (cur_tok, cur_port, &hints, &res)) == 0) {
-		memcpy (&addr->addr, res->ai_addr,
-			MIN (sizeof (addr->addr), res->ai_addrlen));
-		addr->af = res->ai_family;
+		/* Now copy up to max_addrs of addresses */
+		addr_cnt = 0;
+		cur = res;
+		while (cur && addr_cnt < *max_addrs) {
+			cur = cur->ai_next;
+			addr_cnt ++;
+		}
+
+		*addr = g_new (rspamd_inet_addr_t, addr_cnt);
+
+		cur = res;
+		addr_cnt = 0;
+		while (cur && addr_cnt < *max_addrs) {
+			cur_addr = &(*addr)[addr_cnt];
+			memcpy (&cur_addr->addr, cur->ai_addr,
+					MIN (sizeof (cur_addr->addr), cur->ai_addrlen));
+			cur_addr->af = cur->ai_family;
+			cur = cur->ai_next;
+			addr_cnt ++;
+		}
+
+		*max_addrs = addr_cnt;
+
 		freeaddrinfo (res);
 	}
 	else {
@@ -292,7 +318,8 @@ err:
 gboolean
 rspamd_parse_host_port_priority (
 	const gchar *str,
-	rspamd_inet_addr_t *addr,
+	rspamd_inet_addr_t **addr,
+	guint *max_addrs,
 	guint *priority,
 	gchar **name,
 	guint default_port)
@@ -305,8 +332,8 @@ rspamd_parse_host_port_priority (
 		return FALSE;
 	}
 
-	ret = rspamd_parse_host_port_priority_strv (tokens, addr, priority, name,
-			default_port);
+	ret = rspamd_parse_host_port_priority_strv (tokens, addr, max_addrs,
+			priority, name, default_port);
 
 	g_strfreev (tokens);
 
@@ -315,9 +342,11 @@ rspamd_parse_host_port_priority (
 
 gboolean
 rspamd_parse_host_port (const gchar *str,
-	rspamd_inet_addr_t *addr,
+	rspamd_inet_addr_t **addr,
+	guint *max_addrs,
 	gchar **name,
 	guint default_port)
 {
-	return rspamd_parse_host_port_priority (str, addr, NULL, name, default_port);
+	return rspamd_parse_host_port_priority (str, addr, max_addrs, NULL,
+			name, default_port);
 }
