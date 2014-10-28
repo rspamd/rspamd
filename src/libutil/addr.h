@@ -95,4 +95,27 @@ gboolean rspamd_ip_is_valid (rspamd_inet_addr_t *addr);
  */
 gint rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t *addr);
 
+gboolean rspamd_parse_host_port_priority_strv (gchar **tokens,
+	rspamd_inet_addr_t *addr, guint *priority, guint default_port);
+
+/**
+ * Parse host[:port[:priority]] line
+ * @param ina host address
+ * @param port port
+ * @param priority priority
+ * @return TRUE if string was parsed
+ */
+gboolean rspamd_parse_host_port_priority (const gchar *str,
+		rspamd_inet_addr_t *addr, guint *priority, guint default_port);
+
+/**
+ * Parse host:port line
+ * @param ina host address
+ * @param port port
+ * @return TRUE if string was parsed
+ */
+gboolean rspamd_parse_host_port (const gchar *str,
+	rspamd_inet_addr_t *addr, guint default_port);
+
+
 #endif /* ADDR_H_ */

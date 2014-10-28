@@ -15,11 +15,6 @@
 
 #define DEFAULT_BIND_PORT 11333
 #define DEFAULT_CONTROL_PORT 11334
-/* Upstream timeouts */
-#define DEFAULT_UPSTREAM_ERROR_TIME 10
-#define DEFAULT_UPSTREAM_ERROR_TIME 10
-#define DEFAULT_UPSTREAM_DEAD_TIME 300
-#define DEFAULT_UPSTREAM_MAXERRORS 10
 
 struct expression;
 struct tokenizer;
@@ -329,34 +324,6 @@ struct rspamd_config {
 	GList *nameservers;                             /**< list of nameservers or NULL to parse resolv.conf	*/
 };
 
-
-/**
- * Parse host[:port[:priority]] line
- * @param ina host address
- * @param port port
- * @param priority priority
- * @return TRUE if string was parsed
- */
-gboolean rspamd_parse_host_port_priority (rspamd_mempool_t *pool,
-	const gchar *str, gchar **addr, guint16 *port, guint *priority);
-
-/**
- * Parse host:port line
- * @param ina host address
- * @param port port
- * @return TRUE if string was parsed
- */
-gboolean rspamd_parse_host_port (rspamd_mempool_t *pool, const gchar *str,
-	gchar **addr, guint16 *port);
-
-/**
- * Parse host:priority line
- * @param ina host address
- * @param priority priority
- * @return TRUE if string was parsed
- */
-gboolean rspamd_parse_host_priority (rspamd_mempool_t *pool, const gchar *str,
-	gchar **addr, guint *priority);
 
 /**
  * Parse bind credits

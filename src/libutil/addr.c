@@ -182,3 +182,135 @@ rspamd_inet_address_connect (rspamd_inet_addr_t *addr, gint type,
 
 	return fd;
 }
+
+gboolean
+rspamd_parse_host_port_priority_strv (gchar **tokens,
+	rspamd_inet_addr_t *addr, guint *priority, guint default_port)
+{
+	gchar *err_str, portbuf[8];
+	const gchar *cur_tok, *cur_port;
+	struct addrinfo hints, *res;
+	guint port_parsed, priority_parsed, saved_errno = errno;
+	gint r;
+
+	/* Now try to parse host and write address to ina */
+	memset (&hints, 0, sizeof (hints));
+	hints.ai_socktype = SOCK_STREAM; /* Type of the socket */
+	hints.ai_flags = AI_NUMERICSERV;
+
+	cur_tok = tokens[0];
+
+	if (strcmp (cur_tok, "*v6") == 0) {
+		hints.ai_family = AF_INET6;
+		hints.ai_flags |= AI_PASSIVE;
+		cur_tok = NULL;
+	}
+	else if (strcmp (cur_tok, "*v4") == 0) {
+		hints.ai_family = AF_INET;
+		hints.ai_flags |= AI_PASSIVE;
+		cur_tok = NULL;
+	}
+	else {
+		hints.ai_family = AF_UNSPEC;
+	}
+
+	if (tokens[1] != NULL) {
+		/* Port part */
+		rspamd_strlcpy (portbuf, tokens[1], sizeof (portbuf));
+		cur_port = portbuf;
+		errno = 0;
+		port_parsed = strtoul (tokens[1], &err_str, 10);
+		if (*err_str != '\0' || errno != 0) {
+			msg_warn ("cannot parse port: %s, at symbol %c, error: %s",
+					tokens[1],
+					*err_str,
+					strerror (errno));
+			hints.ai_flags ^= AI_NUMERICSERV;
+		}
+		else if (port_parsed > G_MAXUINT16) {
+			errno = ERANGE;
+			msg_warn ("cannot parse port: %s, error: %s",
+					tokens[1],
+					*err_str,
+					strerror (errno));
+			hints.ai_flags ^= AI_NUMERICSERV;
+		}
+		if (priority != NULL) {
+			const gchar *tok;
+
+			tok = tokens[2];
+			if (tok != NULL) {
+				/* Priority part */
+				errno = 0;
+				priority_parsed = strtoul (tok, &err_str, 10);
+				if (*err_str != '\0' || errno != 0) {
+					msg_warn (
+						"cannot parse priority: %s, at symbol %c, error: %s",
+						tok,
+						*err_str,
+						strerror (errno));
+				}
+				else {
+					*priority = priority_parsed;
+				}
+			}
+		}
+	}
+	else if (default_port != 0) {
+		rspamd_snprintf (portbuf, sizeof (portbuf), "%ud", default_port);
+		cur_port = portbuf;
+	}
+	else {
+		cur_port = NULL;
+	}
+
+	if ((r = getaddrinfo (cur_tok, cur_port, &hints, &res)) == 0) {
+		memcpy (&addr->addr, res->ai_addr,
+			MIN (sizeof (addr->addr), res->ai_addrlen));
+		freeaddrinfo (res);
+	}
+	else {
+		msg_err ("address resolution for %s failed: %s",
+			tokens[0],
+			gai_strerror (r));
+		goto err;
+	}
+
+	/* Restore errno */
+	errno = saved_errno;
+	return TRUE;
+
+err:
+	errno = saved_errno;
+	return FALSE;
+}
+
+gboolean
+rspamd_parse_host_port_priority (
+	const gchar *str,
+	rspamd_inet_addr_t *addr,
+	guint *priority,
+	guint default_port)
+{
+	gchar **tokens;
+	gboolean ret;
+
+	tokens = g_strsplit_set (str, ":", 0);
+	if (!tokens || !tokens[0]) {
+		return FALSE;
+	}
+
+	ret = rspamd_parse_host_port_priority_strv (tokens, addr, priority, default_port);
+
+	g_strfreev (tokens);
+
+	return ret;
+}
+
+gboolean
+rspamd_parse_host_port (const gchar *str,
+	rspamd_inet_addr_t *addr,
+	guint default_port)
+{
+	return rspamd_parse_host_port_priority (str, addr, NULL, default_port);
+}
