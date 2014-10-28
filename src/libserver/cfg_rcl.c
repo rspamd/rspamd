@@ -852,12 +852,13 @@ rspamd_rcl_statfile_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 	struct rspamd_classifier_config *ccf = ud;
 	const ucl_object_t *val;
 	struct rspamd_statfile_config *st;
-	const gchar *data;
-	gdouble binlog_rotate;
 	GList *labels;
 
 	st = rspamd_config_new_statfile (cfg, NULL);
 
+#if 0
+	const gchar *data;
+	gdouble binlog_rotate;
 	val = ucl_object_find_key (obj, "binlog");
 	if (val != NULL && ucl_object_tostring_safe (val, &data)) {
 		if (st->binlog == NULL) {
@@ -888,6 +889,7 @@ rspamd_rcl_statfile_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 			}
 		}
 	}
+#endif
 
 
 	if (rspamd_rcl_section_parse_defaults (section, cfg, obj, st, err)) {
