@@ -7,6 +7,7 @@
 #include "printf.h"
 #include "fstring.h"
 #include "ucl.h"
+#include "addr.h"
 
 struct rspamd_config;
 struct rspamd_main;
@@ -15,23 +16,14 @@ struct rspamd_statfile_config;
 struct rspamd_classifier_config;
 
 /**
- * Union that is used for storing sockaddrs
+ * Create generic socket
+ * @param af address family
+ * @param type socket type
+ * @param protocol socket protocol
+ * @param async set non-blocking on a socket
+ * @return socket FD or -1 in case of error
  */
-union sa_union {
-	struct sockaddr_storage ss;
-	struct sockaddr sa;
-	struct sockaddr_in s4;
-	struct sockaddr_in6 s6;
-	struct sockaddr_un su;
-};
-
-typedef struct _rspamd_inet_addr_s {
-	union sa_union addr;
-	socklen_t slen;
-	int af;
-} rspamd_inet_addr_t;
-
-
+gint rspamd_socket_create (gint af, gint type, gint protocol, gboolean async);
 /*
  * Create socket and bind or connect it to specified address and port
  */
@@ -418,14 +410,6 @@ gpointer rspamd_str_pool_copy (gconstpointer data, gpointer ud);
 gint rspamd_read_passphrase (gchar *buf, gint size, gint rwflag, gpointer key);
 
 /**
- * Check whether specified ip is valid (not INADDR_ANY or INADDR_NONE) for ipv4 or ipv6
- * @param ptr pointer to struct in_addr or struct in6_addr
- * @param af address family (AF_INET or AF_INET6)
- * @return TRUE if the address is valid
- */
-gboolean rspamd_ip_is_valid (rspamd_inet_addr_t *addr);
-
-/**
  * Emit UCL object to gstring
  * @param obj object to emit
  * @param emit_type emitter type
@@ -434,51 +418,6 @@ gboolean rspamd_ip_is_valid (rspamd_inet_addr_t *addr);
 void rspamd_ucl_emit_gstring (ucl_object_t *obj,
 	enum ucl_emitter emit_type,
 	GString *target);
-
-/**
- * Accept from listening socket filling addr structure
- * @param sock listening socket
- * @param addr
- * @return
- */
-gint rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t *addr);
-
-/**
- * Try to parse address from string
- * @param target target to fill
- * @param src IP string representation
- * @return TRUE if addr has been parsed
- */
-gboolean rspamd_parse_inet_address (rspamd_inet_addr_t *target,
-	const char *src);
-
-/**
- * Returns string representation of inet address
- * @param addr
- * @return statically allocated string pointer (not thread safe)
- */
-const char * rspamd_inet_address_to_string (rspamd_inet_addr_t *addr);
-
-/**
- * Returns port number for the specified inet address in host byte order
- * @param addr
- * @return
- */
-uint16_t rspamd_inet_address_get_port (rspamd_inet_addr_t *addr);
-
-/**
- * Set port for inet address
- */
-void rspamd_inet_address_set_port (rspamd_inet_addr_t *addr, uint16_t port);
-
-/**
- * Connect to inet_addr address
- * @param addr
- * @param async perform operations asynchronously
- * @return newly created and connected socket
- */
-int rspamd_inet_address_connect (rspamd_inet_addr_t *addr, gint type,
-	gboolean async);
 
 /**
  * Encode string using base32 encoding
