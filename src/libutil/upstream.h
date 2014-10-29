@@ -51,15 +51,27 @@ struct upstream_list* rspamd_upstreams_create (void);
  * @param ups
  */
 void rspamd_upstreams_destroy (struct upstream_list *ups);
+
 /**
  * Add upstream from the string
  * @param ups upstream list
- * @param str string in format "name[:port[:priority]]
+ * @param str string in format "name[:port[:priority]]"
  * @param def_port default port number
  * @param data optional userdata
  * @return TRUE if upstream has been added
  */
 gboolean rspamd_upstreams_add_upstream (struct upstream_list *ups,
+		const gchar *str, guint16 def_port, void *data);
+
+/**
+ * Add multiple upstreams from comma, semicolon or space separated line
+ * @param ups upstream list
+ * @param str string in format "(<ups>([<sep>+]<ups>)*)+"
+ * @param def_port default port number
+ * @param data optional userdata
+ * @return TRUE if **any** of upstreams has been added
+ */
+gboolean rspamd_upstreams_parse_line (struct upstream_list *ups,
 		const gchar *str, guint16 def_port, void *data);
 
 /**
