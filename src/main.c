@@ -560,6 +560,15 @@ delay_fork (struct rspamd_worker_conf *cf)
 	set_alarm (SOFT_FORK_TIME);
 }
 
+static int
+af_cmp_workaround (const void *a, const void *b)
+{
+	rspamd_inet_addr_t *a1 = (rspamd_inet_addr_t *)a,
+			*a2 = (rspamd_inet_addr_t *)b;
+
+	return a2->af - a1->af;
+}
+
 static GList *
 create_listen_socket (rspamd_inet_addr_t *addrs, guint cnt, gint listen_type)
 {
@@ -567,6 +576,8 @@ create_listen_socket (rspamd_inet_addr_t *addrs, guint cnt, gint listen_type)
 	gint fd;
 	guint i;
 
+	/* Fuck morons that have invented ipv6/v4 sockets */
+	qsort (addrs, cnt, sizeof (*addrs), af_cmp_workaround);
 	for (i = 0; i < cnt; i ++) {
 		fd = rspamd_inet_address_listen (&addrs[i], listen_type, TRUE);
 		if (fd != -1) {
@@ -675,8 +686,7 @@ spawn_workers (struct rspamd_main *rspamd)
 		}
 		else {
 			if (cf->worker->has_socket) {
-				LL_FOREACH (cf->bind_conf, bcf)
-				{
+				LL_FOREACH (cf->bind_conf, bcf) {
 					key = make_listen_key (bcf);
 					if ((p =
 						g_hash_table_lookup (listen_sockets,
