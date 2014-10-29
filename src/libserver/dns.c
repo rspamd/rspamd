@@ -30,13 +30,6 @@
 #include "uthash.h"
 #include "rdns_event.h"
 
-struct rspamd_dns_resolver {
-	struct rdns_resolver *r;
-	struct event_base *ev_base;
-	gdouble request_timeout;
-	guint max_retransmits;
-};
-
 struct rspamd_dns_request_ud {
 	struct rspamd_async_session *session;
 	dns_callback_type cb;

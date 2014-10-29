@@ -32,7 +32,12 @@
 #include "logger.h"
 #include "rdns.h"
 
-struct rspamd_dns_resolver;
+struct rspamd_dns_resolver {
+	struct rdns_resolver *r;
+	struct event_base *ev_base;
+	gdouble request_timeout;
+	guint max_retransmits;
+};
 
 /* Rspamd DNS API */
 

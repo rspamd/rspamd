@@ -191,21 +191,25 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
 	g_ptr_array_remove_index (ls->alive, up->active_idx);
 	up->active_idx = -1;
 
-	/* Resolve name of the upstream one more time */
-	if (up->name[0] != '/') {
-		REF_RETAIN (up);
-		rdns_make_request_full (res, rspamd_upstream_dns_cb, up,
-			default_dns_timeout, default_dns_retransmits,
-			RDNS_REQUEST_A, up->name);
-		REF_RETAIN (up);
-		rdns_make_request_full (res, rspamd_upstream_dns_cb, up,
-			default_dns_timeout, default_dns_retransmits,
-			RDNS_REQUEST_AAAA, up->name);
+	if (res != NULL) {
+		/* Resolve name of the upstream one more time */
+		if (up->name[0] != '/') {
+			REF_RETAIN (up);
+			rdns_make_request_full (res, rspamd_upstream_dns_cb, up,
+					default_dns_timeout, default_dns_retransmits,
+					RDNS_REQUEST_A, up->name);
+			REF_RETAIN (up);
+			rdns_make_request_full (res, rspamd_upstream_dns_cb, up,
+					default_dns_timeout, default_dns_retransmits,
+					RDNS_REQUEST_AAAA, up->name);
+		}
 	}
 
 	REF_RETAIN (up);
 	evtimer_set (&up->ev, rspamd_upstream_revive_cb, up);
-	event_base_set (ev_base, &up->ev);
+	if (ev_base != NULL) {
+		event_base_set (ev_base, &up->ev);
+	}
 	up->tv.tv_sec = default_revive_time;
 	up->tv.tv_usec = 0;
 	event_add (&up->ev, &up->tv);
