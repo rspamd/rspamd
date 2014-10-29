@@ -24,6 +24,7 @@
 #define ADDR_H_
 
 #include "config.h"
+#include "mem_pool.h"
 
 /**
  * Union that is used for storing sockaddrs
@@ -97,7 +98,7 @@ gint rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t *addr);
 
 gboolean rspamd_parse_host_port_priority_strv (gchar **tokens,
 	rspamd_inet_addr_t **addr, guint *max_addrs, guint *priority,
-	gchar **name, guint default_port);
+	gchar **name, guint default_port, rspamd_mempool_t *pool);
 
 /**
  * Parse host[:port[:priority]] line
@@ -108,7 +109,8 @@ gboolean rspamd_parse_host_port_priority_strv (gchar **tokens,
  */
 gboolean rspamd_parse_host_port_priority (const gchar *str,
 		rspamd_inet_addr_t **addr, guint *max_addrs,
-		guint *priority, gchar **name, guint default_port);
+		guint *priority, gchar **name, guint default_port,
+		rspamd_mempool_t *pool);
 
 /**
  * Parse host:port line
@@ -118,7 +120,7 @@ gboolean rspamd_parse_host_port_priority (const gchar *str,
  */
 gboolean rspamd_parse_host_port (const gchar *str,
 	rspamd_inet_addr_t **addr, guint *max_addrs,
-	gchar **name, guint default_port);
+	gchar **name, guint default_port, rspamd_mempool_t *pool);
 
 
 #endif /* ADDR_H_ */

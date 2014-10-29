@@ -93,7 +93,16 @@ rspamd_parse_inet_address (rspamd_inet_addr_t *target, const char *src)
 {
 	gboolean ret = FALSE;
 
-	if (inet_pton (AF_INET6, src, &target->addr.s6.sin6_addr) == 1) {
+	if (src[0] == '/' || src[0] == '.') {
+		target->af = AF_UNIX;
+		target->slen = sizeof (target->addr.su);
+		rspamd_strlcpy (target->addr.su.sun_path, src,
+				sizeof (target->addr.su.sun_path));
+#ifdef FREEBSD
+		target->addr.su.sun_len = SUN_LEN (addr);
+#endif
+	}
+	else if (inet_pton (AF_INET6, src, &target->addr.s6.sin6_addr) == 1) {
 		target->af = AF_INET6;
 		target->slen = sizeof (target->addr.s6);
 		ret = TRUE;
@@ -189,7 +198,8 @@ rspamd_parse_host_port_priority_strv (gchar **tokens,
 	guint *max_addrs,
 	guint *priority,
 	gchar **name,
-	guint default_port)
+	guint default_port,
+	rspamd_mempool_t *pool)
 {
 	gchar *err_str, portbuf[8];
 	const gchar *cur_tok, *cur_port;
@@ -279,7 +289,13 @@ rspamd_parse_host_port_priority_strv (gchar **tokens,
 			addr_cnt ++;
 		}
 
-		*addr = g_new (rspamd_inet_addr_t, addr_cnt);
+		if (pool == NULL) {
+			*addr = g_new (rspamd_inet_addr_t, addr_cnt);
+		}
+		else {
+			*addr = rspamd_mempool_alloc (pool, addr_cnt *
+					sizeof (rspamd_inet_addr_t));
+		}
 
 		cur = res;
 		addr_cnt = 0;
@@ -305,7 +321,12 @@ rspamd_parse_host_port_priority_strv (gchar **tokens,
 
 	/* Restore errno */
 	if (name != NULL) {
-		*name = g_strdup (tokens[0]);
+		if (pool == NULL) {
+			*name = g_strdup (tokens[0]);
+		}
+		else {
+			*name = rspamd_mempool_strdup (pool, tokens[0]);
+		}
 	}
 	errno = saved_errno;
 	return TRUE;
@@ -322,7 +343,8 @@ rspamd_parse_host_port_priority (
 	guint *max_addrs,
 	guint *priority,
 	gchar **name,
-	guint default_port)
+	guint default_port,
+	rspamd_mempool_t *pool)
 {
 	gchar **tokens;
 	gboolean ret;
@@ -333,7 +355,7 @@ rspamd_parse_host_port_priority (
 	}
 
 	ret = rspamd_parse_host_port_priority_strv (tokens, addr, max_addrs,
-			priority, name, default_port);
+			priority, name, default_port, pool);
 
 	g_strfreev (tokens);
 
@@ -345,8 +367,9 @@ rspamd_parse_host_port (const gchar *str,
 	rspamd_inet_addr_t **addr,
 	guint *max_addrs,
 	gchar **name,
-	guint default_port)
+	guint default_port,
+	rspamd_mempool_t *pool)
 {
 	return rspamd_parse_host_port_priority (str, addr, max_addrs, NULL,
-			name, default_port);
+			name, default_port, pool);
 }

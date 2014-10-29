@@ -313,7 +313,7 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups,
 	up->addrs.count = default_max_addresses;
 	if (!rspamd_parse_host_port_priority (str, &up->addrs.addr,
 			&up->addrs.count, &up->weight,
-			&up->name, def_port)) {
+			&up->name, def_port, NULL)) {
 		g_slice_free1 (sizeof (*up), up);
 		return FALSE;
 	}
