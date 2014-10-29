@@ -56,13 +56,6 @@
 #define DEFAULT_IO_TIMEOUT 500
 #define DEFAULT_PORT 11335
 
-struct storage_server {
-	struct upstream up;
-	gchar *name;
-	gchar *addr;
-	guint16 port;
-};
-
 struct fuzzy_mapping {
 	guint64 fuzzy_flag;
 	const gchar *symbol;
@@ -75,7 +68,7 @@ struct fuzzy_mime_type {
 };
 
 struct fuzzy_rule {
-	struct storage_server *servers;
+	struct upstream_list *servers;
 	gint servers_num;
 	const gchar *symbol;
 	GHashTable *mappings;
@@ -105,7 +98,7 @@ struct fuzzy_client_session {
 	struct event ev;
 	struct timeval tv;
 	struct rspamd_task *task;
-	struct storage_server *server;
+	struct upstream *server;
 	struct fuzzy_rule *rule;
 	gint fd;
 };
@@ -121,7 +114,7 @@ struct fuzzy_learn_session {
 	struct fuzzy_mapping *map;
 	struct timeval tv;
 	struct rspamd_http_connection_entry *http_entry;
-	struct storage_server *server;
+	struct upstream *server;
 	struct fuzzy_rule *rule;
 	struct rspamd_task *task;
 	gint fd;
@@ -252,38 +245,6 @@ fuzzy_check_content_type (struct fuzzy_rule *rule, GMimeContentType *type)
 	return FALSE;
 }
 
-static void
-parse_servers_string (struct fuzzy_rule *rule, const gchar *str)
-{
-	gchar **strvec;
-	gint i, num;
-	struct storage_server *cur;
-
-	strvec = g_strsplit_set (str, ",", 0);
-	num = g_strv_length (strvec);
-
-	rule->servers = rspamd_mempool_alloc0 (fuzzy_module_ctx->fuzzy_pool,
-			sizeof (struct storage_server) * num);
-
-	for (i = 0; i < num; i++) {
-		g_strstrip (strvec[i]);
-
-		cur = &rule->servers[rule->servers_num];
-		if (rspamd_parse_host_port (fuzzy_module_ctx->fuzzy_pool, strvec[i],
-			&cur->addr, &cur->port)) {
-			if (cur->port == 0) {
-				cur->port = DEFAULT_PORT;
-			}
-			cur->name = rspamd_mempool_strdup (fuzzy_module_ctx->fuzzy_pool,
-					strvec[i]);
-			rule->servers_num++;
-		}
-	}
-
-	g_strfreev (strvec);
-
-}
-
 static double
 fuzzy_normalize (gint32 in, double weight)
 {
@@ -380,13 +341,11 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj)
 	}
 
 	if ((value = ucl_object_find_key (obj, "servers")) != NULL) {
-		if (value->type == UCL_ARRAY) {
-			value = value->value.av;
-		}
-		LL_FOREACH (value, cur)
-		{
-			parse_servers_string (rule, ucl_obj_tostring (cur));
-		}
+		rule->servers = rspamd_upstreams_create ();
+		rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
+				(rspamd_mempool_destruct_t)rspamd_upstreams_destroy,
+				rule->servers);
+		rspamd_upstreams_from_ucl (rule->servers, value, DEFAULT_PORT, NULL);
 	}
 	if ((value = ucl_object_find_key (obj, "fuzzy_map")) != NULL) {
 		while ((cur = ucl_iterate_object (value, &it, true)) != NULL) {
@@ -394,7 +353,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj)
 		}
 	}
 
-	if (rule->servers_num == 0) {
+	if (rspamd_upstreams_count (rule->servers) == 0) {
 		msg_err ("no servers defined for fuzzy rule with symbol: %s",
 			rule->symbol);
 		return -1;
@@ -629,13 +588,13 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 	}
 	else if (ret == -1) {
 		msg_err ("got error on IO with server %s, %d, %s",
-			session->server->name,
+			rspamd_upstream_name (session->server),
 			errno,
 			strerror (errno));
-		upstream_fail (&session->server->up, time (NULL));
+		rspamd_upstream_fail (session->server);
 	}
 	else {
-		upstream_ok (&session->server->up, 0);
+		rspamd_upstream_ok (session->server);
 	}
 
 	remove_normal_event (session->task->s, fuzzy_io_fin, session);
@@ -732,11 +691,11 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 	}
 	else if (ret == -1) {
 		msg_err ("got error in IO with server %s, %d, %s",
-				session->server->name, errno, strerror (errno));
-		upstream_fail (&session->server->up, time (NULL));
+				rspamd_upstream_name (session->server), errno, strerror (errno));
+		rspamd_upstream_fail (session->server);
 	}
 	else {
-		upstream_ok (&session->server->up, 0);
+		rspamd_upstream_ok (session->server);
 	}
 
 	rspamd_http_connection_unref (session->http_entry->conn);
@@ -763,37 +722,17 @@ register_fuzzy_call (struct rspamd_task *task,
 	fuzzy_hash_t *h)
 {
 	struct fuzzy_client_session *session;
-	struct storage_server *selected;
+	struct upstream *selected;
 	gint sock;
 
 	/* Get upstream */
-#ifdef HAVE_CLOCK_GETTIME
-	selected = (struct storage_server *)get_upstream_by_hash (rule->servers,
-			rule->servers_num,
-			sizeof (struct storage_server),
-			task->ts.tv_sec,
-			DEFAULT_UPSTREAM_ERROR_TIME,
-			DEFAULT_UPSTREAM_DEAD_TIME,
-			DEFAULT_UPSTREAM_MAXERRORS,
-			h->hash_pipe,
-			sizeof (h->hash_pipe));
-#else
-	selected = (struct storage_server *)get_upstream_by_hash (rule->servers,
-			rule->servers_num,
-			sizeof (struct storage_server),
-			task->tv.tv_sec,
-			DEFAULT_UPSTREAM_ERROR_TIME,
-			DEFAULT_UPSTREAM_DEAD_TIME,
-			DEFAULT_UPSTREAM_MAXERRORS,
-			h->hash_pipe,
-			sizeof (h->hash_pipe));
-#endif
+	selected = rspamd_upstream_get (rule->servers, RSPAMD_UPSTREAM_HASHED,
+			h->hash_pipe, sizeof (h->hash_pipe));
 	if (selected) {
-		if ((sock =
-			make_universal_socket (selected->addr, selected->port, SOCK_DGRAM,
-			TRUE, FALSE, FALSE)) == -1) {
+		if ((sock = rspamd_inet_address_connect (rspamd_upstream_addr (selected),
+				SOCK_DGRAM, TRUE)) == -1) {
 			msg_warn ("cannot connect to %s, %d, %s",
-				selected->name,
+				rspamd_upstream_name (selected),
 				errno,
 				strerror (errno));
 		}
@@ -951,35 +890,16 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 	gint cmd, gint value, gint flag, gint *saved, GError **err)
 {
 	struct fuzzy_learn_session *s;
-	struct storage_server *selected;
+	struct upstream *selected;
 	gint sock;
 
 	/* Get upstream */
-#ifdef HAVE_CLOCK_GETTIME
-	selected = (struct storage_server *)get_upstream_by_hash (rule->servers,
-			rule->servers_num,
-			sizeof (struct storage_server),
-			task->ts.tv_sec,
-			DEFAULT_UPSTREAM_ERROR_TIME,
-			DEFAULT_UPSTREAM_DEAD_TIME,
-			DEFAULT_UPSTREAM_MAXERRORS,
-			h->hash_pipe,
-			sizeof (h->hash_pipe));
-#else
-	selected = (struct storage_server *)get_upstream_by_hash (rule->servers,
-			rule->servers_num,
-			sizeof (struct storage_server),
-			task->tv.tv_sec,
-			DEFAULT_UPSTREAM_ERROR_TIME,
-			DEFAULT_UPSTREAM_DEAD_TIME,
-			DEFAULT_UPSTREAM_MAXERRORS,
-			h->hash_pipe,
-			sizeof (h->hash_pipe));
-#endif
+	selected = rspamd_upstream_get (rule->servers, RSPAMD_UPSTREAM_HASHED,
+				h->hash_pipe, sizeof (h->hash_pipe));
 	if (selected) {
 		/* Create UDP socket */
-		if ((sock = make_universal_socket (selected->addr, selected->port,
-			SOCK_DGRAM, TRUE, FALSE, FALSE)) == -1) {
+		if ((sock = rspamd_inet_address_connect (rspamd_upstream_addr (selected),
+				SOCK_DGRAM, TRUE)) == -1) {
 			return FALSE;
 		}
 		else {
