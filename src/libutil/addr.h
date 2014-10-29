@@ -81,6 +81,15 @@ int rspamd_inet_address_connect (rspamd_inet_addr_t *addr, gint type,
 	gboolean async);
 
 /**
+ * Listen on a specified inet address
+ * @param addr
+ * @param type
+ * @param async
+ * @return
+ */
+int rspamd_inet_address_listen (rspamd_inet_addr_t *addr, gint type,
+	gboolean async);
+/**
  * Check whether specified ip is valid (not INADDR_ANY or INADDR_NONE) for ipv4 or ipv6
  * @param ptr pointer to struct in_addr or struct in6_addr
  * @param af address family (AF_INET or AF_INET6)

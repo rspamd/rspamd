@@ -561,27 +561,17 @@ delay_fork (struct rspamd_worker_conf *cf)
 }
 
 static GList *
-create_listen_socket (const gchar *addr, gint port, gint listen_type)
+create_listen_socket (rspamd_inet_addr_t *addrs, guint cnt, gint listen_type)
 {
-	gint listen_sock = -1;
-	GList *result, *cur;
-	/* Create listen sockets */
-	result = make_universal_sockets_list (addr,
-			port,
-			listen_type,
-			TRUE,
-			TRUE,
-			TRUE);
+	GList *result = NULL;
+	gint fd;
+	guint i;
 
-	cur = result;
-	while (cur != NULL) {
-		listen_sock = GPOINTER_TO_INT (cur->data);
-		if (listen_sock != -1 && listen_type != SOCK_DGRAM) {
-			if (listen (listen_sock, -1) == -1) {
-				msg_err ("cannot listen on socket. %s", strerror (errno));
-			}
+	for (i = 0; i < cnt; i ++) {
+		fd = rspamd_inet_address_listen (&addrs[i], listen_type, TRUE);
+		if (fd != -1) {
+			result = g_list_prepend (result, GINT_TO_POINTER (fd));
 		}
-		cur = g_list_next (cur);
 	}
 
 	return result;
@@ -645,14 +635,22 @@ fork_delayed (struct rspamd_main *rspamd)
 }
 
 static inline uintptr_t
-make_listen_key (gint ai, const gchar *addr, gint port)
+make_listen_key (struct rspamd_worker_bind_conf *cf)
 {
 	gpointer xxh;
+	guint i;
 
-	xxh = XXH32_init (0xbeef);
-	XXH32_update (xxh, addr, strlen (addr));
-	XXH32_update (xxh, (guchar *)&ai, sizeof (gint));
-	XXH32_update (xxh, (guchar *)&port, sizeof (gint));
+	xxh = XXH32_init (0xdeadbeef);
+	if (cf->is_systemd) {
+		XXH32_update (xxh, "systemd", sizeof ("systemd"));
+		XXH32_update (xxh, &cf->cnt, sizeof (cf->cnt));
+	}
+	else {
+		XXH32_update (xxh, cf->name, strlen (cf->name));
+		for (i = 0; i < cf->cnt; i ++) {
+			XXH32_update (xxh, &cf->addrs[i].addr, cf->addrs[i].slen);
+		}
+	}
 
 	return XXH32_digest (xxh);
 }
@@ -662,8 +660,9 @@ spawn_workers (struct rspamd_main *rspamd)
 {
 	GList *cur, *ls;
 	struct rspamd_worker_conf *cf;
-	gint i, key;
+	gint i;
 	gpointer p;
+	guintptr key;
 	struct rspamd_worker_bind_conf *bcf;
 
 	cur = rspamd->cfg->workers;
@@ -678,29 +677,25 @@ spawn_workers (struct rspamd_main *rspamd)
 			if (cf->worker->has_socket) {
 				LL_FOREACH (cf->bind_conf, bcf)
 				{
-					key = make_listen_key (bcf->ai,
-							bcf->bind_host,
-							bcf->bind_port);
+					key = make_listen_key (bcf);
 					if ((p =
 						g_hash_table_lookup (listen_sockets,
 						GINT_TO_POINTER (key))) == NULL) {
 						if (!bcf->is_systemd) {
 							/* Create listen socket */
-							ls = create_listen_socket (bcf->bind_host,
-									bcf->bind_port,
+							ls = create_listen_socket (bcf->addrs, bcf->cnt,
 									cf->worker->listen_type);
 						}
 						else {
-							ls = systemd_get_socket (bcf->ai);
+							ls = systemd_get_socket (bcf->cnt);
 						}
 						if (ls == NULL) {
 							msg_err ("cannot listen on socket %s: %s",
-								bcf->bind_host,
+								bcf->name,
 								strerror (errno));
 							exit (-errno);
 						}
-						g_hash_table_insert (listen_sockets,
-							GINT_TO_POINTER (key), ls);
+						g_hash_table_insert (listen_sockets, (gpointer)key, ls);
 					}
 					else {
 						/* We had socket for this type of worker */

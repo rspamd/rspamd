@@ -59,8 +59,8 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 	const gchar *str)
 {
 	struct rspamd_worker_bind_conf *cnf;
-	gchar **tokens, *tmp, *err;
-	gboolean ret = TRUE, rc;
+	gchar **tokens, *err;
+	gboolean ret = TRUE;
 
 	if (str == NULL) {
 		return FALSE;
@@ -74,62 +74,29 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 	cnf =
 		rspamd_mempool_alloc0 (cfg->cfg_pool,
 			sizeof (struct rspamd_worker_bind_conf));
-	cnf->bind_port = DEFAULT_BIND_PORT;
-	cnf->bind_host = rspamd_mempool_strdup (cfg->cfg_pool, str);
-	cnf->ai = AF_UNSPEC;
 
-	if (*tokens[0] == '/' || *tokens[0] == '.') {
-		cnf->ai = AF_UNIX;
-		LL_PREPEND (cf->bind_conf, cnf);
-	}
-	else if (strcmp (tokens[0], "*") == 0) {
-		/* We need to add two listen entries: one for ipv4 and one for ipv6 */
-		tmp = tokens[0];
-		tokens[0] = "*v4";
-		cnf->ai = AF_INET;
-		if ((ret = parse_host_port_priority_strv (cfg->cfg_pool, tokens,
-			&cnf->bind_host, &cnf->bind_port, NULL, DEFAULT_BIND_PORT))) {
-			LL_PREPEND (cf->bind_conf, cnf);
-		}
-		cnf =
-			rspamd_mempool_alloc0 (cfg->cfg_pool,
-				sizeof (struct rspamd_worker_bind_conf));
-		cnf->bind_port = DEFAULT_BIND_PORT;
-		cnf->bind_host = rspamd_mempool_strdup (cfg->cfg_pool, str);
-		cnf->ai = AF_INET6;
-		tokens[0] = "*v6";
-		if ((rc = parse_host_port_priority_strv (cfg->cfg_pool, tokens,
-			&cnf->bind_host, &cnf->bind_port, NULL, DEFAULT_BIND_PORT))) {
-			LL_PREPEND (cf->bind_conf, cnf);
-		}
-		tokens[0] = tmp;
-	}
-	else if (strcmp (tokens[0], "systemd") == 0) {
+	cnf->cnt = 1024;
+	if (strcmp (tokens[0], "systemd") == 0) {
 		/* The actual socket will be passed by systemd environment */
-		cnf->bind_host = rspamd_mempool_strdup (cfg->cfg_pool, str);
-		cnf->ai = strtoul (tokens[1], &err, 10);
 		cnf->is_systemd = TRUE;
+		cnf->cnt = strtoul (tokens[1], &err, 10);
+		cnf->addrs = NULL;
 		if (err == NULL || *err == '\0') {
 			LL_PREPEND (cf->bind_conf, cnf);
 		}
 		else {
+			msg_err ("cannot parse bind line: %s", str);
 			ret = FALSE;
 		}
 	}
 	else {
-		cnf->bind_host = rspamd_mempool_strdup (cfg->cfg_pool, tokens[0]);
-		if (tokens[1] == NULL) {
-			cnf->bind_port = DEFAULT_BIND_PORT;
-			err = NULL;
-		}
-		else {
-			cnf->bind_port = strtoul (tokens[1], &err, 10);
-		}
-		if (err == NULL || *err == '\0') {
-			LL_PREPEND (cf->bind_conf, cnf);
-		}
-		else {
+		if (!rspamd_parse_host_port_priority_strv (tokens, &cnf->addrs,
+				&cnf->cnt, NULL, &cnf->name, DEFAULT_BIND_PORT, cfg->cfg_pool)) {
+			msg_err ("cannot parse bind line: %s", str);
 			ret = FALSE;
+		}
+		else {
+			LL_PREPEND (cf->bind_conf, cnf);
 		}
 	}
 

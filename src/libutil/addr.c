@@ -192,6 +192,46 @@ rspamd_inet_address_connect (rspamd_inet_addr_t *addr, gint type,
 	return fd;
 }
 
+int
+rspamd_inet_address_listen (rspamd_inet_addr_t *addr, gint type,
+		gboolean async)
+{
+	gint fd, r;
+	gint on = 1;
+
+	if (addr == NULL) {
+		return -1;
+	}
+
+	fd = rspamd_socket_create (addr->af, type, 0, async);
+	if (fd == -1) {
+		return -1;
+	}
+
+	setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (gint));
+	r = bind (fd, &addr->addr.sa, addr->slen);
+	if (r == -1) {
+		if (!async || errno != EINPROGRESS) {
+			close (fd);
+			msg_warn ("bind failed: %d, '%s'", errno,
+						strerror (errno));
+			return -1;
+		}
+	}
+
+	if (type != SOCK_DGRAM) {
+		r = listen (fd, -1);
+
+		if (r == -1) {
+			msg_warn ("listen failed: %d, '%s'", errno, strerror (errno));
+			close (fd);
+			return -1;
+		}
+	}
+
+	return fd;
+}
+
 gboolean
 rspamd_parse_host_port_priority_strv (gchar **tokens,
 	rspamd_inet_addr_t **addr,
@@ -216,19 +256,12 @@ rspamd_parse_host_port_priority_strv (gchar **tokens,
 
 	cur_tok = tokens[0];
 
-	if (strcmp (cur_tok, "*v6") == 0) {
-		hints.ai_family = AF_INET6;
+	if (strcmp (cur_tok, "*") == 0) {
 		hints.ai_flags |= AI_PASSIVE;
 		cur_tok = NULL;
 	}
-	else if (strcmp (cur_tok, "*v4") == 0) {
-		hints.ai_family = AF_INET;
-		hints.ai_flags |= AI_PASSIVE;
-		cur_tok = NULL;
-	}
-	else {
-		hints.ai_family = AF_UNSPEC;
-	}
+
+	hints.ai_family = AF_UNSPEC;
 
 	if (tokens[1] != NULL) {
 		/* Port part */

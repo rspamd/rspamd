@@ -199,9 +199,9 @@ struct rspamd_classifier_config {
 };
 
 struct rspamd_worker_bind_conf {
-	gchar *bind_host;
-	guint16 bind_port;
-	gint ai;
+	rspamd_inet_addr_t *addrs;
+	guint cnt;
+	gchar *name;
 	gboolean is_systemd;
 	struct rspamd_worker_bind_conf *next;
 };
