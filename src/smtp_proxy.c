@@ -59,8 +59,7 @@ worker_t smtp_proxy_worker = {
 };
 
 struct smtp_proxy_ctx {
-	struct smtp_upstream upstreams[MAX_SMTP_UPSTREAMS];
-	size_t upstream_num;
+	struct upstream_list *upstreams;
 	gchar *upstreams_str;
 
 	rspamd_mempool_t *pool;
@@ -112,7 +111,7 @@ struct smtp_proxy_session {
 
 	rspamd_proxy_t *proxy;
 
-	struct smtp_upstream *upstream;
+	struct upstream *upstream;
 
 	struct event *delay_timer;
 	struct event upstream_ev;
@@ -313,13 +312,13 @@ smtp_proxy_greeting_handler (gint fd, short what, void *arg)
 				else if (r == -1) {
 					/* Proxy sent 500 error */
 					msg_info ("connection with %s got smtp error for greeting",
-						session->upstream->name);
+						rspamd_upstream_name (session->upstream));
 					destroy_session (session->s);
 				}
 			}
 			else {
 				msg_info ("connection with %s got read error: %s",
-					session->upstream->name,
+					rspamd_upstream_name (session->upstream),
 					strerror (errno));
 				destroy_session (session->s);
 			}
@@ -359,14 +358,14 @@ smtp_proxy_greeting_handler (gint fd, short what, void *arg)
 				else if (r == -1) {
 					/* Proxy sent 500 error */
 					msg_info ("connection with %s got smtp error for xclient",
-						session->upstream->name);
+							rspamd_upstream_name (session->upstream));
 					destroy_session (session->s);
 				}
 			}
 		}
 		else {
 			msg_info ("connection with %s got read event at improper state: %d",
-				session->upstream->name,
+				rspamd_upstream_name (session->upstream),
 				session->state);
 			destroy_session (session->s);
 		}
@@ -400,7 +399,7 @@ smtp_proxy_greeting_handler (gint fd, short what, void *arg)
 			}
 			else {
 				msg_info ("connection with %s got write error: %s",
-					session->upstream->name,
+					rspamd_upstream_name (session->upstream),
 					strerror (errno));
 				destroy_session (session->s);
 			}
@@ -408,14 +407,15 @@ smtp_proxy_greeting_handler (gint fd, short what, void *arg)
 		else {
 			msg_info (
 				"connection with %s got write event at improper state: %d",
-				session->upstream->name,
+				rspamd_upstream_name (session->upstream),
 				session->state);
 			destroy_session (session->s);
 		}
 	}
 	else {
 		/* Timeout */
-		msg_info ("connection with %s timed out", session->upstream->name);
+		msg_info ("connection with %s timed out",
+				rspamd_upstream_name (session->upstream));
 		destroy_session (session->s);
 	}
 }
@@ -423,17 +423,11 @@ smtp_proxy_greeting_handler (gint fd, short what, void *arg)
 static gboolean
 create_smtp_proxy_upstream_connection (struct smtp_proxy_session *session)
 {
-	struct smtp_upstream *selected;
+	struct upstream *selected;
 
 	/* Try to select upstream */
-	selected = (struct smtp_upstream *)get_upstream_round_robin (
-		session->ctx->upstreams,
-		session->ctx->upstream_num,
-		sizeof (struct smtp_upstream),
-		time (NULL),
-		DEFAULT_UPSTREAM_ERROR_TIME,
-		DEFAULT_UPSTREAM_DEAD_TIME,
-		DEFAULT_UPSTREAM_MAXERRORS);
+	selected = rspamd_upstream_get (session->ctx->upstreams,
+			RSPAMD_UPSTREAM_ROUND_ROBIN);
 	if (selected == NULL) {
 		msg_err ("no upstreams suitable found");
 		return FALSE;
@@ -442,15 +436,12 @@ create_smtp_proxy_upstream_connection (struct smtp_proxy_session *session)
 	session->upstream = selected;
 
 	/* Now try to create socket */
-	session->upstream_sock = make_universal_socket (selected->name,
-			selected->port,
-			SOCK_STREAM,
-			TRUE,
-			FALSE,
-			FALSE);
+	session->upstream_sock = rspamd_inet_address_connect (
+			rspamd_upstream_addr (selected), SOCK_STREAM, TRUE);
 	if (session->upstream_sock == -1) {
-		msg_err ("cannot make a connection to %s", selected->name);
-		upstream_fail (&selected->up, time (NULL));
+		msg_err ("cannot make a connection to %s",
+				rspamd_upstream_name (session->upstream));
+		rspamd_upstream_fail (selected);
 		return FALSE;
 	}
 	/* Create a proxy for upstream connection */
@@ -1043,8 +1034,8 @@ config_smtp_proxy_worker (struct rspamd_worker *worker)
 
 	/* Init upstreams */
 	if ((value = ctx->upstreams_str) != NULL) {
-		if (!parse_upstreams_line (ctx->pool, ctx->upstreams, value,
-			&ctx->upstream_num)) {
+		if (!rspamd_upstreams_parse_line (ctx->upstreams, value, 25, NULL)) {
+			msg_err ("cannot parse any valid upstream");
 			return FALSE;
 		}
 	}
