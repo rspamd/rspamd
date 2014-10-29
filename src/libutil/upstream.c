@@ -274,6 +274,12 @@ rspamd_upstreams_create (void)
 	return ls;
 }
 
+gsize
+rspamd_upstreams_count (struct upstream_list *ups)
+{
+	return ups->ups->len;
+}
+
 static void
 rspamd_upstream_dtor (struct upstream *up)
 {
@@ -351,6 +357,29 @@ rspamd_upstreams_parse_line (struct upstream_list *ups,
 		p += len + 1;
 		/* Skip separators */
 		p += strspn (p, separators) + 1;
+	}
+
+	return ret;
+}
+
+gboolean
+rspamd_upstreams_from_ucl (struct upstream_list *ups,
+		const ucl_object_t *in, guint16 def_port, void *data)
+{
+	gboolean ret = FALSE;
+	const ucl_object_t *cur;
+	ucl_object_iter_t it = NULL;
+
+	if (ucl_object_type (in) == UCL_ARRAY) {
+		while ((cur = ucl_iterate_object (in, &it, true)) != NULL) {
+			if (rspamd_upstreams_from_ucl (ups, cur, def_port, data)) {
+				ret = TRUE;
+			}
+		}
+	}
+	else if (ucl_object_type (in) == UCL_STRING) {
+		ret = rspamd_upstreams_parse_line (ups, ucl_object_tostring (in),
+				def_port, data);
 	}
 
 	return ret;

@@ -4,6 +4,7 @@
 #include "config.h"
 #include "util.h"
 #include "rdns.h"
+#include "ucl.h"
 
 enum rspamd_upstream_rotation {
 	RSPAMD_UPSTREAM_RANDOM,
@@ -53,6 +54,13 @@ struct upstream_list* rspamd_upstreams_create (void);
 void rspamd_upstreams_destroy (struct upstream_list *ups);
 
 /**
+ * Returns count of upstreams in a list
+ * @param ups
+ * @return
+ */
+gsize rspamd_upstreams_count (struct upstream_list *ups);
+
+/**
  * Add upstream from the string
  * @param ups upstream list
  * @param str string in format "name[:port[:priority]]"
@@ -73,6 +81,18 @@ gboolean rspamd_upstreams_add_upstream (struct upstream_list *ups,
  */
 gboolean rspamd_upstreams_parse_line (struct upstream_list *ups,
 		const gchar *str, guint16 def_port, void *data);
+
+
+/**
+ * Parse upstreams list from the UCL object
+ * @param ups
+ * @param in
+ * @param def_port
+ * @param data
+ * @return
+ */
+gboolean rspamd_upstreams_from_ucl (struct upstream_list *ups,
+		const ucl_object_t *in, guint16 def_port, void *data);
 
 /**
  * Returns the current IP address of the upstream
