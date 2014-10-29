@@ -16,13 +16,6 @@
 #define SURBL_OPTION_NOIP 1
 #define MAX_LEVELS 10
 
-struct redirector_upstream {
-	struct upstream up;
-	gchar *addr;
-	guint16 port;
-	gchar *name;
-};
-
 struct surbl_ctx {
 	gint (*filter)(struct rspamd_task *task);
 	guint16 weight;
@@ -41,8 +34,7 @@ struct surbl_ctx {
 	rspamd_trie_t *redirector_trie;
 	GPtrArray *redirector_ptrs;
 	guint use_redirector;
-	struct redirector_upstream *redirectors;
-	guint32 redirectors_number;
+	struct upstream_list *redirectors;
 	rspamd_mempool_t *surbl_pool;
 };
 
@@ -63,7 +55,7 @@ struct dns_param {
 struct redirector_param {
 	struct uri *url;
 	struct rspamd_task *task;
-	struct redirector_upstream *redirector;
+	struct upstream *redirector;
 	enum {
 		STATE_CONNECT,
 		STATE_READ

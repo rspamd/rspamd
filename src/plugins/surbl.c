@@ -244,7 +244,7 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 
 	surbl_module_ctx->tld2_file = NULL;
 	surbl_module_ctx->whitelist_file = NULL;
-	surbl_module_ctx->redirectors_number = 0;
+	surbl_module_ctx->redirectors = NULL;
 	surbl_module_ctx->redirector_trie = rspamd_trie_create (TRUE);
 	surbl_module_ctx->redirector_ptrs = g_ptr_array_new ();
 
@@ -320,35 +320,20 @@ surbl_module_config (struct rspamd_config *cfg)
 		{
 			i++;
 		}
-		surbl_module_ctx->redirectors = rspamd_mempool_alloc0 (
-			surbl_module_ctx->surbl_pool,
-			i * sizeof (struct redirector_upstream));
+		surbl_module_ctx->redirectors = rspamd_upstreams_create ();
+		rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
+				(rspamd_mempool_destruct_t)rspamd_upstreams_destroy,
+				surbl_module_ctx->redirectors);
 		idx = 0;
 		LL_FOREACH (value, cur)
 		{
 			redir_val = ucl_obj_tostring (cur);
-			surbl_module_ctx->redirectors[idx].up.priority = 100;
-			if (!rspamd_parse_host_port_priority (surbl_module_ctx->surbl_pool,
-				redir_val, &surbl_module_ctx->redirectors[idx].addr,
-				&surbl_module_ctx->redirectors[idx].port,
-				&surbl_module_ctx->redirectors[idx].up.priority)) {
-				msg_warn ("invalid redirector definition: %s", redir_val);
-			}
-			else {
-				if (surbl_module_ctx->redirectors[idx].port != 0) {
-					surbl_module_ctx->redirectors[idx].name =
-						rspamd_mempool_strdup (surbl_module_ctx->surbl_pool,
-							redir_val);
-					msg_info ("add redirector %s",
-						surbl_module_ctx->redirectors[idx].name);
-					idx++;
-				}
+			if (rspamd_upstreams_add_upstream (surbl_module_ctx->redirectors,
+					redir_val, 80, NULL)) {
+				surbl_module_ctx->use_redirector = TRUE;
 			}
 			i++;
 		}
-		surbl_module_ctx->redirectors_number = idx;
-		surbl_module_ctx->use_redirector =
-			(surbl_module_ctx->redirectors_number != 0);
 	}
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "surbl",
@@ -547,7 +532,7 @@ surbl_module_reconfig (struct rspamd_config *cfg)
 
 	surbl_module_ctx->tld2_file = NULL;
 	surbl_module_ctx->whitelist_file = NULL;
-	surbl_module_ctx->redirectors_number = 0;
+	surbl_module_ctx->redirectors = NULL;
 	surbl_module_ctx->redirector_trie = rspamd_trie_create (TRUE);
 
 	surbl_module_ctx->redirector_hosts = g_hash_table_new (rspamd_strcase_hash,
@@ -910,8 +895,8 @@ redirector_callback (gint fd, short what, void *arg)
 					struri (param->url));
 			if (write (param->sock, url_buf, r) == -1) {
 				msg_err ("write failed %s to %s", strerror (
-						errno), param->redirector->name);
-				upstream_fail (&param->redirector->up, param->task->tv.tv_sec);
+						errno), rspamd_upstream_name (param->redirector));
+				rspamd_upstream_fail (param->redirector);
 				remove_normal_event (param->task->s,
 					free_redirector_session,
 					param);
@@ -923,8 +908,8 @@ redirector_callback (gint fd, short what, void *arg)
 			msg_info (
 				"<%s> connection to redirector %s timed out while waiting for write",
 				param->task->message_id,
-				param->redirector->name);
-			upstream_fail (&param->redirector->up, param->task->tv.tv_sec);
+				rspamd_upstream_name (param->redirector));
+			rspamd_upstream_fail (param->redirector);
 			remove_normal_event (param->task->s, free_redirector_session,
 				param);
 
@@ -936,8 +921,8 @@ redirector_callback (gint fd, short what, void *arg)
 			r = read (param->sock, url_buf, sizeof (url_buf) - 1);
 			if (r <= 0) {
 				msg_err ("read failed: %s from %s", strerror (
-						errno), param->redirector->name);
-				upstream_fail (&param->redirector->up, param->task->tv.tv_sec);
+						errno), rspamd_upstream_name (param->redirector));
+				rspamd_upstream_fail (param->redirector);
 				make_surbl_requests (param->url,
 					param->task,
 					param->suffix,
@@ -980,16 +965,16 @@ redirector_callback (gint fd, short what, void *arg)
 					}
 				}
 			}
-			upstream_ok (&param->redirector->up, param->task->tv.tv_sec);
+			rspamd_upstream_ok (param->redirector);
 			remove_normal_event (param->task->s, free_redirector_session,
 				param);
 		}
 		else {
 			msg_info (
 				"<%s> reading redirector %s timed out, while waiting for read",
-				param->redirector->name,
+				rspamd_upstream_name (param->redirector),
 				param->task->message_id);
-			upstream_fail (&param->redirector->up, param->task->tv.tv_sec);
+			rspamd_upstream_fail (param->redirector);
 			remove_normal_event (param->task->s, free_redirector_session,
 				param);
 		}
@@ -1005,24 +990,14 @@ register_redirector_call (struct uri *url, struct rspamd_task *task,
 	gint s = -1;
 	struct redirector_param *param;
 	struct timeval *timeout;
-	struct redirector_upstream *selected;
+	struct upstream *selected;
 
-	selected = (struct redirector_upstream *)get_upstream_round_robin (
-		surbl_module_ctx->redirectors,
-		surbl_module_ctx->redirectors_number,
-		sizeof (struct redirector_upstream),
-		task->tv.tv_sec,
-		DEFAULT_UPSTREAM_ERROR_TIME,
-		DEFAULT_UPSTREAM_DEAD_TIME,
-		DEFAULT_UPSTREAM_MAXERRORS);
+	selected = rspamd_upstream_get (surbl_module_ctx->redirectors,
+			RSPAMD_UPSTREAM_ROUND_ROBIN);
 
 	if (selected) {
-		s = make_universal_socket (selected->addr,
-				selected->port,
-				SOCK_STREAM,
-				TRUE,
-				FALSE,
-				FALSE);
+		s = rspamd_inet_address_connect (rspamd_upstream_addr (selected),
+				SOCK_STREAM, TRUE);
 	}
 
 	if (s == -1) {
@@ -1059,7 +1034,7 @@ register_redirector_call (struct uri *url, struct rspamd_task *task,
 		"<%s> registered redirector call for %s to %s, according to rule: %s",
 		task->message_id,
 		struri (url),
-		selected->name,
+		rspamd_upstream_name (param->redirector),
 		rule);
 }
 
