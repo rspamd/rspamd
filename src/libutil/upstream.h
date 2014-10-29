@@ -70,6 +70,13 @@ gboolean rspamd_upstreams_add_upstream (struct upstream_list *ups,
 rspamd_inet_addr_t* rspamd_upstream_addr (struct upstream *up);
 
 /**
+ * Returns the symbolic name of the upstream
+ * @param up
+ * @return
+ */
+const gchar* rspamd_upstream_name (struct upstream *up);
+
+/**
  * Get new upstream from the list
  * @param ups upstream list
  * @param type type of rotation algorithm, for `RSPAMD_UPSTREAM_HASHED` it is required to specify `key` and `keylen` as arguments

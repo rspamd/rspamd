@@ -21,7 +21,7 @@ enum rspamd_smtp_stage {
 };
 
 struct smtp_worker_ctx {
-	struct smtp_upstream upstreams[MAX_SMTP_UPSTREAMS];
+	struct upstream_list *upstreams;
 	gsize upstream_num;
 	gchar *upstreams_str;
 
@@ -96,7 +96,7 @@ struct smtp_session {
 	rspamd_io_dispatcher_t *dispatcher;
 	rspamd_io_dispatcher_t *upstream_dispatcher;
 
-	struct smtp_upstream *upstream;
+	struct upstream *upstream;
 
 	struct event *delay_timer;
 

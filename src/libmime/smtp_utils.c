@@ -60,17 +60,11 @@ free_smtp_session (gpointer arg)
 gboolean
 create_smtp_upstream_connection (struct smtp_session *session)
 {
-	struct smtp_upstream *selected;
+	struct upstream *selected;
 
 	/* Try to select upstream */
-	selected = (struct smtp_upstream *)get_upstream_round_robin (
-		session->ctx->upstreams,
-		session->ctx->upstream_num,
-		sizeof (struct smtp_upstream),
-		session->session_time,
-		DEFAULT_UPSTREAM_ERROR_TIME,
-		DEFAULT_UPSTREAM_DEAD_TIME,
-		DEFAULT_UPSTREAM_MAXERRORS);
+	selected = rspamd_upstream_get (session->ctx->upstreams,
+			RSPAMD_UPSTREAM_ROUND_ROBIN);
 	if (selected == NULL) {
 		msg_err ("no upstreams suitable found");
 		return FALSE;
@@ -79,15 +73,11 @@ create_smtp_upstream_connection (struct smtp_session *session)
 	session->upstream = selected;
 
 	/* Now try to create socket */
-	session->upstream_sock = make_universal_socket (selected->addr,
-			selected->port,
-			SOCK_STREAM,
-			TRUE,
-			FALSE,
-			FALSE);
+	session->upstream_sock = rspamd_inet_address_connect (
+			rspamd_upstream_addr (selected), SOCK_STREAM, TRUE);
 	if (session->upstream_sock == -1) {
-		msg_err ("cannot make a connection to %s", selected->name);
-		upstream_fail (&selected->up, session->session_time);
+		msg_err ("cannot make a connection to %s", rspamd_upstream_name (selected));
+		rspamd_upstream_fail (selected);
 		return FALSE;
 	}
 	/* Create a dispatcher for upstream connection */
@@ -379,64 +369,4 @@ err:
 	}
 	destroy_session (session->s);
 	return FALSE;
-}
-
-gboolean
-parse_upstreams_line (rspamd_mempool_t *pool,
-	struct smtp_upstream *upstreams,
-	const gchar *line,
-	gsize *count)
-{
-	gchar **strv, *p, *t, *tt, *err_str;
-	guint32 num, i;
-	struct smtp_upstream *cur;
-	gchar resolved_path[PATH_MAX];
-
-	strv = g_strsplit_set (line, ",; ", -1);
-	num = g_strv_length (strv);
-
-	if (num >= MAX_SMTP_UPSTREAMS) {
-		msg_err ("cannot define %d upstreams %d is max", num,
-			MAX_SMTP_UPSTREAMS);
-		return FALSE;
-	}
-	*count = 0;
-
-	for (i = 0; i < num; i++) {
-		p = strv[i];
-		cur = &upstreams[*count];
-		if ((t = strrchr (p, ':')) != NULL && (tt = strchr (p, ':')) != t) {
-			/* Assume that after last `:' we have weigth */
-			*t = '\0';
-			t++;
-			errno = 0;
-			cur->up.priority = strtoul (t, &err_str, 10);
-			if (errno != 0 || (err_str && *err_str != '\0')) {
-				msg_err ("cannot convert weight: %s, %s", t, strerror (errno));
-				g_strfreev (strv);
-				return FALSE;
-			}
-		}
-		if (*p == '/') {
-			cur->is_unix = TRUE;
-			if (realpath (p, resolved_path) == NULL) {
-				msg_err ("cannot resolve path: %s", resolved_path);
-				g_strfreev (strv);
-				return FALSE;
-			}
-			cur->name = rspamd_mempool_strdup (pool, resolved_path);
-			(*count)++;
-		}
-		else {
-			if (!rspamd_parse_host_port (pool, p, &cur->addr, &cur->port)) {
-				g_strfreev (strv);
-				return FALSE;
-			}
-			cur->name = rspamd_mempool_strdup (pool, p);
-			(*count)++;
-		}
-	}
-
-	g_strfreev (strv);
-	return TRUE;
 }

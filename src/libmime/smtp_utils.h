@@ -9,8 +9,6 @@
  */
 
 struct smtp_upstream {
-	struct upstream up;
-
 	const gchar *name;
 	gchar *addr;
 	guint16 port;
@@ -48,17 +46,5 @@ gboolean write_smtp_reply (struct smtp_session *session);
  * Frees smtp session object
  */
 void free_smtp_session (gpointer arg);
-
-/**
- * Parse upstreams line
- * @param upstreams pointer to the array of upstreams (must be at least MAX_SMTP_UPSTREAMS size)
- * @param line description line
- * @param count targeted count
- * @return
- */
-gboolean parse_upstreams_line (rspamd_mempool_t *pool,
-	struct smtp_upstream *upstreams,
-	const gchar *line,
-	gsize *count);
 
 #endif /* SMTP_UTILS_H_ */

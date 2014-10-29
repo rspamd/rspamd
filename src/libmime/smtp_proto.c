@@ -742,7 +742,7 @@ smtp_upstream_err_socket (GError *err, void *arg)
 	struct smtp_session *session = arg;
 
 	msg_info ("abnormally closing connection with upstream %s, error: %s",
-		session->upstream->name,
+		rspamd_upstream_name (session->upstream),
 		err->message);
 	session->error = SMTP_ERROR_UPSTREAM;
 	session->state = SMTP_STATE_CRITICAL_ERROR;
@@ -756,7 +756,7 @@ smtp_upstream_err_socket (GError *err, void *arg)
 		FALSE, TRUE)) {
 		return;
 	}
-	upstream_fail (&session->upstream->up, session->session_time);
+	rspamd_upstream_fail (session->upstream);
 	destroy_session (session->s);
 }
 

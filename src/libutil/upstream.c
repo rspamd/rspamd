@@ -296,6 +296,12 @@ rspamd_upstream_addr (struct upstream *up)
 	return &up->addrs.addr[up->addrs.cur++ % up->addrs.count];
 }
 
+const gchar*
+rspamd_upstream_name (struct upstream *up)
+{
+	return up->name;
+}
+
 gboolean
 rspamd_upstreams_add_upstream (struct upstream_list *ups,
 		const gchar *str, guint16 def_port, void *data)
