@@ -163,6 +163,13 @@ LUA_FUNCTION_DEF (ip, equal);
  */
 LUA_FUNCTION_DEF (ip, copy);
 
+/**
+ * @method ip:get_port()
+ * Returns associated port for this IP address
+ * @return {number} port number or nil
+ */
+LUA_FUNCTION_DEF (ip, get_port);
+
 static const struct luaL_reg iplib_m[] = {
 	LUA_INTERFACE_DEF (ip, to_string),
 	LUA_INTERFACE_DEF (ip, to_table),
@@ -170,6 +177,7 @@ static const struct luaL_reg iplib_m[] = {
 	LUA_INTERFACE_DEF (ip, str_octets),
 	LUA_INTERFACE_DEF (ip, inversed_str_octets),
 	LUA_INTERFACE_DEF (ip, get_version),
+	LUA_INTERFACE_DEF (ip, get_port),
 	LUA_INTERFACE_DEF (ip, is_valid),
 	LUA_INTERFACE_DEF (ip, apply_mask),
 	LUA_INTERFACE_DEF (ip, copy),
@@ -341,6 +349,21 @@ lua_ip_to_string (lua_State *L)
 
 	if (ip != NULL && ip->is_valid) {
 		lua_pushstring (L, rspamd_inet_address_to_string (&ip->addr));
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_ip_get_port (lua_State *L)
+{
+	struct rspamd_lua_ip *ip = lua_check_ip (L, 1);
+
+	if (ip != NULL && ip->is_valid) {
+		lua_pushnumber (L, rspamd_inet_address_get_port (&ip->addr));
 	}
 	else {
 		lua_pushnil (L);

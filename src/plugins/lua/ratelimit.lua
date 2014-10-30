@@ -47,7 +47,8 @@ end
 --- Check specific limit inside redis
 local function check_specific_limit (task, limit, key)
 
-	local upstream = upstreams:get_upstream_by_hash(key, task:get_date())
+	local upstream = upstreams:get_upstream_by_hash(key)
+	local addr = upstream:get_addr()
 	--- Called when value was set on server
 	local function rate_set_key_cb(task, err, data)
 		if err then
@@ -67,13 +68,13 @@ local function check_specific_limit (task, limit, key)
 			bucket = bucket - limit[2] * (ntime - atime);
 			if bucket > 0 then
 				local lstr = string.format('%.7f:%.7f', ntime, bucket)
-				rspamd_redis.make_request(task, upstream:get_ip_string(), upstream:get_port(), rate_set_key_cb, 
+				rspamd_redis.make_request(task, addr:to_string(), addr:get_port(), rate_set_key_cb, 
 							'SET %b %b', key, lstr)
 				if bucket > limit[1] then
 					task:set_pre_result('soft reject', 'Ratelimit exceeded: ' .. key)
 				end
 			else
-				rspamd_redis.make_request(task, upstream:get_ip_string(), upstream:get_port(), rate_set_key_cb, 
+				rspamd_redis.make_request(task, addr:to_string(), addr:get_port(), rate_set_key_cb, 
 							'DEL %b', key)
 			end
 		end
@@ -83,13 +84,14 @@ local function check_specific_limit (task, limit, key)
 		end	
 	end
 	if upstream then
-		rspamd_redis.make_request(task, upstream:get_ip_string(), upstream:get_port(), rate_get_cb, 'GET %b', key)
+		rspamd_redis.make_request(task, addr:to_string(), addr:get_port(), rate_get_cb, 'GET %b', key)
 	end
 end
 
 --- Set specific limit inside redis
 local function set_specific_limit (task, limit, key)
-	local upstream = upstreams:get_upstream_by_hash(key,  task:get_date())
+	local upstream = upstreams:get_upstream_by_hash(key)
+	local addr = upstream:get_addr()
 	--- Called when value was set on server
 	local function rate_set_key_cb(task, err, data)
 		if err then
@@ -105,8 +107,8 @@ local function set_specific_limit (task, limit, key)
 			--- Add new entry
 			local tv = task:get_timeval()
 			local atime = tv['tv_usec'] / 1000000. + tv['tv_sec']
-			local lstr = string.format('%.7f:1', atime)
-			rspamd_redis.make_request(task, upstream:get_ip_string(), upstream:get_port(), rate_set_key_cb, 
+			local lstr = string.format('%.7f:1', atime)	
+			rspamd_redis.make_request(task, addr:to_string(), addr:get_port(), rate_set_key_cb, 
 							'SET %b %b', key, lstr)
 		elseif data then
 			local atime, bucket = parse_limit_data(data)
@@ -115,7 +117,7 @@ local function set_specific_limit (task, limit, key)
 			-- Leak messages
 			bucket = bucket - limit[2] * (ntime - atime) + 1;
 			local lstr = string.format('%.7f:%.7f', ntime, bucket)
-			rspamd_redis.make_request(task, upstream:get_ip_string(), upstream:get_port(), rate_set_key_cb, 
+			rspamd_redis.make_request(task, addr:to_string(), addr:get_port(), rate_set_key_cb, 
 							'SET %b %b', key, lstr)
 		elseif err then
 		  rspamd_logger.info('got error while setting limit: ' .. err)
@@ -123,7 +125,7 @@ local function set_specific_limit (task, limit, key)
 		end
 	end
 	if upstream then
-		rspamd_redis.make_request(task, upstream:get_ip_string(), upstream:get_port(), rate_set_cb, 'GET %b', key)
+		rspamd_redis.make_request(task, addr:to_string(), addr:get_port(), rate_set_cb, 'GET %b', key)
 	end
 end
 
