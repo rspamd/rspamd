@@ -197,11 +197,11 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
 			REF_RETAIN (up);
 			rdns_make_request_full (res, rspamd_upstream_dns_cb, up,
 					default_dns_timeout, default_dns_retransmits,
-					RDNS_REQUEST_A, up->name);
+					1, up->name, RDNS_REQUEST_A);
 			REF_RETAIN (up);
 			rdns_make_request_full (res, rspamd_upstream_dns_cb, up,
 					default_dns_timeout, default_dns_retransmits,
-					RDNS_REQUEST_AAAA, up->name);
+					1, up->name, RDNS_REQUEST_AAAA);
 		}
 	}
 
@@ -229,7 +229,7 @@ void
 rspamd_upstream_fail (struct upstream *up)
 {
 	struct timeval tv;
-	gdouble error_rate, max_error_rate;
+	gdouble error_rate, max_error_rate, msec_last, msec_cur;
 
 	rspamd_mutex_lock (up->lock);
 	if (g_atomic_int_compare_and_exchange (&up->errors, 0, 1)) {
@@ -242,12 +242,16 @@ rspamd_upstream_fail (struct upstream *up)
 
 	gettimeofday (&tv, NULL);
 
-	error_rate = ((gdouble)up->errors) / (tv.tv_sec - up->tv.tv_sec);
-	max_error_rate = (gdouble)default_max_errors / (gdouble)default_error_time;
+	msec_last = tv_to_msec (&up->tv) / 1000.;
+	msec_cur = tv_to_msec (&tv) / 1000.;
+	if (msec_cur > msec_last) {
+		error_rate = ((gdouble)up->errors) / (msec_cur - msec_last);
+		max_error_rate = (gdouble)default_max_errors / (gdouble)default_error_time;
 
-	if (error_rate > max_error_rate) {
-		/* Remove upstream from the active list */
-		rspamd_upstream_set_inactive (up->ls, up);
+		if (error_rate > max_error_rate) {
+			/* Remove upstream from the active list */
+			rspamd_upstream_set_inactive (up->ls, up);
+		}
 	}
 	rspamd_mutex_unlock (up->lock);
 }
@@ -331,6 +335,7 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups,
 	g_ptr_array_add (ups->ups, up);
 	up->ud = data;
 	up->cur_weight = up->weight;
+	up->ls = ups;
 	REF_INIT_RETAIN (up, rspamd_upstream_dtor);
 	up->lock = rspamd_mutex_new ();
 
@@ -424,7 +429,7 @@ rspamd_upstream_restore_cb (gpointer elt, gpointer ls)
 
 	g_ptr_array_add (ups->alive, up);
 	up->active_idx = ups->alive->len - 1;
-	rspamd_mutex_lock (up->lock);
+	rspamd_mutex_unlock (up->lock);
 	/* For revive event */
 	REF_RELEASE (up);
 }
