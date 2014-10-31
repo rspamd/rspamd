@@ -45,18 +45,7 @@ struct roll_history_row {
 	gchar message_id[HISTORY_MAX_ID];
 	gchar symbols[HISTORY_MAX_SYMBOLS];
 	gchar user[HISTORY_MAX_USER];
-#ifdef HAVE_INET_PTON
-	struct {
-		union {
-			struct in_addr in4;
-			struct in6_addr in6;
-		} d;
-		gboolean ipv6;
-		gboolean has_addr;
-	} from_addr;
-#else
-	struct in_addr from_addr;
-#endif
+	rspamd_inet_addr_t from_addr;
 	gsize len;
 	guint scan_time;
 	gint action;

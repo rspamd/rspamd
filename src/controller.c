@@ -647,7 +647,6 @@ rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
 	gint i, rows_proc, row_num;
 	struct tm *tm;
 	gchar timebuf[32];
-	gchar ip_buf[INET6_ADDRSTRLEN];
 	ucl_object_t *top, *obj;
 
 	ctx = session->ctx;
@@ -675,27 +674,14 @@ rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
 		/* Get only completed rows */
 		if (row->completed) {
 			tm = localtime (&row->tv.tv_sec);
-			strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", tm);
-#ifdef HAVE_INET_PTON
-			if (row->from_addr.ipv6) {
-				inet_ntop (AF_INET6, &row->from_addr.d.in6, ip_buf,
-					sizeof (ip_buf));
-			}
-			else {
-				inet_ntop (AF_INET, &row->from_addr.d.in4, ip_buf,
-					sizeof (ip_buf));
-			}
-#else
-			rspamd_strlcpy (ip_buf, inet_ntoa (task->from_addr),
-				sizeof (ip_buf));
-#endif
 			obj = ucl_object_typed_new (UCL_OBJECT);
 			ucl_object_insert_key (obj, ucl_object_fromstring (
 					timebuf),		  "time", 0, false);
 			ucl_object_insert_key (obj, ucl_object_fromstring (
 					row->message_id), "id",	  0, false);
 			ucl_object_insert_key (obj, ucl_object_fromstring (
-					ip_buf),		  "ip",	  0, false);
+					rspamd_inet_address_to_string (&row->from_addr)),
+					"ip", 0, false);
 			ucl_object_insert_key (obj,
 				ucl_object_fromstring (rspamd_action_to_str (
 					row->action)), "action", 0, false);
