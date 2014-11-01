@@ -54,12 +54,20 @@ struct rspamd_worker {
 	gboolean pending;                                           /**< if worker is pending to run					*/
 	struct rspamd_main *srv;                                    /**< pointer to server structure					*/
 	GQuark type;                                                /**< process type									*/
-	struct event sig_ev_usr1;                                   /**< signals event									*/
-	struct event sig_ev_usr2;                                   /**< signals event									*/
+	GHashTable *signal_events;									/**< signal events									*/
 	GList *accept_events;                                       /**< socket events									*/
 	struct rspamd_worker_conf *cf;                                      /**< worker config data								*/
 	gpointer ctx;                                               /**< worker's specific data							*/
 };
+
+struct rspamd_worker_signal_handler {
+	gint signo;
+	gboolean enabled;
+	struct event ev;
+	struct event_base *base;
+	struct rspamd_worker *worker;
+};
+
 
 /**
  * Module

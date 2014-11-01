@@ -1009,7 +1009,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	gint i;
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
-			"controller",
+			"fuzzy",
 			accept_fuzzy_socket);
 	server_stat = worker->srv->stat;
 
@@ -1023,8 +1023,6 @@ start_fuzzy (struct rspamd_worker *worker)
 	signal_set (&sev, SIGTERM, sigterm_handler, (void *)worker);
 	event_base_set (ctx->ev_base, &sev);
 	signal_add (&sev, NULL);
-	/* We set wanna_die to 1 as we setup our own SIGTERM handler */
-	wanna_die = 1;
 
 	if (ctx->strict_hash) {
 		static_hash = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal,
