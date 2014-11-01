@@ -61,7 +61,8 @@ struct rspamd_logger_s {
 	guint32 repeats;
 	gchar *saved_message;
 	gchar *saved_function;
-	GMutex *mtx;
+	rspamd_mempool_t *pool;
+	rspamd_mempool_mutex_t *mtx;
 };
 
 static const gchar lf_chr = '\n';
@@ -299,12 +300,9 @@ rspamd_set_logger (struct rspamd_config *cfg,
 	rspamd->logger->pid = getpid ();
 	rspamd->logger->process_type = ptype;
 
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
-	rspamd->logger->mtx = g_mutex_new ();
-#else
-	rspamd->logger->mtx = g_malloc (sizeof (GMutex));
-	g_mutex_init (rspamd->logger->mtx);
-#endif
+	/* Small pool for interlocking */
+	rspamd->logger->pool = rspamd_mempool_new (512);
+	rspamd->logger->mtx = rspamd_mempool_get_mutex (rspamd->logger->pool);
 
 	switch (cfg->log_type) {
 	case RSPAMD_LOG_CONSOLE:
@@ -406,7 +404,7 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log,
 		}
 	}
 	else if (log_level <= rspamd_log->cfg->log_level) {
-		g_mutex_lock (rspamd_log->mtx);
+		rspamd_mempool_lock_mutex (rspamd_log->mtx);
 		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
 		*end = '\0';
 		rspamd_escape_log_string (logbuf);
@@ -416,7 +414,7 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log,
 			logbuf,
 			FALSE,
 			rspamd_log);
-		g_mutex_unlock (rspamd_log->mtx);
+		rspamd_mempool_unlock_mutex (rspamd_log->mtx);
 	}
 }
 
@@ -789,7 +787,7 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
 				return;
 			}
 		}
-		g_mutex_lock (rspamd_log->mtx);
+		rspamd_mempool_lock_mutex (rspamd_log->mtx);
 		va_start (vp, fmt);
 		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
 		*end = '\0';
@@ -801,7 +799,7 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
 			logbuf,
 			TRUE,
 			rspamd_log);
-		g_mutex_unlock (rspamd_log->mtx);
+		rspamd_mempool_unlock_mutex (rspamd_log->mtx);
 	}
 }
 /**
@@ -816,14 +814,14 @@ rspamd_glib_log_function (const gchar *log_domain,
 	rspamd_logger_t *rspamd_log = arg;
 
 	if (rspamd_log->enabled) {
-		g_mutex_lock (rspamd_log->mtx);
+		rspamd_mempool_lock_mutex (rspamd_log->mtx);
 		rspamd_log->log_func (log_domain,
 			NULL,
 			log_level,
 			message,
 			FALSE,
 			rspamd_log);
-		g_mutex_unlock (rspamd_log->mtx);
+		rspamd_mempool_unlock_mutex (rspamd_log->mtx);
 	}
 }
 
