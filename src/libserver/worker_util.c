@@ -146,6 +146,7 @@ rspamd_worker_set_signal_handler (int signo, struct rspamd_worker *worker,
 static void
 rspamd_worker_init_signals (struct rspamd_worker *worker, struct event_base *base)
 {
+	struct sigaction signals;
 	/* We ignore these signals in the worker */
 	rspamd_worker_ignore_signal (SIGPIPE);
 	rspamd_worker_ignore_signal (SIGALRM);
@@ -162,8 +163,21 @@ rspamd_worker_init_signals (struct rspamd_worker *worker, struct event_base *bas
 	/* Special purpose signals */
 	rspamd_worker_set_signal_handler (SIGUSR1, worker, base,
 			rspamd_worker_usr1_handler);
-	rspamd_worker_set_signal_handler (SIGUSR1, worker, base,
+	rspamd_worker_set_signal_handler (SIGUSR2, worker, base,
 			rspamd_worker_usr2_handler);
+
+	/* Unblock all signals processed */
+	sigemptyset (&signals.sa_mask);
+	sigaddset (&signals.sa_mask, SIGTERM);
+	sigaddset (&signals.sa_mask, SIGINT);
+	sigaddset (&signals.sa_mask, SIGHUP);
+	sigaddset (&signals.sa_mask, SIGCHLD);
+	sigaddset (&signals.sa_mask, SIGUSR1);
+	sigaddset (&signals.sa_mask, SIGUSR2);
+	sigaddset (&signals.sa_mask, SIGALRM);
+	sigaddset (&signals.sa_mask, SIGPIPE);
+
+	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 }
 
 struct event_base *
@@ -183,7 +197,7 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 	gperf_profiler_init (worker->srv->cfg, name);
 
 	worker->srv->pid = getpid ();
-	worker->signal_events = g_hash_table_new_full (g_int_hash, g_int_equal,
+	worker->signal_events = g_hash_table_new_full (g_direct_hash, g_direct_equal,
 			NULL, g_free);
 
 	ev_base = event_init ();
