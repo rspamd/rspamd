@@ -271,13 +271,15 @@ rspamd_upstream_ok (struct upstream *up)
 	rspamd_mutex_unlock (up->lock);
 }
 
+#define SEED_CONSTANT 0xa574de7df64e9b9dULL
+
 struct upstream_list*
 rspamd_upstreams_create (void)
 {
 	struct upstream_list *ls;
 
 	ls = g_slice_alloc (sizeof (*ls));
-	ottery_rand_bytes (&ls->hash_seed, sizeof (ls->hash_seed));
+	ls->hash_seed = SEED_CONSTANT;
 	ls->ups = g_ptr_array_new ();
 	ls->alive = g_ptr_array_new ();
 	ls->lock = rspamd_mutex_new ();
