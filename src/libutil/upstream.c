@@ -70,6 +70,7 @@ static struct event_base *ev_base = NULL;
 /* 4 errors in 10 seconds */
 const guint default_max_errors = 4;
 const guint default_revive_time = 60;
+const gdouble default_revive_jitter = 0.4;
 const guint default_error_time = 10;
 const gdouble default_dns_timeout = 1.0;
 const guint default_dns_retransmits = 2;
@@ -210,7 +211,9 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
 	if (ev_base != NULL) {
 		event_base_set (ev_base, &up->ev);
 	}
-	up->tv.tv_sec = default_revive_time;
+
+	up->tv.tv_sec = default_revive_time + ottery_rand_range (
+			default_revive_time * default_revive_jitter);
 	up->tv.tv_usec = 0;
 	event_add (&up->ev, &up->tv);
 
