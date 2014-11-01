@@ -329,54 +329,32 @@ end:
 }
 
 static void
-sigterm_handler (gint fd, short what, void *arg)
+sigterm_handler (void *arg)
 {
 	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
 	struct rspamd_fuzzy_storage_ctx *ctx;
-	static struct timeval tv = {
-		.tv_sec = 0,
-		.tv_usec = 0
-	};
 
 	ctx = worker->ctx;
-	event_del (&worker->sig_ev_usr1);
-	event_del (&worker->sig_ev_usr2);
-
 	rspamd_mutex_lock (ctx->update_mtx);
 	mods = ctx->max_mods + 1;
-	wanna_die = 1;
 	g_cond_signal (ctx->update_cond);
 	rspamd_mutex_unlock (ctx->update_mtx);
-
-	(void)event_base_loopexit (ctx->ev_base, &tv);
 }
 
 /*
  * Config reload is designed by sending sigusr to active workers and pending shutdown of them
  */
 static void
-sigusr2_handler (gint fd, short what, void *arg)
+sigusr2_handler (void *arg)
 {
 	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
-	/* Do not accept new connections, preparing to end worker's process */
-	struct timeval tv;
 	struct rspamd_fuzzy_storage_ctx *ctx;
 
 	ctx = worker->ctx;
-	tv.tv_sec = 0;
-	tv.tv_usec = 0;
-	event_del (&worker->sig_ev_usr1);
-	event_del (&worker->sig_ev_usr2);
-	rspamd_worker_stop_accept (worker);
-	msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 	rspamd_mutex_lock (ctx->update_mtx);
 	mods = ctx->max_mods + 1;
-	wanna_die = 1;
 	g_cond_signal (ctx->update_cond);
 	rspamd_mutex_unlock (ctx->update_mtx);
-
-	event_base_loopexit (ctx->ev_base, &tv);
-	return;
 }
 
 static gboolean
@@ -1003,9 +981,9 @@ init_fuzzy (struct rspamd_config *cfg)
 void
 start_fuzzy (struct rspamd_worker *worker)
 {
-	struct event sev;
 	struct rspamd_fuzzy_storage_ctx *ctx = worker->ctx;
 	GError *err = NULL;
+	struct rspamd_worker_signal_handler *sigh;
 	gint i;
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
@@ -1014,15 +992,20 @@ start_fuzzy (struct rspamd_worker *worker)
 	server_stat = worker->srv->stat;
 
 	/* Custom SIGUSR2 handler */
-	event_del (&worker->sig_ev_usr2);
-	signal_set (&worker->sig_ev_usr2, SIGUSR2, sigusr2_handler,
-		(void *) worker);
-	event_base_set (ctx->ev_base, &worker->sig_ev_usr2);
-	signal_add (&worker->sig_ev_usr2, NULL);
+	sigh = g_hash_table_lookup (worker->signal_events, GINT_TO_POINTER (SIGUSR2));
+	sigh->post_handler = sigusr2_handler;
+	sigh->handler_data = worker;
 
-	signal_set (&sev, SIGTERM, sigterm_handler, (void *)worker);
-	event_base_set (ctx->ev_base, &sev);
-	signal_add (&sev, NULL);
+	/* Sync on termination */
+	sigh = g_hash_table_lookup (worker->signal_events, GINT_TO_POINTER (SIGTERM));
+	sigh->post_handler = sigterm_handler;
+	sigh->handler_data = worker;
+	sigh = g_hash_table_lookup (worker->signal_events, GINT_TO_POINTER (SIGINT));
+	sigh->post_handler = sigterm_handler;
+	sigh->handler_data = worker;
+	sigh = g_hash_table_lookup (worker->signal_events, GINT_TO_POINTER (SIGHUP));
+	sigh->post_handler = sigterm_handler;
+	sigh->handler_data = worker;
 
 	if (ctx->strict_hash) {
 		static_hash = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal,
