@@ -67,6 +67,10 @@ rspamd_worker_usr2_handler (gint fd, short what, void *arg)
 		msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 		event_base_loopexit (sigh->base, &tv);
 	}
+
+	if (sigh->post_handler) {
+		sigh->post_handler (sigh->handler_data);
+	}
 }
 
 /*
@@ -79,6 +83,10 @@ rspamd_worker_usr1_handler (gint fd, short what, void *arg)
 			(struct rspamd_worker_signal_handler *)arg;
 
 	reopen_log (sigh->worker->srv->logger);
+
+	if (sigh->post_handler) {
+		sigh->post_handler (sigh->handler_data);
+	}
 }
 
 static void
@@ -97,6 +105,10 @@ rspamd_worker_term_handler (gint fd, short what, void *arg)
 #ifdef WITH_GPERF_TOOLS
 		ProfilerStop ();
 #endif
+	}
+
+	if (sigh->post_handler) {
+		sigh->post_handler (sigh->handler_data);
 	}
 }
 
@@ -118,7 +130,7 @@ rspamd_worker_set_signal_handler (int signo, struct rspamd_worker *worker,
 {
 	struct rspamd_worker_signal_handler *sigh;
 
-	sigh = g_malloc (sizeof (*sigh));
+	sigh = g_malloc0 (sizeof (*sigh));
 	sigh->signo = signo;
 	sigh->worker = worker;
 	sigh->base = base;

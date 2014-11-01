@@ -66,6 +66,8 @@ struct rspamd_worker_signal_handler {
 	struct event ev;
 	struct event_base *base;
 	struct rspamd_worker *worker;
+	void (*post_handler)(void *ud);
+	void *handler_data;
 };
 
 
