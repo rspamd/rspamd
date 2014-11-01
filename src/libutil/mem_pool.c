@@ -483,50 +483,6 @@ memory_pool_find_pool (rspamd_mempool_t * pool, void *pointer)
 	return NULL;
 }
 
-static inline gint
-__mutex_spin (rspamd_mempool_mutex_t * mutex)
-{
-	/* check spin count */
-	if (g_atomic_int_dec_and_test (&mutex->spin)) {
-		/* This may be deadlock, so check owner of this lock */
-		if (mutex->owner == getpid ()) {
-			/* This mutex was locked by calling process, so it is just double lock and we can easily unlock it */
-			g_atomic_int_set (&mutex->spin, MUTEX_SPIN_COUNT);
-			return 0;
-		}
-		else if (kill (mutex->owner, 0) == -1) {
-			/* Owner process was not found, so release lock */
-			g_atomic_int_set (&mutex->spin, MUTEX_SPIN_COUNT);
-			return 0;
-		}
-		/* Spin again */
-		g_atomic_int_set (&mutex->spin, MUTEX_SPIN_COUNT);
-	}
-
-#ifdef HAVE_SCHED_YIELD
-	(void)sched_yield ();
-#elif defined(HAVE_NANOSLEEP)
-	struct timespec ts;
-	ts.tv_sec = 0;
-	ts.tv_nsec = MUTEX_SLEEP_TIME;
-	/* Spin */
-	while (nanosleep (&ts, &ts) == -1 && errno == EINTR) ;
-#else
-#       error No methods to spin are defined
-#endif
-	return 1;
-}
-
-static void
-memory_pool_mutex_spin (rspamd_mempool_mutex_t * mutex)
-{
-	while (!g_atomic_int_compare_and_exchange (&mutex->lock, 0, 1)) {
-		if (!__mutex_spin (mutex)) {
-			return;
-		}
-	}
-}
-
 /* Simple implementation of spinlock */
 void
 rspamd_mempool_lock_shared (rspamd_mempool_t * pool, void *pointer)
@@ -718,6 +674,54 @@ rspamd_mempool_suggest_size (void)
 #endif
 }
 
+#ifndef HAVE_PTHREAD_PROCESS_SHARED
+/*
+ * Own emulation
+ */
+static inline gint
+__mutex_spin (rspamd_mempool_mutex_t * mutex)
+{
+	/* check spin count */
+	if (g_atomic_int_dec_and_test (&mutex->spin)) {
+		/* This may be deadlock, so check owner of this lock */
+		if (mutex->owner == getpid ()) {
+			/* This mutex was locked by calling process, so it is just double lock and we can easily unlock it */
+			g_atomic_int_set (&mutex->spin, MUTEX_SPIN_COUNT);
+			return 0;
+		}
+		else if (kill (mutex->owner, 0) == -1) {
+			/* Owner process was not found, so release lock */
+			g_atomic_int_set (&mutex->spin, MUTEX_SPIN_COUNT);
+			return 0;
+		}
+		/* Spin again */
+		g_atomic_int_set (&mutex->spin, MUTEX_SPIN_COUNT);
+	}
+
+#ifdef HAVE_SCHED_YIELD
+	(void)sched_yield ();
+#elif defined(HAVE_NANOSLEEP)
+	struct timespec ts;
+	ts.tv_sec = 0;
+	ts.tv_nsec = MUTEX_SLEEP_TIME;
+	/* Spin */
+	while (nanosleep (&ts, &ts) == -1 && errno == EINTR) ;
+#else
+#       error No methods to spin are defined
+#endif
+	return 1;
+}
+
+static void
+memory_pool_mutex_spin (rspamd_mempool_mutex_t * mutex)
+{
+	while (!g_atomic_int_compare_and_exchange (&mutex->lock, 0, 1)) {
+		if (!__mutex_spin (mutex)) {
+			return;
+		}
+	}
+}
+
 rspamd_mempool_mutex_t *
 rspamd_mempool_get_mutex (rspamd_mempool_t * pool)
 {
@@ -798,6 +802,89 @@ rspamd_mempool_wunlock_rwlock (rspamd_mempool_rwlock_t * lock)
 {
 	rspamd_mempool_unlock_mutex (lock->__w_lock);
 }
+#else
+
+/*
+ * Pthread bases shared mutexes
+ */
+rspamd_mempool_mutex_t *
+rspamd_mempool_get_mutex (rspamd_mempool_t * pool)
+{
+	rspamd_mempool_mutex_t *res;
+	pthread_mutexattr_t mattr;
+
+	if (pool != NULL) {
+		res =
+			rspamd_mempool_alloc_shared (pool, sizeof (rspamd_mempool_mutex_t));
+
+		pthread_mutexattr_init (&mattr);
+		pthread_mutexattr_setpshared (&mattr, PTHREAD_PROCESS_SHARED);
+		pthread_mutex_init (res, &mattr);
+		rspamd_mempool_add_destructor (pool,
+				(rspamd_mempool_destruct_t)pthread_mutex_destroy, res);
+
+		return res;
+	}
+	return NULL;
+}
+
+void
+rspamd_mempool_lock_mutex (rspamd_mempool_mutex_t * mutex)
+{
+	pthread_mutex_lock (mutex);
+}
+
+void
+rspamd_mempool_unlock_mutex (rspamd_mempool_mutex_t * mutex)
+{
+	pthread_mutex_unlock (mutex);
+}
+
+rspamd_mempool_rwlock_t *
+rspamd_mempool_get_rwlock (rspamd_mempool_t * pool)
+{
+	rspamd_mempool_rwlock_t *res;
+	pthread_rwlockattr_t mattr;
+
+	if (pool != NULL) {
+		res =
+			rspamd_mempool_alloc_shared (pool, sizeof (rspamd_mempool_rwlock_t));
+
+		pthread_rwlockattr_init (&mattr);
+		pthread_rwlockattr_setpshared (&mattr, PTHREAD_PROCESS_SHARED);
+		pthread_rwlock_init (res, &mattr);
+		rspamd_mempool_add_destructor (pool,
+				(rspamd_mempool_destruct_t)pthread_rwlock_destroy, res);
+
+		return res;
+	}
+	return NULL;
+}
+
+void
+rspamd_mempool_rlock_rwlock (rspamd_mempool_rwlock_t * lock)
+{
+	pthread_rwlock_rdlock (lock);
+}
+
+void
+rspamd_mempool_wlock_rwlock (rspamd_mempool_rwlock_t * lock)
+{
+	pthread_rwlock_wrlock (lock);
+}
+
+void
+rspamd_mempool_runlock_rwlock (rspamd_mempool_rwlock_t * lock)
+{
+	pthread_rwlock_unlock (lock);
+}
+
+void
+rspamd_mempool_wunlock_rwlock (rspamd_mempool_rwlock_t * lock)
+{
+	pthread_rwlock_unlock (lock);
+}
+#endif
 
 void
 rspamd_mempool_set_variable (rspamd_mempool_t *pool,

@@ -13,7 +13,9 @@
 #define RSPAMD_MEM_POOL_H
 
 #include "config.h"
-
+#ifdef HAVE_PTHREAD_PROCESS_SHARED
+#include <pthread.h>
+#endif
 
 struct f_str_s;
 
@@ -29,11 +31,23 @@ typedef void (*rspamd_mempool_destruct_t)(void *ptr);
 /**
  * Pool mutex structure
  */
+#ifndef HAVE_PTHREAD_PROCESS_SHARED
 typedef struct memory_pool_mutex_s {
 	gint lock;
 	pid_t owner;
 	guint spin;
 } rspamd_mempool_mutex_t;
+/**
+ * Rwlock for locking shared memory regions
+ */
+typedef struct memory_pool_rwlock_s {
+	rspamd_mempool_mutex_t *__r_lock;                           /**< read mutex (private)								*/
+	rspamd_mempool_mutex_t *__w_lock;                           /**< write mutex (private)								*/
+} rspamd_mempool_rwlock_t;
+#else
+typedef pthread_mutex_t rspamd_mempool_mutex_t;
+typedef pthread_rwlock_t rspamd_mempool_rwlock_t;
+#endif
 
 /**
  * Pool page structure
@@ -95,13 +109,7 @@ typedef struct memory_pool_stat_s {
 	guint oversized_chunks;             /**< oversized chunks									*/
 } rspamd_mempool_stat_t;
 
-/**
- * Rwlock for locking shared memory regions
- */
-typedef struct memory_pool_rwlock_s {
-	rspamd_mempool_mutex_t *__r_lock;                           /**< read mutex (private)								*/
-	rspamd_mempool_mutex_t *__w_lock;                           /**< write mutex (private)								*/
-} rspamd_mempool_rwlock_t;
+
 
 /**
  * Allocate new memory poll

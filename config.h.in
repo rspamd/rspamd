@@ -211,6 +211,7 @@
 
 #cmakedefine HAVE_CTYPE_H        1
 #cmakedefine HAVE_SCHED_YEILD    1
+#cmakedefine HAVE_PTHREAD_PROCESS_SHARED 1
 
 /* Configure allocator */
 #define uthash_malloc(sz) g_slice_alloc(sz)
