@@ -367,6 +367,9 @@ rspamd_upstreams_parse_line (struct upstream_list *ups,
 			if (rspamd_upstreams_add_upstream (ups, tmp, def_port, data)) {
 				ret = TRUE;
 			}
+			else {
+				g_free (tmp);
+			}
 		}
 		p += len;
 		/* Skip separators */

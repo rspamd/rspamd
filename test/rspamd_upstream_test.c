@@ -27,7 +27,7 @@
 #include "main.h"
 #include "upstream.h"
 
-const char *test_upstream_list = "microsoft.com:443:1,google.com:2,kernel.org:443:3";
+const char *test_upstream_list = "microsoft.com:443:1,google.com:80:2,kernel.org:443:3";
 
 
 static void
@@ -69,5 +69,8 @@ rspamd_upstream_test_func (void)
 	/* Test round-robin rotation */
 	rspamd_upstream_test_method (ls, RSPAMD_UPSTREAM_ROUND_ROBIN, "kernel.org");
 	rspamd_upstream_test_method (ls, RSPAMD_UPSTREAM_ROUND_ROBIN, "google.com");
+	rspamd_upstream_test_method (ls, RSPAMD_UPSTREAM_ROUND_ROBIN, "kernel.org");
 	rspamd_upstream_test_method (ls, RSPAMD_UPSTREAM_ROUND_ROBIN, "microsoft.com");
+	rspamd_upstream_test_method (ls, RSPAMD_UPSTREAM_ROUND_ROBIN, "google.com");
+	rspamd_upstream_test_method (ls, RSPAMD_UPSTREAM_ROUND_ROBIN, "kernel.org");
 }
