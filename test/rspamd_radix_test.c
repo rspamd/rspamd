@@ -140,7 +140,9 @@ rspamd_radix_text_vec (void)
 void
 rspamd_radix_test_func (void)
 {
+#if 0
 	radix_tree_t *tree = radix_tree_create ();
+#endif
 	radix_compressed_t *comp_tree = radix_create_compressed ();
 	struct {
 		guint32 addr;
@@ -157,7 +159,6 @@ rspamd_radix_test_func (void)
 	/* Test suite for the compressed trie */
 	rspamd_radix_text_vec ();
 
-	g_assert (tree != NULL);
 	nelts = max_elts;
 	/* First of all we generate many elements and push them to the array */
 	addrs = g_malloc (nelts * sizeof (addrs[0]));
@@ -168,7 +169,7 @@ rspamd_radix_test_func (void)
 		ottery_rand_bytes (addrs[i].addr6, sizeof(addrs[i].addr6));
 		addrs[i].mask6 = ottery_rand_range(128);
 	}
-
+#if 0
 	msg_info ("old radix performance (%z elts)", nelts);
 	clock_gettime (CLOCK_MONOTONIC, &ts1);
 	for (i = 0; i < nelts; i ++) {
@@ -204,7 +205,7 @@ rspamd_radix_test_func (void)
 	msg_info ("Deleted %z elements in %.6f ms", nelts, diff);
 
 	radix_tree_free (tree);
-
+#endif
 	msg_info ("new radix performance (%z elts)", nelts);
 	clock_gettime (CLOCK_MONOTONIC, &ts1);
 	for (i = 0; i < nelts; i ++) {
