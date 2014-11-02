@@ -53,6 +53,7 @@ main (int argc, char **argv)
 	g_test_add_func ("/rspamd/aio", rspamd_async_test_func);
 	g_test_add_func ("/rspamd/dkim", rspamd_dkim_test_func);
 	g_test_add_func ("/rspamd/rrd", rspamd_rrd_test_func);
+	g_test_add_func ("/rspamd/upstream", rspamd_upstream_test_func);
 
 	g_test_run ();
 

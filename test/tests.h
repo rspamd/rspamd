@@ -35,4 +35,6 @@ void rspamd_dkim_test_func (void);
 /* RRD test */
 void rspamd_rrd_test_func (void);
 
+void rspamd_upstream_test_func (void);
+
 #endif
