@@ -368,9 +368,9 @@ rspamd_upstreams_parse_line (struct upstream_list *ups,
 				ret = TRUE;
 			}
 		}
-		p += len + 1;
+		p += len;
 		/* Skip separators */
-		p += strspn (p, separators) + 1;
+		p += strspn (p, separators);
 	}
 
 	return ret;
@@ -451,7 +451,7 @@ static struct upstream*
 rspamd_upstream_get_round_robin (struct upstream_list *ups, gboolean use_cur)
 {
 	guint max_weight = 0;
-	struct upstream *up, *selected;
+	struct upstream *up, *selected = NULL;
 	guint i;
 
 	/* Select upstream with the maximum cur_weight */
