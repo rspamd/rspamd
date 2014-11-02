@@ -26,9 +26,11 @@
 #include "config.h"
 #include "main.h"
 #include "upstream.h"
+#include "ottery.h"
 
 const char *test_upstream_list = "microsoft.com:443:1,google.com:80:2,kernel.org:443:3";
-
+const char *new_upstream_list = "freebsd.org:80";
+char test_key[32];
 
 static void
 rspamd_upstream_test_method (struct upstream_list *ls,
@@ -36,18 +38,29 @@ rspamd_upstream_test_method (struct upstream_list *ls,
 {
 	struct upstream *up;
 
-	up = rspamd_upstream_get (ls, rot);
-	g_assert (up != NULL);
-	g_assert (strcmp (rspamd_upstream_name (up), expected) == 0);
+	if (rot != RSPAMD_UPSTREAM_HASHED) {
+		up = rspamd_upstream_get (ls, rot);
+		g_assert (up != NULL);
+		g_assert (strcmp (rspamd_upstream_name (up), expected) == 0);
+	}
+	else {
+		up = rspamd_upstream_get (ls, RSPAMD_UPSTREAM_HASHED, test_key,
+					sizeof (test_key));
+		g_assert (up != NULL);
+		g_assert (strcmp (rspamd_upstream_name (up), expected) == 0);
+	}
 }
 
 void
 rspamd_upstream_test_func (void)
 {
-	struct upstream_list *ls;
+	struct upstream_list *ls, *nls;
+	struct upstream *up, *upn;
 	struct event_base *ev_base = event_init ();
 	struct rspamd_dns_resolver *resolver;
 	struct rspamd_config *cfg;
+	gint i, success = 0;
+	const gint assumptions = 100500;
 
 	cfg = (struct rspamd_config *)g_malloc (sizeof (struct rspamd_config));
 	bzero (cfg, sizeof (struct rspamd_config));
@@ -73,4 +86,29 @@ rspamd_upstream_test_func (void)
 	rspamd_upstream_test_method (ls, RSPAMD_UPSTREAM_ROUND_ROBIN, "microsoft.com");
 	rspamd_upstream_test_method (ls, RSPAMD_UPSTREAM_ROUND_ROBIN, "google.com");
 	rspamd_upstream_test_method (ls, RSPAMD_UPSTREAM_ROUND_ROBIN, "kernel.org");
+
+	/* Test stable hashing */
+	nls = rspamd_upstreams_create ();
+	g_assert (rspamd_upstreams_parse_line (nls, test_upstream_list, 443, NULL));
+	g_assert (rspamd_upstreams_parse_line (nls, new_upstream_list, 443, NULL));
+	for (i = 0; i < assumptions; i ++) {
+		ottery_rand_bytes (test_key, sizeof (test_key));
+		up = rspamd_upstream_get (ls, RSPAMD_UPSTREAM_HASHED, test_key,
+			sizeof (test_key));
+		upn = rspamd_upstream_get (nls, RSPAMD_UPSTREAM_HASHED, test_key,
+			sizeof (test_key));
+
+		if (strcmp (rspamd_upstream_name (up), rspamd_upstream_name (upn)) == 0) {
+			success ++;
+		}
+	}
+
+	/*
+	 * P value is calculated as following:
+	 * when we add/remove M upstreams from the list, the probability of hash
+	 * miss should be close to the relation N / (N + M), where N is the size of
+	 * the previous upstreams list.
+	 */
+	msg_info ("p value for hash consistency: %.6f", 1.0 - fabs ((3.0 / 4.0 -
+			(gdouble)success / (gdouble)assumptions)));
 }
