@@ -319,6 +319,7 @@ start_worker (struct rspamd_worker *worker)
 			worker->srv->cfg);
 
 	rspamd_upstreams_library_init (ctx->resolver->r, ctx->ev_base);
+	rspamd_upstreams_library_config (worker->srv->cfg);
 
 	/* Create classify pool */
 	ctx->classify_pool = NULL;

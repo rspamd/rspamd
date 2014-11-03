@@ -61,6 +61,7 @@ rspamd_upstream_test_func (void)
 	struct rspamd_config *cfg;
 	gint i, success = 0;
 	const gint assumptions = 100500;
+	gdouble p;
 
 	cfg = (struct rspamd_config *)g_malloc (sizeof (struct rspamd_config));
 	bzero (cfg, sizeof (struct rspamd_config));
@@ -103,12 +104,13 @@ rspamd_upstream_test_func (void)
 		}
 	}
 
+	p = 1.0 - fabs (3.0 / 4.0 - (gdouble)success / (gdouble)assumptions);
 	/*
 	 * P value is calculated as following:
 	 * when we add/remove M upstreams from the list, the probability of hash
 	 * miss should be close to the relation N / (N + M), where N is the size of
 	 * the previous upstreams list.
 	 */
-	msg_info ("p value for hash consistency: %.6f", 1.0 - fabs ((3.0 / 4.0 -
-			(gdouble)success / (gdouble)assumptions)));
+	msg_info ("p value for hash consistency: %.6f", p);
+	g_assert (p > 0.9);
 }

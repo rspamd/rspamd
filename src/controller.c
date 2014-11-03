@@ -1721,6 +1721,7 @@ start_controller_worker (struct rspamd_worker *worker)
 			worker->srv->cfg);
 
 	rspamd_upstreams_library_init (ctx->resolver->r, ctx->ev_base);
+	rspamd_upstreams_library_config (worker->srv->cfg);
 	/* Maps events */
 	start_map_watch (worker->srv->cfg, ctx->ev_base);
 
