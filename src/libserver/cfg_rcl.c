@@ -1672,6 +1672,7 @@ rspamd_rcl_parse_struct_integer (struct rspamd_config *cfg,
 		gint32 *i32p;
 		gint16 *i16p;
 		gint64 *i64p;
+		guint *up;
 		gsize *sp;
 	} target;
 	gint64 val;
@@ -1719,6 +1720,17 @@ rspamd_rcl_parse_struct_integer (struct rspamd_config *cfg,
 			return FALSE;
 		}
 		*target.i16p = val;
+	}
+	else if (pd->flags == RSPAMD_CL_FLAG_UINT) {
+		target.up = (guint *)(((gchar *)pd->user_struct) + pd->offset);
+		if (!ucl_object_toint_safe (obj, &val)) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"cannot convert param to integer");
+			return FALSE;
+		}
+		*target.up = val;
 	}
 	else {
 		target.ip = (gint *)(((gchar *)pd->user_struct) + pd->offset);
