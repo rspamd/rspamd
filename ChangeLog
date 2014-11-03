@@ -1,3 +1,32 @@
+0.7.3:
+	* New upstreams code:
+		- simplify upstreams API;
+		- unify strings parsing in upstreams definition;
+		- add configuration options for the upstreams;
+		- for failed upstreams re-resolve their addresses;
+		- use all resolved addresses for an upstream (round-robin);
+		- implement stable hashing and use it by default for upstreams;
+		- add unit test for upstreams module.
+	* Rework signals processing in all rspamd workers:
+		- signals are now processed in the event loop;
+		- implement the most common signal handlers for all workers;
+		- add callbacks for workers specific signal handlers
+	*  Fix critical issue with fuzzy storage:
+		Fuzzy stroage could not save any hashes on termination due to bugged
+		signals handling
+    * Fix roll history IP storage
+    * Rework ipv4/ipv6 handling in parsing addresses:
+		- turn off support of IPV6_V6ONLY socket option;
+		- create ipv6 socket prior to ipv4 one to handle systems with v6/v4 
+		sockets enabled (Linux)
+    * Remove CBL as it's wholly included in Spamhaus XBL (by @fatalbanana)
+    * Remove nszones.com fake RBL (by @citrin)
+    * Fix upstreams interaction for fuzzy_check
+    * Verify spf PTR records (reported by @citrin)
+    * Fix spf MX records parsing
+    * Add compatibility for old libevent (by @yellowman)
+    * Sync bugfixes from libucl
+
 0.7.2:
 	* Convert all maps to the compressed radix trie
 	* Allow IPv6 addresses in IP maps
