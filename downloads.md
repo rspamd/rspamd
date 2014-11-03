@@ -5,7 +5,7 @@ title: Downloads
 
 # Downloading rspamd
 
-<p><a class="btn btn-primary btn-lg" href="/downloads/rspamd-0.7.2.tar.xz">Download rspamd-0.7.2</a></p>
+<p><a class="btn btn-primary btn-lg" href="/downloads/rspamd-0.7.3.tar.xz">Download rspamd-0.7.3</a></p>
 <p><iframe src="//rspamd.com/github-btn.html?user=vstakhov&repo=rspamd&type=watch&count=true&size=large"
   allowtransparency="true" frameborder="0" scrolling="0" width="170" height="30"></iframe></p>
 
@@ -26,7 +26,7 @@ various versions of ubuntu:
 
 <http://software.opensuse.org/download.html?project=home%3Acebka&package=rspamd>
 
-If you want to check the integrity of your source archive downloaded, then you could use the following [GPG signature](/downloads/rspamd-0.7.2.tar.xz.asc).
+If you want to check the integrity of your source archive downloaded, then you could use the following [GPG signature](/downloads/rspamd-0.7.3.tar.xz.asc).
 This signature can be verified against my [GPG public key](https://rspamd.com/vsevolod.pubkey). 
 
 
@@ -51,7 +51,7 @@ To build rspamd from the sources please follow these steps:
 1. Extract rspamd source archive:
 
 ~~~
-$ tar xf rspamd-0.7.2.tar.xz
+$ tar xf rspamd-0.7.3.tar.xz
 ~~~
 
 -OR-
