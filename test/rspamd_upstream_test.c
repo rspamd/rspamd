@@ -51,6 +51,14 @@ rspamd_upstream_test_method (struct upstream_list *ls,
 	}
 }
 
+static void
+rspamd_upstream_timeout_handler (int fd, short what, void *arg)
+{
+	struct rspamd_dns_resolver *resolver = (struct rspamd_dns_resolver *)arg;
+
+	rdns_resolver_release (resolver->r);
+}
+
 void
 rspamd_upstream_test_func (void)
 {
@@ -62,19 +70,26 @@ rspamd_upstream_test_func (void)
 	gint i, success = 0;
 	const gint assumptions = 100500;
 	gdouble p;
+	struct event ev;
+	struct timeval tv;
 
 	cfg = (struct rspamd_config *)g_malloc (sizeof (struct rspamd_config));
 	bzero (cfg, sizeof (struct rspamd_config));
 	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	cfg->dns_retransmits = 2;
 	cfg->dns_timeout = 0.5;
+	cfg->upstream_max_errors = 1;
+	cfg->upstream_revive_time = 0.5;
+	cfg->upstream_error_time = 2;
 
 	resolver = dns_resolver_init (NULL, ev_base, cfg);
 
 	rspamd_upstreams_library_init (resolver->r, ev_base);
+	rspamd_upstreams_library_config (cfg);
 
 	ls = rspamd_upstreams_create ();
 	g_assert (rspamd_upstreams_parse_line (ls, test_upstream_list, 443, NULL));
+	g_assert (rspamd_upstreams_count (ls) == 3);
 
 	/* Test master-slave rotation */
 	rspamd_upstream_test_method (ls, RSPAMD_UPSTREAM_MASTER_SLAVE, "kernel.org");
@@ -111,6 +126,21 @@ rspamd_upstream_test_func (void)
 	 * miss should be close to the relation N / (N + M), where N is the size of
 	 * the previous upstreams list.
 	 */
-	msg_info ("p value for hash consistency: %.6f", p);
+	msg_debug ("p value for hash consistency: %.6f", p);
 	g_assert (p > 0.9);
+
+	/* Upstream fail test */
+	evtimer_set (&ev, rspamd_upstream_timeout_handler, resolver);
+	event_base_set (ev_base, &ev);
+
+	up = rspamd_upstream_get (ls, RSPAMD_UPSTREAM_MASTER_SLAVE);
+	rspamd_upstream_fail (up);
+	g_assert (rspamd_upstreams_alive (ls) == 2);
+
+	tv.tv_sec = 2;
+	tv.tv_usec = 0;
+	event_add (&ev, &tv);
+
+	event_base_loop (ev_base, 0);
+	g_assert (rspamd_upstreams_alive (ls) == 3);
 }

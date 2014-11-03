@@ -260,7 +260,6 @@ rspamd_upstream_fail (struct upstream *up)
 	rspamd_mutex_lock (up->lock);
 	if (g_atomic_int_compare_and_exchange (&up->errors, 0, 1)) {
 		gettimeofday (&up->tv, NULL);
-		up->errors ++;
 	}
 	else {
 		g_atomic_int_inc (&up->errors);
@@ -270,9 +269,15 @@ rspamd_upstream_fail (struct upstream *up)
 
 	msec_last = tv_to_msec (&up->tv) / 1000.;
 	msec_cur = tv_to_msec (&tv) / 1000.;
-	if (msec_cur > msec_last) {
-		error_rate = ((gdouble)up->errors) / (msec_cur - msec_last);
-		max_error_rate = (gdouble)default_max_errors / (gdouble)default_error_time;
+	if (msec_cur >= msec_last) {
+		if (msec_cur > msec_last) {
+			error_rate = ((gdouble)up->errors) / (msec_cur - msec_last);
+			max_error_rate = (gdouble)default_max_errors / default_error_time;
+		}
+		else {
+			error_rate = 1;
+			max_error_rate = 0;
+		}
 
 		if (error_rate > max_error_rate) {
 			/* Remove upstream from the active list */
