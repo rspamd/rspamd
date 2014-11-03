@@ -26,6 +26,7 @@
 #include "upstream.h"
 #include "ottery.h"
 #include "ref.h"
+#include "cfg_file.h"
 #include "rdns.h"
 #include "xxhash.h"
 #include "utlist.h"
@@ -68,13 +69,41 @@ struct upstream_list {
 static struct rdns_resolver *res = NULL;
 static struct event_base *ev_base = NULL;
 /* 4 errors in 10 seconds */
-const guint default_max_errors = 4;
-const guint default_revive_time = 60;
-const gdouble default_revive_jitter = 0.4;
-const guint default_error_time = 10;
-const gdouble default_dns_timeout = 1.0;
-const guint default_dns_retransmits = 2;
-const guint default_max_addresses = 1024;
+static guint default_max_errors = 4;
+static gdouble default_revive_time = 60;
+static gdouble default_revive_jitter = 0.4;
+static gdouble default_error_time = 10;
+static gdouble default_dns_timeout = 1.0;
+static guint default_dns_retransmits = 2;
+static guint default_max_addresses = 1024;
+
+void
+rspamd_upstreams_library_config (struct rspamd_config *cfg)
+{
+	if (cfg->upstream_error_time) {
+		default_error_time = cfg->upstream_error_time;
+	}
+	if (cfg->upstream_max_errors) {
+		default_max_errors = cfg->upstream_max_errors;
+	}
+	if (cfg->upstream_revive_time) {
+		default_revive_time = cfg->upstream_max_errors;
+	}
+	if (cfg->dns_retransmits) {
+		default_dns_retransmits = cfg->dns_retransmits;
+	}
+	if (cfg->dns_timeout) {
+		default_dns_timeout = cfg->dns_timeout;
+	}
+}
+
+void
+rspamd_upstreams_library_init (struct rdns_resolver *resolver,
+		struct event_base *base)
+{
+	res = resolver;
+	ev_base = base;
+}
 
 static void
 rspamd_upstream_set_active (struct upstream_list *ls, struct upstream *up)
@@ -188,6 +217,8 @@ rspamd_upstream_revive_cb (int fd, short what, void *arg)
 static void
 rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
 {
+	gdouble ntim;
+
 	rspamd_mutex_lock (ls->lock);
 	g_ptr_array_remove_index (ls->alive, up->active_idx);
 	up->active_idx = -1;
@@ -212,20 +243,12 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
 		event_base_set (ev_base, &up->ev);
 	}
 
-	up->tv.tv_sec = default_revive_time + ottery_rand_range (
+	ntim = default_revive_time + ottery_rand_range (
 			default_revive_time * default_revive_jitter);
-	up->tv.tv_usec = 0;
+	double_to_tv (ntim, &up->tv);
 	event_add (&up->ev, &up->tv);
 
 	rspamd_mutex_unlock (ls->lock);
-}
-
-void
-rspamd_upstreams_library_init (struct rdns_resolver *resolver,
-		struct event_base *base)
-{
-	res = resolver;
-	ev_base = base;
 }
 
 void
@@ -291,6 +314,12 @@ gsize
 rspamd_upstreams_count (struct upstream_list *ups)
 {
 	return ups->ups->len;
+}
+
+gsize
+rspamd_upstreams_alive (struct upstream_list *ups)
+{
+	return ups->alive->len;
 }
 
 static void

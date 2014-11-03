@@ -13,6 +13,8 @@ enum rspamd_upstream_rotation {
 	RSPAMD_UPSTREAM_MASTER_SLAVE
 };
 
+
+struct rspamd_config;
 /* Opaque upstream structures */
 struct upstream;
 struct upstream_list;
@@ -23,6 +25,12 @@ struct upstream_list;
  */
 void rspamd_upstreams_library_init (struct rdns_resolver *resolver,
 		struct event_base *base);
+
+/**
+ * Configure attributes of upstreams library
+ * @param cfg
+ */
+void rspamd_upstreams_library_config (struct rspamd_config *cfg);
 
 /**
  * Upstream error logic
@@ -59,6 +67,13 @@ void rspamd_upstreams_destroy (struct upstream_list *ups);
  * @return
  */
 gsize rspamd_upstreams_count (struct upstream_list *ups);
+
+/**
+ * Returns the number of upstreams in the list
+ * @param ups
+ * @return
+ */
+gsize rspamd_upstreams_alive (struct upstream_list *ups);
 
 /**
  * Add upstream from the string
