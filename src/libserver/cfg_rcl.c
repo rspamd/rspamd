@@ -212,8 +212,8 @@ static gboolean
 rspamd_rcl_options_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 	gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	const ucl_object_t *dns;
-	struct rspamd_rcl_section *dns_section;
+	const ucl_object_t *dns, *upstream;
+	struct rspamd_rcl_section *dns_section, *upstream_section;
 
 	HASH_FIND_STR (section->subsections, "dns", dns_section);
 
@@ -221,6 +221,16 @@ rspamd_rcl_options_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 	if (dns_section != NULL && dns != NULL) {
 		if (!rspamd_rcl_section_parse_defaults (dns_section, cfg, dns, cfg,
 			err)) {
+			return FALSE;
+		}
+	}
+
+	HASH_FIND_STR (section->subsections, "upstream", upstream_section);
+
+	upstream = ucl_object_find_key (obj, "upstream");
+	if (upstream_section != NULL && upstream != NULL) {
+		if (!rspamd_rcl_section_parse_defaults (upstream_section, cfg,
+			upstream, cfg, err)) {
 			return FALSE;
 		}
 	}
@@ -1252,6 +1262,7 @@ rspamd_rcl_config_init (void)
 		rspamd_rcl_parse_struct_integer,
 		G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server),
 		RSPAMD_CL_FLAG_INT_32);
+
 	/* New DNS configiration */
 	ssub = rspamd_rcl_add_section (&sub->subsections, "dns", NULL,
 			UCL_OBJECT, FALSE, TRUE);
@@ -1275,6 +1286,25 @@ rspamd_rcl_config_init (void)
 		rspamd_rcl_parse_struct_integer,
 		G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server),
 		RSPAMD_CL_FLAG_INT_32);
+
+	/* New upstreams configuration */
+	ssub = rspamd_rcl_add_section (&sub->subsections, "upstream", NULL,
+		UCL_OBJECT, FALSE, TRUE);
+	rspamd_rcl_add_default_handler (ssub,
+		"max_errors",
+		rspamd_rcl_parse_struct_integer,
+		G_STRUCT_OFFSET (struct rspamd_config, upstream_max_errors),
+		RSPAMD_CL_FLAG_UINT);
+	rspamd_rcl_add_default_handler (ssub,
+		"error_time",
+		rspamd_rcl_parse_struct_time,
+		G_STRUCT_OFFSET (struct rspamd_config, upstream_error_time),
+		RSPAMD_CL_FLAG_TIME_FLOAT);
+	rspamd_rcl_add_default_handler (ssub,
+		"revive_time",
+		rspamd_rcl_parse_struct_time,
+		G_STRUCT_OFFSET (struct rspamd_config, upstream_revive_time),
+		RSPAMD_CL_FLAG_TIME_FLOAT);
 
 	rspamd_rcl_add_default_handler (sub,
 		"raw_mode",
