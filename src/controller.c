@@ -547,10 +547,21 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 }
 
 static ucl_object_t *
-rspamd_controller_pie_element(const char *label, gdouble data)
+rspamd_controller_pie_element (enum rspamd_metric_action action,
+		const char *label, gdouble data)
 {
 	ucl_object_t *res = ucl_object_typed_new (UCL_OBJECT);
+	const char *colors[METRIC_ACTION_MAX] = {
+		[METRIC_ACTION_REJECT] = "red",
+		[METRIC_ACTION_SOFT_REJECT] = "orange",
+		[METRIC_ACTION_REWRITE_SUBJECT] = "yellow",
+		[METRIC_ACTION_ADD_HEADER] = "teal",
+		[METRIC_ACTION_GREYLIST] = "blue",
+		[METRIC_ACTION_NOACTION] = "green"
+	};
 
+	ucl_object_insert_key (res, ucl_object_fromstring (colors[action]),
+			"color", 0, false);
 	ucl_object_insert_key (res, ucl_object_fromstring (label), "label", 0, false);
 	ucl_object_insert_key (res, ucl_object_fromdouble (data), "data", 0, false);
 
@@ -574,7 +585,7 @@ rspamd_controller_handle_pie_chart (
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct rspamd_controller_worker_ctx *ctx;
-	gdouble data[4], total;
+	gdouble data[5], total;
 	ucl_object_t *top;
 
 	ctx = session->ctx;
@@ -589,36 +600,29 @@ rspamd_controller_handle_pie_chart (
 
 		data[0] = ctx->srv->stat->actions_stat[METRIC_ACTION_NOACTION] / total *
 			100.;
-		data[1] = (ctx->srv->stat->actions_stat[METRIC_ACTION_ADD_HEADER] +
+		data[1] = ctx->srv->stat->actions_stat[METRIC_ACTION_SOFT_REJECT] / total *
+			100.;
+		data[2] = (ctx->srv->stat->actions_stat[METRIC_ACTION_ADD_HEADER] +
 			ctx->srv->stat->actions_stat[METRIC_ACTION_REWRITE_SUBJECT]) /
 			total * 100.;
-		data[2] = ctx->srv->stat->actions_stat[METRIC_ACTION_GREYLIST] / total *
+		data[3] = ctx->srv->stat->actions_stat[METRIC_ACTION_GREYLIST] / total *
 			100.;
-		data[3] = ctx->srv->stat->actions_stat[METRIC_ACTION_REJECT] / total *
+		data[4] = ctx->srv->stat->actions_stat[METRIC_ACTION_REJECT] / total *
 			100.;
-
-		ucl_array_append (top, rspamd_controller_pie_element ("Clean messages",
-				data[0]));
-		ucl_array_append (top, rspamd_controller_pie_element ("Probable spam messages",
-				data[1]));
-		ucl_array_append (top, rspamd_controller_pie_element ("Greylisted messages",
-				data[2]));
-		ucl_array_append (top, rspamd_controller_pie_element ("Rejected messages",
-				data[3]));
 	}
 	else {
-
 		memset (data, 0, sizeof (data));
-
-		ucl_array_append (top, rspamd_controller_pie_element ("Clean messages",
-				data[0]));
-		ucl_array_append (top, rspamd_controller_pie_element ("Probable spam messages",
-				data[1]));
-		ucl_array_append (top, rspamd_controller_pie_element ("Greylisted messages",
-				data[2]));
-		ucl_array_append (top, rspamd_controller_pie_element ("Rejected messages",
-				data[3]));
 	}
+	ucl_array_append (top, rspamd_controller_pie_element (
+			METRIC_ACTION_NOACTION, "Clean", data[0]));
+	ucl_array_append (top, rspamd_controller_pie_element (
+			METRIC_ACTION_SOFT_REJECT, "Temporary rejected", data[1]));
+	ucl_array_append (top, rspamd_controller_pie_element (
+			METRIC_ACTION_ADD_HEADER, "Probable spam", data[2]));
+	ucl_array_append (top, rspamd_controller_pie_element (
+			METRIC_ACTION_GREYLIST, "Greylisted", data[3]));
+	ucl_array_append (top, rspamd_controller_pie_element (
+			METRIC_ACTION_REJECT, "Rejected", data[4]));
 
 	rspamd_controller_send_ucl (conn_ent, top);
 	ucl_object_unref (top);
