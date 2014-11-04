@@ -2071,12 +2071,49 @@ lua_textpart_get_language (lua_State * L)
 	};
 	const gchar *sel;
 
-	if (part != NULL && part->script > 0 && part->script <
-		(gint)G_N_ELEMENTS (languages)) {
-		sel = languages[part->script];
-		if (*sel != '\0') {
-			lua_pushstring (L, sel);
-			return 1;
+	if (part != NULL) {
+		if (part->is_utf && (part->script == G_UNICODE_SCRIPT_UNKNOWN ||
+				part->script == G_UNICODE_SCRIPT_COMMON)) {
+			/* Try to detect encoding by several symbols */
+			const gchar *p, *pp;
+			gunichar c;
+			gint32 remain = part->content->len, max = 0, processed = 0;
+			gint32 scripts[G_UNICODE_SCRIPT_NKO];
+			GUnicodeScript scc, sel;
+
+			p = part->content->data;
+			memset (scripts, 0, sizeof (scripts));
+
+			while (remain > 0 && processed < 10) {
+				c = g_utf8_get_char_validated (p, remain);
+				if (c == (gunichar) -2 || c == (gunichar) -1) {
+					break;
+				}
+				scc = g_unichar_get_script (c);
+				if (scc < (gint)G_N_ELEMENTS (scripts)) {
+					scripts[scc]++;
+				}
+				pp = g_utf8_next_char (p);
+				remain -= pp - p;
+				p = pp;
+				processed ++;
+			}
+			for (remain = 0; remain < (gint)G_N_ELEMENTS (scripts); remain++) {
+				if (scripts[remain] > max) {
+					max = scripts[remain];
+					sel = remain;
+				}
+			}
+			part->script = sel;
+		}
+
+		if (part->script > 0 && part->script <
+				(gint)G_N_ELEMENTS (languages)) {
+			sel = languages[part->script];
+			if (*sel != '\0') {
+				lua_pushstring (L, sel);
+				return 1;
+			}
 		}
 	}
 
