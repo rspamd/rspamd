@@ -674,6 +674,7 @@ rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
 		/* Get only completed rows */
 		if (row->completed) {
 			tm = localtime (&row->tv.tv_sec);
+			strftime (timebuf, sizeof (timebuf) - 1, "%Y-%m-%d %H:%M:%S", tm);
 			obj = ucl_object_typed_new (UCL_OBJECT);
 			ucl_object_insert_key (obj, ucl_object_fromstring (
 					timebuf),		  "time", 0, false);
