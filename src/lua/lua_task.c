@@ -2008,7 +2008,7 @@ lua_textpart_get_language (lua_State * L)
 		"el",      /* G_UNICODE_SCRIPT_GREEK */
 		"gu",      /* G_UNICODE_SCRIPT_GUJARATI */
 		"pa",      /* G_UNICODE_SCRIPT_GURMUKHI */
-		"",        /* G_UNICODE_SCRIPT_HAN */
+		"han",     /* G_UNICODE_SCRIPT_HAN */
 		"ko",      /* G_UNICODE_SCRIPT_HANGUL */
 		"he",      /* G_UNICODE_SCRIPT_HEBREW */
 		"ja",      /* G_UNICODE_SCRIPT_HIRAGANA */
