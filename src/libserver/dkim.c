@@ -1105,7 +1105,7 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint size,
 		size_t cklen = MIN(t - buf, *remain + added);
 		g_checksum_update (ck, buf, cklen);
 		*remain = *remain - (cklen - added);
-#if 1
+#if 0
 		msg_debug ("update signature with buffer (%ud size, %ud remain): %*s",
 				cklen, *remain, cklen, buf);
 #endif
