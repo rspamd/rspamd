@@ -1024,7 +1024,7 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint size,
 	const gchar *h;
 	static gchar buf[BUFSIZ];
 	gchar *t;
-	guint len, inlen;
+	guint len, inlen, added = 0;
 	gboolean got_sp, finished = FALSE;
 
 	if (size > sizeof (buf)) {
@@ -1050,6 +1050,7 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint size,
 			if (*h == '\n' && h != *start && *(h - 1) != '\r') {
 				*t++ = '\r';
 				inlen--;
+				added ++;
 				if (inlen == 0) {
 					break;
 				}
@@ -1057,6 +1058,7 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint size,
 			else if (*h == '\r' && *(h + 1) != '\n') {
 				*t++ = *h++;
 				*t++ = '\n';
+				added ++;
 				if (inlen > 1) {
 					inlen -= 2;
 				}
@@ -1102,7 +1104,7 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint size,
 	if (*remain > 0) {
 		size_t cklen = MIN(t - buf, *remain);
 		g_checksum_update (ck, buf, cklen);
-		*remain = *remain - cklen;
+		*remain = *remain - (cklen - added);
 #if 0
 		msg_debug ("update signature with buffer (%ud size, %ud remain): %*s",
 				cklen, *remain, cklen, buf);
@@ -1119,7 +1121,7 @@ rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint size,
 	const gchar *h;
 	static gchar buf[BUFSIZ];
 	gchar *t;
-	guint len, inlen;
+	guint len, inlen, added = 0;
 	gboolean finished = FALSE;
 
 	if (size > sizeof (buf)) {
@@ -1138,10 +1140,12 @@ rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint size,
 			/* Replace a single \n or \r with \r\n */
 			if (*h == '\n' && *(h - 1) != '\r') {
 				*t++ = '\r';
+				added ++;
 				inlen--;
 			}
 			else if (*h == '\r' && *(h + 1) != '\n') {
 				*t++ = *h++;
+				added ++;
 				*t++ = '\n';
 				if (inlen > 1) {
 					inlen -= 2;
@@ -1167,7 +1171,7 @@ rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint size,
 	if (*remain > 0) {
 		size_t cklen = MIN(t - buf, *remain);
 		g_checksum_update (ck, buf, cklen);
-		*remain = *remain - cklen;
+		*remain = *remain - (cklen - added);
 	}
 
 	return !finished;
