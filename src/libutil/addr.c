@@ -26,12 +26,51 @@
 #include "util.h"
 #include "logger.h"
 
+enum {
+	RSPAMD_IPV6_UNDEFINED = 0,
+	RSPAMD_IPV6_SUPPORTED,
+	RSPAMD_IPV6_UNSUPPORTED
+} ipv6_status = RSPAMD_IPV6_UNDEFINED;
+
+static void
+rspamd_ip_check_ipv6 (void)
+{
+	if (ipv6_status == RSPAMD_IPV6_UNDEFINED) {
+		gint s, r;
+		struct sockaddr_in6 sin6;
+		const struct in6_addr ip6_local = IN6ADDR_LOOPBACK_INIT;
+
+		s = socket (AF_INET6, SOCK_STREAM, 0);
+		if (s == -1 && errno == EAFNOSUPPORT) {
+			ipv6_status = RSPAMD_IPV6_UNSUPPORTED;
+		}
+		else {
+			/*
+			 * Some systems allow ipv6 sockets creating but not binding,
+			 * so here we try to bind to some local address and check, whether it
+			 * is possible
+			 */
+			sin6.sin6_family = AF_INET6;
+			sin6.sin6_port = g_random_int_range (20000, 60000);
+			sin6.sin6_addr = ip6_local;
+
+			r = bind (s, (struct sockaddr *)&sin6, sizeof (sin6));
+			if (r == -1 && errno != EADDRINUSE) {
+				ipv6_status = RSPAMD_IPV6_UNSUPPORTED;
+			}
+			else {
+				ipv6_status = RSPAMD_IPV6_SUPPORTED;
+			}
+			close (s);
+		}
+	}
+}
+
 gboolean
 rspamd_ip_is_valid (rspamd_inet_addr_t *addr)
 {
 	const struct in_addr ip4_any = { INADDR_ANY }, ip4_none = { INADDR_NONE };
 	const struct in6_addr ip6_any = IN6ADDR_ANY_INIT;
-
 	gboolean ret = FALSE;
 
 	if (G_LIKELY (addr->af == AF_INET)) {
@@ -93,6 +132,8 @@ rspamd_parse_inet_address (rspamd_inet_addr_t *target, const char *src)
 {
 	gboolean ret = FALSE;
 
+	rspamd_ip_check_ipv6 ();
+
 	if (src[0] == '/' || src[0] == '.') {
 		target->af = AF_UNIX;
 		target->slen = sizeof (target->addr.su);
@@ -102,7 +143,8 @@ rspamd_parse_inet_address (rspamd_inet_addr_t *target, const char *src)
 		target->addr.su.sun_len = SUN_LEN (&target->addr.su);
 #endif
 	}
-	else if (inet_pton (AF_INET6, src, &target->addr.s6.sin6_addr) == 1) {
+	else if (ipv6_status == RSPAMD_IPV6_SUPPORTED &&
+			inet_pton (AF_INET6, src, &target->addr.s6.sin6_addr) == 1) {
 		target->af = AF_INET6;
 		target->slen = sizeof (target->addr.s6);
 		ret = TRUE;
@@ -249,6 +291,7 @@ rspamd_parse_host_port_priority_strv (gchar **tokens,
 	guint port_parsed, priority_parsed, saved_errno = errno;
 	gint r;
 
+	rspamd_ip_check_ipv6 ();
 	/* Now try to parse host and write address to ina */
 	memset (&hints, 0, sizeof (hints));
 	hints.ai_socktype = SOCK_STREAM; /* Type of the socket */
@@ -261,7 +304,12 @@ rspamd_parse_host_port_priority_strv (gchar **tokens,
 		cur_tok = NULL;
 	}
 
-	hints.ai_family = AF_UNSPEC;
+	if (ipv6_status == RSPAMD_IPV6_SUPPORTED) {
+		hints.ai_family = AF_UNSPEC;
+	}
+	else {
+		hints.ai_family = AF_INET;
+	}
 
 	if (tokens[1] != NULL) {
 		/* Port part */
