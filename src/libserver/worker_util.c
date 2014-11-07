@@ -63,6 +63,7 @@ rspamd_worker_usr2_handler (gint fd, short what, void *arg)
 	if (!wanna_die) {
 		tv.tv_sec = SOFT_SHUTDOWN_TIME;
 		tv.tv_usec = 0;
+		wanna_die = 1;
 		rspamd_worker_stop_accept (sigh->worker);
 		msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 		event_base_loopexit (sigh->base, &tv);
