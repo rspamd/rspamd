@@ -105,6 +105,42 @@ rspamd_upstreams_library_init (struct rdns_resolver *resolver,
 	ev_base = base;
 }
 
+static gint
+rspamd_upstream_af_to_weight (const rspamd_inet_addr_t *addr)
+{
+	int ret;
+
+	switch (addr->af) {
+	case AF_UNIX:
+		ret = 2;
+		break;
+	case AF_INET:
+		ret = 1;
+		break;
+	default:
+		ret = 0;
+		break;
+	}
+
+	return ret;
+}
+
+/*
+ * Select IPv4 addresses before IPv6
+ */
+static gint
+rspamd_upstream_addr_sort_func (gconstpointer a, gconstpointer b)
+{
+	const rspamd_inet_addr_t *ip1 = (const rspamd_inet_addr_t *)a,
+			*ip2 = (const rspamd_inet_addr_t *)b;
+	gint w1, w2;
+
+	w1 = rspamd_upstream_af_to_weight (ip1);
+	w2 = rspamd_upstream_af_to_weight (ip2);
+
+	return w2 - w1;
+}
+
 static void
 rspamd_upstream_set_active (struct upstream_list *ls, struct upstream *up)
 {
@@ -186,6 +222,8 @@ rspamd_upstream_update_addrs (struct upstream *up)
 		up->addrs.cur = 0;
 		up->addrs.count = addr_cnt;
 		up->addrs.addr = new_addrs;
+		qsort (up->addrs.addr, up->addrs.count, sizeof (up->addrs.addr[0]),
+					rspamd_upstream_addr_sort_func);
 		g_free (old);
 	}
 
@@ -340,13 +378,36 @@ rspamd_upstream_dtor (struct upstream *up)
 
 	rspamd_mutex_free (up->lock);
 	g_free (up->name);
+	g_free (up->addrs.addr);
 	g_slice_free1 (sizeof (*up), up);
 }
 
 rspamd_inet_addr_t*
 rspamd_upstream_addr (struct upstream *up)
 {
-	return &up->addrs.addr[up->addrs.cur++ % up->addrs.count];
+	gint idx, next_idx, w1, w2;
+	/*
+	 * We know that addresses are sorted in the way that ipv4 addresses come
+	 * first. Therefore, we select only ipv4 addresses if they exist, since
+	 * many systems now has poorly supported ipv6
+	 */
+	idx = up->addrs.cur;
+	next_idx = (idx + 1) % up->addrs.count;
+	w1 = rspamd_upstream_af_to_weight (&up->addrs.addr[idx]);
+	w2 = rspamd_upstream_af_to_weight (&up->addrs.addr[next_idx]);
+
+	/*
+	 * We don't care about the exact priorities, but we prefer ipv4/unix
+	 * addresses before any ipv6 addresses
+	 */
+	if (!w1 || w2) {
+		up->addrs.cur = next_idx;
+	}
+	else {
+		up->addrs.cur = 0;
+	}
+
+	return &up->addrs.addr[up->addrs.cur];
 }
 
 const gchar*
@@ -377,8 +438,28 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups,
 	up->ls = ups;
 	REF_INIT_RETAIN (up, rspamd_upstream_dtor);
 	up->lock = rspamd_mutex_new ();
+	qsort (up->addrs.addr, up->addrs.count, sizeof (up->addrs.addr[0]),
+			rspamd_upstream_addr_sort_func);
 
 	rspamd_upstream_set_active (ups, up);
+
+	return TRUE;
+}
+
+gboolean
+rspamd_upstream_add_addr (struct upstream *up, const rspamd_inet_addr_t *addr)
+{
+	gint nsz;
+
+	/*
+	 * XXX: slow and inefficient
+	 */
+	nsz = ++up->addrs.count;
+	up->addrs.addr = g_realloc (up->addrs.addr,
+			nsz * sizeof (up->addrs.addr[0]));
+	memcpy (&up->addrs.addr[nsz - 1], addr, sizeof (*addr));
+	qsort (up->addrs.addr, up->addrs.count, sizeof (up->addrs.addr[0]),
+				rspamd_upstream_addr_sort_func);
 
 	return TRUE;
 }

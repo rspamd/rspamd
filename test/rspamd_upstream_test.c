@@ -72,6 +72,7 @@ rspamd_upstream_test_func (void)
 	gdouble p;
 	struct event ev;
 	struct timeval tv;
+	rspamd_inet_addr_t *addr, *next_addr, paddr;
 
 	cfg = (struct rspamd_config *)g_malloc (sizeof (struct rspamd_config));
 	bzero (cfg, sizeof (struct rspamd_config));
@@ -129,6 +130,29 @@ rspamd_upstream_test_func (void)
 	msg_debug ("p value for hash consistency: %.6f", p);
 	g_assert (p > 0.9);
 
+	rspamd_upstreams_destroy (nls);
+
+	/*
+	 * Test v4/v6 priorities
+	 */
+	nls = rspamd_upstreams_create ();
+	g_assert (rspamd_upstreams_add_upstream (nls, "127.0.0.1", 0, NULL));
+	up = rspamd_upstream_get (nls, RSPAMD_UPSTREAM_RANDOM);
+	addr = g_malloc (sizeof (*addr));
+	rspamd_parse_inet_address(&paddr, "127.0.0.2");
+	g_assert (rspamd_upstream_add_addr (up, &paddr));
+	rspamd_parse_inet_address(&paddr, "::1");
+	g_assert (rspamd_upstream_add_addr (up, &paddr));
+	addr = rspamd_upstream_addr (up);
+	for (i = 0; i < 256; i ++) {
+		next_addr = rspamd_upstream_addr (up);
+		g_assert (addr->af == AF_INET);
+		g_assert (next_addr->af == AF_INET);
+		g_assert (addr != next_addr);
+		addr = next_addr;
+	}
+	rspamd_upstreams_destroy (nls);
+
 	/* Upstream fail test */
 	evtimer_set (&ev, rspamd_upstream_timeout_handler, resolver);
 	event_base_set (ev_base, &ev);
@@ -143,4 +167,7 @@ rspamd_upstream_test_func (void)
 
 	event_base_loop (ev_base, 0);
 	g_assert (rspamd_upstreams_alive (ls) == 3);
+
+	g_free (cfg);
+	rspamd_upstreams_destroy (ls);
 }

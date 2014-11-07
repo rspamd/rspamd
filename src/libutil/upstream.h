@@ -117,6 +117,14 @@ gboolean rspamd_upstreams_from_ucl (struct upstream_list *ups,
 rspamd_inet_addr_t* rspamd_upstream_addr (struct upstream *up);
 
 /**
+ * Add custom address for an upstream
+ * @param up
+ * @return
+ */
+gboolean rspamd_upstream_add_addr (struct upstream *up,
+		const rspamd_inet_addr_t *addr);
+
+/**
  * Returns the symbolic name of the upstream
  * @param up
  * @return
