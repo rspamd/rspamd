@@ -178,7 +178,8 @@ local function process_settings_table(tbl)
           local res = rspamd_ip.from_string(ip)
 
           if res:is_valid() then
-            table.insert(out, {res, 0})
+            out[1] = res
+            out[2] = 0
           else
             rspamd_logger.err("bad IP address: " .. ip)
             return nil
@@ -188,7 +189,8 @@ local function process_settings_table(tbl)
           local mask = tonumber(string.sub(ip, slash + 1))
 
           if res:is_valid() then
-            table.insert(out, {res, mask})
+            out[1] = res
+            out[2] = mask
           else
             rspamd_logger.err("bad IP address: " .. ip)
             return nil
@@ -244,6 +246,13 @@ local function process_settings_table(tbl)
       return out
     end
 
+    local check_table = function(elt, out)
+      if type(elt) == 'string' then
+        return {out}
+      end
+      
+      return out
+    end
 
     local out = {}
 
@@ -251,21 +260,20 @@ local function process_settings_table(tbl)
       local ip = process_ip(elt['ip'])
 
       if ip then
-        out['ip'] = ip
+        out['ip'] = check_table(elt['ip'], ip)
       end
     end
     if elt['from'] then
       local from = process_addr(elt['from'])
 
       if from then
-        out['from'] = from
+        out['from'] = check_table(elt['from'], from)
       end
     end
     if elt['rcpt'] then
       local rcpt = process_addr(elt['rcpt'])
-
       if rcpt then
-        out['rcpt'] = rcpt
+        out['rcpt'] = check_table(elt['rcpt'], rcpt)
       end
     end
 
