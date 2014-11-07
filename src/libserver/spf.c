@@ -488,47 +488,51 @@ spf_check_ptr_host (struct spf_dns_cb *cb, const char *name)
 	if (name == NULL) {
 		return FALSE;
 	}
-	if (cb->ptr_host == NULL) {
-		/* We need to check whether `cur_domain` is a subdomain for `name` */
-		dstart = cb->rec->cur_domain;
-		dend = dstart + strlen (dstart) - 1;
-		nstart = name;
-		nend = nstart + strlen (nstart) - 1;
+	if (cb->ptr_host != NULL) {
+		dstart = cb->ptr_host;
 
-		if (nend == nstart || dend == dstart) {
-			return FALSE;
-		}
-		/* Strip last '.' from names */
-		if (*nend == '.') {
-			nend --;
-		}
-		if (*dend == '.') {
-			dend --;
-		}
-
-		/* Now compare from end to start */
-		for (;;) {
-			if (g_ascii_tolower (*dend) != g_ascii_tolower (*nend)) {
-				return FALSE;
-			}
-			if (dend == dstart) {
-				break;
-			}
-			if (nend == nstart) {
-				/* Name is shorter than cur_domain */
-				return FALSE;
-			}
-			nend --;
-			dend --;
-		}
-		if (nend != nstart && *(nend - 1) != '.') {
-			/* Not a subdomain */
-			return FALSE;
-		}
 	}
 	else {
 		dstart = cb->rec->cur_domain;
-		return rspamd_strcase_equal (dstart, name);
+	}
+
+	msg_debug ("check ptr %s vs %s", name, dstart);
+
+	/* We need to check whether `cur_domain` is a subdomain for `name` */
+	dend = dstart + strlen (dstart) - 1;
+	nstart = name;
+	nend = nstart + strlen (nstart) - 1;
+
+	if (nend == nstart || dend == dstart) {
+		return FALSE;
+	}
+	/* Strip last '.' from names */
+	if (*nend == '.') {
+		nend --;
+	}
+	if (*dend == '.') {
+		dend --;
+	}
+
+	/* Now compare from end to start */
+	for (;;) {
+		if (g_ascii_tolower (*dend) != g_ascii_tolower (*nend)) {
+			msg_debug ("ptr records missmatch: %s and %s", dend, nend);
+			return FALSE;
+		}
+		if (dend == dstart) {
+			break;
+		}
+		if (nend == nstart) {
+			/* Name is shorter than cur_domain */
+			return FALSE;
+		}
+		nend --;
+		dend --;
+	}
+	if (nend != nstart && *(nend - 1) != '.') {
+		/* Not a subdomain */
+		return FALSE;
 	}
 
 	return TRUE;
@@ -555,6 +559,8 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 			case SPF_RESOLVE_MX:
 				if (elt_data->type == RDNS_REQUEST_MX) {
 					/* Now resolve A record for this MX */
+					msg_debug ("resolve %s after resolving of MX",
+							elt_data->content.mx.name);
 					if (make_dns_request (task->resolver, task->s,
 						task->task_pool,
 						spf_record_dns_callback, (void *)cb, RDNS_REQUEST_A,
@@ -582,6 +588,8 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				if (elt_data->type == RDNS_REQUEST_PTR) {
 					/* Validate returned records prior to making A requests */
 					if (spf_check_ptr_host (cb, elt_data->content.ptr.name)) {
+						msg_debug ("resolve %s after resolving of PTR",
+								elt_data->content.ptr.name);
 						if (make_dns_request (task->resolver, task->s,
 								task->task_pool,
 								spf_record_dns_callback, (void *)cb,
@@ -766,6 +774,7 @@ parse_spf_a (struct rspamd_task *task,
 	cb->addr = addr;
 	cb->cur_action = SPF_RESOLVE_A;
 	cb->in_include = rec->in_include;
+	msg_debug ("resolve a %s", host);
 	if (make_dns_request (task->resolver, task->s, task->task_pool,
 		spf_record_dns_callback, (void *)cb, RDNS_REQUEST_A, host)) {
 		task->dns_requests++;
@@ -816,6 +825,7 @@ parse_spf_ptr (struct rspamd_task *task,
 		return FALSE;
 	}
 	rspamd_mempool_add_destructor (task->task_pool, free, ptr);
+	msg_debug ("resolve ptr %s for %s", ptr, host);
 	if (make_dns_request (task->resolver, task->s, task->task_pool,
 		spf_record_dns_callback, (void *)cb, RDNS_REQUEST_PTR, ptr)) {
 		task->dns_requests++;
@@ -857,6 +867,7 @@ parse_spf_mx (struct rspamd_task *task,
 	cb->addr = addr;
 	cb->cur_action = SPF_RESOLVE_MX;
 	cb->in_include = rec->in_include;
+	msg_debug ("resolve mx for %s", host);
 	if (make_dns_request (task->resolver, task->s, task->task_pool,
 		spf_record_dns_callback, (void *)cb, RDNS_REQUEST_MX, host)) {
 		task->dns_requests++;
@@ -939,6 +950,8 @@ parse_spf_include (struct rspamd_task *task,
 	addr->is_list = TRUE;
 	addr->data.list = NULL;
 	domain = rspamd_mempool_strdup (task->task_pool, begin);
+	msg_debug ("resolve include %s", domain);
+
 	if (make_dns_request (task->resolver, task->s, task->task_pool,
 		spf_record_dns_callback, (void *)cb, RDNS_REQUEST_TXT, domain)) {
 		task->dns_requests++;
@@ -986,6 +999,7 @@ parse_spf_redirect (struct rspamd_task *task,
 	cb->cur_action = SPF_RESOLVE_REDIRECT;
 	cb->in_include = rec->in_include;
 	domain = rspamd_mempool_strdup (task->task_pool, begin);
+	msg_debug ("resolve redirect %s", domain);
 	if (make_dns_request (task->resolver, task->s, task->task_pool,
 		spf_record_dns_callback, (void *)cb, RDNS_REQUEST_TXT, domain)) {
 		task->dns_requests++;
@@ -1022,6 +1036,7 @@ parse_spf_exists (struct rspamd_task *task,
 	cb->in_include = rec->in_include;
 	host = rspamd_mempool_strdup (task->task_pool, begin);
 
+	msg_debug ("resolve exists %s", host);
 	if (make_dns_request (task->resolver, task->s, task->task_pool,
 		spf_record_dns_callback, (void *)cb, RDNS_REQUEST_A, host)) {
 		task->dns_requests++;
