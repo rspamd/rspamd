@@ -1047,7 +1047,7 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint size,
 				t--;
 			}
 			/* Replace a single \n or \r with \r\n */
-			if (*h == '\n' && h != *start && *(h - 1) != '\r') {
+			if (*h == '\n' && (h == *start || *(h - 1) != '\r')) {
 				*t++ = '\r';
 				inlen--;
 				added ++;
@@ -1138,7 +1138,7 @@ rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint size,
 	while (len && inlen) {
 		if (*h == '\r' || *h == '\n') {
 			/* Replace a single \n or \r with \r\n */
-			if (*h == '\n' && *(h - 1) != '\r') {
+			if (*h == '\n' && (h == *start || *(h - 1) != '\r')) {
 				*t++ = '\r';
 				added ++;
 				inlen--;
@@ -1212,7 +1212,7 @@ rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx,
 			}
 		}
 		end = p + 1;
-		if (end == start || end == start + 2) {
+		if (end == start) {
 			/* Empty body */
 			if (ctx->body_canon_type == DKIM_CANON_SIMPLE) {
 				g_checksum_update (ctx->body_hash, CRLF, sizeof (CRLF) - 1);
