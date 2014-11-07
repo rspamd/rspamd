@@ -64,13 +64,12 @@ rspamd_worker_usr2_handler (gint fd, short what, void *arg)
 		tv.tv_sec = SOFT_SHUTDOWN_TIME;
 		tv.tv_usec = 0;
 		wanna_die = 1;
-		rspamd_worker_stop_accept (sigh->worker);
 		msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
 		event_base_loopexit (sigh->base, &tv);
-	}
-
-	if (sigh->post_handler) {
-		sigh->post_handler (sigh->handler_data);
+		if (sigh->post_handler) {
+			sigh->post_handler (sigh->handler_data);
+		}
+		rspamd_worker_stop_accept (sigh->worker);
 	}
 }
 
@@ -102,14 +101,14 @@ rspamd_worker_term_handler (gint fd, short what, void *arg)
 		wanna_die = 1;
 		tv.tv_sec = 0;
 		tv.tv_usec = 0;
+		if (sigh->post_handler) {
+			sigh->post_handler (sigh->handler_data);
+		}
 		event_base_loopexit (sigh->base, &tv);
 #ifdef WITH_GPERF_TOOLS
 		ProfilerStop ();
 #endif
-	}
-
-	if (sigh->post_handler) {
-		sigh->post_handler (sigh->handler_data);
+		rspamd_worker_stop_accept (sigh->worker);
 	}
 }
 
