@@ -1294,7 +1294,7 @@ lua_radix_get_key (lua_State * L)
 	guint32 key;
 
 	if (radix) {
-		key = luaL_checkint (L, 2);
+		key = htonl (luaL_checkint (L, 2));
 
 		if (radix_find_compressed (radix, (guint8 *)&key, sizeof (key))
 				!= RADIX_NO_VALUE) {
