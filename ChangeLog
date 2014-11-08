@@ -1,3 +1,26 @@
+0.7.4:
+	* Fix build under *BSD
+	* Detect HAN unicode script
+	* Implement language detection heuristic for text parts
+	* Fix time output in history
+	* Improve piechart coloring
+	* Fix \r\n conversion in DKIM module (reported by @citrin)
+	* Try to detect systems with no IPv6 support
+	* Fix multiple/single values in use settings (reported by @citrin)
+	*  Rework IP addresses in upstreams:
+		- Select ipv4/unix addresses if they exist and use ipv6 for ipv6 only
+		  upstreams (since the support of ipv6 is poor in many OSes and
+		  environments)
+		- Free IP list on upstream destruction
+		- Add test cases for addresses selection
+		- Allow adding of free form IP addresses to upstreams
+    * Fix endiannes in lua_radix search (reported by @citrin)
+    * Soft shutdown should also set wanna_die flag (reported by @citrin)
+    * Stop use-after-free in event loop termination
+    * Fix processing of very short messages in DKIM (reported by @citrin)
+    * Detect systems without shared mutexes
+    * Fix issues with PTR and MX elements in SPF parser (reported by @citrin)
+
 0.7.3:
 	* New upstreams code:
 		- simplify upstreams API;
