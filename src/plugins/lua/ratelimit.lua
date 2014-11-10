@@ -131,11 +131,11 @@ end
 
 --- Make rate key
 local function make_rate_key(from, to, ip)
-	if from and ip then
+	if from and ip and ip:is_valid() then
 		return string.format('%s:%s:%s', from, to, ip:to_string())
 	elseif from then
 		return string.format('%s:%s', from, to)
-	elseif ip then
+	elseif ip and ip:is_valid() then
 		return string.format('%s:%s', to, ip:to_string())
 	elseif to then
 		return to
@@ -158,7 +158,7 @@ end
 local function rate_test_set(task, func)
 	-- Get initial task data
 	local ip = task:get_from_ip()
-	if ip and whitelisted_ip then
+	if ip and ip:is_valid() and whitelisted_ip then
 		if whitelisted_ip:get_key(ip) then
 			-- Do not check whitelisted ip
 			return
