@@ -953,39 +953,32 @@ url_calculate_escaped_hostlen (gchar *host, guint hostlen)
 	return result;
 }
 
-/* URL-unescape the string S.
-
-   This is done by transforming the sequences "%HH" to the character
-   represented by the hexadecimal digits HH.  If % is not followed by
-   two hexadecimal digits, it is inserted literally.
-
-   The transformation is done in place.  If you need the original
-   string intact, make a copy before calling this function.  */
-
-static void
-url_unescape (gchar *s)
+void
+rspamd_url_unescape (gchar *s)
 {
 	gchar *t = s;                           /* t - tortoise */
 	gchar *h = s;                           /* h - hare     */
 
 	for (; *h; h++, t++) {
 		if (*h != '%') {
-copychar:
 			*t = *h;
 		}
 		else {
 			gchar c;
-			/* Do nothing if '%' is not followed by two hex digits. */
 			if (!h[1] || !h[2] ||
-				!(g_ascii_isxdigit (h[1]) && g_ascii_isxdigit (h[2])))
-				goto copychar;
-			c = X2DIGITS_TO_NUM (h[1], h[2]);
-			/* Don't unescape %00 because there is no way to insert it
-			 * into a C string without effectively truncating it. */
-			if (c == '\0')
-				goto copychar;
-			*t = c;
-			h += 2;
+				!(g_ascii_isxdigit (h[1]) && g_ascii_isxdigit (h[2]))) {
+				*t = *h;
+			}
+			else {
+				c = X2DIGITS_TO_NUM (h[1], h[2]);
+				if (c != '\0') {
+					*t = c;
+					h += 2;
+				}
+				else {
+					*t = *h;
+				}
+			}
 		}
 	}
 	*t = '\0';
@@ -1082,12 +1075,8 @@ char_needs_escaping (const gchar *p)
 	return FALSE;
 }
 
-/* Translate a %-escaped (but possibly non-conformant) input string S
-   into a %-escaped (and conformant) output string.
- */
-
 static gchar *
-reencode_escapes (gchar *s, rspamd_mempool_t * pool)
+rspamd_url_reencode_escapes (gchar *s, rspamd_mempool_t * pool)
 {
 	const gchar *p1;
 	gchar *newstr, *p2;
@@ -1130,31 +1119,6 @@ reencode_escapes (gchar *s, rspamd_mempool_t * pool)
 	*p2 = '\0';
 	return newstr;
 }
-
-/* Unescape CHR in an otherwise escaped STR.  Used to selectively
-   escaping of certain characters, such as "/" and ":".  Returns a
-   count of unescaped chars.  */
-
-static void
-unescape_single_char (gchar *str, gchar chr)
-{
-	const gchar c1 = XNUM_TO_DIGIT (chr >> 4);
-	const gchar c2 = XNUM_TO_DIGIT (chr & 0xf);
-	gchar *h = str;                             /* hare */
-	gchar *t = str;                             /* tortoise */
-
-	for (; *h; h++, t++) {
-		if (h[0] == '%' && h[1] == c1 && h[2] == c2) {
-			*t = chr;
-			h += 2;
-		}
-		else {
-			*t = *h;
-		}
-	}
-	*t = '\0';
-}
-
 
 /*
  * Resolve "." and ".." elements of PATH by destructively modifying
@@ -1234,7 +1198,7 @@ parse_uri (struct uri *uri, gchar *uristring, rspamd_mempool_t * pool)
 	if (!*uristring)
 		return URI_ERRNO_EMPTY;
 
-	uri->string = reencode_escapes (uristring, pool);
+	uri->string = rspamd_url_reencode_escapes (uristring, pool);
 	msg_debug ("reencoding escapes in original url: '%s'", struri (uri));
 	uri->protocollen = get_protocol_length (struri (uri));
 
@@ -1456,7 +1420,7 @@ parse_uri (struct uri *uri, gchar *uristring, rspamd_mempool_t * pool)
 	}
 
 	url_strip (struri (uri));
-	url_unescape (uri->host);
+	rspamd_url_unescape (uri->host);
 
 	path_simplify (uri->data);
 

@@ -867,6 +867,7 @@ parse_tag_url (struct rspamd_task *task,
 
 		url_text = rspamd_mempool_alloc (task->task_pool, len + 1);
 		rspamd_strlcpy (url_text, c, len + 1);
+		rspamd_url_unescape (url_text);
 		decode_entitles (url_text, NULL);
 
 		if (g_ascii_strncasecmp (url_text, "http://",
