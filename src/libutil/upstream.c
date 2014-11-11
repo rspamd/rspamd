@@ -168,6 +168,7 @@ rspamd_upstream_dns_cb (struct rdns_reply *reply, void *arg)
 
 				up_ent->addr.addr.s4.sin_addr = entry->content.a.addr;
 				up_ent->addr.af = AF_INET;
+				up_ent->addr.addr.sa.sa_family = AF_INET;
 				up_ent->addr.slen = sizeof (up_ent->addr.addr.s4);
 				LL_PREPEND (up->new_addrs, up_ent);
 			}
@@ -177,6 +178,7 @@ rspamd_upstream_dns_cb (struct rdns_reply *reply, void *arg)
 				memcpy (&up_ent->addr.addr.s6.sin6_addr,
 						&entry->content.aaa.addr, sizeof (struct in6_addr));
 				up_ent->addr.af = AF_INET6;
+				up_ent->addr.addr.sa.sa_family = AF_INET6;
 				up_ent->addr.slen = sizeof (up_ent->addr.addr.s6);
 				LL_PREPEND (up->new_addrs, up_ent);
 			}
