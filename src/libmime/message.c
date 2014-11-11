@@ -953,7 +953,6 @@ process_text_part (struct rspamd_task *task,
 {
 	struct mime_text_part *text_part;
 	const gchar *cd;
-	gchar *raw_headers;
 
 	/* Skip attachements */
 #ifndef GMIME24
