@@ -879,10 +879,7 @@ redirector_callback (gint fd, short what, void *arg)
 			timeout =
 				rspamd_mempool_alloc (param->task->task_pool,
 					sizeof (struct timeval));
-			timeout->tv_sec = surbl_module_ctx->read_timeout / 1000;
-			timeout->tv_usec =
-				(surbl_module_ctx->read_timeout - timeout->tv_sec *
-				1000) * 1000;
+			double_to_tv (surbl_module_ctx->read_timeout, timeout);
 			event_del (&param->ev);
 			event_set (&param->ev,
 				param->sock,
@@ -1021,9 +1018,7 @@ register_redirector_call (struct uri *url, struct rspamd_task *task,
 	param->buf = g_string_sized_new (1024);
 	param->tree = tree;
 	timeout = rspamd_mempool_alloc (task->task_pool, sizeof (struct timeval));
-	timeout->tv_sec = surbl_module_ctx->connect_timeout / 1000;
-	timeout->tv_usec =
-		(surbl_module_ctx->connect_timeout - timeout->tv_sec * 1000) * 1000;
+	double_to_tv (surbl_module_ctx->connect_timeout, timeout);
 	event_set (&param->ev, s, EV_WRITE, redirector_callback, (void *)param);
 	event_add (&param->ev, timeout);
 	register_async_event (task->s,

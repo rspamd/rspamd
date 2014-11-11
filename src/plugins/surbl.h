@@ -7,8 +7,8 @@
 
 #define DEFAULT_REDIRECTOR_PORT 8080
 #define DEFAULT_SURBL_WEIGHT 10
-#define DEFAULT_REDIRECTOR_CONNECT_TIMEOUT 1000
-#define DEFAULT_REDIRECTOR_READ_TIMEOUT 5000
+#define DEFAULT_REDIRECTOR_CONNECT_TIMEOUT 1.0
+#define DEFAULT_REDIRECTOR_READ_TIMEOUT 5.0
 #define DEFAULT_SURBL_MAX_URLS 1000
 #define DEFAULT_SURBL_URL_EXPIRE 86400
 #define DEFAULT_SURBL_SYMBOL "SURBL_DNS"
@@ -19,8 +19,8 @@
 struct surbl_ctx {
 	gint (*filter)(struct rspamd_task *task);
 	guint16 weight;
-	guint connect_timeout;
-	guint read_timeout;
+	gdouble connect_timeout;
+	gdouble read_timeout;
 	guint max_urls;
 	guint url_expire;
 	GList *suffixes;
