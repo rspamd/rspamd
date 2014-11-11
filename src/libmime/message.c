@@ -973,12 +973,6 @@ process_text_part (struct rspamd_task *task,
 		debug_task ("skip attachments for checking as text parts");
 		return;
 	}
-
-	raw_headers = g_mime_object_get_headers (GMIME_OBJECT (part));
-	if (raw_headers) {
-		process_raw_headers (task, raw_headers);
-		g_free (raw_headers);
-	}
 #endif
 
 	if (g_mime_content_type_is_type (type, "text",
