@@ -534,6 +534,7 @@ surbl_module_reconfig (struct rspamd_config *cfg)
 	surbl_module_ctx->whitelist_file = NULL;
 	surbl_module_ctx->redirectors = NULL;
 	surbl_module_ctx->redirector_trie = rspamd_trie_create (TRUE);
+	surbl_module_ctx->redirector_ptrs = g_ptr_array_new ();
 
 	surbl_module_ctx->redirector_hosts = g_hash_table_new (rspamd_strcase_hash,
 			rspamd_strcase_equal);

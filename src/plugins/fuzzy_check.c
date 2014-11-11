@@ -455,11 +455,8 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "fuzzy_check", "rule")) != NULL) {
-		LL_FOREACH (value, cur)
-		{
-			if (fuzzy_parse_rule (cfg, cur) == -1) {
-				return -1;
-			}
+		LL_FOREACH (value, cur) {
+			fuzzy_parse_rule (cfg, cur);
 		}
 	}
 
