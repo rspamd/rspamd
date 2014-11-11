@@ -385,6 +385,7 @@ rspamd_parse_host_port_priority_strv (gchar **tokens,
 			memcpy (&cur_addr->addr, cur->ai_addr,
 					MIN (sizeof (cur_addr->addr), cur->ai_addrlen));
 			cur_addr->af = cur->ai_family;
+			cur_addr->addr.sa.sa_family = cur->ai_family;
 			cur_addr->slen = cur->ai_addrlen;
 			cur = cur->ai_next;
 			addr_cnt ++;
