@@ -577,13 +577,13 @@ rspamd_upstream_get_round_robin (struct upstream_list *ups, gboolean use_cur)
 	for (i = 0; i < ups->alive->len; i ++) {
 		up = g_ptr_array_index (ups->alive, i);
 		if (use_cur) {
-			if (up->cur_weight > max_weight) {
+			if (up->cur_weight >= max_weight) {
 				selected = up;
 				max_weight = up->cur_weight;
 			}
 		}
 		else {
-			if (up->weight > max_weight) {
+			if (up->weight >= max_weight) {
 				selected = up;
 				max_weight = up->weight;
 			}
