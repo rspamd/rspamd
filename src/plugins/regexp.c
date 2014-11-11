@@ -1081,8 +1081,12 @@ process_regexp_item (struct rspamd_task *task, void *user_data)
 		/* Non-threaded version */
 		if (item->lua_function) {
 			/* Just call function */
-			if (rspamd_lua_call_expression_func (item->lua_function, task, NULL,
-				&res) && res) {
+			res = FALSE;
+			if (!rspamd_lua_call_expression_func (item->lua_function, task, NULL,
+				&res)) {
+				msg_err ("error occurred when checking symbol %s", item->symbol);
+			}
+			if (res) {
 				rspamd_task_insert_result (task, item->symbol, 1, NULL);
 			}
 		}
