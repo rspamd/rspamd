@@ -40,7 +40,7 @@ struct regexp_module_item {
 	struct expression *expr;
 	const gchar *symbol;
 	guint32 avg_time;
-	gpointer lua_function;
+	struct ucl_lua_funcdata *lua_function;
 };
 
 struct regexp_ctx {
@@ -341,7 +341,7 @@ regexp_module_config (struct rspamd_config *cfg)
 			cur_item = rspamd_mempool_alloc0 (regexp_module_ctx->regexp_pool,
 					sizeof (struct regexp_module_item));
 			cur_item->symbol = ucl_object_key (value);
-			cur_item->lua_function = value->value.ud;
+			cur_item->lua_function = ucl_object_toclosure (value);
 			register_symbol (&cfg->cache,
 				cur_item->symbol,
 				1,
@@ -999,6 +999,61 @@ process_regexp_expression (struct expression *expr,
 	g_queue_free (stack);
 
 	return FALSE;
+}
+
+/* Call custom lua function in rspamd expression */
+static gboolean
+rspamd_lua_call_expression_func (struct ucl_lua_funcdata *lua_data,
+	struct rspamd_task *task, GList *args, gboolean *res)
+{
+	lua_State *L = lua_data->L;
+	struct rspamd_task **ptask;
+	GList *cur;
+	struct expression_argument *arg;
+	int nargs = 1, pop = 0;
+
+	lua_rawgeti (L, LUA_REGISTRYINDEX, lua_data->idx);
+	/* Now we got function in top of stack */
+	ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
+	rspamd_lua_setclass (L, "rspamd{task}", -1);
+	*ptask = task;
+
+	/* Now push all arguments */
+	cur = args;
+	while (cur) {
+		arg = get_function_arg (cur->data, task, FALSE);
+		if (arg) {
+			switch (arg->type) {
+			case EXPRESSION_ARGUMENT_NORMAL:
+				lua_pushstring (L, (const gchar *)arg->data);
+				break;
+			case EXPRESSION_ARGUMENT_BOOL:
+				lua_pushboolean (L, (gboolean) GPOINTER_TO_SIZE (arg->data));
+				break;
+			default:
+				msg_err ("cannot pass custom params to lua function");
+				return FALSE;
+			}
+		}
+		nargs++;
+		cur = g_list_next (cur);
+	}
+
+	if (lua_pcall (L, nargs, 1, 0) != 0) {
+		msg_info ("call to lua function failed: %s", lua_tostring (L, -1));
+		return FALSE;
+	}
+	pop++;
+
+	if (!lua_isboolean (L, -1)) {
+		lua_pop (L, pop);
+		msg_info ("lua function must return a boolean");
+		return FALSE;
+	}
+	*res = lua_toboolean (L, -1);
+	lua_pop (L, pop);
+
+	return TRUE;
 }
 
 struct regexp_threaded_ud {

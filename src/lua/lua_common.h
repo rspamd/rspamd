@@ -182,10 +182,6 @@ gint rspamd_lua_call_chain_filter (const gchar *function,
 double rspamd_lua_consolidation_func (struct rspamd_task *task,
 	const gchar *metric_name,
 	const gchar *function_name);
-gboolean rspamd_lua_call_expression_func (gpointer lua_data,
-	struct rspamd_task *task,
-	GList *args,
-	gboolean *res);
 void rspamd_lua_call_post_filters (struct rspamd_task *task);
 void rspamd_lua_call_pre_filters (struct rspamd_task *task);
 void rspamd_lua_dostring (const gchar *line);
