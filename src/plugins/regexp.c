@@ -513,9 +513,11 @@ process_regexp (struct rspamd_regexp *re,
 					re->header, rh->decoded);
 				if (re->type == REGEXP_RAW_HEADER) {
 					in = rh->value;
+					regexp = re->raw_regexp;
 				}
 				else {
 					in = rh->decoded;
+					regexp = re->regexp;
 				}
 				/* Try to match regexp */
 				if (!re->is_raw) {
@@ -526,8 +528,8 @@ process_regexp (struct rspamd_regexp *re,
 					}
 				}
 				if (in &&
-					g_regex_match_full (re->regexp, in, -1, 0, 0, NULL,
-					&err) == TRUE) {
+					g_regex_match_full (regexp, in, -1, 0, 0, NULL,
+							&err) == TRUE) {
 					if (G_UNLIKELY (re->is_test)) {
 						msg_info (
 							"process test regexp %s for header %s with value '%s' returned TRUE",
