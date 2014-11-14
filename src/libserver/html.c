@@ -874,8 +874,8 @@ parse_tag_url (struct rspamd_task *task,
 		rspamd_url_unescape (url_text);
 		decode_entitles (url_text, NULL);
 
-		if (g_ascii_strncasecmp (url_text, "http://",
-			sizeof ("http://") - 1) != 0 &&
+		if (g_ascii_strncasecmp (url_text, "http",
+			sizeof ("http") - 1) != 0 &&
 			g_ascii_strncasecmp (url_text, "www",
 			sizeof ("www") - 1) != 0 &&
 			g_ascii_strncasecmp (url_text, "ftp://",
