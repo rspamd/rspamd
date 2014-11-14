@@ -30,6 +30,7 @@
 #include "html.h"
 #include "images.h"
 #include "utlist.h"
+#include <iconv.h>
 
 #define RECURSION_LIMIT 30
 #define UTF8_CHARSET "UTF-8"
@@ -868,6 +869,70 @@ charset_validate (rspamd_mempool_t *pool, const gchar *in, gchar **out)
 	return TRUE;
 }
 
+static GQuark
+converter_error_quark (void)
+{
+	return g_quark_from_static_string ("conversion error");
+}
+
+static gchar *
+rspamd_text_to_utf8 (struct rspamd_task *task,
+		gchar *input, gsize len, const gchar *in_enc,
+		gsize *olen, GError **err)
+{
+	gchar *res, *s, *d;
+	gsize outlen;
+	iconv_t ic;
+	gsize processed, ret;
+
+	ic = iconv_open (UTF8_CHARSET, in_enc);
+
+	if (ic == (iconv_t)-1) {
+		g_set_error (err, converter_error_quark(), EINVAL,
+				"cannot open iconv for: %s", in_enc);
+		return NULL;
+	}
+
+	/* For the most of charsets utf8 notation is larger than native one */
+	outlen = len * 2 + 1;
+
+	res = rspamd_mempool_alloc (task->task_pool, outlen);
+	s = input;
+	d = res;
+	processed = outlen - 1;
+
+	while (len > 0 && processed > 0) {
+		ret = iconv (ic, &s, &len, &d, &processed);
+		if (ret == (gsize)-1) {
+			switch (errno) {
+			case E2BIG:
+				g_set_error (err, converter_error_quark(), EINVAL,
+						"output of size %zd is not enough to handle "
+						"converison of %zd bytes", outlen, len);
+				return NULL;
+			case EILSEQ:
+			case EINVAL:
+				/* Ignore bad characters */
+				if (processed > 0 && len > 0) {
+					*d++ = '?';
+					s++;
+					len --;
+					processed --;
+				}
+				break;
+			}
+		}
+		else if (ret == 0) {
+			break;
+		}
+	}
+
+	*d++ = '\0';
+	*olen = d - res;
+
+	return res;
+}
+
 static GByteArray *
 convert_text_to_utf (struct rspamd_task *task,
 	GByteArray * part_content,
@@ -875,7 +940,7 @@ convert_text_to_utf (struct rspamd_task *task,
 	struct mime_text_part *text_part)
 {
 	GError *err = NULL;
-	gsize read_bytes, write_bytes;
+	gsize write_bytes;
 	const gchar *charset;
 	gchar *res_str, *ocharset;
 	GByteArray *result_array;
@@ -913,12 +978,9 @@ convert_text_to_utf (struct rspamd_task *task,
 		}
 	}
 
-	res_str = g_convert_with_fallback (part_content->data,
+	res_str = rspamd_text_to_utf8 (task, part_content->data,
 			part_content->len,
-			UTF8_CHARSET,
 			ocharset,
-			NULL,
-			&read_bytes,
 			&write_bytes,
 			&err);
 	if (res_str == NULL) {
@@ -934,9 +996,6 @@ convert_text_to_utf (struct rspamd_task *task,
 	result_array = rspamd_mempool_alloc (task->task_pool, sizeof (GByteArray));
 	result_array->data = res_str;
 	result_array->len = write_bytes;
-	rspamd_mempool_add_destructor (task->task_pool,
-		(rspamd_mempool_destruct_t) g_free,
-		res_str);
 	text_part->is_raw = FALSE;
 	text_part->is_utf = TRUE;
 
