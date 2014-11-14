@@ -219,11 +219,6 @@ parse_mime_types (const gchar *str)
 		}
 	}
 
-	if (res != NULL) {
-		rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
-			(rspamd_mempool_destruct_t)g_list_free, res);
-	}
-
 	return res;
 }
 
@@ -320,11 +315,15 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj)
 		if (value->type == UCL_ARRAY) {
 			value = value->value.av;
 		}
-		LL_FOREACH (value, cur)
-		{
+		LL_FOREACH (value, cur) {
 			rule->mime_types = g_list_concat (rule->mime_types,
 					parse_mime_types (ucl_obj_tostring (cur)));
 		}
+	}
+
+	if (rule->mime_types != NULL) {
+		rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
+			(rspamd_mempool_destruct_t)g_list_free, rule->mime_types);
 	}
 
 	if ((value = ucl_object_find_key (obj, "max_score")) != NULL) {
