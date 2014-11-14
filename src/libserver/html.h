@@ -192,6 +192,8 @@ typedef enum
 #define FL_CLOSING      (1 << 1)
 /* Fully closed tag (e.g. <a attrs />) */
 #define FL_CLOSED       (1 << 2)
+/* <! SGML tag */
+#define FL_SGML			(1 << 3)
 
 struct html_tag {
 	tag_id_t id;

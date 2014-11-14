@@ -493,6 +493,10 @@ construct_html_node (rspamd_mempool_t * pool, gchar *text, gsize tag_len)
 		html->flags |= FL_XML;
 		html->tag = NULL;
 	}
+	else if (*text == '!') {
+		html->flags |= FL_SGML;
+		html->tag = NULL;
+	}
 	else {
 		if (*text == '/') {
 			html->flags |= FL_CLOSING;
@@ -972,7 +976,7 @@ add_html_node (struct rspamd_task *task,
 				part->is_balanced = FALSE;
 			}
 		}
-		else {
+		else if ((data->flags & (FL_XML|FL_SGML)) == 0) {
 
 			g_node_append (*cur_level, new);
 			if ((data->flags & FL_CLOSED) == 0) {
