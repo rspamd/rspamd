@@ -631,16 +631,16 @@ rspamc_stat_actions (ucl_object_t *obj, GString *out, gint64 scanned)
 			gint64 cnt = ucl_object_toint (cur);
 			rspamd_printf_gstring (out, "Messages with action %s: %L"
 				", %.2f%%\n", ucl_object_key (cur), cnt,
-				(gdouble)cnt / (gdouble)scanned);
+				((gdouble)cnt / (gdouble)scanned) * 100.);
 		}
 	}
 
 	spam = ucl_object_toint (ucl_object_find_key (obj, "spam_count"));
 	ham = ucl_object_toint (ucl_object_find_key (obj, "ham_count"));
 	rspamd_printf_gstring (out, "Messages treated as spam: %L, %.2f%%\n", spam,
-		(gdouble)spam / (gdouble)scanned);
+		((gdouble)spam / (gdouble)scanned) * 100.);
 	rspamd_printf_gstring (out, "Messages treated as ham: %L, %.2f%%\n", ham,
-		(gdouble)ham / (gdouble)scanned);
+		((gdouble)ham / (gdouble)scanned) * 100.);
 }
 
 static void
