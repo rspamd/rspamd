@@ -1114,8 +1114,12 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint size,
 		g_checksum_update (ck, buf, cklen);
 		*remain = *remain - (cklen - added);
 #if 0
-		msg_debug ("update signature with buffer (%ud size, %ud remain): %*s",
-				cklen, *remain, cklen, buf);
+		msg_debug ("update signature with buffer (%ud size, %ud remain, %ud added): %*s",
+				cklen, *remain, added, cklen, buf);
+#else
+		msg_debug ("update signature with body buffer "
+				"(%ud size, %ud remain, %ud added)",
+						cklen, *remain, added);
 #endif
 	}
 
@@ -1173,13 +1177,13 @@ rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint size,
 
 	*start = h;
 
-#if 0
-	msg_debug ("update signature with buffer: %*s", t - buf, buf);
-#endif
 	if (*remain > 0) {
 		size_t cklen = MIN(t - buf, *remain + added);
 		g_checksum_update (ck, buf, cklen);
 		*remain = *remain - (cklen - added);
+		msg_debug ("update signature with body buffer "
+				"(%ud size, %ud remain, %ud added)",
+				cklen, *remain, added);
 	}
 
 	return !finished;
