@@ -1069,6 +1069,14 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint size,
 				len--;
 				continue;
 			}
+			else if (inlen < 2) {
+				/*
+				 * Inlen is too small to continue, hence we need more iteration to
+				 * avoid splitted \r\n
+				 */
+				finished = FALSE;
+				break;
+			}
 		}
 		else if (g_ascii_isspace (*h)) {
 			if (got_sp) {
