@@ -1115,17 +1115,6 @@ rspamd_rcl_composite_handler (struct rspamd_config *cfg,
 }
 
 /**
- * Fake handler to parse default options only, uses struct cfg_file as pointer
- * for default handlers
- */
-static gboolean
-rspamd_rcl_empty_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
-	gpointer ud, struct rspamd_rcl_section *section, GError **err)
-{
-	return rspamd_rcl_section_parse_defaults (section, cfg, obj, cfg, err);
-}
-
-/**
  * Add new section to the configuration
  * @param top top section
  * @param name the name of the section
