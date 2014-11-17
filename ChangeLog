@@ -1,3 +1,24 @@
+0.7.5:
+	* Fix owner when creating folder /run/rspamd (by @sfirmery)
+	* Fix IP validity checks
+	* Decode URLs obtained from HTML tags
+	* Fix crash with unweighted upstreams
+	* Stop processing headers in parts
+	* Set sockaddr.sa_family properly when connectig to upstreams
+	* Fix reload issues in surbl and fuzzy_check (reported by @citrin)
+	* Fix timeouts in redirector
+	* Improve lua errors reporting
+	* Fix lua closures processing in libucl
+	* Rework calling of lua functions from regexp module
+	* Choose raw regexp for raw headers
+	* Rework conversion to utf since glib one is broken
+	* Ignore SGML style tags in html
+	* Fix old bug with non-capturing https urls
+	* Fix memory corruption on fuzzy reload (reported by @citrin)
+	* Fix percents display in rspamc
+	* Fix buffer update for DKIM
+	* Do not validate utf for raw headers
+
 0.7.4:
 	* Fix build under *BSD
 	* Detect HAN unicode script
