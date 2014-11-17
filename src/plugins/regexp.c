@@ -518,15 +518,14 @@ process_regexp (struct rspamd_regexp *re,
 				else {
 					in = rh->decoded;
 					regexp = re->regexp;
-				}
-				/* Try to match regexp */
-				if (!re->is_raw) {
 					/* Validate input */
 					if (!in || !g_utf8_validate (in, -1, NULL)) {
 						cur = g_list_next (cur);
 						continue;
 					}
 				}
+
+				/* Match re */
 				if (in &&
 					g_regex_match_full (regexp, in, -1, 0, 0, NULL,
 							&err) == TRUE) {
