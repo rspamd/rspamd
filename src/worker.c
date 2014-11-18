@@ -109,6 +109,11 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 
 	ctx = task->worker->ctx;
 
+	if (!rspamd_protocol_handle_request (task, msg)) {
+		task->state = WRITE_REPLY;
+		return 0;
+	}
+
 	if (task->cmd == CMD_PING) {
 		task->state = WRITE_REPLY;
 		return 0;
@@ -118,11 +123,6 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 		msg_err ("got zero length body, cannot continue");
 		task->last_error = "message's body is empty";
 		task->error_code = RSPAMD_LENGTH_ERROR;
-		task->state = WRITE_REPLY;
-		return 0;
-	}
-
-	if (!rspamd_protocol_handle_request (task, msg)) {
 		task->state = WRITE_REPLY;
 		return 0;
 	}

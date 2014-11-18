@@ -906,7 +906,8 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 			rspamd_protocol_http_reply (msg, task);
 			break;
 		case CMD_PING:
-			msg->body = g_string_new ("pong");
+			msg->body = g_string_new ("pong" CRLF);
+			ctype = "text/plain";
 			break;
 		case CMD_OTHER:
 			msg_err ("BROKEN");
