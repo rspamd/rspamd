@@ -1169,6 +1169,14 @@ rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint size,
 				len--;
 				continue;
 			}
+			else if (inlen < 2) {
+				/*
+				 * Inlen is too small to continue, hence we need more iteration to
+				 * avoid splitted \r\n
+				 */
+				finished = FALSE;
+				break;
+			}
 		}
 		*t++ = *h++;
 		inlen--;
