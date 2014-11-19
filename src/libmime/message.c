@@ -1066,8 +1066,9 @@ process_text_part (struct rspamd_task *task,
 			task->text_parts = g_list_prepend (task->text_parts, text_part);
 			return;
 		}
-		text_part->orig = convert_text_to_utf (task,
-				part_content,
+		text_part->orig = part_content;
+		part_content = convert_text_to_utf (task,
+				text_part->orig,
 				type,
 				text_part);
 		text_part->is_balanced = TRUE;
@@ -1077,7 +1078,7 @@ process_text_part (struct rspamd_task *task,
 		text_part->content = strip_html_tags (task,
 				task->task_pool,
 				text_part,
-				text_part->orig,
+				part_content,
 				NULL);
 
 		if (text_part->html_nodes != NULL) {
@@ -1107,11 +1108,11 @@ process_text_part (struct rspamd_task *task,
 			task->text_parts = g_list_prepend (task->text_parts, text_part);
 			return;
 		}
-		text_part->orig = convert_text_to_utf (task,
+		text_part->content = convert_text_to_utf (task,
 				part_content,
 				type,
 				text_part);
-		text_part->content = text_part->orig;
+		text_part->orig = part_content;
 		url_parse_text (task->task_pool, task, text_part, FALSE);
 		fuzzy_init_part (text_part, task->task_pool, task->cfg->max_diff);
 		task->text_parts = g_list_prepend (task->text_parts, text_part);

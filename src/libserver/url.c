@@ -1829,7 +1829,7 @@ url_parse_text (rspamd_mempool_t * pool,
 	gchar *p, *end, *begin;
 
 
-	if (!part->orig->data || part->orig->len == 0) {
+	if (part->content == NULL || part->content->len == 0) {
 		msg_warn ("got empty text part");
 		return;
 	}
