@@ -1027,11 +1027,8 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint size,
 	guint len, inlen, added = 0;
 	gboolean got_sp, finished = FALSE;
 
-	if (size > sizeof (buf)) {
-		len = sizeof (buf);
-	}
-	else {
-		len = size;
+	len = size;
+	if (size <= sizeof (buf)) {
 		finished = TRUE;
 	}
 	inlen = sizeof (buf) - 1;
@@ -1045,6 +1042,15 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint size,
 			if (got_sp) {
 				got_sp = FALSE;
 				t--;
+			}
+			if (inlen < 2) {
+				/*
+				 * Inlen is too small to continue, hence we need more iteration to
+				 * avoid splitted \r\n
+				 */
+				h --;
+				finished = FALSE;
+				break;
 			}
 			/* Replace a single \n or \r with \r\n */
 			if (*h == '\n' && (h == *start || *(h - 1) != '\r')) {
@@ -1068,14 +1074,6 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint size,
 				}
 				len--;
 				continue;
-			}
-			else if (inlen < 2) {
-				/*
-				 * Inlen is too small to continue, hence we need more iteration to
-				 * avoid splitted \r\n
-				 */
-				finished = FALSE;
-				break;
 			}
 		}
 		else if (g_ascii_isspace (*h)) {
@@ -1136,11 +1134,8 @@ rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint size,
 	guint len, inlen, added = 0;
 	gboolean finished = FALSE;
 
-	if (size > sizeof (buf)) {
-		len = sizeof (buf);
-	}
-	else {
-		len = size;
+	len = size;
+	if (size <= sizeof (buf)) {
 		finished = TRUE;
 	}
 	inlen = sizeof (buf) - 1;
@@ -1149,6 +1144,15 @@ rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint size,
 
 	while (len && inlen) {
 		if (*h == '\r' || *h == '\n') {
+			if (inlen < 2) {
+				/*
+				 * Inlen is too small to continue, hence we need more iteration to
+				 * avoid splitted \r\n
+				 */
+				h --;
+				finished = FALSE;
+				break;
+			}
 			/* Replace a single \n or \r with \r\n */
 			if (*h == '\n' && (h == *start || *(h - 1) != '\r')) {
 				*t++ = '\r';
@@ -1168,14 +1172,6 @@ rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint size,
 				}
 				len--;
 				continue;
-			}
-			else if (inlen < 2) {
-				/*
-				 * Inlen is too small to continue, hence we need more iteration to
-				 * avoid splitted \r\n
-				 */
-				finished = FALSE;
-				break;
 			}
 		}
 		*t++ = *h++;
