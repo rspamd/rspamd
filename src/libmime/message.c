@@ -945,7 +945,7 @@ rspamd_text_to_utf8 (struct rspamd_task *task,
 		}
 	}
 
-	*d++ = '\0';
+	*d = '\0';
 	*olen = d - res;
 
 	return res;
