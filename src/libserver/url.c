@@ -1835,16 +1835,9 @@ url_parse_text (rspamd_mempool_t * pool,
 	}
 
 	if (url_init () == 0) {
-		if (is_html) {
-			begin = part->orig->data;
-			end = begin + part->orig->len;
-			p = begin;
-		}
-		else {
-			begin = part->content->data;
-			end = begin + part->content->len;
-			p = begin;
-		}
+		begin = part->content->data;
+		end = begin + part->content->len;
+		p = begin;
 		while (p < end) {
 			if (url_try_text (pool, p, end - p, &url_start, &url_end, &url_str,
 				is_html)) {
