@@ -1025,56 +1025,32 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint size,
 	static gchar buf[BUFSIZ];
 	gchar *t;
 	guint len, inlen, added = 0;
-	gboolean got_sp, finished = FALSE;
+	gboolean got_sp;
 
 	len = size;
-	if (size <= sizeof (buf)) {
-		finished = TRUE;
-	}
 	inlen = sizeof (buf) - 1;
 	h = *start;
-	t = &buf[0];
+	t = buf;
 	got_sp = FALSE;
 
 	while (len && inlen) {
 		if (*h == '\r' || *h == '\n') {
-			/* Ignore spaces at the end of line */
 			if (got_sp) {
-				got_sp = FALSE;
-				t--;
+				/* Ignore spaces at the end of line */
+				t --;
 			}
-			if (inlen < 2) {
-				/*
-				 * Inlen is too small to continue, hence we need more iteration to
-				 * avoid splitted \r\n
-				 */
-				h --;
-				finished = FALSE;
-				break;
+			*t++ = '\r';
+			*t++ = '\n';
+			if (len > 1 && (*h == '\r' && h[1] == '\n')) {
+				h += 2;
+				len -= 2;
 			}
-			/* Replace a single \n or \r with \r\n */
-			if (*h == '\n' && (h == *start || *(h - 1) != '\r')) {
-				*t++ = '\r';
-				inlen--;
+			else {
+				h ++;
+				len --;
 				added ++;
-				if (inlen == 0) {
-					break;
-				}
 			}
-			else if (*h == '\r' && *(h + 1) != '\n') {
-				*t++ = *h++;
-				*t++ = '\n';
-				added ++;
-				if (inlen > 1) {
-					inlen -= 2;
-				}
-				else {
-					/* It is safe as inlen = sizeof (buf) - 1 */
-					inlen = 0;
-				}
-				len--;
-				continue;
-			}
+			break;
 		}
 		else if (g_ascii_isspace (*h)) {
 			if (got_sp) {
@@ -1102,11 +1078,6 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint size,
 
 	*start = h;
 
-	if (!finished && *(t - 1) == ' ' && g_ascii_isspace (*h)) {
-		/* Avoid border problems */
-		t--;
-	}
-
 	if (*remain > 0) {
 		size_t cklen = MIN(t - buf, *remain + added);
 		g_checksum_update (ck, buf, cklen);
@@ -1121,7 +1092,7 @@ rspamd_dkim_relaxed_body_step (GChecksum *ck, const gchar **start, guint size,
 #endif
 	}
 
-	return !finished;
+	return (len != 0);
 }
 
 static gboolean
@@ -1132,47 +1103,26 @@ rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint size,
 	static gchar buf[BUFSIZ];
 	gchar *t;
 	guint len, inlen, added = 0;
-	gboolean finished = FALSE;
 
 	len = size;
-	if (size <= sizeof (buf)) {
-		finished = TRUE;
-	}
 	inlen = sizeof (buf) - 1;
 	h = *start;
 	t = &buf[0];
 
 	while (len && inlen) {
 		if (*h == '\r' || *h == '\n') {
-			if (inlen < 2) {
-				/*
-				 * Inlen is too small to continue, hence we need more iteration to
-				 * avoid splitted \r\n
-				 */
-				h --;
-				finished = FALSE;
-				break;
+			*t++ = '\r';
+			*t++ = '\n';
+			if (len > 1 && (*h == '\r' && h[1] == '\n')) {
+				h += 2;
+				len -= 2;
 			}
-			/* Replace a single \n or \r with \r\n */
-			if (*h == '\n' && (h == *start || *(h - 1) != '\r')) {
-				*t++ = '\r';
+			else {
+				h ++;
+				len --;
 				added ++;
-				inlen--;
 			}
-			else if (*h == '\r' && *(h + 1) != '\n') {
-				*t++ = *h++;
-				added ++;
-				*t++ = '\n';
-				if (inlen > 1) {
-					inlen -= 2;
-				}
-				else {
-					/* It is safe as inlen = sizeof (buf) - 1 */
-					inlen = 0;
-				}
-				len--;
-				continue;
-			}
+			break;
 		}
 		*t++ = *h++;
 		inlen--;
@@ -1190,7 +1140,7 @@ rspamd_dkim_simple_body_step (GChecksum *ck, const gchar **start, guint size,
 				cklen, *remain, added);
 	}
 
-	return !finished;
+	return (len != 0);
 }
 
 static gboolean
