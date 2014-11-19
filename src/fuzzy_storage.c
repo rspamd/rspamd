@@ -595,6 +595,30 @@ process_check_command (struct fuzzy_cmd *cmd,
 	}
 }
 
+static struct rspamd_fuzzy_node *
+add_hash_node (struct fuzzy_cmd *cmd,
+		guint64 time,
+		struct rspamd_fuzzy_storage_ctx *ctx)
+{
+	struct rspamd_fuzzy_node *h;
+
+	h = g_slice_alloc (sizeof (struct rspamd_fuzzy_node));
+	memcpy (&h->h.hash_pipe, &cmd->hash, sizeof (cmd->hash));
+	h->h.block_size = cmd->blocksize;
+	h->time = time;
+	h->value = cmd->value;
+	h->flag = cmd->flag;
+	if (ctx->strict_hash) {
+		g_hash_table_insert (static_hash, h->h.hash_pipe, h);
+	}
+	else {
+		g_queue_push_head (hashes[cmd->blocksize % BUCKETS], h);
+	}
+	rspamd_bloom_add (bf, cmd->hash);
+
+	return h;
+}
+
 static gboolean
 update_hash (struct fuzzy_cmd *cmd,
 	guint64 time,
@@ -618,6 +642,10 @@ update_hash (struct fuzzy_cmd *cmd,
 				time,
 				ctx);
 	}
+	if (n == NULL) {
+		/* Bloom false positive */
+		n = add_hash_node (cmd, time, ctx);
+	}
 	rspamd_rwlock_writer_unlock (ctx->tree_lock);
 
 	if (n != NULL) {
@@ -632,8 +660,6 @@ process_write_command (struct fuzzy_cmd *cmd,
 	guint64 time,
 	struct rspamd_fuzzy_storage_ctx *ctx)
 {
-	struct rspamd_fuzzy_node *h;
-
 	if (rspamd_bloom_check (bf, cmd->hash)) {
 		if (update_hash (cmd, time, ctx)) {
 			return TRUE;
@@ -641,20 +667,7 @@ process_write_command (struct fuzzy_cmd *cmd,
 	}
 
 	rspamd_rwlock_writer_lock (ctx->tree_lock);
-	h = g_slice_alloc (sizeof (struct rspamd_fuzzy_node));
-	memcpy (&h->h.hash_pipe, &cmd->hash, sizeof (cmd->hash));
-	h->h.block_size = cmd->blocksize;
-	h->time = time;
-	h->value = cmd->value;
-	h->flag = cmd->flag;
-	if (ctx->strict_hash) {
-		g_hash_table_insert (static_hash, h->h.hash_pipe, h);
-	}
-	else {
-		g_queue_push_head (hashes[cmd->blocksize % BUCKETS], h);
-	}
-	rspamd_bloom_add (bf, cmd->hash);
-
+	add_hash_node (cmd, time, ctx);
 	rspamd_rwlock_writer_unlock (ctx->tree_lock);
 
 	mods++;
