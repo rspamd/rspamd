@@ -319,7 +319,7 @@ rspamd_upstream_fail (struct upstream *up)
 			max_error_rate = 0;
 		}
 
-		if (error_rate > max_error_rate) {
+		if (error_rate > max_error_rate && up->active_idx != -1) {
 			/* Remove upstream from the active list */
 			rspamd_upstream_set_inactive (up->ls, up);
 		}
