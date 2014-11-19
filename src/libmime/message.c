@@ -42,12 +42,13 @@ strip_html_tags (struct rspamd_task *task,
 	GByteArray * src,
 	gint *stateptr)
 {
-	uint8_t *p, *rp, *tbegin = NULL, *end, c, lc;
+	uint8_t *p, *rp, *tbegin = NULL, *end, c, lc, *estart;
 	gint br, i = 0, depth = 0, in_q = 0;
 	gint state = 0;
+	guint dlen;
 	GByteArray *buf;
 	GNode *level_ptr = NULL;
-	gboolean erase = FALSE;
+	gboolean erase = FALSE, html_decode = FALSE;
 
 	if (stateptr)
 		state = *stateptr;
@@ -204,6 +205,25 @@ unbreak_tag:
 			}
 			break;
 
+		case '&':
+			/* Decode entitle */
+			html_decode = TRUE;
+			estart = rp;
+			goto reg_char;
+			break;
+
+		case ';':
+			if (html_decode) {
+				html_decode = FALSE;
+				*rp = ';';
+				if (rp - estart > 0) {
+					dlen = rp - estart + 1;
+					decode_entitles (estart, &dlen);
+					rp = estart + dlen;
+				}
+			}
+			break;
+
 		case '?':
 
 			if (state == 1 && *(p - 1) == '<') {
@@ -211,7 +231,6 @@ unbreak_tag:
 				state = 2;
 				break;
 			}
-
 		case 'E':
 		case 'e':
 			/* !DOCTYPE exception */
@@ -226,7 +245,6 @@ unbreak_tag:
 				break;
 			}
 		/* fall-through */
-
 		case 'l':
 
 			/* swm: If we encounter '<?xml' then we shouldn't be in
