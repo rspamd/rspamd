@@ -190,7 +190,7 @@ LUA_FUNCTION_DEF (task, get_parts);
  */
 LUA_FUNCTION_DEF (task, get_header);
 /***
- * @method task:get_raw_header(name[, case_sensitive])
+ * @method task:get_header_raw(name[, case_sensitive])
  * Get raw value of a header specified with optional case_sensitive flag.
  * By default headers are searched in caseless matter.
  * @param {string} name name of header to get
@@ -934,13 +934,15 @@ lua_task_push_header (lua_State * L,
 	gint i = 1;
 	const gchar *val;
 
-	if (full) {
-		lua_newtable (L);
-	}
 	rh = g_hash_table_lookup (task->raw_headers, name);
 
 	if (rh == NULL) {
+		lua_pushnil (L);
 		return 1;
+	}
+
+	if (full) {
+		lua_newtable (L);
 	}
 
 	while (rh) {
