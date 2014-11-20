@@ -121,6 +121,7 @@ struct fuzzy_session {
 
 extern sig_atomic_t wanna_die;
 
+
 static gint
 compare_nodes (gconstpointer a, gconstpointer b, gpointer unused)
 {
@@ -161,7 +162,7 @@ expire_nodes (gpointer *to_expire, gint expired_num,
 			}
 			server_stat->fuzzy_hashes--;
 			rspamd_bloom_del (bf, node->h.hash_pipe);
-			g_hash_table_remove (static_hash, node->h.hash_pipe);
+			g_hash_table_remove (static_hash, &node->h);
 		}
 		else {
 			cur = (GList *)to_expire[i];
@@ -436,7 +437,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 			}
 		}
 		if (ctx->strict_hash) {
-			g_hash_table_insert (static_hash, node->h.hash_pipe, node);
+			g_hash_table_insert (static_hash, &node->h, node);
 		}
 		else {
 			if (node->value > (gint)ctx->frequent_score) {
@@ -484,7 +485,7 @@ check_hash_node (GQueue *hash, fuzzy_hash_t *s, gint update_value,
 	gint prob = 0;
 
 	if (ctx->strict_hash) {
-		h = g_hash_table_lookup (static_hash, s->hash_pipe);
+		h = g_hash_table_lookup (static_hash, s);
 		if (h != NULL) {
 			if (h->time == INVALID_NODE_TIME) {
 				/* Node is expired */
@@ -609,7 +610,7 @@ add_hash_node (struct fuzzy_cmd *cmd,
 	h->value = cmd->value;
 	h->flag = cmd->flag;
 	if (ctx->strict_hash) {
-		g_hash_table_insert (static_hash, h->h.hash_pipe, h);
+		g_hash_table_insert (static_hash, &h->h, h);
 	}
 	else {
 		g_queue_push_head (hashes[cmd->blocksize % BUCKETS], h);
@@ -687,7 +688,7 @@ delete_hash (GQueue *hash, fuzzy_hash_t *s,
 
 	if (ctx->strict_hash) {
 		rspamd_rwlock_writer_lock (ctx->tree_lock);
-		if (g_hash_table_remove (static_hash, s->hash_pipe)) {
+		if (g_hash_table_remove (static_hash, s)) {
 			rspamd_bloom_del (bf, s->hash_pipe);
 			msg_info ("fuzzy hash was successfully deleted");
 			server_stat->fuzzy_hashes--;
@@ -1021,7 +1022,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	sigh->handler_data = worker;
 
 	if (ctx->strict_hash) {
-		static_hash = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal,
+		static_hash = g_hash_table_new_full (rspamd_fuzzy_hash, rspamd_fuzzy_equal,
 				NULL, rspamd_fuzzy_free_node);
 	}
 	else {
