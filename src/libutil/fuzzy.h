@@ -67,5 +67,11 @@ gint fuzzy_compare_parts (struct mime_text_part *p1, struct mime_text_part *p2);
  */
 guint32 lev_distance (gchar *s1, gint len1, gchar *s2, gint len2);
 
+/*
+ * Hash table utilities
+ */
+gint rspamd_fuzzy_len (fuzzy_hash_t *h);
+guint rspamd_fuzzy_hash (gconstpointer key);
+gboolean rspamd_fuzzy_equal (gconstpointer v1, gconstpointer v2);
 
 #endif

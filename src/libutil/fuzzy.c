@@ -30,6 +30,7 @@
 #include "message.h"
 #include "url.h"
 #include "main.h"
+#include "xxhash.h"
 
 #define ROLL_WINDOW_SIZE 9
 #define MIN_FUZZY_BLOCK_SIZE 3
@@ -499,6 +500,55 @@ fuzzy_compare_parts (struct mime_text_part *p1, struct mime_text_part *p2)
 	}
 
 	return 0;
+}
+
+gint
+rspamd_fuzzy_len (fuzzy_hash_t *h)
+{
+	gint len;
+	void *nullpos;
+
+	nullpos = memchr (h->hash_pipe, '\0', sizeof (h->hash_pipe));
+
+	if (nullpos == NULL) {
+		len = sizeof (h->hash_pipe);
+	}
+	else {
+		len = (char *)nullpos - h->hash_pipe;
+	}
+
+	return len;
+}
+
+guint
+rspamd_fuzzy_hash (gconstpointer key)
+{
+	fuzzy_hash_t *fh = (fuzzy_hash_t *)key;
+	void *st;
+
+	st = XXH32_init (0xdeadbeef);
+	XXH32_update (st, &fh->block_size, sizeof (fh->block_size));
+	XXH32_update (st, fh->hash_pipe, rspamd_fuzzy_len (fh));
+
+	return XXH32_digest (st);
+}
+
+gboolean
+rspamd_fuzzy_equal (gconstpointer v1, gconstpointer v2)
+{
+	fuzzy_hash_t *fh1= (fuzzy_hash_t *)v1,
+			*fh2 = (fuzzy_hash_t *)v2;
+
+	if (fh1->block_size == fh2->block_size) {
+		gint l1 = rspamd_fuzzy_len (fh1),
+			l2 = rspamd_fuzzy_len (fh2);
+
+		if (l1 == l2) {
+			return (memcmp (fh1->hash_pipe, fh2->hash_pipe, l1) == 0);
+		}
+	}
+
+	return FALSE;
 }
 
 /*
