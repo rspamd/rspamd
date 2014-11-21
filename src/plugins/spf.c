@@ -42,6 +42,7 @@
 
 #define DEFAULT_SYMBOL_FAIL "R_SPF_FAIL"
 #define DEFAULT_SYMBOL_SOFTFAIL "R_SPF_SOFTFAIL"
+#define DEFAULT_SYMBOL_NEUTRAL "R_SPF_NEUTRAL"
 #define DEFAULT_SYMBOL_ALLOW "R_SPF_ALLOW"
 #define DEFAULT_CACHE_SIZE 2048
 #define DEFAULT_CACHE_MAXAGE 86400
@@ -50,6 +51,7 @@ struct spf_ctx {
 	gint (*filter) (struct rspamd_task * task);
 	const gchar *symbol_fail;
 	const gchar *symbol_softfail;
+	const gchar *symbol_neutral;
 	const gchar *symbol_allow;
 
 	rspamd_mempool_t *spf_pool;
@@ -114,6 +116,13 @@ spf_module_config (struct rspamd_config *cfg)
 		spf_module_ctx->symbol_softfail = DEFAULT_SYMBOL_SOFTFAIL;
 	}
 	if ((value =
+			rspamd_config_get_module_opt (cfg, "spf", "symbol_neutral")) != NULL) {
+		spf_module_ctx->symbol_neutral = ucl_obj_tostring (value);
+	}
+	else {
+		spf_module_ctx->symbol_neutral = DEFAULT_SYMBOL_NEUTRAL;
+	}
+	if ((value =
 		rspamd_config_get_module_opt (cfg, "spf", "symbol_allow")) != NULL) {
 		spf_module_ctx->symbol_allow = ucl_obj_tostring (value);
 	}
@@ -151,6 +160,7 @@ spf_module_config (struct rspamd_config *cfg)
 		spf_symbol_callback,
 		NULL);
 	register_virtual_symbol (&cfg->cache, spf_module_ctx->symbol_softfail, 1);
+	register_virtual_symbol (&cfg->cache, spf_module_ctx->symbol_neutral,  1);
 	register_virtual_symbol (&cfg->cache, spf_module_ctx->symbol_allow,	   1);
 
 	spf_module_ctx->spf_hash = rspamd_lru_hash_new (
@@ -179,9 +189,12 @@ spf_check_element (struct spf_addr *addr, struct rspamd_task *task)
 {
 	gboolean res = FALSE;
 	guint8 *s, *d, t;
+	gchar *spf_result;
+	const gchar *spf_message, *spf_symbol;
 	guint nbits, addrlen;
 	struct in_addr in4s, in4d;
 	struct in6_addr in6s, in6d;
+	GList *opts = NULL;
 
 	/* Basic comparing algorithm */
 	if ((addr->data.normal.ipv6 && task->from_addr.af == AF_INET6) ||
@@ -240,32 +253,31 @@ spf_check_element (struct spf_addr *addr, struct rspamd_task *task)
 	}
 
 	if (res) {
+		spf_result = rspamd_mempool_strdup (task->task_pool, addr->spf_string);
+		opts = g_list_prepend (opts, spf_result);
 		switch (addr->mech) {
 		case SPF_FAIL:
-			rspamd_task_insert_result (task,
-				spf_module_ctx->symbol_fail,
-				1,
-				g_list_prepend (NULL, addr->spf_string));
-			task->messages = g_list_prepend (task->messages, "(SPF): spf fail");
+			spf_symbol = spf_module_ctx->symbol_fail;
+			spf_message = "(SPF): spf fail";
 			break;
 		case SPF_SOFT_FAIL:
+			spf_symbol = spf_module_ctx->symbol_softfail;
+			spf_message = "(SPF): spf softfail";
+			break;
 		case SPF_NEUTRAL:
-			rspamd_task_insert_result (task,
-				spf_module_ctx->symbol_softfail,
-				1,
-				g_list_prepend (NULL, addr->spf_string));
-			task->messages = g_list_prepend (task->messages,
-					"(SPF): spf softfail");
+			spf_symbol = spf_module_ctx->symbol_neutral;
+			spf_message = "(SPF): spf neutral";
 			break;
 		default:
-			rspamd_task_insert_result (task,
-				spf_module_ctx->symbol_allow,
-				1,
-				g_list_prepend (NULL,			addr->spf_string));
-			task->messages =
-				g_list_prepend (task->messages, "(SPF): spf allow");
+			spf_symbol = spf_module_ctx->symbol_allow;
+			spf_message = "(SPF): spf allow";
 			break;
 		}
+		rspamd_task_insert_result (task,
+				spf_symbol,
+				1,
+				opts);
+		task->messages = g_list_prepend (task->messages, (gpointer)spf_message);
 		return TRUE;
 	}
 
