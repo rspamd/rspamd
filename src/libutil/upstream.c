@@ -295,33 +295,35 @@ void
 rspamd_upstream_fail (struct upstream *up)
 {
 	struct timeval tv;
-	gdouble error_rate, max_error_rate, msec_last, msec_cur;
-
-	rspamd_mutex_lock (up->lock);
-	if (g_atomic_int_compare_and_exchange (&up->errors, 0, 1)) {
-		gettimeofday (&up->tv, NULL);
-	}
-	else {
-		g_atomic_int_inc (&up->errors);
-	}
+	gdouble error_rate, max_error_rate;
+	gint msec_last, msec_cur;
 
 	gettimeofday (&tv, NULL);
 
-	msec_last = tv_to_msec (&up->tv) / 1000.;
-	msec_cur = tv_to_msec (&tv) / 1000.;
-	if (msec_cur >= msec_last) {
-		if (msec_cur > msec_last) {
-			error_rate = ((gdouble)up->errors) / (msec_cur - msec_last);
-			max_error_rate = (gdouble)default_max_errors / default_error_time;
-		}
-		else {
-			error_rate = 1;
-			max_error_rate = 0;
-		}
+	rspamd_mutex_lock (up->lock);
+	if (up->errors == 0 && up->active_idx != -1) {
+		/* We have the first error */
+		up->tv = tv;
+		up->errors = 1;
+	}
+	else if (up->active_idx != -1) {
+		msec_last = tv_to_msec (&up->tv) / 1000.;
+		msec_cur = tv_to_msec (&tv) / 1000.;
+		if (msec_cur >= msec_last) {
+			if (msec_cur > msec_last) {
+				error_rate = ((gdouble)up->errors) / (msec_cur - msec_last);
+				max_error_rate = (gdouble)default_max_errors / default_error_time;
+			}
+			else {
+				error_rate = 1;
+				max_error_rate = 0;
+			}
 
-		if (error_rate > max_error_rate && up->active_idx != -1) {
-			/* Remove upstream from the active list */
-			rspamd_upstream_set_inactive (up->ls, up);
+			if (error_rate > max_error_rate && up->active_idx != -1) {
+				/* Remove upstream from the active list */
+				up->errors = 0;
+				rspamd_upstream_set_inactive (up->ls, up);
+			}
 		}
 	}
 	rspamd_mutex_unlock (up->lock);
@@ -331,7 +333,8 @@ void
 rspamd_upstream_ok (struct upstream *up)
 {
 	rspamd_mutex_lock (up->lock);
-	if (up->errors > 0) {
+	if (up->errors > 0 && up->active_idx != -1) {
+		/* We touch upstream if and only if it is active */
 		up->errors = 0;
 		rspamd_upstream_set_active (up->ls, up);
 	}
