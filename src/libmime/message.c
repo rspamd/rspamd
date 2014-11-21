@@ -927,6 +927,7 @@ rspamd_text_to_utf8 (struct rspamd_task *task,
 				g_set_error (err, converter_error_quark(), EINVAL,
 						"output of size %zd is not enough to handle "
 						"converison of %zd bytes", outlen, len);
+				iconv_close (ic);
 				return NULL;
 			case EILSEQ:
 			case EINVAL:
@@ -947,6 +948,8 @@ rspamd_text_to_utf8 (struct rspamd_task *task,
 
 	*d = '\0';
 	*olen = d - res;
+
+	iconv_close (ic);
 
 	return res;
 }
