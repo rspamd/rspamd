@@ -55,7 +55,7 @@ local function check_quantity_received (task)
 				else
 					task:insert_result(symbol_strict, 1)
 				end
-                return
+		    return
 			end
 
 			local i = true

@@ -237,6 +237,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 				return 1;
 			}
 			cbdata->to_resolve = rspamd_mempool_strdup (pool, ptr_str);
+			to_resolve = cbdata->to_resolve;
 			free (ptr_str);
 		}
 		lua_pushvalue (L, first + 3);
