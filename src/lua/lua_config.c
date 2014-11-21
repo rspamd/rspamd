@@ -181,10 +181,11 @@ LUA_FUNCTION_DEF (config, get_classifier);
  */
 LUA_FUNCTION_DEF (config, register_symbol);
 /***
- * @method rspamd_config:register_symbols(weight, callback, symbol[, symbol, ...])
+ * @method rspamd_config:register_symbols(weight, callback, callback_name, [, symbol, ...])
  * Register callback function to be called for a set of symbols with initial weight.
  * @param {number} weight initial weight of symbol (can be less than zero to specify non-spam symbols)
  * @param {function} callback callback function to be called for a specified symbol
+ * @param {string} callback_name symbolic name of callback
  * @param {list of strings} symbol list of symbols registered by this function
  */
 LUA_FUNCTION_DEF (config, register_symbols);
@@ -975,19 +976,33 @@ lua_config_register_symbols (lua_State *L)
 		else {
 			top = 3;
 		}
-		sym = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, top));
+		sym = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, top ++));
 		rspamd_register_symbol_fromlua (L,
 				cfg,
 				sym,
 				idx,
 				weight,
 				0,
-				SYMBOL_TYPE_NORMAL);
-		for (i = top; i < lua_gettop (L); i++) {
-			sym =
-				rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L,
-					i + 1));
-			register_virtual_symbol (&cfg->cache, sym, weight);
+				SYMBOL_TYPE_CALLBACK);
+		for (i = top; i <= lua_gettop (L); i++) {
+			if (lua_type (L, i) == LUA_TTABLE) {
+				lua_pushvalue (L, i);
+				lua_pushnil (L);
+				while (lua_next (L, -2)) {
+					lua_pushvalue (L, -2);
+					sym = rspamd_mempool_strdup (cfg->cfg_pool,
+							luaL_checkstring (L, -2));
+					register_virtual_symbol (&cfg->cache, sym, weight);
+					lua_pop (L, 2);
+				}
+				lua_pop (L, 1);
+			}
+			else if (lua_type (L, i) == LUA_TSTRING) {
+				sym =
+						rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L,
+								i + 1));
+				register_virtual_symbol (&cfg->cache, sym, weight);
+			}
 		}
 	}
 

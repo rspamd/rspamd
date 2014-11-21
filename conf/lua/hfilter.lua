@@ -7,7 +7,10 @@
 -- Weight for checks_hellohost and checks_hello: 5 - very hard, 4 - hard, 3 - meduim, 2 - low, 1 - very low.
 -- From HFILTER_HELO_* and HFILTER_HOSTNAME_* symbols the maximum weight is selected in case of their actuating.
 
+
+--local dumper = require 'pl.pretty'.dump
 local rspamd_regexp = require "rspamd_regexp"
+
 local checks_hellohost = {
   ['[.-]dynamic[.-]'] = 5, ['dynamic[.-][0-9]'] = 5, ['[0-9][.-]?dynamic'] = 5, 
   ['[.-]dyn[.-]'] = 5, ['dyn[.-][0-9]'] = 5, ['[0-9][.-]?dyn'] = 5, 
@@ -48,6 +51,14 @@ local checks_hello = {
   ['^\\[*2001:db8::'] = 5, --reserved RFC 3849 for ipv6
   ['^\\[*fc00::'] = 5, ['^\\[*ffxx::'] = 5, --unicast, multicast ipv6
   ['^\\[*\\d+[x.-]\\d+[x.-]\\d+[x.-]\\d+\\]*$'] = 4, ['^\\[*\\d+:'] = 4 --bareip ipv4, ipv6
+}
+
+local config = {
+  ['helo_enabled'] = false,
+  ['hostname_enabled'] = false,
+  ['from_enabled'] = false,
+  ['mid_enabled'] = false,
+  ['url_enabled'] = false
 }
 
 local function trim1(s)
@@ -155,11 +166,6 @@ end
 
 --
 local function hfilter(task)
-  local recvh = task:get_received_headers()
-
-  if table.maxn(recvh) == 0 then 
-    return false
-  end
 
   --IP--
   local ip = false
@@ -178,105 +184,115 @@ local function hfilter(task)
 
   -- Check's HELO
   local weight_helo = 0
-  if helo then
-    -- Regexp check HELO (checks_hello)
-    for regexp,weight in pairs(checks_hello) do
-      if check_regexp(helo, regexp) then
-        weight_helo = weight
-        break
-      end
-    end
-
-    -- Regexp check HELO (checks_hellohost)
-    for regexp,weight in pairs(checks_hellohost) do
-      if check_regexp(helo, regexp) then
-        if weight > weight_helo then
+  if config['helo_enabled'] then
+    if helo then
+      -- Regexp check HELO (checks_hello)
+      for regexp,weight in pairs(checks_hello) do
+        if check_regexp(helo, regexp) then
           weight_helo = weight
+          break
         end
-        break
       end
-    end
 
-    --FQDN check HELO
-    if ip and helo then
-      check_host(task, helo, 'HELO', ip, hostname)
+      -- Regexp check HELO (checks_hellohost)
+      for regexp,weight in pairs(checks_hellohost) do
+        if check_regexp(helo, regexp) then
+          if weight > weight_helo then
+            weight_helo = weight
+          end
+          break
+        end
+      end
+
+      --FQDN check HELO
+      if ip and helo then
+        check_host(task, helo, 'HELO', ip, hostname)
+      end
     end
   end
 
   -- Check's HOSTNAME
-  local weight_hostname = 0
-  if hostname then
-    -- Check regexp HOSTNAME
-    if hostname == 'unknown' then
-      task:insert_result('HFILTER_HOSTNAME_UNKNOWN', 1.00)
-    else
-      for regexp,weight in pairs(checks_hellohost) do
-        if check_regexp(hostname, regexp) then
-          weight_hostname = weight
-          break
+  if config['hostname_enabled'] then
+    local weight_hostname = 0
+    if hostname then
+      -- Check regexp HOSTNAME
+      if hostname == 'unknown' then
+        task:insert_result('HFILTER_HOSTNAME_UNKNOWN', 1.00)
+      else
+        for regexp,weight in pairs(checks_hellohost) do
+          if check_regexp(hostname, regexp) then
+            weight_hostname = weight
+            break
+          end
         end
       end
     end
-  end
 
-  --Insert weight's for HELO or HOSTNAME
-  if weight_helo > 0 and weight_helo >= weight_hostname then
-    task:insert_result('HFILTER_HELO_' .. weight_helo, 1.0)
-  elseif weight_hostname > 0 and weight_hostname > weight_helo then
-    task:insert_result('HFILTER_HOSTNAME_' .. weight_hostname, 1.0)
+    --Insert weight's for HELO or HOSTNAME
+    if weight_helo > 0 and weight_helo >= weight_hostname then
+      task:insert_result('HFILTER_HELO_' .. weight_helo, 1.0)
+    elseif weight_hostname > 0 and weight_hostname > weight_helo then
+      task:insert_result('HFILTER_HOSTNAME_' .. weight_hostname, 1.0)
+    end
   end
-
-  -- MAILFROM checks --
-  local from = task:get_from(1)
-  if from then
-    --FROM host check
-    for _,fr in ipairs(from) do
-      local fr_split = split(fr['addr'], '@', 0)
-      if table.maxn(fr_split) == 2 then
-        check_host(task, fr_split[2], 'FROMHOST', '', '')
+  
+  if config['from_enabled'] then
+    -- MAILFROM checks --
+    local from = task:get_from(1)
+    if from then
+      --FROM host check
+      for _,fr in ipairs(from) do
+        local fr_split = split(fr['addr'], '@', 0)
+        if table.maxn(fr_split) == 2 then
+          check_host(task, fr_split[2], 'FROMHOST', '', '')
+        end
       end
     end
   end
 
   --Message ID host check
-  local message_id = task:get_message_id()
-  if message_id then
-    local mid_split = split(message_id, '@', 0)
-    if table.maxn(mid_split) == 2 and not string.find(mid_split[2], 'local') then
-      check_host(task, mid_split[2], 'MID', '', '')
-    end
-  end
-
-  -- Links checks
-  local parts = task:get_text_parts()
-  if parts then
-    --One text part--
-    local total_parts_len = 0
-    local text_parts_count = 0
-    local selected_text_part = nil
-    for _,p in ipairs(parts) do
-      total_parts_len = total_parts_len + p:get_length()
-
-      if not p:is_html() then
-        text_parts_count = text_parts_count + 1
-        selected_text_part = p
+  if config['mid_enabled'] then
+    local message_id = task:get_message_id()
+    if message_id then
+      local mid_split = split(message_id, '@', 0)
+      if table.maxn(mid_split) == 2 and not string.find(mid_split[2], 'local') then
+        check_host(task, mid_split[2], 'MID', '', '')
       end
     end
-    if total_parts_len > 0 then
-      local urls = task:get_urls()
-      if urls then
-        local total_url_len = 0
-        for _,url in ipairs(urls) do
-          total_url_len = total_url_len + url:get_length()
+  end
+  
+  -- Links checks
+  if config['url_enabled'] then
+    local parts = task:get_text_parts()
+    if parts then
+      --One text part--
+      local total_parts_len = 0
+      local text_parts_count = 0
+      local selected_text_part = nil
+      for _,p in ipairs(parts) do
+        total_parts_len = total_parts_len + p:get_length()
+
+        if not p:is_html() then
+          text_parts_count = text_parts_count + 1
+          selected_text_part = p
         end
-        if total_url_len > 0 then
-          if total_url_len + 7 > total_parts_len then
-            task:insert_result('HFILTER_URL_ONLY', 1.00)
-          elseif text_parts_count == 1 and selected_text_part and selected_text_part:get_length() < 1024 then
-            -- We got a single text part with the total length < 1024 symbols.
-            local part_text = selected_text_part:get_content()
-            if part_text and not string.find(trim1(part_text), "\n") then
-              task:insert_result('HFILTER_URL_ONELINE', 1.00)
+      end
+      if total_parts_len > 0 then
+        local urls = task:get_urls()
+        if urls then
+          local total_url_len = 0
+          for _,url in ipairs(urls) do
+            total_url_len = total_url_len + url:get_length()
+          end
+          if total_url_len > 0 then
+            if total_url_len + 7 > total_parts_len then
+              task:insert_result('HFILTER_URL_ONLY', 1.00)
+            elseif text_parts_count == 1 and selected_text_part and selected_text_part:get_length() < 1024 then
+              -- We got a single text part with the total length < 1024 symbols.
+              local part_text = selected_text_part:get_content()
+              if part_text and not string.find(trim1(part_text), "\n") then
+                task:insert_result('HFILTER_URL_ONELINE', 1.00)
+              end
             end
           end
         end
@@ -287,12 +303,70 @@ local function hfilter(task)
   return false
 end
 
-rspamd_config:register_symbols(hfilter, 1.0, 
-  "HFILTER_HELO_1", "HFILTER_HELO_2", "HFILTER_HELO_3", "HFILTER_HELO_4", "HFILTER_HELO_5", 
-  "HFILTER_HOSTNAME_1", "HFILTER_HOSTNAME_2", "HFILTER_HOSTNAME_3", "HFILTER_HOSTNAME_4", "HFILTER_HOSTNAME_5", 
-  "HFILTER_HELO_NORESOLVE_MX", "HFILTER_HELO_NORES_A_OR_MX", "HFILTER_HELO_IP_A", "HFILTER_HELO_NOT_FQDN", 
-  "HFILTER_FROMHOST_NORESOLVE_MX", "HFILTER_FROMHOST_NORES_A_OR_MX", "HFILTER_FROMHOST_NOT_FQDN",  
-  "HFILTER_MID_NORESOLVE_MX", "HFILTER_MID_NORES_A_OR_MX", "HFILTER_MID_NOT_FQDN",
+local symbols_enabled = {}
+
+local symbols_helo = {
+  "HFILTER_HELO_1",
+  "HFILTER_HELO_2",
+  "HFILTER_HELO_3", 
+  "HFILTER_HELO_4",
+  "HFILTER_HELO_5",
+  "HFILTER_HELO_NORESOLVE_MX", 
+  "HFILTER_HELO_NORES_A_OR_MX",
+  "HFILTER_HELO_IP_A",
+  "HFILTER_HELO_NOT_FQDN"
+}
+local symbols_hostname = {
+  "HFILTER_HOSTNAME_1",
+  "HFILTER_HOSTNAME_2",
+  "HFILTER_HOSTNAME_3",
+  "HFILTER_HOSTNAME_4",
+  "HFILTER_HOSTNAME_5",
+  "HFILTER_HOSTNAME_UNKNOWN"
+}
+local symbols_mid = {
+  "HFILTER_MID_NORESOLVE_MX",
+  "HFILTER_MID_NORES_A_OR_MX",
   "HFILTER_MID_NOT_FQDN",
-  "HFILTER_HOSTNAME_UNKNOWN",
-  "HFILTER_URL_ONLY", "HFILTER_URL_ONELINE");
+  "HFILTER_MID_NOT_FQDN"
+}
+local symbols_url = {
+  "HFILTER_URL_ONLY",
+  "HFILTER_URL_ONELINE"
+}
+local symbols_from = {
+  "HFILTER_FROMHOST_NORESOLVE_MX",
+  "HFILTER_FROMHOST_NORES_A_OR_MX",
+  "HFILTER_FROMHOST_NOT_FQDN"
+}
+
+local opts = rspamd_config:get_all_opt('hfilter')
+if opts then
+  for k,v in pairs(opts) do
+    config[k] = v
+  end
+end
+
+local function append_t(t, a)
+  for _,v in ipairs(a) do table.insert(t, v) end
+end
+if config['helo_enabled'] then
+  append_t(symbols_enabled, symbols_helo)
+end
+if config['hostname_enabled'] then
+  append_t(symbols_enabled, symbols_hostname)
+end
+if config['from_enabled'] then
+  append_t(symbols_enabled, symbols_from)
+end
+if config['mid_enabled'] then
+  append_t(symbols_enabled, symbols_mid)
+end
+if config['url_enabled'] then
+  append_t(symbols_enabled, symbols_url)
+end
+
+--dumper(symbols_enabled)
+if table.maxn(symbols_enabled) > 0 then
+  rspamd_config:register_symbols(hfilter, 1.0, "HFILTER", symbols_enabled);
+end
