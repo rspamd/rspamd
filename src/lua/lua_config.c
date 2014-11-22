@@ -181,10 +181,10 @@ LUA_FUNCTION_DEF (config, get_classifier);
  */
 LUA_FUNCTION_DEF (config, register_symbol);
 /***
- * @method rspamd_config:register_symbols(weight, callback, callback_name, [, symbol, ...])
+ * @method rspamd_config:register_symbols(callback, [weight], callback_name, [, symbol, ...])
  * Register callback function to be called for a set of symbols with initial weight.
- * @param {number} weight initial weight of symbol (can be less than zero to specify non-spam symbols)
  * @param {function} callback callback function to be called for a specified symbol
+ * @param {number} weight initial weight of symbol (can be less than zero to specify non-spam symbols)
  * @param {string} callback_name symbolic name of callback
  * @param {list of strings} symbol list of symbols registered by this function
  */
@@ -998,9 +998,8 @@ lua_config_register_symbols (lua_State *L)
 				lua_pop (L, 1);
 			}
 			else if (lua_type (L, i) == LUA_TSTRING) {
-				sym =
-						rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L,
-								i + 1));
+				sym = rspamd_mempool_strdup (cfg->cfg_pool,
+						luaL_checkstring (L, i));
 				register_virtual_symbol (&cfg->cache, sym, weight);
 			}
 		}
