@@ -1,3 +1,30 @@
+0.7.6:
+	* Apply boundary fix for dkim simple canonization
+	* Fix ping command
+	* Return nil if header was not found in lua_task
+	* Fix hang in upstreams revive logic
+	* Decode entitles when normalizing HTML parts
+	* Fix logic of finding URLs in HTML parts
+	* Do not include \0 into length of text when performing conversion to utf8
+	* Fix raw vs parsed reperesentations
+		Raw parts are now:
+			- decoded b64/qp, but *NOT* converted to utf-8
+		Processed parts are now:
+			- converted to UTF-8
+			- normalized if needed (e.g. HTML tags are stripped)
+	* Rework DKIM canonization to line based
+	* Fix fuzzy hashes addding
+	* Use more specific hash function for fuzzy
+	* Fix leaking of iconv descriptors
+	* Fix PTR resolving in lua resolver
+	* Rework spf module.
+		- Copy data to memory pool as cached record might be destroyed causing
+		  freed memory being passed to the protocol output (use after free)
+		- Allow SPF_NEUTRAL policy to be handled separately
+		- Add R_SPF_NEUTRAL to the default config
+	* Rework `register_symbols` function
+	* Allow to disable components of hfilter
+
 0.7.5:
 	* Fix owner when creating folder /run/rspamd (by @sfirmery)
 	* Fix IP validity checks
