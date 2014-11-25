@@ -56,6 +56,7 @@ static gboolean print_commands = FALSE;
 static gboolean json = FALSE;
 static gboolean headers = FALSE;
 static gboolean raw = FALSE;
+static gboolean extended_urls = FALSE;
 
 static GOptionEntry entries[] =
 {
@@ -103,6 +104,8 @@ static GOptionEntry entries[] =
 	  NULL },
 	{ "max-requests", 'n', 0, G_OPTION_ARG_INT, &max_requests,
 	  "Maximum count of parallel requests to rspamd", NULL },
+	{ "extended-urls", 0, 0, G_OPTION_ARG_NONE, &extended_urls,
+	   "Output urls in extended format", NULL },
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -399,6 +402,9 @@ add_options (GHashTable *opts)
 		numbuf = g_string_sized_new (8);
 		rspamd_printf_gstring (numbuf, "%d", flag);
 		g_hash_table_insert (opts, "Flag", numbuf->str);
+	}
+	if (extended_urls) {
+		g_hash_table_insert (opts, "URL-Format", "extended");
 	}
 }
 
