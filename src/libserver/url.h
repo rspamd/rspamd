@@ -21,14 +21,10 @@ struct uri {
 	gchar *password;
 	gchar *host;
 	gchar *port;
-	/* @data can contain both the path and query uri fields.
-	 * It can never be NULL but can have zero length. */
 	gchar *data;
 	gchar *fragment;
-	/* @post can contain some special encoded form data, used internally
-	 * to make form data handling more efficient. The data is marked by
-	 * POST_CHAR in the uri string. */
 	gchar *post;
+	gchar *surbl;
 
 	struct uri *phished_url;
 
@@ -41,6 +37,7 @@ struct uri {
 	guint portlen;
 	guint datalen;
 	guint fragmentlen;
+	guint surbllen;
 
 	/* Flags */
 	gboolean ipv6;  /* URI contains IPv6 host */

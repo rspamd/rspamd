@@ -90,6 +90,7 @@
 #define QUEUE_ID_HEADER "Queue-ID"
 #define ERROR_HEADER "Error"
 #define USER_HEADER "User"
+#define URLS_HEADER "URL-Format"
 #define PASS_HEADER "Pass"
 #define JSON_HEADER "Json"
 #define HOSTNAME_HEADER "Hostname"
@@ -383,6 +384,13 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			if (g_ascii_strcasecmp (headern, USER_HEADER) == 0) {
 				task->user = h->value->str;
 			}
+			if (g_ascii_strcasecmp (headern, URLS_HEADER) == 0) {
+				if (h->value->len == sizeof ("extended") - 1 &&
+						g_ascii_strcasecmp (h->value->str, "extended") == 0) {
+					task->extended_urls = TRUE;
+					debug_task ("extended urls information");
+				}
+			}
 			else {
 				validh = FALSE;
 			}
@@ -485,9 +493,31 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 {
 	struct tree_cb_data *cb = ud;
 	struct uri *url = value;
-	ucl_object_t *obj;
+	ucl_object_t *obj, *elt;
 
-	obj = ucl_object_fromlstring (url->host, url->hostlen);
+	if (!cb->task->extended_urls) {
+		obj = ucl_object_fromlstring (url->host, url->hostlen);
+	}
+	else {
+		obj = ucl_object_typed_new (UCL_OBJECT);
+
+		elt = ucl_object_fromstring (url->string);
+		ucl_object_insert_key (obj, elt, "url", 0, false);
+
+		elt = ucl_object_fromlstring (url->host, url->hostlen);
+		ucl_object_insert_key (obj, elt, "host", 0, false);
+
+		elt = ucl_object_fromlstring (url->data, url->datalen);
+		ucl_object_insert_key (obj, elt, "data", 0, false);
+
+		if (url->surbl) {
+			elt = ucl_object_fromlstring (url->surbl, url->surbllen);
+			ucl_object_insert_key (obj, elt, "surbl", 0, false);
+		}
+
+		elt = ucl_object_frombool (url->is_phished);
+		ucl_object_insert_key (obj, elt, "phished", 0, false);
+	}
 	DL_APPEND (cb->top->value.av, obj);
 
 	if (cb->task->cfg->log_urls) {

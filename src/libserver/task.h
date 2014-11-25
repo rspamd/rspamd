@@ -79,6 +79,7 @@ struct rspamd_task {
 	gboolean is_json;                                           /**< output is JSON									*/
 	gboolean skip_extra_filters;                                /**< skip pre and post filters						*/
 	gboolean is_skipped;                                        /**< whether message was skipped by configuration   */
+	gboolean extended_urls;										/**< output URLs in details							*/
 
 	gchar *helo;                                                    /**< helo header value								*/
 	gchar *queue_id;                                                /**< queue id if specified							*/
