@@ -576,7 +576,8 @@ format_surbl_request (rspamd_mempool_t * pool,
 	gboolean append_suffix,
 	GError ** err,
 	gboolean forced,
-	GTree *tree)
+	GTree *tree,
+	struct uri *url)
 {
 	GHashTable *t;
 	gchar *result = NULL, *dots[MAX_LEVELS],
@@ -710,6 +711,9 @@ format_surbl_request (rspamd_mempool_t * pool,
 		}
 	}
 
+	url->surbl = result;
+	url->surbllen = r;
+
 	if (tree != NULL) {
 		if (g_tree_lookup (tree, result) != NULL) {
 			msg_debug ("url %s is already registered", result);
@@ -762,7 +766,7 @@ make_surbl_requests (struct uri *url, struct rspamd_task *task,
 	f.len = url->hostlen;
 
 	if ((surbl_req = format_surbl_request (task->task_pool, &f, suffix, TRUE,
-		&err, forced, tree)) != NULL) {
+		&err, forced, tree, url)) != NULL) {
 		param =
 			rspamd_mempool_alloc (task->task_pool, sizeof (struct dns_param));
 		param->url = url;
