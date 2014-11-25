@@ -923,8 +923,10 @@ get_protocol_length (const gchar *url)
 	/* RFC1738:
 	 * scheme  = 1*[ lowalpha | digit | "+" | "-" | "." ]
 	 * (but per its recommendations we accept "upalpha" too) */
-	while (g_ascii_isalnum (*end) || *end == '+' || *end == '-' || *end == '.')
+	while (*end && (g_ascii_isalnum (*end) || *end == '+'
+			|| *end == '-' || *end == '.')) {
 		end++;
+	}
 
 	/* Also return 0 if there's no protocol name (@end == @url). */
 	return (*end == ':') ? end - url : 0;
@@ -1086,9 +1088,11 @@ rspamd_url_reencode_escapes (gchar *s, rspamd_mempool_t * pool)
 
 	/* First pass: inspect the string to see if there's anything to do,
 	   and to calculate the new length.  */
-	for (p1 = s; *p1; p1++)
-		if (char_needs_escaping (p1))
+	for (p1 = s; *p1; p1++) {
+		if (char_needs_escaping (p1)) {
 			++encode_count;
+		}
+	}
 
 	if (!encode_count) {
 		/* The string is good as it is. */
@@ -1105,7 +1109,7 @@ rspamd_url_reencode_escapes (gchar *s, rspamd_mempool_t * pool)
 	p1 = s;
 	p2 = newstr;
 
-	while (*p1)
+	while (*p1) {
 		if (char_needs_escaping (p1)) {
 			guchar c = *p1++;
 			*p2++ = '%';
@@ -1115,6 +1119,7 @@ rspamd_url_reencode_escapes (gchar *s, rspamd_mempool_t * pool)
 		else {
 			*p2++ = *p1++;
 		}
+	}
 
 	*p2 = '\0';
 	return newstr;
@@ -1194,9 +1199,9 @@ parse_uri (struct uri *uri, gchar *uristring, rspamd_mempool_t * pool)
 
 	memset (uri, 0, sizeof (*uri));
 
-	/* Nothing to do for an empty url. */
-	if (!*uristring)
+	if (!*uristring) {
 		return URI_ERRNO_EMPTY;
+	}
 
 	uri->string = rspamd_url_reencode_escapes (uristring, pool);
 	msg_debug ("reencoding escapes in original url: '%s'", struri (uri));
@@ -1382,7 +1387,6 @@ parse_uri (struct uri *uri, gchar *uristring, rspamd_mempool_t * pool)
 
 	if (*host_end == '/') {
 		host_end++;
-
 	}
 	else if (get_protocol_need_slash_after_host (uri->protocol) && *host_end !=
 		'?') {
