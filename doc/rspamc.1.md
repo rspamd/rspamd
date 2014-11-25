@@ -99,6 +99,9 @@ requires input.
 \--headers
 :	Output HTTP headers from a reply
 
+\--extended-urls
+:	Output URLs in an extended format, showing full URL, host and the part of host that was used by surbl module (if enabled).
+
 -n *parallel_count*, \--max-requests=*parallel_count*
 :	Maximum number of requests to rspamd executed in parallel (8 by default)
 
