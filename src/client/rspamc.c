@@ -494,7 +494,12 @@ rspamc_symbols_output (ucl_object_t *obj)
 				ucl_object_tostring (cur));
 		}
 		else if (g_ascii_strcasecmp (ucl_object_key (cur), "urls") == 0) {
-			emitted = ucl_object_emit (cur, UCL_EMIT_JSON_COMPACT);
+			if (!extended_urls) {
+				emitted = ucl_object_emit (cur, UCL_EMIT_JSON_COMPACT);
+			}
+			else {
+				emitted = ucl_object_emit (cur, UCL_EMIT_JSON);
+			}
 			rspamd_fprintf (stdout, "Urls: %s\n", emitted);
 			free (emitted);
 		}

@@ -504,13 +504,12 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 		elt = ucl_object_fromstring (url->string);
 		ucl_object_insert_key (obj, elt, "url", 0, false);
 
-		elt = ucl_object_fromlstring (url->host, url->hostlen);
-		ucl_object_insert_key (obj, elt, "host", 0, false);
+		if (url->hostlen > 0) {
+			elt = ucl_object_fromlstring (url->host, url->hostlen);
+			ucl_object_insert_key (obj, elt, "host", 0, false);
+		}
 
-		elt = ucl_object_fromlstring (url->data, url->datalen);
-		ucl_object_insert_key (obj, elt, "data", 0, false);
-
-		if (url->surbl) {
+		if (url->surbllen > 0) {
 			elt = ucl_object_fromlstring (url->surbl, url->surbllen);
 			ucl_object_insert_key (obj, elt, "surbl", 0, false);
 		}
