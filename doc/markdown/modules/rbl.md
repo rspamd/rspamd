@@ -29,11 +29,11 @@ Use this RBL to test IPv4 addresses.
 
 Use this RBL to test IPv6 addresses.
 
-- default_received (false)
+- default_received (true)
 
 Use this RBL to test IPv4/IPv6 addresses found in Received headers. The RBL should also be configured to check one/both of IPv4/IPv6 addresses.
 
-- default_from (true)
+- default_from (false)
 
 Use this RBL to test IPv4/IPv6 addresses of message senders. The RBL should also be configured to check one/both of IPv4/IPv6 addresses.
 
