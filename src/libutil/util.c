@@ -53,7 +53,7 @@
 #define CONNECT_TIMEOUT 3
 
 gint
-make_socket_nonblocking (gint fd)
+rspamd_socket_nonblocking (gint fd)
 {
 	gint ofl;
 
@@ -67,7 +67,7 @@ make_socket_nonblocking (gint fd)
 }
 
 gint
-make_socket_blocking (gint fd)
+rspamd_socket_blocking (gint fd)
 {
 	gint ofl;
 
@@ -81,7 +81,7 @@ make_socket_blocking (gint fd)
 }
 
 gint
-poll_sync_socket (gint fd, gint timeout, short events)
+rspamd_socket_poll (gint fd, gint timeout, short events)
 {
 	gint r;
 	struct pollfd fds[1];
@@ -116,7 +116,7 @@ rspamd_socket_create (gint af, gint type, gint protocol, gboolean async)
 		return -1;
 	}
 	if (async) {
-		if (make_socket_nonblocking (fd) == -1) {
+		if (rspamd_socket_nonblocking (fd) == -1) {
 			close (fd);
 			return -1;
 		}
@@ -169,7 +169,7 @@ rspamd_inet_socket_create (gint type, struct addrinfo *addr, gboolean is_server,
 			}
 			if (!async) {
 				/* Try to poll */
-				if (poll_sync_socket (fd, CONNECT_TIMEOUT * 1000,
+				if (rspamd_socket_poll (fd, CONNECT_TIMEOUT * 1000,
 					POLLOUT) <= 0) {
 					errno = ETIMEDOUT;
 					msg_warn ("bind/connect failed: timeout");
@@ -177,7 +177,7 @@ rspamd_inet_socket_create (gint type, struct addrinfo *addr, gboolean is_server,
 				}
 				else {
 					/* Make synced again */
-					if (make_socket_blocking (fd) < 0) {
+					if (rspamd_socket_blocking (fd) < 0) {
 						goto out;
 					}
 				}
@@ -212,19 +212,19 @@ out:
 }
 
 gint
-make_tcp_socket (struct addrinfo *addr, gboolean is_server, gboolean async)
+rspamd_socket_tcp (struct addrinfo *addr, gboolean is_server, gboolean async)
 {
 	return rspamd_inet_socket_create (SOCK_STREAM, addr, is_server, async, NULL);
 }
 
 gint
-make_udp_socket (struct addrinfo *addr, gboolean is_server, gboolean async)
+rspamd_socket_udp (struct addrinfo *addr, gboolean is_server, gboolean async)
 {
 	return rspamd_inet_socket_create (SOCK_DGRAM, addr, is_server, async, NULL);
 }
 
 gint
-make_unix_socket (const gchar *path,
+rspamd_socket_unix (const gchar *path,
 	struct sockaddr_un *addr,
 	gint type,
 	gboolean is_server,
@@ -271,7 +271,7 @@ make_unix_socket (const gchar *path,
 		return -1;
 	}
 
-	if (make_socket_nonblocking (fd) < 0) {
+	if (rspamd_socket_nonblocking (fd) < 0) {
 		goto out;
 	}
 
@@ -300,14 +300,14 @@ make_unix_socket (const gchar *path,
 		}
 		if (!async) {
 			/* Try to poll */
-			if (poll_sync_socket (fd, CONNECT_TIMEOUT * 1000, POLLOUT) <= 0) {
+			if (rspamd_socket_poll (fd, CONNECT_TIMEOUT * 1000, POLLOUT) <= 0) {
 				errno = ETIMEDOUT;
 				msg_warn ("bind/connect failed %s: timeout", addr->sun_path);
 				goto out;
 			}
 			else {
 				/* Make synced again */
-				if (make_socket_blocking (fd) < 0) {
+				if (rspamd_socket_blocking (fd) < 0) {
 					goto out;
 				}
 			}
@@ -344,7 +344,7 @@ out:
  * @param try_resolve try name resolution for a socket (BLOCKING)
  */
 gint
-make_universal_socket (const gchar *credits, guint16 port,
+rspamd_socket (const gchar *credits, guint16 port,
 	gint type, gboolean async, gboolean is_server, gboolean try_resolve)
 {
 	struct sockaddr_un un;
@@ -355,7 +355,7 @@ make_universal_socket (const gchar *credits, guint16 port,
 
 	if (*credits == '/') {
 		if (is_server) {
-			return make_unix_socket (credits, &un, type, is_server, async);
+			return rspamd_socket_unix (credits, &un, type, is_server, async);
 		}
 		else {
 			r = stat (credits, &st);
@@ -371,7 +371,7 @@ make_universal_socket (const gchar *credits, guint16 port,
 					return -1;
 				}
 				else {
-					return make_unix_socket (credits,
+					return rspamd_socket_unix (credits,
 							   &un,
 							   type,
 							   is_server,
@@ -419,7 +419,7 @@ make_universal_socket (const gchar *credits, guint16 port,
  * @param try_resolve try name resolution for a socket (BLOCKING)
  */
 GList *
-make_universal_sockets_list (const gchar *credits, guint16 port,
+rspamd_sockets_list (const gchar *credits, guint16 port,
 	gint type, gboolean async, gboolean is_server, gboolean try_resolve)
 {
 	struct sockaddr_un un;
@@ -438,7 +438,7 @@ make_universal_sockets_list (const gchar *credits, guint16 port,
 	while (*cur != NULL) {
 		if (*credits == '/') {
 			if (is_server) {
-				fd = make_unix_socket (credits, &un, type, is_server, async);
+				fd = rspamd_socket_unix (credits, &un, type, is_server, async);
 			}
 			else {
 				r = stat (credits, &st);
@@ -454,7 +454,7 @@ make_universal_sockets_list (const gchar *credits, guint16 port,
 						goto err;
 					}
 					else {
-						fd = make_unix_socket (credits,
+						fd = rspamd_socket_unix (credits,
 								&un,
 								type,
 								is_server,
@@ -525,7 +525,7 @@ err:
 }
 
 gint
-make_socketpair (gint pair[2])
+rspamd_socketpair (gint pair[2])
 {
 	gint r;
 
@@ -555,7 +555,7 @@ out:
 }
 
 gint
-write_pid (struct rspamd_main *main)
+rspamd_write_pid (struct rspamd_main *main)
 {
 	pid_t pid;
 
@@ -587,12 +587,12 @@ write_pid (struct rspamd_main *main)
 
 #ifdef HAVE_SA_SIGINFO
 void
-init_signals (struct sigaction *signals, void (*sig_handler)(gint,
+rspamd_signals_init (struct sigaction *signals, void (*sig_handler)(gint,
 	siginfo_t *,
 	void *))
 #else
 void
-init_signals (struct sigaction *signals, void (*sig_handler)(gint))
+rspamd_signals_init (struct sigaction *signals, void (*sig_handler)(gint))
 #endif
 {
 	struct sigaction sigpipe_act;
@@ -643,13 +643,13 @@ pass_signal_cb (gpointer key, gpointer value, gpointer ud)
 }
 
 void
-pass_signal_worker (GHashTable * workers, gint signo)
+rspamd_pass_signal (GHashTable * workers, gint signo)
 {
 	g_hash_table_foreach (workers, pass_signal_cb, GINT_TO_POINTER (signo));
 }
 
 void
-convert_to_lowercase (gchar *str, guint size)
+rspamd_str_lc (gchar *str, guint size)
 {
 	while (size--) {
 		*str = g_ascii_tolower (*str);
@@ -865,7 +865,7 @@ rspamd_pidfile_open (const gchar *path, mode_t mode, pid_t * pidptr)
 	 * pidfile_write() can be called multiple times.
 	 */
 	fd = open (pfh->pf_path, O_WRONLY | O_CREAT | O_TRUNC | O_NONBLOCK, mode);
-	lock_file (fd, TRUE);
+	rspamd_file_lock (fd, TRUE);
 	if (fd == -1) {
 		count = 0;
 		rqtp.tv_sec = 0;
@@ -979,7 +979,7 @@ _rspamd_pidfile_remove (rspamd_pidfh_t *pfh, gint freeit)
 
 	if (unlink (pfh->pf_path) == -1)
 		error = errno;
-	if (!unlock_file (pfh->pf_fd, FALSE)) {
+	if (!rspamd_file_unlock (pfh->pf_fd, FALSE)) {
 		if (error == 0)
 			error = errno;
 	}
@@ -1189,9 +1189,9 @@ rspamd_str_equal (gconstpointer v, gconstpointer v2)
 }
 
 gboolean
-fstr_strcase_equal (gconstpointer v, gconstpointer v2)
+rspamd_fstring_equal (gconstpointer v, gconstpointer v2)
 {
-	const f_str_t *f1 = v, *f2 = v2;
+	const rspamd_fstring_t *f1 = v, *f2 = v2;
 	if (f1->len == f2->len &&
 		g_ascii_strncasecmp (f1->begin, f2->begin, f1->len) == 0) {
 		return TRUE;
@@ -1202,9 +1202,9 @@ fstr_strcase_equal (gconstpointer v, gconstpointer v2)
 
 
 guint
-fstr_strcase_hash (gconstpointer key)
+rspamd_fstring_hash (gconstpointer key)
 {
-	const f_str_t *f = key;
+	const rspamd_fstring_t *f = key;
 	const gchar *p;
 	guint i = 0;
 	gchar buf[256];
@@ -1266,7 +1266,7 @@ gperf_profiler_init (struct rspamd_config *cfg, const gchar *descr)
 #ifdef HAVE_FLOCK
 /* Flock version */
 gboolean
-lock_file (gint fd, gboolean async)
+rspamd_file_lock (gint fd, gboolean async)
 {
 	gint flags;
 
@@ -1289,7 +1289,7 @@ lock_file (gint fd, gboolean async)
 }
 
 gboolean
-unlock_file (gint fd, gboolean async)
+rspamd_file_unlock (gint fd, gboolean async)
 {
 	gint flags;
 
@@ -1314,7 +1314,7 @@ unlock_file (gint fd, gboolean async)
 #else /* HAVE_FLOCK */
 /* Fctnl version */
 gboolean
-lock_file (gint fd, gboolean async)
+rspamd_file_lock (gint fd, gboolean async)
 {
 	struct flock fl = {
 		.l_type = F_WRLCK,
@@ -1335,7 +1335,7 @@ lock_file (gint fd, gboolean async)
 }
 
 gboolean
-unlock_file (gint fd, gboolean async)
+rspamd_file_unlock (gint fd, gboolean async)
 {
 	struct flock fl = {
 		.l_type = F_UNLCK,
@@ -1425,7 +1425,7 @@ rspamd_strlcpy_tolower (gchar *dst, const gchar *src, gsize siz)
 
 /* Compare two emails for building emails tree */
 gint
-compare_email_func (gconstpointer a, gconstpointer b)
+rspamd_emails_cmp (gconstpointer a, gconstpointer b)
 {
 	const struct uri *u1 = a, *u2 = b;
 	gint r;
@@ -1451,7 +1451,7 @@ compare_email_func (gconstpointer a, gconstpointer b)
 }
 
 gint
-compare_url_func (gconstpointer a, gconstpointer b)
+rspamd_urls_cmp (gconstpointer a, gconstpointer b)
 {
 	const struct uri *u1 = a, *u2 = b;
 	int r;

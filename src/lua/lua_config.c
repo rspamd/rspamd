@@ -716,8 +716,8 @@ lua_config_add_radix_map (lua_State *L)
 		description = lua_tostring (L, 3);
 		r = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (radix_compressed_t *));
 		*r = radix_create_compressed ();
-		if (!add_map (cfg, map_line, description, read_radix_list,
-			fin_radix_list, (void **)r)) {
+		if (!rspamd_map_add (cfg, map_line, description, rspamd_radix_read,
+			rspamd_radix_fin, (void **)r)) {
 			msg_warn ("invalid radix map %s", map_line);
 			radix_destroy_compressed (*r);
 			lua_pushnil (L);
@@ -747,7 +747,7 @@ lua_config_add_hash_map (lua_State *L)
 		description = lua_tostring (L, 3);
 		r = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (GHashTable *));
 		*r = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
-		if (!add_map (cfg, map_line, description, read_host_list, fin_host_list,
+		if (!rspamd_map_add (cfg, map_line, description, rspamd_hosts_read, rspamd_hosts_fin,
 			(void **)r)) {
 			msg_warn ("invalid hash map %s", map_line);
 			g_hash_table_destroy (*r);
@@ -781,7 +781,7 @@ lua_config_add_kv_map (lua_State *L)
 		description = lua_tostring (L, 3);
 		r = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (GHashTable *));
 		*r = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
-		if (!add_map (cfg, map_line, description, read_kv_list, fin_kv_list,
+		if (!rspamd_map_add (cfg, map_line, description, rspamd_kv_list_read, rspamd_kv_list_fin,
 			(void **)r)) {
 			msg_warn ("invalid hash map %s", map_line);
 			g_hash_table_destroy (*r);
@@ -1279,7 +1279,7 @@ lua_config_add_map (lua_State *L)
 			cbdata->ref = luaL_ref (L, LUA_REGISTRYINDEX);
 			pcbdata = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (cbdata));
 			*pcbdata = cbdata;
-			if (!add_map (cfg, map_line, description, lua_map_read, lua_map_fin,
+			if (!rspamd_map_add (cfg, map_line, description, lua_map_read, lua_map_fin,
 				(void **)pcbdata)) {
 				msg_warn ("invalid hash map %s", map_line);
 				lua_pushboolean (L, false);

@@ -37,14 +37,14 @@ extern const int primes[];
 int
 osb_tokenize_text (struct tokenizer *tokenizer,
 	rspamd_mempool_t * pool,
-	f_str_t * input,
+	rspamd_fstring_t * input,
 	GTree ** tree,
 	gboolean save_token,
 	gboolean is_utf,
 	GList *exceptions)
 {
 	token_node_t *new = NULL;
-	f_str_t token = { NULL, 0, 0 };
+	rspamd_fstring_t token = { NULL, 0, 0 };
 	guint32 hashpipe[FEATURE_WINDOW_SIZE], h1, h2;
 	gint i, l, processed = 0;
 	gchar *res;
@@ -75,14 +75,14 @@ osb_tokenize_text (struct tokenizer *tokenizer,
 		if (processed < FEATURE_WINDOW_SIZE) {
 			/* Just fill a hashpipe */
 			hashpipe[FEATURE_WINDOW_SIZE - ++processed] =
-				fstrhash_lowercase (&token, is_utf);
+				rspamd_fstrhash_lc (&token, is_utf);
 		}
 		else {
 			/* Shift hashpipe */
 			for (i = FEATURE_WINDOW_SIZE - 1; i > 0; i--) {
 				hashpipe[i] = hashpipe[i - 1];
 			}
-			hashpipe[0] = fstrhash_lowercase (&token, is_utf);
+			hashpipe[0] = rspamd_fstrhash_lc (&token, is_utf);
 			processed++;
 
 			for (i = 1; i < FEATURE_WINDOW_SIZE; i++) {

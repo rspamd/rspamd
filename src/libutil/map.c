@@ -84,7 +84,7 @@ connect_http (struct rspamd_map *map,
 {
 	gint sock;
 
-	if ((sock = make_tcp_socket (data->addr, FALSE, is_async)) == -1) {
+	if ((sock = rspamd_socket_tcp (data->addr, FALSE, is_async)) == -1) {
 		msg_info ("cannot connect to http server %s: %d, %s",
 			data->host,
 			errno,
@@ -381,7 +381,7 @@ http_callback (gint fd, short what, void *ud)
 
 /* Start watching event for all maps */
 void
-start_map_watch (struct rspamd_config *cfg, struct event_base *ev_base)
+rspamd_map_watch (struct rspamd_config *cfg, struct event_base *ev_base)
 {
 	GList *cur = cfg->maps;
 	struct rspamd_map *map;
@@ -412,7 +412,7 @@ start_map_watch (struct rspamd_config *cfg, struct event_base *ev_base)
 }
 
 void
-remove_all_maps (struct rspamd_config *cfg)
+rspamd_map_remove_all (struct rspamd_config *cfg)
 {
 	g_list_free (cfg->maps);
 	cfg->maps = NULL;
@@ -423,7 +423,7 @@ remove_all_maps (struct rspamd_config *cfg)
 }
 
 gboolean
-check_map_proto (const gchar *map_line, gint *res, const gchar **pos)
+rspamd_map_check_proto (const gchar *map_line, gint *res, const gchar **pos)
 {
 	if (g_ascii_strncasecmp (map_line, "http://",
 		sizeof ("http://") - 1) == 0) {
@@ -453,7 +453,7 @@ check_map_proto (const gchar *map_line, gint *res, const gchar **pos)
 }
 
 gboolean
-add_map (struct rspamd_config *cfg,
+rspamd_map_add (struct rspamd_config *cfg,
 	const gchar *map_line,
 	const gchar *description,
 	map_cb_t read_callback,
@@ -470,7 +470,7 @@ add_map (struct rspamd_config *cfg,
 	struct addrinfo hints, *res;
 
 	/* First of all detect protocol line */
-	if (!check_map_proto (map_line, (int *)&proto, &def)) {
+	if (!rspamd_map_check_proto (map_line, (int *)&proto, &def)) {
 		return FALSE;
 	}
 	/* Constant pool */
@@ -577,7 +577,7 @@ add_map (struct rspamd_config *cfg,
 			return FALSE;
 		}
 		/* Now try to connect */
-		if ((s = make_tcp_socket (hdata->addr, FALSE, FALSE)) == -1) {
+		if ((s = rspamd_socket_tcp (hdata->addr, FALSE, FALSE)) == -1) {
 			msg_info ("cannot connect to http server %s: %d, %s",
 				hdata->host,
 				errno,
@@ -712,7 +712,7 @@ abstract_parse_kv_list (rspamd_mempool_t * pool,
 }
 
 gchar *
-abstract_parse_list (rspamd_mempool_t * pool,
+rspamd_parse_abstract_list (rspamd_mempool_t * pool,
 	gchar * chunk,
 	gint len,
 	struct map_cb_data *data,
@@ -803,7 +803,7 @@ radix_tree_insert_helper (gpointer st, gconstpointer key, gpointer value)
 
 /* Helpers */
 gchar *
-read_host_list (rspamd_mempool_t * pool,
+rspamd_hosts_read (rspamd_mempool_t * pool,
 	gchar * chunk,
 	gint len,
 	struct map_cb_data *data)
@@ -812,7 +812,7 @@ read_host_list (rspamd_mempool_t * pool,
 		data->cur_data = g_hash_table_new (rspamd_strcase_hash,
 				rspamd_strcase_equal);
 	}
-	return abstract_parse_list (pool,
+	return rspamd_parse_abstract_list (pool,
 			   chunk,
 			   len,
 			   data,
@@ -820,7 +820,7 @@ read_host_list (rspamd_mempool_t * pool,
 }
 
 void
-fin_host_list (rspamd_mempool_t * pool, struct map_cb_data *data)
+rspamd_hosts_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
 	if (data->prev_data) {
 		g_hash_table_destroy (data->prev_data);
@@ -828,7 +828,7 @@ fin_host_list (rspamd_mempool_t * pool, struct map_cb_data *data)
 }
 
 gchar *
-read_kv_list (rspamd_mempool_t * pool,
+rspamd_kv_list_read (rspamd_mempool_t * pool,
 	gchar * chunk,
 	gint len,
 	struct map_cb_data *data)
@@ -845,7 +845,7 @@ read_kv_list (rspamd_mempool_t * pool,
 }
 
 void
-fin_kv_list (rspamd_mempool_t * pool, struct map_cb_data *data)
+rspamd_kv_list_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
 	if (data->prev_data) {
 		g_hash_table_destroy (data->prev_data);
@@ -853,7 +853,7 @@ fin_kv_list (rspamd_mempool_t * pool, struct map_cb_data *data)
 }
 
 gchar *
-read_radix_list (rspamd_mempool_t * pool,
+rspamd_radix_read (rspamd_mempool_t * pool,
 	gchar * chunk,
 	gint len,
 	struct map_cb_data *data)
@@ -861,7 +861,7 @@ read_radix_list (rspamd_mempool_t * pool,
 	if (data->cur_data == NULL) {
 		data->cur_data = radix_create_compressed ();
 	}
-	return abstract_parse_list (pool,
+	return rspamd_parse_abstract_list (pool,
 			   chunk,
 			   len,
 			   data,
@@ -869,7 +869,7 @@ read_radix_list (rspamd_mempool_t * pool,
 }
 
 void
-fin_radix_list (rspamd_mempool_t * pool, struct map_cb_data *data)
+rspamd_radix_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
 	if (data->prev_data) {
 		radix_destroy_compressed (data->prev_data);

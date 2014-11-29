@@ -28,7 +28,7 @@
  * Search first occurence of character in string
  */
 ssize_t
-fstrchr (f_str_t * src, gchar c)
+rspamd_fstrchr (rspamd_fstring_t * src, gchar c)
 {
 	register size_t cur = 0;
 
@@ -46,7 +46,7 @@ fstrchr (f_str_t * src, gchar c)
  * Search last occurence of character in string
  */
 ssize_t
-fstrrchr (f_str_t * src, gchar c)
+rspamd_fstrrchr (rspamd_fstring_t * src, gchar c)
 {
 	register ssize_t cur = src->len;
 
@@ -64,7 +64,7 @@ fstrrchr (f_str_t * src, gchar c)
  * Search for pattern in orig
  */
 ssize_t
-fstrstr (f_str_t * orig, f_str_t * pattern)
+rspamd_fstrstr (rspamd_fstring_t * orig, rspamd_fstring_t * pattern)
 {
 	register size_t cur = 0, pcur = 0;
 
@@ -74,6 +74,7 @@ fstrstr (f_str_t * orig, f_str_t * pattern)
 
 	while (cur < orig->len) {
 		if (*(orig->begin + cur) == *pattern->begin) {
+			pcur = 0;
 			while (cur < orig->len && pcur < pattern->len) {
 				if (*(orig->begin + cur) != *(pattern->begin + pcur)) {
 					pcur = 0;
@@ -95,7 +96,7 @@ fstrstr (f_str_t * orig, f_str_t * pattern)
  * Search for pattern in orig ignoring case
  */
 ssize_t
-fstrstri (f_str_t * orig, f_str_t * pattern)
+rspamd_fstrstri (rspamd_fstring_t * orig, rspamd_fstring_t * pattern)
 {
 	register size_t cur = 0, pcur = 0;
 
@@ -106,6 +107,7 @@ fstrstri (f_str_t * orig, f_str_t * pattern)
 	while (cur < orig->len) {
 		if (g_ascii_tolower (*(orig->begin + cur)) ==
 			g_ascii_tolower (*pattern->begin)) {
+			pcur = 0;
 			while (cur < orig->len && pcur < pattern->len) {
 				if (g_ascii_tolower (*(orig->begin + cur)) !=
 					g_ascii_tolower (*(pattern->begin + pcur))) {
@@ -133,7 +135,7 @@ fstrstri (f_str_t * orig, f_str_t * pattern)
  *          0 - last word extracted
  */
 gint
-fstrtok (f_str_t * text, const gchar *sep, f_tok_t * state)
+rspamd_fstrtok (rspamd_fstring_t * text, const gchar *sep, rspamd_fstring_token_t * state)
 {
 	register size_t cur;
 	const gchar *csep = sep;
@@ -170,7 +172,7 @@ fstrtok (f_str_t * text, const gchar *sep, f_tok_t * state)
  * Copy one string into other
  */
 size_t
-fstrcpy (f_str_t * dest, f_str_t * src)
+rspamd_fstrcpy (rspamd_fstring_t * dest, rspamd_fstring_t * src)
 {
 	register size_t cur = 0;
 
@@ -190,7 +192,7 @@ fstrcpy (f_str_t * dest, f_str_t * src)
  * Concatenate two strings
  */
 size_t
-fstrcat (f_str_t * dest, f_str_t * src)
+rspamd_fstrcat (rspamd_fstring_t * dest, rspamd_fstring_t * src)
 {
 	register size_t cur = 0;
 	gchar *p = dest->begin + dest->len;
@@ -215,7 +217,7 @@ fstrcat (f_str_t * dest, f_str_t * src)
  * Make copy of string to 0-terminated string
  */
 gchar *
-fstrcstr (f_str_t * str, rspamd_mempool_t * pool)
+rspamd_fstr_c_str (rspamd_fstring_t * str, rspamd_mempool_t * pool)
 {
 	gchar *res;
 	res = rspamd_mempool_alloc (pool, str->len + 1);
@@ -231,7 +233,7 @@ fstrcstr (f_str_t * str, rspamd_mempool_t * pool)
  * Push one character to fstr
  */
 gint
-fstrpush (f_str_t * dest, gchar c)
+rspamd_fstrappend_c (rspamd_fstring_t * dest, gchar c)
 {
 	if (dest->size < dest->len) {
 		/* Need to reallocate string */
@@ -247,7 +249,7 @@ fstrpush (f_str_t * dest, gchar c)
  * Push one character to fstr
  */
 gint
-fstrpush_unichar (f_str_t * dest, gunichar c)
+rspamd_fstrappend_u (rspamd_fstring_t * dest, gunichar c)
 {
 	int l;
 	if (dest->size < dest->len) {
@@ -263,10 +265,10 @@ fstrpush_unichar (f_str_t * dest, gunichar c)
 /*
  * Allocate memory for f_str_t
  */
-f_str_t *
-fstralloc (rspamd_mempool_t * pool, size_t len)
+rspamd_fstring_t *
+rspamd_fstralloc (rspamd_mempool_t * pool, size_t len)
 {
-	f_str_t *res = rspamd_mempool_alloc (pool, sizeof (f_str_t));
+	rspamd_fstring_t *res = rspamd_mempool_alloc (pool, sizeof (rspamd_fstring_t));
 
 	res->begin = rspamd_mempool_alloc (pool, len);
 
@@ -278,10 +280,10 @@ fstralloc (rspamd_mempool_t * pool, size_t len)
 /*
  * Allocate memory for f_str_t from temporary pool
  */
-f_str_t *
-fstralloc_tmp (rspamd_mempool_t * pool, size_t len)
+rspamd_fstring_t *
+rspamd_fstralloc_tmp (rspamd_mempool_t * pool, size_t len)
 {
-	f_str_t *res = rspamd_mempool_alloc_tmp (pool, sizeof (f_str_t));
+	rspamd_fstring_t *res = rspamd_mempool_alloc_tmp (pool, sizeof (rspamd_fstring_t));
 
 	res->begin = rspamd_mempool_alloc_tmp (pool, len);
 
@@ -293,20 +295,20 @@ fstralloc_tmp (rspamd_mempool_t * pool, size_t len)
 /*
  * Truncate string to its len
  */
-f_str_t *
-fstrtruncate (rspamd_mempool_t * pool, f_str_t * orig)
+rspamd_fstring_t *
+rspamd_fstrtruncate (rspamd_mempool_t * pool, rspamd_fstring_t * orig)
 {
-	f_str_t *res;
+	rspamd_fstring_t *res;
 
 	if (orig == NULL || orig->len == 0 || orig->size <= orig->len) {
 		return orig;
 	}
 
-	res = fstralloc (pool, orig->len);
+	res = rspamd_fstralloc (pool, orig->len);
 	if (res == NULL) {
 		return NULL;
 	}
-	fstrcpy (res, orig);
+	rspamd_fstrcpy (res, orig);
 
 	return res;
 }
@@ -314,20 +316,20 @@ fstrtruncate (rspamd_mempool_t * pool, f_str_t * orig)
 /*
  * Enlarge string to new size
  */
-f_str_t *
-fstrgrow (rspamd_mempool_t * pool, f_str_t * orig, size_t newlen)
+rspamd_fstring_t *
+rspamd_fstrgrow (rspamd_mempool_t * pool, rspamd_fstring_t * orig, size_t newlen)
 {
-	f_str_t *res;
+	rspamd_fstring_t *res;
 
 	if (orig == NULL || orig->len == 0 || orig->size >= newlen) {
 		return orig;
 	}
 
-	res = fstralloc (pool, newlen);
+	res = rspamd_fstralloc (pool, newlen);
 	if (res == NULL) {
 		return NULL;
 	}
-	fstrcpy (res, orig);
+	rspamd_fstrcpy (res, orig);
 
 	return res;
 }
@@ -364,7 +366,7 @@ fstrhash_c (gchar c, guint32 hval)
  * Return hash value for a string
  */
 guint32
-fstrhash (f_str_t * str)
+rspamd_fstrhash (rspamd_fstring_t * str)
 {
 	size_t i;
 	guint32 hval;
@@ -385,7 +387,7 @@ fstrhash (f_str_t * str)
  * Return hash value for a string
  */
 guint32
-fstrhash_lowercase (f_str_t * str, gboolean is_utf)
+rspamd_fstrhash_lc (rspamd_fstring_t * str, gboolean is_utf)
 {
 	gsize i;
 	guint32 j, hval;
@@ -401,7 +403,7 @@ fstrhash_lowercase (f_str_t * str, gboolean is_utf)
 	if (is_utf) {
 		while (end < str->begin + str->len) {
 			if (!g_utf8_validate (p, str->len, &end)) {
-				return fstrhash_lowercase (str, FALSE);
+				return rspamd_fstrhash_lc (str, FALSE);
 			}
 			while (p < end) {
 				uc = g_unichar_tolower (g_utf8_get_char (p));
@@ -427,7 +429,7 @@ fstrhash_lowercase (f_str_t * str, gboolean is_utf)
 }
 
 void
-fstrstrip (f_str_t * str)
+rspamd_fstrstrip (rspamd_fstring_t * str)
 {
 	gchar *p = str->begin;
 	guint r = 0;

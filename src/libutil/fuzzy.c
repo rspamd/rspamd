@@ -98,7 +98,7 @@ fuzzy_blocksize (guint32 len)
 
 /* Update hash with new symbol */
 static void
-fuzzy_update (fuzzy_hash_t * h, guint c)
+fuzzy_update (rspamd_fuzzy_t * h, guint c)
 {
 	h->rh = fuzzy_roll_hash (c);
 	h->h = fuzzy_fnv_hash (c, h->h);
@@ -113,7 +113,7 @@ fuzzy_update (fuzzy_hash_t * h, guint c)
 }
 
 static void
-fuzzy_update2 (fuzzy_hash_t * h1, fuzzy_hash_t *h2, guint c)
+fuzzy_update2 (rspamd_fuzzy_t * h1, rspamd_fuzzy_t *h2, guint c)
 {
 	h1->rh = fuzzy_roll_hash (c);
 	h1->h = fuzzy_fnv_hash (c, h1->h);
@@ -142,7 +142,7 @@ fuzzy_update2 (fuzzy_hash_t * h1, fuzzy_hash_t *h2, guint c)
  * Replace cost is normally 1, and 2 with nonzero xcost.
  */
 guint32
-lev_distance (gchar *s1, gint len1, gchar *s2, gint len2)
+rspamd_levinstein_distance (gchar *s1, gint len1, gchar *s2, gint len2)
 {
 	gint i;
 	gint *row;                              /* we only need to keep one row of costs */
@@ -255,15 +255,15 @@ lev_distance (gchar *s1, gint len1, gchar *s2, gint len2)
 }
 
 /* Calculate fuzzy hash for specified string */
-fuzzy_hash_t *
-fuzzy_init (f_str_t * in, rspamd_mempool_t * pool)
+rspamd_fuzzy_t *
+rspamd_fuzzy_init (rspamd_fstring_t * in, rspamd_mempool_t * pool)
 {
-	fuzzy_hash_t *new;
+	rspamd_fuzzy_t *new;
 	guint i, repeats = 0;
 	gchar *c = in->begin, last = '\0';
 	gsize real_len = 0;
 
-	new = rspamd_mempool_alloc0 (pool, sizeof (fuzzy_hash_t));
+	new = rspamd_mempool_alloc0 (pool, sizeof (rspamd_fuzzy_t));
 	bzero (&rs, sizeof (rs));
 	for (i = 0; i < in->len; i++) {
 		if (*c == last) {
@@ -304,23 +304,23 @@ fuzzy_init (f_str_t * in, rspamd_mempool_t * pool)
 	return new;
 }
 
-fuzzy_hash_t *
-fuzzy_init_byte_array (GByteArray * in, rspamd_mempool_t * pool)
+rspamd_fuzzy_t *
+rspamd_fuzzy_from_byte_array (GByteArray * in, rspamd_mempool_t * pool)
 {
-	f_str_t f;
+	rspamd_fstring_t f;
 
 	f.begin = (gchar *)in->data;
 	f.len = in->len;
 
-	return fuzzy_init (&f, pool);
+	return rspamd_fuzzy_init (&f, pool);
 }
 
 void
-fuzzy_init_part (struct mime_text_part *part,
+rspamd_fuzzy_from_text_part (struct mime_text_part *part,
 	rspamd_mempool_t *pool,
 	gsize max_diff)
 {
-	fuzzy_hash_t *new, *new2;
+	rspamd_fuzzy_t *new, *new2;
 	gchar *c, *end, *begin, *p;
 	gsize real_len = 0, len = part->content->len;
 	GList *cur_offset;
@@ -335,8 +335,8 @@ fuzzy_init_part (struct mime_text_part *part,
 
 	begin = (gchar *)part->content->data;
 	c = begin;
-	new = rspamd_mempool_alloc0 (pool, sizeof (fuzzy_hash_t));
-	new2 = rspamd_mempool_alloc0 (pool, sizeof (fuzzy_hash_t));
+	new = rspamd_mempool_alloc0 (pool, sizeof (rspamd_fuzzy_t));
+	new2 = rspamd_mempool_alloc0 (pool, sizeof (rspamd_fuzzy_t));
 	bzero (&rs, sizeof (rs));
 	end = c + len;
 
@@ -383,7 +383,7 @@ fuzzy_init_part (struct mime_text_part *part,
 	write_diff = real_len > 0 && real_len < max_diff;
 
 	if (write_diff) {
-		part->diff_str = fstralloc (pool, real_len + 1);
+		part->diff_str = rspamd_fstralloc (pool, real_len + 1);
 	}
 	else {
 		part->diff_str = NULL;
@@ -415,7 +415,7 @@ fuzzy_init_part (struct mime_text_part *part,
 				if (g_unichar_isalnum (uc)) {
 					fuzzy_update2 (new, new2, uc);
 					if (write_diff) {
-						fstrpush_unichar (part->diff_str, uc);
+						rspamd_fstrappend_u (part->diff_str, uc);
 					}
 				}
 				c = g_utf8_next_char (c);
@@ -435,7 +435,7 @@ fuzzy_init_part (struct mime_text_part *part,
 				if (!g_ascii_isspace (*c) && !g_ascii_ispunct (*c)) {
 					fuzzy_update2 (new, new2, *c);
 					if (write_diff) {
-						fstrpush (part->diff_str, *c);
+						rspamd_fstrappend_c (part->diff_str, *c);
 					}
 				}
 				c++;
@@ -457,7 +457,7 @@ fuzzy_init_part (struct mime_text_part *part,
 
 /* Compare score of difference between two hashes 0 - different hashes, 100 - identical hashes */
 gint
-fuzzy_compare_hashes (fuzzy_hash_t * h1, fuzzy_hash_t * h2)
+rspamd_fuzzy_compare (rspamd_fuzzy_t * h1, rspamd_fuzzy_t * h2)
 {
 	gint res, l1, l2;
 
@@ -478,24 +478,24 @@ fuzzy_compare_hashes (fuzzy_hash_t * h1, fuzzy_hash_t * h2)
 		}
 	}
 
-	res = lev_distance (h1->hash_pipe, l1, h2->hash_pipe, l2);
+	res = rspamd_levinstein_distance (h1->hash_pipe, l1, h2->hash_pipe, l2);
 	res = 100 - (2 * res * 100) / (l1 + l2);
 
 	return res;
 }
 
 gint
-fuzzy_compare_parts (struct mime_text_part *p1, struct mime_text_part *p2)
+rspamd_fuzzy_compare_parts (struct mime_text_part *p1, struct mime_text_part *p2)
 {
 	if (p1->fuzzy != NULL && p2->fuzzy != NULL) {
 		if (p1->fuzzy->block_size == p2->fuzzy->block_size) {
-			return fuzzy_compare_hashes (p1->fuzzy, p2->fuzzy);
+			return rspamd_fuzzy_compare (p1->fuzzy, p2->fuzzy);
 		}
 		else if (p1->double_fuzzy->block_size == p2->fuzzy->block_size) {
-			return fuzzy_compare_hashes (p1->double_fuzzy, p2->fuzzy);
+			return rspamd_fuzzy_compare (p1->double_fuzzy, p2->fuzzy);
 		}
 		else if (p2->double_fuzzy->block_size == p1->fuzzy->block_size) {
-			return fuzzy_compare_hashes (p2->double_fuzzy, p1->fuzzy);
+			return rspamd_fuzzy_compare (p2->double_fuzzy, p1->fuzzy);
 		}
 	}
 
@@ -503,7 +503,7 @@ fuzzy_compare_parts (struct mime_text_part *p1, struct mime_text_part *p2)
 }
 
 gint
-rspamd_fuzzy_len (fuzzy_hash_t *h)
+rspamd_fuzzy_len (rspamd_fuzzy_t *h)
 {
 	gint len;
 	void *nullpos;
@@ -523,7 +523,7 @@ rspamd_fuzzy_len (fuzzy_hash_t *h)
 guint
 rspamd_fuzzy_hash (gconstpointer key)
 {
-	fuzzy_hash_t *fh = (fuzzy_hash_t *)key;
+	rspamd_fuzzy_t *fh = (rspamd_fuzzy_t *)key;
 	void *st;
 
 	st = XXH32_init (0xdeadbeef);
@@ -536,8 +536,8 @@ rspamd_fuzzy_hash (gconstpointer key)
 gboolean
 rspamd_fuzzy_equal (gconstpointer v1, gconstpointer v2)
 {
-	fuzzy_hash_t *fh1= (fuzzy_hash_t *)v1,
-			*fh2 = (fuzzy_hash_t *)v2;
+	rspamd_fuzzy_t *fh1= (rspamd_fuzzy_t *)v1,
+			*fh2 = (rspamd_fuzzy_t *)v2;
 
 	if (fh1->block_size == fh2->block_size) {
 		gint l1 = rspamd_fuzzy_len (fh1),

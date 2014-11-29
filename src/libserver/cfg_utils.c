@@ -145,7 +145,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 	GList *cur;
 	struct rspamd_symbols_group *gr;
 
-	remove_all_maps (cfg);
+	rspamd_map_remove_all (cfg);
 	ucl_obj_unref (cfg->rcl_obj);
 	g_hash_table_remove_all (cfg->metrics);
 	g_hash_table_unref (cfg->metrics);
@@ -568,7 +568,7 @@ rspamd_include_map_handler (const guchar *data, gsize len,
 	cbdata->cfg = cfg;
 	*pcbdata = cbdata;
 
-	return add_map (cfg,
+	return rspamd_map_add (cfg,
 			   map_line,
 			   "ucl include",
 			   rspamd_ucl_read_cb,

@@ -746,7 +746,7 @@ classifiers_callback (gpointer value, void *arg)
 	struct rspamd_statfile_config *st;
 	GTree *tokens = NULL;
 	GList *cur;
-	f_str_t c;
+	rspamd_fstring_t c;
 	gchar *header = NULL;
 	gint *dist = NULL, diff;
 	gboolean is_twopart = FALSE, is_headers = FALSE;
@@ -807,10 +807,10 @@ classifiers_callback (gpointer value, void *arg)
 					p2 = text_part;
 					if (p1->diff_str != NULL && p2->diff_str != NULL) {
 						diff =
-							compare_diff_distance (p1->diff_str, p2->diff_str);
+							rspamd_diff_distance (p1->diff_str, p2->diff_str);
 					}
 					else {
-						diff = fuzzy_compare_parts (p1, p2);
+						diff = rspamd_fuzzy_compare_parts (p1, p2);
 					}
 					if (diff >= COMMON_PART_FACTOR) {
 						msg_info (
@@ -1115,7 +1115,7 @@ rspamd_learn_task (const gchar *statfile, struct rspamd_task *task, GError **err
 	struct rspamd_classifier_config *cl;
 	struct classifier_ctx *cls_ctx;
 	gchar *s;
-	f_str_t c;
+	rspamd_fstring_t c;
 	GTree *tokens = NULL;
 	struct rspamd_statfile_config *st;
 	stat_file_t *stf;
@@ -1174,10 +1174,10 @@ rspamd_learn_task (const gchar *statfile, struct rspamd_task *task, GError **err
 				p1 = cur->prev->data;
 				p2 = part;
 				if (p1->diff_str != NULL && p2->diff_str != NULL) {
-					diff = compare_diff_distance (p1->diff_str, p2->diff_str);
+					diff = rspamd_diff_distance (p1->diff_str, p2->diff_str);
 				}
 				else {
-					diff = fuzzy_compare_parts (p1, p2);
+					diff = rspamd_fuzzy_compare_parts (p1, p2);
 				}
 				if (diff >= COMMON_PART_FACTOR) {
 					msg_info (
@@ -1261,7 +1261,7 @@ rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
 {
 	GList *cur, *ex;
 	struct classifier_ctx *cls_ctx;
-	f_str_t c;
+	rspamd_fstring_t c;
 	GTree *tokens = NULL;
 	struct mime_text_part *part, *p1, *p2;
 	gboolean is_utf = FALSE, is_twopart = FALSE;
@@ -1292,10 +1292,10 @@ rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
 			p1 = cur->prev->data;
 			p2 = part;
 			if (p1->diff_str != NULL && p2->diff_str != NULL) {
-				diff = compare_diff_distance (p1->diff_str, p2->diff_str);
+				diff = rspamd_diff_distance (p1->diff_str, p2->diff_str);
 			}
 			else {
-				diff = fuzzy_compare_parts (p1, p2);
+				diff = rspamd_fuzzy_compare_parts (p1, p2);
 			}
 			if (diff >= COMMON_PART_FACTOR) {
 				msg_info (

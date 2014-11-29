@@ -163,11 +163,11 @@ struct controller_session {
 	gchar *learn_symbol;                                            /**< symbol to train								*/
 	double learn_multiplier;                                    /**< multiplier for learning						*/
 	rspamd_io_dispatcher_t *dispatcher;                         /**< IO dispatcher object							*/
-	f_str_t *learn_buf;                                         /**< learn input									*/
+	rspamd_fstring_t *learn_buf;                                         /**< learn input									*/
 	GList *parts;                                               /**< extracted mime parts							*/
 	gint in_class;                                              /**< positive or negative learn						*/
 	gboolean (*other_handler)(struct controller_session *session,
-		f_str_t *in);                       /**< other command handler to execute at the end of processing */
+		rspamd_fstring_t *in);                       /**< other command handler to execute at the end of processing */
 	void *other_data;                                           /**< and its data                                   */
 	controller_func_t custom_handler;                           /**< custom command handler							*/
 	struct rspamd_async_session * s;                             /**< async session object							*/

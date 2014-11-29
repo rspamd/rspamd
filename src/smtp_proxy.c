@@ -732,7 +732,7 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 }
 
 static void
-proxy_parse_smtp_input (f_str_t *line, struct smtp_proxy_session *session)
+proxy_parse_smtp_input (rspamd_fstring_t *line, struct smtp_proxy_session *session)
 {
 	gchar *p, *c, *end;
 	gsize len;
@@ -786,7 +786,7 @@ proxy_parse_smtp_input (f_str_t *line, struct smtp_proxy_session *session)
  * Callback that is called when there is data to read in buffer
  */
 static gboolean
-smtp_proxy_read_socket (f_str_t * in, void *arg)
+smtp_proxy_read_socket (rspamd_fstring_t * in, void *arg)
 {
 	struct smtp_proxy_session *session = arg;
 	gchar *p;
@@ -1079,7 +1079,7 @@ start_smtp_proxy (struct rspamd_worker *worker)
 
 	event_base_loop (ctx->ev_base, 0);
 
-	close_log (rspamd_main->logger);
+	rspamd_log_close (rspamd_main->logger);
 	exit (EXIT_SUCCESS);
 }
 

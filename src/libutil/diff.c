@@ -336,7 +336,7 @@ rspamd_diff (const void *a, gint aoff, gint n, const void *b, gint boff, gint m,
 }
 
 static guint32
-compare_diff_distance_unnormalized (f_str_t *s1, f_str_t *s2)
+compare_diff_distance_unnormalized (rspamd_fstring_t *s1, rspamd_fstring_t *s2)
 {
 	GArray *ses;
 	struct diff_edit *e;
@@ -365,7 +365,7 @@ compare_diff_distance_unnormalized (f_str_t *s1, f_str_t *s2)
 }
 
 guint32
-compare_diff_distance (f_str_t *s1, f_str_t *s2)
+rspamd_diff_distance (rspamd_fstring_t *s1, rspamd_fstring_t *s2)
 {
 
 	return 100 -
@@ -376,11 +376,11 @@ compare_diff_distance (f_str_t *s1, f_str_t *s2)
 
 
 guint32
-compare_diff_distance_normalized (f_str_t *s1, f_str_t *s2)
+rspamd_diff_distance_normalized (rspamd_fstring_t *s1, rspamd_fstring_t *s2)
 {
 	gchar b1[BUFSIZ], b2[BUFSIZ], *t, *h, *p1, *p2;
 	gsize r1, r2;
-	f_str_t t1, t2;
+	rspamd_fstring_t t1, t2;
 	guint32 cur_diff = 0;
 
 	r1 = s1->len;

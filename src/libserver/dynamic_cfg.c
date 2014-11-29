@@ -264,7 +264,7 @@ init_dynamic_config (struct rspamd_config *cfg)
 	jb->buf = NULL;
 	jb->cfg = cfg;
 	*pjb = jb;
-	if (!add_map (cfg, cfg->dynamic_conf, "Dynamic configuration map",
+	if (!rspamd_map_add (cfg, cfg->dynamic_conf, "Dynamic configuration map",
 		json_config_read_cb, json_config_fin_cb, (void **)pjb)) {
 		msg_err ("cannot add map for configuration %s", cfg->dynamic_conf);
 	}

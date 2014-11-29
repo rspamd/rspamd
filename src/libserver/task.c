@@ -90,11 +90,11 @@ rspamd_task_new (struct rspamd_worker *worker)
 	rspamd_mempool_add_destructor (new_task->task_pool,
 		(rspamd_mempool_destruct_t) g_hash_table_unref,
 		new_task->raw_headers);
-	new_task->emails = g_tree_new (compare_email_func);
+	new_task->emails = g_tree_new (rspamd_emails_cmp);
 	rspamd_mempool_add_destructor (new_task->task_pool,
 		(rspamd_mempool_destruct_t) g_tree_destroy,
 		new_task->emails);
-	new_task->urls = g_tree_new (compare_url_func);
+	new_task->urls = g_tree_new (rspamd_urls_cmp);
 	rspamd_mempool_add_destructor (new_task->task_pool,
 		(rspamd_mempool_destruct_t) g_tree_destroy,
 		new_task->urls);

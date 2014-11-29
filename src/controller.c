@@ -1634,9 +1634,9 @@ start_controller_worker (struct rspamd_worker *worker)
 	ctx->custom_commands = g_hash_table_new (rspamd_strcase_hash,
 			rspamd_strcase_equal);
 	if (ctx->secure_ip != NULL) {
-		if (!add_map (worker->srv->cfg, ctx->secure_ip,
+		if (!rspamd_map_add (worker->srv->cfg, ctx->secure_ip,
 			"Allow webui access from the specified IP",
-			read_radix_list, fin_radix_list, (void **)&ctx->secure_map)) {
+			rspamd_radix_read, rspamd_radix_fin, (void **)&ctx->secure_map)) {
 			if (!radix_add_generic_iplist (ctx->secure_ip,
 				&ctx->secure_map)) {
 				msg_warn ("cannot load or parse ip list from '%s'",
@@ -1728,11 +1728,11 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_upstreams_library_init (ctx->resolver->r, ctx->ev_base);
 	rspamd_upstreams_library_config (worker->srv->cfg);
 	/* Maps events */
-	start_map_watch (worker->srv->cfg, ctx->ev_base);
+	rspamd_map_watch (worker->srv->cfg, ctx->ev_base);
 
 	event_base_loop (ctx->ev_base, 0);
 
 	g_mime_shutdown ();
-	close_log (rspamd_main->logger);
+	rspamd_log_close (rspamd_main->logger);
 	exit (EXIT_SUCCESS);
 }

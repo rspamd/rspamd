@@ -107,7 +107,7 @@ rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t *addr)
 	addr->slen = len;
 	addr->af = addr->addr.sa.sa_family;
 
-	if (make_socket_nonblocking (nfd) < 0) {
+	if (rspamd_socket_nonblocking (nfd) < 0) {
 		goto out;
 	}
 

@@ -79,7 +79,7 @@ lua_check_event_base (lua_State *L)
 /* Dispatcher callbacks */
 
 static gboolean
-lua_io_read_cb (f_str_t * in, void *arg)
+lua_io_read_cb (rspamd_fstring_t * in, void *arg)
 {
 	struct lua_dispatcher_cbdata *cbdata = arg;
 	gboolean res;

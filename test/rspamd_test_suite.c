@@ -40,7 +40,7 @@ main (int argc, char **argv)
 	cfg->log_type = RSPAMD_LOG_CONSOLE;
 	/* First set logger to console logger */
 	rspamd_set_logger (cfg, g_quark_from_static_string("rspamd-test"), rspamd_main);
-	(void)open_log (rspamd_main->logger);
+	(void)rspamd_log_open (rspamd_main->logger);
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 
 	g_test_add_func ("/rspamd/mem_pool", rspamd_mem_pool_test_func);

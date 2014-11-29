@@ -387,7 +387,7 @@ start_lua_worker (struct rspamd_worker *worker)
 	}
 
 	/* Maps events */
-	start_map_watch (worker->srv->cfg, ctx->ev_base);
+	rspamd_map_watch (worker->srv->cfg, ctx->ev_base);
 
 	event_base_loop (ctx->ev_base, 0);
 	luaL_unref (L, LUA_REGISTRYINDEX, ctx->cbref_accept);
@@ -405,7 +405,7 @@ start_lua_worker (struct rspamd_worker *worker)
 		luaL_unref (L, LUA_REGISTRYINDEX, ctx->cbref_fin);
 	}
 
-	close_log (rspamd_main->logger);
+	rspamd_log_close (rspamd_main->logger);
 	exit (EXIT_SUCCESS);
 }
 

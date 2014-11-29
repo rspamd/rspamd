@@ -90,7 +90,7 @@ exception_insert (gpointer st, gconstpointer key, gpointer value)
 	GHashTable **t = st;
 	gint level = 0;
 	const gchar *p = key;
-	f_str_t *val;
+	rspamd_fstring_t *val;
 
 
 	while (*p) {
@@ -106,12 +106,12 @@ exception_insert (gpointer st, gconstpointer key, gpointer value)
 		return;
 	}
 
-	val = g_malloc (sizeof (f_str_t));
+	val = g_malloc (sizeof (rspamd_fstring_t));
 	val->begin = (gchar *)key;
 	val->len = strlen (key);
 	if (t[level] == NULL) {
-		t[level] = g_hash_table_new_full (fstr_strcase_hash,
-				fstr_strcase_equal,
+		t[level] = g_hash_table_new_full (rspamd_fstring_hash,
+				rspamd_fstring_equal,
 				g_free,
 				NULL);
 	}
@@ -128,7 +128,7 @@ read_exceptions_list (rspamd_mempool_t * pool,
 		data->cur_data = rspamd_mempool_alloc0 (pool,
 				sizeof (GHashTable *) * MAX_LEVELS);
 	}
-	return abstract_parse_list (pool,
+	return rspamd_parse_abstract_list (pool,
 			   chunk,
 			   len,
 			   data,
@@ -217,7 +217,7 @@ read_redirectors_list (rspamd_mempool_t * pool,
 				redirector_item_free);
 	}
 
-	return abstract_parse_list (pool,
+	return rspamd_parse_abstract_list (pool,
 			   chunk,
 			   len,
 			   data,
@@ -379,7 +379,7 @@ surbl_module_config (struct rspamd_config *cfg)
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "surbl",
 		"redirector_hosts_map")) != NULL) {
-		add_map (cfg, ucl_obj_tostring (
+		rspamd_map_add (cfg, ucl_obj_tostring (
 				value),
 			"SURBL redirectors list", read_redirectors_list, fin_redirectors_list,
 			(void **)&surbl_module_ctx->redirector_hosts);
@@ -394,7 +394,7 @@ surbl_module_config (struct rspamd_config *cfg)
 	}
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "surbl", "exceptions")) != NULL) {
-		if (add_map (cfg, ucl_obj_tostring (value),
+		if (rspamd_map_add (cfg, ucl_obj_tostring (value),
 			"SURBL exceptions list", read_exceptions_list, fin_exceptions_list,
 			(void **)&surbl_module_ctx->exceptions)) {
 			surbl_module_ctx->tld2_file = rspamd_mempool_strdup (
@@ -404,8 +404,8 @@ surbl_module_config (struct rspamd_config *cfg)
 	}
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "surbl", "whitelist")) != NULL) {
-		if (add_map (cfg, ucl_obj_tostring (value),
-			"SURBL whitelist", read_host_list, fin_host_list,
+		if (rspamd_map_add (cfg, ucl_obj_tostring (value),
+			"SURBL whitelist", rspamd_hosts_read, rspamd_hosts_fin,
 			(void **)&surbl_module_ctx->whitelist)) {
 			surbl_module_ctx->whitelist_file = rspamd_mempool_strdup (
 				surbl_module_ctx->surbl_pool,
@@ -571,7 +571,7 @@ surbl_module_reconfig (struct rspamd_config *cfg)
 
 static gchar *
 format_surbl_request (rspamd_mempool_t * pool,
-	f_str_t * hostname,
+	rspamd_fstring_t * hostname,
 	struct suffix_item *suffix,
 	gboolean append_suffix,
 	GError ** err,
@@ -585,7 +585,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 	gint len, slen, r, i, dots_num = 0, level = MAX_LEVELS;
 	gboolean is_numeric = TRUE;
 	guint64 ip_num;
-	f_str_t f;
+	rspamd_fstring_t f;
 
 	if (G_LIKELY (suffix != NULL)) {
 		slen = strlen (suffix->suffix);
@@ -758,7 +758,7 @@ make_surbl_requests (struct uri *url, struct rspamd_task *task,
 	struct suffix_item *suffix, gboolean forced, GTree *tree)
 {
 	gchar *surbl_req;
-	f_str_t f;
+	rspamd_fstring_t f;
 	GError *err = NULL;
 	struct dns_param *param;
 
@@ -1147,7 +1147,7 @@ write_urls_buffer (gpointer key, gpointer value, gpointer cbdata)
 {
 	struct urls_tree_cb_data *cb = cbdata;
 	struct uri *url = value;
-	f_str_t f;
+	rspamd_fstring_t f;
 	gchar *urlstr;
 	gsize len;
 

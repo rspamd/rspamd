@@ -94,7 +94,7 @@ struct fuzzy_ctx {
 
 struct fuzzy_client_session {
 	gint state;
-	fuzzy_hash_t *h;
+	rspamd_fuzzy_t *h;
 	struct event ev;
 	struct timeval tv;
 	struct rspamd_task *task;
@@ -105,7 +105,7 @@ struct fuzzy_client_session {
 
 struct fuzzy_learn_session {
 	struct event ev;
-	fuzzy_hash_t *h;
+	rspamd_fuzzy_t *h;
 	gint cmd;
 	gint value;
 	gint flag;
@@ -254,7 +254,7 @@ fuzzy_normalize (gint32 in, double weight)
 }
 
 static const gchar *
-fuzzy_to_string (fuzzy_hash_t *h)
+fuzzy_to_string (rspamd_fuzzy_t *h)
 {
 	static gchar strbuf [FUZZY_HASHLEN * 2 + 1];
 	const int max_print = 5;
@@ -441,8 +441,8 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 		rspamd_config_get_module_opt (cfg, "fuzzy_check",
 		"whitelist")) != NULL) {
 		fuzzy_module_ctx->whitelist = radix_create_compressed ();
-		if (!add_map (cfg, ucl_obj_tostring (value),
-			"Fuzzy whitelist", read_radix_list, fin_radix_list,
+		if (!rspamd_map_add (cfg, ucl_obj_tostring (value),
+			"Fuzzy whitelist", rspamd_radix_read, rspamd_radix_fin,
 			(void **)&fuzzy_module_ctx->whitelist)) {
 			radix_add_generic_iplist (ucl_obj_tostring (value),
 					&fuzzy_module_ctx->whitelist);
@@ -715,7 +715,7 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 static inline void
 register_fuzzy_call (struct rspamd_task *task,
 	struct fuzzy_rule *rule,
-	fuzzy_hash_t *h)
+	rspamd_fuzzy_t *h)
 {
 	struct fuzzy_client_session *session;
 	struct upstream *selected;
@@ -764,7 +764,7 @@ fuzzy_check_rule (struct rspamd_task *task, struct fuzzy_rule *rule)
 	gchar *checksum;
 	gsize hashlen;
 	GList *cur;
-	fuzzy_hash_t *fake_fuzzy;
+	rspamd_fuzzy_t *fake_fuzzy;
 
 	cur = task->text_parts;
 
@@ -820,7 +820,7 @@ fuzzy_check_rule (struct rspamd_task *task, struct fuzzy_rule *rule)
 							image->data->len);
 					/* Construct fake fuzzy hash */
 					fake_fuzzy = rspamd_mempool_alloc0 (task->task_pool,
-							sizeof (fuzzy_hash_t));
+							sizeof (rspamd_fuzzy_t));
 					rspamd_strlcpy (fake_fuzzy->hash_pipe, checksum,
 						sizeof (fake_fuzzy->hash_pipe));
 					register_fuzzy_call (task, rule, fake_fuzzy);
@@ -843,7 +843,7 @@ fuzzy_check_rule (struct rspamd_task *task, struct fuzzy_rule *rule)
 				/* Construct fake fuzzy hash */
 				fake_fuzzy =
 					rspamd_mempool_alloc0 (task->task_pool,
-						sizeof (fuzzy_hash_t));
+						sizeof (rspamd_fuzzy_t));
 				rspamd_strlcpy (fake_fuzzy->hash_pipe, checksum,
 					sizeof (fake_fuzzy->hash_pipe));
 				register_fuzzy_call (task, rule, fake_fuzzy);
@@ -882,7 +882,7 @@ fuzzy_symbol_callback (struct rspamd_task *task, void *unused)
 
 static inline gboolean
 register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
-	struct fuzzy_rule *rule, struct rspamd_task *task, fuzzy_hash_t *h,
+	struct fuzzy_rule *rule, struct rspamd_task *task, rspamd_fuzzy_t *h,
 	gint cmd, gint value, gint flag, gint *saved, GError **err)
 {
 	struct fuzzy_learn_session *s;
@@ -908,8 +908,8 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 			msec_to_tv (fuzzy_module_ctx->io_timeout, &s->tv);
 			s->task = task;
 			s->h =
-				rspamd_mempool_alloc (task->task_pool, sizeof (fuzzy_hash_t));
-			memcpy (s->h, h, sizeof (fuzzy_hash_t));
+				rspamd_mempool_alloc (task->task_pool, sizeof (rspamd_fuzzy_t));
+			memcpy (s->h, h, sizeof (rspamd_fuzzy_t));
 			s->http_entry = entry;
 			s->server = selected;
 			s->cmd = cmd;
@@ -947,7 +947,7 @@ fuzzy_process_rule (struct rspamd_http_connection_entry *entry,
 	struct rspamd_image *image;
 	GList *cur;
 	gchar *checksum;
-	fuzzy_hash_t fake_fuzzy;
+	rspamd_fuzzy_t fake_fuzzy;
 	gint processed = 0;
 
 	/* Plan new event for writing */

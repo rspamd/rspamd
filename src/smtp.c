@@ -83,7 +83,7 @@ call_stage_filters (struct smtp_session *session, enum rspamd_smtp_stage stage)
 }
 
 static gboolean
-read_smtp_command (struct smtp_session *session, f_str_t *line)
+read_smtp_command (struct smtp_session *session, rspamd_fstring_t *line)
 {
 	struct smtp_command *cmd;
 	gchar outbuf[BUFSIZ];
@@ -248,7 +248,7 @@ process_smtp_data (struct smtp_session *session)
 	struct stat st;
 	gint r;
 	GList *cur, *t;
-	f_str_t *f;
+	rspamd_fstring_t *f;
 	gchar *s;
 
 	if (fstat (session->temp_fd, &st) == -1) {
@@ -350,7 +350,7 @@ err:
  * Callback that is called when there is data to read in buffer
  */
 static gboolean
-smtp_read_socket (f_str_t * in, void *arg)
+smtp_read_socket (rspamd_fstring_t * in, void *arg)
 {
 	struct smtp_session *session = arg;
 
@@ -996,7 +996,7 @@ start_smtp (struct rspamd_worker *worker)
 	}
 
 	/* Maps events */
-	start_map_watch (worker->srv->cfg, ctx->ev_base);
+	rspamd_map_watch (worker->srv->cfg, ctx->ev_base);
 
 	/* DNS resolver */
 	ctx->resolver = dns_resolver_init (ctx->ev_base, worker->srv->cfg);
@@ -1006,7 +1006,7 @@ start_smtp (struct rspamd_worker *worker)
 
 	event_base_loop (ctx->ev_base, 0);
 
-	close_log (rspamd_main->logger);
+	rspamd_log_close (rspamd_main->logger);
 	exit (EXIT_SUCCESS);
 }
 

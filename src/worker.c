@@ -311,7 +311,7 @@ start_worker (struct rspamd_worker *worker)
 	ctx->ev_base = rspamd_prepare_worker (worker, "normal", accept_socket);
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
 
-	start_map_watch (worker->srv->cfg, ctx->ev_base);
+	rspamd_map_watch (worker->srv->cfg, ctx->ev_base);
 
 
 	ctx->resolver = dns_resolver_init (worker->srv->logger,
@@ -339,7 +339,7 @@ start_worker (struct rspamd_worker *worker)
 	event_base_loop (ctx->ev_base, 0);
 
 	g_mime_shutdown ();
-	close_log (rspamd_main->logger);
+	rspamd_log_close (rspamd_main->logger);
 	exit (EXIT_SUCCESS);
 }
 

@@ -246,7 +246,7 @@ parse_kvstorage_command (struct kvstorage_session *session, gchar *c, guint len)
  * Parse kvstorage line
  */
 static gboolean
-parse_kvstorage_line (struct kvstorage_session *session, f_str_t *in)
+parse_kvstorage_line (struct kvstorage_session *session, rspamd_fstring_t *in)
 {
 	gchar *p, *c, *end;
 	gint state = 0, next_state = 0;
@@ -728,7 +728,7 @@ kvstorage_process_command (struct kvstorage_session *session, gboolean is_redis)
 }
 
 static gboolean
-kvstorage_read_arglen (f_str_t *in, guint *len)
+kvstorage_read_arglen (rspamd_fstring_t *in, guint *len)
 {
 	gchar *p = in->begin, *end = in->begin + in->len, *c;
 	gint state = 0;
@@ -797,7 +797,7 @@ kvstorage_check_argnum (struct kvstorage_session *session)
  * Callback that is called when there is data to read in buffer
  */
 static gboolean
-kvstorage_read_socket (f_str_t * in, void *arg)
+kvstorage_read_socket (rspamd_fstring_t * in, void *arg)
 {
 	struct kvstorage_session *session = (struct kvstorage_session *) arg;
 	struct kvstorage_worker_thread *thr;
@@ -1248,11 +1248,11 @@ create_kvstorage_thread (struct rspamd_worker *worker,
 	new->id = id;
 
 	/* Create and setup terminating socket */
-	if (make_socketpair (new->term_sock) == -1) {
+	if (rspamd_socketpair (new->term_sock) == -1) {
 		msg_err ("socket failed: %s", strerror (errno));
 		return NULL;
 	}
-	make_socket_nonblocking (new->term_sock[0]);
+	rspamd_socket_nonblocking (new->term_sock[0]);
 
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
 	new->thr = g_thread_create (kvstorage_thread, new, FALSE, &err);
@@ -1299,7 +1299,7 @@ start_keystorage (struct rspamd_worker *worker)
 		exit (EXIT_SUCCESS);
 	}
 	/* Create socketpair */
-	if (make_socketpair (ctx->s_pair) == -1) {
+	if (rspamd_socketpair (ctx->s_pair) == -1) {
 		msg_err ("cannot create socketpair, exiting");
 		exit (EXIT_SUCCESS);
 	}
@@ -1320,7 +1320,7 @@ start_keystorage (struct rspamd_worker *worker)
 		exit (EXIT_SUCCESS);
 	}
 
-	init_signals (&signals, sig_handler);
+	rspamd_signals_init (&signals, sig_handler);
 
 	/* Set umask */
 	umask (S_IWGRP | S_IWOTH | S_IROTH | S_IRGRP);
@@ -1393,7 +1393,7 @@ start_keystorage (struct rspamd_worker *worker)
 		}
 		else if (do_reopen_log == 1) {
 			do_reopen_log = 0;
-			reopen_log (rspamd_main->logger);
+			rspamd_log_reopen (rspamd_main->logger);
 		}
 	}
 
@@ -1408,6 +1408,6 @@ start_keystorage (struct rspamd_worker *worker)
 	}
 #endif
 	destroy_kvstorage_config ();
-	close_log (rspamd_main->logger);
+	rspamd_log_close (rspamd_main->logger);
 	exit (EXIT_SUCCESS);
 }

@@ -1168,11 +1168,11 @@ rspamd_parts_distance (struct rspamd_task * task, GList * args, void *unused)
 		}
 		if (!p1->is_empty && !p2->is_empty) {
 			if (p1->diff_str != NULL && p2->diff_str != NULL) {
-				diff = compare_diff_distance_normalized (p1->diff_str,
+				diff = rspamd_diff_distance_normalized (p1->diff_str,
 						p2->diff_str);
 			}
 			else {
-				diff = fuzzy_compare_parts (p1, p2);
+				diff = rspamd_fuzzy_compare_parts (p1, p2);
 			}
 			debug_task (
 				"got likeliness between parts of %d%%, threshold is %d%%",

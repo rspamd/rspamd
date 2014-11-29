@@ -155,8 +155,8 @@ dkim_module_config (struct rspamd_config *cfg)
 	}
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim", "whitelist")) != NULL) {
-		if (!add_map (cfg, ucl_obj_tostring (value),
-			"DKIM whitelist", read_radix_list, fin_radix_list,
+		if (!rspamd_map_add (cfg, ucl_obj_tostring (value),
+			"DKIM whitelist", rspamd_radix_read, rspamd_radix_fin,
 			(void **)&dkim_module_ctx->whitelist_ip)) {
 			radix_add_generic_iplist (ucl_obj_tostring (value),
 				&dkim_module_ctx->whitelist_ip);
@@ -164,8 +164,8 @@ dkim_module_config (struct rspamd_config *cfg)
 	}
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim", "domains")) != NULL) {
-		if (!add_map (cfg, ucl_obj_tostring (value),
-			"DKIM domains", read_kv_list, fin_kv_list,
+		if (!rspamd_map_add (cfg, ucl_obj_tostring (value),
+			"DKIM domains", rspamd_kv_list_read, rspamd_kv_list_fin,
 			(void **)&dkim_module_ctx->dkim_domains)) {
 			msg_warn ("cannot load dkim domains list from %s",
 				ucl_obj_tostring (value));

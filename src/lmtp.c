@@ -93,7 +93,7 @@ sigusr1_handler (gint fd, short what, void *arg)
 {
 	struct rspamd_worker *worker = (struct rspamd_worker *) arg;
 
-	reopen_log (worker->srv->logger);
+	rspamd_log_reopen (worker->srv->logger);
 
 	return;
 }
@@ -147,7 +147,7 @@ free_lmtp_task (struct rspamd_lmtp_proto *lmtp, gboolean is_soft)
  * Callback that is called when there is data to read in buffer
  */
 static gboolean
-lmtp_read_socket (f_str_t * in, void *arg)
+lmtp_read_socket (rspamd_fstring_t * in, void *arg)
 {
 	struct rspamd_lmtp_proto *lmtp = (struct rspamd_lmtp_proto *)arg;
 	struct rspamd_task *task = lmtp->task;
@@ -316,7 +316,7 @@ start_lmtp (struct rspamd_worker *worker)
 	worker->srv->pid = getpid ();
 	worker->ctx = event_init ();
 
-	init_signals (&signals, sig_handler);
+	rspamd_signals_init (&signals, sig_handler);
 	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 
 	/* SIGUSR2 handler */

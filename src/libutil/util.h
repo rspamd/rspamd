@@ -27,16 +27,16 @@ gint rspamd_socket_create (gint af, gint type, gint protocol, gboolean async);
 /*
  * Create socket and bind or connect it to specified address and port
  */
-gint make_tcp_socket (struct addrinfo *, gboolean is_server, gboolean async);
+gint rspamd_socket_tcp (struct addrinfo *, gboolean is_server, gboolean async);
 /*
  * Create socket and bind or connect it to specified address and port
  */
-gint make_udp_socket (struct addrinfo *, gboolean is_server, gboolean async);
+gint rspamd_socket_udp (struct addrinfo *, gboolean is_server, gboolean async);
 
 /*
  * Create and bind or connect unix socket
  */
-gint make_unix_socket (const gchar *,
+gint rspamd_socket_unix (const gchar *,
 	struct sockaddr_un *,
 	gint type,
 	gboolean is_server,
@@ -51,7 +51,7 @@ gint make_unix_socket (const gchar *,
  * @param is_server make this socket as server socket
  * @param try_resolve try name resolution for a socket (BLOCKING)
  */
-gint make_universal_socket (const gchar *credits, guint16 port, gint type,
+gint rspamd_socket (const gchar *credits, guint16 port, gint type,
 	gboolean async, gboolean is_server, gboolean try_resolve);
 
 /**
@@ -63,7 +63,7 @@ gint make_universal_socket (const gchar *credits, guint16 port, gint type,
  * @param is_server make this socket as server socket
  * @param try_resolve try name resolution for a socket (BLOCKING)
  */
-GList * make_universal_sockets_list (const gchar *credits,
+GList * rspamd_sockets_list (const gchar *credits,
 	guint16 port,
 	gint type,
 	gboolean async,
@@ -72,46 +72,46 @@ GList * make_universal_sockets_list (const gchar *credits,
 /*
  * Create socketpair
  */
-gint make_socketpair (gint pair[2]);
+gint rspamd_socketpair (gint pair[2]);
 
 /*
  * Write pid to file
  */
-gint write_pid (struct rspamd_main *);
+gint rspamd_write_pid (struct rspamd_main *);
 
 /*
  * Make specified socket non-blocking
  */
-gint make_socket_nonblocking (gint);
+gint rspamd_socket_nonblocking (gint);
 /*
  * Make specified socket blocking
  */
-gint make_socket_blocking (gint);
+gint rspamd_socket_blocking (gint);
 
 /*
  * Poll a sync socket for specified events
  */
-gint poll_sync_socket (gint fd, gint timeout, short events);
+gint rspamd_socket_poll (gint fd, gint timeout, short events);
 
 /*
  * Init signals
  */
 #ifdef HAVE_SA_SIGINFO
-void init_signals (struct sigaction *sa, void (*sig_handler)(gint,
+void rspamd_signals_init (struct sigaction *sa, void (*sig_handler)(gint,
 	siginfo_t *,
 	void *));
 #else
-void init_signals (struct sigaction *sa, void (*sig_handler)(gint));
+void rspamd_signals_init (struct sigaction *sa, void (*sig_handler)(gint));
 #endif
 
 /*
  * Send specified signal to each worker
  */
-void pass_signal_worker (GHashTable *, gint );
+void rspamd_pass_signal (GHashTable *, gint );
 /*
  * Convert string to lowercase
  */
-void convert_to_lowercase (gchar *str, guint size);
+void rspamd_str_lc (gchar *str, guint size);
 
 #ifndef HAVE_SETPROCTITLE
 /*
@@ -175,8 +175,8 @@ const gchar * calculate_check_time (struct timeval *begin,
 /*
  * File locking functions
  */
-gboolean lock_file (gint fd, gboolean async);
-gboolean unlock_file (gint fd, gboolean async);
+gboolean rspamd_file_lock (gint fd, gboolean async);
+gboolean rspamd_file_unlock (gint fd, gboolean async);
 
 /*
  * Hash table utility functions for case insensitive hashing
@@ -194,8 +194,8 @@ gboolean rspamd_str_equal (gconstpointer v, gconstpointer v2);
 /*
  * Hash table utility functions for hashing fixed strings
  */
-guint fstr_strcase_hash (gconstpointer key);
-gboolean fstr_strcase_equal (gconstpointer v, gconstpointer v2);
+guint rspamd_fstring_hash (gconstpointer key);
+gboolean rspamd_fstring_equal (gconstpointer v, gconstpointer v2);
 
 /*
  * Google perf-tools initialization function
@@ -246,10 +246,10 @@ gsize rspamd_strlcpy_tolower (gchar *dst, const gchar *src, gsize siz);
 #define tv_to_msec(tv) ((tv)->tv_sec * 1000LLU + (tv)->tv_usec / 1000LLU)
 
 /* Compare two emails for building emails tree */
-gint compare_email_func (gconstpointer a, gconstpointer b);
+gint rspamd_emails_cmp (gconstpointer a, gconstpointer b);
 
 /* Compare two urls for building emails tree */
-gint compare_url_func (gconstpointer a, gconstpointer b);
+gint rspamd_urls_cmp (gconstpointer a, gconstpointer b);
 
 /*
  * Find string find in string s ignoring case

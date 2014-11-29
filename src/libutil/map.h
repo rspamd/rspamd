@@ -61,11 +61,11 @@ struct map_cb_data {
 /**
  * Check map protocol
  */
-gboolean check_map_proto (const gchar *map_line, gint *res, const gchar **pos);
+gboolean rspamd_map_check_proto (const gchar *map_line, gint *res, const gchar **pos);
 /**
  * Add map from line
  */
-gboolean add_map (struct rspamd_config *cfg,
+gboolean rspamd_map_add (struct rspamd_config *cfg,
 	const gchar *map_line,
 	const gchar *description,
 	map_cb_t read_callback,
@@ -75,12 +75,12 @@ gboolean add_map (struct rspamd_config *cfg,
 /**
  * Start watching of maps by adding events to libevent event loop
  */
-void start_map_watch (struct rspamd_config *cfg, struct event_base *ev_base);
+void rspamd_map_watch (struct rspamd_config *cfg, struct event_base *ev_base);
 
 /**
  * Remove all maps watched (remove events)
  */
-void remove_all_maps (struct rspamd_config *cfg);
+void rspamd_map_remove_all (struct rspamd_config *cfg);
 
 typedef void (*insert_func) (gpointer st, gconstpointer key,
 	gconstpointer value);
@@ -92,34 +92,34 @@ typedef void (*insert_func) (gpointer st, gconstpointer key,
 /**
  * Radix list is a list like ip/mask
  */
-gchar * read_radix_list (rspamd_mempool_t *pool,
+gchar * rspamd_radix_read (rspamd_mempool_t *pool,
 	gchar *chunk,
 	gint len,
 	struct map_cb_data *data);
-void fin_radix_list (rspamd_mempool_t *pool, struct map_cb_data *data);
+void rspamd_radix_fin (rspamd_mempool_t *pool, struct map_cb_data *data);
 
 /**
  * Host list is an ordinal list of hosts or domains
  */
-gchar * read_host_list (rspamd_mempool_t *pool,
+gchar * rspamd_hosts_read (rspamd_mempool_t *pool,
 	gchar *chunk,
 	gint len,
 	struct map_cb_data *data);
-void fin_host_list (rspamd_mempool_t *pool, struct map_cb_data *data);
+void rspamd_hosts_fin (rspamd_mempool_t *pool, struct map_cb_data *data);
 
 /**
  * Kv list is an ordinal list of keys and values separated by whitespace
  */
-gchar * read_kv_list (rspamd_mempool_t *pool,
+gchar * rspamd_kv_list_read (rspamd_mempool_t *pool,
 	gchar *chunk,
 	gint len,
 	struct map_cb_data *data);
-void fin_kv_list (rspamd_mempool_t *pool, struct map_cb_data *data);
+void rspamd_kv_list_fin (rspamd_mempool_t *pool, struct map_cb_data *data);
 
 /**
  * FSM for lists parsing (support comments, blank lines and partial replies)
  */
-gchar * abstract_parse_list (rspamd_mempool_t * pool,
+gchar * rspamd_parse_abstract_list (rspamd_mempool_t * pool,
 	gchar * chunk,
 	gint len,
 	struct map_cb_data *data,

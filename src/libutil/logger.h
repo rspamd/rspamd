@@ -22,38 +22,38 @@ void rspamd_set_logger (struct rspamd_config *cfg,
 /**
  * Open log file or initialize other structures
  */
-gint open_log (rspamd_logger_t *logger);
+gint rspamd_log_open (rspamd_logger_t *logger);
 /**
  * Close log file or destroy other structures
  */
-void close_log (rspamd_logger_t *logger);
+void rspamd_log_close (rspamd_logger_t *logger);
 /**
  * Close and open log again
  */
-gint reopen_log (rspamd_logger_t *logger);
+gint rspamd_log_reopen (rspamd_logger_t *logger);
 
 /**
  * Open log file or initialize other structures for privileged processes
  */
-gint open_log_priv (rspamd_logger_t *logger, uid_t uid, gid_t gid);
+gint rspamd_log_open_priv (rspamd_logger_t *logger, uid_t uid, gid_t gid);
 /**
  * Close log file or destroy other structures for privileged processes
  */
-void close_log_priv (rspamd_logger_t *logger, uid_t uid, gid_t gid);
+void rspamd_log_close_priv (rspamd_logger_t *logger, uid_t uid, gid_t gid);
 /**
  * Close and open log again for privileged processes
  */
-gint reopen_log_priv (rspamd_logger_t *logger, uid_t uid, gid_t gid);
+gint rspamd_log_reopen_priv (rspamd_logger_t *logger, uid_t uid, gid_t gid);
 
 /**
  * Set log pid
  */
-void update_log_pid (GQuark ptype, rspamd_logger_t *logger);
+void rspamd_log_update_pid (GQuark ptype, rspamd_logger_t *logger);
 
 /**
  * Flush log buffer for some types of logging
  */
-void flush_log_buf (rspamd_logger_t *logger);
+void rspamd_log_flush (rspamd_logger_t *logger);
 /**
  * Log function that is compatible for glib messages
  */

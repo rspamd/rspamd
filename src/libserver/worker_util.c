@@ -82,7 +82,7 @@ rspamd_worker_usr1_handler (gint fd, short what, void *arg)
 	struct rspamd_worker_signal_handler *sigh =
 			(struct rspamd_worker_signal_handler *)arg;
 
-	reopen_log (sigh->worker->srv->logger);
+	rspamd_log_reopen (sigh->worker->srv->logger);
 
 	if (sigh->post_handler) {
 		sigh->post_handler (sigh->handler_data);

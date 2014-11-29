@@ -85,7 +85,7 @@ log_next_sync (const gchar *symbol, time_t delay)
 }
 
 static gboolean
-parse_revision_line (struct rspamd_sync_ctx *ctx, f_str_t *in)
+parse_revision_line (struct rspamd_sync_ctx *ctx, rspamd_fstring_t *in)
 {
 	guint i, state = 0;
 	gchar *p, *c, numbuf[sizeof("18446744073709551615")];
@@ -151,7 +151,7 @@ parse_revision_line (struct rspamd_sync_ctx *ctx, f_str_t *in)
 }
 
 static gboolean
-read_blocks (struct rspamd_sync_ctx *ctx, f_str_t *in)
+read_blocks (struct rspamd_sync_ctx *ctx, rspamd_fstring_t *in)
 {
 	struct rspamd_binlog_element *elt;
 	guint i;
@@ -173,7 +173,7 @@ read_blocks (struct rspamd_sync_ctx *ctx, f_str_t *in)
 }
 
 static gboolean
-sync_read (f_str_t * in, void *arg)
+sync_read (rspamd_fstring_t * in, void *arg)
 {
 	struct rspamd_sync_ctx *ctx = arg;
 	gchar buf[256];
@@ -290,7 +290,7 @@ sync_timer_callback (gint fd, short what, void *ud)
 	}
 
 	if ((ctx->sock =
-		make_universal_socket (ctx->st->binlog->master_addr,
+		rspamd_socket (ctx->st->binlog->master_addr,
 		ctx->st->binlog->master_port,
 		SOCK_STREAM, TRUE, FALSE, TRUE)) == -1) {
 		msg_info ("cannot connect to %s", ctx->st->binlog->master_addr);

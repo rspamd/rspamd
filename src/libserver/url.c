@@ -1413,8 +1413,8 @@ parse_uri (struct uri *uri, gchar *uristring, rspamd_mempool_t * pool)
 		uri->post = prefix_end + 1;
 	}
 
-	convert_to_lowercase (uri->string, uri->protocollen);
-	convert_to_lowercase (uri->host,   uri->hostlen);
+	rspamd_str_lc (uri->string, uri->protocollen);
+	rspamd_str_lc (uri->host,   uri->hostlen);
 	/* Decode %HH sequences in host name.  This is important not so much
 	   to support %HH sequences in host names (which other browser
 	   don't), but to support binary characters (which will have been

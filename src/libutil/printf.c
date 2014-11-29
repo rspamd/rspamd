@@ -335,7 +335,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 	gint64 i64;
 	guint64 ui64;
 	guint width, sign, hex, humanize, bytes, frac_width, i;
-	f_str_t *v;
+	rspamd_fstring_t *v;
 	GString *gs;
 	gboolean bv;
 
@@ -438,7 +438,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 			switch (*fmt) {
 
 			case 'V':
-				v = va_arg (args, f_str_t *);
+				v = va_arg (args, rspamd_fstring_t *);
 				RSPAMD_PRINTF_APPEND (v->begin, v->len);
 
 				continue;

@@ -10,7 +10,7 @@
 #include "mem_pool.h"
 #include "fstring.h"
 
-typedef gboolean (*dispatcher_read_callback_t)(f_str_t *in, void *user_data);
+typedef gboolean (*dispatcher_read_callback_t)(rspamd_fstring_t *in, void *user_data);
 typedef gboolean (*dispatcher_write_callback_t)(void *user_data);
 typedef void (*dispatcher_err_callback_t)(GError *err, void *user_data);
 
@@ -27,7 +27,7 @@ enum io_policy {
  * Buffer structure
  */
 typedef struct rspamd_buffer_s {
-	f_str_t *data;                                                  /**< buffer logic			*/
+	rspamd_fstring_t *data;                                                  /**< buffer logic			*/
 	gchar *pos;                                                     /**< current position		*/
 } rspamd_buffer_t;
 

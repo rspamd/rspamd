@@ -119,7 +119,7 @@ direct_write_log_line (rspamd_logger_t *rspamd_log,
 					strerror (errno));
 			if (errno == EIO || errno == EINTR) {
 				/* Descriptor is somehow invalid, try to restart */
-				reopen_log (rspamd_log);
+				rspamd_log_reopen (rspamd_log);
 				if (write (rspamd_log->fd, errmsg, r) != -1) {
 					/* Try again */
 					direct_write_log_line (rspamd_log, data, count, is_iov);
@@ -160,7 +160,7 @@ rspamd_escape_log_string (gchar *str)
 
 /* Logging utility functions */
 gint
-open_log_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
+rspamd_log_open_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 {
 	switch (rspamd_log->cfg->log_type) {
 	case RSPAMD_LOG_CONSOLE:
@@ -193,10 +193,10 @@ open_log_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 }
 
 void
-close_log_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
+rspamd_log_close_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 {
 	gchar tmpbuf[256];
-	flush_log_buf (rspamd_log);
+	rspamd_log_flush (rspamd_log);
 
 	switch (rspamd_log->type) {
 	case RSPAMD_LOG_CONSOLE:
@@ -247,10 +247,10 @@ close_log_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 }
 
 gint
-reopen_log_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
+rspamd_log_reopen_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 {
-	close_log_priv (rspamd_log, uid, gid);
-	if (open_log_priv (rspamd_log, uid, gid) == 0) {
+	rspamd_log_close_priv (rspamd_log, uid, gid);
+	if (rspamd_log_open_priv (rspamd_log, uid, gid) == 0) {
 		msg_info ("log file reopened");
 		return 0;
 	}
@@ -262,25 +262,25 @@ reopen_log_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
  * Open log file or initialize other structures
  */
 gint
-open_log (rspamd_logger_t *logger)
+rspamd_log_open (rspamd_logger_t *logger)
 {
-	return open_log_priv (logger, -1, -1);
+	return rspamd_log_open_priv (logger, -1, -1);
 }
 /**
  * Close log file or destroy other structures
  */
 void
-close_log (rspamd_logger_t *logger)
+rspamd_log_close (rspamd_logger_t *logger)
 {
-	close_log_priv (logger, -1, -1);
+	rspamd_log_close_priv (logger, -1, -1);
 }
 /**
  * Close and open log again
  */
 gint
-reopen_log (rspamd_logger_t *logger)
+rspamd_log_reopen (rspamd_logger_t *logger)
 {
-	return reopen_log_priv (logger, -1, -1);
+	return rspamd_log_reopen_priv (logger, -1, -1);
 }
 
 /*
@@ -336,9 +336,9 @@ rspamd_set_logger (struct rspamd_config *cfg,
 			radix_destroy_compressed (rspamd->logger->debug_ip);
 		}
 		rspamd->logger->debug_ip = radix_create_compressed ();
-		if (!add_map (rspamd->cfg, rspamd->cfg->debug_ip_map,
+		if (!rspamd_map_add (rspamd->cfg, rspamd->cfg->debug_ip_map,
 			"IP addresses for which debug logs are enabled",
-			read_radix_list, fin_radix_list,
+			rspamd_radix_read, rspamd_radix_fin,
 			(void **)&rspamd->logger->debug_ip)) {
 			radix_add_generic_iplist (rspamd->cfg->debug_ip_map,
 					&rspamd->logger->debug_ip);
@@ -356,7 +356,7 @@ rspamd_set_logger (struct rspamd_config *cfg,
  * Used after fork() for updating structure params
  */
 void
-update_log_pid (GQuark ptype, rspamd_logger_t *rspamd_log)
+rspamd_log_update_pid (GQuark ptype, rspamd_logger_t *rspamd_log)
 {
 	rspamd_log->pid = getpid ();
 	rspamd_log->process_type = ptype;
@@ -366,7 +366,7 @@ update_log_pid (GQuark ptype, rspamd_logger_t *rspamd_log)
  * Flush logging buffer
  */
 void
-flush_log_buf (rspamd_logger_t *rspamd_log)
+rspamd_log_flush (rspamd_logger_t *rspamd_log)
 {
 	if (rspamd_log->is_buffered &&
 		(rspamd_log->type == RSPAMD_LOG_CONSOLE || rspamd_log->type ==
@@ -495,12 +495,12 @@ file_log_helper (rspamd_logger_t *rspamd_log,
 		/* Fill buffer */
 		if (rspamd_log->io_buf.size < len) {
 			/* Buffer is too small to hold this string, so write it dirrectly */
-			flush_log_buf (rspamd_log);
+			rspamd_log_flush (rspamd_log);
 			direct_write_log_line (rspamd_log, (void *)iov, iovcnt, TRUE);
 		}
 		else if (rspamd_log->io_buf.used + len >= rspamd_log->io_buf.size) {
 			/* Buffer is full, try to write it dirrectly */
-			flush_log_buf (rspamd_log);
+			rspamd_log_flush (rspamd_log);
 			fill_buffer (rspamd_log, iov, iovcnt);
 		}
 		else {

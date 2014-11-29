@@ -314,7 +314,7 @@ read_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 {
 	ssize_t r;
 	GError *err = NULL;
-	f_str_t res;
+	rspamd_fstring_t res;
 	gchar *c, *b;
 	gchar *end;
 	size_t len;
@@ -329,10 +329,10 @@ read_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 		d->in_buf =
 			rspamd_mempool_alloc_tmp (d->pool, sizeof (rspamd_buffer_t));
 		if (d->policy == BUFFER_LINE || d->policy == BUFFER_ANY) {
-			d->in_buf->data = fstralloc_tmp (d->pool, d->default_buf_size);
+			d->in_buf->data = rspamd_fstralloc_tmp (d->pool, d->default_buf_size);
 		}
 		else {
-			d->in_buf->data = fstralloc_tmp (d->pool, d->nchars + 1);
+			d->in_buf->data = rspamd_fstralloc_tmp (d->pool, d->nchars + 1);
 		}
 		d->in_buf->pos = d->in_buf->data->begin;
 	}
@@ -656,7 +656,7 @@ rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t * d,
 	enum io_policy policy,
 	size_t nchars)
 {
-	f_str_t *tmp;
+	rspamd_fstring_t *tmp;
 	gint t;
 
 	if (d->policy != policy || nchars != d->nchars) {
@@ -665,7 +665,7 @@ rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t * d,
 		/* Resize input buffer if needed */
 		if (policy == BUFFER_CHARACTER && nchars != 0) {
 			if (d->in_buf && d->in_buf->data->size < nchars) {
-				tmp = fstralloc_tmp (d->pool, d->nchars + 1);
+				tmp = rspamd_fstralloc_tmp (d->pool, d->nchars + 1);
 				memcpy (tmp->begin, d->in_buf->data->begin,
 					d->in_buf->data->len);
 				t = d->in_buf->pos - d->in_buf->data->begin;
@@ -676,7 +676,7 @@ rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t * d,
 		}
 		else if (policy == BUFFER_LINE || policy == BUFFER_ANY) {
 			if (d->in_buf && d->nchars < d->default_buf_size) {
-				tmp = fstralloc_tmp (d->pool, d->default_buf_size);
+				tmp = rspamd_fstralloc_tmp (d->pool, d->default_buf_size);
 				memcpy (tmp->begin, d->in_buf->data->begin,
 					d->in_buf->data->len);
 				t = d->in_buf->pos - d->in_buf->data->begin;

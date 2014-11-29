@@ -2161,11 +2161,11 @@ lua_textpart_compare_distance (lua_State * L)
 		else {
 			if (!part->is_empty && !other->is_empty) {
 				if (part->diff_str != NULL && other->diff_str != NULL) {
-					diff = compare_diff_distance (part->diff_str,
+					diff = rspamd_diff_distance (part->diff_str,
 							other->diff_str);
 				}
 				else {
-					diff = fuzzy_compare_parts (part, other);
+					diff = rspamd_fuzzy_compare_parts (part, other);
 				}
 			}
 			else if ((part->is_empty &&

@@ -59,7 +59,7 @@ struct lua_redis_userdata {
 	struct in_addr ina;
 	gchar *reqline;
 	guint16 port;
-	f_str_t *args;
+	rspamd_fstring_t *args;
 	guint args_num;
 };
 
@@ -325,7 +325,7 @@ lua_redis_make_request (lua_State *L)
 			/* Now get remaining args */
 			ud->args_num = lua_gettop (L) - 5;
 			ud->args = rspamd_mempool_alloc (task->task_pool,
-					ud->args_num * sizeof (f_str_t));
+					ud->args_num * sizeof (rspamd_fstring_t));
 			for (i = 0; i < ud->args_num; i++) {
 				tmp = lua_tolstring (L, i + 6, &ud->args[i].len);
 				/* Make a copy of argument */

@@ -31,11 +31,11 @@ struct mime_text_part {
 	GByteArray *content;
 	GNode *html_nodes;
 	GList *urls_offset;                                         /**< list of offsets of urls						*/
-	fuzzy_hash_t *fuzzy;
-	fuzzy_hash_t *double_fuzzy;
+	rspamd_fuzzy_t *fuzzy;
+	rspamd_fuzzy_t *double_fuzzy;
 	GMimeObject *parent;
 	GUnicodeScript script;
-	f_str_t *diff_str;
+	rspamd_fstring_t *diff_str;
 };
 
 struct received_header {

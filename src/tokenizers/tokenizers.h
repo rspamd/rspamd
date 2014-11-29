@@ -20,9 +20,9 @@ typedef struct token_node_s {
 struct tokenizer {
 	gchar *name;
 	gint (*tokenize_func)(struct tokenizer *tokenizer, rspamd_mempool_t *pool,
-		f_str_t *input,
+		rspamd_fstring_t *input,
 		GTree **cur, gboolean save_token, gboolean is_utf, GList *exceptions);
-	gchar * (*get_next_word)(f_str_t *buf, f_str_t *token, GList **exceptions);
+	gchar * (*get_next_word)(rspamd_fstring_t *buf, rspamd_fstring_t *token, GList **exceptions);
 };
 
 /* Compare two token nodes */
@@ -30,11 +30,11 @@ int token_node_compare_func (gconstpointer a, gconstpointer b);
 /* Get tokenizer structure by name or return NULL if this name is not found */
 struct tokenizer * get_tokenizer (const char *name);
 /* Get next word from specified f_str_t buf */
-gchar * get_next_word (f_str_t *buf, f_str_t *token, GList **exceptions);
+gchar * get_next_word (rspamd_fstring_t *buf, rspamd_fstring_t *token, GList **exceptions);
 /* OSB tokenize function */
 int osb_tokenize_text (struct tokenizer *tokenizer,
 	rspamd_mempool_t *pool,
-	f_str_t *input,
+	rspamd_fstring_t *input,
 	GTree **cur,
 	gboolean save_token,
 	gboolean is_utf,

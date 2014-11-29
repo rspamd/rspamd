@@ -104,7 +104,7 @@ token_node_compare_func (gconstpointer a, gconstpointer b)
 
 /* Get next word from specified f_str_t buf */
 gchar *
-get_next_word (f_str_t * buf, f_str_t * token, GList **exceptions)
+get_next_word (rspamd_fstring_t * buf, rspamd_fstring_t * token, GList **exceptions)
 {
 	gsize remain, pos;
 	guchar *p;
@@ -195,8 +195,8 @@ tokenize_headers (rspamd_mempool_t * pool,
 	GTree ** tree)
 {
 	token_node_t *new = NULL;
-	f_str_t headername;
-	f_str_t headervalue;
+	rspamd_fstring_t headername;
+	rspamd_fstring_t headervalue;
 
 	if (*tree == NULL) {
 		*tree = g_tree_new (token_node_compare_func);
@@ -215,8 +215,8 @@ tokenize_headers (rspamd_mempool_t * pool,
 			headername.len = strlen (h->name);
 			headervalue.begin = h->value;
 			headervalue.len = strlen (h->value);
-			new->h1 = fstrhash (&headername) * primes[0];
-			new->h2 = fstrhash (&headervalue) * primes[1];
+			new->h1 = rspamd_fstrhash (&headername) * primes[0];
+			new->h2 = rspamd_fstrhash (&headervalue) * primes[1];
 			if (g_tree_lookup (*tree, new) == NULL) {
 				g_tree_insert (*tree, new, new);
 			}
@@ -241,8 +241,8 @@ tokenize_headers (rspamd_mempool_t * pool,
 			headername.len = strlen (name);
 			headervalue.begin = (u_char *)value;
 			headervalue.len = strlen (value);
-			new->h1 = fstrhash (&headername) * primes[0];
-			new->h2 = fstrhash (&headervalue) * primes[1];
+			new->h1 = rspamd_fstrhash (&headername) * primes[0];
+			new->h2 = rspamd_fstrhash (&headervalue) * primes[1];
 			if (g_tree_lookup (*tree, new) == NULL) {
 				g_tree_insert (*tree, new, new);
 			}
@@ -259,7 +259,7 @@ tokenize_headers (rspamd_mempool_t * pool,
 void
 tokenize_subject (struct rspamd_task *task, GTree ** tree)
 {
-	f_str_t subject;
+	rspamd_fstring_t subject;
 	const gchar *sub;
 	struct tokenizer *osb_tokenizer;
 

@@ -137,7 +137,7 @@ rspamd_client_init (struct event_base *ev_base, const gchar *name,
 	struct rspamd_client_connection *conn;
 	gint fd;
 
-	fd = make_universal_socket (name, port, SOCK_STREAM, TRUE, FALSE, TRUE);
+	fd = rspamd_socket (name, port, SOCK_STREAM, TRUE, FALSE, TRUE);
 	if (fd == -1) {
 		return NULL;
 	}

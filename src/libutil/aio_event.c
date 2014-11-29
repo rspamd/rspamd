@@ -273,7 +273,7 @@ rspamd_aio_init (struct event_base *base)
 	}
 	else {
 		/* Set this socket non-blocking */
-		if (make_socket_nonblocking (new->event_fd) == -1) {
+		if (rspamd_socket_nonblocking (new->event_fd) == -1) {
 			msg_err ("non blocking for eventfd failed: %s", strerror (errno));
 			close (new->event_fd);
 		}

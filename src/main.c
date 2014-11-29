@@ -337,7 +337,7 @@ config_logger (struct rspamd_config *cfg, gpointer ud)
 	}
 
 	rspamd_set_logger (cfg, g_quark_try_string ("main"), rm);
-	if (open_log_priv (rm->logger, rm->workers_uid, rm->workers_gid) == -1) {
+	if (rspamd_log_open_priv (rm->logger, rm->workers_uid, rm->workers_gid) == -1) {
 		fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
 		exit (EXIT_FAILURE);
 	}
@@ -490,7 +490,7 @@ fork_worker (struct rspamd_main *rspamd, struct rspamd_worker_conf *cf)
 		switch (cur->pid) {
 		case 0:
 			/* Update pid for logging */
-			update_log_pid (cf->type, rspamd->logger);
+			rspamd_log_update_pid (cf->type, rspamd->logger);
 			/* Lock statfile pool if possible */
 			statfile_pool_lockall (rspamd->statfile_pool);
 			/* Init PRNG after fork */
@@ -503,8 +503,8 @@ fork_worker (struct rspamd_main *rspamd, struct rspamd_worker_conf *cf)
 			setproctitle ("%s process", cf->worker->name);
 			rspamd_pidfile_close (rspamd->pfh);
 			/* Do silent log reopen to avoid collisions */
-			close_log (rspamd->logger);
-			open_log (rspamd->logger);
+			rspamd_log_close (rspamd->logger);
+			rspamd_log_open (rspamd->logger);
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
 # if (GLIB_MINOR_VERSION > 20)
 			/* Ugly hack for old glib */
@@ -1246,7 +1246,7 @@ main (gint argc, gchar **argv, gchar **env)
 	/* First set logger to console logger */
 	rspamd_main->cfg->log_type = RSPAMD_LOG_CONSOLE;
 	rspamd_set_logger (rspamd_main->cfg, type, rspamd_main);
-	(void)open_log (rspamd_main->logger);
+	(void)rspamd_log_open (rspamd_main->logger);
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 
 	detect_priv (rspamd_main);
@@ -1335,9 +1335,9 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->pid = getpid ();
 	rspamd_main->type = type;
 
-	init_signals (&signals, sig_handler);
+	rspamd_signals_init (&signals, sig_handler);
 
-	if (write_pid (rspamd_main) == -1) {
+	if (rspamd_write_pid (rspamd_main) == -1) {
 		msg_err ("cannot write pid file %s", rspamd_main->cfg->pid_file);
 		exit (-errno);
 	}
@@ -1380,7 +1380,7 @@ main (gint argc, gchar **argv, gchar **env)
 	(void)validate_cache (rspamd_main->cfg->cache, rspamd_main->cfg, FALSE);
 
 	/* Flush log */
-	flush_log_buf (rspamd_main->logger);
+	rspamd_log_flush (rspamd_main->logger);
 
 	/* Preload all statfiles */
 	preload_statfiles (rspamd_main);
@@ -1406,7 +1406,7 @@ main (gint argc, gchar **argv, gchar **env)
 		if (do_terminate) {
 			do_terminate = 0;
 			msg_info ("catch termination signal, waiting for children");
-			pass_signal_worker (rspamd_main->workers, SIGTERM);
+			rspamd_pass_signal (rspamd_main->workers, SIGTERM);
 			break;
 		}
 		if (child_dead) {
@@ -1458,18 +1458,18 @@ main (gint argc, gchar **argv, gchar **env)
 		}
 		if (do_restart) {
 			do_restart = 0;
-			reopen_log_priv (rspamd_main->logger,
+			rspamd_log_reopen_priv (rspamd_main->logger,
 				rspamd_main->workers_uid,
 				rspamd_main->workers_gid);
 			msg_info ("rspamd " RVERSION " is restarting");
 			g_hash_table_foreach (rspamd_main->workers, kill_old_workers, NULL);
-			remove_all_maps (rspamd_main->cfg);
+			rspamd_map_remove_all (rspamd_main->cfg);
 			reread_config (rspamd_main);
 			spawn_workers (rspamd_main);
 		}
 		if (do_reopen_log) {
 			do_reopen_log = 0;
-			reopen_log_priv (rspamd_main->logger,
+			rspamd_log_reopen_priv (rspamd_main->logger,
 				rspamd_main->workers_uid,
 				rspamd_main->workers_gid);
 			g_hash_table_foreach (rspamd_main->workers, reopen_log_handler,
@@ -1505,7 +1505,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	statfile_pool_delete (rspamd_main->statfile_pool);
 
-	close_log (rspamd_main->logger);
+	rspamd_log_close (rspamd_main->logger);
 
 	rspamd_config_free (rspamd_main->cfg);
 	g_free (rspamd_main->cfg);

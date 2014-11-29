@@ -25,7 +25,7 @@ struct rspamd_lmtp_proto {
  * @param line line of user's input
  * @return 0 if line was successfully parsed and -1 if we have protocol error
  */
-gint read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, f_str_t *line);
+gint read_lmtp_input_line (struct rspamd_lmtp_proto *lmtp, rspamd_fstring_t *line);
 
 /**
  * Deliver message via lmtp/smtp or pipe to LDA

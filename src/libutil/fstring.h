@@ -15,84 +15,84 @@ typedef struct f_str_s {
 	gchar *begin;
 	size_t len;
 	size_t size;
-} f_str_t;
+} rspamd_fstring_t;
 
 typedef struct f_str_buf_s {
-	f_str_t *buf;
+	rspamd_fstring_t *buf;
 	gchar *pos;
 	size_t free;
-} f_str_buf_t;
+} rspamd_fstring_buf_t;
 
 typedef struct f_tok_s {
-	f_str_t word;
+	rspamd_fstring_t word;
 	size_t pos;
-} f_tok_t;
+} rspamd_fstring_token_t;
 
 /*
  * Search first occurence of character in string
  */
-ssize_t fstrchr (f_str_t *src, gchar c);
+ssize_t rspamd_fstrchr (rspamd_fstring_t *src, gchar c);
 
 /*
  * Search last occurence of character in string
  */
-ssize_t fstrrchr (f_str_t *src, gchar c);
+ssize_t rspamd_fstrrchr (rspamd_fstring_t *src, gchar c);
 
 /*
  * Search for pattern in orig
  */
-ssize_t fstrstr (f_str_t *orig, f_str_t *pattern);
+ssize_t rspamd_fstrstr (rspamd_fstring_t *orig, rspamd_fstring_t *pattern);
 
 /*
  * Search for pattern in orig ignoring case
  */
-ssize_t fstrstri (f_str_t *orig, f_str_t *pattern);
+ssize_t rspamd_fstrstri (rspamd_fstring_t *orig, rspamd_fstring_t *pattern);
 
 /*
  * Split string by tokens
  * word contains parsed word
  */
-gint fstrtok (f_str_t *text, const gchar *sep, f_tok_t *state);
+gint rspamd_fstrtok (rspamd_fstring_t *text, const gchar *sep, rspamd_fstring_token_t *state);
 
 /*
  * Copy one string into other
  */
-size_t fstrcpy (f_str_t *dest, f_str_t *src);
+size_t rspamd_fstrcpy (rspamd_fstring_t *dest, rspamd_fstring_t *src);
 
 /*
  * Concatenate two strings
  */
-size_t fstrcat (f_str_t *dest, f_str_t *src);
+size_t rspamd_fstrcat (rspamd_fstring_t *dest, rspamd_fstring_t *src);
 
 /*
  * Push one character to fstr
  */
-gint fstrpush (f_str_t *dest, gchar c);
+gint rspamd_fstrappend_c (rspamd_fstring_t *dest, gchar c);
 
 /*
  * Push one character to fstr
  */
-gint fstrpush_unichar (f_str_t *dest, gunichar c);
+gint rspamd_fstrappend_u (rspamd_fstring_t *dest, gunichar c);
 
 /*
  * Allocate memory for f_str_t
  */
-f_str_t * fstralloc (rspamd_mempool_t *pool, size_t len);
+rspamd_fstring_t * rspamd_fstralloc (rspamd_mempool_t *pool, size_t len);
 
 /*
  * Allocate memory for f_str_t from temporary pool
  */
-f_str_t * fstralloc_tmp (rspamd_mempool_t *pool, size_t len);
+rspamd_fstring_t * rspamd_fstralloc_tmp (rspamd_mempool_t *pool, size_t len);
 
 /*
  * Truncate string to its len
  */
-f_str_t * fstrtruncate (rspamd_mempool_t *pool, f_str_t *orig);
+rspamd_fstring_t * rspamd_fstrtruncate (rspamd_mempool_t *pool, rspamd_fstring_t *orig);
 
 /*
  * Enlarge string to new size
  */
-f_str_t * fstrgrow (rspamd_mempool_t *pool, f_str_t *orig, size_t newlen);
+rspamd_fstring_t * rspamd_fstrgrow (rspamd_mempool_t *pool, rspamd_fstring_t *orig, size_t newlen);
 
 /*
  * Return specified character
@@ -102,20 +102,20 @@ f_str_t * fstrgrow (rspamd_mempool_t *pool, f_str_t *orig, size_t newlen);
 /*
  * Return fast hash value for fixed string
  */
-guint32 fstrhash (f_str_t *str);
+guint32 rspamd_fstrhash (rspamd_fstring_t *str);
 
 /*
  * Return fast hash value for fixed string converted to lowercase
  */
-guint32 fstrhash_lowercase (f_str_t *str, gboolean is_utf);
+guint32 rspamd_fstrhash_lc (rspamd_fstring_t *str, gboolean is_utf);
 /*
  * Make copy of string to 0-terminated string
  */
-gchar * fstrcstr (f_str_t *str, rspamd_mempool_t *pool);
+gchar * rspamd_fstr_c_str (rspamd_fstring_t *str, rspamd_mempool_t *pool);
 
 /*
  * Strip fstr string from space symbols
  */
-void fstrstrip (f_str_t *str);
+void rspamd_fstrstrip (rspamd_fstring_t *str);
 
 #endif

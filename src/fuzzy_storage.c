@@ -106,7 +106,7 @@ struct rspamd_fuzzy_node {
 	gint32 value;
 	gint32 flag;
 	guint64 time;
-	fuzzy_hash_t h;
+	rspamd_fuzzy_t h;
 };
 
 struct fuzzy_session {
@@ -226,7 +226,7 @@ sync_cache (gpointer ud)
 			continue;
 		}
 
-		(void) lock_file (fd, FALSE);
+		(void) rspamd_file_lock (fd, FALSE);
 
 		now = (guint64) time (NULL );
 
@@ -317,7 +317,7 @@ end:
 		if (nodes_expired != NULL) {
 			g_free (nodes_expired);
 		}
-		(void) unlock_file (fd, FALSE);
+		(void) rspamd_file_unlock (fd, FALSE);
 		close (fd);
 
 		rspamd_mutex_unlock (ctx->update_mtx);
@@ -370,7 +370,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 	struct {
 		gint32 value;
 		guint64 time;
-		fuzzy_hash_t h;
+		rspamd_fuzzy_t h;
 	}                               legacy_node;
 
 	if (server_stat->fuzzy_hashes != 0) {
@@ -387,7 +387,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 		return FALSE;
 	}
 
-	(void)lock_file (fd, FALSE);
+	(void)rspamd_file_lock (fd, FALSE);
 
 	fstat (fd, &st);
 
@@ -427,7 +427,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 			}
 			node->value = legacy_node.value;
 			node->time = legacy_node.time;
-			memcpy (&node->h, &legacy_node.h, sizeof (fuzzy_hash_t));
+			memcpy (&node->h, &legacy_node.h, sizeof (rspamd_fuzzy_t));
 			node->flag = 0;
 		}
 		else {
@@ -461,7 +461,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 		}
 	}
 
-	(void)unlock_file (fd, FALSE);
+	(void)rspamd_file_unlock (fd, FALSE);
 	close (fd);
 
 	if (r > 0) {
@@ -477,7 +477,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 }
 
 static inline struct rspamd_fuzzy_node *
-check_hash_node (GQueue *hash, fuzzy_hash_t *s, gint update_value,
+check_hash_node (GQueue *hash, rspamd_fuzzy_t *s, gint update_value,
 	guint64 time, struct rspamd_fuzzy_storage_ctx *ctx)
 {
 	GList *cur;
@@ -509,7 +509,7 @@ check_hash_node (GQueue *hash, fuzzy_hash_t *s, gint update_value,
 		cur = frequent->head;
 		while (cur) {
 			h = cur->data;
-			if ((prob = fuzzy_compare_hashes (&h->h, s)) > LEV_LIMIT) {
+			if ((prob = rspamd_fuzzy_compare (&h->h, s)) > LEV_LIMIT) {
 				msg_info ("fuzzy hash was found, probability %d%%", prob);
 				if (h->time == INVALID_NODE_TIME) {
 					return NULL;
@@ -531,7 +531,7 @@ check_hash_node (GQueue *hash, fuzzy_hash_t *s, gint update_value,
 		cur = hash->head;
 		while (cur) {
 			h = cur->data;
-			if ((prob = fuzzy_compare_hashes (&h->h, s)) > LEV_LIMIT) {
+			if ((prob = rspamd_fuzzy_compare (&h->h, s)) > LEV_LIMIT) {
 				msg_info ("fuzzy hash was found, probability %d%%", prob);
 				if (h->time == INVALID_NODE_TIME) {
 					return NULL;
@@ -565,7 +565,7 @@ process_check_command (struct fuzzy_cmd *cmd,
 	guint64 time,
 	struct rspamd_fuzzy_storage_ctx *ctx)
 {
-	fuzzy_hash_t s;
+	rspamd_fuzzy_t s;
 	struct rspamd_fuzzy_node *h;
 
 
@@ -625,7 +625,7 @@ update_hash (struct fuzzy_cmd *cmd,
 	guint64 time,
 	struct rspamd_fuzzy_storage_ctx *ctx)
 {
-	fuzzy_hash_t s;
+	rspamd_fuzzy_t s;
 	struct rspamd_fuzzy_node *n;
 
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
@@ -679,7 +679,7 @@ process_write_command (struct fuzzy_cmd *cmd,
 }
 
 static gboolean
-delete_hash (GQueue *hash, fuzzy_hash_t *s,
+delete_hash (GQueue *hash, rspamd_fuzzy_t *s,
 	struct rspamd_fuzzy_storage_ctx *ctx)
 {
 	GList *cur, *tmp;
@@ -703,7 +703,7 @@ delete_hash (GQueue *hash, fuzzy_hash_t *s,
 		/* XXX: too slow way */
 		while (cur) {
 			h = cur->data;
-			if (fuzzy_compare_hashes (&h->h, s) > LEV_LIMIT) {
+			if (rspamd_fuzzy_compare (&h->h, s) > LEV_LIMIT) {
 				g_slice_free1 (sizeof (struct rspamd_fuzzy_node), h);
 				tmp = cur;
 				cur = g_list_next (cur);
@@ -729,7 +729,7 @@ process_delete_command (struct fuzzy_cmd *cmd,
 	guint64 time,
 	struct rspamd_fuzzy_storage_ctx *ctx)
 {
-	fuzzy_hash_t s;
+	rspamd_fuzzy_t s;
 	gboolean res = FALSE;
 
 	if (!rspamd_bloom_check (bf, cmd->hash)) {
@@ -1050,9 +1050,9 @@ start_fuzzy (struct rspamd_worker *worker)
 
 	/* Create radix tree */
 	if (ctx->update_map != NULL) {
-		if (!add_map (worker->srv->cfg, ctx->update_map,
+		if (!rspamd_map_add (worker->srv->cfg, ctx->update_map,
 			"Allow fuzzy updates from specified addresses",
-			read_radix_list, fin_radix_list, (void **)&ctx->update_ips)) {
+			rspamd_radix_read, rspamd_radix_fin, (void **)&ctx->update_ips)) {
 			if (!radix_add_generic_iplist (ctx->update_map,
 				&ctx->update_ips)) {
 				msg_warn ("cannot load or parse ip list from '%s'",
@@ -1062,7 +1062,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	}
 
 	/* Maps events */
-	start_map_watch (worker->srv->cfg, ctx->ev_base);
+	rspamd_map_watch (worker->srv->cfg, ctx->ev_base);
 
 	ctx->update_thread = rspamd_create_thread ("fuzzy update",
 			sync_cache,
@@ -1078,6 +1078,6 @@ start_fuzzy (struct rspamd_worker *worker)
 		g_thread_join (ctx->update_thread);
 	}
 
-	close_log (rspamd_main->logger);
+	rspamd_log_close (rspamd_main->logger);
 	exit (EXIT_SUCCESS);
 }

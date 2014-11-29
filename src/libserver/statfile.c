@@ -86,7 +86,7 @@ convert_statfile_10 (stat_file_t * file)
 	g_free (backup_name);
 
 	/* XXX: maybe race condition here */
-	unlock_file (file->fd, FALSE);
+	rspamd_file_unlock (file->fd, FALSE);
 	close (file->fd);
 	if ((file->fd =
 		open (file->filename, O_RDWR | O_TRUNC | O_CREAT,
@@ -97,7 +97,7 @@ convert_statfile_10 (stat_file_t * file)
 			strerror (errno));
 		return FALSE;
 	}
-	lock_file (file->fd, FALSE);
+	rspamd_file_lock (file->fd, FALSE);
 	/* Now make new header and copy it to new file */
 	if (write (file->fd, &header, sizeof (header)) == -1) {
 		msg_info ("cannot write to file %s, error %d, %s",
@@ -411,15 +411,15 @@ statfile_pool_open (statfile_pool_t * pool,
 		}
 	}
 	/* Acquire lock for this operation */
-	lock_file (new_file->fd, FALSE);
+	rspamd_file_lock (new_file->fd, FALSE);
 	if (statfile_pool_check (new_file) == -1) {
 		pool->opened--;
 		rspamd_mempool_unlock_mutex (pool->lock);
-		unlock_file (new_file->fd, FALSE);
+		rspamd_file_unlock (new_file->fd, FALSE);
 		munmap (new_file->map, st.st_size);
 		return NULL;
 	}
-	unlock_file (new_file->fd, FALSE);
+	rspamd_file_unlock (new_file->fd, FALSE);
 
 	new_file->open_time = time (NULL);
 	new_file->access_time = new_file->open_time;

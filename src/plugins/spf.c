@@ -146,8 +146,8 @@ spf_module_config (struct rspamd_config *cfg)
 	}
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "spf", "whitelist")) != NULL) {
-		if (!add_map (cfg, ucl_obj_tostring (value),
-			"SPF whitelist", read_radix_list, fin_radix_list,
+		if (!rspamd_map_add (cfg, ucl_obj_tostring (value),
+			"SPF whitelist", rspamd_radix_read, rspamd_radix_fin,
 			(void **)&spf_module_ctx->whitelist_ip)) {
 			radix_add_generic_iplist (ucl_obj_tostring (value),
 				&spf_module_ctx->whitelist_ip);

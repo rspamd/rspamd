@@ -53,7 +53,7 @@ gchar * make_smtp_error (rspamd_mempool_t *pool,
  * Parse a single SMTP command
  */
 gboolean parse_smtp_command (struct smtp_session *session,
-	f_str_t *line,
+	rspamd_fstring_t *line,
 	struct smtp_command **cmd);
 
 /*
@@ -79,7 +79,7 @@ gboolean parse_smtp_rcpt (struct smtp_session *session,
 /*
  * Read a line from SMTP upstream
  */
-gboolean smtp_upstream_read_socket (f_str_t * in, void *arg);
+gboolean smtp_upstream_read_socket (rspamd_fstring_t * in, void *arg);
 
 /*
  * Write to SMTP upstream
