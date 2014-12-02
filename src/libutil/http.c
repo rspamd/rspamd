@@ -1070,7 +1070,7 @@ rspamd_http_message_from_url (const gchar *url)
 	}
 
 	memset (&pu, 0, sizeof (pu));
-	if (http_parser_parse_url (url, strlen (url), TRUE, &pu) != 0) {
+	if (http_parser_parse_url (url, strlen (url), FALSE, &pu) != 0) {
 		msg_warn ("cannot parse URL: %s", url);
 		return NULL;
 	}
