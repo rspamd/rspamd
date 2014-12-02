@@ -32,6 +32,28 @@ enum {
 	RSPAMD_IPV6_UNSUPPORTED
 } ipv6_status = RSPAMD_IPV6_UNDEFINED;
 
+
+static void
+rspamd_ip_validate_af (rspamd_inet_addr_t *addr)
+{
+	if (addr->addr.sa.sa_family != addr->af) {
+		addr->addr.sa.sa_family = addr->af;
+	}
+	if (addr->af == AF_INET) {
+		addr->slen = sizeof (addr->addr.s4);
+	}
+	else if (addr->af == AF_INET6) {
+		addr->slen = sizeof (addr->addr.s6);
+	}
+	else if (addr->af == AF_UNIX) {
+#ifdef SUN_LEN
+		addr->slen = SUN_LEN (&addr->addr.su);
+#else
+		addr->slen = sizeof (addr->addr.su);
+#endif
+	}
+}
+
 static void
 rspamd_ip_check_ipv6 (void)
 {
@@ -215,6 +237,8 @@ rspamd_inet_address_connect (rspamd_inet_addr_t *addr, gint type,
 		return -1;
 	}
 
+	rspamd_ip_validate_af (addr);
+
 	fd = rspamd_socket_create (addr->af, type, 0, async);
 	if (fd == -1) {
 		return -1;
@@ -245,6 +269,7 @@ rspamd_inet_address_listen (rspamd_inet_addr_t *addr, gint type,
 		return -1;
 	}
 
+	rspamd_ip_validate_af (addr);
 	fd = rspamd_socket_create (addr->af, type, 0, async);
 	if (fd == -1) {
 		return -1;
@@ -385,7 +410,7 @@ rspamd_parse_host_port_priority_strv (gchar **tokens,
 			memcpy (&cur_addr->addr, cur->ai_addr,
 					MIN (sizeof (cur_addr->addr), cur->ai_addrlen));
 			cur_addr->af = cur->ai_family;
-			cur_addr->addr.sa.sa_family = cur->ai_family;
+			rspamd_ip_validate_af (cur_addr);
 			cur_addr->slen = cur->ai_addrlen;
 			cur = cur->ai_next;
 			addr_cnt ++;
