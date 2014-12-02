@@ -148,7 +148,7 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 	fd = rspamd_inet_address_connect (&cbd->addr, SOCK_STREAM, TRUE);
 
 	if (fd == -1) {
-		lua_http_maybe_free (cbd);
+		msg_info ("cannot connect to %v", cbd->msg->host);
 		return FALSE;
 	}
 	cbd->conn = rspamd_http_connection_new (NULL, lua_http_error_handler,
@@ -191,15 +191,15 @@ lua_http_push_headers (lua_State *L, struct rspamd_http_message *msg)
 	lua_pushnil (L);
 	while (lua_next (L, -2) != 0) {
 
-		name = rspamd_lua_table_get (L, "name");
-		value = rspamd_lua_table_get (L, "value");
+		lua_pushvalue (L, -2);
+		name = lua_tostring (L, -1);
+		value = lua_tostring (L, -2);
 
 		if (name != NULL && value != NULL) {
 			rspamd_http_message_add_header (msg, name, value);
 		}
-		lua_pop (L, 1);
+		lua_pop (L, 2);
 	}
-	lua_pop (L, 1);
 }
 
 static gint
@@ -331,8 +331,10 @@ lua_http_request (lua_State *L)
 	cbd->L = L;
 	cbd->cbref = cbref;
 	cbd->msg = msg;
+	cbd->ev_base = ev_base;
 	msec_to_tv (timeout, &cbd->tv);
 	if (session) {
+		cbd->session = session;
 		register_async_event (session,
 				(event_finalizer_t)lua_http_fin,
 				cbd,
