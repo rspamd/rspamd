@@ -45,6 +45,7 @@ struct lua_http_cbdata {
 	struct event_base *ev_base;
 	struct timeval tv;
 	rspamd_inet_addr_t addr;
+	gint fd;
 	gint cbref;
 };
 
@@ -75,6 +76,10 @@ lua_http_fin (gpointer arg)
 	else if (cbd->msg != NULL) {
 		/* We need to free message */
 		rspamd_http_message_free (cbd->msg);
+	}
+
+	if (cbd->fd != -1) {
+		close (cbd->fd);
 	}
 
 	g_slice_free1 (sizeof (struct lua_http_cbdata), cbd);
@@ -151,6 +156,7 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 		msg_info ("cannot connect to %v", cbd->msg->host);
 		return FALSE;
 	}
+	cbd->fd = fd;
 	cbd->conn = rspamd_http_connection_new (NULL, lua_http_error_handler,
 			lua_http_finish_handler, RSPAMD_HTTP_CLIENT_SIMPLE, RSPAMD_HTTP_CLIENT);
 
@@ -333,6 +339,7 @@ lua_http_request (lua_State *L)
 	cbd->msg = msg;
 	cbd->ev_base = ev_base;
 	msec_to_tv (timeout, &cbd->tv);
+	cbd->fd = -1;
 	if (session) {
 		cbd->session = session;
 		register_async_event (session,
