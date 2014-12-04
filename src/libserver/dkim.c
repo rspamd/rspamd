@@ -629,6 +629,7 @@ rspamd_create_dkim_context (const gchar *sig,
 		case DKIM_STATE_VALUE:
 			if (*p == ';') {
 				if (param == DKIM_PARAM_UNKNOWN ||
+					p - c == 0 ||
 					!parser_funcs[param](new, c, p - c, err)) {
 					state = DKIM_STATE_ERROR;
 				}
