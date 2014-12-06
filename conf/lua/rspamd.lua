@@ -46,7 +46,7 @@ rspamd_config.DATE_IN_FUTURE = function(task)
 		local dm = task:get_date{format = 'message'}
 		local dt = task:get_date{format = 'connect'}
 		-- An hour
-		if dm - dt > 3600 then
+		if dm - dt > 7200 then
 			return true
 		end
 	end
