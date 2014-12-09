@@ -521,10 +521,11 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 			event_del (&session->ev);
 			event_set (&session->ev, fd, EV_READ, fuzzy_io_callback, session);
 			event_add (&session->ev, &session->tv);
+			session->state = 1;
 		}
 	}
-	else if (what == EV_READ) {
-		/* Got reply */
+	else if (session->state == 1) {
+		/* Try to read reply */
 		if ((r = read (fd, buf, sizeof (buf) - 1)) == -1) {
 			ret = -1;
 		}
