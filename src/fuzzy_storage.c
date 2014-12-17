@@ -94,13 +94,16 @@ struct rspamd_fuzzy_storage_ctx {
 	radix_compressed_t *update_ips;
 	gchar *update_map;
 	struct event_base *ev_base;
+	gboolean legacy;
+
+	/* Legacy portions */
 	rspamd_rwlock_t *tree_lock;
 	rspamd_mutex_t *update_mtx;
 	GCond *update_cond;
 	GThread *update_thread;
 };
 
-struct rspamd_fuzzy_node {
+struct rspamd_legacy_fuzzy_node {
 	gint32 value;
 	gint32 flag;
 	guint64 time;
@@ -109,7 +112,7 @@ struct rspamd_fuzzy_node {
 
 struct fuzzy_session {
 	struct rspamd_worker *worker;
-	struct fuzzy_cmd cmd;
+	struct legacy_fuzzy_cmd cmd;
 	gint fd;
 	u_char *pos;
 	guint64 time;
@@ -119,21 +122,12 @@ struct fuzzy_session {
 
 extern sig_atomic_t wanna_die;
 
-
-static gint
-compare_nodes (gconstpointer a, gconstpointer b, gpointer unused)
-{
-	const struct rspamd_fuzzy_node *n1 = a, *n2 = b;
-
-	return n1->value - n2->value;
-}
-
 static void
-rspamd_fuzzy_free_node (gpointer n)
+legacy_fuzzy_node_free (gpointer n)
 {
-	struct rspamd_fuzzy_node *node = (struct rspamd_fuzzy_node *)n;
+	struct rspamd_legacy_fuzzy_node *node = (struct rspamd_legacy_fuzzy_node *)n;
 
-	g_slice_free1 (sizeof (struct rspamd_fuzzy_node), node);
+	g_slice_free1 (sizeof (struct rspamd_legacy_fuzzy_node), node);
 }
 
 /**
@@ -144,14 +138,14 @@ rspamd_fuzzy_free_node (gpointer n)
  * @param ctx context
  */
 static void
-expire_nodes (gpointer *to_expire, gint expired_num,
+legacy_expire_nodes (gpointer *to_expire, gint expired_num,
 	struct rspamd_fuzzy_storage_ctx *ctx)
 {
 	gint i;
-	struct rspamd_fuzzy_node *node;
+	struct rspamd_legacy_fuzzy_node *node;
 
 	for (i = 0; i < expired_num; i++) {
-		node = (struct rspamd_fuzzy_node *)to_expire[i];
+		node = (struct rspamd_legacy_fuzzy_node *)to_expire[i];
 		if (node->time != INVALID_NODE_TIME) {
 			server_stat->fuzzy_hashes_expired++;
 		}
@@ -162,13 +156,13 @@ expire_nodes (gpointer *to_expire, gint expired_num,
 }
 
 static gpointer
-sync_cache (gpointer ud)
+legacy_sync_cache (gpointer ud)
 {
 	static const int max_expired = 8192;
 	struct rspamd_worker *wrk = ud;
 	gint fd, expired_num = 0;
 	gchar *filename, header[4];
-	struct rspamd_fuzzy_node *node;
+	struct rspamd_legacy_fuzzy_node *node;
 	gpointer *nodes_expired = NULL;
 	guint64 expire, now;
 	struct rspamd_fuzzy_storage_ctx *ctx;
@@ -238,7 +232,7 @@ sync_cache (gpointer ud)
 				}
 				continue;
 			}
-			if (write (fd, node, sizeof (struct rspamd_fuzzy_node)) == -1) {
+			if (write (fd, node, sizeof (struct rspamd_legacy_fuzzy_node)) == -1) {
 				msg_err ("cannot write file %s: %s", filename,
 						strerror (errno));
 				goto end;
@@ -249,7 +243,7 @@ sync_cache (gpointer ud)
 		/* Now try to expire some nodes */
 		if (expired_num > 0) {
 			rspamd_rwlock_writer_lock (ctx->tree_lock);
-			expire_nodes (nodes_expired, expired_num, ctx);
+			legacy_expire_nodes (nodes_expired, expired_num, ctx);
 			rspamd_rwlock_writer_unlock (ctx->tree_lock);
 		}
 		mods = 0;
@@ -299,13 +293,13 @@ sigusr2_handler (void *arg)
 }
 
 static gboolean
-read_hashes_file (struct rspamd_worker *wrk)
+legacy_read_db (struct rspamd_worker *wrk)
 {
 	gint r, fd, version = 0;
 	struct stat st;
 	gchar *filename, header[4];
 	gboolean touch_stat = TRUE;
-	struct rspamd_fuzzy_node *node;
+	struct rspamd_legacy_fuzzy_node *node;
 	struct rspamd_fuzzy_storage_ctx *ctx = wrk->ctx;
 	struct {
 		gint32 value;
@@ -345,7 +339,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 				"reading fuzzy hashes storage file of version %d of size %d",
 				version,
 				(gint)(st.st_size -
-				sizeof (header)) / sizeof (struct rspamd_fuzzy_node));
+				sizeof (header)) / sizeof (struct rspamd_legacy_fuzzy_node));
 		}
 		else {
 			/* Old version */
@@ -359,7 +353,7 @@ read_hashes_file (struct rspamd_worker *wrk)
 	}
 
 	for (;; ) {
-		node = g_slice_alloc (sizeof (struct rspamd_fuzzy_node));
+		node = g_slice_alloc (sizeof (struct rspamd_legacy_fuzzy_node));
 		if (version == 0) {
 			r = read (fd, &legacy_node, sizeof (legacy_node));
 			if (r != sizeof (legacy_node)) {
@@ -371,8 +365,8 @@ read_hashes_file (struct rspamd_worker *wrk)
 			node->flag = 0;
 		}
 		else {
-			r = read (fd, node, sizeof (struct rspamd_fuzzy_node));
-			if (r != sizeof (struct rspamd_fuzzy_node)) {
+			r = read (fd, node, sizeof (struct rspamd_legacy_fuzzy_node));
+			if (r != sizeof (struct rspamd_legacy_fuzzy_node)) {
 				break;
 			}
 		}
@@ -398,11 +392,11 @@ read_hashes_file (struct rspamd_worker *wrk)
 	return TRUE;
 }
 
-static inline struct rspamd_fuzzy_node *
-check_hash_node (GQueue *hash, rspamd_fuzzy_t *s, gint update_value,
+static inline struct rspamd_legacy_fuzzy_node *
+legacy_check_node (GQueue *hash, rspamd_fuzzy_t *s, gint update_value,
 	guint64 time, struct rspamd_fuzzy_storage_ctx *ctx)
 {
-	struct rspamd_fuzzy_node *h;
+	struct rspamd_legacy_fuzzy_node *h;
 
 	h = g_hash_table_lookup (static_hash, s);
 	if (h != NULL) {
@@ -428,13 +422,13 @@ check_hash_node (GQueue *hash, rspamd_fuzzy_t *s, gint update_value,
 }
 
 static gint
-process_check_command (struct fuzzy_cmd *cmd,
+legacy_check_cmd (struct legacy_fuzzy_cmd *cmd,
 	gint *flag,
 	guint64 time,
 	struct rspamd_fuzzy_storage_ctx *ctx)
 {
 	rspamd_fuzzy_t s;
-	struct rspamd_fuzzy_node *h;
+	struct rspamd_legacy_fuzzy_node *h;
 
 
 	if (!rspamd_bloom_check (bf, cmd->hash)) {
@@ -445,7 +439,7 @@ process_check_command (struct fuzzy_cmd *cmd,
 	s.block_size = cmd->blocksize;
 
 	rspamd_rwlock_reader_lock (ctx->tree_lock);
-	h = check_hash_node (NULL, &s, 0, time, ctx);
+	h = legacy_check_node (NULL, &s, 0, time, ctx);
 	rspamd_rwlock_reader_unlock (ctx->tree_lock);
 
 	if (h == NULL) {
@@ -457,14 +451,14 @@ process_check_command (struct fuzzy_cmd *cmd,
 	}
 }
 
-static struct rspamd_fuzzy_node *
-add_hash_node (struct fuzzy_cmd *cmd,
+static struct rspamd_legacy_fuzzy_node *
+legacy_add_node (struct legacy_fuzzy_cmd *cmd,
 		guint64 time,
 		struct rspamd_fuzzy_storage_ctx *ctx)
 {
-	struct rspamd_fuzzy_node *h;
+	struct rspamd_legacy_fuzzy_node *h;
 
-	h = g_slice_alloc (sizeof (struct rspamd_fuzzy_node));
+	h = g_slice_alloc (sizeof (struct rspamd_legacy_fuzzy_node));
 	memcpy (&h->h.hash_pipe, &cmd->hash, sizeof (cmd->hash));
 	h->h.block_size = cmd->blocksize;
 	h->time = time;
@@ -477,22 +471,22 @@ add_hash_node (struct fuzzy_cmd *cmd,
 }
 
 static gboolean
-update_hash (struct fuzzy_cmd *cmd,
+legacy_update_hash (struct legacy_fuzzy_cmd *cmd,
 	guint64 time,
 	struct rspamd_fuzzy_storage_ctx *ctx)
 {
 	rspamd_fuzzy_t s;
-	struct rspamd_fuzzy_node *n;
+	struct rspamd_legacy_fuzzy_node *n;
 
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
 	s.block_size = cmd->blocksize;
 	mods++;
 
 	rspamd_rwlock_writer_lock (ctx->tree_lock);
-	n = check_hash_node (NULL, &s, cmd->value, time, ctx);
+	n = legacy_check_node (NULL, &s, cmd->value, time, ctx);
 	if (n == NULL) {
 		/* Bloom false positive */
-		n = add_hash_node (cmd, time, ctx);
+		n = legacy_add_node (cmd, time, ctx);
 	}
 	rspamd_rwlock_writer_unlock (ctx->tree_lock);
 
@@ -504,18 +498,18 @@ update_hash (struct fuzzy_cmd *cmd,
 }
 
 static gboolean
-process_write_command (struct fuzzy_cmd *cmd,
+legacy_write_cmd (struct legacy_fuzzy_cmd *cmd,
 	guint64 time,
 	struct rspamd_fuzzy_storage_ctx *ctx)
 {
 	if (rspamd_bloom_check (bf, cmd->hash)) {
-		if (update_hash (cmd, time, ctx)) {
+		if (legacy_update_hash (cmd, time, ctx)) {
 			return TRUE;
 		}
 	}
 
 	rspamd_rwlock_writer_lock (ctx->tree_lock);
-	add_hash_node (cmd, time, ctx);
+	legacy_add_node (cmd, time, ctx);
 	rspamd_rwlock_writer_unlock (ctx->tree_lock);
 
 	mods++;
@@ -526,7 +520,7 @@ process_write_command (struct fuzzy_cmd *cmd,
 }
 
 static gboolean
-delete_hash (GQueue *hash, rspamd_fuzzy_t *s,
+legacy_delete_hash (GQueue *hash, rspamd_fuzzy_t *s,
 	struct rspamd_fuzzy_storage_ctx *ctx)
 {
 	gboolean res = FALSE;
@@ -545,7 +539,7 @@ delete_hash (GQueue *hash, rspamd_fuzzy_t *s,
 }
 
 static gboolean
-process_delete_command (struct fuzzy_cmd *cmd,
+legacy_delete_cmd (struct legacy_fuzzy_cmd *cmd,
 	guint64 time,
 	struct rspamd_fuzzy_storage_ctx *ctx)
 {
@@ -558,7 +552,7 @@ process_delete_command (struct fuzzy_cmd *cmd,
 	memcpy (s.hash_pipe, cmd->hash, sizeof (s.hash_pipe));
 	s.block_size = cmd->blocksize;
 
-	return delete_hash (NULL, &s, ctx);
+	return legacy_delete_hash (NULL, &s, ctx);
 }
 
 /**
@@ -577,9 +571,9 @@ check_fuzzy_client (struct fuzzy_session *session)
 	return TRUE;
 }
 
-#define CMD_PROCESS(x)                                                         \
+#define LEGACY_CMD_PROCESS(x)                                                         \
 	do {                                                                       \
-		if (process_ ## x ## _command (&session->cmd, session->time,           \
+		if (legacy_ ## x ## _cmd (&session->cmd, session->time,           \
 			session->worker->ctx)) {                                           \
 			if (sendto (session->fd, "OK" CRLF, sizeof ("OK" CRLF) - 1, 0,     \
 					&session->addr.addr.sa, session->addr.slen) == -1) {       \
@@ -595,14 +589,14 @@ check_fuzzy_client (struct fuzzy_session *session)
 	} while (0)
 
 static void
-process_fuzzy_command (struct fuzzy_session *session)
+legacy_fuzzy_cmd (struct fuzzy_session *session)
 {
 	gint r, flag = 0;
 	gchar buf[64];
 
 	switch (session->cmd.cmd) {
 	case FUZZY_CHECK:
-		r = process_check_command (&session->cmd,
+		r = legacy_check_cmd (&session->cmd,
 				&flag,
 				session->time,
 				session->worker->ctx);
@@ -630,7 +624,7 @@ process_fuzzy_command (struct fuzzy_session *session)
 			}
 		}
 		else {
-			CMD_PROCESS (write);
+			LEGACY_CMD_PROCESS (write);
 		}
 		break;
 	case FUZZY_DEL:
@@ -643,7 +637,7 @@ process_fuzzy_command (struct fuzzy_session *session)
 			}
 		}
 		else {
-			CMD_PROCESS (delete);
+			LEGACY_CMD_PROCESS (delete);
 		}
 		break;
 	default:
@@ -655,7 +649,7 @@ process_fuzzy_command (struct fuzzy_session *session)
 	}
 }
 
-#undef CMD_PROCESS
+#undef LEGACY_CMD_PROCESS
 
 
 /*
@@ -684,7 +678,7 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 
 	/* Got some data */
 	if (what == EV_READ) {
-		while ((r = recvfrom (fd, session.pos, sizeof (struct fuzzy_cmd),
+		while ((r = recvfrom (fd, session.pos, sizeof (struct legacy_fuzzy_cmd),
 			MSG_WAITALL, &session.addr.addr.sa, &session.addr.slen)) == -1) {
 			if (errno == EINTR) {
 				continue;
@@ -695,9 +689,9 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 			return;
 		}
 		session.addr.af = session.addr.addr.sa.sa_family;
-		if (r == sizeof (struct fuzzy_cmd)) {
+		if (r == sizeof (struct legacy_fuzzy_cmd)) {
 			/* Assume that the whole command was read */
-			process_fuzzy_command (&session);
+			legacy_fuzzy_cmd (&session);
 		}
 		else if (r == sizeof (legacy_cmd)) {
 			/* Process requests from old rspamd */
@@ -708,7 +702,7 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 			session.cmd.flag = 0;
 			memcpy (session.cmd.hash, legacy_cmd.hash,
 				sizeof (legacy_cmd.hash));
-			process_fuzzy_command (&session);
+			legacy_fuzzy_cmd (&session);
 		}
 		else {
 			msg_err ("got incomplete data while reading from socket: %d, %s",
@@ -769,6 +763,15 @@ init_fuzzy (struct rspamd_config *cfg)
 		rspamd_rcl_parse_struct_string, ctx,
 		G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
 
+	rspamd_rcl_register_worker_option (cfg, type, "file",
+		rspamd_rcl_parse_struct_string, ctx,
+		G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "database",
+		rspamd_rcl_parse_struct_string, ctx,
+		G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
+
+	/* Legacy options */
 	rspamd_rcl_register_worker_option (cfg, type, "max_mods",
 		rspamd_rcl_parse_struct_integer, ctx,
 		G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx,
@@ -825,12 +828,12 @@ start_fuzzy (struct rspamd_worker *worker)
 	sigh->handler_data = worker;
 
 	static_hash = g_hash_table_new_full (rspamd_fuzzy_hash, rspamd_fuzzy_equal,
-				NULL, rspamd_fuzzy_free_node);
+				NULL, legacy_fuzzy_node_free);
 
 	/* Init bloom filter */
 	bf = rspamd_bloom_create (2000000L, RSPAMD_DEFAULT_BLOOM_HASHES);
 	/* Try to read hashes from file */
-	if (!read_hashes_file (worker)) {
+	if (!legacy_read_db (worker)) {
 		msg_err (
 			"cannot read hashes file, it can be created after save procedure");
 	}
@@ -860,7 +863,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	rspamd_map_watch (worker->srv->cfg, ctx->ev_base);
 
 	ctx->update_thread = rspamd_create_thread ("fuzzy update",
-			sync_cache,
+			legacy_sync_cache,
 			worker,
 			&err);
 	if (ctx->update_thread == NULL) {

@@ -10,7 +10,7 @@
 #define FUZZY_WRITE 1
 #define FUZZY_DEL 2
 
-struct fuzzy_cmd {
+struct legacy_fuzzy_cmd {
 	u_char cmd;
 	guint32 blocksize;
 	gint32 value;

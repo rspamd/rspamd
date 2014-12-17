@@ -498,7 +498,7 @@ static void
 fuzzy_io_callback (gint fd, short what, void *arg)
 {
 	struct fuzzy_client_session *session = arg;
-	struct fuzzy_cmd cmd;
+	struct legacy_fuzzy_cmd cmd;
 	struct fuzzy_mapping *map;
 	gchar buf[62], *err_str;
 	const gchar *symbol;
@@ -514,7 +514,7 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 		memcpy (cmd.hash, session->h->hash_pipe, sizeof (cmd.hash));
 		cmd.cmd = FUZZY_CHECK;
 		cmd.flag = 0;
-		if (write (fd, &cmd, sizeof (struct fuzzy_cmd)) == -1) {
+		if (write (fd, &cmd, sizeof (struct legacy_fuzzy_cmd)) == -1) {
 			ret = -1;
 		}
 		else {
@@ -601,7 +601,7 @@ static void
 fuzzy_learn_callback (gint fd, short what, void *arg)
 {
 	struct fuzzy_learn_session *session = arg;
-	struct fuzzy_cmd cmd;
+	struct legacy_fuzzy_cmd cmd;
 	gchar buf[512];
 	const gchar *cmd_name, *symbol;
 	gint ret = 0;
@@ -614,7 +614,7 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 		cmd.cmd = session->cmd;
 		cmd.value = session->value;
 		cmd.flag = session->flag;
-		if (write (fd, &cmd, sizeof (struct fuzzy_cmd)) == -1) {
+		if (write (fd, &cmd, sizeof (struct legacy_fuzzy_cmd)) == -1) {
 			if (*(session->err) == NULL) {
 				g_set_error (session->err,
 					g_quark_from_static_string ("fuzzy check"),
