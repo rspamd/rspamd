@@ -58,6 +58,16 @@ struct rspamd_shingle* rspamd_shingles_generate (GArray *input,
 		gpointer filterd);
 
 /**
+ * Compares two shingles and return result as a floating point value - 1.0
+ * for completely similar shingles and 0.0 for completely different ones
+ * @param a
+ * @param b
+ * @return
+ */
+gdouble rspamd_shingles_compare (const struct rspamd_shingle *a,
+		const struct rspamd_shingle *b);
+
+/**
  * Default filtering function
  */
 guint64 rspamd_shingles_default_filter (guint64 *input, gsize count,

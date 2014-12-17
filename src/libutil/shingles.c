@@ -135,3 +135,18 @@ rspamd_shingles_default_filter (guint64 *input, gsize count,
 
 	return minimal;
 }
+
+
+gdouble rspamd_shingles_compare (const struct rspamd_shingle *a,
+		const struct rspamd_shingle *b)
+{
+	gint i, common = 0;
+
+	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
+		if (a->hashes[i] == b->hashes[i]) {
+			common ++;
+		}
+	}
+
+	return (gdouble)common / 84.0;
+}
