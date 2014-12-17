@@ -2,7 +2,7 @@ language: c
 
 before_script:
   - sudo apt-get update -qq
-  - sudo apt-get install -qq debhelper dpkg-dev cmake libevent-dev libglib2.0-dev libgmime-2.6-dev liblua5.1-0-dev libpcre3-dev cdbs libssl-dev libjudy-dev
+  - sudo apt-get install -qq debhelper dpkg-dev cmake libevent-dev libglib2.0-dev libgmime-2.6-dev liblua5.1-0-dev libpcre3-dev cdbs libssl-dev libjudy-dev liblmdb-dev
 
 script: 
   - mkdir _build
