@@ -935,12 +935,14 @@ rspamd_controller_handle_saveactions (
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct ucl_parser *parser;
 	struct metric *metric;
-	ucl_object_t *obj, *cur;
+	ucl_object_t *obj;
+	const ucl_object_t *cur;
 	struct rspamd_controller_worker_ctx *ctx;
 	const gchar *error;
 	gdouble score;
 	gint i, added = 0;
 	enum rspamd_metric_action act;
+	ucl_object_iter_t it = NULL;
 
 	ctx = session->ctx;
 
@@ -993,8 +995,11 @@ rspamd_controller_handle_saveactions (
 		return 0;
 	}
 
-	cur = obj->value.av;
-	for (i = 0; i < 3 && cur != NULL; i++, cur = cur->next) {
+	for (i = 0; i < 3; i++) {
+		cur = ucl_iterate_object (obj, &it, TRUE);
+		if (cur == NULL) {
+			break;
+		}
 		switch (i) {
 		case 0:
 			act = METRIC_ACTION_REJECT;

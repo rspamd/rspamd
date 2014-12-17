@@ -312,10 +312,9 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj)
 			fuzzy_module_ctx->fuzzy_pool);
 
 	if ((value = ucl_object_find_key (obj, "mime_types")) != NULL) {
-		if (value->type == UCL_ARRAY) {
-			value = value->value.av;
-		}
-		LL_FOREACH (value, cur) {
+		it = NULL;
+		while ((cur = ucl_iterate_object (value, &it, obj->type == UCL_ARRAY))
+				!= NULL) {
 			rule->mime_types = g_list_concat (rule->mime_types,
 					parse_mime_types (ucl_obj_tostring (cur)));
 		}
@@ -347,6 +346,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj)
 		rspamd_upstreams_from_ucl (rule->servers, value, DEFAULT_PORT, NULL);
 	}
 	if ((value = ucl_object_find_key (obj, "fuzzy_map")) != NULL) {
+		it = NULL;
 		while ((cur = ucl_iterate_object (value, &it, true)) != NULL) {
 			parse_flags (rule, cfg, cur);
 		}

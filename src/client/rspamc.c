@@ -411,26 +411,28 @@ add_options (GHashTable *opts)
 static void
 rspamc_symbol_output (const ucl_object_t *obj)
 {
-	const ucl_object_t *cur, *it;
+	const ucl_object_t *val, *cur;
+	ucl_object_iter_t it = NULL;
+	gboolean first = TRUE;
 
 	rspamd_fprintf (stdout, "Symbol: %s ", ucl_object_key (obj));
-	cur = ucl_object_find_key (obj, "score");
+	val = ucl_object_find_key (obj, "score");
 
-	if (cur != NULL) {
-		rspamd_fprintf (stdout, "(%.2f)", ucl_object_todouble (cur));
+	if (val != NULL) {
+		rspamd_fprintf (stdout, "(%.2f)", ucl_object_todouble (val));
 	}
-	cur = ucl_object_find_key (obj, "options");
-	if (cur != NULL && cur->type == UCL_ARRAY) {
-		it = cur->value.av;
+	val = ucl_object_find_key (obj, "options");
+	if (val != NULL && val->type == UCL_ARRAY) {
 		rspamd_fprintf (stdout, "[");
-		while (it) {
-			if (it->next) {
-				rspamd_fprintf (stdout, "%s, ", ucl_object_tostring (it));
+
+		while ((cur = ucl_iterate_object (val, &it, TRUE)) != NULL) {
+			if (first) {
+				rspamd_fprintf (stdout, "%s", ucl_object_tostring (cur));
+				first = FALSE;
 			}
 			else {
-				rspamd_fprintf (stdout, "%s", ucl_object_tostring (it));
+				rspamd_fprintf (stdout, ", %s", ucl_object_tostring (cur));
 			}
-			it = it->next;
 		}
 		rspamd_fprintf (stdout, "]");
 	}

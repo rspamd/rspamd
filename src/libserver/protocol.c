@@ -517,7 +517,7 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 		elt = ucl_object_frombool (url->is_phished);
 		ucl_object_insert_key (obj, elt, "phished", 0, false);
 	}
-	DL_APPEND (cb->top->value.av, obj);
+	ucl_array_append (cb->top, obj);
 
 	if (cb->task->cfg->log_urls) {
 		msg_info ("<%s> URL: %s - %s: %s",
@@ -554,7 +554,7 @@ emails_protocol_cb (gpointer key, gpointer value, gpointer ud)
 	ucl_object_t *obj;
 
 	obj = ucl_object_fromlstring (url->user, url->userlen + url->hostlen + 1);
-	DL_APPEND (cb->top->value.av, obj);
+	ucl_array_append (cb->top, obj);
 
 	return FALSE;
 }
@@ -624,7 +624,7 @@ rspamd_str_list_ucl (GList *str_list)
 	cur = str_list;
 	while (cur) {
 		obj = ucl_object_fromstring (cur->data);
-		DL_APPEND (top->value.av, obj);
+		ucl_array_append (top, obj);
 		cur = g_list_next (cur);
 	}
 
