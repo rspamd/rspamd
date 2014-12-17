@@ -30,12 +30,13 @@ struct mime_text_part {
 	GByteArray *orig;
 	GByteArray *content;
 	GNode *html_nodes;
-	GList *urls_offset;                                         /**< list of offsets of urls						*/
+	GList *urls_offset;	/**< list of offsets of urls						*/
 	rspamd_fuzzy_t *fuzzy;
 	rspamd_fuzzy_t *double_fuzzy;
 	GMimeObject *parent;
 	GUnicodeScript script;
 	rspamd_fstring_t *diff_str;
+	GArray *words;
 };
 
 struct received_header {
