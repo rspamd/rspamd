@@ -10,3 +10,6 @@
 [submodule "doc/doxydown"]
 	path = doc/doxydown
 	url = https://github.com/vstakhov/doxydown.git
+[submodule "contrib/snowball"]
+	path = contrib/snowball
+	url = https://github.com/vstakhov/snowball

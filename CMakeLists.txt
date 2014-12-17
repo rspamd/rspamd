@@ -849,6 +849,7 @@ ADD_DEFINITIONS(-DHAVE_CONFIG_H)
 ADD_SUBDIRECTORY(contrib/xxhash)
 ADD_SUBDIRECTORY(contrib/http-parser)
 ADD_SUBDIRECTORY(contrib/libottery)
+ADD_SUBDIRECTORY(contrib/snowball)
 ADD_SUBDIRECTORY(src)
 
 ADD_SUBDIRECTORY(test)
