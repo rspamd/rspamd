@@ -25,7 +25,7 @@
 #include "fstring.h"
 #include "siphash.h"
 
-#define SHINGLES_WINDOW 10
+#define SHINGLES_WINDOW 3
 
 static void
 rspamd_shingles_update_row (rspamd_fstring_t *in, struct siphash *h)
@@ -84,6 +84,7 @@ rspamd_shingles_generate (GArray *input,
 		g_checksum_reset (cksum);
 		cur_key = out_key;
 		out_key += 16;
+		memset (&h[i], 0, sizeof (h[0]));
 		sip24_init (&h[i], &keys[i]);
 	}
 
@@ -96,15 +97,17 @@ rspamd_shingles_generate (GArray *input,
 				rspamd_shingles_update_row (&g_array_index (input,
 						rspamd_fstring_t, j), h);
 			}
+			beg++;
 
 			/* Now we need to create a new row here */
 			for (j = 0; j < RSPAMD_SHINGLE_SIZE; j ++) {
 				guint64 val;
 
-				val = sip24_final (&h[i]);
+				val = sip24_final (&h[j]);
 				/* Reinit siphash state */
-				sip24_init (&h[i], &keys[i]);
-				g_array_append_val (hashes[i], val);
+				memset (&h[j], 0, sizeof (h[0]));
+				sip24_init (&h[j], &keys[j]);
+				g_array_append_val (hashes[j], val);
 			}
 		}
 	}
@@ -148,5 +151,5 @@ gdouble rspamd_shingles_compare (const struct rspamd_shingle *a,
 		}
 	}
 
-	return (gdouble)common / 84.0;
+	return (gdouble)common / (gdouble)RSPAMD_SHINGLE_SIZE;
 }

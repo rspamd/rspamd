@@ -26,7 +26,7 @@
 #include "config.h"
 #include "mem_pool.h"
 
-#define RSPAMD_SHINGLE_SIZE 84
+#define RSPAMD_SHINGLE_SIZE 23
 
 struct rspamd_shingle {
 	guint64 hashes[RSPAMD_SHINGLE_SIZE];
