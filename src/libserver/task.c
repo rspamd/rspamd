@@ -226,6 +226,7 @@ rspamd_task_free (struct rspamd_task *task, gboolean is_soft)
 {
 	GList *part;
 	struct mime_part *p;
+	struct mime_text_part *tp;
 
 	if (task) {
 		debug_task ("free pointer %p", task);
@@ -236,6 +237,15 @@ rspamd_task_free (struct rspamd_task *task, gboolean is_soft)
 			g_list_free_1 (part);
 		}
 		if (task->text_parts) {
+			part = task->text_parts;
+			while (part) {
+				tp = (struct mime_text_part *)part->data;
+				if (tp->words) {
+					g_array_free (tp->words, TRUE);
+				}
+				part = g_list_next (part);
+			}
+
 			g_list_free (task->text_parts);
 		}
 		if (task->images) {

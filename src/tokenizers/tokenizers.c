@@ -31,7 +31,7 @@
 #include "tokenizers.h"
 
 struct tokenizer tokenizers[] = {
-	{"osb-text", osb_tokenize_text, get_next_word},
+	{"osb-text", osb_tokenize_text, rspamd_tokenizer_get_word},
 };
 
 const int primes[] = {
@@ -104,7 +104,7 @@ token_node_compare_func (gconstpointer a, gconstpointer b)
 
 /* Get next word from specified f_str_t buf */
 gchar *
-get_next_word (rspamd_fstring_t * buf, rspamd_fstring_t * token, GList **exceptions)
+rspamd_tokenizer_get_word (rspamd_fstring_t * buf, rspamd_fstring_t * token, GList **exceptions)
 {
 	gsize remain, pos;
 	guchar *p;

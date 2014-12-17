@@ -30,6 +30,8 @@
 #include "html.h"
 #include "images.h"
 #include "utlist.h"
+#include "tokenizers/tokenizers.h"
+
 #include <iconv.h>
 
 #define RECURSION_LIMIT 30
@@ -1033,6 +1035,8 @@ process_text_part (struct rspamd_task *task,
 {
 	struct mime_text_part *text_part;
 	const gchar *cd;
+	gchar *pos;
+	rspamd_fstring_t token, buf;
 
 	/* Skip attachements */
 #ifndef GMIME24
@@ -1056,7 +1060,6 @@ process_text_part (struct rspamd_task *task,
 
 	if (g_mime_content_type_is_type (type, "text",
 		"html") || g_mime_content_type_is_type (type, "text", "xhtml")) {
-		debug_task ("got urls from text/html part");
 
 		text_part =
 			rspamd_mempool_alloc0 (task->task_pool,
@@ -1097,7 +1100,6 @@ process_text_part (struct rspamd_task *task,
 		task->text_parts = g_list_prepend (task->text_parts, text_part);
 	}
 	else if (g_mime_content_type_is_type (type, "text", "*")) {
-		debug_task ("got urls from text/plain part");
 
 		text_part =
 			rspamd_mempool_alloc0 (task->task_pool,
@@ -1119,6 +1121,20 @@ process_text_part (struct rspamd_task *task,
 		url_parse_text (task->task_pool, task, text_part, FALSE);
 		rspamd_fuzzy_from_text_part (text_part, task->task_pool, task->cfg->max_diff);
 		task->text_parts = g_list_prepend (task->text_parts, text_part);
+	}
+	else {
+		return;
+	}
+
+	/* Post process part */
+	buf.begin = text_part->content->data;
+	buf.len = text_part->content->len;
+	buf.size = buf.len;
+
+	text_part->words = g_array_new (FALSE, FALSE, sizeof (rspamd_fstring_t));
+	while ((pos = rspamd_tokenizer_get_word (&buf,
+			&token, &text_part->urls_offset)) != NULL) {
+		g_array_append_val (text_part->words, token);
 	}
 }
 

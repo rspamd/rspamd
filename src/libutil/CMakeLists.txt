@@ -14,6 +14,7 @@ SET(LIBRSPAMDUTILSRC
 								printf.c
 								radix.c
 								rrd.c
+								shingles.c
 								trie.c
 								upstream.c
 								util.c)
@@ -30,6 +31,7 @@ TARGET_LINK_LIBRARIES(rspamd-util ottery)
 TARGET_LINK_LIBRARIES(rspamd-util rspamd-http-parser)
 TARGET_LINK_LIBRARIES(rspamd-util event)
 TARGET_LINK_LIBRARIES(rspamd-util xxhash)
+TARGET_LINK_LIBRARIES(rspamd-util siphash)
 TARGET_LINK_LIBRARIES(rspamd-util rdns)
 IF(OPENSSL_FOUND)
 	TARGET_LINK_LIBRARIES(rspamd-util ${OPENSSL_LIBRARIES})

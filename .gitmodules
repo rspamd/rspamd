@@ -13,3 +13,6 @@
 [submodule "contrib/snowball"]
 	path = contrib/snowball
 	url = https://github.com/vstakhov/snowball
+[submodule "contrib/siphash"]
+	path = contrib/siphash
+	url = https://github.com/vstakhov/siphash

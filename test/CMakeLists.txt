@@ -8,6 +8,7 @@ SET(TESTSRC		rspamd_expression_test.c
 				rspamd_dkim_test.c
 				rspamd_rrd_test.c
 				rspamd_radix_test.c
+				rspamd_shingles_test.c
 				rspamd_upstream_test.c
 				rspamd_test_suite.c)
 
