@@ -21,6 +21,7 @@ IF(NOT RSPAMD_USER)
 ENDIF(NOT RSPAMD_USER)
 
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6.0 FATAL_ERROR)
+SET_PROPERTY(GLOBAL PROPERTY ALLOW_DUPLICATE_CUSTOM_TARGETS 1)
 
 ############################# OPTIONS SECTION #############################################
 
@@ -939,3 +940,6 @@ ADD_CUSTOM_TARGET(dist ${CMAKE_SOURCE_DIR}/dist.sh
 	"${CMAKE_BINARY_DIR}/rspamd-${RSPAMD_VERSION}.tar.xz"
 	COMMENT "Create source distribution"
 	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+ADD_CUSTOM_TARGET(check DEPENDS rspamd-test)
+ADD_CUSTOM_TARGET(run-test DEPENDS check COMMAND test/rspamd-test)
