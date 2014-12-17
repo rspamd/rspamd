@@ -14,6 +14,7 @@ SET(LIBRSPAMDUTILSRC
 								printf.c
 								radix.c
 								rrd.c
+								shingles.c
 								trie.c
 								upstream.c
 								util.c)
