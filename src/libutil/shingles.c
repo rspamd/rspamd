@@ -54,7 +54,13 @@ rspamd_shingles_generate (GArray *input,
 	gint i, j, beg = 0;
 	gsize shalen;
 
-	res = rspamd_mempool_alloc (pool, sizeof (*res));
+	if (pool != NULL) {
+		res = rspamd_mempool_alloc (pool, sizeof (*res));
+	}
+	else {
+		res = g_malloc (sizeof (*res));
+	}
+
 	cksum = g_checksum_new (G_CHECKSUM_SHA256);
 	cur_key = key;
 	out_key = (guchar *)&keys[0];
