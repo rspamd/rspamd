@@ -675,6 +675,96 @@ legacy_fuzzy_cmd (struct fuzzy_session *session)
  * MDB Interface
  */
 
+static void
+rspamd_fuzzy_process_command (struct fuzzy_session *session)
+{
+	struct rspamd_fuzzy_cmd *cmd = &session->cmd.current;
+	struct rspamd_fuzzy_reply rep;
+	MDB_dbi db;
+	MDB_txn *txn;
+	MDB_val k, v;
+	guint64 value;
+	int rc, match = 0, i;
+
+	if (cmd->cmd == FUZZY_CHECK) {
+		mdb_txn_begin (session->ctx->env, NULL, MDB_RDONLY, &txn);
+		if ((rc = mdb_dbi_open (txn, NULL, MDB_INTEGERKEY, &db)) != 0) {
+			msg_err ("cannot open db: %s", mdb_strerror (rc));
+		}
+		else {
+			for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
+				k.mv_data = &cmd->sh.hashes[i];
+				k.mv_size = sizeof (cmd->sh.hashes[0]);
+				if (mdb_get (txn, db, &k, &v) == 0) {
+					match ++;
+				}
+			}
+
+			rep.code = 0;
+			rep.prob = (gdouble)match / (gdouble)RSPAMD_SHINGLE_SIZE;
+			if (sendto (session->fd, &rep, sizeof (rep), 0,
+					&session->addr.addr.sa, session->addr.slen) == -1) {
+				msg_err ("error while writing reply: %s", strerror (errno));
+			}
+		}
+		mdb_dbi_close (session->ctx->env, db);
+		mdb_txn_abort (txn);
+	}
+	else {
+		mdb_txn_begin (session->ctx->env, NULL, 0, &txn);
+		if ((rc = mdb_dbi_open (txn, NULL, MDB_INTEGERKEY, &db)) != 0) {
+			msg_err ("cannot open db: %s", mdb_strerror (rc));
+		}
+		else {
+			if (cmd->cmd == FUZZY_WRITE) {
+				for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
+					k.mv_data = &cmd->sh.hashes[i];
+					k.mv_size = sizeof (cmd->sh.hashes[0]);
+					if (mdb_get (txn, db, &k, &v) == 0) {
+						value = *(guint64 *)&v;
+						++value;
+						v.mv_data = &value;
+						v.mv_size = sizeof (value);
+						mdb_put (txn, db, &k, &v, 0);
+					}
+					else {
+						value = 1;
+						v.mv_data = &value;
+						v.mv_size = sizeof (value);
+						mdb_put (txn, db, &k, &v, 0);
+					}
+				}
+				rep.code = 0;
+				rep.prob = value;
+				if (sendto (session->fd, &rep, sizeof (rep), 0,
+						&session->addr.addr.sa, session->addr.slen) == -1) {
+					msg_err ("error while writing reply: %s", strerror (errno));
+				}
+			}
+			else {
+				/* Delete command */
+				for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
+					k.mv_data = &cmd->sh.hashes[i];
+					k.mv_size = sizeof (cmd->sh.hashes[0]);
+					if (mdb_get (txn, db, &k, &v) == 0) {
+						value = *(guint64 *)&v;
+						mdb_del (txn, db, &k, &v);
+					}
+				}
+				rep.code = 0;
+				rep.prob = value;
+				if (sendto (session->fd, &rep, sizeof (rep), 0,
+						&session->addr.addr.sa, session->addr.slen) == -1) {
+					msg_err ("error while writing reply: %s", strerror (errno));
+				}
+
+			}
+		}
+		mdb_dbi_close (session->ctx->env, db);
+		mdb_txn_commit (txn);
+	}
+}
+
 static gboolean
 rspamd_fuzzy_storage_open_db (struct rspamd_fuzzy_storage_ctx *ctx, GError **err)
 {
@@ -714,6 +804,7 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 	struct rspamd_fuzzy_storage_ctx *ctx;
 	struct fuzzy_session session;
 	ssize_t r;
+	struct rspamd_fuzzy_reply rep;
 	struct {
 		u_char cmd;
 		guint32 blocksize;
@@ -763,10 +854,15 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 			memcpy (&session.cmd.current, buf, sizeof (session.cmd.current));
 			if (session.cmd.current.size == RSPAMD_SHINGLE_SIZE &&
 				session.cmd.current.version == RSPAMD_FUZZY_VERSION) {
-				/* XXX: Process command */
+				rspamd_fuzzy_process_command (&session);
 			}
 			else {
-				/* XXX: Reply error */
+				rep.code = EINVAL;
+				rep.prob = 0.0;
+				if (sendto (session.fd, &rep, sizeof (rep), 0,
+						&session.addr.addr.sa, session.addr.slen) == -1) {
+					msg_err ("error while writing reply: %s", strerror (errno));
+				}
 			}
 		}
 		else {

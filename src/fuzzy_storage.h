@@ -28,4 +28,9 @@ struct rspamd_fuzzy_cmd {
 	struct rspamd_shingle sh;
 };
 
+struct rspamd_fuzzy_reply {
+	guint32 code;
+	gdouble prob;
+};
+
 #endif
