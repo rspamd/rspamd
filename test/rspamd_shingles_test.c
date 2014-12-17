@@ -61,15 +61,17 @@ generate_fuzzy_words (gsize cnt, gsize max_len)
 static void
 permute_vector (GArray *in, gdouble prob)
 {
-	gsize i;
+	gsize i, total = 0;
 	rspamd_fstring_t *w;
 
 	for (i = 0; i < in->len; i ++) {
 		if (ottery_rand_unsigned () <= G_MAXUINT * prob) {
 			w = &g_array_index (in, rspamd_fstring_t, i);
 			generate_random_string (w->begin, w->len);
+			total ++;
 		}
 	}
+	msg_debug ("generated %z permutations of %ud words", total, in->len);
 }
 
 static void
@@ -93,7 +95,7 @@ test_case (gsize cnt, gsize max_len, gdouble perm_factor)
 	guchar key[16];
 
 	ottery_rand_bytes (key, sizeof (key));
-	input = generate_fuzzy_words (5, 100);
+	input = generate_fuzzy_words (cnt, max_len);
 	sgl = rspamd_shingles_generate (input, key, NULL,
 			rspamd_shingles_default_filter, NULL);
 	permute_vector (input, perm_factor);
@@ -102,7 +104,8 @@ test_case (gsize cnt, gsize max_len, gdouble perm_factor)
 
 	res = rspamd_shingles_compare (sgl, sgl_permuted);
 
-	g_assert_cmpfloat (fabs (res - perm_factor), <=, 0.15);
+	msg_debug ("percentage of common shingles: %.3f", res);
+	g_assert_cmpfloat (fabs ((1.0 - res) - sqrt (perm_factor)), <=, 0.20);
 
 	free_fuzzy_words (input);
 	g_free (sgl);
@@ -112,9 +115,10 @@ test_case (gsize cnt, gsize max_len, gdouble perm_factor)
 void
 rspamd_shingles_test_func (void)
 {
-	test_case (5, 100, 0.5);
-	test_case (500, 100, 0.5);
-	test_case (5000, 200, 0.1);
+	//test_case (5, 100, 0.5);
+	test_case (200, 10, 0.1);
+	test_case (500, 100, 0.01);
+	test_case (5000, 200, 0.01);
 	test_case (5000, 100, 0);
 	test_case (5000, 100, 1.0);
 }
