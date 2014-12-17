@@ -38,6 +38,7 @@
 #include "bloom.h"
 #include "map.h"
 #include "fuzzy_storage.h"
+
 #include <lmdb.h>
 
 /* This number is used as limit while comparing two fuzzy hashes, this value can vary from 0 to 100 */
@@ -115,7 +116,10 @@ struct rspamd_legacy_fuzzy_node {
 
 struct fuzzy_session {
 	struct rspamd_worker *worker;
-	struct legacy_fuzzy_cmd cmd;
+	union {
+		struct legacy_fuzzy_cmd legacy;
+		struct rspamd_fuzzy_cmd current;
+	} cmd;
 	gint fd;
 	u_char *pos;
 	guint64 time;
@@ -587,9 +591,9 @@ check_fuzzy_client (struct fuzzy_session *session)
 	return TRUE;
 }
 
-#define LEGACY_CMD_PROCESS(x)                                                         \
+#define LEGACY_CMD_PROCESS(x)                                                  \
 	do {                                                                       \
-		if (legacy_ ## x ## _cmd (&session->cmd, session->time,           \
+		if (legacy_ ## x ## _cmd (&session->cmd.legacy, session->time,         \
 			session->worker->ctx)) {                                           \
 			if (sendto (session->fd, "OK" CRLF, sizeof ("OK" CRLF) - 1, 0,     \
 					&session->addr.addr.sa, session->addr.slen) == -1) {       \
@@ -610,9 +614,9 @@ legacy_fuzzy_cmd (struct fuzzy_session *session)
 	gint r, flag = 0;
 	gchar buf[64];
 
-	switch (session->cmd.cmd) {
+	switch (session->cmd.legacy.cmd) {
 	case FUZZY_CHECK:
-		r = legacy_check_cmd (&session->cmd,
+		r = legacy_check_cmd (&session->cmd.legacy,
 				&flag,
 				session->time,
 				session->worker->ctx);
@@ -707,6 +711,7 @@ static void
 accept_fuzzy_socket (gint fd, short what, void *arg)
 {
 	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
+	struct rspamd_fuzzy_storage_ctx *ctx;
 	struct fuzzy_session session;
 	ssize_t r;
 	struct {
@@ -714,20 +719,21 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 		guint32 blocksize;
 		gint32 value;
 		u_char hash[FUZZY_HASHLEN];
-	}                               legacy_cmd;
+	} legacy_cmd;
+	guint8 buf[2048];
 
-
+	ctx = worker->ctx;
 	session.worker = worker;
 	session.fd = fd;
-	session.pos = (u_char *) &session.cmd;
+	session.pos = buf;
 	session.addr.slen = sizeof (session.addr.addr);
 	session.ctx = worker->ctx;
 	session.time = (guint64)time (NULL);
 
 	/* Got some data */
 	if (what == EV_READ) {
-		while ((r = recvfrom (fd, session.pos, sizeof (struct legacy_fuzzy_cmd),
-			MSG_WAITALL, &session.addr.addr.sa, &session.addr.slen)) == -1) {
+		while ((r = recvfrom (fd, session.pos, sizeof (buf), 0,
+			&session.addr.addr.sa, &session.addr.slen)) == -1) {
 			if (errno == EINTR) {
 				continue;
 			}
@@ -737,26 +743,35 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 			return;
 		}
 		session.addr.af = session.addr.addr.sa.sa_family;
-		if (r == sizeof (struct legacy_fuzzy_cmd)) {
+		if (r == sizeof (struct legacy_fuzzy_cmd) && ctx->legacy) {
 			/* Assume that the whole command was read */
 			legacy_fuzzy_cmd (&session);
 		}
-		else if (r == sizeof (legacy_cmd)) {
+		else if (r == sizeof (legacy_cmd) && ctx->legacy) {
 			/* Process requests from old rspamd */
 			memcpy (&legacy_cmd, session.pos, sizeof (legacy_cmd));
-			session.cmd.cmd = legacy_cmd.cmd;
-			session.cmd.blocksize = legacy_cmd.blocksize;
-			session.cmd.value = legacy_cmd.value;
-			session.cmd.flag = 0;
-			memcpy (session.cmd.hash, legacy_cmd.hash,
+			session.cmd.legacy.cmd = legacy_cmd.cmd;
+			session.cmd.legacy.blocksize = legacy_cmd.blocksize;
+			session.cmd.legacy.value = legacy_cmd.value;
+			session.cmd.legacy.flag = 0;
+			memcpy (session.cmd.legacy.hash, legacy_cmd.hash,
 				sizeof (legacy_cmd.hash));
 			legacy_fuzzy_cmd (&session);
 		}
+		else if (r == sizeof (struct rspamd_fuzzy_cmd) && !ctx->legacy) {
+			/* We have the second version of request */
+			memcpy (&session.cmd.current, buf, sizeof (session.cmd.current));
+			if (session.cmd.current.size == RSPAMD_SHINGLE_SIZE &&
+				session.cmd.current.version == RSPAMD_FUZZY_VERSION) {
+				/* XXX: Process command */
+			}
+			else {
+				/* XXX: Reply error */
+			}
+		}
 		else {
-			msg_err ("got incomplete data while reading from socket: %d, %s",
-				errno,
-				strerror (errno));
-			return;
+			/* Discard input */
+
 		}
 	}
 }
