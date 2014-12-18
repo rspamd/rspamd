@@ -24,6 +24,7 @@
 #include "shingles.h"
 #include "fstring.h"
 #include "siphash.h"
+#include "blake2.h"
 
 #define SHINGLES_WINDOW 3
 
@@ -48,11 +49,11 @@ rspamd_shingles_generate (GArray *input,
 	GArray *hashes[RSPAMD_SHINGLE_SIZE];
 	struct sipkey keys[RSPAMD_SHINGLE_SIZE];
 	struct siphash h[RSPAMD_SHINGLE_SIZE];
-	guchar shabuf[32], *out_key;
+	guchar shabuf[BLAKE2B_OUTBYTES], *out_key;
 	const guchar *cur_key;
-	GChecksum *cksum;
+	blake2b_state bs;
 	gint i, j, beg = 0;
-	gsize shalen;
+	guint8 shalen;
 
 	if (pool != NULL) {
 		res = rspamd_mempool_alloc (pool, sizeof (*res));
@@ -61,7 +62,7 @@ rspamd_shingles_generate (GArray *input,
 		res = g_malloc (sizeof (*res));
 	}
 
-	cksum = g_checksum_new (G_CHECKSUM_SHA256);
+	blake2b_init (&bs, BLAKE2B_OUTBYTES);
 	cur_key = key;
 	out_key = (guchar *)&keys[0];
 
@@ -75,20 +76,18 @@ rspamd_shingles_generate (GArray *input,
 		 * xor left and right parts of sha256 to get a single 16 bytes SIP key.
 		 */
 		shalen = sizeof (shabuf);
-		g_checksum_update (cksum, cur_key, 16);
-		g_checksum_get_digest (cksum, shabuf, &shalen);
+		blake2b_update (&bs, cur_key, 16);
+		blake2b_final (&bs, shabuf, shalen);
 
 		for (j = 0; j < 16; j ++) {
 			out_key[j] = shabuf[j] ^ shabuf[sizeof(shabuf) - j - 1];
 		}
-		g_checksum_reset (cksum);
+		blake2b_init (&bs, BLAKE2B_OUTBYTES);
 		cur_key = out_key;
 		out_key += 16;
 		memset (&h[i], 0, sizeof (h[0]));
 		sip24_init (&h[i], &keys[i]);
 	}
-
-	g_checksum_free (cksum);
 
 	/* Now parse input words into a vector of hashes using rolling window */
 	for (i = 0; i < (gint)input->len; i ++) {
