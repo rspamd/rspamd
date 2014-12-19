@@ -65,13 +65,24 @@ static struct rspamd_fuzzy_stmts {
 {
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_CREATE,
-		.sql = "",
+		.sql = "CREATE TABLE digests("
+				"id INTEGER PRIMARY KEY,"
+				"flag INTEGER NOT NULL,"
+				"digest TEXT NOT NULL,"
+				"value INTEGER);"
+				""
+				"CREATE TABLE shingles("
+				"value INTEGER NOT NULL,"
+				"number INTEGER NOT NULL,"
+				"digest_id INTEGER REFERENCES digests(id) ON DELETE CASCADE"
+				"ON UPDATE CASCADE);",
 		.args = "",
 		.stmt = NULL
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_INDEX,
-		.sql = "",
+		.sql = "CREATE UNIQUE INDEX d ON digests(digest, flag);"
+				"CREATE UNIQUE INDEX s ON shingles(value, number);",
 		.args = "",
 		.stmt = NULL
 	},
@@ -393,6 +404,7 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 				close (fd);
 				return NULL;
 			}
+			msg_info ("Old database converted");
 		}
 		close (fd);
 	}
