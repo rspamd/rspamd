@@ -40,12 +40,15 @@ struct rspamd_legacy_fuzzy_node {
 
 struct rspamd_fuzzy_backend {
 	sqlite3 *db;
-	const char *path;
+	char *path;
 };
 
 enum rspamd_fuzzy_statement_idx {
 	RSPAMD_FUZZY_BACKEND_CREATE,
 	RSPAMD_FUZZY_BACKEND_INDEX,
+	RSPAMD_FUZZY_BACKEND_TRANSACTION_START,
+	RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT,
+	RSPAMD_FUZZY_BACKEND_TRANSACTION_ROLLBACK,
 	RSPAMD_FUZZY_BACKEND_INSERT,
 	RSPAMD_FUZZY_BACKEND_INSERT_SHINGLE,
 	RSPAMD_FUZZY_BACKEND_CHECK,
@@ -69,6 +72,24 @@ static struct rspamd_fuzzy_stmts {
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_INDEX,
 		.sql = "",
+		.args = "",
+		.stmt = NULL
+	},
+	{
+		.idx = RSPAMD_FUZZY_BACKEND_TRANSACTION_START,
+		.sql = "BEGIN TRANSACTION",
+		.args = "",
+		.stmt = NULL
+	},
+	{
+		.idx = RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT,
+		.sql = "COMMIT",
+		.args = "",
+		.stmt = NULL
+	},
+	{
+		.idx = RSPAMD_FUZZY_BACKEND_TRANSACTION_ROLLBACK,
+		.sql = "ROLLBACK",
 		.args = "",
 		.stmt = NULL
 	},
@@ -182,13 +203,14 @@ rspamd_fuzzy_backend_close_stmts (struct rspamd_fuzzy_backend *bk)
 }
 
 static gboolean
-rspamd_fuzzy_backend_create_index (struct rspamd_fuzzy_backend *bk, GError **err)
+rspamd_fuzzy_backend_run_simple (int idx, struct rspamd_fuzzy_backend *bk,
+		GError **err)
 {
-	if (rspamd_fuzzy_backend_run_stmt (RSPAMD_FUZZY_BACKEND_INDEX)
+	if (rspamd_fuzzy_backend_run_stmt (idx)
 			!= SQLITE_OK) {
 		g_set_error (err, rspamd_fuzzy_backend_quark (),
-				-1, "Cannot execute index sql %s: %s",
-				prepared_stmts[RSPAMD_FUZZY_BACKEND_INDEX].sql,
+				-1, "Cannot execute sql %s: %s",
+				prepared_stmts[idx].sql,
 				sqlite3_errmsg (bk->db));
 		return FALSE;
 	}
@@ -236,8 +258,11 @@ rspamd_fuzzy_backend_create_db (const gchar *path, gboolean add_index,
 	}
 
 	if (add_index) {
-		rspamd_fuzzy_backend_create_index (bk, NULL);
+		rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_INDEX, bk, NULL);
 	}
+
+	rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_START,
+			bk, NULL);
 
 	return bk;
 }
@@ -262,6 +287,9 @@ rspamd_fuzzy_backend_open_db (const gchar *path, GError **err)
 	bk->path = g_strdup (path);
 	bk = g_slice_alloc (sizeof (*bk));
 	bk->db = sqlite;
+
+	rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_START,
+				bk, NULL);
 
 	return bk;
 }
@@ -303,6 +331,8 @@ rspamd_fuzzy_backend_convert (const gchar *path, int fd, GError **err)
 	end = map + st.st_size - off;
 	p = map;
 
+	rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_START,
+				nbackend, NULL);
 	while (p < end) {
 		n = (struct rspamd_legacy_fuzzy_node *)p;
 		/* Convert node */
@@ -311,9 +341,11 @@ rspamd_fuzzy_backend_convert (const gchar *path, int fd, GError **err)
 	}
 
 	munmap (map, st.st_size - off);
-	rspamd_fuzzy_backend_create_index (nbackend, NULL);
+	rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT,
+					nbackend, NULL);
+	rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_INDEX,
+			nbackend, NULL);
 	rspamd_fuzzy_backend_close (nbackend);
-
 	rename (tmpdb, path);
 
 	return TRUE;
@@ -405,12 +437,33 @@ rspamd_fuzzy_backend_del (struct rspamd_fuzzy_backend *backend,
 gboolean
 rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend)
 {
+	gboolean ret = FALSE;
 
+	ret = rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT,
+			backend, NULL);
+
+	if (ret) {
+		ret = rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_START,
+			backend, NULL);
+	}
+
+	return ret;
 }
 
 
 void
 rspamd_fuzzy_backend_close (struct rspamd_fuzzy_backend *backend)
 {
+	if (backend != NULL) {
+		if (backend->db != NULL) {
+			rspamd_fuzzy_backend_close_stmts (backend);
+			sqlite3_close_v2 (backend->db);
+		}
 
+		if (backend->path != NULL) {
+			g_free (backend->path);
+		}
+
+		g_slice_free1 (sizeof (*backend), backend);
+	}
 }
