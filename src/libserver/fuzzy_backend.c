@@ -44,7 +44,7 @@ struct rspamd_fuzzy_backend {
 };
 
 enum rspamd_fuzzy_statement_idx {
-	RSPAMD_FUZZY_BACKEND_CREATE,
+	RSPAMD_FUZZY_BACKEND_CREATE = 0,
 	RSPAMD_FUZZY_BACKEND_INDEX,
 	RSPAMD_FUZZY_BACKEND_TRANSACTION_START,
 	RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT,
@@ -82,46 +82,47 @@ static struct rspamd_fuzzy_stmts {
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_INDEX,
-		.sql = "CREATE UNIQUE INDEX d ON digests(digest, flag);"
-				"CREATE UNIQUE INDEX s ON shingles(value, number);",
+		.sql = "CREATE UNIQUE INDEX IF NOT EXISTS d ON digests(digest, flag);"
+				"CREATE UNIQUE INDEX IF NOT EXISTS s ON shingles(value, number);",
 		.args = "",
 		.stmt = NULL
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_TRANSACTION_START,
-		.sql = "BEGIN TRANSACTION",
+		.sql = "BEGIN TRANSACTION;",
 		.args = "",
 		.stmt = NULL
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT,
-		.sql = "COMMIT",
+		.sql = "COMMIT;",
 		.args = "",
 		.stmt = NULL
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_TRANSACTION_ROLLBACK,
-		.sql = "ROLLBACK",
+		.sql = "ROLLBACK;",
 		.args = "",
 		.stmt = NULL
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_INSERT,
 		.sql = "INSERT INTO digests(flag, digest, value, time) VALUES"
-				"(?1, ?2, ?3, ?4)",
-		.args = "ITII",
+				"(?1, ?2, ?3, ?4);",
+		.args = "STII",
 		.stmt = NULL
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_INSERT_SHINGLE,
-		.sql = "",
-		.args = "",
+		.sql = "INSERT INTO shingles(value, number, digest_id) "
+				"VALUES (?1, ?2, ?3);",
+		.args = "III",
 		.stmt = NULL
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_CHECK,
-		.sql = "",
-		.args = "",
+		.sql = "SELECT * FROM digests WHERE digest==?1 AND flag==?2;",
+		.args = "TI",
 		.stmt = NULL
 	},
 	{
@@ -153,7 +154,7 @@ rspamd_fuzzy_backend_prepare_stmts (struct rspamd_fuzzy_backend *bk, GError **er
 		if (sqlite3_prepare_v2 (bk->db, prepared_stmts[i].sql, -1,
 				&prepared_stmts[i].stmt, NULL) != SQLITE_OK) {
 			g_set_error (err, rspamd_fuzzy_backend_quark (),
-				-1, "Cannot open init sql %s: %s",
+				-1, "Cannot initialize prepared sql %s: %s",
 				prepared_stmts[i].sql, sqlite3_errmsg (bk->db));
 
 			return FALSE;
@@ -189,7 +190,10 @@ rspamd_fuzzy_backend_run_stmt (int idx, ...)
 					SQLITE_STATIC);
 			break;
 		case 'I':
-			sqlite3_bind_int64 (stmt, i + 1, va_arg (ap, int64_t));
+			sqlite3_bind_int64 (stmt, i + 1, va_arg (ap, gint64));
+			break;
+		case 'S':
+			sqlite3_bind_int (stmt, i + 1, va_arg (ap, gint));
 			break;
 		}
 	}
@@ -337,6 +341,7 @@ rspamd_fuzzy_backend_convert (const gchar *path, int fd, GError **err)
 		g_set_error (err, rspamd_fuzzy_backend_quark (),
 				errno, "Cannot mmap file %s: %s",
 				path, strerror (errno));
+		rspamd_fuzzy_backend_close (nbackend);
 
 		return FALSE;
 	}
@@ -348,8 +353,14 @@ rspamd_fuzzy_backend_convert (const gchar *path, int fd, GError **err)
 				nbackend, NULL);
 	while (p < end) {
 		n = (struct rspamd_legacy_fuzzy_node *)p;
-		/* Convert node */
-
+		/* Convert node flag, digest, value, time  */
+		if (rspamd_fuzzy_backend_run_stmt (RSPAMD_FUZZY_BACKEND_INSERT,
+				(gint)n->flag, n->h.hash_pipe,
+				(gint64)n->value, n->time) != SQLITE_OK) {
+			msg_warn ("Cannot execute init sql %s: %s",
+					prepared_stmts[RSPAMD_FUZZY_BACKEND_CREATE].sql,
+					sqlite3_errmsg (nbackend->db));
+		}
 		p += sizeof (struct rspamd_legacy_fuzzy_node);
 	}
 
