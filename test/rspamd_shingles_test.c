@@ -93,18 +93,22 @@ test_case (gsize cnt, gsize max_len, gdouble perm_factor)
 	struct rspamd_shingle *sgl, *sgl_permuted;
 	gdouble res;
 	guchar key[16];
+	struct timespec ts1, ts2;
 
 	ottery_rand_bytes (key, sizeof (key));
 	input = generate_fuzzy_words (cnt, max_len);
+	clock_gettime (CLOCK_MONOTONIC, &ts1);
 	sgl = rspamd_shingles_generate (input, key, NULL,
 			rspamd_shingles_default_filter, NULL);
+	clock_gettime (CLOCK_MONOTONIC, &ts2);
 	permute_vector (input, perm_factor);
 	sgl_permuted = rspamd_shingles_generate (input, key, NULL,
 			rspamd_shingles_default_filter, NULL);
 
 	res = rspamd_shingles_compare (sgl, sgl_permuted);
 
-	msg_debug ("percentage of common shingles: %.3f", res);
+	msg_debug ("percentage of common shingles: %.3f, generate time: %Hd usec",
+			res, ts_to_usec (&ts2) - ts_to_usec (&ts1));
 	g_assert_cmpfloat (fabs ((1.0 - res) - sqrt (perm_factor)), <=, 0.20);
 
 	free_fuzzy_words (input);
@@ -117,8 +121,8 @@ rspamd_shingles_test_func (void)
 {
 	//test_case (5, 100, 0.5);
 	test_case (200, 10, 0.1);
-	test_case (500, 100, 0.01);
-	test_case (5000, 200, 0.01);
-	test_case (5000, 100, 0);
-	test_case (5000, 100, 1.0);
+	test_case (500, 20, 0.01);
+	test_case (5000, 20, 0.01);
+	test_case (5000, 15, 0);
+	test_case (5000, 30, 1.0);
 }

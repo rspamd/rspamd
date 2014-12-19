@@ -244,6 +244,8 @@ gsize rspamd_strlcpy_tolower (gchar *dst, const gchar *src, gsize siz);
 									   ((dbl) - (int)(dbl)) * 1000 * 1000; \
 } while (0)
 #define tv_to_msec(tv) ((tv)->tv_sec * 1000LLU + (tv)->tv_usec / 1000LLU)
+#define ts_to_usec(ts) ((ts)->tv_sec * 1000000LLU +							\
+	(ts)->tv_nsec / 1000LLU)
 
 /* Compare two emails for building emails tree */
 gint rspamd_emails_cmp (gconstpointer a, gconstpointer b);
