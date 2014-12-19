@@ -69,7 +69,7 @@ rspamd_shingles_generate (GArray *input,
 	/* Init hashes pipes and keys */
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
 		hashes[i] = g_array_sized_new (FALSE, FALSE, sizeof (guint64),
-				SHINGLES_WINDOW * 2);
+				input->len + SHINGLES_WINDOW);
 		/*
 		 * To generate a set of hashes we just apply sha256 to the
 		 * initial key as many times as many hashes are required and
@@ -80,7 +80,7 @@ rspamd_shingles_generate (GArray *input,
 		blake2b_final (&bs, shabuf, shalen);
 
 		for (j = 0; j < 16; j ++) {
-			out_key[j] = shabuf[j] ^ shabuf[sizeof(shabuf) - j - 1];
+			out_key[j] = shabuf[j];
 		}
 		blake2b_init (&bs, BLAKE2B_OUTBYTES);
 		cur_key = out_key;
