@@ -294,8 +294,8 @@ rspamd_fuzzy_backend_open_db (const gchar *path, GError **err)
 	if ((rc = sqlite3_open_v2 (path, &sqlite,
 			SQLITE_OPEN_READWRITE|SQLITE_OPEN_NOMUTEX, NULL)) != SQLITE_OK) {
 		g_set_error (err, rspamd_fuzzy_backend_quark (),
-			rc, "Cannot open sqlite db %s: %s",
-			path, sqlite3_errstr (rc));
+			rc, "Cannot open sqlite db %s: %d",
+			path, rc);
 
 		return NULL;
 	}
