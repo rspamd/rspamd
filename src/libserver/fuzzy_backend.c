@@ -31,6 +31,13 @@
 /* Magic sequence for hashes file */
 #define FUZZY_FILE_MAGIC "rsh"
 
+struct rspamd_legacy_fuzzy_node {
+	gint32 value;
+	gint32 flag;
+	guint64 time;
+	rspamd_fuzzy_t h;
+};
+
 struct rspamd_fuzzy_backend {
 	sqlite3 *db;
 	const char *path;
@@ -40,6 +47,59 @@ static GQuark
 rspamd_fuzzy_backend_quark(void)
 {
 	return g_quark_from_static_string ("fuzzy-storage-backend");
+}
+
+/*
+ * Convert old database to the new format
+ */
+static gboolean
+rspamd_fuzzy_backend_convert (const gchar *path, int fd, GError **err)
+{
+	gchar tmpdb[PATH_MAX];
+	struct rspamd_fuzzy_backend *nbackend;
+	struct stat st;
+	gint off;
+	guint8 *map, *p, *end;
+	struct rspamd_legacy_fuzzy_node *n;
+
+	rspamd_snprintf (tmpdb, sizeof (tmpdb), "%s.converted", path);
+	(void)unlink (tmpdb);
+	nbackend = rspamd_fuzzy_backend_create_db (tmpdb, FALSE, err);
+
+	if (nbackend == NULL) {
+		return FALSE;
+	}
+
+	(void)fstat (fd, &st);
+	(void)lseek (fd, 0, SEEK_SET);
+
+	off = sizeof (FUZZY_FILE_MAGIC) - 1;
+	if ((map = mmap (NULL, st.st_size - off, PROT_READ, MAP_SHARED, fd,
+			off)) == MAP_FAILED) {
+		g_set_error (err, rspamd_fuzzy_backend_quark (),
+				errno, "Cannot mmap file %s: %s",
+				path, strerror (errno));
+
+		return FALSE;
+	}
+
+	end = map + st.st_size - off;
+	p = map;
+
+	while (p < end) {
+		n = (struct rspamd_legacy_fuzzy_node *)p;
+		/* Convert node */
+
+		p += sizeof (struct rspamd_legacy_fuzzy_node);
+	}
+
+	munmap (map, st.st_size - off);
+	rspamd_fuzzy_backend_create_index (nbackend);
+	rspamd_fuzzy_backend_close (nbackend);
+
+	rename (tmpdb, path);
+
+	return TRUE;
 }
 
 struct rspamd_fuzzy_backend*
@@ -80,7 +140,7 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 	if ((r = read (fd, header, sizeof (header))) == sizeof (header)) {
 		if (memcmp (header, FUZZY_FILE_MAGIC, sizeof (header) - 1) == 0) {
 			msg_info ("Trying to convert old fuzzy database");
-			if (!rspamd_fuzzy_backend_convert (fd, err)) {
+			if (!rspamd_fuzzy_backend_convert (path, fd, err)) {
 				close (fd);
 				return NULL;
 			}
@@ -92,7 +152,7 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 	if ((res = rspamd_fuzzy_backend_open_db (path, err)) == NULL) {
 		GError *tmp = NULL;
 
-		if ((res = rspamd_fuzzy_backend_create_db (path, tmp)) == NULL) {
+		if ((res = rspamd_fuzzy_backend_create_db (path, TRUE, &tmp)) == NULL) {
 			g_clear_error (err);
 			g_propagate_error (err, tmp);
 			return NULL;

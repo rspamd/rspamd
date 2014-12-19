@@ -24,7 +24,8 @@ struct legacy_fuzzy_cmd {
 struct rspamd_fuzzy_cmd {
 	guint8 version;
 	guint8 cmd;
-	guint16 shingles_count;
+	guint8 shingles_count;
+	guint8 flag;
 	gchar digest[64];
 };
 
