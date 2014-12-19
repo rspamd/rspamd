@@ -69,7 +69,8 @@ static struct rspamd_fuzzy_stmts {
 				"id INTEGER PRIMARY KEY,"
 				"flag INTEGER NOT NULL,"
 				"digest TEXT NOT NULL,"
-				"value INTEGER);"
+				"value INTEGER,"
+				"time INTEGER);"
 				""
 				"CREATE TABLE shingles("
 				"value INTEGER NOT NULL,"
@@ -106,8 +107,9 @@ static struct rspamd_fuzzy_stmts {
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_INSERT,
-		.sql = "",
-		.args = "",
+		.sql = "INSERT INTO digests(flag, digest, value, time) VALUES"
+				"(?1, ?2, ?3, ?4)",
+		.args = "ITII",
 		.stmt = NULL
 	},
 	{
