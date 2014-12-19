@@ -26,14 +26,81 @@
 #include "fuzzy_backend.h"
 #include "fuzzy_storage.h"
 
+#include <sqlite3.h>
 
-struct rspamd_fuzzy_backend;
+/* Magic sequence for hashes file */
+#define FUZZY_FILE_MAGIC "rsh"
 
-struct
-rspamd_fuzzy_backend* rspamd_fuzzy_backend_open (const gchar *path,
-		GError **err)
+struct rspamd_fuzzy_backend {
+	sqlite3 *db;
+	const char *path;
+};
+
+static GQuark
+rspamd_fuzzy_backend_quark(void)
 {
+	return g_quark_from_static_string ("fuzzy-storage-backend");
+}
 
+struct rspamd_fuzzy_backend*
+rspamd_fuzzy_backend_open (const gchar *path, GError **err)
+{
+	gchar *dir, header[4];
+	gint fd, r;
+	struct rspamd_fuzzy_backend *res;
+
+	/* First of all we check path for existence */
+	dir = g_path_get_dirname (path);
+	if (dir == NULL) {
+		g_set_error (err, rspamd_fuzzy_backend_quark (),
+				errno, "Cannot get directory name for %s: %s", path,
+				strerror (errno));
+		return NULL;
+	}
+
+	if (access (path, W_OK) == -1 && access (dir, W_OK) == -1) {
+		g_set_error (err, rspamd_fuzzy_backend_quark (),
+				errno, "Cannot access directory %s to create database: %s",
+				dir, strerror (errno));
+		g_free (dir);
+
+		return NULL;
+	}
+
+	g_free (dir);
+	if ((fd = open (path, O_RDONLY)) == -1) {
+		g_set_error (err, rspamd_fuzzy_backend_quark (),
+				errno, "Cannot open file %s: %s",
+				path, strerror (errno));
+
+		return NULL;
+	}
+
+	/* Check for legacy format */
+	if ((r = read (fd, header, sizeof (header))) == sizeof (header)) {
+		if (memcmp (header, FUZZY_FILE_MAGIC, sizeof (header) - 1) == 0) {
+			msg_info ("Trying to convert old fuzzy database");
+			if (!rspamd_fuzzy_backend_convert (fd, err)) {
+				close (fd);
+				return NULL;
+			}
+		}
+		close (fd);
+	}
+
+	/* Open database */
+	if ((res = rspamd_fuzzy_backend_open_db (path, err)) == NULL) {
+		GError *tmp = NULL;
+
+		if ((res = rspamd_fuzzy_backend_create_db (path, tmp)) == NULL) {
+			g_clear_error (err);
+			g_propagate_error (err, tmp);
+			return NULL;
+		}
+		g_clear_error (err);
+	}
+
+	return res;
 }
 
 struct rspamd_fuzzy_reply

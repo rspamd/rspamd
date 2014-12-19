@@ -54,8 +54,7 @@
 #define MAX_RETRIES 40
 /* Weight of hash to consider it frequent */
 #define DEFAULT_FREQUENT_SCORE 100
-/* Magic sequence for hashes file */
-#define FUZZY_FILE_MAGIC "rsh"
+
 /* Current version of fuzzy hash file format */
 #define CURRENT_FUZZY_VERSION 1
 
