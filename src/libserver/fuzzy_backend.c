@@ -247,8 +247,8 @@ rspamd_fuzzy_backend_create_db (const gchar *path, gboolean add_index,
 			SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE|SQLITE_OPEN_NOMUTEX, NULL))
 			!= SQLITE_OK) {
 		g_set_error (err, rspamd_fuzzy_backend_quark (),
-				rc, "Cannot open sqlite db %s: %s",
-				path, sqlite3_errstr (rc));
+				rc, "Cannot open sqlite db %s: %d",
+				path, rc);
 
 		return NULL;
 	}
@@ -482,7 +482,7 @@ rspamd_fuzzy_backend_close (struct rspamd_fuzzy_backend *backend)
 	if (backend != NULL) {
 		if (backend->db != NULL) {
 			rspamd_fuzzy_backend_close_stmts (backend);
-			sqlite3_close_v2 (backend->db);
+			sqlite3_close (backend->db);
 		}
 
 		if (backend->path != NULL) {
