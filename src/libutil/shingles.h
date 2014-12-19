@@ -26,7 +26,7 @@
 #include "config.h"
 #include "mem_pool.h"
 
-#define RSPAMD_SHINGLE_SIZE 23
+#define RSPAMD_SHINGLE_SIZE 32
 
 struct rspamd_shingle {
 	guint64 hashes[RSPAMD_SHINGLE_SIZE];
@@ -39,7 +39,7 @@ struct rspamd_shingle {
  * @return shingle value
  */
 typedef guint64 (*rspamd_shingles_filter) (guint64 *input, gsize count,
-		gpointer ud);
+		gint shno, const guchar *key, gpointer ud);
 
 /**
  * Generate shingles from the input of fixed size strings using lemmatizer
@@ -71,6 +71,6 @@ gdouble rspamd_shingles_compare (const struct rspamd_shingle *a,
  * Default filtering function
  */
 guint64 rspamd_shingles_default_filter (guint64 *input, gsize count,
-		gpointer ud);
+		gint shno, const guchar *key, gpointer ud);
 
 #endif /* SHINGLES_H_ */

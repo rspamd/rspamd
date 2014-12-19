@@ -63,6 +63,7 @@ rspamd_shingles_generate (GArray *input,
 	}
 
 	blake2b_init (&bs, BLAKE2B_OUTBYTES);
+	memset (h, 0, sizeof (h));
 	cur_key = key;
 	out_key = (guchar *)&keys[0];
 
@@ -85,14 +86,13 @@ rspamd_shingles_generate (GArray *input,
 		blake2b_init (&bs, BLAKE2B_OUTBYTES);
 		cur_key = out_key;
 		out_key += 16;
-		memset (&h[i], 0, sizeof (h[0]));
 		sip24_init (&h[i], &keys[i]);
 	}
 
 	/* Now parse input words into a vector of hashes using rolling window */
-	for (i = 0; i < (gint)input->len; i ++) {
-		if (i - beg >= SHINGLES_WINDOW || i == (gint)input->len - 1) {
-			for (j = beg; j <= i; j ++) {
+	for (i = 0; i <= (gint)input->len; i ++) {
+		if (i - beg >= SHINGLES_WINDOW || i == (gint)input->len) {
+			for (j = beg; j < i; j ++) {
 				rspamd_shingles_update_row (&g_array_index (input,
 						rspamd_fstring_t, j), h);
 			}
@@ -114,7 +114,7 @@ rspamd_shingles_generate (GArray *input,
 	/* Now we need to filter all hashes and make a shingles result */
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
 		res->hashes[i] = filter ((guint64 *)hashes[i]->data, hashes[i]->len,
-				filterd);
+				i, key, filterd);
 		g_array_free (hashes[i], TRUE);
 	}
 
@@ -124,7 +124,7 @@ rspamd_shingles_generate (GArray *input,
 
 guint64
 rspamd_shingles_default_filter (guint64 *input, gsize count,
-		gpointer ud)
+		gint shno, const guchar *key, gpointer ud)
 {
 	guint64 minimal = G_MAXUINT64;
 	gsize i;
