@@ -404,11 +404,6 @@ ELSE(NOT LUA_FOUND)
     INCLUDE_DIRECTORIES("${LUA_INCLUDE_DIR}")
 ENDIF(NOT LUA_FOUND)
 
-IF(ENABLE_SQLITE MATCHES "ON")
-	# Find optional sqlite3 support
-	ProcessPackage(SQLITE sqlite3>=3.6.0)
-ENDIF(ENABLE_SQLITE MATCHES "ON")
-
 #Check for openssl (required for dkim)
 IF(OPENSSL_FOUND)
 	SET(HAVE_OPENSSL 1)
@@ -566,30 +561,7 @@ IF(ENABLE_URL_INCLUDE MATCHES "ON")
     ENDIF(LIBFETCH_LIBRARY)
 ENDIF(ENABLE_URL_INCLUDE MATCHES "ON")
 
-# Find liblmdb
-FIND_LIBRARY(LIBLMDB_LIBRARY NAMES lmdb PATHS PATH_SUFFIXES lib64 lib
-                  PATHS
-                      ~/Library/Frameworks
-                      /Library/Frameworks
-                      /usr/local
-                      /usr
-                      /sw
-                      /opt/local
-                      /opt/csw
-                      /opt
-                 DOC "Path where the liblmdb library can be found")
-IF(LIBLMDB_LIBRARY)
-	FIND_PATH(LIBLMDB_INCLUDE lmdb.h PATHS 	/opt/include
-											/usr/include
-											/usr/local/include
-											DOC "Path where the lmdb header files can be found")
-
-	GET_FILENAME_COMPONENT(LIBLMDB_PATH "${LIBLMDB_LIBRARY}" PATH)
-	INCLUDE_DIRECTORIES("${LIBLMDB_INCLUDE}")
-	LINK_DIRECTORIES("${LIBLMDB_PATH}")
-ELSE(LIBLMDB_LIBRARY)
-	MESSAGE(FATAL "Liblmdb is required for rspamd")
-ENDIF(LIBLMDB_LIBRARY)
+ProcessPackage(SQLITE sqlite3>=3.6.0)
 
 # Static build
 

@@ -24,8 +24,13 @@ struct legacy_fuzzy_cmd {
 struct rspamd_fuzzy_cmd {
 	guint8 version;
 	guint8 cmd;
-	guint16 size;
-	struct rspamd_shingle sh;
+	guint16 shingles_count;
+	gchar digest[64];
+};
+
+struct rspamd_fuzzy_shingle_cmd {
+	struct rspamd_fuzzy_cmd basic;
+	struct rspamd_shingle sgl;
 };
 
 struct rspamd_fuzzy_reply {

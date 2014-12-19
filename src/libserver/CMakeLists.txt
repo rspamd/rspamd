@@ -8,6 +8,7 @@ SET(LIBRSPAMDSERVERSRC
 				dns.c
 				dynamic_cfg.c
 				events.c
+				fuzzy_backend.c
 				html.c
 				protocol.c
 				proxy.c
@@ -44,6 +45,7 @@ SET_TARGET_PROPERTIES(rspamd-server PROPERTIES LINKER_LANGUAGE C COMPILE_FLAGS "
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-lua)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-cdb)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-util)
+TARGET_LINK_LIBRARIES(rspamd-server sqlite3)
 TARGET_LINK_LIBRARIES(rspamd-server rdns)   
 IF(CMAKE_COMPILER_IS_GNUCC)
 SET_TARGET_PROPERTIES(rspamd-server PROPERTIES COMPILE_FLAGS "-DRSPAMD_LIB -fno-strict-aliasing")
