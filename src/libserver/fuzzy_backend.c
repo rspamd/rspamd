@@ -107,7 +107,7 @@ static struct rspamd_fuzzy_stmts {
 		.idx = RSPAMD_FUZZY_BACKEND_INSERT,
 		.sql = "INSERT INTO digests(flag, digest, value, time) VALUES"
 				"(?1, ?2, ?3, ?4);",
-		.args = "STII",
+		.args = "SDII",
 		.stmt = NULL,
 		.result = SQLITE_DONE
 	},
@@ -121,8 +121,8 @@ static struct rspamd_fuzzy_stmts {
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_CHECK,
-		.sql = "SELECT * FROM digests WHERE digest==?1 AND flag==?2;",
-		.args = "TI",
+		.sql = "SELECT value, time FROM digests WHERE digest==?1 AND flag==?2;",
+		.args = "DS",
 		.stmt = NULL,
 		.result = SQLITE_ROW
 	},
@@ -135,8 +135,8 @@ static struct rspamd_fuzzy_stmts {
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_DELETE,
-		.sql = "",
-		.args = "",
+		.sql = "DELETE FROM digests WHERE digest==?1 AND flag==?2;",
+		.args = "DS",
 		.stmt = NULL,
 		.result = SQLITE_DONE
 	}
@@ -205,7 +205,7 @@ rspamd_fuzzy_backend_run_stmt (struct rspamd_fuzzy_backend *bk, int idx, ...)
 	for (i = 0; argtypes[i] != '\0'; i++) {
 		switch (argtypes[i]) {
 		case 'T':
-			sqlite3_bind_text(stmt, i + 1, va_arg (ap, const char*), -1,
+			sqlite3_bind_text (stmt, i + 1, va_arg (ap, const char*), -1,
 					SQLITE_STATIC);
 			break;
 		case 'I':
@@ -213,6 +213,11 @@ rspamd_fuzzy_backend_run_stmt (struct rspamd_fuzzy_backend *bk, int idx, ...)
 			break;
 		case 'S':
 			sqlite3_bind_int (stmt, i + 1, va_arg (ap, gint));
+			break;
+		case 'D':
+			/* Special case for digests variable */
+			sqlite3_bind_text (stmt, i + 1, va_arg (ap, const char*), 64,
+					SQLITE_STATIC);
 			break;
 		}
 	}
@@ -471,9 +476,36 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 
 struct rspamd_fuzzy_reply
 rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
-		const struct rspamd_fuzzy_cmd *cmd)
+		const struct rspamd_fuzzy_cmd *cmd, gint64 expire)
 {
+	struct rspamd_fuzzy_reply rep = {0, 0.0};
+	const struct rspamd_fuzzy_shingle_cmd *shcmd;
+	int rc;
+	gint64 timestamp;
 
+	/* Try direct match first of all */
+	rc = rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK,
+			cmd->digest, cmd->flag);
+
+	if (rc == SQLITE_OK) {
+		timestamp = sqlite3_column_int64 (
+				prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK].stmt, 1);
+		if (time (NULL) - timestamp > expire) {
+			/* Expire element */
+			rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_DELETE,
+				cmd->digest, cmd->flag);
+		}
+		else {
+			rep.value = sqlite3_column_int64 (
+				prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK].stmt, 0);
+			rep.prob = 1.0;
+		}
+	}
+	else if (cmd->shingles_count > 0) {
+		/* Fuzzy match */
+	}
+
+	return rep;
 }
 
 gboolean

@@ -46,7 +46,8 @@ struct rspamd_fuzzy_backend* rspamd_fuzzy_backend_open (const gchar *path,
  */
 struct rspamd_fuzzy_reply rspamd_fuzzy_backend_check (
 		struct rspamd_fuzzy_backend *backend,
-		const struct rspamd_fuzzy_cmd *cmd);
+		const struct rspamd_fuzzy_cmd *cmd,
+		gint64 expire);
 
 /**
  * Add digest to the database
