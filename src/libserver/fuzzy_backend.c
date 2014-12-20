@@ -41,6 +41,8 @@ struct rspamd_legacy_fuzzy_node {
 struct rspamd_fuzzy_backend {
 	sqlite3 *db;
 	char *path;
+	gsize count;
+	gsize expired;
 };
 
 
@@ -61,6 +63,7 @@ const char *create_tables_sql =
 const char *create_index_sql =
 		"BEGIN;"
 		"CREATE UNIQUE INDEX IF NOT EXISTS d ON digests(digest);"
+		"CREATE INDEX IF NOT EXISTS t ON digests(time);"
 		"CREATE UNIQUE INDEX IF NOT EXISTS s ON shingles(value, number);"
 		"COMMIT;";
 enum rspamd_fuzzy_statement_idx {
@@ -73,6 +76,9 @@ enum rspamd_fuzzy_statement_idx {
 	RSPAMD_FUZZY_BACKEND_CHECK,
 	RSPAMD_FUZZY_BACKEND_CHECK_SHINGLE,
 	RSPAMD_FUZZY_BACKEND_DELETE,
+	RSPAMD_FUZZY_BACKEND_COUNT,
+	RSPAMD_FUZZY_BACKEND_EXPIRE,
+	RSPAMD_FUZZY_BACKEND_VACUUM,
 	RSPAMD_FUZZY_BACKEND_MAX
 };
 static struct rspamd_fuzzy_stmts {
@@ -146,6 +152,27 @@ static struct rspamd_fuzzy_stmts {
 		.idx = RSPAMD_FUZZY_BACKEND_DELETE,
 		.sql = "DELETE FROM digests WHERE digest==?1;",
 		.args = "D",
+		.stmt = NULL,
+		.result = SQLITE_DONE
+	},
+	{
+		.idx = RSPAMD_FUZZY_BACKEND_COUNT,
+		.sql = "SELECT COUNT(*) FROM digests;",
+		.args = "",
+		.stmt = NULL,
+		.result = SQLITE_ROW
+	},
+	{
+		.idx = RSPAMD_FUZZY_BACKEND_EXPIRE,
+		.sql = "DELETE FROM digests WHERE time < ?1;",
+		.args = "I",
+		.stmt = NULL,
+		.result = SQLITE_DONE
+	},
+	{
+		.idx = RSPAMD_FUZZY_BACKEND_VACUUM,
+		.sql = "VACUUM;",
+		.args = "",
 		.stmt = NULL,
 		.result = SQLITE_DONE
 	}
@@ -310,6 +337,8 @@ rspamd_fuzzy_backend_create_db (const gchar *path, gboolean add_index,
 	bk = g_slice_alloc (sizeof (*bk));
 	bk->path = g_strdup (path);
 	bk->db = sqlite;
+	bk->expired = 0;
+	bk->count = 0;
 
 	/*
 	 * Here we need to run create prior to preparing other statements
@@ -355,6 +384,16 @@ rspamd_fuzzy_backend_open_db (const gchar *path, GError **err)
 	bk->path = g_strdup (path);
 	bk = g_slice_alloc (sizeof (*bk));
 	bk->db = sqlite;
+	bk->expired = 0;
+
+	/* Cleanup database */
+	rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_VACUUM, bk, NULL);
+
+	if (rspamd_fuzzy_backend_run_stmt (bk, RSPAMD_FUZZY_BACKEND_COUNT)
+			== SQLITE_OK) {
+		bk->count = sqlite3_column_int64 (
+				prepared_stmts[RSPAMD_FUZZY_BACKEND_COUNT].stmt, 0);
+	}
 
 	rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_START,
 				bk, NULL);
@@ -542,6 +581,7 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 		rc = rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_INSERT,
 			(gint)cmd->flag, cmd->digest, (gint64)cmd->value, (gint64)time (NULL));
 
+		backend->count ++;
 		if (cmd->shingles_count > 0) {
 			/* Add corresponding shingles */
 		}
@@ -560,14 +600,22 @@ rspamd_fuzzy_backend_del (struct rspamd_fuzzy_backend *backend,
 	rc = rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_DELETE,
 			cmd->digest);
 
+	backend->count -= sqlite3_changes (backend->db);
+
 	return (rc == SQLITE_OK);
 }
 
 gboolean
-rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend)
+rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend, gint64 expire)
 {
 	gboolean ret = FALSE;
 
+	/* Perform expire */
+	if (expire > 0) {
+		rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_EXPIRE,
+				backend, NULL);
+		backend->expired += sqlite3_changes (backend->db);
+	}
 	ret = rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT,
 			backend, NULL);
 
@@ -595,4 +643,17 @@ rspamd_fuzzy_backend_close (struct rspamd_fuzzy_backend *backend)
 
 		g_slice_free1 (sizeof (*backend), backend);
 	}
+}
+
+
+gsize
+rspamd_fuzzy_backend_count (struct rspamd_fuzzy_backend *backend)
+{
+	return backend->count;
+}
+
+gsize
+rspamd_fuzzy_backend_expired (struct rspamd_fuzzy_backend *backend)
+{
+	return backend->expired;
 }

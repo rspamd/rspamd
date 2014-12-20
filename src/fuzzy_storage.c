@@ -222,6 +222,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 			rep.value = 403;
 			rep.prob = 0.0;
 		}
+		server_stat->fuzzy_hashes = rspamd_fuzzy_backend_count (session->ctx->backend);
 	}
 
 	rspamd_fuzzy_write_reply (session, &rep);
@@ -324,7 +325,9 @@ sync_callback (gint fd, short what, void *arg)
 	evtimer_add (&tev, &tmv);
 
 	/* Call backend sync */
-	rspamd_fuzzy_backend_sync (ctx->backend);
+	rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire);
+
+	server_stat->fuzzy_hashes_expired = rspamd_fuzzy_backend_expired (ctx->backend);
 }
 
 gpointer
@@ -418,6 +421,8 @@ start_fuzzy (struct rspamd_worker *worker)
 		exit (EXIT_FAILURE);
 	}
 
+	server_stat->fuzzy_hashes = rspamd_fuzzy_backend_count (ctx->backend);
+
 	/* Timer event */
 	evtimer_set (&tev, sync_callback, worker);
 	event_base_set (ctx->ev_base, &tev);
@@ -444,7 +449,7 @@ start_fuzzy (struct rspamd_worker *worker)
 
 	event_base_loop (ctx->ev_base, 0);
 
-	rspamd_fuzzy_backend_sync (ctx->backend);
+	rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire);
 	rspamd_fuzzy_backend_close (ctx->backend);
 	rspamd_log_close (rspamd_main->logger);
 	exit (EXIT_SUCCESS);

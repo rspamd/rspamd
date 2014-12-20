@@ -74,12 +74,16 @@ gboolean rspamd_fuzzy_backend_del (
  * @param backend
  * @return
  */
-gboolean rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend);
+gboolean rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend,
+		gint64 expire);
 
 /**
  * Close storage
  * @param backend
  */
 void rspamd_fuzzy_backend_close (struct rspamd_fuzzy_backend *backend);
+
+gsize rspamd_fuzzy_backend_count (struct rspamd_fuzzy_backend *backend);
+gsize rspamd_fuzzy_backend_expired (struct rspamd_fuzzy_backend *backend);
 
 #endif /* FUZZY_BACKEND_H_ */
