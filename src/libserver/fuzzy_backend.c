@@ -129,7 +129,7 @@ static struct rspamd_fuzzy_stmts {
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_INSERT_SHINGLE,
-		.sql = "INSERT INTO shingles(value, number, digest_id) "
+		.sql = "INSERT OR REPLACE INTO shingles(value, number, digest_id) "
 				"VALUES (?1, ?2, ?3);",
 		.args = "III",
 		.stmt = NULL,
@@ -651,7 +651,9 @@ gboolean
 rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 		const struct rspamd_fuzzy_cmd *cmd)
 {
-	int rc;
+	int rc, i;
+	gint64 id;
+	const struct rspamd_fuzzy_shingle_cmd *shcmd;
 
 	rc = rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK,
 				cmd->digest);
@@ -665,9 +667,19 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 		rc = rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_INSERT,
 			(gint)cmd->flag, cmd->digest, (gint64)cmd->value, (gint64)time (NULL));
 
-		backend->count ++;
-		if (cmd->shingles_count > 0) {
-			/* Add corresponding shingles */
+		if (rc == SQLITE_OK) {
+			backend->count ++;
+
+			if (cmd->shingles_count > 0) {
+				id = sqlite3_last_insert_rowid (backend->db);
+				shcmd = (const struct rspamd_fuzzy_shingle_cmd *)cmd;
+
+				for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
+					rspamd_fuzzy_backend_run_stmt (backend,
+							RSPAMD_FUZZY_BACKEND_INSERT_SHINGLE,
+							shcmd->sgl.hashes[i], i, id);
+				}
+			}
 		}
 	}
 
