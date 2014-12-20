@@ -26,6 +26,7 @@ struct rspamd_fuzzy_cmd {
 	guint8 cmd;
 	guint8 shingles_count;
 	guint8 flag;
+	gint32 value;
 	gchar digest[64];
 };
 

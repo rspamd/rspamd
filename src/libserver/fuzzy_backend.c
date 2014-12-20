@@ -68,6 +68,7 @@ enum rspamd_fuzzy_statement_idx {
 	RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT,
 	RSPAMD_FUZZY_BACKEND_TRANSACTION_ROLLBACK,
 	RSPAMD_FUZZY_BACKEND_INSERT,
+	RSPAMD_FUZZY_BACKEND_UPDATE,
 	RSPAMD_FUZZY_BACKEND_INSERT_SHINGLE,
 	RSPAMD_FUZZY_BACKEND_CHECK,
 	RSPAMD_FUZZY_BACKEND_CHECK_SHINGLE,
@@ -108,6 +109,14 @@ static struct rspamd_fuzzy_stmts {
 		.sql = "INSERT INTO digests(flag, digest, value, time) VALUES"
 				"(?1, ?2, ?3, ?4);",
 		.args = "SDII",
+		.stmt = NULL,
+		.result = SQLITE_DONE
+	},
+	{
+		.idx = RSPAMD_FUZZY_BACKEND_UPDATE,
+		.sql = "UPDATE digests SET value = value + ?1 WHERE "
+				"digest==?2 AND flag==?3;",
+		.args = "IDI",
 		.stmt = NULL,
 		.result = SQLITE_DONE
 	},
@@ -512,7 +521,26 @@ gboolean
 rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 		const struct rspamd_fuzzy_cmd *cmd)
 {
+	int rc;
 
+	rc = rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK,
+				cmd->digest, cmd->flag);
+
+	if (rc == SQLITE_OK) {
+		/* We need to increase weight */
+		rc = rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_UPDATE,
+			(gint64)cmd->value, cmd->digest, (gint)cmd->flag);
+	}
+	else {
+		rc = rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_INSERT,
+			(gint)cmd->flag, cmd->digest, (gint64)cmd->value, (gint64)time (NULL));
+
+		if (cmd->shingles_count > 0) {
+			/* Add corresponding shingles */
+		}
+	}
+
+	return (rc == SQLITE_OK);
 }
 
 
@@ -520,7 +548,12 @@ gboolean
 rspamd_fuzzy_backend_del (struct rspamd_fuzzy_backend *backend,
 		const struct rspamd_fuzzy_cmd *cmd)
 {
+	int rc;
 
+	rc = rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_DELETE,
+			cmd->digest, cmd->flag);
+
+	return (rc == SQLITE_OK);
 }
 
 gboolean
