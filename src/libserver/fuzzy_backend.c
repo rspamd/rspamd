@@ -60,7 +60,7 @@ const char *create_tables_sql =
 		"COMMIT;";
 const char *create_index_sql =
 		"BEGIN;"
-		"CREATE UNIQUE INDEX IF NOT EXISTS d ON digests(digest, flag);"
+		"CREATE UNIQUE INDEX IF NOT EXISTS d ON digests(digest);"
 		"CREATE UNIQUE INDEX IF NOT EXISTS s ON shingles(value, number);"
 		"COMMIT;";
 enum rspamd_fuzzy_statement_idx {
@@ -115,8 +115,8 @@ static struct rspamd_fuzzy_stmts {
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_UPDATE,
 		.sql = "UPDATE digests SET value = value + ?1 WHERE "
-				"digest==?2 AND flag==?3;",
-		.args = "IDI",
+				"digest==?2;",
+		.args = "ID",
 		.stmt = NULL,
 		.result = SQLITE_DONE
 	},
@@ -130,8 +130,8 @@ static struct rspamd_fuzzy_stmts {
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_CHECK,
-		.sql = "SELECT value, time FROM digests WHERE digest==?1 AND flag==?2;",
-		.args = "DS",
+		.sql = "SELECT value, time, flag FROM digests WHERE digest==?1;",
+		.args = "D",
 		.stmt = NULL,
 		.result = SQLITE_ROW
 	},
@@ -144,8 +144,8 @@ static struct rspamd_fuzzy_stmts {
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_DELETE,
-		.sql = "DELETE FROM digests WHERE digest==?1 AND flag==?2;",
-		.args = "DS",
+		.sql = "DELETE FROM digests WHERE digest==?1;",
+		.args = "D",
 		.stmt = NULL,
 		.result = SQLITE_DONE
 	}
@@ -236,6 +236,10 @@ rspamd_fuzzy_backend_run_stmt (struct rspamd_fuzzy_backend *bk, int idx, ...)
 
 	if (retcode == prepared_stmts[idx].result) {
 		return SQLITE_OK;
+	}
+	else {
+		msg_debug ("failed to execute query %s: %s", prepared_stmts[idx].sql,
+				sqlite3_errmsg (bk->db));
 	}
 
 	return retcode;
@@ -487,27 +491,30 @@ struct rspamd_fuzzy_reply
 rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 		const struct rspamd_fuzzy_cmd *cmd, gint64 expire)
 {
-	struct rspamd_fuzzy_reply rep = {0, 0.0};
+	struct rspamd_fuzzy_reply rep = {0, 0, 0.0};
 	const struct rspamd_fuzzy_shingle_cmd *shcmd;
 	int rc;
 	gint64 timestamp;
 
 	/* Try direct match first of all */
 	rc = rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK,
-			cmd->digest, cmd->flag);
+			cmd->digest);
 
 	if (rc == SQLITE_OK) {
 		timestamp = sqlite3_column_int64 (
 				prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK].stmt, 1);
 		if (time (NULL) - timestamp > expire) {
 			/* Expire element */
+			msg_debug ("requested hash has been expired");
 			rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_DELETE,
-				cmd->digest, cmd->flag);
+				cmd->digest, (gint)cmd->flag);
 		}
 		else {
 			rep.value = sqlite3_column_int64 (
 				prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK].stmt, 0);
 			rep.prob = 1.0;
+			rep.flag = sqlite3_column_int (
+					prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK].stmt, 2);
 		}
 	}
 	else if (cmd->shingles_count > 0) {
@@ -524,12 +531,12 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 	int rc;
 
 	rc = rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK,
-				cmd->digest, cmd->flag);
+				cmd->digest);
 
 	if (rc == SQLITE_OK) {
 		/* We need to increase weight */
 		rc = rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_UPDATE,
-			(gint64)cmd->value, cmd->digest, (gint)cmd->flag);
+			(gint64)cmd->value, cmd->digest);
 	}
 	else {
 		rc = rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_INSERT,
@@ -551,7 +558,7 @@ rspamd_fuzzy_backend_del (struct rspamd_fuzzy_backend *backend,
 	int rc;
 
 	rc = rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_DELETE,
-			cmd->digest, cmd->flag);
+			cmd->digest);
 
 	return (rc == SQLITE_OK);
 }

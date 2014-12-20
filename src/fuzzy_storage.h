@@ -37,6 +37,7 @@ struct rspamd_fuzzy_shingle_cmd {
 
 struct rspamd_fuzzy_reply {
 	guint32 value;
+	guint32 flag;
 	gdouble prob;
 };
 
