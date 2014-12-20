@@ -75,6 +75,7 @@ enum rspamd_fuzzy_statement_idx {
 	RSPAMD_FUZZY_BACKEND_INSERT_SHINGLE,
 	RSPAMD_FUZZY_BACKEND_CHECK,
 	RSPAMD_FUZZY_BACKEND_CHECK_SHINGLE,
+	RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID,
 	RSPAMD_FUZZY_BACKEND_DELETE,
 	RSPAMD_FUZZY_BACKEND_COUNT,
 	RSPAMD_FUZZY_BACKEND_EXPIRE,
@@ -143,8 +144,15 @@ static struct rspamd_fuzzy_stmts {
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_CHECK_SHINGLE,
-		.sql = "",
-		.args = "",
+		.sql = "SELECT digest_id FROM shingles WHERE value=? AND number=?",
+		.args = "IS",
+		.stmt = NULL,
+		.result = SQLITE_ROW
+	},
+	{
+		.idx = RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID,
+		.sql = "SELECT digest, value, time, flag FROM digests WHERE id=?",
+		.args = "I",
 		.stmt = NULL,
 		.result = SQLITE_ROW
 	},
@@ -526,6 +534,14 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 	return res;
 }
 
+static gint
+rspamd_fuzzy_backend_int64_cmp (const void *a, const void *b)
+{
+	gint64 ia = *(gint64 *)a, ib = *(gint64 *)b;
+
+	return (ia - ib);
+}
+
 struct rspamd_fuzzy_reply
 rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 		const struct rspamd_fuzzy_cmd *cmd, gint64 expire)
@@ -534,6 +550,9 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 	const struct rspamd_fuzzy_shingle_cmd *shcmd;
 	int rc;
 	gint64 timestamp;
+	gint64 shingle_values[RSPAMD_SHINGLE_SIZE], i, sel_id, cur_id,
+		cur_cnt, max_cnt;
+	const char *digest;
 
 	/* Try direct match first of all */
 	rc = rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK,
@@ -546,7 +565,7 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 			/* Expire element */
 			msg_debug ("requested hash has been expired");
 			rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_DELETE,
-				cmd->digest, (gint)cmd->flag);
+				cmd->digest);
 		}
 		else {
 			rep.value = sqlite3_column_int64 (
@@ -558,6 +577,71 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 	}
 	else if (cmd->shingles_count > 0) {
 		/* Fuzzy match */
+		shcmd = (const struct rspamd_fuzzy_shingle_cmd *)cmd;
+		for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
+			rc = rspamd_fuzzy_backend_run_stmt (backend,
+					RSPAMD_FUZZY_BACKEND_CHECK_SHINGLE,
+					shcmd->sgl.hashes[i], i);
+			if (rc == SQLITE_OK) {
+				shingle_values[i] = sqlite3_column_int64 (
+						prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK_SHINGLE].stmt,
+						0);
+			}
+			else {
+				shingle_values[i] = -1;
+			}
+		}
+		qsort (shingle_values, RSPAMD_SHINGLE_SIZE, sizeof (gint64),
+				rspamd_fuzzy_backend_int64_cmp);
+		sel_id = -1;
+		cur_id = -1;
+		cur_cnt = 0;
+		max_cnt = 0;
+
+		for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
+			if (shingle_values[i] == -1) {
+				continue;
+			}
+
+			/* We have some value here, so we need to check it */
+			if (shingle_values[i] == cur_id) {
+				cur_cnt ++;
+			}
+			else {
+				if (cur_cnt > max_cnt) {
+					max_cnt = cur_cnt;
+					sel_id = cur_id;
+				}
+				cur_cnt = 0;
+				cur_id = shingle_values[i];
+			}
+		}
+
+		if (sel_id != -1) {
+			/* We have some id selected here */
+			rep.prob = (gdouble)max_cnt / (gdouble)RSPAMD_SHINGLE_SIZE;
+			rc = rspamd_fuzzy_backend_run_stmt (backend,
+					RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID, sel_id);
+			if (rc == SQLITE_OK) {
+				digest = sqlite3_column_text (
+						prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK].stmt, 0);
+				timestamp = sqlite3_column_int64 (
+						prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK].stmt, 2);
+				if (time (NULL) - timestamp > expire) {
+					/* Expire element */
+					msg_debug ("requested hash has been expired");
+					rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_DELETE,
+							digest);
+					rep.prob = 0.0;
+				}
+				else {
+					rep.value = sqlite3_column_int64 (
+							prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK].stmt, 1);
+					rep.flag = sqlite3_column_int (
+							prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK].stmt, 3);
+				}
+			}
+		}
 	}
 
 	return rep;
