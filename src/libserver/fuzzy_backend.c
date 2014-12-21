@@ -566,6 +566,7 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 			msg_debug ("requested hash has been expired");
 			rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_DELETE,
 				cmd->digest);
+			backend->expired ++;
 		}
 		else {
 			rep.value = sqlite3_column_int64 (
@@ -630,6 +631,7 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 				if (time (NULL) - timestamp > expire) {
 					/* Expire element */
 					msg_debug ("requested hash has been expired");
+					backend->expired ++;
 					rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_DELETE,
 							digest);
 					rep.prob = 0.0;
