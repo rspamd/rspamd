@@ -47,6 +47,7 @@
 #include "fuzzy_storage.h"
 #include "utlist.h"
 #include "main.h"
+#include "blake2.h"
 
 #define DEFAULT_SYMBOL "R_FUZZY_HASH"
 #define DEFAULT_UPSTREAM_ERROR_TIME 10
@@ -73,6 +74,8 @@ struct fuzzy_rule {
 	const gchar *symbol;
 	GHashTable *mappings;
 	GList *mime_types;
+	GString *hash_key;
+	GString *shingles_key;
 	double max_score;
 	gboolean read_only;
 	gboolean skip_unknown;
@@ -491,6 +494,118 @@ fuzzy_io_fin (void *ud)
 
 	event_del (&session->ev);
 	close (session->fd);
+}
+
+
+/*
+ * Create fuzzy command from a text part
+ */
+struct rspamd_fuzzy_cmd *
+fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
+		int c,
+		gint flag,
+		guint32 weight,
+		rspamd_mempool_t *pool,
+		struct mime_text_part *part,
+		gboolean legacy,
+		gsize *size)
+{
+	struct rspamd_fuzzy_cmd *cmd;
+	struct rspamd_fuzzy_shingle_cmd *shcmd;
+	struct rspamd_shingle *sh;
+	guint i;
+	blake2b_state st;
+	rspamd_fstring_t *word;
+
+	if (legacy || part->words == NULL) {
+		cmd = rspamd_mempool_alloc0 (pool, sizeof (*cmd));
+		cmd->cmd = c;
+		cmd->version = RSPAMD_FUZZY_VERSION;
+		if (c != FUZZY_CHECK) {
+			cmd->flag = flag;
+			cmd->value = weight;
+		}
+		cmd->shingles_count = 0;
+		rspamd_strlcpy (cmd->digest, part->fuzzy->hash_pipe, sizeof (cmd->digest));
+		*size = sizeof (struct rspamd_fuzzy_cmd);
+	}
+	else {
+		shcmd = rspamd_mempool_alloc0 (pool, sizeof (*shcmd));
+		shcmd->basic.cmd = c;
+		shcmd->basic.version = RSPAMD_FUZZY_VERSION;
+		if (c != FUZZY_CHECK) {
+			shcmd->basic.flag = flag;
+			shcmd->basic.value = weight;
+		}
+
+		/*
+		 * Generate hash from all words in the part
+		 */
+		blake2b_init_key (&st, BLAKE2B_OUTBYTES, rule->hash_key->str,
+				rule->hash_key->len);
+		for (i = 0; i < part->words->len; i ++) {
+			word = &g_array_index (part->words, rspamd_fstring_t, i);
+			blake2b_update (&st, word->begin, word->len);
+		}
+		blake2b_final (&st, shcmd->basic.digest, sizeof (shcmd->basic.digest));
+
+		sh = rspamd_shingles_generate (part->words, rule->shingles_key->str,
+				pool, rspamd_shingles_default_filter, NULL);
+		if (sh != NULL) {
+			memcpy (&shcmd->sgl, sh, sizeof (shcmd->sgl));
+			shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
+		}
+
+		cmd = (struct rspamd_fuzzy_cmd *)shcmd;
+		*size = sizeof (struct rspamd_fuzzy_shingle_cmd);
+	}
+
+	return cmd;
+}
+
+struct rspamd_fuzzy_cmd *
+fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
+		int c,
+		gint flag,
+		guint32 weight,
+		rspamd_mempool_t *pool,
+		const guchar *data,
+		gsize datalen,
+		gboolean legacy,
+		gsize *size)
+{
+	struct rspamd_fuzzy_cmd *cmd;
+
+	cmd = rspamd_mempool_alloc0 (pool, sizeof (*cmd));
+	cmd->cmd = c;
+	cmd->version = RSPAMD_FUZZY_VERSION;
+	if (c != FUZZY_CHECK) {
+		cmd->flag = flag;
+		cmd->value = weight;
+	}
+	cmd->shingles_count = 0;
+
+	if (legacy) {
+		GChecksum *cksum;
+
+		cksum = g_checksum_new (G_CHECKSUM_MD5);
+		g_checksum_update (cksum, data, datalen);
+		rspamd_strlcpy (cmd->digest, g_checksum_get_string (cksum),
+				sizeof (cmd->digest));
+	}
+	else {
+		/* Use blake2b for digest */
+		blake2b_state st;
+
+		blake2b_init_key (&st, BLAKE2B_OUTBYTES, rule->hash_key->str,
+				rule->hash_key->len);
+		blake2b_update (&st, data, datalen);
+		blake2b_final (&st, cmd->digest, sizeof (cmd->digest));
+	}
+
+	*size = sizeof (struct rspamd_fuzzy_cmd);
+
+	return cmd;
 }
 
 /* Call this whenever we got data from fuzzy storage */
