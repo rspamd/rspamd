@@ -96,7 +96,7 @@
 #elif defined(__GNUC__)
 # define RSPAMD_PACKED(name) struct __attribute__((packed)) name
 #else
-# define RSPAMD_PACKED(name)
+# define RSPAMD_PACKED(name) struct name
 #endif
 
 
