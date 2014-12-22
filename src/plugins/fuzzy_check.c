@@ -296,12 +296,22 @@ fuzzy_rule_new (const char *default_symbol, rspamd_mempool_t *pool)
 	return rule;
 }
 
+static void
+fuzzy_free_rule (gpointer r)
+{
+	struct fuzzy_rule *rule = (struct fuzzy_rule *)r;
+
+	g_string_free (rule->hash_key, TRUE);
+	g_string_free (rule->shingles_key, TRUE);
+}
+
 static gint
 fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj)
 {
 	const ucl_object_t *value, *cur;
 	struct fuzzy_rule *rule;
 	ucl_object_iter_t it = NULL;
+	const char *k = NULL;
 
 	if (obj->type != UCL_OBJECT) {
 		msg_err ("invalid rule definition");
@@ -352,6 +362,29 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj)
 		}
 	}
 
+	if ((value = ucl_object_find_key (obj, "fuzzy_key")) != NULL) {
+		/* Create key from user's input */
+		k = ucl_object_tostring (value);
+	}
+
+	/* Setup keys */
+	if (k == NULL) {
+		/* Use some default key for all ops */
+		k = "rspamd";
+	}
+	rule->hash_key = g_string_sized_new (BLAKE2B_KEYBYTES);
+	blake2 (rule->hash_key->str, k, NULL, BLAKE2B_KEYBYTES, strlen (k), 0);
+
+	if ((value = ucl_object_find_key (obj, "fuzzy_shingles_key")) != NULL) {
+		k = ucl_object_tostring (value);
+	}
+	if (k == NULL) {
+		k = "rspamd";
+	}
+	rule->shingles_key = g_string_sized_new (16);
+	blake2 (rule->hash_key->str, k, NULL, 16, strlen (k), 0);
+
+
 	if (rspamd_upstreams_count (rule->servers) == 0) {
 		msg_err ("no servers defined for fuzzy rule with symbol: %s",
 			rule->symbol);
@@ -365,6 +398,9 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj)
 			register_virtual_symbol (&cfg->cache, rule->symbol, 1.0);
 		}
 	}
+
+	rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool, fuzzy_free_rule,
+			rule);
 
 	return 0;
 }
