@@ -84,6 +84,11 @@ static gboolean is_insecure = FALSE;
 /* List of workers that are pending to start */
 static GList *workers_pending = NULL;
 
+#ifdef HAVE_SA_SIGINFO
+static siginfo_t static_sg[64];
+static sig_atomic_t cur_sg = 0;
+#endif
+
 /* List of unrelated forked processes */
 static GArray *other_workers = NULL;
 
@@ -132,10 +137,10 @@ sig_handler (gint signo, siginfo_t *info, void *unused)
 #endif
 {
 #ifdef HAVE_SA_SIGINFO
-	siginfo_t *new_info;
-	new_info = g_malloc (sizeof (siginfo_t));
-	memcpy (new_info, info, sizeof (siginfo_t));
-	g_queue_push_head (signals_info, new_info);
+	if (cur_sg < (sig_atomic_t)G_N_ELEMENTS (static_sg)) {
+		memcpy (&static_sg[cur_sg++], info, sizeof (siginfo_t));
+	}
+	/* XXX: discard more than 64 simultaneous signals */
 #endif
 
 	switch (signo) {
@@ -196,7 +201,6 @@ print_signals_info (void)
 			msg_info ("got signal: '%s'; received from pid: %P; uid: %ul",
 				g_strsignal (inf->si_signo), inf->si_pid, (gulong)inf->si_uid);
 		}
-		g_free (inf);
 	}
 }
 #endif
@@ -1401,6 +1405,10 @@ main (gint argc, gchar **argv, gchar **env)
 		sigemptyset (&signals.sa_mask);
 		sigsuspend (&signals.sa_mask);
 #ifdef HAVE_SA_SIGINFO
+		for (i = 0; i < cur_sg; i ++) {
+			g_queue_push_head (signals_info, &static_sg[i]);
+		}
+		cur_sg = 0;
 		print_signals_info ();
 #endif
 		if (do_terminate) {
