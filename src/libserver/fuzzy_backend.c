@@ -144,14 +144,14 @@ static struct rspamd_fuzzy_stmts {
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_CHECK_SHINGLE,
-		.sql = "SELECT digest_id FROM shingles WHERE value=? AND number=?",
+		.sql = "SELECT digest_id FROM shingles WHERE value=?1 AND number=?2",
 		.args = "IS",
 		.stmt = NULL,
 		.result = SQLITE_ROW
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID,
-		.sql = "SELECT digest, value, time, flag FROM digests WHERE id=?",
+		.sql = "SELECT digest, value, time, flag FROM digests WHERE id=?1",
 		.args = "I",
 		.stmt = NULL,
 		.result = SQLITE_ROW
@@ -591,6 +591,7 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 			else {
 				shingle_values[i] = -1;
 			}
+			msg_debug ("looking for shingle %d -> %L: %d", i, shcmd->sgl.hashes[i], rc);
 		}
 		qsort (shingle_values, RSPAMD_SHINGLE_SIZE, sizeof (gint64),
 				rspamd_fuzzy_backend_int64_cmp);
@@ -621,6 +622,7 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 		if (sel_id != -1) {
 			/* We have some id selected here */
 			rep.prob = (gdouble)max_cnt / (gdouble)RSPAMD_SHINGLE_SIZE;
+			msg_debug ("found fuzzy hash with probability %.2f", rep.prob);
 			rc = rspamd_fuzzy_backend_run_stmt (backend,
 					RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID, sel_id);
 			if (rc == SQLITE_OK) {
@@ -680,6 +682,7 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 					rspamd_fuzzy_backend_run_stmt (backend,
 							RSPAMD_FUZZY_BACKEND_INSERT_SHINGLE,
 							shcmd->sgl.hashes[i], i, id);
+					msg_debug ("add shingle %d -> %L: %d", i, shcmd->sgl.hashes[i], id);
 				}
 			}
 		}

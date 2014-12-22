@@ -383,8 +383,8 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj)
 		k = "rspamd";
 	}
 	rule->shingles_key = g_string_sized_new (16);
-	blake2 (rule->hash_key->str, k, NULL, 16, strlen (k), 0);
-	rule->hash_key->len = 16;
+	blake2 (rule->shingles_key->str, k, NULL, 16, strlen (k), 0);
+	rule->shingles_key->len = 16;
 
 	if (rspamd_upstreams_count (rule->servers) == 0) {
 		msg_err ("no servers defined for fuzzy rule with symbol: %s",
@@ -578,6 +578,7 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 		}
 		blake2b_final (&st, shcmd->basic.digest, sizeof (shcmd->basic.digest));
 
+		msg_debug ("loading shingles with key %*xs", 16, rule->shingles_key->str);
 		sh = rspamd_shingles_generate (part->words, rule->shingles_key->str,
 				pool, rspamd_shingles_default_filter, NULL);
 		if (sh != NULL) {
