@@ -113,19 +113,17 @@ direct_write_log_line (rspamd_logger_t *rspamd_log,
 		}
 		if (r == -1) {
 			/* We cannot write message to file, so we need to detect error and make decision */
+			if (errno == EINTR) {
+				/* Try again */
+				direct_write_log_line (rspamd_log, data, count, is_iov);
+				return;
+			}
+
 			r = rspamd_snprintf (errmsg,
 					sizeof (errmsg),
 					"direct_write_log_line: cannot write log line: %s",
 					strerror (errno));
-			if (errno == EIO || errno == EINTR) {
-				/* Descriptor is somehow invalid, try to restart */
-				rspamd_log_reopen (rspamd_log);
-				if (write (rspamd_log->fd, errmsg, r) != -1) {
-					/* Try again */
-					direct_write_log_line (rspamd_log, data, count, is_iov);
-				}
-			}
-			else if (errno == EFAULT || errno == EINVAL || errno == EFBIG ||
+			if (errno == EFAULT || errno == EINVAL || errno == EFBIG ||
 				errno == ENOSPC) {
 				/* Rare case */
 				rspamd_log->throttling = TRUE;
