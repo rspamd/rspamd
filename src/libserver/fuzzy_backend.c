@@ -272,9 +272,9 @@ rspamd_fuzzy_backend_run_stmt (struct rspamd_fuzzy_backend *bk, int idx, ...)
 	if (retcode == prepared_stmts[idx].result) {
 		return SQLITE_OK;
 	}
-	else {
-		msg_debug ("failed to execute query %s: %s", prepared_stmts[idx].sql,
-				sqlite3_errmsg (bk->db));
+	else if (retcode != SQLITE_DONE) {
+		msg_debug ("failed to execute query %s: %d, %s", prepared_stmts[idx].sql,
+				retcode, sqlite3_errmsg (bk->db));
 	}
 
 	return retcode;
