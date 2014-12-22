@@ -553,7 +553,7 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 	blake2b_state st;
 	rspamd_fstring_t *word;
 
-	if (legacy || part->words == NULL) {
+	if (legacy || part->words == NULL || part->words->len == 0) {
 		cmd = rspamd_mempool_alloc0 (pool, sizeof (*cmd));
 
 		cmd->shingles_count = 0;
@@ -809,12 +809,7 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 	}
 	else {
 		rspamd_upstream_ok (session->server);
-		if (session->commands->len == 0) {
-			/*
-			 * All requests are processed now
-			 */
-			remove_normal_event (session->task->s, fuzzy_io_fin, session);
-		}
+		remove_normal_event (session->task->s, fuzzy_io_fin, session);
 	}
 }
 
@@ -916,12 +911,10 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 		rspamd_upstream_ok (session->server);
 	}
 
-	if (ret == -1 || session->commands->len == 0) {
-		(*session->saved) --;
-		rspamd_http_connection_unref (session->http_entry->conn);
-		event_del (&session->ev);
-		close (session->fd);
-	}
+	(*session->saved) --;
+	rspamd_http_connection_unref (session->http_entry->conn);
+	event_del (&session->ev);
+	close (session->fd);
 
 	if (*session->saved == 0) {
 		if (*(session->err) != NULL) {

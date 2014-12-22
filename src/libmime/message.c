@@ -1130,6 +1130,8 @@ process_text_part (struct rspamd_task *task,
 	buf.begin = text_part->content->data;
 	buf.len = text_part->content->len;
 	buf.size = buf.len;
+	token.begin = NULL;
+	token.len = 0;
 
 	text_part->words = g_array_new (FALSE, FALSE, sizeof (rspamd_fstring_t));
 	while ((pos = rspamd_tokenizer_get_word (&buf,

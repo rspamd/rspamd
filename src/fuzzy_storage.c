@@ -295,6 +295,7 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 		}
 		else if ((guint)r >= sizeof (struct rspamd_fuzzy_cmd)) {
 			/* Check shingles count sanity */
+			session.legacy = FALSE;
 			cmd = (struct rspamd_fuzzy_cmd *)buf;
 			if (!rspamd_fuzzy_command_valid (cmd, r)) {
 				/* Bad input */
