@@ -610,12 +610,12 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 				cur_cnt ++;
 			}
 			else {
+				cur_id = shingle_values[i];
 				if (cur_cnt >= max_cnt) {
 					max_cnt = cur_cnt;
 					sel_id = cur_id;
 				}
 				cur_cnt = 0;
-				cur_id = shingle_values[i];
 			}
 		}
 
