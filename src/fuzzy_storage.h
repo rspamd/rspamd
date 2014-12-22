@@ -21,24 +21,26 @@ struct legacy_fuzzy_cmd {
 	u_char hash[FUZZY_HASHLEN];
 };
 
-struct rspamd_fuzzy_cmd {
+RSPAMD_PACKED(rspamd_fuzzy_cmd) {
 	guint8 version;
 	guint8 cmd;
 	guint8 shingles_count;
 	guint8 flag;
 	gint32 value;
+	guint32 tag;
 	gchar digest[64];
 };
 
-struct rspamd_fuzzy_shingle_cmd {
+RSPAMD_PACKED(rspamd_fuzzy_shingle_cmd) {
 	struct rspamd_fuzzy_cmd basic;
 	struct rspamd_shingle sgl;
 };
 
-struct rspamd_fuzzy_reply {
+RSPAMD_PACKED(rspamd_fuzzy_reply) {
 	guint32 value;
 	guint32 flag;
-	gdouble prob;
+	guint32 tag;
+	float prob;
 };
 
 #endif

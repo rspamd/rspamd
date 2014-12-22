@@ -90,6 +90,14 @@
  # error "Undefined or unknown BYTE_ORDER"
  #endif
  
+#ifdef _MSC_VER
+# define RSPAMD_PACKED(name) \
+    __pragma(pack(push, 1)) struct name __pragma(pack(pop))
+#elif defined(__GNUC__)
+# define RSPAMD_PACKED(name) struct __attribute__((packed)) name
+#else
+# define RSPAMD_PACKED(name)
+#endif
 
 
 #cmakedefine HAVE_SYS_QUEUE_H    1
