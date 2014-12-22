@@ -1036,6 +1036,7 @@ process_text_part (struct rspamd_task *task,
 	struct mime_text_part *text_part;
 	const gchar *cd;
 	gchar *pos;
+	gsize l;
 	rspamd_fstring_t token, buf;
 
 	/* Skip attachements */
@@ -1136,7 +1137,22 @@ process_text_part (struct rspamd_task *task,
 	text_part->words = g_array_new (FALSE, FALSE, sizeof (rspamd_fstring_t));
 	while ((pos = rspamd_tokenizer_get_word (&buf,
 			&token, &text_part->urls_offset)) != NULL) {
+		if (text_part->is_utf) {
+			l = g_utf8_strlen (token.begin, token.len);
+		}
+		else {
+			l = token.len;
+		}
+		/*
+		 * XXX: make this configurable
+		 */
+		if (l < 4) {
+			token.begin = pos;
+			continue;
+		}
 		g_array_append_val (text_part->words, token);
+
+		token.begin = pos;
 	}
 }
 
