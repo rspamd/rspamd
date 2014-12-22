@@ -731,7 +731,7 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 	const gchar *symbol;
 	gint r;
 	double nval;
-	gint ret = 0;
+	gint ret = -1;
 
 	if (what == EV_WRITE) {
 		if (!fuzzy_cmd_vector_to_wire (fd, session->commands)) {
@@ -743,6 +743,7 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 					fuzzy_io_callback, session);
 			event_add (&session->ev, &session->tv);
 			session->state = 1;
+			ret = 0;
 		}
 	}
 	else if (session->state == 1) {
@@ -766,31 +767,34 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 					symbol = map->symbol;
 				}
 
-				nval = fuzzy_normalize (rep->value, session->rule->max_score);
-				nval *= rep->prob;
-				msg_info (
-						"<%s>, found fuzzy hash with weight: %.2f, in list: %s:%d%s",
-						session->task->message_id,
-						nval,
-						symbol,
-						rep->flag,
-						map == NULL ? "(unknown)" : "");
-				if (map != NULL || !session->rule->skip_unknown) {
-					rspamd_snprintf (buf,
-							sizeof (buf),
-							"%d: %.2f / %.2f",
-							rep->flag,
-							rep->prob,
-							nval);
-					rspamd_task_insert_result_single (session->task,
-							symbol,
+				if (rep->prob > 0.5) {
+					nval = fuzzy_normalize (rep->value, session->rule->max_score);
+					nval *= rep->prob;
+					msg_info (
+							"<%s>, found fuzzy hash with weight: %.2f, in list: %s:%d%s",
+							session->task->message_id,
 							nval,
-							g_list_prepend (NULL,
-								rspamd_mempool_strdup (session->task->task_pool, buf)));
+							symbol,
+							rep->flag,
+							map == NULL ? "(unknown)" : "");
+					if (map != NULL || !session->rule->skip_unknown) {
+						rspamd_snprintf (buf,
+								sizeof (buf),
+								"%d: %.2f / %.2f",
+								rep->flag,
+								rep->prob,
+								nval);
+						rspamd_task_insert_result_single (session->task,
+								symbol,
+								nval,
+								g_list_prepend (NULL,
+									rspamd_mempool_strdup (
+										session->task->task_pool, buf)));
+					}
 				}
+				ret = 1;
 			}
 		}
-		ret = 1;
 	}
 	else {
 		errno = ETIMEDOUT;
@@ -810,7 +814,9 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 	}
 	else {
 		rspamd_upstream_ok (session->server);
-		remove_normal_event (session->task->s, fuzzy_io_fin, session);
+		if (session->commands->len == 0) {
+			remove_normal_event (session->task->s, fuzzy_io_fin, session);
+		}
 	}
 }
 
