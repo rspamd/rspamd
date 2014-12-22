@@ -192,8 +192,10 @@ rspamd_fuzzy_write_reply (struct fuzzy_session *session,
 static void
 rspamd_fuzzy_process_command (struct fuzzy_session *session)
 {
-	struct rspamd_fuzzy_reply rep = {0, 0, 0.0};
+	struct rspamd_fuzzy_reply rep = {0, 0, 0, 0.0};
 	gboolean res = FALSE;
+
+	rep.tag = session->cmd->tag;
 
 	if (session->cmd->cmd == FUZZY_CHECK) {
 		rep = rspamd_fuzzy_backend_check (session->ctx->backend, session->cmd,
@@ -288,6 +290,7 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 			lcmd.flag = l->flag;
 			lcmd.shingles_count = 0;
 			lcmd.value = l->value;
+			lcmd.tag = 0;
 			cmd = &lcmd;
 		}
 		else if ((guint)r >= sizeof (struct rspamd_fuzzy_cmd)) {

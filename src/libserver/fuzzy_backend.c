@@ -546,7 +546,7 @@ struct rspamd_fuzzy_reply
 rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 		const struct rspamd_fuzzy_cmd *cmd, gint64 expire)
 {
-	struct rspamd_fuzzy_reply rep = {0, 0, 0.0};
+	struct rspamd_fuzzy_reply rep = {0, 0, 0, 0.0};
 	const struct rspamd_fuzzy_shingle_cmd *shcmd;
 	int rc;
 	gint64 timestamp;
