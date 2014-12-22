@@ -500,7 +500,7 @@ fuzzy_io_fin (void *ud)
 /*
  * Create fuzzy command from a text part
  */
-struct rspamd_fuzzy_cmd *
+static struct rspamd_fuzzy_cmd *
 fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 		int c,
 		gint flag,
@@ -563,7 +563,7 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 	return cmd;
 }
 
-struct rspamd_fuzzy_cmd *
+static struct rspamd_fuzzy_cmd *
 fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 		int c,
 		gint flag,
@@ -606,6 +606,21 @@ fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 	*size = sizeof (struct rspamd_fuzzy_cmd);
 
 	return cmd;
+}
+
+static gboolean
+fuzzy_cmd_to_wire (gint fd, const struct rspamd_fuzzy_cmd *cmd, gsize len)
+{
+	const guchar *out = (const guchar *)cmd;
+
+	while (write (fd, out, len) == -1) {
+		if (errno == EINTR) {
+			continue;
+		}
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 /* Call this whenever we got data from fuzzy storage */
