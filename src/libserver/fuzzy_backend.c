@@ -610,13 +610,17 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 				cur_cnt ++;
 			}
 			else {
-				if (cur_cnt > max_cnt) {
+				if (cur_cnt >= max_cnt) {
 					max_cnt = cur_cnt;
 					sel_id = cur_id;
 				}
 				cur_cnt = 0;
 				cur_id = shingle_values[i];
 			}
+		}
+
+		if (cur_cnt > max_cnt) {
+			max_cnt = cur_cnt;
 		}
 
 		if (sel_id != -1) {
@@ -627,9 +631,9 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 					RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID, sel_id);
 			if (rc == SQLITE_OK) {
 				digest = sqlite3_column_text (
-						prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK].stmt, 0);
+						prepared_stmts[RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID].stmt, 0);
 				timestamp = sqlite3_column_int64 (
-						prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK].stmt, 2);
+						prepared_stmts[RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID].stmt, 2);
 				if (time (NULL) - timestamp > expire) {
 					/* Expire element */
 					msg_debug ("requested hash has been expired");
@@ -640,9 +644,9 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 				}
 				else {
 					rep.value = sqlite3_column_int64 (
-							prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK].stmt, 1);
+							prepared_stmts[RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID].stmt, 1);
 					rep.flag = sqlite3_column_int (
-							prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK].stmt, 3);
+							prepared_stmts[RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID].stmt, 3);
 				}
 			}
 		}
