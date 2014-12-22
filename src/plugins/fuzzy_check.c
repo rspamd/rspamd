@@ -374,6 +374,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj)
 	}
 	rule->hash_key = g_string_sized_new (BLAKE2B_KEYBYTES);
 	blake2 (rule->hash_key->str, k, NULL, BLAKE2B_KEYBYTES, strlen (k), 0);
+	rule->hash_key->len = BLAKE2B_KEYBYTES;
 
 	if ((value = ucl_object_find_key (obj, "fuzzy_shingles_key")) != NULL) {
 		k = ucl_object_tostring (value);
@@ -383,7 +384,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj)
 	}
 	rule->shingles_key = g_string_sized_new (16);
 	blake2 (rule->hash_key->str, k, NULL, 16, strlen (k), 0);
-
+	rule->hash_key->len = 16;
 
 	if (rspamd_upstreams_count (rule->servers) == 0) {
 		msg_err ("no servers defined for fuzzy rule with symbol: %s",
@@ -569,8 +570,8 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 		/*
 		 * Generate hash from all words in the part
 		 */
-		blake2b_init_key (&st, BLAKE2B_OUTBYTES, rule->hash_key->str,
-				rule->hash_key->len);
+		g_assert (blake2b_init_key (&st, BLAKE2B_OUTBYTES, rule->hash_key->str,
+				rule->hash_key->len) != -1);
 		for (i = 0; i < part->words->len; i ++) {
 			word = &g_array_index (part->words, rspamd_fstring_t, i);
 			blake2b_update (&st, word->begin, word->len);
@@ -637,8 +638,8 @@ fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 		/* Use blake2b for digest */
 		blake2b_state st;
 
-		blake2b_init_key (&st, BLAKE2B_OUTBYTES, rule->hash_key->str,
-				rule->hash_key->len);
+		g_assert (blake2b_init_key (&st, BLAKE2B_OUTBYTES, rule->hash_key->str,
+				rule->hash_key->len) != -1);
 		blake2b_update (&st, data, datalen);
 		blake2b_final (&st, cmd->digest, sizeof (cmd->digest));
 	}
