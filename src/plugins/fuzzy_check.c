@@ -982,10 +982,12 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 		/*
 		 * Try legacy first
 		 */
-		cmd = fuzzy_cmd_from_text_part (rule, c, flag, value, task->task_pool,
-				part, TRUE, NULL);
-		if (cmd) {
-			g_ptr_array_add (res, cmd);
+		if (c == FUZZY_CHECK) {
+			cmd = fuzzy_cmd_from_text_part (rule, c, flag, value, task->task_pool,
+					part, TRUE, NULL);
+			if (cmd) {
+				g_ptr_array_add (res, cmd);
+			}
 		}
 		cmd = fuzzy_cmd_from_text_part (rule, c, flag, value, task->task_pool,
 				part, FALSE, NULL);
@@ -1004,12 +1006,14 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 				fuzzy_module_ctx->min_height) {
 				if (fuzzy_module_ctx->min_width <= 0 || image->width >=
 					fuzzy_module_ctx->min_width) {
-					cmd = fuzzy_cmd_from_data_part (rule, c, flag, value,
-							task->task_pool,
-							image->data->data, image->data->len,
-							TRUE, NULL);
-					if (cmd) {
-						g_ptr_array_add (res, cmd);
+					if (c == FUZZY_CHECK) {
+						cmd = fuzzy_cmd_from_data_part (rule, c, flag, value,
+								task->task_pool,
+								image->data->data, image->data->len,
+								TRUE, NULL);
+						if (cmd) {
+							g_ptr_array_add (res, cmd);
+						}
 					}
 					cmd = fuzzy_cmd_from_data_part (rule, c, flag, value,
 							task->task_pool,
@@ -1031,12 +1035,14 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 			fuzzy_check_content_type (rule, mime_part->type)) {
 			if (fuzzy_module_ctx->min_bytes <= 0 || mime_part->content->len >=
 				fuzzy_module_ctx->min_bytes) {
-				cmd = fuzzy_cmd_from_data_part (rule, c, flag, value,
-						task->task_pool,
-						mime_part->content->data, mime_part->content->len,
-						TRUE, NULL);
-				if (cmd) {
-					g_ptr_array_add (res, cmd);
+				if (c == FUZZY_CHECK) {
+					cmd = fuzzy_cmd_from_data_part (rule, c, flag, value,
+							task->task_pool,
+							mime_part->content->data, mime_part->content->len,
+							TRUE, NULL);
+					if (cmd) {
+						g_ptr_array_add (res, cmd);
+					}
 				}
 				cmd = fuzzy_cmd_from_data_part (rule, c, flag, value,
 						task->task_pool,
