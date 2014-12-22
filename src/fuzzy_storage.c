@@ -195,8 +195,6 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 	struct rspamd_fuzzy_reply rep = {0, 0, 0, 0.0};
 	gboolean res = FALSE;
 
-	rep.tag = session->cmd->tag;
-
 	if (session->cmd->cmd == FUZZY_CHECK) {
 		rep = rspamd_fuzzy_backend_check (session->ctx->backend, session->cmd,
 				session->ctx->expire);
@@ -227,6 +225,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		server_stat->fuzzy_hashes = rspamd_fuzzy_backend_count (session->ctx->backend);
 	}
 
+	rep.tag = session->cmd->tag;
 	rspamd_fuzzy_write_reply (session, &rep);
 }
 
