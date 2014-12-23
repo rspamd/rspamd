@@ -114,7 +114,7 @@ rspamd_tokenizer_get_word (rspamd_fstring_t * buf, rspamd_fstring_t * token, GLi
 		return NULL;
 	}
 
-	if (*exceptions != NULL) {
+	if (exceptions != NULL && *exceptions != NULL) {
 		ex = (*exceptions)->data;
 	}
 
@@ -220,9 +220,9 @@ rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 void
 tokenize_subject (struct rspamd_task *task, GTree ** tree)
 {
-	rspamd_fstring_t subject;
-	const gchar *sub;
+	gchar *sub;
 	struct tokenizer *osb_tokenizer;
+	GArray *words;
 
 	if (*tree == NULL) {
 		*tree = g_tree_new (token_node_compare_func);
@@ -234,26 +234,21 @@ tokenize_subject (struct rspamd_task *task, GTree ** tree)
 
 	/* Try to use pre-defined subject */
 	if (task->subject != NULL) {
-		subject.begin = task->subject;
-		subject.len = strlen (task->subject);
-		osb_tokenizer->tokenize_func (osb_tokenizer,
-			task->task_pool,
-			&subject,
-			tree,
-			FALSE,
-			TRUE,
-			NULL);
+		sub = task->subject;
 	}
-	if ((sub = g_mime_message_get_subject (task->message)) != NULL) {
-		subject.begin = (gchar *)sub;
-		subject.len = strlen (sub);
+	else {
+		sub = (gchar *)g_mime_message_get_subject (task->message);
+	}
+
+	if (sub != NULL) {
+		words = rspamd_tokenize_text (sub, strlen (sub), TRUE, 0, NULL);
 		osb_tokenizer->tokenize_func (osb_tokenizer,
-			task->task_pool,
-			&subject,
-			tree,
-			FALSE,
-			TRUE,
-			NULL);
+				task->task_pool,
+				words,
+				tree,
+				FALSE,
+				TRUE,
+				NULL);
 	}
 }
 

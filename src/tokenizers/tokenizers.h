@@ -19,9 +19,13 @@ typedef struct token_node_s {
 /* Common tokenizer structure */
 struct tokenizer {
 	gchar *name;
-	gint (*tokenize_func)(struct tokenizer *tokenizer, rspamd_mempool_t *pool,
-		rspamd_fstring_t *input,
-		GTree **cur, gboolean save_token, gboolean is_utf, GList *exceptions);
+	gint (*tokenize_func)(struct tokenizer *tokenizer,
+			rspamd_mempool_t *pool,
+			GArray *words,
+			GTree **cur,
+			gboolean save_token,
+			gboolean is_utf,
+			GList *exceptions);
 	gchar * (*get_next_word)(rspamd_fstring_t *buf, rspamd_fstring_t *token, GList **exceptions);
 };
 
@@ -42,7 +46,7 @@ GArray * rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 /* OSB tokenize function */
 int osb_tokenize_text (struct tokenizer *tokenizer,
 	rspamd_mempool_t *pool,
-	rspamd_fstring_t *input,
+	GArray *input,
 	GTree **cur,
 	gboolean save_token,
 	gboolean is_utf,

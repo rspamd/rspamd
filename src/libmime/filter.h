@@ -150,18 +150,8 @@ double rspamd_factor_consolidation_func (struct rspamd_task *task,
 	const gchar *metric_name,
 	const gchar *unused);
 
-/*
- * Learn specified statfile with message in a task
- * @param statfile symbol of statfile
- * @param task worker's task object
- * @param err pointer to GError
- * @return true if learn succeed
- */
-gboolean rspamd_learn_task (const gchar *statfile,
-	struct rspamd_task *task,
-	GError **err);
 
-/*
+/**
  * Learn specified statfile with message in a task
  * @param statfile symbol of statfile
  * @param task worker's task object

@@ -37,17 +37,17 @@ extern const int primes[];
 int
 osb_tokenize_text (struct tokenizer *tokenizer,
 	rspamd_mempool_t * pool,
-	rspamd_fstring_t * input,
+	GArray * input,
 	GTree ** tree,
 	gboolean save_token,
 	gboolean is_utf,
 	GList *exceptions)
 {
 	token_node_t *new = NULL;
-	rspamd_fstring_t token = { NULL, 0, 0 };
+	rspamd_fstring_t *token;
 	guint32 hashpipe[FEATURE_WINDOW_SIZE], h1, h2;
-	gint i, l, processed = 0;
-	gchar *res;
+	gint i, processed = 0;
+	guint w;
 
 	if (*tree == NULL) {
 		*tree = g_tree_new (token_node_compare_func);
@@ -58,31 +58,20 @@ osb_tokenize_text (struct tokenizer *tokenizer,
 
 	memset (hashpipe, 0xfe, FEATURE_WINDOW_SIZE * sizeof (hashpipe[0]));
 
-	while ((res =
-		tokenizer->get_next_word (input, &token, &exceptions)) != NULL) {
-		/* Skip small words */
-		if (is_utf) {
-			l = g_utf8_strlen (token.begin, token.len);
-		}
-		else {
-			l = token.len;
-		}
-		if (l < MIN_LEN) {
-			token.begin = res;
-			continue;
-		}
+	for (w = 0; w < input->len; w ++) {
+		token = &g_array_index (input, rspamd_fstring_t, w);
 
 		if (processed < FEATURE_WINDOW_SIZE) {
 			/* Just fill a hashpipe */
 			hashpipe[FEATURE_WINDOW_SIZE - ++processed] =
-				rspamd_fstrhash_lc (&token, is_utf);
+				rspamd_fstrhash_lc (token, is_utf);
 		}
 		else {
 			/* Shift hashpipe */
 			for (i = FEATURE_WINDOW_SIZE - 1; i > 0; i--) {
 				hashpipe[i] = hashpipe[i - 1];
 			}
-			hashpipe[0] = rspamd_fstrhash_lc (&token, is_utf);
+			hashpipe[0] = rspamd_fstrhash_lc (token, is_utf);
 			processed++;
 
 			for (i = 1; i < FEATURE_WINDOW_SIZE; i++) {
@@ -94,7 +83,7 @@ osb_tokenize_text (struct tokenizer *tokenizer,
 				new->h2 = h2;
 				if (save_token) {
 					new->extra =
-						(uintptr_t)rspamd_mempool_fstrdup (pool, &token);
+						(uintptr_t)rspamd_mempool_fstrdup (pool, token);
 				}
 
 				if (g_tree_lookup (*tree, new) == NULL) {
@@ -102,7 +91,6 @@ osb_tokenize_text (struct tokenizer *tokenizer,
 				}
 			}
 		}
-		token.begin = res;
 	}
 
 	if (processed <= FEATURE_WINDOW_SIZE) {
@@ -113,7 +101,7 @@ osb_tokenize_text (struct tokenizer *tokenizer,
 			new->h1 = h1;
 			new->h2 = h2;
 			if (save_token) {
-				new->extra = (uintptr_t)rspamd_mempool_fstrdup (pool, &token);
+				new->extra = (uintptr_t)rspamd_mempool_fstrdup (pool, token);
 			}
 
 			if (g_tree_lookup (*tree, new) == NULL) {

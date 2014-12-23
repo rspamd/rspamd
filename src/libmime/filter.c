@@ -746,88 +746,58 @@ classifiers_callback (gpointer value, void *arg)
 	struct rspamd_statfile_config *st;
 	GTree *tokens = NULL;
 	GList *cur;
-	rspamd_fstring_t c;
-	gchar *header = NULL;
 	gint *dist = NULL, diff;
-	gboolean is_twopart = FALSE, is_headers = FALSE;
-	struct raw_header *rh;
+	gboolean is_twopart = FALSE;
 
 	task = cbdata->task;
 
-	if ((header = g_hash_table_lookup (cl->opts, "header")) != NULL) {
-		cur =
-			message_get_header (task, header, FALSE);
-		is_headers = TRUE;
-	}
-	else {
-		cur = g_list_first (task->text_parts);
-		dist = rspamd_mempool_get_variable (task->task_pool, "parts_distance");
-		if (cur != NULL && cur->next != NULL && cur->next->next == NULL) {
-			is_twopart = TRUE;
-		}
+	cur = g_list_first (task->text_parts);
+	dist = rspamd_mempool_get_variable (task->task_pool, "parts_distance");
+	if (cur != NULL && cur->next != NULL && cur->next->next == NULL) {
+		is_twopart = TRUE;
 	}
 	ctx = cl->classifier->init_func (task->task_pool, cl);
 
 	if ((tokens = g_hash_table_lookup (task->tokens, cl->tokenizer)) == NULL) {
 		while (cur != NULL) {
-			if (is_headers) {
-				rh = (struct raw_header *)cur->data;
-				if (rh->decoded == NULL) {
-					cur = g_list_next (cur);
-					continue;
-				}
-				c.len = strlen (rh->decoded);
-				if (c.len > 0) {
-					c.begin = rh->decoded;
-					if (!cl->tokenizer->tokenize_func (cl->tokenizer,
-						task->task_pool, &c, &tokens, FALSE, FALSE, NULL)) {
-						msg_info ("cannot tokenize input");
-						return;
-					}
+			text_part = (struct mime_text_part *)cur->data;
+			if (text_part->is_empty) {
+				cur = g_list_next (cur);
+				continue;
+			}
+			if (dist != NULL && cur->next == NULL) {
+				/* Compare part's content */
+
+				if (*dist >= COMMON_PART_FACTOR) {
+					msg_info (
+							"message <%s> has two common text parts, ignore the last one",
+							task->message_id);
+					break;
 				}
 			}
-			else {
-				text_part = (struct mime_text_part *)cur->data;
-				if (text_part->is_empty) {
-					cur = g_list_next (cur);
-					continue;
-				}
-				if (dist != NULL && cur->next == NULL) {
-					/* Compare part's content */
-
-					if (*dist >= COMMON_PART_FACTOR) {
-						msg_info (
-							"message <%s> has two common text parts, ignore the last one",
-							task->message_id);
-						break;
-					}
-				}
-				else if (cur->next == NULL && is_twopart) {
-					p1 = cur->prev->data;
-					p2 = text_part;
-					if (p1->diff_str != NULL && p2->diff_str != NULL) {
-						diff =
+			else if (cur->next == NULL && is_twopart) {
+				p1 = cur->prev->data;
+				p2 = text_part;
+				if (p1->diff_str != NULL && p2->diff_str != NULL) {
+					diff =
 							rspamd_diff_distance (p1->diff_str, p2->diff_str);
-					}
-					else {
-						diff = rspamd_fuzzy_compare_parts (p1, p2);
-					}
-					if (diff >= COMMON_PART_FACTOR) {
-						msg_info (
+				}
+				else {
+					diff = rspamd_fuzzy_compare_parts (p1, p2);
+				}
+				if (diff >= COMMON_PART_FACTOR) {
+					msg_info (
 							"message <%s> has two common text parts, ignore the last one",
 							task->message_id);
-						break;
-					}
+					break;
 				}
-				c.begin = (gchar *)text_part->content->data;
-				c.len = text_part->content->len;
-				/* Tree would be freed at task pool freeing */
-				if (!cl->tokenizer->tokenize_func (cl->tokenizer,
-					task->task_pool, &c, &tokens,
+			}
+			/* Tree would be freed at task pool freeing */
+			if (!cl->tokenizer->tokenize_func (cl->tokenizer,
+					task->task_pool, text_part->words, &tokens,
 					FALSE, text_part->is_utf, text_part->urls_offset)) {
-					msg_info ("cannot tokenize input");
-					return;
-				}
+				msg_info ("cannot tokenize input");
+				return;
 			}
 			cur = g_list_next (cur);
 		}
@@ -1109,151 +1079,6 @@ rspamd_check_action_metric (struct rspamd_task *task,
 }
 
 gboolean
-rspamd_learn_task (const gchar *statfile, struct rspamd_task *task, GError **err)
-{
-	GList *cur, *ex;
-	struct rspamd_classifier_config *cl;
-	struct classifier_ctx *cls_ctx;
-	gchar *s;
-	rspamd_fstring_t c;
-	GTree *tokens = NULL;
-	struct rspamd_statfile_config *st;
-	stat_file_t *stf;
-	gdouble sum;
-	struct mime_text_part *part, *p1, *p2;
-	gboolean is_utf = FALSE, is_twopart = FALSE;
-	gint diff;
-	struct raw_header *rh;
-
-	/* Load classifier by symbol */
-	cl = g_hash_table_lookup (task->cfg->classifiers_symbols, statfile);
-	if (cl == NULL) {
-		g_set_error (err,
-			filter_error_quark (), 1, "Statfile %s is not configured in any classifier",
-			statfile);
-		return FALSE;
-	}
-
-	/* If classifier has 'header' option just classify header of this type */
-	if ((s = g_hash_table_lookup (cl->opts, "header")) != NULL) {
-		cur = message_get_header (task, s, FALSE);
-	}
-	else {
-		/* Classify message otherwise */
-		cur = g_list_first (task->text_parts);
-		if (cur != NULL && cur->next != NULL && cur->next->next == NULL) {
-			is_twopart = TRUE;
-		}
-	}
-
-	/* Get tokens from each element */
-	while (cur) {
-		if (s != NULL) {
-			rh = (struct raw_header *)cur->data;
-			if (rh->decoded == NULL) {
-				cur = g_list_next (cur);
-				continue;
-			}
-			c.len = strlen (rh->decoded);
-			c.begin = rh->decoded;
-			ex = NULL;
-		}
-		else {
-			part = cur->data;
-			/* Skip empty parts */
-			if (part->is_empty) {
-				cur = g_list_next (cur);
-				continue;
-			}
-			c.begin = (gchar *)part->content->data;
-			c.len = part->content->len;
-			is_utf = part->is_utf;
-			ex = part->urls_offset;
-			if (is_twopart && cur->next == NULL) {
-				/* Compare part's content */
-				p1 = cur->prev->data;
-				p2 = part;
-				if (p1->diff_str != NULL && p2->diff_str != NULL) {
-					diff = rspamd_diff_distance (p1->diff_str, p2->diff_str);
-				}
-				else {
-					diff = rspamd_fuzzy_compare_parts (p1, p2);
-				}
-				if (diff >= COMMON_PART_FACTOR) {
-					msg_info (
-						"message <%s> has two common text parts, ignore the last one",
-						task->message_id);
-					break;
-				}
-			}
-		}
-		/* Get tokens */
-		if (!cl->tokenizer->tokenize_func (
-				cl->tokenizer, task->task_pool,
-				&c, &tokens, FALSE, is_utf, ex)) {
-			g_set_error (err,
-				filter_error_quark (), 2, "Cannot tokenize message");
-			return FALSE;
-		}
-		cur = g_list_next (cur);
-	}
-
-	/* Handle messages without text */
-	if (tokens == NULL) {
-		g_set_error (err,
-			filter_error_quark (), 3, "Cannot tokenize message, no text data");
-		msg_info ("learn failed for message <%s>, no tokens to extract",
-			task->message_id);
-		return FALSE;
-	}
-
-	/* Take care of subject */
-	tokenize_subject (task, &tokens);
-
-	/* Init classifier */
-	cls_ctx = cl->classifier->init_func (
-		task->task_pool, cl);
-	/* Get or create statfile */
-	stf = get_statfile_by_symbol (task->worker->srv->statfile_pool,
-			cl, statfile, &st, TRUE);
-
-	/* Learn */
-	if (stf== NULL || !cl->classifier->learn_func (
-			cls_ctx, task->worker->srv->statfile_pool,
-			statfile, tokens, TRUE, &sum,
-			1.0, err)) {
-		if (*err) {
-			msg_info ("learn failed for message <%s>, learn error: %s",
-				task->message_id,
-				(*err)->message);
-			return FALSE;
-		}
-		else {
-			g_set_error (err,
-				filter_error_quark (), 4,
-				"Learn failed, unknown learn classifier error");
-			msg_info ("learn failed for message <%s>, unknown learn error",
-				task->message_id);
-			return FALSE;
-		}
-	}
-	/* Increase statistics */
-	task->worker->srv->stat->messages_learned++;
-
-	maybe_write_binlog (cl, st, stf, tokens);
-	msg_info (
-		"learn success for message <%s>, for statfile: %s, sum weight: %.2f",
-		task->message_id,
-		statfile,
-		sum);
-	statfile_pool_plan_invalidate (task->worker->srv->statfile_pool,
-		DEFAULT_STATFILE_INVALIDATE_TIME,
-		DEFAULT_STATFILE_INVALIDATE_JITTER);
-
-	return TRUE;
-}
-
-gboolean
 rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
 	struct rspamd_task *task,
 	gboolean is_spam,
@@ -1261,7 +1086,6 @@ rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
 {
 	GList *cur, *ex;
 	struct classifier_ctx *cls_ctx;
-	rspamd_fstring_t c;
 	GTree *tokens = NULL;
 	struct mime_text_part *part, *p1, *p2;
 	gboolean is_utf = FALSE, is_twopart = FALSE;
@@ -1280,8 +1104,6 @@ rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
 			cur = g_list_next (cur);
 			continue;
 		}
-		c.begin = (gchar *)part->content->data;
-		c.len = part->content->len;
 		is_utf = part->is_utf;
 		ex = part->urls_offset;
 		if (is_twopart && cur->next == NULL) {
@@ -1307,7 +1129,7 @@ rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
 		/* Get tokens */
 		if (!cl->tokenizer->tokenize_func (
 				cl->tokenizer, task->task_pool,
-				&c, &tokens, FALSE, is_utf, ex)) {
+				part->words, &tokens, FALSE, is_utf, ex)) {
 			g_set_error (err,
 				filter_error_quark (), 2, "Cannot tokenize message");
 			return FALSE;
