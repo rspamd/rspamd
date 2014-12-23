@@ -64,6 +64,7 @@ struct upstream_list {
 	GPtrArray *alive;
 	rspamd_mutex_t *lock;
 	guint64 hash_seed;
+	guint cur_elt;
 };
 
 static struct rdns_resolver *res = NULL;
@@ -354,6 +355,7 @@ rspamd_upstreams_create (void)
 	ls->ups = g_ptr_array_new ();
 	ls->alive = g_ptr_array_new ();
 	ls->lock = rspamd_mutex_new ();
+	ls->cur_elt = 0;
 
 	return ls;
 }
@@ -678,5 +680,12 @@ rspamd_upstream_get (struct upstream_list *ups,
 		return rspamd_upstream_get_round_robin (ups, TRUE);
 	case RSPAMD_UPSTREAM_MASTER_SLAVE:
 		return rspamd_upstream_get_round_robin (ups, FALSE);
+	case RSPAMD_UPSTREAM_SEQUENTIAL:
+		if (ups->cur_elt >= ups->alive->len) {
+			ups->cur_elt = 0;
+			return NULL;
+		}
+
+		return g_ptr_array_index (ups->alive, ups->cur_elt ++);
 	}
 }
