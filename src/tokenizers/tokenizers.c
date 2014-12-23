@@ -176,85 +176,46 @@ rspamd_tokenizer_get_word (rspamd_fstring_t * buf, rspamd_fstring_t * token, GLi
 	return p;
 }
 
-/* Struct to access gmime headers */
-struct raw_header {
-	struct raw_header *next;
-	char *name;
-	char *value;
-};
-
-typedef struct _GMimeHeader {
-	GHashTable *hash;
-	GHashTable *writers;
-	struct raw_header *headers;
-} local_GMimeHeader;
-
-int
-tokenize_headers (rspamd_mempool_t * pool,
-	struct rspamd_task *task,
-	GTree ** tree)
+GArray *
+rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
+		gsize min_len, GList **exceptions)
 {
-	token_node_t *new = NULL;
-	rspamd_fstring_t headername;
-	rspamd_fstring_t headervalue;
+	rspamd_fstring_t token, buf;
+	gchar *pos;
+	gsize l;
+	GArray *res;
 
-	if (*tree == NULL) {
-		*tree = g_tree_new (token_node_compare_func);
-		rspamd_mempool_add_destructor (pool,
-			(rspamd_mempool_destruct_t) g_tree_destroy,
-			*tree);
+	if (len == 0 || text == NULL) {
+		return NULL;
 	}
-#ifndef GMIME24
-	struct raw_header *h;
 
-	h = GMIME_OBJECT (task->message)->headers->headers;
-	while (h) {
-		if (h->name && h->value) {
-			new = rspamd_mempool_alloc (pool, sizeof (token_node_t));
-			headername.begin = h->name;
-			headername.len = strlen (h->name);
-			headervalue.begin = h->value;
-			headervalue.len = strlen (h->value);
-			new->h1 = rspamd_fstrhash (&headername) * primes[0];
-			new->h2 = rspamd_fstrhash (&headervalue) * primes[1];
-			if (g_tree_lookup (*tree, new) == NULL) {
-				g_tree_insert (*tree, new, new);
-			}
+	buf.begin = text;
+	buf.len = len;
+	buf.size = buf.len;
+	token.begin = NULL;
+	token.len = 0;
+
+	res = g_array_new (FALSE, FALSE, sizeof (rspamd_fstring_t));
+	while ((pos = rspamd_tokenizer_get_word (&buf,
+			&token, exceptions)) != NULL) {
+		if (is_utf) {
+			l = g_utf8_strlen (token.begin, token.len);
 		}
-		h = h->next;
-	}
-#else
-	GMimeHeaderList *ls;
-	GMimeHeaderIter *iter;
-	const char *name;
-	const char *value;
-
-	ls = GMIME_OBJECT (task->message)->headers;
-	iter = g_mime_header_iter_new ();
-
-	if (g_mime_header_list_get_iter (ls, iter)) {
-		while (g_mime_header_iter_is_valid (iter)) {
-			new = rspamd_mempool_alloc (pool, sizeof (token_node_t));
-			name = g_mime_header_iter_get_name (iter);
-			value = g_mime_header_iter_get_value (iter);
-			headername.begin = (u_char *)name;
-			headername.len = strlen (name);
-			headervalue.begin = (u_char *)value;
-			headervalue.len = strlen (value);
-			new->h1 = rspamd_fstrhash (&headername) * primes[0];
-			new->h2 = rspamd_fstrhash (&headervalue) * primes[1];
-			if (g_tree_lookup (*tree, new) == NULL) {
-				g_tree_insert (*tree, new, new);
-			}
-			if (!g_mime_header_iter_next (iter)) {
-				break;
-			}
+		else {
+			l = token.len;
 		}
+		if (min_len > 0 && l < min_len) {
+			token.begin = pos;
+			continue;
+		}
+		g_array_append_val (res, token);
+
+		token.begin = pos;
 	}
-	g_mime_header_iter_free (iter);
-#endif
-	return TRUE;
+
+	return res;
 }
+
 
 void
 tokenize_subject (struct rspamd_task *task, GTree ** tree)

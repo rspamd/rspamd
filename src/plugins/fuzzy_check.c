@@ -1155,14 +1155,16 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 	struct fuzzy_learn_session *s;
 	struct upstream *selected;
 	gint sock;
+	gboolean ret = FALSE;
 
 	/* Get upstream */
-	selected = rspamd_upstream_get (rule->servers, RSPAMD_UPSTREAM_ROUND_ROBIN);
-	if (selected) {
+
+	while ((selected = rspamd_upstream_get (rule->servers,
+			RSPAMD_UPSTREAM_SEQUENTIAL))) {
 		/* Create UDP socket */
 		if ((sock = rspamd_inet_address_connect (rspamd_upstream_addr (selected),
 				SOCK_DGRAM, TRUE)) == -1) {
-			return FALSE;
+			rspamd_upstream_fail (selected);
 		}
 		else {
 			s =
@@ -1183,11 +1185,11 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 			rspamd_http_connection_ref (entry->conn);
 			event_add (&s->ev, &s->tv);
 			(*saved)++;
-			return TRUE;
+			ret = TRUE;
 		}
 	}
 
-	return FALSE;
+	return ret;
 }
 
 static void

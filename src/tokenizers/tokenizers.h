@@ -27,11 +27,18 @@ struct tokenizer {
 
 /* Compare two token nodes */
 int token_node_compare_func (gconstpointer a, gconstpointer b);
+
 /* Get tokenizer structure by name or return NULL if this name is not found */
 struct tokenizer * get_tokenizer (const char *name);
+
 /* Get next word from specified f_str_t buf */
 gchar * rspamd_tokenizer_get_word (rspamd_fstring_t *buf,
 		rspamd_fstring_t *token, GList **exceptions);
+
+/* Tokenize text into array of words (rspamd_fstring_t type) */
+GArray * rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
+		gsize min_len, GList **exceptions);
+
 /* OSB tokenize function */
 int osb_tokenize_text (struct tokenizer *tokenizer,
 	rspamd_mempool_t *pool,
@@ -40,10 +47,7 @@ int osb_tokenize_text (struct tokenizer *tokenizer,
 	gboolean save_token,
 	gboolean is_utf,
 	GList *exceptions);
-/* Common tokenizer for headers */
-int tokenize_headers (rspamd_mempool_t *pool,
-	struct rspamd_task *task,
-	GTree **cur);
+
 /* Make tokens for a subject */
 void tokenize_subject (struct rspamd_task *task, GTree ** tree);
 
