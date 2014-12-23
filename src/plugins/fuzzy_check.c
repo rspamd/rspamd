@@ -49,6 +49,7 @@
 #include "main.h"
 #include "blake2.h"
 #include "ottery.h"
+#include "libstemmer.h"
 
 #define DEFAULT_SYMBOL "R_FUZZY_HASH"
 #define DEFAULT_UPSTREAM_ERROR_TIME 10
@@ -533,6 +534,52 @@ fuzzy_io_fin (void *ud)
 	close (session->fd);
 }
 
+static void
+fuzzy_g_array_destructor (gpointer a)
+{
+	GArray *ar = (GArray *)a;
+
+	g_array_free (ar, TRUE);
+}
+
+static GArray *
+fuzzy_preprocess_words (struct mime_text_part *part, rspamd_mempool_t *pool)
+{
+	GArray *res;
+	struct sb_stemmer *stem;
+	rspamd_fstring_t *w, stw;
+	const guchar *r;
+	guint i;
+
+	if (!part->is_utf || !part->language || part->language[0] == '\0') {
+		res = part->words;
+	}
+	else {
+		/* Lemmatize words */
+		stem = sb_stemmer_new (part->language, "UTF_8");
+		if (stem == NULL) {
+			msg_debug ("cannot lemmatize %s language", part->language);
+			res = part->words;
+		}
+		else {
+			res = g_array_sized_new (FALSE, FALSE, sizeof (rspamd_fstring_t),
+					part->words->len);
+			for (i = 0; i < part->words->len; i ++) {
+				w = &g_array_index (part->words, rspamd_fstring_t, i);
+				r = sb_stemmer_stem (stem, w->begin, w->len);
+				if (r != NULL) {
+					stw.begin = rspamd_mempool_strdup (pool, r);
+					stw.len = strlen (r);
+					rspamd_str_lc (stw.begin, stw.len);
+					g_array_append_val (res, stw);
+				}
+			}
+			rspamd_mempool_add_destructor (pool, fuzzy_g_array_destructor, res);
+			sb_stemmer_delete (stem);
+		}
+	}
+	return res;
+}
 
 /*
  * Create fuzzy command from a text part
@@ -553,6 +600,7 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 	guint i;
 	blake2b_state st;
 	rspamd_fstring_t *word;
+	GArray *words;
 
 	if (legacy || part->words == NULL || part->words->len == 0) {
 		cmd = rspamd_mempool_alloc0 (pool, sizeof (*cmd));
@@ -572,15 +620,18 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 		 */
 		g_assert (blake2b_init_key (&st, BLAKE2B_OUTBYTES, rule->hash_key->str,
 				rule->hash_key->len) != -1);
-		for (i = 0; i < part->words->len; i ++) {
-			word = &g_array_index (part->words, rspamd_fstring_t, i);
+		words = fuzzy_preprocess_words (part, pool);
+
+		for (i = 0; i < words->len; i ++) {
+			word = &g_array_index (words, rspamd_fstring_t, i);
 			blake2b_update (&st, word->begin, word->len);
 		}
 		blake2b_final (&st, shcmd->basic.digest, sizeof (shcmd->basic.digest));
 
 		msg_debug ("loading shingles with key %*xs", 16, rule->shingles_key->str);
-		sh = rspamd_shingles_generate (part->words, rule->shingles_key->str,
-				pool, rspamd_shingles_default_filter, NULL);
+		sh = rspamd_shingles_generate (words,
+				rule->shingles_key->str, pool,
+				rspamd_shingles_default_filter, NULL);
 		if (sh != NULL) {
 			memcpy (&shcmd->sgl, sh, sizeof (shcmd->sgl));
 			shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
