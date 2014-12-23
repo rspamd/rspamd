@@ -26,6 +26,9 @@ struct mime_text_part {
 	gboolean is_balanced;
 	gboolean is_empty;
 	gboolean is_utf;
+	GUnicodeScript script;
+	const gchar *lang_code;
+	const gchar *language;
 	const gchar *real_charset;
 	GByteArray *orig;
 	GByteArray *content;
@@ -34,7 +37,6 @@ struct mime_text_part {
 	rspamd_fuzzy_t *fuzzy;
 	rspamd_fuzzy_t *double_fuzzy;
 	GMimeObject *parent;
-	GUnicodeScript script;
 	rspamd_fstring_t *diff_str;
 	GArray *words;
 };

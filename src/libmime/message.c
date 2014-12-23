@@ -1025,6 +1025,148 @@ convert_text_to_utf (struct rspamd_task *task,
 	return result_array;
 }
 
+struct language_match {
+	const char *code;
+	const char *name;
+	GUnicodeScript script;
+};
+
+static int
+language_elts_cmp (const void *a, const void *b)
+{
+	GUnicodeScript sc = *(const GUnicodeScript *)a;
+	const struct language_match *bb = (const struct language_match *)b;
+
+	return (sc - bb->script);
+}
+
+static void
+detect_text_language (struct mime_text_part *part)
+{
+	/* Keep sorted */
+	static const struct language_match language_codes[] = {
+			{ "", "english", G_UNICODE_SCRIPT_COMMON },
+			{ "", "", G_UNICODE_SCRIPT_INHERITED },
+			{ "ar", "arabic", G_UNICODE_SCRIPT_ARABIC },
+			{ "hy", "armenian", G_UNICODE_SCRIPT_ARMENIAN },
+			{ "bn", "chineese", G_UNICODE_SCRIPT_BENGALI },
+			{ "", "", G_UNICODE_SCRIPT_BOPOMOFO },
+			{ "chr", "", G_UNICODE_SCRIPT_CHEROKEE },
+			{ "cop", "",  G_UNICODE_SCRIPT_COPTIC  },
+			{ "ru", "russian",  G_UNICODE_SCRIPT_CYRILLIC },
+			/* Deseret was used to write English */
+			{ "", "",  G_UNICODE_SCRIPT_DESERET },
+			{ "hi", "",  G_UNICODE_SCRIPT_DEVANAGARI },
+			{ "am", "",  G_UNICODE_SCRIPT_ETHIOPIC },
+			{ "ka", "",  G_UNICODE_SCRIPT_GEORGIAN },
+			{ "", "",  G_UNICODE_SCRIPT_GOTHIC },
+			{ "el", "greek",  G_UNICODE_SCRIPT_GREEK },
+			{ "gu", "",  G_UNICODE_SCRIPT_GUJARATI },
+			{ "pa", "",  G_UNICODE_SCRIPT_GURMUKHI },
+			{ "han", "chineese",  G_UNICODE_SCRIPT_HAN },
+			{ "ko", "",  G_UNICODE_SCRIPT_HANGUL },
+			{ "he", "hebrew",  G_UNICODE_SCRIPT_HEBREW },
+			{ "ja", "",  G_UNICODE_SCRIPT_HIRAGANA },
+			{ "kn", "",  G_UNICODE_SCRIPT_KANNADA },
+			{ "ja", "",  G_UNICODE_SCRIPT_KATAKANA },
+			{ "km", "",  G_UNICODE_SCRIPT_KHMER },
+			{ "lo", "",  G_UNICODE_SCRIPT_LAO },
+			{ "en", "english",  G_UNICODE_SCRIPT_LATIN },
+			{ "ml", "",  G_UNICODE_SCRIPT_MALAYALAM },
+			{ "mn", "",  G_UNICODE_SCRIPT_MONGOLIAN },
+			{ "my", "",  G_UNICODE_SCRIPT_MYANMAR },
+			/* Ogham was used to write old Irish */
+			{ "", "",  G_UNICODE_SCRIPT_OGHAM },
+			{ "", "",  G_UNICODE_SCRIPT_OLD_ITALIC },
+			{ "or", "",  G_UNICODE_SCRIPT_ORIYA },
+			{ "", "",  G_UNICODE_SCRIPT_RUNIC },
+			{ "si", "",  G_UNICODE_SCRIPT_SINHALA },
+			{ "syr", "",  G_UNICODE_SCRIPT_SYRIAC },
+			{ "ta", "",  G_UNICODE_SCRIPT_TAMIL },
+			{ "te", "",  G_UNICODE_SCRIPT_TELUGU },
+			{ "dv", "",  G_UNICODE_SCRIPT_THAANA },
+			{ "th", "",  G_UNICODE_SCRIPT_THAI },
+			{ "bo", "",  G_UNICODE_SCRIPT_TIBETAN },
+			{ "iu", "",  G_UNICODE_SCRIPT_CANADIAN_ABORIGINAL },
+			{ "", "",  G_UNICODE_SCRIPT_YI },
+			{ "tl", "",  G_UNICODE_SCRIPT_TAGALOG },
+			/* Phillipino languages/scripts */
+			{ "hnn", "",  G_UNICODE_SCRIPT_HANUNOO },
+			{ "bku", "",  G_UNICODE_SCRIPT_BUHID },
+			{ "tbw", "",  G_UNICODE_SCRIPT_TAGBANWA },
+
+			{ "", "",  G_UNICODE_SCRIPT_BRAILLE },
+			{ "", "",  G_UNICODE_SCRIPT_CYPRIOT },
+			{ "", "",  G_UNICODE_SCRIPT_LIMBU },
+			/* Used for Somali (so) in the past */
+			{ "", "",  G_UNICODE_SCRIPT_OSMANYA },
+			/* The Shavian alphabet was designed for English */
+			{ "", "",  G_UNICODE_SCRIPT_SHAVIAN },
+			{ "", "",  G_UNICODE_SCRIPT_LINEAR_B },
+			{ "", "",  G_UNICODE_SCRIPT_TAI_LE },
+			{ "uga", "",  G_UNICODE_SCRIPT_UGARITIC },
+			{ "", "",  G_UNICODE_SCRIPT_NEW_TAI_LUE },
+			{ "bug", "",  G_UNICODE_SCRIPT_BUGINESE },
+			{ "", "",  G_UNICODE_SCRIPT_GLAGOLITIC },
+			/* Used for for Berber (ber), but Arabic script is more common */
+			{ "", "",  G_UNICODE_SCRIPT_TIFINAGH },
+			{ "syl", "",  G_UNICODE_SCRIPT_SYLOTI_NAGRI },
+			{ "peo", "",  G_UNICODE_SCRIPT_OLD_PERSIAN },
+			{ "", "",  G_UNICODE_SCRIPT_KHAROSHTHI },
+			{ "", "",  G_UNICODE_SCRIPT_UNKNOWN },
+			{ "", "",  G_UNICODE_SCRIPT_BALINESE },
+			{ "", "",  G_UNICODE_SCRIPT_CUNEIFORM },
+			{ "", "",  G_UNICODE_SCRIPT_PHOENICIAN },
+			{ "", "",  G_UNICODE_SCRIPT_PHAGS_PA },
+			{ "nqo", "", G_UNICODE_SCRIPT_NKO }
+	};
+	const struct language_match *lm;
+	const int max_chars = 32;
+
+	if (part != NULL) {
+		if (part->is_utf) {
+			/* Try to detect encoding by several symbols */
+			const gchar *p, *pp;
+			gunichar c;
+			gint32 remain = part->content->len, max = 0, processed = 0;
+			gint32 scripts[G_N_ELEMENTS (language_codes)];
+			GUnicodeScript scc, sel;
+
+			p = part->content->data;
+			memset (scripts, 0, sizeof (scripts));
+
+			while (remain > 0 && processed < max_chars) {
+				c = g_utf8_get_char_validated (p, remain);
+				if (c == (gunichar) -2 || c == (gunichar) -1) {
+					break;
+				}
+				if (g_unichar_isalpha (c)) {
+					scc = g_unichar_get_script (c);
+					if (scc < (gint)G_N_ELEMENTS (scripts)) {
+						scripts[scc]++;
+					}
+					processed ++;
+				}
+				pp = g_utf8_next_char (p);
+				remain -= pp - p;
+				p = pp;
+			}
+			for (remain = 0; remain < (gint)G_N_ELEMENTS (scripts); remain++) {
+				if (scripts[remain] > max) {
+					max = scripts[remain];
+					sel = remain;
+				}
+			}
+			part->script = sel;
+			lm = bsearch (&sel, language_codes, G_N_ELEMENTS (language_codes),
+					sizeof (language_codes[0]), &language_elts_cmp);
+
+			part->lang_code = lm->code;
+			part->language = lm->name;
+		}
+	}
+}
+
 static void
 process_text_part (struct rspamd_task *task,
 	GByteArray *part_content,
@@ -1035,9 +1177,6 @@ process_text_part (struct rspamd_task *task,
 {
 	struct mime_text_part *text_part;
 	const gchar *cd;
-	gchar *pos;
-	gsize l;
-	rspamd_fstring_t token, buf;
 
 	/* Skip attachements */
 #ifndef GMIME24
@@ -1128,32 +1267,10 @@ process_text_part (struct rspamd_task *task,
 	}
 
 	/* Post process part */
-	buf.begin = text_part->content->data;
-	buf.len = text_part->content->len;
-	buf.size = buf.len;
-	token.begin = NULL;
-	token.len = 0;
-
-	text_part->words = g_array_new (FALSE, FALSE, sizeof (rspamd_fstring_t));
-	while ((pos = rspamd_tokenizer_get_word (&buf,
-			&token, &text_part->urls_offset)) != NULL) {
-		if (text_part->is_utf) {
-			l = g_utf8_strlen (token.begin, token.len);
-		}
-		else {
-			l = token.len;
-		}
-		/*
-		 * XXX: make this configurable
-		 */
-		if (l < 4) {
-			token.begin = pos;
-			continue;
-		}
-		g_array_append_val (text_part->words, token);
-
-		token.begin = pos;
-	}
+	detect_text_language (text_part);
+	text_part->words = rspamd_tokenize_text (text_part->content->data,
+			text_part->content->len, text_part->is_utf, 4,
+			&text_part->urls_offset);
 }
 
 #ifdef GMIME24
