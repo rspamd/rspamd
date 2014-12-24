@@ -200,6 +200,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 				session->ctx->expire);
 	}
 	else {
+		rep.flag = session->cmd->flag;
 		if (rspamd_fuzzy_check_client (session)) {
 			if (session->cmd->cmd == FUZZY_WRITE) {
 				res = rspamd_fuzzy_backend_add (session->ctx->backend,
