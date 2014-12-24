@@ -1040,12 +1040,10 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 		/*
 		 * Try legacy first
 		 */
-		if (c == FUZZY_CHECK) {
-			cmd = fuzzy_cmd_from_text_part (rule, c, flag, value, task->task_pool,
-					part, TRUE, NULL);
-			if (cmd) {
-				g_ptr_array_add (res, cmd);
-			}
+		cmd = fuzzy_cmd_from_text_part (rule, c, flag, value, task->task_pool,
+				part, TRUE, NULL);
+		if (cmd) {
+			g_ptr_array_add (res, cmd);
 		}
 		cmd = fuzzy_cmd_from_text_part (rule, c, flag, value, task->task_pool,
 				part, FALSE, NULL);
