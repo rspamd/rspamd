@@ -585,11 +585,8 @@ rspamd_rcl_worker_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 
 	val = ucl_object_find_key (obj, "bind_socket");
 	if (val != NULL) {
-		if (val->type == UCL_ARRAY) {
-			val = val->value.ov;
-		}
-		LL_FOREACH (val, cur)
-		{
+		it = NULL;
+		while ((cur = ucl_iterate_object (val, &it, TRUE)) != NULL) {
 			if (!ucl_object_tostring_safe (cur, &worker_bind)) {
 				continue;
 			}
@@ -613,6 +610,7 @@ rspamd_rcl_worker_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 	/* Parse other attributes */
 	HASH_FIND_INT (cfg->wrk_parsers, (gint *)&qtype, wparser);
 	if (wparser != NULL && obj->type == UCL_OBJECT) {
+		it = NULL;
 		while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
 			HASH_FIND_STR (wparser->parsers, ucl_object_key (cur), whandler);
 			if (whandler != NULL) {
