@@ -585,8 +585,8 @@ rspamd_rcl_worker_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 
 	val = ucl_object_find_key (obj, "bind_socket");
 	if (val != NULL) {
-		it = NULL;
-		while ((cur = ucl_iterate_object (val, &it, TRUE)) != NULL) {
+		it = ucl_object_iterate_new (val);
+		while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
 			if (!ucl_object_tostring_safe (cur, &worker_bind)) {
 				continue;
 			}
@@ -596,9 +596,11 @@ rspamd_rcl_worker_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 					EINVAL,
 					"cannot parse bind line: %s",
 					worker_bind);
+				ucl_object_iterate_free (it);
 				return FALSE;
 			}
 		}
+		ucl_object_iterate_free (it);
 	}
 
 	wrk->options = (ucl_object_t *)obj;
