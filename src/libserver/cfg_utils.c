@@ -66,7 +66,39 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 		return FALSE;
 	}
 
-	tokens = g_strsplit_set (str, ":", 0);
+	if (str[0] == '[') {
+		/* This is an ipv6 address */
+		gsize len, ntok;
+		const gchar *start, *ip_pos;
+
+		start = str + 1;
+
+		len = strcspn (start, "]");
+		if (start[len] != ']') {
+			return FALSE;
+		}
+
+		ip_pos = start;
+		start += len + 1;
+		ntok = 1;
+
+		if (*start == ':') {
+			ntok = 2;
+			start ++;
+		}
+
+		tokens = g_malloc_n (ntok + 1, sizeof (gchar *));
+		tokens[ntok] = NULL;
+		tokens[0] = g_malloc (len + 1);
+		rspamd_strlcpy (tokens[0], ip_pos, len + 1);
+
+		if (ntok > 1) {
+			tokens[1] = g_strdup (start);
+		}
+	}
+	else {
+		tokens = g_strsplit_set (str, ":", 0);
+	}
 	if (!tokens || !tokens[0]) {
 		return FALSE;
 	}
