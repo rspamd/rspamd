@@ -1155,7 +1155,7 @@ rspamd_http_message_find_header (struct rspamd_http_message *msg,
 		LL_FOREACH (msg->headers, hdr)
 		{
 			if (hdr->name->len == slen) {
-				if (memcmp (hdr->name->str, name, slen) == 0) {
+				if (g_ascii_strncasecmp(hdr->name->str, name, slen) == 0) {
 					res = hdr->value->str;
 					break;
 				}
