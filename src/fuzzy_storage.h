@@ -37,7 +37,7 @@ RSPAMD_PACKED(rspamd_fuzzy_shingle_cmd) {
 };
 
 RSPAMD_PACKED(rspamd_fuzzy_reply) {
-	guint32 value;
+	gint32 value;
 	guint32 flag;
 	guint32 tag;
 	float prob;
