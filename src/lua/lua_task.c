@@ -496,6 +496,47 @@ static const struct luaL_reg textpartlib_m[] = {
 };
 
 /* Mimepart methods */
+/***
+ * @method mimepart:get_header(name[, case_sensitive])
+ * Get decoded value of a header specified with optional case_sensitive flag.
+ * By default headers are searched in caseless matter.
+ * @param {string} name name of header to get
+ * @param {boolean} case_sensitive case sensitiveness flag to search for a header
+ * @return {string} decoded value of a header
+ */
+LUA_FUNCTION_DEF (mimepart, get_header);
+/***
+ * @method mimepart:get_header_raw(name[, case_sensitive])
+ * Get raw value of a header specified with optional case_sensitive flag.
+ * By default headers are searched in caseless matter.
+ * @param {string} name name of header to get
+ * @param {boolean} case_sensitive case sensitiveness flag to search for a header
+ * @return {string} raw value of a header
+ */
+LUA_FUNCTION_DEF (mimepart, get_header_raw);
+/***
+ * @method mimepart:get_header_full(name[, case_sensitive])
+ * Get raw value of a header specified with optional case_sensitive flag.
+ * By default headers are searched in caseless matter. This method returns more
+ * information about the header as a list of tables with the following structure:
+ *
+ * - `name` - name of a header
+ * - `value` - raw value of a header
+ * - `decoded` - decoded value of a header
+ * - `tab_separated` - `true` if a header and a value are separated by `tab` character
+ * - `empty_separator` - `true` if there are no separator between a header and a value
+ * @param {string} name name of header to get
+ * @param {boolean} case_sensitive case sensitiveness flag to search for a header
+ * @return {list of tables} all values of a header as specified above
+@example
+function check_header_delimiter_tab(task, header_name)
+	for _,rh in ipairs(task:get_header_full(header_name)) do
+		if rh['tab_separated'] then return true end
+	end
+	return false
+end
+ */
+LUA_FUNCTION_DEF (mimepart, get_header_full);
 LUA_FUNCTION_DEF (mimepart, get_content);
 LUA_FUNCTION_DEF (mimepart, get_length);
 LUA_FUNCTION_DEF (mimepart, get_type);
@@ -506,6 +547,9 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_length),
 	LUA_INTERFACE_DEF (mimepart, get_type),
 	LUA_INTERFACE_DEF (mimepart, get_filename),
+	LUA_INTERFACE_DEF (mimepart, get_header),
+	LUA_INTERFACE_DEF (mimepart, get_header_raw),
+	LUA_INTERFACE_DEF (mimepart, get_header_full),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -922,8 +966,8 @@ lua_task_get_parts (lua_State * L)
 
 
 static gint
-lua_task_push_header (lua_State * L,
-		struct rspamd_task *task,
+lua_push_header (lua_State * L,
+		GHashTable *hdrs,
 		const gchar *name,
 		gboolean strong,
 		gboolean full,
@@ -934,7 +978,7 @@ lua_task_push_header (lua_State * L,
 	gint i = 1;
 	const gchar *val;
 
-	rh = g_hash_table_lookup (task->raw_headers, name);
+	rh = g_hash_table_lookup (hdrs, name);
 
 	if (rh == NULL) {
 		lua_pushnil (L);
@@ -1011,7 +1055,7 @@ lua_task_get_header_common (lua_State *L, gboolean full, gboolean raw)
 		if (lua_gettop (L) == 3) {
 			strong = lua_toboolean (L, 3);
 		}
-		return lua_task_push_header (L, task, name, strong, full, raw);
+		return lua_push_header (L, task->raw_headers, name, strong, full, raw);
 	}
 	lua_pushnil (L);
 	return 1;
@@ -2129,6 +2173,43 @@ lua_mimepart_get_filename (lua_State * L)
 	lua_pushstring (L, part->filename);
 
 	return 1;
+}
+
+static gint
+lua_mimepart_get_header_common (lua_State *L, gboolean full, gboolean raw)
+{
+	gboolean strong = FALSE;
+	struct mime_part *part = lua_check_mimepart (L);
+	const gchar *name;
+
+	name = luaL_checkstring (L, 2);
+
+	if (name && part) {
+		if (lua_gettop (L) == 3) {
+			strong = lua_toboolean (L, 3);
+		}
+		return lua_push_header (L, part->raw_headers, name, strong, full, raw);
+	}
+	lua_pushnil (L);
+	return 1;
+}
+
+static gint
+lua_mimepart_get_header_full (lua_State * L)
+{
+	return lua_mimepart_get_header_common (L, TRUE, TRUE);
+}
+
+static gint
+lua_mimepart_get_header (lua_State * L)
+{
+	return lua_mimepart_get_header_common (L, FALSE, FALSE);
+}
+
+static gint
+lua_mimepart_get_header_raw (lua_State * L)
+{
+	return lua_mimepart_get_header_common (L, FALSE, TRUE);
 }
 
 /* Image functions */
