@@ -607,25 +607,25 @@ parse_recv_header (rspamd_mempool_t * pool,
 }
 
 static void
-append_raw_header (struct rspamd_task *task, struct raw_header *rh)
+append_raw_header (GHashTable *target, struct raw_header *rh)
 {
 	struct raw_header *lp;
 
 	rh->next = NULL;
 	rh->prev = rh;
 	if ((lp =
-			g_hash_table_lookup (task->raw_headers, rh->name)) != NULL) {
+			g_hash_table_lookup (target, rh->name)) != NULL) {
 		DL_APPEND (lp, rh);
 	}
 	else {
-		g_hash_table_insert (task->raw_headers, rh->name, rh);
+		g_hash_table_insert (target, rh->name, rh);
 	}
 	debug_task ("add raw header %s: %s", rh->name, rh->value);
 }
 
 /* Convert raw headers to a list of struct raw_header * */
 static void
-process_raw_headers (struct rspamd_task *task, const gchar *in)
+process_raw_headers (GHashTable *target, rspamd_mempool_t *pool, const gchar *in)
 {
 	struct raw_header *new = NULL;
 	const gchar *p, *c;
@@ -654,11 +654,11 @@ process_raw_headers (struct rspamd_task *task, const gchar *in)
 			/* We got something like header's name */
 			if (*p == ':') {
 				new =
-					rspamd_mempool_alloc0 (task->task_pool,
+					rspamd_mempool_alloc0 (pool,
 						sizeof (struct raw_header));
 				new->prev = new;
 				l = p - c;
-				tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
+				tmp = rspamd_mempool_alloc (pool, l + 1);
 				rspamd_strlcpy (tmp, c, l + 1);
 				new->name = tmp;
 				new->empty_separator = TRUE;
@@ -691,7 +691,7 @@ process_raw_headers (struct rspamd_task *task, const gchar *in)
 				state = 99;
 				l = p - c;
 				if (l > 0) {
-					tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
+					tmp = rspamd_mempool_alloc (pool, l + 1);
 					rspamd_strlcpy (tmp, c, l + 1);
 					new->separator = tmp;
 				}
@@ -703,7 +703,7 @@ process_raw_headers (struct rspamd_task *task, const gchar *in)
 				/* Process value */
 				l = p - c;
 				if (l >= 0) {
-					tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
+					tmp = rspamd_mempool_alloc (pool, l + 1);
 					rspamd_strlcpy (tmp, c, l + 1);
 					new->separator = tmp;
 				}
@@ -728,7 +728,7 @@ process_raw_headers (struct rspamd_task *task, const gchar *in)
 		case 4:
 			/* Copy header's value */
 			l = p - c;
-			tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
+			tmp = rspamd_mempool_alloc (pool, l + 1);
 			tp = tmp;
 			t_state = 0;
 			while (l--) {
@@ -761,16 +761,16 @@ process_raw_headers (struct rspamd_task *task, const gchar *in)
 			*tp = '\0';
 			new->value = tmp;
 			new->decoded = g_mime_utils_header_decode_text (new->value);
-			rspamd_mempool_add_destructor (task->task_pool,
+			rspamd_mempool_add_destructor (pool,
 					(rspamd_mempool_destruct_t)g_free, new->decoded);
-			append_raw_header (task, new);
+			append_raw_header (target, new);
 			state = 0;
 			break;
 		case 5:
 			/* Header has only name, no value */
 			new->value = "";
 			new->decoded = NULL;
-			append_raw_header (task, new);
+			append_raw_header (target, new);
 			state = 0;
 			break;
 		case 99:
@@ -1356,6 +1356,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 		type =
 			(GMimeContentType *) g_mime_part_get_content_type (GMIME_PART (part));
 #endif
+
 		if (type == NULL) {
 			msg_warn ("type of part is unknown, assume text/plain");
 			type = g_mime_content_type_new ("text", "plain");
@@ -1376,6 +1377,8 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 			part_stream = g_mime_stream_mem_new ();
 			if (g_mime_data_wrapper_write_to_stream (wrapper,
 				part_stream) != -1) {
+				gchar *hdrs;
+
 				g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (
 						part_stream), FALSE);
 				part_content = g_mime_stream_mem_get_byte_array (GMIME_STREAM_MEM (
@@ -1384,11 +1387,25 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 				mime_part =
 					rspamd_mempool_alloc (task->task_pool,
 						sizeof (struct mime_part));
+
+				hdrs = g_mime_object_get_headers (GMIME_OBJECT (part));
+				mime_part->raw_headers = g_hash_table_new (rspamd_strcase_hash,
+						rspamd_strcase_equal);
+				rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t) g_hash_table_destroy,
+					mime_part->raw_headers);
+				if (hdrs != NULL) {
+					process_raw_headers (mime_part->raw_headers,
+							task->task_pool, hdrs);
+					g_free (hdrs);
+				}
+
 				mime_part->type = type;
 				mime_part->content = part_content;
 				mime_part->parent = task->parser_parent_part;
 				mime_part->filename = g_mime_part_get_filename (GMIME_PART (
 							part));
+
 				debug_task ("found part with content-type: %s/%s",
 					type->type,
 					type->subtype);
@@ -1510,7 +1527,8 @@ process_message (struct rspamd_task *task)
 		if (task->raw_headers_str) {
 			rspamd_mempool_add_destructor (task->task_pool,
 					(rspamd_mempool_destruct_t) g_free, task->raw_headers_str);
-			process_raw_headers (task, task->raw_headers_str);
+			process_raw_headers (task->raw_headers, task->task_pool,
+					task->raw_headers_str);
 		}
 		process_images (task);
 
