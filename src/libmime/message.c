@@ -1130,7 +1130,7 @@ detect_text_language (struct mime_text_part *part)
 			gunichar c;
 			gint32 remain = part->content->len, max = 0, processed = 0;
 			gint32 scripts[G_N_ELEMENTS (language_codes)];
-			GUnicodeScript scc, sel;
+			GUnicodeScript scc, sel = G_UNICODE_SCRIPT_COMMON;
 
 			p = part->content->data;
 			memset (scripts, 0, sizeof (scripts));
@@ -1161,8 +1161,10 @@ detect_text_language (struct mime_text_part *part)
 			lm = bsearch (&sel, language_codes, G_N_ELEMENTS (language_codes),
 					sizeof (language_codes[0]), &language_elts_cmp);
 
-			part->lang_code = lm->code;
-			part->language = lm->name;
+			if (lm != NULL) {
+				part->lang_code = lm->code;
+				part->language = lm->name;
+			}
 		}
 	}
 }
