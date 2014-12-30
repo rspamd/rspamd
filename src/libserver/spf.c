@@ -1109,13 +1109,15 @@ expand_spf_macro (struct rspamd_task *task, struct spf_record *rec,
 			break;
 		case 1:
 			/* We got % sign, so we should whether wait for { or for - or for _ or for % */
-			if (*p == '%' || *p == '-') {
+			if (*p == '%' || *p == '_') {
 				/* Just a single % sign or space */
 				len++;
+				state = 0;
 			}
-			else if (*p == '_') {
+			else if (*p == '-') {
 				/* %20 */
 				len += sizeof ("%20") - 1;
+				state = 0;
 			}
 			else if (*p == '{') {
 				state = 2;
@@ -1224,15 +1226,18 @@ expand_spf_macro (struct rspamd_task *task, struct spf_record *rec,
 			if (*p == '%') {
 				/* Just a single % sign or space */
 				*c++ = '%';
-			}
-			else if (*p == '-') {
-				*c++ = ' ';
+				state = 0;
 			}
 			else if (*p == '_') {
+				*c++ = ' ';
+				state = 0;
+			}
+			else if (*p == '-') {
 				/* %20 */
 				*c++ = '%';
 				*c++ = '2';
 				*c++ = '0';
+				state = 0;
 			}
 			else if (*p == '{') {
 				state = 2;
@@ -1318,7 +1323,7 @@ expand_spf_macro (struct rspamd_task *task, struct spf_record *rec,
 				len = 0;
 			}
 			else if (g_ascii_isdigit (*p)) {
-				/*XXX: try to implement domain strimming */
+				/*XXX: try to implement domain trimming */
 			}
 			else {
 				msg_info (
