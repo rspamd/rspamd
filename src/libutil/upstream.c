@@ -165,7 +165,7 @@ rspamd_upstream_dns_cb (struct rdns_reply *reply, void *arg)
 		while (entry) {
 
 			if (entry->type == RDNS_REQUEST_A) {
-				up_ent = g_malloc (sizeof (*up_ent));
+				up_ent = g_malloc0 (sizeof (*up_ent));
 
 				up_ent->addr.addr.s4.sin_addr = entry->content.a.addr;
 				up_ent->addr.af = AF_INET;
@@ -174,7 +174,7 @@ rspamd_upstream_dns_cb (struct rdns_reply *reply, void *arg)
 				LL_PREPEND (up->new_addrs, up_ent);
 			}
 			else if (entry->type == RDNS_REQUEST_AAAA) {
-				up_ent = g_malloc (sizeof (*up_ent));
+				up_ent = g_malloc0 (sizeof (*up_ent));
 
 				memcpy (&up_ent->addr.addr.s6.sin6_addr,
 						&entry->content.aaa.addr, sizeof (struct in6_addr));
