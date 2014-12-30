@@ -801,7 +801,10 @@ classifiers_callback (gpointer value, void *arg)
 			}
 			cur = g_list_next (cur);
 		}
-		g_hash_table_insert (task->tokens, cl->tokenizer, tokens);
+
+		if (tokens != NULL) {
+			g_hash_table_insert (task->tokens, cl->tokenizer, tokens);
+		}
 	}
 
 	/* Take care of subject */

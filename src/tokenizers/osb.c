@@ -49,6 +49,10 @@ osb_tokenize_text (struct tokenizer *tokenizer,
 	gint i, processed = 0;
 	guint w;
 
+	if (input == NULL) {
+		return FALSE;
+	}
+
 	if (*tree == NULL) {
 		*tree = g_tree_new (token_node_compare_func);
 		rspamd_mempool_add_destructor (pool,
