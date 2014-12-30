@@ -528,7 +528,7 @@ fuzzy_io_fin (void *ud)
 	struct fuzzy_client_session *session = ud;
 
 	if (session->commands) {
-		g_ptr_array_free (session->commands, FALSE);
+		g_ptr_array_free (session->commands, TRUE);
 	}
 	event_del (&session->ev);
 	close (session->fd);
@@ -685,6 +685,7 @@ fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 		g_checksum_update (cksum, data, datalen);
 		rspamd_strlcpy (cmd->digest, g_checksum_get_string (cksum),
 				sizeof (cmd->digest));
+		g_checksum_free (cksum);
 	}
 	else {
 		/* Use blake2b for digest */

@@ -242,13 +242,16 @@ tokenize_subject (struct rspamd_task *task, GTree ** tree)
 
 	if (sub != NULL) {
 		words = rspamd_tokenize_text (sub, strlen (sub), TRUE, 0, NULL);
-		osb_tokenizer->tokenize_func (osb_tokenizer,
-				task->task_pool,
-				words,
-				tree,
-				FALSE,
-				TRUE,
-				NULL);
+		if (words != NULL) {
+			osb_tokenizer->tokenize_func (osb_tokenizer,
+					task->task_pool,
+					words,
+					tree,
+					FALSE,
+					TRUE,
+					NULL);
+			g_array_free (words, TRUE);
+		}
 	}
 }
 
