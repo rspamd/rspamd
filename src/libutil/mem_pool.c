@@ -27,6 +27,7 @@
 #include "fstring.h"
 #include "logger.h"
 #include "util.h"
+#include "utlist.h"
 #include "main.h"
 
 /* Sleep time for spin lock in nanoseconds */
@@ -540,8 +541,7 @@ rspamd_mempool_add_destructor_full (rspamd_mempool_t * pool,
 		cur->data = data;
 		cur->function = function;
 		cur->loc = line;
-		cur->prev = pool->destructors;
-		pool->destructors = cur;
+		DL_APPEND (pool->destructors, cur);
 		POOL_MTX_UNLOCK ();
 	}
 }
@@ -554,14 +554,12 @@ rspamd_mempool_replace_destructor (rspamd_mempool_t * pool,
 {
 	struct _pool_destructors *tmp;
 
-	tmp = pool->destructors;
-	while (tmp) {
+	DL_FOREACH (pool->destructors, tmp) {
 		if (tmp->func == func && tmp->data == old_data) {
 			tmp->func = func;
 			tmp->data = new_data;
 			break;
 		}
-		tmp = tmp->prev;
 	}
 
 }
@@ -571,16 +569,15 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 {
 	struct _pool_chain *cur = pool->first_pool, *tmp;
 	struct _pool_chain_shared *cur_shared = pool->shared_pool, *tmp_shared;
-	struct _pool_destructors *destructor = pool->destructors;
+	struct _pool_destructors *destructor;
 
 	POOL_MTX_LOCK ();
 	/* Call all pool destructors */
-	while (destructor) {
+	DL_FOREACH (pool->destructors, destructor) {
 		/* Avoid calling destructors for NULL pointers */
 		if (destructor->data != NULL) {
 			destructor->func (destructor->data);
 		}
-		destructor = destructor->prev;
 	}
 
 	while (cur) {
