@@ -990,6 +990,10 @@ add_html_node (struct rspamd_task *task,
 				return FALSE;
 			}
 		}
+		else {
+			/* Destroy ignored nodes */
+			g_node_destroy (new);
+		}
 	}
 
 	return TRUE;
