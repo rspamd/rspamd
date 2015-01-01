@@ -1136,9 +1136,9 @@ expand_spf_macro (struct rspamd_task *task, struct spf_record *rec,
 			switch (g_ascii_tolower (*p)) {
 			case 'i':
 #ifdef HAVE_INET_PTON
-				len += sizeof (INET6_ADDRSTRLEN) - 1;
+				len += INET6_ADDRSTRLEN - 1;
 #else
-				len += sizeof (INET_ADDRSTRLEN) - 1;
+				len += INET_ADDRSTRLEN - 1;
 #endif
 				break;
 			case 's':
