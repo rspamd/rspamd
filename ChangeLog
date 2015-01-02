@@ -1,3 +1,36 @@
+0.8.0:
+	* New fuzzy check logic:
+		- use shingles algorithm for fuzzy matching
+		- use blake2 instead of md5 for larger output space
+		- combine fuzzy and strict matching
+		- allow to organize private storages by means of keys
+		- preserve compatibility with previous versions
+	* New fuzzy storage:
+		- use sqlite instead of own memory based hash tables
+		- rework commands interface
+		- add conversion from the old format
+		- add fuzzy match by shignles
+		- support old rspamd versions
+	* Add lemmatizing for words used in fuzzy hashes that allows to improve match
+	quality by using of the first forms of all words
+	* Rework language detection
+	* Fix several critical bugs, memory leaks and deadlocks:
+		- memory leak in HTML nodes parsing
+		- deadlock in logger code
+		- deadlock in signals processing
+		- crashes in fuzzy_storage
+		- crashes in tokenizers if the input was empty
+	* Import new libucl with several bugfixes and improvements
+	* Support listening on ipv6 addresses only
+	* Fix macro expansion in SPF module
+	* Several bugfixes in DKIM module
+	* Add load headers support for mime parts to the lua API
+	* Add documentation for:
+		- workers in general
+		- fuzzy_storage worker
+		- fuzzy_check plugin
+		- mimepart and textpart lua API modules
+
 0.7.6:
 	* Apply boundary fix for dkim simple canonization
 	* Fix ping command
