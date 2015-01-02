@@ -28,7 +28,11 @@ License:        BSD2c
 %endif
 URL:            https://rspamd.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
-BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel
+%if 0%{?suse_version}
+BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,sqlite3-devel
+%else
+BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,sqlite-devel
+%endif
 Requires:       lua, logrotate
 # for /user/sbin/useradd
 %if 0%{?suse_version}
