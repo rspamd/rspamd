@@ -205,7 +205,6 @@ fi
 %{rspamd_pluginsdir}/lua/once_received.lua
 %{rspamd_pluginsdir}/lua/rbl.lua
 %{rspamd_pluginsdir}/lua/ratelimit.lua
-%{rspamd_pluginsdir}/lua/whitelist.lua
 %{rspamd_pluginsdir}/lua/phishing.lua
 %{rspamd_pluginsdir}/lua/trie.lua
 %{rspamd_pluginsdir}/lua/emails.lua
