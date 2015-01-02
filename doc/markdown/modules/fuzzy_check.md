@@ -105,7 +105,7 @@ Therefore, if a `single_vote_weight` is `1` then the final weight will be `100` 
 score 1.0 (that will be of course multiplied by metric's weigth). In our example,
 if the weight of hash is `100` and `max_score` will be `99`, then the rule will be
 added with the weight of `1`. If `max_score` is `200`, then the rule will be added with the
-weight likely `0.2` (the real function is hyperbolig tangent). In the following configuration:
+weight likely `0.2` (the real function is hyperbolic tangent). In the following configuration:
 
 ~~~nginx
 metric {
