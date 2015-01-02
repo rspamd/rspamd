@@ -475,12 +475,53 @@ static const struct luaL_reg tasklib_m[] = {
 };
 
 /* Textpart methods */
+/***
+ * @module rspamd_textpart
+ * This module provides access to text parts found in a message
+ */
+
+/***
+ * @method textpart:get_content()
+ * Get parsed content of a part
+ * @return {string} text contained in the part
+ */
 LUA_FUNCTION_DEF (textpart, get_content);
+/***
+ * @method textpart:get_length()
+ * Get length of the text inside the part
+ * @return {integer} the lenght of text part in bytes
+ */
 LUA_FUNCTION_DEF (textpart, get_length);
+/***
+ * @method textpart:is_empty()
+ * Check whether a part is empty
+ * @return {bool} `true` if a part is empty
+ */
 LUA_FUNCTION_DEF (textpart, is_empty);
+/***
+ * @method textpart:is_html()
+ * Check whether a part contains HTML
+ * @return {bool} `true` if a part html part
+ */
 LUA_FUNCTION_DEF (textpart, is_html);
+/***
+ * @method textpart:get_fuzzy()
+ * Get fuzzy hash for a message
+ * @return {string} fuzzy hash of the part
+ */
 LUA_FUNCTION_DEF (textpart, get_fuzzy);
+/***
+ * @method textpart:get_language()
+ * Return short language code detected for the part
+ * @return {string} language code for the part or nil if language has not been detected
+ */
 LUA_FUNCTION_DEF (textpart, get_language);
+/***
+ * @method textpart:compare_distance(part)
+ * Compares two parts
+ * @param {textpart} another text part
+ * @return {number} similarity rate from 0.0 (different parts) to 1.0 (equal parts)
+ */
 LUA_FUNCTION_DEF (textpart, compare_distance);
 
 static const struct luaL_reg textpartlib_m[] = {
@@ -496,6 +537,27 @@ static const struct luaL_reg textpartlib_m[] = {
 };
 
 /* Mimepart methods */
+
+/***
+ * @module rspamd_mimepart
+ * This module provides access to mime parts found in a message
+@example
+rspamd_config.MISSING_CONTENT_TYPE = function(task)
+	local parts = task:get_parts()
+	if parts and table.maxn(parts) > 1 then
+		-- We have more than one part
+		for _,p in ipairs(parts) do
+			local ct = p:get_header('Content-Type')
+			-- And some parts have no Content-Type header
+			if not ct then
+				return true
+			end
+		end
+	end
+	return false
+end
+ */
+
 /***
  * @method mimepart:get_header(name[, case_sensitive])
  * Get decoded value of a header specified with optional case_sensitive flag.

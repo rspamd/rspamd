@@ -135,7 +135,7 @@ fuzzy_check {
 If a hash has value `10`, then a symbol `FUZZY_DENIED` with weight of `2.0` will be added.
 If a hash has value `100500`, then `FUZZY_DENIED` will have weight `10.0`.
 
-## Learning for fuzzy_check
+## Learning fuzzy_check
 
 Module `fuzzy_check` also allows to learn messages. You can use `rspamc` command or
 connect to the **controller** worker using HTTP protocol. For learning you must check 
@@ -158,3 +158,5 @@ or delete hashes:
 
 	rspamc -f <flag> fuzzy_del ...
 
+On learning, rspamd sends commands to **all** servers inside specific rule. On check,
+rspamd selects a server in round-robin matter.
