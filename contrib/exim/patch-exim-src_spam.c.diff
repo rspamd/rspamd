@@ -1,8 +1,8 @@
 diff --git a/src/expand.c b/src/expand.c
-index 8e94c3e..45f446d 100644
+index 70d7c7d..df375fa 100644
 --- a/src/expand.c
 +++ b/src/expand.c
-@@ -644,6 +644,7 @@ static var_entry var_table[] = {
+@@ -641,6 +641,7 @@ static var_entry var_table[] = {
    { "sn8",                 vtype_filter_int,  &filter_sn[8] },
    { "sn9",                 vtype_filter_int,  &filter_sn[9] },
  #ifdef WITH_CONTENT_SCAN
@@ -11,10 +11,10 @@ index 8e94c3e..45f446d 100644
    { "spam_report",         vtype_stringptr,   &spam_report },
    { "spam_score",          vtype_stringptr,   &spam_score },
 diff --git a/src/globals.c b/src/globals.c
-index 22bd69e..0ecda99 100644
+index d3f9987..c5cfd6b 100644
 --- a/src/globals.c
 +++ b/src/globals.c
-@@ -1269,6 +1269,7 @@ BOOL    smtp_use_size          = FALSE;
+@@ -1257,6 +1257,7 @@ BOOL    smtp_use_size          = FALSE;
  uschar *spamd_address          = US"127.0.0.1 783";
  uschar *spam_bar               = NULL;
  uschar *spam_report            = NULL;
@@ -23,10 +23,10 @@ index 22bd69e..0ecda99 100644
  uschar *spam_score_int         = NULL;
  #endif
 diff --git a/src/globals.h b/src/globals.h
-index 800ec9c..3a30a5a 100644
+index 2bedcf5..d5716a6 100644
 --- a/src/globals.h
 +++ b/src/globals.h
-@@ -811,6 +811,7 @@ extern BOOL    smtp_use_size;          /* Global for passed connections */
+@@ -803,6 +803,7 @@ extern BOOL    smtp_use_size;          /* Global for passed connections */
  extern uschar *spamd_address;          /* address for the spamassassin daemon */
  extern uschar *spam_bar;               /* the spam "bar" (textual representation of spam_score) */
  extern uschar *spam_report;            /* the spamd report (multiline) */
@@ -35,7 +35,7 @@ index 800ec9c..3a30a5a 100644
  extern uschar *spam_score_int;         /* spam_score * 10 (int) */
  #endif
 diff --git a/src/spam.c b/src/spam.c
-index 7eb6fbf..11951a7 100644
+index 7eb6fbf..679a468 100644
 --- a/src/spam.c
 +++ b/src/spam.c
 @@ -14,12 +14,20 @@
@@ -129,7 +129,7 @@ index 7eb6fbf..11951a7 100644
        (void)fclose(mbox_file);
        (void)close(spamd_sock);
        return DEFER;
-@@ -230,22 +263,67 @@ spam(uschar **listptr)
+@@ -230,22 +263,70 @@ spam(uschar **listptr)
      return DEFER;
    }
  
@@ -154,9 +154,10 @@ index 7eb6fbf..11951a7 100644
 +    /* rspamd variant */
 +    int r, request_p = 0;
 +    const char *helo;
++    const char *fcrdns;
 +    struct iovec *request_v;
 +    
-+    request_v = store_get(sizeof(struct iovec) * (8 + recipients_count));
++    request_v = store_get(sizeof(struct iovec) * (9 + recipients_count));
 +    if (request_v == NULL) {
 +      (void)close(spamd_sock);
 +      log_write(0, LOG_MAIN|LOG_PANIC,
@@ -176,6 +177,8 @@ index 7eb6fbf..11951a7 100644
 +        r += spam_push_line(request_v, request_p++, "Rcpt: <%s>\r\n", recipients_list[i].address);
 +    if ((helo = expand_string(US"$sender_helo_name")) != NULL && *helo != '\0')
 +      r += spam_push_line(request_v, request_p++, "Helo: %s\r\n", helo);
++    if ((fcrdns = expand_string(US"$sender_host_name")) != NULL && *fcrdns != '\0')
++      r += spam_push_line(request_v, request_p++, "Hostname: %s\r\n", fcrdns);
 +    if (sender_host_address != NULL)
 +      r += spam_push_line(request_v, request_p++, "IP: %s\r\n", sender_host_address);
 +    r += spam_push_line(request_v, request_p++, "\r\n");
@@ -212,7 +215,7 @@ index 7eb6fbf..11951a7 100644
  
    /* now send the file */
    /* spamd sometimes accepts conections but doesn't read data off
-@@ -348,60 +426,93 @@ again:
+@@ -348,60 +429,93 @@ again:
    /* reading done */
    (void)close(spamd_sock);
  
@@ -334,7 +337,7 @@ index 7eb6fbf..11951a7 100644
    }
    spam_bar_buffer[i] = '\0';
    spam_bar = spam_bar_buffer;
-@@ -417,12 +528,12 @@ again:
+@@ -417,12 +531,12 @@ again:
  
    /* compare threshold against score */
    if (spamd_score >= spamd_threshold) {
@@ -351,7 +354,7 @@ index 7eb6fbf..11951a7 100644
    };
  
    /* remember expanded spamd_address if needed */
-@@ -442,4 +553,126 @@ again:
+@@ -442,4 +556,126 @@ again:
    };
  }
  
