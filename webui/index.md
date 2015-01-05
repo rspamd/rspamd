@@ -61,7 +61,7 @@ server {
 	listen 10.0.0.1;
 	server_name example.com;
 
-	proxy_pass http://10.0.0.2:11336/;
+	proxy_pass http://10.0.0.2:11334/;
 }
 {% endhighlight %}
 
