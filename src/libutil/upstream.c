@@ -688,4 +688,7 @@ rspamd_upstream_get (struct upstream_list *ups,
 
 		return g_ptr_array_index (ups->alive, ups->cur_elt ++);
 	}
+
+	/* Silent stupid compilers */
+	return NULL;
 }
