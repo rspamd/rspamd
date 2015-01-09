@@ -25,7 +25,7 @@
 	lua_pushnumber (L, val); \
 	lua_settable (L, -3);
 
-#if LUA_VERSION_NUM > 501
+#if LUA_VERSION_NUM > 501 && !defined LUA_COMPAT_MODULE
 static inline void
 luaL_register (lua_State *L, const gchar *name, const struct luaL_reg *methods)
 {
