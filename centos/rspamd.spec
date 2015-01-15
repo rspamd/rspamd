@@ -6,6 +6,8 @@
 %define rspamd_pluginsdir   %{_datadir}/rspamd
 %define rspamd_wwwdir   %{_datadir}/rspamd/www
 
+%{!?_tmpfilesdir:%global _tmpfilesdir /usr/lib/tmpfiles.d}
+
 %if 0%{?suse_version}
 %define __cmake cmake
 %define __install install
@@ -29,22 +31,30 @@ License:        BSD2c
 URL:            https://rspamd.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
 %if 0%{?suse_version}
-BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,sqlite3-devel,perl
-%else
-BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,sqlite-devel,perl
+BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,sqlite3-devel
 %endif
+%if 0%{?el6}
+BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,sqlite-devel
+%else
+BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,sqlite-devel,systemd
+%endif
+%if 0%{?el6}
 Requires:       lua, logrotate
+%else
+Requires:       lua
+%endif
 # for /user/sbin/useradd
 %if 0%{?suse_version}
 Requires(pre):  shadow
-%if 0%{?suse_version} >= 1300
+%else
+Requires(pre):  shadow-utils
+%endif
+%if 0%{?suse_version} || 0%{?fedora} || 0%{?el7}
 Requires(pre): systemd
 Requires(post): systemd
 Requires(preun): systemd
 Requires(postun): systemd
-%endif
 %else
-Requires(pre):  shadow-utils
 Requires(post): chkconfig
 # for /sbin/service
 Requires(preun):        chkconfig, initscripts
@@ -52,16 +62,15 @@ Requires(postun):       initscripts
 %endif
 
 Source0:        https://rspamd.com/downloads/%{name}-%{version}.tar.xz
-%if 0%{?suse_version}
-%if 0%{?suse_version} >= 1300
+%if 0%{?suse_version} || 0%{?fedora} || 0%{?el7}
 Source1:        %{name}.service
-%else
-Source1:        %{name}.init.suse
-%endif
 %else
 Source1:        %{name}.init
 %endif
 Source2:        %{name}.logrotate
+Source3:	workers.conf
+Source4:	logging.conf
+Source5:	tmpfiles.d
 
 %description
 Rspamd is a rapid, modular and lightweight spam filter. It is designed to work
@@ -77,10 +86,9 @@ lua.
         -DCONFDIR=%{_sysconfdir}/rspamd \
         -DMANDIR=%{_mandir} \
         -DDBDIR=%{_localstatedir}/lib/rspamd \
-%if 0%{?suse_version}
-        -DRUNDIR=%{_localstatedir}/lib/rspamd \
-%else
         -DRUNDIR=%{_localstatedir}/run/rspamd \
+%if %{undefined suse_version} && %{undefined fedora} && 0%{?rhel} < 7
+        -DWANT_SYSTEMD_UNITS=OFF \
 %endif
         -DLOGDIR=%{_localstatedir}/log/rspamd \
         -DEXAMPLESDIR=%{_datadir}/examples/rspamd \
@@ -97,20 +105,21 @@ lua.
 %install
 %{__make} install DESTDIR=%{buildroot} INSTALLDIRS=vendor
 
-%if 0%{?suse_version}
-%if 0%{?suse_version} >= 1300
-%{__install} -D -m 0644 %{SOURCE1} %{buildroot}%{_unitdir}/rspamd.service
+%if 0%{?suse_version} || 0%{?fedora} || 0%{?rhel} >= 7
+%{__install} -p -D -m 0644 %{SOURCE1} %{buildroot}%{_unitdir}/%{name}.service
+%{__install} -p -D -m 0644 %{SOURCE3} %{buildroot}%{rspamd_confdir}/workers.conf
+%{__install} -p -D -m 0644 %{SOURCE4} %{buildroot}%{rspamd_confdir}/logging.conf
+%{__install} -d -m 0755 %{buildroot}%{_tmpfilesdir}
+%{__install} -m 0644 %{SOURCE5} %{buildroot}%{_tmpfilesdir}/%{name}.conf
 %else
 %{__install} -p -D -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
-mkdir -p %{buildroot}%{_sbindir}
-ln -sf %{_initrddir}/rspamd %{buildroot}%{_sbindir}/rcrspamd
-%endif
-%else
-%{__install} -p -D -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
+%{__install} -d -p -m 0755 %{buildroot}%{_localstatedir}/run/rspamd
 %endif
 
+%if 0%{?el6}
 %{__install} -p -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_logdir}
+%endif
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_home}
 
 %clean
@@ -120,29 +129,36 @@ rm -rf %{buildroot}
 %{_sbindir}/groupadd -r %{rspamd_group} 2>/dev/null || :
 %{_sbindir}/useradd -g %{rspamd_group} -c "Rspamd user" -s /bin/false -r -d %{rspamd_home} %{rspamd_user} 2>/dev/null || :
 
-%if 0%{?suse_version} >= 1300
+%if 0%{?suse_version}
 %service_add_pre %{name}.service
+%service_add_pre %{name}.socket
 %endif
 
 %post
 %if 0%{?suse_version}
-%if 0%{?suse_version} >= 1300
 %service_add_post %{name}.service
-%else
-%fillup_and_insserv rspamd
+%service_add_post %{name}.socket
 %endif
-%else
+%if 0%{?fedora} || 0%{?rhel} >= 7
+%systemd_post %{name}.service
+%systemd_post %{name}.socket
+%endif
+%if %{undefined suse_version} && %{undefined fedora} && 0%{?rhel} < 7
 /sbin/chkconfig --add %{name}
+%else
+systemd-tmpfiles --create %{_tmpfilesdir}/%{name}.conf
 %endif
 
 %preun
 %if 0%{?suse_version}
-%if 0%{?suse_version} >= 1300
 %service_del_preun %{name}.service
-%else
-%stop_on_removal rspamd
+%service_del_preun %{name}.socket
 %endif
-%else
+%if 0%{?fedora} || 0%{?rhel} >= 7
+%systemd_preun %{name}.service
+%systemd_preun %{name}.socket
+%endif
+%if %{undefined suse_version} && %{undefined fedora} && 0%{?rhel} < 7
 if [ $1 = 0 ]; then
     /sbin/service %{name} stop >/dev/null 2>&1
     /sbin/chkconfig --del %{name}
@@ -151,13 +167,14 @@ fi
 
 %postun
 %if 0%{?suse_version}
-%if 0%{?suse_version} >= 1300
 %service_del_postun %{name}.service
-%else
-%restart_on_update rspamd
-%insserv_cleanup
+%service_del_postun %{name}.socket
 %endif
-%else
+%if 0%{?fedora} || 0%{?rhel} >= 7
+%systemd_postun %{name}.service
+%systemd_postun %{name}.socket
+%endif
+%if %{undefined suse_version} && %{undefined fedora} && 0%{?rhel} < 7
 if [ $1 -ge 1 ]; then
     /sbin/service %{name} condrestart > /dev/null 2>&1 || :
 fi
@@ -166,15 +183,14 @@ fi
 
 %files
 %defattr(-,root,root,-)
-%if 0%{?suse_version}
-%if 0%{?suse_version} >= 1300
+%if 0%{?suse_version} || 0%{?fedora} || 0%{?rhel} >= 7
 %{_unitdir}/%{name}.service
+%{_unitdir}/%{name}.socket
+%dir %{_tmpfilesdir}
+%{_tmpfilesdir}/%{name}.conf
 %else
 %{_initrddir}/%{name}
-%{_sbindir}/rcrspamd
-%endif
-%else
-%{_initrddir}/%{name}
+%dir %{_localstatedir}/run/rspamd
 %endif
 %{_mandir}/man8/%{name}.*
 %{_mandir}/man1/rspamc.*
@@ -188,9 +204,13 @@ fi
 %config(noreplace) %{rspamd_confdir}/options.conf
 %config(noreplace) %{rspamd_confdir}/statistic.conf
 %config(noreplace) %{rspamd_confdir}/workers.conf
+%if 0%{?el6}
 %config(noreplace) %{_sysconfdir}/logrotate.d/%{name}
+%endif
+%if 0%{?el6}
 %dir %{rspamd_logdir}
-%dir %{rspamd_home}
+%endif
+%attr(-, rspamd, rspamd) %dir %{rspamd_home}
 %dir %{rspamd_confdir}/lua/regexp
 %dir %{rspamd_confdir}/lua
 %dir %{rspamd_confdir}
@@ -229,7 +249,7 @@ fi
 * Mon Nov 17 2014 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.7.5-1
 - Update to 0.7.5
 
-* Mon Nov 08 2014 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.7.4-1
+* Sat Nov 08 2014 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.7.4-1
 - Update to 0.7.4
 
 * Mon Nov 03 2014 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.7.3-1
