@@ -40,6 +40,7 @@ OPTION(NO_SHARED           "Build internal libs static [default: OFF]"          
 OPTION(FORCE_GMIME24       "Link with gmime2.4 [default: OFF]"                  OFF)
 OPTION(INSTALL_EXAMPLES    "Install examples [default: OFF]"                    OFF)
 OPTION(INSTALL_WEBUI       "Install web interface [default: ON]"                ON)
+OPTION(WANT_SYSTEMD_UNITS  "Install systemd unit files on Linux [default: ON]"  ON)
 
 # Build optimized code for following CPU (default i386)
 #SET(CPU_TUNE               "i686")
@@ -921,10 +922,10 @@ FOREACH(LUA_CONF ${LUA_CONFIGS})
 ENDFOREACH(LUA_CONF)
 
 # systemd unit
-IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+IF(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND WANT_SYSTEMD_UNITS MATCHES "ON")
 	INSTALL(FILES "rspamd.service" DESTINATION ${SYSTEMDDIR})
 	INSTALL(FILES "rspamd.socket" DESTINATION ${SYSTEMDDIR})
-ENDIF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+ENDIF(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND WANT_SYSTEMD_UNITS MATCHES "ON")
 
 # Manual pages
 INSTALL(FILES "doc/rspamd.8" DESTINATION ${MANDIR}/man8)
