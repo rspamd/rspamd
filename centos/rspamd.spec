@@ -19,7 +19,7 @@ Name:           rspamd
 Version:        0.8.0
 Release:        1
 Summary:        Rapid spam filtering system
-Group:          System Environment/Daemons   
+Group:          System Environment/Daemons
 
 # BSD License (two clause)
 # http://www.freebsd.org/copyright/freebsd-license.html
@@ -31,12 +31,12 @@ License:        BSD2c
 URL:            https://rspamd.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
 %if 0%{?suse_version}
-BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,sqlite3-devel
+BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,perl,sqlite3-devel
 %endif
 %if 0%{?el6}
-BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,sqlite-devel
+BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,perl,sqlite-devel
 %else
-BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,sqlite-devel,systemd
+BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,perl,sqlite-devel,systemd
 %endif
 %if 0%{?el6}
 Requires:       lua, logrotate
