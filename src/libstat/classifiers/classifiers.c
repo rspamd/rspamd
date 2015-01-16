@@ -30,14 +30,6 @@
 
 struct classifier classifiers[] = {
 	{
-		.name = "winnow",
-		.init_func = winnow_init,
-		.classify_func = winnow_classify,
-		.learn_func = winnow_learn,
-		.learn_spam_func = winnow_learn_spam,
-		.weights_func = winnow_weights
-	},
-	{
 		.name = "bayes",
 		.init_func = bayes_init,
 		.classify_func = bayes_classify,

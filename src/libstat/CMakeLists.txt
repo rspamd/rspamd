@@ -5,8 +5,7 @@ SET(TOKENIZERSSRC  tokenizers/tokenizers.c
 				tokenizers/osb.c)
 
 SET(CLASSIFIERSSRC classifiers/classifiers.c
-                classifiers/bayes.c
-				classifiers/winnow.c)
+                classifiers/bayes.c)
 				
 ADD_LIBRARY(rspamd-stat ${LINK_TYPE} ${LIBSTATSRC} ${TOKENIZERSSRC} ${CLASSIFIERSSRC})
 IF(NOT DEBIAN_BUILD)

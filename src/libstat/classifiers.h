@@ -47,34 +47,6 @@ struct classifier {
 /* Get classifier structure by name or return NULL if this name is not found */
 struct classifier * get_classifier (const char *name);
 
-/* Winnow algorithm */
-struct classifier_ctx * winnow_init (rspamd_mempool_t *pool,
-	struct rspamd_classifier_config *cf);
-gboolean winnow_classify (struct classifier_ctx * ctx,
-	statfile_pool_t *pool,
-	GTree *input,
-	struct rspamd_task *task,
-	lua_State *L);
-gboolean winnow_learn (struct classifier_ctx * ctx,
-	statfile_pool_t *pool,
-	const char *symbol,
-	GTree *input,
-	gboolean in_class,
-	double *sum,
-	double multiplier,
-	GError **err);
-gboolean winnow_learn_spam (struct classifier_ctx * ctx,
-	statfile_pool_t *pool,
-	GTree *input,
-	struct rspamd_task *task,
-	gboolean is_spam,
-	lua_State *L,
-	GError **err);
-GList * winnow_weights (struct classifier_ctx * ctx,
-	statfile_pool_t *pool,
-	GTree *input,
-	struct rspamd_task *task);
-
 /* Bayes algorithm */
 struct classifier_ctx * bayes_init (rspamd_mempool_t *pool,
 	struct rspamd_classifier_config *cf);
