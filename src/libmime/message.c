@@ -30,7 +30,7 @@
 #include "html.h"
 #include "images.h"
 #include "utlist.h"
-#include "tokenizers/tokenizers.h"
+#include "tokenizers.h"
 
 #include <iconv.h>
 

@@ -29,7 +29,7 @@
 #include "message.h"
 #include "radix.h"
 #include "trie.h"
-#include "classifiers/classifiers.h"
+#include "classifiers.h"
 
 /***
  * This module is used to configure rspamd and is normally available as global

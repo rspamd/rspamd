@@ -28,8 +28,8 @@
 #include "cfg_file.h"
 #include "lua/lua_common.h"
 #include "expressions.h"
-#include "classifiers/classifiers.h"
-#include "tokenizers/tokenizers.h"
+#include "classifiers.h"
+#include "tokenizers.h"
 
 
 struct rspamd_rcl_default_handler_data {

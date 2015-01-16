@@ -29,7 +29,7 @@
 #include "main.h"
 #include "uthash_strcase.h"
 #include "filter.h"
-#include "classifiers/classifiers.h"
+#include "classifiers.h"
 #include "lua/lua_common.h"
 #include "kvstorage_config.h"
 #include "map.h"

@@ -21,13 +21,6 @@ SET(LIBRSPAMDSERVERSRC
 				url.c
 				worker_util.c)
 
-SET(TOKENIZERSSRC  ../tokenizers/tokenizers.c
-				../tokenizers/osb.c)
-
-SET(CLASSIFIERSSRC ../classifiers/classifiers.c
-                ../classifiers/bayes.c
-				../classifiers/winnow.c)
-
 # Librspamd-server
 
 #IF(WITH_DB)
@@ -37,7 +30,7 @@ SET(CLASSIFIERSSRC ../classifiers/classifiers.c
 #	LIST(APPEND LIBRSPAMDSERVERSRC kvstorage_sqlite.c)
 #ENDIF(WITH_SQLITE)
 				
-ADD_LIBRARY(rspamd-server ${LINK_TYPE} ${LIBRSPAMDSERVERSRC} ${TOKENIZERSSRC} ${CLASSIFIERSSRC})
+ADD_LIBRARY(rspamd-server ${LINK_TYPE} ${LIBRSPAMDSERVERSRC})
 IF(NOT DEBIAN_BUILD)
 	SET_TARGET_PROPERTIES(rspamd-server PROPERTIES VERSION ${RSPAMD_VERSION})
 ENDIF(NOT DEBIAN_BUILD)

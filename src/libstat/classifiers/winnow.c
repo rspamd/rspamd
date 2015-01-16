@@ -27,7 +27,7 @@
  */
 
 #include "classifiers.h"
-#include "tokenizers/tokenizers.h"
+#include "tokenizers.h"
 #include "main.h"
 #include "filter.h"
 #include "cfg_file.h"

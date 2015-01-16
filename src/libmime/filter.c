@@ -32,8 +32,8 @@
 #include "expressions.h"
 #include "binlog.h"
 #include "diff.h"
-#include "classifiers/classifiers.h"
-#include "tokenizers/tokenizers.h"
+#include "classifiers.h"
+#include "tokenizers.h"
 
 #ifdef WITH_LUA
 #   include "lua/lua_common.h"

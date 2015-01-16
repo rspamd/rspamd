@@ -25,7 +25,7 @@
 #include "config.h"
 #include "binlog.h"
 #include "cfg_file.h"
-#include "tokenizers/tokenizers.h"
+#include "tokenizers.h"
 
 #define BINLOG_SUFFIX ".binlog"
 #define BACKUP_SUFFIX ".old"

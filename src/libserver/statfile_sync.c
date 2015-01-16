@@ -24,8 +24,8 @@
 
 #include "config.h"
 #include "cfg_file.h"
-#include "tokenizers/tokenizers.h"
-#include "classifiers/classifiers.h"
+#include "tokenizers.h"
+#include "classifiers.h"
 #include "statfile.h"
 #include "binlog.h"
 #include "buffer.h"

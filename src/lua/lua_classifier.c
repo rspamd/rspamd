@@ -25,7 +25,7 @@
 
 #include "lua_common.h"
 #include "cfg_file.h"
-#include "classifiers/classifiers.h"
+#include "classifiers.h"
 
 /* Classifier methods */
 LUA_FUNCTION_DEF (classifier, register_pre_callback);

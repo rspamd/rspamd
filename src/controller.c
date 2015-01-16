@@ -23,8 +23,8 @@
 
 
 #include "config.h"
-#include "tokenizers/tokenizers.h"
-#include "classifiers/classifiers.h"
+#include "tokenizers.h"
+#include "classifiers.h"
 #include "libserver/dynamic_cfg.h"
 #include "libutil/rrd.h"
 #include "libutil/map.h"

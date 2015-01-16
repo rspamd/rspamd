@@ -4,7 +4,7 @@
 #include "config.h"
 #include "mem_pool.h"
 #include "statfile.h"
-#include "tokenizers/tokenizers.h"
+#include "tokenizers.h"
 #include <lua.h>
 
 /* Consider this value as 0 */
