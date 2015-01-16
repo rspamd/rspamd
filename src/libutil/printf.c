@@ -411,8 +411,19 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 				case '.':
 					fmt++;
 
-					while (*fmt >= '0' && *fmt <= '9') {
-						frac_width = frac_width * 10 + *fmt++ - '0';
+					if (*fmt == '*') {
+						d = (gint)va_arg (args, gint);
+						if (G_UNLIKELY (d < 0)) {
+							msg_err ("critical error: fraction width is less than 0");
+							return 0;
+						}
+						frac_width = (guint)d;
+						fmt++;
+					}
+					else {
+						while (*fmt >= '0' && *fmt <= '9') {
+							frac_width = frac_width * 10 + *fmt++ - '0';
+						}
 					}
 
 					break;
