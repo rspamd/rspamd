@@ -1,6 +1,5 @@
 # Librspamdserver
 SET(LIBRSPAMDSERVERSRC
-				binlog.c
 				buffer.c
 				cfg_utils.c
 				cfg_rcl.c
@@ -15,7 +14,6 @@ SET(LIBRSPAMDSERVERSRC
 				roll_history.c
 				spf.c
 				statfile.c
-				statfile_sync.c
 				symbols_cache.c
 				task.c
 				url.c

@@ -30,7 +30,6 @@
 #include "cfg_file.h"
 #include "util.h"
 #include "expressions.h"
-#include "binlog.h"
 #include "diff.h"
 #include "classifiers.h"
 #include "tokenizers.h"
@@ -674,7 +673,6 @@ process_autolearn (struct rspamd_statfile_config *st,
 				NULL,
 				1.,
 				NULL);
-			maybe_write_binlog (ctx->cfg, st, statfile, tokens);
 			statfile_pool_plan_invalidate (task->worker->srv->statfile_pool,
 				DEFAULT_STATFILE_INVALIDATE_TIME,
 				DEFAULT_STATFILE_INVALIDATE_JITTER);

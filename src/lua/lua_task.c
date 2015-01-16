@@ -35,8 +35,6 @@
 #include "statfile.h"
 #include "tokenizers.h"
 #include "classifiers.h"
-#include "binlog.h"
-#include "statfile_sync.h"
 #include "diff.h"
 
 /***

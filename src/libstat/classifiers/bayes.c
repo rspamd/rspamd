@@ -30,7 +30,6 @@
 #include "main.h"
 #include "filter.h"
 #include "cfg_file.h"
-#include "binlog.h"
 #include "lua/lua_common.h"
 
 #define LOCAL_PROB_DENOM 16.0
@@ -577,7 +576,6 @@ bayes_learn_spam (struct classifier_ctx * ctx,
 		g_tree_foreach (input, bayes_learn_callback, &data);
 		statfile_inc_revision (file);
 		statfile_pool_unlock_file (pool, data.file);
-		maybe_write_binlog (ctx->cfg, st, file, input);
 		msg_info ("increase revision for %s", st->path);
 
 		cur = g_list_next (cur);

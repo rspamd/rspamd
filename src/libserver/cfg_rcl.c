@@ -866,42 +866,6 @@ rspamd_rcl_statfile_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 
 	st = rspamd_config_new_statfile (cfg, NULL);
 
-#if 0
-	const gchar *data;
-	gdouble binlog_rotate;
-	val = ucl_object_find_key (obj, "binlog");
-	if (val != NULL && ucl_object_tostring_safe (val, &data)) {
-		if (st->binlog == NULL) {
-			st->binlog =
-				rspamd_mempool_alloc0 (cfg->cfg_pool,
-					sizeof (struct statfile_binlog_params));
-		}
-		if (g_ascii_strcasecmp (data, "master") == 0) {
-			st->binlog->affinity = AFFINITY_MASTER;
-		}
-		else if (g_ascii_strcasecmp (data, "slave") == 0) {
-			st->binlog->affinity = AFFINITY_SLAVE;
-		}
-		else {
-			st->binlog->affinity = AFFINITY_NONE;
-		}
-		/* Parse remaining binlog attributes */
-		val = ucl_object_find_key (obj, "binlog_rotate");
-		if (val != NULL && ucl_object_todouble_safe (val, &binlog_rotate)) {
-			st->binlog->rotate_time = binlog_rotate;
-		}
-		val = ucl_object_find_key (obj, "binlog_master");
-		if (val != NULL && ucl_object_tostring_safe (val, &data)) {
-			if (!rspamd_parse_host_port (cfg->cfg_pool, data,
-				&st->binlog->master_addr, &st->binlog->master_port)) {
-				msg_err ("cannot parse master address: %s", data);
-				return FALSE;
-			}
-		}
-	}
-#endif
-
-
 	if (rspamd_rcl_section_parse_defaults (section, cfg, obj, st, err)) {
 		ccf->statfiles = g_list_prepend (ccf->statfiles, st);
 		if (st->label != NULL) {
