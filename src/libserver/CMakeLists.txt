@@ -13,7 +13,6 @@ SET(LIBRSPAMDSERVERSRC
 				proxy.c
 				roll_history.c
 				spf.c
-				statfile.c
 				symbols_cache.c
 				task.c
 				url.c

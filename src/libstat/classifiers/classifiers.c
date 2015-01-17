@@ -33,9 +33,7 @@ struct classifier classifiers[] = {
 		.name = "bayes",
 		.init_func = bayes_init,
 		.classify_func = bayes_classify,
-		.learn_func = bayes_learn,
 		.learn_spam_func = bayes_learn_spam,
-		.weights_func = bayes_weights
 	}
 };
 

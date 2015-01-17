@@ -13,7 +13,6 @@
 #include "libutil/logger.h"
 #include "libutil/http.h"
 #include "libutil/upstream.h"
-#include "libserver/statfile.h"
 #include "libserver/url.h"
 #include "libserver/protocol.h"
 #include "libserver/buffer.h"
@@ -110,7 +109,6 @@ struct rspamd_main {
 	struct rspamd_stat *stat;                                   /**< pointer to statistics							*/
 
 	rspamd_mempool_t *server_pool;                                  /**< server's memory pool							*/
-	statfile_pool_t *statfile_pool;                             /**< shared statfiles pool							*/
 	GHashTable *workers;                                        /**< workers pool indexed by pid                    */
 	rspamd_logger_t *logger;
 	uid_t workers_uid;                                          /**< worker's uid running to                        */

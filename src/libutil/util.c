@@ -27,7 +27,6 @@
 #include "util.h"
 #include "cfg_file.h"
 #include "main.h"
-#include "statfile.h"
 #include "filter.h"
 #include "message.h"
 

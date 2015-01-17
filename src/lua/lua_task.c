@@ -32,7 +32,6 @@
 #include "util.h"
 #include "images.h"
 #include "cfg_file.h"
-#include "statfile.h"
 #include "tokenizers.h"
 #include "classifiers.h"
 #include "diff.h"

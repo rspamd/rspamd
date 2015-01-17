@@ -3,7 +3,6 @@
 
 #include "config.h"
 #include "mem_pool.h"
-#include "statfile.h"
 #include "printf.h"
 #include "fstring.h"
 #include "ucl.h"
@@ -12,8 +11,6 @@
 struct rspamd_config;
 struct rspamd_main;
 struct workq;
-struct rspamd_statfile_config;
-struct rspamd_classifier_config;
 
 /**
  * Create generic socket
