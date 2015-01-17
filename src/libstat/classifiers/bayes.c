@@ -45,15 +45,12 @@ struct bayes_statfile_data {
 	guint64 total_hits;
 	double value;
 	struct rspamd_statfile_config *st;
-	stat_file_t *file;
 };
 
 struct bayes_callback_data {
-	statfile_pool_t *pool;
 	struct classifier_ctx *ctx;
 	gboolean in_class;
 	time_t now;
-	stat_file_t *file;
 	struct bayes_statfile_data *statfiles;
 	guint32 statfiles_num;
 	guint64 total_spam;
@@ -75,16 +72,9 @@ bayes_learn_callback (gpointer key, gpointer value, gpointer data)
 	c = (cd->in_class) ? 1 : -1;
 
 	/* Consider that not found blocks have value 1 */
-	v =
-		statfile_pool_get_block (cd->pool, cd->file, node->h1, node->h2,
-			cd->now);
+	/* XXX implement getting */
 	if (v == 0 && c > 0) {
-		statfile_pool_set_block (cd->pool,
-			cd->file,
-			node->h1,
-			node->h2,
-			cd->now,
-			c);
+		/* XXX: add token to the backend */
 		cd->processed_tokens++;
 	}
 	else if (v != 0) {
@@ -96,12 +86,7 @@ bayes_learn_callback (gpointer key, gpointer value, gpointer data)
 				v--;
 			}
 		}
-		statfile_pool_set_block (cd->pool,
-			cd->file,
-			node->h1,
-			node->h2,
-			cd->now,
-			v);
+		/* XXX: Implement setting */
 		cd->processed_tokens++;
 	}
 
@@ -168,11 +153,9 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 
 	for (i = 0; i < cd->statfiles_num; i++) {
 		cur = &cd->statfiles[i];
-		cur->value = statfile_pool_get_block (cd->pool,
-				cur->file,
-				node->h1,
-				node->h2,
-				cd->now);
+		/*
+		 * XXX: Implement getting
+		 */
 		if (cur->value > 0) {
 			cur->total_hits += cur->value;
 			if (cur->st->is_spam) {
@@ -219,7 +202,6 @@ bayes_init (rspamd_mempool_t *pool, struct rspamd_classifier_config *cfg)
 
 gboolean
 bayes_classify (struct classifier_ctx * ctx,
-	statfile_pool_t *pool,
 	GTree *input,
 	struct rspamd_task *task,
 	lua_State *L)
@@ -231,11 +213,9 @@ bayes_classify (struct classifier_ctx * ctx,
 	guint64 maxhits = 0, rev;
 	double final_prob, h, s;
 	struct rspamd_statfile_config *st;
-	stat_file_t *file;
 	GList *cur;
 	char *sumbuf;
 
-	g_assert (pool != NULL);
 	g_assert (ctx != NULL);
 
 	if (ctx->cfg->opts &&
@@ -261,7 +241,6 @@ bayes_classify (struct classifier_ctx * ctx,
 
 	data.statfiles_num = g_list_length (cur);
 	data.statfiles = g_new0 (struct bayes_statfile_data, data.statfiles_num);
-	data.pool = pool;
 	data.now = time (NULL);
 	data.ctx = ctx;
 
@@ -277,32 +256,6 @@ bayes_classify (struct classifier_ctx * ctx,
 	}
 	else {
 		data.max_tokens = 0;
-	}
-
-	while (cur) {
-		/* Select statfile to classify */
-		st = cur->data;
-		if ((file = statfile_pool_is_open (pool, st->path)) == NULL) {
-			if ((file =
-				statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
-				msg_warn ("cannot open %s", st->path);
-				cur = g_list_next (cur);
-				data.statfiles_num--;
-				continue;
-			}
-		}
-		data.statfiles[i].file = file;
-		data.statfiles[i].st = st;
-		statfile_get_revision (file, &rev, NULL);
-		if (st->is_spam) {
-			data.total_spam += rev;
-		}
-		else {
-			data.total_ham += rev;
-		}
-
-		cur = g_list_next (cur);
-		i++;
 	}
 
 	cnt = i;
@@ -358,7 +311,6 @@ bayes_classify (struct classifier_ctx * ctx,
 
 gboolean
 bayes_learn_spam (struct classifier_ctx * ctx,
-	statfile_pool_t *pool,
 	GTree *input,
 	struct rspamd_task *task,
 	gboolean is_spam,
@@ -370,11 +322,9 @@ bayes_learn_spam (struct classifier_ctx * ctx,
 	gint nodes;
 	gint minnodes;
 	struct rspamd_statfile_config *st;
-	stat_file_t *file;
 	GList *cur;
 	gboolean skip_labels;
 
-	g_assert (pool != NULL);
 	g_assert (ctx != NULL);
 
 	if (ctx->cfg->opts &&
@@ -394,19 +344,6 @@ bayes_learn_spam (struct classifier_ctx * ctx,
 		}
 	}
 
-	cur = rspamd_lua_call_cls_pre_callbacks (ctx->cfg, task, TRUE, is_spam, L);
-	if (cur) {
-		skip_labels = FALSE;
-		rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t)g_list_free, cur);
-	}
-	else {
-		/* Do not try to learn specific statfiles if pre callback returned nil */
-		skip_labels = TRUE;
-		cur = ctx->cfg->statfiles;
-	}
-
-	data.pool = pool;
 	data.now = time (NULL);
 	data.ctx = ctx;
 	data.in_class = TRUE;
@@ -421,49 +358,8 @@ bayes_learn_spam (struct classifier_ctx * ctx,
 		data.max_tokens = 0;
 	}
 
-	while (cur) {
-		/* Select statfiles to learn */
-		st = cur->data;
-		if (st->is_spam != is_spam || (skip_labels && st->label)) {
-			cur = g_list_next (cur);
-			continue;
-		}
-		if ((file = statfile_pool_is_open (pool, st->path)) == NULL) {
-			if ((file =
-				statfile_pool_open (pool, st->path, st->size, FALSE)) == NULL) {
-				msg_warn ("cannot open %s", st->path);
-				if (statfile_pool_create (pool, st->path, st->size) == -1) {
-					msg_err ("cannot create statfile %s", st->path);
-					g_set_error (err,
-						bayes_error_quark (),           /* error domain */
-						1,                              /* error code */
-						"cannot create statfile: %s",
-						st->path);
-					return FALSE;
-				}
-				if ((file =
-					statfile_pool_open (pool, st->path, st->size,
-					FALSE)) == NULL) {
-					g_set_error (err,
-						bayes_error_quark (),           /* error domain */
-						1,                              /* error code */
-						"cannot open statfile %s after creation",
-						st->path);
-					msg_err ("cannot open statfile %s after creation",
-						st->path);
-					return FALSE;
-				}
-			}
-		}
-		data.file = file;
-		statfile_pool_lock_file (pool, data.file);
-		g_tree_foreach (input, bayes_learn_callback, &data);
-		statfile_inc_revision (file);
-		statfile_pool_unlock_file (pool, data.file);
-		msg_info ("increase revision for %s", st->path);
+	g_tree_foreach (input, bayes_learn_callback, &data);
 
-		cur = g_list_next (cur);
-	}
 
 	return TRUE;
 }

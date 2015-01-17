@@ -14,6 +14,7 @@
 struct token_result {
 	double value;
 	struct rspamd_statfile_config *st;
+	double *consolidated_value;
 };
 
 typedef struct token_node_s {
