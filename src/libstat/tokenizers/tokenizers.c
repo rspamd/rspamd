@@ -94,11 +94,11 @@ token_node_compare_func (gconstpointer a, gconstpointer b)
 {
 	const token_node_t *aa = a, *bb = b;
 
-	if (aa->h1 == bb->h1) {
-		return aa->h2 - bb->h2;
+	if (aa->datalen != bb->datalen) {
+		return aa->datalen - bb->datalen;
 	}
 
-	return aa->h1 - bb->h1;
+	return memcmp (aa->data, bb->data, aa->datalen);
 }
 
 /* Get next word from specified f_str_t buf */

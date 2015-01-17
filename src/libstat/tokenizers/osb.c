@@ -83,12 +83,9 @@ osb_tokenize_text (struct tokenizer *tokenizer,
 				h2 = hashpipe[0] * primes[1] + hashpipe[i] *
 					primes[(i << 1) - 1];
 				new = rspamd_mempool_alloc0 (pool, sizeof (token_node_t));
-				new->h1 = h1;
-				new->h2 = h2;
-				if (save_token) {
-					new->extra =
-						(uintptr_t)rspamd_mempool_fstrdup (pool, token);
-				}
+				new->datalen = sizeof(gint32) * 2;
+				memcpy(new->data, &h1, sizeof(h1));
+				memcpy(new->data + sizeof(h1), &h2, sizeof(h2));
 
 				if (g_tree_lookup (*tree, new) == NULL) {
 					g_tree_insert (*tree, new, new);
@@ -102,11 +99,9 @@ osb_tokenize_text (struct tokenizer *tokenizer,
 			h1 = hashpipe[0] * primes[0] + hashpipe[i] * primes[i << 1];
 			h2 = hashpipe[0] * primes[1] + hashpipe[i] * primes[(i << 1) - 1];
 			new = rspamd_mempool_alloc0 (pool, sizeof (token_node_t));
-			new->h1 = h1;
-			new->h2 = h2;
-			if (save_token) {
-				new->extra = (uintptr_t)rspamd_mempool_fstrdup (pool, token);
-			}
+			new->datalen = sizeof(gint32) * 2;
+			memcpy(new->data, &h1, sizeof(h1));
+			memcpy(new->data + sizeof(h1), &h2, sizeof(h2));
 
 			if (g_tree_lookup (*tree, new) == NULL) {
 				g_tree_insert (*tree, new, new);

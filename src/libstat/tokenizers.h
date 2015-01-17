@@ -8,12 +8,19 @@
 
 /* Size for features pipe */
 #define FEATURE_WINDOW_SIZE 5
+#define MAX_DATA_LEN 64
+#define MAX_VALUES 32
+
+struct token_result {
+	double value;
+	struct rspamd_statfile_config *st;
+};
 
 typedef struct token_node_s {
-	guint32 h1;
-	guint32 h2;
-	double value;
-	uintptr_t extra;
+	guchar data[MAX_DATA_LEN];
+	guint datalen;
+	struct token_result *results;
+	guint results_len;
 } token_node_t;
 
 /* Common tokenizer structure */
