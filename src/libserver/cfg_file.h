@@ -125,43 +125,6 @@ struct rspamd_symbols_group {
 	GList *symbols;
 };
 
-/**
- * Statfile section definition
- */
-struct rspamd_statfile_section {
-	guint32 code;                                   /**< section's code										*/
-	guint64 size;                                   /**< size of section									*/
-	double weight;                                  /**< weight coefficient for section						*/
-};
-
-/**
- * Statfile autolearn parameters
- */
-struct statfile_autolearn_params {
-	const gchar *metric;                            /**< metric name for autolearn triggering               */
-	double threshold_min;                           /**< threshold mark										*/
-	double threshold_max;                           /**< threshold mark										*/
-	GList *symbols;                                 /**< list of symbols									*/
-};
-
-/**
- * Sync affinity
- */
-enum sync_affinity {
-	AFFINITY_NONE = 0,
-	AFFINITY_MASTER,
-	AFFINITY_SLAVE
-};
-
-/**
- * Binlog params
- */
-struct statfile_binlog_params {
-	enum sync_affinity affinity;
-	time_t rotate_time;
-	gchar *master_addr;
-	guint16 master_port;
-};
 
 typedef double (*statfile_normalize_func)(struct rspamd_config *cfg,
 	long double score, void *params);
@@ -171,15 +134,7 @@ typedef double (*statfile_normalize_func)(struct rspamd_config *cfg,
  */
 struct rspamd_statfile_config {
 	gchar *symbol;                                  /**< symbol of statfile									*/
-	gchar *path;                                    /**< filesystem pattern (with %r or %f)					*/
 	gchar *label;                                   /**< label of this statfile								*/
-	gsize size;                                     /**< size of statfile									*/
-	GList *sections;                                /**< list of sections in statfile						*/
-	struct statfile_autolearn_params *autolearn;    /**< autolearn params									*/
-	struct statfile_binlog_params *binlog;          /**< binlog params										*/
-	statfile_normalize_func normalizer;             /**< function that is used as normaliser                */
-	void *normalizer_data;                          /**< normalizer function params                         */
-	gchar *normalizer_str;                          /**< source string (for dump)							*/
 	ucl_object_t *opts;                             /**< other options										*/
 	gboolean is_spam;                               /**< spam flag											*/
 };
@@ -193,7 +148,7 @@ struct rspamd_classifier_config {
 	gchar *metric;                                  /**< metric of this classifier                          */
 	struct classifier *classifier;                  /**< classifier interface                               */
 	struct tokenizer *tokenizer;                    /**< tokenizer used for classifier						*/
-	GHashTable *opts;                               /**< other options                                      */
+	ucl_object_t *opts;                             /**< other options                                      */
 	GList *pre_callbacks;                           /**< list of callbacks that are called before classification */
 	GList *post_callbacks;                          /**< list of callbacks that are called after classification */
 };

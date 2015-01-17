@@ -1,14 +1,15 @@
 /*
- * Copyright (c) 2009-2012, Vsevolod Stakhov
+ * Copyright (c) 2015, Vsevolod Stakhov
+ *
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
+ *	 * Redistributions of source code must retain the above copyright
+ *	   notice, this list of conditions and the following disclaimer.
+ *	 * Redistributions in binary form must reproduce the above copyright
+ *	   notice, this list of conditions and the following disclaimer in the
+ *	   documentation and/or other materials provided with the distribution.
  *
  * THIS SOFTWARE IS PROVIDED BY AUTHOR ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -22,37 +23,25 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/*
- * Common classifier functions
- */
+#include "main.h"
+#include "backends.h"
+#include "mmaped_file.h"
 
-#include "classifiers.h"
-
-struct classifier classifiers[] = {
-	{
-		.name = "bayes",
-		.init_func = bayes_init,
-		.classify_func = bayes_classify,
-		.learn_func = bayes_learn,
-		.learn_spam_func = bayes_learn_spam,
-		.weights_func = bayes_weights
-	}
+struct rspamd_stat_backend statfile_backends[] = {
+	{RSPAMD_DEFAULT_BACKEND, }
 };
 
-struct classifier *
-rspamd_stat_get_classifier (const char *name)
+
+struct rspamd_stat_backend *
+rspamd_stat_get_backend (const char *name)
 {
 	guint i;
 
-	for (i = 0; i < sizeof (classifiers) / sizeof (classifiers[0]); i++) {
-		if (strcmp (classifiers[i].name, name) == 0) {
-			return &classifiers[i];
+	for (i = 0; i < G_N_ELEMENTS (statfile_backends); i++) {
+		if (strcmp (statfile_backends[i].name, name) == 0) {
+			return &statfile_backends[i];
 		}
 	}
 
 	return NULL;
 }
-
-/*
- * vi:ts=4
- */

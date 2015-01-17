@@ -1,11 +1,14 @@
 # Librspamdserver
 SET(LIBSTATSRC
-				)
+				stat_config.c)
 SET(TOKENIZERSSRC  tokenizers/tokenizers.c
 				tokenizers/osb.c)
 
 SET(CLASSIFIERSSRC classifiers/classifiers.c
                 classifiers/bayes.c)
+                
+SET(BACKENDSSRC backends/backends.c
+			backends/mmaped_file.c)
 				
 ADD_LIBRARY(rspamd-stat ${LINK_TYPE} ${LIBSTATSRC} ${TOKENIZERSSRC} ${CLASSIFIERSSRC})
 IF(NOT DEBIAN_BUILD)

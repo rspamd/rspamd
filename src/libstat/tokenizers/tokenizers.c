@@ -26,7 +26,6 @@
  * Common tokenization functions
  */
 
-#include <sys/types.h>
 #include "main.h"
 #include "tokenizers.h"
 
@@ -77,7 +76,7 @@ const gchar t_delimiters[255] = {
 };
 
 struct tokenizer *
-get_tokenizer (const char *name)
+rspamd_stat_get_tokenizer (const char *name)
 {
 	guint i;
 
@@ -230,7 +229,7 @@ tokenize_subject (struct rspamd_task *task, GTree ** tree)
 			(rspamd_mempool_destruct_t) g_tree_destroy, *tree);
 	}
 
-	osb_tokenizer = get_tokenizer ("osb-text");
+	osb_tokenizer = rspamd_stat_get_tokenizer ("osb-text");
 
 	/* Try to use pre-defined subject */
 	if (task->subject != NULL) {

@@ -45,7 +45,7 @@ struct classifier {
 };
 
 /* Get classifier structure by name or return NULL if this name is not found */
-struct classifier * get_classifier (const char *name);
+struct classifier * rspamd_stat_get_classifier (const char *name);
 
 /* Bayes algorithm */
 struct classifier_ctx * bayes_init (rspamd_mempool_t *pool,

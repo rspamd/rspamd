@@ -45,16 +45,12 @@ static const struct luaL_reg classifierlib_m[] = {
 
 LUA_FUNCTION_DEF (statfile, get_symbol);
 LUA_FUNCTION_DEF (statfile, get_label);
-LUA_FUNCTION_DEF (statfile, get_path);
-LUA_FUNCTION_DEF (statfile, get_size);
 LUA_FUNCTION_DEF (statfile, is_spam);
 LUA_FUNCTION_DEF (statfile, get_param);
 
 static const struct luaL_reg statfilelib_m[] = {
 	LUA_INTERFACE_DEF (statfile, get_symbol),
 	LUA_INTERFACE_DEF (statfile, get_label),
-	LUA_INTERFACE_DEF (statfile, get_path),
-	LUA_INTERFACE_DEF (statfile, get_size),
 	LUA_INTERFACE_DEF (statfile, is_spam),
 	LUA_INTERFACE_DEF (statfile, get_param),
 	{"__tostring", rspamd_lua_class_tostring},
@@ -343,36 +339,6 @@ lua_statfile_get_label (lua_State *L)
 
 	if (st != NULL && st->label != NULL) {
 		lua_pushstring (L, st->label);
-	}
-	else {
-		lua_pushnil (L);
-	}
-
-	return 1;
-}
-
-static gint
-lua_statfile_get_path (lua_State *L)
-{
-	struct rspamd_statfile_config *st = lua_check_statfile (L);
-
-	if (st != NULL) {
-		lua_pushstring (L, st->path);
-	}
-	else {
-		lua_pushnil (L);
-	}
-
-	return 1;
-}
-
-static gint
-lua_statfile_get_size (lua_State *L)
-{
-	struct rspamd_statfile_config *st = lua_check_statfile (L);
-
-	if (st != NULL) {
-		lua_pushinteger (L, st->size);
 	}
 	else {
 		lua_pushnil (L);

@@ -498,12 +498,6 @@ rspamd_config_new_classifier (struct rspamd_config *cfg,
 			rspamd_mempool_alloc0 (cfg->cfg_pool,
 				sizeof (struct rspamd_classifier_config));
 	}
-	if (c->opts == NULL) {
-		c->opts = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t) g_hash_table_destroy,
-			c->opts);
-	}
 	if (c->labels == NULL) {
 		c->labels = g_hash_table_new_full (rspamd_str_hash,
 				rspamd_str_equal,

@@ -33,7 +33,7 @@ struct tokenizer {
 int token_node_compare_func (gconstpointer a, gconstpointer b);
 
 /* Get tokenizer structure by name or return NULL if this name is not found */
-struct tokenizer * get_tokenizer (const char *name);
+struct tokenizer * rspamd_stat_get_tokenizer (const char *name);
 
 /* Get next word from specified f_str_t buf */
 gchar * rspamd_tokenizer_get_word (rspamd_fstring_t *buf,

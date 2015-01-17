@@ -889,14 +889,6 @@ rspamd_rcl_statfile_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 			return FALSE;
 		}
 
-		if (st->path == NULL) {
-			g_set_error (err,
-				CFG_RCL_ERROR,
-				EINVAL,
-				"statfile must have a path defined");
-			return FALSE;
-		}
-
 		st->opts = (ucl_object_t *)obj;
 
 		val = ucl_object_find_key (obj, "spam");
@@ -967,7 +959,7 @@ rspamd_rcl_classifier_handler (struct rspamd_config *cfg,
 
 	if (found == NULL) {
 		ccf = rspamd_config_new_classifier (cfg, NULL);
-		ccf->classifier = get_classifier (type);
+		ccf->classifier = rspamd_stat_get_classifier (type);
 	}
 	else {
 		ccf = found;
@@ -997,13 +989,7 @@ rspamd_rcl_classifier_handler (struct rspamd_config *cfg,
 			}
 			else if (g_ascii_strcasecmp (key,
 				"tokenizer") == 0 && val->type == UCL_STRING) {
-				ccf->tokenizer = get_tokenizer (ucl_object_tostring (val));
-			}
-			else {
-				/* Just insert a value of option to the hash */
-				g_hash_table_insert (ccf->opts,
-					(gpointer)key,
-					(gpointer)ucl_object_tostring_forced (val));
+				ccf->tokenizer = rspamd_stat_get_tokenizer (ucl_object_tostring (val));
 			}
 		}
 	}
@@ -1404,20 +1390,10 @@ rspamd_rcl_config_init (void)
 		G_STRUCT_OFFSET (struct rspamd_statfile_config, symbol),
 		0);
 	rspamd_rcl_add_default_handler (ssub,
-		"path",
-		rspamd_rcl_parse_struct_string,
-		G_STRUCT_OFFSET (struct rspamd_statfile_config, path),
-		RSPAMD_CL_FLAG_STRING_PATH);
-	rspamd_rcl_add_default_handler (ssub,
 		"label",
 		rspamd_rcl_parse_struct_string,
 		G_STRUCT_OFFSET (struct rspamd_statfile_config, label),
 		0);
-	rspamd_rcl_add_default_handler (ssub,
-		"size",
-		rspamd_rcl_parse_struct_integer,
-		G_STRUCT_OFFSET (struct rspamd_statfile_config, size),
-		RSPAMD_CL_FLAG_INT_SIZE);
 	rspamd_rcl_add_default_handler (ssub,
 		"spam",
 		rspamd_rcl_parse_struct_boolean,

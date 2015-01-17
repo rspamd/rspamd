@@ -355,9 +355,8 @@ gboolean
 rspamd_init_lua_filters (struct rspamd_config *cfg)
 {
 	struct rspamd_config **pcfg;
-	GList *cur, *tmp;
+	GList *cur;
 	struct script_module *module;
-	struct rspamd_statfile_config *st;
 	lua_State *L = cfg->lua_state;
 
 	cur = g_list_first (cfg->script_modules);
@@ -395,24 +394,7 @@ rspamd_init_lua_filters (struct rspamd_config *cfg)
 		}
 		cur = g_list_next (cur);
 	}
-	/* Init statfiles normalizers */
-	cur = g_list_first (cfg->statfiles);
-	while (cur) {
-		st = cur->data;
-		if (st->normalizer == rspamd_lua_normalize) {
-			tmp = st->normalizer_data;
-			if (tmp && (tmp = g_list_next (tmp))) {
-				if (tmp->data) {
-					/* Code must be loaded from data */
-					if (luaL_loadstring (L, tmp->data) != 0) {
-						msg_info ("cannot load normalizer code %s", tmp->data);
-						return FALSE;
-					}
-				}
-			}
-		}
-		cur = g_list_next (cur);
-	}
+
 	/* Assign state */
 	cfg->lua_state = L;
 
