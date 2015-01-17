@@ -78,7 +78,7 @@ struct _pool_destructors {
 	void *data;                             /**< data to free							*/
 	const gchar *function;                  /**< function from which this destructor was added */
 	const gchar *loc;                       /**< line number                            */
-	struct _pool_destructors *prev, *next;  /**< chain link								*/
+	struct _pool_destructors *prev;         /**< chain link								*/
 };
 
 /**
