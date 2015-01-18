@@ -495,8 +495,7 @@ fork_worker (struct rspamd_main *rspamd, struct rspamd_worker_conf *cf)
 		case 0:
 			/* Update pid for logging */
 			rspamd_log_update_pid (cf->type, rspamd->logger);
-			/* Lock statfile pool if possible */
-			statfile_pool_lockall (rspamd->statfile_pool);
+			/* Lock statfile pool if possible XXX */
 			/* Init PRNG after fork */
 			ottery_init (NULL);
 			g_random_set_seed (ottery_rand_uint32 ());
@@ -795,36 +794,6 @@ reopen_log_handler (gpointer key, gpointer value, gpointer unused)
 
 	if (kill (w->pid, SIGUSR1) == -1) {
 		msg_err ("kill failed for pid %P: %s", w->pid, strerror (errno));
-	}
-}
-
-static void
-preload_statfiles (struct rspamd_main *rspamd)
-{
-	struct rspamd_classifier_config *cf;
-	struct rspamd_statfile_config *st;
-	stat_file_t *stf;
-	GList *cur_cl, *cur_st;
-
-	cur_cl = rspamd->cfg->classifiers;
-	while (cur_cl) {
-		/* Open all statfiles */
-		cf = cur_cl->data;
-
-		cur_st = cf->statfiles;
-		while (cur_st) {
-			st = cur_st->data;
-			stf = statfile_pool_open (rspamd->statfile_pool,
-					st->path,
-					st->size,
-					FALSE);
-			if (stf == NULL) {
-				msg_warn ("preload of %s from %s failed", st->symbol, st->path);
-			}
-			cur_st = g_list_next (cur_st);
-		}
-
-		cur_cl = g_list_next (cur_cl);
 	}
 }
 
@@ -1351,10 +1320,6 @@ main (gint argc, gchar **argv, gchar **env)
 
 	setproctitle ("main process");
 
-	/* Init statfile pool */
-	rspamd_main->statfile_pool = statfile_pool_new (rspamd_main->server_pool,
-			rspamd_main->cfg->mlock_statfile_pool);
-
 	/* Init lua filters */
 	if (!rspamd_init_lua_filters (rspamd_main->cfg)) {
 		msg_err ("error loading lua plugins");
@@ -1385,9 +1350,6 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Flush log */
 	rspamd_log_flush (rspamd_main->logger);
-
-	/* Preload all statfiles */
-	preload_statfiles (rspamd_main);
 
 	/* Maybe read roll history */
 	if (rspamd_main->cfg->history_file) {
@@ -1510,8 +1472,6 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	msg_info ("terminating...");
-
-	statfile_pool_delete (rspamd_main->statfile_pool);
 
 	rspamd_log_close (rspamd_main->logger);
 

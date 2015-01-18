@@ -1261,7 +1261,6 @@ rspamd_controller_handle_stat_common (
 	time_t ti;
 	rspamd_mempool_stat_t mem_st;
 	struct rspamd_classifier_config *ccf;
-	stat_file_t *statfile;
 	struct rspamd_statfile_config *st;
 	GList *cur_cl, *cur_st;
 	struct rspamd_stat *stat, stat_copy;
@@ -1334,40 +1333,7 @@ rspamd_controller_handle_stat_common (
 	sub = ucl_object_typed_new (UCL_ARRAY);
 	while (cur_cl) {
 		ccf = cur_cl->data;
-		cur_st = g_list_first (ccf->statfiles);
-		while (cur_st) {
-			st = cur_st->data;
-			if ((statfile =
-				statfile_pool_is_open (session->ctx->srv->statfile_pool,
-				st->path)) == NULL) {
-				statfile = statfile_pool_open (session->ctx->srv->statfile_pool,
-						st->path, st->size, FALSE);
-			}
-			if (statfile) {
-				ucl_object_t *obj = ucl_object_typed_new (UCL_OBJECT);
-
-				used = statfile_get_used_blocks (statfile);
-				total = statfile_get_total_blocks (statfile);
-				statfile_get_revision (statfile, &rev, &ti);
-				ucl_object_insert_key (obj,
-					ucl_object_fromstring (st->symbol), "symbol", 0, false);
-				if (st->label != NULL) {
-					ucl_object_insert_key (obj,
-						ucl_object_fromstring (st->label), "label", 0, false);
-				}
-				ucl_object_insert_key (obj, ucl_object_fromint (
-						rev),	"revision", 0, false);
-				ucl_object_insert_key (obj, ucl_object_fromint (
-						st->size),	"size", 0, false);
-				ucl_object_insert_key (obj, ucl_object_fromint (
-						used),	"used",		0, false);
-				ucl_object_insert_key (obj, ucl_object_fromint (
-						total), "total",	0, false);
-
-				ucl_array_append (sub, obj);
-			}
-			cur_st = g_list_next (cur_st);
-		}
+		/* XXX: add statistics for the modern system */
 		cur_cl = g_list_next (cur_cl);
 	}
 

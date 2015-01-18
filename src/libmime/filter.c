@@ -588,97 +588,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 	return;
 }
 
-static gboolean
-check_autolearn (struct statfile_autolearn_params *params,
-	struct rspamd_task *task)
-{
-	gchar *metric_name = DEFAULT_METRIC;
-	struct metric_result *metric_res;
-	GList *cur;
 
-	if (params->metric != NULL) {
-		metric_name = (gchar *)params->metric;
-	}
-
-	/* First check threshold */
-	metric_res = g_hash_table_lookup (task->results, metric_name);
-	if (metric_res == NULL) {
-		if (params->symbols == NULL && params->threshold_max > 0) {
-			/* For ham messages */
-			return TRUE;
-		}
-		debug_task ("metric %s has no results", metric_name);
-		return FALSE;
-	}
-	else {
-		/* Process score of metric */
-		if ((params->threshold_min != 0 && metric_res->score >
-			params->threshold_min) ||
-			(params->threshold_max != 0 && metric_res->score <
-			params->threshold_max)) {
-			/* Now check for specific symbols */
-			if (params->symbols) {
-				cur = params->symbols;
-				while (cur) {
-					if (g_hash_table_lookup (metric_res->symbols,
-						cur->data) == NULL) {
-						return FALSE;
-					}
-					cur = g_list_next (cur);
-				}
-			}
-			/* Now allow processing of actual autolearn */
-			return TRUE;
-		}
-	}
-
-	return FALSE;
-}
-
-void
-process_autolearn (struct rspamd_statfile_config *st,
-	struct rspamd_task *task,
-	GTree * tokens,
-	struct classifier *classifier,
-	gchar *filename,
-	struct classifier_ctx *ctx)
-{
-	stat_file_t *statfile;
-	struct rspamd_statfile_config *unused;
-
-	if (check_autolearn (st->autolearn, task)) {
-		if (tokens) {
-			/* Take care of subject */
-			tokenize_subject (task, &tokens);
-			msg_info ("message with id <%s> autolearned statfile '%s'",
-				task->message_id,
-				filename);
-
-			/* Get or create statfile */
-			statfile = get_statfile_by_symbol (task->worker->srv->statfile_pool,
-					ctx->cfg,
-					st->symbol,
-					&unused,
-					TRUE);
-
-			if (statfile == NULL) {
-				return;
-			}
-
-			classifier->learn_func (ctx,
-				task->worker->srv->statfile_pool,
-				st->symbol,
-				tokens,
-				TRUE,
-				NULL,
-				1.,
-				NULL);
-			statfile_pool_plan_invalidate (task->worker->srv->statfile_pool,
-				DEFAULT_STATFILE_INVALIDATE_TIME,
-				DEFAULT_STATFILE_INVALIDATE_JITTER);
-		}
-	}
-}
 
 static gboolean
 composites_remove_symbols (gpointer key, gpointer value, gpointer data)
@@ -815,7 +725,6 @@ classifiers_callback (gpointer value, void *arg)
 	if (cbdata->nL != NULL) {
 		rspamd_mutex_lock (cbdata->nL->m);
 		cl->classifier->classify_func (ctx,
-			task->worker->srv->statfile_pool,
 			tokens,
 			task,
 			cbdata->nL->L);
@@ -824,28 +733,9 @@ classifiers_callback (gpointer value, void *arg)
 	else {
 		/* Non-threaded case */
 		cl->classifier->classify_func (ctx,
-			task->worker->srv->statfile_pool,
 			tokens,
 			task,
 			task->cfg->lua_state);
-	}
-
-	/* Autolearning */
-	cur = g_list_first (cl->statfiles);
-	while (cur) {
-		st = cur->data;
-		if (st->autolearn) {
-			if (check_autolearn (st->autolearn, task)) {
-				/* Process autolearn */
-				process_autolearn (st,
-					task,
-					tokens,
-					cl->classifier,
-					st->path,
-					ctx);
-			}
-		}
-		cur = g_list_next (cur);
 	}
 }
 
@@ -1155,7 +1045,7 @@ rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
 		task->task_pool, cl);
 	/* Learn */
 	if (!cl->classifier->learn_spam_func (
-			cls_ctx, task->worker->srv->statfile_pool,
+			cls_ctx,
 			tokens, task, is_spam, task->cfg->lua_state, err)) {
 		if (*err) {
 			msg_info ("learn failed for message <%s>, learn error: %s",
@@ -1177,9 +1067,6 @@ rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
 
 	msg_info ("learn success for message <%s>",
 		task->message_id);
-	statfile_pool_plan_invalidate (task->worker->srv->statfile_pool,
-		DEFAULT_STATFILE_INVALIDATE_TIME,
-		DEFAULT_STATFILE_INVALIDATE_JITTER);
 
 	return TRUE;
 }
