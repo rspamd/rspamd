@@ -1765,7 +1765,9 @@ lua_task_get_date (lua_State *L)
 
 				tt = tim;
 				localtime_r (&tt, &t);
+#if !defined(__sun)
 				t.tm_gmtoff = 0;
+#endif
 				t.tm_isdst = 0;
 				tim = mktime (&t);
 			}
