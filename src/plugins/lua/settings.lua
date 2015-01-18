@@ -327,7 +327,7 @@ end
 -- Parse settings map from the ucl line
 local function process_settings_map(string)
   local ucl = require "ucl"
-  local parser = ucl.parser(1)
+  local parser = ucl.parser()
   local res,err = parser:parse_string(string)
   if not res then
     rspamd_logger.warn('cannot parse settings map: ' .. err)
