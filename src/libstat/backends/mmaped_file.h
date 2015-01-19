@@ -7,98 +7,15 @@
 #define RSPAMD_STATFILE_H
 
 #include "config.h"
-#include "mem_pool.h"
-#include "hash.h"
 
-#define CHAIN_LENGTH 128
-
-/* Section types */
-#define STATFILE_SECTION_COMMON 1
-#define STATFILE_SECTION_HEADERS 2
-#define STATFILE_SECTION_URLS 3
-#define STATFILE_SECTION_REGEXP 4
-
-#define DEFAULT_STATFILE_INVALIDATE_TIME 30
-#define DEFAULT_STATFILE_INVALIDATE_JITTER 30
-
-/**
- * Common statfile header
- */
-struct stat_file_header {
-	u_char magic[3];                        /**< magic signature ('r' 's' 'd')      */
-	u_char version[2];                      /**< version of statfile				*/
-	u_char padding[3];                      /**< padding							*/
-	guint64 create_time;                    /**< create time (time_t->guint64)		*/
-	guint64 revision;                       /**< revision number					*/
-	guint64 rev_time;                       /**< revision time						*/
-	guint64 used_blocks;                    /**< used blocks number					*/
-	guint64 total_blocks;                   /**< total number of blocks				*/
-	u_char unused[239];                     /**< some bytes that can be used in future */
-};
-
-/**
- * Section header
- */
-struct stat_file_section {
-	guint64 code;                           /**< section's code						*/
-	guint64 length;                     /**< section's length in blocks			*/
-};
-
-/**
- * Block of data in statfile
- */
-struct stat_file_block {
-	guint32 hash1;                          /**< hash1 (also acts as index)			*/
-	guint32 hash2;                          /**< hash2								*/
-	double value;                           /**< double value                       */
-};
-
-/**
- * Statistic file
- */
-struct stat_file {
-	struct stat_file_header header;         /**< header								*/
-	struct stat_file_section section;       /**< first section						*/
-	struct stat_file_block blocks[1];       /**< first block of data				*/
-};
-
-/**
- * Common view of statfile object
- */
-typedef struct stat_file_s {
-#ifdef HAVE_PATH_MAX
-	gchar filename[PATH_MAX];               /**< name of file						*/
-#else
-	gchar filename[MAXPATHLEN];             /**< name of file						*/
-#endif
-	gint fd;                                    /**< descriptor							*/
-	void *map;                              /**< mmaped area						*/
-	off_t seek_pos;                         /**< current seek position				*/
-	struct stat_file_section cur_section;   /**< current section					*/
-	time_t open_time;                       /**< time when file was opened			*/
-	time_t access_time;                     /**< last access time					*/
-	size_t len;                             /**< length of file(in bytes)			*/
-	rspamd_mempool_mutex_t *lock;               /**< mutex								*/
-} stat_file_t;
-
-/**
- * Statfiles pool
- */
-typedef struct statfile_pool_s {
-	stat_file_t *files;                     /**< hash table of opened files indexed by name	*/
-	void **maps;                            /**< shared hash table of mmaped areas indexed by name	*/
-	gint opened;                                /**< number of opened files				*/
-	rspamd_mempool_t *pool;                 /**< memory pool object					*/
-	rspamd_mempool_mutex_t *lock;               /**< mutex								*/
-	struct event *invalidate_event;         /**< event for pool invalidation        */
-	struct timeval invalidate_tv;
-	gboolean mlock_ok;                      /**< whether it is possible to use mlock (2) to avoid statfiles unloading */
-} statfile_pool_t;
 
 /* Forwarded declarations */
 struct rspamd_classifier_config;
 struct rspamd_statfile_config;
+struct rspamd_config;
 
+gpointer
+rspamd_mmaped_file_init(struct rspamd_config *cfg);
 /**
  * Create new statfile pool
  * @param max_size maximum size

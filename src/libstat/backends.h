@@ -32,7 +32,7 @@
 
 struct rspamd_stat_backend {
 	const char *name;
-	gpointer (*init)(rspamd_mempool_t *pool, struct rspamd_statfile_config *cfg);
+	gpointer (*init)(struct rspamd_statfile_config *cfg);
 	gpointer ctx;
 };
 

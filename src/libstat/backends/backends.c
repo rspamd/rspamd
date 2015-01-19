@@ -28,7 +28,10 @@
 #include "mmaped_file.h"
 
 struct rspamd_stat_backend statfile_backends[] = {
-	{RSPAMD_DEFAULT_BACKEND, }
+	{
+		.name = RSPAMD_DEFAULT_BACKEND,
+		.init = rspamd_mmaped_file_init,
+	}
 };
 
 
