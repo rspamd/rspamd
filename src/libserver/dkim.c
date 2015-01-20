@@ -664,7 +664,7 @@ rspamd_create_dkim_context (const gchar *sig,
 			}
 			break;
 		case DKIM_STATE_ERROR:
-			if (err) {
+			if (err && *err) {
 				msg_info ("dkim parse failed: %s", (*err)->message);
 				return NULL;
 			}
