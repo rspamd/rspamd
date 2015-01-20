@@ -338,6 +338,18 @@ rspamd_mmaped_file_open (rspamd_mmaped_file_ctx * pool,
 	}
 
 	rspamd_mempool_lock_mutex (pool->lock);
+	if (!forced &&
+		labs (size - st.st_size) > (long)sizeof (struct stat_file) * 2
+		&& size > sizeof (struct stat_file)) {
+		rspamd_mempool_unlock_mutex (pool->lock);
+		msg_warn ("need to reindex statfile old size: %Hz, new size: %Hz",
+			(size_t)st.st_size, size);
+		return rspamd_mmaped_file_reindex (pool, filename, st.st_size, size);
+	}
+	else if (size < sizeof (struct stat_file)) {
+		msg_err ("requested to shrink statfile to %Hz but it is too small",
+			size);
+	}
 
 	new_file = g_slice_alloc0 (sizeof (rspamd_mmaped_file_t));
 	if ((new_file->fd = open (filename, O_RDWR)) == -1) {
