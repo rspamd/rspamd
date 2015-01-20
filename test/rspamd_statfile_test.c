@@ -25,21 +25,21 @@ rspamd_statfile_test_func ()
 	}
 
 	/* Create new file */
-	g_assert (statfile_pool_create (pool, TEST_FILENAME, 65535) != -1);
-	g_assert ((st = statfile_pool_open (pool, TEST_FILENAME, 65535, FALSE)) != NULL);
+	g_assert (rspamd_mmaped_file_create (pool, TEST_FILENAME, 65535) != -1);
+	g_assert ((st = rspamd_mmaped_file_open (pool, TEST_FILENAME, 65535, FALSE)) != NULL);
 	
 	/* Get and set random blocks */
-	statfile_pool_lock_file (pool, st);
+	rspamd_mmaped_file_lock_file (pool, st);
 	for (i = 0; i < HASHES_NUM; i ++) {
-		statfile_pool_set_block (pool, st, random_hashes[i], random_hashes[i], now, 1.0);
+		rspamd_mmaped_file_set_block (pool, st, random_hashes[i], random_hashes[i], now, 1.0);
 	}
-	statfile_pool_unlock_file (pool, st);
+	rspamd_mmaped_file_unlock_file (pool, st);
 
 	for (i = 0; i < HASHES_NUM; i ++) {
-		v = statfile_pool_get_block (pool, st, random_hashes[i], random_hashes[i], now);
+		v = rspamd_mmaped_file_get_block (pool, st, random_hashes[i], random_hashes[i], now);
 		g_assert(v == 1.0);
 	}
 
-	statfile_pool_delete (pool);
+	rspamd_mmaped_file_destroy (pool);
 	
 }
