@@ -190,11 +190,32 @@ gpointer
 rspamd_mmaped_file_init (struct rspamd_config *cfg)
 {
 	rspamd_mmaped_file_ctx *new;
+	struct rspamd_classifier_config *clf;
+	struct rspamd_statfile_config *stf;
+	GList *cur, *curst;
+	rspamd_mmaped_file_t *mf;
+	const ucl_object_t *sizeo, *patho;
 
 	new = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (rspamd_mmaped_file_ctx));
 	new->lock = rspamd_mempool_get_mutex (new->pool);
 	new->mlock_ok = cfg->mlock_statfile_pool;
 	new->files = g_hash_table_new (g_str_hash, g_str_equal);
+
+	/* Iterate over all classifiers and load matching statfiles */
+	cur = cfg->classifiers;
+
+	while (cur) {
+		clf = cur->data;
+
+		curst = clf->statfiles;
+		while (curst) {
+			stf = cur->data;
+
+			curst = curst->next;
+		}
+
+		cur = g_list_next (cur);
+	}
 
 	return (gpointer)new;
 }
