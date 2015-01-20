@@ -148,9 +148,6 @@ rspamd_config_defaults (struct rspamd_config *cfg)
 	/* 16 sockets per DNS server */
 	cfg->dns_io_per_server = 16;
 
-	cfg->statfile_sync_interval = 60000;
-	cfg->statfile_sync_timeout = 20000;
-
 	/* 20 Kb */
 	cfg->max_diff = 20480;
 

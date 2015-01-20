@@ -137,6 +137,8 @@ struct rspamd_statfile_config {
 	gchar *label;                                   /**< label of this statfile								*/
 	ucl_object_t *opts;                             /**< other options										*/
 	gboolean is_spam;                               /**< spam flag											*/
+	const gchar *backend;							/**< name of statfile's backend							*/
+	gpointer data;									/**< opaque data 										*/
 };
 
 /**
@@ -216,8 +218,6 @@ struct rspamd_config {
 	gboolean log_color;                             /**< output colors for console output                   */
 	gboolean log_extended;                          /**< log extended information							*/
 
-	guint32 statfile_sync_interval;                 /**< synchronization interval							*/
-	guint32 statfile_sync_timeout;                  /**< synchronization timeout							*/
 	gboolean mlock_statfile_pool;                   /**< use mlock (2) for locking statfiles				*/
 
 	gboolean delivery_enable;                       /**< is delivery agent is enabled						*/

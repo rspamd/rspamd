@@ -1276,16 +1276,6 @@ rspamd_rcl_config_init (void)
 		G_STRUCT_OFFSET (struct rspamd_config, filters_str),
 		0);
 	rspamd_rcl_add_default_handler (sub,
-		"sync_interval",
-		rspamd_rcl_parse_struct_time,
-		G_STRUCT_OFFSET (struct rspamd_config, statfile_sync_interval),
-		RSPAMD_CL_FLAG_TIME_INTEGER);
-	rspamd_rcl_add_default_handler (sub,
-		"sync_timeout",
-		rspamd_rcl_parse_struct_time,
-		G_STRUCT_OFFSET (struct rspamd_config, statfile_sync_timeout),
-		RSPAMD_CL_FLAG_TIME_INTEGER);
-	rspamd_rcl_add_default_handler (sub,
 		"max_diff",
 		rspamd_rcl_parse_struct_integer,
 		G_STRUCT_OFFSET (struct rspamd_config, max_diff),
@@ -1398,6 +1388,11 @@ rspamd_rcl_config_init (void)
 		"spam",
 		rspamd_rcl_parse_struct_boolean,
 		G_STRUCT_OFFSET (struct rspamd_statfile_config, is_spam),
+		0);
+	rspamd_rcl_add_default_handler (ssub,
+		"backend",
+		rspamd_rcl_parse_struct_string,
+		G_STRUCT_OFFSET (struct rspamd_statfile_config, backend),
 		0);
 
 	/**
