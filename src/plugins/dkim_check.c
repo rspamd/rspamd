@@ -391,8 +391,15 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 					dkim_module_ctx->time_jitter,
 					&err);
 			if (ctx == NULL) {
-				msg_info ("cannot parse DKIM context: %s", err->message);
-				g_error_free (err);
+				if (err != NULL) {
+					msg_info ("<%s> cannot parse DKIM context: %s",
+							task->message_id, err->message);
+					g_error_free (err);
+				}
+				else {
+					msg_info ("<%s> cannot parse DKIM context: unknown error",
+							task->message_id);
+				}
 			}
 			else {
 				/* Get key */
