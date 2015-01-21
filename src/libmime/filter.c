@@ -551,7 +551,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 						rd->remove_symbol = TRUE;
 						rd->remove_weight = TRUE;
 					}
-					if (!g_tree_lookup (cd->symbols_to_remove, rd)) {
+					if (!g_tree_lookup (cd->symbols_to_remove, ms->name)) {
 						g_tree_insert (cd->symbols_to_remove,
 							(gpointer)ms->name,
 							rd);
