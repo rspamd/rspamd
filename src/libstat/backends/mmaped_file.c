@@ -38,6 +38,8 @@
 #define DEFAULT_STATFILE_INVALIDATE_TIME 30
 #define DEFAULT_STATFILE_INVALIDATE_JITTER 30
 
+#define MMAPED_BACKEND_TYPE "mmap"
+
 /**
  * Common statfile header
  */
@@ -103,7 +105,6 @@ typedef struct {
  */
 typedef struct  {
 	GHashTable *files;                     /**< hash table of opened files indexed by name	*/
-	void **maps;                            /**< shared hash table of mmaped areas indexed by name	*/
 	rspamd_mempool_t *pool;                 /**< memory pool object					*/
 	rspamd_mempool_mutex_t *lock;               /**< mutex								*/
 	struct event *invalidate_event;         /**< event for pool invalidation        */
@@ -122,11 +123,8 @@ static void rspamd_mmaped_file_set_block_common (
 
 rspamd_mmaped_file_t * rspamd_mmaped_file_is_open (
 		rspamd_mmaped_file_ctx * pool, gchar *filename);
-
 rspamd_mmaped_file_t * rspamd_mmaped_file_open (rspamd_mmaped_file_ctx * pool,
-	gchar *filename,
-	size_t size,
-	gboolean forced);
+		const gchar *filename, size_t size);
 
 /* Check whether specified file is statistic file and calculate its len in blocks */
 static gint
@@ -186,40 +184,6 @@ rspamd_mmaped_file_check (rspamd_mmaped_file_t * file)
 }
 
 
-gpointer
-rspamd_mmaped_file_init (struct rspamd_config *cfg)
-{
-	rspamd_mmaped_file_ctx *new;
-	struct rspamd_classifier_config *clf;
-	struct rspamd_statfile_config *stf;
-	GList *cur, *curst;
-	rspamd_mmaped_file_t *mf;
-	const ucl_object_t *sizeo, *patho;
-
-	new = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (rspamd_mmaped_file_ctx));
-	new->lock = rspamd_mempool_get_mutex (new->pool);
-	new->mlock_ok = cfg->mlock_statfile_pool;
-	new->files = g_hash_table_new (g_str_hash, g_str_equal);
-
-	/* Iterate over all classifiers and load matching statfiles */
-	cur = cfg->classifiers;
-
-	while (cur) {
-		clf = cur->data;
-
-		curst = clf->statfiles;
-		while (curst) {
-			stf = cur->data;
-
-			curst = curst->next;
-		}
-
-		cur = g_list_next (cur);
-	}
-
-	return (gpointer)new;
-}
-
 static rspamd_mmaped_file_t *
 rspamd_mmaped_file_reindex (rspamd_mmaped_file_ctx * pool,
 	gchar *filename,
@@ -264,7 +228,7 @@ rspamd_mmaped_file_reindex (rspamd_mmaped_file_ctx * pool,
 	}
 	/* Now open new file and start copying */
 	fd = open (backup, O_RDONLY);
-	new = rspamd_mmaped_file_open (pool, filename, size, TRUE);
+	new = rspamd_mmaped_file_open (pool, filename, size);
 
 	if (fd == -1 || new == NULL) {
 		msg_err ("cannot open file: %s", strerror (errno));
@@ -341,9 +305,7 @@ rspamd_mmaped_file_preload (rspamd_mmaped_file_t *file)
 
 rspamd_mmaped_file_t *
 rspamd_mmaped_file_open (rspamd_mmaped_file_ctx * pool,
-	gchar *filename,
-	size_t size,
-	gboolean forced)
+		const gchar *filename, size_t size)
 {
 	struct stat st;
 	rspamd_mmaped_file_t *new_file;
@@ -359,8 +321,7 @@ rspamd_mmaped_file_open (rspamd_mmaped_file_ctx * pool,
 	}
 
 	rspamd_mempool_lock_mutex (pool->lock);
-	if (!forced &&
-		labs (size - st.st_size) > (long)sizeof (struct stat_file) * 2
+	if (labs (size - st.st_size) > (long)sizeof (struct stat_file) * 2
 		&& size > sizeof (struct stat_file)) {
 		rspamd_mempool_unlock_mutex (pool->lock);
 		msg_warn ("need to reindex statfile old size: %Hz, new size: %Hz",
@@ -920,3 +881,66 @@ rspamd_mmaped_file_lock_all (rspamd_mmaped_file_ctx *pool)
 	/* Do not try to lock if mlock failed */
 }
 
+
+gpointer
+rspamd_mmaped_file_init (struct rspamd_config *cfg)
+{
+	rspamd_mmaped_file_ctx *new;
+	struct rspamd_classifier_config *clf;
+	struct rspamd_statfile_config *stf;
+	GList *cur, *curst;
+	rspamd_mmaped_file_t *mf;
+	const ucl_object_t *filenameo, *sizeo;
+	const gchar *filename;
+	gsize size;
+
+	new = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (rspamd_mmaped_file_ctx));
+	new->lock = rspamd_mempool_get_mutex (new->pool);
+	new->mlock_ok = cfg->mlock_statfile_pool;
+	new->files = g_hash_table_new (g_str_hash, g_str_equal);
+
+	/* Iterate over all classifiers and load matching statfiles */
+	cur = cfg->classifiers;
+
+	while (cur) {
+		clf = cur->data;
+
+		curst = clf->statfiles;
+		while (curst) {
+			stf = cur->data;
+
+			/*
+			 * By default, all statfiles are treated as mmaped files
+			 */
+			if (stf->backend == NULL ||
+					strcmp (stf->backend, MMAPED_BACKEND_TYPE)) {
+				/*
+				 * Check configuration sanity
+				 */
+				filenameo = ucl_object_find_key (stf->opts, "filename");
+				if (filenameo == NULL || ucl_object_type (filenameo) != UCL_STRING) {
+					msg_err ("statfile %s has no filename defined", stf->symbol);
+					return NULL;
+				}
+
+				filename = ucl_object_tostring (filenameo);
+
+				sizeo = ucl_object_find_key (stf->opts, "size");
+				if (sizeo == NULL || ucl_object_type (sizeo) != UCL_INT) {
+					msg_err ("statfile %s has no size defined", stf->symbol);
+					return NULL;
+				}
+
+				size = ucl_object_toint (sizeo);
+
+				rspamd_mmaped_file_open (new, filename, size);
+			}
+
+			curst = curst->next;
+		}
+
+		cur = g_list_next (cur);
+	}
+
+	return (gpointer)new;
+}
