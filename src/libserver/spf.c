@@ -546,6 +546,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 	struct rdns_reply_entry *elt_data;
 	GList *tmp = NULL;
 	struct rspamd_task *task;
+	gboolean ret;
 
 	task = cb->rec->task;
 
@@ -634,16 +635,20 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 					tmp = cb->rec->addrs;
 					cb->rec->addrs = NULL;
 					cb->rec->in_include = TRUE;
-					start_spf_parse (cb->rec, begin, 0);
+					ret = start_spf_parse (cb->rec, begin, 0);
 					cb->rec->in_include = FALSE;
 
 #ifdef SPF_DEBUG
 					msg_info ("after include");
 					dump_spf_record (cb->rec->addrs);
 #endif
-					/* Insert new list */
-					cb->addr->is_list = TRUE;
-					cb->addr->data.list = cb->rec->addrs;
+
+					if (ret) {
+						/* Insert new list */
+						cb->addr->is_list = TRUE;
+						cb->addr->data.list = cb->rec->addrs;
+					}
+
 					cb->rec->addrs = tmp;
 				}
 				break;
