@@ -107,8 +107,6 @@ typedef struct  {
 	GHashTable *files;                     /**< hash table of opened files indexed by name	*/
 	rspamd_mempool_t *pool;                 /**< memory pool object					*/
 	rspamd_mempool_mutex_t *lock;               /**< mutex								*/
-	struct event *invalidate_event;         /**< event for pool invalidation        */
-	struct timeval invalidate_tv;
 	gboolean mlock_ok;                      /**< whether it is possible to use mlock (2) to avoid statfiles unloading */
 } rspamd_mmaped_file_ctx;
 
@@ -802,85 +800,6 @@ rspamd_mmaped_file_get_total (rspamd_mmaped_file_t *file)
 
 	return header->total_blocks;
 }
-
-static void
-rspamd_mmaped_file_invalidate_cb (gint fd, short what, void *ud)
-{
-	rspamd_mmaped_file_ctx *pool = ud;
-	GHashTableIter it;
-	gpointer k, v;
-	rspamd_mmaped_file_t *f;
-
-	g_hash_table_iter_init (&it, pool->files);
-	while (g_hash_table_iter_next (&it, &k, &v)) {
-		f = (rspamd_mmaped_file_t *)v;
-		msync (f->map, f->len, MS_ASYNC);
-	}
-
-	msg_info ("invalidating statfiles");
-}
-
-
-void
-rspamd_mmaped_file_invalidate (rspamd_mmaped_file_ctx *pool,
-	time_t seconds,
-	time_t jitter)
-{
-	gboolean pending;
-
-
-	if (pool->invalidate_event != NULL) {
-		pending = evtimer_pending (pool->invalidate_event, NULL);
-		if (pending) {
-			/* Replan event */
-			pool->invalidate_tv.tv_sec = seconds +
-				g_random_int_range (0, jitter);
-			pool->invalidate_tv.tv_usec = 0;
-			evtimer_add (pool->invalidate_event, &pool->invalidate_tv);
-		}
-	}
-	else {
-		pool->invalidate_event =
-			rspamd_mempool_alloc (pool->pool, sizeof (struct event));
-		pool->invalidate_tv.tv_sec = seconds + g_random_int_range (0, jitter);
-		pool->invalidate_tv.tv_usec = 0;
-		evtimer_set (pool->invalidate_event,
-			rspamd_mmaped_file_invalidate_cb,
-			pool);
-		evtimer_add (pool->invalidate_event, &pool->invalidate_tv);
-		msg_info ("invalidate of statfile pool is planned in %d seconds",
-			(gint)pool->invalidate_tv.tv_sec);
-	}
-}
-
-
-
-void
-rspamd_mmaped_file_lock_all (rspamd_mmaped_file_ctx *pool)
-{
-	gint i;
-	GHashTableIter it;
-	gpointer k, v;
-	rspamd_mmaped_file_t *f;
-
-
-	if (pool->mlock_ok) {
-		g_hash_table_iter_init (&it, pool->files);
-		while (g_hash_table_iter_next (&it, &k, &v)) {
-			f = (rspamd_mmaped_file_t *)v;
-			if (mlock (f->map, f->len) == -1) {
-				msg_warn (
-						"mlock of statfile failed, maybe you need to "
-						"increase RLIMIT_MEMLOCK limit for a process: %s",
-						strerror (errno));
-				pool->mlock_ok = FALSE;
-				return;
-			}
-		}
-	}
-	/* Do not try to lock if mlock failed */
-}
-
 
 gpointer
 rspamd_mmaped_file_init (struct rspamd_config *cfg)
