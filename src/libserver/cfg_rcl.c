@@ -1102,7 +1102,7 @@ rspamd_rcl_composite_handler (struct rspamd_config *cfg,
 	composite =
 		rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct rspamd_composite));
 	composite->expr = expr;
-	composite->id = g_hash_table_size (cfg->composite_symbols) + 1;
+	composite->id = g_hash_table_size (cfg->composite_symbols);
 	g_hash_table_insert (cfg->composite_symbols,
 		(gpointer)composite_name,
 		composite);
