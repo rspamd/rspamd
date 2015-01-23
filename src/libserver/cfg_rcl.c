@@ -28,8 +28,6 @@
 #include "cfg_file.h"
 #include "lua/lua_common.h"
 #include "expressions.h"
-#include "classifiers.h"
-#include "tokenizers.h"
 
 
 struct rspamd_rcl_default_handler_data {
@@ -933,70 +931,44 @@ rspamd_rcl_classifier_handler (struct rspamd_config *cfg,
 	const ucl_object_t *val, *cur;
 	ucl_object_iter_t it = NULL;
 	const gchar *key, *type;
-	struct rspamd_classifier_config *ccf, *found = NULL;
+	struct rspamd_classifier_config *ccf;
 	gboolean res = TRUE;
 	struct rspamd_rcl_section *stat_section;
-	GList *cur_cl;
 
-	val = ucl_object_find_key (obj, "type");
-	if (val == NULL || !ucl_object_tostring_safe (val, &type)) {
-		g_set_error (err,
-			CFG_RCL_ERROR,
-			EINVAL,
-			"classifier should have type defined");
-		return FALSE;
-	}
+	ccf = rspamd_config_new_classifier (cfg, NULL);
 
-	cur_cl = cfg->classifiers;
-	while (cur_cl != NULL) {
-		ccf = cur_cl->data;
-		if (g_ascii_strcasecmp (ccf->classifier->name, type) == 0) {
-			found = ccf;
-			break;
+	if (rspamd_rcl_section_parse_defaults (section, cfg, obj, ccf, err)) {
+
+		HASH_FIND_STR (section->subsections, "statfile", stat_section);
+
+		if (ccf->classifier == NULL) {
+			ccf->classifier = "bayes";
 		}
-		cur_cl = g_list_next (cur_cl);
-	}
 
-	if (found == NULL) {
-		ccf = rspamd_config_new_classifier (cfg, NULL);
-		ccf->classifier = rspamd_stat_get_classifier (type);
-	}
-	else {
-		ccf = found;
-	}
+		if (ccf->name == NULL) {
+			ccf->name = ccf->classifier;
+		}
 
-	HASH_FIND_STR (section->subsections, "statfile", stat_section);
-
-	while ((val = ucl_iterate_object (obj, &it, true)) != NULL && res) {
-		key = ucl_object_key (val);
-		if (key != NULL) {
-			if (g_ascii_strcasecmp (key, "statfile") == 0) {
-				LL_FOREACH (val, cur)
-				{
-					res = rspamd_rcl_statfile_handler (cfg,
-							cur,
-							ccf,
-							stat_section,
-							err);
-					if (!res) {
-						return FALSE;
+		while ((val = ucl_iterate_object (obj, &it, true)) != NULL && res) {
+			key = ucl_object_key (val);
+			if (key != NULL) {
+				if (g_ascii_strcasecmp (key, "statfile") == 0) {
+					LL_FOREACH (val, cur) {
+						res = rspamd_rcl_statfile_handler (cfg,
+								cur,
+								ccf,
+								stat_section,
+								err);
+						if (!res) {
+							return FALSE;
+						}
 					}
 				}
 			}
-			else if (g_ascii_strcasecmp (key,
-				"type") == 0 && val->type == UCL_STRING) {
-				continue;
-			}
-			else if (g_ascii_strcasecmp (key,
-				"tokenizer") == 0 && val->type == UCL_STRING) {
-				ccf->tokenizer = rspamd_stat_get_tokenizer (ucl_object_tostring (val));
-			}
 		}
 	}
 
-	if (found == NULL) {
-		cfg->classifiers = g_list_prepend (cfg->classifiers, ccf);
-	}
+	cfg->classifiers = g_list_prepend (cfg->classifiers, ccf);
 
 
 	return res;
@@ -1368,12 +1340,37 @@ rspamd_rcl_config_init (void)
 			UCL_OBJECT,
 			FALSE,
 			TRUE);
+	rspamd_rcl_add_default_handler (sub,
+		"name",
+		rspamd_rcl_parse_struct_string,
+		G_STRUCT_OFFSET (struct rspamd_classifier_config, name),
+		0);
+	rspamd_rcl_add_default_handler (sub,
+		"classifier",
+		rspamd_rcl_parse_struct_string,
+		G_STRUCT_OFFSET (struct rspamd_classifier_config, classifier),
+		0);
+	/* type is an alias for classifier now */
+	rspamd_rcl_add_default_handler (sub,
+		"type",
+		rspamd_rcl_parse_struct_string,
+		G_STRUCT_OFFSET (struct rspamd_classifier_config, classifier),
+		0);
+	rspamd_rcl_add_default_handler (sub,
+		"tokenizer",
+		rspamd_rcl_parse_struct_string,
+		G_STRUCT_OFFSET (struct rspamd_classifier_config, tokenizer),
+		0);
+
+	/*
+	 * Statfile defaults
+	 */
 	ssub = rspamd_rcl_add_section (&sub->subsections,
-			"statfile",
-			rspamd_rcl_statfile_handler,
-			UCL_OBJECT,
-			TRUE,
-			TRUE);
+		"statfile",
+		rspamd_rcl_statfile_handler,
+		UCL_OBJECT,
+		TRUE,
+		TRUE);
 	rspamd_rcl_add_default_handler (ssub,
 		"symbol",
 		rspamd_rcl_parse_struct_string,

@@ -29,7 +29,6 @@
 #include "message.h"
 #include "radix.h"
 #include "trie.h"
-#include "classifiers.h"
 
 /***
  * This module is used to configure rspamd and is normally available as global
@@ -450,7 +449,7 @@ lua_config_get_classifier (lua_State * L)
 		cur = g_list_first (cfg->classifiers);
 		while (cur) {
 			clc = cur->data;
-			if (g_ascii_strcasecmp (clc->classifier->name, name) == 0) {
+			if (g_ascii_strcasecmp (clc->name, name) == 0) {
 				pclc = &clc;
 				break;
 			}

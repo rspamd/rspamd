@@ -148,11 +148,12 @@ struct rspamd_classifier_config {
 	GList *statfiles;                               /**< statfiles list                                     */
 	GHashTable *labels;                             /**< statfiles with labels								*/
 	gchar *metric;                                  /**< metric of this classifier                          */
-	struct classifier *classifier;                  /**< classifier interface                               */
-	struct tokenizer *tokenizer;                    /**< tokenizer used for classifier						*/
+	gchar *classifier;                  			/**< classifier interface                               */
+	gchar *tokenizer;                    			/**< tokenizer used for classifier						*/
 	ucl_object_t *opts;                             /**< other options                                      */
 	GList *pre_callbacks;                           /**< list of callbacks that are called before classification */
 	GList *post_callbacks;                          /**< list of callbacks that are called after classification */
+	gchar *name;									/**< unique name of classifier							*/
 };
 
 struct rspamd_worker_bind_conf {

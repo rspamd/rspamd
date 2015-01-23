@@ -25,7 +25,6 @@
 
 #include "lua_common.h"
 #include "cfg_file.h"
-#include "classifiers.h"
 
 /* Classifier methods */
 LUA_FUNCTION_DEF (classifier, register_pre_callback);
@@ -147,7 +146,7 @@ rspamd_lua_call_cls_pre_callbacks (struct rspamd_classifier_config *ccf,
 		/* Check function from global table 'classifiers' */
 		lua_getglobal (L, "classifiers");
 		if (lua_istable (L, -1)) {
-			lua_pushstring (L, ccf->classifier->name);
+			lua_pushstring (L, ccf->name);
 			lua_gettable (L, -2);
 			/* Function is now on top */
 			if (lua_isfunction (L, -1)) {

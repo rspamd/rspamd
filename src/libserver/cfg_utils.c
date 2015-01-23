@@ -29,7 +29,6 @@
 #include "main.h"
 #include "uthash_strcase.h"
 #include "filter.h"
-#include "classifiers.h"
 #include "lua/lua_common.h"
 #include "kvstorage_config.h"
 #include "map.h"
@@ -681,7 +680,7 @@ rspamd_config_find_classifier (struct rspamd_config *cfg, const gchar *name)
 	while (cur) {
 		cf = cur->data;
 
-		if (g_ascii_strcasecmp (cf->classifier->name, name) == 0) {
+		if (g_ascii_strcasecmp (cf->name, name) == 0) {
 			return cf;
 		}
 
