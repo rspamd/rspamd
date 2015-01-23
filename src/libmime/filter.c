@@ -31,8 +31,6 @@
 #include "util.h"
 #include "expressions.h"
 #include "diff.h"
-#include "classifiers.h"
-#include "tokenizers.h"
 
 #ifdef WITH_LUA
 #   include "lua/lua_common.h"
@@ -646,6 +644,8 @@ struct classifiers_cbdata {
 static void
 classifiers_callback (gpointer value, void *arg)
 {
+	/* XXX: totally broken now */
+#if 0
 	struct classifiers_cbdata *cbdata = arg;
 	struct rspamd_task *task;
 	struct rspamd_classifier_config *cl = value;
@@ -737,6 +737,7 @@ classifiers_callback (gpointer value, void *arg)
 			task,
 			task->cfg->lua_state);
 	}
+#endif
 }
 
 
@@ -975,6 +976,9 @@ rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
 	gboolean is_spam,
 	GError **err)
 {
+	/* XXX: Totally broken now */
+	return FALSE;
+#if 0
 	GList *cur, *ex;
 	struct classifier_ctx *cls_ctx;
 	GTree *tokens = NULL;
@@ -1069,6 +1073,7 @@ rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
 		task->message_id);
 
 	return TRUE;
+#endif
 }
 
 /*
