@@ -31,6 +31,7 @@
 
 struct rspamd_statfile_runtime {
 	struct rspamd_statfile_config *st;
+	gpointer statfile_data;
 	guint64 hits;
 	guint64 total_hits;
 };

@@ -38,9 +38,11 @@ struct rspamd_stat_ctx;
 struct rspamd_stat_backend {
 	const char *name;
 	gpointer (*init)(struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg);
+	gpointer (*runtime)(struct rspamd_statfile_config *stcf, gpointer ctx);
 	gpointer ctx;
 };
 
 gpointer rspamd_mmaped_file_init(struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg);
+gpointer rspamd_mmaped_file_runtime (struct rspamd_statfile_config *stcf, gpointer ctx);
 
 #endif /* BACKENDS_H_ */
