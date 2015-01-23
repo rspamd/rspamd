@@ -17,7 +17,7 @@ struct classifier_ctx {
 	struct rspamd_classifier_config *cfg;
 };
 
-struct classifier {
+struct rspamd_stat_classifier {
 	char *name;
 	struct classifier_ctx * (*init_func)(rspamd_mempool_t *pool,
 		struct rspamd_classifier_config *cf);

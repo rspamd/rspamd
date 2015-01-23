@@ -59,12 +59,24 @@ typedef struct token_node_s {
 } rspamd_token_t;
 
 struct rspamd_stat_ctx {
-	struct classifier *classifiers;
+	struct rspamd_stat_classifier *classifiers;
 	guint classifiers_count;
-	struct tokenizer *tokenizers;
+	struct rspamd_stat_tokenizer *tokenizers;
 	guint tokenizers_count;
 	struct rspamd_stat_backend *backends;
 	guint backends_count;
+
+	guint statfiles;
 };
+
+struct rspamd_stat_ctx * rspamd_stat_get_ctx (void);
+struct rspamd_stat_classifier * rspamd_stat_get_classifier (const gchar *name);
+struct rspamd_stat_backend * rspamd_stat_get_backend (const gchar *name);
+struct rspamd_stat_tokenizer * rspamd_stat_get_tokenizer (const gchar *name);
+
+static GQuark rspamd_stat_quark (void)
+{
+	return g_quark_from_static_string ("rspamd-statistics");
+}
 
 #endif /* STAT_INTERNAL_H_ */

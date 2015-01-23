@@ -801,7 +801,7 @@ rspamd_mmaped_file_get_total (rspamd_mmaped_file_t *file)
 }
 
 gpointer
-rspamd_mmaped_file_init (struct rspamd_config *cfg)
+rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 {
 	rspamd_mmaped_file_ctx *new;
 	struct rspamd_classifier_config *clf;
@@ -852,6 +852,8 @@ rspamd_mmaped_file_init (struct rspamd_config *cfg)
 				size = ucl_object_toint (sizeo);
 
 				rspamd_mmaped_file_open (new, filename, size);
+
+				ctx->statfiles ++;
 			}
 
 			curst = curst->next;

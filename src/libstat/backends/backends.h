@@ -33,13 +33,14 @@
 struct rspamd_classifier_config;
 struct rspamd_statfile_config;
 struct rspamd_config;
+struct rspamd_stat_ctx;
 
 struct rspamd_stat_backend {
 	const char *name;
-	gpointer (*init)(struct rspamd_statfile_config *cfg);
+	gpointer (*init)(struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg);
 	gpointer ctx;
 };
 
-gpointer rspamd_mmaped_file_init(struct rspamd_config *cfg);
+gpointer rspamd_mmaped_file_init(struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg);
 
 #endif /* BACKENDS_H_ */

@@ -1,11 +1,13 @@
 # Librspamdserver
-SET(LIBSTATSRC stat_config.c)
-SET(TOKENIZERSSRC  tokenizers/tokenizers.c
-				tokenizers/osb.c)
+SET(LIBSTATSRC		stat_config.c
+					stat_process.c)
 
-SET(CLASSIFIERSSRC classifiers/bayes.c)
+SET(TOKENIZERSSRC	tokenizers/tokenizers.c
+					tokenizers/osb.c)
+
+SET(CLASSIFIERSSRC	classifiers/bayes.c)
                 
-SET(BACKENDSSRC backends/mmaped_file.c)
+SET(BACKENDSSRC 	backends/mmaped_file.c)
 				
 ADD_LIBRARY(rspamd-stat ${LINK_TYPE} ${LIBSTATSRC} 
 			${TOKENIZERSSRC} 

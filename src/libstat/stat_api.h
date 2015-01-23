@@ -25,6 +25,7 @@
 
 #include "config.h"
 #include "task.h"
+#include <lua.h>
 
 /**
  * @file stat_api.h
@@ -42,7 +43,7 @@ void rspamd_stat_init (struct rspamd_config *cfg);
  * @param task
  * @return TRUE if task has been classified
  */
-gboolean rspamd_stat_classify (struct rspamd_task *task, GError **err);
+gboolean rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err);
 
 
 /**
@@ -51,7 +52,8 @@ gboolean rspamd_stat_classify (struct rspamd_task *task, GError **err);
  * @param spam if TRUE learn spam, otherwise learn ham
  * @return TRUE if task has been learned
  */
-gboolean rspamd_stat_learn (struct rspamd_task *task, gboolean spam, GError **err);
+gboolean rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
+		GError **err);
 
 
 void rspamd_stat_unload (void);

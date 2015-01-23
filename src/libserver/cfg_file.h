@@ -18,7 +18,7 @@
 
 struct expression;
 struct tokenizer;
-struct classifier;
+struct rspamd_stat_classifier;
 
 enum { VAL_UNDEF=0, VAL_TRUE, VAL_FALSE };
 
