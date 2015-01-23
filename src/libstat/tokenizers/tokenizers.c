@@ -28,6 +28,7 @@
 
 #include "main.h"
 #include "tokenizers.h"
+#include "stat_internal.h"
 
 const int primes[] = {
 	1, 7,
@@ -227,10 +228,8 @@ tokenize_subject (struct rspamd_task *task, GTree ** tree)
 			osb_tokenizer->tokenize_func (osb_tokenizer,
 					task->task_pool,
 					words,
-					tree,
-					FALSE,
-					TRUE,
-					NULL);
+					*tree,
+					TRUE);
 			g_array_free (words, TRUE);
 		}
 	}

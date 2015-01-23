@@ -2,6 +2,7 @@
 #define CLASSIFIERS_H
 
 #include "config.h"
+#include "mem_pool.h"
 
 /* Consider this value as 0 */
 #define ALPHA 0.0001
@@ -22,10 +23,9 @@ struct rspamd_stat_classifier {
 	struct classifier_ctx * (*init_func)(rspamd_mempool_t *pool,
 		struct rspamd_classifier_config *cf);
 	gboolean (*classify_func)(struct classifier_ctx * ctx,
-		GTree *input, struct rspamd_task *task,
-		lua_State *L);
+		GTree *input, struct rspamd_task *task);
 	gboolean (*learn_spam_func)(struct classifier_ctx * ctx,
-		GTree *input, struct rspamd_task *task, gboolean is_spam, lua_State *L,
+		GTree *input, struct rspamd_task *task, gboolean is_spam,
 		GError **err);
 };
 
@@ -34,13 +34,11 @@ struct classifier_ctx * bayes_init (rspamd_mempool_t *pool,
 	struct rspamd_classifier_config *cf);
 gboolean bayes_classify (struct classifier_ctx * ctx,
 	GTree *input,
-	struct rspamd_task *task,
-	lua_State *L);
+	struct rspamd_task *task);
 gboolean bayes_learn_spam (struct classifier_ctx * ctx,
 	GTree *input,
 	struct rspamd_task *task,
 	gboolean is_spam,
-	lua_State *L,
 	GError **err);
 
 #endif

@@ -23,7 +23,7 @@
  */
 
 #include "config.h"
-
+#include "stat_internal.h"
 #include "main.h"
 
 #define CHAIN_LENGTH 128

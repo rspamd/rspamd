@@ -26,11 +26,10 @@
  * Bayesian classifier
  */
 #include "classifiers.h"
-#include "tokenizers.h"
 #include "main.h"
 #include "filter.h"
 #include "cfg_file.h"
-#include "lua/lua_common.h"
+#include "stat_internal.h"
 
 #define LOCAL_PROB_DENOM 16.0
 
@@ -203,8 +202,7 @@ bayes_init (rspamd_mempool_t *pool, struct rspamd_classifier_config *cfg)
 gboolean
 bayes_classify (struct classifier_ctx * ctx,
 	GTree *input,
-	struct rspamd_task *task,
-	lua_State *L)
+	struct rspamd_task *task)
 {
 	struct bayes_callback_data data;
 	gchar *value;
@@ -228,6 +226,8 @@ bayes_classify (struct classifier_ctx * ctx,
 		}
 	}
 
+	cur = ctx->cfg->statfiles;
+#if 0
 	cur = rspamd_lua_call_cls_pre_callbacks (ctx->cfg, task, FALSE, FALSE, L);
 	if (cur) {
 		rspamd_mempool_add_destructor (task->task_pool,
@@ -236,6 +236,8 @@ bayes_classify (struct classifier_ctx * ctx,
 	else {
 		cur = ctx->cfg->statfiles;
 	}
+#endif
+
 
 	data.statfiles_num = g_list_length (cur);
 	data.statfiles = g_new0 (struct bayes_statfile_data, data.statfiles_num);
@@ -312,7 +314,6 @@ bayes_learn_spam (struct classifier_ctx * ctx,
 	GTree *input,
 	struct rspamd_task *task,
 	gboolean is_spam,
-	lua_State *L,
 	GError **err)
 {
 	struct bayes_callback_data data;

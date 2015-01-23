@@ -26,8 +26,8 @@
  * OSB tokenizer
  */
 
-#include <sys/types.h>
 #include "tokenizers.h"
+#include "stat_internal.h"
 
 /* Size for features pipe */
 #define FEATURE_WINDOW_SIZE 5
@@ -83,8 +83,8 @@ osb_tokenize_text (struct rspamd_stat_tokenizer *tokenizer,
 				memcpy(new->data, &h1, sizeof(h1));
 				memcpy(new->data + sizeof(h1), &h2, sizeof(h2));
 
-				if (g_tree_lookup (*tree, new) == NULL) {
-					g_tree_insert (*tree, new, new);
+				if (g_tree_lookup (tree, new) == NULL) {
+					g_tree_insert (tree, new, new);
 				}
 			}
 		}
