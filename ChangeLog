@@ -1,3 +1,18 @@
+0.8.1:
+	* Add sqlite and perl as dependencies for RPM/Debian packages (by @fatalbanana)
+	* Remove whitelist.lua from RPM file list (by @fatalbanana)
+	* Make Exim pass hostnames to rspamd (by @fatalbanana)
+	* Fix building on Fedora (by @fatalbanana)
+	* Add toggle for disabling installation of systemd units on Linux (by @fatalbanana)
+	* Fix double format rounding that caused output corruption (reported by @fatalbanana)
+	* Revert broken change for destructors ordering that led to memory corruption
+	* Do not reset symbols case of settings if parsed from lua (reported by @andrejzverev)
+	* Fix build on SunOS (by @wiedi)
+	* Fix multiple crashes on broken DKIM DNS records
+	* Fix critical issue with composites weights removing
+	* Fix memory corruption in composites processing code
+	* Ignore non-SPF TXT records when parsing SPF includes
+
 0.8.0:
 	* New fuzzy check logic:
 		- use shingles algorithm for fuzzy matching
