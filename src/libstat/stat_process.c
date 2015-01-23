@@ -29,19 +29,50 @@
 #include "lua/lua_common.h"
 #include <utlist.h>
 
-static gboolean
-rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx, struct rspamd_stat_classifier *cls,
-		struct rspamd_task *task, GError **err)
-{
-
-}
-
 struct rspamd_tokenizer_runtime {
 	GTree *tokens;
 	const gchar *name;
 	struct rspamd_stat_tokenizer *tokenizer;
 	struct rspamd_tokenizer_runtime *next;
 };
+
+static gboolean
+preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
+{
+	rspamd_token_t *t = (rspamd_token_t *)v;
+	struct rspamd_stat_ctx *st_ctx = (struct rspamd_stat_ctx *)d;
+
+	t->results = g_array_sized_new (FALSE, TRUE,
+			sizeof (struct rspamd_token_result), st_ctx->statfiles);
+
+	return FALSE;
+}
+
+static gboolean
+rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
+		struct rspamd_task *task, struct rspamd_tokenizer_runtime *tklist,
+		GError **err)
+{
+	struct rspamd_stat_classifier *cls;
+	struct rspamd_classifier_config *clcf;
+	GList *cur;
+	struct rspamd_tokenizer_runtime *tok;
+
+	cur = g_list_first (task->cfg->classifiers);
+
+	while (cur) {
+		clcf = (struct rspamd_classifier_config *)cur->data;
+
+
+		cur = cur->next;
+	}
+
+	LL_FOREACH (tklist, tok) {
+		g_tree_foreach (tok->tokens, preprocess_init_stat_token, st_ctx);
+	}
+
+	return TRUE;
+}
 
 static struct rspamd_tokenizer_runtime *
 rspamd_stat_get_tokenizer_runtime (const gchar *name, rspamd_mempool_t *pool,
@@ -138,6 +169,7 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 
 	cur = g_list_first (task->cfg->classifiers);
 
+	/* Tokenization */
 	while (cur) {
 		clcf = (struct rspamd_classifier_config *)cur->data;
 		cls = rspamd_stat_get_classifier (clcf->classifier);
@@ -159,11 +191,12 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 
 		rspamd_stat_process_tokenize (st_ctx, task, tok);
 
-		if (!rspamd_stat_preprocess (st_ctx, cls, task, err)) {
-			return FALSE;
-		}
-
 		cur = g_list_next (cur);
+	}
+
+	/* Initialize classifiers and statfiles runtime */
+	if (!rspamd_stat_preprocess (st_ctx, task, tklist, err)) {
+		return FALSE;
 	}
 
 	return TRUE;
