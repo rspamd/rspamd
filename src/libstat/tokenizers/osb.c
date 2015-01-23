@@ -38,13 +38,11 @@
 extern const int primes[];
 
 int
-osb_tokenize_text (struct tokenizer *tokenizer,
+osb_tokenize_text (struct rspamd_stat_tokenizer *tokenizer,
 	rspamd_mempool_t * pool,
 	GArray * input,
-	GTree ** tree,
-	gboolean save_token,
-	gboolean is_utf,
-	GList *exceptions)
+	GTree * tree,
+	gboolean is_utf)
 {
 	rspamd_token_t *new = NULL;
 	rspamd_fstring_t *token;
@@ -52,15 +50,10 @@ osb_tokenize_text (struct tokenizer *tokenizer,
 	gint i, processed = 0;
 	guint w;
 
+	g_assert (tree != NULL);
+
 	if (input == NULL) {
 		return FALSE;
-	}
-
-	if (*tree == NULL) {
-		*tree = g_tree_new (token_node_compare_func);
-		rspamd_mempool_add_destructor (pool,
-			(rspamd_mempool_destruct_t) g_tree_destroy,
-			*tree);
 	}
 
 	memset (hashpipe, 0xfe, FEATURE_WINDOW_SIZE * sizeof (hashpipe[0]));
@@ -106,8 +99,8 @@ osb_tokenize_text (struct tokenizer *tokenizer,
 			memcpy(new->data, &h1, sizeof(h1));
 			memcpy(new->data + sizeof(h1), &h2, sizeof(h2));
 
-			if (g_tree_lookup (*tree, new) == NULL) {
-				g_tree_insert (*tree, new, new);
+			if (g_tree_lookup (tree, new) == NULL) {
+				g_tree_insert (tree, new, new);
 			}
 		}
 	}

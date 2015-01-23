@@ -202,7 +202,7 @@ void
 tokenize_subject (struct rspamd_task *task, GTree ** tree)
 {
 	gchar *sub;
-	struct tokenizer *osb_tokenizer;
+	struct rspamd_stat_tokenizer *osb_tokenizer;
 	GArray *words;
 
 	if (*tree == NULL) {

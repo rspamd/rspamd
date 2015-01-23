@@ -7,17 +7,16 @@
 #include "main.h"
 #include "stat_api.h"
 
+#define RSPAMD_DEFAULT_TOKENIZER "osb"
+
 /* Common tokenizer structure */
-struct tokenizer {
+struct rspamd_stat_tokenizer {
 	gchar *name;
-	gint (*tokenize_func)(struct tokenizer *tokenizer,
+	gint (*tokenize_func)(struct rspamd_stat_tokenizer *rspamd_stat_tokenizer,
 			rspamd_mempool_t *pool,
 			GArray *words,
-			GTree **cur,
-			gboolean save_token,
-			gboolean is_utf,
-			GList *exceptions);
-	gchar * (*get_next_word)(rspamd_fstring_t *buf, rspamd_fstring_t *token, GList **exceptions);
+			GTree *result,
+			gboolean is_utf);
 };
 
 /* Compare two token nodes */
@@ -32,13 +31,11 @@ GArray * rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 		gsize min_len, GList **exceptions);
 
 /* OSB tokenize function */
-int osb_tokenize_text (struct tokenizer *tokenizer,
+int osb_tokenize_text (struct rspamd_stat_tokenizer *tokenizer,
 	rspamd_mempool_t *pool,
 	GArray *input,
-	GTree **cur,
-	gboolean save_token,
-	gboolean is_utf,
-	GList *exceptions);
+	GTree *tokens,
+	gboolean is_utf);
 
 /* Make tokens for a subject */
 void tokenize_subject (struct rspamd_task *task, GTree ** tree);
