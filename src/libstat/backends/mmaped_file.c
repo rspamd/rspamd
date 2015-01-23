@@ -24,7 +24,6 @@
 
 #include "config.h"
 
-#include "mmaped_file.h"
 #include "main.h"
 
 #define CHAIN_LENGTH 128

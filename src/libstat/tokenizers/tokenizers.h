@@ -23,9 +23,6 @@ struct tokenizer {
 /* Compare two token nodes */
 int token_node_compare_func (gconstpointer a, gconstpointer b);
 
-/* Get tokenizer structure by name or return NULL if this name is not found */
-struct tokenizer * rspamd_stat_get_tokenizer (const char *name);
-
 /* Get next word from specified f_str_t buf */
 gchar * rspamd_tokenizer_get_word (rspamd_fstring_t *buf,
 		rspamd_fstring_t *token, GList **exceptions);
@@ -45,9 +42,6 @@ int osb_tokenize_text (struct tokenizer *tokenizer,
 
 /* Make tokens for a subject */
 void tokenize_subject (struct rspamd_task *task, GTree ** tree);
-
-/* Array of all defined tokenizers */
-extern struct tokenizer tokenizers[];
 
 #endif
 /*

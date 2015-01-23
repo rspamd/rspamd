@@ -27,4 +27,34 @@
 #include "stat_api.h"
 #include "main.h"
 #include "cfg_rcl.h"
+#include "stat_internal.h"
+#include "backends/mmaped_file.h"
 
+static struct rspamd_stat_ctx *stat_ctx = NULL;
+
+static struct classifier classifiers[] = {
+	{
+		.name = "bayes",
+		.init_func = bayes_init,
+		.classify_func = bayes_classify,
+		.learn_spam_func = bayes_learn_spam,
+	}
+};
+
+static struct tokenizer tokenizers[] = {
+	{"osb-text", osb_tokenize_text, rspamd_tokenizer_get_word},
+};
+
+struct rspamd_stat_backend statfile_backends[] = {
+	{
+		.name = RSPAMD_DEFAULT_BACKEND,
+		.init = rspamd_mmaped_file_init,
+	}
+};
+
+
+void
+rspamd_stat_init (struct rspamd_config *cfg)
+{
+
+}

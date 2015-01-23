@@ -2,9 +2,6 @@
 #define CLASSIFIERS_H
 
 #include "config.h"
-#include "mem_pool.h"
-#include "tokenizers.h"
-#include <lua.h>
 
 /* Consider this value as 0 */
 #define ALPHA 0.0001
@@ -12,6 +9,7 @@
 struct rspamd_classifier_config;
 struct rspamd_task;
 
+/* Common classifier structure */
 struct classifier_ctx {
 	rspamd_mempool_t *pool;
 	GHashTable *results;
@@ -19,12 +17,6 @@ struct classifier_ctx {
 	struct rspamd_classifier_config *cfg;
 };
 
-struct classify_weight {
-	const char *name;
-	long double weight;
-};
-
-/* Common classifier structure */
 struct classifier {
 	char *name;
 	struct classifier_ctx * (*init_func)(rspamd_mempool_t *pool,
@@ -36,9 +28,6 @@ struct classifier {
 		GTree *input, struct rspamd_task *task, gboolean is_spam, lua_State *L,
 		GError **err);
 };
-
-/* Get classifier structure by name or return NULL if this name is not found */
-struct classifier * rspamd_stat_get_classifier (const char *name);
 
 /* Bayes algorithm */
 struct classifier_ctx * bayes_init (rspamd_mempool_t *pool,
@@ -53,8 +42,6 @@ gboolean bayes_learn_spam (struct classifier_ctx * ctx,
 	gboolean is_spam,
 	lua_State *L,
 	GError **err);
-/* Array of all defined classifiers */
-extern struct classifier classifiers[];
 
 #endif
 /*

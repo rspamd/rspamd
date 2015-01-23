@@ -29,10 +29,6 @@
 #include "main.h"
 #include "tokenizers.h"
 
-struct tokenizer tokenizers[] = {
-	{"osb-text", osb_tokenize_text, rspamd_tokenizer_get_word},
-};
-
 const int primes[] = {
 	1, 7,
 	3, 13,
@@ -74,20 +70,6 @@ const gchar t_delimiters[255] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0
 };
-
-struct tokenizer *
-rspamd_stat_get_tokenizer (const char *name)
-{
-	guint i;
-
-	for (i = 0; i < sizeof (tokenizers) / sizeof (tokenizers[0]); i++) {
-		if (strcmp (tokenizers[i].name, name) == 0) {
-			return &tokenizers[i];
-		}
-	}
-
-	return NULL;
-}
 
 int
 token_node_compare_func (gconstpointer a, gconstpointer b)

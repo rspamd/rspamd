@@ -20,40 +20,51 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef STAT_API_H_
-#define STAT_API_H_
+#ifndef STAT_INTERNAL_H_
+#define STAT_INTERNAL_H_
 
 #include "config.h"
 #include "task.h"
+#include "classifiers/classifiers.h"
+#include "tokenizers/tokenizers.h"
+#include "backends/backends.h"
 
-/**
- * @file stat_api.h
- * High level statistics API
- */
+struct rspamd_statfile_runtime {
+	struct rspamd_statfile_config *st;
+	guint64 hits;
+	guint64 total_hits;
+};
 
-/**
- * Initialise statistics modules
- * @param cfg
- */
-void rspamd_stat_init (struct rspamd_config *cfg);
+struct rspamd_classifier_runtime {
+	double ham_prob;
+	double spam_prob;
+	guint64 total_spam;
+	guint64 total_ham;
+	guint64 processed_tokens;
+	gsize max_tokens;
+};
 
-/**
- * Classify the task specified and insert symbols if needed
- * @param task
- * @return TRUE if task has been classified
- */
-gboolean rspamd_stat_classify (struct rspamd_task *task, GError **err);
+struct rspamd_token_result {
+	double value;
+	struct rspamd_statfile_runtime *st_runtime;
 
+	struct rspamd_classifier_runtime *cl_runtime;
+};
 
-/**
- * Learn task as spam or ham, task must be processed prior to this call
- * @param task task to learn
- * @param spam if TRUE learn spam, otherwise learn ham
- * @return TRUE if task has been learned
- */
-gboolean rspamd_stat_learn (struct rspamd_task *task, gboolean spam, GError **err);
+#define RSPAMD_MAX_TOKEN_LEN 64
+typedef struct token_node_s {
+	guchar data[RSPAMD_MAX_TOKEN_LEN];
+	guint datalen;
+	GArray *results;
+} rspamd_token_t;
 
+struct rspamd_stat_ctx {
+	struct classifier *classifiers;
+	guint classifiers_count;
+	struct tokenizer *tokenizers;
+	guint tokenizers_count;
+	struct rspamd_stat_backend *backends;
+	guint backends_count;
+};
 
-void rspamd_stat_unload (void);
-
-#endif /* STAT_API_H_ */
+#endif /* STAT_INTERNAL_H_ */

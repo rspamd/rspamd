@@ -22,29 +22,24 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#ifndef BACKENDS_H_
+#define BACKENDS_H_
 
-#include "main.h"
-#include "backends.h"
-#include "mmaped_file.h"
+#include "config.h"
 
-struct rspamd_stat_backend statfile_backends[] = {
-	{
-		.name = RSPAMD_DEFAULT_BACKEND,
-		.init = rspamd_mmaped_file_init,
-	}
+#define RSPAMD_DEFAULT_BACKEND "mmap"
+
+/* Forwarded declarations */
+struct rspamd_classifier_config;
+struct rspamd_statfile_config;
+struct rspamd_config;
+
+struct rspamd_stat_backend {
+	const char *name;
+	gpointer (*init)(struct rspamd_statfile_config *cfg);
+	gpointer ctx;
 };
 
+gpointer rspamd_mmaped_file_init(struct rspamd_config *cfg);
 
-struct rspamd_stat_backend *
-rspamd_stat_get_backend (const char *name)
-{
-	guint i;
-
-	for (i = 0; i < G_N_ELEMENTS (statfile_backends); i++) {
-		if (strcmp (statfile_backends[i].name, name) == 0) {
-			return &statfile_backends[i];
-		}
-	}
-
-	return NULL;
-}
+#endif /* BACKENDS_H_ */
