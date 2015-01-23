@@ -64,7 +64,7 @@ struct bayes_callback_data {
 static gboolean
 bayes_learn_callback (gpointer key, gpointer value, gpointer data)
 {
-	token_node_t *node = key;
+	rspamd_token_t *node = key;
 	struct bayes_callback_data *cd = data;
 	gint c;
 	guint64 v;
@@ -144,7 +144,7 @@ static gboolean
 bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 {
 
-	token_node_t *node = key;
+	rspamd_token_t *node = key;
 	struct bayes_callback_data *cd = data;
 	guint i;
 	struct bayes_statfile_data *cur;
@@ -222,9 +222,7 @@ bayes_classify (struct classifier_ctx * ctx,
 		(value = g_hash_table_lookup (ctx->cfg->opts, "min_tokens")) != NULL) {
 		minnodes = strtol (value, NULL, 10);
 		nodes = g_tree_nnodes (input);
-		if (nodes > FEATURE_WINDOW_SIZE) {
-			nodes = nodes / FEATURE_WINDOW_SIZE + FEATURE_WINDOW_SIZE;
-		}
+
 		if (nodes < minnodes) {
 			return FALSE;
 		}
@@ -331,9 +329,7 @@ bayes_learn_spam (struct classifier_ctx * ctx,
 		(value = g_hash_table_lookup (ctx->cfg->opts, "min_tokens")) != NULL) {
 		minnodes = strtol (value, NULL, 10);
 		nodes = g_tree_nnodes (input);
-		if (nodes > FEATURE_WINDOW_SIZE) {
-			nodes = nodes / FEATURE_WINDOW_SIZE + FEATURE_WINDOW_SIZE;
-		}
+
 		if (nodes < minnodes) {
 			g_set_error (err,
 				bayes_error_quark (),           /* error domain */

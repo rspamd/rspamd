@@ -5,24 +5,7 @@
 #include "mem_pool.h"
 #include "fstring.h"
 #include "main.h"
-
-/* Size for features pipe */
-#define FEATURE_WINDOW_SIZE 5
-#define MAX_DATA_LEN 64
-#define MAX_VALUES 32
-
-struct token_result {
-	double value;
-	struct rspamd_statfile_config *st;
-	double *consolidated_value;
-};
-
-typedef struct token_node_s {
-	guchar data[MAX_DATA_LEN];
-	guint datalen;
-	struct token_result *results;
-	guint results_len;
-} token_node_t;
+#include "stat_api.h"
 
 /* Common tokenizer structure */
 struct tokenizer {

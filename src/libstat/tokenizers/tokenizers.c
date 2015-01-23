@@ -92,7 +92,7 @@ rspamd_stat_get_tokenizer (const char *name)
 int
 token_node_compare_func (gconstpointer a, gconstpointer b)
 {
-	const token_node_t *aa = a, *bb = b;
+	const rspamd_token_t *aa = a, *bb = b;
 
 	if (aa->datalen != bb->datalen) {
 		return aa->datalen - bb->datalen;

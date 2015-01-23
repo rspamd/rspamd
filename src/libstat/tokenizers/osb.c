@@ -29,6 +29,9 @@
 #include <sys/types.h>
 #include "tokenizers.h"
 
+/* Size for features pipe */
+#define FEATURE_WINDOW_SIZE 5
+
 /* Minimum length of token */
 #define MIN_LEN 4
 
@@ -43,7 +46,7 @@ osb_tokenize_text (struct tokenizer *tokenizer,
 	gboolean is_utf,
 	GList *exceptions)
 {
-	token_node_t *new = NULL;
+	rspamd_token_t *new = NULL;
 	rspamd_fstring_t *token;
 	guint32 hashpipe[FEATURE_WINDOW_SIZE], h1, h2;
 	gint i, processed = 0;
@@ -82,7 +85,7 @@ osb_tokenize_text (struct tokenizer *tokenizer,
 				h1 = hashpipe[0] * primes[0] + hashpipe[i] * primes[i << 1];
 				h2 = hashpipe[0] * primes[1] + hashpipe[i] *
 					primes[(i << 1) - 1];
-				new = rspamd_mempool_alloc0 (pool, sizeof (token_node_t));
+				new = rspamd_mempool_alloc0 (pool, sizeof (rspamd_token_t));
 				new->datalen = sizeof(gint32) * 2;
 				memcpy(new->data, &h1, sizeof(h1));
 				memcpy(new->data + sizeof(h1), &h2, sizeof(h2));
@@ -98,7 +101,7 @@ osb_tokenize_text (struct tokenizer *tokenizer,
 		for (i = 1; i < processed; i++) {
 			h1 = hashpipe[0] * primes[0] + hashpipe[i] * primes[i << 1];
 			h2 = hashpipe[0] * primes[1] + hashpipe[i] * primes[(i << 1) - 1];
-			new = rspamd_mempool_alloc0 (pool, sizeof (token_node_t));
+			new = rspamd_mempool_alloc0 (pool, sizeof (rspamd_token_t));
 			new->datalen = sizeof(gint32) * 2;
 			memcpy(new->data, &h1, sizeof(h1));
 			memcpy(new->data + sizeof(h1), &h2, sizeof(h2));

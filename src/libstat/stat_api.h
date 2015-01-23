@@ -31,6 +31,35 @@
  * High level statistics API
  */
 
+struct rspamd_statfile_runtime {
+	struct rspamd_statfile_config *st;
+	guint64 hits;
+	guint64 total_hits;
+};
+
+struct rspamd_classifier_runtime {
+	double ham_prob;
+	double spam_prob;
+	guint64 total_spam;
+	guint64 total_ham;
+	guint64 processed_tokens;
+	gsize max_tokens;
+};
+
+struct rspamd_token_result {
+	double value;
+	struct rspamd_statfile_runtime *st_runtime;
+
+	struct rspamd_classifier_runtime *cl_runtime;
+};
+
+#define RSPAMD_MAX_TOKEN_LEN 64
+typedef struct token_node_s {
+	guchar data[RSPAMD_MAX_TOKEN_LEN];
+	guint datalen;
+	GArray *results;
+} rspamd_token_t;
+
 /**
  * Initialise statistics modules
  * @param cfg
