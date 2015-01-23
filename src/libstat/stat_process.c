@@ -25,6 +25,7 @@
 #include "stat_api.h"
 #include "main.h"
 #include "stat_internal.h"
+#include "message.h"
 #include "lua/lua_common.h"
 #include <utlist.h>
 
@@ -73,6 +74,54 @@ rspamd_stat_get_tokenizer_runtime (const gchar *name, rspamd_mempool_t *pool,
 	return tok;
 }
 
+/*
+ * Tokenize task using the tokenizer specified
+ */
+static void
+rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
+		struct rspamd_task *task, struct rspamd_tokenizer_runtime *tok)
+{
+	struct mime_text_part *part;
+	GArray *words;
+	gchar *sub;
+	GList *cur;
+
+	cur = task->text_parts;
+
+	while (cur != NULL) {
+		part = (struct mime_text_part *)cur->data;
+
+		if (!part->is_empty && part->words != NULL) {
+			/*
+			 * XXX: Use normalized words if needed here
+			 */
+			tok->tokenizer->tokenize_func (tok->tokenizer, task->task_pool,
+					part->words, tok->tokens, part->is_utf);
+		}
+
+		cur = g_list_next (cur);
+	}
+
+	if (task->subject != NULL) {
+		sub = task->subject;
+	}
+	else {
+		sub = (gchar *)g_mime_message_get_subject (task->message);
+	}
+
+	if (sub != NULL) {
+		words = rspamd_tokenize_text (sub, strlen (sub), TRUE, 0, NULL);
+		if (words != NULL) {
+			tok->tokenizer->tokenize_func (tok->tokenizer,
+					task->task_pool,
+					words,
+					tok->tokens,
+					TRUE);
+			g_array_free (words, TRUE);
+		}
+	}
+}
+
 
 gboolean
 rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
@@ -80,7 +129,6 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 	struct rspamd_stat_classifier *cls;
 	struct rspamd_classifier_config *clcf;
 	GList *cur;
-	guint i;
 	struct rspamd_stat_ctx *st_ctx;
 	struct rspamd_tokenizer_runtime *tklist = NULL, *tok;
 
@@ -109,8 +157,9 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 			return FALSE;
 		}
 
+		rspamd_stat_process_tokenize (st_ctx, task, tok);
 
-		if (!rspamd_stat_preprocess (st_ctx, task, cls, err)) {
+		if (!rspamd_stat_preprocess (st_ctx, cls, task, err)) {
 			return FALSE;
 		}
 

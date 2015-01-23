@@ -198,43 +198,6 @@ rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 	return res;
 }
 
-
-void
-tokenize_subject (struct rspamd_task *task, GTree ** tree)
-{
-	gchar *sub;
-	struct rspamd_stat_tokenizer *osb_tokenizer;
-	GArray *words;
-
-	if (*tree == NULL) {
-		*tree = g_tree_new (token_node_compare_func);
-		rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t) g_tree_destroy, *tree);
-	}
-
-	osb_tokenizer = rspamd_stat_get_tokenizer ("osb-text");
-
-	/* Try to use pre-defined subject */
-	if (task->subject != NULL) {
-		sub = task->subject;
-	}
-	else {
-		sub = (gchar *)g_mime_message_get_subject (task->message);
-	}
-
-	if (sub != NULL) {
-		words = rspamd_tokenize_text (sub, strlen (sub), TRUE, 0, NULL);
-		if (words != NULL) {
-			osb_tokenizer->tokenize_func (osb_tokenizer,
-					task->task_pool,
-					words,
-					*tree,
-					TRUE);
-			g_array_free (words, TRUE);
-		}
-	}
-}
-
 /*
  * vi:ts=4
  */

@@ -37,9 +37,6 @@ int osb_tokenize_text (struct rspamd_stat_tokenizer *tokenizer,
 	GTree *tokens,
 	gboolean is_utf);
 
-/* Make tokens for a subject */
-void tokenize_subject (struct rspamd_task *task, GTree ** tree);
-
 #endif
 /*
  * vi:ts=4
