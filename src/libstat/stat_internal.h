@@ -31,18 +31,20 @@
 
 struct rspamd_statfile_runtime {
 	struct rspamd_statfile_config *st;
-	gpointer statfile_data;
+	gpointer backend_runtime;
 	guint64 hits;
 	guint64 total_hits;
 };
 
 struct rspamd_classifier_runtime {
+	struct rspamd_classifier_config *clcf;
+	struct rspamd_stat_classifier *cl;
 	double ham_prob;
 	double spam_prob;
 	guint64 total_spam;
 	guint64 total_ham;
 	guint64 processed_tokens;
-	gsize max_tokens;
+	GList *st_runtime;
 };
 
 struct rspamd_token_result {

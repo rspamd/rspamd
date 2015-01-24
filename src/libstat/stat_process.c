@@ -36,42 +36,123 @@ struct rspamd_tokenizer_runtime {
 	struct rspamd_tokenizer_runtime *next;
 };
 
+struct preprocess_cb_data {
+	GList *classifier_runtimes;
+	guint results_count;
+};
+
 static gboolean
 preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
 {
 	rspamd_token_t *t = (rspamd_token_t *)v;
-	struct rspamd_stat_ctx *st_ctx = (struct rspamd_stat_ctx *)d;
+	struct preprocess_cb_data *cbdata = (struct preprocess_cb_data *)d;
 
 	t->results = g_array_sized_new (FALSE, TRUE,
-			sizeof (struct rspamd_token_result), st_ctx->statfiles);
+			sizeof (struct rspamd_token_result), cbdata->results_count);
+
+	/* TODO: add filling of results array */
 
 	return FALSE;
 }
 
-static gboolean
+static GList*
 rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 		struct rspamd_task *task, struct rspamd_tokenizer_runtime *tklist,
-		GError **err)
+		lua_State *L, GError **err)
 {
-	struct rspamd_stat_classifier *cls;
 	struct rspamd_classifier_config *clcf;
-	GList *cur;
+	struct rspamd_statfile_config *stcf;
 	struct rspamd_tokenizer_runtime *tok;
+	struct rspamd_classifier_runtime *cl_runtime;
+	struct rspamd_statfile_runtime *st_runtime;
+	struct rspamd_stat_backend *bk;
+	gpointer backend_runtime;
+	GList *cur, *st_list = NULL, *curst;
+	GList *cl_runtimes = NULL;
+	guint result_size = 0;
+	struct preprocess_cb_data cbdata;
 
 	cur = g_list_first (task->cfg->classifiers);
 
 	while (cur) {
 		clcf = (struct rspamd_classifier_config *)cur->data;
 
+		if (clcf->pre_callbacks != NULL) {
+			st_list = rspamd_lua_call_cls_pre_callbacks (clcf, task, FALSE,
+					FALSE, L);
+		}
+		if (st_list != NULL) {
+			rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t)g_list_free, st_list);
+		}
+		else {
+			st_list = clcf->statfiles;
+		}
 
-		cur = cur->next;
+		/* Now init runtime values */
+		cl_runtime = rspamd_mempool_alloc0 (task->task_pool, sizeof (*cl_runtime));
+		cl_runtime->cl = rspamd_stat_get_classifier (clcf->classifier);
+
+		if (cl_runtime->cl == NULL) {
+			g_set_error (err, rspamd_stat_quark(), 500,
+					"classifier %s is not defined", clcf->classifier);
+			g_list_free (cl_runtimes);
+			return NULL;
+		}
+
+		cl_runtime->clcf = clcf;
+
+		curst = clcf->statfiles;
+		while (curst != NULL) {
+			stcf = (struct rspamd_statfile_config *)curst->data;
+
+			bk = rspamd_stat_get_backend (stcf->backend);
+
+			if (bk == NULL) {
+				msg_warn ("backend of type %s is not defined", stcf->backend);
+				curst = g_list_next (curst);
+				continue;
+			}
+
+			backend_runtime = bk->runtime (stcf, bk->ctx);
+
+			st_runtime = rspamd_mempool_alloc0 (task->task_pool,
+					sizeof (*st_runtime));
+			st_runtime->st = stcf;
+			st_runtime->backend_runtime = backend_runtime;
+
+			cl_runtime->st_runtime = g_list_prepend (cl_runtime->st_runtime,
+					st_runtime);
+			result_size ++;
+
+			curst = g_list_next (curst);
+		}
+
+		if (cl_runtime->st_runtime != NULL) {
+			rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t)g_list_free,
+					cl_runtime->st_runtime);
+			cl_runtimes = g_list_prepend (cl_runtimes, cl_runtime);
+		}
+
+		cur = g_list_next (cur);
 	}
 
-	LL_FOREACH (tklist, tok) {
-		g_tree_foreach (tok->tokens, preprocess_init_stat_token, st_ctx);
+	if (cl_runtimes != NULL) {
+		rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t)g_list_free,
+				cl_runtimes);
+
+		cbdata.results_count = result_size;
+		cbdata.classifier_runtimes = cl_runtimes;
+
+		/* Allocate token results */
+		LL_FOREACH (tklist, tok) {
+			g_tree_foreach (tok->tokens, preprocess_init_stat_token, &cbdata);
+		}
 	}
 
-	return TRUE;
+	return cl_runtimes;
 }
 
 static struct rspamd_tokenizer_runtime *
@@ -162,6 +243,7 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 	GList *cur;
 	struct rspamd_stat_ctx *st_ctx;
 	struct rspamd_tokenizer_runtime *tklist = NULL, *tok;
+	GList *cl_runtimes;
 
 
 	st_ctx = rspamd_stat_get_ctx ();
@@ -195,7 +277,8 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 	}
 
 	/* Initialize classifiers and statfiles runtime */
-	if (!rspamd_stat_preprocess (st_ctx, task, tklist, err)) {
+	if ((cl_runtimes = rspamd_stat_preprocess (st_ctx, task, tklist, L, err))
+			== NULL) {
 		return FALSE;
 	}
 
