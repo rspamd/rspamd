@@ -46,11 +46,40 @@ preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
 {
 	rspamd_token_t *t = (rspamd_token_t *)v;
 	struct preprocess_cb_data *cbdata = (struct preprocess_cb_data *)d;
+	struct rspamd_statfile_runtime *st_runtime;
+	struct rspamd_classifier_runtime *cl_runtime;
+	struct rspamd_token_result *res;
+	GList *cur, *curst;
+	gint i = 0;
 
 	t->results = g_array_sized_new (FALSE, TRUE,
 			sizeof (struct rspamd_token_result), cbdata->results_count);
 
-	/* TODO: add filling of results array */
+	cur = g_list_first (cbdata->classifier_runtimes);
+
+	while (cur) {
+		cl_runtime = (struct rspamd_classifier_runtime *)cur->data;
+		res = &g_array_index (t->results, struct rspamd_token_result, i);
+
+		curst = res->cl_runtime->st_runtime;
+
+		while (curst) {
+			st_runtime = (struct rspamd_statfile_runtime *)curst->data;
+
+			res->cl_runtime = cl_runtime;
+			res->st_runtime = st_runtime;
+
+			if (st_runtime->backend->process_token (t, res,
+					st_runtime->backend->ctx)) {
+				cl_runtime->processed_tokens ++;
+			}
+
+			i ++;
+			curst = g_list_next (curst);
+		}
+		cur = g_list_next (cur);
+	}
+
 
 	return FALSE;
 }
@@ -120,6 +149,7 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 					sizeof (*st_runtime));
 			st_runtime->st = stcf;
 			st_runtime->backend_runtime = backend_runtime;
+			st_runtime->backend = bk;
 
 			cl_runtime->st_runtime = g_list_prepend (cl_runtime->st_runtime,
 					st_runtime);
