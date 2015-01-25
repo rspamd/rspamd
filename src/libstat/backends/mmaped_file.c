@@ -93,8 +93,6 @@ typedef struct {
 	void *map;                              /**< mmaped area						*/
 	off_t seek_pos;                         /**< current seek position				*/
 	struct stat_file_section cur_section;   /**< current section					*/
-	time_t open_time;                       /**< time when file was opened			*/
-	time_t access_time;                     /**< last access time					*/
 	size_t len;                             /**< length of file(in bytes)			*/
 	rspamd_mempool_mutex_t *lock;               /**< mutex								*/
 	struct rspamd_statfile_config *cf;
@@ -115,9 +113,7 @@ typedef struct  {
 
 static void rspamd_mmaped_file_set_block_common (
 	rspamd_mmaped_file_ctx * pool, rspamd_mmaped_file_t * file,
-	guint32 h1, guint32 h2,
-	time_t t, double value,
-	gboolean from_now);
+	guint32 h1, guint32 h2, double value);
 
 rspamd_mmaped_file_t * rspamd_mmaped_file_is_open (
 		rspamd_mmaped_file_ctx * pool, struct rspamd_statfile_config *stcf);
@@ -143,15 +139,12 @@ double
 rspamd_mmaped_file_get_block (rspamd_mmaped_file_ctx * pool,
 	rspamd_mmaped_file_t * file,
 	guint32 h1,
-	guint32 h2,
-	time_t now)
+	guint32 h2)
 {
 	struct stat_file_block *block;
 	guint i, blocknum;
 	u_char *c;
 
-
-	file->access_time = now;
 	if (!file->map) {
 		return 0;
 	}
@@ -181,9 +174,7 @@ rspamd_mmaped_file_set_block_common (rspamd_mmaped_file_ctx * pool,
 		rspamd_mmaped_file_t * file,
 	guint32 h1,
 	guint32 h2,
-	time_t t,
-	double value,
-	gboolean from_now)
+	double value)
 {
 	struct stat_file_block *block, *to_expire = NULL;
 	struct stat_file_header *header;
@@ -191,9 +182,6 @@ rspamd_mmaped_file_set_block_common (rspamd_mmaped_file_ctx * pool,
 	u_char *c;
 	double min = G_MAXDOUBLE;
 
-	if (from_now) {
-		file->access_time = t;
-	}
 	if (!file->map) {
 		return;
 	}
@@ -266,7 +254,7 @@ rspamd_mmaped_file_set_block (rspamd_mmaped_file_ctx * pool,
 	time_t now,
 	double value)
 {
-	rspamd_mmaped_file_set_block_common (pool, file, h1, h2, now, value, TRUE);
+	rspamd_mmaped_file_set_block_common (pool, file, h1, h2, value);
 }
 
 rspamd_mmaped_file_t *
@@ -493,9 +481,7 @@ rspamd_mmaped_file_reindex (rspamd_mmaped_file_ctx * pool,
 				new,
 				block->hash1,
 				block->hash2,
-				0,
-				block->value,
-				FALSE);
+				block->value);
 		}
 		pos += sizeof (block);
 	}
@@ -621,8 +607,6 @@ rspamd_mmaped_file_open (rspamd_mmaped_file_ctx * pool,
 	}
 	rspamd_file_unlock (new_file->fd, FALSE);
 
-	new_file->open_time = time (NULL);
-	new_file->access_time = new_file->open_time;
 	new_file->lock = rspamd_mempool_get_mutex (pool->pool);
 	new_file->cf = stcf;
 
@@ -882,4 +866,53 @@ rspamd_mmaped_file_runtime (struct rspamd_statfile_config *stcf, gpointer p)
 	mf = rspamd_mmaped_file_is_open (ctx, stcf);
 
 	return (gpointer)mf;
+}
+
+gboolean
+rspamd_mmaped_file_process_token (rspamd_token_t *tok,
+		struct rspamd_token_result *res,
+		gpointer p)
+{
+	rspamd_mmaped_file_ctx *ctx = (rspamd_mmaped_file_ctx *)p;
+	rspamd_mmaped_file_t *mf;
+	guint32 h1, h2;
+
+	g_assert (res != NULL);
+	g_assert (p != NULL);
+	g_assert (res->st_runtime != NULL);
+	g_assert (tok != NULL);
+	g_assert (tok->datalen >= sizeof (guint32) * 2);
+
+	mf = (rspamd_mmaped_file_t *)res->st_runtime->backend_runtime;
+
+	if (mf == NULL) {
+		/* Statfile is does not exist, so all values are zero */
+		res->value = 0.0;
+		return FALSE;
+	}
+
+	memcpy (&h1, tok->data, sizeof (h1));
+	memcpy (&h2, tok->data + sizeof (h1), sizeof (h2));
+	res->value = rspamd_mmaped_file_get_block (ctx, mf, h1, h2);
+
+	if (res->value > 0.0) {
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+gulong
+rspamd_mmaped_file_total_learns (struct rspamd_statfile_runtime *runtime,
+		gpointer ctx)
+{
+	rspamd_mmaped_file_t *mf = (rspamd_mmaped_file_t *)runtime;
+	guint64 rev = 0;
+	time_t t;
+
+	if (mf != NULL) {
+		rspamd_mmaped_file_get_revision (mf, &rev, &t);
+	}
+
+	return rev;
 }
