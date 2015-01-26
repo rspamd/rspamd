@@ -251,7 +251,6 @@ rspamd_mmaped_file_set_block (rspamd_mmaped_file_ctx * pool,
 	rspamd_mmaped_file_t * file,
 	guint32 h1,
 	guint32 h2,
-	time_t now,
 	double value)
 {
 	rspamd_mmaped_file_set_block_common (pool, file, h1, h2, value);
@@ -856,14 +855,41 @@ rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 }
 
 gpointer
-rspamd_mmaped_file_runtime (struct rspamd_statfile_config *stcf, gpointer p)
+rspamd_mmaped_file_runtime (struct rspamd_statfile_config *stcf, gboolean learn,
+		gpointer p)
 {
 	rspamd_mmaped_file_ctx *ctx = (rspamd_mmaped_file_ctx *)p;
 	rspamd_mmaped_file_t *mf;
+	const ucl_object_t *filenameo, *sizeo;
+	const gchar *filename;
+	gsize size;
 
 	g_assert (ctx != NULL);
 
 	mf = rspamd_mmaped_file_is_open (ctx, stcf);
+
+	if (mf == NULL && learn) {
+		/* Create file here */
+
+		filenameo = ucl_object_find_key (stcf->opts, "filename");
+		if (filenameo == NULL || ucl_object_type (filenameo) != UCL_STRING) {
+			msg_err ("statfile %s has no filename defined", stcf->symbol);
+			return NULL;
+		}
+
+		filename = ucl_object_tostring (filenameo);
+
+		sizeo = ucl_object_find_key (stcf->opts, "size");
+		if (sizeo == NULL || ucl_object_type (sizeo) != UCL_INT) {
+			msg_err ("statfile %s has no size defined", stcf->symbol);
+			return NULL;
+		}
+
+		size = ucl_object_toint (sizeo);
+		rspamd_mmaped_file_create (ctx, filename, size, stcf);
+
+		mf = rspamd_mmaped_file_open (ctx, filename, size, stcf);
+	}
 
 	return (gpointer)mf;
 }
@@ -894,6 +920,40 @@ rspamd_mmaped_file_process_token (rspamd_token_t *tok,
 	memcpy (&h1, tok->data, sizeof (h1));
 	memcpy (&h2, tok->data + sizeof (h1), sizeof (h2));
 	res->value = rspamd_mmaped_file_get_block (ctx, mf, h1, h2);
+
+	if (res->value > 0.0) {
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+gboolean
+rspamd_mmaped_file_learn_token (rspamd_token_t *tok,
+		struct rspamd_token_result *res,
+		gpointer p)
+{
+	rspamd_mmaped_file_ctx *ctx = (rspamd_mmaped_file_ctx *)p;
+	rspamd_mmaped_file_t *mf;
+	guint32 h1, h2;
+
+	g_assert (res != NULL);
+	g_assert (p != NULL);
+	g_assert (res->st_runtime != NULL);
+	g_assert (tok != NULL);
+	g_assert (tok->datalen >= sizeof (guint32) * 2);
+
+	mf = (rspamd_mmaped_file_t *)res->st_runtime->backend_runtime;
+
+	if (mf == NULL) {
+		/* Statfile is does not exist, so all values are zero */
+		res->value = 0.0;
+		return FALSE;
+	}
+
+	memcpy (&h1, tok->data, sizeof (h1));
+	memcpy (&h2, tok->data + sizeof (h1), sizeof (h2));
+	rspamd_mmaped_file_set_block (ctx, mf, h1, h2, res->value);
 
 	if (res->value > 0.0) {
 		return TRUE;
