@@ -44,7 +44,7 @@ struct rspamd_stat_backend {
 	gpointer (*init)(struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg);
 	gpointer (*runtime)(struct rspamd_statfile_config *stcf, gpointer ctx);
 	gboolean (*process_token)(struct token_node_s *tok,
-			struct rspamd_token_result *res, gpointer *ctx);
+			struct rspamd_token_result *res, gpointer ctx);
 	gulong (*total_learns)(struct rspamd_statfile_runtime *runtime, gpointer ctx);
 	gpointer ctx;
 };
