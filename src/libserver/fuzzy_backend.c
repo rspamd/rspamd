@@ -498,25 +498,30 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 	}
 
 	g_free (dir);
+
 	if ((fd = open (path, O_RDONLY)) == -1) {
-		g_set_error (err, rspamd_fuzzy_backend_quark (),
-				errno, "Cannot open file %s: %s",
-				path, strerror (errno));
+		if (errno != ENOENT) {
+			g_set_error (err, rspamd_fuzzy_backend_quark (),
+					errno, "Cannot open file %s: %s",
+					path, strerror (errno));
 
-		return NULL;
-	}
-
-	/* Check for legacy format */
-	if ((r = read (fd, header, sizeof (header))) == sizeof (header)) {
-		if (memcmp (header, FUZZY_FILE_MAGIC, sizeof (header) - 1) == 0) {
-			msg_info ("Trying to convert old fuzzy database");
-			if (!rspamd_fuzzy_backend_convert (path, fd, err)) {
-				close (fd);
-				return NULL;
-			}
-			msg_info ("Old database converted");
+			return NULL;
 		}
-		close (fd);
+	}
+	else {
+
+		/* Check for legacy format */
+		if ((r = read (fd, header, sizeof (header))) == sizeof (header)) {
+			if (memcmp (header, FUZZY_FILE_MAGIC, sizeof (header) - 1) == 0) {
+				msg_info ("Trying to convert old fuzzy database");
+				if (!rspamd_fuzzy_backend_convert (path, fd, err)) {
+					close (fd);
+					return NULL;
+				}
+				msg_info ("Old database converted");
+			}
+			close (fd);
+		}
 	}
 
 	/* Open database */
