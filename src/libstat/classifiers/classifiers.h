@@ -18,14 +18,19 @@ struct classifier_ctx {
 	struct rspamd_classifier_config *cfg;
 };
 
+struct token_node_s;
+struct rspamd_classifier_runtime;
+
 struct rspamd_stat_classifier {
 	char *name;
 	struct classifier_ctx * (*init_func)(rspamd_mempool_t *pool,
 		struct rspamd_classifier_config *cf);
 	gboolean (*classify_func)(struct classifier_ctx * ctx,
-		GTree *input, struct rspamd_task *task);
+		GTree *input, struct rspamd_classifier_runtime *rt,
+		struct rspamd_task *task);
 	gboolean (*learn_spam_func)(struct classifier_ctx * ctx,
-		GTree *input, struct rspamd_task *task, gboolean is_spam,
+		GTree *input, struct rspamd_classifier_runtime *rt,
+		struct rspamd_task *task, gboolean is_spam,
 		GError **err);
 };
 
@@ -34,9 +39,11 @@ struct classifier_ctx * bayes_init (rspamd_mempool_t *pool,
 	struct rspamd_classifier_config *cf);
 gboolean bayes_classify (struct classifier_ctx * ctx,
 	GTree *input,
+	struct rspamd_classifier_runtime *rt,
 	struct rspamd_task *task);
 gboolean bayes_learn_spam (struct classifier_ctx * ctx,
 	GTree *input,
+	struct rspamd_classifier_runtime *rt,
 	struct rspamd_task *task,
 	gboolean is_spam,
 	GError **err);
