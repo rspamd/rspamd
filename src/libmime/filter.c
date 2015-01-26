@@ -31,6 +31,7 @@
 #include "util.h"
 #include "expressions.h"
 #include "diff.h"
+#include "libstat/stat_api.h"
 
 #ifdef WITH_LUA
 #   include "lua/lua_common.h"
@@ -641,123 +642,16 @@ struct classifiers_cbdata {
 	struct lua_locked_state *nL;
 };
 
-static void
-classifiers_callback (gpointer value, void *arg)
-{
-	/* XXX: totally broken now */
-#if 0
-	struct classifiers_cbdata *cbdata = arg;
-	struct rspamd_task *task;
-	struct rspamd_classifier_config *cl = value;
-	struct classifier_ctx *ctx;
-	struct mime_text_part *text_part, *p1, *p2;
-	struct rspamd_statfile_config *st;
-	GTree *tokens = NULL;
-	GList *cur;
-	gint *dist = NULL, diff;
-	gboolean is_twopart = FALSE;
-
-	task = cbdata->task;
-
-	cur = g_list_first (task->text_parts);
-	dist = rspamd_mempool_get_variable (task->task_pool, "parts_distance");
-	if (cur != NULL && cur->next != NULL && cur->next->next == NULL) {
-		is_twopart = TRUE;
-	}
-	ctx = cl->classifier->init_func (task->task_pool, cl);
-
-	if ((tokens = g_hash_table_lookup (task->tokens, cl->tokenizer)) == NULL) {
-		while (cur != NULL) {
-			text_part = (struct mime_text_part *)cur->data;
-			if (text_part->is_empty) {
-				cur = g_list_next (cur);
-				continue;
-			}
-			if (dist != NULL && cur->next == NULL) {
-				/* Compare part's content */
-
-				if (*dist >= COMMON_PART_FACTOR) {
-					msg_info (
-							"message <%s> has two common text parts, ignore the last one",
-							task->message_id);
-					break;
-				}
-			}
-			else if (cur->next == NULL && is_twopart) {
-				p1 = cur->prev->data;
-				p2 = text_part;
-				if (p1->diff_str != NULL && p2->diff_str != NULL) {
-					diff =
-							rspamd_diff_distance (p1->diff_str, p2->diff_str);
-				}
-				else {
-					diff = rspamd_fuzzy_compare_parts (p1, p2);
-				}
-				if (diff >= COMMON_PART_FACTOR) {
-					msg_info (
-							"message <%s> has two common text parts, ignore the last one",
-							task->message_id);
-					break;
-				}
-			}
-			/* Tree would be freed at task pool freeing */
-			if (!cl->tokenizer->tokenize_func (cl->tokenizer,
-					task->task_pool, text_part->words, &tokens,
-					FALSE, text_part->is_utf, text_part->urls_offset)) {
-				msg_info ("cannot tokenize input");
-				return;
-			}
-			cur = g_list_next (cur);
-		}
-
-		if (tokens != NULL) {
-			g_hash_table_insert (task->tokens, cl->tokenizer, tokens);
-		}
-	}
-
-	/* Take care of subject */
-	tokenize_subject (task, &tokens);
-
-	if (tokens == NULL) {
-		return;
-	}
-
-	if (cbdata->nL != NULL) {
-		rspamd_mutex_lock (cbdata->nL->m);
-		cl->classifier->classify_func (ctx,
-			tokens,
-			task,
-			cbdata->nL->L);
-		rspamd_mutex_unlock (cbdata->nL->m);
-	}
-	else {
-		/* Non-threaded case */
-		cl->classifier->classify_func (ctx,
-			tokens,
-			task,
-			task->cfg->lua_state);
-	}
-#endif
-}
-
 
 void
 rspamd_process_statistics (struct rspamd_task *task)
 {
-	struct classifiers_cbdata cbdata;
-
 	if (task->is_skipped) {
 		return;
 	}
 
-	if (task->tokens == NULL) {
-		task->tokens = g_hash_table_new (g_direct_hash, g_direct_equal);
-		rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t)g_hash_table_unref, task->tokens);
-	}
-	cbdata.task = task;
-	cbdata.nL = NULL;
-	g_list_foreach (task->cfg->classifiers, classifiers_callback, &cbdata);
+	/* TODO: handle err here */
+	rspamd_stat_classify (task, task->cfg->lua_state, NULL);
 
 	/* Process results */
 	rspamd_make_composites (task);
@@ -768,22 +662,16 @@ rspamd_process_statistic_threaded (gpointer data, gpointer user_data)
 {
 	struct rspamd_task *task = (struct rspamd_task *)data;
 	struct lua_locked_state *nL = user_data;
-	struct classifiers_cbdata cbdata;
 
 	if (task->is_skipped) {
 		remove_async_thread (task->s);
 		return;
 	}
 
-	if (task->tokens == NULL) {
-		task->tokens = g_hash_table_new (g_direct_hash, g_direct_equal);
-		rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t)g_hash_table_unref, task->tokens);
-	}
-
-	cbdata.task = task;
-	cbdata.nL = nL;
-	g_list_foreach (task->cfg->classifiers, classifiers_callback, &cbdata);
+	/* TODO: handle err here */
+	rspamd_mutex_lock (nL->m);
+	rspamd_stat_classify (task, nL->L, NULL);
+	rspamd_mutex_unlock (nL->m);
 	remove_async_thread (task->s);
 }
 
@@ -976,104 +864,7 @@ rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
 	gboolean is_spam,
 	GError **err)
 {
-	/* XXX: Totally broken now */
-	return FALSE;
-#if 0
-	GList *cur, *ex;
-	struct classifier_ctx *cls_ctx;
-	GTree *tokens = NULL;
-	struct mime_text_part *part, *p1, *p2;
-	gboolean is_utf = FALSE, is_twopart = FALSE;
-	gint diff;
-
-	cur = g_list_first (task->text_parts);
-	if (cur != NULL && cur->next != NULL && cur->next->next == NULL) {
-		is_twopart = TRUE;
-	}
-
-	/* Get tokens from each element */
-	while (cur) {
-		part = cur->data;
-		/* Skip empty parts */
-		if (part->is_empty) {
-			cur = g_list_next (cur);
-			continue;
-		}
-		is_utf = part->is_utf;
-		ex = part->urls_offset;
-		if (is_twopart && cur->next == NULL) {
-			/*
-			 * Compare part's content
-			 * Note: here we don't have filters proceeded this message, so using pool variable is a bad idea
-			 */
-			p1 = cur->prev->data;
-			p2 = part;
-			if (p1->diff_str != NULL && p2->diff_str != NULL) {
-				diff = rspamd_diff_distance (p1->diff_str, p2->diff_str);
-			}
-			else {
-				diff = rspamd_fuzzy_compare_parts (p1, p2);
-			}
-			if (diff >= COMMON_PART_FACTOR) {
-				msg_info (
-					"message <%s> has two common text parts, ignore the last one",
-					task->message_id);
-				break;
-			}
-		}
-		/* Get tokens */
-		if (!cl->tokenizer->tokenize_func (
-				cl->tokenizer, task->task_pool,
-				part->words, &tokens, FALSE, is_utf, ex)) {
-			g_set_error (err,
-				filter_error_quark (), 2, "Cannot tokenize message");
-			return FALSE;
-		}
-		cur = g_list_next (cur);
-	}
-
-	/* Handle messages without text */
-	if (tokens == NULL) {
-		g_set_error (err,
-			filter_error_quark (), 3, "Cannot tokenize message, no text data");
-		msg_info ("learn failed for message <%s>, no tokens to extract",
-			task->message_id);
-		return FALSE;
-	}
-
-	/* Take care of subject */
-	tokenize_subject (task, &tokens);
-
-	/* Init classifier */
-	cls_ctx = cl->classifier->init_func (
-		task->task_pool, cl);
-	/* Learn */
-	if (!cl->classifier->learn_spam_func (
-			cls_ctx,
-			tokens, task, is_spam, task->cfg->lua_state, err)) {
-		if (*err) {
-			msg_info ("learn failed for message <%s>, learn error: %s",
-				task->message_id,
-				(*err)->message);
-			return FALSE;
-		}
-		else {
-			g_set_error (err,
-				filter_error_quark (), 4,
-				"Learn failed, unknown learn classifier error");
-			msg_info ("learn failed for message <%s>, unknown learn error",
-				task->message_id);
-			return FALSE;
-		}
-	}
-	/* Increase statistics */
-	task->worker->srv->stat->messages_learned++;
-
-	msg_info ("learn success for message <%s>",
-		task->message_id);
-
-	return TRUE;
-#endif
+	return rspamd_stat_learn (task, is_spam, task->cfg->lua_state, err);
 }
 
 /*

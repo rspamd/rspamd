@@ -34,6 +34,7 @@
 #include "ottery.h"
 #include "xxhash.h"
 #include "utlist.h"
+#include "libstat/stat_api.h"
 #ifdef HAVE_OPENSSL
 #include <openssl/rand.h>
 #include <openssl/err.h>
@@ -1325,6 +1326,8 @@ main (gint argc, gchar **argv, gchar **env)
 		msg_err ("error loading lua plugins");
 		exit (EXIT_FAILURE);
 	}
+
+	rspamd_stat_init (rspamd_main->cfg);
 
 	/* Insert classifiers symbols */
 	(void)rspamd_config_insert_classify_symbols (rspamd_main->cfg);
