@@ -99,12 +99,12 @@ preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
 
 		res = &g_array_index (t->results, struct rspamd_token_result, i);
 
-		curst = res->cl_runtime->st_runtime;
+		curst = cl_runtime->st_runtime;
+		res->cl_runtime = cl_runtime;
 
 		while (curst) {
 			st_runtime = (struct rspamd_statfile_runtime *)curst->data;
 
-			res->cl_runtime = cl_runtime;
 			res->st_runtime = st_runtime;
 
 			if (st_runtime->backend->process_token (t, res,

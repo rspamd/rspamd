@@ -74,6 +74,7 @@ rspamd_stat_init (struct rspamd_config *cfg)
 	/* Init backends */
 	for (i = 0; i < stat_ctx->backends_count; i ++) {
 		stat_ctx->backends[i].ctx = stat_ctx->backends[i].init (stat_ctx, cfg);
+		msg_debug ("added backend %s", stat_ctx->backends[i].name);
 	}
 }
 

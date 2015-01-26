@@ -94,7 +94,6 @@ typedef struct {
 	off_t seek_pos;                         /**< current seek position				*/
 	struct stat_file_section cur_section;   /**< current section					*/
 	size_t len;                             /**< length of file(in bytes)			*/
-	rspamd_mempool_mutex_t *lock;               /**< mutex								*/
 	struct rspamd_statfile_config *cf;
 } rspamd_mmaped_file_t;
 
@@ -121,19 +120,6 @@ rspamd_mmaped_file_t * rspamd_mmaped_file_open (rspamd_mmaped_file_ctx * pool,
 		const gchar *filename, size_t size, struct rspamd_statfile_config *stcf);
 gint rspamd_mmaped_file_create (rspamd_mmaped_file_ctx * pool,
 		const gchar *filename, size_t size, struct rspamd_statfile_config *stcf);
-
-void
-rspamd_mmaped_file_lock_file (rspamd_mmaped_file_ctx * pool, rspamd_mmaped_file_t * file)
-{
-	rspamd_mempool_lock_mutex (file->lock);
-}
-
-void
-rspamd_mmaped_file_unlock_file (rspamd_mmaped_file_ctx * pool, rspamd_mmaped_file_t * file)
-{
-
-	rspamd_mempool_unlock_mutex (file->lock);
-}
 
 double
 rspamd_mmaped_file_get_block (rspamd_mmaped_file_ctx * pool,
@@ -433,19 +419,13 @@ rspamd_mmaped_file_reindex (rspamd_mmaped_file_ctx * pool,
 		return NULL;
 	}
 
-	/* First of all rename old file */
-	rspamd_mempool_lock_mutex (pool->lock);
-
 	backup = g_strconcat (filename, ".old", NULL);
 	if (rename (filename, backup) == -1) {
 		msg_err ("cannot rename %s to %s: %s", filename, backup, strerror (
 				errno));
 		g_free (backup);
-		rspamd_mempool_unlock_mutex (pool->lock);
 		return NULL;
 	}
-
-	rspamd_mempool_unlock_mutex (pool->lock);
 
 	/* Now create new file with required size */
 	if (rspamd_mmaped_file_create (pool, filename, size, stcf) != 0) {
@@ -546,10 +526,8 @@ rspamd_mmaped_file_open (rspamd_mmaped_file_ctx * pool,
 		return NULL;
 	}
 
-	rspamd_mempool_lock_mutex (pool->lock);
 	if (labs (size - st.st_size) > (long)sizeof (struct stat_file) * 2
 		&& size > sizeof (struct stat_file)) {
-		rspamd_mempool_unlock_mutex (pool->lock);
 		msg_warn ("need to reindex statfile old size: %Hz, new size: %Hz",
 			(size_t)st.st_size, size);
 		return rspamd_mmaped_file_reindex (pool, filename, st.st_size, size, stcf);
@@ -565,7 +543,6 @@ rspamd_mmaped_file_open (rspamd_mmaped_file_ctx * pool,
 			filename,
 			errno,
 			strerror (errno));
-		rspamd_mempool_unlock_mutex (pool->lock);
 		g_slice_free1 (sizeof (*new_file), new_file);
 		return NULL;
 	}
@@ -574,7 +551,6 @@ rspamd_mmaped_file_open (rspamd_mmaped_file_ctx * pool,
 		mmap (NULL, st.st_size, PROT_READ | PROT_WRITE, MAP_SHARED,
 		new_file->fd, 0)) == MAP_FAILED) {
 		close (new_file->fd);
-		rspamd_mempool_unlock_mutex (pool->lock);
 		msg_info ("cannot mmap file %s, error %d, %s",
 			filename,
 			errno,
@@ -598,7 +574,6 @@ rspamd_mmaped_file_open (rspamd_mmaped_file_ctx * pool,
 	/* Acquire lock for this operation */
 	rspamd_file_lock (new_file->fd, FALSE);
 	if (rspamd_mmaped_file_check (new_file) == -1) {
-		rspamd_mempool_unlock_mutex (pool->lock);
 		rspamd_file_unlock (new_file->fd, FALSE);
 		munmap (new_file->map, st.st_size);
 		g_slice_free1 (sizeof (*new_file), new_file);
@@ -606,14 +581,11 @@ rspamd_mmaped_file_open (rspamd_mmaped_file_ctx * pool,
 	}
 	rspamd_file_unlock (new_file->fd, FALSE);
 
-	new_file->lock = rspamd_mempool_get_mutex (pool->pool);
 	new_file->cf = stcf;
 
 	rspamd_mmaped_file_preload (new_file);
 
 	g_hash_table_insert (pool->files, stcf, new_file);
-
-	rspamd_mempool_unlock_mutex (pool->lock);
 
 	return rspamd_mmaped_file_is_open (pool, stcf);
 }
@@ -629,8 +601,6 @@ rspamd_mmaped_file_close (rspamd_mmaped_file_ctx * pool,
 		return -1;
 	}
 
-	rspamd_mempool_lock_mutex (pool->lock);
-
 	if (file->map) {
 		msg_info ("syncing statfile %s", file->filename);
 		msync (file->map, file->len, MS_ASYNC);
@@ -643,8 +613,6 @@ rspamd_mmaped_file_close (rspamd_mmaped_file_ctx * pool,
 	g_hash_table_remove (pool->files, file->cf);
 
 	g_slice_free1 (sizeof (*file), file);
-
-	rspamd_mempool_unlock_mutex (pool->lock);
 
 	return 0;
 }
@@ -683,7 +651,6 @@ rspamd_mmaped_file_create (rspamd_mmaped_file_ctx * pool, const gchar *filename,
 		return -1;
 	}
 
-	rspamd_mempool_lock_mutex (pool->lock);
 	nblocks =
 		(size - sizeof (struct stat_file_header) -
 		sizeof (struct stat_file_section)) / sizeof (struct stat_file_block);
@@ -695,7 +662,6 @@ rspamd_mmaped_file_create (rspamd_mmaped_file_ctx * pool, const gchar *filename,
 			filename,
 			errno,
 			strerror (errno));
-		rspamd_mempool_unlock_mutex (pool->lock);
 		return -1;
 	}
 
@@ -710,7 +676,7 @@ rspamd_mmaped_file_create (rspamd_mmaped_file_ctx * pool, const gchar *filename,
 			errno,
 			strerror (errno));
 		close (fd);
-		rspamd_mempool_unlock_mutex (pool->lock);
+
 		return -1;
 	}
 
@@ -721,7 +687,7 @@ rspamd_mmaped_file_create (rspamd_mmaped_file_ctx * pool, const gchar *filename,
 			errno,
 			strerror (errno));
 		close (fd);
-		rspamd_mempool_unlock_mutex (pool->lock);
+
 		return -1;
 	}
 
@@ -740,8 +706,8 @@ rspamd_mmaped_file_create (rspamd_mmaped_file_ctx * pool, const gchar *filename,
 					errno,
 					strerror (errno));
 				close (fd);
-				rspamd_mempool_unlock_mutex (pool->lock);
 				g_free (buf);
+
 				return -1;
 			}
 			nblocks -= 256;
@@ -756,7 +722,7 @@ rspamd_mmaped_file_create (rspamd_mmaped_file_ctx * pool, const gchar *filename,
 				if (buf) {
 					g_free (buf);
 				}
-				rspamd_mempool_unlock_mutex (pool->lock);
+
 				return -1;
 			}
 			nblocks--;
@@ -764,7 +730,6 @@ rspamd_mmaped_file_create (rspamd_mmaped_file_ctx * pool, const gchar *filename,
 	}
 
 	close (fd);
-	rspamd_mempool_unlock_mutex (pool->lock);
 
 	if (buf) {
 		g_free (buf);
@@ -814,7 +779,7 @@ rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 
 		curst = clf->statfiles;
 		while (curst) {
-			stf = cur->data;
+			stf = curst->data;
 
 			/*
 			 * By default, all statfiles are treated as mmaped files
@@ -826,8 +791,12 @@ rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 				 */
 				filenameo = ucl_object_find_key (stf->opts, "filename");
 				if (filenameo == NULL || ucl_object_type (filenameo) != UCL_STRING) {
-					msg_err ("statfile %s has no filename defined", stf->symbol);
-					return NULL;
+					filenameo = ucl_object_find_key (stf->opts, "path");
+					if (filenameo == NULL || ucl_object_type (filenameo) != UCL_STRING) {
+						msg_err ("statfile %s has no filename defined", stf->symbol);
+						curst = curst->next;
+						continue;
+					}
 				}
 
 				filename = ucl_object_tostring (filenameo);
@@ -835,7 +804,8 @@ rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 				sizeo = ucl_object_find_key (stf->opts, "size");
 				if (sizeo == NULL || ucl_object_type (sizeo) != UCL_INT) {
 					msg_err ("statfile %s has no size defined", stf->symbol);
-					return NULL;
+					curst = curst->next;
+					continue;
 				}
 
 				size = ucl_object_toint (sizeo);
@@ -873,9 +843,13 @@ rspamd_mmaped_file_runtime (struct rspamd_statfile_config *stcf, gboolean learn,
 
 		filenameo = ucl_object_find_key (stcf->opts, "filename");
 		if (filenameo == NULL || ucl_object_type (filenameo) != UCL_STRING) {
-			msg_err ("statfile %s has no filename defined", stcf->symbol);
-			return NULL;
+			filenameo = ucl_object_find_key (stcf->opts, "path");
+			if (filenameo == NULL || ucl_object_type (filenameo) != UCL_STRING) {
+				msg_err ("statfile %s has no filename defined", stcf->symbol);
+				return NULL;
+			}
 		}
+
 
 		filename = ucl_object_tostring (filenameo);
 
