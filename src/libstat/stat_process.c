@@ -37,7 +37,9 @@ struct rspamd_tokenizer_runtime {
 };
 
 struct preprocess_cb_data {
+	struct rspamd_task *task;
 	GList *classifier_runtimes;
+	struct rspamd_tokenizer_runtime *tok;
 	guint results_count;
 };
 
@@ -59,6 +61,18 @@ preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
 
 	while (cur) {
 		cl_runtime = (struct rspamd_classifier_runtime *)cur->data;
+
+		if (cl_runtime->clcf->min_tokens > 0 &&
+				(guint32)g_tree_nnodes (cbdata->tok->tokens) < cl_runtime->clcf->min_tokens) {
+			/* Skip this classifier */
+			msg_debug ("<%s> contains less tokens than required for %s classifier: "
+					"%ud < %ud", cbdata->task->message_id, cl_runtime->clcf->name,
+					g_tree_nnodes (cbdata->tok->tokens),
+					cl_runtime->clcf->min_tokens);
+			cur = g_list_next (cur);
+			continue;
+		}
+
 		res = &g_array_index (t->results, struct rspamd_token_result, i);
 
 		curst = res->cl_runtime->st_runtime;
@@ -72,6 +86,16 @@ preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
 			if (st_runtime->backend->process_token (t, res,
 					st_runtime->backend->ctx)) {
 				cl_runtime->processed_tokens ++;
+
+				if (cl_runtime->clcf->max_tokens > 0 &&
+						cl_runtime->processed_tokens > cl_runtime->clcf->max_tokens) {
+					msg_debug ("<%s> contains more tokens than allowed for %s classifier: "
+							"%ud > %ud", cbdata->task, cl_runtime->clcf->name,
+							cl_runtime->processed_tokens,
+							cl_runtime->clcf->max_tokens);
+
+					return TRUE;
+				}
 			}
 
 			i ++;
@@ -192,9 +216,11 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 
 		cbdata.results_count = result_size;
 		cbdata.classifier_runtimes = cl_runtimes;
+		cbdata.task = task;
 
 		/* Allocate token results */
 		LL_FOREACH (tklist, tok) {
+			cbdata.tok = tok;
 			g_tree_foreach (tok->tokens, preprocess_init_stat_token, &cbdata);
 		}
 	}

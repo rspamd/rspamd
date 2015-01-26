@@ -930,7 +930,7 @@ rspamd_rcl_classifier_handler (struct rspamd_config *cfg,
 {
 	const ucl_object_t *val, *cur;
 	ucl_object_iter_t it = NULL;
-	const gchar *key, *type;
+	const gchar *key;
 	struct rspamd_classifier_config *ccf;
 	gboolean res = TRUE;
 	struct rspamd_rcl_section *stat_section;
@@ -1361,6 +1361,16 @@ rspamd_rcl_config_init (void)
 		rspamd_rcl_parse_struct_string,
 		G_STRUCT_OFFSET (struct rspamd_classifier_config, tokenizer),
 		0);
+	rspamd_rcl_add_default_handler (sub,
+		"min_tokens",
+		rspamd_rcl_parse_struct_integer,
+		G_STRUCT_OFFSET (struct rspamd_classifier_config, min_tokens),
+		RSPAMD_CL_FLAG_INT_32);
+	rspamd_rcl_add_default_handler (sub,
+		"max_tokens",
+		rspamd_rcl_parse_struct_integer,
+		G_STRUCT_OFFSET (struct rspamd_classifier_config, max_tokens),
+		RSPAMD_CL_FLAG_INT_32);
 
 	/*
 	 * Statfile defaults

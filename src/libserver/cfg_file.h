@@ -154,6 +154,8 @@ struct rspamd_classifier_config {
 	GList *pre_callbacks;                           /**< list of callbacks that are called before classification */
 	GList *post_callbacks;                          /**< list of callbacks that are called after classification */
 	gchar *name;									/**< unique name of classifier							*/
+	guint32 min_tokens;								/**< minimal number of tokens to process classifier 	*/
+	guint32 max_tokens;								/**< maximum number of tokens							*/
 };
 
 struct rspamd_worker_bind_conf {
