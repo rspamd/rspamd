@@ -29,6 +29,13 @@
 #include "tokenizers/tokenizers.h"
 #include "backends/backends.h"
 
+struct rspamd_tokenizer_runtime {
+	GTree *tokens;
+	const gchar *name;
+	struct rspamd_stat_tokenizer *tokenizer;
+	struct rspamd_tokenizer_runtime *next;
+};
+
 struct rspamd_statfile_runtime {
 	struct rspamd_statfile_config *st;
 	struct rspamd_stat_backend *backend;
@@ -40,6 +47,7 @@ struct rspamd_statfile_runtime {
 struct rspamd_classifier_runtime {
 	struct rspamd_classifier_config *clcf;
 	struct rspamd_stat_classifier *cl;
+	struct rspamd_tokenizer_runtime *tok;
 	double ham_prob;
 	double spam_prob;
 	guint64 total_spam;

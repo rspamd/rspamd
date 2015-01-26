@@ -29,19 +29,43 @@
 #include "lua/lua_common.h"
 #include <utlist.h>
 
-struct rspamd_tokenizer_runtime {
-	GTree *tokens;
-	const gchar *name;
-	struct rspamd_stat_tokenizer *tokenizer;
-	struct rspamd_tokenizer_runtime *next;
-};
-
 struct preprocess_cb_data {
 	struct rspamd_task *task;
 	GList *classifier_runtimes;
 	struct rspamd_tokenizer_runtime *tok;
 	guint results_count;
 };
+
+static struct rspamd_tokenizer_runtime *
+rspamd_stat_get_tokenizer_runtime (const gchar *name, rspamd_mempool_t *pool,
+		struct rspamd_tokenizer_runtime **ls)
+{
+	struct rspamd_tokenizer_runtime *tok = NULL, *cur;
+
+	LL_FOREACH (*ls, cur) {
+		if (strcmp (cur->name, name) == 0) {
+			tok = cur;
+			break;
+		}
+	}
+
+	if (tok == NULL) {
+		tok = rspamd_mempool_alloc (pool, sizeof (*tok));
+		tok->tokenizer = rspamd_stat_get_tokenizer (name);
+
+		if (tok->tokenizer == NULL) {
+			return NULL;
+		}
+
+		tok->tokens = g_tree_new (token_node_compare_func);
+		rspamd_mempool_add_destructor (pool,
+				(rspamd_mempool_destruct_t)g_tree_destroy, tok->tokens);
+		tok->name = name;
+		LL_PREPEND(*ls, tok);
+	}
+
+	return tok;
+}
 
 static gboolean
 preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
@@ -115,7 +139,6 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 {
 	struct rspamd_classifier_config *clcf;
 	struct rspamd_statfile_config *stcf;
-	struct rspamd_tokenizer_runtime *tok;
 	struct rspamd_classifier_runtime *cl_runtime;
 	struct rspamd_statfile_runtime *st_runtime;
 	struct rspamd_stat_backend *bk;
@@ -154,6 +177,9 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 		}
 
 		cl_runtime->clcf = clcf;
+		cl_runtime->tok = rspamd_stat_get_tokenizer_runtime (clcf->tokenizer,
+				task->task_pool,
+				&tklist);
 
 		curst = st_list;
 		while (curst != NULL) {
@@ -219,44 +245,12 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 		cbdata.task = task;
 
 		/* Allocate token results */
-		LL_FOREACH (tklist, tok) {
-			cbdata.tok = tok;
-			g_tree_foreach (tok->tokens, preprocess_init_stat_token, &cbdata);
-		}
+		cbdata.tok = cl_runtime->tok;
+		g_tree_foreach (cl_runtime->tok->tokens, preprocess_init_stat_token,
+				&cbdata);
 	}
 
 	return cl_runtimes;
-}
-
-static struct rspamd_tokenizer_runtime *
-rspamd_stat_get_tokenizer_runtime (const gchar *name, rspamd_mempool_t *pool,
-		struct rspamd_tokenizer_runtime **ls)
-{
-	struct rspamd_tokenizer_runtime *tok = NULL, *cur;
-
-	LL_FOREACH (*ls, cur) {
-		if (strcmp (cur->name, name) == 0) {
-			tok = cur;
-			break;
-		}
-	}
-
-	if (tok == NULL) {
-		tok = rspamd_mempool_alloc (pool, sizeof (*tok));
-		tok->tokenizer = rspamd_stat_get_tokenizer (name);
-
-		if (tok->tokenizer == NULL) {
-			return NULL;
-		}
-
-		tok->tokens = g_tree_new (token_node_compare_func);
-		rspamd_mempool_add_destructor (pool,
-				(rspamd_mempool_destruct_t)g_tree_destroy, tok->tokens);
-		tok->name = name;
-		LL_PREPEND(*ls, tok);
-	}
-
-	return tok;
 }
 
 /*
@@ -313,11 +307,13 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 {
 	struct rspamd_stat_classifier *cls;
 	struct rspamd_classifier_config *clcf;
-	GList *cur;
 	struct rspamd_stat_ctx *st_ctx;
 	struct rspamd_tokenizer_runtime *tklist = NULL, *tok;
+	struct rspamd_classifier_runtime *cl_run;
+	struct classifier_ctx *cl_ctx;
 	GList *cl_runtimes;
-
+	GList *cur;
+	gboolean ret = FALSE;
 
 	st_ctx = rspamd_stat_get_ctx ();
 	g_assert (st_ctx != NULL);
@@ -355,5 +351,22 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 		return FALSE;
 	}
 
-	return TRUE;
+	cur = cl_runtimes;
+
+	while (cur) {
+		cl_run = (struct rspamd_classifier_runtime *)cur->data;
+
+		if (cl_run->cl) {
+			cl_ctx = cl_run->cl->init_func (task->task_pool, cl_run->clcf);
+
+			if (cl_ctx != NULL) {
+				ret |= cl_run->cl->classify_func (cl_ctx, cl_run->tok->tokens,
+						cl_run, task);
+			}
+		}
+
+		cur = g_list_next (cur);
+	}
+
+	return ret;
 }
