@@ -46,6 +46,8 @@ struct rspamd_classifier_runtime {
 	guint64 total_ham;
 	guint64 processed_tokens;
 	GList *st_runtime;
+	guint start_pos;
+	guint end_pos;
 };
 
 struct rspamd_token_result {

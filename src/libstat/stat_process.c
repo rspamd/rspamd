@@ -98,7 +98,7 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 	gpointer backend_runtime;
 	GList *cur, *st_list = NULL, *curst;
 	GList *cl_runtimes = NULL;
-	guint result_size = 0;
+	guint result_size = 0, start_pos = 0, end_pos = 0;
 	struct preprocess_cb_data cbdata;
 
 	cur = g_list_first (task->cfg->classifiers);
@@ -131,7 +131,7 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 
 		cl_runtime->clcf = clcf;
 
-		curst = clcf->statfiles;
+		curst = st_list;
 		while (curst != NULL) {
 			stcf = (struct rspamd_statfile_config *)curst->data;
 
@@ -151,11 +151,21 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 			st_runtime->backend_runtime = backend_runtime;
 			st_runtime->backend = bk;
 
+			if (stcf->is_spam) {
+				cl_runtime->total_spam += bk->total_learns (backend_runtime,
+						bk->ctx);
+			}
+			else {
+				cl_runtime->total_ham += bk->total_learns (backend_runtime,
+						bk->ctx);
+			}
+
 			cl_runtime->st_runtime = g_list_prepend (cl_runtime->st_runtime,
 					st_runtime);
 			result_size ++;
 
 			curst = g_list_next (curst);
+			end_pos ++;
 		}
 
 		if (cl_runtime->st_runtime != NULL) {
@@ -165,6 +175,13 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 			cl_runtimes = g_list_prepend (cl_runtimes, cl_runtime);
 		}
 
+		/* Set positions in the results array */
+		cl_runtime->start_pos = start_pos;
+		cl_runtime->end_pos = end_pos;
+
+		start_pos = end_pos;
+
+		/* Next classifier */
 		cur = g_list_next (cur);
 	}
 
