@@ -370,3 +370,73 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 
 	return ret;
 }
+
+gboolean
+rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
+		GError **err)
+{
+	struct rspamd_stat_classifier *cls;
+	struct rspamd_classifier_config *clcf;
+	struct rspamd_stat_ctx *st_ctx;
+	struct rspamd_tokenizer_runtime *tklist = NULL, *tok;
+	struct rspamd_classifier_runtime *cl_run;
+	struct classifier_ctx *cl_ctx;
+	GList *cl_runtimes;
+	GList *cur;
+	gboolean ret = FALSE;
+
+	st_ctx = rspamd_stat_get_ctx ();
+	g_assert (st_ctx != NULL);
+
+	cur = g_list_first (task->cfg->classifiers);
+
+	/* Tokenization */
+	while (cur) {
+		clcf = (struct rspamd_classifier_config *)cur->data;
+		cls = rspamd_stat_get_classifier (clcf->classifier);
+
+		if (cls == NULL) {
+			g_set_error (err, rspamd_stat_quark (), 500, "type %s is not defined"
+					"for classifiers", clcf->classifier);
+			return FALSE;
+		}
+
+		tok = rspamd_stat_get_tokenizer_runtime (clcf->tokenizer, task->task_pool,
+				&tklist);
+
+		if (tok == NULL) {
+			g_set_error (err, rspamd_stat_quark (), 500, "type %s is not defined"
+					"for tokenizers", clcf->tokenizer);
+			return FALSE;
+		}
+
+		rspamd_stat_process_tokenize (st_ctx, task, tok);
+
+		cur = g_list_next (cur);
+	}
+
+	/* Initialize classifiers and statfiles runtime */
+	if ((cl_runtimes = rspamd_stat_preprocess (st_ctx, task, tklist, L, err))
+			== NULL) {
+		return FALSE;
+	}
+
+	cur = cl_runtimes;
+
+	while (cur) {
+		cl_run = (struct rspamd_classifier_runtime *)cur->data;
+
+		if (cl_run->cl) {
+			cl_ctx = cl_run->cl->init_func (task->task_pool, cl_run->clcf);
+
+			if (cl_ctx != NULL) {
+				ret |= cl_run->cl->learn_spam_func (cl_ctx, cl_run->tok->tokens,
+						cl_run, task, spam, err);
+			}
+		}
+
+		cur = g_list_next (cur);
+	}
+
+	return ret;
+}
