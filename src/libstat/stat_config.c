@@ -50,7 +50,8 @@ struct rspamd_stat_backend stat_backends[] = {
 		.init = rspamd_mmaped_file_init,
 		.runtime = rspamd_mmaped_file_runtime,
 		.process_token = rspamd_mmaped_file_process_token,
-		.total_learns = rspamd_mmaped_file_total_learns
+		.total_learns = rspamd_mmaped_file_total_learns,
+		.learn_token = rspamd_mmaped_file_learn_token
 	}
 };
 
