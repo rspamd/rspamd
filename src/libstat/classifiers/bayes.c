@@ -149,7 +149,7 @@ bayes_classify (struct classifier_ctx * ctx,
 	g_assert (rt != NULL);
 	g_assert (rt->end_pos > rt->start_pos);
 
-	g_tree_foreach (input, bayes_classify_callback, &rt);
+	g_tree_foreach (input, bayes_classify_callback, rt);
 
 	if (rt->spam_prob == 0) {
 		final_prob = 0;
