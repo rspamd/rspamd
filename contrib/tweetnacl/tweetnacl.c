@@ -150,6 +150,53 @@ int crypto_stream_salsa20_xor(u8 *c,const u8 *m,u64 b,const u8 *n,const u8 *k)
   return 0;
 }
 
+int crypto_stream_salsa20_xor2(u8 *c1, u8 *c2,const u8 *m1,const u8 *m2,u64 d1,u64 d2,const u8 *n,const u8 *k)
+{
+  u8 z[16],x[64];
+  u32 u,i,j;
+  u64 b = d1, r = 0;
+  const u8 *m = m1;
+  u8 *c = c1;
+  if (!d1) return 0;
+  FOR(i,16) z[i] = 0;
+  FOR(i,8) z[i] = n[i];
+
+  for(j = 0; j < 2; j ++, m = m2, b = d2, c = c2) {
+	  if (r > 0) {
+		  if (r <= b) {
+			  FOR(i,r) c[i] = (m?m[i]:0) ^ x[i];
+			  r = 0;
+			  m += r;
+			  b -= r;
+		  }
+		  else {
+			  FOR(i,b) c[i] = (m?m[i]:0) ^ x[i];
+			  return 0;
+		  }
+		  r = 0;
+	  }
+	  while (b >= 64) {
+		  crypto_core_salsa20(x,z,k,sigma);
+		  FOR(i,64) c[i] = (m?m[i]:0) ^ x[i];
+		  u = 1;
+		  for (i = 8;i < 16;++i) {
+			  u += (u32) z[i];
+			  z[i] = u;
+			  u >>= 8;
+		  }
+		  b -= 64;
+		  c += 64;
+		  if (m) m += 64;
+	  }
+	  if (b) {
+		  crypto_core_salsa20(x,z,k,sigma);
+		  FOR(i,b) c[i] = (m?m[i]:0) ^ x[i];
+		  r = 64 - b;
+	  }
+  }
+  return 0;
+}
+
 int crypto_stream_salsa20(u8 *c,u64 d,const u8 *n,const u8 *k)
 {
   return crypto_stream_salsa20_xor(c,0,d,n,k);
@@ -167,6 +214,13 @@ int crypto_stream_xor(u8 *c,const u8 *m,u64 d,const u8 *n,const u8 *k)
   u8 s[32];
   crypto_core_hsalsa20(s,n,k,sigma);
   return crypto_stream_salsa20_xor(c,m,d,n+16,s);
+}
+
+int crypto_stream_xor2(u8 *c1, u8 *c2,const u8 *m1,const u8 *m2,u64 d1,u64 d2,const u8 *n,const u8 *k)
+{
+  u8 s[32];
+  crypto_core_hsalsa20(s,n,k,sigma);
+  return crypto_stream_salsa20_xor2(c1,c2,m1,m2,d1,d2,n+16,s);
 }
 
 sv add1305(u32 *h,const u32 *c)
@@ -251,6 +305,19 @@ int crypto_secretbox(u8 *c,const u8 *m,u64 d,const u8 *n,const u8 *k)
   crypto_onetimeauth(c + crypto_box_BOXZEROBYTES,c + crypto_box_ZEROBYTES,
 		  d - crypto_box_ZEROBYTES,c);
   FOR(i,crypto_box_BOXZEROBYTES) c[i] = 0;
+  return 0;
+}
+
+int crypto_secretbox_detached(u8 *c,const u8 *m,u64 d,const u8 *n,const u8 *k, u8 *a)
+{
+  unsigned int i;
+  volatile u8 mk[crypto_onetimeauth_poly1305_KEYBYTES];
+  if (d == 0) return -1;
+  FOR(i, crypto_onetimeauth_poly1305_KEYBYTES) mk[i] = 0;
+  crypto_stream_xor2((u8 *)mk,c,(u8 *)mk,m,crypto_onetimeauth_poly1305_KEYBYTES,d,n,k);
+  crypto_onetimeauth(a,c,d,(const u8*)mk);
+  /* TODO: add really secure bzero here */
+  FOR(i,crypto_onetimeauth_poly1305_KEYBYTES) mk[i] = 0;
   return 0;
 }
 
@@ -471,6 +538,11 @@ int crypto_box_afternm(u8 *c,const u8 *m,u64 d,const u8 *n,const u8 *k)
   return crypto_secretbox(c,m,d,n,k);
 }
 
+int crypto_box_afternm_detached(u8 *c,const u8 *m,u64 d,const u8 *n,const u8 *k, u8 *a)
+{
+  return crypto_secretbox_detached(c,m,d,n,k,a);
+}
+
 int crypto_box_open_afternm(u8 *m,const u8 *c,u64 d,const u8 *n,const u8 *k)
 {
   return crypto_secretbox_open(m,c,d,n,k);
@@ -481,6 +553,13 @@ int crypto_box(u8 *c,const u8 *m,u64 d,const u8 *n,const u8 *y,const u8 *x)
   u8 k[32];
   crypto_box_beforenm(k,y,x);
   return crypto_box_afternm(c,m,d,n,k);
+}
+
+int crypto_box_detached(u8 *c,const u8 *m,u64 d,const u8 *n,const u8 *y,const u8 *x,u8 *a)
+{
+  u8 k[32];
+  crypto_box_beforenm(k,y,x);
+  return crypto_box_afternm_detached(c,m,d,n,k,a);
 }
 
 int crypto_box_open(u8 *m,const u8 *c,u64 d,const u8 *n,const u8 *y,const u8 *x)
