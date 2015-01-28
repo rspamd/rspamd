@@ -148,6 +148,16 @@ struct rspamd_http_connection * rspamd_http_connection_new (
 	enum rspamd_http_connection_type type);
 
 /**
+ * Load the encryption keypair for this connection
+ * @param conn connection structure
+ * @param key base32 encoded privkey and pubkey (in that order)
+ * @param keylen length of base32 string
+ * @return TRUE if a key has been loaded successfully
+ */
+gboolean rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
+		gchar *key, gsize keylen);
+
+/**
  * Handle a request using socket fd and user data ud
  * @param conn connection structure
  * @param ud opaque user data
