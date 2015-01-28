@@ -34,7 +34,6 @@
 #include <limits.h>
 
 struct rspamd_http_keypair {
-	guchar beforenm[crypto_box_BEFORENMBYTES];
 	guchar pk[crypto_box_PUBLICKEYBYTES];
 	guchar sk[crypto_box_SECRETKEYBYTES];
 	guchar id[BLAKE2B_OUTBYTES];
@@ -568,7 +567,8 @@ rspamd_http_on_body (http_parser * parser, const gchar *at, size_t length)
 
 	g_string_append_len (priv->msg->body, at, length);
 
-	if (conn->opts & RSPAMD_HTTP_BODY_PARTIAL) {
+	if ((conn->opts & RSPAMD_HTTP_BODY_PARTIAL) && !priv->encrypted) {
+		/* Incremental update is basically impossible for encrypted requests */
 		return (conn->body_handler (conn, priv->msg, at, length));
 	}
 
@@ -582,18 +582,57 @@ rspamd_http_on_message_complete (http_parser * parser)
 		(struct rspamd_http_connection *)parser->data;
 	struct rspamd_http_connection_private *priv;
 	int ret = 0;
+	guchar *nonce, *m;
+	gsize dec_len;
+	GError *err;
 
 	priv = conn->priv;
 
 	if (conn->body_handler != NULL) {
-		rspamd_http_connection_ref (conn);
-		if ((conn->opts & RSPAMD_HTTP_BODY_PARTIAL) == 0) {
+
+		if (priv->encrypted) {
+			if (priv->local_key == NULL || priv->peer_key == NULL ||
+					priv->msg->body->len < crypto_box_NONCEBYTES + crypto_box_ZEROBYTES) {
+				err = g_error_new (HTTP_ERROR, 500, "Cannot decrypt message");
+				rspamd_http_connection_ref (conn);
+				conn->error_handler (conn, err);
+				rspamd_http_connection_unref (conn);
+				g_error_free (err);
+				return -1;
+			}
+			/* We have keys, so we can decrypt message */
+			/* TODO: add pubkey<->privkey pairs to LRU cache */
+			nonce = priv->msg->body->str;
+			m = priv->msg->body->str + crypto_box_NONCEBYTES;
+			dec_len = priv->msg->body->len - crypto_box_NONCEBYTES;
+
+			if (crypto_box_open (m + crypto_box_ZEROBYTES, m, dec_len, nonce,
+					priv->peer_key->str, priv->local_key->sk) != 0) {
+				err = g_error_new (HTTP_ERROR, 500, "Cannot verify encrypted message");
+				rspamd_http_connection_ref (conn);
+				conn->error_handler (conn, err);
+				rspamd_http_connection_unref (conn);
+				g_error_free (err);
+				return -1;
+			}
+			m += crypto_box_ZEROBYTES;
+			dec_len -= crypto_box_ZEROBYTES;
+
+			rspamd_http_connection_ref (conn);
+			ret = conn->body_handler (conn,
+					priv->msg,
+					m,
+					dec_len);
+			rspamd_http_connection_unref (conn);
+		}
+		else if ((conn->opts & RSPAMD_HTTP_BODY_PARTIAL) == 0) {
+			rspamd_http_connection_ref (conn);
 			ret = conn->body_handler (conn,
 					priv->msg,
 					priv->msg->body->str,
 					priv->msg->body->len);
+			rspamd_http_connection_unref (conn);
 		}
-		rspamd_http_connection_unref (conn);
 	}
 
 	if (ret == 0) {
@@ -1563,8 +1602,6 @@ rspamd_http_connection_make_key (gchar *key, gsize keylen)
 			memcpy (kp->sk, decoded, crypto_box_SECRETKEYBYTES);
 			memcpy (kp->pk, decoded + crypto_box_SECRETKEYBYTES,
 					crypto_box_PUBLICKEYBYTES);
-			crypto_box_beforenm (kp->beforenm, kp->pk,
-					kp->sk);
 			blake2b (kp->id, kp->pk, NULL, sizeof (kp->id), sizeof (kp->pk), 0);
 
 			return (gpointer)kp;
