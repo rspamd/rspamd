@@ -30,6 +30,7 @@
 #include "ref.h"
 #include "tweetnacl.h"
 #include "blake2.h"
+#include "ottery.h"
 
 #include <limits.h>
 
@@ -986,6 +987,10 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	gint i;
 	gsize bodylen;
 	GString *buf;
+	gboolean encrypted = FALSE;
+	gchar *b32_key, *b32_id;
+	guchar nonce[crypto_box_NONCEBYTES], mac[crypto_box_ZEROBYTES], id[BLAKE2B_OUTBYTES];
+	guchar *np, *mp;
 
 	conn->fd = fd;
 	conn->ud = ud;
@@ -1026,6 +1031,15 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	else {
 		/* Invalid body for spamc method */
 		return;
+	}
+
+	if (priv->local_key != NULL && priv->peer_key != NULL) {
+		encrypted = TRUE;
+	}
+
+	if (encrypted) {
+		priv->outlen += 2;
+		bodylen += crypto_box_NONCEBYTES + crypto_box_ZEROBYTES;
 	}
 
 	if (conn->type == RSPAMD_HTTP_SERVER) {
@@ -1082,6 +1096,16 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 				host != NULL ? host : msg->host->str,
 				bodylen);
 		}
+		if (encrypted) {
+			blake2b (id, priv->local_key->pk, NULL, sizeof (id),
+					sizeof (priv->local_key->pk), 0);
+			b32_key = rspamd_encode_base32 (priv->local_key->pk,
+					sizeof (priv->local_key->pk));
+			b32_id = rspamd_encode_base32 (id, sizeof (id));
+			rspamd_printf_gstring (buf, "Key: %s%s\r\n", b32_id, b32_key);
+			g_free (b32_key);
+			g_free (b32_id);
+		}
 	}
 	/* Allocate iov */
 	priv->wr_total = bodylen + buf->len + 2;
@@ -1096,7 +1120,19 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 
 	/* Now set up all iov */
 	priv->out[0].iov_base = buf->str;
-	priv->out[0].iov_len = buf->len;
+	if (!encrypted) {
+		priv->out[0].iov_len = buf->len;
+	}
+	else {
+		ottery_rand_bytes (nonce, sizeof (nonce));
+		memset (mac, 0, sizeof (mac));
+		np = buf->str + buf->len;
+		g_string_append_len (buf, nonce, sizeof (nonce));
+		mp = buf->str + buf->len;
+		g_string_append_len (buf, mac, sizeof (mac));
+		priv->out[0].iov_len = buf->len - sizeof (nonce) - sizeof (mac);
+	}
+
 	i = 1;
 	LL_FOREACH (msg->headers, hdr)
 	{
@@ -1118,8 +1154,21 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		priv->wr_total -= 2;
 	}
 	if (msg->body != NULL) {
-		priv->out[i].iov_base = pbody;
-		priv->out[i++].iov_len = bodylen;
+		if (encrypted) {
+			crypto_box_detached (pbody, pbody,
+					bodylen - sizeof (nonce) - sizeof (mac), np,
+					priv->peer_key->str, priv->local_key->sk, mp);
+			priv->out[i].iov_base = np;
+			priv->out[i++].iov_len = sizeof (nonce);
+			priv->out[i].iov_base = mp;
+			priv->out[i++].iov_len = sizeof (mac);
+			priv->out[i].iov_base = pbody;
+			priv->out[i++].iov_len = bodylen;
+		}
+		else {
+			priv->out[i].iov_base = pbody;
+			priv->out[i++].iov_len = bodylen;
+		}
 	}
 
 	event_set (&priv->ev, fd, EV_WRITE, rspamd_http_event_handler, conn);
