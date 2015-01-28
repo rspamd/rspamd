@@ -1612,6 +1612,20 @@ rspamd_http_connection_make_key (gchar *key, gsize keylen)
 	return FALSE;
 }
 
+gpointer
+rspamd_http_connection_gen_key (void)
+{
+	struct rspamd_http_keypair *kp;
+
+	kp = g_slice_alloc (sizeof (*kp));
+	REF_INIT_RETAIN (kp, rspamd_http_keypair_dtor);
+
+	crypto_box_keypair (kp->pk, kp->sk);
+	blake2b (kp->id, kp->pk, NULL, sizeof (kp->id), sizeof (kp->pk), 0);
+
+	return (gpointer)kp;
+}
+
 void
 rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
 		gpointer key)

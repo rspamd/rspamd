@@ -156,6 +156,12 @@ struct rspamd_http_connection * rspamd_http_connection_new (
 gpointer rspamd_http_connection_make_key (gchar *key, gsize keylen);
 
 /**
+ * Generate the encryption keypair
+ * @return opaque pointer pr NULL in case of error
+ */
+gpointer rspamd_http_connection_gen_key (void);
+
+/**
  * Set key pointed by an opaque pointer
  * @param conn connection structure
  * @param key opaque key structure
