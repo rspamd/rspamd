@@ -22,6 +22,7 @@ extern int crypto_auth_hmacsha512256_tweet_verify(const guchar *,const guchar *,
 #define crypto_auth_hmacsha512256_IMPLEMENTATION "crypto_auth/hmacsha512256/tweet"
 #define crypto_box_PRIMITIVE "curve25519xsalsa20poly1305"
 #define crypto_box crypto_box_curve25519xsalsa20poly1305
+#define crypto_box_detached crypto_box_curve25519xsalsa20poly1305_detached
 #define crypto_box_open crypto_box_curve25519xsalsa20poly1305_open
 #define crypto_box_keypair crypto_box_curve25519xsalsa20poly1305_keypair
 #define crypto_box_beforenm crypto_box_curve25519xsalsa20poly1305_beforenm
@@ -42,6 +43,7 @@ extern int crypto_auth_hmacsha512256_tweet_verify(const guchar *,const guchar *,
 #define crypto_box_curve25519xsalsa20poly1305_tweet_ZEROBYTES 16
 #define crypto_box_curve25519xsalsa20poly1305_tweet_BOXZEROBYTES 0
 extern int crypto_box_curve25519xsalsa20poly1305_tweet(guchar *,const guchar *,guint64,const guchar *,const guchar *,const guchar *);
+extern int crypto_box_curve25519xsalsa20poly1305_tweet_detached(guchar *,const guchar *,guint64,const guchar *,const guchar *,const guchar *, guchar *);
 extern int crypto_box_curve25519xsalsa20poly1305_tweet_open(guchar *,const guchar *,guint64,const guchar *,const guchar *,const guchar *);
 extern int crypto_box_curve25519xsalsa20poly1305_tweet_keypair(guchar *,guchar *);
 extern int crypto_box_curve25519xsalsa20poly1305_tweet_beforenm(guchar *,const guchar *,const guchar *);
@@ -49,6 +51,7 @@ extern int crypto_box_curve25519xsalsa20poly1305_tweet_afternm(guchar *,const gu
 extern int crypto_box_curve25519xsalsa20poly1305_tweet_open_afternm(guchar *,const guchar *,guint64,const guchar *,const guchar *);
 #define crypto_box_curve25519xsalsa20poly1305_tweet_VERSION "-"
 #define crypto_box_curve25519xsalsa20poly1305 crypto_box_curve25519xsalsa20poly1305_tweet
+#define crypto_box_curve25519xsalsa20poly1305_detached crypto_box_curve25519xsalsa20poly1305_tweet_detached
 #define crypto_box_curve25519xsalsa20poly1305_open crypto_box_curve25519xsalsa20poly1305_tweet_open
 #define crypto_box_curve25519xsalsa20poly1305_keypair crypto_box_curve25519xsalsa20poly1305_tweet_keypair
 #define crypto_box_curve25519xsalsa20poly1305_beforenm crypto_box_curve25519xsalsa20poly1305_tweet_beforenm
