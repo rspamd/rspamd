@@ -1540,31 +1540,40 @@ rspamd_http_router_free (struct rspamd_http_connection_router *router)
 	}
 }
 
-gboolean
-rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
-		gchar *key, gsize keylen)
+gpointer
+rspamd_http_connection_make_key (gchar *key, gsize keylen)
 {
 	guchar *decoded;
 	gsize decoded_len;
-	struct rspamd_http_connection_private *priv = conn->priv;
+	struct rspamd_http_keypair *kp;
 
 	decoded = rspamd_decode_base32 (key, keylen, &decoded_len);
 
 	if (decoded != NULL) {
 		if (decoded_len == crypto_box_PUBLICKEYBYTES + crypto_box_SECRETKEYBYTES) {
-			priv->local_key = g_slice_alloc (sizeof (*priv->local_key));
-			memcpy (priv->local_key->sk, decoded, crypto_box_SECRETKEYBYTES);
-			memcpy (priv->local_key->pk, decoded + crypto_box_SECRETKEYBYTES,
+			kp = g_slice_alloc (sizeof (*kp));
+			memcpy (kp->sk, decoded, crypto_box_SECRETKEYBYTES);
+			memcpy (kp->pk, decoded + crypto_box_SECRETKEYBYTES,
 					crypto_box_PUBLICKEYBYTES);
-			crypto_box_beforenm (priv->local_key->beforenm, priv->local_key->pk,
-					priv->local_key->sk);
-			blake2b (priv->local_key->id, priv->local_key->pk, NULL,
-					sizeof (priv->local_key->id), sizeof (priv->local_key->pk), 0);
+			crypto_box_beforenm (kp->beforenm, kp->pk,
+					kp->sk);
+			blake2b (kp->id, kp->pk, NULL, sizeof (kp->id), sizeof (kp->pk), 0);
 
-			return TRUE;
+			return (gpointer)kp;
 		}
 		g_free (decoded);
 	}
 
 	return FALSE;
+}
+
+void
+rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
+		gpointer key)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+	struct rspamd_http_keypair *kp = (struct rspamd_http_keypair *)key;
+
+	g_assert (key != NULL);
+	priv->local_key = kp;
 }
