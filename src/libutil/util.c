@@ -2161,7 +2161,7 @@ rspamd_decode_base32 (gchar *in, gsize inlen, gsize *outlen)
 	guint processed_bits = 0;
 	gsize olen = 0, i, allocated_len = inlen * 8 / 5 + 1;
 
-	res = g_slice_alloc (allocated_len);
+	res = g_malloc (allocated_len);
 
 	for (i = 0; i < inlen; i ++) {
 		c = (guchar)in[i];
@@ -2174,7 +2174,7 @@ rspamd_decode_base32 (gchar *in, gsize inlen, gsize *outlen)
 
 		decoded = b32_dec[c];
 		if (decoded == 0xff) {
-			g_slice_free1 (allocated_len, res);
+			g_free (res);
 			return NULL;
 		}
 
