@@ -103,6 +103,8 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 				ham_count += res->value;
 			}
 			total_count += res->value;
+			res->st_runtime->total_hits += res->value;
+			res->cl_runtime->processed_tokens ++;
 		}
 	}
 
@@ -160,6 +162,8 @@ bayes_classify (struct classifier_ctx * ctx,
 		s = 1 - inv_chi_square (-2. * rt->ham_prob,
 				2 * rt->processed_tokens);
 		final_prob = (s + 1 - h) / 2.;
+		msg_debug ("<%s> got ham prob %.2f -> %.2f and spam prob %.2f -> %.2f",
+				task->message_id, rt->ham_prob, h, rt->spam_prob, s);
 	}
 
 	if (rt->processed_tokens > 0 && fabs (final_prob - 0.5) > 0.05) {

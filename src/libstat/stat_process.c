@@ -109,7 +109,6 @@ preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
 
 			if (st_runtime->backend->process_token (t, res,
 					st_runtime->backend->ctx)) {
-				cl_runtime->processed_tokens ++;
 
 				if (cl_runtime->clcf->max_tokens > 0 &&
 						cl_runtime->processed_tokens > cl_runtime->clcf->max_tokens) {
