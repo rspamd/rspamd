@@ -70,7 +70,8 @@ struct rspamd_http_message {
  */
 enum rspamd_http_options {
 	RSPAMD_HTTP_BODY_PARTIAL = 0x1, /**< Call body handler on all body data portions */
-	RSPAMD_HTTP_CLIENT_SIMPLE = 0x2 /**< Read HTTP client reply automatically */
+	RSPAMD_HTTP_CLIENT_SIMPLE = 0x2, /**< Read HTTP client reply automatically */
+	RSPAMD_HTTP_CLIENT_ENCRYPTED = 0x4 /**< Encrypt data for client */
 };
 
 struct rspamd_http_connection_private;
