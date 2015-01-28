@@ -162,6 +162,11 @@ gpointer rspamd_http_connection_make_key (gchar *key, gsize keylen);
  */
 void rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
 		gpointer key);
+/**
+ * Release key pointed by an opaque pointer
+ * @param key opaque key structure
+ */
+void rspamd_http_connection_key_destroy (gpointer key);
 
 /**
  * Handle a request using socket fd and user data ud

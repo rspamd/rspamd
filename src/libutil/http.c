@@ -38,6 +38,7 @@ struct rspamd_http_keypair {
 	guchar pk[crypto_box_PUBLICKEYBYTES];
 	guchar sk[crypto_box_SECRETKEYBYTES];
 	guchar id[BLAKE2B_OUTBYTES];
+	ref_entry_t ref;
 };
 
 struct rspamd_http_connection_private {
@@ -890,7 +891,7 @@ rspamd_http_connection_free (struct rspamd_http_connection *conn)
 	rspamd_http_connection_reset (conn);
 
 	if (priv->local_key) {
-		g_slice_free1 (sizeof (*priv->local_key), priv->local_key);
+		REF_RELEASE (priv->local_key);
 	}
 
 	g_slice_free1 (sizeof (struct rspamd_http_connection_private), priv);
@@ -1540,6 +1541,12 @@ rspamd_http_router_free (struct rspamd_http_connection_router *router)
 	}
 }
 
+static void
+rspamd_http_keypair_dtor (struct rspamd_http_keypair *kp)
+{
+	g_slice_free1 (sizeof (*kp), kp);
+}
+
 gpointer
 rspamd_http_connection_make_key (gchar *key, gsize keylen)
 {
@@ -1552,6 +1559,7 @@ rspamd_http_connection_make_key (gchar *key, gsize keylen)
 	if (decoded != NULL) {
 		if (decoded_len == crypto_box_PUBLICKEYBYTES + crypto_box_SECRETKEYBYTES) {
 			kp = g_slice_alloc (sizeof (*kp));
+			REF_INIT_RETAIN (kp, rspamd_http_keypair_dtor);
 			memcpy (kp->sk, decoded, crypto_box_SECRETKEYBYTES);
 			memcpy (kp->pk, decoded + crypto_box_SECRETKEYBYTES,
 					crypto_box_PUBLICKEYBYTES);
@@ -1575,5 +1583,15 @@ rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
 	struct rspamd_http_keypair *kp = (struct rspamd_http_keypair *)key;
 
 	g_assert (key != NULL);
+	REF_RETAIN (kp);
 	priv->local_key = kp;
+}
+
+void
+rspamd_http_connection_key_destroy (gpointer key)
+{
+	struct rspamd_http_keypair *kp = (struct rspamd_http_keypair *)key;
+
+	g_assert (key != NULL);
+	REF_RELEASE (kp);
 }
