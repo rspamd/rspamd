@@ -446,11 +446,13 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 	struct rspamd_stat_ctx *st_ctx;
 	struct rspamd_tokenizer_runtime *tklist = NULL, *tok;
 	struct rspamd_classifier_runtime *cl_run;
+	struct rspamd_statfile_runtime *st_run;
 	struct classifier_ctx *cl_ctx;
 	struct preprocess_cb_data cbdata;
 	GList *cl_runtimes;
-	GList *cur;
+	GList *cur, *curst;
 	gboolean ret = FALSE;
+	gulong nrev;
 
 	st_ctx = rspamd_stat_get_ctx ();
 	g_assert (st_ctx != NULL);
@@ -509,6 +511,19 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 					g_tree_foreach (cl_run->tok->tokens, rspamd_stat_learn_token,
 							&cbdata);
 
+					curst = g_list_first (cl_run->st_runtime);
+
+					while (curst) {
+						st_run = (struct rspamd_statfile_runtime *)curst->data;
+
+						nrev = st_run->backend->inc_learns (st_run->backend_runtime,
+								st_run->backend->ctx);
+
+						msg_debug ("learned %s, new revision: %ul",
+								st_run->st->symbol, nrev);
+
+						curst = g_list_next (curst);
+					}
 				}
 				else {
 					return FALSE;

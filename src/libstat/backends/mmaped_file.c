@@ -956,3 +956,19 @@ rspamd_mmaped_file_total_learns (struct rspamd_statfile_runtime *runtime,
 
 	return rev;
 }
+
+gulong
+rspamd_mmaped_file_inc_learns (struct rspamd_statfile_runtime *runtime,
+		gpointer ctx)
+{
+	rspamd_mmaped_file_t *mf = (rspamd_mmaped_file_t *)runtime;
+	guint64 rev = 0;
+	time_t t;
+
+	if (mf != NULL) {
+		rspamd_mmaped_file_inc_revision (mf);
+		rspamd_mmaped_file_get_revision (mf, &rev, &t);
+	}
+
+	return rev;
+}
