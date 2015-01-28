@@ -70,7 +70,8 @@ struct rspamd_http_message {
  */
 enum rspamd_http_options {
 	RSPAMD_HTTP_BODY_PARTIAL = 0x1, /**< Call body handler on all body data portions */
-	RSPAMD_HTTP_CLIENT_SIMPLE = 0x2 /**< Read HTTP client reply automatically */
+	RSPAMD_HTTP_CLIENT_SIMPLE = 0x2, /**< Read HTTP client reply automatically */
+	RSPAMD_HTTP_CLIENT_ENCRYPTED = 0x4 /**< Encrypt data for client */
 };
 
 struct rspamd_http_connection_private;
@@ -145,6 +146,33 @@ struct rspamd_http_connection * rspamd_http_connection_new (
 	rspamd_http_finish_handler_t finish_handler,
 	unsigned opts,
 	enum rspamd_http_connection_type type);
+
+/**
+ * Load the encryption keypair
+ * @param key base32 encoded privkey and pubkey (in that order)
+ * @param keylen length of base32 string
+ * @return opaque pointer pr NULL in case of error
+ */
+gpointer rspamd_http_connection_make_key (gchar *key, gsize keylen);
+
+/**
+ * Generate the encryption keypair
+ * @return opaque pointer pr NULL in case of error
+ */
+gpointer rspamd_http_connection_gen_key (void);
+
+/**
+ * Set key pointed by an opaque pointer
+ * @param conn connection structure
+ * @param key opaque key structure
+ */
+void rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
+		gpointer key);
+/**
+ * Release key pointed by an opaque pointer
+ * @param key opaque key structure
+ */
+void rspamd_http_connection_key_destroy (gpointer key);
 
 /**
  * Handle a request using socket fd and user data ud

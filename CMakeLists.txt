@@ -832,6 +832,7 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src"
 					"${CMAKE_SOURCE_DIR}/contrib/snowball/include"
 					"${CMAKE_SOURCE_DIR}/contrib/siphash"
 					"${CMAKE_SOURCE_DIR}/contrib/blake2"
+					"${CMAKE_SOURCE_DIR}/contrib/tweetnacl"
 					"${CMAKE_SOURCE_DIR}/src/rdns/include")
 
 ################################ SUBDIRS SECTION ###########################
@@ -854,6 +855,7 @@ ADD_SUBDIRECTORY(contrib/libottery)
 ADD_SUBDIRECTORY(contrib/snowball)
 ADD_SUBDIRECTORY(contrib/siphash)
 ADD_SUBDIRECTORY(contrib/blake2)
+ADD_SUBDIRECTORY(contrib/tweetnacl)
 ADD_SUBDIRECTORY(src)
 
 ADD_SUBDIRECTORY(test)

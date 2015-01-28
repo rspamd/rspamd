@@ -28,8 +28,18 @@
 #include "printf.h"
 #include "logger.h"
 #include "ref.h"
+#include "tweetnacl.h"
+#include "blake2.h"
+#include "ottery.h"
 
 #include <limits.h>
+
+struct rspamd_http_keypair {
+	guchar pk[crypto_box_PUBLICKEYBYTES];
+	guchar sk[crypto_box_SECRETKEYBYTES];
+	guchar id[BLAKE2B_OUTBYTES];
+	ref_entry_t ref;
+};
 
 struct rspamd_http_connection_private {
 	struct _rspamd_http_privbuf {
@@ -37,6 +47,9 @@ struct rspamd_http_connection_private {
 		ref_entry_t ref;
 	} *buf;
 	gboolean new_header;
+	gboolean encrypted;
+	struct rspamd_http_keypair *local_key;
+	GString *peer_key;
 	struct rspamd_http_header *header;
 	struct http_parser parser;
 	struct http_parser_settings parser_cb;
@@ -71,9 +84,11 @@ static const struct _rspamd_http_magic {
 	[HTTP_MAGIC_JPG] = { "jpg", "image/jpeg" },
 };
 
-static gchar *http_week[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
-static gchar *http_month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+static const gchar *http_week[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+static const gchar *http_month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
 							   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+static const gchar *key_header = "Key";
+static const gchar *date_header = "Date";
 
 
 #define HTTP_ERROR http_error_quark ()
@@ -387,12 +402,45 @@ rspamd_http_parse_date (const gchar *header, gsize len)
 	return (time_t) time;
 }
 
-static inline void
-rspamd_http_check_date (struct rspamd_http_connection_private *priv)
+static void
+rspamd_http_parse_key (GString *data, struct rspamd_http_connection_private *priv)
 {
-	if (g_ascii_strcasecmp (priv->header->name->str, "date") == 0) {
+	guchar *decoded;
+	gsize decoded_len;
+
+	if (priv->local_key == NULL) {
+		/* In this case we cannot do anything, e.g. we cannot decrypt payload */
+		priv->encrypted = TRUE;
+	}
+	else {
+		/* Check sanity of what we have */
+		decoded = rspamd_decode_base32 (data->str, data->len, &decoded_len);
+		if (decoded != NULL) {
+			if (decoded_len >= sizeof (priv->local_key->id) +
+					sizeof (priv->local_key->pk)) {
+				if (memcmp (priv->local_key->id, decoded,
+						sizeof (priv->local_key->id)) == 0) {
+					priv->peer_key = g_string_sized_new (sizeof (priv->local_key->pk));
+					g_string_append_len (priv->peer_key,
+							decoded + sizeof (priv->local_key->id),
+							sizeof (priv->local_key->pk));
+				}
+			}
+		}
+		priv->encrypted = TRUE;
+		g_free (decoded);
+	}
+}
+
+static inline void
+rspamd_http_check_special_header (struct rspamd_http_connection_private *priv)
+{
+	if (g_ascii_strcasecmp (priv->header->name->str, date_header) == 0) {
 		priv->msg->date = rspamd_http_parse_date (priv->header->value->str,
 				priv->header->value->len);
+	}
+	else if (g_ascii_strcasecmp (priv->header->name->str, key_header) == 0) {
+		rspamd_http_parse_key (priv->header->value, priv);
 	}
 }
 
@@ -447,7 +495,7 @@ rspamd_http_on_header_field (http_parser * parser,
 	}
 	else if (priv->new_header) {
 		DL_APPEND (priv->msg->headers, priv->header);
-		rspamd_http_check_date (priv);
+		rspamd_http_check_special_header (priv);
 		priv->header = g_slice_alloc (sizeof (struct rspamd_http_header));
 		priv->header->name = g_string_sized_new (32);
 		priv->header->value = g_string_sized_new (32);
@@ -492,7 +540,7 @@ rspamd_http_on_headers_complete (http_parser * parser)
 
 	if (priv->header != NULL) {
 		DL_APPEND (priv->msg->headers, priv->header);
-		rspamd_http_check_date (priv);
+		rspamd_http_check_special_header (priv);
 		priv->header = NULL;
 	}
 
@@ -520,7 +568,8 @@ rspamd_http_on_body (http_parser * parser, const gchar *at, size_t length)
 
 	g_string_append_len (priv->msg->body, at, length);
 
-	if (conn->opts & RSPAMD_HTTP_BODY_PARTIAL) {
+	if ((conn->opts & RSPAMD_HTTP_BODY_PARTIAL) && !priv->encrypted) {
+		/* Incremental update is basically impossible for encrypted requests */
 		return (conn->body_handler (conn, priv->msg, at, length));
 	}
 
@@ -534,18 +583,57 @@ rspamd_http_on_message_complete (http_parser * parser)
 		(struct rspamd_http_connection *)parser->data;
 	struct rspamd_http_connection_private *priv;
 	int ret = 0;
+	guchar *nonce, *m;
+	gsize dec_len;
+	GError *err;
 
 	priv = conn->priv;
 
 	if (conn->body_handler != NULL) {
-		rspamd_http_connection_ref (conn);
-		if ((conn->opts & RSPAMD_HTTP_BODY_PARTIAL) == 0) {
+
+		if (priv->encrypted) {
+			if (priv->local_key == NULL || priv->peer_key == NULL ||
+					priv->msg->body->len < crypto_box_NONCEBYTES + crypto_box_ZEROBYTES) {
+				err = g_error_new (HTTP_ERROR, 500, "Cannot decrypt message");
+				rspamd_http_connection_ref (conn);
+				conn->error_handler (conn, err);
+				rspamd_http_connection_unref (conn);
+				g_error_free (err);
+				return -1;
+			}
+			/* We have keys, so we can decrypt message */
+			/* TODO: add pubkey<->privkey pairs to LRU cache */
+			nonce = priv->msg->body->str;
+			m = priv->msg->body->str + crypto_box_NONCEBYTES;
+			dec_len = priv->msg->body->len - crypto_box_NONCEBYTES;
+
+			if (crypto_box_open (m + crypto_box_ZEROBYTES, m, dec_len, nonce,
+					priv->peer_key->str, priv->local_key->sk) != 0) {
+				err = g_error_new (HTTP_ERROR, 500, "Cannot verify encrypted message");
+				rspamd_http_connection_ref (conn);
+				conn->error_handler (conn, err);
+				rspamd_http_connection_unref (conn);
+				g_error_free (err);
+				return -1;
+			}
+			m += crypto_box_ZEROBYTES;
+			dec_len -= crypto_box_ZEROBYTES;
+
+			rspamd_http_connection_ref (conn);
+			ret = conn->body_handler (conn,
+					priv->msg,
+					m,
+					dec_len);
+			rspamd_http_connection_unref (conn);
+		}
+		else if ((conn->opts & RSPAMD_HTTP_BODY_PARTIAL) == 0) {
+			rspamd_http_connection_ref (conn);
 			ret = conn->body_handler (conn,
 					priv->msg,
 					priv->msg->body->str,
 					priv->msg->body->len);
+			rspamd_http_connection_unref (conn);
 		}
-		rspamd_http_connection_unref (conn);
 	}
 
 	if (ret == 0) {
@@ -821,6 +909,11 @@ rspamd_http_connection_reset (struct rspamd_http_connection *conn)
 		REF_RELEASE (priv->buf);
 	}
 
+	if (priv->peer_key != NULL) {
+		g_string_free (priv->peer_key, TRUE);
+	}
+	priv->encrypted = FALSE;
+
 	rspamd_http_parser_reset (conn);
 
 	if (priv->out != NULL) {
@@ -836,6 +929,11 @@ rspamd_http_connection_free (struct rspamd_http_connection *conn)
 
 	priv = conn->priv;
 	rspamd_http_connection_reset (conn);
+
+	if (priv->local_key) {
+		REF_RELEASE (priv->local_key);
+	}
+
 	g_slice_free1 (sizeof (struct rspamd_http_connection_private), priv);
 	g_slice_free1 (sizeof (struct rspamd_http_connection),		   conn);
 }
@@ -889,6 +987,10 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	gint i;
 	gsize bodylen;
 	GString *buf;
+	gboolean encrypted = FALSE;
+	gchar *b32_key, *b32_id;
+	guchar nonce[crypto_box_NONCEBYTES], mac[crypto_box_ZEROBYTES], id[BLAKE2B_OUTBYTES];
+	guchar *np, *mp;
 
 	conn->fd = fd;
 	conn->ud = ud;
@@ -929,6 +1031,15 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	else {
 		/* Invalid body for spamc method */
 		return;
+	}
+
+	if (priv->local_key != NULL && priv->peer_key != NULL) {
+		encrypted = TRUE;
+	}
+
+	if (encrypted) {
+		priv->outlen += 2;
+		bodylen += crypto_box_NONCEBYTES + crypto_box_ZEROBYTES;
 	}
 
 	if (conn->type == RSPAMD_HTTP_SERVER) {
@@ -985,6 +1096,16 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 				host != NULL ? host : msg->host->str,
 				bodylen);
 		}
+		if (encrypted) {
+			blake2b (id, priv->local_key->pk, NULL, sizeof (id),
+					sizeof (priv->local_key->pk), 0);
+			b32_key = rspamd_encode_base32 (priv->local_key->pk,
+					sizeof (priv->local_key->pk));
+			b32_id = rspamd_encode_base32 (id, sizeof (id));
+			rspamd_printf_gstring (buf, "Key: %s%s\r\n", b32_id, b32_key);
+			g_free (b32_key);
+			g_free (b32_id);
+		}
 	}
 	/* Allocate iov */
 	priv->wr_total = bodylen + buf->len + 2;
@@ -999,7 +1120,19 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 
 	/* Now set up all iov */
 	priv->out[0].iov_base = buf->str;
-	priv->out[0].iov_len = buf->len;
+	if (!encrypted) {
+		priv->out[0].iov_len = buf->len;
+	}
+	else {
+		ottery_rand_bytes (nonce, sizeof (nonce));
+		memset (mac, 0, sizeof (mac));
+		np = buf->str + buf->len;
+		g_string_append_len (buf, nonce, sizeof (nonce));
+		mp = buf->str + buf->len;
+		g_string_append_len (buf, mac, sizeof (mac));
+		priv->out[0].iov_len = buf->len - sizeof (nonce) - sizeof (mac);
+	}
+
 	i = 1;
 	LL_FOREACH (msg->headers, hdr)
 	{
@@ -1021,8 +1154,21 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		priv->wr_total -= 2;
 	}
 	if (msg->body != NULL) {
-		priv->out[i].iov_base = pbody;
-		priv->out[i++].iov_len = bodylen;
+		if (encrypted) {
+			crypto_box_detached (pbody, pbody,
+					bodylen - sizeof (nonce) - sizeof (mac), np,
+					priv->peer_key->str, priv->local_key->sk, mp);
+			priv->out[i].iov_base = np;
+			priv->out[i++].iov_len = sizeof (nonce);
+			priv->out[i].iov_base = mp;
+			priv->out[i++].iov_len = sizeof (mac);
+			priv->out[i].iov_base = pbody;
+			priv->out[i++].iov_len = bodylen;
+		}
+		else {
+			priv->out[i].iov_base = pbody;
+			priv->out[i++].iov_len = bodylen;
+		}
 	}
 
 	event_set (&priv->ev, fd, EV_WRITE, rspamd_http_event_handler, conn);
@@ -1481,4 +1627,71 @@ rspamd_http_router_free (struct rspamd_http_connection_router *router)
 		g_hash_table_unref (router->paths);
 		g_slice_free1 (sizeof (struct rspamd_http_connection_router), router);
 	}
+}
+
+static void
+rspamd_http_keypair_dtor (struct rspamd_http_keypair *kp)
+{
+	g_slice_free1 (sizeof (*kp), kp);
+}
+
+gpointer
+rspamd_http_connection_make_key (gchar *key, gsize keylen)
+{
+	guchar *decoded;
+	gsize decoded_len;
+	struct rspamd_http_keypair *kp;
+
+	decoded = rspamd_decode_base32 (key, keylen, &decoded_len);
+
+	if (decoded != NULL) {
+		if (decoded_len == crypto_box_PUBLICKEYBYTES + crypto_box_SECRETKEYBYTES) {
+			kp = g_slice_alloc (sizeof (*kp));
+			REF_INIT_RETAIN (kp, rspamd_http_keypair_dtor);
+			memcpy (kp->sk, decoded, crypto_box_SECRETKEYBYTES);
+			memcpy (kp->pk, decoded + crypto_box_SECRETKEYBYTES,
+					crypto_box_PUBLICKEYBYTES);
+			blake2b (kp->id, kp->pk, NULL, sizeof (kp->id), sizeof (kp->pk), 0);
+
+			return (gpointer)kp;
+		}
+		g_free (decoded);
+	}
+
+	return FALSE;
+}
+
+gpointer
+rspamd_http_connection_gen_key (void)
+{
+	struct rspamd_http_keypair *kp;
+
+	kp = g_slice_alloc (sizeof (*kp));
+	REF_INIT_RETAIN (kp, rspamd_http_keypair_dtor);
+
+	crypto_box_keypair (kp->pk, kp->sk);
+	blake2b (kp->id, kp->pk, NULL, sizeof (kp->id), sizeof (kp->pk), 0);
+
+	return (gpointer)kp;
+}
+
+void
+rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
+		gpointer key)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+	struct rspamd_http_keypair *kp = (struct rspamd_http_keypair *)key;
+
+	g_assert (key != NULL);
+	REF_RETAIN (kp);
+	priv->local_key = kp;
+}
+
+void
+rspamd_http_connection_key_destroy (gpointer key)
+{
+	struct rspamd_http_keypair *kp = (struct rspamd_http_keypair *)key;
+
+	g_assert (key != NULL);
+	REF_RELEASE (kp);
 }
