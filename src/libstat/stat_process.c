@@ -135,7 +135,7 @@ preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
 static GList*
 rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 		struct rspamd_task *task, struct rspamd_tokenizer_runtime *tklist,
-		lua_State *L, gboolean learn, GError **err)
+		lua_State *L, gboolean learn, gboolean spam, GError **err)
 {
 	struct rspamd_classifier_config *clcf;
 	struct rspamd_statfile_config *stcf;
@@ -185,6 +185,12 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 		while (curst != NULL) {
 			stcf = (struct rspamd_statfile_config *)curst->data;
 
+			/* On learning skip statfiles that do not belong to class */
+			if (learn && (spam != stcf->is_spam)) {
+				curst = g_list_next (curst);
+				continue;
+			}
+
 			bk = rspamd_stat_get_backend (stcf->backend);
 
 			if (bk == NULL) {
@@ -228,6 +234,9 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 		/* Set positions in the results array */
 		cl_runtime->start_pos = start_pos;
 		cl_runtime->end_pos = end_pos;
+
+		msg_debug ("added runtime for %s classifier from %ud to %ud",
+				clcf->name, start_pos, end_pos);
 
 		start_pos = end_pos;
 
@@ -344,8 +353,8 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 	}
 
 	/* Initialize classifiers and statfiles runtime */
-	if ((cl_runtimes = rspamd_stat_preprocess (st_ctx, task, tklist, L, FALSE, err))
-			== NULL) {
+	if ((cl_runtimes = rspamd_stat_preprocess (st_ctx, task, tklist, L,
+			FALSE, FALSE, err)) == NULL) {
 		return FALSE;
 	}
 
@@ -474,8 +483,8 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 	}
 
 	/* Initialize classifiers and statfiles runtime */
-	if ((cl_runtimes = rspamd_stat_preprocess (st_ctx, task, tklist, L, TRUE, err))
-			== NULL) {
+	if ((cl_runtimes = rspamd_stat_preprocess (st_ctx, task, tklist, L,
+			TRUE, spam, err)) == NULL) {
 		return FALSE;
 	}
 
@@ -490,6 +499,8 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 			if (cl_ctx != NULL) {
 				if (cl_run->cl->learn_spam_func (cl_ctx, cl_run->tok->tokens,
 						cl_run, task, spam, err)) {
+					msg_debug ("learned %s classifier %s", spam ? "spam" : "ham",
+							cl_run->clcf->name);
 					ret = TRUE;
 
 					cbdata.classifier_runtimes = cur;

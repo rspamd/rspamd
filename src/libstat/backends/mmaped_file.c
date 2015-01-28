@@ -188,13 +188,19 @@ rspamd_mmaped_file_set_block_common (rspamd_mmaped_file_ctx * pool,
 		}
 		/* First try to find block in chain */
 		if (block->hash1 == h1 && block->hash2 == h2) {
+			msg_debug ("%s found existing block %ud in chain %ud, value %.2f",
+					file->filename,
+					i,
+					blocknum,
+					value);
 			block->value = value;
 			return;
 		}
 		/* Check whether we have a free block in chain */
 		if (block->hash1 == 0 && block->hash2 == 0) {
 			/* Write new block here */
-			msg_debug ("found free block %ud in chain %ud, set h1=%ud, h2=%ud",
+			msg_debug ("%s found free block %ud in chain %ud, set h1=%ud, h2=%ud",
+				file->filename,
 				i,
 				blocknum,
 				h1,
