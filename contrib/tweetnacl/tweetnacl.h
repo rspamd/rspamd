@@ -39,8 +39,8 @@ extern int crypto_auth_hmacsha512256_tweet_verify(const guchar *,const guchar *,
 #define crypto_box_curve25519xsalsa20poly1305_tweet_SECRETKEYBYTES 32
 #define crypto_box_curve25519xsalsa20poly1305_tweet_BEFORENMBYTES 32
 #define crypto_box_curve25519xsalsa20poly1305_tweet_NONCEBYTES 24
-#define crypto_box_curve25519xsalsa20poly1305_tweet_ZEROBYTES 32
-#define crypto_box_curve25519xsalsa20poly1305_tweet_BOXZEROBYTES 16
+#define crypto_box_curve25519xsalsa20poly1305_tweet_ZEROBYTES 16
+#define crypto_box_curve25519xsalsa20poly1305_tweet_BOXZEROBYTES 0
 extern int crypto_box_curve25519xsalsa20poly1305_tweet(guchar *,const guchar *,guint64,const guchar *,const guchar *,const guchar *);
 extern int crypto_box_curve25519xsalsa20poly1305_tweet_open(guchar *,const guchar *,guint64,const guchar *,const guchar *,const guchar *);
 extern int crypto_box_curve25519xsalsa20poly1305_tweet_keypair(guchar *,guchar *);

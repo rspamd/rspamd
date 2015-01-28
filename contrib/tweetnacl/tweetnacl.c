@@ -246,10 +246,11 @@ int crypto_onetimeauth_verify(const u8 *h,const u8 *m,u64 n,const u8 *k)
 int crypto_secretbox(u8 *c,const u8 *m,u64 d,const u8 *n,const u8 *k)
 {
   unsigned int i;
-  if (d < 32) return -1;
+  if (d < crypto_box_ZEROBYTES) return -1;
   crypto_stream_xor(c,m,d,n,k);
-  crypto_onetimeauth(c + 16,c + 32,d - 32,c);
-  FOR(i,16) c[i] = 0;
+  crypto_onetimeauth(c + crypto_box_BOXZEROBYTES,c + crypto_box_ZEROBYTES,
+		  d - crypto_box_ZEROBYTES,c);
+  FOR(i,crypto_box_BOXZEROBYTES) c[i] = 0;
   return 0;
 }
 
@@ -257,11 +258,12 @@ int crypto_secretbox_open(u8 *m,const u8 *c,u64 d,const u8 *n,const u8 *k)
 {
   unsigned int i;
   u8 x[32];
-  if (d < 32) return -1;
+  if (d < crypto_box_ZEROBYTES) return -1;
   crypto_stream(x,32,n,k);
-  if (crypto_onetimeauth_verify(c + 16,c + 32,d - 32,x) != 0) return -1;
+  if (crypto_onetimeauth_verify(c + crypto_box_BOXZEROBYTES,
+		  c + crypto_box_ZEROBYTES,d - crypto_box_ZEROBYTES,x) != 0) return -1;
   crypto_stream_xor(m,c,d,n,k);
-  FOR(i,32) m[i] = 0;
+  FOR(i,crypto_box_ZEROBYTES) m[i] = 0;
   return 0;
 }
 
