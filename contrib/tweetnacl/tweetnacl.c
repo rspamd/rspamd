@@ -1,11 +1,12 @@
 #include "tweetnacl.h"
+#include "config.h"
 #define FOR(i,n) for (i = 0;i < n;++i)
 #define sv static void
 
-typedef unsigned char u8;
-typedef unsigned long u32;
-typedef unsigned long long u64;
-typedef long long i64;
+typedef guint8 u8;
+typedef guint32 u32;
+typedef guint64 u64;
+typedef gint64 i64;
 typedef i64 gf[16];
 extern void randombytes(u8 *,u64);
 
@@ -41,7 +42,7 @@ static u64 dl64(const u8 *x)
 
 sv st32(u8 *x,u32 u)
 {
-  int i;
+  unsigned int i;
   FOR(i,4) { x[i] = u; u >>= 8; }
 }
 
@@ -51,7 +52,7 @@ sv ts64(u8 *x,u64 u)
   for (i = 7;i >= 0;--i) { x[i] = u; u >>= 8; }
 }
 
-static int vn(const u8 *x,const u8 *y,int n)
+static int vn(const u8 *x,const u8 *y,u32 n)
 {
   u32 i,d = 0;
   FOR(i,n) d |= x[i]^y[i];
@@ -71,7 +72,7 @@ int crypto_verify_32(const u8 *x,const u8 *y)
 sv core(u8 *out,const u8 *in,const u8 *k,const u8 *c,int h)
 {
   u32 w[16],x[16],y[16],t[4];
-  int i,j,m;
+  unsigned int i,j,m;
 
   FOR(i,4) {
     x[5*i] = ld32(c+4*i);
@@ -244,7 +245,7 @@ int crypto_onetimeauth_verify(const u8 *h,const u8 *m,u64 n,const u8 *k)
 
 int crypto_secretbox(u8 *c,const u8 *m,u64 d,const u8 *n,const u8 *k)
 {
-  int i;
+  unsigned int i;
   if (d < 32) return -1;
   crypto_stream_xor(c,m,d,n,k);
   crypto_onetimeauth(c + 16,c + 32,d - 32,c);
@@ -254,7 +255,7 @@ int crypto_secretbox(u8 *c,const u8 *m,u64 d,const u8 *n,const u8 *k)
 
 int crypto_secretbox_open(u8 *m,const u8 *c,u64 d,const u8 *n,const u8 *k)
 {
-  int i;
+  unsigned int i;
   u8 x[32];
   if (d < 32) return -1;
   crypto_stream(x,32,n,k);
@@ -266,13 +267,13 @@ int crypto_secretbox_open(u8 *m,const u8 *c,u64 d,const u8 *n,const u8 *k)
 
 sv set25519(gf r, const gf a)
 {
-  int i;
+  unsigned int i;
   FOR(i,16) r[i]=a[i];
 }
 
 sv car25519(gf o)
 {
-  int i;
+  unsigned int i;
   i64 c;
   FOR(i,16) {
     o[i]+=(1LL<<16);
@@ -284,7 +285,8 @@ sv car25519(gf o)
 
 sv sel25519(gf p,gf q,int b)
 {
-  i64 t,i,c=~(b-1);
+  i64 t,c=~(b-1);
+  u64 i;
   FOR(i,16) {
     t= c&(p[i]^q[i]);
     p[i]^=t;
@@ -294,7 +296,8 @@ sv sel25519(gf p,gf q,int b)
 
 sv pack25519(u8 *o,const gf n)
 {
-  int i,j,b;
+  unsigned int i,j;
+  int b;
   gf m,t;
   FOR(i,16) t[i]=n[i];
   car25519(t);
@@ -334,26 +337,27 @@ static u8 par25519(const gf a)
 
 sv unpack25519(gf o, const u8 *n)
 {
-  int i;
+  unsigned int i;
   FOR(i,16) o[i]=n[2*i]+((i64)n[2*i+1]<<8);
   o[15]&=0x7fff;
 }
 
 sv A(gf o,const gf a,const gf b)
 {
-  int i;
+  unsigned  int i;
   FOR(i,16) o[i]=a[i]+b[i];
 }
 
 sv Z(gf o,const gf a,const gf b)
 {
-  int i;
+  unsigned int i;
   FOR(i,16) o[i]=a[i]-b[i];
 }
 
 sv M(gf o,const gf a,const gf b)
 {
-  i64 i,j,t[31];
+  i64 t[31];
+  u64 i,j;
   FOR(i,31) t[i]=0;
   FOR(i,16) FOR(j,16) t[i+j]+=a[i]*b[j];
   FOR(i,15) t[i]+=38*t[i+16];
@@ -711,7 +715,8 @@ sv reduce(u8 *r)
 int crypto_sign(u8 *sm,u64 *smlen,const u8 *m,u64 n,const u8 *sk)
 {
   u8 d[64],h[64],r[64];
-  i64 i,j,x[64];
+  i64 x[64];
+  u64 i, j;
   gf p[4];
 
   crypto_hash(d, sk, 32);
@@ -778,7 +783,7 @@ static int unpackneg(gf r[4],const u8 p[32])
 
 int crypto_sign_open(u8 *m,u64 *mlen,const u8 *sm,u64 n,const u8 *pk)
 {
-  int i;
+  u64 i;
   u8 t[32],h[64];
   gf p[4],q[4];
 

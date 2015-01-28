@@ -31,6 +31,7 @@
 #include "message.h"
 
 #include "xxhash.h"
+#include "ottery.h"
 
 #ifdef HAVE_OPENSSL
 #include <openssl/rand.h>
@@ -2114,4 +2115,11 @@ rspamd_encode_base32 (guchar *in, gsize inlen)
 	out[r] = 0;
 
 	return out;
+}
+
+
+void
+randombytes (guchar *buf, guint64 len)
+{
+	ottery_rand_bytes (buf, (size_t)len);
 }
