@@ -165,9 +165,10 @@ int crypto_stream_salsa20_xor2(u8 *c1, u8 *c2,const u8 *m1,const u8 *m2,u64 d1,u
 	  if (r > 0) {
 		  if (r <= b) {
 			  FOR(i,r) c[i] = (m?m[i]:0) ^ x[i];
-			  r = 0;
 			  m += r;
+			  c += r;
 			  b -= r;
+			  r = 0;
 		  }
 		  else {
 			  FOR(i,b) c[i] = (m?m[i]:0) ^ x[i];
