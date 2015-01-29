@@ -2186,7 +2186,7 @@ rspamd_decode_base32 (gchar *in, gsize inlen, gsize *outlen)
 		res[olen++] = (acc & 0xFF);
 	}
 
-	*outlen = olen;
+	*outlen = olen > 0 ? olen - 1 : 0;
 
 	return res;
 }

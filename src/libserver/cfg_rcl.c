@@ -1793,22 +1793,37 @@ rspamd_rcl_parse_struct_keypair (struct rspamd_config *cfg,
 				*target = key;
 				return TRUE;
 			}
-
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"invalid string with keypair content");
 			return FALSE;
 		}
 	}
 	else if (obj->type == UCL_OBJECT) {
 		elt = ucl_object_find_key (obj, "pubkey");
 		if (elt == NULL || !ucl_object_tostring_safe (elt, &pk)) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"no sane pubkey found in the keypair");
 			return FALSE;
 		}
 		elt = ucl_object_find_key (obj, "privkey");
 		if (elt == NULL || !ucl_object_tostring_safe (elt, &sk)) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"no sane privkey found in the keypair");
 			return FALSE;
 		}
 	}
 
 	if (sk == NULL || pk == NULL) {
+		g_set_error (err,
+				CFG_RCL_ERROR,
+				EINVAL,
+				"no sane pubkey or privkey found in the keypair");
 		return FALSE;
 	}
 
@@ -1819,13 +1834,17 @@ rspamd_rcl_parse_struct_keypair (struct rspamd_config *cfg,
 		rspamd_snprintf (keybuf, sizeof (keybuf), "%*s%s", sem - sk, sk, pk);
 	}
 
-	key = rspamd_http_connection_make_key (keybuf, strlen (val));
+	key = rspamd_http_connection_make_key (keybuf, strlen (keybuf));
 	if (key != NULL) {
 		/* XXX: clean buffer after usage */
 		*target = key;
 		return TRUE;
 	}
 
+	g_set_error (err,
+			CFG_RCL_ERROR,
+			EINVAL,
+			"cannot load the keypair specified");
 	return FALSE;
 }
 

@@ -86,6 +86,8 @@ struct rspamd_worker_ctx {
 	GThreadPool *classify_pool;
 	/* Events base */
 	struct event_base *ev_base;
+	/* Encryption key */
+	gpointer key;
 };
 
 /*
@@ -243,6 +245,10 @@ accept_socket (gint fd, short what, void *arg)
 
 	new_task->classify_pool = ctx->classify_pool;
 
+	if (ctx->key) {
+		rspamd_http_connection_set_key (new_task->http_conn, ctx->key);
+	}
+
 	rspamd_http_connection_read_message (new_task->http_conn,
 		new_task,
 		nfd,
@@ -295,6 +301,12 @@ init_worker (struct rspamd_config *cfg)
 		G_STRUCT_OFFSET (struct rspamd_worker_ctx,
 		classify_threads), RSPAMD_CL_FLAG_INT_32);
 
+
+	rspamd_rcl_register_worker_option (cfg, type, "keypair",
+		rspamd_rcl_parse_struct_keypair, ctx,
+		G_STRUCT_OFFSET (struct rspamd_worker_ctx,
+		key), 0);
+
 	return ctx;
 }
 
@@ -340,6 +352,11 @@ start_worker (struct rspamd_worker *worker)
 
 	g_mime_shutdown ();
 	rspamd_log_close (rspamd_main->logger);
+
+	if (ctx->key) {
+		rspamd_http_connection_key_destroy (ctx->key);
+	}
+
 	exit (EXIT_SUCCESS);
 }
 
