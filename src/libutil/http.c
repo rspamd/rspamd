@@ -49,7 +49,6 @@ struct rspamd_http_connection_private {
 	gboolean new_header;
 	gboolean encrypted;
 	struct rspamd_http_keypair *local_key;
-	GString *peer_key;
 	struct rspamd_http_header *header;
 	struct http_parser parser;
 	struct http_parser_settings parser_cb;
@@ -421,8 +420,8 @@ rspamd_http_parse_key (GString *data, struct rspamd_http_connection_private *pri
 					sizeof (priv->local_key->pk)) {
 				if (memcmp (priv->local_key->id, decoded,
 						RSPAMD_HTTP_KEY_ID_LEN) == 0) {
-					priv->peer_key = g_string_sized_new (sizeof (priv->local_key->pk));
-					g_string_append_len (priv->peer_key,
+					priv->msg->peer_key = g_string_sized_new (sizeof (priv->local_key->pk));
+					g_string_append_len (priv->msg->peer_key,
 							decoded + sizeof (priv->local_key->id),
 							sizeof (priv->local_key->pk));
 				}
@@ -593,7 +592,7 @@ rspamd_http_on_message_complete (http_parser * parser)
 	if (conn->body_handler != NULL) {
 
 		if (priv->encrypted) {
-			if (priv->local_key == NULL || priv->peer_key == NULL ||
+			if (priv->local_key == NULL || priv->msg->peer_key == NULL ||
 					priv->msg->body->len < crypto_box_NONCEBYTES + crypto_box_ZEROBYTES) {
 				err = g_error_new (HTTP_ERROR, 500, "Cannot decrypt message");
 				rspamd_http_connection_ref (conn);
@@ -609,7 +608,7 @@ rspamd_http_on_message_complete (http_parser * parser)
 			dec_len = priv->msg->body->len - crypto_box_NONCEBYTES;
 
 			if (crypto_box_open (m + crypto_box_ZEROBYTES, m, dec_len, nonce,
-					priv->peer_key->str, priv->local_key->sk) != 0) {
+					priv->msg->peer_key->str, priv->local_key->sk) != 0) {
 				err = g_error_new (HTTP_ERROR, 500, "Cannot verify encrypted message");
 				rspamd_http_connection_ref (conn);
 				conn->error_handler (conn, err);
@@ -910,9 +909,6 @@ rspamd_http_connection_reset (struct rspamd_http_connection *conn)
 		REF_RELEASE (priv->buf);
 	}
 
-	if (priv->peer_key != NULL) {
-		g_string_free (priv->peer_key, TRUE);
-	}
 	priv->encrypted = FALSE;
 
 	rspamd_http_parser_reset (conn);
@@ -1034,7 +1030,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		return;
 	}
 
-	if (priv->local_key != NULL && priv->peer_key != NULL) {
+	if (priv->local_key != NULL && msg->peer_key != NULL) {
 		encrypted = TRUE;
 	}
 
@@ -1102,7 +1098,8 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 					sizeof (priv->local_key->pk), 0);
 			b32_key = rspamd_encode_base32 (priv->local_key->pk,
 					sizeof (priv->local_key->pk));
-			b32_id = rspamd_encode_base32 (id, sizeof (id));
+			b32_id = rspamd_encode_base32 (id, RSPAMD_HTTP_KEY_ID_LEN);
+			/* XXX: add some fuzz here */
 			rspamd_printf_gstring (buf, "Key: %s%s\r\n", b32_id, b32_key);
 			g_free (b32_key);
 			g_free (b32_id);
@@ -1158,7 +1155,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		if (encrypted) {
 			crypto_box_detached (pbody, pbody,
 					bodylen - sizeof (nonce) - sizeof (mac), np,
-					priv->peer_key->str, priv->local_key->sk, mp);
+					msg->peer_key->str, priv->local_key->sk, mp);
 			priv->out[i].iov_base = np;
 			priv->out[i++].iov_len = sizeof (nonce);
 			priv->out[i].iov_base = mp;
@@ -1271,6 +1268,9 @@ rspamd_http_message_free (struct rspamd_http_message *msg)
 	}
 	if (msg->status != NULL) {
 		g_string_free (msg->status, TRUE);
+	}
+	if (msg->peer_key != NULL) {
+		g_string_free (msg->peer_key, TRUE);
 	}
 	g_slice_free1 (sizeof (struct rspamd_http_message), msg);
 }

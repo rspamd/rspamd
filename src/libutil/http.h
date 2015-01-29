@@ -58,6 +58,7 @@ struct rspamd_http_message {
 	GString *status;
 	struct rspamd_http_header *headers;
 	GString *body;
+	GString *peer_key;
 	enum http_parser_type type;
 	time_t date;
 	gint code;
