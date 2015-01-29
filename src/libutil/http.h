@@ -195,6 +195,8 @@ GString *rspamd_http_connection_print_key (gpointer key, guint how);
  */
 void rspamd_http_connection_key_destroy (gpointer key);
 
+GString *rspamd_http_connection_make_peer_key (const gchar *key);
+
 /**
  * Handle a request using socket fd and user data ud
  * @param conn connection structure

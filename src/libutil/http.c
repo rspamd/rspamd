@@ -1768,3 +1768,30 @@ rspamd_http_connection_key_destroy (gpointer key)
 	g_assert (key != NULL);
 	REF_RELEASE (kp);
 }
+
+GString *
+rspamd_http_connection_make_peer_key (const gchar *key)
+{
+	guchar hashbuf[RSPAMD_HTTP_KEY_ID_LEN];
+	gchar *b32_id;
+	guchar *pk_decoded;
+	GString *res = NULL;
+	gsize dec_len;
+
+	pk_decoded = rspamd_decode_base32 (key, strlen (key), &dec_len);
+
+	if (pk_decoded != NULL) {
+		if (dec_len == crypto_box_PUBLICKEYBYTES) {
+			res = g_string_new (NULL);
+			blake2b (hashbuf, pk_decoded, NULL, sizeof (hashbuf), dec_len, 0);
+			b32_id = rspamd_encode_base32 (hashbuf, sizeof (hashbuf));
+
+			g_string_printf (res, "%s%s", b32_id, key);
+			g_free (b32_id);
+		}
+
+		g_free (pk_decoded);
+	}
+
+	return res;
+}
