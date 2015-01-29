@@ -405,8 +405,9 @@ rspamd_http_parse_date (const gchar *header, gsize len)
 static void
 rspamd_http_parse_key (GString *data, struct rspamd_http_connection_private *priv)
 {
-	guchar *decoded;
-	gsize decoded_len;
+	guchar *decoded_id, *decoded_key;
+	const gchar *eq_pos;
+	gsize id_len, key_len;
 
 	if (priv->local_key == NULL) {
 		/* In this case we cannot do anything, e.g. we cannot decrypt payload */
@@ -414,21 +415,27 @@ rspamd_http_parse_key (GString *data, struct rspamd_http_connection_private *pri
 	}
 	else {
 		/* Check sanity of what we have */
-		decoded = rspamd_decode_base32 (data->str, data->len, &decoded_len);
-		if (decoded != NULL) {
-			if (decoded_len >= RSPAMD_HTTP_KEY_ID_LEN +
-					sizeof (priv->local_key->pk)) {
-				if (memcmp (priv->local_key->id, decoded,
-						RSPAMD_HTTP_KEY_ID_LEN) == 0) {
-					priv->msg->peer_key = g_string_sized_new (sizeof (priv->local_key->pk));
-					g_string_append_len (priv->msg->peer_key,
-							decoded + sizeof (priv->local_key->id),
-							sizeof (priv->local_key->pk));
+		eq_pos = memchr (data->str, '=', data->len);
+		if (eq_pos != NULL) {
+			decoded_id = rspamd_decode_base32 (data->str, eq_pos - data->str,
+					&id_len);
+			decoded_key = rspamd_decode_base32 (eq_pos + 1, data->str + data->len -
+					eq_pos - 1, &key_len);
+			if (decoded_id != NULL && decoded_key != NULL) {
+				if (id_len >= RSPAMD_HTTP_KEY_ID_LEN  &&
+						key_len >= sizeof (priv->local_key->pk)) {
+					if (memcmp (priv->local_key->id, decoded_id,
+							RSPAMD_HTTP_KEY_ID_LEN) == 0) {
+						priv->msg->peer_key = g_string_sized_new (sizeof (priv->local_key->pk));
+						g_string_append_len (priv->msg->peer_key,
+								decoded_key, sizeof (priv->local_key->pk));
+					}
 				}
 			}
+			priv->encrypted = TRUE;
+			g_free (decoded_key);
+			g_free (decoded_id);
 		}
-		priv->encrypted = TRUE;
-		g_free (decoded);
 	}
 }
 
@@ -1100,7 +1107,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 					sizeof (priv->local_key->pk));
 			b32_id = rspamd_encode_base32 (id, RSPAMD_HTTP_KEY_ID_LEN);
 			/* XXX: add some fuzz here */
-			rspamd_printf_gstring (buf, "Key: %s%s\r\n", b32_id, b32_key);
+			rspamd_printf_gstring (buf, "Key: %s=%s\r\n", b32_id, b32_key);
 			g_free (b32_key);
 			g_free (b32_id);
 		}
@@ -1662,24 +1669,25 @@ rspamd_http_keypair_dtor (struct rspamd_http_keypair *kp)
 gpointer
 rspamd_http_connection_make_key (gchar *key, gsize keylen)
 {
-	guchar *decoded;
+	guchar *decoded_sk, *decoded_pk;
 	gsize decoded_len;
 	struct rspamd_http_keypair *kp;
 
-	decoded = rspamd_decode_base32 (key, keylen, &decoded_len);
+	decoded_sk = rspamd_decode_base32 (key, keylen / 2, &decoded_len);
+	decoded_pk = rspamd_decode_base32 (key + keylen / 2, keylen / 2, &decoded_len);
 
-	if (decoded != NULL) {
-		if (decoded_len == crypto_box_PUBLICKEYBYTES + crypto_box_SECRETKEYBYTES) {
+	if (decoded_pk != NULL && decoded_sk != NULL) {
+		if (decoded_len == crypto_box_PUBLICKEYBYTES) {
 			kp = g_slice_alloc (sizeof (*kp));
 			REF_INIT_RETAIN (kp, rspamd_http_keypair_dtor);
-			memcpy (kp->sk, decoded, crypto_box_SECRETKEYBYTES);
-			memcpy (kp->pk, decoded + crypto_box_SECRETKEYBYTES,
-					crypto_box_PUBLICKEYBYTES);
+			memcpy (kp->sk, decoded_sk, crypto_box_SECRETKEYBYTES);
+			memcpy (kp->pk, decoded_pk, crypto_box_PUBLICKEYBYTES);
 			blake2b (kp->id, kp->pk, NULL, sizeof (kp->id), sizeof (kp->pk), 0);
 
 			return (gpointer)kp;
 		}
-		g_free (decoded);
+		g_free (decoded_pk);
+		g_free (decoded_sk);
 	}
 
 	return FALSE;

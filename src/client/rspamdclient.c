@@ -154,19 +154,24 @@ rspamd_client_init (struct event_base *ev_base, const gchar *name,
 			0,
 			RSPAMD_HTTP_CLIENT);
 
-	if (key) {
-		conn->key = rspamd_http_connection_make_peer_key (key);
-		if (conn->key) {
-			conn->keypair = rspamd_http_connection_gen_key ();
-			rspamd_http_connection_set_key (conn->http_conn, conn->key);
-		}
-	}
 	conn->server_name = g_string_new (name);
 	if (port != 0) {
 		rspamd_printf_gstring (conn->server_name, ":%d", (int)port);
 	}
 
 	double_to_tv (timeout, &conn->timeout);
+
+	if (key) {
+		conn->key = rspamd_http_connection_make_peer_key (key);
+		if (conn->key) {
+			conn->keypair = rspamd_http_connection_gen_key ();
+			rspamd_http_connection_set_key (conn->http_conn, conn->key);
+		}
+		else {
+			rspamd_client_destroy (conn);
+			return NULL;
+		}
+	}
 
 	return conn;
 }

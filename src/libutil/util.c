@@ -2061,13 +2061,13 @@ rspamd_ucl_emit_gstring (ucl_object_t *obj,
 gchar *
 rspamd_encode_base32 (const guchar *in, gsize inlen)
 {
-	gint remain = -1, r, x;
-	gsize i;
-	gsize outlen = inlen * 8 / 5 + 1;
+	gint remain = -1, x;
+	gsize i, r;
+	gsize allocated_len = inlen * 8 / 5 + 2;
 	gchar *out;
 	static const char b32[]="ybndrfg8ejkmcpqxot1uwisza345h769";
 
-	out = g_malloc (outlen);
+	out = g_malloc (allocated_len);
 	for (i = 0, r = 0; i < inlen; i++) {
 		switch (i % 5) {
 		case 0:
@@ -2109,10 +2109,12 @@ rspamd_encode_base32 (const guchar *in, gsize inlen)
 		}
 
 	}
-	if (remain >= 0)
+	if (remain >= 0) {
 		out[r++] = b32[remain];
+	}
 
 	out[r] = 0;
+	g_assert (r < allocated_len);
 
 	return out;
 }
@@ -2159,7 +2161,7 @@ rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen)
 	guchar c;
 	guint acc = 0U;
 	guint processed_bits = 0;
-	gsize olen = 0, i, allocated_len = inlen * 8 / 5 + 1;
+	gsize olen = 0, i, allocated_len = inlen / 8 * 5 + 2;
 
 	res = g_malloc (allocated_len);
 
@@ -2186,7 +2188,9 @@ rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen)
 		res[olen++] = (acc & 0xFF);
 	}
 
-	*outlen = olen > 0 ? olen - 1 : 0;
+	g_assert (olen <= allocated_len);
+
+	*outlen = olen;
 
 	return res;
 }
