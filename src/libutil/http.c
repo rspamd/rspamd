@@ -90,6 +90,7 @@ static const gchar *http_month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
 static const gchar *key_header = "Key";
 static const gchar *date_header = "Date";
 
+#define RSPAMD_HTTP_KEY_ID_LEN 5
 
 #define HTTP_ERROR http_error_quark ()
 GQuark
@@ -416,10 +417,10 @@ rspamd_http_parse_key (GString *data, struct rspamd_http_connection_private *pri
 		/* Check sanity of what we have */
 		decoded = rspamd_decode_base32 (data->str, data->len, &decoded_len);
 		if (decoded != NULL) {
-			if (decoded_len >= sizeof (priv->local_key->id) +
+			if (decoded_len >= RSPAMD_HTTP_KEY_ID_LEN +
 					sizeof (priv->local_key->pk)) {
 				if (memcmp (priv->local_key->id, decoded,
-						sizeof (priv->local_key->id)) == 0) {
+						RSPAMD_HTTP_KEY_ID_LEN) == 0) {
 					priv->peer_key = g_string_sized_new (sizeof (priv->local_key->pk));
 					g_string_append_len (priv->peer_key,
 							decoded + sizeof (priv->local_key->id),
@@ -1740,7 +1741,7 @@ rspamd_http_connection_print_key (gpointer key, guint how)
 				"Private key");
 	}
 	if ((how & RSPAMD_KEYPAIR_ID)) {
-		rspamd_http_print_key_component (kp->id, sizeof (kp->id), res, how,
+		rspamd_http_print_key_component (kp->id, RSPAMD_HTTP_KEY_ID_LEN, res, how,
 				"Key ID");
 	}
 
