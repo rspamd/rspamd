@@ -169,6 +169,25 @@ gpointer rspamd_http_connection_gen_key (void);
  */
 void rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
 		gpointer key);
+
+/** Print pubkey */
+#define RSPAMD_KEYPAIR_PUBKEY 0x1
+/** Print secret key */
+#define RSPAMD_KEYPAIR_PRIVKEY 0x2
+/** Print key id */
+#define RSPAMD_KEYPAIR_ID 0x4
+/** Encode output with base 32 */
+#define RSPAMD_KEYPAIR_BASE32 0x8
+/** Human readable output */
+#define RSPAMD_KEYPAIR_HUMAN 0x16
+/**
+ * Print keypair encoding it if needed
+ * @param key key to print
+ * @param how flags that specifies printing behaviour
+ * @return newly allocated string with keypair
+ */
+GString *rspamd_http_connection_print_key (gpointer key, guint how);
+
 /**
  * Release key pointed by an opaque pointer
  * @param key opaque key structure

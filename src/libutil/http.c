@@ -1697,6 +1697,56 @@ rspamd_http_connection_gen_key (void)
 	return (gpointer)kp;
 }
 
+static void
+rspamd_http_print_key_component (guchar *data, gsize datalen,
+		GString *res, guint how, const gchar *description)
+{
+	gchar *b32;
+
+	if (how & RSPAMD_KEYPAIR_HUMAN) {
+		g_string_append_printf (res, "%s: ", description);
+	}
+
+	if (how & RSPAMD_KEYPAIR_BASE32) {
+		b32 = rspamd_encode_base32 (data, datalen);
+		g_string_append_printf (res, "%s", b32);
+		g_free (b32);
+	}
+	else {
+		g_string_append_len (res, data, datalen);
+	}
+
+	if (how & RSPAMD_KEYPAIR_HUMAN) {
+		g_string_append_c (res, '\n');
+	}
+}
+
+GString *
+rspamd_http_connection_print_key (gpointer key, guint how)
+{
+	struct rspamd_http_keypair *kp = (struct rspamd_http_keypair *)key;
+	GString *res;
+
+	g_assert (key != NULL);
+
+	res = g_string_new (NULL);
+
+	if ((how & RSPAMD_KEYPAIR_PUBKEY)) {
+		rspamd_http_print_key_component (kp->pk, sizeof (kp->pk), res, how,
+				"Public key");
+	}
+	if ((how & RSPAMD_KEYPAIR_PRIVKEY)) {
+		rspamd_http_print_key_component (kp->sk, sizeof (kp->sk), res, how,
+				"Private key");
+	}
+	if ((how & RSPAMD_KEYPAIR_ID)) {
+		rspamd_http_print_key_component (kp->sk, sizeof (kp->sk), res, how,
+				"Key ID");
+	}
+
+	return res;
+}
+
 void
 rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
 		gpointer key)
