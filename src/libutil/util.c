@@ -2059,7 +2059,7 @@ rspamd_ucl_emit_gstring (ucl_object_t *obj,
  */
 
 gchar *
-rspamd_encode_base32 (guchar *in, gsize inlen)
+rspamd_encode_base32 (const guchar *in, gsize inlen)
 {
 	gint remain = -1, r, x;
 	gsize i;
@@ -2153,7 +2153,7 @@ static const guchar b32_dec[] = {
 };
 
 guchar*
-rspamd_decode_base32 (gchar *in, gsize inlen, gsize *outlen)
+rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen)
 {
 	guchar *res, decoded;
 	guchar c;

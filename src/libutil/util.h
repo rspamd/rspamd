@@ -424,7 +424,7 @@ void rspamd_ucl_emit_gstring (ucl_object_t *obj,
  * @param inlen input length
  * @return freshly allocated base32 encoding of a specified string
  */
-gchar * rspamd_encode_base32 (guchar *in, gsize inlen);
+gchar * rspamd_encode_base32 (const guchar *in, gsize inlen);
 
 /**
  * Decode string using base32 encoding
@@ -432,6 +432,6 @@ gchar * rspamd_encode_base32 (guchar *in, gsize inlen);
  * @param inlen input length
  * @return freshly allocated base32 decoded value or NULL if input is invalid
  */
-guchar* rspamd_decode_base32 (gchar *in, gsize inlen, gsize *outlen);
+guchar* rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen);
 
 #endif
