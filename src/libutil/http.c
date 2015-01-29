@@ -1630,11 +1630,17 @@ void
 rspamd_http_router_free (struct rspamd_http_connection_router *router)
 {
 	struct rspamd_http_connection_entry *conn, *tmp;
+	struct rspamd_http_keypair *kp;
 
 	if (router) {
 		LL_FOREACH_SAFE (router->conns, conn, tmp)
 		{
 			rspamd_http_entry_free (conn);
+		}
+
+		if (router->key) {
+			kp = (struct rspamd_http_keypair *)router->key;
+			REF_RELEASE (kp);
 		}
 
 		if (router->default_fs_path != NULL) {
