@@ -1765,6 +1765,71 @@ rspamd_rcl_parse_struct_time (struct rspamd_config *cfg,
 }
 
 gboolean
+rspamd_rcl_parse_struct_keypair (struct rspamd_config *cfg,
+	const ucl_object_t *obj,
+	gpointer ud,
+	struct rspamd_rcl_section *section,
+	GError **err)
+{
+	struct rspamd_rcl_struct_parser *pd = ud;
+	gpointer *target;
+	gpointer key;
+	const gchar *val, *sem = NULL, *pk = NULL, *sk = NULL;
+	gchar keybuf[256];
+	const ucl_object_t *elt;
+
+	target = (gpointer *)(((gchar *)pd->user_struct) + pd->offset);
+	if (obj->type == UCL_STRING) {
+		/* Pk and Sk are just linked all together */
+		val = ucl_object_tostring (obj);
+		if ((sem = strchr (val, ':')) != NULL) {
+			sk = val;
+			pk = sem + 1;
+		}
+		else {
+			/* Try to parse the key as is */
+			key = rspamd_http_connection_make_key ((gchar *)val, strlen (val));
+			if (key != NULL) {
+				*target = key;
+				return TRUE;
+			}
+
+			return FALSE;
+		}
+	}
+	else if (obj->type == UCL_OBJECT) {
+		elt = ucl_object_find_key (obj, "pubkey");
+		if (elt == NULL || !ucl_object_tostring_safe (elt, &pk)) {
+			return FALSE;
+		}
+		elt = ucl_object_find_key (obj, "privkey");
+		if (elt == NULL || !ucl_object_tostring_safe (elt, &sk)) {
+			return FALSE;
+		}
+	}
+
+	if (sk == NULL || pk == NULL) {
+		return FALSE;
+	}
+
+	if (!sem) {
+		rspamd_snprintf (keybuf, sizeof (keybuf), "%s%s", sk, pk);
+	}
+	else {
+		rspamd_snprintf (keybuf, sizeof (keybuf), "%*s%s", sem - sk, sk, pk);
+	}
+
+	key = rspamd_http_connection_make_key (keybuf, strlen (val));
+	if (key != NULL) {
+		/* XXX: clean buffer after usage */
+		*target = key;
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+gboolean
 rspamd_rcl_parse_struct_string_list (struct rspamd_config *cfg,
 	const ucl_object_t *obj,
 	gpointer ud,

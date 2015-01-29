@@ -215,6 +215,21 @@ gboolean rspamd_rcl_parse_struct_boolean (struct rspamd_config *cfg,
 	GError **err);
 
 /**
+ * Parse a keypair field of a structure
+ * @param cfg config pointer
+ * @param obj object to parse
+ * @param ud struct_parser structure (flags mean the exact structure used)
+ * @param section the current section
+ * @param err error pointer
+ * @return TRUE if a value has been successfully parsed
+ */
+gboolean rspamd_rcl_parse_struct_keypair (struct rspamd_config *cfg,
+	const ucl_object_t *obj,
+	gpointer ud,
+	struct rspamd_rcl_section *section,
+	GError **err);
+
+/**
  * Utility functions
  */
 
