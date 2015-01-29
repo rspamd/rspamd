@@ -57,6 +57,7 @@ static gboolean json = FALSE;
 static gboolean headers = FALSE;
 static gboolean raw = FALSE;
 static gboolean extended_urls = FALSE;
+static gchar *key = NULL;
 
 static GOptionEntry entries[] =
 {
@@ -106,6 +107,8 @@ static GOptionEntry entries[] =
 	  "Maximum count of parallel requests to rspamd", NULL },
 	{ "extended-urls", 0, 0, G_OPTION_ARG_NONE, &extended_urls,
 	   "Output urls in extended format", NULL },
+	{ "key", 0, 0, G_OPTION_ARG_STRING, &key,
+	   "Use specified pubkey to encrypt request", NULL },
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -823,7 +826,7 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 		port = 0;
 	}
 
-	conn = rspamd_client_init (ev_base, connectv[0], port, timeout);
+	conn = rspamd_client_init (ev_base, connectv[0], port, timeout, key);
 	g_strfreev (connectv);
 
 	if (conn != NULL) {

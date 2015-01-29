@@ -58,7 +58,8 @@ struct rspamd_client_connection * rspamd_client_init (
 	struct event_base *ev_base,
 	const gchar *name,
 	guint16 port,
-	gdouble timeout);
+	gdouble timeout,
+	const gchar *key);
 
 /**
  *

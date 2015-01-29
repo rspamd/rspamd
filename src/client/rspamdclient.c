@@ -39,6 +39,8 @@ struct rspamd_client_request;
 struct rspamd_client_connection {
 	gint fd;
 	GString *server_name;
+	GString *key;
+	gpointer keypair;
 	struct event_base *ev_base;
 	struct timeval timeout;
 	struct rspamd_http_connection *http_conn;
@@ -132,7 +134,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 
 struct rspamd_client_connection *
 rspamd_client_init (struct event_base *ev_base, const gchar *name,
-	guint16 port, gdouble timeout)
+	guint16 port, gdouble timeout, const gchar *key)
 {
 	struct rspamd_client_connection *conn;
 	gint fd;
@@ -142,7 +144,7 @@ rspamd_client_init (struct event_base *ev_base, const gchar *name,
 		return NULL;
 	}
 
-	conn = g_slice_alloc (sizeof (struct rspamd_client_connection));
+	conn = g_slice_alloc0 (sizeof (struct rspamd_client_connection));
 	conn->ev_base = ev_base;
 	conn->fd = fd;
 	conn->req_sent = FALSE;
@@ -151,6 +153,14 @@ rspamd_client_init (struct event_base *ev_base, const gchar *name,
 			rspamd_client_finish_handler,
 			0,
 			RSPAMD_HTTP_CLIENT);
+
+	if (key) {
+		conn->key = rspamd_http_connection_make_peer_key (key);
+		if (conn->key) {
+			conn->keypair = rspamd_http_connection_gen_key ();
+			rspamd_http_connection_set_key (conn->http_conn, conn->key);
+		}
+	}
 	conn->server_name = g_string_new (name);
 	if (port != 0) {
 		rspamd_printf_gstring (conn->server_name, ":%d", (int)port);
@@ -178,6 +188,10 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 	req->ud = ud;
 
 	req->msg = rspamd_http_new_message (HTTP_REQUEST);
+	if (conn->key) {
+		req->msg->peer_key = g_string_new (conn->key->str);
+	}
+
 	if (in != NULL) {
 		/* Read input stream */
 		req->msg->body = g_string_sized_new (BUFSIZ);
@@ -233,6 +247,12 @@ rspamd_client_destroy (struct rspamd_client_connection *conn)
 			g_slice_free1 (sizeof (struct rspamd_client_request), conn->req);
 		}
 		close (conn->fd);
+		if (conn->key) {
+			g_string_free (conn->key, TRUE);
+		}
+		if (conn->keypair) {
+			rspamd_http_connection_key_destroy (conn->keypair);
+		}
 		g_string_free (conn->server_name, TRUE);
 		g_slice_free1 (sizeof (struct rspamd_client_connection), conn);
 	}
