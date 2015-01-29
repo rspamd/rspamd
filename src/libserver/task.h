@@ -147,6 +147,7 @@ struct rspamd_task {
 	} pre_result;                                               /**< Result of pre-filters							*/
 
 	ucl_object_t *settings;                                     /**< Settings applied to task						*/
+	GString *peer_key;											/**< Peer's pubkey									*/
 };
 
 /**

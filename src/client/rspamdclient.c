@@ -251,7 +251,7 @@ rspamd_client_destroy (struct rspamd_client_connection *conn)
 			g_string_free (conn->key, TRUE);
 		}
 		if (conn->keypair) {
-			rspamd_http_connection_key_destroy (conn->keypair);
+			rspamd_http_connection_key_unref (conn->keypair);
 		}
 		g_string_free (conn->server_name, TRUE);
 		g_slice_free1 (sizeof (struct rspamd_client_connection), conn);

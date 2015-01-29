@@ -129,6 +129,10 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 		return 0;
 	}
 
+	if (msg->peer_key) {
+		task->peer_key = g_string_new (msg->peer_key->str);
+	}
+
 	if (!rspamd_task_process (task, msg, ctx->classify_pool, TRUE)) {
 		task->state = WRITE_REPLY;
 	}
@@ -354,7 +358,7 @@ start_worker (struct rspamd_worker *worker)
 	rspamd_log_close (rspamd_main->logger);
 
 	if (ctx->key) {
-		rspamd_http_connection_key_destroy (ctx->key);
+		rspamd_http_connection_key_unref (ctx->key);
 	}
 
 	exit (EXIT_SUCCESS);

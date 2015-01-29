@@ -193,7 +193,13 @@ GString *rspamd_http_connection_print_key (gpointer key, guint how);
  * Release key pointed by an opaque pointer
  * @param key opaque key structure
  */
-void rspamd_http_connection_key_destroy (gpointer key);
+void rspamd_http_connection_key_unref (gpointer key);
+
+/**
+ * Increase refcount for a key pointed by an opaque pointer
+ * @param key opaque key structure
+ */
+gpointer rspamd_http_connection_key_ref (gpointer key);
 
 GString *rspamd_http_connection_make_peer_key (const gchar *key);
 

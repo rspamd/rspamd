@@ -905,6 +905,11 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 	const gchar *ctype = "application/json";
 
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
+
+	if (task->peer_key) {
+		msg->peer_key = g_string_new (task->peer_key->str);
+		msg_info ("<%s> writing encrypted reply", task->message_id);
+	}
 	if (!task->is_json) {
 		/* Turn compatibility on */
 		msg->method = HTTP_SYMBOLS;

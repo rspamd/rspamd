@@ -1197,6 +1197,7 @@ rspamd_http_new_message (enum http_parser_type type)
 	new->port = 80;
 	new->type = type;
 	new->method = HTTP_GET;
+	new->peer_key = NULL;
 
 	return new;
 }
@@ -1761,12 +1762,23 @@ rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
 }
 
 void
-rspamd_http_connection_key_destroy (gpointer key)
+rspamd_http_connection_key_unref (gpointer key)
 {
 	struct rspamd_http_keypair *kp = (struct rspamd_http_keypair *)key;
 
 	g_assert (key != NULL);
 	REF_RELEASE (kp);
+}
+
+gpointer
+rspamd_http_connection_key_ref (gpointer key)
+{
+	struct rspamd_http_keypair *kp = (struct rspamd_http_keypair *)key;
+
+	g_assert (key != NULL);
+	REF_RETAIN (kp);
+
+	return kp;
 }
 
 GString *
