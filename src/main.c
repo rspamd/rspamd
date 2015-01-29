@@ -82,6 +82,7 @@ static gchar *rspamd_pidfile = NULL;
 static gboolean dump_cache = FALSE;
 static gboolean is_debug = FALSE;
 static gboolean is_insecure = FALSE;
+static gboolean gen_keypair = FALSE;
 /* List of workers that are pending to start */
 static GList *workers_pending = NULL;
 
@@ -125,6 +126,8 @@ static GOptionEntry entries[] =
 	  "Specify config file(s) to sign", NULL },
 	{ "private-key", 0, 0, G_OPTION_ARG_FILENAME, &privkey,
 	  "Specify private key to sign", NULL },
+	{ "gen-keypair", 0, 0, G_OPTION_ARG_NONE, &gen_keypair, "Generate new encryption "
+			"keypair", NULL},
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -1177,6 +1180,8 @@ main (gint argc, gchar **argv, gchar **env)
 	GList *l;
 	worker_t **pworker;
 	GQuark type;
+	gpointer keypair;
+	GString *keypair_out;
 
 #ifdef HAVE_SA_SIGINFO
 	signals_info = g_queue_new ();
@@ -1243,6 +1248,19 @@ main (gint argc, gchar **argv, gchar **env)
 	/* If we want to sign configs, just do it */
 	if (sign_configs != NULL && privkey != NULL) {
 		exit (perform_configs_sign ());
+	}
+
+	/* Same for keypair creation */
+	if (gen_keypair) {
+		keypair = rspamd_http_connection_gen_key ();
+		if (keypair == NULL) {
+			exit (EXIT_FAILURE);
+		}
+		keypair_out = rspamd_http_connection_print_key (keypair,
+				RSPAMD_KEYPAIR_PUBKEY|RSPAMD_KEYPAIR_PRIVKEY|RSPAMD_KEYPAIR_ID|
+				RSPAMD_KEYPAIR_BASE32|RSPAMD_KEYPAIR_HUMAN);
+		rspamd_printf ("%V", keypair_out);
+		exit (EXIT_SUCCESS);
 	}
 
 	/* Load config */

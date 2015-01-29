@@ -1740,7 +1740,7 @@ rspamd_http_connection_print_key (gpointer key, guint how)
 				"Private key");
 	}
 	if ((how & RSPAMD_KEYPAIR_ID)) {
-		rspamd_http_print_key_component (kp->sk, sizeof (kp->sk), res, how,
+		rspamd_http_print_key_component (kp->id, sizeof (kp->id), res, how,
 				"Key ID");
 	}
 
