@@ -130,6 +130,7 @@ struct rspamd_http_connection_router {
 	struct timeval *ptv;
 	struct event_base *ev_base;
 	gchar *default_fs_path;
+	gpointer key;
 	rspamd_http_router_error_handler_t error_handler;
 	rspamd_http_router_finish_handler_t finish_handler;
 };
@@ -300,6 +301,14 @@ struct rspamd_http_connection_router * rspamd_http_router_new (
 	struct timeval *timeout,
 	struct event_base *base,
 	const char *default_fs_path);
+
+/**
+ * Set encryption key for the HTTP router
+ * @param router router structure
+ * @param key opaque key structure
+ */
+void rspamd_http_router_set_key (struct rspamd_http_connection_router *router,
+		gpointer key);
 
 /**
  * Add new path to the router

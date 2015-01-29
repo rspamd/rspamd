@@ -1542,7 +1542,7 @@ rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 	struct rspamd_http_connection_router * new;
 	struct stat st;
 
-	new = g_slice_alloc (sizeof (struct rspamd_http_connection_router));
+	new = g_slice_alloc0 (sizeof (struct rspamd_http_connection_router));
 	new->paths = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	new->conns = NULL;
 	new->error_handler = eh;
@@ -1575,6 +1575,18 @@ rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 }
 
 void
+rspamd_http_router_set_key (struct rspamd_http_connection_router *router,
+		gpointer key)
+{
+	struct rspamd_http_keypair *kp = (struct rspamd_http_keypair *)key;
+
+	g_assert (key != NULL);
+	REF_RETAIN (kp);
+
+	router->key = key;
+}
+
+void
 rspamd_http_router_add_path (struct rspamd_http_connection_router *router,
 	const gchar *path, rspamd_http_router_handler_t handler)
 {
@@ -1604,6 +1616,10 @@ rspamd_http_router_handle_socket (struct rspamd_http_connection_router *router,
 			rspamd_http_router_finish_handler,
 			0,
 			RSPAMD_HTTP_SERVER);
+
+	if (router->key) {
+		rspamd_http_connection_set_key (conn->conn, router->key);
+	}
 
 	rspamd_http_connection_read_message (conn->conn, conn, fd, router->ptv,
 		router->ev_base);
