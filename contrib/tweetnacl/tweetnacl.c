@@ -157,10 +157,11 @@ int crypto_stream_salsa20_xor2(u8 *c1, u8 *c2,const u8 *m1,const u8 *m2,u64 d1,u
   u64 b = d1, r = 0;
   const u8 *m = m1;
   u8 *c = c1;
-  if (!d1) return 0;
+  if (!d1 || !d2) return 0;
   FOR(i,16) z[i] = 0;
   FOR(i,8) z[i] = n[i];
 
+  rspamd_printf("encrypt %*xs\n", 64, k);
   for(j = 0; j < 2; j ++, m = m2, b = d2, c = c2) {
 	  if (r > 0) {
 		  if (r <= b) {
@@ -168,6 +169,12 @@ int crypto_stream_salsa20_xor2(u8 *c1, u8 *c2,const u8 *m1,const u8 *m2,u64 d1,u
 			  m += r;
 			  c += r;
 			  b -= r;
+			  u = 1;
+			  for (i = 8;i < 16;++i) {
+				  u += (u32) z[i];
+				  z[i] = u;
+				  u >>= 8;
+			  }
 			  r = 0;
 		  }
 		  else {
@@ -288,6 +295,7 @@ int crypto_onetimeauth(u8 *out,const u8 *m,u64 n,const u8 *k)
   c[16] = 0;
   add1305(h,c);
   FOR(j,16) out[j] = h[j];
+  rspamd_printf("poly1305 key=%*xs, tag=%*xs\n", 32, k, 16, out);
   return 0;
 }
 
