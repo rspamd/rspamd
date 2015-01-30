@@ -1161,7 +1161,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 			priv->out[i].iov_base = mp;
 			priv->out[i++].iov_len = sizeof (mac);
 			priv->out[i].iov_base = pbody;
-			priv->out[i++].iov_len = bodylen;
+			priv->out[i++].iov_len = bodylen - sizeof (nonce) - sizeof (mac);
 		}
 		else {
 			priv->out[i].iov_base = pbody;
