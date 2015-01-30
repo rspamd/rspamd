@@ -267,7 +267,7 @@ rspamd_task_free (struct rspamd_task *task, gboolean is_soft)
 			ucl_object_unref (task->settings);
 		}
 		if (task->peer_key != NULL) {
-			g_string_free (task->peer_key, TRUE);
+			rspamd_http_connection_key_unref (task->peer_key);
 		}
 		rspamd_mempool_delete (task->task_pool);
 		g_slice_free1 (sizeof (struct rspamd_task), task);

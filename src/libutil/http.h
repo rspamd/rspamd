@@ -58,7 +58,7 @@ struct rspamd_http_message {
 	GString *status;
 	struct rspamd_http_header *headers;
 	GString *body;
-	GString *peer_key;
+	gpointer peer_key;
 	enum http_parser_type type;
 	time_t date;
 	gint code;
@@ -201,7 +201,7 @@ void rspamd_http_connection_key_unref (gpointer key);
  */
 gpointer rspamd_http_connection_key_ref (gpointer key);
 
-GString *rspamd_http_connection_make_peer_key (const gchar *key);
+gpointer rspamd_http_connection_make_peer_key (const gchar *key);
 
 /**
  * Handle a request using socket fd and user data ud

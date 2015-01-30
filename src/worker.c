@@ -130,7 +130,7 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 	}
 
 	if (msg->peer_key) {
-		task->peer_key = g_string_new (msg->peer_key->str);
+		task->peer_key = rspamd_http_connection_key_ref (msg->peer_key);
 	}
 
 	if (!rspamd_task_process (task, msg, ctx->classify_pool, TRUE)) {

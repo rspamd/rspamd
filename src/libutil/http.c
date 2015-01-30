@@ -593,6 +593,7 @@ rspamd_http_on_message_complete (http_parser * parser)
 	guchar *nonce, *m;
 	gsize dec_len;
 	GError *err;
+	struct rspamd_http_keypair *peer_key = NULL;
 
 	priv = conn->priv;
 
@@ -601,11 +602,7 @@ rspamd_http_on_message_complete (http_parser * parser)
 		if (priv->encrypted) {
 			if (priv->local_key == NULL || priv->msg->peer_key == NULL ||
 					priv->msg->body->len < crypto_box_NONCEBYTES + crypto_box_ZEROBYTES) {
-				err = g_error_new (HTTP_ERROR, 500, "Cannot decrypt message");
-				rspamd_http_connection_ref (conn);
-				conn->error_handler (conn, err);
-				rspamd_http_connection_unref (conn);
-				g_error_free (err);
+				msg_err ("cannot decrypt message");
 				return -1;
 			}
 			/* We have keys, so we can decrypt message */
@@ -613,14 +610,11 @@ rspamd_http_on_message_complete (http_parser * parser)
 			nonce = priv->msg->body->str;
 			m = priv->msg->body->str + crypto_box_NONCEBYTES;
 			dec_len = priv->msg->body->len - crypto_box_NONCEBYTES;
+			peer_key = (struct rspamd_http_keypair *)priv->msg->peer_key;
 
 			if (crypto_box_open (m + crypto_box_ZEROBYTES, m, dec_len, nonce,
-					priv->msg->peer_key->str, priv->local_key->sk) != 0) {
-				err = g_error_new (HTTP_ERROR, 500, "Cannot verify encrypted message");
-				rspamd_http_connection_ref (conn);
-				conn->error_handler (conn, err);
-				rspamd_http_connection_unref (conn);
-				g_error_free (err);
+					peer_key->pk, priv->local_key->sk) != 0) {
+				msg_err ("cannot verify encrypted message");
 				return -1;
 			}
 			m += crypto_box_ZEROBYTES;
@@ -995,6 +989,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	gchar *b32_key, *b32_id;
 	guchar nonce[crypto_box_NONCEBYTES], mac[crypto_box_ZEROBYTES], id[BLAKE2B_OUTBYTES];
 	guchar *np, *mp;
+	struct rspamd_http_keypair *peer_key = NULL;
 
 	conn->fd = fd;
 	conn->ud = ud;
@@ -1101,8 +1096,8 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 				bodylen);
 		}
 		if (encrypted) {
-			blake2b (id, priv->local_key->pk, NULL, sizeof (id),
-					sizeof (priv->local_key->pk), 0);
+			peer_key = (struct rspamd_http_keypair *)msg->peer_key;
+			memcpy (id, peer_key->id, sizeof (id));
 			b32_key = rspamd_encode_base32 (priv->local_key->pk,
 					sizeof (priv->local_key->pk));
 			b32_id = rspamd_encode_base32 (id, RSPAMD_HTTP_KEY_ID_LEN);
@@ -1159,10 +1154,10 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		priv->wr_total -= 2;
 	}
 	if (msg->body != NULL) {
-		if (encrypted) {
+		if (encrypted && peer_key != NULL) {
 			crypto_box_detached (pbody, pbody,
 					bodylen - sizeof (nonce) - sizeof (mac), np,
-					msg->peer_key->str, priv->local_key->sk, mp);
+					peer_key->pk, priv->local_key->sk, mp);
 			priv->out[i].iov_base = np;
 			priv->out[i++].iov_len = sizeof (nonce);
 			priv->out[i].iov_base = mp;
@@ -1278,7 +1273,7 @@ rspamd_http_message_free (struct rspamd_http_message *msg)
 		g_string_free (msg->status, TRUE);
 	}
 	if (msg->peer_key != NULL) {
-		g_string_free (msg->peer_key, TRUE);
+		rspamd_http_connection_key_unref (msg->peer_key);
 	}
 	g_slice_free1 (sizeof (struct rspamd_http_message), msg);
 }
@@ -1690,7 +1685,7 @@ rspamd_http_connection_make_key (gchar *key, gsize keylen)
 		g_free (decoded_sk);
 	}
 
-	return FALSE;
+	return NULL;
 }
 
 gpointer
@@ -1789,29 +1784,23 @@ rspamd_http_connection_key_ref (gpointer key)
 	return kp;
 }
 
-GString *
+gpointer
 rspamd_http_connection_make_peer_key (const gchar *key)
 {
-	guchar hashbuf[RSPAMD_HTTP_KEY_ID_LEN];
-	gchar *b32_id;
 	guchar *pk_decoded;
-	GString *res = NULL;
 	gsize dec_len;
+	struct rspamd_http_keypair *kp = NULL;
 
 	pk_decoded = rspamd_decode_base32 (key, strlen (key), &dec_len);
 
-	if (pk_decoded != NULL) {
-		if (dec_len == crypto_box_PUBLICKEYBYTES) {
-			res = g_string_new (NULL);
-			blake2b (hashbuf, pk_decoded, NULL, sizeof (hashbuf), dec_len, 0);
-			b32_id = rspamd_encode_base32 (hashbuf, sizeof (hashbuf));
-
-			g_string_printf (res, "%s%s", b32_id, key);
-			g_free (b32_id);
-		}
-
-		g_free (pk_decoded);
+	if (pk_decoded != NULL && dec_len == crypto_box_PUBLICKEYBYTES) {
+		kp = g_slice_alloc (sizeof (*kp));
+		REF_INIT_RETAIN (kp, rspamd_http_keypair_dtor);
+		memcpy (kp->pk, pk_decoded, sizeof (kp->pk));
+		blake2b (kp->id, kp->pk, NULL, sizeof (kp->id), sizeof (kp->pk), 0);
 	}
 
-	return res;
+	g_free (pk_decoded);
+
+	return kp;
 }

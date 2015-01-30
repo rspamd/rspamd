@@ -39,7 +39,7 @@ struct rspamd_client_request;
 struct rspamd_client_connection {
 	gint fd;
 	GString *server_name;
-	GString *key;
+	gpointer key;
 	gpointer keypair;
 	struct event_base *ev_base;
 	struct timeval timeout;
@@ -165,7 +165,7 @@ rspamd_client_init (struct event_base *ev_base, const gchar *name,
 		conn->key = rspamd_http_connection_make_peer_key (key);
 		if (conn->key) {
 			conn->keypair = rspamd_http_connection_gen_key ();
-			rspamd_http_connection_set_key (conn->http_conn, conn->key);
+			rspamd_http_connection_set_key (conn->http_conn, conn->keypair);
 		}
 		else {
 			rspamd_client_destroy (conn);
@@ -194,7 +194,7 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 
 	req->msg = rspamd_http_new_message (HTTP_REQUEST);
 	if (conn->key) {
-		req->msg->peer_key = g_string_new (conn->key->str);
+		req->msg->peer_key = rspamd_http_connection_key_ref (conn->key);
 	}
 
 	if (in != NULL) {
@@ -253,7 +253,7 @@ rspamd_client_destroy (struct rspamd_client_connection *conn)
 		}
 		close (conn->fd);
 		if (conn->key) {
-			g_string_free (conn->key, TRUE);
+			rspamd_http_connection_key_unref (conn->key);
 		}
 		if (conn->keypair) {
 			rspamd_http_connection_key_unref (conn->keypair);

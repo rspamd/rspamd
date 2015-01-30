@@ -907,7 +907,7 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 
 	if (task->peer_key) {
-		msg->peer_key = g_string_new (task->peer_key->str);
+		msg->peer_key = rspamd_http_connection_key_ref (task->peer_key);
 		msg_info ("<%s> writing encrypted reply", task->message_id);
 	}
 	if (!task->is_json) {
