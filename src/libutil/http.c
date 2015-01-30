@@ -905,6 +905,7 @@ rspamd_http_connection_reset (struct rspamd_http_connection *conn)
 	if (msg != NULL) {
 		if (msg->peer_key) {
 			priv->peer_key = msg->peer_key;
+			msg->peer_key = NULL;
 		}
 		rspamd_http_message_free (msg);
 		priv->msg = NULL;
@@ -955,6 +956,7 @@ rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
 
 	if (priv->peer_key) {
 		priv->msg->peer_key = priv->peer_key;
+		priv->peer_key = NULL;
 		priv->encrypted = TRUE;
 	}
 
