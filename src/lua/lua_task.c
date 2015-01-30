@@ -716,7 +716,9 @@ lua_task_create_from_buffer (lua_State *L)
 		ptask = lua_newuserdata (L, sizeof (gpointer));
 		rspamd_lua_setclass (L, "rspamd{task}", -1);
 		*ptask = task;
-		task->msg = g_string_new_len (data, len);
+		task->msg.start = rspamd_mempool_alloc (task->task_pool, len + 1);
+		memcpy ((gpointer)task->msg.start, data, len);
+		task->msg.len = len;
 	}
 	return 1;
 }
@@ -726,7 +728,7 @@ lua_task_process_message (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L);
 
-	if (task != NULL && task->msg != NULL && task->msg->len > 0) {
+	if (task != NULL && task->msg.len > 0) {
 		if (process_message (task) == 0) {
 			lua_pushboolean (L, TRUE);
 		}

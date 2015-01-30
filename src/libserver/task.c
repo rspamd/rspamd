@@ -293,29 +293,16 @@ rspamd_task_free_soft (gpointer ud)
 
 gboolean
 rspamd_task_process (struct rspamd_task *task,
-	struct rspamd_http_message *msg, GThreadPool *classify_pool,
+	struct rspamd_http_message *msg, const gchar *start, gsize len,
+	GThreadPool *classify_pool,
 	gboolean process_extra_filters)
 {
 	gint r;
 	GError *err = NULL;
 
-	if (msg->body->len == 0) {
-		msg_err ("got zero length body");
-		task->last_error = "message's body is empty";
-		return FALSE;
-	}
-
-	/* XXX: awful hack */
-	if (msg->peer_key != NULL) {
-		task->msg = rspamd_mempool_alloc (task->task_pool, sizeof (GString));
-		task->msg->len = msg->body->len - 16;
-		task->msg->allocated_len = 0;
-		task->msg->str = msg->body->str + 16;
-	}
-	else {
-		task->msg = msg->body;
-	}
-	debug_task ("got string of length %z", task->msg->len);
+	task->msg.start = start;
+	task->msg.len = len;
+	debug_task ("got string of length %z", task->msg.len);
 
 	/* We got body, set wanna_die flag */
 	task->s->wanna_die = TRUE;

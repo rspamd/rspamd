@@ -1465,8 +1465,8 @@ process_message (struct rspamd_task *task)
 	gint rc;
 
 	tmp = rspamd_mempool_alloc (task->task_pool, sizeof (GByteArray));
-	tmp->data = task->msg->str;
-	tmp->len = task->msg->len;
+	tmp->data = (guint8 *)task->msg.start;
+	tmp->len = task->msg.len;
 
 	stream = g_mime_stream_mem_new_with_byte_array (tmp);
 	/*
@@ -1478,7 +1478,7 @@ process_message (struct rspamd_task *task)
 	if (task->is_mime) {
 
 		debug_task ("construct mime parser from string length %d",
-			(gint)task->msg->len);
+			(gint)task->msg.len);
 		/* create a new parser object to parse the stream */
 		parser = g_mime_parser_new_with_stream (stream);
 		g_object_unref (stream);

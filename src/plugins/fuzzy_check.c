@@ -1260,7 +1260,9 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	task->cfg = ctx->cfg;
 
 	/* Allocate message from string */
-	task->msg = msg->body;
+	/* XXX: what about encrypted messsages ? */
+	task->msg.start = msg->body->str;
+	task->msg.len = msg->body->len;
 
 	saved = rspamd_mempool_alloc0 (task->task_pool, sizeof (gint));
 	err = rspamd_mempool_alloc0 (task->task_pool, sizeof (GError *));

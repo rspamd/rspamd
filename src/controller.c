@@ -798,7 +798,6 @@ rspamd_controller_handle_learn_common (
 	}
 
 	task = rspamd_task_new (session->ctx->worker);
-	task->msg = msg->body;
 
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;
@@ -815,7 +814,8 @@ rspamd_controller_handle_learn_common (
 	task->sock = conn_ent->conn->fd;
 
 
-	if (!rspamd_task_process (task, msg, NULL, FALSE)) {
+	/* XXX: Handle encrypted messages */
+	if (!rspamd_task_process (task, msg, msg->body->str, msg->body->len, NULL, FALSE)) {
 		msg_warn ("filters cannot be processed for %s", task->message_id);
 		rspamd_controller_send_error (conn_ent, 500, task->last_error);
 		destroy_session (task->s);
@@ -890,7 +890,6 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 
 	task = rspamd_task_new (session->ctx->worker);
 	task->ev_base = session->ctx->ev_base;
-	task->msg = msg->body;
 
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;
@@ -905,7 +904,8 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	task->http_conn = rspamd_http_connection_ref (conn_ent->conn);
 	task->sock = conn_ent->conn->fd;
 
-	if (!rspamd_task_process (task, msg, NULL, FALSE)) {
+	/* XXX: handle encrypted messages */
+	if (!rspamd_task_process (task, msg, msg->body->str, msg->body->len, NULL, FALSE)) {
 		msg_warn ("filters cannot be processed for %s", task->message_id);
 		rspamd_controller_send_error (conn_ent, 500, task->last_error);
 		destroy_session (task->s);

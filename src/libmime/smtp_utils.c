@@ -35,8 +35,8 @@ free_smtp_session (gpointer arg)
 	if (session) {
 		if (session->task) {
 			rspamd_task_free (session->task, FALSE);
-			if (session->task->msg->str) {
-				munmap (session->task->msg->str, session->task->msg->len);
+			if (session->task->msg.start) {
+				munmap (session->task->msg.start, session->task->msg.len);
 			}
 		}
 		if (session->rcpt) {
@@ -212,14 +212,14 @@ smtp_metric_callback (gpointer key, gpointer value, gpointer ud)
 	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset,
 			cd->log_size - cd->log_offset,
 			"]), len: %z, time: %s,",
-			task->msg->len,
+			task->msg.len,
 			calculate_check_time (&task->tv, &task->ts, task->cfg->clock_res,
 			&task->scan_milliseconds));
 #else
 	cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset,
 			cd->log_size - cd->log_offset,
 			"]), len: %z, time: %s,",
-			task->msg->len,
+			task->msg.len,
 			calculate_check_time (&task->tv, task->cfg->clock_res,
 			&task->scan_milliseconds));
 #endif

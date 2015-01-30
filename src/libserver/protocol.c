@@ -735,7 +735,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 
 #ifdef HAVE_CLOCK_GETTIME
 	rspamd_printf_gstring (logbuf, "]), len: %z, time: %s, dns req: %d,",
-		task->msg->len, calculate_check_time (&task->tv, &task->ts,
+		task->msg.len, calculate_check_time (&task->tv, &task->ts,
 		task->cfg->clock_res, &task->scan_milliseconds), task->dns_requests);
 #else
 	rspamd_printf_gstring (logbuf, "]), len: %z, time: %s, dns req: %d,",

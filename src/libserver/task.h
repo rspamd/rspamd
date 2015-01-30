@@ -93,7 +93,10 @@ struct rspamd_task {
 	gchar *hostname;                                            /**< hostname reported by MTA						*/
 	GHashTable *request_headers;                                /**< HTTP headers in a request						*/
 	GHashTable *reply_headers;                                  /**< Custom reply headers							*/
-	GString *msg;                                               /**< message buffer									*/
+	struct {
+		const gchar *start;
+		gsize len;
+	} msg;                                                      /**< message buffer									*/
 	struct rspamd_http_connection *http_conn;                   /**< HTTP server connection							*/
 	struct rspamd_async_session * s;                             /**< async session object							*/
 	gint parts_count;                                           /**< mime parts count								*/
@@ -181,7 +184,8 @@ gboolean rspamd_task_fin (void *arg);
  * @return task has been successfully parsed and processed
  */
 gboolean rspamd_task_process (struct rspamd_task *task,
-	struct rspamd_http_message *msg, GThreadPool *classify_pool,
+	struct rspamd_http_message *msg, const gchar *start, gsize len,
+	GThreadPool *classify_pool,
 	gboolean process_extra_filters);
 
 /**

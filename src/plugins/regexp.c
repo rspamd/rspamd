@@ -666,8 +666,8 @@ process_regexp (struct rspamd_regexp *re,
 	case REGEXP_MESSAGE:
 		debug_task ("checking message regexp: %s", re->regexp_text);
 		regexp = re->raw_regexp;
-		ct = task->msg->str;
-		clen = task->msg->len;
+		ct = (guint8 *)task->msg.start;
+		clen = task->msg.len;
 
 		if (regexp_module_ctx->max_size != 0 && clen >
 			regexp_module_ctx->max_size) {

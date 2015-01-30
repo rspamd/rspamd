@@ -146,7 +146,7 @@ rspamd_roll_history_update (struct roll_history *history,
 	}
 
 	row->scan_time = task->scan_milliseconds;
-	row->len = (task->msg == NULL ? 0 : task->msg->len);
+	row->len = task->msg.len;
 	row->completed = TRUE;
 }
 
