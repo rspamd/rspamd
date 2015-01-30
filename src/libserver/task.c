@@ -305,8 +305,16 @@ rspamd_task_process (struct rspamd_task *task,
 		return FALSE;
 	}
 
-	task->msg = msg->body;
-
+	/* XXX: awful hack */
+	if (msg->peer_key != NULL) {
+		task->msg = rspamd_mempool_alloc (task->task_pool, sizeof (GString));
+		task->msg->len = msg->body->len - 16;
+		task->msg->allocated_len = 0;
+		task->msg->str = msg->body->str + 16;
+	}
+	else {
+		task->msg = msg->body;
+	}
 	debug_task ("got string of length %z", task->msg->len);
 
 	/* We got body, set wanna_die flag */
