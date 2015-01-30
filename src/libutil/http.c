@@ -908,8 +908,6 @@ rspamd_http_connection_reset (struct rspamd_http_connection *conn)
 		REF_RELEASE (priv->buf);
 	}
 
-	priv->encrypted = FALSE;
-
 	rspamd_http_parser_reset (conn);
 
 	if (priv->out != NULL) {
@@ -1039,6 +1037,8 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		bodylen += crypto_box_NONCEBYTES + crypto_box_ZEROBYTES;
 	}
 
+	peer_key = (struct rspamd_http_keypair *)msg->peer_key;
+
 	if (conn->type == RSPAMD_HTTP_SERVER) {
 		/* Format reply */
 		if (msg->method < HTTP_SYMBOLS) {
@@ -1094,7 +1094,6 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 				bodylen);
 		}
 		if (encrypted) {
-			peer_key = (struct rspamd_http_keypair *)msg->peer_key;
 			memcpy (id, peer_key->id, sizeof (id));
 			b32_key = rspamd_encode_base32 (priv->local_key->pk,
 					sizeof (priv->local_key->pk));
