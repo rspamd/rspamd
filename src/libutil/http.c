@@ -426,9 +426,8 @@ rspamd_http_parse_key (GString *data, struct rspamd_http_connection_private *pri
 						key_len >= sizeof (priv->local_key->pk)) {
 					if (memcmp (priv->local_key->id, decoded_id,
 							RSPAMD_HTTP_KEY_ID_LEN) == 0) {
-						priv->msg->peer_key = g_string_sized_new (sizeof (priv->local_key->pk));
-						g_string_append_len (priv->msg->peer_key,
-								decoded_key, sizeof (priv->local_key->pk));
+						priv->msg->peer_key =
+							rspamd_http_connection_make_peer_key (eq_pos + 1);
 					}
 				}
 			}
@@ -592,7 +591,6 @@ rspamd_http_on_message_complete (http_parser * parser)
 	int ret = 0;
 	guchar *nonce, *m;
 	gsize dec_len;
-	GError *err;
 	struct rspamd_http_keypair *peer_key = NULL;
 
 	priv = conn->priv;
