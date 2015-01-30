@@ -48,6 +48,7 @@ struct rspamd_http_connection_private {
 	} *buf;
 	gboolean new_header;
 	gboolean encrypted;
+	gpointer peer_key;
 	struct rspamd_http_keypair *local_key;
 	struct rspamd_http_header *header;
 	struct http_parser parser;
@@ -557,6 +558,7 @@ rspamd_http_on_headers_complete (http_parser * parser)
 		priv->msg->body = g_string_sized_new (BUFSIZ);
 	}
 
+	priv->msg->body_buf.str = priv->msg->body->str;
 	priv->msg->method = parser->method;
 	priv->msg->code = parser->status_code;
 
@@ -617,6 +619,9 @@ rspamd_http_on_message_complete (http_parser * parser)
 			}
 			m += crypto_box_ZEROBYTES;
 			dec_len -= crypto_box_ZEROBYTES;
+
+			priv->msg->body->str = m;
+			priv->msg->body->len = dec_len;
 
 			rspamd_http_connection_ref (conn);
 			ret = conn->body_handler (conn,
@@ -898,6 +903,9 @@ rspamd_http_connection_reset (struct rspamd_http_connection *conn)
 
 	/* Clear request */
 	if (msg != NULL) {
+		if (msg->peer_key) {
+			priv->peer_key = msg->peer_key;
+		}
 		rspamd_http_message_free (msg);
 		priv->msg = NULL;
 	}
@@ -944,6 +952,11 @@ rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
 	req = rspamd_http_new_message (
 		conn->type == RSPAMD_HTTP_SERVER ? HTTP_REQUEST : HTTP_RESPONSE);
 	priv->msg = req;
+
+	if (priv->peer_key) {
+		priv->msg->peer_key = priv->peer_key;
+		priv->encrypted = TRUE;
+	}
 
 	if (timeout == NULL) {
 		priv->ptv = NULL;
@@ -1191,6 +1204,7 @@ rspamd_http_new_message (enum http_parser_type type)
 	new->headers = NULL;
 	new->date = 0;
 	new->body = NULL;
+	memset (&new->body_buf, 0, sizeof (new->body_buf));
 	new->status = NULL;
 	new->host = NULL;
 	new->port = 80;
@@ -1261,7 +1275,8 @@ rspamd_http_message_free (struct rspamd_http_message *msg)
 		g_slice_free1 (sizeof (struct rspamd_http_header), hdr);
 	}
 	if (msg->body != NULL) {
-		g_string_free (msg->body, TRUE);
+		g_string_free (msg->body, FALSE);
+		g_free (msg->body_buf.str);
 	}
 	if (msg->url != NULL) {
 		g_string_free (msg->url, TRUE);
