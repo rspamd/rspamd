@@ -161,11 +161,10 @@ int crypto_stream_salsa20_xor2(u8 *c1, u8 *c2,const u8 *m1,const u8 *m2,u64 d1,u
   FOR(i,16) z[i] = 0;
   FOR(i,8) z[i] = n[i];
 
-  rspamd_printf("encrypt %*xs\n", 64, k);
   for(j = 0; j < 2; j ++, m = m2, b = d2, c = c2) {
 	  if (r > 0) {
 		  if (r <= b) {
-			  FOR(i,r) c[i] = (m?m[i]:0) ^ x[i];
+			  FOR(i,r) c[i] = (m?m[i]:0) ^ x[(64 - r) + i];
 			  m += r;
 			  c += r;
 			  b -= r;
@@ -181,7 +180,6 @@ int crypto_stream_salsa20_xor2(u8 *c1, u8 *c2,const u8 *m1,const u8 *m2,u64 d1,u
 			  FOR(i,b) c[i] = (m?m[i]:0) ^ x[i];
 			  return 0;
 		  }
-		  r = 0;
 	  }
 	  while (b >= 64) {
 		  crypto_core_salsa20(x,z,k,sigma);
@@ -295,7 +293,6 @@ int crypto_onetimeauth(u8 *out,const u8 *m,u64 n,const u8 *k)
   c[16] = 0;
   add1305(h,c);
   FOR(j,16) out[j] = h[j];
-  rspamd_printf("poly1305 key=%*xs, tag=%*xs\n", 32, k, 16, out);
   return 0;
 }
 
@@ -320,13 +317,13 @@ int crypto_secretbox(u8 *c,const u8 *m,u64 d,const u8 *n,const u8 *k)
 int crypto_secretbox_detached(u8 *c,const u8 *m,u64 d,const u8 *n,const u8 *k, u8 *a)
 {
   unsigned int i;
-  volatile u8 mk[crypto_onetimeauth_poly1305_KEYBYTES];
+  volatile u8 mk[32];
   if (d == 0) return -1;
-  FOR(i, crypto_onetimeauth_poly1305_KEYBYTES) mk[i] = 0;
+  FOR(i, 32) mk[i] = 0;
   crypto_stream_xor2((u8 *)mk,c,(u8 *)mk,m,crypto_onetimeauth_poly1305_KEYBYTES,d,n,k);
   crypto_onetimeauth(a,c,d,(const u8*)mk);
   /* TODO: add really secure bzero here */
-  FOR(i,crypto_onetimeauth_poly1305_KEYBYTES) mk[i] = 0;
+  FOR(i,32) mk[i] = 0;
   return 0;
 }
 
@@ -334,12 +331,11 @@ int crypto_secretbox_open(u8 *m,const u8 *c,u64 d,const u8 *n,const u8 *k)
 {
   unsigned int i;
   u8 x[32];
-  if (d < crypto_box_ZEROBYTES) return -1;
+  if (d < 16) return -1;
   crypto_stream(x,32,n,k);
-  if (crypto_onetimeauth_verify(c + crypto_box_BOXZEROBYTES,
-		  c + crypto_box_ZEROBYTES,d - crypto_box_ZEROBYTES,x) != 0) return -1;
-  crypto_stream_xor(m,c,d,n,k);
-  FOR(i,crypto_box_ZEROBYTES) m[i] = 0;
+  if (crypto_onetimeauth_verify(c,c + 16,d - 16,x) != 0) return -1;
+  crypto_stream_xor2(x,m + 16,x,c + 16,32,d-16,n,k);
+  FOR(i,16) m[i] = 0;
   return 0;
 }
 

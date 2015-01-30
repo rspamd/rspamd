@@ -610,7 +610,7 @@ rspamd_http_on_message_complete (http_parser * parser)
 			dec_len = priv->msg->body->len - crypto_box_NONCEBYTES;
 			peer_key = (struct rspamd_http_keypair *)priv->msg->peer_key;
 
-			if (crypto_box_open (m + crypto_box_ZEROBYTES, m, dec_len, nonce,
+			if (crypto_box_open (m, m, dec_len, nonce,
 					peer_key->pk, priv->local_key->sk) != 0) {
 				msg_err ("cannot verify encrypted message");
 				return -1;
