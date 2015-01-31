@@ -1,8 +1,7 @@
-diff --git a/src/expand.c b/src/expand.c
-index 70d7c7d..df375fa 100644
---- a/src/expand.c
-+++ b/src/expand.c
-@@ -641,6 +641,7 @@ static var_entry var_table[] = {
+diff -ru a/src/expand.c b/src/expand.c
+--- a/src/expand.c	2014-08-09 14:44:29.000000000 +0200
++++ b/src/expand.c	2015-01-31 20:08:55.022488664 +0200
+@@ -641,6 +641,7 @@
    { "sn8",                 vtype_filter_int,  &filter_sn[8] },
    { "sn9",                 vtype_filter_int,  &filter_sn[9] },
  #ifdef WITH_CONTENT_SCAN
@@ -10,11 +9,10 @@ index 70d7c7d..df375fa 100644
    { "spam_bar",            vtype_stringptr,   &spam_bar },
    { "spam_report",         vtype_stringptr,   &spam_report },
    { "spam_score",          vtype_stringptr,   &spam_score },
-diff --git a/src/globals.c b/src/globals.c
-index d3f9987..c5cfd6b 100644
---- a/src/globals.c
-+++ b/src/globals.c
-@@ -1257,6 +1257,7 @@ BOOL    smtp_use_size          = FALSE;
+diff -ru a/src/globals.c b/src/globals.c
+--- a/src/globals.c	2014-08-09 14:44:29.000000000 +0200
++++ b/src/globals.c	2015-01-31 20:08:55.026488703 +0200
+@@ -1257,6 +1257,7 @@
  uschar *spamd_address          = US"127.0.0.1 783";
  uschar *spam_bar               = NULL;
  uschar *spam_report            = NULL;
@@ -22,11 +20,10 @@ index d3f9987..c5cfd6b 100644
  uschar *spam_score             = NULL;
  uschar *spam_score_int         = NULL;
  #endif
-diff --git a/src/globals.h b/src/globals.h
-index 2bedcf5..d5716a6 100644
---- a/src/globals.h
-+++ b/src/globals.h
-@@ -803,6 +803,7 @@ extern BOOL    smtp_use_size;          /* Global for passed connections */
+diff -ru a/src/globals.h b/src/globals.h
+--- a/src/globals.h	2014-08-09 14:44:29.000000000 +0200
++++ b/src/globals.h	2015-01-31 20:08:55.038488822 +0200
+@@ -803,6 +803,7 @@
  extern uschar *spamd_address;          /* address for the spamassassin daemon */
  extern uschar *spam_bar;               /* the spam "bar" (textual representation of spam_score) */
  extern uschar *spam_report;            /* the spamd report (multiline) */
@@ -34,11 +31,10 @@ index 2bedcf5..d5716a6 100644
  extern uschar *spam_score;             /* the spam score (float) */
  extern uschar *spam_score_int;         /* spam_score * 10 (int) */
  #endif
-diff --git a/src/spam.c b/src/spam.c
-index 7eb6fbf..679a468 100644
---- a/src/spam.c
-+++ b/src/spam.c
-@@ -14,12 +14,20 @@
+diff -ru a/src/spam.c b/src/spam.c
+--- a/src/spam.c	2014-08-09 14:44:29.000000000 +0200
++++ b/src/spam.c	2015-01-31 20:09:51.091042510 +0200
+@@ -14,6 +14,7 @@
  uschar spam_score_buffer[16];
  uschar spam_score_int_buffer[16];
  uschar spam_bar_buffer[128];
@@ -46,25 +42,11 @@ index 7eb6fbf..679a468 100644
  uschar spam_report_buffer[32600];
  uschar prev_user_name[128] = "";
  int spam_ok = 0;
- int spam_rc = 0;
- uschar *prev_spamd_address_work = NULL;
- 
-+/* push formatted line into vector */
-+static int spam_push_line(struct iovec *iov, int i, const char *fmt, ...);
-+/* write io vector to the socket */
-+static int spam_write_vector(int sock, size_t size, struct iovec *iov, time_t now);
-+/* poll socket to obtain write readiness */
-+static int spam_poll_socket (int sock, time_t start);
-+
- int
- spam(uschar **listptr)
- {
-@@ -31,10 +39,11 @@ spam(uschar **listptr)
-   FILE *mbox_file;
+@@ -32,9 +33,11 @@
    int spamd_sock = -1;
    uschar spamd_buffer[32600];
--  int i, j, offset, result;
-+  int i, j, offset, result, is_rspamd;
+   int i, j, offset, result;
++  BOOL is_rspamd;
    uschar spamd_version[8];
 +  uschar spamd_short_result[8];
    uschar spamd_score_char;
@@ -73,24 +55,24 @@ index 7eb6fbf..679a468 100644
    int spamd_report_offset;
    uschar *p,*q;
    int override = 0;
-@@ -128,8 +137,15 @@ spam(uschar **listptr)
+@@ -128,8 +131,15 @@
        spamd_address_container *this_spamd =
          (spamd_address_container *)store_get(sizeof(spamd_address_container));
  
 +      /* Check for spamd variant */
 +      if( Ustrstr(address, "variant=rspamd") != NULL ) {
-+        this_spamd->is_rspamd = 1;  
++        this_spamd->is_rspamd = TRUE;
 +      }
 +      else {
-+        this_spamd->is_rspamd = 0;  
++        this_spamd->is_rspamd = FALSE;
 +      }
        /* grok spamd address and port */
 -      if( sscanf(CS address, "%s %u", this_spamd->tcp_addr, &(this_spamd->tcp_port)) != 2 ) {
-+      if( sscanf(CS address, "%s %hu", this_spamd->tcp_addr, &(this_spamd->tcp_port)) != 2 ) {
++      if( sscanf(CS address, "%23s %hu", this_spamd->tcp_addr, &(this_spamd->tcp_port)) != 2 ) {
          log_write(0, LOG_MAIN,
            "spam acl condition: warning - invalid spamd address: '%s'", address);
          continue;
-@@ -173,6 +189,7 @@ spam(uschar **listptr)
+@@ -173,6 +183,7 @@
                        spamd_address_vector[current_server]->tcp_port,
                        5 ) > -1) {
          /* connection OK */
@@ -98,7 +80,7 @@ index 7eb6fbf..679a468 100644
          break;
        };
  
-@@ -209,12 +226,28 @@ spam(uschar **listptr)
+@@ -209,12 +220,28 @@
      }
  
      server.sun_family = AF_UNIX;
@@ -129,7 +111,7 @@ index 7eb6fbf..679a468 100644
        (void)fclose(mbox_file);
        (void)close(spamd_sock);
        return DEFER;
-@@ -230,22 +263,70 @@ spam(uschar **listptr)
+@@ -230,22 +257,47 @@
      return DEFER;
    }
  
@@ -143,85 +125,61 @@ index 7eb6fbf..679a468 100644
 -
 -  /* send our request */
 -  if (send(spamd_sock, spamd_buffer, Ustrlen(spamd_buffer), 0) < 0) {
--    (void)close(spamd_sock);
--    log_write(0, LOG_MAIN|LOG_PANIC,
--         "spam acl condition: spamd send failed: %s", strerror(errno));
--    (void)fclose(mbox_file);
--    (void)close(spamd_sock);
--    return DEFER;
--  };
 +  if (is_rspamd) { 
 +    /* rspamd variant */
-+    int r, request_p = 0;
 +    const char *helo;
 +    const char *fcrdns;
-+    struct iovec *request_v;
++    uschar *req_str;
 +    
-+    request_v = store_get(sizeof(struct iovec) * (9 + recipients_count));
-+    if (request_v == NULL) {
-+      (void)close(spamd_sock);
-+      log_write(0, LOG_MAIN|LOG_PANIC,
-+        "spam acl condition: store_get failed: %s", strerror(errno));
-+      (void)fclose(mbox_file);
-+      (void)close(spamd_sock);
-+      return DEFER;
-+    }
-+    r = 0;
-+    r += spam_push_line(request_v, request_p++, "CHECK RSPAMC/1.3\r\n");
-+    r += spam_push_line(request_v, request_p++, "Content-length: %lu\r\n", mbox_size);
-+    r += spam_push_line(request_v, request_p++, "Queue-Id: %s\r\n", message_id);
-+    r += spam_push_line(request_v, request_p++, "From: <%s>\r\n", sender_address);
-+    r += spam_push_line(request_v, request_p++, "Recipient-Number: %d\r\n", recipients_count);
-+    /* copy all recipients as well */
++    req_str = string_sprintf("CHECK RSPAMC/1.3\r\nContent-length: %lu\r\n"
++      "Queue-Id: %s\r\nFrom: <%s>\r\nRecipient-Number: %d\r\n", mbox_size,
++      message_id, sender_address, recipients_count);
 +    for (i = 0; i < recipients_count; i ++)
-+        r += spam_push_line(request_v, request_p++, "Rcpt: <%s>\r\n", recipients_list[i].address);
++      req_str = string_sprintf("%sRcpt: <%s>\r\n", req_str, recipients_list[i].address);
 +    if ((helo = expand_string(US"$sender_helo_name")) != NULL && *helo != '\0')
-+      r += spam_push_line(request_v, request_p++, "Helo: %s\r\n", helo);
++      req_str = string_sprintf("%sHelo: %s\r\n", req_str, helo);
 +    if ((fcrdns = expand_string(US"$sender_host_name")) != NULL && *fcrdns != '\0')
-+      r += spam_push_line(request_v, request_p++, "Hostname: %s\r\n", fcrdns);
++      req_str = string_sprintf("%sHostname: %s\r\n", req_str, fcrdns);
 +    if (sender_host_address != NULL)
-+      r += spam_push_line(request_v, request_p++, "IP: %s\r\n", sender_host_address);
-+    r += spam_push_line(request_v, request_p++, "\r\n");
-+    if (spam_write_vector (spamd_sock, request_p, request_v, start) < 0) {
-+        (void)close(spamd_sock);
-+        log_write(0, LOG_MAIN|LOG_PANIC,
-+            "spam acl condition: spamd (rspamd) send failed: %s", strerror(errno));
-+        (void)fclose(mbox_file);
-+        (void)close(spamd_sock);
-+        return DEFER;
-+    }
++      req_str = string_sprintf("%sIP: %s\r\n", req_str, sender_host_address);
++    req_str = string_sprintf("%s\r\n", req_str);
++    wrote = send(spamd_sock, req_str, Ustrlen(req_str), 0); 
 +  }
 +  else {
 +    /* spamassassin variant */
-+    struct iovec req_iov;
 +    (void)string_format(spamd_buffer,
 +            sizeof(spamd_buffer),
 +            "REPORT SPAMC/1.2\r\nUser: %s\r\nContent-length: %ld\r\n\r\n",
 +            user_name,
 +            mbox_size);
 +    /* send our request */
-+    req_iov.iov_len = Ustrlen(spamd_buffer);
-+    req_iov.iov_base = spamd_buffer;
-+    if (spam_write_vector (spamd_sock, 1, &req_iov, start) < 0) {
-+        (void)close(spamd_sock);
-+        log_write(0, LOG_MAIN|LOG_PANIC,
-+            "spam acl condition: spamd send failed: %s", strerror(errno));
-+        (void)fclose(mbox_file);
-+        (void)close(spamd_sock);
-+        return DEFER;
-+    };
++    wrote = send(spamd_sock, spamd_buffer, Ustrlen(spamd_buffer), 0);
 +  }
-+
++  if(wrote == -1)
++  {
+     (void)close(spamd_sock);
+     log_write(0, LOG_MAIN|LOG_PANIC,
+-         "spam acl condition: spamd send failed: %s", strerror(errno));
++      "spam acl condition: spamd send failed: %s", strerror(errno));
+     (void)fclose(mbox_file);
+     (void)close(spamd_sock);
+     return DEFER;
+-  };
++  }
  
    /* now send the file */
    /* spamd sometimes accepts conections but doesn't read data off
-@@ -348,60 +429,93 @@ again:
+@@ -348,60 +400,93 @@
    /* reading done */
    (void)close(spamd_sock);
  
 -  /* dig in the spamd output and put the report in a multiline header, if requested */
 -  if( sscanf(CS spamd_buffer,"SPAMD/%7s 0 EX_OK\r\nContent-length: %*u\r\n\r\n%lf/%lf\r\n%n",
 -             spamd_version,&spamd_score,&spamd_threshold,&spamd_report_offset) != 3 ) {
+-
+-    /* try to fall back to pre-2.50 spamd output */
+-    if( sscanf(CS spamd_buffer,"SPAMD/%7s 0 EX_OK\r\nSpam: %*s ; %lf / %lf\r\n\r\n%n",
+-               spamd_version,&spamd_score,&spamd_threshold,&spamd_report_offset) != 3 ) {
 +  if (!is_rspamd) {
 +    /* dig in the spamd output and put the report in a multiline header, if requested */
 +    if( sscanf(CS spamd_buffer,"SPAMD/%7s 0 EX_OK\r\nContent-length: %*u\r\n\r\n%lf/%lf\r\n%n",
@@ -235,10 +193,7 @@ index 7eb6fbf..679a468 100644
 +        return DEFER;
 +        };
 +    };
- 
--    /* try to fall back to pre-2.50 spamd output */
--    if( sscanf(CS spamd_buffer,"SPAMD/%7s 0 EX_OK\r\nSpam: %*s ; %lf / %lf\r\n\r\n%n",
--               spamd_version,&spamd_score,&spamd_threshold,&spamd_report_offset) != 3 ) {
++
 +    if( spamd_score >= spamd_threshold ) {
 +      Ustrcpy(spam_action_buffer, "reject");
 +    }
@@ -337,7 +292,7 @@ index 7eb6fbf..679a468 100644
    }
    spam_bar_buffer[i] = '\0';
    spam_bar = spam_bar_buffer;
-@@ -417,12 +531,12 @@ again:
+@@ -417,12 +502,12 @@
  
    /* compare threshold against score */
    if (spamd_score >= spamd_threshold) {
@@ -354,144 +309,16 @@ index 7eb6fbf..679a468 100644
    };
  
    /* remember expanded spamd_address if needed */
-@@ -442,4 +556,126 @@ again:
-   };
- }
- 
-+#ifdef __GNUC__
-+static int
-+spam_push_line(struct iovec *iov, const int i, const char *fmt, ...)  __attribute__ ((format (printf, 3, 4)));
-+#endif
-+static int
-+spam_push_line(struct iovec *iov, const int i, const char *fmt, ...)
-+{
-+  va_list ap;
-+  size_t len;
-+  char buf[512];
-+
-+  va_start(ap, fmt);
-+  len = vsnprintf(buf, sizeof(buf), fmt, ap);
-+  va_end(ap);
-+
-+  iov[i].iov_base = string_copy(US buf);
-+  iov[i].iov_len = len;
-+
-+  if (len >= sizeof(buf)) {
-+    log_write(0, LOG_MAIN, "rspam: error, string was longer than %d", (int)sizeof(buf));
-+    return (-1);
-+  }
-+
-+  return 0;
-+}
-+
-+static int 
-+spam_write_vector(int sock, size_t size, struct iovec *iov, time_t start)
-+{
-+  int r, i;
-+  
-+  for (;;) {
-+    if (spam_poll_socket(sock, start) == -1) {
-+      return -1;
-+    }
-+    r = writev(sock, iov, size);
-+    if (r == -1) {
-+      if (errno == EINTR)
-+        continue;
-+
-+      log_write(0, LOG_MAIN|LOG_PANIC,
-+        "spam acl condition: %s on spamd socket", strerror(errno));
-+      return -1;
-+    }
-+    else {
-+      /* check for partial writev */
-+      for (i = 0; i < size; i ++) {
-+        if (r >= iov[i].iov_len) {
-+          r -= iov[i].iov_len;
-+        }
-+        else {
-+          /* partial iov write */
-+          iov[i].iov_base += r;
-+          break;
-+        }
-+        if (r == 0)
-+          break;
-+      }
-+      
-+      if (i == size - 1 && r == 0) {
-+        /* we have written everything */
-+        break;
-+      }
-+      else {
-+        /* move iov to the last unreaded element */
-+        iov = &iov[i];
-+        size -= i;
-+      }
-+    }
-+  }
-+
-+  return 0;
-+  
-+}
-+
-+static int
-+spam_poll_socket (int sock, time_t start)
-+{
-+#ifndef NO_POLL_H
-+  struct pollfd pollfd;
-+#else                               /* Patch posted by Erik ? for OS X */
-+  struct timeval select_tv;         /* and applied by PH */
-+  fd_set select_fd;
-+#endif
-+  int r;
-+
-+#ifndef NO_POLL_H
-+  pollfd.fd = sock;
-+  pollfd.events = POLLOUT;
-+#endif
-+  for (;;) {
-+#ifndef NO_POLL_H
-+    r = poll(&pollfd, 1, 1000);
-+
-+/* Patch posted by Erik ? for OS X and applied by PH */
-+#else
-+    select_tv.tv_sec = 1;
-+    select_tv.tv_usec = 0;
-+    FD_ZERO(&select_fd);
-+    FD_SET(sock, &select_fd);
-+    r = select(sock+1, NULL, &select_fd, NULL, &select_tv);
-+#endif
-+/* End Erik's patch */
-+
-+    if (r == -1 && errno == EINTR)
-+      continue;
-+    else if (r < 1) {
-+      if (r == -1)
-+        log_write(0, LOG_MAIN|LOG_PANIC,
-+          "spam acl condition: %s on spamd socket", strerror(errno));
-+      else {
-+        if (time(NULL) - start < SPAMD_TIMEOUT)
-+          continue;
-+
-+        log_write(0, LOG_MAIN|LOG_PANIC,
-+          "spam acl condition: timed out writing spamd socket");
-+      }
-+    }
-+    return r;
-+  }
-+}
-+
- #endif
-diff --git a/src/spam.h b/src/spam.h
-index ba700c8..6047c59 100644
---- a/src/spam.h
-+++ b/src/spam.h
+diff -ru a/src/spam.h b/src/spam.h
+--- a/src/spam.h	2014-08-09 14:44:29.000000000 +0200
++++ b/src/spam.h	2015-01-31 20:08:55.054488979 +0200
 @@ -22,7 +22,8 @@
  
  typedef struct spamd_address_container {
    uschar tcp_addr[24];
 -  unsigned int tcp_port;
 +  unsigned short int tcp_port;
-+  unsigned is_rspamd:1;
++  BOOL is_rspamd;
  } spamd_address_container;
  
  #endif
