@@ -1047,7 +1047,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		encrypted = TRUE;
 	}
 
-	if (encrypted) {
+	if (encrypted && msg->body != NULL) {
 		priv->outlen += 2;
 		bodylen += crypto_box_NONCEBYTES + crypto_box_ZEROBYTES;
 	}
@@ -1132,7 +1132,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 
 	/* Now set up all iov */
 	priv->out[0].iov_base = buf->str;
-	if (!encrypted) {
+	if (!encrypted || msg->body == NULL) {
 		priv->out[0].iov_len = buf->len;
 	}
 	else {
@@ -1146,6 +1146,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	}
 
 	i = 1;
+	/* XXX: encrypt headers */
 	LL_FOREACH (msg->headers, hdr)
 	{
 		priv->out[i].iov_base = hdr->name->str;
