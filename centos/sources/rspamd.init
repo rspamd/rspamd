@@ -87,7 +87,7 @@ force_reload() {
 }
 
 configtest() {
-  $rspamd -t -c $RSPAMD_CONF_FILE
+  $rspamd -u $RSPAMD_USER -g $RSPAMD_GROUP -t -c $RSPAMD_CONF_FILE
 }
 
 rh_status() {
