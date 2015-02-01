@@ -116,6 +116,9 @@ struct rspamd_controller_worker_ctx {
 
 	/* Worker */
 	struct rspamd_worker *worker;
+
+	/* Local keypair */
+	gpointer key;
 };
 
 struct rspamd_controller_session {
@@ -1565,6 +1568,11 @@ init_controller_worker (struct rspamd_config *cfg)
 		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
 		static_files_dir), 0);
 
+	rspamd_rcl_register_worker_option (cfg, type, "keypair",
+		rspamd_rcl_parse_struct_keypair, ctx,
+		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
+		key), 0);
+
 	return ctx;
 }
 
@@ -1661,6 +1669,10 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http,
 			PATH_COUNTERS,
 		rspamd_controller_handle_counters);
+
+	if (ctx->key) {
+		rspamd_http_router_set_key (ctx->http, ctx->key);
+	}
 
 	/* Attach plugins */
 	cur = g_list_first (ctx->cfg->filters);
