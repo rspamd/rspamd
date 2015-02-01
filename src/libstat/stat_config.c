@@ -52,7 +52,8 @@ struct rspamd_stat_backend stat_backends[] = {
 		.process_token = rspamd_mmaped_file_process_token,
 		.learn_token = rspamd_mmaped_file_learn_token,
 		.total_learns = rspamd_mmaped_file_total_learns,
-		.inc_learns = rspamd_mmaped_file_inc_learns
+		.inc_learns = rspamd_mmaped_file_inc_learns,
+		.get_stat = rspamd_mmaped_file_get_stat
 	}
 };
 

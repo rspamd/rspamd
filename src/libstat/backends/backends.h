@@ -26,7 +26,7 @@
 #define BACKENDS_H_
 
 #include "config.h"
-
+#include "ucl.h"
 
 #define RSPAMD_DEFAULT_BACKEND "mmap"
 
@@ -49,6 +49,7 @@ struct rspamd_stat_backend {
 			struct rspamd_token_result *res, gpointer ctx);
 	gulong (*total_learns)(struct rspamd_statfile_runtime *runtime, gpointer ctx);
 	gulong (*inc_learns)(struct rspamd_statfile_runtime *runtime, gpointer ctx);
+	ucl_object_t* (*get_stat)(struct rspamd_statfile_runtime *runtime, gpointer ctx);
 	gpointer ctx;
 };
 
@@ -64,6 +65,8 @@ gboolean rspamd_mmaped_file_learn_token (struct token_node_s *tok,
 gulong rspamd_mmaped_file_total_learns (struct rspamd_statfile_runtime *runtime,
 		gpointer ctx);
 gulong rspamd_mmaped_file_inc_learns (struct rspamd_statfile_runtime *runtime,
+		gpointer ctx);
+ucl_object_t * rspamd_mmaped_file_get_stat (struct rspamd_statfile_runtime *runtime,
 		gpointer ctx);
 
 #endif /* BACKENDS_H_ */

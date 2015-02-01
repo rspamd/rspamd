@@ -972,3 +972,34 @@ rspamd_mmaped_file_inc_learns (struct rspamd_statfile_runtime *runtime,
 
 	return rev;
 }
+
+ucl_object_t *
+rspamd_mmaped_file_get_stat (struct rspamd_statfile_runtime *runtime,
+		gpointer ctx)
+{
+	ucl_object_t *res = NULL;
+	rspamd_mmaped_file_t *mf = (rspamd_mmaped_file_t *)runtime;
+
+	if (mf != NULL) {
+		res = ucl_object_typed_new (UCL_OBJECT);
+
+		ucl_object_insert_key (res, ucl_object_fromint (
+				rspamd_mmaped_file_get_revision (mf, NULL, NULL)), "revision",
+				0, false);
+		ucl_object_insert_key (res, ucl_object_fromint (mf->len), "size",
+				0, false);
+		ucl_object_insert_key (res, ucl_object_fromint (
+				rspamd_mmaped_file_get_total (mf)), "total",  0, false);
+		ucl_object_insert_key (res, ucl_object_fromint (
+				rspamd_mmaped_file_get_used (mf)), "used", 0, false);
+		ucl_object_insert_key (res, ucl_object_fromstring (mf->cf->symbol),
+				"symbol", 0, false);
+
+		if (mf->cf->label) {
+			ucl_object_insert_key (res, ucl_object_fromstring (mf->cf->label),
+					"label", 0, false);
+		}
+	}
+
+	return res;
+}
