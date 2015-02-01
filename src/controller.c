@@ -26,6 +26,7 @@
 #include "libserver/dynamic_cfg.h"
 #include "libutil/rrd.h"
 #include "libutil/map.h"
+#include "libstat/stat_api.h"
 #include "main.h"
 
 #ifdef WITH_GPERF_TOOLS
@@ -1255,12 +1256,8 @@ rspamd_controller_handle_stat_common (
 	struct rspamd_controller_session *session = conn_ent->ud;
 	ucl_object_t *top, *sub;
 	gint i;
-	guint64 used, total, rev, ham = 0, spam = 0;
-	time_t ti;
+	guint64 learned  = 0, spam, ham;
 	rspamd_mempool_stat_t mem_st;
-	struct rspamd_classifier_config *ccf;
-	struct rspamd_statfile_config *st;
-	GList *cur_cl, *cur_st;
 	struct rspamd_stat *stat, stat_copy;
 
 	rspamd_mempool_stat (&mem_st);
@@ -1294,8 +1291,6 @@ rspamd_controller_handle_stat_common (
 	ucl_object_insert_key (top, ucl_object_fromint (
 			ham),  "ham_count",	 0, false);
 	ucl_object_insert_key (top,
-		ucl_object_fromint (stat->messages_learned), "learned", 0, false);
-	ucl_object_insert_key (top,
 		ucl_object_fromint (stat->connections_count), "connections", 0, false);
 	ucl_object_insert_key (top,
 		ucl_object_fromint (stat->control_connections_count),
@@ -1327,15 +1322,11 @@ rspamd_controller_handle_stat_common (
 			stat->fuzzy_hashes_expired), "fuzzy_expired", 0, false);
 
 	/* Now write statistics for each statfile */
-	cur_cl = g_list_first (session->ctx->cfg->classifiers);
-	sub = ucl_object_typed_new (UCL_ARRAY);
-	while (cur_cl) {
-		ccf = cur_cl->data;
-		/* XXX: add statistics for the modern system */
-		cur_cl = g_list_next (cur_cl);
-	}
 
+	sub = rspamd_stat_statistics (session->ctx->cfg, &learned);
 	ucl_object_insert_key (top, sub, "statfiles", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (learned), "total_learns", 0, false);
 
 	if (do_reset) {
 		session->ctx->srv->stat->messages_scanned = 0;

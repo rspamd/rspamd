@@ -55,6 +55,14 @@ gboolean rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **
 gboolean rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 		GError **err);
 
+/**
+ * Get the overall statistics for all statfile backends
+ * @param cfg configuration
+ * @param total_learns the total number of learns is stored here
+ * @return array of statistical information
+ */
+ucl_object_t * rspamd_stat_statistics (struct rspamd_config *cfg,
+		guint64 *total_learns);
 
 void rspamd_stat_unload (void);
 

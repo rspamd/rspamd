@@ -679,8 +679,8 @@ rspamc_stat_statfile (const ucl_object_t *obj, GString *out)
 		rspamd_printf_gstring (out, "Statfile: %s ", symbol);
 	}
 	rspamd_printf_gstring (out, "length: %HL; free blocks: %HL; total blocks: %HL; "
-		"free: %.2f%%\n", size, blocks - used_blocks, blocks,
-		(blocks - used_blocks) * 100.0 / (gdouble)blocks);
+		"free: %.2f%%; learned: %L\n", size, blocks - used_blocks, blocks,
+		(blocks - used_blocks) * 100.0 / (gdouble)blocks, version);
 }
 
 static void
@@ -734,6 +734,8 @@ rspamc_stat_output (ucl_object_t *obj)
 			rspamc_stat_statfile (cur, out);
 		}
 	}
+	rspamd_printf_gstring (out, "Total learns: %L\n",
+			ucl_object_toint (ucl_object_find_key (obj, "total_learns")));
 
 	rspamd_fprintf (stdout, "%v", out);
 }

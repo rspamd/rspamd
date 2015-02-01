@@ -536,3 +536,60 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 
 	return ret;
 }
+
+ucl_object_t *
+rspamd_stat_statistics (struct rspamd_config *cfg, guint64 *total_learns)
+{
+	struct rspamd_classifier_config *clcf;
+	struct rspamd_statfile_config *stcf;
+	struct rspamd_stat_backend *bk;
+	gpointer backend_runtime;
+	GList *cur, *st_list = NULL, *curst;
+	ucl_object_t *res = NULL, *elt;
+	guint64 learns = 0;
+
+	if (cfg != NULL && cfg->classifiers != NULL) {
+		res = ucl_object_typed_new (UCL_ARRAY);
+
+		cur = g_list_first (cfg->classifiers);
+
+		while (cur) {
+			clcf = (struct rspamd_classifier_config *)cur->data;
+
+			st_list = clcf->statfiles;
+			curst = st_list;
+
+			while (curst != NULL) {
+				stcf = (struct rspamd_statfile_config *)curst->data;
+
+				bk = rspamd_stat_get_backend (stcf->backend);
+
+				if (bk == NULL) {
+					msg_warn ("backend of type %s is not defined", stcf->backend);
+					curst = g_list_next (curst);
+					continue;
+				}
+
+				backend_runtime = bk->runtime (stcf, FALSE, bk->ctx);
+
+				learns += bk->total_learns (backend_runtime, bk->ctx);
+				elt = bk->get_stat (backend_runtime, bk->ctx);
+
+				if (elt != NULL) {
+					ucl_array_append (res, elt);
+				}
+
+				curst = g_list_next (curst);
+			}
+
+			/* Next classifier */
+			cur = g_list_next (cur);
+		}
+
+		if (total_learns != NULL) {
+			*total_learns = learns;
+		}
+	}
+
+	return res;
+}
