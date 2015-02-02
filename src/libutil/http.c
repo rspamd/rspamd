@@ -612,10 +612,19 @@ rspamd_http_on_message_complete (http_parser * parser)
 			dec_len = priv->msg->body->len - crypto_box_NONCEBYTES;
 			peer_key = (struct rspamd_http_keypair *)priv->msg->peer_key;
 
-			if (crypto_box_open (m, m, dec_len, nonce,
-					peer_key->pk, priv->local_key->sk) != 0) {
-				msg_err ("cannot verify encrypted message");
-				return -1;
+			if (conn->cache) {
+				if (crypto_box_open_afternm (m, m, dec_len, nonce,
+						peer_key->nm) != 0) {
+					msg_err ("cannot verify encrypted message");
+					return -1;
+				}
+			}
+			else {
+				if (crypto_box_open (m, m, dec_len, nonce,
+						peer_key->pk, priv->local_key->sk) != 0) {
+					msg_err ("cannot verify encrypted message");
+					return -1;
+				}
 			}
 			m += crypto_box_ZEROBYTES;
 			dec_len -= crypto_box_ZEROBYTES;
@@ -1181,9 +1190,16 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	}
 	if (msg->body != NULL) {
 		if (encrypted && peer_key != NULL) {
-			crypto_box_detached (pbody, pbody,
-					bodylen - sizeof (nonce) - sizeof (mac), np,
-					peer_key->pk, priv->local_key->sk, mp);
+			if (conn->cache) {
+				crypto_box_afternm_detached (pbody, pbody,
+						bodylen - sizeof (nonce) - sizeof (mac), np,
+						peer_key->nm, mp);
+			}
+			else {
+				crypto_box_detached (pbody, pbody,
+						bodylen - sizeof (nonce) - sizeof (mac), np,
+						peer_key->pk, priv->local_key->sk, mp);
+			}
 			priv->out[i].iov_base = np;
 			priv->out[i++].iov_len = sizeof (nonce);
 			priv->out[i].iov_base = mp;
