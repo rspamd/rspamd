@@ -397,7 +397,8 @@ rspamd_http_parse_date (const gchar *header, gsize len)
 }
 
 static void
-rspamd_http_parse_key (GString *data, struct rspamd_http_connection_private *priv)
+rspamd_http_parse_key (GString *data, struct rspamd_http_connection *conn,
+		struct rspamd_http_connection_private *priv)
 {
 	guchar *decoded_id, *decoded_key;
 	const gchar *eq_pos;
@@ -422,6 +423,11 @@ rspamd_http_parse_key (GString *data, struct rspamd_http_connection_private *pri
 							RSPAMD_HTTP_KEY_ID_LEN) == 0) {
 						priv->msg->peer_key =
 							rspamd_http_connection_make_peer_key (eq_pos + 1);
+
+						if (conn->cache && priv->msg->peer_key) {
+							rspamd_keypair_cache_process (conn->cache,
+									priv->msg->peer_key, priv->local_key);
+						}
 					}
 				}
 			}
@@ -433,14 +439,15 @@ rspamd_http_parse_key (GString *data, struct rspamd_http_connection_private *pri
 }
 
 static inline void
-rspamd_http_check_special_header (struct rspamd_http_connection_private *priv)
+rspamd_http_check_special_header (struct rspamd_http_connection *conn,
+		struct rspamd_http_connection_private *priv)
 {
 	if (g_ascii_strcasecmp (priv->header->name->str, date_header) == 0) {
 		priv->msg->date = rspamd_http_parse_date (priv->header->value->str,
 				priv->header->value->len);
 	}
 	else if (g_ascii_strcasecmp (priv->header->name->str, key_header) == 0) {
-		rspamd_http_parse_key (priv->header->value, priv);
+		rspamd_http_parse_key (priv->header->value, conn, priv);
 	}
 }
 
@@ -495,7 +502,7 @@ rspamd_http_on_header_field (http_parser * parser,
 	}
 	else if (priv->new_header) {
 		DL_APPEND (priv->msg->headers, priv->header);
-		rspamd_http_check_special_header (priv);
+		rspamd_http_check_special_header (conn, priv);
 		priv->header = g_slice_alloc (sizeof (struct rspamd_http_header));
 		priv->header->name = g_string_sized_new (32);
 		priv->header->value = g_string_sized_new (32);
@@ -540,7 +547,7 @@ rspamd_http_on_headers_complete (http_parser * parser)
 
 	if (priv->header != NULL) {
 		DL_APPEND (priv->msg->headers, priv->header);
-		rspamd_http_check_special_header (priv);
+		rspamd_http_check_special_header (conn, priv);
 		priv->header = NULL;
 	}
 
@@ -856,7 +863,8 @@ rspamd_http_connection_new (rspamd_http_body_handler_t body_handler,
 	rspamd_http_error_handler_t error_handler,
 	rspamd_http_finish_handler_t finish_handler,
 	unsigned opts,
-	enum rspamd_http_connection_type type)
+	enum rspamd_http_connection_type type,
+	struct rspamd_keypair_cache *cache)
 {
 	struct rspamd_http_connection *new;
 	struct rspamd_http_connection_private *priv;
@@ -874,6 +882,7 @@ rspamd_http_connection_new (rspamd_http_body_handler_t body_handler,
 	new->fd = -1;
 	new->ref = 1;
 	new->finished = FALSE;
+	new->cache = cache;
 
 	/* Init priv */
 	priv = g_slice_alloc0 (sizeof (struct rspamd_http_connection_private));
@@ -1012,10 +1021,15 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	priv->buf->data = g_string_sized_new (128);
 	buf = priv->buf->data;
 
-	if (priv->peer_key) {
+	if (priv->peer_key && priv->local_key) {
 		priv->msg->peer_key = priv->peer_key;
 		priv->peer_key = NULL;
 		priv->encrypted = TRUE;
+
+		if (conn->cache && priv->msg->peer_key) {
+			rspamd_keypair_cache_process (conn->cache,
+					priv->msg->peer_key, priv->local_key);
+		}
 	}
 
 	if (msg->method < HTTP_SYMBOLS) {
@@ -1575,6 +1589,7 @@ rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 	}
 
 	new->default_fs_path = NULL;
+
 	if (default_fs_path != NULL) {
 		if (stat (default_fs_path, &st) == -1) {
 			msg_err ("cannot stat %s", default_fs_path);
@@ -1588,6 +1603,9 @@ rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 			}
 		}
 	}
+
+	/* XXX: stupid default value, should be configurable */
+	new->cache = rspamd_keypair_cache_new (256);
 
 	return new;
 }
@@ -1633,7 +1651,7 @@ rspamd_http_router_handle_socket (struct rspamd_http_connection_router *router,
 			rspamd_http_router_error_handler,
 			rspamd_http_router_finish_handler,
 			0,
-			RSPAMD_HTTP_SERVER);
+			RSPAMD_HTTP_SERVER, router->cache);
 
 	if (router->key) {
 		rspamd_http_connection_set_key (conn->conn, router->key);
@@ -1659,6 +1677,10 @@ rspamd_http_router_free (struct rspamd_http_connection_router *router)
 		if (router->key) {
 			kp = (struct rspamd_http_keypair *)router->key;
 			REF_RELEASE (kp);
+		}
+
+		if (router->cache) {
+			rspamd_keypair_cache_destroy (router->cache);
 		}
 
 		if (router->default_fs_path != NULL) {

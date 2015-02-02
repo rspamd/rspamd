@@ -24,6 +24,7 @@
 #include "rspamdclient.h"
 #include "util.h"
 #include "http.h"
+#include "keypairs_cache.h"
 
 #ifdef HAVE_FETCH_H
 #include <fetch.h>
@@ -46,6 +47,7 @@ struct rspamd_client_connection {
 	struct rspamd_http_connection *http_conn;
 	gboolean req_sent;
 	struct rspamd_client_request *req;
+	struct rspamd_keypair_cache *keys_cache;
 };
 
 struct rspamd_client_request {
@@ -148,11 +150,13 @@ rspamd_client_init (struct event_base *ev_base, const gchar *name,
 	conn->ev_base = ev_base;
 	conn->fd = fd;
 	conn->req_sent = FALSE;
+	conn->keys_cache = rspamd_keypair_cache_new (32);
 	conn->http_conn = rspamd_http_connection_new (rspamd_client_body_handler,
 			rspamd_client_error_handler,
 			rspamd_client_finish_handler,
 			0,
-			RSPAMD_HTTP_CLIENT);
+			RSPAMD_HTTP_CLIENT,
+			conn->keys_cache);
 
 	conn->server_name = g_string_new (name);
 	if (port != 0) {

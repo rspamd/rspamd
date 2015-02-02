@@ -158,7 +158,8 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 	}
 	cbd->fd = fd;
 	cbd->conn = rspamd_http_connection_new (NULL, lua_http_error_handler,
-			lua_http_finish_handler, RSPAMD_HTTP_CLIENT_SIMPLE, RSPAMD_HTTP_CLIENT);
+			lua_http_finish_handler, RSPAMD_HTTP_CLIENT_SIMPLE,
+			RSPAMD_HTTP_CLIENT, NULL);
 
 	rspamd_http_connection_write_message (cbd->conn, cbd->msg,
 			NULL, NULL, cbd, fd, &cbd->tv, cbd->ev_base);

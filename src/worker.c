@@ -36,6 +36,7 @@
 #include "libserver/dns.h"
 #include "libmime/message.h"
 #include "main.h"
+#include "keypairs_cache.h"
 
 #include "lua/lua_common.h"
 
@@ -88,6 +89,8 @@ struct rspamd_worker_ctx {
 	struct event_base *ev_base;
 	/* Encryption key */
 	gpointer key;
+	/* Keys cache */
+	struct rspamd_keypair_cache *keys_cache;
 };
 
 /*
@@ -237,7 +240,8 @@ accept_socket (gint fd, short what, void *arg)
 		rspamd_worker_error_handler,
 		rspamd_worker_finish_handler,
 		0,
-		RSPAMD_HTTP_SERVER);
+		RSPAMD_HTTP_SERVER,
+		ctx->keys_cache);
 	new_task->ev_base = ctx->ev_base;
 	ctx->tasks++;
 	rspamd_mempool_add_destructor (new_task->task_pool,
@@ -352,6 +356,9 @@ start_worker (struct rspamd_worker *worker)
 		}
 	}
 
+	/* XXX: stupid default */
+	ctx->keys_cache = rspamd_keypair_cache_new (256);
+
 	event_base_loop (ctx->ev_base, 0);
 
 	g_mime_shutdown ();
@@ -360,6 +367,8 @@ start_worker (struct rspamd_worker *worker)
 	if (ctx->key) {
 		rspamd_http_connection_key_unref (ctx->key);
 	}
+
+	rspamd_keypair_cache_destroy (ctx->keys_cache);
 
 	exit (EXIT_SUCCESS);
 }

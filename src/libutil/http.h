@@ -33,6 +33,7 @@
 
 #include "config.h"
 #include "http_parser.h"
+#include "keypairs_cache.h"
 
 enum rspamd_http_connection_type {
 	RSPAMD_HTTP_SERVER,
@@ -109,6 +110,7 @@ struct rspamd_http_connection {
 	rspamd_http_body_handler_t body_handler;
 	rspamd_http_error_handler_t error_handler;
 	rspamd_http_finish_handler_t finish_handler;
+	struct rspamd_keypair_cache *cache;
 	gpointer ud;
 	unsigned opts;
 	enum rspamd_http_connection_type type;
@@ -131,6 +133,7 @@ struct rspamd_http_connection_router {
 	struct timeval tv;
 	struct timeval *ptv;
 	struct event_base *ev_base;
+	struct rspamd_keypair_cache *cache;
 	gchar *default_fs_path;
 	gpointer key;
 	rspamd_http_router_error_handler_t error_handler;
@@ -148,7 +151,8 @@ struct rspamd_http_connection * rspamd_http_connection_new (
 	rspamd_http_error_handler_t error_handler,
 	rspamd_http_finish_handler_t finish_handler,
 	unsigned opts,
-	enum rspamd_http_connection_type type);
+	enum rspamd_http_connection_type type,
+	struct rspamd_keypair_cache *cache);
 
 /**
  * Load the encryption keypair

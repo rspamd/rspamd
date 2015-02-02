@@ -588,7 +588,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 		hdata->conn = rspamd_http_connection_new (http_map_read, http_map_error,
 			http_map_finish,
 			RSPAMD_HTTP_BODY_PARTIAL | RSPAMD_HTTP_CLIENT_SIMPLE,
-			RSPAMD_HTTP_CLIENT);
+			RSPAMD_HTTP_CLIENT, NULL);
 		new_map->map_data = hdata;
 	}
 	/* Temp pool */
