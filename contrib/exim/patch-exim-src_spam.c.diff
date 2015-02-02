@@ -318,7 +318,7 @@ diff -ru a/src/spam.h b/src/spam.h
    uschar tcp_addr[24];
 -  unsigned int tcp_port;
 +  unsigned short int tcp_port;
-+  BOOL is_rspamd;
++  int is_rspamd:1;
  } spamd_address_container;
  
  #endif
