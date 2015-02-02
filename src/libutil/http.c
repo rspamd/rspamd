@@ -31,15 +31,8 @@
 #include "tweetnacl.h"
 #include "blake2.h"
 #include "ottery.h"
-
+#include "keypair_private.h"
 #include <limits.h>
-
-struct rspamd_http_keypair {
-	guchar pk[crypto_box_PUBLICKEYBYTES];
-	guchar sk[crypto_box_SECRETKEYBYTES];
-	guchar id[BLAKE2B_OUTBYTES];
-	ref_entry_t ref;
-};
 
 struct rspamd_http_connection_private {
 	struct _rspamd_http_privbuf {

@@ -151,6 +151,10 @@ rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash, gpointer key, time_t now)
 				return NULL;
 			}
 		}
+		else {
+			res->store_time = now;
+		}
+
 		return res->data;
 	}
 
@@ -187,6 +191,9 @@ rspamd_lru_hash_insert (rspamd_lru_hash_t *hash, gpointer key, gpointer value,
 						break;
 					}
 				}
+			}
+			else {
+				/* XXX: use binary heap here */
 			}
 			if (removed == 0) {
 				rspamd_lru_hash_destroy_node (hash->elements);

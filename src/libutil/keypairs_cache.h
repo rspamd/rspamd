@@ -25,6 +25,32 @@
 #ifndef KEYPAIRS_CACHE_H_
 #define KEYPAIRS_CACHE_H_
 
+#include "config.h"
+
+struct rspamd_keypair_cache;
+
+/**
+ * Create new keypair cache of the specified size
+ * @param max_items defines maximum count of elements in the cache
+ * @return new cache
+ */
+struct rspamd_keypair_cache * rspamd_keypair_cache_new (guint max_items);
+
+
+/**
+ * Process local and remote keypair setting beforenm value as appropriate
+ * @param c cache of keypairs
+ * @param lk local key
+ * @param rk remote key
+ */
+void rspamd_keypair_cache_process (struct rspamd_keypair_cache *c,
+		gpointer lk, gpointer rk);
+
+/**
+ * Destroy old keypair cache
+ * @param c cache object
+ */
+void rspamd_keypair_cache_destroy (struct rspamd_keypair_cache *c);
 
 
 #endif /* KEYPAIRS_CACHE_H_ */

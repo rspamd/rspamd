@@ -34,6 +34,7 @@ struct rspamd_http_keypair {
 	guchar pk[crypto_box_PUBLICKEYBYTES];
 	guchar sk[crypto_box_SECRETKEYBYTES];
 	guchar id[BLAKE2B_OUTBYTES];
+	guchar nm[crypto_box_BEFORENMBYTES];
 	ref_entry_t ref;
 };
 

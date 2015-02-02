@@ -23,3 +23,58 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "config.h"
+#include "main.h"
+#include "keypairs_cache.h"
+#include "keypair_private.h"
+#include "hash.h"
+
+struct rspamd_keypair_elt {
+	guchar nm[crypto_box_BEFORENMBYTES];
+};
+
+struct rspamd_keypair_cache {
+	rspamd_lru_hash_t *hash;
+};
+
+struct rspamd_keypair_cache *
+rspamd_keypair_cache_new (guint max_items)
+{
+	struct rspamd_keypair_cache *c;
+
+	g_assert (max_items > 0);
+
+	c = g_slice_alloc (sizeof (*c));
+	c->hash = rspamd_lru_hash_new (max_items, -1, g_free, g_free);
+
+	return c;
+}
+
+void
+rspamd_keypair_cache_process (struct rspamd_keypair_cache *c,
+		gpointer lk, gpointer rk)
+{
+	struct rspamd_http_keypair *kp_local = (struct rspamd_http_keypair *)lk,
+			*kp_remote = (struct rspamd_http_keypair *)rk;
+	guchar nm[crypto_box_BEFORENMBYTES];
+
+	g_assert (kp_local != NULL);
+	g_assert (kp_remote != NULL);
+
+	/*
+	 * XXX: at this point we do nothing, since LRU hash is completely broken
+	 * and useless for our purposes
+	 */
+	crypto_box_beforenm (nm, kp_remote->pk, kp_local->sk);
+	memcpy (kp_remote->nm, nm, sizeof (nm));
+	memcpy (kp_local->nm, nm, sizeof (nm));
+}
+
+void
+rspamd_keypair_cache_destroy (struct rspamd_keypair_cache *c)
+{
+	if (c != NULL) {
+		rspamd_lru_hash_destroy (c->hash);
+		g_slice_free1 (sizeof (*c), c);
+	}
+}
