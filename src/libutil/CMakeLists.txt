@@ -8,6 +8,7 @@ SET(LIBRSPAMDUTILSRC
 								fuzzy.c
 								hash.c
 								http.c
+								keypairs_cache.c
 								logger.c
 								map.c
 								mem_pool.c
