@@ -109,35 +109,6 @@ struct fuzzy_session {
 	struct rspamd_fuzzy_storage_ctx *ctx;
 };
 
-extern sig_atomic_t wanna_die;
-
-static GQuark
-rspamd_fuzzy_quark(void)
-{
-	return g_quark_from_static_string ("fuzzy-storage");
-}
-
-static void
-sigterm_handler (void *arg)
-{
-	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
-	struct rspamd_fuzzy_storage_ctx *ctx;
-
-	ctx = worker->ctx;
-}
-
-/*
- * Config reload is designed by sending sigusr to active workers and pending shutdown of them
- */
-static void
-sigusr2_handler (void *arg)
-{
-	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
-	struct rspamd_fuzzy_storage_ctx *ctx;
-
-	ctx = worker->ctx;
-}
-
 static gboolean
 rspamd_fuzzy_check_client (struct fuzzy_session *session)
 {
@@ -254,14 +225,12 @@ static void
 accept_fuzzy_socket (gint fd, short what, void *arg)
 {
 	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
-	struct rspamd_fuzzy_storage_ctx *ctx;
 	struct fuzzy_session session;
 	gint r;
 	guint8 buf[2048];
 	struct rspamd_fuzzy_cmd *cmd = NULL, lcmd;
 	struct legacy_fuzzy_cmd *l;
 
-	ctx = worker->ctx;
 	session.worker = worker;
 	session.fd = fd;
 	session.addr.slen = sizeof (session.addr.addr);
@@ -396,28 +365,12 @@ start_fuzzy (struct rspamd_worker *worker)
 {
 	struct rspamd_fuzzy_storage_ctx *ctx = worker->ctx;
 	GError *err = NULL;
-	struct rspamd_worker_signal_handler *sigh;
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"fuzzy",
 			accept_fuzzy_socket);
 	server_stat = worker->srv->stat;
 
-	/* Custom SIGUSR2 handler */
-	sigh = g_hash_table_lookup (worker->signal_events, GINT_TO_POINTER (SIGUSR2));
-	sigh->post_handler = sigusr2_handler;
-	sigh->handler_data = worker;
-
-	/* Sync on termination */
-	sigh = g_hash_table_lookup (worker->signal_events, GINT_TO_POINTER (SIGTERM));
-	sigh->post_handler = sigterm_handler;
-	sigh->handler_data = worker;
-	sigh = g_hash_table_lookup (worker->signal_events, GINT_TO_POINTER (SIGINT));
-	sigh->post_handler = sigterm_handler;
-	sigh->handler_data = worker;
-	sigh = g_hash_table_lookup (worker->signal_events, GINT_TO_POINTER (SIGHUP));
-	sigh->post_handler = sigterm_handler;
-	sigh->handler_data = worker;
 
 	if ((ctx->backend = rspamd_fuzzy_backend_open (ctx->hashfile, &err)) == NULL) {
 		msg_err (err->message);
