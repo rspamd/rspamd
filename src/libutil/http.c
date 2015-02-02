@@ -1019,6 +1019,12 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	priv->buf->data = g_string_sized_new (128);
 	buf = priv->buf->data;
 
+	if (priv->peer_key) {
+		priv->msg->peer_key = priv->peer_key;
+		priv->peer_key = NULL;
+		priv->encrypted = TRUE;
+	}
+
 	if (msg->method < HTTP_SYMBOLS) {
 		if (msg->body == NULL || msg->body->len == 0) {
 			pbody = NULL;
