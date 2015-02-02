@@ -72,6 +72,7 @@ rspamd_ip_check_ipv6 (void)
 			 * so here we try to bind to some local address and check, whether it
 			 * is possible
 			 */
+			memset (&sin6, 0, sizeof (sin6));
 			sin6.sin6_family = AF_INET6;
 			sin6.sin6_port = g_random_int_range (20000, 60000);
 			sin6.sin6_addr = ip6_local;
@@ -386,45 +387,63 @@ rspamd_parse_host_port_priority_strv (gchar **tokens,
 		cur_port = NULL;
 	}
 
-	if ((r = getaddrinfo (cur_tok, cur_port, &hints, &res)) == 0) {
-		/* Now copy up to max_addrs of addresses */
-		addr_cnt = 0;
-		cur = res;
-		while (cur && addr_cnt < *max_addrs) {
-			cur = cur->ai_next;
-			addr_cnt ++;
-		}
+	if (*tokens[0] != '/') {
+		if ((r = getaddrinfo (cur_tok, cur_port, &hints, &res)) == 0) {
+			/* Now copy up to max_addrs of addresses */
+			addr_cnt = 0;
+			cur = res;
+			while (cur && addr_cnt < *max_addrs) {
+				cur = cur->ai_next;
+				addr_cnt ++;
+			}
 
-		if (pool == NULL) {
-			*addr = g_new (rspamd_inet_addr_t, addr_cnt);
+			if (pool == NULL) {
+				*addr = g_new (rspamd_inet_addr_t, addr_cnt);
+			}
+			else {
+				*addr = rspamd_mempool_alloc (pool, addr_cnt *
+						sizeof (rspamd_inet_addr_t));
+			}
+
+			cur = res;
+			addr_cnt = 0;
+			while (cur && addr_cnt < *max_addrs) {
+				cur_addr = &(*addr)[addr_cnt];
+				memcpy (&cur_addr->addr, cur->ai_addr,
+						MIN (sizeof (cur_addr->addr), cur->ai_addrlen));
+				cur_addr->af = cur->ai_family;
+				rspamd_ip_validate_af (cur_addr);
+				cur_addr->slen = cur->ai_addrlen;
+				cur = cur->ai_next;
+				addr_cnt ++;
+			}
+
+			*max_addrs = addr_cnt;
+
+			freeaddrinfo (res);
 		}
 		else {
-			*addr = rspamd_mempool_alloc (pool, addr_cnt *
-					sizeof (rspamd_inet_addr_t));
+			msg_err ("address resolution for %s failed: %s",
+					tokens[0],
+					gai_strerror (r));
+			goto err;
 		}
-
-		cur = res;
-		addr_cnt = 0;
-		while (cur && addr_cnt < *max_addrs) {
-			cur_addr = &(*addr)[addr_cnt];
-			memcpy (&cur_addr->addr, cur->ai_addr,
-					MIN (sizeof (cur_addr->addr), cur->ai_addrlen));
-			cur_addr->af = cur->ai_family;
-			rspamd_ip_validate_af (cur_addr);
-			cur_addr->slen = cur->ai_addrlen;
-			cur = cur->ai_next;
-			addr_cnt ++;
-		}
-
-		*max_addrs = addr_cnt;
-
-		freeaddrinfo (res);
 	}
 	else {
-		msg_err ("address resolution for %s failed: %s",
-			tokens[0],
-			gai_strerror (r));
-		goto err;
+		/* Special case of unix socket, as getaddrinfo cannot deal with them */
+		if (pool == NULL) {
+			*addr = g_new0 (rspamd_inet_addr_t, 1);
+		}
+		else {
+			*addr = rspamd_mempool_alloc0 (pool, sizeof (rspamd_inet_addr_t));
+		}
+
+		cur_addr = *addr;
+		cur_addr->af = AF_UNIX;
+		memcpy (cur_addr->addr.su.sun_path, tokens[0],
+				MIN (sizeof (cur_addr->addr.su.sun_path) - 1, strlen (tokens[0])));
+		rspamd_ip_validate_af (cur_addr);
+		*max_addrs = 1;
 	}
 
 	/* Restore errno */
