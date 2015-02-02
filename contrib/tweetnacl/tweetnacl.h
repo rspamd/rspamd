@@ -27,6 +27,7 @@ extern int crypto_auth_hmacsha512256_tweet_verify(const guchar *,const guchar *,
 #define crypto_box_keypair crypto_box_curve25519xsalsa20poly1305_keypair
 #define crypto_box_beforenm crypto_box_curve25519xsalsa20poly1305_beforenm
 #define crypto_box_afternm crypto_box_curve25519xsalsa20poly1305_afternm
+#define crypto_box_afternm_detached crypto_box_curve25519xsalsa20poly1305_afternm_detached
 #define crypto_box_open_afternm crypto_box_curve25519xsalsa20poly1305_open_afternm
 #define crypto_box_PUBLICKEYBYTES crypto_box_curve25519xsalsa20poly1305_PUBLICKEYBYTES
 #define crypto_box_SECRETKEYBYTES crypto_box_curve25519xsalsa20poly1305_SECRETKEYBYTES
@@ -48,6 +49,7 @@ extern int crypto_box_curve25519xsalsa20poly1305_tweet_open(guchar *,const gucha
 extern int crypto_box_curve25519xsalsa20poly1305_tweet_keypair(guchar *,guchar *);
 extern int crypto_box_curve25519xsalsa20poly1305_tweet_beforenm(guchar *,const guchar *,const guchar *);
 extern int crypto_box_curve25519xsalsa20poly1305_tweet_afternm(guchar *,const guchar *,guint64,const guchar *,const guchar *);
+extern int crypto_box_curve25519xsalsa20poly1305_tweet_afternm_detached(guchar *,const guchar *,guint64,const guchar *,const guchar *, guchar *);
 extern int crypto_box_curve25519xsalsa20poly1305_tweet_open_afternm(guchar *,const guchar *,guint64,const guchar *,const guchar *);
 #define crypto_box_curve25519xsalsa20poly1305_tweet_VERSION "-"
 #define crypto_box_curve25519xsalsa20poly1305 crypto_box_curve25519xsalsa20poly1305_tweet
@@ -56,6 +58,7 @@ extern int crypto_box_curve25519xsalsa20poly1305_tweet_open_afternm(guchar *,con
 #define crypto_box_curve25519xsalsa20poly1305_keypair crypto_box_curve25519xsalsa20poly1305_tweet_keypair
 #define crypto_box_curve25519xsalsa20poly1305_beforenm crypto_box_curve25519xsalsa20poly1305_tweet_beforenm
 #define crypto_box_curve25519xsalsa20poly1305_afternm crypto_box_curve25519xsalsa20poly1305_tweet_afternm
+#define crypto_box_curve25519xsalsa20poly1305_afternm_detached crypto_box_curve25519xsalsa20poly1305_tweet_afternm_detached
 #define crypto_box_curve25519xsalsa20poly1305_open_afternm crypto_box_curve25519xsalsa20poly1305_tweet_open_afternm
 #define crypto_box_curve25519xsalsa20poly1305_PUBLICKEYBYTES crypto_box_curve25519xsalsa20poly1305_tweet_PUBLICKEYBYTES
 #define crypto_box_curve25519xsalsa20poly1305_SECRETKEYBYTES crypto_box_curve25519xsalsa20poly1305_tweet_SECRETKEYBYTES
