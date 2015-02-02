@@ -1236,7 +1236,6 @@ rspamd_recipients_distance (struct rspamd_task *task, GList * args,
 {
 	struct expression_argument *arg;
 	InternetAddressList *cur;
-	InternetAddress *addr;
 	double threshold;
 	struct addr_list *ar;
 	gchar *c;
@@ -1272,7 +1271,6 @@ rspamd_recipients_distance (struct rspamd_task *task, GList * args,
 	cur = task->rcpt_mime;
 #ifdef GMIME24
 	for (i = 0; i < num; i++) {
-		addr = internet_address_list_get_address (cur, i);
 		InternetAddress *iaelt =
 			internet_address_list_get_address(cur, i);
 		InternetAddressMailbox *iamb =
@@ -1286,6 +1284,7 @@ rspamd_recipients_distance (struct rspamd_task *task, GList * args,
 		}
 	}
 #else
+	InternetAddress *addr;
 	i = 0;
 	while (cur) {
 		addr = internet_address_list_get_address (cur);

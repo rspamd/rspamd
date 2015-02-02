@@ -1134,7 +1134,7 @@ rspamd_init_main (struct rspamd_main *rspamd)
 }
 
 static void
-rspamd_init_libs ()
+rspamd_init_libs (void)
 {
 	struct rlimit rlim;
 

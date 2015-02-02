@@ -1259,7 +1259,7 @@ rspamd_controller_handle_stat_common (
 	struct rspamd_controller_session *session = conn_ent->ud;
 	ucl_object_t *top, *sub;
 	gint i;
-	guint64 learned  = 0, spam, ham;
+	guint64 learned  = 0, spam = 0, ham = 0;
 	rspamd_mempool_stat_t mem_st;
 	struct rspamd_stat *stat, stat_copy;
 

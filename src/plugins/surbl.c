@@ -310,7 +310,7 @@ surbl_module_config (struct rspamd_config *cfg)
 	ucl_object_iter_t it = NULL;
 	const gchar *redir_val;
 	guint32 bit;
-	gint i, idx;
+	gint i;
 
 
 	if ((value =
@@ -324,7 +324,6 @@ surbl_module_config (struct rspamd_config *cfg)
 		rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
 				(rspamd_mempool_destruct_t)rspamd_upstreams_destroy,
 				surbl_module_ctx->redirectors);
-		idx = 0;
 		LL_FOREACH (value, cur)
 		{
 			redir_val = ucl_obj_tostring (cur);

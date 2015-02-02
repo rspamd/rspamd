@@ -1150,7 +1150,7 @@ rspamd_dkim_canonize_body (rspamd_dkim_context_t *ctx,
 	const gchar *end)
 {
 	const gchar *p;
-	guint remain = ctx->len ? ctx->len : end - start;
+	guint remain = ctx->len ? ctx->len : (guint)(end - start);
 
 	if (start == NULL) {
 		/* Empty body */
