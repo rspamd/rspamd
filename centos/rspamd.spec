@@ -30,35 +30,27 @@ License:        BSD2c
 %endif
 URL:            https://rspamd.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
-%if 0%{?suse_version}
-BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,perl,sqlite3-devel
-%endif
-%if 0%{?el6}
-BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,perl,sqlite-devel
-%else
-BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,perl,sqlite-devel,systemd
-%endif
-%if 0%{?el6}
-Requires:       lua, logrotate
-%else
-Requires:       lua
-%endif
-# for /user/sbin/useradd
-%if 0%{?suse_version}
-Requires(pre):  shadow
-%else
-Requires(pre):  shadow-utils
-%endif
-%if 0%{?suse_version} || 0%{?fedora} || 0%{?el7}
-Requires(pre): systemd
+BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,perl
+%if 0%{?suse_version} || 0%{?el7} || 0%{?fedora}
+BuildRequires:  systemd
+Requires(pre):  systemd
 Requires(post): systemd
 Requires(preun): systemd
 Requires(postun): systemd
+%endif
+%if 0%{?suse_version}
+BuildRequires:  sqlite3-devel
+Requires(pre):  shadow
 %else
+BuildRequires:  sqlite-devel
+Requires(pre):  shadow-utils
+%endif
+Requires:       lua
+%if 0%{?el6}
+Requires:       logrotate
 Requires(post): chkconfig
-# for /sbin/service
-Requires(preun):        chkconfig, initscripts
-Requires(postun):       initscripts
+Requires(preun): chkconfig, initscripts
+Requires(postun): initscripts
 %endif
 
 Source0:        https://rspamd.com/downloads/%{name}-%{version}.tar.xz
