@@ -1,5 +1,5 @@
 #
-# Rspamd - rambler antispam system
+# Rspamd - rapid antispam system
 #
 # Cmake configuration file
 #
