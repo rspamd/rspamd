@@ -378,7 +378,7 @@ static gboolean
 tree_url_callback (gpointer key, gpointer value, void *data)
 {
 	struct url_regexp_param *param = data;
-	struct uri *url = value;
+	struct rspamd_url *url = value;
 	GError *err = NULL;
 
 	if (g_regex_match_full (param->regexp, struri (url), -1, 0, 0, NULL,

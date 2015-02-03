@@ -674,12 +674,12 @@ decode_entitles (gchar *s, guint * len)
 
 static void
 check_phishing (struct rspamd_task *task,
-	struct uri *href_url,
+	struct rspamd_url *href_url,
 	const gchar *url_text,
 	gsize remain,
 	tag_id_t id)
 {
-	struct uri *new;
+	struct rspamd_url *new;
 	gchar *url_str;
 	const gchar *p, *c;
 	gchar tagbuf[128];
@@ -732,12 +732,12 @@ check_phishing (struct rspamd_task *task,
 		p++;
 	}
 
-	if (url_try_text (task->task_pool, url_text, len, NULL, NULL, &url_str,
+	if (rspamd_url_find (task->task_pool, url_text, len, NULL, NULL, &url_str,
 		TRUE) && url_str != NULL) {
-		new = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct uri));
+		new = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct rspamd_url));
 		if (new != NULL) {
 			g_strstrip (url_str);
-			rc = parse_uri (new, url_str, task->task_pool);
+			rc = rspamd_url_parse (new, url_str, task->task_pool);
 
 			if (rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES || rc ==
 				URI_ERRNO_NO_HOST_SLASH) {
@@ -787,7 +787,7 @@ check_phishing (struct rspamd_task *task,
 			else {
 				msg_info ("extract of url '%s' failed: %s",
 					url_str,
-					url_strerror (rc));
+					rspamd_url_strerror (rc));
 			}
 		}
 	}
@@ -804,7 +804,7 @@ parse_tag_url (struct rspamd_task *task,
 {
 	gchar *c = NULL, *p, *url_text;
 	gint len, rc;
-	struct uri *url;
+	struct rspamd_url *url;
 	gboolean got_single_quote = FALSE, got_double_quote = FALSE;
 
 	/* For A tags search for href= and for IMG tags search for src= */
@@ -885,8 +885,8 @@ parse_tag_url (struct rspamd_task *task,
 			return;
 		}
 
-		url = rspamd_mempool_alloc (task->task_pool, sizeof (struct uri));
-		rc = parse_uri (url, url_text, task->task_pool);
+		url = rspamd_mempool_alloc (task->task_pool, sizeof (struct rspamd_url));
+		rc = rspamd_url_parse (url, url_text, task->task_pool);
 
 		if (rc != URI_ERRNO_EMPTY && rc != URI_ERRNO_NO_HOST && url->hostlen !=
 			0) {

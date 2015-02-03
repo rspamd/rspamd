@@ -46,14 +46,14 @@ struct suffix_item {
 };
 
 struct dns_param {
-	struct uri *url;
+	struct rspamd_url *url;
 	struct rspamd_task *task;
 	gchar *host_resolve;
 	struct suffix_item *suffix;
 };
 
 struct redirector_param {
-	struct uri *url;
+	struct rspamd_url *url;
 	struct rspamd_task *task;
 	struct upstream *redirector;
 	enum {

@@ -683,12 +683,12 @@ lua_check_image (lua_State * L)
 	return ud ? *((struct rspamd_image **)ud) : NULL;
 }
 
-static struct uri *
+static struct rspamd_url *
 lua_check_url (lua_State * L)
 {
 	void *ud = luaL_checkudata (L, 1, "rspamd{url}");
 	luaL_argcheck (L, ud != NULL, 1, "'url' expected");
-	return ud ? *((struct uri **)ud) : NULL;
+	return ud ? *((struct rspamd_url **)ud) : NULL;
 }
 
 static int
@@ -924,10 +924,10 @@ struct lua_tree_cb_data {
 static gboolean
 lua_tree_url_callback (gpointer key, gpointer value, gpointer ud)
 {
-	struct uri **purl;
+	struct rspamd_url **purl;
 	struct lua_tree_cb_data *cb = ud;
 
-	purl = lua_newuserdata (cb->L, sizeof (struct uri *));
+	purl = lua_newuserdata (cb->L, sizeof (struct rspamd_url *));
 	rspamd_lua_setclass (cb->L, "rspamd{url}", -1);
 	*purl = value;
 	lua_rawseti (cb->L, -2, cb->i++);
@@ -2352,7 +2352,7 @@ lua_image_get_filename (lua_State *L)
 static gint
 lua_url_get_length (lua_State *L)
 {
-	struct uri *url = lua_check_url (L);
+	struct rspamd_url *url = lua_check_url (L);
 
 	if (url != NULL) {
 		lua_pushinteger (L, strlen (struri (url)));
@@ -2366,7 +2366,7 @@ lua_url_get_length (lua_State *L)
 static gint
 lua_url_get_host (lua_State *L)
 {
-	struct uri *url = lua_check_url (L);
+	struct rspamd_url *url = lua_check_url (L);
 
 	if (url != NULL) {
 		lua_pushlstring (L, url->host, url->hostlen);
@@ -2380,7 +2380,7 @@ lua_url_get_host (lua_State *L)
 static gint
 lua_url_get_user (lua_State *L)
 {
-	struct uri *url = lua_check_url (L);
+	struct rspamd_url *url = lua_check_url (L);
 
 	if (url != NULL && url->user != NULL) {
 		lua_pushlstring (L, url->user, url->userlen);
@@ -2395,7 +2395,7 @@ lua_url_get_user (lua_State *L)
 static gint
 lua_url_get_path (lua_State *L)
 {
-	struct uri *url = lua_check_url (L);
+	struct rspamd_url *url = lua_check_url (L);
 
 	if (url != NULL) {
 		lua_pushlstring (L, url->data, url->datalen);
@@ -2410,7 +2410,7 @@ lua_url_get_path (lua_State *L)
 static gint
 lua_url_get_text (lua_State *L)
 {
-	struct uri *url = lua_check_url (L);
+	struct rspamd_url *url = lua_check_url (L);
 
 	if (url != NULL) {
 		lua_pushstring (L, struri (url));
@@ -2425,7 +2425,7 @@ lua_url_get_text (lua_State *L)
 static gint
 lua_url_is_phished (lua_State *L)
 {
-	struct uri *url = lua_check_url (L);
+	struct rspamd_url *url = lua_check_url (L);
 
 	if (url != NULL) {
 		lua_pushboolean (L, url->is_phished);
@@ -2440,11 +2440,11 @@ lua_url_is_phished (lua_State *L)
 static gint
 lua_url_get_phished (lua_State *L)
 {
-	struct uri **purl, *url = lua_check_url (L);
+	struct rspamd_url **purl, *url = lua_check_url (L);
 
 	if (url) {
 		if (url->is_phished && url->phished_url != NULL) {
-			purl = lua_newuserdata (L, sizeof (struct uri *));
+			purl = lua_newuserdata (L, sizeof (struct rspamd_url *));
 			rspamd_lua_setclass (L, "rspamd{url}", -1);
 			*purl = url->phished_url;
 

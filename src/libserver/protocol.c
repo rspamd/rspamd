@@ -492,7 +492,7 @@ static gboolean
 urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 {
 	struct tree_cb_data *cb = ud;
-	struct uri *url = value;
+	struct rspamd_url *url = value;
 	ucl_object_t *obj, *elt;
 
 	if (!cb->task->extended_urls) {
@@ -550,7 +550,7 @@ static gboolean
 emails_protocol_cb (gpointer key, gpointer value, gpointer ud)
 {
 	struct tree_cb_data *cb = ud;
-	struct uri *url = value;
+	struct rspamd_url *url = value;
 	ucl_object_t *obj;
 
 	obj = ucl_object_fromlstring (url->user, url->userlen + url->hostlen + 1);
