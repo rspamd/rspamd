@@ -221,6 +221,10 @@
 #cmakedefine HAVE_SCHED_YEILD    1
 #cmakedefine HAVE_PTHREAD_PROCESS_SHARED 1
 
+#cmakedefine HAVE_MEMSET_S       1
+#cmakedefine HAVE_EXPLICIT_BZERO 1
+#cmakedefine HAVE_WEAK_SYMBOLS   1
+
 /* Configure allocator */
 #define uthash_malloc(sz) g_slice_alloc(sz)
 #define uthash_free(ptr,sz) g_slice_free1(sz, ptr)

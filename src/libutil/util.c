@@ -2201,3 +2201,33 @@ randombytes (guchar *buf, guint64 len)
 {
 	ottery_rand_bytes (buf, (size_t)len);
 }
+
+#ifdef HAVE_WEAK_SYMBOLS
+__attribute__((weak)) void
+_dummy_symbol_to_prevent_lto(void * const pnt, const size_t len)
+{
+	(void) pnt;
+	(void) len;
+}
+#endif
+
+void
+rspamd_explicit_memzero(void * const pnt, const gsize len)
+{
+#if defined(HAVE_MEMSET_S)
+	if (memset_s (pnt, (rsize_t) len, 0, (rsize_t) len) != 0) {
+		g_assert (0);
+	}
+#elif defined(HAVE_EXPLICIT_BZERO)
+	explicit_bzero (pnt, len);
+#elif defined(HAVE_WEAK_SYMBOLS)
+	memset (pnt, 0, len);
+	_dummy_symbol_to_prevent_lto (pnt, len);
+#else
+	volatile unsigned char *pnt_ = (volatile unsigned char *) pnt;
+	gsize i = (gsize) 0U;
+	while (i < len) {
+		pnt_[i++] = 0U;
+	}
+#endif
+}
