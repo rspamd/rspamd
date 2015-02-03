@@ -1427,7 +1427,7 @@ rspamd_strlcpy_tolower (gchar *dst, const gchar *src, gsize siz)
 gint
 rspamd_emails_cmp (gconstpointer a, gconstpointer b)
 {
-	const struct uri *u1 = a, *u2 = b;
+	const struct rspamd_url *u1 = a, *u2 = b;
 	gint r;
 
 	if (u1->hostlen != u2->hostlen || u1->hostlen == 0) {
@@ -1453,7 +1453,7 @@ rspamd_emails_cmp (gconstpointer a, gconstpointer b)
 gint
 rspamd_urls_cmp (gconstpointer a, gconstpointer b)
 {
-	const struct uri *u1 = a, *u2 = b;
+	const struct rspamd_url *u1 = a, *u2 = b;
 	int r;
 
 	if (u1->hostlen != u2->hostlen || u1->hostlen == 0) {

@@ -577,7 +577,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 	GError ** err,
 	gboolean forced,
 	GTree *tree,
-	struct uri *url)
+	struct rspamd_url *url)
 {
 	GHashTable *t;
 	gchar *result = NULL, *dots[MAX_LEVELS],
@@ -754,7 +754,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 }
 
 static void
-make_surbl_requests (struct uri *url, struct rspamd_task *task,
+make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 	struct suffix_item *suffix, gboolean forced, GTree *tree)
 {
 	gchar *surbl_req;
@@ -954,7 +954,7 @@ redirector_callback (gint fd, short what, void *arg)
 						struri (param->url),
 						c);
 					r =
-						parse_uri (param->url,
+						rspamd_url_parse (param->url,
 							rspamd_mempool_strdup (param->task->task_pool,
 							c), param->task->task_pool);
 					if (r == URI_ERRNO_OK || r == URI_ERRNO_NO_SLASHES || r ==
@@ -986,7 +986,7 @@ redirector_callback (gint fd, short what, void *arg)
 
 
 static void
-register_redirector_call (struct uri *url, struct rspamd_task *task,
+register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 	struct suffix_item *suffix, const gchar *rule, GTree *tree)
 {
 	gint s = -1;
@@ -1043,7 +1043,7 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 {
 	struct redirector_param *param = data;
 	struct rspamd_task *task;
-	struct uri *url = value;
+	struct rspamd_url *url = value;
 	gchar *red_domain;
 	const gchar *pos;
 	GRegex *re;
@@ -1135,7 +1135,7 @@ static gboolean
 calculate_buflen_cb (gpointer key, gpointer value, gpointer cbdata)
 {
 	struct urls_tree_cb_data *cb = cbdata;
-	struct uri *url = value;
+	struct rspamd_url *url = value;
 
 	cb->len += strlen (struri (url)) + url->hostlen + sizeof (" <\"\">, ") - 1;
 
@@ -1146,7 +1146,7 @@ static gboolean
 write_urls_buffer (gpointer key, gpointer value, gpointer cbdata)
 {
 	struct urls_tree_cb_data *cb = cbdata;
-	struct uri *url = value;
+	struct rspamd_url *url = value;
 	rspamd_fstring_t f;
 	gchar *urlstr;
 	gsize len;

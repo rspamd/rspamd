@@ -8,12 +8,9 @@
 struct rspamd_task;
 struct mime_text_part;
 
-struct uri {
-	/* The start of the uri (and thus start of the protocol string). */
+struct rspamd_url {
 	gchar *string;
-
-	/* The internal type of protocol. Can _never_ be PROTOCOL_UNKNOWN. */
-	gint protocol; /* enum protocol */
+	gint protocol;
 
 	gint ip_family;
 
@@ -22,20 +19,20 @@ struct uri {
 	gchar *host;
 	gchar *port;
 	gchar *data;
+	gchar *query;
 	gchar *fragment;
 	gchar *post;
 	gchar *surbl;
 
-	struct uri *phished_url;
+	struct rspamd_url *phished_url;
 
-	/* @protocollen should only be usable if @protocol is either
-	 * PROTOCOL_USER or an uri string should be composed. */
 	guint protocollen;
 	guint userlen;
 	guint passwordlen;
 	guint hostlen;
 	guint portlen;
 	guint datalen;
+	guint querylen;
 	guint fragmentlen;
 	guint surbllen;
 
@@ -46,22 +43,16 @@ struct uri {
 };
 
 enum uri_errno {
-	URI_ERRNO_OK,           /* Parsing went well */
+	URI_ERRNO_OK = 0,           /* Parsing went well */
 	URI_ERRNO_EMPTY,        /* The URI string was empty */
 	URI_ERRNO_INVALID_PROTOCOL, /* No protocol was found */
-	URI_ERRNO_NO_SLASHES,       /* Slashes after protocol missing */
-	URI_ERRNO_TOO_MANY_SLASHES, /* Too many slashes after protocol */
-	URI_ERRNO_TRAILING_DOTS,    /* '.' after host */
-	URI_ERRNO_NO_HOST,      /* Host part is missing */
-	URI_ERRNO_NO_PORT_COLON,    /* ':' after host without port */
-	URI_ERRNO_NO_HOST_SLASH,    /* Slash after host missing */
-	URI_ERRNO_IPV6_SECURITY,    /* IPv6 security bug detected */
 	URI_ERRNO_INVALID_PORT,     /* Port number is bad */
-	URI_ERRNO_INVALID_PORT_RANGE    /* Port number is not within 0-65535 */
+	URI_ERRNO_BAD_ENCODING, /* Bad characters encoding */
+	URI_ERRNO_BAD_FORMAT
 };
 
-enum protocol {
-	PROTOCOL_FILE,
+enum rspamd_url_protocol {
+	PROTOCOL_FILE = 0,
 	PROTOCOL_FTP,
 	PROTOCOL_HTTP,
 	PROTOCOL_HTTPS,
@@ -78,7 +69,7 @@ enum protocol {
  * @param part current text part
  * @param is_html turn on html euristic
  */
-void url_parse_text (rspamd_mempool_t *pool,
+void rspamd_url_text_extract (rspamd_mempool_t *pool,
 	struct rspamd_task *task,
 	struct mime_text_part *part,
 	gboolean is_html);
@@ -89,8 +80,9 @@ void url_parse_text (rspamd_mempool_t *pool,
  * @param uristring text form of url
  * @param uri url object, must be pre allocated
  */
-enum uri_errno parse_uri (struct uri *uri,
+enum uri_errno rspamd_url_parse (struct rspamd_url *uri,
 	gchar *uristring,
+	gsize len,
 	rspamd_mempool_t *pool);
 
 /*
@@ -103,7 +95,7 @@ enum uri_errno parse_uri (struct uri *uri,
  * @param url_str storage for url string(or NULL)
  * @return TRUE if url is found in specified text
  */
-gboolean url_try_text (rspamd_mempool_t *pool,
+gboolean rspamd_url_find (rspamd_mempool_t *pool,
 	const gchar *begin,
 	gsize len,
 	gchar **start,
@@ -114,7 +106,7 @@ gboolean url_try_text (rspamd_mempool_t *pool,
 /*
  * Return text representation of url parsing error
  */
-const gchar * url_strerror (enum uri_errno err);
+const gchar * rspamd_url_strerror (enum uri_errno err);
 
 /*
  * URL unescape characters in the specified string

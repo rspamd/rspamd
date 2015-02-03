@@ -1233,7 +1233,7 @@ process_text_part (struct rspamd_task *task,
 			decode_entitles (text_part->content->data,
 				&text_part->content->len);
 		}
-		url_parse_text (task->task_pool, task, text_part, TRUE);
+		rspamd_url_text_extract (task->task_pool, task, text_part, TRUE);
 
 		rspamd_fuzzy_from_text_part (text_part, task->task_pool, task->cfg->max_diff);
 		rspamd_mempool_add_destructor (task->task_pool,
@@ -1260,7 +1260,7 @@ process_text_part (struct rspamd_task *task,
 				type,
 				text_part);
 		text_part->orig = part_content;
-		url_parse_text (task->task_pool, task, text_part, FALSE);
+		rspamd_url_text_extract (task->task_pool, task, text_part, FALSE);
 		rspamd_fuzzy_from_text_part (text_part, task->task_pool, task->cfg->max_diff);
 		task->text_parts = g_list_prepend (task->text_parts, text_part);
 	}
@@ -1460,7 +1460,7 @@ process_message (struct rspamd_task *task)
 	GMimeDataWrapper *wrapper;
 	struct received_header *recv;
 	gchar *mid, *url_str, *p, *end, *url_end;
-	struct uri *subject_url;
+	struct rspamd_url *subject_url;
 	gsize len;
 	gint rc;
 
@@ -1634,14 +1634,14 @@ process_message (struct rspamd_task *task)
 
 		while (p < end) {
 			/* Search to the end of url */
-			if (url_try_text (task->task_pool, p, end - p, NULL, &url_end,
+			if (rspamd_url_find (task->task_pool, p, end - p, NULL, &url_end,
 				&url_str, FALSE)) {
 				if (url_str != NULL) {
 					subject_url = rspamd_mempool_alloc0 (task->task_pool,
-							sizeof (struct uri));
+							sizeof (struct rspamd_url));
 					if (subject_url != NULL) {
 						/* Try to parse url */
-						rc = parse_uri (subject_url, url_str, task->task_pool);
+						rc = rspamd_url_parse (subject_url, url_str, task->task_pool);
 						if ((rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES ||
 							rc == URI_ERRNO_NO_HOST_SLASH) &&
 							subject_url->hostlen > 0) {
@@ -1656,7 +1656,7 @@ process_message (struct rspamd_task *task)
 						else if (rc != URI_ERRNO_OK) {
 							msg_info ("extract of url '%s' failed: %s",
 								url_str,
-								url_strerror (rc));
+								rspamd_url_strerror (rc));
 						}
 					}
 				}
