@@ -26,6 +26,23 @@ rspamd_lru_hash_t * rspamd_lru_hash_new (
 	GDestroyNotify key_destroy,
 	GDestroyNotify value_destroy);
 
+
+/**
+ * Create new lru hash
+ * @param maxsize maximum elements in a hash
+ * @param maxage maximum age of elemnt
+ * @param hash_func pointer to hash function
+ * @param key_equal_func pointer to function for comparing keys
+ * @return new rspamd_hash object
+ */
+rspamd_lru_hash_t * rspamd_lru_hash_new_full (
+	gint maxsize,
+	gint maxage,
+	GDestroyNotify key_destroy,
+	GDestroyNotify value_destroy,
+	GHashFunc hfunc,
+	GEqualFunc eqfunc);
+
 /**
  * Lookup item from hash
  * @param hash hash object
