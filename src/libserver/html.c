@@ -575,10 +575,7 @@ void
 decode_entitles (gchar *s, guint * len)
 {
 	guint l, rep_len;
-	gchar *t = s;                           /* t - tortoise */
-	gchar *h = s;                           /* h - hare     */
-	gchar *e = s;
-	gchar *end_ptr;
+	gchar *t = s, *h = s, *e = s, *end_ptr;
 	gint state = 0, val, base;
 	entity *found, key;
 
@@ -735,45 +732,38 @@ check_phishing (struct rspamd_task *task,
 	if (rspamd_url_find (task->task_pool, url_text, len, NULL, NULL, &url_str,
 		TRUE) && url_str != NULL) {
 		new = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct rspamd_url));
-		if (new != NULL) {
-			g_strstrip (url_str);
-			rc = rspamd_url_parse (new, url_str, task->task_pool);
+		g_strstrip (url_str);
+		rc = rspamd_url_parse (new, url_str, strlen (url_str), task->task_pool);
 
-			if (rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES || rc ==
-				URI_ERRNO_NO_HOST_SLASH) {
-				if (g_ascii_strncasecmp (href_url->host, new->host,
+		if (rc == URI_ERRNO_OK) {
+			if (g_ascii_strncasecmp (href_url->host, new->host,
 					MAX (href_url->hostlen, new->hostlen)) != 0) {
-					/* Special check for urls beginning with 'www' */
-					if (new->hostlen > 4 && href_url->hostlen > 4) {
-						p = new->host;
-						c = NULL;
-						if ((p[0] == 'w' || p[0] == 'W') &&
+				/* Special check for urls beginning with 'www' */
+				if (new->hostlen > 4 && href_url->hostlen > 4) {
+					p = new->host;
+					c = NULL;
+					if ((p[0] == 'w' || p[0] == 'W') &&
 							(p[1] == 'w' || p[1] == 'W') &&
 							(p[2] == 'w' || p[2] == 'W') &&
 							(p[3] == '.')) {
-							p += 4;
-							c = href_url->host;
-							len = MAX (href_url->hostlen, new->hostlen - 4);
-						}
-						else {
-							p = href_url->host;
-							if ((p[0] == 'w' || p[0] == 'W') &&
+						p += 4;
+						c = href_url->host;
+						len = MAX (href_url->hostlen, new->hostlen - 4);
+					}
+					else {
+						p = href_url->host;
+						if ((p[0] == 'w' || p[0] == 'W') &&
 								(p[1] == 'w' || p[1] == 'W') &&
 								(p[2] == 'w' || p[2] == 'W') &&
 								(p[3] == '.')) {
-								p += 4;
-								c = new->host;
-								len = MAX (href_url->hostlen - 4, new->hostlen);
-							}
+							p += 4;
+							c = new->host;
+							len = MAX (href_url->hostlen - 4, new->hostlen);
 						}
-						/* Compare parts and check for phished hostname */
-						if (c != NULL) {
-							if (g_ascii_strncasecmp (p, c, len) != 0) {
-								href_url->is_phished = TRUE;
-								href_url->phished_url = new;
-							}
-						}
-						else {
+					}
+					/* Compare parts and check for phished hostname */
+					if (c != NULL) {
+						if (g_ascii_strncasecmp (p, c, len) != 0) {
 							href_url->is_phished = TRUE;
 							href_url->phished_url = new;
 						}
@@ -783,12 +773,16 @@ check_phishing (struct rspamd_task *task,
 						href_url->phished_url = new;
 					}
 				}
+				else {
+					href_url->is_phished = TRUE;
+					href_url->phished_url = new;
+				}
 			}
-			else {
-				msg_info ("extract of url '%s' failed: %s",
+		}
+		else {
+			msg_info ("extract of url '%s' failed: %s",
 					url_str,
 					rspamd_url_strerror (rc));
-			}
 		}
 	}
 
@@ -871,8 +865,7 @@ parse_tag_url (struct rspamd_task *task,
 
 		url_text = rspamd_mempool_alloc (task->task_pool, len + 1);
 		rspamd_strlcpy (url_text, c, len + 1);
-		rspamd_url_unescape (url_text);
-		decode_entitles (url_text, NULL);
+		decode_entitles (url_text, &len);
 
 		if (g_ascii_strncasecmp (url_text, "http",
 			sizeof ("http") - 1) != 0 &&
@@ -882,14 +875,14 @@ parse_tag_url (struct rspamd_task *task,
 			sizeof ("ftp://") - 1) != 0 &&
 			g_ascii_strncasecmp (url_text, "mailto:",
 			sizeof ("mailto:") - 1) != 0) {
+
 			return;
 		}
 
 		url = rspamd_mempool_alloc (task->task_pool, sizeof (struct rspamd_url));
-		rc = rspamd_url_parse (url, url_text, task->task_pool);
+		rc = rspamd_url_parse (url, url_text, len, task->task_pool);
 
-		if (rc != URI_ERRNO_EMPTY && rc != URI_ERRNO_NO_HOST && url->hostlen !=
-			0) {
+		if (rc != URI_ERRNO_EMPTY && url->hostlen != 0) {
 			/*
 			 * Check for phishing
 			 */

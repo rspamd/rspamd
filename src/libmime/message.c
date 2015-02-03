@@ -44,7 +44,7 @@ strip_html_tags (struct rspamd_task *task,
 	GByteArray * src,
 	gint *stateptr)
 {
-	uint8_t *p, *rp, *tbegin = NULL, *end, c, lc, *estart;
+	uint8_t *p, *rp, *tbegin = NULL, *end, c, lc, *estart = NULL;
 	gint br, i = 0, depth = 0, in_q = 0;
 	gint state = 0;
 	guint dlen;
@@ -1639,25 +1639,22 @@ process_message (struct rspamd_task *task)
 				if (url_str != NULL) {
 					subject_url = rspamd_mempool_alloc0 (task->task_pool,
 							sizeof (struct rspamd_url));
-					if (subject_url != NULL) {
-						/* Try to parse url */
-						rc = rspamd_url_parse (subject_url, url_str, task->task_pool);
-						if ((rc == URI_ERRNO_OK || rc == URI_ERRNO_NO_SLASHES ||
-							rc == URI_ERRNO_NO_HOST_SLASH) &&
-							subject_url->hostlen > 0) {
-							if (subject_url->protocol != PROTOCOL_MAILTO) {
-								if (!g_tree_lookup (task->urls, subject_url)) {
-									g_tree_insert (task->urls,
+					rc = rspamd_url_parse (subject_url, url_str,
+							strlen (url_str), task->task_pool);
+
+					if ((rc == URI_ERRNO_OK) && subject_url->hostlen > 0) {
+						if (subject_url->protocol != PROTOCOL_MAILTO) {
+							if (!g_tree_lookup (task->urls, subject_url)) {
+								g_tree_insert (task->urls,
 										subject_url,
 										subject_url);
-								}
 							}
 						}
-						else if (rc != URI_ERRNO_OK) {
-							msg_info ("extract of url '%s' failed: %s",
+					}
+					else if (rc != URI_ERRNO_OK) {
+						msg_info ("extract of url '%s' failed: %s",
 								url_str,
 								rspamd_url_strerror (rc));
-						}
 					}
 				}
 			}
