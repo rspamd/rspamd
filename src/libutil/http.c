@@ -1710,6 +1710,8 @@ rspamd_http_router_free (struct rspamd_http_connection_router *router)
 static void
 rspamd_http_keypair_dtor (struct rspamd_http_keypair *kp)
 {
+	rspamd_explicit_memzero (kp->sk, sizeof (kp->sk));
+	rspamd_explicit_memzero (kp->nm, sizeof (kp->nm));
 	g_slice_free1 (sizeof (*kp), kp);
 }
 
