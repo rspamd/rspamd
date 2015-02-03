@@ -447,7 +447,7 @@ rspamc_metric_output (const ucl_object_t *obj)
 {
 	ucl_object_iter_t it = NULL;
 	const ucl_object_t *cur;
-	gdouble score, required_score;
+	gdouble score = 0, required_score = 0;
 	gint got_scores = 0;
 
 	rspamd_fprintf (stdout, "[Metric: %s]\n", ucl_object_key (obj));

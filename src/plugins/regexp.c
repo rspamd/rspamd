@@ -1326,10 +1326,10 @@ static gboolean
 rspamd_check_smtp_data (struct rspamd_task *task, GList * args, void *unused)
 {
 	struct expression_argument *arg;
-	InternetAddressList *ia;
+	InternetAddressList *ia = NULL;
 	const gchar *type, *what = NULL;
 	GList *cur;
-	gint i;
+	gint i, ialen;
 
 	if (args == NULL) {
 		msg_warn ("no parameters to function");
@@ -1416,7 +1416,8 @@ rspamd_check_smtp_data (struct rspamd_task *task, GList * args, void *unused)
 			}
 			else {
 				if (ia != NULL) {
-					for (i = 0; i < internet_address_list_length(ia); i ++) {
+					ialen = internet_address_list_length(ia);
+					for (i = 0; i < ialen; i ++) {
 						InternetAddress *iaelt =
 								internet_address_list_get_address(ia, i);
 						InternetAddressMailbox *iamb =
@@ -1440,7 +1441,8 @@ rspamd_check_smtp_data (struct rspamd_task *task, GList * args, void *unused)
 			}
 			else {
 				if (ia != NULL) {
-					for (i = 0; i < internet_address_list_length(ia); i ++) {
+					ialen = internet_address_list_length(ia);
+					for (i = 0; i < ialen; i ++) {
 						InternetAddress *iaelt =
 								internet_address_list_get_address(ia, i);
 						InternetAddressMailbox *iamb =

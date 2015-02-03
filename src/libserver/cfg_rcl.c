@@ -1432,7 +1432,7 @@ struct rspamd_rcl_section *
 rspamd_rcl_config_get_section (struct rspamd_rcl_section *top,
 	const char *path)
 {
-	struct rspamd_rcl_section *cur, *found;
+	struct rspamd_rcl_section *cur, *found = NULL;
 	char **path_components;
 	gint ncomponents, i;
 
