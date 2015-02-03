@@ -108,9 +108,4 @@ gboolean rspamd_url_find (rspamd_mempool_t *pool,
  */
 const gchar * rspamd_url_strerror (enum uri_errno err);
 
-/*
- * URL unescape characters in the specified string
- */
-void rspamd_url_unescape (gchar *s);
-
 #endif

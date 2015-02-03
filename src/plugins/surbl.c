@@ -868,10 +868,10 @@ redirector_callback (gint fd, short what, void *arg)
 {
 	struct redirector_param *param = (struct redirector_param *)arg;
 	gchar url_buf[512];
-	gint r;
+	gint r, urllen;
 	struct timeval *timeout;
 	struct rspamd_task *task;
-	gchar *p, *c;
+	gchar *p, *c, *urlstr;
 	gboolean found = FALSE;
 
 	task = param->task;
@@ -948,17 +948,21 @@ redirector_callback (gint fd, short what, void *arg)
 						break;
 					}
 				}
+
 				if (found) {
 					debug_task ("<%s> got reply from redirector: '%s' -> '%s'",
 						param->task->message_id,
 						struri (param->url),
 						c);
-					r =
-						rspamd_url_parse (param->url,
-							rspamd_mempool_strdup (param->task->task_pool,
-							c), param->task->task_pool);
-					if (r == URI_ERRNO_OK || r == URI_ERRNO_NO_SLASHES || r ==
-						URI_ERRNO_NO_HOST_SLASH) {
+
+					urllen = strlen (c);
+					urlstr = rspamd_mempool_alloc (param->task->task_pool,
+							urllen + 1);
+					rspamd_strlcpy (urlstr, c, urllen + 1);
+					r = rspamd_url_parse (param->url, urlstr, urllen,
+							param->task->task_pool);
+
+					if (r == URI_ERRNO_OK) {
 						make_surbl_requests (param->url,
 							param->task,
 							param->suffix,
