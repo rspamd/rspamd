@@ -145,12 +145,12 @@ rspamd_http_test_func (void)
 {
 	struct event_base *ev_base = event_init ();
 	rspamd_mempool_t *pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
-	gpointer serv_key, client_key;
+	gpointer serv_key, client_key, peer_key;
 	struct rspamd_keypair_cache *c;
 	rspamd_mempool_mutex_t *mtx;
 	rspamd_inet_addr_t addr;
 	struct timespec ts1, ts2;
-	gchar filepath[PATH_MAX], buf[4096];
+	gchar filepath[PATH_MAX], buf[512];
 	gint fd, i, j;
 	pid_t sfd;
 	GString *b32_key;
@@ -208,12 +208,14 @@ rspamd_http_test_func (void)
 	b32_key = rspamd_http_connection_print_key (serv_key,
 			RSPAMD_KEYPAIR_PUBKEY|RSPAMD_KEYPAIR_BASE32);
 	g_assert (b32_key != NULL);
+	peer_key = rspamd_http_connection_make_peer_key (b32_key->str);
+	g_assert (peer_key != NULL);
 	total_diff = 0.0;
 
 	for (i = 0; i < ntests; i ++) {
 		for (j = 0; j < pconns; j ++) {
 			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, &addr,
-					client_key, b32_key->str, c, ev_base);
+					client_key, peer_key, c, ev_base);
 		}
 		clock_gettime (CLOCK_MONOTONIC, &ts1);
 		event_base_loop (ev_base, 0);
