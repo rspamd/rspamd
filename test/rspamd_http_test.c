@@ -28,7 +28,7 @@
 #include "tests.h"
 #include "ottery.h"
 
-static const int file_blocks = 1;
+static const int file_blocks = 8;
 static const int pconns = 100;
 static const int ntests = 100;
 
@@ -91,6 +91,15 @@ rspamd_http_server_func (const gchar *path, rspamd_inet_addr_t *addr,
 	event_base_loop (ev_base, 0);
 }
 
+static gint
+rspamd_client_body (struct rspamd_http_connection *conn,
+	struct rspamd_http_message *msg,
+	const gchar *chunk, gsize len)
+{
+	g_assert (chunk[0] == '\0');
+
+	return 0;
+}
 
 static void
 rspamd_client_err (struct rspamd_http_connection *conn, GError *err)
@@ -98,6 +107,7 @@ rspamd_client_err (struct rspamd_http_connection *conn, GError *err)
 	msg_info ("abnormally closing connection from: error: %s",
 			err->message);
 
+	g_assert (0);
 	close (conn->fd);
 	rspamd_http_connection_unref (conn);
 }
@@ -123,7 +133,7 @@ rspamd_http_client_func (const gchar *path, rspamd_inet_addr_t *addr,
 	gint fd;
 
 	g_assert ((fd = rspamd_inet_address_connect (addr, SOCK_STREAM, TRUE)) != -1);
-	conn = rspamd_http_connection_new (NULL, rspamd_client_err,
+	conn = rspamd_http_connection_new (rspamd_client_body, rspamd_client_err,
 			rspamd_client_finish, RSPAMD_HTTP_CLIENT_SIMPLE,
 			RSPAMD_HTTP_CLIENT, c);
 	rspamd_snprintf (urlbuf, sizeof (urlbuf), "http://127.0.0.1/%s", path);
@@ -132,8 +142,9 @@ rspamd_http_client_func (const gchar *path, rspamd_inet_addr_t *addr,
 	g_assert (conn != NULL && msg != NULL);
 
 	if (kp != NULL) {
+		g_assert (peer_kp != NULL);
 		rspamd_http_connection_set_key (conn, kp);
-		msg->peer_key = peer_kp;
+		msg->peer_key = rspamd_http_connection_key_ref (peer_kp);
 	}
 
 	rspamd_http_connection_write_message (conn, msg, NULL, NULL, NULL,
@@ -226,6 +237,26 @@ rspamd_http_test_func (void)
 	}
 
 	msg_info ("Made %d encrypted connections of size %d in %.6f ms, %.6f cps",
+			ntests * pconns,
+			sizeof (buf) * file_blocks,
+			total_diff, ntests * pconns / total_diff * 1000.);
+
+	total_diff = 0.0;
+
+	for (i = 0; i < ntests; i ++) {
+		for (j = 0; j < pconns; j ++) {
+			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, &addr,
+					client_key, peer_key, NULL, ev_base);
+		}
+		clock_gettime (CLOCK_MONOTONIC, &ts1);
+		event_base_loop (ev_base, 0);
+		clock_gettime (CLOCK_MONOTONIC, &ts2);
+		diff = (ts2.tv_sec - ts1.tv_sec) * 1000. +   /* Seconds */
+				(ts2.tv_nsec - ts1.tv_nsec) / 1000000.;  /* Nanoseconds */
+		total_diff += diff;
+	}
+
+	msg_info ("Made %d uncached encrypted connections of size %d in %.6f ms, %.6f cps",
 			ntests * pconns,
 			sizeof (buf) * file_blocks,
 			total_diff, ntests * pconns / total_diff * 1000.);
