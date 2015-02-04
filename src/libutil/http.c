@@ -426,7 +426,7 @@ rspamd_http_parse_key (GString *data, struct rspamd_http_connection *conn,
 
 						if (conn->cache && priv->msg->peer_key) {
 							rspamd_keypair_cache_process (conn->cache,
-									priv->msg->peer_key, priv->local_key);
+									priv->local_key, priv->msg->peer_key);
 						}
 					}
 				}
@@ -1034,11 +1034,6 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		priv->msg->peer_key = priv->peer_key;
 		priv->peer_key = NULL;
 		priv->encrypted = TRUE;
-
-		if (conn->cache && priv->msg->peer_key) {
-			rspamd_keypair_cache_process (conn->cache,
-					priv->msg->peer_key, priv->local_key);
-		}
 	}
 
 	if (msg->method < HTTP_SYMBOLS) {
@@ -1067,6 +1062,10 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 
 	if (priv->local_key != NULL && msg->peer_key != NULL) {
 		encrypted = TRUE;
+		if (conn->cache) {
+			rspamd_keypair_cache_process (conn->cache,
+					priv->local_key, priv->msg->peer_key);
+		}
 	}
 
 	if (encrypted && msg->body != NULL) {
