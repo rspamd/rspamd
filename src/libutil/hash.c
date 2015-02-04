@@ -102,6 +102,7 @@ rspamd_lru_hash_new_full (
 
 	new = g_slice_alloc (sizeof (rspamd_lru_hash_t));
 	new->tbl = g_hash_table_new_full (hf, cmpf, NULL, rspamd_lru_destroy_node);
+	new->exp = g_queue_new ();
 	new->maxage = maxage;
 	new->maxsize = maxsize;
 	new->value_destroy = value_destroy;
