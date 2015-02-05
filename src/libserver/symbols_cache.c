@@ -366,7 +366,7 @@ register_symbol_common (struct symbols_cache **cache,
 
 	/* Check whether this item is skipped */
 	skipped = TRUE;
-	if (!item->is_callback &&
+	if (!item->is_callback && pcache->cfg &&
 			g_hash_table_lookup (pcache->cfg->metrics_symbols, name) == NULL) {
 		cur = g_list_first (pcache->cfg->metrics_list);
 		while (cur) {
@@ -595,6 +595,7 @@ init_symbols_cache (rspamd_mempool_t * pool,
 		if (lseek (fd, -(cklen), SEEK_END) == -1) {
 			if (errno == EINVAL) {
 				/* Try to create file */
+				close (fd);
 				msg_info ("recreate cache file");
 				if ((fd =
 					open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR |

@@ -827,30 +827,29 @@ rspamd_check_action_metric (struct rspamd_task *task,
 	const ucl_object_t *ms = NULL;
 	int i;
 
-	if (metric->actions != NULL) {
-		if (task->settings) {
-			ms = ucl_object_find_key (task->settings, metric->name);
+	if (task->settings) {
+		ms = ucl_object_find_key (task->settings, metric->name);
+	}
+
+	for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
+		double sc;
+
+		action = &metric->actions[i];
+		sc = get_specific_action_score (ms, action);
+
+		if (sc < 0) {
+			continue;
+		}
+		if (score >= sc && sc > max_score) {
+			selected_action = action;
+			max_score = sc;
 		}
 
-		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
-			double sc;
-
-			action = &metric->actions[i];
-			sc = get_specific_action_score (ms, action);
-
-			if (sc < 0) {
-				continue;
-			}
-			if (score >= sc && sc > max_score) {
-				selected_action = action;
-				max_score = sc;
-			}
-
-			if (rscore != NULL && i == METRIC_ACTION_REJECT) {
-				*rscore = sc;
-			}
+		if (rscore != NULL && i == METRIC_ACTION_REJECT) {
+			*rscore = sc;
 		}
 	}
+
 	if (selected_action) {
 		return selected_action->action;
 	}

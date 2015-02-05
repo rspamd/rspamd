@@ -250,7 +250,7 @@ image_type_str (enum known_image_types type)
 		return "BMP";
 		break;
 	default:
-		return "unknown";
+		break;
 	}
 
 	return "unknown";

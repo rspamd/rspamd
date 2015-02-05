@@ -62,7 +62,7 @@ rspamd_lru_destroy_node (gpointer value)
 		if (elt->hash && elt->hash->value_destroy) {
 			elt->hash->value_destroy (elt->data);
 		}
-		if (elt->link) {
+		if (elt->hash && elt->link) {
 			g_queue_delete_link (elt->hash->exp, elt->link);
 		}
 

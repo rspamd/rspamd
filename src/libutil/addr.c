@@ -63,7 +63,7 @@ rspamd_ip_check_ipv6 (void)
 		const struct in6_addr ip6_local = IN6ADDR_LOOPBACK_INIT;
 
 		s = socket (AF_INET6, SOCK_STREAM, 0);
-		if (s == -1 && errno == EAFNOSUPPORT) {
+		if (s == -1) {
 			ipv6_status = RSPAMD_IPV6_UNSUPPORTED;
 		}
 		else {

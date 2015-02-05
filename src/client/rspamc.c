@@ -567,9 +567,8 @@ rspamc_uptime_output (ucl_object_t *obj)
 			hours = seconds / 3600;
 			minutes = seconds / 60 - hours * 60;
 			seconds -= hours * 3600 + minutes * 60;
-			rspamd_printf ("%L hour%s %L minute%s %L second%s\n", hours,
-				hours > 1 ? "s" : "", minutes,
-				minutes > 1 ? "s" : "",
+			rspamd_printf ("%L hour %L minute%s %L second%s\n", hours,
+				minutes, minutes > 1 ? "s" : "",
 				seconds, seconds > 1 ? "s" : "");
 		}
 	}
@@ -678,9 +677,12 @@ rspamc_stat_statfile (const ucl_object_t *obj, GString *out)
 	else {
 		rspamd_printf_gstring (out, "Statfile: %s ", symbol);
 	}
-	rspamd_printf_gstring (out, "length: %HL; free blocks: %HL; total blocks: %HL; "
-		"free: %.2f%%; learned: %L\n", size, blocks - used_blocks, blocks,
-		(blocks - used_blocks) * 100.0 / (gdouble)blocks, version);
+
+	if (blocks != 0) {
+		rspamd_printf_gstring (out, "length: %HL; free blocks: %HL; total blocks: %HL; "
+				"free: %.2f%%; learned: %L\n", size, blocks - used_blocks, blocks,
+				(blocks - used_blocks) * 100.0 / (gdouble)blocks, version);
+	}
 }
 
 static void

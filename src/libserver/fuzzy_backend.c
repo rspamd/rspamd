@@ -524,6 +524,8 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 		}
 	}
 
+	close (fd);
+
 	/* Open database */
 	if ((res = rspamd_fuzzy_backend_open_db (path, err)) == NULL) {
 		GError *tmp = NULL;

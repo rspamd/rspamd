@@ -501,7 +501,7 @@ lua_ip_apply_mask (lua_State *L)
 	guint32 umsk, *p;
 
 	mask = lua_tonumber (L, 2);
-	if (mask > 0 && ip->is_valid) {
+	if (mask > 0 && ip != NULL && ip->is_valid) {
 		if (ip->addr.af == AF_INET && mask <= 32) {
 			nip = lua_ip_new (L, ip);
 			umsk = htonl (G_MAXUINT32 << (32 - mask));
@@ -536,7 +536,7 @@ lua_ip_equal (lua_State *L)
 		*ip2 = lua_check_ip (L, 2);
 	gboolean res = FALSE;
 
-	if (ip1->is_valid && ip2->is_valid) {
+	if (ip1 && ip2 && ip1->is_valid && ip2->is_valid) {
 		if (ip1->addr.af == ip2->addr.af) {
 			if (ip1->addr.af == AF_INET) {
 				if (memcmp(&ip1->addr.addr.s4.sin_addr,

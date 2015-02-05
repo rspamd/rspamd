@@ -268,6 +268,9 @@ _ses (const void *a, gint aoff, gint n, const void *b, gint boff,
 			 *     -       |
 			 */
 
+			/*
+			 * XXX: coverity found this code suspicious, needs checking
+			 */
 			if (m > n) {
 				if (x == u) {
 					_edit (ctx, DIFF_MATCH,	 aoff,			 n);
@@ -300,7 +303,6 @@ rspamd_diff (const void *a, gint aoff, gint n, const void *b, gint boff, gint m,
 {
 	struct _ctx ctx;
 	gint d, x, y;
-	struct diff_edit *e = NULL;
 	GArray *tmp;
 
 	tmp = g_array_sized_new (FALSE, TRUE, sizeof(gint), dmax);
@@ -326,9 +328,6 @@ rspamd_diff (const void *a, gint aoff, gint n, const void *b, gint boff, gint m,
 	if ((d = _ses (a, aoff + x, n - x, b, boff + y, m - y, &ctx)) == -1) {
 		g_array_free (tmp, TRUE);
 		return -1;
-	}
-	if (ses && sn && e) {
-		*sn = e->op ? ctx.si + 1 : 0;
 	}
 
 	g_array_free (tmp, TRUE);

@@ -325,6 +325,7 @@ rspamd_config_calculate_checksum (struct rspamd_config *cfg)
 	}
 	if (stat (cfg->cfg_name, &st) == -1) {
 		msg_err ("cannot stat %s: %s", cfg->cfg_name, strerror (errno));
+		close (fd);
 		return FALSE;
 	}
 
@@ -365,7 +366,7 @@ rspamd_config_post_load (struct rspamd_config *cfg)
 	clock_getres (CLOCK_REALTIME,			&ts);
 # endif
 
-	cfg->clock_res = (gint)log10 (1000000 / ts.tv_nsec);
+	cfg->clock_res = log10 (1000000. / ts.tv_nsec);
 	if (cfg->clock_res < 0) {
 		cfg->clock_res = 0;
 	}

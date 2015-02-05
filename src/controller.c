@@ -528,6 +528,7 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 
 	/* Read the whole buffer */
 	if (read (fd, reply->body->str, st.st_size) == -1) {
+		close (fd);
 		rspamd_http_message_free (reply);
 		msg_err ("cannot read map %s: %s", map->uri, strerror (errno));
 		rspamd_controller_send_error (conn_ent, 500, "500 map read error");

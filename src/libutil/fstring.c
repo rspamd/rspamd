@@ -370,11 +370,12 @@ rspamd_fstrhash (rspamd_fstring_t * str)
 {
 	size_t i;
 	guint32 hval;
-	gchar *c = str->begin;
+	gchar *c;
 
 	if (str == NULL) {
 		return 0;
 	}
+	c = str->begin;
 	hval = str->len;
 
 	for (i = 0; i < str->len; i++, c++) {
@@ -391,13 +392,15 @@ rspamd_fstrhash_lc (rspamd_fstring_t * str, gboolean is_utf)
 {
 	gsize i;
 	guint32 j, hval;
-	const gchar *p = str->begin, *end = NULL;
+	const gchar *p, *end = NULL;
 	gchar t;
 	gunichar uc;
 
 	if (str == NULL) {
 		return 0;
 	}
+
+	p = str->begin;
 	hval = str->len;
 
 	if (is_utf) {

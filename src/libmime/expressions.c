@@ -438,7 +438,8 @@ parse_expression (rspamd_mempool_t * pool, gchar *line)
 					}
 				}
 				if (stack) {
-					op = delete_expression_stack (&stack);
+					/* Remove open brace itself */
+					delete_expression_stack (&stack);
 				}
 			}
 			else if (*p == '(') {
@@ -844,14 +845,14 @@ parse_regexp (rspamd_mempool_t * pool, const gchar *line, gboolean raw_mode)
 
 	if (result->regexp == NULL || err != NULL) {
 		msg_warn ("could not read regexp: %s while reading regexp %s",
-			err->message,
+				err ? err->message : "unknown error",
 			src);
 		return NULL;
 	}
 
 	if (result->raw_regexp == NULL || err != NULL) {
 		msg_warn ("could not read raw regexp: %s while reading regexp %s",
-			err->message,
+			err ? err->message : "unknown error",
 			src);
 		return NULL;
 	}

@@ -129,7 +129,7 @@ static gint
 rspamd_inet_socket_create (gint type, struct addrinfo *addr, gboolean is_server,
 	gboolean async, GList **list)
 {
-	gint fd, r, optlen, on = 1, s_error;
+	gint fd = -1, r, optlen, on = 1, s_error;
 	struct addrinfo *cur;
 
 	cur = addr;
@@ -425,7 +425,7 @@ rspamd_sockets_list (const gchar *credits, guint16 port,
 	struct sockaddr_un un;
 	struct stat st;
 	struct addrinfo hints, *res;
-	gint r, fd, serrno;
+	gint r, fd = -1, serrno;
 	gchar portbuf[8], **strv, **cur;
 	GList *result = NULL, *rcur;
 
@@ -486,9 +486,14 @@ rspamd_sockets_list (const gchar *credits, guint16 port,
 
 			rspamd_snprintf (portbuf, sizeof (portbuf), "%d", (int)port);
 			if ((r = getaddrinfo (credits, portbuf, &hints, &res)) == 0) {
-				r = rspamd_inet_socket_create (type, res, is_server, async, &result);
+				fd = rspamd_inet_socket_create (type, res, is_server, async, &result);
 				freeaddrinfo (res);
+
 				if (result == NULL) {
+					if (fd != -1) {
+						close (fd);
+					}
+
 					goto err;
 				}
 			}
@@ -499,6 +504,7 @@ rspamd_sockets_list (const gchar *credits, guint16 port,
 				goto err;
 			}
 		}
+
 		cur++;
 	}
 

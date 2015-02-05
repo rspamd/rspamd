@@ -444,6 +444,10 @@ rspamd_mmaped_file_reindex (rspamd_mmaped_file_ctx * pool,
 	new = rspamd_mmaped_file_open (pool, filename, size, stcf);
 
 	if (fd == -1 || new == NULL) {
+		if (fd != -1) {
+			close (fd);
+		}
+
 		msg_err ("cannot open file: %s", strerror (errno));
 		g_free (backup);
 		return NULL;

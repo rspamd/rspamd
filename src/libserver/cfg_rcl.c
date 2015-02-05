@@ -306,7 +306,7 @@ rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
 		}
 		val = ucl_object_find_key (obj, "group");
 		if (val != NULL) {
-			ucl_object_tostring_safe (val, &group);
+			group = ucl_object_tostring (val);
 		}
 		val = ucl_object_find_key (obj, "one_shot");
 		if (val != NULL) {
@@ -2017,7 +2017,6 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	gchar *data;
 	GError *err = NULL;
 	struct rspamd_rcl_section *top, *logger;
-	gboolean res;
 	struct ucl_parser *parser;
 
 	if (stat (filename, &st) == -1) {
@@ -2050,11 +2049,6 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	munmap (data, st.st_size);
 	cfg->rcl_obj = ucl_parser_get_object (parser);
 	ucl_parser_free (parser);
-	res = TRUE;
-
-	if (!res) {
-		return FALSE;
-	}
 
 	top = rspamd_rcl_config_init ();
 	err = NULL;

@@ -895,25 +895,27 @@ rspamd_register_symbol_fromlua (lua_State *L,
 {
 	struct lua_callback_data *cd;
 
-	cd = rspamd_mempool_alloc0 (cfg->cfg_pool,
-		sizeof (struct lua_callback_data));
-	cd->cb_is_ref = TRUE;
-	cd->callback.ref = ref;
-	cd->L = L;
 	if (name) {
+		cd = rspamd_mempool_alloc0 (cfg->cfg_pool,
+				sizeof (struct lua_callback_data));
+		cd->cb_is_ref = TRUE;
+		cd->callback.ref = ref;
+		cd->L = L;
 		cd->symbol = rspamd_mempool_strdup (cfg->cfg_pool, name);
+
+		register_symbol_common (&cfg->cache,
+				name,
+				weight,
+				priority,
+				lua_metric_symbol_callback,
+				cd,
+				type);
+		rspamd_mempool_add_destructor (cfg->cfg_pool,
+				(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
+				cd);
 	}
 
-	register_symbol_common (&cfg->cache,
-					name,
-					weight,
-					priority,
-					lua_metric_symbol_callback,
-					cd,
-					type);
-	rspamd_mempool_add_destructor (cfg->cfg_pool,
-		(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
-		cd);
+
 }
 
 static gint
@@ -1097,7 +1099,7 @@ lua_config_newindex (lua_State *L)
 
 	name = luaL_checkstring (L, 2);
 
-	if (name != NULL && lua_gettop (L) > 2) {
+	if (cfg != NULL && name != NULL && lua_gettop (L) > 2) {
 		if (lua_type (L, 3) == LUA_TFUNCTION) {
 			/* Normal symbol from just a function */
 			lua_pushvalue (L, 3);
@@ -1391,8 +1393,7 @@ lua_trie_search_text (lua_State *L)
 	gboolean found = FALSE;
 
 	if (trie) {
-		text = luaL_checkstring (L, 2);
-		len = strlen (text);
+		text = luaL_checklstring (L, 2, &len);
 		if (text) {
 			lua_newtable (L);
 			pos = text;

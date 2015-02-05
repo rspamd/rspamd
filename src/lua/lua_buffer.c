@@ -240,7 +240,7 @@ static int
 lua_io_dispatcher_set_policy (lua_State *L)
 {
 	struct rspamd_io_dispatcher_s *io_dispatcher = lua_check_io_dispatcher (L);
-	gint policy, limit = -1;
+	gint policy, limit = 0;
 
 	if (io_dispatcher) {
 		policy = lua_tonumber (L, 2);

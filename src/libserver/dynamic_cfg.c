@@ -289,11 +289,7 @@ dump_dynamic_config (struct rspamd_config *cfg)
 
 	dir = g_path_get_dirname (cfg->dynamic_conf);
 	if (dir == NULL) {
-		/* Inaccessible path */
-		if (dir != NULL) {
-			g_free (dir);
-		}
-		msg_err ("invalid file: %s", cfg->dynamic_conf);
+		msg_err ("invalid path: %s", cfg->dynamic_conf);
 		return FALSE;
 	}
 
