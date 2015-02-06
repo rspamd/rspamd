@@ -141,6 +141,7 @@ local function check_settings(task)
     end
     if not user[1]["addr"] then
       user[1]["user"] = uname
+      user[1]["addr"] = uname
     end
   end
   -- Match rules according their order
