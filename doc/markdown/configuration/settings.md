@@ -49,6 +49,7 @@ settings {
 		rcpt = "admin";
 		rcpt = "/user.*/";
 		ip = "172.16.0.0/16";
+		user = "@example.net";
 		apply "default" {
 			symbol1 = 10.0;
 			symbol2 = 0.0;
@@ -74,6 +75,7 @@ So each setting has the following attributes:
 	+ `from` - match SMTP from
 	+ `rcpt` - match RCPT
 	+ `ip` - match source IP address
+	+ `user` - matches authenticated user ID of message sender if any
 - `apply` - list of applied rules, identified by metric name (e.g. `default`)
 	+ `symbol` - modify weight of a symbol
 	+ `actions` - section of modified actions
