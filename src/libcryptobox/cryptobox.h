@@ -107,7 +107,7 @@ gboolean rspamd_cryptobox_decrypt_nm_inplace (guchar *data, gsize len,
  * @param pk remote pubkey
  * @param sk local privkey
  */
-void rspamd_cryptobox_nm (rspamd_nm_t nm, rspamd_pk_t pk, rspamd_sk_t sk);
+void rspamd_cryptobox_nm (rspamd_nm_t nm, const rspamd_pk_t pk, const rspamd_sk_t sk);
 
 /**
  * Securely clear the buffer specified

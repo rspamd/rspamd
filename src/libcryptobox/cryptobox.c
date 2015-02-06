@@ -26,14 +26,11 @@
 #include "chacha20/chacha.h"
 #include "poly1305/poly1305-donna.h"
 #include "curve25519/curve25519.h"
+#include "ottery.h"
 
 unsigned long cpu_config = 0;
 
 static const guchar n0[16] = {0};
-static const unsigned char sigma[16] = {
-		'e', 'x', 'p', 'a', 'n', 'd', ' ', '3', '2',
-		'-', 'b', 'y', 't', 'e', ' ', 'k'
-};
 
 #ifdef HAVE_WEAK_SYMBOLS
 __attribute__((weak)) void
@@ -121,7 +118,7 @@ rspamd_cryptobox_keypair (rspamd_pk_t pk, rspamd_sk_t sk)
 }
 
 void
-rspamd_cryptobox_nm (rspamd_nm_t nm, rspamd_pk_t pk, rspamd_sk_t sk)
+rspamd_cryptobox_nm (rspamd_nm_t nm, const rspamd_pk_t pk, const rspamd_sk_t sk)
 {
 	guchar s[rspamd_cryptobox_PKBYTES];
 
@@ -182,4 +179,32 @@ rspamd_cryptobox_decrypt_nm_inplace (guchar *data, gsize len,
 	rspamd_explicit_memzero (subkey, sizeof (subkey));
 
 	return ret;
+}
+
+gboolean
+rspamd_cryptobox_decrypt_inplace (guchar *data, gsize len,
+		const rspamd_nonce_t nonce,
+		const rspamd_pk_t pk, const rspamd_sk_t sk, const rspamd_sig_t sig)
+{
+	guchar nm[rspamd_cryptobox_NMBYTES];
+	gboolean ret;
+
+	rspamd_cryptobox_nm (nm, pk, sk);
+	ret = rspamd_cryptobox_decrypt_nm_inplace (data, len, nonce, nm, sig);
+
+	rspamd_explicit_memzero (nm, sizeof (nm));
+
+	return ret;
+}
+
+void
+rspamd_cryptobox_encrypt_inplace (guchar *data, gsize len,
+		const rspamd_nonce_t nonce,
+		const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_sig_t sig)
+{
+	guchar nm[rspamd_cryptobox_NMBYTES];
+
+	rspamd_cryptobox_nm (nm, pk, sk);
+	rspamd_cryptobox_encrypt_nm_inplace (data, len, nonce, nm, sig);
+	rspamd_explicit_memzero (nm, sizeof (nm));
 }
