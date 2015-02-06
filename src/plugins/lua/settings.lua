@@ -70,7 +70,7 @@ local function check_settings(task)
     return false
   end
 
-  local function check_specific_setting(name, rule, ip, from, rcpt)
+  local function check_specific_setting(name, rule, ip, from, rcpt, user)
     local res = false
 
     if rule['ip'] and ip then
@@ -100,6 +100,15 @@ local function check_settings(task)
       end
     end
 
+    if not res and rule['user'] and user then
+      for _, i in ipairs(rule['user']) do
+        res = check_addr_setting(i, user)
+        if res then
+          break
+        end
+      end
+    end
+
     if res then
       if rule['whitelist'] then
         return {whitelist = true}
@@ -120,11 +129,26 @@ local function check_settings(task)
   local ip = task:get_from_ip()
   local from = task:get_from()
   local rcpt = task:get_recipients()
+  local uname = task:get_user()
+  local user = {}
+  if uname then
+    user[1] = {}
+    for localpart, domainpart in string.gmatch(uname, "(.+)@(.+)") do
+      user[1]["user"] = localpart
+      user[1]["domain"] = domainpart
+      user[1]["addr"] = uname
+      break
+    end
+    if not user[1]["addr"] then
+      user[1]["user"] = uname
+      user[1]["addr"] = uname
+    end
+  end
   -- Match rules according their order
   for pri = max_pri,1,-1 do
     if settings[pri] then
       for name, rule in pairs(settings[pri]) do
-        local rule = check_specific_setting(name, rule, ip, from, rcpt)
+        local rule = check_specific_setting(name, rule, ip, from, rcpt, user)
         if rule then
           rspamd_logger.info(string.format("<%s> apply settings according to rule %s",
             task:get_message_id(), name))
@@ -274,6 +298,12 @@ local function process_settings_table(tbl)
       local rcpt = process_addr(elt['rcpt'])
       if rcpt then
         out['rcpt'] = check_table(elt['rcpt'], rcpt)
+      end
+    end
+    if elt['user'] then
+      local user = process_addr(elt['user'])
+      if user then
+        out['user'] = check_table(elt['user'], user)
       end
     end
 
