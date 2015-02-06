@@ -29,7 +29,7 @@
 
 unsigned long cpu_config = 0;
 
-static const rspamd_nonce_t n0 = {0};
+static const guchar n0[16] = {0};
 static const unsigned char sigma[16] = {
 		'e', 'x', 'p', 'a', 'n', 'd', ' ', '3', '2',
 		'-', 'b', 'y', 't', 'e', ' ', 'k'
@@ -126,7 +126,28 @@ rspamd_cryptobox_nm (rspamd_nm_t nm, rspamd_pk_t pk, rspamd_sk_t sk)
 	guchar s[rspamd_cryptobox_PKBYTES];
 
 	curve25519 (s, sk, pk);
-	hchacha (s, sigma, nm, 20);
+	hchacha (s, n0, nm, 20);
+}
+
+void rspamd_cryptobox_encrypt_nm_inplace (guchar *data, gsize len,
+		const rspamd_nonce_t nonce,
+		const rspamd_nm_t nm, rspamd_sig_t sig)
+{
+	poly1305_context mac_ctx;
+	guchar subkey[32];
+	chacha_state s;
+	gsize r;
+
+	xchacha_init (&s, (const chacha_key *)nm, (const chacha_iv24 *)nonce, 20);
+	memset (subkey, 0, sizeof (subkey));
+	chacha_update (&s, subkey, subkey, sizeof (subkey));
+
+	r = chacha_update (&s, data, data, len);
+	chacha_final (&s, data + r);
+
+	poly1305_init (&mac_ctx, subkey);
+	poly1305_update (&mac_ctx, data, len);
+	poly1305_finish (&mac_ctx, sig);
 }
 
 gboolean
@@ -136,19 +157,29 @@ rspamd_cryptobox_decrypt_nm_inplace (guchar *data, gsize len,
 	poly1305_context mac_ctx;
 	guchar subkey[32];
 	rspamd_sig_t mac;
+	chacha_state s;
+	gsize r;
+	gboolean ret = TRUE;
 
 	/* Generate MAC key */
+	xchacha_init (&s, (const chacha_key *)nm, (const chacha_iv24 *)nonce, 20);
 	memset (subkey, 0, sizeof (subkey));
-	xchacha (nm, nonce, subkey, subkey, sizeof (subkey), 20);
+	chacha_update (&s, subkey, subkey, sizeof (subkey));
 
 	poly1305_init (&mac_ctx, subkey);
 	poly1305_update (&mac_ctx, data, len);
 	poly1305_finish (&mac_ctx, mac);
 
 	if (!poly1305_verify (mac, sig)) {
-		return FALSE;
+		ret = FALSE;
+	}
+	else {
+		r = chacha_update (&s, data, data, len);
+		chacha_final (&s, data + r);
 	}
 
+	rspamd_explicit_memzero (&mac_ctx, sizeof (mac_ctx));
+	rspamd_explicit_memzero (subkey, sizeof (subkey));
 
-	return TRUE;
+	return ret;
 }
