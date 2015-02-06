@@ -29,6 +29,12 @@
 
 unsigned long cpu_config = 0;
 
+static const rspamd_nonce_t n0 = {0};
+static const unsigned char sigma[16] = {
+		'e', 'x', 'p', 'a', 'n', 'd', ' ', '3', '2',
+		'-', 'b', 'y', 't', 'e', ' ', 'k'
+};
+
 #ifdef HAVE_WEAK_SYMBOLS
 __attribute__((weak)) void
 _dummy_symbol_to_prevent_lto(void * const pnt, const size_t len)
@@ -101,4 +107,48 @@ rspamd_cryptobox_init (void)
 	}
 
 	chacha_load ();
+}
+
+void
+rspamd_cryptobox_keypair (rspamd_pk_t pk, rspamd_sk_t sk)
+{
+	ottery_rand_bytes (sk, rspamd_cryptobox_SKBYTES);
+	sk[0] &= 248;
+	sk[31] &= 127;
+	sk[31] |= 64;
+
+	curve25519 (pk, sk, curve25519_basepoint);
+}
+
+void
+rspamd_cryptobox_nm (rspamd_nm_t nm, rspamd_pk_t pk, rspamd_sk_t sk)
+{
+	guchar s[rspamd_cryptobox_PKBYTES];
+
+	curve25519 (s, sk, pk);
+	hchacha (s, sigma, nm, 20);
+}
+
+gboolean
+rspamd_cryptobox_decrypt_nm_inplace (guchar *data, gsize len,
+		const rspamd_nonce_t nonce, const rspamd_nm_t nm, const rspamd_sig_t sig)
+{
+	poly1305_context mac_ctx;
+	guchar subkey[32];
+	rspamd_sig_t mac;
+
+	/* Generate MAC key */
+	memset (subkey, 0, sizeof (subkey));
+	xchacha (nm, nonce, subkey, subkey, sizeof (subkey), 20);
+
+	poly1305_init (&mac_ctx, subkey);
+	poly1305_update (&mac_ctx, data, len);
+	poly1305_finish (&mac_ctx, mac);
+
+	if (!poly1305_verify (mac, sig)) {
+		return FALSE;
+	}
+
+
+	return TRUE;
 }

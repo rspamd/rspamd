@@ -35,6 +35,7 @@ typedef guchar rspamd_pk_t[rspamd_cryptobox_PKBYTES];
 typedef guchar rspamd_sk_t[rspamd_cryptobox_SKBYTES];
 typedef guchar rspamd_sig_t[rspamd_cryptobox_MACBYTES];
 typedef guchar rspamd_nm_t[rspamd_cryptobox_NMBYTES];
+typedef guchar rspamd_nonce_t[rspamd_cryptobox_NONCEBYTES];
 
 /**
  * Init cryptobox library
@@ -57,7 +58,8 @@ void rspamd_cryptobox_keypair (rspamd_pk_t pk, rspamd_sk_t sk);
  * @param sig output signature
  */
 void rspamd_cryptobox_encrypt_inplace (guchar *data, gsize len,
-		gsize cnt, const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_sig_t sig);
+		const rspamd_nonce_t nonce,
+		const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_sig_t sig);
 
 
 /**
@@ -70,7 +72,8 @@ void rspamd_cryptobox_encrypt_inplace (guchar *data, gsize len,
  * @return TRUE if input has been verified successfully
  */
 gboolean rspamd_cryptobox_decrypt_inplace (guchar *data, gsize len,
-		 const rspamd_pk_t pk, const rspamd_sk_t sk, const rspamd_sig_t sig);
+		const rspamd_nonce_t nonce,
+		const rspamd_pk_t pk, const rspamd_sk_t sk, const rspamd_sig_t sig);
 
 /**
  * Encrypt segments of data inplace adding signature to sig afterwards
@@ -81,7 +84,8 @@ gboolean rspamd_cryptobox_decrypt_inplace (guchar *data, gsize len,
  * @param sig output signature
  */
 void rspamd_cryptobox_encrypt_nm_inplace (guchar *data, gsize len,
-		gsize cnt, const rspamd_nm_t nm, rspamd_sig_t sig);
+		const rspamd_nonce_t nonce,
+		const rspamd_nm_t nm, rspamd_sig_t sig);
 
 
 /**
@@ -94,6 +98,7 @@ void rspamd_cryptobox_encrypt_nm_inplace (guchar *data, gsize len,
  * @return TRUE if input has been verified successfully
  */
 gboolean rspamd_cryptobox_decrypt_nm_inplace (guchar *data, gsize len,
+		 const rspamd_nonce_t nonce,
 		 const rspamd_nm_t nm, const rspamd_sig_t sig);
 
 /**

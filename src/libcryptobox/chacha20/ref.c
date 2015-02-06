@@ -228,8 +228,7 @@ hchacha_ref(const unsigned char key[32], const unsigned char iv[16], unsigned ch
 
 void
 chacha_clear_state_ref(chacha_state_internal *state) {
-	void * (* volatile safe_memset)(void *s, int c, size_t n) = memset;
-	safe_memset(state, 0, 48);
+	rspamd_explicit_memzero (state, 48);
 }
 
 void
