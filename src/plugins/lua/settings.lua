@@ -131,8 +131,8 @@ local function check_settings(task)
   local rcpt = task:get_recipients()
   local uname = task:get_user()
   local user = {}
-  user[1] = {}
   if uname then
+    user[1] = {}
     for localpart, domainpart in string.gmatch(uname, "(.+)@(.+)") do
       user[1]["user"] = localpart
       user[1]["domain"] = domainpart
