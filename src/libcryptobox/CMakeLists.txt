@@ -1,8 +1,45 @@
+INCLUDE(FindArch.cmake)
+INCLUDE(AsmOp.cmake)
 
+TARGET_ARCHITECTURE(ARCH)
+
+SET(CHACHASRC chacha20/ref.c)
+
+# For now we support only x86_64 architecture with optimizations
+IF(${ARCH} STREQUAL "x86_64")
+	ENABLE_LANGUAGE(ASM)
+	ASM_OP(HAVE_AVX2 "vpaddq %ymm0, %ymm0, %ymm0" "avx2")
+	ASM_OP(HAVE_AVX "vpaddq %xmm0, %xmm0, %xmm0" "avx")
+	ASM_OP(HAVE_SSE2 "pmuludq %xmm0, %xmm0" "sse2")
+	ASM_OP(HAVE_SLASHMACRO "
+	.macro TEST1 op
+	\\op %eax, %eax
+	.endm
+	TEST1 xorl
+	" "slash macro convention")
+	ASM_OP(HAVE_DOLLARMACRO "
+	.macro TEST1 op
+	$0 %eax, %eax
+	.endm
+	TEST1 xorl
+	" "dollar macro convention")
+	CONFIGURE_FILE(platform_config.h.in platform_config.h)
+	INCLUDE_DIRECTORIES("${CMAKE_CURRENT_BINARY_DIR}")
+ENDIF()
+
+IF(HAVE_AVX2)
+	SET(CHACHASRC ${CHACHASRC} chacha20/avx2.S)
+ENDIF(HAVE_AVX2)
+IF(HAVE_AVX)
+	SET(CHACHASRC ${CHACHASRC} chacha20/avx.S)
+ENDIF(HAVE_AVX)
+IF(HAVE_SSE2)
+	SET(CHACHASRC ${CHACHASRC} chacha20/sse2.S)
+ENDIF(HAVE_SSE2)
 
 SET(LIBCRYPTOBOXSRC cryptobox.c)
 
-ADD_LIBRARY(rspamd-cryptobox ${LINK_TYPE} ${LIBCRYPTOBOXSRC})
+ADD_LIBRARY(rspamd-cryptobox ${LINK_TYPE} ${LIBCRYPTOBOXSRC} ${CHACHASRC})
 IF(NOT DEBIAN_BUILD)
 	SET_TARGET_PROPERTIES(rspamd-cryptobox PROPERTIES VERSION ${RSPAMD_VERSION})
 ENDIF(NOT DEBIAN_BUILD)

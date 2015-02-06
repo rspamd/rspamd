@@ -1,0 +1,11 @@
+#ifndef PLATFORM_H_CONFIG
+#define PLATFORM_H_CONFIG
+
+#define ARCH ${ARCH}
+#cmakedefine HAVE_AVX2	1
+#cmakedefine HAVE_AVX	1
+#cmakedefine HAVE_SSE2	1
+#cmakedefine HAVE_SLASHMACRO 1
+#cmakedefine HAVE_DOLLARMACRO 1
+
+#endif

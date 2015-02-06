@@ -61,7 +61,7 @@ void rspamd_cryptobox_keypair (rspamd_pk_t pk, rspamd_sk_t sk);
  * @param sk local secret key
  * @param sig output signature
  */
-void rspamd_cryptobox_encrypt_inplace (struct rspamd_encrypt_segment *segments,
+void rspamd_cryptobox_encrypt_inplace (guchar *data, gsize len,
 		gsize cnt, const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_sig_t sig);
 
 
