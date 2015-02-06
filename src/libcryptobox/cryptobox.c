@@ -22,14 +22,12 @@
  */
 
 #include "cryptobox.h"
+#include "platform_config.h"
+#include "chacha20/chacha.h"
+#include "poly1305/poly1305-donna.h"
+#include "curve25519/curve25519.h"
 
-struct rspamd_cryptobox_config {
-	gboolean has_sse3;
-	gboolean has_avx;
-	gboolean has_avx2;
-};
-
-
+unsigned long cpu_config = 0;
 
 #ifdef HAVE_WEAK_SYMBOLS
 __attribute__((weak)) void
@@ -59,4 +57,48 @@ rspamd_explicit_memzero(void * const pnt, const gsize len)
 		pnt_[i++] = 0U;
 	}
 #endif
+}
+
+static void
+rspamd_cryptobox_cpuid (gint cpu[4], gint info)
+{
+#if defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
+	__asm__ __volatile__ (
+			"cpuid":
+			"=a" (cpu[0]),
+			"=b" (cpu[1]),
+			"=c" (cpu[2]),
+			"=d" (cpu[3]) :
+			"a" (info), "c" (0)
+	);
+#else
+	memset (cpu, 0, sizeof (cpu));
+#endif
+}
+
+
+void
+rspamd_cryptobox_init (void)
+{
+	gint cpu[4], nid;
+
+	rspamd_cryptobox_cpuid (cpu, 0);
+	nid = cpu[0];
+
+	if (nid > 1) {
+		if ((cpu[3] & ((gint)1 << 26))) {
+			cpu_config |= CPUID_SSE2;
+		}
+		if ((cpu[2] & ((gint)1 << 28))) {
+			cpu_config |= CPUID_AVX;
+		}
+	}
+	if (nid > 7) {
+		rspamd_cryptobox_cpuid (cpu, 7);
+		if ((cpu[1] & ((gint)1 <<  5))) {
+			cpu_config |= CPUID_AVX2;
+		}
+	}
+
+	chacha_load ();
 }

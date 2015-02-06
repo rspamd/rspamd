@@ -3,7 +3,7 @@ INCLUDE(AsmOp.cmake)
 
 TARGET_ARCHITECTURE(ARCH)
 
-SET(CHACHASRC chacha20/ref.c)
+SET(CHACHASRC chacha20/chacha.c chacha20/ref.c)
 SET(POLYSRC poly1305/poly1305-donna.c)
 
 # For now we support only x86_64 architecture with optimizations

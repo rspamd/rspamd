@@ -36,11 +36,6 @@ typedef guchar rspamd_sk_t[rspamd_cryptobox_SKBYTES];
 typedef guchar rspamd_sig_t[rspamd_cryptobox_MACBYTES];
 typedef guchar rspamd_nm_t[rspamd_cryptobox_NMBYTES];
 
-struct rspamd_encrypt_segment {
-	guchar *buf;
-	gsize len;
-};
-
 /**
  * Init cryptobox library
  */
@@ -85,7 +80,7 @@ gboolean rspamd_cryptobox_decrypt_inplace (guchar *data, gsize len,
  * @param sk local secret key
  * @param sig output signature
  */
-void rspamd_cryptobox_encrypt_nm_inplace (struct rspamd_encrypt_segment *segments,
+void rspamd_cryptobox_encrypt_nm_inplace (guchar *data, gsize len,
 		gsize cnt, const rspamd_nm_t nm, rspamd_sig_t sig);
 
 

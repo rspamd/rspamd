@@ -8,4 +8,8 @@
 #cmakedefine HAVE_SLASHMACRO 1
 #cmakedefine HAVE_DOLLARMACRO 1
 
+#define CPUID_AVX2 0x1
+#define CPUID_AVX 0x2
+#define CPUID_SSE2 0x4
+
 #endif
