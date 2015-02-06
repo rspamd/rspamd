@@ -63,6 +63,7 @@ UNSET(SLAVE_BUILD)
 
 # Rspamd core components
 ADD_SUBDIRECTORY(lua)
+ADD_SUBDIRECTORY(libcryptobox)
 ADD_SUBDIRECTORY(libutil)
 ADD_SUBDIRECTORY(libserver)
 ADD_SUBDIRECTORY(libmime)

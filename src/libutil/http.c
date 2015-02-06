@@ -32,6 +32,7 @@
 #include "blake2.h"
 #include "ottery.h"
 #include "keypair_private.h"
+#include "cryptobox.h"
 #include <limits.h>
 
 struct rspamd_http_connection_private {

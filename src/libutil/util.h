@@ -434,11 +434,4 @@ gchar * rspamd_encode_base32 (const guchar *in, gsize inlen);
  */
 guchar* rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen);
 
-/**
- * Securely clear the buffer specified
- * @param buf
- * @param buflen
- */
-void rspamd_explicit_memzero (void * const buf, gsize buflen);
-
 #endif

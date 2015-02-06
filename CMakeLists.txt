@@ -278,7 +278,7 @@ ENDMACRO()
 ############################# CONFIG SECTION #############################################
 # Initial set
 
-INCLUDE_DIRECTORIES(src/libutil src/libserver src/libmime src/libstat)
+INCLUDE_DIRECTORIES(src/libutil src/libserver src/libmime src/libstat src/libcryptobox)
 
 IF(CMAKE_INSTALL_PREFIX)
     SET(PREFIX ${CMAKE_INSTALL_PREFIX})
