@@ -303,17 +303,12 @@ int curve25519 (unsigned char *q, const unsigned char *n,
 		const unsigned char *p)
 {
 	unsigned int work[96];
-	unsigned char e[32];
 	unsigned int i;
-	for (i = 0; i < 32; ++i)
-		e[i] = n[i];
-	e[0] &= 248;
-	e[31] &= 127;
-	e[31] |= 64;
+
 	for (i = 0; i < 32; ++i)
 		work[i] = p[i];
 	work[31] &= 127;
-	mainloop (work, e);
+	mainloop (work, n);
 	recip (work + 32, work + 32);
 	mult (work + 64, work, work + 32);
 	freeze (work + 64);

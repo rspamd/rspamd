@@ -482,17 +482,10 @@ int curve25519 (u8 *, const u8 *, const u8 *);
 int curve25519 (u8 *mypublic, const u8 *secret, const u8 *basepoint)
 {
 	limb bp[5], x[5], z[5], zmone[5];
-	uint8_t e[32];
 	int i;
 
-	for (i = 0; i < 32; ++i)
-		e[i] = secret[i];
-	e[0] &= 248;
-	e[31] &= 127;
-	e[31] |= 64;
-
 	fexpand (bp, basepoint);
-	cmult (x, z, e, bp);
+	cmult (x, z, secret, bp);
 	crecip (zmone, z);
 	fmul (z, x, zmone);
 	fcontract (mypublic, z);

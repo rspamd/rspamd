@@ -894,17 +894,10 @@ static void crecip (limb *out, const limb *z)
 int curve25519 (u8 *mypublic, const u8 *secret, const u8 *basepoint)
 {
 	limb bp[10], x[10], z[11], zmone[10];
-	uint8_t e[32];
 	int i;
 
-	for (i = 0; i < 32; ++i)
-		e[i] = secret[i];
-	e[0] &= 248;
-	e[31] &= 127;
-	e[31] |= 64;
-
 	fexpand (bp, basepoint);
-	cmult (x, z, e, bp);
+	cmult (x, z, secret, bp);
 	crecip (zmone, z);
 	fmul (z, x, zmone);
 	fcontract (mypublic, z);
