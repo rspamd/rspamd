@@ -4,6 +4,7 @@ INCLUDE(AsmOp.cmake)
 TARGET_ARCHITECTURE(ARCH)
 
 SET(CHACHASRC chacha20/ref.c)
+SET(POLYSRC poly1305/poly1305-donna.c)
 
 # For now we support only x86_64 architecture with optimizations
 IF(${ARCH} STREQUAL "x86_64")
@@ -25,6 +26,11 @@ IF(${ARCH} STREQUAL "x86_64")
 	" "dollar macro convention")
 	CONFIGURE_FILE(platform_config.h.in platform_config.h)
 	INCLUDE_DIRECTORIES("${CMAKE_CURRENT_BINARY_DIR}")
+	SET(CURVESRC curve25519/curve25519-donna-c64.c)
+ELSEIF(${ARCH} STREQUAL "i386")
+	SET(CURVESRC curve25519/curve25519-donna.c)
+ELSE()
+	SET(CURVESRC curve25519/ref.c)
 ENDIF()
 
 IF(HAVE_AVX2)
@@ -39,7 +45,8 @@ ENDIF(HAVE_SSE2)
 
 SET(LIBCRYPTOBOXSRC cryptobox.c)
 
-ADD_LIBRARY(rspamd-cryptobox ${LINK_TYPE} ${LIBCRYPTOBOXSRC} ${CHACHASRC})
+ADD_LIBRARY(rspamd-cryptobox ${LINK_TYPE} ${LIBCRYPTOBOXSRC} 
+	${CHACHASRC} ${POLYSRC} ${CURVESRC})
 IF(NOT DEBIAN_BUILD)
 	SET_TARGET_PROPERTIES(rspamd-cryptobox PROPERTIES VERSION ${RSPAMD_VERSION})
 ENDIF(NOT DEBIAN_BUILD)
