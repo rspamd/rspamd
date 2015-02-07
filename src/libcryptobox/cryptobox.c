@@ -121,9 +121,17 @@ void
 rspamd_cryptobox_nm (rspamd_nm_t nm, const rspamd_pk_t pk, const rspamd_sk_t sk)
 {
 	guchar s[rspamd_cryptobox_PKBYTES];
+	guchar e[rspamd_cryptobox_SKBYTES];
 
-	curve25519 (s, sk, pk);
+	memcpy (e, sk, rspamd_cryptobox_SKBYTES);
+	e[0] &= 248;
+	e[31] &= 127;
+	e[31] |= 64;
+
+	curve25519 (s, e, pk);
 	hchacha (s, n0, nm, 20);
+
+	rspamd_explicit_memzero (e, rspamd_cryptobox_SKBYTES);
 }
 
 void rspamd_cryptobox_encrypt_nm_inplace (guchar *data, gsize len,
@@ -131,7 +139,7 @@ void rspamd_cryptobox_encrypt_nm_inplace (guchar *data, gsize len,
 		const rspamd_nm_t nm, rspamd_sig_t sig)
 {
 	poly1305_context mac_ctx;
-	guchar subkey[32];
+	guchar subkey[CHACHA_BLOCKBYTES];
 	chacha_state s;
 	gsize r;
 
@@ -155,7 +163,7 @@ rspamd_cryptobox_decrypt_nm_inplace (guchar *data, gsize len,
 		const rspamd_nonce_t nonce, const rspamd_nm_t nm, const rspamd_sig_t sig)
 {
 	poly1305_context mac_ctx;
-	guchar subkey[32];
+	guchar subkey[CHACHA_BLOCKBYTES];
 	rspamd_sig_t mac;
 	chacha_state s;
 	gsize r;

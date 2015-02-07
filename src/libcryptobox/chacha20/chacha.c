@@ -170,7 +170,7 @@ chacha_update (chacha_state *S, const unsigned char *in, unsigned char *out,
 	size_t bytes;
 
 	/* enough for at least one block? */
-	if ((state->leftover + inlen) >= CHACHA_BLOCKBYTES) {
+	while ((state->leftover + inlen) >= CHACHA_BLOCKBYTES) {
 		/* handle the previous data */
 		if (state->leftover) {
 			bytes = (CHACHA_BLOCKBYTES - state->leftover);

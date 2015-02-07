@@ -617,14 +617,14 @@ rspamd_http_on_message_complete (http_parser * parser)
 			peer_key = (struct rspamd_http_keypair *)priv->msg->peer_key;
 
 			if (conn->cache) {
-				if (rspamd_cryptobox_decrypt_nm_inplace (m, dec_len, nonce,
+				if (!rspamd_cryptobox_decrypt_nm_inplace (m, dec_len, nonce,
 						peer_key->nm, m - rspamd_cryptobox_MACBYTES) != 0) {
 					msg_err ("cannot verify encrypted message");
 					return -1;
 				}
 			}
 			else {
-				if (rspamd_cryptobox_decrypt_inplace (m, dec_len, nonce,
+				if (!rspamd_cryptobox_decrypt_inplace (m, dec_len, nonce,
 						peer_key->pk, priv->local_key->sk,
 						m - rspamd_cryptobox_MACBYTES) != 0) {
 					msg_err ("cannot verify encrypted message");
