@@ -24,7 +24,7 @@
 #include "cryptobox.h"
 #include "platform_config.h"
 #include "chacha20/chacha.h"
-#include "poly1305/poly1305-donna.h"
+#include "poly1305/poly1305.h"
 #include "curve25519/curve25519.h"
 #include "ottery.h"
 
@@ -105,6 +105,7 @@ rspamd_cryptobox_init (void)
 	}
 
 	chacha_load ();
+	poly1305_load ();
 }
 
 void
@@ -139,7 +140,7 @@ void rspamd_cryptobox_encrypt_nm_inplace (guchar *data, gsize len,
 		const rspamd_nonce_t nonce,
 		const rspamd_nm_t nm, rspamd_sig_t sig)
 {
-	poly1305_context mac_ctx;
+	poly1305_state mac_ctx;
 	guchar subkey[CHACHA_BLOCKBYTES];
 	chacha_state s;
 	gsize r;
@@ -151,7 +152,7 @@ void rspamd_cryptobox_encrypt_nm_inplace (guchar *data, gsize len,
 	r = chacha_update (&s, data, data, len);
 	chacha_final (&s, data + r);
 
-	poly1305_init (&mac_ctx, subkey);
+	poly1305_init (&mac_ctx, (const poly1305_key *)subkey);
 	poly1305_update (&mac_ctx, data, len);
 	poly1305_finish (&mac_ctx, sig);
 
@@ -163,7 +164,7 @@ gboolean
 rspamd_cryptobox_decrypt_nm_inplace (guchar *data, gsize len,
 		const rspamd_nonce_t nonce, const rspamd_nm_t nm, const rspamd_sig_t sig)
 {
-	poly1305_context mac_ctx;
+	poly1305_state mac_ctx;
 	guchar subkey[CHACHA_BLOCKBYTES];
 	rspamd_sig_t mac;
 	chacha_state s;
@@ -175,7 +176,7 @@ rspamd_cryptobox_decrypt_nm_inplace (guchar *data, gsize len,
 	memset (subkey, 0, sizeof (subkey));
 	chacha_update (&s, subkey, subkey, sizeof (subkey));
 
-	poly1305_init (&mac_ctx, subkey);
+	poly1305_init (&mac_ctx, (const poly1305_key *)subkey);
 	poly1305_update (&mac_ctx, data, len);
 	poly1305_finish (&mac_ctx, mac);
 

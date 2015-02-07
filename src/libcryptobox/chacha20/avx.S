@@ -1,4 +1,5 @@
 #include "macro.S"
+#include "constants.S"
 SECTION_TEXT
 
 GLOBAL_HIDDEN_FN chacha_blocks_avx

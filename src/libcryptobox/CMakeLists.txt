@@ -4,7 +4,7 @@ INCLUDE(AsmOp.cmake)
 TARGET_ARCHITECTURE(ARCH)
 
 SET(CHACHASRC chacha20/chacha.c chacha20/ref.c)
-SET(POLYSRC poly1305/poly1305-donna.c)
+SET(POLYSRC poly1305/poly1305.c)
 
 # For now we support only x86_64 architecture with optimizations
 IF(${ARCH} STREQUAL "x86_64")
@@ -12,35 +12,44 @@ IF(${ARCH} STREQUAL "x86_64")
 	ASM_OP(HAVE_AVX2 "vpaddq %ymm0, %ymm0, %ymm0" "avx2")
 	ASM_OP(HAVE_AVX "vpaddq %xmm0, %xmm0, %xmm0" "avx")
 	ASM_OP(HAVE_SSE2 "pmuludq %xmm0, %xmm0" "sse2")
+	
 	ASM_OP(HAVE_SLASHMACRO "
 	.macro TEST1 op
 	\\op %eax, %eax
 	.endm
 	TEST1 xorl
 	" "slash macro convention")
+	
 	ASM_OP(HAVE_DOLLARMACRO "
 	.macro TEST1 op
 	$0 %eax, %eax
 	.endm
 	TEST1 xorl
 	" "dollar macro convention")
+	
 	CONFIGURE_FILE(platform_config.h.in platform_config.h)
 	INCLUDE_DIRECTORIES("${CMAKE_CURRENT_BINARY_DIR}")
 	SET(CURVESRC curve25519/curve25519-donna-c64.c)
+	SET(POLYSRC ${POLYSRC} poly1305/ref-64.c)
 ELSEIF(${ARCH} STREQUAL "i386")
+	SET(POLYSRC ${POLYSRC} poly1305/ref-32.c)
 	SET(CURVESRC curve25519/curve25519-donna.c)
 ELSE()
 	SET(CURVESRC curve25519/ref.c)
+	SET(POLYSRC ${POLYSRC} poly1305/ref-32.c)
 ENDIF()
 
 IF(HAVE_AVX2)
 	SET(CHACHASRC ${CHACHASRC} chacha20/avx2.S)
+	SET(POLYSRC ${POLYSRC} poly1305/avx2.S)
 ENDIF(HAVE_AVX2)
 IF(HAVE_AVX)
 	SET(CHACHASRC ${CHACHASRC} chacha20/avx.S)
+	SET(POLYSRC ${POLYSRC} poly1305/avx.S)
 ENDIF(HAVE_AVX)
 IF(HAVE_SSE2)
 	SET(CHACHASRC ${CHACHASRC} chacha20/sse2.S)
+	SET(POLYSRC ${POLYSRC} poly1305/sse2.S)
 ENDIF(HAVE_SSE2)
 
 SET(LIBCRYPTOBOXSRC cryptobox.c)
