@@ -145,6 +145,9 @@ void rspamd_cryptobox_encrypt_nm_inplace (guchar *data, gsize len,
 	poly1305_init (&mac_ctx, subkey);
 	poly1305_update (&mac_ctx, data, len);
 	poly1305_finish (&mac_ctx, sig);
+
+	rspamd_explicit_memzero (&mac_ctx, sizeof (mac_ctx));
+	rspamd_explicit_memzero (subkey, sizeof (subkey));
 }
 
 gboolean

@@ -29,12 +29,13 @@
 #include "tweetnacl.h"
 #include "ref.h"
 #include "blake2.h"
+#include "cryptobox.h"
 
 struct rspamd_http_keypair {
-	guchar pk[crypto_box_PUBLICKEYBYTES];
-	guchar sk[crypto_box_SECRETKEYBYTES];
+	guchar pk[rspamd_cryptobox_PKBYTES];
+	guchar sk[rspamd_cryptobox_SKBYTES];
 	guchar id[BLAKE2B_OUTBYTES];
-	guchar nm[crypto_box_BEFORENMBYTES];
+	guchar nm[rspamd_cryptobox_NMBYTES];
 	ref_entry_t ref;
 };
 

@@ -31,8 +31,8 @@
 #include "xxhash.h"
 
 struct rspamd_keypair_elt {
-	guchar nm[crypto_box_BEFORENMBYTES];
-	guchar pair[crypto_box_PUBLICKEYBYTES + crypto_box_SECRETKEYBYTES];
+	guchar nm[rspamd_cryptobox_NMBYTES];
+	guchar pair[rspamd_cryptobox_PKBYTES + rspamd_cryptobox_SKBYTES];
 };
 
 struct rspamd_keypair_cache {
@@ -100,7 +100,7 @@ rspamd_keypair_cache_process (struct rspamd_keypair_cache *c,
 		memcpy (new->pair, kp_remote->pk, crypto_box_PUBLICKEYBYTES);
 		memcpy (&new->pair[crypto_box_PUBLICKEYBYTES], kp_local->sk,
 				crypto_box_SECRETKEYBYTES);
-		crypto_box_beforenm (new->nm, kp_remote->pk, kp_local->sk);
+		rspamd_cryptobox_nm (new->nm, kp_remote->pk, kp_local->sk);
 		rspamd_lru_hash_insert (c->hash, new, new, time (NULL), -1);
 	}
 
