@@ -87,6 +87,7 @@ rspamd_cryptobox_init (void)
 
 	rspamd_cryptobox_cpuid (cpu, 0);
 	nid = cpu[0];
+	rspamd_cryptobox_cpuid (cpu, 1);
 
 	if (nid > 1) {
 		if ((cpu[3] & ((gint)1 << 26))) {

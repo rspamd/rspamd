@@ -167,9 +167,9 @@ rspamd_http_test_func (void)
 	GString *b32_key;
 	double diff, total_diff = 0.0;
 
+	rspamd_cryptobox_init ();
 	rspamd_snprintf (filepath, sizeof (filepath), "/tmp/http-test-XXXXXX");
 	g_assert ((fd = mkstemp (filepath)) != -1);
-
 
 	for (i = 0; i < file_blocks; i ++) {
 		memset (buf, 0, sizeof (buf));

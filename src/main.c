@@ -35,6 +35,7 @@
 #include "xxhash.h"
 #include "utlist.h"
 #include "libstat/stat_api.h"
+#include "cryptobox.h"
 #ifdef HAVE_OPENSSL
 #include <openssl/rand.h>
 #include <openssl/err.h>
@@ -1139,6 +1140,8 @@ rspamd_init_libs (void)
 	struct rlimit rlim;
 
 	ottery_init (NULL);
+
+	rspamd_cryptobox_init ();
 #ifdef HAVE_SETLOCALE
 	/* Set locale setting to C locale to avoid problems in future */
 	setlocale (LC_ALL, "C");
