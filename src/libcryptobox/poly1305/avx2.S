@@ -8,8 +8,10 @@ ret
 FN_END poly1305_block_size_avx2
 
 GLOBAL_HIDDEN_FN poly1305_auth_avx2
+/*
 cmp $128, %rdx
 jb poly1305_auth_x86_local
+*/
 pushq %rbp
 movq %rsp, %rbp
 andq $-64, %rsp

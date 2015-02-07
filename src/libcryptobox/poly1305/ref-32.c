@@ -5,6 +5,7 @@
 */
 
 #include "config.h"
+#include "poly1305.h"
 
 enum {
 	POLY1305_BLOCK_SIZE = 16

@@ -91,10 +91,9 @@ POLY1305_GENERIC,
 #if defined(POLY1305_SSE2)
 		POLY1305_SSE2,
 #endif
-		};
+};
 
 static const poly1305_impl_t *poly1305_opt = &poly1305_list[0];
-;
 
 /* is the pointer aligned on a word boundary? */
 static int poly1305_is_aligned(const void *p)

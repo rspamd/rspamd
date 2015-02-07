@@ -1,5 +1,6 @@
 #include "../chacha20/macro.S"
 #include "constants.S"
+
 SECTION_TEXT
 
 GLOBAL_HIDDEN_FN poly1305_block_size_sse2
@@ -920,8 +921,10 @@ ret
 FN_END poly1305_finish_ext_sse2
 
 GLOBAL_HIDDEN_FN poly1305_auth_sse2
+/*
 cmpq $128, %rdx
 jb poly1305_auth_x86_local
+*/
 pushq %rbp
 movq %rsp, %rbp
 pushq %r14
