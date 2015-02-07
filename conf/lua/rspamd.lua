@@ -67,6 +67,15 @@ rspamd_config.R_EMPTY_IMAGE = function (task)
 end
 
 -- Date issues
+rspamd_config.DATE_NOT_EXISTS = function(task)
+	if rspamd_config:get_api_version() >= 5 then
+		if not task:get_header_raw('Date') then
+			return true
+		end
+	end
+	
+	return false
+end
 rspamd_config.DATE_IN_FUTURE = function(task)
 	if rspamd_config:get_api_version() >= 5 then
 		local dm = task:get_date{format = 'message'}
