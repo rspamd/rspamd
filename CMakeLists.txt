@@ -36,7 +36,7 @@ OPTION(ENABLE_DB           "Find and link with DB library [default: OFF]"       
 OPTION(ENABLE_SQLITE       "Find and link with sqlite3 library [default: OFF]"  OFF)
 OPTION(ENABLE_HIREDIS      "Find and link with external redis library [default: OFF]"  OFF)
 OPTION(ENABLE_URL_INCLUDE  "Enable urls in ucl includes (requires libcurl or libfetch) [default: OFF]" OFF)
-OPTION(NO_SHARED           "Build internal libs static [default: OFF]"          OFF)
+OPTION(NO_SHARED           "Build internal libs static [default: ON]"          ON)
 OPTION(FORCE_GMIME24       "Link with gmime2.4 [default: OFF]"                  OFF)
 OPTION(INSTALL_EXAMPLES    "Install examples [default: OFF]"                    OFF)
 OPTION(INSTALL_WEBUI       "Install web interface [default: ON]"                ON)
