@@ -17,10 +17,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifndef ALIGN
 #if defined(_MSC_VER)
-#define ALIGN(x) __declspec(align(x))
+# define ALIGN(x) __declspec(align(x))
 #else
-#define ALIGN(x) __attribute__((aligned(x)))
+# define ALIGN(x) __attribute__((aligned(x)))
+#endif
 #endif
 
 #if defined(__cplusplus)

@@ -30,7 +30,7 @@
 
 static const int file_blocks = 8;
 static const int pconns = 100;
-static const int ntests = 100;
+static const int ntests = 300;
 
 static void
 rspamd_server_error (struct rspamd_http_connection_entry *conn_ent,

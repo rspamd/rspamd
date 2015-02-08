@@ -472,6 +472,14 @@ typedef off_t goffset;
 #include <gmime/gmime.h>
 #endif
 
+#ifndef ALIGN
+#if defined(_MSC_VER)
+# define ALIGN(x) __declspec(align(x))
+#else
+# define ALIGN(x) __attribute__((aligned(x)))
+#endif
+#endif
+
 /* Forwarded declaration */
 struct module_ctx;
 struct rspamd_config;
