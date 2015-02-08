@@ -73,39 +73,63 @@ local function check_settings(task)
   local function check_specific_setting(name, rule, ip, from, rcpt, user)
     local res = false
 
-    if rule['ip'] and ip then
+    if rule['ip'] then
+      if not ip then
+        return nil
+      end
       for _, i in ipairs(rule['ip']) do
         res = check_ip_setting(i, ip)
         if res then
           break
         end
       end
+      if not res then
+        return nil
+      end
     end
 
-    if not res and rule['from'] and from then
+    if rule['from'] then
+      if not from then
+        return nil
+      end
       for _, i in ipairs(rule['from']) do
         res = check_addr_setting(i, from)
         if res then
           break
         end
       end
+      if not res then
+        return nil
+      end
     end
 
-    if not res and rule['rcpt'] and rcpt then
+    if rule['rcpt'] then
+      if not rcpt then
+        return nil
+      end
       for _, i in ipairs(rule['rcpt']) do
         res = check_addr_setting(i, rcpt)
         if res then
           break
         end
       end
+      if not res then
+        return nil
+      end
     end
 
-    if not res and rule['user'] and user then
+    if rule['user'] then
+      if not user then
+        return nil
+      end
       for _, i in ipairs(rule['user']) do
         res = check_addr_setting(i, user)
         if res then
           break
         end
+      end
+      if not res then
+        return nil
       end
     end
 
