@@ -754,7 +754,25 @@ CHECK_SYMBOL_EXISTS(_SC_NPROCESSORS_ONLN unistd.h HAVE_SC_NPROCESSORS_ONLN)
 CHECK_SYMBOL_EXISTS(setbit sys/param.h PARAM_H_HAS_BITSET)
 CHECK_SYMBOL_EXISTS(getaddrinfo "sys/types.h;sys/socket.h;netdb.h" HAVE_GETADDRINFO)
 CHECK_SYMBOL_EXISTS(sched_yield "sched.h" HAVE_SCHED_YIELD)
-CHECK_SYMBOL_EXISTS(pthread_mutexattr_setpshared "pthread.h" HAVE_PTHREAD_PROCESS_SHARED)
+
+FILE(WRITE ${CMAKE_BINARY_DIR}/pthread_setpshared.c "
+#include <pthread.h>
+#include <stdlib.h>
+int main (void)
+{
+	pthread_mutex_attr_t mattr;
+	if (pthread_mutexattr_init(&mattr) != 0) return 0;
+	if (pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED) != 0) return 0;
+	return 1;
+}
+")
+TRY_RUN(HAVE_PTHREAD_PROCESS_SHARED _CAN_COMPILE
+	"${CMAKE_BINARY_DIR}" "${CMAKE_BINARY_DIR}/pthread_setpshared.c")
+IF(HAVE_PTHREAD_PROCESS_SHARED)
+	MESSAGE(STATUS "pthread_mutexattr_setpshared is supported")
+ELSE(HAVE_PTHREAD_PROCESS_SHARED)
+	MESSAGE(STATUS "pthread_mutexattr_setpshared is -NOT- supported")
+ENDIF(HAVE_PTHREAD_PROCESS_SHARED)
 
 IF(NOT HAVE_GETADDRINFO)
 	MESSAGE(FATAL_ERROR "Your system does not support getaddrinfo call, please consider upgrading it to run rspamd")
