@@ -943,12 +943,17 @@ void
 rspamd_http_connection_free (struct rspamd_http_connection *conn)
 {
 	struct rspamd_http_connection_private *priv;
+	struct rspamd_http_keypair *peer_key;
 
 	priv = conn->priv;
 	rspamd_http_connection_reset (conn);
 
 	if (priv->local_key) {
 		REF_RELEASE (priv->local_key);
+	}
+	if (priv->peer_key) {
+		peer_key = (struct rspamd_http_keypair *)priv->peer_key;
+		REF_RELEASE (peer_key);
 	}
 
 	g_slice_free1 (sizeof (struct rspamd_http_connection_private), priv);
@@ -1319,6 +1324,9 @@ rspamd_http_message_free (struct rspamd_http_message *msg)
 	if (msg->status != NULL) {
 		g_string_free (msg->status, TRUE);
 	}
+	if (msg->host != NULL) {
+		g_string_free (msg->host, TRUE);
+	}
 	if (msg->peer_key != NULL) {
 		rspamd_http_connection_key_unref (msg->peer_key);
 	}
@@ -1504,7 +1512,11 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 	reply_msg = rspamd_http_new_message (HTTP_RESPONSE);
 	reply_msg->date = time (NULL);
 	reply_msg->code = 200;
+
 	reply_msg->body = g_string_sized_new (st.st_size);
+	reply_msg->body->len = st.st_size;
+	reply_msg->body_buf.len = st.st_size;
+	reply_msg->body_buf.str = reply_msg->body->str;
 
 	if (read (fd, reply_msg->body->str, st.st_size) != st.st_size) {
 		close (fd);
@@ -1512,8 +1524,8 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 		return FALSE;
 	}
 
-	reply_msg->body->len = st.st_size;
-	reply_msg->body->str[st.st_size] = '\0';
+	reply_msg->body_buf.str[st.st_size] = '\0';
+
 	close (fd);
 
 	rspamd_http_connection_reset (entry->conn);

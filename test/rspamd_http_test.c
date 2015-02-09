@@ -264,5 +264,5 @@ rspamd_http_test_func (void)
 
 	close (fd);
 	unlink (filepath);
-	kill (sfd, SIGKILL);
+	kill (sfd, SIGTERM);
 }
