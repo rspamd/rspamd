@@ -90,19 +90,23 @@ rspamd_cryptobox_init (void)
 	rspamd_cryptobox_cpuid (cpu, 1);
 
 	if (nid > 1) {
-		if ((cpu[3] & ((gint)1 << 26))) {
-			cpu_config |= CPUID_SSE2;
-		}
-		if ((cpu[2] & ((gint)1 << 28))) {
-			cpu_config |= CPUID_AVX;
+		/* Check OSXSAVE bit first of all */
+		if ((cpu[2] & ((gint)1 << 9))) {
+			if ((cpu[3] & ((gint)1 << 26))) {
+				cpu_config |= CPUID_SSE2;
+			}
+			if ((cpu[2] & ((gint)1 << 28))) {
+				cpu_config |= CPUID_AVX;
+			}
+			if (nid > 7) {
+				rspamd_cryptobox_cpuid (cpu, 7);
+				if ((cpu[1] & ((gint)1 <<  5))) {
+					cpu_config |= CPUID_AVX2;
+				}
+			}
 		}
 	}
-	if (nid > 7) {
-		rspamd_cryptobox_cpuid (cpu, 7);
-		if ((cpu[1] & ((gint)1 <<  5))) {
-			cpu_config |= CPUID_AVX2;
-		}
-	}
+
 
 	chacha_load ();
 	poly1305_load ();
