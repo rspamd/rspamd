@@ -760,14 +760,18 @@ FILE(WRITE ${CMAKE_BINARY_DIR}/pthread_setpshared.c "
 #include <stdlib.h>
 int main (void)
 {
-	pthread_mutex_attr_t mattr;
+	pthread_mutexattr_t mattr;
 	if (pthread_mutexattr_init(&mattr) != 0) return 0;
 	if (pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED) != 0) return 0;
 	return 1;
 }
 ")
-TRY_RUN(HAVE_PTHREAD_PROCESS_SHARED _CAN_COMPILE
-	"${CMAKE_BINARY_DIR}" "${CMAKE_BINARY_DIR}/pthread_setpshared.c")
+TRY_RUN(_CAN_RUN _CAN_COMPILE
+	"${CMAKE_BINARY_DIR}" "${CMAKE_BINARY_DIR}/pthread_setpshared.c"
+	CMAKE_FLAGS CMAKE_C_FLAGS="-pthread")
+IF(_CAN_RUN EQUAL 1)
+	SET(HAVE_PTHREAD_PROCESS_SHARED)
+ENDIF(_CAN_RUN EQUAL 1)
 IF(HAVE_PTHREAD_PROCESS_SHARED)
 	MESSAGE(STATUS "pthread_mutexattr_setpshared is supported")
 ELSE(HAVE_PTHREAD_PROCESS_SHARED)
