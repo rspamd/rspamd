@@ -145,8 +145,8 @@ void rspamd_cryptobox_encrypt_nm_inplace (guchar *data, gsize len,
 		const rspamd_nm_t nm, rspamd_sig_t sig)
 {
 	poly1305_state mac_ctx;
-	ALIGN(64) guchar subkey[CHACHA_BLOCKBYTES];
-	ALIGN(64) chacha_state s;
+	guchar subkey[CHACHA_BLOCKBYTES];
+	chacha_state s;
 	gsize r;
 
 	xchacha_init (&s, (const chacha_key *)nm, (const chacha_iv24 *)nonce, 20);
@@ -168,10 +168,10 @@ gboolean
 rspamd_cryptobox_decrypt_nm_inplace (guchar *data, gsize len,
 		const rspamd_nonce_t nonce, const rspamd_nm_t nm, const rspamd_sig_t sig)
 {
-	ALIGN(64) poly1305_state mac_ctx;
-	ALIGN(64) guchar subkey[CHACHA_BLOCKBYTES];
+	poly1305_state mac_ctx;
+	guchar subkey[CHACHA_BLOCKBYTES];
 	rspamd_sig_t mac;
-	ALIGN(64) chacha_state s;
+	chacha_state s;
 	gsize r;
 	gboolean ret = TRUE;
 
