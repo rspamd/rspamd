@@ -461,9 +461,6 @@ rspamd_rcl_metric_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 	/* Handle symbols */
 	val = ucl_object_find_key (obj, "symbols");
 	if (val != NULL) {
-		if (val->type == UCL_ARRAY) {
-			val = val->value.ov;
-		}
 		if (val->type != UCL_OBJECT) {
 			g_set_error (err, CFG_RCL_ERROR, EINVAL,
 				"symbols must be an object");
@@ -480,9 +477,6 @@ rspamd_rcl_metric_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 		/* Legacy variant */
 		val = ucl_object_find_key (obj, "symbol");
 		if (val != NULL) {
-			if (val->type == UCL_ARRAY) {
-				val = val->value.ov;
-			}
 			if (val->type != UCL_OBJECT) {
 				g_set_error (err,
 					CFG_RCL_ERROR,
