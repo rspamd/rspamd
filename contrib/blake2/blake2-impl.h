@@ -14,7 +14,12 @@
 #ifndef __BLAKE2_IMPL_H__
 #define __BLAKE2_IMPL_H__
 
+#include "config.h"
 #include <stdint.h>
+
+#if BYTE_ORDER == LITTLE_ENDIAN
+#define NATIVE_LITTLE_ENDIAN
+#endif
 
 static inline uint32_t load32( const void *src )
 {

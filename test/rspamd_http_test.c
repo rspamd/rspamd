@@ -27,6 +27,7 @@
 #include "http.h"
 #include "tests.h"
 #include "ottery.h"
+#include "cryptobox.h"
 
 static const int file_blocks = 8;
 static const int pconns = 100;

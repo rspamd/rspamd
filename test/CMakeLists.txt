@@ -17,10 +17,13 @@ ADD_EXECUTABLE(rspamd-test EXCLUDE_FROM_ALL ${TESTSRC})
 SET_TARGET_PROPERTIES(rspamd-test PROPERTIES LINKER_LANGUAGE C)
 SET_TARGET_PROPERTIES(rspamd-test PROPERTIES COMPILE_FLAGS "-DRSPAMD_TEST")
 
+TARGET_LINK_LIBRARIES(rspamd-test rspamd-stat)
 TARGET_LINK_LIBRARIES(rspamd-test rspamd-mime)
 TARGET_LINK_LIBRARIES(rspamd-test rspamd-server)
 TARGET_LINK_LIBRARIES(rspamd-test rspamd-util)
 TARGET_LINK_LIBRARIES(rspamd-test rspamd-lua)
+TARGET_LINK_LIBRARIES(rspamd-test rspamd-cryptobox)
+TARGET_LINK_LIBRARIES(rspamd-test stemmer)
 
 TARGET_LINK_LIBRARIES(rspamd-test event)
 IF(HAVE_LIBEVENT2)
