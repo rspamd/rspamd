@@ -17,11 +17,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#ifndef ALIGN
+#ifndef BLAKE_ALIGN
 #if defined(_MSC_VER)
-# define ALIGN(x) __declspec(align(x))
+# define BLAKE_ALIGN(x) __declspec(align(x))
 #else
-# define ALIGN(x) __attribute__((aligned(x)))
+# define BLAKE_ALIGN(x) __attribute__((aligned(x)))
 #endif
 #endif
 
@@ -56,7 +56,7 @@ extern "C" {
     uint8_t  personal[BLAKE2B_PERSONALBYTES];  // 64
   } blake2b_param;
 
-  ALIGN( 64 ) typedef struct __blake2b_state
+  BLAKE_ALIGN( 64 ) typedef struct __blake2b_state
   {
     uint64_t h[8];
     uint64_t t[2];
