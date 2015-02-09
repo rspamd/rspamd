@@ -381,7 +381,9 @@ rspamd_process_filters (struct rspamd_task *task)
 			if (!task->pass_all_filters &&
 				metric->actions[METRIC_ACTION_REJECT].score > 0 &&
 				check_metric_is_spam (task, metric)) {
-				task->state = WRITE_REPLY;
+				msg_info ("<%s> has already scored more than %.2f, so do not "
+						"plan any more checks", task->message_id,
+						metric->actions[METRIC_ACTION_REJECT].score);
 				return 1;
 			}
 			cur = g_list_next (cur);
