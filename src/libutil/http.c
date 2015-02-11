@@ -1600,7 +1600,8 @@ struct rspamd_http_connection_router *
 rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 	rspamd_http_router_finish_handler_t fh,
 	struct timeval *timeout, struct event_base *base,
-	const char *default_fs_path)
+	const char *default_fs_path,
+	struct rspamd_keypair_cache *cache)
 {
 	struct rspamd_http_connection_router * new;
 	struct stat st;
@@ -1635,8 +1636,7 @@ rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 		}
 	}
 
-	/* XXX: stupid default value, should be configurable */
-	new->cache = rspamd_keypair_cache_new (256);
+	new->cache = cache;
 
 	return new;
 }

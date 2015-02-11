@@ -1589,7 +1589,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	struct module_ctx *mctx;
 	GHashTableIter iter;
 	gpointer key, value;
-
+	struct rspamd_keypair_cache *cache;
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"controller",
@@ -1614,9 +1614,10 @@ start_controller_worker (struct rspamd_worker *worker)
 		}
 	}
 	/* Accept event */
+	cache = rspamd_keypair_cache_new (256);
 	ctx->http = rspamd_http_router_new (rspamd_controller_error_handler,
 			rspamd_controller_finish_handler, &ctx->io_tv, ctx->ev_base,
-			ctx->static_files_dir);
+			ctx->static_files_dir, cache);
 
 	/* Add callbacks for different methods */
 	rspamd_http_router_add_path (ctx->http,
@@ -1706,6 +1707,8 @@ start_controller_worker (struct rspamd_worker *worker)
 	event_base_loop (ctx->ev_base, 0);
 
 	g_mime_shutdown ();
+	rspamd_http_router_free (ctx->http);
+	rspamd_keypair_cache_destroy (cache);
 	rspamd_log_close (rspamd_main->logger);
 	exit (EXIT_SUCCESS);
 }

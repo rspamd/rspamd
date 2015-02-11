@@ -29,7 +29,7 @@
 #include "ottery.h"
 #include "cryptobox.h"
 
-static const int file_blocks = 8;
+static const int file_blocks = 16;
 static const int pconns = 100;
 static const int ntests = 300;
 
@@ -69,7 +69,7 @@ rspamd_server_accept (gint fd, short what, void *arg)
 
 static void
 rspamd_http_server_func (const gchar *path, rspamd_inet_addr_t *addr,
-		rspamd_mempool_mutex_t *mtx, gpointer kp)
+		rspamd_mempool_mutex_t *mtx, gpointer kp, struct rspamd_keypair_cache *c)
 {
 	struct rspamd_http_connection_router *rt;
 	struct event_base *ev_base = event_init ();
@@ -77,7 +77,7 @@ rspamd_http_server_func (const gchar *path, rspamd_inet_addr_t *addr,
 	gint fd;
 
 	rt = rspamd_http_router_new (rspamd_server_error, rspamd_server_finish,
-			NULL, ev_base, path);
+			NULL, ev_base, path, c);
 	g_assert (rt != NULL);
 
 	rspamd_http_router_set_key (rt, kp);
@@ -190,7 +190,7 @@ rspamd_http_test_func (void)
 	g_assert (sfd != -1);
 
 	if (sfd == 0) {
-		rspamd_http_server_func ("/tmp/", &addr, mtx, serv_key);
+		rspamd_http_server_func ("/tmp/", &addr, mtx, serv_key, c);
 		exit (EXIT_SUCCESS);
 	}
 
@@ -242,12 +242,24 @@ rspamd_http_test_func (void)
 			sizeof (buf) * file_blocks,
 			total_diff, ntests * pconns / total_diff * 1000.);
 
+	/* Restart server */
+	kill (sfd, SIGTERM);
+	wait (&i);
+	sfd = fork ();
+	g_assert (sfd != -1);
+
+	if (sfd == 0) {
+		rspamd_http_server_func ("/tmp/", &addr, mtx, serv_key, NULL);
+		exit (EXIT_SUCCESS);
+	}
+
+	rspamd_mempool_lock_mutex (mtx);
 	total_diff = 0.0;
 
 	for (i = 0; i < ntests; i ++) {
 		for (j = 0; j < pconns; j ++) {
 			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, &addr,
-					client_key, peer_key, NULL, ev_base);
+					client_key, peer_key, c, ev_base);
 		}
 		clock_gettime (CLOCK_MONOTONIC, &ts1);
 		event_base_loop (ev_base, 0);
