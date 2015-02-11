@@ -232,7 +232,7 @@ function kmail_msgid (task)
 	local header_msgid = task:get_header('Message-Id')
 	if header_msgid then
 		local header_from = task:get_header('From')
-	  if re:match(header_from.."|"..header_msgid) then return true end
+		if header_from and re:match(header_from.."|"..header_msgid) then return true end
 	end
 	return false
 end
