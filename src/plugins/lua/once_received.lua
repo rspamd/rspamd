@@ -48,7 +48,7 @@ local function check_quantity_received (task)
 			if not r['real_hostname'] or string.lower(r['real_hostname']) == 'unknown' or 
 				string.match(r['real_hostname'], '^%d+%.%d+%.%d+%.%d+$') then
 				
-				if r['real_ip'] and r['real_ip']:to_string() then
+				if r['real_ip'] and r['real_ip']:is_valid() then
 					-- Try to resolve it again
 					task:get_resolver():resolve_ptr(task:get_session(), task:get_mempool(), 
 						r['real_ip']:to_string(), recv_dns_cb)
