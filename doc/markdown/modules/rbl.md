@@ -19,7 +19,7 @@ rbl {
 
 The default settings define the ways in which the RBLs are used unless overridden in an RBL-specific subsection.
 
-Defaults may be set for the following parameters (default values used if these are not set are shown in brackets):
+Defaults may be set for the following parameters (default values used if these are not set are shown in brackets - note that these may be redefined in the default config):
 
 - default_ipv4 (true)
 
@@ -48,6 +48,10 @@ Use this RBL to test parameters sent for HELO/EHLO at SMTP time.
 - default_unknown (false)
 
 If set to false, do not yield a result unless the response received from the RBL is defined in its related returncodes {} subsection, else return the default symbol for the RBL.
+
+- deault_user (true)
+
+If set to false, do not use this RBL if the message sender is authenticated.
 
 RBL-specific subsection is structured as follows:
 
