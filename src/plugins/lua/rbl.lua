@@ -124,7 +124,7 @@ local function rbl_cb (task)
         end
         if not havegot['from'] then
           havegot['from'] = task:get_from_ip()
-          if havegot['from'] == nil then
+          if not havegot['from']:is_valid() then
             notgot['from'] = true
             return
           end
@@ -147,7 +147,7 @@ local function rbl_cb (task)
         end
         if not havegot['received'] then
           havegot['received'] = task:get_received_headers()
-          if havegot['received'] == nil then
+          if next(havegot['received']) == nil then
             notgot['received'] = true
             return
           end
