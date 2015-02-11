@@ -49,7 +49,7 @@ Use this RBL to test parameters sent for HELO/EHLO at SMTP time.
 
 If set to false, do not yield a result unless the response received from the RBL is defined in its related returncodes {} subsection, else return the default symbol for the RBL.
 
-- deault_user (true)
+- default_user (true)
 
 If set to false, do not use this RBL if the message sender is authenticated.
 
