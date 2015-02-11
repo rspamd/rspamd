@@ -60,7 +60,10 @@ local function rbl_cb (task)
   local havegot = {}
   local notgot = {}
   local function check_user() 
-    if not havegot['user'] and not notgot['user'] then
+    if notgot['user'] then
+      return false
+    end
+    if not havegot['user'] then
       havegot['user'] = task:get_user()
       if havegot['user'] == nil then
         notgot['user'] = true
@@ -153,7 +156,7 @@ local function rbl_cb (task)
           return
         end
         for _,rh in ipairs(havegot['received']) do
-          if rh['real_ip'] and rh['real_ip']:to_string() ~= '0.0.0.0' then
+          if rh['real_ip'] and rh['real_ip']:is_valid() then
             for k,rbl in pairs(rbls) do
               if (rh['real_ip']:get_version() == 6 and rbl['ipv6']) or
                 (rh['real_ip']:get_version() == 4 and rbl['ipv4']) then
