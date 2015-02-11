@@ -179,9 +179,11 @@ local function rate_test_set(task, func)
 	end
 	-- Parse from
 	local from = task:get_from()
-	local from_user = ''
+	local from_user = '<>'
+	local from_addr = '<>'
 	if from then
 		from_user = from[1]['user']
+		from_addr = from[1]['addr']
 	end
 	-- Get user (authuser)
 	local auser = task:get_user()
@@ -189,7 +191,7 @@ local function rate_test_set(task, func)
 		func(task, settings['user'], make_rate_key (auser, '<auth>', nil))
 	end
 
-	if not from_user or not rcpts_user[1] then
+	if not rcpts_user[1] then
 		-- Nothing to check
 		return
 	end
@@ -207,7 +209,7 @@ local function rate_test_set(task, func)
 		func(task, settings['to'], make_rate_key (nil, r['addr'], nil))
 		if ip then
 			func(task, settings['to_ip'], make_rate_key (nil, r['addr'], ip))
-			func(task, settings['to_ip_from'], make_rate_key (from[1]['addr'], r['addr'], ip))
+			func(task, settings['to_ip_from'], make_rate_key (from_addr, r['addr'], ip))
 		end
 	end
 end
