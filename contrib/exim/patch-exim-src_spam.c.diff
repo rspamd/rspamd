@@ -1,6 +1,6 @@
 diff -ru a/src/expand.c b/src/expand.c
---- a/src/expand.c	2014-08-09 14:44:29.000000000 +0200
-+++ b/src/expand.c	2015-01-31 20:08:55.022488664 +0200
+--- a/src/expand.c	2015-02-11 14:32:38.787982270 +0200
++++ b/src/expand.c	2015-02-11 14:32:53.467982467 +0200
 @@ -641,6 +641,7 @@
    { "sn8",                 vtype_filter_int,  &filter_sn[8] },
    { "sn9",                 vtype_filter_int,  &filter_sn[9] },
@@ -10,8 +10,8 @@ diff -ru a/src/expand.c b/src/expand.c
    { "spam_report",         vtype_stringptr,   &spam_report },
    { "spam_score",          vtype_stringptr,   &spam_score },
 diff -ru a/src/globals.c b/src/globals.c
---- a/src/globals.c	2014-08-09 14:44:29.000000000 +0200
-+++ b/src/globals.c	2015-01-31 20:08:55.026488703 +0200
+--- a/src/globals.c	2015-02-11 14:32:38.815982283 +0200
++++ b/src/globals.c	2015-02-11 14:32:53.467982467 +0200
 @@ -1257,6 +1257,7 @@
  uschar *spamd_address          = US"127.0.0.1 783";
  uschar *spam_bar               = NULL;
@@ -21,8 +21,8 @@ diff -ru a/src/globals.c b/src/globals.c
  uschar *spam_score_int         = NULL;
  #endif
 diff -ru a/src/globals.h b/src/globals.h
---- a/src/globals.h	2014-08-09 14:44:29.000000000 +0200
-+++ b/src/globals.h	2015-01-31 20:08:55.038488822 +0200
+--- a/src/globals.h	2015-02-11 14:32:38.835982265 +0200
++++ b/src/globals.h	2015-02-11 14:32:53.467982467 +0200
 @@ -803,6 +803,7 @@
  extern uschar *spamd_address;          /* address for the spamassassin daemon */
  extern uschar *spam_bar;               /* the spam "bar" (textual representation of spam_score) */
@@ -32,8 +32,8 @@ diff -ru a/src/globals.h b/src/globals.h
  extern uschar *spam_score_int;         /* spam_score * 10 (int) */
  #endif
 diff -ru a/src/spam.c b/src/spam.c
---- a/src/spam.c	2014-08-09 14:44:29.000000000 +0200
-+++ b/src/spam.c	2015-01-31 20:09:51.091042510 +0200
+--- a/src/spam.c	2015-02-11 14:32:38.803982272 +0200
++++ b/src/spam.c	2015-02-11 14:34:39.287981868 +0200
 @@ -14,6 +14,7 @@
  uschar spam_score_buffer[16];
  uschar spam_score_int_buffer[16];
@@ -111,7 +111,7 @@ diff -ru a/src/spam.c b/src/spam.c
        (void)fclose(mbox_file);
        (void)close(spamd_sock);
        return DEFER;
-@@ -230,22 +257,47 @@
+@@ -230,22 +257,50 @@
      return DEFER;
    }
  
@@ -129,6 +129,7 @@ diff -ru a/src/spam.c b/src/spam.c
 +    /* rspamd variant */
 +    const char *helo;
 +    const char *fcrdns;
++    const char *authid;
 +    uschar *req_str;
 +    
 +    req_str = string_sprintf("CHECK RSPAMC/1.3\r\nContent-length: %lu\r\n"
@@ -142,6 +143,8 @@ diff -ru a/src/spam.c b/src/spam.c
 +      req_str = string_sprintf("%sHostname: %s\r\n", req_str, fcrdns);
 +    if (sender_host_address != NULL)
 +      req_str = string_sprintf("%sIP: %s\r\n", req_str, sender_host_address);
++    if ((authid = expand_string(US"$authenticated_id")) != NULL && *authid != '\0')
++      req_str = string_sprintf("%sUser: %s\r\n", req_str, authid);
 +    req_str = string_sprintf("%s\r\n", req_str);
 +    wrote = send(spamd_sock, req_str, Ustrlen(req_str), 0); 
 +  }
@@ -169,7 +172,7 @@ diff -ru a/src/spam.c b/src/spam.c
  
    /* now send the file */
    /* spamd sometimes accepts conections but doesn't read data off
-@@ -348,60 +400,93 @@
+@@ -348,60 +403,93 @@
    /* reading done */
    (void)close(spamd_sock);
  
@@ -292,7 +295,7 @@ diff -ru a/src/spam.c b/src/spam.c
    }
    spam_bar_buffer[i] = '\0';
    spam_bar = spam_bar_buffer;
-@@ -417,12 +502,12 @@
+@@ -417,12 +505,12 @@
  
    /* compare threshold against score */
    if (spamd_score >= spamd_threshold) {
@@ -310,8 +313,8 @@ diff -ru a/src/spam.c b/src/spam.c
  
    /* remember expanded spamd_address if needed */
 diff -ru a/src/spam.h b/src/spam.h
---- a/src/spam.h	2014-08-09 14:44:29.000000000 +0200
-+++ b/src/spam.h	2015-01-31 20:08:55.054488979 +0200
+--- a/src/spam.h	2015-02-11 14:32:38.775982314 +0200
++++ b/src/spam.h	2015-02-11 14:32:53.467982467 +0200
 @@ -22,7 +22,8 @@
  
  typedef struct spamd_address_container {
