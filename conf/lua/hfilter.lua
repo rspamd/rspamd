@@ -321,6 +321,8 @@ end
 local symbols_enabled = {}
 
 local symbols_helo = {
+  "HFILTER_HELO_BAREIP",
+  "HFILTER_HELO_UNKNOWN",
   "HFILTER_HELO_1",
   "HFILTER_HELO_2",
   "HFILTER_HELO_3", 
