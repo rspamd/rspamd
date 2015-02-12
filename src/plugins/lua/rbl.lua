@@ -59,113 +59,98 @@ local function rbl_cb (task)
 
   local havegot = {}
   local notgot = {}
-  local function check_user() 
-    if notgot['user'] then
-      return false
-    end
-    if not havegot['user'] then
-      havegot['user'] = task:get_user()
-      if havegot['user'] == nil then
-        notgot['user'] = true
-      end
-    end
-    if havegot['user'] ~= nil then
-      return true
-    end
-    return false
-  end
 
   for k,rbl in pairs(rbls) do
 
-    if rbl['helo'] then
-      (function()
-        if notgot['helo'] then
-          return
-        end
-        if not havegot['helo'] then
-          havegot['helo'] = task:get_helo()
-          if havegot['helo'] == nil or string.sub(havegot['helo'],1,1) == '[' then
-            notgot['helo'] = true
-            return
-          end
-        end
-        if rbl['user'] == false and check_user() == true then
-          return
-        end
-        task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
-          havegot['helo'] .. '.' .. rbl['rbl'], rbl_dns_cb, k)
-      end)()
-    end
+    (function()
+      if not notgot['user'] and not havegot['user'] then
+	havegot['user'] = task:get_user()
+	if havegot['user'] == nil then
+	  notgot['user'] = true
+	end
+      end
+      if havegot['user'] ~= nil and rbl['user'] == false then
+	return
+      end
 
-    if rbl['rdns'] then
-      (function()
-        if notgot['rdns'] then
-          return
-        end
-        if not havegot['rdns'] then
-          havegot['rdns'] = task:get_hostname()
-          if havegot['rdns'] == nil or havegot['rdns'] == 'unknown' then
-            notgot['rdns'] = true
-            return
-          end
-        end
-        if rbl['user'] == false and check_user() == true then
-          return
-        end
-        task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
-          havegot['rdns'] .. '.' .. rbl['rbl'], rbl_dns_cb, k)
-      end)()
-    end
+      if rbl['helo'] then
+	(function()
+	  if notgot['helo'] then
+	    return
+	  end
+	  if not havegot['helo'] then
+	    havegot['helo'] = task:get_helo()
+	    if havegot['helo'] == nil or string.sub(havegot['helo'],1,1) == '[' then
+	      notgot['helo'] = true
+	      return
+	    end
+	  end
+	  task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
+	    havegot['helo'] .. '.' .. rbl['rbl'], rbl_dns_cb, k)
+	end)()
+      end
 
-    if rbl['from'] then
-      (function()
-        if notgot['from'] then
-          return
-        end
-        if not havegot['from'] then
-          havegot['from'] = task:get_from_ip()
-          if not havegot['from']:is_valid() then
-            notgot['from'] = true
-            return
-          end
-        end
-        if (havegot['from']:get_version() == 6 and rbl['ipv6']) or
-          (havegot['from']:get_version() == 4 and rbl['ipv4']) then
-          if rbl['user'] == false and check_user() == true then
-            return
-          end
-          task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
-            ip_to_rbl(havegot['from'], rbl['rbl']), rbl_dns_cb, k)
-        end
-      end)()
-    end
+      if rbl['rdns'] then
+	(function()
+	  if notgot['rdns'] then
+	    return
+	  end
+	  if not havegot['rdns'] then
+	    havegot['rdns'] = task:get_hostname()
+	    if havegot['rdns'] == nil or havegot['rdns'] == 'unknown' then
+	      notgot['rdns'] = true
+	      return
+	    end
+	  end
+	  task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
+	    havegot['rdns'] .. '.' .. rbl['rbl'], rbl_dns_cb, k)
+	end)()
+      end
 
-    if rbl['received'] then
-      (function()
-        if notgot['received'] then
-          return
-        end
-        if not havegot['received'] then
-          havegot['received'] = task:get_received_headers()
-          if next(havegot['received']) == nil then
-            notgot['received'] = true
-            return
-          end
-        end
-        if rbl['user'] == false and check_user() == true then
-          return
-        end
-        for _,rh in ipairs(havegot['received']) do
-          if rh['real_ip'] and rh['real_ip']:is_valid() then
+      if rbl['from'] then
+	(function()
+	  if notgot['from'] then
+	    return
+	  end
+	  if not havegot['from'] then
+	    havegot['from'] = task:get_from_ip()
+	    if not havegot['from']:is_valid() then
+	      notgot['from'] = true
+	      return
+	    end
+	  end
+	  if (havegot['from']:get_version() == 6 and rbl['ipv6']) or
+	    (havegot['from']:get_version() == 4 and rbl['ipv4']) then
+	    task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
+	      ip_to_rbl(havegot['from'], rbl['rbl']), rbl_dns_cb, k)
+	  end
+	end)()
+      end
+
+      if rbl['received'] then
+	(function()
+	  if notgot['received'] then
+	    return
+	  end
+	  if not havegot['received'] then
+	    havegot['received'] = task:get_received_headers()
+	    if next(havegot['received']) == nil then
+	      notgot['received'] = true
+	      return
+	    end
+	  end
+	  for _,rh in ipairs(havegot['received']) do
+	    if rh['real_ip'] and rh['real_ip']:is_valid() then
               if (rh['real_ip']:get_version() == 6 and rbl['ipv6']) or
                 (rh['real_ip']:get_version() == 4 and rbl['ipv4']) then
                 task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
                   ip_to_rbl(rh['real_ip'], rbl['rbl']), rbl_dns_cb, k)
               end
-          end
-        end
-      end)()
-    end
+	    end
+	  end
+	end)()
+      end
+    end)()
   end
 end
 
