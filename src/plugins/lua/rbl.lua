@@ -89,7 +89,7 @@ local function rbl_cb (task)
             return
           end
         end
-        if rbl['user'] == false and check_user() == true then
+        if rbl['user'] == true and check_user() == true then
           return
         end
         task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
@@ -109,7 +109,7 @@ local function rbl_cb (task)
             return
           end
         end
-        if rbl['user'] == false and check_user() == true then
+        if rbl['user'] == true and check_user() == true then
           return
         end
         task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
@@ -131,7 +131,7 @@ local function rbl_cb (task)
         end
         if (havegot['from']:get_version() == 6 and rbl['ipv6']) or
           (havegot['from']:get_version() == 4 and rbl['ipv4']) then
-          if rbl['user'] == false and check_user() == true then
+          if rbl['user'] == true and check_user() == true then
             return
           end
           task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
@@ -152,7 +152,7 @@ local function rbl_cb (task)
             return
           end
         end
-        if rbl['user'] == false and check_user() == true then
+        if rbl['user'] == true and check_user() == true then
           return
         end
         for _,rh in ipairs(havegot['received']) do
@@ -213,7 +213,7 @@ if(opts['default_helo'] == nil) then
   opts['default_helo'] = false
 end
 if(opts['default_user'] == nil) then
-  opts['default_user'] = true
+  opts['default_user'] = false
 end
 for key,rbl in pairs(opts['rbls']) do
   local o = { "ipv4", "ipv6", "from", "received", "unknown", "rdns", "helo", "user" }
