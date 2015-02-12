@@ -63,14 +63,16 @@ local function rbl_cb (task)
   for k,rbl in pairs(rbls) do
 
     (function()
-      if not notgot['user'] and not havegot['user'] then
-	havegot['user'] = task:get_user()
-	if havegot['user'] == nil then
-	  notgot['user'] = true
-	end
-      end
-      if havegot['user'] ~= nil and rbl['user'] == false then
-	return
+      if rbl['user'] == false then
+        if not havegot['user'] and not notgot['user'] then
+	  havegot['user'] = task:get_user()
+	  if havegot['user'] == nil then
+	    notgot['user'] = true
+	  end
+        end
+        if havegot['user'] ~= nil then
+	  return
+        end
       end
 
       if rbl['helo'] then
