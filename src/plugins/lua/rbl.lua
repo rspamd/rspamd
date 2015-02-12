@@ -63,14 +63,16 @@ local function rbl_cb (task)
   for k,rbl in pairs(rbls) do
 
     (function()
-      if not notgot['user'] and not havegot['user'] then
-	havegot['user'] = task:get_user()
-	if havegot['user'] == nil then
-	  notgot['user'] = true
-	end
-      end
-      if havegot['user'] ~= nil and rbl['user'] == false then
-	return
+      if rbl['exclude_users'] then
+        if not havegot['user'] and not notgot['user'] then
+	  havegot['user'] = task:get_user()
+	  if havegot['user'] == nil then
+	    notgot['user'] = true
+	  end
+        end
+        if havegot['user'] ~= nil then
+	  return
+        end
       end
 
       if rbl['helo'] then
@@ -165,7 +167,7 @@ if type(rspamd_config.get_api_version) ~= 'nil' then
     rspamd_config:register_module_option('rbl', 'default_rdns', 'string')
     rspamd_config:register_module_option('rbl', 'default_helo', 'string')
     rspamd_config:register_module_option('rbl', 'default_unknown', 'string')
-    rspamd_config:register_module_option('rbl', 'default_user', 'string')
+    rspamd_config:register_module_option('rbl', 'default_exclude_users', 'string')
   end
 end
 
@@ -195,11 +197,11 @@ end
 if(opts['default_helo'] == nil) then
   opts['default_helo'] = false
 end
-if(opts['default_user'] == nil) then
-  opts['default_user'] = true
+if(opts['default_exclude_users'] == nil) then
+  opts['default_exclude_users'] = false
 end
 for key,rbl in pairs(opts['rbls']) do
-  local o = { "ipv4", "ipv6", "from", "received", "unknown", "rdns", "helo", "user" }
+  local o = { "ipv4", "ipv6", "from", "received", "unknown", "rdns", "helo", "exclude_users" }
   for i=1,table.maxn(o) do
     if(rbl[o[i]] == nil) then
       rbl[o[i]] = opts['default_' .. o[i]]
