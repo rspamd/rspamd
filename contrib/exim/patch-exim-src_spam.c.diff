@@ -141,6 +141,7 @@ diff -ru a/src/spam.c b/src/spam.c
 +      req_str = string_sprintf("%sHelo: %s\r\n", req_str, helo);
 +    if ((fcrdns = expand_string(US"$sender_host_name")) != NULL && *fcrdns != '\0')
 +      req_str = string_sprintf("%sHostname: %s\r\n", req_str, fcrdns);
++       else req_str = string_sprintf("%sHostname: unknown\r\n", req_str);
 +    if (sender_host_address != NULL)
 +      req_str = string_sprintf("%sIP: %s\r\n", req_str, sender_host_address);
 +    if ((authid = expand_string(US"$authenticated_id")) != NULL && *authid != '\0')
