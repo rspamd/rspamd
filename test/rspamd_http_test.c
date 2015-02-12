@@ -29,9 +29,9 @@
 #include "ottery.h"
 #include "cryptobox.h"
 
-static const int file_blocks = 16;
-static const int pconns = 100;
-static const int ntests = 300;
+static const int file_blocks = 8;
+static const int pconns = 10;
+static const int ntests = 3000;
 
 static void
 rspamd_server_error (struct rspamd_http_connection_entry *conn_ent,
@@ -102,6 +102,11 @@ rspamd_client_body (struct rspamd_http_connection *conn,
 	return 0;
 }
 
+struct client_cbdata {
+	double *lat;
+	struct timespec ts;
+};
+
 static void
 rspamd_client_err (struct rspamd_http_connection *conn, GError *err)
 {
@@ -117,8 +122,15 @@ static gint
 rspamd_client_finish (struct rspamd_http_connection *conn,
 	struct rspamd_http_message *msg)
 {
+	struct client_cbdata *cb = conn->ud;
+	struct timespec ts;
+
+	clock_gettime (CLOCK_MONOTONIC, &ts);
+	*(cb->lat) = (ts.tv_sec - cb->ts.tv_sec) * 1000. +   /* Seconds */
+					(ts.tv_nsec - cb->ts.tv_nsec) / 1000000.;  /* Nanoseconds */
 	close (conn->fd);
 	rspamd_http_connection_unref (conn);
+	g_free (cb);
 
 	return 0;
 }
@@ -126,11 +138,12 @@ rspamd_client_finish (struct rspamd_http_connection *conn,
 static void
 rspamd_http_client_func (const gchar *path, rspamd_inet_addr_t *addr,
 		gpointer kp, gpointer peer_kp, struct rspamd_keypair_cache *c,
-		struct event_base *ev_base)
+		struct event_base *ev_base, double *latency)
 {
 	struct rspamd_http_message *msg;
 	struct rspamd_http_connection *conn;
 	gchar urlbuf[PATH_MAX];
+	struct client_cbdata *cb;
 	gint fd;
 
 	g_assert ((fd = rspamd_inet_address_connect (addr, SOCK_STREAM, TRUE)) != -1);
@@ -148,8 +161,43 @@ rspamd_http_client_func (const gchar *path, rspamd_inet_addr_t *addr,
 		msg->peer_key = rspamd_http_connection_key_ref (peer_kp);
 	}
 
-	rspamd_http_connection_write_message (conn, msg, NULL, NULL, NULL,
+	cb = g_malloc (sizeof (*cb));
+	clock_gettime (CLOCK_MONOTONIC, &cb->ts);
+	cb->lat = latency;
+	rspamd_http_connection_write_message (conn, msg, NULL, NULL, cb,
 			fd, NULL, ev_base);
+}
+
+static int
+cmpd (const void *p1, const void *p2)
+{
+	const double *d1 = p1, *d2 = p2;
+
+	return (*d1) - (*d2);
+}
+
+double
+rspamd_http_calculate_mean (double *lats, double *std)
+{
+	gint i;
+	gdouble mean = 0., dev = 0.;
+
+	qsort (lats, ntests * pconns, sizeof (double), cmpd);
+
+	for (i = 0; i < ntests * pconns; i ++) {
+		mean += lats[i];
+	}
+
+	mean /= ntests * pconns;
+
+	for (i = 0; i < ntests * pconns; i ++) {
+		dev += (lats[i] - mean) * (lats[i] - mean);
+	}
+
+	dev /= ntests * pconns;
+
+	*std = sqrt (dev);
+	return mean;
 }
 
 void
@@ -166,7 +214,7 @@ rspamd_http_test_func (void)
 	gint fd, i, j;
 	pid_t sfd;
 	GString *b32_key;
-	double diff, total_diff = 0.0;
+	double diff, total_diff = 0.0, latency[pconns * ntests], mean, std;
 
 	rspamd_cryptobox_init ();
 	rspamd_snprintf (filepath, sizeof (filepath), "/tmp/http-test-XXXXXX");
@@ -200,7 +248,7 @@ rspamd_http_test_func (void)
 	for (i = 0; i < ntests; i ++) {
 		for (j = 0; j < pconns; j ++) {
 			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, &addr,
-					NULL, NULL, c, ev_base);
+					NULL, NULL, c, ev_base, &latency[i * pconns + j]);
 		}
 		clock_gettime (CLOCK_MONOTONIC, &ts1);
 		event_base_loop (ev_base, 0);
@@ -210,11 +258,13 @@ rspamd_http_test_func (void)
 		total_diff += diff;
 	}
 
-
 	msg_info ("Made %d connections of size %d in %.6f ms, %.6f cps",
 			ntests * pconns,
 			sizeof (buf) * file_blocks,
 			total_diff, ntests * pconns / total_diff * 1000.);
+	mean = rspamd_http_calculate_mean (latency, &std);
+	msg_info ("Latency: %.6f ms mean, %.6f dev",
+			mean, std);
 
 	/* Now test encrypted */
 	b32_key = rspamd_http_connection_print_key (serv_key,
@@ -227,7 +277,7 @@ rspamd_http_test_func (void)
 	for (i = 0; i < ntests; i ++) {
 		for (j = 0; j < pconns; j ++) {
 			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, &addr,
-					client_key, peer_key, c, ev_base);
+					client_key, peer_key, c, ev_base, &latency[i * pconns + j]);
 		}
 		clock_gettime (CLOCK_MONOTONIC, &ts1);
 		event_base_loop (ev_base, 0);
@@ -241,6 +291,9 @@ rspamd_http_test_func (void)
 			ntests * pconns,
 			sizeof (buf) * file_blocks,
 			total_diff, ntests * pconns / total_diff * 1000.);
+	mean = rspamd_http_calculate_mean (latency, &std);
+	msg_info ("Latency: %.6f ms mean, %.6f dev",
+			mean, std);
 
 	/* Restart server */
 	kill (sfd, SIGTERM);
@@ -259,7 +312,7 @@ rspamd_http_test_func (void)
 	for (i = 0; i < ntests; i ++) {
 		for (j = 0; j < pconns; j ++) {
 			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, &addr,
-					client_key, peer_key, c, ev_base);
+					client_key, peer_key, c, ev_base, &latency[i * pconns + j]);
 		}
 		clock_gettime (CLOCK_MONOTONIC, &ts1);
 		event_base_loop (ev_base, 0);
@@ -273,6 +326,9 @@ rspamd_http_test_func (void)
 			ntests * pconns,
 			sizeof (buf) * file_blocks,
 			total_diff, ntests * pconns / total_diff * 1000.);
+	mean = rspamd_http_calculate_mean (latency, &std);
+	msg_info ("Latency: %.6f ms mean, %.6f dev",
+			mean, std);
 
 	close (fd);
 	unlink (filepath);
