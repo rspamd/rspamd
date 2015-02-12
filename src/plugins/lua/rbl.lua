@@ -1,6 +1,7 @@
 local rbls = {}
 
 local rspamd_logger = require "rspamd_logger"
+local rspamd_ip = require "rspamd_ip"
 
 local function ip_to_rbl(ip, rbl)
   return table.concat(ip:inversed_str_octets(), ".") .. '.' .. rbl
@@ -82,7 +83,7 @@ local function rbl_cb (task)
 	  end
 	  if not havegot['helo'] then
 	    havegot['helo'] = task:get_helo()
-	    if havegot['helo'] == nil or string.sub(havegot['helo'],1,1) == '[' then
+	    if not havegot['helo'] or string.sub(havegot['helo'],1,1) == '[' or rspamd_ip.from_string(havegot['helo']):is_valid() then
 	      notgot['helo'] = true
 	      return
 	    end
