@@ -157,13 +157,11 @@ local function rbl_cb (task)
         end
         for _,rh in ipairs(havegot['received']) do
           if rh['real_ip'] and rh['real_ip']:is_valid() then
-            for k,rbl in pairs(rbls) do
               if (rh['real_ip']:get_version() == 6 and rbl['ipv6']) or
                 (rh['real_ip']:get_version() == 4 and rbl['ipv4']) then
                 task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
                   ip_to_rbl(rh['real_ip'], rbl['rbl']), rbl_dns_cb, k)
               end
-            end
           end
         end
       end)()
