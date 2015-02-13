@@ -968,8 +968,8 @@ lua_task_get_content (lua_State * L)
 {
 	struct rspamd_task *task = lua_check_task (L);
 
-	if (task) {
-		lua_pushlstring (L, task->msg.start, task->msg.len);
+	if (task && task->msg) {
+		lua_pushlstring (L, task->msg->str, task->msg->len);
 		return 1;
 	}
 
