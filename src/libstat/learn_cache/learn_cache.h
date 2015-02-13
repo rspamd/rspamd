@@ -34,10 +34,15 @@ typedef enum rspamd_learn_cache_result {
 	RSPAMD_LEARN_INGORE
 } rspamd_learn_t;
 
+struct rspamd_task;
+struct rspamd_stat_ctx;
+struct rspamd_config;
+
 struct rspamd_stat_cache {
 	const char *name;
 	gpointer (*init)(struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg);
-	rspamd_learn_t (*process)(GTree *input, gboolean is_spam, gpointer ctx);
+	rspamd_learn_t (*process)(struct rspamd_task *task, gboolean is_spam,
+			gpointer ctx);
 	gpointer ctx;
 };
 
