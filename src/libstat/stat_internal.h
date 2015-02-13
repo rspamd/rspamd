@@ -28,6 +28,7 @@
 #include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
 #include "backends/backends.h"
+#include "learn_cache/learn_cache.h"
 
 struct rspamd_tokenizer_runtime {
 	GTree *tokens;
@@ -79,9 +80,17 @@ struct rspamd_stat_ctx {
 	guint tokenizers_count;
 	struct rspamd_stat_backend *backends;
 	guint backends_count;
+	struct rspamd_stat_cache *caches;
+	guint caches_count;
 
 	guint statfiles;
 };
+
+typedef enum rspamd_learn_cache_result {
+	RSPAMD_LEARN_OK = 0,
+	RSPAMD_LEARN_UNLEARN,
+	RSPAMD_LEARN_INGORE
+} rspamd_learn_t;
 
 struct rspamd_stat_ctx * rspamd_stat_get_ctx (void);
 struct rspamd_stat_classifier * rspamd_stat_get_classifier (const gchar *name);

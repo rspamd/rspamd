@@ -167,8 +167,8 @@ rspamd_stat_cache_sqlite3_check (const guchar *h, gsize len, gboolean is_spam,
 	return ret;
 }
 
-rspamd_learn_t
-rspamd_stat_cache_sqlite3_process(struct rspamd_task *task,
+gint
+rspamd_stat_cache_sqlite3_process (struct rspamd_task *task,
 		gboolean is_spam, gpointer c)
 {
 	struct rspamd_stat_sqlite3_ctx *ctx = (struct rspamd_stat_sqlite3_ctx *)c;

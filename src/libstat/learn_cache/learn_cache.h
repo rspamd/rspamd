@@ -28,11 +28,7 @@
 #include "config.h"
 #include "ucl.h"
 
-typedef enum rspamd_learn_cache_result {
-	RSPAMD_LEARN_OK = 0,
-	RSPAMD_LEARN_UNLEARN,
-	RSPAMD_LEARN_INGORE
-} rspamd_learn_t;
+#define RSPAMD_DEFAULT_CACHE "sqlite3"
 
 struct rspamd_task;
 struct rspamd_stat_ctx;
@@ -41,9 +37,16 @@ struct rspamd_config;
 struct rspamd_stat_cache {
 	const char *name;
 	gpointer (*init)(struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg);
-	rspamd_learn_t (*process)(struct rspamd_task *task, gboolean is_spam,
+	gint (*process)(struct rspamd_task *task,
+			gboolean is_spam,
 			gpointer ctx);
 	gpointer ctx;
 };
+
+gpointer rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
+		struct rspamd_config *cfg);
+gint rspamd_stat_cache_sqlite3_process (
+		struct rspamd_task *task,
+		gboolean is_spam, gpointer c);
 
 #endif /* LEARN_CACHE_H_ */

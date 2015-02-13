@@ -44,7 +44,7 @@ static struct rspamd_stat_tokenizer stat_tokenizers[] = {
 	{"osb-text", osb_tokenize_text},
 };
 
-struct rspamd_stat_backend stat_backends[] = {
+static struct rspamd_stat_backend stat_backends[] = {
 	{
 		.name = RSPAMD_DEFAULT_BACKEND,
 		.init = rspamd_mmaped_file_init,
@@ -57,6 +57,13 @@ struct rspamd_stat_backend stat_backends[] = {
 	}
 };
 
+static struct rspamd_stat_cache stat_caches[] = {
+	{
+		.name = RSPAMD_DEFAULT_CACHE,
+		.init = rspamd_stat_cache_sqlite3_init,
+		.process = rspamd_stat_cache_sqlite3_process
+	}
+};
 
 void
 rspamd_stat_init (struct rspamd_config *cfg)
@@ -73,11 +80,19 @@ rspamd_stat_init (struct rspamd_config *cfg)
 	stat_ctx->classifiers_count = G_N_ELEMENTS (stat_classifiers);
 	stat_ctx->tokenizers = stat_tokenizers;
 	stat_ctx->tokenizers_count = G_N_ELEMENTS (stat_tokenizers);
+	stat_ctx->caches = stat_caches;
+	stat_ctx->caches_count = G_N_ELEMENTS (stat_caches);
 
 	/* Init backends */
 	for (i = 0; i < stat_ctx->backends_count; i ++) {
 		stat_ctx->backends[i].ctx = stat_ctx->backends[i].init (stat_ctx, cfg);
 		msg_debug ("added backend %s", stat_ctx->backends[i].name);
+	}
+
+	/* Init caches */
+	for (i = 0; i < stat_ctx->caches_count; i ++) {
+		stat_ctx->caches[i].ctx = stat_ctx->caches[i].init (stat_ctx, cfg);
+		msg_debug ("added cache %s", stat_ctx->caches[i].name);
 	}
 }
 
