@@ -1,57 +1,23 @@
 # Librspamd-util
 SET(LIBRSPAMDUTILSRC			
-								addr.c
-								aio_event.c
-								bloom.c
-								diff.c
-								fstring.c
-								fuzzy.c
-								hash.c
-								http.c
-								keypairs_cache.c
-								logger.c
-								map.c
-								mem_pool.c
-								printf.c
-								radix.c
-								rrd.c
-								shingles.c
-								trie.c
-								upstream.c
-								util.c)
+								${CMAKE_CURRENT_SOURCE_DIR}/addr.c
+								${CMAKE_CURRENT_SOURCE_DIR}/aio_event.c
+								${CMAKE_CURRENT_SOURCE_DIR}/bloom.c
+								${CMAKE_CURRENT_SOURCE_DIR}/diff.c
+								${CMAKE_CURRENT_SOURCE_DIR}/fstring.c
+								${CMAKE_CURRENT_SOURCE_DIR}/fuzzy.c
+								${CMAKE_CURRENT_SOURCE_DIR}/hash.c
+								${CMAKE_CURRENT_SOURCE_DIR}/http.c
+								${CMAKE_CURRENT_SOURCE_DIR}/keypairs_cache.c
+								${CMAKE_CURRENT_SOURCE_DIR}/logger.c
+								${CMAKE_CURRENT_SOURCE_DIR}/map.c
+								${CMAKE_CURRENT_SOURCE_DIR}/mem_pool.c
+								${CMAKE_CURRENT_SOURCE_DIR}/printf.c
+								${CMAKE_CURRENT_SOURCE_DIR}/radix.c
+								${CMAKE_CURRENT_SOURCE_DIR}/rrd.c
+								${CMAKE_CURRENT_SOURCE_DIR}/shingles.c
+								${CMAKE_CURRENT_SOURCE_DIR}/trie.c
+								${CMAKE_CURRENT_SOURCE_DIR}/upstream.c
+								${CMAKE_CURRENT_SOURCE_DIR}/util.c)
 # Rspamdutil
-ADD_LIBRARY(rspamd-util ${LINK_TYPE} ${LIBRSPAMDUTILSRC})
-IF(CMAKE_COMPILER_IS_GNUCC)
-SET_TARGET_PROPERTIES(rspamd-util PROPERTIES COMPILE_FLAGS "-fno-strict-aliasing")
-ENDIF(CMAKE_COMPILER_IS_GNUCC)
-
-TARGET_LINK_LIBRARIES(rspamd-util ${RSPAMD_REQUIRED_LIBRARIES})
-TARGET_LINK_LIBRARIES(rspamd-util pcre)
-TARGET_LINK_LIBRARIES(rspamd-util ucl)
-TARGET_LINK_LIBRARIES(rspamd-util ottery)
-TARGET_LINK_LIBRARIES(rspamd-util rspamd-http-parser)
-TARGET_LINK_LIBRARIES(rspamd-util event)
-TARGET_LINK_LIBRARIES(rspamd-util xxhash)
-TARGET_LINK_LIBRARIES(rspamd-util siphash)
-TARGET_LINK_LIBRARIES(rspamd-util blake2)
-TARGET_LINK_LIBRARIES(rspamd-util tweetnacl)
-TARGET_LINK_LIBRARIES(rspamd-util rspamd-cryptobox)
-TARGET_LINK_LIBRARIES(rspamd-util rdns)
-IF(OPENSSL_FOUND)
-	TARGET_LINK_LIBRARIES(rspamd-util ${OPENSSL_LIBRARIES})
-ENDIF(OPENSSL_FOUND)
-
-IF(NOT DEBIAN_BUILD)
-SET_TARGET_PROPERTIES(rspamd-util PROPERTIES VERSION ${RSPAMD_VERSION})
-ENDIF(NOT DEBIAN_BUILD)
-
-IF(GLIB_COMPAT)
-	INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/contrib/lgpl")
-	TARGET_LINK_LIBRARIES(rspamd-util glibadditions)
-ENDIF(GLIB_COMPAT)
-
-IF(NO_SHARED MATCHES "OFF")
-	INSTALL(TARGETS rspamd-util 
-    	LIBRARY DESTINATION ${LIBDIR} 
-    	PUBLIC_HEADER DESTINATION include)
-ENDIF(NO_SHARED MATCHES "OFF")
+SET(RSPAMD_UTIL ${LIBRSPAMDUTILSRC} PARENT_SCOPE)
