@@ -1,6 +1,6 @@
 --[[
 Copyright (c) 2011-2015, Vsevolod Stakhov <vsevolod@highsecure.ru>
-Copyright (c) 2014-2015, Andrew Lewis
+Copyright (c) 2013-2015, Andrew Lewis <nerf@judo.za.org>
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
