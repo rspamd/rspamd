@@ -4,10 +4,9 @@ When submitting contributions to rspamd project you should:
 
 * provide your own original code;
 * use the license for your contribution from the list below;
-* submitting code without explicit license means automatic applying of the LICENSE distributed within rspamd sources;
 * accept the terms of this policy.
 
-Submitting patches automatically implies your agreement with the statements above.
+Submitting patches automatically implies your agreement with the statements above. Submitting code without explicit license means automatic applying of the LICENSE distributed within rspamd sources.
 
 ## List of licenses accepted
 
