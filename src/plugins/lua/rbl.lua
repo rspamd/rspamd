@@ -1,3 +1,7 @@
+-- This plugin implements various types of RBL checks
+-- Documentation can be found here:
+-- https://rspamd.com/doc/modules/rbl.html
+
 local rbls = {}
 
 local rspamd_logger = require "rspamd_logger"
