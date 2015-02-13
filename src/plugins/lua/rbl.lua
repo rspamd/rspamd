@@ -32,6 +32,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 local rbls = {}
 
 local rspamd_logger = require "rspamd_logger"
+local rspamd_ip = require "rspamd_ip"
 
 local function validate_dns(lstr, rstr)
   if (lstr:len() + rstr:len()) > 252 then
@@ -44,6 +45,43 @@ local function validate_dns(lstr, rstr)
     end
   end
   return true
+end
+
+local private_ranges_v4 = {
+  {[1] = rspamd_ip.from_string("127.0.0.0"), [2] = 8},
+  {[1] = rspamd_ip.from_string("10.0.0.0"), [2] = 8},
+  {[1] = rspamd_ip.from_string("192.168.0.0"), [2] = 16},
+  {[1] = rspamd_ip.from_string("169.254.0.0"), [2] = 16},
+  {[1] = rspamd_ip.from_string("172.16.0.0"), [2] = 12},
+  {[1] = rspamd_ip.from_string("100.64.0.0"), [2] = 10},
+}
+
+local private_ranges_v6 = {
+  {[1] = rspamd_ip.from_string("fc00::"), [2] = 7},
+  {[1] = rspamd_ip.from_string("fe80::"), [2] = 10},
+  {[1] = rspamd_ip.from_string("fec0::"), [2] = 10},
+}
+
+local ipv6_loopback = rspamd_ip.from_string("::1")
+
+local function is_private_ip(rip)
+  if rip:get_version() == 4 then
+    for _, r in pairs(private_ranges_v4) do
+      if r[1] == rip:apply_mask(r[2]) then
+        return true
+      end
+    end
+  else
+    if rip == ipv6_loopback then
+      return true
+    end
+    for _r in pairs(private_ranges_v6) do
+      if r[1] == rip:apply_mask(r[2]) then
+        return true
+      end
+    end
+  end
+  return false
 end
 
 local function ip_to_rbl(ip, rbl)
@@ -161,7 +199,7 @@ local function rbl_cb (task)
 	  end
 	  if not havegot['from'] then
 	    havegot['from'] = task:get_from_ip()
-	    if not havegot['from']:is_valid() then
+	    if not havegot['from']:is_valid() or is_private_ip(havegot['from']) then
 	      notgot['from'] = true
 	      return
 	    end
@@ -188,8 +226,9 @@ local function rbl_cb (task)
 	  end
 	  for _,rh in ipairs(havegot['received']) do
 	    if rh['real_ip'] and rh['real_ip']:is_valid() then
-              if (rh['real_ip']:get_version() == 6 and rbl['ipv6']) or
-                (rh['real_ip']:get_version() == 4 and rbl['ipv4']) then
+              if ((rh['real_ip']:get_version() == 6 and rbl['ipv6']) or
+                (rh['real_ip']:get_version() == 4 and rbl['ipv4']))
+                and not is_private_ip(rh['real_ip']) then
                 task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
                   ip_to_rbl(rh['real_ip'], rbl['rbl']), rbl_dns_cb, k)
               end
