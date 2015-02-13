@@ -11,7 +11,7 @@ local function validate_dns(lstr, rstr)
     return false
   end
   for v in lstr:gmatch("[^%.]+") do
-    if not v:match("^[%w%.-]+$") or v:len() > 63
+    if not v:match("^[%w-]+$") or v:len() > 63
       or v:match("^-") or v:match("-$") then
       return false
     end
