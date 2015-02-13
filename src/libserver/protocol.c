@@ -428,6 +428,11 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		return FALSE;
 	}
 
+	if (task->hostname == NULL || task->hostname[0] == '\0') {
+		/* We assume that hostname is either "unknown" or existing */
+		task->hostname = rspamd_mempool_strdup (task->task_pool, "unknown");
+	}
+
 	return TRUE;
 }
 
