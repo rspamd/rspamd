@@ -34,6 +34,7 @@ struct preprocess_cb_data {
 	GList *classifier_runtimes;
 	struct rspamd_tokenizer_runtime *tok;
 	guint results_count;
+	gboolean unlearn;
 };
 
 static struct rspamd_tokenizer_runtime *
@@ -450,8 +451,10 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 	struct preprocess_cb_data cbdata;
 	GList *cl_runtimes;
 	GList *cur, *curst;
-	gboolean ret = FALSE;
+	gboolean ret = FALSE, unlearn = FALSE;
 	gulong nrev;
+	rspamd_learn_t learn_res = RSPAMD_LEARN_OK;
+	guint i;
 
 	st_ctx = rspamd_stat_get_ctx ();
 	g_assert (st_ctx != NULL);
@@ -483,6 +486,23 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 		cur = g_list_next (cur);
 	}
 
+	/* Check whether we have learned that file */
+	for (i = 0; i < st_ctx->caches_count; i ++) {
+		learn_res = st_ctx->caches[i].process (task, spam,
+				st_ctx->caches[i].ctx);
+
+		if (learn_res == RSPAMD_LEARN_INGORE) {
+			/* Do not learn twice */
+			g_set_error (err, rspamd_stat_quark (), 404, "<%s> has been already "
+					"learned as %s, ignore it", task->message_id,
+					spam ? "spam" : "ham");
+			return FALSE;
+		}
+		else if (learn_res == RSPAMD_LEARN_UNLEARN) {
+			unlearn = TRUE;
+		}
+	}
+
 	/* Initialize classifiers and statfiles runtime */
 	if ((cl_runtimes = rspamd_stat_preprocess (st_ctx, task, tklist, L,
 			TRUE, spam, err)) == NULL) {
@@ -507,6 +527,7 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 					cbdata.classifier_runtimes = cur;
 					cbdata.task = task;
 					cbdata.tok = cl_run->tok;
+					cbdata.unlearn = unlearn;
 					g_tree_foreach (cl_run->tok->tokens, rspamd_stat_learn_token,
 							&cbdata);
 
