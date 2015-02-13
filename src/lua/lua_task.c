@@ -163,6 +163,12 @@ end
  */
 LUA_FUNCTION_DEF (task, get_urls);
 /***
+ * @method task:get_content()
+ * Get raw content for the specified task
+ * @return {string} the data contained in the task
+ */
+LUA_FUNCTION_DEF (task, get_content);
+/***
  * @method task:get_urls()
  * Get all email addresses found in a message.
  * @return {table rspamd_url} list of all email addresses found
@@ -439,6 +445,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, insert_result),
 	LUA_INTERFACE_DEF (task, set_pre_result),
 	LUA_INTERFACE_DEF (task, get_urls),
+	LUA_INTERFACE_DEF (task, get_content),
 	LUA_INTERFACE_DEF (task, get_emails),
 	LUA_INTERFACE_DEF (task, get_text_parts),
 	LUA_INTERFACE_DEF (task, get_parts),
@@ -949,6 +956,20 @@ lua_task_get_urls (lua_State * L)
 		cb.i = 1;
 		cb.L = L;
 		g_tree_foreach (task->urls, lua_tree_url_callback, &cb);
+		return 1;
+	}
+
+	lua_pushnil (L);
+	return 1;
+}
+
+static gint
+lua_task_get_content (lua_State * L)
+{
+	struct rspamd_task *task = lua_check_task (L);
+
+	if (task) {
+		lua_pushlstring (L, task->msg.start, task->msg.len);
 		return 1;
 	}
 
