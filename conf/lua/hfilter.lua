@@ -1,5 +1,5 @@
 --
--- Copyright (c) 2013-2014, Alexey Savelyev
+-- Copyright (c) 2013-2015, Alexey Savelyev
 -- E-mail: info@homeweb.ru
 -- WWW: http://homeweb.ru
 --
@@ -10,8 +10,16 @@
 
 --local dumper = require 'pl.pretty'.dump
 local rspamd_regexp = require "rspamd_regexp"
+local rspamd_ip = require "rspamd_ip"
 
 local checks_hellohost = {
+  ['[.-]gprs[.-]'] = 5, ['gprs[.-][0-9]'] = 5, ['[0-9][.-]?gprs'] = 5, 
+  ['[.-]cdma[.-]'] = 5, ['cdma[.-][0-9]'] = 5, ['[0-9][.-]?cdma'] = 5, 
+  ['[.-]homeuser[.-]'] = 5, ['homeuser[.-][0-9]'] = 5, ['[0-9][.-]?homeuser'] = 5, 
+  ['[.-]dhcp[.-]'] = 5, ['dhcp[.-][0-9]'] = 5, ['[0-9][.-]?dhcp'] = 5, 
+  ['[.-]catv[.-]'] = 5, ['catv[.-][0-9]'] = 5, ['[0-9][.-]?catv'] = 5, 
+  ['[.-]wifi[.-]'] = 5, ['wifi[.-][0-9]'] = 5, ['[0-9][.-]?wifi'] = 5, 
+  ['[.-]dial-?up[.-]'] = 5, ['dial-?up[.-][0-9]'] = 5, ['[0-9][.-]?dial-?up'] = 5, 
   ['[.-]dynamic[.-]'] = 5, ['dynamic[.-][0-9]'] = 5, ['[0-9][.-]?dynamic'] = 5, 
   ['[.-]dyn[.-]'] = 5, ['dyn[.-][0-9]'] = 5, ['[0-9][.-]?dyn'] = 5, 
   ['[.-]clients?[.-]'] = 5, ['clients?[.-][0-9]'] = 5, ['[0-9][.-]?clients?'] = 5, 
@@ -23,22 +31,23 @@ local checks_hellohost = {
   ['[.-]pptp[.-]'] = 5, ['pptp[.-][0-9]'] = 5, ['[0-9][.-]?pptp'] = 5, 
   ['[.-]pppoe[.-]'] = 5, ['pppoe[.-][0-9]'] = 5, ['[0-9][.-]?pppoe'] = 5, 
   ['[.-]ppp[.-]'] = 5, ['ppp[.-][0-9]'] = 5, ['[0-9][.-]?ppp'] = 5, 
-  ['[.-][a|x]?dsl[.-]'] = 4, ['[a|x]?dsl[.-]?[0-9]'] = 4, ['[0-9][.-]?[a|x]?dsl'] = 4, 
+  ['[.-]modem[.-]'] = 5, ['modem[.-][0-9]'] = 5, ['[0-9][.-]?modem'] = 5, 
+  ['[.-]cablemodem[.-]'] = 5, ['cablemodem[.-][0-9]'] = 5, ['[0-9][.-]?cablemodem'] = 5, 
+  ['[.-]comcast[.-]'] = 5, ['comcast[.-][0-9]'] = 5, ['[0-9][.-]?comcast'] = 5, 
   ['[.-][a|x]?dsl-dynamic[.-]'] = 5, ['[a|x]?dsl-dynamic[.-]?[0-9]'] = 5, ['[0-9][.-]?[a|x]?dsl-dynamic'] = 5, 
+  ['[.-][a|x]?dsl[.-]'] = 4, ['[a|x]?dsl[.-]?[0-9]'] = 4, ['[0-9][.-]?[a|x]?dsl'] = 4, 
   ['[.-][a|x]?dsl-line[.-]'] = 4, ['[a|x]?dsl-line[.-]?[0-9]'] = 4, ['[0-9][.-]?[a|x]?dsl-line'] = 4, 
-  ['[.-]dhcp[.-]'] = 5, ['dhcp[.-][0-9]'] = 5, ['[0-9][.-]?dhcp'] = 5, 
-  ['[.-]catv[.-]'] = 5, ['catv[.-][0-9]'] = 5, ['[0-9][.-]?catv'] = 5, 
-  ['[.-]wifi[.-]'] = 5, ['wifi[.-][0-9]'] = 5, ['[0-9][.-]?wifi'] = 5, 
-  ['[.-]unused-addr[.-]'] = 3, ['unused-addr[.-][0-9]'] = 3, ['[0-9][.-]?unused-addr'] = 3, 
-  ['[.-]dial-?up[.-]'] = 5, ['dial-?up[.-][0-9]'] = 5, ['[0-9][.-]?dial-?up'] = 5, 
-  ['[.-]gprs[.-]'] = 5, ['gprs[.-][0-9]'] = 5, ['[0-9][.-]?gprs'] = 5, 
-  ['[.-]cdma[.-]'] = 5, ['cdma[.-][0-9]'] = 5, ['[0-9][.-]?cdma'] = 5, 
-  ['[.-]homeuser[.-]'] = 5, ['homeuser[.-][0-9]'] = 5, ['[0-9][.-]?homeuser'] = 5, 
   ['[.-]in-?addr[.-]'] = 4, ['in-?addr[.-][0-9]'] = 4, ['[0-9][.-]?in-?addr'] = 4, 
   ['[.-]pool[.-]'] = 4, ['pool[.-][0-9]'] = 4, ['[0-9][.-]?pool'] = 4, 
+  ['[.-]fibertel[.-]'] = 4, ['fibertel[.-][0-9]'] = 4, ['[0-9][.-]?fibertel'] = 4, 
+  ['[.-]fbx[.-]'] = 4, ['fbx[.-][0-9]'] = 4, ['[0-9][.-]?fbx'] = 4, 
+  ['[.-]unused-addr[.-]'] = 3, ['unused-addr[.-][0-9]'] = 3, ['[0-9][.-]?unused-addr'] = 3, 
   ['[.-]cable[.-]'] = 3, ['cable[.-][0-9]'] = 3, ['[0-9][.-]?cable'] = 3,
+  ['[.-]kabel[.-]'] = 3, ['kabel[.-][0-9]'] = 3, ['[0-9][.-]?kabel'] = 3,
   ['[.-]host[.-]'] = 2, ['host[.-][0-9]'] = 2, ['[0-9][.-]?host'] = 2,
-  ['[.-]customers[.-]'] = 1, ['customers[.-][0-9]'] = 1, ['[0-9][.-]?customers'] = 1
+  ['[.-]customers?[.-]'] = 1, ['customers?[.-][0-9]'] = 1, ['[0-9][.-]?customers?'] = 1,
+  ['[.-]user[.-]'] = 1, ['user[.-][0-9]'] = 1, ['[0-9][.-]?user'] = 1,
+  ['[.-]peer[.-]'] = 1, ['peer[.-][0-9]'] = 1, ['[0-9][.-]?peer'] = 1
 }
 
 local checks_hello = {
@@ -50,7 +59,7 @@ local checks_hello = {
   ['^\\[*fe[89ab][0-9a-f]::'] = 5, ['^\\[*fe[cdf][0-9a-f]:'] = 5, --local ipv6 (fe80:: - febf::, fec0:: - feff::)
   ['^\\[*2001:db8::'] = 5, --reserved RFC 3849 for ipv6
   ['^\\[*fc00::'] = 5, ['^\\[*ffxx::'] = 5, --unicast, multicast ipv6
-  ['^\\[*\\d+[x.-]\\d+[x.-]\\d+[x.-]\\d+\\]*$'] = 4, ['^\\[*\\d+:'] = 4 --bareip ipv4, ipv6
+--['^\\[*\\d+[x.-]\\d+[x.-]\\d+[x.-]\\d+\\]*$'] = 4, ['^\\[*\\d+:'] = 4 --bareip ipv4, ipv6
 }
 
 local config = {
@@ -167,100 +176,6 @@ end
 --
 local function hfilter(task)
 
-  --IP--
-  local ip = false
-  local rip = task:get_from_ip()
-  if rip and rip:is_valid() then
-    ip = rip:to_string()
-  end
-
-  --HOSTNAME--
-  local hostname = task:get_hostname()
-
-  --HELO--
-  local helo = task:get_helo()
-
-  --RULES--RULES--RULES--
-
-  -- Check's HELO
-  local weight_helo = 0
-  if config['helo_enabled'] then
-    if helo then
-      -- Regexp check HELO (checks_hello)
-      for regexp,weight in pairs(checks_hello) do
-        if check_regexp(helo, regexp) then
-          weight_helo = weight
-          break
-        end
-      end
-
-      -- Regexp check HELO (checks_hellohost)
-      for regexp,weight in pairs(checks_hellohost) do
-        if check_regexp(helo, regexp) then
-          if weight > weight_helo then
-            weight_helo = weight
-          end
-          break
-        end
-      end
-
-      --FQDN check HELO
-      if ip and helo then
-        check_host(task, helo, 'HELO', ip, hostname)
-      end
-    end
-  end
-
-  -- Check's HOSTNAME
-  if config['hostname_enabled'] then
-    local weight_hostname = 0
-    if hostname then
-      -- Check regexp HOSTNAME
-      if hostname == 'unknown' then
-        task:insert_result('HFILTER_HOSTNAME_UNKNOWN', 1.00)
-      else
-        for regexp,weight in pairs(checks_hellohost) do
-          if check_regexp(hostname, regexp) then
-            weight_hostname = weight
-            break
-          end
-        end
-      end
-    end
-
-    --Insert weight's for HELO or HOSTNAME
-    if weight_helo > 0 and weight_helo >= weight_hostname then
-      task:insert_result('HFILTER_HELO_' .. weight_helo, 1.0)
-    elseif weight_hostname > 0 and weight_hostname > weight_helo then
-      task:insert_result('HFILTER_HOSTNAME_' .. weight_hostname, 1.0)
-    end
-  end
-  
-  if config['from_enabled'] then
-    -- MAILFROM checks --
-    local from = task:get_from(1)
-    if from then
-      --FROM host check
-      for _,fr in ipairs(from) do
-        local fr_split = split(fr['addr'], '@', 0)
-        if table.maxn(fr_split) == 2 then
-          check_host(task, fr_split[2], 'FROMHOST', '', '')
-        end
-      end
-    end
-  end
-
-  --Message ID host check
-  if config['mid_enabled'] then
-    local message_id = task:get_message_id()
-    if message_id then
-      local mid_split = split(message_id, '@', 0)
-      if table.maxn(mid_split) == 2 and not string.find(mid_split[2], 'local') then
-        check_host(task, mid_split[2], 'MID', '', '')
-      end
-    end
-  end
-  
   -- Links checks
   if config['url_enabled'] then
     local parts = task:get_text_parts()
@@ -300,12 +215,118 @@ local function hfilter(task)
     end
   end
 
+  if task:get_user() ~= nil then
+    return
+  end
+
+  --IP--
+  local ip = false
+  local rip = task:get_from_ip()
+  if rip and rip:is_valid() then
+    ip = rip:to_string()
+  end
+
+  --HOSTNAME--
+  local hostname = task:get_hostname()
+
+  --HELO--
+  local helo = task:get_helo()
+
+  --RULES--RULES--RULES--
+
+  -- Check's HELO
+  local weight_helo = 0
+  if config['helo_enabled'] then
+    if helo then  
+      if string.sub(helo,1,1) == '[' or rspamd_ip.from_string(helo):is_valid() then
+        task:insert_result('HFILTER_HELO_BAREIP', 1.0)
+      else
+        -- Regexp check HELO (checks_hello)
+        for regexp,weight in pairs(checks_hello) do
+          if check_regexp(helo, regexp) then
+            weight_helo = weight
+            break
+          end
+        end
+      end
+      -- Regexp check HELO (checks_hellohost)
+      for regexp,weight in pairs(checks_hellohost) do
+        if check_regexp(helo, regexp) then
+          if weight > weight_helo then
+            weight_helo = weight
+          end
+          break
+        end
+      end
+      --FQDN check HELO
+      if ip and helo then
+        check_host(task, helo, 'HELO', ip, hostname)
+      end
+    else
+      task:insert_result('HFILTER_HELO_UNKNOWN', 1.0)
+    end
+  end
+  
+  -- Check's HOSTNAME
+  if config['hostname_enabled'] then
+    local weight_hostname = 0
+    if hostname then
+      -- Check regexp HOSTNAME
+      if hostname == 'unknown' then
+        task:insert_result('HFILTER_HOSTNAME_UNKNOWN', 1.00)
+      else
+        for regexp,weight in pairs(checks_hellohost) do
+          if check_regexp(hostname, regexp) then
+            weight_hostname = weight
+            break
+          end
+        end
+      end
+    else
+    task:insert_result('HFILTER_HOSTNAME_UNKNOWN', 1.00)
+    end
+
+    --Insert weight's for HELO or HOSTNAME
+    if weight_helo > 0 and weight_helo >= weight_hostname then
+      task:insert_result('HFILTER_HELO_' .. weight_helo, 1.0)
+    elseif weight_hostname > 0 and weight_hostname > weight_helo then
+      task:insert_result('HFILTER_HOSTNAME_' .. weight_hostname, 1.0)
+    end
+  end
+  
+  if config['from_enabled'] then
+    -- MAILFROM checks --
+    local from = task:get_from(1)
+    if from then
+      --FROM host check
+      for _,fr in ipairs(from) do
+        local fr_split = split(fr['addr'], '@', 0)
+        if table.maxn(fr_split) == 2 then
+          check_host(task, fr_split[2], 'FROMHOST', '', '')
+        end
+      end
+    end
+  end
+
+  --Message ID host check
+  if config['mid_enabled'] then
+    local message_id = task:get_message_id()
+    if message_id then
+      local mid_split = split(message_id, '@', 0)
+      if table.maxn(mid_split) == 2 and not string.find(mid_split[2], 'local') then
+        check_host(task, mid_split[2], 'MID', '', '')
+      end
+    end
+  end
+  
   return false
 end
 
 local symbols_enabled = {}
 
 local symbols_helo = {
+  "HFILTER_HELO_BAREIP",
+  "HFILTER_HELO_UNKNOWN",
   "HFILTER_HELO_1",
   "HFILTER_HELO_2",
   "HFILTER_HELO_3", 
