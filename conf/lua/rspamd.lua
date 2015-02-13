@@ -67,7 +67,7 @@ rspamd_config.R_EMPTY_IMAGE = function (task)
 end
 
 -- Date issues
-rspamd_config.DATE_NOT_EXISTS = function(task)
+rspamd_config.MISSING_DATE = function(task)
 	if rspamd_config:get_api_version() >= 5 then
 		if not task:get_header_raw('Date') then
 			return true

@@ -1,7 +1,6 @@
 --[[
 Copyright (c) 2011-2015, Vsevolod Stakhov <vsevolod@highsecure.ru>
 Copyright (c) 2013-2015, Alexey Savelyev <info@homeweb.ru>
-Copyright (c) 2015, Andrew Lewis
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
