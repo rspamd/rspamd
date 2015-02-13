@@ -32,7 +32,7 @@
 #include "message.h"
 #include <sqlite3.h>
 
-const char *create_tables_sql =
+static const char *create_tables_sql =
 		"BEGIN;"
 		"CREATE TABLE IF NOT EXISTS learns("
 		"id INTEGER PRIMARY KEY,"

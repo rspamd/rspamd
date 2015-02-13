@@ -46,7 +46,7 @@ struct rspamd_fuzzy_backend {
 };
 
 
-const char *create_tables_sql =
+static const char *create_tables_sql =
 		"BEGIN;"
 		"CREATE TABLE digests("
 		"id INTEGER PRIMARY KEY,"
@@ -60,7 +60,7 @@ const char *create_tables_sql =
 		"digest_id INTEGER REFERENCES digests(id) ON DELETE CASCADE "
 		"ON UPDATE CASCADE);"
 		"COMMIT;";
-const char *create_index_sql =
+static const char *create_index_sql =
 		"BEGIN;"
 		"CREATE UNIQUE INDEX IF NOT EXISTS d ON digests(digest);"
 		"CREATE INDEX IF NOT EXISTS t ON digests(time);"
