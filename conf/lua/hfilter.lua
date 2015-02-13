@@ -176,6 +176,49 @@ end
 --
 local function hfilter(task)
 
+  -- Links checks
+  if config['url_enabled'] then
+    local parts = task:get_text_parts()
+    if parts then
+      --One text part--
+      local total_parts_len = 0
+      local text_parts_count = 0
+      local selected_text_part = nil
+      for _,p in ipairs(parts) do
+        total_parts_len = total_parts_len + p:get_length()
+
+        if not p:is_html() then
+          text_parts_count = text_parts_count + 1
+          selected_text_part = p
+        end
+      end
+      if total_parts_len > 0 then
+        local urls = task:get_urls()
+        if urls then
+          local total_url_len = 0
+          for _,url in ipairs(urls) do
+            total_url_len = total_url_len + url:get_length()
+          end
+          if total_url_len > 0 then
+            if total_url_len + 7 > total_parts_len then
+              task:insert_result('HFILTER_URL_ONLY', 1.00)
+            elseif text_parts_count == 1 and selected_text_part and selected_text_part:get_length() < 1024 then
+              -- We got a single text part with the total length < 1024 symbols.
+              local part_text = selected_text_part:get_content()
+              if part_text and not string.find(trim1(part_text), "\n") then
+                task:insert_result('HFILTER_URL_ONELINE', 1.00)
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  if task:get_user() ~= nil then
+    return
+  end
+
   --IP--
   local ip = false
   local rip = task:get_from_ip()
@@ -276,45 +319,6 @@ local function hfilter(task)
     end
   end
   
-  -- Links checks
-  if config['url_enabled'] then
-    local parts = task:get_text_parts()
-    if parts then
-      --One text part--
-      local total_parts_len = 0
-      local text_parts_count = 0
-      local selected_text_part = nil
-      for _,p in ipairs(parts) do
-        total_parts_len = total_parts_len + p:get_length()
-
-        if not p:is_html() then
-          text_parts_count = text_parts_count + 1
-          selected_text_part = p
-        end
-      end
-      if total_parts_len > 0 then
-        local urls = task:get_urls()
-        if urls then
-          local total_url_len = 0
-          for _,url in ipairs(urls) do
-            total_url_len = total_url_len + url:get_length()
-          end
-          if total_url_len > 0 then
-            if total_url_len + 7 > total_parts_len then
-              task:insert_result('HFILTER_URL_ONLY', 1.00)
-            elseif text_parts_count == 1 and selected_text_part and selected_text_part:get_length() < 1024 then
-              -- We got a single text part with the total length < 1024 symbols.
-              local part_text = selected_text_part:get_content()
-              if part_text and not string.find(trim1(part_text), "\n") then
-                task:insert_result('HFILTER_URL_ONELINE', 1.00)
-              end
-            end
-          end
-        end
-      end
-    end
-  end
-
   return false
 end
 

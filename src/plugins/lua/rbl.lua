@@ -1,7 +1,23 @@
+-- This plugin implements various types of RBL checks
+-- Documentation can be found here:
+-- https://rspamd.com/doc/modules/rbl.html
+
 local rbls = {}
 
 local rspamd_logger = require "rspamd_logger"
-local rspamd_ip = require "rspamd_ip"
+
+local function validate_dns(lstr, rstr)
+  if (lstr:len() + rstr:len()) > 252 then
+    return false
+  end
+  for v in lstr:gmatch("[^%.]+") do
+    if not v:match("^[%w-]+$") or v:len() > 63
+      or v:match("^-") or v:match("-$") then
+      return false
+    end
+  end
+  return true
+end
 
 local function ip_to_rbl(ip, rbl)
   return table.concat(ip:inversed_str_octets(), ".") .. '.' .. rbl
@@ -83,7 +99,8 @@ local function rbl_cb (task)
 	  end
 	  if not havegot['helo'] then
 	    havegot['helo'] = task:get_helo()
-	    if not havegot['helo'] or string.sub(havegot['helo'],1,1) == '[' or rspamd_ip.from_string(havegot['helo']):is_valid() then
+	    if havegot['helo'] == nil or
+              not validate_dns(havegot['helo'], rbl['rbl']) then
 	      notgot['helo'] = true
 	      return
 	    end
