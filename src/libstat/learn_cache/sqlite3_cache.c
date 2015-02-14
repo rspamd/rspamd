@@ -81,16 +81,16 @@ rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
 				SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE|SQLITE_OPEN_NOMUTEX, NULL))
 				!= SQLITE_OK) {
 			msg_err ("Cannot open sqlite db %s: %s", SQLITE_CACHE_PATH,
-					sqlite3_errstr (rc));
+					sqlite3_errmsg (sqlite));
 
 			return NULL;
 		}
 
 		if ((rc = sqlite3_exec (sqlite, create_tables_sql, NULL, NULL, NULL))
 				!= SQLITE_OK) {
-			sqlite3_close (sqlite);
 			msg_err ("Cannot initialize sqlite db %s: %s", SQLITE_CACHE_PATH,
-					sqlite3_errstr (rc));
+					sqlite3_errmsg (sqlite));
+			sqlite3_close (sqlite);
 
 			return NULL;
 		}
@@ -115,7 +115,7 @@ rspamd_stat_cache_sqlite3_check (const guchar *h, gsize len, gboolean is_spam,
 
 	if ((rc = sqlite3_prepare_v2 (ctx->db, select_sql,
 			-1, &st, NULL)) != SQLITE_OK) {
-		msg_err ("Cannot prepare sql %s: %s", select_sql, sqlite3_errstr (rc));
+		msg_err ("Cannot prepare sql %s: %s", select_sql, sqlite3_errmsg (ctx->db));
 		return RSPAMD_LEARN_OK;
 	}
 
@@ -137,7 +137,7 @@ rspamd_stat_cache_sqlite3_check (const guchar *h, gsize len, gboolean is_spam,
 			if ((rc = sqlite3_prepare_v2 (ctx->db, update_sql,
 					-1, &st, NULL)) != SQLITE_OK) {
 				msg_err ("Cannot prepare sql %s: %s", update_sql,
-						sqlite3_errstr (rc));
+						sqlite3_errmsg (ctx->db));
 			}
 			else {
 				sqlite3_bind_int (st, 1, is_spam ? 1 : 0);
@@ -154,7 +154,8 @@ rspamd_stat_cache_sqlite3_check (const guchar *h, gsize len, gboolean is_spam,
 		sqlite3_finalize (st);
 		if ((rc = sqlite3_prepare_v2 (ctx->db, insert_sql,
 				-1, &st, NULL)) != SQLITE_OK) {
-			msg_err ("Cannot prepare sql %s: %s", insert_sql, sqlite3_errstr (rc));
+			msg_err ("Cannot prepare sql %s: %s", insert_sql,
+					sqlite3_errmsg (ctx->db));
 		}
 		else {
 			sqlite3_bind_text (st, 1, h, len, SQLITE_STATIC);
