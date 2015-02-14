@@ -71,7 +71,7 @@ local function is_private_ip(rip)
         return true
       end
     end
-  else
+  elseif rip:get_version() == 6 then
     if rip == ipv6_loopback then
       return true
     end
