@@ -75,7 +75,7 @@ local checks_hello = {
   ['^[^\\.]+$'] = 5, -- for helo=COMPUTER, ANNA, etc... Without dot in helo
   ['localhost$'] = 5,
   ['^(dsl)?(device|speedtouch)\\.lan$'] = 5,
-  ['\\.(lan|local|home|localdomain|intra|in-addr.arpa|priv|online|user|veloxzon)$'] = 5,
+  ['\\.(lan|local|home|localdomain|intra|in-addr.arpa|priv|online|user|veloxzon)$'] = 5
 }
 
 local checks_hello_badip = {
@@ -90,12 +90,12 @@ local checks_hello_badip = {
   ['^192\\.0\\.2\\.'] = 5, ['^198\\.51\\.100\\.'] = 5, ['^203\\.0\\.113\\.'] = 5,  --sample
   ['^fe[89ab][0-9a-f]::'] = 5, ['^fe[cdf][0-9a-f]:'] = 5, --local ipv6 (fe80:: - febf::, fec0:: - feff::)
   ['^2001:db8::'] = 5, --reserved RFC 3849 for ipv6
-  ['^fc00::'] = 5, ['^ffxx::'] = 5, --unicast, multicast ipv6
+  ['^fc00::'] = 5, ['^ffxx::'] = 5 --unicast, multicast ipv6
 }
 
 local checks_hello_bareip = {
   '^\\d+[x.-]\\d+[x.-]\\d+[x.-]\\d+$', --bareip ipv4, 
-  '^[0-9a-f]+:', --bareip ipv6
+  '^[0-9a-f]+:' --bareip ipv6
 }
 
 local config = {
