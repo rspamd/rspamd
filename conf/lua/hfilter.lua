@@ -34,7 +34,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 local rspamd_regexp = require "rspamd_regexp"
 
 local checks_hellohost = {
-  --Bad hosts
   ['[.-]gprs[.-]'] = 5, ['gprs[.-][0-9]'] = 5, ['[0-9][.-]?gprs'] = 5, 
   ['[.-]cdma[.-]'] = 5, ['cdma[.-][0-9]'] = 5, ['[0-9][.-]?cdma'] = 5, 
   ['[.-]homeuser[.-]'] = 5, ['homeuser[.-][0-9]'] = 5, ['[0-9][.-]?homeuser'] = 5, 
@@ -57,18 +56,15 @@ local checks_hellohost = {
   ['[.-]cablemodem[.-]'] = 5, ['cablemodem[.-][0-9]'] = 5, ['[0-9][.-]?cablemodem'] = 5, 
   ['[.-]comcast[.-]'] = 5, ['comcast[.-][0-9]'] = 5, ['[0-9][.-]?comcast'] = 5, 
   ['[.-][a|x]?dsl-dynamic[.-]'] = 5, ['[a|x]?dsl-dynamic[.-]?[0-9]'] = 5, ['[0-9][.-]?[a|x]?dsl-dynamic'] = 5, 
-
   ['[.-][a|x]?dsl[.-]'] = 4, ['[a|x]?dsl[.-]?[0-9]'] = 4, ['[0-9][.-]?[a|x]?dsl'] = 4, 
   ['[.-][a|x]?dsl-line[.-]'] = 4, ['[a|x]?dsl-line[.-]?[0-9]'] = 4, ['[0-9][.-]?[a|x]?dsl-line'] = 4, 
   ['[.-]in-?addr[.-]'] = 4, ['in-?addr[.-][0-9]'] = 4, ['[0-9][.-]?in-?addr'] = 4, 
   ['[.-]pool[.-]'] = 4, ['pool[.-][0-9]'] = 4, ['[0-9][.-]?pool'] = 4, 
   ['[.-]fibertel[.-]'] = 4, ['fibertel[.-][0-9]'] = 4, ['[0-9][.-]?fibertel'] = 4, 
   ['[.-]fbx[.-]'] = 4, ['fbx[.-][0-9]'] = 4, ['[0-9][.-]?fbx'] = 4, 
-
   ['[.-]unused-addr[.-]'] = 3, ['unused-addr[.-][0-9]'] = 3, ['[0-9][.-]?unused-addr'] = 3, 
   ['[.-]cable[.-]'] = 3, ['cable[.-][0-9]'] = 3, ['[0-9][.-]?cable'] = 3,
   ['[.-]kabel[.-]'] = 3, ['kabel[.-][0-9]'] = 3, ['[0-9][.-]?kabel'] = 3,
-
   ['[.-]host[.-]'] = 2, ['host[.-][0-9]'] = 2, ['[0-9][.-]?host'] = 2,
   ['[.-]customers?[.-]'] = 1, ['customers?[.-][0-9]'] = 1, ['[0-9][.-]?customers?'] = 1,
   ['[.-]user[.-]'] = 1, ['user[.-][0-9]'] = 1, ['[0-9][.-]?user'] = 1,
