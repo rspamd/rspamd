@@ -53,6 +53,10 @@ If set to false, do not yield a result unless the response received from the RBL
 
 If set to true, do not use this RBL if the message sender is authenticated.
 
+- default_exclude_private_ips (false)
+
+If set to true, from/received RBL checks will ignore private IP address space.
+
 RBL-specific subsection is structured as follows:
 
 ~~~nginx
