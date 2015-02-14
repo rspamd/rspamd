@@ -882,7 +882,8 @@ ENDIF(HG)
 
 ################################ SOURCES SECTION ###########################
 INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src" 
-					"${CMAKE_BINARY_DIR}/src" 
+					"${CMAKE_BINARY_DIR}/src"
+					"${CMAKE_BINARY_DIR}/src/libcryptobox"
 					"${CMAKE_SOURCE_DIR}/src/ucl/include"
 					"${CMAKE_SOURCE_DIR}/contrib/uthash"
 					"${CMAKE_SOURCE_DIR}/contrib/http-parser"
