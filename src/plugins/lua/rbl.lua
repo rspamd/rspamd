@@ -75,7 +75,7 @@ local function is_private_ip(rip)
     if rip == ipv6_loopback then
       return true
     end
-    for _r in pairs(private_ranges_v6) do
+    for _, r in pairs(private_ranges_v6) do
       if r[1] == rip:apply_mask(r[2]) then
         return true
       end
