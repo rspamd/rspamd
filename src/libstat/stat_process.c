@@ -309,7 +309,7 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 }
 
 
-gboolean
+rspamd_stat_result_t
 rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 {
 	struct rspamd_stat_classifier *cls;
@@ -320,7 +320,7 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 	struct classifier_ctx *cl_ctx;
 	GList *cl_runtimes;
 	GList *cur;
-	gboolean ret = FALSE;
+	gboolean ret = RSPAMD_STAT_PROCESS_ERROR;
 
 	st_ctx = rspamd_stat_get_ctx ();
 	g_assert (st_ctx != NULL);
@@ -335,7 +335,7 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 		if (cls == NULL) {
 			g_set_error (err, rspamd_stat_quark (), 500, "type %s is not defined"
 					"for classifiers", clcf->classifier);
-			return FALSE;
+			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 
 		tok = rspamd_stat_get_tokenizer_runtime (clcf->tokenizer, task->task_pool,
@@ -344,7 +344,7 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 		if (tok == NULL) {
 			g_set_error (err, rspamd_stat_quark (), 500, "type %s is not defined"
 					"for tokenizers", clcf->tokenizer);
-			return FALSE;
+			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 
 		rspamd_stat_process_tokenize (st_ctx, task, tok);
@@ -355,7 +355,7 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 	/* Initialize classifiers and statfiles runtime */
 	if ((cl_runtimes = rspamd_stat_preprocess (st_ctx, task, tklist, L,
 			FALSE, FALSE, err)) == NULL) {
-		return FALSE;
+		return RSPAMD_STAT_PROCESS_ERROR;
 	}
 
 	cur = cl_runtimes;
@@ -367,8 +367,10 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 			cl_ctx = cl_run->cl->init_func (task->task_pool, cl_run->clcf);
 
 			if (cl_ctx != NULL) {
-				ret |= cl_run->cl->classify_func (cl_ctx, cl_run->tok->tokens,
-						cl_run, task);
+				if (cl_run->cl->classify_func (cl_ctx, cl_run->tok->tokens,
+						cl_run, task)) {
+					ret = RSPAMD_STAT_PROCESS_OK;
+				}
 			}
 		}
 
@@ -437,7 +439,7 @@ rspamd_stat_learn_token (gpointer k, gpointer v, gpointer d)
 	return FALSE;
 }
 
-gboolean
+rspamd_stat_result_t
 rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 		GError **err)
 {
@@ -451,7 +453,7 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 	struct preprocess_cb_data cbdata;
 	GList *cl_runtimes;
 	GList *cur, *curst;
-	gboolean ret = FALSE, unlearn = FALSE;
+	gboolean ret = RSPAMD_STAT_PROCESS_ERROR, unlearn = FALSE;
 	gulong nrev;
 	rspamd_learn_t learn_res = RSPAMD_LEARN_OK;
 	guint i;
@@ -469,7 +471,7 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 		if (cls == NULL) {
 			g_set_error (err, rspamd_stat_quark (), 500, "type %s is not defined"
 					"for classifiers", clcf->classifier);
-			return FALSE;
+			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 
 		tok = rspamd_stat_get_tokenizer_runtime (clcf->tokenizer, task->task_pool,
@@ -478,7 +480,7 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 		if (tok == NULL) {
 			g_set_error (err, rspamd_stat_quark (), 500, "type %s is not defined"
 					"for tokenizers", clcf->tokenizer);
-			return FALSE;
+			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 
 		rspamd_stat_process_tokenize (st_ctx, task, tok);
@@ -496,7 +498,7 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 			g_set_error (err, rspamd_stat_quark (), 404, "<%s> has been already "
 					"learned as %s, ignore it", task->message_id,
 					spam ? "spam" : "ham");
-			return FALSE;
+			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 		else if (learn_res == RSPAMD_LEARN_UNLEARN) {
 			unlearn = TRUE;
@@ -506,7 +508,7 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 	/* Initialize classifiers and statfiles runtime */
 	if ((cl_runtimes = rspamd_stat_preprocess (st_ctx, task, tklist, L,
 			TRUE, spam, err)) == NULL) {
-		return FALSE;
+		return RSPAMD_STAT_PROCESS_ERROR;
 	}
 
 	cur = cl_runtimes;
@@ -522,7 +524,7 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 						cl_run, task, spam, err)) {
 					msg_debug ("learned %s classifier %s", spam ? "spam" : "ham",
 							cl_run->clcf->name);
-					ret = TRUE;
+					ret = RSPAMD_STAT_PROCESS_OK;
 
 					cbdata.classifier_runtimes = cur;
 					cbdata.task = task;
@@ -546,7 +548,7 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 					}
 				}
 				else {
-					return FALSE;
+					return RSPAMD_STAT_PROCESS_ERROR;
 				}
 
 			}

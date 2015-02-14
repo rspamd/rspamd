@@ -33,6 +33,18 @@
  */
 
 /**
+ * The results of statistics processing:
+ * - error
+ * - need to do additional job for processing
+ * - all processed
+ */
+typedef enum rspamd_stat_result_e {
+	RSPAMD_STAT_PROCESS_ERROR = 0,
+	RSPAMD_STAT_PROCESS_DELAYED = 1,
+	RSPAMD_STAT_PROCESS_OK
+} rspamd_stat_result_t;
+
+/**
  * Initialise statistics modules
  * @param cfg
  */
@@ -43,7 +55,8 @@ void rspamd_stat_init (struct rspamd_config *cfg);
  * @param task
  * @return TRUE if task has been classified
  */
-gboolean rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err);
+rspamd_stat_result_t rspamd_stat_classify (struct rspamd_task *task,
+		lua_State *L, GError **err);
 
 
 /**
@@ -52,7 +65,8 @@ gboolean rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **
  * @param spam if TRUE learn spam, otherwise learn ham
  * @return TRUE if task has been learned
  */
-gboolean rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
+rspamd_stat_result_t rspamd_stat_learn (struct rspamd_task *task,
+		gboolean spam, lua_State *L,
 		GError **err);
 
 /**
