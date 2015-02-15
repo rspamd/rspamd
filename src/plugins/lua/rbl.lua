@@ -30,6 +30,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -- https://rspamd.com/doc/modules/rbl.html
 
 local rbls = {}
+local local_exclusions = nil
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_ip = require "rspamd_ip"
@@ -80,6 +81,13 @@ local function is_private_ip(rip)
         return true
       end
     end
+  end
+  return false
+end
+
+local function is_excluded_ip(rip)
+  if local_exclusions and local_exclusions:get_key(rip) then
+    return true
   end
   return false
 end
@@ -200,7 +208,8 @@ local function rbl_cb (task)
 	  if not havegot['from'] then
 	    havegot['from'] = task:get_from_ip()
 	    if not havegot['from']:is_valid() or
-              (rbl['exclude_private_ips'] and is_private_ip(havegot['from'])) then
+              (rbl['exclude_private_ips'] and is_private_ip(havegot['from']))
+              or is_excluded_ip(havegot['from']) then
 	      notgot['from'] = true
 	      return
 	    end
@@ -230,7 +239,7 @@ local function rbl_cb (task)
               if ((rh['real_ip']:get_version() == 6 and rbl['ipv6']) or
                 (rh['real_ip']:get_version() == 4 and rbl['ipv4'])) and
                 ((rbl['exclude_private_ips'] and not is_private_ip(rh['real_ip'])) or
-                not rbl['exclude_private_ips']) then
+                not rbl['exclude_private_ips']) and not is_excluded_ip(rh['real_ip']) then
                   task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
                     ip_to_rbl(rh['real_ip'], rbl['rbl']), rbl_dns_cb, k)
               end
@@ -255,6 +264,7 @@ if type(rspamd_config.get_api_version) ~= 'nil' then
     rspamd_config:register_module_option('rbl', 'default_unknown', 'string')
     rspamd_config:register_module_option('rbl', 'default_exclude_users', 'string')
     rspamd_config:register_module_option('rbl', 'default_exclude_private_ips', 'string')
+    rspamd_config:register_module_option('rbl', 'local_exclude_ip_map', 'string')
   end
 end
 
@@ -289,6 +299,10 @@ if(opts['default_exclude_users'] == nil) then
 end
 if(opts['default_exclude_private_ips'] == nil) then
   opts['default_exclude_private_ips'] = false
+end
+
+if(opts['local_exclude_ip_map'] ~= nil) then
+  local_exclusions = rspamd_config:add_radix_map(opts['local_exclude_ip_map'])
 end
 
 for key,rbl in pairs(opts['rbls']) do
