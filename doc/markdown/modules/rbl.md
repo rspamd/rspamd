@@ -57,6 +57,12 @@ If set to true, do not use this RBL if the message sender is authenticated.
 
 If set to true, from/received RBL checks will ignore private IP address space.
 
+Other parameters which can be set here are:
+
+- local_exclude_ip_map
+
+Can be set to a URL of a list of IPv4/IPv6 addresses & subnets not to be processed by from/received RBL checks.
+
 RBL-specific subsection is structured as follows:
 
 ~~~nginx
