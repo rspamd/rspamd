@@ -205,6 +205,15 @@ LUA_FUNCTION_DEF (config, register_virtual_symbol);
  */
 LUA_FUNCTION_DEF (config, register_callback_symbol);
 LUA_FUNCTION_DEF (config, register_callback_symbol_priority);
+
+/**
+ * @method rspamd_config:set_metric_symbol(name, weight, [metric])
+ * Set the value of a specified symbol in a metric
+ * @param {string} name name of symbol
+ * @param {number} weight the weight multiplier
+ * @param {string} metric metric name (default metric is used if this value is absent)
+ */
+LUA_FUNCTION_DEF (config, set_metric_symbol);
 /***
  * @method rspamd_config:register_pre_filter(callback)
  * Register function to be called prior to symbols processing.
@@ -289,6 +298,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_virtual_symbol),
 	LUA_INTERFACE_DEF (config, register_callback_symbol),
 	LUA_INTERFACE_DEF (config, register_callback_symbol_priority),
+	LUA_INTERFACE_DEF (config, set_metric_symbol),
 	LUA_INTERFACE_DEF (config, register_module_option),
 	LUA_INTERFACE_DEF (config, register_pre_filter),
 	LUA_INTERFACE_DEF (config, register_post_filter),
@@ -1090,6 +1100,49 @@ lua_config_register_callback_symbol_priority (lua_State * L)
 	return 0;
 }
 
+static gint
+lua_config_set_metric_symbol (lua_State * L)
+{
+	struct rspamd_config *cfg = lua_check_config (L);
+	gchar *name;
+	const gchar *metric_name = DEFAULT_METRIC;
+	double weight;
+	struct rspamd_symbol_def *s;
+	struct metric *metric;
+
+	if (cfg) {
+		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+		weight = luaL_checknumber (L, 3);
+		if (lua_gettop (L) > 3) {
+			metric_name = luaL_checkstring (L, 4);
+		}
+
+		metric = g_hash_table_lookup (cfg->metrics, metric_name);
+
+		if (metric == NULL) {
+			msg_err ("metric named %s is not defined", metric_name);
+		}
+		else if (name) {
+			s = g_hash_table_lookup (metric->symbols, name);
+
+			if (s == NULL) {
+				msg_debug ("set new symbol %s in metric %s with weight %.2f",
+						name, metric_name, weight);
+				s = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*s));
+				s->name = rspamd_mempool_strdup (cfg->cfg_pool, name);
+				s->weight_ptr = rspamd_mempool_alloc (cfg->cfg_pool,
+						sizeof (gdouble));
+
+				g_hash_table_insert (metric->symbols, s->name, s);
+				g_hash_table_insert (cfg->metrics_symbols, s->name, metric);
+			}
+
+			*s->weight_ptr = weight;
+		}
+	}
+
+	return 0;
+}
 
 static gint
 lua_config_newindex (lua_State *L)
