@@ -256,7 +256,13 @@ op_to_char (gchar *a, gchar **next)
 	case '|':
 	case '(':
 	case ')':
-		*next = a + 1;
+		if ((a[0] == '&' && a[1] == '&') ||
+				(a[0] == '|' && a[1] == '|')) {
+			*next = a + 2;
+		}
+		else {
+			*next = a + 1;
+		}
 		return *a;
 	case 'O':
 	case 'o':
