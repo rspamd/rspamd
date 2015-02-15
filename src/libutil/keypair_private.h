@@ -26,7 +26,6 @@
 #define KEYPAIR_PRIVATE_H_
 
 #include "config.h"
-#include "tweetnacl.h"
 #include "ref.h"
 #include "blake2.h"
 #include "cryptobox.h"

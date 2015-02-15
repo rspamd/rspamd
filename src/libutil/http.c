@@ -28,7 +28,6 @@
 #include "printf.h"
 #include "logger.h"
 #include "ref.h"
-#include "tweetnacl.h"
 #include "blake2.h"
 #include "ottery.h"
 #include "keypair_private.h"

@@ -90,24 +90,24 @@ rspamd_keypair_cache_process (struct rspamd_keypair_cache *c,
 	g_assert (kp_local != NULL);
 	g_assert (kp_remote != NULL);
 
-	memcpy (search.pair, kp_remote->pk, crypto_box_PUBLICKEYBYTES);
-	memcpy (&search.pair[crypto_box_PUBLICKEYBYTES], kp_local->sk,
-			crypto_box_SECRETKEYBYTES);
+	memcpy (search.pair, kp_remote->pk, rspamd_cryptobox_PKBYTES);
+	memcpy (&search.pair[rspamd_cryptobox_PKBYTES], kp_local->sk,
+			rspamd_cryptobox_SKBYTES);
 	new = rspamd_lru_hash_lookup (c->hash, &search, time (NULL));
 
 	if (new == NULL) {
 		new = g_slice_alloc (sizeof (*new));
-		memcpy (new->pair, kp_remote->pk, crypto_box_PUBLICKEYBYTES);
-		memcpy (&new->pair[crypto_box_PUBLICKEYBYTES], kp_local->sk,
-				crypto_box_SECRETKEYBYTES);
+		memcpy (new->pair, kp_remote->pk, rspamd_cryptobox_PKBYTES);
+		memcpy (&new->pair[rspamd_cryptobox_PKBYTES], kp_local->sk,
+				rspamd_cryptobox_SKBYTES);
 		rspamd_cryptobox_nm (new->nm, kp_remote->pk, kp_local->sk);
 		rspamd_lru_hash_insert (c->hash, new, new, time (NULL), -1);
 	}
 
 	g_assert (new != NULL);
 
-	memcpy (kp_remote->nm, new->nm, crypto_box_BEFORENMBYTES);
-	memcpy (kp_local->nm, new->nm, crypto_box_BEFORENMBYTES);
+	memcpy (kp_remote->nm, new->nm, rspamd_cryptobox_NMBYTES);
+	memcpy (kp_local->nm, new->nm, rspamd_cryptobox_NMBYTES);
 }
 
 void
