@@ -215,6 +215,14 @@ LUA_FUNCTION_DEF (config, register_callback_symbol_priority);
  * @param {string} metric metric name (default metric is used if this value is absent)
  */
 LUA_FUNCTION_DEF (config, set_metric_symbol);
+
+/**
+ * @method rspamd_config:add_composite(name, expression)
+ * @param {string} name name of composite symbol
+ * @param {string} expression symbolic expression of the composite rule
+ * @return {bool} true if a composite has been added sucessfully
+ */
+LUA_FUNCTION_DEF (config, add_composite);
 /***
  * @method rspamd_config:register_pre_filter(callback)
  * Register function to be called prior to symbols processing.
@@ -300,6 +308,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_callback_symbol),
 	LUA_INTERFACE_DEF (config, register_callback_symbol_priority),
 	LUA_INTERFACE_DEF (config, set_metric_symbol),
+	LUA_INTERFACE_DEF (config, add_composite),
 	LUA_INTERFACE_DEF (config, register_module_option),
 	LUA_INTERFACE_DEF (config, register_pre_filter),
 	LUA_INTERFACE_DEF (config, register_post_filter),
@@ -1152,6 +1161,52 @@ lua_config_set_metric_symbol (lua_State * L)
 	}
 
 	return 0;
+}
+
+static gint
+lua_config_add_composite (lua_State * L)
+{
+	struct rspamd_config *cfg = lua_check_config (L);
+	struct expression *expr;
+	gchar *name;
+	const gchar *expr_str;
+	struct rspamd_composite *composite;
+	gboolean ret = FALSE, new = TRUE;
+
+	if (cfg) {
+		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+		expr_str = luaL_checkstring (L, 3);
+
+		if (name && expr_str) {
+			expr = parse_expression (cfg->cfg_pool, (gchar *)expr_str);
+			if (expr == NULL) {
+				msg_err ("cannot parse composite expression %s", expr_str);
+			}
+			else {
+				if (g_hash_table_lookup (cfg->composite_symbols, name) != NULL) {
+					msg_warn ("composite %s is redefined", name);
+					new = FALSE;
+				}
+				composite = rspamd_mempool_alloc (cfg->cfg_pool,
+						sizeof (struct rspamd_composite));
+				composite->expr = expr;
+				composite->id = g_hash_table_size (cfg->composite_symbols);
+				g_hash_table_insert (cfg->composite_symbols,
+						(gpointer)name,
+						composite);
+
+				if (new) {
+					register_virtual_symbol (&cfg->cache, name, 1);
+				}
+
+				ret = TRUE;
+			}
+		}
+	}
+
+	lua_pushboolean (L, ret);
+
+	return 1;
 }
 
 static gint
