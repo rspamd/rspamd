@@ -1381,7 +1381,7 @@ lua_radix_get_key (lua_State * L)
 		else if (lua_type (L, 2) == LUA_TUSERDATA) {
 			ud = luaL_checkudata (L, 2, "rspamd{ip}");
 			if (ud != NULL) {
-				addr = (struct rspamd_lua_ip *)ud;
+				addr = *((struct rspamd_lua_ip **)ud);
 				if (!addr->is_valid) {
 					msg_err ("rspamd{ip} is not valid");
 					addr = NULL;
