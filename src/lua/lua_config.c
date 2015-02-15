@@ -1305,19 +1305,44 @@ static gint
 lua_radix_get_key (lua_State * L)
 {
 	radix_compressed_t *radix = lua_check_radix (L);
-	guint32 key;
+	struct rspamd_lua_ip *addr = NULL;
+	gpointer ud;
+	guint32 key_num = 0;
+	gboolean ret = FALSE;
 
 	if (radix) {
-		key = htonl (luaL_checkint (L, 2));
+		if (lua_type (L, 2) == LUA_TNUMBER) {
+			key_num = htonl (luaL_checkint (L, 2));
+		}
+		else if (lua_type (L, 2) == LUA_TUSERDATA) {
+			ud = luaL_checkudata (L, 2, "rspamd{ip}");
+			if (ud != NULL) {
+				addr = (struct rspamd_lua_ip *)ud;
+				if (!addr->is_valid) {
+					msg_err ("rspamd{ip} is not valid");
+					addr = NULL;
+				}
+			}
+			else {
+				msg_err ("invalid userdata type provided, rspamd{ip} expected");
+			}
+		}
 
-		if (radix_find_compressed (radix, (guint8 *)&key, sizeof (key))
+		if (addr != NULL) {
+			if (radix_find_compressed_addr (radix, &addr->addr)
+					!=  RADIX_NO_VALUE) {
+				ret = TRUE;
+			}
+		}
+		else if (key_num != 0) {
+			if (radix_find_compressed (radix, (guint8 *)&key_num, sizeof (key_num))
 				!= RADIX_NO_VALUE) {
-			lua_pushboolean (L, 1);
-			return 1;
+				ret = TRUE;
+			}
 		}
 	}
 
-	lua_pushboolean (L, 0);
+	lua_pushboolean (L, ret);
 	return 1;
 }
 
