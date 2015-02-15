@@ -68,8 +68,7 @@ local ip_score_set = function(task)
 	if action then
 		-- Check whitelist 
 		if whitelist then
-			local ipnum = task:get_from_ip():to_number()
-			if task:get_from_ip():is_valid() and whitelist:get_key(ipnum) then
+			if task:get_from_ip():is_valid() and whitelist:get_key(task:get_from_ip()) then
 				-- Address is whitelisted
 				return
 			end
@@ -131,8 +130,7 @@ local ip_score_check = function(task)
 	local ip = task:get_from_ip()
 	if ip:is_valid() then
 		if whitelist then
-			local ipnum = task:get_from_ip():to_number()
-			if whitelist:get_key(ipnum) then
+			if whitelist:get_key(task:get_from_ip()) then
 				-- Address is whitelisted
 				return
 			end
