@@ -421,6 +421,10 @@ local symbols_hostname = {
   "HFILTER_HOSTNAME_5",
   "HFILTER_HOSTNAME_UNKNOWN"
 }
+local symbols_rcpt = {
+  "HFILTER_RCPT_MANY",
+  "HFILTER_RCPT_BOUNCEMOREONE"
+}
 local symbols_mid = {
   "HFILTER_MID_NORESOLVE_MX",
   "HFILTER_MID_NORES_A_OR_MX",
@@ -455,6 +459,9 @@ if config['hostname_enabled'] then
 end
 if config['from_enabled'] then
   append_t(symbols_enabled, symbols_from)
+end
+if config['rcpt_enabled'] then
+	append_t(symbols_enabled, symbols_rcpt)
 end
 if config['mid_enabled'] then
   append_t(symbols_enabled, symbols_mid)
