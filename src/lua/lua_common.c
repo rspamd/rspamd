@@ -351,8 +351,6 @@ rspamd_lua_init (struct rspamd_config *cfg)
 
 	rspamd_lua_add_preload (L, "ucl", luaopen_ucl);
 
-	rspamd_lua_set_path (L, cfg);
-
 	return L;
 }
 
@@ -396,6 +394,7 @@ rspamd_init_lua_filters (struct rspamd_config *cfg)
 	struct rspamd_statfile_config *st;
 	lua_State *L = cfg->lua_state;
 
+	rspamd_lua_set_path (L, cfg);
 	cur = g_list_first (cfg->script_modules);
 
 	while (cur) {
