@@ -111,6 +111,8 @@ local function process_sa_conf(f)
       if cur_rule['meta'] then valid_rule = true end
     elseif words[1] == "describe" and valid_rule then
       cur_rule['description'] = words_to_re(words, 1)
+    elseif words[1] == "score" and valid_rule then
+      cur_rule['score'] = tonumber(words_to_re(words, 1)[1])
     end
     end)()
   end
@@ -127,3 +129,40 @@ if type(section) == "table" then
     end
   end
 end
+
+-- Now check all valid rules and add the according rspamd rules
+
+-- Meta rules
+_.each(function(k, r)
+    rspamd_config:add_composite(k, r['meta'])
+    if r['score'] then
+      rspamd_config:set_metric_symbol(k, r['score'], r['description'])
+    end
+  end,
+  _.filter(function(k, r)
+      return r['type'] == 'meta'
+    end,
+    rules))
+
+-- Header rules
+_.each(function(k, r)
+    local f = function(task)
+      local hdr = task:get_header_full(r['header'])
+      if hdr then
+        for n, rh in ipairs(hdr) do
+          -- Subject for optimization
+          if (r['re']:match(rh['decoded'])) then
+            task:insert_result(k, 1.0)
+          end
+        end
+      end
+    end
+    rspamd_config:register_symbol(k, 1.0, f)
+    if r['score'] then
+      rspamd_config:set_metric_symbol(k, r['score'], r['description'])
+    end
+  end,
+  _.filter(function(k, r)
+      return r['type'] == 'header' and r['header']
+    end,
+    rules))
