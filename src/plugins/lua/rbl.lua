@@ -209,7 +209,7 @@ local function rbl_cb (task)
 	    havegot['from'] = task:get_from_ip()
 	    if not havegot['from']:is_valid() or
               (rbl['exclude_private_ips'] and is_private_ip(havegot['from']))
-              or is_excluded_ip(havegot['from']) then
+              or (is_excluded_ip(havegot['from']) and rbl['exclude_local']) then
 	      notgot['from'] = true
 	      return
 	    end
@@ -239,7 +239,8 @@ local function rbl_cb (task)
               if ((rh['real_ip']:get_version() == 6 and rbl['ipv6']) or
                 (rh['real_ip']:get_version() == 4 and rbl['ipv4'])) and
                 ((rbl['exclude_private_ips'] and not is_private_ip(rh['real_ip'])) or
-                not rbl['exclude_private_ips']) and not is_excluded_ip(rh['real_ip']) then
+                not rbl['exclude_private_ips']) and not (is_excluded_ip(rh['real_ip'])
+                and rbl['exclude_local']) then
                   task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
                     ip_to_rbl(rh['real_ip'], rbl['rbl']), rbl_dns_cb, k)
               end
@@ -265,6 +266,7 @@ if type(rspamd_config.get_api_version) ~= 'nil' then
     rspamd_config:register_module_option('rbl', 'default_exclude_users', 'string')
     rspamd_config:register_module_option('rbl', 'default_exclude_private_ips', 'string')
     rspamd_config:register_module_option('rbl', 'local_exclude_ip_map', 'string')
+    rspamd_config:register_module_option('rbl', 'default_exclude_local', 'string')
   end
 end
 
@@ -300,13 +302,18 @@ end
 if(opts['default_exclude_private_ips'] == nil) then
   opts['default_exclude_private_ips'] = false
 end
-
+if(opts['default_exclude_local'] == nil) then
+  opts['default_exclude_local'] = true
+end
 if(opts['local_exclude_ip_map'] ~= nil) then
   local_exclusions = rspamd_config:add_radix_map(opts['local_exclude_ip_map'])
 end
 
 for key,rbl in pairs(opts['rbls']) do
-  local o = { "ipv4", "ipv6", "from", "received", "unknown", "rdns", "helo", "exclude_users", "exclude_private_ips" }
+  local o = {
+    "ipv4", "ipv6", "from", "received", "unknown", "rdns", "helo", "exclude_users",
+    "exclude_private_ips", "exclude_local"
+  }
   for i=1,table.maxn(o) do
     if(rbl[o[i]] == nil) then
       rbl[o[i]] = opts['default_' .. o[i]]
