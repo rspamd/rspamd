@@ -109,6 +109,24 @@ end
  */
 LUA_FUNCTION_DEF (config, add_radix_map);
 /***
+ * @method rspamd_config:radix_from_config(mname, optname)
+ * Creates new static map of IP/mask addresses from config.
+ * @param {string} mname name of module
+ * @param {string} optname option to get
+ * @return {radix} radix tree object
+ * @example
+local ip_map = rspamd_config:radix_from_config ('mymodule', 'ips')
+...
+local function foo(task)
+	local ip = task:get_from_ip()
+	if ip_map:get_key(ip) then
+		return true
+	end
+	return false
+end
+ */
+LUA_FUNCTION_DEF (config, radix_from_config);
+/***
  * @method rspamd_config:add_hash_map(mapline[, description])
  * Creates new dynamic map string objects.
  * @param {string} mapline URL for a map
@@ -298,6 +316,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_all_opt),
 	LUA_INTERFACE_DEF (config, register_function),
 	LUA_INTERFACE_DEF (config, add_radix_map),
+	LUA_INTERFACE_DEF (config, radix_from_config),
 	LUA_INTERFACE_DEF (config, add_hash_map),
 	LUA_INTERFACE_DEF (config, add_kv_map),
 	LUA_INTERFACE_DEF (config, add_map),
@@ -752,6 +771,44 @@ lua_config_add_radix_map (lua_State *L)
 	lua_pushnil (L);
 	return 1;
 
+}
+
+static gint
+lua_config_radix_from_config (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L);
+	const gchar *mname, *optname;
+	const ucl_object_t *obj;
+	radix_compressed_t **r, ***ud;
+
+	if (!cfg) {
+		lua_pushnil (L);
+		return 1;
+	}
+
+	mname = luaL_checkstring (L, 2);
+	optname = luaL_checkstring (L, 3);
+
+	if (mname && optname) {
+		obj = rspamd_config_get_module_opt (cfg, mname, optname);
+		if (obj) {
+			r = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (radix_compressed_t *));
+			*r = radix_create_compressed ();
+			radix_add_generic_iplist (ucl_obj_tostring (obj), r);
+			ud = lua_newuserdata (L, sizeof (radix_compressed_t *));
+			*ud = r;
+			rspamd_lua_setclass (L, "rspamd{radix}", -1);
+			return 1;
+		} else {
+			msg_warn ("Couldnt find config option [%s][%s]", mname, optname);
+			lua_pushnil (L);
+			return 1;
+		}
+	} else {
+		msg_warn ("Couldnt find config option");
+		lua_pushnil (L);
+		return 1;
+	}
 }
 
 static gint
