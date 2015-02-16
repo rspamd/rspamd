@@ -178,13 +178,15 @@ local function rbl_cb (task)
 	  end
 	  if not havegot['from'] then
 	    havegot['from'] = task:get_from_ip()
-	    if not havegot['from']:is_valid() or
-              (rbl['exclude_private_ips'] and is_private_ip(havegot['from']))
-              or (is_excluded_ip(havegot['from']) and rbl['exclude_local']) then
+	    if not havegot['from']:is_valid() then
 	      notgot['from'] = true
 	      return
 	    end
 	  end
+          if (rbl['exclude_private_ips'] and is_private_ip(havegot['from']))
+            or (is_excluded_ip(havegot['from']) and rbl['exclude_local']) then
+            return
+          end
 	  if (havegot['from']:get_version() == 6 and rbl['ipv6']) or
 	    (havegot['from']:get_version() == 4 and rbl['ipv4']) then
 	    task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
@@ -210,8 +212,8 @@ local function rbl_cb (task)
               if ((rh['real_ip']:get_version() == 6 and rbl['ipv6']) or
                 (rh['real_ip']:get_version() == 4 and rbl['ipv4'])) and
                 ((rbl['exclude_private_ips'] and not is_private_ip(rh['real_ip'])) or
-                not rbl['exclude_private_ips']) and not (is_excluded_ip(rh['real_ip'])
-                or not rbl['exclude_local']) then
+                not rbl['exclude_private_ips']) and ((rbl['exclude_local_ips'] and
+                not is_excluded_ip(rh['real_ip'])) or not rbl['exclude_local_ips']) then
                   task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
                     ip_to_rbl(rh['real_ip'], rbl['rbl']), rbl_dns_cb, k)
               end
