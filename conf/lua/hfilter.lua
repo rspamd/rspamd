@@ -102,6 +102,7 @@ local config = {
   ['helo_enabled'] = false,
   ['hostname_enabled'] = false,
   ['from_enabled'] = false,
+  ['rcpt_enabled'] = false,
   ['mid_enabled'] = false,
   ['url_enabled'] = false
 }
@@ -345,8 +346,9 @@ local function hfilter(task)
     task:insert_result('HFILTER_HOSTNAME_' .. weight_hostname, 1.0)
   end  
   
+  -- MAILFROM checks --
+  local frombounce = false
   if config['from_enabled'] then
-    -- MAILFROM checks --
     local from = task:get_from(1)
     if from then
       --FROM host check
@@ -354,6 +356,25 @@ local function hfilter(task)
         local fr_split = split(fr['addr'], '@', 0)
         if table.maxn(fr_split) == 2 then
           check_host(task, fr_split[2], 'FROMHOST', '', '')
+          if fr_split[1] == 'postmaster' then
+            frombounce = true
+          end
+        end
+      end
+    else
+      task:insert_result('HFILTER_FROM_BOUNCE', 1.00)
+      frombounce = true
+    end
+  end
+  
+  -- Recipients checks --
+  if config['rcpt_enabled'] then
+    local rcpt = task:get_recipients()    
+    if rcpt then
+      local count_rcpt = table.maxn(rcpt)
+      if frombounce then
+        if count_rcpt > 1 then
+          task:insert_result('HFILTER_RCPT_BOUNCEMOREONE', 1.00)
         end
       end
     end
@@ -397,6 +418,9 @@ local symbols_hostname = {
   "HFILTER_HOSTNAME_5",
   "HFILTER_HOSTNAME_UNKNOWN"
 }
+local symbols_rcpt = {
+  "HFILTER_RCPT_BOUNCEMOREONE"
+}
 local symbols_mid = {
   "HFILTER_MID_NORESOLVE_MX",
   "HFILTER_MID_NORES_A_OR_MX",
@@ -410,7 +434,8 @@ local symbols_url = {
 local symbols_from = {
   "HFILTER_FROMHOST_NORESOLVE_MX",
   "HFILTER_FROMHOST_NORES_A_OR_MX",
-  "HFILTER_FROMHOST_NOT_FQDN"
+  "HFILTER_FROMHOST_NOT_FQDN",
+  "HFILTER_FROM_BOUNCE"
 }
 
 local opts = rspamd_config:get_all_opt('hfilter')
@@ -431,6 +456,9 @@ if config['hostname_enabled'] then
 end
 if config['from_enabled'] then
   append_t(symbols_enabled, symbols_from)
+end
+if config['rcpt_enabled'] then
+  append_t(symbols_enabled, symbols_rcpt)
 end
 if config['mid_enabled'] then
   append_t(symbols_enabled, symbols_mid)
