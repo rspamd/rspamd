@@ -18,7 +18,7 @@ List of mentors available for the project via IRC and Google groups mailing list
 
 |---
 | Mentor | IRC nick | Role
-|:-|:-:|-:|
+|:-|:-|-:|
 | Vsevolod Stakhov | cebka | Mentor, Organization Administrator
 | Andrej Zverev | az | Mentor, Backup Administrator
 | Andrew Lewis | notkoos | Mentor
@@ -92,3 +92,19 @@ Currently, rspamd supports opportunistic encryption of all messages. However, th
 * Difficulty: medium
 * Required skills: Javascript
 * Possible mentors: cebka
+
+### Support for pyzor and dcc
+
+Rspamd has no native interface to neither pyzor nor dcc. These hash storages provides reasonable amount of blacklisted patterns and could be used for filtering quality improvement. This project implies the ability to restore protocol's description based on the foreign source code (namely, in Perl or Python)
+
+* Difficulty: medium to high
+* Required skills: strong knowledge of C, familiarity with perl or python
+* Possible mentors: az, AL
+
+### Create migration tools for statistics
+
+With the upcoming rspamd 0.9 release, there are plans to support various backends for the statistic tokens. However, for the long time, the only supported backend was mmap backend. In terms of this project, we propose to create an utility that can automatically convert statistics between different backends. This could be done in lua, for example, with a small support from the C side.
+
+* Difficulty: easy
+* Required skills: medium skills in Lua, basic knowledge of C
+* Possible mentors: notkoos, AL
