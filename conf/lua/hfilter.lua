@@ -377,8 +377,6 @@ local function hfilter(task)
         if count_rcpt > 1 then
           task:insert_result('HFILTER_RCPT_BOUNCEMOREONE', 1.00)
         end
-      elseif count_rcpt >= 5 then
-        task:insert_result('HFILTER_RCPT_MANY', 1.00)
       end
     end
   end
@@ -422,7 +420,6 @@ local symbols_hostname = {
   "HFILTER_HOSTNAME_UNKNOWN"
 }
 local symbols_rcpt = {
-  "HFILTER_RCPT_MANY",
   "HFILTER_RCPT_BOUNCEMOREONE"
 }
 local symbols_mid = {
