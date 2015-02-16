@@ -12,7 +12,7 @@ since we appreciate any valuable contributions to rspamd project.
 
 ## Information for GSoC participants
 
-Prospective students are required to have [a github account](https://github.com) and join our discussion IRC channel: #rspamd at irc.freenode.net. All projects suggested requires medium to advanced knowledge in either *C* or *Lua* programming languages. We encourage picking projects which you feel you can realistically do within the 12-week timeline.
+Prospective students are required to have [a github account](https://github.com), carefully examine the [rspamd source repository](https://github.com/vstakhov/rspamd) and join our discussion IRC channel: #rspamd at irc.freenode.net. All projects suggested requires medium to advanced knowledge in either *C* or *Lua* programming languages. We encourage picking projects which you feel you can realistically do within the 12-week timeline.
 
 List of mentors available for the project via IRC and Google groups mailing list:
 
