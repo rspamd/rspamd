@@ -371,7 +371,6 @@ local function hfilter(task)
   if config['rcpt_enabled'] then
     local rcpt = task:get_recipients()    
     if rcpt then
-      --RCPT count --
       local count_rcpt = table.maxn(rcpt)
       if frombounce then
         if count_rcpt > 1 then
@@ -435,7 +434,8 @@ local symbols_url = {
 local symbols_from = {
   "HFILTER_FROMHOST_NORESOLVE_MX",
   "HFILTER_FROMHOST_NORES_A_OR_MX",
-  "HFILTER_FROMHOST_NOT_FQDN"
+  "HFILTER_FROMHOST_NOT_FQDN",
+  "HFILTER_FROM_BOUNCE"
 }
 
 local opts = rspamd_config:get_all_opt('hfilter')
