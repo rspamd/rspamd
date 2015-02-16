@@ -281,6 +281,40 @@ lua_add_actions_global (lua_State *L)
 	lua_setglobal (L, "rspamd_actions");
 }
 
+static void
+rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg)
+{
+	const gchar *old_path, *additional_path = NULL;
+	const ucl_object_t *opts;
+	gchar path_buf[PATH_MAX];
+
+	lua_getglobal (L, "package");
+	lua_getfield (L, -1, "path");
+	old_path = luaL_checkstring (L, -1);
+
+	opts = ucl_object_find_key (cfg->rcl_obj, "options");
+	if (opts != NULL) {
+		opts = ucl_object_find_key (opts, "lua_path");
+		if (opts != NULL && ucl_object_type (opts) == UCL_STRING) {
+			additional_path = ucl_object_tostring (opts);
+		}
+	}
+
+	if (additional_path) {
+		rspamd_snprintf (path_buf, sizeof (path_buf), "%s;%s/?.lua;%s/?.lua;%s",
+				old_path, RSPAMD_PLUGINSDIR, RSPAMD_CONFDIR, additional_path);
+	}
+	else {
+		rspamd_snprintf (path_buf, sizeof (path_buf), "%s;%s/?.lua;%s/?.lua",
+				old_path, RSPAMD_PLUGINSDIR, RSPAMD_CONFDIR);
+	}
+
+	lua_pop (L, 1);
+	lua_pushstring (L, path_buf);
+	lua_setfield (L, -2, "path");
+	lua_pop (L, 1);
+}
+
 lua_State *
 rspamd_lua_init (struct rspamd_config *cfg)
 {
@@ -316,6 +350,8 @@ rspamd_lua_init (struct rspamd_config *cfg)
 	luaopen_ip (L);
 
 	rspamd_lua_add_preload (L, "ucl", luaopen_ucl);
+
+	rspamd_lua_set_path (L, cfg);
 
 	return L;
 }
@@ -361,6 +397,7 @@ rspamd_init_lua_filters (struct rspamd_config *cfg)
 	lua_State *L = cfg->lua_state;
 
 	cur = g_list_first (cfg->script_modules);
+
 	while (cur) {
 		module = cur->data;
 		if (module->path) {
