@@ -31,6 +31,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 local rbls = {}
 local local_exclusions = nil
+local private_ips = nil
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_ip = require "rspamd_ip"
@@ -48,39 +49,9 @@ local function validate_dns(lstr, rstr)
   return true
 end
 
-local private_ranges_v4 = {
-  {[1] = rspamd_ip.from_string("127.0.0.0"), [2] = 8},
-  {[1] = rspamd_ip.from_string("10.0.0.0"), [2] = 8},
-  {[1] = rspamd_ip.from_string("192.168.0.0"), [2] = 16},
-  {[1] = rspamd_ip.from_string("169.254.0.0"), [2] = 16},
-  {[1] = rspamd_ip.from_string("172.16.0.0"), [2] = 12},
-  {[1] = rspamd_ip.from_string("100.64.0.0"), [2] = 10},
-}
-
-local private_ranges_v6 = {
-  {[1] = rspamd_ip.from_string("fc00::"), [2] = 7},
-  {[1] = rspamd_ip.from_string("fe80::"), [2] = 10},
-  {[1] = rspamd_ip.from_string("fec0::"), [2] = 10},
-}
-
-local ipv6_loopback = rspamd_ip.from_string("::1")
-
 local function is_private_ip(rip)
-  if rip:get_version() == 4 then
-    for _, r in pairs(private_ranges_v4) do
-      if r[1] == rip:apply_mask(r[2]) then
-        return true
-      end
-    end
-  else
-    if rip == ipv6_loopback then
-      return true
-    end
-    for _, r in pairs(private_ranges_v6) do
-      if r[1] == rip:apply_mask(r[2]) then
-        return true
-      end
-    end
+  if private_ips and private_ips:get_key(rip) then
+    return true
   end
   return false
 end
@@ -240,7 +211,7 @@ local function rbl_cb (task)
                 (rh['real_ip']:get_version() == 4 and rbl['ipv4'])) and
                 ((rbl['exclude_private_ips'] and not is_private_ip(rh['real_ip'])) or
                 not rbl['exclude_private_ips']) and not (is_excluded_ip(rh['real_ip'])
-                and rbl['exclude_local']) then
+                or not rbl['exclude_local']) then
                   task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
                     ip_to_rbl(rh['real_ip'], rbl['rbl']), rbl_dns_cb, k)
               end
@@ -267,6 +238,7 @@ if type(rspamd_config.get_api_version) ~= 'nil' then
     rspamd_config:register_module_option('rbl', 'default_exclude_private_ips', 'string')
     rspamd_config:register_module_option('rbl', 'local_exclude_ip_map', 'string')
     rspamd_config:register_module_option('rbl', 'default_exclude_local', 'string')
+    rspamd_config:register_module_option('rbl', 'private_ips', 'string')
   end
 end
 
@@ -307,6 +279,9 @@ if(opts['default_exclude_local'] == nil) then
 end
 if(opts['local_exclude_ip_map'] ~= nil) then
   local_exclusions = rspamd_config:add_radix_map(opts['local_exclude_ip_map'])
+end
+if(opts['private_ips'] ~= nil) then
+  private_ips = rspamd_config:radix_from_config('rbl', 'private_ips')
 end
 
 for key,rbl in pairs(opts['rbls']) do
