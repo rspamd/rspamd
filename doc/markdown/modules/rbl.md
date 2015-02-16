@@ -55,7 +55,7 @@ If set to true, do not use this RBL if the message sender is authenticated.
 
 - default_exclude_private_ips (false)
 
-If set to true, from/received RBL checks will ignore private IP address space.
+If true & private_ips is set appropriately, from/received RBL checks will ignore private IP address space.
 
 - default_exclude_local (true)
 
@@ -66,6 +66,10 @@ Other parameters which can be set here are:
 - local_exclude_ip_map
 
 Can be set to a URL of a list of IPv4/IPv6 addresses & subnets not to be processed by from/received RBL checks.
+
+- private_ips
+
+Should be set to a space/comma/semicolon-delimited list of addresses & subnets to be considered private by exclude_private_ips checks.
 
 RBL-specific subsection is structured as follows:
 
