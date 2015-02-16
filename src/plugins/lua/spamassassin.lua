@@ -153,6 +153,7 @@ _.each(function(k, r)
           -- Subject for optimization
           if (r['re']:match(rh['decoded'])) then
             task:insert_result(k, 1.0)
+            return
           end
         end
       end
@@ -164,5 +165,47 @@ _.each(function(k, r)
   end,
   _.filter(function(k, r)
       return r['type'] == 'header' and r['header']
+    end,
+    rules))
+
+-- Parts rules
+_.each(function(k, r)
+    local f = function(task)
+      local parts = task:get_parts()
+      if parts then
+        for n, part in ipairs(parts) do
+          -- Subject for optimization
+          if (r['re']:match(part:get_content())) then
+            task:insert_result(k, 1.0)
+            return
+          end
+        end
+      end
+    end
+    rspamd_config:register_symbol(k, 1.0, f)
+    if r['score'] then
+      rspamd_config:set_metric_symbol(k, r['score'], r['description'])
+    end
+  end,
+  _.filter(function(k, r)
+      return r['type'] == 'part'
+    end,
+    rules))
+
+-- Raw body rules
+_.each(function(k, r)
+    local f = function(task)
+      if (r['re']:match(task:get_content())) then
+        task:insert_result(k, 1.0)
+        return
+      end
+    end
+    rspamd_config:register_symbol(k, 1.0, f)
+    if r['score'] then
+      rspamd_config:set_metric_symbol(k, r['score'], r['description'])
+    end
+  end,
+  _.filter(function(k, r)
+      return r['type'] == 'message'
     end,
     rules))
