@@ -84,3 +84,11 @@ Libucl, being the crucial component of rspamd, lacks of bindings to other langua
 * Difficulty: low to medium
 * Required skills: C, C++ (and C++11 in particular), SWIG
 * Possible mentors: cebka, az
+
+### Support of HTTPCrypt in the Web interface
+
+Currently, rspamd supports opportunistic encryption of all messages. However, the web interface does not support encryption at all. The idea is to grab [libsodium-js](https://github.com/jedisct1/libsodium.js) and adopt its primitives for rspamd cryptobox (namely, replacing salsa20 with chacha20 and slight poly1305 authenticator modification).
+
+* Difficulty: medium
+* Required skills: Javascript
+* Possible mentors: cebka
