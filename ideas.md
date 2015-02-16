@@ -108,3 +108,11 @@ With the upcoming rspamd 0.9 release, there are plans to support various backend
 * Difficulty: easy
 * Required skills: medium skills in Lua, basic knowledge of C
 * Possible mentors: notkoos, AL
+
+### Recursion support in rdns resolver
+
+So far, librdns library that is used for resolving names in rspamd does not support recursion relaying on the external DNS recursor. Nevertheless, the useful features of this library, for example DNSCurve support and the upcoming DNSSEC support can benefit from the own recursion implementation. This project implies good understanding of network protocols and DNS in particular as well as strong skills in C programming language.
+
+* Difficulty: medium to hard
+* Required skills: good knowledge of C, network programming
+* Possible mentors: cebka
