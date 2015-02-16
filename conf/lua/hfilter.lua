@@ -102,6 +102,7 @@ local config = {
   ['helo_enabled'] = false,
   ['hostname_enabled'] = false,
   ['from_enabled'] = false,
+  ['rcpt_enabled'] = true,
   ['mid_enabled'] = false,
   ['url_enabled'] = false
 }
@@ -345,8 +346,9 @@ local function hfilter(task)
     task:insert_result('HFILTER_HOSTNAME_' .. weight_hostname, 1.0)
   end  
   
+  -- MAILFROM checks --
+  local frombounce = false
   if config['from_enabled'] then
-    -- MAILFROM checks --
     local from = task:get_from(1)
     if from then
       --FROM host check
@@ -354,7 +356,29 @@ local function hfilter(task)
         local fr_split = split(fr['addr'], '@', 0)
         if table.maxn(fr_split) == 2 then
           check_host(task, fr_split[2], 'FROMHOST', '', '')
+          if fr_split[1] == 'postmaster' then
+            frombounce = true
+          end
         end
+      end
+    else
+      task:insert_result('HFILTER_FROM_BOUNCE', 1.00)
+      frombounce = true
+    end
+  end
+  
+  -- Recipients checks --
+  if config['rcpt_enabled'] then
+    local rcpt = task:get_recipients()    
+    if rcpt then
+      --RCPT count --
+      local count_rcpt = table.maxn(rcpt)
+      if frombounce then
+        if count_rcpt > 1 then
+          task:insert_result('HFILTER_RCPT_BOUNCEMOREONE', 1.00)
+        end
+      elseif count_rcpt >= 5 then
+        task:insert_result('HFILTER_RCPT_MANY', 1.00)
       end
     end
   end
