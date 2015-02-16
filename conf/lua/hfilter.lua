@@ -102,7 +102,7 @@ local config = {
   ['helo_enabled'] = false,
   ['hostname_enabled'] = false,
   ['from_enabled'] = false,
-  ['rcpt_enabled'] = true,
+  ['rcpt_enabled'] = false,
   ['mid_enabled'] = false,
   ['url_enabled'] = false
 }
@@ -458,7 +458,7 @@ if config['from_enabled'] then
   append_t(symbols_enabled, symbols_from)
 end
 if config['rcpt_enabled'] then
-	append_t(symbols_enabled, symbols_rcpt)
+  append_t(symbols_enabled, symbols_rcpt)
 end
 if config['mid_enabled'] then
   append_t(symbols_enabled, symbols_mid)
