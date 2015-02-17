@@ -45,6 +45,10 @@ Use this RBL to test reverse DNS names of message senders (hostnames passed to r
 
 Use this RBL to test parameters sent for HELO/EHLO at SMTP time.
 
+- default_emails (false)
+
+Use this RBL to test email addresses in form [localpart].[domainpart].[rbl] or if set to "domain_only" uses [domainpart].[rbl].
+
 - default_unknown (false)
 
 If set to false, do not yield a result unless the response received from the RBL is defined in its related returncodes {} subsection, else return the default symbol for the RBL.
