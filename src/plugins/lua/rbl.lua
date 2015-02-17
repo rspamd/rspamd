@@ -36,10 +36,7 @@ local private_ips = nil
 local rspamd_logger = require "rspamd_logger"
 local rspamd_ip = require "rspamd_ip"
 
-local function validate_dns(lstr, rstr)
-  if (lstr:len() + rstr:len()) > 252 then
-    return false
-  end
+local function validate_dns(lstr)
   for v in lstr:gmatch("[^%.]+") do
     if not v:match("^[%w-]+$") or v:len() > 63
       or v:match("^-") or v:match("-$") then
@@ -136,6 +133,20 @@ local function rbl_cb (task)
         end
       end
 
+      if (rbl['exclude_local'] or rbl['exclude_private_ips']) and not notgot['from'] then
+        if not havegot['from'] then
+          havegot['from'] = task:get_from_ip()
+          if not havegot['from']:is_valid() then
+            notgot['from'] = true
+          end
+        end
+        if havegot['from'] and not notgot['from'] and ((rbl['exclude_local'] and
+          is_excluded_ip(havegot['from'])) or (rbl['exclude_private_ips'] and
+          is_private_ip(havegot['from']))) then
+          return
+        end
+      end
+
       if rbl['helo'] then
 	(function()
 	  if notgot['helo'] then
@@ -144,7 +155,7 @@ local function rbl_cb (task)
 	  if not havegot['helo'] then
 	    havegot['helo'] = task:get_helo()
 	    if havegot['helo'] == nil or
-              not validate_dns(havegot['helo'], rbl['rbl']) then
+              not validate_dns(havegot['helo']) then
 	      notgot['helo'] = true
 	      return
 	    end
@@ -152,6 +163,51 @@ local function rbl_cb (task)
 	  task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
 	    havegot['helo'] .. '.' .. rbl['rbl'], rbl_dns_cb, k)
 	end)()
+      end
+
+      if rbl['emails'] then
+        (function()
+          if notgot['emails'] then
+            return
+          end
+          if not havegot['emails'] then
+            havegot['emails'] = task:get_emails()
+            if havegot['emails'] == nil then
+              notgot['emails'] = true
+              return
+            end
+            local cleanList = {}
+            for _, e in pairs(havegot['emails']) do
+              local localpart = e:get_user()
+              local domainpart = e:get_host()
+              if rbl['emails'] == 'domain_only' then
+                if not cleanList[domainpart] and validate_dns(domainpart) then
+                  cleanList[domainpart] = true
+                end
+              else
+                if validate_dns(localpart) and validate_dns(domainpart) then
+                  table.insert(cleanList, localpart .. '.' .. domainpart)
+                end
+              end 
+            end
+            havegot['emails'] = cleanList
+            if not next(havegot['emails']) then
+              notgot['emails'] = true
+              return
+            end
+          end
+          if rbl['emails'] == 'domain_only' then
+            for domain, _ in pairs(havegot['emails']) do
+              task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
+                domain .. '.' .. rbl['rbl'], rbl_dns_cb, k)
+            end
+          else
+            for _, email in pairs(havegot['emails']) do
+              task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
+                email .. '.' .. rbl['rbl'], rbl_dns_cb, k)
+            end
+          end
+        end)()
       end
 
       if rbl['rdns'] then
@@ -183,10 +239,6 @@ local function rbl_cb (task)
 	      return
 	    end
 	  end
-          if (rbl['exclude_private_ips'] and is_private_ip(havegot['from']))
-            or (is_excluded_ip(havegot['from']) and rbl['exclude_local']) then
-            return
-          end
 	  if (havegot['from']:get_version() == 6 and rbl['ipv6']) or
 	    (havegot['from']:get_version() == 4 and rbl['ipv4']) then
 	    task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
@@ -241,6 +293,7 @@ if type(rspamd_config.get_api_version) ~= 'nil' then
     rspamd_config:register_module_option('rbl', 'local_exclude_ip_map', 'string')
     rspamd_config:register_module_option('rbl', 'default_exclude_local', 'string')
     rspamd_config:register_module_option('rbl', 'private_ips', 'string')
+    rspamd_config:register_module_option('rbl', 'default_emails', 'string')
   end
 end
 
@@ -274,10 +327,13 @@ if(opts['default_exclude_users'] == nil) then
   opts['default_exclude_users'] = false
 end
 if(opts['default_exclude_private_ips'] == nil) then
-  opts['default_exclude_private_ips'] = false
+  opts['default_exclude_private_ips'] = true
 end
 if(opts['default_exclude_local'] == nil) then
   opts['default_exclude_local'] = true
+end
+if(opts['default_emails'] == nil) then
+  opts['default_emails'] = false
 end
 if(opts['local_exclude_ip_map'] ~= nil) then
   local_exclusions = rspamd_config:add_radix_map(opts['local_exclude_ip_map'])
@@ -289,7 +345,7 @@ end
 for key,rbl in pairs(opts['rbls']) do
   local o = {
     "ipv4", "ipv6", "from", "received", "unknown", "rdns", "helo", "exclude_users",
-    "exclude_private_ips", "exclude_local"
+    "exclude_private_ips", "exclude_local", "emails"
   }
   for i=1,table.maxn(o) do
     if(rbl[o[i]] == nil) then

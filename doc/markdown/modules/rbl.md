@@ -45,6 +45,10 @@ Use this RBL to test reverse DNS names of message senders (hostnames passed to r
 
 Use this RBL to test parameters sent for HELO/EHLO at SMTP time.
 
+- default_emails (false)
+
+Use this RBL to test email addresses in form [localpart].[domainpart].[rbl] or if set to "domain_only" uses [domainpart].[rbl].
+
 - default_unknown (false)
 
 If set to false, do not yield a result unless the response received from the RBL is defined in its related returncodes {} subsection, else return the default symbol for the RBL.
@@ -53,13 +57,13 @@ If set to false, do not yield a result unless the response received from the RBL
 
 If set to true, do not use this RBL if the message sender is authenticated.
 
-- default_exclude_private_ips (false)
+- default_exclude_private_ips (true)
 
-If true & private_ips is set appropriately, from/received RBL checks will ignore private IP address space.
+If true & private_ips is set appropriately, do not use the RBL if the sending host address is in the private IP list & do not check received headers baring these addresses.
 
 - default_exclude_local (true)
 
-If true, and local_exclude_ip_map has been set - exclude specified addresses/subnets from received/from RBL checks.
+If true & local_exclude_ip_map has been set - do not use the RBL if the sending host address is in the local IP list & do not check received headers baring these addresses.
 
 Other parameters which can be set here are:
 
