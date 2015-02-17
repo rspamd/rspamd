@@ -115,8 +115,8 @@ lua_regexp_create (lua_State *L)
 		slash = strrchr (string, '/');
 		if (slash != NULL && slash != string) {
 			flags_str = slash + 1;
-			pattern = g_malloc (slash - string - 1);
-			rspamd_strlcpy (pattern, string + 1, slash - string - 1);
+			pattern = g_malloc (slash - string);
+			rspamd_strlcpy (pattern, string + 1, slash - string);
 		}
 		else {
 			pattern = g_strdup (string);
