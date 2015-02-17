@@ -36,10 +36,7 @@ local private_ips = nil
 local rspamd_logger = require "rspamd_logger"
 local rspamd_ip = require "rspamd_ip"
 
-local function validate_dns(lstr, rstr)
-  if (lstr:len() + rstr:len()) > 252 then
-    return false
-  end
+local function validate_dns(lstr)
   for v in lstr:gmatch("[^%.]+") do
     if not v:match("^[%w-]+$") or v:len() > 63
       or v:match("^-") or v:match("-$") then
@@ -144,7 +141,7 @@ local function rbl_cb (task)
 	  if not havegot['helo'] then
 	    havegot['helo'] = task:get_helo()
 	    if havegot['helo'] == nil or
-              not validate_dns(havegot['helo'], rbl['rbl']) then
+              not validate_dns(havegot['helo']) then
 	      notgot['helo'] = true
 	      return
 	    end
