@@ -16,7 +16,7 @@ Prospective students are required to have [a github account](https://github.com)
 
 You should also be familiar with git version control system. Should you want to study more about git then please read the following [book](http://git-scm.com/book/en/v2). For the project itself, we suppose to clone rspamd repo to your local github account and do all job there, synchronizing with the rspamd mainline repository by means of `git rebase`.
 
-We encourage picking projects which you feel you can realistically do within the 12-week timeline. Some of the projects implies certain research work, however, we have placed the **approximate** evaluation criteria for the timeline specified by the summer of code programme. Taking such a project is a challenging task but it could improve your research skills and hence lead to a good research project.
+We encourage picking projects which you feel you can **realistically** do within the **12-week** timeline. Some of the projects imply certain research work, however, we have placed the **approximate** evaluation criteria for the timeline specified by the summer of code programme. Taking such a project is a challenging task but it could improve your research skills and hence lead to a good research project.
 
 All code contributed must have either 2 clause BSD license or any license from [this list](https://github.com/vstakhov/rspamd/blob/master/CONTRIBUTIONS.md).
 
@@ -56,7 +56,7 @@ Evaluation details:
 
 So far, rspamd has no ways to organize autolearning. There are many reasons why the naive approach of automatical learning based on a messages' overall score won't work in general. However, there are many unsupervised machine learning algorithms to classify the sets of messages that are suitable for automatic learning. It would be good to apply these technuques to rspamd for better statistics learning.
 
-* Difficulty: medium
+* Difficulty: medium to hard
 * Required skills: intermediate skills in C, intermediate skills in Lua
 * Possible mentors: cebka
 
@@ -76,7 +76,7 @@ Evaluation details:
 We assume that for better filtering it is possible to apply supervised machine learning algorithms, such as neural networks to provide meta-classification rules based on the prior knowledge of symbols combinations influence on the messages class. In theory, this method should provide
 a very flexible way to train filter against repeated spam patterns. Unlike traditional methods, it requires almost zero additional computations and can be learned automatically instead of writing meta-rules.
 
-* Difficulty: medium
+* Difficulty: medium to hard
 * Required skills: strong skills in C, intermediate skills in Lua
 * Possible mentors: cebka, notkoos
 
@@ -91,7 +91,7 @@ a very flexible way to train filter against repeated spam patterns. Unlike tradi
 
 So far, rspamd includes a client library but it depends on the whole rspamd code making it hard or even impossible to use it in other projects. We want this library to be cut from rspamd in the way similar to separating of [rdns](https://github.com/vstakhov/rdns). Ideally, we also want SWIG bindings for the client library allowing to use it in other programming languages. Moreover, the client library should be able to work in both non-blocking (streaming) and blocking modes without explicit dependency on the exact reactor library, such as libevent.
 
-* Difficulty: low to medium
+* Difficulty: easy to medium
 * Required skills: intermediate skills in C
 * Possible mentors: cebka, az
 
@@ -106,7 +106,7 @@ So far, rspamd includes a client library but it depends on the whole rspamd code
 
 Currently, rspamd lacks of functional testing. The idea is to create a simple testing framework in lua to make rspamd configurations, specific messages and run rspamd with the desired arguments to test a set of rspamd features. Furthermore, we could add such a tests for each commit or issue fixed to ensure that the code is covered with tests. This task also requires to modify rspamd code to work in streaming mode: e.g. to start, execute some particular task, output result and terminate.
 
-* Difficulty: low to medium
+* Difficulty: easy to medium
 * Required skills: good skills in Lua, some knowledge of C
 * Possible mentors: notkoos, AL
 
@@ -114,7 +114,7 @@ Currently, rspamd lacks of functional testing. The idea is to create a simple te
 	- the testing framework that can run rspamd, generate configs, grab messages and evaluate test cases;
 	- rspamd should be able to run in pipe mode to be tested more quickly;
 * At the final evaluation we suppose to have the following tasks being done:
-	- The most of rspamd components should have the correspoding tests in the framework;
+	- Most of rspamd components should have the correspoding tests in the framework;
 	- The code coverage by tests must be more than 50%
 
 ### Support of HTTPCrypt in the Web interface
@@ -137,7 +137,7 @@ Currently, rspamd supports opportunistic encryption of all messages. However, th
 
 Rspamd has no native interface to neither pyzor nor dcc. These hash storages provides reasonable amount of blacklisted patterns and could be used for filtering quality improvement. This project implies the ability to restore protocol's description based on the foreign source code (namely, in Perl or Python)
 
-* Difficulty: medium to high
+* Difficulty: medium to hard
 * Required skills: strong knowledge of C, familiarity with perl or python
 * Possible mentors: az, AL
 
