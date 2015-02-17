@@ -1771,10 +1771,10 @@ url_email_start (const gchar *begin,
 	if (pos > begin && *pos == '@') {
 		/* Try to extract it with username */
 		p = pos - 1;
-		while (p > begin && (is_domain (*p) || *p == '.' || *p == '_')) {
+		while (p > begin && is_atom (*p)) {
 			p--;
 		}
-		if (!is_domain (*p) && p != pos - 1) {
+		if (!is_atom (*p) && p != pos - 1) {
 			match->m_begin = p + 1;
 			return TRUE;
 		}
@@ -1785,7 +1785,7 @@ url_email_start (const gchar *begin,
 	}
 	else {
 		p = pos + strlen (match->pattern);
-		if (is_domain (*p)) {
+		if (is_atom (*p)) {
 			match->m_begin = pos;
 			return TRUE;
 		}
