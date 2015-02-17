@@ -132,6 +132,14 @@ end
 
 -- Now check all valid rules and add the according rspamd rules
 
+local function calculate_score(sym)
+  if _.all(function(c) return c == '_' end, _.take_n(2, _.iter(sym))) then
+    return 0.0
+  end
+
+  return 1.0
+end
+
 -- Meta rules
 _.each(function(k, r)
     rspamd_config:add_composite(k, r['meta'])
@@ -158,7 +166,7 @@ _.each(function(k, r)
         end
       end
     end
-    rspamd_config:register_symbol(k, 1.0, f)
+    rspamd_config:register_symbol(k, calculate_score(k), f)
     if r['score'] then
       rspamd_config:set_metric_symbol(k, r['score'], r['description'])
     end
@@ -182,7 +190,7 @@ _.each(function(k, r)
         end
       end
     end
-    rspamd_config:register_symbol(k, 1.0, f)
+    rspamd_config:register_symbol(k, calculate_score(k), f)
     if r['score'] then
       rspamd_config:set_metric_symbol(k, r['score'], r['description'])
     end
@@ -200,7 +208,7 @@ _.each(function(k, r)
         return
       end
     end
-    rspamd_config:register_symbol(k, 1.0, f)
+    rspamd_config:register_symbol(k, calculate_score(k), f)
     if r['score'] then
       rspamd_config:set_metric_symbol(k, r['score'], r['description'])
     end

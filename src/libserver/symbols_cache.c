@@ -366,7 +366,7 @@ register_symbol_common (struct symbols_cache **cache,
 
 	/* Check whether this item is skipped */
 	skipped = !ghost;
-	if (!item->is_callback && pcache->cfg &&
+	if (!ghost && !item->is_callback && pcache->cfg &&
 			g_hash_table_lookup (pcache->cfg->metrics_symbols, name) == NULL) {
 		cur = g_list_first (pcache->cfg->metrics_list);
 		while (cur) {
