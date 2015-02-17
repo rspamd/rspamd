@@ -57,7 +57,7 @@ If set to false, do not yield a result unless the response received from the RBL
 
 If set to true, do not use this RBL if the message sender is authenticated.
 
-- default_exclude_private_ips (false)
+- default_exclude_private_ips (true)
 
 If true & private_ips is set appropriately, do not use the RBL if the sending host address is in the private IP list & do not check received headers baring these addresses.
 

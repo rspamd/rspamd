@@ -327,7 +327,7 @@ if(opts['default_exclude_users'] == nil) then
   opts['default_exclude_users'] = false
 end
 if(opts['default_exclude_private_ips'] == nil) then
-  opts['default_exclude_private_ips'] = false
+  opts['default_exclude_private_ips'] = true
 end
 if(opts['default_exclude_local'] == nil) then
   opts['default_exclude_local'] = true
