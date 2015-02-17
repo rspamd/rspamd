@@ -128,7 +128,7 @@ struct url_matcher matchers[] = {
 	  0                   },
 	{ "webcal://",      "",         url_web_start,          url_web_end,
 	  0                   },
-	{ "mailto://",      "",         url_email_start,        url_email_end,
+	{ "mailto:",        "",         url_email_start,        url_email_end,
 	  0                   },
 	{ "callto://",      "",         url_web_start,          url_web_end,
 	  0                   },
@@ -802,6 +802,95 @@ url_init (void)
 	return 0;
 }
 
+static gint
+rspamd_mailto_parse (struct http_parser_url *u, const gchar *str)
+{
+	const gchar *p = str, *c = str;
+	gchar t;
+	enum {
+		parse_mailto,
+		parse_slash,
+		parse_slash_slash,
+		parse_semicolon,
+		parse_user,
+		parse_at,
+		parse_domain
+	} st = parse_mailto;
+
+	while (*p) {
+		t = *p;
+
+		switch (st) {
+		case parse_mailto:
+			if (t == ':') {
+				st = parse_semicolon;
+				u->field_set |= 1 << UF_SCHEMA;
+				u->field_data[UF_SCHEMA].len = p - c;
+				u->field_data[UF_SCHEMA].off = 0;
+			}
+			p ++;
+			break;
+		case parse_semicolon:
+			if (t == '/') {
+				st = parse_slash;
+			}
+			else {
+				st = parse_user;
+				c = p;
+			}
+			p ++;
+			break;
+		case parse_slash:
+			if (t == '/') {
+				st = parse_slash_slash;
+			}
+			else {
+				return 1;
+			}
+			p ++;
+			break;
+		case parse_slash_slash:
+			c = p;
+			st = parse_user;
+			break;
+		case parse_user:
+			if (t == '@') {
+				if (p - c == 0) {
+					return 1;
+				}
+				u->field_set |= 1 << UF_USERINFO;
+				u->field_data[UF_USERINFO].len = p - c;
+				u->field_data[UF_USERINFO].off = c - str;
+				st = parse_at;
+			}
+			else if (!is_atom (t)) {
+				return 1;
+			}
+			p ++;
+			break;
+		case parse_at:
+			c = p;
+			st = parse_domain;
+			break;
+		case parse_domain:
+			if (!is_domain (t) && t != '.' && t != '_') {
+				return 1;
+			}
+			p ++;
+			break;
+		}
+	}
+
+	if (st == parse_domain) {
+		u->field_set |= 1 << UF_HOST;
+		u->field_data[UF_HOST].len = p - c;
+		u->field_data[UF_HOST].off = c - str;
+
+		return 0;
+	}
+
+	return 1;
+}
 
 enum uri_errno
 rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
@@ -809,7 +898,7 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 {
 	struct http_parser_url u;
 	gchar *p, *comp;
-	guint i, complen;
+	guint i, complen, ret;
 
 	const struct {
 		enum rspamd_url_protocol proto;
@@ -849,6 +938,7 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	};
 
 	memset (uri, 0, sizeof (*uri));
+	memset (&u, 0, sizeof (u));
 
 	if (*uristring == '\0') {
 		return URI_ERRNO_EMPTY;
@@ -860,13 +950,24 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	}
 
 	uri->string = p;
+	len = strlen (p);
 
 	rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t)g_free, p);
 
-	/*
-	 * We assume here that urls has the sane scheme
-	 */
-	if (http_parser_parse_url (p, len, 0, &u) != 0) {
+	if (len > sizeof ("mailto:") - 1) {
+		/* For mailto: urls we also need to add slashes to make it a valid URL */
+		if (g_ascii_strncasecmp (p, "mailto:", sizeof ("mailto:") - 1) == 0) {
+			ret = rspamd_mailto_parse (&u, p);
+		}
+		else {
+			ret = http_parser_parse_url (p, len, 0, &u);
+		}
+	}
+	else {
+		ret = http_parser_parse_url (p, len, 0, &u);
+	}
+
+	if (ret != 0) {
 		return URI_ERRNO_BAD_FORMAT;
 	}
 
@@ -1307,14 +1408,27 @@ url_email_end (const gchar *begin,
 
 	while (p < end && (is_domain (*p) || *p == '_'
 		|| (*p == '@' && !got_at) ||
-		(*p == '.' && p + 1 < end && is_domain (*(p + 1))))) {
+		*p == '.')) {
+
 		if (*p == '@') {
 			got_at = TRUE;
 		}
+
 		p++;
 	}
+
+	/* Strip strange symbols at the end */
+	if (got_at) {
+		while ((!is_domain (*p) || *p == '.' || *p == '_') &&
+				p >= match->m_begin) {
+			p --;
+		}
+		p ++;
+	}
+
 	match->m_len = p - match->m_begin;
 	match->add_prefix = TRUE;
+
 	return got_at;
 }
 
