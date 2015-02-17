@@ -50,6 +50,7 @@ struct cache_item {
 	/* Flags of virtual symbols */
 	gboolean is_virtual;
 	gboolean is_callback;
+	gboolean is_ghost;
 
 	/* Priority */
 	gint priority;

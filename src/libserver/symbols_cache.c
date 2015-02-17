@@ -316,7 +316,7 @@ register_symbol_common (struct symbols_cache **cache,
 	GList **target, *cur;
 	struct metric *m;
 	struct rspamd_symbol_def *s;
-	gboolean skipped;
+	gboolean skipped, ghost = (weight == 0.0);
 
 	if (*cache == NULL) {
 		pcache = g_new0 (struct symbols_cache, 1);
@@ -365,7 +365,7 @@ register_symbol_common (struct symbols_cache **cache,
 	}
 
 	/* Check whether this item is skipped */
-	skipped = TRUE;
+	skipped = !ghost;
 	if (!item->is_callback && pcache->cfg &&
 			g_hash_table_lookup (pcache->cfg->metrics_symbols, name) == NULL) {
 		cur = g_list_first (pcache->cfg->metrics_list);
@@ -401,14 +401,21 @@ register_symbol_common (struct symbols_cache **cache,
 	}
 
 	item->is_skipped = skipped;
+	item->is_ghost = ghost;
+
 	if (skipped) {
 		msg_warn ("symbol %s is not registered in any metric, so skip its check",
 				name);
 	}
 
+	if (ghost) {
+		msg_debug ("symbol %s is registered as ghost symbol, it won't be inserted "
+				"to any metric", name);
+	}
+
 	/* If we have undefined priority determine list according to weight */
 	if (priority == 0) {
-		if (item->s->weight > 0) {
+		if (item->s->weight >= 0) {
 			target = &(*cache)->static_items;
 		}
 		else {
