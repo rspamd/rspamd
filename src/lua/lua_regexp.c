@@ -152,12 +152,13 @@ lua_regexp_create (lua_State *L)
 				break;
 			default:
 				msg_info ("invalid regexp flag: %c", *flags_str);
+				goto fin;
 				break;
 			}
 			flags_str++;
 		}
 	}
-
+fin:
 	re = g_regex_new (pattern, regexp_flags, 0, &err);
 	if (re == NULL) {
 		g_free (pattern);
