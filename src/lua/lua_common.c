@@ -281,7 +281,7 @@ lua_add_actions_global (lua_State *L)
 	lua_setglobal (L, "rspamd_actions");
 }
 
-static void
+void
 rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg)
 {
 	const gchar *old_path, *additional_path = NULL;
@@ -291,6 +291,11 @@ rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg)
 	lua_getglobal (L, "package");
 	lua_getfield (L, -1, "path");
 	old_path = luaL_checkstring (L, -1);
+
+	if (strstr (old_path, RSPAMD_PLUGINSDIR) != NULL) {
+		/* Path has been already set, do not touch it */
+		return;
+	}
 
 	opts = ucl_object_find_key (cfg->rcl_obj, "options");
 	if (opts != NULL) {
