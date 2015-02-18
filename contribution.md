@@ -5,10 +5,10 @@ title: Contributing to rspamd
 
 # Contributing to rspamd
 
-Rspamd is an open-source software distributed under the terms of permissive [BSD license](license.html). To contribute to rspamd you might want to go to the [github project page](https://github.com/vstakhov/rspamd), study the current issues and suggest sollutions.
-Moreover, rspamd is going to participate in [GSoC 2015](https://www.google-melange.com/gsoc/homepage/google/gsoc2015) and here is [the list of ideas](ideas.html). Regardless of the Google decision you are free to take some of the ideas and contribute it to the rspamd project. In this case, we would advice to join our **irc channel**: #rspamd at [freenode](http://freenode.net) network.
+Rspamd is an open-source software distributed under the terms of permissive [BSD license](license.txt). To contribute to rspamd you might want to go to the [github project page](https://github.com/vstakhov/rspamd), study the current issues and suggest sollutions.
+Moreover, rspamd is going to apply for participating in [GSoC 2015](https://www.google-melange.com/gsoc/homepage/google/gsoc2015) programme and here is [the list of ideas](ideas.html). Regardless of the Google decision you are free to take some of the ideas and contribute it to the rspamd project. In this case, we would advice to join our **irc channel**: #rspamd at [freenode](http://freenode.net) network.
 
-There are also a set of ideas that are small for the complete GSoC projects but are very useful for rspamd itself.
+There are also a set of ideas that are small for the complete GSoC projects but are very useful for rspamd itself. Prior to submitting contributions, please read the [contribution policy](https://github.com/vstakhov/rspamd/blob/master/CONTRIBUTIONS.md) document.
 
 
 ## Ideas list
