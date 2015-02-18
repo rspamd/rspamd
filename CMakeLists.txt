@@ -246,7 +246,7 @@ MACRO(ProcessPackage var _name0)
         ENDFOREACH(_arg ${${_XPREFIX}_LDFLAGS_OTHER})
         LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "${${_XPREFIX}_LIBRARIES}")
     ELSE(${var}_FOUND)
-    	MESSAGE(FATAL "Packages ${_name0} ${ARGN} could not be found")
+		MESSAGE(FATAL_ERROR "Packages ${_name0} ${ARGN} could not be found")
     ENDIF(${var}_FOUND)
 ENDMACRO(ProcessPackage name)
 
