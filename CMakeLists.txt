@@ -32,7 +32,7 @@ OPTION(SKIP_RELINK_RPATH   "Skip relinking and full RPATH for the install tree" 
 OPTION(ENABLE_REDIRECTOR   "Enable redirector install [default: OFF]"           OFF)
 OPTION(ENABLE_GPERF_TOOLS  "Enable google perftools [default: OFF]"             OFF)
 OPTION(ENABLE_STATIC       "Enable static compiling [default: OFF]"             OFF)
-OPTION(ENABLE_LUAJIT       "Link with libluajit [default: OFF]"                 OFF)
+OPTION(ENABLE_LUAJIT       "Link with libluajit [default: ON]"                  ON)
 OPTION(ENABLE_DB           "Find and link with DB library [default: OFF]"       OFF)
 OPTION(ENABLE_SQLITE       "Find and link with sqlite3 library [default: OFF]"  OFF)
 OPTION(ENABLE_HIREDIS      "Find and link with external redis library [default: ON]"  ON)
