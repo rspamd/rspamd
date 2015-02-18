@@ -812,9 +812,14 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str)
 		parse_slash,
 		parse_slash_slash,
 		parse_semicolon,
+		parse_prefix_question,
+		parse_destination,
+		parse_equal,
 		parse_user,
 		parse_at,
-		parse_domain
+		parse_domain,
+		parse_suffix_question,
+		parse_query
 	} st = parse_mailto;
 
 	while (*p) {
@@ -833,12 +838,11 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str)
 		case parse_semicolon:
 			if (t == '/') {
 				st = parse_slash;
+				p ++;
 			}
 			else {
-				st = parse_user;
-				c = p;
+				st = parse_slash_slash;
 			}
-			p ++;
 			break;
 		case parse_slash:
 			if (t == '/') {
@@ -850,6 +854,31 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str)
 			p ++;
 			break;
 		case parse_slash_slash:
+			if (t == '?') {
+				st = parse_prefix_question;
+				p ++;
+			}
+			else {
+				c = p;
+				st = parse_user;
+			}
+			break;
+		case parse_prefix_question:
+			if (t == 't') {
+				/* XXX: accept only to= */
+				st = parse_destination;
+			}
+			else {
+				return 1;
+			}
+			break;
+		case parse_destination:
+			if (t == '=') {
+				st = parse_equal;
+			}
+			p ++;
+			break;
+		case parse_equal:
 			c = p;
 			st = parse_user;
 			break;
@@ -873,7 +902,24 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str)
 			st = parse_domain;
 			break;
 		case parse_domain:
-			if (!is_domain (t) && t != '.' && t != '_') {
+			if (t == '?') {
+				u->field_set |= 1 << UF_HOST;
+				u->field_data[UF_HOST].len = p - c;
+				u->field_data[UF_HOST].off = c - str;
+
+				st = parse_suffix_question;
+			}
+			else if (!is_domain (t) && t != '.' && t != '_') {
+				return 1;
+			}
+			p ++;
+			break;
+		case parse_suffix_question:
+			c = p;
+			st = parse_query;
+			break;
+		case parse_query:
+			if (!is_atom (t)) {
 				return 1;
 			}
 			p ++;
@@ -885,6 +931,13 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str)
 		u->field_set |= 1 << UF_HOST;
 		u->field_data[UF_HOST].len = p - c;
 		u->field_data[UF_HOST].off = c - str;
+
+		return 0;
+	}
+	else if (st == parse_query) {
+		u->field_set |= 1 << UF_QUERY;
+		u->field_data[UF_QUERY].len = p - c;
+		u->field_data[UF_QUERY].off = c - str;
 
 		return 0;
 	}
