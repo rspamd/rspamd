@@ -121,6 +121,7 @@ MACRO(FindLua _major _minor)
 	# Find lua libraries
 	MESSAGE(STATUS "Check for lua ${_major}.${_minor}")
 	
+	UNSET(LUA_INCLUDE_DIR CACHE)
 	FIND_PATH(LUA_INCLUDE_DIR lua.h
 	  HINTS
 	  $ENV{LUA_DIR}
@@ -130,6 +131,7 @@ MACRO(FindLua _major _minor)
 	  				include/lua include
 	  PATHS
 	  /usr/local
+	  /usr/pkg
 	  /usr
 	  ~/Library/Frameworks
 	  /Library/Frameworks
@@ -139,42 +141,13 @@ MACRO(FindLua _major _minor)
 	  /opt
 	)
 	
-	FIND_LIBRARY(LUA_LIBRARY 
-	  NAMES lua 
-	  		"lua${_major}${_minor}"
-	  		"lua${_major}.${_minor}" 
-	  		"lua-${_major}.${_minor}"
-	  HINTS
-	  $ENV{LUA_DIR}
-	  PATH_SUFFIXES lib64 lib
-	  PATHS
-	  /usr/local
-	  /usr
-	  ~/Library/Frameworks
-	  /Library/Frameworks
-	  /sw
-	  /opt/local
-	  /opt/csw
-	  /opt
-	  DOC "Lua library"
-	)
-	
-	IF(LUA_LIBRARY AND LUA_INCLUDE_DIR)
-		SET(LUA_FOUND 1)
-		IF(NOT LUA_VERSION_MAJOR OR NOT LUA_VERSION_MINOR)
-			SET(LUA_VERSION_MAJOR ${_major})
-			SET(LUA_VERSION_MINOR ${_minor})
-		ENDIF(NOT LUA_VERSION_MAJOR OR NOT LUA_VERSION_MINOR)
-		MESSAGE(STATUS "Found lua ${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}")
-	ENDIF(LUA_LIBRARY AND LUA_INCLUDE_DIR)
-	
 	# Check for luajit
 	IF(ENABLE_LUAJIT MATCHES "ON")
-	    FIND_LIBRARY(LUAJIT_LIBRARY NAMES
+	    FIND_LIBRARY(LUA_LIBRARY NAMES
 	    			"luajit${_major}${_minor}"
 	    			"luajit${_major}.${_minor}"
 	    			"luajit-${_major}.${_minor}"
-	    			 luajit
+	    			"luajit"
 	                  HINTS
 	                  $ENV{LUA_DIR}
 	                  PATH_SUFFIXES lib64 lib
@@ -186,12 +159,38 @@ MACRO(FindLua _major _minor)
 	                      /sw
 	                      /opt/local
 	                      /opt/csw
+	                      /usr/pkg
 	                      /opt
 	                )
-	     IF(NOT LUAJIT_LIBRARY)
-	         MESSAGE(FATAL_ERROR "Luajit not found but enabled in configuration")
-	     ENDIF(NOT LUAJIT_LIBRARY)
+	ELSE(ENABLE_LUAJIT MATCHES "ON") 
+		FIND_LIBRARY(LUA_LIBRARY 
+	 	 	NAMES lua 
+	  		"lua${_major}${_minor}"
+	  		"lua${_major}.${_minor}" 
+	  		"lua-${_major}.${_minor}"
+			HINTS
+	  		$ENV{LUA_DIR}
+	  		PATH_SUFFIXES lib64 lib
+	  		PATHS
+	  				/usr/local
+	  				/usr
+	  				~/Library/Frameworks
+	  				/Library/Frameworks
+	  				/sw
+	  				/opt/local
+	  				/opt/csw
+	  				/opt
+	  		DOC "Lua library"
+		)    
 	ENDIF(ENABLE_LUAJIT MATCHES "ON")
+	IF(LUA_LIBRARY AND LUA_INCLUDE_DIR)
+		SET(LUA_FOUND 1)
+		IF(NOT LUA_VERSION_MAJOR OR NOT LUA_VERSION_MINOR)
+			SET(LUA_VERSION_MAJOR ${_major})
+			SET(LUA_VERSION_MINOR ${_minor})
+		ENDIF(NOT LUA_VERSION_MAJOR OR NOT LUA_VERSION_MINOR)
+		MESSAGE(STATUS "Found lua ${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}")
+	ENDIF(LUA_LIBRARY AND LUA_INCLUDE_DIR)
 ENDMACRO(FindLua _major _minor)
 
 FUNCTION(INSTALL_IF_NOT_EXISTS src dest suffix)
@@ -847,6 +846,8 @@ IF(NOT HIREDIS_FOUND)
 ENDIF(NOT HIREDIS_FOUND)
 
 ADD_DEFINITIONS(-DHAVE_CONFIG_H)
+
+LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "${LUA_LIBRARY}")
 
 ADD_SUBDIRECTORY(contrib/xxhash)
 ADD_SUBDIRECTORY(contrib/http-parser)
