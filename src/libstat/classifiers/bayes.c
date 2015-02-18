@@ -221,6 +221,10 @@ bayes_learn_spam_callback (gpointer key, gpointer value, gpointer data)
 		if (res->st_runtime->st->is_spam) {
 			res->value ++;
 		}
+		else if (res->value > 0) {
+			/* Unlearning */
+			res->value --;
+		}
 	}
 
 	return FALSE;
@@ -240,6 +244,9 @@ bayes_learn_ham_callback (gpointer key, gpointer value, gpointer data)
 
 		if (!res->st_runtime->st->is_spam) {
 			res->value ++;
+		}
+		else if (res->value > 0) {
+			res->value --;
 		}
 	}
 

@@ -291,6 +291,23 @@ rspamd_mmaped_file_inc_revision (rspamd_mmaped_file_t *file)
 }
 
 gboolean
+rspamd_mmaped_file_dec_revision (rspamd_mmaped_file_t *file)
+{
+	struct stat_file_header *header;
+
+	if (file == NULL || file->map == NULL) {
+		return FALSE;
+	}
+
+	header = (struct stat_file_header *)file->map;
+
+	header->revision--;
+
+	return TRUE;
+}
+
+
+gboolean
 rspamd_mmaped_file_get_revision (rspamd_mmaped_file_t *file, guint64 *rev, time_t *time)
 {
 	struct stat_file_header *header;
@@ -939,11 +956,7 @@ rspamd_mmaped_file_learn_token (rspamd_token_t *tok,
 	memcpy (&h2, tok->data + sizeof (h1), sizeof (h2));
 	rspamd_mmaped_file_set_block (ctx, mf, h1, h2, res->value);
 
-	if (res->value > 0.0) {
-		return TRUE;
-	}
-
-	return FALSE;
+	return TRUE;
 }
 
 gulong
@@ -976,6 +989,23 @@ rspamd_mmaped_file_inc_learns (struct rspamd_statfile_runtime *runtime,
 
 	return rev;
 }
+
+gulong
+rspamd_mmaped_file_dec_learns (struct rspamd_statfile_runtime *runtime,
+		gpointer ctx)
+{
+	rspamd_mmaped_file_t *mf = (rspamd_mmaped_file_t *)runtime;
+	guint64 rev = 0;
+	time_t t;
+
+	if (mf != NULL) {
+		rspamd_mmaped_file_dec_revision (mf);
+		rspamd_mmaped_file_get_revision (mf, &rev, &t);
+	}
+
+	return rev;
+}
+
 
 ucl_object_t *
 rspamd_mmaped_file_get_stat (struct rspamd_statfile_runtime *runtime,
