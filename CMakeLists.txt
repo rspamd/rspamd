@@ -35,7 +35,7 @@ OPTION(ENABLE_STATIC       "Enable static compiling [default: OFF]"             
 OPTION(ENABLE_LUAJIT       "Link with libluajit [default: OFF]"                 OFF)
 OPTION(ENABLE_DB           "Find and link with DB library [default: OFF]"       OFF)
 OPTION(ENABLE_SQLITE       "Find and link with sqlite3 library [default: OFF]"  OFF)
-OPTION(ENABLE_HIREDIS      "Find and link with external redis library [default: OFF]"  OFF)
+OPTION(ENABLE_HIREDIS      "Find and link with external redis library [default: ON]"  ON)
 OPTION(ENABLE_URL_INCLUDE  "Enable urls in ucl includes (requires libcurl or libfetch) [default: OFF]" OFF)
 OPTION(NO_SHARED           "Build internal libs static [default: ON]"          ON)
 OPTION(FORCE_GMIME24       "Link with gmime2.4 [default: OFF]"                  OFF)
@@ -245,6 +245,8 @@ MACRO(ProcessPackage var _name0)
             SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${_arg}")
         ENDFOREACH(_arg ${${_XPREFIX}_LDFLAGS_OTHER})
         LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "${${_XPREFIX}_LIBRARIES}")
+    ELSE(${var}_FOUND)
+    	MESSAGE(FATAL "Packages ${_name0} ${ARGN} could not be found")
     ENDIF(${var}_FOUND)
 ENDMACRO(ProcessPackage name)
 
@@ -414,11 +416,17 @@ ENDIF(OPENSSL_FOUND)
 
 ProcessPackage(GLIB2 glib-2.0>=2.16)
 ProcessPackage(GTHREAD gthread-2.0)
+ProcessPackage(HIREDIS hiredis libhiredis)
 
-IF(ENABLE_HIREDIS MATCHES "ON")
-	# Try to find hiredis library
-	ProcessPackage(HIREDIS hiredis libhiredis)
-ENDIF(ENABLE_HIREDIS MATCHES "ON")
+FIND_PATH(LIBHIREDIS_INCLUDE hiredis.h PATHS /opt/include
+						/usr/include
+						/usr/local/include
+						PATH_SUFFIXES "" "hiredis"
+						DOC "Path where the hiredis header files can be found")
+
+IF(LIBHIREDIS_INCLUDE)
+	INCLUDE_DIRECTORIES("${LIBHIREDIS_INCLUDE}")
+ENDIF(LIBHIREDIS_INCLUDE)
 
 ProcessPackage(GMIME2 gmime-2.6 gmime-2.4 gmime-2.0)
 IF(GMIME2_VERSION VERSION_GREATER "2.4.0")
@@ -446,11 +454,6 @@ FIND_PATH(LIBEVENT_INCLUDE event.h PATHS 	/opt/include
 										/usr/include
 										/usr/local/include
 										DOC "Path where the libevent header files can be found")
-
-FIND_PATH(LIBEVENT_EVHTTP evhttp.h PATHS /opt/include
-										/usr/include
-										/usr/local/include
-										DOC "Path where the libevhttp header files can be found")
 
 GET_FILENAME_COMPONENT(LIBEVENT_PATH "${LIBEVENT_LIBRARY}" PATH)
 INCLUDE_DIRECTORIES("${LIBEVENT_INCLUDE}")
@@ -900,11 +903,6 @@ ADD_SUBDIRECTORY(contrib/lgpl)
 IF(GLIB_COMPAT)
 	INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/contrib/lgpl")
 ENDIF(GLIB_COMPAT)
-
-IF(NOT HIREDIS_FOUND)
-    ADD_SUBDIRECTORY(contrib/hiredis)
-    INCLUDE_DIRECTORIES("${CMAKE_CURRENT_SOURCE_DIR}/contrib/hiredis")
-ENDIF(NOT HIREDIS_FOUND)
 
 ADD_DEFINITIONS(-DHAVE_CONFIG_H)
 
