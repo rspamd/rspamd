@@ -1037,3 +1037,14 @@ rspamd_mmaped_file_get_stat (struct rspamd_statfile_runtime *runtime,
 
 	return res;
 }
+
+void
+rspamd_mmaped_file_finalize_learn (struct rspamd_statfile_runtime *runtime,
+		gpointer ctx)
+{
+	rspamd_mmaped_file_t *mf = (rspamd_mmaped_file_t *)runtime;
+
+	if (mf != NULL) {
+		msync (mf->map, mf->len, MS_INVALIDATE | MS_ASYNC);
+	}
+}

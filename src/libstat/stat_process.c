@@ -560,6 +560,9 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 								st_run->st->symbol, nrev);
 						}
 
+						st_run->backend->finalize_learn (st_run->backend_runtime,
+														st_run->backend->ctx);
+
 						curst = g_list_next (curst);
 					}
 				}

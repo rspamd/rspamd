@@ -48,6 +48,7 @@ struct rspamd_stat_backend {
 	gboolean (*learn_token)(struct token_node_s *tok,
 			struct rspamd_token_result *res, gpointer ctx);
 	gulong (*total_learns)(struct rspamd_statfile_runtime *runtime, gpointer ctx);
+	void (*finalize_learn)(struct rspamd_statfile_runtime *runtime, gpointer ctx);
 	gulong (*inc_learns)(struct rspamd_statfile_runtime *runtime, gpointer ctx);
 	gulong (*dec_learns)(struct rspamd_statfile_runtime *runtime, gpointer ctx);
 	ucl_object_t* (*get_stat)(struct rspamd_statfile_runtime *runtime, gpointer ctx);
@@ -62,6 +63,8 @@ gboolean rspamd_mmaped_file_process_token (struct token_node_s *tok,
 		gpointer ctx);
 gboolean rspamd_mmaped_file_learn_token (struct token_node_s *tok,
 		struct rspamd_token_result *res,
+		gpointer ctx);
+void rspamd_mmaped_file_finalize_learn (struct rspamd_statfile_runtime *runtime,
 		gpointer ctx);
 gulong rspamd_mmaped_file_total_learns (struct rspamd_statfile_runtime *runtime,
 		gpointer ctx);

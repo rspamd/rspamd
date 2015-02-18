@@ -51,6 +51,7 @@ static struct rspamd_stat_backend stat_backends[] = {
 		.runtime = rspamd_mmaped_file_runtime,
 		.process_token = rspamd_mmaped_file_process_token,
 		.learn_token = rspamd_mmaped_file_learn_token,
+		.finalize_learn = rspamd_mmaped_file_finalize_learn,
 		.total_learns = rspamd_mmaped_file_total_learns,
 		.inc_learns = rspamd_mmaped_file_inc_learns,
 		.dec_learns = rspamd_mmaped_file_dec_learns,
