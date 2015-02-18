@@ -967,6 +967,7 @@ rspamd_rcl_classifier_handler (struct rspamd_config *cfg,
 		msg_err ("fatal configuration error, cannot parse statfile definition");
 	}
 
+	ccf->opts = (ucl_object_t *)obj;
 	cfg->classifiers = g_list_prepend (cfg->classifiers, ccf);
 
 
