@@ -174,3 +174,18 @@ So far, librdns library that is used for resolving names in rspamd does not supp
 	- recursion support in RDNS;
 * At the final evaluation we suppose to have the following tasks being done:
 	- DNSSEC chains of trust and DNSCurve or DNSCrypt trust model support
+
+### Add language detection to rspamd
+
+The current language detection system is based on merely unicode glyphs classes. This classification is quite poor, since it cannot distinguish many languages. The idea is to write an advanced language detection library, for example based on 3-gramms, and take advantage from lemmatization for a bigger set of languages. We also propose to write a more simple approach based on letters combinations as the starting point and check whether can we do better.
+
+* Difficulty: medium
+* Required skills: good knowledge of C **or** good knowledge of Lua
+* Possible mentors: cebka, az
+
+* We suppose that at the midterm evaluation, we could estimate the following:
+	- the working language detection based on letters combinations;
+	- the prototype of 3-gramms algrithm for better language detection.
+* At the final evaluation we suppose to have the following tasks being done:
+	- the working 3-gramms algorithm with trained corpus for the major languages;
+	- support of transliteration detection via 3-gramms for certain languages.
