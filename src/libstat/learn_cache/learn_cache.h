@@ -40,6 +40,7 @@ struct rspamd_stat_cache {
 	gint (*process)(struct rspamd_task *task,
 			gboolean is_spam,
 			gpointer ctx);
+	void (*close) (gpointer ctx);
 	gpointer ctx;
 };
 
@@ -48,5 +49,6 @@ gpointer rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
 gint rspamd_stat_cache_sqlite3_process (
 		struct rspamd_task *task,
 		gboolean is_spam, gpointer c);
+void rspamd_stat_cache_sqlite3_close (gpointer c);
 
 #endif /* LEARN_CACHE_H_ */

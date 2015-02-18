@@ -61,7 +61,8 @@ static struct rspamd_stat_cache stat_caches[] = {
 	{
 		.name = RSPAMD_DEFAULT_CACHE,
 		.init = rspamd_stat_cache_sqlite3_init,
-		.process = rspamd_stat_cache_sqlite3_process
+		.process = rspamd_stat_cache_sqlite3_process,
+		.close = rspamd_stat_cache_sqlite3_close
 	}
 };
 

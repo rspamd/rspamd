@@ -53,12 +53,14 @@ rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
 {
 	struct rspamd_stat_sqlite3_ctx *new = NULL;
 	struct rspamd_classifier_config *clf;
-	const ucl_object_t *obj;
+	const ucl_object_t *obj, *elt;
 	GList *cur;
+	gchar dbpath[PATH_MAX];
 	sqlite3 *sqlite;
 	gboolean has_sqlite_cache = FALSE;
 	gint rc;
 
+	rspamd_snprintf (dbpath, sizeof (dbpath), SQLITE_CACHE_PATH);
 	cur = cfg->classifiers;
 
 	while (cur) {
@@ -67,17 +69,30 @@ rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
 		obj = ucl_object_find_key (clf->opts, "cache");
 
 		/* Sqlite3 cache is the default learn cache method */
-		if (obj == NULL || g_ascii_strcasecmp (ucl_object_tostring (obj),
-				"sqlite3") == 0) {
+		if (obj == NULL) {
 			has_sqlite_cache = TRUE;
 			break;
+		}
+		else if (ucl_object_type (obj) == UCL_OBJECT) {
+			elt = ucl_object_find_key (obj, "name");
+
+			if (ucl_object_type (elt) == UCL_STRING &&
+				g_ascii_strcasecmp (ucl_object_tostring (elt), "sqlite3") == 0) {
+
+				has_sqlite_cache = TRUE;
+				elt = ucl_object_find_key (obj, "path");
+				if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
+					rspamd_snprintf (dbpath, sizeof (dbpath), "%s",
+							ucl_object_tostring (elt));
+				}
+			}
 		}
 
 		cur = g_list_next (cur);
 	}
 
 	if (has_sqlite_cache) {
-		if ((rc = sqlite3_open_v2 (SQLITE_CACHE_PATH, &sqlite,
+		if ((rc = sqlite3_open_v2 (dbpath, &sqlite,
 				SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE|SQLITE_OPEN_NOMUTEX, NULL))
 				!= SQLITE_OK) {
 			msg_err ("Cannot open sqlite db %s: %s", SQLITE_CACHE_PATH,
@@ -201,4 +216,16 @@ rspamd_stat_cache_sqlite3_process (struct rspamd_task *task,
 	}
 
 	return RSPAMD_LEARN_OK;
+}
+
+void
+rspamd_stat_cache_sqlite3_close (gpointer c)
+{
+	struct rspamd_stat_sqlite3_ctx *ctx = (struct rspamd_stat_sqlite3_ctx *)c;
+
+	if (ctx != NULL) {
+		sqlite3_close (ctx->db);
+		g_slice_free1 (sizeof (*ctx), ctx);
+	}
+
 }
