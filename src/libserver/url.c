@@ -1037,6 +1037,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str)
 				}
 				else {
 					st = parse_port;
+					c = p + 1;
 				}
 				p ++;
 			}
@@ -1497,21 +1498,20 @@ url_web_end (const gchar *begin,
 
 	/* find the end of the domain */
 	if (is_atom (*p)) {
-		/* might be a domain or user@domain */
 		c = p;
 		while (p < end) {
-			if (!is_atom (*p)) {
+			if (!is_atom (*p) && !(*p & 0x80)) {
 				break;
 			}
 
 			p++;
 
-			while (p < end && is_atom (*p)) {
+			while (p < end && (is_atom (*p) || (*p & 0x80))) {
 				p++;
 			}
 
 			if ((p + 1) < end && *p == '.' &&
-				(is_atom (*(p + 1)) || *(p + 1) == '/')) {
+				(is_atom (*(p + 1)) || *(p + 1) == '/' || (*(p + 1) & 0x80))) {
 				p++;
 			}
 		}
@@ -1621,10 +1621,6 @@ passwd:
 		}
 	}
 
-	/* urls are extremely unlikely to end with any
-	 * punctuation, so strip any trailing
-	 * punctuation off. Also strip off any closing
-	 * double-quotes. */
 	while (p > pos && strchr (",.:;?!-|}])\"", p[-1])) {
 		p--;
 	}
