@@ -882,14 +882,291 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str)
 	}
 
 	if (st == parse_domain) {
+		if (p - c == 0) {
+			return 1;
+		}
+
 		u->field_set |= 1 << UF_HOST;
 		u->field_data[UF_HOST].len = p - c;
 		u->field_data[UF_HOST].off = c - str;
 
 		return 0;
 	}
+	else if (st == parse_query) {
+		if (p - c > 0) {
+			u->field_set |= 1 << UF_QUERY;
+			u->field_data[UF_QUERY].len = p - c;
+			u->field_data[UF_QUERY].off = c - str;
+		}
+
+		return 0;
+	}
 
 	return 1;
+}
+
+static gint
+rspamd_web_parse (struct http_parser_url *u, const gchar *str)
+{
+	const gchar *p = str, *c = str;
+	gchar t;
+	gunichar uc;
+	glong pt;
+	gint ret = 1;
+	enum {
+		parse_protocol,
+		parse_slash,
+		parse_slash_slash,
+		parse_semicolon,
+		parse_user,
+		parse_at,
+		parse_password_start,
+		parse_password,
+		parse_domain,
+		parse_port,
+		parse_suffix_slash,
+		parse_path,
+		parse_query,
+		parse_part
+	} st = parse_protocol;
+
+	while (*p) {
+		t = *p;
+
+		switch (st) {
+		case parse_protocol:
+			if (t == ':') {
+				st = parse_semicolon;
+				u->field_set |= 1 << UF_SCHEMA;
+				u->field_data[UF_SCHEMA].len = p - c;
+				u->field_data[UF_SCHEMA].off = 0;
+			}
+			p ++;
+			break;
+		case parse_semicolon:
+			if (t == '/') {
+				st = parse_slash;
+				p ++;
+			}
+			else {
+				st = parse_slash_slash;
+			}
+			break;
+		case parse_slash:
+			if (t == '/') {
+				st = parse_slash_slash;
+			}
+			else {
+				return 1;
+			}
+			p ++;
+			break;
+		case parse_slash_slash:
+			c = p;
+
+			/* XXX: inefficient lookahead */
+			if (strchr (p, '@') != NULL) {
+				st = parse_user;
+			}
+			else {
+				st = parse_domain;
+			}
+
+			break;
+		case parse_user:
+			if (t == ':') {
+				if (p - c == 0) {
+					return 1;
+				}
+				u->field_set |= 1 << UF_USERINFO;
+				u->field_data[UF_USERINFO].len = p - c;
+				u->field_data[UF_USERINFO].off = c - str;
+				st = parse_password_start;
+			}
+			else if (t == '@') {
+				/* No password */
+				if (p - c == 0) {
+					return 1;
+				}
+				u->field_set |= 1 << UF_USERINFO;
+				u->field_data[UF_USERINFO].len = p - c;
+				u->field_data[UF_USERINFO].off = c - str;
+				st = parse_at;
+			}
+			else if (!is_atom (t)) {
+				return 1;
+			}
+			p ++;
+			break;
+		case parse_password_start:
+			if (t == '@') {
+				/* Empty password */
+				st = parse_at;
+			}
+			else {
+				c = p;
+				st = parse_password;
+			}
+			p ++;
+			break;
+		case parse_password:
+			if (t == '@') {
+				/* XXX: password is not stored */
+				st = parse_at;
+			}
+			else if (!is_atom (t)) {
+				return 1;
+			}
+			p ++;
+			break;
+		case parse_at:
+			c = p;
+			st = parse_domain;
+			break;
+		case parse_domain:
+			if (t == '/' || t == ':') {
+				if (p - c == 0) {
+					return 1;
+				}
+				u->field_set |= 1 << UF_HOST;
+				u->field_data[UF_HOST].len = p - c;
+				u->field_data[UF_HOST].off = c - str;
+
+				if (t == '/') {
+					st = parse_suffix_slash;
+				}
+				else {
+					st = parse_port;
+				}
+				p ++;
+			}
+			else {
+				if (*p != '.' && *p != '-' && *p != '_') {
+					uc = g_utf8_get_char_validated (p, -1);
+
+					if (uc == (gunichar)-1) {
+						/* Bad utf8 */
+						return 1;
+					}
+
+					if (!g_unichar_isalnum (uc)) {
+						/* Bad symbol */
+						return 1;
+					}
+
+					p = g_utf8_next_char (p);
+				}
+				else {
+					p ++;
+				}
+			}
+			break;
+		case parse_port:
+			if (t == '/') {
+				pt = strtoul (c, NULL, 10);
+				if (pt == 0 || pt > 65535) {
+					return 1;
+				}
+				u->port = pt;
+				st = parse_suffix_slash;
+			}
+			else if (!g_ascii_isdigit (t)) {
+				return 1;
+			}
+			p ++;
+			break;
+		case parse_suffix_slash:
+			if (t != '/') {
+				c = p;
+				st = parse_path;
+			}
+			else {
+				/* Skip extra slashes */
+				p ++;
+			}
+			break;
+		case parse_path:
+			if (t == '?') {
+				if (p - c != 0) {
+					u->field_set |= 1 << UF_PATH;
+					u->field_data[UF_PATH].len = p - c;
+					u->field_data[UF_PATH].off = c - str;
+				}
+				c = p + 1;
+				st = parse_query;
+			}
+			p ++;
+			break;
+		case parse_query:
+			if (t == '#') {
+				if (p - c != 0) {
+					u->field_set |= 1 << UF_QUERY;
+					u->field_data[UF_QUERY].len = p - c;
+					u->field_data[UF_QUERY].off = c - str;
+				}
+				c = p + 1;
+				st = parse_part;
+			}
+			p ++;
+			break;
+		case parse_part:
+			/* Allow anything here */
+			p ++;
+			break;
+		}
+	}
+
+	/* Parse remaining */
+	switch (st) {
+	case parse_domain:
+		if (p - c == 0) {
+			return 1;
+		}
+		u->field_set |= 1 << UF_HOST;
+		u->field_data[UF_HOST].len = p - c;
+		u->field_data[UF_HOST].off = c - str;
+		ret = 0;
+
+		break;
+	case parse_port:
+		pt = strtoul (c, NULL, 10);
+		if (pt == 0 || pt > 65535) {
+			return 1;
+		}
+		u->port = pt;
+		ret = 0;
+		break;
+	case parse_path:
+		if (p - c > 0) {
+			u->field_set |= 1 << UF_PATH;
+			u->field_data[UF_PATH].len = p - c;
+			u->field_data[UF_PATH].off = c - str;
+		}
+		ret = 0;
+		break;
+	case parse_query:
+		if (p - c > 0) {
+			u->field_set |= 1 << UF_QUERY;
+			u->field_data[UF_QUERY].len = p - c;
+			u->field_data[UF_QUERY].off = c - str;
+		}
+		ret = 0;
+		break;
+	case parse_part:
+		if (p - c > 0) {
+			u->field_set |= 1 << UF_FRAGMENT;
+			u->field_data[UF_FRAGMENT].len = p - c;
+			u->field_data[UF_FRAGMENT].off = c - str;
+		}
+		ret = 0;
+		break;
+	default:
+		/* Error state */
+		ret = 1;
+		break;
+	}
+
+	return ret;
 }
 
 enum uri_errno
@@ -950,7 +1227,6 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	}
 
 	uri->string = p;
-	len = strlen (p);
 
 	rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t)g_free, p);
 
@@ -960,11 +1236,11 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 			ret = rspamd_mailto_parse (&u, p);
 		}
 		else {
-			ret = http_parser_parse_url (p, len, 0, &u);
+			ret = rspamd_web_parse (&u, p);
 		}
 	}
 	else {
-		ret = http_parser_parse_url (p, len, 0, &u);
+		ret = rspamd_web_parse (&u, p);
 	}
 
 	if (ret != 0) {
