@@ -1,5 +1,7 @@
 /*
- * Copyright (c) 2009-2012, Vsevolod Stakhov
+ * Copyright (c) 2009-2015, Vsevolod Stakhov
+ * Copyright (C) 2002-2015 Igor Sysoev
+ * Copyright (C) 2011-2015 Nginx, Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -736,6 +738,98 @@ enum {
 #define is_urlsafe(x) ((url_scanner_table[(guchar)(x)] & (IS_ALPHA | IS_DIGIT | \
 	IS_URLSAFE)) != 0)
 
+void
+rspamd_unescape_uri (u_char **dst, u_char **src, size_t size)
+{
+	u_char *d, *s, ch, c, decoded;
+	enum {
+		sw_usual = 0,
+		sw_quoted,
+		sw_quoted_second
+	} state;
+
+	d = *dst;
+	s = *src;
+
+	state = 0;
+	decoded = 0;
+
+	while (size--) {
+
+		ch = *s++;
+
+		switch (state) {
+		case sw_usual:
+			if (ch == '?') {
+				*d++ = ch;
+				goto done;
+			}
+
+			if (ch == '%') {
+				state = sw_quoted;
+				break;
+			}
+
+			*d++ = ch;
+			break;
+
+		case sw_quoted:
+
+			if (ch >= '0' && ch <= '9') {
+				decoded = (u_char) (ch - '0');
+				state = sw_quoted_second;
+				break;
+			}
+
+			c = (u_char) (ch | 0x20);
+			if (c >= 'a' && c <= 'f') {
+				decoded = (u_char) (c - 'a' + 10);
+				state = sw_quoted_second;
+				break;
+			}
+
+			/* the invalid quoted character */
+
+			state = sw_usual;
+
+			*d++ = ch;
+
+			break;
+
+		case sw_quoted_second:
+
+			state = sw_usual;
+
+			if (ch >= '0' && ch <= '9') {
+				ch = (u_char) ((decoded << 4) + ch - '0');
+				*d++ = ch;
+
+				break;
+			}
+
+			c = (u_char) (ch | 0x20);
+			if (c >= 'a' && c <= 'f') {
+				ch = (u_char) ((decoded << 4) + c - 'a' + 10);
+
+				if (ch == '?') {
+					*d++ = ch;
+					goto done;
+				}
+
+				*d++ = ch;
+				break;
+			}
+
+			/* the invalid quoted character */
+			break;
+		}
+	}
+
+	done:
+
+	*dst = d;
+	*src = s;
+}
 
 const gchar *
 rspamd_url_strerror (enum uri_errno err)

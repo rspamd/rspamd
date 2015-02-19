@@ -1,4 +1,6 @@
-/* Copyright (c) 2010, Vsevolod Stakhov
+/* Copyright (c) 2010-2015, Vsevolod Stakhov
+ * Copyright (C) 2002-2015 Igor Sysoev
+ * Copyright (C) 2011-2015 Nginx, Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
