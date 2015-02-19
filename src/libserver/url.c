@@ -803,10 +803,12 @@ url_init (void)
 }
 
 static gint
-rspamd_mailto_parse (struct http_parser_url *u, const gchar *str)
+rspamd_mailto_parse (struct http_parser_url *u, const gchar *str,
+		gchar const **end)
 {
 	const gchar *p = str, *c = str;
 	gchar t;
+	gint ret = 1;
 	enum {
 		parse_mailto,
 		parse_slash,
@@ -849,7 +851,7 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str)
 				st = parse_slash_slash;
 			}
 			else {
-				return 1;
+				goto out;
 			}
 			p ++;
 			break;
@@ -869,7 +871,7 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str)
 				st = parse_destination;
 			}
 			else {
-				return 1;
+				goto out;
 			}
 			break;
 		case parse_destination:
@@ -885,7 +887,7 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str)
 		case parse_user:
 			if (t == '@') {
 				if (p - c == 0) {
-					return 1;
+					goto out;
 				}
 				u->field_set |= 1 << UF_USERINFO;
 				u->field_data[UF_USERINFO].len = p - c;
@@ -893,7 +895,7 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str)
 				st = parse_at;
 			}
 			else if (!is_atom (t)) {
-				return 1;
+				goto out;
 			}
 			p ++;
 			break;
@@ -910,7 +912,7 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str)
 				st = parse_suffix_question;
 			}
 			else if (!is_domain (t) && t != '.' && t != '_') {
-				return 1;
+				goto out;
 			}
 			p ++;
 			break;
@@ -920,7 +922,7 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str)
 			break;
 		case parse_query:
 			if (!is_atom (t)) {
-				return 1;
+				goto out;
 			}
 			p ++;
 			break;
@@ -928,15 +930,13 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str)
 	}
 
 	if (st == parse_domain) {
-		if (p - c == 0) {
-			return 1;
+		if (p - c != 0) {
+			u->field_set |= 1 << UF_HOST;
+			u->field_data[UF_HOST].len = p - c;
+			u->field_data[UF_HOST].off = c - str;
+
+			ret = 0;
 		}
-
-		u->field_set |= 1 << UF_HOST;
-		u->field_data[UF_HOST].len = p - c;
-		u->field_data[UF_HOST].off = c - str;
-
-		return 0;
 	}
 	else if (st == parse_query) {
 		if (p - c > 0) {
@@ -945,14 +945,19 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str)
 			u->field_data[UF_QUERY].off = c - str;
 		}
 
-		return 0;
+		ret = 0;
 	}
 
-	return 1;
+out:
+	if (end != NULL) {
+		*end = p;
+	}
+
+	return ret;
 }
 
 static gint
-rspamd_web_parse (struct http_parser_url *u, const gchar *str)
+rspamd_web_parse (struct http_parser_url *u, const gchar *str, gchar const **end)
 {
 	const gchar *p = str, *c = str;
 	gchar t;
@@ -1003,7 +1008,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str)
 				st = parse_slash_slash;
 			}
 			else {
-				return 1;
+				goto out;
 			}
 			p ++;
 			break;
@@ -1022,7 +1027,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str)
 		case parse_user:
 			if (t == ':') {
 				if (p - c == 0) {
-					return 1;
+					goto out;
 				}
 				u->field_set |= 1 << UF_USERINFO;
 				u->field_data[UF_USERINFO].len = p - c;
@@ -1032,7 +1037,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str)
 			else if (t == '@') {
 				/* No password */
 				if (p - c == 0) {
-					return 1;
+					goto out;
 				}
 				u->field_set |= 1 << UF_USERINFO;
 				u->field_data[UF_USERINFO].len = p - c;
@@ -1040,7 +1045,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str)
 				st = parse_at;
 			}
 			else if (!is_atom (t)) {
-				return 1;
+				goto out;
 			}
 			p ++;
 			break;
@@ -1061,7 +1066,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str)
 				st = parse_at;
 			}
 			else if (!is_atom (t)) {
-				return 1;
+				goto out;
 			}
 			p ++;
 			break;
@@ -1072,7 +1077,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str)
 		case parse_domain:
 			if (t == '/' || t == ':') {
 				if (p - c == 0) {
-					return 1;
+					goto out;
 				}
 				u->field_set |= 1 << UF_HOST;
 				u->field_data[UF_HOST].len = p - c;
@@ -1093,12 +1098,12 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str)
 
 					if (uc == (gunichar)-1) {
 						/* Bad utf8 */
-						return 1;
+						goto out;
 					}
 
 					if (!g_unichar_isalnum (uc)) {
 						/* Bad symbol */
-						return 1;
+						goto out;
 					}
 
 					p = g_utf8_next_char (p);
@@ -1112,13 +1117,13 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str)
 			if (t == '/') {
 				pt = strtoul (c, NULL, 10);
 				if (pt == 0 || pt > 65535) {
-					return 1;
+					goto out;
 				}
 				u->port = pt;
 				st = parse_suffix_slash;
 			}
 			else if (!g_ascii_isdigit (t)) {
-				return 1;
+				goto out;
 			}
 			p ++;
 			break;
@@ -1167,7 +1172,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str)
 	switch (st) {
 	case parse_domain:
 		if (p - c == 0) {
-			return 1;
+			goto out;
 		}
 		u->field_set |= 1 << UF_HOST;
 		u->field_data[UF_HOST].len = p - c;
@@ -1178,7 +1183,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str)
 	case parse_port:
 		pt = strtoul (c, NULL, 10);
 		if (pt == 0 || pt > 65535) {
-			return 1;
+			goto out;
 		}
 		u->port = pt;
 		ret = 0;
@@ -1211,6 +1216,10 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str)
 		/* Error state */
 		ret = 1;
 		break;
+	}
+out:
+	if (end != NULL) {
+		*end = p;
 	}
 
 	return ret;
@@ -1280,14 +1289,14 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	if (len > sizeof ("mailto:") - 1) {
 		/* For mailto: urls we also need to add slashes to make it a valid URL */
 		if (g_ascii_strncasecmp (p, "mailto:", sizeof ("mailto:") - 1) == 0) {
-			ret = rspamd_mailto_parse (&u, p);
+			ret = rspamd_mailto_parse (&u, p, NULL);
 		}
 		else {
-			ret = rspamd_web_parse (&u, p);
+			ret = rspamd_web_parse (&u, p, NULL);
 		}
 	}
 	else {
-		ret = rspamd_web_parse (&u, p);
+		ret = rspamd_web_parse (&u, p, NULL);
 	}
 
 	if (ret != 0) {
