@@ -404,10 +404,6 @@ radix_compare_compressed (struct radix_compressed_node *node,
 				memcmp (node->d.s.key + skip, key + skip, shift - skip) != 0) {
 			return FALSE;
 		}
-		else {
-			/* We already know that we checked all elements prior to this one */
-			return TRUE;
-		}
 	}
 
 	rbits = node->d.s.level % NBBY;
