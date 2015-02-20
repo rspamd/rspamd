@@ -1374,6 +1374,8 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 		return URI_ERRNO_EMPTY;
 	}
 
+	p = uristring;
+
 	if (len > sizeof ("mailto:") - 1) {
 		/* For mailto: urls we also need to add slashes to make it a valid URL */
 		if (g_ascii_strncasecmp (p, "mailto:", sizeof ("mailto:") - 1) == 0) {
@@ -1391,7 +1393,6 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 		return URI_ERRNO_BAD_FORMAT;
 	}
 
-	p = uristring;
 	for (i = 0; i < UF_MAX; i ++) {
 		if (u.field_set & (1 << i)) {
 			comp = p + u.field_data[i].off;
