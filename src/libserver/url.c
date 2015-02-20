@@ -739,9 +739,9 @@ enum {
 	IS_URLSAFE)) != 0)
 
 void
-rspamd_unescape_uri (u_char **dst, u_char **src, size_t size)
+rspamd_unescape_uri (gchar **dst, gchar **src, gsize size)
 {
-	u_char *d, *s, ch, c, decoded;
+	gchar *d, *s, ch, c, decoded;
 	enum {
 		sw_usual = 0,
 		sw_quoted,
@@ -776,14 +776,14 @@ rspamd_unescape_uri (u_char **dst, u_char **src, size_t size)
 		case sw_quoted:
 
 			if (ch >= '0' && ch <= '9') {
-				decoded = (u_char) (ch - '0');
+				decoded = (ch - '0');
 				state = sw_quoted_second;
 				break;
 			}
 
-			c = (u_char) (ch | 0x20);
+			c = (ch | 0x20);
 			if (c >= 'a' && c <= 'f') {
-				decoded = (u_char) (c - 'a' + 10);
+				decoded = (c - 'a' + 10);
 				state = sw_quoted_second;
 				break;
 			}
@@ -801,7 +801,7 @@ rspamd_unescape_uri (u_char **dst, u_char **src, size_t size)
 			state = sw_usual;
 
 			if (ch >= '0' && ch <= '9') {
-				ch = (u_char) ((decoded << 4) + ch - '0');
+				ch = ((decoded << 4) + ch - '0');
 				*d++ = ch;
 
 				break;
@@ -809,7 +809,7 @@ rspamd_unescape_uri (u_char **dst, u_char **src, size_t size)
 
 			c = (u_char) (ch | 0x20);
 			if (c >= 'a' && c <= 'f') {
-				ch = (u_char) ((decoded << 4) + c - 'a' + 10);
+				ch = ((decoded << 4) + c - 'a' + 10);
 
 				if (ch == '?') {
 					*d++ = ch;
@@ -896,11 +896,19 @@ url_init (void)
 	return 0;
 }
 
+#define SET_U(u, field) do {												\
+	if ((u) != NULL) {														\
+		(u)->field_set |= 1 << (field);										\
+		(u)->field_data[(field)].len = p - c;								\
+		(u)->field_data[(field)].off = c - str;								\
+	}																		\
+} while (0)
+
 static gint
-rspamd_mailto_parse (struct http_parser_url *u, const gchar *str,
+rspamd_mailto_parse (struct http_parser_url *u, const gchar *str, gsize len,
 		gchar const **end)
 {
-	const gchar *p = str, *c = str;
+	const gchar *p = str, *c = str, *last = str + len;
 	gchar t;
 	gint ret = 1;
 	enum {
@@ -918,16 +926,14 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str,
 		parse_query
 	} st = parse_mailto;
 
-	while (*p) {
+	while (p < last) {
 		t = *p;
 
 		switch (st) {
 		case parse_mailto:
 			if (t == ':') {
 				st = parse_semicolon;
-				u->field_set |= 1 << UF_SCHEMA;
-				u->field_data[UF_SCHEMA].len = p - c;
-				u->field_data[UF_SCHEMA].off = 0;
+				SET_U (u, UF_SCHEMA);
 			}
 			p ++;
 			break;
@@ -983,9 +989,7 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str,
 				if (p - c == 0) {
 					goto out;
 				}
-				u->field_set |= 1 << UF_USERINFO;
-				u->field_data[UF_USERINFO].len = p - c;
-				u->field_data[UF_USERINFO].off = c - str;
+				SET_U (u, UF_USERINFO);
 				st = parse_at;
 			}
 			else if (!is_atom (t)) {
@@ -999,10 +1003,7 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str,
 			break;
 		case parse_domain:
 			if (t == '?') {
-				u->field_set |= 1 << UF_HOST;
-				u->field_data[UF_HOST].len = p - c;
-				u->field_data[UF_HOST].off = c - str;
-
+				SET_U (u, UF_HOST);
 				st = parse_suffix_question;
 			}
 			else if (!is_domain (t) && t != '.' && t != '_') {
@@ -1025,18 +1026,13 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str,
 
 	if (st == parse_domain) {
 		if (p - c != 0) {
-			u->field_set |= 1 << UF_HOST;
-			u->field_data[UF_HOST].len = p - c;
-			u->field_data[UF_HOST].off = c - str;
-
+			SET_U (u, UF_HOST);
 			ret = 0;
 		}
 	}
 	else if (st == parse_query) {
 		if (p - c > 0) {
-			u->field_set |= 1 << UF_QUERY;
-			u->field_data[UF_QUERY].len = p - c;
-			u->field_data[UF_QUERY].off = c - str;
+			SET_U (u, UF_QUERY);
 		}
 
 		ret = 0;
@@ -1051,9 +1047,10 @@ out:
 }
 
 static gint
-rspamd_web_parse (struct http_parser_url *u, const gchar *str, gchar const **end)
+rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
+		gchar const **end, gboolean strict)
 {
-	const gchar *p = str, *c = str;
+	const gchar *p = str, *c = str, *last = str + len;
 	gchar t;
 	gunichar uc;
 	glong pt;
@@ -1075,16 +1072,14 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gchar const **end
 		parse_part
 	} st = parse_protocol;
 
-	while (*p) {
+	while (p < last) {
 		t = *p;
 
 		switch (st) {
 		case parse_protocol:
 			if (t == ':') {
 				st = parse_semicolon;
-				u->field_set |= 1 << UF_SCHEMA;
-				u->field_data[UF_SCHEMA].len = p - c;
-				u->field_data[UF_SCHEMA].off = 0;
+				SET_U (u, UF_SCHEMA);
 			}
 			p ++;
 			break;
@@ -1123,9 +1118,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gchar const **end
 				if (p - c == 0) {
 					goto out;
 				}
-				u->field_set |= 1 << UF_USERINFO;
-				u->field_data[UF_USERINFO].len = p - c;
-				u->field_data[UF_USERINFO].off = c - str;
+				SET_U (u, UF_USERINFO);
 				st = parse_password_start;
 			}
 			else if (t == '@') {
@@ -1133,9 +1126,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gchar const **end
 				if (p - c == 0) {
 					goto out;
 				}
-				u->field_set |= 1 << UF_USERINFO;
-				u->field_data[UF_USERINFO].len = p - c;
-				u->field_data[UF_USERINFO].off = c - str;
+				SET_U (u, UF_USERINFO);
 				st = parse_at;
 			}
 			else if (!is_atom (t)) {
@@ -1173,9 +1164,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gchar const **end
 				if (p - c == 0) {
 					goto out;
 				}
-				u->field_set |= 1 << UF_HOST;
-				u->field_data[UF_HOST].len = p - c;
-				u->field_data[UF_HOST].off = c - str;
+				SET_U (u, UF_HOST);
 
 				if (t == '/') {
 					st = parse_suffix_slash;
@@ -1188,7 +1177,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gchar const **end
 			}
 			else {
 				if (*p != '.' && *p != '-' && *p != '_') {
-					uc = g_utf8_get_char_validated (p, -1);
+					uc = g_utf8_get_char_validated (p, last - p);
 
 					if (uc == (gunichar)-1) {
 						/* Bad utf8 */
@@ -1234,43 +1223,61 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gchar const **end
 		case parse_path:
 			if (t == '?') {
 				if (p - c != 0) {
-					u->field_set |= 1 << UF_PATH;
-					u->field_data[UF_PATH].len = p - c;
-					u->field_data[UF_PATH].off = c - str;
+					SET_U (u, UF_PATH);
 				}
 				c = p + 1;
 				st = parse_query;
+			}
+			else if (!is_urlsafe (t)) {
+				if (strict) {
+					goto out;
+				}
+				else {
+					goto set;
+				}
 			}
 			p ++;
 			break;
 		case parse_query:
 			if (t == '#') {
 				if (p - c != 0) {
-					u->field_set |= 1 << UF_QUERY;
-					u->field_data[UF_QUERY].len = p - c;
-					u->field_data[UF_QUERY].off = c - str;
+					SET_U (u, UF_QUERY);
 				}
 				c = p + 1;
 				st = parse_part;
 			}
+			else if (!is_urlsafe (t)) {
+				if (strict) {
+					goto out;
+				}
+				else {
+					goto set;
+				}
+			}
 			p ++;
 			break;
 		case parse_part:
-			/* Allow anything here */
+			if (!is_urlsafe (t)) {
+				if (strict) {
+					goto out;
+				}
+				else {
+					goto set;
+				}
+			}
 			p ++;
 			break;
 		}
 	}
 
+set:
 	/* Parse remaining */
 	switch (st) {
 	case parse_domain:
 		if (p - c == 0) {
 			goto out;
 		}
-		u->field_set |= 1 << UF_HOST;
-		u->field_data[UF_HOST].len = p - c;
-		u->field_data[UF_HOST].off = c - str;
+		SET_U (u, UF_HOST);
 		ret = 0;
 
 		break;
@@ -1284,25 +1291,19 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gchar const **end
 		break;
 	case parse_path:
 		if (p - c > 0) {
-			u->field_set |= 1 << UF_PATH;
-			u->field_data[UF_PATH].len = p - c;
-			u->field_data[UF_PATH].off = c - str;
+			SET_U (u, UF_PATH);
 		}
 		ret = 0;
 		break;
 	case parse_query:
 		if (p - c > 0) {
-			u->field_set |= 1 << UF_QUERY;
-			u->field_data[UF_QUERY].len = p - c;
-			u->field_data[UF_QUERY].off = c - str;
+			SET_U (u, UF_QUERY);
 		}
 		ret = 0;
 		break;
 	case parse_part:
 		if (p - c > 0) {
-			u->field_set |= 1 << UF_FRAGMENT;
-			u->field_data[UF_FRAGMENT].len = p - c;
-			u->field_data[UF_FRAGMENT].off = c - str;
+			SET_U (u, UF_FRAGMENT);
 		}
 		ret = 0;
 		break;
@@ -1318,6 +1319,8 @@ out:
 
 	return ret;
 }
+
+#undef SET_U
 
 enum uri_errno
 rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
@@ -1371,32 +1374,24 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 		return URI_ERRNO_EMPTY;
 	}
 
-	p = g_uri_unescape_string (uristring, NULL);
-	if (p == NULL) {
-		return URI_ERRNO_BAD_ENCODING;
-	}
-
-	uri->string = p;
-
-	rspamd_mempool_add_destructor (pool, (rspamd_mempool_destruct_t)g_free, p);
-
 	if (len > sizeof ("mailto:") - 1) {
 		/* For mailto: urls we also need to add slashes to make it a valid URL */
 		if (g_ascii_strncasecmp (p, "mailto:", sizeof ("mailto:") - 1) == 0) {
-			ret = rspamd_mailto_parse (&u, p, NULL);
+			ret = rspamd_mailto_parse (&u, uristring, len, NULL);
 		}
 		else {
-			ret = rspamd_web_parse (&u, p, NULL);
+			ret = rspamd_web_parse (&u, uristring, len, NULL, TRUE);
 		}
 	}
 	else {
-		ret = rspamd_web_parse (&u, p, NULL);
+		ret = rspamd_web_parse (&u, uristring, len, NULL, TRUE);
 	}
 
 	if (ret != 0) {
 		return URI_ERRNO_BAD_FORMAT;
 	}
 
+	p = uristring;
 	for (i = 0; i < UF_MAX; i ++) {
 		if (u.field_set & (1 << i)) {
 			comp = p + u.field_data[i].off;
@@ -1435,6 +1430,15 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 		return URI_ERRNO_BAD_FORMAT;
 	}
 
+	/* Now decode url symbols */
+	uri->string = rspamd_mempool_strdup (pool, p);
+
+	if (uri->datalen > 0) {
+		rspamd_unescape_uri (&uri->data, &uri->data, uri->datalen);
+	}
+	if (uri->querylen > 0) {
+		rspamd_unescape_uri (&uri->query, &uri->query, uri->querylen);
+	}
 	rspamd_str_lc (uri->string, uri->protocollen);
 	rspamd_str_lc (uri->host,   uri->hostlen);
 
@@ -1630,151 +1634,13 @@ url_web_end (const gchar *begin,
 	const gchar *pos,
 	url_match_t *match)
 {
-	const gchar *p, *c;
-	gchar open_brace = '\0', close_brace = '\0';
-	gint brace_stack = 0;
-	gboolean passwd = FALSE;
-	guint port, i;
+	const gchar *last = NULL;
 
-	p = pos + strlen (match->pattern);
-	for (i = 0; i < G_N_ELEMENTS (url_braces) / 2; i += 2) {
-		if (*p == url_braces[i]) {
-			close_brace = url_braces[i + 1];
-			open_brace = *p;
-			break;
-		}
-	}
-
-	/* find the end of the domain */
-	if (is_atom (*p)) {
-		c = p;
-		while (p < end) {
-			if (!is_atom (*p) && !(*p & 0x80)) {
-				break;
-			}
-
-			p++;
-
-			while (p < end && (is_atom (*p) || (*p & 0x80))) {
-				p++;
-			}
-
-			if ((p + 1) < end && *p == '.' &&
-				(is_atom (*(p + 1)) || *(p + 1) == '/' || (*(p + 1) & 0x80))) {
-				p++;
-			}
-		}
-
-		if (*p != '@') {
-			p = c;
-		}
-		else {
-			p++;
-		}
-
-		goto domain;
-	}
-	else if (is_domain (*p) || (*p & 0x80)) {
-domain:
-		while (p < end) {
-			if (!is_domain (*p) && !(*p & 0x80)) {
-				break;
-			}
-
-			p++;
-
-			while (p < end && (is_domain (*p) || (*p & 0x80))) {
-				p++;
-			}
-
-			if ((p + 1) < end && *p == '.' &&
-				(is_domain (*(p + 1)) || *(p + 1) == '/' ||
-				(*(p + 1) & 0x80))) {
-				p++;
-			}
-		}
-	}
-	else {
+	if (rspamd_web_parse (NULL, pos, end - pos, &last, FALSE) != 0) {
 		return FALSE;
 	}
 
-	if (p < end) {
-		switch (*p) {
-		case ':': /* we either have a port or a password */
-			p++;
-
-			if (is_digit (*p) || passwd) {
-				port = (*p++ - '0');
-
-				while (p < end && is_digit (*p) && port < 65536) {
-					port = (port * 10) + (*p++ - '0');
-				}
-
-				if (!passwd && (port >= 65536 || *p == '@')) {
-					if (p < end && *p == '@') {
-						/* this must be a password? */
-						goto passwd;
-					}
-					else if (p < end) {
-						return FALSE;
-					}
-
-					p--;
-				}
-			}
-			else {
-passwd:
-				passwd = TRUE;
-				c = p;
-
-				while (p < end && is_atom (*p)) {
-					p++;
-				}
-
-				if ((p + 2) < end) {
-					if (*p == '@') {
-						p++;
-						if (is_domain (*p)) {
-							goto domain;
-						}
-					}
-
-					return FALSE;
-				}
-			}
-
-			if (p >= end || *p != '/') {
-				break;
-			}
-
-		/* we have a '/' so there could be a path - fall through */
-		case '/': /* we've detected a path component to our url */
-			p++;
-		case '?':
-			while (p < end && is_urlsafe (*p)) {
-				if (*p == open_brace) {
-					brace_stack++;
-				}
-				else if (*p == close_brace) {
-					brace_stack--;
-					if (brace_stack == -1) {
-						break;
-					}
-				}
-				p++;
-			}
-
-			break;
-		default:
-			break;
-		}
-	}
-
-	while (p > pos && strchr (",.:;?!-|}])\"", p[-1])) {
-		p--;
-	}
-
-	match->m_len = (p - pos);
+	match->m_len = (last - pos);
 
 	return TRUE;
 }
