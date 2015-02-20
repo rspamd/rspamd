@@ -40,7 +40,11 @@ union sa_union {
 typedef struct _rspamd_inet_addr_s {
 	union sa_union addr;
 	socklen_t slen;
-	int af;
+	gint af;
+	/* Unix socket specific */
+	gint mode;
+	uid_t owner;
+	gid_t group;
 } rspamd_inet_addr_t;
 
 /**

@@ -150,6 +150,78 @@ out:
 
 }
 
+static gboolean
+rspamd_parse_unix_path (rspamd_inet_addr_t *target, const char *src)
+{
+	gchar **tokens, **cur_tok, *p, *pwbuf;
+	gint pwlen;
+	struct passwd pw, *ppw;
+	struct group gr, *pgr;
+
+	tokens = g_strsplit_set (src, " ", -1);
+
+	target->af = AF_UNIX;
+	target->slen = sizeof (target->addr.su);
+	rspamd_strlcpy (target->addr.su.sun_path, tokens[0],
+			sizeof (target->addr.su.sun_path));
+	#ifdef FREEBSD
+	target->addr.su.sun_len = SUN_LEN (&target->addr.su);
+	#endif
+
+	target->mode = 00644;
+	target->owner = 0;
+	target->group = 0;
+
+	cur_tok = &tokens[1];
+	pwlen = sysconf (_SC_GETPW_R_SIZE_MAX);
+	g_assert (pwlen > 0);
+	pwbuf = g_alloca (pwlen);
+
+	while (*cur_tok) {
+		if (g_ascii_strncasecmp (*cur_tok, "mode=", sizeof ("mode=") - 1) == 0) {
+			p = strchr (*cur_tok, '=');
+			/* XXX: add error check */
+			target->mode = strtoul (p + 1, NULL, 0);
+
+			if (target->mode == 0) {
+				msg_err ("bad mode: %s", p + 1);
+				errno = EINVAL;
+				return FALSE;
+			}
+		}
+		else if (g_ascii_strncasecmp (*cur_tok, "owner=",
+				sizeof ("owner=") - 1) == 0) {
+			p = strchr (*cur_tok, '=');
+
+			if (getpwnam_r (p + 1, &pw, pwbuf, pwlen, &ppw) != 0 || ppw == NULL) {
+				msg_err ("bad user: %s", p + 1);
+				if (ppw == NULL) {
+					errno = ENOENT;
+				}
+				return FALSE;
+			}
+			target->owner = pw.pw_uid;
+			target->group = pw.pw_gid;
+		}
+		else if (g_ascii_strncasecmp (*cur_tok, "group=",
+				sizeof ("group=") - 1) == 0) {
+			p = strchr (*cur_tok, '=');
+
+			if (getgrnam_r (p + 1, &gr, pwbuf, pwlen, &pgr) != 0 || pgr == NULL) {
+				msg_err ("bad group: %s", p + 1);
+				if (pgr == NULL) {
+					errno = ENOENT;
+				}
+				return FALSE;
+			}
+			target->group = gr.gr_gid;
+		}
+		cur_tok ++;
+	}
+
+	return TRUE;
+}
+
 gboolean
 rspamd_parse_inet_address (rspamd_inet_addr_t *target, const char *src)
 {
@@ -158,13 +230,7 @@ rspamd_parse_inet_address (rspamd_inet_addr_t *target, const char *src)
 	rspamd_ip_check_ipv6 ();
 
 	if (src[0] == '/' || src[0] == '.') {
-		target->af = AF_UNIX;
-		target->slen = sizeof (target->addr.su);
-		rspamd_strlcpy (target->addr.su.sun_path, src,
-				sizeof (target->addr.su.sun_path));
-#ifdef FREEBSD
-		target->addr.su.sun_len = SUN_LEN (&target->addr.su);
-#endif
+		return rspamd_parse_unix_path (target, src);
 	}
 	else if (ipv6_status == RSPAMD_IPV6_SUPPORTED &&
 			inet_pton (AF_INET6, src, &target->addr.s6.sin6_addr) == 1) {
@@ -276,6 +342,11 @@ rspamd_inet_address_listen (rspamd_inet_addr_t *addr, gint type,
 		return -1;
 	}
 
+	if (addr->af == AF_UNIX && access (addr->addr.su.sun_path, W_OK) != -1) {
+		/* Unlink old socket */
+		(void)unlink (addr->addr.su.sun_path);
+	}
+
 	setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (gint));
 	r = bind (fd, &addr->addr.sa, addr->slen);
 	if (r == -1) {
@@ -288,6 +359,19 @@ rspamd_inet_address_listen (rspamd_inet_addr_t *addr, gint type,
 	}
 
 	if (type != SOCK_DGRAM) {
+
+		if (addr->af == AF_UNIX) {
+			/* Try to set mode and owner */
+			if (chown (addr->addr.su.sun_path, addr->owner, addr->group) == -1) {
+				msg_info ("cannot change owner for %s to %d:%d: %s",
+						addr->addr.su.sun_path, addr->owner, addr->group,
+						strerror (errno));
+			}
+			if (chmod (addr->addr.su.sun_path, addr->mode) == -1) {
+				msg_info ("cannot change mode for %s to %od %s",
+						addr->addr.su.sun_path, addr->mode, strerror (errno));
+			}
+		}
 		r = listen (fd, -1);
 
 		if (r == -1) {
@@ -439,10 +523,12 @@ rspamd_parse_host_port_priority_strv (gchar **tokens,
 		}
 
 		cur_addr = *addr;
-		cur_addr->af = AF_UNIX;
-		memcpy (cur_addr->addr.su.sun_path, tokens[0],
-				MIN (sizeof (cur_addr->addr.su.sun_path) - 1, strlen (tokens[0])));
-		rspamd_ip_validate_af (cur_addr);
+		if (!rspamd_parse_inet_address (cur_addr, tokens[0])) {
+			msg_err ("cannot parse unix socket definition %s: %s",
+					tokens[0],
+					strerror (errno));
+			goto err;
+		}
 		*max_addrs = 1;
 	}
 
