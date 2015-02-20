@@ -123,6 +123,7 @@ MACRO(FindLua _major _minor)
 	MESSAGE(STATUS "Check for lua ${_major}.${_minor}")
 	
 	UNSET(LUA_INCLUDE_DIR CACHE)
+	UNSET(LUA_LIBRARY CACHE)
 	FIND_PATH(LUA_INCLUDE_DIR lua.h
 	  HINTS
 	  $ENV{LUA_DIR}
