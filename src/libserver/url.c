@@ -739,17 +739,18 @@ enum {
 	IS_URLSAFE)) != 0)
 
 void
-rspamd_unescape_uri (gchar **dst, gchar **src, gsize size)
+rspamd_unescape_uri (gchar *dst, const gchar *src, gsize size)
 {
-	gchar *d, *s, ch, c, decoded;
+	gchar *d, ch, c, decoded;
+	const gchar *s;
 	enum {
 		sw_usual = 0,
 		sw_quoted,
 		sw_quoted_second
 	} state;
 
-	d = *dst;
-	s = *src;
+	d = dst;
+	s = src;
 
 	state = 0;
 	decoded = 0;
@@ -760,10 +761,6 @@ rspamd_unescape_uri (gchar **dst, gchar **src, gsize size)
 
 		switch (state) {
 		case sw_usual:
-			if (ch == '?') {
-				*d++ = ch;
-				goto done;
-			}
 
 			if (ch == '%') {
 				state = sw_quoted;
@@ -811,11 +808,6 @@ rspamd_unescape_uri (gchar **dst, gchar **src, gsize size)
 			if (c >= 'a' && c <= 'f') {
 				ch = ((decoded << 4) + c - 'a' + 10);
 
-				if (ch == '?') {
-					*d++ = ch;
-					goto done;
-				}
-
 				*d++ = ch;
 				break;
 			}
@@ -825,10 +817,7 @@ rspamd_unescape_uri (gchar **dst, gchar **src, gsize size)
 		}
 	}
 
-	done:
-
-	*dst = d;
-	*src = s;
+	*d = '\0';
 }
 
 const gchar *
@@ -1050,11 +1039,12 @@ static gint
 rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 		gchar const **end, gboolean strict)
 {
-	const gchar *p = str, *c = str, *last = str + len;
+	const gchar *p = str, *c = str, *last = str + len, *slash = NULL;
 	gchar t;
 	gunichar uc;
 	glong pt;
 	gint ret = 1;
+	gboolean user_seen = FALSE;
 	enum {
 		parse_protocol,
 		parse_slash,
@@ -1065,6 +1055,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 		parse_password_start,
 		parse_password,
 		parse_domain,
+		parse_port_password,
 		parse_port,
 		parse_suffix_slash,
 		parse_path,
@@ -1103,15 +1094,8 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 			break;
 		case parse_slash_slash:
 			c = p;
-
-			/* XXX: inefficient lookahead */
-			if (strchr (p, '@') != NULL) {
-				st = parse_user;
-			}
-			else {
-				st = parse_domain;
-			}
-
+			st = parse_domain;
+			slash = p;
 			break;
 		case parse_user:
 			if (t == ':') {
@@ -1164,13 +1148,16 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				if (p - c == 0) {
 					goto out;
 				}
-				SET_U (u, UF_HOST);
-
 				if (t == '/') {
+					SET_U (u, UF_HOST);
 					st = parse_suffix_slash;
 				}
-				else {
-					st = parse_port;
+				else if (!user_seen) {
+					/*
+					 * Here we can have both port and password, hence we need
+					 * to apply some heuristic here
+					 */
+					st = parse_port_password;
 					c = p + 1;
 				}
 				p ++;
@@ -1196,13 +1183,31 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				}
 			}
 			break;
+		case parse_port_password:
+			if (g_ascii_isdigit (t)) {
+				/* XXX: that breaks urls with passwords starting with number */
+				st = parse_port;
+				c = slash;
+				SET_U (u, UF_HOST);
+				c = p;
+			}
+			else {
+				/* Rewind back */
+				p = slash;
+				c = slash;
+				user_seen = TRUE;
+				st = parse_user;
+			}
+			break;
 		case parse_port:
 			if (t == '/') {
 				pt = strtoul (c, NULL, 10);
 				if (pt == 0 || pt > 65535) {
 					goto out;
 				}
-				u->port = pt;
+				if (u != NULL) {
+					u->port = pt;
+				}
 				st = parse_suffix_slash;
 			}
 			else if (!g_ascii_isdigit (t)) {
@@ -1432,14 +1437,8 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	}
 
 	/* Now decode url symbols */
-	uri->string = rspamd_mempool_strdup (pool, p);
-
-	if (uri->datalen > 0) {
-		rspamd_unescape_uri (&uri->data, &uri->data, uri->datalen);
-	}
-	if (uri->querylen > 0) {
-		rspamd_unescape_uri (&uri->query, &uri->query, uri->querylen);
-	}
+	uri->string = p;
+	rspamd_unescape_uri (uri->string, uri->string, len);
 	rspamd_str_lc (uri->string, uri->protocollen);
 	rspamd_str_lc (uri->host,   uri->hostlen);
 
