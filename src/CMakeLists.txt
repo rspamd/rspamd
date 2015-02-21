@@ -54,8 +54,6 @@ MACRO(AddModules MLIST WLIST)
 	#ENDIF(NOT EXISTS "modules.c")
 ENDMACRO(AddModules MLIST WLIST)
 
-# Contrib software
-ADD_SUBDIRECTORY(cdb)
 # Rspamd core components
 ADD_SUBDIRECTORY(lua)
 ADD_SUBDIRECTORY(libcryptobox)

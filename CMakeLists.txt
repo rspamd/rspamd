@@ -892,6 +892,7 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src"
 					"${CMAKE_SOURCE_DIR}/contrib/http-parser"
 					"${CMAKE_SOURCE_DIR}/contrib/libottery"
 					"${CMAKE_SOURCE_DIR}/contrib/xxhash"
+					"${CMAKE_SOURCE_DIR}/contrib/cdb"
 					"${CMAKE_SOURCE_DIR}/contrib/snowball/include"
 					"${CMAKE_SOURCE_DIR}/contrib/siphash"
 					"${CMAKE_SOURCE_DIR}/contrib/blake2"
@@ -943,6 +944,7 @@ IF(GLIB_COMPAT)
 ENDIF(GLIB_COMPAT)
 
 ADD_SUBDIRECTORY(contrib/xxhash)
+ADD_SUBDIRECTORY(contrib/cdb)
 ADD_SUBDIRECTORY(contrib/http-parser)
 ADD_SUBDIRECTORY(contrib/libottery)
 ADD_SUBDIRECTORY(contrib/snowball)

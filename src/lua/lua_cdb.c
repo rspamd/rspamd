@@ -22,7 +22,7 @@
  */
 
 #include "lua_common.h"
-#include "cdb/cdb.h"
+#include "cdb.h"
 
 #define CDB_REFRESH_TIME 60
 
