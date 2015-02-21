@@ -531,6 +531,15 @@ XXH32_state_t* XXH32_createState(void)
     XXH_STATIC_ASSERT(sizeof(XXH32_state_t) >= sizeof(XXH_istate32_t));   // A compilation error here means XXH32_state_t is not large enough
     return (XXH32_state_t*)XXH_malloc(sizeof(XXH32_state_t));
 }
+
+void* XXH32_init (unsigned seed)
+{
+	XXH32_state_t *st = XXH32_createState();
+	XXH32_reset(st, seed);
+
+	return st;
+}
+
 XXH_errorcode XXH32_freeState(XXH32_state_t* statePtr)
 {
     XXH_free(statePtr);
@@ -717,6 +726,7 @@ FORCE_INLINE U32 XXH32_digest_endian (const XXH32_state_t* state_in, XXH_endiane
     h32 *= PRIME32_3;
     h32 ^= h32 >> 16;
 
+    XXH32_freeState((XXH32_state_t *)state_in);
     return h32;
 }
 
@@ -911,6 +921,7 @@ FORCE_INLINE U64 XXH64_digest_endian (const XXH64_state_t* state_in, XXH_endiane
     h64 *= PRIME64_3;
     h64 ^= h64 >> 32;
 
+    XXH64_freeState((XXH64_state_t *)state_in);
     return h64;
 }
 

@@ -110,6 +110,12 @@ States must then be initialized using XXHnn_reset() before first use.
 If you prefer dynamic allocation, please refer to functions below.
 */
 
+/*
+ * !!!
+ * Rspamd specific: we use the legacy method to free state when digest is obtained
+ * !!!
+ */
+void * XXH32_init (unsigned seed);
 XXH32_state_t* XXH32_createState(void);
 XXH_errorcode  XXH32_freeState(XXH32_state_t* statePtr);
 
