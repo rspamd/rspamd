@@ -887,7 +887,7 @@ ENDIF(HG)
 INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src" 
 					"${CMAKE_BINARY_DIR}/src"
 					"${CMAKE_BINARY_DIR}/src/libcryptobox"
-					"${CMAKE_SOURCE_DIR}/src/ucl/include"
+					"${CMAKE_SOURCE_DIR}/contrib/libucl"
 					"${CMAKE_SOURCE_DIR}/contrib/uthash"
 					"${CMAKE_SOURCE_DIR}/contrib/http-parser"
 					"${CMAKE_SOURCE_DIR}/contrib/libottery"
@@ -895,7 +895,7 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src"
 					"${CMAKE_SOURCE_DIR}/contrib/snowball/include"
 					"${CMAKE_SOURCE_DIR}/contrib/siphash"
 					"${CMAKE_SOURCE_DIR}/contrib/blake2"
-					"${CMAKE_SOURCE_DIR}/src/rdns/include")
+					"${CMAKE_SOURCE_DIR}/contrib/librdns")
 
 ################################ SUBDIRS SECTION ###########################
 
@@ -916,7 +916,6 @@ LIST(APPEND RSPAMD_REQUIRED_LIBRARIES xxhash)
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES siphash)
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES blake2)
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES sqlite3)
-LIST(APPEND RSPAMD_REQUIRED_LIBRARIES lua-ucl)
 IF(OPENSSL_FOUND)
 	LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ${OPENSSL_LIBRARIES})
 ENDIF(OPENSSL_FOUND)
@@ -949,6 +948,8 @@ ADD_SUBDIRECTORY(contrib/libottery)
 ADD_SUBDIRECTORY(contrib/snowball)
 ADD_SUBDIRECTORY(contrib/siphash)
 ADD_SUBDIRECTORY(contrib/blake2)
+ADD_SUBDIRECTORY(contrib/libucl)
+ADD_SUBDIRECTORY(contrib/librdns)
 ADD_SUBDIRECTORY(src)
 
 ADD_SUBDIRECTORY(test)

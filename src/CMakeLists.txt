@@ -56,11 +56,6 @@ ENDMACRO(AddModules MLIST WLIST)
 
 # Contrib software
 ADD_SUBDIRECTORY(cdb)
-ADD_SUBDIRECTORY(ucl/cmake)
-SET(SLAVE_BUILD 1)
-ADD_SUBDIRECTORY(rdns)
-UNSET(SLAVE_BUILD)
-
 # Rspamd core components
 ADD_SUBDIRECTORY(lua)
 ADD_SUBDIRECTORY(libcryptobox)
