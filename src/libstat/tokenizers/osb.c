@@ -38,7 +38,7 @@
 extern const int primes[];
 
 int
-osb_tokenize_text (struct rspamd_stat_tokenizer *tokenizer,
+osb_tokenize_text (struct rspamd_tokenizer_config *cf,
 	rspamd_mempool_t * pool,
 	GArray * input,
 	GTree * tree,

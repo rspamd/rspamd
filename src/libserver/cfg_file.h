@@ -141,6 +141,11 @@ struct rspamd_statfile_config {
 	gpointer data;									/**< opaque data 										*/
 };
 
+struct rspamd_tokenizer_config {
+	const ucl_object_t *opts;                        /**< other options										*/
+	const gchar *name;								/**< name of tokenizer									*/
+};
+
 /**
  * Classifier config definition
  */
@@ -149,7 +154,7 @@ struct rspamd_classifier_config {
 	GHashTable *labels;                             /**< statfiles with labels								*/
 	gchar *metric;                                  /**< metric of this classifier                          */
 	gchar *classifier;                  			/**< classifier interface                               */
-	gchar *tokenizer;                    			/**< tokenizer used for classifier						*/
+	struct rspamd_tokenizer_config *tokenizer;      /**< tokenizer used for classifier						*/
 	ucl_object_t *opts;                             /**< other options                                      */
 	GList *pre_callbacks;                           /**< list of callbacks that are called before classification */
 	GList *post_callbacks;                          /**< list of callbacks that are called after classification */

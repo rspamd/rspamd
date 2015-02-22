@@ -43,10 +43,19 @@ struct preprocess_cb_data {
 };
 
 static struct rspamd_tokenizer_runtime *
-rspamd_stat_get_tokenizer_runtime (const gchar *name, rspamd_mempool_t *pool,
+rspamd_stat_get_tokenizer_runtime (struct rspamd_tokenizer_config *cf,
+		rspamd_mempool_t *pool,
 		struct rspamd_tokenizer_runtime **ls)
 {
 	struct rspamd_tokenizer_runtime *tok = NULL, *cur;
+	const gchar *name;
+
+	if (cf == NULL || cf->name == NULL) {
+		name = RSPAMD_DEFAULT_TOKENIZER;
+	}
+	else {
+		name = cf->name;
+	}
 
 	LL_FOREACH (*ls, cur) {
 		if (strcmp (cur->name, name) == 0) {
@@ -270,7 +279,8 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
  * Tokenize task using the tokenizer specified
  */
 static void
-rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
+rspamd_stat_process_tokenize (struct rspamd_tokenizer_config *cf,
+		struct rspamd_stat_ctx *st_ctx,
 		struct rspamd_task *task, struct rspamd_tokenizer_runtime *tok)
 {
 	struct mime_text_part *part;
@@ -287,7 +297,7 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 			/*
 			 * XXX: Use normalized words if needed here
 			 */
-			tok->tokenizer->tokenize_func (tok->tokenizer, task->task_pool,
+			tok->tokenizer->tokenize_func (cf, task->task_pool,
 					part->words, tok->tokens, part->is_utf);
 		}
 
@@ -304,7 +314,7 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 	if (sub != NULL) {
 		words = rspamd_tokenize_text (sub, strlen (sub), TRUE, 0, NULL);
 		if (words != NULL) {
-			tok->tokenizer->tokenize_func (tok->tokenizer,
+			tok->tokenizer->tokenize_func (cf,
 					task->task_pool,
 					words,
 					tok->tokens,
@@ -349,11 +359,12 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 
 		if (tok == NULL) {
 			g_set_error (err, rspamd_stat_quark (), 500, "type %s is not defined"
-					"for tokenizers", clcf->tokenizer);
+					"for tokenizers", clcf->tokenizer ?
+							clcf->tokenizer->name : "unknown");
 			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 
-		rspamd_stat_process_tokenize (st_ctx, task, tok);
+		rspamd_stat_process_tokenize (clcf->tokenizer, st_ctx, task, tok);
 
 		cur = g_list_next (cur);
 	}
@@ -487,11 +498,12 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 
 		if (tok == NULL) {
 			g_set_error (err, rspamd_stat_quark (), 500, "type %s is not defined"
-					"for tokenizers", clcf->tokenizer);
+					"for tokenizers", clcf->tokenizer ?
+							clcf->tokenizer->name : "unknown");
 			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 
-		rspamd_stat_process_tokenize (st_ctx, task, tok);
+		rspamd_stat_process_tokenize (clcf->tokenizer, st_ctx, task, tok);
 
 		cur = g_list_next (cur);
 	}

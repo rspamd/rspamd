@@ -12,7 +12,7 @@
 /* Common tokenizer structure */
 struct rspamd_stat_tokenizer {
 	gchar *name;
-	gint (*tokenize_func)(struct rspamd_stat_tokenizer *rspamd_stat_tokenizer,
+	gint (*tokenize_func)(struct rspamd_tokenizer_config *cf,
 			rspamd_mempool_t *pool,
 			GArray *words,
 			GTree *result,
@@ -31,7 +31,7 @@ GArray * rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 		gsize min_len, GList **exceptions);
 
 /* OSB tokenize function */
-int osb_tokenize_text (struct rspamd_stat_tokenizer *tokenizer,
+int osb_tokenize_text (struct rspamd_tokenizer_config *cf,
 	rspamd_mempool_t *pool,
 	GArray *input,
 	GTree *tokens,

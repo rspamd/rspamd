@@ -930,6 +930,7 @@ rspamd_rcl_classifier_handler (struct rspamd_config *cfg,
 	struct rspamd_classifier_config *ccf;
 	gboolean res = TRUE;
 	struct rspamd_rcl_section *stat_section;
+	struct rspamd_tokenizer_config *tkcf = NULL;
 
 	ccf = rspamd_config_new_classifier (cfg, NULL);
 
@@ -960,6 +961,19 @@ rspamd_rcl_classifier_handler (struct rspamd_config *cfg,
 						}
 					}
 				}
+				else if (g_ascii_strcasecmp (key, "tokenizer") == 0) {
+					tkcf = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*tkcf));
+					if (ucl_object_type (val) == UCL_STRING) {
+						tkcf->name = ucl_object_tostring (val);
+					}
+					else if (ucl_object_type (val) == UCL_OBJECT) {
+						cur = ucl_object_find_key (val, "name");
+						if (cur != NULL) {
+							tkcf->name = ucl_object_tostring (cur);
+							tkcf->opts = val;
+						}
+					}
+				}
 			}
 		}
 	}
@@ -968,6 +982,7 @@ rspamd_rcl_classifier_handler (struct rspamd_config *cfg,
 	}
 
 	ccf->opts = (ucl_object_t *)obj;
+	ccf->tokenizer = tkcf;
 	cfg->classifiers = g_list_prepend (cfg->classifiers, ccf);
 
 
@@ -1355,11 +1370,6 @@ rspamd_rcl_config_init (void)
 		"type",
 		rspamd_rcl_parse_struct_string,
 		G_STRUCT_OFFSET (struct rspamd_classifier_config, classifier),
-		0);
-	rspamd_rcl_add_default_handler (sub,
-		"tokenizer",
-		rspamd_rcl_parse_struct_string,
-		G_STRUCT_OFFSET (struct rspamd_classifier_config, tokenizer),
 		0);
 	rspamd_rcl_add_default_handler (sub,
 		"min_tokens",
