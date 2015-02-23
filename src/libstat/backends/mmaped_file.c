@@ -865,7 +865,7 @@ rspamd_mmaped_file_runtime (struct rspamd_statfile_config *stcf, gboolean learn,
 
 	mf = rspamd_mmaped_file_is_open (ctx, stcf);
 
-	if (mf == NULL && learn) {
+	if (mf == NULL) {
 		/* Create file here */
 
 		filenameo = ucl_object_find_key (stcf->opts, "filename");
@@ -877,17 +877,18 @@ rspamd_mmaped_file_runtime (struct rspamd_statfile_config *stcf, gboolean learn,
 			}
 		}
 
+		if (learn) {
+			filename = ucl_object_tostring (filenameo);
 
-		filename = ucl_object_tostring (filenameo);
+			sizeo = ucl_object_find_key (stcf->opts, "size");
+			if (sizeo == NULL || ucl_object_type (sizeo) != UCL_INT) {
+				msg_err ("statfile %s has no size defined", stcf->symbol);
+				return NULL;
+			}
 
-		sizeo = ucl_object_find_key (stcf->opts, "size");
-		if (sizeo == NULL || ucl_object_type (sizeo) != UCL_INT) {
-			msg_err ("statfile %s has no size defined", stcf->symbol);
-			return NULL;
+			size = ucl_object_toint (sizeo);
+			rspamd_mmaped_file_create (ctx, filename, size, stcf);
 		}
-
-		size = ucl_object_toint (sizeo);
-		rspamd_mmaped_file_create (ctx, filename, size, stcf);
 
 		mf = rspamd_mmaped_file_open (ctx, filename, size, stcf);
 	}
