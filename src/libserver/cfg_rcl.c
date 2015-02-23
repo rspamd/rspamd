@@ -1300,6 +1300,11 @@ rspamd_rcl_config_init (void)
 		rspamd_rcl_parse_struct_boolean,
 		G_STRUCT_OFFSET (struct rspamd_config, check_all_filters),
 		0);
+	rspamd_rcl_add_default_handler (sub,
+		"min_word_len",
+		rspamd_rcl_parse_struct_integer,
+		G_STRUCT_OFFSET (struct rspamd_config, min_word_len),
+		RSPAMD_CL_FLAG_INT_32);
 
 	/**
 	 * Metric section

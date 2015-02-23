@@ -1271,7 +1271,7 @@ process_text_part (struct rspamd_task *task,
 	/* Post process part */
 	detect_text_language (text_part);
 	text_part->words = rspamd_tokenize_text (text_part->content->data,
-			text_part->content->len, text_part->is_utf, 4,
+			text_part->content->len, text_part->is_utf, task->cfg->min_word_len,
 			&text_part->urls_offset);
 }
 

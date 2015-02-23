@@ -40,6 +40,7 @@
 #define DEFAULT_RLIMIT_NOFILE 2048
 #define DEFAULT_RLIMIT_MAXCORE 0
 #define DEFAULT_MAP_TIMEOUT 10
+#define DEFAULT_MIN_WORD 4
 
 struct rspamd_ucl_map_cbdata {
 	struct rspamd_config *cfg;
@@ -165,6 +166,8 @@ rspamd_config_defaults (struct rspamd_config *cfg)
 
 	cfg->log_level = G_LOG_LEVEL_WARNING;
 	cfg->log_extended = TRUE;
+
+	cfg->min_word_len = DEFAULT_MIN_WORD;
 }
 
 void
