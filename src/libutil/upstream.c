@@ -634,19 +634,14 @@ rspamd_consistent_hash (guint64 key, guint32 nbuckets)
 static struct upstream*
 rspamd_upstream_get_hashed (struct upstream_list *ups, const guint8 *key, guint keylen)
 {
-	union {
-		guint64 k64;
-		guint32 k32[2];
-	} h;
-
+	guint64 k;
 	guint32 idx;
 
 	/* Generate 64 bits input key */
-	h.k32[0] = XXH32 (key, keylen, ((guint32*)&ups->hash_seed)[0]);
-	h.k32[1] = XXH32 (key, keylen, ((guint32*)&ups->hash_seed)[1]);
+	k = XXH64 (key, keylen, ups->hash_seed);
 
 	rspamd_mutex_lock (ups->lock);
-	idx = rspamd_consistent_hash (h.k64, ups->alive->len);
+	idx = rspamd_consistent_hash (k, ups->alive->len);
 	rspamd_mutex_unlock (ups->lock);
 
 	return g_ptr_array_index (ups->alive, idx);
