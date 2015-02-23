@@ -243,6 +243,9 @@ rspamd_task_free (struct rspamd_task *task, gboolean is_soft)
 				if (tp->words) {
 					g_array_free (tp->words, TRUE);
 				}
+				if (tp->normalized_words) {
+					g_array_free (tp->normalized_words, TRUE);
+				}
 				part = g_list_next (part);
 			}
 

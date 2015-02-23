@@ -40,6 +40,7 @@ struct mime_text_part {
 	GMimeObject *parent;
 	rspamd_fstring_t *diff_str;
 	GArray *words;
+	GArray *normalized_words;
 };
 
 struct received_header {

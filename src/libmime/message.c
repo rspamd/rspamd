@@ -31,6 +31,7 @@
 #include "images.h"
 #include "utlist.h"
 #include "tokenizers/tokenizers.h"
+#include "libstemmer.h"
 
 #include <iconv.h>
 
@@ -1170,6 +1171,54 @@ detect_text_language (struct mime_text_part *part)
 }
 
 static void
+rspamd_normalize_text_part (struct rspamd_task *task,
+		struct mime_text_part *part)
+{
+	struct sb_stemmer *stem = NULL;
+	rspamd_fstring_t *w, stw;
+	const guchar *r;
+	guint i;
+
+	if (part->language && part->language[0] != '\0' && part->is_utf) {
+		stem = sb_stemmer_new (part->language, "UTF_8");
+		if (stem == NULL) {
+			msg_info ("<%s> cannot create lemmatizer for %s language",
+				task->message_id, part->language);
+		}
+	}
+
+	g_array_sized_new (FALSE, FALSE, sizeof (rspamd_fstring_t),
+			part->words->len);
+	for (i = 0; i < part->words->len; i ++) {
+		w = &g_array_index (part->words, rspamd_fstring_t, i);
+		if (stem) {
+			r = sb_stemmer_stem (stem, w->begin, w->len);
+		}
+
+		if (stem == NULL || r == NULL) {
+			stw.begin = rspamd_mempool_fstrdup (task->task_pool, w);
+			stw.len = w->len;
+		}
+		else {
+			stw.begin = rspamd_mempool_strdup (task->task_pool, r);
+			stw.len = strlen (r);
+		}
+
+		if (part->is_utf) {
+			rspamd_str_lc_utf8 (stw.begin, stw.len);
+		}
+		else {
+			rspamd_str_lc (stw.begin, stw.len);
+		}
+		g_array_append_val (part->normalized_words, stw);
+	}
+
+	if (stem != NULL) {
+		sb_stemmer_delete (stem);
+	}
+}
+
+static void
 process_text_part (struct rspamd_task *task,
 	GByteArray *part_content,
 	GMimeContentType *type,
@@ -1273,6 +1322,7 @@ process_text_part (struct rspamd_task *task,
 	text_part->words = rspamd_tokenize_text (text_part->content->data,
 			text_part->content->len, text_part->is_utf, task->cfg->min_word_len,
 			&text_part->urls_offset);
+	rspamd_normalize_text_part (task, text_part);
 }
 
 #ifdef GMIME24
