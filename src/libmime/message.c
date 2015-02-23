@@ -1187,8 +1187,8 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 		}
 	}
 
-	g_array_sized_new (FALSE, FALSE, sizeof (rspamd_fstring_t),
-			part->words->len);
+	part->normalized_words = g_array_sized_new (FALSE, FALSE,
+			sizeof (rspamd_fstring_t), part->words->len);
 	for (i = 0; i < part->words->len; i ++) {
 		w = &g_array_index (part->words, rspamd_fstring_t, i);
 		if (stem) {
