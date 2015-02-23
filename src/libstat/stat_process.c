@@ -287,6 +287,20 @@ rspamd_stat_process_tokenize (struct rspamd_tokenizer_config *cf,
 	GArray *words;
 	gchar *sub;
 	GList *cur;
+	const ucl_object_t *elt;
+	gboolean compat = TRUE;
+
+	/*
+	 * XXX: Ugly repetition to be backward compatible
+	 */
+	if (cf != NULL && cf->opts != NULL) {
+		elt = ucl_object_find_key (cf->opts, "hash");
+		if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
+			if (g_ascii_strcasecmp (ucl_object_tostring (elt), "xxh") == 0) {
+				compat = FALSE;
+			}
+		}
+	}
 
 	cur = task->text_parts;
 
@@ -297,8 +311,15 @@ rspamd_stat_process_tokenize (struct rspamd_tokenizer_config *cf,
 			/*
 			 * XXX: Use normalized words if needed here
 			 */
-			tok->tokenizer->tokenize_func (cf, task->task_pool,
+
+			if (compat) {
+				tok->tokenizer->tokenize_func (cf, task->task_pool,
 					part->words, tok->tokens, part->is_utf);
+			}
+			else {
+				tok->tokenizer->tokenize_func (cf, task->task_pool,
+					part->normalized_words, tok->tokens, part->is_utf);
+			}
 		}
 
 		cur = g_list_next (cur);

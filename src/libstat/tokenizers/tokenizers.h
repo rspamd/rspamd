@@ -31,7 +31,7 @@ GArray * rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 		gsize min_len, GList **exceptions);
 
 /* OSB tokenize function */
-int osb_tokenize_text (struct rspamd_tokenizer_config *cf,
+int rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
 	rspamd_mempool_t *pool,
 	GArray *input,
 	GTree *tokens,

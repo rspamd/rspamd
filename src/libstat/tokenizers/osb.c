@@ -28,17 +28,28 @@
 
 #include "tokenizers.h"
 #include "stat_internal.h"
+#include "libstemmer.h"
+#include "xxhash.h"
+#include "siphash.h"
 
 /* Size for features pipe */
-#define FEATURE_WINDOW_SIZE 5
+#define DEFAULT_FEATURE_WINDOW_SIZE 5
 
-/* Minimum length of token */
-#define MIN_LEN 4
-
-extern const int primes[];
+static const int primes[] = {
+	1, 7,
+	3, 13,
+	5, 29,
+	11, 51,
+	23, 101,
+	47, 203,
+	97, 407,
+	197, 817,
+	397, 1637,
+	797, 3277,
+};
 
 int
-osb_tokenize_text (struct rspamd_tokenizer_config *cf,
+rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
 	rspamd_mempool_t * pool,
 	GArray * input,
 	GTree * tree,
@@ -46,9 +57,15 @@ osb_tokenize_text (struct rspamd_tokenizer_config *cf,
 {
 	rspamd_token_t *new = NULL;
 	rspamd_fstring_t *token;
-	guint32 hashpipe[FEATURE_WINDOW_SIZE], h1, h2;
-	gint i, processed = 0;
-	guint w;
+	const ucl_object_t *elt;
+	guint64 *hashpipe, cur;
+	guint32 h1, h2;
+	guint processed = 0, i, w, window_size = DEFAULT_FEATURE_WINDOW_SIZE;
+	gboolean compat = TRUE, secure = FALSE;
+	gint64 seed = 0xdeadbabe;
+	guchar *key = NULL;
+	gsize keylen;
+	struct sipkey sk;
 
 	g_assert (tree != NULL);
 
@@ -56,32 +73,100 @@ osb_tokenize_text (struct rspamd_tokenizer_config *cf,
 		return FALSE;
 	}
 
-	memset (hashpipe, 0xfe, FEATURE_WINDOW_SIZE * sizeof (hashpipe[0]));
+	if (cf != NULL && cf->opts != NULL) {
+		elt = ucl_object_find_key (cf->opts, "hash");
+		if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
+			if (g_ascii_strncasecmp (ucl_object_tostring (elt), "xxh", 3)
+					== 0) {
+				compat = FALSE;
+				secure = FALSE;
+				elt = ucl_object_find_key (cf->opts, "seed");
+				if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
+					seed = ucl_object_toint (elt);
+				}
+			}
+			else if (g_ascii_strncasecmp (ucl_object_tostring (elt), "sip", 3)
+					== 0) {
+				compat = FALSE;
+				elt = ucl_object_find_key (cf->opts, "seed");
+
+				if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
+					key = rspamd_decode_base32 (ucl_object_tostring (elt),
+							0, &keylen);
+					if (keylen < 16) {
+						msg_warn ("siphash seed is too short: %s", keylen);
+						g_free (key);
+					}
+					else {
+						secure = TRUE;
+						sip_tokey (&sk, key);
+						g_free (key);
+					}
+				}
+				else {
+					msg_warn ("siphash cannot be used without seed");
+				}
+
+			}
+		}
+		elt = ucl_object_find_key (cf->opts, "window");
+		if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
+			window_size = ucl_object_toint (elt);
+			if (window_size > DEFAULT_FEATURE_WINDOW_SIZE * 4) {
+				msg_err ("too large window size: %d", window_size);
+				window_size = DEFAULT_FEATURE_WINDOW_SIZE;
+			}
+		}
+	}
+
+	hashpipe = g_alloca (window_size * sizeof (hashpipe[0]));
+	memset (hashpipe, 0xfe, window_size * sizeof (hashpipe[0]));
 
 	for (w = 0; w < input->len; w ++) {
 		token = &g_array_index (input, rspamd_fstring_t, w);
 
-		if (processed < FEATURE_WINDOW_SIZE) {
+		if (compat) {
+			cur = rspamd_fstrhash_lc (token, is_utf);
+		}
+		else {
+			/* We know that the words are normalized */
+			if (!secure) {
+				cur = XXH64 (token->begin, token->len, seed);
+			}
+			else {
+				cur = siphash24 (token->begin, token->len, &sk);
+			}
+		}
+
+		if (processed < window_size) {
 			/* Just fill a hashpipe */
-			hashpipe[FEATURE_WINDOW_SIZE - ++processed] =
-				rspamd_fstrhash_lc (token, is_utf);
+			hashpipe[window_size - ++processed] = cur;
 		}
 		else {
 			/* Shift hashpipe */
-			for (i = FEATURE_WINDOW_SIZE - 1; i > 0; i--) {
+			for (i = window_size - 1; i > 0; i--) {
 				hashpipe[i] = hashpipe[i - 1];
 			}
-			hashpipe[0] = rspamd_fstrhash_lc (token, is_utf);
+			hashpipe[0] = cur;
 			processed++;
 
-			for (i = 1; i < FEATURE_WINDOW_SIZE; i++) {
-				h1 = hashpipe[0] * primes[0] + hashpipe[i] * primes[i << 1];
-				h2 = hashpipe[0] * primes[1] + hashpipe[i] *
-					primes[(i << 1) - 1];
+			for (i = 1; i < window_size; i++) {
 				new = rspamd_mempool_alloc0 (pool, sizeof (rspamd_token_t));
-				new->datalen = sizeof(gint32) * 2;
-				memcpy(new->data, &h1, sizeof(h1));
-				memcpy(new->data + sizeof(h1), &h2, sizeof(h2));
+				new->datalen = sizeof (gint64);
+
+				if (compat) {
+					h1 = ((guint32)hashpipe[0]) * primes[0] +
+							((guint32)hashpipe[i]) * primes[i << 1];
+					h2 = ((guint32)hashpipe[0]) * primes[1] +
+							((guint32)hashpipe[i]) * primes[(i << 1) - 1];
+
+					memcpy(new->data, &h1, sizeof (h1));
+					memcpy(new->data + sizeof (h1), &h2, sizeof (h2));
+				}
+				else {
+					cur = hashpipe[0] * primes[0] + hashpipe[i] * primes[i << 1];
+					memcpy (new->data, &cur, sizeof (cur));
+				}
 
 				if (g_tree_lookup (tree, new) == NULL) {
 					g_tree_insert (tree, new, new);
@@ -90,14 +175,23 @@ osb_tokenize_text (struct rspamd_tokenizer_config *cf,
 		}
 	}
 
-	if (processed <= FEATURE_WINDOW_SIZE) {
+	if (processed <= window_size) {
 		for (i = 1; i < processed; i++) {
-			h1 = hashpipe[0] * primes[0] + hashpipe[i] * primes[i << 1];
-			h2 = hashpipe[0] * primes[1] + hashpipe[i] * primes[(i << 1) - 1];
 			new = rspamd_mempool_alloc0 (pool, sizeof (rspamd_token_t));
-			new->datalen = sizeof(gint32) * 2;
-			memcpy(new->data, &h1, sizeof(h1));
-			memcpy(new->data + sizeof(h1), &h2, sizeof(h2));
+			new->datalen = sizeof (gint64);
+
+			if (compat) {
+				h1 = ((guint32)hashpipe[0]) * primes[0] +
+						((guint32)hashpipe[i]) * primes[i << 1];
+				h2 = ((guint32)hashpipe[0]) * primes[1] +
+						((guint32)hashpipe[i]) * primes[(i << 1) - 1];
+				memcpy(new->data, &h1, sizeof (h1));
+				memcpy(new->data + sizeof (h1), &h2, sizeof (h2));
+			}
+			else {
+				cur = hashpipe[0] * primes[0] + hashpipe[i] * primes[i << 1];
+				memcpy (new->data, &cur, sizeof (cur));
+			}
 
 			if (g_tree_lookup (tree, new) == NULL) {
 				g_tree_insert (tree, new, new);

@@ -30,19 +30,6 @@
 #include "tokenizers.h"
 #include "stat_internal.h"
 
-const int primes[] = {
-	1, 7,
-	3, 13,
-	5, 29,
-	11, 51,
-	23, 101,
-	47, 203,
-	97, 407,
-	197, 817,
-	397, 1637,
-	797, 3277,
-};
-
 const gchar t_delimiters[255] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
 	1, 0, 0, 1, 0, 0, 0, 0, 0, 0,
