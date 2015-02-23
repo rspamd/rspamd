@@ -109,6 +109,7 @@ void rspamd_pass_signal (GHashTable *, gint );
  * Convert string to lowercase
  */
 void rspamd_str_lc (gchar *str, guint size);
+void rspamd_str_lc_utf8 (gchar *str, guint size);
 
 #ifndef HAVE_SETPROCTITLE
 /*

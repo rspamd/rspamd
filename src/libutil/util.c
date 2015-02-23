@@ -663,6 +663,37 @@ rspamd_str_lc (gchar *str, guint size)
 	}
 }
 
+/*
+ * The purpose of this function is fast and in place conversion of a unicode
+ * string to lower case, so some locale peculiarities are simply ignored
+ * If the target string is longer than initial one, then we just trim it
+ */
+void
+rspamd_str_lc_utf8 (gchar *str, guint size)
+{
+	const gchar *s = str, *p;
+	gchar *d = str;
+	guint remain = size;
+	gint r;
+	gunichar uc;
+
+	while (remain > 0) {
+		uc = g_utf8_get_char_validated (s, remain);
+		uc = g_unichar_tolower (uc);
+		p = g_utf8_next_char (s);
+
+		if (p - s == 0) {
+			return;
+		}
+
+		r = g_unichar_to_utf8 (uc, d);
+		g_assert (r > 0);
+		remain -= r;
+		s = p;
+		d += r;
+	}
+}
+
 #ifndef HAVE_SETPROCTITLE
 
 static gchar *title_buffer = 0;
