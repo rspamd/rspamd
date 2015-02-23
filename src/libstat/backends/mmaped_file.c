@@ -877,8 +877,10 @@ rspamd_mmaped_file_runtime (struct rspamd_statfile_config *stcf, gboolean learn,
 			}
 		}
 
+		filename = ucl_object_tostring (filenameo);
+
 		if (learn) {
-			filename = ucl_object_tostring (filenameo);
+
 
 			sizeo = ucl_object_find_key (stcf->opts, "size");
 			if (sizeo == NULL || ucl_object_type (sizeo) != UCL_INT) {
