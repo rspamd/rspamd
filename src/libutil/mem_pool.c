@@ -819,6 +819,7 @@ rspamd_mempool_get_mutex (rspamd_mempool_t * pool)
 
 		pthread_mutexattr_init (&mattr);
 		pthread_mutexattr_setpshared (&mattr, PTHREAD_PROCESS_SHARED);
+		pthread_mutexattr_setrobust (&mattr, PTHREAD_MUTEX_ROBUST);
 		pthread_mutex_init (res, &mattr);
 		rspamd_mempool_add_destructor (pool,
 				(rspamd_mempool_destruct_t)pthread_mutex_destroy, res);
