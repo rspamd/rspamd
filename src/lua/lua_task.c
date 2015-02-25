@@ -658,8 +658,8 @@ static const struct luaL_reg urllib_m[] = {
 };
 
 /* Utility functions */
-static struct rspamd_task *
-lua_check_task (lua_State * L)
+struct rspamd_task *
+lua_check_task (lua_State * L, gint pos)
 {
 	void *ud = luaL_checkudata (L, 1, "rspamd{task}");
 	luaL_argcheck (L, ud != NULL, 1, "'task' expected");
@@ -733,7 +733,7 @@ lua_task_create_from_buffer (lua_State *L)
 static int
 lua_task_process_message (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL && task->msg.len > 0) {
 		if (process_message (task) == 0) {
@@ -753,7 +753,7 @@ lua_task_process_message (lua_State *L)
 static int
 lua_task_get_cfg (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_config **pcfg;
 
 	pcfg = lua_newuserdata (L, sizeof (gpointer));
@@ -766,7 +766,7 @@ lua_task_get_cfg (lua_State *L)
 static int
 lua_task_set_cfg (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	void *ud = luaL_checkudata (L, 2, "rspamd{config}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'config' expected");
@@ -777,7 +777,7 @@ lua_task_set_cfg (lua_State *L)
 static int
 lua_task_destroy (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL) {
 		rspamd_task_free (task, FALSE);
@@ -790,7 +790,7 @@ static int
 lua_task_get_message (lua_State * L)
 {
 	GMimeMessage **pmsg;
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL && task->message != NULL) {
 		pmsg = lua_newuserdata (L, sizeof (GMimeMessage *));
@@ -807,7 +807,7 @@ static int
 lua_task_get_mempool (lua_State * L)
 {
 	rspamd_mempool_t **ppool;
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL) {
 		ppool = lua_newuserdata (L, sizeof (rspamd_mempool_t *));
@@ -824,7 +824,7 @@ static int
 lua_task_get_session (lua_State * L)
 {
 	struct rspamd_async_session **psession;
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL) {
 		psession = lua_newuserdata (L, sizeof (void *));
@@ -841,7 +841,7 @@ static int
 lua_task_get_ev_base (lua_State * L)
 {
 	struct event_base **pbase;
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL) {
 		pbase = lua_newuserdata (L, sizeof (struct event_base *));
@@ -857,7 +857,7 @@ lua_task_get_ev_base (lua_State * L)
 static gint
 lua_task_insert_result (lua_State * L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *symbol_name, *param;
 	double flag;
 	GList *params = NULL;
@@ -884,7 +884,7 @@ lua_task_insert_result (lua_State * L)
 static gint
 lua_task_set_pre_result (lua_State * L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	struct metric_result *mres;
 	gchar *action_str;
 	gint action = METRIC_ACTION_MAX;
@@ -945,7 +945,7 @@ lua_tree_url_callback (gpointer key, gpointer value, gpointer ud)
 static gint
 lua_task_get_urls (lua_State * L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	struct lua_tree_cb_data cb;
 
 	if (task) {
@@ -963,7 +963,7 @@ lua_task_get_urls (lua_State * L)
 static gint
 lua_task_get_content (lua_State * L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
 		lua_pushlstring (L, task->msg.start, task->msg.len);
@@ -977,7 +977,7 @@ lua_task_get_content (lua_State * L)
 static gint
 lua_task_get_emails (lua_State * L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	struct lua_tree_cb_data cb;
 
 	if (task) {
@@ -996,7 +996,7 @@ static gint
 lua_task_get_text_parts (lua_State * L)
 {
 	gint i = 1;
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	GList *cur;
 	struct mime_text_part *part, **ppart;
 
@@ -1022,7 +1022,7 @@ static gint
 lua_task_get_parts (lua_State * L)
 {
 	gint i = 1;
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	GList *cur;
 	struct mime_part *part, **ppart;
 
@@ -1126,7 +1126,7 @@ static gint
 lua_task_get_header_common (lua_State *L, gboolean full, gboolean raw)
 {
 	gboolean strong = FALSE;
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *name;
 
 	name = luaL_checkstring (L, 2);
@@ -1162,7 +1162,7 @@ lua_task_get_header_raw (lua_State * L)
 static gint
 lua_task_get_received_headers (lua_State * L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	GList *cur;
 	struct received_header *rh;
 	gint i = 1;
@@ -1204,7 +1204,7 @@ lua_task_get_received_headers (lua_State * L)
 static gint
 lua_task_get_resolver (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_dns_resolver **presolver;
 
 	if (task != NULL && task->resolver != NULL) {
@@ -1222,7 +1222,7 @@ lua_task_get_resolver (lua_State *L)
 static gint
 lua_task_inc_dns_req (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL) {
 		task->dns_requests++;
@@ -1234,7 +1234,7 @@ lua_task_inc_dns_req (lua_State *L)
 static gint
 lua_task_call_rspamd_function (lua_State * L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	struct expression_function f;
 	gint i, top;
 	gboolean res;
@@ -1352,7 +1352,7 @@ lua_push_internet_address_list (lua_State *L, InternetAddressList *addrs)
 static gint
 lua_task_get_recipients (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	InternetAddressList *addrs;
 	gint what = 0;
 
@@ -1399,7 +1399,7 @@ lua_task_get_recipients (lua_State *L)
 static gint
 lua_task_get_from (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	InternetAddressList *addrs;
 	gint what = 0;
 
@@ -1446,7 +1446,7 @@ lua_task_get_from (lua_State *L)
 static gint
 lua_task_get_user (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task && task->user != NULL) {
 		lua_pushstring (L, task->user);
@@ -1460,7 +1460,7 @@ lua_task_get_user (lua_State *L)
 static gint
 lua_task_set_user (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *new_user;
 
 	if (task) {
@@ -1476,7 +1476,7 @@ lua_task_set_user (lua_State *L)
 static gint
 lua_task_get_from_ip (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
 		rspamd_lua_ip_push (L, &task->from_addr);
@@ -1506,7 +1506,7 @@ lua_task_get_from_ip_num (lua_State *L)
 static gint
 lua_task_get_client_ip (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
 		rspamd_lua_ip_push (L, &task->client_addr);
@@ -1521,7 +1521,7 @@ lua_task_get_client_ip (lua_State *L)
 static gint
 lua_task_get_helo (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
 		if (task->helo != NULL) {
@@ -1537,7 +1537,7 @@ lua_task_get_helo (lua_State *L)
 static gint
 lua_task_set_helo (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *new_helo;
 
 	if (task) {
@@ -1553,7 +1553,7 @@ lua_task_set_helo (lua_State *L)
 static gint
 lua_task_get_hostname (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
 		if (task->hostname != NULL) {
@@ -1583,7 +1583,7 @@ lua_task_get_hostname (lua_State *L)
 static gint
 lua_task_set_hostname (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *new_hostname;
 
 	if (task) {
@@ -1600,7 +1600,7 @@ lua_task_set_hostname (lua_State *L)
 static gint
 lua_task_get_images (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	gint i = 1;
 	GList *cur;
 	struct rspamd_image **pimg;
@@ -1668,7 +1668,7 @@ lua_push_symbol_result (lua_State *L,
 static gint
 lua_task_get_symbol (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *symbol;
 	struct metric *metric;
 	GList *cur = NULL, *metric_list;
@@ -1764,7 +1764,7 @@ lua_task_detect_date_type (lua_State *L, gint idx, gboolean *gmt)
 static gint
 lua_task_get_date (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	gdouble tim;
 	enum lua_date_type type = DATE_CONNECT;
 	gboolean gmt = TRUE;
@@ -1828,7 +1828,7 @@ lua_task_get_date (lua_State *L)
 static gint
 lua_task_get_message_id (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL && task->message_id != NULL) {
 		lua_pushstring (L, task->message_id);
@@ -1843,7 +1843,7 @@ lua_task_get_message_id (lua_State *L)
 static gint
 lua_task_get_timeval (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL) {
 		lua_newtable (L);
@@ -1865,7 +1865,7 @@ lua_task_get_timeval (lua_State *L)
 static gint
 lua_task_learn (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	gboolean is_spam = FALSE;
 	const gchar *clname;
 	struct rspamd_classifier_config *cl;
@@ -1907,7 +1907,7 @@ lua_task_learn (lua_State *L)
 static gint
 lua_task_set_settings (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	ucl_object_t *settings;
 
 	settings = ucl_object_lua_import (L, 2);
@@ -1921,7 +1921,7 @@ lua_task_set_settings (lua_State *L)
 static gint
 lua_task_get_metric_score (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *metric_name;
 	struct metric_result *metric_res;
 
@@ -1952,7 +1952,7 @@ lua_task_get_metric_score (lua_State *L)
 static gint
 lua_task_get_metric_action (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L);
+	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *metric_name;
 	struct metric_result *metric_res;
 	enum rspamd_metric_action action;

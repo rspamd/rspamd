@@ -128,6 +128,11 @@ void rspamd_lua_ip_push (lua_State *L, rspamd_inet_addr_t *addr);
 struct rspamd_lua_ip * lua_check_ip (lua_State * L, gint pos);
 
 /**
+ * Check for task at the specified position
+ */
+struct rspamd_task *lua_check_task (lua_State * L, gint pos);
+
+/**
  * Push ip address from a string (nil is pushed if a string cannot be converted)
  */
 void rspamd_lua_ip_push_fromstring (lua_State *L, const gchar *ip_str);
