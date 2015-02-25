@@ -109,7 +109,6 @@ lua_redis_push_error (const gchar *err,
 	if (connected) {
 		remove_normal_event (ud->task->s, lua_redis_fin, ud);
 	}
-
 }
 
 /**
@@ -202,6 +201,8 @@ lua_redis_make_request_real (struct lua_redis_userdata *ud)
 		lua_redis_push_error (ud->ctx ? ud->ctx->errstr : "unknown error",
 			ud,
 			FALSE);
+		redisAsyncFree (ud->ctx);
+
 		return FALSE;
 	}
 	else {
