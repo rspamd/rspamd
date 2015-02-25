@@ -292,6 +292,12 @@ rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg)
 	lua_getfield (L, -1, "path");
 	old_path = luaL_checkstring (L, -1);
 
+	if (strstr (old_path, RSPAMD_PLUGINSDIR) != NULL) {
+		/* Path has been already set, do not touch it */
+		lua_pop (L, 2);
+		return;
+	}
+
 	opts = ucl_object_find_key (cfg->rcl_obj, "options");
 	if (opts != NULL) {
 		opts = ucl_object_find_key (opts, "lua_path");
