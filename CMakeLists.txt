@@ -1011,7 +1011,7 @@ FOREACH(LUA_PLUGIN ${LUA_PLUGINS})
 ENDFOREACH(LUA_PLUGIN)
 
 # Install lua fun library
-INSTALL(FILES "contrib/lua-fun/fun.lua" DESTINATION ${PLUGINSDIR}/fun.lua)
+INSTALL(FILES "contrib/lua-fun/fun.lua" DESTINATION ${PLUGINSDIR}/lua)
 
 # Lua config
 INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${CONFDIR}/lua)")
