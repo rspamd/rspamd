@@ -33,13 +33,13 @@ local rbls = {}
 local local_exclusions = nil
 local private_ips = nil
 
-local rspamd_logger = require "rspamd_logger"
-local rspamd_ip = require "rspamd_ip"
+local rspamd_logger = require 'rspamd_logger'
+local rspamd_ip = require 'rspamd_ip'
 
 local function validate_dns(lstr)
-  for v in lstr:gmatch("[^%.]+") do
-    if not v:match("^[%w-]+$") or v:len() > 63
-      or v:match("^-") or v:match("-$") then
+  for v in lstr:gmatch('[^%.]+') do
+    if not v:match('^[%w-]+$') or v:len() > 63
+      or v:match('^-') or v:match('-$') then
       return false
     end
   end
@@ -61,7 +61,7 @@ local function is_excluded_ip(rip)
 end
 
 local function ip_to_rbl(ip, rbl)
-  return table.concat(ip:inversed_str_octets(), ".") .. '.' .. rbl
+  return table.concat(ip:inversed_str_octets(), '.') .. '.' .. rbl
 end
 
 local function rbl_cb (task)
@@ -85,14 +85,14 @@ local function rbl_cb (task)
             local foundrc = false
             for s,i in pairs(thisrbl['returncodes']) do
               if type(i) == 'string' then
-                if string.find(ipstr, "^" .. i .. "$") then
+                if string.find(ipstr, '^' .. i .. '$') then
                   foundrc = true
                   task:insert_result(s, 1)
                   break
                 end
               elseif type(i) == 'table' then
                 for _,v in pairs(i) do
-                  if string.find(ipstr, "^" .. v .. "$") then
+                  if string.find(ipstr, '^' .. v .. '$') then
                     foundrc = true
                     task:insert_result(s, 1)
                     break
@@ -302,39 +302,29 @@ local opts = rspamd_config:get_all_opt('rbl')
 if not opts or type(opts) ~= 'table' then
   return
 end
-if(opts['default_ipv4'] == nil) then
-  opts['default_ipv4'] = true
+
+-- Plugin defaults should not be changed - override these in config
+-- New defaults should not alter behaviour
+default_defaults = {
+  ['default_ipv4'] = {[1] = true, [2] = 'ipv4'},
+  ['default_ipv6'] = {[1] = false, [2] = 'ipv6'},
+  ['default_received'] = {[1] = true, [2] = 'received'},
+  ['default_from'] = {[1] = false, [2] = 'from'},
+  ['default_unknown'] = {[1] = false, [2] = 'unknown'},
+  ['default_rdns'] = {[1] = false, [2] = 'rdns'},
+  ['default_helo'] = {[1] = false, [2] = 'helo'},
+  ['default_emails'] = {[1] = false, [2] = 'emails'},
+  ['default_exclude_users'] = {[1] = false, [2] = 'exclude_users'},
+  ['default_exclude_private_ips'] = {[1] = true, [2] = 'exclude_private_ips'},
+  ['default_exclude_users'] = {[1] = false, [2] = 'exclude_users'},
+  ['default_exclude_local'] = {[1] = true, [2] = 'exclude_local'},
+}
+for default, default_v in pairs(default_defaults) do
+  if opts[default] == nil then
+    opts[default] = default_v[1]
+  end
 end
-if(opts['default_ipv6'] == nil) then
-  opts['default_ipv6'] = false
-end
-if(opts['default_received'] == nil) then
-  opts['default_received'] = true
-end
-if(opts['default_from'] == nil) then
-  opts['default_from'] = false
-end
-if(opts['default_unknown'] == nil) then
-  opts['default_unknown'] = false
-end
-if(opts['default_rdns'] == nil) then
-  opts['default_rdns'] = false
-end
-if(opts['default_helo'] == nil) then
-  opts['default_helo'] = false
-end
-if(opts['default_exclude_users'] == nil) then
-  opts['default_exclude_users'] = false
-end
-if(opts['default_exclude_private_ips'] == nil) then
-  opts['default_exclude_private_ips'] = true
-end
-if(opts['default_exclude_local'] == nil) then
-  opts['default_exclude_local'] = true
-end
-if(opts['default_emails'] == nil) then
-  opts['default_emails'] = false
-end
+
 if(opts['local_exclude_ip_map'] ~= nil) then
   local_exclusions = rspamd_config:add_radix_map(opts['local_exclude_ip_map'])
 end
@@ -343,13 +333,9 @@ if(opts['private_ips'] ~= nil) then
 end
 
 for key,rbl in pairs(opts['rbls']) do
-  local o = {
-    "ipv4", "ipv6", "from", "received", "unknown", "rdns", "helo", "exclude_users",
-    "exclude_private_ips", "exclude_local", "emails"
-  }
-  for i=1,table.maxn(o) do
-    if(rbl[o[i]] == nil) then
-      rbl[o[i]] = opts['default_' .. o[i]]
+  for default, default_v in pairs(default_defaults) do
+    if(rbl[default_v[2]] == nil) then
+      rbl[default_v[2]] = opts[default]
     end
   end
   if type(rbl['returncodes']) == 'table' then
