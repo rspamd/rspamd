@@ -1294,6 +1294,10 @@ set:
 		u->port = pt;
 		ret = 0;
 		break;
+	case parse_suffix_slash:
+		/* Url ends with '/' */
+		ret = 0;
+		break;
 	case parse_path:
 		if (p - c > 0) {
 			SET_U (u, UF_PATH);
