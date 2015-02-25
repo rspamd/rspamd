@@ -173,8 +173,6 @@ local function set_limits(task, args)
       
       local cmd = generate_format_string(values, true)
       rspamd_redis.make_request(task, addr, rate_set_key_cb, cmd, values)
-      rspamd_redis.make_request(task, addr:to_string(), addr:get_port(), rate_set_key_cb,
-        'SET %b %b', key, lstr)
     elseif err then
       rspamd_logger.info('got error while setting limit: ' .. err)
       upstream:fail()
