@@ -661,8 +661,8 @@ static const struct luaL_reg urllib_m[] = {
 struct rspamd_task *
 lua_check_task (lua_State * L, gint pos)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{task}");
-	luaL_argcheck (L, ud != NULL, 1, "'task' expected");
+	void *ud = luaL_checkudata (L, pos, "rspamd{task}");
+	luaL_argcheck (L, ud != NULL, pos, "'task' expected");
 	return ud ? *((struct rspamd_task **)ud) : NULL;
 }
 
