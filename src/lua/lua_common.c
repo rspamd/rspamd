@@ -294,6 +294,7 @@ rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg)
 
 	if (strstr (old_path, RSPAMD_PLUGINSDIR) != NULL) {
 		/* Path has been already set, do not touch it */
+		lua_pop (L, 2);
 		return;
 	}
 
