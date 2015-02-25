@@ -212,7 +212,7 @@ lua_ip_new (lua_State *L, struct rspamd_lua_ip *old)
 	return ip;
 }
 
-static struct rspamd_lua_ip *
+struct rspamd_lua_ip *
 lua_check_ip (lua_State * L, gint pos)
 {
 	void *ud = luaL_checkudata (L, pos, "rspamd{ip}");
