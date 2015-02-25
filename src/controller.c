@@ -1709,7 +1709,6 @@ start_controller_worker (struct rspamd_worker *worker)
 
 	g_mime_shutdown ();
 	rspamd_http_router_free (ctx->http);
-	rspamd_keypair_cache_destroy (cache);
 	rspamd_log_close (rspamd_main->logger);
 	exit (EXIT_SUCCESS);
 }
