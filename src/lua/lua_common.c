@@ -307,11 +307,11 @@ rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg)
 	}
 
 	if (additional_path) {
-		rspamd_snprintf (path_buf, sizeof (path_buf), "%s;%s/?.lua;%s/?.lua;%s",
+		rspamd_snprintf (path_buf, sizeof (path_buf), "%s;%s/lua/?.lua;%s/lua/?.lua;%s",
 				old_path, RSPAMD_PLUGINSDIR, RSPAMD_CONFDIR, additional_path);
 	}
 	else {
-		rspamd_snprintf (path_buf, sizeof (path_buf), "%s;%s/?.lua;%s/?.lua",
+		rspamd_snprintf (path_buf, sizeof (path_buf), "%s;%s/lua/?.lua;%s/lua/?.lua",
 				old_path, RSPAMD_PLUGINSDIR, RSPAMD_CONFDIR);
 	}
 
