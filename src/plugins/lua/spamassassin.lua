@@ -69,17 +69,36 @@ local function process_sa_conf(f)
     local slash = string.find(l, '/')
     
     words = _.totable(_.filter(function(w) return w ~= "" end, _.iter(split(l))))
-    if words[1] == "header" and slash then
+    if words[1] == "header" then
       -- header SYMBOL Header ~= /regexp/
       if valid_rule then
         insert_cur_rule()
       end
-      cur_rule['type'] = 'header'
-      cur_rule['symbol'] = words[2]
-      cur_rule['header'] = words[3]
-      cur_rule['re_expr'] = words_to_re(words, 4)
-      cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
-      if cur_rule['re'] then valid_rule = true end
+      if slash then
+        cur_rule['type'] = 'header'
+        cur_rule['symbol'] = words[2]
+        cur_rule['header'] = words[3]
+        cur_rule['re_expr'] = words_to_re(words, 4)
+        cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
+        if cur_rule['re'] then valid_rule = true end
+      else
+        -- Maybe we know the function and can convert it
+        local s,e = string.find(words[3], 'exists:')
+        if e then
+           local h = _.foldl(function(acc, s) return acc .. s end,
+            '', _.drop_n(e, words[3]))
+           cur_rule['type'] = 'function'
+           cur_rule['symbol'] = words[2]
+           cur_rule['header'] = h
+           cur_rule['function'] = function(task)
+            if task:get_header(h) then
+              return true
+            end
+            return false
+           end
+           valid_rule = true
+        end
+      end
     elseif words[1] == "body" and slash then
       -- body SYMBOL /regexp/
       if valid_rule then
@@ -173,6 +192,24 @@ _.each(function(k, r)
   end,
   _.filter(function(k, r)
       return r['type'] == 'header' and r['header']
+    end,
+    rules))
+    
+-- Custom function rules
+-- Header rules
+_.each(function(k, r)
+    local f = function(task)
+      if r['function'](task) then
+        task:insert_result(k, 1.0)
+      end
+    end
+    rspamd_config:register_symbol(k, calculate_score(k), f)
+    if r['score'] then
+      rspamd_config:set_metric_symbol(k, r['score'], r['description'])
+    end
+  end,
+  _.filter(function(k, r)
+      return r['type'] == 'function' and r['function']
     end,
     rules))
 
