@@ -78,6 +78,11 @@ local function process_sa_conf(f)
         cur_rule['type'] = 'header'
         cur_rule['symbol'] = words[2]
         cur_rule['header'] = words[3]
+        
+        if words[4] == '!~' then
+          cur_rule['not'] = true
+        end
+        
         cur_rule['re_expr'] = words_to_re(words, 4)
         cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
         if cur_rule['re'] then valid_rule = true end
@@ -178,11 +183,14 @@ _.each(function(k, r)
       if hdr then
         for n, rh in ipairs(hdr) do
           -- Subject for optimization
-          if (r['re']:match(rh['decoded'])) then
+          local match = r['re']:match(rh['decoded'])
+          if (match and not r['not']) or (not match and r['not']) then
             task:insert_result(k, 1.0)
             return
           end
         end
+      elseif r['not'] then
+        task:insert_result(k, 1.0)
       end
     end
     rspamd_config:register_symbol(k, calculate_score(k), f)
