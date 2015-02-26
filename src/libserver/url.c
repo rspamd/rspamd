@@ -1073,6 +1073,17 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				st = parse_semicolon;
 				SET_U (u, UF_SCHEMA);
 			}
+			else if (!g_ascii_isalnum (t) && t != '+' && t != '-') {
+				if (!strict && p > c) {
+					/* We might have some domain, but no protocol */
+					st = parse_domain;
+					p = c;
+					break;
+				}
+				else {
+					goto out;
+				}
+			}
 			p ++;
 			break;
 		case parse_semicolon:
@@ -1174,7 +1185,12 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 
 					if (!g_unichar_isalnum (uc)) {
 						/* Bad symbol */
-						goto out;
+						if (strict) {
+							goto out;
+						}
+						else {
+							goto set;
+						}
 					}
 
 					p = g_utf8_next_char (p);
@@ -1831,7 +1847,7 @@ rspamd_url_find (rspamd_mempool_t *pool,
 			m.add_prefix = FALSE;
 			if (matcher->start (begin, end, pos,
 				&m) && matcher->end (begin, end, pos, &m)) {
-				if (m.add_prefix) {
+				if (m.add_prefix || matcher->prefix[0] != '\0') {
 					l = m.m_len + 1 + strlen (m.prefix);
 					*url_str = rspamd_mempool_alloc (pool, l);
 					rspamd_snprintf (*url_str,
