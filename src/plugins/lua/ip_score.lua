@@ -146,12 +146,6 @@ end
 local configure_ip_score_module = function()
   local opts =  rspamd_config:get_all_opt('ip_score')
   if opts then
-    if opts['keystorage_host'] then
-      keystorage_host = opts['keystorage_host']
-    end
-    if opts['keystorage_port'] then
-      keystorage_port = opts['keystorage_port']
-    end
     if opts['metric'] then
       metric = opts['metric']
     end
