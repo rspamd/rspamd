@@ -141,6 +141,10 @@ end
 
 --- Set specific limit inside redis
 local function set_limits(task, args)
+  local key = _.foldl(function(acc, k) return acc .. k[2] end, '', args)
+  local upstream = upstreams:get_upstream_by_hash(key)
+  local addr = upstream:get_addr()
+
   local function rate_set_key_cb(task, err, data)
     if err then
       rspamd_logger.info('got error while setting limit: ' .. err)
@@ -149,9 +153,6 @@ local function set_limits(task, args)
       upstream:ok()
     end
   end
-  local key = _.foldl(function(acc, k) return acc .. k[2] end, '', args)
-  local upstream = upstreams:get_upstream_by_hash(key)
-  local addr = upstream:get_addr()
  
   local function rate_set_cb(task, err, data)
     if data then
