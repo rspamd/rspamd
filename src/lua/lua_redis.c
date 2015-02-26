@@ -111,16 +111,16 @@ lua_redis_push_reply (lua_State *L, const redisReply *r)
 		lua_newuserdata (L, sizeof (gpointer));
 		break;
 	case REDIS_REPLY_STRING:
+	case REDIS_REPLY_STATUS:
 		lua_pushlstring (L, r->str, r->len);
 		break;
-	case REDIS_REPLY_ARRAY: {
+	case REDIS_REPLY_ARRAY:
 		lua_createtable (L, r->elements, 0);
 		for (i = 0; i < r->elements; ++i) {
 			lua_redis_push_reply (L, r->element[i]);
 			lua_rawseti (L, -2, i + 1); /* Store sub-reply */
 		}
 		break;
-	}
 	default: /* should not happen */
 		msg_info ("unknown reply type: %d", r->type);
 		break;
