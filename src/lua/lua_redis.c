@@ -260,10 +260,10 @@ lua_redis_make_request (lua_State *L)
 					args = g_alloca ((top + 1) * sizeof (gchar *));
 					lua_pushnil (L);
 					args[0] = cmd;
-					top = 0;
+					top = 1;
 
 					while (lua_next (L, -2) != 0) {
-						args[++top] = lua_tostring (L, -1);
+						args[top++] = lua_tostring (L, -1);
 						lua_pop (L, 1);
 					}
 

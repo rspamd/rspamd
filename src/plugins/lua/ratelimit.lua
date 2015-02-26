@@ -58,6 +58,7 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_redis = require "rspamd_redis"
 local upstream_list = require "rspamd_upstream_list"
 local _ = require "fun"
+--local dumper = require 'pl.pretty'.dump
 
 --- Parse atime and bucket of limit
 local function parse_limits(data)
@@ -72,27 +73,28 @@ local function parse_limits(data)
     end
   end
   
-  return _.map(function(e) 
+  return _.iter(data):map(function(e) 
     if type(e) == 'string' then 
-      return parse_limit_elt
+      return parse_limit_elt(e)
     else
       return {0, 0}
     end
-    end, data)
+    end):totable()
 end
 
 local function generate_format_string(args, is_set)
   if is_set then
-    return _.foldl(function(acc, k) return acc .. ' %s %s' end, 'MSET', args)
+    return 'MSET'
+    --return _.foldl(function(acc, k) return acc .. ' %s %s' end, 'MSET', args)
   end
-  return _.foldl(function(acc, k) return acc .. ' %s' end, 'MGET', args)
+  return 'MGET'
+  --return _.foldl(function(acc, k) return acc .. ' %s' end, 'MGET', args)
 end
 
 --- Check specific limit inside redis
 local function check_limits(task, args)
 
   local key = _.foldl(function(acc, k) return acc .. k[2] end, '', args)
-  print(key)
   local upstream = upstreams:get_upstream_by_hash(key)
   local addr = upstream:get_addr()
   --- Called when value was set on server
@@ -109,20 +111,20 @@ local function check_limits(task, args)
     if data then
       local tv = task:get_timeval()
       local ntime = tv['tv_usec'] / 1000000. + tv['tv_sec']
-      local it = _.zip(_.map(function(a) return a[1] end, args), parse_limits(data))
       
-      _.each(function(elt)
-        local bucket = elt[2][2]
-        local limit = elt[1]
-        local atime = elt[2][1]
+      _.each(function(elt, limit)
+        local bucket = elt[2]
+        local rate = limit[2]
+        local threshold = limit[1]
+        local atime = elt[1]
         
-        bucket = bucket - limit[2] * (ntime - atime);
+        bucket = bucket - rate * (ntime - atime);
         if bucket > 0 then
-          if bucket > limit[1] then
+          if bucket > threshold then
             task:set_pre_result('soft reject', 'Ratelimit exceeded')
           end
         end
-      end, it)
+      end, _.zip(parse_limits(data), _.map(function(a) return a[1] end, args)))
     elseif err then
       rspamd_logger.info('got error while getting limit: ' .. err)
       upstream:fail()
@@ -155,21 +157,22 @@ local function set_limits(task, args)
     if data then
       local tv = task:get_timeval()
       local ntime = tv['tv_usec'] / 1000000. + tv['tv_sec']
-      local it = _.zip(args, parse_limits(data))
       local values = {}
-      _.each(function(elt)
-        local bucket = elt[2][2]
-        local limit = elt[1][1]
-        local atime = elt[2][1]
+      _.each(function(elt, limit)
+        local bucket = elt[2]
+        local rate = limit[1][2]
+        local threshold = limit[1][1]
+        local atime = elt[1]
         
         if bucket > 0 then
-          bucket = bucket - limit[2] * (ntime - atime) + 1;
+          bucket = bucket - rate * (ntime - atime) + 1;
         else
           bucket = 1
         end
-        local lstr = string.format('%.7f:%.7f', ntime, bucket)
-        table.insert(values, elt[1][2], lstr)
-      end, it)
+        local lstr = string.format('%.3f:%.3f', ntime, bucket)
+        table.insert(values, limit[2])
+        table.insert(values, lstr)
+      end, _.zip(parse_limits(data), _.iter(args)))
       
       local cmd = generate_format_string(values, true)
       rspamd_redis.make_request(task, addr, rate_set_key_cb, cmd, values)
