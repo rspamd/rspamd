@@ -176,11 +176,11 @@ local configure_ip_score_module = function()
     if opts['prefix'] then
       prefix = opts['prefix']
     end
-  end
-  if opts['servers'] then
-    upstreams = upstream_list.create(opts['servers'], default_port)
-    if not upstreams then
-      rspamd_logger.err('no servers are specified')
+    if opts['servers'] then
+      upstreams = upstream_list.create(opts['servers'], default_port)
+      if not upstreams then
+        rspamd_logger.err('no servers are specified')
+      end
     end
   end
 end
