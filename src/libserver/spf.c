@@ -1684,6 +1684,21 @@ resolve_spf (struct rspamd_task *task, spf_cb_t callback)
 			return TRUE;
 		}
 	}
+	else if (task->helo != NULL && strchr (task->helo, '.') != NULL) {
+		/* For notifies we can check HELO identity and check SPF accrodingly */
+		/* XXX: very poor check */
+		rec->local_part = rspamd_mempool_strdup (task->task_pool, "postmaster");
+		rec->cur_domain = task->helo;
+		rec->sender_domain = task->helo;
+
+		if (make_dns_request (task->resolver, task->s, task->task_pool,
+				spf_dns_callback,
+				(void *)rec, RDNS_REQUEST_TXT, rec->cur_domain)) {
+			task->dns_requests++;
+			rec->requests_inflight++;
+			return TRUE;
+		}
+	}
 
 	return FALSE;
 }
