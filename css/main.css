@@ -9,9 +9,9 @@
   /* Let the jumbotron breathe */
   .jumbotron {
     margin-top: 20px;
+	background:url(/img/rspamd_head_alt.png);
 	background-size: 100% auto;
 	background-repeat: no-repeat;
-	background:url(/img/rspamd_head_alt.png);
   }
   /* Remove padding from wrapping element since we kick in the grid classes here */
   .body-content {
