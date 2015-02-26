@@ -22,5 +22,5 @@ lua_config: ../src/lua/lua_config.c
 	$(LUADOC) < ../src/lua/lua_config.c > markdown/lua/config.md
 lua_task: ../src/lua/lua_task.c
 	$(LUADOC) < ../src/lua/lua_task.c > markdown/lua/task.md
-lua_ucl: ../src/ucl/lua/lua_ucl.c
-	$(LUADOC) < ../src/ucl/lua/lua_ucl.c > markdown/lua/ucl.md
+lua_ucl: ../contrib/libucl/lua_ucl.c
+	$(LUADOC) < ../contrib/libucl/lua_ucl.c > markdown/lua/ucl.md
