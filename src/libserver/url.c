@@ -732,6 +732,7 @@ enum {
 #define is_lwsp(x) ((url_scanner_table[(guchar)(x)] & IS_LWSP) != 0)
 #define is_atom(x) ((url_scanner_table[(guchar)(x)] & (IS_SPECIAL | IS_SPACE | \
 	IS_CTRL)) == 0)
+#define is_usersafe(x) ((url_scanner_table[(guchar)(x)] & (IS_CTRL | IS_SPACE)) == 0)
 #define is_alpha(x) ((url_scanner_table[(guchar)(x)] & IS_ALPHA) != 0)
 #define is_digit(x) ((url_scanner_table[(guchar)(x)] & IS_DIGIT) != 0)
 #define is_domain(x) ((url_scanner_table[(guchar)(x)] & IS_DOMAIN) != 0)
@@ -981,7 +982,7 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				SET_U (u, UF_USERINFO);
 				st = parse_at;
 			}
-			else if (!is_atom (t)) {
+			else if (!is_usersafe (t)) {
 				goto out;
 			}
 			p ++;
