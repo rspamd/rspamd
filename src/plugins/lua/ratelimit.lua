@@ -166,6 +166,9 @@ local function set_limits(task, args)
         
         if bucket > 0 then
           bucket = bucket - rate * (ntime - atime) + 1;
+          if bucket < 0 then
+            bucket = 1
+          end
         else
           bucket = 1
         end
