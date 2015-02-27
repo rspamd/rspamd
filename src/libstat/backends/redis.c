@@ -134,8 +134,14 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 	return (gpointer)new;
 }
 
-gpointer rspamd_redis_runtime (struct rspamd_statfile_config *stcf,
-		gboolean learn, gpointer ctx);
+gpointer
+rspamd_redis_runtime (struct rspamd_task *task,
+		struct rspamd_statfile_config *stcf,
+		gboolean learn, gpointer ctx)
+{
+
+}
+
 gboolean rspamd_redis_process_token (struct token_node_s *tok,
 		struct rspamd_token_result *res,
 		gpointer ctx);
