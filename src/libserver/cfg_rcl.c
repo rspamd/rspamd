@@ -681,6 +681,7 @@ rspamd_rcl_lua_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 	tmp2 = g_strdup (lua_src);
 	lua_dir = dirname (tmp1);
 	lua_file = basename (tmp2);
+
 	if (lua_dir && lua_file) {
 		cur_dir = g_malloc (PATH_MAX);
 		if (getcwd (cur_dir, PATH_MAX) != NULL && chdir (lua_dir) != -1) {
@@ -694,7 +695,7 @@ rspamd_rcl_lua_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 					lua_tostring (L, -1));
 				if (chdir (cur_dir) == -1) {
 					msg_err ("cannot chdir to %s: %s", cur_dir,
-						strerror (errno));;
+						strerror (errno));
 				}
 				g_free (cur_dir);
 				g_free (tmp1);
@@ -712,7 +713,7 @@ rspamd_rcl_lua_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 					lua_tostring (L, -1));
 				if (chdir (cur_dir) == -1) {
 					msg_err ("cannot chdir to %s: %s", cur_dir,
-						strerror (errno));;
+						strerror (errno));
 				}
 				g_free (cur_dir);
 				g_free (tmp1);
@@ -724,7 +725,7 @@ rspamd_rcl_lua_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 			g_set_error (err, CFG_RCL_ERROR, ENOENT, "cannot chdir to %s: %s",
 				lua_src, strerror (errno));
 			if (chdir (cur_dir) == -1) {
-				msg_err ("cannot chdir to %s: %s", cur_dir, strerror (errno));;
+				msg_err ("cannot chdir to %s: %s", cur_dir, strerror (errno));
 			}
 			g_free (cur_dir);
 			g_free (tmp1);
@@ -733,13 +734,15 @@ rspamd_rcl_lua_handler (struct rspamd_config *cfg, const ucl_object_t *obj,
 
 		}
 		if (chdir (cur_dir) == -1) {
-			msg_err ("cannot chdir to %s: %s", cur_dir, strerror (errno));;
+			msg_err ("cannot chdir to %s: %s", cur_dir, strerror (errno));
 		}
 		g_free (cur_dir);
 		g_free (tmp1);
 		g_free (tmp2);
 	}
 	else {
+		g_free (tmp1);
+		g_free (tmp2);
 		g_set_error (err, CFG_RCL_ERROR, ENOENT, "cannot find to %s: %s",
 			lua_src, strerror (errno));
 		return FALSE;
