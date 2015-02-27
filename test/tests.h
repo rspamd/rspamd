@@ -41,4 +41,6 @@ void rspamd_shingles_test_func (void);
 
 void rspamd_http_test_func (void);
 
+void rspamd_lua_test_func (void);
+
 #endif
