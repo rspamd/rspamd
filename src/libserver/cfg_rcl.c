@@ -778,7 +778,7 @@ rspamd_rcl_add_module_path (struct rspamd_config *cfg,
 		globbuf.gl_offs = 0;
 		len = strlen (path) + sizeof ("*.lua");
 		pattern = g_malloc (len);
-		snprintf (pattern, len, "%s%s", path, "*.lua");
+		rspamd_snprintf (pattern, len, "%s%s", path, "*.lua");
 
 		if (glob (pattern, GLOB_DOOFFS, NULL, &globbuf) == 0) {
 			for (i = 0; i < globbuf.gl_pathc; i++) {
