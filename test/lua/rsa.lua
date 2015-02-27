@@ -1,39 +1,47 @@
 -- Test rsa signing
 
-local pubkey = 'testkey.pub'
-local privkey = 'testkey'
-local data = 'test.data'
-local signature = 'test.sig'
+require "busted" ()
 
--- Signing test
-local rsa_key = rsa_privkey.load(string.format('%s/%s', test_dir, privkey))
+describe("rsa signarture test", function()
+  local rsa_privkey = require "rspamd_rsa_privkey"
+  local rsa_pubkey = require "rspamd_rsa_pubkey"
+  local rsa_signature = require "rspamd_rsa_signature"
+  local rsa = require "rspamd_rsa"
+  local pubkey = 'testkey.pub'
+  local privkey = 'testkey'
+  local data = 'test.data'
+  local signature = 'test.sig'
 
-if not rsa_key then
-	return -1
-end
+  -- Signing test
+  local rsa_key = rsa_privkey.load(string.format('%s/%s', test_dir, privkey))
 
-local rsa_sig = rsa.sign_file(rsa_key, string.format('%s/%s', test_dir, data))
+  if not rsa_key then
+    return -1
+  end
 
-if not rsa_sig then
-	return -1
-end
+  local rsa_sig = rsa.sign_file(rsa_key, string.format('%s/%s', test_dir, data))
 
-rsa_sig:save(string.format('%s/%s', test_dir, signature), true)
+  if not rsa_sig then
+    return -1
+  end
 
--- Verifying test
-rsa_key = rsa_pubkey.load(string.format('%s/%s', test_dir, pubkey))
+  rsa_sig:save(string.format('%s/%s', test_dir, signature), true)
 
-if not rsa_key then
-	return -1
-end
+  -- Verifying test
+  rsa_key = rsa_pubkey.load(string.format('%s/%s', test_dir, pubkey))
 
-rsa_sig = rsa_signature.load(string.format('%s/%s', test_dir, signature))
+  if not rsa_key then
+    return -1
+  end
 
-if not rsa_sig then
-	return -1
-end
+  rsa_sig = rsa_signature.load(string.format('%s/%s', test_dir, signature))
 
-if not rsa.verify_file(rsa_key, rsa_sig, string.format('%s/%s', test_dir, data)) then
-	return -1
-end
+  if not rsa_sig then
+    return -1
+  end
 
+  if not rsa.verify_file(rsa_key, rsa_sig, string.format('%s/%s', test_dir, data)) then
+    return -1
+  end
+
+end)

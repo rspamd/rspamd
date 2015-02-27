@@ -37,6 +37,7 @@ rspamd_lua_test_func (void)
 	glob_t globbuf;
 	gchar *pattern;
 	guint i, len;
+	struct stat st;
 
 	msg_info ("Starting lua tests");
 
@@ -53,6 +54,15 @@ rspamd_lua_test_func (void)
 	if (glob (pattern, GLOB_DOOFFS, NULL, &globbuf) == 0) {
 		for (i = 0; i < globbuf.gl_pathc; i++) {
 			lua_file = globbuf.gl_pathv[i];
+
+			if (stat (lua_file, &st) == -1 || !S_ISREG (st.st_mode)) {
+				continue;
+			}
+
+			if (strstr (lua_file, "busted") != NULL) {
+				/* Skip busted code itself */
+				continue;
+			}
 
 			if (luaL_loadfile (L, lua_file) != 0) {
 				msg_err ("load test from %s failed", lua_file);
