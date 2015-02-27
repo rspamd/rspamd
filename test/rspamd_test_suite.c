@@ -13,6 +13,11 @@ main (int argc, char **argv)
 {
 	struct rspamd_config            *cfg;
 
+	if (argc > 0 && strcmp (argv[1], "lua") == 0) {
+		/* Special lua testing mode */
+		rspamd_lua_test_func (argc - 1, &argv[2]);
+	}
+
 	g_test_init (&argc, &argv, NULL);
 
 	rspamd_main = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
@@ -56,7 +61,6 @@ main (int argc, char **argv)
 	g_test_add_func ("/rspamd/upstream", rspamd_upstream_test_func);
 	g_test_add_func ("/rspamd/shingles", rspamd_shingles_test_func);
 	g_test_add_func ("/rspamd/http", rspamd_http_test_func);
-	g_test_add_func ("/rspamd/lua", rspamd_lua_test_func);
 
 	g_test_run ();
 

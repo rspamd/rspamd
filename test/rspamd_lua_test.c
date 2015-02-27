@@ -29,15 +29,12 @@
 static const char *lua_src = "./lua";
 
 void
-rspamd_lua_test_func (void)
+rspamd_lua_test_func (int argc, char **argv)
 {
 	lua_State *L = rspamd_lua_init (NULL);
-	gchar *lua_file;
-	gchar rp[PATH_MAX];
-	glob_t globbuf;
-	gchar *pattern;
-	guint i, len;
-	struct stat st;
+	gchar rp[PATH_MAX], path_buf[PATH_MAX];
+	const gchar *old_path;
+	guint i;
 
 	msg_info ("Starting lua tests");
 
@@ -46,40 +43,39 @@ rspamd_lua_test_func (void)
 		g_assert (0);
 	}
 
-	globbuf.gl_offs = 0;
-	len = strlen (rp) + sizeof ("*.lua") + 1;
-	pattern = g_malloc (len);
-	rspamd_snprintf (pattern, len, "%s/%s", rp, "*.lua");
+	/* Set lua path */
+	lua_getglobal (L, "package");
+	lua_getfield (L, -1, "path");
+	old_path = luaL_checkstring (L, -1);
 
-	if (glob (pattern, GLOB_DOOFFS, NULL, &globbuf) == 0) {
-		for (i = 0; i < globbuf.gl_pathc; i++) {
-			lua_file = globbuf.gl_pathv[i];
+	rspamd_snprintf (path_buf, sizeof (path_buf), "%s;%s/?.lua;%s/busted/?.lua",
+			old_path, rp, rp);
+	lua_pop (L, 1);
+	lua_pushstring (L, path_buf);
+	lua_setfield (L, -2, "path");
+	lua_pop (L, 1);
 
-			if (stat (lua_file, &st) == -1 || !S_ISREG (st.st_mode)) {
-				continue;
-			}
+	lua_getglobal (L, "arg");
 
-			if (strstr (lua_file, "busted") != NULL) {
-				/* Skip busted code itself */
-				continue;
-			}
-
-			if (luaL_loadfile (L, lua_file) != 0) {
-				msg_err ("load test from %s failed", lua_file);
-				g_assert (0);
-			}
-			/* Now do it */
-			if (lua_pcall (L, 0, LUA_MULTRET, 0) != 0) {
-				msg_err ("run test from %s failed: %s", lua_file,
-						lua_tostring (L, -1));
-				g_assert (0);
-			}
-		}
-		globfree (&globbuf);
-		g_free (pattern);
+	if (lua_type (L, -1) != LUA_TTABLE) {
+		lua_newtable (L);
 	}
-	else {
-		msg_err ("glob for %s failed: %s", pattern, strerror (errno));
+
+	for (i = 0; i < argc - 1; i ++) {
+		lua_pushinteger (L, i + 1);
+		lua_pushstring (L, argv[i]);
+		lua_settable (L, -3);
+	}
+
+	lua_setglobal (L, "arg");
+	lua_pop (L, 1);
+
+	rspamd_snprintf (path_buf, sizeof (path_buf),
+			"require 'busted.runner'({ batch = true })");
+	if (luaL_dostring (L, path_buf) != 0) {
+		rspamd_fprintf (stderr, "run test failed: %s", lua_tostring (L, -1));
 		g_assert (0);
 	}
+
+	exit (EXIT_SUCCESS);
 }

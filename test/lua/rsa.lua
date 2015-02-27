@@ -1,7 +1,5 @@
 -- Test rsa signing
 
-require "busted" ()
-
 describe("rsa signarture test", function()
   local rsa_privkey = require "rspamd_rsa_privkey"
   local rsa_pubkey = require "rspamd_rsa_pubkey"
