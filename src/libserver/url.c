@@ -1078,6 +1078,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 					/* We might have some domain, but no protocol */
 					st = parse_domain;
 					p = c;
+					slash = c;
 					break;
 				}
 				else {
