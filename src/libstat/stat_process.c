@@ -645,7 +645,7 @@ rspamd_stat_statistics (struct rspamd_config *cfg, guint64 *total_learns)
 					continue;
 				}
 
-				backend_runtime = bk->runtime (stcf, FALSE, bk->ctx);
+				backend_runtime = bk->runtime (NULL, stcf, FALSE, bk->ctx);
 
 				learns += bk->total_learns (backend_runtime, bk->ctx);
 				elt = bk->get_stat (backend_runtime, bk->ctx);

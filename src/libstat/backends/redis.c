@@ -23,6 +23,7 @@
 
 #include "config.h"
 #include "main.h"
+#include "stat_internal.h"
 #include "hiredis.h"
 #include "upstream.h"
 
@@ -46,6 +47,208 @@ struct redis_stat_runtime {
 	GArray *results;
 	gchar *redis_object_expanded;
 };
+
+#define GET_TASK_ELT(task, elt) (task == NULL ? NULL : (task)->elt)
+
+static gsize
+rspamd_redis_expand_object (const gchar *pattern,
+		struct rspamd_statfile_config *stcf,
+		struct rspamd_task *task,
+		gchar **target)
+{
+	gsize tlen = 0;
+	const gchar *p = pattern, *elt;
+	InternetAddressList *ia;
+	InternetAddress *iaelt;
+	InternetAddressMailbox *imb;
+	gchar *d, *end;
+	enum  {
+		just_char,
+		percent_char,
+		mod_char
+	} state = just_char;
+
+	g_assert (stcf != NULL);
+
+	/* Length calculation */
+	while (*p) {
+		switch (state) {
+		case just_char:
+			if (*p == '%') {
+				state = percent_char;
+			}
+			else {
+				tlen ++;
+			}
+			p ++;
+			break;
+		case percent_char:
+			switch (*p) {
+			case '%':
+				tlen ++;
+				state = just_char;
+				break;
+			case 'f':
+				if (task) {
+					elt = rspamd_task_get_sender (task);
+					if (elt) {
+						tlen += strlen (elt);
+					}
+				}
+				break;
+			case 'u':
+				elt = GET_TASK_ELT (task, user);
+				if (elt) {
+					tlen += strlen (elt);
+				}
+				break;
+			case 'r':
+				ia = GET_TASK_ELT (task, rcpt_envelope);
+				if (ia != NULL) {
+					iaelt = internet_address_list_get_address (ia, 0);
+					imb = INTERNET_ADDRESS_IS_MAILBOX (iaelt) ?
+								INTERNET_ADDRESS_MAILBOX (iaelt) : NULL;
+
+					elt = (imb ? internet_address_mailbox_get_addr (imb) : NULL);
+
+					if (elt) {
+						tlen += strlen (elt);
+					}
+				}
+				break;
+			case 'l':
+				if (stcf->label) {
+					tlen += strlen (stcf->label);
+				}
+				break;
+			case 's':
+				if (stcf->symbol) {
+					tlen += strlen (stcf->symbol);
+				}
+				break;
+			default:
+				state = just_char;
+				tlen ++;
+				break;
+			}
+
+			if (state == percent_char) {
+				state = mod_char;
+			}
+			p ++;
+			break;
+
+		case mod_char:
+			switch (*p) {
+			case 'd':
+				p ++;
+				state = just_char;
+				break;
+			default:
+				state = just_char;
+				break;
+			}
+			break;
+		}
+	}
+
+	if (target == NULL) {
+		return tlen;
+	}
+
+	*target = rspamd_mempool_alloc (task->task_pool, tlen + 1);
+	d = *target;
+	end = d + tlen;
+	p = pattern;
+	state = just_char;
+
+	/* Expand string */
+	while (*p && d < end) {
+		switch (state) {
+		case just_char:
+			if (*p == '%') {
+				state = percent_char;
+			}
+			else {
+				*d++ = *p;
+			}
+			p ++;
+			break;
+		case percent_char:
+			switch (*p) {
+			case '%':
+				*d++ = *p;
+				state = just_char;
+				break;
+			case 'f':
+				if (task) {
+					elt = rspamd_task_get_sender (task);
+					if (elt) {
+						d += rspamd_strlcpy (d, elt, end - d);
+					}
+				}
+				break;
+			case 'u':
+				elt = GET_TASK_ELT (task, user);
+				if (elt) {
+					d += rspamd_strlcpy (d, elt, end - d);
+				}
+				break;
+			case 'r':
+				ia = GET_TASK_ELT (task, rcpt_envelope);
+				if (ia != NULL) {
+					iaelt = internet_address_list_get_address (ia, 0);
+					imb = INTERNET_ADDRESS_IS_MAILBOX (iaelt) ?
+							INTERNET_ADDRESS_MAILBOX (iaelt) : NULL;
+
+					elt = (imb ? internet_address_mailbox_get_addr (imb) : NULL);
+
+					if (elt) {
+						d += rspamd_strlcpy (d, elt, end - d);
+					}
+				}
+				break;
+			case 'l':
+				if (stcf->label) {
+					d += rspamd_strlcpy (d, stcf->label, end - d);
+				}
+				break;
+			case 's':
+				if (stcf->symbol) {
+					d += rspamd_strlcpy (d, stcf->symbol, end - d);
+				}
+				break;
+			default:
+				state = just_char;
+				*d++ = *p;
+				break;
+			}
+
+			if (state == percent_char) {
+				state = mod_char;
+			}
+			p ++;
+			break;
+
+		case mod_char:
+			switch (*p) {
+			case 'd':
+				/* TODO: not supported yet */
+				p ++;
+				state = just_char;
+				break;
+			default:
+				state = just_char;
+				break;
+			}
+			break;
+		}
+	}
+
+	*d = '\0';
+
+	return tlen;
+}
 
 gpointer
 rspamd_redis_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
@@ -120,6 +323,11 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 				else {
 					/* XXX: sanity check */
 					new->redis_object = ucl_object_tostring (elt);
+					if (rspamd_redis_expand_object (new->redis_object, stf,
+							NULL, NULL) == 0) {
+						msg_err ("statfile %s cannot write servers configuration",
+							stf->symbol);
+					}
 				}
 
 				ctx->statfiles ++;
