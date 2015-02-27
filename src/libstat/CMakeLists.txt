@@ -7,7 +7,8 @@ SET(TOKENIZERSSRC	${CMAKE_CURRENT_SOURCE_DIR}/tokenizers/tokenizers.c
 
 SET(CLASSIFIERSSRC	${CMAKE_CURRENT_SOURCE_DIR}/classifiers/bayes.c)
                 
-SET(BACKENDSSRC 	${CMAKE_CURRENT_SOURCE_DIR}/backends/mmaped_file.c)
+SET(BACKENDSSRC 	${CMAKE_CURRENT_SOURCE_DIR}/backends/mmaped_file.c
+					${CMAKE_CURRENT_SOURCE_DIR}/backends/redis.c)
 
 SET(CACHESSRC 	${CMAKE_CURRENT_SOURCE_DIR}/learn_cache/sqlite3_cache.c)
 				

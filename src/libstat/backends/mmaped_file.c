@@ -852,7 +852,9 @@ rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 }
 
 gpointer
-rspamd_mmaped_file_runtime (struct rspamd_statfile_config *stcf, gboolean learn,
+rspamd_mmaped_file_runtime (struct rspamd_task *task,
+		struct rspamd_statfile_config *stcf,
+		gboolean learn,
 		gpointer p)
 {
 	rspamd_mmaped_file_ctx *ctx = (rspamd_mmaped_file_ctx *)p;

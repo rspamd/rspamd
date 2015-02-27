@@ -213,7 +213,7 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 				continue;
 			}
 
-			backend_runtime = bk->runtime (stcf, op != RSPAMD_CLASSIFY_OP,
+			backend_runtime = bk->runtime (task, stcf, op != RSPAMD_CLASSIFY_OP,
 					bk->ctx);
 
 			st_runtime = rspamd_mempool_alloc0 (task->task_pool,
@@ -645,7 +645,7 @@ rspamd_stat_statistics (struct rspamd_config *cfg, guint64 *total_learns)
 					continue;
 				}
 
-				backend_runtime = bk->runtime (stcf, FALSE, bk->ctx);
+				backend_runtime = bk->runtime (NULL, stcf, FALSE, bk->ctx);
 
 				learns += bk->total_learns (backend_runtime, bk->ctx);
 				elt = bk->get_stat (backend_runtime, bk->ctx);
