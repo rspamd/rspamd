@@ -18,7 +18,9 @@ ADD_EXECUTABLE(rspamd-test EXCLUDE_FROM_ALL ${TESTSRC})
 SET_TARGET_PROPERTIES(rspamd-test PROPERTIES LINKER_LANGUAGE C)
 SET_TARGET_PROPERTIES(rspamd-test PROPERTIES COMPILE_FLAGS "-DRSPAMD_TEST")
 
-TARGET_LINK_LIBRARIES(rspamd-test rspamd-server)
+TARGET_LINK_LIBRARIES(rspamd-test "-Wl,-whole-archive ../src/librspamd-server.a -Wl,-no-whole-archive")
+TARGET_LINK_LIBRARIES(rspamd-test rspamd-cdb)
+TARGET_LINK_LIBRARIES(rspamd-test rspamd-http-parser)
 TARGET_LINK_LIBRARIES(rspamd-test ${RSPAMD_REQUIRED_LIBRARIES})
 TARGET_LINK_LIBRARIES(rspamd-test stemmer)
 
