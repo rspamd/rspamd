@@ -10,7 +10,16 @@ end
 local buffer = {}
 local results = telescope.run(contexts, callbacks, test_pattern)
 local summary, data = telescope.summary_report(contexts, results)
+
 table.insert(buffer, telescope.test_report(contexts, results))
+table.insert(buffer, summary)
+
+local report = telescope.error_report(contexts, results)
+
+if report then
+  table.insert(buffer, "")
+  table.insert(buffer, report)
+end
 
 if #buffer > 0 then print(table.concat(buffer, "\n")) end
 
