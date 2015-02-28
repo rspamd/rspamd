@@ -692,6 +692,7 @@ rspamd_str_lc_utf8 (gchar *str, guint size)
 		s = p;
 		d += r;
 	}
+	*d = '\0';
 }
 
 #ifndef HAVE_SETPROCTITLE
