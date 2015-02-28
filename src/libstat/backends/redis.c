@@ -50,7 +50,10 @@ struct redis_stat_runtime {
 
 #define GET_TASK_ELT(task, elt) (task == NULL ? NULL : (task)->elt)
 
-static gsize
+/*
+ * Non-static for lua unit testing
+ */
+gsize
 rspamd_redis_expand_object (const gchar *pattern,
 		struct rspamd_statfile_config *stcf,
 		struct rspamd_task *task,
@@ -158,7 +161,8 @@ rspamd_redis_expand_object (const gchar *pattern,
 
 	*target = rspamd_mempool_alloc (task->task_pool, tlen + 1);
 	d = *target;
-	end = d + tlen;
+	end = d + tlen + 1;
+	d[tlen] = '\0';
 	p = pattern;
 	state = just_char;
 
@@ -244,8 +248,6 @@ rspamd_redis_expand_object (const gchar *pattern,
 			break;
 		}
 	}
-
-	*d = '\0';
 
 	return tlen;
 }
