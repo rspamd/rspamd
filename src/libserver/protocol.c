@@ -234,7 +234,6 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 	gchar *headern, *tmp;
 	gboolean res = TRUE, validh;
 	struct rspamd_http_header *h;
-	InternetAddressList *tmp_addr;
 
 	LL_FOREACH (msg->headers, h)
 	{
@@ -272,20 +271,10 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		case 'f':
 		case 'F':
 			if (g_ascii_strcasecmp (headern, FROM_HEADER) == 0) {
-				task->from_envelope = internet_address_list_parse_string (
-						h->value->str);
-				if (task->from_envelope) {
-#ifdef GMIME24
-					rspamd_mempool_add_destructor (task->task_pool,
-							(rspamd_mempool_destruct_t) g_object_unref,
-							task->from_envelope);
-#else
-					rspamd_mempool_add_destructor (task->task_pool,
-							(rspamd_mempool_destruct_t) internet_address_list_destroy,
-							task->from_envelope);
-#endif
+				if (!rspamd_task_add_sender (task, h->value->str)) {
+					msg_err ("bad from header: '%s'", h->value->str);
+					validh = FALSE;
 				}
-				debug_task ("read from header, value: %v", h->value);
 			}
 			else {
 				debug_task ("wrong header: %s", headern);
@@ -316,25 +305,10 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		case 'r':
 		case 'R':
 			if (g_ascii_strcasecmp (headern, RCPT_HEADER) == 0) {
-				if (task->rcpt_envelope == NULL) {
-					task->rcpt_envelope = internet_address_list_new ();
-#ifdef GMIME24
-					rspamd_mempool_add_destructor (task->task_pool,
-							(rspamd_mempool_destruct_t) g_object_unref,
-							task->rcpt_envelope);
-#else
-					rspamd_mempool_add_destructor (task->task_pool,
-							(rspamd_mempool_destruct_t) internet_address_list_destroy,
-							task->rcpt_envelope);
-#endif
+				if (!rspamd_task_add_recipient (task, h->value->str)) {
+					msg_err ("bad from header: '%s'", h->value->str);
+					validh = FALSE;
 				}
-				tmp_addr = internet_address_list_parse_string (h->value->str);
-				internet_address_list_append (task->rcpt_envelope, tmp_addr);
-#ifdef GMIME24
-				g_object_unref (tmp_addr);
-#else
-				internet_address_list_destroy (tmp_addr);
-#endif
 				debug_task ("read rcpt header, value: %v", h->value);
 			}
 			else {

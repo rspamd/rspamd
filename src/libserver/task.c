@@ -376,3 +376,67 @@ rspamd_task_get_sender (struct rspamd_task *task)
 
 	return (imb ? internet_address_mailbox_get_addr (imb) : NULL);
 }
+
+gboolean
+rspamd_task_add_recipient (struct rspamd_task *task, const gchar *rcpt)
+{
+	InternetAddressList *tmp_addr;
+
+	if (task->rcpt_envelope == NULL) {
+		task->rcpt_envelope = internet_address_list_new ();
+#ifdef GMIME24
+		rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t) g_object_unref,
+				task->rcpt_envelope);
+#else
+		rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t) internet_address_list_destroy,
+				task->rcpt_envelope);
+#endif
+	}
+	tmp_addr = internet_address_list_parse_string (rcpt);
+
+	if (tmp_addr) {
+		internet_address_list_append (task->rcpt_envelope, tmp_addr);
+#ifdef GMIME24
+		g_object_unref (tmp_addr);
+#else
+		internet_address_list_destroy (tmp_addr);
+#endif
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+gboolean
+rspamd_task_add_sender (struct rspamd_task *task, const gchar *sender)
+{
+	InternetAddressList *tmp_addr;
+
+	if (task->from_envelope == NULL) {
+		task->from_envelope = internet_address_list_new ();
+#ifdef GMIME24
+		rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t) g_object_unref,
+				task->from_envelope);
+#else
+		rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t) internet_address_list_destroy,
+				task->from_envelope);
+#endif
+	}
+	tmp_addr = internet_address_list_parse_string (sender);
+
+	if (tmp_addr) {
+		internet_address_list_append (task->from_envelope, tmp_addr);
+#ifdef GMIME24
+		g_object_unref (tmp_addr);
+#else
+		internet_address_list_destroy (tmp_addr);
+#endif
+		return TRUE;
+	}
+
+	return FALSE;
+}

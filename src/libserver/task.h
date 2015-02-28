@@ -195,4 +195,20 @@ gboolean rspamd_task_process (struct rspamd_task *task,
  */
 const gchar *rspamd_task_get_sender (struct rspamd_task *task);
 
+/**
+ * Add a recipient for a task
+ * @param task task object
+ * @param rcpt string representation of recipient address
+ * @return TRUE if an address has been parsed and added
+ */
+gboolean rspamd_task_add_recipient (struct rspamd_task *task, const gchar *rcpt);
+/**
+ * Add a sender for a task
+ * @param task task object
+ * @param sender string representation of sender's address
+ * @return TRUE if an address has been parsed and added
+ */
+gboolean rspamd_task_add_sender (struct rspamd_task *task, const gchar *sender);
+
+
 #endif /* TASK_H_ */
