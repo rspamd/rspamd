@@ -24,10 +24,18 @@ TARGET_LINK_LIBRARIES(rspamd-test stemmer)
 
 IF(NOT "${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
 	# Also add dependencies for convenience
-	FILE(GLOB LUA_TESTS "${CMAKE_CURRENT_SOURCE_DIR}/lua/*")
+	FILE(GLOB_RECURSE LUA_TESTS "${CMAKE_CURRENT_SOURCE_DIR}/lua/*")
+	ADD_CUSTOM_TARGET(units-dir COMMAND
+		${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/lua/unit"
+	)
+	ADD_DEPENDENCIES(rspamd-test units-dir)
 	FOREACH(_LF IN LISTS LUA_TESTS)
 		GET_FILENAME_COMPONENT(_NM "${_LF}" NAME)
-		SET(_DS "${CMAKE_CURRENT_BINARY_DIR}/lua/${_NM}")
+		IF("${_LF}" MATCHES "^.*/unit/.*$")
+			SET(_DS "${CMAKE_CURRENT_BINARY_DIR}/lua/unit/${_NM}")
+		ELSE()
+			SET(_DS "${CMAKE_CURRENT_BINARY_DIR}/lua/${_NM}")
+		ENDIF()
 		ADD_CUSTOM_TARGET("${_NM}" COMMAND
 			${CMAKE_COMMAND} -E copy_if_different ${_LF} ${_DS}
 			SOURCES "${_LF}"

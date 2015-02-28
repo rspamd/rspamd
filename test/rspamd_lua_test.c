@@ -26,54 +26,95 @@
 #include "util.h"
 #include "lua/lua_common.h"
 
-static const char *lua_src = "./lua";
+static const char *lua_src = BUILDROOT "/test/lua/tests.lua";
+
+static int
+traceback (lua_State *L)
+{
+	if (!lua_isstring (L, 1)) {
+		return 1;
+	}
+
+	lua_getfield (L, LUA_GLOBALSINDEX, "debug");
+
+	if (!lua_istable(L, -1)) {
+		lua_pop(L, 1);
+		return 1;
+	}
+
+	lua_getfield (L, -1, "traceback");
+
+	if (!lua_isfunction(L, -1)) {
+		lua_pop(L, 2);
+		return 1;
+	}
+	lua_pushvalue (L, 1);
+	lua_pushinteger (L, 2);
+	lua_call(L, 2, 1);
+
+	return 1;
+}
 
 void
-rspamd_lua_test_func (int argc, char **argv)
+rspamd_lua_test_func (void)
 {
 	lua_State *L = rspamd_lua_init (NULL);
-	gchar rp[PATH_MAX], path_buf[PATH_MAX];
+	gchar *rp, rp_buf[PATH_MAX], path_buf[PATH_MAX], *tmp, *dir, *pattern;
 	const gchar *old_path;
-	guint i;
+	glob_t globbuf;
+	gint i, len;
 
-	msg_info ("Starting lua tests");
+	rspamd_printf ("Starting lua tests\n");
 
-	if (realpath (lua_src, rp) == NULL) {
-		msg_err ("cannod find path %s: %s", lua_src, strerror (errno));
+	if ((rp = realpath (lua_src, rp_buf)) == NULL) {
+		msg_err ("cannot find path %s: %s",
+				lua_src, strerror (errno));
 		g_assert (0);
 	}
 
+	tmp = g_strdup (rp);
+	dir = dirname (tmp);
 	/* Set lua path */
 	lua_getglobal (L, "package");
 	lua_getfield (L, -1, "path");
 	old_path = luaL_checkstring (L, -1);
 
-	rspamd_snprintf (path_buf, sizeof (path_buf), "%s;%s/?.lua;%s/busted/?.lua",
-			old_path, rp, rp);
+	rspamd_snprintf (path_buf, sizeof (path_buf), "%s;%s/?.lua;%s/unit/?.lua",
+			old_path, dir, dir);
 	lua_pop (L, 1);
 	lua_pushstring (L, path_buf);
 	lua_setfield (L, -2, "path");
 	lua_pop (L, 1);
 
-	lua_getglobal (L, "arg");
+	lua_newtable (L);
 
-	if (lua_type (L, -1) != LUA_TTABLE) {
-		lua_newtable (L);
+	globbuf.gl_offs = 0;
+	len = strlen (dir) + sizeof ("/unit/") + sizeof ("*.lua");
+	pattern = g_malloc (len);
+	rspamd_snprintf (pattern, len, "%s/unit/%s", dir, "*.lua");
+
+	if (glob (pattern, GLOB_DOOFFS, NULL, &globbuf) == 0) {
+		for (i = 0; i < (gint)globbuf.gl_pathc; i++) {
+			lua_pushinteger (L, i + 1);
+			lua_pushstring (L, globbuf.gl_pathv[i]);
+			lua_settable (L, -3);
+		}
+		globfree (&globbuf);
+		g_free (pattern);
+	}
+	else {
+		msg_err ("pattern %s doesn't match: %s", pattern,
+				strerror (errno));
+		g_assert (0);
 	}
 
-	for (i = 0; i < argc - 1; i ++) {
-		lua_pushinteger (L, i + 1);
-		lua_pushstring (L, argv[i]);
-		lua_settable (L, -3);
-	}
+	lua_setglobal (L, "tests_list");
 
-	lua_setglobal (L, "arg");
-	lua_pop (L, 1);
+	lua_pushcfunction (L, traceback);
+	luaL_loadfile (L, rp);
 
-	rspamd_snprintf (path_buf, sizeof (path_buf),
-			"require 'busted.runner'({ batch = true })");
-	if (luaL_dostring (L, path_buf) != 0) {
-		rspamd_fprintf (stderr, "run test failed: %s", lua_tostring (L, -1));
+	if (lua_pcall (L, 0, 0, lua_gettop (L) - 1) != 0) {
+		msg_err ("run test failed: %s", lua_tostring (L, -1));
 		g_assert (0);
 	}
 

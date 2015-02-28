@@ -13,39 +13,35 @@ main (int argc, char **argv)
 {
 	struct rspamd_config            *cfg;
 
-	if (argc > 0 && strcmp (argv[1], "lua") == 0) {
-		/* Special lua testing mode */
-		rspamd_lua_test_func (argc - 1, &argv[2]);
-	}
-
-	g_test_init (&argc, &argv, NULL);
-
 	rspamd_main = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
-
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
-	g_thread_init (NULL);
-#endif
-
-	g_mime_init (0);
 	memset (rspamd_main, 0, sizeof (struct rspamd_main));
 	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	rspamd_main->cfg = (struct rspamd_config *)g_malloc (sizeof (struct rspamd_config));
 	cfg = rspamd_main->cfg;
 	bzero (cfg, sizeof (struct rspamd_config));
 	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
+	cfg->log_type = RSPAMD_LOG_CONSOLE;
+	cfg->log_level = G_LOG_LEVEL_INFO;
+
+	rspamd_set_logger (cfg, g_quark_from_static_string("rspamd-test"), rspamd_main);
+	(void)rspamd_log_open (rspamd_main->logger);
+
+	g_test_init (&argc, &argv, NULL);
+
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+	g_thread_init (NULL);
+#endif
+
+	g_mime_init (0);
 
 	base = event_init ();
 
 	if (g_test_verbose ()) {
 		cfg->log_level = G_LOG_LEVEL_DEBUG;
+		rspamd_set_logger (cfg, g_quark_from_static_string("rspamd-test"), rspamd_main);
+		(void)rspamd_log_reopen (rspamd_main->logger);
 	}
-	else {
-		cfg->log_level = G_LOG_LEVEL_INFO;
-	}
-	cfg->log_type = RSPAMD_LOG_CONSOLE;
-	/* First set logger to console logger */
-	rspamd_set_logger (cfg, g_quark_from_static_string("rspamd-test"), rspamd_main);
-	(void)rspamd_log_open (rspamd_main->logger);
+
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 
 	g_test_add_func ("/rspamd/mem_pool", rspamd_mem_pool_test_func);
@@ -61,6 +57,7 @@ main (int argc, char **argv)
 	g_test_add_func ("/rspamd/upstream", rspamd_upstream_test_func);
 	g_test_add_func ("/rspamd/shingles", rspamd_shingles_test_func);
 	g_test_add_func ("/rspamd/http", rspamd_http_test_func);
+	g_test_add_func ("/rspamd/lua", rspamd_lua_test_func);
 
 	g_test_run ();
 

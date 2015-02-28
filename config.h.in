@@ -244,6 +244,8 @@
 
 #define MODULES_NUM        ${RSPAMD_MODULES_NUM}
 
+#define BUILDROOT "${CMAKE_BINARY_DIR}"
+
 /* sys/types */
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
