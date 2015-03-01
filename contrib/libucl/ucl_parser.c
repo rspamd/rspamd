@@ -1016,6 +1016,7 @@ ucl_parse_key (struct ucl_parser *parser, struct ucl_chunk *chunk, bool *next_ke
 		ucl_chunk_skipc (chunk, p);
 		parser->prev_state = parser->state;
 		parser->state = UCL_STATE_MACRO_NAME;
+		*end_of_object = false;
 		return true;
 	}
 	while (p < chunk->end) {
