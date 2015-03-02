@@ -33,26 +33,6 @@
 #include "trie.h"
 #include "http.h"
 
-#define POST_CHAR 1
-#define POST_CHAR_S "\001"
-
-/* Tcp port range */
-#define LOWEST_PORT 0
-#define HIGHEST_PORT    65535
-
-#define uri_port_is_valid(port) \
-	(LOWEST_PORT <= (port) && (port) <= HIGHEST_PORT)
-
-struct _proto {
-	guchar *name;
-	gint port;
-	uintptr_t *unused;
-	guint need_slashes : 1;
-	guint need_slash_after_host : 1;
-	guint free_syntax : 1;
-	guint need_ssl : 1;
-};
-
 typedef struct url_match_s {
 	const gchar *m_begin;
 	gsize m_len;
@@ -1309,7 +1289,10 @@ set:
 		if (pt == 0 || pt > 65535) {
 			goto out;
 		}
-		u->port = pt;
+		if (u != NULL) {
+			u->port = pt;
+		}
+
 		ret = 0;
 		break;
 	case parse_suffix_slash:
