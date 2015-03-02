@@ -83,6 +83,12 @@ local function process_sa_conf(f)
           cur_rule['not'] = true
         end
         
+        if cur_rule['header'] == 'MESSAGEID' then
+          -- Special case for spamassassin
+          cur_rule['header'] = 'Message-ID'
+          rspamd_logger.info('MESSAGEID support is limited in ' .. cur_rule['symbol'])
+        end
+        
         cur_rule['re_expr'] = words_to_re(words, 4)
         cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
         if cur_rule['re'] then valid_rule = true end
