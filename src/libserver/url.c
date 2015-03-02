@@ -1106,7 +1106,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				SET_U (u, UF_USERINFO);
 				st = parse_at;
 			}
-			else if (!is_atom (t)) {
+			else if (!g_ascii_isgraph (t)) {
 				goto out;
 			}
 			p ++;
@@ -1127,7 +1127,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				/* XXX: password is not stored */
 				st = parse_at;
 			}
-			else if (!is_atom (t)) {
+			else if (!g_ascii_isgraph (t)) {
 				goto out;
 			}
 			p ++;
@@ -1151,6 +1151,13 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 					 * to apply some heuristic here
 					 */
 					st = parse_port_password;
+				}
+				else {
+					/*
+					 * We can go only for parsing port here
+					 */
+					SET_U (u, UF_HOST);
+					st = parse_port;
 					c = p + 1;
 				}
 				p ++;
@@ -1186,7 +1193,9 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				/* XXX: that breaks urls with passwords starting with number */
 				st = parse_port;
 				c = slash;
+				p --;
 				SET_U (u, UF_HOST);
+				p ++;
 				c = p;
 			}
 			else {
@@ -1209,7 +1218,12 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				st = parse_suffix_slash;
 			}
 			else if (!g_ascii_isdigit (t)) {
-				goto out;
+				if (strict || !g_ascii_isspace (t)) {
+					goto out;
+				}
+				else {
+					goto set;
+				}
 			}
 			p ++;
 			break;
@@ -1445,7 +1459,7 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	uri->string = p;
 	rspamd_unescape_uri (uri->string, uri->string, len);
 	rspamd_str_lc (uri->string, uri->protocollen);
-	rspamd_str_lc (uri->host,   uri->hostlen);
+	rspamd_str_lc_utf8 (uri->host,   uri->hostlen);
 
 	uri->protocol = PROTOCOL_UNKNOWN;
 
