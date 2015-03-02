@@ -400,10 +400,27 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 
 	while (cur) {
 		cl_run = (struct rspamd_classifier_runtime *)cur->data;
+		cl_run->stage = RSPAMD_STAT_STAGE_PRE;
 
 		if (cl_run->cl) {
 			cl_ctx = cl_run->cl->init_func (task->task_pool, cl_run->clcf);
 
+			if (cl_ctx != NULL) {
+				cl_run->cl->classify_func (cl_ctx, cl_run->tok->tokens,
+						cl_run, task);
+			}
+		}
+
+		cur = g_list_next (cur);
+	}
+
+	/* XXX: backend runtime post-processing */
+	/* Post-processing */
+	while (cur) {
+		cl_run = (struct rspamd_classifier_runtime *)cur->data;
+		cl_run->stage = RSPAMD_STAT_STAGE_POST;
+
+		if (cl_run->cl) {
 			if (cl_ctx != NULL) {
 				if (cl_run->cl->classify_func (cl_ctx, cl_run->tok->tokens,
 						cl_run, task)) {

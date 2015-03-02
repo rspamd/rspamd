@@ -30,6 +30,11 @@
 #include "backends/backends.h"
 #include "learn_cache/learn_cache.h"
 
+enum stat_process_stage {
+	RSPAMD_STAT_STAGE_PRE = 0,
+	RSPAMD_STAT_STAGE_POST
+};
+
 struct rspamd_tokenizer_runtime {
 	GTree *tokens;
 	const gchar *name;
@@ -51,6 +56,7 @@ struct rspamd_classifier_runtime {
 	struct rspamd_tokenizer_runtime *tok;
 	double ham_prob;
 	double spam_prob;
+	enum stat_process_stage stage;
 	guint64 total_spam;
 	guint64 total_ham;
 	guint64 processed_tokens;

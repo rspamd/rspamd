@@ -151,55 +151,59 @@ bayes_classify (struct classifier_ctx * ctx,
 	g_assert (rt != NULL);
 	g_assert (rt->end_pos > rt->start_pos);
 
-	g_tree_foreach (input, bayes_classify_callback, rt);
-
-	if (rt->spam_prob == 0) {
-		final_prob = 0;
+	if (rt->stage == RSPAMD_STAT_STAGE_PRE) {
+		g_tree_foreach (input, bayes_classify_callback, rt);
 	}
 	else {
-		h = 1 - inv_chi_square (-2. * rt->spam_prob,
-				2 * rt->processed_tokens);
-		s = 1 - inv_chi_square (-2. * rt->ham_prob,
-				2 * rt->processed_tokens);
-		final_prob = (s + 1 - h) / 2.;
-		msg_debug ("<%s> got ham prob %.2f -> %.2f and spam prob %.2f -> %.2f",
-				task->message_id, rt->ham_prob, h, rt->spam_prob, s);
-	}
 
-	if (rt->processed_tokens > 0 && fabs (final_prob - 0.5) > 0.05) {
-
-		sumbuf = rspamd_mempool_alloc (task->task_pool, 32);
-		cur = g_list_first (rt->st_runtime);
-
-		while (cur) {
-			st = (struct rspamd_statfile_runtime *)cur->data;
-
-			if ((final_prob < 0.5 && !st->st->is_spam) ||
-				(final_prob > 0.5 && st->st->is_spam)) {
-				if (st->total_hits > maxhits) {
-					maxhits = st->total_hits;
-					selected_st = st;
-				}
-			}
-
-			cur = g_list_next (cur);
-		}
-
-		if (selected_st == NULL) {
-			msg_err (
-				"unexpected classifier error: cannot select desired statfile");
+		if (rt->spam_prob == 0) {
+			final_prob = 0;
 		}
 		else {
-			/* Calculate ham probability correctly */
-			if (final_prob < 0.5) {
-				final_prob = 1. - final_prob;
+			h = 1 - inv_chi_square (-2. * rt->spam_prob,
+					2 * rt->processed_tokens);
+			s = 1 - inv_chi_square (-2. * rt->ham_prob,
+					2 * rt->processed_tokens);
+			final_prob = (s + 1 - h) / 2.;
+			msg_debug ("<%s> got ham prob %.2f -> %.2f and spam prob %.2f -> %.2f",
+					task->message_id, rt->ham_prob, h, rt->spam_prob, s);
+		}
+
+		if (rt->processed_tokens > 0 && fabs (final_prob - 0.5) > 0.05) {
+
+			sumbuf = rspamd_mempool_alloc (task->task_pool, 32);
+			cur = g_list_first (rt->st_runtime);
+
+			while (cur) {
+				st = (struct rspamd_statfile_runtime *)cur->data;
+
+				if ((final_prob < 0.5 && !st->st->is_spam) ||
+						(final_prob > 0.5 && st->st->is_spam)) {
+					if (st->total_hits > maxhits) {
+						maxhits = st->total_hits;
+						selected_st = st;
+					}
+				}
+
+				cur = g_list_next (cur);
 			}
-			rspamd_snprintf (sumbuf, 32, "%.2f%%", final_prob * 100.);
-			cur = g_list_prepend (NULL, sumbuf);
-			rspamd_task_insert_result (task,
-				selected_st->st->symbol,
-				final_prob,
-				cur);
+
+			if (selected_st == NULL) {
+				msg_err (
+					"unexpected classifier error: cannot select desired statfile");
+			}
+			else {
+				/* Calculate ham probability correctly */
+				if (final_prob < 0.5) {
+					final_prob = 1. - final_prob;
+				}
+				rspamd_snprintf (sumbuf, 32, "%.2f%%", final_prob * 100.);
+				cur = g_list_prepend (NULL, sumbuf);
+				rspamd_task_insert_result (task,
+						selected_st->st->symbol,
+						final_prob,
+						cur);
+			}
 		}
 	}
 

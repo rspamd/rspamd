@@ -143,6 +143,7 @@ struct rspamd_task {
 	struct event_base *ev_base;                                 /**< Event base										*/
 
 	GThreadPool *classify_pool;                                 /**< A pool of classify threads                     */
+	gpointer classify_data;										/**< Opaque classifiers data						*/
 
 	struct {
 		enum rspamd_metric_action action;                       /**< Action of pre filters							*/
