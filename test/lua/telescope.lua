@@ -179,7 +179,7 @@ local function make_assertion(name, message, func)
       local a = {}
       local args = {...}
       local nargs = select('#', ...)
-      if nargs > num_vars then        
+      if nargs > num_vars then
         local userErrorMessage = args[num_vars+1]
         if type(userErrorMessage) == "string" then
           return(assertion_message_prefix .. userErrorMessage)
@@ -187,7 +187,7 @@ local function make_assertion(name, message, func)
           error(string.format('assert_%s expected %d arguments but got %d', name, num_vars, #args))
         end
       end
-      for i = 1, nargs do a[i] = tostring(v) end
+      for i = 1, nargs do a[i] = tostring(args[i]) end
       for i = nargs+1, num_vars do a[i] = 'nil' end
       return (assertion_message_prefix .. message):format(unpack(a))
     end
@@ -467,12 +467,12 @@ local function run(contexts, callbacks, test_filter)
     table.sort(ancestors)
     -- this "before" is the test callback passed into the runner
     invoke_callback("before", result)
-    
+
     -- run all the "before" blocks/functions
     for _, a in ipairs(ancestors) do
-      if contexts[a].before then 
+      if contexts[a].before then
         setfenv(contexts[a].before, env)
-        contexts[a].before() 
+        contexts[a].before()
       end
     end
 
@@ -489,9 +489,9 @@ local function run(contexts, callbacks, test_filter)
     -- Run all the "after" blocks/functions
     table.reverse(ancestors)
     for _, a in ipairs(ancestors) do
-      if contexts[a].after then 
+      if contexts[a].after then
         setfenv(contexts[a].after, env)
-        contexts[a].after() 
+        contexts[a].after()
       end
     end
 
