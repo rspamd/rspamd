@@ -48,14 +48,14 @@ context("URL check functions", function()
     local cases = {
       {"test.com text", {"test.com", nil}},
       {"mailto:A.User@example.com text", {"example.com", "A.User"}},
-      {"http://тест.рф:18 text", {"тест.рф", nil}},
-      {"http://user:password@тест.рф:18 text", {"тест.рф", "user"}},
+      {"http://Тест.Рф:18 text", {"тест.рф", nil}},
+      {"http://user:password@тест2.РФ:18 text", {"тест2.рф", "user"}},
     }
     
     for _,c in ipairs(cases) do
       local res = ffi.C.rspamd_url_get_next(pool, c[1], nil)
       
-      assert_not_nil(res)
+      assert_not_nil(res, "cannot parse " .. c[1])
       assert_equal(c[2][1], ffi.string(res.host, res.hostlen))
       
       if c[2][2] then
