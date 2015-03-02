@@ -1870,6 +1870,63 @@ rspamd_url_find (rspamd_mempool_t *pool,
 	return FALSE;
 }
 
+struct rspamd_url *
+rspamd_url_get_next (rspamd_mempool_t *pool,
+		const gchar *start, gchar const **pos)
+{
+	const gchar *p, *end;
+	gchar *url_str = NULL, *url_start, *url_end;
+	struct rspamd_url *new;
+	gint rc;
+
+	end = start + strlen (start);
+
+	if (pos == NULL || *pos == NULL) {
+		p = start;
+	}
+	else {
+		p = *pos;
+	}
+
+	if (p < end) {
+		if (rspamd_url_find (pool, p, end - p, &url_start, &url_end, &url_str,
+				FALSE)) {
+			if (url_str != NULL) {
+				new = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_url));
+
+				if (new != NULL) {
+					g_strstrip (url_str);
+					rc = rspamd_url_parse (new, url_str, strlen (url_str), pool);
+					if (rc == URI_ERRNO_OK &&
+							new->hostlen > 0) {
+
+						if (new->protocol == PROTOCOL_MAILTO) {
+							if (new->userlen > 0) {
+								return new;
+							}
+						}
+						else {
+							return new;
+						}
+					}
+					else if (rc != URI_ERRNO_OK) {
+						msg_info ("extract of url '%s' failed: %s",
+								url_str,
+								rspamd_url_strerror (rc));
+					}
+				}
+			}
+		}
+		p = url_end + 1;
+
+		if (pos != NULL) {
+			*pos = p;
+		}
+	}
+
+	return NULL;
+}
+
 /*
  * vi: ts=4
  */

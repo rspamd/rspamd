@@ -108,4 +108,15 @@ gboolean rspamd_url_find (rspamd_mempool_t *pool,
  */
 const gchar * rspamd_url_strerror (enum uri_errno err);
 
+/**
+ * Convenience routine to extract urls from an arbitrarty text
+ * @param pool
+ * @param start
+ * @param pos
+ * @return url or NULL
+ */
+struct rspamd_url *
+rspamd_url_get_next (rspamd_mempool_t *pool,
+		const gchar *start, gchar const **pos);
+
 #endif
