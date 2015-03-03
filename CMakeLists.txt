@@ -730,8 +730,78 @@ CHECK_FUNCTION_EXISTS(mkstemp HAVE_MKSTEMP)
 CHECK_FUNCTION_EXISTS(setitimer HAVE_SETITIMER)
 CHECK_FUNCTION_EXISTS(inet_pton HAVE_INET_PTON)
 CHECK_FUNCTION_EXISTS(clock_gettime HAVE_CLOCK_GETTIME)
+CHECK_FUNCTION_EXISTS(memset_s HAVE_MEMSET_S)
+CHECK_FUNCTION_EXISTS(explicit_bzero HAVE_EXPLICIT_BZERO)
+CHECK_C_SOURCE_COMPILES(
+"#include <stddef.h>
+void cmkcheckweak() __attribute__((weak));
+int main(int argc, char** argv) {
+  return cmkcheckweak == NULL;
+}" HAVE_WEAK_SYMBOLS)
 
-# 
+IF(NOT ICONV_ROOT_DIR)
+	FIND_PATH(ICONV_INCLUDE_DIR iconv.h 
+			PATHS 
+					~/Library/Frameworks
+                      /Library/Frameworks
+                      /usr/local
+                      /sw
+                      /opt/local
+                      /opt/csw
+                      /opt
+                      /usr
+            PATH_SUFFIXES include include/libiconv
+            DOC "Path where the libiconv headers can be found")
+	FIND_LIBRARY(ICONV_LIBRARIES NAMES iconv libiconv libiconv-2 c
+            PATHS
+                      ~/Library/Frameworks
+                      /Library/Frameworks
+                      /usr/local
+                      /sw
+                      /opt/local
+                      /opt/csw
+                      /opt
+                      /usr
+             PATH_SUFFIXES lib64 lib
+             DOC "Path where the libiconv library can be found")
+ELSE(NOT ICONV_ROOT_DIR)
+	FIND_PATH(ICONV_INCLUDE_DIR iconv.h 
+			     PATHS "${ICONV_ROOT_DIR}"
+			     PATH_SUFFIXES include include/libiconv
+                 DOC "Path where the libiconv headers can be found"
+                 NO_DEFAULT_PATH)
+	FIND_LIBRARY(ICONV_LIBRARIES NAMES iconv libiconv libiconv-2 c
+                 PATHS "${ICONV_ROOT_DIR}"
+                 PATH_SUFFIXES lib64 lib
+                 DOC "Path where the libiconv library can be found"
+                 NO_DEFAULT_PATH)
+ENDIF(NOT ICONV_ROOT_DIR)
+IF(ICONV_INCLUDE_DIR AND ICONV_LIBRARIES)
+	SET(ICONV_FOUND TRUE)
+ENDIF(ICONV_INCLUDE_DIR AND ICONV_LIBRARIES)
+INCLUDE_DIRECTORIES(${ICONV_INCLUDE_DIR})
+LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ${ICONV_LIBRARIES})
+
+IF(ICONV_FOUND)
+	CHECK_C_SOURCE_COMPILES("
+#include <iconv.h>
+int main(){
+	iconv_t conv = 0;
+	const char* in = 0;
+	size_t ilen = 0;
+	char* out = 0;
+	size_t olen = 0;
+	iconv(conv, &in, &ilen, &out, &olen);
+	return 0;
+}
+" ICONV_SECOND_ARGUMENT_IS_CONST)
+ENDIF(ICONV_FOUND)
+
+IF(ICONV_FOUND)
+	MESSAGE(STATUS "Found Iconv: ${ICONV_LIBRARIES}")
+ELSE(ICONV_FOUND)
+	MESSAGE(FATAL_ERROR "Could not find Iconv")
+ENDIF(ICONV_FOUND)
 
 # Check macros
 CHECK_SYMBOL_EXISTS(PATH_MAX limits.h HAVE_PATH_MAX)
