@@ -83,6 +83,51 @@ local function process_sa_conf(f)
           cur_rule['not'] = true
         end
         
+        --Now check for modifiers inside header's name
+        local semicolon = string.find(cur_rule['header'], ':')
+        if semicolon then
+          local func = string.sub(cur_rule['header'], semicolon + 1)
+          local hdr =  string.sub(cur_rule['header'], 1, semicolon - 1)
+          cur_rule['header'] = hdr
+          
+          if hdr == 'ALL' then
+            -- We can handle all only with 'raw' condition
+            if func == 'raw' then
+              cur_rule['type'] = 'function'
+              cur_rule['function'] = function(task)
+                local hdr = task:get_raw_headers()
+                if hdr then
+                  local match = r['re']:match(rh['decoded'])
+                  if (match and not r['not']) or (not match and r['not']) then
+                    task:insert_result(k, 1.0)
+                  end
+                end
+              end
+            else
+              -- Not raw
+              rspamd_logger.warn('Cannot deal with not raw ALL rule for ' ..
+                cur_rule['symbol'])
+              return
+            end
+          else
+            -- Just a modifier for a normal header
+            if func == 'addr' then
+              cur_rule['function'] = function(str)
+                local at = string.find(str, '@')
+                if at then
+                  return string.sub(str, at + 1)
+                end
+                return str
+              end
+            elseif func == 'raw' then
+              cur_rule['raw'] = true
+            else
+              rspamd_logger.warn(string.format('Function %s is not supported in %s',
+                func, cur_rule['symbol']))
+            end
+          end
+        end
+          
         if cur_rule['header'] == 'MESSAGEID' then
           -- Special case for spamassassin
           cur_rule['header'] = 'Message-ID'
@@ -91,7 +136,9 @@ local function process_sa_conf(f)
         
         cur_rule['re_expr'] = words_to_re(words, 4)
         cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
-        if cur_rule['re'] then valid_rule = true end
+        if cur_rule['re'] and (cur_rule['header'] or cur_rule['function']) then 
+          valid_rule = true 
+        end
       else
         -- Maybe we know the function and can convert it
         local s,e = string.find(words[3], 'exists:')
@@ -184,12 +231,23 @@ _.each(function(k, r)
 
 -- Header rules
 _.each(function(k, r)
-    local f = function(task)
+    local f = function(task)   
       local hdr = task:get_header_full(r['header'])
       if hdr then
         for n, rh in ipairs(hdr) do
           -- Subject for optimization
-          local match = r['re']:match(rh['decoded'])
+          local str
+          if r['raw'] then
+            str =  rh['value']
+          else
+            str =  rh['decoded']
+          end
+          if not str then return end
+          
+          if r['function'] then
+            str = r['function'](str)
+          end
+          local match = r['re']:match(str)
           if (match and not r['not']) or (not match and r['not']) then
             task:insert_result(k, 1.0)
             return
