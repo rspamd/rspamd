@@ -83,6 +83,14 @@ local function process_sa_conf(f)
           cur_rule['not'] = true
         end
         
+        cur_rule['re_expr'] = words_to_re(words, 4)
+        cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
+        
+        if not cur_rule['re'] then
+          rspamd_logger.warn(string.format("Cannot parse regexp '%s' for %s",
+            cur_rule['re_expr'], cur_rule['symbol']))
+        end
+        
         --Now check for modifiers inside header's name
         local semicolon = string.find(cur_rule['header'], ':')
         if semicolon then
@@ -94,12 +102,17 @@ local function process_sa_conf(f)
             -- We can handle all only with 'raw' condition
             if func == 'raw' then
               cur_rule['type'] = 'function'
+              -- Pack closure
+              local re = cur_rule['re']
+              local not_f = cur_rule['not']
+              local sym = cur_rule['symbol']
               cur_rule['function'] = function(task)
                 local hdr = task:get_raw_headers()
                 if hdr then
-                  local match = r['re']:match(rh['decoded'])
-                  if (match and not r['not']) or (not match and r['not']) then
-                    task:insert_result(k, 1.0)
+                  local match = re:match(hdr)
+                  if (match and not not_f) or 
+                    (not match and not_f) then
+                    task:insert_result(sym, 1.0)
                   end
                 end
               end
@@ -134,8 +147,6 @@ local function process_sa_conf(f)
           rspamd_logger.info('MESSAGEID support is limited in ' .. cur_rule['symbol'])
         end
         
-        cur_rule['re_expr'] = words_to_re(words, 4)
-        cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
         if cur_rule['re'] and (cur_rule['header'] or cur_rule['function']) then 
           valid_rule = true 
         end
