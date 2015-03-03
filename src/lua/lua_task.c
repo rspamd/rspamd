@@ -227,6 +227,14 @@ function check_header_delimiter_tab(task, header_name)
 end
  */
 LUA_FUNCTION_DEF (task, get_header_full);
+
+/***
+ * @method task:get_raw_headers()
+ * Get all undecoded headers of a message as a string
+ * @reeturn {string} all raw headers for a message
+ */
+LUA_FUNCTION_DEF (task, get_raw_headers);
+
 /***
  * @method task:get_received_headers()
  * Returns a list of tables of parsed received headers. A tables returned have
@@ -452,6 +460,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_header),
 	LUA_INTERFACE_DEF (task, get_header_raw),
 	LUA_INTERFACE_DEF (task, get_header_full),
+	LUA_INTERFACE_DEF (task, get_raw_headers),
 	LUA_INTERFACE_DEF (task, get_received_headers),
 	LUA_INTERFACE_DEF (task, get_resolver),
 	LUA_INTERFACE_DEF (task, inc_dns_req),
@@ -1160,6 +1169,21 @@ static gint
 lua_task_get_header_raw (lua_State * L)
 {
 	return lua_task_get_header_common (L, FALSE, TRUE);
+}
+
+static gint
+lua_task_get_raw_headers (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+
+	if (task) {
+		lua_pushstring (L, task->raw_headers_str);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
 }
 
 static gint
