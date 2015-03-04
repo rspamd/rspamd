@@ -647,12 +647,12 @@ parse_expression (rspamd_mempool_t * pool, gchar *line)
 /*
  * Rspamd regexp utility functions
  */
-struct rspamd_regexp *
+struct rspamd_regexp_element *
 parse_regexp (rspamd_mempool_t * pool, const gchar *line, gboolean raw_mode)
 {
 	const gchar *begin, *end, *p, *src, *start;
 	gchar *dbegin, *dend;
-	struct rspamd_regexp *result, *check;
+	struct rspamd_regexp_element *result, *check;
 	gint regexp_flags = G_REGEX_OPTIMIZE | G_REGEX_NO_AUTO_CAPTURE;
 	GError *err = NULL;
 
@@ -662,7 +662,7 @@ parse_regexp (rspamd_mempool_t * pool, const gchar *line, gboolean raw_mode)
 	}
 
 	src = line;
-	result = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_regexp));
+	result = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_regexp_element));
 	/* Skip whitespaces */
 	while (g_ascii_isspace (*line)) {
 		line++;
@@ -815,7 +815,7 @@ parse_regexp (rspamd_mempool_t * pool, const gchar *line, gboolean raw_mode)
 
 	/* Avoid multiply regexp structures for similar regexps */
 	if ((check =
-		(struct rspamd_regexp *)re_cache_check (result->regexp_text,
+		(struct rspamd_regexp_element *)re_cache_check (result->regexp_text,
 		pool)) != NULL) {
 		/* Additional check for headers */
 		if (result->type == REGEXP_HEADER || result->type ==

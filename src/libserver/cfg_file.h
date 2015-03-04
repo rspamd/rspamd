@@ -65,7 +65,7 @@ enum rspamd_log_type {
 /**
  * Regexp structure
  */
-struct rspamd_regexp {
+struct rspamd_regexp_element {
 	enum rspamd_regexp_type type;                   /**< regexp type										*/
 	gchar *regexp_text;                             /**< regexp text representation							*/
 	GRegex *regexp;                                 /**< glib regexp structure								*/

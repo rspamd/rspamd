@@ -120,7 +120,7 @@ G_LOCK_DEFINE (task_cache_mtx);
 
 void
 task_cache_add (struct rspamd_task *task,
-	struct rspamd_regexp *re,
+	struct rspamd_regexp_element *re,
 	gint32 result)
 {
 	if (result == 0) {
@@ -142,7 +142,7 @@ task_cache_add (struct rspamd_task *task,
 }
 
 gint32
-task_cache_check (struct rspamd_task *task, struct rspamd_regexp *re)
+task_cache_check (struct rspamd_task *task, struct rspamd_regexp_element *re)
 {
 	gpointer res;
 	gint32 r;
@@ -370,7 +370,7 @@ regexp_module_reconfig (struct rspamd_config *cfg)
 struct url_regexp_param {
 	struct rspamd_task *task;
 	GRegex *regexp;
-	struct rspamd_regexp *re;
+	struct rspamd_regexp_element *re;
 	gboolean found;
 };
 
@@ -405,7 +405,7 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 }
 
 static gsize
-process_regexp (struct rspamd_regexp *re,
+process_regexp (struct rspamd_regexp_element *re,
 	struct rspamd_task *task,
 	const gchar *additional,
 	gint limit,
@@ -855,7 +855,7 @@ process_regexp_expression (struct expression *expr,
 	GQueue *stack;
 	gsize cur, op1, op2;
 	struct expression *it = expr;
-	struct rspamd_regexp *re;
+	struct rspamd_regexp_element *re;
 	gboolean try_optimize = TRUE;
 
 	stack = g_queue_new ();
@@ -863,7 +863,7 @@ process_regexp_expression (struct expression *expr,
 	while (it) {
 		if (it->type == EXPR_REGEXP_PARSED) {
 			/* Find corresponding symbol */
-			cur = process_regexp ((struct rspamd_regexp *)it->content.operand,
+			cur = process_regexp ((struct rspamd_regexp_element *)it->content.operand,
 					task,
 					additional,
 					0,
@@ -1202,7 +1202,7 @@ rspamd_regexp_occurs_number (struct rspamd_task *task,
 {
 	gint limit;
 	struct expression_argument *arg;
-	struct rspamd_regexp *re;
+	struct rspamd_regexp_element *re;
 	gchar *param, *err_str, op;
 	int_compare_func f = NULL;
 
@@ -1289,7 +1289,7 @@ match_smtp_data (struct rspamd_task *task,
 	const gchar *re_text,
 	const gchar *what)
 {
-	struct rspamd_regexp *re;
+	struct rspamd_regexp_element *re;
 	gint r;
 
 	if (*re_text == '/') {
@@ -1471,7 +1471,7 @@ lua_regexp_match (lua_State *L)
 	void *ud = luaL_checkudata (L, 1, "rspamd{task}");
 	struct rspamd_task *task;
 	const gchar *re_text;
-	struct rspamd_regexp *re;
+	struct rspamd_regexp_element *re;
 	gint r = 0;
 
 	luaL_argcheck (L, ud != NULL, 1, "'task' expected");
@@ -1504,7 +1504,7 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 {
 	gchar *param_name, *param_pattern;
 	const gchar *param_data;
-	struct rspamd_regexp *re;
+	struct rspamd_regexp_element *re;
 	struct expression_argument *arg, *arg1;
 	GMimeObject *part;
 	GMimeContentType *ct;
@@ -1701,7 +1701,7 @@ rspamd_content_type_is_subtype (struct rspamd_task *task,
 	void *unused)
 {
 	gchar *param_pattern;
-	struct rspamd_regexp *re;
+	struct rspamd_regexp_element *re;
 	struct expression_argument *arg, *arg1;
 	GMimeObject *part;
 	GMimeContentType *ct;
@@ -1806,7 +1806,7 @@ rspamd_content_type_is_type (struct rspamd_task * task,
 	void *unused)
 {
 	gchar *param_pattern;
-	struct rspamd_regexp *re;
+	struct rspamd_regexp_element *re;
 	struct expression_argument *arg, *arg1;
 	GMimeObject *part;
 	GMimeContentType *ct;
@@ -1909,7 +1909,7 @@ static gboolean
 compare_subtype (struct rspamd_task *task, GMimeContentType * ct,
 	gchar *subtype)
 {
-	struct rspamd_regexp *re;
+	struct rspamd_regexp_element *re;
 	gint r;
 
 	if (subtype == NULL || ct == NULL) {
@@ -1974,7 +1974,7 @@ common_has_content_part (struct rspamd_task * task,
 	gint min_len,
 	gint max_len)
 {
-	struct rspamd_regexp *re;
+	struct rspamd_regexp_element *re;
 	struct mime_part *part;
 	GList *cur;
 	GMimeContentType *ct;

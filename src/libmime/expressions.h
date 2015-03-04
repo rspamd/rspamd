@@ -10,7 +10,7 @@
 #include <lua.h>
 
 struct rspamd_task;
-struct rspamd_regexp;
+struct rspamd_regexp_element;
 
 /**
  * Rspamd expression function
@@ -60,7 +60,7 @@ typedef gboolean (*rspamd_internal_func_t)(struct rspamd_task *, GList *args,
  * @param line incoming line
  * @return regexp structure or NULL in case of error
  */
-struct rspamd_regexp * parse_regexp (rspamd_mempool_t *pool,
+struct rspamd_regexp_element * parse_regexp (rspamd_mempool_t *pool,
 	const gchar *line,
 	gboolean raw_mode);
 
@@ -119,7 +119,7 @@ void re_cache_del (const gchar *line, rspamd_mempool_t *pool);
  * @param result numeric result of this regexp
  */
 void task_cache_add (struct rspamd_task *task,
-	struct rspamd_regexp *re,
+	struct rspamd_regexp_element *re,
 	gint32 result);
 
 /**
@@ -128,7 +128,7 @@ void task_cache_add (struct rspamd_task *task,
  * @param pointer regexp data
  * @return numeric result if value exists or -1 if not
  */
-gint32 task_cache_check (struct rspamd_task *task, struct rspamd_regexp *re);
+gint32 task_cache_check (struct rspamd_task *task, struct rspamd_regexp_element *re);
 
 /**
  * Parse and return a single function argument for a function (may recurse)
