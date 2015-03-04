@@ -123,14 +123,23 @@ lua_regexp_create (lua_State *L)
 		}
 	}
 	else if (string[0] == 'm') {
-		/* Special case for perl */
+		/* Special case for m */
 		slash = &string[1];
 		sep = *slash;
-		slash = strrchr (string, sep);
-		if (slash != NULL && slash > &string[1]) {
-			flags_str = slash + 1;
-			pattern = g_malloc (slash - string - 1);
-			rspamd_strlcpy (pattern, string + 2, slash - string - 1);
+
+		if (sep == '\0' || g_ascii_isalnum (sep)) {
+			/* Not a special case */
+		}
+		else {
+			slash = strrchr (string, sep);
+			if (slash != NULL && slash > &string[1]) {
+				flags_str = slash + 1;
+				pattern = g_malloc (slash - string + 1);
+				pattern[0] = '^';
+				rspamd_strlcpy (pattern + 1, string + 2, slash - string - 1);
+				pattern[slash - string - 1] = '$';
+				pattern[slash - string] = '\0';
+			}
 		}
 	}
 	else {
