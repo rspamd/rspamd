@@ -16,6 +16,8 @@ For general and technical questions you can use rspamd mailing list provided by 
 
 For immediate help and discussions you can use IRC channel *#rspamd* in <http://freenode.net>
 
+You can read more about IRC [here](irc.html).
+
 ## Issue tracker
 
 If you find a bug in rspamd or would like to request a feature you can use issue trackers for rspamd project:
