@@ -102,7 +102,7 @@ lua_regexp_create (lua_State *L)
 	GRegex *re;
 	struct rspamd_lua_regexp *new, **pnew;
 	const gchar *string, *flags_str = NULL, *slash;
-	gchar *pattern;
+	gchar *pattern, sep;
 	GError *err = NULL;
 
 	string = luaL_checkstring (L, 1);
@@ -120,6 +120,17 @@ lua_regexp_create (lua_State *L)
 		}
 		else {
 			pattern = g_strdup (string);
+		}
+	}
+	else if (string[0] == 'm') {
+		/* Special case for perl */
+		slash = &string[1];
+		sep = *slash;
+		slash = strrchr (string, sep);
+		if (slash != NULL && slash > &string[1]) {
+			flags_str = slash + 1;
+			pattern = g_malloc (slash - string - 1);
+			rspamd_strlcpy (pattern, string + 2, slash - string - 1);
 		}
 	}
 	else {
