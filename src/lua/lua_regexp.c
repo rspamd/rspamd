@@ -129,6 +129,7 @@ lua_regexp_create (lua_State *L)
 
 		if (sep == '\0' || g_ascii_isalnum (sep)) {
 			/* Not a special case */
+			pattern = g_strdup (string);
 		}
 		else {
 			slash = strrchr (string, sep);
