@@ -86,17 +86,21 @@ rspamd_regexp_dtor (rspamd_regexp_t *re)
 {
 	if (re) {
 		if (re->re) {
-			pcre_free_study (re->extra);
 			pcre_free (re->re);
 #ifdef HAVE_PCRE_JIT
+			pcre_free_study (re->extra);
 			pcre_jit_stack_free (re->jstack);
+#else
+			pcre_free (re->extra);
 #endif
 		}
 		if (re->raw_re) {
-			pcre_free_study (re->raw_extra);
 			pcre_free (re->raw_re);
 #ifdef HAVE_PCRE_JIT
+			pcre_free_study (re->raw_extra);
 			pcre_jit_stack_free (re->raw_jstack);
+#else
+			pcre_free (re->raw_extra);
 #endif
 		}
 #ifdef HAVE_PCRE_JIT
