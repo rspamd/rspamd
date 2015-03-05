@@ -233,6 +233,7 @@ MACRO(ProcessPackage var _name0)
         ENDIF(ENABLE_STATIC MATCHES "ON")
         FOREACH(_arg ${${_XPREFIX}_INCLUDE_DIRS})
             INCLUDE_DIRECTORIES("${_arg}")
+            SET(${var}_INCLUDE_DIR "${_arg}")
         ENDFOREACH(_arg ${${_XPREFIX}_INCLUDE_DIRS})
         FOREACH(_arg ${${_XPREFIX}_LIBRARY_DIRS})
             LINK_DIRECTORIES("${_arg}")
@@ -417,6 +418,8 @@ ENDIF(OPENSSL_FOUND)
 ProcessPackage(GLIB2 glib-2.0>=2.16)
 ProcessPackage(GTHREAD gthread-2.0)
 ProcessPackage(HIREDIS hiredis libhiredis)
+ProcessPackage(PCRE pcre libpcre pcre3 libpcre3)
+LIST(APPEND CMAKE_REQUIRED_INCLUDES "${PCRE_INCLUDE_DIR}")
 
 FIND_PATH(LIBHIREDIS_INCLUDE hiredis.h PATHS /opt/include
 						/usr/include
@@ -819,6 +822,7 @@ CHECK_SYMBOL_EXISTS(_SC_NPROCESSORS_ONLN unistd.h HAVE_SC_NPROCESSORS_ONLN)
 CHECK_SYMBOL_EXISTS(setbit sys/param.h PARAM_H_HAS_BITSET)
 CHECK_SYMBOL_EXISTS(getaddrinfo "sys/types.h;sys/socket.h;netdb.h" HAVE_GETADDRINFO)
 CHECK_SYMBOL_EXISTS(sched_yield "sched.h" HAVE_SCHED_YIELD)
+CHECK_SYMBOL_EXISTS(PCRE_CONFIG_JIT "pcre.h" HAVE_PCRE_JIT)
 
 FILE(WRITE ${CMAKE_BINARY_DIR}/pthread_setpshared.c "
 #include <pthread.h>
