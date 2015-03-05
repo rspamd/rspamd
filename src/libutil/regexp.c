@@ -327,7 +327,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 			*start = mt + ovec[0];
 		}
 		if (end) {
-			*end = mt + ovec[1];
+			*end = mt + ovec[0] + ovec[1];
 		}
 
 		return TRUE;
@@ -340,8 +340,16 @@ gboolean
 rspamd_regexp_match (rspamd_regexp_t *re, const gchar *text, gsize len,
 		gboolean raw)
 {
+	const gchar *start = NULL, *end = NULL;
+
 	g_assert (re != NULL);
 	g_assert (text != NULL);
+
+	if (rspamd_regexp_search (re, text, len, &start, &end, raw)) {
+		if (start == text && end == text + len) {
+			return TRUE;
+		}
+	}
 
 	return FALSE;
 }
