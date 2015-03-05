@@ -47,7 +47,8 @@ rspamd_regexp_t* rspamd_regexp_new (const gchar *pattern, const gchar *flags,
  * @param len
  * @return
  */
-gboolean rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len);
+gboolean rspamd_regexp_search (rspamd_regexp_t *re,
+		const gchar *text, gsize len, gboolean raw);
 
 
 /**
@@ -57,7 +58,8 @@ gboolean rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len
  * @param len
  * @return
  */
-gboolean rspamd_regexp_match (rspamd_regexp_t *re, const gchar *text, gsize len);
+gboolean rspamd_regexp_match (rspamd_regexp_t *re,
+		const gchar *text, gsize len, gboolean raw);
 
 /**
  * Increase refcount for a regexp object

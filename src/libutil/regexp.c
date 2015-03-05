@@ -27,18 +27,29 @@
 #include "regexp.h"
 #include "blake2.h"
 #include "ref.h"
+#include "util.h"
 #include <pcre.h>
 
 typedef guchar regexp_id_t[BLAKE2B_OUTBYTES];
 
+#define RSPAMD_REGEXP_FLAG_RAW (1 << 1)
+#define RSPAMD_REGEXP_FLAG_NOOPT (1 << 2)
+
 struct rspamd_regexp_s {
 	gdouble exec_time;
+	gchar *pattern;
 	pcre *re;
 	pcre_extra *extra;
+#ifdef HAVE_PCRE_JIT
+	pcre_jit_stack *jstack;
+	pcre_jit_stack *raw_jstack;
+	rspamd_mutex_t *mtx;
+#endif
 	pcre *raw_re;
 	pcre_extra *raw_extra;
 	regexp_id_t id;
 	ref_entry_t ref;
+	gint flags;
 };
 
 struct rspamd_regexp_cache {
@@ -47,6 +58,12 @@ struct rspamd_regexp_cache {
 
 static struct rspamd_regexp_cache *global_re_cache = NULL;
 
+static GQuark
+rspamd_regexp_quark (void)
+{
+	return g_quark_from_static_string ("rspamd-regexp");
+}
+
 static void
 rspamd_regexp_generate_id (const gchar *pattern, const gchar *flags,
 		regexp_id_t out)
@@ -54,27 +71,205 @@ rspamd_regexp_generate_id (const gchar *pattern, const gchar *flags,
 	blake2b_state st;
 
 	blake2b_init (&st, sizeof (regexp_id_t));
-	blake2b_update (&st, flags, strlen (flags));
+
+	if (flags) {
+		blake2b_update (&st, flags, strlen (flags));
+	}
+
 	blake2b_update (&st, pattern, strlen (pattern));
 	blake2b_final (&st, out, sizeof (regexp_id_t));
+}
+
+static void
+rspamd_regexp_dtor (rspamd_regexp_t *re)
+{
+	if (re) {
+		if (re->re) {
+			pcre_free_study (re->extra);
+			pcre_free (re->re);
+#ifdef HAVE_PCRE_JIT
+			pcre_jit_stack_free (re->jstack);
+#endif
+		}
+		if (re->raw_re) {
+			pcre_free_study (re->raw_extra);
+			pcre_free (re->raw_re);
+#ifdef HAVE_PCRE_JIT
+			pcre_jit_stack_free (re->raw_jstack);
+#endif
+		}
+#ifdef HAVE_PCRE_JIT
+		if (re->mtx) {
+			rspamd_mutex_free (re->mtx);
+		}
+#endif
+		if (re->pattern) {
+			g_free (re->pattern);
+		}
+	}
 }
 
 rspamd_regexp_t*
 rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 		GError **err)
 {
-	return NULL;
+	const gchar *start = pattern, *end, *flags_str, *err_str;
+	rspamd_regexp_t *res;
+	pcre *r;
+	gchar sep = 0, *real_pattern;
+	gint regexp_flags = 0, rspamd_flags = 0, err_off, study_flags = 0;
+	gboolean strict_flags = FALSE;
+
+	if (flags == NULL) {
+		/* We need to parse pattern and detect flags set */
+		if (*start == '/') {
+			sep = '/';
+		}
+		else if (*start == 'm') {
+			start ++;
+			sep = *start;
+		}
+		if (sep == '\0' || g_ascii_isalnum (sep)) {
+			/* We have no flags, no separators and just use all line as expr */
+			start = pattern;
+			end = start + strlen (pattern);
+		}
+		else {
+			end = strrchr (pattern, sep);
+
+			if (end == NULL || end <= start) {
+				g_set_error (err, rspamd_regexp_quark(), EINVAL,
+						"pattern is not enclosed with %c: %s",
+						sep, pattern);
+				return NULL;
+			}
+			flags = end + 1;
+		}
+	}
+	else {
+		/* Strictly check all flags */
+		strict_flags = TRUE;
+		start = pattern;
+		end = pattern + strlen (pattern);
+	}
+
+	regexp_flags |= PCRE_UTF8;
+
+	if (flags != NULL) {
+		flags_str = flags;
+		while (*flags_str) {
+			switch (*flags_str) {
+			case 'i':
+				regexp_flags |= PCRE_CASELESS;
+				break;
+			case 'm':
+				regexp_flags |= PCRE_MULTILINE;
+				break;
+			case 's':
+				regexp_flags |= PCRE_DOTALL;
+				break;
+			case 'x':
+				regexp_flags |= PCRE_EXTENDED;
+				break;
+			case 'u':
+				regexp_flags |= PCRE_UNGREEDY;
+				break;
+			case 'O':
+				/* We optimize all regexps by default */
+				rspamd_flags |= RSPAMD_REGEXP_FLAG_NOOPT;
+				break;
+			case 'r':
+				rspamd_flags |= RSPAMD_REGEXP_FLAG_RAW;
+				regexp_flags &= ~PCRE_UTF8;
+				break;
+			default:
+				if (strict_flags) {
+					g_set_error (err, rspamd_regexp_quark(), EINVAL,
+							"invalid regexp flag: %c in pattern %s",
+							*flags_str, pattern);
+					return NULL;
+				}
+				goto fin;
+				break;
+			}
+			flags_str++;
+		}
+	}
+fin:
+
+	real_pattern = g_malloc (end - start + 1);
+	rspamd_strlcpy (real_pattern, start, end - start + 1);
+
+	r = pcre_compile (real_pattern, regexp_flags, &err_str, &err_off, NULL);
+
+	if (r == NULL) {
+		g_set_error (err, rspamd_regexp_quark(), EINVAL,
+			"invalid regexp pattern: '%s': %s at position %d",
+			pattern, err_str, err_off);
+		g_free (real_pattern);
+
+		return NULL;
+	}
+
+	/* Now allocate the target structure */
+	res = g_slice_alloc0 (sizeof (*res));
+	REF_INIT_RETAIN (res, rspamd_regexp_dtor);
+	res->flags = rspamd_flags;
+	res->pattern = real_pattern;
+
+	if (rspamd_flags & RSPAMD_REGEXP_FLAG_RAW) {
+		res->raw_re = r;
+	}
+	else {
+		res->re = r;
+		res->raw_re = pcre_compile (pattern, regexp_flags & ~PCRE_UTF8,
+				&err_str, &err_off, NULL);
+	}
+
+	if (!(rspamd_flags & RSPAMD_REGEXP_FLAG_NOOPT)) {
+		/* Optimize regexp */
+#ifdef HAVE_PCRE_JIT
+		study_flags |= PCRE_STUDY_JIT_COMPILE;
+		res->mtx = rspamd_mutex_new ();
+#endif
+		if (res->re) {
+			res->extra = pcre_study (res->re, study_flags, NULL);
+#ifdef HAVE_PCRE_JIT
+			res->jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
+			pcre_assign_jit_stack (res->extra, NULL, res->jstack);
+#endif
+		}
+		if (res->raw_re) {
+			res->raw_extra = pcre_study (res->raw_re, study_flags, NULL);
+#ifdef HAVE_PCRE_JIT
+			res->raw_jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
+			pcre_assign_jit_stack (res->raw_extra, NULL, res->raw_jstack);
+#endif
+		}
+	}
+
+	rspamd_regexp_generate_id (pattern, flags, res->id);
+
+	return res;
 }
 
 gboolean
-rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len)
+rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
+		gboolean raw)
 {
+	g_assert (re != NULL);
+	g_assert (text != NULL);
+
 	return FALSE;
 }
 
 gboolean
-rspamd_regexp_match (rspamd_regexp_t *re, const gchar *text, gsize len)
+rspamd_regexp_match (rspamd_regexp_t *re, const gchar *text, gsize len,
+		gboolean raw)
 {
+	g_assert (re != NULL);
+	g_assert (text != NULL);
+
 	return FALSE;
 }
 
