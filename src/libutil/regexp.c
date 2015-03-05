@@ -28,6 +28,7 @@
 #include "blake2.h"
 #include "ref.h"
 #include "util.h"
+#include "main.h"
 #include <pcre.h>
 
 typedef guchar regexp_id_t[BLAKE2B_OUTBYTES];
@@ -144,6 +145,7 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 				return NULL;
 			}
 			flags = end + 1;
+			start ++;
 		}
 	}
 	else {
@@ -189,6 +191,7 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 							*flags_str, pattern);
 					return NULL;
 				}
+				msg_warn ("invalid flag '%c' in pattern %s", *flags_str, pattern);
 				goto fin;
 				break;
 			}
@@ -224,6 +227,11 @@ fin:
 		res->re = r;
 		res->raw_re = pcre_compile (pattern, regexp_flags & ~PCRE_UTF8,
 				&err_str, &err_off, NULL);
+
+		if (res->raw_re == NULL) {
+			msg_warn ("invalid raw regexp pattern: '%s': %s at position %d",
+					pattern, err_str, err_off);
+		}
 	}
 
 	if (!(rspamd_flags & RSPAMD_REGEXP_FLAG_NOOPT)) {
@@ -233,18 +241,30 @@ fin:
 		res->mtx = rspamd_mutex_new ();
 #endif
 		if (res->re) {
-			res->extra = pcre_study (res->re, study_flags, NULL);
+			res->extra = pcre_study (res->re, study_flags, &err_str);
+			if (res->extra != NULL) {
 #ifdef HAVE_PCRE_JIT
-			res->jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
-			pcre_assign_jit_stack (res->extra, NULL, res->jstack);
+				res->jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
+				pcre_assign_jit_stack (res->extra, NULL, res->jstack);
 #endif
+			}
+			else {
+				msg_warn ("cannot optimize regexp pattern: '%s': %s",
+						pattern, err_str);
+			}
 		}
 		if (res->raw_re) {
-			res->raw_extra = pcre_study (res->raw_re, study_flags, NULL);
+			res->raw_extra = pcre_study (res->raw_re, study_flags, &err_str);
+			if (res->raw_extra != NULL) {
 #ifdef HAVE_PCRE_JIT
-			res->raw_jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
-			pcre_assign_jit_stack (res->raw_extra, NULL, res->raw_jstack);
+				res->raw_jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
+				pcre_assign_jit_stack (res->raw_extra, NULL, res->raw_jstack);
 #endif
+			}
+			else {
+				msg_warn ("cannot optimize raw regexp pattern: '%s': %s",
+						pattern, err_str);
+			}
 		}
 	}
 
