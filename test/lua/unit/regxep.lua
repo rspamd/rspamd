@@ -24,7 +24,8 @@ context("Regexp unit tests", function()
       local m = false
       if res then m = true end
       
-      assert_equal(m, c[3])
+      assert_equal(m, c[3], string.format("'%s' doesn't match with '%s'",
+        c[2], c[1]))
     end
   end)
   end

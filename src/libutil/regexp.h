@@ -76,6 +76,13 @@ rspamd_regexp_t* rspamd_regexp_ref (rspamd_regexp_t *re);
 void rspamd_regexp_unref (rspamd_regexp_t *re);
 
 /**
+ * Get pattern for the specified regexp object
+ * @param re
+ * @return
+ */
+const char* rspamd_regexp_get_pattern (rspamd_regexp_t *re);
+
+/**
  * Create new regexp cache
  * @return
  */

@@ -155,7 +155,7 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 		end = pattern + strlen (pattern);
 	}
 
-	regexp_flags |= PCRE_UTF8;
+	regexp_flags |= PCRE_UTF8 | PCRE_NO_AUTO_CAPTURE;
 
 	if (flags != NULL) {
 		flags_str = flags;
@@ -354,6 +354,14 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 	}
 
 	return FALSE;
+}
+
+const char*
+rspamd_regexp_get_pattern (rspamd_regexp_t *re)
+{
+	g_assert (re != NULL);
+
+	return re->pattern;
 }
 
 gboolean

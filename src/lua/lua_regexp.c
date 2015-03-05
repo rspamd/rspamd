@@ -23,6 +23,7 @@
 
 #include "lua_common.h"
 #include "expressions.h"
+#include "regexp.h"
 
 /***
  * Rspamd regexp is an utility module that handles rspamd perl compatible
@@ -70,7 +71,7 @@ static const struct luaL_reg regexplib_f[] = {
 rspamd_mempool_t *regexp_static_pool = NULL;
 
 struct rspamd_lua_regexp {
-	GRegex *re;
+	rspamd_regexp_t *re;
 	gchar *re_pattern;
 	gint re_flags;
 };
@@ -98,11 +99,9 @@ lua_check_regexp (lua_State * L)
 static int
 lua_regexp_create (lua_State *L)
 {
-	gint regexp_flags = 0;
-	GRegex *re;
+	rspamd_regexp_t *re;
 	struct rspamd_lua_regexp *new, **pnew;
-	const gchar *string, *flags_str = NULL, *slash;
-	gchar *pattern, sep;
+	const gchar *string, *flags_str = NULL;
 	GError *err = NULL;
 
 	string = luaL_checkstring (L, 1);
@@ -110,93 +109,20 @@ lua_regexp_create (lua_State *L)
 		flags_str = luaL_checkstring (L, 2);
 	}
 
-	if (string[0] == '/') {
-		/* We have likely slashed regexp */
-		slash = strrchr (string, '/');
-		if (slash != NULL && slash != string) {
-			flags_str = slash + 1;
-			pattern = g_malloc (slash - string);
-			rspamd_strlcpy (pattern, string + 1, slash - string);
-		}
-		else {
-			pattern = g_strdup (string);
-		}
-	}
-	else if (string[0] == 'm') {
-		/* Special case for m */
-		slash = &string[1];
-		sep = *slash;
-
-		if (sep == '\0' || g_ascii_isalnum (sep)) {
-			/* Not a special case */
-			pattern = g_strdup (string);
-		}
-		else {
-			slash = strrchr (string, sep);
-			if (slash != NULL && slash > &string[1]) {
-				flags_str = slash + 1;
-				pattern = g_malloc (slash - string + 1);
-				pattern[0] = '^';
-				rspamd_strlcpy (pattern + 1, string + 2, slash - string - 1);
-				pattern[slash - string - 1] = '$';
-				pattern[slash - string] = '\0';
-			}
-		}
-	}
-	else {
-		pattern = g_strdup (string);
-	}
-
-	if (flags_str && flags_str != '\0') {
-		while (*flags_str) {
-			switch (*flags_str) {
-			case 'i':
-				regexp_flags |= G_REGEX_CASELESS;
-				break;
-			case 'm':
-				regexp_flags |= G_REGEX_MULTILINE;
-				break;
-			case 's':
-				regexp_flags |= G_REGEX_DOTALL;
-				break;
-			case 'x':
-				regexp_flags |= G_REGEX_EXTENDED;
-				break;
-			case 'u':
-				regexp_flags |= G_REGEX_UNGREEDY;
-				break;
-			case 'o':
-				regexp_flags |= G_REGEX_OPTIMIZE;
-				break;
-			case 'r':
-				regexp_flags |= G_REGEX_RAW;
-				break;
-			default:
-				msg_info ("invalid regexp flag: %c", *flags_str);
-				goto fin;
-				break;
-			}
-			flags_str++;
-		}
-	}
-fin:
-	re = g_regex_new (pattern, regexp_flags, 0, &err);
+	re = rspamd_regexp_cache_create (NULL, string, flags_str, &err);
 	if (re == NULL) {
-		g_free (pattern);
 		lua_pushnil (L);
 		msg_info ("cannot parse regexp: %s, error: %s",
 			string,
 			err == NULL ? "undefined" : err->message);
+		g_error_free (err);
 	}
 	else {
 		new = g_slice_alloc (sizeof (struct rspamd_lua_regexp));
 		new->re = re;
-		new->re_flags = regexp_flags;
-		new->re_pattern = pattern;
 		pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
 		rspamd_lua_setclass (L, "rspamd{regexp}", -1);
 		*pnew = new;
-		re_cache_add (new->re_pattern, new, regexp_static_pool);
 	}
 
 	return 1;
@@ -217,7 +143,7 @@ lua_regexp_get_cached (lua_State *L)
 	const gchar *line;
 
 	line = luaL_checkstring (L, 1);
-	new = re_cache_check (line, regexp_static_pool);
+	new = rspamd_regexp_cache_query (NULL, line, NULL);
 	if (new) {
 		pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
 		rspamd_lua_setclass (L, "rspamd{regexp}", -1);
@@ -252,7 +178,7 @@ lua_regexp_create_cached (lua_State *L)
 	struct rspamd_lua_regexp *new, **pnew;
 
 	line = luaL_checkstring (L, 1);
-	new = re_cache_check (line, regexp_static_pool);
+	new = rspamd_regexp_cache_query (NULL, line, NULL);
 	if (new) {
 		pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
 		rspamd_lua_setclass (L, "rspamd{regexp}", -1);
@@ -275,8 +201,11 @@ lua_regexp_get_pattern (lua_State *L)
 {
 	struct rspamd_lua_regexp *re = lua_check_regexp (L);
 
-	if (re) {
-		lua_pushstring (L, re->re_pattern);
+	if (re && re->re) {
+		lua_pushstring (L, rspamd_regexp_get_pattern (re->re));
+	}
+	else {
+		lua_pushnil (L);
 	}
 
 	return 1;
@@ -301,39 +230,32 @@ static int
 lua_regexp_match (lua_State *L)
 {
 	struct rspamd_lua_regexp *re = lua_check_regexp (L);
-	GMatchInfo *mi;
 	const gchar *data;
-	gchar **matches;
+	const gchar *start = NULL, *end = NULL;
 	gint i;
+	gsize len;
+	gboolean matched = FALSE;
 
 	if (re) {
-		data = luaL_checkstring (L, 2);
+		data = luaL_checklstring (L, 2, &len);
 		if (data) {
-			if ((re->re_flags & G_REGEX_RAW) == 0) {
-				/* Validate input */
-				if (!g_utf8_validate (data, -1, NULL)) {
-					lua_pushnil (L);
-					return 1;
-				}
+			lua_newtable (L);
+			i = 0;
+			while (rspamd_regexp_search (re->re, data, len, &start, &end, FALSE)) {
+				lua_pushlstring (L, start, end - start);
+				lua_rawseti (L, -2, ++i);
+				matched = TRUE;
 			}
-			if (g_regex_match_full (re->re, data, -1, 0, 0, &mi, NULL)) {
-				matches = g_match_info_fetch_all (mi);
-				lua_newtable (L);
-				for (i = 1; matches[i - 1] != NULL; i++) {
-					lua_pushstring (L, matches[i - 1]);
-					lua_rawseti (L, -2, i);
-				}
-				g_strfreev (matches);
-			}
-			else {
+			if (!matched) {
+				lua_pop (L, 1);
 				lua_pushnil (L);
 			}
-			g_match_info_free (mi);
 			return 1;
 		}
 	}
 
 	lua_pushnil (L);
+
 	return 1;
 }
 
@@ -394,8 +316,7 @@ lua_regexp_destroy (lua_State *L)
 
 	if (to_del) {
 		re_cache_del (to_del->re_pattern, regexp_static_pool);
-		g_regex_unref (to_del->re);
-		g_free (to_del->re_pattern);
+		rspamd_regexp_unref (to_del->re);
 		g_slice_free1 (sizeof (struct rspamd_lua_regexp), to_del);
 	}
 
