@@ -1,6 +1,7 @@
 #include "config.h"
 #include "main.h"
 #include "cfg_file.h"
+#include "regexp.h"
 #include "tests.h"
 
 struct rspamd_main             *rspamd_main = NULL;
@@ -33,6 +34,7 @@ main (int argc, char **argv)
 #endif
 
 	g_mime_init (0);
+	rspamd_regexp_library_init ();
 
 	base = event_init ();
 
@@ -62,6 +64,7 @@ main (int argc, char **argv)
 	g_test_run ();
 
 	g_mime_shutdown ();
+	rspamd_regexp_library_finalize ();
 
 	return 0;
 }
