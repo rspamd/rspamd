@@ -45,10 +45,13 @@ rspamd_regexp_t* rspamd_regexp_new (const gchar *pattern, const gchar *flags,
  * @param re
  * @param text
  * @param len
+ * @param start position of start of match
+ * @param start position of end of match
  * @return
  */
 gboolean rspamd_regexp_search (rspamd_regexp_t *re,
-		const gchar *text, gsize len, gboolean raw);
+		const gchar *text, gsize len,
+		const gchar **start, const gchar **end, gboolean raw);
 
 
 /**

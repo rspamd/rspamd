@@ -255,10 +255,83 @@ fin:
 
 gboolean
 rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
-		gboolean raw)
+		const gchar **start, const gchar **end, gboolean raw)
 {
+	pcre *r;
+	pcre_extra *ext;
+#ifdef HAVE_PCRE_JIT
+	pcre_jit_stack *st;
+#endif
+	const gchar *mt;
+	gsize remain;
+	gint rc, match_flags = 0, ovec[10];
+
 	g_assert (re != NULL);
 	g_assert (text != NULL);
+
+	if (end != NULL && *end != NULL) {
+		/* Incremental search */
+		mt = (*end) + 1;
+		remain = len - (mt - text);
+	}
+	else {
+		mt = text;
+		remain = len;
+	}
+
+	match_flags = PCRE_NEWLINE_ANYCRLF;
+	if ((re->flags & RSPAMD_REGEXP_FLAG_RAW) || raw) {
+		r = re->raw_re;
+		ext = re->raw_extra;
+#ifdef HAVE_PCRE_JIT
+		st = re->raw_jstack;
+#endif
+	}
+	else {
+		match_flags |= PCRE_NO_UTF8_CHECK;
+		r = re->re;
+		ext = re->extra;
+#ifdef HAVE_PCRE_JIT
+		st = re->jstack;
+#endif
+	}
+
+	g_assert (r != NULL);
+
+#ifdef HAVE_PCRE_JIT
+	if (re->mtx) {
+		rspamd_mutex_lock (re->mtx);
+	}
+#endif
+
+	if (!(re->flags & RSPAMD_REGEXP_FLAG_NOOPT)) {
+#ifdef HAVE_PCRE_JIT
+		rc = pcre_jit_exec (r, ext, mt, remain, 0, match_flags, ovec,
+				G_N_ELEMENTS (ovec), st);
+#else
+		rc = pcre_exec (r, ext, mt, remain, 0, match_flags, ovec,
+				G_N_ELEMENTS (ovec));
+#endif
+	}
+	else {
+		rc = pcre_exec (r, ext, mt, remain, 0, match_flags, ovec,
+				G_N_ELEMENTS (ovec));
+	}
+#ifdef HAVE_PCRE_JIT
+	if (re->mtx) {
+		rspamd_mutex_unlock (re->mtx);
+	}
+#endif
+	if (rc > 0) {
+		if (start) {
+			*start = mt + ovec[0];
+		}
+		if (end) {
+			*end = mt + ovec[1];
+		}
+
+		return TRUE;
+	}
 
 	return FALSE;
 }
