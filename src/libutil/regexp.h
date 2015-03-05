@@ -105,4 +105,14 @@ rspamd_regexp_t* rspamd_regexp_cache_create (struct rspamd_regexp_cache *cache,
  */
 void rspamd_regexp_cache_destroy (struct rspamd_regexp_cache *cache);
 
+/**
+ * Initialize superglobal regexp cache and library
+ */
+void rspamd_regexp_library_init (void);
+
+/**
+ * Cleanup internal library structures
+ */
+void rspamd_regexp_library_finalize (void);
+
 #endif /* REGEXP_H_ */

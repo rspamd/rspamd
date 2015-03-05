@@ -29,13 +29,15 @@
 #include "ref.h"
 #include <pcre.h>
 
+typedef guchar regexp_id_t[BLAKE2B_OUTBYTES];
+
 struct rspamd_regexp_s {
-	gdouble exec_time;			   /**< average execution time								*/
+	gdouble exec_time;
 	pcre *re;
 	pcre_extra *extra;
 	pcre *raw_re;
 	pcre_extra *raw_extra;
-	guchar id[BLAKE2B_OUTBYTES / 2];
+	regexp_id_t id;
 	ref_entry_t ref;
 };
 
@@ -44,6 +46,18 @@ struct rspamd_regexp_cache {
 };
 
 static struct rspamd_regexp_cache *global_re_cache = NULL;
+
+static void
+rspamd_regexp_generate_id (const gchar *pattern, const gchar *flags,
+		regexp_id_t out)
+{
+	blake2b_state st;
+
+	blake2b_init (&st, sizeof (regexp_id_t));
+	blake2b_update (&st, flags, strlen (flags));
+	blake2b_update (&st, pattern, strlen (pattern));
+	blake2b_final (&st, out, sizeof (regexp_id_t));
+}
 
 rspamd_regexp_t*
 rspamd_regexp_new (const gchar *pattern, const gchar *flags,
@@ -70,10 +84,35 @@ rspamd_regexp_unref (rspamd_regexp_t *re)
 	REF_RELEASE (re);
 }
 
+static gboolean
+rspamd_regexp_equal (gconstpointer a, gconstpointer b)
+{
+	const guchar *ia = a, *ib = b;
+
+	return (memcmp (ia, ib, sizeof (regexp_id_t)) == 0);
+}
+
+static guint32
+rspamd_regexp_hash (gconstpointer a)
+{
+	const guchar *ia = a;
+	guint32 res;
+
+	memcpy (&res, ia, sizeof (res));
+
+	return res;
+}
+
 struct rspamd_regexp_cache*
 rspamd_regexp_cache_new (void)
 {
-	return NULL;
+	struct rspamd_regexp_cache *ncache;
+
+	ncache = g_slice_alloc (sizeof (*ncache));
+	ncache->tbl = g_hash_table_new_full (rspamd_regexp_hash, rspamd_regexp_equal,
+			NULL, (GDestroyNotify)rspamd_regexp_unref);
+
+	return ncache;
 }
 
 
@@ -82,7 +121,19 @@ rspamd_regexp_cache_query (struct rspamd_regexp_cache* cache,
 		const gchar *pattern,
 		const gchar *flags)
 {
-	return NULL;
+	rspamd_regexp_t *res = NULL;
+	regexp_id_t id;
+
+	if (cache == NULL) {
+		cache = global_re_cache;
+	}
+
+	g_assert (cache != NULL);
+	rspamd_regexp_generate_id (pattern, flags, id);
+
+	res = g_hash_table_lookup (cache->tbl, id);
+
+	return res;
 }
 
 
@@ -91,11 +142,48 @@ rspamd_regexp_cache_create (struct rspamd_regexp_cache *cache,
 		const gchar *pattern,
 		const gchar *flags, GError **err)
 {
-	return NULL;
+	rspamd_regexp_t *res;
+
+	if (cache == NULL) {
+		cache = global_re_cache;
+	}
+
+	g_assert (cache != NULL);
+	res = rspamd_regexp_cache_query (cache, pattern, flags);
+
+	if (res != NULL) {
+		return res;
+	}
+
+	res = rspamd_regexp_new (pattern, flags, err);
+
+	if (res) {
+		g_hash_table_insert (cache->tbl, res->id, res);
+	}
+
+	return res;
 }
 
 void
 rspamd_regexp_cache_destroy (struct rspamd_regexp_cache *cache)
 {
+	if (cache != NULL) {
+		g_hash_table_destroy (cache->tbl);
+	}
+}
 
+void
+rspamd_regexp_library_init (void)
+{
+	if (global_re_cache == NULL) {
+		global_re_cache = rspamd_regexp_cache_new ();
+	}
+}
+
+void
+rspamd_regexp_library_finalize (void)
+{
+	if (global_re_cache != NULL) {
+		rspamd_regexp_cache_destroy (global_re_cache);
+	}
 }
