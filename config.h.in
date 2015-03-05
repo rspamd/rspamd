@@ -224,6 +224,7 @@
 #cmakedefine HAVE_MEMSET_S       1
 #cmakedefine HAVE_EXPLICIT_BZERO 1
 #cmakedefine HAVE_WEAK_SYMBOLS   1
+#cmakedefine HAVE_PCRE_JIT       1
 
 /* Configure allocator */
 #define uthash_malloc(sz) g_slice_alloc(sz)
