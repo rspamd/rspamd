@@ -153,7 +153,7 @@ rspamd_radix_test_func (void)
 	gsize nelts, i;
 	gint lc;
 	gboolean all_good = TRUE;
-	struct timespec ts1, ts2;
+	gdouble ts1, ts2;
 	double diff;
 
 	/* Test suite for the compressed trie */
@@ -171,54 +171,50 @@ rspamd_radix_test_func (void)
 	}
 #if 0
 	msg_info ("old radix performance (%z elts)", nelts);
-	clock_gettime (CLOCK_MONOTONIC, &ts1);
+	ts1 = rspamd_get_ticks ();
 	for (i = 0; i < nelts; i ++) {
 		guint32 mask = G_MAXUINT32 << (32 - addrs[i].mask);
 		radix32tree_insert (tree, addrs[i].addr, mask, 1);
 	}
-	clock_gettime (CLOCK_MONOTONIC, &ts2);
-	diff = (ts2.tv_sec - ts1.tv_sec) * 1000. +   /* Seconds */
-		(ts2.tv_nsec - ts1.tv_nsec) / 1000000.;  /* Nanoseconds */
+	ts2 = rspamd_get_ticks ();
+	diff = (ts2 - ts1) * 1000.0;
 
 	msg_info ("Added %z elements in %.6f ms", nelts, diff);
 
-	clock_gettime (CLOCK_MONOTONIC, &ts1);
+	ts1 = rspamd_get_ticks ();
 	for (lc = 0; lc < lookup_cycles; lc ++) {
 		for (i = 0; i < nelts; i ++) {
 			g_assert (radix32tree_find (tree, addrs[i].addr) != RADIX_NO_VALUE);
 		}
 	}
-	clock_gettime (CLOCK_MONOTONIC, &ts2);
-	diff = (ts2.tv_sec - ts1.tv_sec) * 1000. +   /* Seconds */
-			(ts2.tv_nsec - ts1.tv_nsec) / 1000000.;  /* Nanoseconds */
+	ts2 = rspamd_get_ticks ();
+	diff = (ts2 - ts1) * 1000.0;
 
 	msg_info ("Checked %z elements in %.6f ms", nelts, diff);
 
-	clock_gettime (CLOCK_MONOTONIC, &ts1);
+	ts1 = rspamd_get_ticks ();
 	for (i = 0; i < nelts; i ++) {
 		radix32tree_delete (tree, addrs[i].addr, addrs[i].mask);
 	}
-	clock_gettime (CLOCK_MONOTONIC, &ts2);
-	diff = (ts2.tv_sec - ts1.tv_sec) * 1000. +   /* Seconds */
-			(ts2.tv_nsec - ts1.tv_nsec) / 1000000.;  /* Nanoseconds */
+	ts2 = rspamd_get_ticks ();
+	diff = (ts2 - ts1) * 1000.;
 
 	msg_info ("Deleted %z elements in %.6f ms", nelts, diff);
 
 	radix_tree_free (tree);
 #endif
 	msg_info ("new radix performance (%z elts)", nelts);
-	clock_gettime (CLOCK_MONOTONIC, &ts1);
+	ts1 = rspamd_get_ticks ();
 	for (i = 0; i < nelts; i ++) {
 		radix_insert_compressed (comp_tree, addrs[i].addr6, sizeof (addrs[i].addr6),
 				128 - addrs[i].mask6, i);
 	}
-	clock_gettime (CLOCK_MONOTONIC, &ts2);
-	diff = (ts2.tv_sec - ts1.tv_sec) * 1000. +   /* Seconds */
-			(ts2.tv_nsec - ts1.tv_nsec) / 1000000.;  /* Nanoseconds */
+	ts2 = rspamd_get_ticks ();
+	diff = (ts2 - ts1) * 1000.0;
 
 	msg_info ("Added %z elements in %.6f ms", nelts, diff);
 
-	clock_gettime (CLOCK_MONOTONIC, &ts1);
+	ts1 = rspamd_get_ticks ();
 	for (lc = 0; lc < lookup_cycles; lc ++) {
 		for (i = 0; i < nelts; i ++) {
 			if (radix_find_compressed (comp_tree, addrs[i].addr6, sizeof (addrs[i].addr6))
@@ -241,9 +237,8 @@ rspamd_radix_test_func (void)
 #endif
 
 	g_assert (all_good);
-	clock_gettime (CLOCK_MONOTONIC, &ts2);
-	diff = (ts2.tv_sec - ts1.tv_sec) * 1000. +   /* Seconds */
-			(ts2.tv_nsec - ts1.tv_nsec) / 1000000.;  /* Nanoseconds */
+	ts2 = rspamd_get_ticks ();
+	diff = (ts2 - ts1) * 1000.0;
 
 	msg_info ("Checked %z elements in %.6f ms", nelts, diff);
 	radix_destroy_compressed (comp_tree);

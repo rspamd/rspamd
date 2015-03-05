@@ -104,7 +104,7 @@ rspamd_client_body (struct rspamd_http_connection *conn,
 
 struct client_cbdata {
 	double *lat;
-	struct timespec ts;
+	gdouble ts;
 };
 
 static void
@@ -125,9 +125,7 @@ rspamd_client_finish (struct rspamd_http_connection *conn,
 	struct client_cbdata *cb = conn->ud;
 	struct timespec ts;
 
-	clock_gettime (CLOCK_MONOTONIC, &ts);
-	*(cb->lat) = (ts.tv_sec - cb->ts.tv_sec) * 1000. +   /* Seconds */
-					(ts.tv_nsec - cb->ts.tv_nsec) / 1000000.;  /* Nanoseconds */
+	*(cb->lat) = rspamd_get_ticks () * 1000.;
 	close (conn->fd);
 	rspamd_http_connection_unref (conn);
 	g_free (cb);
@@ -162,7 +160,7 @@ rspamd_http_client_func (const gchar *path, rspamd_inet_addr_t *addr,
 	}
 
 	cb = g_malloc (sizeof (*cb));
-	clock_gettime (CLOCK_MONOTONIC, &cb->ts);
+	cb->ts = rspamd_get_ticks ();
 	cb->lat = latency;
 	rspamd_http_connection_write_message (conn, msg, NULL, NULL, cb,
 			fd, NULL, ev_base);
@@ -209,7 +207,7 @@ rspamd_http_test_func (void)
 	struct rspamd_keypair_cache *c;
 	rspamd_mempool_mutex_t *mtx;
 	rspamd_inet_addr_t addr;
-	struct timespec ts1, ts2;
+	gdouble ts1, ts2;
 	gchar filepath[PATH_MAX], buf[512];
 	gint fd, i, j;
 	pid_t sfd;
@@ -250,11 +248,10 @@ rspamd_http_test_func (void)
 			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, &addr,
 					NULL, NULL, c, ev_base, &latency[i * pconns + j]);
 		}
-		clock_gettime (CLOCK_MONOTONIC, &ts1);
+		ts1 = rspamd_get_ticks ();
 		event_base_loop (ev_base, 0);
-		clock_gettime (CLOCK_MONOTONIC, &ts2);
-		diff = (ts2.tv_sec - ts1.tv_sec) * 1000. +   /* Seconds */
-				(ts2.tv_nsec - ts1.tv_nsec) / 1000000.;  /* Nanoseconds */
+		ts2 = rspamd_get_ticks ();
+		diff = (ts2 - ts1) * 1000.0;
 		total_diff += diff;
 	}
 
@@ -279,11 +276,10 @@ rspamd_http_test_func (void)
 			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, &addr,
 					client_key, peer_key, c, ev_base, &latency[i * pconns + j]);
 		}
-		clock_gettime (CLOCK_MONOTONIC, &ts1);
+		ts1 = rspamd_get_ticks ();
 		event_base_loop (ev_base, 0);
-		clock_gettime (CLOCK_MONOTONIC, &ts2);
-		diff = (ts2.tv_sec - ts1.tv_sec) * 1000. +   /* Seconds */
-				(ts2.tv_nsec - ts1.tv_nsec) / 1000000.;  /* Nanoseconds */
+		ts2 = rspamd_get_ticks ();
+		diff = (ts2 - ts1) * 1000.0;
 		total_diff += diff;
 	}
 
@@ -314,11 +310,10 @@ rspamd_http_test_func (void)
 			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, &addr,
 					client_key, peer_key, c, ev_base, &latency[i * pconns + j]);
 		}
-		clock_gettime (CLOCK_MONOTONIC, &ts1);
+		ts1 = rspamd_get_ticks ();
 		event_base_loop (ev_base, 0);
-		clock_gettime (CLOCK_MONOTONIC, &ts2);
-		diff = (ts2.tv_sec - ts1.tv_sec) * 1000. +   /* Seconds */
-				(ts2.tv_nsec - ts1.tv_nsec) / 1000000.;  /* Nanoseconds */
+		ts2 = rspamd_get_ticks ();
+		diff = (ts2 - ts1) * 1000.0;
 		total_diff += diff;
 	}
 

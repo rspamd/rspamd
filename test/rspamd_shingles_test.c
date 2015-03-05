@@ -93,14 +93,14 @@ test_case (gsize cnt, gsize max_len, gdouble perm_factor)
 	struct rspamd_shingle *sgl, *sgl_permuted;
 	gdouble res;
 	guchar key[16];
-	struct timespec ts1, ts2;
+	gdouble ts1, ts2;
 
 	ottery_rand_bytes (key, sizeof (key));
 	input = generate_fuzzy_words (cnt, max_len);
-	clock_gettime (CLOCK_MONOTONIC, &ts1);
+	ts1 = rspamd_get_ticks ();
 	sgl = rspamd_shingles_generate (input, key, NULL,
 			rspamd_shingles_default_filter, NULL);
-	clock_gettime (CLOCK_MONOTONIC, &ts2);
+	ts2 = rspamd_get_ticks ();
 	permute_vector (input, perm_factor);
 	sgl_permuted = rspamd_shingles_generate (input, key, NULL,
 			rspamd_shingles_default_filter, NULL);
@@ -108,7 +108,7 @@ test_case (gsize cnt, gsize max_len, gdouble perm_factor)
 	res = rspamd_shingles_compare (sgl, sgl_permuted);
 
 	msg_debug ("percentage of common shingles: %.3f, generate time: %hd usec",
-			res, ts_to_usec (&ts2) - ts_to_usec (&ts1));
+			res, (gint)(ts1 - ts2) * 1000);
 	g_assert_cmpfloat (fabs ((1.0 - res) - sqrt (perm_factor)), <=, 0.20);
 
 	free_fuzzy_words (input);
