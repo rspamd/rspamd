@@ -887,12 +887,15 @@ ENDIF(NOT DESTDIR)
 
 # Try to detect tip version from hg
 SET(ID "unknown")
-FIND_PROGRAM(HG "hg")
+FIND_PROGRAM(HG "git")
 
 IF(HG)
-    EXECUTE_PROCESS(COMMAND "${HG}" id OUTPUT_VARIABLE HG_ID ERROR_QUIET)   
+    EXECUTE_PROCESS(COMMAND "${HG}" rev-parse --verify HEAD 
+    	WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    	OUTPUT_VARIABLE HG_ID ERROR_QUIET)
     IF(HG_ID)
-        STRING(REGEX MATCH ^[0-9a-z]+ RSPAMD_ID "${HG_ID}")
+        STRING(SUBSTRING "${HG_ID}" 0 10 RSPAMD_ID)
+        MESSAGE(STATUS "Git revision: ${RSPAMD_ID}")
     ELSE(HG_ID)
         FIND_FILE(HG_ARCH ".hg_archival.txt" "${CMAKE_CURRENT_SOURCE_DIR}")   
         IF(HG_ARCH)
