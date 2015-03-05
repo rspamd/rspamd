@@ -435,4 +435,10 @@ gchar * rspamd_encode_base32 (const guchar *in, gsize inlen);
  */
 guchar* rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen);
 
+/**
+ * Portably return the current clock ticks as seconds
+ * @return
+ */
+gdouble rspamd_get_ticks (void);
+
 #endif

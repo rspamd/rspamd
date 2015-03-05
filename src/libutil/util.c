@@ -45,6 +45,10 @@
 #include <readpassphrase.h>
 #endif
 
+#ifdef __APPLE__
+#include <mach/mach_time.h>
+#endif
+
 /* Check log messages intensity once per minute */
 #define CHECK_TIME 60
 /* More than 2 log messages per second */
@@ -2229,6 +2233,23 @@ rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen)
 	g_assert (olen <= allocated_len);
 
 	*outlen = olen;
+
+	return res;
+}
+
+gdouble
+rspamd_get_ticks (void)
+{
+	gdouble res;
+
+#ifdef __APPLE__
+	res = mach_absolute_time () / 1000000000.;
+#else
+	struct timespec ts;
+	clock_gettime (CLOCK_MONOTONIC, &ts);
+
+	res = (double)ts.tv_sec + ts.tv_nsec / 1000000000.;
+#endif
 
 	return res;
 }
