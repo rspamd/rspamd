@@ -36,6 +36,7 @@
 #include "utlist.h"
 #include "libstat/stat_api.h"
 #include "cryptobox.h"
+#include "regexp.h"
 #ifdef HAVE_OPENSSL
 #include <openssl/rand.h>
 #include <openssl/err.h>
@@ -1163,6 +1164,8 @@ rspamd_init_libs (void)
 	getrlimit (RLIMIT_STACK, &rlim);
 	rlim.rlim_cur = 100 * 1024 * 1024;
 	setrlimit (RLIMIT_STACK, &rlim);
+
+	rspamd_regexp_library_init ();
 
 	event_init ();
 #ifdef GMIME_ENABLE_RFC2047_WORKAROUNDS
