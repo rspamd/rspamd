@@ -1174,7 +1174,7 @@ lua_task_get_header_raw (lua_State * L)
 static gint
 lua_task_get_raw_headers (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L, 1);
+	struct rspamd_task *task = lua_check_task (L);
 
 	if (task) {
 		lua_pushstring (L, task->raw_headers_str);
