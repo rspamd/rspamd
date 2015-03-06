@@ -32,7 +32,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 --local dumper = require 'pl.pretty'.dump
 local rspamd_regexp = require "rspamd_regexp"
-local rspamd_ip = require "rspamd_ip"
 
 local checks_hellohost = {
   ['[.-]gprs[.-]'] = 5, ['gprs[.-][0-9]'] = 5, ['[0-9][.-]?gprs'] = 5, 
@@ -73,21 +72,37 @@ local checks_hellohost = {
 }
 
 local checks_hello = {
+  ['^[^\\.]+$'] = 5, -- for helo=COMPUTER, ANNA, etc... Without dot in helo
   ['localhost$'] = 5,
   ['^(dsl)?(device|speedtouch)\\.lan$'] = 5,
-  ['\\.(lan|local|home|localdomain|intra|in-addr.arpa|priv|online|user|veloxzon)$'] = 5,
-  ['^\\[*0\\.'] = 5, ['^\\[*::1\\]*'] = 5, --loopback ipv4, ipv6
-  ['^\\[*127\\.'] = 5, ['^\\[*10\\.'] = 5, ['^\\[*172\\.16\\.'] = 5, ['^\\[*192\\.168\\.'] = 5, --local ipv4
-  ['^\\[*fe[89ab][0-9a-f]::'] = 5, ['^\\[*fe[cdf][0-9a-f]:'] = 5, --local ipv6 (fe80:: - febf::, fec0:: - feff::)
-  ['^\\[*2001:db8::'] = 5, --reserved RFC 3849 for ipv6
-  ['^\\[*fc00::'] = 5, ['^\\[*ffxx::'] = 5, --unicast, multicast ipv6
---['^\\[*\\d+[x.-]\\d+[x.-]\\d+[x.-]\\d+\\]*$'] = 4, ['^\\[*\\d+:'] = 4 --bareip ipv4, ipv6
+  ['\\.(lan|local|home|localdomain|intra|in-addr.arpa|priv|online|user|veloxzon)$'] = 5
+}
+
+local checks_hello_badip = {
+  ['^0\\.'] = 5, ['^::1$'] = 5, --loopback ipv4, ipv6
+  ['^127\\.'] = 5, ['^10\\.'] = 5, ['^192\\.168\\.'] = 5, --local ipv4
+  ['^172\\.1[6-9]\\.'] = 5, ['^172\\.2[0-9]\\.'] = 5, ['^172\\.3[01]\\.'] = 5,  --local ipv4
+  ['^169\\.254\\.'] = 5, --chanel ipv4
+  ['^192\\.0\\.0\\.'] = 5, --IETF Protocol
+  ['^192\\.88\\.99\\.'] = 5, --RFC3068
+  ['^100.6[4-9]\\.'] = 5, ['^100.[7-9]\\d\\.'] = 5, ['^100.1[01]\\d\\.'] = 5, ['^100.12[0-7]\\d\\.'] = 5, --RFC6598
+  ['^\\d\\.\\d\\.\\d\\.255$'] = 5, --multicast ipv4
+  ['^192\\.0\\.2\\.'] = 5, ['^198\\.51\\.100\\.'] = 5, ['^203\\.0\\.113\\.'] = 5,  --sample
+  ['^fe[89ab][0-9a-f]::'] = 5, ['^fe[cdf][0-9a-f]:'] = 5, --local ipv6 (fe80:: - febf::, fec0:: - feff::)
+  ['^2001:db8::'] = 5, --reserved RFC 3849 for ipv6
+  ['^fc00::'] = 5, ['^ffxx::'] = 5 --unicast, multicast ipv6
+}
+
+local checks_hello_bareip = {
+  '^\\d+[x.-]\\d+[x.-]\\d+[x.-]\\d+$', --bareip ipv4, 
+  '^[0-9a-f]+:' --bareip ipv6
 }
 
 local config = {
   ['helo_enabled'] = false,
   ['hostname_enabled'] = false,
   ['from_enabled'] = false,
+  ['rcpt_enabled'] = false,
   ['mid_enabled'] = false,
   ['url_enabled'] = false
 }
@@ -128,7 +143,7 @@ local function split(str, delim, maxNb)
 end
 
 local function check_fqdn(domain)
-  if check_regexp(domain, '(?=^.{4,255}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\\.)+[a-zA-Z]{2,63}$)') then
+  if check_regexp(domain, '(?=^.{4,253}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\\.)+[a-zA-Z0-9-]{2,63}\\.?$)') then
     return true
   end
   return false
@@ -197,7 +212,6 @@ end
 
 --
 local function hfilter(task)
-
   -- Links checks
   if config['url_enabled'] then
     local parts = task:get_text_parts()
@@ -236,53 +250,68 @@ local function hfilter(task)
       end
     end
   end
-
+  
+  --No more checks for auth user
   if task:get_user() ~= nil then
-    return
+    return false
   end
-
-  --IP--
+  
+  --local message = task:get_message()
   local ip = false
   local rip = task:get_from_ip()
   if rip and rip:is_valid() then
     ip = rip:to_string()
   end
-
-  --HOSTNAME--
-  local hostname = task:get_hostname()
-
-  --HELO--
-  local helo = task:get_helo()
-
-  --RULES--RULES--RULES--
-
+  
   -- Check's HELO
   local weight_helo = 0
-  if config['helo_enabled'] then
-    if helo then  
-      if string.sub(helo,1,1) == '[' or rspamd_ip.from_string(helo):is_valid() then
-        task:insert_result('HFILTER_HELO_BAREIP', 1.0)
-      else
+  if config['helo_enabled'] then  
+    local helo = task:get_helo()
+    if helo then
+      helo = string.gsub(helo, '[%[%]]', '')
+      -- Regexp check HELO (checks_hello_badip)
+      local find_badip = false
+      for regexp,weight in pairs(checks_hello_badip) do
+        if check_regexp(helo, regexp) then
+          task:insert_result('HFILTER_HELO_BADIP', 1.0)
+          find_badip = true
+          break
+        end
+      end
+      
+      -- Regexp check HELO (checks_hello_bareip)
+      local find_bareip = false
+      if not find_badip then
+        for _,regexp in pairs(checks_hello_bareip) do
+          if check_regexp(helo, regexp) then
+            task:insert_result('HFILTER_HELO_BAREIP', 1.0)
+            find_bareip = true
+            break
+          end
+        end
+      end    
+      
+      if not find_badip and not find_bareip then
         -- Regexp check HELO (checks_hello)
         for regexp,weight in pairs(checks_hello) do
           if check_regexp(helo, regexp) then
             weight_helo = weight
             break
           end
-        end
-      end
-      -- Regexp check HELO (checks_hellohost)
-      for regexp,weight in pairs(checks_hellohost) do
-        if check_regexp(helo, regexp) then
-          if weight > weight_helo then
-            weight_helo = weight
+        end        
+        -- Regexp check HELO (checks_hellohost)
+        for regexp,weight in pairs(checks_hellohost) do
+          if check_regexp(helo, regexp) then
+            if weight > weight_helo then
+              weight_helo = weight
+            end
+            break
           end
-          break
+        end        
+        --FQDN check HELO
+        if ip and helo and weight_helo == 0 then
+          check_host(task, helo, 'HELO', ip, hostname)
         end
-      end
-      --FQDN check HELO
-      if ip and helo then
-        check_host(task, helo, 'HELO', ip, hostname)
       end
     else
       task:insert_result('HFILTER_HELO_UNKNOWN', 1.0)
@@ -290,8 +319,9 @@ local function hfilter(task)
   end
   
   -- Check's HOSTNAME
+  local weight_hostname = 0
   if config['hostname_enabled'] then
-    local weight_hostname = 0
+    local hostname = task:get_hostname()  
     if hostname then
       -- Check regexp HOSTNAME
       if hostname == 'unknown' then
@@ -305,19 +335,20 @@ local function hfilter(task)
         end
       end
     else
-    task:insert_result('HFILTER_HOSTNAME_UNKNOWN', 1.00)
-    end
-
-    --Insert weight's for HELO or HOSTNAME
-    if weight_helo > 0 and weight_helo >= weight_hostname then
-      task:insert_result('HFILTER_HELO_' .. weight_helo, 1.0)
-    elseif weight_hostname > 0 and weight_hostname > weight_helo then
-      task:insert_result('HFILTER_HOSTNAME_' .. weight_hostname, 1.0)
+      task:insert_result('HFILTER_HOSTNAME_UNKNOWN', 1.00)
     end
   end
   
+  --Insert weight's for HELO or HOSTNAME
+  if weight_helo > 0 and weight_helo >= weight_hostname then
+    task:insert_result('HFILTER_HELO_' .. weight_helo, 1.0)
+  elseif weight_hostname > 0 and weight_hostname > weight_helo then
+    task:insert_result('HFILTER_HOSTNAME_' .. weight_hostname, 1.0)
+  end  
+  
+  -- MAILFROM checks --
+  local frombounce = false
   if config['from_enabled'] then
-    -- MAILFROM checks --
     local from = task:get_from(1)
     if from then
       --FROM host check
@@ -325,6 +356,25 @@ local function hfilter(task)
         local fr_split = split(fr['addr'], '@', 0)
         if table.maxn(fr_split) == 2 then
           check_host(task, fr_split[2], 'FROMHOST', '', '')
+          if fr_split[1] == 'postmaster' then
+            frombounce = true
+          end
+        end
+      end
+    else
+      task:insert_result('HFILTER_FROM_BOUNCE', 1.00)
+      frombounce = true
+    end
+  end
+  
+  -- Recipients checks --
+  if config['rcpt_enabled'] then
+    local rcpt = task:get_recipients()    
+    if rcpt then
+      local count_rcpt = table.maxn(rcpt)
+      if frombounce then
+        if count_rcpt > 1 then
+          task:insert_result('HFILTER_RCPT_BOUNCEMOREONE', 1.00)
         end
       end
     end
@@ -348,6 +398,7 @@ local symbols_enabled = {}
 
 local symbols_helo = {
   "HFILTER_HELO_BAREIP",
+  "HFILTER_HELO_BADIP",
   "HFILTER_HELO_UNKNOWN",
   "HFILTER_HELO_1",
   "HFILTER_HELO_2",
@@ -367,6 +418,9 @@ local symbols_hostname = {
   "HFILTER_HOSTNAME_5",
   "HFILTER_HOSTNAME_UNKNOWN"
 }
+local symbols_rcpt = {
+  "HFILTER_RCPT_BOUNCEMOREONE"
+}
 local symbols_mid = {
   "HFILTER_MID_NORESOLVE_MX",
   "HFILTER_MID_NORES_A_OR_MX",
@@ -380,7 +434,8 @@ local symbols_url = {
 local symbols_from = {
   "HFILTER_FROMHOST_NORESOLVE_MX",
   "HFILTER_FROMHOST_NORES_A_OR_MX",
-  "HFILTER_FROMHOST_NOT_FQDN"
+  "HFILTER_FROMHOST_NOT_FQDN",
+  "HFILTER_FROM_BOUNCE"
 }
 
 local opts = rspamd_config:get_all_opt('hfilter')
@@ -401,6 +456,9 @@ if config['hostname_enabled'] then
 end
 if config['from_enabled'] then
   append_t(symbols_enabled, symbols_from)
+end
+if config['rcpt_enabled'] then
+  append_t(symbols_enabled, symbols_rcpt)
 end
 if config['mid_enabled'] then
   append_t(symbols_enabled, symbols_mid)
