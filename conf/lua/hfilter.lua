@@ -143,7 +143,7 @@ local function split(str, delim, maxNb)
 end
 
 local function check_fqdn(domain)
-  if check_regexp(domain, '(?=^.{4,255}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\\.)+[a-zA-Z]{2,63}$)') then
+  if check_regexp(domain, '(?=^.{4,253}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\\.)+[a-zA-Z0-9-]{2,63}\\.?$)') then
     return true
   end
   return false
