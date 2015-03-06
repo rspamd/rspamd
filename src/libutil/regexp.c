@@ -35,6 +35,7 @@ typedef guchar regexp_id_t[BLAKE2B_OUTBYTES];
 
 #define RSPAMD_REGEXP_FLAG_RAW (1 << 1)
 #define RSPAMD_REGEXP_FLAG_NOOPT (1 << 2)
+#define RSPAMD_REGEXP_FLAG_FULL_MATCH (1 << 3)
 
 struct rspamd_regexp_s {
 	gdouble exec_time;
@@ -133,11 +134,13 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 		else if (*start == 'm') {
 			start ++;
 			sep = *start;
+			rspamd_flags |= RSPAMD_REGEXP_FLAG_FULL_MATCH;
 		}
 		if (sep == '\0' || g_ascii_isalnum (sep)) {
 			/* We have no flags, no separators and just use all line as expr */
 			start = pattern;
 			end = start + strlen (pattern);
+			rspamd_flags &= ~RSPAMD_REGEXP_FLAG_FULL_MATCH;
 		}
 		else {
 			end = strrchr (pattern, sep);
@@ -159,7 +162,7 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 		end = pattern + strlen (pattern);
 	}
 
-	regexp_flags |= PCRE_UTF8 | PCRE_NO_AUTO_CAPTURE;
+	regexp_flags |= PCRE_UTF8 ;
 
 	if (flags != NULL) {
 		flags_str = flags;
@@ -364,6 +367,13 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 		}
 		if (end) {
 			*end = mt + ovec[0] + ovec[1];
+		}
+
+		if (re->flags & RSPAMD_REGEXP_FLAG_FULL_MATCH) {
+			/* We also ensure that the match is full */
+			if (ovec[0] != 0 || (guint)ovec[1] < len) {
+				return FALSE;
+			}
 		}
 
 		return TRUE;
