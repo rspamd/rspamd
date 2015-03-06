@@ -1171,6 +1171,7 @@ static gint
 lua_config_set_metric_symbol (lua_State * L)
 {
 	struct rspamd_config *cfg = lua_check_config (L);
+	GList *metric_list;
 	gchar *name;
 	const gchar *metric_name = DEFAULT_METRIC, *description = NULL;
 	double weight;
@@ -1181,10 +1182,10 @@ lua_config_set_metric_symbol (lua_State * L)
 		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
 		weight = luaL_checknumber (L, 3);
 
-		if (lua_gettop (L) > 3) {
+		if (lua_gettop (L) > 3 && lua_type (L, 4) == LUA_TSTRING) {
 			description = luaL_checkstring (L, 4);
 		}
-		if (lua_gettop (L) > 4) {
+		if (lua_gettop (L) > 4 && lua_type (L, 5) == LUA_TSTRING) {
 			metric_name = luaL_checkstring (L, 5);
 		}
 
@@ -1210,7 +1211,20 @@ lua_config_set_metric_symbol (lua_State * L)
 				}
 
 				g_hash_table_insert (metric->symbols, s->name, s);
-				g_hash_table_insert (cfg->metrics_symbols, s->name, metric);
+				if ((metric_list =
+						g_hash_table_lookup (cfg->metrics_symbols, s->name)) == NULL) {
+					metric_list = g_list_prepend (NULL, metric);
+					rspamd_mempool_add_destructor (cfg->cfg_pool,
+							(rspamd_mempool_destruct_t)g_list_free,
+							metric_list);
+					g_hash_table_insert (cfg->metrics_symbols, s->name, metric_list);
+				}
+				else {
+					/* Slow but keep start element of list in safe */
+					if (!g_list_find (metric_list, metric)) {
+						metric_list = g_list_append (metric_list, metric);
+					}
+				}
 			}
 
 			*s->weight_ptr = weight;

@@ -200,7 +200,7 @@ local function process_sa_conf(f)
     elseif words[1] == "describe" and valid_rule then
       cur_rule['description'] = words_to_re(words, 1)
     elseif words[1] == "score" and valid_rule then
-      cur_rule['score'] = tonumber(words_to_re(words, 1)[1])
+      cur_rule['score'] = tonumber(words_to_re(words, 2))
     end
     end)()
   end
@@ -230,10 +230,10 @@ end
 
 -- Meta rules
 _.each(function(k, r)
-    rspamd_config:add_composite(k, r['meta'])
     if r['score'] then
       rspamd_config:set_metric_symbol(k, r['score'], r['description'])
     end
+    rspamd_config:add_composite(k, r['meta'])
   end,
   _.filter(function(k, r)
       return r['type'] == 'meta'
@@ -268,10 +268,10 @@ _.each(function(k, r)
         task:insert_result(k, 1.0)
       end
     end
-    rspamd_config:register_symbol(k, calculate_score(k), f)
     if r['score'] then
       rspamd_config:set_metric_symbol(k, r['score'], r['description'])
     end
+    rspamd_config:register_symbol(k, calculate_score(k), f)
   end,
   _.filter(function(k, r)
       return r['type'] == 'header' and r['header']
@@ -286,10 +286,10 @@ _.each(function(k, r)
         task:insert_result(k, 1.0)
       end
     end
-    rspamd_config:register_symbol(k, calculate_score(k), f)
     if r['score'] then
       rspamd_config:set_metric_symbol(k, r['score'], r['description'])
     end
+    rspamd_config:register_symbol(k, calculate_score(k), f)
   end,
   _.filter(function(k, r)
       return r['type'] == 'function' and r['function']
@@ -299,21 +299,22 @@ _.each(function(k, r)
 -- Parts rules
 _.each(function(k, r)
     local f = function(task)
-      local parts = task:get_parts()
+      local parts = task:get_text_parts()
       if parts then
         for n, part in ipairs(parts) do
           -- Subject for optimization
           if (r['re']:match(part:get_content())) then
+            local s = r['re']:search(part:get_content())
             task:insert_result(k, 1.0)
             return
           end
         end
       end
     end
-    rspamd_config:register_symbol(k, calculate_score(k), f)
     if r['score'] then
       rspamd_config:set_metric_symbol(k, r['score'], r['description'])
     end
+    rspamd_config:register_symbol(k, calculate_score(k), f)
   end,
   _.filter(function(k, r)
       return r['type'] == 'part'
@@ -328,10 +329,10 @@ _.each(function(k, r)
         return
       end
     end
-    rspamd_config:register_symbol(k, calculate_score(k), f)
     if r['score'] then
       rspamd_config:set_metric_symbol(k, r['score'], r['description'])
     end
+    rspamd_config:register_symbol(k, calculate_score(k), f)
   end,
   _.filter(function(k, r)
       return r['type'] == 'message'
