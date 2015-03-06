@@ -21,10 +21,8 @@ context("Regexp unit tests", function()
       local r = re.create_cached(c[1])
       assert_not_nil(r)
       local res = r:match(c[2])
-      local m = false
-      if res then m = true end
       
-      assert_equal(m, c[3], string.format("'%s' doesn't match with '%s'",
+      assert_equal(res, c[3], string.format("'%s' doesn't match with '%s'",
         c[2], c[1]))
     end
   end)

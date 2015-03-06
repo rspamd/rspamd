@@ -49,6 +49,7 @@ LUA_FUNCTION_DEF (regexp, create);
 LUA_FUNCTION_DEF (regexp, create_cached);
 LUA_FUNCTION_DEF (regexp, get_cached);
 LUA_FUNCTION_DEF (regexp, get_pattern);
+LUA_FUNCTION_DEF (regexp, search);
 LUA_FUNCTION_DEF (regexp, match);
 LUA_FUNCTION_DEF (regexp, split);
 LUA_FUNCTION_DEF (regexp, destroy);
@@ -56,6 +57,7 @@ LUA_FUNCTION_DEF (regexp, destroy);
 static const struct luaL_reg regexplib_m[] = {
 	LUA_INTERFACE_DEF (regexp, get_pattern),
 	LUA_INTERFACE_DEF (regexp, match),
+	LUA_INTERFACE_DEF (regexp, search),
 	LUA_INTERFACE_DEF (regexp, split),
 	LUA_INTERFACE_DEF (regexp, destroy),
 	{"__tostring", lua_regexp_get_pattern},
@@ -219,8 +221,8 @@ lua_regexp_get_pattern (lua_State *L)
 }
 
 /***
- * @method re:match(line)
- * Match line against regular expression object. If line matches then this
+ * @method re:search(line)
+ * Search line in regular expression object. If line matches then this
  * function returns the table of captured strings. Otherwise, nil is returned.
  *
  * @param {string} line match the specified line against regexp object
@@ -228,13 +230,13 @@ lua_regexp_get_pattern (lua_State *L)
  * @example
  * local re = regexp.create_cached('/^\s*([0-9]+)\s*$/')
  * -- returns nil
- * local m1 = re:match('blah')
- * local m2 = re:match('   190   ')
+ * local m1 = re:search('blah')
+ * local m2 = re:search('   190   ')
  * -- prints '190'
  * print(m2[1])
  */
 static int
-lua_regexp_match (lua_State *L)
+lua_regexp_search (lua_State *L)
 {
 	struct rspamd_lua_regexp *re = lua_check_regexp (L);
 	const gchar *data;
@@ -256,6 +258,44 @@ lua_regexp_match (lua_State *L)
 			if (!matched) {
 				lua_pop (L, 1);
 				lua_pushnil (L);
+			}
+			return 1;
+		}
+	}
+
+	lua_pushnil (L);
+
+	return 1;
+}
+
+/***
+ * @method re:match(line)
+ * Matches line against the regular expression and return true if line matches
+ * (partially or completely)
+ *
+ * @param {string} line match the specified line against regexp object
+ * @return {table or nil} table of strings matched or nil
+ * @example
+ * local re = regexp.create_cached('/^\s*([0-9]+)\s*$/')
+ * -- returns nil
+ * local m1 = re:match('blah')
+ * local m2 = re:match('   190   ')
+ */
+static int
+lua_regexp_match (lua_State *L)
+{
+	struct rspamd_lua_regexp *re = lua_check_regexp (L);
+	const gchar *data;
+	gsize len;
+
+	if (re) {
+		data = luaL_checklstring (L, 2, &len);
+		if (data) {
+			if (rspamd_regexp_search (re->re, data, len, NULL, NULL, FALSE)) {
+				lua_pushboolean (L, TRUE);
+			}
+			else {
+				lua_pushboolean (L, FALSE);
 			}
 			return 1;
 		}
