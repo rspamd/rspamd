@@ -283,11 +283,11 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 {
 	pcre *r;
 	pcre_extra *ext;
-#ifdef HAVE_PCRE_JIT
+#if defined(HAVE_PCRE_JIT) && (PCRE_MAJOR == 8 && PCRE_MINOR >= 32)
 	pcre_jit_stack *st;
 #endif
 	const gchar *mt;
-	gsize remain;
+	gsize remain = 0;
 	gint rc, match_flags = 0, ovec[10];
 
 	g_assert (re != NULL);
@@ -295,19 +295,26 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 
 	if (end != NULL && *end != NULL) {
 		/* Incremental search */
-		mt = (*end) + 1;
-		remain = len - (mt - text);
+		mt = (*end);
+
+		if ((gint)len > (mt - text)) {
+			remain = len - (mt - text);
+		}
 	}
 	else {
 		mt = text;
 		remain = len;
 	}
 
+	if (remain == 0) {
+		return FALSE;
+	}
+
 	match_flags = PCRE_NEWLINE_ANYCRLF;
 	if ((re->flags & RSPAMD_REGEXP_FLAG_RAW) || raw) {
 		r = re->raw_re;
 		ext = re->raw_extra;
-#ifdef HAVE_PCRE_JIT
+#if defined(HAVE_PCRE_JIT) && (PCRE_MAJOR == 8 && PCRE_MINOR >= 32)
 		st = re->raw_jstack;
 #endif
 	}
@@ -315,7 +322,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 		match_flags |= PCRE_NO_UTF8_CHECK;
 		r = re->re;
 		ext = re->extra;
-#ifdef HAVE_PCRE_JIT
+#if defined(HAVE_PCRE_JIT) && (PCRE_MAJOR == 8 && PCRE_MINOR >= 32)
 		st = re->jstack;
 #endif
 	}
@@ -330,8 +337,13 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 
 	if (!(re->flags & RSPAMD_REGEXP_FLAG_NOOPT)) {
 #ifdef HAVE_PCRE_JIT
+# if (PCRE_MAJOR == 8 && PCRE_MINOR >= 32)
 		rc = pcre_jit_exec (r, ext, mt, remain, 0, match_flags, ovec,
 				G_N_ELEMENTS (ovec), st);
+# else
+		rc = pcre_exec (r, ext, mt, remain, 0, match_flags, ovec,
+						G_N_ELEMENTS (ovec));
+#endif
 #else
 		rc = pcre_exec (r, ext, mt, remain, 0, match_flags, ovec,
 				G_N_ELEMENTS (ovec));

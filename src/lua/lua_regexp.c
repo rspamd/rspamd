@@ -141,10 +141,13 @@ lua_regexp_get_cached (lua_State *L)
 {
 	struct rspamd_lua_regexp *new, **pnew;
 	const gchar *line;
+	rspamd_regexp_t *re;
 
 	line = luaL_checkstring (L, 1);
-	new = rspamd_regexp_cache_query (NULL, line, NULL);
-	if (new) {
+	re = rspamd_regexp_cache_query (NULL, line, NULL);
+	if (re) {
+		new = g_slice_alloc (sizeof (struct rspamd_lua_regexp));
+		new->re = re;
 		pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
 		rspamd_lua_setclass (L, "rspamd{regexp}", -1);
 		*pnew = new;
@@ -176,11 +179,15 @@ lua_regexp_create_cached (lua_State *L)
 {
 	const gchar *line;
 	struct rspamd_lua_regexp *new, **pnew;
+	rspamd_regexp_t *re;
 
 	line = luaL_checkstring (L, 1);
-	new = rspamd_regexp_cache_query (NULL, line, NULL);
-	if (new) {
+	re = rspamd_regexp_cache_query (NULL, line, NULL);
+	if (re) {
+		new = g_slice_alloc (sizeof (struct rspamd_lua_regexp));
+		new->re = re;
 		pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
+
 		rspamd_lua_setclass (L, "rspamd{regexp}", -1);
 		*pnew = new;
 	}
