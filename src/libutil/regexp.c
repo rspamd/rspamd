@@ -119,7 +119,7 @@ rspamd_regexp_t*
 rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 		GError **err)
 {
-	const gchar *start = pattern, *end, *flags_str, *err_str;
+	const gchar *start = pattern, *end, *flags_str = NULL, *err_str;
 	rspamd_regexp_t *res;
 	pcre *r;
 	gchar sep = 0, *real_pattern;
@@ -151,7 +151,7 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 						sep, pattern);
 				return NULL;
 			}
-			flags = end + 1;
+			flags_str = end + 1;
 			start ++;
 		}
 	}
@@ -160,12 +160,12 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 		strict_flags = TRUE;
 		start = pattern;
 		end = pattern + strlen (pattern);
+		flags_str = flags;
 	}
 
 	regexp_flags |= PCRE_UTF8 ;
 
-	if (flags != NULL) {
-		flags_str = flags;
+	if (flags_str != NULL) {
 		while (*flags_str) {
 			switch (*flags_str) {
 			case 'i':
@@ -366,7 +366,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 			*start = mt + ovec[0];
 		}
 		if (end) {
-			*end = mt + ovec[0] + ovec[1];
+			*end = mt + ovec[1];
 		}
 
 		if (re->flags & RSPAMD_REGEXP_FLAG_FULL_MATCH) {
