@@ -19,12 +19,35 @@ context("Regexp unit tests", function()
     
     for _,c in ipairs(cases) do
       local r = re.create_cached(c[1])
-      assert_not_nil(r)
+      assert_not_nil(r, "cannot parse " .. c[1])
       local res = r:match(c[2])
       
       assert_equal(res, c[3], string.format("'%s' doesn't match with '%s'",
         c[2], c[1]))
     end
   end)
+  
+  test("Regexp split", function()
+    local cases = {
+      {'\\s', 'one two', {'one', 'two'}}, -- trivial
+      {'\\s', 'one   two', {'one', 'two'}}, -- multiple delimiters
+      {'\\s', '  one   two  ', {'one', 'two'}}, -- multiple delimiters
+      {'\\s', '  one   ', {'one', 'two'}}, -- multiple delimiters
+      {'[:,]', ',,,:::one,two,,', {'one', 'two'}}, -- multiple delimiters
+    }
+  
+    for _,c in ipairs(cases) do
+      local r = re.create_cached(c[1])
+      assert_not_nil(r, "cannot parse " .. c[1])
+      
+      local res = r:split(c[2])
+      assert_not_nil(res, "cannot split " .. c[2])
+      
+      for i,r in ipairs(res) do
+        assert_equal(r, c[3][i])
+      end
+    end
+  end)
+  
   end
 )

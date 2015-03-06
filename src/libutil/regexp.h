@@ -112,6 +112,15 @@ rspamd_regexp_t* rspamd_regexp_cache_create (struct rspamd_regexp_cache *cache,
 		const gchar *flags, GError **err);
 
 /**
+ * Remove regexp from the cache
+ * @param cache regexp cache. if NULL, the superglobal cache is used (*not* thread-safe)
+ * @param re re to remove
+ * @return TRUE if a regexp has been removed
+ */
+gboolean rspamd_regexp_cache_remove (struct rspamd_regexp_cache *cache,
+		rspamd_regexp_t *re);
+
+/**
  * Destroy regexp cache and unref all elements inside it
  * @param cache
  */

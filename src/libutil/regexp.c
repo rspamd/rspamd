@@ -488,10 +488,25 @@ rspamd_regexp_cache_create (struct rspamd_regexp_cache *cache,
 	res = rspamd_regexp_new (pattern, flags, err);
 
 	if (res) {
+		REF_RETAIN (res);
 		g_hash_table_insert (cache->tbl, res->id, res);
 	}
 
 	return res;
+}
+
+gboolean
+rspamd_regexp_cache_remove (struct rspamd_regexp_cache *cache,
+		rspamd_regexp_t *re)
+{
+	if (cache == NULL) {
+		cache = global_re_cache;
+	}
+
+	g_assert (cache != NULL);
+	g_assert (re != NULL);
+
+	return g_hash_table_remove (cache->tbl, re->id);
 }
 
 void
