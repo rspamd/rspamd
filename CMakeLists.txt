@@ -1009,16 +1009,19 @@ CONFIGURE_FILE(config.h.in src/config.h)
 CONFIGURE_FILE(contrib/exim/local_scan.c.in contrib/exim/local_scan_rspamd.c @ONLY)
 
 SET(CONFFILES 
+	conf/common.conf
 	conf/composites.conf
-	conf/logging.conf
 	conf/metrics.conf
 	conf/modules.conf
-	conf/options.conf
 	conf/rspamd.conf
+	conf/rspamd.sysvinit.conf
 	conf/statistic.conf
-	conf/workers.conf
 	conf/2tld.inc
-	conf/surbl-whitelist.inc)
+	conf/logging.inc
+	conf/options.inc
+	conf/surbl-whitelist.inc
+	conf/worker-controller.inc
+	conf/worker-normal.inc)
 
 ##################### INSTALLATION ##########################################
 
