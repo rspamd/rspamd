@@ -653,12 +653,17 @@ parse_regexp (rspamd_mempool_t * pool, const gchar *line, gboolean raw_mode)
 	const gchar *begin, *end, *p, *src, *start;
 	gchar *dbegin, *dend;
 	struct rspamd_regexp_element *result;
+	rspamd_regexp_t *re;
 	GError *err = NULL;
 	GString *re_flags;
 
 	if (line == NULL) {
 		msg_err ("cannot parse NULL line");
 		return NULL;
+	}
+
+	if ((re = rspamd_regexp_cache_query (NULL, line, NULL)) != NULL) {
+		return ((struct rspamd_regexp_element *)rspamd_regexp_get_ud (re));
 	}
 
 	src = line;
@@ -798,7 +803,7 @@ parse_regexp (rspamd_mempool_t * pool, const gchar *line, gboolean raw_mode)
 		g_string_append_c (re_flags, 'r');
 	}
 
-	result->regexp = rspamd_regexp_cache_create (NULL, dbegin, re_flags->str,
+	result->regexp = rspamd_regexp_new (dbegin, re_flags->str,
 			&err);
 
 	g_string_free (re_flags, TRUE);
@@ -813,6 +818,10 @@ parse_regexp (rspamd_mempool_t * pool, const gchar *line, gboolean raw_mode)
 	rspamd_mempool_add_destructor (pool,
 		(rspamd_mempool_destruct_t) rspamd_regexp_unref,
 		(void *)result->regexp);
+
+	rspamd_regexp_set_ud (result->regexp, result);
+
+	rspamd_regexp_cache_insert (NULL, line, NULL, result->regexp);
 
 	*dend = '/';
 
