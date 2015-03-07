@@ -635,6 +635,7 @@ process_regexp (struct rspamd_regexp_element *re,
 	case REGEXP_MESSAGE:
 		debug_task ("checking message regexp: %s", re->regexp_text);
 		raw = TRUE;
+		regexp = re->regexp;
 		ct = (guint8 *)task->msg.start;
 		clen = task->msg.len;
 
@@ -1245,18 +1246,16 @@ match_smtp_data (struct rspamd_task *task,
 
 	if (*re_text == '/') {
 		/* This is a regexp */
-		if ((re = re_cache_check (re_text, task->cfg->cfg_pool)) == NULL) {
-			re = parse_regexp (task->cfg->cfg_pool,
-					(gchar *)re_text,
-					task->cfg->raw_mode);
-			if (re == NULL) {
-				msg_warn ("cannot compile regexp for function");
-				return FALSE;
-			}
-			re_cache_add ((gchar *)re_text, re, task->cfg->cfg_pool);
+		re = parse_regexp (task->cfg->cfg_pool,
+				(gchar *)re_text,
+				task->cfg->raw_mode);
+		if (re == NULL) {
+			msg_warn ("cannot compile regexp for function");
+			return FALSE;
 		}
+
 		if ((r = task_cache_check (task, re)) == -1) {
-			if (g_regex_match (re->regexp, what, 0, NULL) == TRUE) {
+			if (rspamd_regexp_search (re->regexp, what, 0, NULL, NULL, FALSE)) {
 				task_cache_add (task, re, 1);
 				return TRUE;
 			}
@@ -1431,15 +1430,12 @@ lua_regexp_match (lua_State *L)
 
 	/* This is a regexp */
 	if (task != NULL) {
-		if ((re = re_cache_check (re_text, task->cfg->cfg_pool)) == NULL) {
-			re = parse_regexp (task->cfg->cfg_pool,
-					(gchar *)re_text,
-					task->cfg->raw_mode);
-			if (re == NULL) {
-				msg_warn ("cannot compile regexp for function");
-				return FALSE;
-			}
-			re_cache_add ((gchar *)re_text, re, task->cfg->cfg_pool);
+		re = parse_regexp (task->cfg->cfg_pool,
+				(gchar *)re_text,
+				task->cfg->raw_mode);
+		if (re == NULL) {
+			msg_warn ("cannot compile regexp for function");
+			return FALSE;
 		}
 		r = process_regexp (re, task, NULL, 0, NULL);
 	}
@@ -1515,22 +1511,16 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 			}
 			else {
 				if (*param_pattern == '/') {
-					/* This is regexp, so compile and create g_regexp object */
-					if ((re =
-						re_cache_check (param_pattern,
-						task->cfg->cfg_pool)) == NULL) {
-						re = parse_regexp (task->cfg->cfg_pool,
-								param_pattern,
-								task->cfg->raw_mode);
-						if (re == NULL) {
-							msg_warn ("cannot compile regexp for function");
-							return FALSE;
-						}
-						re_cache_add (param_pattern, re, task->cfg->cfg_pool);
+					re = parse_regexp (task->cfg->cfg_pool,
+							param_pattern,
+							task->cfg->raw_mode);
+					if (re == NULL) {
+						msg_warn ("cannot compile regexp for function");
+						return FALSE;
 					}
 					if ((r = task_cache_check (task, re)) == -1) {
-						if (g_regex_match (re->regexp, param_data, 0,
-							NULL) == TRUE) {
+						if (rspamd_regexp_search (re->regexp, param_data, 0,
+							NULL, NULL, FALSE) == TRUE) {
 							task_cache_add (task, re, 1);
 							return TRUE;
 						}
@@ -1698,22 +1688,16 @@ rspamd_content_type_is_subtype (struct rspamd_task *task,
 #endif
 		for (;; ) {
 			if (*param_pattern == '/') {
-				/* This is regexp, so compile and create g_regexp object */
-				if ((re =
-					re_cache_check (param_pattern,
-					task->cfg->cfg_pool)) == NULL) {
-					re = parse_regexp (task->cfg->cfg_pool,
-							param_pattern,
-							task->cfg->raw_mode);
-					if (re == NULL) {
-						msg_warn ("cannot compile regexp for function");
-						return FALSE;
-					}
-					re_cache_add (param_pattern, re, task->cfg->cfg_pool);
+				re = parse_regexp (task->cfg->cfg_pool,
+						param_pattern,
+						task->cfg->raw_mode);
+				if (re == NULL) {
+					msg_warn ("cannot compile regexp for function");
+					return FALSE;
 				}
 				if ((r = task_cache_check (task, re)) == -1) {
-					if (g_regex_match (re->regexp, ct->subtype, 0,
-						NULL) == TRUE) {
+					if (rspamd_regexp_search (re->regexp, ct->subtype, 0,
+						NULL, NULL, FALSE)) {
 						task_cache_add (task, re, 1);
 						return TRUE;
 					}
@@ -1804,21 +1788,16 @@ rspamd_content_type_is_type (struct rspamd_task * task,
 #endif
 		for (;; ) {
 			if (*param_pattern == '/') {
-				/* This is regexp, so compile and create g_regexp object */
-				if ((re =
-					re_cache_check (param_pattern,
-					task->cfg->cfg_pool)) == NULL) {
-					re = parse_regexp (task->cfg->cfg_pool,
-							param_pattern,
-							task->cfg->raw_mode);
-					if (re == NULL) {
-						msg_warn ("cannot compile regexp for function");
-						return FALSE;
-					}
-					re_cache_add (param_pattern, re, task->cfg->cfg_pool);
+				re = parse_regexp (task->cfg->cfg_pool,
+						param_pattern,
+						task->cfg->raw_mode);
+				if (re == NULL) {
+					msg_warn ("cannot compile regexp for function");
+					return FALSE;
 				}
 				if ((r = task_cache_check (task, re)) == -1) {
-					if (g_regex_match (re->regexp, ct->type, 0, NULL) == TRUE) {
+					if (rspamd_regexp_search (re->regexp, ct->type, 0,
+							NULL, NULL, FALSE) == TRUE) {
 						task_cache_add (task, re, 1);
 						return TRUE;
 					}
@@ -1868,19 +1847,15 @@ compare_subtype (struct rspamd_task *task, GMimeContentType * ct,
 		return FALSE;
 	}
 	if (*subtype == '/') {
-		/* This is regexp, so compile and create g_regexp object */
-		if ((re = re_cache_check (subtype, task->cfg->cfg_pool)) == NULL) {
-			re =
-				parse_regexp (task->cfg->cfg_pool, subtype,
-					task->cfg->raw_mode);
-			if (re == NULL) {
-				msg_warn ("cannot compile regexp for function");
-				return FALSE;
-			}
-			re_cache_add (subtype, re, task->cfg->cfg_pool);
+		re = parse_regexp (task->cfg->cfg_pool, subtype,
+				task->cfg->raw_mode);
+		if (re == NULL) {
+			msg_warn ("cannot compile regexp for function");
+			return FALSE;
 		}
 		if ((r = task_cache_check (task, re)) == -1) {
-			if (g_regex_match (re->regexp, subtype, 0, NULL) == TRUE) {
+			if (rspamd_regexp_search (re->regexp, subtype, 0,
+					NULL, NULL, FALSE) == TRUE) {
 				task_cache_add (task, re, 1);
 				return TRUE;
 			}
@@ -1941,22 +1916,18 @@ common_has_content_part (struct rspamd_task * task,
 		}
 
 		if (*param_type == '/') {
-			/* This is regexp, so compile and create g_regexp object */
-			if ((re =
-				re_cache_check (param_type, task->cfg->cfg_pool)) == NULL) {
-				re = parse_regexp (task->cfg->cfg_pool,
-						param_type,
-						task->cfg->raw_mode);
-				if (re == NULL) {
-					msg_warn ("cannot compile regexp for function");
-					cur = g_list_next (cur);
-					continue;
-				}
-				re_cache_add (param_type, re, task->cfg->cfg_pool);
+			re = parse_regexp (task->cfg->cfg_pool,
+					param_type,
+					task->cfg->raw_mode);
+			if (re == NULL) {
+				msg_warn ("cannot compile regexp for function");
+				cur = g_list_next (cur);
+				continue;
 			}
 			if ((r = task_cache_check (task, re)) == -1) {
 				if (ct->type &&
-					g_regex_match (re->regexp, ct->type, 0, NULL) == TRUE) {
+					rspamd_regexp_search (re->regexp, ct->type, 0,
+							NULL, NULL, TRUE)) {
 					if (param_subtype) {
 						if (compare_subtype (task, ct, param_subtype)) {
 							if (compare_len (part, min_len, max_len)) {
