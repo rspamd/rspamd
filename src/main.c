@@ -1335,7 +1335,9 @@ main (gint argc, gchar **argv, gchar **env)
 
 	rspamd_signals_init (&signals, sig_handler);
 
-	if (rspamd_write_pid (rspamd_main) == -1) {
+	if (rspamd_main->cfg->pid_file == NULL) {
+		msg_info("pid file is not specified, skipping writing it");
+	} else if (rspamd_write_pid (rspamd_main) == -1) {
 		msg_err ("cannot write pid file %s", rspamd_main->cfg->pid_file);
 		exit (-errno);
 	}
