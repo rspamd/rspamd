@@ -32,5 +32,11 @@ override_dh_fixperms:
 	dh_fixperms
 	chmod 750 $(CURDIR)/debian/rspamd/var/lib/rspamd
 
+override_dh_systemd_enable:
+	dh_systemd_enable rspamd.socket
+
 override_dh_systemd_start:
-	dh_systemd_start --restart-after-upgrade
+	dh_systemd_start --restart-after-upgrade --no-start
+
+override_dh_installinit:
+	dh_installinit -n

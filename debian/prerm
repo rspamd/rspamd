@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+
+if [ -x /etc/init.d/rspamd ] && ! [ -d /run/systemd/system ]; then
+    invoke-rc.d rspamd stop || exit $?
+fi
+
+#DEBHELPER#
