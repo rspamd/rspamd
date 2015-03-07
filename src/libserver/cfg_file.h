@@ -12,6 +12,7 @@
 #include "symbols_cache.h"
 #include "cfg_rcl.h"
 #include "ucl.h"
+#include "regexp.h"
 
 #define DEFAULT_BIND_PORT 11333
 #define DEFAULT_CONTROL_PORT 11334
@@ -68,11 +69,9 @@ enum rspamd_log_type {
 struct rspamd_regexp_element {
 	enum rspamd_regexp_type type;                   /**< regexp type										*/
 	gchar *regexp_text;                             /**< regexp text representation							*/
-	GRegex *regexp;                                 /**< glib regexp structure								*/
-	GRegex *raw_regexp;                             /**< glib regexp structure for raw matching				*/
+	rspamd_regexp_t *regexp;                        /**< regexp structure									*/
 	gchar *header;                                  /**< header name for header regexps						*/
 	gboolean is_test;                               /**< true if this expression must be tested				*/
-	gboolean is_raw;                                /**< true if this regexp is done by raw matching		*/
 	gboolean is_strong;                             /**< true if headers search must be case sensitive		*/
 };
 

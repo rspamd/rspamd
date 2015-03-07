@@ -296,6 +296,10 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 	g_assert (re != NULL);
 	g_assert (text != NULL);
 
+	if (len == 0) {
+		len = strlen (text);
+	}
+
 	if (end != NULL && *end != NULL) {
 		/* Incremental search */
 		mt = (*end);

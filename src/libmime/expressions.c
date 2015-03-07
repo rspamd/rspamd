@@ -652,9 +652,9 @@ parse_regexp (rspamd_mempool_t * pool, const gchar *line, gboolean raw_mode)
 {
 	const gchar *begin, *end, *p, *src, *start;
 	gchar *dbegin, *dend;
-	struct rspamd_regexp_element *result, *check;
-	gint regexp_flags = G_REGEX_OPTIMIZE | G_REGEX_NO_AUTO_CAPTURE;
+	struct rspamd_regexp_element *result;
 	GError *err = NULL;
+	GString *re_flags;
 
 	if (line == NULL) {
 		msg_err ("cannot parse NULL line");
@@ -727,35 +727,20 @@ parse_regexp (rspamd_mempool_t * pool, const gchar *line, gboolean raw_mode)
 	}
 	/* Parse flags */
 	p = end + 1;
+	re_flags = g_string_sized_new (32);
 	while (p != NULL) {
 		switch (*p) {
 		case 'i':
-			regexp_flags |= G_REGEX_CASELESS;
-			p++;
-			break;
 		case 'm':
-			regexp_flags |= G_REGEX_MULTILINE;
-			p++;
-			break;
 		case 's':
-			regexp_flags |= G_REGEX_DOTALL;
-			p++;
-			break;
 		case 'x':
-			regexp_flags |= G_REGEX_EXTENDED;
-			p++;
-			break;
 		case 'u':
-			regexp_flags |= G_REGEX_UNGREEDY;
+		case 'O':
+		case 'r':
+			g_string_append_c (re_flags, *p);
 			p++;
 			break;
 		case 'o':
-			regexp_flags |= G_REGEX_OPTIMIZE;
-			p++;
-			break;
-		case 'r':
-			regexp_flags |= G_REGEX_RAW;
-			result->is_raw = TRUE;
 			p++;
 			break;
 		/* Type flags */
@@ -810,61 +795,27 @@ parse_regexp (rspamd_mempool_t * pool, const gchar *line, gboolean raw_mode)
 	*dend = '\0';
 
 	if (raw_mode) {
-		regexp_flags |= G_REGEX_RAW;
+		g_string_append_c (re_flags, 'r');
 	}
 
-	/* Avoid multiply regexp structures for similar regexps */
-	if ((check =
-		(struct rspamd_regexp_element *)re_cache_check (result->regexp_text,
-		pool)) != NULL) {
-		/* Additional check for headers */
-		if (result->type == REGEXP_HEADER || result->type ==
-			REGEXP_RAW_HEADER) {
-			if (result->header && check->header) {
-				if (strcmp (result->header, check->header) == 0) {
-					return check;
-				}
-			}
-		}
-		else {
-			return check;
-		}
-	}
-	result->regexp = g_regex_new (dbegin, regexp_flags, 0, &err);
-	if ((regexp_flags & G_REGEX_RAW) != 0) {
-		result->raw_regexp = result->regexp;
-	}
-	else {
-		result->raw_regexp = g_regex_new (dbegin,
-				regexp_flags | G_REGEX_RAW,
-				0,
-				&err);
-		rspamd_mempool_add_destructor (pool,
-			(rspamd_mempool_destruct_t) g_regex_unref,
-			(void *)result->raw_regexp);
-	}
-	rspamd_mempool_add_destructor (pool,
-		(rspamd_mempool_destruct_t) g_regex_unref,
-		(void *)result->regexp);
+	result->regexp = rspamd_regexp_cache_create (NULL, dbegin, re_flags->str,
+			&err);
 
-	*dend = '/';
+	g_string_free (re_flags, TRUE);
 
 	if (result->regexp == NULL || err != NULL) {
 		msg_warn ("could not read regexp: %s while reading regexp %s",
 				err ? err->message : "unknown error",
-			src);
+						src);
 		return NULL;
 	}
 
-	if (result->raw_regexp == NULL || err != NULL) {
-		msg_warn ("could not read raw regexp: %s while reading regexp %s",
-			err ? err->message : "unknown error",
-			src);
-		return NULL;
-	}
+	rspamd_mempool_add_destructor (pool,
+		(rspamd_mempool_destruct_t) rspamd_regexp_unref,
+		(void *)result->regexp);
 
-	/* Add to cache for further usage */
-	re_cache_add (result->regexp_text, result, pool);
+	*dend = '/';
+
 	return result;
 }
 

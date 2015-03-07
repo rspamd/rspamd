@@ -369,7 +369,7 @@ regexp_module_reconfig (struct rspamd_config *cfg)
 
 struct url_regexp_param {
 	struct rspamd_task *task;
-	GRegex *regexp;
+	rspamd_regexp_t *regexp;
 	struct rspamd_regexp_element *re;
 	gboolean found;
 };
@@ -379,10 +379,9 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 {
 	struct url_regexp_param *param = data;
 	struct rspamd_url *url = value;
-	GError *err = NULL;
 
-	if (g_regex_match_full (param->regexp, struri (url), -1, 0, 0, NULL,
-		&err) == TRUE) {
+	if (rspamd_regexp_search (param->regexp, struri (url), 0, NULL, NULL, FALSE)
+			== TRUE) {
 		if (G_UNLIKELY (param->re->is_test)) {
 			msg_info ("process test regexp %s for url %s returned TRUE",
 				struri (url));
@@ -394,11 +393,6 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 	else if (G_UNLIKELY (param->re->is_test)) {
 		msg_info ("process test regexp %s for url %s returned FALSE",
 			struri (url));
-	}
-	if (err != NULL) {
-		msg_info ("error occured while processing regexp \"%s\": %s",
-			param->re->regexp_text,
-			err->message);
 	}
 
 	return FALSE;
@@ -413,14 +407,12 @@ process_regexp (struct rspamd_regexp_element *re,
 {
 	guint8 *ct;
 	gsize clen;
-	gint r, passed = 0, start, end, old;
-	gboolean matched = FALSE;
-	const gchar *in;
+	gint r, passed = 0;
+	gboolean matched = FALSE, raw = FALSE;
+	const gchar *in, *start, *end;
 
 	GList *cur, *headerlist;
-	GRegex *regexp;
-	GMatchInfo *info;
-	GError *err = NULL;
+	rspamd_regexp_t *regexp;
 	struct url_regexp_param callback_param = {
 		.task = task,
 		.re = re,
@@ -449,8 +441,8 @@ process_regexp (struct rspamd_regexp_element *re,
 				re->regexp_text,
 				additional);
 		}
-		if (g_regex_match_full (re->regexp, additional, strlen (additional), 0,
-			0, NULL, NULL) == TRUE) {
+		if (rspamd_regexp_search (re->regexp, additional, 0, NULL, NULL,
+			FALSE) == TRUE) {
 			if (G_UNLIKELY (re->is_test)) {
 				msg_info ("result of regexp %s is true", re->regexp_text);
 			}
@@ -513,7 +505,7 @@ process_regexp (struct rspamd_regexp_element *re,
 					re->header, rh->decoded);
 				if (re->type == REGEXP_RAW_HEADER) {
 					in = rh->value;
-					regexp = re->raw_regexp;
+					raw = TRUE;
 				}
 				else {
 					in = rh->decoded;
@@ -527,8 +519,7 @@ process_regexp (struct rspamd_regexp_element *re,
 
 				/* Match re */
 				if (in &&
-					g_regex_match_full (regexp, in, -1, 0, 0, NULL,
-							&err) == TRUE) {
+					rspamd_regexp_search (regexp, in, 0, NULL, NULL, raw)) {
 					if (G_UNLIKELY (re->is_test)) {
 						msg_info (
 							"process test regexp %s for header %s with value '%s' returned TRUE",
@@ -554,12 +545,6 @@ process_regexp (struct rspamd_regexp_element *re,
 						re->regexp_text,
 						re->header,
 						in);
-				}
-				if (err != NULL) {
-					msg_info (
-						"error occured while processing regexp \"%s\": %s",
-						re->regexp_text,
-						err->message);
 				}
 				cur = g_list_next (cur);
 			}
@@ -589,14 +574,14 @@ process_regexp (struct rspamd_regexp_element *re,
 			}
 			/* Check raw flags */
 			if (part->is_raw) {
-				regexp = re->raw_regexp;
+				raw = TRUE;
 			}
 			else {
 				/* This time there is no need to validate anything as conversion succeed only for valid characters */
 				regexp = re->regexp;
 			}
 			/* Select data for regexp */
-			if (re->is_raw) {
+			if (raw) {
 				ct = part->orig->data;
 				clen = part->orig->len;
 			}
@@ -607,9 +592,10 @@ process_regexp (struct rspamd_regexp_element *re,
 			/* If we have limit, apply regexp so much times as we can */
 			if (f != NULL && limit > 1) {
 				end = 0;
+				start = NULL;
+				end = NULL;
 				while ((matched =
-					g_regex_match_full (regexp, ct + end + 1, clen - end - 1, 0,
-					0, &info, &err)) == TRUE) {
+					rspamd_regexp_search (regexp, ct, clen, &start, &end, raw))) {
 					if (G_UNLIKELY (re->is_test)) {
 						msg_info (
 							"process test regexp %s for mime part of length %d returned TRUE",
@@ -621,22 +607,10 @@ process_regexp (struct rspamd_regexp_element *re,
 						task_cache_add (task, re, 1);
 						return 1;
 					}
-					else {
-						/* Match not found, skip further cycles */
-						old = end;
-						if (!g_match_info_fetch_pos (info, 0, &start,
-							&end) || end <= 0) {
-							break;
-						}
-						end += old;
-					}
-					g_match_info_free (info);
 				}
-				g_match_info_free (info);
 			}
 			else {
-				if (g_regex_match_full (regexp, ct, clen, 0, 0, NULL,
-					&err) == TRUE) {
+				if (rspamd_regexp_search (regexp, ct, clen, NULL, NULL, raw)) {
 					if (G_UNLIKELY (re->is_test)) {
 						msg_info (
 							"process test regexp %s for mime part of length %d returned TRUE",
@@ -654,18 +628,13 @@ process_regexp (struct rspamd_regexp_element *re,
 					re->regexp_text,
 					(gint)clen);
 			}
-			if (err != NULL) {
-				msg_info ("error occured while processing regexp \"%s\": %s",
-					re->regexp_text,
-					err->message);
-			}
 			cur = g_list_next (cur);
 		}
 		task_cache_add (task, re, 0);
 		break;
 	case REGEXP_MESSAGE:
 		debug_task ("checking message regexp: %s", re->regexp_text);
-		regexp = re->raw_regexp;
+		raw = TRUE;
 		ct = (guint8 *)task->msg.start;
 		clen = task->msg.len;
 
@@ -676,10 +645,9 @@ process_regexp (struct rspamd_regexp_element *re,
 		}
 		/* If we have limit, apply regexp so much times as we can */
 		if (f != NULL && limit > 1) {
-			end = 0;
+			start = end = NULL;
 			while ((matched =
-				g_regex_match_full (regexp, ct + end + 1, clen - end - 1, 0, 0,
-				&info, &err)) == TRUE) {
+				rspamd_regexp_search (regexp, ct, clen, &start, &end, raw))) {
 				if (G_UNLIKELY (re->is_test)) {
 					msg_info (
 						"process test regexp %s for mime part of length %d returned TRUE",
@@ -690,22 +658,10 @@ process_regexp (struct rspamd_regexp_element *re,
 					task_cache_add (task, re, 1);
 					return 1;
 				}
-				else {
-					/* Match not found, skip further cycles */
-					old = end;
-					if (!g_match_info_fetch_pos (info, 0, &start,
-						&end) || end <= 0) {
-						break;
-					}
-					old += end;
-				}
-				g_match_info_free (info);
 			}
-			g_match_info_free (info);
 		}
 		else {
-			if (g_regex_match_full (regexp, ct, clen, 0, 0, NULL,
-				&err) == TRUE) {
+			if (rspamd_regexp_search (regexp, ct, clen, NULL, NULL, raw)) {
 				if (G_UNLIKELY (re->is_test)) {
 					msg_info (
 						"process test regexp %s for message part of length %d returned TRUE",
@@ -722,11 +678,6 @@ process_regexp (struct rspamd_regexp_element *re,
 				"process test regexp %s for message part of length %d returned FALSE",
 				re->regexp_text,
 				(gint)clen);
-		}
-		if (err != NULL) {
-			msg_info ("error occured while processing regexp \"%s\": %s",
-				re->regexp_text,
-				err->message);
 		}
 		task_cache_add (task, re, 0);
 		break;
