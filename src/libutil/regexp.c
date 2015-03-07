@@ -51,6 +51,7 @@ struct rspamd_regexp_s {
 	pcre_extra *raw_extra;
 	regexp_id_t id;
 	ref_entry_t ref;
+	gpointer ud;
 	gint flags;
 };
 
@@ -418,6 +419,22 @@ rspamd_regexp_unref (rspamd_regexp_t *re)
 	REF_RELEASE (re);
 }
 
+void
+rspamd_regexp_set_ud (rspamd_regexp_t *re, gpointer ud)
+{
+	g_assert (re != NULL);
+
+	re->ud = ud;
+}
+
+gpointer
+rspamd_regexp_get_ud (rspamd_regexp_t *re)
+{
+	g_assert (re != NULL);
+
+	return re->ud;
+}
+
 static gboolean
 rspamd_regexp_equal (gconstpointer a, gconstpointer b)
 {
@@ -497,6 +514,25 @@ rspamd_regexp_cache_create (struct rspamd_regexp_cache *cache,
 	}
 
 	return res;
+}
+
+void rspamd_regexp_cache_insert (struct rspamd_regexp_cache* cache,
+		const gchar *pattern,
+		const gchar *flags, rspamd_regexp_t *re)
+{
+	g_assert (re != NULL);
+	g_assert (pattern != NULL);
+
+	if (cache == NULL) {
+		cache = global_re_cache;
+	}
+
+	g_assert (cache != NULL);
+	/* Generate custom id */
+	rspamd_regexp_generate_id (pattern, flags, re->id);
+
+	REF_RETAIN (re);
+	g_hash_table_insert (cache->tbl, re->id, re);
 }
 
 gboolean

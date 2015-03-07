@@ -76,6 +76,20 @@ rspamd_regexp_t* rspamd_regexp_ref (rspamd_regexp_t *re);
 void rspamd_regexp_unref (rspamd_regexp_t *re);
 
 /**
+ * Set auxiliary userdata for the specified regexp
+ * @param re regexp object
+ * @param ud opaque pointer
+ */
+void rspamd_regexp_set_ud (rspamd_regexp_t *re, gpointer ud);
+
+/**
+ * Get userdata for a regexp object
+ * @param re regexp object
+ * @return opaque pointer
+ */
+gpointer rspamd_regexp_get_ud (rspamd_regexp_t *re);
+
+/**
  * Get pattern for the specified regexp object
  * @param re
  * @return
@@ -98,6 +112,17 @@ struct rspamd_regexp_cache* rspamd_regexp_cache_new (void);
 rspamd_regexp_t* rspamd_regexp_cache_query (struct rspamd_regexp_cache* cache,
 		const gchar *pattern,
 		const gchar *flags);
+
+/**
+ * Insert item to the cache using custom pattern and flags
+ * @param cache
+ * @param pattern
+ * @param flags
+ * @param re
+ */
+void rspamd_regexp_cache_insert (struct rspamd_regexp_cache* cache,
+		const gchar *pattern,
+		const gchar *flags, rspamd_regexp_t *re);
 
 /**
  * Create or get cached regexp from the specified cache
