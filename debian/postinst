@@ -29,6 +29,15 @@ case "$1" in
     ;;
 esac
 
+if [ -x /etc/init.d/rspamd ]; then
+    update-rc.d rspamd defaults >/dev/null
+    if [ -d /run/systemd/systemd ]; then
+        systemctl --system daemon-reload >/dev/null || true
+    else
+        invoke-rc.d rspamd start || exit $?
+    fi
+fi
+
 #DEBHELPER#
 
 exit 0
