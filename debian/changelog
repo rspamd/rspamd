@@ -1,8 +1,10 @@
-rspamd (0.8.1) UNRELEASED; urgency=low
+rspamd (0.8.2) UNRELEASED; urgency=low
 
   * New release.
+  * systemd socket-activated service.
+  * Bump Standards-Version, no changes required.
 
- -- Mikhail Gusarov <dottedmag@debian.org>  Fri, 23 Jan 2015 16:55:00 +0000
+ -- Mikhail Gusarov <dottedmag@debian.org>  Sun, 08 Mar 2015 22:38:55 +0100
 
 rspamd (0.6.9) unstable; urgency=low
 

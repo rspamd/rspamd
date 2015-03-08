@@ -13,3 +13,4 @@ dns {
     sockets = 16;
     retransmits = 5;
 }
+tempdir = "/tmp";

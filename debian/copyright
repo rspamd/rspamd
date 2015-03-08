@@ -44,8 +44,7 @@ Files: contrib/libottery/*
 Copyright: Nick Mathewson
 License: CC0
 
-Files: contrib/libottery/chacha_crovetz.c
-       contrib/libottery/chacha_merged.c
+Files: contrib/libottery/chacha_merged.c
 Copyright: Ted Krovetz <ted@krovetz.net>
            D. J. Bernstein
 License: public-domain
@@ -54,12 +53,6 @@ License: public-domain
 Files: contrib/xxhash/xxhash.*
 Copyright: 2012-2013, Yann Collet.
 License: BSD-2-Clause
-
-Files: contrib/siphash/*
-Copyright: William Ahern
-           Jean-Philippe Aumasson
-           Daniel J. Berstein
-License: Unlicense
 
 Files: contrib/siphash/*
 Copyright: William Ahern
