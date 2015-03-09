@@ -8,17 +8,18 @@ context("Base32 encodning", function()
     unsigned char* rspamd_decode_base32 (const char *in, size_t inlen, size_t *outlen);
     char * rspamd_encode_base32 (const unsigned char *in, size_t inlen);
     void g_free(void *ptr);
+    int memcmp(const void *a1, const void *a2, size_t len);
   ]]
   
   local function random_buf(max_size)
-    local l = ffi.C.ottery_rand_unsigned()
+    local l = ffi.C.ottery_rand_unsigned() % max_size + 1
     local buf = ffi.new("unsigned char[?]", l)
     ffi.C.ottery_rand_bytes(buf, l)
     
     return buf, l
   end
   
-  test("Base32 exact test", function()
+  test("Base32 encode test", function()
     local cases = {
       {'test123', 'wm3g84fg13cy'},
       {'hello', 'em3ags7p'}
@@ -29,6 +30,21 @@ context("Base32 encodning", function()
       local s = ffi.string(b)
       ffi.C.g_free(b)
       assert_equal(s, c[2], s .. " not equal " .. c[2])
+    end
+  end)
+  
+  test("Base32 fuzz test", function()
+    for i = 1,1000 do
+      local b, l = random_buf(4096)
+      local ben = ffi.C.rspamd_encode_base32(b, l)
+      local bs = ffi.string(ben)
+      local nl = ffi.new("size_t [1]")
+      local nb = ffi.C.rspamd_decode_base32(bs, #bs, nl)
+      
+      local cmp = ffi.C.memcmp(b, nb, l)
+      ffi.C.g_free(ben)
+      ffi.C.g_free(nb)
+      assert_equal(cmp, 0, "fuzz test failed for length: " .. tostring(l))
     end
   end)
 end)
