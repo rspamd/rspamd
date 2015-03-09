@@ -2203,7 +2203,7 @@ rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen)
 	guchar c;
 	guint acc = 0U;
 	guint processed_bits = 0;
-	gsize olen = 0, i, allocated_len = inlen / 8 * 5 + 2;
+	gsize olen = 0, i, allocated_len = inlen * 5 / 8 + 2;
 
 	res = g_malloc (allocated_len);
 
