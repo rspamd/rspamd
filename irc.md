@@ -32,3 +32,5 @@ There are no strict rules in rspamd discussion channel, just some generic ones:
 * no spam
 * no flood
 * no abuse
+
+Please do not expect the immediate reply: we all have different task ongoing and different timezones.

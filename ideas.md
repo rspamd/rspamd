@@ -20,6 +20,11 @@ We encourage picking projects which you feel you can **realistically** do within
 
 All code contributed must have either 2 clause BSD license or any license from [this list](https://github.com/vstakhov/rspamd/blob/master/CONTRIBUTIONS.md).
 
+
+### Entry requirements
+
+We expect from the successful candidates the established contribution history to rspamd that would demostrate us the ability to understand and modify rspamd code. The possible ideas for contribution could be found in [contribution suggestions page](https://rspamd.com/contribution.html), in [github issue tracker](https://github.com/vstakhov/rspamd/issues/) or discussed in our [irc channel](https://rspamd.com/irc.html).
+
 #### List of mentors available for the project via IRC and Google groups mailing list:
 
 |---
