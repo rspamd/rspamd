@@ -48,6 +48,7 @@
 #include "libutil/map.h"
 #include "main.h"
 #include "surbl.h"
+#include "regexp.h"
 
 #include "utlist.h"
 
@@ -158,7 +159,7 @@ redirector_insert (gpointer st, gconstpointer key, gpointer value)
 	const gchar *p = key, *begin = key;
 	gchar *new;
 	gsize len;
-	GRegex *re = NO_REGEXP;
+	rspamd_regexp_t *re = NO_REGEXP;
 	GError *err = NULL;
 	guint idx;
 
@@ -179,14 +180,14 @@ redirector_insert (gpointer st, gconstpointer key, gpointer value)
 			p++;
 		}
 		if (*p) {
-			re = g_regex_new (p,
-					G_REGEX_RAW | G_REGEX_OPTIMIZE | G_REGEX_NO_AUTO_CAPTURE | G_REGEX_CASELESS,
-					0,
+			re = rspamd_regexp_new (p,
+					"ir",
 					&err);
 			if (re == NULL) {
 				msg_warn ("could not read regexp: %s while reading regexp %s",
 					err->message,
 					p);
+				g_error_free (err);
 				re = NO_REGEXP;
 			}
 		}
@@ -197,10 +198,10 @@ redirector_insert (gpointer st, gconstpointer key, gpointer value)
 static void
 redirector_item_free (gpointer p)
 {
-	GRegex *re;
+	rspamd_regexp_t *re;
 	if (p != NULL && p != NO_REGEXP) {
-		re = (GRegex *)p;
-		g_regex_unref (re);
+		re = (rspamd_regexp_t *)p;
+		rspamd_regexp_unref (re);
 	}
 }
 
@@ -1049,7 +1050,7 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 	struct rspamd_url *url = value;
 	gchar *red_domain;
 	const gchar *pos;
-	GRegex *re;
+	rspamd_regexp_t *re;
 	guint idx, len;
 
 	task = param->task;
@@ -1080,7 +1081,7 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 						red_domain);
 					if (re != NULL &&
 						(re == NO_REGEXP ||
-						g_regex_match (re, url->string, 0, NULL))) {
+						rspamd_regexp_search (re, url->string, 0, NULL, NULL, TRUE))) {
 						/* If no regexp found or founded regexp matches url string register redirector's call */
 						if (surbl_module_ctx->redirector_symbol != NULL) {
 							rspamd_task_insert_result (param->task,
