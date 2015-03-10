@@ -346,7 +346,8 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 	if (!(re->flags & RSPAMD_REGEXP_FLAG_NOOPT)) {
 #ifdef HAVE_PCRE_JIT
 # if (PCRE_MAJOR == 8 && PCRE_MINOR >= 32)
-		rc = pcre_jit_exec (r, ext, mt, remain, 0, match_flags, ovec,
+		/* XXX: flags seems to be broken with jit fast path */
+		rc = pcre_jit_exec (r, ext, mt, remain, 0, 0, ovec,
 				G_N_ELEMENTS (ovec), st);
 # else
 		rc = pcre_exec (r, ext, mt, remain, 0, match_flags, ovec,
