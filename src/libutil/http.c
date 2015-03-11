@@ -1062,6 +1062,7 @@ rspamd_http_new_message (enum http_parser_type type)
 	new->port = 80;
 	new->type = type;
 	new->method = HTTP_GET;
+	new->flags = 0;
 
 	return new;
 }
