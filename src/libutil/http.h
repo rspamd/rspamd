@@ -50,6 +50,11 @@ struct rspamd_http_header {
 };
 
 /**
+ * Legacy spamc protocol
+ */
+#define RSPAMD_HTTP_FLAG_SPAMC 1 << 1
+
+/**
  * HTTP message structure, used for requests and replies
  */
 struct rspamd_http_message {
@@ -65,6 +70,7 @@ struct rspamd_http_message {
 	time_t date;
 	gint code;
 	enum http_method method;
+	gint flags;
 };
 
 
