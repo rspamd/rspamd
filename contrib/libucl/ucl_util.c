@@ -917,6 +917,10 @@ ucl_include_file_single (const unsigned char *data, size_t len,
 	}
 
 	/* Restore old file vars */
+	if (parser->cur_file) {
+		free (parser->cur_file);
+	}
+
 	parser->cur_file = old_curfile;
 	DL_FOREACH_SAFE (parser->variables, cur_var, tmp_var) {
 		if (strcmp (cur_var->var, "CURDIR") == 0 && old_curdir) {
@@ -937,9 +941,6 @@ ucl_include_file_single (const unsigned char *data, size_t len,
 	}
 	if (old_curdir) {
 		DL_APPEND (parser->variables, old_curdir);
-	}
-	if (old_curfile) {
-		free (old_curfile);
 	}
 
 	parser->state = prev_state;
