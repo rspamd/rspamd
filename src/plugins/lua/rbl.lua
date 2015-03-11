@@ -37,6 +37,9 @@ local rspamd_logger = require 'rspamd_logger'
 local rspamd_ip = require 'rspamd_ip'
 
 local function validate_dns(lstr)
+  if lstr:match('%.%.') then
+    return false
+  end
   for v in lstr:gmatch('[^%.]+') do
     if not v:match('^[%w-]+$') or v:len() > 63
       or v:match('^-') or v:match('-$') then
