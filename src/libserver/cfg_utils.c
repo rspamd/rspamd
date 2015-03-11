@@ -113,7 +113,9 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 		cnf->is_systemd = TRUE;
 		cnf->cnt = strtoul (tokens[1], &err, 10);
 		cnf->addrs = NULL;
+
 		if (err == NULL || *err == '\0') {
+			cnf->name = rspamd_mempool_strdup (cfg->cfg_pool, str);
 			LL_PREPEND (cf->bind_conf, cnf);
 		}
 		else {

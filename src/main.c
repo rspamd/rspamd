@@ -615,9 +615,11 @@ systemd_get_socket (gint number)
 		if ((err == NULL || *err == '\0') && num_passed > number) {
 			sock = number + sd_listen_fds_start;
 			if (fstat (sock, &st) == -1) {
+				msg_warn ("cannot stat systemd descriptor %d", sock);
 				return NULL;
 			}
 			if (!S_ISSOCK (st.st_mode)) {
+				msg_warn ("systemd descriptor %d is not a socket", sock);
 				errno = EINVAL;
 				return NULL;
 			}
@@ -628,10 +630,13 @@ systemd_get_socket (gint number)
 			result = g_list_prepend (result, GINT_TO_POINTER (sock));
 		}
 		else if (num_passed <= number) {
+			msg_warn ("systemd LISTEN_FDS does not contain the expected fd: %d",
+					num_passed);
 			errno = EOVERFLOW;
 		}
 	}
 	else {
+		msg_warn ("cannot get systemd variable 'LISTEN_FDS'");
 		errno = ENOENT;
 	}
 
