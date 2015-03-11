@@ -1215,21 +1215,21 @@ size_t http_parser_execute (http_parser *parser,
 
         break;
       }
-      case s_req_spamc_start:
-          switch (ch) {
-          case 'S':
-        	  parser->flags |= F_SPAMC;
-        	  /* go forward */
-          case 'R':
-              parser->state = s_req_spamc;
-              break;
-          case ' ':
-              break;
-          default:
-             SET_ERRNO(HPE_INVALID_CONSTANT);
-             goto error;
-          }
-      break;
+      case s_req_spamc_start: {
+    	  if (ch == 'S') {
+    		  parser->flags |= F_SPAMC;
+    		  parser->state = s_req_spamc;
+    	  }
+    	  else if (ch == 'R') {
+    		  parser->state = s_req_spamc;
+    	  }
+    	  else if (ch != ' ') {
+    		  SET_ERRNO(HPE_INVALID_CONSTANT);
+    		  goto error;
+    	  }
+
+          break;
+      }
 
       case s_req_spamc:
       {
@@ -1609,7 +1609,7 @@ size_t http_parser_execute (http_parser *parser,
             parser->flags |= F_CONNECTION_KEEP_ALIVE;
             break;
           case h_connection_close:
-            parser->flags |= F_CONNECTION_CLOSE;
+            /* XXX: not needed for rspamd parser->flags |= F_CONNECTION_CLOSE; */
             break;
           case h_transfer_encoding_chunked:
             parser->flags |= F_CHUNKED;
@@ -1959,7 +1959,7 @@ http_should_keep_alive (const http_parser *parser)
 {
   if (parser->http_major > 0 && parser->http_minor > 0) {
     /* HTTP/1.1 */
-    if (parser->flags & F_CONNECTION_CLOSE) {
+    if (!(parser->flags & F_CONNECTION_KEEP_ALIVE)) {
       return 0;
     }
   } else {
