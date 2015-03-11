@@ -22,6 +22,9 @@ IF(NOT RSPAMD_USER)
 ENDIF(NOT RSPAMD_USER)
 
 CMAKE_MINIMUM_REQUIRED(VERSION 2.8.0 FATAL_ERROR)
+# Default for SysV Init
+SET(RSPAMD_WORKER_NORMAL "*:11333")
+SET(RSPAMD_WORKER_CONTROLLER "*:11334")
 SET_PROPERTY(GLOBAL PROPERTY ALLOW_DUPLICATE_CUSTOM_TARGETS 1)
 
 ############################# OPTIONS SECTION #############################################
@@ -346,6 +349,9 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	ELSE(EXISTS "/etc/debian_version")
 		SET(LINUX_START_SCRIPT "rspamd_rh.in")
 	ENDIF(EXISTS "/etc/debian_version")
+	# Overwrite to conform systemd
+	SET(RSPAMD_WORKER_NORMAL "systemd:0")
+	SET(RSPAMD_WORKER_CONTROLLER "systemd:1")
 ENDIF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
 IF(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
@@ -393,6 +399,9 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
   	SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE)
   	SET(CMAKE_INSTALL_RPATH "${PREFIX}/lib")	
 ENDIF(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
+
+# Create conf/rspamd.conf from template
+CONFIGURE_FILE(conf/rspamd.conf.in conf/rspamd.conf @ONLY)
 
 # Now find libraries and headers
 
