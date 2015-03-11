@@ -98,7 +98,7 @@ lua.
 %{__install} -p -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_logdir}
 %else
-%{__install} -p -D -m 0644 %{SOURCE1} %{buildroot}%{_unitdir}/%{name}.service
+%{__install} -p -D -m 0644 %{SOURCE3} %{buildroot}%{_unitdir}/%{name}.service
 %endif
 
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_home}
