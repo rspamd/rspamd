@@ -10,11 +10,11 @@ logging {
 }
 
 worker {
-    bind_socket = "systemd:0";
+    bind_socket = "@RSPAMD_WORKER_NORMAL@";
     .include "$CONFDIR/worker-normal.inc"
 }
 
 worker {
-    bind_socket = "systemd:1";
+    bind_socket = "@RSPAMD_WORKER_CONTROLLER@";
     .include "$CONFDIR/worker-controller.inc"
 }
