@@ -21,7 +21,7 @@
 rspamd="/usr/bin/rspamd"
 prog=$(basename $rspamd)
 
-RSPAMD_CONF_FILE="/etc/rspamd/rspamd"
+RSPAMD_CONF_FILE="/etc/rspamd/rspamd.sysvinit.conf"
 RSPAMD_USER="rspamd"
 RSPAMD_GROUP="rspamd"
 

@@ -1,4 +1,4 @@
-%define rspamd_user      rspamd
+%define rspamd_user      _rspamd
 %define rspamd_group     %{rspamd_user}
 %define rspamd_home      %{_localstatedir}/lib/rspamd
 %define rspamd_logdir    %{_localstatedir}/log/rspamd
@@ -54,15 +54,12 @@ Requires(postun): initscripts
 %endif
 
 Source0:        https://rspamd.com/downloads/%{name}-%{version}.tar.xz
-%if 0%{?suse_version} || 0%{?fedora} || 0%{?el7}
-Source1:        %{name}.service
-%else
+%if 0%{?el6}
 Source1:        %{name}.init
-%endif
 Source2:        %{name}.logrotate
-Source3:	workers.conf
-Source4:	logging.conf
+%else
 Source5:	tmpfiles.d
+%endif
 
 %description
 Rspamd is a rapid, modular and lightweight spam filter. It is designed to work
@@ -97,21 +94,16 @@ lua.
 %install
 %{__make} install DESTDIR=%{buildroot} INSTALLDIRS=vendor
 
-%if 0%{?suse_version} || 0%{?fedora} || 0%{?rhel} >= 7
-%{__install} -p -D -m 0644 %{SOURCE1} %{buildroot}%{_unitdir}/%{name}.service
-%{__install} -p -D -m 0644 %{SOURCE3} %{buildroot}%{rspamd_confdir}/workers.conf
-%{__install} -p -D -m 0644 %{SOURCE4} %{buildroot}%{rspamd_confdir}/logging.conf
-%{__install} -d -m 0755 %{buildroot}%{_tmpfilesdir}
-%{__install} -m 0644 %{SOURCE5} %{buildroot}%{_tmpfilesdir}/%{name}.conf
-%else
+%if 0%{?el6}
 %{__install} -p -D -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
 %{__install} -d -p -m 0755 %{buildroot}%{_localstatedir}/run/rspamd
-%endif
-
-%if 0%{?el6}
 %{__install} -p -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_logdir}
+%else
+%{__install} -d -m 0755 %{buildroot}%{_tmpfilesdir}
+%{__install} -m 0644 %{SOURCE5} %{buildroot}%{_tmpfilesdir}/%{name}.conf
 %endif
+
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_home}
 
 %clean
@@ -190,12 +182,15 @@ fi
 %{_bindir}/rspamc
 %config(noreplace) %{rspamd_confdir}/%{name}.conf
 %config(noreplace) %{rspamd_confdir}/composites.conf
-%config(noreplace) %{rspamd_confdir}/logging.conf
 %config(noreplace) %{rspamd_confdir}/metrics.conf
 %config(noreplace) %{rspamd_confdir}/modules.conf
-%config(noreplace) %{rspamd_confdir}/options.conf
 %config(noreplace) %{rspamd_confdir}/statistic.conf
-%config(noreplace) %{rspamd_confdir}/workers.conf
+%config(noreplace) %{rspamd_confdir}/common.conf
+%config(noreplace) %{rspamd_confdir}/logging.inc
+%config(noreplace) %{rspamd_confdir}/options.inc
+%config(noreplace) %{rspamd_confdir}/%{name}.sysvinit.conf
+%config(noreplace) %{rspamd_confdir}/worker-controller.inc
+%config(noreplace) %{rspamd_confdir}/worker-normal.inc
 %if 0%{?el6}
 %config(noreplace) %{_sysconfdir}/logrotate.d/%{name}
 %endif
@@ -222,6 +217,7 @@ fi
 %{rspamd_pluginsdir}/lua/emails.lua
 %{rspamd_pluginsdir}/lua/ip_score.lua
 %{rspamd_pluginsdir}/lua/settings.lua
+%{rspamd_pluginsdir}/lua/fun.lua
 %{rspamd_confdir}/lua/regexp/drugs.lua
 %{rspamd_confdir}/lua/regexp/fraud.lua
 %{rspamd_confdir}/lua/regexp/headers.lua
@@ -250,7 +246,7 @@ fi
 * Wed Oct 15 2014 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.7.2-1
 - Update to 0.7.2
 
-* Mon Sep 30 2014 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.7.1-1
+* Tue Sep 30 2014 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.7.1-1
 - Update to 0.7.1
 
 * Mon Sep 1 2014 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.7.0-1
