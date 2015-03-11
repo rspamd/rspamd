@@ -92,20 +92,19 @@ a very flexible way to train filter against repeated spam patterns. Unlike tradi
 	- implement other ANN models and evaluate their learning curve;
 	- adjust generated meta-rules weight according to the evidence of rules.
 
-### Create a dedicated library for rspamd client
+### Implement SMTP proxy mode in rspamd
 
-So far, rspamd includes a client library but it depends on the whole rspamd code making it hard or even impossible to use it in other projects. We want this library to be cut from rspamd in the way similar to separating of [rdns](https://github.com/vstakhov/rdns). Ideally, we also want SWIG bindings for the client library allowing to use it in other programming languages. Moreover, the client library should be able to work in both non-blocking (streaming) and blocking modes without explicit dependency on the exact reactor library, such as libevent.
+There are two efforts of SMTP proxy implementations in rspamd, however, they are not finished so far. SMTP proxy is a convenient method of spam filtering that can be used with any MTA (including, for example, OpenSMTPD). Moreover, rspamd could act as a fast pre-filtering proxy to eliminate spam based on merely envelope checks (SPF, RBL and so on).
 
-* Difficulty: easy to medium
-* Required skills: intermediate skills in C
-* Possible mentors: cebka, az
+* Difficulty: medium
+* Required skills: excellent skills in C, good understanding of event based data processing model
+* Possible mentors: cebka
 
 * We suppose that at the midterm evaluation, we could estimate the following:
-	- the separate implementation of rspamdclient in C using abstract events model;
-	- the ability to interact with rspamd both for scanning and learning;
+	- the *tested* implementation of smtp full and lightweight proxies with no SMTP queue support;
 * At the final evaluation we suppose to have the following tasks being done:
-	- HTTPCrypt encryption support, replay attacks protection, nonces policy selection;
-	- SWIG bindings to another languages
+	- fully functional SMTP proxy that supports SMTP queue managing
+
 
 ### Create functional test framework
 
@@ -119,8 +118,8 @@ Currently, rspamd lacks of functional testing. The idea is to create a simple te
 	- the testing framework that can run rspamd, generate configs, grab messages and evaluate test cases;
 	- rspamd should be able to run in pipe mode to be tested more quickly;
 * At the final evaluation we suppose to have the following tasks being done:
-	- Most of rspamd components should have the correspoding tests in the framework;
-	- The code coverage by tests must be more than 50%
+	- most of rspamd components should have the correspoding tests in the framework;
+	- the code coverage by tests must be more than 50%
 
 ### Support of HTTPCrypt in the Web interface
 
