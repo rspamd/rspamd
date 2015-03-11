@@ -31,8 +31,8 @@ rspamd="/usr/bin/rspamd"
 prog=$(basename $rspamd)
 
 RSPAMD_CONF_FILE="/etc/rspamd/rspamd.sysvinit.conf"
-RSPAMD_USER="rspamd"
-RSPAMD_GROUP="rspamd"
+RSPAMD_USER="_rspamd"
+RSPAMD_GROUP="_rspamd"
 
 [ -f /etc/sysconfig/rspamd ] && . /etc/sysconfig/rspamd
 
