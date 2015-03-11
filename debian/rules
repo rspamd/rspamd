@@ -16,11 +16,13 @@ override_dh_auto_configure:
 		-DEXAMPLESDIR=/usr/share/doc/rspamd/examples \
 		-DLIBDIR=/usr/lib \
 		-DINCLUDEDIR=/usr/include \
+		-DSYSTEMDDIR=/lib/systemd/system \
 		-DNO_SHARED=ON \
 		-DDEBIAN_BUILD=1 \
 		-DINSTALL_EXAMPLES=ON \
 		-DFORCE_GMIME24=ON \
-		-DENABLE_HIREDIS=ON
+		-DENABLE_HIREDIS=ON \
+		-DWANT_SYSTEMD_UNITS=ON
 
 override_dh_auto_clean:
 	dh_auto_clean

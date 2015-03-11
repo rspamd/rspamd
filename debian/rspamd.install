@@ -1,2 +1,0 @@
-debian/workers.conf etc/rspamd
-debian/logging.conf etc/rspamd

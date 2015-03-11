@@ -6,8 +6,6 @@
 %define rspamd_pluginsdir   %{_datadir}/rspamd
 %define rspamd_wwwdir   %{_datadir}/rspamd/www
 
-%{!?_tmpfilesdir:%global _tmpfilesdir /usr/lib/tmpfiles.d}
-
 %if 0%{?suse_version}
 %define __cmake cmake
 %define __install install
@@ -58,7 +56,7 @@ Source0:        https://rspamd.com/downloads/%{name}-%{version}.tar.xz
 Source1:        %{name}.init
 Source2:        %{name}.logrotate
 %else
-Source5:	tmpfiles.d
+Source3:        %{name}.service
 %endif
 
 %description
@@ -100,8 +98,7 @@ lua.
 %{__install} -p -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_logdir}
 %else
-%{__install} -d -m 0755 %{buildroot}%{_tmpfilesdir}
-%{__install} -m 0644 %{SOURCE5} %{buildroot}%{_tmpfilesdir}/%{name}.conf
+%{__install} -p -D -m 0644 %{SOURCE1} %{buildroot}%{_unitdir}/%{name}.service
 %endif
 
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_home}
@@ -127,10 +124,8 @@ rm -rf %{buildroot}
 %systemd_post %{name}.service
 %systemd_post %{name}.socket
 %endif
-%if %{undefined suse_version} && %{undefined fedora} && 0%{?rhel} < 7
+%if 0%{?el6}
 /sbin/chkconfig --add %{name}
-%else
-systemd-tmpfiles --create %{_tmpfilesdir}/%{name}.conf
 %endif
 
 %preun
@@ -170,9 +165,8 @@ fi
 %if 0%{?suse_version} || 0%{?fedora} || 0%{?rhel} >= 7
 %{_unitdir}/%{name}.service
 %{_unitdir}/%{name}.socket
-%dir %{_tmpfilesdir}
-%{_tmpfilesdir}/%{name}.conf
-%else
+%endif
+%if 0%{?el6}
 %{_initrddir}/%{name}
 %dir %{_localstatedir}/run/rspamd
 %endif

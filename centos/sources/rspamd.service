@@ -1,11 +1,6 @@
 [Unit]
 Description=rapid spam filtering system
-After=syslog.target network.target remote-fs.target nss-lookup.target
+After=nss-lookup.target
 
 [Service]
-Type=simple
-PIDFile=/var/run/rspamd/rspamd.pid
-ExecStartPre=/usr/bin/rspamd -u rspamd -g rspamd -t
-ExecStart=/usr/bin/rspamd -f -c /etc/rspamd/rspamd.conf -u rspamd -g rspamd
-ExecStop=/bin/kill -s QUIT $MAINPID
-WantedBy=multi-user.target
+ExecStart=/usr/bin/rspamd -c /etc/rspamd/rspamd.conf -f -u _rspamd -g _rspamd
