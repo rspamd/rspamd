@@ -503,6 +503,10 @@ rspamd_http_on_headers_complete (http_parser * parser)
 		priv->msg->body = g_string_sized_new (BUFSIZ);
 	}
 
+	if (parser->flags & F_SPAMC) {
+		priv->msg->flags |= RSPAMD_HTTP_FLAG_SPAMC;
+	}
+
 	priv->msg->method = parser->method;
 	priv->msg->code = parser->status_code;
 
@@ -965,7 +969,12 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		}
 		else {
 			/* Legacy spamd reply */
-			rspamd_printf_gstring (buf, "RSPAMD/1.3 0 EX_OK\r\n");
+			if (msg->flags & RSPAMD_HTTP_FLAG_SPAMC) {
+				rspamd_printf_gstring (buf, "SPAMD/1.1 0 EX_OK\r\n");
+			}
+			else {
+				rspamd_printf_gstring (buf, "RSPAMD/1.3 0 EX_OK\r\n");
+			}
 		}
 	}
 	else {
