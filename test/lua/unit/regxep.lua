@@ -15,6 +15,10 @@ context("Regexp unit tests", function()
       {'m,test,', 'test123', false},
       {'/test/i', 'TeSt123', true},
       {'/тест/i', 'ТесТ', true},
+      -- Raw regexp
+      {'/\\S<[-\\w\\.]+\\@[-\\w\\.]+>/r', 'some<example@example.com>', true},
+      -- Cyrillic utf8 letter
+      {'/\\S<[-\\w\\.]+\\@[-\\w\\.]+>/r', 'some<example@exаmple.com>', false},
     }
     
     for _,c in ipairs(cases) do
