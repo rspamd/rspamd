@@ -133,6 +133,7 @@ enum flags
   , F_TRAILING              = 1 << 3
   , F_UPGRADE               = 1 << 4
   , F_SKIPBODY              = 1 << 5
+  , F_SPAMC                 = 1 << 6
   };
 
 
