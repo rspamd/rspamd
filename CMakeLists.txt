@@ -397,10 +397,15 @@ ENDIF(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
 # Now find libraries and headers
 
 # Find lua libraries
-FindLua(5 2)
-IF(NOT LUA_FOUND)
+IF(ENABLE_LUAJIT MATCHES "ON")
+	# For luajit we need to check merely lua 5.1 as lua 5.2 is incompatible
 	FindLua(5 1)
-ENDIF(NOT LUA_FOUND)
+ELSE(ENABLE_LUAJIT MATCHES "ON")
+	FindLua(5 2)
+	IF(NOT LUA_FOUND)
+		FindLua(5 1)
+	ENDIF(NOT LUA_FOUND)
+ENDIF(ENABLE_LUAJIT MATCHES "ON")
 
 IF(NOT LUA_FOUND)
 	MESSAGE(FATAL_ERROR "Lua not found, lua support is required for working")
@@ -668,6 +673,7 @@ CHECK_INCLUDE_FILES(unistd.h    HAVE_UNISTD_H)
 CHECK_INCLUDE_FILES(sysexits.h  HAVE_SYSEXITS_H)
 CHECK_INCLUDE_FILES(stdint.h  HAVE_STDINT_H)
 CHECK_INCLUDE_FILES(inttypes.h  HAVE_INTTYPES_H)
+CHECK_INCLUDE_FILES(stdbool.h  HAVE_STDBOOL_H)
 CHECK_INCLUDE_FILES(endian.h  HAVE_ENDIAN_H)
 CHECK_INCLUDE_FILES(sys/endian.h  HAVE_SYS_ENDIAN_H)
 CHECK_INCLUDE_FILES(machine/endian.h  HAVE_MACHINE_ENDIAN_H)
