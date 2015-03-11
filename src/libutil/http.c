@@ -1259,6 +1259,7 @@ rspamd_http_new_message (enum http_parser_type type)
 	new->type = type;
 	new->method = HTTP_GET;
 	new->peer_key = NULL;
+	new->flags = 0;
 
 	return new;
 }
