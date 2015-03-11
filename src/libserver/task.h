@@ -75,11 +75,13 @@ struct rspamd_task {
 	enum rspamd_command cmd;                                    /**< command										*/
 	struct custom_command *custom_cmd;                          /**< custom command if any							*/
 	gint sock;                                                  /**< socket descriptor								*/
+	/* TODO: all these fields should be converted to flags */
 	gboolean is_mime;                                           /**< if this task is mime task                      */
 	gboolean is_json;                                           /**< output is JSON									*/
 	gboolean skip_extra_filters;                                /**< skip pre and post filters						*/
 	gboolean is_skipped;                                        /**< whether message was skipped by configuration   */
 	gboolean extended_urls;										/**< output URLs in details							*/
+	gboolean is_spamc;											/**< need legacy spamc output						*/
 
 	gchar *helo;                                                    /**< helo header value								*/
 	gchar *queue_id;                                                /**< queue id if specified							*/

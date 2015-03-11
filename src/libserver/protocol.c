@@ -450,6 +450,10 @@ rspamd_protocol_handle_request (struct rspamd_task *task,
 		ret = rspamd_protocol_handle_url (task, msg);
 	}
 
+	if (msg->flags & RSPAMD_HTTP_FLAG_SPAMC) {
+		task->is_spamc = TRUE;
+	}
+
 	return ret;
 }
 
@@ -749,7 +753,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 }
 
 static void
-rspamd_ucl_tolegacy_output (struct rspamd_task *task,
+rspamd_ucl_torspamc_output (struct rspamd_task *task,
 	ucl_object_t *top,
 	GString *out)
 {
@@ -803,6 +807,40 @@ rspamd_ucl_tolegacy_output (struct rspamd_task *task,
 	}
 
 	g_string_append_printf (out, "Message-ID: %s\r\n", task->message_id);
+}
+
+static void
+rspamd_ucl_tospamc_output (struct rspamd_task *task,
+	ucl_object_t *top,
+	GString *out)
+{
+	const ucl_object_t *metric, *score,
+		*required_score, *is_spam, *elt;
+	ucl_object_iter_t iter = NULL;
+
+	metric = ucl_object_find_key (top, DEFAULT_METRIC);
+	if (metric != NULL) {
+		score = ucl_object_find_key (metric, "score");
+		required_score = ucl_object_find_key (metric, "required_score");
+		is_spam = ucl_object_find_key (metric, "is_spam");
+		g_string_append_printf (out,
+			"Spam: %s ; %.2f / %.2f\r\n\r\n",
+			ucl_object_toboolean (is_spam) ? "True" : "False",
+			ucl_object_todouble (score),
+			ucl_object_todouble (required_score));
+
+		while ((elt = ucl_iterate_object (metric, &iter, true)) != NULL) {
+			if (elt->type == UCL_OBJECT) {
+				g_string_append_printf (out, "%s,",
+					ucl_object_key (elt));
+			}
+		}
+		/* Ugly hack, but the whole spamc is ugly */
+		if (out->str[out->len - 1] == ',') {
+			g_string_truncate (out, out->len - 1);
+			g_string_append (out, CRLF);
+		}
+	}
 }
 
 void
@@ -874,11 +912,16 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 
 	msg->body = g_string_sized_new (BUFSIZ);
 
-	if (msg->method < HTTP_SYMBOLS) {
+	if (msg->method < HTTP_SYMBOLS && !task->is_spamc) {
 		rspamd_ucl_emit_gstring (top, UCL_EMIT_JSON_COMPACT, msg->body);
 	}
 	else {
-		rspamd_ucl_tolegacy_output (task, top, msg->body);
+		if (task->is_spamc) {
+			rspamd_ucl_tospamc_output (task, top, msg->body);
+		}
+		else {
+			rspamd_ucl_torspamc_output (task, top, msg->body);
+		}
 	}
 	ucl_object_unref (top);
 
@@ -907,6 +950,10 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 		/* Turn compatibility on */
 		msg->method = HTTP_SYMBOLS;
 	}
+	if (task->is_spamc) {
+		msg->flags |= RSPAMD_HTTP_FLAG_SPAMC;
+	}
+
 	msg->date = time (NULL);
 
 	task->state = WRITING_REPLY;
