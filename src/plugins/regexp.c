@@ -503,13 +503,14 @@ process_regexp (struct rspamd_regexp_element *re,
 				rh = cur->data;
 				debug_task ("found header \"%s\" with value \"%s\"",
 					re->header, rh->decoded);
+				regexp = re->regexp;
+
 				if (re->type == REGEXP_RAW_HEADER) {
 					in = rh->value;
 					raw = TRUE;
 				}
 				else {
 					in = rh->decoded;
-					regexp = re->regexp;
 					/* Validate input */
 					if (!in || !g_utf8_validate (in, -1, NULL)) {
 						cur = g_list_next (cur);
@@ -572,13 +573,12 @@ process_regexp (struct rspamd_regexp_element *re,
 				cur = g_list_next (cur);
 				continue;
 			}
+
+			regexp = re->regexp;
+
 			/* Check raw flags */
 			if (part->is_raw) {
 				raw = TRUE;
-			}
-			else {
-				/* This time there is no need to validate anything as conversion succeed only for valid characters */
-				regexp = re->regexp;
 			}
 			/* Select data for regexp */
 			if (raw) {
