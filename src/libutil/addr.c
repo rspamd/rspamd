@@ -956,3 +956,11 @@ rspamd_inet_address_copy (const rspamd_inet_addr_t *addr)
 
 	return n;
 }
+
+gint
+rspamd_inet_address_get_af (const rspamd_inet_addr_t *addr)
+{
+	g_assert (addr != NULL);
+
+	return addr->af;
+}
