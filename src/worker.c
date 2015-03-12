@@ -199,7 +199,7 @@ accept_socket (gint fd, short what, void *arg)
 	struct rspamd_worker *worker = (struct rspamd_worker *) arg;
 	struct rspamd_worker_ctx *ctx;
 	struct rspamd_task *new_task;
-	rspamd_inet_addr_t addr;
+	rspamd_inet_addr_t *addr;
 	gint nfd;
 
 	ctx = worker->ctx;
@@ -224,8 +224,8 @@ accept_socket (gint fd, short what, void *arg)
 	new_task = rspamd_task_new (worker);
 
 	msg_info ("accepted connection from %s port %d",
-		rspamd_inet_address_to_string (&addr),
-		rspamd_inet_address_get_port (&addr));
+		rspamd_inet_address_to_string (addr),
+		rspamd_inet_address_get_port (addr));
 
 	/* Copy some variables */
 	if (ctx->is_mime) {
@@ -234,8 +234,9 @@ accept_socket (gint fd, short what, void *arg)
 	else {
 		new_task->flags &= ~RSPAMD_TASK_FLAG_MIME;
 	}
+
 	new_task->sock = nfd;
-	memcpy (&new_task->client_addr, &addr, sizeof (addr));
+	new_task->client_addr = addr;
 
 	worker->srv->stat->connections_count++;
 	new_task->resolver = ctx->resolver;
