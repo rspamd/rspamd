@@ -870,17 +870,17 @@ radix_destroy_compressed (radix_compressed_t *tree)
 uintptr_t
 radix_find_compressed_addr (radix_compressed_t *tree, rspamd_inet_addr_t *addr)
 {
+	guchar *key;
+	guint klen = 0;
+
 	if (addr == NULL) {
 		return RADIX_NO_VALUE;
 	}
 
-	if (addr->af == AF_INET) {
-		return radix_find_compressed (tree, (guint8 *)&addr->addr.s4.sin_addr,
-				sizeof (addr->addr.s4.sin_addr));
-	}
-	else if (addr->af == AF_INET6) {
-		return radix_find_compressed (tree, (guint8 *)&addr->addr.s6.sin6_addr,
-				sizeof (addr->addr.s6.sin6_addr));
+	key = rspamd_inet_address_get_radix_key (addr, &klen);
+
+	if (key && klen) {
+		return radix_find_compressed (tree, key, klen);
 	}
 
 	return RADIX_NO_VALUE;
