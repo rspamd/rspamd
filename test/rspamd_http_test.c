@@ -51,7 +51,7 @@ static void
 rspamd_server_accept (gint fd, short what, void *arg)
 {
 	struct rspamd_http_connection_router *rt = arg;
-	rspamd_inet_addr_t addr;
+	rspamd_inet_addr_t *addr;
 	gint nfd;
 
 	if ((nfd =
@@ -64,6 +64,7 @@ rspamd_server_accept (gint fd, short what, void *arg)
 		return;
 	}
 
+	rspamd_inet_address_destroy (addr);
 	rspamd_http_router_handle_socket (rt, nfd, NULL);
 }
 
@@ -206,7 +207,7 @@ rspamd_http_test_func (void)
 	gpointer serv_key, client_key, peer_key;
 	struct rspamd_keypair_cache *c;
 	rspamd_mempool_mutex_t *mtx;
-	rspamd_inet_addr_t addr;
+	rspamd_inet_addr_t *addr;
 	gdouble ts1, ts2;
 	gchar filepath[PATH_MAX], buf[512];
 	gint fd, i, j;
@@ -226,7 +227,7 @@ rspamd_http_test_func (void)
 	mtx = rspamd_mempool_get_mutex (pool);
 
 	rspamd_parse_inet_address (&addr, "127.0.0.1");
-	rspamd_inet_address_set_port (&addr, ottery_rand_range (30000) + 32768);
+	rspamd_inet_address_set_port (addr, ottery_rand_range (30000) + 32768);
 	serv_key = rspamd_http_connection_gen_key ();
 	client_key = rspamd_http_connection_gen_key ();
 	c = rspamd_keypair_cache_new (16);
@@ -236,7 +237,7 @@ rspamd_http_test_func (void)
 	g_assert (sfd != -1);
 
 	if (sfd == 0) {
-		rspamd_http_server_func ("/tmp/", &addr, mtx, serv_key, c);
+		rspamd_http_server_func ("/tmp/", addr, mtx, serv_key, c);
 		exit (EXIT_SUCCESS);
 	}
 
@@ -245,7 +246,7 @@ rspamd_http_test_func (void)
 	/* Do client stuff */
 	for (i = 0; i < ntests; i ++) {
 		for (j = 0; j < pconns; j ++) {
-			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, &addr,
+			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, addr,
 					NULL, NULL, c, ev_base, &latency[i * pconns + j]);
 		}
 		ts1 = rspamd_get_ticks ();
@@ -273,7 +274,7 @@ rspamd_http_test_func (void)
 
 	for (i = 0; i < ntests; i ++) {
 		for (j = 0; j < pconns; j ++) {
-			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, &addr,
+			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, addr,
 					client_key, peer_key, c, ev_base, &latency[i * pconns + j]);
 		}
 		ts1 = rspamd_get_ticks ();
@@ -298,7 +299,7 @@ rspamd_http_test_func (void)
 	g_assert (sfd != -1);
 
 	if (sfd == 0) {
-		rspamd_http_server_func ("/tmp/", &addr, mtx, serv_key, NULL);
+		rspamd_http_server_func ("/tmp/", addr, mtx, serv_key, NULL);
 		exit (EXIT_SUCCESS);
 	}
 
@@ -307,7 +308,7 @@ rspamd_http_test_func (void)
 
 	for (i = 0; i < ntests; i ++) {
 		for (j = 0; j < pconns; j ++) {
-			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, &addr,
+			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, addr,
 					client_key, peer_key, c, ev_base, &latency[i * pconns + j]);
 		}
 		ts1 = rspamd_get_ticks ();
