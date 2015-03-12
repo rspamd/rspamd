@@ -44,7 +44,7 @@ struct lua_http_cbdata {
 	struct rspamd_http_message *msg;
 	struct event_base *ev_base;
 	struct timeval tv;
-	rspamd_inet_addr_t addr;
+	rspamd_inet_addr_t *addr;
 	gint fd;
 	gint cbref;
 };
@@ -80,6 +80,10 @@ lua_http_fin (gpointer arg)
 
 	if (cbd->fd != -1) {
 		close (cbd->fd);
+	}
+
+	if (cbd->addr) {
+		rspamd_inet_address_destroy (cbd->addr);
 	}
 
 	g_slice_free1 (sizeof (struct lua_http_cbdata), cbd);
@@ -149,8 +153,8 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 {
 	int fd;
 
-	rspamd_inet_address_set_port (&cbd->addr, cbd->msg->port);
-	fd = rspamd_inet_address_connect (&cbd->addr, SOCK_STREAM, TRUE);
+	rspamd_inet_address_set_port (cbd->addr, cbd->msg->port);
+	fd = rspamd_inet_address_connect (cbd->addr, SOCK_STREAM, TRUE);
 
 	if (fd == -1) {
 		msg_info ("cannot connect to %v", cbd->msg->host);
@@ -179,10 +183,15 @@ lua_http_dns_handler (struct rdns_reply *reply, gpointer ud)
 		lua_http_maybe_free (cbd);
 	}
 	else {
-		/* XXX: support ipv6 some day */
-		cbd->addr.af = AF_INET;
-		memcpy (&cbd->addr.addr.s4.sin_addr, &reply->entries->content.a.addr,
-				sizeof (struct in_addr));
+		if (reply->entries->type == RDNS_REQUEST_A) {
+			cbd->addr = rspamd_inet_address_new (AF_INET,
+					&reply->entries->content.a.addr);
+		}
+		else if (reply->entries->type == RDNS_REQUEST_AAAA) {
+			cbd->addr = rspamd_inet_address_new (AF_INET6,
+					&reply->entries->content.aaa.addr);
+		}
+
 		if (!lua_http_make_connection (cbd)) {
 			lua_http_push_error (cbd, "unable to make connection to the host");
 			lua_http_maybe_free (cbd);
