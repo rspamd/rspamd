@@ -1,0 +1,9 @@
+--- rspamd.service.orig	2015-03-12 07:59:13.779172699 +0200
++++ rspamd.service	2015-03-12 08:00:20.443173489 +0200
+@@ -3,5 +3,4 @@
+ After=nss-lookup.target
+ 
+ [Service]
+-ExecStart=/usr/bin/rspamd -c /etc/rspamd/rspamd.conf -f
+-User=_rspamd
++ExecStart=/usr/bin/rspamd -c /etc/rspamd/rspamd.conf -f -u _rspamd -g _rspamd
