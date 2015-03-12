@@ -338,7 +338,7 @@ gboolean
 rspamd_parse_inet_address (rspamd_inet_addr_t **target, const char *src)
 {
 	gboolean ret = FALSE;
-	rspamd_inet_addr_t *addr;
+	rspamd_inet_addr_t *addr = NULL;
 	union sa_inet su;
 
 	g_assert (src != NULL);
@@ -361,6 +361,10 @@ rspamd_parse_inet_address (rspamd_inet_addr_t **target, const char *src)
 		memcpy (&addr->u.in.addr.s4.sin_addr, &su.s4.sin_addr,
 				sizeof (struct in_addr));
 		ret = TRUE;
+	}
+
+	if (ret && target) {
+		*target = addr;
 	}
 
 	return ret;
