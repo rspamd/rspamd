@@ -118,6 +118,8 @@ rm -rf %{buildroot}
 %endif
 
 %post
+#to allow easy upgrade from 0.8.1
+chown -R %{rspamd_user}:%{rspamd_group} %{rspamd_home}
 %if 0%{?suse_version}
 %service_add_post %{name}.service
 %service_add_post %{name}.socket
