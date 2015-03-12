@@ -179,7 +179,7 @@ smtp_metric_callback (gpointer key, gpointer value, gpointer ud)
 		cd->res = metric_res;
 	}
 
-	if (!task->is_skipped) {
+	if (!RSPAMD_TASK_IS_SKIPPED (task)) {
 		cd->log_offset += rspamd_snprintf (cd->log_buf + cd->log_offset,
 				cd->log_size - cd->log_offset,
 				"(%s: %c (%s): [%.2f/%.2f/%.2f] [",

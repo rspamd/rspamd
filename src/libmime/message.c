@@ -1525,7 +1525,7 @@ process_message (struct rspamd_task *task)
 	 */
 	g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (stream), FALSE);
 
-	if (task->is_mime) {
+	if (task->flags & RSPAMD_TASK_FLAG_MIME) {
 
 		debug_task ("construct mime parser from string length %d",
 			(gint)task->msg.len);

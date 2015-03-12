@@ -367,7 +367,7 @@ rspamd_process_filters (struct rspamd_task *task)
 		wl = ucl_object_find_key (task->settings, "whitelist");
 		if (wl != NULL) {
 			msg_info ("<%s> is whitelisted", task->message_id);
-			task->is_skipped = TRUE;
+			task->flags |= RSPAMD_TASK_FLAG_SKIP;
 			return 0;
 		}
 	}
@@ -378,7 +378,7 @@ rspamd_process_filters (struct rspamd_task *task)
 		cur = task->cfg->metrics_list;
 		while (cur) {
 			metric = cur->data;
-			if (!task->pass_all_filters &&
+			if (!(task->flags & RSPAMD_TASK_FLAG_PASS_ALL) &&
 				metric->actions[METRIC_ACTION_REJECT].score > 0 &&
 				check_metric_is_spam (task, metric)) {
 				msg_info ("<%s> has already scored more than %.2f, so do not "
@@ -648,7 +648,7 @@ struct classifiers_cbdata {
 void
 rspamd_process_statistics (struct rspamd_task *task)
 {
-	if (task->is_skipped) {
+	if (RSPAMD_TASK_IS_SKIPPED (task)) {
 		return;
 	}
 
@@ -665,7 +665,7 @@ rspamd_process_statistic_threaded (gpointer data, gpointer user_data)
 	struct rspamd_task *task = (struct rspamd_task *)data;
 	struct lua_locked_state *nL = user_data;
 
-	if (task->is_skipped) {
+	if (RSPAMD_TASK_IS_SKIPPED (task)) {
 		remove_async_thread (task->s);
 		return;
 	}

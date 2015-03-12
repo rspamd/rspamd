@@ -51,6 +51,19 @@ enum rspamd_metric_action {
 	METRIC_ACTION_MAX
 };
 
+#define RSPAMD_TASK_FLAG_MIME (1 << 0)
+#define RSPAMD_TASK_FLAG_JSON (1 << 1)
+#define RSPAMD_TASK_FLAG_SKIP_EXTRA (1 << 2)
+#define RSPAMD_TASK_FLAG_SKIP (1 << 3)
+#define RSPAMD_TASK_FLAG_EXT_URLS (1 << 4)
+#define RSPAMD_TASK_FLAG_SPAMC (1 << 5)
+#define RSPAMD_TASK_FLAG_PASS_ALL (1 << 6)
+#define RSPAMD_TASK_FLAG_NO_LOG (1 << 7)
+
+#define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
+#define RSPAMD_TASK_IS_JSON(task) (((task)->flags & RSPAMD_TASK_FLAG_JSON))
+#define RSPAMD_TASK_IS_SPAMC(task) (((task)->flags & RSPAMD_TASK_FLAG_SPAMC))
+
 typedef gint (*protocol_reply_func)(struct rspamd_task *task);
 
 struct custom_command {
@@ -75,13 +88,7 @@ struct rspamd_task {
 	enum rspamd_command cmd;                                    /**< command										*/
 	struct custom_command *custom_cmd;                          /**< custom command if any							*/
 	gint sock;                                                  /**< socket descriptor								*/
-	/* TODO: all these fields should be converted to flags */
-	gboolean is_mime;                                           /**< if this task is mime task                      */
-	gboolean is_json;                                           /**< output is JSON									*/
-	gboolean skip_extra_filters;                                /**< skip pre and post filters						*/
-	gboolean is_skipped;                                        /**< whether message was skipped by configuration   */
-	gboolean extended_urls;										/**< output URLs in details							*/
-	gboolean is_spamc;											/**< need legacy spamc output						*/
+	gint flags;
 
 	gchar *helo;                                                    /**< helo header value								*/
 	gchar *queue_id;                                                /**< queue id if specified							*/
@@ -133,8 +140,6 @@ struct rspamd_task {
 #endif
 	struct timeval tv;                                          /**< time of connection								*/
 	guint32 scan_milliseconds;                                  /**< how much milliseconds passed					*/
-	gboolean pass_all_filters;                                  /**< pass task throught every rule					*/
-	gboolean no_log;                                            /**< do not log or write this task to the history	*/
 	guint32 parser_recursion;                                   /**< for avoiding recursion stack overflow			*/
 	gboolean (*fin_callback)(void *arg);                        /**< calback for filters finalizing					*/
 	void *fin_arg;                                              /**< argument for fin callback						*/

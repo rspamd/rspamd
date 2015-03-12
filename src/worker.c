@@ -228,8 +228,13 @@ accept_socket (gint fd, short what, void *arg)
 		rspamd_inet_address_get_port (&addr));
 
 	/* Copy some variables */
+	if (ctx->is_mime) {
+		new_task->flags |= RSPAMD_TASK_FLAG_MIME;
+	}
+	else {
+		new_task->flags &= ~RSPAMD_TASK_FLAG_MIME;
+	}
 	new_task->sock = nfd;
-	new_task->is_mime = ctx->is_mime;
 	memcpy (&new_task->client_addr, &addr, sizeof (addr));
 
 	worker->srv->stat->connections_count++;

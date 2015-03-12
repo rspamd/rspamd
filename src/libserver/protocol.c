@@ -232,7 +232,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 	struct rspamd_http_message *msg)
 {
 	gchar *headern, *tmp;
-	gboolean res = TRUE, validh;
+	gboolean res = TRUE, validh, fl;
 	struct rspamd_http_header *h;
 
 	LL_FOREACH (msg->headers, h)
@@ -284,7 +284,13 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		case 'j':
 		case 'J':
 			if (g_ascii_strcasecmp (headern, JSON_HEADER) == 0) {
-				task->is_json = rspamd_config_parse_flag (h->value->str);
+				fl = rspamd_config_parse_flag (h->value->str);
+				if (fl) {
+					task->flags |= RSPAMD_TASK_FLAG_JSON;
+				}
+				else {
+					task->flags &= ~RSPAMD_TASK_FLAG_JSON;
+				}
 			}
 			else {
 				debug_task ("wrong header: %s", headern);
@@ -336,7 +342,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			if (g_ascii_strcasecmp (headern, PASS_HEADER) == 0) {
 				if (h->value->len == sizeof ("all") - 1 &&
 					g_ascii_strcasecmp (h->value->str, "all") == 0) {
-					task->pass_all_filters = TRUE;
+					task->flags |= RSPAMD_TASK_FLAG_PASS_ALL;
 					debug_task ("pass all filters");
 				}
 			}
@@ -361,7 +367,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			if (g_ascii_strcasecmp (headern, URLS_HEADER) == 0) {
 				if (h->value->len == sizeof ("extended") - 1 &&
 						g_ascii_strcasecmp (h->value->str, "extended") == 0) {
-					task->extended_urls = TRUE;
+					task->flags |= RSPAMD_TASK_FLAG_EXT_URLS;
 					debug_task ("extended urls information");
 				}
 			}
@@ -373,7 +379,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		case 'L':
 			if (g_ascii_strcasecmp (headern, NO_LOG_HEADER) == 0) {
 				if (g_ascii_strcasecmp (h->value->str, "no") == 0) {
-					task->no_log = TRUE;
+					task->flags |= RSPAMD_TASK_FLAG_NO_LOG;
 				}
 			}
 			else {
@@ -418,19 +424,20 @@ rspamd_protocol_handle_request (struct rspamd_task *task,
 
 	if (msg->method == HTTP_SYMBOLS) {
 		task->cmd = CMD_SYMBOLS;
-		task->is_json = FALSE;
+		task->flags &= ~RSPAMD_TASK_FLAG_JSON;
 	}
 	else if (msg->method == HTTP_CHECK) {
 		task->cmd = CMD_CHECK;
-		task->is_json = FALSE;
+		task->flags &= ~RSPAMD_TASK_FLAG_JSON;
 	}
 	else {
-		task->is_json = TRUE;
+		task->flags |= RSPAMD_TASK_FLAG_JSON;
 		ret = rspamd_protocol_handle_url (task, msg);
 	}
 
 	if (msg->flags & RSPAMD_HTTP_FLAG_SPAMC) {
-		task->is_spamc = TRUE;
+		task->flags &= ~RSPAMD_TASK_FLAG_JSON;
+		task->flags |= RSPAMD_TASK_FLAG_SPAMC;
 	}
 
 	return ret;
@@ -478,7 +485,7 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 	struct rspamd_url *url = value;
 	ucl_object_t *obj, *elt;
 
-	if (!cb->task->extended_urls) {
+	if (!(cb->task->flags & RSPAMD_TASK_FLAG_EXT_URLS)) {
 		obj = ucl_object_fromlstring (url->host, url->hostlen);
 	}
 	else {
@@ -670,7 +677,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	action = mres->action;
 	is_spam = (action == METRIC_ACTION_REJECT);
 
-	if (task->is_skipped) {
+	if (RSPAMD_TASK_IS_SKIPPED (task)) {
 		action_char = 'S';
 	}
 	else if (is_spam) {
@@ -688,7 +695,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	obj = ucl_object_typed_new (UCL_OBJECT);
 	ucl_object_insert_key (obj,	  ucl_object_frombool (is_spam),
 		"is_spam", 0, false);
-	ucl_object_insert_key (obj,	  ucl_object_frombool (task->is_skipped),
+	ucl_object_insert_key (obj,	  ucl_object_frombool (RSPAMD_TASK_IS_SKIPPED (task)),
 		"is_skipped", 0, false);
 	ucl_object_insert_key (obj, ucl_object_fromdouble (mres->score),
 		"score", 0, false);
@@ -847,7 +854,7 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 		rspamd_printf_gstring (logbuf, "user: %s, ", task->user);
 	}
 
-	if (!task->no_log) {
+	if (!(task->flags & RSPAMD_TASK_FLAG_NO_LOG)) {
 		rspamd_roll_history_update (task->worker->srv->history, task);
 	}
 
@@ -886,18 +893,18 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 		"message-id", 0, false);
 
 	write_hashes_to_log (task, logbuf);
-	if (!task->no_log) {
+	if (!(task->flags & RSPAMD_TASK_FLAG_NO_LOG)) {
 		msg_info ("%v", logbuf);
 	}
 	g_string_free (logbuf, TRUE);
 
 	msg->body = g_string_sized_new (BUFSIZ);
 
-	if (msg->method < HTTP_SYMBOLS && !task->is_spamc) {
+	if (msg->method < HTTP_SYMBOLS && !RSPAMD_TASK_IS_SPAMC (task)) {
 		rspamd_ucl_emit_gstring (top, UCL_EMIT_JSON_COMPACT, msg->body);
 	}
 	else {
-		if (task->is_spamc) {
+		if (RSPAMD_TASK_IS_SPAMC (task)) {
 			rspamd_ucl_tospamc_output (task, top, msg->body);
 		}
 		else {
@@ -932,11 +939,11 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 		msg->peer_key = rspamd_http_connection_key_ref (task->peer_key);
 		msg_info ("<%s> writing encrypted reply", task->message_id);
 	}
-	if (!task->is_json) {
+	if (!RSPAMD_TASK_IS_JSON (task)) {
 		/* Turn compatibility on */
 		msg->method = HTTP_SYMBOLS;
 	}
-	if (task->is_spamc) {
+	if (RSPAMD_TASK_IS_SPAMC (task)) {
 		msg->flags |= RSPAMD_HTTP_FLAG_SPAMC;
 	}
 

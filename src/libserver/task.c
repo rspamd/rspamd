@@ -50,7 +50,9 @@ rspamd_task_new (struct rspamd_worker *worker)
 	new_task->state = READ_MESSAGE;
 	if (worker) {
 		new_task->cfg = worker->srv->cfg;
-		new_task->pass_all_filters = new_task->cfg->check_all_filters;
+		if (new_task->cfg->check_all_filters) {
+			new_task->flags |= RSPAMD_TASK_FLAG_PASS_ALL;
+		}
 	}
 #ifdef HAVE_CLOCK_GETTIME
 # ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
@@ -99,8 +101,7 @@ rspamd_task_new (struct rspamd_worker *worker)
 		(rspamd_mempool_destruct_t) g_tree_destroy,
 		new_task->urls);
 	new_task->sock = -1;
-	new_task->is_mime = TRUE;
-	new_task->is_json = TRUE;
+	new_task->flags |= (RSPAMD_TASK_FLAG_MIME|RSPAMD_TASK_FLAG_JSON);
 	new_task->pre_result.action = METRIC_ACTION_NOACTION;
 
 	new_task->message_id = new_task->queue_id = "undef";
@@ -182,7 +183,7 @@ rspamd_task_fin (void *arg)
 				return TRUE;
 			}
 			/* Add task to classify to classify pool */
-			if (!task->is_skipped && task->classify_pool) {
+			if (!RSPAMD_TASK_IS_SKIPPED (task) && task->classify_pool) {
 				register_async_thread (task->s);
 				g_thread_pool_push (task->classify_pool, task, &err);
 				if (err != NULL) {
@@ -191,7 +192,7 @@ rspamd_task_fin (void *arg)
 					g_error_free (err);
 				}
 			}
-			if (task->is_skipped) {
+			if (RSPAMD_TASK_IS_SKIPPED (task)) {
 				rspamd_task_reply (task);
 			}
 			else {
@@ -212,7 +213,8 @@ rspamd_task_restore (void *arg)
 	struct rspamd_task *task = (struct rspamd_task *) arg;
 
 	/* Call post filters */
-	if (task->state == WAIT_POST_FILTER && !task->skip_extra_filters) {
+	if (task->state == WAIT_POST_FILTER &&
+			!(task->flags & RSPAMD_TASK_FLAG_SKIP_EXTRA)) {
 		rspamd_lua_call_post_filters (task);
 	}
 	task->s->wanna_die = TRUE;
@@ -320,7 +322,9 @@ rspamd_task_process (struct rspamd_task *task,
 		task->state = WRITE_REPLY;
 		return FALSE;
 	}
-	task->skip_extra_filters = !process_extra_filters;
+	if (!process_extra_filters) {
+		task->flags |= RSPAMD_TASK_FLAG_SKIP_EXTRA;
+	}
 	if (!process_extra_filters || task->cfg->pre_filters == NULL) {
 		r = rspamd_process_filters (task);
 		if (r == -1) {
@@ -330,7 +334,7 @@ rspamd_task_process (struct rspamd_task *task,
 			return FALSE;
 		}
 		/* Add task to classify to classify pool */
-		if (!task->is_skipped && classify_pool) {
+		if (!RSPAMD_TASK_IS_SKIPPED (task) && classify_pool) {
 			register_async_thread (task->s);
 			g_thread_pool_push (classify_pool, task, &err);
 			if (err != NULL) {
@@ -342,7 +346,7 @@ rspamd_task_process (struct rspamd_task *task,
 				task->classify_pool = classify_pool;
 			}
 		}
-		if (task->is_skipped) {
+		if (RSPAMD_TASK_IS_SKIPPED (task)) {
 			/* Call write_socket to write reply and exit */
 			task->state = WRITE_REPLY;
 		}
