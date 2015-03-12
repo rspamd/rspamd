@@ -188,35 +188,39 @@ static gboolean
 spf_check_element (struct spf_addr *addr, struct rspamd_task *task)
 {
 	gboolean res = FALSE;
-	guint8 *s, *d, t;
+	guint8 *s, *d, t, *buf;
 	gchar *spf_result;
+	gint af;
 	const gchar *spf_message, *spf_symbol;
 	guint nbits, addrlen;
-	struct in_addr in4s, in4d;
-	struct in6_addr in6s, in6d;
+	struct in_addr in4s;
+	struct in6_addr in6s;
 	GList *opts = NULL;
 
+	if (task->from_addr == NULL) {
+		return FALSE;
+	}
+
+	af = rspamd_inet_address_get_af (task->from_addr);
 	/* Basic comparing algorithm */
-	if ((addr->data.normal.ipv6 && task->from_addr.af == AF_INET6) ||
-		(!addr->data.normal.ipv6 && task->from_addr.af == AF_INET)) {
+	if ((addr->data.normal.ipv6 && af == AF_INET6) ||
+		(!addr->data.normal.ipv6 && af == AF_INET)) {
+		d = rspamd_inet_address_get_radix_key (task->from_addr, &addrlen);
+		buf = g_alloca (addrlen);
+		memcpy (buf, d, addrlen);
+		d = buf;
+
 		if (addr->data.normal.ipv6) {
-			addrlen = sizeof (struct in6_addr);
 			memcpy (&in6s, &addr->data.normal.d.in6,
 				sizeof (struct in6_addr));
-			memcpy (&in6d, &task->from_addr.addr.s6.sin6_addr,
-				sizeof (struct in6_addr));
 			s = (guint8 *)&in6s;
-			d = (guint8 *)&in6d;
 		}
 		else {
-			addrlen = sizeof (struct in_addr);
 			memcpy (&in4s, &addr->data.normal.d.in4,
 				sizeof (struct in_addr));
-			memcpy (&in4d, &task->from_addr.addr.s4.sin_addr,
-				sizeof (struct in_addr));
 			s = (guint8 *)&in4s;
-			d = (guint8 *)&in4d;
 		}
+
 		/* Move pointers to the less significant byte */
 		t = 0x1;
 		s += addrlen - 1;
@@ -236,12 +240,8 @@ spf_check_element (struct spf_addr *addr, struct rspamd_task *task)
 			*d |= t;
 			t <<= 1;
 		}
-		if (addr->data.normal.ipv6) {
-			res = memcmp (&in6d, &in6s, sizeof (struct in6_addr)) == 0;
-		}
-		else {
-			res = memcmp (&in4d, &in4s, sizeof (struct in_addr)) == 0;
-		}
+
+		res = memcmp (d, s, addrlen);
 	}
 	else {
 		if (addr->data.normal.addr_any) {
@@ -338,7 +338,7 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 	GList *l;
 
 	if (radix_find_compressed_addr (spf_module_ctx->whitelist_ip,
-			&task->from_addr) == RADIX_NO_VALUE) {
+			task->from_addr) == RADIX_NO_VALUE) {
 		domain = get_spf_domain (task);
 		if (domain) {
 			if ((l =
