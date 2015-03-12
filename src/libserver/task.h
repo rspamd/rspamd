@@ -94,8 +94,8 @@ struct rspamd_task {
 	gchar *queue_id;                                                /**< queue id if specified							*/
 	const gchar *message_id;                                        /**< message id										*/
 
-	rspamd_inet_addr_t from_addr;                               /**< from addr for a task							*/
-	rspamd_inet_addr_t client_addr;                             /**< address of connected socket					*/
+	rspamd_inet_addr_t *from_addr;                              /**< from addr for a task							*/
+	rspamd_inet_addr_t *client_addr;                            /**< address of connected socket					*/
 	gchar *deliver_to;                                          /**< address to deliver								*/
 	gchar *user;                                                    /**< user to deliver								*/
 	gchar *subject;                                             /**< subject (for non-mime)							*/
