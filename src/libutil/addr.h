@@ -174,6 +174,33 @@ gboolean rspamd_parse_host_port (const gchar *str,
 		GPtrArray **addrs,
 	gchar **name, guint default_port, rspamd_mempool_t *pool);
 
+/**
+ * Destroy the specified IP address
+ * @param addr
+ */
 void rspamd_inet_address_destroy (rspamd_inet_addr_t *addr);
+
+/**
+ * Apply the specified mask to an address (ignored for AF_UNIX)
+ * @param addr
+ * @param mask
+ */
+void rspamd_inet_address_apply_mask (rspamd_inet_addr_t *addr, guint mask);
+
+/**
+ * Compare a1 and a2 and return value >0, ==0 and <0 if a1 is more, equal or less than a2 correspondingly
+ * @param a1
+ * @param a2
+ * @return
+ */
+gint rspamd_inet_address_compare (const rspamd_inet_addr_t *a1,
+		const rspamd_inet_addr_t *a2);
+
+/**
+ * Performs deep copy of rspamd inet addr
+ * @param addr
+ * @return
+ */
+rspamd_inet_addr_t *rspamd_inet_address_copy (const rspamd_inet_addr_t *addr);
 
 #endif /* ADDR_H_ */

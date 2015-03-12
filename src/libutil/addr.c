@@ -863,3 +863,96 @@ rspamd_inet_address_from_sa (const struct sockaddr *sa, socklen_t slen)
 	return addr;
 }
 
+void
+rspamd_inet_address_apply_mask (rspamd_inet_addr_t *addr, guint mask)
+{
+	guint32 umsk, *p;
+
+	if (mask > 0 && addr != NULL) {
+		if (addr->af == AF_INET && mask <= 32) {
+			umsk = htonl (G_MAXUINT32 << (32 - mask));
+			addr->u.in.addr.s4.sin_addr.s_addr &= umsk;
+		}
+		else if (addr->af == AF_INET && mask <= 128) {
+			p = (uint32_t *)&addr->u.in.addr.s6.sin6_addr;
+			p += 3;
+			while (mask > 0) {
+				umsk = htonl (G_MAXUINT32 << (32 - (mask > 32 ? 32 : mask)));
+				*p &= umsk;
+				p --;
+				mask -= 32;
+			}
+		}
+	}
+}
+
+static gint
+rspamd_inet_address_af_order (const rspamd_inet_addr_t *addr)
+{
+	int ret;
+
+	switch (addr->af) {
+	case AF_UNIX:
+		ret = 2;
+		break;
+	case AF_INET:
+		ret = 1;
+		break;
+	default:
+		ret = 0;
+		break;
+	}
+
+	return ret;
+}
+
+gint
+rspamd_inet_address_compare (const rspamd_inet_addr_t *a1,
+		const rspamd_inet_addr_t *a2)
+{
+	g_assert (a1 != NULL);
+	g_assert (a2 != NULL);
+
+	if (a1->af != a2->af) {
+		return (rspamd_inet_address_af_order (a1) -
+				rspamd_inet_address_af_order (a2));
+	}
+	else {
+		switch (a1->af) {
+		case AF_INET:
+			return memcmp (&a1->u.in.addr.s4.sin_addr,
+					&a2->u.in.addr.s4.sin_addr, sizeof (struct in_addr));
+		case AF_INET6:
+			return memcmp (&a1->u.in.addr.s6.sin6_addr,
+				&a2->u.in.addr.s6.sin6_addr, sizeof (struct in6_addr));
+		case AF_UNIX:
+			return strncmp (a1->u.un->addr.sun_path,
+				a2->u.un->addr.sun_path, sizeof (a1->u.un->addr.sun_path));
+		default:
+			return memcmp (&a1->u.in, &a2->u.in, sizeof (a1->u.in));
+		}
+	}
+
+	return 0;
+}
+
+rspamd_inet_addr_t *
+rspamd_inet_address_copy (const rspamd_inet_addr_t *addr)
+{
+	rspamd_inet_addr_t *n;
+
+	if (addr == NULL) {
+		return NULL;
+	}
+
+	n = rspamd_inet_addr_create (addr->af);
+
+	if (n->af == AF_UNIX) {
+		memcpy (n->u.un, addr->u.un, sizeof (*addr->u.un));
+	}
+	else {
+		memcpy (&n->u.in, &addr->u.in, sizeof (addr->u.in));
+	}
+
+	return n;
+}
