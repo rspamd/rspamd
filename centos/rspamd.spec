@@ -55,9 +55,9 @@ Source0:        https://rspamd.com/downloads/%{name}-%{version}.tar.xz
 %if 0%{?el6}
 Source1:        %{name}.init
 Source2:        %{name}.logrotate
-%else
-Source3:        %{name}.service
 %endif
+
+Patch0:         %{name}.service.patch
 
 %description
 Rspamd is a rapid, modular and lightweight spam filter. It is designed to work
@@ -97,8 +97,6 @@ lua.
 %{__install} -d -p -m 0755 %{buildroot}%{_localstatedir}/run/rspamd
 %{__install} -p -D -m 0644 %{SOURCE2} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_logdir}
-%else
-%{__install} -p -D -m 0644 %{SOURCE3} %{buildroot}%{_unitdir}/%{name}.service
 %endif
 
 %{__install} -d -p -m 0755 %{buildroot}%{rspamd_home}
@@ -115,7 +113,13 @@ rm -rf %{buildroot}
 %service_add_pre %{name}.socket
 %endif
 
+%if 0%{?el7}
+%patch0 -p0
+%endif
+
 %post
+#to allow easy upgrade from 0.8.1
+chown -R %{rspamd_user}:%{rspamd_group} %{rspamd_home}
 %if 0%{?suse_version}
 %service_add_post %{name}.service
 %service_add_post %{name}.socket
@@ -191,7 +195,7 @@ fi
 %if 0%{?el6}
 %dir %{rspamd_logdir}
 %endif
-%attr(-, rspamd, rspamd) %dir %{rspamd_home}
+%attr(-, _rspamd, _rspamd) %dir %{rspamd_home}
 %dir %{rspamd_confdir}/lua/regexp
 %dir %{rspamd_confdir}/lua
 %dir %{rspamd_confdir}
