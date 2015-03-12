@@ -49,7 +49,6 @@ struct lua_redis_userdata {
 	struct rspamd_task *task;
 	gint cbref;
 	gchar *server;
-	struct in_addr ina;
 	gchar *reqline;
 	guint16 port;
 };
@@ -213,15 +212,15 @@ lua_redis_make_request (lua_State *L)
 		addr = lua_check_ip (L, 2);
 		top = lua_gettop (L);
 		/* Now get callback */
-		if (lua_isfunction (L, 3) && addr != NULL && addr->is_valid && top >= 4) {
+		if (lua_isfunction (L, 3) && addr != NULL && addr->addr && top >= 4) {
 			/* Create userdata */
 			ud =
 				rspamd_mempool_alloc (task->task_pool,
 					sizeof (struct lua_redis_userdata));
 			ud->task = task;
 			ud->L = L;
-			ud->ctx = redisAsyncConnect (rspamd_inet_address_to_string (&addr->addr),
-					rspamd_inet_address_get_port (&addr->addr));
+			ud->ctx = redisAsyncConnect (rspamd_inet_address_to_string (addr->addr),
+					rspamd_inet_address_get_port (addr->addr));
 
 			if (ud->ctx == NULL || ud->ctx->err) {
 				redisAsyncFree (ud->ctx);
