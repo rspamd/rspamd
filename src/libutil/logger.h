@@ -129,7 +129,7 @@ void rspamd_log_nodebug (rspamd_logger_t *logger);
 		__FUNCTION__, \
 		__VA_ARGS__)
 #define debug_task(...) rspamd_conditional_debug (rspamd_main->logger, \
-		&task->from_addr, \
+		task->from_addr, \
 		__FUNCTION__, \
 		__VA_ARGS__)
 #else
