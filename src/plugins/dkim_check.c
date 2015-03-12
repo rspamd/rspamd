@@ -369,7 +369,7 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 		/* Check whitelist */
 		msg_debug ("dkim signature found");
 		if (radix_find_compressed_addr (dkim_module_ctx->whitelist_ip,
-				&task->from_addr) == RADIX_NO_VALUE) {
+				task->from_addr) == RADIX_NO_VALUE) {
 			/* Parse signature */
 			msg_debug ("create dkim signature");
 			/*

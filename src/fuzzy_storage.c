@@ -105,7 +105,7 @@ struct fuzzy_session {
 	gint fd;
 	guint64 time;
 	gboolean legacy;
-	rspamd_inet_addr_t addr;
+	rspamd_inet_addr_t *addr;
 	struct rspamd_fuzzy_storage_ctx *ctx;
 };
 
@@ -114,7 +114,7 @@ rspamd_fuzzy_check_client (struct fuzzy_session *session)
 {
 	if (session->ctx->update_ips != NULL) {
 		if (radix_find_compressed_addr (session->ctx->update_ips,
-				&session->addr) == RADIX_NO_VALUE) {
+				session->addr) == RADIX_NO_VALUE) {
 			return FALSE;
 		}
 	}
@@ -142,12 +142,11 @@ rspamd_fuzzy_write_reply (struct fuzzy_session *session,
 		else {
 			r = rspamd_snprintf (buf, sizeof (buf), "ERR" CRLF);
 		}
-		r = sendto (session->fd, buf, r, 0, &session->addr.addr.sa,
-			session->addr.slen);
+		r = rspamd_inet_address_sendto (session->fd, buf, r, 0, session->addr);
 	}
 	else {
-		r = sendto (session->fd, rep, sizeof (*rep), 0, &session->addr.addr.sa,
-				session->addr.slen);
+		r = rspamd_inet_address_sendto (session->fd, rep, sizeof (*rep), 0,
+				session->addr);
 	}
 
 	if (r == -1) {
@@ -233,14 +232,13 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 
 	session.worker = worker;
 	session.fd = fd;
-	session.addr.slen = sizeof (session.addr.addr);
 	session.ctx = worker->ctx;
 	session.time = (guint64)time (NULL);
 
 	/* Got some data */
 	if (what == EV_READ) {
-		while ((r = recvfrom (fd, buf, sizeof (buf), 0,
-			&session.addr.addr.sa, &session.addr.slen)) == -1) {
+		while ((r = rspamd_inet_address_recvfrom (fd, buf, sizeof (buf), 0,
+			&session.addr)) == -1) {
 			if (errno == EINTR) {
 				continue;
 			}
@@ -249,7 +247,7 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 				strerror (errno));
 			return;
 		}
-		session.addr.af = session.addr.addr.sa.sa_family;
+
 		if ((guint)r == sizeof (struct legacy_fuzzy_cmd)) {
 			session.legacy = TRUE;
 			l = (struct legacy_fuzzy_cmd *)buf;
@@ -279,6 +277,8 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 			session.cmd = cmd;
 			rspamd_fuzzy_process_command (&session);
 		}
+
+		rspamd_inet_address_destroy (session.addr);
 	}
 }
 

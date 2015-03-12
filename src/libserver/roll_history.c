@@ -27,6 +27,7 @@
 #include "main.h"
 #include "roll_history.h"
 
+static const gchar rspamd_history_magic[] = {'r', 's', 'h', '1'};
 
 /**
  * Returns new roll history
@@ -108,7 +109,9 @@ rspamd_roll_history_update (struct roll_history *history,
 	}
 
 	/* Add information from task to roll history */
-	memcpy (&row->from_addr, &task->from_addr, sizeof (row->from_addr));
+	rspamd_strlcpy (row->from_addr,
+			rspamd_inet_address_to_string (task->from_addr),
+			sizeof (row->from_addr));
 	memcpy (&row->tv,		 &task->tv,		   sizeof (row->tv));
 
 	/* Strings */
@@ -161,6 +164,7 @@ rspamd_roll_history_load (struct roll_history *history, const gchar *filename)
 {
 	gint fd;
 	struct stat st;
+	gchar magic[sizeof(rspamd_history_magic)];
 
 	if (stat (filename, &st) == -1) {
 		msg_info ("cannot load history from %s: %s", filename,
@@ -168,7 +172,7 @@ rspamd_roll_history_load (struct roll_history *history, const gchar *filename)
 		return FALSE;
 	}
 
-	if (st.st_size != sizeof (history->rows)) {
+	if (st.st_size != sizeof (history->rows) + sizeof (rspamd_history_magic)) {
 		msg_info ("cannot load history from %s: size mismatch", filename);
 		return FALSE;
 	}
@@ -176,6 +180,19 @@ rspamd_roll_history_load (struct roll_history *history, const gchar *filename)
 	if ((fd = open (filename, O_RDONLY)) == -1) {
 		msg_info ("cannot load history from %s: %s", filename,
 			strerror (errno));
+		return FALSE;
+	}
+
+	if (read (fd, magic, sizeof (magic)) == -1) {
+		close (fd);
+		msg_info ("cannot read history from %s: %s", filename,
+				strerror (errno));
+		return FALSE;
+	}
+
+	if (memcmp (magic, rspamd_history_magic, sizeof (magic)) != 0) {
+		close (fd);
+		msg_info ("cannot read history from %s: bad magic", filename);
 		return FALSE;
 	}
 
@@ -204,6 +221,12 @@ rspamd_roll_history_save (struct roll_history *history, const gchar *filename)
 
 	if ((fd = open (filename, O_WRONLY | O_CREAT | O_TRUNC, 00600)) == -1) {
 		msg_info ("cannot save history to %s: %s", filename, strerror (errno));
+		return FALSE;
+	}
+
+	if (write (fd, rspamd_history_magic, sizeof (rspamd_history_magic)) == -1) {
+		close (fd);
+		msg_info ("cannot write history to %s: %s", filename, strerror (errno));
 		return FALSE;
 	}
 

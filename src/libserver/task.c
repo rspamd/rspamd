@@ -274,6 +274,12 @@ rspamd_task_free (struct rspamd_task *task, gboolean is_soft)
 		if (task->peer_key != NULL) {
 			rspamd_http_connection_key_unref (task->peer_key);
 		}
+		if (task->client_addr) {
+			rspamd_inet_address_destroy (task->client_addr);
+		}
+		if (task->from_addr) {
+			rspamd_inet_address_destroy (task->from_addr);
+		}
 		rspamd_mempool_delete (task->task_pool);
 		g_slice_free1 (sizeof (struct rspamd_task), task);
 	}

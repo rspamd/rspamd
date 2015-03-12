@@ -514,7 +514,7 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 			cb->task->message_id,
 			cb->task->user ?
 			cb->task->user : "unknown",
-			rspamd_inet_address_to_string (&cb->task->from_addr),
+			rspamd_inet_address_to_string (cb->task->from_addr),
 			struri (url));
 	}
 

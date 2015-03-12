@@ -163,7 +163,7 @@ struct rspamd_classifier_config {
 };
 
 struct rspamd_worker_bind_conf {
-	rspamd_inet_addr_t *addrs;
+	GPtrArray *addrs;
 	guint cnt;
 	gchar *name;
 	gboolean is_systemd;

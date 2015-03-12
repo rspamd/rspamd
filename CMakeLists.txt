@@ -420,7 +420,7 @@ IF(OPENSSL_FOUND)
 	INCLUDE_DIRECTORIES("${OPENSSL_INCLUDE_DIR}")
 ENDIF(OPENSSL_FOUND)
 
-ProcessPackage(GLIB2 glib-2.0>=2.16)
+ProcessPackage(GLIB2 glib-2.0>=2.30)
 ProcessPackage(GTHREAD gthread-2.0)
 ProcessPackage(HIREDIS hiredis libhiredis)
 ProcessPackage(PCRE pcre libpcre pcre3 libpcre3)

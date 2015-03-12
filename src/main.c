@@ -569,26 +569,17 @@ delay_fork (struct rspamd_worker_conf *cf)
 	set_alarm (SOFT_FORK_TIME);
 }
 
-static int
-af_cmp_workaround (const void *a, const void *b)
-{
-	rspamd_inet_addr_t *a1 = (rspamd_inet_addr_t *)a,
-			*a2 = (rspamd_inet_addr_t *)b;
-
-	return a2->af - a1->af;
-}
-
 static GList *
-create_listen_socket (rspamd_inet_addr_t *addrs, guint cnt, gint listen_type)
+create_listen_socket (GPtrArray *addrs, guint cnt, gint listen_type)
 {
 	GList *result = NULL;
 	gint fd;
 	guint i;
 
-	/* Fuck morons that have invented ipv6/v4 sockets */
-	qsort (addrs, cnt, sizeof (*addrs), af_cmp_workaround);
+	g_ptr_array_sort (addrs, (GCompareFunc)rspamd_inet_address_compare);
 	for (i = 0; i < cnt; i ++) {
-		fd = rspamd_inet_address_listen (&addrs[i], listen_type, TRUE);
+		fd = rspamd_inet_address_listen (g_ptr_array_index (addrs, i),
+				listen_type, TRUE);
 		if (fd != -1) {
 			result = g_list_prepend (result, GINT_TO_POINTER (fd));
 		}
@@ -663,7 +654,8 @@ static inline uintptr_t
 make_listen_key (struct rspamd_worker_bind_conf *cf)
 {
 	gpointer xxh;
-	guint i;
+	guint i, keylen;
+	guint8 *key;
 
 	xxh = XXH32_init (0xdeadbeef);
 	if (cf->is_systemd) {
@@ -673,7 +665,9 @@ make_listen_key (struct rspamd_worker_bind_conf *cf)
 	else {
 		XXH32_update (xxh, cf->name, strlen (cf->name));
 		for (i = 0; i < cf->cnt; i ++) {
-			XXH32_update (xxh, &cf->addrs[i].addr, cf->addrs[i].slen);
+			key = rspamd_inet_address_get_radix_key (
+					g_ptr_array_index (cf->addrs, i), &keylen);
+			XXH32_update (xxh, key, keylen);
 		}
 	}
 

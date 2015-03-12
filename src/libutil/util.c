@@ -2260,3 +2260,12 @@ randombytes (guchar *buf, guint64 len)
 {
 	ottery_rand_bytes (buf, (size_t)len);
 }
+
+
+void
+rspamd_ptr_array_free_hard (gpointer p)
+{
+	GPtrArray *ar = (GPtrArray *)p;
+
+	g_ptr_array_free (ar, TRUE);
+}

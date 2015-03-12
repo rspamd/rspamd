@@ -36,6 +36,7 @@
 #define HISTORY_MAX_ID 100
 #define HISTORY_MAX_SYMBOLS 200
 #define HISTORY_MAX_USER 20
+#define HISTORY_MAX_ADDR 32
 #define HISTORY_MAX_ROWS 200
 
 struct rspamd_task;
@@ -45,7 +46,7 @@ struct roll_history_row {
 	gchar message_id[HISTORY_MAX_ID];
 	gchar symbols[HISTORY_MAX_SYMBOLS];
 	gchar user[HISTORY_MAX_USER];
-	rspamd_inet_addr_t from_addr;
+	gchar from_addr[HISTORY_MAX_ADDR];
 	gsize len;
 	guint scan_time;
 	gint action;

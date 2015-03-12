@@ -441,4 +441,10 @@ guchar* rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen);
  */
 gdouble rspamd_get_ticks (void);
 
+/**
+ * Special utility to help array freeing in rspamd_mempool
+ * @param p
+ */
+void rspamd_ptr_array_free_hard (gpointer p);
+
 #endif

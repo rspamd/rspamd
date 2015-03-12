@@ -1142,10 +1142,10 @@ fuzzy_symbol_callback (struct rspamd_task *task, void *unused)
 	/* Check whitelist */
 	if (fuzzy_module_ctx->whitelist) {
 		if (radix_find_compressed_addr (fuzzy_module_ctx->whitelist,
-				&task->from_addr) != RADIX_NO_VALUE) {
+				task->from_addr) != RADIX_NO_VALUE) {
 			msg_info ("<%s>, address %s is whitelisted, skip fuzzy check",
 				task->message_id,
-				rspamd_inet_address_to_string (&task->from_addr));
+				rspamd_inet_address_to_string (task->from_addr));
 			return;
 		}
 	}

@@ -126,7 +126,7 @@ struct rspamd_controller_session {
 	rspamd_mempool_t *pool;
 	struct rspamd_task *task;
 	struct rspamd_classifier_config *cl;
-	rspamd_inet_addr_t from_addr;
+	rspamd_inet_addr_t *from_addr;
 	gboolean is_spam;
 };
 
@@ -141,14 +141,14 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 	gboolean ret = TRUE;
 
 	/* Access list logic */
-	if (!session->from_addr.af == AF_UNIX) {
+	if (!rspamd_inet_address_get_af(session->from_addr) == AF_UNIX) {
 		msg_info ("allow unauthorized connection from a unix socket");
 		return TRUE;
 	}
 	else if (ctx->secure_map && radix_find_compressed_addr (ctx->secure_map,
-		&session->from_addr) != RADIX_NO_VALUE) {
+		session->from_addr) != RADIX_NO_VALUE) {
 		msg_info ("allow unauthorized connection from a trusted IP %s",
-			rspamd_inet_address_to_string (&session->from_addr));
+			rspamd_inet_address_to_string (session->from_addr));
 		return TRUE;
 	}
 
@@ -687,8 +687,7 @@ rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
 					timebuf),		  "time", 0, false);
 			ucl_object_insert_key (obj, ucl_object_fromstring (
 					row->message_id), "id",	  0, false);
-			ucl_object_insert_key (obj, ucl_object_fromstring (
-					rspamd_inet_address_to_string (&row->from_addr)),
+			ucl_object_insert_key (obj, ucl_object_fromstring (row->from_addr),
 					"ip", 0, false);
 			ucl_object_insert_key (obj,
 				ucl_object_fromstring (rspamd_action_to_str (
@@ -737,7 +736,7 @@ rspamd_controller_learn_fin_task (void *ud)
 	}
 	/* Successful learn */
 	msg_info ("<%s> learned message: %s",
-		rspamd_inet_address_to_string (&session->from_addr),
+		rspamd_inet_address_to_string (session->from_addr),
 		task->message_id);
 	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
 
@@ -1024,7 +1023,7 @@ rspamd_controller_handle_saveactions (
 
 	dump_dynamic_config (ctx->cfg);
 	msg_info ("<%s> modified %d actions",
-		rspamd_inet_address_to_string (&session->from_addr),
+		rspamd_inet_address_to_string (session->from_addr),
 		added);
 
 	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
@@ -1135,7 +1134,7 @@ rspamd_controller_handle_savesymbols (
 
 	dump_dynamic_config (ctx->cfg);
 	msg_info ("<%s> modified %d symbols",
-			rspamd_inet_address_to_string (&session->from_addr),
+			rspamd_inet_address_to_string (session->from_addr),
 			added);
 
 	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
@@ -1235,7 +1234,7 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	msg_info ("<%s>, map %s saved",
-		rspamd_inet_address_to_string (&session->from_addr),
+		rspamd_inet_address_to_string (session->from_addr),
 		map->uri);
 	/* Close and unlock */
 	close (fd);
@@ -1372,7 +1371,7 @@ rspamd_controller_handle_statreset (
 	}
 
 	msg_info ("<%s> reset stat",
-			rspamd_inet_address_to_string (&session->from_addr));
+			rspamd_inet_address_to_string (session->from_addr));
 	return rspamd_controller_handle_stat_common (conn_ent, msg, TRUE);
 }
 
@@ -1492,6 +1491,7 @@ rspamd_controller_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 		rspamd_mempool_delete (session->pool);
 	}
 
+	rspamd_inet_address_destroy (session->from_addr);
 	g_slice_free1 (sizeof (struct rspamd_controller_session), session);
 }
 
@@ -1501,7 +1501,7 @@ rspamd_controller_accept_socket (gint fd, short what, void *arg)
 	struct rspamd_worker *worker = (struct rspamd_worker *) arg;
 	struct rspamd_controller_worker_ctx *ctx;
 	struct rspamd_controller_session *nsession;
-	rspamd_inet_addr_t addr;
+	rspamd_inet_addr_t *addr;
 	gint nfd;
 
 	ctx = worker->ctx;
@@ -1520,7 +1520,7 @@ rspamd_controller_accept_socket (gint fd, short what, void *arg)
 	nsession->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	nsession->ctx = ctx;
 
-	memcpy (&nsession->from_addr, &addr, sizeof (addr));
+	nsession->from_addr = addr;
 
 	rspamd_http_router_handle_socket (ctx->http, nfd, nsession);
 }

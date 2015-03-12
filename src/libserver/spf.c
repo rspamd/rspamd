@@ -825,7 +825,7 @@ parse_spf_ptr (struct rspamd_task *task,
 	cb->ptr_host = host;
 	ptr =
 		rdns_generate_ptr_from_str (rspamd_inet_address_to_string (
-				&task->from_addr));
+				task->from_addr));
 	if (ptr == NULL) {
 		return FALSE;
 	}
@@ -1259,16 +1259,10 @@ expand_spf_macro (struct rspamd_task *task, struct spf_record *rec,
 			/* Read macro name */
 			switch (g_ascii_tolower (*p)) {
 			case 'i':
-#ifdef HAVE_INET_PTON
 				len = rspamd_strlcpy (ip_buf,
-						rspamd_inet_address_to_string (&task->from_addr),
+						rspamd_inet_address_to_string (task->from_addr),
 						sizeof (ip_buf));
 				memcpy (c, ip_buf, len);
-#else
-				tmp = inet_ntoa (task->from_addr);
-				len = strlen (tmp);
-				memcpy (c, tmp, len);
-#endif
 				c += len;
 				break;
 			case 's':
