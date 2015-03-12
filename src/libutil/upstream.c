@@ -32,7 +32,7 @@
 #include "utlist.h"
 
 struct upstream_inet_addr_entry {
-	rspamd_inet_addr_t addr;
+	rspamd_inet_addr_t *addr;
 	struct upstream_inet_addr_entry *next;
 };
 
@@ -48,8 +48,7 @@ struct upstream {
 	struct upstream_list *ls;
 
 	struct {
-		rspamd_inet_addr_t *addr;
-		guint count;
+		GPtrArray *addr;
 		guint cur;
 	} addrs;
 
@@ -76,7 +75,6 @@ static gdouble default_revive_jitter = 0.4;
 static gdouble default_error_time = 10;
 static gdouble default_dns_timeout = 1.0;
 static guint default_dns_retransmits = 2;
-static guint default_max_addresses = 1024;
 
 void
 rspamd_upstreams_library_config (struct rspamd_config *cfg)
@@ -111,7 +109,7 @@ rspamd_upstream_af_to_weight (const rspamd_inet_addr_t *addr)
 {
 	int ret;
 
-	switch (addr->af) {
+	switch (rspamd_inet_address_get_af (addr)) {
 	case AF_UNIX:
 		ret = 2;
 		break;
@@ -166,21 +164,14 @@ rspamd_upstream_dns_cb (struct rdns_reply *reply, void *arg)
 
 			if (entry->type == RDNS_REQUEST_A) {
 				up_ent = g_malloc0 (sizeof (*up_ent));
-
-				up_ent->addr.addr.s4.sin_addr = entry->content.a.addr;
-				up_ent->addr.af = AF_INET;
-				up_ent->addr.addr.sa.sa_family = AF_INET;
-				up_ent->addr.slen = sizeof (up_ent->addr.addr.s4);
+				up_ent->addr = rspamd_inet_address_new (AF_INET,
+						&entry->content.a.addr);
 				LL_PREPEND (up->new_addrs, up_ent);
 			}
 			else if (entry->type == RDNS_REQUEST_AAAA) {
 				up_ent = g_malloc0 (sizeof (*up_ent));
-
-				memcpy (&up_ent->addr.addr.s6.sin6_addr,
-						&entry->content.aaa.addr, sizeof (struct in6_addr));
-				up_ent->addr.af = AF_INET6;
-				up_ent->addr.addr.sa.sa_family = AF_INET6;
-				up_ent->addr.slen = sizeof (up_ent->addr.addr.s6);
+				up_ent->addr = rspamd_inet_address_new (AF_INET6,
+						&entry->content.aaa.addr);
 				LL_PREPEND (up->new_addrs, up_ent);
 			}
 			entry = entry->next;
@@ -197,40 +188,39 @@ rspamd_upstream_update_addrs (struct upstream *up)
 	guint16 port;
 	guint addr_cnt;
 	struct upstream_inet_addr_entry *cur, *tmp;
-	rspamd_inet_addr_t *new_addrs, *old;
+	GPtrArray *new_addrs;
 
 	/*
 	 * We need first of all get the saved port, since DNS gives us no
 	 * idea about what port has been used previously
 	 */
-	if (up->addrs.count > 0 && up->new_addrs) {
-		port = rspamd_inet_address_get_port (&up->addrs.addr[0]);
+	if (up->addrs.addr->len > 0 && up->new_addrs) {
+		port = rspamd_inet_address_get_port (g_ptr_array_index (up->addrs.addr, 0));
+
+		/* Free old addresses */
+		g_ptr_array_free (up->addrs.addr, TRUE);
 
 		/* Now calculate new addrs count */
 		addr_cnt = 0;
 		LL_FOREACH (up->new_addrs, cur) {
 			addr_cnt ++;
 		}
-		new_addrs = g_new (rspamd_inet_addr_t, addr_cnt);
+		new_addrs = g_ptr_array_new_full (addr_cnt,
+				(GDestroyNotify)rspamd_inet_address_destroy);
 
 		/* Copy addrs back */
-		addr_cnt = 0;
 		LL_FOREACH (up->new_addrs, cur) {
-			memcpy (&new_addrs[addr_cnt], cur, sizeof (rspamd_inet_addr_t));
-			rspamd_inet_address_set_port (&new_addrs[addr_cnt], port);
-			addr_cnt ++;
+			rspamd_inet_address_set_port (cur->addr, port);
+			g_ptr_array_add (new_addrs, cur->addr);
 		}
 
-		old = up->addrs.addr;
 		up->addrs.cur = 0;
-		up->addrs.count = addr_cnt;
 		up->addrs.addr = new_addrs;
-		qsort (up->addrs.addr, up->addrs.count, sizeof (up->addrs.addr[0]),
-					rspamd_upstream_addr_sort_func);
-		g_free (old);
+		g_ptr_array_sort (up->addrs.addr, rspamd_upstream_addr_sort_func);
 	}
 
 	LL_FOREACH_SAFE (up->new_addrs, cur, tmp) {
+		/* Do not free inet address pointer since it has been transferred to up */
 		g_free (cur);
 	}
 	up->new_addrs = NULL;
@@ -379,8 +369,14 @@ rspamd_upstream_dtor (struct upstream *up)
 
 	if (up->new_addrs) {
 		LL_FOREACH_SAFE(up->new_addrs, cur, tmp) {
+			/* Here we need to free pointer as well */
+			rspamd_inet_address_destroy (cur->addr);
 			g_free (cur);
 		}
+	}
+
+	if (up->addrs.addr) {
+		g_ptr_array_free (up->addrs.addr, TRUE);
 	}
 
 	rspamd_mutex_free (up->lock);
@@ -399,9 +395,10 @@ rspamd_upstream_addr (struct upstream *up)
 	 * many systems now has poorly supported ipv6
 	 */
 	idx = up->addrs.cur;
-	next_idx = (idx + 1) % up->addrs.count;
-	w1 = rspamd_upstream_af_to_weight (&up->addrs.addr[idx]);
-	w2 = rspamd_upstream_af_to_weight (&up->addrs.addr[next_idx]);
+	next_idx = (idx + 1) % up->addrs.addr->len;
+	w1 = rspamd_upstream_af_to_weight (g_ptr_array_index (up->addrs.addr, idx));
+	w2 = rspamd_upstream_af_to_weight (g_ptr_array_index (up->addrs.addr,
+			next_idx));
 
 	/*
 	 * We don't care about the exact priorities, but we prefer ipv4/unix
@@ -414,7 +411,7 @@ rspamd_upstream_addr (struct upstream *up)
 		up->addrs.cur = 0;
 	}
 
-	return &up->addrs.addr[up->addrs.cur];
+	return g_ptr_array_index (up->addrs.addr, up->addrs.cur);
 }
 
 const gchar*
@@ -431,9 +428,8 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups,
 
 	up = g_slice_alloc0 (sizeof (*up));
 
-	up->addrs.count = default_max_addresses;
 	if (!rspamd_parse_host_port_priority (str, &up->addrs.addr,
-			&up->addrs.count, &up->weight,
+			&up->weight,
 			&up->name, def_port, NULL)) {
 		g_slice_free1 (sizeof (*up), up);
 		return FALSE;
@@ -445,8 +441,7 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups,
 	up->ls = ups;
 	REF_INIT_RETAIN (up, rspamd_upstream_dtor);
 	up->lock = rspamd_mutex_new ();
-	qsort (up->addrs.addr, up->addrs.count, sizeof (up->addrs.addr[0]),
-			rspamd_upstream_addr_sort_func);
+	g_ptr_array_sort (up->addrs.addr, rspamd_upstream_addr_sort_func);
 
 	rspamd_upstream_set_active (ups, up);
 
@@ -454,19 +449,13 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups,
 }
 
 gboolean
-rspamd_upstream_add_addr (struct upstream *up, const rspamd_inet_addr_t *addr)
+rspamd_upstream_add_addr (struct upstream *up, rspamd_inet_addr_t *addr)
 {
-	gint nsz;
-
 	/*
 	 * XXX: slow and inefficient
 	 */
-	nsz = ++up->addrs.count;
-	up->addrs.addr = g_realloc (up->addrs.addr,
-			nsz * sizeof (up->addrs.addr[0]));
-	memcpy (&up->addrs.addr[nsz - 1], addr, sizeof (*addr));
-	qsort (up->addrs.addr, up->addrs.count, sizeof (up->addrs.addr[0]),
-				rspamd_upstream_addr_sort_func);
+	g_ptr_array_add (up->addrs.addr, addr);
+	g_ptr_array_sort (up->addrs.addr, rspamd_upstream_addr_sort_func);
 
 	return TRUE;
 }
