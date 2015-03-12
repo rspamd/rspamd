@@ -146,8 +146,7 @@ int rspamd_lua_typerror (lua_State *L, int narg, const char *tname);
  * Lua IP address structure
  */
 struct rspamd_lua_ip {
-	rspamd_inet_addr_t addr;
-	gboolean is_valid;
+	rspamd_inet_addr_t *addr;
 };
 
 /**
