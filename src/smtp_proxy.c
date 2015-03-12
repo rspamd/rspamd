@@ -905,7 +905,7 @@ accept_socket (gint fd, short what, void *arg)
 	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
 	struct smtp_proxy_session *session;
 	struct smtp_proxy_ctx *ctx;
-	rspamd_inet_addr_t addr;
+	rspamd_inet_addr_t *addr;
 	gint nfd;
 
 	ctx = worker->ctx;
@@ -921,8 +921,8 @@ accept_socket (gint fd, short what, void *arg)
 	}
 
 	msg_info ("accepted connection from %s port %d",
-		rspamd_inet_address_to_string (&addr),
-		rspamd_inet_address_get_port (&addr));
+		rspamd_inet_address_to_string (addr),
+		rspamd_inet_address_get_port (addr));
 
 	ctx = worker->ctx;
 	session = g_slice_alloc0 (sizeof (struct smtp_proxy_session));
@@ -936,7 +936,7 @@ accept_socket (gint fd, short what, void *arg)
 	session->ev_base = ctx->ev_base;
 	session->upstream_sock = -1;
 	session->ptr_str = rdns_generate_ptr_from_str (rspamd_inet_address_to_string (
-				&addr));
+				addr));
 	worker->srv->stat->connections_count++;
 
 	/* Resolve client's addr */
@@ -946,6 +946,7 @@ accept_socket (gint fd, short what, void *arg)
 			NULL,
 			free_smtp_proxy_session,
 			session);
+	rspamd_inet_address_destroy (addr);
 	session->state = SMTP_PROXY_STATE_RESOLVE_REVERSE;
 	if (!make_dns_request (session->resolver, session->s, session->pool,
 		smtp_dns_cb, session, RDNS_REQUEST_PTR, session->ptr_str)) {

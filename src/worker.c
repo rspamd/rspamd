@@ -149,7 +149,7 @@ rspamd_worker_error_handler (struct rspamd_http_connection *conn, GError *err)
 	struct rspamd_task *task = (struct rspamd_task *) conn->ud;
 
 	msg_info ("abnormally closing connection from: %s, error: %s",
-		rspamd_inet_address_to_string (&task->client_addr), err->message);
+		rspamd_inet_address_to_string (task->client_addr), err->message);
 	/* Terminate session immediately */
 	destroy_session (task->s);
 }
@@ -163,7 +163,7 @@ rspamd_worker_finish_handler (struct rspamd_http_connection *conn,
 	if (task->state == CLOSING_CONNECTION || task->state == WRITING_REPLY) {
 		/* We are done here */
 		msg_debug ("normally closing connection from: %s",
-			rspamd_inet_address_to_string (&task->client_addr));
+			rspamd_inet_address_to_string (task->client_addr));
 		destroy_session (task->s);
 	}
 	else if (task->state == WRITE_REPLY) {
@@ -173,7 +173,7 @@ rspamd_worker_finish_handler (struct rspamd_http_connection *conn,
 		 * is read
 		 */
 		msg_debug ("want write message to the wire: %s",
-			rspamd_inet_address_to_string (&task->client_addr));
+			rspamd_inet_address_to_string (task->client_addr));
 		rspamd_protocol_write_reply (task);
 		/* Forcefully set the state */
 		task->state = CLOSING_CONNECTION;
