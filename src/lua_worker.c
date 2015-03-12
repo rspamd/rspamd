@@ -262,7 +262,7 @@ lua_accept_socket (gint fd, short what, void *arg)
 	struct rspamd_lua_worker_ctx *ctx, **pctx;
 	gint nfd;
 	lua_State *L;
-	rspamd_inet_addr_t addr;
+	rspamd_inet_addr_t *addr;
 
 	ctx = worker->ctx;
 	L = ctx->L;
@@ -278,8 +278,8 @@ lua_accept_socket (gint fd, short what, void *arg)
 	}
 
 	msg_info ("accepted connection from %s port %d",
-		rspamd_inet_address_to_string (&addr),
-		rspamd_inet_address_get_port (&addr));
+		rspamd_inet_address_to_string (addr),
+		rspamd_inet_address_get_port (addr));
 
 	/* Call finalizer function */
 	lua_rawgeti (L, LUA_REGISTRYINDEX, ctx->cbref_accept);
@@ -287,13 +287,15 @@ lua_accept_socket (gint fd, short what, void *arg)
 	rspamd_lua_setclass (L, "rspamd{worker}", -1);
 	*pctx = ctx;
 	lua_pushinteger (L, nfd);
-	lua_pushstring (L, rspamd_inet_address_to_string (&addr));
+	lua_pushstring (L, rspamd_inet_address_to_string (addr));
 	lua_pushinteger (L, 0);
 
 
 	if (lua_pcall (L, 4, 0, 0) != 0) {
 		msg_info ("call to worker accept failed: %s", lua_tostring (L, -1));
 	}
+
+	rspamd_inet_address_destroy (addr);
 }
 
 static gboolean
