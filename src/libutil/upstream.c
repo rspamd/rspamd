@@ -130,12 +130,12 @@ rspamd_upstream_af_to_weight (const rspamd_inet_addr_t *addr)
 static gint
 rspamd_upstream_addr_sort_func (gconstpointer a, gconstpointer b)
 {
-	const rspamd_inet_addr_t *ip1 = (const rspamd_inet_addr_t *)a,
-			*ip2 = (const rspamd_inet_addr_t *)b;
+	const rspamd_inet_addr_t **ip1 = (const rspamd_inet_addr_t **)a,
+			**ip2 = (const rspamd_inet_addr_t **)b;
 	gint w1, w2;
 
-	w1 = rspamd_upstream_af_to_weight (ip1);
-	w2 = rspamd_upstream_af_to_weight (ip2);
+	w1 = rspamd_upstream_af_to_weight (*ip1);
+	w2 = rspamd_upstream_af_to_weight (*ip2);
 
 	return w2 - w1;
 }
@@ -381,7 +381,6 @@ rspamd_upstream_dtor (struct upstream *up)
 
 	rspamd_mutex_free (up->lock);
 	g_free (up->name);
-	g_free (up->addrs.addr);
 	g_slice_free1 (sizeof (*up), up);
 }
 

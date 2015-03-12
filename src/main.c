@@ -576,7 +576,7 @@ create_listen_socket (GPtrArray *addrs, guint cnt, gint listen_type)
 	gint fd;
 	guint i;
 
-	g_ptr_array_sort (addrs, (GCompareFunc)rspamd_inet_address_compare);
+	g_ptr_array_sort (addrs, rspamd_inet_address_compare_ptr);
 	for (i = 0; i < cnt; i ++) {
 		fd = rspamd_inet_address_listen (g_ptr_array_index (addrs, i),
 				listen_type, TRUE);

@@ -197,6 +197,14 @@ gint rspamd_inet_address_compare (const rspamd_inet_addr_t *a1,
 		const rspamd_inet_addr_t *a2);
 
 /**
+ * Utility function to compare addresses by in g_ptr_array
+ * @param a1
+ * @param a2
+ * @return
+ */
+gint rspamd_inet_address_compare_ptr (const gpointer a1,
+		const gpointer a2);
+/**
  * Performs deep copy of rspamd inet addr
  * @param addr
  * @return

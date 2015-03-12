@@ -349,17 +349,17 @@ rspamd_parse_inet_address (rspamd_inet_addr_t **target, const char *src)
 	if (src[0] == '/' || src[0] == '.') {
 		return rspamd_parse_unix_path (target, src);
 	}
+	else if (inet_pton (AF_INET, src, &su.s4.sin_addr) == 1) {
+		addr = rspamd_inet_addr_create (AF_INET);
+		memcpy (&addr->u.in.addr.s4.sin_addr, &su.s4.sin_addr,
+				sizeof (struct in_addr));
+		ret = TRUE;
+	}
 	else if (ipv6_status == RSPAMD_IPV6_SUPPORTED &&
 			inet_pton (AF_INET6, src, &su.s6.sin6_addr) == 1) {
 		addr = rspamd_inet_addr_create (AF_INET6);
 		memcpy (&addr->u.in.addr.s6.sin6_addr, &su.s6.sin6_addr,
 				sizeof (struct in6_addr));
-		ret = TRUE;
-	}
-	else if (inet_pton (AF_INET, src, &su.s4.sin_addr) == 1) {
-		addr = rspamd_inet_addr_create (AF_INET6);
-		memcpy (&addr->u.in.addr.s4.sin_addr, &su.s4.sin_addr,
-				sizeof (struct in_addr));
 		ret = TRUE;
 	}
 
@@ -918,8 +918,8 @@ rspamd_inet_address_compare (const rspamd_inet_addr_t *a1,
 	g_assert (a2 != NULL);
 
 	if (a1->af != a2->af) {
-		return (rspamd_inet_address_af_order (a1) -
-				rspamd_inet_address_af_order (a2));
+		return (rspamd_inet_address_af_order (a2) -
+				rspamd_inet_address_af_order (a1));
 	}
 	else {
 		switch (a1->af) {
@@ -938,6 +938,15 @@ rspamd_inet_address_compare (const rspamd_inet_addr_t *a1,
 	}
 
 	return 0;
+}
+
+gint
+rspamd_inet_address_compare_ptr (const gpointer a1,
+		const gpointer a2)
+{
+	const rspamd_inet_addr_t **i1 = a1, **i2 = a2;
+
+	return rspamd_inet_address_compare (*i1, *i2);
 }
 
 rspamd_inet_addr_t *
