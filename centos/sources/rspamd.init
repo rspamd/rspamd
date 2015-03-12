@@ -122,6 +122,7 @@ case "$1" in
         ;;
     condrestart|try-restart)
         rh_status_q || exit 0
+        restart
 	    ;;
     *)
         echo $"Usage: $0 {start|stop|status|restart|condrestart|try-restart|reload|force-reload|configtest}"
