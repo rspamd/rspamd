@@ -1015,11 +1015,8 @@ SET(CONFFILES
 	conf/logging.conf
 	conf/metrics.conf
 	conf/modules.conf
-<<<<<<< HEAD
 	conf/options.conf
 	conf/rspamd.conf
-=======
->>>>>>> 317da93... Reiterate on systemd.
 	conf/statistic.conf
 	conf/workers.conf
 	conf/2tld.inc
