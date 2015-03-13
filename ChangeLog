@@ -1,3 +1,14 @@
+0.8.3:
+	* Various critical fixes in distribution (by @dottedmag and @fatalbanana)
+	* Fixed bugs in url detector to parse certain patterns
+	* Add default host and helo for a client
+	* Some sanity checks for tokenizer and classifier
+	* Reiterate on systemd support
+	* Fix missing symbol registration
+	* Add support of spamc compatible output
+	* Filter double-dots in rbl.lua validate_dns (by @fatalbanana)
+	* Update ucl submodule due to critical bugfix
+
 0.8.2:
 	* Create fuzzy db if it does not exist
 	* Fix: Centos init script: configtest() (by @AlexeySa)
