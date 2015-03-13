@@ -1742,8 +1742,8 @@ url_email_end (const gchar *begin,
 
 	/* Strip strange symbols at the end */
 	if (got_at) {
-		while ((!is_domain (*p) || *p == '.' || *p == '_') &&
-				p >= match->m_begin) {
+		while (p >= match->m_begin &&
+				(!is_domain (*p) || *p == '.' || *p == '_')) {
 			p --;
 		}
 		p ++;
