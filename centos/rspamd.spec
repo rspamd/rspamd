@@ -70,6 +70,7 @@ lua.
 %if 0%{?el6}
         -DWANT_SYSTEMD_UNITS=OFF \
 %else
+        -DWANT_SYSTEMD_UNITS=ON \
         -DSYSTEMDDIR=%{_unitdir} \
 %endif
         -DLOGDIR=%{_localstatedir}/log/rspamd \
@@ -177,7 +178,6 @@ fi
 %config(noreplace) %{rspamd_confdir}/common.conf
 %config(noreplace) %{rspamd_confdir}/logging.inc
 %config(noreplace) %{rspamd_confdir}/options.inc
-%config(noreplace) %{rspamd_confdir}/%{name}.sysvinit.conf
 %config(noreplace) %{rspamd_confdir}/worker-controller.inc
 %config(noreplace) %{rspamd_confdir}/worker-normal.inc
 %if 0%{?el6}
