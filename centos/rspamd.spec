@@ -6,13 +6,6 @@
 %define rspamd_pluginsdir   %{_datadir}/rspamd
 %define rspamd_wwwdir   %{_datadir}/rspamd/www
 
-%if 0%{?suse_version}
-%define __cmake cmake
-%define __install install
-%define __make make
-%define __chown chown
-%endif
-
 Name:           rspamd
 Version:        0.8.0
 Release:        1
@@ -49,14 +42,11 @@ Requires:       logrotate
 Requires(post): chkconfig
 Requires(preun): chkconfig, initscripts
 Requires(postun): initscripts
-%endif
-
-Source0:        https://rspamd.com/downloads/%{name}-%{version}.tar.xz
-%if 0%{?el6}
 Source1:        %{name}.init
 Source2:        %{name}.logrotate
 %endif
 
+Source0:        https://rspamd.com/downloads/%{name}-%{version}.tar.xz
 Patch0:         %{name}.service.patch
 
 %description
@@ -66,6 +56,9 @@ lua.
 
 %prep
 %setup -q
+%if 0%{?el7}
+%patch0 -p0
+%endif
 
 %build
 %{__cmake} \
@@ -74,8 +67,10 @@ lua.
         -DMANDIR=%{_mandir} \
         -DDBDIR=%{_localstatedir}/lib/rspamd \
         -DRUNDIR=%{_localstatedir}/run/rspamd \
-%if %{undefined suse_version} && %{undefined fedora} && 0%{?rhel} < 7
+%if 0%{?el6}
         -DWANT_SYSTEMD_UNITS=OFF \
+%else
+        -DSYSTEMDDIR=%{_unitdir} \
 %endif
         -DLOGDIR=%{_localstatedir}/log/rspamd \
         -DEXAMPLESDIR=%{_datadir}/examples/rspamd \
@@ -113,18 +108,14 @@ rm -rf %{buildroot}
 %service_add_pre %{name}.socket
 %endif
 
-%if 0%{?el7}
-%patch0 -p0
-%endif
-
 %post
 #to allow easy upgrade from 0.8.1
-chown -R %{rspamd_user}:%{rspamd_group} %{rspamd_home}
+%{__chown} -R %{rspamd_user}:%{rspamd_group} %{rspamd_home}
 %if 0%{?suse_version}
 %service_add_post %{name}.service
 %service_add_post %{name}.socket
 %endif
-%if 0%{?fedora} || 0%{?rhel} >= 7
+%if 0%{?fedora} || 0%{?el7}
 %systemd_post %{name}.service
 %systemd_post %{name}.socket
 %endif
@@ -137,11 +128,11 @@ chown -R %{rspamd_user}:%{rspamd_group} %{rspamd_home}
 %service_del_preun %{name}.service
 %service_del_preun %{name}.socket
 %endif
-%if 0%{?fedora} || 0%{?rhel} >= 7
+%if 0%{?fedora} || 0%{?el7}
 %systemd_preun %{name}.service
 %systemd_preun %{name}.socket
 %endif
-%if %{undefined suse_version} && %{undefined fedora} && 0%{?rhel} < 7
+%if 0%{?el6}
 if [ $1 = 0 ]; then
     /sbin/service %{name} stop >/dev/null 2>&1
     /sbin/chkconfig --del %{name}
@@ -153,11 +144,11 @@ fi
 %service_del_postun %{name}.service
 %service_del_postun %{name}.socket
 %endif
-%if 0%{?fedora} || 0%{?rhel} >= 7
-%systemd_postun %{name}.service
+%if 0%{?fedora} || 0%{?el7}
+%systemd_postun_with_restart %{name}.service
 %systemd_postun %{name}.socket
 %endif
-%if %{undefined suse_version} && %{undefined fedora} && 0%{?rhel} < 7
+%if 0%{?el6}
 if [ $1 -ge 1 ]; then
     /sbin/service %{name} condrestart > /dev/null 2>&1 || :
 fi
@@ -166,7 +157,7 @@ fi
 
 %files
 %defattr(-,root,root,-)
-%if 0%{?suse_version} || 0%{?fedora} || 0%{?rhel} >= 7
+%if 0%{?suse_version} || 0%{?fedora} || 0%{?el7}
 %{_unitdir}/%{name}.service
 %{_unitdir}/%{name}.socket
 %endif
