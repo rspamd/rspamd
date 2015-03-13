@@ -1247,6 +1247,9 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 			}
 			else if (!is_urlsafe (t)) {
 				if (strict) {
+					if (g_ascii_isspace (t)) {
+						goto set;
+					}
 					goto out;
 				}
 				else {
@@ -1265,6 +1268,9 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 			}
 			else if (!is_urlsafe (t)) {
 				if (strict) {
+					if (g_ascii_isspace (t)) {
+						goto set;
+					}
 					goto out;
 				}
 				else {
@@ -1276,6 +1282,9 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 		case parse_part:
 			if (!is_urlsafe (t)) {
 				if (strict) {
+					if (g_ascii_isspace (t)) {
+						goto set;
+					}
 					goto out;
 				}
 				else {
@@ -1352,6 +1361,7 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 {
 	struct http_parser_url u;
 	gchar *p, *comp;
+	const gchar *end;
 	guint i, complen, ret;
 
 	const struct {
@@ -1403,18 +1413,24 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	if (len > sizeof ("mailto:") - 1) {
 		/* For mailto: urls we also need to add slashes to make it a valid URL */
 		if (g_ascii_strncasecmp (p, "mailto:", sizeof ("mailto:") - 1) == 0) {
-			ret = rspamd_mailto_parse (&u, uristring, len, NULL);
+			ret = rspamd_mailto_parse (&u, uristring, len, &end);
 		}
 		else {
-			ret = rspamd_web_parse (&u, uristring, len, NULL, TRUE);
+			ret = rspamd_web_parse (&u, uristring, len, &end, TRUE);
 		}
 	}
 	else {
-		ret = rspamd_web_parse (&u, uristring, len, NULL, TRUE);
+		ret = rspamd_web_parse (&u, uristring, len, &end, TRUE);
 	}
 
 	if (ret != 0) {
 		return URI_ERRNO_BAD_FORMAT;
+	}
+
+	if (end > uristring && (guint)(end - uristring) != len) {
+		/* We have extra data at the end of uri, so we are ignoring it for now */
+		p = rspamd_mempool_alloc (pool, end - uristring + 1);
+		rspamd_strlcpy (p, uristring, end - uristring + 1);
 	}
 
 	for (i = 0; i < UF_MAX; i ++) {
