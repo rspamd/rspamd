@@ -1004,6 +1004,13 @@ rspamd_rcl_classifier_handler (struct rspamd_config *cfg,
 	if (found == NULL) {
 		ccf = rspamd_config_new_classifier (cfg, NULL);
 		ccf->classifier = get_classifier (type);
+		if (ccf->classifier == NULL) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"unknown classifier: %s", type);
+			return FALSE;
+		}
 	}
 	else {
 		ccf = found;
@@ -1045,6 +1052,9 @@ rspamd_rcl_classifier_handler (struct rspamd_config *cfg,
 	}
 
 	if (found == NULL) {
+		if (ccf->tokenizer == NULL) {
+			ccf->tokenizer = get_tokenizer ("osb-text");
+		}
 		cfg->classifiers = g_list_prepend (cfg->classifiers, ccf);
 	}
 
