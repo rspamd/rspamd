@@ -487,6 +487,15 @@ rspamd_inet_address_listen (const rspamd_inet_addr_t *addr, gint type,
 	}
 
 	setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on, sizeof (gint));
+
+#ifdef HAVE_IPV6_V6ONLY
+	if (addr->af == AF_INET6) {
+		/* We need to set this flag to avoid errors */
+		on = 1;
+		setsockopt (fd, SOL_IPV6, IPV6_V6ONLY, (const void *)&on, sizeof (gint));
+	}
+#endif
+
 	r = bind (fd, sa, addr->slen);
 	if (r == -1) {
 		if (!async || errno != EINPROGRESS) {
