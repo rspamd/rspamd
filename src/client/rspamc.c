@@ -36,13 +36,13 @@
 
 static gchar *connect_str = "localhost";
 static gchar *password = NULL;
-static gchar *ip = NULL;
+static gchar *ip = "127.0.0.1";
 static gchar *from = NULL;
 static gchar *deliver_to = NULL;
 static gchar *rcpt = NULL;
 static gchar *user = NULL;
-static gchar *helo = NULL;
-static gchar *hostname = NULL;
+static gchar *helo = "localhost.localdomain";
+static gchar *hostname = "localhost";
 static gchar *classifier = "bayes";
 static gchar *local_addr = NULL;
 static gint weight = 0;
