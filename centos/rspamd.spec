@@ -170,6 +170,7 @@ fi
 %{_bindir}/rspamd
 %{_bindir}/rspamc
 %config(noreplace) %{rspamd_confdir}/%{name}.conf
+%config(noreplace) %{rspamd_confdir}/%{name}.sysvinit.conf
 %config(noreplace) %{rspamd_confdir}/composites.conf
 %config(noreplace) %{rspamd_confdir}/metrics.conf
 %config(noreplace) %{rspamd_confdir}/modules.conf
