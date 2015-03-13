@@ -130,6 +130,7 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 			ret = FALSE;
 		}
 		else {
+			cnf->cnt = cnf->addrs->len;
 			LL_PREPEND (cf->bind_conf, cnf);
 		}
 	}

@@ -77,6 +77,9 @@ rspamd_ip_validate_af (rspamd_inet_addr_t *addr)
 			addr->u.in.addr.sa.sa_family = addr->af;
 		}
 	}
+	else {
+		addr->u.un->addr.sun_family = AF_UNIX;
+	}
 
 	if (addr->af == AF_INET) {
 		addr->slen = sizeof (struct sockaddr_in);
@@ -320,6 +323,7 @@ rspamd_parse_unix_path (rspamd_inet_addr_t **target, const char *src)
 	}
 
 	if (target) {
+		rspamd_ip_validate_af (addr);
 		*target = addr;
 	}
 	else {
