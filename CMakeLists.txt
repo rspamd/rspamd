@@ -21,10 +21,10 @@ IF(NOT RSPAMD_USER)
 	SET(RSPAMD_GROUP "nobody")
 ENDIF(NOT RSPAMD_USER)
 
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8.0 FATAL_ERROR)
 # Default for SysV Init
 SET(RSPAMD_WORKER_NORMAL "*:11333")
 SET(RSPAMD_WORKER_CONTROLLER "*:11334")
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8.0 FATAL_ERROR)
 SET_PROPERTY(GLOBAL PROPERTY ALLOW_DUPLICATE_CUSTOM_TARGETS 1)
 
 ############################# OPTIONS SECTION #############################################
@@ -44,7 +44,7 @@ OPTION(NO_SHARED           "Build internal libs static [default: ON]"          O
 OPTION(FORCE_GMIME24       "Link with gmime2.4 [default: OFF]"                  OFF)
 OPTION(INSTALL_EXAMPLES    "Install examples [default: OFF]"                    OFF)
 OPTION(INSTALL_WEBUI       "Install web interface [default: ON]"                ON)
-OPTION(WANT_SYSTEMD_UNITS  "Install systemd unit files on Linux [default: ON]"  ON)
+OPTION(WANT_SYSTEMD_UNITS  "Install systemd unit files on Linux [default: OFF]" OFF)
 
 # Build optimized code for following CPU (default i386)
 #SET(CPU_TUNE               "i686")
@@ -105,6 +105,7 @@ ENDIF(NOT INCLUDEDIR)
 IF(NOT SYSTEMDDIR)
 	SET(SYSTEMDDIR ${CMAKE_INSTALL_PREFIX}/lib/systemd/system)
 ENDIF(NOT SYSTEMDDIR)
+
 
 ############################# INCLUDE SECTION #############################################
 
@@ -198,27 +199,28 @@ MACRO(FindLua _major _minor)
 	ENDIF(LUA_LIBRARY AND LUA_INCLUDE_DIR)
 ENDMACRO(FindLua _major _minor)
 
-FUNCTION(INSTALL_IF_NOT_EXISTS src dest suffix)
+FUNCTION(INSTALL_IF_NOT_EXISTS src dest destname suffix)
   IF(NOT IS_ABSOLUTE "${src}")
     SET(src "${CMAKE_CURRENT_SOURCE_DIR}/${src}")
   ENDIF()
   GET_FILENAME_COMPONENT(src_name "${src}" NAME)
+  GET_FILENAME_COMPONENT(dest_name "${destname}" NAME)
   IF(NOT IS_ABSOLUTE "${dest}")
     SET(dest "${CMAKE_INSTALL_PREFIX}/${dest}")
   ENDIF()
   INSTALL(CODE "
-    IF(NOT EXISTS \"\$ENV{DESTDIR}${dest}/${src_name}${suffix}\")
+    IF(NOT EXISTS \"\$ENV{DESTDIR}${dest}/${dest_name}${suffix}\")
       #FILE(INSTALL \"${src}\" DESTINATION \"${dest}\")
-      MESSAGE(STATUS \"Installing: \$ENV{DESTDIR}${dest}/${src_name}${suffix}\")
+      MESSAGE(STATUS \"Installing: \$ENV{DESTDIR}${dest}/${dest_name}${suffix}\")
       EXECUTE_PROCESS(COMMAND \${CMAKE_COMMAND} -E copy \"${src}\"
-                      \"\$ENV{DESTDIR}${dest}/${src_name}${suffix}\"
+                      \"\$ENV{DESTDIR}${dest}/${dest_name}${suffix}\"
                       RESULT_VARIABLE copy_result
                       ERROR_VARIABLE error_output)
       IF(copy_result)
         MESSAGE(FATAL_ERROR \${error_output})
       ENDIF()
     ELSE()
-      MESSAGE(STATUS \"Skipping  : \$ENV{DESTDIR}${dest}/${src_name}${suffix}\")
+      MESSAGE(STATUS \"Skipping  : \$ENV{DESTDIR}${dest}/${dest_name}${suffix}\")
     ENDIF()
   ")
 ENDFUNCTION(INSTALL_IF_NOT_EXISTS)
@@ -349,9 +351,6 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	ELSE(EXISTS "/etc/debian_version")
 		SET(LINUX_START_SCRIPT "rspamd_rh.in")
 	ENDIF(EXISTS "/etc/debian_version")
-	# Overwrite to conform systemd
-	SET(RSPAMD_WORKER_NORMAL "systemd:0")
-	SET(RSPAMD_WORKER_CONTROLLER "systemd:1")
 ENDIF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
 IF(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
@@ -399,9 +398,6 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
   	SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE)
   	SET(CMAKE_INSTALL_RPATH "${PREFIX}/lib")	
 ENDIF(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
-
-# Create conf/rspamd.conf from template
-CONFIGURE_FILE(conf/rspamd.conf.in conf/rspamd.conf @ONLY)
 
 # Now find libraries and headers
 
@@ -1022,8 +1018,6 @@ SET(CONFFILES
 	conf/composites.conf
 	conf/metrics.conf
 	conf/modules.conf
-	conf/rspamd.conf
-	conf/rspamd.sysvinit.conf
 	conf/statistic.conf
 	conf/2tld.inc
 	conf/logging.inc
@@ -1048,14 +1042,29 @@ MATH(EXPR CONFLIST_MAX ${CONFLIST_COUNT}-1)
 FOREACH(CONF_IDX RANGE ${CONFLIST_MAX})
 	LIST(GET CONFFILES ${CONF_IDX} CONF_FILE)
 	IF(BUILD_PORT)
-		INSTALL_IF_NOT_EXISTS(${CONF_FILE} ${CONFDIR} ".sample")
+		INSTALL_IF_NOT_EXISTS(${CONF_FILE} ${CONFDIR} ${CONF_FILE} ".sample")
 	ELSE(BUILD_PORT)
-		INSTALL_IF_NOT_EXISTS(${CONF_FILE} ${CONFDIR} "")
+		INSTALL_IF_NOT_EXISTS(${CONF_FILE} ${CONFDIR} ${CONF_FILE} "")
 	ENDIF(BUILD_PORT)
 	IF(INSTALL_EXAMPLES MATCHES "ON")
 		INSTALL(FILES ${CONF_FILE} DESTINATION ${EXAMPLESDIR})
 	ENDIF(INSTALL_EXAMPLES MATCHES "ON")
 ENDFOREACH(CONF_IDX RANGE ${CONFLIST_MAX})
+
+# Main config is special due to systemd
+IF(WANT_SYSTEMD_UNITS MATCHES "ON")
+	SET(MAIN_CONF "conf/rspamd.systemd.conf")
+ELSE(WANT_SYSTEMD_UNITS MATCHES "ON")
+	SET(MAIN_CONF "conf/rspamd.sysvinit.conf")
+ENDIF(WANT_SYSTEMD_UNITS MATCHES "ON")
+IF(BUILD_PORT)
+	INSTALL_IF_NOT_EXISTS(${MAIN_CONF} ${CONFDIR} "rspamd.conf" ".sample")
+ELSE(BUILD_PORT)
+	INSTALL_IF_NOT_EXISTS(${MAIN_CONF} ${CONFDIR} "rspamd.conf" "")
+ENDIF(BUILD_PORT)
+IF(INSTALL_EXAMPLES MATCHES "ON")
+	INSTALL(FILES ${MAIN_CONF} DESTINATION ${EXAMPLESDIR})
+ENDIF(INSTALL_EXAMPLES MATCHES "ON")
 
 # Lua plugins
 
