@@ -66,6 +66,9 @@ lua.
 
 %prep
 %setup -q
+%if 0%{?el7}
+%patch0 -p0
+%endif
 
 %build
 %{__cmake} \
@@ -111,10 +114,6 @@ rm -rf %{buildroot}
 %if 0%{?suse_version}
 %service_add_pre %{name}.service
 %service_add_pre %{name}.socket
-%endif
-
-%if 0%{?el7}
-%patch0 -p0
 %endif
 
 %post
