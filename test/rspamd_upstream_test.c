@@ -157,7 +157,9 @@ rspamd_upstream_test_func (void)
 	event_base_set (ev_base, &ev);
 
 	up = rspamd_upstream_get (ls, RSPAMD_UPSTREAM_MASTER_SLAVE);
-	rspamd_upstream_fail (up);
+	for (i = 0; i < 100; i ++) {
+		rspamd_upstream_fail (up);
+	}
 	g_assert (rspamd_upstreams_alive (ls) == 2);
 
 	tv.tv_sec = 2;
