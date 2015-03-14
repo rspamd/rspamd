@@ -225,6 +225,8 @@
 #cmakedefine HAVE_EXPLICIT_BZERO 1
 #cmakedefine HAVE_WEAK_SYMBOLS   1
 #cmakedefine HAVE_PCRE_JIT       1
+#cmakedefine HAVE_GET_CPUID      1
+#cmakedefine HAVE_CPUID_H        1
 
 /* Configure allocator */
 #define uthash_malloc(sz) g_slice_alloc(sz)

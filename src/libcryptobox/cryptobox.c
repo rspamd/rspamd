@@ -27,6 +27,9 @@
 #include "poly1305/poly1305.h"
 #include "curve25519/curve25519.h"
 #include "ottery.h"
+#ifdef HAVE_CPUID_H
+#include <cpuid.h>
+#endif
 
 unsigned long cpu_config = 0;
 
@@ -66,6 +69,9 @@ static void
 rspamd_cryptobox_cpuid (gint cpu[4], gint info)
 {
 #if defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
+# if defined(HAVE_GET_CPUID)
+	__get_cpuid (info, &cpu[0], &cpu[1], &cpu[2], &cpu[3]);
+# else
 	__asm__ __volatile__ (
 			"cpuid":
 			"=a" (cpu[0]),
@@ -74,6 +80,7 @@ rspamd_cryptobox_cpuid (gint cpu[4], gint info)
 			"=d" (cpu[3]) :
 			"a" (info), "c" (0)
 	);
+# endif
 #else
 	memset (cpu, 0, sizeof (cpu));
 #endif
