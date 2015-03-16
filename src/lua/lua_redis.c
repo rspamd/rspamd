@@ -28,6 +28,8 @@
 #include "async.h"
 #include "adapters/libevent.h"
 
+#define REDIS_DEFAULT_TIMEOUT 1.0
+
 /**
  * Redis access API for lua from task object
  */
@@ -47,6 +49,7 @@ struct lua_redis_userdata {
 	redisAsyncContext *ctx;
 	lua_State *L;
 	struct rspamd_task *task;
+	struct event timeout;
 	gint cbref;
 	gchar *server;
 	gchar *reqline;
@@ -61,6 +64,7 @@ lua_redis_fin (void *arg)
 
 	if (ud->ctx) {
 		redisAsyncFree (ud->ctx);
+		event_del (&ud->timeout);
 		luaL_unref (ud->L, LUA_REGISTRYINDEX, ud->cbref);
 	}
 }
@@ -189,6 +193,14 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 	}
 }
 
+static void
+lua_redis_timeout (int fd, short what, gpointer u)
+{
+	struct lua_redis_userdata *ud = ud;
+
+	lua_redis_push_error ("timeout while connecting the server", ud, FALSE);
+}
+
 /**
  * Make request to redis server
  * @param task worker task object
@@ -207,6 +219,8 @@ lua_redis_make_request (lua_State *L)
 	struct rspamd_task *task;
 	const gchar **args = NULL, *cmd;
 	gint top;
+	struct timeval tv;
+	gboolean ret = FALSE;
 
 	if ((task = lua_check_task (L, 1)) != NULL) {
 		addr = lua_check_ip (L, 2);
@@ -227,12 +241,6 @@ lua_redis_make_request (lua_State *L)
 				lua_pushboolean (L, FALSE);
 
 				return 1;
-			}
-			else {
-				register_async_event (ud->task->s,
-						lua_redis_fin,
-						ud,
-						g_quark_from_static_string ("lua redis"));
 			}
 
 			redisLibeventAttach (ud->ctx, ud->task->ev_base);
@@ -281,18 +289,37 @@ lua_redis_make_request (lua_State *L)
 				top = 1;
 			}
 
-			lua_pushboolean (L, redisAsyncCommandArgv (ud->ctx,
+			ret = redisAsyncCommandArgv (ud->ctx,
 						lua_redis_callback,
 						ud,
 						top,
 						args,
-						NULL));
+						NULL);
+			if (ret) {
+				register_async_event (ud->task->s,
+						lua_redis_fin,
+						ud,
+						g_quark_from_static_string ("lua redis"));
+				/*
+				 * TODO: cannot handle more than fixed timeout here
+				 */
+				double_to_tv (REDIS_DEFAULT_TIMEOUT, &tv);
+				event_set (&ud->timeout, -1, EV_TIMEOUT, lua_redis_timeout, ud);
+				event_base_set (ud->task->ev_base, &ud->timeout);
+				event_add (&ud->timeout, &tv);
+			}
+			else {
+				msg_info ("call to redis failed");
+				redisAsyncFree (ud->ctx);
+				luaL_unref (ud->L, LUA_REGISTRYINDEX, ud->cbref);
+			}
 		}
 		else {
 			msg_info ("incorrect function invocation");
-			lua_pushboolean (L, FALSE);
 		}
 	}
+
+	lua_pushboolean (L, ret);
 
 	return 1;
 }
