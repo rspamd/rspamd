@@ -21,7 +21,11 @@ License:        BSD2c
 %endif
 URL:            https://rspamd.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
+%if 0%{?centos_version} == 600
+BuildRequires:  cmake28,glib2-devel,gmime24-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,perl
+%else
 BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,perl
+%endif
 %if 0%{?suse_version} || 0%{?el7} || 0%{?fedora}
 BuildRequires:  systemd
 Requires(pre):  systemd
@@ -61,7 +65,12 @@ lua.
 %endif
 
 %build
+%if 0%{?el6}
+%define __cmake /usr/bin/env cmake28
+%endif # el6
+
 %{__cmake} \
+		-DCMAKE_C_OPT_FLAGS="%{optflags}" \
         -DCMAKE_INSTALL_PREFIX=%{_prefix} \
         -DCONFDIR=%{_sysconfdir}/rspamd \
         -DMANDIR=%{_mandir} \
