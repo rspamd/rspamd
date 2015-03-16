@@ -1,4 +1,4 @@
-rspamd (0.8.3) UNRELEASED; urgency=low
+rspamd (0.8.3) unstable; urgency=low
 
   * New release.
   * systemd socket-activated service.
