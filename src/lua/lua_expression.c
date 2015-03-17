@@ -64,6 +64,7 @@ LUA_FUNCTION_DEF (expr, to_string);
 
 static const struct luaL_reg exprlib_m[] = {
 	LUA_INTERFACE_DEF (expr, to_string),
+	{"__tostring", lua_expr_to_string},
 	{NULL, NULL}
 };
 
@@ -231,6 +232,7 @@ lua_expr_create (lua_State *L)
 		}
 
 		pe = lua_newuserdata (L, sizeof (struct lua_expression *));
+		rspamd_lua_setclass (L, "rspamd{expr}", -1);
 		*pe = e;
 		lua_pushnil (L);
 	}

@@ -184,6 +184,9 @@ rspamd_expr_str_to_op (const gchar *a, const gchar *end, const gchar **next)
 				*next = a + 1;
 			}
 		}
+		else {
+			*next = end;
+		}
 		/* XXX: not especially effective */
 		switch (*a) {
 		case '!':
@@ -336,7 +339,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 				state = SKIP_SPACES;
 			}
 			else if (rspamd_expr_is_operation_symbol (*p)) {
-				state = PARSE_ATOM;
+				state = PARSE_OP;
 			}
 			else {
 				/*
@@ -480,6 +483,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 				rspamd_expr_stack_push (e, GINT_TO_POINTER (op));
 			}
 
+			state = SKIP_SPACES;
 			break;
 		case SKIP_SPACES:
 			if (g_ascii_isspace (*p)) {

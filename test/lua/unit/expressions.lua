@@ -4,11 +4,15 @@ context("Rspamd expressions", function()
   local rspamd_expression = require "rspamd_expression"
   local rspamd_mempool = require "rspamd_mempool"
   local rspamd_regexp = require "rspamd_regexp"
-  local split_re = rspamd_regexp.create('/\\s+/')
+  local split_re = rspamd_regexp.create('/\\s+|\\)|\\(/')
   
   local function parse_func(str)
     -- extract token till the first space character
-    local token = split_re:split(str)[1]
+    local token = str
+    local t = split_re:split(str)
+    if t then
+      token = t[1]
+    end
     -- Return token name
     return token
   end
@@ -21,15 +25,17 @@ context("Rspamd expressions", function()
     local pool = rspamd_mempool.create()
     
     local cases = {
-       {'A & B | !C', 'A B & C ! |'}
+       {'A & B | !C', 'A B & C ! |'},
+       {'A & (B | !C)', 'A B C ! | &'}
     }
     for _,c in ipairs(cases) do
       local expr,err = rspamd_expression.create(c[1], 
         {parse_func, process_func}, pool)
       
-      if c[2] then
-        assert_not_nil(expr, "Cannot parse " .. c[1] ": " .. err)
+      if not c[2] then
+        assert_nil(expr, "Should not be able to parse " .. c[1])
       else
+        assert_not_nil(expr, "Cannot parse " .. c[1])
         assert_equal(expr:to_string(), c[2], string.format("Evaluated expr to '%s', expected: '%s'",
             expr:to_string(), c[2]))
       end
