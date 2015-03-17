@@ -31,6 +31,8 @@ enum rspamd_expression_op {
 	OP_INVALID = 0,
 	OP_PLUS, /* || or + */
 	OP_MULT, /* && or * */
+	OP_OR, /* || or | */
+	OP_AND, /* && or & */
 	OP_NOT, /* ! */
 	OP_LT, /* < */
 	OP_GT, /* > */
@@ -106,9 +108,11 @@ rspamd_expr_logic_priority (enum rspamd_expression_op op)
 		ret = 5;
 		break;
 	case OP_MULT:
+	case OP_AND:
 		ret = 4;
 		break;
 	case OP_PLUS:
+	case OP_OR:
 		ret = 3;
 		break;
 	case OP_GE:
@@ -181,10 +185,14 @@ rspamd_expr_str_to_op (const gchar *a, const gchar *end, const gchar **next)
 			op = OP_NOT;
 			break;
 		case '&':
+			op = OP_AND;
+			break;
 		case '*':
 			op = OP_MULT;
 			break;
 		case '|':
+			op = OP_OR;
+			break;
 		case '+':
 			op = OP_PLUS;
 			break;
@@ -205,7 +213,7 @@ rspamd_expr_str_to_op (const gchar *a, const gchar *end, const gchar **next)
 		if ((gulong)(end - a) >= sizeof ("or") &&
 				g_ascii_strncasecmp (a, "or", sizeof ("or") - 1) == 0) {
 			*next = a + sizeof ("or") - 1;
-			op = OP_PLUS;
+			op = OP_OR;
 		}
 		break;
 	case 'A':
@@ -213,7 +221,7 @@ rspamd_expr_str_to_op (const gchar *a, const gchar *end, const gchar **next)
 		if ((gulong)(end - a) >= sizeof ("and") &&
 				g_ascii_strncasecmp (a, "and", sizeof ("and") - 1) == 0) {
 			*next = a + sizeof ("and") - 1;
-			op = OP_MULT;
+			op = OP_AND;
 		}
 		break;
 	case 'N':
@@ -542,6 +550,12 @@ rspamd_expression_tostring (struct rspamd_expression *expr)
 		}
 		else {
 			switch (elt->p.op) {
+			case OP_AND:
+				op_str = "&";
+				break;
+			case OP_OR:
+				op_str = "|";
+				break;
 			case OP_MULT:
 				op_str = "*";
 				break;

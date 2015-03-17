@@ -37,14 +37,14 @@ require "fun" ()
 local rspamd_expression = require "rspamd_expression"
 local rspamd_mempool = require "rspamd_mempool"
 
-local parse_func(str)
+local function parse_func(str)
 	-- extract token till the first space character
-	local token = table.join('', take_while(function(s) return s <> ' ' end, str)
+	local token = table.join('', take_while(function(s) return s ~= ' ' end, str))
 	-- Return token name
 	return token
 end
 
-local process_func(token, task)
+local function process_func(token, task)
 	-- Do something using token and task
 end
 
