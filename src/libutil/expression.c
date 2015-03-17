@@ -27,6 +27,8 @@
 #include "printf.h"
 #include "regexp.h"
 
+#define RSPAMD_EXPR_FLAG_NEGATE (1 << 0)
+
 enum rspamd_expression_op {
 	OP_INVALID = 0,
 	OP_PLUS, /* || or + */
@@ -57,6 +59,8 @@ struct rspamd_expression_elt {
 			gint op_idx;
 		} lim;
 	} p;
+	gint flags;
+	gint value;
 };
 
 struct rspamd_expression {
@@ -519,10 +523,108 @@ err:
 	return FALSE;
 }
 
+#define CHOSE_OPERAND(e1, e2) (((e1)->p.atom->priority >= (e2)->p.atom->priority) ? \
+		(e1) : (e2))
+#define CHOOSE_REMAIN(e1, e2, es) ((es) == (e1) ? (e2) : (e1))
+
 gint
 rspamd_process_expression (struct rspamd_expression *expr, gpointer data)
 {
+	struct rspamd_expression_elt *elt, *st_elt[2], *ev;
+	guint i;
+
 	g_assert (expr != NULL);
+	/* Ensure that stack is empty at this point */
+	g_assert (expr->expression_stack->len == 0);
+
+	/* Go through the whole expression */
+	for (i = 0; i < expr->expressions->len; i ++) {
+		elt = &g_array_index (expr->expressions, struct rspamd_expression_elt, i);
+
+		if (elt->type == ELT_ATOM || elt->type == ELT_LIMIT) {
+			/* Push this value to the stack without processing */
+			rspamd_expr_stack_push (expr, elt);
+		}
+		else {
+			/*
+			 * Here we can process atoms on stack and apply
+			 * some optimizations for them
+			 */
+			g_assert (expr->expression_stack->len > 0);
+
+			switch (elt->p.op) {
+			case OP_NOT:
+				/* Just setup flag for the atom on top of the stack */
+				st_elt[0] = rspamd_expr_stack_pop (expr);
+				g_assert (st_elt[0]->type == ELT_ATOM);
+
+				if (st_elt[0]->flags & RSPAMD_EXPR_FLAG_NEGATE) {
+					st_elt[0]->flags &= ~RSPAMD_EXPR_FLAG_NEGATE;
+				}
+				else {
+					st_elt[0]->flags |= RSPAMD_EXPR_FLAG_NEGATE;
+				}
+
+				rspamd_expr_stack_push (expr, st_elt[0]);
+				break;
+			case OP_OR:
+				/* Evaluate first, if it evaluates to true, then push true */
+				g_assert (expr->expression_stack->len > 1);
+				st_elt[0] = rspamd_expr_stack_pop (expr);
+				st_elt[1] = rspamd_expr_stack_pop (expr);
+				ev = CHOSE_OPERAND (st_elt[0], st_elt[1]);
+				ev->value = expr->subr->process (data, ev->p.atom);
+
+				if (ev->flags & RSPAMD_EXPR_FLAG_NEGATE) {
+					ev->value = !ev->value;
+				}
+
+				if (ev->value) {
+					rspamd_expr_stack_push (expr, ev);
+				}
+				else {
+					ev = CHOOSE_REMAIN (st_elt[0], st_elt[1], ev);
+					ev->value = expr->subr->process (data, ev->p.atom);
+
+					if (ev->flags & RSPAMD_EXPR_FLAG_NEGATE) {
+						ev->value = !ev->value;
+					}
+					/* Push the remaining op */
+					rspamd_expr_stack_push (expr, ev);
+				}
+				break;
+			case OP_AND:
+				/* Evaluate first, if it evaluates to false, then push false */
+				g_assert (expr->expression_stack->len > 1);
+				st_elt[0] = rspamd_expr_stack_pop (expr);
+				st_elt[1] = rspamd_expr_stack_pop (expr);
+				ev = CHOSE_OPERAND (st_elt[0], st_elt[1]);
+				ev->value = expr->subr->process (data, ev->p.atom);
+
+				if (ev->flags & RSPAMD_EXPR_FLAG_NEGATE) {
+					ev->value = !ev->value;
+				}
+
+				if (!ev->value) {
+					rspamd_expr_stack_push (expr, ev);
+				}
+				else {
+					ev = CHOOSE_REMAIN (st_elt[0], st_elt[1], ev);
+					ev->value = expr->subr->process (data, ev->p.atom);
+
+					if (ev->flags & RSPAMD_EXPR_FLAG_NEGATE) {
+						ev->value = !ev->value;
+					}
+					/* Push the remaining op */
+					rspamd_expr_stack_push (expr, ev);
+				}
+				break;
+			default:
+				g_assert (0);
+				break;
+			}
+		}
+	}
 
 	return 0;
 }
