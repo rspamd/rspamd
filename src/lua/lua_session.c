@@ -156,7 +156,7 @@ lua_session_create (lua_State *L)
 		return 1;
 	}
 
-	mempool = rspamd_lua_check_mempool (L);
+	mempool = rspamd_lua_check_mempool (L, 1);
 	if (mempool == NULL) {
 		msg_err ("invalid mempool argument to rspamd_session.create");
 		lua_pushnil (L);

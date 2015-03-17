@@ -182,6 +182,7 @@ void luaopen_io_dispatcher (lua_State * L);
 void luaopen_dns_resolver (lua_State * L);
 void luaopen_rsa (lua_State * L);
 void luaopen_ip (lua_State * L);
+void luaopen_expression (lua_State * L);
 
 gint rspamd_lua_call_filter (const gchar *function, struct rspamd_task *task);
 gint rspamd_lua_call_chain_filter (const gchar *function,
@@ -230,7 +231,7 @@ void rspamd_lua_dumpstack (lua_State *L);
 /* Set lua path according to the configuration */
 void rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg);
 
-struct memory_pool_s * rspamd_lua_check_mempool (lua_State * L);
+struct memory_pool_s * rspamd_lua_check_mempool (lua_State * L, gint pos);
 
 
 #endif /* WITH_LUA */

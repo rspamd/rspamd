@@ -15,6 +15,7 @@ SET(LUASRC			  ${CMAKE_CURRENT_SOURCE_DIR}/lua_common.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_buffer.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_dns.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_rsa.c
-					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_ip.c)
+					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_ip.c
+					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_expression.c)
 
 SET(RSPAMD_LUA ${LUASRC} PARENT_SCOPE)

@@ -494,7 +494,11 @@ rspamd_inet_address_listen (const rspamd_inet_addr_t *addr, gint type,
 	if (addr->af == AF_INET6) {
 		/* We need to set this flag to avoid errors */
 		on = 1;
+#ifdef SOL_IPV6
 		setsockopt (fd, SOL_IPV6, IPV6_V6ONLY, (const void *)&on, sizeof (gint));
+#elif defined(IPPROTO_IPV6)
+		setsockopt (fd, IPPROTO_IPV6, IPV6_V6ONLY, (const void *)&on, sizeof (gint));
+#endif
 	}
 #endif
 
