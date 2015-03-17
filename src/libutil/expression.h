@@ -77,4 +77,11 @@ gboolean rspamd_parse_expression (const gchar *line, gsize len,
  */
 gint rspamd_process_expression (struct rspamd_expression *expr, gpointer data);
 
+/**
+ * Shows string representation of an expression
+ * @param expr expression to show
+ * @return freshly allocated string with expression
+ */
+GString *rspamd_expression_tostring (struct rspamd_expression *expr);
+
 #endif /* SRC_LIBUTIL_EXPRESSION_H_ */

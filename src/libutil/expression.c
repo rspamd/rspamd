@@ -24,6 +24,7 @@
 
 #include "config.h"
 #include "expression.h"
+#include "printf.h"
 #include "regexp.h"
 
 enum rspamd_expression_op {
@@ -515,4 +516,63 @@ rspamd_process_expression (struct rspamd_expression *expr, gpointer data)
 	g_assert (expr != NULL);
 
 	return 0;
+}
+
+GString *
+rspamd_expression_tostring (struct rspamd_expression *expr)
+{
+	GString *res;
+	struct rspamd_expression_elt *elt;
+	const char *op_str = NULL;
+	guint i;
+
+	g_assert (expr != NULL);
+
+	res = g_string_new (NULL);
+
+	for (i = 0; i < expr->expressions->len; i ++) {
+		elt = &g_array_index (expr->expressions, struct rspamd_expression_elt, i);
+
+		if (elt->type == ELT_ATOM) {
+			g_string_append_len (res, elt->p.atom->str, elt->p.atom->len);
+		}
+		else if (elt->type == ELT_LIMIT) {
+			rspamd_printf_gstring (res, "%d", elt->p.lim.val);
+		}
+		else {
+			switch (elt->p.op) {
+			case OP_MULT:
+				op_str = "*";
+				break;
+			case OP_PLUS:
+				op_str = "+";
+				break;
+			case OP_NOT:
+				op_str = "!";
+				break;
+			case OP_GE:
+				op_str = ">=";
+				break;
+			case OP_GT:
+				op_str = ">";
+				break;
+			case OP_LE:
+				op_str = "<=";
+				break;
+			case OP_LT:
+				op_str = ">=";
+				break;
+			default:
+				op_str = "???";
+				break;
+			}
+			g_string_append (res, op_str);
+		}
+
+		if (i != expr->expressions->len - 1) {
+			g_string_append_c (res, ' ');
+		}
+	}
+
+	return res;
 }
