@@ -65,7 +65,7 @@ struct rspamd_expression;
  * @return TRUE if an expression have been parsed
  */
 gboolean rspamd_parse_expression (const gchar *line, gsize len,
-		struct rspamd_atom_subr *subr, gpointer subr_data,
+		const struct rspamd_atom_subr *subr, gpointer subr_data,
 		rspamd_mempool_t *pool, GError **err,
 		struct rspamd_expression **target);
 

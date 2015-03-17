@@ -58,7 +58,7 @@ struct rspamd_expression_elt {
 };
 
 struct rspamd_expression {
-	struct rspamd_atom_subr *subr;
+	const struct rspamd_atom_subr *subr;
 	GArray *expressions;
 	GArray *expression_stack;
 };
@@ -279,7 +279,7 @@ rspamd_expression_destroy (struct rspamd_expression *expr)
 
 gboolean
 rspamd_parse_expression (const gchar *line, gsize len,
-		struct rspamd_atom_subr *subr, gpointer subr_data,
+		const struct rspamd_atom_subr *subr, gpointer subr_data,
 		rspamd_mempool_t *pool, GError **err,
 		struct rspamd_expression **target)
 {
@@ -313,6 +313,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 	e->expressions = g_array_new (FALSE, FALSE,
 			sizeof (struct rspamd_expression_elt));
 	e->expression_stack = g_array_sized_new (FALSE, FALSE, sizeof (gpointer), 32);
+	e->subr = subr;
 
 	/* Shunting-yard algorithm */
 	while (p < end) {
