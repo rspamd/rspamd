@@ -25,6 +25,63 @@
 #include <expression.h>
 #include "config.h"
 
+enum rspamd_expression_op {
+	OP_PLUS, /* || or + */
+	OP_MULT, /* && or * */
+	OP_NOT, /* ! */
+	OP_LT, /* < */
+	OP_GT, /* > */
+	OP_LE, /* <= */
+	OP_GE /* >= */
+};
+
+struct rspamd_expression_elt {
+	enum {
+		ELT_OP = 0,
+		ELT_ATOM,
+		ELT_LIMIT
+	} type;
+
+	union {
+		rspamd_expression_atom_t *atom;
+		enum rspamd_expression_op op;
+		struct {
+			gint val;
+			gint op_idx;
+		} lim;
+	} p;
+};
+
+struct rspamd_expression {
+	struct rspamd_atom_subr *subr;
+	GArray *expressions;
+	GPtrArray *expression_stack;
+};
+
+static void
+rspamd_expr_stack_push (struct rspamd_expression *expr,
+		struct rspamd_expression_elt *elt)
+{
+	g_ptr_array_add (expr->expression_stack, elt);
+}
+
+static struct rspamd_expression_elt *
+rspamd_expr_stack_pop (struct rspamd_expression *expr)
+{
+	struct rspamd_expression_elt *e;
+	gint idx;
+
+	if (expr->expression_stack->len == 0) {
+		return NULL;
+	}
+
+	idx = expr->expression_stack->len - 1;
+	e = g_ptr_array_index (expr->expression_stack, idx);
+	g_ptr_array_remove_index_fast (expr->expression_stack, idx);
+
+	return e;
+}
+
 gboolean
 rspamd_parse_expression (const gchar *line, gsize len,
 		struct rspamd_atom_subr *subr, gpointer subr_data,
@@ -37,6 +94,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 	if (len == 0) {
 		len = strlen (line);
 	}
+
 	return FALSE;
 }
 
