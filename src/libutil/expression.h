@@ -47,6 +47,7 @@ struct rspamd_atom_subr {
 	gint (*process) (gpointer input, rspamd_expression_atom_t *atom);
 	/* Calculates the relative priority of the expression */
 	gint (*priority) (rspamd_expression_atom_t *atom);
+	void (*destroy) (rspamd_expression_atom_t *atom);
 };
 
 /* Opaque structure */

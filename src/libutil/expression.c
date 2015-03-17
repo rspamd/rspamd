@@ -251,6 +251,31 @@ rspamd_expr_str_to_op (const gchar *a, const gchar *end, const gchar **next)
 	return op;
 }
 
+static void
+rspamd_expression_destroy (struct rspamd_expression *expr)
+{
+	guint i;
+	struct rspamd_expression_elt *elt;
+
+	if (expr != NULL) {
+
+		if (expr->subr->destroy) {
+			/* Free atoms */
+			for (i = 0; i < expr->expressions->len; i ++) {
+				elt = &g_array_index (expr->expressions,
+						struct rspamd_expression_elt, i);
+
+				if (elt->type == ELT_ATOM) {
+					expr->subr->destroy (elt->p.atom);
+				}
+			}
+		}
+
+		g_array_free (expr->expressions, TRUE);
+		g_array_free (expr->expression_stack, TRUE);
+	}
+}
+
 gboolean
 rspamd_parse_expression (const gchar *line, gsize len,
 		struct rspamd_atom_subr *subr, gpointer subr_data,
@@ -302,7 +327,8 @@ rspamd_parse_expression (const gchar *line, gsize len,
 				/*
 				 * First of all, we check some pre-conditions:
 				 * 1) if we have 'and ' or 'or ' or 'not ' strings, they are op
-				 * 2) if we have full numeric string, then we check for the following:
+				 * 2) if we have full numeric string, then we check for
+				 * the following expression:
 				 *  ^\d+\s*[><]$
 				 */
 				if ((gulong)(end - p) > sizeof ("and ") &&
@@ -470,6 +496,11 @@ rspamd_parse_expression (const gchar *line, gsize len,
 
 	if (*target) {
 		*target = e;
+		rspamd_mempool_add_destructor (pool,
+			(rspamd_mempool_destruct_t)rspamd_expression_destroy, e);
+	}
+	else {
+		rspamd_expression_destroy (e);
 	}
 
 	return TRUE;
