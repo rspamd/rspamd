@@ -230,7 +230,7 @@ void rspamd_lua_dumpstack (lua_State *L);
 /* Set lua path according to the configuration */
 void rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg);
 
-struct memory_pool_s * rspamd_lua_check_mempool (lua_State * L);
+struct memory_pool_s * rspamd_lua_check_mempool (lua_State * L, gint pos);
 
 
 #endif /* WITH_LUA */
