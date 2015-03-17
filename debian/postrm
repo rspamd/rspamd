@@ -1,6 +1,14 @@
 #!/bin/sh
 set -e
 
+if [ "$1" = "purge" ]; then
+   update-rc.d rspamd remove >/dev/null
+fi
+
+if [ -d /run/systemd/system ]; then
+    systemctl --system daemon-reload >/dev/null || true
+fi
+
 #DEBHELPER#
 
 case "$1" in
