@@ -33,6 +33,8 @@ typedef struct rspamd_expression_atom_s {
 	gpointer data;
 	/* String representation of atom */
 	const gchar *str;
+	/* Length of the string representation of atom */
+	gsize len;
 	/* Relative priority */
 	gint priority;
 } rspamd_expression_atom_t;
