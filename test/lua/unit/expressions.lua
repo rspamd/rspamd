@@ -3,11 +3,12 @@
 context("Rspamd expressions", function()
   local rspamd_expression = require "rspamd_expression"
   local rspamd_mempool = require "rspamd_mempool"
-  local _ = require "fun"
+  local rspamd_regexp = require "rspamd_regexp"
+  local split_re = rspamd_regexp.create('/\\s+/')
   
   local function parse_func(str)
     -- extract token till the first space character
-    local token = table.join('', take_while(function(s) return s ~= ' ' end, str))
+    local token = split_re:split(str)[1]
     -- Return token name
     return token
   end
@@ -27,7 +28,7 @@ context("Rspamd expressions", function()
         {parse_func, process_func}, pool)
       
       if c[2] then
-        assert_not_null(expr, "Cannot parse " .. c[1] ": " .. err)
+        assert_not_nil(expr, "Cannot parse " .. c[1] ": " .. err)
       else
         assert_equal(expr:to_string(), c[2], string.format("Evaluated expr to '%s', expected: '%s'",
             expr:to_string(), c[2]))
