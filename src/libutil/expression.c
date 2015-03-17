@@ -28,6 +28,7 @@
 #include "regexp.h"
 
 #define RSPAMD_EXPR_FLAG_NEGATE (1 << 0)
+#define RSPAMD_EXPR_FLAG_PROCESSED (1 << 1)
 
 enum rspamd_expression_op {
 	OP_INVALID = 0,
@@ -526,6 +527,15 @@ err:
 #define CHOSE_OPERAND(e1, e2) (((e1)->p.atom->priority >= (e2)->p.atom->priority) ? \
 		(e1) : (e2))
 #define CHOOSE_REMAIN(e1, e2, es) ((es) == (e1) ? (e2) : (e1))
+#define PROCESS_ELT(expr, e)	do {										\
+		if (!((e)->flags & RSPAMD_EXPR_FLAG_PROCESSED)) {					\
+			(e)->value = (expr)->subr->process (data, (e)->p.atom);			\
+			(e)->flags |= RSPAMD_EXPR_FLAG_PROCESSED;						\
+			if ((e)->flags & RSPAMD_EXPR_FLAG_NEGATE) {						\
+				(e)->value = !(e)->value;									\
+			}																\
+		}																	\
+	} while (0)
 
 gint
 rspamd_process_expression (struct rspamd_expression *expr, gpointer data)
@@ -572,23 +582,14 @@ rspamd_process_expression (struct rspamd_expression *expr, gpointer data)
 				g_assert (expr->expression_stack->len > 1);
 				st_elt[0] = rspamd_expr_stack_pop (expr);
 				st_elt[1] = rspamd_expr_stack_pop (expr);
-				ev = CHOSE_OPERAND (st_elt[0], st_elt[1]);
-				ev->value = expr->subr->process (data, ev->p.atom);
-
-				if (ev->flags & RSPAMD_EXPR_FLAG_NEGATE) {
-					ev->value = !ev->value;
-				}
+				PROCESS_ELT (expr, ev);
 
 				if (ev->value) {
 					rspamd_expr_stack_push (expr, ev);
 				}
 				else {
 					ev = CHOOSE_REMAIN (st_elt[0], st_elt[1], ev);
-					ev->value = expr->subr->process (data, ev->p.atom);
-
-					if (ev->flags & RSPAMD_EXPR_FLAG_NEGATE) {
-						ev->value = !ev->value;
-					}
+					PROCESS_ELT (expr, ev);
 					/* Push the remaining op */
 					rspamd_expr_stack_push (expr, ev);
 				}
@@ -599,22 +600,14 @@ rspamd_process_expression (struct rspamd_expression *expr, gpointer data)
 				st_elt[0] = rspamd_expr_stack_pop (expr);
 				st_elt[1] = rspamd_expr_stack_pop (expr);
 				ev = CHOSE_OPERAND (st_elt[0], st_elt[1]);
-				ev->value = expr->subr->process (data, ev->p.atom);
-
-				if (ev->flags & RSPAMD_EXPR_FLAG_NEGATE) {
-					ev->value = !ev->value;
-				}
+				PROCESS_ELT (expr, ev);
 
 				if (!ev->value) {
 					rspamd_expr_stack_push (expr, ev);
 				}
 				else {
 					ev = CHOOSE_REMAIN (st_elt[0], st_elt[1], ev);
-					ev->value = expr->subr->process (data, ev->p.atom);
-
-					if (ev->flags & RSPAMD_EXPR_FLAG_NEGATE) {
-						ev->value = !ev->value;
-					}
+					PROCESS_ELT (expr, ev);
 					/* Push the remaining op */
 					rspamd_expr_stack_push (expr, ev);
 				}
