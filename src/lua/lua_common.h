@@ -182,6 +182,7 @@ void luaopen_io_dispatcher (lua_State * L);
 void luaopen_dns_resolver (lua_State * L);
 void luaopen_rsa (lua_State * L);
 void luaopen_ip (lua_State * L);
+void luaopen_expression (lua_State * L);
 
 gint rspamd_lua_call_filter (const gchar *function, struct rspamd_task *task);
 gint rspamd_lua_call_chain_filter (const gchar *function,
