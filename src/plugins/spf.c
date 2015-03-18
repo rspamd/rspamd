@@ -299,9 +299,11 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task)
 			rspamd_lru_hash_lookup (spf_module_ctx->spf_hash,
 			record->domain, task->tv.tv_sec)) == NULL) {
 
+			l = spf_record_ref (record);
 			rspamd_lru_hash_insert (spf_module_ctx->spf_hash,
-				record->domain, spf_record_ref (record),
+				record->domain, l,
 				task->tv.tv_sec, record->ttl);
+
 		}
 		spf_record_ref (l);
 		spf_check_list (l, task);

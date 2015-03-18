@@ -113,7 +113,6 @@ struct spf_dns_cb {
 		}                                                       \
 	} while (0)                                                 \
 
-static gboolean parse_spf_record (struct spf_record *rec, const gchar *elt);
 static gboolean start_spf_parse (struct spf_record *rec, gchar *begin);
 
 /* Determine spf mech */
@@ -1017,7 +1016,7 @@ parse_spf_redirect (struct spf_record *rec, struct spf_addr *addr)
 
 	CHECK_REC (rec);
 
-	domain = strchr (addr->spf_string, ':');
+	domain = strchr (addr->spf_string, '=');
 
 	if (domain == NULL) {
 		return FALSE;
@@ -1394,17 +1393,14 @@ expand_spf_macro (struct spf_record *rec,
 
 /* Read current element and try to parse record */
 static gboolean
-parse_spf_record (struct spf_record *rec, const gchar *elt)
+parse_spf_record (struct spf_record *rec, struct spf_resolved_element *resolved,
+		const gchar *elt)
 {
 	struct spf_addr *addr = NULL;
 	gboolean res = FALSE;
 	const gchar *begin;
 	struct rspamd_task *task;
-	struct spf_resolved_element *resolved;
 	gchar t;
-
-	resolved = &g_array_index (rec->resolved, struct spf_resolved_element,
-		rec->resolved->len - 1);
 
 	g_assert (elt != NULL);
 	g_assert (rec != NULL);
@@ -1519,7 +1515,7 @@ parse_spf_record (struct spf_record *rec, const gchar *elt)
 	}
 
 	if (res) {
-		addr->flags |= RSPAMD_SPF_FLAG_VALID;
+		addr->flags |= RSPAMD_SPF_FLAG_PARSED;
 	}
 
 	return res;
@@ -1553,6 +1549,7 @@ static gboolean
 start_spf_parse (struct spf_record *rec, gchar *begin)
 {
 	gchar **elts, **cur_elt;
+	struct spf_resolved_element *resolved;
 
 	/* Skip spaces */
 	while (g_ascii_isspace (*begin)) {
@@ -1593,13 +1590,15 @@ start_spf_parse (struct spf_record *rec, gchar *begin)
 		begin++;
 	}
 
+	resolved = &g_array_index (rec->resolved, struct spf_resolved_element,
+			rec->resolved->len - 1);
 	elts = g_strsplit_set (begin, " ", 0);
 
 	if (elts) {
 		cur_elt = elts;
 
 		while (*cur_elt) {
-			parse_spf_record (rec, *cur_elt);
+			parse_spf_record (rec, resolved, *cur_elt);
 			cur_elt ++;
 		}
 
@@ -1664,6 +1663,9 @@ resolve_spf (struct rspamd_task *task, spf_cb_t callback)
 	rec = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct spf_record));
 	rec->task = task;
 	rec->callback = callback;
+
+	rec->resolved = g_array_sized_new (FALSE, FALSE,
+			sizeof (struct spf_resolved_element), 8);
 
 	rspamd_spf_new_addr_list (rec, rec->sender_domain);
 
