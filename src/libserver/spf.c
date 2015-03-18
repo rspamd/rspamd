@@ -301,6 +301,7 @@ rspamd_spf_record_flatten (struct spf_record *rec)
 	res->elts = g_array_sized_new (FALSE, FALSE, sizeof (struct spf_addr),
 			rec->resolved->len);
 	res->domain = g_strdup (rec->sender_domain);
+	res->ttl = rec->ttl;
 	REF_INIT_RETAIN (res, rspamd_flatten_record_dtor);
 
 	top = &g_array_index (rec->resolved, struct spf_resolved_element, 0);
