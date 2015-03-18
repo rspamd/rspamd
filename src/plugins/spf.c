@@ -62,8 +62,6 @@ struct spf_ctx {
 static struct spf_ctx *spf_module_ctx = NULL;
 
 static void spf_symbol_callback (struct rspamd_task *task, void *unused);
-static GList * spf_record_copy (GList *addrs);
-static void spf_record_destroy (gpointer list);
 
 /* Initialization */
 gint spf_module_init (struct rspamd_config *cfg, struct module_ctx **ctx);
@@ -315,8 +313,8 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task)
 static void
 spf_symbol_callback (struct rspamd_task *task, void *unused)
 {
-	gchar *domain;
-	GList *l;
+	const gchar *domain;
+	struct spf_resolved *l;
 
 	if (radix_find_compressed_addr (spf_module_ctx->whitelist_ip,
 			task->from_addr) == RADIX_NO_VALUE) {
@@ -325,7 +323,9 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 			if ((l =
 				rspamd_lru_hash_lookup (spf_module_ctx->spf_hash, domain,
 				task->tv.tv_sec)) != NULL) {
+				spf_record_ref (l);
 				spf_check_list (l, task);
+				spf_record_unref (l);
 			}
 			else if (!resolve_spf (task, spf_plugin_callback)) {
 				msg_info ("cannot make spf request for [%s]", task->message_id);
