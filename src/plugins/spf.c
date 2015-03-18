@@ -281,7 +281,6 @@ spf_check_list (struct spf_resolved *rec, struct rspamd_task *task)
 
 	for (i = 0; i < rec->elts->len; i ++) {
 		addr = &g_array_index (rec->elts, struct spf_addr, i);
-
 		if (spf_check_element (addr, task)) {
 			break;
 		}
