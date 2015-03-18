@@ -188,11 +188,10 @@ static gboolean
 spf_check_element (struct spf_addr *addr, struct rspamd_task *task)
 {
 	gboolean res = FALSE;
-	guint8 *s, *d, t, *buf;
+	guint8 *s, *d;
 	gchar *spf_result;
-	gint af;
+	guint af, mask, bmask, addrlen;
 	const gchar *spf_message, *spf_symbol;
-	guint nbits, addrlen;
 	struct in_addr in4s;
 	struct in6_addr in6s;
 	GList *opts = NULL;
@@ -206,9 +205,6 @@ spf_check_element (struct spf_addr *addr, struct rspamd_task *task)
 	if ((addr->data.normal.ipv6 && af == AF_INET6) ||
 		(!addr->data.normal.ipv6 && af == AF_INET)) {
 		d = rspamd_inet_address_get_radix_key (task->from_addr, &addrlen);
-		buf = g_alloca (addrlen);
-		memcpy (buf, d, addrlen);
-		d = buf;
 
 		if (addr->data.normal.ipv6) {
 			memcpy (&in6s, &addr->data.normal.d.in6,
@@ -221,27 +217,27 @@ spf_check_element (struct spf_addr *addr, struct rspamd_task *task)
 			s = (guint8 *)&in4s;
 		}
 
-		/* Move pointers to the less significant byte */
-		t = 0x1;
-		s += addrlen - 1;
-		d += addrlen - 1;
-		/* TODO: improve this cycle by masking by words */
-		for (nbits = 0;
-			nbits < addrlen * CHAR_BIT - addr->data.normal.mask;
-			nbits++) {
-			/* Skip bits from the beginning as we know that data is in network byte order */
-			if (nbits != 0 && nbits % 8 == 0) {
-				/* Move pointer to the next byte */
-				s--;
-				d--;
-				t = 0x1;
-			}
-			*s |= t;
-			*d |= t;
-			t <<= 1;
+		/* Compare the first bytes */
+		mask = addr->data.normal.mask;
+		bmask = mask / CHAR_BIT;
+		if (bmask > addrlen) {
+			msg_info ("bad mask length: %d", mask);
 		}
+		else if (memcmp (s, d, bmask) == 0) {
 
-		res = memcmp (d, s, addrlen);
+			if (bmask * CHAR_BIT != mask) {
+				/* Compare the remaining bits */
+				s += bmask;
+				d += bmask;
+				mask = (0xff << (CHAR_BIT - (mask - bmask * 8))) & 0xff;
+				if ((*s & mask) == (*d & mask)) {
+					res = TRUE;
+				}
+			}
+			else {
+				res = TRUE;
+			}
+		}
 	}
 	else {
 		if (addr->data.normal.addr_any) {
