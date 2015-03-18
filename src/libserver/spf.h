@@ -34,13 +34,14 @@ typedef enum spf_action_e {
 #define RSPAMD_SPF_FLAG_REFRENCE (1 << 4)
 
 struct spf_addr {
-	guchar addr[sizeof (struct in6_addr)];
+	guchar addr6[sizeof (struct in6_addr)];
+	guchar addr4[sizeof (struct in_addr)];
 	union {
 		struct {
 			guint16 mask_v4;
 			guint16 mask_v6;
 		} dual;
-		guint32 mask;
+		guint32 idx;
 	} m;
 	guint flags;
 	spf_mech_t mech;
