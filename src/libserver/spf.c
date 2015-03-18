@@ -911,10 +911,7 @@ parse_spf_ptr (struct rspamd_task *task,
 }
 
 static gboolean
-parse_spf_mx (struct rspamd_task *task,
-	const gchar *begin,
-	struct spf_record *rec,
-	struct spf_addr *addr)
+parse_spf_mx (struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
 	gchar *host;
@@ -952,76 +949,66 @@ parse_spf_mx (struct rspamd_task *task,
 }
 
 static gboolean
-parse_spf_all (struct rspamd_task *task,
-	const gchar *begin,
-	struct spf_record *rec,
-	struct spf_addr *addr)
+parse_spf_all (struct spf_record *rec, struct spf_addr *addr)
 {
 	/* All is 0/0 */
-	memset (&addr->data.normal.d, 0, sizeof (addr->data.normal.d));
-	if (rec->in_include) {
-		/* Ignore all record in include */
-		addr->data.normal.mask = 32;
-	}
-	else {
-		addr->data.normal.mask = 0;
-		addr->data.normal.addr_any = TRUE;
-	}
+	memset (&addr->addr, 0, sizeof (addr->addr));
+	addr->m.mask = 0;
+	addr->flags |= RSPAMD_SPF_FLAG_ANY;
 
 	return TRUE;
 }
 
 static gboolean
-parse_spf_ip4 (struct rspamd_task *task,
-	const gchar *begin,
-	struct spf_record *rec,
-	struct spf_addr *addr)
+parse_spf_ip4 (struct spf_record *rec, struct spf_addr *addr)
 {
 	/* ip4:addr[/mask] */
 
 	CHECK_REC (rec);
-	return parse_spf_ipmask (begin, addr, rec);
+	return parse_spf_ipmask (addr->spf_string, addr, rec);
 }
 
 #ifdef HAVE_INET_PTON
 static gboolean
-parse_spf_ip6 (struct rspamd_task *task,
-	const gchar *begin,
-	struct spf_record *rec,
-	struct spf_addr *addr)
+parse_spf_ip6 (struct spf_record *rec, struct spf_addr *addr)
 {
 	/* ip6:addr[/mask] */
 
 	CHECK_REC (rec);
-	return parse_spf_ipmask (begin, addr, rec);
+	return parse_spf_ipmask (addr->spf_string, addr, rec);
 }
 #endif
 
 static gboolean
-parse_spf_include (struct rspamd_task *task,
-	const gchar *begin,
-	struct spf_record *rec,
-	struct spf_addr *addr)
+parse_spf_include (struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
 	gchar *domain;
+	struct spf_resolved_element *resolved;
+	struct rspamd_task *task = rec->task;
+
+	resolved = &g_array_index (rec->resolved, struct spf_resolved_element,
+			rec->resolved->len - 1);
 
 	CHECK_REC (rec);
+	domain = strchr (addr->spf_string, '=');
 
-	if (begin == NULL || *begin != ':') {
+	if (domain == NULL) {
 		return FALSE;
 	}
-	begin++;
+
+	domain++;
+
 	rec->dns_requests++;
 
 	cb = rspamd_mempool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
 	cb->rec = rec;
 	cb->addr = addr;
 	cb->cur_action = SPF_RESOLVE_INCLUDE;
-	cb->in_include = rec->in_include;
-	addr->is_list = TRUE;
-	addr->data.list = NULL;
-	domain = rspamd_mempool_strdup (task->task_pool, begin);
+	/* Set reference */
+	addr->flags |= RSPAMD_SPF_FLAG_REFRENCE;
+	addr->m.mask = rec->resolved->len;
+	rspamd_spf_new_addr_list (rec, domain);
 	msg_debug ("resolve include %s", domain);
 
 	if (make_dns_request (task->resolver, task->s, task->task_pool,
@@ -1037,10 +1024,7 @@ parse_spf_include (struct rspamd_task *task,
 }
 
 static gboolean
-parse_spf_exp (struct rspamd_task *task,
-	const gchar *begin,
-	struct spf_record *rec,
-	struct spf_addr *addr)
+parse_spf_exp (struct spf_record *rec, struct spf_addr *addr)
 {
 	CHECK_REC (rec);
 
@@ -1049,29 +1033,51 @@ parse_spf_exp (struct rspamd_task *task,
 }
 
 static gboolean
-parse_spf_redirect (struct rspamd_task *task,
-	const gchar *begin,
-	struct spf_record *rec,
-	struct spf_addr *addr)
+parse_spf_redirect (struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
-	gchar *domain;
+	const gchar *domain;
+	struct spf_resolved_element *resolved;
+	struct spf_addr *cur;
+	struct rspamd_task *task = rec->task;
+	guint i;
+
+	resolved = &g_array_index (rec->resolved, struct spf_resolved_element,
+			rec->resolved->len - 1);
 
 	CHECK_REC (rec);
 
-	if (begin == NULL || *begin != '=') {
+	domain = strchr (addr->spf_string, '=');
+
+	if (domain == NULL) {
 		return FALSE;
 	}
-	begin++;
+
+	domain++;
+
 	rec->dns_requests++;
+	resolved->redirected = TRUE;
+
+	/* Now clear all elements but this one */
+	for (i = 0; i < resolved->elts->len; i ++) {
+		cur = g_ptr_array_index (resolved->elts, i);
+
+		if (cur != addr) {
+			g_ptr_array_remove_index_fast (resolved->elts, i);
+		}
+	}
 
 	cb = rspamd_mempool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
+	/* Set reference */
+	addr->flags |= RSPAMD_SPF_FLAG_REFRENCE;
+	addr->m.mask = rec->resolved->len;
+	rspamd_spf_new_addr_list (rec, domain);
+
 	cb->rec = rec;
 	cb->addr = addr;
 	cb->cur_action = SPF_RESOLVE_REDIRECT;
-	cb->in_include = rec->in_include;
-	domain = rspamd_mempool_strdup (task->task_pool, begin);
 	msg_debug ("resolve redirect %s", domain);
+
 	if (make_dns_request (task->resolver, task->s, task->task_pool,
 		spf_record_dns_callback, (void *)cb, RDNS_REQUEST_TXT, domain)) {
 		task->dns_requests++;
@@ -1084,29 +1090,27 @@ parse_spf_redirect (struct rspamd_task *task,
 }
 
 static gboolean
-parse_spf_exists (struct rspamd_task *task,
-	const gchar *begin,
-	struct spf_record *rec,
-	struct spf_addr *addr)
+parse_spf_exists (struct spf_record *rec, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
-	gchar *host;
+	const gchar *host;
+	struct rspamd_task *task = rec->task;
 
 	CHECK_REC (rec);
 
-	if (begin == NULL || *begin != ':') {
+	host = strchr (addr->spf_string, ':');
+	if (host == NULL) {
+		msg_info ("bad SPF exist record: %s", addr->spf_string);
 		return FALSE;
 	}
-	begin++;
+
+	host ++;
 	rec->dns_requests++;
 
-	addr->data.normal.mask = 32;
 	cb = rspamd_mempool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
 	cb->rec = rec;
 	cb->addr = addr;
 	cb->cur_action = SPF_RESOLVE_EXISTS;
-	cb->in_include = rec->in_include;
-	host = rspamd_mempool_strdup (task->task_pool, begin);
 
 	msg_debug ("resolve exists %s", host);
 	if (make_dns_request (task->resolver, task->s, task->task_pool,
@@ -1152,17 +1156,26 @@ reverse_spf_ip (gchar *ip, gint len)
 	memcpy (ip,	   ipbuf, len);
 }
 
-static gchar *
-expand_spf_macro (struct rspamd_task *task, struct spf_record *rec,
-	gchar *begin)
+static const gchar *
+expand_spf_macro (struct spf_record *rec,
+	const gchar *begin)
 {
-	gchar *p, *c, *new, *tmp;
+	const gchar *p, *c;
+	gchar *new, *tmp;
 	gint len = 0, slen = 0, state = 0;
 #ifdef HAVE_INET_PTON
 	gchar ip_buf[INET6_ADDRSTRLEN];
 #endif
 	gboolean need_expand = FALSE;
+	struct rspamd_task *task;
+	struct spf_resolved_element *resolved;
 
+	g_assert (rec != NULL);
+	g_assert (begin != NULL);
+
+	task = rec->task;
+	resolved = &g_array_index (rec->resolved, struct spf_resolved_element,
+			rec->resolved->len - 1);
 	p = begin;
 	/* Calculate length */
 	while (*p) {
@@ -1223,7 +1236,7 @@ expand_spf_macro (struct rspamd_task *task, struct spf_record *rec,
 				len += strlen (rec->sender_domain);
 				break;
 			case 'd':
-				len += strlen (rec->cur_domain);
+				len += strlen (resolved->cur_domain);
 				break;
 			case 'v':
 				len += sizeof ("in-addr") - 1;
@@ -1348,8 +1361,8 @@ expand_spf_macro (struct rspamd_task *task, struct spf_record *rec,
 				c += len;
 				break;
 			case 'd':
-				len = strlen (rec->cur_domain);
-				memcpy (c, rec->cur_domain, len);
+				len = strlen (resolved->cur_domain);
+				memcpy (c, resolved->cur_domain, len);
 				c += len;
 				break;
 			case 'v':
@@ -1411,174 +1424,138 @@ expand_spf_macro (struct rspamd_task *task, struct spf_record *rec,
 
 }
 
-#define NEW_ADDR(x) do {                                                        \
-		(x) = rspamd_mempool_alloc (task->task_pool, sizeof (struct spf_addr));     \
-		(x)->mech = check_spf_mech (rec->cur_elt, &need_shift);                     \
-		(x)->spf_string = rspamd_mempool_strdup (task->task_pool, begin);               \
-		memset (&(x)->data.normal, 0, sizeof ((x)->data.normal));                   \
-		(x)->data.normal.mask = 32;                                                 \
-		(x)->is_list = FALSE;                                                       \
-} while (0);
-
 /* Read current element and try to parse record */
 static gboolean
-parse_spf_record (struct rspamd_task *task, struct spf_record *rec)
+parse_spf_record (struct spf_record *rec, const gchar *elt)
 {
-	struct spf_addr *new = NULL;
-	gboolean need_shift, res = FALSE;
-	gchar *begin;
+	struct spf_addr *addr = NULL;
+	gboolean res = FALSE;
+	const gchar *begin;
+	struct rspamd_task *task;
+	struct spf_resolved_element *resolved;
+	gchar t;
 
-	rec->cur_elt = rec->elts[rec->elt_num];
-	if (rec->cur_elt == NULL) {
-		return FALSE;
-	}
-	else if (*rec->cur_elt == '\0') {
-		/* Silently skip empty elements */
-		rec->elt_num++;
+	resolved = &g_array_index (rec->resolved, struct spf_resolved_element,
+		rec->resolved->len - 1);
+
+	g_assert (elt != NULL);
+	g_assert (rec != NULL);
+
+	if (*elt == '\0' || resolved->redirected) {
 		return TRUE;
 	}
-	else {
-		begin = expand_spf_macro (task, rec, rec->cur_elt);
-		if (*begin == '?' || *begin == '+' || *begin == '-' || *begin == '~') {
-			begin++;
-		}
 
+	task = rec->task;
+	begin = expand_spf_macro (rec, elt);
+	addr = rspamd_spf_new_addr (rec, begin);
+	g_assert (addr != NULL);
+	t = g_ascii_tolower (addr->spf_string[0]);
+	begin = addr->spf_string;
 
-		/* Now check what we have */
-		switch (g_ascii_tolower (*begin)) {
-		case 'a':
-			/* all or a */
-			if (g_ascii_strncasecmp (begin, SPF_ALL,
+	/* Now check what we have */
+	switch (t) {
+	case 'a':
+		/* all or a */
+		if (g_ascii_strncasecmp (begin, SPF_ALL,
 				sizeof (SPF_ALL) - 1) == 0) {
-				NEW_ADDR (new);
-				begin += sizeof (SPF_ALL) - 1;
-				res = parse_spf_all (task, begin, rec, new);
-			}
-			else if (g_ascii_strncasecmp (begin, SPF_A,
+			res = parse_spf_all (rec, addr);
+		}
+		else if (g_ascii_strncasecmp (begin, SPF_A,
 				sizeof (SPF_A) - 1) == 0) {
-				NEW_ADDR (new);
-				begin += sizeof (SPF_A) - 1;
-				res = parse_spf_a (task, begin, rec, new);
-			}
-			else {
-				msg_info ("<%s>: spf error for domain %s: bad spf command %s",
-					task->message_id, rec->sender_domain, begin);
-			}
-			break;
-		case 'i':
-			/* include or ip4 */
-			if (g_ascii_strncasecmp (begin, SPF_IP4,
-				sizeof (SPF_IP4) - 1) == 0) {
-				NEW_ADDR (new);
-				begin += sizeof (SPF_IP4) - 1;
-				res = parse_spf_ip4 (task, begin, rec, new);
-			}
-			else if (g_ascii_strncasecmp (begin, SPF_INCLUDE,
-				sizeof (SPF_INCLUDE) - 1) == 0) {
-				NEW_ADDR (new);
-				begin += sizeof (SPF_INCLUDE) - 1;
-				res = parse_spf_include (task, begin, rec, new);
-			}
-			else if (g_ascii_strncasecmp (begin, SPF_IP6, sizeof (SPF_IP6) -
-				1) == 0) {
-#ifdef HAVE_INET_PTON
-				NEW_ADDR (new);
-				begin += sizeof (SPF_IP6) - 1;
-				res = parse_spf_ip6 (task, begin, rec, new);
-#else
-				msg_info (
-					"ignoring ip6 spf command as IPv6 is not supported: %s",
-					begin);
-				new = NULL;
-				res = TRUE;
-				begin += sizeof (SPF_IP6) - 1;
-#endif
-			}
-			else {
-				msg_info ("<%s>: spf error for domain %s: bad spf command %s",
-					task->message_id, rec->sender_domain, begin);
-			}
-			break;
-		case 'm':
-			/* mx */
-			if (g_ascii_strncasecmp (begin, SPF_MX, sizeof (SPF_MX) - 1) == 0) {
-				NEW_ADDR (new);
-				begin += sizeof (SPF_MX) - 1;
-				res = parse_spf_mx (task, begin, rec, new);
-			}
-			else {
-				msg_info ("<%s>: spf error for domain %s: bad spf command %s",
-					task->message_id, rec->sender_domain, begin);
-			}
-			break;
-		case 'p':
-			/* ptr */
-			if (g_ascii_strncasecmp (begin, SPF_PTR,
-				sizeof (SPF_PTR) - 1) == 0) {
-				NEW_ADDR (new);
-				begin += sizeof (SPF_PTR) - 1;
-				res = parse_spf_ptr (task, begin, rec, new);
-			}
-			else {
-				msg_info ("<%s>: spf error for domain %s: bad spf command %s",
-					task->message_id, rec->sender_domain, begin);
-			}
-			break;
-		case 'e':
-			/* exp or exists */
-			if (g_ascii_strncasecmp (begin, SPF_EXP,
-				sizeof (SPF_EXP) - 1) == 0) {
-				begin += sizeof (SPF_EXP) - 1;
-				res = parse_spf_exp (task, begin, rec, NULL);
-			}
-			else if (g_ascii_strncasecmp (begin, SPF_EXISTS,
-				sizeof (SPF_EXISTS) - 1) == 0) {
-				NEW_ADDR (new);
-				begin += sizeof (SPF_EXISTS) - 1;
-				res = parse_spf_exists (task, begin, rec, new);
-			}
-			else {
-				msg_info ("<%s>: spf error for domain %s: bad spf command %s",
-					task->message_id, rec->sender_domain, begin);
-			}
-			break;
-		case 'r':
-			/* redirect */
-			if (g_ascii_strncasecmp (begin, SPF_REDIRECT,
-				sizeof (SPF_REDIRECT) - 1) == 0) {
-				begin += sizeof (SPF_REDIRECT) - 1;
-				res = parse_spf_redirect (task, begin, rec, NULL);
-			}
-			else {
-				msg_info ("<%s>: spf error for domain %s: bad spf command %s",
-					task->message_id, rec->sender_domain, begin);
-			}
-			break;
-		case 'v':
-			if (g_ascii_strncasecmp (begin, "v=spf",
-				sizeof ("v=spf") - 1) == 0) {
-				/* Skip this element till the end of record */
-				while (*begin && !g_ascii_isspace (*begin)) {
-					begin++;
-				}
-			}
-			break;
-		default:
+			res = parse_spf_a (rec, addr);
+		}
+		else {
 			msg_info ("<%s>: spf error for domain %s: bad spf command %s",
-				task->message_id, rec->sender_domain, begin);
-			break;
+					task->message_id, rec->sender_domain, begin);
 		}
-		if (res) {
-			if (new != NULL) {
-				rec->addrs = g_list_prepend (rec->addrs, new);
+		break;
+	case 'i':
+		/* include or ip4 */
+		if (g_ascii_strncasecmp (begin, SPF_IP4,
+				sizeof (SPF_IP4) - 1) == 0) {
+			res = parse_spf_ip4 (rec, addr);
+		}
+		else if (g_ascii_strncasecmp (begin, SPF_INCLUDE,
+				sizeof (SPF_INCLUDE) - 1) == 0) {
+			res = parse_spf_include (rec, addr);
+		}
+		else if (g_ascii_strncasecmp (begin, SPF_IP6, sizeof (SPF_IP6) -
+				1) == 0) {
+			res = parse_spf_ip6 (rec, addr);
+		}
+		else {
+			msg_info ("<%s>: spf error for domain %s: bad spf command %s",
+					task->message_id, rec->sender_domain, begin);
+		}
+		break;
+	case 'm':
+		/* mx */
+		if (g_ascii_strncasecmp (begin, SPF_MX, sizeof (SPF_MX) - 1) == 0) {
+			res = parse_spf_mx (rec, addr);
+		}
+		else {
+			msg_info ("<%s>: spf error for domain %s: bad spf command %s",
+					task->message_id, rec->sender_domain, begin);
+		}
+		break;
+	case 'p':
+		/* ptr */
+		if (g_ascii_strncasecmp (begin, SPF_PTR,
+				sizeof (SPF_PTR) - 1) == 0) {
+			res = parse_spf_ptr (rec, addr);
+		}
+		else {
+			msg_info ("<%s>: spf error for domain %s: bad spf command %s",
+					task->message_id, rec->sender_domain, begin);
+		}
+		break;
+	case 'e':
+		/* exp or exists */
+		if (g_ascii_strncasecmp (begin, SPF_EXP,
+				sizeof (SPF_EXP) - 1) == 0) {
+			res = parse_spf_exp (rec, addr);
+		}
+		else if (g_ascii_strncasecmp (begin, SPF_EXISTS,
+				sizeof (SPF_EXISTS) - 1) == 0) {
+			res = parse_spf_exists (rec, addr);
+		}
+		else {
+			msg_info ("<%s>: spf error for domain %s: bad spf command %s",
+					task->message_id, rec->sender_domain, begin);
+		}
+		break;
+	case 'r':
+		/* redirect */
+		if (g_ascii_strncasecmp (begin, SPF_REDIRECT,
+				sizeof (SPF_REDIRECT) - 1) == 0) {
+			res = parse_spf_redirect (rec, addr);
+		}
+		else {
+			msg_info ("<%s>: spf error for domain %s: bad spf command %s",
+					task->message_id, rec->sender_domain, begin);
+		}
+		break;
+	case 'v':
+		if (g_ascii_strncasecmp (begin, "v=spf",
+				sizeof ("v=spf") - 1) == 0) {
+			/* Skip this element till the end of record */
+			while (*begin && !g_ascii_isspace (*begin)) {
+				begin++;
 			}
-			rec->elt_num++;
 		}
+		break;
+	default:
+		msg_info ("<%s>: spf error for domain %s: bad spf command %s",
+				task->message_id, rec->sender_domain, begin);
+		break;
+	}
+
+	if (res) {
+		addr->flags |= RSPAMD_SPF_FLAG_VALID;
 	}
 
 	return res;
 }
-#undef NEW_ADDR
 
 static void
 parse_spf_scopes (struct spf_record *rec, gchar **begin)
