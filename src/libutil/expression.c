@@ -468,8 +468,8 @@ rspamd_parse_expression (const gchar *line, gsize len,
 
 					/* We ignore associativity for now */
 					if (op_stack != OP_OBRACE &&
-							rspamd_expr_logic_priority (op) <=
-							rspamd_expr_logic_priority(op_stack)) {
+							rspamd_expr_logic_priority (op) <
+							rspamd_expr_logic_priority (op_stack)) {
 						elt.type = ELT_OP;
 						elt.p.op = op_stack;
 						g_array_append_val (e->expressions, elt);
@@ -497,6 +497,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 			else {
 				state = PARSE_ATOM;
 			}
+			break;
 		}
 	}
 
