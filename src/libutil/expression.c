@@ -311,7 +311,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 		PARSE_OP,
 		PARSE_LIM,
 		SKIP_SPACES
-	} state;
+	} state = PARSE_ATOM;
 
 	g_assert (line != NULL);
 	g_assert (subr != NULL && subr->parse != NULL);
