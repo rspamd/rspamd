@@ -878,7 +878,7 @@ parse_spf_ip4 (struct spf_record *rec, struct spf_addr *addr)
 		len = strlen (semicolon);
 	}
 
-	rspamd_strlcpy (ipbuf, semicolon, MIN (len, sizeof (ipbuf)));
+	rspamd_strlcpy (ipbuf, semicolon, MIN (len + 1, sizeof (ipbuf)));
 
 	if (inet_pton (AF_INET, ipbuf, addr->addr4) != 1) {
 		return FALSE;
@@ -927,7 +927,7 @@ parse_spf_ip6 (struct spf_record *rec, struct spf_addr *addr)
 		len = strlen (semicolon);
 	}
 
-	rspamd_strlcpy (ipbuf, semicolon, MIN (len, sizeof (ipbuf)));
+	rspamd_strlcpy (ipbuf, semicolon, MIN (len + 1, sizeof (ipbuf)));
 
 	if (inet_pton (AF_INET6, ipbuf, addr->addr6) != 1) {
 		return FALSE;
