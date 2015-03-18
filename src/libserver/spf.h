@@ -50,6 +50,7 @@ struct spf_addr {
 };
 
 struct spf_resolved {
+	gchar *domain;
 	GArray *elts; /* Flat list of struct spf_addr */
 	ref_entry_t ref; /* Refcounting */
 };

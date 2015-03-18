@@ -67,6 +67,7 @@ struct spf_record {
 	gchar *local_part;
 	struct rspamd_task *task;
 	spf_cb_t callback;
+	gboolean done;
 };
 
 /**
@@ -200,130 +201,20 @@ static void
 spf_record_destructor (gpointer r)
 {
 	struct spf_record *rec = r;
-	GList *cur;
 	struct spf_addr *addr;
+	struct spf_resolved_element *elt;
+	guint i, j;
 
-	if (rec->addrs) {
-		cur = rec->addrs;
-		while (cur) {
-			addr = cur->data;
-			if (addr->is_list && addr->data.list != NULL) {
-				g_list_free (addr->data.list);
-			}
-			cur = g_list_next (cur);
+	if (rec) {
+		for (i = 0; i < rec->resolved->len; i ++) {
+			elt = &g_array_index (rec->resolved, struct spf_resolved_element, i);
+
+			/* Elts are destructed automatically here */
+			g_ptr_array_free (elt->elts, TRUE);
+			g_free (elt->cur_domain);
 		}
-		g_list_free (rec->addrs);
+		g_array_free (rec->resolved, TRUE);
 	}
-}
-
-static gboolean
-parse_spf_ipmask (const gchar *begin,
-	struct spf_addr *addr,
-	struct spf_record *rec)
-{
-	const gchar *pos;
-	gchar mask_buf[5] = {'\0'}, *p;
-	gint state = 0, dots = 0;
-	guint mask;
-	gchar ip_buf[INET6_ADDRSTRLEN];
-
-	bzero (ip_buf,	 sizeof (ip_buf));
-	bzero (mask_buf, sizeof (mask_buf));
-	pos = begin;
-	p = ip_buf;
-
-	while (*pos) {
-		switch (state) {
-		case 0:
-			/* Require ':' */
-			if (*pos != ':') {
-				msg_info ("<%s>: spf error for domain %s: semicolon missing",
-					rec->task->message_id, rec->sender_domain);
-				return FALSE;
-			}
-			state = 1;
-			pos++;
-			p = ip_buf;
-			dots = 0;
-			break;
-		case 1:
-			if (p - ip_buf >= (gint)sizeof (ip_buf)) {
-				return FALSE;
-			}
-			if (g_ascii_isxdigit (*pos)) {
-				*p++ = *pos++;
-			}
-			else if (*pos == '.' || *pos == ':') {
-				*p++ = *pos++;
-				dots++;
-			}
-			else if (*pos == '/') {
-				pos++;
-				p = mask_buf;
-				state = 2;
-			}
-			else {
-				/* Invalid character */
-				msg_info ("<%s>: spf error for domain %s: invalid ip address",
-					rec->task->message_id, rec->sender_domain);
-				return FALSE;
-			}
-			break;
-		case 2:
-			/* Parse mask */
-			if (p - mask_buf >= (gint)sizeof (mask_buf)) {
-				msg_info ("<%s>: spf error for domain %s: too long mask",
-					rec->task->message_id, rec->sender_domain);
-				return FALSE;
-			}
-			if (g_ascii_isdigit (*pos)) {
-				*p++ = *pos++;
-			}
-			else {
-				return FALSE;
-			}
-			break;
-		}
-	}
-
-	if (inet_pton (AF_INET, ip_buf, &addr->addr) != 1) {
-		if (inet_pton (AF_INET6, ip_buf, &addr->addr) == 1) {
-			addr->flags |= RSPAMD_SPF_FLAG_IPV6;
-		}
-		else {
-			msg_info ("<%s>: spf error for domain %s: invalid ip address",
-				rec->task->message_id, rec->sender_domain);
-			return FALSE;
-		}
-	}
-
-	if (state == 2) {
-		/* Also parse mask */
-		mask = strtoul (mask_buf, NULL, 10);
-		if (mask > (addr->flags & RSPAMD_SPF_FLAG_IPV6) ? 128 : 32) {
-			msg_info (
-					"<%s>: spf error for domain %s: bad ipmask value: '%s'",
-					rec->task->message_id,
-					rec->sender_domain,
-					begin);
-			return FALSE;
-		}
-
-		if (addr->flags & RSPAMD_SPF_FLAG_IPV6) {
-			addr->m.dual.mask_v6 = mask;
-		}
-		else {
-			addr->m.dual.mask_v4 = mask;
-		}
-
-	}
-	else {
-		addr->m.dual.mask_v6 = 128;
-		addr->m.dual.mask_v4 = 32;
-	}
-
-	return TRUE;
-
 }
 
 static void
@@ -337,6 +228,7 @@ rspamd_flatten_record_dtor (struct spf_resolved *r)
 		g_free (addr->spf_string);
 	}
 
+	g_free (r->domain);
 	g_array_free (r->elts, TRUE);
 	g_slice_free1 (sizeof (*r), r);
 }
@@ -408,6 +300,7 @@ rspamd_spf_record_flatten (struct spf_record *rec)
 	res = g_slice_alloc (sizeof (*res));
 	res->elts = g_array_sized_new (FALSE, FALSE, sizeof (struct spf_addr),
 			rec->resolved->len);
+	res->domain = g_strdup (rec->sender_domain);
 	REF_INIT_RETAIN (res, rspamd_flatten_record_dtor);
 
 	top = &g_array_index (rec->resolved, struct spf_resolved_element, 0);
@@ -415,6 +308,19 @@ rspamd_spf_record_flatten (struct spf_record *rec)
 	rspamd_spf_process_reference (res->elts, NULL, rec, TRUE);
 
 	return res;
+}
+
+static void
+rspamd_spf_maybe_return (struct spf_record *rec)
+{
+	struct spf_resolved *flat;
+
+	if (rec->requests_inflight == 0 && !rec->done) {
+		flat = rspamd_spf_record_flatten (rec);
+		rec->callback (flat, rec->task);
+		REF_RELEASE (flat);
+		rec->done = TRUE;
+	}
 }
 
 static gboolean
@@ -480,9 +386,11 @@ spf_record_process_addr (struct spf_addr *addr, struct rdns_reply_entry *reply)
 {
 	if (reply->type == RDNS_REQUEST_AAAA) {
 		memcpy (addr->addr6, &reply->content.aaa.addr, sizeof (addr->addr6));
+		addr->flags |= RSPAMD_SPF_FLAG_IPV6;
 	}
 	else if (reply->type == RDNS_REQUEST_A) {
 		memcpy (addr->addr4, &reply->content.a.addr, sizeof (addr->addr4));
+		addr->flags |= RSPAMD_SPF_FLAG_IPV4;
 	}
 	else {
 		msg_err ("internal error, bad DNS reply is treated as address: %s",
@@ -511,6 +419,9 @@ spf_record_addr_set (struct spf_addr *addr, gboolean allow_any)
 	memset (addr->addr6, fill, sizeof (addr->addr6));
 	addr->m.dual.mask_v4 = maskv4;
 	addr->m.dual.mask_v6 = maskv6;
+
+	addr->flags |= RSPAMD_SPF_FLAG_IPV4;
+	addr->flags |= RSPAMD_SPF_FLAG_IPV6;
 }
 
 static void
@@ -669,9 +580,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 		}
 	}
 
-	if (cb->rec->requests_inflight == 0) {
-		cb->rec->callback (cb->rec, cb->rec->task);
-	}
+	rspamd_spf_maybe_return (cb->rec);
 }
 
 /*
@@ -1682,6 +1591,8 @@ start_spf_parse (struct spf_record *rec, gchar *begin)
 		g_strfreev (elts);
 	}
 
+	rspamd_spf_maybe_return (rec);
+
 	return TRUE;
 }
 
@@ -1705,9 +1616,7 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 		}
 	}
 
-	if (rec->requests_inflight == 0) {
-		rec->callback (rec, rec->task);
-	}
+	rspamd_spf_maybe_return (rec);
 }
 
 const gchar *
@@ -1741,6 +1650,8 @@ resolve_spf (struct rspamd_task *task, spf_cb_t callback)
 	rec->task = task;
 	rec->callback = callback;
 
+	rspamd_spf_new_addr_list (rec, rec->sender_domain);
+
 	/* Add destructor */
 	rspamd_mempool_add_destructor (task->task_pool,
 		(rspamd_mempool_destruct_t)spf_record_destructor,
@@ -1765,8 +1676,6 @@ resolve_spf (struct rspamd_task *task, spf_cb_t callback)
 		return FALSE;
 	}
 
-	rspamd_spf_new_addr_list (rec, rec->sender_domain);
-
 	if (make_dns_request (task->resolver, task->s, task->task_pool,
 			spf_dns_callback,
 			(void *)rec, RDNS_REQUEST_TXT, rec->sender_domain)) {
@@ -1774,4 +1683,6 @@ resolve_spf (struct rspamd_task *task, spf_cb_t callback)
 		rec->requests_inflight++;
 		return TRUE;
 	}
+
+	return FALSE;
 }
