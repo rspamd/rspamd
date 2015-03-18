@@ -101,7 +101,7 @@ struct spf_dns_cb {
 	gboolean in_include;
 };
 
-#define CHECK_REC(rec)                                      \
+#define CHECK_REC(rec)                                          \
 	do {                                                        \
 		if ((rec)->nested > SPF_MAX_NESTING ||                  \
 			(rec)->dns_requests > SPF_MAX_DNS_REQUESTS) {       \
@@ -113,8 +113,7 @@ struct spf_dns_cb {
 	} while (0)                                                 \
 
 static gboolean parse_spf_record (struct spf_record *rec, const gchar *elt);
-static gboolean start_spf_parse (struct spf_record *rec, gchar *begin,
-	guint ttl);
+static gboolean start_spf_parse (struct spf_record *rec, gchar *begin);
 
 /* Determine spf mech */
 static spf_mech_t
@@ -325,6 +324,97 @@ parse_spf_ipmask (const gchar *begin,
 
 	return TRUE;
 
+}
+
+static void
+rspamd_flatten_record_dtor (struct spf_resolved *r)
+{
+	struct spf_addr *addr;
+	guint i;
+
+	for (i = 0; i < r->elts; i ++) {
+		addr = &g_array_index (r->elts, struct spf_addr, i);
+		g_free (addr->spf_string);
+	}
+
+	g_array_free (r->elts, TRUE);
+	g_slice_free1 (sizeof (*r), r);
+}
+
+static void
+rspamd_spf_process_reference (struct spf_resolved *target,
+		struct spf_addr *addr, struct spf_record *rec, gboolean top)
+{
+	struct spf_resolved_element *elt;
+	struct spf_addr *cur, taddr;
+	guint i;
+
+	if (addr) {
+		g_assert (addr->m.idx < rec->resolved->len);
+
+		elt = &g_array_index (rec->resolved, struct spf_resolved_element,
+				addr->m.idx);
+	}
+	else {
+		elt = &g_array_index (rec->resolved, struct spf_resolved_element, 0);
+	}
+
+	while (elt->redirected) {
+		cur = g_ptr_array_index (elt->elts, 0);
+		g_assert (cur->flags & RSPAMD_SPF_FLAG_REFRENCE);
+		g_assert (cur->m.idx < rec->resolved->len);
+		elt = &g_array_index (rec->resolved, struct spf_resolved_element,
+				cur->m.idx);
+	}
+
+	for (i = 0; i < elt->elts->len; i ++) {
+		cur = g_ptr_array_index (elt->elts, i);
+
+		if (!(cur->flags & RSPAMD_SPF_FLAG_PARSED)) {
+			/* Ignore unparsed addrs */
+			continue;
+		}
+		else if (cur->flags & RSPAMD_SPF_FLAG_REFRENCE) {
+			/* Process reference */
+			rspamd_spf_process_reference (target, cur, rec, FALSE);
+		}
+		else {
+			if ((cur->flags & RSPAMD_SPF_FLAG_ANY) && !top) {
+				/* Ignore wide policies in includes */
+				continue;
+			}
+
+			memcpy (&taddr, cur, sizeof (taddr));
+			/* Steal element */
+			cur->spf_string = NULL;
+			g_array_append_val (target->elts, taddr);
+		}
+	}
+}
+
+/*
+ * Parse record and flatten it to a simple structure
+ */
+static struct spf_resolved *
+rspamd_spf_record_flatten (struct spf_record *rec)
+{
+	struct spf_resolved *res;
+
+	struct spf_resolved_element *top;
+	guint i;
+
+	g_assert (rec != NULL);
+
+	res = g_slice_alloc (sizeof (*res));
+	res->elts = g_array_sized_new (FALSE, FALSE, sizeof (struct spf_addr),
+			rec->resolved->len);
+	REF_INIT_RETAIN (res, rspamd_flatten_record_dtor);
+
+	top = &g_array_index (rec->resolved, struct spf_resolved_element, 0);
+
+	rspamd_spf_process_reference (res->elts, NULL, rec, TRUE);
+
+	return res;
 }
 
 static gboolean
@@ -549,13 +639,11 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				spf_record_addr_set (addr, FALSE);
 			}
 			break;
-#ifdef HAVE_INET_PTON
 		case SPF_RESOLVE_AAA:
 			if (rdns_request_has_type (reply->request, RDNS_REQUEST_AAAA)) {
 				spf_record_addr_set (addr, FALSE);
 			}
 			break;
-#endif
 		case SPF_RESOLVE_PTR:
 			spf_record_addr_set (addr, FALSE);
 			break;
@@ -858,7 +946,6 @@ parse_spf_ip4 (struct spf_record *rec, struct spf_addr *addr)
 	return parse_spf_ipmask (addr->spf_string, addr, rec);
 }
 
-#ifdef HAVE_INET_PTON
 static gboolean
 parse_spf_ip6 (struct spf_record *rec, struct spf_addr *addr)
 {
@@ -867,7 +954,7 @@ parse_spf_ip6 (struct spf_record *rec, struct spf_addr *addr)
 	CHECK_REC (rec);
 	return parse_spf_ipmask (addr->spf_string, addr, rec);
 }
-#endif
+
 
 static gboolean
 parse_spf_include (struct spf_record *rec, struct spf_addr *addr)
@@ -1052,9 +1139,7 @@ expand_spf_macro (struct spf_record *rec,
 	const gchar *p, *c;
 	gchar *new, *tmp;
 	gint len = 0, slen = 0, state = 0;
-#ifdef HAVE_INET_PTON
 	gchar ip_buf[INET6_ADDRSTRLEN];
-#endif
 	gboolean need_expand = FALSE;
 	struct rspamd_task *task;
 	struct spf_resolved_element *resolved;
@@ -1109,11 +1194,7 @@ expand_spf_macro (struct spf_record *rec,
 			/* Read macro name */
 			switch (g_ascii_tolower (*p)) {
 			case 'i':
-#ifdef HAVE_INET_PTON
 				len += INET6_ADDRSTRLEN - 1;
-#else
-				len += INET_ADDRSTRLEN - 1;
-#endif
 				break;
 			case 's':
 				len += strlen (rec->sender);
@@ -1526,6 +1607,7 @@ start_spf_parse (struct spf_record *rec, gchar *begin)
 
 		g_strfreev (elts);
 	}
+
 	return TRUE;
 }
 
@@ -1619,7 +1701,3 @@ resolve_spf (struct rspamd_task *task, spf_cb_t callback)
 		return TRUE;
 	}
 }
-
-/*
- * vi:ts=4
- */
