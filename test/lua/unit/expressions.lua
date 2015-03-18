@@ -26,7 +26,17 @@ context("Rspamd expressions", function()
     
     local cases = {
        {'A & B | !C', 'A B & C ! |'},
-       {'A & (B | !C)', 'A B C ! | &'}
+       {'A & (B | !C)', 'A B C ! | &'},
+       -- Unbalanced braces
+       {'(((A))', nil},
+       -- Balanced braces
+       {'(((A)))', 'A'},
+       -- Plus and comparision operators
+       {'A + B + C + D > 2', 'A B C D + + + 2 >'},
+       -- Plus and logic operators
+       {'((A + B + C + D) > 2) & D', 'A B C D + + + 2 > D &'},
+       -- Associativity
+       {'A | B | C & D & E', 'A B C D E & & | |'},
     }
     for _,c in ipairs(cases) do
       local expr,err = rspamd_expression.create(c[1], 
