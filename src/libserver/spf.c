@@ -443,46 +443,6 @@ parse_spf_ipmask (const gchar *begin,
 
 }
 
-static gchar *
-parse_spf_hostmask (struct rspamd_task *task,
-	const gchar *begin,
-	struct spf_addr *addr,
-	struct spf_record *rec)
-{
-	gchar *host = NULL, *p,  mask_buf[3];
-	gint hostlen;
-
-	bzero (mask_buf, sizeof (mask_buf));
-	if (*begin == '\0' || *begin == '/') {
-		/* Assume host as host to resolve from record */
-		host = rec->cur_domain;
-	}
-	p = strchr (begin, '/');
-	if (p != NULL) {
-		/* Extract mask */
-		rspamd_strlcpy (mask_buf, p + 1, sizeof (mask_buf));
-		addr->data.normal.mask = strtoul (mask_buf, NULL, 10);
-		if (addr->data.normal.mask > 32) {
-			msg_info ("<%s>: spf error for domain %s: too long mask",
-				rec->task->message_id, rec->sender_domain);
-			return FALSE;
-		}
-		if (host == NULL) {
-			hostlen = p - begin;
-			host = rspamd_mempool_alloc (task->task_pool, hostlen);
-			rspamd_strlcpy (host, begin, hostlen);
-		}
-	}
-	else {
-		addr->data.normal.mask = 32;
-		if (host == NULL) {
-			host = rspamd_mempool_strdup (task->task_pool, begin);
-		}
-	}
-
-	return host;
-}
-
 static void
 spf_record_process_addr (struct rdns_reply_entry *elt,
 	struct spf_dns_cb *cb, struct rspamd_task *task)
@@ -797,6 +757,130 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 	if (cb->rec->requests_inflight == 0) {
 		cb->rec->callback (cb->rec, cb->rec->task);
 	}
+}
+
+/*
+ * The syntax defined by the following BNF:
+ * [ ":" domain-spec ] [ dual-cidr-length ]
+ * ip4-cidr-length  = "/" 1*DIGIT
+ * ip6-cidr-length  = "/" 1*DIGIT
+ * dual-cidr-length = [ ip4-cidr-length ] [ "/" ip6-cidr-length ]
+ */
+static const gchar *
+parse_spf_domain_mask (struct spf_record *rec, struct spf_addr *addr,
+		gboolean allow_mask)
+{
+	struct spf_resolved_element *resolved;
+	struct rspamd_task *task = rec->task;
+	enum {
+		parse_spf_elt = 0,
+		parse_semicolon,
+		parse_domain,
+		parse_slash,
+		parse_ipv4_mask,
+		parse_second_slash,
+		parse_ipv6_mask
+	} state = 0;
+	const gchar *p = addr->spf_string, *host, *c;
+	gchar *hostbuf;
+	gchar t;
+	guint16 cur_mask = 0;
+
+	resolved = &g_array_index (rec->resolved, struct spf_resolved_element,
+				rec->resolved->len - 1);
+	host = resolved->cur_domain;
+
+	while (*p) {
+		t = *p;
+
+		switch (state) {
+		case parse_spf_elt:
+			if (t == ':') {
+				state = parse_semicolon;
+			}
+			else if (t == '/') {
+				/* No domain but mask */
+				state = parse_slash;
+			}
+			p ++;
+			break;
+		case parse_semicolon:
+			if (t == '/') {
+				/* Empty domain, technically an error */
+				state = parse_slash;
+			}
+			c = p;
+			state = parse_domain;
+			break;
+		case parse_domain:
+			if (t == '/') {
+				hostbuf = rspamd_mempool_alloc (task->task_pool, p - c + 1);
+				rspamd_strlcpy (hostbuf, c, p - c + 1);
+				host = hostbuf;
+				state = parse_slash;
+			}
+			p ++;
+			break;
+		case parse_slash:
+			c = p;
+			state = parse_ipv4_mask;
+			cur_mask = 0;
+			break;
+		case parse_ipv4_mask:
+			if (g_ascii_isdigit (t)) {
+				/* Ignore errors here */
+				cur_mask = cur_mask * 10 + (t - '0');
+			}
+			else if (t == '/') {
+				if (cur_mask <= 32) {
+					addr->m.dual.mask_v4 = cur_mask;
+				}
+				else {
+					msg_info ("bad ipv4 mask: %d", cur_mask);
+				}
+				state = parse_second_slash;
+			}
+			p ++;
+			break;
+		case parse_second_slash:
+			c = p;
+			state = parse_ipv6_mask;
+			cur_mask = 0;
+			break;
+		case parse_ipv6_mask:
+			if (g_ascii_isdigit (t)) {
+				/* Ignore errors here */
+				cur_mask = cur_mask * 10 + (t - '0');
+			}
+			p ++;
+			break;
+		}
+	}
+
+	/* Process end states */
+	if (state == parse_ipv4_mask) {
+		if (cur_mask <= 32) {
+			addr->m.dual.mask_v4 = cur_mask;
+		}
+		else {
+			msg_info ("bad ipv4 mask: %d", cur_mask);
+		}
+	}
+	else if (state == parse_ipv6_mask) {
+		if (cur_mask <= 128) {
+			addr->m.dual.mask_v6 = cur_mask;
+		}
+		else {
+			msg_info ("bad ipv6 mask: %d", cur_mask);
+		}
+	}
+	else if (state == parse_domain && p - c > 0) {
+		hostbuf = rspamd_mempool_alloc (task->task_pool, p - c + 1);
+		rspamd_strlcpy (hostbuf, c, p - c + 1);
+		host = hostbuf;
+	}
+
+	return host;
 }
 
 static gboolean
