@@ -2,11 +2,12 @@
 #define RSPAMD_SPF_H
 
 #include "config.h"
+#include "ref.h"
 
 struct rspamd_task;
-struct spf_record;
+struct spf_resolved;
 
-typedef void (*spf_cb_t)(struct spf_record *record, struct rspamd_task *task);
+typedef void (*spf_cb_t)(struct spf_resolved *record, struct rspamd_task *task);
 
 typedef enum spf_mech_e {
 	SPF_FAIL,
@@ -26,47 +27,33 @@ typedef enum spf_action_e {
 	SPF_RESOLVE_EXP
 } spf_action_t;
 
+#define RSPAMD_SPF_FLAG_IPV6 (1 << 0)
+#define RSPAMD_SPF_FLAG_IPV4 (1 << 1)
+#define RSPAMD_SPF_FLAG_ANY (1 << 2)
+#define RSPAMD_SPF_FLAG_PARSED (1 << 3)
+#define RSPAMD_SPF_FLAG_VALID (1 << 4)
+#define RSPAMD_SPF_FLAG_REFRENCE (1 << 5)
+
 struct spf_addr {
+	guchar addr6[sizeof (struct in6_addr)];
+	guchar addr4[sizeof (struct in_addr)];
 	union {
 		struct {
-			union {
-				struct in_addr in4;
-#ifdef HAVE_INET_PTON
-				struct in6_addr in6;
-#endif
-			} d;
-			guint32 mask;
-			gboolean ipv6;
-			gboolean parsed;
-			gboolean addr_any;
-		} normal;
-		GList *list;
-	} data;
-	gboolean is_list;
+			guint16 mask_v4;
+			guint16 mask_v6;
+		} dual;
+		guint32 idx;
+	} m;
+	guint flags;
 	spf_mech_t mech;
 	gchar *spf_string;
 };
 
-struct spf_record {
-	gchar **elts;
-
-	gchar *cur_elt;
-	gint elt_num;
-	gint nested;
-	gint dns_requests;
-	gint requests_inflight;
-
+struct spf_resolved {
+	gchar *domain;
 	guint ttl;
-
-	GList *addrs;
-	gchar *cur_domain;
-	const gchar *sender;
-	gchar *sender_domain;
-	gchar *local_part;
-	struct rspamd_task *task;
-	spf_cb_t callback;
-
-	gboolean in_include;
+	GArray *elts; /* Flat list of struct spf_addr */
+	ref_entry_t ref; /* Refcounting */
 };
 
 
@@ -78,7 +65,17 @@ gboolean resolve_spf (struct rspamd_task *task, spf_cb_t callback);
 /*
  * Get a domain for spf for specified task
  */
-gchar * get_spf_domain (struct rspamd_task *task);
+const gchar * get_spf_domain (struct rspamd_task *task);
 
+
+/*
+ * Increase refcount
+ */
+struct spf_resolved * spf_record_ref (struct spf_resolved *rec);
+
+/*
+ * Decrease refcount
+ */
+void spf_record_unref (struct spf_resolved *rec);
 
 #endif
