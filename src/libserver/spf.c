@@ -139,15 +139,12 @@ check_spf_mech (const gchar *elt, gboolean *need_shift)
 }
 
 static struct spf_addr *
-rspamd_spf_new_addr (struct spf_record *rec, const gchar *elt)
+rspamd_spf_new_addr (struct spf_record *rec,
+		struct spf_resolved_element *resolved, const gchar *elt)
 {
-	struct spf_resolved_element *resolved;
 	gboolean need_shift = FALSE;
 	struct spf_addr *naddr;
 
-	/* Peek the top element */
-	resolved = &g_array_index (rec->resolved, struct spf_resolved_element,
-			rec->resolved->len - 1);
 	naddr = g_slice_alloc0 (sizeof (*naddr));
 	naddr->mech = check_spf_mech (elt, &need_shift);
 
@@ -894,6 +891,9 @@ parse_spf_ip4 (struct spf_record *rec, struct spf_addr *addr)
 		}
 		addr->m.dual.mask_v4 = mask;
 	}
+	else {
+		addr->m.dual.mask_v4 = 32;
+	}
 
 	addr->flags |= RSPAMD_SPF_FLAG_IPV4;
 
@@ -929,7 +929,7 @@ parse_spf_ip6 (struct spf_record *rec, struct spf_addr *addr)
 
 	rspamd_strlcpy (ipbuf, semicolon, MIN (len, sizeof (ipbuf)));
 
-	if (inet_pton (AF_INET6, ipbuf, addr->addr4) != 1) {
+	if (inet_pton (AF_INET6, ipbuf, addr->addr6) != 1) {
 		return FALSE;
 	}
 
@@ -939,6 +939,9 @@ parse_spf_ip6 (struct spf_record *rec, struct spf_addr *addr)
 			return FALSE;
 		}
 		addr->m.dual.mask_v6 = mask;
+	}
+	else {
+		addr->m.dual.mask_v6 = 128;
 	}
 
 	addr->flags |= RSPAMD_SPF_FLAG_IPV6;
@@ -1411,7 +1414,7 @@ parse_spf_record (struct spf_record *rec, struct spf_resolved_element *resolved,
 
 	task = rec->task;
 	begin = expand_spf_macro (rec, elt);
-	addr = rspamd_spf_new_addr (rec, begin);
+	addr = rspamd_spf_new_addr (rec, resolved, begin);
 	g_assert (addr != NULL);
 	t = g_ascii_tolower (addr->spf_string[0]);
 	begin = addr->spf_string;
