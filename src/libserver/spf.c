@@ -1687,3 +1687,16 @@ resolve_spf (struct rspamd_task *task, spf_cb_t callback)
 
 	return FALSE;
 }
+
+struct spf_resolved *
+spf_record_ref (struct spf_resolved *rec)
+{
+	REF_RETAIN (rec);
+	return rec;
+}
+
+void
+spf_record_unref (struct spf_resolved *rec)
+{
+	REF_RELEASE (rec);
+}

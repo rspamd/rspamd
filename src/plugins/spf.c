@@ -302,10 +302,12 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task)
 			record->domain, task->tv.tv_sec)) == NULL) {
 
 			rspamd_lru_hash_insert (spf_module_ctx->spf_hash,
-				record->domain,
-				record, task->tv.tv_sec, record->ttl);
+				record->domain, spf_record_ref (record),
+				task->tv.tv_sec, record->ttl);
 		}
+		spf_record_ref (l);
 		spf_check_list (l, task);
+		spf_record_unref (l);
 	}
 }
 
