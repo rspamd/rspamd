@@ -153,6 +153,8 @@ rspamd_expr_is_operation_symbol (gchar a)
 	case ')':
 	case '>':
 	case '<':
+	case '+':
+	case '*':
 		return TRUE;
 	}
 
