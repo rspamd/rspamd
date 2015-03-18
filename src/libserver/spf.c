@@ -49,8 +49,28 @@
 #define SPF_MAX_NESTING 10
 #define SPF_MAX_DNS_REQUESTS 30
 
+struct spf_resolved_element {
+	GPtrArray *elts;
+	gchar *cur_domain;
+	gboolean redirected; /* Ingnore level, it's redirected */
+};
+
+struct spf_record {
+	gint nested;
+	gint dns_requests;
+	gint requests_inflight;
+
+	guint ttl;
+	GArray *resolved; /* Array of struct spf_resolved_element */
+	const gchar *sender;
+	const gchar *sender_domain;
+	gchar *local_part;
+	struct rspamd_task *task;
+	spf_cb_t callback;
+};
+
 /**
- * State machine for SPF record:
+ * BNF for SPF record:
  *
  * spf_mech ::= +|-|~|?
  *
@@ -91,8 +111,7 @@ struct spf_dns_cb {
 		}                                                       \
 	} while (0)                                                 \
 
-static gboolean parse_spf_record (struct rspamd_task *task,
-	struct spf_record *rec);
+static gboolean parse_spf_record (struct spf_record *rec, const gchar *elt);
 static gboolean start_spf_parse (struct spf_record *rec, gchar *begin,
 	guint ttl);
 
@@ -117,6 +136,54 @@ check_spf_mech (const gchar *elt, gboolean *need_shift)
 		*need_shift = FALSE;
 		return SPF_PASS;
 	}
+}
+
+static struct spf_addr *
+rspamd_spf_new_addr (struct spf_record *rec, const gchar *elt)
+{
+	struct spf_resolved_element *resolved;
+	gboolean need_shift = FALSE;
+	struct spf_addr *naddr;
+
+	/* Peek the top element */
+	resolved = &g_array_index (rec->resolved, struct spf_resolved_element,
+			rec->resolved->len - 1);
+	naddr = g_slice_alloc0 (sizeof (*naddr));
+	naddr->mech = check_spf_mech (elt, &need_shift);
+
+	if (need_shift) {
+		naddr->spf_string = g_strdup (elt + 1);
+	}
+	else {
+		naddr->spf_string = g_strdup (elt);
+	}
+
+	g_ptr_array_add (resolved->elts, naddr);
+
+	return naddr;
+}
+
+static void
+rspamd_spf_free_addr (gpointer a)
+{
+	struct spf_addr *addr = a;
+
+	if (addr) {
+		g_free (addr->spf_string);
+		g_slice_free1 (sizeof (*addr), addr);
+	}
+}
+
+static void
+rspamd_spf_new_addr_list (struct spf_record *rec, const gchar *domain)
+{
+	struct spf_resolved_element resolved;
+
+	resolved.redirected = FALSE;
+	resolved.cur_domain = g_strdup (domain);
+	resolved.elts = g_ptr_array_new_full (8, rspamd_spf_free_addr);
+
+	g_array_append_val (rec->resolved, resolved);
 }
 
 /* Debugging function that dumps spf record in log */
@@ -1538,30 +1605,20 @@ parse_spf_scopes (struct spf_record *rec, gchar **begin)
 }
 
 static gboolean
-start_spf_parse (struct spf_record *rec, gchar *begin, guint ttl)
+start_spf_parse (struct spf_record *rec, gchar *begin)
 {
+	gchar **elts, **cur_elt;
+
 	/* Skip spaces */
 	while (g_ascii_isspace (*begin)) {
 		begin++;
 	}
 
-	if (g_ascii_strncasecmp (begin, SPF_VER1_STR,
-		sizeof (SPF_VER1_STR) - 1) == 0) {
+	if (g_ascii_strncasecmp (begin, SPF_VER1_STR, sizeof (SPF_VER1_STR) - 1) == 0) {
 		begin += sizeof (SPF_VER1_STR) - 1;
+
 		while (g_ascii_isspace (*begin) && *begin) {
 			begin++;
-		}
-		rec->elts = g_strsplit_set (begin, " ", 0);
-		rec->elt_num = 0;
-		if (rec->elts) {
-			rspamd_mempool_add_destructor (rec->task->task_pool,
-				(rspamd_mempool_destruct_t)g_strfreev, rec->elts);
-			rec->cur_elt = rec->elts[0];
-			while (parse_spf_record (rec->task, rec)) ;
-			if (ttl != 0) {
-				rec->ttl = ttl;
-			}
-			return TRUE;
 		}
 	}
 	else if (g_ascii_strncasecmp (begin, SPF_VER2_STR, sizeof (SPF_VER2_STR) -
@@ -1577,21 +1634,6 @@ start_spf_parse (struct spf_record *rec, gchar *begin, guint ttl)
 			parse_spf_scopes (rec, &begin);
 		}
 		/* Now common spf record */
-		while (g_ascii_isspace (*begin) && *begin) {
-			begin++;
-		}
-		rec->elts = g_strsplit_set (begin, " ", 0);
-		rec->elt_num = 0;
-		if (rec->elts) {
-			rspamd_mempool_add_destructor (rec->task->task_pool,
-				(rspamd_mempool_destruct_t)g_strfreev, rec->elts);
-			rec->cur_elt = rec->elts[0];
-			while (parse_spf_record (rec->task, rec)) ;
-			if (ttl != 0) {
-				rec->ttl = ttl;
-			}
-		}
-		return TRUE;
 	}
 	else {
 		msg_debug ("<%s>: spf error for domain %s: bad spf record version: %*s",
@@ -1599,8 +1641,26 @@ start_spf_parse (struct spf_record *rec, gchar *begin, guint ttl)
 			rec->sender_domain,
 			sizeof (SPF_VER1_STR) - 1,
 			begin);
+		return FALSE;
 	}
-	return FALSE;
+
+	while (g_ascii_isspace (*begin) && *begin) {
+		begin++;
+	}
+
+	elts = g_strsplit_set (begin, " ", 0);
+
+	if (elts) {
+		cur_elt = elts;
+
+		while (*cur_elt) {
+			parse_spf_record (rec, *cur_elt);
+			cur_elt ++;
+		}
+
+		g_strfreev (elts);
+	}
+	return TRUE;
 }
 
 static void
@@ -1611,9 +1671,13 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 
 	rec->requests_inflight--;
 	if (reply->code == RDNS_RC_NOERROR) {
-		LL_FOREACH (reply->entries, elt)
-		{
-			if (start_spf_parse (rec, elt->content.txt.data, elt->ttl)) {
+		if (rec->resolved->len == 1) {
+			/* Top level resolved element */
+			rec->ttl = reply->entries->ttl;
+		}
+
+		LL_FOREACH (reply->entries, elt) {
+			if (start_spf_parse (rec, elt->content.txt.data)) {
 				break;
 			}
 		}
@@ -1624,10 +1688,10 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 	}
 }
 
-gchar *
+const gchar *
 get_spf_domain (struct rspamd_task *task)
 {
-	gchar *domain, *res = NULL;
+	const gchar *domain, *res = NULL;
 	const gchar *sender;
 
 	sender = rspamd_task_get_sender (task);
@@ -1635,7 +1699,7 @@ get_spf_domain (struct rspamd_task *task)
 	if (sender != NULL) {
 		domain = strchr (sender, '@');
 		if (domain) {
-			res = rspamd_mempool_strdup (task->task_pool, domain + 1);
+			res = domain + 1;
 		}
 	}
 
@@ -1667,34 +1731,27 @@ resolve_spf (struct rspamd_task *task, spf_cb_t callback)
 		rec->local_part = rspamd_mempool_alloc (task->task_pool,
 				domain - sender);
 		rspamd_strlcpy (rec->local_part, sender, domain - sender);
-		rec->cur_domain = rspamd_mempool_strdup (task->task_pool, domain + 1);
-		rec->sender_domain = rec->cur_domain;
-
-		if (make_dns_request (task->resolver, task->s, task->task_pool,
-			spf_dns_callback,
-			(void *)rec, RDNS_REQUEST_TXT, rec->cur_domain)) {
-			task->dns_requests++;
-			rec->requests_inflight++;
-			return TRUE;
-		}
+		rec->sender_domain = domain + 1;
 	}
 	else if (task->helo != NULL && strchr (task->helo, '.') != NULL) {
-		/* For notifies we can check HELO identity and check SPF accrodingly */
+		/* For notifies we can check HELO identity and check SPF accordingly */
 		/* XXX: very poor check */
 		rec->local_part = rspamd_mempool_strdup (task->task_pool, "postmaster");
-		rec->cur_domain = task->helo;
 		rec->sender_domain = task->helo;
-
-		if (make_dns_request (task->resolver, task->s, task->task_pool,
-				spf_dns_callback,
-				(void *)rec, RDNS_REQUEST_TXT, rec->cur_domain)) {
-			task->dns_requests++;
-			rec->requests_inflight++;
-			return TRUE;
-		}
+	}
+	else {
+		return FALSE;
 	}
 
-	return FALSE;
+	rspamd_spf_new_addr_list (rec, rec->sender_domain);
+
+	if (make_dns_request (task->resolver, task->s, task->task_pool,
+			spf_dns_callback,
+			(void *)rec, RDNS_REQUEST_TXT, rec->sender_domain)) {
+		task->dns_requests++;
+		rec->requests_inflight++;
+		return TRUE;
+	}
 }
 
 /*
