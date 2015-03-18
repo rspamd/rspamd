@@ -50,7 +50,7 @@ rspamd_lru_hash_t * rspamd_lru_hash_new_full (
  * @return value of key or NULL if key is not found
  */
 gpointer rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash,
-	gpointer key,
+	gconstpointer key,
 	time_t now);
 /**
  * Insert item in hash

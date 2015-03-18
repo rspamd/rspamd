@@ -124,7 +124,7 @@ rspamd_lru_hash_new (
 }
 
 gpointer
-rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash, gpointer key, time_t now)
+rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash, gconstpointer key, time_t now)
 {
 	rspamd_lru_element_t *res;
 	GList *cur, *tmp;
