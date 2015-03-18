@@ -37,6 +37,10 @@ context("Rspamd expressions", function()
        {'((A + B + C + D) > 2) & D', 'A B C D + + + 2 > D &'},
        -- Associativity
        {'A | B | C & D & E', 'A B C D E & & | |'},
+       -- More associativity
+       {'1 | 0 & 0 | 0', '1 0 0 & 0 | |'},
+       -- Extra space
+       {'A & B | ! C', 'A B & C ! |'},
     }
     for _,c in ipairs(cases) do
       local expr,err = rspamd_expression.create(c[1], 
