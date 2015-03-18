@@ -941,18 +941,92 @@ static gboolean
 parse_spf_ip4 (struct spf_record *rec, struct spf_addr *addr)
 {
 	/* ip4:addr[/mask] */
+	const gchar *semicolon, *slash;
+	gsize len;
+	gchar ipbuf[INET_ADDRSTRLEN + 1];
+	guint32 mask;
 
 	CHECK_REC (rec);
-	return parse_spf_ipmask (addr->spf_string, addr, rec);
+
+	semicolon = strchr (addr->spf_string, ':');
+
+	if (semicolon == NULL) {
+		return FALSE;
+	}
+
+	semicolon ++;
+	slash = strchr (semicolon, '/');
+
+	if (slash) {
+		len = slash - semicolon;
+	}
+	else {
+		len = strlen (semicolon);
+	}
+
+	rspamd_strlcpy (ipbuf, semicolon, MIN (len, sizeof (ipbuf)));
+
+	if (inet_pton (AF_INET, ipbuf, addr->addr4) != 1) {
+		return FALSE;
+	}
+
+	if (slash) {
+		mask = strtoul (slash + 1, NULL, 10);
+		if (mask > 32) {
+			return FALSE;
+		}
+		addr->m.dual.mask_v4 = mask;
+	}
+
+	addr->flags |= RSPAMD_SPF_FLAG_IPV4;
+
+	return TRUE;
 }
 
 static gboolean
 parse_spf_ip6 (struct spf_record *rec, struct spf_addr *addr)
 {
 	/* ip6:addr[/mask] */
+	const gchar *semicolon, *slash;
+	gsize len;
+	gchar ipbuf[INET6_ADDRSTRLEN + 1];
+	guint32 mask;
 
 	CHECK_REC (rec);
-	return parse_spf_ipmask (addr->spf_string, addr, rec);
+
+	semicolon = strchr (addr->spf_string, ':');
+
+	if (semicolon == NULL) {
+		return FALSE;
+	}
+
+	semicolon ++;
+	slash = strchr (semicolon, '/');
+
+	if (slash) {
+		len = slash - semicolon;
+	}
+	else {
+		len = strlen (semicolon);
+	}
+
+	rspamd_strlcpy (ipbuf, semicolon, MIN (len, sizeof (ipbuf)));
+
+	if (inet_pton (AF_INET6, ipbuf, addr->addr4) != 1) {
+		return FALSE;
+	}
+
+	if (slash) {
+		mask = strtoul (slash + 1, NULL, 10);
+		if (mask > 128) {
+			return FALSE;
+		}
+		addr->m.dual.mask_v6 = mask;
+	}
+
+	addr->flags |= RSPAMD_SPF_FLAG_IPV6;
+
+	return TRUE;
 }
 
 

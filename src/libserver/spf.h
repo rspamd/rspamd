@@ -28,10 +28,11 @@ typedef enum spf_action_e {
 } spf_action_t;
 
 #define RSPAMD_SPF_FLAG_IPV6 (1 << 0)
-#define RSPAMD_SPF_FLAG_ANY (1 << 1)
-#define RSPAMD_SPF_FLAG_PARSED (1 << 2)
-#define RSPAMD_SPF_FLAG_VALID (1 << 3)
-#define RSPAMD_SPF_FLAG_REFRENCE (1 << 4)
+#define RSPAMD_SPF_FLAG_IPV4 (1 << 1)
+#define RSPAMD_SPF_FLAG_ANY (1 << 2)
+#define RSPAMD_SPF_FLAG_PARSED (1 << 3)
+#define RSPAMD_SPF_FLAG_VALID (1 << 4)
+#define RSPAMD_SPF_FLAG_REFRENCE (1 << 5)
 
 struct spf_addr {
 	guchar addr6[sizeof (struct in6_addr)];
