@@ -103,7 +103,12 @@ struct rspamd_function_atom {
 };
 
 struct rspamd_mime_atom {
-
+	gchar *str;
+	union {
+		struct rspamd_regexp_atom *re;
+		struct rspamd_function_atom *func;
+	} d;
+	gboolean is_function;
 };
 
 /*
@@ -146,6 +151,12 @@ fl_cmp (const void *s1, const void *s2)
 	struct _fl *fl1 = (struct _fl *)s1;
 	struct _fl *fl2 = (struct _fl *)s2;
 	return strcmp (fl1->name, fl2->name);
+}
+
+static GQuark
+rspamd_mime_expr_quark (void)
+{
+	return g_quark_from_static_string ("mime-expressions");
 }
 
 /*
@@ -328,11 +339,136 @@ rspamd_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 	return result;
 }
 
-static
-rspamd_expression_atom_t * rspamd_mime_expr_parse (const gchar *line, gsize len,
+static rspamd_expression_atom_t *
+rspamd_mime_expr_parse (const gchar *line, gsize len,
 		rspamd_mempool_t *pool, gpointer ud, GError **err)
 {
+	rspamd_expression_atom_t *a = NULL;
+	struct rspamd_mime_atom *mime_atom = NULL;
+	const gchar *p, *end;
+	gchar t;
+	gboolean is_function = FALSE;
+	enum {
+		in_header = 0,
+		got_slash,
+		in_regexp,
+		got_backslash,
+		got_second_slash,
+		in_flags,
+		got_obrace,
+		in_function,
+		got_ebrace,
+		end_atom,
+		bad_atom
+	} state = 0, prev_state = 0;
 
+	p = line;
+	end = p + len;
+
+	while (p < end) {
+		t = *p;
+
+		switch (state) {
+		case in_header:
+			if (t == '/') {
+				/* Regexp */
+				state = got_slash;
+			}
+			else if (t == '(') {
+				/* Function */
+				state = got_obrace;
+			}
+			else if (g_ascii_isspace (t)) {
+				state = bad_atom;
+			}
+			p ++;
+			break;
+		case got_slash:
+			state = in_regexp;
+			break;
+		case in_regexp:
+			if (t == '\\') {
+				state = got_backslash;
+				prev_state = in_regexp;
+			}
+			else if (t == '/') {
+				state = got_second_slash;
+			}
+			p ++;
+			break;
+		case got_second_slash:
+			state = in_flags;
+			break;
+		case in_flags:
+			if (!g_ascii_isalpha (t)) {
+				state = end_atom;
+			}
+			else {
+				p ++;
+			}
+			break;
+		case got_backslash:
+			state = prev_state;
+			p ++;
+			break;
+		case got_obrace:
+			state = in_function;
+			is_function = TRUE;
+			break;
+		case in_function:
+			if (t == '\\') {
+				state = got_backslash;
+				prev_state = in_function;
+			}
+			else if (t == ')') {
+				state = got_ebrace;
+			}
+			p ++;
+			break;
+		case got_ebrace:
+			state = end_atom;
+			break;
+		case bad_atom:
+			g_set_error (err, rspamd_mime_expr_quark(), 100, "cannot parse"
+					" mime atom '%*.s' when reading symbol '%c'", len, line, t);
+			return NULL;
+		case end_atom:
+			goto set;
+		}
+	}
+set:
+
+	if (p - line == 0 || (state != got_ebrace || state != got_second_slash ||
+			state != in_flags)) {
+		g_set_error (err, rspamd_mime_expr_quark(), 200, "inclomplete or empty"
+				" mime atom");
+		return NULL;
+	}
+
+	mime_atom = g_slice_alloc (sizeof (*mime_atom));
+	mime_atom->is_function = is_function;
+	mime_atom->str = g_malloc (p - line + 1);
+	rspamd_strlcpy (mime_atom->str, line, p - line + 1);
+
+	if (!is_function) {
+		mime_atom->d.re = rspamd_parse_regexp_atom (pool, mime_atom->str);
+		if (mime_atom->d.re == NULL) {
+			g_set_error (err, rspamd_mime_expr_quark(), 200, "cannot parse regexp '%s'",
+					mime_atom->str);
+			goto err;
+		}
+	}
+
+	a = rspamd_mempool_alloc (pool, sizeof (*a));
+	a->len = p - line;
+	a->priority = 0;
+	a->data = mime_atom;
+
+err:
+	if (mime_atom != NULL) {
+		g_free (mime_atom->str);
+		g_slice_free1 (sizeof (*mime_atom), mime_atom);
+	}
 }
 
 static gint
@@ -354,7 +490,7 @@ rspamd_mime_expr_destroy (rspamd_expression_atom_t *atom)
 }
 
 gboolean
-call_expression_function (struct expression_function * func,
+call_expression_function (struct rspamd_function_atom * func,
 	struct rspamd_task * task,
 	lua_State *L)
 {
