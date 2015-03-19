@@ -7,10 +7,11 @@
 #define RSPAMD_EXPRESSIONS_H
 
 #include "config.h"
-#include <lua.h>
+#include "expression.h"
 
 struct rspamd_task;
-struct rspamd_regexp_element;
+
+extern const struct rspamd_atom_subr mime_expr_subr;
 
 /**
  * Function's argument
@@ -19,7 +20,6 @@ struct expression_argument {
 	enum {
 		EXPRESSION_ARGUMENT_NORMAL,
 		EXPRESSION_ARGUMENT_BOOL,
-		EXPRESSION_ARGUMENT_EXPR,
 	} type;                                                     /**< type of argument (text or other function)		*/
 	void *data;                                                 /**< pointer to its data							*/
 };

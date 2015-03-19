@@ -64,6 +64,12 @@ gboolean rspamd_has_fake_html (struct rspamd_task *task,
 	GList * args,
 	void *unused);
 
+static rspamd_expression_atom_t * rspamd_mime_expr_parse (const gchar *line, gsize len,
+		rspamd_mempool_t *pool, gpointer ud, GError **err);
+static gint rspamd_mime_expr_process (gpointer input, rspamd_expression_atom_t *atom);
+static gint rspamd_mime_expr_priority (rspamd_expression_atom_t *atom);
+static void rspamd_mime_expr_destroy (rspamd_expression_atom_t *atom);
+
 /**
  * Regexp type: /H - header, /M - mime, /U - url /X - raw header
  */
@@ -119,6 +125,13 @@ static struct _fl {
 	{"header_exists", rspamd_header_exists, NULL},
 	{"is_html_balanced", rspamd_is_html_balanced, NULL},
 	{"is_recipients_sorted", rspamd_is_recipients_sorted, NULL}
+};
+
+const struct rspamd_atom_subr mime_expr_subr = {
+	.parse = rspamd_mime_expr_parse,
+	.process = rspamd_mime_expr_process,
+	.priority = rspamd_mime_expr_priority,
+	.destroy = rspamd_mime_expr_destroy
 };
 
 static struct _fl *list_ptr = &rspamd_functions_list[0];
@@ -313,6 +326,31 @@ rspamd_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 	*dend = '/';
 
 	return result;
+}
+
+static
+rspamd_expression_atom_t * rspamd_mime_expr_parse (const gchar *line, gsize len,
+		rspamd_mempool_t *pool, gpointer ud, GError **err)
+{
+
+}
+
+static gint
+rspamd_mime_expr_process (gpointer input, rspamd_expression_atom_t *atom)
+{
+
+}
+
+static gint
+rspamd_mime_expr_priority (rspamd_expression_atom_t *atom)
+{
+
+}
+
+static void
+rspamd_mime_expr_destroy (rspamd_expression_atom_t *atom)
+{
+
 }
 
 gboolean
