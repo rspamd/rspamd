@@ -552,7 +552,7 @@ rspamd_process_expression (struct rspamd_expression *expr, gpointer data)
 	struct rspamd_expression_elt *elt, *st_elt[2], *ev, *lim = NULL,
 			*cmp_op = NULL, *check;
 	guint i, j, cmp_pos = 0;
-	gint cur_value = 0;
+	gint cur_value = 0, ret = 0;
 	gboolean done = FALSE;
 
 	g_assert (expr != NULL);
@@ -776,7 +776,18 @@ rspamd_process_expression (struct rspamd_expression *expr, gpointer data)
 		}
 	}
 
-	return 0;
+	g_assert (expr->expression_stack->len == 1);
+	ev = rspamd_expr_stack_pop (expr);
+	ret = ev->value;
+
+	/* Cleanup */
+	for (i = 0; i < expr->expressions->len; i ++) {
+		elt = &g_array_index (expr->expressions, struct rspamd_expression_elt, i);
+		elt->value = 0;
+		elt->flags = 0;
+	}
+
+	return ret;
 }
 
 GString *
