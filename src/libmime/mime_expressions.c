@@ -588,13 +588,33 @@ rspamd_mime_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 static gint
 rspamd_mime_expr_priority (rspamd_expression_atom_t *atom)
 {
-
+	/* TODO: implement priorities for mime expressions */
+	return 0;
 }
 
 static void
 rspamd_mime_expr_destroy (rspamd_expression_atom_t *atom)
 {
+	struct rspamd_mime_atom *mime_atom = atom->data;
+	guint i;
+	struct expression_argument *arg;
 
+	if (mime_atom) {
+		if (mime_atom->is_function) {
+			/* Need to cleanup arguments */
+			for (i = 0; i < mime_atom->d.func->args->len; i ++) {
+				arg = &g_array_index (mime_atom->d.func->args,
+						struct expression_argument, i);
+
+				if (arg->type == EXPRESSION_ARGUMENT_NORMAL) {
+					g_free (arg->data);
+				}
+			}
+			g_array_free (mime_atom->d.func->args, TRUE);
+		}
+		/* XXX: regexp shouldn't be special */
+		g_slice_free1 (sizeof (*mime_atom), mime_atom);
+	}
 }
 
 gboolean
