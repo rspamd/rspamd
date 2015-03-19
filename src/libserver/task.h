@@ -218,5 +218,24 @@ gboolean rspamd_task_add_recipient (struct rspamd_task *task, const gchar *rcpt)
  */
 gboolean rspamd_task_add_sender (struct rspamd_task *task, const gchar *sender);
 
+#define RSPAMD_TASK_CACHE_NO_VALUE ((guint)-1)
+
+/**
+ * Add or replace the value to the task cache of regular expressions results
+ * @param task task object
+ * @param re text value of regexp
+ * @param value value to add
+ * @return previous value of element or RSPAMD_TASK_CACHE_NO_VALUE
+ */
+guint rspamd_task_re_cache_add (struct rspamd_task *task, gchar *re,
+		guint value);
+
+/**
+ * Check for cached result of re inside cache
+ * @param task task object
+ * @param re text value of regexp
+ * @return the current value of element or RSPAMD_TASK_CACHE_NO_VALUE
+ */
+guint rspamd_task_re_cache_check (struct rspamd_task *task, const gchar *re);
 
 #endif /* TASK_H_ */

@@ -73,7 +73,7 @@ rspamd_task_new (struct rspamd_worker *worker)
 	rspamd_mempool_add_destructor (new_task->task_pool,
 		(rspamd_mempool_destruct_t) g_hash_table_unref,
 		new_task->results);
-	new_task->re_cache = g_hash_table_new (rspamd_regexp_hash, rspamd_regexp_equal);
+	new_task->re_cache = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	rspamd_mempool_add_destructor (new_task->task_pool,
 		(rspamd_mempool_destruct_t) g_hash_table_unref,
 		new_task->re_cache);
@@ -449,4 +449,38 @@ rspamd_task_add_sender (struct rspamd_task *task, const gchar *sender)
 	}
 
 	return FALSE;
+}
+
+
+guint
+rspamd_task_re_cache_add (struct rspamd_task *task, gchar *re,
+		guint value)
+{
+	guint ret = RSPAMD_TASK_CACHE_NO_VALUE;
+	gpointer p;
+
+	p = g_hash_table_lookup (task->re_cache, re);
+
+	if (p != NULL) {
+		ret = GPOINTER_TO_INT (p);
+	}
+
+	g_hash_table_insert (task->re_cache, re, GINT_TO_POINTER (value));
+
+	return ret;
+}
+
+guint
+rspamd_task_re_cache_check (struct rspamd_task *task, const gchar *re)
+{
+	guint ret = RSPAMD_TASK_CACHE_NO_VALUE;
+	gpointer p;
+
+	p = g_hash_table_lookup (task->re_cache, re);
+
+	if (p != NULL) {
+		ret = GPOINTER_TO_INT (p);
+	}
+
+	return ret;
 }
