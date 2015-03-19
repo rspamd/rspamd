@@ -531,8 +531,10 @@ err:
 	return FALSE;
 }
 
-#define CHOSE_OPERAND(e1, e2) (((e1)->p.atom->priority >= (e2)->p.atom->priority) ? \
-		(e1) : (e2))
+#define CHOSE_OPERAND(e1, e2) ((e1)->flags & RSPAMD_EXPR_FLAG_PROCESSED ? (e1) : \
+	((e2)->flags & RSPAMD_EXPR_FLAG_PROCESSED) ? (e2) :						\
+	((e1)->p.atom->priority >= (e2)->p.atom->priority) ? 					\
+	(e1) : (e2))
 #define CHOOSE_REMAIN(e1, e2, es) ((es) == (e1) ? (e2) : (e1))
 #define PROCESS_ELT(expr, e)	do {										\
 		if (!((e)->flags & RSPAMD_EXPR_FLAG_PROCESSED)) {					\
