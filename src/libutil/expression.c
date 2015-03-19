@@ -598,6 +598,7 @@ rspamd_process_expression (struct rspamd_expression *expr, gpointer data)
 				g_assert (expr->expression_stack->len > 1);
 				st_elt[0] = rspamd_expr_stack_pop (expr);
 				st_elt[1] = rspamd_expr_stack_pop (expr);
+				ev = CHOSE_OPERAND (st_elt[0], st_elt[1]);
 				PROCESS_ELT (expr, ev);
 
 				if (ev->value) {
