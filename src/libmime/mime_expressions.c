@@ -143,6 +143,7 @@ static struct _fl *list_ptr = &rspamd_functions_list[0];
 static guint32 functions_number = sizeof (rspamd_functions_list) /
 	sizeof (struct _fl);
 static gboolean list_allocated = FALSE;
+static guint max_re_data = 0;
 
 /* Bsearch routine */
 static gint
@@ -1256,4 +1257,13 @@ rspamd_has_fake_html (struct rspamd_task * task, GList * args, void *unused)
 
 	return res;
 
+}
+
+guint
+rspamd_mime_expression_set_re_limit (guint limit)
+{
+	guint ret = max_re_data;
+
+	max_re_data = limit;
+	return ret;
 }

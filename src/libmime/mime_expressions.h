@@ -57,4 +57,11 @@ void task_cache_add (struct rspamd_task *task,
  */
 gint32 task_cache_check (struct rspamd_task *task, struct rspamd_regexp_element *re);
 
+/**
+ * Set global limit of regexp data size to be processed
+ * @param limit new limit in bytes
+ * @return old limit value
+ */
+guint rspamd_mime_expression_set_re_limit (guint limit);
+
 #endif
