@@ -40,24 +40,6 @@ void register_expression_function (const gchar *name,
 	void *user_data);
 
 /**
- * Add regexp to regexp task cache
- * @param task task object
- * @param pointer regexp data
- * @param result numeric result of this regexp
- */
-void task_cache_add (struct rspamd_task *task,
-	struct rspamd_regexp_element *re,
-	gint32 result);
-
-/**
- * Check regexp in cache
- * @param task task object
- * @param pointer regexp data
- * @return numeric result if value exists or -1 if not
- */
-gint32 task_cache_check (struct rspamd_task *task, struct rspamd_regexp_element *re);
-
-/**
  * Set global limit of regexp data size to be processed
  * @param limit new limit in bytes
  * @return old limit value

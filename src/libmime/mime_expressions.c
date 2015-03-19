@@ -92,6 +92,7 @@ struct rspamd_regexp_atom {
 	gchar *header;                                  /**< header name for header regexps						*/
 	gboolean is_test;                               /**< true if this expression must be tested				*/
 	gboolean is_strong;                             /**< true if headers search must be case sensitive		*/
+	gboolean is_multiple;                           /**< true if we need to match all inclusions of atom	*/
 };
 
 /**
@@ -301,6 +302,10 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 			break;
 		case 'S':
 			result->is_strong = TRUE;
+			p++;
+			break;
+		case 'A':
+			result->is_multiple = TRUE;
 			p++;
 			break;
 		/* Stop flags parsing */
@@ -530,7 +535,7 @@ rspamd_mime_expr_parse (const gchar *line, gsize len,
 			break;
 		case bad_atom:
 			g_set_error (err, rspamd_mime_expr_quark(), 100, "cannot parse"
-					" mime atom '%*.s' when reading symbol '%c'", len, line, t);
+					" mime atom '%*.s' when reading symbol '%c'", (gint)len, line, t);
 			return NULL;
 		case end_atom:
 			goto set;
@@ -573,11 +578,64 @@ set:
 	a->priority = 0;
 	a->data = mime_atom;
 
+	return a;
+
 err:
 	if (mime_atom != NULL) {
 		g_free (mime_atom->str);
 		g_slice_free1 (sizeof (*mime_atom), mime_atom);
 	}
+
+	return NULL;
+}
+
+static gint
+rspamd_mime_regexp_element_process (struct rspamd_task *task,
+		struct rspamd_regexp_atom *re, const gchar *data, gsize len,
+		gboolean raw)
+{
+	guint r = 0;
+	const gchar *start = NULL, *end = NULL;
+
+	if ((r = rspamd_task_re_cache_check (task, re->regexp_text)) !=
+			RSPAMD_TASK_CACHE_NO_VALUE) {
+		debug_task ("regexp /%s/ is found in cache, result: %d",
+				re->regexp_text, r);
+		return r;
+	}
+
+	if (len == 0) {
+		len = strlen (data);
+	}
+
+	if (max_re_data != 0 && len > max_re_data) {
+		msg_info ("<%s> skip data of size %Hud",
+							task->message_id,
+							len);
+
+		return 0;
+	}
+
+	while (rspamd_regexp_search (re->regexp, data, len, &start, &end, raw)) {
+		if (G_UNLIKELY (re->is_test)) {
+			msg_info (
+					"process test regexp %s for header %s with value '%s' returned TRUE",
+					re->regexp_text,
+					re->header,
+					data);
+		}
+		r++;
+
+		if (!re->is_multiple) {
+			break;
+		}
+	}
+
+	if (r > 0) {
+		rspamd_task_re_cache_add (task, re->regexp_text, r);
+	}
+
+	return r;
 }
 
 struct url_regexp_param {
@@ -593,13 +651,8 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 	struct url_regexp_param *param = data;
 	struct rspamd_url *url = value;
 
-	if (rspamd_regexp_search (param->regexp, struri (url), 0, NULL, NULL, FALSE)
-			== TRUE) {
-		if (G_UNLIKELY (param->re->is_test)) {
-			msg_info ("process test regexp %s for url %s returned TRUE",
-				struri (url));
-		}
-		task_cache_add (param->task, param->re, 1);
+	if (rspamd_mime_regexp_element_process (param->task, param->re,
+			struri (url), 0, FALSE)) {
 		param->found = TRUE;
 		return TRUE;
 	}
@@ -612,27 +665,13 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 }
 
 static gint
-rspamd_mime_regexp_element_process (struct rspamd_task *task,
-		struct rspamd_regexp_atom *re, const guchar data, gsize len)
-{
-	gint r;
-	if ((r = task_cache_check (task, re)) != -1) {
-		debug_task ("regexp /%s/ is found in cache, result: %d",
-				re->regexp_text,
-				r);
-		return r == 1;
-	}
-}
-
-static gint
 rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 		struct rspamd_task *task)
 {
 	guint8 *ct;
 	gsize clen;
-	gint r, passed = 0;
-	gboolean matched = FALSE, raw = FALSE;
-	const gchar *in, *start, *end;
+	gboolean raw = FALSE;
+	const gchar *in;
 
 	GList *cur, *headerlist;
 	rspamd_regexp_t *regexp;
@@ -663,7 +702,7 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 		if (re->header == NULL) {
 			msg_info ("header regexp without header name: '%s'",
 				re->regexp_text);
-			task_cache_add (task, re, 0);
+			rspamd_task_re_cache_add (task, re->regexp_text, 0);
 			return 0;
 		}
 		debug_task ("checking %s header regexp: %s = %s",
@@ -683,7 +722,7 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 					re->regexp_text,
 					re->header);
 			}
-			task_cache_add (task, re, 0);
+			rspamd_task_re_cache_add (task, re->regexp_text, 0);
 			return 0;
 		}
 		else {
@@ -691,7 +730,7 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 			if (re->regexp == NULL) {
 				debug_task ("regexp contains only header and it is found %s",
 					re->header);
-				task_cache_add (task, re, 1);
+				rspamd_task_re_cache_add (task, re->regexp_text, 1);
 				return 1;
 			}
 			/* Iterate through headers */
@@ -716,29 +755,16 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 				}
 
 				/* Match re */
-				if (in &&
-					rspamd_regexp_search (regexp, in, 0, NULL, NULL, raw)) {
-					if (G_UNLIKELY (re->is_test)) {
-						msg_info (
-							"process test regexp %s for header %s with value '%s' returned TRUE",
-							re->regexp_text,
-							re->header,
-							in);
-					}
-					task_cache_add (task, re, 1);
+				if (in && rspamd_mime_regexp_element_process (task, re, in,
+						strlen (in), raw)) {
+
 					return 1;
 				}
-				else if (G_UNLIKELY (re->is_test)) {
-					msg_info (
-						"process test regexp %s for header %s with value '%s' returned FALSE",
-						re->regexp_text,
-						re->header,
-						in);
-				}
+
 				cur = g_list_next (cur);
 			}
-			task_cache_add (task, re, 0);
-			return 0;
+
+			rspamd_task_re_cache_add (task, re->regexp_text, 0);
 		}
 		break;
 	case REGEXP_MIME:
@@ -752,16 +778,6 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 				cur = g_list_next (cur);
 				continue;
 			}
-			/* Skip too large parts */
-			if (max_re_data != 0 && part->content->len > max_re_data) {
-				msg_info ("<%s> skip part of size %Hud",
-					task->message_id,
-					part->content->len);
-				cur = g_list_next (cur);
-				continue;
-			}
-
-			regexp = re->regexp;
 
 			/* Check raw flags */
 			if (part->is_raw) {
@@ -777,54 +793,23 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 				clen = part->content->len;
 			}
 			/* If we have limit, apply regexp so much times as we can */
-			if (rspamd_regexp_search (regexp, ct, clen, NULL, NULL, raw)) {
-				if (G_UNLIKELY (re->is_test)) {
-					msg_info (
-							"process test regexp %s for mime part of length %d returned TRUE",
-							re->regexp_text,
-							(gint)clen);
-				}
-				task_cache_add (task, re, 1);
+			if (rspamd_mime_regexp_element_process (task, re, ct, clen, raw)) {
 				return 1;
-			}
-			if (!matched && G_UNLIKELY (re->is_test)) {
-				msg_info (
-					"process test regexp %s for mime part of length %d returned FALSE",
-					re->regexp_text,
-					(gint)clen);
 			}
 			cur = g_list_next (cur);
 		}
-		task_cache_add (task, re, 0);
+		rspamd_task_re_cache_add (task, re->regexp_text, 0);
 		break;
 	case REGEXP_MESSAGE:
 		debug_task ("checking message regexp: %s", re->regexp_text);
 		raw = TRUE;
-		regexp = re->regexp;
 		ct = (guint8 *)task->msg.start;
 		clen = task->msg.len;
 
-		if (max_re_data != 0 && clen > max_re_data) {
-			msg_info ("<%s> skip message of size %Hz", task->message_id, clen);
-			return 0;
-		}
-		if (rspamd_regexp_search (regexp, ct, clen, NULL, NULL, raw)) {
-			if (G_UNLIKELY (re->is_test)) {
-				msg_info (
-						"process test regexp %s for message part of length %d returned TRUE",
-						re->regexp_text,
-						(gint)clen);
-			}
-			task_cache_add (task, re, 1);
+		if (rspamd_mime_regexp_element_process (task, re, ct, clen, raw)) {
 			return 1;
 		}
-		if (!matched && G_UNLIKELY (re->is_test)) {
-			msg_info (
-				"process test regexp %s for message part of length %d returned FALSE",
-				re->regexp_text,
-				(gint)clen);
-		}
-		task_cache_add (task, re, 0);
+		rspamd_task_re_cache_add (task, re->regexp_text, 0);
 		break;
 	case REGEXP_URL:
 		debug_task ("checking url regexp: %s", re->regexp_text);
@@ -840,7 +825,7 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 			g_tree_foreach (task->emails, tree_url_callback, &callback_param);
 		}
 		if (callback_param.found == FALSE) {
-			task_cache_add (task, re, 0);
+			rspamd_task_re_cache_add (task, re->regexp_text, 0);
 		}
 		break;
 	default:
@@ -848,7 +833,6 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 		break;
 	}
 
-	/* Not reached */
 	return 0;
 }
 
