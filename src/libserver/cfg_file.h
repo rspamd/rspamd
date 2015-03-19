@@ -43,36 +43,12 @@ enum rspamd_cred_type {
 };
 
 /**
- * Regexp type: /H - header, /M - mime, /U - url /X - raw header
- */
-enum rspamd_regexp_type {
-	REGEXP_NONE = 0,
-	REGEXP_HEADER,
-	REGEXP_MIME,
-	REGEXP_MESSAGE,
-	REGEXP_URL,
-	REGEXP_RAW_HEADER
-};
-
-/**
  * Logging type
  */
 enum rspamd_log_type {
 	RSPAMD_LOG_CONSOLE,
 	RSPAMD_LOG_SYSLOG,
 	RSPAMD_LOG_FILE
-};
-
-/**
- * Regexp structure
- */
-struct rspamd_regexp_element {
-	enum rspamd_regexp_type type;                   /**< regexp type										*/
-	gchar *regexp_text;                             /**< regexp text representation							*/
-	rspamd_regexp_t *regexp;                        /**< regexp structure									*/
-	gchar *header;                                  /**< header name for header regexps						*/
-	gboolean is_test;                               /**< true if this expression must be tested				*/
-	gboolean is_strong;                             /**< true if headers search must be case sensitive		*/
 };
 
 /**

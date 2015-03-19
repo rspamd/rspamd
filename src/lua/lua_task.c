@@ -25,7 +25,6 @@
 
 #include "lua_common.h"
 #include "message.h"
-#include "expressions.h"
 #include "protocol.h"
 #include "filter.h"
 #include "dns.h"
@@ -273,15 +272,7 @@ LUA_FUNCTION_DEF (task, get_resolver);
  * Increment number of DNS requests for the task. Is used just for logging purposes.
  */
 LUA_FUNCTION_DEF (task, inc_dns_req);
-/***
- * @method task:call_rspamd_function(function[, param, param...])
- * Calls rspamd expression function `func` with the specified parameters.
- * It returns the boolean result of function invocation.
- * @param {string} function name of internal or registered lua function to call
- * @param {list of strings} params parameters for a function
- * @return {bool} true or false returned by expression function
- */
-LUA_FUNCTION_DEF (task, call_rspamd_function);
+
 /***
  * @method task:get_recipients([type])
  * Return SMTP or MIME recipients for a task. This function returns list of internet addresses each one is a table with the following structure:
@@ -459,7 +450,6 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_received_headers),
 	LUA_INTERFACE_DEF (task, get_resolver),
 	LUA_INTERFACE_DEF (task, inc_dns_req),
-	LUA_INTERFACE_DEF (task, call_rspamd_function),
 	LUA_INTERFACE_DEF (task, get_recipients),
 	LUA_INTERFACE_DEF (task, get_from),
 	LUA_INTERFACE_DEF (task, get_user),
@@ -1254,45 +1244,6 @@ lua_task_inc_dns_req (lua_State *L)
 
 	return 0;
 }
-
-static gint
-lua_task_call_rspamd_function (lua_State * L)
-{
-	struct rspamd_task *task = lua_check_task (L, 1);
-	struct expression_function f;
-	gint i, top;
-	gboolean res;
-	gchar *arg;
-
-	if (task) {
-		f.name = (gchar *)luaL_checkstring (L, 2);
-		if (f.name) {
-			f.args = NULL;
-			top = lua_gettop (L);
-			/* Get arguments after function name */
-			for (i = 3; i <= top; i++) {
-				arg = (gchar *)luaL_checkstring (L, i);
-				if (arg != NULL) {
-					f.args = g_list_prepend (f.args, arg);
-				}
-			}
-			res = call_expression_function (&f, task, L);
-			lua_pushboolean (L, res);
-			if (f.args) {
-				g_list_free (f.args);
-			}
-
-			return 1;
-		}
-	}
-
-	lua_pushnil (L);
-
-	return 1;
-
-}
-
-
 
 static gboolean
 lua_push_internet_address (lua_State *L, InternetAddress *ia)

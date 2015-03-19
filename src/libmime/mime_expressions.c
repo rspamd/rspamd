@@ -28,7 +28,7 @@
 #include "main.h"
 #include "message.h"
 #include "fuzzy.h"
-#include "expressions.h"
+#include "mime_expressions.h"
 #include "html.h"
 #include "lua/lua_common.h"
 #include "diff.h"
@@ -63,6 +63,42 @@ gboolean rspamd_has_html_tag (struct rspamd_task *task,
 gboolean rspamd_has_fake_html (struct rspamd_task *task,
 	GList * args,
 	void *unused);
+
+/**
+ * Regexp type: /H - header, /M - mime, /U - url /X - raw header
+ */
+enum rspamd_regexp_type {
+	REGEXP_NONE = 0,
+	REGEXP_HEADER,
+	REGEXP_MIME,
+	REGEXP_MESSAGE,
+	REGEXP_URL,
+	REGEXP_RAW_HEADER
+};
+
+/**
+ * Regexp structure
+ */
+struct rspamd_regexp_atom {
+	enum rspamd_regexp_type type;                   /**< regexp type										*/
+	gchar *regexp_text;                             /**< regexp text representation							*/
+	rspamd_regexp_t *regexp;                        /**< regexp structure									*/
+	gchar *header;                                  /**< header name for header regexps						*/
+	gboolean is_test;                               /**< true if this expression must be tested				*/
+	gboolean is_strong;                             /**< true if headers search must be case sensitive		*/
+};
+
+/**
+ * Rspamd expression function
+ */
+struct rspamd_function_atom {
+	gchar *name;	/**< name of function								*/
+	GList *args;	/**< its args										*/
+};
+
+struct rspamd_mime_atom {
+
+};
 
 /*
  * List of internal functions of rspamd
@@ -99,560 +135,15 @@ fl_cmp (const void *s1, const void *s2)
 	return strcmp (fl1->name, fl2->name);
 }
 
-/* Cache for regular expressions that are used in functions */
-void *
-re_cache_check (const gchar *line, rspamd_mempool_t *pool)
-{
-	GHashTable *re_cache;
-
-	re_cache = rspamd_mempool_get_variable (pool, "re_cache");
-
-	if (re_cache == NULL) {
-		re_cache = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-		rspamd_mempool_set_variable (pool, "re_cache", re_cache,
-			(rspamd_mempool_destruct_t)g_hash_table_destroy);
-		return NULL;
-	}
-	return g_hash_table_lookup (re_cache, line);
-}
-
-void
-re_cache_add (const gchar *line, void *pointer, rspamd_mempool_t *pool)
-{
-	GHashTable *re_cache;
-
-	re_cache = rspamd_mempool_get_variable (pool, "re_cache");
-
-	if (re_cache == NULL) {
-		re_cache = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-		rspamd_mempool_set_variable (pool, "re_cache", re_cache,
-			(rspamd_mempool_destruct_t)g_hash_table_destroy);
-	}
-
-	g_hash_table_insert (re_cache, (gpointer)line, pointer);
-}
-
-void
-re_cache_del (const gchar *line, rspamd_mempool_t *pool)
-{
-	GHashTable *re_cache;
-
-	re_cache = rspamd_mempool_get_variable (pool, "re_cache");
-
-	if (re_cache != NULL) {
-		g_hash_table_remove (re_cache, line);
-	}
-
-}
-
-/*
- * Functions for parsing expressions
- */
-struct expression_stack {
-	gchar op;
-	struct expression_stack *next;
-};
-
-/*
- * Push operand or operator to stack
- */
-static struct expression_stack *
-push_expression_stack (rspamd_mempool_t * pool,
-	struct expression_stack *head,
-	gchar op)
-{
-	struct expression_stack *new;
-	new = rspamd_mempool_alloc (pool, sizeof (struct expression_stack));
-	new->op = op;
-	new->next = head;
-	return new;
-}
-
-/*
- * Delete symbol from stack, return pointer to operand or operator (casted to void* )
- */
-static gchar
-delete_expression_stack (struct expression_stack **head)
-{
-	struct expression_stack *cur;
-	gchar res;
-
-	if (*head == NULL)
-		return 0;
-
-	cur = *head;
-	res = cur->op;
-
-	*head = cur->next;
-	return res;
-}
-
-/*
- * Return operation priority
- */
-static gint
-logic_priority (gchar a)
-{
-	switch (a) {
-	case '!':
-		return 3;
-	case '|':
-	case '&':
-		return 2;
-	case '(':
-		return 1;
-	default:
-		return 0;
-	}
-}
-
-/*
- * Return FALSE if symbol is not operation symbol (operand)
- * Return TRUE if symbol is operation symbol
- */
-static gboolean
-is_operation_symbol (gchar *a)
-{
-	switch (*a) {
-	case '!':
-	case '&':
-	case '|':
-	case '(':
-	case ')':
-		return TRUE;
-	case 'O':
-	case 'o':
-		if (g_ascii_strncasecmp (a, "or",
-			sizeof ("or") - 1) == 0 && g_ascii_isspace (a[2])) {
-			return TRUE;
-		}
-		break;
-	case 'A':
-	case 'a':
-		if (g_ascii_strncasecmp (a, "and",
-			sizeof ("and") - 1) == 0 && g_ascii_isspace (a[3])) {
-			return TRUE;
-		}
-		break;
-	case 'N':
-	case 'n':
-		if (g_ascii_strncasecmp (a, "not",
-			sizeof ("not") - 1) == 0 && g_ascii_isspace (a[3])) {
-			return TRUE;
-		}
-		break;
-	}
-
-	return FALSE;
-}
-
-/* Return character representation of operation */
-static gchar
-op_to_char (gchar *a, gchar **next)
-{
-	switch (*a) {
-	case '!':
-	case '&':
-	case '|':
-	case '(':
-	case ')':
-		if ((a[0] == '&' && a[1] == '&') ||
-				(a[0] == '|' && a[1] == '|')) {
-			*next = a + 2;
-		}
-		else {
-			*next = a + 1;
-		}
-		return *a;
-	case 'O':
-	case 'o':
-		if (g_ascii_strncasecmp (a, "or", sizeof ("or") - 1) == 0) {
-			*next = a + sizeof ("or") - 1;
-			return '|';
-		}
-		break;
-	case 'A':
-	case 'a':
-		if (g_ascii_strncasecmp (a, "and", sizeof ("and") - 1) == 0) {
-			*next = a + sizeof ("and") - 1;
-			return '&';
-		}
-		break;
-	case 'N':
-	case 'n':
-		if (g_ascii_strncasecmp (a, "not", sizeof ("not") - 1) == 0) {
-			*next = a + sizeof ("not") - 1;
-			return '!';
-		}
-		break;
-	}
-
-	return '\0';
-}
-
-/*
- * Return TRUE if symbol can be regexp flag
- */
-static gboolean
-is_regexp_flag (gchar a)
-{
-	switch (a) {
-	case 'i':
-	case 'm':
-	case 'x':
-	case 's':
-	case 'u':
-	case 'o':
-	case 'r':
-	case 'H':
-	case 'M':
-	case 'P':
-	case 'U':
-	case 'X':
-	case 'T':
-	case 'S':
-		return TRUE;
-	default:
-		return FALSE;
-	}
-}
-
-static void
-insert_expression (rspamd_mempool_t * pool,
-	struct expression **head,
-	gint type,
-	gchar op,
-	void *operand,
-	const gchar *orig)
-{
-	struct expression *new, *cur;
-
-	new = rspamd_mempool_alloc (pool, sizeof (struct expression));
-	new->type = type;
-	new->orig = orig;
-	if (new->type != EXPR_OPERATION) {
-		new->content.operand = operand;
-	}
-	else {
-		new->content.operation = op;
-	}
-	new->next = NULL;
-
-	if (!*head) {
-		*head = new;
-	}
-	else {
-		cur = *head;
-		while (cur->next) {
-			cur = cur->next;
-		}
-		cur->next = new;
-	}
-}
-
-static struct expression *
-maybe_parse_expression (rspamd_mempool_t * pool, gchar *line)
-{
-	struct expression *expr;
-	gchar *p = line;
-
-	while (*p) {
-		if (is_operation_symbol (p)) {
-			return parse_expression (pool, line);
-		}
-		p++;
-	}
-
-	expr = rspamd_mempool_alloc (pool, sizeof (struct expression));
-	expr->type = EXPR_STR;
-	expr->content.operand = rspamd_mempool_strdup (pool, line);
-	expr->next = NULL;
-
-	return expr;
-}
-
-/*
- * Make inverse polish record for specified expression
- * Memory is allocated from given pool
- */
-struct expression *
-parse_expression (rspamd_mempool_t * pool, gchar *line)
-{
-	struct expression *expr = NULL;
-	struct expression_stack *stack = NULL;
-	struct expression_function *func = NULL;
-	struct expression *arg;
-	GQueue *function_stack;
-	gchar *p, *c, *str, op, newop, *copy, *next;
-	gboolean in_regexp = FALSE;
-	gint brackets = 0;
-
-	enum {
-		SKIP_SPACES,
-		READ_OPERATOR,
-		READ_REGEXP,
-		READ_REGEXP_FLAGS,
-		READ_FUNCTION,
-		READ_FUNCTION_ARGUMENT,
-	} state = SKIP_SPACES;
-
-	if (line == NULL || pool == NULL) {
-		return NULL;
-	}
-
-	msg_debug ("parsing expression {{ %s }}", line);
-
-	function_stack = g_queue_new ();
-	copy = rspamd_mempool_strdup (pool, line);
-	p = line;
-	c = p;
-	while (*p) {
-		switch (state) {
-		case SKIP_SPACES:
-			if (!g_ascii_isspace (*p)) {
-				if (is_operation_symbol (p)) {
-					state = READ_OPERATOR;
-				}
-				else if (*p == '/') {
-					c = ++p;
-					state = READ_REGEXP;
-				}
-				else {
-					c = p;
-					state = READ_FUNCTION;
-				}
-			}
-			else {
-				p++;
-			}
-			break;
-		case READ_OPERATOR:
-			if (*p == ')') {
-				if (stack == NULL) {
-					return NULL;
-				}
-				/* Pop all operators from stack to nearest '(' or to head */
-				while (stack && stack->op != '(') {
-					op = delete_expression_stack (&stack);
-					if (op != '(') {
-						insert_expression (pool,
-							&expr,
-							EXPR_OPERATION,
-							op,
-							NULL,
-							copy);
-					}
-				}
-				if (stack) {
-					/* Remove open brace itself */
-					delete_expression_stack (&stack);
-				}
-			}
-			else if (*p == '(') {
-				/* Push it to stack */
-				stack = push_expression_stack (pool, stack, *p);
-			}
-			else {
-				if (stack == NULL) {
-					newop = op_to_char (p, &next);
-					if (newop != '\0') {
-						stack = push_expression_stack (pool, stack, newop);
-						p = next;
-						state = SKIP_SPACES;
-						continue;
-					}
-				}
-				/* Check priority of logic operation */
-				else {
-					newop = op_to_char (p, &next);
-					if (newop != '\0') {
-						if (logic_priority (stack->op) <
-							logic_priority (newop)) {
-							stack = push_expression_stack (pool, stack, newop);
-						}
-						else {
-							/* Pop all operations that have higher priority than this one */
-							while ((stack != NULL) &&
-								(logic_priority (stack->op) >=
-								logic_priority (newop))) {
-								op = delete_expression_stack (&stack);
-								if (op != '(') {
-									insert_expression (pool,
-										&expr,
-										EXPR_OPERATION,
-										op,
-										NULL,
-										copy);
-								}
-							}
-							stack = push_expression_stack (pool, stack, newop);
-						}
-					}
-					p = next;
-					state = SKIP_SPACES;
-					continue;
-				}
-			}
-			p++;
-			state = SKIP_SPACES;
-			break;
-
-		case READ_REGEXP:
-			if (*p == '/' && *(p - 1) != '\\') {
-				if (*(p + 1)) {
-					p++;
-				}
-				state = READ_REGEXP_FLAGS;
-			}
-			else {
-				p++;
-			}
-			break;
-
-		case READ_REGEXP_FLAGS:
-			if (!is_regexp_flag (*p) || *(p + 1) == '\0') {
-				if (c != p) {
-					if ((is_regexp_flag (*p) || *p ==
-						'/') && *(p + 1) == '\0') {
-						p++;
-					}
-					str = rspamd_mempool_alloc (pool, p - c + 2);
-					rspamd_strlcpy (str, c - 1, (p - c + 2));
-					g_strstrip (str);
-					msg_debug ("found regexp: %s", str);
-					if (strlen (str) > 0) {
-						insert_expression (pool,
-							&expr,
-							EXPR_REGEXP,
-							0,
-							str,
-							copy);
-					}
-				}
-				c = p;
-				state = SKIP_SPACES;
-			}
-			else {
-				p++;
-			}
-			break;
-
-		case READ_FUNCTION:
-			if (*p == '/') {
-				/* In fact it is regexp */
-				state = READ_REGEXP;
-				c++;
-				p++;
-			}
-			else if (*p == '(') {
-				func =
-					rspamd_mempool_alloc (pool,
-						sizeof (struct expression_function));
-				func->name = rspamd_mempool_alloc (pool, p - c + 1);
-				func->args = NULL;
-				rspamd_strlcpy (func->name, c, (p - c + 1));
-				g_strstrip (func->name);
-				state = READ_FUNCTION_ARGUMENT;
-				g_queue_push_tail (function_stack, func);
-				insert_expression (pool, &expr, EXPR_FUNCTION, 0, func, copy);
-				c = ++p;
-			}
-			else if (is_operation_symbol (p)) {
-				/* In fact it is not function, but symbol */
-				if (c != p) {
-					str = rspamd_mempool_alloc (pool, p - c + 1);
-					rspamd_strlcpy (str, c, (p - c + 1));
-					g_strstrip (str);
-					if (strlen (str) > 0) {
-						insert_expression (pool, &expr, EXPR_STR, 0, str, copy);
-					}
-				}
-				state = READ_OPERATOR;
-			}
-			else if (*(p + 1) == '\0') {
-				/* In fact it is not function, but symbol */
-				p++;
-				if (c != p) {
-					str = rspamd_mempool_alloc (pool, p - c + 1);
-					rspamd_strlcpy (str, c, (p - c + 1));
-					g_strstrip (str);
-					if (strlen (str) > 0) {
-						insert_expression (pool, &expr, EXPR_STR, 0, str, copy);
-					}
-				}
-				state = SKIP_SPACES;
-			}
-			else {
-				p++;
-			}
-			break;
-
-		case READ_FUNCTION_ARGUMENT:
-			if (*p == '/' && !in_regexp) {
-				in_regexp = TRUE;
-				p++;
-			}
-			if (!in_regexp) {
-				/* Append argument to list */
-				if (*p == ',' || (*p == ')' && brackets == 0)) {
-					arg = NULL;
-					str = rspamd_mempool_alloc (pool, p - c + 1);
-					rspamd_strlcpy (str, c, (p - c + 1));
-					g_strstrip (str);
-					/* Recursive call */
-					arg = maybe_parse_expression (pool, str);
-					func->args = g_list_append (func->args, arg);
-					/* Pop function */
-					if (*p == ')') {
-						/* Last function in chain, goto skipping spaces state */
-						func = g_queue_pop_tail (function_stack);
-						if (g_queue_get_length (function_stack) == 0) {
-							state = SKIP_SPACES;
-						}
-					}
-					c = p + 1;
-				}
-				else if (*p == '(') {
-					brackets++;
-				}
-				else if (*p == ')') {
-					brackets--;
-				}
-			}
-			else if (*p == '/' && *(p - 1) != '\\') {
-				in_regexp = FALSE;
-			}
-			p++;
-			break;
-		}
-	}
-
-	g_queue_free (function_stack);
-	if (state != SKIP_SPACES) {
-		/* In fact we got bad expression */
-		msg_warn ("expression \"%s\" is invalid", line);
-		return NULL;
-	}
-	/* Pop everything from stack */
-	while (stack != NULL) {
-		op = delete_expression_stack (&stack);
-		if (op != '(') {
-			insert_expression (pool, &expr, EXPR_OPERATION, op, NULL, copy);
-		}
-	}
-
-	return expr;
-}
-
 /*
  * Rspamd regexp utility functions
  */
-struct rspamd_regexp_element *
-parse_regexp (rspamd_mempool_t * pool, const gchar *line, gboolean raw_mode)
+static struct rspamd_regexp_atom *
+rspamd_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 {
 	const gchar *begin, *end, *p, *src, *start;
 	gchar *dbegin, *dend;
-	struct rspamd_regexp_element *result;
+	struct rspamd_regexp_atom *result;
 	rspamd_regexp_t *re;
 	GError *err = NULL;
 	GString *re_flags;
@@ -799,10 +290,6 @@ parse_regexp (rspamd_mempool_t * pool, const gchar *line, gboolean raw_mode)
 	dend = result->regexp_text + (end - start);
 	*dend = '\0';
 
-	if (raw_mode) {
-		g_string_append_c (re_flags, 'r');
-	}
-
 	result->regexp = rspamd_regexp_new (dbegin, re_flags->str,
 			&err);
 
@@ -848,113 +335,6 @@ call_expression_function (struct expression_function * func,
 	}
 
 	return selected->func (task, func->args, selected->user_data);
-}
-
-struct expression_argument *
-get_function_arg (struct expression *expr,
-	struct rspamd_task *task,
-	gboolean want_string)
-{
-	GQueue *stack;
-	gsize cur, op1, op2;
-	struct expression_argument *res;
-	struct expression *it;
-
-	if (expr == NULL) {
-		msg_warn ("NULL expression passed");
-		return NULL;
-	}
-	if (expr->next == NULL) {
-		res =
-			rspamd_mempool_alloc (task->task_pool,
-				sizeof (struct expression_argument));
-		if (expr->type == EXPR_REGEXP || expr->type == EXPR_STR || expr->type ==
-			EXPR_REGEXP_PARSED) {
-			res->type = EXPRESSION_ARGUMENT_NORMAL;
-			res->data = expr->content.operand;
-		}
-		else if (expr->type == EXPR_FUNCTION && !want_string) {
-			res->type = EXPRESSION_ARGUMENT_BOOL;
-			cur = call_expression_function (expr->content.operand, task, NULL);
-			res->data = GSIZE_TO_POINTER (cur);
-		}
-		else {
-			msg_warn (
-				"cannot parse argument: it contains operator or bool expression that is not wanted");
-			return NULL;
-		}
-		return res;
-	}
-	else if (!want_string) {
-		res =
-			rspamd_mempool_alloc (task->task_pool,
-				sizeof (struct expression_argument));
-		res->type = EXPRESSION_ARGUMENT_BOOL;
-		stack = g_queue_new ();
-		it = expr;
-
-		while (it) {
-			if (it->type == EXPR_REGEXP || it->type == EXPR_REGEXP_PARSED ||
-				it->type == EXPR_STR) {
-				g_queue_free (stack);
-				res->type = EXPRESSION_ARGUMENT_EXPR;
-				res->data = expr;
-				return res;
-			}
-			else if (it->type == EXPR_FUNCTION) {
-				cur =
-					(gsize) call_expression_function ((struct
-						expression_function
-						*)it->content.operand, task, NULL);
-				debug_task ("function %s returned %s",
-					((struct expression_function *)it->content.operand)->name,
-					cur ? "true" : "false");
-			}
-			else if (it->type == EXPR_OPERATION) {
-				if (g_queue_is_empty (stack)) {
-					/* Queue has no operands for operation, exiting */
-					debug_task ("invalid expression");
-					g_queue_free (stack);
-					return NULL;
-				}
-				switch (it->content.operation) {
-				case '!':
-					op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
-					op1 = !op1;
-					g_queue_push_head (stack, GSIZE_TO_POINTER (op1));
-					break;
-				case '&':
-					op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
-					op2 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
-					g_queue_push_head (stack, GSIZE_TO_POINTER (op1 && op2));
-					break;
-				case '|':
-					op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
-					op2 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
-					g_queue_push_head (stack, GSIZE_TO_POINTER (op1 || op2));
-					break;
-				default:
-					it = it->next;
-					continue;
-				}
-			}
-			if (it) {
-				it = it->next;
-			}
-		}
-		if (!g_queue_is_empty (stack)) {
-			res->data = g_queue_pop_head (stack);
-		}
-		else {
-			res->data = GSIZE_TO_POINTER (FALSE);
-		}
-
-		return res;
-	}
-
-	msg_warn ("invalid expression argument");
-
-	return NULL;
 }
 
 void
@@ -1575,8 +955,3 @@ rspamd_has_fake_html (struct rspamd_task * task, GList * args, void *unused)
 	return res;
 
 }
-
-
-/*
- * vi:ts=4
- */
