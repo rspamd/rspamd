@@ -18,8 +18,9 @@ extern const struct rspamd_atom_subr mime_expr_subr;
  */
 struct expression_argument {
 	enum {
-		EXPRESSION_ARGUMENT_NORMAL,
+		EXPRESSION_ARGUMENT_NORMAL = 0,
 		EXPRESSION_ARGUMENT_BOOL,
+		EXPRESSION_ARGUMENT_REGEXP
 	} type;                                                     /**< type of argument (text or other function)		*/
 	void *data;                                                 /**< pointer to its data							*/
 };

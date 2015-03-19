@@ -99,7 +99,7 @@ struct rspamd_regexp_atom {
  */
 struct rspamd_function_atom {
 	gchar *name;	/**< name of function								*/
-	GList *args;	/**< its args										*/
+	GArray *args;	/**< its args										*/
 };
 
 struct rspamd_mime_atom {
@@ -163,7 +163,7 @@ rspamd_mime_expr_quark (void)
  * Rspamd regexp utility functions
  */
 static struct rspamd_regexp_atom *
-rspamd_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
+rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 {
 	const gchar *begin, *end, *p, *src, *start;
 	gchar *dbegin, *dend;
@@ -178,11 +178,11 @@ rspamd_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 	}
 
 	if ((re = rspamd_regexp_cache_query (NULL, line, NULL)) != NULL) {
-		return ((struct rspamd_regexp_element *)rspamd_regexp_get_ud (re));
+		return ((struct rspamd_regexp_atom *)rspamd_regexp_get_ud (re));
 	}
 
 	src = line;
-	result = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_regexp_element));
+	result = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_regexp_atom));
 	/* Skip whitespaces */
 	while (g_ascii_isspace (*line)) {
 		line++;
@@ -339,6 +339,105 @@ rspamd_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 	return result;
 }
 
+struct rspamd_function_atom *
+rspamd_mime_expr_parse_function_atom (const gchar *input)
+{
+	const gchar *obrace, *ebrace, *p, *c;
+	gchar t, *databuf;
+	struct rspamd_function_atom *res;
+	struct expression_argument arg;
+	GError *err = NULL;
+	enum {
+		start_read_argument = 0,
+		in_string,
+		in_regexp,
+		got_backslash,
+		got_comma
+	} state, prev_state = 0;
+
+	obrace = strchr (input, '(');
+	ebrace = strrchr (input, ')');
+
+	g_assert (obrace != NULL && ebrace != NULL);
+
+	res = g_slice_alloc0 (sizeof (*res));
+	res->name = g_malloc (obrace - input + 1);
+	rspamd_strlcpy (res->name, input, obrace - input + 1);
+	res->args = g_array_new (FALSE, FALSE, sizeof (struct expression_argument));
+
+	p = obrace + 1;
+	c = p;
+	state = start_read_argument;
+
+	/* Read arguments */
+	while (p <= ebrace) {
+		t = *p;
+		switch (state) {
+		case start_read_argument:
+			if (t == '/') {
+				state = in_regexp;
+				c = p;
+			}
+			else if (!g_ascii_isspace (t)) {
+				state = in_string;
+				c = p;
+			}
+			p ++;
+			break;
+		case in_regexp:
+			if (t == '\\') {
+				state = got_backslash;
+				prev_state = in_regexp;
+			}
+			else if (t == ',' || p == ebrace) {
+				databuf = g_malloc (p - c + 1);
+				rspamd_strlcpy (databuf, c, p - c + 1);
+				arg.type = EXPRESSION_ARGUMENT_REGEXP;
+				arg.data = rspamd_regexp_cache_create (NULL, databuf, NULL, &err);
+
+				if (arg.data == NULL) {
+					/* Fallback to string */
+					msg_warn ("cannot parse slashed argument %s as regexp: %s",
+							databuf, err->message);
+					g_error_free (err);
+					arg.type = EXPRESSION_ARGUMENT_NORMAL;
+					arg.data = databuf;
+				}
+				else {
+					g_free (databuf);
+				}
+
+				g_array_append_val (res->args, arg);
+			}
+			p ++;
+			break;
+		case in_string:
+			if (t == '\\') {
+				state = got_backslash;
+				prev_state = in_string;
+			}
+			else if (t == ',' || p == ebrace) {
+				databuf = g_malloc (p - c + 1);
+				rspamd_strlcpy (databuf, c, p - c + 1);
+				arg.type = EXPRESSION_ARGUMENT_NORMAL;
+				arg.data = databuf;
+				g_array_append_val (res->args, arg);
+			}
+			p ++;
+			break;
+		case got_backslash:
+			state = prev_state;
+			p ++;
+			break;
+		case got_comma:
+			state = start_read_argument;
+			break;
+		}
+	}
+
+	return res;
+}
+
 static rspamd_expression_atom_t *
 rspamd_mime_expr_parse (const gchar *line, gsize len,
 		rspamd_mempool_t *pool, gpointer ud, GError **err)
@@ -451,9 +550,18 @@ set:
 	rspamd_strlcpy (mime_atom->str, line, p - line + 1);
 
 	if (!is_function) {
-		mime_atom->d.re = rspamd_parse_regexp_atom (pool, mime_atom->str);
+		mime_atom->d.re = rspamd_mime_expr_parse_regexp_atom (pool,
+				mime_atom->str);
 		if (mime_atom->d.re == NULL) {
 			g_set_error (err, rspamd_mime_expr_quark(), 200, "cannot parse regexp '%s'",
+					mime_atom->str);
+			goto err;
+		}
+	}
+	else {
+		mime_atom->d.func = rspamd_mime_expr_parse_function_atom (mime_atom->str);
+		if (mime_atom->d.func == NULL) {
+			g_set_error (err, rspamd_mime_expr_quark(), 200, "cannot parse function '%s'",
 					mime_atom->str);
 			goto err;
 		}
