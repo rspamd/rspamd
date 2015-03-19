@@ -322,7 +322,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 		len = strlen (line);
 	}
 
-	num_re = rspamd_regexp_cache_create (NULL, "/^\\d+(\\s+|$)/", NULL, NULL);
+	num_re = rspamd_regexp_cache_create (NULL, "/^\\d+(\\s+|[)]|$)/", NULL, NULL);
 
 	p = line;
 	c = line;
@@ -670,42 +670,53 @@ rspamd_process_expression (struct rspamd_expression *expr, gpointer data)
 				case OP_LT:
 					if (cur_value >= lim->p.lim.val) {
 						ev->value = 0;
-						rspamd_expr_stack_push (expr, ev);
 						done = TRUE;
 					}
 					break;
 				case OP_LE:
 					if (cur_value > lim->p.lim.val) {
 						ev->value = 0;
-						rspamd_expr_stack_push (expr, ev);
 						done = TRUE;
 					}
 					break;
 				case OP_GT:
 					if (cur_value > lim->p.lim.val) {
 						ev->value = 1;
-						rspamd_expr_stack_push (expr, ev);
 						done = TRUE;
 					}
 					break;
 				case OP_GE:
 					if (cur_value >= lim->p.lim.val) {
 						ev->value = 1;
-						rspamd_expr_stack_push (expr, ev);
 						done = TRUE;
 					}
 					break;
 				default:
-					rspamd_expr_stack_push (expr, ev);
+					g_assert (0);
 					break;
 				}
+
 				/* If we done, then we go forward and skip remaining items */
 				if (done) {
-					i = cmp_pos + 1;
+					/* Remove extra elements left on the stack */
+					for (j = i; j < cmp_pos; j ++) {
+						check = &g_array_index (expr->expressions,
+								struct rspamd_expression_elt, j);
+						if (check->type == ELT_OP && check->p.op == OP_PLUS) {
+							rspamd_expr_stack_pop (expr);
+						}
+					}
+
+					/* Push the final result */
+					rspamd_expr_stack_push (expr, ev);
+					i = cmp_pos;
 					done = FALSE;
 					lim = NULL;
 					cur_value = 0;
 					cmp_op = NULL;
+				}
+				else {
+					rspamd_expr_stack_push (expr, ev);
 				}
 				break;
 			}
