@@ -57,4 +57,42 @@ context("Rspamd expressions", function()
     -- Expression is destroyed when the corresponding pool is destroyed
     pool:destroy()
   end)
+  test("Expression process function", function()
+    local function process_func(token, input)
+    
+      print(token)
+      local t = input[token]
+      
+      if t then return 1 end
+      return 0
+    end
+    
+    local pool = rspamd_mempool.create()
+    local atoms = {
+      A = true,
+      B = false,
+      C = true,
+      D = false,
+      E = true,
+      F = false,
+    }
+    local cases = {
+       {'A & B | !C', 0},
+       {'A & (!B | C)', 1},
+       {'A + B + C + D + E + F >= 2', 1},
+       {'((A + B + C + D) > 1) & F', 0},
+       {'!!C', 1},
+    }
+    for _,c in ipairs(cases) do
+      local expr,err = rspamd_expression.create(c[1], 
+        {parse_func, process_func}, pool)
+
+      assert_not_nil(expr, "Cannot parse " .. c[1])
+      res = expr:process(atoms)
+      assert_equal(res, c[2], string.format("Processed expr '%s' returned '%d', expected: '%d'",
+        expr:to_string(), res, c[2]))
+    end
+    
+    pool:destroy()
+  end)
 end)
