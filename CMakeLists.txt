@@ -127,26 +127,45 @@ MACRO(FindLua _major _minor)
 	MESSAGE(STATUS "Check for lua ${_major}.${_minor}")
 	
 	UNSET(LUA_INCLUDE_DIR CACHE)
-	UNSET(LUA_LIBRARY CACHE)
-	FIND_PATH(LUA_INCLUDE_DIR lua.h
-	  HINTS
-	  $ENV{LUA_DIR}
-	  PATH_SUFFIXES "include/luajit-2.0"
-					"include/lua${_major}${_minor}" 
-	  				"include/lua${_major}.${_minor}" 
-	  				"include/lua-${_major}.${_minor}"
-	  				include/lua include
-	  PATHS
-	  /usr/local
-	  /usr/pkg
-	  /usr
-	  ~/Library/Frameworks
-	  /Library/Frameworks
-	  /sw # Fink
-	  /opt/local # DarwinPorts
-	  /opt/csw # Blastwave
-	  /opt
-	)
+        UNSET(LUA_LIBRARY CACHE)
+
+        IF(ENABLE_LUAJIT MATCHES "ON")
+          FIND_PATH(LUA_INCLUDE_DIR lua.h
+            HINTS
+            $ENV{LUA_DIR}
+              PATH_SUFFIXES "include/luajit-2.0"
+            PATHS
+            /usr/local
+            /usr/pkg
+            /usr
+            ~/Library/Frameworks
+            /Library/Frameworks
+            /sw # Fink
+            /opt/local # DarwinPorts
+            /opt/csw # Blastwave
+            /opt
+          )
+        ELSE(ENABLE_LUAJIT MATCHES "ON")
+	  FIND_PATH(LUA_INCLUDE_DIR lua.h
+	    HINTS
+	    $ENV{LUA_DIR}
+              PATH_SUFFIXES "include/lua${_major}${_minor}"
+                            "include/lua${_major}${_minor}"
+                            "include/lua${_major}.${_minor}"
+                            "include/lua-${_major}.${_minor}"
+                            include/lua include
+	    PATHS
+	    /usr/local
+	    /usr/pkg
+	    /usr
+	    ~/Library/Frameworks
+	    /Library/Frameworks
+	    /sw # Fink
+	    /opt/local # DarwinPorts
+	    /opt/csw # Blastwave
+	    /opt
+	  )
+        ENDIF(ENABLE_LUAJIT MATCHES "ON")
 	
 	# Check for luajit
 	IF(ENABLE_LUAJIT MATCHES "ON")
