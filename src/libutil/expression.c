@@ -322,7 +322,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 		len = strlen (line);
 	}
 
-	num_re = rspamd_regexp_cache_create (NULL, "/^\\d+\\s*[><]/", NULL, NULL);
+	num_re = rspamd_regexp_cache_create (NULL, "/^\\d+(\\s+|$)/", NULL, NULL);
 
 	p = line;
 	c = line;
@@ -383,10 +383,14 @@ rspamd_parse_expression (const gchar *line, gsize len,
 			}
 			break;
 		case PARSE_LIM:
-			if (g_ascii_isdigit (*p)) {
+			if (g_ascii_isdigit (*p) && p != end - 1) {
 				p ++;
 			}
 			else {
+				if (p == end - 1) {
+					p ++;
+				}
+
 				if (p - c > 0) {
 					elt.type = ELT_LIMIT;
 					elt.p.lim.val = strtoul (c, NULL, 10);
