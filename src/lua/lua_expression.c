@@ -156,9 +156,10 @@ lua_atom_process (gpointer input, rspamd_expression_atom_t *atom)
 	gint ret;
 
 	lua_rawgeti (e->L, LUA_REGISTRYINDEX, e->process_idx);
+	lua_pushlstring (e->L, atom->str, atom->len);
 	lua_pushvalue (e->L, GPOINTER_TO_INT (input));
 
-	if (lua_pcall (e->L, 1, 1, 0) != 0) {
+	if (lua_pcall (e->L, 2, 1, 0) != 0) {
 		msg_info ("callback call failed: %s", lua_tostring (e->L, -1));
 	}
 
@@ -216,7 +217,7 @@ lua_expr_create (lua_State *L)
 
 		lua_pop (L, 1);
 
-		lua_pushnumber (L, 1);
+		lua_pushnumber (L, 2);
 		lua_gettable (L, -2);
 
 		if (lua_type (L, -1) != LUA_TFUNCTION) {
@@ -238,11 +239,11 @@ lua_expr_create (lua_State *L)
 		lua_pushnumber (L, 1);
 		lua_gettable (L, -2);
 		e->parse_idx = luaL_ref (L, LUA_REGISTRYINDEX);
-		lua_pop (L, 1);
+
 		lua_pushnumber (L, 2);
 		lua_gettable (L, -2);
 		e->process_idx = luaL_ref (L, LUA_REGISTRYINDEX);
-		lua_pop (L, 2); /* Idx and table */
+		lua_pop (L, 1); /* Table */
 
 		if (!rspamd_parse_expression (line, len, &lua_atom_subr, e, pool, &err,
 				&e->expr)) {
