@@ -62,8 +62,17 @@ LUA_FUNCTION_DEF (expr, create);
  */
 LUA_FUNCTION_DEF (expr, to_string);
 
+/***
+ * @method rspamd_expression:process(input)
+ * Executes the expression and pass input to process atom callbacks
+ * @param {any} input input data for processing callbacks
+ * @return {number} result of the expression evaluation
+ */
+LUA_FUNCTION_DEF (expr, process);
+
 static const struct luaL_reg exprlib_m[] = {
 	LUA_INTERFACE_DEF (expr, to_string),
+	LUA_INTERFACE_DEF (expr, process),
 	{"__tostring", lua_expr_to_string},
 	{NULL, NULL}
 };
@@ -157,6 +166,19 @@ lua_atom_process (gpointer input, rspamd_expression_atom_t *atom)
 	lua_pop (e->L, 1);
 
 	return ret;
+}
+
+static gint
+lua_expr_process (lua_State *L)
+{
+	struct lua_expression *e = rspamd_lua_expression (L, 1);
+	gint res;
+
+	res = rspamd_process_expression (e->expr, GINT_TO_POINTER (2));
+
+	lua_pushnumber (L, res);
+
+	return 1;
 }
 
 static gint
