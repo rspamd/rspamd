@@ -794,6 +794,7 @@ rspamd_process_expression (struct rspamd_expression *expr, gpointer data)
 
 	g_assert (expr->expression_stack->len == 1);
 	ev = rspamd_expr_stack_pop (expr);
+	PROCESS_ELT (expr, ev);
 	ret = ev->value;
 
 	/* Cleanup */
