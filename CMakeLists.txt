@@ -131,7 +131,8 @@ MACRO(FindLua _major _minor)
 	FIND_PATH(LUA_INCLUDE_DIR lua.h
 	  HINTS
 	  $ENV{LUA_DIR}
-	  PATH_SUFFIXES "include/lua${_major}${_minor}" 
+	  PATH_SUFFIXES "include/luajit-2.0"
+					"include/lua${_major}${_minor}" 
 	  				"include/lua${_major}.${_minor}" 
 	  				"include/lua-${_major}.${_minor}"
 	  				include/lua include
