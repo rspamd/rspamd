@@ -22,7 +22,6 @@
  */
 
 #include "lua_common.h"
-#include "expressions.h"
 #include "regexp.h"
 
 /***

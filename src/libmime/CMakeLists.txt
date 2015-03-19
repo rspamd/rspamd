@@ -1,6 +1,6 @@
 # Librspamd mime
 SET(LIBRSPAMDMIMESRC
-				${CMAKE_CURRENT_SOURCE_DIR}/expressions.c
+				${CMAKE_CURRENT_SOURCE_DIR}/mime_expressions.c
 				${CMAKE_CURRENT_SOURCE_DIR}/filter.c
 				${CMAKE_CURRENT_SOURCE_DIR}/images.c
 				${CMAKE_CURRENT_SOURCE_DIR}/message.c

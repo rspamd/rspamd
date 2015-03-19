@@ -27,7 +27,6 @@
 #include "utlist.h"
 #include "cfg_file.h"
 #include "lua/lua_common.h"
-#include "expressions.h"
 
 
 struct rspamd_rcl_default_handler_data {

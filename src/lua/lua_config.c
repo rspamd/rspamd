@@ -24,7 +24,6 @@
 
 
 #include "lua_common.h"
-#include "expressions.h"
 #include "map.h"
 #include "message.h"
 #include "radix.h"
@@ -69,27 +68,6 @@ LUA_FUNCTION_DEF (config, get_all_opt);
  * @return {mempool} [memory pool](mempool.md) object
  */
 LUA_FUNCTION_DEF (config, get_mempool);
-/***
- * @method rspamd_config:register_function(name, callback)
- * Registers new rspamd function that could be used in symbols expressions
- * @param {string} name name of function
- * @param {function} callback callback to be called
- * @example
-
-local function lua_header_exists(task, hname)
-	if task:get_raw_header(hname) then
-		return true
-	end
-
-	return false
-end
-
-rspamd_config:register_function('lua_header_exists', lua_header_exists)
-
--- Further in configuration it would be possible to define symbols like:
--- HAS_CONTENT_TYPE = 'lua_header_exists(Content-Type)'
- */
-LUA_FUNCTION_DEF (config, register_function);
 /***
  * @method rspamd_config:add_radix_map(mapline[, description])
  * Creates new dynamic map of IP/mask addresses.
@@ -314,7 +292,6 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
 	LUA_INTERFACE_DEF (config, get_mempool),
 	LUA_INTERFACE_DEF (config, get_all_opt),
-	LUA_INTERFACE_DEF (config, register_function),
 	LUA_INTERFACE_DEF (config, add_radix_map),
 	LUA_INTERFACE_DEF (config, radix_from_config),
 	LUA_INTERFACE_DEF (config, add_hash_map),
@@ -530,90 +507,6 @@ lua_destroy_cfg_symbol (gpointer ud)
 	if (cd->cb_is_ref) {
 		luaL_unref (cd->L, LUA_REGISTRYINDEX, cd->callback.ref);
 	}
-}
-
-static gboolean
-lua_config_function_callback (struct rspamd_task *task,
-	GList *args,
-	void *user_data)
-{
-	struct lua_callback_data *cd = user_data;
-	struct rspamd_task **ptask;
-	gint i = 1;
-	struct expression_argument *arg;
-	GList *cur;
-	gboolean res = FALSE;
-
-	if (cd->cb_is_ref) {
-		lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->callback.ref);
-	}
-	else {
-		lua_getglobal (cd->L, cd->callback.name);
-	}
-	ptask = lua_newuserdata (cd->L, sizeof (struct rspamd_task *));
-	rspamd_lua_setclass (cd->L, "rspamd{task}", -1);
-	*ptask = task;
-	/* Now push all arguments */
-	cur = args;
-	while (cur) {
-		arg = get_function_arg (cur->data, task, TRUE);
-		lua_pushstring (cd->L, (const gchar *)arg->data);
-		cur = g_list_next (cur);
-		i++;
-	}
-
-	if (lua_pcall (cd->L, i, 1, 0) != 0) {
-		msg_info ("error processing symbol %s: call to %s failed: %s",
-			cd->symbol,
-			cd->cb_is_ref ? "local function" :
-			cd->callback.name,
-			lua_tostring (cd->L, -1));
-	}
-	else {
-		if (lua_isboolean (cd->L, 1)) {
-			res = lua_toboolean (cd->L, 1);
-		}
-		lua_pop (cd->L, 1);
-	}
-
-	return res;
-}
-
-static gint
-lua_config_register_function (lua_State *L)
-{
-	struct rspamd_config *cfg = lua_check_config (L);
-	gchar *name;
-	struct lua_callback_data *cd;
-
-	if (cfg) {
-		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
-		cd =
-			rspamd_mempool_alloc (cfg->cfg_pool,
-				sizeof (struct lua_callback_data));
-
-		if (lua_type (L, 3) == LUA_TSTRING) {
-			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool,
-					luaL_checkstring (L, 3));
-			cd->cb_is_ref = FALSE;
-		}
-		else {
-			lua_pushvalue (L, 3);
-			/* Get a reference */
-			cd->callback.ref = luaL_ref (L, LUA_REGISTRYINDEX);
-			cd->cb_is_ref = TRUE;
-		}
-		if (name) {
-			cd->L = L;
-			cd->symbol = name;
-			register_expression_function (name, lua_config_function_callback,
-				cd);
-		}
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
-			cd);
-	}
-	return 1;
 }
 
 static gint
