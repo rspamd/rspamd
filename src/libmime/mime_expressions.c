@@ -840,7 +840,20 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 static gint
 rspamd_mime_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 {
+	struct rspamd_task *task = input;
+	struct rspamd_mime_atom *mime_atom;
+	gint ret = 0;
 
+	g_assert (task != NULL);
+	g_assert (atom != NULL);
+
+	mime_atom = atom->data;
+
+	if (!mime_atom->is_function) {
+		ret = rspamd_mime_expr_process_regexp (mime_atom->d.re, task);
+	}
+
+	return ret;
 }
 
 static gint
