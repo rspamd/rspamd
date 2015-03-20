@@ -1845,20 +1845,13 @@ rspamd_rcl_parse_struct_string_list (struct rspamd_config *cfg,
 
 	target = (GList **)(((gchar *)pd->user_struct) + pd->offset);
 
-	if (obj->type != UCL_ARRAY) {
-		g_set_error (err,
-			CFG_RCL_ERROR,
-			EINVAL,
-			"an array of strings is expected");
-		return FALSE;
-	}
+	iter = ucl_object_iterate_new (obj);
 
-	while ((cur = ucl_iterate_object (obj, &iter, true)) != NULL) {
+	while ((cur = ucl_object_iterate_safe (iter, true)) != NULL) {
 		switch (cur->type) {
 		case UCL_STRING:
-			val =
-				rspamd_mempool_strdup (cfg->cfg_pool,
-					ucl_copy_value_trash (cur));
+			val = rspamd_mempool_strdup (cfg->cfg_pool,
+							ucl_copy_value_trash (cur));
 			break;
 		case UCL_INT:
 			val = rspamd_mempool_alloc (cfg->cfg_pool, num_str_len);
@@ -1874,12 +1867,20 @@ rspamd_rcl_parse_struct_string_list (struct rspamd_config *cfg,
 			break;
 		default:
 			g_set_error (err,
-				CFG_RCL_ERROR,
-				EINVAL,
-				"cannot convert an object or array to string");
+					CFG_RCL_ERROR,
+					EINVAL,
+					"cannot convert an object or array to string");
 			return FALSE;
 		}
 		*target = g_list_prepend (*target, val);
+	}
+
+	if (*target == NULL) {
+		g_set_error (err,
+			CFG_RCL_ERROR,
+			EINVAL,
+			"an array of strings is expected");
+		return FALSE;
 	}
 
 	/* Add a destructor */
