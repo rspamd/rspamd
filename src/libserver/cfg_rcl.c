@@ -1879,44 +1879,37 @@ rspamd_rcl_parse_struct_string_list (struct rspamd_config *cfg,
 
 	target = (GList **)(((gchar *)pd->user_struct) + pd->offset);
 
-	if (obj->type == UCL_STRING) {
-		/* Just a single string */
-		val = rspamd_mempool_strdup (cfg->cfg_pool,
-			ucl_copy_value_trash (obj));
+	iter = ucl_object_iterate_new (obj);
+
+	while ((cur = ucl_object_iterate_safe (iter, true)) != NULL) {
+		switch (cur->type) {
+		case UCL_STRING:
+			val = rspamd_mempool_strdup (cfg->cfg_pool,
+							ucl_copy_value_trash (cur));
+			break;
+		case UCL_INT:
+			val = rspamd_mempool_alloc (cfg->cfg_pool, num_str_len);
+			rspamd_snprintf (val, num_str_len, "%L", cur->value.iv);
+			break;
+		case UCL_FLOAT:
+			val = rspamd_mempool_alloc (cfg->cfg_pool, num_str_len);
+			rspamd_snprintf (val, num_str_len, "%f", cur->value.dv);
+			break;
+		case UCL_BOOLEAN:
+			val = rspamd_mempool_alloc (cfg->cfg_pool, num_str_len);
+			rspamd_snprintf (val, num_str_len, "%b", (gboolean)cur->value.iv);
+			break;
+		default:
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"cannot convert an object or array to string");
+			return FALSE;
+		}
 		*target = g_list_prepend (*target, val);
 	}
-	else if (obj->type == UCL_ARRAY) {
 
-		while ((cur = ucl_iterate_object (obj, &iter, true)) != NULL) {
-			switch (cur->type) {
-			case UCL_STRING:
-				val =
-						rspamd_mempool_strdup (cfg->cfg_pool,
-								ucl_copy_value_trash (cur));
-				break;
-			case UCL_INT:
-				val = rspamd_mempool_alloc (cfg->cfg_pool, num_str_len);
-				rspamd_snprintf (val, num_str_len, "%L", cur->value.iv);
-				break;
-			case UCL_FLOAT:
-				val = rspamd_mempool_alloc (cfg->cfg_pool, num_str_len);
-				rspamd_snprintf (val, num_str_len, "%f", cur->value.dv);
-				break;
-			case UCL_BOOLEAN:
-				val = rspamd_mempool_alloc (cfg->cfg_pool, num_str_len);
-				rspamd_snprintf (val, num_str_len, "%b", (gboolean)cur->value.iv);
-				break;
-			default:
-				g_set_error (err,
-						CFG_RCL_ERROR,
-						EINVAL,
-						"cannot convert an object or array to string");
-				return FALSE;
-			}
-			*target = g_list_prepend (*target, val);
-		}
-	}
-	else {
+	if (*target == NULL) {
 		g_set_error (err,
 				CFG_RCL_ERROR,
 				EINVAL,
