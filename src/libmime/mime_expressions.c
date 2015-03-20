@@ -947,7 +947,7 @@ rspamd_compare_encoding (struct rspamd_task *task, GArray * args, void *unused)
 	}
 
 	arg = &g_array_index (args, struct expression_argument, 0);
-	if (!arg || arg->type == EXPRESSION_ARGUMENT_BOOL) {
+	if (!arg || arg->type != EXPRESSION_ARGUMENT_NORMAL) {
 		msg_warn ("invalid argument to function is passed");
 		return FALSE;
 	}
@@ -967,7 +967,7 @@ rspamd_header_exists (struct rspamd_task * task, GArray * args, void *unused)
 	}
 
 	arg = &g_array_index (args, struct expression_argument, 0);
-	if (!arg || arg->type == EXPRESSION_ARGUMENT_BOOL) {
+	if (!arg || arg->type != EXPRESSION_ARGUMENT_NORMAL) {
 		msg_warn ("invalid argument to function is passed");
 		return FALSE;
 	}
@@ -1006,6 +1006,11 @@ rspamd_parts_distance (struct rspamd_task * task, GArray * args, void *unused)
 	else {
 		errno = 0;
 		arg = &g_array_index (args, struct expression_argument, 0);
+		if (!arg || arg->type != EXPRESSION_ARGUMENT_NORMAL) {
+			msg_warn ("invalid argument to function is passed");
+			return FALSE;
+		}
+
 		threshold = strtoul ((gchar *)arg->data, NULL, 10);
 		if (errno != 0) {
 			msg_info ("bad numeric value for threshold \"%s\", assume it 100",
@@ -1014,6 +1019,11 @@ rspamd_parts_distance (struct rspamd_task * task, GArray * args, void *unused)
 		}
 		if (args->len == 1) {
 			arg = &g_array_index (args, struct expression_argument, 1);
+			if (!arg || arg->type != EXPRESSION_ARGUMENT_NORMAL) {
+				msg_warn ("invalid argument to function is passed");
+				return FALSE;
+			}
+
 			errno = 0;
 			threshold2 = strtoul ((gchar *)arg->data, NULL, 10);
 			if (errno != 0) {
@@ -1171,8 +1181,14 @@ rspamd_recipients_distance (struct rspamd_task *task, GArray * args,
 	}
 
 	arg = &g_array_index (args, struct expression_argument, 0);
+	if (!arg || arg->type != EXPRESSION_ARGUMENT_NORMAL) {
+		msg_warn ("invalid argument to function is passed");
+		return FALSE;
+	}
+
 	errno = 0;
 	threshold = strtod ((gchar *)arg->data, NULL);
+
 	if (errno != 0) {
 		msg_warn ("invalid numeric value '%s': %s",
 			(gchar *)arg->data,
@@ -1183,7 +1199,9 @@ rspamd_recipients_distance (struct rspamd_task *task, GArray * args,
 	if (!task->rcpt_mime) {
 		return FALSE;
 	}
+
 	num = internet_address_list_length (task->rcpt_mime);
+
 	if (num < MIN_RCPT_TO_COMPARE) {
 		return FALSE;
 	}
@@ -1374,6 +1392,11 @@ rspamd_compare_transfer_encoding (struct rspamd_task * task,
 	}
 
 	arg = &g_array_index (args, struct expression_argument, 0);
+	if (!arg || arg->type != EXPRESSION_ARGUMENT_NORMAL) {
+		msg_warn ("invalid argument to function is passed");
+		return FALSE;
+	}
+
 #ifndef GMIME24
 	enc_req = g_mime_part_encoding_from_string (arg->data);
 	if (enc_req == GMIME_PART_ENCODING_DEFAULT) {
@@ -1484,6 +1507,11 @@ rspamd_has_html_tag (struct rspamd_task * task, GArray * args, void *unused)
 	}
 
 	arg = &g_array_index (args, struct expression_argument, 0);
+	if (!arg || arg->type != EXPRESSION_ARGUMENT_NORMAL) {
+		msg_warn ("invalid argument to function is passed");
+		return FALSE;
+	}
+
 	tag = get_tag_by_name (arg->data);
 	if (tag == NULL) {
 		msg_warn ("unknown tag type passed as argument: %s",
