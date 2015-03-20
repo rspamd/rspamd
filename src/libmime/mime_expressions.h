@@ -26,8 +26,8 @@ struct expression_argument {
 };
 
 
-typedef gboolean (*rspamd_internal_func_t)(struct rspamd_task *, GList *args,
-	void *user_data);
+typedef gboolean (*rspamd_internal_func_t)(struct rspamd_task *,
+		GArray *args, void *user_data);
 
 
 /**

@@ -34,34 +34,34 @@
 #include "diff.h"
 
 gboolean rspamd_compare_encoding (struct rspamd_task *task,
-	GList * args,
+	GArray * args,
 	void *unused);
 gboolean rspamd_header_exists (struct rspamd_task *task,
-	GList * args,
+	GArray * args,
 	void *unused);
 gboolean rspamd_parts_distance (struct rspamd_task *task,
-	GList * args,
+	GArray * args,
 	void *unused);
 gboolean rspamd_recipients_distance (struct rspamd_task *task,
-	GList * args,
+	GArray * args,
 	void *unused);
 gboolean rspamd_has_only_html_part (struct rspamd_task *task,
-	GList * args,
+	GArray * args,
 	void *unused);
 gboolean rspamd_is_recipients_sorted (struct rspamd_task *task,
-	GList * args,
+	GArray * args,
 	void *unused);
 gboolean rspamd_compare_transfer_encoding (struct rspamd_task *task,
-	GList * args,
+	GArray * args,
 	void *unused);
 gboolean rspamd_is_html_balanced (struct rspamd_task *task,
-	GList * args,
+	GArray * args,
 	void *unused);
 gboolean rspamd_has_html_tag (struct rspamd_task *task,
-	GList * args,
+	GArray * args,
 	void *unused);
 gboolean rspamd_has_fake_html (struct rspamd_task *task,
-	GList * args,
+	GArray * args,
 	void *unused);
 
 static rspamd_expression_atom_t * rspamd_mime_expr_parse (const gchar *line, gsize len,
@@ -838,25 +838,6 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 
 
 static gint
-rspamd_mime_expr_process (gpointer input, rspamd_expression_atom_t *atom)
-{
-	struct rspamd_task *task = input;
-	struct rspamd_mime_atom *mime_atom;
-	gint ret = 0;
-
-	g_assert (task != NULL);
-	g_assert (atom != NULL);
-
-	mime_atom = atom->data;
-
-	if (!mime_atom->is_function) {
-		ret = rspamd_mime_expr_process_regexp (mime_atom->d.re, task);
-	}
-
-	return ret;
-}
-
-static gint
 rspamd_mime_expr_priority (rspamd_expression_atom_t *atom)
 {
 	/* TODO: implement priorities for mime expressions */
@@ -888,8 +869,8 @@ rspamd_mime_expr_destroy (rspamd_expression_atom_t *atom)
 	}
 }
 
-gboolean
-call_expression_function (struct rspamd_function_atom * func,
+static gboolean
+rspamd_mime_expr_process_function (struct rspamd_function_atom * func,
 	struct rspamd_task * task,
 	lua_State *L)
 {
@@ -908,6 +889,29 @@ call_expression_function (struct rspamd_function_atom * func,
 	}
 
 	return selected->func (task, func->args, selected->user_data);
+}
+
+static gint
+rspamd_mime_expr_process (gpointer input, rspamd_expression_atom_t *atom)
+{
+	struct rspamd_task *task = input;
+	struct rspamd_mime_atom *mime_atom;
+	gint ret = 0;
+
+	g_assert (task != NULL);
+	g_assert (atom != NULL);
+
+	mime_atom = atom->data;
+
+	if (!mime_atom->is_function) {
+		ret = rspamd_mime_expr_process_regexp (mime_atom->d.re, task);
+	}
+	else {
+		ret = rspamd_mime_expr_process_function (mime_atom->d.func, task,
+				task->cfg->lua_state);
+	}
+
+	return ret;
 }
 
 void
@@ -934,7 +938,7 @@ register_expression_function (const gchar *name,
 }
 
 gboolean
-rspamd_compare_encoding (struct rspamd_task *task, GList * args, void *unused)
+rspamd_compare_encoding (struct rspamd_task *task, GArray * args, void *unused)
 {
 	struct expression_argument *arg;
 
@@ -942,8 +946,8 @@ rspamd_compare_encoding (struct rspamd_task *task, GList * args, void *unused)
 		return FALSE;
 	}
 
-	arg = get_function_arg (args->data, task, TRUE);
-	if (arg->type == EXPRESSION_ARGUMENT_BOOL) {
+	arg = &g_array_index (args, struct expression_argument, 0);
+	if (!arg || arg->type == EXPRESSION_ARGUMENT_BOOL) {
 		msg_warn ("invalid argument to function is passed");
 		return FALSE;
 	}
@@ -953,7 +957,7 @@ rspamd_compare_encoding (struct rspamd_task *task, GList * args, void *unused)
 }
 
 gboolean
-rspamd_header_exists (struct rspamd_task * task, GList * args, void *unused)
+rspamd_header_exists (struct rspamd_task * task, GArray * args, void *unused)
 {
 	struct expression_argument *arg;
 	GList *headerlist;
@@ -962,7 +966,7 @@ rspamd_header_exists (struct rspamd_task * task, GList * args, void *unused)
 		return FALSE;
 	}
 
-	arg = get_function_arg (args->data, task, TRUE);
+	arg = &g_array_index (args, struct expression_argument, 0);
 	if (!arg || arg->type == EXPRESSION_ARGUMENT_BOOL) {
 		msg_warn ("invalid argument to function is passed");
 		return FALSE;
@@ -985,7 +989,7 @@ rspamd_header_exists (struct rspamd_task * task, GList * args, void *unused)
  * and return FALSE otherwise.
  */
 gboolean
-rspamd_parts_distance (struct rspamd_task * task, GList * args, void *unused)
+rspamd_parts_distance (struct rspamd_task * task, GArray * args, void *unused)
 {
 	gint threshold, threshold2 = -1, diff;
 	struct mime_text_part *p1, *p2;
@@ -995,21 +999,21 @@ rspamd_parts_distance (struct rspamd_task * task, GList * args, void *unused)
 	const GMimeContentType *ct;
 	gint *pdiff;
 
-	if (args == NULL) {
+	if (args == NULL || args->len == 0) {
 		debug_task ("no threshold is specified, assume it 100");
 		threshold = 100;
 	}
 	else {
 		errno = 0;
-		arg = get_function_arg (args->data, task, TRUE);
+		arg = &g_array_index (args, struct expression_argument, 0);
 		threshold = strtoul ((gchar *)arg->data, NULL, 10);
 		if (errno != 0) {
 			msg_info ("bad numeric value for threshold \"%s\", assume it 100",
-				(gchar *)args->data);
+				(gchar *)arg->data);
 			threshold = 100;
 		}
-		if (args->next) {
-			arg = get_function_arg (args->next->data, task, TRUE);
+		if (args->len == 1) {
+			arg = &g_array_index (args, struct expression_argument, 1);
 			errno = 0;
 			threshold2 = strtoul ((gchar *)arg->data, NULL, 10);
 			if (errno != 0) {
@@ -1151,7 +1155,7 @@ struct addr_list {
 #define MIN_RCPT_TO_COMPARE 7
 
 gboolean
-rspamd_recipients_distance (struct rspamd_task *task, GList * args,
+rspamd_recipients_distance (struct rspamd_task *task, GArray * args,
 	void *unused)
 {
 	struct expression_argument *arg;
@@ -1166,7 +1170,7 @@ rspamd_recipients_distance (struct rspamd_task *task, GList * args,
 		return FALSE;
 	}
 
-	arg = get_function_arg (args->data, task, TRUE);
+	arg = &g_array_index (args, struct expression_argument, 0);
 	errno = 0;
 	threshold = strtod ((gchar *)arg->data, NULL);
 	if (errno != 0) {
@@ -1250,7 +1254,7 @@ rspamd_recipients_distance (struct rspamd_task *task, GList * args,
 }
 
 gboolean
-rspamd_has_only_html_part (struct rspamd_task * task, GList * args,
+rspamd_has_only_html_part (struct rspamd_task * task, GArray * args,
 	void *unused)
 {
 	struct mime_text_part *p;
@@ -1331,7 +1335,7 @@ is_recipient_list_sorted (const InternetAddressList * ia)
 
 gboolean
 rspamd_is_recipients_sorted (struct rspamd_task * task,
-	GList * args,
+	GArray * args,
 	void *unused)
 {
 	/* Check all types of addresses */
@@ -1353,7 +1357,7 @@ rspamd_is_recipients_sorted (struct rspamd_task * task,
 
 gboolean
 rspamd_compare_transfer_encoding (struct rspamd_task * task,
-	GList * args,
+	GArray * args,
 	void *unused)
 {
 	GMimeObject *part;
@@ -1369,7 +1373,7 @@ rspamd_compare_transfer_encoding (struct rspamd_task * task,
 		return FALSE;
 	}
 
-	arg = get_function_arg (args->data, task, TRUE);
+	arg = &g_array_index (args, struct expression_argument, 0);
 #ifndef GMIME24
 	enc_req = g_mime_part_encoding_from_string (arg->data);
 	if (enc_req == GMIME_PART_ENCODING_DEFAULT) {
@@ -1417,7 +1421,7 @@ rspamd_compare_transfer_encoding (struct rspamd_task * task,
 }
 
 gboolean
-rspamd_is_html_balanced (struct rspamd_task * task, GList * args, void *unused)
+rspamd_is_html_balanced (struct rspamd_task * task, GArray * args, void *unused)
 {
 	struct mime_text_part *p;
 	GList *cur;
@@ -1465,7 +1469,7 @@ search_html_node_callback (GNode * node, gpointer data)
 }
 
 gboolean
-rspamd_has_html_tag (struct rspamd_task * task, GList * args, void *unused)
+rspamd_has_html_tag (struct rspamd_task * task, GArray * args, void *unused)
 {
 	struct mime_text_part *p;
 	GList *cur;
@@ -1479,7 +1483,7 @@ rspamd_has_html_tag (struct rspamd_task * task, GList * args, void *unused)
 		return FALSE;
 	}
 
-	arg = get_function_arg (args->data, task, TRUE);
+	arg = &g_array_index (args, struct expression_argument, 0);
 	tag = get_tag_by_name (arg->data);
 	if (tag == NULL) {
 		msg_warn ("unknown tag type passed as argument: %s",
@@ -1509,7 +1513,7 @@ rspamd_has_html_tag (struct rspamd_task * task, GList * args, void *unused)
 }
 
 gboolean
-rspamd_has_fake_html (struct rspamd_task * task, GList * args, void *unused)
+rspamd_has_fake_html (struct rspamd_task * task, GArray * args, void *unused)
 {
 	struct mime_text_part *p;
 	GList *cur;
