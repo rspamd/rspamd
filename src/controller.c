@@ -105,7 +105,7 @@ struct rspamd_controller_worker_ctx {
 	/* SSL private key */
 	gchar *ssl_key;
 	/* A map of secure IP */
-	gchar *secure_ip;
+	GList *secure_ip;
 	radix_compressed_t *secure_map;
 
 	/* Static files dir */
@@ -1562,7 +1562,7 @@ init_controller_worker (struct rspamd_config *cfg)
 		timeout), RSPAMD_CL_FLAG_TIME_INTEGER);
 
 	rspamd_rcl_register_worker_option (cfg, type, "secure_ip",
-		rspamd_rcl_parse_struct_string, ctx,
+		rspamd_rcl_parse_struct_string_list, ctx,
 		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, secure_ip), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "static_dir",
@@ -1591,6 +1591,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	GHashTableIter iter;
 	gpointer key, value;
 	struct rspamd_keypair_cache *cache;
+	gchar *secure_ip;
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"controller",
@@ -1604,14 +1605,23 @@ start_controller_worker (struct rspamd_worker *worker)
 	ctx->custom_commands = g_hash_table_new (rspamd_strcase_hash,
 			rspamd_strcase_equal);
 	if (ctx->secure_ip != NULL) {
-		if (!rspamd_map_add (worker->srv->cfg, ctx->secure_ip,
-			"Allow webui access from the specified IP",
-			rspamd_radix_read, rspamd_radix_fin, (void **)&ctx->secure_map)) {
-			if (!radix_add_generic_iplist (ctx->secure_ip,
-				&ctx->secure_map)) {
-				msg_warn ("cannot load or parse ip list from '%s'",
-					ctx->secure_ip);
+		cur = ctx->secure_ip;
+
+		while (cur) {
+			secure_ip = cur->data;
+
+			/* Try map syntax */
+			if (!rspamd_map_add (worker->srv->cfg, secure_ip,
+					"Allow webui access from the specified IP",
+					rspamd_radix_read, rspamd_radix_fin, (void **)&ctx->secure_map)) {
+				/* Fallback to the plain IP */
+				if (!radix_add_generic_iplist (secure_ip,
+						&ctx->secure_map)) {
+					msg_warn ("cannot load or parse ip list from '%s'",
+							secure_ip);
+				}
 			}
+			cur = g_list_next (cur);
 		}
 	}
 	/* Accept event */
