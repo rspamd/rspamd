@@ -75,7 +75,7 @@ struct metric_result {
  * Composite structure
  */
 struct rspamd_composite {
-	struct expression *expr;
+	struct rspamd_expression *expr;
 	gint id;
 };
 

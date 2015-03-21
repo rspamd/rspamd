@@ -29,7 +29,7 @@
 #include "message.h"
 #include "cfg_file.h"
 #include "util.h"
-#include "expressions.h"
+#include "expression.h"
 #include "diff.h"
 #include "libstat/stat_api.h"
 
@@ -53,6 +53,19 @@
 #endif
 #define BITSPERBYTE (8 * sizeof (gchar))
 #define NBYTES(nbits)   (((nbits) + BITSPERBYTE - 1) / BITSPERBYTE)
+
+static rspamd_expression_atom_t * rspamd_composite_expr_parse (const gchar *line, gsize len,
+		rspamd_mempool_t *pool, gpointer ud, GError **err);
+static gint rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom);
+static gint rspamd_composite_expr_priority (rspamd_expression_atom_t *atom);
+static void rspamd_composite_expr_destroy (rspamd_expression_atom_t *atom);
+
+const struct rspamd_atom_subr composite_expr_subr = {
+	.parse = rspamd_composite_expr_parse,
+	.process = rspamd_composite_expr_process,
+	.priority = rspamd_composite_expr_priority,
+	.destroy = rspamd_composite_expr_destroy
+};
 
 static inline GQuark
 filter_error_quark (void)
@@ -398,6 +411,7 @@ rspamd_process_filters (struct rspamd_task *task)
 
 struct composites_data {
 	struct rspamd_task *task;
+	struct rspamd_composite *composite;
 	struct metric_result *metric_res;
 	GTree *symbols_to_remove;
 	guint8 *checked;
@@ -408,6 +422,113 @@ struct symbol_remove_data {
 	gboolean remove_weight;
 	gboolean remove_symbol;
 };
+
+
+/*
+ * Composites are just sequences of symbols
+ */
+static rspamd_expression_atom_t *
+rspamd_composite_expr_parse (const gchar *line, gsize len,
+		rspamd_mempool_t *pool, gpointer ud, GError **err)
+{
+	gsize clen;
+	rspamd_expression_atom_t *res;
+
+	clen = strcspn (line, ", \t(+!|&\n");
+	if (clen == 0) {
+		/* Invalid composite atom */
+		g_set_error (err, filter_error_quark (), 100, "Invalid composite: %s",
+				line);
+		return NULL;
+	}
+
+	res = rspamd_mempool_alloc0 (pool, sizeof (*res));
+	res->len = clen;
+	res->data = line;
+
+	return res;
+}
+static gint
+rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
+{
+	struct composites_data *cd = (struct composites_data *)input;
+	const gchar *sym = atom->str;
+	struct rspamd_composite *ncomp;
+	struct symbol_remove_data *rd;
+	struct symbol *ms;
+	gint ret = 0, rc = 0;
+	gchar t;
+
+	if (*sym == '~' || *sym == '-') {
+		t = *sym ++;
+	}
+
+	if ((ms = g_hash_table_lookup (cd->metric_res->symbols, sym)) == NULL) {
+		if ((ncomp =
+				g_hash_table_lookup (cd->task->cfg->composite_symbols,
+						sym)) != NULL) {
+			/* Set checked for this symbol to avoid cyclic references */
+			if (isclr (cd->checked, ncomp->id * 2)) {
+				setbit (cd->checked, cd->composite->id * 2);
+				rc = rspamd_process_expression (ncomp->expr, cd);
+				clrbit (cd->checked, cd->composite->id * 2);
+				ms = g_hash_table_lookup (cd->metric_res->symbols, sym);
+			}
+			else {
+				/*
+				 * XXX: in case of cyclic references this would return 0
+				 */
+				rc = isset (cd->checked, ncomp->id * 2 + 1);
+			}
+		}
+	}
+	else {
+		rc = 1;
+	}
+
+	if (rc && ms) {
+		/*
+		 * At this point we know that we need to do something about this symbol,
+		 * however, we don't know whether we need to delete it unfortunately,
+		 * that depends on the later decisions when the complete expression is
+		 * evaluated.
+		 */
+		rd = rspamd_mempool_alloc (cd->task->task_pool, sizeof (*cd));
+		rd->ms = ms;
+		if (G_UNLIKELY (*sym == '~')) {
+			rd->remove_weight = FALSE;
+			rd->remove_symbol = TRUE;
+		}
+		else if (G_UNLIKELY (*sym == '-')) {
+			rd->remove_symbol = FALSE;
+			rd->remove_weight = FALSE;
+		}
+		else {
+			rd->remove_symbol = TRUE;
+			rd->remove_weight = TRUE;
+		}
+		if (!g_tree_lookup (cd->symbols_to_remove, ms->name)) {
+			g_tree_insert (cd->symbols_to_remove,
+					(gpointer)ms->name,
+					rd);
+		}
+	}
+}
+
+/*
+ * We don't have preferences for composites
+ */
+static gint
+rspamd_composite_expr_priority (rspamd_expression_atom_t *atom)
+{
+	return 0;
+}
+
+static void
+rspamd_composite_expr_destroy (rspamd_expression_atom_t *atom)
+{
+
+}
 
 static gint
 remove_compare_data (gconstpointer a, gconstpointer b)
@@ -420,173 +541,7 @@ remove_compare_data (gconstpointer a, gconstpointer b)
 static void
 composites_foreach_callback (gpointer key, gpointer value, void *data)
 {
-	struct composites_data *cd = (struct composites_data *)data;
-	struct rspamd_composite *composite = value, *ncomp;
-	struct expression *expr;
-	GQueue *stack;
-	GList *symbols = NULL, *s;
-	gsize cur, op1, op2;
-	gchar logbuf[256], *sym, *check_sym;
-	gint r;
-	struct symbol *ms;
-	struct symbol_remove_data *rd;
 
-
-	expr = composite->expr;
-	if (isset (cd->checked, composite->id)) {
-		/* Symbol was already checked */
-		return;
-	}
-
-	stack = g_queue_new ();
-
-	while (expr) {
-		if (expr->type == EXPR_STR) {
-			/* Find corresponding symbol */
-			sym = expr->content.operand;
-			if (*sym == '~' || *sym == '-') {
-				sym++;
-			}
-			if (g_hash_table_lookup (cd->metric_res->symbols, sym) == NULL) {
-				cur = 0;
-				if ((ncomp =
-					g_hash_table_lookup (cd->task->cfg->composite_symbols,
-					sym)) != NULL) {
-					/* Set checked for this symbol to avoid cyclic references */
-					if (isclr (cd->checked, ncomp->id)) {
-						setbit (cd->checked, composite->id);
-						composites_foreach_callback (sym, ncomp, cd);
-						if (g_hash_table_lookup (cd->metric_res->symbols,
-							sym) != NULL) {
-							cur = 1;
-						}
-					}
-				}
-			}
-			else {
-				cur = 1;
-				symbols = g_list_prepend (symbols, expr->content.operand);
-			}
-			g_queue_push_head (stack, GSIZE_TO_POINTER (cur));
-		}
-		else {
-			if (g_queue_is_empty (stack)) {
-				/* Queue has no operands for operation, exiting */
-				g_list_free (symbols);
-				g_queue_free (stack);
-				setbit (cd->checked, composite->id);
-				return;
-			}
-			switch (expr->content.operation) {
-			case '!':
-				op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
-				op1 = !op1;
-				g_queue_push_head (stack, GSIZE_TO_POINTER (op1));
-				break;
-			case '&':
-				op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
-				op2 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
-				g_queue_push_head (stack, GSIZE_TO_POINTER (op1 && op2));
-				break;
-			case '|':
-				op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
-				op2 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
-				g_queue_push_head (stack, GSIZE_TO_POINTER (op1 || op2));
-				break;
-			default:
-				expr = expr->next;
-				continue;
-			}
-		}
-		expr = expr->next;
-	}
-	if (!g_queue_is_empty (stack)) {
-		op1 = GPOINTER_TO_SIZE (g_queue_pop_head (stack));
-		if (op1) {
-			/* Remove all symbols that are in composite symbol */
-			s = g_list_first (symbols);
-			r = rspamd_snprintf (logbuf,
-					sizeof (logbuf),
-					"<%s>, insert symbol %s instead of symbols: ",
-					cd->task->message_id,
-					key);
-			while (s) {
-				sym = s->data;
-				if (*sym == '~' || *sym == '-') {
-					check_sym = sym + 1;
-				}
-				else {
-					check_sym = sym;
-				}
-				ms = g_hash_table_lookup (cd->metric_res->symbols, check_sym);
-
-				if (ms == NULL) {
-					/* Try to process other composites */
-					if ((ncomp =
-						g_hash_table_lookup (cd->task->cfg->composite_symbols,
-						check_sym)) != NULL) {
-						/* Set checked for this symbol to avoid cyclic references */
-						if (isclr (cd->checked, ncomp->id)) {
-							setbit (cd->checked, composite->id);
-							composites_foreach_callback (check_sym, ncomp, cd);
-							ms = g_hash_table_lookup (cd->metric_res->symbols,
-									check_sym);
-						}
-					}
-				}
-
-				if (ms != NULL) {
-					rd =
-						rspamd_mempool_alloc (cd->task->task_pool,
-							sizeof (struct symbol_remove_data));
-					rd->ms = ms;
-					if (G_UNLIKELY (*sym == '~')) {
-						rd->remove_weight = FALSE;
-						rd->remove_symbol = TRUE;
-					}
-					else if (G_UNLIKELY (*sym == '-')) {
-						rd->remove_symbol = FALSE;
-						rd->remove_weight = FALSE;
-					}
-					else {
-						rd->remove_symbol = TRUE;
-						rd->remove_weight = TRUE;
-					}
-					if (!g_tree_lookup (cd->symbols_to_remove, ms->name)) {
-						g_tree_insert (cd->symbols_to_remove,
-							(gpointer)ms->name,
-							rd);
-					}
-				}
-				else {
-
-				}
-
-				if (s->next) {
-					r += rspamd_snprintf (logbuf + r,
-							sizeof (logbuf) - r,
-							"%s, ",
-							s->data);
-				}
-				else {
-					r += rspamd_snprintf (logbuf + r,
-							sizeof (logbuf) - r,
-							"%s",
-							s->data);
-				}
-				s = g_list_next (s);
-			}
-			/* Add new symbol */
-			rspamd_task_insert_result_single (cd->task, key, 1.0, NULL);
-			msg_info ("%s", logbuf);
-		}
-	}
-
-	setbit (cd->checked, composite->id);
-	g_queue_free (stack);
-	g_list_free (symbols);
-
-	return;
 }
 
 
