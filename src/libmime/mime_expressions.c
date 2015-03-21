@@ -63,6 +63,30 @@ gboolean rspamd_has_html_tag (struct rspamd_task *task,
 gboolean rspamd_has_fake_html (struct rspamd_task *task,
 	GArray * args,
 	void *unused);
+static gboolean rspamd_raw_header_exists (struct rspamd_task *task,
+	GArray * args,
+	void *unused);
+static gboolean rspamd_check_smtp_data (struct rspamd_task *task,
+	GArray * args,
+	void *unused);
+static gboolean rspamd_content_type_is_type (struct rspamd_task * task,
+	GArray * args,
+	void *unused);
+static gboolean rspamd_content_type_is_subtype (struct rspamd_task *task,
+	GArray * args,
+	void *unused);
+static gboolean rspamd_content_type_has_param (struct rspamd_task * task,
+	GArray * args,
+	void *unused);
+static gboolean rspamd_content_type_compare_param (struct rspamd_task * task,
+	GArray * args,
+	void *unused);
+static gboolean rspamd_has_content_part (struct rspamd_task *task,
+	GArray * args,
+	void *unused);
+static gboolean rspamd_has_content_part_len (struct rspamd_task *task,
+	GArray * args,
+	void *unused);
 
 static rspamd_expression_atom_t * rspamd_mime_expr_parse (const gchar *line, gsize len,
 		rspamd_mempool_t *pool, gpointer ud, GError **err);
@@ -121,16 +145,24 @@ static struct _fl {
 	rspamd_internal_func_t func;
 	void *user_data;
 } rspamd_functions_list[] = {
+	{"check_smtp_data", rspamd_check_smtp_data, NULL},
 	{"compare_encoding", rspamd_compare_encoding, NULL},
 	{"compare_parts_distance", rspamd_parts_distance, NULL},
 	{"compare_recipients_distance", rspamd_recipients_distance, NULL},
 	{"compare_transfer_encoding", rspamd_compare_transfer_encoding, NULL},
+	{"content_type_compare_param", rspamd_content_type_compare_param, NULL},
+	{"content_type_has_param", rspamd_content_type_has_param, NULL},
+	{"content_type_is_subtype", rspamd_content_type_is_subtype, NULL},
+	{"content_type_is_type", rspamd_content_type_is_type, NULL},
+	{"has_content_part", rspamd_has_content_part, NULL},
+	{"has_content_part_len", rspamd_has_content_part_len, NULL},
 	{"has_fake_html", rspamd_has_fake_html, NULL},
 	{"has_html_tag", rspamd_has_html_tag, NULL},
 	{"has_only_html_part", rspamd_has_only_html_part, NULL},
 	{"header_exists", rspamd_header_exists, NULL},
 	{"is_html_balanced", rspamd_is_html_balanced, NULL},
-	{"is_recipients_sorted", rspamd_is_recipients_sorted, NULL}
+	{"is_recipients_sorted", rspamd_is_recipients_sorted, NULL},
+	{"raw_header_exists", rspamd_raw_header_exists, NULL}
 };
 
 const struct rspamd_atom_subr mime_expr_subr = {
@@ -1559,6 +1591,837 @@ rspamd_has_fake_html (struct rspamd_task * task, GArray * args, void *unused)
 
 	return res;
 
+}
+
+static gboolean
+rspamd_raw_header_exists (struct rspamd_task *task, GList * args, void *unused)
+{
+	struct expression_argument *arg;
+
+	if (args == NULL || task == NULL) {
+		return FALSE;
+	}
+
+	arg = get_function_arg (args->data, task, TRUE);
+	if (!arg || arg->type == EXPRESSION_ARGUMENT_BOOL) {
+		msg_warn ("invalid argument to function is passed");
+		return FALSE;
+	}
+
+	return g_hash_table_lookup (task->raw_headers, arg->data) != NULL;
+}
+
+static gboolean
+match_smtp_data (struct rspamd_task *task,
+	const gchar *re_text,
+	const gchar *what)
+{
+	struct rspamd_regexp_element *re;
+	gint r;
+
+	if (*re_text == '/') {
+		/* This is a regexp */
+		re = parse_regexp (task->cfg->cfg_pool,
+				(gchar *)re_text,
+				task->cfg->raw_mode);
+		if (re == NULL) {
+			msg_warn ("cannot compile regexp for function");
+			return FALSE;
+		}
+
+		if ((r = task_cache_check (task, re)) == -1) {
+			if (rspamd_regexp_search (re->regexp, what, 0, NULL, NULL, FALSE)) {
+				task_cache_add (task, re, 1);
+				return TRUE;
+			}
+			task_cache_add (task, re, 0);
+		}
+		else {
+			return r == 1;
+		}
+	}
+	else if (g_ascii_strcasecmp (re_text, what) == 0) {
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+static gboolean
+rspamd_check_smtp_data (struct rspamd_task *task, GList * args, void *unused)
+{
+	struct expression_argument *arg;
+	InternetAddressList *ia = NULL;
+	const gchar *type, *what = NULL;
+	GList *cur;
+	gint i, ialen;
+
+	if (args == NULL) {
+		msg_warn ("no parameters to function");
+		return FALSE;
+	}
+
+	arg = get_function_arg (args->data, task, TRUE);
+
+	if (!arg || !arg->data) {
+		msg_warn ("no parameters to function");
+		return FALSE;
+	}
+	else {
+		type = arg->data;
+		switch (*type) {
+		case 'f':
+		case 'F':
+			if (g_ascii_strcasecmp (type, "from") == 0) {
+				what = rspamd_task_get_sender (task);
+			}
+			else {
+				msg_warn ("bad argument to function: %s", type);
+				return FALSE;
+			}
+			break;
+		case 'h':
+		case 'H':
+			if (g_ascii_strcasecmp (type, "helo") == 0) {
+				what = task->helo;
+			}
+			else {
+				msg_warn ("bad argument to function: %s", type);
+				return FALSE;
+			}
+			break;
+		case 'u':
+		case 'U':
+			if (g_ascii_strcasecmp (type, "user") == 0) {
+				what = task->user;
+			}
+			else {
+				msg_warn ("bad argument to function: %s", type);
+				return FALSE;
+			}
+			break;
+		case 's':
+		case 'S':
+			if (g_ascii_strcasecmp (type, "subject") == 0) {
+				what = task->subject;
+			}
+			else {
+				msg_warn ("bad argument to function: %s", type);
+				return FALSE;
+			}
+			break;
+		case 'r':
+		case 'R':
+			if (g_ascii_strcasecmp (type, "rcpt") == 0) {
+				ia = task->rcpt_mime;
+			}
+			else {
+				msg_warn ("bad argument to function: %s", type);
+				return FALSE;
+			}
+			break;
+		default:
+			msg_warn ("bad argument to function: %s", type);
+			return FALSE;
+		}
+	}
+
+	if (what == NULL && ia == NULL) {
+		/* Not enough data so regexp would NOT be found anyway */
+		return FALSE;
+	}
+
+	/* We would process only one more argument, others are ignored */
+	cur = args->next;
+	if (cur) {
+		arg = get_function_arg (cur->data, task, FALSE);
+		if (arg && arg->type == EXPRESSION_ARGUMENT_NORMAL) {
+			if (what != NULL) {
+				return match_smtp_data (task, arg->data, what);
+			}
+			else {
+				if (ia != NULL) {
+					ialen = internet_address_list_length(ia);
+					for (i = 0; i < ialen; i ++) {
+						InternetAddress *iaelt =
+								internet_address_list_get_address(ia, i);
+						InternetAddressMailbox *iamb =
+							INTERNET_ADDRESS_IS_MAILBOX(iaelt) ?
+							INTERNET_ADDRESS_MAILBOX (iaelt) : NULL;
+						if (iamb &&
+							match_smtp_data (task, arg->data,
+								internet_address_mailbox_get_addr(iamb))) {
+							return TRUE;
+						}
+					}
+				}
+			}
+		}
+		else if (arg != NULL) {
+			if (what != NULL) {
+				if (process_regexp_expression (arg->data,
+					"regexp_check_smtp_data", task, what, NULL)) {
+					return TRUE;
+				}
+			}
+			else {
+				if (ia != NULL) {
+					ialen = internet_address_list_length(ia);
+					for (i = 0; i < ialen; i ++) {
+						InternetAddress *iaelt =
+								internet_address_list_get_address(ia, i);
+						InternetAddressMailbox *iamb =
+								INTERNET_ADDRESS_IS_MAILBOX(iaelt) ?
+								INTERNET_ADDRESS_MAILBOX (iaelt) : NULL;
+						if (iamb &&
+								process_regexp_expression (arg->data,
+									"regexp_check_smtp_data", task,
+									internet_address_mailbox_get_addr(iamb),
+									NULL)) {
+							return TRUE;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return FALSE;
+}
+
+/* Lua part */
+static gint
+lua_regexp_match (lua_State *L)
+{
+	void *ud = luaL_checkudata (L, 1, "rspamd{task}");
+	struct rspamd_task *task;
+	const gchar *re_text;
+	struct rspamd_regexp_element *re;
+	gint r = 0;
+
+	luaL_argcheck (L, ud != NULL, 1, "'task' expected");
+	task = ud ? *((struct rspamd_task **)ud) : NULL;
+	re_text = luaL_checkstring (L, 2);
+
+	/* This is a regexp */
+	if (task != NULL) {
+		re = parse_regexp (task->cfg->cfg_pool,
+				(gchar *)re_text,
+				task->cfg->raw_mode);
+		if (re == NULL) {
+			msg_warn ("cannot compile regexp for function");
+			return FALSE;
+		}
+		r = process_regexp (re, task, NULL, 0, NULL);
+	}
+	lua_pushboolean (L, r == 1);
+
+	return 1;
+}
+
+static gboolean
+rspamd_content_type_compare_param (struct rspamd_task * task,
+	GList * args,
+	void *unused)
+{
+	gchar *param_name, *param_pattern;
+	const gchar *param_data;
+	struct rspamd_regexp_element *re;
+	struct expression_argument *arg, *arg1;
+	GMimeObject *part;
+	GMimeContentType *ct;
+	gint r;
+	gboolean recursive = FALSE, result = FALSE;
+	GList *cur = NULL;
+	struct mime_part *cur_part;
+
+	if (args == NULL) {
+		msg_warn ("no parameters to function");
+		return FALSE;
+	}
+	arg = get_function_arg (args->data, task, TRUE);
+	param_name = arg->data;
+	args = g_list_next (args);
+	if (args == NULL) {
+		msg_warn ("too few params to function");
+		return FALSE;
+	}
+	arg = get_function_arg (args->data, task, TRUE);
+	param_pattern = arg->data;
+
+
+	part = g_mime_message_get_mime_part (task->message);
+	if (part) {
+		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
+		if (args->next) {
+			args = g_list_next (args);
+			arg1 = get_function_arg (args->data, task, TRUE);
+			if (g_ascii_strncasecmp (arg1->data, "true",
+				sizeof ("true") - 1) == 0) {
+				recursive = TRUE;
+			}
+		}
+		else {
+			/*
+			 * If user did not specify argument, let's assume that he wants
+			 * recursive search if mime part is multipart/mixed
+			 */
+			if (g_mime_content_type_is_type (ct, "multipart", "*")) {
+				recursive = TRUE;
+			}
+		}
+
+		if (recursive) {
+			cur = task->parts;
+		}
+
+#ifndef GMIME24
+		g_object_unref (part);
+#endif
+		for (;; ) {
+			if ((param_data =
+				g_mime_content_type_get_parameter ((GMimeContentType *)ct,
+				param_name)) == NULL) {
+				result = FALSE;
+			}
+			else {
+				if (*param_pattern == '/') {
+					re = parse_regexp (task->cfg->cfg_pool,
+							param_pattern,
+							task->cfg->raw_mode);
+					if (re == NULL) {
+						msg_warn ("cannot compile regexp for function");
+						return FALSE;
+					}
+					if ((r = task_cache_check (task, re)) == -1) {
+						if (rspamd_regexp_search (re->regexp, param_data, 0,
+							NULL, NULL, FALSE) == TRUE) {
+							task_cache_add (task, re, 1);
+							return TRUE;
+						}
+						task_cache_add (task, re, 0);
+					}
+					else {
+
+					}
+				}
+				else {
+					/* Just do strcasecmp */
+					if (g_ascii_strcasecmp (param_data, param_pattern) == 0) {
+						return TRUE;
+					}
+				}
+			}
+			/* Get next part */
+			if (!recursive) {
+				return result;
+			}
+			else if (cur != NULL) {
+				cur_part = cur->data;
+				if (cur_part->type != NULL) {
+					ct = cur_part->type;
+				}
+				cur = g_list_next (cur);
+			}
+			else {
+				/* All is done */
+				return result;
+			}
+		}
+
+	}
+
+	return FALSE;
+}
+
+static gboolean
+rspamd_content_type_has_param (struct rspamd_task * task,
+	GList * args,
+	void *unused)
+{
+	gchar *param_name;
+	const gchar *param_data;
+	struct expression_argument *arg, *arg1;
+	GMimeObject *part;
+	GMimeContentType *ct;
+	gboolean recursive = FALSE, result = FALSE;
+	GList *cur = NULL;
+	struct mime_part *cur_part;
+
+	if (args == NULL) {
+		msg_warn ("no parameters to function");
+		return FALSE;
+	}
+	arg = get_function_arg (args->data, task, TRUE);
+	param_name = arg->data;
+
+	part = g_mime_message_get_mime_part (task->message);
+	if (part) {
+		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
+		if (args->next) {
+			args = g_list_next (args);
+			arg1 = get_function_arg (args->data, task, TRUE);
+			if (g_ascii_strncasecmp (arg1->data, "true",
+				sizeof ("true") - 1) == 0) {
+				recursive = TRUE;
+			}
+		}
+		else {
+			/*
+			 * If user did not specify argument, let's assume that he wants
+			 * recursive search if mime part is multipart/mixed
+			 */
+			if (g_mime_content_type_is_type (ct, "multipart", "*")) {
+				recursive = TRUE;
+			}
+		}
+
+		if (recursive) {
+			cur = task->parts;
+		}
+
+#ifndef GMIME24
+		g_object_unref (part);
+#endif
+		for (;; ) {
+			if ((param_data =
+				g_mime_content_type_get_parameter ((GMimeContentType *)ct,
+				param_name)) != NULL) {
+				return TRUE;
+			}
+			/* Get next part */
+			if (!recursive) {
+				return result;
+			}
+			else if (cur != NULL) {
+				cur_part = cur->data;
+				if (cur_part->type != NULL) {
+					ct = cur_part->type;
+				}
+				cur = g_list_next (cur);
+			}
+			else {
+				/* All is done */
+				return result;
+			}
+		}
+
+	}
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_content_type_is_subtype (struct rspamd_task *task,
+	GList * args,
+	void *unused)
+{
+	gchar *param_pattern;
+	struct rspamd_regexp_element *re;
+	struct expression_argument *arg, *arg1;
+	GMimeObject *part;
+	GMimeContentType *ct;
+	gint r;
+	gboolean recursive = FALSE, result = FALSE;
+	GList *cur = NULL;
+	struct mime_part *cur_part;
+
+	if (args == NULL) {
+		msg_warn ("no parameters to function");
+		return FALSE;
+	}
+	arg = get_function_arg (args->data, task, TRUE);
+	param_pattern = arg->data;
+
+	part = g_mime_message_get_mime_part (task->message);
+	if (part) {
+		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
+		if (args->next) {
+			args = g_list_next (args);
+			arg1 = get_function_arg (args->data, task, TRUE);
+			if (g_ascii_strncasecmp (arg1->data, "true",
+				sizeof ("true") - 1) == 0) {
+				recursive = TRUE;
+			}
+		}
+		else {
+			/*
+			 * If user did not specify argument, let's assume that he wants
+			 * recursive search if mime part is multipart/mixed
+			 */
+			if (g_mime_content_type_is_type (ct, "multipart", "*")) {
+				recursive = TRUE;
+			}
+		}
+
+		if (recursive) {
+			cur = task->parts;
+		}
+
+#ifndef GMIME24
+		g_object_unref (part);
+#endif
+		for (;; ) {
+			if (*param_pattern == '/') {
+				re = parse_regexp (task->cfg->cfg_pool,
+						param_pattern,
+						task->cfg->raw_mode);
+				if (re == NULL) {
+					msg_warn ("cannot compile regexp for function");
+					return FALSE;
+				}
+				if ((r = task_cache_check (task, re)) == -1) {
+					if (rspamd_regexp_search (re->regexp, ct->subtype, 0,
+						NULL, NULL, FALSE)) {
+						task_cache_add (task, re, 1);
+						return TRUE;
+					}
+					task_cache_add (task, re, 0);
+				}
+				else {
+
+				}
+			}
+			else {
+				/* Just do strcasecmp */
+				if (g_ascii_strcasecmp (ct->subtype, param_pattern) == 0) {
+					return TRUE;
+				}
+			}
+			/* Get next part */
+			if (!recursive) {
+				return result;
+			}
+			else if (cur != NULL) {
+				cur_part = cur->data;
+				if (cur_part->type != NULL) {
+					ct = cur_part->type;
+				}
+				cur = g_list_next (cur);
+			}
+			else {
+				/* All is done */
+				return result;
+			}
+		}
+
+	}
+
+	return FALSE;
+}
+
+static gboolean
+rspamd_content_type_is_type (struct rspamd_task * task,
+	GList * args,
+	void *unused)
+{
+	gchar *param_pattern;
+	struct rspamd_regexp_element *re;
+	struct expression_argument *arg, *arg1;
+	GMimeObject *part;
+	GMimeContentType *ct;
+	gint r;
+	gboolean recursive = FALSE, result = FALSE;
+	GList *cur = NULL;
+	struct mime_part *cur_part;
+
+	if (args == NULL) {
+		msg_warn ("no parameters to function");
+		return FALSE;
+	}
+	arg = get_function_arg (args->data, task, TRUE);
+	param_pattern = arg->data;
+
+
+	part = g_mime_message_get_mime_part (task->message);
+	if (part) {
+		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
+		if (args->next) {
+			args = g_list_next (args);
+			arg1 = get_function_arg (args->data, task, TRUE);
+			if (g_ascii_strncasecmp (arg1->data, "true",
+				sizeof ("true") - 1) == 0) {
+				recursive = TRUE;
+			}
+		}
+		else {
+			/*
+			 * If user did not specify argument, let's assume that he wants
+			 * recursive search if mime part is multipart/mixed
+			 */
+			if (g_mime_content_type_is_type (ct, "multipart", "*")) {
+				recursive = TRUE;
+			}
+		}
+
+		if (recursive) {
+			cur = task->parts;
+		}
+
+#ifndef GMIME24
+		g_object_unref (part);
+#endif
+		for (;; ) {
+			if (*param_pattern == '/') {
+				re = parse_regexp (task->cfg->cfg_pool,
+						param_pattern,
+						task->cfg->raw_mode);
+				if (re == NULL) {
+					msg_warn ("cannot compile regexp for function");
+					return FALSE;
+				}
+				if ((r = task_cache_check (task, re)) == -1) {
+					if (rspamd_regexp_search (re->regexp, ct->type, 0,
+							NULL, NULL, FALSE) == TRUE) {
+						task_cache_add (task, re, 1);
+						return TRUE;
+					}
+					task_cache_add (task, re, 0);
+				}
+				else {
+
+				}
+			}
+			else {
+				/* Just do strcasecmp */
+				if (g_ascii_strcasecmp (ct->type, param_pattern) == 0) {
+					return TRUE;
+				}
+			}
+			/* Get next part */
+			if (!recursive) {
+				return result;
+			}
+			else if (cur != NULL) {
+				cur_part = cur->data;
+				if (cur_part->type != NULL) {
+					ct = cur_part->type;
+				}
+				cur = g_list_next (cur);
+			}
+			else {
+				/* All is done */
+				return result;
+			}
+		}
+
+	}
+
+	return FALSE;
+}
+
+static gboolean
+compare_subtype (struct rspamd_task *task, GMimeContentType * ct,
+	gchar *subtype)
+{
+	struct rspamd_regexp_element *re;
+	gint r;
+
+	if (subtype == NULL || ct == NULL) {
+		msg_warn ("invalid parameters passed");
+		return FALSE;
+	}
+	if (*subtype == '/') {
+		re = parse_regexp (task->cfg->cfg_pool, subtype,
+				task->cfg->raw_mode);
+		if (re == NULL) {
+			msg_warn ("cannot compile regexp for function");
+			return FALSE;
+		}
+		if ((r = task_cache_check (task, re)) == -1) {
+			if (rspamd_regexp_search (re->regexp, subtype, 0,
+					NULL, NULL, FALSE) == TRUE) {
+				task_cache_add (task, re, 1);
+				return TRUE;
+			}
+			task_cache_add (task, re, 0);
+		}
+		else {
+			return r == 1;
+		}
+	}
+	else {
+		/* Just do strcasecmp */
+		if (ct->subtype && g_ascii_strcasecmp (ct->subtype, subtype) == 0) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
+static gboolean
+compare_len (struct mime_part *part, guint min, guint max)
+{
+	if (min == 0 && max == 0) {
+		return TRUE;
+	}
+
+	if (min == 0) {
+		return part->content->len <= max;
+	}
+	else if (max == 0) {
+		return part->content->len >= min;
+	}
+	else {
+		return part->content->len >= min && part->content->len <= max;
+	}
+}
+
+static gboolean
+common_has_content_part (struct rspamd_task * task,
+	gchar *param_type,
+	gchar *param_subtype,
+	gint min_len,
+	gint max_len)
+{
+	struct rspamd_regexp_element *re;
+	struct mime_part *part;
+	GList *cur;
+	GMimeContentType *ct;
+	gint r;
+
+	cur = g_list_first (task->parts);
+	while (cur) {
+		part = cur->data;
+		ct = part->type;
+		if (ct == NULL) {
+			cur = g_list_next (cur);
+			continue;
+		}
+
+		if (*param_type == '/') {
+			re = parse_regexp (task->cfg->cfg_pool,
+					param_type,
+					task->cfg->raw_mode);
+			if (re == NULL) {
+				msg_warn ("cannot compile regexp for function");
+				cur = g_list_next (cur);
+				continue;
+			}
+			if ((r = task_cache_check (task, re)) == -1) {
+				if (ct->type &&
+					rspamd_regexp_search (re->regexp, ct->type, 0,
+							NULL, NULL, TRUE)) {
+					if (param_subtype) {
+						if (compare_subtype (task, ct, param_subtype)) {
+							if (compare_len (part, min_len, max_len)) {
+								return TRUE;
+							}
+						}
+					}
+					else {
+						if (compare_len (part, min_len, max_len)) {
+							return TRUE;
+						}
+					}
+					task_cache_add (task, re, 1);
+				}
+				else {
+					task_cache_add (task, re, 0);
+				}
+			}
+			else {
+				if (r == 1) {
+					if (compare_subtype (task, ct, param_subtype)) {
+						if (compare_len (part, min_len, max_len)) {
+							return TRUE;
+						}
+					}
+				}
+			}
+		}
+		else {
+			/* Just do strcasecmp */
+			if (ct->type && g_ascii_strcasecmp (ct->type, param_type) == 0) {
+				if (param_subtype) {
+					if (compare_subtype (task, ct, param_subtype)) {
+						if (compare_len (part, min_len, max_len)) {
+							return TRUE;
+						}
+					}
+				}
+				else {
+					if (compare_len (part, min_len, max_len)) {
+						return TRUE;
+					}
+				}
+			}
+		}
+		cur = g_list_next (cur);
+	}
+
+	return FALSE;
+}
+
+static gboolean
+rspamd_has_content_part (struct rspamd_task * task, GList * args, void *unused)
+{
+	gchar *param_type = NULL, *param_subtype = NULL;
+	struct expression_argument *arg;
+
+	if (args == NULL) {
+		msg_warn ("no parameters to function");
+		return FALSE;
+	}
+
+	arg = get_function_arg (args->data, task, TRUE);
+	param_type = arg->data;
+	args = args->next;
+	if (args) {
+		arg = args->data;
+		param_subtype = arg->data;
+	}
+
+	return common_has_content_part (task, param_type, param_subtype, 0, 0);
+}
+
+static gboolean
+rspamd_has_content_part_len (struct rspamd_task * task,
+	GList * args,
+	void *unused)
+{
+	gchar *param_type = NULL, *param_subtype = NULL;
+	gint min = 0, max = 0;
+	struct expression_argument *arg;
+
+	if (args == NULL) {
+		msg_warn ("no parameters to function");
+		return FALSE;
+	}
+
+	arg = get_function_arg (args->data, task, TRUE);
+	param_type = arg->data;
+	args = args->next;
+	if (args) {
+		arg = get_function_arg (args->data, task, TRUE);
+		param_subtype = arg->data;
+		args = args->next;
+		if (args) {
+			arg = get_function_arg (args->data, task, TRUE);
+			errno = 0;
+			min = strtoul (arg->data, NULL, 10);
+			if (errno != 0) {
+				msg_warn ("invalid numeric value '%s': %s",
+					(gchar *)arg->data,
+					strerror (errno));
+				return FALSE;
+			}
+			args = args->next;
+			if (args) {
+				arg = get_function_arg (args->data, task, TRUE);
+				max = strtoul (arg->data, NULL, 10);
+				if (errno != 0) {
+					msg_warn ("invalid numeric value '%s': %s",
+						(gchar *)arg->data,
+						strerror (errno));
+					return FALSE;
+				}
+			}
+		}
+	}
+
+	return common_has_content_part (task, param_type, param_subtype, min, max);
 }
 
 guint
