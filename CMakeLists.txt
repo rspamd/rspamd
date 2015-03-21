@@ -123,87 +123,44 @@ MACRO(FindLua _major _minor)
 	MESSAGE(STATUS "Check for lua ${_major}.${_minor}")
 	
 	UNSET(LUA_INCLUDE_DIR CACHE)
-
-        IF(ENABLE_LUAJIT MATCHES "ON")
-          FIND_PATH(LUA_INCLUDE_DIR lua.h
-            HINTS
-            $ENV{LUA_DIR}
-              PATH_SUFFIXES "include/luajit-2.0"
-            PATHS
-            /usr/local
-            /usr/pkg
-            /usr
-            ~/Library/Frameworks
-            /Library/Frameworks
-            /sw # Fink
-            /opt/local # DarwinPorts
-            /opt/csw # Blastwave
-            /opt
-          )
-        ELSE(ENABLE_LUAJIT MATCHES "ON")
-	  FIND_PATH(LUA_INCLUDE_DIR lua.h
-	    HINTS
-	    $ENV{LUA_DIR}
-              PATH_SUFFIXES "include/lua${_major}${_minor}"
-                            "include/lua${_major}${_minor}"
-                            "include/lua${_major}.${_minor}"
-                            "include/lua-${_major}.${_minor}"
-                            include/lua include
-	    PATHS
-	    /usr/local
-	    /usr/pkg
-	    /usr
-	    ~/Library/Frameworks
-	    /Library/Frameworks
-	    /sw # Fink
-	    /opt/local # DarwinPorts
-	    /opt/csw # Blastwave
-	    /opt
-	  )
-        ENDIF(ENABLE_LUAJIT MATCHES "ON")
+	FIND_PATH(LUA_INCLUDE_DIR lua.h
+	  HINTS
+	  $ENV{LUA_DIR}
+	  PATH_SUFFIXES "include/lua${_major}${_minor}" 
+	  				"include/lua${_major}.${_minor}" 
+	  				"include/lua-${_major}.${_minor}"
+	  				include/lua include
+	  PATHS
+	  /usr/local
+	  /usr/pkg
+	  /usr
+	  ~/Library/Frameworks
+	  /Library/Frameworks
+	  /sw # Fink
+	  /opt/local # DarwinPorts
+	  /opt/csw # Blastwave
+	  /opt
+	)
 	
-	# Check for luajit
-	IF(ENABLE_LUAJIT MATCHES "ON")
-	    FIND_LIBRARY(LUA_LIBRARY NAMES
-	    			"luajit${_major}${_minor}"
-	    			"luajit${_major}.${_minor}"
-	    			"luajit-${_major}.${_minor}"
-	    			"luajit"
-	                  HINTS
-	                  $ENV{LUA_DIR}
-	                  PATH_SUFFIXES lib64 lib
-	                  PATHS
-	                      ~/Library/Frameworks
-	                      /Library/Frameworks
-	                      /usr/local
-	                      /usr
-	                      /sw
-	                      /opt/local
-	                      /opt/csw
-	                      /usr/pkg
-	                      /opt
-	                )
-	ELSE(ENABLE_LUAJIT MATCHES "ON") 
-		FIND_LIBRARY(LUA_LIBRARY 
-	 	 	NAMES lua 
+	FIND_LIBRARY(LUA_LIBRARY 
+	 	NAMES lua 
 	  		"lua${_major}${_minor}"
 	  		"lua${_major}.${_minor}" 
 	  		"lua-${_major}.${_minor}"
-			HINTS
+		HINTS
 	  		$ENV{LUA_DIR}
-	  		PATH_SUFFIXES lib64 lib
-	  		PATHS
-	  				/usr/local
-	  				/usr
-	  				~/Library/Frameworks
-	  				/Library/Frameworks
-	  				/sw
-	  				/opt/local
-	  				/opt/csw
-	  				/opt
-	  		DOC "Lua library"
-		)    
-	ENDIF(ENABLE_LUAJIT MATCHES "ON")
+	  	PATH_SUFFIXES lib64 lib
+	  	PATHS
+	  		/usr/local
+	  		/usr
+	  		~/Library/Frameworks
+	  		/Library/Frameworks
+	  		/sw
+	  		/opt/local
+	  		/opt/csw
+	  		/opt
+	 	DOC "Lua library"
+	)
 	IF(LUA_LIBRARY AND LUA_INCLUDE_DIR)
 		SET(LUA_FOUND 1)
 		IF(NOT LUA_VERSION_MAJOR OR NOT LUA_VERSION_MINOR)
@@ -413,18 +370,21 @@ ENDIF(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
 
 # Now find libraries and headers
 
-# Find lua libraries
-FindLua(5 2)
-IF(NOT LUA_FOUND)
-	FindLua(5 1)
-ENDIF(NOT LUA_FOUND)
-
-IF(NOT LUA_FOUND)
-	MESSAGE(FATAL_ERROR "Lua not found, lua support is required for working")
-ELSE(NOT LUA_FOUND)
-    SET(WITH_LUA 1)
-    INCLUDE_DIRECTORIES("${LUA_INCLUDE_DIR}")
-ENDIF(NOT LUA_FOUND)
+IF(ENABLE_LUAJIT MATCHES "ON")
+	ProcessPackage(LUAJIT luajit)
+	SET(WITH_LUA 1)
+ELSEIF(ENABLE_LUAJIT MATCHES "ON")
+	FindLua(5 2)
+	IF(NOT LUA_FOUND)
+        	FindLua(5 1)
+	ENDIF(NOT LUA_FOUND)
+	IF(NOT LUA_FOUND)
+        	MESSAGE(FATAL_ERROR "Lua not found, lua support is required for working")
+	ELSE(NOT LUA_FOUND)
+    		SET(WITH_LUA 1)
+    		INCLUDE_DIRECTORIES("${LUA_INCLUDE_DIR}")
+	ENDIF(NOT LUA_FOUND)
+ENDIF(ENABLE_LUAJIT MATCHES "ON")
 
 #Check for openssl (required for dkim)
 IF(OPENSSL_FOUND)
