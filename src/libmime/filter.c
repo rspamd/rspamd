@@ -459,6 +459,12 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 	gint ret = 0, rc = 0;
 	gchar t;
 
+	if (isset (cd->checked, cd->composite->id * 2)) {
+		/* We have already checked this composite, so just return its value */
+		rc = isset (cd->checked, cd->composite->id * 2 + 1);
+		return rc;
+	}
+
 	if (*sym == '~' || *sym == '-') {
 		t = *sym ++;
 	}
@@ -513,6 +519,8 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 					rd);
 		}
 	}
+
+	return rc;
 }
 
 /*
@@ -527,7 +535,7 @@ rspamd_composite_expr_priority (rspamd_expression_atom_t *atom)
 static void
 rspamd_composite_expr_destroy (rspamd_expression_atom_t *atom)
 {
-
+	/* Composite atoms are destroyed just with the pool */
 }
 
 static gint
@@ -541,9 +549,24 @@ remove_compare_data (gconstpointer a, gconstpointer b)
 static void
 composites_foreach_callback (gpointer key, gpointer value, void *data)
 {
+	struct composites_data *cd = data;
+	struct rspamd_composite *comp = value;
+	gint rc;
 
+	cd->composite = comp;
+
+	rc = rspamd_process_expression (comp->expr, cd);
+
+	/* Checked bit */
+	setbit (cd->checked, comp->id * 2);
+	/* Result bit */
+	if (rc) {
+		setbit (cd->checked, comp->id * 2 + 1);
+	}
+	else {
+		clrbit (cd->checked, comp->id * 2 + 1);
+	}
 }
-
 
 
 static gboolean
