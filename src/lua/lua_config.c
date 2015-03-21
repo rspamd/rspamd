@@ -28,6 +28,7 @@
 #include "message.h"
 #include "radix.h"
 #include "trie.h"
+#include "expression.h"
 
 /***
  * This module is used to configure rspamd and is normally available as global
@@ -1131,7 +1132,7 @@ static gint
 lua_config_add_composite (lua_State * L)
 {
 	struct rspamd_config *cfg = lua_check_config (L);
-	struct expression *expr;
+	struct rspamd_expression *expr;
 	gchar *name;
 	const gchar *expr_str;
 	struct rspamd_composite *composite;
@@ -1142,8 +1143,8 @@ lua_config_add_composite (lua_State * L)
 		expr_str = luaL_checkstring (L, 3);
 
 		if (name && expr_str) {
-			expr = parse_expression (cfg->cfg_pool, (gchar *)expr_str);
-			if (expr == NULL) {
+			if (!rspamd_parse_expression (expr_str, 0, &composite_expr_subr,
+					NULL, cfg->cfg_pool, NULL, &expr)) {
 				msg_err ("cannot parse composite expression %s", expr_str);
 			}
 			else {
