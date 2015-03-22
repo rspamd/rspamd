@@ -227,7 +227,7 @@ gboolean rspamd_task_add_sender (struct rspamd_task *task, const gchar *sender);
  * @param value value to add
  * @return previous value of element or RSPAMD_TASK_CACHE_NO_VALUE
  */
-guint rspamd_task_re_cache_add (struct rspamd_task *task, gchar *re,
+guint rspamd_task_re_cache_add (struct rspamd_task *task, const gchar *re,
 		guint value);
 
 /**

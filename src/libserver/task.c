@@ -453,7 +453,7 @@ rspamd_task_add_sender (struct rspamd_task *task, const gchar *sender)
 
 
 guint
-rspamd_task_re_cache_add (struct rspamd_task *task, gchar *re,
+rspamd_task_re_cache_add (struct rspamd_task *task, const gchar *re,
 		guint value)
 {
 	guint ret = RSPAMD_TASK_CACHE_NO_VALUE;
@@ -465,7 +465,7 @@ rspamd_task_re_cache_add (struct rspamd_task *task, gchar *re,
 		ret = GPOINTER_TO_INT (p);
 	}
 
-	g_hash_table_insert (task->re_cache, re, GINT_TO_POINTER (value));
+	g_hash_table_insert (task->re_cache, (gpointer)re, GINT_TO_POINTER (value));
 
 	return ret;
 }
