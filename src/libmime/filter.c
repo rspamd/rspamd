@@ -444,7 +444,7 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 
 	res = rspamd_mempool_alloc0 (pool, sizeof (*res));
 	res->len = clen;
-	res->data = line;
+	res->data = rspamd_mempool_strdup (pool, line);
 
 	return res;
 }
@@ -456,7 +456,7 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 	struct rspamd_composite *ncomp;
 	struct symbol_remove_data *rd;
 	struct symbol *ms;
-	gint ret = 0, rc = 0;
+	gint rc = 0;
 	gchar t;
 
 	if (isset (cd->checked, cd->composite->id * 2)) {
@@ -501,11 +501,11 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 		 */
 		rd = rspamd_mempool_alloc (cd->task->task_pool, sizeof (*cd));
 		rd->ms = ms;
-		if (G_UNLIKELY (*sym == '~')) {
+		if (G_UNLIKELY (t == '~')) {
 			rd->remove_weight = FALSE;
 			rd->remove_symbol = TRUE;
 		}
-		else if (G_UNLIKELY (*sym == '-')) {
+		else if (G_UNLIKELY (t == '-')) {
 			rd->remove_symbol = FALSE;
 			rd->remove_weight = FALSE;
 		}

@@ -1594,7 +1594,7 @@ rspamd_has_fake_html (struct rspamd_task * task, GArray * args, void *unused)
 }
 
 static gboolean
-rspamd_raw_header_exists (struct rspamd_task *task, GList * args, void *unused)
+rspamd_raw_header_exists (struct rspamd_task *task, GArray * args, void *unused)
 {
 	struct expression_argument *arg;
 
@@ -1602,8 +1602,8 @@ rspamd_raw_header_exists (struct rspamd_task *task, GList * args, void *unused)
 		return FALSE;
 	}
 
-	arg = get_function_arg (args->data, task, TRUE);
-	if (!arg || arg->type == EXPRESSION_ARGUMENT_BOOL) {
+	arg = &g_array_index (args, struct expression_argument, 0);
+	if (!arg || arg->type != EXPRESSION_ARGUMENT_NORMAL) {
 		msg_warn ("invalid argument to function is passed");
 		return FALSE;
 	}
@@ -1613,34 +1613,29 @@ rspamd_raw_header_exists (struct rspamd_task *task, GList * args, void *unused)
 
 static gboolean
 match_smtp_data (struct rspamd_task *task,
-	const gchar *re_text,
+	struct expression_argument *arg,
 	const gchar *what)
 {
-	struct rspamd_regexp_element *re;
+	rspamd_regexp_t *re;
 	gint r;
 
-	if (*re_text == '/') {
+	if (arg->type == EXPRESSION_ARGUMENT_REGEXP) {
 		/* This is a regexp */
-		re = parse_regexp (task->cfg->cfg_pool,
-				(gchar *)re_text,
-				task->cfg->raw_mode);
+		re = arg->data;
 		if (re == NULL) {
 			msg_warn ("cannot compile regexp for function");
 			return FALSE;
 		}
 
-		if ((r = task_cache_check (task, re)) == -1) {
-			if (rspamd_regexp_search (re->regexp, what, 0, NULL, NULL, FALSE)) {
-				task_cache_add (task, re, 1);
-				return TRUE;
-			}
-			task_cache_add (task, re, 0);
+		if ((r = rspamd_task_re_cache_check (task,
+				rspamd_regexp_get_pattern (re))) == -1) {
+			r = rspamd_regexp_search (re, what, 0, NULL, NULL, FALSE);
+			rspamd_task_re_cache_add (task, rspamd_regexp_get_pattern (re), r);
 		}
-		else {
-			return r == 1;
-		}
+		return r;
 	}
-	else if (g_ascii_strcasecmp (re_text, what) == 0) {
+	else if (arg->type == EXPRESSION_ARGUMENT_NORMAL &&
+			g_ascii_strcasecmp (arg->data, what) == 0) {
 		return TRUE;
 	}
 
@@ -1648,12 +1643,11 @@ match_smtp_data (struct rspamd_task *task,
 }
 
 static gboolean
-rspamd_check_smtp_data (struct rspamd_task *task, GList * args, void *unused)
+rspamd_check_smtp_data (struct rspamd_task *task, GArray * args, void *unused)
 {
 	struct expression_argument *arg;
 	InternetAddressList *ia = NULL;
 	const gchar *type, *what = NULL;
-	GList *cur;
 	gint i, ialen;
 
 	if (args == NULL) {
@@ -1661,9 +1655,9 @@ rspamd_check_smtp_data (struct rspamd_task *task, GList * args, void *unused)
 		return FALSE;
 	}
 
-	arg = get_function_arg (args->data, task, TRUE);
+	arg = &g_array_index (args, struct expression_argument, 0);
 
-	if (!arg || !arg->data) {
+	if (!arg || !arg->data || arg->type != EXPRESSION_ARGUMENT_NORMAL) {
 		msg_warn ("no parameters to function");
 		return FALSE;
 	}
@@ -1732,12 +1726,11 @@ rspamd_check_smtp_data (struct rspamd_task *task, GList * args, void *unused)
 	}
 
 	/* We would process only one more argument, others are ignored */
-	cur = args->next;
-	if (cur) {
-		arg = get_function_arg (cur->data, task, FALSE);
-		if (arg && arg->type == EXPRESSION_ARGUMENT_NORMAL) {
+	if (args->len >= 2) {
+		arg = &g_array_index (args, struct expression_argument, 1);
+		if (arg) {
 			if (what != NULL) {
-				return match_smtp_data (task, arg->data, what);
+				return match_smtp_data (task, arg, what);
 			}
 			else {
 				if (ia != NULL) {
@@ -1749,35 +1742,8 @@ rspamd_check_smtp_data (struct rspamd_task *task, GList * args, void *unused)
 							INTERNET_ADDRESS_IS_MAILBOX(iaelt) ?
 							INTERNET_ADDRESS_MAILBOX (iaelt) : NULL;
 						if (iamb &&
-							match_smtp_data (task, arg->data,
+							match_smtp_data (task, arg,
 								internet_address_mailbox_get_addr(iamb))) {
-							return TRUE;
-						}
-					}
-				}
-			}
-		}
-		else if (arg != NULL) {
-			if (what != NULL) {
-				if (process_regexp_expression (arg->data,
-					"regexp_check_smtp_data", task, what, NULL)) {
-					return TRUE;
-				}
-			}
-			else {
-				if (ia != NULL) {
-					ialen = internet_address_list_length(ia);
-					for (i = 0; i < ialen; i ++) {
-						InternetAddress *iaelt =
-								internet_address_list_get_address(ia, i);
-						InternetAddressMailbox *iamb =
-								INTERNET_ADDRESS_IS_MAILBOX(iaelt) ?
-								INTERNET_ADDRESS_MAILBOX (iaelt) : NULL;
-						if (iamb &&
-								process_regexp_expression (arg->data,
-									"regexp_check_smtp_data", task,
-									internet_address_mailbox_get_addr(iamb),
-									NULL)) {
 							return TRUE;
 						}
 					}
@@ -1789,45 +1755,15 @@ rspamd_check_smtp_data (struct rspamd_task *task, GList * args, void *unused)
 	return FALSE;
 }
 
-/* Lua part */
-static gint
-lua_regexp_match (lua_State *L)
-{
-	void *ud = luaL_checkudata (L, 1, "rspamd{task}");
-	struct rspamd_task *task;
-	const gchar *re_text;
-	struct rspamd_regexp_element *re;
-	gint r = 0;
-
-	luaL_argcheck (L, ud != NULL, 1, "'task' expected");
-	task = ud ? *((struct rspamd_task **)ud) : NULL;
-	re_text = luaL_checkstring (L, 2);
-
-	/* This is a regexp */
-	if (task != NULL) {
-		re = parse_regexp (task->cfg->cfg_pool,
-				(gchar *)re_text,
-				task->cfg->raw_mode);
-		if (re == NULL) {
-			msg_warn ("cannot compile regexp for function");
-			return FALSE;
-		}
-		r = process_regexp (re, task, NULL, 0, NULL);
-	}
-	lua_pushboolean (L, r == 1);
-
-	return 1;
-}
-
 static gboolean
 rspamd_content_type_compare_param (struct rspamd_task * task,
-	GList * args,
+	GArray * args,
 	void *unused)
 {
-	gchar *param_name, *param_pattern;
+	const gchar *param_name;
 	const gchar *param_data;
-	struct rspamd_regexp_element *re;
-	struct expression_argument *arg, *arg1;
+	rspamd_regexp_t *re;
+	struct expression_argument *arg, *arg1, *arg_pattern;
 	GMimeObject *part;
 	GMimeContentType *ct;
 	gint r;
@@ -1835,27 +1771,22 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 	GList *cur = NULL;
 	struct mime_part *cur_part;
 
-	if (args == NULL) {
+	if (args == NULL || args->len < 2) {
 		msg_warn ("no parameters to function");
 		return FALSE;
 	}
-	arg = get_function_arg (args->data, task, TRUE);
+
+	arg = &g_array_index (args, struct expression_argument, 0);
+	g_assert (arg->type == EXPRESSION_ARGUMENT_NORMAL);
 	param_name = arg->data;
-	args = g_list_next (args);
-	if (args == NULL) {
-		msg_warn ("too few params to function");
-		return FALSE;
-	}
-	arg = get_function_arg (args->data, task, TRUE);
-	param_pattern = arg->data;
+	arg_pattern = &g_array_index (args, struct expression_argument, 1);
 
 
 	part = g_mime_message_get_mime_part (task->message);
 	if (part) {
 		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
-		if (args->next) {
-			args = g_list_next (args);
-			arg1 = get_function_arg (args->data, task, TRUE);
+		if (args->len >= 3) {
+			arg1 = &g_array_index (args, struct expression_argument, 2);
 			if (g_ascii_strncasecmp (arg1->data, "true",
 				sizeof ("true") - 1) == 0) {
 				recursive = TRUE;
@@ -1885,29 +1816,20 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 				result = FALSE;
 			}
 			else {
-				if (*param_pattern == '/') {
-					re = parse_regexp (task->cfg->cfg_pool,
-							param_pattern,
-							task->cfg->raw_mode);
-					if (re == NULL) {
-						msg_warn ("cannot compile regexp for function");
-						return FALSE;
-					}
-					if ((r = task_cache_check (task, re)) == -1) {
-						if (rspamd_regexp_search (re->regexp, param_data, 0,
-							NULL, NULL, FALSE) == TRUE) {
-							task_cache_add (task, re, 1);
-							return TRUE;
-						}
-						task_cache_add (task, re, 0);
-					}
-					else {
+				if (arg_pattern->type == EXPRESSION_ARGUMENT_REGEXP) {
+					re = arg_pattern->data;
 
+					if ((r = rspamd_task_re_cache_check (task,
+							rspamd_regexp_get_pattern (re))) == -1) {
+						r = rspamd_regexp_search (re, param_data, 0,
+								NULL, NULL, FALSE);
+						rspamd_task_re_cache_add (task,
+								rspamd_regexp_get_pattern (re), r);
 					}
 				}
 				else {
 					/* Just do strcasecmp */
-					if (g_ascii_strcasecmp (param_data, param_pattern) == 0) {
+					if (g_ascii_strcasecmp (param_data, arg_pattern->data) == 0) {
 						return TRUE;
 					}
 				}
@@ -1928,7 +1850,6 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 				return result;
 			}
 		}
-
 	}
 
 	return FALSE;
@@ -1936,7 +1857,7 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 
 static gboolean
 rspamd_content_type_has_param (struct rspamd_task * task,
-	GList * args,
+	GArray * args,
 	void *unused)
 {
 	gchar *param_name;
@@ -1948,21 +1869,22 @@ rspamd_content_type_has_param (struct rspamd_task * task,
 	GList *cur = NULL;
 	struct mime_part *cur_part;
 
-	if (args == NULL) {
+	if (args == NULL || args->len < 1) {
 		msg_warn ("no parameters to function");
 		return FALSE;
 	}
-	arg = get_function_arg (args->data, task, TRUE);
+
+	arg = &g_array_index (args, struct expression_argument, 0);
+	g_assert (arg->type == EXPRESSION_ARGUMENT_NORMAL);
 	param_name = arg->data;
 
 	part = g_mime_message_get_mime_part (task->message);
 	if (part) {
 		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
-		if (args->next) {
-			args = g_list_next (args);
-			arg1 = get_function_arg (args->data, task, TRUE);
+		if (args->len >= 2) {
+			arg1 = &g_array_index (args, struct expression_argument, 2);
 			if (g_ascii_strncasecmp (arg1->data, "true",
-				sizeof ("true") - 1) == 0) {
+					sizeof ("true") - 1) == 0) {
 				recursive = TRUE;
 			}
 		}
@@ -2012,13 +1934,13 @@ rspamd_content_type_has_param (struct rspamd_task * task,
 }
 
 static gboolean
-rspamd_content_type_is_subtype (struct rspamd_task *task,
-	GList * args,
-	void *unused)
+rspamd_content_type_check (struct rspamd_task *task,
+	GArray * args,
+	gboolean check_subtype)
 {
-	gchar *param_pattern;
-	struct rspamd_regexp_element *re;
-	struct expression_argument *arg, *arg1;
+	const gchar *param_data;
+	rspamd_regexp_t *re;
+	struct expression_argument *arg1, *arg_pattern;
 	GMimeObject *part;
 	GMimeContentType *ct;
 	gint r;
@@ -2030,17 +1952,15 @@ rspamd_content_type_is_subtype (struct rspamd_task *task,
 		msg_warn ("no parameters to function");
 		return FALSE;
 	}
-	arg = get_function_arg (args->data, task, TRUE);
-	param_pattern = arg->data;
+	arg_pattern = &g_array_index (args, struct expression_argument, 1);
 
 	part = g_mime_message_get_mime_part (task->message);
 	if (part) {
 		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
-		if (args->next) {
-			args = g_list_next (args);
-			arg1 = get_function_arg (args->data, task, TRUE);
+		if (args->len >= 2) {
+			arg1 = &g_array_index (args, struct expression_argument, 2);
 			if (g_ascii_strncasecmp (arg1->data, "true",
-				sizeof ("true") - 1) == 0) {
+					sizeof ("true") - 1) == 0) {
 				recursive = TRUE;
 			}
 		}
@@ -2061,30 +1981,29 @@ rspamd_content_type_is_subtype (struct rspamd_task *task,
 #ifndef GMIME24
 		g_object_unref (part);
 #endif
-		for (;; ) {
-			if (*param_pattern == '/') {
-				re = parse_regexp (task->cfg->cfg_pool,
-						param_pattern,
-						task->cfg->raw_mode);
-				if (re == NULL) {
-					msg_warn ("cannot compile regexp for function");
-					return FALSE;
-				}
-				if ((r = task_cache_check (task, re)) == -1) {
-					if (rspamd_regexp_search (re->regexp, ct->subtype, 0,
-						NULL, NULL, FALSE)) {
-						task_cache_add (task, re, 1);
-						return TRUE;
-					}
-					task_cache_add (task, re, 0);
-				}
-				else {
+		for (;;) {
 
+			if (check_subtype) {
+				param_data = ct->subtype;
+			}
+			else {
+				param_data = ct->type;
+			}
+
+			if (arg_pattern->type == EXPRESSION_ARGUMENT_REGEXP) {
+				re = arg_pattern->data;
+
+				if ((r = rspamd_task_re_cache_check (task,
+						rspamd_regexp_get_pattern (re))) == -1) {
+					r = rspamd_regexp_search (re, param_data, 0,
+							NULL, NULL, FALSE);
+					rspamd_task_re_cache_add (task,
+							rspamd_regexp_get_pattern (re), r);
 				}
 			}
 			else {
 				/* Just do strcasecmp */
-				if (g_ascii_strcasecmp (ct->subtype, param_pattern) == 0) {
+				if (g_ascii_strcasecmp (param_data, arg_pattern->data) == 0) {
 					return TRUE;
 				}
 			}
@@ -2112,142 +2031,50 @@ rspamd_content_type_is_subtype (struct rspamd_task *task,
 
 static gboolean
 rspamd_content_type_is_type (struct rspamd_task * task,
-	GList * args,
+	GArray * args,
 	void *unused)
 {
-	gchar *param_pattern;
-	struct rspamd_regexp_element *re;
-	struct expression_argument *arg, *arg1;
-	GMimeObject *part;
-	GMimeContentType *ct;
-	gint r;
-	gboolean recursive = FALSE, result = FALSE;
-	GList *cur = NULL;
-	struct mime_part *cur_part;
+	return rspamd_content_type_check (task, args, FALSE);
+}
 
-	if (args == NULL) {
-		msg_warn ("no parameters to function");
-		return FALSE;
-	}
-	arg = get_function_arg (args->data, task, TRUE);
-	param_pattern = arg->data;
-
-
-	part = g_mime_message_get_mime_part (task->message);
-	if (part) {
-		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
-		if (args->next) {
-			args = g_list_next (args);
-			arg1 = get_function_arg (args->data, task, TRUE);
-			if (g_ascii_strncasecmp (arg1->data, "true",
-				sizeof ("true") - 1) == 0) {
-				recursive = TRUE;
-			}
-		}
-		else {
-			/*
-			 * If user did not specify argument, let's assume that he wants
-			 * recursive search if mime part is multipart/mixed
-			 */
-			if (g_mime_content_type_is_type (ct, "multipart", "*")) {
-				recursive = TRUE;
-			}
-		}
-
-		if (recursive) {
-			cur = task->parts;
-		}
-
-#ifndef GMIME24
-		g_object_unref (part);
-#endif
-		for (;; ) {
-			if (*param_pattern == '/') {
-				re = parse_regexp (task->cfg->cfg_pool,
-						param_pattern,
-						task->cfg->raw_mode);
-				if (re == NULL) {
-					msg_warn ("cannot compile regexp for function");
-					return FALSE;
-				}
-				if ((r = task_cache_check (task, re)) == -1) {
-					if (rspamd_regexp_search (re->regexp, ct->type, 0,
-							NULL, NULL, FALSE) == TRUE) {
-						task_cache_add (task, re, 1);
-						return TRUE;
-					}
-					task_cache_add (task, re, 0);
-				}
-				else {
-
-				}
-			}
-			else {
-				/* Just do strcasecmp */
-				if (g_ascii_strcasecmp (ct->type, param_pattern) == 0) {
-					return TRUE;
-				}
-			}
-			/* Get next part */
-			if (!recursive) {
-				return result;
-			}
-			else if (cur != NULL) {
-				cur_part = cur->data;
-				if (cur_part->type != NULL) {
-					ct = cur_part->type;
-				}
-				cur = g_list_next (cur);
-			}
-			else {
-				/* All is done */
-				return result;
-			}
-		}
-
-	}
-
-	return FALSE;
+static gboolean
+rspamd_content_type_is_subtype (struct rspamd_task * task,
+	GArray * args,
+	void *unused)
+{
+	return rspamd_content_type_check (task, args, TRUE);
 }
 
 static gboolean
 compare_subtype (struct rspamd_task *task, GMimeContentType * ct,
-	gchar *subtype)
+	struct expression_argument *subtype)
 {
-	struct rspamd_regexp_element *re;
-	gint r;
+	rspamd_regexp_t *re;
+	gint r = 0;
 
 	if (subtype == NULL || ct == NULL) {
 		msg_warn ("invalid parameters passed");
 		return FALSE;
 	}
-	if (*subtype == '/') {
-		re = parse_regexp (task->cfg->cfg_pool, subtype,
-				task->cfg->raw_mode);
-		if (re == NULL) {
-			msg_warn ("cannot compile regexp for function");
-			return FALSE;
-		}
-		if ((r = task_cache_check (task, re)) == -1) {
-			if (rspamd_regexp_search (re->regexp, subtype, 0,
-					NULL, NULL, FALSE) == TRUE) {
-				task_cache_add (task, re, 1);
-				return TRUE;
-			}
-			task_cache_add (task, re, 0);
-		}
-		else {
-			return r == 1;
+	if (subtype->type == EXPRESSION_ARGUMENT_REGEXP) {
+		re = subtype->data;
+
+		if ((r = rspamd_task_re_cache_check (task,
+				rspamd_regexp_get_pattern (re))) == -1) {
+			r = rspamd_regexp_search (re, ct->subtype, 0,
+					NULL, NULL, FALSE);
+			rspamd_task_re_cache_add (task,
+					rspamd_regexp_get_pattern (re), r);
 		}
 	}
 	else {
 		/* Just do strcasecmp */
-		if (ct->subtype && g_ascii_strcasecmp (ct->subtype, subtype) == 0) {
+		if (ct->subtype && g_ascii_strcasecmp (ct->subtype, subtype->data) == 0) {
 			return TRUE;
 		}
 	}
 
-	return FALSE;
+	return r;
 }
 
 static gboolean
@@ -2270,12 +2097,12 @@ compare_len (struct mime_part *part, guint min, guint max)
 
 static gboolean
 common_has_content_part (struct rspamd_task * task,
-	gchar *param_type,
-	gchar *param_subtype,
+	struct expression_argument *param_type,
+	struct expression_argument *param_subtype,
 	gint min_len,
 	gint max_len)
 {
-	struct rspamd_regexp_element *re;
+	rspamd_regexp_t *re;
 	struct mime_part *part;
 	GList *cur;
 	GMimeContentType *ct;
@@ -2290,50 +2117,25 @@ common_has_content_part (struct rspamd_task * task,
 			continue;
 		}
 
-		if (*param_type == '/') {
-			re = parse_regexp (task->cfg->cfg_pool,
-					param_type,
-					task->cfg->raw_mode);
-			if (re == NULL) {
-				msg_warn ("cannot compile regexp for function");
-				cur = g_list_next (cur);
-				continue;
-			}
-			if ((r = task_cache_check (task, re)) == -1) {
-				if (ct->type &&
-					rspamd_regexp_search (re->regexp, ct->type, 0,
-							NULL, NULL, TRUE)) {
-					if (param_subtype) {
-						if (compare_subtype (task, ct, param_subtype)) {
-							if (compare_len (part, min_len, max_len)) {
-								return TRUE;
-							}
-						}
-					}
-					else {
-						if (compare_len (part, min_len, max_len)) {
-							return TRUE;
-						}
-					}
-					task_cache_add (task, re, 1);
+		if (param_type->type == EXPRESSION_ARGUMENT_REGEXP) {
+			re = param_type->data;
+
+			if ((r = rspamd_task_re_cache_check (task,
+					rspamd_regexp_get_pattern (re))) == -1) {
+				r = rspamd_regexp_search (re, ct->type, 0,
+						NULL, NULL, FALSE);
+				/* Also check subtype and length of the part */
+				if (r && param_subtype) {
+					r = compare_len (part, min_len, max_len) &&
+						compare_subtype (task, ct, param_subtype);
 				}
-				else {
-					task_cache_add (task, re, 0);
-				}
-			}
-			else {
-				if (r == 1) {
-					if (compare_subtype (task, ct, param_subtype)) {
-						if (compare_len (part, min_len, max_len)) {
-							return TRUE;
-						}
-					}
-				}
+				rspamd_task_re_cache_add (task,
+						rspamd_regexp_get_pattern (re), r);
 			}
 		}
 		else {
 			/* Just do strcasecmp */
-			if (ct->type && g_ascii_strcasecmp (ct->type, param_type) == 0) {
+			if (ct->type && g_ascii_strcasecmp (ct->type, param_type->data) == 0) {
 				if (param_subtype) {
 					if (compare_subtype (task, ct, param_subtype)) {
 						if (compare_len (part, min_len, max_len)) {
@@ -2355,22 +2157,18 @@ common_has_content_part (struct rspamd_task * task,
 }
 
 static gboolean
-rspamd_has_content_part (struct rspamd_task * task, GList * args, void *unused)
+rspamd_has_content_part (struct rspamd_task * task, GArray * args, void *unused)
 {
-	gchar *param_type = NULL, *param_subtype = NULL;
-	struct expression_argument *arg;
+	struct expression_argument *param_type = NULL, *param_subtype = NULL;
 
 	if (args == NULL) {
 		msg_warn ("no parameters to function");
 		return FALSE;
 	}
 
-	arg = get_function_arg (args->data, task, TRUE);
-	param_type = arg->data;
-	args = args->next;
-	if (args) {
-		arg = args->data;
-		param_subtype = arg->data;
+	param_type = &g_array_index (args, struct expression_argument, 0);
+	if (args->len >= 2) {
+		param_subtype = &g_array_index (args, struct expression_argument, 1);
 	}
 
 	return common_has_content_part (task, param_type, param_subtype, 0, 0);
@@ -2378,10 +2176,10 @@ rspamd_has_content_part (struct rspamd_task * task, GList * args, void *unused)
 
 static gboolean
 rspamd_has_content_part_len (struct rspamd_task * task,
-	GList * args,
+	GArray * args,
 	void *unused)
 {
-	gchar *param_type = NULL, *param_subtype = NULL;
+	struct expression_argument *param_type = NULL, *param_subtype = NULL;
 	gint min = 0, max = 0;
 	struct expression_argument *arg;
 
@@ -2390,27 +2188,29 @@ rspamd_has_content_part_len (struct rspamd_task * task,
 		return FALSE;
 	}
 
-	arg = get_function_arg (args->data, task, TRUE);
-	param_type = arg->data;
-	args = args->next;
-	if (args) {
-		arg = get_function_arg (args->data, task, TRUE);
-		param_subtype = arg->data;
-		args = args->next;
-		if (args) {
-			arg = get_function_arg (args->data, task, TRUE);
+	param_type = &g_array_index (args, struct expression_argument, 0);
+
+	if (args->len >= 2) {
+		param_subtype = &g_array_index (args, struct expression_argument, 1);
+
+		if (args->len >= 3) {
+			arg = &g_array_index (args, struct expression_argument, 2);
 			errno = 0;
 			min = strtoul (arg->data, NULL, 10);
+			g_assert (arg->type == EXPRESSION_ARGUMENT_NORMAL);
+
 			if (errno != 0) {
 				msg_warn ("invalid numeric value '%s': %s",
 					(gchar *)arg->data,
 					strerror (errno));
 				return FALSE;
 			}
-			args = args->next;
+
 			if (args) {
-				arg = get_function_arg (args->data, task, TRUE);
+				arg = &g_array_index (args, struct expression_argument, 3);
+				g_assert (arg->type == EXPRESSION_ARGUMENT_NORMAL);
 				max = strtoul (arg->data, NULL, 10);
+
 				if (errno != 0) {
 					msg_warn ("invalid numeric value '%s': %s",
 						(gchar *)arg->data,
