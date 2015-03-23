@@ -73,12 +73,17 @@ read_regexp_expression (rspamd_mempool_t * pool,
 	gboolean raw_mode)
 {
 	struct rspamd_expression *e = NULL;
+	GError *err = NULL;
 
-	/* XXX: Implement atoms parsing */
-	if (e == NULL) {
-		msg_warn ("%s = \"%s\" is invalid regexp expression", symbol, line);
+	if (!rspamd_parse_expression (line, 0, &mime_expr_subr, NULL, pool, &err,
+			&e)) {
+		msg_warn ("%s = \"%s\" is invalid regexp expression: %e", symbol, line,
+				err);
+		g_error_free (err);
+
 		return FALSE;
 	}
+
 	chain->expr = e;
 
 	return TRUE;
@@ -185,7 +190,7 @@ static gboolean rspamd_lua_call_expression_func(
 	*ptask = task;
 
 	/* Now push all arguments */
-	for (i = 0; i < args->len; i ++) {
+	for (i = 0; i < (gint)args->len; i ++) {
 		arg = &g_array_index (args, struct expression_argument, i);
 		if (arg) {
 			switch (arg->type) {
@@ -234,12 +239,13 @@ process_regexp_item (struct rspamd_task *task, void *user_data)
 				&res)) {
 			msg_err ("error occurred when checking symbol %s", item->symbol);
 		}
-		if (res) {
-			rspamd_task_insert_result (task, item->symbol, 1, NULL);
-		}
 	}
 	else {
 		/* Process expression */
-		/* XXX: add this function */
+		res = rspamd_process_expression (item->expr, task);
+	}
+
+	if (res) {
+		rspamd_task_insert_result (task, item->symbol, res, NULL);
 	}
 }
