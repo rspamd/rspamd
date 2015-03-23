@@ -444,6 +444,7 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 
 	res = rspamd_mempool_alloc0 (pool, sizeof (*res));
 	res->len = clen;
+	res->str = line;
 	res->data = rspamd_mempool_strdup (pool, line);
 
 	return res;
