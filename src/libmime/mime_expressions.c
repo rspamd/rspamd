@@ -1954,13 +1954,13 @@ rspamd_content_type_check (struct rspamd_task *task,
 		msg_warn ("no parameters to function");
 		return FALSE;
 	}
-	arg_pattern = &g_array_index (args, struct expression_argument, 1);
+	arg_pattern = &g_array_index (args, struct expression_argument, 0);
 
 	part = g_mime_message_get_mime_part (task->message);
 	if (part) {
 		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
 		if (args->len >= 2) {
-			arg1 = &g_array_index (args, struct expression_argument, 2);
+			arg1 = &g_array_index (args, struct expression_argument, 1);
 			if (g_ascii_strncasecmp (arg1->data, "true",
 					sizeof ("true") - 1) == 0) {
 				recursive = TRUE;
