@@ -479,7 +479,8 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 
 				slen = strlen (p);
 				RSPAMD_PRINTF_APPEND (p, slen);
-				break;
+
+				continue;
 
 			case 's':
 				p = va_arg (args, gchar *);
