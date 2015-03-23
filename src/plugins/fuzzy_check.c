@@ -41,7 +41,6 @@
 
 #include "config.h"
 #include "libmime/message.h"
-#include "libmime/expressions.h"
 #include "libutil/map.h"
 #include "libmime/images.h"
 #include "fuzzy_storage.h"
