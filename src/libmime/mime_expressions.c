@@ -638,6 +638,12 @@ rspamd_mime_regexp_element_process (struct rspamd_task *task,
 		return r;
 	}
 
+	/*
+	 * Since we've queried cache for the value
+	 * r could be RSPAMD_TASK_CACHE_NO_VALUE. Hence, we need to reset it here
+	 * to avoid suspicious results
+	 */
+	r = 0;
 	if (len == 0) {
 		len = strlen (data);
 	}
