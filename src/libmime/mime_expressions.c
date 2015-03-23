@@ -567,7 +567,9 @@ rspamd_mime_expr_parse (const gchar *line, gsize len,
 			break;
 		case bad_atom:
 			g_set_error (err, rspamd_mime_expr_quark(), 100, "cannot parse"
-					" mime atom '%*.s' when reading symbol '%c'", (gint)len, line, t);
+					" mime atom '%s' when reading symbol '%c' at offset %d, "
+					"near %*.s", line, t, (gint)(p - line),
+					(gint)MIN (end - p, 10), p);
 			return NULL;
 		case end_atom:
 			goto set;
@@ -575,9 +577,9 @@ rspamd_mime_expr_parse (const gchar *line, gsize len,
 	}
 set:
 
-	if (p - line == 0 || (state != got_ebrace || state != got_second_slash ||
-			state != in_flags)) {
-		g_set_error (err, rspamd_mime_expr_quark(), 200, "inclomplete or empty"
+	if (p - line == 0 || (state != got_ebrace && state != got_second_slash &&
+			state != in_flags && state != end_atom)) {
+		g_set_error (err, rspamd_mime_expr_quark(), 200, "incomplete or empty"
 				" mime atom");
 		return NULL;
 	}

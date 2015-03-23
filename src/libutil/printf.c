@@ -339,6 +339,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 	guint width, sign, hex, humanize, bytes, frac_width, i;
 	rspamd_fstring_t *v;
 	GString *gs;
+	GError *err;
 	gboolean bv;
 
 	while (*fmt) {
@@ -459,6 +460,25 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 			case 'v':
 				gs = va_arg (args, GString *);
 				RSPAMD_PRINTF_APPEND (gs->str, gs->len);
+
+				continue;
+
+			case 'e':
+				err = va_arg (args, GError *);
+
+				if (err) {
+					p = err->message;
+
+					if (p == NULL) {
+						p = "(NULL)";
+					}
+				}
+				else {
+					p = "unknown error";
+				}
+
+				slen = strlen (p);
+				RSPAMD_PRINTF_APPEND (p, slen);
 
 				continue;
 

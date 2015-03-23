@@ -73,12 +73,17 @@ read_regexp_expression (rspamd_mempool_t * pool,
 	gboolean raw_mode)
 {
 	struct rspamd_expression *e = NULL;
+	GError *err = NULL;
 
-	/* XXX: Implement atoms parsing */
-	if (e == NULL) {
-		msg_warn ("%s = \"%s\" is invalid regexp expression", symbol, line);
+	if (!rspamd_parse_expression (line, 0, &mime_expr_subr, NULL, pool, &err,
+			&e)) {
+		msg_warn ("%s = \"%s\" is invalid regexp expression: %e", symbol, line,
+				err);
+		g_error_free (err);
+
 		return FALSE;
 	}
+
 	chain->expr = e;
 
 	return TRUE;
@@ -133,11 +138,13 @@ regexp_module_config (struct rspamd_config *cfg)
 				ucl_obj_tostring (value), cfg->raw_mode)) {
 				res = FALSE;
 			}
-			register_symbol (&cfg->cache,
-				cur_item->symbol,
-				1,
-				process_regexp_item,
-				cur_item);
+			else {
+				register_symbol (&cfg->cache,
+						cur_item->symbol,
+						1,
+						process_regexp_item,
+						cur_item);
+			}
 		}
 		else if (value->type == UCL_USERDATA) {
 			cur_item = rspamd_mempool_alloc0 (regexp_module_ctx->regexp_pool,
@@ -171,7 +178,7 @@ regexp_module_reconfig (struct rspamd_config *cfg)
 
 static gboolean rspamd_lua_call_expression_func(
 		struct ucl_lua_funcdata *lua_data, struct rspamd_task *task,
-		GArray *args, gboolean *res)
+		GArray *args, gint *res)
 {
 	lua_State *L = lua_data->L;
 	struct rspamd_task **ptask;
@@ -185,7 +192,7 @@ static gboolean rspamd_lua_call_expression_func(
 	*ptask = task;
 
 	/* Now push all arguments */
-	for (i = 0; i < args->len; i ++) {
+	for (i = 0; i < (gint)args->len; i ++) {
 		arg = &g_array_index (args, struct expression_argument, i);
 		if (arg) {
 			switch (arg->type) {
@@ -208,12 +215,16 @@ static gboolean rspamd_lua_call_expression_func(
 	}
 	pop++;
 
-	if (!lua_isboolean (L, -1)) {
-		lua_pop (L, pop);
-		msg_info("lua function must return a boolean");
-		return FALSE;
+	if (lua_type (L, -1) == LUA_TNUMBER) {
+		*res = lua_tonumber (L, -1);
 	}
-	*res = lua_toboolean (L, -1);
+	else if (lua_type (L, -1) == LUA_TBOOLEAN) {
+		*res = lua_toboolean (L, -1);
+	}
+	else {
+		msg_info("lua function must return a boolean");
+	}
+
 	lua_pop (L, pop);
 
 	return TRUE;
@@ -224,7 +235,7 @@ static void
 process_regexp_item (struct rspamd_task *task, void *user_data)
 {
 	struct regexp_module_item *item = user_data;
-	gboolean res = FALSE;
+	gint res = FALSE;
 
 	/* Non-threaded version */
 	if (item->lua_function) {
@@ -234,12 +245,19 @@ process_regexp_item (struct rspamd_task *task, void *user_data)
 				&res)) {
 			msg_err ("error occurred when checking symbol %s", item->symbol);
 		}
-		if (res) {
-			rspamd_task_insert_result (task, item->symbol, 1, NULL);
-		}
 	}
 	else {
 		/* Process expression */
-		/* XXX: add this function */
+		if (item->expr) {
+			res = rspamd_process_expression (item->expr, task);
+		}
+		else {
+			msg_warn ("FIXME: %s symbol is broken with new expressions",
+					item->symbol);
+		}
+	}
+
+	if (res) {
+		rspamd_task_insert_result (task, item->symbol, res, NULL);
 	}
 }
