@@ -450,3 +450,37 @@ rspamd_task_add_sender (struct rspamd_task *task, const gchar *sender)
 
 	return FALSE;
 }
+
+
+guint
+rspamd_task_re_cache_add (struct rspamd_task *task, const gchar *re,
+		guint value)
+{
+	guint ret = RSPAMD_TASK_CACHE_NO_VALUE;
+	gpointer p;
+
+	p = g_hash_table_lookup (task->re_cache, re);
+
+	if (p != NULL) {
+		ret = GPOINTER_TO_INT (p);
+	}
+
+	g_hash_table_insert (task->re_cache, (gpointer)re, GINT_TO_POINTER (value));
+
+	return ret;
+}
+
+guint
+rspamd_task_re_cache_check (struct rspamd_task *task, const gchar *re)
+{
+	guint ret = RSPAMD_TASK_CACHE_NO_VALUE;
+	gpointer p;
+
+	p = g_hash_table_lookup (task->re_cache, re);
+
+	if (p != NULL) {
+		ret = GPOINTER_TO_INT (p);
+	}
+
+	return ret;
+}

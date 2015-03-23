@@ -436,7 +436,7 @@ rspamd_regexp_get_ud (rspamd_regexp_t *re)
 	return re->ud;
 }
 
-static gboolean
+gboolean
 rspamd_regexp_equal (gconstpointer a, gconstpointer b)
 {
 	const guchar *ia = a, *ib = b;
@@ -444,7 +444,7 @@ rspamd_regexp_equal (gconstpointer a, gconstpointer b)
 	return (memcmp (ia, ib, sizeof (regexp_id_t)) == 0);
 }
 
-static guint32
+guint32
 rspamd_regexp_hash (gconstpointer a)
 {
 	const guchar *ia = a;

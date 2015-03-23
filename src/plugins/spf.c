@@ -34,7 +34,6 @@
 
 #include "config.h"
 #include "libmime/message.h"
-#include "libmime/expressions.h"
 #include "libserver/spf.h"
 #include "libutil/hash.h"
 #include "libutil/map.h"

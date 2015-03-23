@@ -90,6 +90,13 @@ void rspamd_regexp_set_ud (rspamd_regexp_t *re, gpointer ud);
 gpointer rspamd_regexp_get_ud (rspamd_regexp_t *re);
 
 /**
+ * Get regexp ID suitable for hashing
+ * @param re
+ * @return
+ */
+gpointer rspamd_regexp_get_id (rspamd_regexp_t *re);
+
+/**
  * Get pattern for the specified regexp object
  * @param re
  * @return
@@ -150,6 +157,21 @@ gboolean rspamd_regexp_cache_remove (struct rspamd_regexp_cache *cache,
  * @param cache
  */
 void rspamd_regexp_cache_destroy (struct rspamd_regexp_cache *cache);
+
+/**
+ * Return the value for regexp hash based on its ID
+ * @param a
+ * @return
+ */
+guint32 rspamd_regexp_hash (gconstpointer a);
+
+/**
+ * Compare two regexp objects based on theirs ID
+ * @param a
+ * @param b
+ * @return
+ */
+gboolean rspamd_regexp_equal (gconstpointer a, gconstpointer b);
 
 /**
  * Initialize superglobal regexp cache and library

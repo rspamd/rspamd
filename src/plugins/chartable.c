@@ -33,7 +33,6 @@
 
 #include "config.h"
 #include "libmime/message.h"
-#include "libmime/expressions.h"
 #include "main.h"
 
 #define DEFAULT_SYMBOL "R_CHARSET_MIXED"

@@ -71,11 +71,16 @@ struct metric_result {
 	double grow_factor;                             /**< current grow factor					*/
 };
 
+
+/**
+ * Subr for composite expressions
+ */
+extern const struct rspamd_atom_subr composite_expr_subr;
 /**
  * Composite structure
  */
 struct rspamd_composite {
-	struct expression *expr;
+	struct rspamd_expression *expr;
 	gint id;
 };
 

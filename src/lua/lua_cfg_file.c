@@ -23,8 +23,9 @@
  */
 
 #include "lua_common.h"
-#include "expressions.h"
 #include "symbols_cache.h"
+#include "expression.h"
+#include "filter.h"
 #ifdef HAVE_SYS_UTSNAME_H
 #include <sys/utsname.h>
 #endif
@@ -140,9 +141,10 @@ rspamd_lua_post_load_config (struct rspamd_config *cfg)
 	lua_State *L = cfg->lua_state;
 	const gchar *name, *val;
 	gchar *sym;
-	struct expression *expr, *old_expr;
+	struct rspamd_expression *expr, *old_expr;
 	ucl_object_t *obj;
 	gsize keylen;
+	GError *err = NULL;
 
 	/* First check all module options that may be overriden in 'config' global */
 	lua_getglobal (L, "config");
@@ -193,10 +195,12 @@ rspamd_lua_post_load_config (struct rspamd_config *cfg)
 			if (name != NULL && lua_isstring (L, -1)) {
 				val = lua_tostring (L, -1);
 				sym = rspamd_mempool_strdup (cfg->cfg_pool, name);
-				if ((expr =
-					parse_expression (cfg->cfg_pool,
-					rspamd_mempool_strdup (cfg->cfg_pool, val))) == NULL) {
-					msg_err ("cannot parse composite expression: %s", val);
+				if (!rspamd_parse_expression (val, 0, &composite_expr_subr, NULL,
+							cfg->cfg_pool, &err, &expr)) {
+					msg_err ("cannot parse composite expression '%s': %s", val,
+							err->message);
+					g_error_free (err);
+					err = NULL;
 					continue;
 				}
 				/* Now check hash table for this composite */

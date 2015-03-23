@@ -27,7 +27,7 @@
 #include "utlist.h"
 #include "cfg_file.h"
 #include "lua/lua_common.h"
-#include "expressions.h"
+#include "expression.h"
 
 
 struct rspamd_rcl_default_handler_data {
@@ -1000,7 +1000,7 @@ rspamd_rcl_composite_handler (struct rspamd_config *cfg,
 	GError **err)
 {
 	const ucl_object_t *val;
-	struct expression *expr;
+	struct rspamd_expression *expr;
 	struct rspamd_composite *composite;
 	const gchar *composite_name, *composite_expression;
 	gboolean new = TRUE;
@@ -1028,14 +1028,8 @@ rspamd_rcl_composite_handler (struct rspamd_config *cfg,
 		return FALSE;
 	}
 
-	if ((expr =
-		parse_expression (cfg->cfg_pool,
-		(gchar *)composite_expression)) == NULL) {
-		g_set_error (err,
-			CFG_RCL_ERROR,
-			EINVAL,
-			"cannot parse composite expression: %s",
-			composite_expression);
+	if (!rspamd_parse_expression (composite_expression, 0, &composite_expr_subr,
+				NULL, cfg->cfg_pool, err, &expr)) {
 		return FALSE;
 	}
 
