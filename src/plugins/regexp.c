@@ -84,6 +84,7 @@ read_regexp_expression (rspamd_mempool_t * pool,
 		return FALSE;
 	}
 
+	g_assert (e != NULL);
 	chain->expr = e;
 
 	return TRUE;

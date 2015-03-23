@@ -520,7 +520,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 		}
 	}
 
-	if (*target) {
+	if (target) {
 		*target = e;
 		rspamd_mempool_add_destructor (pool,
 			(rspamd_mempool_destruct_t)rspamd_expression_destroy, e);
