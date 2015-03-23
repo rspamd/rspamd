@@ -656,6 +656,8 @@ make_listen_key (struct rspamd_worker_bind_conf *cf)
 	gpointer xxh;
 	guint i, keylen;
 	guint8 *key;
+	rspamd_inet_addr_t *addr;
+	guint16 port;
 
 	xxh = XXH32_init (0xdeadbeef);
 	if (cf->is_systemd) {
@@ -665,9 +667,12 @@ make_listen_key (struct rspamd_worker_bind_conf *cf)
 	else {
 		XXH32_update (xxh, cf->name, strlen (cf->name));
 		for (i = 0; i < cf->cnt; i ++) {
+			addr = g_ptr_array_index (cf->addrs, i);
 			key = rspamd_inet_address_get_radix_key (
-					g_ptr_array_index (cf->addrs, i), &keylen);
+					addr, &keylen);
 			XXH32_update (xxh, key, keylen);
+			port = rspamd_inet_address_get_port (addr);
+			XXH32_update (xxh, &port, sizeof (port));
 		}
 	}
 

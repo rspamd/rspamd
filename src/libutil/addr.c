@@ -960,10 +960,11 @@ rspamd_inet_address_compare (const rspamd_inet_addr_t *a1,
 }
 
 gint
-rspamd_inet_address_compare_ptr (const gpointer a1,
-		const gpointer a2)
+rspamd_inet_address_compare_ptr (gconstpointer a1,
+		gconstpointer a2)
 {
-	const rspamd_inet_addr_t **i1 = a1, **i2 = a2;
+	const rspamd_inet_addr_t **i1 = (const rspamd_inet_addr_t **)a1,
+			**i2 = (const rspamd_inet_addr_t **)a2;
 
 	return rspamd_inet_address_compare (*i1, *i2);
 }
