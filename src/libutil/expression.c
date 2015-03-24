@@ -595,6 +595,13 @@ rspamd_process_expression (struct rspamd_expression *expr, gpointer data)
 					st_elt[0]->flags |= RSPAMD_EXPR_FLAG_NEGATE;
 				}
 
+				if (st_elt[0]->flags & RSPAMD_EXPR_FLAG_PROCESSED) {
+					/* Inverse the value */
+					if ((st_elt[0]->flags & RSPAMD_EXPR_FLAG_NEGATE)) {
+						st_elt[0]->value = !st_elt[0]->value;
+					}
+				}
+
 				rspamd_expr_stack_push (expr, st_elt[0]);
 				break;
 			case OP_OR:
