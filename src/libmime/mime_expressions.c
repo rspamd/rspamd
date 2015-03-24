@@ -520,7 +520,7 @@ rspamd_mime_expr_parse (const gchar *line, gsize len,
 				/* Function */
 				state = got_obrace;
 			}
-			else if (!g_ascii_isalnum (t) && t != '_' && t != '-') {
+			else if (!g_ascii_isalnum (t) && t != '_' && t != '-' && t != '=') {
 				/* Likely lua function, identified by just a string */
 				type = MIME_ATOM_LUA_FUNCTION;
 				state = end_atom;
