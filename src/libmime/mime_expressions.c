@@ -132,8 +132,13 @@ struct rspamd_mime_atom {
 	union {
 		struct rspamd_regexp_atom *re;
 		struct rspamd_function_atom *func;
+		const gchar *lua_function;
 	} d;
-	gboolean is_function;
+	enum {
+		MIME_ATOM_REGEXP = 0,
+		MIME_ATOM_INTERNAL_FUNCTION,
+		MIME_ATOM_LUA_FUNCTION
+	} type;
 };
 
 /*
@@ -484,7 +489,7 @@ rspamd_mime_expr_parse (const gchar *line, gsize len,
 	struct rspamd_mime_atom *mime_atom = NULL;
 	const gchar *p, *end;
 	gchar t;
-	gboolean is_function = FALSE;
+	gint type = MIME_ATOM_REGEXP, obraces = 0, ebraces = 0;
 	enum {
 		in_header = 0,
 		got_slash,
@@ -514,6 +519,13 @@ rspamd_mime_expr_parse (const gchar *line, gsize len,
 			else if (t == '(') {
 				/* Function */
 				state = got_obrace;
+			}
+			else if (!g_ascii_isalnum (t) && t != '_' && t != '-') {
+				/* Likely lua function, identified by just a string */
+				type = MIME_ATOM_LUA_FUNCTION;
+				state = end_atom;
+				/* Do not increase p */
+				continue;
 			}
 			else if (g_ascii_isspace (t)) {
 				state = bad_atom;
@@ -550,15 +562,22 @@ rspamd_mime_expr_parse (const gchar *line, gsize len,
 			break;
 		case got_obrace:
 			state = in_function;
-			is_function = TRUE;
+			type = MIME_ATOM_INTERNAL_FUNCTION;
+			obraces ++;
 			break;
 		case in_function:
 			if (t == '\\') {
 				state = got_backslash;
 				prev_state = in_function;
 			}
+			else if (t == '(') {
+				obraces ++;
+			}
 			else if (t == ')') {
-				state = got_ebrace;
+				ebraces ++;
+				if (ebraces == obraces) {
+					state = got_ebrace;
+				}
 			}
 			p ++;
 			break;
@@ -585,11 +604,11 @@ set:
 	}
 
 	mime_atom = g_slice_alloc (sizeof (*mime_atom));
-	mime_atom->is_function = is_function;
+	mime_atom->type = type;
 	mime_atom->str = g_malloc (p - line + 1);
 	rspamd_strlcpy (mime_atom->str, line, p - line + 1);
 
-	if (!is_function) {
+	if (type == MIME_ATOM_REGEXP) {
 		mime_atom->d.re = rspamd_mime_expr_parse_regexp_atom (pool,
 				mime_atom->str);
 		if (mime_atom->d.re == NULL) {
@@ -892,7 +911,7 @@ rspamd_mime_expr_destroy (rspamd_expression_atom_t *atom)
 	struct expression_argument *arg;
 
 	if (mime_atom) {
-		if (mime_atom->is_function) {
+		if (mime_atom->type == MIME_ATOM_INTERNAL_FUNCTION) {
 			/* Need to cleanup arguments */
 			for (i = 0; i < mime_atom->d.func->args->len; i ++) {
 				arg = &g_array_index (mime_atom->d.func->args,
@@ -943,7 +962,7 @@ rspamd_mime_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 
 	mime_atom = atom->data;
 
-	if (!mime_atom->is_function) {
+	if (mime_atom->type == MIME_ATOM_REGEXP) {
 		ret = rspamd_mime_expr_process_regexp (mime_atom->d.re, task);
 	}
 	else {
