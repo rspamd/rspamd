@@ -645,6 +645,35 @@ err:
 	return NULL;
 }
 
+static const gchar *
+rspamd_mime_regexp_type_to_string (struct rspamd_regexp_atom *re)
+{
+	const gchar *ret = "unknown";
+
+	switch (re->type) {
+	case REGEXP_NONE:
+		ret = "none";
+		break;
+	case REGEXP_HEADER:
+		ret = "header";
+		break;
+	case REGEXP_RAW_HEADER:
+		ret = "raw header";
+		break;
+	case REGEXP_MIME:
+		ret = "part";
+		break;
+	case REGEXP_MESSAGE:
+		ret = "message";
+		break;
+	case REGEXP_URL:
+		ret = "url";
+		break;
+	}
+
+	return ret;
+}
+
 static gint
 rspamd_mime_regexp_element_process (struct rspamd_task *task,
 		struct rspamd_regexp_atom *re, const gchar *data, gsize len,
@@ -655,8 +684,8 @@ rspamd_mime_regexp_element_process (struct rspamd_task *task,
 
 	if ((r = rspamd_task_re_cache_check (task, re->regexp_text)) !=
 			RSPAMD_TASK_CACHE_NO_VALUE) {
-		debug_task ("regexp /%s/ is found in cache, result: %d",
-				re->regexp_text, r);
+		debug_task ("%s regexp %s is found in cache, result: %d",
+				rspamd_mime_regexp_type_to_string (re), re->regexp_text, r);
 		return r;
 	}
 
@@ -679,18 +708,19 @@ rspamd_mime_regexp_element_process (struct rspamd_task *task,
 	}
 
 	while (rspamd_regexp_search (re->regexp, data, len, &start, &end, raw)) {
-		if (G_UNLIKELY (re->is_test)) {
-			msg_info (
-					"process test regexp %s for header %s with value '%s' returned TRUE",
-					re->regexp_text,
-					re->header,
-					data);
-		}
 		r++;
 
 		if (!re->is_multiple) {
 			break;
 		}
+	}
+
+	if (G_UNLIKELY (re->is_test)) {
+		msg_info (
+				"process %s test regexp %s returned %d",
+				rspamd_mime_regexp_type_to_string (re),
+				re->regexp_text,
+				r);
 	}
 
 	if (r > 0) {
