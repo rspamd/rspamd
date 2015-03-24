@@ -544,10 +544,17 @@ err:
 	(e1) : (e2))
 #define CHOOSE_REMAIN(e1, e2, es) ((es) == (e1) ? (e2) : (e1))
 #define PROCESS_ELT(expr, e)	do {										\
+		g_assert ((e)->type != ELT_OP);										\
 		if (!((e)->flags & RSPAMD_EXPR_FLAG_PROCESSED)) {					\
-			(e)->value = (expr)->subr->process (data, (e)->p.atom);			\
+			if ((e)->type == ELT_ATOM) {									\
+				(e)->value = (expr)->subr->process (data, (e)->p.atom);		\
+			}																\
+			else {															\
+				(e)->value = (e)->p.lim.val;								\
+			}																\
 			(e)->flags |= RSPAMD_EXPR_FLAG_PROCESSED;						\
 			if ((e)->flags & RSPAMD_EXPR_FLAG_NEGATE) {						\
+				(e)->flags &= ~RSPAMD_EXPR_FLAG_NEGATE;						\
 				(e)->value = !(e)->value;									\
 			}																\
 		}																	\
