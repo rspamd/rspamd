@@ -1137,6 +1137,7 @@ lua_config_add_composite (lua_State * L)
 	const gchar *expr_str;
 	struct rspamd_composite *composite;
 	gboolean ret = FALSE, new = TRUE;
+	GError *err = NULL;
 
 	if (cfg) {
 		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
@@ -1144,8 +1145,10 @@ lua_config_add_composite (lua_State * L)
 
 		if (name && expr_str) {
 			if (!rspamd_parse_expression (expr_str, 0, &composite_expr_subr,
-					NULL, cfg->cfg_pool, NULL, &expr)) {
-				msg_err ("cannot parse composite expression %s", expr_str);
+					NULL, cfg->cfg_pool, &err, &expr)) {
+				msg_err ("cannot parse composite expression %s: %e", expr_str,
+						err);
+				g_error_free (err);
 			}
 			else {
 				if (g_hash_table_lookup (cfg->composite_symbols, name) != NULL) {
