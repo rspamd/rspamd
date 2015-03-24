@@ -33,6 +33,7 @@
 /* How much message should be repeated before it is count to be repeated one */
 #define REPEATS_MIN 3
 #define REPEATS_MAX 300
+#define RSPAMD_LOGBUF_SIZE 8192
 
 /**
  * Static structure that store logging parameters
@@ -385,7 +386,7 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log,
 	const gchar *fmt,
 	va_list args)
 {
-	static gchar logbuf[BUFSIZ];
+	static gchar logbuf[RSPAMD_LOGBUF_SIZE];
 	u_char *end;
 
 	if (rspamd_log == NULL) {
