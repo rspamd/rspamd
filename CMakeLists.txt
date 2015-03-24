@@ -206,7 +206,7 @@ ENDFUNCTION(INSTALL_IF_NOT_EXISTS)
 # Process required package by using FindPackage and calling for INCLUDE_DIRECTORIES and
 # setting list of required libraries
 MACRO(ProcessPackage var _name0)
-    PKG_SEARCH_MODULE(${var} REQUIRED "${_name0}" ${ARGN})
+    PKG_SEARCH_MODULE(${var} "${_name0}" ${ARGN})
     IF(${var}_FOUND)
         SET(WITH_${var} 1)
         IF(ENABLE_STATIC MATCHES "ON")
@@ -230,8 +230,36 @@ MACRO(ProcessPackage var _name0)
         ENDFOREACH(_arg ${${_XPREFIX}_LDFLAGS_OTHER})
         LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "${${_XPREFIX}_LIBRARIES}")
     ELSE(${var}_FOUND)
-		MESSAGE(FATAL_ERROR "Packages ${_name0} ${ARGN} could not be found")
-    ENDIF(${var}_FOUND)
+ 		# Try some more heuristic
+		FIND_LIBRARY(_lib NAMES "${_name0}" ${ARGN} PATH_SUFFIXES lib64 lib
+					PATHS
+						~/Library/Frameworks
+						/Library/Frameworks
+						/usr/local
+						/usr
+						/sw
+						/opt/local
+						/opt/csw
+						/opt)
+		IF(NOT _lib)
+			MESSAGE(FATAL_ERROR "Packages ${_name0} ${ARGN} could not be found, no library")
+		ENDIF(NOT _lib)
+		
+
+		FIND_PATH(_incl "${_name0}.h" PATH_SUFFIXES "" "${_name0}" ${ARGN}
+						PATHS 	/opt/include
+								/usr/include
+								/usr/local/include)
+		IF(NOT _incl)
+			MESSAGE(FATAL_ERROR "Packages ${_name0} ${ARGN} could not be found, no header")
+		ENDIF(NOT _incl)
+		GET_FILENAME_COMPONENT(_lib_path "${_lib}" PATH)
+		INCLUDE_DIRECTORIES("${_incl}")
+		LINK_DIRECTORIES("${_lib_path}")
+		MESSAGE(STATUS "Found ${_name0} ${ARGN} in '${_lib_path}' (library) and '${_incl}' (include).")
+		UNSET(_lib CACHE)
+		UNSET(_incl CACHE)
+	ENDIF(${var}_FOUND)
 ENDMACRO(ProcessPackage name)
 
 MACRO(ADD_PRECOMPILED_HEADER _target _input)
@@ -405,74 +433,24 @@ ProcessPackage(GLIB2 glib-2.0>=2.30)
 ProcessPackage(GTHREAD gthread-2.0)
 ProcessPackage(HIREDIS hiredis libhiredis)
 ProcessPackage(PCRE pcre libpcre pcre3 libpcre3)
-LIST(APPEND CMAKE_REQUIRED_INCLUDES "${PCRE_INCLUDE_DIR}")
-
-FIND_PATH(LIBHIREDIS_INCLUDE hiredis.h PATHS /opt/include
-						/usr/include
-						/usr/local/include
-						PATH_SUFFIXES "" "hiredis"
-						DOC "Path where the hiredis header files can be found")
-
-IF(LIBHIREDIS_INCLUDE)
-	INCLUDE_DIRECTORIES("${LIBHIREDIS_INCLUDE}")
-ENDIF(LIBHIREDIS_INCLUDE)
-
 ProcessPackage(GMIME2 gmime-2.6 gmime-2.4 gmime-2.0)
+ProcessPackage(LIBEVENT event libevent)
+ProcessPackage(SQLITE sqlite3>=3.6.0)
 IF(GMIME2_VERSION VERSION_GREATER "2.4.0")
     SET(GMIME24 1)
 ENDIF(GMIME2_VERSION VERSION_GREATER "2.4.0")
+LIST(APPEND CMAKE_REQUIRED_INCLUDES "${PCRE_INCLUDE_DIR}")
 
-# Check for libevent
+# Libhiredis pc file is so special
+FIND_PATH(LIBHIREDIS_INCLUDE hiredis.h PATHS /opt/include
+                                               /usr/include
+                                               /usr/local/include
+                                               PATH_SUFFIXES "" "hiredis"
+                                               DOC "Path where the hiredis header files can be found")
 
-FIND_LIBRARY(LIBEVENT_LIBRARY NAMES event PATH_SUFFIXES lib64 lib
-                  PATHS
-                      ~/Library/Frameworks
-                      /Library/Frameworks
-                      /usr/local
-                      /usr
-                      /sw
-                      /opt/local
-                      /opt/csw
-                      /opt
-                 DOC "Path where the libevent library can be found")
-IF(NOT LIBEVENT_LIBRARY)
-	MESSAGE(FATAL_ERROR "libevent is required for building rspamd")
-ENDIF(NOT LIBEVENT_LIBRARY)
-
-FIND_PATH(LIBEVENT_INCLUDE event.h PATHS 	/opt/include
-										/usr/include
-										/usr/local/include
-										DOC "Path where the libevent header files can be found")
-
-GET_FILENAME_COMPONENT(LIBEVENT_PATH "${LIBEVENT_LIBRARY}" PATH)
-INCLUDE_DIRECTORIES("${LIBEVENT_INCLUDE}")
-LINK_DIRECTORIES("${LIBEVENT_PATH}")
-
-# Find libbd
-IF(ENABLE_DB MATCHES "ON")
-	FIND_LIBRARY(LIBDB_LIBRARY NAMES db PATHS PATH_SUFFIXES lib64 lib
-	                  PATHS
-	                      ~/Library/Frameworks
-	                      /Library/Frameworks
-	                      /usr/local
-	                      /usr
-	                      /sw
-	                      /opt/local
-	                      /opt/csw
-	                      /opt
-	                 DOC "Path where the libdb library can be found")
-	IF(LIBDB_LIBRARY)
-		FIND_PATH(LIBDB_INCLUDE db.h PATHS 	/opt/include
-												/usr/include
-												/usr/local/include
-												DOC "Path where the bdb header files can be found")
-	
-		GET_FILENAME_COMPONENT(LIBDB_PATH "${LIBDB_LIBRARY}" PATH)
-		INCLUDE_DIRECTORIES("${LIBDB_INCLUDE}")
-		LINK_DIRECTORIES("${LIBDB_PATH}")
-		SET(WITH_DB 1)
-	ENDIF(LIBDB_LIBRARY)
-ENDIF(ENABLE_DB MATCHES "ON")
+IF(LIBHIREDIS_INCLUDE)
+       INCLUDE_DIRECTORIES("${LIBHIREDIS_INCLUDE}")
+ENDIF(LIBHIREDIS_INCLUDE)
 
 # Google performance tools
 
@@ -554,8 +532,6 @@ IF(ENABLE_URL_INCLUDE MATCHES "ON")
     	ENDIF(NOT CURL_FOUND)
     ENDIF(LIBFETCH_LIBRARY)
 ENDIF(ENABLE_URL_INCLUDE MATCHES "ON")
-
-ProcessPackage(SQLITE sqlite3>=3.6.0)
 
 # Static build
 
