@@ -599,7 +599,7 @@ composites_metric_callback (gpointer key, gpointer value, gpointer data)
 	cd->symbols_to_remove = g_tree_new (remove_compare_data);
 	cd->checked =
 		rspamd_mempool_alloc0 (task->task_pool,
-			NBYTES (g_hash_table_size (task->cfg->composite_symbols)));
+			NBYTES (g_hash_table_size (task->cfg->composite_symbols) * 2));
 
 	/* Process hash table */
 	g_hash_table_foreach (task->cfg->composite_symbols,
