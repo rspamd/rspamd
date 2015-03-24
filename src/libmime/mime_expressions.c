@@ -1135,7 +1135,7 @@ rspamd_parts_distance (struct rspamd_task * task, GArray * args, void *unused)
 				(gchar *)arg->data);
 			threshold = 100;
 		}
-		if (args->len == 1) {
+		if (args->len >= 2) {
 			arg = &g_array_index (args, struct expression_argument, 1);
 			if (!arg || arg->type != EXPRESSION_ARGUMENT_NORMAL) {
 				msg_warn ("invalid argument to function is passed");
