@@ -11,9 +11,6 @@ void rspamd_url_test_func (void);
 /* Memory pools */
 void rspamd_mem_pool_test_func (void);
 
-/* Expressions */
-void rspamd_expression_test_func (void);
-
 /* Fuzzy hashes */
 void rspamd_fuzzy_test_func (void);
 

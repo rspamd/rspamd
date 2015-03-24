@@ -1,5 +1,4 @@
-SET(TESTSRC		rspamd_expression_test.c
-				rspamd_mem_pool_test.c
+SET(TESTSRC		rspamd_mem_pool_test.c
 				rspamd_statfile_test.c
 				rspamd_fuzzy_test.c
 				rspamd_url_test.c
