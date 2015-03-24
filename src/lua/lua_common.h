@@ -123,6 +123,11 @@ void rspamd_free_lua_locked (struct lua_locked_state *st);
 void rspamd_lua_ip_push (lua_State *L, rspamd_inet_addr_t *addr);
 
 /**
+ * Push rspamd task structure to lua
+ */
+void rspamd_lua_task_push (lua_State *L, struct rspamd_task *task);
+
+/**
  * Return lua ip structure at the specified address
  */
 struct rspamd_lua_ip * lua_check_ip (lua_State * L, gint pos);

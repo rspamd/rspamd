@@ -617,6 +617,9 @@ set:
 			goto err;
 		}
 	}
+	else if (type == MIME_ATOM_LUA_FUNCTION) {
+		mime_atom->d.lua_function = mime_atom->str;
+	}
 	else {
 		mime_atom->d.func = rspamd_mime_expr_parse_function_atom (mime_atom->str);
 		if (mime_atom->d.func == NULL) {
@@ -955,6 +958,7 @@ rspamd_mime_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 {
 	struct rspamd_task *task = input;
 	struct rspamd_mime_atom *mime_atom;
+	lua_State *L;
 	gint ret = 0;
 
 	g_assert (task != NULL);
@@ -964,6 +968,31 @@ rspamd_mime_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 
 	if (mime_atom->type == MIME_ATOM_REGEXP) {
 		ret = rspamd_mime_expr_process_regexp (mime_atom->d.re, task);
+	}
+	else if (mime_atom->type == MIME_ATOM_LUA_FUNCTION) {
+		L = task->cfg->lua_state;
+		lua_getglobal (L, mime_atom->d.lua_function);
+		rspamd_lua_task_push (L, task);
+
+		if (lua_pcall (L, 1, 1, 0) != 0) {
+			msg_info ("call to %s failed: %s",
+				mime_atom->str,
+				lua_tostring (L, -1));
+		}
+		else {
+			if (lua_type (L, -1) == LUA_TBOOLEAN) {
+				ret = lua_toboolean (L, -1);
+			}
+			else if (lua_type (L, -1) == LUA_TNUMBER) {
+				ret = lua_tonumber (L, 1);
+			}
+			else {
+				msg_err ("%s returned wrong return type: %s",
+						mime_atom->str, lua_typename (L, lua_type (L, -1)));
+			}
+			/* Remove result */
+			lua_pop (L, 1);
+		}
 	}
 	else {
 		ret = rspamd_mime_expr_process_function (mime_atom->d.func, task,

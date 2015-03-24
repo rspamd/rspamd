@@ -2502,3 +2502,12 @@ luaopen_url (lua_State * L)
 	lua_pop (L, 1);                      /* remove metatable from stack */
 }
 
+void
+rspamd_lua_task_push (lua_State *L, struct rspamd_task *task)
+{
+	struct rspamd_task **ptask;
+
+	ptask = lua_newuserdata (L, sizeof (gpointer));
+	rspamd_lua_setclass (L, "rspamd{task}", -1);
+	*ptask = task;
+}
