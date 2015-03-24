@@ -110,20 +110,22 @@ rspamd_expr_logic_priority (enum rspamd_expression_op op)
 
 	switch (op) {
 	case OP_NOT:
-		ret = 5;
-		break;
-	case OP_MULT:
-	case OP_AND:
-		ret = 4;
+		ret = 6;
 		break;
 	case OP_PLUS:
-	case OP_OR:
-		ret = 3;
+		ret = 5;
 		break;
 	case OP_GE:
 	case OP_GT:
 	case OP_LE:
 	case OP_LT:
+		ret = 4;
+		break;
+	case OP_MULT:
+	case OP_AND:
+		ret = 3;
+		break;
+	case OP_OR:
 		ret = 2;
 		break;
 	case OP_OBRACE:
@@ -322,6 +324,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 		len = strlen (line);
 	}
 
+	memset (&elt, 0, sizeof (elt));
 	num_re = rspamd_regexp_cache_create (NULL, "/^\\d+(\\s+|[)]|$)/", NULL, NULL);
 
 	p = line;

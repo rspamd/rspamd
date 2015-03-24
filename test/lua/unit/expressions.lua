@@ -60,7 +60,7 @@ context("Rspamd expressions", function()
   test("Expression process function", function()
     local function process_func(token, input)
     
-      print(token)
+      --print(token)
       local t = input[token]
       
       if t then return 1 end
@@ -81,6 +81,8 @@ context("Rspamd expressions", function()
        {'A & (!B | C)', 1},
        {'A + B + C + D + E + F >= 2', 1},
        {'((A + B + C + D) > 1) & F', 0},
+       {'(A + B + C + D) > 1 && F || E', 1},
+       {'(A + B + C + D) > 100 && F || !E', 0},
        {'!!C', 1},
     }
     for _,c in ipairs(cases) do
@@ -88,6 +90,7 @@ context("Rspamd expressions", function()
         {parse_func, process_func}, pool)
 
       assert_not_nil(expr, "Cannot parse " .. c[1])
+     --print(expr)
       res = expr:process(atoms)
       assert_equal(res, c[2], string.format("Processed expr '%s' returned '%d', expected: '%d'",
         expr:to_string(), res, c[2]))
