@@ -387,7 +387,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 				p ++;
 			}
 			else {
-				if (p == end - 1) {
+				if (p == end - 1 && g_ascii_isdigit (*p)) {
 					p ++;
 				}
 
