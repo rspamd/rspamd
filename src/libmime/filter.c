@@ -434,7 +434,7 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 	gsize clen;
 	rspamd_expression_atom_t *res;
 
-	clen = strcspn (line, ", \t(+!|&\n");
+	clen = strcspn (line, ", \t()><+!|&\n");
 	if (clen == 0) {
 		/* Invalid composite atom */
 		g_set_error (err, filter_error_quark (), 100, "Invalid composite: %s",
