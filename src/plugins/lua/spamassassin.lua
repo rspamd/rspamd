@@ -182,12 +182,22 @@ local function process_sa_conf(f)
       cur_rule['re_expr'] = words_to_re(words, 2)
       cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
       if cur_rule['re'] then valid_rule = true end
-    elseif words[1] == "rawbody" and slash then
+    elseif words[1] == "rawbody" or words[1] == "full" and slash then
       -- body SYMBOL /regexp/
       if valid_rule then
         insert_cur_rule()
       end
       cur_rule['type'] = 'message'
+      cur_rule['symbol'] = words[2]
+      cur_rule['re_expr'] = words_to_re(words, 2)
+      cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
+      if cur_rule['re'] then valid_rule = true end
+    elseif words[1] == "uri" then
+      -- uri SYMBOL /regexp/
+      if valid_rule then
+        insert_cur_rule()
+      end
+      cur_rule['type'] = 'uri'
       cur_rule['symbol'] = words[2]
       cur_rule['re_expr'] = words_to_re(words, 2)
       cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
@@ -334,6 +344,27 @@ _.each(function(k, r)
       return r['type'] == 'message'
     end,
     rules))
+-- URL rules
+_.each(function(k, r)
+    local f = function(task)
+      local urls = task:get_urls()
+      for _,u in ipairs(urls) do
+        if (r['re']:match(u:get_text())) then
+          return 1
+        end
+      end
+      return 0
+    end
+    if r['score'] then
+      rspamd_config:set_metric_symbol(k, r['score'], r['description'])
+    end
+    --rspamd_config:register_symbol(k, calculate_score(k), f)
+     atoms[k] = f
+  end,
+  _.filter(function(k, r)
+      return r['type'] == 'uri'
+    end,
+    rules))
 
 
 local sa_mempool = rspamd_mempool.create()
@@ -354,7 +385,7 @@ local function process_atom(atom, task)
   if atom_cb then
     return atom_cb(task)
   else
-    --rspamd_logger.err('Cannot find atom ' .. atom)
+    rspamd_logger.err('Cannot find atom ' .. atom)
   end
   return 0
 end
