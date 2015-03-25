@@ -383,7 +383,12 @@ end
 local function process_atom(atom, task)
   local atom_cb = atoms[atom]
   if atom_cb then
-    return atom_cb(task)
+    local res = task:cache_get(atom)
+    if res < 0 then
+      res = atom_cb(task)
+      task:cache_set(atom, res)
+    end
+    return res
   else
     rspamd_logger.err('Cannot find atom ' .. atom)
   end
