@@ -457,15 +457,17 @@ rspamd_task_re_cache_add (struct rspamd_task *task, const gchar *re,
 		guint value)
 {
 	guint ret = RSPAMD_TASK_CACHE_NO_VALUE;
+	static const guint32 mask = 1 << 31;
 	gpointer p;
 
 	p = g_hash_table_lookup (task->re_cache, re);
 
 	if (p != NULL) {
-		ret = GPOINTER_TO_INT (p);
+		ret = GPOINTER_TO_INT (p) & ~mask;
 	}
 
-	g_hash_table_insert (task->re_cache, (gpointer)re, GINT_TO_POINTER (value));
+	g_hash_table_insert (task->re_cache, (gpointer)re,
+			GINT_TO_POINTER (value | mask));
 
 	return ret;
 }
@@ -474,12 +476,13 @@ guint
 rspamd_task_re_cache_check (struct rspamd_task *task, const gchar *re)
 {
 	guint ret = RSPAMD_TASK_CACHE_NO_VALUE;
+	static const guint32 mask = 1 << 31;
 	gpointer p;
 
 	p = g_hash_table_lookup (task->re_cache, re);
 
 	if (p != NULL) {
-		ret = GPOINTER_TO_INT (p);
+		ret = GPOINTER_TO_INT (p) & ~mask;
 	}
 
 	return ret;
