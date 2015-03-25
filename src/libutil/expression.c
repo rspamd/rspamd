@@ -716,7 +716,7 @@ rspamd_process_expression (struct rspamd_expression *expr, gpointer data)
 				/* If we done, then we go forward and skip remaining items */
 				if (done) {
 					/* Remove extra elements left on the stack */
-					for (j = i; j < cmp_pos; j ++) {
+					for (j = i + 1; j < cmp_pos - 1; j ++) {
 						check = &g_array_index (expr->expressions,
 								struct rspamd_expression_elt, j);
 						if (check->type == ELT_OP && check->p.op == OP_PLUS) {
