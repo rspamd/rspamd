@@ -52,27 +52,28 @@ cache_cmp (const void *p1, const void *p2)
 	return strcmp (i1->s->symbol, i2->s->symbol);
 }
 
+/* weight, frequency, time */
+#define TIME_ALPHA (1.0 / 10000000.0)
+#define SCORE_FUN(w, f, t) (((w) > 0 ? (w) : 1) * ((f) > 0 ? (f) : 1) / (t > TIME_ALPHA ? t : TIME_ALPHA))
+
 gint
 cache_logic_cmp (const void *p1, const void *p2)
 {
 	const struct cache_item *i1 = p1, *i2 = p2;
 	double w1, w2;
 	double weight1, weight2;
-	double f1 = 0, f2 = 0;
+	double f1 = 0, f2 = 0, t1, t2;
 
 	if (i1->priority == 0 && i2->priority == 0) {
-		if (total_frequency > 0) {
-			f1 =
-				((double)i1->s->frequency * nsymbols) / (double)total_frequency;
-			f2 =
-				((double)i2->s->frequency * nsymbols) / (double)total_frequency;
-		}
+		f1 = (double)i1->s->frequency;
+		f2 = (double)i2->s->frequency;
 		weight1 = i1->metric_weight == 0 ? i1->s->weight : i1->metric_weight;
 		weight2 = i2->metric_weight == 0 ? i2->s->weight : i2->metric_weight;
-		w1 = abs (weight1) * WEIGHT_MULT + f1 * FREQUENCY_MULT +
-			i1->s->avg_time * TIME_MULT;
-		w2 = abs (weight2) * WEIGHT_MULT + f2 * FREQUENCY_MULT +
-			i2->s->avg_time * TIME_MULT;
+		t1 = i1->s->avg_time / 1000000.0;
+		t2 = i2->s->avg_time / 1000000.0;
+		w1 = SCORE_FUN (abs (weight1), f1, t1);
+		w2 = SCORE_FUN (abs (weight2), f2, t2);
+		msg_debug ("%s -> %.2f, %s -> %.2f", i1->s->symbol, w1, i2->s->symbol, w2);
 	}
 	else {
 		/* Strict sorting */
