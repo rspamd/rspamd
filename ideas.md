@@ -7,7 +7,7 @@ title: Rspamd project ideas
 
 ## Introduction
 
-This page is intended for those who are interested in contribution to rspamd. In particular, this page might be useful for those who are going to participate in Google Summer of Code programm. However, this is not limited by this purpose,
+This page is intended for those who are interested in contribution to rspamd. In particular, this page might be useful for those who are going to participate in [Google Summer of Code program](http://www.google-melange.com/gsoc/org2/google/gsoc2015/rspamd). However, this is not limited by this purpose,
 since we appreciate any valuable contributions to rspamd project.
 
 ## Information for GSoC participants
