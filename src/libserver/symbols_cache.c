@@ -91,14 +91,16 @@ static double
 rspamd_set_counter (struct cache_item *item, guint32 value)
 {
 	struct counter_data *cd;
-	double alpha;
 	cd = item->cd;
 
-	/* Calculate new value */
+	/* Cumulative moving average */
 	rspamd_mempool_lock_mutex (item->mtx);
 
-	alpha = 2. / (++cd->number + 1);
-	cd->value = cd->value * (1. - alpha) + value * alpha;
+	if (cd->number == 0) {
+		cd->value = 0;
+	}
+
+	cd->value = cd->value + (value - cd->value) / (++cd->number);
 
 	rspamd_mempool_unlock_mutex (item->mtx);
 
