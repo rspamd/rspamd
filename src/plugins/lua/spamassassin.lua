@@ -29,9 +29,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
+local rspamd_expression = require "rspamd_expression"
+local rspamd_mempool = require "rspamd_mempool"
 local _ = require "fun"
 --local dumper = require 'pl.pretty'.dump
 local rules = {}
+local atoms = {}
+local metas = {}
 local section = rspamd_config:get_key("spamassassin")
 
 local function split(str)
@@ -228,18 +232,6 @@ local function calculate_score(sym)
   return 1.0
 end
 
--- Meta rules
-_.each(function(k, r)
-    if r['score'] then
-      rspamd_config:set_metric_symbol(k, r['score'], r['description'])
-    end
-    rspamd_config:add_composite(k, r['meta'])
-  end,
-  _.filter(function(k, r)
-      return r['type'] == 'meta'
-    end,
-    rules))
-
 -- Header rules
 _.each(function(k, r)
     local f = function(task)   
@@ -253,25 +245,27 @@ _.each(function(k, r)
           else
             str =  rh['decoded']
           end
-          if not str then return end
+          if not str then return 0 end
           
           if r['function'] then
             str = r['function'](str)
           end
           local match = r['re']:match(str)
           if (match and not r['not']) or (not match and r['not']) then
-            task:insert_result(k, 1.0)
-            return
+            return 1
           end
         end
       elseif r['not'] then
-        task:insert_result(k, 1.0)
+        return 1
       end
+      
+      return 0
     end
     if r['score'] then
       rspamd_config:set_metric_symbol(k, r['score'], r['description'])
     end
-    rspamd_config:register_symbol(k, calculate_score(k), f)
+    --rspamd_config:register_symbol(k, calculate_score(k), f)
+    atoms[k] = f
   end,
   _.filter(function(k, r)
       return r['type'] == 'header' and r['header']
@@ -279,17 +273,18 @@ _.each(function(k, r)
     rules))
     
 -- Custom function rules
--- Header rules
 _.each(function(k, r)
     local f = function(task)
       if r['function'](task) then
-        task:insert_result(k, 1.0)
+        return 1
       end
+      return 0
     end
     if r['score'] then
       rspamd_config:set_metric_symbol(k, r['score'], r['description'])
     end
-    rspamd_config:register_symbol(k, calculate_score(k), f)
+    --rspamd_config:register_symbol(k, calculate_score(k), f)
+    atoms[k] = f
   end,
   _.filter(function(k, r)
       return r['type'] == 'function' and r['function']
@@ -304,17 +299,17 @@ _.each(function(k, r)
         for n, part in ipairs(parts) do
           -- Subject for optimization
           if (r['re']:match(part:get_content())) then
-            local s = r['re']:search(part:get_content())
-            task:insert_result(k, 1.0)
-            return
+            return 1
           end
         end
       end
+      return 0
     end
     if r['score'] then
       rspamd_config:set_metric_symbol(k, r['score'], r['description'])
     end
-    rspamd_config:register_symbol(k, calculate_score(k), f)
+    --rspamd_config:register_symbol(k, calculate_score(k), f)
+    atoms[k] = f
   end,
   _.filter(function(k, r)
       return r['type'] == 'part'
@@ -325,16 +320,75 @@ _.each(function(k, r)
 _.each(function(k, r)
     local f = function(task)
       if (r['re']:match(task:get_content())) then
-        task:insert_result(k, 1.0)
-        return
+        return 1
       end
+      return 0
     end
     if r['score'] then
       rspamd_config:set_metric_symbol(k, r['score'], r['description'])
     end
-    rspamd_config:register_symbol(k, calculate_score(k), f)
+    --rspamd_config:register_symbol(k, calculate_score(k), f)
+     atoms[k] = f
   end,
   _.filter(function(k, r)
       return r['type'] == 'message'
+    end,
+    rules))
+
+
+local sa_mempool = rspamd_mempool.create()
+
+local function parse_atom(str)
+  local atom = table.concat(_.totable(_.take_while(function(c)
+    if string.find(', \t()><+!|&\n', c) then
+      return false
+    end
+    return true
+  end, _.iter(str))), '')
+
+  return atom
+end
+
+local function process_atom(atom, task)
+  local atom_cb = atoms[atom]
+  if atom_cb then
+    return atom_cb(task)
+  else
+    --rspamd_logger.err('Cannot find atom ' .. atom)
+  end
+  return 0
+end
+
+-- Meta rules
+_.each(function(k, r)
+    local expression = nil
+    -- Meta function callback
+    local meta_cb = function(task)
+      local res = task:cache_get(k)
+      if res < 0 then
+        res = 0
+        if expression then
+          res = expression:process(task)
+        end
+        task:cache_set(k, res)
+      end
+      if res > 0 then
+        task:insert_result(k, res)
+      end
+    end
+    expression = rspamd_expression.create(r['meta'],  
+      {parse_atom, process_atom}, sa_mempool)
+    if not expression then
+      rspamd_logger.err('Cannot parse expression ' .. r['meta'])
+    else
+      if r['score'] then
+        rspamd_config:set_metric_symbol(k, r['score'], r['description'])
+      end
+      rspamd_config:register_symbol(k, calculate_score(k), meta_cb)
+      atoms[k] = meta_cb
+    end
+  end,
+  _.filter(function(k, r)
+      return r['type'] == 'meta'
     end,
     rules))
