@@ -458,7 +458,7 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 	struct symbol_remove_data *rd;
 	struct symbol *ms;
 	gint rc = 0;
-	gchar t;
+	gchar t = '\0';
 
 	if (isset (cd->checked, cd->composite->id * 2)) {
 		/* We have already checked this composite, so just return its value */
