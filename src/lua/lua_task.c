@@ -421,6 +421,22 @@ LUA_FUNCTION_DEF (task, learn);
  */
 LUA_FUNCTION_DEF (task, set_settings);
 
+/***
+ * @method task:cache_get(str)
+ * Return cached value for the specified string. Returns value less than 0 if str is not in the cache
+ * @param {string} str key to get from the cache
+ * @return {number} value of key or value less than 0 if a key has not been found
+ */
+LUA_FUNCTION_DEF (task, cache_get);
+
+/***
+ * @method task:cache_set(str, value)
+ * Write new or rewrite existing value of the cached key 'str'
+ * @param {string} str key to set in the cache
+ * @return {number} previous value of the key or value less than zero
+ */
+LUA_FUNCTION_DEF (task, cache_set);
+
 static const struct luaL_reg tasklib_f[] = {
 	LUA_INTERFACE_DEF (task, create_empty),
 	LUA_INTERFACE_DEF (task, create_from_buffer),
@@ -471,6 +487,8 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_metric_action),
 	LUA_INTERFACE_DEF (task, learn),
 	LUA_INTERFACE_DEF (task, set_settings),
+	LUA_INTERFACE_DEF (task, cache_get),
+	LUA_INTERFACE_DEF (task, cache_set),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -1891,6 +1909,40 @@ lua_task_set_settings (lua_State *L)
 	}
 
 	return 0;
+}
+
+static gint
+lua_task_cache_get (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *k = luaL_checkstring (L, 2);
+	gint res = RSPAMD_TASK_CACHE_NO_VALUE;
+
+	if (task && k) {
+		res = rspamd_task_re_cache_check (task, k);
+	}
+
+	lua_pushnumber (L, res);
+
+	return 1;
+}
+
+static gint
+lua_task_cache_set (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *k = luaL_checkstring (L, 2);
+	gint res = RSPAMD_TASK_CACHE_NO_VALUE, param = RSPAMD_TASK_CACHE_NO_VALUE;;
+
+	param = lua_tonumber (L, 3);
+	if (task && k && param > 0) {
+		res = rspamd_task_re_cache_check (task, k);
+		rspamd_task_re_cache_add (task, k, param);
+	}
+
+	lua_pushnumber (L, res);
+
+	return 1;
 }
 
 static gint
