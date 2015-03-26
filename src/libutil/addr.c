@@ -558,7 +558,7 @@ rspamd_inet_address_recvfrom (gint fd, void *buf, gsize len, gint fl,
 
 	if (target) {
 		addr = rspamd_inet_addr_create (su.sa.sa_family);
-		addr->slen = len;
+		addr->slen = slen;
 
 		if (addr->af == AF_UNIX) {
 			addr->u.un = g_slice_alloc (sizeof (*addr->u.un));
