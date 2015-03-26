@@ -333,8 +333,8 @@ rspamd_ast_add_node (GArray *operands, struct rspamd_expression_elt *op)
 	}
 	else {
 		/* For binary operators we might want to examine chains */
-		a1 = rspamd_expr_stack_elt_pop (operands);
 		a2 = rspamd_expr_stack_elt_pop (operands);
+		a1 = rspamd_expr_stack_elt_pop (operands);
 
 		/* First try with a1 */
 		test = a1;
