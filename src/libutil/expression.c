@@ -384,6 +384,7 @@ rspamd_ast_priority_traverse (GNode *node, gpointer d)
 			cnt += cur_elt->priority;
 			cur = cur->next;
 		}
+		elt->priority = cnt;
 	}
 	else {
 		/* It is atom or limit */
@@ -402,8 +403,6 @@ rspamd_ast_priority_traverse (GNode *node, gpointer d)
 		}
 	}
 
-	elt->priority = cnt;
-
 	return FALSE;
 }
 
@@ -412,7 +411,7 @@ rspamd_ast_priority_cmp (GNode *a, GNode *b)
 {
 	struct rspamd_expression_elt *ea = a->data, *eb = b->data;
 
-	return ea->priority - eb->priority;
+	return eb->priority - ea->priority;
 }
 
 static gboolean
