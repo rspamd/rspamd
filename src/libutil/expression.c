@@ -68,6 +68,7 @@ struct rspamd_expression {
 	const struct rspamd_atom_subr *subr;
 	GArray *expressions;
 	GArray *expression_stack;
+	GNode *ast;
 };
 
 static GQuark
@@ -77,27 +78,40 @@ rspamd_expr_quark (void)
 }
 
 static void
+rspamd_expr_stack_elt_push (GArray *stack,
+		gpointer elt)
+{
+	g_array_append_val (stack, elt);
+}
+
+static gpointer
+rspamd_expr_stack_elt_pop (GArray *stack)
+{
+	gpointer e;
+	gint idx;
+
+	if (stack->len == 0) {
+		return NULL;
+	}
+
+	idx = stack->len - 1;
+	e = g_array_index (stack, gpointer, idx);
+	g_array_remove_index_fast (stack, idx);
+
+	return e;
+}
+
+static void
 rspamd_expr_stack_push (struct rspamd_expression *expr,
 		gpointer elt)
 {
-	g_array_append_val (expr->expression_stack, elt);
+	rspamd_expr_stack_elt_push (expr->expression_stack, elt);
 }
 
 static gpointer
 rspamd_expr_stack_pop (struct rspamd_expression *expr)
 {
-	gpointer e;
-	gint idx;
-
-	if (expr->expression_stack->len == 0) {
-		return NULL;
-	}
-
-	idx = expr->expression_stack->len - 1;
-	e = g_array_index (expr->expression_stack, gpointer, idx);
-	g_array_remove_index_fast (expr->expression_stack, idx);
-
-	return e;
+	return rspamd_expr_stack_elt_pop (expr->expression_stack);
 }
 
 /*
@@ -294,6 +308,7 @@ rspamd_expression_destroy (struct rspamd_expression *expr)
 
 		g_array_free (expr->expressions, TRUE);
 		g_array_free (expr->expression_stack, TRUE);
+		g_node_destroy (expr->ast);
 	}
 }
 
@@ -333,6 +348,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 	e = g_slice_alloc (sizeof (*e));
 	e->expressions = g_array_new (FALSE, FALSE,
 			sizeof (struct rspamd_expression_elt));
+	e->ast = NULL;
 	e->expression_stack = g_array_sized_new (FALSE, FALSE, sizeof (gpointer), 32);
 	e->subr = subr;
 
