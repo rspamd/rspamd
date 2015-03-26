@@ -77,6 +77,9 @@ rspamd_expr_quark (void)
 	return g_quark_from_static_string ("rspamd-expression");
 }
 
+
+#define G_ARRAY_LAST(ar, type) (&g_array_index((ar), type, (ar)->len - 1))
+
 static void
 rspamd_expr_stack_elt_push (GArray *stack,
 		gpointer elt)
@@ -100,6 +103,7 @@ rspamd_expr_stack_elt_pop (GArray *stack)
 
 	return e;
 }
+
 
 static void
 rspamd_expr_stack_push (struct rspamd_expression *expr,
@@ -312,6 +316,57 @@ rspamd_expression_destroy (struct rspamd_expression *expr)
 	}
 }
 
+static void
+rspamd_ast_add_node (GArray *operands, struct rspamd_expression_elt *op)
+{
+
+	GNode *res, *a1, *a2, *test;
+	struct rspamd_expression_elt *test_elt;
+
+	g_assert (op->type == ELT_OP);
+
+	if (op->p.op == OP_NOT) {
+		/* Unary operator */
+		res = g_node_new (op);
+		a1 = rspamd_expr_stack_elt_pop (operands);
+		g_node_append (res, a1);
+	}
+	else {
+		/* For binary operators we might want to examine chains */
+		a1 = rspamd_expr_stack_elt_pop (operands);
+		a2 = rspamd_expr_stack_elt_pop (operands);
+
+		/* First try with a1 */
+		test = a1;
+		test_elt = test->data;
+
+		if (test_elt->type == ELT_OP && test_elt->p.op == op->p.op) {
+			/* Add children */
+			g_node_append (test, a2);
+			rspamd_expr_stack_elt_push (operands, a1);
+			return;
+		}
+		/* Now test a2 */
+		test = a2;
+		test_elt = test->data;
+
+		if (test_elt->type == ELT_OP && test_elt->p.op == op->p.op) {
+			/* Add children */
+			g_node_append (test, a1);
+			rspamd_expr_stack_elt_push (operands, a2);
+			return;
+		}
+
+		/* No optimizations possible, so create new level */
+		res = g_node_new (op);
+		g_node_append (res, a1);
+		g_node_append (res, a2);
+	}
+
+	/* Push back resulting node to the stack */
+	rspamd_expr_stack_elt_push (operands, res);
+}
+
 gboolean
 rspamd_parse_expression (const gchar *line, gsize len,
 		const struct rspamd_atom_subr *subr, gpointer subr_data,
@@ -324,6 +379,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 	rspamd_regexp_t *num_re;
 	enum rspamd_expression_op op, op_stack;
 	const gchar *p, *c, *end;
+	GArray *operand_stack;
 
 	enum {
 		PARSE_ATOM = 0,
@@ -348,6 +404,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 	e = g_slice_alloc (sizeof (*e));
 	e->expressions = g_array_new (FALSE, FALSE,
 			sizeof (struct rspamd_expression_elt));
+	operand_stack = g_array_sized_new (FALSE, FALSE, sizeof (gpointer), 32);
 	e->ast = NULL;
 	e->expression_stack = g_array_sized_new (FALSE, FALSE, sizeof (gpointer), 32);
 	e->subr = subr;
@@ -398,6 +455,9 @@ rspamd_parse_expression (const gchar *line, gsize len,
 					elt.type = ELT_ATOM;
 					elt.p.atom = atom;
 					g_array_append_val (e->expressions, elt);
+					rspamd_expr_stack_elt_push (operand_stack,
+							g_node_new (G_ARRAY_LAST (e->expressions,
+							struct rspamd_expression_elt)));
 				}
 			}
 			break;
@@ -414,6 +474,9 @@ rspamd_parse_expression (const gchar *line, gsize len,
 					elt.type = ELT_LIMIT;
 					elt.p.lim.val = strtoul (c, NULL, 10);
 					g_array_append_val (e->expressions, elt);
+					rspamd_expr_stack_elt_push (operand_stack,
+							g_node_new (G_ARRAY_LAST (e->expressions,
+							struct rspamd_expression_elt)));
 					c = p;
 					state = SKIP_SPACES;
 				}
@@ -462,6 +525,9 @@ rspamd_parse_expression (const gchar *line, gsize len,
 						elt.type = ELT_OP;
 						elt.p.op = op;
 						g_array_append_val (e->expressions, elt);
+						rspamd_ast_add_node (operand_stack,
+							G_ARRAY_LAST (e->expressions,
+							struct rspamd_expression_elt));
 					}
 
 				} while (op != OP_OBRACE);
@@ -496,6 +562,9 @@ rspamd_parse_expression (const gchar *line, gsize len,
 						elt.type = ELT_OP;
 						elt.p.op = op_stack;
 						g_array_append_val (e->expressions, elt);
+						rspamd_ast_add_node (operand_stack,
+								G_ARRAY_LAST (e->expressions,
+								struct rspamd_expression_elt));
 					}
 					else {
 						/* Push op_stack back */
@@ -531,6 +600,9 @@ rspamd_parse_expression (const gchar *line, gsize len,
 			elt.type = ELT_OP;
 			elt.p.op = op_stack;
 			g_array_append_val (e->expressions, elt);
+			rspamd_ast_add_node (operand_stack,
+					G_ARRAY_LAST (e->expressions,
+					struct rspamd_expression_elt));
 		}
 		else {
 			g_set_error (err, rspamd_expr_quark(), 600,
@@ -538,6 +610,10 @@ rspamd_parse_expression (const gchar *line, gsize len,
 			goto err;
 		}
 	}
+
+	g_assert (operand_stack->len == 1);
+	e->ast = rspamd_expr_stack_elt_pop (operand_stack);
+	g_array_free (operand_stack, TRUE);
 
 	if (target) {
 		*target = e;
