@@ -24,12 +24,12 @@ All code contributed must have either 2 clause BSD license or any license from [
 #### List of mentors available for the project via IRC and Google groups mailing list:
 
 |---
-| Mentor | IRC nick | Role
-|:-|:-|-:|
-| Vsevolod Stakhov | cebka | Mentor, Organization Administrator
-| Andrej Zverev | az | Mentor, Backup Administrator
-| Andrew Lewis | notkoos | Mentor
-| Alexey Savelyev | AL | Mentor
+| Mentor | IRC nick | E-Mail | Role
+|:-|:-|:-|-:|
+| Vsevolod Stakhov | cebka | vsevolod@rspamd.com | Mentor, Organization Administrator
+| Andrej Zverev | az | az@rspamd.com | Mentor, Backup Administrator
+| Andrew Lewis | notkoos | notkoos@rspamd.com | Mentor
+| Alexey Savelyev | AL | | Mentor
 
 ## List of projects available
 
