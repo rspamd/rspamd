@@ -916,66 +916,74 @@ rspamd_process_expression (struct rspamd_expression *expr, gpointer data)
 	return ret;
 }
 
+static gboolean
+rspamd_ast_string_traverse (GNode *n, gpointer d)
+{
+	GString *res = d;
+	struct rspamd_expression_elt *elt = n->data;
+	const char *op_str = NULL;
+
+	if (elt->type == ELT_ATOM) {
+		g_string_append_len (res, elt->p.atom->str, elt->p.atom->len);
+	}
+	else if (elt->type == ELT_LIMIT) {
+		rspamd_printf_gstring (res, "%d", elt->p.lim.val);
+	}
+	else {
+		switch (elt->p.op) {
+		case OP_AND:
+			op_str = "&";
+			break;
+		case OP_OR:
+			op_str = "|";
+			break;
+		case OP_MULT:
+			op_str = "*";
+			break;
+		case OP_PLUS:
+			op_str = "+";
+			break;
+		case OP_NOT:
+			op_str = "!";
+			break;
+		case OP_GE:
+			op_str = ">=";
+			break;
+		case OP_GT:
+			op_str = ">";
+			break;
+		case OP_LE:
+			op_str = "<=";
+			break;
+		case OP_LT:
+			op_str = ">=";
+			break;
+		default:
+			op_str = "???";
+			break;
+		}
+		g_string_append (res, op_str);
+	}
+
+	g_string_append_c (res, ' ');
+
+	return FALSE;
+}
+
 GString *
 rspamd_expression_tostring (struct rspamd_expression *expr)
 {
 	GString *res;
-	struct rspamd_expression_elt *elt;
-	const char *op_str = NULL;
-	guint i;
 
 	g_assert (expr != NULL);
 
 	res = g_string_new (NULL);
+	g_node_traverse (expr->ast, G_POST_ORDER, G_TRAVERSE_ALL, -1,
+			rspamd_ast_string_traverse, res);
 
-	for (i = 0; i < expr->expressions->len; i ++) {
-		elt = &g_array_index (expr->expressions, struct rspamd_expression_elt, i);
-
-		if (elt->type == ELT_ATOM) {
-			g_string_append_len (res, elt->p.atom->str, elt->p.atom->len);
-		}
-		else if (elt->type == ELT_LIMIT) {
-			rspamd_printf_gstring (res, "%d", elt->p.lim.val);
-		}
-		else {
-			switch (elt->p.op) {
-			case OP_AND:
-				op_str = "&";
-				break;
-			case OP_OR:
-				op_str = "|";
-				break;
-			case OP_MULT:
-				op_str = "*";
-				break;
-			case OP_PLUS:
-				op_str = "+";
-				break;
-			case OP_NOT:
-				op_str = "!";
-				break;
-			case OP_GE:
-				op_str = ">=";
-				break;
-			case OP_GT:
-				op_str = ">";
-				break;
-			case OP_LE:
-				op_str = "<=";
-				break;
-			case OP_LT:
-				op_str = ">=";
-				break;
-			default:
-				op_str = "???";
-				break;
-			}
-			g_string_append (res, op_str);
-		}
-
-		if (i != expr->expressions->len - 1) {
-			g_string_append_c (res, ' ');
-		}
+	/* Last space */
+	if (res->len > 0) {
+		g_string_erase (res, res->len - 1, 1);
 	}
 
 	return res;
