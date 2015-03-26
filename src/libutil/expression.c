@@ -354,7 +354,7 @@ rspamd_ast_add_node (GPtrArray *operands, struct rspamd_expression_elt *op)
 
 		if (test_elt->type == ELT_OP && test_elt->p.op == op->p.op) {
 			/* Add children */
-			g_node_append (test, a1);
+			g_node_prepend (test, a1);
 			rspamd_expr_stack_elt_push (operands, a2);
 			return;
 		}
@@ -418,15 +418,9 @@ rspamd_ast_priority_cmp (GNode *a, GNode *b)
 static gboolean
 rspamd_ast_resort_traverse (GNode *node, gpointer unused)
 {
-	GNode *cur;
-
-	cur = node->children;
-
-	if (cur) {
-		DL_SORT (cur, rspamd_ast_priority_cmp);
+	if (node->children) {
+		DL_SORT (node->children, rspamd_ast_priority_cmp);
 	}
-
-	node->children = cur;
 
 	return FALSE;
 }
