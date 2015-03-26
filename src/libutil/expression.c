@@ -26,6 +26,7 @@
 #include "expression.h"
 #include "printf.h"
 #include "regexp.h"
+#include "utlist.h"
 
 #define RSPAMD_EXPR_FLAG_NEGATE (1 << 0)
 #define RSPAMD_EXPR_FLAG_PROCESSED (1 << 1)
@@ -62,6 +63,7 @@ struct rspamd_expression_elt {
 	} p;
 	gint flags;
 	gint value;
+	gint priority;
 };
 
 struct rspamd_expression {
@@ -367,6 +369,68 @@ rspamd_ast_add_node (GArray *operands, struct rspamd_expression_elt *op)
 	rspamd_expr_stack_elt_push (operands, res);
 }
 
+static gboolean
+rspamd_ast_priority_traverse (GNode *node, gpointer d)
+{
+	struct rspamd_expression_elt *elt = node->data, *cur_elt;
+	struct rspamd_expression *expr = d;
+	gint cnt = 0;
+	GNode *cur;
+
+	if (node->children) {
+		cur = node->children;
+		while (cur) {
+			cur_elt = cur->data;
+			cnt += cur_elt->priority;
+			cur = cur->next;
+		}
+	}
+	else {
+		/* It is atom or limit */
+		g_assert (elt->type != ELT_OP);
+
+		if (elt->type == ELT_LIMIT) {
+			/* Always push limit first */
+			elt->priority = G_MAXINT;
+		}
+		else {
+			elt->priority = 0;
+
+			if (expr->subr->priority != NULL) {
+				elt->priority = expr->subr->priority (elt->p.atom);
+			}
+		}
+	}
+
+	elt->priority = cnt;
+
+	return FALSE;
+}
+
+static gint
+rspamd_ast_priority_cmp (GNode *a, GNode *b)
+{
+	struct rspamd_expression_elt *ea = a->data, *eb = b->data;
+
+	return ea->priority - eb->priority;
+}
+
+static gboolean
+rspamd_ast_resort_traverse (GNode *node, gpointer unused)
+{
+	GNode *cur;
+
+	cur = node->children;
+
+	if (cur) {
+		DL_SORT (cur, rspamd_ast_priority_cmp);
+	}
+
+	node->children = cur;
+
+	return FALSE;
+}
+
 gboolean
 rspamd_parse_expression (const gchar *line, gsize len,
 		const struct rspamd_atom_subr *subr, gpointer subr_data,
@@ -614,6 +678,14 @@ rspamd_parse_expression (const gchar *line, gsize len,
 	g_assert (operand_stack->len == 1);
 	e->ast = rspamd_expr_stack_elt_pop (operand_stack);
 	g_array_free (operand_stack, TRUE);
+
+	/* Set priorities for branches */
+	g_node_traverse (e->ast, G_POST_ORDER, G_TRAVERSE_ALL, -1,
+			rspamd_ast_priority_traverse, e);
+
+	/* Now set less expensive branches to be evaluated first */
+	g_node_traverse (e->ast, G_POST_ORDER, G_TRAVERSE_NON_LEAVES, -1,
+			rspamd_ast_resort_traverse, NULL);
 
 	if (target) {
 		*target = e;
