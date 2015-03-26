@@ -69,7 +69,7 @@ struct rspamd_expression_elt {
 struct rspamd_expression {
 	const struct rspamd_atom_subr *subr;
 	GArray *expressions;
-	GArray *expression_stack;
+	GPtrArray *expression_stack;
 	GNode *ast;
 };
 
@@ -83,14 +83,14 @@ rspamd_expr_quark (void)
 #define G_ARRAY_LAST(ar, type) (&g_array_index((ar), type, (ar)->len - 1))
 
 static void
-rspamd_expr_stack_elt_push (GArray *stack,
+rspamd_expr_stack_elt_push (GPtrArray *stack,
 		gpointer elt)
 {
-	g_array_append_val (stack, elt);
+	g_ptr_array_add (stack, elt);
 }
 
 static gpointer
-rspamd_expr_stack_elt_pop (GArray *stack)
+rspamd_expr_stack_elt_pop (GPtrArray *stack)
 {
 	gpointer e;
 	gint idx;
@@ -100,8 +100,8 @@ rspamd_expr_stack_elt_pop (GArray *stack)
 	}
 
 	idx = stack->len - 1;
-	e = g_array_index (stack, gpointer, idx);
-	g_array_remove_index_fast (stack, idx);
+	e = g_ptr_array_index (stack, idx);
+	g_ptr_array_remove_index_fast (stack, idx);
 
 	return e;
 }
@@ -313,13 +313,13 @@ rspamd_expression_destroy (struct rspamd_expression *expr)
 		}
 
 		g_array_free (expr->expressions, TRUE);
-		g_array_free (expr->expression_stack, TRUE);
+		g_ptr_array_free (expr->expression_stack, TRUE);
 		g_node_destroy (expr->ast);
 	}
 }
 
 static void
-rspamd_ast_add_node (GArray *operands, struct rspamd_expression_elt *op)
+rspamd_ast_add_node (GPtrArray *operands, struct rspamd_expression_elt *op)
 {
 
 	GNode *res, *a1, *a2, *test;
@@ -431,6 +431,17 @@ rspamd_ast_resort_traverse (GNode *node, gpointer unused)
 	return FALSE;
 }
 
+static struct rspamd_expression_elt *
+rspamd_expr_dup_elt (rspamd_mempool_t *pool, struct rspamd_expression_elt *elt)
+{
+	struct rspamd_expression_elt *n;
+
+	n = rspamd_mempool_alloc (pool, sizeof (*n));
+	memcpy (n, elt, sizeof (*n));
+
+	return n;
+}
+
 gboolean
 rspamd_parse_expression (const gchar *line, gsize len,
 		const struct rspamd_atom_subr *subr, gpointer subr_data,
@@ -443,7 +454,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 	rspamd_regexp_t *num_re;
 	enum rspamd_expression_op op, op_stack;
 	const gchar *p, *c, *end;
-	GArray *operand_stack;
+	GPtrArray *operand_stack;
 
 	enum {
 		PARSE_ATOM = 0,
@@ -468,9 +479,9 @@ rspamd_parse_expression (const gchar *line, gsize len,
 	e = g_slice_alloc (sizeof (*e));
 	e->expressions = g_array_new (FALSE, FALSE,
 			sizeof (struct rspamd_expression_elt));
-	operand_stack = g_array_sized_new (FALSE, FALSE, sizeof (gpointer), 32);
+	operand_stack = g_ptr_array_sized_new (32);
 	e->ast = NULL;
-	e->expression_stack = g_array_sized_new (FALSE, FALSE, sizeof (gpointer), 32);
+	e->expression_stack = g_ptr_array_sized_new (32);
 	e->subr = subr;
 
 	/* Shunting-yard algorithm */
@@ -520,8 +531,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 					elt.p.atom = atom;
 					g_array_append_val (e->expressions, elt);
 					rspamd_expr_stack_elt_push (operand_stack,
-							g_node_new (G_ARRAY_LAST (e->expressions,
-							struct rspamd_expression_elt)));
+							g_node_new (rspamd_expr_dup_elt (pool, &elt)));
 				}
 			}
 			break;
@@ -539,8 +549,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 					elt.p.lim.val = strtoul (c, NULL, 10);
 					g_array_append_val (e->expressions, elt);
 					rspamd_expr_stack_elt_push (operand_stack,
-							g_node_new (G_ARRAY_LAST (e->expressions,
-							struct rspamd_expression_elt)));
+							g_node_new (rspamd_expr_dup_elt (pool, &elt)));
 					c = p;
 					state = SKIP_SPACES;
 				}
@@ -590,8 +599,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 						elt.p.op = op;
 						g_array_append_val (e->expressions, elt);
 						rspamd_ast_add_node (operand_stack,
-							G_ARRAY_LAST (e->expressions,
-							struct rspamd_expression_elt));
+								rspamd_expr_dup_elt (pool, &elt));
 					}
 
 				} while (op != OP_OBRACE);
@@ -627,8 +635,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 						elt.p.op = op_stack;
 						g_array_append_val (e->expressions, elt);
 						rspamd_ast_add_node (operand_stack,
-								G_ARRAY_LAST (e->expressions,
-								struct rspamd_expression_elt));
+								rspamd_expr_dup_elt (pool, &elt));
 					}
 					else {
 						/* Push op_stack back */
@@ -665,8 +672,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 			elt.p.op = op_stack;
 			g_array_append_val (e->expressions, elt);
 			rspamd_ast_add_node (operand_stack,
-					G_ARRAY_LAST (e->expressions,
-					struct rspamd_expression_elt));
+					rspamd_expr_dup_elt (pool, &elt));
 		}
 		else {
 			g_set_error (err, rspamd_expr_quark(), 600,
@@ -677,7 +683,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 
 	g_assert (operand_stack->len == 1);
 	e->ast = rspamd_expr_stack_elt_pop (operand_stack);
-	g_array_free (operand_stack, TRUE);
+	g_ptr_array_free (operand_stack, TRUE);
 
 	/* Set priorities for branches */
 	g_node_traverse (e->ast, G_POST_ORDER, G_TRAVERSE_ALL, -1,
