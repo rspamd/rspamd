@@ -445,7 +445,8 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 	res = rspamd_mempool_alloc0 (pool, sizeof (*res));
 	res->len = clen;
 	res->str = line;
-	res->data = rspamd_mempool_strdup (pool, line);
+	res->data = rspamd_mempool_alloc (pool, clen + 1);
+	rspamd_strlcpy (res->data, line, clen + 1);
 
 	return res;
 }
@@ -453,7 +454,7 @@ static gint
 rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 {
 	struct composites_data *cd = (struct composites_data *)input;
-	const gchar *sym = atom->str;
+	const gchar *sym = atom->data;
 	struct rspamd_composite *ncomp;
 	struct symbol_remove_data *rd;
 	struct symbol *ms;
@@ -560,9 +561,11 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 
 	/* Checked bit */
 	setbit (cd->checked, comp->id * 2);
+
 	/* Result bit */
 	if (rc) {
 		setbit (cd->checked, comp->id * 2 + 1);
+		rspamd_task_insert_result_single (cd->task, key, 1.0, NULL);
 	}
 	else {
 		clrbit (cd->checked, comp->id * 2 + 1);
