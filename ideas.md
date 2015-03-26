@@ -25,7 +25,7 @@ All code contributed must have either 2 clause BSD license or any license from [
 
 |---
 | Mentor | IRC nick | E-Mail | Role
-|:-|:-|:-|-:|
+|:-|:-|-:|:-|
 | Vsevolod Stakhov | cebka | vsevolod@rspamd.com | Mentor, Organization Administrator
 | Andrej Zverev | az | az@rspamd.com | Mentor, Backup Administrator
 | Andrew Lewis | notkoos | notkoos@rspamd.com | Mentor
