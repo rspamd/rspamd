@@ -848,15 +848,14 @@ rspamd_ast_process_node (struct rspamd_expression *expr, GNode *node,
 			/* Save limit if we've found it */
 			val = rspamd_ast_process_node (expr, cld, data);
 
-			if (acc != G_MININT || cld->next == NULL) {
-				acc = rspamd_ast_do_op (elt, val, acc);
-
-				if (rspamd_ast_node_done (elt, parelt, acc, lim)) {
-					return acc;
-				}
-			}
-			else {
+			if (acc == G_MININT) {
 				acc = val;
+			}
+
+			acc = rspamd_ast_do_op (elt, val, acc);
+
+			if (rspamd_ast_node_done (elt, parelt, acc, lim)) {
+				return acc;
 			}
 		}
 		break;
