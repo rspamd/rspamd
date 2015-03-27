@@ -864,11 +864,20 @@ rspamd_ast_process_node (struct rspamd_expression *expr, GNode *node,
 	return acc;
 }
 
+static gboolean
+rspamd_ast_cleanup_traverse (GNode *n, gpointer d)
+{
+	struct rspamd_expression_elt *elt = n->data;
+
+	elt->value = 0;
+	elt->flags = 0;
+
+	return FALSE;
+}
+
 gint
 rspamd_process_expression (struct rspamd_expression *expr, gpointer data)
 {
-	struct rspamd_expression_elt *elt;
-	guint i;
 	gint ret = 0;
 
 	g_assert (expr != NULL);
@@ -878,11 +887,8 @@ rspamd_process_expression (struct rspamd_expression *expr, gpointer data)
 	ret = rspamd_ast_process_node (expr, expr->ast, data);
 
 	/* Cleanup */
-	for (i = 0; i < expr->expressions->len; i ++) {
-		elt = &g_array_index (expr->expressions, struct rspamd_expression_elt, i);
-		elt->value = 0;
-		elt->flags = 0;
-	}
+	g_node_traverse (expr->ast, G_IN_ORDER, G_TRAVERSE_ALL, -1,
+			rspamd_ast_cleanup_traverse, NULL);
 
 	return ret;
 }
