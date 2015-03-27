@@ -811,21 +811,21 @@ rspamd_ast_process_node (struct rspamd_expression *expr, GNode *node,
 {
 	struct rspamd_expression_elt *elt, *celt, *parelt;
 	GNode *cld;
-	gint acc = 0, lim = G_MININT, val;
+	gint acc = G_MININT, lim = G_MININT, val;
 
 	elt = node->data;
 
 	switch (elt->type) {
 	case ELT_ATOM:
-		if (elt->flags & RSPAMD_EXPR_FLAG_PROCESSED) {
-			return elt->value;
-		}
-		else {
+		if (!(elt->flags & RSPAMD_EXPR_FLAG_PROCESSED)) {
 			elt->value = expr->subr->process (data, elt->p.atom);
 			elt->flags |= RSPAMD_EXPR_FLAG_PROCESSED;
 		}
+
+		return elt->value;
 		break;
 	case ELT_LIMIT:
+
 		return elt->p.lim.val;
 		break;
 	case ELT_OP:
@@ -838,7 +838,7 @@ rspamd_ast_process_node (struct rspamd_expression *expr, GNode *node,
 			celt = node->parent->children->data;
 
 			if (celt->type == ELT_LIMIT) {
-				lim = celt->value;
+				lim = celt->p.lim.val;
 			}
 		}
 
@@ -848,10 +848,15 @@ rspamd_ast_process_node (struct rspamd_expression *expr, GNode *node,
 			/* Save limit if we've found it */
 			val = rspamd_ast_process_node (expr, cld, data);
 
-			acc = rspamd_ast_do_op (elt, val, acc);
+			if (acc != G_MININT || cld->next == NULL) {
+				acc = rspamd_ast_do_op (elt, val, acc);
 
-			if (rspamd_ast_node_done (elt, parelt, acc, lim)) {
-				return acc;
+				if (rspamd_ast_node_done (elt, parelt, acc, lim)) {
+					return acc;
+				}
+			}
+			else {
+				acc = val;
 			}
 		}
 		break;
@@ -860,281 +865,18 @@ rspamd_ast_process_node (struct rspamd_expression *expr, GNode *node,
 	return acc;
 }
 
-#define CHOSE_OPERAND(e1, e2) ((e1)->flags & RSPAMD_EXPR_FLAG_PROCESSED ? (e1) : \
-	((e2)->flags & RSPAMD_EXPR_FLAG_PROCESSED) ? (e2) :						\
-	((e1)->p.atom->priority >= (e2)->p.atom->priority) ? 					\
-	(e1) : (e2))
-#define CHOOSE_REMAIN(e1, e2, es) ((es) == (e1) ? (e2) : (e1))
-#define PROCESS_ELT(expr, e)	do {										\
-		g_assert ((e)->type != ELT_OP);										\
-		if (!((e)->flags & RSPAMD_EXPR_FLAG_PROCESSED)) {					\
-			if ((e)->type == ELT_ATOM) {									\
-				(e)->value = (expr)->subr->process (data, (e)->p.atom);		\
-			}																\
-			else {															\
-				(e)->value = (e)->p.lim.val;								\
-			}																\
-			(e)->flags |= RSPAMD_EXPR_FLAG_PROCESSED;						\
-			if ((e)->flags & RSPAMD_EXPR_FLAG_NEGATE) {						\
-				(e)->flags &= ~RSPAMD_EXPR_FLAG_NEGATE;						\
-				(e)->value = !(e)->value;									\
-			}																\
-		}																	\
-	} while (0)
-
 gint
 rspamd_process_expression (struct rspamd_expression *expr, gpointer data)
 {
-	struct rspamd_expression_elt *elt, *st_elt[2], *ev, *lim = NULL,
-			*cmp_op = NULL, *check;
-	guint i, j, cmp_pos = 0;
-	gint cur_value = 0, ret = 0;
-	gboolean done = FALSE;
+	struct rspamd_expression_elt *elt;
+	guint i;
+	gint ret = 0;
 
 	g_assert (expr != NULL);
 	/* Ensure that stack is empty at this point */
 	g_assert (expr->expression_stack->len == 0);
 
-	/* Go through the whole expression */
-	for (i = 0; i < expr->expressions->len; i ++) {
-		elt = &g_array_index (expr->expressions, struct rspamd_expression_elt, i);
-
-		if (elt->type == ELT_ATOM || elt->type == ELT_LIMIT) {
-			/* Push this value to the stack without processing */
-			rspamd_expr_stack_push (expr, elt);
-			if (elt->type == ELT_LIMIT) {
-				/* Save for optimizator */
-				lim = elt;
-			}
-		}
-		else {
-			/*
-			 * Here we can process atoms on stack and apply
-			 * some optimizations for them
-			 */
-			g_assert (expr->expression_stack->len > 0);
-
-			switch (elt->p.op) {
-			case OP_NOT:
-				/* Just setup flag for the atom on top of the stack */
-				st_elt[0] = rspamd_expr_stack_pop (expr);
-				g_assert (st_elt[0]->type == ELT_ATOM);
-
-				if (st_elt[0]->flags & RSPAMD_EXPR_FLAG_NEGATE) {
-					st_elt[0]->flags &= ~RSPAMD_EXPR_FLAG_NEGATE;
-				}
-				else {
-					st_elt[0]->flags |= RSPAMD_EXPR_FLAG_NEGATE;
-				}
-
-				if (st_elt[0]->flags & RSPAMD_EXPR_FLAG_PROCESSED) {
-					/* Inverse the value */
-					if ((st_elt[0]->flags & RSPAMD_EXPR_FLAG_NEGATE)) {
-						st_elt[0]->value = !st_elt[0]->value;
-					}
-				}
-
-				rspamd_expr_stack_push (expr, st_elt[0]);
-				break;
-			case OP_OR:
-				/* Evaluate first, if it evaluates to true, then push true */
-				g_assert (expr->expression_stack->len > 1);
-				st_elt[0] = rspamd_expr_stack_pop (expr);
-				st_elt[1] = rspamd_expr_stack_pop (expr);
-				ev = CHOSE_OPERAND (st_elt[0], st_elt[1]);
-				PROCESS_ELT (expr, ev);
-
-				if (ev->value) {
-					rspamd_expr_stack_push (expr, ev);
-				}
-				else {
-					ev = CHOOSE_REMAIN (st_elt[0], st_elt[1], ev);
-					PROCESS_ELT (expr, ev);
-					/* Push the remaining op */
-					rspamd_expr_stack_push (expr, ev);
-				}
-				break;
-			case OP_AND:
-				/* Evaluate first, if it evaluates to false, then push false */
-				g_assert (expr->expression_stack->len > 1);
-				st_elt[0] = rspamd_expr_stack_pop (expr);
-				st_elt[1] = rspamd_expr_stack_pop (expr);
-				ev = CHOSE_OPERAND (st_elt[0], st_elt[1]);
-				PROCESS_ELT (expr, ev);
-
-				if (!ev->value) {
-					rspamd_expr_stack_push (expr, ev);
-				}
-				else {
-					ev = CHOOSE_REMAIN (st_elt[0], st_elt[1], ev);
-					PROCESS_ELT (expr, ev);
-					/* Push the remaining op */
-					rspamd_expr_stack_push (expr, ev);
-				}
-				break;
-			case OP_PLUS: {
-				/* First we search for a comparision operator */
-				if (lim == NULL || cmp_op == NULL) {
-					for (j = i + 1; j < expr->expressions->len; j ++) {
-						check = &g_array_index (expr->expressions,
-								struct rspamd_expression_elt, j);
-						if (check->type == ELT_LIMIT && lim == NULL) {
-							lim = check;
-						}
-						else if (check->type == ELT_OP && check->p.op >= OP_LT &&
-							cmp_op == NULL) {
-							cmp_op = check;
-							cmp_pos = j;
-						}
-
-						if (cmp_op && lim) {
-							break;
-						}
-					}
-				}
-				g_assert (cmp_op != NULL && lim != NULL);
-
-				g_assert (expr->expression_stack->len > 1);
-				st_elt[0] = rspamd_expr_stack_pop (expr);
-				st_elt[1] = rspamd_expr_stack_pop (expr);
-				ev = CHOSE_OPERAND (st_elt[0], st_elt[1]);
-				PROCESS_ELT (expr, ev);
-				cur_value = ev->value;
-				ev = CHOOSE_REMAIN (st_elt[0], st_elt[1], ev);
-				PROCESS_ELT (expr, ev);
-				cur_value += ev->value;
-				ev->value = cur_value;
-				/* Now we can check the value against limit */
-				switch (cmp_op->p.op) {
-				case OP_LT:
-					if (cur_value >= lim->p.lim.val) {
-						ev->value = 0;
-						done = TRUE;
-					}
-					break;
-				case OP_LE:
-					if (cur_value > lim->p.lim.val) {
-						ev->value = 0;
-						done = TRUE;
-					}
-					break;
-				case OP_GT:
-					if (cur_value > lim->p.lim.val) {
-						ev->value = 1;
-						done = TRUE;
-					}
-					break;
-				case OP_GE:
-					if (cur_value >= lim->p.lim.val) {
-						ev->value = 1;
-						done = TRUE;
-					}
-					break;
-				default:
-					g_assert (0);
-					break;
-				}
-
-				/* If we done, then we go forward and skip remaining items */
-				if (done) {
-					/* Remove extra elements left on the stack */
-					for (j = i + 1; j < cmp_pos - 1; j ++) {
-						check = &g_array_index (expr->expressions,
-								struct rspamd_expression_elt, j);
-						if (check->type == ELT_OP && check->p.op == OP_PLUS) {
-							rspamd_expr_stack_pop (expr);
-						}
-					}
-
-					/* Push the final result */
-					rspamd_expr_stack_push (expr, ev);
-					i = cmp_pos;
-					done = FALSE;
-					lim = NULL;
-					cur_value = 0;
-					cmp_op = NULL;
-				}
-				else {
-					rspamd_expr_stack_push (expr, ev);
-				}
-				break;
-			}
-			case OP_LT:
-			case OP_LE:
-			case OP_GT:
-			case OP_GE: {
-				g_assert (expr->expression_stack->len > 1);
-				st_elt[0] = rspamd_expr_stack_pop (expr);
-				st_elt[1] = rspamd_expr_stack_pop (expr);
-
-				if (st_elt[0]->type == ELT_LIMIT) {
-					lim = st_elt[0];
-					ev = st_elt[1];
-				}
-				else {
-					lim = st_elt[1];
-					ev = st_elt[0];
-				}
-
-				g_assert (lim->type == ELT_LIMIT && ev->type == ELT_ATOM);
-				cur_value = ev->value;
-
-				switch (elt->p.op) {
-				case OP_LT:
-					if (cur_value >= lim->p.lim.val) {
-						ev->value = 0;
-					}
-					else {
-						ev->value = 1;
-					}
-					break;
-				case OP_LE:
-					if (cur_value > lim->p.lim.val) {
-						ev->value = 0;
-					}
-					else {
-						ev->value = 1;
-					}
-					break;
-				case OP_GT:
-					if (cur_value > lim->p.lim.val) {
-						ev->value = 1;
-					}
-					else {
-						ev->value = 0;
-					}
-					break;
-				case OP_GE:
-					if (cur_value >= lim->p.lim.val) {
-						ev->value = 1;
-					}
-					else {
-						ev->value = 0;
-					}
-					break;
-				default:
-					g_assert (0);
-					break;
-				}
-
-				done = FALSE;
-				lim = NULL;
-				cur_value = 0;
-				cmp_op = NULL;
-				rspamd_expr_stack_push (expr, ev);
-				break;
-			}
-			default:
-				g_assert (0);
-				break;
-			}
-		}
-	}
-
-	g_assert (expr->expression_stack->len == 1);
-	ev = rspamd_expr_stack_pop (expr);
-	PROCESS_ELT (expr, ev);
-	ret = ev->value;
+	ret = rspamd_ast_process_node (expr, expr->ast, data);
 
 	/* Cleanup */
 	for (i = 0; i < expr->expressions->len; i ++) {
