@@ -702,6 +702,164 @@ err:
 	return FALSE;
 }
 
+static gboolean
+rspamd_ast_node_done (struct rspamd_expression_elt *elt,
+		struct rspamd_expression_elt *parelt, gint acc, gint lim)
+{
+	gboolean ret = FALSE;
+
+	g_assert (elt->type == ELT_OP);
+
+	switch (elt->p.op) {
+	case OP_NOT:
+		ret = TRUE;
+		break;
+	case OP_PLUS:
+		if (parelt && lim > 0) {
+			g_assert (parelt->type == ELT_OP);
+
+			switch (parelt->p.op) {
+			case OP_GE:
+				ret = acc >= lim;
+				break;
+			case OP_GT:
+				ret = acc > lim;
+				break;
+			case OP_LE:
+				ret = acc <= lim;
+				break;
+			case OP_LT:
+				ret = acc < lim;
+				break;
+			default:
+				ret = FALSE;
+				break;
+			}
+		}
+		break;
+	case OP_GE:
+		ret = acc >= lim;
+		break;
+	case OP_GT:
+		ret = acc > lim;
+		break;
+	case OP_LE:
+		ret = acc <= lim;
+		break;
+	case OP_LT:
+		ret = acc < lim;
+		break;
+	case OP_MULT:
+	case OP_AND:
+		ret = !acc;
+		break;
+	case OP_OR:
+		ret = !!acc;
+		break;
+	default:
+		g_assert (0);
+		break;
+	}
+
+	return ret;
+}
+
+static gint
+rspamd_ast_do_op (struct rspamd_expression_elt *elt, gint val, gint acc)
+{
+	gint ret = val;
+
+	g_assert (elt->type == ELT_OP);
+
+	switch (elt->p.op) {
+	case OP_NOT:
+		ret = !val;
+		break;
+	case OP_PLUS:
+		ret = acc + val;
+		break;
+	case OP_GE:
+		ret = acc >= val;
+		break;
+	case OP_GT:
+		ret = acc > val;
+		break;
+	case OP_LE:
+		ret = acc <= val;
+		break;
+	case OP_LT:
+		ret = acc < val;
+		break;
+	case OP_MULT:
+	case OP_AND:
+		ret = acc && val;
+		break;
+	case OP_OR:
+		ret = acc || val;
+		break;
+	default:
+		g_assert (0);
+		break;
+	}
+
+	return ret;
+}
+
+static gint
+rspamd_ast_process_node (struct rspamd_expression *expr, GNode *node,
+		gpointer data)
+{
+	struct rspamd_expression_elt *elt, *celt, *parelt;
+	GNode *cld;
+	gint acc = 0, lim = G_MININT, val;
+
+	elt = node->data;
+
+	switch (elt->type) {
+	case ELT_ATOM:
+		if (elt->flags & RSPAMD_EXPR_FLAG_PROCESSED) {
+			return elt->value;
+		}
+		else {
+			elt->value = expr->subr->process (data, elt->p.atom);
+			elt->flags |= RSPAMD_EXPR_FLAG_PROCESSED;
+		}
+		break;
+	case ELT_LIMIT:
+		return elt->p.lim.val;
+		break;
+	case ELT_OP:
+		g_assert (node->children != NULL);
+		cld = node->children;
+
+		/* Try to find limit at the parent node */
+		if (node->parent) {
+			parelt = node->parent->data;
+			celt = node->parent->children->data;
+
+			if (celt->type == ELT_LIMIT) {
+				lim = celt->value;
+			}
+		}
+
+		DL_FOREACH (node->children, cld) {
+			celt = cld->data;
+
+			/* Save limit if we've found it */
+			val = rspamd_ast_process_node (expr, cld, data);
+
+			acc = rspamd_ast_do_op (elt, val, acc);
+
+			if (rspamd_ast_node_done (elt, parelt, acc, lim)) {
+				return acc;
+			}
+		}
+		break;
+	}
+
+	return acc;
+}
+
 #define CHOSE_OPERAND(e1, e2) ((e1)->flags & RSPAMD_EXPR_FLAG_PROCESSED ? (e1) : \
 	((e2)->flags & RSPAMD_EXPR_FLAG_PROCESSED) ? (e2) :						\
 	((e1)->p.atom->priority >= (e2)->p.atom->priority) ? 					\
