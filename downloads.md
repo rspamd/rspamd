@@ -39,8 +39,11 @@ Rspamd requires several 3-rd party software packages to build and run:
 * [libevent](http://libevent.org) - asynchronous event library
 * [glib](http://gnome.org) - common purposes library
 * [gmime](http://spruce.sourceforge.net/gmime/) - mime parser
-* [lua](http://lua.org) - extendable scripting language
-* [cmake](http://cmake.org) - advanced software build system 
+* [lua](http://lua.org) - extendable scripting language (version 5.1 should be used)
+* [cmake](http://cmake.org) - advanced software build system
+* [openssl](http://openssl.org) - generic purposes cryptographic library
+
+If you want additional optimizations of lua scripts then you should consider installation of [luajit](http://luajit.org). This requirement is enabled by default in the upcoming version of rspamd.
 
 You can either install them from sources or (recommended) install using package manager of your system.
 
