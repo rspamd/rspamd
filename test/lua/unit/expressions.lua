@@ -25,22 +25,22 @@ context("Rspamd expressions", function()
     local pool = rspamd_mempool.create()
     
     local cases = {
-       {'A & B | !C', 'A B & C ! |'},
+       {'A & B | !C', 'C ! A B & |'},
        {'A & (B | !C)', 'A B C ! | &'},
        -- Unbalanced braces
        {'(((A))', nil},
        -- Balanced braces
        {'(((A)))', 'A'},
        -- Plus and comparision operators
-       {'A + B + C + D > 2', 'A B C D + + + 2 >'},
+       {'A + B + C + D > 2', '2 A B C D +(4) >'},
        -- Plus and logic operators
-       {'((A + B + C + D) > 2) & D', 'A B C D + + + 2 > D &'},
+       {'((A + B + C + D) > 2) & D', 'D 2 A B C D +(4) > &'},
        -- Associativity
-       {'A | B | C & D & E', 'A B C D E & & | |'},
+       {'A | B | C & D & E', 'A B C D E &(3) |(3)'},
        -- More associativity
-       {'1 | 0 & 0 | 0', '1 0 0 & 0 | |'},
+       {'1 | 0 & 0 | 0', '1 0 0 & 0 |(3)'},
        -- Extra space
-       {'A & B | ! C', 'A B & C ! |'},
+       {'A & B | ! C', 'C ! A B & |'},
     }
     for _,c in ipairs(cases) do
       local expr,err = rspamd_expression.create(c[1], 

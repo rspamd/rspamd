@@ -28,6 +28,8 @@
 #include "config.h"
 #include "mem_pool.h"
 
+#define RSPAMD_EXPRESSION_MAX_PRIORITY 1024
+
 typedef struct rspamd_expression_atom_s {
 	/* Opaque userdata */
 	gpointer data;

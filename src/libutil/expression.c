@@ -392,13 +392,14 @@ rspamd_ast_priority_traverse (GNode *node, gpointer d)
 
 		if (elt->type == ELT_LIMIT) {
 			/* Always push limit first */
-			elt->priority = G_MAXINT;
+			elt->priority = 0;
 		}
 		else {
-			elt->priority = 0;
+			elt->priority = RSPAMD_EXPRESSION_MAX_PRIORITY;
 
 			if (expr->subr->priority != NULL) {
-				elt->priority = expr->subr->priority (elt->p.atom);
+				elt->priority = RSPAMD_EXPRESSION_MAX_PRIORITY -
+						expr->subr->priority (elt->p.atom);
 			}
 		}
 	}
@@ -411,7 +412,7 @@ rspamd_ast_priority_cmp (GNode *a, GNode *b)
 {
 	struct rspamd_expression_elt *ea = a->data, *eb = b->data;
 
-	return eb->priority - ea->priority;
+	return ea->priority - eb->priority;
 }
 
 static gboolean
@@ -991,6 +992,8 @@ static gboolean
 rspamd_ast_string_traverse (GNode *n, gpointer d)
 {
 	GString *res = d;
+	gint cnt;
+	GNode *cur;
 	struct rspamd_expression_elt *elt = n->data;
 	const char *op_str = NULL;
 
@@ -1034,6 +1037,15 @@ rspamd_ast_string_traverse (GNode *n, gpointer d)
 			break;
 		}
 		g_string_append (res, op_str);
+
+		if (n->children) {
+			LL_COUNT(n->children, cur, cnt);
+
+			if (cnt > 2) {
+				/* Print n-ary of the operator */
+				g_string_append_printf (res, "(%d)", cnt);
+			}
+		}
 	}
 
 	g_string_append_c (res, ' ');
