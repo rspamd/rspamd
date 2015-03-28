@@ -478,7 +478,8 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 			/* Set checked for this symbol to avoid cyclic references */
 			if (isclr (cd->checked, ncomp->id * 2)) {
 				setbit (cd->checked, cd->composite->id * 2);
-				rc = rspamd_process_expression (ncomp->expr, cd);
+				rc = rspamd_process_expression (ncomp->expr,
+						RSPAMD_EXPRESSION_FLAG_NOOPT, cd);
 				clrbit (cd->checked, cd->composite->id * 2);
 				ms = g_hash_table_lookup (cd->metric_res->symbols, sym);
 			}
@@ -557,7 +558,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 
 	cd->composite = comp;
 
-	rc = rspamd_process_expression (comp->expr, cd);
+	rc = rspamd_process_expression (comp->expr, RSPAMD_EXPRESSION_FLAG_NOOPT, cd);
 
 	/* Checked bit */
 	setbit (cd->checked, comp->id * 2);

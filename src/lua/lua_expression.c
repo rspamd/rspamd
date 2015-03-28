@@ -174,8 +174,13 @@ lua_expr_process (lua_State *L)
 {
 	struct lua_expression *e = rspamd_lua_expression (L, 1);
 	gint res;
+	gint flags = 0;
 
-	res = rspamd_process_expression (e->expr, GINT_TO_POINTER (2));
+	if (lua_gettop (L) >= 3) {
+		flags = lua_tonumber (L, 3);
+	}
+
+	res = rspamd_process_expression (e->expr, flags, GINT_TO_POINTER (2));
 
 	lua_pushnumber (L, res);
 

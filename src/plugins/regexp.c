@@ -250,7 +250,7 @@ process_regexp_item (struct rspamd_task *task, void *user_data)
 	else {
 		/* Process expression */
 		if (item->expr) {
-			res = rspamd_process_expression (item->expr, task);
+			res = rspamd_process_expression (item->expr, 0, task);
 		}
 		else {
 			msg_warn ("FIXME: %s symbol is broken with new expressions",
