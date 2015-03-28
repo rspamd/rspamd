@@ -232,7 +232,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 	struct rspamd_http_message *msg)
 {
 	gchar *headern, *tmp;
-	gboolean res = TRUE, validh, fl;
+	gboolean res = TRUE, validh, fl, has_ip = FALSE;
 	struct rspamd_http_header *h;
 
 	LL_FOREACH (msg->headers, h)
@@ -331,6 +331,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					return FALSE;
 				}
 				debug_task ("read IP header, value: %s", tmp);
+				has_ip = TRUE;
 			}
 			else {
 				debug_task ("wrong header: %s", headern);
@@ -411,6 +412,10 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 	if (task->hostname == NULL || task->hostname[0] == '\0') {
 		/* We assume that hostname is either "unknown" or existing */
 		task->hostname = rspamd_mempool_strdup (task->task_pool, "unknown");
+	}
+
+	if (!has_ip) {
+		task->flags |= RSPAMD_TASK_FLAG_NO_IP;
 	}
 
 	return TRUE;

@@ -59,6 +59,7 @@ enum rspamd_metric_action {
 #define RSPAMD_TASK_FLAG_SPAMC (1 << 5)
 #define RSPAMD_TASK_FLAG_PASS_ALL (1 << 6)
 #define RSPAMD_TASK_FLAG_NO_LOG (1 << 7)
+#define RSPAMD_TASK_FLAG_NO_IP (1 << 8)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_JSON(task) (((task)->flags & RSPAMD_TASK_FLAG_JSON))
@@ -88,7 +89,7 @@ struct rspamd_task {
 	enum rspamd_command cmd;                                    /**< command										*/
 	struct custom_command *custom_cmd;                          /**< custom command if any							*/
 	gint sock;                                                  /**< socket descriptor								*/
-	gint flags;
+	guint flags;
 
 	gchar *helo;                                                    /**< helo header value								*/
 	gchar *queue_id;                                                /**< queue id if specified							*/
