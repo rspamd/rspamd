@@ -1600,6 +1600,20 @@ process_message (struct rspamd_task *task)
 		/* Restore normal order */
 		task->received = g_list_reverse (task->received);
 
+		/* Extract data from received header if we were not given IP */
+		if (task->received && (task->flags & RSPAMD_TASK_FLAG_NO_IP)) {
+			recv = task->received->data;
+			if (recv->real_ip) {
+				if (!rspamd_parse_inet_address (&task->from_addr, recv->real_ip)) {
+					msg_warn ("cannot get IP from received header: '%s'",
+							recv->real_ip);
+				}
+			}
+			if (recv->real_hostname) {
+				task->hostname = recv->real_hostname;
+			}
+		}
+
 		/* free the parser (and the stream) */
 		g_object_unref (parser);
 	}
