@@ -1597,6 +1597,9 @@ process_message (struct rspamd_task *task)
 			cur = g_list_next (cur);
 		}
 
+		/* Restore normal order */
+		task->received = g_list_reverse (task->received);
+
 		/* free the parser (and the stream) */
 		g_object_unref (parser);
 	}
