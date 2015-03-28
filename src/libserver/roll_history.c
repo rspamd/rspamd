@@ -109,9 +109,15 @@ rspamd_roll_history_update (struct roll_history *history,
 	}
 
 	/* Add information from task to roll history */
-	rspamd_strlcpy (row->from_addr,
-			rspamd_inet_address_to_string (task->from_addr),
-			sizeof (row->from_addr));
+	if (task->from_addr) {
+		rspamd_strlcpy (row->from_addr,
+				rspamd_inet_address_to_string (task->from_addr),
+				sizeof (row->from_addr));
+	}
+	else {
+		rspamd_strlcpy (row->from_addr, "unknown", sizeof (row->from_addr));
+	}
+
 	memcpy (&row->tv,		 &task->tv,		   sizeof (row->tv));
 
 	/* Strings */

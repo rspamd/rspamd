@@ -381,6 +381,10 @@ rspamd_inet_address_to_string (const rspamd_inet_addr_t *addr)
 {
 	static char addr_str[INET6_ADDRSTRLEN + 1];
 
+	if (addr == NULL) {
+		return "<empty inet address>";
+	}
+
 	switch (addr->af) {
 	case AF_INET:
 		return inet_ntop (addr->af, &addr->u.in.addr.s4.sin_addr, addr_str,
