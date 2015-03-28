@@ -36,7 +36,7 @@
 
 static gchar *connect_str = "localhost";
 static gchar *password = NULL;
-static gchar *ip = "127.0.0.1";
+static gchar *ip = NULL;
 static gchar *from = NULL;
 static gchar *deliver_to = NULL;
 static gchar *rcpt = NULL;
