@@ -932,8 +932,37 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 static gint
 rspamd_mime_expr_priority (rspamd_expression_atom_t *atom)
 {
-	/* TODO: implement priorities for mime expressions */
-	return 0;
+	struct rspamd_mime_atom *mime_atom = atom->data;
+	gint ret = 0;
+
+	switch (mime_atom->type) {
+	case MIME_ATOM_INTERNAL_FUNCTION:
+		/* Prioritize internal functions slightly */
+		ret = 50;
+		break;
+	case MIME_ATOM_LUA_FUNCTION:
+		ret = 50;
+		break;
+	case MIME_ATOM_REGEXP:
+		switch (mime_atom->d.re->type) {
+		case REGEXP_HEADER:
+		case REGEXP_RAW_HEADER:
+			ret = 100;
+			break;
+		case REGEXP_URL:
+			ret = 90;
+			break;
+		case REGEXP_MIME:
+			ret = 10;
+			break;
+		default:
+			/* For message regexp */
+			ret = 0;
+			break;
+		}
+	}
+
+	return ret;
 }
 
 static void
