@@ -30,6 +30,8 @@
 
 #define RSPAMD_EXPRESSION_MAX_PRIORITY 1024
 
+#define RSPAMD_EXPRESSION_FLAG_NOOPT (1 << 0)
+
 typedef struct rspamd_expression_atom_s {
 	/* Opaque userdata */
 	gpointer data;
@@ -77,7 +79,8 @@ gboolean rspamd_parse_expression (const gchar *line, gsize len,
  * @param data opaque data pointer for all the atoms
  * @return the value of expression
  */
-gint rspamd_process_expression (struct rspamd_expression *expr, gpointer data);
+gint rspamd_process_expression (struct rspamd_expression *expr, gint flags,
+		gpointer data);
 
 /**
  * Shows string representation of an expression

@@ -806,7 +806,7 @@ rspamd_ast_do_op (struct rspamd_expression_elt *elt, gint val, gint acc)
 }
 
 static gint
-rspamd_ast_process_node (struct rspamd_expression *expr, GNode *node,
+rspamd_ast_process_node (struct rspamd_expression *expr, gint flags, GNode *node,
 		gpointer data)
 {
 	struct rspamd_expression_elt *elt, *celt, *parelt;
@@ -846,7 +846,7 @@ rspamd_ast_process_node (struct rspamd_expression *expr, GNode *node,
 			celt = cld->data;
 
 			/* Save limit if we've found it */
-			val = rspamd_ast_process_node (expr, cld, data);
+			val = rspamd_ast_process_node (expr, flags, cld, data);
 
 			if (acc == G_MININT) {
 				acc = val;
@@ -854,8 +854,10 @@ rspamd_ast_process_node (struct rspamd_expression *expr, GNode *node,
 
 			acc = rspamd_ast_do_op (elt, val, acc);
 
-			if (rspamd_ast_node_done (elt, parelt, acc, lim)) {
-				return acc;
+			if (!(flags & RSPAMD_EXPRESSION_FLAG_NOOPT)) {
+				if (rspamd_ast_node_done (elt, parelt, acc, lim)) {
+					return acc;
+				}
 			}
 		}
 		break;
@@ -876,7 +878,8 @@ rspamd_ast_cleanup_traverse (GNode *n, gpointer d)
 }
 
 gint
-rspamd_process_expression (struct rspamd_expression *expr, gpointer data)
+rspamd_process_expression (struct rspamd_expression *expr, gint flags,
+		gpointer data)
 {
 	gint ret = 0;
 
@@ -884,7 +887,7 @@ rspamd_process_expression (struct rspamd_expression *expr, gpointer data)
 	/* Ensure that stack is empty at this point */
 	g_assert (expr->expression_stack->len == 0);
 
-	ret = rspamd_ast_process_node (expr, expr->ast, data);
+	ret = rspamd_ast_process_node (expr, flags, expr->ast, data);
 
 	/* Cleanup */
 	g_node_traverse (expr->ast, G_IN_ORDER, G_TRAVERSE_ALL, -1,
