@@ -41,6 +41,10 @@ typedef struct rspamd_expression_atom_s {
 	gsize len;
 	/* Relative priority */
 	gint priority;
+	/* Average execution time (in ticks) */
+	gdouble avg_ticks;
+	/* Amount of positive triggers */
+	guint hits;
 } rspamd_expression_atom_t;
 
 struct rspamd_atom_subr {

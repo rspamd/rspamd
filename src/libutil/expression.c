@@ -26,10 +26,15 @@
 #include "expression.h"
 #include "printf.h"
 #include "regexp.h"
+#include "util.h"
 #include "utlist.h"
+#include "ottery.h"
 
 #define RSPAMD_EXPR_FLAG_NEGATE (1 << 0)
 #define RSPAMD_EXPR_FLAG_PROCESSED (1 << 1)
+
+#define MIN_RESORT_EVALS 50
+#define MAX_RESORT_EVALS 150
 
 enum rspamd_expression_op {
 	OP_INVALID = 0,
@@ -71,6 +76,8 @@ struct rspamd_expression {
 	GArray *expressions;
 	GPtrArray *expression_stack;
 	GNode *ast;
+	guint next_resort;
+	guint evals;
 };
 
 static GQuark
@@ -477,6 +484,8 @@ rspamd_parse_expression (const gchar *line, gsize len,
 	e->ast = NULL;
 	e->expression_stack = g_ptr_array_sized_new (32);
 	e->subr = subr;
+	e->evals = 0;
+	e->next_resort = ottery_rand_range (MAX_RESORT_EVALS) + MIN_RESORT_EVALS;
 
 	/* Shunting-yard algorithm */
 	while (p < end) {
@@ -812,13 +821,34 @@ rspamd_ast_process_node (struct rspamd_expression *expr, gint flags, GNode *node
 	struct rspamd_expression_elt *elt, *celt, *parelt;
 	GNode *cld;
 	gint acc = G_MININT, lim = G_MININT, val;
+	gdouble t1, t2;
+	gboolean calc_ticks = FALSE;
 
 	elt = node->data;
 
 	switch (elt->type) {
 	case ELT_ATOM:
 		if (!(elt->flags & RSPAMD_EXPR_FLAG_PROCESSED)) {
+
+			/*
+			 * Sometimes get ticks for this expression. 'Sometimes' here means
+			 * that we get lowest 5 bits of the counter `evals` and 5 bits
+			 * of some shifted address to provide some sort of jittering for
+			 * ticks evaluation
+			 */
+			if ((expr->evals & 0x1F) == (GPOINTER_TO_UINT (node) >> 4 & 0x1F)) {
+				calc_ticks = TRUE;
+				t1 = rspamd_get_ticks ();
+			}
+
 			elt->value = expr->subr->process (data, elt->p.atom);
+
+			if (calc_ticks) {
+				t2 = rspamd_get_ticks ();
+				elt->p.atom->avg_ticks += ((t2 - t1) - elt->p.atom->avg_ticks) /
+						(expr->evals);
+			}
+
 			elt->flags |= RSPAMD_EXPR_FLAG_PROCESSED;
 		}
 
@@ -892,6 +922,14 @@ rspamd_process_expression (struct rspamd_expression *expr, gint flags,
 	/* Cleanup */
 	g_node_traverse (expr->ast, G_IN_ORDER, G_TRAVERSE_ALL, -1,
 			rspamd_ast_cleanup_traverse, NULL);
+
+	expr->evals ++;
+
+	/* Check if we need to resort */
+	if (expr->evals == expr->next_resort) {
+		expr->next_resort = ottery_rand_range (MAX_RESORT_EVALS) +
+				MIN_RESORT_EVALS;
+	}
 
 	return ret;
 }
