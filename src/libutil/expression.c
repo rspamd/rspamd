@@ -929,6 +929,13 @@ rspamd_process_expression (struct rspamd_expression *expr, gint flags,
 	if (expr->evals == expr->next_resort) {
 		expr->next_resort = ottery_rand_range (MAX_RESORT_EVALS) +
 				MIN_RESORT_EVALS;
+		/* Set priorities for branches */
+		g_node_traverse (expr->ast, G_POST_ORDER, G_TRAVERSE_ALL, -1,
+				rspamd_ast_priority_traverse, expr);
+
+		/* Now set less expensive branches to be evaluated first */
+		g_node_traverse (expr->ast, G_POST_ORDER, G_TRAVERSE_NON_LEAVES, -1,
+				rspamd_ast_resort_traverse, NULL);
 	}
 
 	return ret;
