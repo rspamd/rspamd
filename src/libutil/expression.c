@@ -414,12 +414,29 @@ rspamd_ast_priority_traverse (GNode *node, gpointer d)
 	return FALSE;
 }
 
+#define ATOM_PRIORITY(a) ((a)->p.atom->hits / ((a)->p.atom->avg_ticks > 0 ?	\
+				(a)->p.atom->avg_ticks * 10000000 : 1.0))
+
 static gint
 rspamd_ast_priority_cmp (GNode *a, GNode *b)
 {
 	struct rspamd_expression_elt *ea = a->data, *eb = b->data;
+	gdouble w1, w2;
 
-	return ea->priority - eb->priority;
+	/* Special logic for atoms */
+	if (ea->type == ELT_ATOM && eb->type == ELT_ATOM &&
+			ea->priority == eb->priority) {
+		w1 = ATOM_PRIORITY (ea);
+		w2 = ATOM_PRIORITY (eb);
+
+		ea->p.atom->hits = 0;
+		ea->p.atom->avg_ticks = 0.0;
+
+		return w1 - w2;
+	}
+	else {
+		return ea->priority - eb->priority;
+	}
 }
 
 static gboolean
@@ -842,6 +859,10 @@ rspamd_ast_process_node (struct rspamd_expression *expr, gint flags, GNode *node
 			}
 
 			elt->value = expr->subr->process (data, elt->p.atom);
+
+			if (elt->value) {
+				elt->p.atom->hits ++;
+			}
 
 			if (calc_ticks) {
 				t2 = rspamd_get_ticks ();
