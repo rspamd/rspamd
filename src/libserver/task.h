@@ -60,6 +60,7 @@ enum rspamd_metric_action {
 #define RSPAMD_TASK_FLAG_PASS_ALL (1 << 6)
 #define RSPAMD_TASK_FLAG_NO_LOG (1 << 7)
 #define RSPAMD_TASK_FLAG_NO_IP (1 << 8)
+#define RSPAMD_TASK_FLAG_HAS_CONTROL (1 << 9)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_JSON(task) (((task)->flags & RSPAMD_TASK_FLAG_JSON))
@@ -77,6 +78,7 @@ struct custom_command {
  */
 struct rspamd_task {
 	struct rspamd_worker *worker;                               /**< pointer to worker object						*/
+	struct custom_command *custom_cmd;                          /**< custom command if any							*/
 	enum {
 		READ_MESSAGE,
 		WAIT_PRE_FILTER,
@@ -87,18 +89,18 @@ struct rspamd_task {
 		CLOSING_CONNECTION
 	} state;                                                    /**< current session state							*/
 	enum rspamd_command cmd;                                    /**< command										*/
-	struct custom_command *custom_cmd;                          /**< custom command if any							*/
 	gint sock;                                                  /**< socket descriptor								*/
-	guint flags;
+	guint flags;												/**< Bit flags										*/
+	guint message_len;											/**< Message length									*/
 
-	gchar *helo;                                                    /**< helo header value								*/
-	gchar *queue_id;                                                /**< queue id if specified							*/
-	const gchar *message_id;                                        /**< message id										*/
+	gchar *helo;                                                /**< helo header value								*/
+	gchar *queue_id;                                            /**< queue id if specified							*/
+	const gchar *message_id;                                    /**< message id										*/
 
 	rspamd_inet_addr_t *from_addr;                              /**< from addr for a task							*/
 	rspamd_inet_addr_t *client_addr;                            /**< address of connected socket					*/
 	gchar *deliver_to;                                          /**< address to deliver								*/
-	gchar *user;                                                    /**< user to deliver								*/
+	gchar *user;                                                /**< user to deliver								*/
 	gchar *subject;                                             /**< subject (for non-mime)							*/
 	gchar *hostname;                                            /**< hostname reported by MTA						*/
 	GHashTable *request_headers;                                /**< HTTP headers in a request						*/
@@ -114,7 +116,7 @@ struct rspamd_task {
 	GMimeObject *parser_parent_part;                            /**< current parent part							*/
 	GList *parts;                                               /**< list of parsed parts							*/
 	GList *text_parts;                                          /**< list of text parts								*/
-	gchar *raw_headers_str;                                         /**< list of raw headers							*/
+	gchar *raw_headers_str;                                     /**< list of raw headers							*/
 	GList *received;                                            /**< list of received headers						*/
 	GTree *urls;                                                /**< list of parsed urls							*/
 	GTree *emails;                                              /**< list of parsed emails							*/

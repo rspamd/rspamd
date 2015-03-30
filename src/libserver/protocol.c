@@ -26,6 +26,7 @@
 #include "main.h"
 #include "util.h"
 #include "cfg_file.h"
+#include "cfg_rcl.h"
 #include "message.h"
 #include "utlist.h"
 
@@ -96,6 +97,7 @@
 #define HOSTNAME_HEADER "Hostname"
 #define DELIVER_TO_HEADER "Deliver-To"
 #define NO_LOG_HEADER "Log"
+#define MLEN_HEADER "Message-Length"
 
 static GList *custom_commands = NULL;
 
@@ -387,6 +389,23 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				validh = FALSE;
 			}
 			break;
+		case 'm':
+		case 'M':
+			if (g_ascii_strcasecmp (headern, MLEN_HEADER) == 0) {
+				task->message_len = strtoul (h->value->str, NULL, 10);
+
+				if (task->message_len == 0) {
+					msg_err ("Invalid message length header: %s", h->value->str);
+					validh = FALSE;
+				}
+				else {
+					task->flags |= RSPAMD_TASK_FLAG_HAS_CONTROL;
+				}
+			}
+			else {
+				validh = FALSE;
+			}
+			break;
 		default:
 			debug_task ("unknown header: %s", headern);
 			validh = FALSE;
@@ -416,6 +435,111 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 
 	if (!has_ip) {
 		task->flags |= RSPAMD_TASK_FLAG_NO_IP;
+	}
+
+	return TRUE;
+}
+
+#define BOOL_TO_FLAG(val, flags, flag) do {									\
+	if ((val)) (flags) |= (flag);											\
+	else (flags) &= ~(flag);												\
+} while(0)
+
+gboolean
+rspamd_protocol_parse_task_flags (rspamd_mempool_t *pool,
+	const ucl_object_t *obj,
+	gpointer ud,
+	struct rspamd_rcl_section *section,
+	GError **err)
+{
+	struct rspamd_rcl_struct_parser *pd = ud;
+	gint *target;
+	const gchar *key;
+	gboolean value;
+
+	target = (gint *)(((gchar *)pd->user_struct) + pd->offset);
+	key = ucl_object_key (obj);
+	value = ucl_object_toboolean (obj);
+
+	if (key != NULL) {
+		if (g_ascii_strcasecmp (key, "pass_all") == 0) {
+			BOOL_TO_FLAG (value, *target, RSPAMD_TASK_FLAG_PASS_ALL);
+		}
+		else if (g_ascii_strcasecmp (key, "no_log") == 0) {
+			BOOL_TO_FLAG (value, *target, RSPAMD_TASK_FLAG_NO_LOG);
+		}
+	}
+
+	return TRUE;
+}
+
+static struct rspamd_rcl_section *control_parser = NULL;
+
+static void
+rspamd_protocol_control_parser_init (void)
+{
+	struct rspamd_rcl_section *sub;
+
+	if (control_parser == NULL) {
+		sub = rspamd_rcl_add_section (&control_parser,
+				"*",
+				NULL,
+				UCL_OBJECT,
+				FALSE,
+				TRUE);
+		/* Default handlers */
+		rspamd_rcl_add_default_handler (sub,
+				"ip",
+				rspamd_rcl_parse_struct_addr,
+				G_STRUCT_OFFSET (struct rspamd_task, from_addr),
+				0);
+		rspamd_rcl_add_default_handler (sub,
+				"from",
+				rspamd_rcl_parse_struct_mime_addr,
+				G_STRUCT_OFFSET (struct rspamd_task, from_envelope),
+				0);
+		rspamd_rcl_add_default_handler (sub,
+				"rcpt",
+				rspamd_rcl_parse_struct_mime_addr,
+				G_STRUCT_OFFSET (struct rspamd_task, rcpt_envelope),
+				0);
+		rspamd_rcl_add_default_handler (sub,
+				"helo",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_task, helo),
+				0);
+		rspamd_rcl_add_default_handler (sub,
+				"user",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_task, user),
+				0);
+		rspamd_rcl_add_default_handler (sub,
+				"pass_all",
+				rspamd_protocol_parse_task_flags,
+				G_STRUCT_OFFSET (struct rspamd_task, flags),
+				0);
+		rspamd_rcl_add_default_handler (sub,
+				"json",
+				rspamd_protocol_parse_task_flags,
+				G_STRUCT_OFFSET (struct rspamd_task, flags),
+				0);
+	}
+}
+
+gboolean
+rspamd_protocol_handle_control (struct rspamd_task *task,
+		const ucl_object_t *control)
+{
+	GError *err = NULL;
+
+	rspamd_protocol_control_parser_init ();
+
+	if (!rspamd_rcl_parse (control_parser, task, task->task_pool,
+			control, &err)) {
+		msg_warn ("cannot parse control block: %e", err);
+		g_error_free (err);
+
+		return FALSE;
 	}
 
 	return TRUE;

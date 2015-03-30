@@ -26,6 +26,7 @@
 
 #include "config.h"
 #include "ucl.h"
+#include "mem_pool.h"
 
 #define CFG_RCL_ERROR cfg_rcl_error_quark ()
 static inline GQuark
@@ -64,7 +65,7 @@ struct rspamd_rcl_struct_parser {
  * @param err error object
  * @return TRUE if a section has been parsed
  */
-typedef gboolean (*rspamd_rcl_handler_t) (struct rspamd_config *cfg,
+typedef gboolean (*rspamd_rcl_handler_t) (rspamd_mempool_t *pool,
 	const ucl_object_t *obj,
 	gpointer ud, struct rspamd_rcl_section *section, GError **err);
 
@@ -73,10 +74,38 @@ typedef gboolean (*rspamd_rcl_handler_t) (struct rspamd_config *cfg,
  * @param cfg configuration
  * @param ud user data
  */
-typedef void (*rspamd_rcl_section_fin_t)(struct rspamd_config *cfg,
-	gpointer ud);
+typedef void (*rspamd_rcl_section_fin_t)(rspamd_mempool_t *pool, gpointer ud);
 
+/**
+ * Add a default handler for a section
+ * @param section section pointer
+ * @param name name of param
+ * @param handler handler of param
+ * @param offset offset in a structure
+ * @param flags flags for the parser
+ * @return newly created structure
+ */
+struct rspamd_rcl_default_handler_data * rspamd_rcl_add_default_handler (
+	struct rspamd_rcl_section *section,
+	const gchar *name,
+	rspamd_rcl_handler_t handler,
+	gsize offset,
+	gint flags);
 
+/**
+ * Add new section to the configuration
+ * @param top top section
+ * @param name the name of the section
+ * @param handler handler function for all attributes
+ * @param type type of object handled by a handler
+ * @param required whether at least one of these sections is required
+ * @param strict_type turn on strict check for types for this section
+ * @return newly created structure
+ */
+struct rspamd_rcl_section * rspamd_rcl_add_section (
+	struct rspamd_rcl_section **top,
+	const gchar *name, rspamd_rcl_handler_t handler,
+	enum ucl_type type, gboolean required, gboolean strict_type);
 
 /**
  * Init common sections known to rspamd
@@ -101,8 +130,9 @@ struct rspamd_rcl_section * rspamd_rcl_config_get_section (
  * @param obj object to handle
  * @return TRUE if an object can be parsed
  */
-gboolean rspamd_read_rcl_config (struct rspamd_rcl_section *top,
-	struct rspamd_config *cfg, const ucl_object_t *obj, GError **err);
+gboolean rspamd_rcl_parse (struct rspamd_rcl_section *top,
+		gpointer ptr, rspamd_mempool_t *pool,
+		const ucl_object_t *obj, GError **err);
 
 
 /**
@@ -115,7 +145,7 @@ gboolean rspamd_read_rcl_config (struct rspamd_rcl_section *top,
  * @return TRUE if the object has been parsed
  */
 gboolean rspamd_rcl_section_parse_defaults (struct rspamd_rcl_section *section,
-	struct rspamd_config *cfg, const ucl_object_t *obj, gpointer ptr,
+	rspamd_mempool_t *pool, const ucl_object_t *obj, gpointer ptr,
 	GError **err);
 /**
  * Here is a section of common handlers that accepts rcl_struct_parser
@@ -132,7 +162,7 @@ gboolean rspamd_rcl_section_parse_defaults (struct rspamd_rcl_section *section,
  * @param err error pointer
  * @return TRUE if a string value has been successfully parsed
  */
-gboolean rspamd_rcl_parse_struct_string (struct rspamd_config *cfg,
+gboolean rspamd_rcl_parse_struct_string (rspamd_mempool_t *pool,
 	const ucl_object_t *obj,
 	gpointer ud,
 	struct rspamd_rcl_section *section,
@@ -147,7 +177,7 @@ gboolean rspamd_rcl_parse_struct_string (struct rspamd_config *cfg,
  * @param err error pointer
  * @return TRUE if a value has been successfully parsed
  */
-gboolean rspamd_rcl_parse_struct_integer (struct rspamd_config *cfg,
+gboolean rspamd_rcl_parse_struct_integer (rspamd_mempool_t *pool,
 	const ucl_object_t *obj,
 	gpointer ud,
 	struct rspamd_rcl_section *section,
@@ -163,7 +193,7 @@ gboolean rspamd_rcl_parse_struct_integer (struct rspamd_config *cfg,
  * @param err error pointer
  * @return TRUE if a value has been successfully parsed
  */
-gboolean rspamd_rcl_parse_struct_double (struct rspamd_config *cfg,
+gboolean rspamd_rcl_parse_struct_double (rspamd_mempool_t *pool,
 	const ucl_object_t *obj,
 	gpointer ud,
 	struct rspamd_rcl_section *section,
@@ -178,7 +208,7 @@ gboolean rspamd_rcl_parse_struct_double (struct rspamd_config *cfg,
  * @param err error pointer
  * @return TRUE if a value has been successfully parsed
  */
-gboolean rspamd_rcl_parse_struct_time (struct rspamd_config *cfg,
+gboolean rspamd_rcl_parse_struct_time (rspamd_mempool_t *pool,
 	const ucl_object_t *obj,
 	gpointer ud,
 	struct rspamd_rcl_section *section,
@@ -193,7 +223,7 @@ gboolean rspamd_rcl_parse_struct_time (struct rspamd_config *cfg,
  * @param err error pointer
  * @return TRUE if a value has been successfully parsed
  */
-gboolean rspamd_rcl_parse_struct_string_list (struct rspamd_config *cfg,
+gboolean rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 	const ucl_object_t *obj,
 	gpointer ud,
 	struct rspamd_rcl_section *section,
@@ -208,7 +238,7 @@ gboolean rspamd_rcl_parse_struct_string_list (struct rspamd_config *cfg,
  * @param err error pointer
  * @return TRUE if a value has been successfully parsed
  */
-gboolean rspamd_rcl_parse_struct_boolean (struct rspamd_config *cfg,
+gboolean rspamd_rcl_parse_struct_boolean (rspamd_mempool_t *pool,
 	const ucl_object_t *obj,
 	gpointer ud,
 	struct rspamd_rcl_section *section,
@@ -223,7 +253,37 @@ gboolean rspamd_rcl_parse_struct_boolean (struct rspamd_config *cfg,
  * @param err error pointer
  * @return TRUE if a value has been successfully parsed
  */
-gboolean rspamd_rcl_parse_struct_keypair (struct rspamd_config *cfg,
+gboolean rspamd_rcl_parse_struct_keypair (rspamd_mempool_t *pool,
+	const ucl_object_t *obj,
+	gpointer ud,
+	struct rspamd_rcl_section *section,
+	GError **err);
+
+/**
+ * Parse a inet addr field of a structure
+ * @param cfg config pointer
+ * @param obj object to parse
+ * @param ud struct_parser structure (flags mean the exact structure used)
+ * @param section the current section
+ * @param err error pointer
+ * @return TRUE if a value has been successfully parsed
+ */
+gboolean rspamd_rcl_parse_struct_addr (rspamd_mempool_t *pool,
+	const ucl_object_t *obj,
+	gpointer ud,
+	struct rspamd_rcl_section *section,
+	GError **err);
+
+/**
+ * Parse a gmime inet address field of a structure
+ * @param cfg config pointer
+ * @param obj object to parse
+ * @param ud struct_parser structure (flags mean the exact structure used)
+ * @param section the current section
+ * @param err error pointer
+ * @return TRUE if a value has been successfully parsed
+ */
+gboolean rspamd_rcl_parse_struct_mime_addr (rspamd_mempool_t *pool,
 	const ucl_object_t *obj,
 	gpointer ud,
 	struct rspamd_rcl_section *section,

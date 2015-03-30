@@ -337,16 +337,16 @@ drop_priv (struct rspamd_main *rspamd)
 }
 
 static void
-config_logger (struct rspamd_config *cfg, gpointer ud)
+config_logger (rspamd_mempool_t *pool, gpointer ud)
 {
 	struct rspamd_main *rm = ud;
 
 	if (config_test) {
 		/* Explicitly set logger type to console in case of config testing */
-		cfg->log_type = RSPAMD_LOG_CONSOLE;
+		rm->cfg->log_type = RSPAMD_LOG_CONSOLE;
 	}
 
-	rspamd_set_logger (cfg, g_quark_try_string ("main"), rm);
+	rspamd_set_logger (rm->cfg, g_quark_try_string ("main"), rm);
 	if (rspamd_log_open_priv (rm->logger, rm->workers_uid, rm->workers_gid) == -1) {
 		fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
 		exit (EXIT_FAILURE);
