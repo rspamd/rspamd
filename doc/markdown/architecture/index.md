@@ -31,6 +31,10 @@ options {
 }
 ~~~
 
+## Protocol
+
+Rspamd uses HTTP protocol for all operations. This protocol is described in the [protocol section](protocol.md).
+
 ## Metrics
 
 Rules in rspamd, defines merely a logic of checks, however it is required to
@@ -60,6 +64,9 @@ This scheduler is rather naive and it performs the following logic:
   - faster rules
 
 These optimizations can filter definite spam more quickly than a generic queue.
+
+Since rspamd-0.9 there are more optimizations for rules and expressions that are
+roughly described in the [following presentation](http://highsecure.ru/ast-rspamd.pdf).
 
 ## Actions
 
