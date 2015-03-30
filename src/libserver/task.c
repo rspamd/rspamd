@@ -371,9 +371,9 @@ rspamd_task_process (struct rspamd_task *task,
 const gchar *
 rspamd_task_get_sender (struct rspamd_task *task)
 {
-	InternetAddressMailbox *imb;
 	InternetAddress *iaelt = NULL;
-
+#ifdef GMIME24
+	InternetAddressMailbox *imb;
 
 	if (task->from_envelope != NULL) {
 		iaelt = internet_address_list_get_address (task->from_envelope, 0);
@@ -385,6 +385,16 @@ rspamd_task_get_sender (struct rspamd_task *task)
 			INTERNET_ADDRESS_MAILBOX (iaelt) : NULL;
 
 	return (imb ? internet_address_mailbox_get_addr (imb) : NULL);
+#else
+	if (task->from_envelope != NULL) {
+		iaelt = internet_address_list_get_address (task->from_envelope);
+	}
+	else if (task->from_mime != NULL) {
+		iaelt = internet_address_list_get_address (task->from_mime);
+	}
+
+	return (iaelt != NULL ? internet_address_get_addr (iaelt) : NULL);
+#endif
 }
 
 gboolean
