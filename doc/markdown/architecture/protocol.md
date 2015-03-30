@@ -135,7 +135,28 @@ Moreover, some other keys might be in the reply:
 * `urls` - a list of urls found in a message (only hostnames)
 * `emails` - a list of emails found in a message
 * `message-id` - ID of message (useful for logging)
-* `messages` - array of optional messages added by some rspamd filters (such as `SPF`) 
+* `messages` - array of optional messages added by some rspamd filters (such as `SPF`)
+
+## Rspamd JSON control block
+
+Since rspamd 0.9 it is also possible to pass additional data by using request body prepending JSON control block to the message. Hence, you can use either headers or JSON block to pass data from MTA to rspamd.
+The advantage of JSON block is that it can be encrypted using `httpcrypt`. Headers encryption is currently unsupported.
+
+To use JSON control block, you need to pass extra header to rspamd called `Message-Length`. This header should be equal to the size of the message **excluding** JSON control block. Therefore, the size of control block is equal to `Content-Length` - `Message-Length`. Rspamd assumes that a message starts immediately after control block (with no extra CRLF). This method is equally compatible with streaming transfer, however even if not specifying `Content-Length` you are still required to specify `Message-Length`.
+
+Here is an example of JSON control block:
+
+~~~json
+{
+	"from": "smtp@example.com",
+	"pass_all": "true",
+	"ip": "95.211.146.161",
+	"helo": "localhost.localdomain",
+	"hostname": "localhost"
+}
+~~~
+
+Moreover, [UCL](https://github.com/vstakhov/libucl) json extensions and syntax conventions are also supported inside control block.
 
 ## Legacy RSPAMC protocol
 
