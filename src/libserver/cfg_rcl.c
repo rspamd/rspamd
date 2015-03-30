@@ -1484,7 +1484,6 @@ rspamd_rcl_parse (struct rspamd_rcl_section *top,
 {
 	const ucl_object_t *found, *cur_obj;
 	struct rspamd_rcl_section *cur, *tmp, *found_sec;
-	ucl_object_iter_t it;
 
 	if (obj->type != UCL_OBJECT) {
 		g_set_error (err,
@@ -1499,16 +1498,12 @@ rspamd_rcl_parse (struct rspamd_rcl_section *top,
 	{
 		if (strcmp (cur->name, "*") == 0) {
 			/* Default section handler */
-
-			it = ucl_object_iterate_new (obj);
-			while ((cur_obj = ucl_object_iterate_safe (it, false)) != NULL) {
+			LL_FOREACH (obj, cur_obj) {
 				HASH_FIND_STR (top, ucl_object_key (cur_obj), found_sec);
 
 				if (found_sec == NULL) {
 					if (cur->handler != NULL) {
 						if (!cur->handler (pool, cur_obj, ptr, cur, err)) {
-							ucl_object_iterate_free (it);
-
 							return FALSE;
 						}
 					}
@@ -1521,7 +1516,6 @@ rspamd_rcl_parse (struct rspamd_rcl_section *top,
 					}
 				}
 			}
-			ucl_object_iterate_free (it);
 		}
 		else {
 			found = ucl_object_find_key (obj, cur->name);
@@ -1542,12 +1536,9 @@ rspamd_rcl_parse (struct rspamd_rcl_section *top,
 					}
 				}
 
-				it = ucl_object_iterate_new (obj);
-				while ((cur_obj = ucl_object_iterate_safe (it, false)) != NULL) {
+				LL_FOREACH (found, cur_obj) {
 					if (cur->handler != NULL) {
 						if (!cur->handler (pool, cur_obj, ptr, cur, err)) {
-							ucl_object_iterate_free (it);
-
 							return FALSE;
 						}
 					}
@@ -1559,7 +1550,6 @@ rspamd_rcl_parse (struct rspamd_rcl_section *top,
 								err);
 					}
 				}
-				ucl_object_iterate_free (it);
 			}
 		}
 		if (cur->fin) {
