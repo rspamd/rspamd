@@ -96,6 +96,7 @@
 #define HOSTNAME_HEADER "Hostname"
 #define DELIVER_TO_HEADER "Deliver-To"
 #define NO_LOG_HEADER "Log"
+#define MLEN_HEADER "Message-Length"
 
 static GList *custom_commands = NULL;
 
@@ -381,6 +382,20 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			if (g_ascii_strcasecmp (headern, NO_LOG_HEADER) == 0) {
 				if (g_ascii_strcasecmp (h->value->str, "no") == 0) {
 					task->flags |= RSPAMD_TASK_FLAG_NO_LOG;
+				}
+			}
+			else {
+				validh = FALSE;
+			}
+			break;
+		case 'm':
+		case 'M':
+			if (g_ascii_strcasecmp (headern, MLEN_HEADER) == 0) {
+				task->message_len = strtoul (h->value->str, NULL, 10);
+
+				if (task->message_len == 0) {
+					msg_err ("Invalid message length header: %s", h->value->str);
+					validh = FALSE;
 				}
 			}
 			else {
