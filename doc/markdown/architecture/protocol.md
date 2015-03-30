@@ -11,17 +11,15 @@ SMTP sasl authentication data and so on. Rspamd supports both normal and chunked
 Rspamd encourages usage of HTTP protocol since it is standard and can be used by literally every programming language without exotic libraries.
 The typical HTTP request looks like the following:
 
-```
- POST /check HTTP/1.0
-Content-Length: 26969
-From: smtp@example.com
-Pass: all
-Ip: 95.211.146.161
-Helo: localhost.localdomain
-Hostname: localhost
+	POST /check HTTP/1.0
+	Content-Length: 26969
+	From: smtp@example.com
+	Pass: all
+	Ip: 95.211.146.161
+	Helo: localhost.localdomain
+	Hostname: localhost
 
-<your message goes here>
-```
+	<your message goes here>
 
 You can also use chunked encoding that allows streamlined data transfer which is useful if you don't know the length of the message.
 
@@ -36,8 +34,8 @@ Normally, you should just use '/check' here. However, if you talk to the control
 To avoid unnecessary work, rspamd allows MTA to pass pre-processed data about the message by using either HTTP headers or JSON control block (described further in this document). 
 Rspamd supports the following non-standard HTTP headers:
 
-| Header          | Description                      |
-| --------------- | -------------------------------- |                                                                                                                 
+| Header          | Description                       |
+| :-------------- | :-------------------------------- |                                                                                                                 
 | **Deliver-To:** | Defines actual delivery recipient of message. Can be used for personalized statistic and for user specific options.|  
 | **IP:**         | Defines IP from which this message is received.                                                                    | 
 | **Helo:**       | Defines SMTP helo.                                                                                                 |
@@ -60,14 +58,14 @@ Standard HTTP headers, such as `Content-Length`, are also supported.
 
 Rspamd reply is encoded using `json` format. Here is a typical HTTP reply:
 
-~~~json
-HTTP/1.1 200 OK
-Connection: close
-Server: rspamd/0.9.0
-Date: Mon, 30 Mar 2015 16:19:35 GMT
-Content-Length: 825
-Content-Type: application/json
+	HTTP/1.1 200 OK
+	Connection: close
+	Server: rspamd/0.9.0
+	Date: Mon, 30 Mar 2015 16:19:35 GMT
+	Content-Length: 825
+	Content-Type: application/json
 
+~~~json
 {
     "default": {
         "is_spam": false,
@@ -144,29 +142,25 @@ Moreover, some other keys might be in the reply:
 For compatibility, rspamd also supports legacy `RSPAMC` and also spamassassin `SPAMC` protocols. Thought their usage is discouraged, these protocols could be still used as last resort to communicate with rspamd from legacy applications.
 The rspamc dialog looks as following:
 
-```
-SYMBOLS RSPAMC/1.1
-Content-Length: 2200
+	SYMBOLS RSPAMC/1.1
+	Content-Length: 2200
 
-<message octets>
-```
+	<message octets>
 
-```
-RSPAMD/1.1 0 OK
-Metric: default; True; 10.40 / 10.00 / 0.00
-Symbol: R_UNDISC_RCPT
-Symbol: ONCE_RECEIVED
-Symbol: R_MISSING_CHARSET
-Urls: 
-```
+	RSPAMD/1.1 0 OK
+	Metric: default; True; 10.40 / 10.00 / 0.00
+	Symbol: R_UNDISC_RCPT
+	Symbol: ONCE_RECEIVED
+	Symbol: R_MISSING_CHARSET
+	Urls: 
 
 Rspamc protocol support different commands as well:
 
-| Command | Mean  |
-| ------- | ----- |                                                                               
+| Command | Description   |
+| :-------| :-----        |                                                                               
 | CHECK   | Check a message and output results for each metric. But do not output symbols. |      
-| SYMBOLS | Same as //CHECK// but output symbols.                                          |    
-| PROCESS | Same as //SYMBOLS// but output also original message with inserted X-Spam headers. |  
+| SYMBOLS | Same as `CHECK` but output symbols.                                          |    
+| PROCESS | Same as `SYMBOLS` but output also original message with inserted X-Spam headers. |  
 | PING    | Do not do any processing, just check rspamd state:                                 |
 
 
@@ -174,12 +168,10 @@ After command there should be one mandatory header: `Content-Length` that define
 
 Rspamd supports spamassassin `spamc` protocol and you can even pass rspamc headers in spamc mode, but reply of rspamd in `spamc` mode is truncated to "default" metric only with no options for symbols being displayed. Rspamc reply looks as following: 
 
-```
-RSPAMD/1.1 0 OK
-Metric: default; True; 10.40 / 10.00 / 0.00
-Symbol: R_UNDISC_RCPT
-Symbol: ONCE_RECEIVED
-Symbol: R_MISSING_CHARSET
-Urls: 
-```
+	RSPAMD/1.1 0 OK
+	Metric: default; True; 10.40 / 10.00 / 0.00
+	Symbol: R_UNDISC_RCPT
+	Symbol: ONCE_RECEIVED
+	Symbol: R_MISSING_CHARSET
+	Urls: 
  
