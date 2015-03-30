@@ -1971,6 +1971,41 @@ rspamd_rcl_parse_struct_boolean (rspamd_mempool_t *pool,
 	return TRUE;
 }
 
+gboolean
+rspamd_rcl_parse_struct_addr (rspamd_mempool_t *pool,
+	const ucl_object_t *obj,
+	gpointer ud,
+	struct rspamd_rcl_section *section,
+	GError **err)
+{
+	struct rspamd_rcl_struct_parser *pd = ud;
+	rspamd_inet_addr_t **target;
+	const gchar *val;
+
+	target = (rspamd_inet_addr_t **)(((gchar *)pd->user_struct) + pd->offset);
+
+	if (obj->type == UCL_STRING) {
+		val = ucl_object_tostring (obj);
+
+		if (!rspamd_parse_inet_address (target, val)) {
+			g_set_error (err,
+				CFG_RCL_ERROR,
+				EINVAL,
+				"cannot parse inet address: %s", val);
+			return FALSE;
+		}
+	}
+	else {
+		g_set_error (err,
+			CFG_RCL_ERROR,
+			EINVAL,
+			"cannot convert an object to inet address");
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
 void
 rspamd_rcl_register_worker_option (struct rspamd_config *cfg,
 	gint type,
