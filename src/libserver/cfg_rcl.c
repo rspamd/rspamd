@@ -1502,7 +1502,8 @@ rspamd_rcl_parse (struct rspamd_rcl_section *top,
 		const ucl_object_t *obj, GError **err)
 {
 	const ucl_object_t *found, *cur_obj;
-	struct rspamd_rcl_section *cur, *tmp;
+	struct rspamd_rcl_section *cur, *tmp, *found_sec;
+	ucl_object_iter_t it;
 
 	if (obj->type != UCL_OBJECT) {
 		g_set_error (err,
@@ -1515,37 +1516,69 @@ rspamd_rcl_parse (struct rspamd_rcl_section *top,
 	/* Iterate over known sections and ignore unknown ones */
 	HASH_ITER (hh, top, cur, tmp)
 	{
-		found = ucl_object_find_key (obj, cur->name);
-		if (found == NULL) {
-			if (cur->required) {
-				g_set_error (err, CFG_RCL_ERROR, ENOENT,
-					"required section %s is missing", cur->name);
-				return FALSE;
+		if (strcmp (cur->name, "*") == 0) {
+			/* Default section handler */
+
+			it = ucl_object_iterate_new (obj);
+			while ((cur_obj = ucl_object_iterate_safe (it, false)) != NULL) {
+				HASH_FIND_STR (top, ucl_object_key (cur_obj), found_sec);
+
+				if (found_sec == NULL) {
+					if (cur->handler != NULL) {
+						if (!cur->handler (pool, cur_obj, ptr, cur, err)) {
+							ucl_object_iterate_free (it);
+
+							return FALSE;
+						}
+					}
+					else {
+						rspamd_rcl_section_parse_defaults (cur,
+								pool,
+								cur_obj,
+								ptr,
+								err);
+					}
+				}
 			}
+			ucl_object_iterate_free (it);
 		}
 		else {
-			/* Check type */
-			if (cur->strict_type) {
-				if (cur->type != found->type) {
-					g_set_error (err, CFG_RCL_ERROR, EINVAL,
-						"object in section %s has invalid type", cur->name);
+			found = ucl_object_find_key (obj, cur->name);
+			if (found == NULL) {
+				if (cur->required) {
+					g_set_error (err, CFG_RCL_ERROR, ENOENT,
+							"required section %s is missing", cur->name);
 					return FALSE;
 				}
 			}
-			LL_FOREACH (found, cur_obj)
-			{
-				if (cur->handler != NULL) {
-					if (!cur->handler (pool, cur_obj, ptr, cur, err)) {
+			else {
+				/* Check type */
+				if (cur->strict_type) {
+					if (cur->type != found->type) {
+						g_set_error (err, CFG_RCL_ERROR, EINVAL,
+								"object in section %s has invalid type", cur->name);
 						return FALSE;
 					}
 				}
-				else {
-					rspamd_rcl_section_parse_defaults (cur,
-						pool,
-						cur_obj,
-						ptr,
-						err);
+
+				it = ucl_object_iterate_new (obj);
+				while ((cur_obj = ucl_object_iterate_safe (it, false)) != NULL) {
+					if (cur->handler != NULL) {
+						if (!cur->handler (pool, cur_obj, ptr, cur, err)) {
+							ucl_object_iterate_free (it);
+
+							return FALSE;
+						}
+					}
+					else {
+						rspamd_rcl_section_parse_defaults (cur,
+								pool,
+								cur_obj,
+								ptr,
+								err);
+					}
 				}
+				ucl_object_iterate_free (it);
 			}
 		}
 		if (cur->fin) {
