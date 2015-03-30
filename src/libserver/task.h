@@ -60,7 +60,7 @@ enum rspamd_metric_action {
 #define RSPAMD_TASK_FLAG_PASS_ALL (1 << 6)
 #define RSPAMD_TASK_FLAG_NO_LOG (1 << 7)
 #define RSPAMD_TASK_FLAG_NO_IP (1 << 8)
-#define RSPAMD_TASK_FLAG_HAS_JSON (1 << 9)
+#define RSPAMD_TASK_FLAG_HAS_CONTROL (1 << 9)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_JSON(task) (((task)->flags & RSPAMD_TASK_FLAG_JSON))

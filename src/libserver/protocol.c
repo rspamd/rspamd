@@ -397,6 +397,9 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					msg_err ("Invalid message length header: %s", h->value->str);
 					validh = FALSE;
 				}
+				else {
+					task->flags |= RSPAMD_TASK_FLAG_HAS_CONTROL;
+				}
 			}
 			else {
 				validh = FALSE;

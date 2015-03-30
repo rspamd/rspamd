@@ -309,6 +309,9 @@ rspamd_task_process (struct rspamd_task *task,
 	gboolean process_extra_filters)
 {
 	gint r;
+	guint control_len;
+	struct ucl_parser *parser;
+	ucl_object_t *control_obj;
 	GError *err = NULL;
 
 	task->msg.start = start;
@@ -319,6 +322,36 @@ rspamd_task_process (struct rspamd_task *task,
 	task->s->wanna_die = TRUE;
 
 	rspamd_protocol_handle_headers (task, msg);
+
+	if (task->flags & RSPAMD_TASK_FLAG_HAS_CONTROL) {
+		/* We have control chunk, so we need to process it separately */
+		if (task->msg.len < task->message_len) {
+			msg_warn ("message has invalid message length: %ud and total len: %ud",
+					task->message_len, task->msg.len);
+			task->last_error = "Invalid length";
+			task->error_code = RSPAMD_PROTOCOL_ERROR;
+			task->state = WRITE_REPLY;
+			return FALSE;
+		}
+		control_len = task->msg.len - task->message_len;
+
+		if (control_len > 0) {
+			parser = ucl_parser_new (UCL_PARSER_KEY_LOWERCASE);
+
+			if (!ucl_parser_add_chunk (parser, task->msg.start, control_len)) {
+				msg_warn ("processing of control chunk failed: %s",
+					ucl_parser_get_error (parser));
+				ucl_parser_free (parser);
+			}
+			else {
+				control_obj = ucl_parser_get_object (parser);
+				ucl_parser_free (parser);
+			}
+
+			task->msg.start += control_len;
+			task->msg.len -= control_len;
+		}
+	}
 
 	r = process_message (task);
 	if (r == -1) {
