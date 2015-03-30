@@ -30,6 +30,15 @@ gboolean rspamd_protocol_handle_headers (struct rspamd_task *task,
 	struct rspamd_http_message *msg);
 
 /**
+ * Process control chunk and update task structure accordingly
+ * @param task
+ * @param control
+ * @return
+ */
+gboolean rspamd_protocol_handle_control (struct rspamd_task *task,
+		const ucl_object_t *control);
+
+/**
  * Process HTTP request to the task structure
  * @param task
  * @param msg

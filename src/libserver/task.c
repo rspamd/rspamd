@@ -346,6 +346,8 @@ rspamd_task_process (struct rspamd_task *task,
 			else {
 				control_obj = ucl_parser_get_object (parser);
 				ucl_parser_free (parser);
+				rspamd_protocol_handle_control (task, control_obj);
+				ucl_object_unref (control_obj);
 			}
 
 			task->msg.start += control_len;
