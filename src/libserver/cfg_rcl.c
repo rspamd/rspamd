@@ -1984,7 +1984,7 @@ rspamd_rcl_parse_struct_addr (rspamd_mempool_t *pool,
 
 	target = (rspamd_inet_addr_t **)(((gchar *)pd->user_struct) + pd->offset);
 
-	if (obj->type == UCL_STRING) {
+	if (ucl_object_type (obj) == UCL_STRING) {
 		val = ucl_object_tostring (obj);
 
 		if (!rspamd_parse_inet_address (target, val)) {
@@ -2003,6 +2003,74 @@ rspamd_rcl_parse_struct_addr (rspamd_mempool_t *pool,
 		return FALSE;
 	}
 
+	return TRUE;
+}
+
+gboolean
+rspamd_rcl_parse_struct_mime_addr (rspamd_mempool_t *pool,
+	const ucl_object_t *obj,
+	gpointer ud,
+	struct rspamd_rcl_section *section,
+	GError **err)
+{
+	struct rspamd_rcl_struct_parser *pd = ud;
+	InternetAddressList **target, *tmp_addr;
+	const gchar *val;
+	ucl_object_iter_t it;
+	const ucl_object_t *cur;
+
+	target = (InternetAddressList **)(((gchar *)pd->user_struct) + pd->offset);
+	if (*target == NULL) {
+		*target = internet_address_list_new ();
+	#ifdef GMIME24
+			rspamd_mempool_add_destructor (pool,
+					(rspamd_mempool_destruct_t) g_object_unref,
+					*target);
+	#else
+			rspamd_mempool_add_destructor (pool,
+					(rspamd_mempool_destruct_t) internet_address_list_destroy,
+					*target);
+	#endif
+	}
+
+	it = ucl_object_iterate_new (obj);
+
+	while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
+
+		if (ucl_object_type (cur) == UCL_STRING) {
+			val = ucl_object_tostring (obj);
+			tmp_addr = internet_address_list_parse_string (val);
+
+			if (tmp_addr) {
+				internet_address_list_append (*target, tmp_addr);
+#ifdef GMIME24
+				g_object_unref (tmp_addr);
+#else
+				internet_address_list_destroy (tmp_addr);
+#endif
+			}
+			else {
+				g_set_error (err,
+						CFG_RCL_ERROR,
+						EINVAL,
+						"cannot parse inet address: %s", val);
+				ucl_object_iterate_free (it);
+
+				return FALSE;
+			}
+		}
+		else {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"cannot get inet address from ucl object");
+			ucl_object_iterate_free (it);
+
+			return FALSE;
+		}
+	}
+
+	ucl_object_iterate_free (it);
 	return TRUE;
 }
 
