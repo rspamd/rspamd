@@ -38,6 +38,9 @@ local atoms = {}
 local metas = {}
 local section = rspamd_config:get_key("spamassassin")
 
+-- Minimum score to treat symbols as meta
+local meta_score_alpha = 0.5
+
 local function split(str)
   local result = {}
 
@@ -224,7 +227,10 @@ local function process_sa_conf(f)
 end
 
 if type(section) == "table" then
-  for _,fn in pairs(section) do
+  for k,fn in pairs(section) do
+    if k == 'alpha' and type(fn) == 'number' then
+      meta_score_alpha = fn
+    end
     f = io.open(fn, "r")
     if f then
       process_sa_conf(f)
@@ -240,6 +246,16 @@ local function calculate_score(sym)
   end
 
   return 1.0
+end
+
+local function add_sole_meta(sym, rule)
+  local r = {
+    type = 'meta',
+    meta = rule['symbol'],
+    score = rule['score'],
+    description = rule['description']
+  }
+  rules[sym] = r
 end
 
 -- Header rules
@@ -272,7 +288,10 @@ _.each(function(k, r)
       return 0
     end
     if r['score'] then
-      rspamd_config:set_metric_symbol(k, r['score'], r['description'])
+      local real_score = calculate_score(k)
+      if real_score > meta_score_alpha then
+        add_sole_meta(k, r)
+      end
     end
     --rspamd_config:register_symbol(k, calculate_score(k), f)
     atoms[k] = f
@@ -291,7 +310,10 @@ _.each(function(k, r)
       return 0
     end
     if r['score'] then
-      rspamd_config:set_metric_symbol(k, r['score'], r['description'])
+      local real_score = calculate_score(k)
+      if real_score > meta_score_alpha then
+        add_sole_meta(k, r)
+      end
     end
     --rspamd_config:register_symbol(k, calculate_score(k), f)
     atoms[k] = f
@@ -316,7 +338,10 @@ _.each(function(k, r)
       return 0
     end
     if r['score'] then
-      rspamd_config:set_metric_symbol(k, r['score'], r['description'])
+      local real_score = calculate_score(k)
+      if real_score > meta_score_alpha then
+        add_sole_meta(k, r)
+      end
     end
     --rspamd_config:register_symbol(k, calculate_score(k), f)
     atoms[k] = f
@@ -335,7 +360,10 @@ _.each(function(k, r)
       return 0
     end
     if r['score'] then
-      rspamd_config:set_metric_symbol(k, r['score'], r['description'])
+      local real_score = calculate_score(k)
+      if real_score > meta_score_alpha then
+        add_sole_meta(k, r)
+      end
     end
     --rspamd_config:register_symbol(k, calculate_score(k), f)
      atoms[k] = f
@@ -356,7 +384,10 @@ _.each(function(k, r)
       return 0
     end
     if r['score'] then
-      rspamd_config:set_metric_symbol(k, r['score'], r['description'])
+      local real_score = calculate_score(k)
+      if real_score > meta_score_alpha then
+        add_sole_meta(k, r)
+      end
     end
     --rspamd_config:register_symbol(k, calculate_score(k), f)
      atoms[k] = f
@@ -421,7 +452,9 @@ _.each(function(k, r)
         rspamd_config:set_metric_symbol(k, r['score'], r['description'])
       end
       rspamd_config:register_symbol(k, calculate_score(k), meta_cb)
-      atoms[k] = meta_cb
+      if not atoms[k] then
+        atoms[k] = meta_cb
+      end
     end
   end,
   _.filter(function(k, r)
