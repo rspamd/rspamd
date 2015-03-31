@@ -180,6 +180,16 @@ local function process_sa_conf(f)
         end
         
         cur_rule['re_expr'] = words_to_re(words, 4)
+        local unset_comp = string.find(cur_rule['re_expr'], '%s+%[if%-unset:')
+        if unset_comp then
+          -- We have optional part that needs to be processed
+          unset = string.match(string.sub(cur_rule['re_expr'], unset_comp),
+            '%[if%-unset:%s*([^%]%s]+)]')
+          cur_rule['unset'] = unset
+          -- Cut it down
+           cur_rule['re_expr'] = string.sub(cur_rule['re_expr'], 1, unset_comp - 1)
+        end
+        
         cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
         
         if not cur_rule['re'] then
@@ -317,7 +327,9 @@ _.each(function(k, r)
             end
             
             acc = acc .. str
-          end
+            end
+        elseif r['unset'] then
+          acc = acc .. r['unset']
         end
         
         return acc
