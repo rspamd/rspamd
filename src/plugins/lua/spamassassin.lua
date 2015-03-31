@@ -270,7 +270,7 @@ end
 -- Header rules
 _.each(function(k, r)
     local f = function(task)
-      _.each(function(h)
+      local str = _.foldl(function(acc, h)
         local hdr = task:get_header_full(h['header'], h['strong'])
         if hdr then
           for n, rh in ipairs(hdr) do
@@ -286,15 +286,23 @@ _.each(function(k, r)
             if h['function'] then
               str = h['function'](str)
             end
-            local match = r['re']:match(str)
-            if (match and not r['not']) or (not match and r['not']) then
-              return 1
-            end
+            
+            acc = acc .. str
           end
-        elseif r['not'] then
-          return 1
         end
-      end, r['header'])
+        
+        return acc
+      end, '', r['header'])
+      
+      if str == '' then
+        if r['not'] then return 1 end
+        return 0
+      end
+      
+      local match = r['re']:match(str)
+      if (match and not r['not']) or (not match and r['not']) then
+        return 1
+      end
       
       return 0
     end
@@ -383,6 +391,7 @@ _.each(function(k, r)
       return r['type'] == 'message'
     end,
     rules))
+
 -- URL rules
 _.each(function(k, r)
     local f = function(task)
