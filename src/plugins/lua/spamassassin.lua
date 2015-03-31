@@ -130,13 +130,25 @@ local function process_sa_conf(f)
     return table.concat(_.totable(_.drop_n(start, words)), " ");
   end
   
+  local skip_to_endif = false
   for l in f:lines() do
     (function ()
     if string.len(l) == 0 or
       _.nth(1, _.drop_while(function(c) return c == ' ' end, _.iter(l))) == '#' then
       return
     end
-      
+    
+    if skip_to_endif then
+      if string.match(l, '^endif') then
+        skip_to_endif = false
+      end
+      return
+    else
+      if string.match(l, '^ifplugin') then
+        skip_to_endif = true
+      end
+    end
+    
     local slash = string.find(l, '/')
     
     -- Skip comments
@@ -277,6 +289,7 @@ end
 -- Header rules
 _.each(function(k, r)
     local f = function(task)
+      local raw = false
       local str = _.foldl(function(acc, h)
         local hdr = task:get_header_full(h['header'], h['strong'])
         if hdr then
@@ -285,6 +298,7 @@ _.each(function(k, r)
             local str
             if h['raw'] then
               str =  rh['value']
+              raw = true
             else
               str =  rh['decoded']
             end
@@ -306,7 +320,7 @@ _.each(function(k, r)
         return 0
       end
       
-      local match = r['re']:match(str)
+      local match = r['re']:match(str, raw)
       if (match and not r['not']) or (not match and r['not']) then
         return 1
       end
@@ -356,11 +370,18 @@ _.each(function(k, r)
       if parts then
         for n, part in ipairs(parts) do
           -- Subject for optimization
-          if (r['re']:match(part:get_content())) then
-            return 1
+          if not part:is_empty() then
+            local content = part:get_content()
+            local raw = false
+            
+            if not part:is_utf() then raw = true end
+            if r['re']:match(content, raw) then
+              return 1
+            end
           end
         end
       end
+      
       return 0
     end
     if r['score'] then
@@ -380,7 +401,7 @@ _.each(function(k, r)
 -- Raw body rules
 _.each(function(k, r)
     local f = function(task)
-      if (r['re']:match(task:get_content())) then
+      if r['re']:match(task:get_content(), true) then
         return 1
       end
       return 0
