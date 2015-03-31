@@ -135,6 +135,12 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 		else if (*start == 'm') {
 			start ++;
 			sep = *start;
+
+			/* Paired braces */
+			if (sep == '{') {
+				sep = '}';
+			}
+
 			rspamd_flags |= RSPAMD_REGEXP_FLAG_FULL_MATCH;
 		}
 		if (sep == '\0' || g_ascii_isalnum (sep)) {

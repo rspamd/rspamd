@@ -13,6 +13,7 @@ context("Regexp unit tests", function()
       {'/^test$/m', '123test', false},
       {'m,test,', 'test', true},
       {'m,test,', 'test123', false},
+      {'m{https?://[^/?\\s]+?:\\d+(?<!:80)(?<!:443)(?<!:8080)(?:/|\\s|$)}', '', false},
       {'/test/i', 'TeSt123', true},
       {'/тест/i', 'ТесТ', true},
       -- Raw regexp
