@@ -163,7 +163,8 @@ local function process_sa_conf(f)
           handle_header_def(words[3], cur_rule)
         end
         
-        if cur_rule['re'] and (cur_rule['header'] or cur_rule['function']) then 
+        if cur_rule['re'] and cur_rule['symbol'] and 
+          (cur_rule['header'] or cur_rule['function']) then 
           valid_rule = true 
         end
       else
@@ -193,7 +194,7 @@ local function process_sa_conf(f)
       cur_rule['symbol'] = words[2]
       cur_rule['re_expr'] = words_to_re(words, 2)
       cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
-      if cur_rule['re'] then valid_rule = true end
+      if cur_rule['re'] and cur_rule['symbol'] then valid_rule = true end
     elseif words[1] == "rawbody" or words[1] == "full" and slash then
       -- body SYMBOL /regexp/
       if valid_rule then
@@ -203,7 +204,7 @@ local function process_sa_conf(f)
       cur_rule['symbol'] = words[2]
       cur_rule['re_expr'] = words_to_re(words, 2)
       cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
-      if cur_rule['re'] then valid_rule = true end
+      if cur_rule['re'] and cur_rule['symbol'] then valid_rule = true end
     elseif words[1] == "uri" then
       -- uri SYMBOL /regexp/
       if valid_rule then
@@ -213,7 +214,7 @@ local function process_sa_conf(f)
       cur_rule['symbol'] = words[2]
       cur_rule['re_expr'] = words_to_re(words, 2)
       cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
-      if cur_rule['re'] then valid_rule = true end
+      if cur_rule['re'] and cur_rule['symbol'] then valid_rule = true end
     elseif words[1] == "meta" then
       -- meta SYMBOL expression
       if valid_rule then
@@ -222,7 +223,7 @@ local function process_sa_conf(f)
       cur_rule['type'] = 'meta'
       cur_rule['symbol'] = words[2]
       cur_rule['meta'] = words_to_re(words, 2)
-      if cur_rule['meta'] then valid_rule = true end
+      if cur_rule['meta'] and cur_rule['symbol'] then valid_rule = true end
     elseif words[1] == "describe" and valid_rule then
       cur_rule['description'] = words_to_re(words, 1)
     elseif words[1] == "score" and valid_rule then
