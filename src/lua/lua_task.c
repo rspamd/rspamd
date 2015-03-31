@@ -499,6 +499,8 @@ static const struct luaL_reg tasklib_m[] = {
  * This module provides access to text parts found in a message
  */
 
+LUA_FUNCTION_DEF (textpart, is_utf);
+
 /***
  * @method textpart:get_content()
  * Get parsed content of a part
@@ -544,6 +546,7 @@ LUA_FUNCTION_DEF (textpart, get_language);
 LUA_FUNCTION_DEF (textpart, compare_distance);
 
 static const struct luaL_reg textpartlib_m[] = {
+	LUA_INTERFACE_DEF (textpart, is_utf),
 	LUA_INTERFACE_DEF (textpart, get_content),
 	LUA_INTERFACE_DEF (textpart, get_length),
 	LUA_INTERFACE_DEF (textpart, is_empty),
@@ -2024,6 +2027,26 @@ rspamd_config.R_EMPTY_IMAGE = function (task)
 	return false
 end
  */
+
+/***
+ * @method text_part:is_utf()
+ * Return TRUE if part is a valid utf text
+ * @return {boolean} true if part is valid `UTF8` part
+ */
+static gint
+lua_textpart_is_utf (lua_State * L)
+{
+	struct mime_text_part *part = lua_check_textpart (L);
+
+	if (part == NULL || part->is_empty) {
+		lua_pushboolean (L, FALSE);
+		return 1;
+	}
+
+	lua_pushboolean (L, part->is_utf);
+
+	return 1;
+}
 
 /***
  * @method text_part:get_content()
