@@ -139,7 +139,13 @@ local function process_sa_conf(f)
       
     local slash = string.find(l, '/')
     
-    words = _.totable(_.filter(function(w) return w ~= "" end, _.iter(split(l))))
+    -- Skip comments
+    words = _.totable(_.take_while(
+      function(w) return string.sub(w, 1, 1) ~= '#' end,
+      _.filter(function(w) 
+          return w ~= "" end, 
+      _.iter(split(l)))))
+
     if words[1] == "header" then
       -- header SYMBOL Header ~= /regexp/
       if valid_rule then
