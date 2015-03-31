@@ -314,7 +314,9 @@ rspamd_spf_record_flatten (struct spf_record *rec)
 	res->ttl = rec->ttl;
 	REF_INIT_RETAIN (res, rspamd_flatten_record_dtor);
 
-	rspamd_spf_process_reference (res, NULL, rec, TRUE);
+	if (res->elts->len > 0) {
+		rspamd_spf_process_reference (res, NULL, rec, TRUE);
+	}
 
 	return res;
 }
