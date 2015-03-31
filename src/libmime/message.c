@@ -986,6 +986,7 @@ convert_text_to_utf (struct rspamd_task *task,
 		text_part->is_raw = TRUE;
 		return part_content;
 	}
+
 	if (g_ascii_strcasecmp (ocharset,
 		"utf-8") == 0 || g_ascii_strcasecmp (ocharset, "utf8") == 0) {
 		if (g_utf8_validate (part_content->data, part_content->len, NULL)) {
@@ -1001,20 +1002,22 @@ convert_text_to_utf (struct rspamd_task *task,
 			return part_content;
 		}
 	}
-
-	res_str = rspamd_text_to_utf8 (task, part_content->data,
-			part_content->len,
-			ocharset,
-			&write_bytes,
-			&err);
-	if (res_str == NULL) {
-		msg_warn ("<%s>: cannot convert from %s to utf8: %s",
-			task->message_id,
-			ocharset,
-			err ? err->message : "unknown problem");
-		text_part->is_raw = TRUE;
-		g_error_free (err);
-		return part_content;
+	else {
+		res_str = rspamd_text_to_utf8 (task, part_content->data,
+				part_content->len,
+				ocharset,
+				&write_bytes,
+				&err);
+		if (res_str == NULL) {
+			msg_warn ("<%s>: cannot convert from %s to utf8: %s",
+					task->message_id,
+					ocharset,
+					err ? err->message : "unknown problem");
+			text_part->is_raw = TRUE;
+			text_part->is_utf = FALSE;
+			g_error_free (err);
+			return part_content;
+		}
 	}
 
 	result_array = rspamd_mempool_alloc (task->task_pool, sizeof (GByteArray));
