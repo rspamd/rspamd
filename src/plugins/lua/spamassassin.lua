@@ -41,14 +41,78 @@ local section = rspamd_config:get_key("spamassassin")
 -- Minimum score to treat symbols as meta
 local meta_score_alpha = 0.5
 
-local function split(str)
+local function split(str, delim)
   local result = {}
+  
+  if not delim then
+    delim = '[^%s]+'
+  end
 
-  for token in string.gmatch(str, "[^%s]+") do
+  for token in string.gmatch(str, delim) do
     table.insert(result, token)
   end
   
   return result
+end
+
+local function handle_header_def(hline, cur_rule)
+  --Now check for modifiers inside header's name
+  local hdrs = split(hline, '[^|]+')
+  local hdr_params = {}
+  local cur_param = {}
+  for i,h in ipairs(hdrs) do
+    if h == 'ALL' or h == 'ALL:raw' then
+      cur_rule['type'] = 'function'
+      -- Pack closure
+      local re = cur_rule['re']
+      local not_f = cur_rule['not']
+      local sym = cur_rule['symbol']
+      cur_rule['function'] = function(task)
+        local hdr = task:get_raw_headers()
+        if hdr then
+          local match = re:match(hdr)
+          if (match and not not_f) or 
+            (not match and not_f) then
+            task:insert_result(sym, 1.0)
+          end
+        end
+      end
+      return
+    else
+      local args = split(h, '[^:]+')
+      cur_param['strong'] = false
+      cur_param['raw'] = false
+      cur_param['header'] = args[1]
+      
+      if cur_param['header'] == 'MESSAGEID' then
+        -- Special case for spamassassin
+        cur_param['header'] = 'Message-ID'
+        rspamd_logger.info('MESSAGEID support is limited in ' .. cur_rule['symbol'])
+      end
+      
+      _.each(function(func)
+          if func == 'addr' then
+            cur_param['function'] = function(str)
+              local at = string.find(str, '@')
+              if at then
+                return string.sub(str, at + 1)
+              end
+              return str
+            end
+          elseif func == 'raw' then
+            cur_param['raw'] = true
+          elseif func == 'case' then
+            cur_param['strong'] = true
+          else
+            rspamd_logger.warn(string.format('Function %s is not supported in %s',
+              func, cur_rule['symbol']))
+          end
+        end, _.tail(args))
+        table.insert(hdr_params, cur_param)
+    end
+    
+    cur_rule['header'] = hdr_params
+  end
 end
 
 local function process_sa_conf(f)
@@ -84,7 +148,6 @@ local function process_sa_conf(f)
       if slash then
         cur_rule['type'] = 'header'
         cur_rule['symbol'] = words[2]
-        cur_rule['header'] = words[3]
         
         if words[4] == '!~' then
           cur_rule['not'] = true
@@ -96,62 +159,8 @@ local function process_sa_conf(f)
         if not cur_rule['re'] then
           rspamd_logger.warn(string.format("Cannot parse regexp '%s' for %s",
             cur_rule['re_expr'], cur_rule['symbol']))
-        end
-        
-        --Now check for modifiers inside header's name
-        local semicolon = string.find(cur_rule['header'], ':')
-        if semicolon then
-          local func = string.sub(cur_rule['header'], semicolon + 1)
-          local hdr =  string.sub(cur_rule['header'], 1, semicolon - 1)
-          cur_rule['header'] = hdr
-          
-          if hdr == 'ALL' then
-            -- We can handle all only with 'raw' condition
-            if func == 'raw' then
-              cur_rule['type'] = 'function'
-              -- Pack closure
-              local re = cur_rule['re']
-              local not_f = cur_rule['not']
-              local sym = cur_rule['symbol']
-              cur_rule['function'] = function(task)
-                local hdr = task:get_raw_headers()
-                if hdr then
-                  local match = re:match(hdr)
-                  if (match and not not_f) or 
-                    (not match and not_f) then
-                    task:insert_result(sym, 1.0)
-                  end
-                end
-              end
-            else
-              -- Not raw
-              rspamd_logger.warn('Cannot deal with not raw ALL rule for ' ..
-                cur_rule['symbol'])
-              return
-            end
-          else
-            -- Just a modifier for a normal header
-            if func == 'addr' then
-              cur_rule['function'] = function(str)
-                local at = string.find(str, '@')
-                if at then
-                  return string.sub(str, at + 1)
-                end
-                return str
-              end
-            elseif func == 'raw' then
-              cur_rule['raw'] = true
-            else
-              rspamd_logger.warn(string.format('Function %s is not supported in %s',
-                func, cur_rule['symbol']))
-            end
-          end
-        end
-          
-        if cur_rule['header'] == 'MESSAGEID' then
-          -- Special case for spamassassin
-          cur_rule['header'] = 'Message-ID'
-          rspamd_logger.info('MESSAGEID support is limited in ' .. cur_rule['symbol'])
+        else
+          handle_header_def(words[3], cur_rule)
         end
         
         if cur_rule['re'] and (cur_rule['header'] or cur_rule['function']) then 
@@ -260,35 +269,37 @@ end
 
 -- Header rules
 _.each(function(k, r)
-    local f = function(task)   
-      local hdr = task:get_header_full(r['header'])
-      if hdr then
-        for n, rh in ipairs(hdr) do
-          -- Subject for optimization
-          local str
-          if r['raw'] then
-            str =  rh['value']
-          else
-            str =  rh['decoded']
+    local f = function(task)
+      _.each(function(h)
+        local hdr = task:get_header_full(h['header'], h['strong'])
+        if hdr then
+          for n, rh in ipairs(hdr) do
+            -- Subject for optimization
+            local str
+            if h['raw'] then
+              str =  rh['value']
+            else
+              str =  rh['decoded']
+            end
+            if not str then return 0 end
+            
+            if h['function'] then
+              str = h['function'](str)
+            end
+            local match = r['re']:match(str)
+            if (match and not r['not']) or (not match and r['not']) then
+              return 1
+            end
           end
-          if not str then return 0 end
-          
-          if r['function'] then
-            str = r['function'](str)
-          end
-          local match = r['re']:match(str)
-          if (match and not r['not']) or (not match and r['not']) then
-            return 1
-          end
+        elseif r['not'] then
+          return 1
         end
-      elseif r['not'] then
-        return 1
-      end
+      end, r['header'])
       
       return 0
     end
     if r['score'] then
-      local real_score = calculate_score(k)
+      local real_score = r['score'] * calculate_score(k)
       if real_score > meta_score_alpha then
         add_sole_meta(k, r)
       end
