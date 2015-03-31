@@ -268,11 +268,12 @@ lua_regexp_search (lua_State *L)
 }
 
 /***
- * @method re:match(line)
+ * @method re:match(line[, raw_match])
  * Matches line against the regular expression and return true if line matches
  * (partially or completely)
  *
  * @param {string} line match the specified line against regexp object
+ * @param {bool} match raw regexp instead of utf8 one
  * @return {table or nil} table of strings matched or nil
  * @example
  * local re = regexp.create_cached('/^\s*([0-9]+)\s*$/')
@@ -286,11 +287,17 @@ lua_regexp_match (lua_State *L)
 	struct rspamd_lua_regexp *re = lua_check_regexp (L);
 	const gchar *data;
 	gsize len;
+	gboolean raw = FALSE;
 
 	if (re) {
 		data = luaL_checklstring (L, 2, &len);
+
+		if (lua_gettop (L) == 3) {
+			raw = lua_toboolean (L, 3);
+		}
+
 		if (data) {
-			if (rspamd_regexp_search (re->re, data, len, NULL, NULL, FALSE)) {
+			if (rspamd_regexp_search (re->re, data, len, NULL, NULL, raw)) {
 				lua_pushboolean (L, TRUE);
 			}
 			else {
