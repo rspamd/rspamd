@@ -310,7 +310,7 @@ _.each(function(k, r)
       return 0
     end
     if r['score'] then
-      local real_score = calculate_score(k)
+      local real_score = r['score'] * calculate_score(k)
       if real_score > meta_score_alpha then
         add_sole_meta(k, r)
       end
@@ -338,7 +338,7 @@ _.each(function(k, r)
       return 0
     end
     if r['score'] then
-      local real_score = calculate_score(k)
+      local real_score = r['score'] * calculate_score(k)
       if real_score > meta_score_alpha then
         add_sole_meta(k, r)
       end
@@ -360,7 +360,7 @@ _.each(function(k, r)
       return 0
     end
     if r['score'] then
-      local real_score = calculate_score(k)
+      local real_score = r['score'] * calculate_score(k)
       if real_score > meta_score_alpha then
         add_sole_meta(k, r)
       end
@@ -384,7 +384,7 @@ _.each(function(k, r)
       return 0
     end
     if r['score'] then
-      local real_score = calculate_score(k)
+      local real_score = r['score'] * calculate_score(k)
       if real_score > meta_score_alpha then
         add_sole_meta(k, r)
       end
