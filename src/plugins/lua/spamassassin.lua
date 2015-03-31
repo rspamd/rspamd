@@ -99,6 +99,14 @@ local function handle_header_def(hline, cur_rule)
               end
               return str
             end
+          elseif func == 'name' then
+            cur_param['function'] = function(str)
+              local at = string.find(str, '@')
+              if at then
+                return string.sub(str, 1, at - 1)
+              end
+              return str
+            end
           elseif func == 'raw' then
             cur_param['raw'] = true
           elseif func == 'case' then
