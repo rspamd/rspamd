@@ -34,6 +34,7 @@
 
 /* Size for features pipe */
 #define DEFAULT_FEATURE_WINDOW_SIZE 5
+#define DEFAULT_OSB_VERSION 2
 
 static const int primes[] = {
 	1, 7,
@@ -48,6 +49,103 @@ static const int primes[] = {
 	797, 3277,
 };
 
+static const guchar osb_tokenizer_magic[] = {'o', 's', 'b', 't', 'o', 'k', 'v', '2'};
+
+enum rspamd_osb_hash_type {
+	RSPAMD_OSB_HASH_COMPAT = 0,
+	RSPAMD_OSB_HASH_XXHASH,
+	RSPAMD_OSB_HASH_SIPHASH
+};
+
+struct rspamd_osb_tokenizer_config {
+	guchar magic[8];
+	gshort version;
+	gshort window_size;
+	enum rspamd_osb_hash_type ht;
+	guint64 seed;
+	struct sipkey sk;
+};
+
+/*
+ * Return default config
+ */
+static struct rspamd_osb_tokenizer_config *
+rspamd_tokenizer_osb_default_config (void)
+{
+	static struct rspamd_osb_tokenizer_config def;
+
+	if (memcmp (def.magic, osb_tokenizer_magic, sizeof (osb_tokenizer_magic)) != 0) {
+		memset (&def, 0, sizeof (def));
+		memcpy (def.magic, osb_tokenizer_magic, sizeof (osb_tokenizer_magic));
+		def.version = DEFAULT_OSB_VERSION;
+		def.window_size = DEFAULT_FEATURE_WINDOW_SIZE;
+		def.ht = RSPAMD_OSB_HASH_COMPAT;
+		def.seed = 0xdeadbabe;
+	}
+
+	return &def;
+}
+
+static struct rspamd_osb_tokenizer_config *
+rspamd_tokenizer_osb_config_from_ucl (rspamd_mempool_t * pool,
+		const ucl_object_t *obj)
+{
+	const ucl_object_t *elt;
+	struct rspamd_osb_tokenizer_config *cf, *def;
+	guchar *key = NULL;
+	gsize keylen;
+
+	/* Use default config */
+	cf = rspamd_mempool_alloc (pool, sizeof (*cf));
+	def = rspamd_tokenizer_osb_default_config ();
+	memcpy (cf, def, sizeof (*cf));
+
+	elt = ucl_object_find_key (obj, "hash");
+	if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
+		if (g_ascii_strncasecmp (ucl_object_tostring (elt), "xxh", 3)
+				== 0) {
+			cf->ht = RSPAMD_OSB_HASH_XXHASH;
+			elt = ucl_object_find_key (obj, "seed");
+			if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
+				cf->seed = ucl_object_toint (elt);
+			}
+		}
+		else if (g_ascii_strncasecmp (ucl_object_tostring (elt), "sip", 3)
+				== 0) {
+			cf->ht = RSPAMD_OSB_HASH_SIPHASH;
+			elt = ucl_object_find_key (obj, "key");
+
+			if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
+				key = rspamd_decode_base32 (ucl_object_tostring (elt),
+						0, &keylen);
+				if (keylen < 16) {
+					msg_warn ("siphash key is too short: %s", keylen);
+					g_free (key);
+				}
+				else {
+					sip_tokey (&cf->sk, key);
+					g_free (key);
+				}
+			}
+			else {
+				msg_warn ("siphash cannot be used without key");
+			}
+
+		}
+	}
+
+	elt = ucl_object_find_key (obj, "window");
+	if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
+		cf->window_size = ucl_object_toint (elt);
+		if (cf->window_size > DEFAULT_FEATURE_WINDOW_SIZE * 4) {
+			msg_err ("too large window size: %d", cf->window_size);
+			cf->window_size = DEFAULT_FEATURE_WINDOW_SIZE;
+		}
+	}
+
+	return cf;
+}
+
 int
 rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
 	rspamd_mempool_t * pool,
@@ -57,15 +155,10 @@ rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
 {
 	rspamd_token_t *new = NULL;
 	rspamd_fstring_t *token;
-	const ucl_object_t *elt;
+	struct rspamd_osb_tokenizer_config *osb_cf;
 	guint64 *hashpipe, cur;
 	guint32 h1, h2;
-	guint processed = 0, i, w, window_size = DEFAULT_FEATURE_WINDOW_SIZE;
-	gboolean compat = TRUE, secure = FALSE;
-	gint64 seed = 0xdeadbabe;
-	guchar *key = NULL;
-	gsize keylen;
-	struct sipkey sk;
+	guint processed = 0, i, w, window_size;
 
 	g_assert (tree != NULL);
 
@@ -74,50 +167,13 @@ rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
 	}
 
 	if (cf != NULL && cf->opts != NULL) {
-		elt = ucl_object_find_key (cf->opts, "hash");
-		if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
-			if (g_ascii_strncasecmp (ucl_object_tostring (elt), "xxh", 3)
-					== 0) {
-				compat = FALSE;
-				secure = FALSE;
-				elt = ucl_object_find_key (cf->opts, "seed");
-				if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
-					seed = ucl_object_toint (elt);
-				}
-			}
-			else if (g_ascii_strncasecmp (ucl_object_tostring (elt), "sip", 3)
-					== 0) {
-				compat = FALSE;
-				elt = ucl_object_find_key (cf->opts, "seed");
-
-				if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
-					key = rspamd_decode_base32 (ucl_object_tostring (elt),
-							0, &keylen);
-					if (keylen < 16) {
-						msg_warn ("siphash seed is too short: %s", keylen);
-						g_free (key);
-					}
-					else {
-						secure = TRUE;
-						sip_tokey (&sk, key);
-						g_free (key);
-					}
-				}
-				else {
-					msg_warn ("siphash cannot be used without seed");
-				}
-
-			}
-		}
-		elt = ucl_object_find_key (cf->opts, "window");
-		if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
-			window_size = ucl_object_toint (elt);
-			if (window_size > DEFAULT_FEATURE_WINDOW_SIZE * 4) {
-				msg_err ("too large window size: %d", window_size);
-				window_size = DEFAULT_FEATURE_WINDOW_SIZE;
-			}
-		}
+		osb_cf = rspamd_tokenizer_osb_config_from_ucl (pool, cf->opts);
 	}
+	else {
+		osb_cf = rspamd_tokenizer_osb_default_config ();
+	}
+
+	window_size = osb_cf->window_size;
 
 	hashpipe = g_alloca (window_size * sizeof (hashpipe[0]));
 	memset (hashpipe, 0xfe, window_size * sizeof (hashpipe[0]));
@@ -125,16 +181,16 @@ rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
 	for (w = 0; w < input->len; w ++) {
 		token = &g_array_index (input, rspamd_fstring_t, w);
 
-		if (compat) {
+		if (osb_cf->ht == RSPAMD_OSB_HASH_COMPAT) {
 			cur = rspamd_fstrhash_lc (token, is_utf);
 		}
 		else {
 			/* We know that the words are normalized */
-			if (!secure) {
-				cur = XXH64 (token->begin, token->len, seed);
+			if (osb_cf->ht == RSPAMD_OSB_HASH_XXHASH) {
+				cur = XXH64 (token->begin, token->len, osb_cf->seed);
 			}
 			else {
-				cur = siphash24 (token->begin, token->len, &sk);
+				cur = siphash24 (token->begin, token->len, &osb_cf->sk);
 			}
 		}
 
@@ -154,7 +210,7 @@ rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
 				new = rspamd_mempool_alloc0 (pool, sizeof (rspamd_token_t));
 				new->datalen = sizeof (gint64);
 
-				if (compat) {
+				if (osb_cf->ht == RSPAMD_OSB_HASH_COMPAT) {
 					h1 = ((guint32)hashpipe[0]) * primes[0] +
 							((guint32)hashpipe[i]) * primes[i << 1];
 					h2 = ((guint32)hashpipe[0]) * primes[1] +
@@ -180,7 +236,7 @@ rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
 			new = rspamd_mempool_alloc0 (pool, sizeof (rspamd_token_t));
 			new->datalen = sizeof (gint64);
 
-			if (compat) {
+			if (osb_cf->ht == RSPAMD_OSB_HASH_COMPAT) {
 				h1 = ((guint32)hashpipe[0]) * primes[0] +
 						((guint32)hashpipe[i]) * primes[i << 1];
 				h2 = ((guint32)hashpipe[0]) * primes[1] +
