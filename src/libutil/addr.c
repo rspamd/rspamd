@@ -346,6 +346,10 @@ rspamd_parse_inet_address (rspamd_inet_addr_t **target, const char *src)
 	gboolean ret = FALSE;
 	rspamd_inet_addr_t *addr = NULL;
 	union sa_inet su;
+	const char *end;
+	char ipbuf[INET6_ADDRSTRLEN + 1];
+	guint iplen;
+	guint portnum;
 
 	g_assert (src != NULL);
 	g_assert (target != NULL);
@@ -355,18 +359,84 @@ rspamd_parse_inet_address (rspamd_inet_addr_t **target, const char *src)
 	if (src[0] == '/' || src[0] == '.') {
 		return rspamd_parse_unix_path (target, src);
 	}
-	else if (inet_pton (AF_INET, src, &su.s4.sin_addr) == 1) {
-		addr = rspamd_inet_addr_create (AF_INET);
-		memcpy (&addr->u.in.addr.s4.sin_addr, &su.s4.sin_addr,
-				sizeof (struct in_addr));
-		ret = TRUE;
+
+	if (src[0] == '[') {
+		/* Ipv6 address in format [::1]:port or just [::1] */
+		end = strrchr (src + 1, ']');
+
+		if (end == NULL) {
+			return FALSE;
+		}
+
+		iplen = end - src - 1;
+
+		if (iplen == 0 || iplen > sizeof (ipbuf)) {
+			return FALSE;
+		}
+
+		rspamd_strlcpy (ipbuf, src + 1, iplen);
+
+		if (ipv6_status == RSPAMD_IPV6_SUPPORTED &&
+				inet_pton (AF_INET6, ipbuf, &su.s6.sin6_addr) == 1) {
+			addr = rspamd_inet_addr_create (AF_INET6);
+			memcpy (&addr->u.in.addr.s6.sin6_addr, &su.s6.sin6_addr,
+					sizeof (struct in6_addr));
+			ret = TRUE;
+		}
+
+		if (ret && end[1] == ':') {
+			/* Port part */
+			portnum = strtoul (end + 1, NULL, 10);
+			rspamd_inet_address_set_port (addr, portnum);
+		}
 	}
-	else if (ipv6_status == RSPAMD_IPV6_SUPPORTED &&
-			inet_pton (AF_INET6, src, &su.s6.sin6_addr) == 1) {
-		addr = rspamd_inet_addr_create (AF_INET6);
-		memcpy (&addr->u.in.addr.s6.sin6_addr, &su.s6.sin6_addr,
-				sizeof (struct in6_addr));
-		ret = TRUE;
+	else {
+
+		if ((end = strchr (src, ':')) != NULL) {
+			/* This is either port number and ipv4 addr or ipv6 addr */
+			if (ipv6_status == RSPAMD_IPV6_SUPPORTED &&
+					inet_pton (AF_INET6, src, &su.s6.sin6_addr) == 1) {
+				addr = rspamd_inet_addr_create (AF_INET6);
+				memcpy (&addr->u.in.addr.s6.sin6_addr, &su.s6.sin6_addr,
+						sizeof (struct in6_addr));
+				ret = TRUE;
+			}
+			else {
+				/* Not ipv6, so try ip:port */
+				iplen = end - src;
+
+				if (iplen > sizeof (ipbuf)) {
+					return FALSE;
+				}
+				else {
+					rspamd_strlcpy (ipbuf, src, iplen);
+				}
+
+				if (inet_pton (AF_INET, ipbuf, &su.s4.sin_addr) == 1) {
+					addr = rspamd_inet_addr_create (AF_INET);
+					memcpy (&addr->u.in.addr.s4.sin_addr, &su.s4.sin_addr,
+							sizeof (struct in_addr));
+					portnum = strtoul (end + 1, NULL, 10);
+					rspamd_inet_address_set_port (addr, portnum);
+					ret = TRUE;
+				}
+			}
+		}
+		else {
+			if (inet_pton (AF_INET, src, &su.s4.sin_addr) == 1) {
+				addr = rspamd_inet_addr_create (AF_INET);
+				memcpy (&addr->u.in.addr.s4.sin_addr, &su.s4.sin_addr,
+						sizeof (struct in_addr));
+				ret = TRUE;
+			}
+			else if (ipv6_status == RSPAMD_IPV6_SUPPORTED &&
+					inet_pton (AF_INET6, src, &su.s6.sin6_addr) == 1) {
+				addr = rspamd_inet_addr_create (AF_INET6);
+				memcpy (&addr->u.in.addr.s6.sin6_addr, &su.s6.sin6_addr,
+						sizeof (struct in6_addr));
+				ret = TRUE;
+			}
+		}
 	}
 
 	if (ret && target) {
