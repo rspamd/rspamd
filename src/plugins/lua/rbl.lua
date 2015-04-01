@@ -379,9 +379,9 @@ metrics['default'] = {}
 for _, w in pairs(white_symbols) do
   for _, b in pairs(black_symbols) do
     csymbol = 'RBL_COMPOSITE_' .. w .. '_' .. b
-    rspamd_config:register_virtual_symbol(csymbol, 1)
-    rspamd_config:add_composite(csymbol, w .. ' & ' .. b)
     metrics['default'][csymbol] = {weight = 0, description = 'RBL Composite'}
+    rspamd_config:add_composite(csymbol, w .. ' & ' .. b)
+    rspamd_config:register_virtual_symbol(csymbol, 1)
   end
 end
 rspamd_config:register_callback_symbol_priority('RBL', 1.0, 0, rbl_cb)
