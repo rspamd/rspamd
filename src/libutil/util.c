@@ -682,7 +682,7 @@ rspamd_str_lc_utf8 (gchar *str, guint size)
 	gunichar uc;
 
 	while (remain > 0) {
-		uc = g_utf8_get_char_validated (s, remain);
+		uc = g_utf8_get_char (s);
 		uc = g_unichar_tolower (uc);
 		p = g_utf8_next_char (s);
 
