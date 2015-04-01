@@ -1603,9 +1603,6 @@ process_message (struct rspamd_task *task)
 			cur = g_list_next (cur);
 		}
 
-		/* Restore normal order */
-		task->received = g_list_reverse (task->received);
-
 		/* Extract data from received header if we were not given IP */
 		if (task->received && (task->flags & RSPAMD_TASK_FLAG_NO_IP)) {
 			recv = task->received->data;
