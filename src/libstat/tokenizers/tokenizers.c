@@ -246,6 +246,7 @@ rspamd_tokenizer_get_word (rspamd_fstring_t * buf,
 			break;
 		}
 
+		remain -= next_p - p;
 		p = next_p;
 	}
 
