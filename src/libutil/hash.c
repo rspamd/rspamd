@@ -223,8 +223,8 @@ rspamd_lru_hash_insert (rspamd_lru_hash_t *hash, gpointer key, gpointer value,
 void
 rspamd_lru_hash_destroy (rspamd_lru_hash_t *hash)
 {
-	g_queue_free (hash->exp);
 	g_hash_table_unref (hash->tbl);
+	g_queue_free (hash->exp);
 	g_slice_free1 (sizeof (rspamd_lru_hash_t), hash);
 }
 
