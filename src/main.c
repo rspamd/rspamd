@@ -1494,7 +1494,14 @@ main (gint argc, gchar **argv, gchar **env)
 	sigaction (SIGINT,	&signals, NULL);
 	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 	/* Set alarm for hard termination */
-	set_alarm (HARD_TERMINATION_TIME);
+	if (getenv ("G_SLICE") != NULL) {
+		/* Special case if we are likely running with valgrind */
+		set_alarm (HARD_TERMINATION_TIME * 10);
+	}
+	else {
+		set_alarm (HARD_TERMINATION_TIME);
+	}
+
 	/* Wait for workers termination */
 	g_hash_table_foreach_remove (rspamd_main->workers, wait_for_workers, NULL);
 
