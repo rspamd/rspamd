@@ -1181,6 +1181,7 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 	rspamd_fstring_t *w, stw;
 	const guchar *r;
 	guint i;
+	GArray *tmp;
 
 	if (part->language && part->language[0] != '\0' && part->is_utf) {
 		stem = sb_stemmer_new (part->language, "UTF_8");
@@ -1191,32 +1192,35 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 	}
 
 	/* Ugly workaround */
-	part->normalized_words = rspamd_tokenize_text (part->content->data,
+	tmp = rspamd_tokenize_text (part->content->data,
 			part->content->len, part->is_utf, task->cfg->min_word_len,
 			part->urls_offset, FALSE);
 
-	for (i = 0; i < part->words->len; i ++) {
-		w = &g_array_index (part->words, rspamd_fstring_t, i);
-		if (stem) {
-			r = sb_stemmer_stem (stem, w->begin, w->len);
-		}
+	if (tmp) {
+		for (i = 0; i < tmp->len; i ++) {
+			w = &g_array_index (tmp, rspamd_fstring_t, i);
+			if (stem) {
+				r = sb_stemmer_stem (stem, w->begin, w->len);
+			}
 
-		if (stem == NULL || r == NULL) {
-			stw.begin = rspamd_mempool_fstrdup (task->task_pool, w);
-			stw.len = w->len;
-		}
-		else {
-			stw.begin = rspamd_mempool_strdup (task->task_pool, r);
-			stw.len = strlen (r);
-		}
+			if (stem == NULL || r == NULL) {
+				stw.begin = rspamd_mempool_fstrdup (task->task_pool, w);
+				stw.len = w->len;
+			}
+			else {
+				stw.begin = rspamd_mempool_strdup (task->task_pool, r);
+				stw.len = strlen (r);
+			}
 
-		if (part->is_utf) {
-			rspamd_str_lc_utf8 (stw.begin, stw.len);
+			if (part->is_utf) {
+				rspamd_str_lc_utf8 (stw.begin, stw.len);
+			}
+			else {
+				rspamd_str_lc (stw.begin, stw.len);
+			}
+			g_array_append_val (part->normalized_words, stw);
 		}
-		else {
-			rspamd_str_lc (stw.begin, stw.len);
-		}
-		g_array_append_val (part->normalized_words, stw);
+		g_array_free (tmp, TRUE);
 	}
 
 	if (stem != NULL) {
