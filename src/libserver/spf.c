@@ -61,7 +61,7 @@ struct spf_record {
 	gint requests_inflight;
 
 	guint ttl;
-	GArray *resolved; /* Array of struct spf_resolved_element */
+	GPtrArray *resolved; /* Array of struct spf_resolved_element */
 	const gchar *sender;
 	const gchar *sender_domain;
 	gchar *local_part;
@@ -175,23 +175,16 @@ rspamd_spf_free_addr (gpointer a)
 static struct spf_resolved_element *
 rspamd_spf_new_addr_list (struct spf_record *rec, const gchar *domain)
 {
-	struct spf_resolved_element resolved;
+	struct spf_resolved_element *resolved;
 
-	resolved.redirected = FALSE;
-	resolved.cur_domain = g_strdup (domain);
-	resolved.elts = g_ptr_array_new_full (8, rspamd_spf_free_addr);
+	resolved = g_slice_alloc (sizeof (*resolved));
+	resolved->redirected = FALSE;
+	resolved->cur_domain = g_strdup (domain);
+	resolved->elts = g_ptr_array_new_full (8, rspamd_spf_free_addr);
 
-	g_array_append_val (rec->resolved, resolved);
+	g_ptr_array_add (rec->resolved, resolved);
 
-	return &g_array_index (rec->resolved, struct spf_resolved_element,
-			rec->resolved->len - 1);
-}
-
-/* Debugging function that dumps spf record in log */
-static void
-dump_spf_record (GList *addrs)
-{
-
+	return g_ptr_array_index (rec->resolved, rec->resolved->len - 1);
 }
 
 /*
@@ -206,13 +199,13 @@ spf_record_destructor (gpointer r)
 
 	if (rec) {
 		for (i = 0; i < rec->resolved->len; i ++) {
-			elt = &g_array_index (rec->resolved, struct spf_resolved_element, i);
-
-			/* Elts are destructed automatically here */
+			elt = g_ptr_array_index (rec->resolved, i);
 			g_ptr_array_free (elt->elts, TRUE);
 			g_free (elt->cur_domain);
+			g_slice_free1 (sizeof (*elt), elt);
 		}
-		g_array_free (rec->resolved, TRUE);
+
+		g_ptr_array_free (rec->resolved, TRUE);
 	}
 }
 
@@ -243,11 +236,10 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 	if (addr) {
 		g_assert (addr->m.idx < rec->resolved->len);
 
-		elt = &g_array_index (rec->resolved, struct spf_resolved_element,
-				addr->m.idx);
+		elt = g_ptr_array_index (rec->resolved, addr->m.idx);
 	}
 	else {
-		elt = &g_array_index (rec->resolved, struct spf_resolved_element, 0);
+		elt = g_ptr_array_index (rec->resolved, 0);
 	}
 
 	while (elt->redirected) {
@@ -268,8 +260,7 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 
 		g_assert (cur->flags & RSPAMD_SPF_FLAG_REFRENCE);
 		g_assert (cur->m.idx < rec->resolved->len);
-		elt = &g_array_index (rec->resolved, struct spf_resolved_element,
-				cur->m.idx);
+		elt = g_ptr_array_index (rec->resolved, cur->m.idx);
 	}
 
 	for (i = 0; i < elt->elts->len; i ++) {
@@ -314,7 +305,7 @@ rspamd_spf_record_flatten (struct spf_record *rec)
 	res->ttl = rec->ttl;
 	REF_INIT_RETAIN (res, rspamd_flatten_record_dtor);
 
-	if (res->elts->len > 0) {
+	if (rec->resolved->len > 0) {
 		rspamd_spf_process_reference (res, NULL, rec, TRUE);
 	}
 
@@ -637,8 +628,7 @@ parse_spf_domain_mask (struct spf_record *rec, struct spf_addr *addr,
 	gchar t;
 	guint16 cur_mask = 0;
 
-	resolved = &g_array_index (rec->resolved, struct spf_resolved_element,
-				rec->resolved->len - 1);
+	resolved = g_ptr_array_index (rec->resolved, rec->resolved->len - 1);
 	host = resolved->cur_domain;
 
 	while (*p) {
@@ -750,8 +740,7 @@ parse_spf_a (struct spf_record *rec, struct spf_addr *addr)
 	struct rspamd_task *task = rec->task;
 	struct spf_resolved_element *resolved;
 
-	resolved = &g_array_index (rec->resolved, struct spf_resolved_element,
-			rec->resolved->len - 1);
+	resolved = g_ptr_array_index (rec->resolved, rec->resolved->len - 1);
 	CHECK_REC (rec);
 
 	host = parse_spf_domain_mask (rec, addr, TRUE);
@@ -788,8 +777,7 @@ parse_spf_ptr (struct spf_record *rec, struct spf_addr *addr)
 	struct rspamd_task *task = rec->task;
 	struct spf_resolved_element *resolved;
 
-	resolved = &g_array_index (rec->resolved, struct spf_resolved_element,
-			rec->resolved->len - 1);
+	resolved = g_ptr_array_index (rec->resolved, rec->resolved->len - 1);
 	CHECK_REC (rec);
 
 	host = parse_spf_domain_mask (rec, addr, FALSE);
@@ -830,8 +818,7 @@ parse_spf_mx (struct spf_record *rec, struct spf_addr *addr)
 	struct rspamd_task *task = rec->task;
 	struct spf_resolved_element *resolved;
 
-	resolved = &g_array_index (rec->resolved, struct spf_resolved_element,
-			rec->resolved->len - 1);
+	resolved = g_ptr_array_index (rec->resolved, rec->resolved->len - 1);
 
 	CHECK_REC (rec);
 
@@ -1083,8 +1070,7 @@ parse_spf_exists (struct spf_record *rec, struct spf_addr *addr)
 	struct rspamd_task *task = rec->task;
 	struct spf_resolved_element *resolved;
 
-	resolved = &g_array_index (rec->resolved, struct spf_resolved_element,
-			rec->resolved->len - 1);
+	resolved = g_ptr_array_index (rec->resolved, rec->resolved->len - 1);
 	CHECK_REC (rec);
 
 	host = strchr (addr->spf_string, ':');
@@ -1161,8 +1147,7 @@ expand_spf_macro (struct spf_record *rec,
 	g_assert (begin != NULL);
 
 	task = rec->task;
-	resolved = &g_array_index (rec->resolved, struct spf_resolved_element,
-			rec->resolved->len - 1);
+	resolved = g_ptr_array_index (rec->resolved, rec->resolved->len - 1);
 	p = begin;
 	/* Calculate length */
 	while (*p) {
@@ -1681,8 +1666,7 @@ resolve_spf (struct rspamd_task *task, spf_cb_t callback)
 	rec->task = task;
 	rec->callback = callback;
 
-	rec->resolved = g_array_sized_new (FALSE, FALSE,
-			sizeof (struct spf_resolved_element), 8);
+	rec->resolved = g_ptr_array_sized_new (8);
 
 	/* Add destructor */
 	rspamd_mempool_add_destructor (task->task_pool,
