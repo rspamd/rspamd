@@ -30,6 +30,10 @@
 #include "tokenizers.h"
 #include "stat_internal.h"
 
+typedef gboolean (*token_get_function) (rspamd_fstring_t * buf, gchar **pos,
+		rspamd_fstring_t * token,
+		GList **exceptions, gboolean is_utf, gsize *rl);
+
 const gchar t_delimiters[255] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
 	1, 0, 0, 1, 0, 0, 0, 0, 0, 0,
@@ -72,22 +76,26 @@ token_node_compare_func (gconstpointer a, gconstpointer b)
 }
 
 /* Get next word from specified f_str_t buf */
-static gchar *
-rspamd_tokenizer_get_word (rspamd_fstring_t * buf, rspamd_fstring_t * token, GList **exceptions)
+static gboolean
+rspamd_tokenizer_get_word_compat (rspamd_fstring_t * buf,
+		gchar **cur, rspamd_fstring_t * token,
+		GList **exceptions, gboolean is_utf, gsize *rl)
 {
 	gsize remain, pos;
 	guchar *p;
 	struct process_exception *ex = NULL;
 
 	if (buf == NULL) {
-		return NULL;
+		return FALSE;
 	}
+
+	g_assert (cur != NULL);
 
 	if (exceptions != NULL && *exceptions != NULL) {
 		ex = (*exceptions)->data;
 	}
 
-	if (token->begin == NULL) {
+	if (token->begin == NULL || *cur == NULL) {
 		if (ex != NULL) {
 			if (ex->pos == 0) {
 				token->begin = buf->begin + ex->len;
@@ -106,19 +114,21 @@ rspamd_tokenizer_get_word (rspamd_fstring_t * buf, rspamd_fstring_t * token, GLi
 
 	token->len = 0;
 
-	pos = token->begin - buf->begin;
+	pos = *cur - buf->begin;
 	if (pos >= buf->len) {
-		return NULL;
+		return FALSE;
 	}
 
 	remain = buf->len - pos;
-	p = token->begin;
+	p = *cur;
+
 	/* Skip non delimiters symbols */
 	do {
 		if (ex != NULL && ex->pos == pos) {
 			/* Go to the next exception */
 			*exceptions = g_list_next (*exceptions);
-			return p + ex->len;
+			*cur = p + ex->len;
+			return TRUE;
 		}
 		pos++;
 		p++;
@@ -130,7 +140,8 @@ rspamd_tokenizer_get_word (rspamd_fstring_t * buf, rspamd_fstring_t * token, GLi
 	while (remain > 0 && !t_delimiters[*p]) {
 		if (ex != NULL && ex->pos == pos) {
 			*exceptions = g_list_next (*exceptions);
-			return p + ex->len;
+			*cur = p + ex->len;
+			return TRUE;
 		}
 		token->len++;
 		pos++;
@@ -139,20 +150,127 @@ rspamd_tokenizer_get_word (rspamd_fstring_t * buf, rspamd_fstring_t * token, GLi
 	}
 
 	if (remain == 0) {
-		return NULL;
+		return FALSE;
 	}
 
-	return p;
+	if (rl) {
+		if (is_utf) {
+			*rl = g_utf8_strlen (token->begin, token->len);
+		}
+		else {
+			*rl = token->len;
+		}
+	}
+
+	*cur = p;
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_tokenizer_get_word (rspamd_fstring_t * buf,
+		gchar **cur, rspamd_fstring_t * token,
+		GList **exceptions, gboolean is_utf, gsize *rl)
+{
+	gsize remain, pos;
+	gchar *p, *next_p;
+	gunichar uc;
+	guint processed = 0;
+	struct process_exception *ex = NULL;
+	enum {
+		skip_delimiters = 0,
+		feed_token,
+		skip_exception
+	} state = skip_delimiters;
+
+	if (buf == NULL) {
+		return FALSE;
+	}
+
+	if (exceptions != NULL && *exceptions != NULL) {
+		ex = (*exceptions)->data;
+	}
+
+	g_assert (is_utf);
+	g_assert (cur != NULL);
+
+	if (*cur == NULL) {
+		*cur = buf->begin;
+	}
+
+	token->len = 0;
+
+	pos = *cur - buf->begin;
+	if (pos >= buf->len) {
+		return FALSE;
+	}
+
+	remain = buf->len - pos;
+	p = *cur;
+	token->begin = p;
+
+	while (remain > 0) {
+		uc = g_utf8_get_char (p);
+		next_p = g_utf8_next_char (p);
+
+		if (next_p - p > (gint)remain) {
+			return FALSE;
+		}
+
+		switch (state) {
+		case skip_delimiters:
+			if (ex != NULL && p - buf->begin == (gint)ex->pos) {
+				token->begin = "exception";
+				token->len = sizeof ("exception") - 1;
+				state = skip_exception;
+			}
+			else if (g_unichar_isgraph (uc) && !g_unichar_ispunct (uc)) {
+				state = feed_token;
+				token->begin = p;
+				continue;
+			}
+			break;
+		case feed_token:
+			if (ex != NULL && p - buf->begin == (gint)ex->pos) {
+				goto set_token;
+			}
+			else if (!g_unichar_isgraph (uc) || g_unichar_ispunct (uc)) {
+				goto set_token;
+			}
+			processed ++;
+			break;
+		case skip_exception:
+			*cur = p + ex->len;
+			*exceptions = g_list_next (*exceptions);
+			goto set_token;
+			break;
+		}
+
+		p = next_p;
+	}
+
+set_token:
+	if (rl) {
+		*rl = processed;
+	}
+
+	token->len = p - *cur;
+	g_assert (token->len > 0);
+	*cur = p;
+
+	return TRUE;
 }
 
 GArray *
 rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
-		gsize min_len, GList **exceptions)
+		gsize min_len, GList *exceptions, gboolean compat)
 {
 	rspamd_fstring_t token, buf;
-	gchar *pos;
+	gchar *pos = NULL;
 	gsize l;
 	GArray *res;
+	GList *cur = exceptions;
+	token_get_function func;
 
 	if (len == 0 || text == NULL) {
 		return NULL;
@@ -164,21 +282,22 @@ rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 	token.begin = NULL;
 	token.len = 0;
 
+	if (compat || !is_utf) {
+		func = rspamd_tokenizer_get_word_compat;
+	}
+	else {
+		func = rspamd_tokenizer_get_word;
+	}
+
 	res = g_array_new (FALSE, FALSE, sizeof (rspamd_fstring_t));
-	while ((pos = rspamd_tokenizer_get_word (&buf,
-			&token, exceptions)) != NULL) {
-		if (is_utf) {
-			l = g_utf8_strlen (token.begin, token.len);
-		}
-		else {
-			l = token.len;
-		}
+
+	while (func (&buf, &pos, &token, &cur, is_utf, &l)) {
 		if (min_len > 0 && l < min_len) {
 			token.begin = pos;
 			continue;
 		}
-		g_array_append_val (res, token);
 
+		g_array_append_val (res, token);
 		token.begin = pos;
 	}
 

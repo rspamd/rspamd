@@ -1190,8 +1190,11 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 		}
 	}
 
-	part->normalized_words = g_array_sized_new (FALSE, FALSE,
-			sizeof (rspamd_fstring_t), part->words->len);
+	/* Ugly workaround */
+	part->normalized_words = rspamd_tokenize_text (part->content->data,
+			part->content->len, part->is_utf, task->cfg->min_word_len,
+			part->urls_offset, FALSE);
+
 	for (i = 0; i < part->words->len; i ++) {
 		w = &g_array_index (part->words, rspamd_fstring_t, i);
 		if (stem) {
@@ -1324,7 +1327,7 @@ process_text_part (struct rspamd_task *task,
 	detect_text_language (text_part);
 	text_part->words = rspamd_tokenize_text (text_part->content->data,
 			text_part->content->len, text_part->is_utf, task->cfg->min_word_len,
-			&text_part->urls_offset);
+			text_part->urls_offset, TRUE);
 	rspamd_normalize_text_part (task, text_part);
 }
 

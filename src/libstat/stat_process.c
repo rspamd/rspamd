@@ -316,7 +316,7 @@ rspamd_stat_process_tokenize (struct rspamd_tokenizer_config *cf,
 	}
 
 	if (sub != NULL) {
-		words = rspamd_tokenize_text (sub, strlen (sub), TRUE, 0, NULL);
+		words = rspamd_tokenize_text (sub, strlen (sub), TRUE, 0, NULL, compat);
 		if (words != NULL) {
 			tok->tokenizer->tokenize_func (cf,
 					task->task_pool,
