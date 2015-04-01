@@ -12,6 +12,9 @@
 /* Common tokenizer structure */
 struct rspamd_stat_tokenizer {
 	gchar *name;
+	gpointer (*get_config) (struct rspamd_tokenizer_config *cf, gsize *len);
+	gboolean (*compatible_config) (struct rspamd_tokenizer_config *cf,
+			gpointer ptr, gsize len);
 	gint (*tokenize_func)(struct rspamd_tokenizer_config *cf,
 			rspamd_mempool_t *pool,
 			GArray *words,
@@ -20,7 +23,7 @@ struct rspamd_stat_tokenizer {
 };
 
 /* Compare two token nodes */
-int token_node_compare_func (gconstpointer a, gconstpointer b);
+gint token_node_compare_func (gconstpointer a, gconstpointer b);
 
 
 /* Tokenize text into array of words (rspamd_fstring_t type) */
@@ -28,11 +31,18 @@ GArray * rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 		gsize min_len, GList **exceptions);
 
 /* OSB tokenize function */
-int rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
+gint rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
 	rspamd_mempool_t *pool,
 	GArray *input,
 	GTree *tokens,
 	gboolean is_utf);
+
+gpointer rspamd_tokenizer_osb_get_config (struct rspamd_tokenizer_config *cf,
+		gsize *len);
+
+gboolean
+rspamd_tokenizer_osb_compatible_config (struct rspamd_tokenizer_config *cf,
+			gpointer ptr, gsize len);
 
 #endif
 /*

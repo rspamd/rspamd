@@ -41,8 +41,18 @@ static struct rspamd_stat_classifier stat_classifiers[] = {
 };
 
 static struct rspamd_stat_tokenizer stat_tokenizers[] = {
-	{"osb-text", rspamd_tokenizer_osb},
-	{"osb", rspamd_tokenizer_osb}
+	{
+		.name = "osb-text",
+		.get_config = rspamd_tokenizer_osb_get_config,
+		.compatible_config = rspamd_tokenizer_osb_compatible_config,
+		.tokenize_func = rspamd_tokenizer_osb
+	},
+	{
+		.name = "osb",
+		.get_config = rspamd_tokenizer_osb_get_config,
+		.compatible_config = rspamd_tokenizer_osb_compatible_config,
+		.tokenize_func = rspamd_tokenizer_osb
+	},
 };
 
 static struct rspamd_stat_backend stat_backends[] = {

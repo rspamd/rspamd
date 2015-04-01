@@ -95,8 +95,15 @@ rspamd_tokenizer_osb_config_from_ucl (rspamd_mempool_t * pool,
 	guchar *key = NULL;
 	gsize keylen;
 
+
+	if (pool != NULL) {
+		cf = rspamd_mempool_alloc (pool, sizeof (*cf));
+	}
+	else {
+		cf = g_slice_alloc (sizeof (*cf));
+	}
+
 	/* Use default config */
-	cf = rspamd_mempool_alloc (pool, sizeof (*cf));
 	def = rspamd_tokenizer_osb_default_config ();
 	memcpy (cf, def, sizeof (*cf));
 
@@ -146,7 +153,61 @@ rspamd_tokenizer_osb_config_from_ucl (rspamd_mempool_t * pool,
 	return cf;
 }
 
-int
+gpointer
+rspamd_tokenizer_osb_get_config (struct rspamd_tokenizer_config *cf,
+		gsize *len)
+{
+	struct rspamd_osb_tokenizer_config *osb_cf, *def;
+
+	if (cf != NULL && cf->opts != NULL) {
+		osb_cf = rspamd_tokenizer_osb_config_from_ucl (NULL, cf->opts);
+	}
+	else {
+		def = rspamd_tokenizer_osb_default_config ();
+		osb_cf = g_slice_alloc (sizeof (*osb_cf));
+		memcpy (osb_cf, def, sizeof (*osb_cf));
+	}
+
+	if (len != NULL) {
+		*len = sizeof (*osb_cf);
+	}
+
+	return osb_cf;
+}
+
+gboolean
+rspamd_tokenizer_osb_compatible_config (struct rspamd_tokenizer_config *cf,
+			gpointer ptr, gsize len)
+{
+	struct rspamd_osb_tokenizer_config *osb_cf, *test_cf;
+	gboolean ret = FALSE;
+
+	test_cf = rspamd_tokenizer_osb_get_config (cf, NULL);
+
+	if (len == sizeof (*osb_cf)) {
+		osb_cf = ptr;
+
+		if (memcmp (osb_cf, osb_tokenizer_magic, sizeof (osb_tokenizer_magic)) != 0) {
+			ret = test_cf->ht == RSPAMD_OSB_HASH_COMPAT;
+		}
+		else {
+			if (osb_cf->version == DEFAULT_OSB_VERSION) {
+				/* We can compare them directly now */
+				ret = memcmp (osb_cf, test_cf, sizeof (*osb_cf)) == 0;
+			}
+		}
+	}
+	else {
+		/* We are compatible now merely with fallback config */
+		if (test_cf->ht == RSPAMD_OSB_HASH_COMPAT) {
+			ret = TRUE;
+		}
+	}
+
+	return ret;
+}
+
+gint
 rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
 	rspamd_mempool_t * pool,
 	GArray * input,

@@ -59,7 +59,7 @@ const gchar t_delimiters[255] = {
 	0, 0, 0, 0, 0
 };
 
-int
+gint
 token_node_compare_func (gconstpointer a, gconstpointer b)
 {
 	const rspamd_token_t *aa = a, *bb = b;
