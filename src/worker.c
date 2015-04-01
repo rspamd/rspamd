@@ -132,9 +132,6 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 		return 0;
 	}
 
-	if (msg->peer_key) {
-		task->peer_key = rspamd_http_connection_key_ref (msg->peer_key);
-	}
 
 	if (!rspamd_task_process (task, msg, chunk, len, ctx->classify_pool, TRUE)) {
 		task->state = WRITE_REPLY;

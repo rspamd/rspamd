@@ -182,6 +182,13 @@ gpointer rspamd_http_connection_gen_key (void);
 void rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
 		gpointer key);
 
+/**
+ * Returns TRUE if a connection is encrypted
+ * @param conn
+ * @return
+ */
+gboolean rspamd_http_connection_is_encrypted (struct rspamd_http_connection *conn);
+
 /** Print pubkey */
 #define RSPAMD_KEYPAIR_PUBKEY 0x1
 /** Print secret key */

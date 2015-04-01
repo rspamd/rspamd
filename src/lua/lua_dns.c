@@ -111,11 +111,13 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 			case RDNS_REQUEST_A:
 				addr = rspamd_inet_address_new (AF_INET, &elt->content.a.addr);
 				rspamd_lua_ip_push (cd->L, addr);
+				rspamd_inet_address_destroy (addr);
 				lua_rawseti (cd->L, -2, ++i);
 				break;
 			case RDNS_REQUEST_AAAA:
 				addr = rspamd_inet_address_new (AF_INET6, &elt->content.aaa.addr);
 				rspamd_lua_ip_push (cd->L, addr);
+				rspamd_inet_address_destroy (addr);
 				lua_rawseti (cd->L, -2, ++i);
 				break;
 			case RDNS_REQUEST_PTR:

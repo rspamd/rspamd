@@ -1064,10 +1064,10 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 
-	if (task->peer_key) {
-		msg->peer_key = rspamd_http_connection_key_ref (task->peer_key);
+	if (rspamd_http_connection_is_encrypted (task->http_conn)) {
 		msg_info ("<%s> writing encrypted reply", task->message_id);
 	}
+
 	if (!RSPAMD_TASK_IS_JSON (task)) {
 		/* Turn compatibility on */
 		msg->method = HTTP_SYMBOLS;

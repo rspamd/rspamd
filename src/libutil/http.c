@@ -1830,6 +1830,21 @@ rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
 	priv->local_key = kp;
 }
 
+gboolean
+rspamd_http_connection_is_encrypted (struct rspamd_http_connection *conn)
+{
+	struct rspamd_http_connection_private *priv = conn->priv;
+
+	if (priv->peer_key != NULL) {
+		return TRUE;
+	}
+	else if (priv->msg) {
+		return priv->msg->peer_key != NULL;
+	}
+
+	return FALSE;
+}
+
 void
 rspamd_http_connection_key_unref (gpointer key)
 {

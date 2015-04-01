@@ -271,9 +271,6 @@ rspamd_task_free (struct rspamd_task *task, gboolean is_soft)
 		if (task->settings != NULL) {
 			ucl_object_unref (task->settings);
 		}
-		if (task->peer_key != NULL) {
-			rspamd_http_connection_key_unref (task->peer_key);
-		}
 		if (task->client_addr) {
 			rspamd_inet_address_destroy (task->client_addr);
 		}
