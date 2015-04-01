@@ -22,9 +22,6 @@ struct rspamd_stat_tokenizer {
 /* Compare two token nodes */
 int token_node_compare_func (gconstpointer a, gconstpointer b);
 
-/* Get next word from specified f_str_t buf */
-gchar * rspamd_tokenizer_get_word (rspamd_fstring_t *buf,
-		rspamd_fstring_t *token, GList **exceptions);
 
 /* Tokenize text into array of words (rspamd_fstring_t type) */
 GArray * rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,

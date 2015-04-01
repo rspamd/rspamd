@@ -906,6 +906,7 @@ rspamd_rcl_statfile_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 
 		st->opts = (ucl_object_t *)obj;
+		st->clcf = ccf;
 
 		val = ucl_object_find_key (obj, "spam");
 		if (val == NULL) {

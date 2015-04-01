@@ -72,7 +72,7 @@ token_node_compare_func (gconstpointer a, gconstpointer b)
 }
 
 /* Get next word from specified f_str_t buf */
-gchar *
+static gchar *
 rspamd_tokenizer_get_word (rspamd_fstring_t * buf, rspamd_fstring_t * token, GList **exceptions)
 {
 	gsize remain, pos;

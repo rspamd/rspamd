@@ -113,6 +113,7 @@ struct rspamd_statfile_config {
 	ucl_object_t *opts;                             /**< other options										*/
 	gboolean is_spam;                               /**< spam flag											*/
 	const gchar *backend;							/**< name of statfile's backend							*/
+	struct rspamd_classifier_config *clcf;			/**< parent pointer of classifier configuration			*/
 	gpointer data;									/**< opaque data 										*/
 };
 
