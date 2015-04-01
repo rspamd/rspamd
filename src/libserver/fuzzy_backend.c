@@ -390,7 +390,6 @@ rspamd_fuzzy_backend_open_db (const gchar *path, GError **err)
 
 	bk = g_slice_alloc (sizeof (*bk));
 	bk->path = g_strdup (path);
-	bk = g_slice_alloc (sizeof (*bk));
 	bk->db = sqlite;
 	bk->expired = 0;
 
