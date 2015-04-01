@@ -1610,6 +1610,7 @@ process_message (struct rspamd_task *task)
 				if (!rspamd_parse_inet_address (&task->from_addr, recv->real_ip)) {
 					msg_warn ("cannot get IP from received header: '%s'",
 							recv->real_ip);
+					task->from_addr = NULL;
 				}
 			}
 			if (recv->real_hostname) {
