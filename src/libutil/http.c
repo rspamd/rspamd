@@ -1191,6 +1191,8 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		priv->wr_total -= 2;
 	}
 	if (msg->body != NULL) {
+		msg->body_buf.str = msg->body->str;
+
 		if (encrypted && peer_key != NULL && np != NULL && mp != NULL) {
 			if (conn->cache) {
 				rspamd_cryptobox_encrypt_nm_inplace (pbody,
