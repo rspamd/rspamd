@@ -408,6 +408,8 @@ rspamd_ast_priority_traverse (GNode *node, gpointer d)
 				elt->priority = RSPAMD_EXPRESSION_MAX_PRIORITY -
 						expr->subr->priority (elt->p.atom);
 			}
+			elt->p.atom->hits = 0;
+			elt->p.atom->avg_ticks = 0.0;
 		}
 	}
 
