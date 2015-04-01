@@ -281,26 +281,13 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 static void
 rspamd_stat_process_tokenize (struct rspamd_tokenizer_config *cf,
 		struct rspamd_stat_ctx *st_ctx,
-		struct rspamd_task *task, struct rspamd_tokenizer_runtime *tok)
+		struct rspamd_task *task, struct rspamd_tokenizer_runtime *tok,
+		gboolean compat)
 {
 	struct mime_text_part *part;
 	GArray *words;
 	gchar *sub;
 	GList *cur;
-	const ucl_object_t *elt;
-	gboolean compat = TRUE;
-
-	/*
-	 * XXX: Ugly repetition to be backward compatible
-	 */
-	if (cf != NULL && cf->opts != NULL) {
-		elt = ucl_object_find_key (cf->opts, "hash");
-		if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
-			if (g_ascii_strcasecmp (ucl_object_tostring (elt), "xxh") == 0) {
-				compat = FALSE;
-			}
-		}
-	}
 
 	cur = task->text_parts;
 
@@ -308,10 +295,6 @@ rspamd_stat_process_tokenize (struct rspamd_tokenizer_config *cf,
 		part = (struct mime_text_part *)cur->data;
 
 		if (!part->is_empty && part->words != NULL) {
-			/*
-			 * XXX: Use normalized words if needed here
-			 */
-
 			if (compat) {
 				tok->tokenizer->tokenize_func (cf, task->task_pool,
 					part->words, tok->tokens, part->is_utf);
@@ -357,7 +340,8 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 	struct classifier_ctx *cl_ctx;
 	GList *cl_runtimes;
 	GList *cur;
-	gboolean ret = RSPAMD_STAT_PROCESS_ERROR;
+	gboolean ret = RSPAMD_STAT_PROCESS_ERROR, compat = TRUE;
+	const ucl_object_t *obj;
 
 	st_ctx = rspamd_stat_get_ctx ();
 	g_assert (st_ctx != NULL);
@@ -375,6 +359,11 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 
+		obj = ucl_object_find_key (clcf->opts, "compat");
+		if (obj != NULL) {
+			compat = ucl_object_toboolean (obj);
+		}
+
 		tok = rspamd_stat_get_tokenizer_runtime (clcf->tokenizer, task->task_pool,
 				&tklist);
 
@@ -385,7 +374,7 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 
-		rspamd_stat_process_tokenize (clcf->tokenizer, st_ctx, task, tok);
+		rspamd_stat_process_tokenize (clcf->tokenizer, st_ctx, task, tok, compat);
 
 		cur = g_list_next (cur);
 	}
@@ -462,8 +451,6 @@ rspamd_stat_learn_token (gpointer k, gpointer v, gpointer d)
 			continue;
 		}
 
-
-
 		curst = cl_runtime->st_runtime;
 
 		while (curst) {
@@ -508,12 +495,14 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 	struct rspamd_statfile_runtime *st_run;
 	struct classifier_ctx *cl_ctx;
 	struct preprocess_cb_data cbdata;
+	const ucl_object_t *obj;
 	GList *cl_runtimes;
 	GList *cur, *curst;
 	gboolean ret = RSPAMD_STAT_PROCESS_ERROR, unlearn = FALSE;
 	gulong nrev;
 	rspamd_learn_t learn_res = RSPAMD_LEARN_OK;
 	guint i;
+	gboolean compat = TRUE;
 
 	st_ctx = rspamd_stat_get_ctx ();
 	g_assert (st_ctx != NULL);
@@ -531,6 +520,11 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 
+		obj = ucl_object_find_key (clcf->opts, "compat");
+		if (obj != NULL) {
+			compat = ucl_object_toboolean (obj);
+		}
+
 		tok = rspamd_stat_get_tokenizer_runtime (clcf->tokenizer, task->task_pool,
 				&tklist);
 
@@ -541,7 +535,7 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 
-		rspamd_stat_process_tokenize (clcf->tokenizer, st_ctx, task, tok);
+		rspamd_stat_process_tokenize (clcf->tokenizer, st_ctx, task, tok, compat);
 
 		cur = g_list_next (cur);
 	}
