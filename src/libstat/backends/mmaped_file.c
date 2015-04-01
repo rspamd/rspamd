@@ -51,7 +51,8 @@ struct stat_file_header {
 	guint64 rev_time;                       /**< revision time						*/
 	guint64 used_blocks;                    /**< used blocks number					*/
 	guint64 total_blocks;                   /**< total number of blocks				*/
-	u_char unused[239];                     /**< some bytes that can be used in future */
+	guint64 tokenizer_conf_len;				/**< length of tokenizer configuration	*/
+	u_char unused[231];                     /**< some bytes that can be used in future */
 };
 
 /**
@@ -542,6 +543,8 @@ rspamd_mmaped_file_open (rspamd_mmaped_file_ctx * pool,
 {
 	struct stat st;
 	rspamd_mmaped_file_t *new_file;
+	struct rspamd_stat_tokenizer *tokenizer;
+	struct stat_file_header *header;
 
 	if ((new_file = rspamd_mmaped_file_is_open (pool, stcf)) != NULL) {
 		return new_file;
@@ -612,9 +615,26 @@ rspamd_mmaped_file_open (rspamd_mmaped_file_ctx * pool,
 
 	rspamd_mmaped_file_preload (new_file);
 
+	/* Check tokenizer compatibility */
+	header = new_file->map;
+	g_assert (stcf->clcf != NULL);
+	g_assert (stcf->clcf->tokenizer != NULL);
+	tokenizer = rspamd_stat_get_tokenizer (stcf->clcf->tokenizer->name);
+	g_assert (tokenizer != NULL);
+
+	if (!tokenizer->compatible_config (stcf->clcf->tokenizer, header->unused,
+			header->tokenizer_conf_len)) {
+		msg_err ("mmapped statfile %s is not compatible with the tokenizer "
+				"defined", new_file->filename);
+		munmap (new_file->map, st.st_size);
+		g_slice_free1 (sizeof (*new_file), new_file);
+
+		return NULL;
+	}
+
 	g_hash_table_insert (pool->files, stcf, new_file);
 
-	return rspamd_mmaped_file_is_open (pool, stcf);
+	return new_file;
 }
 
 gint
@@ -660,9 +680,12 @@ rspamd_mmaped_file_create (rspamd_mmaped_file_ctx * pool, const gchar *filename,
 		.code = STATFILE_SECTION_COMMON,
 	};
 	struct stat_file_block block = { 0, 0, 0 };
+	struct rspamd_stat_tokenizer *tokenizer;
 	gint fd;
 	guint buflen = 0, nblocks;
 	gchar *buf = NULL;
+	gpointer tok_conf;
+	gsize tok_conf_len;
 
 	if (rspamd_mmaped_file_is_open (pool, stcf) != NULL) {
 		msg_info ("file %s is already opened", filename);
@@ -697,6 +720,15 @@ rspamd_mmaped_file_create (rspamd_mmaped_file_ctx * pool, const gchar *filename,
 		sizeof (header) + sizeof (section) + sizeof (block) * nblocks);
 
 	header.create_time = (guint64) time (NULL);
+	g_assert (stcf->clcf != NULL);
+	g_assert (stcf->clcf->tokenizer != NULL);
+	tokenizer = rspamd_stat_get_tokenizer (stcf->clcf->tokenizer->name);
+	g_assert (tokenizer != NULL);
+	tok_conf = tokenizer->get_config (stcf->clcf->tokenizer, &tok_conf_len);
+	header.tokenizer_conf_len = tok_conf_len;
+	g_assert (tok_conf_len < sizeof (header.unused) - sizeof (guint64));
+	memcpy (header.unused, tok_conf, tok_conf_len);
+
 	if (write (fd, &header, sizeof (header)) == -1) {
 		msg_info ("cannot write header to file %s, error %d, %s",
 			filename,
