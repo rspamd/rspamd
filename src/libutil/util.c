@@ -735,7 +735,7 @@ void
 rspamd_str_lc_utf8 (gchar *str, guint size)
 {
 	const gchar *s = str, *p;
-	gchar *d = str;
+	gchar *d = str, tst[6];
 	gint remain = size;
 	gint r;
 	gunichar uc;
@@ -749,12 +749,24 @@ rspamd_str_lc_utf8 (gchar *str, guint size)
 			break;
 		}
 
-		r = g_unichar_to_utf8 (uc, d);
-		g_assert (remain >= r);
+		if (remain >= 6) {
+			r = g_unichar_to_utf8 (uc, d);
+		}
+		else {
+			/* We must be cautious here to avoid broken unicode being append */
+			r = g_unichar_to_utf8 (uc, tst);
+			if (r > remain) {
+				break;
+			}
+			else {
+				memcpy (d, tst, r);
+			}
+		}
 		remain -= r;
 		s = p;
 		d += r;
 	}
+
 	*d = '\0';
 }
 
