@@ -295,7 +295,7 @@ rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 	res = g_array_sized_new (FALSE, FALSE, sizeof (rspamd_fstring_t), 128);
 
 	while (func (&buf, &pos, &token, &cur, is_utf, &l)) {
-		if (min_len > 0 && l < min_len) {
+		if (l == 0 || (min_len > 0 && l < min_len)) {
 			token.begin = pos;
 			continue;
 		}
