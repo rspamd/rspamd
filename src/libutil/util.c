@@ -2340,3 +2340,11 @@ rspamd_ptr_array_free_hard (gpointer p)
 
 	g_ptr_array_free (ar, TRUE);
 }
+
+void
+rspamd_array_free_hard (gpointer p)
+{
+	GArray *ar = (GArray *)p;
+
+	g_array_free (ar, TRUE);
+}

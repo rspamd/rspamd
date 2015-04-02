@@ -95,7 +95,8 @@ preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
 
 	t->results = g_array_sized_new (FALSE, TRUE,
 			sizeof (struct rspamd_token_result), cbdata->results_count);
-	g_array_set_size (t->results, cbdata->results_count);
+	rspamd_mempool_add_destructor (cbdata->task->task_pool,
+			rspamd_array_free_hard, t->results);
 
 	cur = g_list_first (cbdata->classifier_runtimes);
 

@@ -447,4 +447,10 @@ gdouble rspamd_get_ticks (void);
  */
 void rspamd_ptr_array_free_hard (gpointer p);
 
+/**
+ * Special utility to help array freeing in rspamd_mempool
+ * @param p
+ */
+void rspamd_array_free_hard (gpointer p);
+
 #endif
