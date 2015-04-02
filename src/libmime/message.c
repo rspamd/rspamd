@@ -1178,7 +1178,7 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 		struct mime_text_part *part)
 {
 	struct sb_stemmer *stem = NULL;
-	rspamd_fstring_t *w, stw;
+	rspamd_fstring_t *w;
 	const guchar *r;
 	guint i, nlen;
 	GArray *tmp;
@@ -1205,16 +1205,16 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 
 			if (stem != NULL && r != NULL) {
 				nlen = strlen (r);
-				nlen = MIN (nlen, stw.len);
-				memcpy (stw.begin, r, nlen);
-				stw.len = nlen;
+				nlen = MIN (nlen, w->len);
+				memcpy (w->begin, r, nlen);
+				w->len = nlen;
 			}
 			else {
 				if (part->is_utf) {
-					rspamd_str_lc_utf8 (stw.begin, stw.len);
+					rspamd_str_lc_utf8 (w->begin, w->len);
 				}
 				else {
-					rspamd_str_lc (stw.begin, stw.len);
+					rspamd_str_lc (w->begin, w->len);
 				}
 			}
 		}
