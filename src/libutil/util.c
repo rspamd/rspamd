@@ -677,7 +677,7 @@ rspamd_str_lc_utf8 (gchar *str, guint size)
 {
 	const gchar *s = str, *p;
 	gchar *d = str;
-	guint remain = size;
+	gint remain = size;
 	gint r;
 	gunichar uc;
 
@@ -686,12 +686,12 @@ rspamd_str_lc_utf8 (gchar *str, guint size)
 		uc = g_unichar_tolower (uc);
 		p = g_utf8_next_char (s);
 
-		if (p - s == 0) {
-			return;
+		if (p - s > remain) {
+			break;
 		}
 
 		r = g_unichar_to_utf8 (uc, d);
-		g_assert (r > 0);
+		g_assert (remain >= r);
 		remain -= r;
 		s = p;
 		d += r;
