@@ -537,7 +537,8 @@ fuzzy_preprocess_words (struct mime_text_part *part, rspamd_mempool_t *pool)
 {
 	GArray *res;
 
-	if (!part->is_utf || !part->language || part->language[0] == '\0') {
+	if (!part->is_utf || !part->language || part->language[0] == '\0' ||
+			part->normalized_words == NULL) {
 		res = part->words;
 	}
 	else {
