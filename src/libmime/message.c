@@ -1180,7 +1180,7 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 	struct sb_stemmer *stem = NULL;
 	rspamd_fstring_t *w, stw;
 	const guchar *r;
-	guint i;
+	guint i, nlen;
 	GArray *tmp;
 
 	if (part->language && part->language[0] != '\0' && part->is_utf) {
@@ -1203,13 +1203,11 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 				r = sb_stemmer_stem (stem, w->begin, w->len);
 			}
 
-			if (stem == NULL || r == NULL) {
-				stw.begin = rspamd_mempool_fstrdup (task->task_pool, w);
-				stw.len = w->len;
-			}
-			else {
-				stw.begin = rspamd_mempool_strdup (task->task_pool, r);
-				stw.len = strlen (r);
+			if (stem != NULL && r != NULL) {
+				nlen = strlen (r);
+				nlen = MIN (nlen, stw.len);
+				memcpy (stw.begin, r, nlen);
+				stw.len = nlen;
 			}
 
 			if (part->is_utf) {
@@ -1218,9 +1216,8 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 			else {
 				rspamd_str_lc (stw.begin, stw.len);
 			}
-			g_array_append_val (part->normalized_words, stw);
 		}
-		g_array_free (tmp, TRUE);
+		part->normalized_words = tmp;
 	}
 
 	if (stem != NULL) {
