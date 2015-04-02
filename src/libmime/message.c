@@ -1209,12 +1209,13 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 				memcpy (stw.begin, r, nlen);
 				stw.len = nlen;
 			}
-
-			if (part->is_utf) {
-				rspamd_str_lc_utf8 (stw.begin, stw.len);
-			}
 			else {
-				rspamd_str_lc (stw.begin, stw.len);
+				if (part->is_utf) {
+					rspamd_str_lc_utf8 (stw.begin, stw.len);
+				}
+				else {
+					rspamd_str_lc (stw.begin, stw.len);
+				}
 			}
 		}
 		part->normalized_words = tmp;

@@ -489,7 +489,7 @@ local function process_atom(atom, task)
     end
     return res
   else
-    rspamd_logger.err('Cannot find atom ' .. atom)
+    --rspamd_logger.err('Cannot find atom ' .. atom)
   end
   return 0
 end
