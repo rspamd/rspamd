@@ -837,7 +837,7 @@ static gint
 rspamd_ast_process_node (struct rspamd_expression *expr, gint flags, GNode *node,
 		gpointer data)
 {
-	struct rspamd_expression_elt *elt, *celt, *parelt;
+	struct rspamd_expression_elt *elt, *celt, *parelt = NULL;
 	GNode *cld;
 	gint acc = G_MININT, lim = G_MININT, val;
 	gdouble t1, t2;

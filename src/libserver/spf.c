@@ -230,7 +230,7 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 		struct spf_addr *addr, struct spf_record *rec, gboolean top)
 {
 	struct spf_resolved_element *elt;
-	struct spf_addr *cur, taddr;
+	struct spf_addr *cur = NULL, taddr;
 	guint i;
 
 	if (addr) {
@@ -252,6 +252,7 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 			}
 		}
 
+		g_assert (cur != NULL);
 		if (!(cur->flags & RSPAMD_SPF_FLAG_PARSED)) {
 			/* Unresolved redirect */
 			msg_info ("redirect to %s cannot be resolved", cur->spf_string);
@@ -630,6 +631,7 @@ parse_spf_domain_mask (struct spf_record *rec, struct spf_addr *addr,
 
 	resolved = g_ptr_array_index (rec->resolved, rec->resolved->len - 1);
 	host = resolved->cur_domain;
+	c = p;
 
 	while (*p) {
 		t = *p;

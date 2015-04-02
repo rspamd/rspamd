@@ -913,16 +913,15 @@ rspamd_mmaped_file_runtime (struct rspamd_task *task,
 
 		filename = ucl_object_tostring (filenameo);
 
+		sizeo = ucl_object_find_key (stcf->opts, "size");
+		if (sizeo == NULL || ucl_object_type (sizeo) != UCL_INT) {
+			msg_err ("statfile %s has no size defined", stcf->symbol);
+			return NULL;
+		}
+
+		size = ucl_object_toint (sizeo);
+
 		if (learn) {
-
-
-			sizeo = ucl_object_find_key (stcf->opts, "size");
-			if (sizeo == NULL || ucl_object_type (sizeo) != UCL_INT) {
-				msg_err ("statfile %s has no size defined", stcf->symbol);
-				return NULL;
-			}
-
-			size = ucl_object_toint (sizeo);
 			rspamd_mmaped_file_create (ctx, filename, size, stcf);
 		}
 
