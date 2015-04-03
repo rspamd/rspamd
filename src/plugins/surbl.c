@@ -869,11 +869,8 @@ redirector_callback (gint fd, short what, void *arg)
 	gchar url_buf[512];
 	gint r, urllen;
 	struct timeval *timeout;
-	struct rspamd_task *task;
 	gchar *p, *c, *urlstr;
 	gboolean found = FALSE;
-
-	task = param->task;
 
 	switch (param->state) {
 	case STATE_CONNECT:
@@ -949,7 +946,7 @@ redirector_callback (gint fd, short what, void *arg)
 				}
 
 				if (found) {
-					debug_task ("<%s> got reply from redirector: '%s' -> '%s'",
+					msg_info ("<%s> got reply from redirector: '%s' -> '%s'",
 						param->task->message_id,
 						struri (param->url),
 						c);
@@ -968,6 +965,11 @@ redirector_callback (gint fd, short what, void *arg)
 							FALSE,
 							param->tree);
 					}
+				}
+				else {
+					msg_info ("<%s> could not resolve '%s' on redirector",
+							param->task->message_id,
+							struri (param->url));
 				}
 			}
 			rspamd_upstream_ok (param->redirector);
