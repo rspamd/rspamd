@@ -1,5 +1,6 @@
 # Lua support makefile
 SET(LUASRC			  ${CMAKE_CURRENT_SOURCE_DIR}/lua_common.c
+					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_logger.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_task.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_config.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_classifier.c
