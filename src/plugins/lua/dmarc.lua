@@ -60,7 +60,7 @@ local function dmarc_report(task, spf_ok, dkim_ok)
 end
 
 local function dmarc_callback(task)
-  local from = task:get_from()
+  local from = task:get_from(2)
   
   local function dmarc_report_cb(task, err, data)
     if not err then
@@ -76,6 +76,7 @@ local function dmarc_callback(task)
     local strict_spf = false
     local strict_dkim = false
     local strict_policy = false
+    local quarantine_policy = false
     local rua
     
     if results then
@@ -92,9 +93,18 @@ local function dmarc_callback(task)
             if spf_pol and spf_pol == 's' then
               strict_spf = true
             end
-            policy = string.match(e, '^p=reject$')
+            policy = string.match(e, '^p=(.*)$')
             if policy then
-              strict_policy = true
+              if (policy == 'reject') then
+                strict_policy = true
+              elseif (policy == 'quarantine') then
+                strict_policy = true
+                quarantine_policy = true
+              end
+            end
+            pct = string.match(e, '^pct=(.*)$')
+            if pct then
+              pct = tonumber(pct)
             end
             
             if not rua then
@@ -103,6 +113,8 @@ local function dmarc_callback(task)
           end
         end
       end
+    else
+      return
     end
 
     if strict_spf then
@@ -115,20 +127,40 @@ local function dmarc_callback(task)
     -- Check dkim and spf symbols
     local spf_ok = false
     local dkim_ok = false
-    if task:get_symbol(symbols['spf_allow_symbol']) then spf_ok = true end
-    if task:get_symbol(symbols['dkim_allow_symbol']) then dkim_ok = true end
-    
-    if strict_policy and (not spf_ok or not dkim_ok) then
-      local res = 0.5
-      if not dkim_ok and not spf_ok then res = 1.0 end
-      
-      task:insert_result('DMARC_STRICT_DENY', res)
-      
-    elseif strict_policy then
-      task:insert_result('DMARC_STRICT_ALLOW', res)
+    if task:get_symbol(symbols['spf_allow_symbol']) then
+      efrom = task:get_from(1)
+      if efrom and efrom[1] and efrom[1]['domain'] and
+        from and from[1] and from[1]['domain'] and
+        not from[2] then
+          if efrom[1]['domain'] == from[1]['domain'] then
+            spf_ok = true
+          end
+      end
+    end
+    if task:get_symbol(symbols['dkim_allow_symbol']) then
+      -- XXX: Check DKIM alignment
+      dkim_ok = true
+    end
+
+    local res = 0.5
+    if not (spf_ok or dkim_ok) then
+      res = 1.0
+      if quarantine_policy then
+        if not pct or pct == 100 or (math.random(100) <= pct) then
+          task:insert_result('DMARC_POLICY_QUARANTINE', res)
+        end
+      elseif strict_policy then
+        if not pct or pct == 100 or (math.random(100) <= pct) then
+          task:insert_result('DMARC_POLICY_DENY', res)
+        end
+      else
+        task:insert_result('DMARC_POLICY_SOFTFAIL', res)
+      end
+    else
+      task:insert_result('DMARC_POLICY_ALLOW', res)
     end
     
-    if rua and (not spf_ok or not dkim_ok) and upstreams then
+    if rua and not(spf_ok or dkim_ok) and upstreams then
       -- Prepare and send redis report element
       local upstream = upstreams:get_upstream_by_hash(from[1]['domain'])
       local redis_key = dmarc_redis_key_prefix .. from[1]['domain']
@@ -193,4 +225,6 @@ end
 
 rspamd_config:register_virtual_symbol('DMARC_POLICY_ALLOW', -1)
 rspamd_config:register_virtual_symbol('DMARC_POLICY_REJECT', 1)
+rspamd_config:register_virtual_symbol('DMARC_POLICY_QUARANTINE', 1)
+rspamd_config:register_virtual_symbol('DMARC_POLICY_SOFTFAIL', 1)
 rspamd_config:register_post_filter(dmarc_callback)
