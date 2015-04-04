@@ -117,29 +117,26 @@ local function dmarc_callback(task)
       return
     end
 
-    if strict_spf then
-      -- Handle subdomains
-    end
-    if strict_dkim then
-      -- Handle subdomain
-    end
-    
     -- Check dkim and spf symbols
     local spf_ok = false
     local dkim_ok = false
     if task:get_symbol(symbols['spf_allow_symbol']) then
       efrom = task:get_from(1)
-      if efrom and efrom[1] and efrom[1]['domain'] and
-        from and from[1] and from[1]['domain'] and
-        not from[2] then
+      if efrom and efrom[1] and efrom[1]['domain'] then
           if efrom[1]['domain'] == from[1]['domain'] then
             spf_ok = true
+          elseif not strict_spf then
+            -- XXX: use tld list here and generate top level domain
           end
       end
     end
-    if task:get_symbol(symbols['dkim_allow_symbol']) then
-      -- XXX: Check DKIM alignment
-      dkim_ok = true
+    local das = task:get_symbol(symbols['dkim_allow_symbol'])
+    if das and das[1] and das[1]['options'] and das[1]['options'][0] then
+      if from[1]['domain'] == das[1]['options'][0] then
+        dkim_ok = true
+      elseif not strict_dkim then
+        -- XXX: use tld list here and generate top level domain
+      end
     end
 
     local res = 0.5
@@ -151,7 +148,7 @@ local function dmarc_callback(task)
         end
       elseif strict_policy then
         if not pct or pct == 100 or (math.random(100) <= pct) then
-          task:insert_result('DMARC_POLICY_DENY', res)
+          task:insert_result('DMARC_POLICY_REJECT', res)
         end
       else
         task:insert_result('DMARC_POLICY_SOFTFAIL', res)
@@ -176,7 +173,7 @@ local function dmarc_callback(task)
     -- XXX: handle rua and push data to redis
   end
   
-  if from and from[1]['domain'] then
+  if from and from[1]['domain'] and not from[2] then
     -- XXX: use tld list here and generate top level domain
     local dmarc_domain = '_dmarc.' .. from[1]['domain']
     task:get_resolver():resolve_txt(task:get_session(), task:get_mempool(),
