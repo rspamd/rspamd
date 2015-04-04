@@ -295,7 +295,7 @@ lua_redis_make_request (lua_State *L)
 						top,
 						args,
 						NULL);
-			if (ret) {
+			if (ret == REDIS_OK) {
 				register_async_event (ud->task->s,
 						lua_redis_fin,
 						ud,
@@ -309,7 +309,7 @@ lua_redis_make_request (lua_State *L)
 				event_add (&ud->timeout, &tv);
 			}
 			else {
-				msg_info ("call to redis failed");
+				msg_info ("call to redis failed: %s", ud->ctx->errstr);
 				redisAsyncFree (ud->ctx);
 				luaL_unref (ud->L, LUA_REGISTRYINDEX, ud->cbref);
 			}
