@@ -67,7 +67,7 @@ If true & local_exclude_ip_map has been set - do not use the RBL if the sending 
 
 - default_is_whitelist (false)
 
-If true matches on this list should neutralise any listings where this setting is false, or ignore_whitelists has been set.
+If true matches on this list should neutralise any listings where this setting is false and ignore_whitelists is not true.
 
 - default_ignore_whitelists (false)
 
