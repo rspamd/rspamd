@@ -160,7 +160,7 @@ lua_logger_out_num (lua_State *L, gint pos, gchar *outbuf, gsize len)
 
 	if ((gdouble)(glong)num == num) {
 		inum = num;
-		r = rspamd_snprintf (outbuf, len, "%ld", inum);
+		r = rspamd_snprintf (outbuf, len, "%l", inum);
 	}
 	else {
 		r = rspamd_snprintf (outbuf, len, "%f", num);
@@ -188,42 +188,65 @@ lua_logger_out_table (lua_State *L, gint pos, gchar *outbuf, gsize len)
 	gchar *d = outbuf;
 	gsize remain = len, r;
 	gboolean first = TRUE;
+	gint i;
 
 	if (!lua_istable (L, pos)) {
 		return 0;
 	}
 
 	lua_pushvalue (L, pos);
-	r = rspamd_snprintf (outbuf, remain, "{");
+	r = rspamd_snprintf (d, remain, "{");
+	remain -= r;
+	d += r;
 
-	for (lua_pushnil (L); lua_next (L, -2) && remain > 0; lua_pop (L, 1)) {
-		/* 'key' is at index -2 and 'value' is at index -1 */
+	/* Get numeric keys (ipairs) */
+	for (i = 1; ; i ++) {
+		lua_rawgeti (L, -1, i);
+
+		if (lua_isnil (L, -1)) {
+			lua_pop (L, 1);
+			break;
+		}
+
 		if (!first) {
 			r = rspamd_snprintf (d, remain, ", ");
+			MOVE_BUF(d, remain, r);
 		}
 
-		MOVE_BUF(d, remain, r);
-
-		if (lua_type (L, -2) == LUA_TNUMBER) {
-			r = rspamd_snprintf (d, remain, "[%d] = ",
-					lua_tonumber (L, -2));
-		}
-		else if (lua_type (L, -2) == LUA_TSTRING) {
-			r = rspamd_snprintf (d, remain, "[%s] = ",
-					lua_tostring (L, -2));
-		}
-		else {
-			g_assert (0);
-		}
-
+		r = rspamd_snprintf (d, remain, "[%d] = ", i);
 		MOVE_BUF(d, remain, r);
 		r = lua_logger_out_type (L, -1, d, remain);
 		MOVE_BUF(d, remain, r);
+
+		first = FALSE;
+		lua_pop (L, 1);
+	}
+
+	/* Get string keys (pairs) */
+	for (lua_pushnil (L); lua_next (L, -2) && remain > 0; lua_pop (L, 1)) {
+		/* 'key' is at index -2 and 'value' is at index -1 */
+
+		if (lua_type (L, -2) == LUA_TNUMBER) {
+			continue;
+		}
+
+		if (!first) {
+			r = rspamd_snprintf (d, remain, ", ");
+			MOVE_BUF(d, remain, r);
+		}
+
+		r = rspamd_snprintf (d, remain, "[%s] = ",
+				lua_tostring (L, -2));
+		MOVE_BUF(d, remain, r);
+		r = lua_logger_out_type (L, -1, d, remain);
+		MOVE_BUF(d, remain, r);
+
+		first = FALSE;
 	}
 
 	lua_pop (L, 1);
 
-	r = rspamd_snprintf (outbuf, remain, "}");
+	r = rspamd_snprintf (d, remain, "}");
 	d += r;
 
 	return (d - outbuf);
@@ -329,6 +352,27 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 			}
 			break;
 		}
+	}
+
+	if (state == parse_arg_num) {
+		arg_num = strtoul (c, NULL, 10);
+
+		if (arg_num < 1 || arg_num > (guint)lua_gettop (L) + 1) {
+			msg_err ("wrong argument number: %ud", arg_num);
+
+			if (is_string) {
+				lua_pushnil (L);
+				return 1;
+			}
+			else {
+				return 0;
+			}
+		}
+
+		r = lua_logger_out_type (L, arg_num + 1, d, remain);
+		g_assert (r <= remain);
+		remain -= r;
+		d += r;
 	}
 
 	if (is_string) {
