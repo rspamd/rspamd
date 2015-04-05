@@ -305,13 +305,16 @@ dkim_module_check (struct rspamd_task *task,
 	}
 
 	if (res == DKIM_REJECT) {
-		rspamd_task_insert_result (task, dkim_module_ctx->symbol_reject, score_deny, NULL);
+		rspamd_task_insert_result (task, dkim_module_ctx->symbol_reject, score_deny,
+			g_list_prepend (NULL, rspamd_mempool_strdup (task->task_pool, ctx->domain)));
 	}
 	else if (res == DKIM_TRYAGAIN) {
-		rspamd_task_insert_result (task, dkim_module_ctx->symbol_tempfail, 1, NULL);
+		rspamd_task_insert_result (task, dkim_module_ctx->symbol_tempfail, 1,
+			g_list_prepend (NULL, rspamd_mempool_strdup (task->task_pool, ctx->domain)));
 	}
 	else if (res == DKIM_CONTINUE) {
-		rspamd_task_insert_result (task, dkim_module_ctx->symbol_allow, score_allow, NULL);
+		rspamd_task_insert_result (task, dkim_module_ctx->symbol_allow, score_allow,
+			g_list_prepend (NULL, rspamd_mempool_strdup (task->task_pool, ctx->domain)));
 	}
 }
 
