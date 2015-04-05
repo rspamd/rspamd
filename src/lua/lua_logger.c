@@ -25,24 +25,35 @@
 
 #include "lua_common.h"
 
+static gsize lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf, gsize len);
 
 /* Logger methods */
 LUA_FUNCTION_DEF (logger, err);
 LUA_FUNCTION_DEF (logger, warn);
 LUA_FUNCTION_DEF (logger, info);
 LUA_FUNCTION_DEF (logger, debug);
+LUA_FUNCTION_DEF (logger, errx);
+LUA_FUNCTION_DEF (logger, warnx);
+LUA_FUNCTION_DEF (logger, infox);
+LUA_FUNCTION_DEF (logger, debugx);
+LUA_FUNCTION_DEF (logger, slog);
 
 static const struct luaL_reg loggerlib_f[] = {
 	LUA_INTERFACE_DEF (logger, err),
 	LUA_INTERFACE_DEF (logger, warn),
 	LUA_INTERFACE_DEF (logger, info),
 	LUA_INTERFACE_DEF (logger, debug),
+	LUA_INTERFACE_DEF (logger, errx),
+	LUA_INTERFACE_DEF (logger, warnx),
+	LUA_INTERFACE_DEF (logger, infox),
+	LUA_INTERFACE_DEF (logger, debugx),
+	LUA_INTERFACE_DEF (logger, slog),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
 
 static void
-lua_common_log (GLogLevelFlags level, lua_State *L, const gchar *msg)
+lua_common_log_line (GLogLevelFlags level, lua_State *L, const gchar *msg)
 {
 	lua_Debug d;
 	gchar func_buf[128], *p;
@@ -96,8 +107,8 @@ lua_logger_err (lua_State * L)
 {
 	const gchar *msg;
 	msg = luaL_checkstring (L, 1);
-	lua_common_log (G_LOG_LEVEL_CRITICAL, L, msg);
-	return 1;
+	lua_common_log_line (G_LOG_LEVEL_CRITICAL, L, msg);
+	return 0;
 }
 
 static gint
@@ -105,8 +116,8 @@ lua_logger_warn (lua_State * L)
 {
 	const gchar *msg;
 	msg = luaL_checkstring (L, 1);
-	lua_common_log (G_LOG_LEVEL_WARNING, L, msg);
-	return 1;
+	lua_common_log_line (G_LOG_LEVEL_WARNING, L, msg);
+	return 0;
 }
 
 static gint
@@ -114,8 +125,8 @@ lua_logger_info (lua_State * L)
 {
 	const gchar *msg;
 	msg = luaL_checkstring (L, 1);
-	lua_common_log (G_LOG_LEVEL_INFO, L, msg);
-	return 1;
+	lua_common_log_line (G_LOG_LEVEL_INFO, L, msg);
+	return 0;
 }
 
 static gint
@@ -123,10 +134,244 @@ lua_logger_debug (lua_State * L)
 {
 	const gchar *msg;
 	msg = luaL_checkstring (L, 1);
-	lua_common_log (G_LOG_LEVEL_DEBUG, L, msg);
-	return 1;
+	lua_common_log_line (G_LOG_LEVEL_DEBUG, L, msg);
+	return 0;
 }
 
+static gsize
+lua_logger_out_str (lua_State *L, gint pos, gchar *outbuf, gsize len)
+{
+	const gchar *str = lua_tostring (L, pos);
+	gsize r = 0;
+
+	if (str) {
+		r = rspamd_strlcpy (outbuf, str, len);
+	}
+
+	return r;
+}
+
+static gsize
+lua_logger_out_num (lua_State *L, gint pos, gchar *outbuf, gsize len)
+{
+	gdouble num = lua_tonumber (L, pos);
+	glong inum;
+	gsize r = 0;
+
+	if ((gdouble)(glong)num == num) {
+		inum = num;
+		r = rspamd_snprintf (outbuf, len, "%ld", inum);
+	}
+	else {
+		r = rspamd_snprintf (outbuf, len, "%f", num);
+	}
+
+	return r;
+}
+
+static gsize
+lua_logger_out_boolean (lua_State *L, gint pos, gchar *outbuf, gsize len)
+{
+	gboolean val = lua_toboolean (L, pos);
+	gsize r = 0;
+
+	r = rspamd_strlcpy (outbuf, val ? "true" : "false", len);
+
+	return r;
+}
+
+#define MOVE_BUF(d, remain, r) if ((remain) - (r) == 0) break; (d) += (r); (remain) -= (r)
+
+static gsize
+lua_logger_out_table (lua_State *L, gint pos, gchar *outbuf, gsize len)
+{
+	gchar *d = outbuf;
+	gsize remain = len, r;
+	gboolean first = TRUE;
+
+	if (!lua_istable (L, pos)) {
+		return 0;
+	}
+
+	lua_pushvalue (L, pos);
+	r = rspamd_snprintf (outbuf, remain, "{");
+
+	for (lua_pushnil (L); lua_next (L, -2) && remain > 0; lua_pop (L, 1)) {
+		/* 'key' is at index -2 and 'value' is at index -1 */
+		if (!first) {
+			r = rspamd_snprintf (d, remain, ", ");
+		}
+
+		MOVE_BUF(d, remain, r);
+
+		if (lua_type (L, -2) == LUA_TNUMBER) {
+			r = rspamd_snprintf (d, remain, "[%d] = ",
+					lua_tonumber (L, -2));
+		}
+		else if (lua_type (L, -2) == LUA_TSTRING) {
+			r = rspamd_snprintf (d, remain, "[%s] = ",
+					lua_tostring (L, -2));
+		}
+		else {
+			g_assert (0);
+		}
+
+		MOVE_BUF(d, remain, r);
+		r = lua_logger_out_type (L, -1, d, remain);
+		MOVE_BUF(d, remain, r);
+	}
+
+	lua_pop (L, 1);
+
+	r = rspamd_snprintf (outbuf, remain, "}");
+	d += r;
+
+	return (d - outbuf);
+}
+#undef MOVE_BUF
+
+static gsize
+lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf, gsize len)
+{
+	gint type;
+	gsize r = 0;
+
+	type = lua_type (L, pos);
+
+	switch (type) {
+	case LUA_TNUMBER:
+		r = lua_logger_out_num (L, pos, outbuf, len);
+		break;
+	case LUA_TBOOLEAN:
+		r = lua_logger_out_boolean (L, pos, outbuf, len);
+		break;
+	case LUA_TTABLE:
+		r = lua_logger_out_table (L, pos, outbuf, len);
+		break;
+	default:
+		/* Try to push everything as string using tostring magic */
+		r = lua_logger_out_str (L, pos, outbuf, len);
+		break;
+	}
+
+	return r;
+}
+
+static gint
+lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
+{
+	static gchar logbuf[BUFSIZ];
+	gchar *d;
+	const gchar *s, *c;
+	gsize remain, r;
+	guint arg_num = 0;
+	enum {
+		copy_char = 0,
+		got_percent,
+		parse_arg_num
+	} state = copy_char;
+
+	d = logbuf;
+	remain = sizeof (logbuf);
+	s = lua_tostring (L, 1);
+	c = s;
+
+	if (s == NULL) {
+		return 0;
+	}
+
+	while (remain > 0 && *s != '\0') {
+		switch (state) {
+		case copy_char:
+			if (*s == '%') {
+				state = got_percent;
+				s ++;
+			}
+			else {
+				*d++ = *s++;
+				remain --;
+			}
+			break;
+		case got_percent:
+			if (g_ascii_isdigit (*s)) {
+				state = parse_arg_num;
+				c = s;
+			}
+			else {
+				*d++ = *s++;
+				state = copy_char;
+			}
+			break;
+		case parse_arg_num:
+			if (g_ascii_isdigit (*s)) {
+				s ++;
+			}
+			else {
+				arg_num = strtoul (c, NULL, 10);
+
+				if (arg_num < 1 || arg_num > (guint)lua_gettop (L) + 1) {
+					msg_err ("wrong argument number: %ud", arg_num);
+
+					if (is_string) {
+						lua_pushnil (L);
+						return 1;
+					}
+					else {
+						return 0;
+					}
+				}
+
+				r = lua_logger_out_type (L, arg_num + 1, d, remain);
+				g_assert (r <= remain);
+				remain -= r;
+				d += r;
+				state = copy_char;
+			}
+			break;
+		}
+	}
+
+	if (is_string) {
+		lua_pushlstring (L, logbuf, sizeof (logbuf) - remain);
+		return 1;
+	}
+	else {
+		*d = '\0';
+		lua_common_log_line (level, L, logbuf);
+	}
+
+	return 0;
+}
+
+static gint
+lua_logger_errx (lua_State * L)
+{
+	return lua_logger_logx (L, G_LOG_LEVEL_CRITICAL, FALSE);
+}
+
+static gint
+lua_logger_warnx (lua_State * L)
+{
+	return lua_logger_logx (L, G_LOG_LEVEL_WARNING, FALSE);
+}
+
+static gint
+lua_logger_infox (lua_State * L)
+{
+	return lua_logger_logx (L, G_LOG_LEVEL_INFO, FALSE);
+}
+
+static gint
+lua_logger_debugx (lua_State * L)
+{
+	return lua_logger_logx (L, G_LOG_LEVEL_DEBUG, FALSE);
+}
+
+static gint
+lua_logger_slog (lua_State * L)
+{
+	return lua_logger_logx (L, 0, TRUE);
+}
 
 /*** Init functions ***/
 
