@@ -38,9 +38,11 @@ context("URL check functions", function()
   int form;  /* URI originated from form */
   int is_phished; /* URI maybe phishing */
   };
+  struct rspamd_config;
   struct rspamd_url* rspamd_url_get_next (void *pool,
     const char *start, char const **pos);
   void * rspamd_mempool_new (unsigned long size);
+  void rspamd_url_init (struct rspamd_config *cfg);
   ]]
   
   test("Extract urls from text", function()
@@ -51,6 +53,8 @@ context("URL check functions", function()
       {"http://Тест.Рф:18 text", {"тест.рф", nil}},
       {"http://user:password@тест2.РФ:18 text", {"тест2.рф", "user"}},
     }
+    
+    ffi.C.rspamd_url_init(nil)
     
     for _,c in ipairs(cases) do
       local res = ffi.C.rspamd_url_get_next(pool, c[1], nil)

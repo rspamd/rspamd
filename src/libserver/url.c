@@ -904,7 +904,7 @@ rspamd_url_init (struct rspamd_config *cfg)
 		url_scanner->tld_trie = rspamd_trie_create (TRUE);
 		rspamd_url_add_static_matchers (url_scanner->matchers);
 
-		if (cfg->tld_file) {
+		if (cfg != NULL && cfg->tld_file) {
 			rspamd_url_parse_tld_file (cfg->tld_file, url_scanner);
 		}
 		else {
