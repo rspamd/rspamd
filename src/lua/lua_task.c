@@ -1237,7 +1237,7 @@ lua_task_get_received_headers (lua_State * L)
 static gint
 lua_task_get_queue_id (lua_State *L)
 {
-	struct rspamd_task *task = lua_check_task (L, 1);
+	struct rspamd_task *task = lua_check_task (L);
 
 	if (task && task->queue_id != NULL && strcmp (task->queue_id, "undef") != 0) {
 		lua_pushstring (L, task->queue_id);
