@@ -7,6 +7,7 @@
 
 struct rspamd_task;
 struct mime_text_part;
+struct rspamd_config;
 
 struct rspamd_url {
 	gchar *string;
@@ -61,6 +62,12 @@ enum rspamd_url_protocol {
 };
 
 #define struri(uri) ((uri)->string)
+
+/**
+ * Initialize url library
+ * @param cfg
+ */
+void rspamd_url_init (struct rspamd_config *cfg);
 
 /*
  * Parse urls inside text

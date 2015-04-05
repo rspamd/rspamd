@@ -1309,6 +1309,11 @@ rspamd_rcl_config_init (void)
 		rspamd_rcl_parse_struct_integer,
 		G_STRUCT_OFFSET (struct rspamd_config, min_word_len),
 		RSPAMD_CL_FLAG_INT_32);
+	rspamd_rcl_add_default_handler (sub,
+		"url_tld",
+		rspamd_rcl_parse_struct_string,
+		G_STRUCT_OFFSET (struct rspamd_config, tld_file),
+		RSPAMD_CL_FLAG_STRING_PATH);
 
 	/**
 	 * Metric section

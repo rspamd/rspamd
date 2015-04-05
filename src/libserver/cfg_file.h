@@ -247,13 +247,15 @@ struct rspamd_config {
 	gchar *cache_filename;                          /**< filename of cache file								*/
 	struct metric *default_metric;                  /**< default metric										*/
 
-	gchar * checksum;                                /**< real checksum of config file						*/
-	gchar * dump_checksum;                           /**< dump checksum of config file						*/
+	gchar * checksum;                               /**< real checksum of config file						*/
+	gchar * dump_checksum;                          /**< dump checksum of config file						*/
 	gpointer lua_state;                             /**< pointer to lua state								*/
 
-	gchar * rrd_file;                                /**< rrd file to store statistics						*/
+	gchar * rrd_file;                               /**< rrd file to store statistics						*/
 
-	gchar * history_file;                            /**< file to save rolling history						*/
+	gchar * history_file;                           /**< file to save rolling history						*/
+
+	gchar * tld_file;								/**< file to load effective tld list from				*/
 
 	gdouble dns_timeout;                            /**< timeout in milliseconds for waiting for dns reply	*/
 	guint32 dns_retransmits;                        /**< maximum retransmits count							*/

@@ -41,8 +41,9 @@ typedef struct url_match_s {
 	gboolean add_prefix;
 } url_match_t;
 
-#define URL_FLAG_NOHTML 0x1
-#define URL_FLAG_STRICT_MATCH 0x2
+#define URL_FLAG_NOHTML (1 << 0)
+#define URL_FLAG_STRICT_MATCH (1 << 1)
+#define URL_FLAG_STAR_MATCH (1 << 2)
 
 struct url_matcher {
 	const gchar *pattern;
@@ -90,7 +91,7 @@ static gboolean url_email_end (const gchar *begin,
 	const gchar *pos,
 	url_match_t *match);
 
-struct url_matcher matchers[] = {
+struct url_matcher static_matchers[] = {
 	/* Common prefixes */
 	{ "file://",        "",         url_file_start,         url_file_end,
 	  0                   },
@@ -671,9 +672,9 @@ struct url_matcher matchers[] = {
 };
 
 struct url_match_scanner {
-	struct url_matcher *matchers;
-	gsize matchers_count;
-	rspamd_trie_t *patterns;
+	GArray *matchers;
+	rspamd_trie_t *search_trie;
+	rspamd_trie_t *tld_trie;
 };
 
 struct url_match_scanner *url_scanner = NULL;
@@ -821,49 +822,130 @@ rspamd_url_strerror (enum uri_errno err)
 	return NULL;
 }
 
-static gint
-url_init (void)
+static void
+rspamd_url_parse_tld_file (const gchar *fname, struct url_match_scanner *scanner)
+{
+	FILE *f;
+	struct url_matcher m;
+	gchar *linebuf = NULL, *p;
+	gsize buflen = 0;
+	gssize r;
+	gint flags;
+
+	f = fopen (fname, "r");
+
+	if (f == NULL) {
+		msg_err ("cannot open TLD file %s: %s", fname, strerror (errno));
+		return;
+	}
+
+	m.end = url_tld_end;
+	m.start = url_tld_start;
+	m.prefix = "http://";
+
+	while ((r = getline (&linebuf, &buflen, f)) > 0) {
+		if (linebuf[0] == '/' || g_ascii_isspace (linebuf[0])) {
+			/* Skip comment or empty line */
+			continue;
+		}
+
+		g_strchomp (linebuf);
+
+		/* TODO: add support for ! patterns */
+		if (linebuf[0] == '!') {
+			msg_debug ("skip '!' patterns from parsing for now: %s", linebuf);
+			continue;
+		}
+
+		flags = URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH;
+
+		if (linebuf[0] == '*') {
+			flags |= URL_FLAG_STAR_MATCH;
+			p = strchr (linebuf, '.');
+
+			if (p == NULL) {
+				msg_err ("got bad star line, skip it: %s", linebuf);
+				continue;
+			}
+			p ++;
+		}
+		else {
+			p = linebuf;
+		}
+
+		m.pattern = g_strdup (p);
+		g_array_append_val (url_scanner->matchers, m);
+	}
+
+	free (linebuf);
+	fclose (f);
+}
+
+static void
+rspamd_url_add_static_matchers (GArray *matchers)
+{
+	gint n = G_N_ELEMENTS (static_matchers);
+
+	g_array_append_vals (matchers, static_matchers, n);
+}
+
+void
+rspamd_url_init (struct rspamd_config *cfg)
 {
 	guint i;
 	gchar patbuf[128];
+	struct url_matcher *m;
 
 	if (url_scanner == NULL) {
 		url_scanner = g_malloc (sizeof (struct url_match_scanner));
-		url_scanner->matchers = matchers;
-		url_scanner->matchers_count = G_N_ELEMENTS (matchers);
-		url_scanner->patterns = rspamd_trie_create (TRUE);
-		for (i = 0; i < url_scanner->matchers_count; i++) {
-			if (matchers[i].flags & URL_FLAG_STRICT_MATCH) {
+		url_scanner->matchers = g_array_new (FALSE, TRUE,
+				sizeof (struct url_matcher));
+		url_scanner->search_trie = rspamd_trie_create (TRUE);
+		url_scanner->tld_trie = rspamd_trie_create (TRUE);
+		rspamd_url_add_static_matchers (url_scanner->matchers);
+
+		if (cfg->tld_file) {
+			rspamd_url_parse_tld_file (cfg->tld_file, url_scanner);
+		}
+		else {
+			msg_warn ("tld extension file is not specified, url matching is limited");
+		}
+
+		for (i = 0; i < url_scanner->matchers->len; i++) {
+			m = &g_array_index (url_scanner->matchers, struct url_matcher, i);
+
+			if (m->flags & URL_FLAG_STRICT_MATCH) {
 				/* Insert more specific patterns */
 
 				/* some.tld/ */
 				rspamd_snprintf (patbuf,
 					sizeof (patbuf),
 					"%s/",
-					matchers[i].pattern);
-				rspamd_trie_insert (url_scanner->patterns, patbuf, i);
+					m->pattern);
+				rspamd_trie_insert (url_scanner->search_trie, patbuf, i);
 				/* some.tld  */
 				rspamd_snprintf (patbuf,
 					sizeof (patbuf),
 					"%s ",
-					matchers[i].pattern);
-				rspamd_trie_insert (url_scanner->patterns, patbuf, i);
+					m->pattern);
+				rspamd_trie_insert (url_scanner->search_trie, patbuf, i);
 				/* some.tld: */
 				rspamd_snprintf (patbuf,
 					sizeof (patbuf),
 					"%s:",
-					matchers[i].pattern);
-				rspamd_trie_insert (url_scanner->patterns, patbuf, i);
+					m->pattern);
+				rspamd_trie_insert (url_scanner->search_trie, patbuf, i);
 			}
 			else {
-				rspamd_trie_insert (url_scanner->patterns,
-					matchers[i].pattern,
-					i);
+				rspamd_trie_insert (url_scanner->search_trie, m->pattern, i);
+			}
+
+			/* Also use it for TLD lookups */
+			if (strcmp (m->prefix, "http://") == 0) {
+				rspamd_trie_insert (url_scanner->tld_trie, m->pattern, i);
 			}
 		}
 	}
-
-	return 0;
 }
 
 #define SET_U(u, field) do {												\
@@ -1773,54 +1855,52 @@ rspamd_url_text_extract (rspamd_mempool_t * pool,
 		return;
 	}
 
-	if (url_init () == 0) {
-		begin = part->content->data;
-		end = begin + part->content->len;
-		p = begin;
-		while (p < end) {
-			if (rspamd_url_find (pool, p, end - p, &url_start, &url_end, &url_str,
+	begin = part->content->data;
+	end = begin + part->content->len;
+	p = begin;
+	while (p < end) {
+		if (rspamd_url_find (pool, p, end - p, &url_start, &url_end, &url_str,
 				is_html)) {
-				if (url_str != NULL) {
-					new = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_url));
-					ex =
+			if (url_str != NULL) {
+				new = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_url));
+				ex =
 						rspamd_mempool_alloc0 (pool,
-							sizeof (struct process_exception));
-					if (new != NULL) {
-						g_strstrip (url_str);
-						rc = rspamd_url_parse (new, url_str, strlen (url_str), pool);
-						if (rc == URI_ERRNO_OK &&
+								sizeof (struct process_exception));
+				if (new != NULL) {
+					g_strstrip (url_str);
+					rc = rspamd_url_parse (new, url_str, strlen (url_str), pool);
+					if (rc == URI_ERRNO_OK &&
 							new->hostlen > 0) {
-							ex->pos = url_start - begin;
-							ex->len = url_end - url_start;
-							if (new->protocol == PROTOCOL_MAILTO) {
-								if (new->userlen > 0) {
-									if (!g_tree_lookup (task->emails, new)) {
-										g_tree_insert (task->emails, new, new);
-									}
+						ex->pos = url_start - begin;
+						ex->len = url_end - url_start;
+						if (new->protocol == PROTOCOL_MAILTO) {
+							if (new->userlen > 0) {
+								if (!g_tree_lookup (task->emails, new)) {
+									g_tree_insert (task->emails, new, new);
 								}
 							}
-							else {
-								if (!g_tree_lookup (task->urls, new)) {
-									g_tree_insert (task->urls, new, new);
-								}
+						}
+						else {
+							if (!g_tree_lookup (task->urls, new)) {
+								g_tree_insert (task->urls, new, new);
 							}
-							part->urls_offset = g_list_prepend (
+						}
+						part->urls_offset = g_list_prepend (
 								part->urls_offset,
 								ex);
-						}
-						else if (rc != URI_ERRNO_OK) {
-							msg_info ("extract of url '%s' failed: %s",
+					}
+					else if (rc != URI_ERRNO_OK) {
+						msg_info ("extract of url '%s' failed: %s",
 								url_str,
 								rspamd_url_strerror (rc));
-						}
 					}
 				}
 			}
-			else {
-				break;
-			}
-			p = url_end + 1;
 		}
+		else {
+			break;
+		}
+		p = url_end + 1;
 	}
 	/* Handle offsets of this part */
 	if (part->urls_offset != NULL) {
@@ -1845,57 +1925,55 @@ rspamd_url_find (rspamd_mempool_t *pool,
 	url_match_t m;
 
 	end = begin + len;
-	if (url_init () == 0) {
-		if ((pos =
-			rspamd_trie_lookup (url_scanner->patterns, begin, len,
-			&idx)) == NULL) {
+	if ((pos =
+			rspamd_trie_lookup (url_scanner->search_trie, begin, len,
+					&idx)) == NULL) {
+		return FALSE;
+	}
+	else {
+		matcher = &g_array_index (url_scanner->matchers, struct url_matcher, idx);
+		if ((matcher->flags & URL_FLAG_NOHTML) && is_html) {
+			/* Do not try to match non-html like urls in html texts */
 			return FALSE;
 		}
-		else {
-			matcher = &matchers[idx];
-			if ((matcher->flags & URL_FLAG_NOHTML) && is_html) {
-				/* Do not try to match non-html like urls in html texts */
-				return FALSE;
-			}
-			m.pattern = matcher->pattern;
-			m.prefix = matcher->prefix;
-			m.add_prefix = FALSE;
-			if (matcher->start (begin, end, pos,
+		m.pattern = matcher->pattern;
+		m.prefix = matcher->prefix;
+		m.add_prefix = FALSE;
+		if (matcher->start (begin, end, pos,
 				&m) && matcher->end (begin, end, pos, &m)) {
-				if (m.add_prefix || matcher->prefix[0] != '\0') {
-					l = m.m_len + 1 + strlen (m.prefix);
-					*url_str = rspamd_mempool_alloc (pool, l);
-					rspamd_snprintf (*url_str,
+			if (m.add_prefix || matcher->prefix[0] != '\0') {
+				l = m.m_len + 1 + strlen (m.prefix);
+				*url_str = rspamd_mempool_alloc (pool, l);
+				rspamd_snprintf (*url_str,
 						l,
 						"%s%*s",
 						m.prefix,
 						m.m_len,
 						m.m_begin);
-				}
-				else {
-					*url_str = rspamd_mempool_alloc (pool, m.m_len + 1);
-					memcpy (*url_str, m.m_begin, m.m_len);
-					(*url_str)[m.m_len] = '\0';
-				}
-				if (start != NULL) {
-					*start = (gchar *)m.m_begin;
-				}
-				if (fin != NULL) {
-					*fin = (gchar *)m.m_begin + m.m_len;
-				}
 			}
 			else {
-				*url_str = NULL;
-				if (start != NULL) {
-					*start = (gchar *)pos;
-				}
-				if (fin != NULL) {
-					*fin = (gchar *)pos + strlen (m.prefix);
-				}
+				*url_str = rspamd_mempool_alloc (pool, m.m_len + 1);
+				memcpy (*url_str, m.m_begin, m.m_len);
+				(*url_str)[m.m_len] = '\0';
 			}
-
-			return TRUE;
+			if (start != NULL) {
+				*start = (gchar *)m.m_begin;
+			}
+			if (fin != NULL) {
+				*fin = (gchar *)m.m_begin + m.m_len;
+			}
 		}
+		else {
+			*url_str = NULL;
+			if (start != NULL) {
+				*start = (gchar *)pos;
+			}
+			if (fin != NULL) {
+				*fin = (gchar *)pos + strlen (m.prefix);
+			}
+		}
+
+		return TRUE;
 	}
 
 	return FALSE;
