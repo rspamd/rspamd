@@ -890,7 +890,7 @@ rspamd_url_add_static_matchers (GArray *matchers)
 }
 
 void
-rspamd_url_init (struct rspamd_config *cfg)
+rspamd_url_init (const gchar *tld_file)
 {
 	guint i;
 	gchar patbuf[128];
@@ -904,8 +904,8 @@ rspamd_url_init (struct rspamd_config *cfg)
 		url_scanner->tld_trie = rspamd_trie_create (TRUE);
 		rspamd_url_add_static_matchers (url_scanner->matchers);
 
-		if (cfg != NULL && cfg->tld_file) {
-			rspamd_url_parse_tld_file (cfg->tld_file, url_scanner);
+		if (tld_file != NULL) {
+			rspamd_url_parse_tld_file (tld_file, url_scanner);
 		}
 		else {
 			msg_warn ("tld extension file is not specified, url matching is limited");

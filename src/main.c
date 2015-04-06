@@ -1358,7 +1358,7 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	rspamd_stat_init (rspamd_main->cfg);
-	rspamd_url_init (rspamd_main->cfg);
+	rspamd_url_init (rspamd_main->cfg->tld_file);
 
 	/* Insert classifiers symbols */
 	(void)rspamd_config_insert_classify_symbols (rspamd_main->cfg);

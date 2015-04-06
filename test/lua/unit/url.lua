@@ -42,7 +42,7 @@ context("URL check functions", function()
   struct rspamd_url* rspamd_url_get_next (void *pool,
     const char *start, char const **pos);
   void * rspamd_mempool_new (unsigned long size);
-  void rspamd_url_init (struct rspamd_config *cfg);
+  void rspamd_url_init (const char *tld_file);
   ]]
   
   test("Extract urls from text", function()
