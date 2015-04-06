@@ -65,17 +65,16 @@
 #include <stddef.h> /* size_t */
 #include <stdint.h> /* uint64_t uint32_t uint8_t */
 
-#define SIPHASH_INITIALIZER { 0, 0, 0, 0, { 0 }, 0, 0 }
+#define SIPHASH_INITIALIZER { 0, 0, 0, 0, 0, 0, {{0}} }
 
 struct siphash {
 	uint64_t v0, v1, v2, v3;
-
+	uint64_t c;
+	unsigned char *p;
 	union {
 		unsigned char buf[8];
 		uint64_t m;
 	} b;
-	unsigned char *p;
-	uint64_t c;
 }; /* struct siphash */
 
 
