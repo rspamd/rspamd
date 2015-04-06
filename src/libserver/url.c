@@ -1909,22 +1909,24 @@ rspamd_url_trie_callback (int strnum, int textpos, void *context)
 	url_match_t m;
 	const gchar *pos;
 	struct url_callback_data *cb = context;
+	ac_trie_pat_t *pat;
 
 	matcher = &g_array_index (url_scanner->matchers, struct url_matcher, strnum);
 	if ((matcher->flags & URL_FLAG_NOHTML) && cb->is_html) {
 		/* Do not try to match non-html like urls in html texts */
 		return 0;
 	}
+	pat = &g_array_index (url_scanner->patterns, ac_trie_pat_t, strnum);
 
 	m.pattern = matcher->pattern;
 	m.prefix = matcher->prefix;
 	m.add_prefix = FALSE;
-	pos = cb->begin + textpos;
+	pos = cb->begin + textpos - pat->len;
 
 	if (matcher->start (cb->begin, cb->end, pos,
 			&m) && matcher->end (cb->begin, cb->end, pos, &m)) {
 		if (m.add_prefix || matcher->prefix[0] != '\0') {
-			cb->len = m.m_len + strlen (m.prefix);
+			cb->len = m.m_len + strlen (matcher->prefix) + 1;
 			cb->url_str = rspamd_mempool_alloc (cb->pool, cb->len + 1);
 			rspamd_snprintf (cb->url_str,
 					cb->len,
@@ -1938,8 +1940,8 @@ rspamd_url_trie_callback (int strnum, int textpos, void *context)
 			rspamd_strlcpy (cb->url_str, m.m_begin, m.m_len + 1);
 		}
 
-		cb->start = (gchar *)m.m_begin;
-		cb->fin = (gchar *)m.m_begin + m.m_len;
+		cb->start = m.m_begin;
+		cb->fin = m.m_begin + m.m_len;
 
 		return 1;
 	}
