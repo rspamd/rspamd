@@ -196,7 +196,7 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 static void
 lua_redis_timeout (int fd, short what, gpointer u)
 {
-	struct lua_redis_userdata *ud = ud;
+	struct lua_redis_userdata *ud = u;
 
 	lua_redis_push_error ("timeout while connecting the server", ud, FALSE);
 }
