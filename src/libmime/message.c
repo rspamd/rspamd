@@ -1517,10 +1517,11 @@ process_message (struct rspamd_task *task)
 	GMimePart *part;
 	GMimeDataWrapper *wrapper;
 	struct received_header *recv;
-	gchar *mid, *url_str, *p, *end, *url_end;
+	gchar *mid, *url_str;
+	const gchar *url_end, *p, *end;
 	struct rspamd_url *subject_url;
 	gsize len;
-	gint rc;
+	gint rc, state = 0;
 
 	tmp = rspamd_mempool_alloc (task->task_pool, sizeof (GByteArray));
 	tmp->data = (guint8 *)task->msg.start;
@@ -1708,7 +1709,7 @@ process_message (struct rspamd_task *task)
 		while (p < end) {
 			/* Search to the end of url */
 			if (rspamd_url_find (task->task_pool, p, end - p, NULL, &url_end,
-				&url_str, FALSE)) {
+				&url_str, FALSE, &state)) {
 				if (url_str != NULL) {
 					subject_url = rspamd_mempool_alloc0 (task->task_pool,
 							sizeof (struct rspamd_url));

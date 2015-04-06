@@ -24,11 +24,11 @@
 
 int
 acism_lookup(ac_trie_t const *psp, const char *text, size_t len,
-           ACISM_ACTION *cb, void *context)
+           ACISM_ACTION *cb, void *context, int *statep)
 {
     ac_trie_t const ps = *psp;
     char const *cp = text, *endp = cp + len;
-    STATE state = 0;
+    STATE state = *statep;
     int ret = 0;
 
     while (cp < endp) {
@@ -102,6 +102,18 @@ acism_lookup(ac_trie_t const *psp, const char *text, size_t len,
         }
     }
 EXIT:
+	*statep = state;
     return ret;
+}
+
+void
+acism_destroy(ac_trie_t *psp)
+{
+	if (!psp) return;
+	if (psp->flags & IS_MMAP)
+		munmap((char*)psp->tranv - sizeof(ac_trie_t),
+				sizeof(ac_trie_t) + p_size(psp));
+	else free(psp->tranv);
+	free(psp);
 }
 //EOF

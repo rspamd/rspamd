@@ -46,6 +46,6 @@ typedef int (ACISM_ACTION)(int strnum, int textpos, void *context);
 // *state should initially be (0).
 
 int acism_lookup(ac_trie_t const *psp, const char *text, size_t len,
-           ACISM_ACTION *cb, void *context);
+           ACISM_ACTION *cb, void *context, int *statep);
 
 #endif//ACISM_H

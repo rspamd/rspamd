@@ -104,11 +104,11 @@ enum uri_errno rspamd_url_parse (struct rspamd_url *uri,
 gboolean rspamd_url_find (rspamd_mempool_t *pool,
 	const gchar *begin,
 	gsize len,
-	gchar **start,
-	gchar **end,
+	const gchar **start,
+	const gchar **end,
 	gchar **url_str,
-	gboolean is_html);
-
+	gboolean is_html,
+	gint *statep);
 /*
  * Return text representation of url parsing error
  */
@@ -123,6 +123,6 @@ const gchar * rspamd_url_strerror (enum uri_errno err);
  */
 struct rspamd_url *
 rspamd_url_get_next (rspamd_mempool_t *pool,
-		const gchar *start, gchar const **pos);
+		const gchar *start, gchar const **pos, gint *statep);
 
 #endif
