@@ -1041,7 +1041,7 @@ INSTALL(FILES "contrib/lua-fun/fun.lua" DESTINATION ${PLUGINSDIR}/lua)
 
 # Install TLD list
 INSTALL(FILES "contrib/publicsuffix/effective_tld_names.dat" DESTINATION 
-	"${PLUGINSDIR}/effective_tld_names.dat")
+	"${PLUGINSDIR}")
 
 # Lua config
 INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${CONFDIR}/lua)")
