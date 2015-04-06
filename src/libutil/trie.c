@@ -150,6 +150,10 @@ rspamd_trie_insert (rspamd_trie_t *trie, const gchar *pattern, gint pattern_id)
 					q1->fail = n->state;
 					if (q1->fail->final > q1->final) {
 						q1->final = q1->fail->final;
+
+						if (q1->id == -1) {
+							q1->id = q1->fail->id;
+						}
 					}
 				}
 				else {
