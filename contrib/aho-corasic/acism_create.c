@@ -37,8 +37,8 @@ static inline int bitwid(unsigned u)
     if (u & 0x00000002) ret++;
     return ret;
 }
-static void   fill_symv(ac_trie_t*, MEMREF const*, int ns);
-static int    create_tree(TNODE*, SYMBOL const*symv, MEMREF const*strv, int nstrs);
+static void   fill_symv(ac_trie_t*, ac_trie_pat_t const*, int ns);
+static int    create_tree(TNODE*, SYMBOL const*symv, ac_trie_pat_t const*strv, int nstrs);
 static void   add_backlinks(TNODE*, TNODE**, TNODE**);
 static void   prune_backlinks(TNODE*);
 static int    interleave(TNODE*, int nnodes, int nsyms, TNODE**, TNODE**);
@@ -69,7 +69,7 @@ extern PSSTAT psstat[];
 
 //--------------|---------------------------------------------
 ac_trie_t*
-acism_create(MEMREF const* strv, int nstrs)
+acism_create(ac_trie_pat_t const* strv, int nstrs)
 {
     TNODE *tp, **v1 = NULL, **v2 = NULL;
     ac_trie_t *psp = calloc(1, sizeof*psp);
@@ -134,7 +134,7 @@ typedef struct { int freq, rank; } FRANK;
 static int frcmp(FRANK*a, FRANK*b) { return a->freq - b->freq; }
 
 static void
-fill_symv(ac_trie_t *psp, MEMREF const *strv, int nstrs)
+fill_symv(ac_trie_t *psp, ac_trie_pat_t const *strv, int nstrs)
 {
     int i, j;
     FRANK frv[256];
@@ -156,7 +156,7 @@ fill_symv(ac_trie_t *psp, MEMREF const *strv, int nstrs)
 }
 
 static int
-create_tree(TNODE *Tree, SYMBOL const *symv, MEMREF const *strv, int nstrs)
+create_tree(TNODE *Tree, SYMBOL const *symv, ac_trie_pat_t const *strv, int nstrs)
 {
     int i, j;
     TNODE *nextp = Tree + 1;

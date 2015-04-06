@@ -21,17 +21,15 @@
 #ifndef ACISM_H
 #define ACISM_H
 
+#include "config.h"
 // "acism" uses MEMREF {ptr,len} bytevec structs for "string" args,
 // rather than NUL-terminated "C" strings.
 
-#ifndef MSUTIL_H
-#include <stdio.h>
-typedef struct { char const *ptr; size_t len; } MEMREF;
-#endif
+typedef struct { char const *ptr; size_t len; } ac_trie_pat_t;
 
 typedef struct acism ac_trie_t;
 
-ac_trie_t* acism_create(MEMREF const *strv, int nstrs);
+ac_trie_t* acism_create(ac_trie_pat_t const *strv, int nstrs);
 void   acism_destroy(ac_trie_t*);
 
 // For each match, acism_scan calls its ACISM_ACTION fn,
@@ -47,14 +45,7 @@ typedef int (ACISM_ACTION)(int strnum, int textpos, void *context);
 //  string matches can cross block boundaries.
 // *state should initially be (0).
 
-int acism_more(ac_trie_t const*, MEMREF const text,
-                 ACISM_ACTION *fn, void *fndata, int *state);
-
-static inline int acism_scan(ac_trie_t const*psp, MEMREF const text,
-                               ACISM_ACTION *fn, void *fndata)
-{
-    int state = 0;
-    return acism_more(psp, text, fn, fndata, &state);
-}
+int acism_lookup(ac_trie_t const *psp, const char *text, size_t len,
+           ACISM_ACTION *cb, void *context);
 
 #endif//ACISM_H

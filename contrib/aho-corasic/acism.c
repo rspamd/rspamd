@@ -23,12 +23,12 @@
 #define ROOT ((STATE) 0)
 
 int
-acism_more(ac_trie_t const *psp, MEMREF const text,
-           ACISM_ACTION *cb, void *context, int *statep)
+acism_lookup(ac_trie_t const *psp, const char *text, size_t len,
+           ACISM_ACTION *cb, void *context)
 {
     ac_trie_t const ps = *psp;
-    char const *cp = text.ptr, *endp = cp + text.len;
-    STATE state = *statep;
+    char const *cp = text, *endp = cp + len;
+    STATE state = 0;
     int ret = 0;
 
     while (cp < endp) {
@@ -83,7 +83,7 @@ acism_more(ac_trie_t const *psp, MEMREF const text,
                         strno = ps.hashv[i].strno;
                     }
 
-                    if ((ret = cb(strno, cp - text.ptr, context)))
+                    if ((ret = cb(strno, cp - text, context)))
                         goto EXIT;
                 }
 
@@ -102,6 +102,6 @@ acism_more(ac_trie_t const *psp, MEMREF const text,
         }
     }
 EXIT:
-    return *statep = state, ret;
+    return ret;
 }
 //EOF
