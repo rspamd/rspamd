@@ -682,7 +682,7 @@ check_phishing (struct rspamd_task *task,
 	gchar tagbuf[128];
 	struct html_tag *tag;
 	gsize len = 0;
-	gint rc;
+	gint rc, state = 0;
 
 	p = url_text;
 	while (len < remain) {
@@ -730,7 +730,7 @@ check_phishing (struct rspamd_task *task,
 	}
 
 	if (rspamd_url_find (task->task_pool, url_text, len, NULL, NULL, &url_str,
-		TRUE) && url_str != NULL) {
+		TRUE, &state) && url_str != NULL) {
 		new = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct rspamd_url));
 		g_strstrip (url_str);
 		rc = rspamd_url_parse (new, url_str, strlen (url_str), task->task_pool);

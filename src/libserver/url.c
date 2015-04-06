@@ -32,6 +32,7 @@
 #include "message.h"
 #include "trie.h"
 #include "http.h"
+#include "acism.h"
 
 typedef struct url_match_s {
 	const gchar *m_begin;
@@ -673,8 +674,8 @@ struct url_matcher static_matchers[] = {
 
 struct url_match_scanner {
 	GArray *matchers;
-	rspamd_trie_t *search_trie;
-	rspamd_trie_t *tld_trie;
+	GArray *patterns;
+	ac_trie_t *search_trie;
 };
 
 struct url_match_scanner *url_scanner = NULL;
@@ -827,6 +828,7 @@ rspamd_url_parse_tld_file (const gchar *fname, struct url_match_scanner *scanner
 {
 	FILE *f;
 	struct url_matcher m;
+	ac_trie_pat_t pat;
 	gchar *linebuf = NULL, *p;
 	gsize buflen = 0, patlen;
 	gssize r;
@@ -876,8 +878,11 @@ rspamd_url_parse_tld_file (const gchar *fname, struct url_match_scanner *scanner
 		patlen = strlen (p);
 		m.pattern = g_malloc (patlen + 2);
 		m.pattern[0] = '.';
+		pat.ptr = m.pattern;
+		pat.len = patlen + 1;
 		rspamd_strlcpy (&m.pattern[1], p, patlen + 1);
 		g_array_append_val (url_scanner->matchers, m);
+		g_array_append_val (url_scanner->patterns, pat);
 	}
 
 	free (linebuf);
@@ -885,27 +890,30 @@ rspamd_url_parse_tld_file (const gchar *fname, struct url_match_scanner *scanner
 }
 
 static void
-rspamd_url_add_static_matchers (GArray *matchers)
+rspamd_url_add_static_matchers (struct url_match_scanner *sc)
 {
-	gint n = G_N_ELEMENTS (static_matchers);
+	gint n = G_N_ELEMENTS (static_matchers), i;
+	ac_trie_pat_t pat;
 
-	g_array_append_vals (matchers, static_matchers, n);
+	g_array_append_vals (sc->matchers, static_matchers, n);
+
+	for (i = 0; i < n; i ++) {
+		pat.ptr = static_matchers[i].pattern;
+		pat.len = strlen (pat.ptr);
+		g_array_append_val (sc->patterns, pat);
+	}
 }
 
 void
 rspamd_url_init (const gchar *tld_file)
 {
-	guint i;
-	gchar patbuf[128];
-	struct url_matcher *m;
-
 	if (url_scanner == NULL) {
 		url_scanner = g_malloc (sizeof (struct url_match_scanner));
-		url_scanner->matchers = g_array_new (FALSE, TRUE,
-				sizeof (struct url_matcher));
-		url_scanner->search_trie = rspamd_trie_create (TRUE);
-		url_scanner->tld_trie = rspamd_trie_create (TRUE);
-		rspamd_url_add_static_matchers (url_scanner->matchers);
+		url_scanner->matchers = g_array_sized_new (FALSE, TRUE,
+				sizeof (struct url_matcher), 512);
+		url_scanner->patterns = g_array_sized_new (FALSE, TRUE,
+				sizeof (ac_trie_pat_t), 512);
+		rspamd_url_add_static_matchers (url_scanner);
 
 		if (tld_file != NULL) {
 			rspamd_url_parse_tld_file (tld_file, url_scanner);
@@ -914,16 +922,11 @@ rspamd_url_init (const gchar *tld_file)
 			msg_warn ("tld extension file is not specified, url matching is limited");
 		}
 
-		for (i = 0; i < url_scanner->matchers->len; i++) {
-			m = &g_array_index (url_scanner->matchers, struct url_matcher, i);
+		url_scanner->search_trie = acism_create (
+				(const ac_trie_pat_t *)url_scanner->patterns->data,
+				url_scanner->patterns->len);
 
-			rspamd_trie_insert (url_scanner->search_trie, m->pattern, i);
-
-			/* Also use it for TLD lookups */
-			if (strcmp (m->prefix, "http://") == 0) {
-				rspamd_trie_insert (url_scanner->tld_trie, m->pattern, i);
-			}
-		}
+		msg_info ("initialized ac_trie of %ud elements", url_scanner->patterns->len);
 	}
 }
 
@@ -1822,12 +1825,11 @@ rspamd_url_text_extract (rspamd_mempool_t * pool,
 	struct mime_text_part *part,
 	gboolean is_html)
 {
-	gint rc;
-	gchar *url_str = NULL, *url_start, *url_end;
+	gint rc, state = 0;
+	gchar *url_str = NULL;
 	struct rspamd_url *new;
 	struct process_exception *ex;
-	gchar *p, *end, *begin;
-
+	const gchar *p, *end, *begin, *url_start, *url_end;
 
 	if (part->content == NULL || part->content->len == 0) {
 		msg_warn ("got empty text part");
@@ -1839,7 +1841,7 @@ rspamd_url_text_extract (rspamd_mempool_t * pool,
 	p = begin;
 	while (p < end) {
 		if (rspamd_url_find (pool, p, end - p, &url_start, &url_end, &url_str,
-				is_html)) {
+				is_html, &state)) {
 			if (url_str != NULL) {
 				new = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_url));
 				ex =
@@ -1889,67 +1891,99 @@ rspamd_url_text_extract (rspamd_mempool_t * pool,
 	}
 }
 
+struct url_callback_data {
+	const gchar *begin;
+	gchar *url_str;
+	rspamd_mempool_t *pool;
+	gint len;
+	gboolean is_html;
+	const gchar *start;
+	const gchar *fin;
+	const gchar *end;
+};
+
+static gint
+rspamd_url_trie_callback (int strnum, int textpos, void *context)
+{
+	struct url_matcher *matcher;
+	url_match_t m;
+	const gchar *pos;
+	struct url_callback_data *cb = context;
+	ac_trie_pat_t *pat;
+
+	matcher = &g_array_index (url_scanner->matchers, struct url_matcher, strnum);
+	if ((matcher->flags & URL_FLAG_NOHTML) && cb->is_html) {
+		/* Do not try to match non-html like urls in html texts */
+		return 0;
+	}
+	pat = &g_array_index (url_scanner->patterns, ac_trie_pat_t, strnum);
+
+	m.pattern = matcher->pattern;
+	m.prefix = matcher->prefix;
+	m.add_prefix = FALSE;
+	pos = cb->begin + textpos - pat->len;
+
+	if (matcher->start (cb->begin, cb->end, pos,
+			&m) && matcher->end (cb->begin, cb->end, pos, &m)) {
+		if (m.add_prefix || matcher->prefix[0] != '\0') {
+			cb->len = m.m_len + strlen (matcher->prefix) + 1;
+			cb->url_str = rspamd_mempool_alloc (cb->pool, cb->len + 1);
+			rspamd_snprintf (cb->url_str,
+					cb->len,
+					"%s%*s",
+					m.prefix,
+					m.m_len,
+					m.m_begin);
+		}
+		else {
+			cb->url_str = rspamd_mempool_alloc (cb->pool, m.m_len + 1);
+			rspamd_strlcpy (cb->url_str, m.m_begin, m.m_len + 1);
+		}
+
+		cb->start = m.m_begin;
+		cb->fin = m.m_begin + m.m_len;
+
+		return 1;
+	}
+	else {
+		cb->url_str = NULL;
+	}
+
+	/* Continue search */
+	return 0;
+}
+
 gboolean
 rspamd_url_find (rspamd_mempool_t *pool,
 	const gchar *begin,
 	gsize len,
-	gchar **start,
-	gchar **fin,
+	const gchar **start,
+	const gchar **fin,
 	gchar **url_str,
-	gboolean is_html)
+	gboolean is_html,
+	gint *statep)
 {
-	const gchar *end, *pos;
-	gint idx, l;
-	struct url_matcher *matcher;
-	url_match_t m;
+	struct url_callback_data cb;
+	gint ret;
 
-	end = begin + len;
-	if ((pos =
-			rspamd_trie_lookup (url_scanner->search_trie, begin, len,
-					&idx)) == NULL) {
-		return FALSE;
-	}
-	else {
-		matcher = &g_array_index (url_scanner->matchers, struct url_matcher, idx);
-		if ((matcher->flags & URL_FLAG_NOHTML) && is_html) {
-			/* Do not try to match non-html like urls in html texts */
-			return FALSE;
+	g_assert (statep != NULL);
+	memset (&cb, 0, sizeof (cb));
+	cb.begin = begin;
+	cb.end = begin + len;
+	cb.is_html = is_html;
+	cb.pool = pool;
+	ret = acism_lookup (url_scanner->search_trie, begin, len,
+			rspamd_url_trie_callback, &cb, statep);
+
+	if (ret) {
+		if (start) {
+			*start = cb.start;
 		}
-		m.pattern = matcher->pattern;
-		m.prefix = matcher->prefix;
-		m.add_prefix = FALSE;
-		if (matcher->start (begin, end, pos,
-				&m) && matcher->end (begin, end, pos, &m)) {
-			if (m.add_prefix || matcher->prefix[0] != '\0') {
-				l = m.m_len + 1 + strlen (m.prefix);
-				*url_str = rspamd_mempool_alloc (pool, l);
-				rspamd_snprintf (*url_str,
-						l,
-						"%s%*s",
-						m.prefix,
-						m.m_len,
-						m.m_begin);
-			}
-			else {
-				*url_str = rspamd_mempool_alloc (pool, m.m_len + 1);
-				memcpy (*url_str, m.m_begin, m.m_len);
-				(*url_str)[m.m_len] = '\0';
-			}
-			if (start != NULL) {
-				*start = (gchar *)m.m_begin;
-			}
-			if (fin != NULL) {
-				*fin = (gchar *)m.m_begin + m.m_len;
-			}
+		if (fin) {
+			*fin = cb.fin;
 		}
-		else {
-			*url_str = NULL;
-			if (start != NULL) {
-				*start = (gchar *)pos;
-			}
-			if (fin != NULL) {
-				*fin = (gchar *)pos + strlen (m.prefix);
-			}
+		if (url_str) {
+			*url_str = cb.url_str;
 		}
 
 		return TRUE;
@@ -1960,10 +1994,10 @@ rspamd_url_find (rspamd_mempool_t *pool,
 
 struct rspamd_url *
 rspamd_url_get_next (rspamd_mempool_t *pool,
-		const gchar *start, gchar const **pos)
+		const gchar *start, gchar const **pos, gint *statep)
 {
-	const gchar *p, *end;
-	gchar *url_str = NULL, *url_start, *url_end;
+	const gchar *p, *end, *url_start, *url_end;
+	gchar *url_str = NULL;
 	struct rspamd_url *new;
 	gint rc;
 
@@ -1978,7 +2012,7 @@ rspamd_url_get_next (rspamd_mempool_t *pool,
 
 	if (p < end) {
 		if (rspamd_url_find (pool, p, end - p, &url_start, &url_end, &url_str,
-				FALSE)) {
+				FALSE, statep)) {
 			if (url_str != NULL) {
 				new = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_url));
 
