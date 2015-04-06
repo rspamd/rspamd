@@ -1,0 +1,8 @@
+SET(AHOCORASICSRC	acism_create.c
+					acism.c)
+if ("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
+	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
+endif ()
+ADD_LIBRARY(rspamd-actrie SHARED ${AHOCORASICSRC})
+INSTALL(TARGETS rspamd-actrie
+    	LIBRARY DESTINATION lib)
