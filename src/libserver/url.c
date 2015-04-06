@@ -46,7 +46,7 @@ typedef struct url_match_s {
 #define URL_FLAG_STAR_MATCH (1 << 2)
 
 struct url_matcher {
-	const gchar *pattern;
+	gchar *pattern;
 	const gchar *prefix;
 	gboolean (*start)(const gchar *begin, const gchar *end, const gchar *pos,
 		url_match_t *match);
@@ -828,7 +828,7 @@ rspamd_url_parse_tld_file (const gchar *fname, struct url_match_scanner *scanner
 	FILE *f;
 	struct url_matcher m;
 	gchar *linebuf = NULL, *p;
-	gsize buflen = 0;
+	gsize buflen = 0, patlen;
 	gssize r;
 	gint flags;
 
@@ -873,7 +873,10 @@ rspamd_url_parse_tld_file (const gchar *fname, struct url_match_scanner *scanner
 			p = linebuf;
 		}
 
-		m.pattern = g_strdup (p);
+		patlen = strlen (p);
+		m.pattern = g_malloc (patlen + 2);
+		m.pattern[0] = '.';
+		rspamd_strlcpy (&m.pattern[1], p, patlen + 1);
 		g_array_append_val (url_scanner->matchers, m);
 	}
 
@@ -914,31 +917,7 @@ rspamd_url_init (const gchar *tld_file)
 		for (i = 0; i < url_scanner->matchers->len; i++) {
 			m = &g_array_index (url_scanner->matchers, struct url_matcher, i);
 
-			if (m->flags & URL_FLAG_STRICT_MATCH) {
-				/* Insert more specific patterns */
-
-				/* some.tld/ */
-				rspamd_snprintf (patbuf,
-					sizeof (patbuf),
-					"%s/",
-					m->pattern);
-				rspamd_trie_insert (url_scanner->search_trie, patbuf, i);
-				/* some.tld  */
-				rspamd_snprintf (patbuf,
-					sizeof (patbuf),
-					"%s ",
-					m->pattern);
-				rspamd_trie_insert (url_scanner->search_trie, patbuf, i);
-				/* some.tld: */
-				rspamd_snprintf (patbuf,
-					sizeof (patbuf),
-					"%s:",
-					m->pattern);
-				rspamd_trie_insert (url_scanner->search_trie, patbuf, i);
-			}
-			else {
-				rspamd_trie_insert (url_scanner->search_trie, m->pattern, i);
-			}
+			rspamd_trie_insert (url_scanner->search_trie, m->pattern, i);
 
 			/* Also use it for TLD lookups */
 			if (strcmp (m->prefix, "http://") == 0) {

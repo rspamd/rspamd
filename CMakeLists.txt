@@ -1037,6 +1037,10 @@ ENDFOREACH(LUA_PLUGIN)
 # Install lua fun library
 INSTALL(FILES "contrib/lua-fun/fun.lua" DESTINATION ${PLUGINSDIR}/lua)
 
+# Install TLD list
+INSTALL(FILES "contrib/publicsuffix/effective_tld_names.dat" DESTINATION 
+	"${PLUGINSDIR}/effective_tld_names.dat")
+
 # Lua config
 INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${CONFDIR}/lua)")
 FILE(GLOB_RECURSE LUA_CONFIGS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/conf/lua" 

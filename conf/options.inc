@@ -14,3 +14,4 @@ dns {
     retransmits = 5;
 }
 tempdir = "/tmp";
+url_tld = "${PLUGINSDIR}/effective_tld_names.dat";
