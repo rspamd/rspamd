@@ -1322,6 +1322,8 @@ main (gint argc, gchar **argv, gchar **env)
 		return res ? EXIT_SUCCESS : EXIT_FAILURE;
 	}
 
+	gperf_profiler_init (rspamd_main->cfg, "main");
+
 	msg_info ("rspamd " RVERSION " is starting, build id: " RID);
 	rspamd_main->cfg->cfg_name = rspamd_mempool_strdup (
 		rspamd_main->cfg->cfg_pool,
@@ -1391,6 +1393,9 @@ main (gint argc, gchar **argv, gchar **env)
 			rspamd_main->cfg->history_file);
 	}
 
+#if defined(WITH_GPERF_TOOLS)
+	ProfilerStop ();
+#endif
 	/* Spawn workers */
 	rspamd_main->workers = g_hash_table_new (g_direct_hash, g_direct_equal);
 	spawn_workers (rspamd_main);
