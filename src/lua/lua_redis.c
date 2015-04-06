@@ -198,7 +198,8 @@ lua_redis_timeout (int fd, short what, gpointer u)
 {
 	struct lua_redis_userdata *ud = u;
 
-	lua_redis_push_error ("timeout while connecting the server", ud, FALSE);
+	msg_info ("timeout while querying redis server");
+	lua_redis_push_error ("timeout while connecting the server", ud, TRUE);
 }
 
 /**
