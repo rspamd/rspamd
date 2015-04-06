@@ -1,7 +1,7 @@
 #ifndef SIPHASH_INTERNAL_H
 #define SIPHASH_INTERNAL_H
 
-#include <endian.h>
+#include "config.h"
 #define SIP_ROTL(x, b) (uint64_t)(((x) << (b)) | ( (x) >> (64 - (b))))
 
 #define SIP_U32TO8_LE(p, v) \
