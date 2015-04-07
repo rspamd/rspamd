@@ -29,13 +29,15 @@
 
 /* Suffix trie */
 LUA_FUNCTION_DEF (trie, create);
-LUA_FUNCTION_DEF (trie, search_text);
-LUA_FUNCTION_DEF (trie, search_task);
+LUA_FUNCTION_DEF (trie, match);
+LUA_FUNCTION_DEF (trie, search_mime);
+LUA_FUNCTION_DEF (trie, search_rawmsg);
 LUA_FUNCTION_DEF (trie, destroy);
 
 static const struct luaL_reg trielib_m[] = {
-	LUA_INTERFACE_DEF (trie, search_text),
-	LUA_INTERFACE_DEF (trie, search_task),
+	LUA_INTERFACE_DEF (trie, match),
+	LUA_INTERFACE_DEF (trie, search_mime),
+	LUA_INTERFACE_DEF (trie, search_rawmsg),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__gc", lua_trie_destroy},
 	{NULL, NULL}
@@ -171,7 +173,7 @@ lua_trie_search_str (lua_State *L, ac_trie_t *trie, const gchar *str, gsize len,
 }
 
 static gint
-lua_trie_search_text (lua_State *L)
+lua_trie_match (lua_State *L)
 {
 	ac_trie_t *trie = lua_check_trie (L, 1);
 	const gchar *text;
@@ -211,7 +213,7 @@ lua_trie_search_text (lua_State *L)
 }
 
 static gint
-lua_trie_search_task (lua_State *L)
+lua_trie_search_mime (lua_State *L)
 {
 	ac_trie_t *trie = lua_check_trie (L, 1);
 	struct rspamd_task *task = lua_check_task (L, 2);
@@ -238,6 +240,29 @@ lua_trie_search_task (lua_State *L)
 			}
 
 			cur = g_list_next (cur);
+		}
+	}
+
+	lua_pushboolean (L, found);
+	return 1;
+}
+
+static gint
+lua_trie_search_rawmsg (lua_State *L)
+{
+	ac_trie_t *trie = lua_check_trie (L, 1);
+	struct rspamd_task *task = lua_check_task (L, 2);
+	const gchar *text;
+	gint state = 0;
+	gsize len;
+	gboolean found = FALSE;
+
+	if (trie) {
+		text = task->msg.start;
+		len = task->msg.len;
+
+		if (lua_trie_search_str (L, trie, text, len, &state) != 0) {
+			found = TRUE;
 		}
 	}
 

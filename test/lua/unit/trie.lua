@@ -43,7 +43,7 @@ context("Trie search functions", function()
         return 0
       end
       
-      ret = trie:search_text(c[1], cb)
+      ret = trie:match(c[1], cb)
       
       assert_equal(c[2], ret, tostring(c[2]) .. ' while matching ' .. c[1])
       
