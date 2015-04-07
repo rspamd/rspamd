@@ -228,6 +228,7 @@ lua_http_request (lua_State *L)
 	struct lua_http_cbdata *cbd;
 	struct rspamd_dns_resolver *resolver;
 	struct rspamd_async_session *session;
+	struct rspamd_lua_text *t;
 	gdouble timeout = default_http_timeout;
 
 	if (lua_gettop (L) >= 2) {
@@ -335,6 +336,16 @@ lua_http_request (lua_State *L)
 		if (lua_type (L, -1) == LUA_TSTRING) {
 			msg->body = g_string_new (lua_tostring (L, -1));
 		}
+		else if (lua_type (L, -1) == LUA_TUSERDATA) {
+			t = lua_check_text (L, -1);
+			if (t) {
+				/* XXX: is it safe ? */
+				msg->body = g_string_new (NULL);
+				msg->body->str = (gchar *)t->start;
+				msg->body->len = t->len;
+			}
+		}
+
 		lua_pop (L, 1);
 	}
 	else {
