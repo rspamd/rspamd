@@ -134,7 +134,7 @@ lua_trie_callback (int strnum, int textpos, void *context)
 
 	/* Function */
 	lua_pushvalue (L, 3);
-	lua_pushnumber (L, strnum);
+	lua_pushnumber (L, strnum + 1);
 	lua_pushnumber (L, textpos);
 
 	if (lua_pcall (L, 2, 1, 0) != 0) {

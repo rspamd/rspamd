@@ -16,10 +16,10 @@ context("Trie search functions", function()
     assert_not_nil(trie, "cannot create trie")
     
     local cases = {
-      {'test', true, {{4, 0}, {4, 1}}},
-      {'she test test', true, {{3, 3}, {3, 2}, {8, 0}, {8, 1}, {13, 0}, {13, 1}}},
+      {'test', true, {{4, 1}, {4, 2}}},
+      {'she test test', true, {{3, 4}, {3, 3}, {8, 1}, {8, 2}, {13, 1}, {13, 2}}},
       {'non-existent', false},
-      {'str\0ing test', true, {{7, 4}, {12, 0}, {12, 1}}},
+      {'str\0ing test', true, {{7, 5}, {12, 1}, {12, 2}}},
     }
     
     local function comparetables(t1, t2)
