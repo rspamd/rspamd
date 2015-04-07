@@ -683,6 +683,22 @@ static const struct luaL_reg urllib_m[] = {
 	{NULL, NULL}
 };
 
+/* Blob methods */
+struct rspamd_lua_text {
+	const gchar *start;
+	gsize len;
+};
+
+LUA_FUNCTION_DEF (text, len);
+LUA_FUNCTION_DEF (text, str);
+
+static const struct luaL_reg textlib_m[] = {
+	LUA_INTERFACE_DEF (text, len),
+	LUA_INTERFACE_DEF (text, str),
+	{"__tostring", lua_text_str},
+	{NULL, NULL}
+};
+
 /* Utility functions */
 struct rspamd_task *
 lua_check_task (lua_State * L, gint pos)
@@ -723,6 +739,16 @@ lua_check_url (lua_State * L)
 	luaL_argcheck (L, ud != NULL, 1, "'url' expected");
 	return ud ? *((struct rspamd_url **)ud) : NULL;
 }
+
+static struct rspamd_lua_text *
+lua_check_text (lua_State * L, gint pos)
+{
+	void *ud = luaL_checkudata (L, pos, "rspamd{text}");
+	luaL_argcheck (L, ud != NULL, pos, "'text' expected");
+	return ud ? (struct rspamd_lua_text *)ud : NULL;
+}
+
+/* Task methods */
 
 static int
 lua_task_create_empty (lua_State *L)
@@ -2547,6 +2573,37 @@ lua_url_get_phished (lua_State *L)
 	return 1;
 }
 
+/* Text methods */
+static gint
+lua_text_len (lua_State *L)
+{
+	struct rspamd_lua_text *t = lua_check_text (L, 1);
+	gsize l = 0;
+
+	if (t != NULL) {
+		l = t->len;
+	}
+
+	lua_pushnumber (L, l);
+
+	return 1;
+}
+
+static gint
+lua_text_str (lua_State *L)
+{
+	struct rspamd_lua_text *t = lua_check_text (L, 1);
+
+	if (t != NULL) {
+		lua_pushlstring (L, t->start, t->len);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
 /* Init part */
 
 static gint
@@ -2598,6 +2655,13 @@ luaopen_url (lua_State * L)
 }
 
 void
+luaopen_text (lua_State *L)
+{
+	rspamd_lua_new_class (L, "rspamd{text}", textlib_m);
+	lua_pop (L, 1);
+}
+
+void
 rspamd_lua_task_push (lua_State *L, struct rspamd_task *task)
 {
 	struct rspamd_task **ptask;
@@ -2606,3 +2670,4 @@ rspamd_lua_task_push (lua_State *L, struct rspamd_task *task)
 	rspamd_lua_setclass (L, "rspamd{task}", -1);
 	*ptask = task;
 }
+

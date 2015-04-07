@@ -234,6 +234,7 @@ rspamd_lua_init (struct rspamd_config *cfg)
 	luaopen_rsa (L);
 	luaopen_ip (L);
 	luaopen_expression (L);
+	luaopen_text (L);
 
 	rspamd_lua_add_preload (L, "ucl", luaopen_ucl);
 
