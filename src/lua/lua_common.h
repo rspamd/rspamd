@@ -55,6 +55,19 @@ struct lua_locked_state {
 	rspamd_mutex_t *m;
 };
 
+/**
+ * Lua IP address structure
+ */
+struct rspamd_lua_ip {
+	rspamd_inet_addr_t *addr;
+};
+
+struct rspamd_lua_text {
+	const gchar *start;
+	gsize len;
+};
+
+
 /* Common utility functions */
 
 /**
@@ -132,6 +145,8 @@ void rspamd_lua_task_push (lua_State *L, struct rspamd_task *task);
  */
 struct rspamd_lua_ip * lua_check_ip (lua_State * L, gint pos);
 
+struct rspamd_lua_text * lua_check_text (lua_State * L, gint pos);
+
 /**
  * Check for task at the specified position
  */
@@ -146,14 +161,6 @@ void rspamd_lua_ip_push_fromstring (lua_State *L, const gchar *ip_str);
  * Create type error
  */
 int rspamd_lua_typerror (lua_State *L, int narg, const char *tname);
-
-/**
- * Lua IP address structure
- */
-struct rspamd_lua_ip {
-	rspamd_inet_addr_t *addr;
-};
-
 /**
  * Open libraries functions
  */

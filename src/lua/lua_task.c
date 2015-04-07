@@ -684,11 +684,6 @@ static const struct luaL_reg urllib_m[] = {
 };
 
 /* Blob methods */
-struct rspamd_lua_text {
-	const gchar *start;
-	gsize len;
-};
-
 LUA_FUNCTION_DEF (text, len);
 LUA_FUNCTION_DEF (text, str);
 
@@ -740,7 +735,7 @@ lua_check_url (lua_State * L)
 	return ud ? *((struct rspamd_url **)ud) : NULL;
 }
 
-static struct rspamd_lua_text *
+struct rspamd_lua_text *
 lua_check_text (lua_State * L, gint pos)
 {
 	void *ud = luaL_checkudata (L, pos, "rspamd{text}");
@@ -1016,9 +1011,14 @@ static gint
 lua_task_get_content (lua_State * L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
+	struct rspamd_lua_text *t;
 
 	if (task) {
-		lua_pushlstring (L, task->msg.start, task->msg.len);
+		t = lua_newuserdata (L, sizeof (*t));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+		t->len = task->msg.len;
+		t->start = task->msg.start;
+
 		return 1;
 	}
 

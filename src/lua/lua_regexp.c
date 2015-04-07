@@ -285,12 +285,22 @@ static int
 lua_regexp_match (lua_State *L)
 {
 	struct rspamd_lua_regexp *re = lua_check_regexp (L);
-	const gchar *data;
-	gsize len;
+	struct rspamd_lua_text *t;
+	const gchar *data = NULL;
+	gsize len = 0;
 	gboolean raw = FALSE;
 
 	if (re) {
-		data = luaL_checklstring (L, 2, &len);
+		if (lua_type (L, 2) == LUA_TSTRING) {
+			data = luaL_checklstring (L, 2, &len);
+		}
+		else if (lua_type (L, 2) == LUA_TUSERDATA) {
+			t = lua_check_text (L, 2);
+			if (t != NULL) {
+				data = t->start;
+				len = t->len;
+			}
+		}
 
 		if (lua_gettop (L) == 3) {
 			raw = lua_toboolean (L, 3);
