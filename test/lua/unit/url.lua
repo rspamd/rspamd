@@ -40,7 +40,7 @@ context("URL check functions", function()
   };
   struct rspamd_config;
   struct rspamd_url* rspamd_url_get_next (void *pool,
-    const char *start, char const **pos);
+    const char *start, char const **pos, int *statep);
   void * rspamd_mempool_new (unsigned long size);
   void rspamd_url_init (const char *tld_file);
   ]]
@@ -54,10 +54,12 @@ context("URL check functions", function()
       {"http://user:password@тест2.РФ:18 text", {"тест2.рф", "user"}},
     }
     
-    ffi.C.rspamd_url_init(nil)
+    local test_dir = string.gsub(debug.getinfo(1).source, "^@(.+/)[^/]+$", "%1")
+    
+    ffi.C.rspamd_url_init(string.format('%s/%s', test_dir, "test_tld.dat"))
     
     for _,c in ipairs(cases) do
-      local res = ffi.C.rspamd_url_get_next(pool, c[1], nil)
+      local res = ffi.C.rspamd_url_get_next(pool, c[1], nil, nil)
       
       assert_not_nil(res, "cannot parse " .. c[1])
       assert_equal(c[2][1], ffi.string(res.host, res.hostlen))
