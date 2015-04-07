@@ -58,12 +58,11 @@ local function tries_callback(task)
       local param = params[idx]
       local pattern = patterns[idx]
       
-      rspamd_logger.debugx("<%1> matched pattern %2 at pos %3",
-        task:get_message_id(), pattern, pos)
-      
-      if params['multi'] or not matched[pattern] then
-        task:insert_result(params['symbol'], 1.0)
-        if not params['multi'] then
+      if param['multi'] or not matched[pattern] then
+        rspamd_logger.debugx("<%1> matched pattern %2 at pos %3",
+          task:get_message_id(), pattern, pos)
+        task:insert_result(param['symbol'], 1.0)
+        if not param['multi'] then
           matched[pattern] = true
         end
       end
@@ -80,6 +79,9 @@ end
 
 local function process_single_pattern(pat, symbol, cf)
   if pat then
+    local multi = false
+    if cf['multi'] then multi = true end
+    
     if cf['raw'] then
       table.insert(raw_patterns, pat)
       table.insert(raw_params, {symbol=symbol, multi=multi})
@@ -100,9 +102,6 @@ local function process_trie_file(symbol, cf)
       rspamd_logger.errx('binary trie patterns are not implemented yet: %1', 
         cf['file'])
     else
-      local multi = false
-      if cf['multi'] then multi = true end
-      
       for line in file:lines() do
         local pat = string.match(line, '^([^#].*[^%s])%s*$')
         process_single_pattern(pat, symbol, cf)
