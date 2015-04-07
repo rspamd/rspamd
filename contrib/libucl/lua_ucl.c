@@ -172,19 +172,33 @@ static int
 ucl_object_lua_push_array (lua_State *L, const ucl_object_t *obj)
 {
 	const ucl_object_t *cur;
+	ucl_object_iter_t it;
 	int i = 1, nelt = 0;
 
-	/* Optimize allocation by preallocation of table */
-	LL_FOREACH (obj, cur) {
-		nelt ++;
+	if (obj->type == UCL_ARRAY) {
+		nelt = obj->len;
+		it = ucl_object_iterate_new (obj);
+		lua_createtable (L, nelt, 0);
+
+		while ((cur = ucl_object_iterate_safe (it, true))) {
+			ucl_object_push_lua (L, cur, false);
+			lua_rawseti (L, -2, i);
+			i ++;
+		}
 	}
+	else {
+		/* Optimize allocation by preallocation of table */
+		LL_FOREACH (obj, cur) {
+			nelt ++;
+		}
 
-	lua_createtable (L, nelt, 0);
+		lua_createtable (L, nelt, 0);
 
-	LL_FOREACH (obj, cur) {
-		ucl_object_push_lua (L, cur, false);
-		lua_rawseti (L, -2, i);
-		i ++;
+		LL_FOREACH (obj, cur) {
+			ucl_object_push_lua (L, cur, false);
+			lua_rawseti (L, -2, i);
+			i ++;
+		}
 	}
 
 	return 1;
@@ -259,7 +273,7 @@ ucl_object_push_lua (lua_State *L, const ucl_object_t *obj, bool allow_array)
 	case UCL_OBJECT:
 		return ucl_object_lua_push_object (L, obj, allow_array);
 	case UCL_ARRAY:
-		return ucl_object_lua_push_array (L, obj->value.av);
+		return ucl_object_lua_push_array (L, obj);
 	default:
 		return ucl_object_lua_push_scalar (L, obj, allow_array);
 	}
