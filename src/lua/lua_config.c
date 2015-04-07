@@ -335,24 +335,6 @@ static const struct luaL_reg hashlib_m[] = {
 	{NULL, NULL}
 };
 
-/* Suffix trie */
-LUA_FUNCTION_DEF (trie, create);
-LUA_FUNCTION_DEF (trie, add_pattern);
-LUA_FUNCTION_DEF (trie, search_text);
-LUA_FUNCTION_DEF (trie, search_task);
-
-static const struct luaL_reg trielib_m[] = {
-	LUA_INTERFACE_DEF (trie, add_pattern),
-	LUA_INTERFACE_DEF (trie, search_text),
-	LUA_INTERFACE_DEF (trie, search_task),
-	{"__tostring", rspamd_lua_class_tostring},
-	{NULL, NULL}
-};
-static const struct luaL_reg trielib_f[] = {
-	LUA_INTERFACE_DEF (trie, create),
-	{NULL, NULL}
-};
-
 static struct rspamd_config *
 lua_check_config (lua_State * L)
 {
@@ -375,15 +357,6 @@ lua_check_hash_table (lua_State * L)
 	void *ud = luaL_checkudata (L, 1, "rspamd{hash_table}");
 	luaL_argcheck (L, ud != NULL, 1, "'hash_table' expected");
 	return ud ? **((GHashTable ***)ud) : NULL;
-}
-
-static rspamd_trie_t *
-lua_check_trie (lua_State * L)
-{
-	void *ud = luaL_checkudata (L, 1, "rspamd{trie}");
-
-	luaL_argcheck (L, ud != NULL, 1, "'trie' expected");
-	return ud ? *((rspamd_trie_t **)ud) : NULL;
 }
 
 /*** Config functions ***/
@@ -1453,132 +1426,7 @@ lua_hash_table_get_key (lua_State * L)
 }
 
 /* Trie functions */
-static gint
-lua_trie_create (lua_State *L)
-{
-	rspamd_trie_t *trie, **ptrie;
-	gboolean icase = FALSE;
 
-	if (lua_gettop (L) == 1) {
-		icase = lua_toboolean (L, 1);
-	}
-
-	trie = rspamd_trie_create (icase);
-
-	ptrie = lua_newuserdata (L, sizeof (rspamd_trie_t *));
-	rspamd_lua_setclass (L, "rspamd{trie}", -1);
-	*ptrie = trie;
-
-	return 1;
-}
-
-static gint
-lua_trie_add_pattern (lua_State *L)
-{
-	rspamd_trie_t *trie = lua_check_trie (L);
-	const gchar *pattern;
-	gint id;
-
-	if (trie) {
-		pattern = luaL_checkstring (L, 2);
-		id = luaL_checknumber (L, 3);
-
-		if (pattern != NULL) {
-			rspamd_trie_insert (trie, pattern, id);
-			lua_pushboolean (L, 1);
-		}
-	}
-
-	lua_pushboolean (L, 0);
-
-	return 1;
-}
-
-static gint
-lua_trie_search_text (lua_State *L)
-{
-	rspamd_trie_t *trie = lua_check_trie (L);
-	const gchar *text, *pos;
-	gint id, i = 1;
-	gsize len;
-	gboolean found = FALSE;
-
-	if (trie) {
-		text = luaL_checklstring (L, 2, &len);
-		if (text) {
-			lua_newtable (L);
-			pos = text;
-			while (pos < text + len &&
-				(pos = rspamd_trie_lookup (trie, pos, len, &id)) != NULL) {
-				lua_pushinteger (L, i);
-				lua_pushinteger (L, id);
-				lua_settable (L, -3);
-				i++;
-				found = TRUE;
-				break;
-			}
-
-			if (!found) {
-				lua_pushnil (L);
-			}
-			return 1;
-		}
-	}
-
-	lua_pushnil (L);
-	return 1;
-}
-
-static gint
-lua_trie_search_task (lua_State *L)
-{
-	rspamd_trie_t *trie = lua_check_trie (L);
-	struct rspamd_task *task;
-	struct mime_text_part *part;
-	GList *cur;
-	const gchar *pos, *end;
-	gint id, i = 1;
-	void *ud;
-	gboolean found = FALSE;
-
-	if (trie) {
-		ud = luaL_checkudata (L, 2, "rspamd{task}");
-		luaL_argcheck (L, ud != NULL, 1, "'task' expected");
-		task = ud ? *((struct rspamd_task **)ud) : NULL;
-		if (task) {
-			lua_newtable (L);
-			cur = task->text_parts;
-			while (cur) {
-				part = cur->data;
-				if (!part->is_empty && part->content != NULL) {
-					pos = (const gchar *)part->content->data;
-					end = pos + part->content->len;
-					while (pos < end &&
-						(pos =
-						rspamd_trie_lookup (trie, pos, part->content->len,
-						&id)) != NULL) {
-						lua_pushinteger (L, i);
-						lua_pushinteger (L, id);
-						lua_settable (L, -3);
-						i++;
-						found = TRUE;
-						break;
-					}
-				}
-				cur = g_list_next (cur);
-			}
-			if (!found) {
-				lua_pushnil (L);
-			}
-			return 1;
-		}
-	}
-
-	if (!found) {
-		lua_pushnil (L);
-	}
-	return 1;
-}
 /* Init functions */
 
 void
@@ -1602,33 +1450,6 @@ luaopen_hash_table (lua_State * L)
 {
 	rspamd_lua_new_class (L, "rspamd{hash_table}", hashlib_m);
 	luaL_register (L, "rspamd_hash_table", null_reg);
-
-	lua_pop (L, 1);                      /* remove metatable from stack */
-}
-
-static gint
-lua_load_trie (lua_State *L)
-{
-	lua_newtable (L);
-	luaL_register (L, NULL, trielib_f);
-
-	return 1;
-}
-
-void
-luaopen_trie (lua_State * L)
-{
-	luaL_newmetatable (L, "rspamd{trie}");
-	lua_pushstring (L, "__index");
-	lua_pushvalue (L, -2);
-	lua_settable (L, -3);
-
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{trie}");
-	lua_rawset (L, -3);
-
-	luaL_register (L, NULL,			 trielib_m);
-	rspamd_lua_add_preload (L, "rspamd_trie", lua_load_trie);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 }
