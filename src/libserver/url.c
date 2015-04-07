@@ -1421,16 +1421,27 @@ rspamd_url_find (rspamd_mempool_t *pool,
 	gint *statep)
 {
 	struct url_callback_data cb;
-	gint ret;
+	gint ret, state;
 
-	g_assert (statep != NULL);
 	memset (&cb, 0, sizeof (cb));
 	cb.begin = begin;
 	cb.end = begin + len;
 	cb.is_html = is_html;
 	cb.pool = pool;
+
+	if (statep != NULL) {
+		state = *statep;
+	}
+	else {
+		state = 0;
+	}
+
 	ret = acism_lookup (url_scanner->search_trie, begin, len,
-			rspamd_url_trie_callback, &cb, statep, true);
+			rspamd_url_trie_callback, &cb, &state, true);
+
+	if (statep) {
+		*statep = state;
+	}
 
 	if (ret) {
 		if (start) {
