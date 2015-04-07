@@ -115,11 +115,20 @@ lua_trie_create (lua_State *L)
 	return 1;
 }
 
+struct lua_trie_cbdata {
+	gboolean found;
+	lua_State *L;
+};
+
 static gint
 lua_trie_callback (int strnum, int textpos, void *context)
 {
-	lua_State *L = context;
+	struct lua_trie_cbdata *cb = context;
+	lua_State *L;
 	gint ret;
+
+	L = cb->L;
+	cb->found = TRUE;
 
 	/* Function */
 	lua_pushvalue (L, 3);
@@ -146,17 +155,19 @@ static gint
 lua_trie_search_str (lua_State *L, ac_trie_t *trie, const gchar *str, gsize len,
 		gint *statep)
 {
+	struct lua_trie_cbdata cb;
 	gboolean icase = FALSE;
-	gint ret;
 
 	if (lua_gettop (L) == 4) {
 		icase = lua_toboolean (L, 4);
 	}
 
-	ret = acism_lookup (trie, str, len,
-			lua_trie_callback, L, statep, icase);
+	cb.L = L;
+	cb.found = FALSE;
+	acism_lookup (trie, str, len,
+			lua_trie_callback, &cb, statep, icase);
 
-	return ret;
+	return cb.found;
 }
 
 static gint
@@ -177,9 +188,8 @@ lua_trie_search_text (lua_State *L)
 				if (lua_isstring (L, -1)) {
 					text = lua_tolstring (L, -1, &len);
 
-					if (lua_trie_search_str (L, trie, text, len, &state) != 0) {
+					if (lua_trie_search_str (L, trie, text, len, &state)) {
 						found = TRUE;
-						break;
 					}
 				}
 				lua_pop (L, 1);
@@ -188,9 +198,9 @@ lua_trie_search_text (lua_State *L)
 			lua_pop (L, 1); /* table */
 		}
 		else if (lua_type (L, 2) == LUA_TSTRING) {
-			text = lua_tolstring (L, -1, &len);
+			text = lua_tolstring (L, 2, &len);
 
-			if (lua_trie_search_str (L, trie, text, len, &state) != 0) {
+			if (lua_trie_search_str (L, trie, text, len, &state)) {
 				found = TRUE;
 			}
 		}
