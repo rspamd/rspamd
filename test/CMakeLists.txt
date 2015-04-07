@@ -26,6 +26,7 @@ TARGET_LINK_LIBRARIES(rspamd-test rspamd-cdb)
 TARGET_LINK_LIBRARIES(rspamd-test rspamd-http-parser)
 TARGET_LINK_LIBRARIES(rspamd-test ${RSPAMD_REQUIRED_LIBRARIES})
 TARGET_LINK_LIBRARIES(rspamd-test stemmer)
+TARGET_LINK_LIBRARIES(rspamd-test rspamd-actrie)
 
 IF(NOT "${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
 	# Also add dependencies for convenience
