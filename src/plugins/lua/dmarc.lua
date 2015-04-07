@@ -30,7 +30,7 @@ local rspamd_regexp = require "rspamd_regexp"
 local rspamd_logger = require "rspamd_logger"
 local rspamd_redis = require "rspamd_redis"
 local upstream_list = require "rspamd_upstream_list"
-local dumper = require 'pl.pretty'.dump
+--local dumper = require 'pl.pretty'.dump
 
 local symbols = {
   spf_allow_symbol = 'R_SPF_ALLOW',
