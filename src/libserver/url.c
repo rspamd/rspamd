@@ -1430,7 +1430,7 @@ rspamd_url_find (rspamd_mempool_t *pool,
 	cb.is_html = is_html;
 	cb.pool = pool;
 	ret = acism_lookup (url_scanner->search_trie, begin, len,
-			rspamd_url_trie_callback, &cb, statep);
+			rspamd_url_trie_callback, &cb, statep, true);
 
 	if (ret) {
 		if (start) {

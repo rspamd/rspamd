@@ -24,15 +24,17 @@
 
 int
 acism_lookup(ac_trie_t const *psp, const char *text, size_t len,
-           ACISM_ACTION *cb, void *context, int *statep)
+           ACISM_ACTION *cb, void *context, int *statep, bool caseless)
 {
     ac_trie_t const ps = *psp;
     char const *cp = text, *endp = cp + len;
+    uint8_t s;
     STATE state = *statep;
     int ret = 0;
 
     while (cp < endp) {
-        _SYMBOL sym = ps.symv[(uint8_t)*cp++];
+    	s = caseless ? g_ascii_tolower (*cp++) : *cp++;
+        _SYMBOL sym = ps.symv[s];
         if (!sym) {
             // Input byte is not in any pattern string.
             state = ROOT;
