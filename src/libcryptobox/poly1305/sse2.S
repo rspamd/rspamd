@@ -1,4 +1,4 @@
-#include "../chacha20/macro.S"
+#include "../macro.S"
 #include "constants.S"
 
 SECTION_TEXT
