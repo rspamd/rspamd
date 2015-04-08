@@ -1215,9 +1215,13 @@ static gint
 lua_task_get_raw_headers (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
+	struct rspamd_lua_text *t;
 
 	if (task) {
-		lua_pushstring (L, task->raw_headers_str);
+		t = lua_newuserdata (L, sizeof (*t));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+		t->start = task->raw_headers_str;
+		t->len = strlen (t->start);
 	}
 	else {
 		lua_pushnil (L);
@@ -2103,13 +2107,17 @@ static gint
 lua_textpart_get_content (lua_State * L)
 {
 	struct mime_text_part *part = lua_check_textpart (L);
+	struct rspamd_lua_text *t;
 
 	if (part == NULL || part->is_empty) {
 		lua_pushnil (L);
 		return 1;
 	}
 
-	lua_pushlstring (L, (const gchar *)part->content->data, part->content->len);
+	t = lua_newuserdata (L, sizeof (*t));
+	rspamd_lua_setclass (L, "rspamd{text}", -1);
+	t->start = part->content->data;
+	t->len = part->content->len;
 
 	return 1;
 }
@@ -2291,13 +2299,17 @@ static gint
 lua_mimepart_get_content (lua_State * L)
 {
 	struct mime_part *part = lua_check_mimepart (L);
+	struct rspamd_lua_text *t;
 
 	if (part == NULL) {
 		lua_pushnil (L);
 		return 1;
 	}
 
-	lua_pushlstring (L, (const gchar *)part->content->data, part->content->len);
+	t = lua_newuserdata (L, sizeof (*t));
+	rspamd_lua_setclass (L, "rspamd{text}", -1);
+	t->start = part->content->data;
+	t->len = part->content->len;
 
 	return 1;
 }
