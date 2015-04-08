@@ -398,7 +398,7 @@ rdns_resolver_conf_process_line (struct rdns_resolver *resolver, char *line)
 			if (has_obrace && *p != ']') {
 				return false;
 			}
-			else if (*p != '\0' && *p != '\n') {
+			else if (*p != '\0' && !isspace (*p) && *p != '#') {
 				return false;
 			}
 			*p = '\0';
