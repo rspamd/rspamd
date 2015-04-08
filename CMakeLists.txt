@@ -899,7 +899,6 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src"
 					"${CMAKE_SOURCE_DIR}/contrib/xxhash"
 					"${CMAKE_SOURCE_DIR}/contrib/cdb"
 					"${CMAKE_SOURCE_DIR}/contrib/snowball/include"
-					"${CMAKE_SOURCE_DIR}/contrib/siphash"
 					"${CMAKE_SOURCE_DIR}/contrib/blake2"
 					"${CMAKE_SOURCE_DIR}/contrib/librdns"
 					"${CMAKE_SOURCE_DIR}/contrib/aho-corasick")
@@ -920,7 +919,6 @@ LIST(APPEND RSPAMD_REQUIRED_LIBRARIES rdns)
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ottery)
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES event)
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES xxhash)
-LIST(APPEND RSPAMD_REQUIRED_LIBRARIES siphash)
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES blake2)
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES sqlite3)
 IF(OPENSSL_FOUND)
@@ -954,7 +952,6 @@ ADD_SUBDIRECTORY(contrib/cdb)
 ADD_SUBDIRECTORY(contrib/http-parser)
 ADD_SUBDIRECTORY(contrib/libottery)
 ADD_SUBDIRECTORY(contrib/snowball)
-ADD_SUBDIRECTORY(contrib/siphash)
 ADD_SUBDIRECTORY(contrib/blake2)
 ADD_SUBDIRECTORY(contrib/libucl)
 ADD_SUBDIRECTORY(contrib/librdns)
