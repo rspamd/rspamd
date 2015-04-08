@@ -15,7 +15,7 @@
 #define CPUID_AVX 0x2
 #define CPUID_SSE2 0x4
 #define CPUID_SSE3 0x8
-#define CPUID_SSSE3 0x16
-#define CPUID_SSE41 0x32
+#define CPUID_SSSE3 0x10
+#define CPUID_SSE41 0x20
 
 #endif
