@@ -1,5 +1,6 @@
 --[[
 Copyright (c) 2011-2015, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2015, Andrew Lewis <nerf@judo.za.org>
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -46,7 +47,7 @@ local default_port = 6379
 local upstreams = nil
 local dmarc_redis_key_prefix = "dmarc_"
 
-local elts_re = rspamd_regexp.create_cached(";\\s+")
+local elts_re = rspamd_regexp.create_cached("\\\\*;\\s+")
 
 local function dmarc_report(task, spf_ok, dkim_ok)
   local ip = task:get_from_ip()
@@ -77,10 +78,26 @@ local function dmarc_callback(task)
     local strict_dkim = false
     local strict_policy = false
     local quarantine_policy = false
+    local found_policy = false
+    local failed_policy = false
     local rua
     
-    if results then
-      for _,r in ipairs(results) do
+    if not results then
+      return
+    end
+    for _,r in ipairs(results) do
+      if failed_policy then break end
+      (function()
+        if(string.sub(r,1,8) ~= 'v=DMARC1') then
+          return
+        else
+          if found_policy then
+            failed_policy = true
+            return
+          else
+            found_policy = true
+          end
+        end
         local elts = elts_re:split(r)
 
         if elts then
@@ -93,7 +110,7 @@ local function dmarc_callback(task)
             if spf_pol and spf_pol == 's' then
               strict_spf = true
             end
-            policy = string.match(e, '^p=(.*)$')
+            policy = string.match(e, '^p=(%a+)$')
             if policy then
               if (policy == 'reject') then
                 strict_policy = true
@@ -102,7 +119,7 @@ local function dmarc_callback(task)
                 quarantine_policy = true
               end
             end
-            pct = string.match(e, '^pct=(.*)$')
+            pct = string.match(e, '^pct=(%d+)$')
             if pct then
               pct = tonumber(pct)
             end
@@ -112,10 +129,10 @@ local function dmarc_callback(task)
             end
           end
         end
-      end
-    else
-      return
+      end)()
     end
+
+    if not found_policy or failed_policy then return end
 
     -- Check dkim and spf symbols
     local spf_ok = false
