@@ -26,6 +26,7 @@
 #include "chacha20/chacha.h"
 #include "poly1305/poly1305.h"
 #include "curve25519/curve25519.h"
+#include "siphash/siphash.h"
 #include "ottery.h"
 #ifdef HAVE_CPUID_H
 #include <cpuid.h>
@@ -117,6 +118,7 @@ rspamd_cryptobox_init (void)
 
 	chacha_load ();
 	poly1305_load ();
+	siphash_load ();
 }
 
 void
