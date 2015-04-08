@@ -243,3 +243,12 @@ rspamd_cryptobox_encrypt_inplace (guchar *data, gsize len,
 	rspamd_cryptobox_encrypt_nm_inplace (data, len, nonce, nm, sig);
 	rspamd_explicit_memzero (nm, sizeof (nm));
 }
+
+
+void
+rspamd_cryptobox_siphash (unsigned char *out, const unsigned char *in,
+		unsigned long long inlen,
+		const rspamd_sipkey_t k)
+{
+	siphash24 (out, in, inlen, k);
+}

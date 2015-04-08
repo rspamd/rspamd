@@ -30,7 +30,7 @@
 #include "stat_internal.h"
 #include "libstemmer.h"
 #include "xxhash.h"
-#include "siphash.h"
+#include "cryptobox.h"
 
 /* Size for features pipe */
 #define DEFAULT_FEATURE_WINDOW_SIZE 5
@@ -63,7 +63,7 @@ struct rspamd_osb_tokenizer_config {
 	gshort window_size;
 	enum rspamd_osb_hash_type ht;
 	guint64 seed;
-	struct sipkey sk;
+	rspamd_sipkey_t sk;
 };
 
 /*
@@ -125,12 +125,12 @@ rspamd_tokenizer_osb_config_from_ucl (rspamd_mempool_t * pool,
 			if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
 				key = rspamd_decode_base32 (ucl_object_tostring (elt),
 						0, &keylen);
-				if (keylen < 16) {
+				if (keylen < sizeof (rspamd_sipkey_t)) {
 					msg_warn ("siphash key is too short: %s", keylen);
 					g_free (key);
 				}
 				else {
-					sip_tokey (&cf->sk, key);
+					memcpy (cf->sk, key, sizeof (cf->sk));
 					g_free (key);
 				}
 			}
@@ -251,7 +251,8 @@ rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
 				cur = XXH64 (token->begin, token->len, osb_cf->seed);
 			}
 			else {
-				cur = siphash24 (token->begin, token->len, &osb_cf->sk);
+				rspamd_cryptobox_siphash ((guchar *)&cur, token->begin,
+						token->len, osb_cf->sk);
 			}
 		}
 

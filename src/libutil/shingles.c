@@ -23,20 +23,10 @@
 
 #include "shingles.h"
 #include "fstring.h"
-#include "siphash.h"
+#include "cryptobox.h"
 #include "blake2.h"
 
 #define SHINGLES_WINDOW 3
-
-static void
-rspamd_shingles_update_row (rspamd_fstring_t *in, struct siphash *h)
-{
-	int i;
-
-	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
-		sip24_update (&h[i], in->begin, in->len);
-	}
-}
 
 struct rspamd_shingle*
 rspamd_shingles_generate (GArray *input,
@@ -47,11 +37,13 @@ rspamd_shingles_generate (GArray *input,
 {
 	struct rspamd_shingle *res;
 	GArray *hashes[RSPAMD_SHINGLE_SIZE];
-	struct sipkey keys[RSPAMD_SHINGLE_SIZE];
-	struct siphash h[RSPAMD_SHINGLE_SIZE];
+	rspamd_sipkey_t keys[RSPAMD_SHINGLE_SIZE];
 	guchar shabuf[BLAKE2B_OUTBYTES], *out_key;
 	const guchar *cur_key;
+	GString *row;
+	rspamd_fstring_t *word;
 	blake2b_state bs;
+	guint64 val;
 	gint i, j, beg = 0;
 	guint8 shalen;
 
@@ -63,7 +55,7 @@ rspamd_shingles_generate (GArray *input,
 	}
 
 	blake2b_init (&bs, BLAKE2B_OUTBYTES);
-	memset (h, 0, sizeof (h));
+	row = g_string_sized_new (256);
 	cur_key = key;
 	out_key = (guchar *)&keys[0];
 
@@ -86,28 +78,24 @@ rspamd_shingles_generate (GArray *input,
 		blake2b_init (&bs, BLAKE2B_OUTBYTES);
 		cur_key = out_key;
 		out_key += 16;
-		sip24_init (&h[i], &keys[i]);
 	}
 
 	/* Now parse input words into a vector of hashes using rolling window */
 	for (i = 0; i <= (gint)input->len; i ++) {
 		if (i - beg >= SHINGLES_WINDOW || i == (gint)input->len) {
 			for (j = beg; j < i; j ++) {
-				rspamd_shingles_update_row (&g_array_index (input,
-						rspamd_fstring_t, j), h);
+				word = &g_array_index (input, rspamd_fstring_t, j);
+				g_string_append_len (row, word->begin, word->len);
 			}
 			beg++;
 
 			/* Now we need to create a new row here */
 			for (j = 0; j < RSPAMD_SHINGLE_SIZE; j ++) {
-				guint64 val;
-
-				val = sip24_final (&h[j]);
-				/* Reinit siphash state */
-				memset (&h[j], 0, sizeof (h[0]));
-				sip24_init (&h[j], &keys[j]);
+				rspamd_cryptobox_siphash ((guchar *)&val, row->str, row->len,
+						keys[j]);
 				g_array_append_val (hashes[j], val);
 			}
+			g_string_assign (row, "");
 		}
 	}
 
@@ -117,6 +105,8 @@ rspamd_shingles_generate (GArray *input,
 				i, key, filterd);
 		g_array_free (hashes[i], TRUE);
 	}
+
+	g_string_free (row, TRUE);
 
 	return res;
 }

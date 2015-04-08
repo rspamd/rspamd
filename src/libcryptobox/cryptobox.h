@@ -30,12 +30,14 @@
 #define rspamd_cryptobox_SKBYTES 32
 #define rspamd_cryptobox_MACBYTES 16
 #define rspamd_cryptobox_NMBYTES 32
+#define rspamd_cryptobox_SIPKEYBYTES 16
 
 typedef guchar rspamd_pk_t[rspamd_cryptobox_PKBYTES];
 typedef guchar rspamd_sk_t[rspamd_cryptobox_SKBYTES];
 typedef guchar rspamd_sig_t[rspamd_cryptobox_MACBYTES];
 typedef guchar rspamd_nm_t[rspamd_cryptobox_NMBYTES];
 typedef guchar rspamd_nonce_t[rspamd_cryptobox_NONCEBYTES];
+typedef guchar rspamd_sipkey_t[rspamd_cryptobox_SIPKEYBYTES];
 
 /**
  * Init cryptobox library
@@ -115,5 +117,16 @@ void rspamd_cryptobox_nm (rspamd_nm_t nm, const rspamd_pk_t pk, const rspamd_sk_
  * @param buflen length of buffer
  */
 void rspamd_explicit_memzero (void * const buf, gsize buflen);
+
+/**
+ * Calculates siphash-2-4 for a message
+ * @param out (8 bytes output)
+ * @param in
+ * @param inlen
+ * @param k key (must be 16 bytes)
+ */
+void rspamd_cryptobox_siphash (unsigned char *out, const unsigned char *in,
+		unsigned long long inlen,
+		const rspamd_sipkey_t k);
 
 #endif /* CRYPTOBOX_H_ */
