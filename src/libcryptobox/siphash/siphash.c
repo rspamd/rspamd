@@ -49,6 +49,10 @@ SIPHASH_DECLARE(ref)
 SIPHASH_DECLARE(sse41)
 #define SIPHASH_SSE41 SIPHASH_IMPL(CPUID_SSE41, "sse41", sse41)
 #endif
+#if defined(HAVE_SSSE3)
+SIPHASH_DECLARE(ssse3)
+#define SIPHASH_SSSE3 SIPHASH_IMPL(CPUID_SSSE3, "ssse3", ssse3)
+#endif
 #if defined(HAVE_AVX)
 SIPHASH_DECLARE(avx)
 #define SIPHASH_AVX SIPHASH_IMPL(CPUID_AVX, "avx", avx)
@@ -59,6 +63,9 @@ static const siphash_impl_t siphash_list[] = {
 		SIPHASH_GENERIC,
 #if defined(SIPHASH_AVX)
 		SIPHASH_AVX,
+#endif
+#if defined(SIPHASH_SSSE3)
+		SIPHASH_SSSE3,
 #endif
 #if defined(SIPHASH_SSE41)
 		SIPHASH_SSE41,
