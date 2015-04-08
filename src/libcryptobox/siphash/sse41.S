@@ -1,0 +1,183 @@
+#include "../macro.S"
+#include "constants.S"
+
+SECTION_TEXT
+
+GLOBAL_HIDDEN_FN siphash_sse41
+siphash_sse41_local:
+
+	movdqu	(%rdi), %xmm1
+	movq	%rdx, %rcx
+	xorl	%eax, %eax
+	andq	$-8, %rcx
+	movdqa	.LC0(%rip), %xmm4
+	pxor	%xmm1, %xmm4
+	pxor	.LC1(%rip), %xmm1
+	movdqa	%xmm4, %xmm0
+	punpckhqdq	%xmm1, %xmm4
+	punpcklqdq	%xmm1, %xmm0
+	je	.L2
+	pxor	%xmm3, %xmm3
+	.p2align 4,,10
+	.p2align 3
+.L3:
+	movdqa	%xmm3, %xmm2
+	movdqa	%xmm3, %xmm1
+	pinsrq	$0, (%rsi,%rax), %xmm2
+	addq	$8, %rax
+	cmpq	%rcx, %rax
+	punpcklqdq	%xmm2, %xmm1
+	pxor	%xmm1, %xmm4
+	movdqa	%xmm4, %xmm1
+	paddq	%xmm4, %xmm0
+	movdqa	%xmm4, %xmm5
+	pshufhw	$147, %xmm4, %xmm4
+	psrlq	$51, %xmm1
+	psllq	$13, %xmm5
+	pxor	%xmm5, %xmm1
+	pblendw	$240, %xmm4, %xmm1
+	pxor	%xmm0, %xmm1
+	pshufd	$30, %xmm0, %xmm0
+	movdqa	%xmm1, %xmm4
+	movdqa	%xmm1, %xmm5
+	paddq	%xmm1, %xmm0
+	psrlq	$47, %xmm4
+	psllq	$17, %xmm5
+	pxor	%xmm5, %xmm4
+	movdqa	%xmm1, %xmm5
+	psllq	$21, %xmm1
+	psrlq	$43, %xmm5
+	pxor	%xmm5, %xmm1
+	pblendw	$240, %xmm1, %xmm4
+	pxor	%xmm0, %xmm4
+	pshufd	$30, %xmm0, %xmm0
+	movdqa	%xmm4, %xmm1
+	movdqa	%xmm4, %xmm5
+	paddq	%xmm4, %xmm0
+	pshufhw	$147, %xmm4, %xmm4
+	psrlq	$51, %xmm1
+	psllq	$13, %xmm5
+	pxor	%xmm5, %xmm1
+	pblendw	$240, %xmm4, %xmm1
+	pxor	%xmm0, %xmm1
+	pshufd	$30, %xmm0, %xmm0
+	movdqa	%xmm1, %xmm4
+	movdqa	%xmm1, %xmm5
+	paddq	%xmm1, %xmm0
+	psrlq	$47, %xmm4
+	psllq	$17, %xmm5
+	pxor	%xmm5, %xmm4
+	movdqa	%xmm1, %xmm5
+	psllq	$21, %xmm1
+	psrlq	$43, %xmm5
+	pxor	%xmm5, %xmm1
+	pblendw	$240, %xmm1, %xmm4
+	pxor	%xmm0, %xmm4
+	pshufd	$30, %xmm0, %xmm0
+	pxor	%xmm2, %xmm0
+	jb	.L3
+.L2:
+	movl	%edx, %ecx
+	pxor	%xmm1, %xmm1
+	andl	$7, %ecx
+	movdqa	.LC2(%rip), %xmm2
+	negl	%ecx
+	sall	$24, %edx
+	pinsrq	$0, (%rsi,%rax), %xmm1
+	leal	64(,%rcx,8), %edi
+	movl	$4, %eax
+	movl	%edi, -24(%rsp)
+	movd	-24(%rsp), %xmm7
+	psrlq	%xmm7, %xmm2
+	pand	%xmm1, %xmm2
+	pxor	%xmm1, %xmm1
+	pinsrd	$1, %edx, %xmm1
+	pxor	%xmm1, %xmm2
+	pxor	%xmm1, %xmm1
+	punpcklqdq	%xmm2, %xmm1
+	pxor	%xmm1, %xmm4
+	movdqa	%xmm4, %xmm1
+	paddq	%xmm4, %xmm0
+	movdqa	%xmm4, %xmm3
+	pshufhw	$147, %xmm4, %xmm4
+	psrlq	$51, %xmm1
+	psllq	$13, %xmm3
+	pxor	%xmm3, %xmm1
+	pshufd	$30, %xmm0, %xmm3
+	pblendw	$240, %xmm4, %xmm1
+	pxor	%xmm0, %xmm1
+	movdqa	%xmm1, %xmm0
+	paddq	%xmm1, %xmm3
+	movdqa	%xmm1, %xmm4
+	psrlq	$47, %xmm0
+	psllq	$17, %xmm4
+	pxor	%xmm4, %xmm0
+	movdqa	%xmm1, %xmm4
+	psllq	$21, %xmm1
+	psrlq	$43, %xmm4
+	pxor	%xmm4, %xmm1
+	movdqa	%xmm0, %xmm6
+	pblendw	$240, %xmm1, %xmm6
+	movdqa	%xmm6, %xmm1
+	pxor	%xmm3, %xmm1
+	pshufd	$30, %xmm3, %xmm3
+	movdqa	%xmm1, %xmm0
+	movdqa	%xmm1, %xmm4
+	paddq	%xmm1, %xmm3
+	pshufhw	$147, %xmm1, %xmm1
+	psrlq	$51, %xmm0
+	psllq	$13, %xmm4
+	pxor	%xmm0, %xmm4
+	pblendw	$240, %xmm1, %xmm4
+	pxor	%xmm3, %xmm4
+	pshufd	$30, %xmm3, %xmm3
+	movdqa	%xmm4, %xmm1
+	movdqa	%xmm4, %xmm0
+	paddq	%xmm4, %xmm3
+	psrlq	$47, %xmm1
+	psllq	$17, %xmm0
+	pxor	%xmm1, %xmm0
+	movdqa	%xmm4, %xmm1
+	psllq	$21, %xmm4
+	psrlq	$43, %xmm1
+	pxor	%xmm1, %xmm4
+	pblendw	$240, %xmm4, %xmm0
+	pxor	%xmm3, %xmm0
+	pshufd	$30, %xmm3, %xmm3
+	pxor	%xmm3, %xmm2
+	pxor	.LC3(%rip), %xmm2
+.L4:
+	movdqa	%xmm0, %xmm1
+	paddq	%xmm0, %xmm2
+	subq	$1, %rax
+	movdqa	%xmm0, %xmm3
+	pshufhw	$147, %xmm0, %xmm0
+	psrlq	$51, %xmm1
+	psllq	$13, %xmm3
+	pxor	%xmm3, %xmm1
+	pblendw	$240, %xmm0, %xmm1
+	pxor	%xmm2, %xmm1
+	pshufd	$30, %xmm2, %xmm2
+	movdqa	%xmm1, %xmm0
+	movdqa	%xmm1, %xmm3
+	paddq	%xmm1, %xmm2
+	psrlq	$47, %xmm0
+	psllq	$17, %xmm3
+	pxor	%xmm3, %xmm0
+	movdqa	%xmm1, %xmm3
+	psllq	$21, %xmm1
+	psrlq	$43, %xmm3
+	pxor	%xmm3, %xmm1
+	pblendw	$240, %xmm1, %xmm0
+	pxor	%xmm2, %xmm0
+	pshufd	$30, %xmm2, %xmm2
+	jne	.L4
+	pxor	%xmm2, %xmm0
+	pxor	%xmm1, %xmm1
+	movhlps	%xmm0, %xmm1
+	pxor	%xmm1, %xmm0
+	movaps	%xmm0, -24(%rsp)
+	movq	-24(%rsp), %rax
+	ret
+
+FN_END siphash_sse41
