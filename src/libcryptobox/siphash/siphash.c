@@ -33,11 +33,11 @@ typedef struct siphash_impl_t
 	unsigned long cpu_flags;
 	const char *desc;
 
-	void (*siphash)(uint8_t *out, const uint8_t *in, uint64_t inlen, const uint8_t *k);
+	uint64_t (*siphash) (const unsigned char k[16], const unsigned char *in, const uint64_t inlen);
 } siphash_impl_t;
 
 #define SIPHASH_DECLARE(ext) \
-	void siphash_##ext(uint8_t *out, const uint8_t *in, uint64_t inlen, const uint8_t *k);
+	uint64_t siphash_##ext(const unsigned char k[16], const unsigned char *in, const uint64_t inlen);
 
 #define SIPHASH_IMPL(cpuflags, desc, ext) \
 	{(cpuflags), desc, siphash_##ext}
@@ -45,10 +45,17 @@ typedef struct siphash_impl_t
 
 SIPHASH_DECLARE(ref)
 #define SIPHASH_GENERIC SIPHASH_IMPL(0, "generic", ref)
+#if defined(HAVE_SSE41)
+SIPHASH_DECLARE(sse41)
+#define SIPHASH_SSE41 SIPHASH_IMPL(CPUID_SSE41, "sse41", sse41)
+#endif
 
 /* list implemenations from most optimized to least, with generic as the last entry */
 static const siphash_impl_t siphash_list[] = {
 		SIPHASH_GENERIC,
+#if defined(SIPHASH_SSE41)
+		SIPHASH_SSE41,
+#endif
 };
 
 static const siphash_impl_t *siphash_opt = &siphash_list[0];
@@ -66,17 +73,22 @@ siphash_load(void)
 			}
 		}
 	}
+	fprintf(stderr, "selected %s\n", siphash_opt->desc);
 }
 
 void siphash24 (unsigned char *out, const unsigned char *in,
 		unsigned long long inlen, const unsigned char *k)
 {
-	siphash_opt->siphash (out, in, inlen, k);
+	uint64_t r;
+
+	r = siphash_opt->siphash (k, in, inlen);
+	memcpy (out, &r, sizeof (r));
 }
 
 
 size_t
-siphash24_test (void) {
+siphash24_test (bool generic)
+{
 	static const unsigned char vectors[64][8] = {
 		{ 0x31, 0x0e, 0x0e, 0xdd, 0x47, 0xdb, 0x6f, 0x72, },
 		{ 0xfd, 0x67, 0xdc, 0x93, 0xc5, 0x39, 0xf8, 0x74, },
@@ -159,7 +171,12 @@ siphash24_test (void) {
 		for (i = 0; i < sizeof in; ++i) {
 			in[i] = i;
 
-			siphash24 (r.c, in, i, k);
+			if (generic) {
+				r.m = siphash_list[0].siphash (k, in, i);
+			}
+			else {
+				r.m = siphash_opt->siphash (k, in, i);
+			}
 			if (memcmp (r.c, vectors[i], sizeof (r)) != 0) {
 				return 0;
 			}

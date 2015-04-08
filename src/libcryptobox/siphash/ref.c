@@ -62,8 +62,8 @@
   } while(0)
 
 
-void
-siphash_ref (uint8_t *out, const uint8_t *in, uint64_t inlen, const uint8_t *k)
+uint64_t
+siphash_ref (const unsigned char k[16], const unsigned char *in, const uint64_t inlen)
 {
 	/* "somepseudorandomlygeneratedbytes" */
 	uint64_t v0 = 0x736f6d6570736575ULL;
@@ -137,7 +137,7 @@ siphash_ref (uint8_t *out, const uint8_t *in, uint64_t inlen, const uint8_t *k)
 		;
 
 	b = v0 ^ v1 ^ v2 ^ v3;
-	U64TO8_LE(out, b);
+	return b;
 
 #ifdef DOUBLE
 	v1 ^= 0xdd;
@@ -146,6 +146,7 @@ siphash_ref (uint8_t *out, const uint8_t *in, uint64_t inlen, const uint8_t *k)
 	for( i=0; i<dROUNDS; ++i ) SIPROUND;
 
 	b = v0 ^ v1 ^ v2 ^ v3;
-	U64TO8_LE( out+8, b );
+
+	return b;
 #endif
 }
