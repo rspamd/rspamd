@@ -14,6 +14,9 @@ IF(${ARCH} STREQUAL "x86_64")
 	ASM_OP(HAVE_AVX2 "vpaddq %ymm0, %ymm0, %ymm0" "avx2")
 	ASM_OP(HAVE_AVX "vpaddq %xmm0, %xmm0, %xmm0" "avx")
 	ASM_OP(HAVE_SSE2 "pmuludq %xmm0, %xmm0" "sse2")
+	ASM_OP(HAVE_SSE3 "lddqu 0(%esi), %xmm0" "sse3")
+	ASM_OP(HAVE_SSSE3 "pshufb %xmm0, %xmm0" "ssse3")
+	ASM_OP(HAVE_SSE41 "pblendw \$0, %xmm0, %xmm0" "sse41")
 	
 	ASM_OP(HAVE_SLASHMACRO "
 	.macro TEST1 op

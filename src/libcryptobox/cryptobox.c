@@ -87,7 +87,6 @@ rspamd_cryptobox_cpuid (gint cpu[4], gint info)
 #endif
 }
 
-
 void
 rspamd_cryptobox_init (void)
 {
@@ -106,6 +105,16 @@ rspamd_cryptobox_init (void)
 			if ((cpu[2] & ((gint)1 << 28))) {
 				cpu_config |= CPUID_AVX;
 			}
+			if ((cpu[2] & ((gint)1 << 0))) {
+				cpu_config |= CPUID_SSE3;
+			}
+			if ((cpu[2] & ((gint)1 << 9))) {
+				cpu_config |= CPUID_SSSE3;
+			}
+			if ((cpu[2] & ((gint)1 << 19))) {
+				cpu_config |= CPUID_SSE41;
+			}
+
 			if (nid > 7) {
 				rspamd_cryptobox_cpuid (cpu, 7);
 				if ((cpu[1] & ((gint)1 <<  5))) {
