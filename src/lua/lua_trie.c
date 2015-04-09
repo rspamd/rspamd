@@ -34,7 +34,7 @@
  * this algorithm is at most O(n + m + z), where `n` is the length of text, `m` is a length of pattern and `z` is a number of patterns in the text.
  *
  * Here is a typical example of trie usage:
-
+ * @example
 local rspamd_trie = require "rspamd_trie"
 local patterns = {'aab', 'ab', 'bcd\0ef'}
 
