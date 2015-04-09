@@ -25,9 +25,9 @@
 #include "regexp.h"
 
 /***
+ * @module rspamd_regexp
  * Rspamd regexp is an utility module that handles rspamd perl compatible
  * regular expressions
- * @module rspamd_regexp
  * @example
  * local rspamd_regexp = require "rspamd_regexp"
  *

@@ -25,17 +25,104 @@
 
 #include "lua_common.h"
 
+/***
+ * @module rspamd_logger
+ * Rspamd logger module is used to log messages from LUA API to the main rspamd logger.
+ * It supports legacy and modern interfaces allowing highly customized an convenient log functions.
+ * Here is an example of logger usage:
+ * @example
+local rspamd_logger = require "rspamd_logger"
+
+local a = 'string'
+local b = 1.5
+local c = 1
+local d = {
+	'aa',
+	1,
+	'bb'
+}
+local e = {
+	key = 'value',
+	key2 = 1.0
+}
+
+-- New extended interface
+
+rspamd_logger.infox('a=%1, b=%2, c=%3, d=%4, e=%5', a, b, c, d, e)
+-- Output: a=string, b=1.50000, c=1, d={[1] = aa, [2] = 1, [3] = bb} e={[key]=value, [key2]=1.0}
+
+-- Legacy interface (can handle merely strings)
+rspamd_logger.info('Old stupid API')
+
+-- Create string using logger API
+local str = rspamd_logger.slog('a=%1, b=%2, c=%3, d=%4, e=%5', a, b, c, d, e)
+
+print(str)
+-- Output: a=string, b=1.50000, c=1, d={[1] = aa, [2] = 1, [3] = bb} e={[key]=value, [key2]=1.0}
+ */
+
 static gsize lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf, gsize len);
 
 /* Logger methods */
+/***
+ * @function logger.err(msg)
+ * Log message as an error
+ * @param {string} msg string to be logged
+ */
 LUA_FUNCTION_DEF (logger, err);
+/***
+ * @function logger.warn(msg)
+ * Log message as a warning
+ * @param {string} msg string to be logged
+ */
 LUA_FUNCTION_DEF (logger, warn);
+/***
+ * @function logger.info(msg)
+ * Log message as an informational message
+ * @param {string} msg string to be logged
+ */
 LUA_FUNCTION_DEF (logger, info);
+/***
+ * @function logger.debug(msg)
+ * Log message as a debug message
+ * @param {string} msg string to be logged
+ */
 LUA_FUNCTION_DEF (logger, debug);
+/***
+ * @function logger.errx(fmt[, args)
+ * Extended interface to make an error log message
+ * @param {string} fmt format string, arguments are encoded as %<number>
+ * @param {any} args list of arguments to be replaced in %<number> positions
+ */
 LUA_FUNCTION_DEF (logger, errx);
+/***
+ * @function logger.warn(fmt[, args)
+ * Extended interface to make a warning log message
+ * @param {string} fmt format string, arguments are encoded as %<number>
+ * @param {any} args list of arguments to be replaced in %<number> positions
+ */
 LUA_FUNCTION_DEF (logger, warnx);
+/***
+ * @function logger.infox(fmt[, args)
+ * Extended interface to make an informational log message
+ * @param {string} fmt format string, arguments are encoded as %<number>
+ * @param {any} args list of arguments to be replaced in %<number> positions
+ */
 LUA_FUNCTION_DEF (logger, infox);
+/***
+ * @function logger.debugx(fmt[, args)
+ * Extended interface to make a debug log message
+ * @param {string} fmt format string, arguments are encoded as %<number>
+ * @param {any} args list of arguments to be replaced in %<number> positions
+ */
 LUA_FUNCTION_DEF (logger, debugx);
+/***
+ * @function logger.slog(fmt[, args)
+ * Create string replacing percent params with corresponding arguments
+ * @param {string} fmt format string, arguments are encoded as %<number>
+ * @param {any} args list of arguments to be replaced in %<number> positions
+ * @return {string} string with percent parameters substituted
+ */
 LUA_FUNCTION_DEF (logger, slog);
 
 static const struct luaL_reg loggerlib_f[] = {
