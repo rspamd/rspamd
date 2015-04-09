@@ -27,8 +27,36 @@
 #include "cfg_file.h"
 
 
-/**
- * This module implements upstreams manipulation from lua
+/***
+ * This module implements upstreams manipulation from LUA API. This functionality
+ * can be used for load balancing using different strategies including:
+ *
+ * - round-robin: balance upstreams one by one selecting accordingly to their weight
+ * - hash: use stable hashing algorithm to distribute values according to some static strings
+ * - master-slave: always prefer upstream with higher priority unless it is not available
+ *
+ * Here is an example of upstreams manipulations:
+ * @example
+local rspamd_logger = require "rspamd_logger"
+local rspamd_redis = require "rspamd_redis"
+local upstream_list = require "rspamd_upstream_list"
+local upstreams = upstream_list.create('127.0.0.1,10.0.0.1,10.0.0.2', 6379)
+
+local function sym_callback(task)
+	local upstream = upstreams:get_upstream_by_hash(task:get_from()[1]['domain'])
+
+	local function cb(task, err, data)
+		if err then
+			upstream:fail()
+		else
+			upstream:ok()
+		end
+	end
+
+	local addr = upstream:get_addr()
+	rspamd_redis.make_request(task, addr, cb,
+		'PUSH', {'key', 'value'})
+end
  */
 /* Upstream list functions */
 LUA_FUNCTION_DEF (upstream_list, create);
@@ -75,10 +103,10 @@ lua_check_upstream (lua_State * L)
 	return ud ? *((struct upstream **)ud) : NULL;
 }
 
-/**
- * Get ip of upstream in numeric form (guint32)
- * @param L
- * @return
+/***
+ * @method upstream:get_addr()
+ * Get ip of upstream
+ * @return {ip} ip address object
  */
 static gint
 lua_upstream_get_addr (lua_State *L)
@@ -95,10 +123,9 @@ lua_upstream_get_addr (lua_State *L)
 	return 1;
 }
 
-/**
- * Make upstream fail, the second argument is time, if absent the current time is used
- * @param L
- * @return
+/***
+ * @method upstream:fail()
+ * Indicate upstream failure. After certain amount of failures during specified time frame, an upstream is marked as down and does not participate in rotations.
  */
 static gint
 lua_upstream_fail (lua_State *L)
@@ -112,10 +139,9 @@ lua_upstream_fail (lua_State *L)
 	return 0;
 }
 
-/**
- * Make upstream success, the second argument is time, if absent the current time is used
- * @param L
- * @return
+/***
+ * @method upstream:ok()
+ * Indicates upstream success. Resets errors count for an upstream.
  */
 static gint
 lua_upstream_ok (lua_State *L)
@@ -140,10 +166,11 @@ lua_check_upstream_list (lua_State * L)
 	return ud ? *((struct upstream_list **)ud) : NULL;
 }
 
-/**
- * Create new upstream list from its string definition like '<upstream>,<upstream>;<upstream>'
- * @param L
- * @return upstream list structure
+/***
+ * @function upstream_list.create(def)
+ * Create new upstream list from its string definition in form `<upstream>,<upstream>;<upstream>`
+ * @param {string} def upstream list definition
+ * @return {upstream_list} upstream list structure
  */
 static gint
 lua_upstream_list_create (lua_State *L)
@@ -207,10 +234,11 @@ lua_upstream_list_destroy (lua_State *L)
 	return 0;
 }
 
-/**
- * Get upstream by hash from key, params are: key and time (optional)
- * @param L
- * @return
+/***
+ * @method upstream_list:get_upstream_by_hash(key)
+ * Get upstream by hash from key
+ * @param {string} key a string used as input for stable hash algorithm
+ * @return {upstream} upstream from a list corresponding to the given key
  */
 static gint
 lua_upstream_list_get_upstream_by_hash (lua_State *L)
@@ -246,10 +274,10 @@ lua_upstream_list_get_upstream_by_hash (lua_State *L)
 	return 1;
 }
 
-/**
- * Get upstream round robin (by current weight), params are: time (optional)
- * @param L
- * @return
+/***
+ * @method upstream_list:get_upstream_round_robin()
+ * Get upstream round robin (by current weight)
+ * @return {upstream} upstream from a list in round-robin matter
  */
 static gint
 lua_upstream_list_get_upstream_round_robin (lua_State *L)
@@ -277,10 +305,10 @@ lua_upstream_list_get_upstream_round_robin (lua_State *L)
 	return 1;
 }
 
-/**
- * Get upstream master slave order (by static priority), params are: time (optional)
- * @param L
- * @return
+/***
+ * @method upstream_list:get_upstream_master_slave()
+ * Get upstream master slave order (by static priority)
+ * @return {upstream} upstream from a list in master-slave order
  */
 static gint
 lua_upstream_list_get_upstream_master_slave (lua_State *L)
