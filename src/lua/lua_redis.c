@@ -31,6 +31,7 @@
 #define REDIS_DEFAULT_TIMEOUT 1.0
 
 /***
+ * @module rspamd_redis
  * This module implements redis asynchronous client for rspamd LUA API.
  * Here is an example of using of this module:
  * @example

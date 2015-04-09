@@ -24,8 +24,8 @@
 #include "lua_common.h"
 
 /***
- * `rspamd_ip` is a helper module to simplify IP addresses manipulations.
  * @module rspamd_ip
+ * `rspamd_ip` is a helper module to simplify IP addresses manipulations.
  * @example
 local print_octets = function(ip)
         print('Normal order octets:')

@@ -27,6 +27,7 @@
 
 
 /***
+ * @module rspamd_resolver
  * This module allows to resolve DNS names from LUA code. All resolving is executed
  * asynchronously. Here is an example of name resolution:
  * @example

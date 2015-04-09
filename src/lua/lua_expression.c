@@ -26,6 +26,12 @@
 #include "expression.h"
 
 /***
+ * @module rspamd_expression
+ * This module can be used to implement different logic expressions in lua using
+ * rspamd AST optimizer. There are some examples in individual methods definitions to help understanding of this module.
+ */
+
+/***
  * @function rspamd_expression.create(line, {parse_func, process_func}, pool)
  * Create expression from the line using atom parsing routines and the specified memory pool
  * @param {string} line expression line

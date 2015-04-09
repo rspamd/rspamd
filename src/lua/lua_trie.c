@@ -28,6 +28,7 @@
 #include "message.h"
 
 /***
+ * @module rspamd_trie
  * Rspamd trie module provides the data structure suitable for searching of many
  * patterns in arbitrary texts (or binary chunks). The algorithmic complexity of
  * this algorithm is at most O(n + m + z), where `n` is the length of text, `m` is a length of pattern and `z` is a number of patterns in the text.

@@ -28,6 +28,7 @@
 #include "utlist.h"
 
 /***
+ * @module rspamd_http
  * Rspamd HTTP module represents HTTP asynchronous client available from LUA code.
  * This module hides all complexity: DNS resolving, sessions management, zero-copy
  * text transfers and so on under the hood.

@@ -28,6 +28,7 @@
 
 
 /***
+ * @module rspamd_upstream_list
  * This module implements upstreams manipulation from LUA API. This functionality
  * can be used for load balancing using different strategies including:
  *
