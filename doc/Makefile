@@ -24,3 +24,13 @@ lua_task: ../src/lua/lua_task.c
 	$(LUADOC) < ../src/lua/lua_task.c > markdown/lua/task.md
 lua_ucl: ../contrib/libucl/lua_ucl.c
 	$(LUADOC) < ../contrib/libucl/lua_ucl.c > markdown/lua/ucl.md
+lua_http: ../src/lua/lua_http.c
+	$(LUADOC) < ../src/lua/lua_http.c > markdown/lua/http.md
+lua_trie: ../src/lua/lua_trie.c
+	$(LUADOC) < ../src/lua/lua_trie.c > markdown/lua/trie.md
+lua_dns: ../src/lua/lua_dns.c
+	$(LUADOC) < ../src/lua/lua_dns.c > markdown/lua/dns.md
+lua_redis: ../src/lua/lua_redis.c
+	$(LUADOC) < ../src/lua/lua_redis.c > markdown/lua/redis.md
+lua_upstream: ../src/lua/lua_upstream.c
+	$(LUADOC) < ../src/lua/lua_upstream.c > markdown/lua/upstream.md
