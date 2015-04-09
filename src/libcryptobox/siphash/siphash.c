@@ -45,28 +45,14 @@ typedef struct siphash_impl_t
 
 SIPHASH_DECLARE(ref)
 #define SIPHASH_GENERIC SIPHASH_IMPL(0, "generic", ref)
-#if defined(HAVE_SSE41)
+#if defined(HAVE_SSE41) && defined(__i386__)
 SIPHASH_DECLARE(sse41)
 #define SIPHASH_SSE41 SIPHASH_IMPL(CPUID_SSE41, "sse41", sse41)
-#endif
-#if defined(HAVE_SSSE3)
-SIPHASH_DECLARE(ssse3)
-#define SIPHASH_SSSE3 SIPHASH_IMPL(CPUID_SSSE3, "ssse3", ssse3)
-#endif
-#if defined(HAVE_AVX)
-SIPHASH_DECLARE(avx)
-#define SIPHASH_AVX SIPHASH_IMPL(CPUID_AVX, "avx", avx)
 #endif
 
 /* list implemenations from most optimized to least, with generic as the last entry */
 static const siphash_impl_t siphash_list[] = {
 		SIPHASH_GENERIC,
-#if defined(SIPHASH_AVX)
-		SIPHASH_AVX,
-#endif
-#if defined(SIPHASH_SSSE3)
-		SIPHASH_SSSE3,
-#endif
 #if defined(SIPHASH_SSE41)
 		SIPHASH_SSE41,
 #endif
