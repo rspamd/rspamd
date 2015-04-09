@@ -291,9 +291,6 @@ local function process_settings_table(tbl)
           local re = rspamd_regexp.create(addr)
           if re then
             out['regexp'] = re
-            setmetatable(out, {
-              __gc = function(t) t['regexp']:destroy() end
-            })
           else
             rspamd_logger.err("bad regexp: " .. addr)
             return nil

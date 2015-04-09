@@ -182,7 +182,7 @@ void luaopen_image (lua_State *L);
 void luaopen_url (lua_State *L);
 void luaopen_classifier (lua_State *L);
 void luaopen_statfile (lua_State * L);
-void luaopen_glib_regexp (lua_State *L);
+void luaopen_regexp (lua_State *L);
 void luaopen_cdb (lua_State *L);
 void luaopen_xmlrpc (lua_State * L);
 void luaopen_http (lua_State * L);
