@@ -25,7 +25,29 @@
 #include "dns.h"
 #include "utlist.h"
 
-/* Public prototypes */
+
+/***
+ * This module allows to resolve DNS names from LUA code. All resolving is executed
+ * asynchronously. Here is an example of name resolution:
+ * @example
+local function symbol_callback(task)
+	local host = 'example.com'
+
+	local function dns_cb(resolver, to_resolve, results, err)
+		if not results then
+			rspamd_logger.infox('DNS resolving of %1 failed: %2', host, err)
+			return
+		end
+		for _,r in ipairs(results) do
+			-- r is of type rspamd{ip} here, but it can be converted to string
+			rspamd_logger.infox('Resolved %1 to %2', host, tostring(r))
+		end
+	end
+
+	task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
+		host, dns_cb)
+end
+ */
 struct rspamd_dns_resolver * lua_check_dns_resolver (lua_State * L);
 void luaopen_dns_resolver (lua_State * L);
 
@@ -163,6 +185,12 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 	luaL_unref (cd->L, LUA_REGISTRYINDEX, cd->cbref);
 }
 
+/***
+ * @function rspamd_resolver.init(ev_base, config)
+ * @param {event_base} ev_base event base used for asynchronous events
+ * @param {rspamd_config} config rspamd configuration parameters
+ * @return {rspamd_resolver} new resolver object associated with the specified base
+ */
 static int
 lua_dns_resolver_init (lua_State *L)
 {
@@ -263,6 +291,15 @@ lua_dns_resolver_resolve_common (lua_State *L,
 
 }
 
+/***
+ * @method resolver:resolve_a(session, pool, host, callback)
+ * Resolve A record for a specified host.
+ * @param {async_session} session asynchronous session normally associated with rspamd task (`task:get_session()`)
+ * @param {mempool} pool memory pool for storing intermediate data
+ * @param {string} host name to resolve
+ * @param {function} callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * @return {boolean} `true` if DNS request has been scheduled
+ */
 static int
 lua_dns_resolver_resolve_a (lua_State *L)
 {
@@ -281,6 +318,15 @@ lua_dns_resolver_resolve_a (lua_State *L)
 	return 1;
 }
 
+/***
+ * @method resolver:resolve_ptr(session, pool, ip, callback)
+ * Resolve PTR record for a specified host.
+ * @param {async_session} session asynchronous session normally associated with rspamd task (`task:get_session()`)
+ * @param {mempool} pool memory pool for storing intermediate data
+ * @param {string} ip name to resolve in string form (e.g. '8.8.8.8' or '2001:dead::')
+ * @param {function} callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * @return {boolean} `true` if DNS request has been scheduled
+ */
 static int
 lua_dns_resolver_resolve_ptr (lua_State *L)
 {
@@ -299,6 +345,15 @@ lua_dns_resolver_resolve_ptr (lua_State *L)
 	return 1;
 }
 
+/***
+ * @method resolver:resolve_txt(session, pool, host, callback)
+ * Resolve TXT record for a specified host.
+ * @param {async_session} session asynchronous session normally associated with rspamd task (`task:get_session()`)
+ * @param {mempool} pool memory pool for storing intermediate data
+ * @param {string} host name to get TXT record for
+ * @param {function} callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * @return {boolean} `true` if DNS request has been scheduled
+ */
 static int
 lua_dns_resolver_resolve_txt (lua_State *L)
 {
@@ -317,6 +372,15 @@ lua_dns_resolver_resolve_txt (lua_State *L)
 	return 1;
 }
 
+/***
+ * @method resolver:resolve_mx(session, pool, host, callback)
+ * Resolve MX record for a specified host.
+ * @param {async_session} session asynchronous session normally associated with rspamd task (`task:get_session()`)
+ * @param {mempool} pool memory pool for storing intermediate data
+ * @param {string} host name to get MX record for
+ * @param {function} callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * @return {boolean} `true` if DNS request has been scheduled
+ */
 static int
 lua_dns_resolver_resolve_mx (lua_State *L)
 {
@@ -335,6 +399,7 @@ lua_dns_resolver_resolve_mx (lua_State *L)
 	return 1;
 }
 
+/* XXX: broken currently */
 static int
 lua_dns_resolver_resolve (lua_State *L)
 {
