@@ -27,6 +27,25 @@
 #include "acism.h"
 #include "message.h"
 
+/***
+ * Rspamd trie module provides the data structure suitable for searching of many
+ * patterns in arbitrary texts (or binary chunks). The algorithmic complexity of
+ * this algorithm is at most O(n + m + z), where `n` is the length of text, `m` is a length of pattern and `z` is a number of patterns in the text.
+ *
+ * Here is a typical example of trie usage:
+
+local rspamd_trie = require "rspamd_trie"
+local patterns = {'aab', 'ab', 'bcd\0ef'}
+
+local trie = rspamd_trie.create(patterns)
+
+local function trie_callback(number, pos)
+	print('Matched pattern number ' .. tostring(number) .. ' at pos: ' .. tostring(pos))
+end
+
+trie:match('some big text', trie_callback)
+ */
+
 /* Suffix trie */
 LUA_FUNCTION_DEF (trie, create);
 LUA_FUNCTION_DEF (trie, match);
@@ -68,6 +87,12 @@ lua_trie_destroy (lua_State *L)
 	return 0;
 }
 
+/***
+ * function trie.create(patterns)
+ * Creates new trie data structure
+ * @param {table} array of string patterns
+ * @return {trie} new trie object
+ */
 static gint
 lua_trie_create (lua_State *L)
 {
@@ -172,6 +197,14 @@ lua_trie_search_str (lua_State *L, ac_trie_t *trie, const gchar *str, gsize len,
 	return cb.found;
 }
 
+/***
+ * @method trie:match(input, cb[, caseless])
+ * Search for patterns in `input` invoking `cb` optionally ignoring case
+ * @param {table or string} input one or several (if `input` is an array) strings of input text
+ * @param {function} cb callback called on each pattern match in form `function (idx, pos)` where `idx` is a numeric index of pattern (starting from 1) and `pos` is a numeric offset where the pattern ends
+ * @param {boolean} caseless if `true` then match ignores symbols case (ASCII only)
+ * @return {boolean} `true` if any pattern has been found (`cb` might be called multiple times however)
+ */
 static gint
 lua_trie_match (lua_State *L)
 {
@@ -212,6 +245,14 @@ lua_trie_match (lua_State *L)
 	return 1;
 }
 
+/***
+ * @method trie:search_mime(task, cb[, caseless])
+ * This is a helper mehthod to search pattern within text parts of a message in rspamd task
+ * @param {task} task object
+ * @param {function} cb callback called on each pattern match @see trie:match
+ * @param {boolean} caseless if `true` then match ignores symbols case (ASCII only)
+ * @return {boolean} `true` if any pattern has been found (`cb` might be called multiple times however)
+ */
 static gint
 lua_trie_search_mime (lua_State *L)
 {
@@ -247,6 +288,14 @@ lua_trie_search_mime (lua_State *L)
 	return 1;
 }
 
+/***
+ * @method trie:search_rawmsg(task, cb[, caseless])
+ * This is a helper mehthod to search pattern within the whole undecoded content of rspamd task
+ * @param {task} task object
+ * @param {function} cb callback called on each pattern match @see trie:match
+ * @param {boolean} caseless if `true` then match ignores symbols case (ASCII only)
+ * @return {boolean} `true` if any pattern has been found (`cb` might be called multiple times however)
+ */
 static gint
 lua_trie_search_rawmsg (lua_State *L)
 {
