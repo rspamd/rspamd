@@ -45,6 +45,7 @@ struct lua_http_cbdata {
 	struct event_base *ev_base;
 	struct timeval tv;
 	rspamd_inet_addr_t *addr;
+	gchar *mime_type;
 	gint fd;
 	gint cbref;
 };
@@ -84,6 +85,10 @@ lua_http_fin (gpointer arg)
 
 	if (cbd->addr) {
 		rspamd_inet_address_destroy (cbd->addr);
+	}
+
+	if (cbd->mime_type) {
+		g_free (cbd->mime_type);
 	}
 
 	g_slice_free1 (sizeof (struct lua_http_cbdata), cbd);
@@ -166,7 +171,7 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 			RSPAMD_HTTP_CLIENT, NULL);
 
 	rspamd_http_connection_write_message (cbd->conn, cbd->msg,
-			NULL, NULL, cbd, fd, &cbd->tv, cbd->ev_base);
+			NULL, cbd->mime_type, cbd, fd, &cbd->tv, cbd->ev_base);
 	/* Message is now owned by a connection object */
 	cbd->msg = NULL;
 
@@ -229,7 +234,9 @@ lua_http_request (lua_State *L)
 	struct rspamd_dns_resolver *resolver;
 	struct rspamd_async_session *session;
 	struct rspamd_lua_text *t;
+	struct rspamd_task *task = NULL;
 	gdouble timeout = default_http_timeout;
+	gchar *mime_type = NULL;
 
 	if (lua_gettop (L) >= 2) {
 		/* url, callback and event_base format */
@@ -281,35 +288,47 @@ lua_http_request (lua_State *L)
 		}
 		cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 
-		lua_pushstring (L, "ev_base");
+		lua_pushstring (L, "task");
 		lua_gettable (L, -2);
-		if (luaL_checkudata (L, -1, "rspamd{ev_base}")) {
-			ev_base = *(struct event_base **)lua_touserdata (L, -1);
-		}
-		else {
-			ev_base = NULL;
+		if (lua_type (L, -1) == LUA_TUSERDATA) {
+			task = lua_check_task (L, -1);
+			ev_base = task->ev_base;
+			resolver = task->resolver;
+			session = task->s;
 		}
 		lua_pop (L, 1);
 
-		lua_pushstring (L, "resolver");
-		lua_gettable (L, -2);
-		if (luaL_checkudata (L, -1, "rspamd{resolver}")) {
-			resolver = *(struct rspamd_dns_resolver **)lua_touserdata (L, -1);
-		}
-		else {
-			resolver = lua_http_global_resolver (ev_base);
-		}
-		lua_pop (L, 1);
+		if (task == NULL) {
+			lua_pushstring (L, "ev_base");
+			lua_gettable (L, -2);
+			if (luaL_checkudata (L, -1, "rspamd{ev_base}")) {
+				ev_base = *(struct event_base **)lua_touserdata (L, -1);
+			}
+			else {
+				ev_base = NULL;
+			}
+			lua_pop (L, 1);
 
-		lua_pushstring (L, "session");
-		lua_gettable (L, -2);
-		if (luaL_checkudata (L, -1, "rspamd{session}")) {
-			session = *(struct rspamd_async_session **)lua_touserdata (L, -1);
+			lua_pushstring (L, "resolver");
+			lua_gettable (L, -2);
+			if (luaL_checkudata (L, -1, "rspamd{resolver}")) {
+				resolver = *(struct rspamd_dns_resolver **)lua_touserdata (L, -1);
+			}
+			else {
+				resolver = lua_http_global_resolver (ev_base);
+			}
+			lua_pop (L, 1);
+
+			lua_pushstring (L, "session");
+			lua_gettable (L, -2);
+			if (luaL_checkudata (L, -1, "rspamd{session}")) {
+				session = *(struct rspamd_async_session **)lua_touserdata (L, -1);
+			}
+			else {
+				session = NULL;
+			}
+			lua_pop (L, 1);
 		}
-		else {
-			session = NULL;
-		}
-		lua_pop (L, 1);
 
 		msg = rspamd_http_message_from_url (url);
 		if (msg == NULL) {
@@ -328,6 +347,13 @@ lua_http_request (lua_State *L)
 		lua_gettable (L, -2);
 		if (lua_type (L, -1) == LUA_TNUMBER) {
 			timeout = lua_tonumber (L, -1) * 1000.;
+		}
+		lua_pop (L, 1);
+
+		lua_pushstring (L, "mime_type");
+		lua_gettable (L, -2);
+		if (lua_type (L, -1) == LUA_TSTRING) {
+			mime_type = g_strdup (lua_tostring (L, -1));
 		}
 		lua_pop (L, 1);
 
@@ -351,6 +377,11 @@ lua_http_request (lua_State *L)
 	else {
 		msg_err ("http request has bad params");
 		lua_pushboolean (L, FALSE);
+
+		if (mime_type) {
+			g_free (mime_type);
+		}
+
 		return 1;
 	}
 
@@ -359,6 +390,7 @@ lua_http_request (lua_State *L)
 	cbd->cbref = cbref;
 	cbd->msg = msg;
 	cbd->ev_base = ev_base;
+	cbd->mime_type = mime_type;
 	msec_to_tv (timeout, &cbd->tv);
 	cbd->fd = -1;
 	if (session) {
@@ -372,7 +404,9 @@ lua_http_request (lua_State *L)
 	if (rspamd_parse_inet_address (&cbd->addr, msg->host->str)) {
 		/* Host is numeric IP, no need to resolve */
 		if (!lua_http_make_connection (cbd)) {
+			lua_http_maybe_free (cbd);
 			lua_pushboolean (L, FALSE);
+
 			return 1;
 		}
 	}
