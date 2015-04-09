@@ -148,6 +148,16 @@ struct rspamd_lua_ip * lua_check_ip (lua_State * L, gint pos);
 struct rspamd_lua_text * lua_check_text (lua_State * L, gint pos);
 
 /**
+ * Push specific header to lua
+ */
+gint rspamd_lua_push_header (lua_State * L,
+	GHashTable *hdrs,
+	const gchar *name,
+	gboolean strong,
+	gboolean full,
+	gboolean raw);
+
+/**
  * Check for task at the specified position
  */
 struct rspamd_task *lua_check_task (lua_State * L, gint pos);
