@@ -27,6 +27,29 @@
 #include "http.h"
 #include "utlist.h"
 
+/***
+ * Rspamd HTTP module represents HTTP asynchronous client available from LUA code.
+ * This module hides all complexity: DNS resolving, sessions management, zero-copy
+ * text transfers and so on under the hood.
+ * @example
+local rspamd_http = require "rspamd_http"
+
+local function symbol_callback(task)
+	local function http_callback(err_message, code, body, headers)
+		task:insert_result('SYMBOL', 1) -- task is available via closure
+	end
+
+ 	rspamd_http.request({
+ 		task=task,
+ 		url='http://example.com/data',
+ 		body=task:get_content(),
+ 		callback=http_callback,
+ 		headers={Header='Value', OtherHeader='Value'},
+ 		mime_type='text/plain',
+ 		})
+ end
+ */
+
 #define MAX_HEADERS_SIZE 8192
 
 LUA_FUNCTION_DEF (http, request);
@@ -223,6 +246,23 @@ lua_http_push_headers (lua_State *L, struct rspamd_http_message *msg)
 	}
 }
 
+/***
+ * @function rspamd_http.request({params...})
+ * This function creates HTTP request and accepts several parameters as a table using key=value syntax.
+ * Required params are:
+ *
+ * - `url`
+ * - `callback`
+ * - `task`
+ * @param {string} url specifies URL for a request in the standard URI form (e.g. 'http://example.com/path')
+ * @param {function} callback specifies callback function in format  `function (err_message, code, body, headers)` that is called on HTTP request completion
+ * @param {task} task if called from symbol handler it is generally a good idea to use the common task objects: event base, DNS resolver and events session
+ * @param {table} headers optional headers in form `[name='value', name='value']`
+ * @param {string} mime_type MIME type of the HTTP content (for example, `text/html`)
+ * @param {string/text} body full body content, can be opaque `rspamd{text}` to avoid data copying
+ * @param {number} timeout floating point request timeout value in seconds (default is 5.0 seconds)
+ * @return {boolean} `true` if a request has been successfuly scheduled. If this value is `false` then some error occurred, the callback thus will not be called
+ */
 static gint
 lua_http_request (lua_State *L)
 {
