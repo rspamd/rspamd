@@ -32,6 +32,25 @@
 
 /***
  * This module implements redis asynchronous client for rspamd LUA API.
+ * Here is an example of using of this module:
+ * @example
+local rspamd_redis = require "rspamd_redis"
+local rspamd_logger = require "rspamd_logger"
+
+local function symbol_callback(task)
+	local redis_key = 'some_key'
+	local function redis_cb(task, err, data)
+		if not err then
+			rspamd_logger.infox('redis returned %1=%2', redis_key, data)
+		end
+	end
+
+	rspamd_redis.make_request(task, "127.0.0.1:6379", redis_cb,
+		'GET', {redis_key})
+	-- or in table form:
+	-- rspamd_redis.make_request({task=task, host="127.0.0.1:6379,
+	--	callback=redis_cb, timeout=2.0, cmd='GET', args={redis_key}})
+end
  */
 
 LUA_FUNCTION_DEF (redis, make_request);
@@ -256,15 +275,16 @@ lua_redis_parse_args (lua_State *L, gint idx, const gchar *cmd,
 	ud->nargs = top;
 	ud->args = args;
 }
-/**
- * Make request to redis server
- * @param task worker task object
- * @param server server to check
- * @param port port of redis server
- * @param callback callback to be called
- * @param request request line
- * @param args list of arguments
- * @return
+/***
+ * @function rspamd_redis.make_request({params})
+ * Make request to redis server, params is a table of key=value arguments in any order
+ * @param {task} task worker task object
+ * @param {ip} host server address
+ * @param {function} callback callback to be called in form `function (task, err, data)`
+ * @param {string} cmd command to be sent to redis
+ * @param {table} args numeric array of strings used as redis arguments
+ * @param {number} timeout timeout in seconds for request (1.0 by default)
+ * @return {boolean} `true` if a request has been scheduled
  */
 static int
 lua_redis_make_request (lua_State *L)
