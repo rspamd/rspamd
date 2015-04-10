@@ -64,8 +64,8 @@ struct fuzzy_mapping {
 };
 
 struct fuzzy_mime_type {
-	gchar *type;
-	gchar *subtype;
+	GPatternSpec *type;
+	GPatternSpec *subtype;
 };
 
 struct fuzzy_rule {
@@ -204,19 +204,22 @@ parse_mime_types (const gchar *str)
 		g_strstrip (strvec[i]);
 		if ((p = strchr (strvec[i], '/')) != NULL) {
 			*p = 0;
-			type =
-				rspamd_mempool_alloc (fuzzy_module_ctx->fuzzy_pool,
+			type = rspamd_mempool_alloc (fuzzy_module_ctx->fuzzy_pool,
 					sizeof (struct fuzzy_mime_type));
-			type->type = rspamd_mempool_strdup (fuzzy_module_ctx->fuzzy_pool,
-					strvec[i]);
-			type->subtype = rspamd_mempool_strdup (fuzzy_module_ctx->fuzzy_pool,
-					p + 1);
+			type->type = g_pattern_spec_new (strvec[i]);
+			type->subtype = g_pattern_spec_new (p + 1);
+			*p = '/';
 			res = g_list_prepend (res, type);
 		}
 		else {
-			msg_info ("bad content type: %s", strvec[i]);
+			type = rspamd_mempool_alloc (fuzzy_module_ctx->fuzzy_pool,
+							sizeof (struct fuzzy_mime_type));
+			type->type = g_pattern_spec_new (strvec[i]);
+			type->subtype = NULL;
 		}
 	}
+
+	g_strfreev (strvec);
 
 	return res;
 }
@@ -230,9 +233,20 @@ fuzzy_check_content_type (struct fuzzy_rule *rule, GMimeContentType *type)
 	cur = rule->mime_types;
 	while (cur) {
 		ft = cur->data;
-		if (g_mime_content_type_is_type (type, ft->type, ft->subtype)) {
-			return TRUE;
+		if (ft->type) {
+
+			if (g_pattern_match_string (ft->type, type->type)) {
+				if (ft->subtype) {
+					if (g_pattern_match_string (ft->subtype, type->subtype)) {
+						return TRUE;
+					}
+				}
+				else {
+					return TRUE;
+				}
+			}
 		}
+
 		cur = g_list_next (cur);
 	}
 
