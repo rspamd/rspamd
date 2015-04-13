@@ -1009,8 +1009,14 @@ rspamd_rcl_classifier_handler (rspamd_mempool_t *pool,
 		msg_err ("fatal configuration error, cannot parse statfile definition");
 	}
 
-	ccf->opts = (ucl_object_t *)obj;
+	if (tkcf == NULL) {
+		tkcf = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*tkcf));
+		tkcf->name = NULL;
+
+	}
+
 	ccf->tokenizer = tkcf;
+	ccf->opts = (ucl_object_t *)obj;
 	cfg->classifiers = g_list_prepend (cfg->classifiers, ccf);
 
 
