@@ -407,6 +407,7 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 
 	/* XXX: backend runtime post-processing */
 	/* Post-processing */
+	cur = cl_runtimes;
 	while (cur) {
 		cl_run = (struct rspamd_classifier_runtime *)cur->data;
 		cl_run->stage = RSPAMD_STAT_STAGE_POST;
