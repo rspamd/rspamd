@@ -194,9 +194,7 @@ bayes_classify (struct classifier_ctx * ctx,
 			}
 			else {
 				/* Calculate ham probability correctly */
-				if (final_prob < 0.5) {
-					final_prob = 1. - final_prob;
-				}
+				final_prob = (final_prob - 0.5) * 2;
 				rspamd_snprintf (sumbuf, 32, "%.2f%%", final_prob * 100.);
 				cur = g_list_prepend (NULL, sumbuf);
 				rspamd_task_insert_result (task,
