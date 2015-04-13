@@ -72,9 +72,10 @@ struct rspamd_token_result {
 	struct rspamd_classifier_runtime *cl_runtime;
 };
 
-#define RSPAMD_MAX_TOKEN_LEN 64
+#define RSPAMD_MAX_TOKEN_LEN 16
 typedef struct token_node_s {
 	guchar data[RSPAMD_MAX_TOKEN_LEN];
+	guint window_idx;
 	guint datalen;
 	GArray *results;
 } rspamd_token_t;

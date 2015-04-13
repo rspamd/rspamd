@@ -286,6 +286,8 @@ rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
 					memcpy (new->data, &cur, sizeof (cur));
 				}
 
+				new->window_idx = i;
+
 				if (g_tree_lookup (tree, new) == NULL) {
 					g_tree_insert (tree, new, new);
 				}
