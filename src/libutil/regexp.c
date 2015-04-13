@@ -45,7 +45,6 @@ struct rspamd_regexp_s {
 #ifdef HAVE_PCRE_JIT
 	pcre_jit_stack *jstack;
 	pcre_jit_stack *raw_jstack;
-	rspamd_mutex_t *mtx;
 #endif
 	pcre *raw_re;
 	pcre_extra *raw_extra;
@@ -105,11 +104,7 @@ rspamd_regexp_dtor (rspamd_regexp_t *re)
 			pcre_free (re->raw_extra);
 #endif
 		}
-#ifdef HAVE_PCRE_JIT
-		if (re->mtx) {
-			rspamd_mutex_free (re->mtx);
-		}
-#endif
+
 		if (re->pattern) {
 			g_free (re->pattern);
 		}
@@ -250,10 +245,6 @@ fin:
 
 	if (!(rspamd_flags & RSPAMD_REGEXP_FLAG_NOOPT)) {
 		/* Optimize regexp */
-#ifdef HAVE_PCRE_JIT
-		study_flags |= PCRE_STUDY_JIT_COMPILE;
-		res->mtx = rspamd_mutex_new ();
-#endif
 		if (res->re) {
 			res->extra = pcre_study (res->re, study_flags, &err_str);
 			if (res->extra != NULL) {
@@ -343,12 +334,6 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 
 	g_assert (r != NULL);
 
-#ifdef HAVE_PCRE_JIT
-	if (re->mtx) {
-		rspamd_mutex_lock (re->mtx);
-	}
-#endif
-
 	if (!(re->flags & RSPAMD_REGEXP_FLAG_NOOPT)) {
 #ifdef HAVE_PCRE_JIT
 # if (PCRE_MAJOR == 8 && PCRE_MINOR >= 32)
@@ -372,11 +357,6 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 		rc = pcre_exec (r, ext, mt, remain, 0, match_flags, ovec,
 				G_N_ELEMENTS (ovec));
 	}
-#ifdef HAVE_PCRE_JIT
-	if (re->mtx) {
-		rspamd_mutex_unlock (re->mtx);
-	}
-#endif
 	if (rc > 0) {
 		if (start) {
 			*start = mt + ovec[0];
