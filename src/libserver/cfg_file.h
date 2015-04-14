@@ -69,18 +69,6 @@ enum lua_var_type {
 	LUA_VAR_FUNCTION,
 	LUA_VAR_UNKNOWN
 };
-/**
- * Module option
- */
-struct rspamd_module_opt {
-	gchar *param;                                   /**< parameter name										*/
-	gchar *value;                                   /**< parameter value									*/
-	gchar *description;                             /**< parameter description								*/
-	gchar *group;                                   /**< parameter group									*/
-	gpointer actual_data;                           /**< parsed data										*/
-	gboolean is_lua;                                /**< actually this is lua variable						*/
-	enum lua_var_type lua_type;                     /**< type of lua variable								*/
-};
 
 /**
  * Symbol definition

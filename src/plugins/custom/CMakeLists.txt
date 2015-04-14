@@ -1,2 +1,0 @@
-ADD_SUBDIRECTORY(ipmark)
-ADD_SUBDIRECTORY(regmark)

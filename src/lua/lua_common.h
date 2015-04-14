@@ -237,12 +237,6 @@ double rspamd_lua_normalize (struct rspamd_config *cfg,
 
 /* Config file functions */
 void rspamd_lua_post_load_config (struct rspamd_config *cfg);
-void rspamd_lua_process_elt (struct rspamd_config *cfg,
-	const gchar *name,
-	const gchar *module_name,
-	struct rspamd_module_opt *opt,
-	gint idx,
-	gboolean allow_meta);
 gboolean rspamd_lua_handle_param (struct rspamd_task *task,
 	gchar *mname,
 	gchar *optname,
