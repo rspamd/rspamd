@@ -130,7 +130,7 @@ struct rspamd_http_connection_entry {
 	struct rspamd_http_connection *conn;
 	gpointer ud;
 	gboolean is_reply;
-	struct rspamd_http_connection_entry *next;
+	struct rspamd_http_connection_entry *prev, *next;
 };
 
 struct rspamd_http_connection_router {

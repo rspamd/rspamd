@@ -1381,6 +1381,8 @@ rspamd_http_entry_free (struct rspamd_http_connection_entry *entry)
 		if (entry->rt->finish_handler) {
 			entry->rt->finish_handler (entry);
 		}
+
+		DL_DELETE (entry->rt->conns, entry);
 		g_slice_free1 (sizeof (struct rspamd_http_connection_entry), entry);
 	}
 }
@@ -1687,7 +1689,7 @@ rspamd_http_router_handle_socket (struct rspamd_http_connection_router *router,
 
 	rspamd_http_connection_read_message (conn->conn, conn, fd, router->ptv,
 		router->ev_base);
-	LL_PREPEND (router->conns, conn);
+	DL_PREPEND (router->conns, conn);
 }
 
 void
@@ -1697,7 +1699,7 @@ rspamd_http_router_free (struct rspamd_http_connection_router *router)
 	struct rspamd_http_keypair *kp;
 
 	if (router) {
-		LL_FOREACH_SAFE (router->conns, conn, tmp)
+		DL_FOREACH_SAFE (router->conns, conn, tmp)
 		{
 			rspamd_http_entry_free (conn);
 		}
