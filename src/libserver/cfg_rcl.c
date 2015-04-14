@@ -355,7 +355,7 @@ rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
 	if (sym_group == NULL) {
 		/* Create new group */
 		sym_group =
-			rspamd_mempool_alloc (cfg->cfg_pool,
+			rspamd_mempool_alloc0 (cfg->cfg_pool,
 				sizeof (struct rspamd_symbols_group));
 		sym_group->name = rspamd_mempool_strdup (cfg->cfg_pool, group);
 		sym_group->symbols = NULL;
@@ -558,6 +558,7 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 			}
 		}
 	}
+
 	/* Handle symbols */
 	if (!rspamd_rcl_symbols_handler (pool, obj, cfg, metric, NULL,
 			have_symbols, err)) {
