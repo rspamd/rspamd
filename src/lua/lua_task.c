@@ -354,6 +354,7 @@ LUA_FUNCTION_DEF (task, get_images);
  * - `metric` - name of metric
  * - `score` - score of a symbol in that metric
  * - `options` - a table of strings representing options of a symbol
+ * - `group` - a group of symbol (or 'ungrouped')
  * @param {string} name symbol's name
  * @return {list of tables} list of tables or nil if symbol was not found in any metric
  */
@@ -1528,6 +1529,18 @@ lua_push_symbol_result (lua_State *L,
 			lua_pushstring (L, "score");
 			lua_pushnumber (L, s->score);
 			lua_settable (L, -3);
+
+			if (s->def) {
+				lua_pushstring (L, "group");
+				lua_pushstring (L, s->def->gr->name);
+				lua_settable (L, -3);
+			}
+			else {
+				lua_pushstring (L, "group");
+				lua_pushstring (L, "ungrouped");
+				lua_settable (L, -3);
+			}
+
 			if (s->options) {
 				opt = s->options;
 				lua_pushstring (L, "options");
