@@ -95,10 +95,14 @@ rspamd_create_metric_result (struct rspamd_task *task, const gchar *name)
 					sizeof (struct metric_result));
 	metric_res->symbols = g_hash_table_new (rspamd_str_hash,
 			rspamd_str_equal);
-	metric_res->checked = FALSE;
 	rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) g_hash_table_unref,
 			metric_res->symbols);
+	metric_res->sym_groups = g_hash_table_new (g_direct_hash, g_direct_equal);
+	rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) g_hash_table_unref,
+			metric_res->sym_groups);
+	metric_res->checked = FALSE;
 	metric_res->metric = metric;
 	metric_res->grow_factor = 0;
 	metric_res->score = 0;
@@ -119,8 +123,9 @@ insert_metric_result (struct rspamd_task *task,
 {
 	struct metric_result *metric_res;
 	struct symbol *s;
-	gdouble w;
+	gdouble w, *gr_score = NULL;
 	struct rspamd_symbol_def *sdef;
+	struct rspamd_symbols_group *gr = NULL;
 	const ucl_object_t *mobj, *sobj;
 
 	metric_res = rspamd_create_metric_result (task, metric->name);
@@ -131,6 +136,16 @@ insert_metric_result (struct rspamd_task *task,
 	}
 	else {
 		w = (*sdef->weight_ptr) * flag;
+		gr = sdef->gr;
+
+		if (gr != NULL) {
+			gr_score = g_hash_table_lookup (metric_res->sym_groups, gr);
+
+			if (gr_score == NULL) {
+				gr_score = rspamd_mempool_alloc (task->task_pool, sizeof (gdouble));
+				*gr_score = 0;
+			}
+		}
 	}
 
 	if (task->settings) {
@@ -144,6 +159,18 @@ insert_metric_result (struct rspamd_task *task,
 						symbol, w, corr);
 				w = corr * flag;
 			}
+		}
+	}
+
+	/* XXX: does not take grow factor into account */
+	if (gr != NULL && gr_score != NULL && gr->max_score > 0.0) {
+		*gr_score += w;
+
+		if (*gr_score > gr->max_score) {
+			msg_info ("maximum group score %.2f for group %s has been reached,"
+					" ignoring symbol %s with weight %.2f", gr->max_score,
+					gr->name, symbol, w);
+			return;
 		}
 	}
 

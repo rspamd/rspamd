@@ -67,6 +67,7 @@ struct metric_result {
 	double score;                                   /**< total score							*/
 	enum rspamd_metric_action action;				/**< the current action						*/
 	GHashTable *symbols;                            /**< symbols of metric						*/
+	GHashTable *sym_groups;							/**< groups of symbols						*/
 	gboolean checked;                               /**< whether metric result is consolidated  */
 	double grow_factor;                             /**< current grow factor					*/
 };
