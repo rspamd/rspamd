@@ -537,7 +537,7 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 				elt = ucl_object_find_key (cur, "name");
 
 				if (elt) {
-					if (!rspamd_rcl_symbols_handler (pool, obj, cfg, metric,
+					if (!rspamd_rcl_symbols_handler (pool, cur, cfg, metric,
 							ucl_object_tostring (elt),
 							have_symbols, err)) {
 						return FALSE;

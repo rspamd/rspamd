@@ -144,6 +144,7 @@ insert_metric_result (struct rspamd_task *task,
 			if (gr_score == NULL) {
 				gr_score = rspamd_mempool_alloc (task->task_pool, sizeof (gdouble));
 				*gr_score = 0;
+				g_hash_table_insert (metric_res->sym_groups, gr, gr_score);
 			}
 		}
 	}
