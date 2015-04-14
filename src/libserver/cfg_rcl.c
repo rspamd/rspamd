@@ -368,6 +368,60 @@ rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
 }
 
 static gboolean
+rspamd_rcl_symbols_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
+		struct rspamd_config *cfg, struct metric *metric,
+		const gchar *group, gboolean new, GError **err)
+{
+	const ucl_object_t *val, *cur;
+	ucl_object_iter_t it = NULL;
+
+	val = ucl_object_find_key (obj, "symbols");
+	if (val != NULL) {
+		if (val->type != UCL_OBJECT) {
+			g_set_error (err, CFG_RCL_ERROR, EINVAL,
+					"symbols must be an object");
+			return FALSE;
+		}
+		it = NULL;
+		while ((cur = ucl_iterate_object (val, &it, true)) != NULL) {
+			if (!rspamd_rcl_insert_symbol (cfg, metric, cur, NULL, FALSE, err)) {
+				return FALSE;
+			}
+		}
+	}
+	else {
+		/* Legacy variant */
+		val = ucl_object_find_key (obj, "symbol");
+		if (val != NULL) {
+			if (val->type != UCL_OBJECT) {
+				g_set_error (err,
+						CFG_RCL_ERROR,
+						EINVAL,
+						"symbols must be an object");
+				return FALSE;
+			}
+
+			it = NULL;
+			while ((cur = ucl_iterate_object (val, &it, false)) != NULL) {
+				if (!rspamd_rcl_insert_symbol (cfg, metric, cur, NULL, TRUE, err)) {
+					return FALSE;
+				}
+			}
+		}
+		else if (new) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"metric %s has no symbols",
+					metric->name);
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+static gboolean
 rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
@@ -456,46 +510,6 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	}
 
 	/* Handle symbols */
-	val = ucl_object_find_key (obj, "symbols");
-	if (val != NULL) {
-		if (val->type != UCL_OBJECT) {
-			g_set_error (err, CFG_RCL_ERROR, EINVAL,
-				"symbols must be an object");
-			return FALSE;
-		}
-		it = NULL;
-		while ((cur = ucl_iterate_object (val, &it, true)) != NULL) {
-			if (!rspamd_rcl_insert_symbol (cfg, metric, cur, NULL, FALSE, err)) {
-				return FALSE;
-			}
-		}
-	}
-	else {
-		/* Legacy variant */
-		val = ucl_object_find_key (obj, "symbol");
-		if (val != NULL) {
-			if (val->type != UCL_OBJECT) {
-				g_set_error (err,
-					CFG_RCL_ERROR,
-					EINVAL,
-					"symbols must be an object");
-				return FALSE;
-			}
-			LL_FOREACH (val, cur) {
-				if (!rspamd_rcl_insert_symbol (cfg, metric, cur, NULL, TRUE, err)) {
-					return FALSE;
-				}
-			}
-		}
-		else if (new) {
-			g_set_error (err,
-				CFG_RCL_ERROR,
-				EINVAL,
-				"metric %s has no symbols",
-				metric_name);
-			return FALSE;
-		}
-	}
 
 	val = ucl_object_find_key (obj, "grow_factor");
 	if (val && ucl_object_todouble_safe (val, &grow_factor)) {
@@ -512,6 +526,10 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		unknown_weight != 0.) {
 		metric->unknown_weight = unknown_weight;
 		metric->accept_unknown_symbols = TRUE;
+	}
+
+	if (!rspamd_rcl_symbols_handler (pool, obj, cfg, metric, NULL, new, err)) {
+		return FALSE;
 	}
 
 	/* Insert the resulting metric */
