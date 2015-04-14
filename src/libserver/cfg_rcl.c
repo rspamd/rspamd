@@ -425,14 +425,15 @@ static gboolean
 rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	gpointer ud, struct rspamd_rcl_section *section, GError **err)
 {
-	const ucl_object_t *val, *cur;
+	const ucl_object_t *val, *cur, *elt;
 	struct rspamd_config *cfg = ud;
 	const gchar *metric_name, *subject_name, *semicolon, *act_str;
 	struct metric *metric;
 	struct metric_action *action;
+	struct rspamd_symbols_group *gr;
 	gdouble action_score, grow_factor;
 	gint action_value;
-	gboolean new = TRUE, have_actions = FALSE;
+	gboolean new = TRUE, have_actions = FALSE, have_symbols = FALSE;
 	gdouble unknown_weight;
 	ucl_object_iter_t it = NULL;
 
@@ -448,6 +449,7 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	}
 	else {
 		new = FALSE;
+		have_symbols = TRUE;
 	}
 
 	/* Handle actions */
@@ -509,8 +511,6 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 	}
 
-	/* Handle symbols */
-
 	val = ucl_object_find_key (obj, "grow_factor");
 	if (val && ucl_object_todouble_safe (val, &grow_factor)) {
 		metric->grow_factor = grow_factor;
@@ -528,7 +528,39 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		metric->accept_unknown_symbols = TRUE;
 	}
 
-	if (!rspamd_rcl_symbols_handler (pool, obj, cfg, metric, NULL, new, err)) {
+	/* Handle grouped symbols */
+	val = ucl_object_find_key (obj, "group");
+	if (ucl_object_type (val) == UCL_OBJECT) {
+		it = NULL;
+		while ((cur = ucl_iterate_object (val, &it, false))) {
+			if (ucl_object_type (cur) == UCL_OBJECT) {
+				elt = ucl_object_find_key (cur, "name");
+
+				if (elt) {
+					if (!rspamd_rcl_symbols_handler (pool, obj, cfg, metric,
+							ucl_object_tostring (elt),
+							have_symbols, err)) {
+						return FALSE;
+					}
+
+					have_symbols = TRUE;
+					gr = g_hash_table_lookup (cfg->symbols_groups,
+							ucl_object_tostring (elt));
+
+					if (gr != NULL) {
+						elt = ucl_object_find_key (cur, "max_score");
+
+						if (elt) {
+							gr->max_score = ucl_object_todouble (elt);
+						}
+					}
+				}
+			}
+		}
+	}
+	/* Handle symbols */
+	if (!rspamd_rcl_symbols_handler (pool, obj, cfg, metric, NULL,
+			have_symbols, err)) {
 		return FALSE;
 	}
 
