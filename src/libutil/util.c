@@ -1550,7 +1550,7 @@ rspamd_url_hash (gconstpointer u)
 	if (url->userlen > 0) {
 		XXH64_update (&st, url->user, url->userlen);
 	}
-	XXH64_update (&st, url->is_phished, sizeof (url->is_phished));
+	XXH64_update (&st, &url->is_phished, sizeof (url->is_phished));
 
 	return XXH64_digest (&st);
 }

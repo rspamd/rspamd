@@ -920,8 +920,9 @@ FORCE_INLINE U64 XXH64_digest_endian (const XXH64_state_t* state_in, XXH_endiane
     h64 ^= h64 >> 29;
     h64 *= PRIME64_3;
     h64 ^= h64 >> 32;
-
+#if 0
     XXH64_freeState((XXH64_state_t *)state_in);
+#endif
     return h64;
 }
 
