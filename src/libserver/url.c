@@ -335,6 +335,7 @@ rspamd_url_parse_tld_file (const gchar *fname, struct url_match_scanner *scanner
 		patlen = strlen (p);
 		m.pattern = g_malloc (patlen + 2);
 		m.pattern[0] = '.';
+		m.flags = flags;
 		pat.ptr = m.pattern;
 		pat.len = patlen + 1;
 		rspamd_strlcpy (&m.pattern[1], p, patlen + 1);
