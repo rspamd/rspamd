@@ -28,6 +28,7 @@
 #include "libutil/map.h"
 #include "libstat/stat_api.h"
 #include "main.h"
+#include "utlist.h"
 
 #ifdef WITH_GPERF_TOOLS
 #   include <glib/gprintf.h>
@@ -292,10 +293,11 @@ rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message *msg)
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
-	GList *cur_gr, *cur_sym;
+	GHashTableIter it;
 	struct rspamd_symbols_group *gr;
-	struct rspamd_symbol_def *sym;
+	struct rspamd_symbol_def *sym, *cur;
 	ucl_object_t *obj, *top, *sym_obj;
+	gpointer k, v;
 
 	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
@@ -304,17 +306,17 @@ rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 	top = ucl_object_typed_new (UCL_ARRAY);
 
 	/* Go through all symbols groups */
-	cur_gr = session->ctx->cfg->symbols_groups;
-	while (cur_gr) {
-		gr = cur_gr->data;
+	g_hash_table_iter_init (&it, session->ctx->cfg->symbols_groups);
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		gr = v;
 		obj = ucl_object_typed_new (UCL_OBJECT);
 		ucl_object_insert_key (obj, ucl_object_fromstring (
 				gr->name), "group", 0, false);
 		/* Iterate through all symbols */
-		cur_sym = gr->symbols;
-		while (cur_sym) {
+		sym = gr->symbols;
+
+		LL_FOREACH (sym, cur) {
 			sym_obj = ucl_object_typed_new (UCL_OBJECT);
-			sym = cur_sym->data;
 
 			ucl_object_insert_key (sym_obj, ucl_object_fromstring (sym->name),
 				"symbol", 0, false);
@@ -328,9 +330,8 @@ rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 			}
 
 			ucl_object_insert_key (obj, sym_obj, "rules", 0, false);
-			cur_sym = g_list_next (cur_sym);
 		}
-		cur_gr = g_list_next (cur_gr);
+
 		ucl_array_append (top, obj);
 	}
 

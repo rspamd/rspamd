@@ -164,6 +164,7 @@ rspamd_config_defaults (struct rspamd_config *cfg)
 			rspamd_str_equal);
 	cfg->cfg_params = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->metrics_symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+	cfg->symbols_groups = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 
 	cfg->map_timeout = DEFAULT_MAP_TIMEOUT;
 
@@ -176,9 +177,6 @@ rspamd_config_defaults (struct rspamd_config *cfg)
 void
 rspamd_config_free (struct rspamd_config *cfg)
 {
-	GList *cur;
-	struct rspamd_symbols_group *gr;
-
 	rspamd_map_remove_all (cfg);
 	ucl_obj_unref (cfg->rcl_obj);
 	g_hash_table_remove_all (cfg->metrics);
@@ -190,18 +188,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 	g_hash_table_unref (cfg->cfg_params);
 	g_hash_table_destroy (cfg->metrics_symbols);
 	g_hash_table_destroy (cfg->classifiers_symbols);
-	/* Free symbols groups */
-	cur = cfg->symbols_groups;
-	while (cur) {
-		gr = cur->data;
-		if (gr->symbols) {
-			g_list_free (gr->symbols);
-		}
-		cur = g_list_next (cur);
-	}
-	if (cfg->symbols_groups) {
-		g_list_free (cfg->symbols_groups);
-	}
+	g_hash_table_unref (cfg->symbols_groups);
 
 	if (cfg->checksum) {
 		g_free (cfg->checksum);

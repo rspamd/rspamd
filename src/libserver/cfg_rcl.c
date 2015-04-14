@@ -240,15 +240,6 @@ rspamd_rcl_options_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 			cfg, err);
 }
 
-static gint
-rspamd_symbols_group_find_func (gconstpointer a, gconstpointer b)
-{
-	const struct rspamd_symbols_group *gr = a;
-	const gchar *uv = b;
-
-	return g_ascii_strcasecmp (gr->name, uv);
-}
-
 /**
  * Insert a symbol to the metric
  * @param cfg
@@ -259,14 +250,14 @@ rspamd_symbols_group_find_func (gconstpointer a, gconstpointer b)
  */
 static gboolean
 rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
-	const ucl_object_t *obj, gboolean is_legacy, GError **err)
+	const ucl_object_t *obj, const gchar *group, gboolean is_legacy, GError **err)
 {
-	const gchar *group = "ungrouped", *description = NULL, *sym_name;
+	const gchar *description = NULL, *sym_name;
 	gdouble symbol_score, *score_ptr;
 	const ucl_object_t *val;
 	struct rspamd_symbols_group *sym_group;
 	struct rspamd_symbol_def *sym_def;
-	GList *metric_list, *group_list;
+	GList *metric_list;
 	gboolean one_shot = FALSE;
 
 	/*
@@ -291,6 +282,11 @@ rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
 	else {
 		sym_name = ucl_object_key (obj);
 	}
+
+	if (group == NULL) {
+		group = "ungrouped";
+	}
+
 	if (ucl_object_todouble_safe (obj, &symbol_score)) {
 		description = NULL;
 	}
@@ -311,6 +307,7 @@ rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
 		val = ucl_object_find_key (obj, "group");
 		if (val != NULL) {
 			group = ucl_object_tostring (val);
+			msg_warn ("legacy 'group' parameter inside symbol definition");
 		}
 		val = ucl_object_find_key (obj, "one_shot");
 		if (val != NULL) {
@@ -354,23 +351,18 @@ rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
 	}
 
 	/* Search for symbol group */
-	group_list = g_list_find_custom (cfg->symbols_groups,
-			group,
-			rspamd_symbols_group_find_func);
-	if (group_list == NULL) {
+	sym_group = g_hash_table_lookup (cfg->symbols_groups, group);
+	if (sym_group == NULL) {
 		/* Create new group */
 		sym_group =
 			rspamd_mempool_alloc (cfg->cfg_pool,
 				sizeof (struct rspamd_symbols_group));
 		sym_group->name = rspamd_mempool_strdup (cfg->cfg_pool, group);
 		sym_group->symbols = NULL;
-		cfg->symbols_groups = g_list_prepend (cfg->symbols_groups, sym_group);
+		g_hash_table_insert (cfg->symbols_groups, sym_group->name, sym_group);
 	}
-	else {
-		sym_group = group_list->data;
-	}
-	/* Insert symbol */
-	sym_group->symbols = g_list_prepend (sym_group->symbols, sym_def);
+
+	LL_PREPEND (sym_group->symbols, sym_def);
 
 	return TRUE;
 }
@@ -473,7 +465,7 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 		it = NULL;
 		while ((cur = ucl_iterate_object (val, &it, true)) != NULL) {
-			if (!rspamd_rcl_insert_symbol (cfg, metric, cur, FALSE, err)) {
+			if (!rspamd_rcl_insert_symbol (cfg, metric, cur, NULL, FALSE, err)) {
 				return FALSE;
 			}
 		}
@@ -489,9 +481,8 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 					"symbols must be an object");
 				return FALSE;
 			}
-			LL_FOREACH (val, cur)
-			{
-				if (!rspamd_rcl_insert_symbol (cfg, metric, cur, TRUE, err)) {
+			LL_FOREACH (val, cur) {
+				if (!rspamd_rcl_insert_symbol (cfg, metric, cur, NULL, TRUE, err)) {
 					return FALSE;
 				}
 			}

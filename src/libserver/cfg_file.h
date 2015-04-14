@@ -71,21 +71,25 @@ enum lua_var_type {
 };
 
 /**
+ * Symbols group
+ */
+struct rspamd_symbol_def;
+struct rspamd_symbols_group {
+	gchar *name;
+	struct rspamd_symbol_def *symbols;
+	gdouble max_score;
+};
+
+/**
  * Symbol definition
  */
 struct rspamd_symbol_def {
 	gchar *name;
 	gchar *description;
 	gdouble *weight_ptr;
+	struct rspamd_symbols_group *gr;
 	gboolean one_shot;
-};
-
-/**
- * Symbols group
- */
-struct rspamd_symbols_group {
-	gchar *name;
-	GList *symbols;
+	struct rspamd_symbol_def *next;
 };
 
 
@@ -208,7 +212,7 @@ struct rspamd_config {
 	gchar *filters_str;                             /**< string of filters									*/
 	ucl_object_t *rcl_obj;                  /**< rcl object											*/
 	GHashTable * metrics;                            /**< hash of metrics indexed by metric name				*/
-	GList * symbols_groups;                          /**< groups of symbols									*/
+	GHashTable * symbols_groups;                     /**< groups of symbols									*/
 	GList * metrics_list;                            /**< linked list of metrics								*/
 	GHashTable * metrics_symbols;                    /**< hash table of metrics indexed by symbol			*/
 	GHashTable * c_modules;                          /**< hash of c modules indexed by module name			*/
