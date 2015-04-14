@@ -227,6 +227,7 @@ insert_metric_result (struct rspamd_task *task,
 
 		s->score = w;
 		s->name = symbol;
+		s->def = sdef;
 		metric_res->score += w;
 
 		if (opts) {

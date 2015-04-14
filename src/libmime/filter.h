@@ -36,6 +36,7 @@ struct symbol {
 	double score;                                   /**< symbol's score							*/
 	GList *options;                                 /**< list of symbol's options				*/
 	const gchar *name;
+	struct rspamd_symbol_def *def;					/**< symbol configuration					*/
 };
 
 struct metric_action {
