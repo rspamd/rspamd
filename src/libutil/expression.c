@@ -491,7 +491,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 	}
 
 	memset (&elt, 0, sizeof (elt));
-	num_re = rspamd_regexp_cache_create (NULL, "/^\\d+(\\s+|[)]|$)/", NULL, NULL);
+	num_re = rspamd_regexp_cache_create (NULL, "/^\\d+(?:\\s+|[)]|$)/", NULL, NULL);
 
 	p = line;
 	c = line;

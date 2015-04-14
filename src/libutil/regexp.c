@@ -89,8 +89,12 @@ rspamd_regexp_dtor (rspamd_regexp_t *re)
 		if (re->re) {
 			pcre_free (re->re);
 #ifdef HAVE_PCRE_JIT
-			pcre_free_study (re->extra);
-			pcre_jit_stack_free (re->jstack);
+			if (re->extra) {
+				pcre_free_study (re->extra);
+			}
+			if (re->jstack) {
+				pcre_jit_stack_free (re->jstack);
+			}
 #else
 			pcre_free (re->extra);
 #endif
@@ -98,8 +102,12 @@ rspamd_regexp_dtor (rspamd_regexp_t *re)
 		if (re->raw_re) {
 			pcre_free (re->raw_re);
 #ifdef HAVE_PCRE_JIT
-			pcre_free_study (re->raw_extra);
-			pcre_jit_stack_free (re->raw_jstack);
+			if (re->extra) {
+				pcre_free_study (re->extra);
+			}
+			if (re->jstack) {
+				pcre_jit_stack_free (re->jstack);
+			}
 #else
 			pcre_free (re->raw_extra);
 #endif
@@ -243,14 +251,30 @@ fin:
 		}
 	}
 
+#ifdef HAVE_PCRE_JIT
+	study_flags |= PCRE_STUDY_JIT_COMPILE;
+#endif
+
 	if (!(rspamd_flags & RSPAMD_REGEXP_FLAG_NOOPT)) {
 		/* Optimize regexp */
 		if (res->re) {
 			res->extra = pcre_study (res->re, study_flags, &err_str);
 			if (res->extra != NULL) {
 #ifdef HAVE_PCRE_JIT
-				res->jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
-				pcre_assign_jit_stack (res->extra, NULL, res->jstack);
+				gint jit, n;
+
+				jit = 0;
+				n = pcre_fullinfo (res->re, res->extra,
+						PCRE_INFO_JIT, &jit);
+
+				if (n != 0 || jit != 1) {
+					msg_info ("jit compilation of %s is not supported", pattern);
+					res->jstack = NULL;
+				}
+				else {
+					res->jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
+					pcre_assign_jit_stack (res->extra, NULL, res->jstack);
+				}
 #endif
 			}
 			else {
@@ -262,8 +286,20 @@ fin:
 			res->raw_extra = pcre_study (res->raw_re, study_flags, &err_str);
 			if (res->raw_extra != NULL) {
 #ifdef HAVE_PCRE_JIT
-				res->raw_jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
-				pcre_assign_jit_stack (res->raw_extra, NULL, res->raw_jstack);
+				gint jit, n;
+
+				jit = 0;
+				n = pcre_fullinfo (res->re, res->extra,
+						PCRE_INFO_JIT, &jit);
+
+				if (n != 0 || jit != 1) {
+					msg_info ("jit compilation of %s is not supported", pattern);
+					res->jstack = NULL;
+				}
+				else {
+					res->jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
+					pcre_assign_jit_stack (res->extra, NULL, res->jstack);
+				}
 #endif
 			}
 			else {
@@ -285,7 +321,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 	pcre *r;
 	pcre_extra *ext;
 #if defined(HAVE_PCRE_JIT) && (PCRE_MAJOR == 8 && PCRE_MINOR >= 32)
-	pcre_jit_stack *st;
+	pcre_jit_stack *st = NULL;
 #endif
 	const gchar *mt;
 	gsize remain = 0;
@@ -340,10 +376,15 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 		/* XXX: flags seems to be broken with jit fast path */
 		g_assert (remain > 0);
 		g_assert (mt != NULL);
-		g_assert (st != NULL);
 
-		rc = pcre_jit_exec (r, ext, mt, remain, 0, 0, ovec,
+		if (st != NULL) {
+			rc = pcre_jit_exec (r, ext, mt, remain, 0, 0, ovec,
 				G_N_ELEMENTS (ovec), st);
+		}
+		else {
+			rc = pcre_exec (r, ext, mt, remain, 0, match_flags, ovec,
+				G_N_ELEMENTS (ovec));
+		}
 # else
 		rc = pcre_exec (r, ext, mt, remain, 0, match_flags, ovec,
 						G_N_ELEMENTS (ovec));
