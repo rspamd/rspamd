@@ -108,7 +108,7 @@ lua_regexp_create (lua_State *L)
 		flags_str = luaL_checkstring (L, 2);
 	}
 
-	re = rspamd_regexp_cache_create (NULL, string, flags_str, &err);
+	re = rspamd_regexp_new (string, flags_str, &err);
 	if (re == NULL) {
 		lua_pushnil (L);
 		msg_info ("cannot parse regexp: %s, error: %s",
@@ -138,15 +138,20 @@ lua_regexp_create (lua_State *L)
 static int
 lua_regexp_get_cached (lua_State *L)
 {
-	struct rspamd_lua_regexp *new, **pnew;
-	const gchar *line;
 	rspamd_regexp_t *re;
+	struct rspamd_lua_regexp *new, **pnew;
+	const gchar *string, *flags_str = NULL;
 
-	line = luaL_checkstring (L, 1);
-	re = rspamd_regexp_cache_query (NULL, line, NULL);
+	string = luaL_checkstring (L, 1);
+	if (lua_gettop (L) == 2) {
+		flags_str = luaL_checkstring (L, 2);
+	}
+
+	re = rspamd_regexp_cache_query (NULL, string, flags_str);
+
 	if (re) {
 		new = g_slice_alloc0 (sizeof (struct rspamd_lua_regexp));
-		new->re = re;
+		new->re = rspamd_regexp_ref (re);
 		pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
 		rspamd_lua_setclass (L, "rspamd{regexp}", -1);
 		*pnew = new;
@@ -176,22 +181,42 @@ lua_regexp_get_cached (lua_State *L)
 static int
 lua_regexp_create_cached (lua_State *L)
 {
-	const gchar *line;
-	struct rspamd_lua_regexp *new, **pnew;
 	rspamd_regexp_t *re;
+	struct rspamd_lua_regexp *new, **pnew;
+	const gchar *string, *flags_str = NULL;
+	GError *err = NULL;
 
-	line = luaL_checkstring (L, 1);
-	re = rspamd_regexp_cache_query (NULL, line, NULL);
+	string = luaL_checkstring (L, 1);
+	if (lua_gettop (L) == 2) {
+		flags_str = luaL_checkstring (L, 2);
+	}
+
+	re = rspamd_regexp_cache_query (NULL, string, flags_str);
+
 	if (re) {
 		new = g_slice_alloc0 (sizeof (struct rspamd_lua_regexp));
-		new->re = re;
+		new->re = rspamd_regexp_ref (re);
 		pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
 
 		rspamd_lua_setclass (L, "rspamd{regexp}", -1);
 		*pnew = new;
 	}
 	else {
-		return lua_regexp_create (L);
+		re = rspamd_regexp_cache_create (NULL, string, flags_str, &err);
+		if (re == NULL) {
+			lua_pushnil (L);
+			msg_info ("cannot parse regexp: %s, error: %s",
+					string,
+					err == NULL ? "undefined" : err->message);
+			g_error_free (err);
+		}
+		else {
+			new = g_slice_alloc0 (sizeof (struct rspamd_lua_regexp));
+			new->re = rspamd_regexp_ref (re);
+			pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
+			rspamd_lua_setclass (L, "rspamd{regexp}", -1);
+			*pnew = new;
+		}
 	}
 
 	return 1;

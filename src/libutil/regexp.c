@@ -86,6 +86,7 @@ static void
 rspamd_regexp_dtor (rspamd_regexp_t *re)
 {
 	if (re) {
+		msg_info("dtor of %s", re->pattern);
 		if (re->re) {
 			pcre_free (re->re);
 #ifdef HAVE_PCRE_JIT
@@ -449,6 +450,16 @@ void
 rspamd_regexp_unref (rspamd_regexp_t *re)
 {
 	REF_RELEASE (re);
+}
+
+rspamd_regexp_t*
+rspamd_regexp_ref (rspamd_regexp_t *re)
+{
+	g_assert (re != NULL);
+
+	REF_RETAIN (re);
+
+	return re;
 }
 
 void
