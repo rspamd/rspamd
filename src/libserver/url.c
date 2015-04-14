@@ -1313,14 +1313,14 @@ rspamd_url_text_extract (rspamd_mempool_t * pool,
 						ex->len = url_end - url_start;
 						if (new->protocol == PROTOCOL_MAILTO) {
 							if (new->userlen > 0) {
-								if (!g_tree_lookup (task->emails, new)) {
-									g_tree_insert (task->emails, new, new);
+								if (!g_hash_table_lookup (task->emails, new)) {
+									g_hash_table_insert (task->emails, new, new);
 								}
 							}
 						}
 						else {
-							if (!g_tree_lookup (task->urls, new)) {
-								g_tree_insert (task->urls, new, new);
+							if (!g_hash_table_lookup (task->urls, new)) {
+								g_hash_table_insert (task->urls, new, new);
 							}
 						}
 						part->urls_offset = g_list_prepend (

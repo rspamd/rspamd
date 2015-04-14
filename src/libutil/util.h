@@ -245,11 +245,13 @@ gsize rspamd_strlcpy_tolower (gchar *dst, const gchar *src, gsize siz);
 #define ts_to_usec(ts) ((ts)->tv_sec * 1000000LLU +							\
 	(ts)->tv_nsec / 1000LLU)
 
-/* Compare two emails for building emails tree */
-gint rspamd_emails_cmp (gconstpointer a, gconstpointer b);
+guint rspamd_url_hash (gconstpointer u);
 
-/* Compare two urls for building emails tree */
-gint rspamd_urls_cmp (gconstpointer a, gconstpointer b);
+/* Compare two emails for building emails hash */
+gboolean rspamd_emails_cmp (gconstpointer a, gconstpointer b);
+
+/* Compare two urls for building emails hash */
+gboolean rspamd_urls_cmp (gconstpointer a, gconstpointer b);
 
 /*
  * Find string find in string s ignoring case

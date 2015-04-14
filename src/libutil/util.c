@@ -1536,51 +1536,70 @@ rspamd_strlcpy_tolower (gchar *dst, const gchar *src, gsize siz)
 	return (s - src - 1);    /* count does not include NUL */
 }
 
+guint
+rspamd_url_hash (gconstpointer u)
+{
+	const struct rspamd_url *url = u;
+	XXH64_state_t st;
+
+	XXH64_reset (&st, 0xdeadbabe);
+
+	if (url->hostlen > 0) {
+		XXH64_update (&st, url->host, url->hostlen);
+	}
+	if (url->userlen > 0) {
+		XXH64_update (&st, url->user, url->userlen);
+	}
+	XXH64_update (&st, url->is_phished, sizeof (url->is_phished));
+
+	return XXH64_digest (&st);
+}
+
 /* Compare two emails for building emails tree */
-gint
+gboolean
 rspamd_emails_cmp (gconstpointer a, gconstpointer b)
 {
 	const struct rspamd_url *u1 = a, *u2 = b;
 	gint r;
 
 	if (u1->hostlen != u2->hostlen || u1->hostlen == 0) {
-		return u1->hostlen - u2->hostlen;
+		return FALSE;
 	}
 	else {
 		if ((r = g_ascii_strncasecmp (u1->host, u2->host, u1->hostlen)) == 0) {
 			if (u1->userlen != u2->userlen || u1->userlen == 0) {
-				return u1->userlen - u2->userlen;
+				return FALSE;
 			}
 			else {
-				return g_ascii_strncasecmp (u1->user, u2->user, u1->userlen);
+				return g_ascii_strncasecmp (u1->user, u2->user, u1->userlen) == 0;
 			}
 		}
 		else {
-			return r;
+			return r == 0;
 		}
 	}
 
-	return 0;
+	return FALSE;
 }
 
-gint
+gboolean
 rspamd_urls_cmp (gconstpointer a, gconstpointer b)
 {
 	const struct rspamd_url *u1 = a, *u2 = b;
 	int r;
 
 	if (u1->hostlen != u2->hostlen || u1->hostlen == 0) {
-		return u1->hostlen - u2->hostlen;
+		return FALSE;
 	}
 	else {
 		r = g_ascii_strncasecmp (u1->host, u2->host, u1->hostlen);
 		if (r == 0 && u1->is_phished != u2->is_phished) {
 			/* Always insert phished urls to the tree */
-			return -1;
+			return FALSE;
 		}
 	}
 
-	return r;
+	return r == 0;
 }
 
 /*

@@ -892,14 +892,14 @@ parse_tag_url (struct rspamd_task *task,
 			}
 			if (url->protocol == PROTOCOL_MAILTO) {
 				if (url->userlen > 0) {
-					if (!g_tree_lookup (task->emails, url)) {
-						g_tree_insert (task->emails, url, url);
+					if (!g_hash_table_lookup (task->emails, url)) {
+						g_hash_table_insert (task->emails, url, url);
 					}
 				}
 			}
 			else {
-				if (!g_tree_lookup (task->urls, url)) {
-					g_tree_insert (task->urls, url, url);
+				if (!g_hash_table_lookup (task->urls, url)) {
+					g_hash_table_insert (task->urls, url, url);
 				}
 			}
 		}

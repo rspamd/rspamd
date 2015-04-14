@@ -63,7 +63,7 @@ struct redirector_param {
 	GString *buf;
 	struct event ev;
 	gint sock;
-	GTree *tree;
+	GHashTable *tree;
 	struct suffix_item *suffix;
 };
 

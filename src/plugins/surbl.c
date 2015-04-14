@@ -575,7 +575,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 	gboolean append_suffix,
 	GError ** err,
 	gboolean forced,
-	GTree *tree,
+	GHashTable *tree,
 	struct rspamd_url *url)
 {
 	GHashTable *t;
@@ -714,7 +714,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 	url->surbllen = r;
 
 	if (tree != NULL) {
-		if (g_tree_lookup (tree, result) != NULL) {
+		if (g_hash_table_lookup (tree, result) != NULL) {
 			msg_debug ("url %s is already registered", result);
 			g_set_error (err, SURBL_ERROR, /* error domain */
 				DUPLICATE_ERROR,        /* error code */
@@ -723,7 +723,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 			return NULL;
 		}
 		else {
-			g_tree_insert (tree, result, result);
+			g_hash_table_insert (tree, result, url);
 		}
 	}
 
@@ -754,7 +754,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 
 static void
 make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
-	struct suffix_item *suffix, gboolean forced, GTree *tree)
+	struct suffix_item *suffix, gboolean forced, GHashTable *tree)
 {
 	gchar *surbl_req;
 	rspamd_fstring_t f;
@@ -992,7 +992,7 @@ redirector_callback (gint fd, short what, void *arg)
 
 static void
 register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
-	struct suffix_item *suffix, const gchar *rule, GTree *tree)
+	struct suffix_item *suffix, const gchar *rule, GHashTable *tree)
 {
 	gint s = -1;
 	struct redirector_param *param;
@@ -1043,7 +1043,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 		rule);
 }
 
-static gboolean
+static void
 surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 {
 	struct redirector_param *param = data;
@@ -1058,7 +1058,7 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 	debug_task ("check url %s", struri (url));
 
 	if (url->hostlen <= 0) {
-		return FALSE;
+		return;
 	}
 
 	if (surbl_module_ctx->use_redirector) {
@@ -1095,7 +1095,7 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 							param->suffix,
 							red_domain,
 							param->tree);
-						return FALSE;
+						return;
 					}
 				}
 			}
@@ -1107,8 +1107,6 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 		make_surbl_requests (url, param->task, param->suffix, FALSE,
 			param->tree);
 	}
-
-	return FALSE;
 }
 
 static void
@@ -1119,108 +1117,9 @@ surbl_test_url (struct rspamd_task *task, void *user_data)
 
 	param.task = task;
 	param.suffix = suffix;
-	param.tree = g_tree_new ((GCompareFunc)strcmp);
+	param.tree = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	rspamd_mempool_add_destructor (task->task_pool,
-		(rspamd_mempool_destruct_t)g_tree_destroy,
+		(rspamd_mempool_destruct_t)g_hash_table_unref,
 		param.tree);
-	g_tree_foreach (task->urls, surbl_tree_url_callback, &param);
+	g_hash_table_foreach (task->urls, surbl_tree_url_callback, &param);
 }
-/*
- * Handlers of URLS command
- */
-#if 0
-struct urls_tree_cb_data {
-	gchar *buf;
-	gsize len;
-	gsize off;
-	struct rspamd_task *task;
-};
-
-static gboolean
-calculate_buflen_cb (gpointer key, gpointer value, gpointer cbdata)
-{
-	struct urls_tree_cb_data *cb = cbdata;
-	struct rspamd_url *url = value;
-
-	cb->len += strlen (struri (url)) + url->hostlen + sizeof (" <\"\">, ") - 1;
-
-	return FALSE;
-}
-
-static gboolean
-write_urls_buffer (gpointer key, gpointer value, gpointer cbdata)
-{
-	struct urls_tree_cb_data *cb = cbdata;
-	struct rspamd_url *url = value;
-	rspamd_fstring_t f;
-	gchar *urlstr;
-	gsize len;
-
-	f.begin = url->host;
-	f.len = url->hostlen;
-	if ((urlstr =
-		format_surbl_request (cb->task->task_pool, &f, NULL, FALSE, NULL,
-		FALSE)) != NULL) {
-		len = strlen (urlstr);
-		if (cb->off + len >= cb->len) {
-			msg_info (
-				"cannot write urls header completely, stripped reply at: %z",
-				cb->off);
-			return TRUE;
-		}
-		else {
-			cb->off += rspamd_snprintf (cb->buf + cb->off,
-					cb->len - cb->off,
-					" %s <\"%s\">,",
-					urlstr,
-					struri (url));
-		}
-	}
-
-	return FALSE;
-}
-
-
-static gboolean
-urls_command_handler (struct rspamd_task *task)
-{
-	struct urls_tree_cb_data cb;
-
-	/* First calculate buffer length */
-	cb.len = sizeof (RSPAMD_REPLY_BANNER "/1.0 0 " SPAMD_OK CRLF "Urls: " CRLF);
-	cb.off = 0;
-	g_tree_foreach (task->urls, calculate_buflen_cb, &cb);
-
-	cb.buf = rspamd_mempool_alloc (task->task_pool, cb.len * sizeof (gchar));
-	cb.off += rspamd_snprintf (cb.buf + cb.off,
-			cb.len - cb.off,
-			"%s/%s 0 %s" CRLF "Urls:",
-			(task->proto == SPAMC_PROTO) ? SPAMD_REPLY_BANNER : RSPAMD_REPLY_BANNER,
-			"1.3",
-			SPAMD_OK);
-	cb.task = task;
-
-	/* Write urls to buffer */
-	g_tree_foreach (task->urls, write_urls_buffer, &cb);
-
-	/* Strip last ',' */
-	if (cb.buf[cb.off - 1] == ',') {
-		cb.buf[--cb.off] = '\0';
-	}
-	/* Write result */
-	if (!rspamd_dispatcher_write (task->dispatcher, cb.buf, cb.off, FALSE,
-		TRUE)) {
-		return FALSE;
-	}
-	if (!rspamd_dispatcher_write (task->dispatcher, CRLF, sizeof (CRLF) - 1,
-		FALSE, TRUE)) {
-		return FALSE;
-	}
-	task->state = STATE_REPLY;
-
-	return TRUE;
-}
-#endif
-/*
- * vi:ts=4
- */

@@ -813,7 +813,7 @@ struct lua_tree_cb_data {
 	int i;
 };
 
-static gboolean
+static void
 lua_tree_url_callback (gpointer key, gpointer value, gpointer ud)
 {
 	struct rspamd_url **purl;
@@ -823,8 +823,6 @@ lua_tree_url_callback (gpointer key, gpointer value, gpointer ud)
 	rspamd_lua_setclass (cb->L, "rspamd{url}", -1);
 	*purl = value;
 	lua_rawseti (cb->L, -2, cb->i++);
-
-	return FALSE;
 }
 
 static gint
@@ -837,7 +835,7 @@ lua_task_get_urls (lua_State * L)
 		lua_newtable (L);
 		cb.i = 1;
 		cb.L = L;
-		g_tree_foreach (task->urls, lua_tree_url_callback, &cb);
+		g_hash_table_foreach (task->urls, lua_tree_url_callback, &cb);
 		return 1;
 	}
 
@@ -874,7 +872,7 @@ lua_task_get_emails (lua_State * L)
 		lua_newtable (L);
 		cb.i = 1;
 		cb.L = L;
-		g_tree_foreach (task->emails, lua_tree_url_callback, &cb);
+		g_hash_table_foreach (task->emails, lua_tree_url_callback, &cb);
 		return 1;
 	}
 

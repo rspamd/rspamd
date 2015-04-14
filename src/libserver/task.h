@@ -118,8 +118,8 @@ struct rspamd_task {
 	GList *text_parts;                                          /**< list of text parts								*/
 	gchar *raw_headers_str;                                     /**< list of raw headers							*/
 	GList *received;                                            /**< list of received headers						*/
-	GTree *urls;                                                /**< list of parsed urls							*/
-	GTree *emails;                                              /**< list of parsed emails							*/
+	GHashTable *urls;                                           /**< list of parsed urls							*/
+	GHashTable *emails;                                         /**< list of parsed emails							*/
 	GList *images;                                              /**< list of images									*/
 	GHashTable *raw_headers;                                    /**< list of raw headers							*/
 	GHashTable *results;                                        /**< hash table of metric_result indexed by

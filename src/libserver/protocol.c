@@ -607,7 +607,7 @@ struct tree_cb_data {
 /*
  * Callback for writing urls
  */
-static gboolean
+static void
 urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 {
 	struct tree_cb_data *cb = ud;
@@ -646,12 +646,10 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 			rspamd_inet_address_to_string (cb->task->from_addr),
 			struri (url));
 	}
-
-	return FALSE;
 }
 
 static ucl_object_t *
-rspamd_urls_tree_ucl (GTree *input, struct rspamd_task *task)
+rspamd_urls_tree_ucl (GHashTable *input, struct rspamd_task *task)
 {
 	struct tree_cb_data cb;
 	ucl_object_t *obj;
@@ -660,12 +658,12 @@ rspamd_urls_tree_ucl (GTree *input, struct rspamd_task *task)
 	cb.top = obj;
 	cb.task = task;
 
-	g_tree_foreach (input, urls_protocol_cb, &cb);
+	g_hash_table_foreach (input, urls_protocol_cb, &cb);
 
 	return obj;
 }
 
-static gboolean
+static void
 emails_protocol_cb (gpointer key, gpointer value, gpointer ud)
 {
 	struct tree_cb_data *cb = ud;
@@ -674,12 +672,10 @@ emails_protocol_cb (gpointer key, gpointer value, gpointer ud)
 
 	obj = ucl_object_fromlstring (url->user, url->userlen + url->hostlen + 1);
 	ucl_array_append (cb->top, obj);
-
-	return FALSE;
 }
 
 static ucl_object_t *
-rspamd_emails_tree_ucl (GTree *input, struct rspamd_task *task)
+rspamd_emails_tree_ucl (GHashTable *input, struct rspamd_task *task)
 {
 	struct tree_cb_data cb;
 	ucl_object_t *obj;
@@ -688,7 +684,7 @@ rspamd_emails_tree_ucl (GTree *input, struct rspamd_task *task)
 	cb.top = obj;
 	cb.task = task;
 
-	g_tree_foreach (input, emails_protocol_cb, &cb);
+	g_hash_table_foreach (input, emails_protocol_cb, &cb);
 
 	return obj;
 }
@@ -1009,11 +1005,11 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 		ucl_object_insert_key (top, rspamd_str_list_ucl (
 				task->messages), "messages", 0, false);
 	}
-	if (g_tree_nnodes (task->urls) > 0) {
+	if (g_hash_table_size (task->urls) > 0) {
 		ucl_object_insert_key (top, rspamd_urls_tree_ucl (task->urls,
 			task), "urls", 0, false);
 	}
-	if (g_tree_nnodes (task->emails) > 0) {
+	if (g_hash_table_size (task->emails) > 0) {
 		ucl_object_insert_key (top, rspamd_emails_tree_ucl (task->emails, task),
 			"emails", 0, false);
 	}

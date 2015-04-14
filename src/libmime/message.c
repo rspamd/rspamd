@@ -1718,8 +1718,8 @@ process_message (struct rspamd_task *task)
 
 					if ((rc == URI_ERRNO_OK) && subject_url->hostlen > 0) {
 						if (subject_url->protocol != PROTOCOL_MAILTO) {
-							if (!g_tree_lookup (task->urls, subject_url)) {
-								g_tree_insert (task->urls,
+							if (!g_hash_table_lookup (task->urls, subject_url)) {
+								g_hash_table_insert (task->urls,
 										subject_url,
 										subject_url);
 							}

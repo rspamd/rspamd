@@ -737,23 +737,24 @@ struct url_regexp_param {
 	gboolean found;
 };
 
-static gboolean
+static void
 tree_url_callback (gpointer key, gpointer value, void *data)
 {
 	struct url_regexp_param *param = data;
 	struct rspamd_url *url = value;
 
+	if (param->found) {
+		return;
+	}
+
 	if (rspamd_mime_regexp_element_process (param->task, param->re,
 			struri (url), 0, FALSE)) {
 		param->found = TRUE;
-		return TRUE;
 	}
 	else if (G_UNLIKELY (param->re->is_test)) {
 		msg_info ("process test regexp %s for url %s returned FALSE",
 			struri (url));
 	}
-
-	return FALSE;
 }
 
 static gint
@@ -911,10 +912,10 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 		callback_param.re = re;
 		callback_param.found = FALSE;
 		if (task->urls) {
-			g_tree_foreach (task->urls, tree_url_callback, &callback_param);
+			g_hash_table_foreach (task->urls, tree_url_callback, &callback_param);
 		}
 		if (task->emails && callback_param.found == FALSE) {
-			g_tree_foreach (task->emails, tree_url_callback, &callback_param);
+			g_hash_table_foreach (task->emails, tree_url_callback, &callback_param);
 		}
 		if (callback_param.found == FALSE) {
 			rspamd_task_re_cache_add (task, re->regexp_text, 0);
