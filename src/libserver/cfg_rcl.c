@@ -530,7 +530,7 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 	/* Handle grouped symbols */
 	val = ucl_object_find_key (obj, "group");
-	if (ucl_object_type (val) == UCL_OBJECT) {
+	if (val != NULL && ucl_object_type (val) == UCL_OBJECT) {
 		it = NULL;
 		while ((cur = ucl_iterate_object (val, &it, false))) {
 			if (ucl_object_type (cur) == UCL_OBJECT) {
