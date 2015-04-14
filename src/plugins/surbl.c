@@ -110,8 +110,8 @@ exception_insert (gpointer st, gconstpointer key, gpointer value)
 	val->begin = (gchar *)key;
 	val->len = strlen (key);
 	if (t[level] == NULL) {
-		t[level] = g_hash_table_new_full (rspamd_fstring_hash,
-				rspamd_fstring_equal,
+		t[level] = g_hash_table_new_full (rspamd_fstring_icase_hash,
+				rspamd_fstring_icase_equal,
 				g_free,
 				NULL);
 	}

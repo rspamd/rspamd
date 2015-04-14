@@ -1258,31 +1258,54 @@ rspamd_strcase_equal (gconstpointer v, gconstpointer v2)
 	return FALSE;
 }
 
+static guint
+rspamd_icase_hash (const gchar *in, gsize len)
+{
+	guint leftover = len % 8;
+	guint fp, i;
+	const uint8_t* s = (const uint8_t*) in;
+	union {
+		guchar c1, c2, c3, c4;
+		guint32 pp;
+	} u;
+	XXH64_state_t st;
+
+	fp = len - leftover;
+	XXH64_reset (&st, 0xdeadbabe);
+
+	for (i = 0; i != fp; i += 4) {
+		u.c1 = s[i], u.c2 = s[i + 1], u.c3 = s[i + 2], u.c4 = s[i + 3];
+		u.c1 = lc_map[u.c1];
+		u.c2 = lc_map[u.c2];
+		u.c3 = lc_map[u.c3];
+		u.c4 = lc_map[u.c4];
+		XXH64_update (&st, &u.pp, sizeof (u));
+	}
+
+	u.pp = 0;
+	switch (leftover) {
+	case 3:
+		u.c3 = lc_map[(guchar)s[i++]];
+	case 2:
+		u.c2 = lc_map[(guchar)s[i++]];
+	case 1:
+		u.c1 = lc_map[(guchar)s[i]];
+		XXH64_update (&st, &u.pp, sizeof (u));
+		break;
+	}
+
+	return XXH64_digest (&st);
+}
 
 guint
 rspamd_strcase_hash (gconstpointer key)
 {
 	const gchar *p = key;
-	gchar buf[256];
-	guint i = 0;
-	gpointer xxh;
+	gsize len;
 
-	xxh = XXH32_init (0);
-	while (*p != '\0') {
-		buf[i] = g_ascii_tolower (*p);
-		i++;
-		p++;
-		if (i == sizeof (buf)) {
-			XXH32_update (xxh, buf, i);
-			i = 0;
-		}
-	}
+	len = strlen (p);
 
-	if (i > 0) {
-		XXH32_update (xxh, buf, i);
-	}
-
-	return XXH32_digest (xxh);
+	return rspamd_icase_hash (p, len);
 }
 
 guint
@@ -1292,7 +1315,7 @@ rspamd_str_hash (gconstpointer key)
 
 	len = strlen ((const gchar *)key);
 
-	return XXH32 (key, len, 0);
+	return XXH64 (key, len, 0xdeadbabe);
 }
 
 gboolean
@@ -1302,7 +1325,7 @@ rspamd_str_equal (gconstpointer v, gconstpointer v2)
 }
 
 gboolean
-rspamd_fstring_equal (gconstpointer v, gconstpointer v2)
+rspamd_fstring_icase_equal (gconstpointer v, gconstpointer v2)
 {
 	const rspamd_fstring_t *f1 = v, *f2 = v2;
 	if (f1->len == f2->len &&
@@ -1315,31 +1338,11 @@ rspamd_fstring_equal (gconstpointer v, gconstpointer v2)
 
 
 guint
-rspamd_fstring_hash (gconstpointer key)
+rspamd_fstring_icase_hash (gconstpointer key)
 {
 	const rspamd_fstring_t *f = key;
-	const gchar *p;
-	guint i = 0;
-	gchar buf[256];
-	gpointer xxh;
 
-	xxh = XXH32_init (0);
-	p = f->begin;
-	while (p - f->begin < (gint)f->len) {
-		buf[i] = g_ascii_tolower (*p);
-		i++;
-		p++;
-		if (i == sizeof (buf)) {
-			XXH32_update (xxh, buf, i);
-			i = 0;
-		}
-	}
-
-	if (i > 0) {
-		XXH32_update (xxh, buf, i);
-	}
-
-	return XXH32_digest (xxh);
+	return rspamd_icase_hash (f->begin, f->len);
 }
 
 void
