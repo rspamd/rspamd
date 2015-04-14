@@ -333,6 +333,9 @@ rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
 	sym_def->description = (gchar *)description;
 	sym_def->one_shot = one_shot;
 
+	msg_debug ("registered symbol %s with weight %.2f in metric %s and group %s",
+			sym_def->name, symbol_score, metric->name, group);
+
 	g_hash_table_insert (metric->symbols, sym_def->name, sym_def);
 
 	if ((metric_list =
@@ -362,6 +365,8 @@ rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
 		g_hash_table_insert (cfg->symbols_groups, sym_group->name, sym_group);
 	}
 
+	sym_def->gr = sym_group;
+
 	LL_PREPEND (sym_group->symbols, sym_def);
 
 	return TRUE;
@@ -384,7 +389,7 @@ rspamd_rcl_symbols_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 		it = NULL;
 		while ((cur = ucl_iterate_object (val, &it, true)) != NULL) {
-			if (!rspamd_rcl_insert_symbol (cfg, metric, cur, NULL, FALSE, err)) {
+			if (!rspamd_rcl_insert_symbol (cfg, metric, cur, group, FALSE, err)) {
 				return FALSE;
 			}
 		}
@@ -403,7 +408,7 @@ rspamd_rcl_symbols_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 			it = NULL;
 			while ((cur = ucl_iterate_object (val, &it, false)) != NULL) {
-				if (!rspamd_rcl_insert_symbol (cfg, metric, cur, NULL, TRUE, err)) {
+				if (!rspamd_rcl_insert_symbol (cfg, metric, cur, group, TRUE, err)) {
 					return FALSE;
 				}
 			}
