@@ -102,11 +102,11 @@ rspamd_regexp_dtor (rspamd_regexp_t *re)
 		if (re->raw_re) {
 			pcre_free (re->raw_re);
 #ifdef HAVE_PCRE_JIT
-			if (re->extra) {
-				pcre_free_study (re->extra);
+			if (re->raw_extra) {
+				pcre_free_study (re->raw_extra);
 			}
-			if (re->jstack) {
-				pcre_jit_stack_free (re->jstack);
+			if (re->raw_jstack) {
+				pcre_jit_stack_free (re->raw_jstack);
 			}
 #else
 			pcre_free (re->raw_extra);
