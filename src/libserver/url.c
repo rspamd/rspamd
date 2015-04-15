@@ -877,6 +877,50 @@ out:
 
 #undef SET_U
 
+static gint
+rspamd_tld_trie_callback (int strnum, int textpos, void *context)
+{
+	struct url_matcher *matcher;
+	const gchar *start, *pos, *p;
+	struct rspamd_url *url = context;
+	ac_trie_pat_t *pat;
+	gint ndots = 1;
+
+	matcher = &g_array_index (url_scanner->matchers, struct url_matcher, strnum);
+	pat = &g_array_index (url_scanner->patterns, ac_trie_pat_t, strnum);
+
+	if (matcher->flags & URL_FLAG_STAR_MATCH) {
+		/* Skip one more tld component */
+		ndots = 2;
+	}
+
+	pos = url->host + textpos;
+	start = url->host;
+
+	if (*pos != '.' || pos + pat->len != url->host + url->hostlen) {
+		/* Something weird has been found */
+		return 0;
+	}
+
+	/* Now we need to find top level domain */
+	p = pos - 1;
+	while (p >= start && ndots > 0) {
+		if (*p == '.') {
+			ndots --;
+			pos = p + 1;
+		}
+
+		p --;
+	}
+
+	if (ndots == 0) {
+		url->tld = (gchar *)pos;
+		url->tldlen = url->host + url->hostlen - pos;
+	}
+
+	return 1;
+}
+
 enum uri_errno
 rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 		rspamd_mempool_t *pool)
@@ -885,6 +929,7 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	gchar *p, *comp;
 	const gchar *end;
 	guint i, complen, ret;
+	gint state = 0;
 
 	const struct {
 		enum rspamd_url_protocol proto;
@@ -1011,6 +1056,10 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 			}
 		}
 	}
+
+	/* Find TLD part */
+	acism_lookup (url_scanner->search_trie, uri->host, uri->hostlen,
+			rspamd_tld_trie_callback, uri, &state, true);
 
 	if (uri->protocol == PROTOCOL_UNKNOWN) {
 		return URI_ERRNO_INVALID_PROTOCOL;

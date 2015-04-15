@@ -20,6 +20,7 @@ struct rspamd_url {
 	gchar *query;
 	gchar *fragment;
 	gchar *surbl;
+	gchar *tld;
 
 	struct rspamd_url *phished_url;
 
@@ -31,7 +32,7 @@ struct rspamd_url {
 	guint querylen;
 	guint fragmentlen;
 	guint surbllen;
-
+	guint tldlen;
 	guint urllen;
 
 	gboolean is_phished; /* URI maybe phishing */
