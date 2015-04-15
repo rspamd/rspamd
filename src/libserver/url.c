@@ -953,7 +953,8 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 		/* We have extra data at the end of uri, so we are ignoring it for now */
 		p = rspamd_mempool_alloc (pool, end - uristring + 1);
 		rspamd_strlcpy (p, uristring, end - uristring + 1);
-		len = end - uristring ;
+		len = end - uristring;
+		uri->urllen = len;
 	}
 
 	for (i = 0; i < UF_MAX; i ++) {

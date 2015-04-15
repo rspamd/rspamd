@@ -12,8 +12,6 @@ struct rspamd_url {
 	gchar *string;
 	gint protocol;
 
-	gint ip_family;
-
 	gchar *user;
 	gchar *password;
 	gchar *host;
@@ -21,7 +19,6 @@ struct rspamd_url {
 	gchar *data;
 	gchar *query;
 	gchar *fragment;
-	gchar *post;
 	gchar *surbl;
 
 	struct rspamd_url *phished_url;
@@ -30,15 +27,13 @@ struct rspamd_url {
 	guint userlen;
 	guint passwordlen;
 	guint hostlen;
-	guint portlen;
 	guint datalen;
 	guint querylen;
 	guint fragmentlen;
 	guint surbllen;
 
-	/* Flags */
-	gboolean ipv6;  /* URI contains IPv6 host */
-	gboolean form;  /* URI originated from form */
+	guint urllen;
+
 	gboolean is_phished; /* URI maybe phishing */
 };
 
