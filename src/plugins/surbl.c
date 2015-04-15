@@ -582,7 +582,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 	gchar *result = NULL, *dots[MAX_LEVELS],
 		num_buf[sizeof("18446744073709551616")], *p;
 	gint len, slen, r, i, dots_num = 0, level = MAX_LEVELS;
-	gboolean is_numeric = TRUE;
+	gboolean is_numeric = TRUE, found_exception = FALSE;
 	guint64 ip_num;
 	rspamd_fstring_t f;
 
@@ -675,38 +675,47 @@ format_surbl_request (rspamd_mempool_t * pool,
 						(dots[dots_num - i - 1] - hostname->begin + 1);
 					if (g_hash_table_lookup (t, &f) != NULL) {
 						level = dots_num - i - 1;
+						found_exception = TRUE;
 						break;
 					}
 				}
 			}
 		}
-		if (level != MAX_LEVELS) {
-			if (level == 0) {
-				r = rspamd_snprintf (result,
-						len,
-						"%*s",
-						(gint)hostname->len,
-						hostname->begin);
+
+		if (found_exception || url->tldlen == 0) {
+			if (level != MAX_LEVELS) {
+				if (level == 0) {
+					r = rspamd_snprintf (result,
+							len,
+							"%V",
+							hostname);
+				}
+				else {
+					r = rspamd_snprintf (result, len, "%*s",
+							(gint)(hostname->len -
+									(dots[level - 1] - hostname->begin + 1)),
+									dots[level - 1] + 1);
+				}
 			}
-			else {
+			else if (dots_num >= 2) {
 				r = rspamd_snprintf (result, len, "%*s",
 						(gint)(hostname->len -
-						(dots[level - 1] - hostname->begin + 1)),
-						dots[level - 1] + 1);
+								(dots[dots_num - 2] - hostname->begin + 1)),
+								dots[dots_num - 2] + 1);
 			}
-		}
-		else if (dots_num >= 2) {
-			r = rspamd_snprintf (result, len, "%*s",
-					(gint)(hostname->len -
-					(dots[dots_num - 2] - hostname->begin + 1)),
-					dots[dots_num - 2] + 1);
+			else {
+				r = rspamd_snprintf (result,
+						len,
+						"%V",
+						hostname);
+			}
 		}
 		else {
 			r = rspamd_snprintf (result,
-					len,
-					"%*s",
-					(gint)hostname->len,
-					hostname->begin);
+						len,
+						"%*s",
+						url->tldlen,
+						url->tld);
 		}
 	}
 
