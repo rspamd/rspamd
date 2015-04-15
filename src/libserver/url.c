@@ -999,7 +999,6 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 		p = rspamd_mempool_alloc (pool, end - uristring + 1);
 		rspamd_strlcpy (p, uristring, end - uristring + 1);
 		len = end - uristring;
-		uri->urllen = len;
 	}
 
 	for (i = 0; i < UF_MAX; i ++) {
@@ -1042,6 +1041,7 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 
 	/* Now decode url symbols */
 	uri->string = p;
+	uri->urllen = len;
 	rspamd_unescape_uri (uri->string, uri->string, len);
 	rspamd_str_lc (uri->string, uri->protocollen);
 	rspamd_str_lc_utf8 (uri->host,   uri->hostlen);
