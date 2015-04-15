@@ -894,16 +894,17 @@ rspamd_tld_trie_callback (int strnum, int textpos, void *context)
 		ndots = 2;
 	}
 
-	pos = url->host + textpos;
+	pos = url->host + textpos - pat->len;
 	start = url->host;
 
-	if (*pos != '.' || pos + pat->len != url->host + url->hostlen) {
+	if (*pos != '.' || textpos != (gint)url->hostlen) {
 		/* Something weird has been found */
 		return 0;
 	}
 
 	/* Now we need to find top level domain */
 	p = pos - 1;
+	pos = start;
 	while (p >= start && ndots > 0) {
 		if (*p == '.') {
 			ndots --;
@@ -913,7 +914,7 @@ rspamd_tld_trie_callback (int strnum, int textpos, void *context)
 		p --;
 	}
 
-	if (ndots == 0) {
+	if (ndots == 0 || p == start - 1) {
 		url->tld = (gchar *)pos;
 		url->tldlen = url->host + url->hostlen - pos;
 	}
