@@ -30,7 +30,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 local rspamd_regexp = require "rspamd_regexp"
 local rspamd_logger = require "rspamd_logger"
 local rspamd_redis = require "rspamd_redis"
+local rspamd_url = require "rspamd_url"
 local upstream_list = require "rspamd_upstream_list"
+
 --local dumper = require 'pl.pretty'.dump
 
 local symbols = {
@@ -191,10 +193,12 @@ local function dmarc_callback(task)
   end
   
   if from and from[1]['domain'] and not from[2] then
-    -- XXX: use tld list here and generate top level domain
-    local dmarc_domain = '_dmarc.' .. from[1]['domain']
-    task:get_resolver():resolve_txt(task:get_session(), task:get_mempool(),
-      dmarc_domain, dmarc_dns_cb)
+    local url_from = rspamd_url.create(task:get_mempool(), from[1]['domain'])
+    if url_from then
+      local dmarc_domain = '_dmarc.' .. url_from:get_tld()
+      task:get_resolver():resolve_txt(task:get_session(), task:get_mempool(),
+        dmarc_domain, dmarc_dns_cb)
+    end
   end
 end
 
