@@ -29,6 +29,8 @@ LUA_FUNCTION_DEF (url, get_host);
 LUA_FUNCTION_DEF (url, get_user);
 LUA_FUNCTION_DEF (url, get_path);
 LUA_FUNCTION_DEF (url, get_text);
+LUA_FUNCTION_DEF (url, get_tld);
+LUA_FUNCTION_DEF (url, to_table);
 LUA_FUNCTION_DEF (url, is_phished);
 LUA_FUNCTION_DEF (url, get_phished);
 LUA_FUNCTION_DEF (url, create);
@@ -39,6 +41,8 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF (url, get_user),
 	LUA_INTERFACE_DEF (url, get_path),
 	LUA_INTERFACE_DEF (url, get_text),
+	LUA_INTERFACE_DEF (url, get_tld),
+	LUA_INTERFACE_DEF (url, to_table),
 	LUA_INTERFACE_DEF (url, is_phished),
 	LUA_INTERFACE_DEF (url, get_phished),
 	{"__tostring", lua_url_get_text},
@@ -107,7 +111,7 @@ lua_url_get_path (lua_State *L)
 {
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
-	if (url != NULL) {
+	if (url != NULL && url->url->datalen > 0) {
 		lua_pushlstring (L, url->url->data, url->url->datalen);
 	}
 	else {
@@ -163,6 +167,90 @@ lua_url_get_phished (lua_State *L)
 	}
 
 	lua_pushnil (L);
+	return 1;
+}
+
+static gint
+lua_url_get_tld (lua_State *L)
+{
+	struct rspamd_lua_url *url = lua_check_url (L, 1);
+
+	if (url != NULL && url->url->tldlen > 0) {
+		lua_pushlstring (L, url->url->tld, url->url->tldlen);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_url_to_table (lua_State *L)
+{
+	struct rspamd_lua_url *url = lua_check_url (L, 1);
+	struct rspamd_url *u;
+
+	if (url != NULL) {
+		u = url->url;
+		lua_newtable (L);
+		lua_pushstring (L, "url");
+		lua_pushlstring (L, u->string, u->urllen);
+		lua_settable (L, -3);
+
+		if (u->hostlen > 0) {
+			lua_pushstring (L, "host");
+			lua_pushlstring (L, u->host, u->hostlen);
+			lua_settable (L, -3);
+		}
+
+		if (u->tldlen > 0) {
+			lua_pushstring (L, "tld");
+			lua_pushlstring (L, u->tld, u->tldlen);
+			lua_settable (L, -3);
+		}
+
+		if (u->userlen > 0) {
+			lua_pushstring (L, "user");
+			lua_pushlstring (L, u->user, u->userlen);
+			lua_settable (L, -3);
+		}
+
+		if (u->hostlen > 0) {
+			lua_pushstring (L, "path");
+			lua_pushlstring (L, u->data, u->datalen);
+			lua_settable (L, -3);
+		}
+
+		lua_pushstring (L, "protocol");
+
+		switch (u->protocol) {
+		case PROTOCOL_FILE:
+			lua_pushstring (L, "file");
+			break;
+		case PROTOCOL_FTP:
+			lua_pushstring (L, "ftp");
+			break;
+		case PROTOCOL_HTTP:
+			lua_pushstring (L, "http");
+			break;
+		case PROTOCOL_HTTPS:
+			lua_pushstring (L, "https");
+			break;
+		case PROTOCOL_MAILTO:
+			lua_pushstring (L, "mailto");
+			break;
+		case PROTOCOL_UNKNOWN:
+		default:
+			lua_pushstring (L, "unknown");
+			break;
+		}
+		lua_settable (L, -3);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
 	return 1;
 }
 
