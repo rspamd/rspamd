@@ -13,7 +13,7 @@ rspamc.1: rspamc.1.md
 	$(PANDOC) -s -f markdown -t man -o rspamc.1 rspamc.1.md 
 	
 lua-doc: lua_regexp lua_ip lua_config lua_task lua_ucl lua_http lua_trie \
-	lua_dns lua_redis lua_upstream lua_expression lua_mimepart lua_logger
+	lua_dns lua_redis lua_upstream lua_expression lua_mimepart lua_logger lua_url
 
 lua_regexp: ../src/lua/lua_regexp.c
 	$(LUADOC) < ../src/lua/lua_regexp.c > markdown/lua/regexp.md
