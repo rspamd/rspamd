@@ -41,3 +41,5 @@ lua_mimepart: ../src/lua/lua_mimepart.c
 	$(LUADOC) < ../src/lua/lua_mimepart.c > markdown/lua/mimepart.md
 lua_logger: ../src/lua/lua_logger.c
 	$(LUADOC) < ../src/lua/lua_logger.c > markdown/lua/logger.md
+lua_url: ../src/lua/lua_url.c
+	$(LUADOC) < ../src/lua/lua_url.c > markdown/lua/url.md

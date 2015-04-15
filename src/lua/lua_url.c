@@ -23,6 +23,28 @@
 
 #include "lua_common.h"
 
+/***
+ * @module rspamd_url
+ * This module provides routines to handle URL's and extract URL's from the text.
+ * Objects of this class are returned, for example, by `task:get_urls()` or `task:get_emails()`.
+ * You can also create `rspamd_url` from any text.
+ * @example
+local url = require "rspamd_url"
+local pool = mpool.create()
+local res = url.create(pool, 'Look at: http://user@test.example.com/test?query")
+local t = res:to_table()
+-- Content of t:
+-- url = ['http://test.example.com/test?query']
+-- host = ['test.example.com']
+-- user = ['user']
+-- path = ['test']
+-- tld = ['example.com']
+
+pool:destroy() -- res is destroyed here, so you should not use it afterwards
+
+local mistake = res:to_table() -- INVALID! as pool is destroyed
+ */
+
 /* URL methods */
 LUA_FUNCTION_DEF (url, get_length);
 LUA_FUNCTION_DEF (url, get_host);
@@ -63,6 +85,11 @@ lua_check_url (lua_State * L, gint pos)
 }
 
 
+/***
+ * @method url:get_length()
+ * Get length of the url
+ * @return {number} length of url in bytes
+ */
 static gint
 lua_url_get_length (lua_State *L)
 {
@@ -77,6 +104,11 @@ lua_url_get_length (lua_State *L)
 	return 1;
 }
 
+/***
+ * @method url:get_host()
+ * Get domain part of the url
+ * @return {string} domain part of URL
+ */
 static gint
 lua_url_get_host (lua_State *L)
 {
@@ -91,6 +123,11 @@ lua_url_get_host (lua_State *L)
 	return 1;
 }
 
+/***
+ * @method url:get_user()
+ * Get user part of the url (e.g. username in email)
+ * @return {string} user part of URL
+ */
 static gint
 lua_url_get_user (lua_State *L)
 {
@@ -106,6 +143,11 @@ lua_url_get_user (lua_State *L)
 	return 1;
 }
 
+/***
+ * @method url:get_path()
+ * Get path of the url
+ * @return {string} path part of URL
+ */
 static gint
 lua_url_get_path (lua_State *L)
 {
@@ -121,6 +163,11 @@ lua_url_get_path (lua_State *L)
 	return 1;
 }
 
+/***
+ * @method url:get_text()
+ * Get full content of the url
+ * @return {string} url string
+ */
 static gint
 lua_url_get_text (lua_State *L)
 {
@@ -136,6 +183,11 @@ lua_url_get_text (lua_State *L)
 	return 1;
 }
 
+/***
+ * @method url:is_phished()
+ * Check whether URL is treated as phished
+ * @return {boolean} `true` if URL is phished
+ */
 static gint
 lua_url_is_phished (lua_State *L)
 {
@@ -151,6 +203,11 @@ lua_url_is_phished (lua_State *L)
 	return 1;
 }
 
+/***
+ * @method url:get_phished()
+ * Get another URL that pretends to be this URL (e.g. used in phishing)
+ * @return {url} phished URL
+ */
 static gint
 lua_url_get_phished (lua_State *L)
 {
@@ -170,6 +227,11 @@ lua_url_get_phished (lua_State *L)
 	return 1;
 }
 
+/***
+ * @method url:get_tld()
+ * Get top level domain part of the url host
+ * @return {string} top level part of the url host
+ */
 static gint
 lua_url_get_tld (lua_State *L)
 {
@@ -185,6 +247,18 @@ lua_url_get_tld (lua_State *L)
 	return 1;
 }
 
+/***
+ * @method url:to_table()
+ * Return url as a table with the following fields:
+ *
+ * - `url`: full content
+ * - `host`: hostname part
+ * - `user`: user part
+ * - `path`: path part
+ * - `tld`: top level domain
+ * - `protocol`: url protocol
+ * @return {table} URL as a table
+ */
 static gint
 lua_url_to_table (lua_State *L)
 {
@@ -254,6 +328,12 @@ lua_url_to_table (lua_State *L)
 	return 1;
 }
 
+/***
+ * @function url.create(mempool, str)
+ * @param {rspamd_mempool} memory pool for URL, e.g. `task:get_mempool()`
+ * @param {string} text that contains URL (can also contain other stuff)
+ * @return {url} new url object that exists as long as the corresponding mempool exists
+ */
 static gint
 lua_url_create (lua_State *L)
 {
