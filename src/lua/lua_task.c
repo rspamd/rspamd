@@ -517,27 +517,6 @@ static const struct luaL_reg imagelib_m[] = {
 	{NULL, NULL}
 };
 
-/* URL methods */
-LUA_FUNCTION_DEF (url, get_length);
-LUA_FUNCTION_DEF (url, get_host);
-LUA_FUNCTION_DEF (url, get_user);
-LUA_FUNCTION_DEF (url, get_path);
-LUA_FUNCTION_DEF (url, get_text);
-LUA_FUNCTION_DEF (url, is_phished);
-LUA_FUNCTION_DEF (url, get_phished);
-
-static const struct luaL_reg urllib_m[] = {
-	LUA_INTERFACE_DEF (url, get_length),
-	LUA_INTERFACE_DEF (url, get_host),
-	LUA_INTERFACE_DEF (url, get_user),
-	LUA_INTERFACE_DEF (url, get_path),
-	LUA_INTERFACE_DEF (url, get_text),
-	LUA_INTERFACE_DEF (url, is_phished),
-	LUA_INTERFACE_DEF (url, get_phished),
-	{"__tostring", rspamd_lua_class_tostring},
-	{NULL, NULL}
-};
-
 /* Blob methods */
 LUA_FUNCTION_DEF (text, len);
 LUA_FUNCTION_DEF (text, str);
@@ -564,14 +543,6 @@ lua_check_image (lua_State * L)
 	void *ud = luaL_checkudata (L, 1, "rspamd{image}");
 	luaL_argcheck (L, ud != NULL, 1, "'image' expected");
 	return ud ? *((struct rspamd_image **)ud) : NULL;
-}
-
-static struct rspamd_url *
-lua_check_url (lua_State * L)
-{
-	void *ud = luaL_checkudata (L, 1, "rspamd{url}");
-	luaL_argcheck (L, ud != NULL, 1, "'url' expected");
-	return ud ? *((struct rspamd_url **)ud) : NULL;
 }
 
 struct rspamd_lua_text *
@@ -817,12 +788,12 @@ struct lua_tree_cb_data {
 static void
 lua_tree_url_callback (gpointer key, gpointer value, gpointer ud)
 {
-	struct rspamd_url **purl;
+	struct rspamd_lua_url *url;
 	struct lua_tree_cb_data *cb = ud;
 
-	purl = lua_newuserdata (cb->L, sizeof (struct rspamd_url *));
+	url = lua_newuserdata (cb->L, sizeof (struct rspamd_lua_url));
 	rspamd_lua_setclass (cb->L, "rspamd{url}", -1);
-	*purl = value;
+	url->url = value;
 	lua_rawseti (cb->L, -2, cb->i++);
 }
 
@@ -1980,114 +1951,6 @@ lua_image_get_filename (lua_State *L)
 	return 1;
 }
 
-/* URL part */
-static gint
-lua_url_get_length (lua_State *L)
-{
-	struct rspamd_url *url = lua_check_url (L);
-
-	if (url != NULL) {
-		lua_pushinteger (L, strlen (struri (url)));
-	}
-	else {
-		lua_pushnil (L);
-	}
-	return 1;
-}
-
-static gint
-lua_url_get_host (lua_State *L)
-{
-	struct rspamd_url *url = lua_check_url (L);
-
-	if (url != NULL) {
-		lua_pushlstring (L, url->host, url->hostlen);
-	}
-	else {
-		lua_pushnil (L);
-	}
-	return 1;
-}
-
-static gint
-lua_url_get_user (lua_State *L)
-{
-	struct rspamd_url *url = lua_check_url (L);
-
-	if (url != NULL && url->user != NULL) {
-		lua_pushlstring (L, url->user, url->userlen);
-	}
-	else {
-		lua_pushnil (L);
-	}
-
-	return 1;
-}
-
-static gint
-lua_url_get_path (lua_State *L)
-{
-	struct rspamd_url *url = lua_check_url (L);
-
-	if (url != NULL) {
-		lua_pushlstring (L, url->data, url->datalen);
-	}
-	else {
-		lua_pushnil (L);
-	}
-
-	return 1;
-}
-
-static gint
-lua_url_get_text (lua_State *L)
-{
-	struct rspamd_url *url = lua_check_url (L);
-
-	if (url != NULL) {
-		lua_pushstring (L, struri (url));
-	}
-	else {
-		lua_pushnil (L);
-	}
-
-	return 1;
-}
-
-static gint
-lua_url_is_phished (lua_State *L)
-{
-	struct rspamd_url *url = lua_check_url (L);
-
-	if (url != NULL) {
-		lua_pushboolean (L, url->is_phished);
-	}
-	else {
-		lua_pushnil (L);
-	}
-
-	return 1;
-}
-
-static gint
-lua_url_get_phished (lua_State *L)
-{
-	struct rspamd_url **purl, *url = lua_check_url (L);
-
-	if (url) {
-		if (url->is_phished && url->phished_url != NULL) {
-			purl = lua_newuserdata (L, sizeof (struct rspamd_url *));
-			rspamd_lua_setclass (L, "rspamd{url}", -1);
-			*purl = url->phished_url;
-
-			return 1;
-		}
-	}
-
-	lua_pushnil (L);
-	return 1;
-}
-
 /* Text methods */
 static gint
 lua_text_len (lua_State *L)
@@ -2143,13 +2006,6 @@ void
 luaopen_image (lua_State * L)
 {
 	rspamd_lua_new_class (L, "rspamd{image}", imagelib_m);
-	lua_pop (L, 1);                      /* remove metatable from stack */
-}
-
-void
-luaopen_url (lua_State * L)
-{
-	rspamd_lua_new_class (L, "rspamd{url}", urllib_m);
 	lua_pop (L, 1);                      /* remove metatable from stack */
 }
 

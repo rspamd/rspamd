@@ -67,6 +67,10 @@ struct rspamd_lua_text {
 	gsize len;
 };
 
+struct rspamd_lua_url {
+	struct rspamd_url *url;
+};
+
 
 /* Common utility functions */
 
