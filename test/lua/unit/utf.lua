@@ -14,7 +14,7 @@ context("UTF8 check functions", function()
     }
     
     for _,c in ipairs(cases) do
-      local buf = ffi.new("char[?]", #c[1])
+      local buf = ffi.new("char[?]", #c[1] + 1)
       ffi.copy(buf, c[1])
       ffi.C.rspamd_str_lc_utf8(buf, #c[1])
       local s = ffi.string(buf)
@@ -30,7 +30,7 @@ context("UTF8 check functions", function()
     }
     
     for _,c in ipairs(cases) do
-      local buf = ffi.new("char[?]", #c[1])
+      local buf = ffi.new("char[?]", #c[1] + 1)
       ffi.copy(buf, c[1])
       ffi.C.rspamd_str_lc(buf, #c[1])
       local s = ffi.string(buf)
