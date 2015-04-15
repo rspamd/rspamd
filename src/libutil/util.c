@@ -720,8 +720,6 @@ rspamd_str_lc (gchar *str, guint size)
 		*dest++ = lc_map[(guchar)str[i++]];
 	case 1:
 		*dest++ = lc_map[(guchar)str[i]];
-	case 0:
-		*dest = '\0';
 	}
 
 }
@@ -766,8 +764,6 @@ rspamd_str_lc_utf8 (gchar *str, guint size)
 		s = p;
 		d += r;
 	}
-
-	*d = '\0';
 }
 
 #ifndef HAVE_SETPROCTITLE
