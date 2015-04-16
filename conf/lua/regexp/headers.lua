@@ -178,7 +178,7 @@ local outlook_dollars_other = 'Message-Id=/^<?\\!\\~\\!>?/H'
 local vista_msgid = 'Message-Id=/^<?[A-F\\d]{32}\\@\\S+>?$/H'
 local ims_msgid = 'Message-Id=/^<?[A-F\\d]{36,40}\\@\\S+>?$/H'
 -- Forged outlook headers
-local forged_outlook_dollars = string.format('(%s & !%s & !%s & !%s & !%s & !%s',
+local forged_outlook_dollars = string.format('(%s & !%s & !%s & !%s & !%s & !%s)',
 					outlook_dollars_mua, oe_msgid_2, outlook_dollars_other, vista_msgid, ims_msgid, unusable_msgid)
 -- Outlook versions that should be excluded from summary rule
 local fmo_excl_o3416 = 'X-Mailer=/^Microsoft Outlook, Build 10.0.3416$/H'
