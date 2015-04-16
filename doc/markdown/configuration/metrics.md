@@ -116,7 +116,7 @@ to `spam` class. Here is an example of such a functionality:
 
 ~~~nginx
 metric {
-	name = default;
+	name = default; # This is mandatory option
 	
 	group {
 		name = "RBL group";
