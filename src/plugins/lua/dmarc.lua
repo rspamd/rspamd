@@ -48,7 +48,7 @@ local symbols = {
 local default_port = 6379
 local upstreams = nil
 local dmarc_redis_key_prefix = "dmarc_"
-
+local dmarc_domain = nil
 local elts_re = rspamd_regexp.create_cached("\\\\{0,1};\\s+")
 
 local function dmarc_report(task, spf_ok, dkim_ok)
@@ -177,7 +177,11 @@ local function dmarc_callback(task)
           if efrom[1]['domain'] == from[1]['domain'] then
             spf_ok = true
           elseif not strict_spf then
-            -- XXX: use tld list here and generate top level domain
+            if string.sub(efrom[1]['domain'],
+              -string.len('.' .. dmarc_domain))
+              == '.' .. dmarc_domain then
+                spf_ok = true
+            end
           end
       end
     end
@@ -186,7 +190,11 @@ local function dmarc_callback(task)
       if from[1]['domain'] == das[1]['options'][0] then
         dkim_ok = true
       elseif not strict_dkim then
-        -- XXX: use tld list here and generate top level domain
+        if string.sub(das[1]['options'][0],
+          -string.len('.' .. dmarc_domain))
+          == '.' .. dmarc_domain then
+            dkim_ok = true
+        end
       end
     end
 
@@ -195,17 +203,17 @@ local function dmarc_callback(task)
       res = 1.0
       if quarantine_policy then
         if not pct or pct == 100 or (math.random(100) <= pct) then
-          task:insert_result('DMARC_POLICY_QUARANTINE', res, from[1]['domain'])
+          task:insert_result('DMARC_POLICY_QUARANTINE', res, dmarc_domain)
         end
       elseif strict_policy then
         if not pct or pct == 100 or (math.random(100) <= pct) then
-          task:insert_result('DMARC_POLICY_REJECT', res, from[1]['domain'])
+          task:insert_result('DMARC_POLICY_REJECT', res, dmarc_domain)
         end
       else
-        task:insert_result('DMARC_POLICY_SOFTFAIL', res, from[1]['domain'])
+        task:insert_result('DMARC_POLICY_SOFTFAIL', res, dmarc_domain)
       end
     else
-      task:insert_result('DMARC_POLICY_ALLOW', res, from[1]['domain'])
+      task:insert_result('DMARC_POLICY_ALLOW', res, dmarc_domain)
     end
     
     if rua and not(spf_ok or dkim_ok) and upstreams then
@@ -228,9 +236,9 @@ local function dmarc_callback(task)
   if from and from[1]['domain'] and not from[2] then
     local url_from = rspamd_url.create(task:get_mempool(), from[1]['domain'])
     if url_from then
-      local dmarc_domain = '_dmarc.' .. url_from:get_tld()
+      dmarc_domain = url_from:get_tld()
       task:get_resolver():resolve_txt(task:get_session(), task:get_mempool(),
-        dmarc_domain, dmarc_dns_cb)
+        '_dmarc.' .. dmarc_domain, dmarc_dns_cb)
     end
   end
 end
