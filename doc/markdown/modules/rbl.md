@@ -77,7 +77,7 @@ Other parameters which can be set here are:
 
 - local_exclude_ip_map
 
-Can be set to a URL of a list of IPv4/IPv6 addresses & subnets not to be processed by from/received RBL checks.
+Can be set to a URL of a list of IPv4/IPv6 addresses & subnets not to be considered as local exclusions by exclude_local checks.
 
 - private_ips
 

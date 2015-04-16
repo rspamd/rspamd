@@ -49,7 +49,7 @@ local default_port = 6379
 local upstreams = nil
 local dmarc_redis_key_prefix = "dmarc_"
 
-local elts_re = rspamd_regexp.create_cached("\\\\*;\\s+")
+local elts_re = rspamd_regexp.create_cached("\\\\{0,1};\\s+")
 
 local function dmarc_report(task, spf_ok, dkim_ok)
   local ip = task:get_from_ip()
@@ -90,7 +90,7 @@ local function dmarc_callback(task)
     for _,r in ipairs(results) do
       if failed_policy then break end
       (function()
-        if(string.sub(r,1,8) ~= 'v=DMARC1') then
+        if not string.match(r, '^v=DMARC1[;\\][; ]') then
           return
         else
           if found_policy then
@@ -104,21 +104,53 @@ local function dmarc_callback(task)
 
         if elts then
           for _,e in ipairs(elts) do
-            dkim_pol = string.match(e, '^adkim=([sr])$')
-            if dkim_pol and dkim_pol == 's' then
-              strict_dkim = true
+            dkim_pol = string.match(e, '^adkim=(.)$')
+            if dkim_pol then
+              if dkim_pol == 's' then
+                strict_dkim = true
+              elseif dkim_pol ~= 'r' then
+                failed_policy = true
+                return
+              end
             end
-            spf_pol = string.match(e, '^aspf=([sr])$')
-            if spf_pol and spf_pol == 's' then
-              strict_spf = true
+            spf_pol = string.match(e, '^aspf=(.)$')
+            if spf_pol then
+              if spf_pol == 's' then
+                strict_spf = true
+              elseif spf_pol ~= 'r' then
+                failed_policy = true
+                return
+              end
             end
-            policy = string.match(e, '^p=(%a+)$')
+            policy = string.match(e, '^p=(.+)$')
             if policy then
               if (policy == 'reject') then
                 strict_policy = true
               elseif (policy == 'quarantine') then
                 strict_policy = true
                 quarantine_policy = true
+              elseif (policy ~= 'none') then
+                failed_policy = true
+              end
+            end
+            subdomain_policy = string.match(e, '^sp=(.+)$')
+            if subdomain_policy then
+              if (subdomain_policy == 'reject') then
+                if url_from:get_tld() ~= from[1]['domain'] then
+                  strict_policy = true
+                end
+              elseif (subdomain_policy == 'quarantine') then
+                if url_from:get_tld() ~= from[1]['domain'] then
+                  strict_policy = true
+                  quarantine_policy = true
+                end
+              elseif (subdomain_policy == 'none') then
+                if url_from:get_tld() ~= from[1]['domain'] then
+                  strict_policy = false
+                  quarantine_policy = false
+                end
+              else
+                failed_policy = true
               end
             end
             pct = string.match(e, '^pct=(%d+)$')
@@ -163,17 +195,17 @@ local function dmarc_callback(task)
       res = 1.0
       if quarantine_policy then
         if not pct or pct == 100 or (math.random(100) <= pct) then
-          task:insert_result('DMARC_POLICY_QUARANTINE', res)
+          task:insert_result('DMARC_POLICY_QUARANTINE', res, from[1]['domain'])
         end
       elseif strict_policy then
         if not pct or pct == 100 or (math.random(100) <= pct) then
-          task:insert_result('DMARC_POLICY_REJECT', res)
+          task:insert_result('DMARC_POLICY_REJECT', res, from[1]['domain'])
         end
       else
-        task:insert_result('DMARC_POLICY_SOFTFAIL', res)
+        task:insert_result('DMARC_POLICY_SOFTFAIL', res, from[1]['domain'])
       end
     else
-      task:insert_result('DMARC_POLICY_ALLOW', res)
+      task:insert_result('DMARC_POLICY_ALLOW', res, from[1]['domain'])
     end
     
     if rua and not(spf_ok or dkim_ok) and upstreams then
@@ -191,7 +223,8 @@ local function dmarc_callback(task)
     
     -- XXX: handle rua and push data to redis
   end
-  
+
+  -- XXX: Check for DMARC policy record at subdomain
   if from and from[1]['domain'] and not from[2] then
     local url_from = rspamd_url.create(task:get_mempool(), from[1]['domain'])
     if url_from then
