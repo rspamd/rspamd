@@ -1,14 +1,23 @@
 # Rspamd statistic settings
 
-## Table of Contents
-
-* [Options](options.md)
-* [Logging](logging.md)
-* [Metrics](metrics.md)
-* [Composites](composites.md)
-* [User settings](settings.md)
-* [Statistic configuration](statistic.md)
-* [Workers](../workers/index.md)
-* [Modules](../modules/index.md)
-
 ## Introduction
+
+~~~nginx
+classifier {
+    type = "bayes";
+    tokenizer = "osb-text";
+    metric = "default";
+    min_tokens = 10;
+    max_tokens = 1000;
+    statfile {
+        symbol = "BAYES_HAM";
+        size = 50Mb;
+        path = "$DBDIR/bayes.ham";
+    }
+    statfile {
+        symbol = "BAYES_SPAM";
+        size = 50Mb;
+        path = "$DBDIR/bayes.spam";
+    }
+}
+~~~

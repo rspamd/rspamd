@@ -4,17 +4,6 @@ Rspamd uses UCL for its configuration. UCL format is described in details in
 this [document](ucl.md). Rspamd defines several variables and macros to extend
 UCL functionality.
 
-## Table of Contents
-
-* [Options](options.md)
-* [Logging](logging.md)
-* [Metrics](metrics.md)
-* [Composites](composites.md)
-* [User settings](settings.md)
-* [Statistic configuration](statistic.md)
-* [Workers](../workers/index.md)
-* [Modules](../modules/index.md)
-
 ## Rspamd variables
 
 - *CONFDIR*: configuration directory for rspamd, it is $PREFIX/etc/rspamd/
