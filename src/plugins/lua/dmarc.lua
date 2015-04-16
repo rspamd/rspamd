@@ -131,6 +131,7 @@ local function dmarc_callback(task)
                 quarantine_policy = true
               elseif (policy ~= 'none') then
                 failed_policy = true
+                return
               end
             end
             subdomain_policy = string.match(e, '^sp=(.+)$')
@@ -151,6 +152,7 @@ local function dmarc_callback(task)
                 end
               else
                 failed_policy = true
+                return
               end
             end
             pct = string.match(e, '^pct=(%d+)$')
