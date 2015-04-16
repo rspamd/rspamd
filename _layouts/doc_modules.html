@@ -1,0 +1,56 @@
+{% include top.html %}	 
+	 <div class="container">
+
+	 <div class="row">
+	 <div class="col-sm-3">
+	 <!-- Docs navigation -->
+	 	<ul data-spy="scroll" class="nav nav-pills nav-stacked" role="navigation">
+			<li class="nav-header"><h4>Rspamd documentation</h4></li>
+			<li><a  href="/doc/index.html">Documentation index</a></li>
+			<li class="divider"></li>
+			<li class="nav-header">Rspamd modules</li>
+			<li><a  href="/doc/modules/index.html">Overview</a></li>
+			<li class="divider"></li>
+			<li class="nav-header">C (internal) modules</li>
+			<li><a  href="/doc/modules/regexp.html">Regexp</a></li>
+			<li><a  href="/doc/modules/surbl.html">Surbl</a></li>
+			<li><a  href="/doc/modules/dkim.html">DKIM</a></li>
+			<li><a  href="/doc/modules/spf.html">SPF</a></li>
+			<li><a  href="/doc/modules/fuzzy_check.html">Fuzzy check</a></li>
+			<li><a  href="/doc/modules/chartable.html">Chartable</a></li>
+			<li class="divider"></li>
+			<li class="nav-header">Lua modules</li>
+			<li><a  href="/doc/modules/multimap.html">Multimap</a></li>
+			<li><a  href="/doc/modules/rbl.html">RBL</a></li>
+			<li><a  href="/doc/modules/emails.html">Emails scan</a></li>
+			<li><a  href="/doc/modules/spamassassin.html">Spamassassin rules</a></li>
+			<li><a  href="/doc/modules/phishing.html">Phishing check</a></li>
+			<li><a  href="/doc/modules/trie.html">Trie matcher</a></li>
+			<li><a  href="/doc/modules/ratelimit.html">Ratelimit</a></li>
+			<li><a  href="/doc/modules/maillist.html">Mailing list</a></li>
+			<li><a  href="/doc/modules/once_received.html">Received policy</a></li>
+			<li><a  href="/doc/modules/dmarc.html">DMARC</a></li>
+		<!--	<li><a  href="/doc/lua/classifier.html">Lua classifier module</a></li> -->
+		</ul>
+	 </div>
+
+	 <div class="col-sm-9">
+     <div class="body-content">
+                {{ content }}
+      </div>
+	 </div>
+
+	 </div> <!-- row -->
+
+      <!-- Site footer -->
+	  <hr>
+	  <footer>
+	    <p class="pull-right"><a href="#top">Back to top</a></p> 
+		<!--
+        <p>Code licensed under the <a href="http://www.apache.org/licenses/LICENSE-2.0">Apache License v2.0</a>.</p>
+        <p>Based on <a href="http://getbootstrap.com">Bootstrap</a>. Icons from <a href="http://fortawesome.github.io/Font-Awesome/">Font Awesome</a>. Web fonts from <a href="http://www.google.com/webfonts">Google</a>.</p>
+		-->
+      </footer>
+
+    </div> <!-- /container -->
+{% include bottom.html %}
