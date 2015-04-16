@@ -29,52 +29,76 @@
 /* Textpart methods */
 /***
  * @module rspamd_textpart
- * This module provides access to text parts found in a message
+ * This module provides different methods to manipulate text parts data. Text parts
+ * could be obtained from the `rspamd_task` by using of method `task:get_text_parts()`
+@example
+rspamd_config.R_EMPTY_IMAGE = function (task)
+	parts = task:get_text_parts()
+	if parts then
+		for _,part in ipairs(parts) do
+			if part:is_empty() then
+				images = task:get_images()
+				if images then
+					return true
+				end
+				return false
+			end
+		end
+	end
+	return false
+end
  */
 
-LUA_FUNCTION_DEF (textpart, is_utf);
-
 /***
- * @method textpart:get_content()
- * Get parsed content of a part
- * @return {string} text contained in the part
+ * @method text_part:is_utf()
+ * Return TRUE if part is a valid utf text
+ * @return {boolean} true if part is valid `UTF8` part
+ */
+LUA_FUNCTION_DEF (textpart, is_utf);
+/***
+ * @method text_part:get_content()
+ * Get the text of the part
+ * @return {text} `UTF8` encoded content of the part (zero-copy if not converted to a lua string)
  */
 LUA_FUNCTION_DEF (textpart, get_content);
 /***
- * @method textpart:get_length()
- * Get length of the text inside the part
- * @return {integer} the lenght of text part in bytes
+ * @method text_part:get_length()
+ * Get length of the text of the part
+ * @return {integer} length of part in **bytes**
  */
 LUA_FUNCTION_DEF (textpart, get_length);
 /***
- * @method textpart:is_empty()
- * Check whether a part is empty
- * @return {bool} `true` if a part is empty
+ * @method text_part:is_empty()
+ * Returns `true` if the specified part is empty
+ * @return {bool} whether a part is empty
  */
 LUA_FUNCTION_DEF (textpart, is_empty);
 /***
- * @method textpart:is_html()
- * Check whether a part contains HTML
- * @return {bool} `true` if a part html part
+ * @method text_part:is_html()
+ * Returns `true` if the specified part has HTML content
+ * @return {bool} whether a part is HTML part
  */
 LUA_FUNCTION_DEF (textpart, is_html);
 /***
- * @method textpart:get_fuzzy()
- * Get fuzzy hash for a message
- * @return {string} fuzzy hash of the part
+ * @method text_part:get_fuzzy()
+ * Returns base32 encoded value of fuzzy hash of the specified part
+ * @return {string} fuzzy hash value
  */
 LUA_FUNCTION_DEF (textpart, get_fuzzy);
 /***
- * @method textpart:get_language()
- * Return short language code detected for the part
- * @return {string} language code for the part or nil if language has not been detected
+ * @method text_part:get_language()
+ * Returns the code of the most used unicode script in the text part. Does not work with raw parts
+ * @return {string} short abbreviation (such as `ru`) for the script's language
  */
 LUA_FUNCTION_DEF (textpart, get_language);
 /***
- * @method textpart:compare_distance(part)
- * Compares two parts
- * @param {textpart} another text part
- * @return {number} similarity rate from 0.0 (different parts) to 1.0 (equal parts)
+ * @method text_part:compare_distance(other)
+ * Calculates the difference to another text part.  This function is intended to work with
+ * the parts of `multipart/alternative` container only. If the two parts are not the parts of the
+ * same `multipart/alternative` container, then they are considered as unrelated and
+ * `-1` is returned.
+ * @param {text_part} other text part to compare
+ * @return {integer} commodity percentage (e.g. the same strings give `100`, different give `0` and unrelated give `-1`)
  */
 LUA_FUNCTION_DEF (textpart, compare_distance);
 
@@ -114,7 +138,7 @@ end
  */
 
 /***
- * @method mimepart:get_header(name[, case_sensitive])
+ * @method mime_part:get_header(name[, case_sensitive])
  * Get decoded value of a header specified with optional case_sensitive flag.
  * By default headers are searched in caseless matter.
  * @param {string} name name of header to get
@@ -123,7 +147,7 @@ end
  */
 LUA_FUNCTION_DEF (mimepart, get_header);
 /***
- * @method mimepart:get_header_raw(name[, case_sensitive])
+ * @method mime_part:get_header_raw(name[, case_sensitive])
  * Get raw value of a header specified with optional case_sensitive flag.
  * By default headers are searched in caseless matter.
  * @param {string} name name of header to get
@@ -132,7 +156,7 @@ LUA_FUNCTION_DEF (mimepart, get_header);
  */
 LUA_FUNCTION_DEF (mimepart, get_header_raw);
 /***
- * @method mimepart:get_header_full(name[, case_sensitive])
+ * @method mime_part:get_header_full(name[, case_sensitive])
  * Get raw value of a header specified with optional case_sensitive flag.
  * By default headers are searched in caseless matter. This method returns more
  * information about the header as a list of tables with the following structure:
@@ -154,9 +178,29 @@ function check_header_delimiter_tab(task, header_name)
 end
  */
 LUA_FUNCTION_DEF (mimepart, get_header_full);
+/***
+ * @method mime_part:get_content()
+ * Get the raw content of part
+ * @return {text} opaque text object (zero-copy if not casted to lua string)
+ */
 LUA_FUNCTION_DEF (mimepart, get_content);
+/***
+ * @method mime_part:get_length()
+ * Get length of the content of the part
+ * @return {integer} length of part in **bytes**
+ */
 LUA_FUNCTION_DEF (mimepart, get_length);
+/***
+ * @method mime_part:get_type()
+ * Extract content-type string of the mime part
+ * @return {string} content type in form 'type/subtype'
+ */
 LUA_FUNCTION_DEF (mimepart, get_type);
+/***
+ * @method mime_part:get_filename()
+ * Extract filename associated with mime part if it is an attachement
+ * @return {string} filename or `nil` if no file is associated with this part
+ */
 LUA_FUNCTION_DEF (mimepart, get_filename);
 
 static const struct luaL_reg mimepartlib_m[] = {
@@ -188,33 +232,7 @@ lua_check_mimepart (lua_State * L)
 	return ud ? *((struct mime_part **)ud) : NULL;
 }
 
-/***
- * @module mime_textpart
- * This module provides different methods to manipulate text parts data. Text parts
- * could be obtained from the `rspamd_task` by using of method `task:get_text_parts()`
-@example
-rspamd_config.R_EMPTY_IMAGE = function (task)
-	parts = task:get_text_parts()
-	if parts then
-		for _,part in ipairs(parts) do
-			if part:is_empty() then
-				images = task:get_images()
-				if images then
-					return true
-				end
-				return false
-			end
-		end
-	end
-	return false
-end
- */
 
-/***
- * @method text_part:is_utf()
- * Return TRUE if part is a valid utf text
- * @return {boolean} true if part is valid `UTF8` part
- */
 static gint
 lua_textpart_is_utf (lua_State * L)
 {
@@ -230,11 +248,7 @@ lua_textpart_is_utf (lua_State * L)
 	return 1;
 }
 
-/***
- * @method text_part:get_content()
- * Get the text of the part
- * @return {string} `UTF8` encoded content of the part
- */
+
 static gint
 lua_textpart_get_content (lua_State * L)
 {
@@ -254,11 +268,6 @@ lua_textpart_get_content (lua_State * L)
 	return 1;
 }
 
-/***
- * @method text_part:get_length()
- * Get length of the text of the part
- * @return {integer} length of part in **bytes**
- */
 static gint
 lua_textpart_get_length (lua_State * L)
 {
@@ -279,11 +288,6 @@ lua_textpart_get_length (lua_State * L)
 	return 1;
 }
 
-/***
- * @method text_part:is_empty()
- * Returns `true` if the specified part is empty
- * @return {bool} whether a part is empty
- */
 static gint
 lua_textpart_is_empty (lua_State * L)
 {
@@ -298,11 +302,7 @@ lua_textpart_is_empty (lua_State * L)
 
 	return 1;
 }
-/***
- * @method text_part:is_html()
- * Returns `true` if the specified part has HTML content
- * @return {bool} whether a part is HTML part
- */
+
 static gint
 lua_textpart_is_html (lua_State * L)
 {
@@ -318,11 +318,6 @@ lua_textpart_is_html (lua_State * L)
 	return 1;
 }
 
-/***
- * @method text_part:get_fuzzy()
- * Returns base32 encoded value of fuzzy hash of the specified part
- * @return {string} fuzzy hash value
- */
 static gint
 lua_textpart_get_fuzzy (lua_State * L)
 {
@@ -342,11 +337,6 @@ lua_textpart_get_fuzzy (lua_State * L)
 	return 1;
 }
 
-/***
- * @method text_part:is_language()
- * Returns the code of the most used unicode script in the text part. Does not work with raw parts
- * @return {string} short abbreviation (such as `ru`) for the script's language
- */
 static gint
 lua_textpart_get_language (lua_State * L)
 {
@@ -363,15 +353,6 @@ lua_textpart_get_language (lua_State * L)
 	return 1;
 }
 
-/***
- * @method text_part:compare_distance(other)
- * Calculates the difference to another text part.  This function is intended to work with
- * the parts of `multipart/alternative` container only. If the two parts are not the parts of the
- * same `multipart/alternative` container, then they are considered as unrelated and
- * `-1` is returned.
- * @param {text_part} other text part to compare
- * @return {integer} commodity percentage (e.g. the same strings give `100`, different give `0` and unrelated give `-1`)
- */
 static gint
 lua_textpart_compare_distance (lua_State * L)
 {
