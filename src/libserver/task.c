@@ -114,7 +114,7 @@ static void
 rspamd_task_reply (struct rspamd_task *task)
 {
 	if (task->fin_callback) {
-		task->fin_callback (task->fin_arg);
+		task->fin_callback (task, task->fin_arg);
 	}
 	else {
 		rspamd_protocol_write_reply (task);
@@ -318,7 +318,9 @@ rspamd_task_process (struct rspamd_task *task,
 	/* We got body, set wanna_die flag */
 	task->s->wanna_die = TRUE;
 
-	rspamd_protocol_handle_headers (task, msg);
+	if (msg) {
+		rspamd_protocol_handle_headers (task, msg);
+	}
 
 	if (task->flags & RSPAMD_TASK_FLAG_HAS_CONTROL) {
 		/* We have control chunk, so we need to process it separately */

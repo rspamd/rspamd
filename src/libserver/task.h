@@ -144,7 +144,7 @@ struct rspamd_task {
 	struct timeval tv;                                          /**< time of connection								*/
 	guint32 scan_milliseconds;                                  /**< how much milliseconds passed					*/
 	guint32 parser_recursion;                                   /**< for avoiding recursion stack overflow			*/
-	gboolean (*fin_callback)(void *arg);                        /**< calback for filters finalizing					*/
+	gboolean (*fin_callback)(struct rspamd_task *task, void *arg); /**< calback for filters finalizing					*/
 	void *fin_arg;                                              /**< argument for fin callback						*/
 
 	guint32 dns_requests;                                       /**< number of DNS requests per this task			*/
