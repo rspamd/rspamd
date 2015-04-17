@@ -1316,8 +1316,8 @@ rspamd_rcl_config_init (void)
 		RSPAMD_CL_FLAG_STRING_PATH);
 	rspamd_rcl_add_default_handler (sub,
 		"filters",
-		rspamd_rcl_parse_struct_string,
-		G_STRUCT_OFFSET (struct rspamd_config, filters_str),
+		rspamd_rcl_parse_struct_string_list,
+		G_STRUCT_OFFSET (struct rspamd_config, filters),
 		0);
 	rspamd_rcl_add_default_handler (sub,
 		"max_diff",

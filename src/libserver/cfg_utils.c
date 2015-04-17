@@ -815,6 +815,55 @@ rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 	}
 }
 
+gboolean
+rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
+{
+	GList *cur;
+	module_t *mod, **pmod;
+	struct module_ctx *mod_ctx;
+
+	/* Init all compiled modules */
+	for (pmod = modules; *pmod != NULL; pmod ++) {
+		mod = *pmod;
+		mod_ctx = g_slice_alloc0 (sizeof (struct module_ctx));
+
+		if (mod->module_init_func (cfg, &mod_ctx) == 0) {
+			g_hash_table_insert (cfg->c_modules,
+				(gpointer) mod->name,
+				mod_ctx);
+		}
+	}
+
+	cur = g_list_first (cfg->filters);
+
+	while (cur) {
+		/* Perform modules configuring */
+		mod = NULL;
+		for (pmod = modules; *pmod != NULL; pmod ++) {
+			if ((*pmod)->name && g_ascii_strcasecmp ((*pmod)->name,
+					cur->data) == 0) {
+				mod = *pmod;
+
+				if (reconfig) {
+					(void)mod->module_reconfig_func (cfg);
+					msg_debug ("reconfig of %s", mod->name);
+				}
+				else {
+					(void)mod->module_config_func (cfg);
+				}
+			}
+		}
+
+		if (mod == NULL) {
+			msg_warn ("requested unknown module %s", cur->data);
+		}
+
+		cur = g_list_next (cur);
+	}
+
+	return rspamd_init_lua_filters (cfg);
+}
+
 /*
  * vi:ts=4
  */

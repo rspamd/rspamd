@@ -209,7 +209,6 @@ struct rspamd_config {
 	GList *filters;                                 /**< linked list of all filters							*/
 	GList *workers;                                 /**< linked list of all workers params					*/
 	struct rspamd_worker_cfg_parser *wrk_parsers;   /**< hash for worker config parsers, indexed by worker quarks */
-	gchar *filters_str;                             /**< string of filters									*/
 	ucl_object_t *rcl_obj;                  /**< rcl object											*/
 	GHashTable * metrics;                            /**< hash of metrics indexed by metric name				*/
 	GHashTable * symbols_groups;                     /**< groups of symbols									*/
@@ -387,6 +386,14 @@ void rspamd_ucl_add_conf_macros (struct ucl_parser *parser,
 	struct rspamd_config *cfg);
 
 void rspamd_ucl_add_conf_variables (struct ucl_parser *parser);
+
+/**
+ * Initialize rspamd filtering system (lua and C filters)
+ * @param cfg
+ * @param reconfig
+ * @return
+ */
+gboolean rspamd_init_filters (struct rspamd_config *cfg, bool reconfig);
 
 #endif /* ifdef CFG_FILE_H */
 /*

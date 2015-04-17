@@ -354,60 +354,10 @@ config_logger (rspamd_mempool_t *pool, gpointer ud)
 }
 
 static void
-parse_filters_str (struct rspamd_config *cfg, const gchar *str)
-{
-	gchar **strvec, **p;
-	struct filter *cur;
-	module_t **pmodule;
-
-	if (str == NULL) {
-		return;
-	}
-
-	strvec = g_strsplit_set (str, ",", 0);
-	if (strvec == NULL) {
-		return;
-	}
-
-	p = strvec;
-	while (*p) {
-		cur = NULL;
-		/* Search modules from known C modules */
-		pmodule = &modules[0];
-		while (*pmodule) {
-			g_strstrip (*p);
-			if ((*pmodule)->name != NULL &&
-				g_ascii_strcasecmp ((*pmodule)->name, *p) == 0) {
-				cur = rspamd_mempool_alloc (cfg->cfg_pool,
-						sizeof (struct filter));
-				cur->type = C_FILTER;
-				msg_debug ("found C filter %s", *p);
-				cur->func_name = rspamd_mempool_strdup (cfg->cfg_pool, *p);
-				cur->module = (*pmodule);
-				cfg->filters = g_list_prepend (cfg->filters, cur);
-
-				break;
-			}
-			pmodule++;
-		}
-		if (cur != NULL) {
-			/* Go to next iteration */
-			p++;
-			continue;
-		}
-		p++;
-	}
-
-	g_strfreev (strvec);
-}
-
-static void
 reread_config (struct rspamd_main *rspamd)
 {
 	struct rspamd_config *tmp_cfg;
 	gchar *cfg_file;
-	GList *l;
-	struct filter *filt;
 
 	tmp_cfg = (struct rspamd_config *)g_malloc0 (sizeof (struct rspamd_config));
 	if (tmp_cfg) {
@@ -436,18 +386,8 @@ reread_config (struct rspamd_main *rspamd)
 			if (is_debug) {
 				rspamd->cfg->log_level = G_LOG_LEVEL_DEBUG;
 			}
-			/* Perform modules configuring */
-			l = g_list_first (rspamd->cfg->filters);
 
-			while (l) {
-				filt = l->data;
-				if (filt->module) {
-					(void)filt->module->module_reconfig_func (rspamd->cfg);
-					msg_debug ("reconfig of %s", filt->module->name);
-				}
-				l = g_list_next (l);
-			}
-			rspamd_init_lua_filters (rspamd->cfg);
+			rspamd_init_filters (rspamd->cfg, TRUE);
 			init_cfg_cache (rspamd->cfg);
 			msg_info ("config rereaded successfully");
 		}
@@ -810,10 +750,6 @@ reopen_log_handler (gpointer key, gpointer value, gpointer unused)
 static gboolean
 load_rspamd_config (struct rspamd_config *cfg, gboolean init_modules)
 {
-	GList *l;
-	struct filter *filt;
-	struct module_ctx *cur_module = NULL;
-
 	if (!rspamd_config_read (cfg, cfg->cfg_name, NULL,
 		config_logger, rspamd_main)) {
 		return FALSE;
@@ -833,24 +769,9 @@ load_rspamd_config (struct rspamd_config *cfg, gboolean init_modules)
 
 	/* Do post-load actions */
 	rspamd_config_post_load (cfg);
-	parse_filters_str (cfg, cfg->filters_str);
 
 	if (init_modules) {
-		/* Init C modules */
-		l = g_list_first (cfg->filters);
-
-		while (l) {
-			filt = l->data;
-			if (filt->module) {
-				cur_module = g_slice_alloc0 (sizeof (struct module_ctx));
-				if (filt->module->module_init_func (cfg, &cur_module) == 0) {
-					g_hash_table_insert (cfg->c_modules,
-						(gpointer) filt->module->name,
-						cur_module);
-				}
-			}
-			l = g_list_next (l);
-		}
+		rspamd_init_filters (cfg, FALSE);
 	}
 
 	return TRUE;
@@ -1185,9 +1106,7 @@ main (gint argc, gchar **argv, gchar **env)
 	gint res = 0, i;
 	struct sigaction signals;
 	struct rspamd_worker *cur;
-	struct filter *filt;
 	pid_t wrk;
-	GList *l;
 	worker_t **pworker;
 	GQuark type;
 	gpointer keypair;
@@ -1273,40 +1192,19 @@ main (gint argc, gchar **argv, gchar **env)
 		exit (EXIT_SUCCESS);
 	}
 
-	/* Load config */
-	if (!load_rspamd_config (rspamd_main->cfg, TRUE)) {
-		exit (EXIT_FAILURE);
-	}
-
-	/* Override pidfile from configuration by command line argument */
-	if (rspamd_pidfile != NULL) {
-		rspamd_main->cfg->pid_file = rspamd_pidfile;
-	}
-
-	/* Force debug log */
-	if (is_debug) {
-		rspamd_main->cfg->log_level = G_LOG_LEVEL_DEBUG;
-	}
-
 	if (rspamd_main->cfg->config_test || dump_cache) {
+		if (!load_rspamd_config (rspamd_main->cfg, FALSE)) {
+			exit (EXIT_FAILURE);
+		}
+
 		/* Init events to test modules */
 		event_init ();
 		res = TRUE;
-		if (!rspamd_init_lua_filters (rspamd_main->cfg)) {
+
+		if (!rspamd_init_filters (rspamd_main->cfg, FALSE)) {
 			res = FALSE;
 		}
-		/* Perform modules configuring */
-		l = g_list_first (rspamd_main->cfg->filters);
 
-		while (l) {
-			filt = l->data;
-			if (filt->module) {
-				if (!filt->module->module_config_func (rspamd_main->cfg)) {
-					res = FALSE;
-				}
-			}
-			l = g_list_next (l);
-		}
 		/* Insert classifiers symbols */
 		(void)rspamd_config_insert_classify_symbols (rspamd_main->cfg);
 
@@ -1320,6 +1218,21 @@ main (gint argc, gchar **argv, gchar **env)
 		}
 		fprintf (stderr, "syntax %s\n", res ? "OK" : "BAD");
 		return res ? EXIT_SUCCESS : EXIT_FAILURE;
+	}
+
+	/* Load config */
+	if (!load_rspamd_config (rspamd_main->cfg, TRUE)) {
+		exit (EXIT_FAILURE);
+	}
+
+	/* Override pidfile from configuration by command line argument */
+	if (rspamd_pidfile != NULL) {
+		rspamd_main->cfg->pid_file = rspamd_pidfile;
+	}
+
+	/* Force debug log */
+	if (is_debug) {
+		rspamd_main->cfg->log_level = G_LOG_LEVEL_DEBUG;
 	}
 
 	gperf_profiler_init (rspamd_main->cfg, "main");
@@ -1353,30 +1266,11 @@ main (gint argc, gchar **argv, gchar **env)
 
 	setproctitle ("main process");
 
-	/* Init lua filters */
-	if (!rspamd_init_lua_filters (rspamd_main->cfg)) {
-		msg_err ("error loading lua plugins");
-		exit (EXIT_FAILURE);
-	}
-
 	rspamd_stat_init (rspamd_main->cfg);
 	rspamd_url_init (rspamd_main->cfg->tld_file);
 
 	/* Insert classifiers symbols */
 	(void)rspamd_config_insert_classify_symbols (rspamd_main->cfg);
-
-	/* Perform modules configuring */
-	l = g_list_first (rspamd_main->cfg->filters);
-
-	while (l) {
-		filt = l->data;
-		if (filt->module) {
-			if (!filt->module->module_config_func (rspamd_main->cfg)) {
-				res = FALSE;
-			}
-		}
-		l = g_list_next (l);
-	}
 
 	/* Init config cache */
 	init_cfg_cache (rspamd_main->cfg);
