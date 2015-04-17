@@ -1953,7 +1953,7 @@ rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 {
 	struct rspamd_rcl_struct_parser *pd = ud;
 	GList **target;
-	gchar *val;
+	gchar *val, **strvec, **cvec;
 	const ucl_object_t *cur;
 	const gsize num_str_len = 32;
 	ucl_object_iter_t iter = NULL;
@@ -1965,8 +1965,18 @@ rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 	while ((cur = ucl_object_iterate_safe (iter, true)) != NULL) {
 		switch (cur->type) {
 		case UCL_STRING:
-			val = rspamd_mempool_strdup (pool, ucl_copy_value_trash (cur));
-			break;
+			strvec = g_strsplit_set (ucl_object_tostring (cur), ",", -1);
+			cvec = strvec;
+
+			while (*cvec) {
+				*target = g_list_prepend (*target,
+						rspamd_mempool_strdup (pool, *cvec));
+				cvec ++;
+			}
+
+			g_strfreev (strvec);
+			/* Go to the next object */
+			continue;
 		case UCL_INT:
 			val = rspamd_mempool_alloc (pool, num_str_len);
 			rspamd_snprintf (val, num_str_len, "%L", cur->value.iv);
