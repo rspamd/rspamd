@@ -871,6 +871,25 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 	return rspamd_init_lua_filters (cfg);
 }
 
-/*
- * vi:ts=4
- */
+void
+rspamd_init_cfg (struct rspamd_config *cfg, gboolean init_lua)
+{
+	cfg->cfg_pool = rspamd_mempool_new (
+			rspamd_mempool_suggest_size ());
+	rspamd_config_defaults (cfg);
+
+	if (init_lua) {
+		cfg->lua_state = rspamd_lua_init (cfg);
+		rspamd_mempool_add_destructor (cfg->cfg_pool,
+				(rspamd_mempool_destruct_t)lua_close, cfg->lua_state);
+	}
+
+	/* Pre-init of cache */
+	cfg->cache = g_new0 (struct symbols_cache, 1);
+	cfg->cache->static_pool = rspamd_mempool_new (
+		rspamd_mempool_suggest_size ());
+	cfg->cache->cfg = cfg;
+	cfg->cache->items_by_symbol = g_hash_table_new (
+		rspamd_str_hash,
+		rspamd_str_equal);
+}

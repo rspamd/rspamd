@@ -2256,10 +2256,12 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	top = rspamd_rcl_config_init ();
 	err = NULL;
 
-	HASH_FIND_STR (top, "logging", logger);
-	if (logger != NULL) {
-		logger->fin = logger_fin;
-		logger->fin_ud = logger_ud;
+	if (logger_fin != NULL) {
+		HASH_FIND_STR (top, "logging", logger);
+		if (logger != NULL) {
+			logger->fin = logger_fin;
+			logger->fin_ud = logger_ud;
+		}
 	}
 
 	if (!rspamd_rcl_parse (top, cfg, cfg->cfg_pool, cfg->rcl_obj, &err)) {

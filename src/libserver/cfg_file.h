@@ -395,6 +395,13 @@ void rspamd_ucl_add_conf_variables (struct ucl_parser *parser);
  */
 gboolean rspamd_init_filters (struct rspamd_config *cfg, bool reconfig);
 
+/**
+ * Init configuration file structure
+ * @param cfg
+ * @param init_lua
+ */
+void rspamd_init_cfg (struct rspamd_config *cfg, gboolean init_lua);
+
 #endif /* ifdef CFG_FILE_H */
 /*
  * vi:ts=4

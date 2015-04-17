@@ -60,7 +60,6 @@ static struct rspamd_worker * fork_worker (struct rspamd_main *,
 static gboolean load_rspamd_config (struct rspamd_config *cfg,
 	gboolean init_modules);
 static void init_cfg_cache (struct rspamd_config *cfg);
-static void rspamd_init_cfg (struct rspamd_config *cfg);
 
 sig_atomic_t do_restart = 0;
 sig_atomic_t do_reopen_log = 0;
@@ -362,7 +361,8 @@ reread_config (struct rspamd_main *rspamd)
 	tmp_cfg = (struct rspamd_config *)g_malloc0 (sizeof (struct rspamd_config));
 	if (tmp_cfg) {
 
-		rspamd_init_cfg (tmp_cfg);
+		rspamd_init_cfg (tmp_cfg, FALSE);
+		tmp_cfg->lua_state = rspamd->cfg->lua_state;
 		cfg_file = rspamd_mempool_strdup (tmp_cfg->cfg_pool,
 				rspamd->cfg->cfg_name);
 		/* Save some variables */
@@ -1029,27 +1029,6 @@ perform_configs_sign (void)
 }
 
 static void
-rspamd_init_cfg (struct rspamd_config *cfg)
-{
-	cfg->cfg_pool = rspamd_mempool_new (
-			rspamd_mempool_suggest_size ());
-	rspamd_config_defaults (cfg);
-
-	cfg->lua_state = rspamd_lua_init (cfg);
-	rspamd_mempool_add_destructor (cfg->cfg_pool,
-		(rspamd_mempool_destruct_t)lua_close, cfg->lua_state);
-
-	/* Pre-init of cache */
-	cfg->cache = g_new0 (struct symbols_cache, 1);
-	cfg->cache->static_pool = rspamd_mempool_new (
-		rspamd_mempool_suggest_size ());
-	cfg->cache->cfg = cfg;
-	cfg->cache->items_by_symbol = g_hash_table_new (
-		rspamd_str_hash,
-		rspamd_str_equal);
-}
-
-static void
 rspamd_init_main (struct rspamd_main *rspamd)
 {
 	rspamd->server_pool = rspamd_mempool_new (
@@ -1094,7 +1073,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	rspamd_init_libs ();
 	rspamd_init_main (rspamd_main);
-	rspamd_init_cfg (rspamd_main->cfg);
+	rspamd_init_cfg (rspamd_main->cfg, TRUE);
 
 	memset (&signals, 0, sizeof (struct sigaction));
 
