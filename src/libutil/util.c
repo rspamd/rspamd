@@ -32,10 +32,12 @@
 
 #include "xxhash.h"
 #include "ottery.h"
+#include "cryptobox.h"
 
 #ifdef HAVE_OPENSSL
 #include <openssl/rand.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
 #endif
 
 #ifdef HAVE_TERMIOS_H
