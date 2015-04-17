@@ -42,6 +42,7 @@ struct regexp_module_item {
 };
 
 struct regexp_ctx {
+	struct module_ctx ctx;
 	rspamd_mempool_t *regexp_pool;
 	gsize max_size;
 };

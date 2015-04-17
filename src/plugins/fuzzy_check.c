@@ -82,7 +82,7 @@ struct fuzzy_rule {
 };
 
 struct fuzzy_ctx {
-	gint (*filter) (struct rspamd_task * task);
+	struct module_ctx ctx;
 	rspamd_mempool_t *fuzzy_pool;
 	GList *fuzzy_rules;
 	struct rspamd_config *cfg;

@@ -838,6 +838,7 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 			g_hash_table_insert (cfg->c_modules,
 				(gpointer) mod->name,
 				mod_ctx);
+			mod_ctx->mod = mod;
 		}
 	}
 
@@ -845,23 +846,23 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 
 	while (cur) {
 		/* Perform modules configuring */
-		mod = NULL;
-		for (pmod = modules; *pmod != NULL; pmod ++) {
-			if ((*pmod)->name && g_ascii_strcasecmp ((*pmod)->name,
-					cur->data) == 0) {
-				mod = *pmod;
+		mod_ctx = NULL;
+		mod_ctx = g_hash_table_lookup (cfg->c_modules, cur->data);
 
-				if (reconfig) {
-					(void)mod->module_reconfig_func (cfg);
-					msg_debug ("reconfig of %s", mod->name);
-				}
-				else {
-					(void)mod->module_config_func (cfg);
-				}
+		if (mod_ctx) {
+			mod = mod_ctx->mod;
+			mod_ctx->enabled = TRUE;
+
+			if (reconfig) {
+				(void)mod->module_reconfig_func (cfg);
+				msg_debug ("reconfig of %s", mod->name);
+			}
+			else {
+				(void)mod->module_config_func (cfg);
 			}
 		}
 
-		if (mod == NULL) {
+		if (mod_ctx == NULL) {
 			msg_warn ("requested unknown module %s", cur->data);
 		}
 

@@ -179,6 +179,8 @@ struct controller_session {
  */
 struct module_ctx {
 	gint (*filter)(struct rspamd_task *task);                   /**< pointer to headers process function			*/
+	module_t *mod;												/**< module pointer									*/
+	gboolean enabled;											/**< true if module is enabled in configuration		*/
 };
 
 /**

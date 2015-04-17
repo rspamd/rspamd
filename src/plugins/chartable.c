@@ -52,7 +52,7 @@ module_t chartable_module = {
 };
 
 struct chartable_ctx {
-	gint (*filter) (struct rspamd_task * task);
+	struct module_ctx ctx;
 	const gchar *symbol;
 	double threshold;
 
@@ -69,7 +69,6 @@ chartable_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
 	chartable_module_ctx = g_malloc (sizeof (struct chartable_ctx));
 
-	chartable_module_ctx->filter = chartable_mime_filter;
 	chartable_module_ctx->chartable_pool = rspamd_mempool_new (
 		rspamd_mempool_suggest_size ());
 
@@ -220,11 +219,4 @@ chartable_symbol_callback (struct rspamd_task *task, void *unused)
 		cur = g_list_next (cur);
 	}
 
-}
-
-static gint
-chartable_mime_filter (struct rspamd_task *task)
-{
-	/* XXX: remove it */
-	return 0;
 }

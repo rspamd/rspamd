@@ -47,7 +47,7 @@
 #define DEFAULT_CACHE_MAXAGE 86400
 
 struct spf_ctx {
-	gint (*filter) (struct rspamd_task * task);
+	struct module_ctx ctx;
 	const gchar *symbol_fail;
 	const gchar *symbol_softfail;
 	const gchar *symbol_neutral;

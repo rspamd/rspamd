@@ -1587,7 +1587,6 @@ start_controller_worker (struct rspamd_worker *worker)
 {
 	struct rspamd_controller_worker_ctx *ctx = worker->ctx;
 	GList *cur;
-	struct filter *f;
 	struct module_ctx *mctx;
 	GHashTableIter iter;
 	gpointer key, value;
@@ -1688,23 +1687,20 @@ start_controller_worker (struct rspamd_worker *worker)
 		rspamd_http_router_set_key (ctx->http, ctx->key);
 	}
 
-	/* Attach plugins */
-	cur = g_list_first (ctx->cfg->filters);
-	while (cur) {
-		f = cur->data;
-		mctx = g_hash_table_lookup (ctx->cfg->c_modules, f->module->name);
-		if (mctx != NULL && f->module->module_attach_controller_func != NULL) {
-			f->module->module_attach_controller_func (mctx,
-				ctx->custom_commands);
-		}
-		cur = g_list_next (cur);
-	}
-
 	g_hash_table_iter_init (&iter, ctx->custom_commands);
 	while (g_hash_table_iter_next (&iter, &key, &value)) {
 		rspamd_http_router_add_path (ctx->http,
 			key,
 			rspamd_controller_handle_custom);
+	}
+
+	g_hash_table_iter_init (&iter, ctx->cfg->c_modules);
+	while (g_hash_table_iter_next (&iter, &key, &value)) {
+		mctx = value;
+		if (mctx->mod->module_attach_controller_func != NULL) {
+			mctx->mod->module_attach_controller_func (mctx,
+					ctx->custom_commands);
+		}
 	}
 
 	ctx->resolver = dns_resolver_init (worker->srv->logger,

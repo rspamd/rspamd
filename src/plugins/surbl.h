@@ -17,7 +17,7 @@
 #define MAX_LEVELS 10
 
 struct surbl_ctx {
-	gint (*filter)(struct rspamd_task *task);
+	struct module_ctx ctx;
 	guint16 weight;
 	gdouble connect_timeout;
 	gdouble read_timeout;

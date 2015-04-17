@@ -52,7 +52,7 @@
 #define DEFAULT_TIME_JITTER 60
 
 struct dkim_ctx {
-	gint (*filter) (struct rspamd_task * task);
+	struct module_ctx ctx;
 	const gchar *symbol_reject;
 	const gchar *symbol_tempfail;
 	const gchar *symbol_allow;
