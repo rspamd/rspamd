@@ -455,4 +455,9 @@ void rspamd_ptr_array_free_hard (gpointer p);
  */
 void rspamd_array_free_hard (gpointer p);
 
+/**
+ * Initialize rspamd libraries
+ */
+void rspamd_init_libs (void);
+
 #endif

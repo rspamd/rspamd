@@ -1060,46 +1060,6 @@ rspamd_init_main (struct rspamd_main *rspamd)
 	rspamd_main->history = rspamd_roll_history_new (rspamd_main->server_pool);
 }
 
-static void
-rspamd_init_libs (void)
-{
-	struct rlimit rlim;
-
-	ottery_init (NULL);
-
-	rspamd_cryptobox_init ();
-#ifdef HAVE_SETLOCALE
-	/* Set locale setting to C locale to avoid problems in future */
-	setlocale (LC_ALL, "C");
-	setlocale (LC_CTYPE, "C");
-	setlocale (LC_MESSAGES, "C");
-	setlocale (LC_TIME, "C");
-#endif
-
-#ifdef HAVE_OPENSSL
-	ERR_load_crypto_strings ();
-
-	OpenSSL_add_all_algorithms ();
-	OpenSSL_add_all_digests ();
-	OpenSSL_add_all_ciphers ();
-#endif
-	g_random_set_seed (ottery_rand_uint32 ());
-
-	/* Set stack size for pcre */
-	getrlimit (RLIMIT_STACK, &rlim);
-	rlim.rlim_cur = 100 * 1024 * 1024;
-	setrlimit (RLIMIT_STACK, &rlim);
-
-	rspamd_regexp_library_init ();
-
-	event_init ();
-#ifdef GMIME_ENABLE_RFC2047_WORKAROUNDS
-	g_mime_init (GMIME_ENABLE_RFC2047_WORKAROUNDS);
-#else
-	g_mime_init (0);
-#endif
-}
-
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
@@ -1197,8 +1157,6 @@ main (gint argc, gchar **argv, gchar **env)
 			exit (EXIT_FAILURE);
 		}
 
-		/* Init events to test modules */
-		event_init ();
 		res = TRUE;
 
 		if (!rspamd_init_filters (rspamd_main->cfg, FALSE)) {
