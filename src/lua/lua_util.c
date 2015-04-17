@@ -126,10 +126,60 @@ lua_util_config_from_ucl (lua_State *L)
 	return 1;
 }
 
+static gboolean
+lua_util_task_fin (struct rspamd_task *task, void *ud)
+{
+	ucl_object_t **target = ud;
+
+	*target = rspamd_protocol_write_ucl (task, NULL);
+
+	return TRUE;
+}
+
 static gint
 lua_util_process_message (lua_State *L)
 {
-	return 0;
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *message;
+	gsize mlen;
+	struct rspamd_task *task;
+	struct event_base *base;
+	ucl_object_t *res = NULL;
+
+	message = luaL_checklstring (L, 2, &mlen);
+
+	if (cfg != NULL && message != NULL) {
+		base = event_init ();
+		task = rspamd_task_new (NULL);
+		task->cfg = cfg;
+		task->ev_base = base;
+		task->msg.start = rspamd_mempool_alloc (task->task_pool, mlen + 1);
+		rspamd_strlcpy ((gpointer)task->msg.start, message, mlen + 1);
+		task->msg.len = mlen;
+		task->fin_callback = lua_util_task_fin;
+		task->fin_arg = &res;
+
+		if (rspamd_task_process (task, NULL, message, mlen, NULL, TRUE)) {
+			event_base_loop (base, 0);
+
+			if (res != NULL) {
+				ucl_object_push_lua (L, res, true);
+
+				ucl_object_unref (res);
+			}
+		}
+		else {
+			lua_pushnil (L);
+		}
+
+		rspamd_task_free_hard (task);
+		event_base_free (base);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
 }
 
 static gint
