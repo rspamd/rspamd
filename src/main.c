@@ -1224,12 +1224,6 @@ main (gint argc, gchar **argv, gchar **env)
 
 	setproctitle ("main process");
 
-	rspamd_stat_init (rspamd_main->cfg);
-	rspamd_url_init (rspamd_main->cfg->tld_file);
-
-	/* Insert classifiers symbols */
-	(void)rspamd_config_insert_classify_symbols (rspamd_main->cfg);
-
 	/* Init config cache */
 	init_cfg_cache (rspamd_main->cfg);
 

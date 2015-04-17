@@ -34,6 +34,7 @@
 #include "map.h"
 #include "dynamic_cfg.h"
 #include "utlist.h"
+#include "stat_api.h"
 
 #define DEFAULT_SCORE 10.0
 
@@ -385,6 +386,12 @@ rspamd_config_post_load (struct rspamd_config *cfg)
 	/* Lua options */
 	(void)rspamd_lua_post_load_config (cfg);
 	init_dynamic_config (cfg);
+
+	rspamd_stat_init (rspamd_main->cfg);
+	rspamd_url_init (rspamd_main->cfg->tld_file);
+
+	/* Insert classifiers symbols */
+	(void)rspamd_config_insert_classify_symbols (rspamd_main->cfg);
 }
 
 #if 0
