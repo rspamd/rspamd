@@ -19,7 +19,8 @@ main (int argc, char **argv)
 	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	rspamd_main->cfg = (struct rspamd_config *)g_malloc (sizeof (struct rspamd_config));
 	cfg = rspamd_main->cfg;
-	bzero (cfg, sizeof (struct rspamd_config));
+	memset (cfg, 0, sizeof (struct rspamd_config));
+	rspamd_init_cfg (cfg, FALSE);
 	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	cfg->log_type = RSPAMD_LOG_CONSOLE;
 	cfg->log_level = G_LOG_LEVEL_INFO;
@@ -29,12 +30,7 @@ main (int argc, char **argv)
 
 	g_test_init (&argc, &argv, NULL);
 
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
-	g_thread_init (NULL);
-#endif
-
-	g_mime_init (0);
-	rspamd_regexp_library_init ();
+	rspamd_init_libs ();
 
 	base = event_init ();
 
