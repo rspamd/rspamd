@@ -753,7 +753,10 @@ rspamd_metric_symbol_ucl (struct rspamd_task *task, struct metric *m,
 	ucl_object_t *obj = NULL;
 	const gchar *description = NULL;
 
-	rspamd_printf_gstring (logbuf, "%s,", sym->name);
+	if (logbuf != NULL) {
+		rspamd_printf_gstring (logbuf, "%s,", sym->name);
+	}
+
 	description = g_hash_table_lookup (m->descriptions, sym->name);
 
 	obj = ucl_object_typed_new (UCL_OBJECT);
@@ -812,10 +815,12 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 		action_char = 'F';
 	}
 
-	rspamd_printf_gstring (logbuf, "(%s: %c (%s): [%.2f/%.2f] [",
-		m->name, action_char,
-		rspamd_action_to_str (action),
-		mres->score, required_score);
+	if (logbuf != NULL) {
+		rspamd_printf_gstring (logbuf, "(%s: %c (%s): [%.2f/%.2f] [",
+				m->name, action_char,
+				rspamd_action_to_str (action),
+				mres->score, required_score);
+	}
 
 	obj = ucl_object_typed_new (UCL_OBJECT);
 	ucl_object_insert_key (obj,	  ucl_object_frombool (is_spam),
@@ -843,22 +848,25 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 		ucl_object_insert_key (obj, sobj, h, 0, false);
 	}
 
-	/* Cut the trailing comma if needed */
-	if (logbuf->str[logbuf->len - 1] == ',') {
-		logbuf->len--;
-	}
+	if (logbuf != NULL) {
+		/* Cut the trailing comma if needed */
+		if (logbuf->str[logbuf->len - 1] == ',') {
+			logbuf->len--;
+		}
 
 #ifdef HAVE_CLOCK_GETTIME
-	rspamd_printf_gstring (logbuf, "]), len: %z, time: %s, dns req: %d,",
-		task->msg.len, calculate_check_time (&task->tv, &task->ts,
-		task->cfg->clock_res, &task->scan_milliseconds), task->dns_requests);
+		rspamd_printf_gstring (logbuf, "]), len: %z, time: %s, dns req: %d,",
+				task->msg.len, calculate_check_time (&task->tv, &task->ts,
+						task->cfg->clock_res, &task->scan_milliseconds),
+						task->dns_requests);
 #else
-	rspamd_printf_gstring (logbuf, "]), len: %z, time: %s, dns req: %d,",
-		task->msg.len,
-		calculate_check_time (&task->tv, task->cfg->clock_res,
-		&task->scan_milliseconds),
-		task->dns_requests);
+		rspamd_printf_gstring (logbuf, "]), len: %z, time: %s, dns req: %d,",
+				task->msg.len,
+				calculate_check_time (&task->tv, task->cfg->clock_res,
+						&task->scan_milliseconds),
+						task->dns_requests);
 #endif
+	}
 
 	return obj;
 }
@@ -956,43 +964,26 @@ rspamd_ucl_tospamc_output (struct rspamd_task *task,
 	}
 }
 
-void
-rspamd_protocol_http_reply (struct rspamd_http_message *msg,
-	struct rspamd_task *task)
+ucl_object_t *
+rspamd_protocol_write_ucl (struct rspamd_task *task, GString *logbuf)
 {
-	GString *logbuf;
 	struct metric_result *metric_res;
+	ucl_object_t *top = NULL, *obj;
 	GHashTableIter hiter;
 	gpointer h, v;
-	ucl_object_t *top = NULL, *obj;
-	gdouble required_score;
-	gint action;
 
-	/* Output the first line - check status */
-	logbuf = g_string_sized_new (BUFSIZ);
-	rspamd_printf_gstring (logbuf,
-		"id: <%s>, qid: <%s>, ",
-		task->message_id,
-		task->queue_id);
+	if (logbuf != NULL) {
+		rspamd_printf_gstring (logbuf,
+				"id: <%s>, qid: <%s>, ",
+				task->message_id,
+				task->queue_id);
 
-	if (task->user) {
-		rspamd_printf_gstring (logbuf, "user: %s, ", task->user);
-	}
-
-	if (!(task->flags & RSPAMD_TASK_FLAG_NO_LOG)) {
-		rspamd_roll_history_update (task->worker->srv->history, task);
-	}
-
-	/* Write custom headers */
-	g_hash_table_iter_init (&hiter, task->reply_headers);
-	while (g_hash_table_iter_next (&hiter, &h, &v)) {
-		GString *hn = (GString *)h, *hv = (GString *)v;
-
-		rspamd_http_message_add_header (msg, hn->str, hv->str);
+		if (task->user) {
+			rspamd_printf_gstring (logbuf, "user: %s, ", task->user);
+		}
 	}
 
 	g_hash_table_iter_init (&hiter, task->results);
-
 	top = ucl_object_typed_new (UCL_OBJECT);
 	/* Convert results to an ucl object */
 	while (g_hash_table_iter_next (&hiter, &h, &v)) {
@@ -1007,17 +998,52 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	}
 	if (g_hash_table_size (task->urls) > 0) {
 		ucl_object_insert_key (top, rspamd_urls_tree_ucl (task->urls,
-			task), "urls", 0, false);
+				task), "urls", 0, false);
 	}
 	if (g_hash_table_size (task->emails) > 0) {
 		ucl_object_insert_key (top, rspamd_emails_tree_ucl (task->emails, task),
-			"emails", 0, false);
+				"emails", 0, false);
 	}
 
 	ucl_object_insert_key (top, ucl_object_fromstring (task->message_id),
-		"message-id", 0, false);
+			"message-id", 0, false);
 
-	write_hashes_to_log (task, logbuf);
+	if (logbuf != NULL) {
+		write_hashes_to_log (task, logbuf);
+	}
+
+	return top;
+}
+
+void
+rspamd_protocol_http_reply (struct rspamd_http_message *msg,
+	struct rspamd_task *task)
+{
+	GString *logbuf;
+	struct metric_result *metric_res;
+	GHashTableIter hiter;
+	gpointer h, v;
+	ucl_object_t *top = NULL;
+	gdouble required_score;
+	gint action;
+
+	/* Output the first line - check status */
+	logbuf = g_string_sized_new (BUFSIZ);
+
+	/* Write custom headers */
+	g_hash_table_iter_init (&hiter, task->reply_headers);
+	while (g_hash_table_iter_next (&hiter, &h, &v)) {
+		GString *hn = (GString *)h, *hv = (GString *)v;
+
+		rspamd_http_message_add_header (msg, hn->str, hv->str);
+	}
+
+	top = rspamd_protocol_write_ucl (task, logbuf);
+
+	if (!(task->flags & RSPAMD_TASK_FLAG_NO_LOG)) {
+		rspamd_roll_history_update (task->worker->srv->history, task);
+	}
+
 	if (!(task->flags & RSPAMD_TASK_FLAG_NO_LOG)) {
 		msg_info ("%v", logbuf);
 	}
