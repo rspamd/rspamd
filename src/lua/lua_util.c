@@ -106,7 +106,7 @@ lua_util_config_from_ucl (lua_State *L)
 	if (obj) {
 		cfg = g_malloc0 (sizeof (struct rspamd_config));
 		rspamd_init_cfg (cfg, FALSE);
-
+		cfg->lua_state = L;
 		cfg->rcl_obj = obj;
 		top = rspamd_rcl_config_init ();
 
@@ -158,6 +158,9 @@ lua_util_process_message (lua_State *L)
 		task->msg.len = mlen;
 		task->fin_callback = lua_util_task_fin;
 		task->fin_arg = &res;
+		task->resolver = dns_resolver_init (NULL, base, cfg);
+		task->s = new_async_session (task->task_pool, rspamd_task_fin,
+					rspamd_task_restore, rspamd_task_free_hard, task);
 
 		if (rspamd_task_process (task, NULL, message, mlen, NULL, TRUE)) {
 			event_base_loop (base, 0);
@@ -167,12 +170,16 @@ lua_util_process_message (lua_State *L)
 
 				ucl_object_unref (res);
 			}
+			else {
+				ucl_object_push_lua (L, rspamd_protocol_write_ucl (task, NULL),
+						true);
+				rspamd_task_free_hard (task);
+			}
 		}
 		else {
 			lua_pushnil (L);
 		}
 
-		rspamd_task_free_hard (task);
 		event_base_free (base);
 	}
 	else {
