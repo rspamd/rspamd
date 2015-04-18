@@ -336,6 +336,7 @@ ucl_object_lua_fromtable (lua_State *L, int idx)
 			if (obj != NULL) {
 				ucl_array_append (top, obj);
 			}
+			lua_pop (L, 1);
 		}
 	}
 	else {
