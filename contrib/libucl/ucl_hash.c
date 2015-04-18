@@ -336,7 +336,7 @@ ucl_hash_delete (ucl_hash_t* hashlin, const ucl_object_t *obj)
 		k = kh_get (ucl_hash_caseless_node, h, obj);
 		if (k != kh_end (h)) {
 			elt = &kh_value (h, k);
-			kv_A (hashlin->ar, elt->ar_idx) = NULL;
+			kv_del (const ucl_object_t *, hashlin->ar, elt->ar_idx);
 			kh_del (ucl_hash_caseless_node, h, k);
 		}
 	}
@@ -346,7 +346,7 @@ ucl_hash_delete (ucl_hash_t* hashlin, const ucl_object_t *obj)
 		k = kh_get (ucl_hash_node, h, obj);
 		if (k != kh_end (h)) {
 			elt = &kh_value (h, k);
-			kv_A (hashlin->ar, elt->ar_idx) = NULL;
+			kv_del (const ucl_object_t *, hashlin->ar, elt->ar_idx);
 			kh_del (ucl_hash_node, h, k);
 		}
 	}
