@@ -31,11 +31,20 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
 local rspamd_expression = require "rspamd_expression"
 local rspamd_mempool = require "rspamd_mempool"
+local rspamd_trie = require "rspamd_trie"
 local _ = require "fun"
+
 --local dumper = require 'pl.pretty'.dump
+
+-- Known plugins
+local known_plugins = {'Mail::SpamAssassin::Plugin::FreeMail'}
+
+-- Internal variables
 local rules = {}
 local atoms = {}
 local metas = {}
+local freemail_domains = {}
+local freemail_trie
 local section = rspamd_config:get_key("spamassassin")
 
 -- Minimum score to treat symbols as meta
@@ -123,6 +132,125 @@ local function handle_header_def(hline, cur_rule)
   end
 end
 
+
+local function freemail_search(input)
+  local res = false
+  local function trie_callback(number, pos)
+    rspamd_logger.debugx('Matched pattern %1 at pos %2', freemail_domains[number], pos)
+    res = true
+  end
+  
+  if input then
+    freemail_trie:match(input, trie_callback, true)
+  end
+  
+  return res
+end
+
+local function gen_eval_rule(arg)
+  local eval_funcs = {
+    {'check_freemail_from', function(task, remain) 
+        local from = task:get_from()
+        if from then
+          return freemail_search(from[1]['addr'])
+        end
+        return false 
+      end},
+    {'check_freemail_replyto', 
+      function(task, remain) 
+        return freemail_search(task:get_header('Reply-To')) 
+      end
+    },
+    {'check_freemail_header',
+      function(task, remain)
+        -- Remain here contains one or two args: header and regexp to match
+        local arg = string.match(remain, "^%(%s*['\"]([^%s]+)['\"]%s*%)$")
+        local re = nil
+        if not arg then
+          arg, re = string.match(remain, "^%(%s*['\"]([^%s]+)['\"]%s*,%s*['\"]([^%s]+)['\"]%s*%)$")
+        end
+        
+        if arg then
+          local h = task:get_header(arg)
+          if h then
+            local hdr_freemail = freemail_search(h)
+            if hdr_freemail and re then
+              r = rspamd_regexp.create_cached(re)
+              if r then
+                r:match(h)
+              else
+                rspamd_logger.infox('cannot create regexp %1', re)
+                return false
+              end
+            end
+           
+            return hdr_freemail
+          end
+        end
+        
+        return false   
+      end
+    },
+  }
+  
+  for k,f in ipairs(eval_funcs) do
+    local pat = string.format('^%s', f[1])
+    local first,last = string.find(arg, pat)
+    
+    if first then
+      local func_arg = string.sub(arg, last + 1)
+      return function(task)
+        return f[2](task, func_arg)
+      end 
+    end
+  end
+end
+
+-- Returns parser function or nil
+local function maybe_parse_sa_function(line)
+  local arg
+  local elts = split(line, '[^:]+')
+  arg = elts[2]
+  local func_cache = {}
+  
+  rspamd_logger.debugx('trying to parse SA function %1 with args %2', elts[1], elts[2])
+  local substitutions = {
+    {'^exists:', 
+      function(task) -- filter
+        if task:get_header(arg) then
+          return true
+        end
+        return false
+      end,
+    },
+    {'^eval:',
+      function(task)
+        local func = func_cache[arg]
+        if not func then
+          func = gen_eval_rule(arg)
+          func_cache[arg] = func
+        end
+        
+        if not func then
+          rspamd_logger.errx('cannot find appropriate eval rule for function %1', arg)
+        else
+          return func(task)
+        end
+        
+        return false
+      end
+    },
+  }
+  
+  for k,s in ipairs(substitutions) do
+    if string.find(line, s[1]) then
+      return s[2]
+    end
+  end
+  
+  return nil
+end
+
 local function process_sa_conf(f)
   local cur_rule = {}
   local valid_rule = false
@@ -153,7 +281,14 @@ local function process_sa_conf(f)
       return
     else
       if string.match(l, '^ifplugin') then
-        skip_to_endif = true
+        local ls = split(l)
+        
+        if not _.any(function(pl) 
+            if pl == ls[2] then return true end
+            return false
+            end, known_plugins) then
+          skip_to_endif = true
+        end
       end
     end
     
@@ -171,7 +306,7 @@ local function process_sa_conf(f)
       if valid_rule then
         insert_cur_rule()
       end
-      if slash then
+      if slash and words[4] and (words[4] == '=~' or words[4] == '!~') then
         cur_rule['type'] = 'header'
         cur_rule['symbol'] = words[2]
         
@@ -205,20 +340,16 @@ local function process_sa_conf(f)
         end
       else
         -- Maybe we know the function and can convert it
-        local s,e = string.find(words[3], 'exists:')
-        if e then
-           local h = _.foldl(function(acc, s) return acc .. s end,
-            '', _.drop_n(e, words[3]))
-           cur_rule['type'] = 'function'
-           cur_rule['symbol'] = words[2]
-           cur_rule['header'] = h
-           cur_rule['function'] = function(task)
-            if task:get_header(h) then
-              return true
-            end
-            return false
-           end
-           valid_rule = true
+        local args =  words_to_re(words, 2)
+        local func = maybe_parse_sa_function(args)
+        
+        if func then
+          cur_rule['type'] = 'function'
+          cur_rule['symbol'] = words[2]
+          cur_rule['function'] = func
+          valid_rule = true
+        else
+          rspamd_logger.infox('unknown function %1', args)
         end
       end
     elseif words[1] == "body" and slash then
@@ -261,9 +392,13 @@ local function process_sa_conf(f)
       cur_rule['meta'] = words_to_re(words, 2)
       if cur_rule['meta'] and cur_rule['symbol'] then valid_rule = true end
     elseif words[1] == "describe" and valid_rule then
-      cur_rule['description'] = words_to_re(words, 1)
+      cur_rule['description'] = words_to_re(words, 2)
     elseif words[1] == "score" and valid_rule then
       cur_rule['score'] = tonumber(words_to_re(words, 2))
+    elseif words[1] == 'freemail_domains' then
+      _.each(function(dom)
+        table.insert(freemail_domains, '@' .. dom)
+        end, _.drop_n(1, words))
     end
     end)()
   end
@@ -302,6 +437,11 @@ local function add_sole_meta(sym, rule)
     description = rule['description']
   }
   rules[sym] = r
+end
+
+if freemail_domains then
+  freemail_trie = rspamd_trie.create(freemail_domains)
+  rspamd_logger.infox('loaded %1 freemail domains definitions', #freemail_domains)
 end
 
 -- Header rules
@@ -489,7 +629,7 @@ local function process_atom(atom, task)
     end
     return res
   else
-    --rspamd_logger.err('Cannot find atom ' .. atom)
+    rspamd_logger.err('Cannot find atom ' .. atom)
   end
   return 0
 end
