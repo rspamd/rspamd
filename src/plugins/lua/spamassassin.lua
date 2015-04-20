@@ -40,6 +40,7 @@ local _ = require "fun"
 local known_plugins = {
   'Mail::SpamAssassin::Plugin::FreeMail',
   'Mail::SpamAssassin::Plugin::HeaderEval',
+  'Mail::SpamAssassin::Plugin::ReplaceTags'
 }
 
 -- Internal variables
@@ -48,6 +49,13 @@ local atoms = {}
 local metas = {}
 local freemail_domains = {}
 local freemail_trie
+local replace = {
+  tags = {},
+  pre = {},
+  inter = {},
+  post = {},
+  rules = {}
+}
 local section = rspamd_config:get_key("spamassassin")
 
 -- Minimum score to treat symbols as meta
@@ -254,6 +262,10 @@ local function maybe_parse_sa_function(line)
   return nil
 end
 
+local function words_to_re(words, start)
+  return table.concat(_.totable(_.drop_n(start, words)), " ");
+end
+
 local function process_tflags(rule, flags)
   _.each(function(flag)
     if flag == 'publish' then
@@ -264,6 +276,11 @@ local function process_tflags(rule, flags)
       rule['maxhits'] = tonumber(string.match(flag, '^maxhits=(%d+)$'))
     end
   end, _.drop_n(1, flags))
+end
+
+local function process_replace(words, tbl)
+  local re = words_to_re(words, 2)
+  tbl[words[2]] = re
 end
 
 local function process_sa_conf(f)
@@ -288,10 +305,6 @@ local function process_sa_conf(f)
    rules[cur_rule['symbol']] = cur_rule
    cur_rule = {}
    valid_rule = false
-  end
-  
-  local function words_to_re(words, start)
-    return table.concat(_.totable(_.drop_n(start, words)), " ");
   end
   
   local skip_to_endif = false
@@ -334,7 +347,7 @@ local function process_sa_conf(f)
       if valid_rule then
         insert_cur_rule()
       end
-      if slash and words[4] and (words[4] == '=~' or words[4] == '!~') then
+      if words[4] and (words[4] == '=~' or words[4] == '!~') then
         cur_rule['type'] = 'header'
         cur_rule['symbol'] = words[2]
         
@@ -429,6 +442,17 @@ local function process_sa_conf(f)
         end, _.drop_n(1, words))
     elseif words[1] == 'tflags' then
       process_tflags(cur_rule, words)
+    elseif words[1] == 'replace_tag' then
+      process_replace(words, replace['tags'])
+    elseif words[1] == 'replace_pre' then
+      process_replace(words, replace['pre'])
+    elseif words[1] == 'replace_inter' then
+      process_replace(words, replace['inter'])
+    elseif words[1] == 'replace_post' then
+      process_replace(words, replace['post'])
+    elseif words[1] == 'replace_rules' then
+      _.each(function(r) table.insert(replace['rules'], r) end,
+        _.drop_n(1, words))
     end
     end)()
   end
@@ -488,6 +512,106 @@ local function sa_regexp_match(data, re, raw, rule)
   
   return res
 end
+
+local function apply_replacements(str)
+  local pre = ""
+  local post = ""
+  local inter = ""
+  
+  local function check_specific_tag(prefix, s, tbl)
+    local replacement = nil
+    local ret = s
+    _.each(function(n, t)
+      local ns,matches = string.gsub(s, string.format("<%s%s>", prefix, n), "")
+      if matches > 0 then
+        replacement = t
+        ret = ns
+      end
+    end, tbl)
+    
+    return ret,replacement
+  end
+  
+  local repl
+  str,repl = check_specific_tag("pre ", str, replace['pre'])
+  if repl then
+    pre = repl
+  end
+  str,repl = check_specific_tag("inter ", str, replace['inter'])
+  if repl then
+    inter = repl
+  end
+  str,repl = check_specific_tag("post ", str, replace['post'])
+  if repl then
+    post = repl
+  end
+  
+  -- XXX: ugly hack
+  if inter then
+    str = string.gsub(str, "><", string.format(">%s<", inter))
+  end
+  
+  local function replace_all_tags(s)
+    local str, matches
+    str = s
+    _.each(function(n, t)
+        str,matches = string.gsub(str, string.format("<%s>", n),
+          string.format("%s%s%s", pre, t, post))
+    end, replace['tags'])
+    
+    return str
+  end
+  
+  local s = replace_all_tags(str)
+  
+  
+  if str ~= s then
+    return true,s
+  end
+  
+  return false,str
+end
+
+-- Replace rule tags
+local ntags = {}
+local function rec_replace_tags(tag, tagv)
+  if ntags[tag] then return ntags[tag] end
+  _.each(function(n, t)
+    if n ~= tag then
+      local s,matches = string.gsub(tagv, string.format("<%s>", n), t)
+      if matches > 0 then
+        ntags[tag] = rec_replace_tags(tag, s)
+      end
+    end
+  end, replace['tags'])
+  
+  if not ntags[tag] then ntags[tag] = tagv end
+  return ntags[tag]
+end
+_.each(function(n, t)
+  rec_replace_tags(n, t)
+end, replace['tags'])
+_.each(function(n, t)
+  replace['tags'][n] = t
+end, ntags)
+
+_.each(function(r)
+  local rule = rules[r]
+  
+  if rule['re_expr'] and rule['re'] then
+    local res,nexpr = apply_replacements(rule['re_expr'])
+    if res then
+      local nre = rspamd_regexp.create_cached(nexpr)
+      if not nre then
+        rspamd_logger.errx('cannot apply replacement for rule %1', r)
+      else
+        rspamd_logger.debugx('replace %1 -> %2', r, nexpr)
+        rule['re'] = nre
+        rule['re_expr'] = nexpr
+      end
+    end 
+  end
+end, replace['rules'])
 
 -- Header rules
 _.each(function(k, r)
