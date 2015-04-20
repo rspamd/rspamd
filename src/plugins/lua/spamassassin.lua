@@ -402,6 +402,7 @@ local function process_sa_conf(f)
       cur_rule['symbol'] = words[2]
       cur_rule['re_expr'] = words_to_re(words, 2)
       cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
+      cur_rule['raw'] = true
       if cur_rule['re'] and cur_rule['symbol'] then valid_rule = true end
     elseif words[1] == "rawbody" or words[1] == "full" and slash then
       -- body SYMBOL /regexp/
@@ -704,7 +705,7 @@ _.each(function(k, r)
             local content = part:get_content()
             local raw = false
             
-            if not part:is_utf() then raw = true end
+            if not part:is_utf() or r['raw'] then raw = true end
             
             return sa_regexp_match(content, r['re'], raw, r)
           end
