@@ -1687,13 +1687,6 @@ start_controller_worker (struct rspamd_worker *worker)
 		rspamd_http_router_set_key (ctx->http, ctx->key);
 	}
 
-	g_hash_table_iter_init (&iter, ctx->custom_commands);
-	while (g_hash_table_iter_next (&iter, &key, &value)) {
-		rspamd_http_router_add_path (ctx->http,
-			key,
-			rspamd_controller_handle_custom);
-	}
-
 	g_hash_table_iter_init (&iter, ctx->cfg->c_modules);
 	while (g_hash_table_iter_next (&iter, &key, &value)) {
 		mctx = value;
@@ -1702,6 +1695,14 @@ start_controller_worker (struct rspamd_worker *worker)
 					ctx->custom_commands);
 		}
 	}
+
+	g_hash_table_iter_init (&iter, ctx->custom_commands);
+	while (g_hash_table_iter_next (&iter, &key, &value)) {
+		rspamd_http_router_add_path (ctx->http,
+			key,
+			rspamd_controller_handle_custom);
+	}
+
 
 	ctx->resolver = dns_resolver_init (worker->srv->logger,
 			ctx->ev_base,
