@@ -84,6 +84,7 @@ lua_util_load_rspamd_config (lua_State *L)
 		}
 		else {
 			rspamd_config_post_load (cfg);
+			init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg, NULL, TRUE);
 			pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
 			rspamd_lua_setclass (L, "rspamd{config}", -1);
 			*pcfg = cfg;
@@ -117,6 +118,7 @@ lua_util_config_from_ucl (lua_State *L)
 		}
 		else {
 			rspamd_config_post_load (cfg);
+			init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg, NULL, TRUE);
 			pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
 			rspamd_lua_setclass (L, "rspamd{config}", -1);
 			*pcfg = cfg;
@@ -132,6 +134,7 @@ lua_util_task_fin (struct rspamd_task *task, void *ud)
 	ucl_object_t **target = ud;
 
 	*target = rspamd_protocol_write_ucl (task, NULL);
+	rdns_resolver_release (task->resolver->r);
 
 	return TRUE;
 }
@@ -150,6 +153,7 @@ lua_util_process_message (lua_State *L)
 
 	if (cfg != NULL && message != NULL) {
 		base = event_init ();
+		rspamd_init_filters (cfg, FALSE);
 		task = rspamd_task_new (NULL);
 		task->cfg = cfg;
 		task->ev_base = base;
@@ -173,6 +177,7 @@ lua_util_process_message (lua_State *L)
 			else {
 				ucl_object_push_lua (L, rspamd_protocol_write_ucl (task, NULL),
 						true);
+				rdns_resolver_release (task->resolver->r);
 				rspamd_task_free_hard (task);
 			}
 		}
