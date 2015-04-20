@@ -43,6 +43,7 @@ LUA_FUNCTION_DEF (regexp, get_cached);
 LUA_FUNCTION_DEF (regexp, get_pattern);
 LUA_FUNCTION_DEF (regexp, search);
 LUA_FUNCTION_DEF (regexp, match);
+LUA_FUNCTION_DEF (regexp, matchn);
 LUA_FUNCTION_DEF (regexp, split);
 LUA_FUNCTION_DEF (regexp, destroy);
 LUA_FUNCTION_DEF (regexp, gc);
@@ -50,6 +51,7 @@ LUA_FUNCTION_DEF (regexp, gc);
 static const struct luaL_reg regexplib_m[] = {
 	LUA_INTERFACE_DEF (regexp, get_pattern),
 	LUA_INTERFACE_DEF (regexp, match),
+	LUA_INTERFACE_DEF (regexp, matchn),
 	LUA_INTERFACE_DEF (regexp, search),
 	LUA_INTERFACE_DEF (regexp, split),
 	LUA_INTERFACE_DEF (regexp, destroy),
@@ -336,6 +338,78 @@ lua_regexp_match (lua_State *L)
 			else {
 				lua_pushboolean (L, FALSE);
 			}
+			return 1;
+		}
+	}
+
+	lua_pushnil (L);
+
+	return 1;
+}
+
+/***
+ * @method re:matchn(line, max_matches, [, raw_match])
+ * Matches line against the regular expression and return number of matches if line matches
+ * (partially or completely). This process stop when `max_matches` is reached.
+ * If `max_matches` is zero, then only a single match is counted which is equal to
+ * @see re:match If `max_matches` is negative, then all matches are considered.
+ *
+ * @param {string} line match the specified line against regexp object
+ * @param {number} max_matches maximum number of matches
+ * @param {bool} match raw regexp instead of utf8 one
+ * @return {table or nil} table of strings matched or nil
+ * @example
+ * local re = regexp.create_cached('/^\s*([0-9]+)\s*$/')
+ * -- returns nil
+ * local m1 = re:match('blah')
+ * local m2 = re:match('   190   ')
+ */
+static int
+lua_regexp_matchn (lua_State *L)
+{
+	struct rspamd_lua_regexp *re = lua_check_regexp (L);
+	struct rspamd_lua_text *t;
+	const gchar *data = NULL, *start = NULL, *end = NULL;
+	gint max_matches, matches;
+	gsize len = 0;
+	gboolean raw = FALSE;
+
+	if (re && !IS_DESTROYED (re)) {
+		if (lua_type (L, 2) == LUA_TSTRING) {
+			data = luaL_checklstring (L, 2, &len);
+		}
+		else if (lua_type (L, 2) == LUA_TUSERDATA) {
+			t = lua_check_text (L, 2);
+			if (t != NULL) {
+				data = t->start;
+				len = t->len;
+			}
+		}
+
+		max_matches = lua_tonumber (L, 3);
+
+		if (lua_gettop (L) == 4) {
+			raw = lua_toboolean (L, 4);
+		}
+
+		if (data) {
+			matches = 0;
+
+			for (;;) {
+				if (rspamd_regexp_search (re->re, data, len, &start, &end, raw)) {
+					matches ++;
+				}
+				else {
+					break;
+				}
+
+				if (max_matches >= 0 && matches >= max_matches) {
+					break;
+				}
+			}
+
+			lua_pushnumber (L, matches);
+
 			return 1;
 		}
 	}
