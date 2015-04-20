@@ -85,11 +85,11 @@ local function handle_header_def(hline, cur_rule)
           local match = re:match(hdr)
           if (match and not not_f) or 
             (not match and not_f) then
-            task:insert_result(sym, 1.0)
+            return 1
           end
         end
+        return 0
       end
-      return
     else
       local args = split(h, '[^:]+')
       cur_param['strong'] = false
@@ -137,10 +137,10 @@ end
 
 
 local function freemail_search(input)
-  local res = false
+  local res = 0
   local function trie_callback(number, pos)
     rspamd_logger.debugx('Matched pattern %1 at pos %2', freemail_domains[number], pos)
-    res = true
+    res = res + 1
   end
   
   if input then
@@ -157,7 +157,7 @@ local function gen_eval_rule(arg)
         if from then
           return freemail_search(from[1]['addr'])
         end
-        return false 
+        return 0 
       end},
     {'check_freemail_replyto', 
       function(task, remain) 
@@ -177,13 +177,13 @@ local function gen_eval_rule(arg)
           local h = task:get_header(arg)
           if h then
             local hdr_freemail = freemail_search(h)
-            if hdr_freemail and re then
+            if hdr_freemail > 0 and re then
               r = rspamd_regexp.create_cached(re)
               if r then
                 r:match(h)
               else
                 rspamd_logger.infox('cannot create regexp %1', re)
-                return false
+                return 0
               end
             end
            
@@ -191,7 +191,7 @@ local function gen_eval_rule(arg)
           end
         end
         
-        return false   
+        return 0   
       end
     },
   }
@@ -221,9 +221,9 @@ local function maybe_parse_sa_function(line)
     {'^exists:', 
       function(task) -- filter
         if task:get_header(arg) then
-          return true
+          return 1
         end
-        return false
+        return 0
       end,
     },
     {'^eval:',
@@ -240,7 +240,7 @@ local function maybe_parse_sa_function(line)
           return func(task)
         end
         
-        return false
+        return 0
       end
     },
   }
@@ -252,6 +252,18 @@ local function maybe_parse_sa_function(line)
   end
   
   return nil
+end
+
+local function process_tflags(rule, flags)
+  _.each(function(flag)
+    if flag == 'publish' then
+      rule['publish'] = true
+    elseif flag == 'multiple' then
+      rule['multiple'] = true
+    elseif string.match(flag, '^maxhits=(%d+)$') then
+      rule['maxhits'] = tonumber(string.match(flag, '^maxhits=(%d+)$'))
+    end
+  end, _.drop_n(1, flags))
 end
 
 local function process_sa_conf(f)
@@ -402,6 +414,8 @@ local function process_sa_conf(f)
       _.each(function(dom)
         table.insert(freemail_domains, '@' .. dom)
         end, _.drop_n(1, words))
+    elseif words[1] == 'tflags' then
+      process_tflags(cur_rule, words)
     end
     end)()
   end
@@ -447,6 +461,21 @@ if freemail_domains then
   rspamd_logger.infox('loaded %1 freemail domains definitions', #freemail_domains)
 end
 
+local function sa_regexp_match(data, re, raw, rule)
+  local res = 0
+  if rule['multiple'] then
+    local lim = -1
+    if rule['maxhits'] then
+      lim = rule['maxhits']
+    end
+    res = res + re:matchn(data, lim, raw)
+  else
+    if re:match(data, raw) then res = 1 end
+  end
+  
+  return res
+end
+
 -- Header rules
 _.each(function(k, r)
     local f = function(task)
@@ -483,9 +512,9 @@ _.each(function(k, r)
         return 0
       end
       
-      local match = r['re']:match(str, raw)
+      local match = sa_regexp_match(str, r['re'], raw, r)
       if (match and not r['not']) or (not match and r['not']) then
-        return 1
+        return match
       end
       
       return 0
@@ -507,8 +536,9 @@ _.each(function(k, r)
 -- Custom function rules
 _.each(function(k, r)
     local f = function(task)
-      if r['function'](task) then
-        return 1
+      local res = r['function'](task)
+      if res > 0 then
+        return res
       end
       return 0
     end
@@ -538,9 +568,8 @@ _.each(function(k, r)
             local raw = false
             
             if not part:is_utf() then raw = true end
-            if r['re']:match(content, raw) then
-              return 1
-            end
+            
+            return sa_regexp_match(content, r['re'], raw, r)
           end
         end
       end
@@ -564,10 +593,7 @@ _.each(function(k, r)
 -- Raw body rules
 _.each(function(k, r)
     local f = function(task)
-      if r['re']:match(task:get_content(), true) then
-        return 1
-      end
-      return 0
+      return sa_regexp_match(task:get_content(), r['re'], true, r)
     end
     if r['score'] then
       local real_score = r['score'] * calculate_score(k)
@@ -588,8 +614,9 @@ _.each(function(k, r)
     local f = function(task)
       local urls = task:get_urls()
       for _,u in ipairs(urls) do
-        if (r['re']:match(u:get_text())) then
-          return 1
+        local res = sa_regexp_match(u:get_text(), r['re'], true, r)
+        if res > 0 then
+          return res
         end
       end
       return 0
@@ -630,9 +657,15 @@ local function process_atom(atom, task)
       res = atom_cb(task)
       task:cache_set(atom, res)
     end
+    
+    if not res then
+      rspamd_logger.debugx('atom: %1, NULL result', atom)
+    elseif res > 0 then
+      rspamd_logger.debugx('atom: %1, result: %2', atom, res)
+    end
     return res
   else
-    rspamd_logger.err('Cannot find atom ' .. atom)
+    rspamd_logger.debugx('Cannot find atom ' .. atom)
   end
   return 0
 end
@@ -653,6 +686,8 @@ _.each(function(k, r)
       if res > 0 then
         task:insert_result(k, res)
       end
+      
+      return res
     end
     expression = rspamd_expression.create(r['meta'],  
       {parse_atom, process_atom}, sa_mempool)
