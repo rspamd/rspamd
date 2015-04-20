@@ -271,6 +271,19 @@ local function process_sa_conf(f)
   local valid_rule = false
   
   local function insert_cur_rule()
+   if cur_rule['type'] ~= 'meta' and cur_rule['publish'] then
+     -- Create meta rule from this rule
+     local nsym = '__fake' .. cur_rule['symbol']
+     local nrule = {
+       type = 'meta',
+       symbol = cur_rule['symbol'],
+       score = cur_rule['score'],
+       meta = nsym,
+       description = cur_rule['description'],
+     }
+     rules[nrule['symbol']] = nrule
+     cur_rule['symbol'] = nsym
+   end 
    -- We have previous rule valid
    rules[cur_rule['symbol']] = cur_rule
    cur_rule = {}
