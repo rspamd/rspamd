@@ -37,7 +37,10 @@ local _ = require "fun"
 --local dumper = require 'pl.pretty'.dump
 
 -- Known plugins
-local known_plugins = {'Mail::SpamAssassin::Plugin::FreeMail'}
+local known_plugins = {
+  'Mail::SpamAssassin::Plugin::FreeMail',
+  'Mail::SpamAssassin::Plugin::HeaderEval',
+}
 
 -- Internal variables
 local rules = {}
