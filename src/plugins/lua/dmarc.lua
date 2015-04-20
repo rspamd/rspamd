@@ -64,6 +64,18 @@ end
 
 local function dmarc_callback(task)
   local from = task:get_from(2)
+  local dmarc_domain
+
+  if from and from[1]['domain'] and not from[2] then
+    local url_from = rspamd_url.create(task:get_mempool(), from[1]['domain'])
+    if url_from then
+      dmarc_domain = url_from:get_tld()
+    else
+      return
+    end
+  else
+    return
+  end
   
   local function dmarc_report_cb(task, err, data)
     if not err then
@@ -83,8 +95,9 @@ local function dmarc_callback(task)
         task:get_resolver():resolve_txt(task:get_session(),
         task:get_mempool(), '_dmarc.' .. dmarc_domain, dmarc_dns_cb)
         return
-      else
-        return
+      end
+      
+      return
     end
 
     local strict_spf = false
@@ -183,7 +196,9 @@ local function dmarc_callback(task)
         return
       else
         return
+      end
     end
+    
     if failed_policy then return end
 
     -- Check dkim and spf symbols
@@ -192,15 +207,15 @@ local function dmarc_callback(task)
     if task:get_symbol(symbols['spf_allow_symbol']) then
       efrom = task:get_from(1)
       if efrom and efrom[1] and efrom[1]['domain'] then
-          if efrom[1]['domain'] == from[1]['domain'] then
+        if efrom[1]['domain'] == from[1]['domain'] then
+          spf_ok = true
+        elseif not strict_spf then
+          if string.sub(efrom[1]['domain'],
+            -string.len('.' .. lookup_domain))
+          == '.' .. lookup_domain then
             spf_ok = true
-          elseif not strict_spf then
-            if string.sub(efrom[1]['domain'],
-              -string.len('.' .. lookup_domain))
-              == '.' .. lookup_domain then
-                spf_ok = true
-            end
           end
+        end
       end
     end
     local das = task:get_symbol(symbols['dkim_allow_symbol'])
@@ -210,8 +225,8 @@ local function dmarc_callback(task)
       elseif not strict_dkim then
         if string.sub(das[1]['options'][0],
           -string.len('.' .. lookup_domain))
-          == '.' .. lookup_domain then
-            dkim_ok = true
+        == '.' .. lookup_domain then
+          dkim_ok = true
         end
       end
     end
@@ -249,15 +264,10 @@ local function dmarc_callback(task)
     
     -- XXX: handle rua and push data to redis
   end
-
-  if from and from[1]['domain'] and not from[2] then
-    local url_from = rspamd_url.create(task:get_mempool(), from[1]['domain'])
-    if url_from then
-      dmarc_domain = url_from:get_tld()
-      task:get_resolver():resolve_txt(task:get_session(), task:get_mempool(),
+  
+  -- Do initial request
+  task:get_resolver():resolve_txt(task:get_session(), task:get_mempool(),
         '_dmarc.' .. from[1]['domain'], dmarc_dns_cb)
-    end
-  end
 end
 
 local opts = rspamd_config:get_all_opt('dmarc')
