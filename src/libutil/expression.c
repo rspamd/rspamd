@@ -899,6 +899,11 @@ rspamd_ast_process_node (struct rspamd_expression *expr, gint flags, GNode *node
 			celt = cld->data;
 
 			/* Save limit if we've found it */
+			if (celt->type == ELT_LIMIT) {
+				lim = celt->p.lim.val;
+				continue;
+			}
+
 			val = rspamd_ast_process_node (expr, flags, cld, data);
 
 			if (acc == G_MININT) {
@@ -1006,7 +1011,7 @@ rspamd_ast_string_traverse (GNode *n, gpointer d)
 			op_str = "<=";
 			break;
 		case OP_LT:
-			op_str = ">=";
+			op_str = "<";
 			break;
 		default:
 			op_str = "???";
