@@ -2,7 +2,7 @@
 #define RSPAMD_MODULE_SURBL
 
 #include "config.h"
-#include "libutil/trie.h"
+#include "acism.h"
 #include "main.h"
 
 #define DEFAULT_REDIRECTOR_PORT 8080
@@ -31,8 +31,8 @@ struct surbl_ctx {
 	GHashTable **exceptions;
 	GHashTable *whitelist;
 	GHashTable *redirector_hosts;
-	rspamd_trie_t *redirector_trie;
-	GPtrArray *redirector_ptrs;
+	ac_trie_t *redirector_trie;
+	GArray *redirector_ptrs;
 	guint use_redirector;
 	struct upstream_list *redirectors;
 	rspamd_mempool_t *surbl_pool;
