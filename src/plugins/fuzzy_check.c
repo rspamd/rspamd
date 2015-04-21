@@ -120,7 +120,6 @@ struct fuzzy_learn_session {
 };
 
 static struct fuzzy_ctx *fuzzy_module_ctx = NULL;
-static const gchar hex_digits[] = "0123456789abcdef";
 
 static void fuzzy_symbol_callback (struct rspamd_task *task, void *unused);
 
@@ -264,32 +263,6 @@ fuzzy_normalize (gint32 in, double weight)
 #else
 	return (in < weight ? in / weight : weight);
 #endif
-}
-
-static const gchar *
-fuzzy_to_string (rspamd_fuzzy_t *h)
-{
-	static gchar strbuf [FUZZY_HASHLEN * 2 + 1];
-	const int max_print = 5;
-	gint i;
-	guint8 byte;
-
-	for (i = 0; i < max_print; i++) {
-		byte = h->hash_pipe[i];
-		if (byte == '\0') {
-			break;
-		}
-		strbuf[i * 2] = hex_digits[byte >> 4];
-		strbuf[i * 2 + 1] = hex_digits[byte & 0xf];
-	}
-	if (i == max_print) {
-		memcpy (&strbuf[i * 2], "...", 4);
-	}
-	else {
-		strbuf[i * 2] = '\0';
-	}
-
-	return strbuf;
 }
 
 static struct fuzzy_rule *
