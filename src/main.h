@@ -84,6 +84,16 @@ struct rspamd_dns_resolver;
 struct rspamd_task;
 
 /**
+ * The epoch of the fuzzy client
+ */
+enum rspamd_fuzzy_epoch {
+	RSPAMD_FUZZY_EPOCH6 = 0, /**< pre 0.6.x */
+	RSPAMD_FUZZY_EPOCH8,     /**< 0.8 till 0.9 */
+	RSPAMD_FUZZY_EPOCH9,     /**< 0.9 + */
+	RSPAMD_FUZZY_EPOCH_MAX
+};
+
+/**
  * Server statistics
  */
 struct rspamd_stat {
@@ -94,6 +104,8 @@ struct rspamd_stat {
 	guint messages_learned;                             /**< messages learned								*/
 	guint fuzzy_hashes;                                 /**< number of fuzzy hashes stored					*/
 	guint fuzzy_hashes_expired;                         /**< number of fuzzy hashes expired					*/
+	guint64 fuzzy_hashes_checked[RSPAMD_FUZZY_EPOCH_MAX]; /**< ammount of check requests for each epoch		*/
+	guint64 fuzzy_hashes_found[RSPAMD_FUZZY_EPOCH_MAX]; /**< amount of hashes found by epoch				*/
 };
 
 /**

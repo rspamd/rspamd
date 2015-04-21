@@ -160,7 +160,8 @@ rspamd_fuzzy_write_reply (struct fuzzy_session *session,
 }
 
 static void
-rspamd_fuzzy_process_command (struct fuzzy_session *session)
+rspamd_fuzzy_process_command (struct fuzzy_session *session,
+		enum rspamd_fuzzy_epoch epoch)
 {
 	struct rspamd_fuzzy_reply rep = {0, 0, 0, 0.0};
 	gboolean res = FALSE;
@@ -168,6 +169,12 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 	if (session->cmd->cmd == FUZZY_CHECK) {
 		rep = rspamd_fuzzy_backend_check (session->ctx->backend, session->cmd,
 				session->ctx->expire);
+		/* XXX: actually, these updates are not atomic, but we don't care */
+		server_stat->fuzzy_hashes_checked[epoch] ++;
+
+		if (rep.prob > 0.5) {
+			server_stat->fuzzy_hashes_found[epoch] ++;
+		}
 	}
 	else {
 		rep.flag = session->cmd->flag;
@@ -201,17 +208,21 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 }
 
 
-static gboolean
+static enum rspamd_fuzzy_epoch
 rspamd_fuzzy_command_valid (struct rspamd_fuzzy_cmd *cmd, gint r)
 {
+	enum rspamd_fuzzy_epoch ret = RSPAMD_FUZZY_EPOCH_MAX;
+
 	if (cmd->version == RSPAMD_FUZZY_VERSION) {
 		if (cmd->shingles_count > 0) {
 			if (r == sizeof (struct rspamd_fuzzy_shingle_cmd)) {
-				return TRUE;
+				ret = RSPAMD_FUZZY_EPOCH9;
 			}
 		}
 		else {
-			return (r == sizeof (*cmd));
+			if (r == sizeof (*cmd)) {
+				ret = RSPAMD_FUZZY_EPOCH9;
+			}
 		}
 	}
 	else if (cmd->version == 2) {
@@ -221,15 +232,15 @@ rspamd_fuzzy_command_valid (struct rspamd_fuzzy_cmd *cmd, gint r)
 		 */
 		if (cmd->shingles_count > 0) {
 			if (r == sizeof (struct rspamd_fuzzy_shingle_cmd)) {
-				return TRUE;
+				ret = RSPAMD_FUZZY_EPOCH8;
 			}
 		}
 		else {
-			return (r == sizeof (*cmd));
+			ret = RSPAMD_FUZZY_EPOCH8;
 		}
 	}
 
-	return FALSE;
+	return ret;
 }
 /*
  * Accept new connection and construct task
@@ -243,6 +254,7 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 	guint8 buf[2048];
 	struct rspamd_fuzzy_cmd *cmd = NULL, lcmd;
 	struct legacy_fuzzy_cmd *l;
+	enum rspamd_fuzzy_epoch epoch = RSPAMD_FUZZY_EPOCH_MAX;
 
 	session.worker = worker;
 	session.fd = fd;
@@ -273,14 +285,17 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 			lcmd.value = l->value;
 			lcmd.tag = 0;
 			cmd = &lcmd;
+			epoch = RSPAMD_FUZZY_EPOCH6;
 		}
 		else if ((guint)r >= sizeof (struct rspamd_fuzzy_cmd)) {
 			/* Check shingles count sanity */
 			session.legacy = FALSE;
 			cmd = (struct rspamd_fuzzy_cmd *)buf;
-			if (!rspamd_fuzzy_command_valid (cmd, r)) {
+			epoch = rspamd_fuzzy_command_valid (cmd, r);
+			if (epoch == RSPAMD_FUZZY_EPOCH_MAX) {
 				/* Bad input */
 				msg_debug ("invalid fuzzy command of size %d received", r);
+				cmd = NULL;
 			}
 		}
 		else {
@@ -289,7 +304,7 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 		}
 		if (cmd != NULL) {
 			session.cmd = cmd;
-			rspamd_fuzzy_process_command (&session);
+			rspamd_fuzzy_process_command (&session, epoch);
 		}
 
 		rspamd_inet_address_destroy (session.addr);
