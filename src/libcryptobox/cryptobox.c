@@ -28,6 +28,7 @@
 #include "curve25519/curve25519.h"
 #include "siphash/siphash.h"
 #include "ottery.h"
+#include "blake2.h"
 #ifdef HAVE_CPUID_H
 #include <cpuid.h>
 #endif
@@ -251,4 +252,62 @@ rspamd_cryptobox_siphash (unsigned char *out, const unsigned char *in,
 		const rspamd_sipkey_t k)
 {
 	siphash24 (out, in, inlen, k);
+}
+
+/*
+ * Password-Based Key Derivation Function 2 (PKCS #5 v2.0).
+ * Code based on IEEE Std 802.11-2007, Annex H.4.2.
+ */
+gboolean
+rspamd_cryptobox_pbkdf(const char *pass, gsize pass_len,
+		const guint8 *salt, gsize salt_len, guint8 *key, gsize key_len,
+		unsigned int rounds)
+{
+	guint8 *asalt, obuf[BLAKE2B_OUTBYTES];
+	guint8 d1[BLAKE2B_OUTBYTES], d2[BLAKE2B_OUTBYTES];
+	unsigned int i, j;
+	unsigned int count;
+	gsize r;
+
+	if (rounds < 1 || key_len == 0) {
+		return FALSE;
+	}
+	if (salt_len == 0 || salt_len > G_MAXSIZE - 4) {
+		return FALSE;
+	}
+
+	asalt = g_malloc (salt_len + 4);
+	memcpy (asalt, salt, salt_len);
+
+	for (count = 1; key_len > 0; count++) {
+		asalt[salt_len + 0] = (count >> 24) & 0xff;
+		asalt[salt_len + 1] = (count >> 16) & 0xff;
+		asalt[salt_len + 2] = (count >> 8) & 0xff;
+		asalt[salt_len + 3] = count & 0xff;
+		blake2b (d1, asalt, pass, BLAKE2B_OUTBYTES, salt_len + 4, pass_len);
+		memcpy (obuf, d1, sizeof(obuf));
+
+		for (i = 1; i < rounds; i++) {
+			blake2b (d2, d1, pass, BLAKE2B_OUTBYTES, BLAKE2B_OUTBYTES,
+					pass_len);
+			memcpy (d1, d2, sizeof(d1));
+
+			for (j = 0; j < sizeof(obuf); j++) {
+				obuf[j] ^= d1[j];
+			}
+		}
+
+		r = MIN(key_len, BLAKE2B_OUTBYTES);
+		memcpy (key, obuf, r);
+		key += r;
+		key_len -= r;
+	}
+
+	rspamd_explicit_memzero (asalt, salt_len + 4);
+	g_free (asalt);
+	rspamd_explicit_memzero (d1, sizeof (d1));
+	rspamd_explicit_memzero (d2, sizeof (d2));
+	rspamd_explicit_memzero (obuf, sizeof (obuf));
+
+	return TRUE;
 }

@@ -129,4 +129,19 @@ void rspamd_cryptobox_siphash (unsigned char *out, const unsigned char *in,
 		unsigned long long inlen,
 		const rspamd_sipkey_t k);
 
+/**
+ * Derive key from password using PKCS#5 and HMAC-blake2
+ * @param pass input password
+ * @param pass_len length of the password
+ * @param salt input salt
+ * @param salt_len length of salt
+ * @param key output key
+ * @param key_len size of the key
+ * @param rounds number of rounds (should be reasonably high)
+ * @return TRUE in case of success and FALSE if failed
+ */
+gboolean rspamd_cryptobox_pbkdf(const char *pass, gsize pass_len,
+		const guint8 *salt, gsize salt_len, guint8 *key, gsize key_len,
+		unsigned int rounds);
+
 #endif /* CRYPTOBOX_H_ */
