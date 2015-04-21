@@ -57,12 +57,7 @@ struct redirector_param {
 	struct rspamd_url *url;
 	struct rspamd_task *task;
 	struct upstream *redirector;
-	enum {
-		STATE_CONNECT,
-		STATE_READ
-	} state;
-	GString *buf;
-	struct event ev;
+	struct rspamd_http_connection *conn;
 	gint sock;
 	GHashTable *tree;
 	struct suffix_item *suffix;

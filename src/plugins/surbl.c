@@ -865,136 +865,67 @@ free_redirector_session (void *ud)
 {
 	struct redirector_param *param = (struct redirector_param *)ud;
 
-	event_del (&param->ev);
-	g_string_free (param->buf, TRUE);
+	rspamd_http_connection_unref (param->conn);
 	close (param->sock);
 }
 
 static void
-redirector_callback (gint fd, short what, void *arg)
+surbl_redirector_error (struct rspamd_http_connection *conn,
+	GError *err)
 {
-	struct redirector_param *param = (struct redirector_param *)arg;
-	gchar url_buf[512];
+	struct redirector_param *param = (struct redirector_param *)conn->ud;
+
+	msg_err ("connection with http server %s terminated incorrectly: %s",
+		rspamd_inet_address_to_string (rspamd_upstream_addr (param->redirector)),
+		err->message);
+	rspamd_upstream_fail (param->redirector);
+	remove_normal_event (param->task->s, free_redirector_session,
+			param);
+}
+
+static int
+surbl_redirector_finish (struct rspamd_http_connection *conn,
+		struct rspamd_http_message *msg)
+{
+	struct redirector_param *param = (struct redirector_param *)conn->ud;
 	gint r, urllen;
-	struct timeval *timeout;
-	gchar *p, *c, *urlstr;
-	gboolean found = FALSE;
+	const gchar *hdr;
+	gchar *urlstr;
 
-	switch (param->state) {
-	case STATE_CONNECT:
-		/* We have write readiness after connect call, so reinit event */
-		if (what == EV_WRITE) {
-			timeout =
-				rspamd_mempool_alloc (param->task->task_pool,
-					sizeof (struct timeval));
-			double_to_tv (surbl_module_ctx->read_timeout, timeout);
-			event_del (&param->ev);
-			event_set (&param->ev,
-				param->sock,
-				EV_READ | EV_PERSIST,
-				redirector_callback,
-				(void *)param);
-			event_add (&param->ev, timeout);
-			r = rspamd_snprintf (url_buf,
-					sizeof (url_buf),
-					"GET %s HTTP/1.0\r\n\r\n",
-					struri (param->url));
-			if (write (param->sock, url_buf, r) == -1) {
-				msg_err ("write failed %s to %s", strerror (
-						errno), rspamd_upstream_name (param->redirector));
-				rspamd_upstream_fail (param->redirector);
-				remove_normal_event (param->task->s,
-					free_redirector_session,
-					param);
-				return;
-			}
-			param->state = STATE_READ;
-		}
-		else {
-			msg_info (
-				"<%s> connection to redirector %s timed out while waiting for write",
-				param->task->message_id,
-				rspamd_upstream_name (param->redirector));
-			rspamd_upstream_fail (param->redirector);
-			remove_normal_event (param->task->s, free_redirector_session,
-				param);
+	if (msg->code == 200) {
+		hdr = rspamd_http_message_find_header (msg, "Uri");
 
-			return;
-		}
-		break;
-	case STATE_READ:
-		if (what == EV_READ) {
-			r = read (param->sock, url_buf, sizeof (url_buf) - 1);
-			if (r <= 0) {
-				msg_err ("read failed: %s from %s", strerror (
-						errno), rspamd_upstream_name (param->redirector));
-				rspamd_upstream_fail (param->redirector);
+		if (hdr != NULL) {
+			msg_info ("<%s> got reply from redirector: '%s' -> '%s'",
+					param->task->message_id,
+					struri (param->url),
+					hdr);
+			urllen = strlen (hdr);
+			urlstr = rspamd_mempool_strdup (param->task->task_pool,
+					hdr);
+			r = rspamd_url_parse (param->url, urlstr, urllen,
+					param->task->task_pool);
+
+			if (r == URI_ERRNO_OK) {
 				make_surbl_requests (param->url,
-					param->task,
-					param->suffix,
-					FALSE,
-					param->tree);
-				remove_normal_event (param->task->s,
-					free_redirector_session,
-					param);
-				return;
+						param->task,
+						param->suffix,
+						FALSE,
+						param->tree);
 			}
-
-			g_string_append_len (param->buf, url_buf, r);
-
-			if ((p = strstr (param->buf->str, "Uri: ")) != NULL) {
-				p += sizeof ("Uri: ") - 1;
-				c = p;
-				while (p++ < param->buf->str + param->buf->len - 1) {
-					if (*p == '\r' || *p == '\n') {
-						*p = '\0';
-						found = TRUE;
-						break;
-					}
-				}
-
-				if (found) {
-					msg_info ("<%s> got reply from redirector: '%s' -> '%s'",
-						param->task->message_id,
-						struri (param->url),
-						c);
-
-					urllen = strlen (c);
-					urlstr = rspamd_mempool_alloc (param->task->task_pool,
-							urllen + 1);
-					rspamd_strlcpy (urlstr, c, urllen + 1);
-					r = rspamd_url_parse (param->url, urlstr, urllen,
-							param->task->task_pool);
-
-					if (r == URI_ERRNO_OK) {
-						make_surbl_requests (param->url,
-							param->task,
-							param->suffix,
-							FALSE,
-							param->tree);
-					}
-				}
-				else {
-					msg_info ("<%s> could not resolve '%s' on redirector",
-							param->task->message_id,
-							struri (param->url));
-				}
-			}
-			rspamd_upstream_ok (param->redirector);
-			remove_normal_event (param->task->s, free_redirector_session,
-				param);
 		}
-		else {
-			msg_info (
-				"<%s> reading redirector %s timed out, while waiting for read",
-				rspamd_upstream_name (param->redirector),
-				param->task->message_id);
-			rspamd_upstream_fail (param->redirector);
-			remove_normal_event (param->task->s, free_redirector_session,
-				param);
-		}
-		break;
 	}
+	else {
+		msg_info ("<%s> could not resolve '%s' on redirector",
+				param->task->message_id,
+				struri (param->url));
+	}
+
+	rspamd_upstream_ok (param->redirector);
+	remove_normal_event (param->task->s, free_redirector_session,
+			param);
+
+	return 0;
 }
 
 
@@ -1006,6 +937,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 	struct redirector_param *param;
 	struct timeval *timeout;
 	struct upstream *selected;
+	struct rspamd_http_message *msg;
 
 	selected = rspamd_upstream_get (surbl_module_ctx->redirectors,
 			RSPAMD_UPSTREAM_ROUND_ROBIN);
@@ -1028,20 +960,26 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 			sizeof (struct redirector_param));
 	param->url = url;
 	param->task = task;
-	param->state = STATE_CONNECT;
+	param->conn = rspamd_http_connection_new (NULL, surbl_redirector_error,
+			surbl_redirector_finish,
+			RSPAMD_HTTP_CLIENT_SIMPLE,
+			RSPAMD_HTTP_CLIENT, NULL);
+	msg = rspamd_http_new_message (HTTP_REQUEST);
+	msg->url = g_string_new (struri (url));
 	param->sock = s;
 	param->suffix = suffix;
 	param->redirector = selected;
-	param->buf = g_string_sized_new (1024);
 	param->tree = tree;
 	timeout = rspamd_mempool_alloc (task->task_pool, sizeof (struct timeval));
-	double_to_tv (surbl_module_ctx->connect_timeout, timeout);
-	event_set (&param->ev, s, EV_WRITE, redirector_callback, (void *)param);
-	event_add (&param->ev, timeout);
+	double_to_tv (surbl_module_ctx->read_timeout, timeout);
+
 	register_async_event (task->s,
 		free_redirector_session,
 		param,
 		g_quark_from_static_string ("surbl"));
+
+	rspamd_http_connection_write_message (param->conn, msg, NULL,
+			NULL, param, s, timeout, task->ev_base);
 
 	msg_info (
 		"<%s> registered redirector call for %s to %s, according to rule: %s",
