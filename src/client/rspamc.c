@@ -730,8 +730,34 @@ rspamc_stat_output (ucl_object_t *obj)
 	rspamd_printf_gstring (out, "Fuzzy hashes expired: %L\n",
 		ucl_object_toint (ucl_object_find_key (obj, "fuzzy_expired")));
 
+	st = ucl_object_find_key (obj, "fuzzy_checked");
+	if (st != NULL && ucl_object_type (st) == UCL_ARRAY) {
+		rspamd_printf_gstring (out, "Fuzzy hashes checked: ");
+		iter = NULL;
+
+		while ((cur = ucl_iterate_object (st, &iter, true)) != NULL) {
+			rspamd_printf_gstring (out, "%hL ", ucl_object_toint (cur));
+		}
+
+		rspamd_printf_gstring (out, "\n");
+	}
+
+	st = ucl_object_find_key (obj, "fuzzy_found");
+	if (st != NULL && ucl_object_type (st) == UCL_ARRAY) {
+		rspamd_printf_gstring (out, "Fuzzy hashes found: ");
+		iter = NULL;
+
+		while ((cur = ucl_iterate_object (st, &iter, true)) != NULL) {
+			rspamd_printf_gstring (out, "%hL ", ucl_object_toint (cur));
+		}
+
+		rspamd_printf_gstring (out, "\n");
+	}
+
 	st = ucl_object_find_key (obj, "statfiles");
 	if (st != NULL && ucl_object_type (st) == UCL_ARRAY) {
+		iter = NULL;
+
 		while ((cur = ucl_iterate_object (st, &iter, true)) != NULL) {
 			rspamc_stat_statfile (cur, out);
 		}
