@@ -396,7 +396,7 @@ surbl_module_config (struct rspamd_config *cfg)
 		rspamd_map_add (cfg, ucl_obj_tostring (
 				value),
 			"SURBL redirectors list", read_redirectors_list, fin_redirectors_list,
-			(void **)&surbl_module_ctx->redirector_hosts);
+			(void **)&surbl_module_ctx->redirector_map_data);
 	}
 
 	if ((value =

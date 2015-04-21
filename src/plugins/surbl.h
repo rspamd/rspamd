@@ -31,6 +31,7 @@ struct surbl_ctx {
 	GHashTable **exceptions;
 	GHashTable *whitelist;
 	GHashTable *redirector_hosts;
+	void *redirector_map_data;
 	ac_trie_t *redirector_trie;
 	GArray *redirector_ptrs;
 	guint use_redirector;
