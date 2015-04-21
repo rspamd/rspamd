@@ -221,7 +221,7 @@ read_redirectors_list (rspamd_mempool_t * pool,
 	struct rspamd_redirector_map_cb *cbdata;
 
 	if (data->cur_data == NULL) {
-		cbdata = rspamd_mempool_alloc (pool, sizeof (*cbdata));
+		cbdata = g_slice_alloc0 (sizeof (*cbdata));
 		cbdata->patterns = g_array_sized_new (FALSE, FALSE,
 				sizeof (ac_trie_pat_t), 32);
 
@@ -257,6 +257,7 @@ fin_redirectors_list (rspamd_mempool_t * pool, struct map_cb_data *data)
 		g_hash_table_unref (cbdata->re_hash);
 		g_array_free (cbdata->patterns, TRUE);
 		acism_destroy (surbl_module_ctx->redirector_trie);
+		g_slice_free1 (sizeof (*cbdata), cbdata);
 	}
 
 	cbdata = data->cur_data;
@@ -840,12 +841,8 @@ static void
 dns_callback (struct rdns_reply *reply, gpointer arg)
 {
 	struct dns_param *param = (struct dns_param *)arg;
-	struct rspamd_task *task;
 	struct rdns_reply_entry *elt;
 
-	task = param->task;
-
-	debug_task ("in surbl request callback");
 	/* If we have result from DNS server, this url exists in SURBL, so increase score */
 	if (reply->code == RDNS_RC_NOERROR && reply->entries) {
 		msg_info ("<%s> domain [%s] is in surbl %s", param->task->message_id,
@@ -857,7 +854,7 @@ dns_callback (struct rdns_reply *reply, gpointer arg)
 		}
 	}
 	else {
-		debug_task ("<%s> domain [%s] is not in surbl %s",
+		msg_debug ("<%s> domain [%s] is not in surbl %s",
 			param->task->message_id, param->host_resolve,
 			param->suffix->suffix);
 	}
