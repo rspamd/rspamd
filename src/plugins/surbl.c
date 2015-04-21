@@ -1091,7 +1091,7 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 				/* Try to find corresponding regexp */
 				re = g_hash_table_lookup (
 						surbl_module_ctx->redirector_hosts,
-						pat);
+						pat->ptr);
 				if (re == NULL || rspamd_regexp_search (re, url->string, 0,
 						NULL, NULL, TRUE)) {
 					if (surbl_module_ctx->redirector_symbol != NULL) {
