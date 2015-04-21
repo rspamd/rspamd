@@ -214,6 +214,20 @@ rspamd_fuzzy_command_valid (struct rspamd_fuzzy_cmd *cmd, gint r)
 			return (r == sizeof (*cmd));
 		}
 	}
+	else if (cmd->version == 2) {
+		/*
+		 * rspamd 0.8 has slightly different tokenizer then it might be not
+		 * 100% compatible
+		 */
+		if (cmd->shingles_count > 0) {
+			if (r == sizeof (struct rspamd_fuzzy_shingle_cmd)) {
+				return TRUE;
+			}
+		}
+		else {
+			return (r == sizeof (*cmd));
+		}
+	}
 
 	return FALSE;
 }

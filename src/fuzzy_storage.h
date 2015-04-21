@@ -6,7 +6,7 @@
 #include "fuzzy.h"
 #include "shingles.h"
 
-#define RSPAMD_FUZZY_VERSION 2
+#define RSPAMD_FUZZY_VERSION 3
 
 /* Commands for fuzzy storage */
 #define FUZZY_CHECK 0
