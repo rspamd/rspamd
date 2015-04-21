@@ -30,10 +30,6 @@
 #include "main.h"
 #include "utlist.h"
 
-#ifdef WITH_GPERF_TOOLS
-#   include <glib/gprintf.h>
-#endif
-
 /* 60 seconds for worker's IO */
 #define DEFAULT_WORKER_IO_TIMEOUT 60000
 
@@ -736,8 +732,9 @@ rspamd_controller_learn_fin_task (void *ud)
 		return TRUE;
 	}
 	/* Successful learn */
-	msg_info ("<%s> learned message: %s",
+	msg_info ("<%s> learned message as %s: %s",
 		rspamd_inet_address_to_string (session->from_addr),
+		session->is_spam ? "spam" : "ham",
 		task->message_id);
 	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
 
