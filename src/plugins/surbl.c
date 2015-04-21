@@ -178,7 +178,6 @@ redirector_insert (gpointer st, gconstpointer key, gpointer value)
 	rspamd_strlcpy (pattern, begin, pat.len + 1);
 	pat.ptr = pattern;
 
-	//rspamd_trie_insert (surbl_module_ctx->redirector_trie, new, idx);
 	g_array_append_val (cbdata->patterns, pat);
 
 	if (g_ascii_isspace (*p)) {

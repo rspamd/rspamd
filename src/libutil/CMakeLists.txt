@@ -18,7 +18,6 @@ SET(LIBRSPAMDUTILSRC
 								${CMAKE_CURRENT_SOURCE_DIR}/regexp.c
 								${CMAKE_CURRENT_SOURCE_DIR}/rrd.c
 								${CMAKE_CURRENT_SOURCE_DIR}/shingles.c
-								${CMAKE_CURRENT_SOURCE_DIR}/trie.c
 								${CMAKE_CURRENT_SOURCE_DIR}/upstream.c
 								${CMAKE_CURRENT_SOURCE_DIR}/util.c)
 # Rspamdutil

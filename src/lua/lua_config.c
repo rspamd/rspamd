@@ -27,7 +27,6 @@
 #include "map.h"
 #include "message.h"
 #include "radix.h"
-#include "trie.h"
 #include "expression.h"
 
 /***

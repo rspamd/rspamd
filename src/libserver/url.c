@@ -30,7 +30,6 @@
 #include "fstring.h"
 #include "main.h"
 #include "message.h"
-#include "trie.h"
 #include "http.h"
 #include "acism.h"
 
