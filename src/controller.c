@@ -1323,6 +1323,22 @@ rspamd_controller_handle_stat_common (
 		ucl_object_fromint (
 			stat->fuzzy_hashes_expired), "fuzzy_expired", 0, false);
 
+	/* Fuzzy epoch statistics */
+	sub = ucl_object_typed_new (UCL_ARRAY);
+
+	for (i = RSPAMD_FUZZY_EPOCH6; i < RSPAMD_FUZZY_EPOCH_MAX; i ++) {
+		ucl_array_append (sub, ucl_object_fromint (stat->fuzzy_hashes_checked[i]));
+	}
+
+	ucl_object_insert_key (top, sub, "fuzzy_checked", 0, false);
+	sub = ucl_object_typed_new (UCL_ARRAY);
+
+	for (i = RSPAMD_FUZZY_EPOCH6; i < RSPAMD_FUZZY_EPOCH_MAX; i ++) {
+		ucl_array_append (sub, ucl_object_fromint (stat->fuzzy_hashes_found[i]));
+	}
+
+	ucl_object_insert_key (top, sub, "fuzzy_found", 0, false);
+
 	/* Now write statistics for each statfile */
 
 	sub = rspamd_stat_statistics (session->ctx->cfg, &learned);
@@ -1335,6 +1351,10 @@ rspamd_controller_handle_stat_common (
 		session->ctx->srv->stat->messages_learned = 0;
 		session->ctx->srv->stat->connections_count = 0;
 		session->ctx->srv->stat->control_connections_count = 0;
+		memset (stat->fuzzy_hashes_checked, 0,
+				sizeof (stat->fuzzy_hashes_checked));
+		memset (stat->fuzzy_hashes_found, 0,
+				sizeof (stat->fuzzy_hashes_found));
 		rspamd_mempool_stat_reset ();
 	}
 
