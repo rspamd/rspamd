@@ -56,10 +56,10 @@ struct rspamd_logger_s {
 	sig_atomic_t do_reopen_log;
 	enum rspamd_log_type type;
 	pid_t pid;
+	guint32 repeats;
 	GQuark process_type;
 	radix_compressed_t *debug_ip;
-	guint32 last_line_cksum;
-	guint32 repeats;
+	guint64 last_line_cksum;
 	gchar *saved_message;
 	gchar *saved_function;
 	rspamd_mempool_t *pool;
@@ -83,10 +83,10 @@ file_log_function (const gchar * log_domain, const gchar *function,
 /**
  * Calculate checksum for log line (used for repeating logic)
  */
-static inline guint32
+static inline guint64
 rspamd_log_calculate_cksum (const gchar *message, size_t mlen)
 {
-	return XXH32 (message, mlen, rspamd_hash_seed ());
+	return XXH64 (message, mlen, rspamd_hash_seed ());
 }
 
 /*
