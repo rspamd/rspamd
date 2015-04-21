@@ -593,30 +593,30 @@ fork_delayed (struct rspamd_main *rspamd)
 static inline uintptr_t
 make_listen_key (struct rspamd_worker_bind_conf *cf)
 {
-	gpointer xxh;
+	XXH64_state_t st;
 	guint i, keylen;
 	guint8 *key;
 	rspamd_inet_addr_t *addr;
 	guint16 port;
 
-	xxh = XXH32_init (0xdeadbeef);
+	XXH64_reset (&st, rspamd_hash_seed ());
 	if (cf->is_systemd) {
-		XXH32_update (xxh, "systemd", sizeof ("systemd"));
-		XXH32_update (xxh, &cf->cnt, sizeof (cf->cnt));
+		XXH64_update (&st, "systemd", sizeof ("systemd"));
+		XXH64_update (&st, &cf->cnt, sizeof (cf->cnt));
 	}
 	else {
-		XXH32_update (xxh, cf->name, strlen (cf->name));
+		XXH64_update (&st, cf->name, strlen (cf->name));
 		for (i = 0; i < cf->cnt; i ++) {
 			addr = g_ptr_array_index (cf->addrs, i);
 			key = rspamd_inet_address_get_radix_key (
 					addr, &keylen);
-			XXH32_update (xxh, key, keylen);
+			XXH64_update (&st, key, keylen);
 			port = rspamd_inet_address_get_port (addr);
-			XXH32_update (xxh, &port, sizeof (port));
+			XXH64_update (&st, &port, sizeof (port));
 		}
 	}
 
-	return XXH32_digest (xxh);
+	return XXH64_digest (&st);
 }
 
 static void

@@ -460,4 +460,10 @@ void rspamd_array_free_hard (gpointer p);
  */
 void rspamd_init_libs (void);
 
+/**
+ * Returns some statically initialized random hash seed
+ * @return hash seed
+ */
+guint64 rspamd_hash_seed (void);
+
 #endif

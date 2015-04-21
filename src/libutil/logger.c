@@ -86,7 +86,7 @@ file_log_function (const gchar * log_domain, const gchar *function,
 static inline guint32
 rspamd_log_calculate_cksum (const gchar *message, size_t mlen)
 {
-	return XXH32 (message, mlen, 0xdeadbeef);
+	return XXH32 (message, mlen, rspamd_hash_seed ());
 }
 
 /*

@@ -53,7 +53,7 @@ rspamd_keypair_hash (gconstpointer ptr)
 {
 	struct rspamd_keypair_elt *elt = (struct rspamd_keypair_elt *)ptr;
 
-	return XXH32 (elt->pair, sizeof (elt->pair), 0xdeadbabe);
+	return XXH64 (elt->pair, sizeof (elt->pair), rspamd_hash_seed ());
 }
 
 static gboolean

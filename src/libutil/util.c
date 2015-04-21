@@ -1271,7 +1271,7 @@ rspamd_icase_hash (const gchar *in, gsize len)
 	XXH64_state_t st;
 
 	fp = len - leftover;
-	XXH64_reset (&st, 0xdeadbabe);
+	XXH64_reset (&st, rspamd_hash_seed ());
 
 	for (i = 0; i != fp; i += 4) {
 		u.c.c1 = s[i], u.c.c2 = s[i + 1], u.c.c3 = s[i + 2], u.c.c4 = s[i + 3];
@@ -1315,7 +1315,7 @@ rspamd_str_hash (gconstpointer key)
 
 	len = strlen ((const gchar *)key);
 
-	return XXH64 (key, len, 0xdeadbabe);
+	return XXH64 (key, len, rspamd_hash_seed ());
 }
 
 gboolean
@@ -1545,7 +1545,7 @@ rspamd_url_hash (gconstpointer u)
 	const struct rspamd_url *url = u;
 	XXH64_state_t st;
 
-	XXH64_reset (&st, 0xdeadbabe);
+	XXH64_reset (&st, rspamd_hash_seed ());
 
 	if (url->hostlen > 0) {
 		XXH64_update (&st, url->host, url->hostlen);
@@ -2410,4 +2410,16 @@ rspamd_init_libs (void)
 #else
 	g_mime_init (0);
 #endif
+}
+
+guint64
+rspamd_hash_seed (void)
+{
+	static guint64 seed;
+
+	if (seed == 0) {
+		seed = ottery_rand_uint64 ();
+	}
+
+	return seed;
 }

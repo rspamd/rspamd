@@ -15,7 +15,7 @@ context("Task processing", function()
     },
     logging = {
       type = 'console',
-      level = 'info'
+      level = 'debug'
     },
     metric = {
       name = 'default',

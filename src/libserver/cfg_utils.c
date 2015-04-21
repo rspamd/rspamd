@@ -791,7 +791,7 @@ rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 		return;
 	}
 
-	checksum = XXH32 (cbdata->buf->str, cbdata->buf->len, 0xdead);
+	checksum = XXH64 (cbdata->buf->str, cbdata->buf->len, 0);
 	if (data->map->checksum != checksum) {
 		/* New data available */
 		parser = ucl_parser_new (0);
