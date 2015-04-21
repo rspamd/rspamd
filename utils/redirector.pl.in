@@ -193,10 +193,13 @@ sub memcached_check_url {
 # Write url to memcached key
 sub memcached_cache_url {
     my ( $url, $url_real ) = @_;
+	
+    if ($url ne $url_real) {
+        my $context = Digest->new("SHA-256");
 
-    my $context = Digest->new("SHA-256");
-
-    $memd->set(unpack("H*", ($context->hash($url))), $url_real, $cfg{cache_expire});
+        $memd->set(unpack("H*", ($context->hash($url))), $url_real, 
+            $cfg{cache_expire});
+    }
 }
 
 # POE http client callback
