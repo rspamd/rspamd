@@ -1475,8 +1475,8 @@ rspamd_url_trie_callback (int strnum, int textpos, void *context)
 	}
 
 	if (matcher->flags & URL_FLAG_TLD_MATCH) {
-		/* Immediately check pos + 1 for valid chars */
-		pos = &cb->begin[textpos + 1];
+		/* Immediately check pos for valid chars */
+		pos = &cb->begin[textpos];
 		if (pos < cb->end) {
 			if (!g_ascii_isspace (*pos) && *pos != '/' && *pos != '?' && *pos != ':') {
 				return 0;
