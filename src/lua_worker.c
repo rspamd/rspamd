@@ -287,7 +287,7 @@ lua_accept_socket (gint fd, short what, void *arg)
 	rspamd_lua_setclass (L, "rspamd{worker}", -1);
 	*pctx = ctx;
 	lua_pushinteger (L, nfd);
-	lua_pushstring (L, rspamd_inet_address_to_string (addr));
+	rspamd_lua_ip_push (L, addr);
 	lua_pushinteger (L, 0);
 
 
