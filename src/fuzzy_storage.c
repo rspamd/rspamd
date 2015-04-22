@@ -39,24 +39,13 @@
 #include "map.h"
 #include "fuzzy_storage.h"
 #include "fuzzy_backend.h"
+#include "ottery.h"
 
-/* This number is used as limit while comparing two fuzzy hashes, this value can vary from 0 to 100 */
-#define LEV_LIMIT 99
-/* This number is used as limit while we are making decision to write new hash file or not */
-#define DEFAULT_MOD_LIMIT 10000
 /* This number is used as expire time in seconds for cache items  (2 days) */
 #define DEFAULT_EXPIRE 172800L
 /* Resync value in seconds */
-#define SYNC_TIMEOUT 60
-/* Number of hash buckets */
-#define BUCKETS 1024
-/* Number of insuccessfull bind retries */
-#define MAX_RETRIES 40
-/* Weight of hash to consider it frequent */
-#define DEFAULT_FREQUENT_SCORE 100
+#define DEFAULT_SYNC_TIMEOUT 60
 
-/* Current version of fuzzy hash file format */
-#define CURRENT_FUZZY_VERSION 1
 
 #define INVALID_NODE_TIME (guint64) - 1
 
@@ -83,8 +72,7 @@ static struct rspamd_stat *server_stat;
 struct rspamd_fuzzy_storage_ctx {
 	char *hashfile;
 	gdouble expire;
-	guint32 frequent_score;
-	guint32 max_mods;
+	gdouble sync_timeout;
 	radix_compressed_t *update_ips;
 	gchar *update_map;
 	struct event_base *ev_base;
@@ -316,14 +304,16 @@ sync_callback (gint fd, short what, void *arg)
 {
 	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
 	struct rspamd_fuzzy_storage_ctx *ctx;
+	gdouble next_check;
 
 	ctx = worker->ctx;
 	/* Timer event */
 	evtimer_set (&tev, sync_callback, worker);
 	event_base_set (ctx->ev_base, &tev);
 	/* Plan event with jitter */
-	tmv.tv_sec = SYNC_TIMEOUT + SYNC_TIMEOUT * g_random_double ();
-	tmv.tv_usec = 0;
+	next_check = ctx->sync_timeout * (1. + ((gdouble)ottery_rand_uint32 ()) /
+			G_MAXUINT32);
+	double_to_tv (next_check, &tmv);
 	evtimer_add (&tev, &tmv);
 
 	/* Call backend sync */
@@ -342,9 +332,6 @@ init_fuzzy (struct rspamd_config *cfg)
 
 	ctx = g_malloc0 (sizeof (struct rspamd_fuzzy_storage_ctx));
 
-	ctx->max_mods = DEFAULT_MOD_LIMIT;
-	ctx->expire = DEFAULT_EXPIRE;
-
 	rspamd_rcl_register_worker_option (cfg, type, "hashfile",
 		rspamd_rcl_parse_struct_string, ctx,
 		G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
@@ -361,16 +348,10 @@ init_fuzzy (struct rspamd_config *cfg)
 		rspamd_rcl_parse_struct_string, ctx,
 		G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
 
-	/* Legacy options */
-	rspamd_rcl_register_worker_option (cfg, type, "max_mods",
-		rspamd_rcl_parse_struct_integer, ctx,
+	rspamd_rcl_register_worker_option (cfg, type, "sync",
+		rspamd_rcl_parse_struct_time, ctx,
 		G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx,
-		max_mods), RSPAMD_CL_FLAG_INT_32);
-
-	rspamd_rcl_register_worker_option (cfg, type, "frequent_score",
-		rspamd_rcl_parse_struct_integer, ctx,
-		G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx,
-		frequent_score), RSPAMD_CL_FLAG_INT_32);
+		sync_timeout), RSPAMD_CL_FLAG_TIME_FLOAT);
 
 	rspamd_rcl_register_worker_option (cfg, type, "expire",
 		rspamd_rcl_parse_struct_time, ctx,
@@ -394,6 +375,7 @@ start_fuzzy (struct rspamd_worker *worker)
 {
 	struct rspamd_fuzzy_storage_ctx *ctx = worker->ctx;
 	GError *err = NULL;
+	gdouble next_check;
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"fuzzy",
@@ -413,8 +395,9 @@ start_fuzzy (struct rspamd_worker *worker)
 	evtimer_set (&tev, sync_callback, worker);
 	event_base_set (ctx->ev_base, &tev);
 	/* Plan event with jitter */
-	tmv.tv_sec = SYNC_TIMEOUT + SYNC_TIMEOUT * g_random_double ();
-	tmv.tv_usec = 0;
+	next_check = ctx->sync_timeout * (1. + ((gdouble)ottery_rand_uint32 ()) /
+			G_MAXUINT32);
+	double_to_tv (next_check, &tmv);
 	evtimer_add (&tev, &tmv);
 
 	/* Create radix tree */
