@@ -42,7 +42,7 @@ typedef struct url_match_s {
 } url_match_t;
 
 #define URL_FLAG_NOHTML (1 << 0)
-#define URL_FLAG_STRICT_MATCH (1 << 1)
+#define URL_FLAG_TLD_MATCH (1 << 1)
 #define URL_FLAG_STAR_MATCH (1 << 2)
 
 struct url_matcher {
@@ -315,7 +315,7 @@ rspamd_url_parse_tld_file (const gchar *fname, struct url_match_scanner *scanner
 			continue;
 		}
 
-		flags = URL_FLAG_NOHTML | URL_FLAG_STRICT_MATCH;
+		flags = URL_FLAG_NOHTML | URL_FLAG_TLD_MATCH;
 
 		if (linebuf[0] == '*') {
 			flags |= URL_FLAG_STAR_MATCH;
@@ -926,7 +926,7 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 		rspamd_mempool_t *pool)
 {
 	struct http_parser_url u;
-	gchar *p, *comp;
+	gchar *p, *comp, t;
 	const gchar *end;
 	guint i, complen, ret;
 	gint state = 0;
@@ -1058,8 +1058,17 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	}
 
 	/* Find TLD part */
-	acism_lookup (url_scanner->search_trie, uri->host, uri->hostlen,
-			rspamd_tld_trie_callback, uri, &state, true);
+	if (acism_lookup (url_scanner->search_trie, uri->host, uri->hostlen,
+			rspamd_tld_trie_callback, uri, &state, true) == 0) {
+		/* Ignore URL's without TLD if it is not a numeric URL */
+		for (i = 0; i < uri->hostlen; i ++) {
+			t = uri->host[i];
+
+			if (g_ascii_isalpha (t)) {
+				return URI_ERRNO_BAD_FORMAT;
+			}
+		}
+	}
 
 	if (uri->protocol == PROTOCOL_UNKNOWN) {
 		return URI_ERRNO_INVALID_PROTOCOL;
@@ -1424,6 +1433,17 @@ rspamd_url_trie_callback (int strnum, int textpos, void *context)
 		/* Do not try to match non-html like urls in html texts */
 		return 0;
 	}
+
+	if (matcher->flags & URL_FLAG_TLD_MATCH) {
+		/* Immediately check pos + 1 for valid chars */
+		pos = &cb->begin[textpos + 1];
+		if (pos < cb->end) {
+			if (!g_ascii_isspace (*pos) && *pos != '/' && *pos != '?' && *pos != ':') {
+				return 0;
+			}
+		}
+	}
+
 	pat = &g_array_index (url_scanner->patterns, ac_trie_pat_t, strnum);
 
 	m.pattern = matcher->pattern;
