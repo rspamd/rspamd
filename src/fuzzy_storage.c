@@ -44,7 +44,7 @@
 /* This number is used as expire time in seconds for cache items  (2 days) */
 #define DEFAULT_EXPIRE 172800L
 /* Resync value in seconds */
-#define DEFAULT_SYNC_TIMEOUT 60
+#define DEFAULT_SYNC_TIMEOUT 60.0
 
 
 #define INVALID_NODE_TIME (guint64) - 1
@@ -332,6 +332,8 @@ init_fuzzy (struct rspamd_config *cfg)
 
 	ctx = g_malloc0 (sizeof (struct rspamd_fuzzy_storage_ctx));
 
+	ctx->sync_timeout = DEFAULT_SYNC_TIMEOUT;
+
 	rspamd_rcl_register_worker_option (cfg, type, "hashfile",
 		rspamd_rcl_parse_struct_string, ctx,
 		G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
@@ -357,7 +359,6 @@ init_fuzzy (struct rspamd_config *cfg)
 		rspamd_rcl_parse_struct_time, ctx,
 		G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx,
 		expire), RSPAMD_CL_FLAG_TIME_FLOAT);
-
 
 	rspamd_rcl_register_worker_option (cfg, type, "allow_update",
 		rspamd_rcl_parse_struct_string, ctx,
