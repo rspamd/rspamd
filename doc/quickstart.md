@@ -42,6 +42,7 @@ If start script is not suitable for your system (now rspamd shipped with start s
 After this initial setup you can run rspamd using start script:
 
 	service rspamd start (for Linux)
+	systemctl enable rspamd.socket (for CentOS)
 	/usr/local/etc/rc.d/rspamd start (for FreeBSD)
 
 Rspamd listens several ports based on configuration. By default the following values are used:
