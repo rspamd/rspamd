@@ -557,6 +557,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 		parse_password_start,
 		parse_password,
 		parse_domain,
+		parse_ipv6,
 		parse_port_password,
 		parse_port,
 		parse_suffix_slash,
@@ -610,6 +611,36 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 			c = p;
 			st = parse_domain;
 			slash = p;
+
+			if (*p == '[') {
+				st = parse_ipv6;
+				p ++;
+				c = p;
+			}
+			break;
+		case parse_ipv6:
+			if (t == ']') {
+				if (p - c == 0) {
+					goto out;
+				}
+				SET_U (u, UF_HOST);
+				p ++;
+
+				if (*p == ':') {
+					st = parse_port;
+					c = p + 1;
+				}
+				else if (*p == '/') {
+					st = parse_path;
+					c = p + 1;
+				}
+				else if (p != last) {
+					goto out;
+				}
+			}
+			else {
+				p ++;
+			}
 			break;
 		case parse_user:
 			if (t == ':') {
@@ -860,6 +891,15 @@ set:
 			SET_U (u, UF_FRAGMENT);
 		}
 		ret = 0;
+		break;
+	case parse_ipv6:
+		if (t != ']') {
+			ret = 1;
+		}
+		else {
+			/* e.g. http://[::] */
+			ret = 0;
+		}
 		break;
 	default:
 		/* Error state */
