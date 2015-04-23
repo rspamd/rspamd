@@ -27,6 +27,7 @@
 #include "platform_config.h"
 
 extern unsigned long cpu_config;
+static const int test_iters = 1000;
 
 typedef struct siphash_impl_t
 {
@@ -166,7 +167,7 @@ siphash24_test (bool generic)
 		guchar c[sizeof (guint64)];
 	} r;
 
-	for (cycles = 0; cycles < 100000; cycles ++) {
+	for (cycles = 0; cycles < test_iters; cycles ++) {
 		for (i = 0; i < sizeof in; ++i) {
 			in[i] = i;
 
