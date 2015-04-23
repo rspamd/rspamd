@@ -7,22 +7,30 @@ context("URL check functions", function()
   local ffi = require("ffi")
   ffi.cdef[[
   void rspamd_url_init (const char *tld_file);
+  unsigned ottery_rand_range(unsigned top);
   ]]
+  
+  local pool = mpool.create()
+  local test_dir = string.gsub(debug.getinfo(1).source, "^@(.+/)[^/]+$", "%1")
+
+  ffi.C.rspamd_url_init(string.format('%s/%s', test_dir, "test_tld.dat"))
 
   test("Extract urls from text", function()
-    local pool = mpool.create()
     local cases = {
       {"test.com text", {"test.com", nil}},
+      {"test.com. text", {"test.com", nil}},
       {"mailto:A.User@example.com text", {"example.com", "A.User"}},
       {"http://Тест.Рф:18 text", {"тест.рф", nil}},
       {"http://user:password@тест2.РФ:18 text", {"тест2.рф", "user"}},
       {"somebody@example.com", {"example.com", "somebody"}},
+      {"https://127.0.0.1/abc text", {"127.0.0.1", nil}},
+      {"https://127.0.0.1 text", {"127.0.0.1", nil}},
+      {"https://[::1]:1", {"::1", nil}},
+      {"https://user:password@[::1]:1", {"::1", nil}},
+      {"https://user:password@[::1]", {"::1", nil}},
+      {"https://user:password@[::1]/1", {"::1", nil}},
     }
-    
-    local test_dir = string.gsub(debug.getinfo(1).source, "^@(.+/)[^/]+$", "%1")
-    
-    ffi.C.rspamd_url_init(string.format('%s/%s', test_dir, "test_tld.dat"))
-    
+
     for _,c in ipairs(cases) do
       local res = url.create(pool, c[1])
       
@@ -37,7 +45,7 @@ context("URL check functions", function()
         assert_equal(c[2][2], t['user'])
       end
     end
-    
-    pool:destroy()
   end)
+  
+  pool:destroy()
 end)
