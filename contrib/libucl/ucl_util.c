@@ -230,11 +230,13 @@ ucl_object_free_internal (ucl_object_t *obj, bool allow_rec, ucl_object_dtor dto
 				kv_destroy (*vec);
 				UCL_FREE (sizeof (*vec), vec);
 			}
+			obj->value.av = NULL;
 		}
 		else if (obj->type == UCL_OBJECT) {
 			if (obj->value.ov != NULL) {
 				ucl_hash_destroy (obj->value.ov, (ucl_hash_free_func *)dtor);
 			}
+			obj->value.ov = NULL;
 		}
 		tmp = obj->next;
 		dtor (obj);
