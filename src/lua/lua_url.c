@@ -56,6 +56,7 @@ LUA_FUNCTION_DEF (url, to_table);
 LUA_FUNCTION_DEF (url, is_phished);
 LUA_FUNCTION_DEF (url, get_phished);
 LUA_FUNCTION_DEF (url, create);
+LUA_FUNCTION_DEF (url, all);
 
 static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF (url, get_length),
@@ -73,6 +74,7 @@ static const struct luaL_reg urllib_m[] = {
 
 static const struct luaL_reg urllib_f[] = {
 	LUA_INTERFACE_DEF (url, create),
+	LUA_INTERFACE_DEF (url, all),
 	{NULL, NULL}
 };
 
@@ -368,6 +370,49 @@ lua_url_create (lua_State *L)
 
 	return 1;
 }
+
+static gint
+lua_url_all (lua_State *L)
+{
+	struct rspamd_url *url;
+	rspamd_mempool_t *pool = rspamd_lua_check_mempool (L, 1);
+	const gchar *text,*end;
+	gint length,i;
+	const gchar **pos;
+
+	if (pool == NULL) {
+		lua_pushnil (L);
+	}
+	else {
+		text = luaL_checkstring (L, 2);
+
+		if (text != NULL) {
+			length = strlen(text);
+			*pos=text;
+			end=text+length;
+			lua_newtable(L);
+			while(*pos<=end){
+				url = rspamd_url_get_next (pool, text, pos, NULL);				
+
+				if (url!=NULL) {
+					lua_pushinteger (L, i);
+					lua_pushlstring (L, url->string, url->urllen);
+					lua_settable (L, -3);
+				}
+				i++;
+			}
+
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+
+
+	return 1;
+
+}
+
 
 static gint
 lua_load_url (lua_State * L)
