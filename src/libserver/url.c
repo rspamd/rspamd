@@ -638,9 +638,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 					goto out;
 				}
 			}
-			else {
-				p ++;
-			}
+			p ++;
 			break;
 		case parse_user:
 			if (t == ':') {
@@ -687,6 +685,11 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 		case parse_at:
 			c = p;
 			st = parse_domain;
+			if (t == '[') {
+				st = parse_ipv6;
+				p ++;
+				c = p;
+			}
 			break;
 		case parse_domain:
 			if (t == '/' || t == ':') {
@@ -934,15 +937,24 @@ rspamd_tld_trie_callback (int strnum, int textpos, void *context)
 	}
 
 	pos = url->host + textpos - pat->len;
+	p = pos - 1;
 	start = url->host;
 
 	if (*pos != '.' || textpos != (gint)url->hostlen) {
 		/* Something weird has been found */
-		return 0;
+		if (textpos == (gint)url->hostlen - 1) {
+			pos = url->host + textpos;
+			if (*pos == '.') {
+				/* This is dot at the end of domain */
+				url->hostlen --;
+			}
+		}
+		else {
+			return 0;
+		}
 	}
 
 	/* Now we need to find top level domain */
-	p = pos - 1;
 	pos = start;
 	while (p >= start && ndots > 0) {
 		if (*p == '.') {
@@ -1259,6 +1271,16 @@ url_tld_end (const gchar *begin,
 		}
 
 	}
+	else if (*p == '.') {
+		p ++;
+		if (p < end) {
+			if (g_ascii_isspace (*p) || *p == '/' ||
+					*p == '?' || *p == ':') {
+				return url_web_end (begin, end, match->m_begin, match);
+			}
+		}
+	}
+
 	return FALSE;
 }
 
@@ -1479,7 +1501,19 @@ rspamd_url_trie_callback (int strnum, int textpos, void *context)
 		pos = &cb->begin[textpos];
 		if (pos < cb->end) {
 			if (!g_ascii_isspace (*pos) && *pos != '/' && *pos != '?' && *pos != ':') {
-				return 0;
+				if (*pos == '.') {
+					/* We allow . at the end of the domain however */
+					pos ++;
+					if (pos < cb->end) {
+						if (!g_ascii_isspace (*pos) && *pos != '/' &&
+								*pos != '?' && *pos != ':') {
+							return 0;
+						}
+					}
+				}
+				else {
+					return 0;
+				}
 			}
 		}
 	}
