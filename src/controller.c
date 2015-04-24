@@ -64,7 +64,7 @@
 #define COLOR_REJECT "#CB4B4B"
 #define COLOR_TOTAL "#9440ED"
 
-#define VALID_ID 1
+#define RSPAMD_PBKDF_ID_V1 1
 
 gpointer init_controller_worker (struct rspamd_config *cfg);
 void start_controller_worker (struct rspamd_worker *worker);
@@ -133,181 +133,257 @@ struct rspamd_controller_session {
 	gboolean is_spam;
 };
 
-static gboolean
-rspamd_is_encrypted_password (const gchar * password)
-{
-        const gchar *start, *end;
-        gint64 id;
-        gsize size;
-        gboolean ret = TRUE;
-        
-        if (password[0] == '$') {
-                /* Parse id */
-                start = password + 1;
-                end = start;
-                size = 0;
-                while (*end != '\0' && g_ascii_isdigit (*end)) {
-                        size++;
-                        end++;
-                }
-                if (size) {
-                        gchar *endptr;
-                        id = strtoul (start, &endptr, 10);
+struct rspamd_controller_pbkdf {
+	gint id;
+	guint rounds;
+	gsize salt_len;
+	gsize key_len;
+};
 
-                        if ((endptr != NULL && *endptr != *end) || id != VALID_ID) {
-                            return FALSE;
-                        }
-                } else {
-                       ret = FALSE;
-                }
-        } else {
-                ret = FALSE;
-        }
-                
-        return ret;
+static const struct rspamd_controller_pbkdf pbkdf_list[] = {
+	{
+		.id = RSPAMD_PBKDF_ID_V1,
+		.rounds = 16000,
+		.salt_len = 20,
+		.key_len = BLAKE2B_OUTBYTES / 2
+	}
+};
+
+static gboolean
+rspamd_constant_memcmp (const guchar *a, const guchar *b, gsize len)
+{
+	gsize lena, lenb, i;
+	gint acc = 0;
+
+	if (len == 0) {
+		lena = strlen (a);
+		lenb = strlen (b);
+
+		if (lena != lenb) {
+			return FALSE;
+		}
+
+		len = lena;
+	}
+
+	for (i = 0; i < len; i ++) {
+		acc |= a[i] ^ b[i];
+	}
+
+	return acc == 0;
+}
+
+static gboolean
+rspamd_is_encrypted_password (const gchar *password,
+		struct rspamd_controller_pbkdf const **pbkdf)
+{
+	const gchar *start, *end;
+	gint64 id;
+	gsize size;
+	gboolean ret = FALSE;
+
+	if (password[0] == '$') {
+		/* Parse id */
+		start = password + 1;
+		end = start;
+		size = 0;
+
+		while (*end != '\0' && g_ascii_isdigit (*end)) {
+			size++;
+			end++;
+		}
+
+		if (size > 0) {
+			gchar *endptr;
+			id = strtoul (start, &endptr, 10);
+
+			if ((endptr == NULL || *endptr == *end) && id == RSPAMD_PBKDF_ID_V1) {
+				ret = TRUE;
+				*pbkdf = &pbkdf_list[0];
+			}
+		}
+	}
+
+	return ret;
 }
 
 static const gchar *
-rspamd_encrypted_password_get_str (const gchar * password, gsize skip, gsize * length)
+rspamd_encrypted_password_get_str (const gchar * password, gsize skip,
+		gsize * length)
 {
-        const gchar *str, *start, *end;
-        gsize size;
-        
-        start = password + skip;   
-        end = start;
-        size = 0;
-        while (*end != '\0' && g_ascii_isalnum (*end)) { 
-             size++;
-             end++;
-        }
-        if (size) {
-                str = start;
-                *length = size;
-                
-        } else {
-                str = NULL;
-        }
-        
-        return str;
+	const gchar *str, *start, *end;
+	gsize size;
+
+	start = password + skip;
+	end = start;
+	size = 0;
+
+	while (*end != '\0' && g_ascii_isalnum (*end)) {
+		size++;
+		end++;
+	}
+
+	if (size) {
+		str = start;
+		*length = size;
+	}
+	else {
+		str = NULL;
+	}
+
+	return str;
 }
 
-static gboolean
-rspamd_check_encrypted_password (const gchar * password, const gchar * check)
+static gboolean rspamd_check_encrypted_password (const gchar * password,
+		const gchar * check, const struct rspamd_controller_pbkdf *pbkdf)
 {
-        const gchar *salt, *hash;
-        gsize salt_len, hash_len;
-        gboolean ret = TRUE;
-        
-        /* get salt */
-        salt = rspamd_encrypted_password_get_str (check, 3, &salt_len);
-        /* get hash */
-        hash = rspamd_encrypted_password_get_str (check, 3 + salt_len + 1, &hash_len);
-        if (salt != NULL && hash != NULL) {
-                guchar key[BLAKE2B_OUTBYTES];
+	const gchar *salt, *hash;
+	gchar *salt_decoded, *key_decoded;
+	gsize salt_len, key_len;
+	gboolean ret = TRUE;
+	guchar *local_key;
 
-                /* decode salt */
-                salt = rspamd_decode_base32 (salt, salt_len, &salt_len);
-                rspamd_cryptobox_pbkdf (password, strlen(password), salt, salt_len, key, BLAKE2B_OUTBYTES, 16000);
-                if (strcmp (hash, rspamd_encode_base32 (key, BLAKE2B_OUTBYTES)) != 0) {
-                        msg_info ("incorrect or absent password has been specified");
-                        ret = FALSE;
-                }
-                
-                g_free ((void*) salt);               
-        }
-        
-        return ret;
+	g_assert (pbkdf != NULL);
+	/* get salt */
+	salt = rspamd_encrypted_password_get_str (check, 3, &salt_len);
+	/* get hash */
+	hash = rspamd_encrypted_password_get_str (check, 3 + salt_len + 1,
+			&key_len);
+	if (salt != NULL && hash != NULL) {
+
+		/* decode salt */
+		salt_decoded = rspamd_decode_base32 (salt, salt_len, &salt_len);
+
+		if (salt_decoded == NULL || salt_len != pbkdf->salt_len) {
+			/* We have some unknown salt here */
+			msg_info ("incorrect salt: %z, while %z expected",
+					salt_len, pbkdf->salt_len);
+			return FALSE;
+		}
+
+		key_decoded = rspamd_decode_base32 (hash, 0, &key_len);
+
+		if (key_decoded == NULL || key_len != pbkdf->key_len) {
+			/* We have some unknown salt here */
+			msg_info ("incorrect key: %z, while %z expected",
+					key_len, pbkdf->key_len);
+			return FALSE;
+		}
+
+		local_key = g_alloca (pbkdf->key_len);
+		rspamd_cryptobox_pbkdf (password, strlen (password), salt, salt_len,
+				local_key, pbkdf->key_len, pbkdf->rounds);
+
+		if (!rspamd_constant_memcmp (key_decoded, local_key, pbkdf->key_len)) {
+			msg_info ("incorrect or absent password has been specified");
+			ret = FALSE;
+		}
+
+		g_free (salt_decoded);
+		g_free (key_decoded);
+	}
+
+	return ret;
 }
 
 /* Check for password if it is required by configuration */
-static gboolean
-rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
-	struct rspamd_controller_session *session, struct rspamd_http_message *msg,
-	gboolean is_enable)
+static gboolean rspamd_controller_check_password(
+		struct rspamd_http_connection_entry *entry,
+		struct rspamd_controller_session *session,
+		struct rspamd_http_message *msg, gboolean is_enable)
 {
 	const gchar *password, *check;
 	struct rspamd_controller_worker_ctx *ctx = session->ctx;
 	gboolean check_normal = TRUE, check_enable = TRUE, ret = TRUE;
-	
+	const struct rspamd_controller_pbkdf *pbkdf = NULL;
+
 	/* Access list logic */
-	if (!rspamd_inet_address_get_af(session->from_addr) == AF_UNIX) {
-		msg_info ("allow unauthorized connection from a unix socket");
+	if (!rspamd_inet_address_get_af (session->from_addr) == AF_UNIX) {
+		msg_info("allow unauthorized connection from a unix socket");
 		return TRUE;
 	}
-	else if (ctx->secure_map && radix_find_compressed_addr (ctx->secure_map,
-		session->from_addr) != RADIX_NO_VALUE) {
-		msg_info ("allow unauthorized connection from a trusted IP %s",
-			rspamd_inet_address_to_string (session->from_addr));
+	else if (ctx->secure_map
+			&& radix_find_compressed_addr (ctx->secure_map, session->from_addr)
+					!= RADIX_NO_VALUE) {
+		msg_info("allow unauthorized connection from a trusted IP %s",
+				rspamd_inet_address_to_string (session->from_addr));
 		return TRUE;
 	}
 
-	/* Password logic */	
+	/* Password logic */
 	password = rspamd_http_message_find_header (msg, "Password");
+
 	if (password == NULL) {
-                msg_info ("absent password has been specified");
+		msg_info("absent password has been specified");
 		ret = FALSE;
-	} else {
-	        if (is_enable) {
-		        /* For privileged commands we strictly require enable password */		
-		        if (ctx->enable_password != NULL) {
-                                check = ctx->enable_password;
-		        } else {
-			        /* Use just a password (legacy mode) */
-			        msg_info ("using password as enable_password for a privileged command");
-			        check = ctx->password;
-		        }
-		        if (check != NULL) {
-		                if (!rspamd_is_encrypted_password (check)) {
-        			        if (strcmp (password, check) != 0) {
-			                        ret = FALSE;
-			                }
-		                } else {
-		                        ret = rspamd_check_encrypted_password (password, check);
-		                }
-		        } else {
-			        msg_warn ("no password to check while executing a privileged command");
-			        if (ctx->secure_map) {
-				        msg_info ("deny unauthorized connection");
-				        ret = FALSE;
-			        }
-			        ret = FALSE;
-		        }
-	        }
-	        else {
-	                /* Accept both normal and enable passwords */ 
-	                if (ctx->password != NULL) {
-	                        check = ctx->password;
-	                        if (!rspamd_is_encrypted_password (check)) {
-                                        if (strcmp (password, check) != 0) {
-                                                check_normal = FALSE;
-                                        }
-	                        } else {
-	                                check_normal = rspamd_check_encrypted_password (password, check);
-	                        }
-	                        
-	                } else {
-	                        check_normal = FALSE;
-	                }
-	                if (ctx->enable_password != NULL) {
-	                        check = ctx->enable_password;
-	                        if (!rspamd_is_encrypted_password (check)) {
-                                        if (strcmp (password, check) != 0) {
-                                                check_enable = FALSE;
-                                        }
-	                        } else {
-	                                check_enable = rspamd_check_encrypted_password (password, check);
-	                        }
-	                } else {
-	                        check_enable = FALSE;
-	                }
-	        }
-        }
-	
-	if (check_normal == FALSE && check_enable == FALSE) {
-	        msg_info ("absent or incorrect password has been specified");
-	        ret = FALSE;
 	}
-	
+	else {
+		if (is_enable) {
+			/* For privileged commands we strictly require enable password */
+			if (ctx->enable_password != NULL) {
+				check = ctx->enable_password;
+			}
+			else {
+				/* Use just a password (legacy mode) */
+				msg_info(
+						"using password as enable_password for a privileged command");
+				check = ctx->password;
+			}
+			if (check != NULL) {
+				if (!rspamd_is_encrypted_password (check, &pbkdf)) {
+					ret = rspamd_constant_memcmp (password, check, 0);
+				}
+				else {
+					ret = rspamd_check_encrypted_password (password, check, pbkdf);
+				}
+			}
+			else {
+				msg_warn(
+						"no password to check while executing a privileged command");
+				if (ctx->secure_map) {
+					msg_info("deny unauthorized connection");
+					ret = FALSE;
+				}
+				ret = FALSE;
+			}
+		}
+		else {
+			/* Accept both normal and enable passwords */
+			if (ctx->password != NULL) {
+				check = ctx->password;
+				if (!rspamd_is_encrypted_password (check, &pbkdf)) {
+					check_normal = rspamd_constant_memcmp (password, check, 0);
+				}
+				else {
+					check_normal = rspamd_check_encrypted_password (password,
+							check, pbkdf);
+				}
+
+			}
+			else {
+				check_normal = FALSE;
+			}
+			if (ctx->enable_password != NULL) {
+				check = ctx->enable_password;
+				if (!rspamd_is_encrypted_password (check, &pbkdf)) {
+					check_enable = rspamd_constant_memcmp (password, check, 0);
+				}
+				else {
+					check_enable = rspamd_check_encrypted_password (password,
+							check, pbkdf);
+				}
+			}
+			else {
+				check_enable = FALSE;
+			}
+		}
+	}
+
+	if (check_normal == FALSE && check_enable == FALSE) {
+		msg_info("absent or incorrect password has been specified");
+		ret = FALSE;
+	}
+
 	if (!ret) {
 		rspamd_controller_send_error (entry, 403, "Unauthorized");
 	}
