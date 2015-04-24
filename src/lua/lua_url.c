@@ -404,8 +404,9 @@ lua_url_all (lua_State *L)
 					lua_pushlstring (L, url->string, url->urllen);
 					lua_settable (L, -3);
 				}
-				else
+				else{
 					break;
+				}
 			}
 
 		}
