@@ -1048,13 +1048,13 @@ rspamd_mmaped_file_get_stat (struct rspamd_statfile_runtime *runtime,
 		gpointer ctx)
 {
 	ucl_object_t *res = NULL;
+	guint64 rev;
 	rspamd_mmaped_file_t *mf = (rspamd_mmaped_file_t *)runtime;
 
 	if (mf != NULL) {
 		res = ucl_object_typed_new (UCL_OBJECT);
-
-		ucl_object_insert_key (res, ucl_object_fromint (
-				rspamd_mmaped_file_get_revision (mf, NULL, NULL)), "revision",
+		rspamd_mmaped_file_get_revision (mf, &rev, NULL);
+		ucl_object_insert_key (res, ucl_object_fromint (rev), "revision",
 				0, false);
 		ucl_object_insert_key (res, ucl_object_fromint (mf->len), "size",
 				0, false);
