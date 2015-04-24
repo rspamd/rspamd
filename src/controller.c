@@ -199,7 +199,10 @@ rspamd_is_encrypted_password (const gchar *password,
 
 			if ((endptr == NULL || *endptr == *end) && id == RSPAMD_PBKDF_ID_V1) {
 				ret = TRUE;
-				*pbkdf = &pbkdf_list[0];
+
+				if (pbkdf != NULL) {
+					*pbkdf = &pbkdf_list[0];
+				}
 			}
 		}
 	}
@@ -261,7 +264,7 @@ static gboolean rspamd_check_encrypted_password (const gchar * password,
 			return FALSE;
 		}
 
-		key_decoded = rspamd_decode_base32 (hash, 0, &key_len);
+		key_decoded = rspamd_decode_base32 (hash, key_len, &key_len);
 
 		if (key_decoded == NULL || key_len != pbkdf->key_len) {
 			/* We have some unknown salt here */
@@ -271,7 +274,8 @@ static gboolean rspamd_check_encrypted_password (const gchar * password,
 		}
 
 		local_key = g_alloca (pbkdf->key_len);
-		rspamd_cryptobox_pbkdf (password, strlen (password), salt, salt_len,
+		rspamd_cryptobox_pbkdf (password, strlen (password),
+				salt_decoded, salt_len,
 				local_key, pbkdf->key_len, pbkdf->rounds);
 
 		if (!rspamd_constant_memcmp (key_decoded, local_key, pbkdf->key_len)) {
