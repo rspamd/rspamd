@@ -307,9 +307,16 @@ register_bit_symbols (struct rspamd_config *cfg, struct suffix_item *suffix)
 	guint i;
 	GHashTableIter it;
 	struct surbl_bit_item *bit;
+	gpointer k, v;
 
 	if (suffix->ips != NULL) {
 		g_hash_table_iter_init (&it, suffix->ips);
+
+		while (g_hash_table_iter_next (&it, &k, &v)) {
+			bit = v;
+			register_virtual_symbol (&cfg->cache, bit->symbol, 1);
+			msg_debug ("bit: %d", bit->bit);
+		}
 	}
 	else if (suffix->bits != NULL) {
 		for (i = 0; i < suffix->bits->len; i++) {
@@ -437,7 +444,7 @@ surbl_module_config (struct rspamd_config *cfg)
 				msg_err ("surbl rule must have explicit symbol definition");
 				continue;
 			}
-			new_suffix = rspamd_mempool_alloc (surbl_module_ctx->surbl_pool,
+			new_suffix = rspamd_mempool_alloc0 (surbl_module_ctx->surbl_pool,
 					sizeof (struct suffix_item));
 			new_suffix->suffix = rspamd_mempool_strdup (
 				surbl_module_ctx->surbl_pool,
@@ -445,10 +452,6 @@ surbl_module_config (struct rspamd_config *cfg)
 			new_suffix->options = 0;
 			new_suffix->bits = g_array_new (FALSE, FALSE,
 					sizeof (struct surbl_bit_item));
-			new_suffix->ips = g_hash_table_new (g_int_hash, g_int_equal);
-			rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
-					(rspamd_mempool_destruct_t)g_hash_table_unref,
-					new_suffix->ips);
 			rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
 					(rspamd_mempool_destruct_t)rspamd_array_free_hard,
 					new_suffix->bits);
@@ -507,10 +510,14 @@ surbl_module_config (struct rspamd_config *cfg)
 			cur = ucl_obj_get_key (cur_rule, "ips");
 			if (cur != NULL && cur->type == UCL_OBJECT) {
 				it = NULL;
+				new_suffix->ips = g_hash_table_new (g_int_hash, g_int_equal);
+				rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
+						(rspamd_mempool_destruct_t)g_hash_table_unref,
+						new_suffix->ips);
+
 				while ((cur_bit =
 						ucl_iterate_object (cur, &it, true)) != NULL) {
-					if (ucl_object_key (cur_bit) != NULL && cur_bit->type ==
-							UCL_INT) {
+					if (ucl_object_key (cur_bit) != NULL) {
 						gchar *p;
 
 						ip_val = ucl_obj_tostring (cur_bit);
@@ -568,11 +575,8 @@ surbl_module_config (struct rspamd_config *cfg)
 	cur_opt = surbl_module_ctx->suffixes;
 	while (cur_opt) {
 		cur_suffix = cur_opt->data;
-		if (cur_suffix->bits != NULL) {
+		if (cur_suffix->bits != NULL || cur_suffix->ips != NULL) {
 			register_bit_symbols (cfg, cur_suffix);
-			rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
-				(rspamd_mempool_destruct_t) g_list_free,
-				cur_suffix->bits);
 		}
 		cur_opt = g_list_next (cur_opt);
 	}
