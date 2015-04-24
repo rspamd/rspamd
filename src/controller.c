@@ -30,6 +30,10 @@
 #include "main.h"
 #include "utlist.h"
 
+#include "blake2.h" 
+#include "cryptobox.h"
+#include "ottery.h"
+
 /* 60 seconds for worker's IO */
 #define DEFAULT_WORKER_IO_TIMEOUT 60000
 
@@ -59,6 +63,8 @@
 #define COLOR_GREYLIST "#A0A0A0"
 #define COLOR_REJECT "#CB4B4B"
 #define COLOR_TOTAL "#9440ED"
+
+#define VALID_ID 1
 
 gpointer init_controller_worker (struct rspamd_config *cfg);
 void start_controller_worker (struct rspamd_worker *worker);
@@ -127,6 +133,92 @@ struct rspamd_controller_session {
 	gboolean is_spam;
 };
 
+static gboolean
+rspamd_is_encrypted_password (const gchar * password)
+{
+        const gchar *start, *end;
+        gint64 id;
+        gsize size;
+        gboolean ret = TRUE;
+        
+        if (password[0] == '$') {
+                /* Parse id */
+                start = password + 1;
+                end = start;
+                size = 0;
+                while (*end != '\0' && g_ascii_isdigit (*end)) {
+                        size++;
+                        end++;
+                }
+                if (size) {
+                        gchar *endptr;
+                        id = strtoul (start, &endptr, 10);
+
+                        if ((endptr != NULL && *endptr != *end) || id != VALID_ID) {
+                            return FALSE;
+                        }
+                } else {
+                       ret = FALSE;
+                }
+        } else {
+                ret = FALSE;
+        }
+                
+        return ret;
+}
+
+static const gchar *
+rspamd_encrypted_password_get_str (const gchar * password, gsize skip, gsize * length)
+{
+        const gchar *str, *start, *end;
+        gsize size;
+        
+        start = password + skip;   
+        end = start;
+        size = 0;
+        while (*end != '\0' && g_ascii_isalnum (*end)) { 
+             size++;
+             end++;
+        }
+        if (size) {
+                str = start;
+                *length = size;
+                
+        } else {
+                str = NULL;
+        }
+        
+        return str;
+}
+
+static gboolean
+rspamd_check_encrypted_password (const gchar * password, const gchar * check)
+{
+        const gchar *salt, *hash;
+        gsize salt_len, hash_len;
+        gboolean ret = TRUE;
+        
+        /* get salt */
+        salt = rspamd_encrypted_password_get_str (check, 3, &salt_len);
+        /* get hash */
+        hash = rspamd_encrypted_password_get_str (check, 3 + salt_len + 1, &hash_len);
+        if (salt != NULL && hash != NULL) {
+                guchar key[BLAKE2B_OUTBYTES];
+
+                /* decode salt */
+                salt = rspamd_decode_base32 (salt, salt_len, &salt_len);
+                rspamd_cryptobox_pbkdf (password, strlen(password), salt, salt_len, key, BLAKE2B_OUTBYTES, 16000);
+                if (strcmp (hash, rspamd_encode_base32 (key, BLAKE2B_OUTBYTES)) != 0) {
+                        msg_info ("incorrect or absent password has been specified");
+                        ret = FALSE;
+                }
+                
+                g_free ((void*) salt);               
+        }
+        
+        return ret;
+}
+
 /* Check for password if it is required by configuration */
 static gboolean
 rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
@@ -135,8 +227,8 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 {
 	const gchar *password, *check;
 	struct rspamd_controller_worker_ctx *ctx = session->ctx;
-	gboolean ret = TRUE;
-
+	gboolean check_normal = TRUE, check_enable = TRUE, ret = TRUE;
+	
 	/* Access list logic */
 	if (!rspamd_inet_address_get_af(session->from_addr) == AF_UNIX) {
 		msg_info ("allow unauthorized connection from a unix socket");
@@ -149,61 +241,73 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 		return TRUE;
 	}
 
-	/* Password logic */
-	if (is_enable) {
-		/* For privileged commands we strictly require enable password */
-		password = rspamd_http_message_find_header (msg, "Password");
-		if (ctx->enable_password == NULL) {
-			/* Use just a password (legacy mode) */
-			msg_info (
-				"using password as enable_password for a privileged command");
-			check = ctx->password;
-		}
-		else {
-			check = ctx->enable_password;
-		}
-		if (check != NULL) {
-			if (password == NULL || strcmp (password, check) != 0) {
-				msg_info ("incorrect or absent password has been specified");
-				ret = FALSE;
-			}
-		}
-		else {
-			msg_warn (
-				"no password to check while executing a privileged command");
-			if (ctx->secure_map) {
-				msg_info ("deny unauthorized connection");
-				ret = FALSE;
-			}
-		}
+	/* Password logic */	
+	password = rspamd_http_message_find_header (msg, "Password");
+	if (password == NULL) {
+                msg_info ("absent password has been specified");
+		ret = FALSE;
+	} else {
+	        if (is_enable) {
+		        /* For privileged commands we strictly require enable password */		
+		        if (ctx->enable_password != NULL) {
+                                check = ctx->enable_password;
+		        } else {
+			        /* Use just a password (legacy mode) */
+			        msg_info ("using password as enable_password for a privileged command");
+			        check = ctx->password;
+		        }
+		        if (check != NULL) {
+		                if (!rspamd_is_encrypted_password (check)) {
+        			        if (strcmp (password, check) != 0) {
+			                        ret = FALSE;
+			                }
+		                } else {
+		                        ret = rspamd_check_encrypted_password (password, check);
+		                }
+		        } else {
+			        msg_warn ("no password to check while executing a privileged command");
+			        if (ctx->secure_map) {
+				        msg_info ("deny unauthorized connection");
+				        ret = FALSE;
+			        }
+			        ret = FALSE;
+		        }
+	        }
+	        else {
+	                /* Accept both normal and enable passwords */ 
+	                if (ctx->password != NULL) {
+	                        check = ctx->password;
+	                        if (!rspamd_is_encrypted_password (check)) {
+                                        if (strcmp (password, check) != 0) {
+                                                check_normal = FALSE;
+                                        }
+	                        } else {
+	                                check_normal = rspamd_check_encrypted_password (password, check);
+	                        }
+	                        
+	                } else {
+	                        check_normal = FALSE;
+	                }
+	                if (ctx->enable_password != NULL) {
+	                        check = ctx->enable_password;
+	                        if (!rspamd_is_encrypted_password (check)) {
+                                        if (strcmp (password, check) != 0) {
+                                                check_enable = FALSE;
+                                        }
+	                        } else {
+	                                check_enable = rspamd_check_encrypted_password (password, check);
+	                        }
+	                } else {
+	                        check_enable = FALSE;
+	                }
+	        }
+        }
+	
+	if (check_normal == FALSE && check_enable == FALSE) {
+	        msg_info ("absent or incorrect password has been specified");
+	        ret = FALSE;
 	}
-	else {
-		password = rspamd_http_message_find_header (msg, "Password");
-		if (ctx->password != NULL) {
-			/* Accept both normal and enable passwords */
-			check = ctx->password;
-			if (password == NULL) {
-				msg_info ("absent password has been specified");
-				ret = FALSE;
-			}
-			else if (strcmp (password, check) != 0) {
-				if (ctx->enable_password != NULL) {
-					check = ctx->enable_password;
-					if (strcmp (password, check) != 0) {
-						msg_info ("incorrect password has been specified");
-						ret = FALSE;
-					}
-				}
-				else {
-					msg_info ("incorrect or absent password has been specified");
-					ret = FALSE;
-				}
-			}
-		}
-		/* No password specified, allowing this command */
-	}
-
-
+	
 	if (!ret) {
 		rspamd_controller_send_error (entry, 403, "Unauthorized");
 	}
@@ -1561,7 +1665,7 @@ init_controller_worker (struct rspamd_config *cfg)
 
 	rspamd_rcl_register_worker_option (cfg, type, "enable_password",
 		rspamd_rcl_parse_struct_string, ctx,
-		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, password), 0);
+		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, enable_password), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "ssl",
 		rspamd_rcl_parse_struct_boolean, ctx,
