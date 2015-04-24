@@ -375,31 +375,37 @@ static gint
 lua_url_all (lua_State *L)
 {
 	struct rspamd_url *url;
+	struct rspamd_lua_url *lua_url;
 	rspamd_mempool_t *pool = rspamd_lua_check_mempool (L, 1);
 	const gchar *text,*end;
-	gint length,i;
+	gint i = 1;
+	size_t length;
 	const gchar **pos;
 
 	if (pool == NULL) {
 		lua_pushnil (L);
 	}
 	else {
-		text = luaL_checkstring (L, 2);
+		text = luaL_checklstring (L, 2, &length);
 
 		if (text != NULL) {
-			length = strlen(text);
-			*pos=text;
-			end=text+length;
-			lua_newtable(L);
-			while(*pos<=end){
+			*pos = text;
+			end = text + length;
+			lua_newtable (L);
+			
+			while (*pos <= end) {
 				url = rspamd_url_get_next (pool, text, pos, NULL);				
 
-				if (url!=NULL) {
-					lua_pushinteger (L, i);
+				if (url != NULL) {
+					lua_url = lua_newuserdata (L, sizeof (struct rspamd_lua_url));
+					rspamd_lua_setclass (L, "rspamd{url}", -1);
+					lua_url->url = url;
+					lua_pushinteger (L, i++);
 					lua_pushlstring (L, url->string, url->urllen);
 					lua_settable (L, -3);
 				}
-				i++;
+				else
+					break;
 			}
 
 		}
