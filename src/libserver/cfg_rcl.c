@@ -544,7 +544,7 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 				if (elt) {
 					if (!rspamd_rcl_symbols_handler (pool, cur, cfg, metric,
 							ucl_object_tostring (elt),
-							have_symbols, err)) {
+							!have_symbols, err)) {
 						return FALSE;
 					}
 
@@ -566,7 +566,7 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 	/* Handle symbols */
 	if (!rspamd_rcl_symbols_handler (pool, obj, cfg, metric, NULL,
-			have_symbols, err)) {
+			!have_symbols, err)) {
 		return FALSE;
 	}
 
