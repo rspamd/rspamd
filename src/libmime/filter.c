@@ -165,14 +165,17 @@ insert_metric_result (struct rspamd_task *task,
 
 	/* XXX: does not take grow factor into account */
 	if (gr != NULL && gr_score != NULL && gr->max_score > 0.0) {
-		*gr_score += w;
-
-		if (*gr_score > gr->max_score) {
+		if (*gr_score >= gr->max_score) {
 			msg_info ("maximum group score %.2f for group %s has been reached,"
 					" ignoring symbol %s with weight %.2f", gr->max_score,
 					gr->name, symbol, w);
 			return;
 		}
+		else if (*gr_score + w > gr->max_score) {
+			w = gr->max_score - *gr_score;
+		}
+
+		*gr_score += w;
 	}
 
 	/* Add metric score */
@@ -247,7 +250,6 @@ insert_metric_result (struct rspamd_task *task,
 		s->score,
 		metric->name,
 		w);
-
 }
 
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
