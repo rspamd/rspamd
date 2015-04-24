@@ -304,16 +304,17 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 static void
 register_bit_symbols (struct rspamd_config *cfg, struct suffix_item *suffix)
 {
-	GList *cur;
+	guint i;
+	GHashTableIter it;
 	struct surbl_bit_item *bit;
 
-	if (suffix->bits != NULL) {
-		/* Prepend bit to symbol */
-		cur = g_list_first (suffix->bits);
-		while (cur) {
-			bit = (struct surbl_bit_item *)cur->data;
+	if (suffix->ips != NULL) {
+		g_hash_table_iter_init (&it, suffix->ips);
+	}
+	else if (suffix->bits != NULL) {
+		for (i = 0; i < suffix->bits->len; i++) {
+			bit = &g_array_index (suffix->bits, struct surbl_bit_item, i);
 			register_virtual_symbol (&cfg->cache, bit->symbol, 1);
-			cur = g_list_next (cur);
 		}
 	}
 	else {
@@ -330,7 +331,7 @@ surbl_module_config (struct rspamd_config *cfg)
 
 	const ucl_object_t *value, *cur, *cur_rule, *cur_bit;
 	ucl_object_iter_t it = NULL;
-	const gchar *redir_val;
+	const gchar *redir_val, *ip_val;
 	guint32 bit;
 
 
@@ -442,7 +443,15 @@ surbl_module_config (struct rspamd_config *cfg)
 				surbl_module_ctx->surbl_pool,
 				ucl_obj_tostring (cur));
 			new_suffix->options = 0;
-			new_suffix->bits = NULL;
+			new_suffix->bits = g_array_new (FALSE, FALSE,
+					sizeof (struct surbl_bit_item));
+			new_suffix->ips = g_hash_table_new (g_int_hash, g_int_equal);
+			rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
+					(rspamd_mempool_destruct_t)g_hash_table_unref,
+					new_suffix->ips);
+			rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
+					(rspamd_mempool_destruct_t)rspamd_array_free_hard,
+					new_suffix->bits);
 
 			cur = ucl_obj_get_key (cur_rule, "symbol");
 			if (cur == NULL) {
@@ -491,11 +500,49 @@ surbl_module_config (struct rspamd_config *cfg)
 
 						msg_debug ("add new bit suffix: %d with symbol: %s",
 							(gint)new_bit->bit, new_bit->symbol);
-						new_suffix->bits = g_list_prepend (new_suffix->bits,
+						g_array_append_val (new_suffix->bits, *new_bit);
+					}
+				}
+			}
+			cur = ucl_obj_get_key (cur_rule, "ips");
+			if (cur != NULL && cur->type == UCL_OBJECT) {
+				it = NULL;
+				while ((cur_bit =
+						ucl_iterate_object (cur, &it, true)) != NULL) {
+					if (ucl_object_key (cur_bit) != NULL && cur_bit->type ==
+							UCL_INT) {
+						gchar *p;
+
+						ip_val = ucl_obj_tostring (cur_bit);
+						new_bit = rspamd_mempool_alloc (
+								surbl_module_ctx->surbl_pool,
+								sizeof (struct surbl_bit_item));
+
+						if (inet_pton (AF_INET, ip_val, &bit) != 1) {
+							msg_err ("cannot parse ip %s: %s", ip_val,
+									strerror (errno));
+							continue;
+						}
+
+						new_bit->bit = bit;
+						new_bit->symbol = rspamd_mempool_strdup (
+								surbl_module_ctx->surbl_pool,
+								ucl_object_key (cur_bit));
+						/* Convert to uppercase */
+						p = new_bit->symbol;
+						while (*p) {
+							*p = g_ascii_toupper (*p);
+							p ++;
+						}
+
+						msg_debug ("add new IP suffix: %d with symbol: %s",
+								(gint)new_bit->bit, new_bit->symbol);
+						g_hash_table_insert (new_suffix->ips, &new_bit->bit,
 								new_bit);
 					}
 				}
 			}
+
 			surbl_module_ctx->suffixes = g_list_prepend (
 				surbl_module_ctx->suffixes,
 				new_suffix);
@@ -810,14 +857,22 @@ process_dns_results (struct rspamd_task *task,
 	gchar *url,
 	guint32 addr)
 {
-	GList *cur;
+	guint i;
 	struct surbl_bit_item *bit;
 
-	if (suffix->bits != NULL) {
-		cur = g_list_first (suffix->bits);
+	if (suffix->ips) {
 
-		while (cur) {
-			bit = (struct surbl_bit_item *)cur->data;
+		bit = g_hash_table_lookup (suffix->ips, &addr);
+		if (bit != NULL) {
+			rspamd_task_insert_result (task, bit->symbol, 1,
+				g_list_prepend (NULL,
+				rspamd_mempool_strdup (task->task_pool, url)));
+		}
+	}
+	else if (suffix->bits != NULL) {
+		for (i = 0; i < suffix->bits->len; i ++) {
+
+			bit = &g_array_index (suffix->bits, struct surbl_bit_item, i);
 			debug_task ("got result(%d) AND bit(%d): %d",
 				(gint)addr,
 				(gint)ntohl (bit->bit),
@@ -827,7 +882,6 @@ process_dns_results (struct rspamd_task *task,
 					g_list_prepend (NULL,
 					rspamd_mempool_strdup (task->task_pool, url)));
 			}
-			cur = g_list_next (cur);
 		}
 	}
 	else {

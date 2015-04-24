@@ -43,7 +43,8 @@ struct suffix_item {
 	const gchar *suffix;
 	const gchar *symbol;
 	guint32 options;
-	GList *bits;
+	GArray *bits;
+	GHashTable *ips;
 };
 
 struct dns_param {
