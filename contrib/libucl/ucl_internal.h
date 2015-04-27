@@ -311,7 +311,7 @@ ucl_maybe_parse_boolean (ucl_object_t *obj, const unsigned char *start, size_t l
 		}
 	}
 
-	if (ret) {
+	if (ret && obj != NULL) {
 		obj->type = UCL_BOOLEAN;
 		obj->value.iv = val;
 	}

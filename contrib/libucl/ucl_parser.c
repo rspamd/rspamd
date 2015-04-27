@@ -834,19 +834,21 @@ ucl_maybe_parse_number (ucl_object_t *obj,
 	*pos = c;
 	return EINVAL;
 
-	set_obj:
-	if (allow_double && (need_double || is_time)) {
-		if (!is_time) {
-			obj->type = UCL_FLOAT;
+set_obj:
+	if (obj != NULL) {
+		if (allow_double && (need_double || is_time)) {
+			if (!is_time) {
+				obj->type = UCL_FLOAT;
+			}
+			else {
+				obj->type = UCL_TIME;
+			}
+			obj->value.dv = is_neg ? (-dv) : dv;
 		}
 		else {
-			obj->type = UCL_TIME;
+			obj->type = UCL_INT;
+			obj->value.iv = is_neg ? (-lv) : lv;
 		}
-		obj->value.dv = is_neg ? (-dv) : dv;
-	}
-	else {
-		obj->type = UCL_INT;
-		obj->value.iv = is_neg ? (-lv) : lv;
 	}
 	*pos = p;
 	return 0;
@@ -998,7 +1000,8 @@ ucl_parser_append_elt (struct ucl_parser *parser, ucl_hash_t *cont,
  * @return true if a key has been parsed
  */
 static bool
-ucl_parse_key (struct ucl_parser *parser, struct ucl_chunk *chunk, bool *next_key, bool *end_of_object)
+ucl_parse_key (struct ucl_parser *parser, struct ucl_chunk *chunk,
+		bool *next_key, bool *end_of_object, bool *skip_value)
 {
 	const unsigned char *p, *c = NULL, *end, *t;
 	const char *key = NULL;
@@ -1218,6 +1221,7 @@ ucl_parse_key (struct ucl_parser *parser, struct ucl_chunk *chunk, bool *next_ke
 		}
 		else if (priold > prinew) {
 			ucl_object_unref (nobj);
+			*skip_value = true;
 			return true;
 		}
 		else {
@@ -1229,9 +1233,10 @@ ucl_parse_key (struct ucl_parser *parser, struct ucl_chunk *chunk, bool *next_ke
 	if (ucl_escape) {
 		nobj->flags |= UCL_OBJECT_NEED_KEY_ESCAPE;
 	}
-	parser->stack->obj->value.ov = container;
 
+	parser->stack->obj->value.ov = container;
 	parser->cur_obj = nobj;
+	*skip_value = false;
 
 	return true;
 }
@@ -1244,7 +1249,8 @@ ucl_parse_key (struct ucl_parser *parser, struct ucl_chunk *chunk, bool *next_ke
  */
 static bool
 ucl_parse_string_value (struct ucl_parser *parser,
-		struct ucl_chunk *chunk, bool *var_expand, bool *need_unescape)
+		struct ucl_chunk *chunk, bool *var_expand, bool *need_unescape,
+		bool skip_value)
 {
 	const unsigned char *p;
 	enum {
@@ -1391,7 +1397,8 @@ ucl_get_value_object (struct ucl_parser *parser)
  * @return
  */
 static bool
-ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
+ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk,
+		bool skip_value)
 {
 	const unsigned char *p, *c;
 	ucl_object_t *obj = NULL;
@@ -1417,42 +1424,57 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 		c = p;
 		switch (*p) {
 		case '"':
-			obj = ucl_get_value_object (parser);
 			ucl_chunk_skipc (chunk, p);
-			if (!ucl_lex_json_string (parser, chunk, &need_unescape, &ucl_escape, &var_expand)) {
+
+			if (!ucl_lex_json_string (parser, chunk, &need_unescape, &ucl_escape,
+					&var_expand)) {
 				return false;
 			}
-			str_len = chunk->pos - c - 2;
-			obj->type = UCL_STRING;
-			if ((str_len = ucl_copy_or_store_ptr (parser, c + 1, &obj->trash_stack[UCL_TRASH_VALUE],
-					&obj->value.sv, str_len, need_unescape, false, var_expand)) == -1) {
-				return false;
+
+			if (!skip_value) {
+				obj = ucl_get_value_object (parser);
+				str_len = chunk->pos - c - 2;
+				obj->type = UCL_STRING;
+				if ((str_len = ucl_copy_or_store_ptr (parser, c + 1,
+						&obj->trash_stack[UCL_TRASH_VALUE],
+						&obj->value.sv, str_len, need_unescape, false,
+						var_expand)) == -1) {
+					return false;
+				}
+				obj->len = str_len;
 			}
-			obj->len = str_len;
+
 			parser->state = UCL_STATE_AFTER_VALUE;
 			p = chunk->pos;
+
 			return true;
 			break;
 		case '{':
-			obj = ucl_get_value_object (parser);
-			/* We have a new object */
-			obj = ucl_add_parser_stack (obj, parser, false, parser->stack->level);
-			if (obj == NULL) {
-				return false;
+			if (!skip_value) {
+				obj = ucl_get_value_object (parser);
+				/* We have a new object */
+				obj = ucl_add_parser_stack (obj, parser, false, parser->stack->level);
+				if (obj == NULL) {
+					return false;
+				}
 			}
 
 			ucl_chunk_skipc (chunk, p);
+
 			return true;
 			break;
 		case '[':
-			obj = ucl_get_value_object (parser);
-			/* We have a new array */
-			obj = ucl_add_parser_stack (obj, parser, true, parser->stack->level);
-			if (obj == NULL) {
-				return false;
+			if (!skip_value) {
+				obj = ucl_get_value_object (parser);
+				/* We have a new array */
+				obj = ucl_add_parser_stack (obj, parser, true, parser->stack->level);
+				if (obj == NULL) {
+					return false;
+				}
 			}
 
 			ucl_chunk_skipc (chunk, p);
+
 			return true;
 			break;
 		case ']':
@@ -1488,13 +1510,20 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 									"unterminated multiline value", &parser->err);
 							return false;
 						}
-						obj->type = UCL_STRING;
-						if ((str_len = ucl_copy_or_store_ptr (parser, c, &obj->trash_stack[UCL_TRASH_VALUE],
-							&obj->value.sv, str_len - 1, false, false, var_expand)) == -1) {
-							return false;
+
+						if (!skip_value) {
+							obj->type = UCL_STRING;
+							if ((str_len = ucl_copy_or_store_ptr (parser, c,
+									&obj->trash_stack[UCL_TRASH_VALUE],
+									&obj->value.sv, str_len - 1, false,
+									false, var_expand)) == -1) {
+								return false;
+							}
+							obj->len = str_len;
 						}
-						obj->len = str_len;
+
 						parser->state = UCL_STATE_AFTER_VALUE;
+
 						return true;
 					}
 				}
@@ -1502,9 +1531,10 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 			/* Fallback to ordinary strings */
 		default:
 parse_string:
-			if (obj == NULL) {
+			if (obj == NULL && !skip_value) {
 				obj = ucl_get_value_object (parser);
 			}
+
 			/* Parse atom */
 			if (ucl_test_character (*p, UCL_CHARACTER_VALUE_DIGIT_START)) {
 				if (!ucl_lex_number (parser, chunk, obj)) {
@@ -1519,7 +1549,8 @@ parse_string:
 				/* Fallback to normal string */
 			}
 
-			if (!ucl_parse_string_value (parser, chunk, &var_expand, &need_unescape)) {
+			if (!ucl_parse_string_value (parser, chunk, &var_expand,
+					&need_unescape, skip_value)) {
 				return false;
 			}
 			/* Cut trailing spaces */
@@ -1539,13 +1570,16 @@ parse_string:
 				obj->type = UCL_NULL;
 			}
 			else if (!ucl_maybe_parse_boolean (obj, c, str_len)) {
-				obj->type = UCL_STRING;
-				if ((str_len = ucl_copy_or_store_ptr (parser, c, &obj->trash_stack[UCL_TRASH_VALUE],
-						&obj->value.sv, str_len, need_unescape,
-						false, var_expand)) == -1) {
-					return false;
+				if (!skip_value) {
+					obj->type = UCL_STRING;
+					if ((str_len = ucl_copy_or_store_ptr (parser, c,
+							&obj->trash_stack[UCL_TRASH_VALUE],
+							&obj->value.sv, str_len, need_unescape,
+							false, var_expand)) == -1) {
+						return false;
+					}
+					obj->len = str_len;
 				}
-				obj->len = str_len;
 			}
 			parser->state = UCL_STATE_AFTER_VALUE;
 			p = chunk->pos;
@@ -1565,7 +1599,8 @@ parse_string:
  * @return
  */
 static bool
-ucl_parse_after_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
+ucl_parse_after_value (struct ucl_parser *parser, struct ucl_chunk *chunk,
+		bool skip_value)
 {
 	const unsigned char *p;
 	bool got_sep = false;
@@ -1595,28 +1630,30 @@ ucl_parse_after_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 							&parser->err);
 					return false;
 				}
-				if ((*p == '}' && parser->stack->obj->type == UCL_OBJECT) ||
-						(*p == ']' && parser->stack->obj->type == UCL_ARRAY)) {
+				if (!skip_value) {
+					if ((*p == '}' && parser->stack->obj->type == UCL_OBJECT) ||
+							(*p == ']' && parser->stack->obj->type == UCL_ARRAY)) {
 
-					/* Pop all nested objects from a stack */
-					st = parser->stack;
-					parser->stack = st->next;
-					UCL_FREE (sizeof (struct ucl_stack), st);
-
-					while (parser->stack != NULL) {
+						/* Pop all nested objects from a stack */
 						st = parser->stack;
-						if (st->next == NULL || st->next->level == st->level) {
-							break;
-						}
 						parser->stack = st->next;
 						UCL_FREE (sizeof (struct ucl_stack), st);
+
+						while (parser->stack != NULL) {
+							st = parser->stack;
+							if (st->next == NULL || st->next->level == st->level) {
+								break;
+							}
+							parser->stack = st->next;
+							UCL_FREE (sizeof (struct ucl_stack), st);
+						}
 					}
-				}
-				else {
-					ucl_set_err (parser, UCL_ESYNTAX,
-							"unexpected terminating symbol detected",
-							&parser->err);
-					return false;
+					else {
+						ucl_set_err (parser, UCL_ESYNTAX,
+								"unexpected terminating symbol detected",
+								&parser->err);
+						return false;
+					}
 				}
 
 				if (parser->stack == NULL) {
@@ -1855,7 +1892,7 @@ ucl_state_machine (struct ucl_parser *parser)
 	unsigned char *macro_escaped;
 	size_t macro_len = 0;
 	struct ucl_macro *macro = NULL;
-	bool next_key = false, end_of_object = false, ret;
+	bool next_key = false, end_of_object = false, skip_value = false, ret;
 
 	if (parser->top_obj == NULL) {
 		if (*chunk->pos == '[') {
@@ -1923,7 +1960,8 @@ ucl_state_machine (struct ucl_parser *parser)
 				parser->state = UCL_STATE_ERROR;
 				return false;
 			}
-			if (!ucl_parse_key (parser, chunk, &next_key, &end_of_object)) {
+			if (!ucl_parse_key (parser, chunk, &next_key, &end_of_object,
+					&skip_value)) {
 				parser->prev_state = parser->state;
 				parser->state = UCL_STATE_ERROR;
 				return false;
@@ -1953,7 +1991,7 @@ ucl_state_machine (struct ucl_parser *parser)
 			break;
 		case UCL_STATE_VALUE:
 			/* We need to check what we do have */
-			if (!ucl_parse_value (parser, chunk)) {
+			if (!ucl_parse_value (parser, chunk, skip_value)) {
 				parser->prev_state = parser->state;
 				parser->state = UCL_STATE_ERROR;
 				return false;
@@ -1962,11 +2000,14 @@ ucl_state_machine (struct ucl_parser *parser)
 			p = chunk->pos;
 			break;
 		case UCL_STATE_AFTER_VALUE:
-			if (!ucl_parse_after_value (parser, chunk)) {
+			if (!ucl_parse_after_value (parser, chunk, skip_value)) {
 				parser->prev_state = parser->state;
 				parser->state = UCL_STATE_ERROR;
 				return false;
 			}
+
+			skip_value = false;
+
 			if (parser->stack != NULL) {
 				if (parser->stack->obj->type == UCL_OBJECT) {
 					parser->state = UCL_STATE_KEY;
