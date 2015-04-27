@@ -438,7 +438,8 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	struct rspamd_symbols_group *gr;
 	gdouble action_score, grow_factor;
 	gint action_value;
-	gboolean new = TRUE, have_actions = FALSE, have_symbols = FALSE;
+	gboolean new = TRUE, have_actions = FALSE, have_symbols = FALSE,
+			have_unknown = FALSE;
 	gdouble unknown_weight;
 	ucl_object_iter_t it = NULL;
 
@@ -455,6 +456,14 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	else {
 		new = FALSE;
 		have_symbols = TRUE;
+	}
+
+	val = ucl_object_find_key (obj, "unknown_weight");
+	if (val && ucl_object_todouble_safe (val, &unknown_weight) &&
+			unknown_weight != 0.) {
+		metric->unknown_weight = unknown_weight;
+		metric->accept_unknown_symbols = TRUE;
+		have_unknown = TRUE;
 	}
 
 	/* Handle actions */
@@ -526,13 +535,6 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		metric->subject = (gchar *)subject_name;
 	}
 
-	val = ucl_object_find_key (obj, "unknown_weight");
-	if (val && ucl_object_todouble_safe (val, &unknown_weight) &&
-		unknown_weight != 0.) {
-		metric->unknown_weight = unknown_weight;
-		metric->accept_unknown_symbols = TRUE;
-	}
-
 	/* Handle grouped symbols */
 	val = ucl_object_find_key (obj, "group");
 	if (val != NULL && ucl_object_type (val) == UCL_OBJECT) {
@@ -566,7 +568,7 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 	/* Handle symbols */
 	if (!rspamd_rcl_symbols_handler (pool, obj, cfg, metric, NULL,
-			!have_symbols, err)) {
+			!have_symbols && !have_unknown, err)) {
 		return FALSE;
 	}
 
