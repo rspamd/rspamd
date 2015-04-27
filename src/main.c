@@ -628,11 +628,13 @@ spawn_workers (struct rspamd_main *rspamd)
 	gpointer p;
 	guintptr key;
 	struct rspamd_worker_bind_conf *bcf;
+	gboolean listen_ok = FALSE;
 
 	cur = rspamd->cfg->workers;
 
 	while (cur) {
 		cf = cur->data;
+		listen_ok = FALSE;
 
 		if (cf->worker == NULL) {
 			msg_err ("type of worker is unspecified, skip spawning");
@@ -656,13 +658,16 @@ spawn_workers (struct rspamd_main *rspamd)
 							msg_err ("cannot listen on socket %s: %s",
 								bcf->name,
 								strerror (errno));
-							exit (-errno);
 						}
-						g_hash_table_insert (listen_sockets, (gpointer)key, ls);
+						else {
+							g_hash_table_insert (listen_sockets, (gpointer)key, ls);
+							listen_ok = TRUE;
+						}
 					}
 					else {
 						/* We had socket for this type of worker */
 						ls = p;
+						listen_ok = TRUE;
 					}
 					/* Do not add existing lists as it causes loops */
 					if (g_list_position (cf->listen_socks, ls) == -1) {
@@ -671,19 +676,23 @@ spawn_workers (struct rspamd_main *rspamd)
 				}
 			}
 
-			if (cf->worker->unique) {
-				if (cf->count > 1) {
-					msg_err ("cannot spawn more than 1 %s worker, so spawn one",
-						cf->worker->name);
+			if (listen_ok) {
+				if (cf->worker->unique) {
+					if (cf->count > 1) {
+						msg_err ("cannot spawn more than 1 %s worker, so spawn one",
+								cf->worker->name);
+					}
+					else {
+						fork_worker (rspamd, cf);
+					}
 				}
-				fork_worker (rspamd, cf);
-			}
-			else if (cf->worker->threaded) {
-				fork_worker (rspamd, cf);
-			}
-			else {
-				for (i = 0; i < cf->count; i++) {
+				else if (cf->worker->threaded) {
 					fork_worker (rspamd, cf);
+				}
+				else {
+					for (i = 0; i < cf->count; i++) {
+						fork_worker (rspamd, cf);
+					}
 				}
 			}
 		}
