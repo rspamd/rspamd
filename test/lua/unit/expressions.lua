@@ -27,6 +27,7 @@ context("Rspamd expressions", function()
     local cases = {
        {'A & B | !C', 'C ! A B & |'},
        {'A & (B | !C)', 'A B C ! | &'},
+       {'A & B &', nil},
        -- Unbalanced braces
        {'(((A))', nil},
        -- Balanced braces
