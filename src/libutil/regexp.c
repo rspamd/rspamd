@@ -59,6 +59,7 @@ struct rspamd_regexp_cache {
 };
 
 static struct rspamd_regexp_cache *global_re_cache = NULL;
+static gboolean can_jit = FALSE;
 
 static GQuark
 rspamd_regexp_quark (void)
@@ -264,17 +265,19 @@ fin:
 #ifdef HAVE_PCRE_JIT
 				gint jit, n;
 
-				jit = 0;
-				n = pcre_fullinfo (res->re, res->extra,
-						PCRE_INFO_JIT, &jit);
+				if (can_jit) {
+					jit = 0;
+					n = pcre_fullinfo (res->re, res->extra,
+							PCRE_INFO_JIT, &jit);
 
-				if (n != 0 || jit != 1) {
-					msg_info ("jit compilation of %s is not supported", pattern);
-					res->jstack = NULL;
-				}
-				else {
-					res->jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
-					pcre_assign_jit_stack (res->extra, NULL, res->jstack);
+					if (n != 0 || jit != 1) {
+						msg_info ("jit compilation of %s is not supported", pattern);
+						res->jstack = NULL;
+					}
+					else {
+						res->jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
+						pcre_assign_jit_stack (res->extra, NULL, res->jstack);
+					}
 				}
 #endif
 			}
@@ -289,17 +292,19 @@ fin:
 #ifdef HAVE_PCRE_JIT
 				gint jit, n;
 
-				jit = 0;
-				n = pcre_fullinfo (res->re, res->extra,
-						PCRE_INFO_JIT, &jit);
+				if (can_jit) {
+					jit = 0;
+					n = pcre_fullinfo (res->re, res->extra,
+							PCRE_INFO_JIT, &jit);
 
-				if (n != 0 || jit != 1) {
-					msg_info ("jit compilation of %s is not supported", pattern);
-					res->jstack = NULL;
-				}
-				else {
-					res->jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
-					pcre_assign_jit_stack (res->extra, NULL, res->jstack);
+					if (n != 0 || jit != 1) {
+						msg_info ("jit compilation of %s is not supported", pattern);
+						res->jstack = NULL;
+					}
+					else {
+						res->jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
+						pcre_assign_jit_stack (res->extra, NULL, res->jstack);
+					}
 				}
 #endif
 			}
@@ -606,6 +611,28 @@ rspamd_regexp_library_init (void)
 	if (global_re_cache == NULL) {
 		global_re_cache = rspamd_regexp_cache_new ();
 	}
+#ifdef HAVE_PCRE_JIT
+	gint jit, rc;
+	const gchar *str;
+
+
+	rc = pcre_config (PCRE_CONFIG_JIT, &jit);
+
+	if (rc == 0 && jit == 1) {
+		pcre_config (PCRE_CONFIG_JITTARGET, &str);
+
+		msg_info ("pcre is compiled with JIT for %s", str);
+
+		can_jit = TRUE;
+	}
+	else {
+		msg_info ("pcre is compiled without JIT support, so many optimisations"
+				" are impossible");
+	}
+#else
+	msg_info ("pcre is too old and has no JIT support, so many optimisations"
+					" are impossible");
+#endif
 }
 
 void
