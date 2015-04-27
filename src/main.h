@@ -69,6 +69,13 @@ struct rspamd_worker_signal_handler {
 	void *handler_data;
 };
 
+struct rspamd_controller_pbkdf {
+	gint id;
+	guint rounds;
+	gsize salt_len;
+	gsize key_len;
+};
+
 
 /**
  * Module

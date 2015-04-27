@@ -133,14 +133,8 @@ struct rspamd_controller_session {
 	gboolean is_spam;
 };
 
-struct rspamd_controller_pbkdf {
-	gint id;
-	guint rounds;
-	gsize salt_len;
-	gsize key_len;
-};
 
-static const struct rspamd_controller_pbkdf pbkdf_list[] = {
+const struct rspamd_controller_pbkdf pbkdf_list[] = {
 	{
 		.id = RSPAMD_PBKDF_ID_V1,
 		.rounds = 16000,

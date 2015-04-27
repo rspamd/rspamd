@@ -84,6 +84,7 @@ static gboolean dump_cache = FALSE;
 static gboolean is_debug = FALSE;
 static gboolean is_insecure = FALSE;
 static gboolean gen_keypair = FALSE;
+static gboolean encrypt_password = FALSE;
 /* List of workers that are pending to start */
 static GList *workers_pending = NULL;
 
@@ -129,9 +130,12 @@ static GOptionEntry entries[] =
 	  "Specify private key to sign", NULL },
 	{ "gen-keypair", 0, 0, G_OPTION_ARG_NONE, &gen_keypair, "Generate new encryption "
 			"keypair", NULL},
+	{ "encrypt-password", 0, 0, G_OPTION_ARG_NONE, &encrypt_password, "Encrypt "
+			"controller password to store in the configuration file", NULL },
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
+extern const struct rspamd_controller_pbkdf pbkdf_list[];
 
 #ifndef HAVE_SA_SIGINFO
 static void
@@ -1038,6 +1042,43 @@ perform_configs_sign (void)
 }
 
 static void
+do_encrypt_password (void)
+{
+	const struct rspamd_controller_pbkdf *pbkdf;
+	guchar *salt, *key;
+	gchar *encoded_salt, *encoded_key;
+	gchar password[BUFSIZ];
+	gsize plen;
+
+	pbkdf = &pbkdf_list[0];
+	g_assert (pbkdf != NULL);
+
+	plen = rspamd_read_passphrase (password, sizeof (password), 0, NULL);
+
+	if (plen == 0) {
+		fprintf (stderr, "Invalid password\n");
+		exit (EXIT_FAILURE);
+	}
+
+	salt = g_alloca (pbkdf->salt_len);
+	key = g_alloca (pbkdf->key_len);
+	ottery_rand_bytes (salt, pbkdf->salt_len);
+	/* Derive key */
+	rspamd_cryptobox_pbkdf (password, strlen (password),
+			salt, pbkdf->salt_len, key, pbkdf->key_len, pbkdf->rounds);
+
+	encoded_salt = rspamd_encode_base32 (salt, pbkdf->salt_len);
+	encoded_key = rspamd_encode_base32 (key, pbkdf->key_len);
+
+	rspamd_printf ("$%d$%s$%s\n", pbkdf->id, encoded_salt,
+			encoded_key);
+
+	g_free (encoded_salt);
+	g_free (encoded_key);
+	rspamd_explicit_memzero (password, sizeof (password));
+}
+
+static void
 rspamd_init_main (struct rspamd_main *rspamd)
 {
 	rspamd->server_pool = rspamd_mempool_new (
@@ -1137,6 +1178,11 @@ main (gint argc, gchar **argv, gchar **env)
 				RSPAMD_KEYPAIR_PUBKEY|RSPAMD_KEYPAIR_PRIVKEY|RSPAMD_KEYPAIR_ID|
 				RSPAMD_KEYPAIR_BASE32|RSPAMD_KEYPAIR_HUMAN);
 		rspamd_printf ("%V", keypair_out);
+		exit (EXIT_SUCCESS);
+	}
+
+	if (encrypt_password) {
+		do_encrypt_password ();
 		exit (EXIT_SUCCESS);
 	}
 
