@@ -380,7 +380,7 @@ lua_url_all (lua_State *L)
 	const gchar *text,*end;
 	gint i = 1;
 	size_t length;
-	const gchar **pos;
+	const gchar *pos;
 
 	if (pool == NULL) {
 		lua_pushnil (L);
@@ -389,12 +389,12 @@ lua_url_all (lua_State *L)
 		text = luaL_checklstring (L, 2, &length);
 
 		if (text != NULL) {
-			*pos = text;
+			pos = text;
 			end = text + length;
 			lua_newtable (L);
 			
-			while (*pos <= end) {
-				url = rspamd_url_get_next (pool, text, pos, NULL);				
+			while (pos <= end) {
+				url = rspamd_url_get_next (pool, text, &pos, NULL);
 
 				if (url != NULL) {
 					lua_url = lua_newuserdata (L, sizeof (struct rspamd_lua_url));
