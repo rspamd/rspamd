@@ -719,19 +719,43 @@ gboolean
 rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend, gint64 expire)
 {
 	gboolean ret = FALSE;
+	gint64 expire_lim, expired;
+	gint rc;
+	GError *err = NULL;
 
 	/* Perform expire */
 	if (expire > 0) {
-		rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_EXPIRE,
-				backend, NULL);
-		backend->expired += sqlite3_changes (backend->db);
+		expire_lim = time (NULL) - expire;
+
+		if (expire_lim > 0) {
+			rc = rspamd_fuzzy_backend_run_stmt (backend,
+					RSPAMD_FUZZY_BACKEND_EXPIRE, expire_lim);
+
+			if (rc == SQLITE_OK) {
+				expired = sqlite3_changes (backend->db);
+
+				if (expired > 0) {
+					backend->expired += expired;
+					msg_info ("expired %L hashes", expired);
+				}
+			}
+			else {
+				msg_warn ("cannot execute expired statement: %s",
+						sqlite3_errmsg (backend->db));
+			}
+		}
+
 	}
 	ret = rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT,
-			backend, NULL);
+			backend, &err);
 
 	if (ret) {
 		ret = rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_START,
 			backend, NULL);
+	}
+	else {
+		msg_warn ("cannot synchronise fuzzy backend: %e", err);
+		g_error_free (err);
 	}
 
 	return ret;
