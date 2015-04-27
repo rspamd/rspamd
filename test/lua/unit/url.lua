@@ -10,12 +10,12 @@ context("URL check functions", function()
   unsigned ottery_rand_range(unsigned top);
   ]]
   
-  local pool = mpool.create()
   local test_dir = string.gsub(debug.getinfo(1).source, "^@(.+/)[^/]+$", "%1")
 
   ffi.C.rspamd_url_init(string.format('%s/%s', test_dir, "test_tld.dat"))
 
   test("Extract urls from text", function()
+    local pool = mpool.create()
     local cases = {
       {"test.com text", {"test.com", nil}},
       {"test.com. text", {"test.com", nil}},
@@ -45,7 +45,7 @@ context("URL check functions", function()
         assert_equal(c[2][2], t['user'])
       end
     end
+    pool:destroy()
   end)
   
-  pool:destroy()
 end)
