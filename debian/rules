@@ -14,7 +14,7 @@ override_dh_auto_configure:
 		-DLOGDIR=/var/log/rspamd \
 		-DPLUGINSDIR=/usr/share/rspamd \
 		-DEXAMPLESDIR=/usr/share/doc/rspamd/examples \
-		-DLIBDIR=/usr/lib \
+		-DLIBDIR=/usr/lib/rspamd \
 		-DINCLUDEDIR=/usr/include \
 		-DSYSTEMDDIR=/lib/systemd/system \
 		-DNO_SHARED=ON \
