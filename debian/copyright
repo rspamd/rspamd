@@ -50,6 +50,23 @@ Copyright: Ted Krovetz <ted@krovetz.net>
 License: public-domain
  Public domain.
 
+Files: contrib/blake2/*
+Copyright: Samuel Neves <sneves@dei.uc.pt>
+License: public-domain
+ Public domain.
+
+Files: contrib/lua-fun
+Copyright: 2013 Roman Tsisyk <roman@tsisyk.com>
+License: MIT
+
+Files: contrib/publicsuffix
+Copyright: 2007-2011, Mozilla Foundation. 
+License: MPL-2
+
+Files: contrib/aho-corasic
+Copyright: 2009-2014 Mischa Sandberg <mischasan@gmail.com>
+License: License: LGPL-3+
+
 Files: contrib/xxhash/xxhash.*
 Copyright: 2012-2013, Yann Collet.
 License: BSD-2-Clause
@@ -98,13 +115,33 @@ Files: interface/*
 Copyright: 2000-2012 The Apache Software Foundation
 License: Apache-2.0
 
-Files: src/cdb/cdb*
+Files: contrib/cdb*
 Copyright: Michael Tokarev <mjt@corpit.ru>
 License: public-domain
  The code is in public domain, that is, you may do anything you want with it.
 Comment:
  The exact meaning of "Public domain" mentioned in the file headers was taken from:
  http://www.corpit.ru/mjt/tinycdb.html
+
+Files: src/libcryptobox/curve25519/*
+Copyright: 2008, Google Inc.
+License: BSD-3-Clause-Google
+
+Files: src/libcryptobox/siphash/*
+Copyright: 2015, Vsevolod Stakhov
+           2012-2014 Jean-Philippe Aumasson <jeanphilippe.aumasson@gmail.com>
+           2012-2014 Daniel J. Bernstein <djb@cr.yp.to>
+License: BSD-2-Clause
+
+Files: src/libcryptobox/poly1305/*
+Copyright: 2015, Andrew Moon
+           2015, Vsevolod Stakhov
+License: MIT
+
+Files: src/libcryptobox/chacha20/*
+Copyright: 2015, Andrew Moon
+           2015, Vsevolod Stakhov
+License: MIT
 
 Files: debian/*
 Copyright: 2011-2015 Vsevolod Stakhov <vsevolod@highsecure.ru>
@@ -208,6 +245,35 @@ License: BSD-3-Clause-Redis
  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+License: BSD-3-Clause-Google
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions are
+ met:
+ .
+ Redistributions of source code must retain the above copyright
+ notice, this list of conditions and the following disclaimer.
+ .
+ Redistributions in binary form must reproduce the above
+ copyright notice, this list of conditions and the following disclaimer
+ in the documentation and/or other materials provided with the
+ distribution.
+ .
+ Neither the name of Google Inc. nor the names of its
+ contributors may be used to endorse or promote products derived from
+ this software without specific prior written permission.
+ .
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 License: Expat
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
@@ -267,6 +333,25 @@ License: LGPL-2.1+
  On Debian systems, the full text of the GNU Library General Public
  License version 2 can be found in the file
  `/usr/share/common-licenses/LGPL-2.1'.
+
+License: LGPL-3+
+ This library is free software; you can redistribute it and/or
+ modify it under the terms of the GNU Lesser General Public
+ License as published by the Free Software Foundation; either
+ version 3 of the License, or (at your option) any later version.
+ .
+ This library is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ Lesser General Public License for more details.
+ .
+ You should have received a copy of the GNU Lesser General Public
+ License along with this library; if not, write to the Free Software
+ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ .
+ On Debian systems, the full text of the GNU Library General Public
+ License version 3 can be found in the file
+ `/usr/share/common-licenses/LGPL-3'.
 
 License: Apache-2.0
  On Debian GNU/Linux system you can find the complete text of the
@@ -328,3 +413,8 @@ License: MIT
  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  SOFTWARE.
+
+License: MPL-2
+ This Source Code Form is subject to the terms of the Mozilla Public License,
+ v. 2.0. If a copy of the MPL was not distributed with this file,
+ You can obtain one at http://mozilla.org/MPL/2.0/.
