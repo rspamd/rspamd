@@ -49,6 +49,7 @@ fuzzy_check {
 
 		# List of additional mime types to be checked in this fuzzy
 		mime_types = "application/pdf";
+		mime_types = ["application/*", "*/octet-stream", "*"];
 
 		# Maximum global score for all maps
 		max_score = 20.0;
