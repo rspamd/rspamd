@@ -1111,6 +1111,8 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 
 	if (!rspamd_parse_expression (composite_expression, 0, &composite_expr_subr,
 				NULL, cfg->cfg_pool, err, &expr)) {
+		msg_err ("cannot parse composite expression for %s: %e",
+				composite_name, err);
 		return FALSE;
 	}
 
