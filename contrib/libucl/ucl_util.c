@@ -429,6 +429,7 @@ ucl_parser_free (struct ucl_parser *parser)
 	struct ucl_chunk *chunk, *ctmp;
 	struct ucl_pubkey *key, *ktmp;
 	struct ucl_variable *var, *vtmp;
+	ucl_object_t *tr, *trtmp;
 
 	if (parser == NULL) {
 		return;
@@ -456,6 +457,9 @@ ucl_parser_free (struct ucl_parser *parser)
 		free (var->value);
 		free (var->var);
 		UCL_FREE (sizeof (struct ucl_variable), var);
+	}
+	LL_FOREACH_SAFE (parser->trash_objs, tr, trtmp) {
+		ucl_object_unref (tr);
 	}
 
 	if (parser->err != NULL) {
@@ -1795,6 +1799,12 @@ ucl_object_iterate_free (ucl_object_iter_t it)
 
 const ucl_object_t *
 ucl_lookup_path (const ucl_object_t *top, const char *path_in) {
+	return ucl_lookup_path_char (top, path_in, '.');
+}
+
+
+const ucl_object_t *
+ucl_lookup_path_char (const ucl_object_t *top, const char *path_in, const char sep) {
 	const ucl_object_t *o = NULL, *found;
 	const char *p, *c;
 	char *err_str;
@@ -1808,20 +1818,20 @@ ucl_lookup_path (const ucl_object_t *top, const char *path_in) {
 	p = path_in;
 
 	/* Skip leading dots */
-	while (*p == '.') {
+	while (*p == sep) {
 		p ++;
 	}
 
 	c = p;
 	while (*p != '\0') {
 		p ++;
-		if (*p == '.' || *p == '\0') {
+		if (*p == sep || *p == '\0') {
 			if (p > c) {
 				switch (top->type) {
 				case UCL_ARRAY:
 					/* Key should be an int */
 					index = strtoul (c, &err_str, 10);
-					if (err_str != NULL && (*err_str != '.' && *err_str != '\0')) {
+					if (err_str != NULL && (*err_str != sep && *err_str != '\0')) {
 						return NULL;
 					}
 					o = ucl_array_find_index (top, index);
@@ -1916,6 +1926,10 @@ ucl_object_new_userdata (ucl_userdata_dtor dtor, ucl_userdata_emitter emitter)
 ucl_type_t
 ucl_object_type (const ucl_object_t *obj)
 {
+	if (obj == NULL) {
+		return UCL_NULL;
+	}
+
 	return obj->type;
 }
 

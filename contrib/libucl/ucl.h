@@ -145,6 +145,7 @@ typedef enum ucl_emitter {
  * UCL still has to perform copying implicitly.
  */
 typedef enum ucl_parser_flags {
+	UCL_PARSER_DEFAULT = 0x0,       /**< No special flags */
 	UCL_PARSER_KEY_LOWERCASE = 0x1, /**< Convert all keys to lower case */
 	UCL_PARSER_ZEROCOPY = 0x2, /**< Parse input in zero-copy mode if possible */
 	UCL_PARSER_NO_TIME = 0x4, /**< Do not parse time and treat time values as strings */
@@ -155,6 +156,7 @@ typedef enum ucl_parser_flags {
  * String conversion flags, that are used in #ucl_object_fromstring_common function.
  */
 typedef enum ucl_string_flags {
+	UCL_STRING_RAW = 0x0,     /**< Treat string as is */
 	UCL_STRING_ESCAPE = 0x1,  /**< Perform JSON escape */
 	UCL_STRING_TRIM = 0x2,    /**< Trim leading and trailing whitespaces */
 	UCL_STRING_PARSE_BOOLEAN = 0x4,    /**< Parse passed string and detect boolean */
@@ -629,6 +631,16 @@ UCL_EXTERN const ucl_object_t* ucl_object_find_keyl (const ucl_object_t *obj,
  */
 UCL_EXTERN const ucl_object_t *ucl_lookup_path (const ucl_object_t *obj,
 		const char *path);
+
+/**
+ * Return object identified by object notation string using arbitrary delimiter
+ * @param obj object to search in
+ * @param path dot.notation.path to the path to lookup. May use numeric .index on arrays
+ * @param sep the sepatorator to use in place of . (incase keys have . in them)
+ * @return object matched the specified path or NULL if path is not found
+ */
+UCL_EXTERN const ucl_object_t *ucl_lookup_path_char (const ucl_object_t *obj,
+		const char *path, char sep);
 
 /**
  * Returns a key of an object as a NULL terminated string
