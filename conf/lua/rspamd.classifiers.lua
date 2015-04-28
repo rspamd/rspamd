@@ -31,8 +31,6 @@ local many_recipients_label = 'many recipients'
 local undisclosed_recipients_label = 'undisclosed recipients'
 local list_label = 'maillist'
 local long_subject_label = 'long subject'
-local different_reply_to_label = 'different reply to'
-local has_in_reply_label = 'reply message'
 
 -- Get specific statfiles set based on message rules
 local function get_specific_statfiles(classifier, task)
@@ -73,25 +71,6 @@ local function get_specific_statfiles(classifier, task)
 		local subj = task:get_header_raw('Subject')
 		if subj and string.len(subj) > 150 then
 			table.foreach(st_longsubj, function(i,v) table.insert(spec_st,v) end)
-		end
-	end
-	-- Reply-To != To
-	local st_replyto = classifier:get_statfile_by_label(different_reply_to_label)
-	if st_replyto then
-		local to = task:get_header_raw('To')
-		local reply_to = task:get_header_raw('Reply-To')
-		if to and reply_to then
-			if string.lower(to) ~= string.lower(reply_to) then
-				table.foreach(st_replyto, function(i,v) table.insert(spec_st,v) end)
-			end
-		end
-	end
-	-- Has In-Reply-To header
-	local st_reply = classifier:get_statfile_by_label(has_in_reply_label)
-	if st_reply then
-		local inrep_header = task:get_header_raw('In-Reply-To')
-		if inrep_header then
-			table.foreach(st_reply, function(i,v) table.insert(spec_st,v) end)
 		end
 	end
 	
