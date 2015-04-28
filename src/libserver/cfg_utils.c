@@ -383,6 +383,27 @@ rspamd_config_post_load (struct rspamd_config *cfg)
 
 	cfg->default_metric = def_metric;
 
+	if (cfg->tld_file == NULL) {
+		/* Try to guess tld file */
+		GString *fpath = g_string_new (NULL);
+
+		rspamd_printf_gstring (fpath, "%s%c%s", RSPAMD_PLUGINSDIR,
+				G_DIR_SEPARATOR, "effective_tld_names.dat");
+
+		if (access (fpath->str, R_OK)) {
+			msg_warn ("url_tld option is not specified but %s is available,"
+					" therefore this file is assumed as TLD file for URL"
+					" extraction", fpath->str);
+			cfg->tld_file = rspamd_mempool_strdup (cfg->cfg_pool, fpath->str);
+		}
+		else {
+			msg_err ("no url_tld option has been specified, URL's detection "
+					"will be awfully broken");
+		}
+
+		g_string_free (fpath, TRUE);
+	}
+
 	/* Lua options */
 	(void)rspamd_lua_post_load_config (cfg);
 	init_dynamic_config (cfg);
