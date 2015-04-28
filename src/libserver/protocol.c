@@ -896,8 +896,6 @@ rspamd_ucl_torspamc_output (struct rspamd_task *task,
 				ucl_object_tostring (elt));
 		}
 
-		g_assert (ucl_object_todouble (score) < 1000.0);
-
 		iter = NULL;
 		while ((elt = ucl_iterate_object (metric, &iter, true)) != NULL) {
 			if (elt->type == UCL_OBJECT) {
