@@ -185,7 +185,7 @@ static gboolean rspamd_lua_call_expression_func(
 	lua_State *L = lua_data->L;
 	struct rspamd_task **ptask;
 	struct expression_argument *arg;
-	gint pop = 0, i;
+	gint pop = 0, i, nargs = 0;
 
 	lua_rawgeti (L, LUA_REGISTRYINDEX, lua_data->idx);
 	/* Now we got function in top of stack */
@@ -194,24 +194,27 @@ static gboolean rspamd_lua_call_expression_func(
 	*ptask = task;
 
 	/* Now push all arguments */
-	for (i = 0; i < (gint)args->len; i ++) {
-		arg = &g_array_index (args, struct expression_argument, i);
-		if (arg) {
-			switch (arg->type) {
-			case EXPRESSION_ARGUMENT_NORMAL:
-				lua_pushstring (L, (const gchar *) arg->data);
-				break;
-			case EXPRESSION_ARGUMENT_BOOL:
-				lua_pushboolean (L, (gboolean) GPOINTER_TO_SIZE(arg->data));
-				break;
-			default:
-				msg_err("cannot pass custom params to lua function");
-				return FALSE;
+	if (args) {
+		for (i = 0; i < (gint)args->len; i ++) {
+			arg = &g_array_index (args, struct expression_argument, i);
+			if (arg) {
+				switch (arg->type) {
+				case EXPRESSION_ARGUMENT_NORMAL:
+					lua_pushstring (L, (const gchar *) arg->data);
+					break;
+				case EXPRESSION_ARGUMENT_BOOL:
+					lua_pushboolean (L, (gboolean) GPOINTER_TO_SIZE(arg->data));
+					break;
+				default:
+					msg_err("cannot pass custom params to lua function");
+					return FALSE;
+				}
 			}
 		}
+		nargs = args->len;
 	}
 
-	if (lua_pcall (L, args->len, 1, 0) != 0) {
+	if (lua_pcall (L, nargs + 1, 1, 0) != 0) {
 		msg_info("call to lua function failed: %s", lua_tostring (L, -1));
 		return FALSE;
 	}
