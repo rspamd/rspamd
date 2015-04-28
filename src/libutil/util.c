@@ -2402,8 +2402,6 @@ rspamd_init_libs (void)
 	rlim.rlim_cur = 100 * 1024 * 1024;
 	setrlimit (RLIMIT_STACK, &rlim);
 
-	rspamd_regexp_library_init ();
-
 	event_init ();
 #ifdef GMIME_ENABLE_RFC2047_WORKAROUNDS
 	g_mime_init (GMIME_ENABLE_RFC2047_WORKAROUNDS);

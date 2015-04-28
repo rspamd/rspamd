@@ -87,7 +87,6 @@ static void
 rspamd_regexp_dtor (rspamd_regexp_t *re)
 {
 	if (re) {
-		msg_info("dtor of %s", re->pattern);
 		if (re->re) {
 			pcre_free (re->re);
 #ifdef HAVE_PCRE_JIT
@@ -131,6 +130,8 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 	gchar sep = 0, *real_pattern;
 	gint regexp_flags = 0, rspamd_flags = 0, err_off, study_flags = 0;
 	gboolean strict_flags = FALSE;
+
+	rspamd_regexp_library_init ();
 
 	if (flags == NULL) {
 		/* We need to parse pattern and detect flags set */
@@ -524,6 +525,7 @@ rspamd_regexp_cache_query (struct rspamd_regexp_cache* cache,
 	regexp_id_t id;
 
 	if (cache == NULL) {
+		rspamd_regexp_library_init ();
 		cache = global_re_cache;
 	}
 
@@ -544,6 +546,7 @@ rspamd_regexp_cache_create (struct rspamd_regexp_cache *cache,
 	rspamd_regexp_t *res;
 
 	if (cache == NULL) {
+		rspamd_regexp_library_init ();
 		cache = global_re_cache;
 	}
 
@@ -572,6 +575,7 @@ void rspamd_regexp_cache_insert (struct rspamd_regexp_cache* cache,
 	g_assert (pattern != NULL);
 
 	if (cache == NULL) {
+		rspamd_regexp_library_init ();
 		cache = global_re_cache;
 	}
 
@@ -610,29 +614,29 @@ rspamd_regexp_library_init (void)
 {
 	if (global_re_cache == NULL) {
 		global_re_cache = rspamd_regexp_cache_new ();
-	}
 #ifdef HAVE_PCRE_JIT
-	gint jit, rc;
-	const gchar *str;
+		gint jit, rc;
+		const gchar *str;
 
 
-	rc = pcre_config (PCRE_CONFIG_JIT, &jit);
+		rc = pcre_config (PCRE_CONFIG_JIT, &jit);
 
-	if (rc == 0 && jit == 1) {
-		pcre_config (PCRE_CONFIG_JITTARGET, &str);
+		if (rc == 0 && jit == 1) {
+			pcre_config (PCRE_CONFIG_JITTARGET, &str);
 
-		msg_info ("pcre is compiled with JIT for %s", str);
+			msg_info ("pcre is compiled with JIT for %s", str);
 
-		can_jit = TRUE;
-	}
-	else {
-		msg_info ("pcre is compiled without JIT support, so many optimisations"
-				" are impossible");
-	}
-#else
-	msg_info ("pcre is too old and has no JIT support, so many optimisations"
+			can_jit = TRUE;
+		}
+		else {
+			msg_info ("pcre is compiled without JIT support, so many optimisations"
 					" are impossible");
+		}
+#else
+		msg_info ("pcre is too old and has no JIT support, so many optimisations"
+				" are impossible");
 #endif
+	}
 }
 
 void

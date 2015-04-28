@@ -372,6 +372,8 @@ rspamd_config_post_load (struct rspamd_config *cfg)
 	cfg->clock_res = 1;
 #endif
 
+	rspamd_regexp_library_init ();
+
 	if ((def_metric =
 		g_hash_table_lookup (cfg->metrics, DEFAULT_METRIC)) == NULL) {
 		def_metric = rspamd_config_new_metric (cfg, NULL);
