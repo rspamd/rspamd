@@ -16,6 +16,7 @@ struct mime_part {
 	GMimeContentType *type;
 	GByteArray *content;
 	GMimeObject *parent;
+	GMimeObject *mime;
 	GHashTable *raw_headers;
 	gchar *checksum;
 	const gchar *filename;
@@ -44,6 +45,7 @@ struct mime_text_part {
 	rspamd_fuzzy_t *fuzzy;
 	rspamd_fuzzy_t *double_fuzzy;
 	GMimeObject *parent;
+	struct mime_part *mime_part;
 	rspamd_fstring_t *diff_str;
 	GArray *words;
 	GArray *normalized_words;

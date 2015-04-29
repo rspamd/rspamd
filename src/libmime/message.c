@@ -1234,7 +1234,7 @@ static void
 process_text_part (struct rspamd_task *task,
 	GByteArray *part_content,
 	GMimeContentType *type,
-	GMimeObject *part,
+	struct mime_part *mime_part,
 	GMimeObject *parent,
 	gboolean is_empty)
 {
@@ -1244,7 +1244,7 @@ process_text_part (struct rspamd_task *task,
 
 	/* Skip attachements */
 #ifndef GMIME24
-	cd = g_mime_part_get_content_disposition (GMIME_PART (part));
+	cd = g_mime_part_get_content_disposition (GMIME_PART (mime_part->mime));
 	if (cd &&
 		g_ascii_strcasecmp (cd,
 		"attachment") == 0 && !task->cfg->check_text_attachements) {
@@ -1252,7 +1252,7 @@ process_text_part (struct rspamd_task *task,
 		return;
 	}
 #else
-	cd = g_mime_object_get_disposition (GMIME_OBJECT (part));
+	cd = g_mime_object_get_disposition (GMIME_OBJECT (mime_part->mime));
 	if (cd &&
 		g_ascii_strcasecmp (cd,
 		GMIME_DISPOSITION_ATTACHMENT) == 0 &&
@@ -1283,6 +1283,7 @@ process_text_part (struct rspamd_task *task,
 				text_part);
 		text_part->html_nodes = NULL;
 		text_part->parent = parent;
+		text_part->mime_part = mime_part;
 
 		text_part->flags |= RSPAMD_MIME_PART_FLAG_BALANCED;
 		text_part->content = strip_html_tags (task,
@@ -1309,6 +1310,8 @@ process_text_part (struct rspamd_task *task,
 			rspamd_mempool_alloc0 (task->task_pool,
 				sizeof (struct mime_text_part));
 		text_part->parent = parent;
+		text_part->mime_part = mime_part;
+
 		if (is_empty) {
 			text_part->flags |= RSPAMD_MIME_PART_FLAG_EMPTY;
 			text_part->orig = NULL;
@@ -1316,6 +1319,7 @@ process_text_part (struct rspamd_task *task,
 			task->text_parts = g_list_prepend (task->text_parts, text_part);
 			return;
 		}
+
 		text_part->content = convert_text_to_utf (task,
 				part_content,
 				type,
@@ -1484,6 +1488,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 				mime_part->parent = task->parser_parent_part;
 				mime_part->filename = g_mime_part_get_filename (GMIME_PART (
 							part));
+				mime_part->mime = part;
 
 				debug_task ("found part with content-type: %s/%s",
 					type->type,
@@ -1493,7 +1498,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 				process_text_part (task,
 					part_content,
 					type,
-					part,
+					mime_part,
 					task->parser_parent_part,
 					(part_content->len <= 0));
 			}
