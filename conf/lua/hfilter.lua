@@ -107,10 +107,6 @@ local config = {
   ['url_enabled'] = false
 }
 
-local function trim1(s)
-  return (s:gsub("^%s*(.-)%s*$", "%1"))
-end
-
 local function check_regexp(str, regexp_text)
   local re = rspamd_regexp.create_cached(regexp_text, 'i')
   if re:match(str) then return true end
@@ -241,7 +237,7 @@ local function hfilter(task)
             elseif text_parts_count == 1 and selected_text_part and selected_text_part:get_length() < 1024 then
               -- We got a single text part with the total length < 1024 symbols.
               local part_text = selected_text_part:get_content()
-              if part_text and not string.find(trim1(part_text), "\n") then
+              if part_text and part_text:get_lines_count() < 2 then
                 task:insert_result('HFILTER_URL_ONELINE', 1.00)
               end
             end
