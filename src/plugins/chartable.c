@@ -133,7 +133,7 @@ check_part (struct mime_text_part *part, gboolean raw_mode)
 
 	p = part->content->data;
 
-	if (part->is_raw || raw_mode) {
+	if (IS_PART_UTF (part) || raw_mode) {
 		while (remain > 1) {
 			if ((g_ascii_isalpha (*p) &&
 				(*(p + 1) & 0x80)) ||
@@ -213,7 +213,7 @@ chartable_symbol_callback (struct rspamd_task *task, void *unused)
 	cur = g_list_first (task->text_parts);
 	while (cur) {
 		part = cur->data;
-		if (!part->is_empty && check_part (part, task->cfg->raw_mode)) {
+		if (!IS_PART_EMPTY (part) && check_part (part, task->cfg->raw_mode)) {
 			rspamd_task_insert_result (task, chartable_module_ctx->symbol, 1, NULL);
 		}
 		cur = g_list_next (cur);

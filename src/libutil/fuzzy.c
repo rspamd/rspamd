@@ -340,7 +340,7 @@ rspamd_fuzzy_from_text_part (struct mime_text_part *part,
 	bzero (&rs, sizeof (rs));
 	end = c + len;
 
-	if (part->is_utf) {
+	if (IS_PART_UTF (part)) {
 		while (c < end) {
 			if (cur_ex != NULL && (gint)cur_ex->pos == c - begin) {
 				c += cur_ex->len + 1;
@@ -400,7 +400,7 @@ rspamd_fuzzy_from_text_part (struct mime_text_part *part,
 	begin = (gchar *)part->content->data;
 	c = begin;
 	end = c + len;
-	if (part->is_utf) {
+	if (IS_PART_UTF (part)) {
 
 		while (c < end) {
 			if (cur_ex != NULL && (gint)cur_ex->pos == c - begin) {

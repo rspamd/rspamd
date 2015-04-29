@@ -38,6 +38,9 @@
 #define RECURSION_LIMIT 30
 #define UTF8_CHARSET "UTF-8"
 
+#define SET_PART_RAW(part) ((part)->flags &= ~RSPAMD_MIME_PART_FLAG_UTF)
+#define SET_PART_UTF(part) ((part)->flags |= RSPAMD_MIME_PART_FLAG_UTF)
+
 GByteArray *
 strip_html_tags (struct rspamd_task *task,
 	rspamd_mempool_t * pool,
@@ -280,7 +283,10 @@ reg_char:
 
 	/* Check tag balancing */
 	if (level_ptr && level_ptr->data != NULL) {
-		part->is_balanced = FALSE;
+		part->flags &= ~RSPAMD_MIME_PART_FLAG_BALANCED;
+	}
+	else {
+		part->flags |= RSPAMD_MIME_PART_FLAG_BALANCED;
 	}
 
 	if (stateptr) {
@@ -957,6 +963,7 @@ rspamd_text_to_utf8 (struct rspamd_task *task,
 	return res;
 }
 
+
 static GByteArray *
 convert_text_to_utf (struct rspamd_task *task,
 	GByteArray * part_content,
@@ -970,35 +977,34 @@ convert_text_to_utf (struct rspamd_task *task,
 	GByteArray *result_array;
 
 	if (task->cfg->raw_mode) {
-		text_part->is_raw = TRUE;
+		SET_PART_RAW (text_part);
 		return part_content;
 	}
 
 	if ((charset =
 		g_mime_content_type_get_parameter (type, "charset")) == NULL) {
-		text_part->is_raw = TRUE;
+		SET_PART_RAW (text_part);
 		return part_content;
 	}
 	if (!charset_validate (task->task_pool, charset, &ocharset)) {
 		msg_info (
 			"<%s>: has invalid charset",
 			task->message_id);
-		text_part->is_raw = TRUE;
+		SET_PART_RAW (text_part);
 		return part_content;
 	}
 
 	if (g_ascii_strcasecmp (ocharset,
 		"utf-8") == 0 || g_ascii_strcasecmp (ocharset, "utf8") == 0) {
 		if (g_utf8_validate (part_content->data, part_content->len, NULL)) {
-			text_part->is_raw = FALSE;
-			text_part->is_utf = TRUE;
+			SET_PART_UTF (text_part);
 			return part_content;
 		}
 		else {
 			msg_info (
 				"<%s>: contains invalid utf8 characters, assume it as raw",
 				task->message_id);
-			text_part->is_raw = TRUE;
+			SET_PART_RAW (text_part);
 			return part_content;
 		}
 	}
@@ -1013,8 +1019,7 @@ convert_text_to_utf (struct rspamd_task *task,
 					task->message_id,
 					ocharset,
 					err ? err->message : "unknown problem");
-			text_part->is_raw = TRUE;
-			text_part->is_utf = FALSE;
+			SET_PART_RAW (text_part);
 			g_error_free (err);
 			return part_content;
 		}
@@ -1023,8 +1028,7 @@ convert_text_to_utf (struct rspamd_task *task,
 	result_array = rspamd_mempool_alloc (task->task_pool, sizeof (GByteArray));
 	result_array->data = res_str;
 	result_array->len = write_bytes;
-	text_part->is_raw = FALSE;
-	text_part->is_utf = TRUE;
+	SET_PART_UTF (text_part);
 
 	return result_array;
 }
@@ -1128,7 +1132,7 @@ detect_text_language (struct mime_text_part *part)
 	const int max_chars = 32;
 
 	if (part != NULL) {
-		if (part->is_utf) {
+		if (IS_PART_UTF (part)) {
 			/* Try to detect encoding by several symbols */
 			const gchar *p, *pp;
 			gunichar c;
@@ -1183,7 +1187,7 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 	guint i, nlen;
 	GArray *tmp;
 
-	if (part->language && part->language[0] != '\0' && part->is_utf) {
+	if (part->language && part->language[0] != '\0' && IS_PART_UTF (part)) {
 		stem = sb_stemmer_new (part->language, "UTF_8");
 		if (stem == NULL) {
 			msg_info ("<%s> cannot create lemmatizer for %s language",
@@ -1193,7 +1197,7 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 
 	/* Ugly workaround */
 	tmp = rspamd_tokenize_text (part->content->data,
-			part->content->len, part->is_utf, task->cfg->min_word_len,
+			part->content->len, IS_PART_UTF (part), task->cfg->min_word_len,
 			part->urls_offset, FALSE);
 
 	if (tmp) {
@@ -1210,7 +1214,7 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 				w->len = nlen;
 			}
 			else {
-				if (part->is_utf) {
+				if (IS_PART_UTF (part)) {
 					rspamd_str_lc_utf8 (w->begin, w->len);
 				}
 				else {
@@ -1263,9 +1267,9 @@ process_text_part (struct rspamd_task *task,
 		text_part =
 			rspamd_mempool_alloc0 (task->task_pool,
 				sizeof (struct mime_text_part));
-		text_part->is_html = TRUE;
+		text_part->flags |= RSPAMD_MIME_PART_FLAG_HTML;
 		if (is_empty) {
-			text_part->is_empty = TRUE;
+			text_part->flags |= RSPAMD_MIME_PART_FLAG_EMPTY;
 			text_part->orig = NULL;
 			text_part->content = NULL;
 			task->text_parts = g_list_prepend (task->text_parts, text_part);
@@ -1276,10 +1280,10 @@ process_text_part (struct rspamd_task *task,
 				text_part->orig,
 				type,
 				text_part);
-		text_part->is_balanced = TRUE;
 		text_part->html_nodes = NULL;
 		text_part->parent = parent;
 
+		text_part->flags |= RSPAMD_MIME_PART_FLAG_BALANCED;
 		text_part->content = strip_html_tags (task,
 				task->task_pool,
 				text_part,
@@ -1303,10 +1307,9 @@ process_text_part (struct rspamd_task *task,
 		text_part =
 			rspamd_mempool_alloc0 (task->task_pool,
 				sizeof (struct mime_text_part));
-		text_part->is_html = FALSE;
 		text_part->parent = parent;
 		if (is_empty) {
-			text_part->is_empty = TRUE;
+			text_part->flags |= RSPAMD_MIME_PART_FLAG_EMPTY;
 			text_part->orig = NULL;
 			text_part->content = NULL;
 			task->text_parts = g_list_prepend (task->text_parts, text_part);
@@ -1328,7 +1331,7 @@ process_text_part (struct rspamd_task *task,
 	/* Post process part */
 	detect_text_language (text_part);
 	text_part->words = rspamd_tokenize_text (text_part->content->data,
-			text_part->content->len, text_part->is_utf, task->cfg->min_word_len,
+			text_part->content->len, IS_PART_UTF (text_part), task->cfg->min_word_len,
 			text_part->urls_offset, TRUE);
 	rspamd_normalize_text_part (task, text_part);
 }

@@ -238,12 +238,12 @@ lua_textpart_is_utf (lua_State * L)
 {
 	struct mime_text_part *part = lua_check_textpart (L);
 
-	if (part == NULL || part->is_empty) {
+	if (part == NULL || IS_PART_EMPTY (part)) {
 		lua_pushboolean (L, FALSE);
 		return 1;
 	}
 
-	lua_pushboolean (L, part->is_utf);
+	lua_pushboolean (L, IS_PART_UTF (part));
 
 	return 1;
 }
@@ -255,7 +255,7 @@ lua_textpart_get_content (lua_State * L)
 	struct mime_text_part *part = lua_check_textpart (L);
 	struct rspamd_lua_text *t;
 
-	if (part == NULL || part->is_empty) {
+	if (part == NULL || IS_PART_EMPTY (part)) {
 		lua_pushnil (L);
 		return 1;
 	}
@@ -278,7 +278,7 @@ lua_textpart_get_length (lua_State * L)
 		return 1;
 	}
 
-	if (part->is_empty) {
+	if (IS_PART_EMPTY (part)) {
 		lua_pushnumber (L, 0);
 	}
 	else {
@@ -298,7 +298,7 @@ lua_textpart_is_empty (lua_State * L)
 		return 1;
 	}
 
-	lua_pushboolean (L, part->is_empty);
+	lua_pushboolean (L, IS_PART_EMPTY (part));
 
 	return 1;
 }
@@ -313,7 +313,7 @@ lua_textpart_is_html (lua_State * L)
 		return 1;
 	}
 
-	lua_pushboolean (L, part->is_html);
+	lua_pushboolean (L, IS_PART_HTML (part));
 
 	return 1;
 }
@@ -324,7 +324,7 @@ lua_textpart_get_fuzzy (lua_State * L)
 	struct mime_text_part *part = lua_check_textpart (L);
 	gchar *out;
 
-	if (part == NULL || part->is_empty) {
+	if (part == NULL || IS_PART_EMPTY (part)) {
 		lua_pushnil (L);
 		return 1;
 	}
@@ -380,7 +380,7 @@ lua_textpart_compare_distance (lua_State * L)
 
 		}
 		else {
-			if (!part->is_empty && !other->is_empty) {
+			if (!IS_PART_EMPTY (part) && !IS_PART_EMPTY (other)) {
 				if (part->diff_str != NULL && other->diff_str != NULL) {
 					diff = rspamd_diff_distance (part->diff_str,
 							other->diff_str);
@@ -389,8 +389,9 @@ lua_textpart_compare_distance (lua_State * L)
 					diff = rspamd_fuzzy_compare_parts (part, other);
 				}
 			}
-			else if ((part->is_empty &&
-				!other->is_empty) || (!part->is_empty && other->is_empty)) {
+			else if ((IS_PART_EMPTY (part) &&
+				!IS_PART_EMPTY (other)) || (!IS_PART_EMPTY (part) &&
+						IS_PART_EMPTY (other))) {
 				/* Empty and non empty parts are different */
 				diff = 0;
 			}

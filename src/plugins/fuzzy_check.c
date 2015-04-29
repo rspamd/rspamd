@@ -524,7 +524,7 @@ fuzzy_preprocess_words (struct mime_text_part *part, rspamd_mempool_t *pool)
 {
 	GArray *res;
 
-	if (!part->is_utf || !part->language || part->language[0] == '\0' ||
+	if (!IS_PART_UTF (part) || !part->language || part->language[0] == '\0' ||
 			part->normalized_words == NULL) {
 		res = part->words;
 	}
@@ -961,7 +961,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 
 	while (cur) {
 		part = cur->data;
-		if (part->is_empty) {
+		if (IS_PART_EMPTY (part)) {
 			cur = g_list_next (cur);
 			continue;
 		}

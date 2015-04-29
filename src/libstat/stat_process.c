@@ -296,14 +296,14 @@ rspamd_stat_process_tokenize (struct rspamd_tokenizer_config *cf,
 	while (cur != NULL) {
 		part = (struct mime_text_part *)cur->data;
 
-		if (!part->is_empty && part->words != NULL) {
+		if (!IS_PART_EMPTY (part) && part->words != NULL) {
 			if (compat) {
 				tok->tokenizer->tokenize_func (cf, task->task_pool,
-					part->words, tok->tokens, part->is_utf);
+					part->words, tok->tokens, IS_PART_UTF (part));
 			}
 			else {
 				tok->tokenizer->tokenize_func (cf, task->task_pool,
-					part->normalized_words, tok->tokens, part->is_utf);
+					part->normalized_words, tok->tokens, IS_PART_UTF (part));
 			}
 		}
 

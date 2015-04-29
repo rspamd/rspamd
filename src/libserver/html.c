@@ -941,7 +941,7 @@ add_html_node (struct rspamd_task *task,
 			if (!check_balance (new, cur_level)) {
 				debug_task (
 					"mark part as unbalanced as it has not pairable closing tags");
-				part->is_balanced = FALSE;
+				part->flags &= ~RSPAMD_MIME_PART_FLAG_BALANCED;
 			}
 		}
 		else if ((data->flags & (FL_XML|FL_SGML)) == 0) {

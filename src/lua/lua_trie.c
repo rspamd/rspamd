@@ -272,7 +272,7 @@ lua_trie_search_mime (lua_State *L)
 		while (cur) {
 			part = cur->data;
 
-			if (!part->is_empty && part->content != NULL) {
+			if (!IS_PART_EMPTY (part) && part->content != NULL) {
 				text = part->content->data;
 				len = part->content->len;
 

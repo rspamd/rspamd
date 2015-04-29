@@ -867,13 +867,13 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 		while (cur) {
 			part = (struct mime_text_part *)cur->data;
 			/* Skip empty parts */
-			if (part->is_empty) {
+			if (IS_PART_EMPTY (part)) {
 				cur = g_list_next (cur);
 				continue;
 			}
 
 			/* Check raw flags */
-			if (part->is_raw) {
+			if (!IS_PART_UTF (part)) {
 				raw = TRUE;
 			}
 			/* Select data for regexp */
@@ -1248,7 +1248,7 @@ rspamd_parts_distance (struct rspamd_task * task, GArray * args, void *unused)
 				NULL);
 			return FALSE;
 		}
-		if (!p1->is_empty && !p2->is_empty) {
+		if (!IS_PART_EMPTY (p1) && !IS_PART_EMPTY (p2)) {
 			if (p1->diff_str != NULL && p2->diff_str != NULL) {
 				diff = rspamd_diff_distance_normalized (p1->diff_str,
 						p2->diff_str);
@@ -1278,8 +1278,8 @@ rspamd_parts_distance (struct rspamd_task * task, GArray * args, void *unused)
 				}
 			}
 		}
-		else if ((p1->is_empty &&
-			!p2->is_empty) || (!p1->is_empty && p2->is_empty)) {
+		else if ((IS_PART_EMPTY (p1) &&
+			!IS_PART_EMPTY (p2)) || (!IS_PART_EMPTY (p1)&& IS_PART_EMPTY (p2))) {
 			/* Empty and non empty parts are different */
 			*pdiff = 0;
 			rspamd_mempool_set_variable (task->task_pool,
@@ -1430,7 +1430,7 @@ rspamd_has_only_html_part (struct rspamd_task * task, GArray * args,
 	cur = g_list_first (task->text_parts);
 	while (cur) {
 		p = cur->data;
-		if (p->is_html) {
+		if (IS_PART_HTML (p)) {
 			res = TRUE;
 		}
 		else {
@@ -1601,8 +1601,8 @@ rspamd_is_html_balanced (struct rspamd_task * task, GArray * args, void *unused)
 	cur = g_list_first (task->text_parts);
 	while (cur) {
 		p = cur->data;
-		if (!p->is_empty && p->is_html) {
-			if (p->is_balanced) {
+		if (!IS_PART_EMPTY (p) && IS_PART_HTML (p)) {
+			if (p->flags & RSPAMD_MIME_PART_FLAG_BALANCED) {
 				res = TRUE;
 			}
 			else {
@@ -1673,7 +1673,7 @@ rspamd_has_html_tag (struct rspamd_task * task, GArray * args, void *unused)
 
 	while (cur && res == FALSE) {
 		p = cur->data;
-		if (!p->is_empty && p->is_html && p->html_nodes) {
+		if (!IS_PART_EMPTY (p) && IS_PART_HTML (p) && p->html_nodes) {
 			g_node_traverse (p->html_nodes,
 				G_PRE_ORDER,
 				G_TRAVERSE_ALL,
@@ -1699,7 +1699,7 @@ rspamd_has_fake_html (struct rspamd_task * task, GArray * args, void *unused)
 
 	while (cur && res == FALSE) {
 		p = cur->data;
-		if (!p->is_empty && p->is_html && p->html_nodes == NULL) {
+		if (!IS_PART_EMPTY (p) && IS_PART_HTML (p) && p->html_nodes == NULL) {
 			res = TRUE;
 		}
 		cur = g_list_next (cur);
