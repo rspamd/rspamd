@@ -1239,7 +1239,8 @@ process_text_part (struct rspamd_task *task,
 	gboolean is_empty)
 {
 	struct mime_text_part *text_part;
-	const gchar *cd;
+	const gchar *cd, *p, *c;
+	guint remain;
 
 	/* Skip attachements */
 #ifndef GMIME24
@@ -1334,6 +1335,21 @@ process_text_part (struct rspamd_task *task,
 			text_part->content->len, IS_PART_UTF (text_part), task->cfg->min_word_len,
 			text_part->urls_offset, TRUE);
 	rspamd_normalize_text_part (task, text_part);
+
+	/* Calculate number of lines */
+	p = text_part->content->data;
+	remain = text_part->content->len;
+	c = p;
+
+	while (p != NULL && remain > 0) {
+		p = memchr (c, '\n', remain);
+
+		if (p != NULL) {
+			text_part->nlines ++;
+			remain -= p - c + 1;
+			c = p + 1;
+		}
+	}
 }
 
 #ifdef GMIME24

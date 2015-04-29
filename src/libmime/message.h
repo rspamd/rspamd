@@ -47,6 +47,7 @@ struct mime_text_part {
 	rspamd_fstring_t *diff_str;
 	GArray *words;
 	GArray *normalized_words;
+	guint nlines;
 };
 
 struct received_header {
