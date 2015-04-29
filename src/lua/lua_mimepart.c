@@ -98,6 +98,12 @@ LUA_FUNCTION_DEF (textpart, get_fuzzy);
  */
 LUA_FUNCTION_DEF (textpart, get_language);
 /***
+ * @method text_part:get_mimepart()
+ * Returns the mime part object corresponding to this text part
+ * @return {mimepart} mimepart object
+ */
+LUA_FUNCTION_DEF (textpart, get_mimepart);
+/***
  * @method text_part:compare_distance(other)
  * Calculates the difference to another text part.  This function is intended to work with
  * the parts of `multipart/alternative` container only. If the two parts are not the parts of the
@@ -117,6 +123,7 @@ static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, is_html),
 	LUA_INTERFACE_DEF (textpart, get_fuzzy),
 	LUA_INTERFACE_DEF (textpart, get_language),
+	LUA_INTERFACE_DEF (textpart, get_mimepart),
 	LUA_INTERFACE_DEF (textpart, compare_distance),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
@@ -372,6 +379,26 @@ lua_textpart_get_language (lua_State * L)
 	if (part != NULL) {
 		if (part->lang_code != NULL && part->lang_code[0] != '\0') {
 			lua_pushstring (L, part->lang_code);
+			return 1;
+		}
+	}
+
+	lua_pushnil (L);
+	return 1;
+}
+
+static gint
+lua_textpart_get_mimepart (lua_State * L)
+{
+	struct mime_text_part *part = lua_check_textpart (L);
+	struct mime_part **pmime;
+
+	if (part != NULL) {
+		if (part->mime_part != NULL) {
+			pmime = lua_newuserdata (L, sizeof (struct mime_part *));
+			rspamd_lua_setclass (L, "rspamd{mimepart}", -1);
+			*pmime = part->mime_part;
+
 			return 1;
 		}
 	}
