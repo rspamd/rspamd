@@ -863,7 +863,7 @@ rspamd_ast_node_done (struct rspamd_expression_elt *elt,
 }
 
 static gint
-rspamd_ast_do_op (struct rspamd_expression_elt *elt, gint val, gint acc)
+rspamd_ast_do_op (struct rspamd_expression_elt *elt, gint val, gint acc, gint lim)
 {
 	gint ret = val;
 
@@ -877,16 +877,16 @@ rspamd_ast_do_op (struct rspamd_expression_elt *elt, gint val, gint acc)
 		ret = acc + val;
 		break;
 	case OP_GE:
-		ret = acc >= val;
+		ret = acc >= lim;
 		break;
 	case OP_GT:
-		ret = acc > val;
+		ret = acc > lim;
 		break;
 	case OP_LE:
-		ret = acc <= val;
+		ret = acc <= lim;
 		break;
 	case OP_LT:
-		ret = acc < val;
+		ret = acc < lim;
 		break;
 	case OP_MULT:
 	case OP_AND:
@@ -980,7 +980,7 @@ rspamd_ast_process_node (struct rspamd_expression *expr, gint flags, GNode *node
 				acc = val;
 			}
 
-			acc = rspamd_ast_do_op (elt, val, acc);
+			acc = rspamd_ast_do_op (elt, val, acc, lim);
 
 			if (!(flags & RSPAMD_EXPRESSION_FLAG_NOOPT)) {
 				if (rspamd_ast_node_done (elt, parelt, acc, lim)) {

@@ -85,6 +85,7 @@ context("Rspamd expressions", function()
        {'(A + B + C + D) > 1 && F || E', 1},
        {'(A + B + C + D) > 100 && F || !E', 0},
        {'F && ((A + B + C + D) > 1)', 0},
+       {'(E) && ((B + B + B + B) >= 1)', 0},
        {'!!C', 1},
     }
     for _,c in ipairs(cases) do
