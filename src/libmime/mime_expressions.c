@@ -723,10 +723,6 @@ rspamd_mime_regexp_element_process (struct rspamd_task *task,
 				r);
 	}
 
-	if (r > 0) {
-		rspamd_task_re_cache_add (task, re->regexp_text, r);
-	}
-
 	return r;
 }
 
@@ -734,7 +730,7 @@ struct url_regexp_param {
 	struct rspamd_task *task;
 	rspamd_regexp_t *regexp;
 	struct rspamd_regexp_atom *re;
-	gboolean found;
+	gint found;
 };
 
 static void
@@ -742,16 +738,18 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 {
 	struct url_regexp_param *param = data;
 	struct rspamd_url *url = value;
+	gint ret;
 
-	if (param->found) {
+	if (param->found && ! param->re->is_multiple) {
 		return;
 	}
 
-	if (rspamd_mime_regexp_element_process (param->task, param->re,
-			struri (url), 0, FALSE)) {
-		param->found = TRUE;
-	}
-	else if (G_UNLIKELY (param->re->is_test)) {
+	ret = rspamd_mime_regexp_element_process (param->task, param->re,
+			struri (url), 0, FALSE);
+
+	param->found = ret;
+
+	if (G_UNLIKELY (param->re->is_test)) {
 		msg_info ("process test regexp %s for url %s returned FALSE",
 			struri (url));
 	}
@@ -765,7 +763,7 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 	gsize clen;
 	gboolean raw = FALSE;
 	const gchar *in;
-
+	gint ret = 0;
 	GList *cur, *headerlist;
 	rspamd_regexp_t *regexp;
 	struct url_regexp_param callback_param = {
@@ -815,8 +813,6 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 					re->regexp_text,
 					re->header);
 			}
-			rspamd_task_re_cache_add (task, re->regexp_text, 0);
-			return 0;
 		}
 		else {
 			/* Check whether we have regexp for it */
@@ -824,44 +820,48 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 				debug_task ("regexp contains only header and it is found %s",
 					re->header);
 				rspamd_task_re_cache_add (task, re->regexp_text, 1);
-				return 1;
+				ret = 1;
 			}
-			/* Iterate through headers */
-			cur = headerlist;
-			while (cur) {
-				rh = cur->data;
-				debug_task ("found header \"%s\" with value \"%s\"",
-					re->header, rh->decoded);
-				regexp = re->regexp;
+			else {
+				/* Iterate through headers */
+				cur = headerlist;
+				while (cur) {
+					rh = cur->data;
+					debug_task ("found header \"%s\" with value \"%s\"",
+							re->header, rh->decoded);
+					regexp = re->regexp;
 
-				if (re->type == REGEXP_RAW_HEADER) {
-					in = rh->value;
-					raw = TRUE;
-				}
-				else {
-					in = rh->decoded;
-					/* Validate input */
-					if (!in || !g_utf8_validate (in, -1, NULL)) {
-						cur = g_list_next (cur);
-						continue;
+					if (re->type == REGEXP_RAW_HEADER) {
+						in = rh->value;
+						raw = TRUE;
 					}
+					else {
+						in = rh->decoded;
+						/* Validate input */
+						if (!in || !g_utf8_validate (in, -1, NULL)) {
+							cur = g_list_next (cur);
+							continue;
+						}
+					}
+
+					/* Match re */
+					if (in) {
+						ret += rspamd_mime_regexp_element_process (task, re, in,
+							strlen (in), raw);
+						debug_task ("checking header %s regexp: %s -> %d",
+								re->header, re->regexp_text, ret);
+
+						if (!re->is_multiple && ret) {
+							break;
+						}
+					}
+
+					cur = g_list_next (cur);
 				}
-
-				/* Match re */
-				if (in && rspamd_mime_regexp_element_process (task, re, in,
-						strlen (in), raw)) {
-
-					return 1;
-				}
-
-				cur = g_list_next (cur);
 			}
-
-			rspamd_task_re_cache_add (task, re->regexp_text, 0);
 		}
 		break;
 	case REGEXP_MIME:
-		debug_task ("checking mime regexp: %s", re->regexp_text);
 		/* Iterate throught text parts */
 		cur = g_list_first (task->text_parts);
 		while (cur) {
@@ -886,23 +886,25 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 				clen = part->content->len;
 			}
 			/* If we have limit, apply regexp so much times as we can */
-			if (rspamd_mime_regexp_element_process (task, re, ct, clen, raw)) {
-				return 1;
+			ret = rspamd_mime_regexp_element_process (task, re, ct, clen, raw);
+			debug_task ("checking mime regexp: %s -> %d",
+					re->regexp_text, ret);
+
+			if (!re->is_multiple && ret) {
+				break;
 			}
+
 			cur = g_list_next (cur);
 		}
-		rspamd_task_re_cache_add (task, re->regexp_text, 0);
+
+
 		break;
 	case REGEXP_MESSAGE:
-		debug_task ("checking message regexp: %s", re->regexp_text);
 		raw = TRUE;
 		ct = (guint8 *)task->msg.start;
 		clen = task->msg.len;
 
-		if (rspamd_mime_regexp_element_process (task, re, ct, clen, raw)) {
-			return 1;
-		}
-		rspamd_task_re_cache_add (task, re->regexp_text, 0);
+		ret = rspamd_mime_regexp_element_process (task, re, ct, clen, raw);
 		break;
 	case REGEXP_URL:
 		debug_task ("checking url regexp: %s", re->regexp_text);
@@ -910,23 +912,33 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 		callback_param.task = task;
 		callback_param.regexp = regexp;
 		callback_param.re = re;
-		callback_param.found = FALSE;
+		callback_param.found = 0;
+
 		if (task->urls) {
 			g_hash_table_foreach (task->urls, tree_url_callback, &callback_param);
 		}
-		if (task->emails && callback_param.found == FALSE) {
+
+		if (task->emails && !callback_param.found) {
 			g_hash_table_foreach (task->emails, tree_url_callback, &callback_param);
 		}
-		if (callback_param.found == FALSE) {
-			rspamd_task_re_cache_add (task, re->regexp_text, 0);
-		}
+
+		ret = callback_param.found;
 		break;
 	default:
 		msg_warn ("bad error detected: %p is not a valid regexp object", re);
+		return 0;
 		break;
 	}
 
-	return 0;
+	if (re && re->regexp_text) {
+		if (ret > 1 && !re->is_multiple) {
+			ret = 1;
+		}
+
+		rspamd_task_re_cache_add (task, re->regexp_text, ret);
+	}
+
+	return ret;
 }
 
 
