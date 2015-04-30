@@ -656,6 +656,10 @@ rspamd_http_on_message_complete (http_parser * parser)
 	}
 
 	if (ret == 0) {
+		if (event_pending (&priv->ev, EV_READ, NULL)) {
+			event_del (&priv->ev);
+		}
+
 		rspamd_http_connection_ref (conn);
 		ret = conn->finish_handler (conn, priv->msg);
 		conn->finished = TRUE;
@@ -794,15 +798,16 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 			return;
 		}
 		else if (r == 0) {
-			err = g_error_new (HTTP_ERROR,
-					errno,
-					"IO read error: unexpected EOF");
-			conn->error_handler (conn, err);
-			g_error_free (err);
+			if (!conn->finished) {
+				err = g_error_new (HTTP_ERROR,
+						errno,
+						"IO read error: unexpected EOF");
+				conn->error_handler (conn, err);
+				g_error_free (err);
 
-			REF_RELEASE (pbuf);
-			rspamd_http_connection_unref (conn);
-
+				REF_RELEASE (pbuf);
+				rspamd_http_connection_unref (conn);
+			}
 			return;
 		}
 		else {
