@@ -79,5 +79,5 @@ local drugs_muscle3 = '/\\b_{0,3}f[_\\W]?l[_\\W]?[e3\\xE8-\\xEB][_\\W]?x[_\\W]?[
 local drugs_muscle4 = '/\\b_{0,3}z[_\\W]?a[_\\W]?n[_\\W]?a[_\\W]?f[_\\W]?l[_\\W]?e[_\\W]?x_{0,3}\\b/irP'
 local drugs_muscle5 = '/\\bskelaxin\\b/irP'
 reconf['DRUGS_MUSCLE'] = string.format('((%s) | (%s) | (%s)) & ((%s) | (%s) | (%s) | (%s) | (%s))', reconf['R_UNDISC_RCPT'], reconf['R_BAD_CTE_7BIT'], reconf['R_NO_SPACE_IN_FROM'], drugs_muscle1, drugs_muscle2, drugs_muscle3, drugs_muscle4, drugs_muscle5)
-reconf['DRUGS_MANYKINDS'] = string.format('((%s) | (%s) | (%s)) & regexp_match_number(3, (%s), (%s), (%s), (%s), (%s), (%s))', reconf['R_UNDISC_RCPT'], reconf['R_BAD_CTE_7BIT'], reconf['R_NO_SPACE_IN_FROM'], reconf['DRUGS_ERECTILE'], reconf['DRUGS_DIET'], drugs_pain, drugs_sleep, reconf['DRUGS_MUSCLE'], reconf['DRUGS_ANXIETY'])
+reconf['DRUGS_MANYKINDS'] = string.format('((%s) | (%s) | (%s)) & ((%s) + (%s) + (%s) + (%s) + (%s) + (%s) >= 3)', reconf['R_UNDISC_RCPT'], reconf['R_BAD_CTE_7BIT'], reconf['R_NO_SPACE_IN_FROM'], reconf['DRUGS_ERECTILE'], reconf['DRUGS_DIET'], drugs_pain, drugs_sleep, reconf['DRUGS_MUSCLE'], reconf['DRUGS_ANXIETY'])
 

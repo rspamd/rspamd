@@ -29,5 +29,5 @@ local kam_lotto4 = '/(claims (officer|agent)|lottery coordinator|fiduciary (offi
 local kam_lotto5 = '/(freelotto group|Royal Heritage Lottery|UK National (Online)? Lottery|U\\.?K\\.? Grand Promotions|Lottery Department UK|Euromillion Loteria|Luckyday International Lottery|International Lottery)/isrP'
 local kam_lotto6 = '/(Dear Lucky Winner|Winning Notification|Attention:Winner|Dear Winner)/isrP'
 local kam_lotto7 = 'Subject=/(Your Lucky Day|(Attention:|ONLINE) WINNER)/iH'
-reconf['R_LOTTO'] = string.format('((%s) | (%s) | (%s)) & regexp_match_number(3, (%s), (%s), (%s), (%s),  (%s), (%s), (%s), (%s), (%s))', reconf['R_UNDISC_RCPT'], reconf['R_BAD_CTE_7BIT'], reconf['R_NO_SPACE_IN_FROM'], r_lotto_from, r_lotto_subject, r_lotto_body, kam_lotto1, kam_lotto2, kam_lotto3, kam_lotto4, kam_lotto5, kam_lotto6)
+reconf['R_LOTTO'] = string.format('((%s) | (%s) | (%s)) & (((%s) + (%s) + (%s) + (%s) + (%s) + (%s) + (%s) + (%s) + (%s)) >= 3)', reconf['R_UNDISC_RCPT'], reconf['R_BAD_CTE_7BIT'], reconf['R_NO_SPACE_IN_FROM'], r_lotto_from, r_lotto_subject, r_lotto_body, kam_lotto1, kam_lotto2, kam_lotto3, kam_lotto4, kam_lotto5, kam_lotto6)
 
