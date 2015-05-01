@@ -235,9 +235,7 @@ local function hfilter(task)
             if total_url_len + 7 > total_parts_len then
               task:insert_result('HFILTER_URL_ONLY', 1.00)
             elseif text_parts_count == 1 and selected_text_part and selected_text_part:get_length() < 1024 then
-              -- We got a single text part with the total length < 1024 symbols.
-              local part_text = selected_text_part:get_content()
-              if part_text and part_text:get_lines_count() < 2 then
+              if selected_text_part:get_lines_count() < 2 then
                 task:insert_result('HFILTER_URL_ONELINE', 1.00)
               end
             end
