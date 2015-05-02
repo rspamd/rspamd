@@ -255,7 +255,6 @@ e2e.ru
 east-kazakhstan.su
 ecard.ru
 eclub.lv
-eg
 email.su
 enacre.net
 english.lc
@@ -540,7 +539,6 @@ moy.su
 mp3.cr
 mp3.gp
 mpeg3.ru
-mt
 mundesweb.com
 musik.cx
 musik.lc
@@ -598,7 +596,6 @@ oesterreich.lc
 o-f.com
 okis.ru
 ok.ru
-om
 omp9.com
 on-4.com
 onecoolhost.com
