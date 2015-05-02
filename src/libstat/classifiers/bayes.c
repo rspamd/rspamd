@@ -164,7 +164,7 @@ bayes_classify (struct classifier_ctx * ctx,
 					2 * rt->processed_tokens);
 			s = 1 - inv_chi_square (-2. * rt->ham_prob,
 					2 * rt->processed_tokens);
-			final_prob = (s + 1 - h) / 2.;
+			final_prob = (s + 1.0 - h) / 2.;
 			msg_debug ("<%s> got ham prob %.2f -> %.2f and spam prob %.2f -> %.2f,"
 					" %L tokens processed of %ud total tokens",
 					task->message_id, rt->ham_prob, h, rt->spam_prob, s,
@@ -195,8 +195,6 @@ bayes_classify (struct classifier_ctx * ctx,
 					"unexpected classifier error: cannot select desired statfile");
 			}
 			else {
-				/* Calculate ham probability correctly */
-				final_prob = (final_prob - 0.5) * 2;
 				rspamd_snprintf (sumbuf, 32, "%.2f%%", final_prob * 100.);
 				cur = g_list_prepend (NULL, sumbuf);
 				rspamd_task_insert_result (task,
