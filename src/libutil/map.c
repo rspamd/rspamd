@@ -193,7 +193,7 @@ http_map_read (struct rspamd_http_connection *conn,
 	gchar *pos;
 	struct rspamd_map *map;
 
-	if (msg->code != 200) {
+	if (msg->code != 200 || len == 0) {
 		/* Ignore not full replies */
 		return 0;
 	}
@@ -269,8 +269,10 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 
 	close (fd);
 
-	map->fin_callback (map->pool, &cbdata);
-	*map->user_data = cbdata.cur_data;
+	if (rlen > 0) {
+		map->fin_callback (map->pool, &cbdata);
+		*map->user_data = cbdata.cur_data;
+	}
 }
 
 static void
