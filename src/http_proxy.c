@@ -104,7 +104,10 @@ http_proxy_parse_upstream (rspamd_mempool_t *pool,
 {
 	const ucl_object_t *elt;
 	struct rspamd_http_upstream *up = NULL;
-	struct http_proxy_ctx *ctx = ud;
+	struct http_proxy_ctx *ctx;
+	struct rspamd_rcl_struct_parser *pd = ud;
+
+	ctx = pd->user_struct;
 
 	if (ucl_object_type (obj) != UCL_OBJECT) {
 		g_set_error (err, http_proxy_quark (), 100,
@@ -159,6 +162,8 @@ http_proxy_parse_upstream (rspamd_mempool_t *pool,
 	}
 
 	g_hash_table_insert (ctx->upstreams, up->name, up);
+
+	return TRUE;
 
 err:
 
@@ -413,6 +418,7 @@ start_http_proxy (struct rspamd_worker *worker)
 
 	/* XXX: stupid default */
 	ctx->keys_cache = rspamd_keypair_cache_new (256);
+	ctx->local_key = rspamd_http_connection_gen_key ();
 
 	event_base_loop (ctx->ev_base, 0);
 
