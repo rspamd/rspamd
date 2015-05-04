@@ -182,7 +182,7 @@ init_http_proxy (struct rspamd_config *cfg)
 	struct http_proxy_ctx *ctx;
 	GQuark type;
 
-	type = g_quark_try_string ("http-proxy");
+	type = g_quark_try_string ("http_proxy");
 
 	ctx = g_malloc0 (sizeof (struct http_proxy_ctx));
 	ctx->timeout = 5.0;

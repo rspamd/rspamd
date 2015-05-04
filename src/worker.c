@@ -145,8 +145,8 @@ rspamd_worker_error_handler (struct rspamd_http_connection *conn, GError *err)
 {
 	struct rspamd_task *task = (struct rspamd_task *) conn->ud;
 
-	msg_info ("abnormally closing connection from: %s, error: %s",
-		rspamd_inet_address_to_string (task->client_addr), err->message);
+	msg_info ("abnormally closing connection from: %s, error: %e",
+		rspamd_inet_address_to_string (task->client_addr), err);
 	/* Terminate session immediately */
 	destroy_session (task->s);
 }
@@ -354,7 +354,8 @@ start_worker (struct rspamd_worker *worker)
 				TRUE,
 				&err);
 		if (err != NULL) {
-			msg_err ("pool create failed: %s", err->message);
+			msg_err ("pool create failed: %e", err);
+			g_error_free (err);
 			ctx->classify_pool = NULL;
 		}
 	}

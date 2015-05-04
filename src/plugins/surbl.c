@@ -189,8 +189,8 @@ redirector_insert (gpointer st, gconstpointer key, gpointer value)
 					"ir",
 					&err);
 			if (re == NULL) {
-				msg_warn ("could not read regexp: %s while reading regexp %s",
-					err->message,
+				msg_warn ("could not read regexp: %e while reading regexp %s",
+					err,
 					p);
 				g_error_free (err);
 				re = NO_REGEXP;
@@ -845,8 +845,8 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 	}
 	else if (err != NULL && err->code != WHITELIST_ERROR && err->code !=
 		DUPLICATE_ERROR) {
-		msg_info ("cannot format url string for surbl %s, %s", struri (
-				url), err->message);
+		msg_info ("cannot format url string for surbl %s, %e", struri (
+				url), err);
 		g_error_free (err);
 		return;
 	}
@@ -933,9 +933,9 @@ surbl_redirector_error (struct rspamd_http_connection *conn,
 {
 	struct redirector_param *param = (struct redirector_param *)conn->ud;
 
-	msg_err ("connection with http server %s terminated incorrectly: %s",
+	msg_err ("connection with http server %s terminated incorrectly: %e",
 		rspamd_inet_address_to_string (rspamd_upstream_addr (param->redirector)),
-		err->message);
+		err);
 	rspamd_upstream_fail (param->redirector);
 	remove_normal_event (param->task->s, free_redirector_session,
 			param);

@@ -2276,7 +2276,8 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	}
 
 	if (!rspamd_rcl_parse (top, cfg, cfg->cfg_pool, cfg->rcl_obj, &err)) {
-		msg_err ("rcl parse error: %s", err->message);
+		msg_err ("rcl parse error: %e", err);
+		g_error_free (err);
 		return FALSE;
 	}
 
