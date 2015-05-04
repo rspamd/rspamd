@@ -518,17 +518,19 @@ rspamd_upstreams_destroy (struct upstream_list *ups)
 	guint i;
 	struct upstream *up;
 
-	g_ptr_array_free (ups->alive, TRUE);
+	if (ups != NULL) {
+		g_ptr_array_free (ups->alive, TRUE);
 
-	for (i = 0; i < ups->ups->len; i ++) {
-		up = g_ptr_array_index (ups->ups, i);
-		up->ls = NULL;
-		REF_RELEASE (up);
+		for (i = 0; i < ups->ups->len; i ++) {
+			up = g_ptr_array_index (ups->ups, i);
+			up->ls = NULL;
+			REF_RELEASE (up);
+		}
+
+		g_ptr_array_free (ups->ups, TRUE);
+		rspamd_mutex_free (ups->lock);
+		g_slice_free1 (sizeof (*ups), ups);
 	}
-
-	g_ptr_array_free (ups->ups, TRUE);
-	rspamd_mutex_free (ups->lock);
-	g_slice_free1 (sizeof (*ups), ups);
 }
 
 static void
