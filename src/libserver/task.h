@@ -138,10 +138,9 @@ struct rspamd_task {
 	gchar *last_error;                                          /**< last error										*/
 	gint error_code;                                                /**< code of last error								*/
 	rspamd_mempool_t *task_pool;                                    /**< memory pool for task							*/
-#ifdef HAVE_CLOCK_GETTIME
-	struct timespec ts;                                         /**< time of connection								*/
-#endif
-	struct timeval tv;                                          /**< time of connection								*/
+	double time_real;
+	double time_virtual;
+	struct timeval tv;
 	guint32 scan_milliseconds;                                  /**< how much milliseconds passed					*/
 	guint32 parser_recursion;                                   /**< for avoiding recursion stack overflow			*/
 	gboolean (*fin_callback)(struct rspamd_task *task, void *arg); /**< calback for filters finalizing					*/

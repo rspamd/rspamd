@@ -800,11 +800,7 @@ call_symbol_callback (struct rspamd_task * task,
 	struct symbols_cache * cache,
 	gpointer *save)
 {
-#ifdef HAVE_CLOCK_GETTIME
-	struct timespec ts1, ts2;
-#else
-	struct timeval tv1, tv2;
-#endif
+	double t1, t2;
 	guint64 diff;
 	struct cache_item *item = NULL;
 	struct symbol_callback_data *s = *save;
@@ -879,19 +875,8 @@ call_symbol_callback (struct rspamd_task * task,
 		return FALSE;
 	}
 	if (!item->is_virtual && !item->is_skipped) {
-#ifdef HAVE_CLOCK_GETTIME
-# ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
-		clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts1);
-# elif defined(HAVE_CLOCK_VIRTUAL)
-		clock_gettime (CLOCK_VIRTUAL,			 &ts1);
-# else
-		clock_gettime (CLOCK_REALTIME,			 &ts1);
-# endif
-#else
-		if (gettimeofday (&tv1, NULL) == -1) {
-			msg_warn ("gettimeofday failed: %s", strerror (errno));
-		}
-#endif
+		t1 = rspamd_get_ticks ();
+
 		if (G_UNLIKELY (check_debug_symbol (task->cfg, item->s->symbol))) {
 			rspamd_log_debug (rspamd_main->logger);
 			item->func (task, item->user_data);
@@ -901,29 +886,9 @@ call_symbol_callback (struct rspamd_task * task,
 			item->func (task, item->user_data);
 		}
 
+		t2 = rspamd_get_ticks ();
 
-#ifdef HAVE_CLOCK_GETTIME
-# ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
-		clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts2);
-# elif defined(HAVE_CLOCK_VIRTUAL)
-		clock_gettime (CLOCK_VIRTUAL,			 &ts2);
-# else
-		clock_gettime (CLOCK_REALTIME,			 &ts2);
-# endif
-#else
-		if (gettimeofday (&tv2, NULL) == -1) {
-			msg_warn ("gettimeofday failed: %s", strerror (errno));
-		}
-#endif
-
-#ifdef HAVE_CLOCK_GETTIME
-		diff =
-			(ts2.tv_sec -
-			ts1.tv_sec) * 1000000 + (ts2.tv_nsec - ts1.tv_nsec) / 1000;
-#else
-		diff =
-			(tv2.tv_sec - tv1.tv_sec) * 1000000 + (tv2.tv_usec - tv1.tv_usec);
-#endif
+		diff = (t2 - t1) * 1000000;
 		item->s->avg_time = rspamd_set_counter (item, diff);
 	}
 

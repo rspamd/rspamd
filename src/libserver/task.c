@@ -54,18 +54,10 @@ rspamd_task_new (struct rspamd_worker *worker)
 			new_task->flags |= RSPAMD_TASK_FLAG_PASS_ALL;
 		}
 	}
-#ifdef HAVE_CLOCK_GETTIME
-# ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
-	clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &new_task->ts);
-# elif defined(HAVE_CLOCK_VIRTUAL)
-	clock_gettime (CLOCK_VIRTUAL,			 &new_task->ts);
-# else
-	clock_gettime (CLOCK_REALTIME,			 &new_task->ts);
-# endif
-#endif
-	if (gettimeofday (&new_task->tv, NULL) == -1) {
-		msg_warn ("gettimeofday failed: %s", strerror (errno));
-	}
+
+	gettimeofday (&new_task->tv, NULL);
+	new_task->time_real = rspamd_get_ticks ();
+	new_task->time_virtual = rspamd_get_virtual_ticks ();
 
 	new_task->task_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
