@@ -76,7 +76,8 @@ SET(RSPAMDSRC	controller.c
 				lua_worker.c
 				main.c
 				smtp_proxy.c
-				worker.c)
+				worker.c
+				http_proxy.c)
 
 SET(PLUGINSSRC	plugins/surbl.c
 				plugins/regexp.c
@@ -86,7 +87,7 @@ SET(PLUGINSSRC	plugins/surbl.c
 				plugins/dkim_check.c)
 				
 SET(MODULES_LIST surbl regexp chartable fuzzy_check spf dkim)
-SET(WORKERS_LIST normal controller smtp_proxy fuzzy lua)
+SET(WORKERS_LIST normal controller smtp_proxy fuzzy lua http_proxy)
 
 AddModules(MODULES_LIST WORKERS_LIST)
 LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)
