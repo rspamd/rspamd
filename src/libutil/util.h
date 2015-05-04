@@ -156,19 +156,10 @@ gchar * resolve_stat_filename (rspamd_mempool_t *pool,
 	gchar *pattern,
 	gchar *rcpt,
 	gchar *from);
-#ifdef HAVE_CLOCK_GETTIME
-/*
- * Calculate check time with specified resolution of timer
- */
-const gchar * calculate_check_time (struct timeval *tv,
-	struct timespec *begin,
-	gint resolution,
-	guint32 *scan_ms);
-#else
-const gchar * calculate_check_time (struct timeval *begin,
-	gint resolution,
-	guint32 *scan_ms);
-#endif
+
+const gchar *
+calculate_check_time (gdouble start_real, gdouble start_virtual, gint resolution,
+	guint32 *scan_time);
 
 /*
  * File locking functions
@@ -442,6 +433,12 @@ guchar* rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen);
  * @return
  */
 gdouble rspamd_get_ticks (void);
+
+/**
+ * Portably return the current virtual clock ticks as seconds
+ * @return
+ */
+gdouble rspamd_get_virtual_ticks (void);
 
 /**
  * Special utility to help array freeing in rspamd_mempool

@@ -1191,47 +1191,18 @@ resolve_stat_filename (rspamd_mempool_t * pool,
 	return new;
 }
 
-#ifdef HAVE_CLOCK_GETTIME
 const gchar *
-calculate_check_time (struct timeval *tv,
-	struct timespec *begin,
-	gint resolution,
+calculate_check_time (gdouble start_real, gdouble start_virtual, gint resolution,
 	guint32 *scan_time)
-#else
-const gchar *
-calculate_check_time (struct timeval *begin, gint resolution,
-	guint32 *scan_time)
-#endif
 {
-	double vdiff, diff;
+	double vdiff, diff, end_real, end_virtual;
 	static gchar res[64];
 	static gchar fmt[sizeof ("%.10f ms real, %.10f ms virtual")];
-	struct timeval tv_now;
 
-	if (gettimeofday (&tv_now, NULL) == -1) {
-		msg_warn ("gettimeofday failed: %s", strerror (errno));
-	}
-#ifdef HAVE_CLOCK_GETTIME
-	struct timespec ts;
-
-	diff = (tv_now.tv_sec - tv->tv_sec) * 1000. +   /* Seconds */
-		(tv_now.tv_usec - tv->tv_usec) / 1000.; /* Microseconds */
-#ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
-	clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts);
-#elif defined(HAVE_CLOCK_VIRTUAL)
-	clock_gettime (CLOCK_VIRTUAL,			 &ts);
-#else
-	clock_gettime (CLOCK_REALTIME,			 &ts);
-#endif
-
-	vdiff = (ts.tv_sec - begin->tv_sec) * 1000. +   /* Seconds */
-		(ts.tv_nsec - begin->tv_nsec) / 1000000.;   /* Nanoseconds */
-#else
-	diff = (tv_now.tv_sec - begin->tv_sec) * 1000. +    /* Seconds */
-		(tv_now.tv_usec - begin->tv_usec) / 1000.;  /* Microseconds */
-
-	vdiff = diff;
-#endif
+	end_real = rspamd_get_ticks ();
+	end_virtual = rspamd_get_virtual_ticks ();
+	vdiff = (end_virtual - start_virtual) * 1000;
+	diff = (end_real - start_real) * 1000;
 
 	*scan_time = diff;
 
@@ -2335,13 +2306,43 @@ rspamd_get_ticks (void)
 {
 	gdouble res;
 
-#ifdef __APPLE__
-	res = mach_absolute_time () / 1000000000.;
-#else
+#ifdef HAVE_CLOCK_GETTIME
 	struct timespec ts;
 	clock_gettime (CLOCK_MONOTONIC, &ts);
 
 	res = (double)ts.tv_sec + ts.tv_nsec / 1000000000.;
+#elif defined(__APPLE__)
+	res = mach_absolute_time () / 1000000000.;
+#else
+	struct timeval tv;
+
+	(void)gettimeofday (&tv, NULL);
+	res = (double)tv.tv_sec + tv.tv_nsec / 1000000.;
+#endif
+
+	return res;
+}
+
+gdouble
+rspamd_get_virtual_ticks (void)
+{
+	gdouble res;
+
+#ifdef HAVE_CLOCK_GETTIME
+	struct timespec ts;
+# ifdef CLOCK_PROCESS_CPUTIME_ID
+	clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts);
+# elif defined(CLOCK_PROF)
+	clock_gettime (CLOCK_PROF, &ts);
+# elif defined(CLOCK_VIRTUAL)
+	clock_gettime (CLOCK_VIRTUAL, &ts);
+# else
+	clock_gettime (CLOCK_REALTIME, &ts);
+# endif
+
+	res = (double)ts.tv_sec + ts.tv_nsec / 1000000000.;
+#else
+	res = clock () / (double)CLOCKS_PER_SEC;
 #endif
 
 	return res;
