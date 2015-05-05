@@ -601,43 +601,42 @@ rspamd_http_on_message_complete (http_parser * parser)
 
 	priv = conn->priv;
 
-	if (conn->body_handler != NULL) {
+	if ((conn->opts & RSPAMD_HTTP_BODY_PARTIAL) == 0 && priv->encrypted) {
+		if (priv->local_key == NULL || priv->msg->peer_key == NULL ||
+				priv->msg->body->len < rspamd_cryptobox_NONCEBYTES +
+				rspamd_cryptobox_MACBYTES) {
+			msg_err ("cannot decrypt message");
+			return -1;
+		}
+		/* We have keys, so we can decrypt message */
+		/* TODO: add pubkey<->privkey pairs to LRU cache */
+		nonce = priv->msg->body->str;
+		m = priv->msg->body->str + rspamd_cryptobox_NONCEBYTES +
+				rspamd_cryptobox_MACBYTES;
+		dec_len = priv->msg->body->len - rspamd_cryptobox_NONCEBYTES -
+				rspamd_cryptobox_MACBYTES;
+		peer_key = (struct rspamd_http_keypair *)priv->msg->peer_key;
 
-		if (priv->encrypted) {
-			if (priv->local_key == NULL || priv->msg->peer_key == NULL ||
-					priv->msg->body->len < rspamd_cryptobox_NONCEBYTES +
-					rspamd_cryptobox_MACBYTES) {
-				msg_err ("cannot decrypt message");
+		if (conn->cache) {
+			if (!rspamd_cryptobox_decrypt_nm_inplace (m, dec_len, nonce,
+					peer_key->nm, m - rspamd_cryptobox_MACBYTES) != 0) {
+				msg_err ("cannot verify encrypted message");
 				return -1;
 			}
-			/* We have keys, so we can decrypt message */
-			/* TODO: add pubkey<->privkey pairs to LRU cache */
-			nonce = priv->msg->body->str;
-			m = priv->msg->body->str + rspamd_cryptobox_NONCEBYTES +
-					rspamd_cryptobox_MACBYTES;
-			dec_len = priv->msg->body->len - rspamd_cryptobox_NONCEBYTES -
-					rspamd_cryptobox_MACBYTES;
-			peer_key = (struct rspamd_http_keypair *)priv->msg->peer_key;
-
-			if (conn->cache) {
-				if (!rspamd_cryptobox_decrypt_nm_inplace (m, dec_len, nonce,
-						peer_key->nm, m - rspamd_cryptobox_MACBYTES) != 0) {
-					msg_err ("cannot verify encrypted message");
-					return -1;
-				}
+		}
+		else {
+			if (!rspamd_cryptobox_decrypt_inplace (m, dec_len, nonce,
+					peer_key->pk, priv->local_key->sk,
+					m - rspamd_cryptobox_MACBYTES) != 0) {
+				msg_err ("cannot verify encrypted message");
+				return -1;
 			}
-			else {
-				if (!rspamd_cryptobox_decrypt_inplace (m, dec_len, nonce,
-						peer_key->pk, priv->local_key->sk,
-						m - rspamd_cryptobox_MACBYTES) != 0) {
-					msg_err ("cannot verify encrypted message");
-					return -1;
-				}
-			}
+		}
 
-			priv->msg->body->str = m;
-			priv->msg->body->len = dec_len;
+		priv->msg->body->str = m;
+		priv->msg->body->len = dec_len;
 
+		if (conn->body_handler != NULL) {
 			rspamd_http_connection_ref (conn);
 			ret = conn->body_handler (conn,
 					priv->msg,
@@ -645,14 +644,15 @@ rspamd_http_on_message_complete (http_parser * parser)
 					dec_len);
 			rspamd_http_connection_unref (conn);
 		}
-		else if ((conn->opts & RSPAMD_HTTP_BODY_PARTIAL) == 0) {
-			rspamd_http_connection_ref (conn);
-			ret = conn->body_handler (conn,
-					priv->msg,
-					priv->msg->body->str,
-					priv->msg->body->len);
-			rspamd_http_connection_unref (conn);
-		}
+	}
+	else if ((conn->opts & RSPAMD_HTTP_BODY_PARTIAL) == 0 && conn->body_handler) {
+		g_assert (conn->body_handler != NULL);
+		rspamd_http_connection_ref (conn);
+		ret = conn->body_handler (conn,
+				priv->msg,
+				priv->msg->body->str,
+				priv->msg->body->len);
+		rspamd_http_connection_unref (conn);
 	}
 
 	if (ret == 0) {
@@ -805,9 +805,11 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 				conn->error_handler (conn, err);
 				g_error_free (err);
 
-				REF_RELEASE (pbuf);
-				rspamd_http_connection_unref (conn);
+
 			}
+			REF_RELEASE (pbuf);
+			rspamd_http_connection_unref (conn);
+
 			return;
 		}
 		else {
@@ -923,6 +925,7 @@ rspamd_http_connection_reset (struct rspamd_http_connection *conn)
 	event_del (&priv->ev);
 	if (priv->buf != NULL) {
 		REF_RELEASE (priv->buf);
+		priv->buf = NULL;
 	}
 
 	rspamd_http_parser_reset (conn);
@@ -933,6 +936,27 @@ rspamd_http_connection_reset (struct rspamd_http_connection *conn)
 	}
 }
 
+struct rspamd_http_message *
+rspamd_http_connection_steal_msg (struct rspamd_http_connection *conn)
+{
+	struct rspamd_http_connection_private *priv;
+	struct rspamd_http_message *msg;
+
+	priv = conn->priv;
+	msg = priv->msg;
+
+	/* Clear request */
+	if (msg != NULL) {
+		if (msg->peer_key) {
+			priv->peer_key = msg->peer_key;
+			msg->peer_key = NULL;
+		}
+		priv->msg = NULL;
+	}
+
+	return msg;
+}
+
 void
 rspamd_http_connection_free (struct rspamd_http_connection *conn)
 {
@@ -940,17 +964,21 @@ rspamd_http_connection_free (struct rspamd_http_connection *conn)
 	struct rspamd_http_keypair *peer_key;
 
 	priv = conn->priv;
-	rspamd_http_connection_reset (conn);
 
-	if (priv->local_key) {
-		REF_RELEASE (priv->local_key);
-	}
-	if (priv->peer_key) {
-		peer_key = (struct rspamd_http_keypair *)priv->peer_key;
-		REF_RELEASE (peer_key);
+	if (priv != NULL) {
+		rspamd_http_connection_reset (conn);
+
+		if (priv->local_key) {
+			REF_RELEASE (priv->local_key);
+		}
+		if (priv->peer_key) {
+			peer_key = (struct rspamd_http_keypair *)priv->peer_key;
+			REF_RELEASE (peer_key);
+		}
+
+		g_slice_free1 (sizeof (struct rspamd_http_connection_private), priv);
 	}
 
-	g_slice_free1 (sizeof (struct rspamd_http_connection_private), priv);
 	g_slice_free1 (sizeof (struct rspamd_http_connection),		   conn);
 }
 
@@ -976,10 +1004,11 @@ rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
 	if (timeout == NULL) {
 		priv->ptv = NULL;
 	}
-	else {
+	else if (&priv->tv != timeout) {
 		memcpy (&priv->tv, timeout, sizeof (struct timeval));
 		priv->ptv = &priv->tv;
 	}
+
 	priv->header = NULL;
 	priv->buf = g_slice_alloc0 (sizeof (*priv->buf));
 	REF_INIT_RETAIN (priv->buf, rspamd_http_privbuf_dtor);
@@ -1023,10 +1052,11 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	if (timeout == NULL) {
 		priv->ptv = NULL;
 	}
-	else {
+	else if (timeout != &priv->tv) {
 		memcpy (&priv->tv, timeout, sizeof (struct timeval));
 		priv->ptv = &priv->tv;
 	}
+
 	priv->header = NULL;
 	priv->buf = g_slice_alloc0 (sizeof (*priv->buf));
 	REF_INIT_RETAIN (priv->buf, rspamd_http_privbuf_dtor);
@@ -1196,7 +1226,10 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		priv->wr_total -= 2;
 	}
 	if (msg->body != NULL) {
-		msg->body_buf.str = msg->body->str;
+
+		if (msg->body_buf.str == NULL) {
+			msg->body_buf.str = msg->body->str;
+		}
 
 		if (encrypted && peer_key != NULL && np != NULL && mp != NULL) {
 			if (conn->cache) {
@@ -1362,9 +1395,33 @@ rspamd_http_message_find_header (struct rspamd_http_message *msg,
 		LL_FOREACH (msg->headers, hdr)
 		{
 			if (hdr->name->len == slen) {
-				if (g_ascii_strncasecmp(hdr->name->str, name, slen) == 0) {
+				if (g_ascii_strncasecmp (hdr->name->str, name, slen) == 0) {
 					res = hdr->value->str;
 					break;
+				}
+			}
+		}
+	}
+
+	return res;
+}
+
+gboolean rspamd_http_message_remove_header (struct rspamd_http_message *msg,
+	const gchar *name)
+{
+	struct rspamd_http_header *hdr, *tmp;
+	gboolean res = FALSE;
+	guint slen = strlen (name);
+
+	if (msg != NULL) {
+		DL_FOREACH_SAFE (msg->headers, hdr, tmp) {
+			if (hdr->name->len == slen) {
+				if (g_ascii_strncasecmp (hdr->name->str, name, slen) == 0) {
+					res = TRUE;
+					DL_DELETE (msg->headers, hdr);
+					g_string_free (hdr->name, TRUE);
+					g_string_free (hdr->value, TRUE);
+					g_slice_free1 (sizeof (*hdr), hdr);
 				}
 			}
 		}

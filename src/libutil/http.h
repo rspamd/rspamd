@@ -288,6 +288,14 @@ rspamd_http_connection_unref (struct rspamd_http_connection *conn)
 void rspamd_http_connection_reset (struct rspamd_http_connection *conn);
 
 /**
+ * Extract the current message from a connection to deal with separately
+ * @param conn
+ * @return
+ */
+struct rspamd_http_message * rspamd_http_connection_steal_msg (
+		struct rspamd_http_connection *conn);
+
+/**
  * Create new HTTP message
  * @param type request or response
  * @return new http message
@@ -307,21 +315,30 @@ struct rspamd_http_message* rspamd_http_message_from_url (const gchar *url);
  * @param name
  * @param value
  */
-void rspamd_http_message_add_header (struct rspamd_http_message *rep,
+void rspamd_http_message_add_header (struct rspamd_http_message *msg,
 	const gchar *name,
 	const gchar *value);
 
 /**
  * Search for a specified header in message
- * @param rep message
+ * @param msg message
  * @param name name of header
  */
-const gchar * rspamd_http_message_find_header (struct rspamd_http_message *rep,
+const gchar * rspamd_http_message_find_header (struct rspamd_http_message *msg,
 	const gchar *name);
 
 /**
- * Free HTTP reply
- * @param rep
+ * Remove specific header from a message
+ * @param msg
+ * @param name
+ * @return
+ */
+gboolean rspamd_http_message_remove_header (struct rspamd_http_message *msg,
+	const gchar *name);
+
+/**
+ * Free HTTP message
+ * @param msg
  */
 void rspamd_http_message_free (struct rspamd_http_message *msg);
 
