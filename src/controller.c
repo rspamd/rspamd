@@ -297,13 +297,13 @@ static gboolean rspamd_controller_check_password(
 
 	/* Access list logic */
 	if (!rspamd_inet_address_get_af (session->from_addr) == AF_UNIX) {
-		msg_info("allow unauthorized connection from a unix socket");
+		msg_info ("allow unauthorized connection from a unix socket");
 		return TRUE;
 	}
 	else if (ctx->secure_map
 			&& radix_find_compressed_addr (ctx->secure_map, session->from_addr)
 					!= RADIX_NO_VALUE) {
-		msg_info("allow unauthorized connection from a trusted IP %s",
+		msg_info ("allow unauthorized connection from a trusted IP %s",
 				rspamd_inet_address_to_string (session->from_addr));
 		return TRUE;
 	}
@@ -312,7 +312,16 @@ static gboolean rspamd_controller_check_password(
 	password = rspamd_http_message_find_header (msg, "Password");
 
 	if (password == NULL) {
-		msg_info("absent password has been specified");
+		if (ctx->secure_map == NULL) {
+			if (ctx->password == NULL && !is_enable) {
+				return TRUE;
+			}
+			else if (is_enable && (ctx->password == NULL &&
+					ctx->enable_password == NULL)) {
+				return TRUE;
+			}
+		}
+		msg_info ("absent password has been specified");
 		ret = FALSE;
 	}
 	else {
@@ -332,11 +341,12 @@ static gboolean rspamd_controller_check_password(
 					ret = rspamd_constant_memcmp (password, check, 0);
 				}
 				else {
-					ret = rspamd_check_encrypted_password (password, check, pbkdf);
+					ret = rspamd_check_encrypted_password (password, check,
+							pbkdf);
 				}
 			}
 			else {
-				msg_warn(
+				msg_warn (
 						"no password to check while executing a privileged command");
 				if (ctx->secure_map) {
 					msg_info("deny unauthorized connection");
