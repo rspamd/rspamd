@@ -132,7 +132,7 @@ local function process_trie_conf(symbol, cf)
   rspamd_config:register_virtual_symbol(symbol, 1.0)
 end
 
-local opts =  rspamd_config:get_key("trie")
+local opts =  rspamd_config:get_all_opt("trie")
 if opts then
   for sym, opt in pairs(opts) do
      process_trie_conf(sym, opt)

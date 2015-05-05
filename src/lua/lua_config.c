@@ -28,6 +28,7 @@
 #include "message.h"
 #include "radix.h"
 #include "expression.h"
+#include "utlist.h"
 
 /***
  * This module is used to configure rspamd and is normally available as global
@@ -57,7 +58,8 @@ local opts = rspamd_config:get_key('options') -- get content of the specified ke
 LUA_FUNCTION_DEF (config, get_module_opt);
 /***
  * @method rspamd_config:get_all_opt(mname)
- * Returns value of all options for a module `mname`,
+ * Returns value of all options for a module `mname`, flattening values into a single table consisting
+ * of all sections with such a name.
  * @param {string} mname name of module
  * @return {table} table of all options for `mname` or `nil` if a module's configuration is not found
  */
@@ -407,19 +409,38 @@ lua_config_get_all_opt (lua_State * L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *mname;
-	const ucl_object_t *obj;
+	const ucl_object_t *obj, *cur, *cur_elt;
+	ucl_object_iter_t it = NULL;
 
 	if (cfg) {
 		mname = luaL_checkstring (L, 2);
 
 		if (mname) {
 			obj = ucl_obj_get_key (cfg->rcl_obj, mname);
-			if (obj != NULL) {
-				return ucl_object_push_lua (L, obj, TRUE);
+			/* Flatten object */
+			if (obj != NULL && ucl_object_type (obj) == UCL_OBJECT) {
+
+				lua_newtable (L);
+				it = ucl_object_iterate_new (obj);
+
+				LL_FOREACH (obj, cur) {
+					it = ucl_object_iterate_reset (it, cur);
+
+					while ((cur_elt = ucl_object_iterate_safe (it, true))) {
+						lua_pushstring (L, ucl_object_key (cur_elt));
+						ucl_object_push_lua (L, cur_elt, true);
+						lua_settable (L, -3);
+					}
+				}
+
+				ucl_object_iterate_free (it);
+
+				return 1;
 			}
 		}
 	}
 	lua_pushnil (L);
+
 	return 1;
 }
 

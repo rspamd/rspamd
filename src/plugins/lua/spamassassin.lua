@@ -56,7 +56,7 @@ local replace = {
   post = {},
   rules = {}
 }
-local section = rspamd_config:get_key("spamassassin")
+local section = rspamd_config:get_all_opt("spamassassin")
 
 -- Minimum score to treat symbols as meta
 local meta_score_alpha = 0.5
