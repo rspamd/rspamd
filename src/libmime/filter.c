@@ -481,26 +481,14 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 
 	return res;
 }
+
 static gint
-rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
+rspamd_composite_process_single_symbol (struct composites_data *cd,
+		const gchar *sym, struct symbol **pms)
 {
-	struct composites_data *cd = (struct composites_data *)input;
-	const gchar *sym = atom->data;
-	struct rspamd_composite *ncomp;
-	struct symbol_remove_data *rd;
-	struct symbol *ms;
+	struct symbol *ms = NULL;
 	gint rc = 0;
-	gchar t = '\0';
-
-	if (isset (cd->checked, cd->composite->id * 2)) {
-		/* We have already checked this composite, so just return its value */
-		rc = isset (cd->checked, cd->composite->id * 2 + 1);
-		return rc;
-	}
-
-	if (*sym == '~' || *sym == '-') {
-		t = *sym ++;
-	}
+	struct rspamd_composite *ncomp;
 
 	if ((ms = g_hash_table_lookup (cd->metric_res->symbols, sym)) == NULL) {
 		if ((ncomp =
@@ -525,6 +513,32 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 	else {
 		rc = 1;
 	}
+
+	*pms = ms;
+	return rc;
+}
+
+static gint
+rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
+{
+	struct composites_data *cd = (struct composites_data *)input;
+	const gchar *sym = atom->data;
+	struct symbol_remove_data *rd;
+	struct symbol *ms;
+	gint rc = 0;
+	gchar t = '\0';
+
+	if (isset (cd->checked, cd->composite->id * 2)) {
+		/* We have already checked this composite, so just return its value */
+		rc = isset (cd->checked, cd->composite->id * 2 + 1);
+		return rc;
+	}
+
+	if (*sym == '~' || *sym == '-') {
+		t = *sym ++;
+	}
+
+	rc = rspamd_composite_process_single_symbol (cd, sym, &ms);
 
 	if (rc && ms) {
 		/*
