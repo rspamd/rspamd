@@ -294,6 +294,10 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 		}
 		else {
 			backend = g_hash_table_lookup (session->ctx->upstreams, host);
+
+			if (backend == NULL) {
+				backend = session->ctx->default_upstream;
+			}
 		}
 
 		if (backend == NULL) {
@@ -409,7 +413,6 @@ void
 start_http_proxy (struct rspamd_worker *worker)
 {
 	struct http_proxy_ctx *ctx = worker->ctx;
-	GError *err = NULL;
 
 	ctx->ev_base = rspamd_prepare_worker (worker, "http_proxy",
 			proxy_accept_socket);
