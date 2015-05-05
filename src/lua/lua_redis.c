@@ -78,25 +78,30 @@ struct lua_redis_userdata {
 	guint nargs;
 };
 
+static void
+lua_redis_free_args (struct lua_redis_userdata *ud)
+{
+	guint i;
+
+	if (ud->args) {
+		for (i = 0; i < ud->nargs; i ++) {
+			g_free (ud->args[i]);
+		}
+
+		g_free (ud->args);
+	}
+}
 
 static void
 lua_redis_fin (void *arg)
 {
 	struct lua_redis_userdata *ud = arg;
-	guint i;
 
 	if (ud->ctx) {
 		redisAsyncFree (ud->ctx);
+		lua_redis_free_args (ud);
 		event_del (&ud->timeout);
 		luaL_unref (ud->L, LUA_REGISTRYINDEX, ud->cbref);
-
-		if (ud->args) {
-			for (i = 0; i < ud->nargs; i ++) {
-				g_free (ud->args[i]);
-			}
-
-			g_free (ud->args);
-		}
 	}
 }
 
@@ -211,7 +216,7 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 			}
 		}
 		else {
-			lua_redis_push_error ("received no data from server", ud, FALSE);
+			lua_redis_push_error ("received no data from server", ud, TRUE);
 		}
 	}
 	else {
@@ -350,6 +355,7 @@ lua_redis_make_request (lua_State *L)
 			if (cbref != -1) {
 				luaL_unref (L, LUA_REGISTRYINDEX, cbref);
 			}
+
 			msg_err ("incorrect function invocation");
 		}
 	}
@@ -389,6 +395,7 @@ lua_redis_make_request (lua_State *L)
 
 		if (ud->ctx == NULL || ud->ctx->err) {
 			redisAsyncFree (ud->ctx);
+			lua_redis_free_args (ud);
 			luaL_unref (ud->L, LUA_REGISTRYINDEX, ud->cbref);
 			lua_pushboolean (L, FALSE);
 
@@ -414,6 +421,7 @@ lua_redis_make_request (lua_State *L)
 		}
 		else {
 			msg_info ("call to redis failed: %s", ud->ctx->errstr);
+			lua_redis_free_args (ud);
 			redisAsyncFree (ud->ctx);
 			luaL_unref (ud->L, LUA_REGISTRYINDEX, ud->cbref);
 		}
