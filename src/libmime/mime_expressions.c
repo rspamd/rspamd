@@ -387,6 +387,7 @@ rspamd_mime_expr_parse_function_atom (const gchar *input)
 {
 	const gchar *obrace, *ebrace, *p, *c;
 	gchar t, *databuf;
+	guint len;
 	struct rspamd_function_atom *res;
 	struct expression_argument arg;
 	GError *err = NULL;
@@ -423,7 +424,13 @@ rspamd_mime_expr_parse_function_atom (const gchar *input)
 			}
 			else if (!g_ascii_isspace (t)) {
 				state = in_string;
-				c = p;
+
+				if (t == '\'' || t == '\"') {
+					c = p + 1;
+				}
+				else {
+					c = p;
+				}
 			}
 			p ++;
 			break;
@@ -433,8 +440,9 @@ rspamd_mime_expr_parse_function_atom (const gchar *input)
 				prev_state = in_regexp;
 			}
 			else if (t == ',' || p == ebrace) {
-				databuf = g_malloc (p - c + 1);
-				rspamd_strlcpy (databuf, c, p - c + 1);
+				len = p - c + 1;
+				databuf = g_malloc (len);
+				rspamd_strlcpy (databuf, c, len);
 				arg.type = EXPRESSION_ARGUMENT_REGEXP;
 				arg.data = rspamd_regexp_cache_create (NULL, databuf, NULL, &err);
 
@@ -451,6 +459,7 @@ rspamd_mime_expr_parse_function_atom (const gchar *input)
 				}
 
 				g_array_append_val (res->args, arg);
+				state = got_comma;
 			}
 			p ++;
 			break;
@@ -460,11 +469,19 @@ rspamd_mime_expr_parse_function_atom (const gchar *input)
 				prev_state = in_string;
 			}
 			else if (t == ',' || p == ebrace) {
-				databuf = g_malloc (p - c + 1);
-				rspamd_strlcpy (databuf, c, p - c + 1);
+				if (*(p - 1) == '\'' || *(p - 1) == '\"') {
+					len = p - c;
+				}
+				else {
+					len = p - c + 1;
+				}
+
+				databuf = g_malloc (len);
+				rspamd_strlcpy (databuf, c, len);
 				arg.type = EXPRESSION_ARGUMENT_NORMAL;
 				arg.data = databuf;
 				g_array_append_val (res->args, arg);
+				state = got_comma;
 			}
 			p ++;
 			break;
@@ -2334,7 +2351,7 @@ rspamd_has_content_part_len (struct rspamd_task * task,
 				return FALSE;
 			}
 
-			if (args) {
+			if (args->len >= 4) {
 				arg = &g_array_index (args, struct expression_argument, 3);
 				g_assert (arg->type == EXPRESSION_ARGUMENT_NORMAL);
 				max = strtoul (arg->data, NULL, 10);
