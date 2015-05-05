@@ -79,6 +79,9 @@ inv_chi_square (gdouble value, gint freedom_deg)
 	return MIN (1.0, sum);
 }
 
+static const double feature_weight[] = { 0, 3125, 256, 27, 4, 1 };
+
+#define PROB_COMBINE(prob, cnt, weight, assumed) (((weight) * (assumed) + (cnt) * (prob)) / ((weight) + (cnt)))
 /*
  * In this callback we calculate local probabilities for tokens
  */
@@ -90,7 +93,8 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 	guint i;
 	struct rspamd_token_result *res;
 	guint64 spam_count = 0, ham_count = 0, total_count = 0;
-	double spam_prob, spam_freq, ham_freq, bayes_spam_prob;
+	double spam_prob, spam_freq, ham_freq, bayes_spam_prob, bayes_ham_prob,
+		ham_prob, fw, w;
 
 	for (i = rt->start_pos; i < rt->end_pos; i++) {
 		res = &g_array_index (node->results, struct rspamd_token_result, i);
@@ -112,9 +116,13 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 		spam_freq = ((double)spam_count / MAX (1., (double)rt->total_spam));
 		ham_freq = ((double)ham_count / MAX (1., (double)rt->total_ham));
 		spam_prob = spam_freq / (spam_freq + ham_freq);
-		bayes_spam_prob = (0.5 + spam_prob * total_count) / (1. + total_count);
+		ham_prob = ham_freq / (spam_freq + ham_freq);
+		fw = feature_weight[node->window_idx % G_N_ELEMENTS (feature_weight)];
+		w = (fw * total_count) / (4.0 * (1.0 + fw * total_count));
+		bayes_spam_prob = PROB_COMBINE (spam_prob, total_count, w, 0.5);
+		bayes_ham_prob = PROB_COMBINE (ham_prob, total_count, w, 0.5);
 		rt->spam_prob += log (bayes_spam_prob);
-		rt->ham_prob += log (1. - bayes_spam_prob);
+		rt->ham_prob += log (bayes_ham_prob);
 		res->cl_runtime->processed_tokens ++;
 	}
 
