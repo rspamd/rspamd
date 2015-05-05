@@ -32,6 +32,7 @@
 #include "expression.h"
 #include "diff.h"
 #include "libstat/stat_api.h"
+#include "utlist.h"
 
 #ifdef WITH_LUA
 #   include "lua/lua_common.h"
@@ -525,6 +526,8 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 	const gchar *sym = atom->data;
 	struct symbol_remove_data *rd;
 	struct symbol *ms;
+	struct rspamd_symbols_group *gr;
+	struct rspamd_symbol_def *sdef;
 	gint rc = 0;
 	gchar t = '\0';
 
@@ -538,7 +541,21 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 		t = *sym ++;
 	}
 
-	rc = rspamd_composite_process_single_symbol (cd, sym, &ms);
+	if (strncmp (sym, "g:", 2) == 0) {
+		gr = g_hash_table_lookup (cd->task->cfg->symbols_groups, sym + 2);
+
+		if (gr != NULL) {
+			LL_FOREACH (gr->symbols, sdef) {
+				rc = rspamd_composite_process_single_symbol (cd, sdef->name, &ms);
+				if (rc) {
+					break;
+				}
+			}
+		}
+	}
+	else {
+		rc = rspamd_composite_process_single_symbol (cd, sym, &ms);
+	}
 
 	if (rc && ms) {
 		/*
