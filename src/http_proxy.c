@@ -216,7 +216,7 @@ proxy_session_cleanup (struct http_proxy_session *session)
 		rspamd_http_connection_unref (session->backend_conn);
 	}
 	if (session->client_conn) {
-		rspamd_http_connection_unref (session->backend_conn);
+		rspamd_http_connection_unref (session->client_conn);
 	}
 
 	close (session->backend_sock);
@@ -245,6 +245,7 @@ proxy_backend_error_handler (struct rspamd_http_connection *conn, GError *err)
 	msg_info ("abnormally closing connection from backend: %s, error: %s",
 		rspamd_inet_address_to_string (rspamd_upstream_addr (session->up)),
 		err->message);
+	rspamd_http_connection_reset (session->backend_conn);
 	/* Terminate session immediately */
 	proxy_client_write_error (session, err->code);
 }
@@ -255,6 +256,10 @@ proxy_backend_finish_handler (struct rspamd_http_connection *conn,
 {
 	struct http_proxy_session *session = conn->ud;
 
+	rspamd_http_connection_steal_msg (session->backend_conn);
+	rspamd_http_message_remove_header (msg, "Content-Length");
+	rspamd_http_message_remove_header (msg, "Key");
+	rspamd_http_connection_reset (session->backend_conn);
 	rspamd_http_connection_write_message (session->client_conn,
 		msg, NULL, NULL, session, session->client_sock,
 		&session->ctx->io_tv, session->ev_base);
@@ -313,6 +318,10 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 				goto err;
 			}
 
+			rspamd_http_connection_steal_msg (session->client_conn);
+			rspamd_http_message_remove_header (msg, "Content-Length");
+			rspamd_http_message_remove_header (msg, "Key");
+			rspamd_http_connection_reset (session->client_conn);
 			session->backend_conn = rspamd_http_connection_new (
 					NULL,
 					proxy_backend_error_handler,
