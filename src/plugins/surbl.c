@@ -864,7 +864,7 @@ process_dns_results (struct rspamd_task *task,
 	guint i;
 	struct surbl_bit_item *bit;
 
-	if (suffix->ips) {
+	if (suffix->ips && g_hash_table_size (suffix->ips) > 0) {
 
 		bit = g_hash_table_lookup (suffix->ips, &addr);
 		if (bit != NULL) {
@@ -873,7 +873,7 @@ process_dns_results (struct rspamd_task *task,
 				rspamd_mempool_strdup (task->task_pool, url)));
 		}
 	}
-	else if (suffix->bits != NULL) {
+	else if (suffix->bits != NULL && suffix->bits->len > 0) {
 		for (i = 0; i < suffix->bits->len; i ++) {
 
 			bit = &g_array_index (suffix->bits, struct surbl_bit_item, i);
