@@ -94,7 +94,7 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 	struct rspamd_token_result *res;
 	guint64 spam_count = 0, ham_count = 0, total_count = 0;
 	double spam_prob, spam_freq, ham_freq, bayes_spam_prob, bayes_ham_prob,
-		ham_prob, fw, w;
+		ham_prob, fw, w, norm_sum, norm_sub;
 
 	for (i = rt->start_pos; i < rt->end_pos; i++) {
 		res = &g_array_index (node->results, struct rspamd_token_result, i);
@@ -118,8 +118,14 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 		spam_prob = spam_freq / (spam_freq + ham_freq);
 		ham_prob = ham_freq / (spam_freq + ham_freq);
 		fw = feature_weight[node->window_idx % G_N_ELEMENTS (feature_weight)];
-		w = (fw * total_count) / (4.0 * (1.0 + fw * total_count));
+		norm_sum = (spam_freq + ham_freq) * (spam_freq + ham_freq);
+		norm_sub = (spam_freq - ham_freq) * (spam_freq - ham_freq);
+		w = (norm_sub) / (norm_sum) *
+				(fw * total_count) / (4.0 * (1.0 + fw * total_count));
 		bayes_spam_prob = PROB_COMBINE (spam_prob, total_count, w, 0.5);
+		norm_sub = (ham_freq - spam_freq) * (ham_freq - spam_freq);
+		w = (norm_sub) / (norm_sum) *
+				(fw * total_count) / (4.0 * (1.0 + fw * total_count));
 		bayes_ham_prob = PROB_COMBINE (ham_prob, total_count, w, 0.5);
 		rt->spam_prob += log (bayes_spam_prob);
 		rt->ham_prob += log (bayes_ham_prob);
