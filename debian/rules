@@ -24,6 +24,9 @@ override_dh_auto_configure:
 		-DENABLE_HIREDIS=ON \
 		-DWANT_SYSTEMD_UNITS=ON
 
+override_dh_makeshlibs:
+	dh_makeshlibs -Xrspamd-actrie
+
 override_dh_auto_clean:
 	dh_auto_clean
 	rm -f src/modules.c
