@@ -31,8 +31,6 @@
 #include "cfg_file.h"
 #include "stat_internal.h"
 
-#define LOCAL_PROB_DENOM 16.0
-
 static inline GQuark
 bayes_error_quark (void)
 {
@@ -209,6 +207,11 @@ bayes_classify (struct classifier_ctx * ctx,
 					"unexpected classifier error: cannot select desired statfile");
 			}
 			else {
+				/* Correctly scale HAM */
+				if (final_prob < 0.5) {
+					final_prob = 1.0 - final_prob;
+				}
+
 				rspamd_snprintf (sumbuf, 32, "%.2f%%", final_prob * 100.);
 				cur = g_list_prepend (NULL, sumbuf);
 				rspamd_task_insert_result (task,
