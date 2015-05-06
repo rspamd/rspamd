@@ -21,6 +21,12 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/* Workaround for memset_s */
+#ifdef __APPLE__
+#define __STDC_WANT_LIB_EXT1__ 1
+#include <string.h>
+#endif
+
 #include "cryptobox.h"
 #include "platform_config.h"
 #include "chacha20/chacha.h"
@@ -31,6 +37,15 @@
 #include "blake2.h"
 #ifdef HAVE_CPUID_H
 #include <cpuid.h>
+#endif
+
+
+#ifndef ALIGNED
+#if defined(_MSC_VER)
+# define ALIGNED(x) __declspec(align(x))
+#else
+# define ALIGNED(x) __attribute__((aligned(x)))
+#endif
 #endif
 
 unsigned long cpu_config = 0;
@@ -164,7 +179,7 @@ void rspamd_cryptobox_encrypt_nm_inplace (guchar *data, gsize len,
 		const rspamd_nm_t nm, rspamd_sig_t sig)
 {
 	poly1305_state mac_ctx;
-	guchar subkey[CHACHA_BLOCKBYTES];
+	guchar ALIGNED(32) subkey[CHACHA_BLOCKBYTES];
 	chacha_state s;
 	gsize r;
 
@@ -183,12 +198,112 @@ void rspamd_cryptobox_encrypt_nm_inplace (guchar *data, gsize len,
 	rspamd_explicit_memzero (subkey, sizeof (subkey));
 }
 
+static void
+rspamd_cryptobox_flush_outbuf (struct rspamd_cryptobox_segment *st,
+		const guchar *buf, gsize len, gsize offset)
+{
+	gsize cpy_len;
+
+	while (len > 0) {
+		cpy_len = MIN (len, st->len - offset);
+		memcpy (st->data + offset, buf, cpy_len);
+		st ++;
+		buf += cpy_len;
+		len -= cpy_len;
+		offset = 0;
+	}
+}
+
+void rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segments,
+		gsize cnt,
+		const rspamd_nonce_t nonce,
+		const rspamd_nm_t nm, rspamd_sig_t sig)
+{
+	struct rspamd_cryptobox_segment *cur = segments, *start_seg = segments;
+	guchar ALIGNED(32) subkey[CHACHA_BLOCKBYTES],
+		outbuf[CHACHA_BLOCKBYTES * 16];
+	poly1305_state mac_ctx;
+	guchar *out, *in;
+	chacha_state s;
+	gsize r, remain, inremain, seg_offset;
+
+	xchacha_init (&s, (const chacha_key *)nm, (const chacha_iv24 *)nonce, 20);
+	memset (subkey, 0, sizeof (subkey));
+	chacha_update (&s, subkey, subkey, sizeof (subkey));
+	poly1305_init (&mac_ctx, (const poly1305_key *)subkey);
+
+	remain = sizeof (outbuf);
+	out = outbuf;
+	inremain = cur->len;
+	seg_offset = 0;
+
+	for (;;) {
+		if (cur->len <= remain) {
+			memcpy (out, cur->data, cur->len);
+			remain -= cur->len;
+			out += cur->len;
+			cur ++;
+
+			if (remain == 0) {
+				rspamd_cryptobox_flush_outbuf (start_seg, outbuf,
+						sizeof (outbuf), seg_offset);
+				start_seg = cur;
+				seg_offset = 0;
+				remain = sizeof (outbuf);
+				out = outbuf;
+			}
+		}
+		else {
+			memcpy (out, cur->data, remain);
+			chacha_update (&s, outbuf, outbuf, sizeof (outbuf));
+			poly1305_update (&mac_ctx, outbuf, sizeof (outbuf));
+			rspamd_cryptobox_flush_outbuf (start_seg, outbuf, sizeof (outbuf),
+					seg_offset);
+			seg_offset = 0;
+
+			inremain = cur->len - remain;
+			in = cur->data + remain;
+			out = outbuf;
+			remain = 0;
+			start_seg = cur;
+
+			while (inremain > 0) {
+				if (sizeof (outbuf) <= inremain) {
+					memcpy (outbuf, in, sizeof (outbuf));
+					chacha_update (&s, outbuf, outbuf, sizeof (outbuf));
+					poly1305_update (&mac_ctx, outbuf, sizeof (outbuf));
+					memcpy (in, outbuf, sizeof (outbuf));
+					in += sizeof (outbuf);
+					inremain -= sizeof (outbuf);
+				}
+				else {
+					memcpy (outbuf, in, inremain);
+					remain = sizeof (outbuf) - inremain;
+					cur ++;
+					seg_offset = inremain;
+					inremain = 0;
+				}
+			}
+		}
+	}
+
+	r = chacha_final (&s, out);
+	remain -= r;
+	poly1305_update (&mac_ctx, outbuf, sizeof (outbuf) - remain);
+	poly1305_finish (&mac_ctx, sig);
+
+	rspamd_cryptobox_flush_outbuf (start_seg, outbuf, sizeof (outbuf) - remain,
+			seg_offset);
+	rspamd_explicit_memzero (&mac_ctx, sizeof (mac_ctx));
+	rspamd_explicit_memzero (subkey, sizeof (subkey));
+}
+
 gboolean
 rspamd_cryptobox_decrypt_nm_inplace (guchar *data, gsize len,
 		const rspamd_nonce_t nonce, const rspamd_nm_t nm, const rspamd_sig_t sig)
 {
 	poly1305_state mac_ctx;
-	guchar subkey[CHACHA_BLOCKBYTES];
+	guchar ALIGNED(32) subkey[CHACHA_BLOCKBYTES];
 	rspamd_sig_t mac;
 	chacha_state s;
 	gsize r;
@@ -242,6 +357,19 @@ rspamd_cryptobox_encrypt_inplace (guchar *data, gsize len,
 
 	rspamd_cryptobox_nm (nm, pk, sk);
 	rspamd_cryptobox_encrypt_nm_inplace (data, len, nonce, nm, sig);
+	rspamd_explicit_memzero (nm, sizeof (nm));
+}
+
+void
+rspamd_cryptobox_encryptv_inplace (struct rspamd_cryptobox_segment *segments,
+		gsize cnt,
+		const rspamd_nonce_t nonce,
+		const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_sig_t sig)
+{
+	guchar nm[rspamd_cryptobox_NMBYTES];
+
+	rspamd_cryptobox_nm (nm, pk, sk);
+	rspamd_cryptobox_encryptv_nm_inplace (segments, cnt, nonce, nm, sig);
 	rspamd_explicit_memzero (nm, sizeof (nm));
 }
 

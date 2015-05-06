@@ -25,6 +25,11 @@
 
 #include "config.h"
 
+struct rspamd_cryptobox_segment {
+	guchar *data;
+	gsize len;
+};
+
 #define rspamd_cryptobox_NONCEBYTES 24
 #define rspamd_cryptobox_PKBYTES 32
 #define rspamd_cryptobox_SKBYTES 32
@@ -52,6 +57,17 @@ void rspamd_cryptobox_init (void);
 void rspamd_cryptobox_keypair (rspamd_pk_t pk, rspamd_sk_t sk);
 
 /**
+ * Encrypt data inplace adding signature to sig afterwards
+ * @param data input buffer
+ * @param pk remote pubkey
+ * @param sk local secret key
+ * @param sig output signature
+ */
+void rspamd_cryptobox_encrypt_inplace (guchar *data, gsize len,
+		const rspamd_nonce_t nonce,
+		const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_sig_t sig);
+
+/**
  * Encrypt segments of data inplace adding signature to sig afterwards
  * @param segments segments of data
  * @param cnt count of segments
@@ -59,7 +75,8 @@ void rspamd_cryptobox_keypair (rspamd_pk_t pk, rspamd_sk_t sk);
  * @param sk local secret key
  * @param sig output signature
  */
-void rspamd_cryptobox_encrypt_inplace (guchar *data, gsize len,
+void rspamd_cryptobox_encryptv_inplace (struct rspamd_cryptobox_segment *segments,
+		gsize cnt,
 		const rspamd_nonce_t nonce,
 		const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_sig_t sig);
 
@@ -86,6 +103,19 @@ gboolean rspamd_cryptobox_decrypt_inplace (guchar *data, gsize len,
  * @param sig output signature
  */
 void rspamd_cryptobox_encrypt_nm_inplace (guchar *data, gsize len,
+		const rspamd_nonce_t nonce,
+		const rspamd_nm_t nm, rspamd_sig_t sig);
+
+/**
+ * Encrypt segments of data inplace adding signature to sig afterwards
+ * @param segments segments of data
+ * @param cnt count of segments
+ * @param pk remote pubkey
+ * @param sk local secret key
+ * @param sig output signature
+ */
+void rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segments,
+		gsize cnt,
 		const rspamd_nonce_t nonce,
 		const rspamd_nm_t nm, rspamd_sig_t sig);
 
