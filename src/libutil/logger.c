@@ -697,15 +697,15 @@ file_log_function (const gchar * log_domain,
 			cptype = g_quark_to_string (rspamd_log->process_type);
 
 			if (rspamd_log->cfg->log_color) {
-				if (log_level >= G_LOG_LEVEL_INFO) {
+				if (log_level == G_LOG_LEVEL_INFO) {
 					/* White */
-					r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "\033[1;37m");
+					r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "\033[0;37m");
 				}
-				else if (log_level >= G_LOG_LEVEL_WARNING) {
+				else if (log_level == G_LOG_LEVEL_WARNING) {
 					/* Magenta */
-					r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "\033[2;32m");
+					r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "\033[0;32m");
 				}
-				else if (log_level >= G_LOG_LEVEL_CRITICAL) {
+				else if (log_level == G_LOG_LEVEL_CRITICAL) {
 					/* Red */
 					r = rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "\033[1;31m");
 				}
