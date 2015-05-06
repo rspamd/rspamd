@@ -327,7 +327,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 {
 	pcre *r;
 	pcre_extra *ext;
-#if defined(HAVE_PCRE_JIT) && (PCRE_MAJOR == 8 && PCRE_MINOR >= 32)
+#if defined(HAVE_PCRE_JIT) && defined(HAVE_PCRE_JIT_FAST)
 	pcre_jit_stack *st = NULL;
 #endif
 	const gchar *mt;
@@ -362,7 +362,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 	if ((re->flags & RSPAMD_REGEXP_FLAG_RAW) || raw) {
 		r = re->raw_re;
 		ext = re->raw_extra;
-#if defined(HAVE_PCRE_JIT) && (PCRE_MAJOR == 8 && PCRE_MINOR >= 32)
+#if defined(HAVE_PCRE_JIT) && defined(HAVE_PCRE_JIT_FAST)
 		st = re->raw_jstack;
 #endif
 	}
@@ -370,7 +370,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 		match_flags |= PCRE_NO_UTF8_CHECK;
 		r = re->re;
 		ext = re->extra;
-#if defined(HAVE_PCRE_JIT) && (PCRE_MAJOR == 8 && PCRE_MINOR >= 32)
+#if defined(HAVE_PCRE_JIT) && defined(HAVE_PCRE_JIT_FAST)
 		st = re->jstack;
 #endif
 	}
@@ -379,7 +379,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 
 	if (!(re->flags & RSPAMD_REGEXP_FLAG_NOOPT)) {
 #ifdef HAVE_PCRE_JIT
-# if (PCRE_MAJOR == 8 && PCRE_MINOR >= 32)
+# ifdef HAVE_PCRE_JIT_FAST
 		/* XXX: flags seems to be broken with jit fast path */
 		g_assert (remain > 0);
 		g_assert (mt != NULL);

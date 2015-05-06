@@ -792,6 +792,36 @@ CHECK_SYMBOL_EXISTS(sched_yield "sched.h" HAVE_SCHED_YIELD)
 CHECK_SYMBOL_EXISTS(__get_cpuid "cpuid.h" HAVE_GET_CPUID)
 CHECK_SYMBOL_EXISTS(PCRE_CONFIG_JIT "pcre.h" HAVE_PCRE_JIT)
 
+# Some PCRE implementations are lacking of pcre_jit_exec fast path
+SET(_PCRE_FAST_TEST "
+#include \"pcre.h\"
+int main (void) 
+{
+	int rc;
+	int ovector[30];
+	pcre *re;
+	pcre_extra *extra;
+	pcre_jit_stack *jit_stack;
+	
+	re = pcre_compile(\"abc\", 0, NULL, NULL, NULL);
+	extra = pcre_study(re, PCRE_STUDY_JIT_COMPILE, NULL);
+	jit_stack = pcre_jit_stack_alloc(32*1024, 512*1024);
+	pcre_assign_jit_stack(extra, NULL, jit_stack);
+	rc = pcre_jit_exec(re, extra, \"abc\", 3, 0, 0, ovector, 30, jit_stack);
+	
+	return rc;
+}
+")
+
+SET(CMAKE_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES} -lpcre")
+CHECK_C_SOURCE_COMPILES("${_PCRE_FAST_TEST}" _PCRE_JIT_FAST)
+IF(_PCRE_JIT_FAST)
+	SET(HAVE_PCRE_JIT_FAST 1)
+	MESSAGE(STATUS "pcre_jit_exec is supported")
+ELSE(_PCRE_JIT_FAST)
+	MESSAGE(STATUS "pcre_jit_exec is -NOT- supported")
+ENDIF(_PCRE_JIT_FAST)
+
 FILE(WRITE ${CMAKE_BINARY_DIR}/pthread_setpshared.c "
 #include <pthread.h>
 #include <stdlib.h>
