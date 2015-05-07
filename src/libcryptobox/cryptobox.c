@@ -286,7 +286,7 @@ void rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segm
 				else {
 					memcpy (outbuf, in, inremain);
 					remain = sizeof (outbuf) - inremain;
-
+					out = outbuf + inremain;
 					inremain = 0;
 				}
 			}
