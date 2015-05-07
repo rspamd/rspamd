@@ -277,6 +277,8 @@ local function process_tflags(rule, flags)
       rule['multiple'] = true
     elseif string.match(flag, '^maxhits=(%d+)$') then
       rule['maxhits'] = tonumber(string.match(flag, '^maxhits=(%d+)$'))
+    elseif flag == 'nice' then
+      rule['nice'] = true
     end
   end, _.drop_n(1, flags))
 end
@@ -493,11 +495,15 @@ end
 
 -- Now check all valid rules and add the according rspamd rules
 
-local function calculate_score(sym)
+local function calculate_score(sym, rule)
   if _.all(function(c) return c == '_' end, _.take_n(2, _.iter(sym))) then
     return 0.0
   end
-
+  
+  if rule['nice'] or (r['score'] and r['score'] < 0.0) then
+    return -1.0
+  end
+  
   return 1.0
 end
 
@@ -676,8 +682,8 @@ _.each(function(k, r)
       return 0
     end
     if r['score'] then
-      local real_score = r['score'] * calculate_score(k)
-      if real_score > meta_score_alpha then
+      local real_score = r['score'] * calculate_score(k, r)
+      if math.abs(real_score) > meta_score_alpha then
         add_sole_meta(k, r)
       end
     end
@@ -699,8 +705,8 @@ _.each(function(k, r)
       return 0
     end
     if r['score'] then
-      local real_score = r['score'] * calculate_score(k)
-      if real_score > meta_score_alpha then
+      local real_score = r['score'] * calculate_score(k, r)
+      if math.abs(real_score) > meta_score_alpha then
         add_sole_meta(k, r)
       end
     end
@@ -733,8 +739,8 @@ _.each(function(k, r)
       return 0
     end
     if r['score'] then
-      local real_score = r['score'] * calculate_score(k)
-      if real_score > meta_score_alpha then
+      local real_score = r['score'] * calculate_score(k, r)
+      if math.abs(real_score) > meta_score_alpha then
         add_sole_meta(k, r)
       end
     end
@@ -752,8 +758,8 @@ _.each(function(k, r)
       return sa_regexp_match(task:get_content(), r['re'], true, r)
     end
     if r['score'] then
-      local real_score = r['score'] * calculate_score(k)
-      if real_score > meta_score_alpha then
+      local real_score = r['score'] * calculate_score(k, r)
+      if math.abs(real_score) > meta_score_alpha then
         add_sole_meta(k, r)
       end
     end
@@ -778,8 +784,8 @@ _.each(function(k, r)
       return 0
     end
     if r['score'] then
-      local real_score = r['score'] * calculate_score(k)
-      if real_score > meta_score_alpha then
+      local real_score = r['score'] * calculate_score(k, r)
+      if math.abs(real_score) > meta_score_alpha then
         add_sole_meta(k, r)
       end
     end
@@ -853,7 +859,7 @@ _.each(function(k, r)
       if r['score'] then
         rspamd_config:set_metric_symbol(k, r['score'], r['description'])
       end
-      rspamd_config:register_symbol(k, calculate_score(k), meta_cb)
+      rspamd_config:register_symbol(k, calculate_score(k, r), meta_cb)
       if not atoms[k] then
         atoms[k] = meta_cb
       end
