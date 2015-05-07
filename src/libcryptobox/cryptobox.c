@@ -238,6 +238,10 @@ void rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segm
 	seg_offset = 0;
 
 	for (;;) {
+		if (cur - segments == cnt) {
+			break;
+		}
+
 		if (cur->len <= remain) {
 			memcpy (out, cur->data, cur->len);
 			remain -= cur->len;
@@ -275,15 +279,18 @@ void rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segm
 					memcpy (in, outbuf, sizeof (outbuf));
 					in += sizeof (outbuf);
 					inremain -= sizeof (outbuf);
+					remain = sizeof (outbuf);
 				}
 				else {
 					memcpy (outbuf, in, inremain);
 					remain = sizeof (outbuf) - inremain;
-					cur ++;
-					seg_offset = inremain;
+
 					inremain = 0;
 				}
 			}
+
+			cur ++;
+			seg_offset = inremain;
 		}
 	}
 
