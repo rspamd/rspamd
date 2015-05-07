@@ -30,7 +30,7 @@
 #include "ottery.h"
 #include "cryptobox.h"
 
-static const int mapping_size = 64 * 8192;
+static const int mapping_size = 64 * 8192 + 1;
 static const int max_seg = 1024;
 
 static void *
@@ -42,6 +42,7 @@ create_mapping (int mapping_len, guchar **beg, guchar **end)
 	map = mmap (NULL, mapping_len + psize * 3, PROT_READ|PROT_WRITE,
 			MAP_ANON|MAP_SHARED, -1, 0);
 	g_assert (map != 0);
+	memset (map, 0, mapping_len + psize * 3);
 	mprotect (map, psize, PROT_NONE);
 	/* Misalign pointer */
 	*beg = ((guchar *)map) + psize + 1;
@@ -83,7 +84,6 @@ rspamd_cryptobox_test_func (void)
 	ottery_rand_bytes (nonce, sizeof (nonce));
 
 	memset (mac, 0, sizeof (mac));
-	memset (begin, 0, end - begin);
 	seg = g_slice_alloc0 (sizeof (*seg) * max_seg);
 
 	/* Test baseline */
