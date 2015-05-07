@@ -760,9 +760,11 @@ validate_cache (struct symbols_cache *cache,
 		}
 		if (!res) {
 			msg_warn (
-				"symbol '%s' is registered in metric but not found in cache",
+				"symbol '%s' has its score defined but there is no "
+				"corresponding rule registered",
 				cur->data);
 			if (strict) {
+				g_list_free (metric_symbols);
 				return FALSE;
 			}
 		}
