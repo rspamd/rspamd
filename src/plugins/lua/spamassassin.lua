@@ -61,6 +61,9 @@ local section = rspamd_config:get_all_opt("spamassassin")
 -- Minimum score to treat symbols as meta
 local meta_score_alpha = 0.5
 
+-- Maximum size of regexp checked
+local match_limit = 0
+
 local function split(str, delim)
   local result = {}
   
@@ -378,6 +381,7 @@ local function process_sa_conf(f)
         if cur_rule['re'] and cur_rule['symbol'] and 
           (cur_rule['header'] or cur_rule['function']) then 
           valid_rule = true 
+          cur_rule['re']:set_limit(match_limit)
         end
       else
         -- Maybe we know the function and can convert it
@@ -403,7 +407,11 @@ local function process_sa_conf(f)
       cur_rule['re_expr'] = words_to_re(words, 2)
       cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
       cur_rule['raw'] = true
-      if cur_rule['re'] and cur_rule['symbol'] then valid_rule = true end
+      
+      if cur_rule['re'] and cur_rule['symbol'] then 
+        valid_rule = true 
+        cur_rule['re']:set_limit(match_limit)
+      end
     elseif words[1] == "rawbody" or words[1] == "full" and slash then
       -- body SYMBOL /regexp/
       if valid_rule then
@@ -413,7 +421,10 @@ local function process_sa_conf(f)
       cur_rule['symbol'] = words[2]
       cur_rule['re_expr'] = words_to_re(words, 2)
       cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
-      if cur_rule['re'] and cur_rule['symbol'] then valid_rule = true end
+      if cur_rule['re'] and cur_rule['symbol'] then 
+        valid_rule = true 
+        cur_rule['re']:set_limit(match_limit)
+      end
     elseif words[1] == "uri" then
       -- uri SYMBOL /regexp/
       if valid_rule then
@@ -423,7 +434,10 @@ local function process_sa_conf(f)
       cur_rule['symbol'] = words[2]
       cur_rule['re_expr'] = words_to_re(words, 2)
       cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
-      if cur_rule['re'] and cur_rule['symbol'] then valid_rule = true end
+      if cur_rule['re'] and cur_rule['symbol'] then 
+        valid_rule = true 
+        cur_rule['re']:set_limit(match_limit)
+      end
     elseif words[1] == "meta" then
       -- meta SYMBOL expression
       if valid_rule then
@@ -466,10 +480,13 @@ if type(section) == "table" then
   for k,fn in pairs(section) do
     if k == 'alpha' and type(fn) == 'number' then
       meta_score_alpha = fn
-    end
-    f = io.open(fn, "r")
-    if f then
-      process_sa_conf(f)
+    elseif k == 'match_limit' and type(fn) == 'number' then
+      match_limit = fn
+    else
+      f = io.open(fn, "r")
+      if f then
+        process_sa_conf(f)
+      end
     end
   end
 end
@@ -609,6 +626,7 @@ _.each(function(r)
         rspamd_logger.debugx('replace %1 -> %2', r, nexpr)
         rule['re'] = nre
         rule['re_expr'] = nexpr
+        nre:set_limit(match_limit)
       end
     end 
   end
