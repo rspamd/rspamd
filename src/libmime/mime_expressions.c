@@ -505,6 +505,7 @@ rspamd_mime_expr_parse (const gchar *line, gsize len,
 	rspamd_expression_atom_t *a = NULL;
 	struct rspamd_mime_atom *mime_atom = NULL;
 	const gchar *p, *end;
+	struct rspamd_config *cfg = ud;
 	gchar t;
 	gint type = MIME_ATOM_REGEXP, obraces = 0, ebraces = 0;
 	enum {
@@ -636,6 +637,17 @@ set:
 	}
 	else if (type == MIME_ATOM_LUA_FUNCTION) {
 		mime_atom->d.lua_function = mime_atom->str;
+
+		lua_getglobal (cfg->lua_state, mime_atom->str);
+
+		if (lua_type (cfg->lua_state, -1) != LUA_TFUNCTION) {
+			g_set_error (err, rspamd_mime_expr_quark(), 200, "no such lua function '%s'",
+					mime_atom->str);
+			lua_pop (cfg->lua_state, 1);
+
+			goto err;
+		}
+		lua_pop (cfg->lua_state, 1);
 	}
 	else {
 		mime_atom->d.func = rspamd_mime_expr_parse_function_atom (mime_atom->str);
@@ -1064,7 +1076,8 @@ rspamd_mime_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 		rspamd_lua_task_push (L, task);
 
 		if (lua_pcall (L, 1, 1, 0) != 0) {
-			msg_info ("call to %s failed: %s",
+			msg_info ("lua call to global function '%s' for atom '%s' failed: %s",
+				mime_atom->d.lua_function,
 				mime_atom->str,
 				lua_tostring (L, -1));
 		}

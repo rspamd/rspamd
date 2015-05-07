@@ -71,12 +71,12 @@ read_regexp_expression (rspamd_mempool_t * pool,
 	struct regexp_module_item *chain,
 	const gchar *symbol,
 	const gchar *line,
-	gboolean raw_mode)
+	struct rspamd_config *cfg)
 {
 	struct rspamd_expression *e = NULL;
 	GError *err = NULL;
 
-	if (!rspamd_parse_expression (line, 0, &mime_expr_subr, NULL, pool, &err,
+	if (!rspamd_parse_expression (line, 0, &mime_expr_subr, cfg, pool, &err,
 			&e)) {
 		msg_warn ("%s = \"%s\" is invalid regexp expression: %e", symbol, line,
 				err);
@@ -137,7 +137,7 @@ regexp_module_config (struct rspamd_config *cfg)
 			cur_item->symbol = ucl_object_key (value);
 			if (!read_regexp_expression (regexp_module_ctx->regexp_pool,
 				cur_item, ucl_object_key (value),
-				ucl_obj_tostring (value), cfg->raw_mode)) {
+				ucl_obj_tostring (value), cfg)) {
 				res = FALSE;
 			}
 			else {
