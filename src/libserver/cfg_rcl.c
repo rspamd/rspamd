@@ -631,6 +631,10 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	}
 
 	val = ucl_object_find_key (obj, "bind_socket");
+	/* This name is more logical */
+	if (val == NULL) {
+		val = ucl_object_find_key (obj, "listen");
+	}
 	if (val != NULL) {
 		it = ucl_object_iterate_new (val);
 		while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
@@ -1271,6 +1275,11 @@ rspamd_rcl_config_init (void)
 		G_STRUCT_OFFSET (struct rspamd_config, nameservers),
 		0);
 	rspamd_rcl_add_default_handler (ssub,
+		"server",
+		rspamd_rcl_parse_struct_string_list,
+		G_STRUCT_OFFSET (struct rspamd_config, nameservers),
+		0);
+	rspamd_rcl_add_default_handler (ssub,
 		"timeout",
 		rspamd_rcl_parse_struct_time,
 		G_STRUCT_OFFSET (struct rspamd_config, dns_timeout),
@@ -1282,6 +1291,11 @@ rspamd_rcl_config_init (void)
 		RSPAMD_CL_FLAG_INT_32);
 	rspamd_rcl_add_default_handler (ssub,
 		"sockets",
+		rspamd_rcl_parse_struct_integer,
+		G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server),
+		RSPAMD_CL_FLAG_INT_32);
+	rspamd_rcl_add_default_handler (ssub,
+		"connections",
 		rspamd_rcl_parse_struct_integer,
 		G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server),
 		RSPAMD_CL_FLAG_INT_32);
@@ -1374,12 +1388,22 @@ rspamd_rcl_config_init (void)
 		G_STRUCT_OFFSET (struct rspamd_config, check_all_filters),
 		0);
 	rspamd_rcl_add_default_handler (sub,
+		"all_filters",
+		rspamd_rcl_parse_struct_boolean,
+		G_STRUCT_OFFSET (struct rspamd_config, check_all_filters),
+		0);
+	rspamd_rcl_add_default_handler (sub,
 		"min_word_len",
 		rspamd_rcl_parse_struct_integer,
 		G_STRUCT_OFFSET (struct rspamd_config, min_word_len),
 		RSPAMD_CL_FLAG_INT_32);
 	rspamd_rcl_add_default_handler (sub,
 		"url_tld",
+		rspamd_rcl_parse_struct_string,
+		G_STRUCT_OFFSET (struct rspamd_config, tld_file),
+		RSPAMD_CL_FLAG_STRING_PATH);
+	rspamd_rcl_add_default_handler (sub,
+		"tld",
 		rspamd_rcl_parse_struct_string,
 		G_STRUCT_OFFSET (struct rspamd_config, tld_file),
 		RSPAMD_CL_FLAG_STRING_PATH);
