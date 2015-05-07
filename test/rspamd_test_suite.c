@@ -55,6 +55,8 @@ main (int argc, char **argv)
 	g_test_add_func ("/rspamd/shingles", rspamd_shingles_test_func);
 	g_test_add_func ("/rspamd/http", rspamd_http_test_func);
 	g_test_add_func ("/rspamd/lua", rspamd_lua_test_func);
+	g_test_add_func ("/rspamd/crypto", rspamd_cryptobox_test_func);
+	g_test_add_func ("/rspamd/cryptobox", rspamd_cryptobox_test_func);
 
 	g_test_run ();
 

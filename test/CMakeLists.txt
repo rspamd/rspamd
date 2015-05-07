@@ -11,6 +11,7 @@ SET(TESTSRC		rspamd_mem_pool_test.c
 				rspamd_upstream_test.c
 				rspamd_http_test.c
 				rspamd_lua_test.c
+				rspamd_cryptobox_test.c
 				rspamd_test_suite.c)
 
 ADD_EXECUTABLE(rspamd-test EXCLUDE_FROM_ALL ${TESTSRC})
