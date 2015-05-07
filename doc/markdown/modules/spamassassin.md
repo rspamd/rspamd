@@ -13,6 +13,8 @@ spamassassin module:
 ~~~nginx
 spamassassin {
 	ruleset = "/path/to/file";
+	# Limit search size to 100 kilobytes for all regular expressions
+	match_limit = 100k;
 }
 ~~~
 
