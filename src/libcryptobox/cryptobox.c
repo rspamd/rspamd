@@ -238,7 +238,7 @@ void rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segm
 	seg_offset = 0;
 
 	for (;;) {
-		if (cur - segments == cnt) {
+		if (cur - segments == (gint)cnt) {
 			break;
 		}
 
@@ -249,6 +249,8 @@ void rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segm
 			cur ++;
 
 			if (remain == 0) {
+				chacha_update (&s, outbuf, outbuf, sizeof (outbuf));
+				poly1305_update (&mac_ctx, outbuf, sizeof (outbuf));
 				rspamd_cryptobox_flush_outbuf (start_seg, outbuf,
 						sizeof (outbuf), seg_offset);
 				start_seg = cur;
@@ -289,13 +291,14 @@ void rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segm
 				}
 			}
 
+			seg_offset = cur->len - (sizeof (outbuf) - remain);
 			cur ++;
-			seg_offset = inremain;
 		}
 	}
 
-	r = chacha_final (&s, out);
-	remain -= r;
+	r = chacha_update (&s, outbuf, outbuf, sizeof (outbuf) - remain);
+	out = outbuf + r;
+	chacha_final (&s, out);
 	poly1305_update (&mac_ctx, outbuf, sizeof (outbuf) - remain);
 	poly1305_finish (&mac_ctx, sig);
 
