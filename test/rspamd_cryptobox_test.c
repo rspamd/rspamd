@@ -131,6 +131,35 @@ create_realistic_split (struct rspamd_cryptobox_segment *seg, int mseg,
 	return used;
 }
 
+static int
+create_constrainted_split (struct rspamd_cryptobox_segment *seg, int mseg,
+		int constraint,
+		guchar *begin, guchar *end)
+{
+	gsize remain = end - begin;
+	gint used = 0;
+
+	while (remain > 0 && used < mseg - 1) {
+		seg->data = begin;
+		seg->len = constraint;
+		if (seg->len > remain) {
+			seg->len = remain;
+		}
+		begin += seg->len;
+		remain -= seg->len;
+		used ++;
+		seg ++;
+	}
+
+	if (remain > 0) {
+		seg->data = begin;
+		seg->len = remain;
+		used ++;
+	}
+
+	return used;
+}
+
 void
 rspamd_cryptobox_test_func (void)
 {
@@ -149,7 +178,7 @@ rspamd_cryptobox_test_func (void)
 	ottery_rand_bytes (nonce, sizeof (nonce));
 
 	memset (mac, 0, sizeof (mac));
-	seg = g_slice_alloc0 (sizeof (*seg) * max_seg);
+	seg = g_slice_alloc0 (sizeof (*seg) * max_seg * 10);
 
 	/* Test baseline */
 	t1 = rspamd_get_ticks ();
@@ -252,6 +281,15 @@ rspamd_cryptobox_test_func (void)
 
 	msg_info ("realistic split of %d chunks encryption: %.6f", cnt, t2 - t1);
 
+	cnt = create_constrainted_split (seg, max_seg + 1, 32, begin, end);
+	t1 = rspamd_get_ticks ();
+	rspamd_cryptobox_encryptv_nm_inplace (seg, cnt, nonce, key, mac);
+	t2 = rspamd_get_ticks ();
+
+	check_result (key, nonce, mac, begin, end);
+
+	msg_info ("constrainted split of %d chunks encryption: %.6f", cnt, t2 - t1);
+
 	for (i = 0; i < random_fuzz_cnt; i ++) {
 		ms = ottery_rand_range (i % max_seg * 2) + 1;
 		cnt = create_random_split (seg, ms, begin, end);
@@ -276,6 +314,19 @@ rspamd_cryptobox_test_func (void)
 
 		if (i % 1000 == 0) {
 			msg_info ("realistic fuzz iterations: %d", i);
+		}
+	}
+	for (i = 0; i < random_fuzz_cnt; i ++) {
+		ms = ottery_rand_range (i % max_seg * 10) + 1;
+		cnt = create_constrainted_split (seg, ms, i, begin, end);
+		t1 = rspamd_get_ticks ();
+		rspamd_cryptobox_encryptv_nm_inplace (seg, cnt, nonce, key, mac);
+		t2 = rspamd_get_ticks ();
+
+		check_result (key, nonce, mac, begin, end);
+
+		if (i % 1000 == 0) {
+			msg_info ("constrainted fuzz iterations: %d", i);
 		}
 	}
 }
