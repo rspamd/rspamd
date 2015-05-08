@@ -93,6 +93,14 @@ http_error_quark (void)
 }
 
 static void
+rspamd_http_keypair_dtor (struct rspamd_http_keypair *kp)
+{
+	rspamd_explicit_memzero (kp->sk, sizeof (kp->sk));
+	rspamd_explicit_memzero (kp->nm, sizeof (kp->nm));
+	g_slice_free1 (sizeof (*kp), kp);
+}
+
+static void
 rspamd_http_privbuf_dtor (gpointer ud)
 {
 	struct _rspamd_http_privbuf *p = (struct _rspamd_http_privbuf *)ud;
@@ -403,6 +411,7 @@ rspamd_http_parse_key (GString *data, struct rspamd_http_connection *conn,
 	guchar *decoded_id, *decoded_key;
 	const gchar *eq_pos;
 	gsize id_len, key_len;
+	struct rspamd_http_keypair *kp;
 
 	if (priv->local_key == NULL) {
 		/* In this case we cannot do anything, e.g. we cannot decrypt payload */
@@ -418,11 +427,13 @@ rspamd_http_parse_key (GString *data, struct rspamd_http_connection *conn,
 					eq_pos - 1, &key_len);
 			if (decoded_id != NULL && decoded_key != NULL) {
 				if (id_len >= RSPAMD_HTTP_KEY_ID_LEN  &&
-						key_len >= sizeof (priv->local_key->pk)) {
+						key_len >= sizeof (kp->pk)) {
 					if (memcmp (priv->local_key->id, decoded_id,
 							RSPAMD_HTTP_KEY_ID_LEN) == 0) {
-						priv->msg->peer_key =
-							rspamd_http_connection_make_peer_key (eq_pos + 1);
+						kp = g_slice_alloc (sizeof (*kp));
+						REF_INIT_RETAIN (kp, rspamd_http_keypair_dtor);
+						memcpy (kp->pk, decoded_key, sizeof (kp->pk));
+						priv->msg->peer_key = kp;
 
 						if (conn->cache && priv->msg->peer_key) {
 							rspamd_keypair_cache_process (conn->cache,
@@ -442,11 +453,13 @@ static inline void
 rspamd_http_check_special_header (struct rspamd_http_connection *conn,
 		struct rspamd_http_connection_private *priv)
 {
-	if (g_ascii_strcasecmp (priv->header->name->str, date_header) == 0) {
+	if (g_ascii_strncasecmp (priv->header->name->str, date_header,
+			priv->header->name->len) == 0) {
 		priv->msg->date = rspamd_http_parse_date (priv->header->value->str,
 				priv->header->value->len);
 	}
-	else if (g_ascii_strcasecmp (priv->header->name->str, key_header) == 0) {
+	else if (g_ascii_strncasecmp (priv->header->name->str, key_header,
+			priv->header->name->len) == 0) {
 		rspamd_http_parse_key (priv->header->value, conn, priv);
 	}
 }
@@ -605,14 +618,108 @@ rspamd_http_on_body (http_parser * parser, const gchar *at, size_t length)
 }
 
 static int
+rspamd_http_on_body_decrypted (http_parser * parser, const gchar *at, size_t length)
+{
+	struct rspamd_http_connection *conn =
+		(struct rspamd_http_connection *)parser->data;
+	struct rspamd_http_connection_private *priv;
+
+	priv = conn->priv;
+
+	if (priv->header != NULL) {
+		g_string_append_len (priv->header->combined, "\r\n", 2);
+		priv->header->value->len = priv->header->combined->len -
+				priv->header->name->len - 4;
+		DL_APPEND (priv->msg->headers, priv->header);
+		rspamd_http_check_special_header (conn, priv);
+		priv->header = NULL;
+	}
+
+	if (priv->msg->body->str == 0) {
+		priv->msg->body->str = (gchar *)at;
+		priv->msg->method = parser->method;
+		priv->msg->code = parser->status_code;
+	}
+
+	priv->msg->body->len += length;
+
+	return 0;
+}
+
+static int
+rspamd_http_decrypt_message (struct rspamd_http_connection *conn,
+		struct rspamd_http_connection_private *priv,
+		struct rspamd_http_keypair *peer_key)
+{
+	guchar *nonce, *m;
+	gsize dec_len;
+	struct rspamd_http_message *msg = priv->msg;
+	struct rspamd_http_header *hdr, *hdrtmp;
+	struct http_parser decrypted_parser;
+	struct http_parser_settings decrypted_cb;
+
+	nonce = msg->body->str;
+	m = msg->body->str + rspamd_cryptobox_NONCEBYTES +
+			rspamd_cryptobox_MACBYTES;
+	dec_len = msg->body->len - rspamd_cryptobox_NONCEBYTES -
+			rspamd_cryptobox_MACBYTES;
+
+	if (conn->cache) {
+		if (!rspamd_cryptobox_decrypt_nm_inplace (m, dec_len, nonce,
+				peer_key->nm, m - rspamd_cryptobox_MACBYTES) != 0) {
+			msg_err ("cannot verify encrypted message");
+			return -1;
+		}
+	}
+	else {
+		if (!rspamd_cryptobox_decrypt_inplace (m, dec_len, nonce,
+				peer_key->pk, priv->local_key->sk,
+				m - rspamd_cryptobox_MACBYTES) != 0) {
+			msg_err ("cannot verify encrypted message");
+			return -1;
+		}
+	}
+
+	/* Cleanup message */
+	DL_FOREACH_SAFE (msg->headers, hdr, hdrtmp) {
+		g_string_free (hdr->combined, TRUE);
+		g_slice_free1 (sizeof (GString), hdr->name);
+		g_slice_free1 (sizeof (GString), hdr->value);
+		g_slice_free1 (sizeof (struct rspamd_http_header), hdr);
+	}
+	msg->headers = NULL;
+	g_string_assign (msg->url, "");
+	msg->body->len = 0;
+	msg->body->str = NULL;
+
+	http_parser_init (&decrypted_parser,
+			conn->type == RSPAMD_HTTP_SERVER ? HTTP_REQUEST : HTTP_RESPONSE);
+
+	memset (&decrypted_cb, 0, sizeof (decrypted_cb));
+	decrypted_cb.on_url = rspamd_http_on_url;
+	decrypted_cb.on_status = rspamd_http_on_status;
+	decrypted_cb.on_header_field = rspamd_http_on_header_field;
+	decrypted_cb.on_header_value = rspamd_http_on_header_value;
+	decrypted_cb.on_body = rspamd_http_on_body_decrypted;
+
+	if (http_parser_execute (&decrypted_parser, &decrypted_cb, m,
+			dec_len) != (size_t)dec_len) {
+		msg_err ("HTTP parser error: %s when parsing encrypted request",
+				http_errno_description (decrypted_parser.http_errno));
+
+		return -1;
+	}
+
+	return 0;
+}
+
+static int
 rspamd_http_on_message_complete (http_parser * parser)
 {
 	struct rspamd_http_connection *conn =
 		(struct rspamd_http_connection *)parser->data;
 	struct rspamd_http_connection_private *priv;
 	int ret = 0;
-	guchar *nonce, *m;
-	gsize dec_len;
 	struct rspamd_http_keypair *peer_key = NULL;
 
 	priv = conn->priv;
@@ -624,40 +731,21 @@ rspamd_http_on_message_complete (http_parser * parser)
 			msg_err ("cannot decrypt message");
 			return -1;
 		}
+
 		/* We have keys, so we can decrypt message */
-		/* TODO: add pubkey<->privkey pairs to LRU cache */
-		nonce = priv->msg->body->str;
-		m = priv->msg->body->str + rspamd_cryptobox_NONCEBYTES +
-				rspamd_cryptobox_MACBYTES;
-		dec_len = priv->msg->body->len - rspamd_cryptobox_NONCEBYTES -
-				rspamd_cryptobox_MACBYTES;
 		peer_key = (struct rspamd_http_keypair *)priv->msg->peer_key;
+		ret = rspamd_http_decrypt_message (conn, priv, peer_key);
 
-		if (conn->cache) {
-			if (!rspamd_cryptobox_decrypt_nm_inplace (m, dec_len, nonce,
-					peer_key->nm, m - rspamd_cryptobox_MACBYTES) != 0) {
-				msg_err ("cannot verify encrypted message");
-				return -1;
-			}
+		if (ret != 0) {
+			return ret;
 		}
-		else {
-			if (!rspamd_cryptobox_decrypt_inplace (m, dec_len, nonce,
-					peer_key->pk, priv->local_key->sk,
-					m - rspamd_cryptobox_MACBYTES) != 0) {
-				msg_err ("cannot verify encrypted message");
-				return -1;
-			}
-		}
-
-		priv->msg->body->str = m;
-		priv->msg->body->len = dec_len;
 
 		if (conn->body_handler != NULL) {
 			rspamd_http_connection_ref (conn);
 			ret = conn->body_handler (conn,
 					priv->msg,
-					m,
-					dec_len);
+					priv->msg->body->str,
+					priv->msg->body->len);
 			rspamd_http_connection_unref (conn);
 		}
 	}
@@ -833,7 +921,7 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 			buf->len = r;
 
 			if (http_parser_execute (&priv->parser, &priv->parser_cb, buf->str,
-				r) != (size_t)r) {
+				r) != (size_t)r || priv->parser.http_errno != 0) {
 				err = g_error_new (HTTP_ERROR, priv->parser.http_errno,
 						"HTTP parser error: %s",
 						http_errno_description (priv->parser.http_errno));
@@ -1996,14 +2084,6 @@ rspamd_http_router_free (struct rspamd_http_connection_router *router)
 		g_hash_table_unref (router->paths);
 		g_slice_free1 (sizeof (struct rspamd_http_connection_router), router);
 	}
-}
-
-static void
-rspamd_http_keypair_dtor (struct rspamd_http_keypair *kp)
-{
-	rspamd_explicit_memzero (kp->sk, sizeof (kp->sk));
-	rspamd_explicit_memzero (kp->nm, sizeof (kp->nm));
-	g_slice_free1 (sizeof (*kp), kp);
 }
 
 gpointer
