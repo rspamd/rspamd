@@ -131,7 +131,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 		ucl_parser_free (parser);
 	}
 
-	return -1;
+	return 0;
 }
 
 struct rspamd_client_connection *
