@@ -1535,6 +1535,13 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		/* Add some used vars */
 		meth_pos = buf->str + buf->len;
 
+		/* XXX: bad bad bad
+		 * TODO:
+		 * XXX:
+		 * Actually, g_string_append_len can break everything as it may do realloc,
+		 * hence, we need to store offsets here instead of the direct pointers
+		 * XXX: fix fix fix
+		 */
 		if (conn->type == RSPAMD_HTTP_SERVER) {
 			g_string_append_len (buf, repbuf, meth_len);
 		}
