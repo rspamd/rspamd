@@ -497,19 +497,23 @@ rspamd_http_on_header_field (http_parser * parser,
 
 	if (priv->header == NULL) {
 		priv->header = g_slice_alloc (sizeof (struct rspamd_http_header));
-		priv->header->name = g_string_sized_new (32);
-		priv->header->value = g_string_sized_new (32);
+		priv->header->name = g_slice_alloc0 (sizeof (GString));
+		priv->header->value = g_slice_alloc0 (sizeof (GString));
+		priv->header->combined = g_string_sized_new (64);
 	}
 	else if (priv->new_header) {
+		priv->header->value->len = priv->header->combined->len -
+				priv->header->name->len - 2;
 		DL_APPEND (priv->msg->headers, priv->header);
 		rspamd_http_check_special_header (conn, priv);
 		priv->header = g_slice_alloc (sizeof (struct rspamd_http_header));
-		priv->header->name = g_string_sized_new (32);
-		priv->header->value = g_string_sized_new (32);
+		priv->header->name = g_slice_alloc0 (sizeof (GString));
+		priv->header->value = g_slice_alloc0 (sizeof (GString));
+		priv->header->combined = g_string_sized_new (64);
 	}
 
 	priv->new_header = FALSE;
-	g_string_append_len (priv->header->name, at, length);
+	g_string_append_len (priv->header->combined, at, length);
 
 	return 0;
 }
@@ -530,8 +534,16 @@ rspamd_http_on_header_value (http_parser * parser,
 		return -1;
 	}
 
-	priv->new_header = TRUE;
-	g_string_append_len (priv->header->value, at, length);
+	if (!priv->new_header) {
+		priv->new_header = TRUE;
+		priv->header->name->str = priv->header->combined->str;
+		priv->header->name->len = priv->header->combined->len;
+		g_string_append_len (priv->header->combined, ": ", 2);
+		priv->header->value->str = priv->header->combined->str +
+				priv->header->combined->len;
+	}
+
+	g_string_append_len (priv->header->combined, at, length);
 
 	return 0;
 }
@@ -546,6 +558,8 @@ rspamd_http_on_headers_complete (http_parser * parser)
 	priv = conn->priv;
 
 	if (priv->header != NULL) {
+		priv->header->value->len = priv->header->combined->len -
+			priv->header->name->len - 2;
 		DL_APPEND (priv->msg->headers, priv->header);
 		rspamd_http_check_special_header (conn, priv);
 		priv->header = NULL;
@@ -1026,6 +1040,22 @@ rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
 	event_add (&priv->ev, priv->ptv);
 }
 
+static void
+rspamd_http_connection_encrypt_message (
+		struct rspamd_http_connection *conn,
+		struct rspamd_http_message *msg,
+		struct rspamd_http_connection_private *priv,
+		const gchar *pbody,
+		guint bodylen,
+		gint hdrcount,
+		const guchar *np,
+		guchar *mp,
+		struct rspamd_http_keypair *peer_key)
+{
+
+
+}
+
 void
 rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	struct rspamd_http_message *msg, const gchar *host, const gchar *mime_type,
@@ -1035,7 +1065,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	struct rspamd_http_header *hdr;
 	struct tm t, *ptm;
 	gchar datebuf[64], *pbody;
-	gint i;
+	gint i, hdrcount;
 	gsize bodylen;
 	GString *buf;
 	gboolean encrypted = FALSE;
@@ -1180,18 +1210,21 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	}
 	/* Allocate iov */
 	priv->wr_total = bodylen + buf->len + 2;
-	DL_FOREACH (msg->headers, hdr)
-	{
-		/* <name><: ><value><\r\n> */
-		priv->wr_total += hdr->name->len + hdr->value->len + 4;
-		priv->outlen += 4;
+	hdrcount = 0;
+
+	DL_FOREACH (msg->headers, hdr) {
+		/* <name: value><\r\n> */
+		priv->wr_total += hdr->combined->len + 2;
+		priv->outlen += 2;
+		hdrcount ++;
 	}
+
 	priv->out = g_slice_alloc (sizeof (struct iovec) * priv->outlen);
 	priv->wr_pos = 0;
 
 	/* Now set up all iov */
 	priv->out[0].iov_base = buf->str;
-	if (!encrypted || msg->body == NULL) {
+	if (!encrypted) {
 		priv->out[0].iov_len = buf->len;
 	}
 	else {
@@ -1206,50 +1239,29 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 
 	i = 1;
 	/* XXX: encrypt headers */
-	LL_FOREACH (msg->headers, hdr)
-	{
-		priv->out[i].iov_base = hdr->name->str;
-		priv->out[i++].iov_len = hdr->name->len;
-		priv->out[i].iov_base = ": ";
-		priv->out[i++].iov_len = 2;
-		priv->out[i].iov_base = hdr->value->str;
-		priv->out[i++].iov_len = hdr->value->len;
-		priv->out[i].iov_base = "\r\n";
-		priv->out[i++].iov_len = 2;
-	}
-	if (msg->method < HTTP_SYMBOLS) {
-		priv->out[i].iov_base = "\r\n";
-		priv->out[i++].iov_len = 2;
+	if (encrypted && peer_key != NULL && np != NULL && mp != NULL) {
+
 	}
 	else {
-		/* No CRLF for compatibility reply */
-		priv->wr_total -= 2;
-	}
-	if (msg->body != NULL) {
-
-		if (msg->body_buf.str == NULL) {
-			msg->body_buf.str = msg->body->str;
+		LL_FOREACH (msg->headers, hdr) {
+			priv->out[i].iov_base = hdr->combined->str;
+			priv->out[i++].iov_len = hdr->combined->len;
+			priv->out[i].iov_base = "\r\n";
+			priv->out[i++].iov_len = 2;
 		}
-
-		if (encrypted && peer_key != NULL && np != NULL && mp != NULL) {
-			if (conn->cache) {
-				rspamd_cryptobox_encrypt_nm_inplace (pbody,
-						bodylen - sizeof (nonce) - sizeof (mac), np,
-						peer_key->nm, mp);
-			}
-			else {
-				rspamd_cryptobox_encrypt_inplace (pbody,
-						bodylen - sizeof (nonce) - sizeof (mac), np,
-						peer_key->pk, priv->local_key->sk, mp);
-			}
-			priv->out[i].iov_base = np;
-			priv->out[i++].iov_len = sizeof (nonce);
-			priv->out[i].iov_base = mp;
-			priv->out[i++].iov_len = sizeof (mac);
-			priv->out[i].iov_base = pbody;
-			priv->out[i++].iov_len = bodylen - sizeof (nonce) - sizeof (mac);
+		if (msg->method < HTTP_SYMBOLS) {
+			priv->out[i].iov_base = "\r\n";
+			priv->out[i++].iov_len = 2;
 		}
 		else {
+			/* No CRLF for compatibility reply */
+			priv->wr_total -= 2;
+		}
+		if (msg->body != NULL) {
+
+			if (msg->body_buf.str == NULL) {
+				msg->body_buf.str = msg->body->str;
+			}
 			priv->out[i].iov_base = pbody;
 			priv->out[i++].iov_len = bodylen;
 		}
@@ -1345,8 +1357,9 @@ rspamd_http_message_free (struct rspamd_http_message *msg)
 
 	LL_FOREACH_SAFE (msg->headers, hdr, tmp_hdr)
 	{
-		g_string_free (hdr->name,  TRUE);
-		g_string_free (hdr->value, TRUE);
+		g_string_free (hdr->combined, TRUE);
+		g_slice_free1 (sizeof (GString), hdr->name);
+		g_slice_free1 (sizeof (GString), hdr->value);
 		g_slice_free1 (sizeof (struct rspamd_http_header), hdr);
 	}
 	if (msg->body != NULL) {
@@ -1374,11 +1387,20 @@ rspamd_http_message_add_header (struct rspamd_http_message *msg,
 	const gchar *value)
 {
 	struct rspamd_http_header *hdr;
+	guint nlen, vlen;
 
 	if (msg != NULL && name != NULL && value != NULL) {
 		hdr = g_slice_alloc (sizeof (struct rspamd_http_header));
-		hdr->name = g_string_new (name);
-		hdr->value = g_string_new (value);
+		nlen = strlen (name);
+		vlen = strlen (value);
+		hdr->combined = g_string_sized_new (nlen + vlen + 2);
+		rspamd_printf_gstring (hdr->combined, "%s: %s");
+		hdr->value = g_slice_alloc (sizeof (GString));
+		hdr->name = g_slice_alloc (sizeof (GString));
+		hdr->name->str = hdr->combined->str;
+		hdr->name->len = nlen;
+		hdr->value->str = hdr->combined->str + nlen + 2;
+		hdr->value->len = vlen;
 		DL_APPEND (msg->headers, hdr);
 	}
 }
@@ -1419,8 +1441,9 @@ gboolean rspamd_http_message_remove_header (struct rspamd_http_message *msg,
 				if (g_ascii_strncasecmp (hdr->name->str, name, slen) == 0) {
 					res = TRUE;
 					DL_DELETE (msg->headers, hdr);
-					g_string_free (hdr->name, TRUE);
-					g_string_free (hdr->value, TRUE);
+					g_string_free (hdr->combined, TRUE);
+					g_slice_free1 (sizeof (GString), hdr->value);
+					g_slice_free1 (sizeof (GString), hdr->name);
 					g_slice_free1 (sizeof (*hdr), hdr);
 				}
 			}

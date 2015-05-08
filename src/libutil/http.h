@@ -46,6 +46,7 @@ enum rspamd_http_connection_type {
 struct rspamd_http_header {
 	GString *name;
 	GString *value;
+	GString *combined;
 	struct rspamd_http_header *next, *prev;
 };
 
