@@ -1504,8 +1504,8 @@ rspamd_http_message_add_header (struct rspamd_http_message *msg,
 		hdr = g_slice_alloc (sizeof (struct rspamd_http_header));
 		nlen = strlen (name);
 		vlen = strlen (value);
-		hdr->combined = g_string_sized_new (nlen + vlen + 2);
-		rspamd_printf_gstring (hdr->combined, "%s: %s");
+		hdr->combined = g_string_sized_new (nlen + vlen + 4);
+		rspamd_printf_gstring (hdr->combined, "%s: %s\r\n", name, value);
 		hdr->value = g_slice_alloc (sizeof (GString));
 		hdr->name = g_slice_alloc (sizeof (GString));
 		hdr->name->str = hdr->combined->str;
