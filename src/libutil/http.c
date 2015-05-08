@@ -690,7 +690,9 @@ rspamd_http_decrypt_message (struct rspamd_http_connection *conn,
 		g_slice_free1 (sizeof (struct rspamd_http_header), hdr);
 	}
 	msg->headers = NULL;
-	g_string_assign (msg->url, "");
+	if (msg->url != NULL) {
+		g_string_assign (msg->url, "");
+	}
 	msg->body->len = 0;
 	msg->body->str = NULL;
 
@@ -1246,7 +1248,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	struct rspamd_http_connection_private *priv = conn->priv;
 	struct rspamd_http_header *hdr;
 	struct tm t, *ptm;
-	gchar datebuf[64], repbuf[128], *pbody;
+	gchar datebuf[64], repbuf[512], *pbody;
 	gint i, hdrcount, meth_len, preludelen = 0;
 	gsize bodylen, enclen;
 	GString *buf;
@@ -1272,7 +1274,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	priv->header = NULL;
 	priv->buf = g_slice_alloc0 (sizeof (*priv->buf));
 	REF_INIT_RETAIN (priv->buf, rspamd_http_privbuf_dtor);
-	priv->buf->data = g_string_sized_new (128);
+	priv->buf->data = g_string_sized_new (512);
 	buf = priv->buf->data;
 
 	if (priv->peer_key && priv->local_key) {
@@ -1419,8 +1421,8 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 						"Connection: close\r\n"
 						"Server: %s\r\n"
 						"Date: %s\r\n"
-						"Content-Length: %z\r\n",
-						"Content-Type: %s\r\n",
+						"Content-Length: %z\r\n"
+						"Content-Type: %s", /* NO \r\n at the end ! */
 						msg->code,
 						msg->status ? msg->status->str :
 								rspamd_http_code_to_str (msg->code),
