@@ -252,16 +252,17 @@ rspamd_config_parse_limit (const gchar *limit, guint len)
 }
 
 gchar
-rspamd_config_parse_flag (const gchar *str)
+rspamd_config_parse_flag (const gchar *str, guint len)
 {
-	guint len;
 	gchar c;
 
 	if (!str || !*str) {
 		return -1;
 	}
 
-	len = strlen (str);
+	if (len == 0) {
+		len = strlen (str);
+	}
 
 	switch (len) {
 	case 1:

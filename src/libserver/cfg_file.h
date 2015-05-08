@@ -308,7 +308,7 @@ guint64 rspamd_config_parse_limit (const gchar *limit, guint len);
  * @param str string representation of flag (eg. 'on')
  * @return numeric value of flag (0 or 1)
  */
-gchar rspamd_config_parse_flag (const gchar *str);
+gchar rspamd_config_parse_flag (const gchar *str, guint len);
 
 /**
  * Do post load actions for config

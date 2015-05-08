@@ -580,6 +580,7 @@ rspamd_http_on_headers_complete (http_parser * parser)
 		DL_APPEND (priv->msg->headers, priv->header);
 		rspamd_http_check_special_header (conn, priv);
 		priv->header = NULL;
+		priv->new_header = FALSE;
 	}
 
 	if (parser->content_length != 0 && parser->content_length != ULLONG_MAX) {

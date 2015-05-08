@@ -101,34 +101,54 @@
 
 static GList *custom_commands = NULL;
 
+ static gchar *
+ rspamd_protocol_header_dup (struct rspamd_task *task, GString *h)
+ {
+ 	gchar *res;
+
+ 	g_assert (h != NULL);
+ 	g_assert (h->len > 0);
+
+ 	res = rspamd_mempool_alloc (task->task_pool, h->len + 1);
+ 	rspamd_strlcpy (res, h->str, h->len + 1);
+
+ 	return res;
+ }
 
 /*
  * Remove <> from the fixed string and copy it to the pool
  */
 static gchar *
-rspamd_protocol_escape_braces (GString *in)
+rspamd_protocol_escape_braces (struct rspamd_task *task, GString *in)
 {
 	gint len = 0;
-	gchar *orig, *p;
+	gchar *orig, *p, *res;
+
+	g_assert (in != NULL);
+	g_assert (in->len > 0);
 
 	orig = in->str;
+
 	while ((g_ascii_isspace (*orig) || *orig ==
 		'<') && orig - in->str < (gint)in->len) {
 		orig++;
 	}
 
-	g_string_erase (in, 0, orig - in->str);
+	res = rspamd_mempool_alloc (task->task_pool,
+			in->len - (orig - in->str));
 
-	p = in->str;
+	p = in->str + in->len - 1;
+	len = in->len - (orig - in->str);
+
 	while ((!g_ascii_isspace (*p) && *p !=
-		'>') && p - in->str < (gint)in->len) {
-		p++;
-		len++;
+		'>') && p > orig) {
+		p--;
+		len--;
 	}
 
-	g_string_truncate (in, len);
+	rspamd_strlcpy (res, orig, len + 1);
 
-	return in->str;
+	return res;
 }
 
 static gboolean
@@ -235,58 +255,61 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 {
 	gchar *headern, *tmp;
 	gboolean res = TRUE, validh, fl, has_ip = FALSE;
+	gsize hlen;
 	struct rspamd_http_header *h;
 
 	LL_FOREACH (msg->headers, h)
 	{
 		headern = h->name->str;
+		hlen = h->name->len;
 		validh = TRUE;
 
 		switch (headern[0]) {
 		case 'd':
 		case 'D':
-			if (g_ascii_strcasecmp (headern, DELIVER_TO_HEADER) == 0) {
-				task->deliver_to = rspamd_protocol_escape_braces (h->value);
+			if (g_ascii_strncasecmp (headern, DELIVER_TO_HEADER, hlen) == 0) {
+				task->deliver_to = rspamd_protocol_escape_braces (task, h->value);
 				debug_task ("read deliver-to header, value: %s",
 					task->deliver_to);
 			}
 			else {
-				debug_task ("wrong header: %s", headern);
+				debug_task ("wrong header: %v", h->name);
 				validh = FALSE;
 			}
 			break;
 		case 'h':
 		case 'H':
-			if (g_ascii_strcasecmp (headern, HELO_HEADER) == 0) {
-				task->helo = h->value->str;
+			if (g_ascii_strncasecmp (headern, HELO_HEADER, hlen) == 0) {
+				task->helo = rspamd_protocol_header_dup (task, h->value);
 				debug_task ("read helo header, value: %s", task->helo);
 			}
-			else if (g_ascii_strcasecmp (headern, HOSTNAME_HEADER) == 0) {
-				task->hostname = h->value->str;
+			else if (g_ascii_strncasecmp (headern, HOSTNAME_HEADER, hlen) == 0) {
+				task->hostname = rspamd_protocol_header_dup (task, h->value);
 				debug_task ("read hostname header, value: %s", task->hostname);
 			}
 			else {
-				debug_task ("wrong header: %s", headern);
+				debug_task ("wrong header: %v", h->value);
 				validh = FALSE;
 			}
 			break;
 		case 'f':
 		case 'F':
-			if (g_ascii_strcasecmp (headern, FROM_HEADER) == 0) {
-				if (!rspamd_task_add_sender (task, h->value->str)) {
-					msg_err ("bad from header: '%s'", h->value->str);
+			if (g_ascii_strncasecmp (headern, FROM_HEADER, hlen) == 0) {
+				if (!rspamd_task_add_sender (task,
+						rspamd_protocol_header_dup (task, h->value))) {
+					msg_err ("bad from header: '%v'", h->value);
 					validh = FALSE;
 				}
 			}
 			else {
-				debug_task ("wrong header: %s", headern);
+				debug_task ("wrong header: %v", h->value);
 				validh = FALSE;
 			}
 			break;
 		case 'j':
 		case 'J':
-			if (g_ascii_strcasecmp (headern, JSON_HEADER) == 0) {
-				fl = rspamd_config_parse_flag (h->value->str);
+			if (g_ascii_strncasecmp (headern, JSON_HEADER, hlen) == 0) {
+				fl = rspamd_config_parse_flag (h->value->str, h->value->len);
 				if (fl) {
 					task->flags |= RSPAMD_TASK_FLAG_JSON;
 				}
@@ -295,39 +318,41 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				}
 			}
 			else {
-				debug_task ("wrong header: %s", headern);
+				debug_task ("wrong header: %v", h->value);
 				validh = FALSE;
 			}
 			break;
 		case 'q':
 		case 'Q':
-			if (g_ascii_strcasecmp (headern, QUEUE_ID_HEADER) == 0) {
-				task->queue_id = h->value->str;
+			if (g_ascii_strncasecmp (headern, QUEUE_ID_HEADER, hlen) == 0) {
+				task->queue_id = rspamd_protocol_header_dup (task, h->value);
 				debug_task ("read queue_id header, value: %s", task->queue_id);
 			}
 			else {
-				debug_task ("wrong header: %s", headern);
+				debug_task ("wrong header: %v", h->name);
 				validh = FALSE;
 			}
 			break;
 		case 'r':
 		case 'R':
-			if (g_ascii_strcasecmp (headern, RCPT_HEADER) == 0) {
-				if (!rspamd_task_add_recipient (task, h->value->str)) {
-					msg_err ("bad from header: '%s'", h->value->str);
+			if (g_ascii_strncasecmp (headern, RCPT_HEADER, hlen) == 0) {
+				if (!rspamd_task_add_recipient (task,
+						rspamd_protocol_header_dup (task, h->value))) {
+					msg_err ("bad from header: '%v'", h->value);
 					validh = FALSE;
 				}
 				debug_task ("read rcpt header, value: %v", h->value);
 			}
 			else {
-				debug_task ("wrong header: %s", headern);
+				debug_task ("wrong header: %v", h->name);
 				validh = FALSE;
 			}
 			break;
 		case 'i':
 		case 'I':
-			if (g_ascii_strcasecmp (headern, IP_ADDR_HEADER) == 0) {
-				tmp = h->value->str;
+			if (g_ascii_strncasecmp (headern, IP_ADDR_HEADER, hlen) == 0) {
+				tmp = rspamd_protocol_header_dup (task, h->value);
+
 				if (!rspamd_parse_inet_address (&task->from_addr, tmp)) {
 					msg_err ("bad ip header: '%s'", tmp);
 					return FALSE;
@@ -336,15 +361,15 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				has_ip = TRUE;
 			}
 			else {
-				debug_task ("wrong header: %s", headern);
+				debug_task ("wrong header: %v", h->name);
 				validh = FALSE;
 			}
 			break;
 		case 'p':
 		case 'P':
-			if (g_ascii_strcasecmp (headern, PASS_HEADER) == 0) {
+			if (g_ascii_strncasecmp (headern, PASS_HEADER, hlen) == 0) {
 				if (h->value->len == sizeof ("all") - 1 &&
-					g_ascii_strcasecmp (h->value->str, "all") == 0) {
+					g_ascii_strncasecmp (h->value->str, "all", h->value->len) == 0) {
 					task->flags |= RSPAMD_TASK_FLAG_PASS_ALL;
 					debug_task ("pass all filters");
 				}
@@ -355,8 +380,8 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			break;
 		case 's':
 		case 'S':
-			if (g_ascii_strcasecmp (headern, SUBJECT_HEADER) == 0) {
-				task->subject = h->value->str;
+			if (g_ascii_strncasecmp (headern, SUBJECT_HEADER, hlen) == 0) {
+				task->subject = rspamd_protocol_header_dup (task, h->value);
 			}
 			else {
 				validh = FALSE;
@@ -364,12 +389,13 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			break;
 		case 'u':
 		case 'U':
-			if (g_ascii_strcasecmp (headern, USER_HEADER) == 0) {
-				task->user = h->value->str;
+			if (g_ascii_strncasecmp (headern, USER_HEADER, hlen) == 0) {
+				task->user = rspamd_protocol_header_dup (task, h->value);
 			}
-			if (g_ascii_strcasecmp (headern, URLS_HEADER) == 0) {
+			if (g_ascii_strncasecmp (headern, URLS_HEADER, hlen) == 0) {
 				if (h->value->len == sizeof ("extended") - 1 &&
-						g_ascii_strcasecmp (h->value->str, "extended") == 0) {
+						g_ascii_strncasecmp (h->value->str, "extended",
+								h->value->len) == 0) {
 					task->flags |= RSPAMD_TASK_FLAG_EXT_URLS;
 					debug_task ("extended urls information");
 				}
@@ -380,8 +406,8 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			break;
 		case 'l':
 		case 'L':
-			if (g_ascii_strcasecmp (headern, NO_LOG_HEADER) == 0) {
-				if (g_ascii_strcasecmp (h->value->str, "no") == 0) {
+			if (g_ascii_strncasecmp (headern, NO_LOG_HEADER, hlen) == 0) {
+				if (g_ascii_strncasecmp (h->value->str, "no", h->value->len) == 0) {
 					task->flags |= RSPAMD_TASK_FLAG_NO_LOG;
 				}
 			}
@@ -391,11 +417,11 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			break;
 		case 'm':
 		case 'M':
-			if (g_ascii_strcasecmp (headern, MLEN_HEADER) == 0) {
+			if (g_ascii_strncasecmp (headern, MLEN_HEADER, hlen) == 0) {
 				task->message_len = strtoul (h->value->str, NULL, 10);
 
 				if (task->message_len == 0) {
-					msg_err ("Invalid message length header: %s", h->value->str);
+					msg_err ("Invalid message length header: %v", h->value);
 					validh = FALSE;
 				}
 				else {
@@ -407,16 +433,13 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			}
 			break;
 		default:
-			debug_task ("unknown header: %s", headern);
+			debug_task ("unknown header: %v", h->name);
 			validh = FALSE;
 			break;
 		}
 
 		if (!validh) {
 			res = FALSE;
-			g_hash_table_replace (task->request_headers,
-				g_string_new_len(h->name->str, h->name->len),
-				g_string_new_len(h->value->str, h->value->len));
 		}
 	}
 
