@@ -34,6 +34,8 @@
 #include "cryptobox.h"
 #include <limits.h>
 
+#define ENCRYPTED_VERSION " HTTP/1.0"
+
 struct rspamd_http_connection_private {
 	struct _rspamd_http_privbuf {
 		GString *data;
@@ -701,6 +703,8 @@ rspamd_http_decrypt_message (struct rspamd_http_connection *conn,
 	decrypted_cb.on_header_field = rspamd_http_on_header_field;
 	decrypted_cb.on_header_value = rspamd_http_on_header_value;
 	decrypted_cb.on_body = rspamd_http_on_body_decrypted;
+	decrypted_parser.data = conn;
+	decrypted_parser.content_length = dec_len;
 
 	if (http_parser_execute (&decrypted_parser, &decrypted_cb, m,
 			dec_len) != (size_t)dec_len) {
@@ -1140,6 +1144,7 @@ rspamd_http_connection_encrypt_message (
 		guint bodylen,
 		guchar *pmethod,
 		guint methodlen,
+		guint preludelen,
 		gint hdrcount,
 		guchar *np,
 		guchar *mp,
@@ -1164,15 +1169,17 @@ rspamd_http_connection_encrypt_message (
 	if (conn->type != RSPAMD_HTTP_SERVER) {
 		segments[1].data = msg->url->str;
 		segments[1].len = msg->url->len;
-		/* 2 CRLF is in some persistent buffer after MAC */
+		/* space + HTTP version + crlf */
 		segments[2].data = crlfp;
-		segments[2].len = 2;
-
+		segments[2].len = preludelen - 2;
+		crlfp += segments[2].len;
 		i = 3;
 	}
 	else {
+		/* Here we send just CRLF */
 		segments[1].data = crlfp;
 		segments[1].len = 2;
+		crlfp += segments[1].len;
 
 		i = 2;
 	}
@@ -1183,7 +1190,8 @@ rspamd_http_connection_encrypt_message (
 		segments[i++].len = hdr->combined->len;
 	}
 
-	segments[i].data = crlfp + 2;
+	/* crlfp should point now at the second crlf */
+	segments[i].data = crlfp;
 	segments[i++].len = 2;
 
 	if (pbody) {
@@ -1239,7 +1247,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	struct rspamd_http_header *hdr;
 	struct tm t, *ptm;
 	gchar datebuf[64], repbuf[128], *pbody;
-	gint i, hdrcount, meth_len;
+	gint i, hdrcount, meth_len, preludelen = 0;
 	gsize bodylen, enclen;
 	GString *buf;
 	gboolean encrypted = FALSE;
@@ -1282,6 +1290,17 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	}
 
 	if (encrypted) {
+		if (msg->body == NULL || msg->body->len == 0) {
+			pbody = NULL;
+			bodylen = 0;
+			msg->method = HTTP_GET;
+		}
+		else {
+			pbody = msg->body->str;
+			bodylen = msg->body->len;
+			msg->method = HTTP_POST;
+		}
+
 		if (conn->type == RSPAMD_HTTP_SERVER) {
 			/*
 			 * iov[0] = base reply
@@ -1295,6 +1314,9 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 			 * [iov[n + 2] = encrypted body]
 			 */
 			priv->outlen = 7;
+			enclen = rspamd_cryptobox_NONCEBYTES + rspamd_cryptobox_MACBYTES +
+					4 + /* 2 * CRLF */
+					bodylen;
 		}
 		else {
 			/*
@@ -1302,27 +1324,32 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 			 * iov[1] = CRLF
 			 * iov[2] = nonce
 			 * iov[3] = mac
-			 * iov[4] = encrypted method
+			 * iov[4] = encrypted method + space
 			 * iov[5] = encrypted url
-			 * iov[6] = encrypted crlf
-			 * iov[7..n] = encrypted headers
+			 * iov[7] = encrypted prelude
+			 * iov[8..n] = encrypted headers
 			 * iov[n + 1] = encrypted crlf
 			 * [iov[n + 2] = encrypted body]
 			 */
 			priv->outlen = 8;
+
+			if (bodylen > 0) {
+				preludelen = rspamd_snprintf (repbuf, sizeof (repbuf), "%s\r\n"
+						"Content-Length: %z\r\n\r\n", ENCRYPTED_VERSION, bodylen);
+			}
+			else {
+				preludelen = rspamd_snprintf (repbuf, sizeof (repbuf), "%s\r\n\r\n",
+						ENCRYPTED_VERSION);
+			}
+
+			enclen = rspamd_cryptobox_NONCEBYTES + rspamd_cryptobox_MACBYTES +
+					preludelen + /* version [content-length] + 2 * CRLF */
+					bodylen;
 		}
-		if (msg->body == NULL || msg->body->len == 0) {
-			pbody = NULL;
-			bodylen = 0;
-		}
-		else {
-			pbody = msg->body->str;
-			bodylen = msg->body->len;
+
+		if (bodylen > 0) {
 			priv->outlen ++;
 		}
-		enclen = rspamd_cryptobox_NONCEBYTES + rspamd_cryptobox_MACBYTES +
-				4 + /* 2 * CRLF */
-				bodylen;
 	}
 	else {
 		if (msg->method < HTTP_SYMBOLS) {
@@ -1387,7 +1414,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 			}
 			if (encrypted) {
 				/* Internal reply (encrypted) */
-				enclen += rspamd_snprintf (repbuf, sizeof (repbuf),
+				meth_len = rspamd_snprintf (repbuf, sizeof (repbuf),
 						"HTTP/1.1 %d %s\r\n"
 						"Connection: close\r\n"
 						"Server: %s\r\n"
@@ -1401,6 +1428,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 						datebuf,
 						bodylen,
 						mime_type);
+				enclen += meth_len;
 				/* External reply */
 				rspamd_printf_gstring (buf, "HTTP/1.1 200 OK\r\n"
 						"Connection: close\r\n"
@@ -1439,7 +1467,8 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	}
 	else {
 		/* Format request */
-		enclen += msg->url->len + strlen (http_method_str (msg->method));
+		enclen += msg->url->len +
+				strlen (http_method_str (msg->method)) + 1 /* method + space */;
 		if (host == NULL && msg->host == NULL) {
 			/* Fallback to HTTP/1.0 */
 			if (encrypted) {
@@ -1502,14 +1531,27 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 
 		/* Add some used vars */
 		meth_pos = buf->str + buf->len;
-		meth_len = strlen (http_method_str (msg->method));
-		g_string_append_len (buf, http_method_str (msg->method), meth_len);
+
+		if (conn->type == RSPAMD_HTTP_SERVER) {
+			g_string_append_len (buf, repbuf, meth_len);
+		}
+		else {
+			meth_len = strlen (http_method_str (msg->method)) + 1; /* + space */
+			g_string_append_len (buf, http_method_str (msg->method),
+					meth_len - 1);
+			g_string_append_c (buf, ' ');
+		}
 		np = buf->str + buf->len;
 		g_string_append_len (buf, nonce, sizeof (nonce));
 		mp = buf->str + buf->len;
 		g_string_append_len (buf, mac, sizeof (mac));
 		/* Need to be encrypted */
-		g_string_append_len (buf, "\r\n\r\n", 4);
+		if (conn->type == RSPAMD_HTTP_SERVER) {
+			g_string_append (buf, "\r\n\r\n");
+		}
+		else {
+			g_string_append_len (buf, repbuf, preludelen);
+		}
 	}
 
 
@@ -1519,7 +1561,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		priv->out[1].iov_len = 2;
 		/* Encrypt the real request */
 		rspamd_http_connection_encrypt_message (conn, msg, priv, pbody, bodylen,
-				meth_pos, meth_len, hdrcount, np, mp, peer_key);
+				meth_pos, meth_len, preludelen, hdrcount, np, mp, peer_key);
 	}
 	else {
 		i = 1;
