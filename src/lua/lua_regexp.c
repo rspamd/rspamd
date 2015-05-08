@@ -333,12 +333,7 @@ lua_regexp_search (lua_State *L)
  *
  * @param {string} line match the specified line against regexp object
  * @param {bool} match raw regexp instead of utf8 one
- * @return {table or nil} table of strings matched or nil
- * @example
- * local re = regexp.create_cached('/^\s*([0-9]+)\s*$/')
- * -- returns nil
- * local m1 = re:match('blah')
- * local m2 = re:match('   190   ')
+ * @return {bool} true if `line` matches
  */
 static int
 lua_regexp_match (lua_State *L)
@@ -395,12 +390,7 @@ lua_regexp_match (lua_State *L)
  * @param {string} line match the specified line against regexp object
  * @param {number} max_matches maximum number of matches
  * @param {bool} match raw regexp instead of utf8 one
- * @return {table or nil} table of strings matched or nil
- * @example
- * local re = regexp.create_cached('/^\s*([0-9]+)\s*$/')
- * -- returns nil
- * local m1 = re:match('blah')
- * local m2 = re:match('   190   ')
+ * @return {number} number of matches found in the `line` argument
  */
 static int
 lua_regexp_matchn (lua_State *L)
