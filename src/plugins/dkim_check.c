@@ -173,6 +173,18 @@ dkim_module_config (struct rspamd_config *cfg)
 			got_trusted = TRUE;
 		}
 	}
+	if (!got_trusted && (value =
+			rspamd_config_get_module_opt (cfg, "dkim", "trusted_domains")) != NULL) {
+		if (!rspamd_map_add (cfg, ucl_obj_tostring (value),
+				"DKIM domains", rspamd_kv_list_read, rspamd_kv_list_fin,
+				(void **)&dkim_module_ctx->dkim_domains)) {
+			msg_warn ("cannot load dkim domains list from %s",
+					ucl_obj_tostring (value));
+		}
+		else {
+			got_trusted = TRUE;
+		}
+	}
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim",
 		"strict_multiplier")) != NULL) {
