@@ -61,3 +61,14 @@ For example, you have symbol `A` and `B` with weights `W_a` and `W_b` and a comp
 * If `C` is `-A & B`, then rule `A` is preserved, but the symbol `C` is inserted. The weight of `A` is preserved as well, so the total weight of `-A & B` will be `W_a + W_c`.
 * If `C` is `~A & B`, then rule `A` is *removed* but its weight is *preserved*, leading to a single symbol `C` with weight `W_a + W_c`
 
+## Composites with symbol groups
+
+It is also possible to include the whole group of symbols to a composite rule. This
+efficiently means **any** symbol of the specified group:
+
+~~~nginx
+composite {
+    name = "TEST2";
+    expression = "SYMBOL2 && !g:mua";
+}
+~~~
