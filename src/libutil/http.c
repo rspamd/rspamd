@@ -520,6 +520,8 @@ rspamd_http_on_header_field (http_parser * parser,
 		g_string_append_len (priv->header->combined, "\r\n", 2);
 		priv->header->value->len = priv->header->combined->len -
 				priv->header->name->len - 4;
+		priv->header->value->str = priv->header->combined->str +
+				priv->header->name->len + 2;
 		DL_APPEND (priv->msg->headers, priv->header);
 		rspamd_http_check_special_header (conn, priv);
 		priv->header = g_slice_alloc (sizeof (struct rspamd_http_header));
@@ -552,11 +554,9 @@ rspamd_http_on_header_value (http_parser * parser,
 
 	if (!priv->new_header) {
 		priv->new_header = TRUE;
-		priv->header->name->str = priv->header->combined->str;
-		priv->header->name->len = priv->header->combined->len;
 		g_string_append_len (priv->header->combined, ": ", 2);
-		priv->header->value->str = priv->header->combined->str +
-				priv->header->combined->len;
+		priv->header->name->str = priv->header->combined->str;
+		priv->header->name->len = priv->header->combined->len - 2;
 	}
 
 	g_string_append_len (priv->header->combined, at, length);
@@ -575,6 +575,8 @@ rspamd_http_on_headers_complete (http_parser * parser)
 
 	if (priv->header != NULL) {
 		g_string_append_len (priv->header->combined, "\r\n", 2);
+		priv->header->value->str = priv->header->combined->str +
+			priv->header->name->len + 2;
 		priv->header->value->len = priv->header->combined->len -
 			priv->header->name->len - 4;
 		DL_APPEND (priv->msg->headers, priv->header);
@@ -1529,19 +1531,12 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	priv->out[0].iov_len = buf->len;
 
 	if (encrypted) {
+		gint meth_offset, nonce_offset, mac_offset;
+
 		ottery_rand_bytes (nonce, sizeof (nonce));
 		memset (mac, 0, sizeof (mac));
+		meth_offset = buf->len;
 
-		/* Add some used vars */
-		meth_pos = buf->str + buf->len;
-
-		/* XXX: bad bad bad
-		 * TODO:
-		 * XXX:
-		 * Actually, g_string_append_len can break everything as it may do realloc,
-		 * hence, we need to store offsets here instead of the direct pointers
-		 * XXX: fix fix fix
-		 */
 		if (conn->type == RSPAMD_HTTP_SERVER) {
 			g_string_append_len (buf, repbuf, meth_len);
 		}
@@ -1551,10 +1546,12 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 					meth_len - 1);
 			g_string_append_c (buf, ' ');
 		}
-		np = buf->str + buf->len;
+
+		nonce_offset = buf->len;
 		g_string_append_len (buf, nonce, sizeof (nonce));
-		mp = buf->str + buf->len;
+		mac_offset = buf->len;
 		g_string_append_len (buf, mac, sizeof (mac));
+
 		/* Need to be encrypted */
 		if (conn->type == RSPAMD_HTTP_SERVER) {
 			g_string_append (buf, "\r\n\r\n");
@@ -1562,6 +1559,10 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		else {
 			g_string_append_len (buf, repbuf, preludelen);
 		}
+
+		meth_pos = buf->str + meth_offset;
+		np = buf->str + nonce_offset;
+		mp = buf->str + mac_offset;
 	}
 
 
