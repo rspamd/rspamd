@@ -699,6 +699,12 @@ spawn_workers (struct rspamd_main *rspamd)
 					}
 				}
 			}
+			else {
+				msg_err ("cannot create listen socket for %s at %s",
+						g_quark_to_string (cf->type), cf->bind_conf->name);
+
+				exit (EXIT_FAILURE);
+			}
 		}
 
 		cur = g_list_next (cur);
