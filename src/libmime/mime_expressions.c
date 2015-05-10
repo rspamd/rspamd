@@ -728,12 +728,8 @@ rspamd_mime_regexp_element_process (struct rspamd_task *task,
 		len = strlen (data);
 	}
 
-	if (max_re_data != 0 && len > max_re_data) {
-		msg_info ("<%s> skip data of size %Hud",
-							task->message_id,
-							len);
-
-		return 0;
+	if (max_re_data > 0 && len > max_re_data) {
+		len = max_re_data;
 	}
 
 	while (rspamd_regexp_search (re->regexp, data, len, &start, &end, raw)) {
