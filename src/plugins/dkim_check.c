@@ -43,6 +43,7 @@
 #include "libutil/hash.h"
 #include "libutil/map.h"
 #include "main.h"
+#include "utlist.h"
 
 #define DEFAULT_SYMBOL_REJECT "R_DKIM_REJECT"
 #define DEFAULT_SYMBOL_TEMPFAIL "R_DKIM_TEMPFAIL"
@@ -65,6 +66,15 @@ struct dkim_ctx {
 	rspamd_lru_hash_t *dkim_hash;
 	gboolean trusted_only;
 	gboolean skip_multi;
+};
+
+struct dkim_check_result {
+	rspamd_dkim_context_t *ctx;
+	rspamd_dkim_key_t *key;
+	struct rspamd_task *task;
+	gint res;
+	gint mult_allow, mult_deny;
+	struct dkim_check_result *next, *prev, *first;
 };
 
 static struct dkim_ctx *dkim_module_ctx = NULL;
@@ -280,53 +290,85 @@ dkim_module_parse_strict (const gchar *value, gint *allow, gint *deny)
 }
 
 static void
-dkim_module_check (struct rspamd_task *task,
-	rspamd_dkim_context_t *ctx,
-	rspamd_dkim_key_t *key)
+dkim_module_check (struct dkim_check_result *res)
 {
-	gint res, score_allow = 1, score_deny = 1;
+	gboolean all_done = TRUE, got_allow = FALSE;
 	const gchar *strict_value;
+	struct dkim_check_result *first, *cur, *sel = NULL;
 
-	msg_debug ("check dkim signature for %s domain from %s",
-		ctx->domain,
-		ctx->dns_key);
-	res = rspamd_dkim_check (ctx, key, task);
+	first = res->first;
 
-	if (dkim_module_ctx->dkim_domains != NULL) {
-		/* Perform strict check */
-		if ((strict_value =
-			g_hash_table_lookup (dkim_module_ctx->dkim_domains,
-			ctx->domain)) != NULL) {
-			if (!dkim_module_parse_strict (strict_value, &score_allow,
-				&score_deny)) {
-				score_allow = dkim_module_ctx->strict_multiplier;
-				score_deny = dkim_module_ctx->strict_multiplier;
-				msg_debug (
-					"no specific score found for %s domain, using %d for it",
-					ctx->domain,
-					score_deny);
+	DL_FOREACH (first, cur) {
+		if (cur->ctx == NULL) {
+			continue;
+		}
+
+		if (cur->key != NULL && cur->res == -1) {
+			msg_debug ("check dkim signature for %s domain from %s",
+					cur->ctx->domain,
+					cur->ctx->dns_key);
+			cur->res = rspamd_dkim_check (cur->ctx, cur->key, cur->task);
+
+			if (dkim_module_ctx->dkim_domains != NULL) {
+				/* Perform strict check */
+				if ((strict_value =
+						g_hash_table_lookup (dkim_module_ctx->dkim_domains,
+								cur->ctx->domain)) != NULL) {
+					if (!dkim_module_parse_strict (strict_value, &cur->mult_allow,
+							&cur->mult_deny)) {
+						cur->mult_allow = dkim_module_ctx->strict_multiplier;
+						cur->mult_deny = dkim_module_ctx->strict_multiplier;
+					}
+				}
 			}
-			else {
-				msg_debug (
-					"specific score found for %s domain: using %d for deny and %d for allow",
-					ctx->dns_key,
-					score_deny,
-					score_allow);
+		}
+
+		if (cur->res == -1) {
+			/* Still need a key */
+			all_done = FALSE;
+		}
+	}
+
+	if (all_done) {
+		DL_FOREACH (first, cur) {
+			if (cur->res == DKIM_CONTINUE) {
+				rspamd_task_insert_result (cur->task,
+						dkim_module_ctx->symbol_allow,
+						cur->mult_allow * 1.0,
+						g_list_prepend (NULL,
+								rspamd_mempool_strdup (cur->task->task_pool,
+										cur->ctx->domain)));
+				got_allow = TRUE;
+				sel = NULL;
+			}
+			else if (!got_allow) {
+				if (sel == NULL) {
+					sel = cur;
+				}
+				else if (sel->res == DKIM_TRYAGAIN && cur->res != DKIM_TRYAGAIN) {
+					sel = cur;
+				}
 			}
 		}
 	}
 
-	if (res == DKIM_REJECT) {
-		rspamd_task_insert_result (task, dkim_module_ctx->symbol_reject, score_deny,
-			g_list_prepend (NULL, rspamd_mempool_strdup (task->task_pool, ctx->domain)));
-	}
-	else if (res == DKIM_TRYAGAIN) {
-		rspamd_task_insert_result (task, dkim_module_ctx->symbol_tempfail, 1,
-			g_list_prepend (NULL, rspamd_mempool_strdup (task->task_pool, ctx->domain)));
-	}
-	else if (res == DKIM_CONTINUE) {
-		rspamd_task_insert_result (task, dkim_module_ctx->symbol_allow, score_allow,
-			g_list_prepend (NULL, rspamd_mempool_strdup (task->task_pool, ctx->domain)));
+	if (sel != NULL) {
+		if (sel->res == DKIM_REJECT) {
+			rspamd_task_insert_result (sel->task,
+					dkim_module_ctx->symbol_reject,
+					sel->mult_deny * 1.0,
+					g_list_prepend (NULL,
+							rspamd_mempool_strdup (sel->task->task_pool,
+									sel->ctx->domain)));
+		}
+		else {
+			rspamd_task_insert_result (sel->task,
+					dkim_module_ctx->symbol_tempfail,
+					1.0,
+					g_list_prepend (NULL,
+							rspamd_mempool_strdup (sel->task->task_pool,
+									sel->ctx->domain)));
+		}
 	}
 }
 
@@ -337,33 +379,28 @@ dkim_module_key_handler (rspamd_dkim_key_t *key,
 	gpointer ud,
 	GError *err)
 {
-	struct rspamd_task *task = ud;
-
+	struct dkim_check_result *res = ud;
 
 	if (key != NULL) {
 		/* Add new key to the lru cache */
 		rspamd_lru_hash_insert (dkim_module_ctx->dkim_hash,
 			g_strdup (ctx->dns_key),
-			key, task->tv.tv_sec, key->ttl);
-		dkim_module_check (task, ctx, key);
+			key, res->task->time_real, key->ttl);
+		res->key = key;
 	}
 	else {
 		/* Insert tempfail symbol */
 		msg_info ("cannot get key for domain %s", ctx->dns_key);
 		if (err != NULL) {
-			rspamd_task_insert_result (task, dkim_module_ctx->symbol_tempfail, 1,
-				g_list_prepend (NULL,
-				rspamd_mempool_strdup (task->task_pool, err->message)));
-
-		}
-		else {
-			rspamd_task_insert_result (task, dkim_module_ctx->symbol_tempfail, 1, NULL);
+			res->res = DKIM_TRYAGAIN;
 		}
 	}
 
 	if (err) {
 		g_error_free (err);
 	}
+
+	dkim_module_check (res);
 }
 
 static void
@@ -374,6 +411,7 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 	rspamd_dkim_key_t *key;
 	GError *err = NULL;
 	struct raw_header *rh;
+	struct dkim_check_result *res = NULL, *cur;
 	/* First check if a message has its signature */
 
 	hlist = message_get_header (task,
@@ -386,61 +424,86 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 				task->from_addr) == RADIX_NO_VALUE) {
 			/* Parse signature */
 			msg_debug ("create dkim signature");
-			/*
-			 * Check only last signature as there is no way to check embeded signatures after
-			 * resend or something like this
-			 */
-			if (dkim_module_ctx->skip_multi) {
-				if (hlist->next != NULL) {
-					msg_info (
-						"<%s> skip dkim check as it has several dkim signatures",
-						task->message_id);
-					return;
-				}
-			}
-			hlist = g_list_last (hlist);
-			rh = (struct raw_header *)hlist->data;
-			ctx = rspamd_create_dkim_context (rh->decoded,
-					task->task_pool,
-					dkim_module_ctx->time_jitter,
-					&err);
-			if (ctx == NULL) {
-				if (err != NULL) {
-					msg_info ("<%s> cannot parse DKIM context: %s",
-							task->message_id, err->message);
-					g_error_free (err);
+
+			while (hlist != NULL) {
+				rh = (struct raw_header *)hlist->data;
+
+				if (res == NULL) {
+					res = rspamd_mempool_alloc0 (task->task_pool, sizeof (*res));
+					res->prev = res;
+					cur = res;
 				}
 				else {
-					msg_info ("<%s> cannot parse DKIM context: unknown error",
-							task->message_id);
+					cur = rspamd_mempool_alloc0 (task->task_pool, sizeof (*res));
 				}
-			}
-			else {
-				/* Get key */
-				if (dkim_module_ctx->trusted_only &&
-					(dkim_module_ctx->dkim_domains == NULL ||
-					g_hash_table_lookup (dkim_module_ctx->dkim_domains,
-					ctx->domain) == NULL)) {
-					msg_debug ("skip dkim check for %s domain", ctx->domain);
-					return;
-				}
-				key = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_hash,
-						ctx->dns_key,
-						task->tv.tv_sec);
-				if (key != NULL) {
-					debug_task ("found key for %s in cache", ctx->dns_key);
-					dkim_module_check (task, ctx, key);
+
+				cur->first = res;
+				cur->res = -1;
+				cur->task = task;
+				cur->mult_allow = 1.0;
+				cur->mult_deny = 1.0;
+
+				ctx = rspamd_create_dkim_context (rh->decoded,
+						task->task_pool,
+						dkim_module_ctx->time_jitter,
+						&err);
+				if (ctx == NULL) {
+					if (err != NULL) {
+						msg_info ("<%s> cannot parse DKIM context: %s",
+								task->message_id, err->message);
+						g_error_free (err);
+					}
+					else {
+						msg_info ("<%s> cannot parse DKIM context: unknown error",
+								task->message_id);
+					}
+
+					hlist = g_list_next (hlist);
+					continue;
 				}
 				else {
-					debug_task ("request key for %s from DNS", ctx->dns_key);
-					task->dns_requests++;
-					rspamd_get_dkim_key (ctx,
-						task->resolver,
-						task->s,
-						dkim_module_key_handler,
-						task);
+					/* Get key */
+
+					cur->ctx = ctx;
+
+					if (dkim_module_ctx->trusted_only &&
+							(dkim_module_ctx->dkim_domains == NULL ||
+									g_hash_table_lookup (dkim_module_ctx->dkim_domains,
+											ctx->domain) == NULL)) {
+						msg_debug ("skip dkim check for %s domain", ctx->domain);
+						hlist = g_list_next (hlist);
+
+						continue;
+					}
+
+					key = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_hash,
+							ctx->dns_key,
+							task->tv.tv_sec);
+					if (key != NULL) {
+						debug_task ("found key for %s in cache", ctx->dns_key);
+						cur->key = key;
+					}
+					else {
+						debug_task ("request key for %s from DNS", ctx->dns_key);
+						task->dns_requests++;
+						rspamd_get_dkim_key (ctx,
+								task->resolver,
+								task->s,
+								dkim_module_key_handler,
+								cur);
+					}
 				}
+
+				if (res != cur) {
+					DL_APPEND (res, cur);
+				}
+
+				hlist = g_list_next (hlist);
 			}
 		}
+	}
+
+	if (res != NULL) {
+		dkim_module_check (res);
 	}
 }
