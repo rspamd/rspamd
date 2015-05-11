@@ -107,6 +107,8 @@ IF(NOT SYSTEMDDIR)
 	SET(SYSTEMDDIR ${CMAKE_INSTALL_PREFIX}/lib/systemd/system)
 ENDIF(NOT SYSTEMDDIR)
 
+SET(RSPAMD_DEFAULT_INCLUDE_PATHS "/opt;/usr;/usr/local;/opt/local;/usr/pkg;/opt/csw;/sw")
+SET(RSPAMD_DEFAULT_LIBRARY_PATHS "/usr/local;/usr/pkg;/usr;~/Library/Frameworks;/Library/Frameworks;/sw;/opt/local;/opt/csw;/opt")
 
 ############################# INCLUDE SECTION #############################################
 
@@ -138,16 +140,7 @@ MACRO(FindLua _major _minor)
 	  				"include/lua${_major}.${_minor}" 
 	  				"include/lua-${_major}.${_minor}"
 	  				include/lua include
-	  PATHS
-	  /usr/local
-	  /usr/pkg
-	  /usr
-	  ~/Library/Frameworks
-	  /Library/Frameworks
-	  /sw # Fink
-	  /opt/local # DarwinPorts
-	  /opt/csw # Blastwave
-	  /opt
+	  PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS}
 	)
 	
 	FIND_LIBRARY(LUA_LIBRARY 
@@ -159,15 +152,7 @@ MACRO(FindLua _major _minor)
 			"${RSPAMD_SEARCH_PATH}"
 	  		$ENV{LUA_DIR}
 	  	PATH_SUFFIXES lib64 lib
-	  	PATHS
-	  		/usr/local
-	  		/usr
-	  		~/Library/Frameworks
-	  		/Library/Frameworks
-	  		/sw
-	  		/opt/local
-	  		/opt/csw
-	  		/opt
+	  	PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS}
 	 	DOC "Lua library"
 	)
 	IF(LUA_LIBRARY AND LUA_INCLUDE_DIR)
@@ -238,15 +223,7 @@ MACRO(ProcessPackage var _name0)
 					HINTS
 					"${RSPAMD_SEARCH_PATH}"
 					PATH_SUFFIXES lib64 lib
-					PATHS
-						~/Library/Frameworks
-						/Library/Frameworks
-						/usr/local
-						/usr
-						/sw
-						/opt/local
-						/opt/csw
-						/opt)
+					PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS})
 		IF(NOT _lib)
 			MESSAGE(FATAL_ERROR "Packages ${_name0} ${ARGN} could not be found, no library")
 		ENDIF(NOT _lib)
@@ -254,10 +231,8 @@ MACRO(ProcessPackage var _name0)
 
 		FIND_PATH(_incl "${_name0}.h" 
 						HINTS "${RSPAMD_SEARCH_PATH}"
-						PATH_SUFFIXES "" "${_name0}" ${ARGN}
-						PATHS 	/opt/include
-								/usr/include
-								/usr/local/include)
+						PATH_SUFFIXES "include" "include/${_name0}" ${ARGN}
+						PATHS 	${RSPAMD_DEFAULT_INCLUDE_PATHS})
 		IF(NOT _incl)
 			MESSAGE(FATAL_ERROR "Packages ${_name0} ${ARGN} could not be found, no header")
 		ENDIF(NOT _incl)
@@ -454,11 +429,9 @@ LIST(APPEND CMAKE_REQUIRED_INCLUDES "${PCRE_INCLUDE_DIR}")
 # Libhiredis pc file is so special
 FIND_PATH(LIBHIREDIS_INCLUDE hiredis.h 
 		HINTS "${RSPAMD_SEARCH_PATH}"
-		PATHS	/opt
-				/usr
-				/usr/local
-				PATH_SUFFIXES "include" "include/hiredis"
-				DOC "Path where the hiredis header files can be found")
+		PATH_SUFFIXES "include" "include/hiredis"
+		PATHS	${RSPAMD_DEFAULT_INCLUDE_PATHS}
+		DOC "Path where the hiredis header files can be found")
 
 IF(LIBHIREDIS_INCLUDE)
        INCLUDE_DIRECTORIES("${LIBHIREDIS_INCLUDE}")
@@ -467,24 +440,16 @@ ENDIF(LIBHIREDIS_INCLUDE)
 # Google performance tools
 
 IF(ENABLE_GPERF_TOOLS MATCHES "ON")
-	FIND_PATH(GPERF_INCLUDE google/profiler.h PATHS /opt/include
-													/usr/include
-													/usr/local/include
-											  DOC "Path where google perftools includes can be found")
+	FIND_PATH(GPERF_INCLUDE google/profiler.h
+			PATH_SUFFIXES "include" "include/google"
+			PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS}
+			DOC "Path where google perftools includes can be found")
 	INCLUDE_DIRECTORIES("${GPERF_INCLUDE}")
 	FIND_LIBRARY(GPERF_LIBRARY NAMES profiler 
 	              HINTS "${RSPAMD_SEARCH_PATH}"
-                  PATH_SUFFIXES lib64 lib
-                  PATHS
-                      ~/Library/Frameworks
-                      /Library/Frameworks
-                      /usr/local
-                      /usr
-                      /sw
-                      /opt/local
-                      /opt/csw
-                      /opt
-					DOC "Path where the gperf library can be found")
+                  PATH_SUFFIXES lib64 lib "lib/google"
+                  PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS}
+				  DOC "Path where the gperf library can be found")
 	IF(NOT GPERF_LIBRARY)
 		MESSAGE(FATAL_ERROR "gperf tools support is enabled but not found in system")
 	ENDIF(NOT GPERF_LIBRARY)
@@ -499,22 +464,13 @@ ENDIF(ENABLE_GPERF_TOOLS MATCHES "ON")
 FIND_LIBRARY(LIBUTIL_LIBRARY NAMES util 
 				HINTS "${RSPAMD_SEARCH_PATH}"
 					PATH_SUFFIXES lib64 lib
-                  PATHS
-                      ~/Library/Frameworks
-                      /Library/Frameworks
-                      /usr/local
-                      /usr
-                      /sw
-                      /opt/local
-                      /opt/csw
-                      /opt
+                  PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS}
                  DOC "Path where the libutil library can be found")
 IF(LIBUTIL_LIBRARY)
 	FIND_FILE(HAVE_LIBUTIL_H 
 				HINTS "${RSPAMD_SEARCH_PATH}" 
-				NAMES libutil.h PATHS /usr/include
-											   /opt/include
-											   /usr/local/include
+				NAMES libutil.h PATH ${RSPAMD_DEFAULT_INCLUDE_PATHS}
+				PATH_SUFFIXES include
 				DOC "Path to libutil header")
 	IF(HAVE_LIBUTIL_H)
 		LIST(APPEND RSPAMD_REQUIRED_LIBRARIES util)
@@ -528,21 +484,13 @@ ENDIF(LIBUTIL_LIBRARY)
 IF(ENABLE_URL_INCLUDE MATCHES "ON")
     FIND_LIBRARY(LIBFETCH_LIBRARY HINTS "${RSPAMD_SEARCH_PATH}"
     				NAMES fetch PATHS	PATH_SUFFIXES lib64 lib
-                      PATHS
-                          ~/Library/Frameworks
-                          /Library/Frameworks
-                          /usr/local
-                          /usr
-                          /sw
-                          /opt/local
-                          /opt/csw
-                          /opt
-                     DOC "Path where the libfetch library can be found")
+                    PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS}
+                    DOC "Path where the libfetch library can be found")
     IF(LIBFETCH_LIBRARY)
     	FIND_FILE(HAVE_FETCH_H HINTS "${RSPAMD_SEARCH_PATH}"
-    		NAMES fetch.h PATHS /usr/include
-    											   /opt/include
-    											   /usr/local/include
+    		NAMES fetch.h 
+    		PATH_SUFFIXES include
+    		PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS}
     				DOC "Path to libfetch header")
     ELSE(LIBFETCH_LIBRARY)
     	# Try to find libcurl
@@ -729,30 +677,14 @@ int main(int argc, char** argv) {
 IF(NOT ICONV_ROOT_DIR)
 	FIND_PATH(ICONV_INCLUDE_DIR iconv.h 
 			HINTS "${RSPAMD_SEARCH_PATH}"
-			PATHS 
-					~/Library/Frameworks
-                      /Library/Frameworks
-                      /usr/local
-                      /sw
-                      /opt/local
-                      /opt/csw
-                      /opt
-                      /usr
+			PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS}
             PATH_SUFFIXES include include/libiconv
             DOC "Path where the libiconv headers can be found")
 	FIND_LIBRARY(ICONV_LIBRARIES NAMES iconv libiconv libiconv-2 c
 			HINTS "${RSPAMD_SEARCH_PATH}"
-            PATHS
-                      ~/Library/Frameworks
-                      /Library/Frameworks
-                      /usr/local
-                      /sw
-                      /opt/local
-                      /opt/csw
-                      /opt
-                      /usr
-             PATH_SUFFIXES lib64 lib
-             DOC "Path where the libiconv library can be found")
+            PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS}
+            PATH_SUFFIXES lib64 lib
+            DOC "Path where the libiconv library can be found")
 ELSE(NOT ICONV_ROOT_DIR)
 	FIND_PATH(ICONV_INCLUDE_DIR iconv.h 
 				HINTS "${RSPAMD_SEARCH_PATH}"
