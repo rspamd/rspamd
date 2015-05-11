@@ -132,6 +132,7 @@ MACRO(FindLua _major _minor)
 
 	FIND_PATH(LUA_INCLUDE_DIR lua.h
 	  HINTS
+	  "${RSPAMD_SEARCH_PATH}"
 	  $ENV{LUA_DIR}
 	  PATH_SUFFIXES "include/lua${_major}${_minor}" 
 	  				"include/lua${_major}.${_minor}" 
@@ -155,6 +156,7 @@ MACRO(FindLua _major _minor)
 	  		"lua${_major}.${_minor}" 
 	  		"lua-${_major}.${_minor}"
 		HINTS
+			"${RSPAMD_SEARCH_PATH}"
 	  		$ENV{LUA_DIR}
 	  	PATH_SUFFIXES lib64 lib
 	  	PATHS
@@ -232,7 +234,10 @@ MACRO(ProcessPackage var _name0)
         LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "${${_XPREFIX}_LIBRARIES}")
     ELSE(${var}_FOUND)
  		# Try some more heuristic
-		FIND_LIBRARY(_lib NAMES "${_name0}" ${ARGN} PATH_SUFFIXES lib64 lib
+		FIND_LIBRARY(_lib NAMES "${_name0}" ${ARGN}
+					HINTS
+					"${RSPAMD_SEARCH_PATH}"
+					PATH_SUFFIXES lib64 lib
 					PATHS
 						~/Library/Frameworks
 						/Library/Frameworks
@@ -247,7 +252,9 @@ MACRO(ProcessPackage var _name0)
 		ENDIF(NOT _lib)
 		
 
-		FIND_PATH(_incl "${_name0}.h" PATH_SUFFIXES "" "${_name0}" ${ARGN}
+		FIND_PATH(_incl "${_name0}.h" 
+						HINTS "${RSPAMD_SEARCH_PATH}"
+						PATH_SUFFIXES "" "${_name0}" ${ARGN}
 						PATHS 	/opt/include
 								/usr/include
 								/usr/local/include)
@@ -445,11 +452,13 @@ ENDIF(GMIME2_VERSION VERSION_GREATER "2.4.0")
 LIST(APPEND CMAKE_REQUIRED_INCLUDES "${PCRE_INCLUDE_DIR}")
 
 # Libhiredis pc file is so special
-FIND_PATH(LIBHIREDIS_INCLUDE hiredis.h PATHS /opt/include
-                                               /usr/include
-                                               /usr/local/include
-                                               PATH_SUFFIXES "" "hiredis"
-                                               DOC "Path where the hiredis header files can be found")
+FIND_PATH(LIBHIREDIS_INCLUDE hiredis.h 
+		HINTS "${RSPAMD_SEARCH_PATH}"
+		PATHS	/opt
+				/usr
+				/usr/local
+				PATH_SUFFIXES "include" "include/hiredis"
+				DOC "Path where the hiredis header files can be found")
 
 IF(LIBHIREDIS_INCLUDE)
        INCLUDE_DIRECTORIES("${LIBHIREDIS_INCLUDE}")
@@ -463,7 +472,9 @@ IF(ENABLE_GPERF_TOOLS MATCHES "ON")
 													/usr/local/include
 											  DOC "Path where google perftools includes can be found")
 	INCLUDE_DIRECTORIES("${GPERF_INCLUDE}")
-	FIND_LIBRARY(GPERF_LIBRARY NAMES profiler PATH_SUFFIXES lib64 lib
+	FIND_LIBRARY(GPERF_LIBRARY NAMES profiler 
+	              HINTS "${RSPAMD_SEARCH_PATH}"
+                  PATH_SUFFIXES lib64 lib
                   PATHS
                       ~/Library/Frameworks
                       /Library/Frameworks
@@ -485,7 +496,9 @@ ENDIF(ENABLE_GPERF_TOOLS MATCHES "ON")
 
 # Find util library
 
-FIND_LIBRARY(LIBUTIL_LIBRARY NAMES util PATHS	PATH_SUFFIXES lib64 lib
+FIND_LIBRARY(LIBUTIL_LIBRARY NAMES util 
+				HINTS "${RSPAMD_SEARCH_PATH}"
+					PATH_SUFFIXES lib64 lib
                   PATHS
                       ~/Library/Frameworks
                       /Library/Frameworks
@@ -497,7 +510,9 @@ FIND_LIBRARY(LIBUTIL_LIBRARY NAMES util PATHS	PATH_SUFFIXES lib64 lib
                       /opt
                  DOC "Path where the libutil library can be found")
 IF(LIBUTIL_LIBRARY)
-	FIND_FILE(HAVE_LIBUTIL_H NAMES libutil.h PATHS /usr/include
+	FIND_FILE(HAVE_LIBUTIL_H 
+				HINTS "${RSPAMD_SEARCH_PATH}" 
+				NAMES libutil.h PATHS /usr/include
 											   /opt/include
 											   /usr/local/include
 				DOC "Path to libutil header")
@@ -511,7 +526,8 @@ ENDIF(LIBUTIL_LIBRARY)
 # Find libfetch (for FreeBSD)
 
 IF(ENABLE_URL_INCLUDE MATCHES "ON")
-    FIND_LIBRARY(LIBFETCH_LIBRARY NAMES fetch PATHS	PATH_SUFFIXES lib64 lib
+    FIND_LIBRARY(LIBFETCH_LIBRARY HINTS "${RSPAMD_SEARCH_PATH}"
+    				NAMES fetch PATHS	PATH_SUFFIXES lib64 lib
                       PATHS
                           ~/Library/Frameworks
                           /Library/Frameworks
@@ -523,7 +539,8 @@ IF(ENABLE_URL_INCLUDE MATCHES "ON")
                           /opt
                      DOC "Path where the libfetch library can be found")
     IF(LIBFETCH_LIBRARY)
-    	FIND_FILE(HAVE_FETCH_H NAMES fetch.h PATHS /usr/include
+    	FIND_FILE(HAVE_FETCH_H HINTS "${RSPAMD_SEARCH_PATH}"
+    		NAMES fetch.h PATHS /usr/include
     											   /opt/include
     											   /usr/local/include
     				DOC "Path to libfetch header")
@@ -711,6 +728,7 @@ int main(int argc, char** argv) {
 
 IF(NOT ICONV_ROOT_DIR)
 	FIND_PATH(ICONV_INCLUDE_DIR iconv.h 
+			HINTS "${RSPAMD_SEARCH_PATH}"
 			PATHS 
 					~/Library/Frameworks
                       /Library/Frameworks
@@ -723,6 +741,7 @@ IF(NOT ICONV_ROOT_DIR)
             PATH_SUFFIXES include include/libiconv
             DOC "Path where the libiconv headers can be found")
 	FIND_LIBRARY(ICONV_LIBRARIES NAMES iconv libiconv libiconv-2 c
+			HINTS "${RSPAMD_SEARCH_PATH}"
             PATHS
                       ~/Library/Frameworks
                       /Library/Frameworks
@@ -736,11 +755,13 @@ IF(NOT ICONV_ROOT_DIR)
              DOC "Path where the libiconv library can be found")
 ELSE(NOT ICONV_ROOT_DIR)
 	FIND_PATH(ICONV_INCLUDE_DIR iconv.h 
+				HINTS "${RSPAMD_SEARCH_PATH}"
 			     PATHS "${ICONV_ROOT_DIR}"
 			     PATH_SUFFIXES include include/libiconv
                  DOC "Path where the libiconv headers can be found"
                  NO_DEFAULT_PATH)
 	FIND_LIBRARY(ICONV_LIBRARIES NAMES iconv libiconv libiconv-2 c
+				HINTS "${RSPAMD_SEARCH_PATH}"
                  PATHS "${ICONV_ROOT_DIR}"
                  PATH_SUFFIXES lib64 lib
                  DOC "Path where the libiconv library can be found"
