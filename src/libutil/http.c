@@ -633,6 +633,8 @@ rspamd_http_on_body_decrypted (http_parser * parser, const gchar *at, size_t len
 
 	if (priv->header != NULL) {
 		g_string_append_len (priv->header->combined, "\r\n", 2);
+		priv->header->value->str = priv->header->combined->str +
+				priv->header->name->len + 2;
 		priv->header->value->len = priv->header->combined->len -
 				priv->header->name->len - 4;
 		DL_APPEND (priv->msg->headers, priv->header);
