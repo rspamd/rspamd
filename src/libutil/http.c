@@ -1592,7 +1592,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		}
 		if (msg->body != NULL) {
 
-			if (msg->body_buf.str == NULL) {
+			if (msg->body_buf.str == NULL && msg->body_buf.len == 0) {
 				msg->body_buf.str = msg->body->str;
 			}
 			priv->out[i].iov_base = pbody;

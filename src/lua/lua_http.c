@@ -410,6 +410,8 @@ lua_http_request (lua_State *L)
 				msg->body = g_string_new (NULL);
 				msg->body->str = (gchar *)t->start;
 				msg->body->len = t->len;
+				/* It is not safe unless we set len to avoid body_buf to be freed */
+				msg->body_buf.len = t->len;
 			}
 		}
 
