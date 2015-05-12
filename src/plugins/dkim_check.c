@@ -331,6 +331,10 @@ dkim_module_check (struct dkim_check_result *res)
 
 	if (all_done) {
 		DL_FOREACH (first, cur) {
+			if (cur->ctx == NULL) {
+				continue;
+			}
+
 			if (cur->res == DKIM_CONTINUE) {
 				rspamd_task_insert_result (cur->task,
 						dkim_module_ctx->symbol_allow,
