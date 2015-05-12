@@ -1740,12 +1740,12 @@ rspamd_http_message_add_header (struct rspamd_http_message *msg,
 	}
 }
 
-const gchar *
+const GString *
 rspamd_http_message_find_header (struct rspamd_http_message *msg,
 	const gchar *name)
 {
 	struct rspamd_http_header *hdr;
-	const gchar *res = NULL;
+	const GString *res = NULL;
 	guint slen = strlen (name);
 
 	if (msg != NULL) {
@@ -1753,7 +1753,7 @@ rspamd_http_message_find_header (struct rspamd_http_message *msg,
 		{
 			if (hdr->name->len == slen) {
 				if (g_ascii_strncasecmp (hdr->name->str, name, slen) == 0) {
-					res = hdr->value->str;
+					res = hdr->value;
 					break;
 				}
 			}

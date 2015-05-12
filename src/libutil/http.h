@@ -325,7 +325,7 @@ void rspamd_http_message_add_header (struct rspamd_http_message *msg,
  * @param msg message
  * @param name name of header
  */
-const gchar * rspamd_http_message_find_header (struct rspamd_http_message *msg,
+const GString * rspamd_http_message_find_header (struct rspamd_http_message *msg,
 	const gchar *name);
 
 /**

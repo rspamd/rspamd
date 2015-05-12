@@ -294,7 +294,8 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 {
 	struct http_proxy_session *session = conn->ud;
 	struct rspamd_http_upstream *backend = NULL;
-	const gchar *host;
+	const GString *host;
+	gchar hostbuf[512];
 
 	if (!session->replied) {
 		host = rspamd_http_message_find_header (msg, "Host");
@@ -303,7 +304,8 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 			backend = session->ctx->default_upstream;
 		}
 		else {
-			backend = g_hash_table_lookup (session->ctx->upstreams, host);
+			rspamd_strlcpy (hostbuf, host->str, sizeof (hostbuf));
+			backend = g_hash_table_lookup (session->ctx->upstreams, hostbuf);
 
 			if (backend == NULL) {
 				backend = session->ctx->default_upstream;
@@ -312,14 +314,14 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 
 		if (backend == NULL) {
 			/* No backend */
-			msg_err ("cannot find upstream for %s", host ? host : "default");
+			msg_err ("cannot find upstream for %s", host ? hostbuf : "default");
 			goto err;
 		}
 		else {
 			session->up = rspamd_upstream_get (backend->u, RSPAMD_UPSTREAM_ROUND_ROBIN);
 
 			if (session->up == NULL) {
-				msg_err ("cannot select upstream for %s", host ? host : "default");
+				msg_err ("cannot select upstream for %s", host ? hostbuf : "default");
 				goto err;
 			}
 
@@ -327,7 +329,7 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 					rspamd_upstream_addr (session->up), SOCK_STREAM, TRUE);
 
 			if (session->backend_sock == -1) {
-				msg_err ("cannot connect upstream for %s", host ? host : "default");
+				msg_err ("cannot connect upstream for %s", host ? hostbuf : "default");
 				rspamd_upstream_fail (session->up);
 				goto err;
 			}

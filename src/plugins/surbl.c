@@ -947,20 +947,21 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 {
 	struct redirector_param *param = (struct redirector_param *)conn->ud;
 	gint r, urllen;
-	const gchar *hdr;
+	const GString *hdr;
 	gchar *urlstr;
 
 	if (msg->code == 200) {
 		hdr = rspamd_http_message_find_header (msg, "Uri");
 
 		if (hdr != NULL) {
-			msg_info ("<%s> got reply from redirector: '%s' -> '%s'",
+			msg_info ("<%s> got reply from redirector: '%s' -> '%v'",
 					param->task->message_id,
 					struri (param->url),
 					hdr);
-			urllen = strlen (hdr);
-			urlstr = rspamd_mempool_strdup (param->task->task_pool,
-					hdr);
+			urllen = hdr->len;
+			urlstr = rspamd_mempool_alloc (param->task->task_pool,
+					urllen + 1);
+			rspamd_strlcpy (urlstr, hdr->str, urllen + 1);
 			r = rspamd_url_parse (param->url, urlstr, urllen,
 					param->task->task_pool);
 

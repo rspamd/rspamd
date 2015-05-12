@@ -1292,7 +1292,7 @@ static gboolean
 fuzzy_controller_handler (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message *msg, struct module_ctx *ctx, gint cmd)
 {
-	const gchar *arg;
+	const GString *arg;
 	gchar *err_str;
 	gint value = 1, flag = 0;
 
@@ -1300,18 +1300,18 @@ fuzzy_controller_handler (struct rspamd_http_connection_entry *conn_ent,
 	arg = rspamd_http_message_find_header (msg, "Weight");
 	if (arg) {
 		errno = 0;
-		value = strtol (arg, &err_str, 10);
-		if (errno != 0 || *err_str != '\0') {
-			msg_info ("error converting numeric argument %s", arg);
+		value = strtol (arg->str, &err_str, 10);
+		if (*err_str != '\0' && *err_str != '\r') {
+			msg_info ("error converting numeric argument %v", arg);
 			value = 0;
 		}
 	}
 	arg = rspamd_http_message_find_header (msg, "Flag");
 	if (arg) {
 		errno = 0;
-		flag = strtol (arg, &err_str, 10);
-		if (errno != 0 || *err_str != '\0') {
-			msg_info ("error converting numeric argument %s", arg);
+		flag = strtol (arg->str, &err_str, 10);
+		if (*err_str != '\0' && *err_str != '\r') {
+			msg_info ("error converting numeric argument %v", arg);
 			flag = 0;
 		}
 	}

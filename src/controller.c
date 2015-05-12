@@ -231,7 +231,7 @@ rspamd_encrypted_password_get_str (const gchar * password, gsize skip,
 	return str;
 }
 
-static gboolean rspamd_check_encrypted_password (const gchar * password,
+static gboolean rspamd_check_encrypted_password (const GString * password,
 		const gchar * check, const struct rspamd_controller_pbkdf *pbkdf)
 {
 	const gchar *salt, *hash;
@@ -268,7 +268,7 @@ static gboolean rspamd_check_encrypted_password (const gchar * password,
 		}
 
 		local_key = g_alloca (pbkdf->key_len);
-		rspamd_cryptobox_pbkdf (password, strlen (password),
+		rspamd_cryptobox_pbkdf (password->str, password->len,
 				salt_decoded, salt_len,
 				local_key, pbkdf->key_len, pbkdf->rounds);
 
@@ -290,7 +290,8 @@ static gboolean rspamd_controller_check_password(
 		struct rspamd_controller_session *session,
 		struct rspamd_http_message *msg, gboolean is_enable)
 {
-	const gchar *password, *check;
+	const gchar *check;
+	const GString *password;
 	struct rspamd_controller_worker_ctx *ctx = session->ctx;
 	gboolean check_normal = TRUE, check_enable = TRUE, ret = TRUE;
 	const struct rspamd_controller_pbkdf *pbkdf = NULL;
@@ -338,7 +339,7 @@ static gboolean rspamd_controller_check_password(
 			}
 			if (check != NULL) {
 				if (!rspamd_is_encrypted_password (check, &pbkdf)) {
-					ret = rspamd_constant_memcmp (password, check, 0);
+					ret = rspamd_constant_memcmp (password->str, check, password->len);
 				}
 				else {
 					ret = rspamd_check_encrypted_password (password, check,
@@ -360,7 +361,8 @@ static gboolean rspamd_controller_check_password(
 			if (ctx->password != NULL) {
 				check = ctx->password;
 				if (!rspamd_is_encrypted_password (check, &pbkdf)) {
-					check_normal = rspamd_constant_memcmp (password, check, 0);
+					check_normal = rspamd_constant_memcmp (password->str, check,
+							password->len);
 				}
 				else {
 					check_normal = rspamd_check_encrypted_password (password,
@@ -374,7 +376,8 @@ static gboolean rspamd_controller_check_password(
 			if (ctx->enable_password != NULL) {
 				check = ctx->enable_password;
 				if (!rspamd_is_encrypted_password (check, &pbkdf)) {
-					check_enable = rspamd_constant_memcmp (password, check, 0);
+					check_enable = rspamd_constant_memcmp (password->str, check,
+							password->len);
 				}
 				else {
 					check_enable = rspamd_check_encrypted_password (password,
@@ -655,7 +658,7 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_controller_session *session = conn_ent->ud;
 	GList *cur;
 	struct rspamd_map *map;
-	const gchar *idstr;
+	const GString *idstr;
 	gchar *errstr;
 	struct stat st;
 	gint fd;
@@ -676,8 +679,8 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	id = strtoul (idstr, &errstr, 10);
-	if (*errstr != '\0') {
+	id = strtoul (idstr->str, &errstr, 10);
+	if (*errstr != '\0' && *errstr != '\n') {
 		msg_info ("invalid map id");
 		rspamd_controller_send_error (conn_ent, 400, "400 invalid map id");
 		return 0;
@@ -961,7 +964,6 @@ rspamd_controller_handle_learn_common (
 	struct rspamd_controller_worker_ctx *ctx;
 	struct rspamd_classifier_config *cl;
 	struct rspamd_task *task;
-	const gchar *classifier;
 
 	ctx = session->ctx;
 
@@ -977,12 +979,8 @@ rspamd_controller_handle_learn_common (
 		return 0;
 	}
 
-	if ((classifier =
-		rspamd_http_message_find_header (msg, "Classifier")) == NULL) {
-		classifier = "bayes";
-	}
-
-	cl = rspamd_config_find_classifier (ctx->cfg, classifier);
+	/* XXX: now work with only bayes */
+	cl = rspamd_config_find_classifier (ctx->cfg, "bayes");
 	if (cl == NULL) {
 		rspamd_controller_send_error (conn_ent, 400, "Classifier not found");
 		return 0;
@@ -1343,7 +1341,7 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 	GList *cur;
 	struct rspamd_map *map;
 	struct rspamd_controller_worker_ctx *ctx;
-	const gchar *idstr;
+	const GString *idstr;
 	gchar *errstr;
 	guint32 id;
 	gboolean found = FALSE;
@@ -1371,8 +1369,8 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	id = strtoul (idstr, &errstr, 10);
-	if (*errstr != '\0') {
+	id = strtoul (idstr->str, &errstr, 10);
+	if (*errstr != '\0' && *errstr != '\r') {
 		msg_info ("invalid map id");
 		rspamd_controller_send_error (conn_ent, 400, "Map id is invalid");
 		return 0;
