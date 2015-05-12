@@ -127,23 +127,26 @@ INCLUDE(FindOpenSSL)
 # Find lua installation
 MACRO(FindLua _major _minor)
 	# Find lua libraries
-	MESSAGE(STATUS "Check for lua ${_major}.${_minor}")
-	
 	UNSET(LUA_INCLUDE_DIR CACHE)
-        UNSET(LUA_LIBRARY CACHE)
-
-	FIND_PATH(LUA_INCLUDE_DIR lua.h
-	  HINTS
-	  "${RSPAMD_SEARCH_PATH}"
-	  $ENV{LUA_DIR}
-	  PATH_SUFFIXES "include/lua${_major}${_minor}" 
-	  				"include/lua${_major}.${_minor}" 
-	  				"include/lua-${_major}.${_minor}"
-	  				include/lua include
-	  PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS}
-	)
+	UNSET(LUA_LIBRARY CACHE)
 	
 	IF(ENABLE_LUAJIT MATCHES "ON")
+		MESSAGE(STATUS "Check for luajit ${_major}.${_minor}")
+		FIND_PATH(LUA_INCLUDE_DIR lua.h
+		  HINTS
+		  "${RSPAMD_SEARCH_PATH}"
+		  $ENV{LUA_DIR}
+		  PATH_SUFFIXES "include/luajit-2.0" 
+		  				"include/luajit${_major}${_minor}" 
+		  				"include/luajit${_major}.${_minor}" 
+		  				"include/luajit-${_major}.${_minor}"
+		  				"include/luajit" 
+		  				"include/lua${_major}${_minor}" 
+		  				"include/lua${_major}.${_minor}" 
+		  				"include/lua-${_major}.${_minor}"
+		  				include/lua include
+		  PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS}
+		)
 		FIND_LIBRARY(LUA_LIBRARY 
 		 	NAMES luajit 
 		  		"luajit-2.0"
@@ -159,6 +162,17 @@ MACRO(FindLua _major _minor)
 		 	DOC "Lua library"
 		)
 	ELSE(ENABLE_LUAJIT MATCHES "ON")
+		MESSAGE(STATUS "Check for lua ${_major}.${_minor}")
+		FIND_PATH(LUA_INCLUDE_DIR lua.h
+		  HINTS
+		  "${RSPAMD_SEARCH_PATH}"
+		  $ENV{LUA_DIR}
+		  PATH_SUFFIXES "include/lua${_major}${_minor}" 
+		  				"include/lua${_major}.${_minor}" 
+		  				"include/lua-${_major}.${_minor}"
+		  				include/lua include
+		  PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS}
+		)
 		FIND_LIBRARY(LUA_LIBRARY 
 		 	NAMES lua 
 		  		"lua${_major}${_minor}"
