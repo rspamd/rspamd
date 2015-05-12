@@ -176,7 +176,8 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 		flags_str = flags;
 	}
 
-	regexp_flags |= PCRE_UTF8 ;
+	rspamd_flags |= RSPAMD_REGEXP_FLAG_RAW;
+	regexp_flags &= ~PCRE_UTF8;
 
 	if (flags_str != NULL) {
 		while (*flags_str) {
@@ -194,7 +195,8 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 				regexp_flags |= PCRE_EXTENDED;
 				break;
 			case 'u':
-				regexp_flags |= PCRE_UNGREEDY;
+				rspamd_flags &= ~RSPAMD_REGEXP_FLAG_RAW;
+				regexp_flags |= PCRE_UTF8;
 				break;
 			case 'O':
 				/* We optimize all regexps by default */

@@ -15,7 +15,7 @@ context("Regexp unit tests", function()
       {'m,test,', 'test123', false},
       {'m{https?://[^/?\\s]+?:\\d+(?<!:80)(?<!:443)(?<!:8080)(?:/|\\s|$)}', '', false},
       {'/test/i', 'TeSt123', true},
-      {'/тест/i', 'ТесТ', true},
+      {'/ТесТ/iu', 'тест', true},
       -- Raw regexp
       {'/\\S<[-\\w\\.]+\\@[-\\w\\.]+>/r', 'some<example@example.com>', true},
       -- Cyrillic utf8 letter
