@@ -453,6 +453,7 @@ struct symbol_remove_data {
 	struct symbol *ms;
 	gboolean remove_weight;
 	gboolean remove_symbol;
+	GList *comp;
 };
 
 
@@ -501,6 +502,12 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 				rc = rspamd_process_expression (ncomp->expr,
 						RSPAMD_EXPRESSION_FLAG_NOOPT, cd);
 				clrbit (cd->checked, cd->composite->id * 2);
+
+				if (rc) {
+					setbit (cd->checked, ncomp->id * 2 + 1);
+				}
+				setbit (cd->checked, ncomp->id * 2);
+
 				ms = g_hash_table_lookup (cd->metric_res->symbols, sym);
 			}
 			else {
@@ -564,24 +571,32 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 		 * that depends on the later decisions when the complete expression is
 		 * evaluated.
 		 */
-		rd = rspamd_mempool_alloc (cd->task->task_pool, sizeof (*cd));
-		rd->ms = ms;
-		if (G_UNLIKELY (t == '~')) {
-			rd->remove_weight = FALSE;
-			rd->remove_symbol = TRUE;
-		}
-		else if (G_UNLIKELY (t == '-')) {
-			rd->remove_symbol = FALSE;
-			rd->remove_weight = FALSE;
-		}
-		else {
-			rd->remove_symbol = TRUE;
-			rd->remove_weight = TRUE;
-		}
-		if (!g_tree_lookup (cd->symbols_to_remove, ms->name)) {
+		if ((rd = g_tree_lookup (cd->symbols_to_remove, ms->name)) == NULL) {
 			g_tree_insert (cd->symbols_to_remove,
 					(gpointer)ms->name,
 					rd);
+			rd = rspamd_mempool_alloc (cd->task->task_pool, sizeof (*rd));
+			rd->ms = ms;
+			if (G_UNLIKELY (t == '~')) {
+				rd->remove_weight = FALSE;
+				rd->remove_symbol = TRUE;
+			}
+			else if (G_UNLIKELY (t == '-')) {
+				rd->remove_symbol = FALSE;
+				rd->remove_weight = FALSE;
+			}
+			else {
+				rd->remove_symbol = TRUE;
+				rd->remove_weight = TRUE;
+			}
+			rd->comp = g_list_prepend (NULL, cd->composite);
+		}
+		else {
+			/*
+			 * XXX: what if we have different preferences regarding
+			 * weight and symbol removal in different composites?
+			 */
+			rd->comp = g_list_prepend (rd->comp, cd->composite);
 		}
 	}
 
@@ -641,12 +656,37 @@ composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 {
 	struct composites_data *cd = data;
 	struct symbol_remove_data *rd = value;
+	GList *cur;
+	struct rspamd_composite *comp;
+	gboolean matched = FALSE;
 
-	if (rd->remove_symbol) {
-		g_hash_table_remove (cd->metric_res->symbols, key);
+	cur = rd->comp;
+
+	/*
+	 * XXX: actually, this is a weak assumption as we are unaware here about
+	 * negate operation and so on. We need to parse AST directly and remove
+	 * only those symbols that could be removed.
+	 */
+	while (cur) {
+		comp = cur->data;
+
+		if (isset (cd->checked, comp->id * 2 + 1)) {
+			matched = TRUE;
+			break;
+		}
+
+		cur = g_list_next (cur);
 	}
-	if (rd->remove_weight) {
-		cd->metric_res->score -= rd->ms->score;
+
+	g_list_free (rd->comp);
+
+	if (matched) {
+		if (rd->remove_symbol) {
+			g_hash_table_remove (cd->metric_res->symbols, key);
+		}
+		if (rd->remove_weight) {
+			cd->metric_res->score -= rd->ms->score;
+		}
 	}
 
 	return FALSE;
