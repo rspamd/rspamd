@@ -113,7 +113,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 					msg->status ? msg->status->str : "unknown error");
 			req->cb (c, msg, c->server_name->str, NULL, req->ud, err);
 			g_error_free (err);
-			return -1;
+			return 0;
 		}
 
 		parser = ucl_parser_new (0);
@@ -123,7 +123,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 			ucl_parser_free (parser);
 			req->cb (c, msg, c->server_name->str, NULL, req->ud, err);
 			g_error_free (err);
-			return -1;
+			return 0;
 		}
 
 		req->cb (c, msg, c->server_name->str, ucl_parser_get_object (
