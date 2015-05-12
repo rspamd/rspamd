@@ -143,25 +143,47 @@ MACRO(FindLua _major _minor)
 	  PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS}
 	)
 	
-	FIND_LIBRARY(LUA_LIBRARY 
-	 	NAMES lua 
-	  		"lua${_major}${_minor}"
-	  		"lua${_major}.${_minor}" 
-	  		"lua-${_major}.${_minor}"
-		HINTS
-			"${RSPAMD_SEARCH_PATH}"
-	  		$ENV{LUA_DIR}
-	  	PATH_SUFFIXES lib64 lib
-	  	PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS}
-	 	DOC "Lua library"
-	)
+	IF(ENABLE_LUAJIT MATCHES "ON")
+		FIND_LIBRARY(LUA_LIBRARY 
+		 	NAMES luajit 
+		  		"luajit-2.0"
+		  		"luajit2.0"
+		  		"luajit${_major}${_minor}"
+		  		"luajit${_major}.${_minor}" 
+		  		"luajit-${_major}.${_minor}"
+			HINTS
+				"${RSPAMD_SEARCH_PATH}"
+		  		$ENV{LUA_DIR}
+		  	PATH_SUFFIXES lib64 lib
+		  	PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS}
+		 	DOC "Lua library"
+		)
+	ELSE(ENABLE_LUAJIT MATCHES "ON")
+		FIND_LIBRARY(LUA_LIBRARY 
+		 	NAMES lua 
+		  		"lua${_major}${_minor}"
+		  		"lua${_major}.${_minor}" 
+		  		"lua-${_major}.${_minor}"
+			HINTS
+				"${RSPAMD_SEARCH_PATH}"
+		  		$ENV{LUA_DIR}
+		  	PATH_SUFFIXES lib64 lib
+		  	PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS}
+		 	DOC "Lua library"
+		)
+	ENDIF(ENABLE_LUAJIT MATCHES "ON")
+
 	IF(LUA_LIBRARY AND LUA_INCLUDE_DIR)
 		SET(LUA_FOUND 1)
 		IF(NOT LUA_VERSION_MAJOR OR NOT LUA_VERSION_MINOR)
 			SET(LUA_VERSION_MAJOR ${_major})
 			SET(LUA_VERSION_MINOR ${_minor})
 		ENDIF(NOT LUA_VERSION_MAJOR OR NOT LUA_VERSION_MINOR)
-		MESSAGE(STATUS "Found lua ${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}")
+		IF(ENABLE_LUAJIT MATCHES "ON")
+			MESSAGE(STATUS "Found luajit ${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}")
+		ELSE(ENABLE_LUAJIT MATCHES "ON")
+			MESSAGE(STATUS "Found lua ${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}")
+		ENDIF(ENABLE_LUAJIT MATCHES "ON")
 	ENDIF(LUA_LIBRARY AND LUA_INCLUDE_DIR)
 ENDMACRO(FindLua _major _minor)
 
@@ -230,7 +252,6 @@ MACRO(ProcessPackage var _name0)
 				MESSAGE(FATAL_ERROR "Packages ${_name0} ${ARGN} could not be found, no library")
 			ENDIF(NOT _lib)
 			
-	
 			FIND_PATH(_incl "${_name0}.h" 
 							HINTS "${RSPAMD_SEARCH_PATH}"
 							PATH_SUFFIXES "include" "include/${_name0}" ${ARGN}
@@ -238,9 +259,11 @@ MACRO(ProcessPackage var _name0)
 			IF(NOT _incl)
 				MESSAGE(FATAL_ERROR "Packages ${_name0} ${ARGN} could not be found, no header")
 			ENDIF(NOT _incl)
+			
 			GET_FILENAME_COMPONENT(_lib_path "${_lib}" PATH)
 			INCLUDE_DIRECTORIES("${_incl}")
 			LINK_DIRECTORIES("${_lib_path}")
+			LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ${_lib})
 			SET(${var}_INCLUDE "${_incl}")
 			SET(${var}_LIBRARY "${_lib_path}")
 			MESSAGE(STATUS "Found ${_name0} ${ARGN} in '${_lib_path}' (library) and '${_incl}' (include).")
@@ -264,6 +287,7 @@ MACRO(ProcessPackage var _name0)
 				MESSAGE(STATUS "Found ${_name0} ${ARGN} in '${_lib_path}' (library) and '${_incl}' (include).")
 				SET(${var}_INCLUDE "${_incl}")
 				SET(${var}_LIBRARY "${_lib_path}")
+				LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ${_lib})
 			ENDIF(_incl)
 		ENDIF(_lib)
 		
@@ -954,7 +978,6 @@ ENDIF(GLIB_COMPAT)
 ADD_DEFINITIONS(-DHAVE_CONFIG_H)
 
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES}")
-LIST(APPEND RSPAMD_REQUIRED_LIBRARIES pcre)
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ucl)
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES rdns)
 LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ottery)
