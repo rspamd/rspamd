@@ -385,7 +385,7 @@ start_fuzzy (struct rspamd_worker *worker)
 
 
 	if ((ctx->backend = rspamd_fuzzy_backend_open (ctx->hashfile, &err)) == NULL) {
-		msg_err (err->message);
+		msg_err ("cannot open backend: %e", err);
 		g_error_free (err);
 		exit (EXIT_FAILURE);
 	}

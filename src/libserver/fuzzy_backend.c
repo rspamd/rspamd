@@ -433,37 +433,43 @@ rspamd_fuzzy_backend_convert (const gchar *path, int fd, GError **err)
 	(void)lseek (fd, 0, SEEK_SET);
 
 	off = sizeof (FUZZY_FILE_MAGIC);
-	if ((map = mmap (NULL, st.st_size - off, PROT_READ, MAP_SHARED, fd,
-			0)) == MAP_FAILED) {
-		g_set_error (err, rspamd_fuzzy_backend_quark (),
-				errno, "Cannot mmap file %s: %s",
-				path, strerror (errno));
-		rspamd_fuzzy_backend_close (nbackend);
-
-		return FALSE;
+	if (off >= st.st_size) {
+		msg_warn ("old fuzzy storage is empty or corrupted, remove it");
 	}
+	else {
+		if ((map = mmap (NULL, st.st_size - off, PROT_READ, MAP_SHARED, fd,
+				0)) == MAP_FAILED) {
+			g_set_error (err, rspamd_fuzzy_backend_quark (),
+					errno, "Cannot mmap file %s: %s",
+					path, strerror (errno));
+			rspamd_fuzzy_backend_close (nbackend);
 
-	end = map + st.st_size;
-	p = map + off;
-
-	rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_START,
-				nbackend, NULL);
-	while (p < end) {
-		n = (struct rspamd_legacy_fuzzy_node *)p;
-		/* Convert node flag, digest, value, time  */
-		if (rspamd_fuzzy_backend_run_stmt (nbackend, RSPAMD_FUZZY_BACKEND_INSERT,
-				(gint)n->flag, n->h.hash_pipe,
-				(gint64)n->value, n->time) != SQLITE_OK) {
-			msg_warn ("Cannot execute init sql %s: %s",
-					prepared_stmts[RSPAMD_FUZZY_BACKEND_INSERT].sql,
-					sqlite3_errmsg (nbackend->db));
+			return FALSE;
 		}
-		p += sizeof (struct rspamd_legacy_fuzzy_node);
+
+		end = map + st.st_size;
+		p = map + off;
+
+		rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_START,
+				nbackend, NULL);
+		while (p < end) {
+			n = (struct rspamd_legacy_fuzzy_node *)p;
+			/* Convert node flag, digest, value, time  */
+			if (rspamd_fuzzy_backend_run_stmt (nbackend, RSPAMD_FUZZY_BACKEND_INSERT,
+					(gint)n->flag, n->h.hash_pipe,
+					(gint64)n->value, n->time) != SQLITE_OK) {
+				msg_warn ("Cannot execute init sql %s: %s",
+						prepared_stmts[RSPAMD_FUZZY_BACKEND_INSERT].sql,
+						sqlite3_errmsg (nbackend->db));
+			}
+			p += sizeof (struct rspamd_legacy_fuzzy_node);
+		}
+
+		munmap (map, st.st_size);
+		rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT,
+				nbackend, NULL);
 	}
 
-	munmap (map, st.st_size);
-	rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT,
-					nbackend, NULL);
 	rspamd_fuzzy_backend_run_sql (create_index_sql, nbackend, NULL);
 	rspamd_fuzzy_backend_close (nbackend);
 	rename (tmpdb, path);
