@@ -33,6 +33,10 @@
 #include "libmime/message.h"
 #include "main.h"
 #include "keypairs_cache.h"
+#include "ottery.h"
+
+/* Rotate keys each minute by default */
+#define DEFAULT_ROTATION_TIME 60.0
 
 gpointer init_http_proxy (struct rspamd_config *cfg);
 void start_http_proxy (struct rspamd_worker *worker);
@@ -72,6 +76,7 @@ struct http_proxy_ctx {
 	/* Local rotating keypair for upstreams */
 	gpointer local_key;
 	struct event rotate_ev;
+	gdouble rotate_tm;
 };
 
 struct http_proxy_session {
@@ -192,11 +197,16 @@ init_http_proxy (struct rspamd_config *cfg)
 	ctx = g_malloc0 (sizeof (struct http_proxy_ctx));
 	ctx->timeout = 5.0;
 	ctx->upstreams = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+	ctx->rotate_tm = DEFAULT_ROTATION_TIME;
 
 	rspamd_rcl_register_worker_option (cfg, type, "timeout",
 		rspamd_rcl_parse_struct_time, ctx,
 		G_STRUCT_OFFSET (struct http_proxy_ctx,
 		timeout), RSPAMD_CL_FLAG_TIME_FLOAT);
+	rspamd_rcl_register_worker_option (cfg, type, "rotate",
+		rspamd_rcl_parse_struct_time, ctx,
+		G_STRUCT_OFFSET (struct http_proxy_ctx,
+		rotate_tm), RSPAMD_CL_FLAG_TIME_FLOAT);
 	rspamd_rcl_register_worker_option (cfg, type, "keypair",
 		rspamd_rcl_parse_struct_keypair, ctx,
 		G_STRUCT_OFFSET (struct http_proxy_ctx,
@@ -409,10 +419,28 @@ proxy_accept_socket (gint fd, short what, void *arg)
 		ctx->ev_base);
 }
 
+static void
+proxy_rotate_key (gint fd, short what, void *arg)
+{
+	struct timeval rot_tv;
+	struct http_proxy_ctx *ctx = arg;
+	gpointer kp;
+
+	double_to_tv (ctx->rotate_tm, &rot_tv);
+	rot_tv.tv_sec += ottery_rand_range (rot_tv.tv_sec);
+	event_del (&ctx->rotate_ev);
+	event_add (&ctx->rotate_ev, &rot_tv);
+
+	kp = ctx->local_key;
+	ctx->local_key = rspamd_http_connection_gen_key ();
+	rspamd_http_connection_key_unref (kp);
+}
+
 void
 start_http_proxy (struct rspamd_worker *worker)
 {
 	struct http_proxy_ctx *ctx = worker->ctx;
+	struct timeval rot_tv;
 
 	ctx->ev_base = rspamd_prepare_worker (worker, "http_proxy",
 			proxy_accept_socket);
@@ -431,6 +459,12 @@ start_http_proxy (struct rspamd_worker *worker)
 	/* XXX: stupid default */
 	ctx->keys_cache = rspamd_keypair_cache_new (256);
 	ctx->local_key = rspamd_http_connection_gen_key ();
+
+	double_to_tv (ctx->rotate_tm, &rot_tv);
+	rot_tv.tv_sec += ottery_rand_range (rot_tv.tv_sec);
+	event_set (&ctx->rotate_ev, -1, EV_TIMEOUT, proxy_rotate_key, ctx);
+	event_base_set (ctx->ev_base, &ctx->rotate_ev);
+	event_add (&ctx->rotate_ev, &rot_tv);
 
 	event_base_loop (ctx->ev_base, 0);
 
