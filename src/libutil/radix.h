@@ -1,3 +1,27 @@
+/*
+ * Copyright (c) 2009-2015, Vsevolod Stakhov
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY AUTHOR ''AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL AUTHOR BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #ifndef RADIX_H
 #define RADIX_H
 
@@ -10,105 +34,33 @@
 
 typedef struct radix_tree_compressed radix_compressed_t;
 
-#ifdef LEGACY_RADIX
-typedef struct radix_node_s radix_node_t;
-typedef struct radix_tree_s radix_tree_t;
-enum radix_insert_type {
-	RADIX_INSERT,
-	RADIX_ADD,
-	RADIX_REPLACE
-};
-
-typedef gboolean (*radix_tree_traverse_func)(guint32 key, guint32 mask,
-	uintptr_t value, void *user_data);
-
 /**
- * Create new radix tree
+ * Insert new key to the radix trie
+ * @param tree radix trie
+ * @param key key to insert (bitstring)
+ * @param keylen length of the key (in bytes)
+ * @param masklen lenght of mask that should be applied to the key (in bits)
+ * @param value opaque value pointer
+ * @return previous value of the key or `RADIX_NO_VALUE`
  */
-radix_tree_t * radix_tree_create (void);
-
-/**
- * Insert value to radix tree
- * returns: 1 if value already exists
- *          0 if operation was successfull
- *          -1 if there was some error
- */
-gint radix32tree_insert (radix_tree_t *tree,
-	guint32 key,
-	guint32 mask,
-	uintptr_t value);
-
-/**
- * Add value to radix tree or insert it if value does not exists
- * returns: value if value already exists and was added
- *          0 if value was inserted
- *          -1 if there was some error
- */
-uintptr_t radix32tree_add (radix_tree_t *tree,
-	guint32 key,
-	guint32 mask,
-	uintptr_t value);
-
-/**
- * Replace value in radix tree or insert it if value does not exists
- * returns: 1 if value already exists and was replaced
- *          0 if value was inserted
- *          -1 if there was some error
- */
-gint radix32tree_replace (radix_tree_t *tree,
-	guint32 key,
-	guint32 mask,
-	uintptr_t value);
-
-/**
- * Delete value from radix tree
- * returns: 1 if value does not exist
- *          0 if value was deleted
- *          -1 if there was some error
- */
-gint radix32tree_delete (radix_tree_t *tree, guint32 key, guint32 mask);
-
-/**
- * Find value in radix tree
- * returns: value if value was found
- *			RADIX_NO_VALUE if value was not found
- */
-uintptr_t radix32tree_find (radix_tree_t *tree, guint32 key);
-
-/**
- * Find specified address in tree (works only for ipv4 addresses)
- * @param tree
- * @param addr
- * @return
- */
-uintptr_t radix32_tree_find_addr (radix_tree_t *tree, rspamd_inet_addr_t *addr);
-
-
-
-/**
- * Traverse via the whole tree calling specified callback
- */
-void radix32tree_traverse (radix_tree_t *tree,
-	radix_tree_traverse_func func,
-	void *user_data);
-
-/**
- * Frees radix tree
- */
-void radix_tree_free (radix_tree_t *tree);
-#endif
-
 uintptr_t
 radix_insert_compressed (radix_compressed_t * tree,
 	guint8 *key, gsize keylen,
 	gsize masklen,
 	uintptr_t value);
 
+/**
+ * Find a key in a radix trie
+ * @param tree radix trie
+ * @param key key to find (bitstring)
+ * @param keylen length of a key
+ * @return opaque pointer or `RADIX_NO_VALUE` if no value has been found
+ */
 uintptr_t radix_find_compressed (radix_compressed_t * tree, guint8 *key,
 		gsize keylen);
 
 /**
- * Find specified address in tree (works for any address)
+ * Find specified address in tree (works for IPv4 or IPv6 addresses)
  * @param tree
  * @param addr
  * @return
@@ -116,8 +68,16 @@ uintptr_t radix_find_compressed (radix_compressed_t * tree, guint8 *key,
 uintptr_t radix_find_compressed_addr (radix_compressed_t *tree,
 		rspamd_inet_addr_t *addr);
 
+/**
+ * Destroy the complete radix trie
+ * @param tree
+ */
 void radix_destroy_compressed (radix_compressed_t *tree);
 
+/**
+ * Create new radix trie
+ * @return
+ */
 radix_compressed_t *radix_create_compressed (void);
 
 /**
