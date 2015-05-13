@@ -291,7 +291,7 @@ rspamd_init_lua_filters (struct rspamd_config *cfg)
 				msg_info ("load of %s failed: %s", module->path,
 					lua_tostring (L, -1));
 				cur = g_list_next (cur);
-				return FALSE;
+				continue;
 			}
 
 			/* Initialize config structure */
@@ -304,14 +304,14 @@ rspamd_init_lua_filters (struct rspamd_config *cfg)
 			if (lua_pcall (L, 0, LUA_MULTRET, 0) != 0) {
 				msg_info ("init of %s failed: %s", module->path,
 					lua_tostring (L, -1));
-				return FALSE;
+				cur = g_list_next (cur);
+				continue;
 			}
 			if (lua_gettop (L) != 0) {
 				if (lua_tonumber (L, -1) == -1) {
 					msg_info (
 						"%s returned -1 that indicates configuration error",
 						module->path);
-					return FALSE;
 				}
 				lua_pop (L, lua_gettop (L));
 			}
