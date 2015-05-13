@@ -572,11 +572,9 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 		 * evaluated.
 		 */
 		if ((rd = g_tree_lookup (cd->symbols_to_remove, ms->name)) == NULL) {
-			g_tree_insert (cd->symbols_to_remove,
-					(gpointer)ms->name,
-					rd);
 			rd = rspamd_mempool_alloc (cd->task->task_pool, sizeof (*rd));
 			rd->ms = ms;
+
 			if (G_UNLIKELY (t == '~')) {
 				rd->remove_weight = FALSE;
 				rd->remove_symbol = TRUE;
@@ -589,7 +587,11 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 				rd->remove_symbol = TRUE;
 				rd->remove_weight = TRUE;
 			}
+
 			rd->comp = g_list_prepend (NULL, cd->composite);
+			g_tree_insert (cd->symbols_to_remove,
+					(gpointer)ms->name,
+					rd);
 		}
 		else {
 			/*
