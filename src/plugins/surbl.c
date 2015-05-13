@@ -1024,7 +1024,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 			RSPAMD_HTTP_CLIENT_SIMPLE,
 			RSPAMD_HTTP_CLIENT, NULL);
 	msg = rspamd_http_new_message (HTTP_REQUEST);
-	msg->url = g_string_new (struri (url));
+	g_string_assign (msg->url, struri (url));
 	param->sock = s;
 	param->suffix = suffix;
 	param->redirector = selected;
