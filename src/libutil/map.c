@@ -829,6 +829,9 @@ rspamd_hosts_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 	if (data->prev_data) {
 		g_hash_table_destroy (data->prev_data);
 	}
+	if (data->cur_data) {
+		msg_info ("read hash of %z elements", g_hash_table_size (data->cur_data));
+	}
 }
 
 gchar *
@@ -854,6 +857,9 @@ rspamd_kv_list_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 	if (data->prev_data) {
 		g_hash_table_destroy (data->prev_data);
 	}
+	if (data->cur_data) {
+		msg_info ("read hash of %z elements", g_hash_table_size (data->cur_data));
+	}
 }
 
 gchar *
@@ -877,5 +883,8 @@ rspamd_radix_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
 	if (data->prev_data) {
 		radix_destroy_compressed (data->prev_data);
+	}
+	if (data->cur_data) {
+		msg_info ("read radix trie of %z elements", radix_get_size (data->cur_data));
 	}
 }
