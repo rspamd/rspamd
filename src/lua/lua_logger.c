@@ -267,6 +267,38 @@ lua_logger_out_boolean (lua_State *L, gint pos, gchar *outbuf, gsize len)
 	return r;
 }
 
+static gsize
+lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len)
+{
+	gint r;
+
+	if (!lua_getmetatable (L, pos)) {
+		return 0;
+	}
+
+	lua_pushstring (L, "__index");
+	lua_gettable (L, -2);
+
+	if (!lua_istable (L, -1)) {
+		lua_pop (L, 2);
+		return 0;
+	}
+
+	lua_pushstring (L, "class");
+	lua_gettable (L, -2);
+
+	if (!lua_isstring (L, -1)) {
+		lua_pop (L, 3);
+		return 0;
+	}
+
+	r = rspamd_snprintf (outbuf, len, "%s(%p)", lua_tostring (L, -1),
+			lua_touserdata (L, pos));
+	lua_pop (L, 3);
+
+	return r;
+}
+
 #define MOVE_BUF(d, remain, r) if ((remain) - (r) == 0) break; (d) += (r); (remain) -= (r)
 
 static gsize
@@ -325,7 +357,7 @@ lua_logger_out_table (lua_State *L, gint pos, gchar *outbuf, gsize len)
 		r = rspamd_snprintf (d, remain, "[%s] = ",
 				lua_tostring (L, -2));
 		MOVE_BUF(d, remain, r);
-		r = lua_logger_out_type (L, -1, d, remain);
+		r = lua_logger_out_type (L, lua_gettop (L), d, remain);
 		MOVE_BUF(d, remain, r);
 
 		first = FALSE;
@@ -358,6 +390,9 @@ lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf, gsize len)
 	case LUA_TTABLE:
 		r = lua_logger_out_table (L, pos, outbuf, len);
 		break;
+	case LUA_TUSERDATA:
+		r = lua_logger_out_userdata (L, pos, outbuf, len);
+		break;
 	default:
 		/* Try to push everything as string using tostring magic */
 		r = lua_logger_out_str (L, pos, outbuf, len);
@@ -370,7 +405,7 @@ lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf, gsize len)
 static gint
 lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 {
-	static gchar logbuf[BUFSIZ];
+	gchar logbuf[BUFSIZ];
 	gchar *d;
 	const gchar *s, *c;
 	gsize remain, r;
