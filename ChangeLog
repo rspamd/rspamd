@@ -1,3 +1,68 @@
+0.8.3:
+	* Various critical fixes in distribution (by @dottedmag and @fatalbanana)
+	* Fixed bugs in url detector to parse certain patterns
+	* Add default host and helo for a client
+	* Some sanity checks for tokenizer and classifier
+	* Reiterate on systemd support
+	* Fix missing symbol registration
+	* Add support of spamc compatible output
+	* Filter double-dots in rbl.lua validate_dns (by @fatalbanana)
+	* Update ucl submodule due to critical bugfix
+
+0.8.2:
+	* Create fuzzy db if it does not exist
+	* Fix: Centos init script: configtest() (by @AlexeySa)
+	* Enable one_shot for RECEIVED_SPAMHAUS_XBL - Fixes #102 (by @fatalbanana)
+	* Update Exim patch (by @fatalbanana)
+	* Fix processing of unix sockets.
+	* Allow applying settings to authenticated users (by @fatalbanana)
+	* Make settings priorities work as documented (by @fatalbanana)
+	* Fix race condition in symbols planner
+	* Add DNSWL_BLOCKED symbol (by @fatalbanana)
+	* Make Exim pass usernames to rspamd (by @fatalbanana)
+	* Update RBL module (by @fatalbanana):
+		- fix indentation;
+		- collapse loops;
+		- avoid calling for un-needed information;
+		- allow disabling RBLs for authenticated users
+	* once_received.lua: Fix indentation & add exclusion for authenticated users (by @fatalbanana)
+	* hfilter.lua: Add exclusion for authenticated users (by @AlexeySa)
+	* Updates to hfilter rules (by @AlexeySa)
+	* Set empty <> user or addr for msgs without FROM (by @eneq123)
+	* Fix: attempt to index field '?' (a nil value) (by @eneq123)
+	* Fix: if not exist Date-header (by @AlexeySa)
+	* Add task:get_content() method.
+	* rbl.lua: Ignore private IP space (by @fatalbanana)
+	* Allow to check radix maps from lua by rspamd{ip}
+	* Make local exclusions configurable per-RBL (by @fatalbanana)
+	* Add rspamd_config:radix_from_config() (by @fatalbanana)
+	* Support emails dnsbl in rbl (by @fatalbanana)
+	* Complete rework of url extraction logic
+	* Allow customizations for unix sockets. (fixes #182)
+	* Set lua path according to rspamd settings.
+	* Import lua-functional for plugins stuff.
+	* Completely rewrite multimap plugin in functional style.
+	* Fix FORGED_MUA_THUNDERBIRD_MSGID (fixes #186)
+	* Check IPv6 addresses at dnswl.org and Spamhaus whitelist (by @fatalbanana)
+	* Add lowercase utility for utf8 strings.
+	* Various fixes to build system
+	* Updated debian configuration infrastructure (by @dottedmag)
+
+0.8.1:
+	* Add sqlite and perl as dependencies for RPM/Debian packages (by @fatalbanana)
+	* Remove whitelist.lua from RPM file list (by @fatalbanana)
+	* Make Exim pass hostnames to rspamd (by @fatalbanana)
+	* Fix building on Fedora (by @fatalbanana)
+	* Add toggle for disabling installation of systemd units on Linux (by @fatalbanana)
+	* Fix double format rounding that caused output corruption (reported by @fatalbanana)
+	* Revert broken change for destructors ordering that led to memory corruption
+	* Do not reset symbols case of settings if parsed from lua (reported by @andrejzverev)
+	* Fix build on SunOS (by @wiedi)
+	* Fix multiple crashes on broken DKIM DNS records
+	* Fix critical issue with composites weights removing
+	* Fix memory corruption in composites processing code
+	* Ignore non-SPF TXT records when parsing SPF includes
+
 0.8.0:
 	* New fuzzy check logic:
 		- use shingles algorithm for fuzzy matching
