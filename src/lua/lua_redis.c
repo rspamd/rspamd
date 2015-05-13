@@ -288,6 +288,22 @@ lua_redis_parse_args (lua_State *L, gint idx, const gchar *cmd,
 	ud->nargs = top;
 	ud->args = args;
 }
+
+static void
+lua_redis_connect_cb (const struct redisAsyncContext *c, int status)
+{
+	/*
+	 * Workaround to prevent double close:
+	 * https://groups.google.com/forum/#!topic/redis-db/mQm46XkIPOY
+	 */
+#if defined(HIREDIS_MAJOR) && HIREDIS_MAJOR == 0 && HIREDIS_MINOR <= 11
+	struct redisAsyncContext *nc = (struct redisAsyncContext *)c;
+	if (status == REDIS_ERR) {
+		nc->c.fd = -1;
+	}
+#endif
+}
+
 /***
  * @function rspamd_redis.make_request({params})
  * Make request to redis server, params is a table of key=value arguments in any order
@@ -403,8 +419,10 @@ lua_redis_make_request (lua_State *L)
 		ud->terminated = 0;
 		ud->ctx = redisAsyncConnect (rspamd_inet_address_to_string (addr->addr),
 				rspamd_inet_address_get_port (addr->addr));
+		redisAsyncSetConnectCallback (ud->ctx, lua_redis_connect_cb);
 
 		if (ud->ctx == NULL || ud->ctx->err) {
+			ud->terminated = 1;
 			redisAsyncFree (ud->ctx);
 			lua_redis_free_args (ud);
 			luaL_unref (ud->L, LUA_REGISTRYINDEX, ud->cbref);
@@ -432,6 +450,7 @@ lua_redis_make_request (lua_State *L)
 		}
 		else {
 			msg_info ("call to redis failed: %s", ud->ctx->errstr);
+			ud->terminated = 1;
 			lua_redis_free_args (ud);
 			redisAsyncFree (ud->ctx);
 			luaL_unref (ud->L, LUA_REGISTRYINDEX, ud->cbref);
