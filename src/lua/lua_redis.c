@@ -70,12 +70,13 @@ struct lua_redis_userdata {
 	lua_State *L;
 	struct rspamd_task *task;
 	struct event timeout;
-	gint cbref;
 	gchar *server;
 	gchar *reqline;
-	guint16 port;
 	gchar **args;
+	gint cbref;
 	guint nargs;
+	guint16 port;
+	guint16 terminated;
 };
 
 static void
@@ -98,6 +99,7 @@ lua_redis_fin (void *arg)
 	struct lua_redis_userdata *ud = arg;
 
 	if (ud->ctx) {
+		ud->terminated = 1;
 		redisAsyncFree (ud->ctx);
 		lua_redis_free_args (ud);
 		event_del (&ud->timeout);
@@ -205,6 +207,11 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 {
 	redisReply *reply = r;
 	struct lua_redis_userdata *ud = priv;
+
+	if (ud->terminated) {
+		/* We are already at the termination stage, just go out */
+		return;
+	}
 
 	if (c->err == 0) {
 		if (r != NULL) {
@@ -393,6 +400,7 @@ lua_redis_make_request (lua_State *L)
 	}
 
 	if (ret) {
+		ud->terminated = 0;
 		ud->ctx = redisAsyncConnect (rspamd_inet_address_to_string (addr->addr),
 				rspamd_inet_address_get_port (addr->addr));
 
