@@ -21,7 +21,7 @@ License:        BSD2c
 %endif
 URL:            https://rspamd.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
-%if 0%{?centos_version} == 600
+%if 0%{?el6}
 BuildRequires:  cmake28,glib2-devel,gmime24-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,perl
 %else
 BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,perl
@@ -85,7 +85,7 @@ lua.
         -DLOGDIR=%{_localstatedir}/log/rspamd \
         -DEXAMPLESDIR=%{_datadir}/examples/rspamd \
         -DPLUGINSDIR=%{_datadir}/rspamd \
-        -DLIBDIR=%{_libdir} \
+        -DLIBDIR=%{_libdir}/rspamd/ \
         -DINCLUDEDIR=%{_includedir} \
         -DNO_SHARED=ON \
         -DDEBIAN_BUILD=1 \
@@ -203,6 +203,7 @@ fi
 %dir %{rspamd_pluginsdir}/lua
 %dir %{rspamd_pluginsdir}
 %dir %{rspamd_wwwdir}
+%dir %{_libdir}/rspamd
 %config(noreplace) %{rspamd_confdir}/2tld.inc
 %config(noreplace) %{rspamd_confdir}/surbl-whitelist.inc
 %{rspamd_pluginsdir}/lua/forged_recipients.lua
@@ -217,6 +218,8 @@ fi
 %{rspamd_pluginsdir}/lua/ip_score.lua
 %{rspamd_pluginsdir}/lua/settings.lua
 %{rspamd_pluginsdir}/lua/fun.lua
+%{rspamd_pluginsdir}/lua/spamassassin.lua
+%{rspamd_pluginsdir}/lua/dmarc.lua
 %{rspamd_confdir}/lua/regexp/drugs.lua
 %{rspamd_confdir}/lua/regexp/fraud.lua
 %{rspamd_confdir}/lua/regexp/headers.lua
@@ -225,8 +228,13 @@ fi
 %{rspamd_confdir}/lua/hfilter.lua
 %{rspamd_confdir}/lua/rspamd.classifiers.lua
 %{rspamd_wwwdir}/*
+%{_libdir}/rspamd/*
+%{_datadir}/rspamd/effective_tld_names.dat
 
 %changelog
+* Wed May 13 2015 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.9.0-1
+- Update to 0.9.0
+
 * Fri Mar 13 2015 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.8.3-1
 - Update to 0.8.3
 
