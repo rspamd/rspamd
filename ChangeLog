@@ -1,3 +1,74 @@
+0.9.0:
+	* Add support of the fast and secure protocol level encryption:
+		- curve25519 is used for key exchange;
+		- chacha20/poly1305 cryptobox construction for bulk encryption;
+		- zero latency overhead;
+		- encrypting and balancing HTTP proxy worker
+	* Rework expressions and create new expressions library:
+		- aggressive optimizations based on the abstract syntax tree;
+		- abstract expressions support (regular expressions, functions, lua modules
+		  composites and so on)
+		- New comparision and '+' operators support
+		- New greedy algorithm to minimize execution time of expressions and
+		  all symbols
+		- Dynamic expressions benchmark and reoptimizations
+	* Many improvements to the LUA API:
+		- reworked logger module allowing to do pretty print of the most of lua
+		  types (including tables and userdata classes)
+		- reworked lua redis and lua HTTP to support more features
+		- added opaque type for passing large text chunks without copying
+		- new regexp module with many auxiliary functions (e.g. `re:split`)
+	* LuaJIT is now the default requirement for rspamd allowing to speed up lua
+	  execution by a large margin (however, plain lua is still supported)
+	* New plugins:
+		- spamassassin rules plugin that allows to load and re-use the most of
+		  SA rules natively
+		- DMARC plugin that evaluates SPF and DKIM policies to the domain policies
+		- many old plugins has been reworked to implement new features and improve
+		  stability
+	* New aho-corasic trie implementation from @mischasan that allows to load and
+	  use hundreds of thousands of patterns with no influence on load
+	* Support of PCRE JIT and PCRE JIT fast path modes that significantly improves
+	  the performance of regular expressions if supported by PCRE
+	* New URLs parser and extractor:
+		- removed legacy code that was useless for url finding
+		- reworked algorithms of URL parsing for more precise and accurate results
+		- added top-level-domains tree from http://publicsuffix.org
+		- improved emails parsing
+		- removed many phishing false positives due to TLD tree check
+	* New statistics infrastructure:
+		- created a separate layer of statistic library
+		- improved OSB-Bayes by re-weighting tokens according to the original
+		  academic paper and `crm114` implementation, which reduced false positives
+		  rate significantly
+		- created learn cache to avoid double learning of statistics and providing
+		  an efficient way to re-learn class for a message
+		- created abstract layers for different statistics backends
+		- implemented new tokenization algorithms with fast or secure (siphash)
+		  hashes to generate statistics features
+	* Reworked utf8 tokenization that previously corrupted all UTF8 words (minor
+	  incompatibility with old fuzzy hashes with utf-8 symbols)
+	* SPF module has been completely rewritten to support complex cases of
+	  `include` and `redirect` within SPF records
+	* DKIM module now supports multiple signatures
+	* Controller passwords can now be stored encrypted by `PBKDF2-HMAC` in the
+	  configuration file
+	* Many hand-written HTTP clients has been replaced with the common rspamd
+	  http module
+	* New test framework:
+		- import lua `telescope` test framework
+		- add unit tests for many rspamd modules and routines
+		- create a unit test for each possible bug found
+		- use luajit ffi for testing C code
+		- added preliminary support of functional testing by creating tasks from lua
+	* Randomize hash seed to avoid certain hash tables vulnerabilities
+	* Documentation improvements:
+		- added documentation for the vast majority of rspamd modules
+		- added documentation for rspamd protocol
+		- added documentation for the most of rspamd LUA extensions
+	* Fixed tonns of bugs and memory leaks
+	* Added tonns of minor features
+
 0.8.3:
 	* Various critical fixes in distribution (by @dottedmag and @fatalbanana)
 	* Fixed bugs in url detector to parse certain patterns
