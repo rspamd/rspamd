@@ -237,7 +237,7 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 	struct map_cb_data cbdata;
 	gchar buf[BUFSIZ], *remain;
 	ssize_t r;
-	gint fd, rlen;
+	gint fd, rlen, tlen;
 
 	if (map->read_callback == NULL || map->fin_callback == NULL) {
 		msg_err ("bad callback for reading map file");
@@ -256,8 +256,10 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 	cbdata.map = map;
 
 	rlen = 0;
+	tlen = 0;
 	while ((r = read (fd, buf + rlen, sizeof (buf) - rlen - 1)) > 0) {
 		r += rlen;
+		tlen += r;
 		buf[r] = '\0';
 		remain = map->read_callback (map->pool, buf, r, &cbdata);
 		if (remain != NULL) {
@@ -269,7 +271,7 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 
 	close (fd);
 
-	if (rlen > 0) {
+	if (tlen > 0) {
 		map->fin_callback (map->pool, &cbdata);
 		*map->user_data = cbdata.cur_data;
 	}
