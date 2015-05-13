@@ -79,7 +79,6 @@ local function check_multimap(task)
       end
     end
   end
-
   -- IP rules
   local ip = task:get_from_ip()
   if ip:is_valid() then
@@ -146,7 +145,6 @@ local function add_multimap_rule(key, newrule)
     if newrule['type'] == 'ip' then
       newrule['radix'] = rspamd_config:add_radix_map (newrule['map'], newrule['description'])
       if newrule['radix'] then
-        table.insert(rules, newrule)
         return newrule
       else
         rspamd_logger.warn('Cannot add rule: map doesn\'t exists: ' .. newrule['map'])
