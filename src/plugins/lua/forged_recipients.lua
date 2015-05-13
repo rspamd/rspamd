@@ -27,10 +27,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -- Plugin for comparing smtp dialog recipients and sender with recipients and sender
 -- in mime headers
 
+local logger = require "rspamd_logger"
 local symbol_rcpt = 'FORGED_RECIPIENTS'
 local symbol_sender = 'FORGED_SENDER'
 
-function check_forged_headers(task)
+local function check_forged_headers(task)
 	local smtp_rcpt = task:get_recipients(1)
 	local res = false
 	
@@ -85,21 +86,12 @@ if opts then
 	if opts['symbol_rcpt'] or opts['symbol_sender'] then
 		if opts['symbol_rcpt'] then
 			symbol_rcpt = opts['symbol_rcpt']
-			if type(rspamd_config.get_api_version) ~= 'nil' then
-				rspamd_config:register_virtual_symbol(symbol_rcpt, 1.0, 'check_forged_headers')
-			end
+			rspamd_config:register_virtual_symbol(symbol_rcpt, 1.0, check_forged_headers)
 		end
 		if opts['symbol_sender'] then
 			symbol_sender = opts['symbol_sender']
-			if type(rspamd_config.get_api_version) ~= 'nil' then
-				rspamd_config:register_virtual_symbol(symbol_sender, 1.0)
-			end
+			rspamd_config:register_virtual_symbol(symbol_sender, 1.0)
 		end
-		if type(rspamd_config.get_api_version) ~= 'nil' then
-			rspamd_config:register_callback_symbol('FORGED_RECIPIENTS', 1.0, 'check_forged_headers')
-		else
-			rspamd_config:register_symbol('FORGED_RECIPIENTS', 1.0, 'check_forged_headers')
-		end
-		
+		rspamd_config:register_callback_symbol('FORGED_RECIPIENTS', 1.0, check_forged_headers)
 	end
 end
