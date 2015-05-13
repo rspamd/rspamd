@@ -642,6 +642,16 @@ radix_add_generic_iplist (const gchar *ip_list, radix_compressed_t **tree)
 	return (rspamd_radix_add_iplist (ip_list, ",; ", *tree) > 0);
 }
 
+
+gsize
+radix_get_size (radix_compressed_t *tree)
+{
+	if (tree != NULL) {
+		return tree->size;
+	}
+
+	return 0;
+}
 /*
  * vi:ts=4
  */

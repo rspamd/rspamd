@@ -97,4 +97,11 @@ gint rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 gboolean radix_add_generic_iplist (const gchar *ip_list,
 		radix_compressed_t **tree);
 
+/**
+ * Returns number of elements in the tree
+ * @param tree
+ * @return
+ */
+gsize radix_get_size (radix_compressed_t *tree);
+
 #endif
