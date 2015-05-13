@@ -322,9 +322,11 @@ fin:
 				}
 			}
 			else {
+#ifdef HAVE_PCRE_JIT
 				/* Just alias pointers */
 				res->raw_extra = res->extra;
 				res->raw_jstack = res->jstack;
+#endif
 			}
 		}
 	}
