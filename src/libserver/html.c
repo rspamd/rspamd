@@ -848,7 +848,7 @@ parse_tag_url (struct rspamd_task *task,
 		url = rspamd_mempool_alloc (task->task_pool, sizeof (struct rspamd_url));
 		rc = rspamd_url_parse (url, url_text, len, task->task_pool);
 
-		if (rc != URI_ERRNO_EMPTY && url->hostlen != 0) {
+		if (rc == URI_ERRNO_OK && url->hostlen != 0) {
 			/*
 			 * Check for phishing
 			 */
