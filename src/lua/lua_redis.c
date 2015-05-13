@@ -350,6 +350,7 @@ lua_redis_make_request (lua_State *L)
 			ud->cbref = cbref;
 			lua_pushstring (L, "args");
 			lua_redis_parse_args (L, -1, cmd, ud);
+			ret = TRUE;
 		}
 		else {
 			if (cbref != -1) {
@@ -383,6 +384,8 @@ lua_redis_make_request (lua_State *L)
 			else {
 				lua_redis_parse_args (L, 0, cmd, ud);
 			}
+
+			ret = TRUE;
 		}
 		else {
 			msg_err ("incorrect function invocation");
