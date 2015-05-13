@@ -163,7 +163,7 @@ LUA_FUNCTION_DEF (task, get_urls);
  */
 LUA_FUNCTION_DEF (task, get_content);
 /***
- * @method task:get_urls()
+ * @method task:get_emails()
  * Get all email addresses found in a message.
  * @return {table rspamd_url} list of all email addresses found
  */
