@@ -87,6 +87,19 @@ static void
 rspamd_regexp_dtor (rspamd_regexp_t *re)
 {
 	if (re) {
+		if (re->raw_re && re->raw_re != re->re) {
+			pcre_free (re->raw_re);
+#ifdef HAVE_PCRE_JIT
+			if (re->raw_extra) {
+				pcre_free_study (re->raw_extra);
+			}
+			if (re->raw_jstack) {
+				pcre_jit_stack_free (re->raw_jstack);
+			}
+#else
+			pcre_free (re->raw_extra);
+#endif
+		}
 		if (re->re) {
 			pcre_free (re->re);
 #ifdef HAVE_PCRE_JIT
@@ -98,19 +111,6 @@ rspamd_regexp_dtor (rspamd_regexp_t *re)
 			}
 #else
 			pcre_free (re->extra);
-#endif
-		}
-		if (re->raw_re) {
-			pcre_free (re->raw_re);
-#ifdef HAVE_PCRE_JIT
-			if (re->raw_extra) {
-				pcre_free_study (re->raw_extra);
-			}
-			if (re->raw_jstack) {
-				pcre_jit_stack_free (re->raw_jstack);
-			}
-#else
-			pcre_free (re->raw_extra);
 #endif
 		}
 
@@ -274,7 +274,7 @@ fin:
 							PCRE_INFO_JIT, &jit);
 
 					if (n != 0 || jit != 1) {
-						msg_info ("jit compilation of %s is not supported", pattern);
+						msg_debug ("jit compilation of %s is not supported", pattern);
 						res->jstack = NULL;
 					}
 					else {
@@ -289,31 +289,42 @@ fin:
 						pattern, err_str);
 			}
 		}
+
 		if (res->raw_re) {
-			res->raw_extra = pcre_study (res->raw_re, study_flags, &err_str);
-			if (res->raw_extra != NULL) {
+			if (res->raw_re != res->re) {
+				res->raw_extra = pcre_study (res->raw_re, study_flags, &err_str);
+				if (res->raw_extra != NULL) {
 #ifdef HAVE_PCRE_JIT
-				gint jit, n;
+					gint jit, n;
 
-				if (can_jit) {
-					jit = 0;
-					n = pcre_fullinfo (res->re, res->extra,
-							PCRE_INFO_JIT, &jit);
+					if (can_jit) {
+						jit = 0;
+						n = pcre_fullinfo (res->raw_re, res->raw_extra,
+								PCRE_INFO_JIT, &jit);
 
-					if (n != 0 || jit != 1) {
-						msg_info ("jit compilation of %s is not supported", pattern);
-						res->jstack = NULL;
+						if (n != 0 || jit != 1) {
+							msg_debug ("jit compilation of %s is not supported",
+									pattern);
+							res->raw_jstack = NULL;
+						}
+						else {
+							res->raw_jstack = pcre_jit_stack_alloc (32 * 1024,
+									512 * 1024);
+							pcre_assign_jit_stack (res->raw_extra, NULL,
+									res->raw_jstack);
+						}
 					}
-					else {
-						res->jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
-						pcre_assign_jit_stack (res->extra, NULL, res->jstack);
-					}
-				}
 #endif
+				}
+				else {
+					msg_warn ("cannot optimize raw regexp pattern: '%s': %s",
+							pattern, err_str);
+				}
 			}
 			else {
-				msg_warn ("cannot optimize raw regexp pattern: '%s': %s",
-						pattern, err_str);
+				/* Just alias pointers */
+				res->raw_extra = res->extra;
+				res->raw_jstack = res->jstack;
 			}
 		}
 	}
