@@ -520,10 +520,12 @@ static const struct luaL_reg imagelib_m[] = {
 /* Blob methods */
 LUA_FUNCTION_DEF (text, len);
 LUA_FUNCTION_DEF (text, str);
+LUA_FUNCTION_DEF (text, ptr);
 
 static const struct luaL_reg textlib_m[] = {
 	LUA_INTERFACE_DEF (text, len),
 	LUA_INTERFACE_DEF (text, str),
+	LUA_INTERFACE_DEF (text, ptr),
 	{"__tostring", lua_text_str},
 	{NULL, NULL}
 };
@@ -1974,6 +1976,21 @@ lua_text_str (lua_State *L)
 
 	if (t != NULL) {
 		lua_pushlstring (L, t->start, t->len);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_text_ptr (lua_State *L)
+{
+	struct rspamd_lua_text *t = lua_check_text (L, 1);
+
+	if (t != NULL) {
+		lua_pushlightuserdata (L, (gpointer)t->start);
 	}
 	else {
 		lua_pushnil (L);
