@@ -491,6 +491,17 @@ lua_regexp_split (lua_State *L)
 				}
 				old_start = end;
 			}
+
+			if (len > 0 && (end == NULL || end < data + len)) {
+				if (end == NULL) {
+					end = data;
+				}
+
+				lua_pushlstring (L, end, (data + len) - end);
+				lua_rawseti (L, -2, ++i);
+				matched = TRUE;
+			}
+
 			if (!matched) {
 				lua_pop (L, 1);
 				lua_pushnil (L);

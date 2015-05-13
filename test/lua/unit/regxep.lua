@@ -34,10 +34,12 @@ context("Regexp unit tests", function()
   
   test("Regexp split", function()
     local cases = {
+      {'\\s', 'one', {'one'}}, -- one arg
       {'\\s', 'one two', {'one', 'two'}}, -- trivial
+      {'/,/i', '1,2', {'1', '2'}}, -- trivial
       {'\\s', 'one   two', {'one', 'two'}}, -- multiple delimiters
       {'\\s', '  one   two  ', {'one', 'two'}}, -- multiple delimiters
-      {'\\s', '  one   ', {'one', 'two'}}, -- multiple delimiters
+      {'\\s', '  one   ', {'one'}}, -- multiple delimiters
       {'[:,]', ',,,:::one,two,,', {'one', 'two'}}, -- multiple delimiters
     }
   
@@ -48,8 +50,8 @@ context("Regexp unit tests", function()
       local res = r:split(c[2])
       assert_not_nil(res, "cannot split " .. c[2])
       
-      for i,r in ipairs(res) do
-        assert_equal(r, c[3][i])
+      for i,r in ipairs(c[3]) do
+        assert_equal(res[i], r)
       end
     end
   end)
