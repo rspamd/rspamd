@@ -882,6 +882,9 @@ rspamd_dkim_key_free (rspamd_dkim_key_t *key)
 	if (key->key_rsa) {
 		RSA_free (key->key_rsa);
 	}
+	if (key->key_evp) {
+		EVP_PKEY_free (key->key_evp);
+	}
 	if (key->key_bio) {
 		BIO_free (key->key_bio);
 	}
