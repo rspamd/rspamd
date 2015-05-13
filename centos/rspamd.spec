@@ -21,10 +21,11 @@ License:        BSD2c
 %endif
 URL:            https://rspamd.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
+BuildRequires:  glib2-devel,libevent-devel,openssl-devel,pcre-devel,perl,luajit-devel,hiredis-devel
 %if 0%{?el6}
-BuildRequires:  cmake28,glib2-devel,gmime24-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,perl
+BuildRequires:  cmake28,gmime24-devel
 %else
-BuildRequires:  cmake,glib2-devel,gmime-devel,libevent-devel,openssl-devel,lua-devel,pcre-devel,perl
+BuildRequires:  cmake,gmime-devel
 %endif
 %if 0%{?suse_version} || 0%{?el7} || 0%{?fedora}
 BuildRequires:  systemd
