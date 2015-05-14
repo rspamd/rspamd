@@ -11,6 +11,8 @@ This is a simple control interface for rspamd spam filtering system.
 It provides basic functions for setting metric actions, scores,
 viewing statistic and learning.
 
+<img src="/img/webui.png" class="img-responsive" alt="Webui screenshot"> 
+
 ##Rspamd setup.
 
 It is required to configure dynamic settings to store configured values.
@@ -46,6 +48,7 @@ Password option should be changed for sure for your specific configuration. Encr
 
 Interface itself is written in pure HTML5/js and, hence, it requires zero setup.
 Just enter a password for webui access and you are ready.
+
 
 ##Contact information.
 
