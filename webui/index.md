@@ -40,31 +40,7 @@ worker {
 }
 {% endhighlight %}
 
-Basically, this worker should be accessed by some proxying HTTP server
-like nginx or apache, but rspamd could be used as a standalone HTTP server as well.
-
-Password option should be changed for sure for your specific configuration.
-
-##Proxy and HTTP server setup.
-
-HTTP server is required for displaying static rspamd-interface files and for
-proxying ajax requests. So it is possible to use any widely-spread HTTP
-server, like `nginx` or `apache` with `mod_proxy` support.
-
-Proxying should be setup to send HTTP requests to the URL called `/rspamd`
-to the webui interface (via local interface or via local network).
-
-Here is a sample setup for nginx:
-
-{% highlight nginx %}
-server {
-	listen 10.0.0.1;
-	server_name example.com;
-
-	proxy_pass http://10.0.0.2:11334/;
-}
-{% endhighlight %}
-
+Password option should be changed for sure for your specific configuration. Encrypted password using is encouraged (`rspamd --encrypt-password`).
 
 ##Interface setup.
 
@@ -73,5 +49,5 @@ Just enter a password for webui access and you are ready.
 
 ##Contact information.
 
-Rspamd interface is `GPLv3` licensed software. For all questions rlated to this
+Rspamd interface is `Apache-2.0` licensed software. For all questions rlated to this
 product please email to `rspamd-interface <at> highsecure.ru`.
