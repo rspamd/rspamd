@@ -186,4 +186,4 @@ Then compile m4 to cf in an ordinary way.
 
 A plugin implementing Rspamd integration for Haraka can be found in the [Haraka git repository](https://github.com/baudehlo/Haraka/); documentation can be found [here](https://github.com/baudehlo/Haraka/blob/master/docs/plugins/rspamd.md).
 
-To install: copy `plugins/rspamd.js` to your local plugins directory and `config/rspamd.ini` to your local config directory; add `rspamd` to your `plugins/config` file in the `DATA` section and edit `config/rspamd.ini` to suit.
+To install: copy `plugins/rspamd.js` to your local plugins directory and `config/rspamd.ini` to your local config directory; add `rspamd` to your `config/plugins` file in the `DATA` section and edit `config/rspamd.ini` to suit.
