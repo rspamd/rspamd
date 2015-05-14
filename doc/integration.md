@@ -9,6 +9,7 @@ This document describes several methods of integration rspamd to popular MTA. Am
 * exim
 * postfix
 * sendmail
+* haraka
 
 Also this document describes rspamd smtp proxy mode suitable for any MTA.
 
@@ -17,7 +18,14 @@ Also this document describes rspamd smtp proxy mode suitable for any MTA.
 Exim may use rspamd just like spamd from SA. But for more convenient interaction it is useful to apply a patch to exim that improves communication.
 
 ### Using spam.c patch
-Patch is placed in rspamd source tree: src/contrib/exim/patch-exim-src_spam.c.diff
+
+For FreeBSD users you can just enable integration with rspamd when building exim from the ports by typing 
+
+	# make config
+
+and selecting the appropriate option in the dialog.
+
+For other systems and exim < 4.86 there is a patch which placed in rspamd source tree: src/contrib/exim/patch-exim-src_spam.c.diff
 
 It should be applied in exim's source directory:
 
@@ -155,9 +163,10 @@ Postfix configuration to use rspamd via rmilter is very simple:
 
 {% highlight make %}
 smtpd_milters = unix:/var/run/rmilter/rmilter.sock
-milter_mail_macros =  i {mail_addr} {client_addr} {client_name}
-milter_protocol = 4
-milter_rcpt_macros = i {rcpt_addr}
+# or for TCP socket
+# smtpd_milters = inet:localhost:9900
+milter_protocol = 6
+milter_mail_macros = i {mail_addr} {client_addr} {client_name} {auth_authen}
 # skip mail without checks if milter will die
 milter_default_action = accept
 {% endhighlight %}
@@ -173,7 +182,8 @@ And configure it just like for postfix. Sendmail configuration may be like this:
 
 Then compile m4 to cf in an ordinary way.
 
-## Using rspamd as SMTP proxy
+## Integration with Haraka MTA
 
-This way is suitable for any MTA: just let rspamd to accept mail and proxy connections to real MTA after scanning them for spam. So real MTA should listen either on non-smtp port or on local interface and rspamd should accept mail on smtp port. For working as SMTP proxy you should setup SMTP worker in rspamd.xml. You can find documentation of SMTP proxy setup here: <>.
+A plugin implementing Rspamd integration for Haraka can be found in the [Haraka git repository](https://github.com/baudehlo/Haraka/); documentation can be found [here](https://github.com/baudehlo/Haraka/blob/master/docs/plugins/rspamd.md).
 
+To install: copy `plugins/rspamd.js` to your local plugins directory and `config/rspamd.ini` to your local config directory; add `rspamd` to your `plugins/config` file in the `DATA` section and edit `config/rspamd.ini` to suit.

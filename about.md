@@ -4,6 +4,7 @@ title: About rspamd
 ---
 
 ## Introduction
+
 Rspamd is an advanced spam filtering system that allows evaluation of messages by a number of
 rules including regular expressions, statistical analysis and custom services
 such as URL black lists. Each message is analysed by rspamd and given a `spam score`. 
@@ -20,7 +21,8 @@ Rspamd distribution contains a number of mail processing features, including suc
 * **Regular expressions filtering** - allows basic processing of messages, their textual parts, MIME headers and
 SMTP data received by MTA against a set of expressions that includes both normal regular expressions and 
 message processing functions. Rspamd expressions are the powerful tool that allows to filter messages based on
-some pre-defined rules. This feature is similar to regular expressions in spamassassin spam filter.
+some pre-defined rules. This feature is similar to regular expressions in spamassassin spam filter. Moreover, rspamd
+supports Spamassassin rules directly via [the plugin](https://rspamd.com/doc/modules/spamassassin.html).
 
 
 * **SPF module** that allows to validate a message's sender against the policy defined in the DNS record of sender's domain. You can read
@@ -29,6 +31,8 @@ about SPF policies [here](http://www.openspf.org/). A number of mail systems inc
 
 * **DKIM module** validates message's cryptographic signature against public key placed in the DNS record of sender's domain. Like SPF,
 this technique is widely spread and allows to validate that a message is sent from that specific domain.
+
+* **DMARC module** validates the joint SPF and DKIM policies for a sender and evaluates if there are additional restrictions. Rspamd also support storing report data within [redis](http://redis.io) storage.
 
 
 * **DNS black lists** allows to estimate reputation of sender's IP address or network. Rspamd uses a number of DNS lists including such lists as
@@ -80,7 +84,7 @@ such actions as headers processing, received elements extraction, protocol opera
 expensive expressions calls when scanning a message.
 
 * **Symbols optimizer** - rspamd tries to check first the rules that are frequent or inexpensive in terms of time or CPU resourses, which allows to block spam before processing of
-expensive rules (rules with negative weights are always checked before other ones).
+expensive rules (rules with negative weights are always checked before other ones). You can view my presentation about it [here](https://highsecure.ru/ast-rspamd.pdf).
 
 * **Event driven model** - rspamd is designed not to block anywhere in the code and counting that spam checks requires a lot of network operations, rspamd can process many messages
 simultaneously increasing the efficiency of shared DNS caches and other system resources. Moreover, event-driven system normally scales automatically and you won't need to do any
