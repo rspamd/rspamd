@@ -507,14 +507,14 @@ rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 		LL_FOREACH (sym, cur) {
 			sym_obj = ucl_object_typed_new (UCL_OBJECT);
 
-			ucl_object_insert_key (sym_obj, ucl_object_fromstring (sym->name),
+			ucl_object_insert_key (sym_obj, ucl_object_fromstring (cur->name),
 				"symbol", 0, false);
 			ucl_object_insert_key (sym_obj,
-				ucl_object_fromdouble (*sym->weight_ptr),
+				ucl_object_fromdouble (*cur->weight_ptr),
 				"weight", 0, false);
-			if (sym->description) {
+			if (cur->description) {
 				ucl_object_insert_key (sym_obj,
-					ucl_object_fromstring (sym->description),
+					ucl_object_fromstring (cur->description),
 					"description", 0, false);
 			}
 
