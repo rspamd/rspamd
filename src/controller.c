@@ -483,7 +483,7 @@ rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 	GHashTableIter it;
 	struct rspamd_symbols_group *gr;
 	struct rspamd_symbol_def *sym, *cur;
-	ucl_object_t *obj, *top, *sym_obj;
+	ucl_object_t *obj, *top, *sym_obj, *group_symbols;
 	gpointer k, v;
 
 	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
@@ -502,6 +502,8 @@ rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 		/* Iterate through all symbols */
 		sym = gr->symbols;
 
+		group_symbols = ucl_object_typed_new (UCL_ARRAY);
+
 		LL_FOREACH (sym, cur) {
 			sym_obj = ucl_object_typed_new (UCL_OBJECT);
 
@@ -516,9 +518,10 @@ rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 					"description", 0, false);
 			}
 
-			ucl_object_insert_key (obj, sym_obj, "rules", 0, false);
+			ucl_array_append (group_symbols, sym_obj);
 		}
 
+		ucl_object_insert_key (obj, group_symbols, "rules", 0, false);
 		ucl_array_append (top, obj);
 	}
 
