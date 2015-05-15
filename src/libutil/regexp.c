@@ -382,11 +382,12 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 #endif
 	}
 	else {
-		match_flags |= PCRE_NO_UTF8_CHECK;
 		r = re->re;
 		ext = re->extra;
 #if defined(HAVE_PCRE_JIT) && defined(HAVE_PCRE_JIT_FAST)
-		st = re->jstack;
+		if (g_utf8_validate (mt, remain, NULL)) {
+			st = re->jstack;
+		}
 #endif
 	}
 
