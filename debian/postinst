@@ -31,8 +31,9 @@ esac
 
 if [ -x /etc/init.d/rspamd ]; then
     update-rc.d rspamd defaults >/dev/null
-    if [ -d /run/systemd/systemd ]; then
-        systemctl --system daemon-reload >/dev/null || true
+    if [ -d /run/systemd/system ]; then
+        deb-systemd-invoke --system daemon-reload >/dev/null || true
+        deb-systemd-invoke --system stop rspamd.service 2>/dev/null || true
     else
         invoke-rc.d rspamd start || exit $?
     fi

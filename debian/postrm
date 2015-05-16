@@ -6,7 +6,8 @@ if [ "$1" = "purge" ]; then
 fi
 
 if [ -d /run/systemd/system ]; then
-    systemctl --system daemon-reload >/dev/null || true
+    deb-systemd-invoke --system daemon-reload >/dev/null || true
+    deb-systemd-invoke --system stop rspamd.service 2>/dev/null || true
 fi
 
 #DEBHELPER#
