@@ -36,13 +36,14 @@
 #define HASH_KEYCMP(a,b,len) memcmp(a,b,len)
 #else
 #define HASH_FUNCTION(key,keylen,num_bkts,hashv,bkt) do {\
-	void *xxh = XXH32_init(0xdead);	\
+	XXH32_state_t xxh; \
+	XXH32_reset(&xxh, 0xdead);	\
 	unsigned char *p = (unsigned char *)key, t;	\
 	for (unsigned int i = 0; i < keylen; i ++) {	\
 		t = g_ascii_tolower(p[i]);	\
-		XXH32_update(xxh, &t, 1);	\
+		XXH32_update(&xxh, &t, 1);	\
 	}	\
-	hashv = XXH32_digest(xxh);	\
+	hashv = XXH32_digest(&xxh);	\
 	bkt = (hashv) & (num_bkts-1);	\
 } while (0)
 #define HASH_KEYCMP(a,b,len) strncasecmp(a,b,len)

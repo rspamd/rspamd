@@ -524,13 +524,14 @@ guint
 rspamd_fuzzy_hash (gconstpointer key)
 {
 	rspamd_fuzzy_t *fh = (rspamd_fuzzy_t *)key;
-	void *st;
+	XXH64_state_t xxh;
 
-	st = XXH32_init (0xdeadbeef);
-	XXH32_update (st, &fh->block_size, sizeof (fh->block_size));
-	XXH32_update (st, fh->hash_pipe, rspamd_fuzzy_len (fh));
+	XXH64_reset (&xxh, rspamd_hash_seed ());
 
-	return XXH32_digest (st);
+	XXH64_update (&xxh, &fh->block_size, sizeof (fh->block_size));
+	XXH64_update (&xxh, fh->hash_pipe, rspamd_fuzzy_len (fh));
+
+	return XXH64_digest (&xxh);
 }
 
 gboolean
