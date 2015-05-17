@@ -725,8 +725,9 @@ FORCE_INLINE U32 XXH32_digest_endian (const XXH32_state_t* state_in, XXH_endiane
     h32 ^= h32 >> 13;
     h32 *= PRIME32_3;
     h32 ^= h32 >> 16;
-
+#if 0
     XXH32_freeState((XXH32_state_t *)state_in);
+#endif
     return h32;
 }
 
