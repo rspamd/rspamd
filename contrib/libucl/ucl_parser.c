@@ -981,14 +981,13 @@ ucl_parser_append_elt (struct ucl_parser *parser, ucl_hash_t *cont,
 		}
 		else {
 			/* Convert to an array */
-			ucl_hash_delete (cont, top);
 			nobj = ucl_object_typed_new (UCL_ARRAY);
 			nobj->key = top->key;
 			nobj->keylen = top->keylen;
 			nobj->flags |= UCL_OBJECT_MULTIVALUE;
 			ucl_array_append (nobj, top);
 			ucl_array_append (nobj, elt);
-			ucl_hash_insert (cont, nobj, nobj->key, nobj->keylen);
+			ucl_hash_replace (cont, top, nobj);
 		}
 	}
 }
@@ -2091,6 +2090,7 @@ ucl_parser_new (int flags)
 	if (new == NULL) {
 		return NULL;
 	}
+
 	memset (new, 0, sizeof (struct ucl_parser));
 
 	ucl_parser_register_macro (new, "include", ucl_include_handler, new);
@@ -2105,6 +2105,17 @@ ucl_parser_new (int flags)
 	return new;
 }
 
+bool
+ucl_parser_set_default_priority (struct ucl_parser *parser, unsigned prio)
+{
+	if (parser == NULL) {
+		return false;
+	}
+
+	parser->default_priority = prio;
+
+	return true;
+}
 
 void
 ucl_parser_register_macro (struct ucl_parser *parser, const char *macro,
@@ -2194,6 +2205,10 @@ ucl_parser_add_chunk_priority (struct ucl_parser *parser, const unsigned char *d
 {
 	struct ucl_chunk *chunk;
 
+	if (parser == NULL) {
+		return false;
+	}
+
 	if (data == NULL) {
 		ucl_create_err (&parser->err, "invalid chunk added");
 		return false;
@@ -2234,7 +2249,12 @@ bool
 ucl_parser_add_chunk (struct ucl_parser *parser, const unsigned char *data,
 		size_t len)
 {
-	return ucl_parser_add_chunk_priority (parser, data, len, 0);
+	if (parser == NULL) {
+		return false;
+	}
+
+	return ucl_parser_add_chunk_priority (parser, data, len,
+			parser->default_priority);
 }
 
 bool

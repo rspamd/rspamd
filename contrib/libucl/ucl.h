@@ -498,6 +498,15 @@ UCL_EXTERN const ucl_object_t* ucl_array_find_index (const ucl_object_t *top,
 		unsigned int index);
 
 /**
+ * Return the index of `elt` in the array `top`
+ * @param top object to get a key from (must be of type UCL_ARRAY)
+ * @param elt element to find index of (must NOT be NULL)
+ * @return index of `elt` in the array `top or (unsigned int)-1 if `elt` is not found
+ */
+UCL_EXTERN unsigned int ucl_array_index_of (ucl_object_t *top,
+		ucl_object_t *elt);
+
+/**
  * Replace an element in an array with a different element, returning the object
  * that was replaced. This object is not released, caller must unref the
  * returned object when it is no longer needed.
@@ -791,6 +800,15 @@ struct ucl_parser;
  */
 UCL_EXTERN struct ucl_parser* ucl_parser_new (int flags);
 
+/**
+ * Sets the default priority for the parser applied to chunks that does not
+ * specify priority explicitly
+ * @param parser parser object
+ * @param prio default priority (0 .. 16)
+ * @return true if parser's default priority was set
+ */
+UCL_EXTERN bool ucl_parser_set_default_priority (struct ucl_parser *parser,
+		unsigned prio);
 /**
  * Register new handler for a macro
  * @param parser parser object

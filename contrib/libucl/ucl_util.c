@@ -268,6 +268,17 @@ ucl_unescape_json_string (char *str, size_t len)
 	while (len) {
 		if (*h == '\\') {
 			h ++;
+
+			if (len == 1) {
+				/*
+				 * If \ is last, then do not try to go further
+				 * Issue: #74
+				 */
+				len --;
+				*t++ = '\\';
+				continue;
+			}
+
 			switch (*h) {
 			case 'n':
 				*t++ = '\n';
@@ -352,7 +363,10 @@ ucl_unescape_json_string (char *str, size_t len)
 		else {
 			*t++ = *h++;
 		}
-		len --;
+
+		if (len > 0) {
+			len --;
+		}
 	}
 	*t = '\0';
 
@@ -459,7 +473,7 @@ ucl_parser_free (struct ucl_parser *parser)
 		UCL_FREE (sizeof (struct ucl_variable), var);
 	}
 	LL_FOREACH_SAFE (parser->trash_objs, tr, trtmp) {
-		ucl_object_unref (tr);
+		ucl_object_free_internal (tr, false, ucl_object_dtor_free);
 	}
 
 	if (parser->err != NULL) {
@@ -483,7 +497,7 @@ ucl_parser_get_error(struct ucl_parser *parser)
 	if (parser->err == NULL)
 		return NULL;
 
-	return utstring_body(parser->err);
+	return utstring_body (parser->err);
 }
 
 UCL_EXTERN void
@@ -2151,6 +2165,21 @@ ucl_array_find_index (const ucl_object_t *top, unsigned int index)
 	}
 
 	return NULL;
+}
+
+unsigned int
+ucl_array_index_of (ucl_object_t *top, ucl_object_t *elt)
+{
+	UCL_ARRAY_GET (vec, top);
+	unsigned i;
+
+	for (i = 0; i < vec->n; i ++) {
+		if (kv_A (*vec, i) == elt) {
+			return i;
+		}
+	}
+
+	return (unsigned int)(-1);
 }
 
 ucl_object_t *

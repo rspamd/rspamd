@@ -27,6 +27,7 @@
 #include "kvec.h"
 
 #include <time.h>
+#include <limits.h>
 
 struct ucl_hash_elt {
 	const ucl_object_t *obj;
@@ -87,11 +88,19 @@ static const unsigned char lc_map[256] = {
 		0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
 };
 
+#if (defined(WORD_BIT) && WORD_BIT == 64) || (defined(__WORDSIZE) && __WORDSIZE == 64)
 static inline uint32_t
 ucl_hash_func (const ucl_object_t *o)
 {
 	return XXH64 (o->key, o->keylen, ucl_hash_seed ());
 }
+#else
+static inline uint32_t
+ucl_hash_func (const ucl_object_t *o)
+{
+	return XXH32 (o->key, o->keylen, ucl_hash_seed ());
+}
+#endif
 
 static inline int
 ucl_hash_equal (const ucl_object_t *k1, const ucl_object_t *k2)
@@ -106,6 +115,7 @@ ucl_hash_equal (const ucl_object_t *k1, const ucl_object_t *k2)
 KHASH_INIT (ucl_hash_node, const ucl_object_t *, struct ucl_hash_elt, 1,
 		ucl_hash_func, ucl_hash_equal)
 
+#if (defined(WORD_BIT) && WORD_BIT == 64) || (defined(__WORDSIZE) && __WORDSIZE == 64)
 static inline uint32_t
 ucl_hash_caseless_func (const ucl_object_t *o)
 {
@@ -147,6 +157,49 @@ ucl_hash_caseless_func (const ucl_object_t *o)
 
 	return XXH64_digest (&st);
 }
+#else
+static inline uint32_t
+ucl_hash_caseless_func (const ucl_object_t *o)
+{
+	unsigned len = o->keylen;
+	unsigned leftover = o->keylen % 4;
+	unsigned fp, i;
+	const uint8_t* s = (const uint8_t*)o->key;
+	union {
+		struct {
+			unsigned char c1, c2, c3, c4;
+		} c;
+		uint32_t pp;
+	} u;
+	XXH32_state_t st;
+
+	fp = len - leftover;
+	XXH32_reset (&st, ucl_hash_seed ());
+
+	for (i = 0; i != fp; i += 4) {
+		u.c.c1 = s[i], u.c.c2 = s[i + 1], u.c.c3 = s[i + 2], u.c.c4 = s[i + 3];
+		u.c.c1 = lc_map[u.c.c1];
+		u.c.c2 = lc_map[u.c.c2];
+		u.c.c3 = lc_map[u.c.c3];
+		u.c.c4 = lc_map[u.c.c4];
+		XXH32_update (&st, &u.pp, sizeof (u));
+	}
+
+	u.pp = 0;
+	switch (leftover) {
+	case 3:
+		u.c.c3 = lc_map[(unsigned char)s[i++]];
+	case 2:
+		u.c.c2 = lc_map[(unsigned char)s[i++]];
+	case 1:
+		u.c.c1 = lc_map[(unsigned char)s[i]];
+		XXH32_update (&st, &u.pp, leftover);
+		break;
+	}
+
+	return XXH32_digest (&st);
+}
+#endif
 
 static inline int
 ucl_hash_caseless_equal (const ucl_object_t *k1, const ucl_object_t *k2)
