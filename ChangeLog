@@ -1,3 +1,13 @@
+0.9.1:
+	* Restore utf8 validation for regular expressions to avoid crashes
+	* Fix symbols displaying in the interface
+	* Add symbol groups to the interface
+	* Fix maps ID parsing in the controller
+	* Add multimap and regexp modules documentation
+	* Backport fixes from libucl
+	* Fix debian package (by @dottedmag)
+	* Rework XXH32 invocations
+
 0.9.0:
 	* Add support of the fast and secure protocol level encryption:
 		- curve25519 is used for key exchange;
