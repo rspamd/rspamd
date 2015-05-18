@@ -2386,6 +2386,14 @@ rspamd_array_free_hard (gpointer p)
 	g_array_free (ar, TRUE);
 }
 
+void
+rspamd_gstring_free_hard (gpointer p)
+{
+	GString *ar = (GString *)p;
+
+	g_string_free (ar, TRUE);
+}
+
 
 void
 rspamd_init_libs (void)

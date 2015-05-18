@@ -451,6 +451,11 @@ void rspamd_ptr_array_free_hard (gpointer p);
  * @param p
  */
 void rspamd_array_free_hard (gpointer p);
+/**
+ * Special utility to help GString freeing in rspamd_mempool
+ * @param p
+ */
+void rspamd_gstring_free_hard (gpointer p);
 
 /**
  * Initialize rspamd libraries
