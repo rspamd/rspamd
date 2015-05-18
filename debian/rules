@@ -3,8 +3,6 @@
 	dh $@ --with systemd
 
 export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
-# Until https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=739834 is fixed
-export DEB_CFLAGS_MAINT_APPEND = -I/usr/include/hiredis
 
 override_dh_auto_configure:
 	dh_auto_configure -- -DCONFDIR=/etc/rspamd \
