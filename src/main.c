@@ -683,12 +683,10 @@ spawn_workers (struct rspamd_main *rspamd)
 			if (listen_ok) {
 				if (cf->worker->unique) {
 					if (cf->count > 1) {
-						msg_err ("cannot spawn more than 1 %s worker, so spawn one",
+						msg_warn ("cannot spawn more than 1 %s worker, so spawn one",
 								cf->worker->name);
 					}
-					else {
-						fork_worker (rspamd, cf);
-					}
+					fork_worker (rspamd, cf);
 				}
 				else if (cf->worker->threaded) {
 					fork_worker (rspamd, cf);
