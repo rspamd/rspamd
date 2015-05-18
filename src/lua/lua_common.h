@@ -212,6 +212,7 @@ void luaopen_expression (lua_State * L);
 void luaopen_logger (lua_State * L);
 void luaopen_text (lua_State *L);
 void luaopen_util (lua_State * L);
+void luaopen_tcp (lua_State * L);
 
 gint rspamd_lua_call_filter (const gchar *function, struct rspamd_task *task);
 gint rspamd_lua_call_chain_filter (const gchar *function,
