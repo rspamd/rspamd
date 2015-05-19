@@ -363,38 +363,35 @@ reread_config (struct rspamd_main *rspamd)
 	gchar *cfg_file;
 
 	tmp_cfg = (struct rspamd_config *)g_malloc0 (sizeof (struct rspamd_config));
-	if (tmp_cfg) {
+	tmp_cfg->c_modules = g_hash_table_ref (rspamd->cfg->c_modules);
+	rspamd_set_logger (tmp_cfg,  g_quark_try_string ("main"), rspamd);
+	rspamd_init_cfg (tmp_cfg, TRUE);
+	cfg_file = rspamd_mempool_strdup (tmp_cfg->cfg_pool,
+			rspamd->cfg->cfg_name);
+	/* Save some variables */
+	tmp_cfg->cfg_name = cfg_file;
 
-		rspamd_init_cfg (tmp_cfg, FALSE);
-		tmp_cfg->lua_state = rspamd->cfg->lua_state;
-		cfg_file = rspamd_mempool_strdup (tmp_cfg->cfg_pool,
-				rspamd->cfg->cfg_name);
-		/* Save some variables */
-		tmp_cfg->cfg_name = cfg_file;
+	if (!load_rspamd_config (tmp_cfg, FALSE)) {
+		rspamd_set_logger (rspamd_main->cfg, g_quark_try_string (
+				"main"), rspamd_main);
+		msg_err ("cannot parse new config file, revert to old one");
+		rspamd_config_free (tmp_cfg);
+	}
+	else {
+		msg_debug ("replacing config");
+		rspamd_config_free (rspamd->cfg);
+		g_free (rspamd->cfg);
 
-		tmp_cfg->c_modules = g_hash_table_ref (rspamd->cfg->c_modules);
-
-		if (!load_rspamd_config (tmp_cfg, FALSE)) {
-			rspamd_set_logger (rspamd_main->cfg, g_quark_try_string (
-					"main"), rspamd_main);
-			msg_err ("cannot parse new config file, revert to old one");
-			rspamd_config_free (tmp_cfg);
+		rspamd->cfg = tmp_cfg;
+		rspamd_set_logger (tmp_cfg,  g_quark_try_string ("main"), rspamd);
+		/* Force debug log */
+		if (is_debug) {
+			rspamd->cfg->log_level = G_LOG_LEVEL_DEBUG;
 		}
-		else {
-			msg_debug ("replacing config");
-			rspamd_config_free (rspamd->cfg);
-			g_free (rspamd->cfg);
 
-			rspamd->cfg = tmp_cfg;
-			/* Force debug log */
-			if (is_debug) {
-				rspamd->cfg->log_level = G_LOG_LEVEL_DEBUG;
-			}
-
-			rspamd_init_filters (rspamd->cfg, TRUE);
-			init_cfg_cache (rspamd->cfg);
-			msg_info ("config rereaded successfully");
-		}
+		rspamd_init_filters (rspamd->cfg, TRUE);
+		init_cfg_cache (rspamd->cfg);
+		msg_info ("config has been reread successfully");
 	}
 }
 
