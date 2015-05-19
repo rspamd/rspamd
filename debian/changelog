@@ -1,4 +1,4 @@
-rspamd (0.9.2) unstable; urgency=low
+rspamd (0.9.3) unstable; urgency=low
 
   * New release:
     - Use lua 5.1 if luajit is not available.

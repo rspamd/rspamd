@@ -1,3 +1,7 @@
+0.9.3:
+	* Revert incorrect regexp change that broke the default rules
+	* Fix lua_tcp module
+
 0.9.2:
 	* Fix error on spawning unique workers.
 	* Add preliminary version of generic LUA TCP requests API.
