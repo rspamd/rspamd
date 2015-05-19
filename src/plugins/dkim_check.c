@@ -259,7 +259,9 @@ dkim_module_reconfig (struct rspamd_config *cfg)
 	if (dkim_module_ctx->dkim_domains) {
 		g_hash_table_destroy (dkim_module_ctx->dkim_domains);
 	}
-	memset (dkim_module_ctx, 0, sizeof (*dkim_module_ctx));
+
+	memset (dkim_module_ctx + sizeof (dkim_module_ctx->ctx),
+				0, sizeof (*dkim_module_ctx) - sizeof (dkim_module_ctx->ctx));
 	dkim_module_ctx->dkim_pool = rspamd_mempool_new (
 		rspamd_mempool_suggest_size ());
 

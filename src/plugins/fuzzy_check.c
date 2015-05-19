@@ -499,7 +499,8 @@ fuzzy_check_module_reconfig (struct rspamd_config *cfg)
 {
 	rspamd_mempool_delete (fuzzy_module_ctx->fuzzy_pool);
 
-	memset (fuzzy_module_ctx, 0, sizeof (*fuzzy_module_ctx));
+	memset (fuzzy_module_ctx + sizeof (fuzzy_module_ctx->ctx),
+			0, sizeof (*fuzzy_module_ctx) - sizeof (fuzzy_module_ctx->ctx));
 	fuzzy_module_ctx->fuzzy_pool = rspamd_mempool_new (
 		rspamd_mempool_suggest_size ());
 	fuzzy_module_ctx->cfg = cfg;

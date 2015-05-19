@@ -174,7 +174,8 @@ spf_module_reconfig (struct rspamd_config *cfg)
 {
 	rspamd_mempool_delete (spf_module_ctx->spf_pool);
 	radix_destroy_compressed (spf_module_ctx->whitelist_ip);
-	memset (spf_module_ctx, 0, sizeof (*spf_module_ctx));
+	memset (spf_module_ctx + sizeof (spf_module_ctx->ctx),
+				0, sizeof (*spf_module_ctx) - sizeof (spf_module_ctx->ctx));
 	spf_module_ctx->spf_pool = rspamd_mempool_new (
 		rspamd_mempool_suggest_size ());
 
