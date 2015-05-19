@@ -443,6 +443,13 @@ LUA_FUNCTION_DEF (task, cache_get);
  */
 LUA_FUNCTION_DEF (task, cache_set);
 
+/***
+ * @method task:get_size()
+ * Returns size of the task in bytes (that includes headers + parts size)
+ * @return {number} size in bytes
+ */
+LUA_FUNCTION_DEF (task, get_size);
+
 static const struct luaL_reg tasklib_f[] = {
 	LUA_INTERFACE_DEF (task, create_empty),
 	LUA_INTERFACE_DEF (task, create_from_buffer),
@@ -496,6 +503,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, set_settings),
 	LUA_INTERFACE_DEF (task, cache_get),
 	LUA_INTERFACE_DEF (task, cache_set),
+	LUA_INTERFACE_DEF (task, get_size),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -1721,6 +1729,21 @@ lua_task_get_timeval (lua_State *L)
 		lua_pushstring (L, "tv_usec");
 		lua_pushnumber (L, (lua_Number)task->tv.tv_usec);
 		lua_settable (L, -3);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_get_size (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+
+	if (task != NULL) {
+		lua_pushnumber (L, task->msg.len);
 	}
 	else {
 		lua_pushnil (L);
