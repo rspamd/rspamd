@@ -161,6 +161,34 @@ MACRO(FindLua _major _minor)
 		  	PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS}
 		 	DOC "Lua library"
 		)
+		
+		IF(NOT LUA_LIBRARY OR NOT LUA_INCLUDE_DIR)
+			MESSAGE(STATUS "Fallback from luajit to plain lua")
+			SET(ENABLE_LUAJIT "OFF")
+			MESSAGE(STATUS "Check for lua ${_major}.${_minor}")
+			FIND_PATH(LUA_INCLUDE_DIR lua.h
+			  HINTS
+			  "${RSPAMD_SEARCH_PATH}"
+			  $ENV{LUA_DIR}
+			  PATH_SUFFIXES "include/lua${_major}${_minor}" 
+			  				"include/lua${_major}.${_minor}" 
+			  				"include/lua-${_major}.${_minor}"
+			  				include/lua include
+			  PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS}
+			)
+			FIND_LIBRARY(LUA_LIBRARY 
+			 	NAMES lua 
+			  		"lua${_major}${_minor}"
+			  		"lua${_major}.${_minor}" 
+			  		"lua-${_major}.${_minor}"
+				HINTS
+					"${RSPAMD_SEARCH_PATH}"
+			  		$ENV{LUA_DIR}
+			  	PATH_SUFFIXES lib64 lib
+			  	PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS}
+			 	DOC "Lua library"
+			)
+		ENDIF()
 	ELSE(ENABLE_LUAJIT MATCHES "ON")
 		MESSAGE(STATUS "Check for lua ${_major}.${_minor}")
 		FIND_PATH(LUA_INCLUDE_DIR lua.h
@@ -510,11 +538,11 @@ ENDIF(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
 # Now find libraries and headers
 
 IF(ENABLE_LUAJIT MATCHES "ON")
-	ProcessPackage(LUAJIT luajit)
+	#ProcessPackage(LUAJIT luajit)
 	SET(WITH_LUA 1)
 	FindLua(5 1)
 	IF(NOT LUA_FOUND)
-        MESSAGE(FATAL_ERROR "Lua not found, lua support is required for working")
+        MESSAGE(FATAL_ERROR "Lua not found, lua support is required")
 	ELSE(NOT LUA_FOUND)
     	SET(WITH_LUA 1)
     	INCLUDE_DIRECTORIES("${LUA_INCLUDE_DIR}")
@@ -525,7 +553,7 @@ ELSE(ENABLE_LUAJIT MATCHES "ON")
         	FindLua(5 1)
 	ENDIF(NOT LUA_FOUND)
 	IF(NOT LUA_FOUND)
-        	MESSAGE(FATAL_ERROR "Lua not found, lua support is required for working")
+        	MESSAGE(FATAL_ERROR "Lua not found, lua support is required")
 	ELSE(NOT LUA_FOUND)
     		SET(WITH_LUA 1)
     		INCLUDE_DIRECTORIES("${LUA_INCLUDE_DIR}")
