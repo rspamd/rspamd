@@ -854,15 +854,17 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 	struct module_ctx *mod_ctx;
 
 	/* Init all compiled modules */
-	for (pmod = modules; *pmod != NULL; pmod ++) {
-		mod = *pmod;
-		mod_ctx = g_slice_alloc0 (sizeof (struct module_ctx));
+	if (!reconfig) {
+		for (pmod = modules; *pmod != NULL; pmod ++) {
+			mod = *pmod;
+			mod_ctx = g_slice_alloc0 (sizeof (struct module_ctx));
 
-		if (mod->module_init_func (cfg, &mod_ctx) == 0) {
-			g_hash_table_insert (cfg->c_modules,
-				(gpointer) mod->name,
-				mod_ctx);
-			mod_ctx->mod = mod;
+			if (mod->module_init_func (cfg, &mod_ctx) == 0) {
+				g_hash_table_insert (cfg->c_modules,
+						(gpointer) mod->name,
+						mod_ctx);
+				mod_ctx->mod = mod;
+			}
 		}
 	}
 
