@@ -172,7 +172,12 @@ regexp_module_config (struct rspamd_config *cfg)
 gint
 regexp_module_reconfig (struct rspamd_config *cfg)
 {
+	struct module_ctx saved_ctx;
+
+	saved_ctx = regexp_module_ctx->ctx;
 	rspamd_mempool_delete (regexp_module_ctx->regexp_pool);
+	memset (regexp_module_ctx, 0, sizeof (*regexp_module_ctx));
+	regexp_module_ctx->ctx = saved_ctx;
 	regexp_module_ctx->regexp_pool = rspamd_mempool_new (
 		rspamd_mempool_suggest_size ());
 
