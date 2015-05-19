@@ -1,3 +1,13 @@
+0.9.2:
+	* Fix error on spawning unique workers.
+	* Add preliminary version of generic LUA TCP requests API.
+	* Use lua 5.1 if luajit is not available (Arm64, PowerPC, s390x etc)
+	* Fix fuzzy mime strings with only type.
+	* Improve thunderbird sanity checks.
+	* Fix critical bug on matching regular expressions.
+	* Make hiredis optional dependency.
+	* Fix multiple bugs in daemon reloading
+
 0.9.1:
 	* Restore utf8 validation for regular expressions to avoid crashes
 	* Fix symbols displaying in the interface
