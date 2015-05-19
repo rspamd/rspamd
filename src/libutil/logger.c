@@ -293,15 +293,14 @@ rspamd_set_logger (struct rspamd_config *cfg,
 	if (rspamd->logger == NULL) {
 		rspamd->logger = g_malloc (sizeof (rspamd_logger_t));
 		memset (rspamd->logger, 0, sizeof (rspamd_logger_t));
+		/* Small pool for interlocking */
+		rspamd->logger->pool = rspamd_mempool_new (512);
+		rspamd->logger->mtx = rspamd_mempool_get_mutex (rspamd->logger->pool);
 	}
 
 	rspamd->logger->type = cfg->log_type;
 	rspamd->logger->pid = getpid ();
 	rspamd->logger->process_type = ptype;
-
-	/* Small pool for interlocking */
-	rspamd->logger->pool = rspamd_mempool_new (512);
-	rspamd->logger->mtx = rspamd_mempool_get_mutex (rspamd->logger->pool);
 
 	switch (cfg->log_type) {
 	case RSPAMD_LOG_CONSOLE:
