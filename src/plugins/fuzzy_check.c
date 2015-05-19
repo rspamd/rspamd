@@ -215,6 +215,7 @@ parse_mime_types (const gchar *str)
 							sizeof (struct fuzzy_mime_type));
 			type->type = g_pattern_spec_new (strvec[i]);
 			type->subtype = NULL;
+			res = g_list_prepend (res, type);
 		}
 	}
 
