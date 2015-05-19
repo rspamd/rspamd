@@ -28,6 +28,32 @@
 #include "utlist.h"
 
 static void lua_tcp_handler (int fd, short what, gpointer ud);
+/***
+ * @module rspamd_tcp
+ * Rspamd TCP module represents generic TCP asynchronous client available from LUA code.
+ * This module hides all complexity: DNS resolving, sessions management, zero-copy
+ * text transfers and so on under the hood. It can work in partial or complete modes:
+ *
+ * - partial mode is used when you need to call a continuation routine each time data is available for read
+ * - complete mode calls for continuation merely when all data is read from socket (e.g. when a server sends reply and closes a connection)
+ * @example
+local logger = require "rspamd_logger"
+local tcp = require "rspamd_tcp"
+
+rspamd_config.SYM = function(task)
+
+    local function cb(err, data)
+        logger.infox('err: %1, data: %2', err, tostring(data))
+    end
+
+    tcp.request({
+    	task = task,
+    	host = "google.com",
+    	port = 80,
+    	data = {"GET / HTTP/1.0\r\n", "Host: google.com\r\n", "\r\n"},
+    	callback = cb})
+end
+ */
 
 LUA_FUNCTION_DEF (tcp, request);
 
@@ -340,6 +366,26 @@ lua_tcp_arg_toiovec (lua_State *L, gint pos, rspamd_mempool_t *pool,
 	return TRUE;
 }
 
+/***
+ * @function rspamd_tcp.request({params})
+ * This function creates and sends TCP request to the specified host and port,
+ * resolves hostname (if needed) and invokes continuation callback upon data received
+ * from the remote peer. This function accepts table of arguments with the following
+ * attributes
+ *
+ * - `task`: rspamd task objects (implies `pool`, `session`, `ev_base` and `resolver` arguments)
+ * - `ev_base`: event base (if no task specified)
+ * - `resolver`: DNS resolver (no task)
+ * - `session`: events session (no task)
+ * - `pool`: memory pool (no task)
+ * - `host`: IP or name of the peer (required)
+ * - `port`: remote port to use (required)
+ * - `data`: a table of strings or `rspamd_text` objects that contains data pieces
+ * - `callback`: continuation function (required)
+ * - `timeout`: floating point value that specifies timeout for IO operations in seconds
+ * - `partial`: boolean flag that specifies that callback should be called on any data portion received
+ * @return {boolean} true if request has been sent
+ */
 static gint
 lua_tcp_request (lua_State *L)
 {
