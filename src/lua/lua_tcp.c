@@ -128,10 +128,6 @@ lua_tcp_push_data (struct lua_tcp_cbdata *cbd, const gchar *str, gsize len)
 	if (lua_pcall (cbd->L, 2, 0, 0) != 0) {
 		msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));
 	}
-
-	if (!cbd->partial) {
-		lua_tcp_maybe_free (cbd);
-	}
 }
 
 static void
@@ -303,6 +299,8 @@ lua_tcp_dns_handler (struct rdns_reply *reply, gpointer ud)
 					&reply->entries->content.aaa.addr);
 		}
 
+		rspamd_inet_address_set_port (cbd->addr, cbd->port);
+
 		if (!lua_tcp_make_connection (cbd)) {
 			lua_tcp_push_error (cbd, "unable to make connection to the host");
 			lua_tcp_maybe_free (cbd);
@@ -360,7 +358,7 @@ lua_tcp_request (lua_State *L)
 	gboolean partial = FALSE;
 
 	if (lua_type (L, 1) == LUA_TTABLE) {
-		lua_pushstring (L, "url");
+		lua_pushstring (L, "host");
 		lua_gettable (L, -2);
 		host = luaL_checkstring (L, -1);
 		lua_pop (L, 1);
@@ -520,6 +518,7 @@ lua_tcp_request (lua_State *L)
 	cbd->iovlen = niov;
 	cbd->total = total_out;
 	cbd->pos = 0;
+	cbd->port = port;
 
 	if (session) {
 		cbd->session = session;
