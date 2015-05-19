@@ -24,9 +24,11 @@
 #include "lua_common.h"
 #include "dns.h"
 
+#ifdef WITH_HIREDIS
 #include "hiredis.h"
 #include "async.h"
 #include "adapters/libevent.h"
+#endif
 
 #define REDIS_DEFAULT_TIMEOUT 1.0
 
@@ -62,6 +64,7 @@ static const struct luaL_reg redislib_m[] = {
 	{NULL, NULL}
 };
 
+#ifdef WITH_HIREDIS
 /**
  * Struct for userdata representation
  */
@@ -461,6 +464,17 @@ lua_redis_make_request (lua_State *L)
 
 	return 1;
 }
+#else
+static int
+lua_redis_make_request (lua_State *L)
+{
+	msg_warn ("rspamd is compiled with no redis support");
+
+	lua_pushboolean (L, FALSE);
+
+	return 1;
+}
+#endif
 
 static gint
 lua_load_redis (lua_State * L)

@@ -62,6 +62,8 @@
 
 #cmakedefine LIBEVENT_EVHTTP     1
 
+#cmakedefine WITH_HIREDIS        1
+
  #ifdef HAVE_ENDIAN_H
  #include <endian.h>
  #else 
