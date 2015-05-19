@@ -177,6 +177,7 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 	}
 
 	rspamd_flags |= RSPAMD_REGEXP_FLAG_RAW;
+	regexp_flags |= PCRE_NO_AUTO_CAPTURE;
 	regexp_flags &= ~PCRE_UTF8;
 
 	if (flags_str != NULL) {
@@ -421,7 +422,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 		rc = pcre_exec (r, ext, mt, remain, 0, match_flags, ovec,
 				G_N_ELEMENTS (ovec));
 	}
-	if (rc > 0) {
+	if (rc >= 0) {
 		if (start) {
 			*start = mt + ovec[0];
 		}
