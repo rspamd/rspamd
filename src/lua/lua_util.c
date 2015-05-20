@@ -44,6 +44,14 @@ LUA_FUNCTION_DEF (util, load_rspamd_config);
  * @return {confg} new configuration object suitable for access
  */
 LUA_FUNCTION_DEF (util, config_from_ucl);
+/***
+ * @function util.encode_base64(input[, str_len])
+ * Encodes data in base64 breaking lines if needed
+ * @param {text or string} input input data
+ * @param {number} str_len optional size of lines or 0 if split is not needed
+ * @return {rspamd_text} encoded data chunk
+ */
+LUA_FUNCTION_DEF (util, encode_base64);
 LUA_FUNCTION_DEF (util, process_message);
 
 static const struct luaL_reg utillib_f[] = {
@@ -51,6 +59,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, load_rspamd_config),
 	LUA_INTERFACE_DEF (util, config_from_ucl),
 	LUA_INTERFACE_DEF (util, process_message),
+	LUA_INTERFACE_DEF (util, encode_base64),
 	{NULL, NULL}
 };
 
@@ -189,6 +198,53 @@ lua_util_process_message (lua_State *L)
 	}
 	else {
 		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_util_encode_base64 (lua_State *L)
+{
+	struct rspamd_lua_text *t;
+	const gchar *s = NULL;
+	gchar *out;
+	gsize inlen, outlen;
+	guint str_lim = 0;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		s = luaL_checklstring (L, 1, &inlen);
+	}
+	else if (lua_type (L, 1) == LUA_TUSERDATA) {
+		t = lua_check_text (L, 1);
+
+		if (t != NULL) {
+			s = t->start;
+			inlen = t->len;
+		}
+	}
+
+	if (lua_gettop (L) > 1) {
+		str_lim = luaL_checknumber (L, 2);
+	}
+
+	if (s == NULL) {
+		lua_pushnil (L);
+	}
+	else {
+		out = rspamd_encode_base64 (s, inlen, str_lim, &outlen);
+
+		if (out != NULL) {
+			t = lua_newuserdata (L, sizeof (*t));
+			rspamd_lua_setclass (L, "rspamd{text}", -1);
+			t->start = out;
+			t->len = outlen;
+			/* Need destruction */
+			t->own = TRUE;
+		}
+		else {
+			lua_pushnil (L);
+		}
 	}
 
 	return 1;
