@@ -330,7 +330,7 @@ lua_util_tokenize_text (lua_State *L)
 		for (i = 0; i < res->len; i ++) {
 			w = &g_array_index (res, rspamd_fstring_t, i);
 			lua_pushlstring (L, w->begin, w->len);
-			lua_settable (L, i + 1);
+			lua_rawseti (L, -2, i + 1);
 		}
 	}
 

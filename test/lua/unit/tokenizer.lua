@@ -8,6 +8,9 @@ context("Text tokenization test", function()
         "Integer", "mattis", "nibh"
         }
       },
+      {"Հետաքրքրվողների համար ոտորև ներկայացված",
+        {"Հետաքրքրվողների", "համար", "ոտորև", "ներկայացված"}
+      },
     }
     
     for _,c in ipairs(cases) do
