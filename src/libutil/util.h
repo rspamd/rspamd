@@ -429,6 +429,16 @@ gchar * rspamd_encode_base32 (const guchar *in, gsize inlen);
 guchar* rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen);
 
 /**
+ * Encode string using base64 encoding
+ * @param in input
+ * @param inlen input length
+ * @param str_len maximum string length (if <= 0 then no lines are split)
+ * @return freshly allocated base64 encoded value or NULL if input is invalid
+ */
+gchar * rspamd_encode_base64 (const guchar *in, gsize inlen, gint str_len,
+		gsize *outlen);
+
+/**
  * Portably return the current clock ticks as seconds
  * @return
  */

@@ -2315,6 +2315,172 @@ rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen)
 	return res;
 }
 
+gchar *
+rspamd_encode_base64 (const guchar *in, gsize inlen, gint str_len, gsize *outlen)
+{
+	gsize allocated_len = (inlen / 3) * 4 + 4;
+	gchar *out, *o;
+	guint64 n;
+	guint32 t1, t2, t3;
+	gint cols, shift;
+	guint i = 0;
+	static const char b64_enc[] =
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		"abcdefghijklmnopqrstuvwxyz"
+		"0123456789+/";
+
+	if (str_len > 0) {
+		allocated_len += (allocated_len / str_len + 1) * 2 + 1;
+	}
+
+	out = g_malloc (allocated_len);
+	o = out;
+	cols = 0;
+
+	while (inlen > 6) {
+		n = *(guint64 *)in;
+		n = GUINT64_TO_BE (n);
+
+		if (str_len <= 0 || cols <= str_len - 8) {
+			*o++ = b64_enc[(n >> 58) & 0x3F];
+			*o++ = b64_enc[(n >> 52) & 0x3F];
+			*o++ = b64_enc[(n >> 46) & 0x3F];
+			*o++ = b64_enc[(n >> 40) & 0x3F];
+			*o++ = b64_enc[(n >> 34) & 0x3F];
+			*o++ = b64_enc[(n >> 28) & 0x3F];
+			*o++ = b64_enc[(n >> 22) & 0x3F];
+			*o++ = b64_enc[(n >> 16) & 0x3F];
+			cols += 8;
+		}
+		else {
+			cols = str_len - cols;
+			shift = 58;
+			while (cols) {
+				*o++ = b64_enc[(n >> shift) & 0x3F];
+				shift -= 6;
+				cols --;
+			}
+
+			*o++ = '\r';
+			*o++ = '\n';
+
+			/* Remaining bytes */
+			while (shift >= 16) {
+				*o++ = b64_enc[(n >> shift) & 0x3F];
+				shift -= 6;
+				cols ++;
+			}
+		}
+
+		in += 6;
+		inlen -= 6;
+	}
+
+	if (str_len > 0 && cols >= str_len) {
+		*o++ = '\r';
+		*o++ = '\n';
+		cols = 0;
+	}
+	/* Trailing bytes */
+	if (inlen > 2) {
+		for (i = 0; i < inlen - 2; i += 3) {
+			t1 = in[i]; t2 = in[i+1]; t3 = in[i+2];
+			*o++ = b64_enc[t1];
+			if (str_len > 0 && ++cols >= str_len) {
+				*o++ = '\r';
+				*o++ = '\n';
+				cols = 0;
+			}
+			*o++ = b64_enc[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
+			if (str_len > 0 && ++cols >= str_len) {
+				*o++ = '\r';
+				*o++ = '\n';
+				cols = 0;
+			}
+			*o++ = b64_enc[((t2 & 0x0F) << 2) | ((t3 >> 6) & 0x03)];
+			if (str_len > 0 && ++cols >= str_len) {
+				*o++ = '\r';
+				*o++ = '\n';
+				cols = 0;
+			}
+			*o++ = b64_enc[t3];
+			if (str_len > 0 && ++cols >= str_len) {
+				*o++ = '\r';
+				*o++ = '\n';
+				cols = 0;
+			}
+		}
+	}
+
+	/* Padding + remaining data (0 - 2 bytes) */
+	switch (inlen - i) {
+	case 0:
+		break;
+	case 1:
+		t1 = in[i];
+		*o++ = b64_enc[t1];
+		if (str_len > 0 && ++cols >= str_len) {
+			*o++ = '\r';
+			*o++ = '\n';
+			cols = 0;
+		}
+		*o++ = b64_enc[(t1 & 0x03) << 4];
+		if (str_len > 0 && ++cols >= str_len) {
+			*o++ = '\r';
+			*o++ = '\n';
+			cols = 0;
+		}
+		*o++ = '=';
+		if (str_len > 0 && ++cols >= str_len) {
+			*o++ = '\r';
+			*o++ = '\n';
+			cols = 0;
+		}
+		*o++ = '=';
+		if (str_len > 0 && ++cols >= str_len) {
+			*o++ = '\r';
+			*o++ = '\n';
+			cols = 0;
+		}
+		break;
+	default: /* case 2 */
+		t1 = in[i]; t2 = in[i+1];
+		*o++ = b64_enc[t1];
+		if (str_len > 0 && ++cols >= str_len) {
+			*o++ = '\r';
+			*o++ = '\n';
+			cols = 0;
+		}
+		*o++ = b64_enc[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
+		if (str_len > 0 && ++cols >= str_len) {
+			*o++ = '\r';
+			*o++ = '\n';
+			cols = 0;
+		}
+		*o++ = b64_enc[(t2 & 0x0F) << 2];
+		if (str_len > 0 && ++cols >= str_len) {
+			*o++ = '\r';
+			*o++ = '\n';
+			cols = 0;
+		}
+		*o++ = '=';
+	}
+
+	if (str_len > 0 && ++cols >= str_len) {
+		*o++ = '\r';
+		*o++ = '\n';
+		cols = 0;
+	}
+
+	*o = '\0';
+
+	if (outlen != NULL) {
+		*outlen = o - out;
+	}
+
+	return out;
+}
+
 gdouble
 rspamd_get_ticks (void)
 {
