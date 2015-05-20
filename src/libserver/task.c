@@ -71,13 +71,13 @@ rspamd_task_new (struct rspamd_worker *worker)
 		new_task->re_cache);
 	new_task->raw_headers = g_hash_table_new (rspamd_strcase_hash,
 			rspamd_strcase_equal);
-	new_task->request_headers = g_hash_table_new_full ((GHashFunc)g_string_hash,
-		(GEqualFunc)g_string_equal, gstring_destruct, gstring_destruct);
+	new_task->request_headers = g_hash_table_new_full (rspamd_gstring_icase_hash,
+		rspamd_gstring_icase_equal, gstring_destruct, gstring_destruct);
 	rspamd_mempool_add_destructor (new_task->task_pool,
 		(rspamd_mempool_destruct_t) g_hash_table_unref,
 		new_task->request_headers);
-	new_task->reply_headers = g_hash_table_new_full ((GHashFunc)g_string_hash,
-		(GEqualFunc)g_string_equal, gstring_destruct, gstring_destruct);
+	new_task->reply_headers = g_hash_table_new_full (rspamd_gstring_icase_hash,
+			rspamd_gstring_icase_equal, gstring_destruct, gstring_destruct);
 	rspamd_mempool_add_destructor (new_task->task_pool,
 		(rspamd_mempool_destruct_t) g_hash_table_unref,
 		new_task->reply_headers);

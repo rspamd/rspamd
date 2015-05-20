@@ -185,6 +185,8 @@ gboolean rspamd_str_equal (gconstpointer v, gconstpointer v2);
  */
 guint rspamd_fstring_icase_hash (gconstpointer key);
 gboolean rspamd_fstring_icase_equal (gconstpointer v, gconstpointer v2);
+guint rspamd_gstring_icase_hash (gconstpointer key);
+gboolean rspamd_gstring_icase_equal (gconstpointer v, gconstpointer v2);
 
 /*
  * Google perf-tools initialization function
