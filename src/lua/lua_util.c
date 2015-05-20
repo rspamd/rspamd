@@ -25,6 +25,7 @@
 #include "task.h"
 #include "main.h"
 #include "cfg_rcl.h"
+#include "tokenizers/tokenizers.h"
 
 /***
  * @function util.create_event_base()
@@ -52,6 +53,14 @@ LUA_FUNCTION_DEF (util, config_from_ucl);
  * @return {rspamd_text} encoded data chunk
  */
 LUA_FUNCTION_DEF (util, encode_base64);
+/***
+ * @function util.tokenize_text(input[, exceptions])
+ * Create tokens from a text using optional exceptions list
+ * @param {text/string} input input data
+ * @param {table} exceptions, a table of pairs containing <start_pos,lenght> of exceptions in the input
+ * @return {table/strings} list of strings representing words in the text
+ */
+LUA_FUNCTION_DEF (util, tokenize_text);
 LUA_FUNCTION_DEF (util, process_message);
 
 static const struct luaL_reg utillib_f[] = {
@@ -60,6 +69,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, config_from_ucl),
 	LUA_INTERFACE_DEF (util, process_message),
 	LUA_INTERFACE_DEF (util, encode_base64),
+	LUA_INTERFACE_DEF (util, tokenize_text),
 	{NULL, NULL}
 };
 
@@ -246,6 +256,92 @@ lua_util_encode_base64 (lua_State *L)
 			lua_pushnil (L);
 		}
 	}
+
+	return 1;
+}
+
+static gint
+lua_util_tokenize_text (lua_State *L)
+{
+	const gchar *in = NULL;
+	gsize len, pos, ex_len, i;
+	GList *exceptions = NULL, *cur;
+	struct rspamd_lua_text *t;
+	struct process_exception *ex;
+	GArray *res;
+	rspamd_fstring_t *w;
+	gboolean compat = FALSE;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		in = luaL_checklstring (L, 1, &len);
+	}
+	else if (lua_type (L, 1) == LUA_TTABLE) {
+		t = lua_check_text (L, 1);
+
+		if (t) {
+			in = t->start;
+			len = t->len;
+		}
+	}
+
+	if (in == NULL) {
+		lua_pushnil (L);
+		return 1;
+	}
+
+	if (lua_gettop (L) > 1 && lua_type (L, 2) == LUA_TTABLE) {
+		lua_pushvalue (L, 2);
+		lua_pushnil (L);
+
+		while (lua_next (L, -2) != 0) {
+			if (lua_type (L, -1) == LUA_TTABLE) {
+				lua_rawgeti (L, -1, 1);
+				pos = luaL_checknumber (L, -1);
+				lua_pop (L, 1);
+				lua_rawgeti (L, -1, 2);
+				ex_len = luaL_checknumber (L, -1);
+				lua_pop (L, 1);
+
+				if (ex_len > 0) {
+					ex = g_slice_alloc (sizeof (*ex));
+					ex->pos = pos;
+					ex->len = ex_len;
+					exceptions = g_list_prepend (exceptions, ex);
+				}
+			}
+			lua_pop (L, 1);
+		}
+
+		lua_pop (L, 1);
+	}
+
+	if (lua_gettop (L) > 2 && lua_type (L, 3) == LUA_TBOOLEAN) {
+		compat = lua_toboolean (L, 3);
+	}
+
+	res = rspamd_tokenize_text ((gchar *)in, len, TRUE, 0, exceptions, compat);
+
+	if (res == NULL) {
+		lua_pushnil (L);
+	}
+	else {
+		lua_newtable (L);
+
+		for (i = 0; i < res->len; i ++) {
+			w = &g_array_index (res, rspamd_fstring_t, i);
+			lua_pushlstring (L, w->begin, w->len);
+			lua_settable (L, i + 1);
+		}
+	}
+
+	cur = exceptions;
+	while (cur) {
+		ex = cur->data;
+		g_slice_free1 (sizeof (*ex), ex);
+		cur = g_list_next (cur);
+	}
+
+	g_list_free (exceptions);
 
 	return 1;
 }
