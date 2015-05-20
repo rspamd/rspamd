@@ -257,7 +257,7 @@ set_token:
 		*rl = processed;
 	}
 
-	token->len = p - *cur;
+	token->len = p - token->begin;
 	g_assert (token->len > 0);
 	*cur = p;
 
