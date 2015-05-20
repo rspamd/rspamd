@@ -150,6 +150,7 @@ lua_tcp_push_data (struct lua_tcp_cbdata *cbd, const gchar *str, gsize len)
 	rspamd_lua_setclass (cbd->L, "rspamd{text}", -1);
 	t->start = str;
 	t->len = len;
+	t->own = FALSE;
 
 	if (lua_pcall (cbd->L, 2, 0, 0) != 0) {
 		msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));

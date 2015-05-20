@@ -64,7 +64,8 @@ struct rspamd_lua_ip {
 
 struct rspamd_lua_text {
 	const gchar *start;
-	gsize len;
+	guint len;
+	gboolean own;
 };
 
 struct rspamd_lua_url {

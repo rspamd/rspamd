@@ -529,12 +529,14 @@ static const struct luaL_reg imagelib_m[] = {
 LUA_FUNCTION_DEF (text, len);
 LUA_FUNCTION_DEF (text, str);
 LUA_FUNCTION_DEF (text, ptr);
+LUA_FUNCTION_DEF (text, gc);
 
 static const struct luaL_reg textlib_m[] = {
 	LUA_INTERFACE_DEF (text, len),
 	LUA_INTERFACE_DEF (text, str),
 	LUA_INTERFACE_DEF (text, ptr),
 	{"__tostring", lua_text_str},
+	{"__gc", lua_text_gc},
 	{NULL, NULL}
 };
 
@@ -836,6 +838,7 @@ lua_task_get_content (lua_State * L)
 		rspamd_lua_setclass (L, "rspamd{text}", -1);
 		t->len = task->msg.len;
 		t->start = task->msg.start;
+		t->own = FALSE;
 
 		return 1;
 	}
@@ -1040,6 +1043,7 @@ lua_task_get_raw_headers (lua_State *L)
 		rspamd_lua_setclass (L, "rspamd{text}", -1);
 		t->start = task->raw_headers_str;
 		t->len = strlen (t->start);
+		t->own = FALSE;
 	}
 	else {
 		lua_pushnil (L);
@@ -2020,6 +2024,18 @@ lua_text_ptr (lua_State *L)
 	}
 
 	return 1;
+}
+
+static gint
+lua_text_gc (lua_State *L)
+{
+	struct rspamd_lua_text *t = lua_check_text (L, 1);
+
+	if (t != NULL && t->own) {
+		g_free ((gpointer)t->start);
+	}
+
+	return 0;
 }
 
 /* Init part */

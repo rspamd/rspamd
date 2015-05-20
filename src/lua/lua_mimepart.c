@@ -278,6 +278,7 @@ lua_textpart_get_content (lua_State * L)
 	rspamd_lua_setclass (L, "rspamd{text}", -1);
 	t->start = part->content->data;
 	t->len = part->content->len;
+	t->own = FALSE;
 
 	return 1;
 }
@@ -478,6 +479,7 @@ lua_mimepart_get_content (lua_State * L)
 	rspamd_lua_setclass (L, "rspamd{text}", -1);
 	t->start = part->content->data;
 	t->len = part->content->len;
+	t->own = FALSE;
 
 	return 1;
 }
