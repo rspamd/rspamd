@@ -2315,21 +2315,30 @@ rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen)
 	return res;
 }
 
+
 gchar *
 rspamd_encode_base64 (const guchar *in, gsize inlen, gint str_len, gsize *outlen)
 {
+#define CHECK_SPLIT \
+	do { if (str_len > 0 && cols >= str_len) { \
+				*o++ = '\r'; \
+				*o++ = '\n'; \
+				cols = 0; \
+	} } \
+while (0)
+
 	gsize allocated_len = (inlen / 3) * 4 + 4;
 	gchar *out, *o;
 	guint64 n;
-	guint32 t1, t2, t3;
+	guint32 rem, t, carry;
 	gint cols, shift;
-	guint i = 0;
 	static const char b64_enc[] =
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 		"abcdefghijklmnopqrstuvwxyz"
 		"0123456789+/";
 
 	if (str_len > 0) {
+		g_assert (str_len > 8);
 		allocated_len += (allocated_len / str_len + 1) * 2 + 1;
 	}
 
@@ -2376,101 +2385,70 @@ rspamd_encode_base64 (const guchar *in, gsize inlen, gint str_len, gsize *outlen
 		inlen -= 6;
 	}
 
-	if (str_len > 0 && cols >= str_len) {
-		*o++ = '\r';
-		*o++ = '\n';
-		cols = 0;
-	}
-	/* Trailing bytes */
-	if (inlen > 2) {
-		for (i = 0; i < inlen - 2; i += 3) {
-			t1 = in[i]; t2 = in[i+1]; t3 = in[i+2];
-			*o++ = b64_enc[t1];
-			if (str_len > 0 && ++cols >= str_len) {
-				*o++ = '\r';
-				*o++ = '\n';
-				cols = 0;
+	CHECK_SPLIT;
+
+	rem = 0;
+	carry = 0;
+
+	for (;;) {
+		/* Padding + remaining data (0 - 2 bytes) */
+		switch (rem) {
+		case 0:
+			if (inlen-- == 0) {
+				goto end;
 			}
-			*o++ = b64_enc[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
-			if (str_len > 0 && ++cols >= str_len) {
-				*o++ = '\r';
-				*o++ = '\n';
-				cols = 0;
+			t = *in++;
+			*o++ = b64_enc[t >> 2];
+			carry = (t << 4) & 0x30;
+			rem = 1;
+			cols ++;
+		case 1:
+			if (inlen-- == 0) {
+				goto end;
 			}
-			*o++ = b64_enc[((t2 & 0x0F) << 2) | ((t3 >> 6) & 0x03)];
-			if (str_len > 0 && ++cols >= str_len) {
-				*o++ = '\r';
-				*o++ = '\n';
-				cols = 0;
+			CHECK_SPLIT;
+			t = *in++;
+			*o++ = b64_enc[carry | (t >> 4)];
+			carry = (t << 2) & 0x3C;
+			rem = 2;
+			cols ++;
+		default:
+			if (inlen-- == 0) {
+				goto end;
 			}
-			*o++ = b64_enc[t3];
-			if (str_len > 0 && ++cols >= str_len) {
-				*o++ = '\r';
-				*o++ = '\n';
-				cols = 0;
-			}
+			CHECK_SPLIT;
+			t = *in ++;
+			*o++ = b64_enc[carry | (t >> 6)];
+			cols ++;
+			CHECK_SPLIT;
+			*o++ = b64_enc[t & 0x3F];
+			cols ++;
+			CHECK_SPLIT;
+			rem = 0;
 		}
 	}
 
-	/* Padding + remaining data (0 - 2 bytes) */
-	switch (inlen - i) {
-	case 0:
-		break;
-	case 1:
-		t1 = in[i];
-		*o++ = b64_enc[t1];
-		if (str_len > 0 && ++cols >= str_len) {
-			*o++ = '\r';
-			*o++ = '\n';
-			cols = 0;
-		}
-		*o++ = b64_enc[(t1 & 0x03) << 4];
-		if (str_len > 0 && ++cols >= str_len) {
-			*o++ = '\r';
-			*o++ = '\n';
-			cols = 0;
-		}
+end:
+	if (rem == 1) {
+		*o++ = b64_enc[carry];
+		cols ++;
+		CHECK_SPLIT;
 		*o++ = '=';
-		if (str_len > 0 && ++cols >= str_len) {
-			*o++ = '\r';
-			*o++ = '\n';
-			cols = 0;
-		}
+		cols ++;
+		CHECK_SPLIT;
 		*o++ = '=';
-		if (str_len > 0 && ++cols >= str_len) {
-			*o++ = '\r';
-			*o++ = '\n';
-			cols = 0;
-		}
-		break;
-	default: /* case 2 */
-		t1 = in[i]; t2 = in[i+1];
-		*o++ = b64_enc[t1];
-		if (str_len > 0 && ++cols >= str_len) {
-			*o++ = '\r';
-			*o++ = '\n';
-			cols = 0;
-		}
-		*o++ = b64_enc[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
-		if (str_len > 0 && ++cols >= str_len) {
-			*o++ = '\r';
-			*o++ = '\n';
-			cols = 0;
-		}
-		*o++ = b64_enc[(t2 & 0x0F) << 2];
-		if (str_len > 0 && ++cols >= str_len) {
-			*o++ = '\r';
-			*o++ = '\n';
-			cols = 0;
-		}
+		cols ++;
+		CHECK_SPLIT;
+	}
+	else if (rem == 2) {
+		*o++ = b64_enc[carry];
+		cols ++;
+		CHECK_SPLIT;
 		*o++ = '=';
+		cols ++;
 	}
 
-	if (str_len > 0 && ++cols >= str_len) {
-		*o++ = '\r';
-		*o++ = '\n';
-		cols = 0;
-	}
+	CHECK_SPLIT;
 
 	*o = '\0';
 
