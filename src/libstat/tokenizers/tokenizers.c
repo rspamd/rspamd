@@ -223,6 +223,7 @@ rspamd_tokenizer_get_word (rspamd_fstring_t * buf,
 			if (ex != NULL && p - buf->begin == (gint)ex->pos) {
 				token->begin = "exception";
 				token->len = sizeof ("exception") - 1;
+				processed = token->len;
 				state = skip_exception;
 				continue;
 			}
@@ -257,9 +258,11 @@ set_token:
 		*rl = processed;
 	}
 
-	token->len = p - token->begin;
-	g_assert (token->len > 0);
-	*cur = p;
+	if (token->len == 0) {
+		token->len = p - token->begin;
+		g_assert (token->len > 0);
+		*cur = p;
+	}
 
 	return TRUE;
 }
@@ -275,7 +278,7 @@ rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 	GList *cur = exceptions;
 	token_get_function func;
 
-	if (len == 0 || text == NULL) {
+	if (text == NULL) {
 		return NULL;
 	}
 
