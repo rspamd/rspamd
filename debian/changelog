@@ -1,3 +1,11 @@
+rspamd (0.9.4) unstable; urgency=low
+
+  * New release:
+    - Fix Build-Depends to let buildd pick up lua 5.1 on architectures
+      without luajit (Closes: #785800)
+
+ -- Mikhail Gusarov <dottedmag@debian.org>  Thu, 21 May 2015 09:26:18 +0200
+
 rspamd (0.9.3) unstable; urgency=low
 
   * New release:
