@@ -1208,23 +1208,25 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 				r = sb_stemmer_stem (stem, w->begin, w->len);
 			}
 
-			if (stem != NULL && r != NULL) {
-				nlen = strlen (r);
-				nlen = MIN (nlen, w->len);
-				w->begin = rspamd_mempool_alloc (task->task_pool, nlen);
-				memcpy (w->begin, r, nlen);
-				w->len = nlen;
-			}
-			else {
-				temp_word = w->begin;
-				w->begin = rspamd_mempool_alloc (task->task_pool, w->len);
-				memcpy (w->begin, temp_word, w->len);
-
-				if (IS_PART_UTF (part)) {
-					rspamd_str_lc_utf8 (w->begin, w->len);
+			if (w->len > 0 && !(w->len == 6 && memcmp (w->begin, "!!EX!!", 6) == 0)) {
+				if (stem != NULL && r != NULL) {
+					nlen = strlen (r);
+					nlen = MIN (nlen, w->len);
+					w->begin = rspamd_mempool_alloc (task->task_pool, nlen);
+					memcpy (w->begin, r, nlen);
+					w->len = nlen;
 				}
 				else {
-					rspamd_str_lc (w->begin, w->len);
+					temp_word = w->begin;
+					w->begin = rspamd_mempool_alloc (task->task_pool, w->len);
+					memcpy (w->begin, temp_word, w->len);
+
+					if (IS_PART_UTF (part)) {
+						rspamd_str_lc_utf8 (w->begin, w->len);
+					}
+					else {
+						rspamd_str_lc (w->begin, w->len);
+					}
 				}
 			}
 		}
