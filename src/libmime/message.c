@@ -1345,7 +1345,7 @@ process_text_part (struct rspamd_task *task,
 	detect_text_language (text_part);
 	text_part->words = rspamd_tokenize_text (text_part->content->data,
 			text_part->content->len, IS_PART_UTF (text_part), task->cfg->min_word_len,
-			text_part->urls_offset, TRUE);
+			text_part->urls_offset, FALSE);
 	rspamd_normalize_text_part (task, text_part);
 
 	/* Calculate number of lines */
