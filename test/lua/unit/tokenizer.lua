@@ -67,31 +67,31 @@ context("Text tokenization test", function()
     local cases = {
       {"word https://example.com/path word",
         {{5, 24}},
-        {"word", "exception", "word"}
+        {"word", "!!EX!!", "word"}
       },
       {"համար https://example.com/path համար",
         {{11, 24}},
-        {"համար", "exception", "համար"}
+        {"համար", "!!EX!!", "համար"}
       },
       {"word https://example.com/path https://example.com/path word",
         {{5, 24}, {30, 24}},
-        {"word", "exception", "exception", "word"}
+        {"word", "!!EX!!", "!!EX!!", "word"}
       },
       {"word https://example.com/path https://example.com/path",
         {{5, 24}, {30, 24}},
-        {"word", "exception", "exception"}
+        {"word", "!!EX!!", "!!EX!!"}
       },
       {"https://example.com/path https://example.com/path word",
         {{0, 24}, {25, 24}},
-        {"exception", "exception", "word"}
+        {"!!EX!!", "!!EX!!", "word"}
       },
       {"https://example.com/path https://example.com/path",
         {{0, 24}, {25, 24}},
-        {"exception", "exception"}
+        {"!!EX!!", "!!EX!!"}
       },
       {",,,,https://example.com/path https://example.com/path    ",
         {{4, 24}, {29, 24}},
-        {"exception", "exception"}
+        {"!!EX!!", "!!EX!!"}
       },
     }
     

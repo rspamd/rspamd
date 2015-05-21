@@ -221,8 +221,8 @@ rspamd_tokenizer_get_word (rspamd_fstring_t * buf,
 		switch (state) {
 		case skip_delimiters:
 			if (ex != NULL && p - buf->begin == (gint)ex->pos) {
-				token->begin = "exception";
-				token->len = sizeof ("exception") - 1;
+				token->begin = "!!EX!!";
+				token->len = sizeof ("!!EX!!") - 1;
 				processed = token->len;
 				state = skip_exception;
 				continue;
