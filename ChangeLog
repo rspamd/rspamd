@@ -1,3 +1,16 @@
+0.9.4:
+	* Fix critical bugs in tokenization algorithm
+	* Write unit tests for tokenization
+	* Add documentation for lua_tcp
+	* Switch off legacy tokenization by default.
+	* Fix critical bugs in words normalization
+	* Add lua bindings to tokenizer.
+	* Implement storing of HTTP headers inside task
+	* Add lua API to accerss HTTP headers data
+	* Implemented base64 encoding suitable for MIME
+	* Use caseless hash and equal functions for HTTP request headers.
+	* Improve debian architectures support (by @dottedmag)
+
 0.9.3:
 	* Revert incorrect regexp change that broke the default rules
 	* Fix lua_tcp module
