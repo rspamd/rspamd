@@ -1184,6 +1184,7 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 	struct sb_stemmer *stem = NULL;
 	rspamd_fstring_t *w;
 	const guchar *r;
+	gchar *temp_word;
 	guint i, nlen;
 	GArray *tmp;
 
@@ -1210,10 +1211,15 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 			if (stem != NULL && r != NULL) {
 				nlen = strlen (r);
 				nlen = MIN (nlen, w->len);
+				w->begin = rspamd_mempool_alloc (task->task_pool, nlen);
 				memcpy (w->begin, r, nlen);
 				w->len = nlen;
 			}
 			else {
+				temp_word = w->begin;
+				w->begin = rspamd_mempool_alloc (task->task_pool, w->len);
+				memcpy (w->begin, temp_word, w->len);
+
 				if (IS_PART_UTF (part)) {
 					rspamd_str_lc_utf8 (w->begin, w->len);
 				}
