@@ -319,6 +319,10 @@ lua_util_tokenize_text (lua_State *L)
 		compat = lua_toboolean (L, 3);
 	}
 
+	if (exceptions) {
+		exceptions = g_list_reverse (exceptions);
+	}
+
 	res = rspamd_tokenize_text ((gchar *)in, len, TRUE, 0, exceptions, compat);
 
 	if (res == NULL) {
