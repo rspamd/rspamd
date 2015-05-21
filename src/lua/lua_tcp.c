@@ -72,6 +72,7 @@ struct lua_tcp_cbdata {
 	rspamd_mempool_t *pool;
 	struct iovec *iov;
 	GString *in;
+	gchar *stop_pattern;
 	struct event ev;
 	gint fd;
 	gint cbref;
@@ -241,6 +242,7 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 	struct lua_tcp_cbdata *cbd = ud;
 	gchar inbuf[BUFSIZ];
 	gssize r;
+	guint slen;
 
 	if (what == EV_READ) {
 		g_assert (cbd->partial || cbd->in != NULL);
@@ -274,6 +276,18 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 			}
 			else {
 				g_string_append_len (cbd->in, inbuf, r);
+
+				if (cbd->stop_pattern) {
+					slen = strlen (cbd->stop_pattern);
+
+					if (cbd->in->len >= slen) {
+						if (memcmp (cbd->stop_pattern, cbd->in->str +
+								(cbd->in->len - slen), slen) == 0) {
+							lua_tcp_push_data (cbd, cbd->in->str, cbd->in->len);
+							lua_tcp_maybe_free (cbd);
+						}
+					}
+				}
 			}
 		}
 	}
@@ -385,12 +399,14 @@ lua_tcp_arg_toiovec (lua_State *L, gint pos, rspamd_mempool_t *pool,
  * - `callback`: continuation function (required)
  * - `timeout`: floating point value that specifies timeout for IO operations in seconds
  * - `partial`: boolean flag that specifies that callback should be called on any data portion received
+ * - `stop_pattern`: stop reading on finding a certain pattern (e.g. \r\n.\r\n for smtp)
  * @return {boolean} true if request has been sent
  */
 static gint
 lua_tcp_request (lua_State *L)
 {
 	const gchar *host;
+	gchar *stop_pattern = NULL;
 	guint port;
 	gint cbref, tp;
 	struct event_base *ev_base;
@@ -485,6 +501,13 @@ lua_tcp_request (lua_State *L)
 		}
 		lua_pop (L, 1);
 
+		lua_pushstring (L, "stop_pattern");
+		lua_gettable (L, -2);
+		if (lua_type (L, -1) == LUA_TSTRING) {
+			stop_pattern = rspamd_mempool_strdup (pool, lua_tostring (L, -1));
+		}
+		lua_pop (L, 1);
+
 		lua_pushstring (L, "partial");
 		lua_gettable (L, -2);
 		if (lua_type (L, -1) == LUA_TBOOLEAN) {
@@ -566,6 +589,7 @@ lua_tcp_request (lua_State *L)
 	cbd->total = total_out;
 	cbd->pos = 0;
 	cbd->port = port;
+	cbd->stop_pattern = stop_pattern;
 
 	if (session) {
 		cbd->session = session;
