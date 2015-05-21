@@ -1384,7 +1384,7 @@ url_email_end (const gchar *begin,
 	}
 
 	/* Strip strange symbols at the end */
-	if (got_at) {
+	if (got_at && p < end) {
 		while (p >= match->m_begin &&
 				(!is_domain (*p) || *p == '.' || *p == '_')) {
 			p --;
