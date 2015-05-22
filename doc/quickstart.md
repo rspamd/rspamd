@@ -11,7 +11,7 @@ This guide describes the main procedures to get and start working with rspamd.
 
 ### Arch, CentOS, Debian, Fedora, openSUSE, SLE, Ubuntu
 
-The recommended way to install Rspamd is using binary packages from [our project on the openSUSE build service](https://software.opensuse.org/download.html?project=home%3Acebka&package=rspamd) which is expected to always offer the best available version. See this page for installation instructions appropriate to your platform.
+The recommended way to install Rspamd is using binary packages from [our project on the openSUSE build service](https://software.opensuse.org/download.html?project=home%3Acebka&package=rspamd) which is expected to always offer the best available version.
 
 Rspamd is also available in Debian's [testing](https://packages.debian.org/source/testing/rspamd) and [unstable](https://packages.debian.org/source/unstable/rspamd) distributions and the universe repository in [some versions](http://packages.ubuntu.com/search?keywords=rspamd&searchon=names&suite=all&section=all) of Ubuntu.
 
