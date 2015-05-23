@@ -459,21 +459,30 @@ lua_regexp_matchn (lua_State *L)
  * of the substrings will also be returned. If the pattern does not match
  * anywhere in the string, then the whole string is returned as the first
  * token.
- * @param {string} line line to split
- * @return {table} table of split line portions
+ * @param {string/text} line line to split
+ * @return {table} table of split line portions (if text was the input, then text is used for return parts)
  */
 static int
 lua_regexp_split (lua_State *L)
 {
 	struct rspamd_lua_regexp *re = lua_check_regexp (L);
-	const gchar *data;
-	gboolean matched = FALSE;
-	gsize len;
+	const gchar *data = NULL;
+	struct rspamd_lua_text *t;
+	gboolean matched = FALSE, is_text = FALSE;
+	gsize len = 0;
 	const gchar *start = NULL, *end = NULL, *old_start;
 	gint i;
 
 	if (re && !IS_DESTROYED (re)) {
-		data = luaL_checklstring (L, 2, &len);
+		if (lua_type (L, 2) == LUA_TSTRING) {
+			data = luaL_checklstring (L, 2, &len);
+		}
+		else if (lua_type (L, 2) == LUA_TUSERDATA) {
+			t = lua_check_text (L, 2);
+			data = t->start;
+			len = t->len;
+			is_text = TRUE;
+		}
 
 		if (re->match_limit > 0) {
 			len = MIN (len, re->match_limit);
@@ -485,7 +494,17 @@ lua_regexp_split (lua_State *L)
 			old_start = data;
 			while (rspamd_regexp_search (re->re, data, len, &start, &end, FALSE)) {
 				if (start - old_start > 0) {
-					lua_pushlstring (L, old_start, start - old_start);
+					if (!is_text) {
+						lua_pushlstring (L, old_start, start - old_start);
+					}
+					else {
+						t = lua_newuserdata (L, sizeof (*t));
+						rspamd_lua_setclass (L, "rspamd{text}", -1);
+						t->start = old_start;
+						t->len = start - old_start;
+						t->own = FALSE;
+					}
+
 					lua_rawseti (L, -2, ++i);
 					matched = TRUE;
 				}
@@ -497,7 +516,17 @@ lua_regexp_split (lua_State *L)
 					end = data;
 				}
 
-				lua_pushlstring (L, end, (data + len) - end);
+				if (!is_text) {
+					lua_pushlstring (L, end, (data + len) - end);
+				}
+				else {
+					t = lua_newuserdata (L, sizeof (*t));
+					rspamd_lua_setclass (L, "rspamd{text}", -1);
+					t->start = end;
+					t->len = (data + len) - end;
+					t->own = FALSE;
+				}
+
 				lua_rawseti (L, -2, ++i);
 				matched = TRUE;
 			}
