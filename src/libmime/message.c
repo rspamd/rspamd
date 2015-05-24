@@ -1556,8 +1556,16 @@ process_message (struct rspamd_task *task)
 	gint rc, state = 0;
 
 	tmp = rspamd_mempool_alloc (task->task_pool, sizeof (GByteArray));
-	tmp->data = (guint8 *)task->msg.start;
-	tmp->len = task->msg.len;
+	p = task->msg.start;
+	len = task->msg.len;
+	/* Skip any space characters to avoid some bad messages to be unparsed */
+	while (g_ascii_isspace (*p) && len > 0) {
+		p ++;
+		len --;
+	}
+
+	tmp->data = (guint8 *)p;
+	tmp->len = len;
 
 	stream = g_mime_stream_mem_new_with_byte_array (tmp);
 	/*
