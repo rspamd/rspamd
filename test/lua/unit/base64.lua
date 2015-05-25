@@ -1,5 +1,6 @@
 context("Base64 encodning", function()
   local ffi = require("ffi")
+  local util = require("rspamd_util")
   ffi.cdef[[
     void ottery_rand_bytes(void *buf, size_t n);
     unsigned ottery_rand_unsigned(void);
@@ -14,6 +15,19 @@ context("Base64 encodning", function()
     local l = ffi.C.ottery_rand_unsigned() % max_size + 1
     local buf = ffi.new("unsigned char[?]", l)
     ffi.C.ottery_rand_bytes(buf, l)
+    
+    return buf, l
+  end
+  
+  local function random_safe_buf(max_size)
+    local l = ffi.C.ottery_rand_unsigned() % max_size + 1
+    local buf = ffi.new("unsigned char[?]", l)
+    
+    for i = 0,l-1 do
+      buf[i] = ffi.C.ottery_rand_unsigned() % 20 + string.byte('A')
+    end 
+    
+    buf[l - 1] = 0;
     
     return buf, l
   end
@@ -38,6 +52,23 @@ context("Base64 encodning", function()
     end
   end)
   
+  test("Base64 decode test", function()
+    local cases = {
+      {"", ""},
+      {"f", "Zg=="},
+      {"fo", "Zm8="},
+      {"foo", "Zm9v"},
+      {"foob", "Zm9vYg=="},
+      {"fooba", "Zm9vYmE="},
+      {"foobar", "Zm9vYmFy"},
+    }
+    
+    for _,c in ipairs(cases) do
+      local b = tostring(util.decode_base64(c[2]))
+      assert_equal(b, c[1], b .. " not equal " .. c[1])
+    end
+  end)
+  
   test("Base64 line split encode test", function()
     local text = [[
 Man is distinguished, not only by his reason, but by this singular passion from
@@ -53,6 +84,16 @@ vehemence of any carnal pleasure.]]
   end)
   
   test("Base64 fuzz test", function()
+    for i = 1,1000 do
+      local b, l = random_safe_buf(4096)
+      local lim = ffi.C.ottery_rand_unsigned() % 64 + 10
+      local orig = ffi.string(b)
+      local ben = util.encode_base64(orig, lim)
+      local dec = util.decode_base64(ben)
+      assert_equal(orig, tostring(dec), "fuzz test failed for length: " .. #orig)
+    end
+  end)
+    test("Base64 fuzz test (ffi)", function()
     for i = 1,1000 do
       local b, l = random_buf(4096)
       local nl = ffi.new("size_t [1]")
