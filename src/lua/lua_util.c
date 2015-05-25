@@ -54,6 +54,13 @@ LUA_FUNCTION_DEF (util, config_from_ucl);
  */
 LUA_FUNCTION_DEF (util, encode_base64);
 /***
+ * @function util.decode_base64(input)
+ * Decodes data from base64 ignoring whitespace characters
+ * @param {text or string} input data to decode; if `rspamd{text}` is used then the string is modified **in-place**
+ * @return {rspamd_text} decoded data chunk
+ */
+LUA_FUNCTION_DEF (util, decode_base64);
+/***
  * @function util.tokenize_text(input[, exceptions])
  * Create tokens from a text using optional exceptions list
  * @param {text/string} input input data
@@ -69,6 +76,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, config_from_ucl),
 	LUA_INTERFACE_DEF (util, process_message),
 	LUA_INTERFACE_DEF (util, encode_base64),
+	LUA_INTERFACE_DEF (util, decode_base64),
 	LUA_INTERFACE_DEF (util, tokenize_text),
 	{NULL, NULL}
 };
@@ -255,6 +263,57 @@ lua_util_encode_base64 (lua_State *L)
 		else {
 			lua_pushnil (L);
 		}
+	}
+
+	return 1;
+}
+
+static gint
+lua_util_decode_base64 (lua_State *L)
+{
+	struct rspamd_lua_text *t;
+	const gchar *s = NULL;
+	gsize inlen, outlen;
+	gboolean zero_copy = FALSE;
+	gint state = 0;
+	guint save = 0;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		s = luaL_checklstring (L, 1, &inlen);
+	}
+	else if (lua_type (L, 1) == LUA_TUSERDATA) {
+		t = lua_check_text (L, 1);
+
+		if (t != NULL) {
+			s = t->start;
+			inlen = t->len;
+			zero_copy = TRUE;
+		}
+	}
+
+	if (s != NULL) {
+		if (zero_copy) {
+			/* Decode in place */
+			outlen = g_base64_decode_step (s, inlen, (gchar *)s, &state, &save);
+			t = lua_newuserdata (L, sizeof (*t));
+			rspamd_lua_setclass (L, "rspamd{text}", -1);
+			t->start = s;
+			t->len = outlen;
+			t->own = FALSE;
+		}
+		else {
+			t = lua_newuserdata (L, sizeof (*t));
+			rspamd_lua_setclass (L, "rspamd{text}", -1);
+			t->len = (inlen / 4) * 3 + 3;
+			t->start = g_malloc (t->len);
+			outlen = g_base64_decode_step (s, inlen, (gchar *)t->start,
+					&state, &save);
+			t->len = outlen;
+			t->own = TRUE;
+		}
+	}
+	else {
+		lua_pushnil (L);
 	}
 
 	return 1;
