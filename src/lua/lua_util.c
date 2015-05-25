@@ -274,7 +274,7 @@ lua_util_decode_base64 (lua_State *L)
 	struct rspamd_lua_text *t;
 	const gchar *s = NULL;
 	gsize inlen, outlen;
-	gboolean zero_copy = FALSE;
+	gboolean zero_copy = FALSE, grab_own = FALSE;
 	gint state = 0;
 	guint save = 0;
 
@@ -288,25 +288,29 @@ lua_util_decode_base64 (lua_State *L)
 			s = t->start;
 			inlen = t->len;
 			zero_copy = TRUE;
+			if (t->own) {
+				t->own = FALSE;
+				grab_own = TRUE;
+			}
 		}
 	}
 
 	if (s != NULL) {
 		if (zero_copy) {
 			/* Decode in place */
-			outlen = g_base64_decode_step (s, inlen, (gchar *)s, &state, &save);
+			outlen = g_base64_decode_step (s, inlen, (guchar *)s, &state, &save);
 			t = lua_newuserdata (L, sizeof (*t));
 			rspamd_lua_setclass (L, "rspamd{text}", -1);
 			t->start = s;
 			t->len = outlen;
-			t->own = FALSE;
+			t->own = grab_own;
 		}
 		else {
 			t = lua_newuserdata (L, sizeof (*t));
 			rspamd_lua_setclass (L, "rspamd{text}", -1);
 			t->len = (inlen / 4) * 3 + 3;
 			t->start = g_malloc (t->len);
-			outlen = g_base64_decode_step (s, inlen, (gchar *)t->start,
+			outlen = g_base64_decode_step (s, inlen, (guchar *)t->start,
 					&state, &save);
 			t->len = outlen;
 			t->own = TRUE;
