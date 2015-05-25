@@ -552,6 +552,7 @@ static const struct luaL_reg textlib_m[] = {
 	LUA_INTERFACE_DEF (text, len),
 	LUA_INTERFACE_DEF (text, str),
 	LUA_INTERFACE_DEF (text, ptr),
+	{"__len", lua_text_len},
 	{"__tostring", lua_text_str},
 	{"__gc", lua_text_gc},
 	{NULL, NULL}
