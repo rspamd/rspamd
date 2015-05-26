@@ -160,26 +160,25 @@ remove_normal_event (struct rspamd_async_session *session,
 	/* Search for event */
 	search_ev.fin = fin;
 	search_ev.user_data = ud;
-	if ((found_ev =
-		g_hash_table_lookup (session->events, &search_ev)) != NULL) {
+	found_ev = g_hash_table_lookup (session->events, &search_ev);
+	g_assert (found_ev != NULL);
 
-		msg_debug ("removed event: %p, subsystem: %s, pending %d events", ud,
+	msg_debug ("removed event: %p, subsystem: %s, pending %d events", ud,
 			g_quark_to_string (found_ev->subsystem),
 			g_hash_table_size (session->events));
-		/* Remove event */
-		fin (ud);
+	/* Remove event */
+	fin (ud);
 
-		/* Call watcher if needed */
-		if (found_ev->w) {
-			if (found_ev->w->remain > 0) {
-				if (--found_ev->w->remain == 0) {
-					found_ev->w->cb (found_ev->w->ud);
-				}
+	/* Call watcher if needed */
+	if (found_ev->w) {
+		if (found_ev->w->remain > 0) {
+			if (--found_ev->w->remain == 0) {
+				found_ev->w->cb (found_ev->w->ud);
 			}
 		}
-
-		g_hash_table_remove (session->events, found_ev);
 	}
+
+	g_hash_table_remove (session->events, found_ev);
 
 	check_session_pending (session);
 }
