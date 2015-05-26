@@ -1580,6 +1580,8 @@ rspamd_controller_handle_statreset (
 	return rspamd_controller_handle_stat_common (conn_ent, msg, TRUE);
 }
 
+#if 0
+/* XXX: restore counters */
 static ucl_object_t *
 rspamd_controller_cache_item_to_ucl (struct cache_item *item)
 {
@@ -1597,6 +1599,7 @@ rspamd_controller_cache_item_to_ucl (struct cache_item *item)
 
 	return obj;
 }
+#endif
 
 /*
  * Counters command handler:
@@ -1622,6 +1625,8 @@ rspamd_controller_handle_counters (
 	cache = session->ctx->cfg->cache;
 	top = ucl_object_typed_new (UCL_ARRAY);
 	if (cache != NULL) {
+#if 0
+/* XXX: restore counters */
 		cur = cache->negative_items;
 		while (cur) {
 			item = cur->data;
@@ -1640,6 +1645,7 @@ rspamd_controller_handle_counters (
 			}
 			cur = g_list_next (cur);
 		}
+#endif
 	}
 	rspamd_controller_send_ucl (conn_ent, top);
 	ucl_object_unref (top);

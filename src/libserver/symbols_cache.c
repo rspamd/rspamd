@@ -32,10 +32,10 @@
 
 /* After which number of messages try to resort cache */
 #define MAX_USES 100
-static const guchar rspamd_symbols_cache_magic[] = {'r', 's', 'c', 1, 0, 0 };
+static const guchar rspamd_symbols_cache_magic[8] = {'r', 's', 'c', 1, 0, 0, 0, 0 };
 
 struct rspamd_symbols_cache_header {
-	guchar magic;
+	guchar magic[8];
 	guint nitems;
 	guchar checksum[BLAKE2B_OUTBYTES];
 	guchar unused[128];
@@ -167,7 +167,7 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 		return FALSE;
 	}
 
-	if (st.st_size < sizeof (*hdr)) {
+	if (st.st_size < (gint)sizeof (*hdr)) {
 		close (fd);
 		errno = EINVAL;
 		msg_info ("cannot use file %s, error %d, %s", name,
@@ -188,14 +188,14 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 	hdr = map;
 
 	if (memcmp (hdr->magic, rspamd_symbols_cache_magic,
-			sizeof (rspamd_symbols_cache_magic)) == NULL) {
+			sizeof (rspamd_symbols_cache_magic)) != 0) {
 		msg_info ("cannot use file %s, bad magic", name);
 		munmap (map, st.st_size);
 		return FALSE;
 	}
 
 	parser = ucl_parser_new (0);
-	p = hdr + 1;
+	p = (const guchar *)(hdr + 1);
 
 	if (!ucl_parser_add_chunk (parser, p, st.st_size - sizeof (*hdr))) {
 		msg_info ("cannot use file %s, cannot parse: %s", name,
@@ -269,7 +269,7 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 	}
 
 	memset (&hdr, 0, sizeof (hdr));
-	memcpy (hdr->magic, rspamd_symbols_cache_magic,
+	memcpy (hdr.magic, rspamd_symbols_cache_magic,
 			sizeof (rspamd_symbols_cache_magic));
 
 	if (write (fd, &hdr, sizeof (hdr)) == -1) {
@@ -314,7 +314,7 @@ register_symbol_common (struct symbols_cache *cache,
 	enum rspamd_symbol_type type)
 {
 	struct cache_item *item = NULL;
-	GList **target, *cur;
+	GList *cur;
 	struct metric *m;
 	struct rspamd_symbol_def *s;
 	gboolean skipped, ghost = (weight == 0.0);
@@ -438,7 +438,7 @@ register_virtual_symbol (struct symbols_cache *cache,
 }
 
 void
-register_callback_symbol (struct symbols_cache **cache,
+register_callback_symbol (struct symbols_cache *cache,
 	const gchar *name,
 	double weight,
 	symbol_func_t func,
@@ -454,7 +454,7 @@ register_callback_symbol (struct symbols_cache **cache,
 }
 
 void
-register_callback_symbol_priority (struct symbols_cache **cache,
+register_callback_symbol_priority (struct symbols_cache *cache,
 	const gchar *name,
 	double weight,
 	gint priority,
@@ -509,11 +509,6 @@ gboolean
 init_symbols_cache (struct symbols_cache* cache,
 		struct rspamd_config *cfg)
 {
-	struct stat st;
-	gint fd;
-	GChecksum *cksum;
-	u_char *mem_sum, *file_sum;
-	gsize cklen;
 	gboolean res;
 
 	g_assert (cache != NULL);
@@ -527,6 +522,8 @@ init_symbols_cache (struct symbols_cache* cache,
 
 	/* Copy saved cache entries */
 	res = rspamd_symbols_cache_load_items (cache, cfg->cache_filename);
+
+	post_cache_init (cache);
 
 	return res;
 }
@@ -571,7 +568,6 @@ validate_cache (struct symbols_cache *cache,
 {
 	struct cache_item *item;
 	GList *cur, *metric_symbols;
-	gboolean res;
 
 	if (cache == NULL) {
 		msg_err ("empty cache is invalid");
@@ -582,9 +578,9 @@ validate_cache (struct symbols_cache *cache,
 	metric_symbols = g_hash_table_get_keys (cfg->metrics_symbols);
 	cur = metric_symbols;
 	while (cur) {
-		res = g_hash_table_lookup (cache->items_by_symbol, cur->data);
+		item = g_hash_table_lookup (cache->items_by_symbol, cur->data);
 
-		if (!res) {
+		if (item == NULL) {
 			msg_warn (
 				"symbol '%s' has its score defined but there is no "
 				"corresponding rule registered",
@@ -626,7 +622,7 @@ call_symbol_callback (struct rspamd_task * task,
 	if (s == NULL) {
 		s =
 			rspamd_mempool_alloc0 (task->task_pool,
-				sizeof (struct symbol_callback_data));
+				sizeof (gpointer));
 		*save = s;
 	}
 

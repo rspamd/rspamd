@@ -764,6 +764,8 @@ reopen_log_handler (gpointer key, gpointer value, gpointer unused)
 static gboolean
 load_rspamd_config (struct rspamd_config *cfg, gboolean init_modules)
 {
+	cfg->cache = rspamd_symbols_cache_new ();
+
 	if (!rspamd_config_read (cfg, cfg->cfg_name, NULL,
 		config_logger, rspamd_main)) {
 		return FALSE;
@@ -795,65 +797,8 @@ static void
 init_cfg_cache (struct rspamd_config *cfg)
 {
 
-	if (!init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg,
-		cfg->cache_filename, FALSE)) {
+	if (!init_symbols_cache (cfg->cache, cfg)) {
 		exit (EXIT_FAILURE);
-	}
-}
-
-static void
-print_symbols_cache (struct rspamd_config *cfg)
-{
-	GList *cur;
-	struct cache_item *item;
-	gint i;
-
-	if (!init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg,
-		cfg->cache_filename, TRUE)) {
-		exit (EXIT_FAILURE);
-	}
-	if (cfg->cache) {
-		printf ("Symbols cache\n");
-		printf (
-			"-----------------------------------------------------------------\n");
-		printf (
-			"| Pri  | Symbol                | Weight | Frequency | Avg. time |\n");
-		i = 0;
-		cur = cfg->cache->negative_items;
-		while (cur) {
-			item = cur->data;
-			if (!item->is_callback) {
-				printf (
-						"-----------------------------------------------------------------\n");
-				printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n",
-					i,
-					item->s->symbol,
-					item->s->weight,
-					item->s->frequency,
-					item->s->avg_time);
-			}
-			cur = g_list_next (cur);
-			i++;
-		}
-		cur = cfg->cache->static_items;
-		while (cur) {
-			item = cur->data;
-			if (!item->is_callback) {
-				printf (
-						"-----------------------------------------------------------------\n");
-				printf ("| %3d | %22s | %6.1f | %9d | %9.3f |\n",
-					i,
-					item->s->symbol,
-					item->s->weight,
-					item->s->frequency,
-					item->s->avg_time);
-			}
-			cur = g_list_next (cur);
-			i++;
-		}
-
-		printf (
-			"-----------------------------------------------------------------\n");
 	}
 }
 
@@ -1206,8 +1151,8 @@ main (gint argc, gchar **argv, gchar **env)
 			res = FALSE;
 		}
 		if (dump_cache) {
-			print_symbols_cache (rspamd_main->cfg);
-			exit (EXIT_SUCCESS);
+			msg_err ("Use rspamc counters for dumping cache");
+			exit (EXIT_FAILURE);
 		}
 		fprintf (stderr, "syntax %s\n", res ? "OK" : "BAD");
 		return res ? EXIT_SUCCESS : EXIT_FAILURE;

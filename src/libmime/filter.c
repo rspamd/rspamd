@@ -267,7 +267,6 @@ insert_result_common (struct rspamd_task *task,
 	gboolean single)
 {
 	struct metric *metric;
-	struct cache_item *item;
 	GList *cur, *metric_list;
 
 	/* Avoid concurrenting inserting of results */
@@ -298,10 +297,7 @@ insert_result_common (struct rspamd_task *task,
 
 	/* Process cache item */
 	if (task->cfg->cache) {
-		item = g_hash_table_lookup (task->cfg->cache->items_by_symbol, symbol);
-		if (item != NULL) {
-			item->s->frequency++;
-		}
+		/* XXX: increase frequency here */
 	}
 
 	if (opts != NULL) {

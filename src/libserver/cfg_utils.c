@@ -680,7 +680,7 @@ symbols_classifiers_callback (gpointer key, gpointer value, gpointer ud)
 {
 	struct rspamd_config *cfg = ud;
 
-	register_virtual_symbol (&cfg->cache, key, 1.0);
+	register_virtual_symbol (cfg->cache, key, 1.0);
 }
 
 void
@@ -910,13 +910,4 @@ rspamd_init_cfg (struct rspamd_config *cfg, gboolean init_lua)
 		rspamd_mempool_add_destructor (cfg->cfg_pool,
 				(rspamd_mempool_destruct_t)lua_close, cfg->lua_state);
 	}
-
-	/* Pre-init of cache */
-	cfg->cache = g_new0 (struct symbols_cache, 1);
-	cfg->cache->static_pool = rspamd_mempool_new (
-		rspamd_mempool_suggest_size ());
-	cfg->cache->cfg = cfg;
-	cfg->cache->items_by_symbol = g_hash_table_new (
-		rspamd_str_hash,
-		rspamd_str_equal);
 }
