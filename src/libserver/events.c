@@ -82,7 +82,7 @@ rspamd_event_hash (gconstpointer a)
 	u.f = ev->fin;
 
 	XXH64_reset (&st, rspamd_hash_seed ());
-	XXH64_update (&st, ev->user_data, sizeof (gpointer));
+	XXH64_update (&st, &ev->user_data, sizeof (gpointer));
 	XXH64_update (&st, &u, sizeof (u));
 
 	return XXH64_digest (&st);
