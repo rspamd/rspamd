@@ -50,35 +50,13 @@ struct rspamd_symbols_cache_header {
 };
 
 struct symbols_cache {
-	/* Normal cache items */
-	GList *static_items;
-
-	/* Items that have negative weights */
-	GList *negative_items;
-
 	/* Hash table for fast access */
 	GHashTable *items_by_symbol;
-
 	rspamd_mempool_t *static_pool;
-
 	guint cur_items;
 	guint used_items;
 	guint uses;
-	gpointer map;
 	struct rspamd_config *cfg;
-};
-
-struct saved_cache_item {
-	gchar symbol[MAX_SYMBOL];
-	double weight;
-	guint32 frequency;
-	double avg_time;
-};
-
-struct dynamic_map_item {
-	struct in_addr addr;
-	guint32 mask;
-	gboolean negative;
 };
 
 struct counter_data {
@@ -87,34 +65,27 @@ struct counter_data {
 };
 
 struct cache_item {
-	/* Static item's data */
-	struct saved_cache_item *s;
-	struct counter_data *cd;
+	/* This block is likely shared */
+	gdouble avg_time;
 	gdouble weight;
 	guint32 frequency;
-	gdouble avg_time;
 
-	rspamd_mempool_mutex_t *mtx;
-
-	/* For dynamic rules */
-	struct dynamic_map_item *networks;
-	guint32 networks_number;
-	gboolean is_dynamic;
-
-	gboolean is_skipped;
+	/* Static item's data */
+	struct counter_data *cd;
+	enum rspamd_symbol_type type;
 
 	/* Callback data */
 	symbol_func_t func;
 	gpointer user_data;
 
-	/* Flags of virtual symbols */
-	gboolean is_virtual;
-	gboolean is_callback;
-	gboolean is_ghost;
-
+	/* Parent symbol id for virtual symbols */
+	gint parent;
 	/* Priority */
 	gint priority;
+	gint id;
 	gdouble metric_weight;
+
+	rspamd_mempool_mutex_t *mtx;
 };
 
 gint

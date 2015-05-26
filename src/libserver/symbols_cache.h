@@ -38,7 +38,8 @@ typedef void (*symbol_func_t)(struct rspamd_task *task, gpointer user_data);
 enum rspamd_symbol_type {
 	SYMBOL_TYPE_NORMAL,
 	SYMBOL_TYPE_VIRTUAL,
-	SYMBOL_TYPE_CALLBACK
+	SYMBOL_TYPE_CALLBACK,
+	SYMBOL_TYPE_GHOST
 };
 
 /**
