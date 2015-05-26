@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2012, Vsevolod Stakhov
+ * Copyright (c) 2009-2015, Vsevolod Stakhov
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,29 +28,57 @@
 #include "message.h"
 #include "symbols_cache.h"
 #include "cfg_file.h"
-
-#define WEIGHT_MULT 4.0
-#define FREQUENCY_MULT 10.0
-#define TIME_MULT -1.0
+#include "blake2.h"
 
 /* After which number of messages try to resort cache */
 #define MAX_USES 100
-/*
- * Symbols cache utility functions
- */
+static const guchar rspamd_symbols_cache_magic[8] = {'r', 's', 'c', 1, 0, 0, 0, 0 };
 
-#define MIN_CACHE 17
+struct rspamd_symbols_cache_header {
+	guchar magic[8];
+	guint nitems;
+	guchar checksum[BLAKE2B_OUTBYTES];
+	guchar unused[128];
+};
 
-static guint64 total_frequency = 0;
-static guint32 nsymbols = 0;
+struct symbols_cache {
+	/* Hash table for fast access */
+	GHashTable *items_by_symbol;
+	GPtrArray *items_by_order;
+	rspamd_mempool_t *static_pool;
+	guint cur_items;
+	guint used_items;
+	guint uses;
+	struct rspamd_config *cfg;
+};
 
-gint
-cache_cmp (const void *p1, const void *p2)
-{
-	const struct cache_item *i1 = p1, *i2 = p2;
+struct counter_data {
+	gdouble value;
+	gint number;
+};
 
-	return strcmp (i1->s->symbol, i2->s->symbol);
-}
+struct cache_item {
+	/* This block is likely shared */
+	gdouble avg_time;
+	gdouble weight;
+	guint32 frequency;
+
+	/* Per process counter */
+	struct counter_data *cd;
+	gchar *symbol;
+	enum rspamd_symbol_type type;
+
+	/* Callback data */
+	symbol_func_t func;
+	gpointer user_data;
+
+	/* Parent symbol id for virtual symbols */
+	gint parent;
+	/* Priority */
+	gint priority;
+	gint id;
+	gdouble metric_weight;
+};
 
 /* weight, frequency, time */
 #define TIME_ALPHA (1.0 / 10000000.0)
@@ -64,16 +92,16 @@ cache_logic_cmp (const void *p1, const void *p2)
 	double weight1, weight2;
 	double f1 = 0, f2 = 0, t1, t2;
 
-	if (i1->priority == 0 && i2->priority == 0) {
-		f1 = (double)i1->s->frequency;
-		f2 = (double)i2->s->frequency;
-		weight1 = i1->metric_weight == 0 ? i1->s->weight : i1->metric_weight;
-		weight2 = i2->metric_weight == 0 ? i2->s->weight : i2->metric_weight;
-		t1 = i1->s->avg_time / 1000000.0;
-		t2 = i2->s->avg_time / 1000000.0;
+	if (i1->priority == i2->priority) {
+		f1 = (double)i1->frequency;
+		f2 = (double)i2->frequency;
+		weight1 = i1->metric_weight == 0 ? i1->weight : i1->metric_weight;
+		weight2 = i2->metric_weight == 0 ? i2->weight : i2->metric_weight;
+		t1 = i1->avg_time / 1000000.0;
+		t2 = i2->avg_time / 1000000.0;
 		w1 = SCORE_FUN (abs (weight1), f1, t1);
 		w2 = SCORE_FUN (abs (weight2), f2, t2);
-		msg_debug ("%s -> %.2f, %s -> %.2f", i1->s->symbol, w1, i2->s->symbol, w2);
+		msg_debug ("%s -> %.2f, %s -> %.2f", i1->symbol, w1, i2->symbol, w2);
 	}
 	else {
 		/* Strict sorting */
@@ -93,220 +121,191 @@ rspamd_set_counter (struct cache_item *item, guint32 value)
 	struct counter_data *cd;
 	cd = item->cd;
 
-	/* Cumulative moving average */
-	rspamd_mempool_lock_mutex (item->mtx);
-
+	/* Cumulative moving average using per-process counter data */
 	if (cd->number == 0) {
 		cd->value = 0;
 	}
 
 	cd->value = cd->value + (value - cd->value) / (++cd->number);
 
-	rspamd_mempool_unlock_mutex (item->mtx);
-
 	return cd->value;
-}
-
-static GChecksum *
-get_mem_cksum (struct symbols_cache *cache)
-{
-	GChecksum *result;
-	GList *cur, *l;
-	struct cache_item *item;
-
-	result = g_checksum_new (G_CHECKSUM_SHA1);
-
-	l = g_list_copy (cache->negative_items);
-	l = g_list_sort (l, cache_cmp);
-	cur = g_list_first (l);
-	while (cur) {
-		item = cur->data;
-		if (item->s->symbol[0] != '\0') {
-			g_checksum_update (result, item->s->symbol,
-				strlen (item->s->symbol));
-		}
-		cur = g_list_next (cur);
-	}
-	g_list_free (l);
-
-
-	l = g_list_copy (cache->static_items);
-	l = g_list_sort (l, cache_cmp);
-	cur = g_list_first (l);
-	while (cur) {
-		item = cur->data;
-		if (item->s->symbol[0] != '\0') {
-			g_checksum_update (result, item->s->symbol,
-				strlen (item->s->symbol));
-		}
-		total_frequency += item->s->frequency;
-		cur = g_list_next (cur);
-	}
-	g_list_free (l);
-
-	return result;
 }
 
 /* Sort items in logical order */
 static void
 post_cache_init (struct symbols_cache *cache)
 {
-	GList *cur;
-	struct cache_item *item;
-
-	total_frequency = 0;
-	nsymbols = cache->used_items;
-	cur = g_list_first (cache->negative_items);
-	while (cur) {
-		item = cur->data;
-		total_frequency += item->s->frequency;
-		cur = g_list_next (cur);
-	}
-	cur = g_list_first (cache->static_items);
-	while (cur) {
-		item = cur->data;
-		total_frequency += item->s->frequency;
-		cur = g_list_next (cur);
-	}
-
-	cache->negative_items =
-		g_list_sort (cache->negative_items, cache_logic_cmp);
-	cache->static_items = g_list_sort (cache->static_items, cache_logic_cmp);
-}
-
-/* Unmap cache file */
-static void
-unmap_cache_file (gpointer arg)
-{
-	struct symbols_cache *cache = arg;
-
-	/* A bit ugly usage */
-	munmap (cache->map, cache->used_items * sizeof (struct saved_cache_item));
+	g_ptr_array_sort (cache->items_by_order, cache_logic_cmp);
 }
 
 static gboolean
-mmap_cache_file (struct symbols_cache *cache, gint fd, rspamd_mempool_t *pool)
+rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 {
-	guint8 *map;
-	gint i;
-	GList *cur;
+	struct rspamd_symbols_cache_header *hdr;
+	struct stat st;
+	struct ucl_parser *parser;
+	ucl_object_t *top;
+	const ucl_object_t *cur, *elt;
+	ucl_object_iter_t it;
 	struct cache_item *item;
+	const guchar *p;
+	gint fd;
+	gpointer map;
 
-	if (cache->used_items > 0) {
-		map = mmap (NULL,
-				cache->used_items * sizeof (struct saved_cache_item),
-				PROT_READ | PROT_WRITE,
-				MAP_SHARED,
-				fd,
-				0);
-		if (map == MAP_FAILED) {
-			msg_err ("cannot mmap cache file: %d, %s", errno, strerror (errno));
-			close (fd);
-			return FALSE;
-		}
-		/* Close descriptor as it would never be used */
-		close (fd);
-		cache->map = map;
-		/* Now free old values for saved cache items and fill them with mmapped ones */
-		i = 0;
-		cur = g_list_first (cache->negative_items);
-		while (cur) {
-			item = cur->data;
-			item->s =
-				(struct saved_cache_item *)(map + i *
-				sizeof (struct saved_cache_item));
-			cur = g_list_next (cur);
-			i++;
-		}
-		cur = g_list_first (cache->static_items);
-		while (cur) {
-			item = cur->data;
-			item->s =
-				(struct saved_cache_item *)(map + i *
-				sizeof (struct saved_cache_item));
-			cur = g_list_next (cur);
-			i++;
-		}
+	fd = open (name, O_RDONLY);
 
-		post_cache_init (cache);
-	}
-
-	return TRUE;
-}
-
-/* Fd must be opened for writing, after creating file is mmapped */
-static gboolean
-create_cache_file (struct symbols_cache *cache,
-	const gchar *filename,
-	gint fd,
-	rspamd_mempool_t *pool)
-{
-	GChecksum *cksum;
-	u_char *digest;
-	gsize cklen;
-	GList *cur;
-	struct cache_item *item;
-
-	/* Calculate checksum */
-	cksum = get_mem_cksum (cache);
-	if (cksum == NULL) {
-		msg_err ("cannot calculate checksum for symbols");
-		close (fd);
+	if (fd == -1) {
+		msg_info ("cannot open file %s, error %d, %s", name,
+			errno, strerror (errno));
 		return FALSE;
 	}
 
-	cklen = g_checksum_type_get_length (G_CHECKSUM_SHA1);
-	digest = g_malloc (cklen);
-
-	g_checksum_get_digest (cksum, digest, &cklen);
-	/* Now write data to file */
-	cur = g_list_first (cache->negative_items);
-	while (cur) {
-		item = cur->data;
-		if (write (fd, item->s, sizeof (struct saved_cache_item)) == -1) {
-			msg_err ("cannot write to file %d, %s", errno, strerror (errno));
-			close (fd);
-			g_checksum_free (cksum);
-			g_free (digest);
-			return FALSE;
-		}
-		cur = g_list_next (cur);
-	}
-	cur = g_list_first (cache->static_items);
-	while (cur) {
-		item = cur->data;
-		if (write (fd, item->s, sizeof (struct saved_cache_item)) == -1) {
-			msg_err ("cannot write to file %d, %s", errno, strerror (errno));
-			close (fd);
-			g_checksum_free (cksum);
-			g_free (digest);
-			return FALSE;
-		}
-		cur = g_list_next (cur);
-	}
-	/* Write checksum */
-	if (write (fd, digest, cklen) == -1) {
-		msg_err ("cannot write to file %d, %s", errno, strerror (errno));
+	if (fstat (fd, &st) == -1) {
 		close (fd);
-		g_checksum_free (cksum);
-		g_free (digest);
+		msg_info ("cannot stat file %s, error %d, %s", name,
+				errno, strerror (errno));
+		return FALSE;
+	}
+
+	if (st.st_size < (gint)sizeof (*hdr)) {
+		close (fd);
+		errno = EINVAL;
+		msg_info ("cannot use file %s, error %d, %s", name,
+				errno, strerror (errno));
+		return FALSE;
+	}
+
+	map = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+
+	if (map == MAP_FAILED) {
+		close (fd);
+		msg_info ("cannot mmap file %s, error %d, %s", name,
+				errno, strerror (errno));
 		return FALSE;
 	}
 
 	close (fd);
-	g_checksum_free (cksum);
-	g_free (digest);
-	/* Reopen for reading */
-	if ((fd = open (filename, O_RDWR)) == -1) {
-		msg_info ("cannot open file %s, error %d, %s", errno, strerror (errno));
+	hdr = map;
+
+	if (memcmp (hdr->magic, rspamd_symbols_cache_magic,
+			sizeof (rspamd_symbols_cache_magic)) != 0) {
+		msg_info ("cannot use file %s, bad magic", name);
+		munmap (map, st.st_size);
 		return FALSE;
 	}
 
-	return mmap_cache_file (cache, fd, pool);
+	parser = ucl_parser_new (0);
+	p = (const guchar *)(hdr + 1);
+
+	if (!ucl_parser_add_chunk (parser, p, st.st_size - sizeof (*hdr))) {
+		msg_info ("cannot use file %s, cannot parse: %s", name,
+				ucl_parser_get_error (parser));
+		munmap (map, st.st_size);
+		ucl_parser_free (parser);
+		return FALSE;
+	}
+
+	top = ucl_parser_get_object (parser);
+	munmap (map, st.st_size);
+	ucl_parser_free (parser);
+
+	if (top == NULL || ucl_object_type (top) != UCL_OBJECT) {
+		msg_info ("cannot use file %s, bad object", name);
+		ucl_object_unref (top);
+		return FALSE;
+	}
+
+	it = ucl_object_iterate_new (top);
+
+	while ((cur = ucl_object_iterate_safe (it, true))) {
+		item = g_hash_table_lookup (cache->items_by_symbol, ucl_object_key (cur));
+
+		if (item) {
+			/* Copy saved info */
+			elt = ucl_object_find_key (cur, "weight");
+
+			if (elt) {
+				item->weight = ucl_object_todouble (cur);
+			}
+
+			elt = ucl_object_find_key (cur, "time");
+
+			if (elt) {
+				item->avg_time = ucl_object_todouble (cur);
+			}
+
+			elt = ucl_object_find_key (cur, "frequency");
+
+			if (elt) {
+				item->frequency = ucl_object_toint (cur);
+			}
+		}
+	}
+
+	ucl_object_iterate_free (it);
+	ucl_object_unref (top);
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
+{
+	struct rspamd_symbols_cache_header hdr;
+	ucl_object_t *top, *elt;
+	GHashTableIter it;
+	struct cache_item *item;
+	struct ucl_emitter_functions *efunc;
+	gpointer k, v;
+	gint fd;
+	bool ret;
+
+	fd = open (name, O_CREAT | O_TRUNC | O_WRONLY | O_EXCL, 00644);
+
+	if (fd == -1) {
+		msg_info ("cannot open file %s, error %d, %s", name,
+				errno, strerror (errno));
+		return FALSE;
+	}
+
+	memset (&hdr, 0, sizeof (hdr));
+	memcpy (hdr.magic, rspamd_symbols_cache_magic,
+			sizeof (rspamd_symbols_cache_magic));
+
+	if (write (fd, &hdr, sizeof (hdr)) == -1) {
+		msg_info ("cannot write to file %s, error %d, %s", name,
+				errno, strerror (errno));
+		close (fd);
+
+		return FALSE;
+	}
+
+	top = ucl_object_typed_new (UCL_OBJECT);
+	g_hash_table_iter_init (&it, cache->items_by_symbol);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		item = v;
+		elt = ucl_object_typed_new (UCL_OBJECT);
+		ucl_object_insert_key (elt, ucl_object_fromdouble (item->weight),
+				"weight", 0, false);
+		ucl_object_insert_key (elt, ucl_object_fromdouble (item->avg_time),
+				"time", 0, false);
+		ucl_object_insert_key (elt, ucl_object_fromint (item->frequency),
+				"frequency", 0, false);
+
+		ucl_object_insert_key (top, elt, k, 0, false);
+	}
+
+	efunc = ucl_object_emit_fd_funcs (fd);
+	ret = ucl_object_emit_full (top, UCL_EMIT_JSON_COMPACT, efunc);
+	ucl_object_emit_funcs_free (efunc);
+	close (fd);
+
+	return ret;
 }
 
 void
-register_symbol_common (struct symbols_cache **cache,
+register_symbol_common (struct symbols_cache *cache,
 	const gchar *name,
 	double weight,
 	gint priority,
@@ -315,63 +314,54 @@ register_symbol_common (struct symbols_cache **cache,
 	enum rspamd_symbol_type type)
 {
 	struct cache_item *item = NULL;
-	struct symbols_cache *pcache = *cache;
-	GList **target, *cur;
+	GList *cur;
 	struct metric *m;
 	struct rspamd_symbol_def *s;
 	gboolean skipped, ghost = (weight == 0.0);
 
-	if (*cache == NULL) {
-		pcache = g_new0 (struct symbols_cache, 1);
-		*cache = pcache;
-		pcache->static_pool =
-			rspamd_mempool_new (rspamd_mempool_suggest_size ());
-		pcache->items_by_symbol = g_hash_table_new (rspamd_str_hash,
-				rspamd_str_equal);
+	g_assert (cache != NULL);
+
+	if (g_hash_table_lookup (cache->items_by_symbol, name) != NULL) {
+		msg_err ("skip duplicate symbol registration for %s", name);
+		return;
 	}
 
-	item = rspamd_mempool_alloc0 (pcache->static_pool,
+	item = rspamd_mempool_alloc0_shared (cache->static_pool,
 			sizeof (struct cache_item));
-	item->s =
-		rspamd_mempool_alloc0_shared (pcache->static_pool,
-			sizeof (struct saved_cache_item));
-	item->cd = rspamd_mempool_alloc0_shared (pcache->static_pool,
+	/*
+	 * We do not share cd to skip locking, instead we'll just calculate it on
+	 * save or accumulate
+	 */
+	item->cd = rspamd_mempool_alloc0 (cache->static_pool,
 			sizeof (struct counter_data));
 
-	item->mtx = rspamd_mempool_get_mutex (pcache->static_pool);
-
-	rspamd_strlcpy (item->s->symbol, name, sizeof (item->s->symbol));
+	item->symbol = rspamd_mempool_strdup (cache->static_pool, name);
 	item->func = func;
 	item->user_data = user_data;
 	item->priority = priority;
-
-	switch (type) {
-	case SYMBOL_TYPE_NORMAL:
-		break;
-	case SYMBOL_TYPE_VIRTUAL:
-		item->is_virtual = TRUE;
-		break;
-	case SYMBOL_TYPE_CALLBACK:
-		item->is_callback = TRUE;
-		break;
-	}
+	item->type = type;
 
 	/* Handle weight using default metric */
-	if (pcache->cfg && pcache->cfg->default_metric &&
+	if (cache->cfg && cache->cfg->default_metric &&
 		(s =
-		g_hash_table_lookup (pcache->cfg->default_metric->symbols,
+		g_hash_table_lookup (cache->cfg->default_metric->symbols,
 		name)) != NULL) {
-		item->s->weight = weight * (*s->weight_ptr);
+		item->weight = weight * (*s->weight_ptr);
 	}
 	else {
-		item->s->weight = weight;
+		item->weight = weight;
+	}
+
+	if (item->weight < 0 && item->priority == 0) {
+		/* Make priority for negative weighted symbols */
+		item->priority = 1;
 	}
 
 	/* Check whether this item is skipped */
 	skipped = !ghost;
-	if (!ghost && !item->is_callback && pcache->cfg &&
-			g_hash_table_lookup (pcache->cfg->metrics_symbols, name) == NULL) {
-		cur = g_list_first (pcache->cfg->metrics_list);
+	if (item->type == SYMBOL_TYPE_NORMAL &&
+			g_hash_table_lookup (cache->cfg->metrics_symbols, name) == NULL) {
+		cur = g_list_first (cache->cfg->metrics_list);
 		while (cur) {
 			m = cur->data;
 
@@ -379,18 +369,16 @@ register_symbol_common (struct symbols_cache **cache,
 				GList *mlist;
 
 				skipped = FALSE;
-
-				item->s->weight = weight * (m->unknown_weight);
-				s = rspamd_mempool_alloc0 (pcache->static_pool,
+				item->weight = weight * (m->unknown_weight);
+				s = rspamd_mempool_alloc0 (cache->static_pool,
 						sizeof (*s));
-				s->name = item->s->symbol;
-				s->weight_ptr = &item->s->weight;
-				g_hash_table_insert (m->symbols, item->s->symbol,
-						s);
-				mlist = g_hash_table_lookup (pcache->cfg->metrics_symbols, name);
+				s->name = item->symbol;
+				s->weight_ptr = &item->weight;
+				g_hash_table_insert (m->symbols, item->symbol, s);
+				mlist = g_hash_table_lookup (cache->cfg->metrics_symbols, name);
 				mlist = g_list_prepend (mlist, m);
-				g_hash_table_insert (pcache->cfg->metrics_symbols,
-						item->s->symbol, mlist);
+				g_hash_table_insert (cache->cfg->metrics_symbols,
+						item->symbol, mlist);
 
 				msg_info ("adding unknown symbol %s to metric %s", name,
 						m->name);
@@ -403,10 +391,8 @@ register_symbol_common (struct symbols_cache **cache,
 		skipped = FALSE;
 	}
 
-	item->is_skipped = skipped;
-	item->is_ghost = ghost;
-
 	if (skipped) {
+		item->type = SYMBOL_TYPE_SKIPPED;
 		msg_warn ("symbol %s is not registered in any metric, so skip its check",
 				name);
 	}
@@ -416,35 +402,16 @@ register_symbol_common (struct symbols_cache **cache,
 				"to any metric", name);
 	}
 
-	/* If we have undefined priority determine list according to weight */
-	if (priority == 0) {
-		if (item->s->weight >= 0) {
-			target = &(*cache)->static_items;
-		}
-		else {
-			target = &(*cache)->negative_items;
-		}
-	}
-	else {
-		/* Items with more priority are called before items with less priority */
-		if (priority < 0) {
-			target = &(*cache)->negative_items;
-		}
-		else {
-			target = &(*cache)->static_items;
-		}
-	}
-
-	pcache->used_items++;
-	g_hash_table_insert (pcache->items_by_symbol, item->s->symbol, item);
-	msg_debug ("used items: %d, added symbol: %s", (*cache)->used_items, name);
+	item->id = cache->used_items;
+	cache->used_items ++;
+	msg_debug ("used items: %d, added symbol: %s", cache->used_items, name);
 	rspamd_set_counter (item, 0);
-
-	*target = g_list_prepend (*target, item);
+	g_hash_table_insert (cache->items_by_symbol, item->symbol, item);
+	g_ptr_array_add (cache->items_by_order, item);
 }
 
 void
-register_symbol (struct symbols_cache **cache, const gchar *name, double weight,
+register_symbol (struct symbols_cache *cache, const gchar *name, double weight,
 	symbol_func_t func, gpointer user_data)
 {
 	register_symbol_common (cache,
@@ -457,7 +424,7 @@ register_symbol (struct symbols_cache **cache, const gchar *name, double weight,
 }
 
 void
-register_virtual_symbol (struct symbols_cache **cache,
+register_virtual_symbol (struct symbols_cache *cache,
 	const gchar *name,
 	double weight)
 {
@@ -471,7 +438,7 @@ register_virtual_symbol (struct symbols_cache **cache,
 }
 
 void
-register_callback_symbol (struct symbols_cache **cache,
+register_callback_symbol (struct symbols_cache *cache,
 	const gchar *name,
 	double weight,
 	symbol_func_t func,
@@ -487,7 +454,7 @@ register_callback_symbol (struct symbols_cache **cache,
 }
 
 void
-register_callback_symbol_priority (struct symbols_cache **cache,
+register_callback_symbol_priority (struct symbols_cache *cache,
 	const gchar *name,
 	double weight,
 	gint priority,
@@ -503,171 +470,60 @@ register_callback_symbol_priority (struct symbols_cache **cache,
 		SYMBOL_TYPE_CALLBACK);
 }
 
-
-
-static void
-free_cache (gpointer arg)
+void
+rspamd_symbols_cache_destroy (struct symbols_cache *cache)
 {
-	struct symbols_cache *cache = arg;
+	if (cache != NULL) {
 
-	if (cache->map != NULL) {
-		unmap_cache_file (cache);
-	}
+		if (cache->cfg->cache_filename) {
+			/* Try to sync values to the disk */
+			if (!rspamd_symbols_cache_save_items (cache,
+					cache->cfg->cache_filename)) {
+				msg_err ("cannot save cache data to %s",
+						cache->cfg->cache_filename);
+			}
+		}
 
-	if (cache->static_items) {
-		g_list_free (cache->static_items);
-	}
-	if (cache->negative_items) {
-		g_list_free (cache->negative_items);
-	}
-	g_hash_table_destroy (cache->items_by_symbol);
-	rspamd_mempool_delete (cache->static_pool);
+		g_hash_table_destroy (cache->items_by_symbol);
+		rspamd_mempool_delete (cache->static_pool);
 
-	g_free (cache);
+		g_slice_free1 (sizeof (*cache), cache);
+	}
+}
+
+struct symbols_cache*
+rspamd_symbols_cache_new (void)
+{
+	struct symbols_cache *cache;
+
+	cache = g_slice_alloc0 (sizeof (struct symbols_cache));
+	cache->static_pool =
+			rspamd_mempool_new (rspamd_mempool_suggest_size ());
+	cache->items_by_symbol = g_hash_table_new (rspamd_str_hash,
+			rspamd_str_equal);
+
+	return cache;
 }
 
 gboolean
-init_symbols_cache (rspamd_mempool_t * pool,
-	struct symbols_cache *cache,
-	struct rspamd_config *cfg,
-	const gchar *filename,
-	gboolean ignore_checksum)
+init_symbols_cache (struct symbols_cache* cache,
+		struct rspamd_config *cfg)
 {
-	struct stat st;
-	gint fd;
-	GChecksum *cksum;
-	u_char *mem_sum, *file_sum;
-	gsize cklen;
 	gboolean res;
 
-	if (cache == NULL) {
-		return FALSE;
-	}
-
+	g_assert (cache != NULL);
 	cache->cfg = cfg;
 
 	/* Just in-memory cache */
-	if (filename == NULL) {
+	if (cfg->cache_filename == NULL) {
 		post_cache_init (cache);
 		return TRUE;
 	}
 
-	/* First of all try to stat file */
-	if (stat (filename, &st) == -1) {
-		/* Check errno */
-		if (errno == ENOENT) {
-			/* Try to create file */
-			if ((fd =
-				open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR |
-				S_IRUSR)) == -1) {
-				msg_info ("cannot create file %s, error %d, %s",
-					filename,
-					errno,
-					strerror (errno));
-				return FALSE;
-			}
-			else {
-				return create_cache_file (cache, filename, fd, pool);
-			}
-		}
-		else {
-			msg_info ("cannot stat file %s, error %d, %s",
-				filename,
-				errno,
-				strerror (errno));
-			return FALSE;
-		}
-	}
-	else {
-		if ((fd = open (filename, O_RDWR)) == -1) {
-			msg_info ("cannot open file %s, error %d, %s",
-				filename,
-				errno,
-				strerror (errno));
-			return FALSE;
-		}
-	}
+	/* Copy saved cache entries */
+	res = rspamd_symbols_cache_load_items (cache, cfg->cache_filename);
 
-	if (!ignore_checksum) {
-		/* Calculate checksum */
-		cksum = get_mem_cksum (cache);
-		if (cksum == NULL) {
-			msg_err ("cannot calculate checksum for symbols");
-			close (fd);
-			return FALSE;
-		}
-
-		cklen = g_checksum_type_get_length (G_CHECKSUM_SHA1);
-		mem_sum = g_malloc (cklen);
-
-		g_checksum_get_digest (cksum, mem_sum, &cklen);
-		/* Now try to read file sum */
-		if (lseek (fd, -(cklen), SEEK_END) == -1) {
-			if (errno == EINVAL) {
-				/* Try to create file */
-				close (fd);
-				msg_info ("recreate cache file");
-				if ((fd =
-					open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR |
-					S_IRUSR)) == -1) {
-					msg_info ("cannot create file %s, error %d, %s",
-						filename,
-						errno,
-						strerror (errno));
-					return FALSE;
-				}
-				else {
-					return create_cache_file (cache, filename, fd, pool);
-				}
-			}
-			close (fd);
-			g_free (mem_sum);
-			g_checksum_free (cksum);
-			msg_err ("cannot seek to read checksum, %d, %s", errno,
-				strerror (errno));
-			return FALSE;
-		}
-		file_sum = g_malloc (cklen);
-		if (read (fd, file_sum, cklen) == -1) {
-			close (fd);
-			g_free (mem_sum);
-			g_free (file_sum);
-			g_checksum_free (cksum);
-			msg_err ("cannot read checksum, %d, %s", errno, strerror (errno));
-			return FALSE;
-		}
-
-		if (memcmp (file_sum, mem_sum, cklen) != 0) {
-			close (fd);
-			g_free (mem_sum);
-			g_free (file_sum);
-			g_checksum_free (cksum);
-			msg_info ("checksum mismatch, recreating file");
-			/* Reopen with rw permissions */
-			if ((fd =
-				open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR |
-				S_IRUSR)) == -1) {
-				msg_info ("cannot create file %s, error %d, %s",
-					filename,
-					errno,
-					strerror (errno));
-				return FALSE;
-			}
-			else {
-				return create_cache_file (cache, filename, fd, pool);
-			}
-		}
-
-		g_free (mem_sum);
-		g_free (file_sum);
-		g_checksum_free (cksum);
-	}
-	/* MMap cache file and copy saved_cache structures */
-	res = mmap_cache_file (cache, fd, pool);
-
-	rspamd_mempool_add_destructor (pool,
-		(rspamd_mempool_destruct_t)free_cache,
-		cache);
+	post_cache_init (cache);
 
 	return res;
 }
@@ -692,30 +548,16 @@ static void
 rspamd_symbols_cache_metric_cb (gpointer k, gpointer v, gpointer ud)
 {
 	struct symbols_cache *cache = (struct symbols_cache *)ud;
-	GList *cur;
 	const gchar *sym = k;
 	struct rspamd_symbol_def *s = (struct rspamd_symbol_def *)v;
 	gdouble weight;
 	struct cache_item *item;
 
 	weight = *s->weight_ptr;
-	cur = cache->negative_items;
-	while (cur) {
-		item = cur->data;
-		if (strcmp (item->s->symbol, sym) == 0) {
-			item->metric_weight = weight;
-			return;
-		}
-		cur = g_list_next (cur);
-	}
-	cur = cache->static_items;
-	while (cur) {
-		item = cur->data;
-		if (strcmp (item->s->symbol, sym) == 0) {
-			item->metric_weight = weight;
-			return;
-		}
-		cur = g_list_next (cur);
+	item = g_hash_table_lookup (cache->items_by_symbol, sym);
+
+	if (item) {
+		item->metric_weight = weight;
 	}
 }
 
@@ -725,40 +567,20 @@ validate_cache (struct symbols_cache *cache,
 	gboolean strict)
 {
 	struct cache_item *item;
-	GList *cur, *p, *metric_symbols;
-	gboolean res;
+	GList *cur, *metric_symbols;
 
 	if (cache == NULL) {
 		msg_err ("empty cache is invalid");
 		return FALSE;
 	}
-#ifndef GLIB_HASH_COMPAT
+
 	/* Now check each metric item and find corresponding symbol in a cache */
 	metric_symbols = g_hash_table_get_keys (cfg->metrics_symbols);
 	cur = metric_symbols;
 	while (cur) {
-		res = FALSE;
-		p = cache->negative_items;
-		while (p) {
-			item = p->data;
-			if (strcmp (item->s->symbol, cur->data) == 0) {
-				res = TRUE;
-				break;
-			}
-			p = g_list_next (p);
-		}
-		if (!res) {
-			p = cache->static_items;
-			while (p) {
-				item = p->data;
-				if (strcmp (item->s->symbol, cur->data) == 0) {
-					res = TRUE;
-					break;
-				}
-				p = g_list_next (p);
-			}
-		}
-		if (!res) {
+		item = g_hash_table_lookup (cache->items_by_symbol, cur->data);
+
+		if (item == NULL) {
 			msg_warn (
 				"symbol '%s' has its score defined but there is no "
 				"corresponding rule registered",
@@ -771,31 +593,18 @@ validate_cache (struct symbols_cache *cache,
 		cur = g_list_next (cur);
 	}
 	g_list_free (metric_symbols);
-#endif /* GLIB_COMPAT */
 
 	/* Now adjust symbol weights according to default metric */
 	if (cfg->default_metric != NULL) {
 		g_hash_table_foreach (cfg->default_metric->symbols,
 			rspamd_symbols_cache_metric_cb,
 			cache);
-		/* Resort caches */
-		cache->negative_items = g_list_sort (cache->negative_items,
-				cache_logic_cmp);
-		cache->static_items =
-			g_list_sort (cache->static_items, cache_logic_cmp);
 	}
+
+	post_cache_init (cache);
 
 	return TRUE;
 }
-
-struct symbol_callback_data {
-	enum {
-		CACHE_STATE_NEGATIVE,
-		CACHE_STATE_STATIC
-	} state;
-	struct cache_item *saved_item;
-	GList *list_pointer;
-};
 
 gboolean
 call_symbol_callback (struct rspamd_task * task,
@@ -805,81 +614,35 @@ call_symbol_callback (struct rspamd_task * task,
 	double t1, t2;
 	guint64 diff;
 	struct cache_item *item = NULL;
-	struct symbol_callback_data *s = *save;
+	guint *s = *save;
+	guint idx;
+
+	g_assert (cache != NULL);
 
 	if (s == NULL) {
-		if (cache == NULL) {
-			return FALSE;
-		}
-		if (cache->uses++ >= MAX_USES) {
-			msg_info ("resort symbols cache");
-			cache->uses = 0;
-			/* Resort while having write lock */
-			post_cache_init (cache);
-		}
 		s =
 			rspamd_mempool_alloc0 (task->task_pool,
-				sizeof (struct symbol_callback_data));
+				sizeof (gpointer));
 		*save = s;
-		if (cache->negative_items != NULL) {
-			s->list_pointer = g_list_first (cache->negative_items);
-			s->saved_item = s->list_pointer->data;
-			s->state = CACHE_STATE_NEGATIVE;
-		}
-		else {
-			s->state = CACHE_STATE_STATIC;
-			s->list_pointer = g_list_first (cache->static_items);
-			if (s->list_pointer) {
-				s->saved_item = s->list_pointer->data;
-			}
-			else {
-				return FALSE;
-			}
-		}
-		item = s->saved_item;
 	}
-	else {
-		if (cache == NULL) {
-			return FALSE;
-		}
-		switch (s->state) {
-		case CACHE_STATE_NEGATIVE:
-			s->list_pointer = g_list_next (s->list_pointer);
-			if (s->list_pointer == NULL) {
-				s->state = CACHE_STATE_STATIC;
-				s->list_pointer = g_list_first (cache->static_items);
-				if (s->list_pointer) {
-					s->saved_item = s->list_pointer->data;
-				}
-				else {
-					return FALSE;
-				}
-			}
-			else {
-				s->saved_item = s->list_pointer->data;
-			}
-			item = s->saved_item;
-			break;
-		case CACHE_STATE_STATIC:
-			/* Next pointer */
-			s->list_pointer = g_list_next (s->list_pointer);
-			if (s->list_pointer) {
-				s->saved_item = s->list_pointer->data;
-			}
-			else {
-				return FALSE;
-			}
-			item = s->saved_item;
-			break;
-		}
+
+	idx = GPOINTER_TO_INT (s);
+
+	if (idx >= cache->used_items) {
+		/* All symbols are processed */
+		return FALSE;
 	}
+
+	item = g_ptr_array_index (cache->items_by_order, idx);
+
 	if (!item) {
 		return FALSE;
 	}
-	if (!item->is_virtual && !item->is_skipped) {
+
+	if (item->type == SYMBOL_TYPE_NORMAL || item->type == SYMBOL_TYPE_CALLBACK) {
 		t1 = rspamd_get_ticks ();
 
-		if (G_UNLIKELY (check_debug_symbol (task->cfg, item->s->symbol))) {
+		if (G_UNLIKELY (check_debug_symbol (task->cfg, item->symbol))) {
 			rspamd_log_debug (rspamd_main->logger);
 			item->func (task, item->user_data);
 			rspamd_log_nodebug (rspamd_main->logger);
@@ -891,10 +654,12 @@ call_symbol_callback (struct rspamd_task * task,
 		t2 = rspamd_get_ticks ();
 
 		diff = (t2 - t1) * 1000000;
-		item->s->avg_time = rspamd_set_counter (item, diff);
+		rspamd_set_counter (item, diff);
 	}
 
-	s->saved_item = item;
+	idx ++;
+	s = GINT_TO_POINTER (idx);
+	*save = s;
 
 	return TRUE;
 

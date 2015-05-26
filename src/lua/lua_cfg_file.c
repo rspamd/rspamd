@@ -212,7 +212,7 @@ rspamd_lua_post_load_config (struct rspamd_config *cfg)
 				}
 				else {
 					g_hash_table_insert (cfg->composite_symbols, sym, expr);
-					register_virtual_symbol (&cfg->cache, sym, 1);
+					register_virtual_symbol (cfg->cache, sym, 1);
 				}
 			}
 		}
