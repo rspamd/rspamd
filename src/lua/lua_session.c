@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, Vsevolod Stakhov
+/* Copyright (c) 2010-2015, Vsevolod Stakhov
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -23,8 +23,23 @@
 
 #include "lua_common.h"
 
+struct lua_session_udata {
+	lua_State *L;
+	gint cbref_fin;
+	gint cbref_restore;
+	gint cbref_cleanup;
+	rspamd_mempool_t *pool;
+	struct rspamd_async_session *session;
+};
+
+struct lua_event_udata {
+	lua_State *L;
+	gint cbref;
+	struct rspamd_async_session *session;
+};
+
 /* Public prototypes */
-struct rspamd_async_session * lua_check_session (lua_State * L);
+struct lua_session_udata * lua_check_session (lua_State * L);
 void luaopen_session (lua_State * L);
 
 /* Lua bindings */
@@ -53,26 +68,12 @@ static const struct luaL_reg eventlib_m[] = {
 	{NULL, NULL}
 };
 
-struct lua_session_udata {
-	lua_State *L;
-	gint cbref_fin;
-	gint cbref_restore;
-	gint cbref_cleanup;
-	struct rspamd_async_session *session;
-};
-
-struct lua_event_udata {
-	lua_State *L;
-	gint cbref;
-	struct rspamd_async_session *session;
-};
-
-struct rspamd_async_session *
+struct lua_session_udata *
 lua_check_session (lua_State * L)
 {
 	void *ud = luaL_checkudata (L, 1, "rspamd{session}");
 	luaL_argcheck (L, ud != NULL, 1, "'session' expected");
-	return ud ? *((struct rspamd_async_session **)ud) : NULL;
+	return ud ? *((struct lua_session_udata **)ud) : NULL;
 }
 
 struct rspamd_async_event *
@@ -144,11 +145,9 @@ lua_session_cleanup (gpointer ud)
 static int
 lua_session_create (lua_State *L)
 {
-	struct rspamd_async_session *session, **psession;
-	struct lua_session_udata *cbdata;
+	struct rspamd_async_session *session;
+	struct lua_session_udata *cbdata, **pdata;
 	rspamd_mempool_t *mempool;
-
-
 
 	if (lua_gettop (L) < 2 || lua_gettop (L) > 4) {
 		msg_err ("invalid arguments number to rspamd_session.create");
@@ -171,6 +170,7 @@ lua_session_create (lua_State *L)
 
 	cbdata = rspamd_mempool_alloc0 (mempool, sizeof (struct lua_session_udata));
 	cbdata->L = L;
+	cbdata->pool = mempool;
 	lua_pushvalue (L, 2);
 	cbdata->cbref_fin = luaL_ref (L, LUA_REGISTRYINDEX);
 
@@ -189,15 +189,16 @@ lua_session_create (lua_State *L)
 			cbdata->cbref_cleanup = luaL_ref (L, LUA_REGISTRYINDEX);
 		}
 	}
+
 	session = new_async_session (mempool,
 			lua_session_finalizer,
 			lua_session_restore,
 			lua_session_cleanup,
 			cbdata);
 	cbdata->session = session;
-	psession = lua_newuserdata (L, sizeof (struct rspamd_async_session *));
+	pdata = lua_newuserdata (L, sizeof (struct rspamd_async_session *));
 	rspamd_lua_setclass (L, "rspamd{session}", -1);
-	*psession = session;
+	*pdata = cbdata;
 
 	return 1;
 }
@@ -205,8 +206,10 @@ lua_session_create (lua_State *L)
 static int
 lua_session_delete (lua_State *L)
 {
-	struct rspamd_async_session *session = lua_check_session (L);
+	struct lua_session_udata *cbd = lua_check_session (L);
+	struct rspamd_async_session *session;
 
+	session = cbd->session;
 	if (session) {
 		destroy_session (session);
 		return 0;
@@ -237,14 +240,17 @@ lua_event_fin (gpointer ud)
 static int
 lua_session_register_async_event (lua_State *L)
 {
-	struct rspamd_async_session *session = lua_check_session (L);
+	struct lua_session_udata *cbd = lua_check_session (L);
+	struct rspamd_async_session *session;
 	struct lua_event_udata *cbdata;
 	gpointer *pdata;
+
+	session = cbd->session;
 
 	if (session) {
 		if (lua_isfunction (L, 1)) {
 			cbdata =
-				rspamd_mempool_alloc (session->pool,
+				rspamd_mempool_alloc (cbd->pool,
 					sizeof (struct lua_event_udata));
 			cbdata->L = L;
 			lua_pushvalue (L, 1);
@@ -270,8 +276,11 @@ lua_session_register_async_event (lua_State *L)
 static int
 lua_session_remove_normal_event (lua_State *L)
 {
-	struct rspamd_async_session *session = lua_check_session (L);
+	struct lua_session_udata *cbd = lua_check_session (L);
+	struct rspamd_async_session *session;
 	gpointer data;
+
+	session = cbd->session;
 
 	if (session) {
 		data = lua_check_event (L, 2);
@@ -290,7 +299,10 @@ lua_session_remove_normal_event (lua_State *L)
 static int
 lua_session_check_session_pending (lua_State *L)
 {
-	struct rspamd_async_session *session = lua_check_session (L);
+	struct lua_session_udata *cbd = lua_check_session (L);
+	struct rspamd_async_session *session;
+
+	session = cbd->session;
 
 	if (session) {
 
@@ -326,10 +338,10 @@ luaopen_session (lua_State * L)
 	luaL_register (L, NULL,				sessionlib_m);
 	rspamd_lua_add_preload (L, "rspamd_session", lua_load_session);
 
-	lua_pop (L, 1);                      /* remove metatable from stack */
+	lua_pop (L, 1);
 
 	/* Simple event class */
 	rspamd_lua_new_class (L, "rspamd{event}", eventlib_m);
 
-	lua_pop (L, 1);                      /* remove metatable from stack */
+	lua_pop (L, 1);
 }

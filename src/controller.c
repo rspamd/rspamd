@@ -1000,14 +1000,13 @@ rspamd_controller_handle_learn_common (
 			NULL,
 			rspamd_task_free_hard,
 			task);
-	task->s->wanna_die = TRUE;
 	task->fin_arg = conn_ent;
 	task->http_conn = rspamd_http_connection_ref (conn_ent->conn);;
 	task->sock = conn_ent->conn->fd;
 
 
 	/* XXX: Handle encrypted messages */
-	if (!rspamd_task_process (task, msg, msg->body->str, msg->body->len, NULL, FALSE)) {
+	if (!rspamd_task_process (task, msg, msg->body->str, msg->body->len, FALSE)) {
 		msg_warn ("filters cannot be processed for %s", task->message_id);
 		rspamd_controller_send_error (conn_ent, 500, task->last_error);
 		destroy_session (task->s);
@@ -1091,13 +1090,12 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 			NULL,
 			rspamd_task_free_hard,
 			task);
-	task->s->wanna_die = TRUE;
 	task->fin_arg = conn_ent;
 	task->http_conn = rspamd_http_connection_ref (conn_ent->conn);
 	task->sock = conn_ent->conn->fd;
 
 	/* XXX: handle encrypted messages */
-	if (!rspamd_task_process (task, msg, msg->body->str, msg->body->len, NULL, FALSE)) {
+	if (!rspamd_task_process (task, msg, msg->body->str, msg->body->len, FALSE)) {
 		msg_warn ("filters cannot be processed for %s", task->message_id);
 		rspamd_controller_send_error (conn_ent, 500, task->last_error);
 		destroy_session (task->s);

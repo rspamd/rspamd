@@ -109,12 +109,6 @@ gint rspamd_process_filters (struct rspamd_task *task);
 void rspamd_process_statistics (struct rspamd_task *task);
 
 /**
- * Process message with statfiles threaded
- * @param data worker's task that present message from user
- */
-void rspamd_process_statistic_threaded (gpointer data, gpointer user_data);
-
-/**
  * Insert a result to task
  * @param task worker's task that present message from user
  * @param metric_name metric's name to which we need to insert result

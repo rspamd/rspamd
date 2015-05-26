@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2012, Vsevolod Stakhov
+ * Copyright (c) 2009-2015, Vsevolod Stakhov
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,6 +25,37 @@
 #include "config.h"
 #include "main.h"
 #include "events.h"
+#include "xxhash.h"
+
+#define RSPAMD_SESSION_FLAG_WATCHING (1 << 0)
+#define RSPAMD_SESSION_FLAG_DESTROYING (1 << 1)
+
+#define RSPAMD_SESSION_IS_WATCHING(s) ((s)->flags & RSPAMD_SESSION_FLAG_WATCHING)
+#define RSPAMD_SESSION_IS_DESTROYING(s) ((s)->flags & RSPAMD_SESSION_FLAG_DESTROYING)
+
+struct rspamd_async_watcher {
+	event_watcher_t cb;
+	guint remain;
+	gpointer ud;
+};
+
+struct rspamd_async_event {
+	GQuark subsystem;
+	event_finalizer_t fin;
+	void *user_data;
+	struct rspamd_async_watcher *w;
+};
+
+struct rspamd_async_session {
+	session_finalizer_t fin;
+	event_finalizer_t restore;
+	event_finalizer_t cleanup;
+	GHashTable *events;
+	void *user_data;
+	rspamd_mempool_t *pool;
+	struct rspamd_async_watcher *cur_watcher;
+	guint flags;
+};
 
 static gboolean
 rspamd_event_equal (gconstpointer a, gconstpointer b)
@@ -42,27 +73,21 @@ static guint
 rspamd_event_hash (gconstpointer a)
 {
 	const struct rspamd_async_event *ev = a;
+	XXH64_state_t st;
+	union {
+		event_finalizer_t f;
+		gpointer p;
+	} u;
 
-	return GPOINTER_TO_UINT (ev->user_data);
+	u.f = ev->fin;
+
+	XXH64_reset (&st, rspamd_hash_seed ());
+	XXH64_update (&st, &ev->user_data, sizeof (gpointer));
+	XXH64_update (&st, &u, sizeof (u));
+
+	return XXH64_digest (&st);
 }
 
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
-static void
-event_mutex_free (gpointer data)
-{
-	GMutex *mtx = data;
-
-	g_mutex_free (mtx);
-}
-
-static void
-event_cond_free (gpointer data)
-{
-	GCond *cond = data;
-
-	g_cond_free (cond);
-}
-#endif
 
 struct rspamd_async_session *
 new_async_session (rspamd_mempool_t * pool, session_finalizer_t fin,
@@ -70,36 +95,13 @@ new_async_session (rspamd_mempool_t * pool, session_finalizer_t fin,
 {
 	struct rspamd_async_session *new;
 
-	new = rspamd_mempool_alloc (pool, sizeof (struct rspamd_async_session));
+	new = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_async_session));
 	new->pool = pool;
 	new->fin = fin;
 	new->restore = restore;
 	new->cleanup = cleanup;
 	new->user_data = user_data;
-	new->wanna_die = FALSE;
 	new->events = g_hash_table_new (rspamd_event_hash, rspamd_event_equal);
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
-	new->mtx = g_mutex_new ();
-	new->cond = g_cond_new ();
-	rspamd_mempool_add_destructor (pool,
-		(rspamd_mempool_destruct_t) event_mutex_free,
-		new->mtx);
-	rspamd_mempool_add_destructor (pool,
-		(rspamd_mempool_destruct_t) event_cond_free,
-		new->cond);
-#else
-	new->mtx = rspamd_mempool_alloc (pool, sizeof (GMutex));
-	g_mutex_init (new->mtx);
-	new->cond = rspamd_mempool_alloc (pool, sizeof (GCond));
-	g_cond_init (new->cond);
-	rspamd_mempool_add_destructor (pool,
-		(rspamd_mempool_destruct_t) g_mutex_clear,
-		new->mtx);
-	rspamd_mempool_add_destructor (pool,
-		(rspamd_mempool_destruct_t) g_cond_clear,
-		new->cond);
-#endif
-	new->threads = 0;
 
 	rspamd_mempool_add_destructor (pool,
 		(rspamd_mempool_destruct_t) g_hash_table_destroy,
@@ -121,12 +123,19 @@ register_async_event (struct rspamd_async_session *session,
 		return;
 	}
 
-	g_mutex_lock (session->mtx);
 	new = rspamd_mempool_alloc (session->pool,
 			sizeof (struct rspamd_async_event));
 	new->fin = fin;
 	new->user_data = user_data;
 	new->subsystem = subsystem;
+
+	if (RSPAMD_SESSION_IS_WATCHING (session)) {
+		new->w = session->cur_watcher;
+		new->w->remain ++;
+	}
+	else {
+		new->w = NULL;
+	}
 
 	g_hash_table_insert (session->events, new, new);
 
@@ -134,8 +143,6 @@ register_async_event (struct rspamd_async_session *session,
 		user_data,
 		g_hash_table_size (session->events),
 		g_quark_to_string (subsystem));
-
-	g_mutex_unlock (session->mtx);
 }
 
 void
@@ -150,20 +157,28 @@ remove_normal_event (struct rspamd_async_session *session,
 		return;
 	}
 
-	g_mutex_lock (session->mtx);
 	/* Search for event */
 	search_ev.fin = fin;
 	search_ev.user_data = ud;
-	if ((found_ev =
-		g_hash_table_lookup (session->events, &search_ev)) != NULL) {
-		g_hash_table_remove (session->events, found_ev);
-		msg_debug ("removed event: %p, subsystem: %s, pending %d events", ud,
+	found_ev = g_hash_table_lookup (session->events, &search_ev);
+	g_assert (found_ev != NULL);
+
+	msg_debug ("removed event: %p, subsystem: %s, pending %d events", ud,
 			g_quark_to_string (found_ev->subsystem),
 			g_hash_table_size (session->events));
-		/* Remove event */
-		fin (ud);
+	/* Remove event */
+	fin (ud);
+
+	/* Call watcher if needed */
+	if (found_ev->w) {
+		if (found_ev->w->remain > 0) {
+			if (--found_ev->w->remain == 0) {
+				found_ev->w->cb (found_ev->w->ud);
+			}
+		}
 	}
-	g_mutex_unlock (session->mtx);
+
+	g_hash_table_remove (session->events, found_ev);
 
 	check_session_pending (session);
 }
@@ -181,6 +196,8 @@ rspamd_session_destroy (gpointer k, gpointer v, gpointer unused)
 		ev->fin (ev->user_data);
 	}
 
+	/* We ignore watchers on session destroying */
+
 	return TRUE;
 }
 
@@ -192,40 +209,25 @@ destroy_session (struct rspamd_async_session *session)
 		return FALSE;
 	}
 
-	g_mutex_lock (session->mtx);
-	if (session->threads > 0) {
-		/* Wait for conditional variable to finish processing */
-		g_mutex_unlock (session->mtx);
-		g_cond_wait (session->cond, session->mtx);
-	}
-
-	session->wanna_die = TRUE;
-
+	session->flags |= RSPAMD_SESSION_FLAG_DESTROYING;
 	g_hash_table_foreach_remove (session->events,
 		rspamd_session_destroy,
 		session);
 
-	/* Mutex can be destroyed here */
-	g_mutex_unlock (session->mtx);
-
 	if (session->cleanup != NULL) {
 		session->cleanup (session->user_data);
 	}
+
 	return TRUE;
 }
 
 gboolean
 check_session_pending (struct rspamd_async_session *session)
 {
-	g_mutex_lock (session->mtx);
-	if (session->wanna_die && g_hash_table_size (session->events) == 0) {
-		session->wanna_die = FALSE;
-		if (session->threads > 0) {
-			/* Wait for conditional variable to finish processing */
-			g_cond_wait (session->cond, session->mtx);
-		}
+	gboolean ret = TRUE;
+
+	if (g_hash_table_size (session->events) == 0) {
 		if (session->fin != NULL) {
-			g_mutex_unlock (session->mtx);
 			if (!session->fin (session->user_data)) {
 				/* Session finished incompletely, perform restoration */
 				if (session->restore != NULL) {
@@ -233,43 +235,52 @@ check_session_pending (struct rspamd_async_session *session)
 					/* Call pending once more */
 					return check_session_pending (session);
 				}
-				return TRUE;
 			}
 			else {
-				return FALSE;
+				ret = FALSE;
 			}
 		}
-		g_mutex_unlock (session->mtx);
-		return FALSE;
+
+		ret = FALSE;
 	}
-	g_mutex_unlock (session->mtx);
-	return TRUE;
+
+	return ret;
 }
 
-
-/**
- * Add new async thread to session
- * @param session session object
- */
 void
-register_async_thread (struct rspamd_async_session *session)
+rspamd_session_watch_start (struct rspamd_async_session *s,
+		event_watcher_t cb,
+		gpointer ud)
 {
-	g_atomic_int_inc (&session->threads);
-	msg_debug ("added thread: pending %d thread", session->threads);
+	g_assert (s != NULL);
+	g_assert (!RSPAMD_SESSION_IS_WATCHING (s));
+
+	if (s->cur_watcher == NULL) {
+		s->cur_watcher = rspamd_mempool_alloc (s->pool, sizeof (*s->cur_watcher));
+	}
+
+	s->cur_watcher->cb = cb;
+	s->cur_watcher->remain = 0;
+	s->cur_watcher->ud = ud;
+	s->flags |= RSPAMD_SESSION_FLAG_WATCHING;
 }
 
-/**
- * Remove async thread from session and check whether session can be terminated
- * @param session session object
- */
-void
-remove_async_thread (struct rspamd_async_session *session)
+guint
+rspamd_session_watch_stop (struct rspamd_async_session *s)
 {
-	if (g_atomic_int_dec_and_test (&session->threads)) {
-		/* Signal if there are any sessions waiting */
-		g_mutex_lock (session->mtx);
-		g_cond_signal (session->cond);
-		g_mutex_unlock (session->mtx);
+	guint remain;
+
+	g_assert (s != NULL);
+	g_assert (RSPAMD_SESSION_IS_WATCHING (s));
+
+	remain = s->cur_watcher->remain;
+
+	if (remain > 0) {
+		/* Avoid reusing */
+		s->cur_watcher = NULL;
 	}
-	msg_debug ("removed thread: pending %d thread", session->threads);
+
+	s->flags &= ~RSPAMD_SESSION_FLAG_WATCHING;
+
+	return remain;
 }

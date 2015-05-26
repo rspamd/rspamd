@@ -122,7 +122,6 @@ rspamd_task_fin (void *arg)
 {
 	struct rspamd_task *task = (struct rspamd_task *) arg;
 	gint r;
-	GError *err = NULL;
 
 	/* Task is already finished or skipped */
 	if (task->state == WRITE_REPLY) {
@@ -133,14 +132,9 @@ rspamd_task_fin (void *arg)
 	/* We processed all filters and want to process statfiles */
 	if (task->state != WAIT_POST_FILTER && task->state != WAIT_PRE_FILTER) {
 		/* Process all statfiles */
-		if (task->classify_pool == NULL) {
-			/* Non-threaded version */
-			rspamd_process_statistics (task);
-		}
-		else {
-			/* Just process composites */
-			rspamd_make_composites (task);
-		}
+		/* Non-threaded version */
+		rspamd_process_statistics (task);
+
 		if (task->cfg->post_filters) {
 			/* More to process */
 			/* Special state */
@@ -174,16 +168,7 @@ rspamd_task_fin (void *arg)
 				rspamd_task_reply (task);
 				return TRUE;
 			}
-			/* Add task to classify to classify pool */
-			if (!RSPAMD_TASK_IS_SKIPPED (task) && task->classify_pool) {
-				register_async_thread (task->s);
-				g_thread_pool_push (task->classify_pool, task, &err);
-				if (err != NULL) {
-					msg_err ("cannot pull task to the pool: %s", err->message);
-					remove_async_thread (task->s);
-					g_error_free (err);
-				}
-			}
+
 			if (RSPAMD_TASK_IS_SKIPPED (task)) {
 				rspamd_task_reply (task);
 			}
@@ -209,7 +194,6 @@ rspamd_task_restore (void *arg)
 			!(task->flags & RSPAMD_TASK_FLAG_SKIP_EXTRA)) {
 		rspamd_lua_call_post_filters (task);
 	}
-	task->s->wanna_die = TRUE;
 }
 
 /*
@@ -294,21 +278,16 @@ rspamd_task_free_soft (gpointer ud)
 gboolean
 rspamd_task_process (struct rspamd_task *task,
 	struct rspamd_http_message *msg, const gchar *start, gsize len,
-	GThreadPool *classify_pool,
 	gboolean process_extra_filters)
 {
 	gint r;
 	guint control_len;
 	struct ucl_parser *parser;
 	ucl_object_t *control_obj;
-	GError *err = NULL;
 
 	task->msg.start = start;
 	task->msg.len = len;
 	debug_task ("got string of length %z", task->msg.len);
-
-	/* We got body, set wanna_die flag */
-	task->s->wanna_die = TRUE;
 
 	if (msg) {
 		rspamd_protocol_handle_headers (task, msg);
@@ -359,35 +338,23 @@ rspamd_task_process (struct rspamd_task *task,
 	}
 	if (!process_extra_filters || task->cfg->pre_filters == NULL) {
 		r = rspamd_process_filters (task);
+
 		if (r == -1) {
 			task->last_error = "filter processing error";
 			task->error_code = RSPAMD_FILTER_ERROR;
 			task->state = WRITE_REPLY;
 			return FALSE;
 		}
-		/* Add task to classify to classify pool */
-		if (!RSPAMD_TASK_IS_SKIPPED (task) && classify_pool) {
-			register_async_thread (task->s);
-			g_thread_pool_push (classify_pool, task, &err);
-			if (err != NULL) {
-				msg_err ("cannot pull task to the pool: %s", err->message);
-				remove_async_thread (task->s);
-				g_error_free (err);
-			}
-			else {
-				task->classify_pool = classify_pool;
-			}
-		}
+
 		if (RSPAMD_TASK_IS_SKIPPED (task)) {
 			/* Call write_socket to write reply and exit */
 			task->state = WRITE_REPLY;
 		}
-		task->s->wanna_die = TRUE;
+
 	}
 	else {
 		rspamd_lua_call_pre_filters (task);
 		/* We want fin_task after pre filters are processed */
-		task->s->wanna_die = TRUE;
 		task->state = WAIT_PRE_FILTER;
 	}
 

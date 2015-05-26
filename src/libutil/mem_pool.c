@@ -33,8 +33,8 @@
 #define MUTEX_SLEEP_TIME 10000000L
 #define MUTEX_SPIN_COUNT 100
 
-#define POOL_MTX_LOCK() do { rspamd_mutex_lock (pool->mtx); } while (0)
-#define POOL_MTX_UNLOCK()   do { rspamd_mutex_unlock (pool->mtx); } while (0)
+#define POOL_MTX_LOCK() do { } while (0)
+#define POOL_MTX_UNLOCK()   do { } while (0)
 
 /*
  * This define specify whether we should check all pools for free space for new object
@@ -224,7 +224,6 @@ rspamd_mempool_new (gsize size)
 	new->destructors = NULL;
 	/* Set it upon first call of set variable */
 	new->variables = NULL;
-	new->mtx = rspamd_mutex_new ();
 
 	mem_pool_stat->pools_allocated++;
 
@@ -616,7 +615,6 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 
 	g_atomic_int_inc (&mem_pool_stat->pools_freed);
 	POOL_MTX_UNLOCK ();
-	rspamd_mutex_free (pool->mtx);
 	g_slice_free (rspamd_mempool_t, pool);
 }
 
