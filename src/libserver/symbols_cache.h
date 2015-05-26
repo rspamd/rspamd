@@ -41,7 +41,17 @@ enum rspamd_symbol_type {
 	SYMBOL_TYPE_CALLBACK
 };
 
+/**
+ * Creates new cache structure
+ * @return
+ */
 struct symbols_cache* rspamd_symbols_cache_new (void);
+
+/**
+ * Remove the cache structure syncing data if needed
+ * @param cache
+ */
+void rspamd_symbols_cache_destroy (struct symbols_cache *cache);
 
 /**
  * Load symbols cache from file, must be called _after_ init_symbols_cache

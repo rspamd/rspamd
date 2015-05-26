@@ -180,46 +180,6 @@ rspamd_set_counter (struct cache_item *item, guint32 value)
 	return cd->value;
 }
 
-static GChecksum *
-get_mem_cksum (struct symbols_cache *cache)
-{
-	GChecksum *result;
-	GList *cur, *l;
-	struct cache_item *item;
-
-	result = g_checksum_new (G_CHECKSUM_SHA1);
-
-	l = g_list_copy (cache->negative_items);
-	l = g_list_sort (l, cache_cmp);
-	cur = g_list_first (l);
-	while (cur) {
-		item = cur->data;
-		if (item->s->symbol[0] != '\0') {
-			g_checksum_update (result, item->s->symbol,
-				strlen (item->s->symbol));
-		}
-		cur = g_list_next (cur);
-	}
-	g_list_free (l);
-
-
-	l = g_list_copy (cache->static_items);
-	l = g_list_sort (l, cache_cmp);
-	cur = g_list_first (l);
-	while (cur) {
-		item = cur->data;
-		if (item->s->symbol[0] != '\0') {
-			g_checksum_update (result, item->s->symbol,
-				strlen (item->s->symbol));
-		}
-		total_frequency += item->s->frequency;
-		cur = g_list_next (cur);
-	}
-	g_list_free (l);
-
-	return result;
-}
-
 /* Sort items in logical order */
 static void
 post_cache_init (struct symbols_cache *cache)
@@ -245,137 +205,6 @@ post_cache_init (struct symbols_cache *cache)
 	cache->negative_items =
 		g_list_sort (cache->negative_items, cache_logic_cmp);
 	cache->static_items = g_list_sort (cache->static_items, cache_logic_cmp);
-}
-
-/* Unmap cache file */
-static void
-unmap_cache_file (gpointer arg)
-{
-	struct symbols_cache *cache = arg;
-
-	/* A bit ugly usage */
-	munmap (cache->map, cache->used_items * sizeof (struct saved_cache_item));
-}
-
-static gboolean
-mmap_cache_file (struct symbols_cache *cache, gint fd, rspamd_mempool_t *pool)
-{
-	guint8 *map;
-	gint i;
-	GList *cur;
-	struct cache_item *item;
-
-	if (cache->used_items > 0) {
-		map = mmap (NULL,
-				cache->used_items * sizeof (struct saved_cache_item),
-				PROT_READ | PROT_WRITE,
-				MAP_SHARED,
-				fd,
-				0);
-		if (map == MAP_FAILED) {
-			msg_err ("cannot mmap cache file: %d, %s", errno, strerror (errno));
-			close (fd);
-			return FALSE;
-		}
-		/* Close descriptor as it would never be used */
-		close (fd);
-		cache->map = map;
-		/* Now free old values for saved cache items and fill them with mmapped ones */
-		i = 0;
-		cur = g_list_first (cache->negative_items);
-		while (cur) {
-			item = cur->data;
-			item->s =
-				(struct saved_cache_item *)(map + i *
-				sizeof (struct saved_cache_item));
-			cur = g_list_next (cur);
-			i++;
-		}
-		cur = g_list_first (cache->static_items);
-		while (cur) {
-			item = cur->data;
-			item->s =
-				(struct saved_cache_item *)(map + i *
-				sizeof (struct saved_cache_item));
-			cur = g_list_next (cur);
-			i++;
-		}
-
-		post_cache_init (cache);
-	}
-
-	return TRUE;
-}
-
-/* Fd must be opened for writing, after creating file is mmapped */
-static gboolean
-create_cache_file (struct symbols_cache *cache,
-	const gchar *filename,
-	gint fd,
-	rspamd_mempool_t *pool)
-{
-	GChecksum *cksum;
-	u_char *digest;
-	gsize cklen;
-	GList *cur;
-	struct cache_item *item;
-
-	/* Calculate checksum */
-	cksum = get_mem_cksum (cache);
-	if (cksum == NULL) {
-		msg_err ("cannot calculate checksum for symbols");
-		close (fd);
-		return FALSE;
-	}
-
-	cklen = g_checksum_type_get_length (G_CHECKSUM_SHA1);
-	digest = g_malloc (cklen);
-
-	g_checksum_get_digest (cksum, digest, &cklen);
-	/* Now write data to file */
-	cur = g_list_first (cache->negative_items);
-	while (cur) {
-		item = cur->data;
-		if (write (fd, item->s, sizeof (struct saved_cache_item)) == -1) {
-			msg_err ("cannot write to file %d, %s", errno, strerror (errno));
-			close (fd);
-			g_checksum_free (cksum);
-			g_free (digest);
-			return FALSE;
-		}
-		cur = g_list_next (cur);
-	}
-	cur = g_list_first (cache->static_items);
-	while (cur) {
-		item = cur->data;
-		if (write (fd, item->s, sizeof (struct saved_cache_item)) == -1) {
-			msg_err ("cannot write to file %d, %s", errno, strerror (errno));
-			close (fd);
-			g_checksum_free (cksum);
-			g_free (digest);
-			return FALSE;
-		}
-		cur = g_list_next (cur);
-	}
-	/* Write checksum */
-	if (write (fd, digest, cklen) == -1) {
-		msg_err ("cannot write to file %d, %s", errno, strerror (errno));
-		close (fd);
-		g_checksum_free (cksum);
-		g_free (digest);
-		return FALSE;
-	}
-
-	close (fd);
-	g_checksum_free (cksum);
-	g_free (digest);
-	/* Reopen for reading */
-	if ((fd = open (filename, O_RDWR)) == -1) {
-		msg_info ("cannot open file %s, error %d, %s", errno, strerror (errno));
-		return FALSE;
-	}
-
-	return mmap_cache_file (cache, fd, pool);
 }
 
 static gboolean
@@ -736,27 +565,25 @@ register_callback_symbol_priority (struct symbols_cache **cache,
 		SYMBOL_TYPE_CALLBACK);
 }
 
-
-
-static void
-free_cache (gpointer arg)
+void
+rspamd_symbols_cache_destroy (struct symbols_cache *cache)
 {
-	struct symbols_cache *cache = arg;
+	if (cache != NULL) {
 
-	if (cache->map != NULL) {
-		unmap_cache_file (cache);
-	}
+		if (cache->cfg->cache_filename) {
+			/* Try to sync values to the disk */
+			if (!rspamd_symbols_cache_save_items (cache,
+					cache->cfg->cache_filename)) {
+				msg_err ("cannot save cache data to %s",
+						cache->cfg->cache_filename);
+			}
+		}
 
-	if (cache->static_items) {
-		g_list_free (cache->static_items);
-	}
-	if (cache->negative_items) {
-		g_list_free (cache->negative_items);
-	}
-	g_hash_table_destroy (cache->items_by_symbol);
-	rspamd_mempool_delete (cache->static_pool);
+		g_hash_table_destroy (cache->items_by_symbol);
+		rspamd_mempool_delete (cache->static_pool);
 
-	g_free (cache);
+		g_slice_free1 (sizeof (*cache), cache);
+	}
 }
 
 struct symbols_cache*
