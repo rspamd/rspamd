@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2012, Vsevolod Stakhov
+ * Copyright (c) 2009-2015, Vsevolod Stakhov
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,10 +28,6 @@
 #include "message.h"
 #include "symbols_cache.h"
 #include "cfg_file.h"
-
-#define WEIGHT_MULT 4.0
-#define FREQUENCY_MULT 10.0
-#define TIME_MULT -1.0
 
 /* After which number of messages try to resort cache */
 #define MAX_USES 100
