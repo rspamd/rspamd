@@ -151,7 +151,6 @@ struct rspamd_task {
 	struct rspamd_dns_resolver *resolver;                       /**< DNS resolver									*/
 	struct event_base *ev_base;                                 /**< Event base										*/
 
-	GThreadPool *classify_pool;                                 /**< A pool of classify threads                     */
 	gpointer classify_data;										/**< Opaque classifiers data						*/
 
 	struct {
@@ -188,13 +187,11 @@ gboolean rspamd_task_fin (void *arg);
  * Process task from http message and write reply or call task->fin_handler
  * @param task task to process
  * @param msg incoming http message
- * @param classify_pool classify pool (or NULL)
  * @param process_extra_filters whether to check pre and post filters
  * @return task has been successfully parsed and processed
  */
 gboolean rspamd_task_process (struct rspamd_task *task,
 	struct rspamd_http_message *msg, const gchar *start, gsize len,
-	GThreadPool *classify_pool,
 	gboolean process_extra_filters);
 
 /**

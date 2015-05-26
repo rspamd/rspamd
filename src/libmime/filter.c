@@ -746,24 +746,6 @@ rspamd_process_statistics (struct rspamd_task *task)
 	rspamd_make_composites (task);
 }
 
-void
-rspamd_process_statistic_threaded (gpointer data, gpointer user_data)
-{
-	struct rspamd_task *task = (struct rspamd_task *)data;
-	struct lua_locked_state *nL = user_data;
-
-	if (RSPAMD_TASK_IS_SKIPPED (task)) {
-		remove_async_thread (task->s);
-		return;
-	}
-
-	/* TODO: handle err here */
-	rspamd_mutex_lock (nL->m);
-	rspamd_stat_classify (task, nL->L, NULL);
-	rspamd_mutex_unlock (nL->m);
-	remove_async_thread (task->s);
-}
-
 static void
 insert_metric_header (gpointer metric_name, gpointer metric_value,
 	gpointer data)

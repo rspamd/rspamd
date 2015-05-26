@@ -40,10 +40,6 @@
 
 #include "lua/lua_common.h"
 
-#ifdef WITH_GPERF_TOOLS
-#   include <glib/gprintf.h>
-#endif
-
 /* 60 seconds for worker's IO */
 #define DEFAULT_WORKER_IO_TIMEOUT 60000
 
@@ -81,10 +77,6 @@ struct rspamd_worker_ctx {
 	guint32 tasks;
 	/* Limit of tasks */
 	guint32 max_tasks;
-	/* Classify threads */
-	guint32 classify_threads;
-	/* Classify threads */
-	GThreadPool *classify_pool;
 	/* Events base */
 	struct event_base *ev_base;
 	/* Encryption key */
@@ -133,7 +125,7 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 	}
 
 
-	if (!rspamd_task_process (task, msg, chunk, len, ctx->classify_pool, TRUE)) {
+	if (!rspamd_task_process (task, msg, chunk, len, TRUE)) {
 		task->state = WRITE_REPLY;
 	}
 
@@ -180,7 +172,6 @@ rspamd_worker_finish_handler (struct rspamd_http_connection *conn,
 		 * If all filters have finished their tasks, this function will trigger
 		 * writing a reply.
 		 */
-		task->s->wanna_die = TRUE;
 		check_session_pending (task->s);
 	}
 
@@ -254,8 +245,6 @@ accept_socket (gint fd, short what, void *arg)
 	new_task->s = new_async_session (new_task->task_pool, rspamd_task_fin,
 			rspamd_task_restore, rspamd_task_free_hard, new_task);
 
-	new_task->classify_pool = ctx->classify_pool;
-
 	if (ctx->key) {
 		rspamd_http_connection_set_key (new_task->http_conn, ctx->key);
 	}
@@ -279,7 +268,6 @@ init_worker (struct rspamd_config *cfg)
 
 	ctx->is_mime = TRUE;
 	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;
-	ctx->classify_threads = 1;
 
 	rspamd_rcl_register_worker_option (cfg, type, "mime",
 		rspamd_rcl_parse_struct_boolean, ctx,
@@ -307,12 +295,6 @@ init_worker (struct rspamd_config *cfg)
 		G_STRUCT_OFFSET (struct rspamd_worker_ctx,
 		max_tasks), RSPAMD_CL_FLAG_INT_32);
 
-	rspamd_rcl_register_worker_option (cfg, type, "classify_threads",
-		rspamd_rcl_parse_struct_integer, ctx,
-		G_STRUCT_OFFSET (struct rspamd_worker_ctx,
-		classify_threads), RSPAMD_CL_FLAG_INT_32);
-
-
 	rspamd_rcl_register_worker_option (cfg, type, "keypair",
 		rspamd_rcl_parse_struct_keypair, ctx,
 		G_STRUCT_OFFSET (struct rspamd_worker_ctx,
@@ -328,8 +310,6 @@ void
 start_worker (struct rspamd_worker *worker)
 {
 	struct rspamd_worker_ctx *ctx = worker->ctx;
-	GError *err = NULL;
-	struct lua_locked_state *nL;
 
 	ctx->ev_base = rspamd_prepare_worker (worker, "normal", accept_socket);
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
@@ -343,22 +323,6 @@ start_worker (struct rspamd_worker *worker)
 
 	rspamd_upstreams_library_init (ctx->resolver->r, ctx->ev_base);
 	rspamd_upstreams_library_config (worker->srv->cfg);
-
-	/* Create classify pool */
-	ctx->classify_pool = NULL;
-	if (ctx->classify_threads > 1) {
-		nL = rspamd_init_lua_locked (worker->srv->cfg);
-		ctx->classify_pool = g_thread_pool_new (rspamd_process_statistic_threaded,
-				nL,
-				ctx->classify_threads,
-				TRUE,
-				&err);
-		if (err != NULL) {
-			msg_err ("pool create failed: %e", err);
-			g_error_free (err);
-			ctx->classify_pool = NULL;
-		}
-	}
 
 	/* XXX: stupid default */
 	ctx->keys_cache = rspamd_keypair_cache_new (256);

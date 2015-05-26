@@ -193,7 +193,7 @@ lua_util_process_message (lua_State *L)
 		task->s = new_async_session (task->task_pool, rspamd_task_fin,
 					rspamd_task_restore, rspamd_task_free_hard, task);
 
-		if (rspamd_task_process (task, NULL, message, mlen, NULL, TRUE)) {
+		if (rspamd_task_process (task, NULL, message, mlen, TRUE)) {
 			event_base_loop (base, 0);
 
 			if (res != NULL) {
