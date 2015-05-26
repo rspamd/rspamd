@@ -56,6 +56,9 @@ struct cache_item {
 	/* Static item's data */
 	struct saved_cache_item *s;
 	struct counter_data *cd;
+	gdouble weight;
+	guint32 frequency;
+	gdouble avg_time;
 
 	rspamd_mempool_mutex_t *mtx;
 

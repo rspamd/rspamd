@@ -28,6 +28,7 @@
 #include "message.h"
 #include "symbols_cache.h"
 #include "cfg_file.h"
+#include "blake2.h"
 
 /* After which number of messages try to resort cache */
 #define MAX_USES 100
@@ -39,6 +40,14 @@
 
 static guint64 total_frequency = 0;
 static guint32 nsymbols = 0;
+static const guchar rspamd_symbols_cache_magic[] = {'r', 's', 'c', 1, 0, 0 };
+
+struct rspamd_symbols_cache_header {
+	guchar magic;
+	guint nitems;
+	guchar checksum[BLAKE2B_OUTBYTES];
+	guchar unused[128];
+};
 
 gint
 cache_cmp (const void *p1, const void *p2)
@@ -299,6 +308,173 @@ create_cache_file (struct symbols_cache *cache,
 	}
 
 	return mmap_cache_file (cache, fd, pool);
+}
+
+static gboolean
+rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
+{
+	struct rspamd_symbols_cache_header *hdr;
+	struct stat st;
+	struct ucl_parser *parser;
+	ucl_object_t *top;
+	const ucl_object_t *cur, *elt;
+	ucl_object_iter_t it;
+	struct cache_item *item;
+	const guchar *p;
+	gint fd;
+	gpointer map;
+
+	fd = open (name, O_RDONLY);
+
+	if (fd == -1) {
+		msg_info ("cannot open file %s, error %d, %s", name,
+			errno, strerror (errno));
+		return FALSE;
+	}
+
+	if (fstat (fd, &st) == -1) {
+		close (fd);
+		msg_info ("cannot stat file %s, error %d, %s", name,
+				errno, strerror (errno));
+		return FALSE;
+	}
+
+	if (st.st_size < sizeof (*hdr)) {
+		close (fd);
+		errno = EINVAL;
+		msg_info ("cannot use file %s, error %d, %s", name,
+				errno, strerror (errno));
+		return FALSE;
+	}
+
+	map = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+
+	if (map == MAP_FAILED) {
+		close (fd);
+		msg_info ("cannot mmap file %s, error %d, %s", name,
+				errno, strerror (errno));
+		return FALSE;
+	}
+
+	close (fd);
+	hdr = map;
+
+	if (memcmp (hdr->magic, rspamd_symbols_cache_magic,
+			sizeof (rspamd_symbols_cache_magic)) == NULL) {
+		msg_info ("cannot use file %s, bad magic", name);
+		munmap (map, st.st_size);
+		return FALSE;
+	}
+
+	parser = ucl_parser_new (0);
+	p = hdr + 1;
+
+	if (!ucl_parser_add_chunk (parser, p, st.st_size - sizeof (*hdr))) {
+		msg_info ("cannot use file %s, cannot parse: %s", name,
+				ucl_parser_get_error (parser));
+		munmap (map, st.st_size);
+		ucl_parser_free (parser);
+		return FALSE;
+	}
+
+	top = ucl_parser_get_object (parser);
+	munmap (map, st.st_size);
+	ucl_parser_free (parser);
+
+	if (top == NULL || ucl_object_type (top) != UCL_OBJECT) {
+		msg_info ("cannot use file %s, bad object", name);
+		ucl_object_unref (top);
+		return FALSE;
+	}
+
+	it = ucl_object_iterate_new (top);
+
+	while ((cur = ucl_object_iterate_safe (it, true))) {
+		item = g_hash_table_lookup (cache->items_by_symbol, ucl_object_key (cur));
+
+		if (item) {
+			/* Copy saved info */
+			elt = ucl_object_find_key (cur, "weight");
+
+			if (elt) {
+				item->weight = ucl_object_todouble (cur);
+			}
+
+			elt = ucl_object_find_key (cur, "time");
+
+			if (elt) {
+				item->avg_time = ucl_object_todouble (cur);
+			}
+
+			elt = ucl_object_find_key (cur, "frequency");
+
+			if (elt) {
+				item->frequency = ucl_object_toint (cur);
+			}
+		}
+	}
+
+	ucl_object_iterate_free (it);
+	ucl_object_unref (top);
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
+{
+	struct rspamd_symbols_cache_header hdr;
+	ucl_object_t *top, *elt;
+	GHashTableIter it;
+	struct cache_item *item;
+	struct ucl_emitter_functions *efunc;
+	gpointer k, v;
+	gint fd;
+	bool ret;
+
+	fd = open (name, O_CREAT | O_TRUNC | O_WRONLY | O_EXCL, 00644);
+
+	if (fd == -1) {
+		msg_info ("cannot open file %s, error %d, %s", name,
+				errno, strerror (errno));
+		return FALSE;
+	}
+
+	memset (&hdr, 0, sizeof (hdr));
+	memcpy (hdr->magic, rspamd_symbols_cache_magic,
+			sizeof (rspamd_symbols_cache_magic));
+
+	if (write (fd, &hdr, sizeof (hdr)) == -1) {
+		msg_info ("cannot write to file %s, error %d, %s", name,
+				errno, strerror (errno));
+		close (fd);
+
+		return FALSE;
+	}
+
+	top = ucl_object_typed_new (UCL_OBJECT);
+
+	g_hash_table_iter_init (&it, cache->items_by_symbol);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		item = v;
+		elt = ucl_object_typed_new (UCL_OBJECT);
+		ucl_object_insert_key (elt, ucl_object_fromdouble (item->weight),
+				"weight", 0, false);
+		ucl_object_insert_key (elt, ucl_object_fromdouble (item->avg_time),
+				"time", 0, false);
+		ucl_object_insert_key (elt, ucl_object_fromint (item->frequency),
+				"frequency", 0, false);
+
+		ucl_object_insert_key (top, elt, k, 0, false);
+	}
+
+	efunc = ucl_object_emit_fd_funcs (fd);
+	ret = ucl_object_emit_full (top, UCL_EMIT_JSON_COMPACT, efunc);
+	ucl_object_emit_funcs_free (efunc);
+	close (fd);
+
+	return ret;
 }
 
 void
