@@ -140,7 +140,7 @@ rspamd_worker_error_handler (struct rspamd_http_connection *conn, GError *err)
 	msg_info ("abnormally closing connection from: %s, error: %e",
 		rspamd_inet_address_to_string (task->client_addr), err);
 	/* Terminate session immediately */
-	destroy_session (task->s);
+	rspamd_session_destroy (task->s);
 }
 
 static gint
@@ -153,7 +153,7 @@ rspamd_worker_finish_handler (struct rspamd_http_connection *conn,
 		/* We are done here */
 		msg_debug ("normally closing connection from: %s",
 			rspamd_inet_address_to_string (task->client_addr));
-		destroy_session (task->s);
+		rspamd_session_destroy (task->s);
 	}
 	else if (task->state == WRITE_REPLY) {
 		/*
@@ -172,7 +172,7 @@ rspamd_worker_finish_handler (struct rspamd_http_connection *conn,
 		 * If all filters have finished their tasks, this function will trigger
 		 * writing a reply.
 		 */
-		check_session_pending (task->s);
+		rspamd_session_pending (task->s);
 	}
 
 	return 0;
@@ -242,7 +242,7 @@ accept_socket (gint fd, short what, void *arg)
 		(rspamd_mempool_destruct_t)reduce_tasks_count, &ctx->tasks);
 
 	/* Set up async session */
-	new_task->s = new_async_session (new_task->task_pool, rspamd_task_fin,
+	new_task->s = rspamd_session_create (new_task->task_pool, rspamd_task_fin,
 			rspamd_task_restore, rspamd_task_free_hard, new_task);
 
 	if (ctx->key) {

@@ -193,7 +193,7 @@ smtp_proxy_err_proxy (GError * err, void *arg)
 	}
 	/* Free buffers */
 	session->state = SMTP_PROXY_STATE_REJECT;
-	destroy_session (session->s);
+	rspamd_session_destroy (session->s);
 }
 
 /**
@@ -280,7 +280,7 @@ smtp_proxy_greeting_handler (gint fd, short what, void *arg)
 							msg_info ("connection with %s got write error: %s",
 								inet_ntoa (session->client_addr),
 								strerror (errno));
-							destroy_session (session->s);
+							rspamd_session_destroy (session->s);
 						}
 					}
 					else {
@@ -305,7 +305,7 @@ smtp_proxy_greeting_handler (gint fd, short what, void *arg)
 							msg_info ("connection with %s got write error: %s",
 								inet_ntoa (session->client_addr),
 								strerror (errno));
-							destroy_session (session->s);
+							rspamd_session_destroy (session->s);
 						}
 					}
 				}
@@ -313,14 +313,14 @@ smtp_proxy_greeting_handler (gint fd, short what, void *arg)
 					/* Proxy sent 500 error */
 					msg_info ("connection with %s got smtp error for greeting",
 						rspamd_upstream_name (session->upstream));
-					destroy_session (session->s);
+					rspamd_session_destroy (session->s);
 				}
 			}
 			else {
 				msg_info ("connection with %s got read error: %s",
 					rspamd_upstream_name (session->upstream),
 					strerror (errno));
-				destroy_session (session->s);
+				rspamd_session_destroy (session->s);
 			}
 		}
 		else if (session->state == SMTP_PROXY_STATE_XCLIENT) {
@@ -352,14 +352,14 @@ smtp_proxy_greeting_handler (gint fd, short what, void *arg)
 						msg_info ("connection with %s got write error: %s",
 							inet_ntoa (session->client_addr),
 							strerror (errno));
-						destroy_session (session->s);
+						rspamd_session_destroy (session->s);
 					}
 				}
 				else if (r == -1) {
 					/* Proxy sent 500 error */
 					msg_info ("connection with %s got smtp error for xclient",
 							rspamd_upstream_name (session->upstream));
-					destroy_session (session->s);
+					rspamd_session_destroy (session->s);
 				}
 			}
 		}
@@ -367,7 +367,7 @@ smtp_proxy_greeting_handler (gint fd, short what, void *arg)
 			msg_info ("connection with %s got read event at improper state: %d",
 				rspamd_upstream_name (session->upstream),
 				session->state);
-			destroy_session (session->s);
+			rspamd_session_destroy (session->s);
 		}
 	}
 	else if (what == EV_WRITE) {
@@ -401,7 +401,7 @@ smtp_proxy_greeting_handler (gint fd, short what, void *arg)
 				msg_info ("connection with %s got write error: %s",
 					rspamd_upstream_name (session->upstream),
 					strerror (errno));
-				destroy_session (session->s);
+				rspamd_session_destroy (session->s);
 			}
 		}
 		else {
@@ -409,14 +409,14 @@ smtp_proxy_greeting_handler (gint fd, short what, void *arg)
 				"connection with %s got write event at improper state: %d",
 				rspamd_upstream_name (session->upstream),
 				session->state);
-			destroy_session (session->s);
+			rspamd_session_destroy (session->s);
 		}
 	}
 	else {
 		/* Timeout */
 		msg_info ("connection with %s timed out",
 				rspamd_upstream_name (session->upstream));
-		destroy_session (session->s);
+		rspamd_session_destroy (session->s);
 	}
 }
 
@@ -573,7 +573,7 @@ smtp_delay_handler (gint fd, short what, void *arg)
 {
 	struct smtp_proxy_session *session = arg;
 
-	remove_normal_event (session->s, (event_finalizer_t) event_del,
+	rspamd_session_remove_event (session->s, (event_finalizer_t) event_del,
 		session->delay_timer);
 	if (session->state == SMTP_PROXY_STATE_DELAY) {
 		/* TODO: Create upstream connection here */
@@ -623,7 +623,7 @@ smtp_make_delay (struct smtp_proxy_session *session)
 
 		evtimer_set (tev, smtp_delay_handler, session);
 		evtimer_add (tev, tv);
-		register_async_event (session->s, (event_finalizer_t) event_del, tev,
+		rspamd_session_add_event (session->s, (event_finalizer_t) event_del, tev,
 			g_quark_from_static_string ("smtp proxy"));
 		session->delay_timer = tev;
 	}
@@ -800,7 +800,7 @@ smtp_proxy_read_socket (rspamd_fstring_t * in, void *arg)
 			0, FALSE, TRUE)) {
 			msg_err ("cannot write smtp error");
 		}
-		destroy_session (session->s);
+		rspamd_session_destroy (session->s);
 	}
 	else {
 		/* Try to extract data */
@@ -821,7 +821,7 @@ smtp_proxy_read_socket (rspamd_fstring_t * in, void *arg)
 				0, FALSE, TRUE)) {
 				msg_err ("cannot write smtp error");
 			}
-			destroy_session (session->s);
+			rspamd_session_destroy (session->s);
 			return FALSE;
 		}
 		if (session->rcpt != NULL) {
@@ -832,7 +832,7 @@ smtp_proxy_read_socket (rspamd_fstring_t * in, void *arg)
 					0, FALSE, TRUE)) {
 					msg_err ("cannot write smtp error");
 				}
-				destroy_session (session->s);
+				rspamd_session_destroy (session->s);
 				return FALSE;
 			}
 			return rspamd_dispatcher_write (session->dispatcher,
@@ -862,7 +862,7 @@ smtp_proxy_write_socket (void *arg)
 	struct smtp_proxy_session *session = arg;
 
 	if (session->ctx->instant_reject) {
-		destroy_session (session->s);
+		rspamd_session_destroy (session->s);
 		return FALSE;
 	}
 	else {
@@ -893,7 +893,7 @@ smtp_proxy_err_socket (GError * err, void *arg)
 		g_error_free (err);
 	}
 	/* Free buffers */
-	destroy_session (session->s);
+	rspamd_session_destroy (session->s);
 }
 
 /*
@@ -941,7 +941,7 @@ accept_socket (gint fd, short what, void *arg)
 
 	/* Resolve client's addr */
 	/* Set up async session */
-	session->s = new_async_session (session->pool,
+	session->s = rspamd_session_create (session->pool,
 			NULL,
 			NULL,
 			free_smtp_proxy_session,

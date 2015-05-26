@@ -80,7 +80,7 @@ rspamd_dns_test_func ()
 
 	pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 
-	s = new_async_session (pool, session_fin, NULL, NULL, NULL);
+	s = rspamd_session_create (pool, session_fin, NULL, NULL, NULL);
 
 	resolver = dns_resolver_init (NULL, base, cfg);
 

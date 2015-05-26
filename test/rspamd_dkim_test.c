@@ -42,7 +42,7 @@ test_key_handler (rspamd_dkim_key_t *key, gsize keylen, rspamd_dkim_context_t *c
 	struct rspamd_async_session *s = ud;
 	g_assert (key != NULL);
 
-	destroy_session (s);
+	rspamd_session_destroy (s);
 }
 
 static gboolean
@@ -85,7 +85,7 @@ rspamd_dkim_test_func ()
 	g_assert (ctx != NULL);
 
 	/* Key part */
-	s = new_async_session (pool, session_fin, NULL, NULL, NULL);
+	s = rspamd_session_create (pool, session_fin, NULL, NULL, NULL);
 
 	g_assert (rspamd_get_dkim_key (ctx, resolver, s, test_key_handler, s));
 

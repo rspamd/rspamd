@@ -937,7 +937,7 @@ surbl_redirector_error (struct rspamd_http_connection *conn,
 		rspamd_inet_address_to_string (rspamd_upstream_addr (param->redirector)),
 		err);
 	rspamd_upstream_fail (param->redirector);
-	remove_normal_event (param->task->s, free_redirector_session,
+	rspamd_session_remove_event (param->task->s, free_redirector_session,
 			param);
 }
 
@@ -981,7 +981,7 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 	}
 
 	rspamd_upstream_ok (param->redirector);
-	remove_normal_event (param->task->s, free_redirector_session,
+	rspamd_session_remove_event (param->task->s, free_redirector_session,
 			param);
 
 	return 0;
@@ -1032,7 +1032,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 	timeout = rspamd_mempool_alloc (task->task_pool, sizeof (struct timeval));
 	double_to_tv (surbl_module_ctx->read_timeout, timeout);
 
-	register_async_event (task->s,
+	rspamd_session_add_event (task->s,
 		free_redirector_session,
 		param,
 		g_quark_from_static_string ("surbl"));

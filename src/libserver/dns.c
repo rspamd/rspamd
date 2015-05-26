@@ -62,7 +62,7 @@ rspamd_dns_callback (struct rdns_reply *reply, gpointer ud)
 		 * event removing
 		 */
 		rdns_request_retain (reply->request);
-		remove_normal_event (reqdata->session, rspamd_dns_fin_cb, reqdata);
+		rspamd_session_remove_event (reqdata->session, rspamd_dns_fin_cb, reqdata);
 	}
 	else if (reqdata->pool == NULL) {
 		g_slice_free1 (sizeof (struct rspamd_dns_request_ud), reqdata);
@@ -100,7 +100,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 
 	if (session) {
 		if (req != NULL) {
-			register_async_event (session,
+			rspamd_session_add_event (session,
 					(event_finalizer_t)rspamd_dns_fin_cb,
 					reqdata,
 					g_quark_from_static_string ("dns resolver"));

@@ -188,7 +188,7 @@ read_smtp_command (struct smtp_session *session, rspamd_fstring_t *line)
 			g_list_free (session->rcpt);
 		}
 		if (session->upstream) {
-			remove_normal_event (session->s,
+			rspamd_session_remove_event (session->s,
 				smtp_upstream_finalize_connection,
 				session);
 			session->upstream = NULL;
@@ -323,7 +323,7 @@ process_smtp_data (struct smtp_session *session)
 			/* We want fin_task after pre filters are processed */
 			session->task->s->wanna_die = TRUE;
 			session->task->state = WAIT_PRE_FILTER;
-			check_session_pending (session->task->s);
+			rspamd_session_pending (session->task->s);
 		}
 	}
 	else {
@@ -342,7 +342,7 @@ err:
 		TRUE)) {
 		return FALSE;
 	}
-	destroy_session (session->s);
+	rspamd_session_destroy (session->s);
 	return FALSE;
 }
 
@@ -378,7 +378,7 @@ smtp_read_socket (rspamd_fstring_t * in, void *arg)
 					session->error, 0, FALSE, TRUE)) {
 					return FALSE;
 				}
-				destroy_session (session->s);
+				rspamd_session_destroy (session->s);
 				return FALSE;
 			}
 			if (!smtp_write_socket (session)) {
@@ -403,7 +403,7 @@ smtp_read_socket (rspamd_fstring_t * in, void *arg)
 				0, FALSE, TRUE)) {
 				return FALSE;
 			}
-			destroy_session (session->s);
+			rspamd_session_destroy (session->s);
 			return FALSE;
 		}
 		break;
@@ -420,7 +420,7 @@ smtp_read_socket (rspamd_fstring_t * in, void *arg)
 	}
 
 	if (session->state == SMTP_STATE_QUIT) {
-		destroy_session (session->s);
+		rspamd_session_destroy (session->s);
 		return FALSE;
 	}
 	else if (session->state == SMTP_STATE_WAIT_UPSTREAM) {
@@ -445,7 +445,7 @@ smtp_write_socket (void *arg)
 				return FALSE;
 			}
 		}
-		destroy_session (session->s);
+		rspamd_session_destroy (session->s);
 		return FALSE;
 	}
 	else if (session->state == SMTP_STATE_END) {
@@ -483,7 +483,7 @@ smtp_err_socket (GError * err, void *arg)
 
 	msg_info ("abnormally closing connection, error: %s", err->message);
 	/* Free buffers */
-	destroy_session (session->s);
+	rspamd_session_destroy (session->s);
 }
 
 /*
@@ -510,7 +510,7 @@ smtp_delay_handler (gint fd, short what, void *arg)
 {
 	struct smtp_session *session = arg;
 
-	remove_normal_event (session->s,
+	rspamd_session_remove_event (session->s,
 		(event_finalizer_t)event_del,
 		session->delay_timer);
 	if (session->state == SMTP_STATE_DELAY) {
@@ -546,7 +546,7 @@ smtp_make_delay (struct smtp_session *session)
 
 		evtimer_set (tev, smtp_delay_handler, session);
 		evtimer_add (tev, tv);
-		register_async_event (session->s,
+		rspamd_session_add_event (session->s,
 			(event_finalizer_t)event_del,
 			tev,
 			g_quark_from_static_string ("smtp proxy"));
@@ -710,7 +710,7 @@ accept_socket (gint fd, short what, void *arg)
 
 	/* Resolve client's addr */
 	/* Set up async session */
-	session->s = new_async_session (session->pool,
+	session->s = rspamd_session_create (session->pool,
 			NULL,
 			NULL,
 			free_smtp_session,

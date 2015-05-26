@@ -120,7 +120,7 @@ static void
 lua_tcp_maybe_free (struct lua_tcp_cbdata *cbd)
 {
 	if (cbd->session) {
-		remove_normal_event (cbd->session, lua_tcp_fin, cbd);
+		rspamd_session_remove_event (cbd->session, lua_tcp_fin, cbd);
 	}
 	else {
 		lua_tcp_fin (cbd);
@@ -593,7 +593,7 @@ lua_tcp_request (lua_State *L)
 
 	if (session) {
 		cbd->session = session;
-		register_async_event (session,
+		rspamd_session_add_event (session,
 				(event_finalizer_t)lua_tcp_fin,
 				cbd,
 				g_quark_from_static_string ("lua tcp"));

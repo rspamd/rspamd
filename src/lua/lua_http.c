@@ -122,7 +122,7 @@ static void
 lua_http_maybe_free (struct lua_http_cbdata *cbd)
 {
 	if (cbd->session) {
-		remove_normal_event (cbd->session, lua_http_fin, cbd);
+		rspamd_session_remove_event (cbd->session, lua_http_fin, cbd);
 	}
 	else {
 		lua_http_fin (cbd);
@@ -438,7 +438,7 @@ lua_http_request (lua_State *L)
 	cbd->fd = -1;
 	if (session) {
 		cbd->session = session;
-		register_async_event (session,
+		rspamd_session_add_event (session,
 				(event_finalizer_t)lua_http_fin,
 				cbd,
 				g_quark_from_static_string ("lua http"));

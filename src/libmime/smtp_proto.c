@@ -425,7 +425,7 @@ smtp_upstream_read_socket (rspamd_fstring_t * in, void *arg)
 				sizeof (CRLF) - 1, FALSE, TRUE)) {
 				goto err;
 			}
-			destroy_session (session->s);
+			rspamd_session_destroy (session->s);
 			return FALSE;
 		}
 		else if (r == 1) {
@@ -476,7 +476,7 @@ smtp_upstream_read_socket (rspamd_fstring_t * in, void *arg)
 				sizeof (CRLF) - 1, FALSE, TRUE)) {
 				goto err;
 			}
-			destroy_session (session->s);
+			rspamd_session_destroy (session->s);
 			return FALSE;
 		}
 		else if (r == 1) {
@@ -512,7 +512,7 @@ smtp_upstream_read_socket (rspamd_fstring_t * in, void *arg)
 				sizeof (CRLF) - 1, FALSE, TRUE)) {
 				goto err;
 			}
-			destroy_session (session->s);
+			rspamd_session_destroy (session->s);
 			return FALSE;
 		}
 		else if (r == 1) {
@@ -545,7 +545,7 @@ smtp_upstream_read_socket (rspamd_fstring_t * in, void *arg)
 				sizeof (CRLF) - 1, FALSE, TRUE)) {
 				goto err;
 			}
-			destroy_session (session->s);
+			rspamd_session_destroy (session->s);
 			return FALSE;
 		}
 		else if (r == 1) {
@@ -638,7 +638,7 @@ smtp_upstream_read_socket (rspamd_fstring_t * in, void *arg)
 				sizeof (CRLF) - 1, FALSE, TRUE)) {
 				goto err;
 			}
-			destroy_session (session->s);
+			rspamd_session_destroy (session->s);
 			return FALSE;
 		}
 		else if (r == 1) {
@@ -650,7 +650,7 @@ smtp_upstream_read_socket (rspamd_fstring_t * in, void *arg)
 					session->error, 0, FALSE, TRUE)) {
 					goto err;
 				}
-				destroy_session (session->s);
+				rspamd_session_destroy (session->s);
 				return FALSE;
 			}
 			session->state = SMTP_STATE_AFTER_DATA;
@@ -702,11 +702,11 @@ smtp_upstream_read_socket (rspamd_fstring_t * in, void *arg)
 				sizeof (CRLF) - 1, FALSE, TRUE)) {
 				goto err;
 			}
-			destroy_session (session->s);
+			rspamd_session_destroy (session->s);
 			return FALSE;
 		}
 		else {
-			remove_normal_event (session->s,
+			rspamd_session_remove_event (session->s,
 				(event_finalizer_t)smtp_upstream_finalize_connection,
 				session);
 		}
@@ -726,7 +726,7 @@ smtp_upstream_read_socket (rspamd_fstring_t * in, void *arg)
 			1, FALSE, TRUE)) {
 			goto err;
 		}
-		destroy_session (session->s);
+		rspamd_session_destroy (session->s);
 		return FALSE;
 	}
 
@@ -757,7 +757,7 @@ smtp_upstream_err_socket (GError *err, void *arg)
 		return;
 	}
 	rspamd_upstream_fail (session->upstream);
-	destroy_session (session->s);
+	rspamd_session_destroy (session->s);
 }
 
 void

@@ -995,7 +995,7 @@ rspamd_controller_handle_learn_common (
 	task->ev_base = ctx->ev_base;
 
 
-	task->s = new_async_session (session->pool,
+	task->s = rspamd_session_create (session->pool,
 			rspamd_controller_learn_fin_task,
 			NULL,
 			rspamd_task_free_hard,
@@ -1009,14 +1009,14 @@ rspamd_controller_handle_learn_common (
 	if (!rspamd_task_process (task, msg, msg->body->str, msg->body->len, FALSE)) {
 		msg_warn ("filters cannot be processed for %s", task->message_id);
 		rspamd_controller_send_error (conn_ent, 500, task->last_error);
-		destroy_session (task->s);
+		rspamd_session_destroy (task->s);
 		return 0;
 	}
 
 	session->task = task;
 	session->cl = cl;
 	session->is_spam = is_spam;
-	check_session_pending (task->s);
+	rspamd_session_pending (task->s);
 
 	return 0;
 }
@@ -1085,7 +1085,7 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;
 
-	task->s = new_async_session (session->pool,
+	task->s = rspamd_session_create (session->pool,
 			rspamd_controller_check_fin_task,
 			NULL,
 			rspamd_task_free_hard,
@@ -1098,12 +1098,12 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	if (!rspamd_task_process (task, msg, msg->body->str, msg->body->len, FALSE)) {
 		msg_warn ("filters cannot be processed for %s", task->message_id);
 		rspamd_controller_send_error (conn_ent, 500, task->last_error);
-		destroy_session (task->s);
+		rspamd_session_destroy (task->s);
 		return 0;
 	}
 
 	session->task = task;
-	check_session_pending (task->s);
+	rspamd_session_pending (task->s);
 
 	return 0;
 }
@@ -1690,7 +1690,7 @@ rspamd_controller_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 
 	session->ctx->worker->srv->stat->control_connections_count++;
 	if (session->task != NULL) {
-		destroy_session (session->task->s);
+		rspamd_session_destroy (session->task->s);
 	}
 	if (session->pool) {
 		rspamd_mempool_delete (session->pool);

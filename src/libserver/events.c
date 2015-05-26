@@ -90,7 +90,7 @@ rspamd_event_hash (gconstpointer a)
 
 
 struct rspamd_async_session *
-new_async_session (rspamd_mempool_t * pool, session_finalizer_t fin,
+rspamd_session_create (rspamd_mempool_t * pool, session_finalizer_t fin,
 	event_finalizer_t restore, event_finalizer_t cleanup, void *user_data)
 {
 	struct rspamd_async_session *new;
@@ -111,7 +111,7 @@ new_async_session (rspamd_mempool_t * pool, session_finalizer_t fin,
 }
 
 void
-register_async_event (struct rspamd_async_session *session,
+rspamd_session_add_event (struct rspamd_async_session *session,
 	event_finalizer_t fin,
 	void *user_data,
 	GQuark subsystem)
@@ -146,7 +146,7 @@ register_async_event (struct rspamd_async_session *session,
 }
 
 void
-remove_normal_event (struct rspamd_async_session *session,
+rspamd_session_remove_event (struct rspamd_async_session *session,
 	event_finalizer_t fin,
 	void *ud)
 {
@@ -180,11 +180,11 @@ remove_normal_event (struct rspamd_async_session *session,
 
 	g_hash_table_remove (session->events, found_ev);
 
-	check_session_pending (session);
+	rspamd_session_pending (session);
 }
 
 static gboolean
-rspamd_session_destroy (gpointer k, gpointer v, gpointer unused)
+rspamd_session_destroy_callback (gpointer k, gpointer v, gpointer unused)
 {
 	struct rspamd_async_event *ev = v;
 
@@ -202,7 +202,7 @@ rspamd_session_destroy (gpointer k, gpointer v, gpointer unused)
 }
 
 gboolean
-destroy_session (struct rspamd_async_session *session)
+rspamd_session_destroy (struct rspamd_async_session *session)
 {
 	if (session == NULL) {
 		msg_info ("session is NULL");
@@ -211,7 +211,7 @@ destroy_session (struct rspamd_async_session *session)
 
 	session->flags |= RSPAMD_SESSION_FLAG_DESTROYING;
 	g_hash_table_foreach_remove (session->events,
-		rspamd_session_destroy,
+		rspamd_session_destroy_callback,
 		session);
 
 	if (session->cleanup != NULL) {
@@ -222,7 +222,7 @@ destroy_session (struct rspamd_async_session *session)
 }
 
 gboolean
-check_session_pending (struct rspamd_async_session *session)
+rspamd_session_pending (struct rspamd_async_session *session)
 {
 	gboolean ret = TRUE;
 
@@ -233,7 +233,7 @@ check_session_pending (struct rspamd_async_session *session)
 				if (session->restore != NULL) {
 					session->restore (session->user_data);
 					/* Call pending once more */
-					return check_session_pending (session);
+					return rspamd_session_pending (session);
 				}
 			}
 			else {

@@ -190,7 +190,7 @@ lua_util_process_message (lua_State *L)
 		task->fin_callback = lua_util_task_fin;
 		task->fin_arg = &res;
 		task->resolver = dns_resolver_init (NULL, base, cfg);
-		task->s = new_async_session (task->task_pool, rspamd_task_fin,
+		task->s = rspamd_session_create (task->task_pool, rspamd_task_fin,
 					rspamd_task_restore, rspamd_task_free_hard, task);
 
 		if (rspamd_task_process (task, NULL, message, mlen, TRUE)) {

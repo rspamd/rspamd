@@ -44,7 +44,7 @@ typedef gboolean (*session_finalizer_t)(gpointer user_data);
  * @param user_data abstract user data
  * @return
  */
-struct rspamd_async_session * new_async_session (rspamd_mempool_t *pool,
+struct rspamd_async_session * rspamd_session_create (rspamd_mempool_t *pool,
 	session_finalizer_t fin, event_finalizer_t restore,
 	event_finalizer_t cleanup, gpointer user_data);
 
@@ -55,7 +55,7 @@ struct rspamd_async_session * new_async_session (rspamd_mempool_t *pool,
  * @param user_data abstract user_data
  * @param forced unused
  */
-void register_async_event (struct rspamd_async_session *session,
+void rspamd_session_add_event (struct rspamd_async_session *session,
 	event_finalizer_t fin, gpointer user_data, GQuark subsystem);
 
 /**
@@ -64,7 +64,7 @@ void register_async_event (struct rspamd_async_session *session,
  * @param fin final callback
  * @param ud user data object
  */
-void remove_normal_event (struct rspamd_async_session *session,
+void rspamd_session_remove_event (struct rspamd_async_session *session,
 	event_finalizer_t fin,
 	gpointer ud);
 
@@ -72,14 +72,14 @@ void remove_normal_event (struct rspamd_async_session *session,
  * Must be called at the end of session, it calls fin functions for all non-forced callbacks
  * @return true if the whole session was destroyed and false if there are forced events
  */
-gboolean destroy_session (struct rspamd_async_session *session);
+gboolean rspamd_session_destroy (struct rspamd_async_session *session);
 
 /**
  * Check session for events pending and call fin callback if no events are pending
  * @param session session object
  * @return TRUE if session has pending events
  */
-gboolean check_session_pending (struct rspamd_async_session *session);
+gboolean rspamd_session_pending (struct rspamd_async_session *session);
 
 /**
  * Start watching for events in the session, so the specified watcher will be added

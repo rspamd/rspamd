@@ -91,7 +91,7 @@ create_smtp_upstream_connection (struct smtp_session *session)
 			session);
 	session->state = SMTP_STATE_WAIT_UPSTREAM;
 	session->upstream_state = SMTP_STATE_GREETING;
-	register_async_event (session->s,
+	rspamd_session_add_event (session->s,
 		(event_finalizer_t)smtp_upstream_finalize_connection,
 		session,
 		g_quark_from_static_string ("smtp proxy"));
@@ -120,7 +120,7 @@ err:
 		TRUE)) {
 		return FALSE;
 	}
-	destroy_session (session->s);
+	rspamd_session_destroy (session->s);
 	return FALSE;
 }
 
@@ -286,7 +286,7 @@ write_smtp_reply (struct smtp_session *session)
 			1, FALSE, TRUE)) {
 			return FALSE;
 		}
-		destroy_session (session->s);
+		rspamd_session_destroy (session->s);
 		return FALSE;
 	}
 	else if (cd.action <= METRIC_ACTION_ADD_HEADER || cd.action <=
@@ -300,7 +300,7 @@ write_smtp_reply (struct smtp_session *session)
 				0, FALSE, TRUE)) {
 				goto err;
 			}
-			destroy_session (session->s);
+			rspamd_session_destroy (session->s);
 			return FALSE;
 		}
 
@@ -345,7 +345,7 @@ write_smtp_reply (struct smtp_session *session)
 				0, FALSE, TRUE)) {
 				goto err;
 			}
-			destroy_session (session->s);
+			rspamd_session_destroy (session->s);
 			return FALSE;
 		}
 		g_object_unref (stream);
@@ -359,6 +359,6 @@ err:
 		TRUE)) {
 		return FALSE;
 	}
-	destroy_session (session->s);
+	rspamd_session_destroy (session->s);
 	return FALSE;
 }

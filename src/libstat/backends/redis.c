@@ -417,7 +417,7 @@ rspamd_redis_runtime (struct rspamd_task *task,
 	g_assert (rt->redis != NULL);
 
 	redisLibeventAttach (rt->redis, task->ev_base);
-	register_async_event (task->s, rspamd_redis_fin, rt,
+	rspamd_session_add_event (task->s, rspamd_redis_fin, rt,
 			rspamd_redis_stat_quark ());
 
 	return rt;

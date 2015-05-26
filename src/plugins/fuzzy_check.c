@@ -821,12 +821,12 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 			errno,
 			strerror (errno));
 		rspamd_upstream_fail (session->server);
-		remove_normal_event (session->task->s, fuzzy_io_fin, session);
+		rspamd_session_remove_event (session->task->s, fuzzy_io_fin, session);
 	}
 	else {
 		rspamd_upstream_ok (session->server);
 		if (session->commands->len == 0) {
-			remove_normal_event (session->task->s, fuzzy_io_fin, session);
+			rspamd_session_remove_event (session->task->s, fuzzy_io_fin, session);
 		}
 	}
 }
@@ -1114,7 +1114,7 @@ register_fuzzy_client_call (struct rspamd_task *task,
 			session->server = selected;
 			session->rule = rule;
 			event_add (&session->ev, &session->tv);
-			register_async_event (task->s,
+			rspamd_session_add_event (task->s,
 				fuzzy_io_fin,
 				session,
 				g_quark_from_static_string ("fuzzy check"));

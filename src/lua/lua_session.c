@@ -190,7 +190,7 @@ lua_session_create (lua_State *L)
 		}
 	}
 
-	session = new_async_session (mempool,
+	session = rspamd_session_create (mempool,
 			lua_session_finalizer,
 			lua_session_restore,
 			lua_session_cleanup,
@@ -211,7 +211,7 @@ lua_session_delete (lua_State *L)
 
 	session = cbd->session;
 	if (session) {
-		destroy_session (session);
+		rspamd_session_destroy (session);
 		return 0;
 	}
 	else {
@@ -256,7 +256,7 @@ lua_session_register_async_event (lua_State *L)
 			lua_pushvalue (L, 1);
 			cbdata->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 			cbdata->session = session;
-			register_async_event (session,
+			rspamd_session_add_event (session,
 				lua_event_fin,
 				cbdata,
 				g_quark_from_static_string ("lua event"));
@@ -285,7 +285,7 @@ lua_session_remove_normal_event (lua_State *L)
 	if (session) {
 		data = lua_check_event (L, 2);
 		if (data) {
-			remove_normal_event (session, lua_event_fin, data);
+			rspamd_session_remove_event (session, lua_event_fin, data);
 			return 0;
 		}
 	}

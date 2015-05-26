@@ -137,7 +137,7 @@ lua_redis_push_error (const gchar *err,
 	}
 
 	if (connected) {
-		remove_normal_event (ud->task->s, lua_redis_fin, ud);
+		rspamd_session_remove_event (ud->task->s, lua_redis_fin, ud);
 	}
 }
 
@@ -196,7 +196,7 @@ lua_redis_push_data (const redisReply *r, struct lua_redis_userdata *ud)
 		msg_info ("call to callback failed: %s", lua_tostring (ud->L, -1));
 	}
 
-	remove_normal_event (ud->task->s, lua_redis_fin, ud);
+	rspamd_session_remove_event (ud->task->s, lua_redis_fin, ud);
 }
 
 /**
@@ -441,7 +441,7 @@ lua_redis_make_request (lua_State *L)
 					(const gchar **)ud->args,
 					NULL);
 		if (ret == REDIS_OK) {
-			register_async_event (ud->task->s,
+			rspamd_session_add_event (ud->task->s,
 					lua_redis_fin,
 					ud,
 					g_quark_from_static_string ("lua redis"));
