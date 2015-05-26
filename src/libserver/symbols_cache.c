@@ -49,6 +49,74 @@ struct rspamd_symbols_cache_header {
 	guchar unused[128];
 };
 
+struct symbols_cache {
+	/* Normal cache items */
+	GList *static_items;
+
+	/* Items that have negative weights */
+	GList *negative_items;
+
+	/* Hash table for fast access */
+	GHashTable *items_by_symbol;
+
+	rspamd_mempool_t *static_pool;
+
+	guint cur_items;
+	guint used_items;
+	guint uses;
+	gpointer map;
+	struct rspamd_config *cfg;
+};
+
+struct saved_cache_item {
+	gchar symbol[MAX_SYMBOL];
+	double weight;
+	guint32 frequency;
+	double avg_time;
+};
+
+struct dynamic_map_item {
+	struct in_addr addr;
+	guint32 mask;
+	gboolean negative;
+};
+
+struct counter_data {
+	gdouble value;
+	gint number;
+};
+
+struct cache_item {
+	/* Static item's data */
+	struct saved_cache_item *s;
+	struct counter_data *cd;
+	gdouble weight;
+	guint32 frequency;
+	gdouble avg_time;
+
+	rspamd_mempool_mutex_t *mtx;
+
+	/* For dynamic rules */
+	struct dynamic_map_item *networks;
+	guint32 networks_number;
+	gboolean is_dynamic;
+
+	gboolean is_skipped;
+
+	/* Callback data */
+	symbol_func_t func;
+	gpointer user_data;
+
+	/* Flags of virtual symbols */
+	gboolean is_virtual;
+	gboolean is_callback;
+	gboolean is_ghost;
+
+	/* Priority */
+	gint priority;
+	gdouble metric_weight;
+};
+
 gint
 cache_cmp (const void *p1, const void *p2)
 {
@@ -453,7 +521,6 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 	}
 
 	top = ucl_object_typed_new (UCL_OBJECT);
-
 	g_hash_table_iter_init (&it, cache->items_by_symbol);
 
 	while (g_hash_table_iter_next (&it, &k, &v)) {
@@ -494,12 +561,6 @@ register_symbol_common (struct symbols_cache **cache,
 	gboolean skipped, ghost = (weight == 0.0);
 
 	if (*cache == NULL) {
-		pcache = g_new0 (struct symbols_cache, 1);
-		*cache = pcache;
-		pcache->static_pool =
-			rspamd_mempool_new (rspamd_mempool_suggest_size ());
-		pcache->items_by_symbol = g_hash_table_new (rspamd_str_hash,
-				rspamd_str_equal);
 	}
 
 	item = rspamd_mempool_alloc0 (pcache->static_pool,
@@ -698,12 +759,23 @@ free_cache (gpointer arg)
 	g_free (cache);
 }
 
+struct symbols_cache*
+rspamd_symbols_cache_new (void)
+{
+	struct symbols_cache *cache;
+
+	cache = g_slice_alloc0 (sizeof (struct symbols_cache));
+	cache->static_pool =
+			rspamd_mempool_new (rspamd_mempool_suggest_size ());
+	cache->items_by_symbol = g_hash_table_new (rspamd_str_hash,
+			rspamd_str_equal);
+
+	return cache;
+}
+
 gboolean
-init_symbols_cache (rspamd_mempool_t * pool,
-	struct symbols_cache *cache,
-	struct rspamd_config *cfg,
-	const gchar *filename,
-	gboolean ignore_checksum)
+init_symbols_cache (struct symbols_cache* cache,
+		struct rspamd_config *cfg)
 {
 	struct stat st;
 	gint fd;
@@ -712,134 +784,17 @@ init_symbols_cache (rspamd_mempool_t * pool,
 	gsize cklen;
 	gboolean res;
 
-	if (cache == NULL) {
-		return FALSE;
-	}
-
+	g_assert (cache != NULL);
 	cache->cfg = cfg;
 
 	/* Just in-memory cache */
-	if (filename == NULL) {
+	if (cfg->cache_filename == NULL) {
 		post_cache_init (cache);
 		return TRUE;
 	}
 
-	/* First of all try to stat file */
-	if (stat (filename, &st) == -1) {
-		/* Check errno */
-		if (errno == ENOENT) {
-			/* Try to create file */
-			if ((fd =
-				open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR |
-				S_IRUSR)) == -1) {
-				msg_info ("cannot create file %s, error %d, %s",
-					filename,
-					errno,
-					strerror (errno));
-				return FALSE;
-			}
-			else {
-				return create_cache_file (cache, filename, fd, pool);
-			}
-		}
-		else {
-			msg_info ("cannot stat file %s, error %d, %s",
-				filename,
-				errno,
-				strerror (errno));
-			return FALSE;
-		}
-	}
-	else {
-		if ((fd = open (filename, O_RDWR)) == -1) {
-			msg_info ("cannot open file %s, error %d, %s",
-				filename,
-				errno,
-				strerror (errno));
-			return FALSE;
-		}
-	}
-
-	if (!ignore_checksum) {
-		/* Calculate checksum */
-		cksum = get_mem_cksum (cache);
-		if (cksum == NULL) {
-			msg_err ("cannot calculate checksum for symbols");
-			close (fd);
-			return FALSE;
-		}
-
-		cklen = g_checksum_type_get_length (G_CHECKSUM_SHA1);
-		mem_sum = g_malloc (cklen);
-
-		g_checksum_get_digest (cksum, mem_sum, &cklen);
-		/* Now try to read file sum */
-		if (lseek (fd, -(cklen), SEEK_END) == -1) {
-			if (errno == EINVAL) {
-				/* Try to create file */
-				close (fd);
-				msg_info ("recreate cache file");
-				if ((fd =
-					open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR |
-					S_IRUSR)) == -1) {
-					msg_info ("cannot create file %s, error %d, %s",
-						filename,
-						errno,
-						strerror (errno));
-					return FALSE;
-				}
-				else {
-					return create_cache_file (cache, filename, fd, pool);
-				}
-			}
-			close (fd);
-			g_free (mem_sum);
-			g_checksum_free (cksum);
-			msg_err ("cannot seek to read checksum, %d, %s", errno,
-				strerror (errno));
-			return FALSE;
-		}
-		file_sum = g_malloc (cklen);
-		if (read (fd, file_sum, cklen) == -1) {
-			close (fd);
-			g_free (mem_sum);
-			g_free (file_sum);
-			g_checksum_free (cksum);
-			msg_err ("cannot read checksum, %d, %s", errno, strerror (errno));
-			return FALSE;
-		}
-
-		if (memcmp (file_sum, mem_sum, cklen) != 0) {
-			close (fd);
-			g_free (mem_sum);
-			g_free (file_sum);
-			g_checksum_free (cksum);
-			msg_info ("checksum mismatch, recreating file");
-			/* Reopen with rw permissions */
-			if ((fd =
-				open (filename, O_RDWR | O_TRUNC | O_CREAT, S_IWUSR |
-				S_IRUSR)) == -1) {
-				msg_info ("cannot create file %s, error %d, %s",
-					filename,
-					errno,
-					strerror (errno));
-				return FALSE;
-			}
-			else {
-				return create_cache_file (cache, filename, fd, pool);
-			}
-		}
-
-		g_free (mem_sum);
-		g_free (file_sum);
-		g_checksum_free (cksum);
-	}
-	/* MMap cache file and copy saved_cache structures */
-	res = mmap_cache_file (cache, fd, pool);
-
-	rspamd_mempool_add_destructor (pool,
-		(rspamd_mempool_destruct_t)free_cache,
-		cache);
+	/* Copy saved cache entries */
+	res = rspamd_symbols_cache_load_items (cache, cfg->cache_filename);
 
 	return res;
 }

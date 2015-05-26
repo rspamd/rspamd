@@ -31,57 +31,9 @@
 
 struct rspamd_task;
 struct rspamd_config;
+struct symbols_cache;
 
 typedef void (*symbol_func_t)(struct rspamd_task *task, gpointer user_data);
-
-struct saved_cache_item {
-	gchar symbol[MAX_SYMBOL];
-	double weight;
-	guint32 frequency;
-	double avg_time;
-};
-
-struct dynamic_map_item {
-	struct in_addr addr;
-	guint32 mask;
-	gboolean negative;
-};
-
-struct counter_data {
-	gdouble value;
-	gint number;
-};
-
-struct cache_item {
-	/* Static item's data */
-	struct saved_cache_item *s;
-	struct counter_data *cd;
-	gdouble weight;
-	guint32 frequency;
-	gdouble avg_time;
-
-	rspamd_mempool_mutex_t *mtx;
-
-	/* For dynamic rules */
-	struct dynamic_map_item *networks;
-	guint32 networks_number;
-	gboolean is_dynamic;
-
-	gboolean is_skipped;
-
-	/* Callback data */
-	symbol_func_t func;
-	gpointer user_data;
-
-	/* Flags of virtual symbols */
-	gboolean is_virtual;
-	gboolean is_callback;
-	gboolean is_ghost;
-
-	/* Priority */
-	gint priority;
-	gdouble metric_weight;
-};
 
 enum rspamd_symbol_type {
 	SYMBOL_TYPE_NORMAL,
@@ -89,33 +41,13 @@ enum rspamd_symbol_type {
 	SYMBOL_TYPE_CALLBACK
 };
 
-struct symbols_cache {
-	/* Normal cache items */
-	GList *static_items;
-
-	/* Items that have negative weights */
-	GList *negative_items;
-
-	/* Hash table for fast access */
-	GHashTable *items_by_symbol;
-
-	rspamd_mempool_t *static_pool;
-
-	guint cur_items;
-	guint used_items;
-	guint uses;
-	gpointer map;
-	struct rspamd_config *cfg;
-};
+struct symbols_cache* rspamd_symbols_cache_new (void);
 
 /**
  * Load symbols cache from file, must be called _after_ init_symbols_cache
  */
-gboolean init_symbols_cache (rspamd_mempool_t *pool,
-	struct symbols_cache *cache,
-	struct rspamd_config *cfg,
-	const gchar *filename,
-	gboolean ignore_checksum);
+gboolean init_symbols_cache (struct symbols_cache* cache,
+	struct rspamd_config *cfg);
 
 /**
  * Register function for symbols parsing
