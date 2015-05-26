@@ -29,29 +29,11 @@
 #include "mem_pool.h"
 
 struct rspamd_async_event;
+struct rspamd_async_session;
 
-typedef void (*event_finalizer_t)(void *user_data);
-typedef gboolean (*session_finalizer_t)(void *user_data);
-
-struct rspamd_async_event {
-	GQuark subsystem;
-	event_finalizer_t fin;
-	void *user_data;
-	guint ref;
-};
-
-struct rspamd_async_session {
-	session_finalizer_t fin;
-	event_finalizer_t restore;
-	event_finalizer_t cleanup;
-	GHashTable *events;
-	void *user_data;
-	rspamd_mempool_t *pool;
-	gboolean wanna_die;
-	guint threads;
-	GMutex *mtx;
-	GCond *cond;
-};
+typedef void (*event_finalizer_t)(gpointer ud);
+typedef void (*event_watcher_t)(guint remain, gboolean terminated, gpointer ud);
+typedef gboolean (*session_finalizer_t)(gpointer user_data);
 
 /**
  * Make new async session
@@ -64,7 +46,7 @@ struct rspamd_async_session {
  */
 struct rspamd_async_session * new_async_session (rspamd_mempool_t *pool,
 	session_finalizer_t fin, event_finalizer_t restore,
-	event_finalizer_t cleanup, void *user_data);
+	event_finalizer_t cleanup, gpointer user_data);
 
 /**
  * Insert new event to the session
@@ -74,7 +56,7 @@ struct rspamd_async_session * new_async_session (rspamd_mempool_t *pool,
  * @param forced unused
  */
 void register_async_event (struct rspamd_async_session *session,
-	event_finalizer_t fin, void *user_data, GQuark subsystem);
+	event_finalizer_t fin, gpointer user_data, GQuark subsystem);
 
 /**
  * Remove normal event
@@ -84,7 +66,7 @@ void register_async_event (struct rspamd_async_session *session,
  */
 void remove_normal_event (struct rspamd_async_session *session,
 	event_finalizer_t fin,
-	void *ud);
+	gpointer ud);
 
 /**
  * Must be called at the end of session, it calls fin functions for all non-forced callbacks
@@ -98,17 +80,5 @@ gboolean destroy_session (struct rspamd_async_session *session);
  * @return TRUE if session has pending events
  */
 gboolean check_session_pending (struct rspamd_async_session *session);
-
-/**
- * Add new async thread to session
- * @param session session object
- */
-void register_async_thread (struct rspamd_async_session *session);
-
-/**
- * Remove async thread from session and check whether session can be terminated
- * @param session session object
- */
-void remove_async_thread (struct rspamd_async_session *session);
 
 #endif /* RSPAMD_EVENTS_H */
