@@ -104,6 +104,7 @@ lua_util_load_rspamd_config (lua_State *L)
 	if (cfg_name) {
 		cfg = g_malloc0 (sizeof (struct rspamd_config));
 		rspamd_init_cfg (cfg, FALSE);
+		cfg->cache = rspamd_symbols_cache_new ();
 
 		if (rspamd_config_read (cfg, cfg_name, NULL, NULL, NULL)) {
 			msg_err ("cannot load config from %s", cfg_name);
@@ -111,7 +112,7 @@ lua_util_load_rspamd_config (lua_State *L)
 		}
 		else {
 			rspamd_config_post_load (cfg);
-			init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg, NULL, TRUE);
+			init_symbols_cache (cfg->cache, cfg);
 			pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
 			rspamd_lua_setclass (L, "rspamd{config}", -1);
 			*pcfg = cfg;
@@ -136,6 +137,7 @@ lua_util_config_from_ucl (lua_State *L)
 		rspamd_init_cfg (cfg, FALSE);
 		cfg->lua_state = L;
 		cfg->rcl_obj = obj;
+		cfg->cache = rspamd_symbols_cache_new ();
 		top = rspamd_rcl_config_init ();
 
 		if (!rspamd_rcl_parse (top, cfg, cfg->cfg_pool, cfg->rcl_obj, &err)) {
@@ -145,7 +147,7 @@ lua_util_config_from_ucl (lua_State *L)
 		}
 		else {
 			rspamd_config_post_load (cfg);
-			init_symbols_cache (cfg->cfg_pool, cfg->cache, cfg, NULL, TRUE);
+			init_symbols_cache (cfg->cache, cfg);
 			pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
 			rspamd_lua_setclass (L, "rspamd{config}", -1);
 			*pcfg = cfg;

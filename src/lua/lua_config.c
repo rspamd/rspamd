@@ -867,7 +867,7 @@ rspamd_register_symbol_fromlua (lua_State *L,
 		cd->L = L;
 		cd->symbol = rspamd_mempool_strdup (cfg->cfg_pool, name);
 
-		register_symbol_common (&cfg->cache,
+		register_symbol_common (cfg->cache,
 				name,
 				weight,
 				priority,
@@ -957,7 +957,7 @@ lua_config_register_symbols (lua_State *L)
 					lua_pushvalue (L, -2);
 					sym = rspamd_mempool_strdup (cfg->cfg_pool,
 							luaL_checkstring (L, -2));
-					register_virtual_symbol (&cfg->cache, sym, weight);
+					register_virtual_symbol (cfg->cache, sym, weight);
 					lua_pop (L, 2);
 				}
 				lua_pop (L, 1);
@@ -965,7 +965,7 @@ lua_config_register_symbols (lua_State *L)
 			else if (lua_type (L, i) == LUA_TSTRING) {
 				sym = rspamd_mempool_strdup (cfg->cfg_pool,
 						luaL_checkstring (L, i));
-				register_virtual_symbol (&cfg->cache, sym, weight);
+				register_virtual_symbol (cfg->cache, sym, weight);
 			}
 		}
 	}
@@ -984,7 +984,7 @@ lua_config_register_virtual_symbol (lua_State * L)
 		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
 		weight = luaL_checknumber (L, 3);
 		if (name) {
-			register_virtual_symbol (&cfg->cache, name, weight);
+			register_virtual_symbol (cfg->cache, name, weight);
 		}
 	}
 	return 0;
@@ -1157,7 +1157,7 @@ lua_config_add_composite (lua_State * L)
 						composite);
 
 				if (new) {
-					register_virtual_symbol (&cfg->cache, name, 1);
+					register_virtual_symbol (cfg->cache, name, 1);
 				}
 
 				ret = TRUE;
