@@ -25,6 +25,7 @@
 #include "config.h"
 #include "main.h"
 #include "events.h"
+#include "xxhash.h"
 
 #define RSPAMD_SESSION_FLAG_WATCHING (1 << 0)
 #define RSPAMD_SESSION_FLAG_DESTROYING (1 << 1)
@@ -73,10 +74,16 @@ rspamd_event_hash (gconstpointer a)
 {
 	const struct rspamd_async_event *ev = a;
 	XXH64_state_t st;
+	union {
+		event_finalizer_t f;
+		gpointer p;
+	} u;
+
+	u.f = ev->fin;
 
 	XXH64_reset (&st, rspamd_hash_seed ());
 	XXH64_update (&st, ev->user_data, sizeof (gpointer));
-	XXH64_update (&st, ev->fin, sizeof (*ev->fin));
+	XXH64_update (&st, &u, sizeof (u));
 
 	return XXH64_digest (&st);
 }
