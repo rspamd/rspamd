@@ -429,6 +429,8 @@ register_symbol_common (struct symbols_cache *cache,
 	}
 
 	g_hash_table_insert (cache->items_by_symbol, item->symbol, item);
+	item->id = cache->used_items;
+	cache->used_items ++;
 	msg_debug ("used items: %d, added symbol: %s", cache->used_items, name);
 	rspamd_set_counter (item, 0);
 
