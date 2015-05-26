@@ -89,14 +89,8 @@ rspamd_cryptobox_cpuid (gint cpu[4], gint info)
 # if defined(HAVE_GET_CPUID)
 	__get_cpuid (info, &cpu[0], &cpu[1], &cpu[2], &cpu[3]);
 # else
-	__asm__ __volatile__ (
-			"cpuid":
-			"=a" (cpu[0]),
-			"=b" (cpu[1]),
-			"=c" (cpu[2]),
-			"=d" (cpu[3]) :
-			"a" (info), "c" (0)
-	);
+	__asm ("cpuid" : "=a"(cpu[0]), "=b" (cpu[1]), "=c"(cpu[2]), "=d"(cpu[3])
+			: "0"(info));
 # endif
 #else
 	memset (cpu, 0, sizeof (cpu));
