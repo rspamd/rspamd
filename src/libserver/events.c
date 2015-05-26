@@ -27,8 +27,10 @@
 #include "events.h"
 
 #define RSPAMD_SESSION_FLAG_WATCHING (1 << 0)
+#define RSPAMD_SESSION_FLAG_DESTROYING (1 << 1)
 
 #define RSPAMD_SESSION_IS_WATCHING(s) ((s)->flags & RSPAMD_SESSION_FLAG_WATCHING)
+#define RSPAMD_SESSION_IS_DESTROYING(s) ((s)->flags & RSPAMD_SESSION_FLAG_DESTROYING)
 
 struct rspamd_async_watcher {
 	event_watcher_t cb;
@@ -153,12 +155,23 @@ remove_normal_event (struct rspamd_async_session *session,
 	search_ev.user_data = ud;
 	if ((found_ev =
 		g_hash_table_lookup (session->events, &search_ev)) != NULL) {
-		g_hash_table_remove (session->events, found_ev);
+
 		msg_debug ("removed event: %p, subsystem: %s, pending %d events", ud,
 			g_quark_to_string (found_ev->subsystem),
 			g_hash_table_size (session->events));
 		/* Remove event */
 		fin (ud);
+
+		/* Call watcher if needed */
+		if (found_ev->w) {
+			if (found_ev->w->remain > 0) {
+				if (--found_ev->w->remain == 0) {
+					found_ev->w->cb (found_ev->w->ud);
+				}
+			}
+		}
+
+		g_hash_table_remove (session->events, found_ev);
 	}
 
 	check_session_pending (session);
@@ -177,6 +190,8 @@ rspamd_session_destroy (gpointer k, gpointer v, gpointer unused)
 		ev->fin (ev->user_data);
 	}
 
+	/* We ignore watchers on session destroying */
+
 	return TRUE;
 }
 
@@ -188,6 +203,7 @@ destroy_session (struct rspamd_async_session *session)
 		return FALSE;
 	}
 
+	session->flags |= RSPAMD_SESSION_FLAG_DESTROYING;
 	g_hash_table_foreach_remove (session->events,
 		rspamd_session_destroy,
 		session);
@@ -195,6 +211,7 @@ destroy_session (struct rspamd_async_session *session)
 	if (session->cleanup != NULL) {
 		session->cleanup (session->user_data);
 	}
+
 	return TRUE;
 }
 

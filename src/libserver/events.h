@@ -32,7 +32,7 @@ struct rspamd_async_event;
 struct rspamd_async_session;
 
 typedef void (*event_finalizer_t)(gpointer ud);
-typedef void (*event_watcher_t)(guint remain, gboolean terminated, gpointer ud);
+typedef void (*event_watcher_t)(gpointer ud);
 typedef gboolean (*session_finalizer_t)(gpointer user_data);
 
 /**
