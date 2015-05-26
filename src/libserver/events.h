@@ -81,4 +81,23 @@ gboolean destroy_session (struct rspamd_async_session *session);
  */
 gboolean check_session_pending (struct rspamd_async_session *session);
 
+/**
+ * Start watching for events in the session, so the specified watcher will be added
+ * to all subsequent events until `rspamd_session_watch_stop` is called
+ * @param s session object
+ * @param cb watcher callback that is called when all events watched are destroyed
+ * @param ud opaque data for the callback
+ */
+void rspamd_session_watch_start (struct rspamd_async_session *s,
+		event_watcher_t cb,
+		gpointer ud);
+
+/**
+ * Stop watching mode, if no events are watched since the last `rspamd_session_watch_start`,
+ * then the watcher is silently ignored
+ * @param s session
+ * @return number of events watched
+ */
+guint rspamd_session_watch_stop (struct rspamd_async_session *s);
+
 #endif /* RSPAMD_EVENTS_H */

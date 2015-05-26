@@ -26,6 +26,10 @@
 #include "main.h"
 #include "events.h"
 
+#define RSPAMD_SESSION_FLAG_WATCHING (1 << 0)
+
+#define RSPAMD_SESSION_IS_WATCHING(s) ((s)->flags & RSPAMD_SESSION_FLAG_WATCHING)
+
 struct rspamd_async_watcher {
 	event_watcher_t cb;
 	guint remain;
@@ -116,7 +120,7 @@ register_async_event (struct rspamd_async_session *session,
 	new->user_data = user_data;
 	new->subsystem = subsystem;
 
-	if (session->cur_watcher) {
+	if (RSPAMD_SESSION_IS_WATCHING (session)) {
 		new->w = session->cur_watcher;
 		new->w->remain ++;
 	}
@@ -197,6 +201,8 @@ destroy_session (struct rspamd_async_session *session)
 gboolean
 check_session_pending (struct rspamd_async_session *session)
 {
+	gboolean ret = TRUE;
+
 	if (g_hash_table_size (session->events) == 0) {
 		if (session->fin != NULL) {
 			if (!session->fin (session->user_data)) {
@@ -206,15 +212,52 @@ check_session_pending (struct rspamd_async_session *session)
 					/* Call pending once more */
 					return check_session_pending (session);
 				}
-				return TRUE;
 			}
 			else {
-				return FALSE;
+				ret = FALSE;
 			}
 		}
 
-		return FALSE;
+		ret = FALSE;
 	}
 
-	return TRUE;
+	return ret;
+}
+
+void
+rspamd_session_watch_start (struct rspamd_async_session *s,
+		event_watcher_t cb,
+		gpointer ud)
+{
+	g_assert (s != NULL);
+	g_assert (!RSPAMD_SESSION_IS_WATCHING (s));
+
+	if (s->cur_watcher == NULL) {
+		s->cur_watcher = rspamd_mempool_alloc (s->pool, sizeof (*s->cur_watcher));
+	}
+
+	s->cur_watcher->cb = cb;
+	s->cur_watcher->remain = 0;
+	s->cur_watcher->ud = ud;
+	s->flags |= RSPAMD_SESSION_FLAG_WATCHING;
+}
+
+guint
+rspamd_session_watch_stop (struct rspamd_async_session *s)
+{
+	guint remain;
+
+	g_assert (s != NULL);
+	g_assert (RSPAMD_SESSION_IS_WATCHING (s));
+
+	remain = s->cur_watcher->remain;
+
+	if (remain > 0) {
+		/* Avoid reusing */
+		s->cur_watcher = NULL;
+	}
+
+	s->flags &= ~RSPAMD_SESSION_FLAG_WATCHING;
+
+	return remain;
 }
