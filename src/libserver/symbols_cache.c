@@ -52,6 +52,7 @@ struct rspamd_symbols_cache_header {
 struct symbols_cache {
 	/* Hash table for fast access */
 	GHashTable *items_by_symbol;
+	GPtrArray *items_by_order;
 	rspamd_mempool_t *static_pool;
 	guint cur_items;
 	guint used_items;
@@ -70,8 +71,9 @@ struct cache_item {
 	gdouble weight;
 	guint32 frequency;
 
-	/* Static item's data */
+	/* Per process counter */
 	struct counter_data *cd;
+	gchar *symbol;
 	enum rspamd_symbol_type type;
 
 	/* Callback data */
@@ -84,8 +86,6 @@ struct cache_item {
 	gint priority;
 	gint id;
 	gdouble metric_weight;
-
-	rspamd_mempool_mutex_t *mtx;
 };
 
 gint
@@ -137,16 +137,12 @@ rspamd_set_counter (struct cache_item *item, guint32 value)
 	struct counter_data *cd;
 	cd = item->cd;
 
-	/* Cumulative moving average */
-	rspamd_mempool_lock_mutex (item->mtx);
-
+	/* Cumulative moving average using per-process counter data */
 	if (cd->number == 0) {
 		cd->value = 0;
 	}
 
 	cd->value = cd->value + (value - cd->value) / (++cd->number);
-
-	rspamd_mempool_unlock_mutex (item->mtx);
 
 	return cd->value;
 }
@@ -345,7 +341,7 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 }
 
 void
-register_symbol_common (struct symbols_cache **cache,
+register_symbol_common (struct symbols_cache *cache,
 	const gchar *name,
 	double weight,
 	gint priority,
@@ -354,57 +350,44 @@ register_symbol_common (struct symbols_cache **cache,
 	enum rspamd_symbol_type type)
 {
 	struct cache_item *item = NULL;
-	struct symbols_cache *pcache = *cache;
 	GList **target, *cur;
 	struct metric *m;
 	struct rspamd_symbol_def *s;
 	gboolean skipped, ghost = (weight == 0.0);
 
-	if (*cache == NULL) {
-	}
+	g_assert (cache != NULL);
 
-	item = rspamd_mempool_alloc0 (pcache->static_pool,
+	item = rspamd_mempool_alloc0_shared (cache->static_pool,
 			sizeof (struct cache_item));
-	item->s =
-		rspamd_mempool_alloc0_shared (pcache->static_pool,
-			sizeof (struct saved_cache_item));
-	item->cd = rspamd_mempool_alloc0_shared (pcache->static_pool,
+	/*
+	 * We do not share cd to skip locking, instead we'll just calculate it on
+	 * save or accumulate
+	 */
+	item->cd = rspamd_mempool_alloc0 (cache->static_pool,
 			sizeof (struct counter_data));
 
-	item->mtx = rspamd_mempool_get_mutex (pcache->static_pool);
-
-	rspamd_strlcpy (item->s->symbol, name, sizeof (item->s->symbol));
+	item->symbol = rspamd_mempool_strdup (cache->static_pool, name);
 	item->func = func;
 	item->user_data = user_data;
 	item->priority = priority;
-
-	switch (type) {
-	case SYMBOL_TYPE_NORMAL:
-		break;
-	case SYMBOL_TYPE_VIRTUAL:
-		item->is_virtual = TRUE;
-		break;
-	case SYMBOL_TYPE_CALLBACK:
-		item->is_callback = TRUE;
-		break;
-	}
+	item->type = type;
 
 	/* Handle weight using default metric */
-	if (pcache->cfg && pcache->cfg->default_metric &&
+	if (cache->cfg && cache->cfg->default_metric &&
 		(s =
-		g_hash_table_lookup (pcache->cfg->default_metric->symbols,
+		g_hash_table_lookup (cache->cfg->default_metric->symbols,
 		name)) != NULL) {
-		item->s->weight = weight * (*s->weight_ptr);
+		item->weight = weight * (*s->weight_ptr);
 	}
 	else {
-		item->s->weight = weight;
+		item->weight = weight;
 	}
 
 	/* Check whether this item is skipped */
 	skipped = !ghost;
-	if (!ghost && !item->is_callback && pcache->cfg &&
-			g_hash_table_lookup (pcache->cfg->metrics_symbols, name) == NULL) {
-		cur = g_list_first (pcache->cfg->metrics_list);
+	if (item->type == SYMBOL_TYPE_NORMAL &&
+			g_hash_table_lookup (cache->cfg->metrics_symbols, name) == NULL) {
+		cur = g_list_first (cache->cfg->metrics_list);
 		while (cur) {
 			m = cur->data;
 
@@ -412,18 +395,16 @@ register_symbol_common (struct symbols_cache **cache,
 				GList *mlist;
 
 				skipped = FALSE;
-
-				item->s->weight = weight * (m->unknown_weight);
-				s = rspamd_mempool_alloc0 (pcache->static_pool,
+				item->weight = weight * (m->unknown_weight);
+				s = rspamd_mempool_alloc0 (cache->static_pool,
 						sizeof (*s));
-				s->name = item->s->symbol;
-				s->weight_ptr = &item->s->weight;
-				g_hash_table_insert (m->symbols, item->s->symbol,
-						s);
-				mlist = g_hash_table_lookup (pcache->cfg->metrics_symbols, name);
+				s->name = item->symbol;
+				s->weight_ptr = &item->weight;
+				g_hash_table_insert (m->symbols, item->symbol, s);
+				mlist = g_hash_table_lookup (cache->cfg->metrics_symbols, name);
 				mlist = g_list_prepend (mlist, m);
-				g_hash_table_insert (pcache->cfg->metrics_symbols,
-						item->s->symbol, mlist);
+				g_hash_table_insert (cache->cfg->metrics_symbols,
+						item->symbol, mlist);
 
 				msg_info ("adding unknown symbol %s to metric %s", name,
 						m->name);
@@ -436,10 +417,8 @@ register_symbol_common (struct symbols_cache **cache,
 		skipped = FALSE;
 	}
 
-	item->is_skipped = skipped;
-	item->is_ghost = ghost;
-
 	if (skipped) {
+		item->type = SYMBOL_TYPE_SKIPPED;
 		msg_warn ("symbol %s is not registered in any metric, so skip its check",
 				name);
 	}
@@ -449,28 +428,8 @@ register_symbol_common (struct symbols_cache **cache,
 				"to any metric", name);
 	}
 
-	/* If we have undefined priority determine list according to weight */
-	if (priority == 0) {
-		if (item->s->weight >= 0) {
-			target = &(*cache)->static_items;
-		}
-		else {
-			target = &(*cache)->negative_items;
-		}
-	}
-	else {
-		/* Items with more priority are called before items with less priority */
-		if (priority < 0) {
-			target = &(*cache)->negative_items;
-		}
-		else {
-			target = &(*cache)->static_items;
-		}
-	}
-
-	pcache->used_items++;
-	g_hash_table_insert (pcache->items_by_symbol, item->s->symbol, item);
-	msg_debug ("used items: %d, added symbol: %s", (*cache)->used_items, name);
+	g_hash_table_insert (cache->items_by_symbol, item->symbol, item);
+	msg_debug ("used items: %d, added symbol: %s", cache->used_items, name);
 	rspamd_set_counter (item, 0);
 
 	*target = g_list_prepend (*target, item);
