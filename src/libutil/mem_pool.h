@@ -93,7 +93,6 @@ typedef struct memory_pool_s {
 	struct _pool_chain_shared *shared_pool; /**< shared chain							*/
 	struct _pool_destructors *destructors;  /**< destructors chain						*/
 	GHashTable *variables;                  /**< private memory pool variables			*/
-	struct rspamd_mutex_s *mtx;             /**< threads lock							*/
 } rspamd_mempool_t;
 
 /**
