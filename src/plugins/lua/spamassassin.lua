@@ -500,7 +500,7 @@ local function calculate_score(sym, rule)
     return 0.0
   end
   
-  if rule['nice'] or (r['score'] and r['score'] < 0.0) then
+  if rule['nice'] or (rule['score'] and rule['score'] < 0.0) then
     return -1.0
   end
   
