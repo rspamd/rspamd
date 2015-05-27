@@ -618,19 +618,9 @@ call_symbol_callback (struct rspamd_task * task,
 	double t1, t2;
 	guint64 diff;
 	struct cache_item *item = NULL;
-	guint *s = *save;
-	guint idx;
+	guintptr idx = GPOINTER_TO_UINT (*save);
 
 	g_assert (cache != NULL);
-
-	if (s == NULL) {
-		s =
-			rspamd_mempool_alloc0 (task->task_pool,
-				sizeof (gpointer));
-		*save = s;
-	}
-
-	idx = GPOINTER_TO_INT (s);
 
 	if (idx >= cache->used_items) {
 		/* All symbols are processed */
@@ -662,8 +652,7 @@ call_symbol_callback (struct rspamd_task * task,
 	}
 
 	idx ++;
-	s = GINT_TO_POINTER (idx);
-	*save = s;
+	*save = GUINT_TO_POINTER (idx);
 
 	return TRUE;
 
