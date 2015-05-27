@@ -26,6 +26,7 @@
 #define RSPAMD_SYMBOLS_CACHE_H
 
 #include "config.h"
+#include "ucl.h"
 
 #define MAX_SYMBOL 128
 
@@ -152,5 +153,11 @@ gboolean validate_cache (struct symbols_cache *cache,
 	struct rspamd_config *cfg,
 	gboolean strict);
 
+/**
+ * Return statistics about the cache as ucl object (array of objects one per item)
+ * @param cache
+ * @return
+ */
+ucl_object_t *rspamd_symbols_cache_counters (struct symbols_cache * cache);
 
 #endif

@@ -655,5 +655,38 @@ call_symbol_callback (struct rspamd_task * task,
 	*save = GUINT_TO_POINTER (idx);
 
 	return TRUE;
+}
 
+static void
+rspamd_symbols_cache_counters_cb (gpointer k, gpointer v, gpointer ud)
+{
+	ucl_object_t *obj, *top = ud;
+	struct cache_item *item = v;
+
+	if (item->type != SYMBOL_TYPE_CALLBACK) {
+		obj = ucl_object_typed_new (UCL_OBJECT);
+		ucl_object_insert_key (obj, ucl_object_fromstring (item->symbol),
+				"symbol", 0, false);
+		ucl_object_insert_key (obj, ucl_object_fromdouble (item->weight),
+				"weight", 0, false);
+		ucl_object_insert_key (obj, ucl_object_fromint (item->frequency),
+				"frequency", 0, false);
+		ucl_object_insert_key (obj, ucl_object_fromdouble (item->avg_time),
+				"time", 0, false);
+
+		ucl_array_append (top, obj);
+	}
+}
+
+ucl_object_t *
+rspamd_symbols_cache_counters (struct symbols_cache * cache)
+{
+	ucl_object_t *top;
+
+	g_assert (cache != NULL);
+	top = ucl_object_typed_new (UCL_ARRAY);
+	g_hash_table_foreach (cache->items_by_symbol,
+			rspamd_symbols_cache_counters_cb, top);
+
+	return top;
 }

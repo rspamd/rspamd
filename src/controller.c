@@ -1580,26 +1580,6 @@ rspamd_controller_handle_statreset (
 	return rspamd_controller_handle_stat_common (conn_ent, msg, TRUE);
 }
 
-#if 0
-/* XXX: restore counters */
-static ucl_object_t *
-rspamd_controller_cache_item_to_ucl (struct cache_item *item)
-{
-	ucl_object_t *obj;
-
-	obj = ucl_object_typed_new (UCL_OBJECT);
-	ucl_object_insert_key (obj, ucl_object_fromstring (item->s->symbol),
-		"symbol", 0, false);
-	ucl_object_insert_key (obj, ucl_object_fromdouble (item->s->weight),
-		"weight", 0, false);
-	ucl_object_insert_key (obj,	   ucl_object_fromint (item->s->frequency),
-		"frequency", 0, false);
-	ucl_object_insert_key (obj, ucl_object_fromdouble (item->s->avg_time),
-		"time", 0, false);
-
-	return obj;
-}
-#endif
 
 /*
  * Counters command handler:
@@ -1623,32 +1603,15 @@ rspamd_controller_handle_counters (
 	}
 
 	cache = session->ctx->cfg->cache;
-	top = ucl_object_typed_new (UCL_ARRAY);
+
 	if (cache != NULL) {
-#if 0
-/* XXX: restore counters */
-		cur = cache->negative_items;
-		while (cur) {
-			item = cur->data;
-			if (!item->is_callback) {
-				ucl_array_append (top, rspamd_controller_cache_item_to_ucl (
-						item));
-			}
-			cur = g_list_next (cur);
-		}
-		cur = cache->static_items;
-		while (cur) {
-			item = cur->data;
-			if (!item->is_callback) {
-				ucl_array_append (top, rspamd_controller_cache_item_to_ucl (
-						item));
-			}
-			cur = g_list_next (cur);
-		}
-#endif
+		top = rspamd_symbols_cache_counters (cache);
+		rspamd_controller_send_ucl (conn_ent, top);
+		ucl_object_unref (top);
 	}
-	rspamd_controller_send_ucl (conn_ent, top);
-	ucl_object_unref (top);
+	else {
+		rspamd_controller_send_error (conn_ent, 500, "Invalid cache");
+	}
 
 	return 0;
 }
