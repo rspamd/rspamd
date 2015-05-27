@@ -151,14 +151,14 @@ spf_module_config (struct rspamd_config *cfg)
 		}
 	}
 
-	register_symbol (cfg->cache,
+	rspamd_symbols_cache_add_symbol_normal (cfg->cache,
 		spf_module_ctx->symbol_fail,
 		1,
 		spf_symbol_callback,
 		NULL);
-	register_virtual_symbol (cfg->cache, spf_module_ctx->symbol_softfail, 1);
-	register_virtual_symbol (cfg->cache, spf_module_ctx->symbol_neutral,  1);
-	register_virtual_symbol (cfg->cache, spf_module_ctx->symbol_allow,	   1);
+	rspamd_symbols_cache_add_symbol_virtual (cfg->cache, spf_module_ctx->symbol_softfail, 1);
+	rspamd_symbols_cache_add_symbol_virtual (cfg->cache, spf_module_ctx->symbol_neutral,  1);
+	rspamd_symbols_cache_add_symbol_virtual (cfg->cache, spf_module_ctx->symbol_allow,	   1);
 
 	spf_module_ctx->spf_hash = rspamd_lru_hash_new (
 			cache_size,

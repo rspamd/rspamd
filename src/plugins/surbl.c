@@ -314,18 +314,18 @@ register_bit_symbols (struct rspamd_config *cfg, struct suffix_item *suffix)
 
 		while (g_hash_table_iter_next (&it, &k, &v)) {
 			bit = v;
-			register_virtual_symbol (cfg->cache, bit->symbol, 1);
+			rspamd_symbols_cache_add_symbol_virtual (cfg->cache, bit->symbol, 1);
 			msg_debug ("bit: %d", bit->bit);
 		}
 	}
 	else if (suffix->bits != NULL) {
 		for (i = 0; i < suffix->bits->len; i++) {
 			bit = &g_array_index (suffix->bits, struct surbl_bit_item, i);
-			register_virtual_symbol (cfg->cache, bit->symbol, 1);
+			rspamd_symbols_cache_add_symbol_virtual (cfg->cache, bit->symbol, 1);
 		}
 	}
 	else {
-		register_virtual_symbol (cfg->cache, suffix->symbol, 1);
+		rspamd_symbols_cache_add_symbol_virtual (cfg->cache, suffix->symbol, 1);
 	}
 }
 
@@ -361,7 +361,7 @@ surbl_module_config (struct rspamd_config *cfg)
 		rspamd_config_get_module_opt (cfg, "surbl",
 		"redirector_symbol")) != NULL) {
 		surbl_module_ctx->redirector_symbol = ucl_obj_tostring (value);
-		register_virtual_symbol (cfg->cache,
+		rspamd_symbols_cache_add_symbol_virtual (cfg->cache,
 			surbl_module_ctx->redirector_symbol,
 			1.0);
 	}
@@ -553,7 +553,7 @@ surbl_module_config (struct rspamd_config *cfg)
 			surbl_module_ctx->suffixes = g_list_prepend (
 				surbl_module_ctx->suffixes,
 				new_suffix);
-			register_callback_symbol (cfg->cache,
+			rspamd_symbols_cache_add_symbol_callback (cfg->cache,
 				new_suffix->symbol,
 				1,
 				surbl_test_url,

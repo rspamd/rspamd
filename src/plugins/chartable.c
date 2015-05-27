@@ -100,7 +100,7 @@ chartable_module_config (struct rspamd_config *cfg)
 		chartable_module_ctx->threshold = DEFAULT_THRESHOLD;
 	}
 
-	register_symbol (cfg->cache,
+	rspamd_symbols_cache_add_symbol_normal (cfg->cache,
 		chartable_module_ctx->symbol,
 		1,
 		chartable_symbol_callback,

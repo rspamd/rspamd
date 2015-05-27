@@ -680,7 +680,7 @@ symbols_classifiers_callback (gpointer key, gpointer value, gpointer ud)
 {
 	struct rspamd_config *cfg = ud;
 
-	register_virtual_symbol (cfg->cache, key, 1.0);
+	rspamd_symbols_cache_add_symbol_virtual (cfg->cache, key, 1.0);
 }
 
 void

@@ -306,7 +306,7 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 }
 
 void
-register_symbol_common (struct symbols_cache *cache,
+rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	const gchar *name,
 	double weight,
 	gint priority,
@@ -352,10 +352,10 @@ register_symbol_common (struct symbols_cache *cache,
 }
 
 void
-register_symbol (struct symbols_cache *cache, const gchar *name, double weight,
+rspamd_symbols_cache_add_symbol_normal (struct symbols_cache *cache, const gchar *name, double weight,
 	symbol_func_t func, gpointer user_data)
 {
-	register_symbol_common (cache,
+	rspamd_symbols_cache_add_symbol (cache,
 		name,
 		weight,
 		0,
@@ -365,11 +365,11 @@ register_symbol (struct symbols_cache *cache, const gchar *name, double weight,
 }
 
 void
-register_virtual_symbol (struct symbols_cache *cache,
+rspamd_symbols_cache_add_symbol_virtual (struct symbols_cache *cache,
 	const gchar *name,
 	double weight)
 {
-	register_symbol_common (cache,
+	rspamd_symbols_cache_add_symbol (cache,
 		name,
 		weight,
 		0,
@@ -379,13 +379,13 @@ register_virtual_symbol (struct symbols_cache *cache,
 }
 
 void
-register_callback_symbol (struct symbols_cache *cache,
+rspamd_symbols_cache_add_symbol_callback (struct symbols_cache *cache,
 	const gchar *name,
 	double weight,
 	symbol_func_t func,
 	gpointer user_data)
 {
-	register_symbol_common (cache,
+	rspamd_symbols_cache_add_symbol (cache,
 		name,
 		weight,
 		0,
@@ -395,14 +395,14 @@ register_callback_symbol (struct symbols_cache *cache,
 }
 
 void
-register_callback_symbol_priority (struct symbols_cache *cache,
+rspamd_symbols_cache_add_symbol_callback_prio (struct symbols_cache *cache,
 	const gchar *name,
 	double weight,
 	gint priority,
 	symbol_func_t func,
 	gpointer user_data)
 {
-	register_symbol_common (cache,
+	rspamd_symbols_cache_add_symbol (cache,
 		name,
 		weight,
 		priority,
@@ -448,7 +448,7 @@ rspamd_symbols_cache_new (void)
 }
 
 gboolean
-init_symbols_cache (struct symbols_cache* cache,
+rspamd_symbols_cache_init (struct symbols_cache* cache,
 		struct rspamd_config *cfg)
 {
 	gboolean res;
@@ -563,7 +563,7 @@ rspamd_symbols_cache_metric_validate_cb (gpointer k, gpointer v, gpointer ud)
 }
 
 gboolean
-validate_cache (struct symbols_cache *cache,
+rspamd_symbols_cache_validate (struct symbols_cache *cache,
 	struct rspamd_config *cfg,
 	gboolean strict)
 {
@@ -611,7 +611,7 @@ validate_cache (struct symbols_cache *cache,
 }
 
 gboolean
-call_symbol_callback (struct rspamd_task * task,
+rspamd_symbols_cache_process_symbol (struct rspamd_task * task,
 	struct symbols_cache * cache,
 	gpointer *save)
 {

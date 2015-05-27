@@ -391,7 +391,7 @@ reread_config (struct rspamd_main *rspamd)
 		}
 
 		rspamd_init_filters (rspamd->cfg, TRUE);
-		init_symbols_cache (rspamd->cfg->cache, rspamd->cfg);
+		rspamd_symbols_cache_init (rspamd->cfg->cache, rspamd->cfg);
 		msg_info ("config has been reread successfully");
 	}
 }
@@ -1138,7 +1138,7 @@ main (gint argc, gchar **argv, gchar **env)
 		/* Insert classifiers symbols */
 		(void)rspamd_config_insert_classify_symbols (rspamd_main->cfg);
 
-		if (!validate_cache (rspamd_main->cfg->cache, rspamd_main->cfg,
+		if (!rspamd_symbols_cache_validate (rspamd_main->cfg->cache, rspamd_main->cfg,
 			FALSE)) {
 			res = FALSE;
 		}
@@ -1197,10 +1197,10 @@ main (gint argc, gchar **argv, gchar **env)
 	setproctitle ("main process");
 
 	/* Init config cache */
-	init_symbols_cache (rspamd_main->cfg->cache, rspamd_main->cfg);
+	rspamd_symbols_cache_init (rspamd_main->cfg->cache, rspamd_main->cfg);
 
 	/* Validate cache */
-	(void)validate_cache (rspamd_main->cfg->cache, rspamd_main->cfg, FALSE);
+	(void)rspamd_symbols_cache_validate (rspamd_main->cfg->cache, rspamd_main->cfg, FALSE);
 
 	/* Flush log */
 	rspamd_log_flush (rspamd_main->logger);

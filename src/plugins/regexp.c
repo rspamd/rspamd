@@ -142,7 +142,7 @@ regexp_module_config (struct rspamd_config *cfg)
 				res = FALSE;
 			}
 			else {
-				register_symbol (cfg->cache,
+				rspamd_symbols_cache_add_symbol_normal (cfg->cache,
 						cur_item->symbol,
 						1,
 						process_regexp_item,
@@ -154,7 +154,7 @@ regexp_module_config (struct rspamd_config *cfg)
 					sizeof (struct regexp_module_item));
 			cur_item->symbol = ucl_object_key (value);
 			cur_item->lua_function = ucl_object_toclosure (value);
-			register_symbol (cfg->cache,
+			rspamd_symbols_cache_add_symbol_normal (cfg->cache,
 				cur_item->symbol,
 				1,
 				process_regexp_item,

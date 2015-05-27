@@ -414,7 +414,7 @@ rspamd_process_filters (struct rspamd_task *task)
 	}
 
 	/* Process metrics symbols */
-	while (call_symbol_callback (task, task->cfg->cache, &item)) {
+	while (rspamd_symbols_cache_process_symbol (task, task->cfg->cache, &item)) {
 		/* Check reject actions */
 		cur = task->cfg->metrics_list;
 		while (cur) {

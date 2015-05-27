@@ -59,7 +59,7 @@ void rspamd_symbols_cache_destroy (struct symbols_cache *cache);
 /**
  * Load symbols cache from file, must be called _after_ init_symbols_cache
  */
-gboolean init_symbols_cache (struct symbols_cache* cache,
+gboolean rspamd_symbols_cache_init (struct symbols_cache* cache,
 	struct rspamd_config *cfg);
 
 /**
@@ -68,7 +68,7 @@ gboolean init_symbols_cache (struct symbols_cache* cache,
  * @param func pointer to handler
  * @param user_data pointer to user_data
  */
-void register_symbol (struct symbols_cache *cache,
+void rspamd_symbols_cache_add_symbol_normal (struct symbols_cache *cache,
 	const gchar *name,
 	double weight,
 	symbol_func_t func,
@@ -79,7 +79,7 @@ void register_symbol (struct symbols_cache *cache,
  * Register virtual symbol
  * @param name name of symbol
  */
-void register_virtual_symbol (struct symbols_cache *cache,
+void rspamd_symbols_cache_add_symbol_virtual (struct symbols_cache *cache,
 	const gchar *name,
 	double weight);
 
@@ -89,7 +89,7 @@ void register_virtual_symbol (struct symbols_cache *cache,
  * @param func pointer to handler
  * @param user_data pointer to user_data
  */
-void register_callback_symbol (struct symbols_cache *cache,
+void rspamd_symbols_cache_add_symbol_callback (struct symbols_cache *cache,
 	const gchar *name,
 	double weight,
 	symbol_func_t func,
@@ -101,7 +101,7 @@ void register_callback_symbol (struct symbols_cache *cache,
  * @param func pointer to handler
  * @param user_data pointer to user_data
  */
-void register_callback_symbol_priority (struct symbols_cache *cache,
+void rspamd_symbols_cache_add_symbol_callback_prio (struct symbols_cache *cache,
 	const gchar *name,
 	double weight,
 	gint priority,
@@ -118,8 +118,7 @@ void register_callback_symbol_priority (struct symbols_cache *cache,
  * @param user_data
  * @param type
  */
-void
-register_symbol_common (struct symbols_cache *cache,
+void rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	const gchar *name,
 	double weight,
 	gint priority,
@@ -133,15 +132,9 @@ register_symbol_common (struct symbols_cache *cache,
  * @param cache symbols cache
  * @param saved_item pointer to currently saved item
  */
-gboolean call_symbol_callback (struct rspamd_task *task,
+gboolean rspamd_symbols_cache_process_symbol (struct rspamd_task *task,
 	struct symbols_cache *cache,
 	gpointer *save);
-
-/**
- * Remove all dynamic rules from cache
- * @param cache symbols cache
- */
-void remove_dynamic_rules (struct symbols_cache *cache);
 
 /**
  * Validate cache items agains theirs weights defined in metrics
@@ -149,7 +142,7 @@ void remove_dynamic_rules (struct symbols_cache *cache);
  * @param cfg configuration
  * @param strict do strict checks - symbols MUST be described in metrics
  */
-gboolean validate_cache (struct symbols_cache *cache,
+gboolean rspamd_symbols_cache_validate (struct symbols_cache *cache,
 	struct rspamd_config *cfg,
 	gboolean strict);
 
