@@ -261,7 +261,7 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 	gint fd;
 	bool ret;
 
-	fd = open (name, O_CREAT | O_TRUNC | O_WRONLY | O_EXCL, 00644);
+	fd = open (name, O_CREAT | O_TRUNC | O_WRONLY, 00644);
 
 	if (fd == -1) {
 		msg_info ("cannot open file %s, error %d, %s", name,
