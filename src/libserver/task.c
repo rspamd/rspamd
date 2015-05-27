@@ -355,10 +355,10 @@ rspamd_task_process (struct rspamd_task *task,
 	else {
 		rspamd_lua_call_pre_filters (task);
 		/* We want fin_task after pre filters are processed */
-		task->state = WAIT_PRE_FILTER;
+		if (rspamd_session_events_pending (task->s) != 0) {
+			task->state = WAIT_PRE_FILTER;
+		}
 	}
-
-	rspamd_session_pending (task->s);
 
 	return TRUE;
 }

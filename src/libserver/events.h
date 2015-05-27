@@ -82,6 +82,13 @@ gboolean rspamd_session_destroy (struct rspamd_async_session *session);
 gboolean rspamd_session_pending (struct rspamd_async_session *session);
 
 /**
+ * Returns number of events pending
+ * @param session
+ * @return
+ */
+guint rspamd_session_events_pending (struct rspamd_async_session *session);
+
+/**
  * Start watching for events in the session, so the specified watcher will be added
  * to all subsequent events until `rspamd_session_watch_stop` is called
  * @param s session object

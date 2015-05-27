@@ -284,3 +284,12 @@ rspamd_session_watch_stop (struct rspamd_async_session *s)
 
 	return remain;
 }
+
+
+guint
+rspamd_session_events_pending (struct rspamd_async_session *session)
+{
+	g_assert (session != NULL);
+
+	return g_hash_table_size (session->events);
+}

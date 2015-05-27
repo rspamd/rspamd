@@ -106,13 +106,13 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 
 	ctx = task->worker->ctx;
 
+	task->state = WRITE_REPLY;
+
 	if (!rspamd_protocol_handle_request (task, msg)) {
-		task->state = WRITE_REPLY;
 		return 0;
 	}
 
 	if (task->cmd == CMD_PING) {
-		task->state = WRITE_REPLY;
 		return 0;
 	}
 
@@ -120,14 +120,11 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 		msg_err ("got zero length body, cannot continue");
 		task->last_error = "message's body is empty";
 		task->error_code = RSPAMD_LENGTH_ERROR;
-		task->state = WRITE_REPLY;
+
 		return 0;
 	}
 
-
-	if (!rspamd_task_process (task, msg, chunk, len, TRUE)) {
-		task->state = WRITE_REPLY;
-	}
+	rspamd_task_process (task, msg, chunk, len, TRUE);
 
 	return 0;
 }
@@ -149,7 +146,7 @@ rspamd_worker_finish_handler (struct rspamd_http_connection *conn,
 {
 	struct rspamd_task *task = (struct rspamd_task *) conn->ud;
 
-	if (task->state == CLOSING_CONNECTION) {
+	if (task->state == CLOSING_CONNECTION || task->state == WRITING_REPLY) {
 		/* We are done here */
 		msg_debug ("normally closing connection from: %s",
 			rspamd_inet_address_to_string (task->client_addr));
@@ -163,16 +160,6 @@ rspamd_worker_finish_handler (struct rspamd_http_connection *conn,
 		 */
 		msg_debug ("want write message to the wire: %s",
 			rspamd_inet_address_to_string (task->client_addr));
-		rspamd_protocol_write_reply (task);
-		/* Forcefully set the state */
-		task->state = CLOSING_CONNECTION;
-	}
-	else if (task->state == WRITING_REPLY) {
-		msg_debug ("still writing reply to: %s",
-			rspamd_inet_address_to_string (task->client_addr));
-		task->state = CLOSING_CONNECTION;
-	}
-	else {
 		/*
 		 * If all filters have finished their tasks, this function will trigger
 		 * writing a reply.

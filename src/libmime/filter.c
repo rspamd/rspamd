@@ -431,7 +431,9 @@ rspamd_process_filters (struct rspamd_task *task)
 		}
 	}
 
-	task->state = WAIT_FILTER;
+	if (rspamd_session_events_pending (task->s) != 0) {
+		task->state = WAIT_FILTER;
+	}
 
 	return 1;
 }
