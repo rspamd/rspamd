@@ -87,7 +87,8 @@ struct cache_item {
 gint
 cache_logic_cmp (const void *p1, const void *p2)
 {
-	const struct cache_item *i1 = p1, *i2 = p2;
+	const struct cache_item *i1 = *(struct cache_item **)p1,
+			*i2 = *(struct cache_item **)p2;
 	double w1, w2;
 	double weight1, weight2;
 	double f1 = 0, f2 = 0, t1, t2;

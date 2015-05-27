@@ -797,9 +797,7 @@ static void
 init_cfg_cache (struct rspamd_config *cfg)
 {
 
-	if (!init_symbols_cache (cfg->cache, cfg)) {
-		exit (EXIT_FAILURE);
-	}
+	init_symbols_cache (cfg->cache, cfg);
 }
 
 static gint
