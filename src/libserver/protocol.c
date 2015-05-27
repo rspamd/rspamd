@@ -101,20 +101,6 @@
 
 static GList *custom_commands = NULL;
 
- static gchar *
- rspamd_protocol_header_dup (struct rspamd_task *task, GString *h)
- {
- 	gchar *res;
-
- 	g_assert (h != NULL);
- 	g_assert (h->len > 0);
-
- 	res = rspamd_mempool_alloc (task->task_pool, h->len + 1);
- 	rspamd_strlcpy (res, h->str, h->len + 1);
-
- 	return res;
- }
-
 /*
  * Remove <> from the fixed string and copy it to the pool
  */

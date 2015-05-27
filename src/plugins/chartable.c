@@ -60,8 +60,6 @@ struct chartable_ctx {
 };
 
 static struct chartable_ctx *chartable_module_ctx = NULL;
-
-static gint chartable_mime_filter (struct rspamd_task *task);
 static void chartable_symbol_callback (struct rspamd_task *task, void *unused);
 
 gint
@@ -102,7 +100,7 @@ chartable_module_config (struct rspamd_config *cfg)
 		chartable_module_ctx->threshold = DEFAULT_THRESHOLD;
 	}
 
-	register_symbol (&cfg->cache,
+	register_symbol (cfg->cache,
 		chartable_module_ctx->symbol,
 		1,
 		chartable_symbol_callback,

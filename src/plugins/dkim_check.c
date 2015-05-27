@@ -223,15 +223,15 @@ dkim_module_config (struct rspamd_config *cfg)
 			"trusted_only option is set and no trusted domains are defined; disabling dkim module completely as it is useless in this case");
 	}
 	else {
-		register_symbol (&cfg->cache,
+		register_symbol (cfg->cache,
 			dkim_module_ctx->symbol_reject,
 			1,
 			dkim_symbol_callback,
 			NULL);
-		register_virtual_symbol (&cfg->cache,
+		register_virtual_symbol (cfg->cache,
 			dkim_module_ctx->symbol_tempfail,
 			1);
-		register_virtual_symbol (&cfg->cache,
+		register_virtual_symbol (cfg->cache,
 			dkim_module_ctx->symbol_allow,
 			1);
 
