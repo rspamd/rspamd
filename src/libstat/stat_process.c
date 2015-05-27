@@ -168,6 +168,7 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 
 	while (cur) {
 		clcf = (struct rspamd_classifier_config *)cur->data;
+		st_list = NULL;
 
 		if (clcf->pre_callbacks != NULL) {
 			st_list = rspamd_lua_call_cls_pre_callbacks (clcf, task, FALSE,
