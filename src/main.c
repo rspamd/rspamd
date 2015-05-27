@@ -59,7 +59,6 @@ static struct rspamd_worker * fork_worker (struct rspamd_main *,
 	struct rspamd_worker_conf *);
 static gboolean load_rspamd_config (struct rspamd_config *cfg,
 	gboolean init_modules);
-static void init_cfg_cache (struct rspamd_config *cfg);
 
 sig_atomic_t do_restart = 0;
 sig_atomic_t do_reopen_log = 0;
@@ -368,6 +367,7 @@ reread_config (struct rspamd_main *rspamd)
 	rspamd_init_cfg (tmp_cfg, TRUE);
 	cfg_file = rspamd_mempool_strdup (tmp_cfg->cfg_pool,
 			rspamd->cfg->cfg_name);
+	tmp_cfg->cache = rspamd_symbols_cache_new ();
 	/* Save some variables */
 	tmp_cfg->cfg_name = cfg_file;
 
@@ -379,6 +379,7 @@ reread_config (struct rspamd_main *rspamd)
 	}
 	else {
 		msg_debug ("replacing config");
+		rspamd_symbols_cache_destroy (rspamd_main->cfg->cache);
 		rspamd_config_free (rspamd->cfg);
 		g_free (rspamd->cfg);
 
@@ -390,7 +391,7 @@ reread_config (struct rspamd_main *rspamd)
 		}
 
 		rspamd_init_filters (rspamd->cfg, TRUE);
-		init_cfg_cache (rspamd->cfg);
+		init_symbols_cache (rspamd->cfg->cache, rspamd->cfg);
 		msg_info ("config has been reread successfully");
 	}
 }
@@ -791,13 +792,6 @@ load_rspamd_config (struct rspamd_config *cfg, gboolean init_modules)
 	}
 
 	return TRUE;
-}
-
-static void
-init_cfg_cache (struct rspamd_config *cfg)
-{
-
-	init_symbols_cache (cfg->cache, cfg);
 }
 
 static gint
@@ -1203,7 +1197,7 @@ main (gint argc, gchar **argv, gchar **env)
 	setproctitle ("main process");
 
 	/* Init config cache */
-	init_cfg_cache (rspamd_main->cfg);
+	init_symbols_cache (rspamd_main->cfg->cache, rspamd_main->cfg);
 
 	/* Validate cache */
 	(void)validate_cache (rspamd_main->cfg->cache, rspamd_main->cfg, FALSE);
@@ -1342,9 +1336,8 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	msg_info ("terminating...");
-
+	rspamd_symbols_cache_destroy (rspamd_main->cfg->cache);
 	rspamd_log_close (rspamd_main->logger);
-
 	rspamd_config_free (rspamd_main->cfg);
 	g_free (rspamd_main->cfg);
 	g_free (rspamd_main);
