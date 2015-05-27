@@ -314,10 +314,6 @@ register_symbol_common (struct symbols_cache *cache,
 	enum rspamd_symbol_type type)
 {
 	struct cache_item *item = NULL;
-	GList *cur;
-	struct metric *m;
-	struct rspamd_symbol_def *s;
-	gboolean skipped, ghost = (weight == 0.0);
 
 	g_assert (cache != NULL);
 
@@ -341,65 +337,9 @@ register_symbol_common (struct symbols_cache *cache,
 	item->priority = priority;
 	item->type = type;
 
-	/* Handle weight using default metric */
-	if (cache->cfg && cache->cfg->default_metric &&
-		(s =
-		g_hash_table_lookup (cache->cfg->default_metric->symbols,
-		name)) != NULL) {
-		item->weight = weight * (*s->weight_ptr);
-	}
-	else {
-		item->weight = weight;
-	}
-
 	if (item->weight < 0 && item->priority == 0) {
 		/* Make priority for negative weighted symbols */
 		item->priority = 1;
-	}
-
-	/* Check whether this item is skipped */
-	skipped = !ghost;
-	if (item->type == SYMBOL_TYPE_NORMAL &&
-			g_hash_table_lookup (cache->cfg->metrics_symbols, name) == NULL) {
-		cur = g_list_first (cache->cfg->metrics_list);
-		while (cur) {
-			m = cur->data;
-
-			if (m->accept_unknown_symbols) {
-				GList *mlist;
-
-				skipped = FALSE;
-				item->weight = weight * (m->unknown_weight);
-				s = rspamd_mempool_alloc0 (cache->static_pool,
-						sizeof (*s));
-				s->name = item->symbol;
-				s->weight_ptr = &item->weight;
-				g_hash_table_insert (m->symbols, item->symbol, s);
-				mlist = g_hash_table_lookup (cache->cfg->metrics_symbols, name);
-				mlist = g_list_prepend (mlist, m);
-				g_hash_table_insert (cache->cfg->metrics_symbols,
-						item->symbol, mlist);
-
-				msg_info ("adding unknown symbol %s to metric %s", name,
-						m->name);
-			}
-
-			cur = g_list_next (cur);
-		}
-	}
-	else {
-		skipped = FALSE;
-	}
-
-	if (skipped) {
-		item->type = SYMBOL_TYPE_SKIPPED;
-		msg_warn ("symbol %s is not registered in any metric, so skip its check",
-				name);
-	}
-
-	if (ghost) {
-		msg_debug ("symbol %s is registered as ghost symbol, it won't be inserted "
-				"to any metric", name);
 	}
 
 	item->id = cache->used_items;
@@ -501,6 +441,7 @@ rspamd_symbols_cache_new (void)
 			rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	cache->items_by_symbol = g_hash_table_new (rspamd_str_hash,
 			rspamd_str_equal);
+	cache->items_by_order = g_ptr_array_new ();
 
 	return cache;
 }
@@ -545,7 +486,66 @@ check_debug_symbol (struct rspamd_config *cfg, const gchar *symbol)
 }
 
 static void
-rspamd_symbols_cache_metric_cb (gpointer k, gpointer v, gpointer ud)
+rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
+{
+	struct cache_item *item = v;
+	struct symbols_cache *cache = (struct symbols_cache *)ud;
+	GList *cur;
+	struct metric *m;
+	struct rspamd_symbol_def *s;
+	gboolean skipped, ghost;
+
+	ghost = item->weight == 0 ? TRUE : FALSE;
+
+	/* Check whether this item is skipped */
+	skipped = !ghost;
+	if (item->type == SYMBOL_TYPE_NORMAL &&
+			g_hash_table_lookup (cache->cfg->metrics_symbols, item->symbol) == NULL) {
+		cur = g_list_first (cache->cfg->metrics_list);
+		while (cur) {
+			m = cur->data;
+
+			if (m->accept_unknown_symbols) {
+				GList *mlist;
+
+				skipped = FALSE;
+				item->weight = item->weight * (m->unknown_weight);
+				s = rspamd_mempool_alloc0 (cache->static_pool,
+						sizeof (*s));
+				s->name = item->symbol;
+				s->weight_ptr = &item->weight;
+				g_hash_table_insert (m->symbols, item->symbol, s);
+				mlist = g_hash_table_lookup (cache->cfg->metrics_symbols,
+						item->symbol);
+				mlist = g_list_prepend (mlist, m);
+				g_hash_table_insert (cache->cfg->metrics_symbols,
+						item->symbol, mlist);
+
+				msg_info ("adding unknown symbol %s to metric %s", item->symbol,
+						m->name);
+			}
+
+			cur = g_list_next (cur);
+		}
+	}
+	else {
+		skipped = FALSE;
+	}
+
+	if (skipped) {
+		item->type = SYMBOL_TYPE_SKIPPED;
+		msg_warn ("symbol %s is not registered in any metric, so skip its check",
+				item->symbol);
+	}
+
+	if (ghost) {
+		msg_debug ("symbol %s is registered as ghost symbol, it won't be inserted "
+				"to any metric", item->symbol);
+	}
+}
+
+static void
+rspamd_symbols_cache_metric_validate_cb (gpointer k, gpointer v, gpointer ud)
 {
 	struct symbols_cache *cache = (struct symbols_cache *)ud;
 	const gchar *sym = k;
@@ -574,6 +574,9 @@ validate_cache (struct symbols_cache *cache,
 		return FALSE;
 	}
 
+	g_hash_table_foreach (cache->items_by_symbol,
+			rspamd_symbols_cache_validate_cb,
+			cache);
 	/* Now check each metric item and find corresponding symbol in a cache */
 	metric_symbols = g_hash_table_get_keys (cfg->metrics_symbols);
 	cur = metric_symbols;
@@ -597,7 +600,7 @@ validate_cache (struct symbols_cache *cache,
 	/* Now adjust symbol weights according to default metric */
 	if (cfg->default_metric != NULL) {
 		g_hash_table_foreach (cfg->default_metric->symbols,
-			rspamd_symbols_cache_metric_cb,
+			rspamd_symbols_cache_metric_validate_cb,
 			cache);
 	}
 
