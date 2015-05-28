@@ -297,7 +297,7 @@ insert_result_common (struct rspamd_task *task,
 
 	/* Process cache item */
 	if (task->cfg->cache) {
-		/* XXX: increase frequency here */
+		rspamd_symbols_cache_inc_frequency (task->cfg->cache, symbol);
 	}
 
 	if (opts != NULL) {

@@ -865,3 +865,25 @@ rspamd_symbols_cache_start_refresh (struct symbols_cache * cache,
 	double_to_tv (tm, &tv);
 	event_add (&cache->resort_ev, &tv);
 }
+
+void
+rspamd_symbols_cache_inc_frequency (struct symbols_cache *cache,
+		const gchar *symbol)
+{
+	struct cache_item *item, *parent;
+
+	g_assert (cache != NULL);
+
+	item = g_hash_table_lookup (cache->items_by_symbol, symbol);
+
+	if (item != NULL) {
+		/* We assume ++ as atomic op */
+		item->frequency ++;
+
+		/* For virtual symbols we also increase counter for parent */
+		if (item->parent != -1) {
+			parent = g_ptr_array_index (cache->items_by_order, item->parent);
+			parent->frequency ++;
+		}
+	}
+}

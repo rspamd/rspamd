@@ -165,4 +165,12 @@ ucl_object_t *rspamd_symbols_cache_counters (struct symbols_cache * cache);
 void rspamd_symbols_cache_start_refresh (struct symbols_cache * cache,
 		struct event_base *ev_base);
 
+/**
+ * Increases counter for a specific symbol
+ * @param cache
+ * @param symbol
+ */
+void rspamd_symbols_cache_inc_frequency (struct symbols_cache *cache,
+		const gchar *symbol);
+
 #endif
