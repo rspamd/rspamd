@@ -305,7 +305,7 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 	return ret;
 }
 
-void
+gint
 rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	const gchar *name,
 	double weight,
@@ -320,7 +320,7 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 
 	if (g_hash_table_lookup (cache->items_by_symbol, name) != NULL) {
 		msg_err ("skip duplicate symbol registration for %s", name);
-		return;
+		return -1;
 	}
 
 	item = rspamd_mempool_alloc0_shared (cache->static_pool,
@@ -349,13 +349,15 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	rspamd_set_counter (item, 0);
 	g_hash_table_insert (cache->items_by_symbol, item->symbol, item);
 	g_ptr_array_add (cache->items_by_order, item);
+
+	return item->id;
 }
 
-void
+gint
 rspamd_symbols_cache_add_symbol_normal (struct symbols_cache *cache, const gchar *name, double weight,
 	symbol_func_t func, gpointer user_data)
 {
-	rspamd_symbols_cache_add_symbol (cache,
+	return rspamd_symbols_cache_add_symbol (cache,
 		name,
 		weight,
 		0,
@@ -364,12 +366,12 @@ rspamd_symbols_cache_add_symbol_normal (struct symbols_cache *cache, const gchar
 		SYMBOL_TYPE_NORMAL);
 }
 
-void
+gint
 rspamd_symbols_cache_add_symbol_virtual (struct symbols_cache *cache,
 	const gchar *name,
 	double weight)
 {
-	rspamd_symbols_cache_add_symbol (cache,
+	return rspamd_symbols_cache_add_symbol (cache,
 		name,
 		weight,
 		0,
@@ -378,14 +380,14 @@ rspamd_symbols_cache_add_symbol_virtual (struct symbols_cache *cache,
 		SYMBOL_TYPE_VIRTUAL);
 }
 
-void
+gint
 rspamd_symbols_cache_add_symbol_callback (struct symbols_cache *cache,
 	const gchar *name,
 	double weight,
 	symbol_func_t func,
 	gpointer user_data)
 {
-	rspamd_symbols_cache_add_symbol (cache,
+	return rspamd_symbols_cache_add_symbol (cache,
 		name,
 		weight,
 		0,
@@ -394,7 +396,7 @@ rspamd_symbols_cache_add_symbol_callback (struct symbols_cache *cache,
 		SYMBOL_TYPE_CALLBACK);
 }
 
-void
+gint
 rspamd_symbols_cache_add_symbol_callback_prio (struct symbols_cache *cache,
 	const gchar *name,
 	double weight,
@@ -402,7 +404,7 @@ rspamd_symbols_cache_add_symbol_callback_prio (struct symbols_cache *cache,
 	symbol_func_t func,
 	gpointer user_data)
 {
-	rspamd_symbols_cache_add_symbol (cache,
+	return rspamd_symbols_cache_add_symbol (cache,
 		name,
 		weight,
 		priority,

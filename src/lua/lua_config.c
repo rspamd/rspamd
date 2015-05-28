@@ -848,7 +848,7 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 	}
 }
 
-static void
+static gint
 rspamd_register_symbol_fromlua (lua_State *L,
 		struct rspamd_config *cfg,
 		const gchar *name,
@@ -858,6 +858,7 @@ rspamd_register_symbol_fromlua (lua_State *L,
 		enum rspamd_symbol_type type)
 {
 	struct lua_callback_data *cd;
+	gint ret = -1;
 
 	if (name) {
 		cd = rspamd_mempool_alloc0 (cfg->cfg_pool,
@@ -867,7 +868,7 @@ rspamd_register_symbol_fromlua (lua_State *L,
 		cd->L = L;
 		cd->symbol = rspamd_mempool_strdup (cfg->cfg_pool, name);
 
-		rspamd_symbols_cache_add_symbol (cfg->cache,
+		ret = rspamd_symbols_cache_add_symbol (cfg->cache,
 				name,
 				weight,
 				priority,
@@ -879,7 +880,7 @@ rspamd_register_symbol_fromlua (lua_State *L,
 				cd);
 	}
 
-
+	return ret;
 }
 
 static gint
@@ -888,6 +889,7 @@ lua_config_register_symbol (lua_State * L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	gchar *name;
 	double weight;
+	gint ret = -1;
 
 	if (cfg) {
 		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
@@ -900,7 +902,7 @@ lua_config_register_symbol (lua_State * L)
 			lua_pushvalue (L, 4);
 		}
 		if (name) {
-			rspamd_register_symbol_fromlua (L,
+			ret = rspamd_register_symbol_fromlua (L,
 					cfg,
 					name,
 					luaL_ref (L, LUA_REGISTRYINDEX),
@@ -910,14 +912,16 @@ lua_config_register_symbol (lua_State * L)
 		}
 	}
 
-	return 0;
+	lua_pushnumber (L, ret);
+
+	return 1;
 }
 
 static gint
 lua_config_register_symbols (lua_State *L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
-	gint i, top, idx;
+	gint i, top, idx, ret = -1;
 	gchar *sym;
 	gdouble weight = 1.0;
 
@@ -942,7 +946,7 @@ lua_config_register_symbols (lua_State *L)
 			top = 3;
 		}
 		sym = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, top ++));
-		rspamd_register_symbol_fromlua (L,
+		ret = rspamd_register_symbol_fromlua (L,
 				cfg,
 				sym,
 				idx,
@@ -970,7 +974,9 @@ lua_config_register_symbols (lua_State *L)
 		}
 	}
 
-	return 0;
+	lua_pushnumber (L, ret);
+
+	return 1;
 }
 
 static gint
@@ -979,15 +985,19 @@ lua_config_register_virtual_symbol (lua_State * L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	gchar *name;
 	double weight;
+	gint ret = -1;
 
 	if (cfg) {
 		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
 		weight = luaL_checknumber (L, 3);
 		if (name) {
-			rspamd_symbols_cache_add_symbol_virtual (cfg->cache, name, weight);
+			ret = rspamd_symbols_cache_add_symbol_virtual (cfg->cache, name, weight);
 		}
 	}
-	return 0;
+
+	lua_pushnumber (L, ret);
+
+	return 1;
 }
 
 static gint
@@ -996,6 +1006,7 @@ lua_config_register_callback_symbol (lua_State * L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	gchar *name;
 	double weight;
+	gint ret = -1;
 
 	if (cfg) {
 		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
@@ -1008,7 +1019,7 @@ lua_config_register_callback_symbol (lua_State * L)
 			lua_pushvalue (L, 4);
 		}
 		if (name) {
-			rspamd_register_symbol_fromlua (L,
+			ret = rspamd_register_symbol_fromlua (L,
 					cfg,
 					name,
 					luaL_ref (L, LUA_REGISTRYINDEX),
@@ -1018,7 +1029,9 @@ lua_config_register_callback_symbol (lua_State * L)
 		}
 	}
 
-	return 0;
+	lua_pushnumber (L, ret);
+
+	return 1;
 }
 
 static gint
@@ -1027,7 +1040,7 @@ lua_config_register_callback_symbol_priority (lua_State * L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	gchar *name;
 	double weight;
-	gint priority;
+	gint priority, ret = -1;
 
 	if (cfg) {
 		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
@@ -1041,7 +1054,7 @@ lua_config_register_callback_symbol_priority (lua_State * L)
 			lua_pushvalue (L, 5);
 		}
 		if (name) {
-			rspamd_register_symbol_fromlua (L,
+			ret = rspamd_register_symbol_fromlua (L,
 					cfg,
 					name,
 					luaL_ref (L, LUA_REGISTRYINDEX),
@@ -1051,7 +1064,9 @@ lua_config_register_callback_symbol_priority (lua_State * L)
 		}
 	}
 
-	return 0;
+	lua_pushnumber (L, ret);
+
+	return 1;
 }
 
 static gint

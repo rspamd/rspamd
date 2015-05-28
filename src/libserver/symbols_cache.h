@@ -68,7 +68,7 @@ gboolean rspamd_symbols_cache_init (struct symbols_cache* cache,
  * @param func pointer to handler
  * @param user_data pointer to user_data
  */
-void rspamd_symbols_cache_add_symbol_normal (struct symbols_cache *cache,
+gint rspamd_symbols_cache_add_symbol_normal (struct symbols_cache *cache,
 	const gchar *name,
 	double weight,
 	symbol_func_t func,
@@ -79,7 +79,7 @@ void rspamd_symbols_cache_add_symbol_normal (struct symbols_cache *cache,
  * Register virtual symbol
  * @param name name of symbol
  */
-void rspamd_symbols_cache_add_symbol_virtual (struct symbols_cache *cache,
+gint rspamd_symbols_cache_add_symbol_virtual (struct symbols_cache *cache,
 	const gchar *name,
 	double weight);
 
@@ -89,7 +89,7 @@ void rspamd_symbols_cache_add_symbol_virtual (struct symbols_cache *cache,
  * @param func pointer to handler
  * @param user_data pointer to user_data
  */
-void rspamd_symbols_cache_add_symbol_callback (struct symbols_cache *cache,
+gint rspamd_symbols_cache_add_symbol_callback (struct symbols_cache *cache,
 	const gchar *name,
 	double weight,
 	symbol_func_t func,
@@ -101,7 +101,7 @@ void rspamd_symbols_cache_add_symbol_callback (struct symbols_cache *cache,
  * @param func pointer to handler
  * @param user_data pointer to user_data
  */
-void rspamd_symbols_cache_add_symbol_callback_prio (struct symbols_cache *cache,
+gint rspamd_symbols_cache_add_symbol_callback_prio (struct symbols_cache *cache,
 	const gchar *name,
 	double weight,
 	gint priority,
@@ -118,7 +118,7 @@ void rspamd_symbols_cache_add_symbol_callback_prio (struct symbols_cache *cache,
  * @param user_data
  * @param type
  */
-void rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
+gint rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	const gchar *name,
 	double weight,
 	gint priority,
