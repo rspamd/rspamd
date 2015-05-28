@@ -861,26 +861,24 @@ rspamd_register_symbol_fromlua (lua_State *L,
 	struct lua_callback_data *cd;
 	gint ret = -1;
 
-	if (name) {
-		cd = rspamd_mempool_alloc0 (cfg->cfg_pool,
-				sizeof (struct lua_callback_data));
-		cd->cb_is_ref = TRUE;
-		cd->callback.ref = ref;
-		cd->L = L;
-		cd->symbol = rspamd_mempool_strdup (cfg->cfg_pool, name);
+	cd = rspamd_mempool_alloc0 (cfg->cfg_pool,
+			sizeof (struct lua_callback_data));
+	cd->cb_is_ref = TRUE;
+	cd->callback.ref = ref;
+	cd->L = L;
+	cd->symbol = rspamd_mempool_strdup (cfg->cfg_pool, name);
 
-		ret = rspamd_symbols_cache_add_symbol (cfg->cache,
-				name,
-				weight,
-				priority,
-				lua_metric_symbol_callback,
-				cd,
-				type,
-				parent);
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-				(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
-				cd);
-	}
+	ret = rspamd_symbols_cache_add_symbol (cfg->cache,
+			name,
+			weight,
+			priority,
+			lua_metric_symbol_callback,
+			cd,
+			type,
+			parent);
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
+			cd);
 
 	return ret;
 }
