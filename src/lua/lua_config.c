@@ -855,7 +855,8 @@ rspamd_register_symbol_fromlua (lua_State *L,
 		gint ref,
 		gdouble weight,
 		gint priority,
-		enum rspamd_symbol_type type)
+		enum rspamd_symbol_type type,
+		gint parent)
 {
 	struct lua_callback_data *cd;
 	gint ret = -1;
@@ -874,7 +875,8 @@ rspamd_register_symbol_fromlua (lua_State *L,
 				priority,
 				lua_metric_symbol_callback,
 				cd,
-				type);
+				type,
+				parent);
 		rspamd_mempool_add_destructor (cfg->cfg_pool,
 				(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
 				cd);
@@ -908,7 +910,8 @@ lua_config_register_symbol (lua_State * L)
 					luaL_ref (L, LUA_REGISTRYINDEX),
 					weight,
 					0,
-					SYMBOL_TYPE_NORMAL);
+					SYMBOL_TYPE_NORMAL,
+					-1);
 		}
 	}
 
@@ -922,7 +925,7 @@ lua_config_register_symbols (lua_State *L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	gint i, top, idx, ret = -1;
-	gchar *sym;
+	const gchar *sym;
 	gdouble weight = 1.0;
 
 	if (lua_gettop (L) < 3) {
@@ -945,31 +948,32 @@ lua_config_register_symbols (lua_State *L)
 		else {
 			top = 3;
 		}
-		sym = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, top ++));
+		sym = luaL_checkstring (L, top ++);
 		ret = rspamd_register_symbol_fromlua (L,
 				cfg,
 				sym,
 				idx,
 				weight,
 				0,
-				SYMBOL_TYPE_CALLBACK);
+				SYMBOL_TYPE_CALLBACK,
+				-1);
 		for (i = top; i <= lua_gettop (L); i++) {
 			if (lua_type (L, i) == LUA_TTABLE) {
 				lua_pushvalue (L, i);
 				lua_pushnil (L);
 				while (lua_next (L, -2)) {
 					lua_pushvalue (L, -2);
-					sym = rspamd_mempool_strdup (cfg->cfg_pool,
-							luaL_checkstring (L, -2));
-					rspamd_symbols_cache_add_symbol_virtual (cfg->cache, sym, weight);
+					sym = luaL_checkstring (L, -2);
+					rspamd_symbols_cache_add_symbol_virtual (cfg->cache, sym,
+							weight, ret);
 					lua_pop (L, 2);
 				}
 				lua_pop (L, 1);
 			}
 			else if (lua_type (L, i) == LUA_TSTRING) {
-				sym = rspamd_mempool_strdup (cfg->cfg_pool,
-						luaL_checkstring (L, i));
-				rspamd_symbols_cache_add_symbol_virtual (cfg->cache, sym, weight);
+				sym = luaL_checkstring (L, i);
+				rspamd_symbols_cache_add_symbol_virtual (cfg->cache, sym,
+						weight, ret);
 			}
 		}
 	}
@@ -983,15 +987,21 @@ static gint
 lua_config_register_virtual_symbol (lua_State * L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
-	gchar *name;
+	const gchar *name;
 	double weight;
-	gint ret = -1;
+	gint ret = -1, parent = -1;
 
 	if (cfg) {
-		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
+		name = luaL_checkstring (L, 2);
 		weight = luaL_checknumber (L, 3);
+
+		if (lua_gettop (L) > 3) {
+			parent = lua_tonumber (L, 4);
+		}
+
 		if (name) {
-			ret = rspamd_symbols_cache_add_symbol_virtual (cfg->cache, name, weight);
+			ret = rspamd_symbols_cache_add_symbol_virtual (cfg->cache, name,
+					weight, parent);
 		}
 	}
 
@@ -1004,29 +1014,33 @@ static gint
 lua_config_register_callback_symbol (lua_State * L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
-	gchar *name;
+	const gchar *name = NULL;
 	double weight;
-	gint ret = -1;
+	gint ret = -1, top = 2;
 
 	if (cfg) {
-		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
-		weight = luaL_checknumber (L, 3);
+		if (lua_type (L, 2) == LUA_TSTRING) {
+			/* Legacy syntax */
+			name = luaL_checkstring (L, 2);
+			top ++;
+		}
 
-		if (lua_type (L, 4) == LUA_TSTRING) {
-			lua_getglobal (L, luaL_checkstring (L, 4));
+		weight = luaL_checknumber (L, top);
+
+		if (lua_type (L, top + 1) == LUA_TSTRING) {
+			lua_getglobal (L, luaL_checkstring (L, top + 1));
 		}
 		else {
-			lua_pushvalue (L, 4);
+			lua_pushvalue (L, top + 1);
 		}
-		if (name) {
-			ret = rspamd_register_symbol_fromlua (L,
-					cfg,
-					name,
-					luaL_ref (L, LUA_REGISTRYINDEX),
-					weight,
-					0,
-					SYMBOL_TYPE_CALLBACK);
-		}
+		ret = rspamd_register_symbol_fromlua (L,
+				cfg,
+				name,
+				luaL_ref (L, LUA_REGISTRYINDEX),
+				weight,
+				0,
+				SYMBOL_TYPE_CALLBACK,
+				-1);
 	}
 
 	lua_pushnumber (L, ret);
@@ -1038,30 +1052,35 @@ static gint
 lua_config_register_callback_symbol_priority (lua_State * L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
-	gchar *name;
+	const gchar *name = NULL;
 	double weight;
-	gint priority, ret = -1;
+	gint priority, ret = -1, top = 2;
 
 	if (cfg) {
-		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
-		weight = luaL_checknumber (L, 3);
-		priority = luaL_checknumber (L, 4);
+		if (lua_type (L, 2) == LUA_TSTRING) {
+			/* Legacy syntax */
+			name = luaL_checkstring (L, 2);
+			top ++;
+		}
 
-		if (lua_type (L, 5) == LUA_TSTRING) {
-			lua_getglobal (L, luaL_checkstring (L, 5));
+		weight = luaL_checknumber (L, top);
+		priority = luaL_checknumber (L, top + 1);
+
+		if (lua_type (L, top + 2) == LUA_TSTRING) {
+			lua_getglobal (L, luaL_checkstring (L, top + 2));
 		}
 		else {
-			lua_pushvalue (L, 5);
+			lua_pushvalue (L, top + 2);
 		}
-		if (name) {
-			ret = rspamd_register_symbol_fromlua (L,
-					cfg,
-					name,
-					luaL_ref (L, LUA_REGISTRYINDEX),
-					weight,
-					priority,
-					SYMBOL_TYPE_CALLBACK);
-		}
+
+		ret = rspamd_register_symbol_fromlua (L,
+				cfg,
+				name,
+				luaL_ref (L, LUA_REGISTRYINDEX),
+				weight,
+				priority,
+				SYMBOL_TYPE_CALLBACK,
+				-1);
 	}
 
 	lua_pushnumber (L, ret);
@@ -1172,7 +1191,8 @@ lua_config_add_composite (lua_State * L)
 						composite);
 
 				if (new) {
-					rspamd_symbols_cache_add_symbol_virtual (cfg->cache, name, 1);
+					rspamd_symbols_cache_add_symbol_virtual (cfg->cache, name,
+							1, -1);
 				}
 
 				ret = TRUE;
@@ -1203,7 +1223,8 @@ lua_config_newindex (lua_State *L)
 					luaL_ref (L, LUA_REGISTRYINDEX),
 					1.0,
 					0,
-					SYMBOL_TYPE_NORMAL);
+					SYMBOL_TYPE_NORMAL,
+					-1);
 		}
 		else if (lua_type (L, 3) == LUA_TTABLE) {
 			gint type = SYMBOL_TYPE_NORMAL, priority = 0, idx;
@@ -1271,7 +1292,8 @@ lua_config_newindex (lua_State *L)
 					idx,
 					weight,
 					priority,
-					type);
+					type,
+					-1);
 		}
 	}
 
