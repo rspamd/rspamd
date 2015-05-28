@@ -307,7 +307,7 @@ start_worker (struct rspamd_worker *worker)
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
 
 	rspamd_map_watch (worker->srv->cfg, ctx->ev_base);
-
+	rspamd_symbols_cache_start_refresh (worker->srv->cfg->cache, ctx->ev_base);
 
 	ctx->resolver = dns_resolver_init (worker->srv->logger,
 			ctx->ev_base,

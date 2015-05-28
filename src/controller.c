@@ -1594,8 +1594,6 @@ rspamd_controller_handle_counters (
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	ucl_object_t *top;
-	GList *cur;
-	struct cache_item *item;
 	struct symbols_cache *cache;
 
 	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
@@ -1932,6 +1930,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_upstreams_library_config (worker->srv->cfg);
 	/* Maps events */
 	rspamd_map_watch (worker->srv->cfg, ctx->ev_base);
+	rspamd_symbols_cache_start_refresh (worker->srv->cfg->cache, ctx->ev_base);
 
 	event_base_loop (ctx->ev_base, 0);
 

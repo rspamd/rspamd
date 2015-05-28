@@ -157,4 +157,12 @@ gboolean rspamd_symbols_cache_validate (struct symbols_cache *cache,
  */
 ucl_object_t *rspamd_symbols_cache_counters (struct symbols_cache * cache);
 
+/**
+ * Start cache reloading
+ * @param cache
+ * @param ev_base
+ */
+void rspamd_symbols_cache_start_refresh (struct symbols_cache * cache,
+		struct event_base *ev_base);
+
 #endif
