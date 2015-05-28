@@ -752,7 +752,7 @@ rspamd_symbols_cache_counters (struct symbols_cache * cache)
 	cbd.top = top;
 	cbd.cache = cache;
 	g_hash_table_foreach (cache->items_by_symbol,
-			rspamd_symbols_cache_counters_cb, top);
+			rspamd_symbols_cache_counters_cb, &cbd);
 
 	return top;
 }
