@@ -43,9 +43,9 @@ struct symbols_cache {
 	GHashTable *items_by_symbol;
 	GPtrArray *items_by_order;
 	rspamd_mempool_t *static_pool;
-	guint cur_items;
+	gdouble max_weight;
 	guint used_items;
-	guint uses;
+	guint64 total_freq;
 	struct rspamd_config *cfg;
 	rspamd_mempool_mutex_t *mtx;
 	gdouble reload_time;
@@ -84,7 +84,7 @@ struct cache_item {
 /* XXX: Maybe make it configurable */
 #define CACHE_RELOAD_TIME 60.0
 /* weight, frequency, time */
-#define TIME_ALPHA (1.0 / 1000000.0)
+#define TIME_ALPHA (1.0)
 #define WEIGHT_ALPHA (0.001)
 #define FREQ_ALPHA (0.001)
 #define SCORE_FUN(w, f, t) (((w) > 0 ? (w) : WEIGHT_ALPHA) \
@@ -92,33 +92,43 @@ struct cache_item {
 		/ (t > TIME_ALPHA ? t : TIME_ALPHA))
 
 gint
-cache_logic_cmp (const void *p1, const void *p2)
+cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 {
 	const struct cache_item *i1 = *(struct cache_item **)p1,
 			*i2 = *(struct cache_item **)p2;
+	struct symbols_cache *cache = ud;
 	double w1, w2;
 	double weight1, weight2;
 	double f1 = 0, f2 = 0, t1, t2;
 
 	if (i1->priority == i2->priority) {
-		f1 = (double)i1->frequency;
-		f2 = (double)i2->frequency;
-		weight1 = abs (i1->weight);
-		weight2 = abs (i2->weight);
-		t1 = i1->avg_time / 1000000.0;
-		t2 = i2->avg_time / 1000000.0;
+		f1 = (double)i1->frequency / (double)cache->total_freq;
+		f2 = (double)i2->frequency / (double)cache->total_freq;
+		weight1 = abs (i1->weight) / cache->max_weight;
+		weight2 = abs (i2->weight) / cache->max_weight;
+		t1 = i1->avg_time;
+		t2 = i2->avg_time;
 		w1 = SCORE_FUN (weight1, f1, t1);
 		w2 = SCORE_FUN (weight2, f2, t2);
-		msg_debug ("%s -> %.2f, %s -> %.2f", i1->symbol, w1, i2->symbol, w2);
+		msg_debug ("%s -> %.2f, %s -> %.2f", i1->symbol, w1 * 1000.0,
+				i2->symbol, w2 * 1000.0);
 	}
 	else {
 		/* Strict sorting */
 		w1 = abs (i1->priority);
 		w2 = abs (i2->priority);
-		msg_debug ("priority: %s -> %.2f, %s -> %.2f", i1->symbol, w1, i2->symbol, w2);
+		msg_debug ("priority: %s -> %.2f, %s -> %.2f", i1->symbol, w1 * 1000.0,
+				i2->symbol, w2 * 1000.0);
 	}
 
-	return w2 - w1;
+	if (w2 > w1) {
+		return 1;
+	}
+	else if (w2 < w1) {
+		return -1;
+	}
+
+	return 0;
 }
 
 /**
@@ -144,7 +154,7 @@ rspamd_set_counter (struct cache_item *item, guint32 value)
 static void
 post_cache_init (struct symbols_cache *cache)
 {
-	g_ptr_array_sort (cache->items_by_order, cache_logic_cmp);
+	g_ptr_array_sort_with_data (cache->items_by_order, cache_logic_cmp, cache);
 }
 
 static gboolean
@@ -273,6 +283,12 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 		parent->avg_time = item->avg_time;
 		parent->avg_counter = item->avg_counter;
 	}
+
+	if (abs (item->weight) > cache->max_weight) {
+		cache->max_weight = abs (item->weight);
+	}
+
+	cache->total_freq += item->frequency;
 
 	ucl_object_iterate_free (it);
 	ucl_object_unref (top);
@@ -503,6 +519,8 @@ rspamd_symbols_cache_new (void)
 	cache->items_by_order = g_ptr_array_new ();
 	cache->mtx = rspamd_mempool_get_mutex (cache->static_pool);
 	cache->reload_time = CACHE_RELOAD_TIME;
+	cache->total_freq = 1;
+	cache->max_weight = 1.0;
 
 	return cache;
 }
@@ -622,6 +640,10 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 			parent->priority = MAX (p1, p2);
 			item->priority = parent->priority;
 		}
+	}
+
+	if (abs (item->weight) > cache->max_weight) {
+		cache->max_weight = abs (item->weight);
 	}
 }
 
@@ -879,6 +901,7 @@ rspamd_symbols_cache_inc_frequency (struct symbols_cache *cache,
 	if (item != NULL) {
 		/* We assume ++ as atomic op */
 		item->frequency ++;
+		cache->total_freq ++;
 
 		/* For virtual symbols we also increase counter for parent */
 		if (item->parent != -1) {
