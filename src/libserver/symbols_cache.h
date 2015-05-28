@@ -78,10 +78,13 @@ gint rspamd_symbols_cache_add_symbol_normal (struct symbols_cache *cache,
 /**
  * Register virtual symbol
  * @param name name of symbol
+ * @param weight initial weight
+ * @param parent associated callback parent
  */
 gint rspamd_symbols_cache_add_symbol_virtual (struct symbols_cache *cache,
 	const gchar *name,
-	double weight);
+	double weight,
+	gint parent);
 
 /**
  * Register callback function for symbols parsing
@@ -90,7 +93,6 @@ gint rspamd_symbols_cache_add_symbol_virtual (struct symbols_cache *cache,
  * @param user_data pointer to user_data
  */
 gint rspamd_symbols_cache_add_symbol_callback (struct symbols_cache *cache,
-	const gchar *name,
 	double weight,
 	symbol_func_t func,
 	gpointer user_data);
@@ -102,7 +104,6 @@ gint rspamd_symbols_cache_add_symbol_callback (struct symbols_cache *cache,
  * @param user_data pointer to user_data
  */
 gint rspamd_symbols_cache_add_symbol_callback_prio (struct symbols_cache *cache,
-	const gchar *name,
 	double weight,
 	gint priority,
 	symbol_func_t func,
@@ -117,6 +118,7 @@ gint rspamd_symbols_cache_add_symbol_callback_prio (struct symbols_cache *cache,
  * @param func
  * @param user_data
  * @param type
+ * @param parent
  */
 gint rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	const gchar *name,
@@ -124,7 +126,8 @@ gint rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	gint priority,
 	symbol_func_t func,
 	gpointer user_data,
-	enum rspamd_symbol_type type);
+	enum rspamd_symbol_type type,
+	gint parent);
 
 /**
  * Call function for cached symbol using saved callback

@@ -148,7 +148,7 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 	ucl_object_t *top;
 	const ucl_object_t *cur, *elt;
 	ucl_object_iter_t it;
-	struct cache_item *item;
+	struct cache_item *item, *parent;
 	const guchar *p;
 	gint fd;
 	gpointer map;
@@ -312,15 +312,26 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	gint priority,
 	symbol_func_t func,
 	gpointer user_data,
-	enum rspamd_symbol_type type)
+	enum rspamd_symbol_type type,
+	gint parent)
 {
 	struct cache_item *item = NULL;
 
 	g_assert (cache != NULL);
 
-	if (g_hash_table_lookup (cache->items_by_symbol, name) != NULL) {
-		msg_err ("skip duplicate symbol registration for %s", name);
-		return -1;
+	if (name == NULL && type != SYMBOL_TYPE_CALLBACK) {
+		msg_warn ("no name for non-callback symbol!");
+	}
+	else if (type == SYMBOL_TYPE_VIRTUAL && parent == -1) {
+		msg_warn ("no parent symbol is associated with virtual symbol %s",
+			name);
+	}
+
+	if (name != NULL) {
+		if (g_hash_table_lookup (cache->items_by_symbol, name) != NULL) {
+			msg_err ("skip duplicate symbol registration for %s", name);
+			return -1;
+		}
 	}
 
 	item = rspamd_mempool_alloc0_shared (cache->static_pool,
@@ -332,7 +343,10 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	item->cd = rspamd_mempool_alloc0 (cache->static_pool,
 			sizeof (struct counter_data));
 
-	item->symbol = rspamd_mempool_strdup (cache->static_pool, name);
+	if (name != NULL) {
+		item->symbol = rspamd_mempool_strdup (cache->static_pool, name);
+	}
+
 	item->func = func;
 	item->user_data = user_data;
 	item->priority = priority;
@@ -344,17 +358,22 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	}
 
 	item->id = cache->used_items;
+	item->parent = parent;
 	cache->used_items ++;
 	msg_debug ("used items: %d, added symbol: %s", cache->used_items, name);
 	rspamd_set_counter (item, 0);
-	g_hash_table_insert (cache->items_by_symbol, item->symbol, item);
 	g_ptr_array_add (cache->items_by_order, item);
+
+	if (name != NULL) {
+		g_hash_table_insert (cache->items_by_symbol, item->symbol, item);
+	}
 
 	return item->id;
 }
 
 gint
-rspamd_symbols_cache_add_symbol_normal (struct symbols_cache *cache, const gchar *name, double weight,
+rspamd_symbols_cache_add_symbol_normal (struct symbols_cache *cache,
+	const gchar *name, double weight,
 	symbol_func_t func, gpointer user_data)
 {
 	return rspamd_symbols_cache_add_symbol (cache,
@@ -363,13 +382,15 @@ rspamd_symbols_cache_add_symbol_normal (struct symbols_cache *cache, const gchar
 		0,
 		func,
 		user_data,
-		SYMBOL_TYPE_NORMAL);
+		SYMBOL_TYPE_NORMAL,
+		-1);
 }
 
 gint
 rspamd_symbols_cache_add_symbol_virtual (struct symbols_cache *cache,
 	const gchar *name,
-	double weight)
+	double weight,
+	gint parent)
 {
 	return rspamd_symbols_cache_add_symbol (cache,
 		name,
@@ -377,40 +398,41 @@ rspamd_symbols_cache_add_symbol_virtual (struct symbols_cache *cache,
 		0,
 		NULL,
 		NULL,
-		SYMBOL_TYPE_VIRTUAL);
+		SYMBOL_TYPE_VIRTUAL,
+		parent);
 }
 
 gint
 rspamd_symbols_cache_add_symbol_callback (struct symbols_cache *cache,
-	const gchar *name,
 	double weight,
 	symbol_func_t func,
 	gpointer user_data)
 {
 	return rspamd_symbols_cache_add_symbol (cache,
-		name,
+		NULL,
 		weight,
 		0,
 		func,
 		user_data,
-		SYMBOL_TYPE_CALLBACK);
+		SYMBOL_TYPE_CALLBACK,
+		-1);
 }
 
 gint
 rspamd_symbols_cache_add_symbol_callback_prio (struct symbols_cache *cache,
-	const gchar *name,
 	double weight,
 	gint priority,
 	symbol_func_t func,
 	gpointer user_data)
 {
 	return rspamd_symbols_cache_add_symbol (cache,
-		name,
+		NULL,
 		weight,
 		priority,
 		func,
 		user_data,
-		SYMBOL_TYPE_CALLBACK);
+		SYMBOL_TYPE_CALLBACK,
+		-1);
 }
 
 void
@@ -638,7 +660,8 @@ rspamd_symbols_cache_process_symbol (struct rspamd_task * task,
 	if (item->type == SYMBOL_TYPE_NORMAL || item->type == SYMBOL_TYPE_CALLBACK) {
 		t1 = rspamd_get_ticks ();
 
-		if (G_UNLIKELY (check_debug_symbol (task->cfg, item->symbol))) {
+		if (item->symbol != NULL &&
+				G_UNLIKELY (check_debug_symbol (task->cfg, item->symbol))) {
 			rspamd_log_debug (rspamd_main->logger);
 			item->func (task, item->user_data);
 			rspamd_log_nodebug (rspamd_main->logger);
@@ -659,22 +682,44 @@ rspamd_symbols_cache_process_symbol (struct rspamd_task * task,
 	return TRUE;
 }
 
+struct counters_cbdata {
+	ucl_object_t *top;
+	struct symbols_cache *cache;
+};
+
 static void
 rspamd_symbols_cache_counters_cb (gpointer k, gpointer v, gpointer ud)
 {
-	ucl_object_t *obj, *top = ud;
-	struct cache_item *item = v;
+	struct counters_cbdata *cbd = ud;
+	ucl_object_t *obj, *top;
+	struct cache_item *item = v, *parent;
+
+	top = cbd->top;
 
 	if (item->type != SYMBOL_TYPE_CALLBACK) {
 		obj = ucl_object_typed_new (UCL_OBJECT);
 		ucl_object_insert_key (obj, ucl_object_fromstring (item->symbol),
 				"symbol", 0, false);
-		ucl_object_insert_key (obj, ucl_object_fromdouble (item->weight),
-				"weight", 0, false);
-		ucl_object_insert_key (obj, ucl_object_fromint (item->frequency),
-				"frequency", 0, false);
-		ucl_object_insert_key (obj, ucl_object_fromdouble (item->avg_time),
-				"time", 0, false);
+
+		if (item->type == SYMBOL_TYPE_VIRTUAL && item->parent != -1) {
+			g_assert (item->parent < cbd->cache->items_by_order->len);
+			parent = g_ptr_array_index (cbd->cache->items_by_order,
+					item->parent);
+			ucl_object_insert_key (obj, ucl_object_fromdouble (item->weight),
+					"weight", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromint (item->frequency),
+					"frequency", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromdouble (parent->avg_time),
+					"time", 0, false);
+		}
+		else {
+			ucl_object_insert_key (obj, ucl_object_fromdouble (item->weight),
+					"weight", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromint (item->frequency),
+					"frequency", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromdouble (item->avg_time),
+					"time", 0, false);
+		}
 
 		ucl_array_append (top, obj);
 	}
@@ -684,9 +729,12 @@ ucl_object_t *
 rspamd_symbols_cache_counters (struct symbols_cache * cache)
 {
 	ucl_object_t *top;
+	struct counters_cbdata cbd;
 
 	g_assert (cache != NULL);
 	top = ucl_object_typed_new (UCL_ARRAY);
+	cbd.top = top;
+	cbd.cache = cache;
 	g_hash_table_foreach (cache->items_by_symbol,
 			rspamd_symbols_cache_counters_cb, top);
 
