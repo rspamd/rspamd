@@ -113,7 +113,6 @@ if opts and type(opts) == 'table' then
 				logger.err('incomplete rule')
 			else
 				table.insert(rules, rule)
-				rspamd_config:register_virtual_symbol(rule['symbol'], 1.0)
 			end
 		end
 	end
@@ -121,9 +120,8 @@ end
 
 if table.maxn(rules) > 0 then
 	-- add fake symbol to check all maps inside a single callback
-	if type(rspamd_config.get_api_version) ~= 'nil' then
-		rspamd_config:register_callback_symbol('EMAILS', 1.0, check_emails)
-	else
-		rspamd_config:register_symbol('EMAILS', 1.0, check_emails)
+	local id = rspamd_config:register_callback_symbol(1.0, check_emails)
+	for _,rule in ipairs(rules) do
+	 rspamd_config:register_virtual_symbol(rule['symbol'], 1.0, id)
 	end
 end

@@ -32,7 +32,7 @@ local domains = nil
 local strict_domains = {}
 local rspamd_logger = require "rspamd_logger"
 
-function phishing_cb (task)
+local function phishing_cb(task)
 	local urls = task:get_urls();
 
 	if urls then
@@ -79,41 +79,37 @@ end
 
 local opts = rspamd_config:get_all_opt('phishing')
 if opts then
-    if opts['symbol'] then
-        symbol = opts['symbol']
-        
-        -- Register symbol's callback
-        rspamd_config:register_symbol(symbol, 1.0, 'phishing_cb')
+  if opts['symbol'] then
+    symbol = opts['symbol']
+    -- Register symbol's callback
+    local id = rspamd_config:register_symbol(symbol, 1.0, phishing_cb)
+    if opts['domains'] and type(opt['domains']) == 'string' then
+      domains = rspamd_config:add_hash_map (opts['domains'])
     end
-	if opts['domains'] and type(opt['domains']) == 'string' then
-		domains = rspamd_config:add_hash_map (opts['domains'])
-	end
-	if opts['strict_domains'] then
-		local sd = {}
-		if type(opts['strict_domains']) == 'table' then
-			sd = opts['strict_domains']
-		else
-			sd[1] = opts['strict_domains']
-		end
-		for _,d in ipairs(sd) do
-			local s, _ = string.find(d, ':[^:]+$')
-			if s then
-				local sym = string.sub(d, s + 1, -1)
-				local map = string.sub(d, 1, s - 1)
-				if type(rspamd_config.get_api_version) ~= 'nil' then
-					rspamd_config:register_virtual_symbol(sym, 1)
-				end
-				local rmap = rspamd_config:add_hash_map (map, 'Phishing strict domains map')
-				if rmap then
-					local rule = {symbol = sym, map = rmap}
-					table.insert(strict_domains, rule)
-				else
-					rspamd_logger.info('cannot add map: ' .. map .. ' for symbol: ' .. sym)
-				end
-			else
-				rspamd_logger.info('strict_domains option must be in format <map>:<symbol>')
-			end
-		end
-	end
-    -- If no symbol defined, do not register this module
+    if opts['strict_domains'] then
+      local sd = {}
+      if type(opts['strict_domains']) == 'table' then
+        sd = opts['strict_domains']
+      else
+        sd[1] = opts['strict_domains']
+      end
+      for _,d in ipairs(sd) do
+        local s, _ = string.find(d, ':[^:]+$')
+        if s then
+          local sym = string.sub(d, s + 1, -1)
+          local map = string.sub(d, 1, s - 1)
+          rspamd_config:register_virtual_symbol(sym, 1, id)
+          local rmap = rspamd_config:add_hash_map (map, 'Phishing strict domains map')
+          if rmap then
+            local rule = {symbol = sym, map = rmap}
+            table.insert(strict_domains, rule)
+          else
+            rspamd_logger.info('cannot add map: ' .. map .. ' for symbol: ' .. sym)
+          end
+        else
+          rspamd_logger.info('strict_domains option must be in format <map>:<symbol>')
+        end
+      end
+    end
+  end
 end

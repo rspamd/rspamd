@@ -128,8 +128,6 @@ local function process_trie_conf(symbol, cf)
       process_single_pattern(pat, symbol, cf)
     end, cf['patterns'])
   end
-  
-  rspamd_config:register_virtual_symbol(symbol, 1.0)
 end
 
 local opts =  rspamd_config:get_all_opt("trie")
@@ -147,10 +145,17 @@ if opts then
     mime_trie = rspamd_trie.create(mime_patterns)
     rspamd_logger.infox('registered mime search trie from %1 patterns', #mime_patterns)
   end
-
+  
+  local id = -1
   if mime_trie or raw_trie then
-    rspamd_config:register_callback_symbol('TRIE', 1.0, tries_callback)
+    id = rspamd_config:register_callback_symbol('TRIE', 1.0, tries_callback)
   else
     rspamd_logger.err('no tries defined')
+  end
+  
+  if id ~= -1 then
+    for sym, opt in pairs(opts) do
+      rspamd_config:register_virtual_symbol(sym, 1.0, id)
+    end
   end
 end

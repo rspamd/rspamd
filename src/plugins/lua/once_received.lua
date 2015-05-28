@@ -124,31 +124,28 @@ end
 -- Configuration
 local opts =  rspamd_config:get_all_opt('once_received')
 if opts then
-    if opts['symbol'] then
-        local symbol = opts['symbol']
+  if opts['symbol'] then
+    local symbol = opts['symbol']
 
-      for n,v in pairs(opts) do
+    local id = rspamd_config:register_symbol(symbol, 1.0, check_quantity_received)
+
+    for n,v in pairs(opts) do
       if n == 'symbol_strict' then
         symbol_strict = v
-        if type(rspamd_config.get_api_version) ~= 'nil' then
-          rspamd_config:register_virtual_symbol(symbol_strict, 1.0)
-        end
+        rspamd_config:register_virtual_symbol(symbol_strict, 1.0, id)
       elseif n == 'bad_host' then
         if type(v) == 'string' then
-            bad_hosts[1] = v
+          bad_hosts[1] = v
         else
           bad_hosts = v
         end
       elseif n == 'good_host' then
         if type(v) == 'string' then
-            good_hosts[1] = v
+          good_hosts[1] = v
         else
           good_hosts = v
         end
-        end
       end
-
-    -- Register symbol's callback
-    rspamd_config:register_symbol(symbol, 1.0, check_quantity_received)
+    end
   end
 end

@@ -84,14 +84,15 @@ end
 local opts =  rspamd_config:get_all_opt('forged_recipients')
 if opts then
 	if opts['symbol_rcpt'] or opts['symbol_sender'] then
+    local id = rspamd_config:register_callback_symbol(1.0, 
+      check_forged_headers)
 		if opts['symbol_rcpt'] then
 			symbol_rcpt = opts['symbol_rcpt']
-			rspamd_config:register_virtual_symbol(symbol_rcpt, 1.0, check_forged_headers)
+			rspamd_config:register_virtual_symbol(symbol_rcpt, 1.0, id)
 		end
 		if opts['symbol_sender'] then
 			symbol_sender = opts['symbol_sender']
-			rspamd_config:register_virtual_symbol(symbol_sender, 1.0)
+			rspamd_config:register_virtual_symbol(symbol_sender, 1.0, id)
 		end
-		rspamd_config:register_callback_symbol('FORGED_RECIPIENTS', 1.0, check_forged_headers)
 	end
 end
