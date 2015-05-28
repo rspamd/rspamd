@@ -1191,8 +1191,8 @@ lua_config_add_composite (lua_State * L)
 						composite);
 
 				if (new) {
-					rspamd_symbols_cache_add_symbol_virtual (cfg->cache, name,
-							1, -1);
+					rspamd_symbols_cache_add_symbol (cfg->cache, name,
+							1, 0, NULL, NULL, SYMBOL_TYPE_COMPOSITE, -1);
 				}
 
 				ret = TRUE;

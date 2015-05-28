@@ -673,6 +673,7 @@ rspamd_symbols_cache_process_symbol (struct rspamd_task * task,
 	}
 
 	if (item->type == SYMBOL_TYPE_NORMAL || item->type == SYMBOL_TYPE_CALLBACK) {
+		g_assert (item->func != NULL);
 		t1 = rspamd_get_ticks ();
 
 		if (item->symbol != NULL &&

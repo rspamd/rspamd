@@ -1136,7 +1136,8 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 		composite);
 
 	if (new) {
-		rspamd_symbols_cache_add_symbol_virtual (cfg->cache, composite_name, 1);
+		rspamd_symbols_cache_add_symbol (cfg->cache, composite_name, 1, 0,
+			NULL, NULL, SYMBOL_TYPE_COMPOSITE, -1);
 	}
 
 	return TRUE;
