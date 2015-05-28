@@ -81,8 +81,12 @@ struct cache_item {
 };
 
 /* weight, frequency, time */
-#define TIME_ALPHA (1.0 / 10000000.0)
-#define SCORE_FUN(w, f, t) (((w) > 0 ? (w) : 1) * ((f) > 0 ? (f) : 1) / (t > TIME_ALPHA ? t : TIME_ALPHA))
+#define TIME_ALPHA (1.0 / 1000000.0)
+#define WEIGHT_ALPHA (0.001)
+#define FREQ_ALPHA (0.001)
+#define SCORE_FUN(w, f, t) (((w) > 0 ? (w) : WEIGHT_ALPHA) \
+		* ((f) > 0 ? (f) : FREQ_ALPHA) \
+		/ (t > TIME_ALPHA ? t : TIME_ALPHA))
 
 gint
 cache_logic_cmp (const void *p1, const void *p2)
@@ -96,21 +100,22 @@ cache_logic_cmp (const void *p1, const void *p2)
 	if (i1->priority == i2->priority) {
 		f1 = (double)i1->frequency;
 		f2 = (double)i2->frequency;
-		weight1 = i1->metric_weight == 0 ? i1->weight : i1->metric_weight;
-		weight2 = i2->metric_weight == 0 ? i2->weight : i2->metric_weight;
+		weight1 = abs (i1->weight);
+		weight2 = abs (i2->weight);
 		t1 = i1->avg_time / 1000000.0;
 		t2 = i2->avg_time / 1000000.0;
-		w1 = SCORE_FUN (abs (weight1), f1, t1);
-		w2 = SCORE_FUN (abs (weight2), f2, t2);
+		w1 = SCORE_FUN (weight1, f1, t1);
+		w2 = SCORE_FUN (weight2, f2, t2);
 		msg_debug ("%s -> %.2f, %s -> %.2f", i1->symbol, w1, i2->symbol, w2);
 	}
 	else {
 		/* Strict sorting */
 		w1 = abs (i1->priority);
 		w2 = abs (i2->priority);
+		msg_debug ("priority: %s -> %.2f, %s -> %.2f", i1->symbol, w1, i2->symbol, w2);
 	}
 
-	return (gint)w2 - w1;
+	return w2 - w1;
 }
 
 /**
@@ -152,6 +157,7 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 	const guchar *p;
 	gint fd;
 	gpointer map;
+	double w;
 
 	fd = open (name, O_RDONLY);
 
@@ -226,7 +232,10 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 			elt = ucl_object_find_key (cur, "weight");
 
 			if (elt) {
-				item->weight = ucl_object_todouble (cur);
+				w = ucl_object_todouble (cur);
+				if (w != 0) {
+					item->weight = w;
+				}
 			}
 
 			elt = ucl_object_find_key (cur, "time");
@@ -244,7 +253,7 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 	}
 
 	if (item->type == SYMBOL_TYPE_VIRTUAL && item->parent != -1) {
-		g_assert (item->parent < cache->items_by_order->len);
+		g_assert (item->parent < (gint)cache->items_by_order->len);
 		parent = g_ptr_array_index (cache->items_by_order, item->parent);
 
 		if (parent->weight < item->weight) {
@@ -366,6 +375,7 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	item->user_data = user_data;
 	item->priority = priority;
 	item->type = type;
+	item->weight = weight;
 
 	if (item->weight < 0 && item->priority == 0) {
 		/* Make priority for negative weighted symbols */
@@ -504,8 +514,6 @@ rspamd_symbols_cache_init (struct symbols_cache* cache,
 	/* Copy saved cache entries */
 	res = rspamd_symbols_cache_load_items (cache, cfg->cache_filename);
 
-	post_cache_init (cache);
-
 	return res;
 }
 
@@ -528,12 +536,13 @@ check_debug_symbol (struct rspamd_config *cfg, const gchar *symbol)
 static void
 rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 {
-	struct cache_item *item = v;
+	struct cache_item *item = v, *parent;
 	struct symbols_cache *cache = (struct symbols_cache *)ud;
 	GList *cur;
 	struct metric *m;
 	struct rspamd_symbol_def *s;
 	gboolean skipped, ghost;
+	gint p1, p2;
 
 	ghost = item->weight == 0 ? TRUE : FALSE;
 
@@ -582,6 +591,27 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 		msg_debug ("symbol %s is registered as ghost symbol, it won't be inserted "
 				"to any metric", item->symbol);
 	}
+
+	if (item->weight < 0 && item->priority == 0) {
+		item->priority ++;
+	}
+
+	if (item->type == SYMBOL_TYPE_VIRTUAL && item->parent != -1) {
+		g_assert (item->parent < (gint)cache->items_by_order->len);
+		parent = g_ptr_array_index (cache->items_by_order, item->parent);
+
+		if (abs (parent->weight) < abs (item->weight)) {
+			parent->weight = item->weight;
+		}
+
+		p1 = abs (item->priority);
+		p2 = abs (parent->priority);
+
+		if (p1 != p2) {
+			parent->priority = MAX (p1, p2);
+			item->priority = parent->priority;
+		}
+	}
 }
 
 static void
@@ -598,6 +628,7 @@ rspamd_symbols_cache_metric_validate_cb (gpointer k, gpointer v, gpointer ud)
 
 	if (item) {
 		item->metric_weight = weight;
+		item->weight = item->weight * weight;
 	}
 }
 
@@ -612,6 +643,13 @@ rspamd_symbols_cache_validate (struct symbols_cache *cache,
 	if (cache == NULL) {
 		msg_err ("empty cache is invalid");
 		return FALSE;
+	}
+
+	/* Now adjust symbol weights according to default metric */
+	if (cfg->default_metric != NULL) {
+		g_hash_table_foreach (cfg->default_metric->symbols,
+			rspamd_symbols_cache_metric_validate_cb,
+			cache);
 	}
 
 	g_hash_table_foreach (cache->items_by_symbol,
@@ -636,13 +674,6 @@ rspamd_symbols_cache_validate (struct symbols_cache *cache,
 		cur = g_list_next (cur);
 	}
 	g_list_free (metric_symbols);
-
-	/* Now adjust symbol weights according to default metric */
-	if (cfg->default_metric != NULL) {
-		g_hash_table_foreach (cfg->default_metric->symbols,
-			rspamd_symbols_cache_metric_validate_cb,
-			cache);
-	}
 
 	post_cache_init (cache);
 
@@ -704,7 +735,7 @@ struct counters_cbdata {
 };
 
 static void
-rspamd_symbols_cache_counters_cb (gpointer k, gpointer v, gpointer ud)
+rspamd_symbols_cache_counters_cb (gpointer v, gpointer ud)
 {
 	struct counters_cbdata *cbd = ud;
 	ucl_object_t *obj, *top;
@@ -718,7 +749,7 @@ rspamd_symbols_cache_counters_cb (gpointer k, gpointer v, gpointer ud)
 				"symbol", 0, false);
 
 		if (item->type == SYMBOL_TYPE_VIRTUAL && item->parent != -1) {
-			g_assert (item->parent < cbd->cache->items_by_order->len);
+			g_assert (item->parent < (gint)cbd->cache->items_by_order->len);
 			parent = g_ptr_array_index (cbd->cache->items_by_order,
 					item->parent);
 			ucl_object_insert_key (obj, ucl_object_fromdouble (item->weight),
@@ -751,7 +782,7 @@ rspamd_symbols_cache_counters (struct symbols_cache * cache)
 	top = ucl_object_typed_new (UCL_ARRAY);
 	cbd.top = top;
 	cbd.cache = cache;
-	g_hash_table_foreach (cache->items_by_symbol,
+	g_ptr_array_foreach (cache->items_by_order,
 			rspamd_symbols_cache_counters_cb, &cbd);
 
 	return top;
