@@ -480,4 +480,9 @@ void rspamd_init_libs (void);
  */
 guint64 rspamd_hash_seed (void);
 
+/**
+ * Return jittered time value
+ */
+gdouble rspamd_time_jitter (gdouble in, gdouble jitter);
+
 #endif

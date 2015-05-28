@@ -2609,3 +2609,21 @@ rspamd_hash_seed (void)
 
 	return seed;
 }
+
+gdouble
+rspamd_time_jitter (gdouble in, gdouble jitter)
+{
+	guint64 rnd_int;
+	double res;
+	const double transform_bias = 2.2204460492503130808472633361816e-16;
+
+	rnd_int = ottery_rand_uint64 () >> 12;
+	res = rnd_int;
+	res *= transform_bias;
+
+	if (jitter == 0) {
+		jitter = in;
+	}
+
+	return in + jitter * res;
+}
