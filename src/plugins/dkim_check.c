@@ -111,7 +111,7 @@ gint
 dkim_module_config (struct rspamd_config *cfg)
 {
 	const ucl_object_t *value;
-	gint res = TRUE;
+	gint res = TRUE, cb_id;
 	guint cache_size, cache_expire;
 	gboolean got_trusted = FALSE;
 
@@ -223,17 +223,19 @@ dkim_module_config (struct rspamd_config *cfg)
 			"trusted_only option is set and no trusted domains are defined; disabling dkim module completely as it is useless in this case");
 	}
 	else {
-		rspamd_symbols_cache_add_symbol_normal (cfg->cache,
+		cb_id = rspamd_symbols_cache_add_symbol_normal (cfg->cache,
 			dkim_module_ctx->symbol_reject,
 			1,
 			dkim_symbol_callback,
 			NULL);
 		rspamd_symbols_cache_add_symbol_virtual (cfg->cache,
 			dkim_module_ctx->symbol_tempfail,
-			1);
+			1,
+			cb_id);
 		rspamd_symbols_cache_add_symbol_virtual (cfg->cache,
 			dkim_module_ctx->symbol_allow,
-			1);
+			1,
+			cb_id);
 
 		dkim_module_ctx->dkim_hash = rspamd_lru_hash_new (
 				cache_size,

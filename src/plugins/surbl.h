@@ -45,6 +45,7 @@ struct suffix_item {
 	guint32 options;
 	GArray *bits;
 	GHashTable *ips;
+	gint callback_id;
 };
 
 struct dns_param {

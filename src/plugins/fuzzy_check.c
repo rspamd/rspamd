@@ -142,7 +142,8 @@ module_t fuzzy_check_module = {
 static void
 parse_flags (struct fuzzy_rule *rule,
 	struct rspamd_config *cfg,
-	const ucl_object_t *val)
+	const ucl_object_t *val,
+	gint cb_id)
 {
 	const ucl_object_t *elt;
 	struct fuzzy_mapping *map;
@@ -174,7 +175,8 @@ parse_flags (struct fuzzy_rule *rule,
 				/* Add flag to hash table */
 				g_hash_table_insert (rule->mappings,
 					GINT_TO_POINTER (map->fuzzy_flag), map);
-				rspamd_symbols_cache_add_symbol_virtual (cfg->cache, map->symbol, 1.0);
+				rspamd_symbols_cache_add_symbol_virtual (cfg->cache,
+						map->symbol, 1.0, cb_id);
 			}
 			else {
 				msg_err ("fuzzy_map parameter has no flag definition");
@@ -293,7 +295,7 @@ fuzzy_free_rule (gpointer r)
 }
 
 static gint
-fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj)
+fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id)
 {
 	const ucl_object_t *value, *cur;
 	struct fuzzy_rule *rule;
@@ -345,7 +347,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj)
 	if ((value = ucl_object_find_key (obj, "fuzzy_map")) != NULL) {
 		it = NULL;
 		while ((cur = ucl_iterate_object (value, &it, true)) != NULL) {
-			parse_flags (rule, cfg, cur);
+			parse_flags (rule, cfg, cur, cb_id);
 		}
 	}
 
@@ -383,7 +385,8 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj)
 			fuzzy_module_ctx->fuzzy_rules,
 			rule);
 		if (rule->symbol != fuzzy_module_ctx->default_symbol) {
-			rspamd_symbols_cache_add_symbol_virtual (cfg->cache, rule->symbol, 1.0);
+			rspamd_symbols_cache_add_symbol_virtual (cfg->cache, rule->symbol,
+					1.0, cb_id);
 		}
 	}
 
@@ -411,7 +414,7 @@ gint
 fuzzy_check_module_config (struct rspamd_config *cfg)
 {
 	const ucl_object_t *value, *cur;
-	gint res = TRUE;
+	gint res = TRUE, cb_id;
 
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "fuzzy_check", "symbol")) != NULL) {
@@ -478,16 +481,16 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "fuzzy_check", "rule")) != NULL) {
+
+		cb_id = rspamd_symbols_cache_add_symbol_callback (cfg->cache,
+					1.0, fuzzy_symbol_callback, NULL);
+
 		LL_FOREACH (value, cur) {
-			fuzzy_parse_rule (cfg, cur);
+			fuzzy_parse_rule (cfg, cur, cb_id);
 		}
 	}
 
-	if (fuzzy_module_ctx->fuzzy_rules != NULL) {
-		rspamd_symbols_cache_add_symbol_callback (cfg->cache, fuzzy_module_ctx->default_symbol,
-			1.0, fuzzy_symbol_callback, NULL);
-	}
-	else {
+	if (fuzzy_module_ctx->fuzzy_rules == NULL) {
 		msg_warn ("fuzzy module is enabled but no rules are defined");
 	}
 

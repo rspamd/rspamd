@@ -302,7 +302,8 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
  * Register virtual symbols for suffixes with bit wildcard
  */
 static void
-register_bit_symbols (struct rspamd_config *cfg, struct suffix_item *suffix)
+register_bit_symbols (struct rspamd_config *cfg, struct suffix_item *suffix,
+		gint parent_id)
 {
 	guint i;
 	GHashTableIter it;
@@ -314,18 +315,21 @@ register_bit_symbols (struct rspamd_config *cfg, struct suffix_item *suffix)
 
 		while (g_hash_table_iter_next (&it, &k, &v)) {
 			bit = v;
-			rspamd_symbols_cache_add_symbol_virtual (cfg->cache, bit->symbol, 1);
+			rspamd_symbols_cache_add_symbol_virtual (cfg->cache, bit->symbol,
+					1, parent_id);
 			msg_debug ("bit: %d", bit->bit);
 		}
 	}
 	else if (suffix->bits != NULL) {
 		for (i = 0; i < suffix->bits->len; i++) {
 			bit = &g_array_index (suffix->bits, struct surbl_bit_item, i);
-			rspamd_symbols_cache_add_symbol_virtual (cfg->cache, bit->symbol, 1);
+			rspamd_symbols_cache_add_symbol_virtual (cfg->cache, bit->symbol,
+					1, parent_id);
 		}
 	}
 	else {
-		rspamd_symbols_cache_add_symbol_virtual (cfg->cache, suffix->symbol, 1);
+		rspamd_symbols_cache_add_symbol_virtual (cfg->cache, suffix->symbol,
+				1, parent_id);
 	}
 }
 
@@ -335,12 +339,12 @@ surbl_module_config (struct rspamd_config *cfg)
 	GList *cur_opt;
 	struct suffix_item *new_suffix, *cur_suffix = NULL;
 	struct surbl_bit_item *new_bit;
-
 	const ucl_object_t *value, *cur, *cur_rule, *cur_bit;
 	ucl_object_iter_t it = NULL;
 	const gchar *redir_val, *ip_val;
 	guint32 bit;
-
+	gint cb_id;
+	gboolean has_subsymbols;
 
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "surbl", "redirector")) != NULL) {
@@ -361,9 +365,9 @@ surbl_module_config (struct rspamd_config *cfg)
 		rspamd_config_get_module_opt (cfg, "surbl",
 		"redirector_symbol")) != NULL) {
 		surbl_module_ctx->redirector_symbol = ucl_obj_tostring (value);
-		rspamd_symbols_cache_add_symbol_virtual (cfg->cache,
+		rspamd_symbols_cache_add_symbol (cfg->cache,
 			surbl_module_ctx->redirector_symbol,
-			1.0);
+			1.0, 0, NULL, NULL, SYMBOL_TYPE_COMPOSITE, -1);
 	}
 	else {
 		surbl_module_ctx->redirector_symbol = NULL;
@@ -477,6 +481,14 @@ surbl_module_config (struct rspamd_config *cfg)
 					new_suffix->options |= SURBL_OPTION_NOIP;
 				}
 			}
+
+			cb_id = rspamd_symbols_cache_add_symbol_callback (cfg->cache,
+							1,
+							surbl_test_url,
+							new_suffix);
+			new_suffix->callback_id = cb_id;
+			has_subsymbols = FALSE;
+
 			cur = ucl_obj_get_key (cur_rule, "bits");
 			if (cur != NULL && cur->type == UCL_OBJECT) {
 				it = NULL;
@@ -504,10 +516,13 @@ surbl_module_config (struct rspamd_config *cfg)
 						msg_debug ("add new bit suffix: %d with symbol: %s",
 							(gint)new_bit->bit, new_bit->symbol);
 						g_array_append_val (new_suffix->bits, *new_bit);
+						has_subsymbols = TRUE;
 					}
 				}
 			}
+
 			cur = ucl_obj_get_key (cur_rule, "ips");
+
 			if (cur != NULL && cur->type == UCL_OBJECT) {
 				it = NULL;
 				new_suffix->ips = g_hash_table_new (g_int_hash, g_int_equal);
@@ -546,17 +561,20 @@ surbl_module_config (struct rspamd_config *cfg)
 								(gint)new_bit->bit, new_bit->symbol);
 						g_hash_table_insert (new_suffix->ips, &new_bit->bit,
 								new_bit);
+						has_subsymbols = TRUE;
 					}
 				}
 			}
 
+			if (!has_subsymbols) {
+				/* Register just a symbol itself */
+				rspamd_symbols_cache_add_symbol_virtual (cfg->cache,
+						new_suffix->symbol,
+						1,
+						cb_id);
+			}
 			surbl_module_ctx->suffixes = g_list_prepend (
 				surbl_module_ctx->suffixes,
-				new_suffix);
-			rspamd_symbols_cache_add_symbol_callback (cfg->cache,
-				new_suffix->symbol,
-				1,
-				surbl_test_url,
 				new_suffix);
 		}
 	}
@@ -576,7 +594,7 @@ surbl_module_config (struct rspamd_config *cfg)
 	while (cur_opt) {
 		cur_suffix = cur_opt->data;
 		if (cur_suffix->bits != NULL || cur_suffix->ips != NULL) {
-			register_bit_symbols (cfg, cur_suffix);
+			register_bit_symbols (cfg, cur_suffix, cur_suffix->callback_id);
 		}
 		cur_opt = g_list_next (cur_opt);
 	}

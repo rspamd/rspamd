@@ -93,7 +93,7 @@ gint
 spf_module_config (struct rspamd_config *cfg)
 {
 	const ucl_object_t *value;
-	gint res = TRUE;
+	gint res = TRUE, cb_id;
 	guint cache_size, cache_expire;
 
 	spf_module_ctx->whitelist_ip = radix_create_compressed ();
@@ -151,14 +151,17 @@ spf_module_config (struct rspamd_config *cfg)
 		}
 	}
 
-	rspamd_symbols_cache_add_symbol_normal (cfg->cache,
+	cb_id = rspamd_symbols_cache_add_symbol_normal (cfg->cache,
 		spf_module_ctx->symbol_fail,
 		1,
 		spf_symbol_callback,
 		NULL);
-	rspamd_symbols_cache_add_symbol_virtual (cfg->cache, spf_module_ctx->symbol_softfail, 1);
-	rspamd_symbols_cache_add_symbol_virtual (cfg->cache, spf_module_ctx->symbol_neutral,  1);
-	rspamd_symbols_cache_add_symbol_virtual (cfg->cache, spf_module_ctx->symbol_allow,	   1);
+	rspamd_symbols_cache_add_symbol_virtual (cfg->cache,
+			spf_module_ctx->symbol_softfail, 1, cb_id);
+	rspamd_symbols_cache_add_symbol_virtual (cfg->cache,
+			spf_module_ctx->symbol_neutral, 1, cb_id);
+	rspamd_symbols_cache_add_symbol_virtual (cfg->cache,
+			spf_module_ctx->symbol_allow, 1, cb_id);
 
 	spf_module_ctx->spf_hash = rspamd_lru_hash_new (
 			cache_size,
