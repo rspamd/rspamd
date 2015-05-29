@@ -613,6 +613,8 @@ rspamd_http_on_body (http_parser * parser, const gchar *at, size_t length)
 	priv = conn->priv;
 
 	g_string_append_len (priv->msg->body, at, length);
+	/* Append might cause realloc */
+	priv->msg->body_buf.str = priv->msg->body->str;
 
 	if ((conn->opts & RSPAMD_HTTP_BODY_PARTIAL) && !priv->encrypted) {
 		/* Incremental update is basically impossible for encrypted requests */
