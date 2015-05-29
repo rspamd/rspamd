@@ -1,3 +1,17 @@
+0.9.5:
+	* Avoid double free when extending HTTP message.
+	* Fix double free if multiple classifiers are defined.
+	* Fix misprint in spamassassin plugin.
+	* Fix cpuid invocation on i386.
+	* Fix ownership issues for zero-copy decode.
+	* Allow __len metamethod on rspamd{text}.
+	* Add base64 decoding lua utility.
+	* Fix build on FreeBSD
+	* Skip spaces at the beginning of mime messages.
+	* DBL_ABUSE_REDIR should not have significant weight.
+	* Allow to split by lua_regexp rspamd{text} objects.
+	* Allow to specify custom stop pattern for lua_tcp.
+
 0.9.4:
 	* Fix critical bugs in tokenization algorithm
 	* Write unit tests for tokenization
