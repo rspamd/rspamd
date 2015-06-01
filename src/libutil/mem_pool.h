@@ -19,7 +19,7 @@
 
 struct f_str_s;
 
-#define MEM_ALIGNMENT   sizeof(unsigned long)    /* platform word */
+#define MEM_ALIGNMENT   16    /* Better for SSE */
 #define align_ptr(p, a)                                                   \
 	(guint8 *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
 
