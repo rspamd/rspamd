@@ -28,6 +28,7 @@
 #include "logger.h"
 #include "util.h"
 #include "main.h"
+#include "utlist.h"
 
 /* Sleep time for spin lock in nanoseconds */
 #define MUTEX_SLEEP_TIME 10000000L
@@ -56,10 +57,15 @@ static gboolean always_malloc = FALSE;
  * Function that return free space in pool page
  * @param x pool page struct
  */
-static gint
+static gsize
 pool_chain_free (struct _pool_chain *chain)
 {
-	return (gint)chain->len - (chain->pos - chain->begin + MEM_ALIGNMENT);
+	return chain->len - (gsize)(chain->pos - chain->begin + MEM_ALIGNMENT);
+}
+static gsize
+pool_chain_free_shared (struct _pool_chain_shared *chain)
+{
+	return chain->len - (gsize)(chain->pos - chain->begin + MEM_ALIGNMENT);
 }
 
 static struct _pool_chain *
@@ -218,12 +224,11 @@ rspamd_mempool_new (gsize size)
 
 	new->cur_pool = pool_chain_new (size);
 	new->shared_pool = NULL;
-	new->first_pool = new->cur_pool;
 	new->cur_pool_tmp = NULL;
-	new->first_pool_tmp = NULL;
 	new->destructors = NULL;
 	/* Set it upon first call of set variable */
 	new->variables = NULL;
+	new->elt_len = size;
 
 	mem_pool_stat->pools_allocated++;
 
@@ -235,7 +240,7 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size, gboolean is_tmp)
 {
 	guint8 *tmp;
 	struct _pool_chain *new, *cur;
-	gint free;
+	gsize free = 0;
 
 	if (pool) {
 		POOL_MTX_LOCK ();
@@ -248,76 +253,51 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size, gboolean is_tmp)
 
 			return ptr;
 		}
-#ifdef MEMORY_GREEDY
-		if (is_tmp) {
-			cur = pool->first_pool_tmp;
-		}
-		else {
-			cur = pool->first_pool;
-		}
-#else
 		if (is_tmp) {
 			cur = pool->cur_pool_tmp;
 		}
 		else {
 			cur = pool->cur_pool;
 		}
-#endif
+
 		/* Find free space in pool chain */
-		while (cur != NULL &&
-			(free = pool_chain_free (cur)) < (gint)size &&
-			cur->next != NULL) {
-			cur = cur->next;
+		if (cur) {
+			free = pool_chain_free (cur);
 		}
 
-		if (cur == NULL || (free < (gint)size && cur->next == NULL)) {
-			/* Allocate new pool */
-			if (cur == NULL) {
-				if (pool->first_pool->len >= size + MEM_ALIGNMENT) {
-					new = pool_chain_new (pool->first_pool->len);
-				}
-				else {
-					new = pool_chain_new (
-						size + pool->first_pool->len + MEM_ALIGNMENT);
-				}
-				/* Connect to pool subsystem */
-				if (is_tmp) {
-					pool->first_pool_tmp = new;
-				}
-				else {
-					pool->first_pool = new;
-				}
+		if (cur == NULL || free < size) {
+			/* Allocate new chain element */
+			if (pool->elt_len >= size + MEM_ALIGNMENT) {
+				new = pool_chain_new (pool->elt_len);
 			}
 			else {
-				if (cur->len >= size + MEM_ALIGNMENT) {
-					new = pool_chain_new (cur->len);
-				}
-				else {
-					mem_pool_stat->oversized_chunks++;
-					new = pool_chain_new (
-						size + pool->first_pool->len + MEM_ALIGNMENT);
-				}
-				/* Attach new pool to chain */
-				cur->next = new;
+				mem_pool_stat->oversized_chunks++;
+				new = pool_chain_new (
+						size + pool->elt_len + MEM_ALIGNMENT);
 			}
+			/* Connect to pool subsystem */
 			if (is_tmp) {
-				pool->cur_pool_tmp = new;
+				LL_PREPEND (pool->cur_pool_tmp, new);
 			}
 			else {
-				pool->cur_pool = new;
+				LL_PREPEND (pool->cur_pool, new);
 			}
 			/* No need to align again */
 			tmp = new->pos;
 			new->pos = tmp + size;
 			POOL_MTX_UNLOCK ();
+
 			return tmp;
 		}
+
 		/* No need to allocate page */
 		tmp = align_ptr (cur->pos, MEM_ALIGNMENT);
 		cur->pos = tmp + size;
 		POOL_MTX_UNLOCK ();
+
 		return tmp;
 	}
+
 	return NULL;
 }
 
@@ -369,48 +349,45 @@ rspamd_mempool_alloc_shared (rspamd_mempool_t * pool, gsize size)
 {
 	guint8 *tmp;
 	struct _pool_chain_shared *new, *cur;
-	gint free;
+	gsize free = 0;
 
 	if (pool) {
 		g_return_val_if_fail (size > 0, NULL);
 
-		POOL_MTX_LOCK ()
-		;
+		POOL_MTX_LOCK ();
 		cur = pool->shared_pool;
-		if (!cur) {
-			cur = pool_chain_new_shared (pool->first_pool->len);
-			pool->shared_pool = cur;
-		}
-
 		/* Find free space in pool chain */
-		while ((free = pool_chain_free ((struct _pool_chain *) cur))
-			< (gint) size && cur->next) {
-			cur = cur->next;
+		if (cur) {
+			free = pool_chain_free_shared (cur);
 		}
-		if (free < (gint) size && cur->next == NULL) {
-			/* Allocate new pool */
 
-			if (cur->len >= size + MEM_ALIGNMENT) {
-				new = pool_chain_new_shared (cur->len);
+		if (free < size) {
+			/* Allocate new pool */
+			if (pool->elt_len >= size + MEM_ALIGNMENT) {
+				new = pool_chain_new_shared (pool->elt_len);
 			}
 			else {
 				mem_pool_stat->oversized_chunks++;
 				new = pool_chain_new_shared (
-					size + pool->first_pool->len + MEM_ALIGNMENT);
+					size + pool->elt_len + MEM_ALIGNMENT);
 			}
 			/* Attach new pool to chain */
-			cur->next = new;
-			new->pos += size;
+			LL_PREPEND (pool->shared_pool, cur);
+			tmp = new->pos;
+			new->pos = tmp + size;
 			g_atomic_int_add (&mem_pool_stat->bytes_allocated, size);
 
 			POOL_MTX_UNLOCK ();
-			return new->begin;
+			return tmp;
 		}
+
 		tmp = align_ptr (cur->pos, MEM_ALIGNMENT);
 		cur->pos = tmp + size;
 		POOL_MTX_UNLOCK ();
+
 		return tmp;
 	}
+
 	return NULL;
 }
 
@@ -568,8 +545,8 @@ rspamd_mempool_replace_destructor (rspamd_mempool_t * pool,
 void
 rspamd_mempool_delete (rspamd_mempool_t * pool)
 {
-	struct _pool_chain *cur = pool->first_pool, *tmp;
-	struct _pool_chain_shared *cur_shared = pool->shared_pool, *tmp_shared;
+	struct _pool_chain *cur, *tmp;
+	struct _pool_chain_shared *cur_shared, *tmp_shared;
 	struct _pool_destructors *destructor = pool->destructors;
 
 	POOL_MTX_LOCK ();
@@ -582,33 +559,27 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 		destructor = destructor->prev;
 	}
 
-	while (cur) {
-		tmp = cur;
-		cur = cur->next;
+	LL_FOREACH_SAFE (pool->cur_pool, cur, tmp) {
 		g_atomic_int_inc (&mem_pool_stat->chunks_freed);
-		g_atomic_int_add (&mem_pool_stat->bytes_allocated, -tmp->len);
-		g_slice_free1 (tmp->len, tmp->begin);
-		g_slice_free (struct _pool_chain, tmp);
+		g_atomic_int_add (&mem_pool_stat->bytes_allocated, -cur->len);
+		g_slice_free1 (cur->len, cur->begin);
+		g_slice_free (struct _pool_chain, cur);
 	}
 	/* Clean temporary pools */
-	cur = pool->first_pool_tmp;
-	while (cur) {
-		tmp = cur;
-		cur = cur->next;
+	LL_FOREACH_SAFE (pool->cur_pool_tmp, cur, tmp) {
 		g_atomic_int_inc (&mem_pool_stat->chunks_freed);
-		g_atomic_int_add (&mem_pool_stat->bytes_allocated, -tmp->len);
-		g_slice_free1 (tmp->len, tmp->begin);
-		g_slice_free (struct _pool_chain, tmp);
+		g_atomic_int_add (&mem_pool_stat->bytes_allocated, -cur->len);
+		g_slice_free1 (cur->len, cur->begin);
+		g_slice_free (struct _pool_chain, cur);
 	}
 	/* Unmap shared memory */
-	while (cur_shared) {
-		tmp_shared = cur_shared;
-		cur_shared = cur_shared->next;
+	LL_FOREACH_SAFE (pool->shared_pool, cur_shared, tmp_shared) {
 		g_atomic_int_inc (&mem_pool_stat->chunks_freed);
-		g_atomic_int_add (&mem_pool_stat->bytes_allocated, -tmp_shared->len);
-		munmap ((void *)tmp_shared, tmp_shared->len +
+		g_atomic_int_add (&mem_pool_stat->bytes_allocated, -cur_shared->len);
+		munmap ((void *)cur_shared, cur_shared->len +
 			sizeof (struct _pool_chain_shared));
 	}
+
 	if (pool->variables) {
 		g_hash_table_destroy (pool->variables);
 	}
@@ -621,18 +592,17 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 void
 rspamd_mempool_cleanup_tmp (rspamd_mempool_t * pool)
 {
-	struct _pool_chain *cur = pool->first_pool, *tmp;
+	struct _pool_chain *cur, *tmp;
 
 	POOL_MTX_LOCK ();
-	cur = pool->first_pool_tmp;
-	while (cur) {
-		tmp = cur;
-		cur = cur->next;
+
+	LL_FOREACH_SAFE (pool->cur_pool_tmp, cur, tmp) {
 		g_atomic_int_inc (&mem_pool_stat->chunks_freed);
-		g_atomic_int_add (&mem_pool_stat->bytes_allocated, -tmp->len);
-		g_slice_free1 (tmp->len, tmp->begin);
-		g_slice_free (struct _pool_chain, tmp);
+		g_atomic_int_add (&mem_pool_stat->bytes_allocated, -cur->len);
+		g_slice_free1 (cur->len, cur->begin);
+		g_slice_free (struct _pool_chain, cur);
 	}
+
 	g_atomic_int_inc (&mem_pool_stat->pools_freed);
 	POOL_MTX_UNLOCK ();
 }

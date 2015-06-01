@@ -87,12 +87,11 @@ struct _pool_destructors {
 struct rspamd_mutex_s;
 typedef struct memory_pool_s {
 	struct _pool_chain *cur_pool;           /**< currently used page					*/
-	struct _pool_chain *first_pool;         /**< first page								*/
 	struct _pool_chain *cur_pool_tmp;       /**< currently used temporary page			*/
-	struct _pool_chain *first_pool_tmp;     /**< first temporary page					*/
 	struct _pool_chain_shared *shared_pool; /**< shared chain							*/
 	struct _pool_destructors *destructors;  /**< destructors chain						*/
 	GHashTable *variables;                  /**< private memory pool variables			*/
+	gsize elt_len;							/**< size of an element						*/
 } rspamd_mempool_t;
 
 /**
