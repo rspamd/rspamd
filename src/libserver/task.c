@@ -449,6 +449,7 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		break;
 
 	case RSPAMD_TASK_STAGE_DONE:
+		task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
 		return TRUE;
 
 	default:
