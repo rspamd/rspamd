@@ -638,17 +638,19 @@ append_raw_header (GHashTable *target, struct raw_header *rh)
 
 /* Convert raw headers to a list of struct raw_header * */
 static void
-process_raw_headers (GHashTable *target, rspamd_mempool_t *pool, const gchar *in)
+process_raw_headers (struct rspamd_task *task)
 {
 	struct raw_header *new = NULL;
-	const gchar *p, *c;
+	const gchar *p, *c, *end;
 	gchar *tmp, *tp;
 	gint state = 0, l, next_state = 100, err_state = 100, t_state;
 	gboolean valid_folding = FALSE;
 
-	p = in;
+	p = task->raw_headers_content.begin;
+	end = p + task->raw_headers_content.len;
 	c = p;
-	while (*p) {
+
+	while (p < end) {
 		/* FSM for processing headers */
 		switch (state) {
 		case 0:
@@ -667,11 +669,11 @@ process_raw_headers (GHashTable *target, rspamd_mempool_t *pool, const gchar *in
 			/* We got something like header's name */
 			if (*p == ':') {
 				new =
-					rspamd_mempool_alloc0 (pool,
+					rspamd_mempool_alloc0 (task->task_pool,
 						sizeof (struct raw_header));
 				new->prev = new;
 				l = p - c;
-				tmp = rspamd_mempool_alloc (pool, l + 1);
+				tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
 				rspamd_strlcpy (tmp, c, l + 1);
 				new->name = tmp;
 				new->empty_separator = TRUE;
@@ -704,7 +706,7 @@ process_raw_headers (GHashTable *target, rspamd_mempool_t *pool, const gchar *in
 				state = 99;
 				l = p - c;
 				if (l > 0) {
-					tmp = rspamd_mempool_alloc (pool, l + 1);
+					tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
 					rspamd_strlcpy (tmp, c, l + 1);
 					new->separator = tmp;
 				}
@@ -716,7 +718,7 @@ process_raw_headers (GHashTable *target, rspamd_mempool_t *pool, const gchar *in
 				/* Process value */
 				l = p - c;
 				if (l >= 0) {
-					tmp = rspamd_mempool_alloc (pool, l + 1);
+					tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
 					rspamd_strlcpy (tmp, c, l + 1);
 					new->separator = tmp;
 				}
@@ -741,7 +743,7 @@ process_raw_headers (GHashTable *target, rspamd_mempool_t *pool, const gchar *in
 		case 4:
 			/* Copy header's value */
 			l = p - c;
-			tmp = rspamd_mempool_alloc (pool, l + 1);
+			tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
 			tp = tmp;
 			t_state = 0;
 			while (l--) {
@@ -774,16 +776,16 @@ process_raw_headers (GHashTable *target, rspamd_mempool_t *pool, const gchar *in
 			*tp = '\0';
 			new->value = tmp;
 			new->decoded = g_mime_utils_header_decode_text (new->value);
-			rspamd_mempool_add_destructor (pool,
+			rspamd_mempool_add_destructor (task->task_pool,
 					(rspamd_mempool_destruct_t)g_free, new->decoded);
-			append_raw_header (target, new);
+			append_raw_header (task->raw_headers, new);
 			state = 0;
 			break;
 		case 5:
 			/* Header has only name, no value */
 			new->value = "";
 			new->decoded = NULL;
-			append_raw_header (target, new);
+			append_raw_header (task->raw_headers, new);
 			state = 0;
 			break;
 		case 99:
@@ -1559,6 +1561,7 @@ rspamd_message_parse (struct rspamd_task *task)
 	const gchar *url_end, *p, *end;
 	struct rspamd_url *subject_url;
 	gsize len;
+	gint64 hdr_start, hdr_end;
 	gint rc, state = 0;
 
 	tmp = rspamd_mempool_alloc (task->task_pool, sizeof (GByteArray));
@@ -1633,22 +1636,14 @@ rspamd_message_parse (struct rspamd_task *task)
 			task->queue_id = "undef";
 		}
 
-		/*
-		 * TODO: we can save resourses if not copy headers here by using
-		 * g_mime_parser_get_headers_end
-		 */
-#ifdef GMIME24
-		task->raw_headers_str =
-			g_mime_object_get_headers (GMIME_OBJECT (task->message));
-#else
-		task->raw_headers_str = g_mime_message_get_headers (task->message);
-#endif
-
-		if (task->raw_headers_str) {
-			rspamd_mempool_add_destructor (task->task_pool,
-					(rspamd_mempool_destruct_t) g_free, task->raw_headers_str);
-			process_raw_headers (task->raw_headers, task->task_pool,
-					task->raw_headers_str);
+		hdr_start = g_mime_parser_get_headers_begin (parser);
+		hdr_end = g_mime_parser_get_headers_end (parser);
+		if (hdr_start != -1 && hdr_end != -1) {
+			g_assert (hdr_start < hdr_end);
+			g_assert (hdr_end < len);
+			task->raw_headers_content.begin = p + hdr_start;
+			task->raw_headers_content.len = hdr_end - hdr_start;
+			process_raw_headers (task);
 		}
 
 		process_images (task);

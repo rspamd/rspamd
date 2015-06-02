@@ -135,7 +135,7 @@ struct rspamd_task {
 	GMimeObject *parser_parent_part;                            /**< current parent part							*/
 	GList *parts;                                               /**< list of parsed parts							*/
 	GList *text_parts;                                          /**< list of text parts								*/
-	gchar *raw_headers_str;                                     /**< list of raw headers							*/
+	rspamd_fstring_t raw_headers_content;                       /**< list of raw headers							*/
 	GList *received;                                            /**< list of received headers						*/
 	GHashTable *urls;                                           /**< list of parsed urls							*/
 	GHashTable *emails;                                         /**< list of parsed emails							*/
