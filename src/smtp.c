@@ -305,7 +305,7 @@ process_smtp_data (struct smtp_session *session)
 			sizeof (struct in_addr));
 		session->task->cmd = CMD_CHECK;
 
-		if (process_message (session->task) == -1) {
+		if (rspamd_message_parse (session->task) == -1) {
 			msg_err ("cannot process message");
 			munmap (session->task->msg->str, st.st_size);
 			goto err;

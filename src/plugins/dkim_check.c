@@ -425,7 +425,7 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 	struct dkim_check_result *res = NULL, *cur;
 	/* First check if a message has its signature */
 
-	hlist = message_get_header (task,
+	hlist = rspamd_message_get_header (task,
 			DKIM_SIGNHEADER,
 			FALSE);
 	if (hlist != NULL) {

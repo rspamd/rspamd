@@ -58,8 +58,9 @@ enum rspamd_task_stage {
 	RSPAMD_TASK_STAGE_PRE_FILTERS = (1 << 3),
 	RSPAMD_TASK_STAGE_FILTERS = (1 << 4),
 	RSPAMD_TASK_STAGE_CLASSIFIERS = (1 << 5),
-	RSPAMD_TASK_STAGE_POST_FILTERS = (1 << 6),
-	RSPAMD_TASK_STAGE_WRITE_REPLY = (1 << 7)
+	RSPAMD_TASK_STAGE_COMPOSITES = (1 << 6),
+	RSPAMD_TASK_STAGE_POST_FILTERS = (1 << 7),
+	RSPAMD_TASK_STAGE_DONE = (1 << 8)
 };
 
 #define RSPAMD_TASK_PROCESS_ALL (RSPAMD_TASK_STAGE_CONNECT | \
@@ -89,6 +90,7 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_JSON(task) (((task)->flags & RSPAMD_TASK_FLAG_JSON))
 #define RSPAMD_TASK_IS_SPAMC(task) (((task)->flags & RSPAMD_TASK_FLAG_SPAMC))
+#define RSPAMD_TASK_IS_PROCESSED(task) (((task)->processed_stages & RSPAMD_TASK_STAGE_DONE))
 
 typedef gint (*protocol_reply_func)(struct rspamd_task *task);
 
@@ -157,7 +159,6 @@ struct rspamd_task {
 	double time_virtual;
 	struct timeval tv;
 	guint32 scan_milliseconds;                                  /**< how much milliseconds passed					*/
-	guint32 parser_recursion;                                   /**< for avoiding recursion stack overflow			*/
 	gboolean (*fin_callback)(struct rspamd_task *task, void *arg); /**< calback for filters finalizing					*/
 	void *fin_arg;                                              /**< argument for fin callback						*/
 

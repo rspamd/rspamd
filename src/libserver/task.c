@@ -329,47 +329,141 @@ rspamd_task_load_message (struct rspamd_task *task,
 	return TRUE;
 }
 
-gboolean
-rspamd_task_process (struct rspamd_task *task,
-	struct rspamd_http_message *msg, const gchar *start, gsize len,
-	guint stages)
+static gint
+rspamd_task_select_processing_stage (struct rspamd_task *task, guint stages)
 {
-	gint r;
+	gint st;
 
-	if (stages & RSPAMD_TASK_STAGE_READ_MESSAGE) {
-		/* Process message itself */
-		r = process_message (task);
-		if (r == -1) {
-			msg_warn ("processing of message failed");
-			task->last_error = "MIME processing error";
-			task->error_code = RSPAMD_FILTER_ERROR;
-			return FALSE;
-		}
-	if (!process_extra_filters) {
-		task->flags |= RSPAMD_TASK_FLAG_SKIP_EXTRA;
-	}
-	if (!process_extra_filters || task->cfg->pre_filters == NULL) {
-		r = rspamd_process_filters (task);
+	st = ffs (task->processed_stages);
 
-		if (r == -1) {
-			task->last_error = "filter processing error";
-			task->error_code = RSPAMD_FILTER_ERROR;
-			task->state = WRITE_REPLY;
-			return FALSE;
-		}
-
-		if (RSPAMD_TASK_IS_SKIPPED (task)) {
-			/* Call write_socket to write reply and exit */
-			task->state = WRITE_REPLY;
-		}
-
+	if (st == -1) {
+		st = (1 << 0);
 	}
 	else {
-		rspamd_lua_call_pre_filters (task);
-		/* We want fin_task after pre filters are processed */
-		if (rspamd_session_events_pending (task->s) != 0) {
-			task->state = WAIT_PRE_FILTER;
+		st = (1 << (st + 1));
+	}
+
+	if (stages & st) {
+		return st;
+	}
+	else if (st < RSPAMD_TASK_STAGE_DONE) {
+		/* We assume that the stage that was not requested is done */
+		task->processed_stages |= st;
+		return rspamd_task_select_processing_stage (task, stages);
+	}
+
+	/* We are done */
+	return RSPAMD_TASK_STAGE_DONE;
+}
+
+static gboolean
+rspamd_process_filters (struct rspamd_task *task)
+{
+	GList *cur;
+	struct metric *metric;
+	gpointer item = NULL;
+
+	/* Insert default metric to be sure that it exists all the time */
+	/* TODO: make preprocessing only once */
+	rspamd_create_metric_result (task, DEFAULT_METRIC);
+	if (task->settings) {
+		const ucl_object_t *wl;
+
+		wl = ucl_object_find_key (task->settings, "whitelist");
+		if (wl != NULL) {
+			msg_info ("<%s> is whitelisted", task->message_id);
+			task->flags |= RSPAMD_TASK_FLAG_SKIP;
+			return TRUE;
 		}
+	}
+
+	/* Process metrics symbols */
+	while (rspamd_symbols_cache_process_symbol (task, task->cfg->cache, &item)) {
+		/* Check reject actions */
+		cur = task->cfg->metrics_list;
+		while (cur) {
+			metric = cur->data;
+			if (!(task->flags & RSPAMD_TASK_FLAG_PASS_ALL) &&
+				metric->actions[METRIC_ACTION_REJECT].score > 0 &&
+				check_metric_is_spam (task, metric)) {
+				msg_info ("<%s> has already scored more than %.2f, so do not "
+						"plan any more checks", task->message_id,
+						metric->actions[METRIC_ACTION_REJECT].score);
+				return TRUE;
+			}
+			cur = g_list_next (cur);
+		}
+	}
+
+	return TRUE;
+}
+
+gboolean
+rspamd_task_process (struct rspamd_task *task, guint stages)
+{
+	gint st;
+
+	if (RSPAMD_TASK_IS_PROCESSED (task)) {
+		return TRUE;
+	}
+
+	st = rspamd_task_select_processing_stage (task, stages);
+
+	switch (st) {
+	case RSPAMD_TASK_STAGE_READ_MESSAGE:
+		if (!rspamd_message_parse (task)) {
+			return FALSE;
+		}
+		break;
+
+	case RSPAMD_TASK_STAGE_PRE_FILTERS:
+		rspamd_lua_call_pre_filters (task);
+		break;
+
+	case RSPAMD_TASK_STAGE_FILTERS:
+		if (!rspamd_process_filters (task)) {
+			return FALSE;
+		}
+		break;
+
+	case RSPAMD_TASK_STAGE_CLASSIFIERS:
+		if (!rspamd_stat_classify (task, task->cfg->lua_state, &task->err)) {
+			return FALSE;
+		}
+		break;
+
+	case RSPAMD_TASK_STAGE_COMPOSITES:
+		rspamd_make_composites (task);
+		break;
+
+	case RSPAMD_TASK_STAGE_POST_FILTERS:
+		rspamd_lua_call_post_filters (task);
+		break;
+
+	case RSPAMD_TASK_STAGE_DONE:
+		return TRUE;
+
+	default:
+		/* TODO: not implemented stage */
+		break;
+	}
+
+	if (RSPAMD_TASK_IS_SKIPPED (task)) {
+		task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
+		return TRUE;
+	}
+
+	if (rspamd_session_events_pending (task->s) != 0) {
+		/* We have events pending, so we consider this stage as incomplete */
+		msg_debug ("need more work on stage %d", st);
+	}
+	else {
+		/* Mark the current stage as done and go to the next stage */
+		msg_debug ("completed stage %d", st);
+		task->processed_stages |= st;
+
+		/* Tail recursion */
+		return rspamd_task_process (task, stages);
 	}
 
 	return TRUE;
@@ -547,49 +641,4 @@ check_metric_is_spam (struct rspamd_task *task, struct metric *metric)
 #endif
 
 	return FALSE;
-}
-
-gint
-rspamd_process_filters (struct rspamd_task *task)
-{
-	GList *cur;
-	struct metric *metric;
-	gpointer item = NULL;
-
-	/* Insert default metric to be sure that it exists all the time */
-	rspamd_create_metric_result (task, DEFAULT_METRIC);
-	if (task->settings) {
-		const ucl_object_t *wl;
-
-		wl = ucl_object_find_key (task->settings, "whitelist");
-		if (wl != NULL) {
-			msg_info ("<%s> is whitelisted", task->message_id);
-			task->flags |= RSPAMD_TASK_FLAG_SKIP;
-			return 0;
-		}
-	}
-
-	/* Process metrics symbols */
-	while (rspamd_symbols_cache_process_symbol (task, task->cfg->cache, &item)) {
-		/* Check reject actions */
-		cur = task->cfg->metrics_list;
-		while (cur) {
-			metric = cur->data;
-			if (!(task->flags & RSPAMD_TASK_FLAG_PASS_ALL) &&
-				metric->actions[METRIC_ACTION_REJECT].score > 0 &&
-				check_metric_is_spam (task, metric)) {
-				msg_info ("<%s> has already scored more than %.2f, so do not "
-						"plan any more checks", task->message_id,
-						metric->actions[METRIC_ACTION_REJECT].score);
-				return 1;
-			}
-			cur = g_list_next (cur);
-		}
-	}
-
-	if (rspamd_session_events_pending (task->s) != 0) {
-		task->state = WAIT_FILTER;
-	}
-
-	return 1;
 }
