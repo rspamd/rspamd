@@ -492,3 +492,92 @@ rspamd_task_re_cache_check (struct rspamd_task *task, const gchar *re)
 
 	return ret;
 }
+
+gboolean
+rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
+	struct rspamd_task *task,
+	gboolean is_spam,
+	GError **err)
+{
+	return rspamd_stat_learn (task, is_spam, task->cfg->lua_state, err);
+}
+
+/* Return true if metric has score that is more than spam score for it */
+static gboolean
+check_metric_is_spam (struct rspamd_task *task, struct metric *metric)
+{
+	struct metric_result *res;
+	double ms;
+
+	/* Avoid concurrency while checking results */
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+	g_static_mutex_lock (&result_mtx);
+#else
+	G_LOCK (result_mtx);
+#endif
+	res = g_hash_table_lookup (task->results, metric->name);
+	if (res) {
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+		g_static_mutex_unlock (&result_mtx);
+#else
+		G_UNLOCK (result_mtx);
+#endif
+		if (!check_metric_settings (task, metric, &ms)) {
+			ms = metric->actions[METRIC_ACTION_REJECT].score;
+		}
+		return (ms > 0 && res->score >= ms);
+	}
+
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+	g_static_mutex_unlock (&result_mtx);
+#else
+	G_UNLOCK (result_mtx);
+#endif
+
+	return FALSE;
+}
+
+gint
+rspamd_process_filters (struct rspamd_task *task)
+{
+	GList *cur;
+	struct metric *metric;
+	gpointer item = NULL;
+
+	/* Insert default metric to be sure that it exists all the time */
+	rspamd_create_metric_result (task, DEFAULT_METRIC);
+	if (task->settings) {
+		const ucl_object_t *wl;
+
+		wl = ucl_object_find_key (task->settings, "whitelist");
+		if (wl != NULL) {
+			msg_info ("<%s> is whitelisted", task->message_id);
+			task->flags |= RSPAMD_TASK_FLAG_SKIP;
+			return 0;
+		}
+	}
+
+	/* Process metrics symbols */
+	while (rspamd_symbols_cache_process_symbol (task, task->cfg->cache, &item)) {
+		/* Check reject actions */
+		cur = task->cfg->metrics_list;
+		while (cur) {
+			metric = cur->data;
+			if (!(task->flags & RSPAMD_TASK_FLAG_PASS_ALL) &&
+				metric->actions[METRIC_ACTION_REJECT].score > 0 &&
+				check_metric_is_spam (task, metric)) {
+				msg_info ("<%s> has already scored more than %.2f, so do not "
+						"plan any more checks", task->message_id,
+						metric->actions[METRIC_ACTION_REJECT].score);
+				return 1;
+			}
+			cur = g_list_next (cur);
+		}
+	}
+
+	if (rspamd_session_events_pending (task->s) != 0) {
+		task->state = WAIT_FILTER;
+	}
+
+	return 1;
+}

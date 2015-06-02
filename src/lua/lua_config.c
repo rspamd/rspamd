@@ -28,6 +28,7 @@
 #include "message.h"
 #include "radix.h"
 #include "expression.h"
+#include "composites.h"
 #include "utlist.h"
 
 /***

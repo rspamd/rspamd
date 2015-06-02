@@ -73,19 +73,6 @@ struct metric_result {
 	double grow_factor;                             /**< current grow factor					*/
 };
 
-
-/**
- * Subr for composite expressions
- */
-extern const struct rspamd_atom_subr composite_expr_subr;
-/**
- * Composite structure
- */
-struct rspamd_composite {
-	struct rspamd_expression *expr;
-	gint id;
-};
-
 /**
  * Create or return existing result for the specified metric name
  * @param task task object
@@ -94,19 +81,6 @@ struct rspamd_composite {
  */
 struct metric_result * rspamd_create_metric_result (struct rspamd_task *task,
 		const gchar *name);
-
-/**
- * Process all filters
- * @param task worker's task that present message from user
- * @return 0 - if there is non-finished tasks and 1 if processing is completed
- */
-gint rspamd_process_filters (struct rspamd_task *task);
-
-/**
- * Process message with statfiles
- * @param task worker's task that present message from user
- */
-void rspamd_process_statistics (struct rspamd_task *task);
 
 /**
  * Insert a result to task
@@ -135,12 +109,6 @@ void rspamd_task_insert_result_single (struct rspamd_task *task,
 	GList *opts);
 
 /**
- * Process all results and form composite metrics from existent metrics as it is defined in config
- * @param task worker's task that present message from user
- */
-void rspamd_make_composites (struct rspamd_task *task);
-
-/**
  * Default consolidation function for metric, it get all symbols and multiply symbol
  * weight by some factor that is specified in config. Default factor is 1.
  * @param task worker's task that present message from user
@@ -151,18 +119,6 @@ double rspamd_factor_consolidation_func (struct rspamd_task *task,
 	const gchar *metric_name,
 	const gchar *unused);
 
-
-/**
- * Learn specified statfile with message in a task
- * @param statfile symbol of statfile
- * @param task worker's task object
- * @param err pointer to GError
- * @return true if learn succeed
- */
-gboolean rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
-	struct rspamd_task *task,
-	gboolean is_spam,
-	GError **err);
 
 /*
  * Get action from a string
