@@ -62,6 +62,19 @@ enum rspamd_task_stage {
 	RSPAMD_TASK_STAGE_WRITE_REPLY = (1 << 7)
 };
 
+#define RSPAMD_TASK_PROCESS_ALL (RSPAMD_TASK_STAGE_CONNECT | \
+		RSPAMD_TASK_STAGE_ENVELOPE | \
+		RSPAMD_TASK_STAGE_READ_MESSAGE | \
+		RSPAMD_TASK_STAGE_PRE_FILTERS | \
+		RSPAMD_TASK_STAGE_FILTERS | \
+		RSPAMD_TASK_STAGE_CLASSIFIERS | \
+		RSPAMD_TASK_STAGE_POST_FILTERS | \
+		RSPAMD_TASK_STAGE_WRITE_REPLY)
+#define RSPAMD_TASK_PROCESS_LEARN (RSPAMD_TASK_STAGE_CONNECT | \
+		RSPAMD_TASK_STAGE_ENVELOPE | \
+		RSPAMD_TASK_STAGE_READ_MESSAGE | \
+		RSPAMD_TASK_STAGE_WRITE_REPLY)
+
 #define RSPAMD_TASK_FLAG_MIME (1 << 0)
 #define RSPAMD_TASK_FLAG_JSON (1 << 1)
 #define RSPAMD_TASK_FLAG_SKIP_EXTRA (1 << 2)
@@ -138,8 +151,7 @@ struct rspamd_task {
 	GList *messages;                                            /**< list of messages that would be reported		*/
 	GHashTable *re_cache;                                       /**< cache for matched or not matched regexps		*/
 	struct rspamd_config *cfg;                                  /**< pointer to config object						*/
-	gchar *last_error;                                          /**< last error										*/
-	gint error_code;                                                /**< code of last error								*/
+	GError *err;
 	rspamd_mempool_t *task_pool;                                    /**< memory pool for task							*/
 	double time_real;
 	double time_virtual;
@@ -187,15 +199,22 @@ void rspamd_task_restore (void *arg);
 gboolean rspamd_task_fin (void *arg);
 
 /**
- * Process task from http message and write reply or call task->fin_handler
+ * Load HTTP message with body in `msg` to an rspamd_task
+ * @param task
+ * @param msg
+ * @param start
+ * @param len
+ * @return
+ */
+gboolean rspamd_task_load_message (struct rspamd_task *task,
+	struct rspamd_http_message *msg, const gchar *start, gsize len);
+
+/**
+ * Process task
  * @param task task to process
- * @param msg incoming http message
- * @param process_extra_filters whether to check pre and post filters
  * @return task has been successfully parsed and processed
  */
-gboolean rspamd_task_process (struct rspamd_task *task,
-	struct rspamd_http_message *msg, const gchar *start, gsize len,
-	gboolean process_extra_filters);
+gboolean rspamd_task_process (struct rspamd_task *task, guint stages);
 
 /**
  * Return address of sender or NULL

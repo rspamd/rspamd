@@ -28,12 +28,11 @@
 #include "message.h"
 #include "lua/lua_common.h"
 
-static void
-gstring_destruct (gpointer ptr)
-{
-	GString *s = (GString *)ptr;
 
-	g_string_free (s, TRUE);
+static GQuark
+rspamd_task_quark (void)
+{
+	return g_quark_from_static_string ("task-error");
 }
 
 /*
@@ -72,12 +71,14 @@ rspamd_task_new (struct rspamd_worker *worker)
 	new_task->raw_headers = g_hash_table_new (rspamd_strcase_hash,
 			rspamd_strcase_equal);
 	new_task->request_headers = g_hash_table_new_full (rspamd_gstring_icase_hash,
-		rspamd_gstring_icase_equal, gstring_destruct, gstring_destruct);
+		rspamd_gstring_icase_equal, rspamd_gstring_free_hard,
+		rspamd_gstring_free_hard);
 	rspamd_mempool_add_destructor (new_task->task_pool,
 		(rspamd_mempool_destruct_t) g_hash_table_unref,
 		new_task->request_headers);
 	new_task->reply_headers = g_hash_table_new_full (rspamd_gstring_icase_hash,
-			rspamd_gstring_icase_equal, gstring_destruct, gstring_destruct);
+			rspamd_gstring_icase_equal, rspamd_gstring_free_hard,
+			rspamd_gstring_free_hard);
 	rspamd_mempool_add_destructor (new_task->task_pool,
 		(rspamd_mempool_destruct_t) g_hash_table_unref,
 		new_task->reply_headers);
@@ -253,6 +254,10 @@ rspamd_task_free (struct rspamd_task *task, gboolean is_soft)
 		if (task->from_addr) {
 			rspamd_inet_address_destroy (task->from_addr);
 		}
+		if (task->err) {
+			g_error_free (task->err);
+		}
+
 		rspamd_mempool_delete (task->task_pool);
 		g_slice_free1 (sizeof (struct rspamd_task), task);
 	}
@@ -274,20 +279,17 @@ rspamd_task_free_soft (gpointer ud)
 	rspamd_task_free (task, FALSE);
 }
 
-
 gboolean
-rspamd_task_process (struct rspamd_task *task,
-	struct rspamd_http_message *msg, const gchar *start, gsize len,
-	gboolean process_extra_filters)
+rspamd_task_load_message (struct rspamd_task *task,
+	struct rspamd_http_message *msg, const gchar *start, gsize len)
 {
-	gint r;
 	guint control_len;
 	struct ucl_parser *parser;
 	ucl_object_t *control_obj;
 
+	debug_task ("got input of length %z", task->msg.len);
 	task->msg.start = start;
 	task->msg.len = len;
-	debug_task ("got string of length %z", task->msg.len);
 
 	if (msg) {
 		rspamd_protocol_handle_headers (task, msg);
@@ -298,9 +300,8 @@ rspamd_task_process (struct rspamd_task *task,
 		if (task->msg.len < task->message_len) {
 			msg_warn ("message has invalid message length: %ud and total len: %ud",
 					task->message_len, task->msg.len);
-			task->last_error = "Invalid length";
-			task->error_code = RSPAMD_PROTOCOL_ERROR;
-			task->state = WRITE_REPLY;
+			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"Invalid length");
 			return FALSE;
 		}
 		control_len = task->msg.len - task->message_len;
@@ -325,14 +326,25 @@ rspamd_task_process (struct rspamd_task *task,
 		}
 	}
 
-	r = process_message (task);
-	if (r == -1) {
-		msg_warn ("processing of message failed");
-		task->last_error = "MIME processing error";
-		task->error_code = RSPAMD_FILTER_ERROR;
-		task->state = WRITE_REPLY;
-		return FALSE;
-	}
+	return TRUE;
+}
+
+gboolean
+rspamd_task_process (struct rspamd_task *task,
+	struct rspamd_http_message *msg, const gchar *start, gsize len,
+	guint stages)
+{
+	gint r;
+
+	if (stages & RSPAMD_TASK_STAGE_READ_MESSAGE) {
+		/* Process message itself */
+		r = process_message (task);
+		if (r == -1) {
+			msg_warn ("processing of message failed");
+			task->last_error = "MIME processing error";
+			task->error_code = RSPAMD_FILTER_ERROR;
+			return FALSE;
+		}
 	if (!process_extra_filters) {
 		task->flags |= RSPAMD_TASK_FLAG_SKIP_EXTRA;
 	}
