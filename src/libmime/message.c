@@ -1587,6 +1587,7 @@ process_message (struct rspamd_task *task)
 
 		if (message == NULL) {
 			msg_warn ("cannot construct mime from stream");
+			g_object_unref (parser);
 			return -1;
 		}
 
