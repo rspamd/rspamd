@@ -283,16 +283,20 @@ rspamd_task_load_message (struct rspamd_task *task,
 static gint
 rspamd_task_select_processing_stage (struct rspamd_task *task, guint stages)
 {
-	gint st;
+	gint st, mask;
 
-	st = ffs (task->processed_stages);
+	mask = task->processed_stages;
 
-	if (st == -1) {
-		st = (1 << 0);
+	if (mask == 0) {
+		st = 0;
 	}
 	else {
-		st = (1 << (st + 1));
+		for (st = 1; mask != 1; st ++) {
+			mask = (unsigned int)mask >> 1;
+		}
 	}
+
+	st = 1 << st;
 
 	if (stages & st) {
 		return st;
