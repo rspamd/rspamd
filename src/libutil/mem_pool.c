@@ -372,7 +372,7 @@ rspamd_mempool_alloc_shared (rspamd_mempool_t * pool, gsize size)
 					size + pool->elt_len + MEM_ALIGNMENT);
 			}
 			/* Attach new pool to chain */
-			LL_PREPEND (pool->shared_pool, cur);
+			LL_PREPEND (pool->shared_pool, new);
 			tmp = new->pos;
 			new->pos = tmp + size;
 			g_atomic_int_add (&mem_pool_stat->bytes_allocated, size);
