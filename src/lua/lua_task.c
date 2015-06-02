@@ -71,7 +71,7 @@ LUA_FUNCTION_DEF (task, create_empty);
 LUA_FUNCTION_DEF (task, create_from_buffer);
 /* Task methods */
 LUA_FUNCTION_DEF (task, get_message);
-LUA_FUNCTION_DEF (task, rspamd_message_parse);
+LUA_FUNCTION_DEF (task, process_message);
 /***
  * @method task:get_cfg()
  * Get configuration object for a task.
@@ -474,7 +474,7 @@ static const struct luaL_reg tasklib_f[] = {
 static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_message),
 	LUA_INTERFACE_DEF (task, destroy),
-	LUA_INTERFACE_DEF (task, rspamd_message_parse),
+	LUA_INTERFACE_DEF (task, process_message),
 	LUA_INTERFACE_DEF (task, set_cfg),
 	LUA_INTERFACE_DEF (task, get_cfg),
 	LUA_INTERFACE_DEF (task, get_mempool),
