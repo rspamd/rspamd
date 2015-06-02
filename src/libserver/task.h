@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, Vsevolod Stakhov
+/* Copyright (c) 2014-2015, Vsevolod Stakhov
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -51,6 +51,17 @@ enum rspamd_metric_action {
 	METRIC_ACTION_MAX
 };
 
+enum rspamd_task_stage {
+	RSPAMD_TASK_STAGE_CONNECT = (1 << 0),
+	RSPAMD_TASK_STAGE_ENVELOPE = (1 << 1),
+	RSPAMD_TASK_STAGE_READ_MESSAGE = (1 << 2),
+	RSPAMD_TASK_STAGE_PRE_FILTERS = (1 << 3),
+	RSPAMD_TASK_STAGE_FILTERS = (1 << 4),
+	RSPAMD_TASK_STAGE_CLASSIFIERS = (1 << 5),
+	RSPAMD_TASK_STAGE_POST_FILTERS = (1 << 6),
+	RSPAMD_TASK_STAGE_WRITE_REPLY = (1 << 7)
+};
+
 #define RSPAMD_TASK_FLAG_MIME (1 << 0)
 #define RSPAMD_TASK_FLAG_JSON (1 << 1)
 #define RSPAMD_TASK_FLAG_SKIP_EXTRA (1 << 2)
@@ -79,15 +90,7 @@ struct custom_command {
 struct rspamd_task {
 	struct rspamd_worker *worker;                               /**< pointer to worker object						*/
 	struct custom_command *custom_cmd;                          /**< custom command if any							*/
-	enum {
-		READ_MESSAGE,
-		WAIT_PRE_FILTER,
-		WAIT_FILTER,
-		WAIT_POST_FILTER,
-		WRITE_REPLY,
-		WRITING_REPLY,
-		CLOSING_CONNECTION
-	} state;                                                    /**< current session state							*/
+	guint processed_stages;										/**< bits of stages that are processed				*/
 	enum rspamd_command cmd;                                    /**< command										*/
 	gint sock;                                                  /**< socket descriptor								*/
 	guint flags;												/**< Bit flags										*/

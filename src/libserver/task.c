@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, Vsevolod Stakhov
+/* Copyright (c) 2014-2015, Vsevolod Stakhov
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -47,7 +47,7 @@ rspamd_task_new (struct rspamd_worker *worker)
 	new_task = g_slice_alloc0 (sizeof (struct rspamd_task));
 
 	new_task->worker = worker;
-	new_task->state = READ_MESSAGE;
+
 	if (worker) {
 		new_task->cfg = worker->srv->cfg;
 		if (new_task->cfg->check_all_filters) {
