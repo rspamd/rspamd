@@ -168,7 +168,7 @@ struct rspamd_task {
 	struct rspamd_dns_resolver *resolver;                       /**< DNS resolver									*/
 	struct event_base *ev_base;                                 /**< Event base										*/
 
-	gpointer classify_data;										/**< Opaque classifiers data						*/
+	gpointer checkpoint;										/**< Opaque checkpoint data						*/
 
 	struct {
 		enum rspamd_metric_action action;                       /**< Action of pre filters							*/

@@ -364,17 +364,25 @@ rspamd_process_filters (struct rspamd_task *task)
 	gpointer item = NULL;
 
 	/* Insert default metric to be sure that it exists all the time */
-	/* TODO: make preprocessing only once */
-	rspamd_create_metric_result (task, DEFAULT_METRIC);
-	if (task->settings) {
-		const ucl_object_t *wl;
 
-		wl = ucl_object_find_key (task->settings, "whitelist");
-		if (wl != NULL) {
-			msg_info ("<%s> is whitelisted", task->message_id);
-			task->flags |= RSPAMD_TASK_FLAG_SKIP;
-			return TRUE;
+	if (task->checkpoint == NULL) {
+		rspamd_create_metric_result (task, DEFAULT_METRIC);
+		if (task->settings) {
+			const ucl_object_t *wl;
+
+			wl = ucl_object_find_key (task->settings, "whitelist");
+			if (wl != NULL) {
+				msg_info ("<%s> is whitelisted", task->message_id);
+				task->flags |= RSPAMD_TASK_FLAG_SKIP;
+				return TRUE;
+			}
 		}
+
+		task->checkpoint = GUINT_TO_POINTER (0x1);
+	}
+	else {
+		/* TODO: in future, we need to add dependencies here */
+		return TRUE;
 	}
 
 	/* Process metrics symbols */
@@ -461,6 +469,9 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		/* Mark the current stage as done and go to the next stage */
 		msg_debug ("completed stage %d", st);
 		task->processed_stages |= st;
+
+		/* Reset checkpoint */
+		task->checkpoint = NULL;
 
 		/* Tail recursion */
 		return rspamd_task_process (task, stages);
