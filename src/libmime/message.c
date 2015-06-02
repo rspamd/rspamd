@@ -638,7 +638,8 @@ append_raw_header (GHashTable *target, struct raw_header *rh)
 
 /* Convert raw headers to a list of struct raw_header * */
 static void
-process_raw_headers (struct rspamd_task *task)
+process_raw_headers (struct rspamd_task *task, GHashTable *target,
+		const gchar *in, gsize len)
 {
 	struct raw_header *new = NULL;
 	const gchar *p, *c, *end;
@@ -646,8 +647,8 @@ process_raw_headers (struct rspamd_task *task)
 	gint state = 0, l, next_state = 100, err_state = 100, t_state;
 	gboolean valid_folding = FALSE;
 
-	p = task->raw_headers_content.begin;
-	end = p + task->raw_headers_content.len;
+	p = in;
+	end = p + len;
 	c = p;
 
 	while (p < end) {
@@ -778,14 +779,14 @@ process_raw_headers (struct rspamd_task *task)
 			new->decoded = g_mime_utils_header_decode_text (new->value);
 			rspamd_mempool_add_destructor (task->task_pool,
 					(rspamd_mempool_destruct_t)g_free, new->decoded);
-			append_raw_header (task->raw_headers, new);
+			append_raw_header (target, new);
 			state = 0;
 			break;
 		case 5:
 			/* Header has only name, no value */
 			new->value = "";
 			new->decoded = NULL;
-			append_raw_header (task->raw_headers, new);
+			append_raw_header (target, new);
 			state = 0;
 			break;
 		case 99:
@@ -1494,8 +1495,8 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 					(rspamd_mempool_destruct_t) g_hash_table_destroy,
 					mime_part->raw_headers);
 				if (hdrs != NULL) {
-					process_raw_headers (mime_part->raw_headers,
-							task->task_pool, hdrs);
+					process_raw_headers (task, mime_part->raw_headers,
+							hdrs, strlen (hdrs));
 					g_free (hdrs);
 				}
 
@@ -1640,10 +1641,12 @@ rspamd_message_parse (struct rspamd_task *task)
 		hdr_end = g_mime_parser_get_headers_end (parser);
 		if (hdr_start != -1 && hdr_end != -1) {
 			g_assert (hdr_start < hdr_end);
-			g_assert (hdr_end < len);
-			task->raw_headers_content.begin = p + hdr_start;
-			task->raw_headers_content.len = hdr_end - hdr_start;
-			process_raw_headers (task);
+			g_assert (hdr_end < (gint64)len);
+			task->raw_headers_content.begin = (gchar *)(p + hdr_start);
+			task->raw_headers_content.len = (guint64)(hdr_end - hdr_start);
+			process_raw_headers (task, task->raw_headers,
+					task->raw_headers_content.begin,
+					task->raw_headers_content.len);
 		}
 
 		process_images (task);

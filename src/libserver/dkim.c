@@ -1378,11 +1378,12 @@ struct rspamd_dkim_sign_chunk {
 static gboolean
 rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx,
 	const gchar *headers,
+	gsize headers_length,
 	const gchar *header_name,
 	guint count,
 	gboolean is_sign)
 {
-	const gchar *p, *c;
+	const gchar *p, *c, *end;
 	gint state = 0, hlen;
 	gboolean found = FALSE;
 	GArray *to_sign;
@@ -1396,10 +1397,11 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx,
 			sizeof (struct rspamd_dkim_sign_chunk),
 			count);
 	p = headers;
+	end = p + headers_length;
 	c = p;
 	hlen = strlen (header_name);
 
-	while (*p) {
+	while (p < end) {
 		switch (state) {
 		case 0:
 			/* Compare state */
@@ -1508,7 +1510,8 @@ rspamd_dkim_canonize_header (rspamd_dkim_context_t *ctx,
 
 	if (ctx->header_canon_type == DKIM_CANON_SIMPLE) {
 		return rspamd_dkim_canonize_header_simple (ctx,
-				   task->raw_headers_str,
+				   task->raw_headers_content.begin,
+				   task->raw_headers_content.len,
 				   header_name,
 				   count,
 				   is_sig);

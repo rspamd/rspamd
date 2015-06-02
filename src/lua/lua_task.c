@@ -1138,8 +1138,8 @@ lua_task_get_raw_headers (lua_State *L)
 	if (task) {
 		t = lua_newuserdata (L, sizeof (*t));
 		rspamd_lua_setclass (L, "rspamd{text}", -1);
-		t->start = task->raw_headers_str;
-		t->len = strlen (t->start);
+		t->start = task->raw_headers_content.begin;
+		t->len = task->raw_headers_content.len;
 		t->own = FALSE;
 	}
 	else {
