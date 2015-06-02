@@ -827,7 +827,7 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 			re->regexp_text);
 
 		/* Get list of specified headers */
-		headerlist = message_get_header (task,
+		headerlist = rspamd_message_get_header (task,
 				re->header,
 				re->is_strong);
 		if (headerlist == NULL) {
@@ -1159,7 +1159,7 @@ rspamd_header_exists (struct rspamd_task * task, GArray * args, void *unused)
 	}
 
 	debug_task ("try to get header %s", (gchar *)arg->data);
-	headerlist = message_get_header (task,
+	headerlist = rspamd_message_get_header (task,
 			(gchar *)arg->data,
 			FALSE);
 	if (headerlist) {

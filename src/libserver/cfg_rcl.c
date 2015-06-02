@@ -1,4 +1,4 @@
-/* Copyright (c) 2013, Vsevolod Stakhov
+/* Copyright (c) 2013-2015, Vsevolod Stakhov
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,7 +28,7 @@
 #include "cfg_file.h"
 #include "lua/lua_common.h"
 #include "expression.h"
-
+#include "composites.h"
 
 struct rspamd_rcl_default_handler_data {
 	struct rspamd_rcl_struct_parser pd;

@@ -35,11 +35,17 @@
 
 #include <iconv.h>
 
-#define RECURSION_LIMIT 30
+#define RECURSION_LIMIT 5
 #define UTF8_CHARSET "UTF-8"
 
 #define SET_PART_RAW(part) ((part)->flags &= ~RSPAMD_MIME_PART_FLAG_UTF)
 #define SET_PART_UTF(part) ((part)->flags |= RSPAMD_MIME_PART_FLAG_UTF)
+
+static GQuark
+rspamd_message_quark (void)
+{
+	return g_quark_from_static_string ("mime-error");
+}
 
 GByteArray *
 strip_html_tags (struct rspamd_task *task,
@@ -1396,7 +1402,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 		   g_mime_message_foreach_part() again here. */
 
 		message = g_mime_message_part_get_message ((GMimeMessagePart *) part);
-		if (task->parser_recursion++ < RECURSION_LIMIT) {
+		if (task->scan_milliseconds++ < RECURSION_LIMIT) {
 #ifdef GMIME24
 			g_mime_message_foreach (message, mime_foreach_callback, task);
 #else
@@ -1404,7 +1410,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 #endif
 		}
 		else {
-			msg_err ("endless recursion detected: %d", task->parser_recursion);
+			msg_err ("too deep mime recursion detected: %d", task->scan_milliseconds);
 			return;
 		}
 #ifndef GMIME24
@@ -1538,8 +1544,8 @@ destroy_message (void *pointer)
 	g_object_unref (msg);
 }
 
-gint
-process_message (struct rspamd_task *task)
+gboolean
+rspamd_message_parse (struct rspamd_task *task)
 {
 	GMimeMessage *message;
 	GMimeParser *parser;
@@ -1587,7 +1593,11 @@ process_message (struct rspamd_task *task)
 
 		if (message == NULL) {
 			msg_warn ("cannot construct mime from stream");
-			return -1;
+			g_set_error (&task->err, rspamd_message_quark(), RSPAMD_FILTER_ERROR,\
+				"cannot parse MIME in the message");
+			/* TODO: backport to 0.9 */
+			g_object_unref (parser);
+			return FALSE;
 		}
 
 		task->message = message;
@@ -1600,7 +1610,11 @@ process_message (struct rspamd_task *task)
 			task->message_id = "undef";
 		}
 
-		task->parser_recursion = 0;
+		/*
+		 * XXX: we use this strange value to save bytes in the task for
+		 * saving foreach recursion
+		 */
+		task->scan_milliseconds = 0;
 #ifdef GMIME24
 		g_mime_message_foreach (message, mime_foreach_callback, task);
 #else
@@ -1612,12 +1626,17 @@ process_message (struct rspamd_task *task)
 		g_object_unref (task->parser_parent_part);
 		g_mime_message_foreach_part (message, mime_foreach_callback, task);
 #endif
+		task->scan_milliseconds = 0;
 
 		debug_task ("found %d parts in message", task->parts_count);
 		if (task->queue_id == NULL) {
 			task->queue_id = "undef";
 		}
 
+		/*
+		 * TODO: we can save resourses if not copy headers here by using
+		 * g_mime_parser_get_headers_end
+		 */
 #ifdef GMIME24
 		task->raw_headers_str =
 			g_mime_object_get_headers (GMIME_OBJECT (task->message));
@@ -1631,11 +1650,12 @@ process_message (struct rspamd_task *task)
 			process_raw_headers (task->raw_headers, task->task_pool,
 					task->raw_headers_str);
 		}
+
 		process_images (task);
 
 		/* Parse received headers */
 		first =
-			message_get_header (task, "Received", FALSE);
+			rspamd_message_get_header (task, "Received", FALSE);
 		cur = first;
 		while (cur) {
 			recv =
@@ -1691,14 +1711,19 @@ process_message (struct rspamd_task *task)
 			(rspamd_mempool_destruct_t) g_object_unref,	 part);
 		rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) destroy_message, task->message);
-		/* Now parse in a normal way */
-		task->parser_recursion = 0;
+
+		/*
+		 * XXX: we use this strange value to save bytes in the task for
+		 * saving foreach recursion
+		 */
+		task->scan_milliseconds = 0;
 #ifdef GMIME24
 		g_mime_message_foreach (task->message, mime_foreach_callback, task);
 #else
 		g_mime_message_foreach_part (task->message, mime_foreach_callback,
 			task);
 #endif
+		task->scan_milliseconds = 0;
 		/* Generate message ID */
 		mid = g_mime_utils_generate_message_id ("localhost.localdomain");
 		rspamd_mempool_add_destructor (task->task_pool,
@@ -1740,7 +1765,7 @@ process_message (struct rspamd_task *task)
 	}
 
 	/* Parse urls inside Subject header */
-	cur = message_get_header (task, "Subject", FALSE);
+	cur = rspamd_message_get_header (task, "Subject", FALSE);
 	if (cur) {
 		p = cur->data;
 		len = strlen (p);
@@ -1779,13 +1804,11 @@ process_message (struct rspamd_task *task)
 		}
 	}
 
-	return 0;
+	return TRUE;
 }
 
-
-
 GList *
-message_get_header (struct rspamd_task *task,
+rspamd_message_get_header (struct rspamd_task *task,
 	const gchar *field,
 	gboolean strong)
 {

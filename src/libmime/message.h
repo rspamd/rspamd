@@ -72,13 +72,11 @@ struct raw_header {
 };
 
 /**
- * Process message with all filters/statfiles, extract mime parts, urls and
- * call metrics consolidation functions
+ * Parse and pre-process mime message
  * @param task worker_task object
- * @return 0 if we have delayed filters to process and 1 if we have finished with processing
+ * @return
  */
-gint process_message (struct rspamd_task *task);
-
+gboolean rspamd_message_parse (struct rspamd_task *task);
 
 /*
  * Get a list of header's values with specified header's name using raw headers
@@ -87,7 +85,7 @@ gint process_message (struct rspamd_task *task);
  * @param strong if this flag is TRUE header's name is case sensitive, otherwise it is not
  * @return A list of header's values or NULL. Unlike previous function it is NOT required to free list or values. I should rework one of these functions some time.
  */
-GList * message_get_header (struct rspamd_task *task,
+GList * rspamd_message_get_header (struct rspamd_task *task,
 	const gchar *field,
 	gboolean strong);
 

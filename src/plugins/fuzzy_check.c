@@ -1227,7 +1227,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 
 	saved = rspamd_mempool_alloc0 (task->task_pool, sizeof (gint));
 	err = rspamd_mempool_alloc0 (task->task_pool, sizeof (GError *));
-	r = process_message (task);
+	r = rspamd_message_parse (task);
 	if (r == -1) {
 		msg_warn ("<%s>: cannot process message for fuzzy", task->message_id);
 		rspamd_task_free (task, FALSE);

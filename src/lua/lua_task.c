@@ -623,7 +623,7 @@ lua_task_process_message (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL && task->msg.len > 0) {
-		if (process_message (task) == 0) {
+		if (rspamd_message_parse (task) == 0) {
 			lua_pushboolean (L, TRUE);
 		}
 		else {

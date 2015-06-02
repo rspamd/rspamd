@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, Vsevolod Stakhov
+/* Copyright (c) 2014-2015, Vsevolod Stakhov
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -51,6 +51,32 @@ enum rspamd_metric_action {
 	METRIC_ACTION_MAX
 };
 
+enum rspamd_task_stage {
+	RSPAMD_TASK_STAGE_CONNECT = (1 << 0),
+	RSPAMD_TASK_STAGE_ENVELOPE = (1 << 1),
+	RSPAMD_TASK_STAGE_READ_MESSAGE = (1 << 2),
+	RSPAMD_TASK_STAGE_PRE_FILTERS = (1 << 3),
+	RSPAMD_TASK_STAGE_FILTERS = (1 << 4),
+	RSPAMD_TASK_STAGE_CLASSIFIERS = (1 << 5),
+	RSPAMD_TASK_STAGE_COMPOSITES = (1 << 6),
+	RSPAMD_TASK_STAGE_POST_FILTERS = (1 << 7),
+	RSPAMD_TASK_STAGE_DONE = (1 << 8),
+	RSPAMD_TASK_STAGE_REPLIED = (1 << 9)
+};
+
+#define RSPAMD_TASK_PROCESS_ALL (RSPAMD_TASK_STAGE_CONNECT | \
+		RSPAMD_TASK_STAGE_ENVELOPE | \
+		RSPAMD_TASK_STAGE_READ_MESSAGE | \
+		RSPAMD_TASK_STAGE_PRE_FILTERS | \
+		RSPAMD_TASK_STAGE_FILTERS | \
+		RSPAMD_TASK_STAGE_CLASSIFIERS | \
+		RSPAMD_TASK_STAGE_POST_FILTERS | \
+		RSPAMD_TASK_STAGE_DONE)
+#define RSPAMD_TASK_PROCESS_LEARN (RSPAMD_TASK_STAGE_CONNECT | \
+		RSPAMD_TASK_STAGE_ENVELOPE | \
+		RSPAMD_TASK_STAGE_READ_MESSAGE | \
+		RSPAMD_TASK_STAGE_DONE)
+
 #define RSPAMD_TASK_FLAG_MIME (1 << 0)
 #define RSPAMD_TASK_FLAG_JSON (1 << 1)
 #define RSPAMD_TASK_FLAG_SKIP_EXTRA (1 << 2)
@@ -65,6 +91,7 @@ enum rspamd_metric_action {
 #define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_JSON(task) (((task)->flags & RSPAMD_TASK_FLAG_JSON))
 #define RSPAMD_TASK_IS_SPAMC(task) (((task)->flags & RSPAMD_TASK_FLAG_SPAMC))
+#define RSPAMD_TASK_IS_PROCESSED(task) (((task)->processed_stages & RSPAMD_TASK_STAGE_DONE))
 
 typedef gint (*protocol_reply_func)(struct rspamd_task *task);
 
@@ -79,15 +106,7 @@ struct custom_command {
 struct rspamd_task {
 	struct rspamd_worker *worker;                               /**< pointer to worker object						*/
 	struct custom_command *custom_cmd;                          /**< custom command if any							*/
-	enum {
-		READ_MESSAGE,
-		WAIT_PRE_FILTER,
-		WAIT_FILTER,
-		WAIT_POST_FILTER,
-		WRITE_REPLY,
-		WRITING_REPLY,
-		CLOSING_CONNECTION
-	} state;                                                    /**< current session state							*/
+	guint processed_stages;										/**< bits of stages that are processed				*/
 	enum rspamd_command cmd;                                    /**< command										*/
 	gint sock;                                                  /**< socket descriptor								*/
 	guint flags;												/**< Bit flags										*/
@@ -135,14 +154,12 @@ struct rspamd_task {
 	GList *messages;                                            /**< list of messages that would be reported		*/
 	GHashTable *re_cache;                                       /**< cache for matched or not matched regexps		*/
 	struct rspamd_config *cfg;                                  /**< pointer to config object						*/
-	gchar *last_error;                                          /**< last error										*/
-	gint error_code;                                                /**< code of last error								*/
+	GError *err;
 	rspamd_mempool_t *task_pool;                                    /**< memory pool for task							*/
 	double time_real;
 	double time_virtual;
 	struct timeval tv;
 	guint32 scan_milliseconds;                                  /**< how much milliseconds passed					*/
-	guint32 parser_recursion;                                   /**< for avoiding recursion stack overflow			*/
 	gboolean (*fin_callback)(struct rspamd_task *task, void *arg); /**< calback for filters finalizing					*/
 	void *fin_arg;                                              /**< argument for fin callback						*/
 
@@ -151,7 +168,7 @@ struct rspamd_task {
 	struct rspamd_dns_resolver *resolver;                       /**< DNS resolver									*/
 	struct event_base *ev_base;                                 /**< Event base										*/
 
-	gpointer classify_data;										/**< Opaque classifiers data						*/
+	gpointer checkpoint;										/**< Opaque checkpoint data						*/
 
 	struct {
 		enum rspamd_metric_action action;                       /**< Action of pre filters							*/
@@ -184,15 +201,22 @@ void rspamd_task_restore (void *arg);
 gboolean rspamd_task_fin (void *arg);
 
 /**
- * Process task from http message and write reply or call task->fin_handler
+ * Load HTTP message with body in `msg` to an rspamd_task
+ * @param task
+ * @param msg
+ * @param start
+ * @param len
+ * @return
+ */
+gboolean rspamd_task_load_message (struct rspamd_task *task,
+	struct rspamd_http_message *msg, const gchar *start, gsize len);
+
+/**
+ * Process task
  * @param task task to process
- * @param msg incoming http message
- * @param process_extra_filters whether to check pre and post filters
  * @return task has been successfully parsed and processed
  */
-gboolean rspamd_task_process (struct rspamd_task *task,
-	struct rspamd_http_message *msg, const gchar *start, gsize len,
-	gboolean process_extra_filters);
+gboolean rspamd_task_process (struct rspamd_task *task, guint stages);
 
 /**
  * Return address of sender or NULL
@@ -235,5 +259,17 @@ guint rspamd_task_re_cache_add (struct rspamd_task *task, const gchar *re,
  * @return the current value of element or RSPAMD_TASK_CACHE_NO_VALUE
  */
 guint rspamd_task_re_cache_check (struct rspamd_task *task, const gchar *re);
+
+/**
+ * Learn specified statfile with message in a task
+ * @param statfile symbol of statfile
+ * @param task worker's task object
+ * @param err pointer to GError
+ * @return true if learn succeed
+ */
+gboolean rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
+	struct rspamd_task *task,
+	gboolean is_spam,
+	GError **err);
 
 #endif /* TASK_H_ */

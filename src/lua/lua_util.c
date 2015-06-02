@@ -195,23 +195,28 @@ lua_util_process_message (lua_State *L)
 		task->s = rspamd_session_create (task->task_pool, rspamd_task_fin,
 					rspamd_task_restore, rspamd_task_free_hard, task);
 
-		if (rspamd_task_process (task, NULL, message, mlen, TRUE)) {
-			event_base_loop (base, 0);
-
-			if (res != NULL) {
-				ucl_object_push_lua (L, res, true);
-
-				ucl_object_unref (res);
-			}
-			else {
-				ucl_object_push_lua (L, rspamd_protocol_write_ucl (task, NULL),
-						true);
-				rdns_resolver_release (task->resolver->r);
-				rspamd_task_free_hard (task);
-			}
+		if (!rspamd_task_load_message (task, NULL, message, mlen)) {
+			lua_pushnil (L);
 		}
 		else {
-			lua_pushnil (L);
+			if (rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL)) {
+				event_base_loop (base, 0);
+
+				if (res != NULL) {
+					ucl_object_push_lua (L, res, true);
+
+					ucl_object_unref (res);
+				}
+				else {
+					ucl_object_push_lua (L, rspamd_protocol_write_ucl (task, NULL),
+							true);
+					rdns_resolver_release (task->resolver->r);
+					rspamd_task_free_hard (task);
+				}
+			}
+			else {
+				lua_pushnil (L);
+			}
 		}
 
 		event_base_free (base);

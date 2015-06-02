@@ -488,6 +488,26 @@ typedef off_t goffset;
 #endif
 #endif
 
+#ifndef PARAM_H_HAS_BITSET
+/* Bit map related macros. */
+#define NBBY    8               /* number of bits in a byte */
+#define setbit(a, \
+		i)     (((unsigned char *)(a))[(i) / NBBY] |= 1 << ((i) % NBBY))
+#define clrbit(a, \
+		i)     (((unsigned char *)(a))[(i) / NBBY] &= ~(1 << ((i) % NBBY)))
+#define isset(a,i)                                                      \
+	(((const unsigned char *)(a))[(i) / NBBY] & (1 << ((i) % NBBY)))
+#define isclr(a,i)                                                      \
+	((((const unsigned char *)(a))[(i) / NBBY] & (1 << ((i) % NBBY))) == 0)
+#endif
+
+#ifndef BITSPERBYTE
+# define BITSPERBYTE (NBBY * sizeof (char))
+#endif
+#ifndef NBYTES
+# define NBYTES(nbits)   (((nbits) + BITSPERBYTE - 1) / BITSPERBYTE)
+#endif
+
 /* Forwarded declaration */
 struct module_ctx;
 struct rspamd_config;

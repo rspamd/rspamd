@@ -166,7 +166,7 @@ lmtp_read_socket (rspamd_fstring_t * in, void *arg)
 		}
 		break;
 	case READ_MESSAGE:
-		r = process_message (lmtp->task);
+		r = rspamd_message_parse (lmtp->task);
 		r = rspamd_process_filters (lmtp->task);
 		if (r == -1) {
 			return FALSE;
