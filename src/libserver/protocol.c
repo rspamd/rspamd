@@ -1147,6 +1147,8 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 	rspamd_http_connection_reset (task->http_conn);
 	rspamd_http_connection_write_message (task->http_conn, msg, NULL,
 		ctype, task, task->sock, &task->tv, task->ev_base);
+
+	task->processed_stages |= RSPAMD_TASK_STAGE_REPLIED;
 }
 
 void

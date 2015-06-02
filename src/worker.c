@@ -106,8 +106,6 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 
 	ctx = task->worker->ctx;
 
-	task->state = WRITE_REPLY;
-
 	if (!rspamd_protocol_handle_request (task, msg)) {
 		return 0;
 	}
@@ -116,15 +114,12 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 		return 0;
 	}
 
-	if (msg->body->len == 0) {
-		msg_err ("got zero length body, cannot continue");
-		task->last_error = "message's body is empty";
-		task->error_code = RSPAMD_LENGTH_ERROR;
-
+	if (!rspamd_task_load_message (task, msg, chunk, len)) {
+		rspamd_session_destroy (task->s);
 		return 0;
 	}
 
-	rspamd_task_process (task, msg, chunk, len, TRUE);
+	rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL);
 
 	return 0;
 }
@@ -146,25 +141,11 @@ rspamd_worker_finish_handler (struct rspamd_http_connection *conn,
 {
 	struct rspamd_task *task = (struct rspamd_task *) conn->ud;
 
-	if (task->state == CLOSING_CONNECTION || task->state == WRITING_REPLY) {
+	if (task->processed_stages & RSPAMD_TASK_STAGE_REPLIED) {
 		/* We are done here */
 		msg_debug ("normally closing connection from: %s",
 			rspamd_inet_address_to_string (task->client_addr));
 		rspamd_session_destroy (task->s);
-	}
-	else if (task->state == WRITE_REPLY) {
-		/*
-		 * We can come here if no filters has delayed their job and we want to
-		 * write reply immediately. But this handler is executed when message
-		 * is read
-		 */
-		msg_debug ("want write message to the wire: %s",
-			rspamd_inet_address_to_string (task->client_addr));
-		/*
-		 * If all filters have finished their tasks, this function will trigger
-		 * writing a reply.
-		 */
-		rspamd_session_pending (task->s);
 	}
 
 	return 0;

@@ -297,66 +297,6 @@ rspamd_task_insert_result_single (struct rspamd_task *task,
 	insert_result_common (task, symbol, flag, opts, TRUE);
 }
 
-static void
-insert_metric_header (gpointer metric_name, gpointer metric_value,
-	gpointer data)
-{
-#ifndef GLIB_HASH_COMPAT
-	struct rspamd_task *task = (struct rspamd_task *)data;
-	gint r = 0;
-	/* Try to be rfc2822 compatible and avoid long headers with folding */
-	gchar header_name[128], outbuf[1000];
-	GList *symbols = NULL, *cur;
-	struct metric_result *metric_res = (struct metric_result *)metric_value;
-	double ms;
-
-	rspamd_snprintf (header_name,
-		sizeof (header_name),
-		"X-Spam-%s",
-		metric_res->metric->name);
-
-	if (!check_metric_settings (task, metric_res->metric, &ms)) {
-		ms = metric_res->metric->actions[METRIC_ACTION_REJECT].score;
-	}
-	if (ms > 0 && metric_res->score >= ms) {
-		r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r,
-				"yes; %.2f/%.2f/%.2f; ", metric_res->score, ms, ms);
-	}
-	else {
-		r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r,
-				"no; %.2f/%.2f/%.2f; ", metric_res->score, ms, ms);
-	}
-
-	symbols = g_hash_table_get_keys (metric_res->symbols);
-	cur = symbols;
-	while (cur) {
-		if (g_list_next (cur) != NULL) {
-			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r,
-					"%s,", (gchar *)cur->data);
-		}
-		else {
-			r += rspamd_snprintf (outbuf + r, sizeof (outbuf) - r,
-					"%s", (gchar *)cur->data);
-		}
-		cur = g_list_next (cur);
-	}
-	g_list_free (symbols);
-#ifdef GMIME24
-	g_mime_object_append_header (GMIME_OBJECT (
-			task->message), header_name, outbuf);
-#else
-	g_mime_message_add_header (task->message, header_name, outbuf);
-#endif
-
-#endif /* GLIB_COMPAT */
-}
-
-void
-insert_headers (struct rspamd_task *task)
-{
-	g_hash_table_foreach (task->results, insert_metric_header, task);
-}
-
 gboolean
 rspamd_action_from_str (const gchar *data, gint *result)
 {
