@@ -27,7 +27,8 @@
 #include "protocol.h"
 #include "message.h"
 #include "lua/lua_common.h"
-
+#include "composites.h"
+#include "stat_api.h"
 
 static GQuark
 rspamd_task_quark (void)
@@ -122,64 +123,20 @@ gboolean
 rspamd_task_fin (void *arg)
 {
 	struct rspamd_task *task = (struct rspamd_task *) arg;
-	gint r;
 
 	/* Task is already finished or skipped */
-	if (task->state == WRITE_REPLY) {
+	if (RSPAMD_TASK_IS_PROCESSED (task)) {
 		rspamd_task_reply (task);
 		return TRUE;
 	}
 
-	/* We processed all filters and want to process statfiles */
-	if (task->state != WAIT_POST_FILTER && task->state != WAIT_PRE_FILTER) {
-		/* Process all statfiles */
-		/* Non-threaded version */
-		rspamd_process_statistics (task);
-
-		if (task->cfg->post_filters) {
-			/* More to process */
-			/* Special state */
-			task->state = WAIT_POST_FILTER;
-			return FALSE;
-		}
-
-	}
-
-	/* We are on post-filter waiting state */
-	if (task->state != WAIT_PRE_FILTER) {
-		/* Check if we have all events finished */
-		task->state = WRITE_REPLY;
+	if (!rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL)) {
 		rspamd_task_reply (task);
-	}
-	else {
-		/* We were waiting for pre-filter */
-		if (task->pre_result.action != METRIC_ACTION_NOACTION) {
-			/* Write result based on pre filters */
-			task->state = WRITE_REPLY;
-			rspamd_task_reply (task);
-			return TRUE;
-		}
-		else {
-			task->state = WAIT_FILTER;
-			r = rspamd_process_filters (task);
-			if (r == -1) {
-				task->last_error = "Filter processing error";
-				task->error_code = RSPAMD_FILTER_ERROR;
-				task->state = WRITE_REPLY;
-				rspamd_task_reply (task);
-				return TRUE;
-			}
-
-			if (RSPAMD_TASK_IS_SKIPPED (task)) {
-				rspamd_task_reply (task);
-			}
-			else {
-				return FALSE;
-			}
-		}
+		return TRUE;
 	}
 
-	return TRUE;
+	/* One more iteration */
+	return FALSE;
 }
 
 /*
@@ -188,13 +145,7 @@ rspamd_task_fin (void *arg)
 void
 rspamd_task_restore (void *arg)
 {
-	struct rspamd_task *task = (struct rspamd_task *) arg;
-
-	/* Call post filters */
-	if (task->state == WAIT_POST_FILTER &&
-			!(task->flags & RSPAMD_TASK_FLAG_SKIP_EXTRA)) {
-		rspamd_lua_call_post_filters (task);
-	}
+	/* XXX: not needed now ? */
 }
 
 /*
@@ -354,6 +305,51 @@ rspamd_task_select_processing_stage (struct rspamd_task *task, guint stages)
 
 	/* We are done */
 	return RSPAMD_TASK_STAGE_DONE;
+}
+
+static gboolean
+check_metric_settings (struct rspamd_task *task, struct metric *metric,
+	double *score)
+{
+	const ucl_object_t *mobj, *reject, *act;
+	double val;
+
+	if (task->settings == NULL) {
+		return FALSE;
+	}
+
+	mobj = ucl_object_find_key (task->settings, metric->name);
+	if (mobj != NULL) {
+		act = ucl_object_find_key (mobj, "actions");
+		if (act != NULL) {
+			reject = ucl_object_find_key (act,
+					rspamd_action_to_str (METRIC_ACTION_REJECT));
+			if (reject != NULL && ucl_object_todouble_safe (reject, &val)) {
+				*score = val;
+				return TRUE;
+			}
+		}
+	}
+
+	return FALSE;
+}
+
+/* Return true if metric has score that is more than spam score for it */
+static gboolean
+check_metric_is_spam (struct rspamd_task *task, struct metric *metric)
+{
+	struct metric_result *res;
+	double ms;
+
+	res = g_hash_table_lookup (task->results, metric->name);
+	if (res) {
+		if (!check_metric_settings (task, metric, &ms)) {
+			ms = metric->actions[METRIC_ACTION_REJECT].score;
+		}
+		return (ms > 0 && res->score >= ms);
+	}
+
+	return FALSE;
 }
 
 static gboolean
@@ -606,39 +602,4 @@ rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
 	GError **err)
 {
 	return rspamd_stat_learn (task, is_spam, task->cfg->lua_state, err);
-}
-
-/* Return true if metric has score that is more than spam score for it */
-static gboolean
-check_metric_is_spam (struct rspamd_task *task, struct metric *metric)
-{
-	struct metric_result *res;
-	double ms;
-
-	/* Avoid concurrency while checking results */
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
-	g_static_mutex_lock (&result_mtx);
-#else
-	G_LOCK (result_mtx);
-#endif
-	res = g_hash_table_lookup (task->results, metric->name);
-	if (res) {
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
-		g_static_mutex_unlock (&result_mtx);
-#else
-		G_UNLOCK (result_mtx);
-#endif
-		if (!check_metric_settings (task, metric, &ms)) {
-			ms = metric->actions[METRIC_ACTION_REJECT].score;
-		}
-		return (ms > 0 && res->score >= ms);
-	}
-
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
-	g_static_mutex_unlock (&result_mtx);
-#else
-	G_UNLOCK (result_mtx);
-#endif
-
-	return FALSE;
 }

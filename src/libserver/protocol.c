@@ -101,6 +101,12 @@
 
 static GList *custom_commands = NULL;
 
+static GQuark
+rspamd_protocol_quark (void)
+{
+	return g_quark_from_static_string ("protocol-error");
+}
+
 /*
  * Remove <> from the fixed string and copy it to the pool
  */
@@ -146,8 +152,7 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	const gchar *p;
 
 	if (msg->url == NULL || msg->url->len == 0) {
-		task->last_error = "command is absent";
-		task->error_code = 400;
+		g_set_error (&task->err, rspamd_protocol_quark(), 400, "missing command");
 		return FALSE;
 	}
 
@@ -229,9 +234,9 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	return TRUE;
 
 err:
-	debug_task ("bad command: %s", p);
-	task->last_error = "invalid command";
-	task->error_code = 400;
+	g_set_error (&task->err, rspamd_protocol_quark(), 400, "invalid command: %s",
+			p);
+
 	return FALSE;
 }
 
@@ -433,8 +438,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 	if (!res && task->cfg->strict_protocol_headers) {
 		msg_err (
 			"deny processing of a request with incorrect or unknown headers");
-		task->last_error = "invalid header";
-		task->error_code = 400;
+		g_set_error (&task->err, rspamd_protocol_quark, 400, "invalid header command");
 		return FALSE;
 	}
 
@@ -1103,17 +1107,19 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 
 	msg->date = time (NULL);
 
-	task->state = WRITING_REPLY;
 
 	debug_task ("writing reply to client");
-	if (task->error_code != 0) {
+	if (task->err != NULL) {
 		ucl_object_t *top = NULL;
 
 		top = ucl_object_typed_new (UCL_OBJECT);
-		msg->code = 500 + task->error_code % 100;
-		msg->status = g_string_new (task->last_error);
-		ucl_object_insert_key (top, ucl_object_fromstring (task->last_error),
+		msg->code = 500 + task->err->code % 100;
+		msg->status = g_string_new (task->err->message);
+		ucl_object_insert_key (top, ucl_object_fromstring (task->err->message),
 			"error", 0, false);
+		ucl_object_insert_key (top,
+			ucl_object_fromstring (g_quark_to_string (task->err->domain)),
+			"error_domain", 0, false);
 		msg->body = g_string_sized_new (256);
 		rspamd_ucl_emit_gstring (top, UCL_EMIT_JSON_COMPACT, msg->body);
 		ucl_object_unref (top);

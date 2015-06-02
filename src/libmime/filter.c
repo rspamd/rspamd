@@ -297,33 +297,6 @@ rspamd_task_insert_result_single (struct rspamd_task *task,
 	insert_result_common (task, symbol, flag, opts, TRUE);
 }
 
-static gboolean
-check_metric_settings (struct rspamd_task *task, struct metric *metric,
-	double *score)
-{
-	const ucl_object_t *mobj, *reject, *act;
-	double val;
-
-	if (task->settings == NULL) {
-		return FALSE;
-	}
-
-	mobj = ucl_object_find_key (task->settings, metric->name);
-	if (mobj != NULL) {
-		act = ucl_object_find_key (mobj, "actions");
-		if (act != NULL) {
-			reject = ucl_object_find_key (act,
-					rspamd_action_to_str (METRIC_ACTION_REJECT));
-			if (reject != NULL && ucl_object_todouble_safe (reject, &val)) {
-				*score = val;
-				return TRUE;
-			}
-		}
-	}
-
-	return FALSE;
-}
-
 static void
 insert_metric_header (gpointer metric_name, gpointer metric_value,
 	gpointer data)
