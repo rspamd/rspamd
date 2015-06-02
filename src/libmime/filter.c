@@ -40,21 +40,6 @@
 
 #define COMMON_PART_FACTOR 95
 
-#ifndef PARAM_H_HAS_BITSET
-/* Bit map related macros. */
-#define NBBY    8               /* number of bits in a byte */
-#define setbit(a, \
-		i)     (((unsigned char *)(a))[(i) / NBBY] |= 1 << ((i) % NBBY))
-#define clrbit(a, \
-		i)     (((unsigned char *)(a))[(i) / NBBY] &= ~(1 << ((i) % NBBY)))
-#define isset(a,i)                                                      \
-	(((const unsigned char *)(a))[(i) / NBBY] & (1 << ((i) % NBBY)))
-#define isclr(a,i)                                                      \
-	((((const unsigned char *)(a))[(i) / NBBY] & (1 << ((i) % NBBY))) == 0)
-#endif
-#define BITSPERBYTE (8 * sizeof (gchar))
-#define NBYTES(nbits)   (((nbits) + BITSPERBYTE - 1) / BITSPERBYTE)
-
 static rspamd_expression_atom_t * rspamd_composite_expr_parse (const gchar *line, gsize len,
 		rspamd_mempool_t *pool, gpointer ud, GError **err);
 static gint rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom);
