@@ -60,12 +60,16 @@ static gboolean always_malloc = FALSE;
 static gsize
 pool_chain_free (struct _pool_chain *chain)
 {
-	return chain->len - (gsize)(chain->pos - chain->begin + MEM_ALIGNMENT);
+	gint64 occupied = chain->pos - chain->begin + MEM_ALIGNMENT;
+
+	return occupied < (gint64)chain->len ? chain->len - occupied : 0;
 }
 static gsize
 pool_chain_free_shared (struct _pool_chain_shared *chain)
 {
-	return chain->len - (gsize)(chain->pos - chain->begin + MEM_ALIGNMENT);
+	gint64 occupied = chain->pos - chain->begin + MEM_ALIGNMENT;
+
+	return occupied < (gint64)chain->len ? chain->len - occupied : 0;
 }
 
 static struct _pool_chain *
