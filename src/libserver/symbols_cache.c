@@ -265,30 +265,30 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 			if (elt) {
 				item->frequency = ucl_object_toint (elt);
 			}
+
+			if (item->type == SYMBOL_TYPE_VIRTUAL && item->parent != -1) {
+				g_assert (item->parent < (gint)cache->items_by_order->len);
+				parent = g_ptr_array_index (cache->items_by_order, item->parent);
+
+				if (parent->weight < item->weight) {
+					parent->weight = item->weight;
+				}
+
+				/*
+				 * We maintain avg_time for virtual symbols equal to the
+				 * parent item avg_time
+				 */
+				parent->avg_time = item->avg_time;
+				parent->avg_counter = item->avg_counter;
+			}
+
+			if (abs (item->weight) > cache->max_weight) {
+				cache->max_weight = abs (item->weight);
+			}
+
+			cache->total_freq += item->frequency;
 		}
 	}
-
-	if (item->type == SYMBOL_TYPE_VIRTUAL && item->parent != -1) {
-		g_assert (item->parent < (gint)cache->items_by_order->len);
-		parent = g_ptr_array_index (cache->items_by_order, item->parent);
-
-		if (parent->weight < item->weight) {
-			parent->weight = item->weight;
-		}
-
-		/*
-		 * We maintain avg_time for virtual symbols equal to the
-		 * parent item avg_time
-		 */
-		parent->avg_time = item->avg_time;
-		parent->avg_counter = item->avg_counter;
-	}
-
-	if (abs (item->weight) > cache->max_weight) {
-		cache->max_weight = abs (item->weight);
-	}
-
-	cache->total_freq += item->frequency;
 
 	ucl_object_iterate_free (it);
 	ucl_object_unref (top);
