@@ -80,6 +80,15 @@ struct cache_item {
 	gint priority;
 	gint id;
 	gdouble metric_weight;
+
+	/* Dependencies */
+	GArray *deps;
+	GArray *rdeps;
+};
+
+struct cache_dependency {
+	gchar *name;
+	gint id;
 };
 
 /* XXX: Maybe make it configurable */
@@ -720,6 +729,11 @@ rspamd_symbols_cache_validate (struct symbols_cache *cache,
 	return TRUE;
 }
 
+struct cache_savepoint {
+	guchar *processed_bits;
+	guint processed_num;
+};
+
 gboolean
 rspamd_symbols_cache_process_symbol (struct rspamd_task * task,
 	struct symbols_cache * cache,
@@ -728,15 +742,39 @@ rspamd_symbols_cache_process_symbol (struct rspamd_task * task,
 	double t1, t2;
 	guint64 diff;
 	struct cache_item *item = NULL;
-	guintptr idx = GPOINTER_TO_UINT (*save);
+	struct cache_savepoint *checkpoint;
+	gint idx = -1, i;
 
 	g_assert (cache != NULL);
+	g_assert (save != NULL);
 
-	if (idx >= cache->used_items) {
+	if (*save == NULL) {
+		checkpoint = rspamd_mempool_alloc (task->task_pool, sizeof (*checkpoint));
+		checkpoint->processed_bits = rspamd_mempool_alloc (task->task_pool,
+				NBYTES (cache->used_items));
+		/* Inverse to use ffs */
+		memset (checkpoint->processed_bits, 0xff, NBYTES (cache->used_items));
+		checkpoint->processed_num = 0;
+		*save = checkpoint;
+	}
+	else {
+		checkpoint = *save;
+	}
+
+	if (checkpoint->processed_num >= cache->used_items) {
 		/* All symbols are processed */
 		return FALSE;
 	}
 
+	/* TODO: too slow approach */
+	for (i = 0; i < (gint)cache->used_items; i ++) {
+		if (isset (checkpoint->processed_bits, i)) {
+			idx = i;
+			break;
+		}
+	}
+
+	g_assert (idx >= 0 && idx < (gint)cache->items_by_order->len);
 	item = g_ptr_array_index (cache->items_by_order, idx);
 
 	if (!item) {
@@ -763,8 +801,8 @@ rspamd_symbols_cache_process_symbol (struct rspamd_task * task,
 		rspamd_set_counter (item, diff);
 	}
 
-	idx ++;
-	*save = GUINT_TO_POINTER (idx);
+	clrbit (checkpoint->processed_bits, idx);
+	checkpoint->processed_num ++;
 
 	return TRUE;
 }
