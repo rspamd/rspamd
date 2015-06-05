@@ -42,6 +42,7 @@ struct symbols_cache {
 	/* Hash table for fast access */
 	GHashTable *items_by_symbol;
 	GPtrArray *items_by_order;
+	GPtrArray *items_by_id;
 	rspamd_mempool_t *static_pool;
 	gdouble max_weight;
 	guint used_items;
@@ -267,8 +268,8 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 			}
 
 			if (item->type == SYMBOL_TYPE_VIRTUAL && item->parent != -1) {
-				g_assert (item->parent < (gint)cache->items_by_order->len);
-				parent = g_ptr_array_index (cache->items_by_order, item->parent);
+				g_assert (item->parent < (gint)cache->items_by_id->len);
+				parent = g_ptr_array_index (cache->items_by_id, item->parent);
 
 				if (parent->weight < item->weight) {
 					parent->weight = item->weight;
@@ -412,6 +413,7 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	cache->used_items ++;
 	msg_debug ("used items: %d, added symbol: %s", cache->used_items, name);
 	rspamd_set_counter (item, 0);
+	g_ptr_array_add (cache->items_by_id, item);
 	g_ptr_array_add (cache->items_by_order, item);
 
 	if (name != NULL) {
@@ -501,7 +503,8 @@ rspamd_symbols_cache_destroy (struct symbols_cache *cache)
 
 		g_hash_table_destroy (cache->items_by_symbol);
 		rspamd_mempool_delete (cache->static_pool);
-
+		g_ptr_array_free (cache->items_by_id, TRUE);
+		g_ptr_array_free (cache->items_by_order, TRUE);
 		g_slice_free1 (sizeof (*cache), cache);
 	}
 }
@@ -517,6 +520,7 @@ rspamd_symbols_cache_new (void)
 	cache->items_by_symbol = g_hash_table_new (rspamd_str_hash,
 			rspamd_str_equal);
 	cache->items_by_order = g_ptr_array_new ();
+	cache->items_by_id = g_ptr_array_new ();
 	cache->mtx = rspamd_mempool_get_mutex (cache->static_pool);
 	cache->reload_time = CACHE_RELOAD_TIME;
 	cache->total_freq = 1;
@@ -626,8 +630,8 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 	}
 
 	if (item->type == SYMBOL_TYPE_VIRTUAL && item->parent != -1) {
-		g_assert (item->parent < (gint)cache->items_by_order->len);
-		parent = g_ptr_array_index (cache->items_by_order, item->parent);
+		g_assert (item->parent < (gint)cache->items_by_id->len);
+		parent = g_ptr_array_index (cache->items_by_id, item->parent);
 
 		if (abs (parent->weight) < abs (item->weight)) {
 			parent->weight = item->weight;
@@ -785,8 +789,8 @@ rspamd_symbols_cache_counters_cb (gpointer v, gpointer ud)
 				"symbol", 0, false);
 
 		if (item->type == SYMBOL_TYPE_VIRTUAL && item->parent != -1) {
-			g_assert (item->parent < (gint)cbd->cache->items_by_order->len);
-			parent = g_ptr_array_index (cbd->cache->items_by_order,
+			g_assert (item->parent < (gint)cbd->cache->items_by_id->len);
+			parent = g_ptr_array_index (cbd->cache->items_by_id,
 					item->parent);
 			ucl_object_insert_key (obj, ucl_object_fromdouble (item->weight),
 					"weight", 0, false);
@@ -860,9 +864,9 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 		}
 	}
 	/* Sync virtual symbols */
-	for (i = 0; i < cache->items_by_order->len; i ++) {
+	for (i = 0; i < cache->items_by_id->len; i ++) {
 		if (item->parent != -1) {
-			parent = g_ptr_array_index (cache->items_by_order, item->parent);
+			parent = g_ptr_array_index (cache->items_by_id, item->parent);
 			item->avg_time = parent->avg_time;
 			item->avg_counter = parent->avg_counter;
 		}
@@ -905,7 +909,7 @@ rspamd_symbols_cache_inc_frequency (struct symbols_cache *cache,
 
 		/* For virtual symbols we also increase counter for parent */
 		if (item->parent != -1) {
-			parent = g_ptr_array_index (cache->items_by_order, item->parent);
+			parent = g_ptr_array_index (cache->items_by_id, item->parent);
 			parent->frequency ++;
 		}
 	}
