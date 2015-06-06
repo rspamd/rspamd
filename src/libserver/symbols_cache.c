@@ -732,6 +732,8 @@ rspamd_symbols_cache_validate (struct symbols_cache *cache,
 struct cache_savepoint {
 	guchar *processed_bits;
 	guint processed_num;
+	guint pass;
+	gint offset;
 };
 
 gboolean
@@ -755,6 +757,8 @@ rspamd_symbols_cache_process_symbol (struct rspamd_task * task,
 		/* Inverse to use ffs */
 		memset (checkpoint->processed_bits, 0xff, NBYTES (cache->used_items));
 		checkpoint->processed_num = 0;
+		checkpoint->pass = 0;
+		checkpoint->offset = 0;
 		*save = checkpoint;
 	}
 	else {
@@ -767,11 +771,15 @@ rspamd_symbols_cache_process_symbol (struct rspamd_task * task,
 	}
 
 	/* TODO: too slow approach */
-	for (i = 0; i < (gint)cache->used_items; i ++) {
+	for (i = checkpoint->offset * NBBY; i < (gint)cache->used_items; i ++) {
 		if (isset (checkpoint->processed_bits, i)) {
 			idx = i;
 			break;
 		}
+	}
+
+	if (idx >= (checkpoint->offset + 1) * NBBY) {
+		checkpoint->offset ++;
 	}
 
 	g_assert (idx >= 0 && idx < (gint)cache->items_by_order->len);
