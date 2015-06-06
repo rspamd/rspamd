@@ -438,7 +438,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 	if (!res && task->cfg->strict_protocol_headers) {
 		msg_err (
 			"deny processing of a request with incorrect or unknown headers");
-		g_set_error (&task->err, rspamd_protocol_quark, 400, "invalid header command");
+		g_set_error (&task->err, rspamd_protocol_quark(), 400, "invalid header command");
 		return FALSE;
 	}
 
