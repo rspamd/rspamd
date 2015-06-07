@@ -82,12 +82,13 @@ struct cache_item {
 	gdouble metric_weight;
 
 	/* Dependencies */
-	GArray *deps;
-	GArray *rdeps;
+	GPtrArray *deps;
+	GPtrArray *rdeps;
 };
 
 struct cache_dependency {
-	gchar *name;
+	struct cache_item *item;
+	gchar *sym;
 	gint id;
 };
 
@@ -164,7 +165,36 @@ rspamd_set_counter (struct cache_item *item, guint32 value)
 static void
 post_cache_init (struct symbols_cache *cache)
 {
+	struct cache_item *it, *dit;
+	struct cache_dependency *dep, *rdep;
+	guint i, j;
+
 	g_ptr_array_sort_with_data (cache->items_by_order, cache_logic_cmp, cache);
+
+	for (i = 0; i < cache->items_by_id->len; i ++) {
+		it = g_ptr_array_index (cache->items_by_id, i);
+
+		for (j = 0; j < it->deps->len; j ++) {
+			dep = g_ptr_array_index (cache->items_by_id, j);
+			dit = g_hash_table_lookup (cache->items_by_symbol, dep->sym);
+
+			if (dit != NULL) {
+				if (dit->parent != -1) {
+					dit = g_ptr_array_index (cache->items_by_order, dit->parent);
+				}
+
+				rdep = rspamd_mempool_alloc (cache->static_pool, sizeof (*rdep));
+				rdep->sym = dep->sym;
+				rdep->item = it;
+				rdep->id = i;
+				g_ptr_array_add (dit->rdeps, rdep);
+				dep->item = dit;
+			}
+			else {
+				msg_warn ("cannot find dependency on symbol %s", dep->sym);
+			}
+		}
+	}
 }
 
 static gboolean
@@ -424,6 +454,12 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	rspamd_set_counter (item, 0);
 	g_ptr_array_add (cache->items_by_id, item);
 	g_ptr_array_add (cache->items_by_order, item);
+	item->deps = g_ptr_array_new ();
+	item->rdeps = g_ptr_array_new ();
+	rspamd_mempool_add_destructor (cache->static_pool,
+			rspamd_ptr_array_free_hard, item->deps);
+	rspamd_mempool_add_destructor (cache->static_pool,
+			rspamd_ptr_array_free_hard, item->rdeps);
 
 	if (name != NULL) {
 		g_hash_table_insert (cache->items_by_symbol, item->symbol, item);
@@ -959,4 +995,22 @@ rspamd_symbols_cache_inc_frequency (struct symbols_cache *cache,
 			parent->frequency ++;
 		}
 	}
+}
+
+void
+rspamd_symbols_cache_add_dependency (struct symbols_cache *cache,
+		gint id_from, const gchar *to)
+{
+	struct cache_item *source;
+	struct cache_dependency *dep;
+
+	g_assert (id_from < (gint)cache->items_by_id->len);
+
+	source = g_ptr_array_index (cache->items_by_id, id_from);
+	dep = rspamd_mempool_alloc (cache->static_pool, sizeof (*dep));
+	dep->id = id_from;
+	dep->sym = rspamd_mempool_strdup (cache->static_pool, to);
+	/* Will be filled later */
+	dep->item = NULL;
+	g_ptr_array_add (source->deps, dep);
 }

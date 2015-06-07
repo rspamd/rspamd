@@ -173,4 +173,14 @@ void rspamd_symbols_cache_start_refresh (struct symbols_cache * cache,
 void rspamd_symbols_cache_inc_frequency (struct symbols_cache *cache,
 		const gchar *symbol);
 
+/**
+ * Add dependency relation between two symbols identified by id (source) and
+ * a symbolic name (destination). Destination could be virtual or real symbol.
+ * Callback destinations are not yet supported.
+ * @param id_from source symbol
+ * @param to destination name
+ */
+void rspamd_symbols_cache_add_dependency (struct symbols_cache *cache,
+		gint id_from, const gchar *to);
+
 #endif
