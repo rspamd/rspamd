@@ -155,8 +155,8 @@ dns_resolver_init (rspamd_logger_t *logger,
 			msg_err (
 				"cannot parse resolv.conf and no nameservers defined, so no ways to resolve addresses");
 			rdns_resolver_release (new->r);
-			g_slice_free1 (sizeof (struct rspamd_dns_resolver), new);
-			return NULL;
+
+			return new;
 		}
 	}
 	else {
