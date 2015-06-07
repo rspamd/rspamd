@@ -136,9 +136,8 @@ gint rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
  * @param cache symbols cache
  * @param saved_item pointer to currently saved item
  */
-gboolean rspamd_symbols_cache_process_symbol (struct rspamd_task *task,
-	struct symbols_cache *cache,
-	gpointer *save);
+gboolean rspamd_symbols_cache_process_symbols (struct rspamd_task *task,
+	struct symbols_cache *cache);
 
 /**
  * Validate cache items agains theirs weights defined in metrics

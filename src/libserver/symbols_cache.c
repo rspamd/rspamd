@@ -112,7 +112,12 @@ cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 	double weight1, weight2;
 	double f1 = 0, f2 = 0, t1, t2;
 
-	if (i1->priority == i2->priority) {
+	if (i1->deps->len != 0 || i2->deps->len != 0) {
+		/* TODO: handle complex dependencies */
+		w1 = -(i1->deps->len);
+		w2 = -(i2->deps->len);
+	}
+	else if (i1->priority == i2->priority) {
 		f1 = (double)i1->frequency / (double)cache->total_freq;
 		f2 = (double)i2->frequency / (double)cache->total_freq;
 		weight1 = abs (i1->weight) / cache->max_weight;
@@ -770,12 +775,86 @@ struct cache_savepoint {
 	guint processed_num;
 	guint pass;
 	gint offset;
+	struct metric_result *rs;
+	gdouble lim;
+	GPtrArray *waitq;
 };
 
+
+static gboolean
+check_metric_settings (struct rspamd_task *task, struct metric *metric,
+	double *score)
+{
+	const ucl_object_t *mobj, *reject, *act;
+	double val;
+
+	if (task->settings == NULL) {
+		return FALSE;
+	}
+
+	mobj = ucl_object_find_key (task->settings, metric->name);
+	if (mobj != NULL) {
+		act = ucl_object_find_key (mobj, "actions");
+		if (act != NULL) {
+			reject = ucl_object_find_key (act,
+					rspamd_action_to_str (METRIC_ACTION_REJECT));
+			if (reject != NULL && ucl_object_todouble_safe (reject, &val)) {
+				*score = val;
+				return TRUE;
+			}
+		}
+	}
+
+	return FALSE;
+}
+
+/* Return true if metric has score that is more than spam score for it */
+static gboolean
+rspamd_symbols_cache_metric_limit (struct rspamd_task *task,
+		struct cache_savepoint *cp)
+{
+	struct metric_result *res;
+	GList *cur;
+	struct metric *metric;
+	double ms;
+
+	cur = task->cfg->metrics_list;
+
+	if (cp->lim == 0.0) {
+		/*
+		 * Look for metric that has the maximum reject score
+		 */
+		while (cur) {
+			metric = cur->data;
+			res = g_hash_table_lookup (task->results, metric->name);
+
+			if (res) {
+				if (!check_metric_settings (task, metric, &ms)) {
+					ms = metric->actions[METRIC_ACTION_REJECT].score;
+				}
+
+				if (cp->lim < ms) {
+					cp->rs = res;
+					cp->lim = ms;
+				}
+			}
+
+			cur = g_list_next (cur);
+		}
+	}
+
+	g_assert (cp->rs != NULL);
+
+	if (cp->rs->score > cp->lim) {
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 gboolean
-rspamd_symbols_cache_process_symbol (struct rspamd_task * task,
-	struct symbols_cache * cache,
-	gpointer *save)
+rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
+	struct symbols_cache * cache)
 {
 	double t1, t2;
 	guint64 diff;
@@ -784,69 +863,73 @@ rspamd_symbols_cache_process_symbol (struct rspamd_task * task,
 	gint idx = -1, i;
 
 	g_assert (cache != NULL);
-	g_assert (save != NULL);
 
-	if (*save == NULL) {
-		checkpoint = rspamd_mempool_alloc (task->task_pool, sizeof (*checkpoint));
+	if (task->checkpoint == NULL) {
+		checkpoint = rspamd_mempool_alloc0 (task->task_pool, sizeof (*checkpoint));
 		checkpoint->processed_bits = rspamd_mempool_alloc (task->task_pool,
 				NBYTES (cache->used_items));
 		/* Inverse to use ffs */
-		memset (checkpoint->processed_bits, 0xff, NBYTES (cache->used_items));
-		checkpoint->processed_num = 0;
-		checkpoint->pass = 0;
-		checkpoint->offset = 0;
-		*save = checkpoint;
+		memset (checkpoint->processed_bits, 0x0, NBYTES (cache->used_items));
+		checkpoint->waitq = g_ptr_array_new ();
+		rspamd_mempool_add_destructor (task->task_pool,
+				rspamd_ptr_array_free_hard, checkpoint->waitq);
+		task->checkpoint = checkpoint;
+
+		rspamd_create_metric_result (task, DEFAULT_METRIC);
+		if (task->settings) {
+			const ucl_object_t *wl;
+
+			wl = ucl_object_find_key (task->settings, "whitelist");
+			if (wl != NULL) {
+				msg_info ("<%s> is whitelisted", task->message_id);
+				task->flags |= RSPAMD_TASK_FLAG_SKIP;
+				return TRUE;
+			}
+		}
 	}
 	else {
-		checkpoint = *save;
+		checkpoint = task->checkpoint;
 	}
 
 	if (checkpoint->processed_num >= cache->used_items) {
 		/* All symbols are processed */
-		return FALSE;
+		return TRUE;
 	}
 
-	/* TODO: too slow approach */
 	for (i = checkpoint->offset * NBBY; i < (gint)cache->used_items; i ++) {
-		if (isset (checkpoint->processed_bits, i)) {
-			idx = i;
-			break;
-		}
-	}
-
-	if (idx >= (checkpoint->offset + 1) * NBBY) {
-		checkpoint->offset ++;
-	}
-
-	g_assert (idx >= 0 && idx < (gint)cache->items_by_order->len);
-	item = g_ptr_array_index (cache->items_by_order, idx);
-
-	if (!item) {
-		return FALSE;
-	}
-
-	if (item->type == SYMBOL_TYPE_NORMAL || item->type == SYMBOL_TYPE_CALLBACK) {
-		g_assert (item->func != NULL);
-		t1 = rspamd_get_ticks ();
-
-		if (item->symbol != NULL &&
-				G_UNLIKELY (check_debug_symbol (task->cfg, item->symbol))) {
-			rspamd_log_debug (rspamd_main->logger);
-			item->func (task, item->user_data);
-			rspamd_log_nodebug (rspamd_main->logger);
-		}
-		else {
-			item->func (task, item->user_data);
+		if (rspamd_symbols_cache_metric_limit (task, checkpoint)) {
+			msg_info ("<%s> has already scored more than %.2f, so do not "
+					"plan any more checks", task->message_id,
+					checkpoint->rs->score);
+			return TRUE;
 		}
 
-		t2 = rspamd_get_ticks ();
+		item = g_ptr_array_index (cache->items_by_order, idx);
+		if (!isset (checkpoint->processed_bits, i)) {
+			if (item->type == SYMBOL_TYPE_NORMAL || item->type == SYMBOL_TYPE_CALLBACK) {
+				g_assert (item->func != NULL);
+				t1 = rspamd_get_ticks ();
 
-		diff = (t2 - t1) * 1000000;
-		rspamd_set_counter (item, diff);
+				if (item->symbol != NULL &&
+						G_UNLIKELY (check_debug_symbol (task->cfg, item->symbol))) {
+					rspamd_log_debug (rspamd_main->logger);
+					item->func (task, item->user_data);
+					rspamd_log_nodebug (rspamd_main->logger);
+				}
+				else {
+					item->func (task, item->user_data);
+				}
+
+				t2 = rspamd_get_ticks ();
+
+				diff = (t2 - t1) * 1000000;
+				rspamd_set_counter (item, diff);
+			}
+
+			setbit (checkpoint->processed_bits, idx);
+			checkpoint->processed_num ++;
+		}
 	}
-
-	clrbit (checkpoint->processed_bits, idx);
-	checkpoint->processed_num ++;
 
 	return TRUE;
 }

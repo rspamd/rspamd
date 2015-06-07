@@ -312,98 +312,10 @@ rspamd_task_select_processing_stage (struct rspamd_task *task, guint stages)
 }
 
 static gboolean
-check_metric_settings (struct rspamd_task *task, struct metric *metric,
-	double *score)
-{
-	const ucl_object_t *mobj, *reject, *act;
-	double val;
-
-	if (task->settings == NULL) {
-		return FALSE;
-	}
-
-	mobj = ucl_object_find_key (task->settings, metric->name);
-	if (mobj != NULL) {
-		act = ucl_object_find_key (mobj, "actions");
-		if (act != NULL) {
-			reject = ucl_object_find_key (act,
-					rspamd_action_to_str (METRIC_ACTION_REJECT));
-			if (reject != NULL && ucl_object_todouble_safe (reject, &val)) {
-				*score = val;
-				return TRUE;
-			}
-		}
-	}
-
-	return FALSE;
-}
-
-/* Return true if metric has score that is more than spam score for it */
-static gboolean
-check_metric_is_spam (struct rspamd_task *task, struct metric *metric)
-{
-	struct metric_result *res;
-	double ms;
-
-	res = g_hash_table_lookup (task->results, metric->name);
-	if (res) {
-		if (!check_metric_settings (task, metric, &ms)) {
-			ms = metric->actions[METRIC_ACTION_REJECT].score;
-		}
-		return (ms > 0 && res->score >= ms);
-	}
-
-	return FALSE;
-}
-
-static gboolean
 rspamd_process_filters (struct rspamd_task *task)
 {
-	GList *cur;
-	struct metric *metric;
-	gpointer item = NULL;
-
-	/* Insert default metric to be sure that it exists all the time */
-
-	if (task->checkpoint == NULL) {
-		rspamd_create_metric_result (task, DEFAULT_METRIC);
-		if (task->settings) {
-			const ucl_object_t *wl;
-
-			wl = ucl_object_find_key (task->settings, "whitelist");
-			if (wl != NULL) {
-				msg_info ("<%s> is whitelisted", task->message_id);
-				task->flags |= RSPAMD_TASK_FLAG_SKIP;
-				return TRUE;
-			}
-		}
-
-		task->checkpoint = GUINT_TO_POINTER (0x1);
-	}
-	else {
-		/* TODO: in future, we need to add dependencies here */
-		return TRUE;
-	}
-
 	/* Process metrics symbols */
-	while (rspamd_symbols_cache_process_symbol (task, task->cfg->cache, &item)) {
-		/* Check reject actions */
-		cur = task->cfg->metrics_list;
-		while (cur) {
-			metric = cur->data;
-			if (!(task->flags & RSPAMD_TASK_FLAG_PASS_ALL) &&
-				metric->actions[METRIC_ACTION_REJECT].score > 0 &&
-				check_metric_is_spam (task, metric)) {
-				msg_info ("<%s> has already scored more than %.2f, so do not "
-						"plan any more checks", task->message_id,
-						metric->actions[METRIC_ACTION_REJECT].score);
-				return TRUE;
-			}
-			cur = g_list_next (cur);
-		}
-	}
-
-	return TRUE;
+	return rspamd_symbols_cache_process_symbols (task, task->cfg->cache);
 }
 
 gboolean
