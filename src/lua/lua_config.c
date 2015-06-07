@@ -205,6 +205,22 @@ LUA_FUNCTION_DEF (config, register_virtual_symbol);
 LUA_FUNCTION_DEF (config, register_callback_symbol);
 LUA_FUNCTION_DEF (config, register_callback_symbol_priority);
 
+/***
+ * @method rspamd_config:register_dependency(id, dep)
+ * Create a dependency between symbol identified by `id` and a symbol identified
+ * by some symbolic name `dep`
+ * @param {number} id id of source (returned by all register_*_symbol)
+ * @param {string} dep dependency name
+ * @example
+local function cb(task)
+...
+end
+
+local id = rspamd_config:register_symbol('SYM', 1.0, cb)
+rspamd_config:register_dependency(id, 'OTHER_SYM')
+ */
+LUA_FUNCTION_DEF (config, register_dependency);
+
 /**
  * @method rspamd_config:set_metric_symbol(name, weight, [description], [metric])
  * Set the value of a specified symbol in a metric
@@ -306,6 +322,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_virtual_symbol),
 	LUA_INTERFACE_DEF (config, register_callback_symbol),
 	LUA_INTERFACE_DEF (config, register_callback_symbol_priority),
+	LUA_INTERFACE_DEF (config, register_dependency),
 	LUA_INTERFACE_DEF (config, set_metric_symbol),
 	LUA_INTERFACE_DEF (config, add_composite),
 	LUA_INTERFACE_DEF (config, register_module_option),
@@ -1101,6 +1118,23 @@ lua_config_register_callback_symbol_priority (lua_State * L)
 	lua_pushnumber (L, ret);
 
 	return 1;
+}
+
+static gint
+lua_config_register_dependency (lua_State * L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *name = NULL;
+	gint id;
+
+	id = luaL_checknumber (L, 2);
+	name = luaL_checkstring (L, 3);
+
+	if (id > 0 && name != NULL) {
+		rspamd_symbols_cache_add_dependency (cfg->cache, id, name);
+	}
+
+	return 0;
 }
 
 static gint
