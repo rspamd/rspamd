@@ -860,7 +860,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	guint64 diff;
 	struct cache_item *item = NULL;
 	struct cache_savepoint *checkpoint;
-	gint idx = -1, i;
+	gint i;
 
 	g_assert (cache != NULL);
 
@@ -904,7 +904,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 			return TRUE;
 		}
 
-		item = g_ptr_array_index (cache->items_by_order, idx);
+		item = g_ptr_array_index (cache->items_by_order, i);
 		if (!isset (checkpoint->processed_bits, i)) {
 			if (item->type == SYMBOL_TYPE_NORMAL || item->type == SYMBOL_TYPE_CALLBACK) {
 				g_assert (item->func != NULL);
@@ -926,7 +926,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 				rspamd_set_counter (item, diff);
 			}
 
-			setbit (checkpoint->processed_bits, idx);
+			setbit (checkpoint->processed_bits, i);
 			checkpoint->processed_num ++;
 		}
 	}
