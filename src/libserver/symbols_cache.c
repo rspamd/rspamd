@@ -882,17 +882,23 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 		diff = (t2 - t1) * 1000000;
 		rspamd_set_counter (item, diff);
 
+		/* Check has been started */
+		setbit (checkpoint->processed_bits, item->id * 2);
+
 		if (pending_before == pending_after) {
 			/* No new events registered */
-			setbit (checkpoint->processed_bits, item->id);
+			setbit (checkpoint->processed_bits, item->id * 2 + 1);
 
 			return TRUE;
 		}
 
+		/* XXX: add watcher function for each symbol */
+
 		return FALSE;
 	}
 	else {
-		setbit (checkpoint->processed_bits, item->id);
+		setbit (checkpoint->processed_bits, item->id * 2);
+		setbit (checkpoint->processed_bits, item->id * 2 + 1);
 
 		return TRUE;
 	}
@@ -914,9 +920,17 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 
 			g_assert (dep->item != NULL);
 
-			if (!isset (checkpoint->processed_bits, dep->item->id)) {
-				if (!rspamd_symbols_cache_check_symbol (task, cache, item,
-						checkpoint)) {
+			if (!isset (checkpoint->processed_bits, dep->item->id * 2 + 1)) {
+				if (!isset (checkpoint->processed_bits, dep->item->id * 2)) {
+					/* Not started */
+					if (!rspamd_symbols_cache_check_symbol (task, cache, item,
+							checkpoint)) {
+						/* Now started, but has events pending */
+						ret = FALSE;
+					}
+				}
+				else {
+					/* Started but not finished */
 					ret = FALSE;
 				}
 			}
@@ -938,9 +952,9 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 
 	if (task->checkpoint == NULL) {
 		checkpoint = rspamd_mempool_alloc0 (task->task_pool, sizeof (*checkpoint));
-		checkpoint->processed_bits = rspamd_mempool_alloc (task->task_pool,
-				NBYTES (cache->used_items));
-		memset (checkpoint->processed_bits, 0x0, NBYTES (cache->used_items));
+		/* Bit 0: check started, Bit 1: check finished */
+		checkpoint->processed_bits = rspamd_mempool_alloc0 (task->task_pool,
+				NBYTES (cache->used_items) * 2);
 		checkpoint->waitq = g_ptr_array_new ();
 		rspamd_mempool_add_destructor (task->task_pool,
 				rspamd_ptr_array_free_hard, checkpoint->waitq);
@@ -978,7 +992,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 			}
 
 			item = g_ptr_array_index (cache->items_by_order, i);
-			if (!isset (checkpoint->processed_bits, i)) {
+			if (!isset (checkpoint->processed_bits, i * 2)) {
 				if (!rspamd_symbols_cache_check_deps (task, cache, item,
 						checkpoint)) {
 					g_ptr_array_add (checkpoint->waitq, item);
