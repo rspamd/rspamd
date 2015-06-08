@@ -851,12 +851,62 @@ rspamd_symbols_cache_metric_limit (struct rspamd_task *task,
 }
 
 static gboolean
-rspamd_symbols_cache_check_deps (struct symbols_cache *cache,
+rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
+		struct symbols_cache *cache,
+		struct cache_item *item,
+		struct cache_savepoint *checkpoint)
+{
+	guint pending_before, pending_after;
+	double t1, t2;
+	guint64 diff;
+
+	if (item->type == SYMBOL_TYPE_NORMAL || item->type == SYMBOL_TYPE_CALLBACK) {
+
+		g_assert (item->func != NULL);
+		t1 = rspamd_get_ticks ();
+
+		pending_before = rspamd_session_events_pending (task->s);
+		if (item->symbol != NULL &&
+				G_UNLIKELY (check_debug_symbol (task->cfg, item->symbol))) {
+			rspamd_log_debug (rspamd_main->logger);
+			item->func (task, item->user_data);
+			rspamd_log_nodebug (rspamd_main->logger);
+		}
+		else {
+			item->func (task, item->user_data);
+		}
+
+		t2 = rspamd_get_ticks ();
+		pending_after = rspamd_session_events_pending (task->s);
+
+		diff = (t2 - t1) * 1000000;
+		rspamd_set_counter (item, diff);
+
+		if (pending_before == pending_after) {
+			/* No new events registered */
+			setbit (checkpoint->processed_bits, item->id);
+
+			return TRUE;
+		}
+
+		return FALSE;
+	}
+	else {
+		setbit (checkpoint->processed_bits, item->id);
+
+		return TRUE;
+	}
+}
+
+static gboolean
+rspamd_symbols_cache_check_deps (struct rspamd_task *task,
+		struct symbols_cache *cache,
 		struct cache_item *item,
 		struct cache_savepoint *checkpoint)
 {
 	struct cache_dependency *dep;
 	guint i;
+	gboolean ret = TRUE;
 
 	if (item->deps != NULL && item->deps->len > 0) {
 		for (i = 0; i < item->deps->len; i ++) {
@@ -865,24 +915,24 @@ rspamd_symbols_cache_check_deps (struct symbols_cache *cache,
 			g_assert (dep->item != NULL);
 
 			if (!isset (checkpoint->processed_bits, dep->item->id)) {
-				return FALSE;
+				if (!rspamd_symbols_cache_check_symbol (task, cache, item,
+						checkpoint)) {
+					ret = FALSE;
+				}
 			}
 		}
 	}
 
-	return TRUE;
+	return ret;
 }
 
 gboolean
 rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	struct symbols_cache *cache)
 {
-	double t1, t2;
-	guint64 diff;
 	struct cache_item *item = NULL;
 	struct cache_savepoint *checkpoint;
 	gint i;
-	guint pending_before, pending_after;
 
 	g_assert (cache != NULL);
 
@@ -929,41 +979,20 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 
 			item = g_ptr_array_index (cache->items_by_order, i);
 			if (!isset (checkpoint->processed_bits, i)) {
-				if (item->type == SYMBOL_TYPE_NORMAL || item->type == SYMBOL_TYPE_CALLBACK) {
-
-					if (!rspamd_symbols_cache_check_deps (cache, item,
-							checkpoint)) {
-						g_ptr_array_add (checkpoint->waitq, item);
-						continue;
-					}
-
-					g_assert (item->func != NULL);
-					t1 = rspamd_get_ticks ();
-
-					pending_before = rspamd_session_events_pending (task->s);
-					if (item->symbol != NULL &&
-							G_UNLIKELY (check_debug_symbol (task->cfg, item->symbol))) {
-						rspamd_log_debug (rspamd_main->logger);
-						item->func (task, item->user_data);
-						rspamd_log_nodebug (rspamd_main->logger);
-					}
-					else {
-						item->func (task, item->user_data);
-					}
-
-					t2 = rspamd_get_ticks ();
-					pending_after = rspamd_session_events_pending (task->s);
-
-					diff = (t2 - t1) * 1000000;
-					rspamd_set_counter (item, diff);
-
-					if (pending_before == pending_after) {
-						/* No new events registered */
-						setbit (checkpoint->processed_bits, i);
-					}
+				if (!rspamd_symbols_cache_check_deps (task, cache, item,
+						checkpoint)) {
+					g_ptr_array_add (checkpoint->waitq, item);
+					continue;
 				}
+
+				rspamd_symbols_cache_check_symbol (task, cache, item, checkpoint);
 			}
 		}
+
+		checkpoint->pass ++;
+	}
+	else {
+		/* We just go through the blocked symbols and check if they are ready */
 	}
 
 	return TRUE;
