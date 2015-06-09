@@ -863,9 +863,11 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 	if (item->type == SYMBOL_TYPE_NORMAL || item->type == SYMBOL_TYPE_CALLBACK) {
 
 		g_assert (item->func != NULL);
+		/* Check has been started */
+		setbit (checkpoint->processed_bits, item->id * 2);
 		t1 = rspamd_get_ticks ();
-
 		pending_before = rspamd_session_events_pending (task->s);
+
 		if (item->symbol != NULL &&
 				G_UNLIKELY (check_debug_symbol (task->cfg, item->symbol))) {
 			rspamd_log_debug (rspamd_main->logger);
@@ -881,9 +883,6 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 
 		diff = (t2 - t1) * 1000000;
 		rspamd_set_counter (item, diff);
-
-		/* Check has been started */
-		setbit (checkpoint->processed_bits, item->id * 2);
 
 		if (pending_before == pending_after) {
 			/* No new events registered */

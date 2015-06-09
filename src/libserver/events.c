@@ -232,8 +232,6 @@ rspamd_session_pending (struct rspamd_async_session *session)
 				/* Session finished incompletely, perform restoration */
 				if (session->restore != NULL) {
 					session->restore (session->user_data);
-					/* Call pending once more */
-					return rspamd_session_pending (session);
 				}
 			}
 			else {

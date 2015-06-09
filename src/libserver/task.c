@@ -322,17 +322,26 @@ gboolean
 rspamd_task_process (struct rspamd_task *task, guint stages)
 {
 	gint st;
+	gboolean ret = TRUE;
+
+	/* Avoid nested calls */
+	if (task->flags & RSPAMD_TASK_FLAG_PROCESSING) {
+		return TRUE;
+	}
+
 
 	if (RSPAMD_TASK_IS_PROCESSED (task)) {
 		return TRUE;
 	}
+
+	task->flags |= RSPAMD_TASK_FLAG_PROCESSING;
 
 	st = rspamd_task_select_processing_stage (task, stages);
 
 	switch (st) {
 	case RSPAMD_TASK_STAGE_READ_MESSAGE:
 		if (!rspamd_message_parse (task)) {
-			return FALSE;
+			ret = FALSE;
 		}
 		break;
 
@@ -342,13 +351,13 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 
 	case RSPAMD_TASK_STAGE_FILTERS:
 		if (!rspamd_process_filters (task)) {
-			return FALSE;
+			ret = FALSE;
 		}
 		break;
 
 	case RSPAMD_TASK_STAGE_CLASSIFIERS:
 		if (!rspamd_stat_classify (task, task->cfg->lua_state, &task->err)) {
-			return FALSE;
+			ret = FALSE;
 		}
 		break;
 
@@ -362,7 +371,7 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 
 	case RSPAMD_TASK_STAGE_DONE:
 		task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
-		return TRUE;
+		break;
 
 	default:
 		/* TODO: not implemented stage */
@@ -371,7 +380,12 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 
 	if (RSPAMD_TASK_IS_SKIPPED (task)) {
 		task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
-		return TRUE;
+	}
+
+	task->flags &= ~RSPAMD_TASK_FLAG_PROCESSING;
+
+	if (!ret || RSPAMD_TASK_IS_PROCESSED (task)) {
+		return ret;
 	}
 
 	if (rspamd_session_events_pending (task->s) != 0) {
@@ -390,7 +404,7 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		return rspamd_task_process (task, stages);
 	}
 
-	return TRUE;
+	return ret;
 }
 
 const gchar *
