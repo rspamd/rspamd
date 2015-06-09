@@ -173,7 +173,7 @@ rspamd_session_remove_event (struct rspamd_async_session *session,
 	if (found_ev->w) {
 		if (found_ev->w->remain > 0) {
 			if (--found_ev->w->remain == 0) {
-				found_ev->w->cb (found_ev->w->ud);
+				found_ev->w->cb (session->user_data, found_ev->w->ud);
 			}
 		}
 	}
