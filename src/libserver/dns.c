@@ -81,6 +81,12 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	struct rdns_request *req;
 	struct rspamd_dns_request_ud *reqdata = NULL;
 
+	g_assert (resolver != NULL);
+
+	if (resolver->r == NULL) {
+		return FALSE;
+	}
+
 	if (pool != NULL) {
 		reqdata =
 			rspamd_mempool_alloc (pool, sizeof (struct rspamd_dns_request_ud));
@@ -155,6 +161,7 @@ dns_resolver_init (rspamd_logger_t *logger,
 			msg_err (
 				"cannot parse resolv.conf and no nameservers defined, so no ways to resolve addresses");
 			rdns_resolver_release (new->r);
+			new->r = NULL;
 
 			return new;
 		}

@@ -147,6 +147,9 @@ rspamd_worker_finish_handler (struct rspamd_http_connection *conn,
 			rspamd_inet_address_to_string (task->client_addr));
 		rspamd_session_destroy (task->s);
 	}
+	else if (task->processed_stages & RSPAMD_TASK_STAGE_DONE) {
+		rspamd_session_pending (task->s);
+	}
 
 	return 0;
 }
