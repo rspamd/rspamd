@@ -1450,8 +1450,8 @@ rspamd_url_text_extract (rspamd_mempool_t * pool,
 								ex);
 					}
 					else if (rc != URI_ERRNO_OK) {
-						msg_info ("extract of url '%s' failed: %s",
-								url_str,
+						msg_info ("<%s> extract of url '%s' failed: %s",
+								task->message_id, url_str,
 								rspamd_url_strerror (rc));
 					}
 				}
