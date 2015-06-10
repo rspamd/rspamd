@@ -297,7 +297,7 @@ rspamd_session_watcher_push (struct rspamd_async_session *s)
 {
 	g_assert (s != NULL);
 
-	if (s->cur_watcher) {
+	if (RSPAMD_SESSION_IS_WATCHING (s)) {
 		s->cur_watcher->remain ++;
 	}
 }
