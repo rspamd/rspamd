@@ -30,6 +30,7 @@
 
 struct rspamd_async_event;
 struct rspamd_async_session;
+struct rspamd_async_watcher;
 
 typedef void (*event_finalizer_t)(gpointer ud);
 typedef void (*event_watcher_t)(gpointer session_data, gpointer ud);
@@ -106,5 +107,26 @@ void rspamd_session_watch_start (struct rspamd_async_session *s,
  * @return number of events watched
  */
 guint rspamd_session_watch_stop (struct rspamd_async_session *s);
+
+/**
+ * Create a fake event just for event watcher
+ * @param s
+ */
+void rspamd_session_watcher_push (struct rspamd_async_session *s);
+
+/**
+ * Remove a fake event from a watcher
+ * @param s
+ */
+void rspamd_session_watcher_pop (struct rspamd_async_session *s,
+		struct rspamd_async_watcher *w);
+
+/**
+ * Returns the current watcher for events session
+ * @param s
+ * @return
+ */
+struct rspamd_async_watcher* rspamd_session_get_watcher (
+		struct rspamd_async_session *s);
 
 #endif /* RSPAMD_EVENTS_H */

@@ -291,3 +291,34 @@ rspamd_session_events_pending (struct rspamd_async_session *session)
 
 	return g_hash_table_size (session->events);
 }
+
+void
+rspamd_session_watcher_push (struct rspamd_async_session *s)
+{
+	g_assert (s != NULL);
+
+	if (s->cur_watcher) {
+		s->cur_watcher->remain ++;
+	}
+}
+
+void
+rspamd_session_watcher_pop (struct rspamd_async_session *s,
+		struct rspamd_async_watcher *w)
+{
+	g_assert (s != NULL);
+
+	if (w) {
+		if (--w->remain == 0) {
+			w->cb (s->user_data, w->ud);
+		}
+	}
+}
+
+struct rspamd_async_watcher*
+rspamd_session_get_watcher (struct rspamd_async_session *s)
+{
+	g_assert (s != NULL);
+
+	return s->cur_watcher;
+}
