@@ -865,10 +865,10 @@ static void
 rspamd_symbols_cache_watcher_cb (gpointer sessiond, gpointer ud)
 {
 	struct rspamd_task *task = sessiond;
-	struct cache_item *item = ud;
+	struct cache_item *item = ud, *it;
 	struct cache_savepoint *checkpoint;
 	struct symbols_cache *cache;
-	gint i;
+	gint i, remain = 0;
 
 	checkpoint = task->checkpoint;
 	cache = task->cfg->cache;
@@ -876,19 +876,23 @@ rspamd_symbols_cache_watcher_cb (gpointer sessiond, gpointer ud)
 	/* Specify that we are done with this item */
 	setbit (checkpoint->processed_bits, item->id * 2 + 1);
 
-	msg_debug ("finished watcher, %ud symbols waiting", checkpoint->waitq->len);
+	if (checkpoint->pass > 0) {
+		for (i = 0; i < (gint)checkpoint->waitq->len; i ++) {
+			it = g_ptr_array_index (checkpoint->waitq, i);
 
-	for (i = 0; i < (gint)checkpoint->waitq->len; i ++) {
-		item = g_ptr_array_index (checkpoint->waitq, i);
-		if (!isset (checkpoint->processed_bits, item->id * 2)) {
-			if (!rspamd_symbols_cache_check_deps (task, cache, item,
-					checkpoint)) {
-				continue;
+			if (!isset (checkpoint->processed_bits, it->id * 2)) {
+				if (!rspamd_symbols_cache_check_deps (task, cache, it,
+						checkpoint)) {
+					remain ++;
+					continue;
+				}
+
+				rspamd_symbols_cache_check_symbol (task, cache, it, checkpoint);
 			}
-
-			rspamd_symbols_cache_check_symbol (task, cache, item, checkpoint);
 		}
 	}
+
+	msg_debug ("finished watcher, %ud symbols waiting", remain);
 }
 
 static gboolean
@@ -978,8 +982,10 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 						msg_debug ("started check of %d symbol as dep for %d",
 								dep->id, item->id);
 					}
-					msg_debug ("dependency %d for symbol %d is already processed",
+					else {
+						msg_debug ("dependency %d for symbol %d is already processed",
 								dep->id, item->id);
+					}
 				}
 				else {
 					/* Started but not finished */
@@ -1032,6 +1038,8 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		checkpoint = task->checkpoint;
 	}
 
+	msg_debug ("symbols processing stage at pass: %d", checkpoint->pass);
+
 	if (checkpoint->pass == 0) {
 
 		/*
@@ -1048,7 +1056,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 			}
 
 			item = g_ptr_array_index (cache->items_by_order, i);
-			if (!isset (checkpoint->processed_bits, i * 2)) {
+			if (!isset (checkpoint->processed_bits, item->id * 2)) {
 				if (!rspamd_symbols_cache_check_deps (task, cache, item,
 						checkpoint)) {
 					msg_debug ("blocked execution of %d unless deps are resolved",
