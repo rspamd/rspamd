@@ -135,6 +135,11 @@ rspamd_task_fin (void *arg)
 		return TRUE;
 	}
 
+	if (RSPAMD_TASK_IS_PROCESSED (task)) {
+		rspamd_task_reply (task);
+		return TRUE;
+	}
+
 	/* One more iteration */
 	return FALSE;
 }

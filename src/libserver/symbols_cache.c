@@ -850,6 +850,19 @@ rspamd_symbols_cache_metric_limit (struct rspamd_task *task,
 	return FALSE;
 }
 
+static void
+rspamd_symbols_cache_watcher_cb (gpointer sessiond, gpointer ud)
+{
+	struct rspamd_task *task = sessiond;
+	struct cache_item *item = ud;
+	struct cache_savepoint *checkpoint;
+
+	checkpoint = task->checkpoint;
+
+	/* Specify that we are done with this item */
+	setbit (checkpoint->processed_bits, item->id * 2 + 1);
+}
+
 static gboolean
 rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 		struct symbols_cache *cache,
@@ -867,6 +880,9 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 		setbit (checkpoint->processed_bits, item->id * 2);
 		t1 = rspamd_get_ticks ();
 		pending_before = rspamd_session_events_pending (task->s);
+		/* Watch for events appeared */
+		rspamd_session_watch_start (task->s, rspamd_symbols_cache_watcher_cb,
+				item);
 
 		if (item->symbol != NULL &&
 				G_UNLIKELY (check_debug_symbol (task->cfg, item->symbol))) {
@@ -879,10 +895,10 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 		}
 
 		t2 = rspamd_get_ticks ();
-		pending_after = rspamd_session_events_pending (task->s);
-
 		diff = (t2 - t1) * 1000000;
 		rspamd_set_counter (item, diff);
+		rspamd_session_watch_stop (task->s);
+		pending_after = rspamd_session_events_pending (task->s);
 
 		if (pending_before == pending_after) {
 			/* No new events registered */
