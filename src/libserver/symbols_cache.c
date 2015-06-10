@@ -180,7 +180,7 @@ post_cache_init (struct symbols_cache *cache)
 		it = g_ptr_array_index (cache->items_by_id, i);
 
 		for (j = 0; j < it->deps->len; j ++) {
-			dep = g_ptr_array_index (cache->items_by_id, j);
+			dep = g_ptr_array_index (it->deps, j);
 			dit = g_hash_table_lookup (cache->items_by_symbol, dep->sym);
 
 			if (dit != NULL) {
@@ -938,7 +938,14 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 			if (!isset (checkpoint->processed_bits, dep->item->id * 2 + 1)) {
 				if (!isset (checkpoint->processed_bits, dep->item->id * 2)) {
 					/* Not started */
-					if (!rspamd_symbols_cache_check_symbol (task, cache, item,
+					if (!rspamd_symbols_cache_check_deps (task, cache,
+							dep->item,
+							checkpoint)) {
+						g_ptr_array_add (checkpoint->waitq, item);
+						ret = FALSE;
+					}
+					else if (!rspamd_symbols_cache_check_symbol (task, cache,
+							dep->item,
 							checkpoint)) {
 						/* Now started, but has events pending */
 						ret = FALSE;
