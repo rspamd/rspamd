@@ -1194,7 +1194,7 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 
 	rspamd_mempool_unlock_mutex (cache->mtx);
 
-	post_cache_init (cache);
+	g_ptr_array_sort_with_data (cache->items_by_order, cache_logic_cmp, cache);
 }
 
 void
