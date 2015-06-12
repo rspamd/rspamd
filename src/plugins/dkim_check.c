@@ -394,7 +394,7 @@ dkim_module_key_handler (rspamd_dkim_key_t *key,
 		/* Add new key to the lru cache */
 		rspamd_lru_hash_insert (dkim_module_ctx->dkim_hash,
 			g_strdup (ctx->dns_key),
-			key, res->task->time_real, key->ttl);
+			key, res->task->tv.tv_sec, key->ttl);
 		res->key = key;
 	}
 	else {
