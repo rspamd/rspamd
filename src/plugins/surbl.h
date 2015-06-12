@@ -53,6 +53,7 @@ struct dns_param {
 	struct rspamd_task *task;
 	gchar *host_resolve;
 	struct suffix_item *suffix;
+	struct rspamd_async_watcher *w;
 };
 
 struct redirector_param {

@@ -855,10 +855,13 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 		param->host_resolve =
 			rspamd_mempool_strdup (task->task_pool, surbl_req);
 		debug_task ("send surbl dns request %s", surbl_req);
+
 		if (make_dns_request (task->resolver, task->s, task->task_pool,
 			dns_callback,
 			(void *)param, RDNS_REQUEST_A, surbl_req)) {
 			task->dns_requests++;
+			param->w = rspamd_session_get_watcher (task->s);
+			rspamd_session_watcher_push (task->s);
 		}
 	}
 	else if (err != NULL && err->code != WHITELIST_ERROR && err->code !=
@@ -934,6 +937,8 @@ dns_callback (struct rdns_reply *reply, gpointer arg)
 			param->task->message_id, param->host_resolve,
 			param->suffix->suffix);
 	}
+
+	rspamd_session_watcher_pop (param->task->s, param->w);
 }
 
 static void
