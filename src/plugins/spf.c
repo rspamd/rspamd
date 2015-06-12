@@ -75,6 +75,18 @@ module_t spf_module = {
 	NULL
 };
 
+static GQuark
+spf_plugin_quark (void)
+{
+	return g_quark_from_static_string ("spf-plugin");
+}
+
+static void
+spf_plugin_fin (gpointer ud)
+{
+
+}
+
 gint
 spf_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
@@ -314,6 +326,8 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task)
 		spf_check_list (l, task);
 		spf_record_unref (l);
 	}
+
+	rspamd_session_remove_event (task->s, spf_plugin_fin, NULL);
 }
 
 
@@ -334,8 +348,14 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 				spf_check_list (l, task);
 				spf_record_unref (l);
 			}
-			else if (!resolve_spf (task, spf_plugin_callback)) {
-				msg_info ("cannot make spf request for [%s]", task->message_id);
+			else {
+				if (!resolve_spf (task, spf_plugin_callback)) {
+					msg_info ("cannot make spf request for [%s]", task->message_id);
+				}
+				else {
+					rspamd_session_add_event (task->s, spf_plugin_fin, NULL,
+							spf_plugin_quark ());
+				}
 			}
 		}
 	}
