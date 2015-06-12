@@ -137,8 +137,8 @@ cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 	else if (i1->priority == i2->priority) {
 		f1 = (double)i1->frequency / (double)cache->total_freq;
 		f2 = (double)i2->frequency / (double)cache->total_freq;
-		weight1 = abs (i1->weight) / cache->max_weight;
-		weight2 = abs (i2->weight) / cache->max_weight;
+		weight1 = fabs (i1->weight) / cache->max_weight;
+		weight2 = fabs (i2->weight) / cache->max_weight;
 		t1 = i1->avg_time;
 		t2 = i2->avg_time;
 		w1 = SCORE_FUN (weight1, f1, t1);
@@ -347,8 +347,8 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 				parent->avg_counter = item->avg_counter;
 			}
 
-			if (abs (item->weight) > cache->max_weight) {
-				cache->max_weight = abs (item->weight);
+			if (fabs (item->weight) > cache->max_weight) {
+				cache->max_weight = fabs (item->weight);
 			}
 
 			cache->total_freq += item->frequency;
@@ -703,7 +703,7 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 		g_assert (item->parent < (gint)cache->items_by_id->len);
 		parent = g_ptr_array_index (cache->items_by_id, item->parent);
 
-		if (abs (parent->weight) < abs (item->weight)) {
+		if (fabs (parent->weight) < fabs (item->weight)) {
 			parent->weight = item->weight;
 		}
 
@@ -716,8 +716,8 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 		}
 	}
 
-	if (abs (item->weight) > cache->max_weight) {
-		cache->max_weight = abs (item->weight);
+	if (fabs (item->weight) > cache->max_weight) {
+		cache->max_weight = fabs (item->weight);
 	}
 }
 
@@ -736,7 +736,7 @@ rspamd_symbols_cache_metric_validate_cb (gpointer k, gpointer v, gpointer ud)
 	if (item) {
 		item->metric_weight = weight;
 
-		if (abs (item->weight) < abs (weight) || weight < 0) {
+		if (fabs (item->weight) < fabs (weight) || weight < 0) {
 			item->weight = weight;
 		}
 	}
