@@ -89,6 +89,8 @@ struct lua_dns_cbdata {
 	gint cbref;
 	const gchar *to_resolve;
 	const gchar *user_str;
+	struct rspamd_async_watcher *w;
+	struct rspamd_async_session *s;
 };
 
 static int
@@ -184,6 +186,10 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 
 	/* Unref function */
 	luaL_unref (cd->L, LUA_REGISTRYINDEX, cd->cbref);
+
+	if (cd->s) {
+		rspamd_session_watcher_pop (cd->s, cd->w);
+	}
 }
 
 /***
@@ -247,7 +253,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 
 	if (pool != NULL && session != NULL && to_resolve != NULL &&
 		lua_isfunction (L, first + 3)) {
-		cbdata = rspamd_mempool_alloc (pool, sizeof (struct lua_dns_cbdata));
+		cbdata = rspamd_mempool_alloc0 (pool, sizeof (struct lua_dns_cbdata));
 		cbdata->L = L;
 		cbdata->resolver = resolver;
 		if (type != RDNS_REQUEST_PTR) {
@@ -255,16 +261,20 @@ lua_dns_resolver_resolve_common (lua_State *L,
 		}
 		else {
 			char *ptr_str;
+
 			ptr_str = rdns_generate_ptr_from_str (to_resolve);
+
 			if (ptr_str == NULL) {
 				msg_err ("wrong resolve string to PTR request: %s", to_resolve);
 				lua_pushnil (L);
 				return 1;
 			}
+
 			cbdata->to_resolve = rspamd_mempool_strdup (pool, ptr_str);
 			to_resolve = cbdata->to_resolve;
 			free (ptr_str);
 		}
+
 		lua_pushvalue (L, first + 3);
 		cbdata->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 
@@ -274,14 +284,26 @@ lua_dns_resolver_resolve_common (lua_State *L,
 		else {
 			cbdata->user_str = NULL;
 		}
-		make_dns_request (resolver,
+
+		if (make_dns_request (resolver,
 			session,
 			pool,
 			lua_dns_callback,
 			cbdata,
 			type,
-			to_resolve);
-		lua_pushboolean (L, TRUE);
+			to_resolve)) {
+
+			lua_pushboolean (L, TRUE);
+
+			if (session) {
+				cbdata->s = session;
+				cbdata->w = rspamd_session_get_watcher (session);
+				rspamd_session_watcher_push (session);
+			}
+		}
+		else {
+			lua_pushnil (L);
+		}
 	}
 	else {
 		msg_err ("invalid arguments to lua_resolve");
