@@ -311,8 +311,7 @@ sync_callback (gint fd, short what, void *arg)
 	evtimer_set (&tev, sync_callback, worker);
 	event_base_set (ctx->ev_base, &tev);
 	/* Plan event with jitter */
-	next_check = ctx->sync_timeout * (1. + ((gdouble)ottery_rand_uint32 ()) /
-			G_MAXUINT32);
+	next_check = rspamd_time_jitter (ctx->sync_timeout, 0);
 	double_to_tv (next_check, &tmv);
 	evtimer_add (&tev, &tmv);
 

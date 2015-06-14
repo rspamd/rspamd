@@ -285,14 +285,7 @@ jitter_timeout_event (struct rspamd_map *map, gboolean locked, gboolean initial)
 
 	/* Plan event again with jitter */
 	evtimer_del (&map->ev);
-	jittered_sec = timeout;
-	if (locked) {
-		/* Add bigger jitter */
-		jittered_sec += g_random_double () * timeout * 4;
-	}
-	else {
-		jittered_sec += g_random_double () * timeout;
-	}
+	jittered_sec = rspamd_time_jitter (locked ? timeout * 4 : timeout, 0);
 	double_to_tv (jittered_sec, &map->tv);
 
 	evtimer_add (&map->ev, &map->tv);
