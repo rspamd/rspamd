@@ -80,19 +80,7 @@ pool_chain_new (gsize size)
 	g_return_val_if_fail (size > 0, NULL);
 
 	chain = g_slice_alloc (sizeof (struct _pool_chain));
-
-	if (chain == NULL) {
-		msg_err ("cannot allocate %z bytes, aborting",
-			sizeof (struct _pool_chain));
-		abort ();
-	}
-
 	chain->begin = g_slice_alloc (size);
-	if (chain->begin == NULL) {
-		msg_err ("cannot allocate %z bytes, aborting", size);
-		abort ();
-	}
-
 	chain->pos = align_ptr (chain->begin, MEM_ALIGNMENT);
 	chain->len = size;
 	chain->next = NULL;
@@ -117,7 +105,7 @@ pool_chain_new_shared (gsize size)
 			-1,
 			0);
 	if (map == MAP_FAILED) {
-		msg_err ("cannot allocate %z bytes, aborting", size +
+		msg_err ("cannot allocate %z bytes of shared memory, aborting", size +
 			sizeof (struct _pool_chain));
 		abort ();
 	}
@@ -220,12 +208,6 @@ rspamd_mempool_new (gsize size)
 	}
 
 	new = g_slice_alloc (sizeof (rspamd_mempool_t));
-	if (new == NULL) {
-		msg_err ("cannot allocate %z bytes, aborting",
-			sizeof (rspamd_mempool_t));
-		abort ();
-	}
-
 	new->cur_pool = pool_chain_new (size);
 	new->shared_pool = NULL;
 	new->cur_pool_tmp = NULL;
@@ -233,7 +215,6 @@ rspamd_mempool_new (gsize size)
 	/* Set it upon first call of set variable */
 	new->variables = NULL;
 	new->elt_len = size;
-
 	mem_pool_stat->pools_allocated++;
 
 	return new;
