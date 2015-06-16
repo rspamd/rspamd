@@ -1149,6 +1149,13 @@ INSTALL(FILES "contrib/lua-fun/fun.lua" DESTINATION ${PLUGINSDIR}/lua)
 INSTALL(FILES "contrib/publicsuffix/effective_tld_names.dat" DESTINATION 
 	"${PLUGINSDIR}")
 
+# Redirector
+IF(ENABLE_REDIRECTOR MATCHES "ON")
+	CONFIGURE_FILE(utils/redirector.pl.in utils/redirector.pl @ONLY)
+	INSTALL(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/utils/redirector.pl"
+		DESTINATION bin RENAME rspamd-redirector)
+ENDIF(ENABLE_REDIRECTOR MATCHES "ON")
+
 # Lua config
 INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${CONFDIR}/lua)")
 FILE(GLOB_RECURSE LUA_CONFIGS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/conf/lua" 
