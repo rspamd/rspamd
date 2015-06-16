@@ -262,7 +262,7 @@ sub process_client {
         _log (LOG_INFO, "Max recursion exceeded: %d from %s to %s for request from: %s",  $rec, $base_url, $http_request->uri, $heap->{remote_ip});
         # Write to cache
         memcached_cache_url ($base_url, $http_request->uri);
-        my $new_response = create_response(200, $redirect);
+        my $new_response = create_response(200, $http_request->uri);
 
         # Avoid sending the response if the client has gone away.
         $heap->{client}->put($new_response) if defined $heap->{client};
