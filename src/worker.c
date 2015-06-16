@@ -132,10 +132,9 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 		return 0;
 	}
 
-
-	if (!rspamd_task_process (task, msg, chunk, len, ctx->classify_pool, TRUE)) {
-		task->state = WRITE_REPLY;
-	}
+	task->state = READ_MESSAGE;
+	task->msg.start = chunk;
+	task->msg.len = len;
 
 	return 0;
 }
@@ -174,6 +173,15 @@ rspamd_worker_finish_handler (struct rspamd_http_connection *conn,
 		rspamd_protocol_write_reply (task);
 		/* Forcefully set the state */
 		task->state = CLOSING_CONNECTION;
+	}
+	else if (task->state == READ_MESSAGE) {
+		task->state = WRITE_REPLY;
+		if (!rspamd_task_process (task, msg, task->msg.start, task->msg.len,
+				NULL, TRUE)) {
+			rspamd_protocol_write_reply (task);
+		}
+		task->s->wanna_die = TRUE;
+		check_session_pending (task->s);
 	}
 	else {
 		/*
