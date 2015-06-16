@@ -202,6 +202,29 @@ sub memcached_cache_url {
     }
 }
 
+sub create_response {
+	my ( $code, $uri ) = @_;
+	
+	
+	my $new_response;
+	
+	if ($uri) {
+		$new_response = HTTP::Response->new($code, 'OK');
+		$new_response->header("Uri", $uri);
+		$new_response->content($uri);
+		$new_response->content_length(length($uri));
+	}
+	else {
+		$new_response = HTTP::Response->new($code);
+		$new_response->content_length(0);
+	}
+	
+	$new_response->header("Connection", "Close");
+	$new_response->header("Proxy-Connection", "Close");
+	
+	return $new_response;
+}
+
 # POE http client callback
 sub process_client {
     my ( $kernel, $heap ) = @_[ KERNEL, HEAP ];
@@ -220,8 +243,7 @@ sub process_client {
         my $redirect = memcached_check_url($http_request->uri);
         if ($redirect) {
             _log (LOG_INFO, "Memcached redirect from %s to %s for request from: %s",  $http_response->base, $redirect, $heap->{remote_ip});
-            my $new_response = HTTP::Response->new(200);
-            $new_response->header("Uri", $redirect); 
+            my $new_response = create_response(200, $redirect);
 
             # Avoid sending the response if the client has gone away.
             $heap->{client}->put($new_response) if defined $heap->{client};
@@ -240,8 +262,7 @@ sub process_client {
         _log (LOG_INFO, "Max recursion exceeded: %d from %s to %s for request from: %s",  $rec, $base_url, $http_request->uri, $heap->{remote_ip});
         # Write to cache
         memcached_cache_url ($base_url, $http_request->uri);
-        my $new_response = HTTP::Response->new(200);
-        $new_response->header("Uri", $http_request->uri); 
+        my $new_response = create_response(200, $redirect);
 
         # Avoid sending the response if the client has gone away.
         $heap->{client}->put($new_response) if defined $heap->{client};
@@ -265,8 +286,7 @@ sub process_client {
             }
             else {
                 _log (LOG_INFO, "ignoring internal redirect from %s to %s for request from: %s",  $http_request->uri, $redirect, $heap->{remote_ip});
-                my $new_response = HTTP::Response->new(200);
-                $new_response->header("Uri", $http_request->uri); 
+                my $new_response = create_response(200, $http_request->uri);
 
                 # Avoid sending the response if the client has gone away.
                 $heap->{client}->put($new_response) if defined $heap->{client};
@@ -279,8 +299,7 @@ sub process_client {
     }
 	elsif ($http_response->code != 200) {
 		_log (LOG_INFO, "HTTP response was %d, for request to %s", $http_response->code, $http_request->uri);
-		my $new_response = HTTP::Response->new($http_response->code);
-
+		my $new_response = create_response($http_response->code);
 		# Avoid sending the response if the client has gone away.
 		$heap->{client}->put($new_response) if defined $heap->{client};
 
@@ -350,8 +369,7 @@ sub process_client {
     _log (LOG_INFO, "redirect from %s to %s for request from: %s",  $base_url, $http_request->uri, $heap->{remote_ip});
     # Write to cache
     memcached_cache_url ($base_url, $http_request->uri);
-    my $new_response = HTTP::Response->new($http_response->code);
-    $new_response->header("Uri", $http_request->uri); 
+    my $new_response = create_response($http_response->code, $http_request->uri);
 
     # Avoid sending the response if the client has gone away.
     $heap->{client}->put($new_response) if defined $heap->{client};
@@ -380,10 +398,7 @@ sub process_input {
 
     if ((defined($cfg{check_regexp}) && $request->uri !~ $cfg{check_regexp}) || 
         (defined($cfg{check_domains}) && scalar(grep {$_ eq $domain} @{$cfg{check_domains}}) == 0)) {
-        my $new_response = HTTP::Response->new(200);
-        $new_response->header("Uri", $request->uri); 
-        $new_response->header("Connection", "close"); 
-        $new_response->header("Proxy-Connection", "close"); 
+        my $new_response = create_response(200, $request->uri);
 
         # Avoid sending the response if the client has gone away.
         $heap->{client}->put($new_response) if defined $heap->{client};
@@ -397,10 +412,7 @@ sub process_input {
     my $redirect = memcached_check_url($request->uri);
     if ($redirect) {
         _log (LOG_INFO, "Memcached redirect from %s to %s for request from: %s",  $request->uri, $redirect, $heap->{remote_ip});
-        my $new_response = HTTP::Response->new(200);
-        $new_response->header("Uri", $redirect); 
-        $new_response->header("Connection", "close"); 
-        $new_response->header("Proxy-Connection", "close"); 
+        my $new_response = create_response(200, $redirect);
 
         # Avoid sending the response if the client has gone away.
         $heap->{client}->put($new_response) if defined $heap->{client};
