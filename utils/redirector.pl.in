@@ -203,7 +203,9 @@ sub memcached_cache_url {
 	if ( $url ne $url_real ) {
 		my $context = Digest->new("SHA-256");
 		$context->add($url);
-		$memd->set( $context->digest(), $url_real, $cfg{cache_expire} );
+		if (!$memd->set( $context->digest(), $url_real, $cfg{cache_expire} )) {
+			_log(LOG_INFO, "cannot save redirect from $url to $url_real in memcached");
+		}
 	}
 }
 
@@ -318,7 +320,14 @@ sub process_client {
 	elsif ( $http_response->code != 200 ) {
 		_log( LOG_INFO, "HTTP response was %d, for request to %s",
 			$http_response->code, $http_request->uri );
-		my $new_response = create_response( $http_response->code );
+		my $new_response;
+		if ($rec == 0) {
+			$new_response = create_response( $http_response->code );
+		}
+		else {
+			memcached_cache_url( $base_url, $http_request->uri );
+			$new_response = create_response( 200, $http_request->uri );
+		}
 
 		# Avoid sending the response if the client has gone away.
 		$heap->{client}->put($new_response) if defined $heap->{client};
