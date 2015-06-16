@@ -186,7 +186,7 @@ sub memcached_check_url {
     my ( $url ) = @_;
 
     my $context = Digest->new("SHA-256");
-	$context->update($url);
+	$context->add($url);
     return $memd->get($context->digest());
 }
 
@@ -196,7 +196,7 @@ sub memcached_cache_url {
 	
     if ($url ne $url_real) {
         my $context = Digest->new("SHA-256");
-		$context->update($url);
+		$context->add($url);
         $memd->set($context->digest(), $url_real, 
             $cfg{cache_expire});
     }
