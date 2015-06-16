@@ -16,22 +16,24 @@ use strict;
 
 use POSIX qw(strftime);
 use HTTP::Request::Common qw(GET POST);
-
-use POE qw(Component::Server::TCP Filter::HTTPD Component::Client::HTTP); # p5-POE-Component-Client-HTTP
-use HTTP::Response;
-use HTML::HeadParser; 
-use SWF::Element; # p5-SWF-File
-use Cache::Memcached::Fast;
-use Digest;
-
-use HTML::HeadParser;
-use Proc::Daemon;
-use Proc::PidUtil;
 use URI::Escape qw(uri_unescape);
 use Sys::Syslog qw/:standard :macros setlogsock/;
+use HTTP::Response;
+use HTML::HeadParser;
+use Digest;
+use Proc::Daemon;
+use Proc::PidUtil;
 
+my $loop;
+eval "require @POE_LOOP@" or $loop = "POE::Loop::IO_Poll";
+use POE qw(Component::Server::TCP Filter::HTTPD Component::Client::HTTP); # p5-POE-Component-Client-HTTP
+
+my $with_swf = 1;
 my $swf_parser;
 my $saved_swf_url = "";
+eval "require SWF::Element" or $with_swf = 0; # p5-SWF-File
+
+require Cache::Memcached::Fast;
 
 my $DEBUG = grep { $_ eq '-debug' } @ARGV;
 
@@ -40,8 +42,7 @@ our %cfg = (
     max_size    =>  102400,
     http_timeout    =>  5,
     max_rec     => 5,
-    pidfile =>  '/var/run/rspamd/redirector.pid',
-    logfile =>  '/var/log/rspamd-redirector.log',
+    pidfile =>  '/tmp/redirector.pid',
     do_log  =>  0,
     debug   =>  0,
     memcached_servers => [ { address => 'localhost:11211', weight => 2.5 }, 
@@ -65,7 +66,7 @@ our $memd;
 sub read_file {
     my ($file) = @_;
 
-    open(IN, $file) or die "Can't open $file: $!";
+    open(IN, $file) or _log(LOG_ALERT, "Can't open $file: $!");
     local $/;
     my $content = <IN>;
     close IN;
@@ -81,12 +82,18 @@ sub _log {
         printf STDERR $w."\n", @s  
     } else {  
         syslog ($l, $w."\n", @s) if ($l <= $cfg{'log_level'}) 
-    }  
+    }
+    
+    if ($l == LOG_ALERT) {
+    	die $w;
+    }
 }  
 
 # Init swf parser
 sub swf_init_parser {
-    $swf_parser = SWF::Parser->new('tag-callback' => \&swf_tag_callback);
+	if ($with_swf) {
+    	$swf_parser = SWF::Parser->new('tag-callback' => \&swf_tag_callback);
+	}
 }
 
 # Checking for SWF url
@@ -346,8 +353,8 @@ sub process_client {
             return;
         }
     }
-    elsif ( $response_type eq 'application/x-shockwave-flash' || 
-            ($http_request->uri =~ /\.swf(\?.*)?$/i && $http_response->code == 200)) {
+    elsif ($with_swf && ($response_type eq 'application/x-shockwave-flash' || 
+            ($http_request->uri =~ /\.swf(\?.*)?$/i && $http_response->code == 200))) {
         my $content = $http_response->decoded_content();
         $swf_parser->parse($content);
 
@@ -439,6 +446,10 @@ sub sig_DIE {
     }
 }
 
+sub sig_CLD {
+  my ($heap, $child_pid) = @_[HEAP, ARG1];
+  return 0;
+}
 
 ############################### Main code fragment ##################################
 
@@ -456,31 +467,32 @@ if (-f $cfg{cfg_file}) {
     eval $config;
 }
 
-die "Process is already started, check $cfg{pidfile}" if Proc::PidUtil::is_running($cfg{pidfile});
+_log(LOG_ALERT, "Process is already started, check $cfg{pidfile}") if Proc::PidUtil::is_running($cfg{pidfile});
 
 
 # Drop privilleges
 if ($> == 0) {
-    my $uid = getpwnam($cfg{user}) or die "user $cfg{user} unknown";
-    my $gid = getgrnam($cfg{group}) or die "group $cfg{group} unknown";
+    my $uid = getpwnam($cfg{user}) or _log(LOG_ALERT, "user $cfg{user} unknown");
+    my $gid = getgrnam($cfg{group}) or _log(LOG_ALERT, "group $cfg{group} unknown");
     $< = $> = $uid;
     $) = $( = $gid;
 }
 
 if (!$DEBUG) {
-    die "Cannot write to pidfile $cfg{pidfile}" if ! open(PID, "> $cfg{pidfile}");
+    _log (LOG_ALERT, "Cannot write to pidfile $cfg{pidfile}") if ! open(PID, "> $cfg{pidfile}");
     close(PID);
 }
 
 # Reopen log on SIGUSR1
-$poe_kernel->sig(DIE => 'sig_DIE');
+$poe_kernel->sig(DIE => \&sig_DIE);
+$poe_kernel->sig(CLD => \&sig_CLD);
 $SIG{USR1} = sub { $do_reopen_log = 1; $poe_kernel->sig_handled(); };
 $SIG{INT} = sub { $poe_kernel->stop(); };
 $SIG{QUIT} = sub { $poe_kernel->stop(); };
 $SIG{PIPE} = 'IGNORE';
 
 if (!$DEBUG) {
-    Proc::PidUtil::make_pidfile($cfg{pidfile}, $$) or die "Cannot write pidfile $cfg{pidfile}";
+    Proc::PidUtil::make_pidfile($cfg{pidfile}, $$) or _log(LOG_ALERT, "Cannot write pidfile $cfg{pidfile}");
 }
 
 # Init memcached connection
