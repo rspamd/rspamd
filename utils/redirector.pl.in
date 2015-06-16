@@ -26,35 +26,35 @@ use Proc::PidUtil;
 
 my $loop;
 eval "require @POE_LOOP@" or $loop = "POE::Loop::IO_Poll";
-use POE qw(Component::Server::TCP Filter::HTTPD Component::Client::HTTP); # p5-POE-Component-Client-HTTP
+use POE qw(Component::Server::TCP Filter::HTTPD Component::Client::HTTP)
+  ;    # p5-POE-Component-Client-HTTP
 
 my $with_swf = 1;
 my $swf_parser;
 my $saved_swf_url = "";
-eval "require SWF::Element" or $with_swf = 0; # p5-SWF-File
+eval "require SWF::Element" or $with_swf = 0;    # p5-SWF-File
 
 require Cache::Memcached::Fast;
 
 my $DEBUG = grep { $_ eq '-debug' } @ARGV;
 
 our %cfg = (
-    port    =>  8080,
-    max_size    =>  102400,
-    http_timeout    =>  5,
-    max_rec     => 5,
-    pidfile =>  '/tmp/redirector.pid',
-    do_log  =>  0,
-    debug   =>  0,
-    memcached_servers => [ { address => 'localhost:11211', weight => 2.5 }, 
-                          ],
+	port              => 8080,
+	max_size          => 102400,
+	http_timeout      => 5,
+	max_rec           => 5,
+	pidfile           => '/tmp/redirector.pid',
+	do_log            => 0,
+	debug             => 0,
+	memcached_servers => [ { address => 'localhost:11211', weight => 2.5 }, ],
 
-    facility        => LOG_LOCAL3, # syslog facility
-    log_level       => LOG_INFO,
-    digest_bits     => 256,
-    cache_expire    => 3600,
-    user            => '@RSPAMD_USER@',
-    group           => '@RSPAMD_GROUP@',
-    cfg_file        => '@CMAKE_INSTALL_PREFIX@/etc/rspamd-redirector.conf',
+	facility     => LOG_LOCAL3,         # syslog facility
+	log_level    => LOG_INFO,
+	digest_bits  => 256,
+	cache_expire => 3600,
+	user         => '@RSPAMD_USER@',
+	group        => '@RSPAMD_GROUP@',
+	cfg_file => '@CMAKE_INSTALL_PREFIX@/etc/rspamd-redirector.conf',
 );
 
 our $do_reopen_log = 0;
@@ -64,249 +64,219 @@ our $memd;
 
 # Read file into string
 sub read_file {
-    my ($file) = @_;
+	my ($file) = @_;
 
-    open(IN, $file) or _log(LOG_ALERT, "Can't open $file: $!");
-    local $/;
-    my $content = <IN>;
-    close IN;
+	open( IN, $file ) or _log( LOG_ALERT, "Can't open $file: $!" );
+	local $/;
+	my $content = <IN>;
+	close IN;
 
-    return $content;
+	return $content;
 }
 
 # Write log line:
-sub _log {  
-    my ($l,$w,@s)=@_; 
-     
-    if ($DEBUG) {  
-        printf STDERR $w."\n", @s  
-    } else {  
-        syslog ($l, $w."\n", @s) if ($l <= $cfg{'log_level'}) 
-    }
-    
-    if ($l == LOG_ALERT) {
-    	die $w;
-    }
-}  
+sub _log {
+	my ( $l, $w, @s ) = @_;
+
+	if ($DEBUG) {
+		printf STDERR $w . "\n", @s;
+	}
+	else {
+		syslog( $l, $w . "\n", @s ) if ( $l <= $cfg{'log_level'} );
+	}
+
+	if ( $l == LOG_ALERT ) {
+		die $w;
+	}
+}
 
 # Init swf parser
 sub swf_init_parser {
 	if ($with_swf) {
-    	$swf_parser = SWF::Parser->new('tag-callback' => \&swf_tag_callback);
+		$swf_parser = SWF::Parser->new( 'tag-callback' => \&swf_tag_callback );
 	}
 }
 
 # Checking for SWF url
 sub swf_search_get_url {
-    my $actions = shift;
-    my $saved_pool_str = "";
+	my $actions        = shift;
+	my $saved_pool_str = "";
 
-    for my $action (@$actions) {
-        if ($action->tag_name eq 'ActionConstantPool') {
-            my $pool = $action->ConstantPool;
-            for my $string (@$pool) {
-                if ($string =~ /^https?:\/\//) {
-                    $saved_pool_str = $string->value;
-                }
-            }
-        }
-        elsif ($action->tag_name eq 'ActionGetURL2') {
-            if ($saved_pool_str ne "") {
-                $saved_swf_url = $saved_pool_str;
-            }
-        }
-        elsif ($action->tag_name =~ 'ActionGetURL') {
-            $saved_swf_url = $action->UrlString->value;
-        }
-    }
+	for my $action (@$actions) {
+		if ( $action->tag_name eq 'ActionConstantPool' ) {
+			my $pool = $action->ConstantPool;
+			for my $string (@$pool) {
+				if ( $string =~ /^https?:\/\// ) {
+					$saved_pool_str = $string->value;
+				}
+			}
+		}
+		elsif ( $action->tag_name eq 'ActionGetURL2' ) {
+			if ( $saved_pool_str ne "" ) {
+				$saved_swf_url = $saved_pool_str;
+			}
+		}
+		elsif ( $action->tag_name =~ 'ActionGetURL' ) {
+			$saved_swf_url = $action->UrlString->value;
+		}
+	}
 }
 
 # SWF check tag utility
 sub swf_check_tag {
-    my ($t, $stream) = @_;
-    my ($tagname) = $t->tag_name;
+	my ( $t, $stream ) = @_;
+	my ($tagname) = $t->tag_name;
 
-    for ($tagname) {
-    (/^Do(Init)?Action$/ or /^DefineButton$/) and do {
-        swf_search_get_url ($t->Actions);
-        last;
-    };
-    /^PlaceObject2$/ and do {
-        for my $ca (@{$t->ClipActions}) {
-            swf_search_get_url ($ca->Actions);
-        }
-        last;
-    };
-    /^DefineButton2$/ and do {
-        for my $ba (@{$t->Actions}) {
-            swf_search_get_url ($ba->Actions);
-        }
-        last;
-    };
-    /^DefineSprite$/ and do {
-        for my $tag (@{$t->ControlTags}) {
-            swf_search_get_url ($tag, $stream);
-        }
-        last;
-    };
-    }
+	for ($tagname) {
+		( /^Do(Init)?Action$/ or /^DefineButton$/ ) and do {
+			swf_search_get_url( $t->Actions );
+			last;
+		};
+		/^PlaceObject2$/ and do {
+			for my $ca ( @{ $t->ClipActions } ) {
+				swf_search_get_url( $ca->Actions );
+			}
+			last;
+		};
+		/^DefineButton2$/ and do {
+			for my $ba ( @{ $t->Actions } ) {
+				swf_search_get_url( $ba->Actions );
+			}
+			last;
+		};
+		/^DefineSprite$/ and do {
+			for my $tag ( @{ $t->ControlTags } ) {
+				swf_search_get_url( $tag, $stream );
+			}
+			last;
+		};
+	}
 }
 
 # Callback for swf parser
 sub swf_tag_callback {
-    my ($self, $tag, $length, $stream)=@_;
-    my $t = SWF::Element::Tag->new (Tag=>$tag, Length=>$length);
-    my ($tagname) = $t->tag_name;
+	my ( $self, $tag, $length, $stream ) = @_;
+	my $t = SWF::Element::Tag->new( Tag => $tag, Length => $length );
+	my ($tagname) = $t->tag_name;
 
-    return unless
-          $tagname eq 'DoAction'      or
-          $tagname eq 'DoInitAction'  or
-          $tagname eq 'PlaceObject2'  or
-          $tagname eq 'DefineButton'  or
-          $tagname eq 'DefineButton2' or
-          $tagname eq 'DefineSprite';
-    
-    if ($tagname eq 'DefineSprite') {
+	return
+	  unless $tagname eq 'DoAction'
+		  or $tagname eq 'DoInitAction'
+		  or $tagname eq 'PlaceObject2'
+		  or $tagname eq 'DefineButton'
+		  or $tagname eq 'DefineButton2'
+		  or $tagname eq 'DefineSprite';
 
-        # Tags in the sprite are not unpacked here.
+	if ( $tagname eq 'DefineSprite' ) {
 
-        $t->shallow_unpack ($stream);
-        $t->TagStream->parse (callback => \&swf_tag_callback);
-        return;
+		# Tags in the sprite are not unpacked here.
 
-    } elsif ($tagname eq 'PlaceObject2') {
+		$t->shallow_unpack($stream);
+		$t->TagStream->parse( callback => \&swf_tag_callback );
+		return;
 
-        # Most of PlaceObject2 tags don't have ClipActions.
+	}
+	elsif ( $tagname eq 'PlaceObject2' ) {
 
-        $t->lookahead_Flags ($stream);
-        return unless $t->PlaceFlagHasClipActions;
-    }
+		# Most of PlaceObject2 tags don't have ClipActions.
 
-    # unpack the tag and search actions.
+		$t->lookahead_Flags($stream);
+		return unless $t->PlaceFlagHasClipActions;
+	}
 
-    $t->unpack ($stream);
-    swf_check_tag ($t);
+	# unpack the tag and search actions.
+
+	$t->unpack($stream);
+	swf_check_tag($t);
 }
 
 # Check url from memcached cache first
 sub memcached_check_url {
-    my ( $url ) = @_;
+	my ($url) = @_;
 
-    my $context = Digest->new("SHA-256");
+	my $context = Digest->new("SHA-256");
 	$context->add($url);
-    return $memd->get($context->digest());
+	return $memd->get( $context->digest() );
 }
 
 # Write url to memcached key
 sub memcached_cache_url {
-    my ( $url, $url_real ) = @_;
-	
-    if ($url ne $url_real) {
-        my $context = Digest->new("SHA-256");
+	my ( $url, $url_real ) = @_;
+
+	if ( $url ne $url_real ) {
+		my $context = Digest->new("SHA-256");
 		$context->add($url);
-        $memd->set($context->digest(), $url_real, 
-            $cfg{cache_expire});
-    }
+		$memd->set( $context->digest(), $url_real, $cfg{cache_expire} );
+	}
 }
 
 sub create_response {
 	my ( $code, $uri ) = @_;
-	
-	
+
 	my $new_response;
-	
+
 	if ($uri) {
-		$new_response = HTTP::Response->new($code, 'OK');
-		$new_response->header("Uri", $uri);
+		$new_response = HTTP::Response->new( $code, 'OK' );
+		$new_response->header( "Uri", $uri );
 		$new_response->content($uri);
-		$new_response->content_length(length($uri));
+		$new_response->content_length( length($uri) );
 	}
 	else {
 		$new_response = HTTP::Response->new($code);
 		$new_response->content_length(0);
 	}
-	
-	$new_response->header("Connection", "Close");
-	$new_response->header("Proxy-Connection", "Close");
-	
+
+	$new_response->header( "Connection",       "Close" );
+	$new_response->header( "Proxy-Connection", "Close" );
+
 	return $new_response;
 }
 
 # POE http client callback
 sub process_client {
-    my ( $kernel, $heap ) = @_[ KERNEL, HEAP ];
-    
-    my $http_request = $_[ARG0]->[0];
-    my $rec = $_[ARG0]->[1][0];
-    my $http_response = $_[ARG1]->[0];
-    my $base_url = $_[ARG0]->[1][1];
-    $saved_swf_url = "";
-    
-    if ($rec == 0) {
-        $base_url = $http_request->uri;
-    }
-    else {
-        # Check cache for each url
-        my $redirect = memcached_check_url($http_request->uri);
-        if ($redirect) {
-            _log (LOG_INFO, "Memcached redirect from %s to %s for request from: %s",  $http_response->base, $redirect, $heap->{remote_ip});
-            my $new_response = create_response(200, $redirect);
+	my ( $kernel, $heap ) = @_[ KERNEL, HEAP ];
 
-            # Avoid sending the response if the client has gone away.
-            $heap->{client}->put($new_response) if defined $heap->{client};
+	my $http_request  = $_[ARG0]->[0];
+	my $rec           = $_[ARG0]->[1][0];
+	my $http_response = $_[ARG1]->[0];
+	my $base_url      = $_[ARG0]->[1][1];
+	$saved_swf_url = "";
 
-            # Shut down the client's connection when the response is sent.
-            return;
-        }
-    }
+	if ( $rec == 0 ) {
+		$base_url = $http_request->uri;
+	}
+	else {
 
-    if ($do_reopen_log) {
-        $do_reopen_log = 0;
-        reopen_log();
-    }
+		# Check cache for each url
+		my $redirect = memcached_check_url( $http_request->uri );
+		if ($redirect) {
+			_log( LOG_INFO,
+				"Memcached redirect from %s to %s for request from: %s",
+				$http_response->base, $redirect, $heap->{remote_ip} );
+			my $new_response = create_response( 200, $redirect );
 
-    if ($rec > $cfg{max_rec}) {
-        _log (LOG_INFO, "Max recursion exceeded: %d from %s to %s for request from: %s",  $rec, $base_url, $http_request->uri, $heap->{remote_ip});
-        # Write to cache
-        memcached_cache_url ($base_url, $http_request->uri);
-        my $new_response = create_response(200, $http_request->uri);
+			# Avoid sending the response if the client has gone away.
+			$heap->{client}->put($new_response) if defined $heap->{client};
 
-        # Avoid sending the response if the client has gone away.
-        $heap->{client}->put($new_response) if defined $heap->{client};
+			# Shut down the client's connection when the response is sent.
+			return;
+		}
+	}
 
-        # Shut down the client's connection when the response is sent.
-        $kernel->yield("shutdown");
-        return;
-    }
-    
-    # Detect HTTP redirects
-    if ($http_response->is_redirect) {
-        my $redirect = $http_response->header('Location');
-        if ($redirect) {
-            if ($redirect =~ /^https?:\/\//) {
-                _log (LOG_INFO, "HTML redirect from %s to %s for request from: %s",  $http_response->base, $redirect, $heap->{remote_ip});
-                my $request = HTTP::Request->new('GET', $redirect);
-                $request->header( "Connection",       "close" );
-                $request->header( "Proxy-Connection", "close" );
-                $kernel->post( "cl", "request", "got_response", $request, [$rec + 1, $base_url]);
-                return;
-            }
-            else {
-                _log (LOG_INFO, "ignoring internal redirect from %s to %s for request from: %s",  $http_request->uri, $redirect, $heap->{remote_ip});
-                my $new_response = create_response(200, $http_request->uri);
+	if ($do_reopen_log) {
+		$do_reopen_log = 0;
+		reopen_log();
+	}
 
-                # Avoid sending the response if the client has gone away.
-                $heap->{client}->put($new_response) if defined $heap->{client};
+	if ( $rec > $cfg{max_rec} ) {
+		_log( LOG_INFO,
+			"Max recursion exceeded: %d from %s to %s for request from: %s",
+			$rec, $base_url, $http_request->uri, $heap->{remote_ip} );
 
-                # Shut down the client's connection when the response is sent.
-                $kernel->yield("shutdown");
-                return;
-            }
-        }
-    }
-	elsif ($http_response->code != 200) {
-		_log (LOG_INFO, "HTTP response was %d, for request to %s", $http_response->code, $http_request->uri);
-		my $new_response = create_response($http_response->code);
+		# Write to cache
+		memcached_cache_url( $base_url, $http_request->uri );
+		my $new_response = create_response( 200, $http_request->uri );
+
 		# Avoid sending the response if the client has gone away.
 		$heap->{client}->put($new_response) if defined $heap->{client};
 
@@ -314,226 +284,314 @@ sub process_client {
 		$kernel->yield("shutdown");
 		return;
 	}
-    my $response_type = $http_response->content_type();
-    if ( $response_type =~ /^text/i ) {
-        my $content = $http_response->decoded_content();
-        my $p = HTML::HeadParser->new($http_response);
-        $p->parse($content);
-        my $expire = $http_response->header('Refresh');
-        if ($http_response->is_redirect || $expire) {
-            my $redirect;
-            if ($expire) {
-                $expire =~ /URL=(\S+)/;
-                $redirect = $1;
-            }
-            else {
-                $redirect = $http_response->header('Location');
-            }
-            if ($redirect) {
-                if ($redirect =~ /^https?:\/\//) {
-                    _log (LOG_INFO, "HTML redirect from %s to %s for request from: %s",  $http_response->base, $redirect, $heap->{remote_ip});
-                    my $request = HTTP::Request->new('GET', $redirect);
-                    $request->header( "Connection",       "close" );
-                    $request->header( "Proxy-Connection", "close" );
-                    $kernel->post( "cl", "request", "got_response", $request, [$rec + 1, $base_url]);
-                    return;
-                }
-                else {
-                    _log (LOG_INFO, "ignoring internal redirect from %s to %s for request from: %s",  $http_response->base, $redirect, $heap->{remote_ip});
-                }
-            }
-        }
-        if ($content =~ /location\s*=\s*["']*(https?:\/\/[^"'\s]+)["']*/im) {
-            my $redir = uri_unescape ($1);
-            _log (LOG_INFO, "js redirect from %s to %s for request from: %s",  $http_response->base, $1, $heap->{remote_ip});
-            my $request = HTTP::Request->new('GET', $redir);
-            $request->header("Connection",       "close" );
-            $request->header("Proxy-Connection", "close" );
-            $kernel->post("cl", "request", "got_response", $request, [$rec + 1, $base_url]);
-            return;
-        }
-    }
-    elsif ($with_swf && ($response_type eq 'application/x-shockwave-flash' || 
-            ($http_request->uri =~ /\.swf(\?.*)?$/i && $http_response->code == 200))) {
-        my $content = $http_response->decoded_content();
-        $swf_parser->parse($content);
 
-        if ($saved_swf_url ne "") {
-            _log (LOG_INFO, "flash redirect from %s to %s for request from: %s",  $http_response->base, $saved_swf_url, $heap->{remote_ip});
-            my $request = HTTP::Request->new('GET', $saved_swf_url);
-            # Reset swf redirect global variable
-            $saved_swf_url = "";
-            $request->header( "Connection",       "close" );
-            $request->header( "Proxy-Connection", "close" );
-            $kernel->post( "cl", "request", "got_response", $request, [$rec + 1, $base_url]);
-            return;
-        }
-    }
-    else {
-        _log (LOG_INFO, "response wasn't text request from: %s, response is: %s",  $heap->{remote_ip}, $response_type);
-    }
-    
-    _log (LOG_INFO, "redirect from %s to %s for request from: %s",  $base_url, $http_request->uri, $heap->{remote_ip});
-    # Write to cache
-    memcached_cache_url ($base_url, $http_request->uri);
-    my $new_response = create_response($http_response->code, $http_request->uri);
+	# Detect HTTP redirects
+	if ( $http_response->is_redirect ) {
+		my $redirect = $http_response->header('Location');
+		if ($redirect) {
+			if ( $redirect =~ /^https?:\/\// ) {
+				_log( LOG_INFO,
+					"HTML redirect from %s to %s for request from: %s",
+					$http_response->base, $redirect, $heap->{remote_ip} );
+				my $request = HTTP::Request->new( 'GET', $redirect );
+				$request->header( "Connection",       "close" );
+				$request->header( "Proxy-Connection", "close" );
+				$kernel->post( "cl", "request", "got_response", $request,
+					[ $rec + 1, $base_url ] );
+				return;
+			}
+			else {
+				_log( LOG_INFO,
+"ignoring internal redirect from %s to %s for request from: %s",
+					$http_request->uri,
+					$redirect,
+					$heap->{remote_ip}
+				);
+				my $new_response = create_response( 200, $http_request->uri );
 
-    # Avoid sending the response if the client has gone away.
-    $heap->{client}->put($new_response) if defined $heap->{client};
+				# Avoid sending the response if the client has gone away.
+				$heap->{client}->put($new_response) if defined $heap->{client};
 
-    # Shut down the client's connection when the response is sent.
-    $kernel->yield("shutdown");
+				# Shut down the client's connection when the response is sent.
+				$kernel->yield("shutdown");
+				return;
+			}
+		}
+	}
+	elsif ( $http_response->code != 200 ) {
+		_log( LOG_INFO, "HTTP response was %d, for request to %s",
+			$http_response->code, $http_request->uri );
+		my $new_response = create_response( $http_response->code );
+
+		# Avoid sending the response if the client has gone away.
+		$heap->{client}->put($new_response) if defined $heap->{client};
+
+		# Shut down the client's connection when the response is sent.
+		$kernel->yield("shutdown");
+		return;
+	}
+	my $response_type = $http_response->content_type();
+	if ( $response_type =~ /^text/i ) {
+		my $content = $http_response->decoded_content();
+		my $p       = HTML::HeadParser->new($http_response);
+		$p->parse($content);
+		my $expire = $http_response->header('Refresh');
+		if ( $http_response->is_redirect || $expire ) {
+			my $redirect;
+			if ($expire) {
+				$expire =~ /URL=(\S+)/;
+				$redirect = $1;
+			}
+			else {
+				$redirect = $http_response->header('Location');
+			}
+			if ($redirect) {
+				if ( $redirect =~ /^https?:\/\// ) {
+					_log( LOG_INFO,
+						"HTML redirect from %s to %s for request from: %s",
+						$http_response->base,
+						$redirect,
+						$heap->{remote_ip}
+					);
+					my $request = HTTP::Request->new( 'GET', $redirect );
+					$request->header( "Connection",       "close" );
+					$request->header( "Proxy-Connection", "close" );
+					$kernel->post( "cl", "request", "got_response", $request,
+						[ $rec + 1, $base_url ] );
+					return;
+				}
+				else {
+					_log( LOG_INFO,
+"ignoring internal redirect from %s to %s for request from: %s",
+						$http_response->base,
+						$redirect,
+						$heap->{remote_ip}
+					);
+				}
+			}
+		}
+		if ( $content =~ /location\s*=\s*["']*(https?:\/\/[^"'\s]+)["']*/im ) {
+			my $redir = uri_unescape($1);
+			_log( LOG_INFO, "js redirect from %s to %s for request from: %s",
+				$http_response->base, $1, $heap->{remote_ip} );
+			my $request = HTTP::Request->new( 'GET', $redir );
+			$request->header( "Connection",       "close" );
+			$request->header( "Proxy-Connection", "close" );
+			$kernel->post( "cl", "request", "got_response", $request,
+				[ $rec + 1, $base_url ] );
+			return;
+		}
+	}
+	elsif (
+		$with_swf
+		&& (
+			$response_type eq 'application/x-shockwave-flash'
+			|| (   $http_request->uri =~ /\.swf(\?.*)?$/i
+				&& $http_response->code == 200 )
+		)
+	  )
+	{
+		my $content = $http_response->decoded_content();
+		$swf_parser->parse($content);
+
+		if ( $saved_swf_url ne "" ) {
+			_log( LOG_INFO, "flash redirect from %s to %s for request from: %s",
+				$http_response->base, $saved_swf_url, $heap->{remote_ip} );
+			my $request = HTTP::Request->new( 'GET', $saved_swf_url );
+
+			# Reset swf redirect global variable
+			$saved_swf_url = "";
+			$request->header( "Connection",       "close" );
+			$request->header( "Proxy-Connection", "close" );
+			$kernel->post( "cl", "request", "got_response", $request,
+				[ $rec + 1, $base_url ] );
+			return;
+		}
+	}
+	else {
+		_log( LOG_INFO,
+			"response wasn't text request from: %s, response is: %s",
+			$heap->{remote_ip}, $response_type );
+	}
+
+	_log( LOG_INFO, "redirect from %s to %s for request from: %s",
+		$base_url, $http_request->uri, $heap->{remote_ip} );
+
+	# Write to cache
+	memcached_cache_url( $base_url, $http_request->uri );
+	my $new_response =
+	  create_response( $http_response->code, $http_request->uri );
+
+	# Avoid sending the response if the client has gone away.
+	$heap->{client}->put($new_response) if defined $heap->{client};
+
+	# Shut down the client's connection when the response is sent.
+	$kernel->yield("shutdown");
 
 }
 
 sub process_input {
-    my ( $kernel, $heap, $request ) = @_[ KERNEL, HEAP, ARG0 ];
+	my ( $kernel, $heap, $request ) = @_[ KERNEL, HEAP, ARG0 ];
 
-    if ($request->isa ("HTTP::Response")) {
-        $heap->{client}->put($request);
-        $kernel->yield("shutdown");
-        return;
-    }
-    
-    my $domain;
-    if ($request->uri =~ /^http:\/\/([^\/]+)\//) {
-        my @parts = split(/\./, $1);
-        my $c1 = pop @parts;
-        my $c2 = pop @parts;
-        $domain = "$c2.$c1";
-    }
+	if ( $request->isa("HTTP::Response") ) {
+		$heap->{client}->put($request);
+		$kernel->yield("shutdown");
+		return;
+	}
 
-    if ((defined($cfg{check_regexp}) && $request->uri !~ $cfg{check_regexp}) || 
-        (defined($cfg{check_domains}) && scalar(grep {$_ eq $domain} @{$cfg{check_domains}}) == 0)) {
-        my $new_response = create_response(200, $request->uri);
+	my $domain;
+	if ( $request->uri =~ /^http:\/\/([^\/]+)\// ) {
+		my @parts = split( /\./, $1 );
+		my $c1    = pop @parts;
+		my $c2    = pop @parts;
+		$domain = "$c2.$c1";
+	}
 
-        # Avoid sending the response if the client has gone away.
-        $heap->{client}->put($new_response) if defined $heap->{client};
-        $kernel->yield("shutdown");
+	if (
+		(
+			defined( $cfg{check_regexp} ) && $request->uri !~ $cfg{check_regexp}
+		)
+		|| ( defined( $cfg{check_domains} )
+			&& scalar( grep { $_ eq $domain } @{ $cfg{check_domains} } ) == 0 )
+	  )
+	{
+		my $new_response = create_response( 200, $request->uri );
 
-        # Shut down the client's connection when the response is sent.
-        return;
-    }
+		# Avoid sending the response if the client has gone away.
+		$heap->{client}->put($new_response) if defined $heap->{client};
+		$kernel->yield("shutdown");
 
-    # Check cache first
-    my $redirect = memcached_check_url($request->uri);
-    if ($redirect) {
-        _log (LOG_INFO, "Memcached redirect from %s to %s for request from: %s",  $request->uri, $redirect, $heap->{remote_ip});
-        my $new_response = create_response(200, $redirect);
+		# Shut down the client's connection when the response is sent.
+		return;
+	}
 
-        # Avoid sending the response if the client has gone away.
-        $heap->{client}->put($new_response) if defined $heap->{client};
-        $kernel->yield("shutdown");
+	# Check cache first
+	my $redirect = memcached_check_url( $request->uri );
+	if ($redirect) {
+		_log( LOG_INFO, "Memcached redirect from %s to %s for request from: %s",
+			$request->uri, $redirect, $heap->{remote_ip} );
+		my $new_response = create_response( 200, $redirect );
 
-        # Shut down the client's connection when the response is sent.
-        return;
-    }
-    # Start http request
-    my $new_request = HTTP::Request->new('GET', $request->uri);
-    $new_request->header( "Connection",       "close" );
-    $new_request->header( "Proxy-Connection", "close" );
-    $kernel->post( "cl", "request", "got_response", $new_request, [0, ""]);
+		# Avoid sending the response if the client has gone away.
+		$heap->{client}->put($new_response) if defined $heap->{client};
+		$kernel->yield("shutdown");
+
+		# Shut down the client's connection when the response is sent.
+		return;
+	}
+
+	# Start http request
+	my $new_request = HTTP::Request->new( 'GET', $request->uri );
+	$new_request->header( "Connection",       "close" );
+	$new_request->header( "Proxy-Connection", "close" );
+	$kernel->post( "cl", "request", "got_response", $new_request, [ 0, "" ] );
 }
 
 sub sig_DIE {
-    my( $sig, $ex ) = @_[ ARG0, ARG1 ];
-    _log(LOG_ERR,  "$$: error in $ex->{event}: $ex->{error_str}");
-    $poe_kernel->sig_handled();
+	my ( $sig, $ex ) = @_[ ARG0, ARG1 ];
+	_log( LOG_ERR, "$$: error in $ex->{event}: $ex->{error_str}" );
+	$poe_kernel->sig_handled();
 
-    # Send the signal to session that sent the original event.
-    if( $ex->{source_session} ne $_[SESSION] ) {
-        $poe_kernel->signal( $ex->{source_session}, 'DIE', $sig, $ex );
-    }
+	# Send the signal to session that sent the original event.
+	if ( $ex->{source_session} ne $_[SESSION] ) {
+		$poe_kernel->signal( $ex->{source_session}, 'DIE', $sig, $ex );
+	}
 }
 
 sub sig_CLD {
-  my ($heap, $child_pid) = @_[HEAP, ARG1];
-  return 0;
+	my ( $heap, $child_pid ) = @_[ HEAP, ARG1 ];
+	return 0;
 }
 
 ############################### Main code fragment ##################################
 
 # Do daemonization
-if (!$DEBUG) {
-    Proc::Daemon::Init;
-    POE::Kernel->has_forked;
-    setlogsock('unix');
-    openlog('redirector', 'ndelay,pid', $cfg{'facility'})
+if ( !$DEBUG ) {
+	Proc::Daemon::Init;
+	POE::Kernel->has_forked;
+	setlogsock('unix');
+	openlog( 'redirector', 'ndelay,pid', $cfg{'facility'} );
 }
 
 # Try to eval config file
-if (-f $cfg{cfg_file}) {
-    my $config = read_file ($cfg{cfg_file});
-    eval $config;
+if ( -f $cfg{cfg_file} ) {
+	my $config = read_file( $cfg{cfg_file} );
+	eval $config;
 }
 
-_log(LOG_ALERT, "Process is already started, check $cfg{pidfile}") if Proc::PidUtil::is_running($cfg{pidfile});
-
+_log( LOG_ALERT, "Process is already started, check $cfg{pidfile}" )
+  if Proc::PidUtil::is_running( $cfg{pidfile} );
 
 # Drop privilleges
-if ($> == 0) {
-    my $uid = getpwnam($cfg{user}) or _log(LOG_ALERT, "user $cfg{user} unknown");
-    my $gid = getgrnam($cfg{group}) or _log(LOG_ALERT, "group $cfg{group} unknown");
-    $< = $> = $uid;
-    $) = $( = $gid;
+if ( $> == 0 ) {
+	my $uid = getpwnam( $cfg{user} )
+	  or _log( LOG_ALERT, "user $cfg{user} unknown" );
+	my $gid = getgrnam( $cfg{group} )
+	  or _log( LOG_ALERT, "group $cfg{group} unknown" );
+	$< = $> = $uid;
+	$) = $( = $gid;
 }
 
-if (!$DEBUG) {
-    _log (LOG_ALERT, "Cannot write to pidfile $cfg{pidfile}") if ! open(PID, "> $cfg{pidfile}");
-    close(PID);
+if ( !$DEBUG ) {
+	_log( LOG_ALERT, "Cannot write to pidfile $cfg{pidfile}" )
+	  if !open( PID, "> $cfg{pidfile}" );
+	close(PID);
 }
 
 # Reopen log on SIGUSR1
-$poe_kernel->sig(DIE => \&sig_DIE);
-$poe_kernel->sig(CLD => \&sig_CLD);
+$poe_kernel->sig( DIE => \&sig_DIE );
+$poe_kernel->sig( CLD => \&sig_CLD );
 $SIG{USR1} = sub { $do_reopen_log = 1; $poe_kernel->sig_handled(); };
-$SIG{INT} = sub { $poe_kernel->stop(); };
+$SIG{INT}  = sub { $poe_kernel->stop(); };
 $SIG{QUIT} = sub { $poe_kernel->stop(); };
 $SIG{PIPE} = 'IGNORE';
 
-if (!$DEBUG) {
-    Proc::PidUtil::make_pidfile($cfg{pidfile}, $$) or _log(LOG_ALERT, "Cannot write pidfile $cfg{pidfile}");
+if ( !$DEBUG ) {
+	Proc::PidUtil::make_pidfile( $cfg{pidfile}, $$ )
+	  or _log( LOG_ALERT, "Cannot write pidfile $cfg{pidfile}" );
 }
 
 # Init memcached connection
-_log(LOG_INFO,  "Starting memcached connection");
-$memd = new Cache::Memcached::Fast({
-        servers => $cfg{memcached_servers},
-        connect_timeout => 0.2,
-        io_timeout => 0.5,
-        max_failures => 3,
-        failure_timeout => 2,
-        ketama_points => 150,
-        hash_namespace => 1,
-        serialize_methods => [ \&Storable::freeze, \&Storable::thaw ],
-        utf8 => ($^V ge v5.8.1 ? 1 : 0),
-});
+_log( LOG_INFO, "Starting memcached connection" );
+$memd = new Cache::Memcached::Fast(
+	{
+		servers           => $cfg{memcached_servers},
+		connect_timeout   => 0.2,
+		io_timeout        => 0.5,
+		max_failures      => 3,
+		failure_timeout   => 2,
+		ketama_points     => 150,
+		hash_namespace    => 1,
+		serialize_methods => [ \&Storable::freeze, \&Storable::thaw ],
+		utf8              => ( $^V ge v5.8.1 ? 1 : 0 ),
+	}
+);
 
 # POE part
-POE::Component::Client::HTTP->spawn( 
-    Alias => 'cl',
-    MaxSize => $cfg{max_size},    # Remove for unlimited page sizes
-    Timeout => $cfg{http_timeout},
-    ConnectionManager   => POE::Component::Client::Keepalive->new(
-        max_per_host    => 256,
-        max_open        => 1024,
-        keep_alive      => 1,
-        timeout         => $cfg{http_timeout},
-    ), 
+POE::Component::Client::HTTP->spawn(
+	Alias   => 'cl',
+	MaxSize => $cfg{max_size},       # Remove for unlimited page sizes
+	Timeout => $cfg{http_timeout},
+	ConnectionManager => POE::Component::Client::Keepalive->new(
+		max_per_host => 256,
+		max_open     => 1024,
+		keep_alive   => 1,
+		timeout      => $cfg{http_timeout},
+	),
 );
 
-_log(LOG_INFO,  "Starting HTTP server");
-POE::Component::Server::TCP->new
-  ( Alias => "",
-    Port         => $cfg{port},
-    ClientFilter => 'POE::Filter::HTTPD',
+_log( LOG_INFO, "Starting HTTP server" );
+POE::Component::Server::TCP->new(
+	Alias        => "",
+	Port         => $cfg{port},
+	ClientFilter => 'POE::Filter::HTTPD',
 
-    ClientInput => \&process_input,
-    InlineStates => { got_response => \&process_client, },
+	ClientInput  => \&process_input,
+	InlineStates => { got_response => \&process_client, },
 );
 
-swf_init_parser ();
-_log(LOG_NOTICE,  "Starting URL resolver");
+swf_init_parser();
+_log( LOG_NOTICE, "Starting URL resolver" );
 
 # Start POE.  This will run the server until it exits.
 POE::Kernel->run();
@@ -542,6 +600,6 @@ exit 0;
 ############################## Final block ####################################
 
 END {
-    _log(LOG_NOTICE, 'redirector stopped');
-    closelog();
+	_log( LOG_NOTICE, 'redirector stopped' );
+	closelog();
 }
