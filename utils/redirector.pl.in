@@ -24,10 +24,7 @@ use Digest;
 use Proc::Daemon;
 use Proc::PidUtil;
 
-my $loop;
-eval "require @POE_LOOP@" or $loop = "POE::Loop::IO_Poll";
-use POE qw(Component::Server::TCP Filter::HTTPD Component::Client::HTTP)
-  ;    # p5-POE-Component-Client-HTTP
+use POE qw(@POE_LOOP@ Component::Server::TCP Filter::HTTPD Component::Client::HTTP);
 
 my $with_swf = 1;
 my $swf_parser;
