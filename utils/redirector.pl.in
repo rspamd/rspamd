@@ -16,22 +16,20 @@ use strict;
 
 use POSIX qw(strftime);
 use HTTP::Request::Common qw(GET POST);
+use HTTP::Response;
 use URI::Escape qw(uri_unescape);
 use Sys::Syslog qw/:standard :macros setlogsock/;
-use HTTP::Response;
 use HTML::HeadParser;
 use Digest;
 use Proc::Daemon;
 use Proc::PidUtil;
-
 use POE qw(@POE_LOOP@ Component::Server::TCP Filter::HTTPD Component::Client::HTTP);
+use Cache::Memcached::Fast;
 
 my $with_swf = 1;
 my $swf_parser;
 my $saved_swf_url = "";
 eval "require SWF::Element" or $with_swf = 0;    # p5-SWF-File
-
-require Cache::Memcached::Fast;
 
 my $DEBUG = grep { $_ eq '-debug' } @ARGV;
 
