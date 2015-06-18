@@ -28,6 +28,8 @@
 #include "sqlite3.h"
 
 #define SQLITE3_BACKEND_TYPE "sqlite3"
+#define SQLITE3_SCHEMA_VERSION "1"
+#define SQLITE3_DEFAULT "default"
 
 struct rspamd_sqlite3_prstmt;
 
@@ -60,6 +62,9 @@ static const char *create_tables_sql =
 		");"
 		"CREATE UNIQUE INDEX IF NOT EXISTS un ON users(name);"
 		"CREATE UNIQUE INDEX IF NOT EXISTS ln ON languages(name);"
+		"PRAGMA user_version=" SQLITE3_SCHEMA_VERSION
+		"INSERT INTO users(id, name, learns) VALUES(0, '" SQLITE3_DEFAULT "',0);"
+		"INSERT INTO languages(id, name, learns) VALUES(0, '" SQLITE3_DEFAULT "',0);"
 		"COMMIT;";
 
 enum rspamd_stat_sqlite3_stmt_idx {
@@ -252,6 +257,43 @@ rspamd_sqlite3_opendb (const gchar *path, GError **err)
 	return bk;
 }
 
+static struct rspamd_stat_sqlite3_db *
+rspamd_sqlite3_createdb (const gchar *path, GError **err)
+{
+	struct rspamd_stat_sqlite3_db *bk;
+	sqlite3 *sqlite;
+	int rc;
+
+	if ((rc = sqlite3_open_v2 (path, &sqlite,
+			SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE, NULL)) != SQLITE_OK) {
+		g_set_error (err, rspamd_sqlite3_quark (),
+				rc, "Cannot open sqlite db %s: %d",
+				path, rc);
+
+		return NULL;
+	}
+
+	if (sqlite3_exec (sqlite, create_tables_sql, NULL, NULL, NULL) != SQLITE_OK) {
+		g_set_error (err, rspamd_sqlite3_quark (),
+				-1, "Cannot execute raw sql `%s`: %s",
+				create_tables_sql, sqlite3_errmsg (sqlite));
+		sqlite3_close (sqlite);
+
+		return NULL;
+	}
+
+	bk = g_slice_alloc (sizeof (*bk));
+	bk->sqlite = sqlite;
+	bk->prstmt = g_slice_alloc0 (sizeof (prepared_stmts));
+	memcpy (bk->prstmt, prepared_stmts, sizeof (prepared_stmts));
+
+	if (!rspamd_sqlite3_init_prstmt (bk, err)) {
+		return NULL;
+	}
+
+	return bk;
+}
+
 gpointer
 rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 		struct rspamd_config *cfg)
@@ -298,10 +340,17 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 					msg_err ("cannot open sqlite3 db: %e", err);
 					g_error_free (err);
 					err = NULL;
+
+					bk = rspamd_sqlite3_createdb (filename, &err);
 				}
 
 				if (bk != NULL) {
 					g_hash_table_insert (new->files, stf, bk);
+				}
+				else {
+					msg_err ("cannot create sqlite3 db: %e", err);
+					g_error_free (err);
+					err = NULL;
 				}
 
 				ctx->statfiles ++;
