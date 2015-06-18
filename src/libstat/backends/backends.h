@@ -57,46 +57,31 @@ struct rspamd_stat_backend {
 	gpointer ctx;
 };
 
-gpointer rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg);
-gpointer rspamd_mmaped_file_runtime (struct rspamd_task *task,
-		struct rspamd_statfile_config *stcf,
-		gboolean learn, gpointer ctx);
-gboolean rspamd_mmaped_file_process_token (struct token_node_s *tok,
-		struct rspamd_token_result *res,
-		gpointer ctx);
-gboolean rspamd_mmaped_file_learn_token (struct token_node_s *tok,
-		struct rspamd_token_result *res,
-		gpointer ctx);
-void rspamd_mmaped_file_finalize_learn (struct rspamd_statfile_runtime *runtime,
-		gpointer ctx);
-gulong rspamd_mmaped_file_total_learns (struct rspamd_statfile_runtime *runtime,
-		gpointer ctx);
-gulong rspamd_mmaped_file_inc_learns (struct rspamd_statfile_runtime *runtime,
-		gpointer ctx);
-gulong rspamd_mmaped_file_dec_learns (struct rspamd_statfile_runtime *runtime,
-		gpointer ctx);
-ucl_object_t * rspamd_mmaped_file_get_stat (struct rspamd_statfile_runtime *runtime,
-		gpointer ctx);
+#define RSPAMD_STAT_BACKEND_DEF(name) \
+		gpointer rspamd_##name##_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg); \
+		gpointer rspamd_##name##_runtime (struct rspamd_task *task, \
+				struct rspamd_statfile_config *stcf, \
+				gboolean learn, gpointer ctx); \
+		gboolean rspamd_##name##_process_token (struct token_node_s *tok, \
+				struct rspamd_token_result *res, \
+				gpointer ctx); \
+		gboolean rspamd_##name##_learn_token (struct token_node_s *tok, \
+				struct rspamd_token_result *res, \
+				gpointer ctx); \
+		void rspamd_##name##_finalize_learn (struct rspamd_statfile_runtime *runtime, \
+				gpointer ctx); \
+		gulong rspamd_##name##_total_learns (struct rspamd_statfile_runtime *runtime, \
+				gpointer ctx); \
+		gulong rspamd_##name##_inc_learns (struct rspamd_statfile_runtime *runtime, \
+				gpointer ctx); \
+		gulong rspamd_##name##_dec_learns (struct rspamd_statfile_runtime *runtime, \
+						gpointer ctx); \
+		gulong rspamd_##name##_learns (struct rspamd_statfile_runtime *runtime, \
+				gpointer ctx); \
+		ucl_object_t * rspamd_##name##_get_stat (struct rspamd_statfile_runtime *runtime, \
+				gpointer ctx)
 
-gpointer rspamd_redis_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg);
-gpointer rspamd_redis_runtime (struct rspamd_task *task,
-		struct rspamd_statfile_config *stcf,
-		gboolean learn, gpointer ctx);
-gboolean rspamd_redis_process_token (struct token_node_s *tok,
-		struct rspamd_token_result *res,
-		gpointer ctx);
-gboolean rspamd_redis_learn_token (struct token_node_s *tok,
-		struct rspamd_token_result *res,
-		gpointer ctx);
-void rspamd_redis_finalize_learn (struct rspamd_statfile_runtime *runtime,
-		gpointer ctx);
-gulong rspamd_redis_total_learns (struct rspamd_statfile_runtime *runtime,
-		gpointer ctx);
-gulong rspamd_redis_inc_learns (struct rspamd_statfile_runtime *runtime,
-		gpointer ctx);
-gulong rspamd_redis_learns (struct rspamd_statfile_runtime *runtime,
-		gpointer ctx);
-ucl_object_t * rspamd_redis_get_stat (struct rspamd_statfile_runtime *runtime,
-		gpointer ctx);
+RSPAMD_STAT_BACKEND_DEF(mmaped_file);
+RSPAMD_STAT_BACKEND_DEF(redis);
 
 #endif /* BACKENDS_H_ */
