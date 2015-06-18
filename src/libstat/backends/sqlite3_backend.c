@@ -36,6 +36,7 @@ struct rspamd_sqlite3_prstmt;
 struct rspamd_stat_sqlite3_db {
 	sqlite3 *sqlite;
 	struct rspamd_sqlite3_prstmt *prstmt;
+	gboolean in_transaction;
 };
 
 struct rspamd_stat_sqlite3_ctx {
@@ -230,59 +231,40 @@ rspamd_sqlite3_close_prstmt (struct rspamd_stat_sqlite3_db *db)
 }
 
 static struct rspamd_stat_sqlite3_db *
-rspamd_sqlite3_opendb (const gchar *path, GError **err)
+rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
+		gboolean create, GError **err)
 {
 	struct rspamd_stat_sqlite3_db *bk;
 	sqlite3 *sqlite;
-	int rc;
+	gint rc, flags;
+
+	flags = SQLITE_OPEN_READWRITE;
+
+	if (create) {
+		flags |= SQLITE_OPEN_CREATE;
+	}
 
 	if ((rc = sqlite3_open_v2 (path, &sqlite,
-			SQLITE_OPEN_READWRITE, NULL)) != SQLITE_OK) {
+			flags, NULL)) != SQLITE_OK) {
 		g_set_error (err, rspamd_sqlite3_quark (),
-			rc, "Cannot open sqlite db %s: %d",
+			rc, "cannot open sqlite db %s: %d",
 			path, rc);
 
 		return NULL;
 	}
 
-	bk = g_slice_alloc (sizeof (*bk));
-	bk->sqlite = sqlite;
-	bk->prstmt = g_slice_alloc0 (sizeof (prepared_stmts));
-	memcpy (bk->prstmt, prepared_stmts, sizeof (prepared_stmts));
+	if (create) {
+		if (sqlite3_exec (sqlite, create_tables_sql, NULL, NULL, NULL) != SQLITE_OK) {
+			g_set_error (err, rspamd_sqlite3_quark (),
+					-1, "cannot execute create sql `%s`: %s",
+					create_tables_sql, sqlite3_errmsg (sqlite));
+			sqlite3_close (sqlite);
 
-	if (!rspamd_sqlite3_init_prstmt (bk, err)) {
-		return NULL;
+			return NULL;
+		}
 	}
 
-	return bk;
-}
-
-static struct rspamd_stat_sqlite3_db *
-rspamd_sqlite3_createdb (const gchar *path, GError **err)
-{
-	struct rspamd_stat_sqlite3_db *bk;
-	sqlite3 *sqlite;
-	int rc;
-
-	if ((rc = sqlite3_open_v2 (path, &sqlite,
-			SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE, NULL)) != SQLITE_OK) {
-		g_set_error (err, rspamd_sqlite3_quark (),
-				rc, "Cannot open sqlite db %s: %d",
-				path, rc);
-
-		return NULL;
-	}
-
-	if (sqlite3_exec (sqlite, create_tables_sql, NULL, NULL, NULL) != SQLITE_OK) {
-		g_set_error (err, rspamd_sqlite3_quark (),
-				-1, "Cannot execute raw sql `%s`: %s",
-				create_tables_sql, sqlite3_errmsg (sqlite));
-		sqlite3_close (sqlite);
-
-		return NULL;
-	}
-
-	bk = g_slice_alloc (sizeof (*bk));
+	bk = g_slice_alloc0 (sizeof (*bk));
 	bk->sqlite = sqlite;
 	bk->prstmt = g_slice_alloc0 (sizeof (prepared_stmts));
 	memcpy (bk->prstmt, prepared_stmts, sizeof (prepared_stmts));
@@ -336,12 +318,14 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 
 				filename = ucl_object_tostring (filenameo);
 
-				if ((bk = rspamd_sqlite3_opendb (filename, &err)) == NULL) {
+				if ((bk = rspamd_sqlite3_opendb (filename, stf->opts, FALSE,
+						&err)) == NULL) {
 					msg_err ("cannot open sqlite3 db: %e", err);
 					g_error_free (err);
 					err = NULL;
 
-					bk = rspamd_sqlite3_createdb (filename, &err);
+					bk = rspamd_sqlite3_opendb (filename, stf->opts, TRUE,
+							&err);
 				}
 
 				if (bk != NULL) {
