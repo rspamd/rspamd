@@ -75,6 +75,7 @@ static struct rspamd_sqlite3_prstmt {
 	const gchar *args;
 	sqlite3_stmt *stmt;
 	gint result;
+	const gchar *ret;
 } prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 {
 	{
@@ -82,21 +83,24 @@ static struct rspamd_sqlite3_prstmt {
 		.sql = "BEGIN TRANSACTION;",
 		.args = "",
 		.stmt = NULL,
-		.result = SQLITE_DONE
+		.result = SQLITE_DONE,
+		.ret = ""
 	},
 	{
 		.idx = RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT,
 		.sql = "COMMIT;",
 		.args = "",
 		.stmt = NULL,
-		.result = SQLITE_DONE
+		.result = SQLITE_DONE,
+		.ret = ""
 	},
 	{
 		.idx = RSPAMD_STAT_BACKEND_TRANSACTION_ROLLBACK,
 		.sql = "ROLLBACK;",
 		.args = "",
 		.stmt = NULL,
-		.result = SQLITE_DONE
+		.result = SQLITE_DONE,
+		.ret = ""
 	},
 };
 
@@ -179,6 +183,22 @@ rspamd_sqlite3_run_prstmt (struct rspamd_stat_sqlite3_db *db, int idx, ...)
 	retcode = sqlite3_step (stmt);
 
 	if (retcode == db->prstmt[idx].result) {
+		argtypes = db->prstmt[idx].ret;
+
+		for (i = 0; argtypes != NULL && argtypes[i] != '\0'; i ++) {
+			switch (argtypes[i]) {
+			case 'T':
+				*va_arg (ap, char**) = g_strdup (sqlite3_column_text (stmt, i));
+				break;
+			case 'I':
+				*va_arg (ap, gint64*) = sqlite3_column_int64 (stmt, i);
+				break;
+			case 'S':
+				*va_arg (ap, int*) = sqlite3_column_int (stmt, i);
+				break;
+			}
+		}
+
 		return SQLITE_OK;
 	}
 	else if (retcode != SQLITE_DONE) {
@@ -277,6 +297,7 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 				if ((bk = rspamd_sqlite3_opendb (filename, &err)) == NULL) {
 					msg_err ("cannot open sqlite3 db: %e", err);
 					g_error_free (err);
+					err = NULL;
 				}
 
 				if (bk != NULL) {
