@@ -83,5 +83,6 @@ struct rspamd_stat_backend {
 
 RSPAMD_STAT_BACKEND_DEF(mmaped_file);
 RSPAMD_STAT_BACKEND_DEF(redis);
+RSPAMD_STAT_BACKEND_DEF(sqlite3);
 
 #endif /* BACKENDS_H_ */
