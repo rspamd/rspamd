@@ -56,10 +56,10 @@ static const char *create_tables_sql =
 		"learns INTEGER"
 		");"
 		"CREATE TABLE tokens("
-		"token INTEGER,"
+		"token INTEGER PRIMARY KEY,"
 		"user INTEGER REFERENCES users(id) ON DELETE CASCADE,"
-		"language INTEGER REFERENCES users(id) ON DELETE CASCADE,"
-		"PRIMARY KEY (token,user,language)"
+		"language INTEGER REFERENCES languages(id) ON DELETE CASCADE,"
+		"value INTEGER"
 		");"
 		"CREATE UNIQUE INDEX IF NOT EXISTS un ON users(name);"
 		"CREATE UNIQUE INDEX IF NOT EXISTS ln ON languages(name);"
@@ -72,6 +72,11 @@ enum rspamd_stat_sqlite3_stmt_idx {
 	RSPAMD_STAT_BACKEND_TRANSACTION_START = 0,
 	RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT,
 	RSPAMD_STAT_BACKEND_TRANSACTION_ROLLBACK,
+	RSPAMD_STAT_BACKEND_GET_TOKEN,
+	RSPAMD_STAT_BACKEND_SET_TOKEN,
+	RSPAMD_STAT_BACKEND_INC_LEARNS,
+	RSPAMD_STAT_BACKEND_DEC_LEARNS,
+	RSPAMD_STAT_BACKEND_GET_LEARNS,
 	RSPAMD_STAT_BACKEND_MAX
 };
 
@@ -108,6 +113,52 @@ static struct rspamd_sqlite3_prstmt {
 		.result = SQLITE_DONE,
 		.ret = ""
 	},
+	{
+		.idx = RSPAMD_STAT_BACKEND_GET_TOKEN,
+		.sql = "SELECT value FROM tokens "
+				"LEFT JOIN languages ON tokens.language=languages.id "
+				"LEFT JOIN users ON tokens.user=users.id "
+				"WHERE token=?1 AND users.name=?2 AND languages.name=?3;",
+		.stmt = NULL,
+		.args = "ITT",
+		.result = SQLITE_ROW,
+		.ret = "I"
+	},
+	{
+		.idx = RSPAMD_STAT_BACKEND_SET_TOKEN,
+		.sql = "INSERT OR REPLACE INTO tokens(token, user, language, value)"
+				"VALUES (?1, ?2, ?3, ?4);",
+		.stmt = NULL,
+		.args = "IIII",
+		.result = SQLITE_DONE,
+		.ret = ""
+	},
+	{
+		.idx = RSPAMD_STAT_BACKEND_INC_LEARNS,
+		.sql = "UPDATE languages SET learns=learns + 1 WHERE name=?1;"
+				"UPDATE users SET learns=learns + 1 WHERE name=?2;",
+		.stmt = NULL,
+		.args = "TT",
+		.result = SQLITE_DONE,
+		.ret = ""
+	},
+	{
+		.idx = RSPAMD_STAT_BACKEND_DEC_LEARNS,
+		.sql = "UPDATE languages SET learns=learns - 1 WHERE name=?1;"
+				"UPDATE users SET learns=learns - 1 WHERE name=?2;",
+		.stmt = NULL,
+		.args = "TT",
+		.result = SQLITE_DONE,
+		.ret = ""
+	},
+	{
+		.idx = RSPAMD_STAT_BACKEND_GET_LEARNS,
+		.sql = "SELECT sum(learns) FROM languages;",
+		.stmt = NULL,
+		.args = "",
+		.result = SQLITE_DONE,
+		.ret = "I"
+	}
 };
 
 static GQuark
@@ -368,7 +419,7 @@ rspamd_sqlite3_close (gpointer p)
 			}
 
 			sqlite3_close (bk->sqlite);
-			rspamd_sqlite3_close_prstmt (bk->prstmt);
+			rspamd_sqlite3_close_prstmt (bk);
 			g_slice_free1 (sizeof (*bk), bk);
 		}
 	}
@@ -386,22 +437,91 @@ rspamd_sqlite3_runtime (struct rspamd_task *task,
 
 gboolean
 rspamd_sqlite3_process_token (struct token_node_s *tok,
-		struct rspamd_token_result *res, gpointer ctx)
+		struct rspamd_token_result *res, gpointer p)
 {
-	return FALSE;
+	struct rspamd_stat_sqlite3_db *bk;
+	gint64 iv = 0, idx;
+
+	g_assert (res != NULL);
+	g_assert (p != NULL);
+	g_assert (res->st_runtime != NULL);
+	g_assert (tok != NULL);
+	g_assert (tok->datalen >= sizeof (guint32) * 2);
+
+	bk = res->st_runtime->backend_runtime;
+
+	if (bk == NULL) {
+		/* Statfile is does not exist, so all values are zero */
+		res->value = 0.0;
+		return FALSE;
+	}
+
+	memcpy (&idx, tok->data, sizeof (idx));
+
+	/* TODO: language and user support */
+	if (rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_TOKEN,
+			idx, SQLITE3_DEFAULT, SQLITE3_DEFAULT, &iv) == SQLITE_OK) {
+		res->value = iv;
+	}
+	else {
+		res->value = 0.0;
+		return FALSE;
+	}
+
+
+	return TRUE;
 }
 
 gboolean
 rspamd_sqlite3_learn_token (struct token_node_s *tok,
-		struct rspamd_token_result *res, gpointer ctx)
+		struct rspamd_token_result *res, gpointer p)
 {
-	return FALSE;
+	struct rspamd_stat_sqlite3_db *bk;
+	gint64 iv = 0, idx;
+
+	g_assert (res != NULL);
+	g_assert (p != NULL);
+	g_assert (res->st_runtime != NULL);
+	g_assert (tok != NULL);
+	g_assert (tok->datalen >= sizeof (guint32) * 2);
+
+	bk = res->st_runtime->backend_runtime;
+
+	if (bk == NULL) {
+		/* Statfile is does not exist, so all values are zero */
+		return FALSE;
+	}
+
+	if (!bk->in_transaction) {
+		rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_TRANSACTION_START);
+		bk->in_transaction = TRUE;
+	}
+
+	iv = res->value;
+	memcpy (&idx, tok->data, sizeof (idx));
+
+	if (rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_SET_TOKEN,
+				idx, 0, 0, iv) == SQLITE_OK) {
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 void
 rspamd_sqlite3_finalize_learn (struct rspamd_statfile_runtime *runtime,
 		gpointer ctx)
 {
+	struct rspamd_stat_sqlite3_db *bk;
+
+	g_assert (runtime->backend_runtime != NULL);
+	bk = runtime->backend_runtime;
+
+	if (bk->in_transaction) {
+		rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
+		bk->in_transaction = FALSE;
+	}
+
 	return;
 }
 
@@ -409,13 +529,28 @@ gulong
 rspamd_sqlite3_total_learns (struct rspamd_statfile_runtime *runtime,
 		gpointer ctx)
 {
-	return 0;
+	struct rspamd_stat_sqlite3_db *bk;
+	guint64 res;
+
+	g_assert (runtime->backend_runtime != NULL);
+	bk = runtime->backend_runtime;
+
+	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
+
+	return res;
 }
 
 gulong
 rspamd_sqlite3_inc_learns (struct rspamd_statfile_runtime *runtime,
 		gpointer ctx)
 {
+	struct rspamd_stat_sqlite3_db *bk;
+
+	g_assert (runtime->backend_runtime != NULL);
+	bk = runtime->backend_runtime;
+	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_INC_LEARNS,
+			SQLITE3_DEFAULT, SQLITE3_DEFAULT);
+
 	return 0;
 }
 
@@ -423,6 +558,13 @@ gulong
 rspamd_sqlite3_dec_learns (struct rspamd_statfile_runtime *runtime,
 		gpointer ctx)
 {
+	struct rspamd_stat_sqlite3_db *bk;
+
+	g_assert (runtime->backend_runtime != NULL);
+	bk = runtime->backend_runtime;
+	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_DEC_LEARNS,
+			SQLITE3_DEFAULT, SQLITE3_DEFAULT);
+
 	return 0;
 }
 
@@ -430,7 +572,15 @@ gulong
 rspamd_sqlite3_learns (struct rspamd_statfile_runtime *runtime,
 		gpointer ctx)
 {
-	return 0;
+	struct rspamd_stat_sqlite3_db *bk;
+	guint64 res;
+
+	g_assert (runtime->backend_runtime != NULL);
+	bk = runtime->backend_runtime;
+
+	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
+
+	return res;
 }
 
 ucl_object_t *
