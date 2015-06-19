@@ -657,8 +657,6 @@ rspamd_mmaped_file_close_file (rspamd_mmaped_file_ctx * pool,
 		close (file->fd);
 	}
 
-	g_hash_table_remove (pool->files, file->cf);
-
 	g_slice_free1 (sizeof (*file), file);
 
 	return 0;
@@ -809,6 +807,7 @@ rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 	gsize size;
 
 	new = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (rspamd_mmaped_file_ctx));
+	new->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	new->lock = rspamd_mempool_get_mutex (new->pool);
 	new->mlock_ok = cfg->mlock_statfile_pool;
 	new->files = g_hash_table_new (g_direct_hash, g_direct_equal);
@@ -886,8 +885,7 @@ rspamd_mmaped_file_close (gpointer p)
 
 	g_hash_table_unref (ctx->files);
 	rspamd_mempool_unlock_mutex (ctx->lock);
-
-	rspamd_mempool_delete (ctx->pool);
+	/* XXX: we don't delete pool here to avoid deadlocks */
 }
 
 gpointer
