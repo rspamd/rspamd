@@ -1337,6 +1337,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	msg_info ("terminating...");
 	rspamd_symbols_cache_destroy (rspamd_main->cfg->cache);
+	rspamd_stat_close ();
 	rspamd_log_close (rspamd_main->logger);
 	rspamd_config_free (rspamd_main->cfg);
 	g_free (rspamd_main->cfg);

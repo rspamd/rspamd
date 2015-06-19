@@ -638,7 +638,7 @@ rspamd_mmaped_file_open (rspamd_mmaped_file_ctx * pool,
 }
 
 gint
-rspamd_mmaped_file_close (rspamd_mmaped_file_ctx * pool,
+rspamd_mmaped_file_close_file (rspamd_mmaped_file_ctx * pool,
 	rspamd_mmaped_file_t * file)
 {
 	rspamd_mmaped_file_t *pos;
@@ -656,8 +656,6 @@ rspamd_mmaped_file_close (rspamd_mmaped_file_ctx * pool,
 	if (file->fd != -1) {
 		close (file->fd);
 	}
-
-	g_hash_table_remove (pool->files, file->cf);
 
 	g_slice_free1 (sizeof (*file), file);
 
@@ -797,23 +795,6 @@ rspamd_mmaped_file_create (rspamd_mmaped_file_ctx * pool, const gchar *filename,
 	return 0;
 }
 
-void
-rspamd_mmaped_file_destroy (rspamd_mmaped_file_ctx * pool)
-{
-	GHashTableIter it;
-	gpointer k, v;
-	rspamd_mmaped_file_t *f;
-
-	g_hash_table_iter_init (&it, pool->files);
-	while (g_hash_table_iter_next (&it, &k, &v)) {
-		f = (rspamd_mmaped_file_t *)v;
-		rspamd_mmaped_file_close (pool, f);
-	}
-
-	g_hash_table_destroy (pool->files);
-	rspamd_mempool_delete (pool->pool);
-}
-
 gpointer
 rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 {
@@ -826,6 +807,7 @@ rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 	gsize size;
 
 	new = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (rspamd_mmaped_file_ctx));
+	new->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
 	new->lock = rspamd_mempool_get_mutex (new->pool);
 	new->mlock_ok = cfg->mlock_statfile_pool;
 	new->files = g_hash_table_new (g_direct_hash, g_direct_equal);
@@ -844,7 +826,7 @@ rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 			 * By default, all statfiles are treated as mmaped files
 			 */
 			if (stf->backend == NULL ||
-					strcmp (stf->backend, MMAPED_BACKEND_TYPE)) {
+					strcmp (stf->backend, MMAPED_BACKEND_TYPE) == 0) {
 				/*
 				 * Check configuration sanity
 				 */
@@ -881,6 +863,29 @@ rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 	}
 
 	return (gpointer)new;
+}
+
+void
+rspamd_mmaped_file_close (gpointer p)
+{
+	rspamd_mmaped_file_ctx *ctx = (rspamd_mmaped_file_ctx *)p;
+	GHashTableIter it;
+	gpointer k, v;
+	rspamd_mmaped_file_t *mf;
+
+	g_assert (ctx != NULL);
+
+	rspamd_mempool_lock_mutex (ctx->lock);
+	g_hash_table_iter_init (&it, ctx->files);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		mf = v;
+		rspamd_mmaped_file_close_file (ctx, mf);
+	}
+
+	g_hash_table_unref (ctx->files);
+	rspamd_mempool_unlock_mutex (ctx->lock);
+	/* XXX: we don't delete pool here to avoid deadlocks */
 }
 
 gpointer

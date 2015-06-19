@@ -51,6 +51,11 @@ typedef enum rspamd_stat_result_e {
 void rspamd_stat_init (struct rspamd_config *cfg);
 
 /**
+ * Finalize statistics
+ */
+void rspamd_stat_close (void);
+
+/**
  * Classify the task specified and insert symbols if needed
  * @param task
  * @return TRUE if task has been classified
