@@ -63,7 +63,7 @@ static const char *create_tables_sql =
 		");"
 		"CREATE UNIQUE INDEX IF NOT EXISTS un ON users(name);"
 		"CREATE UNIQUE INDEX IF NOT EXISTS ln ON languages(name);"
-		"PRAGMA user_version=" SQLITE3_SCHEMA_VERSION
+		"PRAGMA user_version=" SQLITE3_SCHEMA_VERSION ";"
 		"INSERT INTO users(id, name, learns) VALUES(0, '" SQLITE3_DEFAULT "',0);"
 		"INSERT INTO languages(id, name, learns) VALUES(0, '" SQLITE3_DEFAULT "',0);"
 		"COMMIT;";
@@ -302,7 +302,7 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 		while (curst) {
 			stf = curst->data;
 
-			if (strcmp (stf->backend, SQLITE3_BACKEND_TYPE) == 0) {
+			if (stf->backend && strcmp (stf->backend, SQLITE3_BACKEND_TYPE) == 0) {
 				/*
 				 * Check configuration sanity
 				 */
@@ -347,6 +347,33 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 	}
 
 	return (gpointer)new;
+}
+
+void
+rspamd_sqlite3_close (gpointer p)
+{
+	struct rspamd_stat_sqlite3_ctx *ctx = p;
+	struct rspamd_stat_sqlite3_db *bk;
+	GHashTableIter it;
+	gpointer k, v;
+
+	g_hash_table_iter_init (&it, ctx->files);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		bk = v;
+
+		if (bk->sqlite) {
+			if (bk->in_transaction) {
+				rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
+			}
+
+			sqlite3_close (bk->sqlite);
+			rspamd_sqlite3_close_prstmt (bk->prstmt);
+			g_slice_free1 (sizeof (*bk), bk);
+		}
+	}
+
+	g_hash_table_destroy (ctx->files);
 }
 
 gpointer

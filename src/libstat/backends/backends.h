@@ -54,6 +54,7 @@ struct rspamd_stat_backend {
 	gulong (*inc_learns)(struct rspamd_statfile_runtime *runtime, gpointer ctx);
 	gulong (*dec_learns)(struct rspamd_statfile_runtime *runtime, gpointer ctx);
 	ucl_object_t* (*get_stat)(struct rspamd_statfile_runtime *runtime, gpointer ctx);
+	void (*close)(gpointer ctx);
 	gpointer ctx;
 };
 
@@ -79,7 +80,8 @@ struct rspamd_stat_backend {
 		gulong rspamd_##name##_learns (struct rspamd_statfile_runtime *runtime, \
 				gpointer ctx); \
 		ucl_object_t * rspamd_##name##_get_stat (struct rspamd_statfile_runtime *runtime, \
-				gpointer ctx)
+				gpointer ctx); \
+		void rspamd_##name##_close (gpointer ctx)
 
 RSPAMD_STAT_BACKEND_DEF(mmaped_file);
 RSPAMD_STAT_BACKEND_DEF(redis);

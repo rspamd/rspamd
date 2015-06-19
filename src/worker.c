@@ -306,6 +306,7 @@ start_worker (struct rspamd_worker *worker)
 	event_base_loop (ctx->ev_base, 0);
 
 	g_mime_shutdown ();
+	rspamd_stat_close ();
 	rspamd_log_close (rspamd_main->logger);
 
 	if (ctx->key) {

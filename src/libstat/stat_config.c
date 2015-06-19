@@ -65,7 +65,8 @@ static struct rspamd_stat_tokenizer stat_tokenizers[] = {
 		.total_learns = rspamd_##eltn##_total_learns, \
 		.inc_learns = rspamd_##eltn##_inc_learns, \
 		.dec_learns = rspamd_##eltn##_dec_learns, \
-		.get_stat = rspamd_##eltn##_get_stat \
+		.get_stat = rspamd_##eltn##_get_stat, \
+		.close = rspamd_##eltn##_close \
 	}
 
 static struct rspamd_stat_backend stat_backends[] = {
@@ -110,6 +111,21 @@ rspamd_stat_init (struct rspamd_config *cfg)
 	for (i = 0; i < stat_ctx->caches_count; i ++) {
 		stat_ctx->caches[i].ctx = stat_ctx->caches[i].init (stat_ctx, cfg);
 		msg_debug ("added cache %s", stat_ctx->caches[i].name);
+	}
+}
+
+void
+rspamd_stat_close (void)
+{
+	guint i;
+
+	g_assert (stat_ctx != NULL);
+
+	for (i = 0; i < stat_ctx->backends_count; i ++) {
+		if (stat_ctx->backends[i].close != NULL) {
+			stat_ctx->backends[i].close (stat_ctx->backends[i].ctx);
+			msg_debug ("closed backend %s", stat_ctx->backends[i].name);
+		}
 	}
 }
 
