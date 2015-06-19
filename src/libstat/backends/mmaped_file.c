@@ -844,7 +844,7 @@ rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 			 * By default, all statfiles are treated as mmaped files
 			 */
 			if (stf->backend == NULL ||
-					strcmp (stf->backend, MMAPED_BACKEND_TYPE)) {
+					strcmp (stf->backend, MMAPED_BACKEND_TYPE) == 0) {
 				/*
 				 * Check configuration sanity
 				 */

@@ -302,7 +302,7 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 		while (curst) {
 			stf = curst->data;
 
-			if (strcmp (stf->backend, SQLITE3_BACKEND_TYPE)) {
+			if (strcmp (stf->backend, SQLITE3_BACKEND_TYPE) == 0) {
 				/*
 				 * Check configuration sanity
 				 */
