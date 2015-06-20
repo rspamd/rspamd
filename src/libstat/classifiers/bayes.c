@@ -176,11 +176,35 @@ bayes_classify (struct classifier_ctx * ctx,
 					2 * rt->processed_tokens);
 			s = 1 - inv_chi_square (-2. * rt->ham_prob,
 					2 * rt->processed_tokens);
-			final_prob = (s + 1.0 - h) / 2.;
-			msg_debug ("<%s> got ham prob %.2f -> %.2f and spam prob %.2f -> %.2f,"
-					" %L tokens processed of %ud total tokens",
-					task->message_id, rt->ham_prob, h, rt->spam_prob, s,
-					rt->processed_tokens, g_tree_nnodes (input));
+
+			if (isnormal (s) && isnormal (h)) {
+				final_prob = (s + 1.0 - h) / 2.;
+				msg_debug ("<%s> got ham prob %.2f -> %.2f and spam prob %.2f -> %.2f,"
+						" %L tokens processed of %ud total tokens",
+						task->message_id, rt->ham_prob, h, rt->spam_prob, s,
+						rt->processed_tokens, g_tree_nnodes (input));
+			}
+			else {
+				/*
+				 * We have some overflow, hence we need to check which class
+				 * is NaN
+				 */
+				if (isnormal (h)) {
+					final_prob = 1.0;
+					msg_debug ("<%s> spam class is overflowed, as we have no"
+							" ham samples", task->message_id);
+				}
+				else if (isnormal (s)){
+					final_prob = 0.0;
+					msg_debug ("<%s> spam class is overflowed, as we have no"
+							" spam samples", task->message_id);
+				}
+				else {
+					final_prob = 0.5;
+					msg_warn ("<%s> spam and ham classes are both overflowed",
+							task->message_id);
+				}
+			}
 		}
 
 		if (rt->processed_tokens > 0 && fabs (final_prob - 0.5) > 0.05) {
