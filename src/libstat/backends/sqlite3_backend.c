@@ -287,9 +287,11 @@ rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
 {
 	struct rspamd_stat_sqlite3_db *bk;
 	sqlite3 *sqlite;
+	sqlite3_stmt *stmt;
 	gint rc, flags;
 	static const char sqlite_wal[] = "PRAGMA journal_mode=WAL;",
-			fallback_journal[] = "PRAGMA journal_mode=OFF;";
+			fallback_journal[] = "PRAGMA journal_mode=OFF;",
+			user_version[] = "PRAGMA user_version;";
 
 	flags = SQLITE_OPEN_READWRITE;
 
@@ -306,6 +308,23 @@ rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
 		return NULL;
 	}
 
+	if (sqlite3_exec (sqlite, sqlite_wal, NULL, NULL, NULL) != SQLITE_OK) {
+		msg_warn ("WAL mode is not supported, locking issues might occur");
+		sqlite3_exec (sqlite, fallback_journal, NULL, NULL, NULL);
+	}
+
+	/* Check user_version */
+	g_assert (sqlite3_prepare_v2 (sqlite, user_version, -1, &stmt, NULL)
+			== SQLITE_OK);
+	g_assert (sqlite3_step (stmt) == SQLITE_ROW);
+
+	if (sqlite3_column_int (stmt, 0) != atoi (SQLITE3_SCHEMA_VERSION)) {
+		msg_warn ("bad sqlite database: %s, try to recreate it", path);
+		create = TRUE;
+	}
+
+	sqlite3_finalize (stmt);
+
 	if (create) {
 		if (sqlite3_exec (sqlite, create_tables_sql, NULL, NULL, NULL) != SQLITE_OK) {
 			g_set_error (err, rspamd_sqlite3_quark (),
@@ -315,11 +334,6 @@ rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
 
 			return NULL;
 		}
-	}
-
-	if (sqlite3_exec (sqlite, sqlite_wal, NULL, NULL, NULL) != SQLITE_OK) {
-		msg_warn ("WAL mode is not supported, locking issues might occur");
-		sqlite3_exec (sqlite, fallback_journal, NULL, NULL, NULL);
 	}
 
 	bk = g_slice_alloc0 (sizeof (*bk));
