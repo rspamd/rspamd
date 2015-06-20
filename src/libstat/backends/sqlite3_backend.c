@@ -156,7 +156,7 @@ static struct rspamd_sqlite3_prstmt {
 		.sql = "SELECT sum(learns) FROM languages;",
 		.stmt = NULL,
 		.args = "",
-		.result = SQLITE_DONE,
+		.result = SQLITE_ROW,
 		.ret = "I"
 	}
 };
