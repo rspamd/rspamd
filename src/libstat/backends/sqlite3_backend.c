@@ -91,7 +91,7 @@ static struct rspamd_sqlite3_prstmt {
 {
 	{
 		.idx = RSPAMD_STAT_BACKEND_TRANSACTION_START,
-		.sql = "BEGIN TRANSACTION;",
+		.sql = "BEGIN IMMEDIATE TRANSACTION;",
 		.args = "",
 		.stmt = NULL,
 		.result = SQLITE_DONE,
@@ -288,6 +288,7 @@ rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
 	struct rspamd_stat_sqlite3_db *bk;
 	sqlite3 *sqlite;
 	gint rc, flags;
+	static const char sqlite_wal[] = "PRAGMA journal_mode=WAL;";
 
 	flags = SQLITE_OPEN_READWRITE;
 
@@ -313,6 +314,10 @@ rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
 
 			return NULL;
 		}
+	}
+
+	if (sqlite3_exec (sqlite, sqlite_wal, NULL, NULL, NULL) != SQLITE_OK) {
+		msg_warn ("WAL mode is not supported, locking issues might occur");
 	}
 
 	bk = g_slice_alloc0 (sizeof (*bk));
