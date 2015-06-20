@@ -288,7 +288,8 @@ rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
 	struct rspamd_stat_sqlite3_db *bk;
 	sqlite3 *sqlite;
 	gint rc, flags;
-	static const char sqlite_wal[] = "PRAGMA journal_mode=WAL;";
+	static const char sqlite_wal[] = "PRAGMA journal_mode=WAL;",
+			fallback_journal[] = "PRAGMA journal_mode=OFF;";
 
 	flags = SQLITE_OPEN_READWRITE;
 
@@ -318,6 +319,7 @@ rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
 
 	if (sqlite3_exec (sqlite, sqlite_wal, NULL, NULL, NULL) != SQLITE_OK) {
 		msg_warn ("WAL mode is not supported, locking issues might occur");
+		sqlite3_exec (sqlite, fallback_journal, NULL, NULL, NULL);
 	}
 
 	bk = g_slice_alloc0 (sizeof (*bk));
