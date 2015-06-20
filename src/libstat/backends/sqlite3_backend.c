@@ -509,13 +509,12 @@ rspamd_sqlite3_learn_token (struct token_node_s *tok,
 }
 
 void
-rspamd_sqlite3_finalize_learn (struct rspamd_statfile_runtime *runtime,
+rspamd_sqlite3_finalize_learn (gpointer runtime,
 		gpointer ctx)
 {
-	struct rspamd_stat_sqlite3_db *bk;
+	struct rspamd_stat_sqlite3_db *bk = runtime;
 
-	g_assert (runtime->backend_runtime != NULL);
-	bk = runtime->backend_runtime;
+	g_assert (bk != NULL);
 
 	if (bk->in_transaction) {
 		rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
@@ -526,14 +525,13 @@ rspamd_sqlite3_finalize_learn (struct rspamd_statfile_runtime *runtime,
 }
 
 gulong
-rspamd_sqlite3_total_learns (struct rspamd_statfile_runtime *runtime,
+rspamd_sqlite3_total_learns (gpointer runtime,
 		gpointer ctx)
 {
-	struct rspamd_stat_sqlite3_db *bk;
+	struct rspamd_stat_sqlite3_db *bk = runtime;
 	guint64 res;
 
-	g_assert (runtime->backend_runtime != NULL);
-	bk = runtime->backend_runtime;
+	g_assert (bk != NULL);
 
 	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 
@@ -541,13 +539,12 @@ rspamd_sqlite3_total_learns (struct rspamd_statfile_runtime *runtime,
 }
 
 gulong
-rspamd_sqlite3_inc_learns (struct rspamd_statfile_runtime *runtime,
+rspamd_sqlite3_inc_learns (gpointer runtime,
 		gpointer ctx)
 {
-	struct rspamd_stat_sqlite3_db *bk;
+	struct rspamd_stat_sqlite3_db *bk = runtime;
 
-	g_assert (runtime->backend_runtime != NULL);
-	bk = runtime->backend_runtime;
+	g_assert (bk != NULL);
 	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_INC_LEARNS,
 			SQLITE3_DEFAULT, SQLITE3_DEFAULT);
 
@@ -555,13 +552,12 @@ rspamd_sqlite3_inc_learns (struct rspamd_statfile_runtime *runtime,
 }
 
 gulong
-rspamd_sqlite3_dec_learns (struct rspamd_statfile_runtime *runtime,
+rspamd_sqlite3_dec_learns (gpointer runtime,
 		gpointer ctx)
 {
-	struct rspamd_stat_sqlite3_db *bk;
+	struct rspamd_stat_sqlite3_db *bk = runtime;
 
-	g_assert (runtime->backend_runtime != NULL);
-	bk = runtime->backend_runtime;
+	g_assert (bk != NULL);
 	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_DEC_LEARNS,
 			SQLITE3_DEFAULT, SQLITE3_DEFAULT);
 
@@ -569,22 +565,20 @@ rspamd_sqlite3_dec_learns (struct rspamd_statfile_runtime *runtime,
 }
 
 gulong
-rspamd_sqlite3_learns (struct rspamd_statfile_runtime *runtime,
+rspamd_sqlite3_learns (gpointer runtime,
 		gpointer ctx)
 {
-	struct rspamd_stat_sqlite3_db *bk;
+	struct rspamd_stat_sqlite3_db *bk = runtime;
 	guint64 res;
 
-	g_assert (runtime->backend_runtime != NULL);
-	bk = runtime->backend_runtime;
-
+	g_assert (bk);
 	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 
 	return res;
 }
 
 ucl_object_t *
-rspamd_sqlite3_get_stat (struct rspamd_statfile_runtime *runtime,
+rspamd_sqlite3_get_stat (gpointer runtime,
 		gpointer ctx)
 {
 	return NULL;

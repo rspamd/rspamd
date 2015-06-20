@@ -422,20 +422,3 @@ rspamd_redis_runtime (struct rspamd_task *task,
 
 	return rt;
 }
-
-gboolean rspamd_redis_process_token (struct token_node_s *tok,
-		struct rspamd_token_result *res,
-		gpointer ctx);
-gboolean rspamd_redis_learn_token (struct token_node_s *tok,
-		struct rspamd_token_result *res,
-		gpointer ctx);
-void rspamd_redis_finalize_learn (struct rspamd_statfile_runtime *runtime,
-		gpointer ctx);
-gulong rspamd_redis_total_learns (struct rspamd_statfile_runtime *runtime,
-		gpointer ctx);
-gulong rspamd_redis_inc_learns (struct rspamd_statfile_runtime *runtime,
-		gpointer ctx);
-gulong rspamd_redis_learns (struct rspamd_statfile_runtime *runtime,
-		gpointer ctx);
-ucl_object_t * rspamd_redis_get_stat (struct rspamd_statfile_runtime *runtime,
-		gpointer ctx);

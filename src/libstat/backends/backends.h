@@ -69,17 +69,17 @@ struct rspamd_stat_backend {
 		gboolean rspamd_##name##_learn_token (struct token_node_s *tok, \
 				struct rspamd_token_result *res, \
 				gpointer ctx); \
-		void rspamd_##name##_finalize_learn (struct rspamd_statfile_runtime *runtime, \
+		void rspamd_##name##_finalize_learn (gpointer runtime, \
 				gpointer ctx); \
-		gulong rspamd_##name##_total_learns (struct rspamd_statfile_runtime *runtime, \
+		gulong rspamd_##name##_total_learns (gpointer runtime, \
 				gpointer ctx); \
-		gulong rspamd_##name##_inc_learns (struct rspamd_statfile_runtime *runtime, \
+		gulong rspamd_##name##_inc_learns (gpointer runtime, \
 				gpointer ctx); \
-		gulong rspamd_##name##_dec_learns (struct rspamd_statfile_runtime *runtime, \
+		gulong rspamd_##name##_dec_learns (gpointer runtime, \
 						gpointer ctx); \
-		gulong rspamd_##name##_learns (struct rspamd_statfile_runtime *runtime, \
+		gulong rspamd_##name##_learns (gpointer runtime, \
 				gpointer ctx); \
-		ucl_object_t * rspamd_##name##_get_stat (struct rspamd_statfile_runtime *runtime, \
+		ucl_object_t * rspamd_##name##_get_stat (gpointer runtime, \
 				gpointer ctx); \
 		void rspamd_##name##_close (gpointer ctx)
 
