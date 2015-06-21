@@ -422,19 +422,18 @@ rspamd_map_remove_all (struct rspamd_config *cfg)
 gboolean
 rspamd_map_check_proto (const gchar *map_line, gint *res, const gchar **pos)
 {
+	g_assert (res != NULL);
+	g_assert (pos != NULL);
+
 	if (g_ascii_strncasecmp (map_line, "http://",
-		sizeof ("http://") - 1) == 0) {
-		if (res && pos) {
-			*res = MAP_PROTO_HTTP;
-			*pos = map_line + sizeof ("http://") - 1;
-		}
+			sizeof ("http://") - 1) == 0) {
+		*res = MAP_PROTO_HTTP;
+		*pos = map_line + sizeof ("http://") - 1;
 	}
 	else if (g_ascii_strncasecmp (map_line, "file://", sizeof ("file://") -
-		1) == 0) {
-		if (res && pos) {
-			*res = MAP_PROTO_FILE;
-			*pos = map_line + sizeof ("file://") - 1;
-		}
+			1) == 0) {
+		*res = MAP_PROTO_FILE;
+		*pos = map_line + sizeof ("file://") - 1;
 	}
 	else if (*map_line == '/') {
 		/* Trivial file case */
