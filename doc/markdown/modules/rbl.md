@@ -105,3 +105,8 @@ an_rbl {
 }
 ~~~
 
+The following extra settings are valid in the RBL subsection:
+
+- whitelist_exception
+
+(For whitelists) - Symbols named as parameters for this setting will not be used for neutralising blacklists (set this multiple times to add multiple exceptions).

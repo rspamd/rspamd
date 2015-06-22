@@ -353,7 +353,22 @@ for key,rbl in pairs(opts['rbls']) do
       if type(rspamd_config.get_api_version) ~= 'nil' then
         rspamd_config:register_virtual_symbol(s, 1)
         if(rbl['is_whitelist']) then
-          table.insert(white_symbols, s)
+          if type(rbl['whitelist_exception']) == 'string' then
+            if (rbl['whitelist_exception'] ~= s) then
+              table.insert(white_symbols, s)
+            end
+          elseif type(rbl['whitelist_exception']) == 'table' then
+            local foundException = false
+            for _, e in pairs(rbl['whitelist_exception']) do
+              if e == s then
+                foundException = true
+                break
+              end
+            end
+            if not foundException then
+              table.insert(white_symbols, s)
+            end
+          end
         else
           table.insert(black_symbols, s)
         end
