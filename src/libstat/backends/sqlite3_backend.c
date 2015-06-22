@@ -564,12 +564,14 @@ rspamd_sqlite3_inc_learns (gpointer runtime,
 		gpointer ctx)
 {
 	struct rspamd_stat_sqlite3_db *bk = runtime;
+	guint64 res;
 
 	g_assert (bk != NULL);
+	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_INC_LEARNS,
 			SQLITE3_DEFAULT, SQLITE3_DEFAULT);
 
-	return 0;
+	return res;
 }
 
 gulong
@@ -577,12 +579,14 @@ rspamd_sqlite3_dec_learns (gpointer runtime,
 		gpointer ctx)
 {
 	struct rspamd_stat_sqlite3_db *bk = runtime;
+	guint64 res;
 
 	g_assert (bk != NULL);
+	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_DEC_LEARNS,
 			SQLITE3_DEFAULT, SQLITE3_DEFAULT);
 
-	return 0;
+	return res;
 }
 
 gulong
