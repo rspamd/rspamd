@@ -67,17 +67,43 @@ local function check_multimap(task)
     if ret then
       task:insert_result(r['symbol'], 1)
     end
+    
+    return ret
   end
 
   -- Match list of values according to the field
-  local function match_list(r, ls, field)
+  local function match_list(r, ls, fields)
+    local ret = false
     if ls then
-      if field then
-        _.each(function(e) match_rule(r, e[field]) end, ls)
+      if fields then
+        _.each(function(e) 
+          local match = e[fields[1]]
+          if fields[2] then
+            match = fields[2](match)
+          end
+          ret = match_rule(r, match) 
+        end, ls)
       else
-        _.each(function(e) match_rule(r, e) end, ls)
+        _.each(function(e) ret = match_rule(r, e) end, ls)
       end
     end
+
+    return ret
+  end
+  
+  local function match_addr(r, addr)
+    local ret = match_list(r, addr, {'addr'})
+    
+    if not ret then
+      -- Try domain
+      ret = match_list(r, addr, {'domain', function(d) return '@' .. d end})
+    end
+    if not ret then
+      -- Try user
+      ret =  match_list(r, addr, {'user', function(d) return d .. '@' end})
+    end
+    
+    return ret
   end
   -- IP rules
   local ip = task:get_from_ip()
@@ -97,7 +123,7 @@ local function check_multimap(task)
   local rcpts = task:get_recipients()
   if rcpts then
     _.each(function(r)
-      match_list(r, rcpts, 'addr')
+      match_addr(r, rcpts)
     end,
     _.filter(function(r) return r['type'] == 'rcpt' end, rules))
   end
@@ -106,7 +132,7 @@ local function check_multimap(task)
   local from = task:get_from()
   if from then
     _.each(function(r)
-      match_list(r, from, 'addr')
+      match_addr(r, from)
     end,
     _.filter(function(r) return r['type'] == 'from' end, rules))
   end
