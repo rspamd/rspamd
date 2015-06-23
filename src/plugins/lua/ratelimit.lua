@@ -242,7 +242,7 @@ local function rate_test_set(task, func)
   local from = task:get_from()
   local from_user = '<>'
   local from_addr = '<>'
-  if from then
+  if from and from[1]['addr'] then
     from_user = from[1]['user']
     from_addr = from[1]['addr']
   end

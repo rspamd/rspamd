@@ -490,16 +490,25 @@ rspamd_task_add_sender (struct rspamd_task *task, const gchar *sender)
 				task->from_envelope);
 #endif
 	}
-	tmp_addr = internet_address_list_parse_string (sender);
 
-	if (tmp_addr) {
-		internet_address_list_append (task->from_envelope, tmp_addr);
-#ifdef GMIME24
-		g_object_unref (tmp_addr);
-#else
-		internet_address_list_destroy (tmp_addr);
-#endif
+	if (strcmp (sender, "<>") == 0) {
+		/* Workaround for gmime */
+		internet_address_list_add (task->from_envelope,
+				internet_address_mailbox_new ("", ""));
 		return TRUE;
+	}
+	else {
+		tmp_addr = internet_address_list_parse_string (sender);
+
+		if (tmp_addr) {
+			internet_address_list_append (task->from_envelope, tmp_addr);
+#ifdef GMIME24
+			g_object_unref (tmp_addr);
+#else
+			internet_address_list_destroy (tmp_addr);
+#endif
+			return TRUE;
+		}
 	}
 
 	return FALSE;
