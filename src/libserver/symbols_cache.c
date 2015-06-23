@@ -71,14 +71,14 @@ cache_logic_cmp (const void *p1, const void *p2)
 		weight2 = i2->metric_weight == 0 ? i2->s->weight : i2->metric_weight;
 		t1 = i1->s->avg_time / 1000000.0;
 		t2 = i2->s->avg_time / 1000000.0;
-		w1 = SCORE_FUN (abs (weight1), f1, t1);
-		w2 = SCORE_FUN (abs (weight2), f2, t2);
+		w1 = SCORE_FUN (fabs (weight1), f1, t1);
+		w2 = SCORE_FUN (fabs (weight2), f2, t2);
 		msg_debug ("%s -> %.2f, %s -> %.2f", i1->s->symbol, w1, i2->s->symbol, w2);
 	}
 	else {
 		/* Strict sorting */
-		w1 = abs (i1->priority);
-		w2 = abs (i2->priority);
+		w1 = fabs (i1->priority);
+		w2 = fabs (i2->priority);
 	}
 
 	return (gint)w2 - w1;
