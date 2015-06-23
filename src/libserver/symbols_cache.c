@@ -77,8 +77,8 @@ cache_logic_cmp (const void *p1, const void *p2)
 	}
 	else {
 		/* Strict sorting */
-		w1 = fabs (i1->priority);
-		w2 = fabs (i2->priority);
+		w1 = abs (i1->priority);
+		w2 = abs (i2->priority);
 	}
 
 	return (gint)w2 - w1;
