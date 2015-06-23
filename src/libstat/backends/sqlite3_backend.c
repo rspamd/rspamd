@@ -193,10 +193,10 @@ rspamd_sqlite3_init_prstmt (struct rspamd_stat_sqlite3_db *db, GError **err)
 static int
 rspamd_sqlite3_run_prstmt (struct rspamd_stat_sqlite3_db *db, int idx, ...)
 {
-	int retcode;
+	gint retcode;
 	va_list ap;
 	sqlite3_stmt *stmt;
-	int i;
+	gint i, rowid, nargs, j;
 	const char *argtypes;
 
 	if (idx < 0 || idx >= RSPAMD_STAT_BACKEND_MAX) {
@@ -220,18 +220,37 @@ rspamd_sqlite3_run_prstmt (struct rspamd_stat_sqlite3_db *db, int idx, ...)
 	argtypes = db->prstmt[idx].args;
 	sqlite3_reset (stmt);
 	va_start (ap, idx);
+	nargs = 1;
 
-	for (i = 0; argtypes[i] != '\0'; i++) {
+	for (i = 0, rowid = 1; argtypes[i] != '\0'; i ++, rowid ++) {
 		switch (argtypes[i]) {
 		case 'T':
-			sqlite3_bind_text (stmt, i + 1, va_arg (ap, const char*), -1,
+
+			for (j = 0; j < nargs; j ++, rowid ++) {
+				sqlite3_bind_text (stmt, rowid, va_arg (ap, const char*), -1,
 					SQLITE_STATIC);
+			}
+
+			nargs = 1;
 			break;
 		case 'I':
-			sqlite3_bind_int64 (stmt, i + 1, va_arg (ap, gint64));
+
+			for (j = 0; j < nargs; j ++, rowid ++) {
+				sqlite3_bind_int64 (stmt, rowid, va_arg (ap, gint64));
+			}
+
+			nargs = 1;
 			break;
 		case 'S':
-			sqlite3_bind_int (stmt, i + 1, va_arg (ap, gint));
+
+			for (j = 0; j < nargs; j ++, rowid ++) {
+				sqlite3_bind_int (stmt, rowid, va_arg (ap, gint));
+			}
+
+			nargs = 1;
+			break;
+		case '*':
+			nargs = va_arg (ap, gint);
 			break;
 		}
 	}
