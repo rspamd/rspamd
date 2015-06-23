@@ -1,3 +1,17 @@
+0.9.7:
+	* Add whitelist_exception setting to RBL module (by @fatalbanana)
+	* Don't use RWL_MAILSPIKE_POSSIBLE or DNSWL_BLOCKED for whitelisting (by
+	  @fatalbanana)
+	* Fix extreme cases in bayes classifier.
+	* Fix parsing of urls with '?' at the end of hostname.
+	* Update interface.
+	* Fix number of issues with webui interaction.
+	* Fix saving maps.
+	* Allow user@ and @domain matches in multimap.
+	* Fix issues with bounces From processing.
+	* Fix abs/fabs misuse.
+	* Fix builds on suse and arch linux distributions.
+
 0.9.6:
 	* Fix memory leak if mime cannot be parsed.
 	* Fix dkim cache expiration.
