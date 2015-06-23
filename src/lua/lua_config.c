@@ -1478,7 +1478,8 @@ lua_radix_get_key (lua_State * L)
 
 	if (radix) {
 		if (lua_type (L, 2) == LUA_TNUMBER) {
-			key_num = htonl (luaL_checkint (L, 2));
+			key_num = luaL_checknumber (L, 2);
+			key_num = htonl (key_num);
 		}
 		else if (lua_type (L, 2) == LUA_TUSERDATA) {
 			ud = luaL_checkudata (L, 2, "rspamd{ip}");
