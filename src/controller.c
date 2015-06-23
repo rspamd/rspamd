@@ -1391,8 +1391,8 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	id = strtoul (idstr->str, &errstr, 10);
-	if (*errstr != '\0' && g_ascii_isspace (*errstr)) {
-		msg_info ("invalid map id");
+	if (*errstr != '\0' && !g_ascii_isspace (*errstr)) {
+		msg_info ("invalid map id: %V", idstr);
 		rspamd_controller_send_error (conn_ent, 400, "Map id is invalid");
 		return 0;
 	}
