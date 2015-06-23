@@ -1221,12 +1221,18 @@ rspamd_controller_handle_saveactions (
 		}
 	}
 
-	dump_dynamic_config (ctx->cfg);
-	msg_info ("<%s> modified %d actions",
-		rspamd_inet_address_to_string (session->from_addr),
-		added);
+	if (dump_dynamic_config (ctx->cfg)) {
+		msg_info ("<%s> modified %d actions",
+			rspamd_inet_address_to_string (session->from_addr),
+			added);
 
-	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
+		rspamd_controller_send_string (conn_ent, "{\"success\":true}");
+	}
+	else {
+		rspamd_controller_send_error (conn_ent, 500, "Save error");
+	}
+
+	ucl_object_unref (obj);
 
 	return 0;
 }
@@ -1332,12 +1338,24 @@ rspamd_controller_handle_savesymbols (
 		}
 	}
 
-	dump_dynamic_config (ctx->cfg);
-	msg_info ("<%s> modified %d symbols",
-			rspamd_inet_address_to_string (session->from_addr),
-			added);
+	if (added > 0) {
+		if (dump_dynamic_config (ctx->cfg)) {
+			msg_info ("<%s> modified %d symbols",
+					rspamd_inet_address_to_string (session->from_addr),
+					added);
 
-	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
+			rspamd_controller_send_string (conn_ent, "{\"success\":true}");
+		}
+		else {
+			rspamd_controller_send_error (conn_ent, 500, "Save error");
+		}
+	}
+	else {
+		msg_err ("no symbols to save");
+		rspamd_controller_send_error (conn_ent, 404, "No symbols to save");
+	}
+
+	ucl_object_unref (obj);
 
 	return 0;
 }

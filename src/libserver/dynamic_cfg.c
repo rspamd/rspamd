@@ -28,11 +28,8 @@
 #include "dynamic_cfg.h"
 
 struct config_json_buf {
-	gchar *buf;
-	gchar *pos;
-	size_t buflen;
+	GString *buf;
 	struct rspamd_config *cfg;
-	ucl_object_t *obj;
 };
 
 /**
@@ -144,15 +141,16 @@ json_config_read_cb (rspamd_mempool_t * pool,
 	gint len,
 	struct map_cb_data *data)
 {
-	struct config_json_buf *jb;
-	gint free, off;
+	struct config_json_buf *jb, *pd;
+
+	pd = data->prev_data;
+
+	g_assert (pd != NULL);
 
 	if (data->cur_data == NULL) {
-		jb = g_malloc (sizeof (struct config_json_buf));
-		jb->cfg = ((struct config_json_buf *)data->prev_data)->cfg;
-		jb->buf = NULL;
-		jb->pos = NULL;
-		jb->obj = NULL;
+		jb = g_slice_alloc (sizeof (*jb));
+		jb->cfg = pd->cfg;
+		jb->buf = pd->buf;
 		data->cur_data = jb;
 	}
 	else {
@@ -161,24 +159,11 @@ json_config_read_cb (rspamd_mempool_t * pool,
 
 	if (jb->buf == NULL) {
 		/* Allocate memory for buffer */
-		jb->buflen = len * 2;
-		jb->buf = g_malloc (jb->buflen);
-		jb->pos = jb->buf;
+		jb->buf = g_string_sized_new (BUFSIZ);
 	}
 
-	off = jb->pos - jb->buf;
-	free = jb->buflen - off;
+	g_string_append_len (jb->buf, chunk, len);
 
-	if (free < len) {
-		jb->buflen = MAX (jb->buflen * 2, jb->buflen + len * 2);
-		jb->buf = g_realloc (jb->buf, jb->buflen);
-		jb->pos = jb->buf + off;
-	}
-
-	memcpy (jb->pos, chunk, len);
-	jb->pos += len;
-
-	/* Say not to copy any part of this buffer */
 	return NULL;
 }
 
@@ -192,10 +177,7 @@ json_config_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 	if (data->prev_data) {
 		jb = data->prev_data;
 		/* Clean prev data */
-		if (jb->buf) {
-			g_free (jb->buf);
-		}
-		g_free (jb);
+		g_slice_free1 (sizeof (*jb), jb);
 	}
 
 	/* Now parse json */
@@ -210,11 +192,10 @@ json_config_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 		msg_err ("no data read");
 		return;
 	}
-	/* NULL terminate current buf */
-	*jb->pos = '\0';
 
 	parser = ucl_parser_new (0);
-	if (!ucl_parser_add_chunk (parser, jb->buf, jb->pos - jb->buf)) {
+
+	if (!ucl_parser_add_chunk (parser, jb->buf->str, jb->buf->len)) {
 		msg_err ("cannot load json data: parse error %s",
 				ucl_parser_get_error (parser));
 		ucl_parser_free (parser);
@@ -230,18 +211,9 @@ json_config_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 		return;
 	}
 
-	jb->cfg->current_dynamic_conf = NULL;
-	ucl_object_unref (jb->obj);
-	jb->obj = top;
-
-	/*
-	 * Note about thread safety: we are updating values that are gdoubles so it is not atomic in general case
-	 * but on the other hand all that data is used only in the main thread, so why it is *likely* safe
-	 * to do this task in this way without explicit lock.
-	 */
-	apply_dynamic_conf (jb->obj, jb->cfg);
-
-	jb->cfg->current_dynamic_conf = jb->obj;
+	ucl_object_unref (jb->cfg->current_dynamic_conf);
+	apply_dynamic_conf (top, jb->cfg);
+	jb->cfg->current_dynamic_conf = top;
 }
 
 /**
@@ -259,11 +231,13 @@ init_dynamic_config (struct rspamd_config *cfg)
 	}
 
 	/* Now try to add map with json data */
-	jb = g_malloc0 (sizeof (struct config_json_buf));
+	jb = g_slice_alloc (sizeof (struct config_json_buf));
 	pjb = g_malloc (sizeof (struct config_json_buf *));
 	jb->buf = NULL;
 	jb->cfg = cfg;
 	*pjb = jb;
+	cfg->current_dynamic_conf = ucl_object_typed_new (UCL_ARRAY);
+
 	if (!rspamd_map_add (cfg, cfg->dynamic_conf, "Dynamic configuration map",
 		json_config_read_cb, json_config_fin_cb, (void **)pjb)) {
 		msg_err ("cannot add map for configuration %s", cfg->dynamic_conf);
@@ -284,6 +258,7 @@ dump_dynamic_config (struct rspamd_config *cfg)
 
 	if (cfg->dynamic_conf == NULL || cfg->current_dynamic_conf == NULL) {
 		/* No dynamic conf has been specified, so do not try to dump it */
+		msg_err ("cannot save dynamic conf as it is not specified");
 		return FALSE;
 	}
 
