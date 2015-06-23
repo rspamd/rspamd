@@ -78,10 +78,12 @@ local function check_multimap(task)
       if fields then
         _.each(function(e) 
           local match = e[fields[1]]
-          if fields[2] then
-            match = fields[2](match)
+          if match then
+            if fields[2] then
+              match = fields[2](match)
+            end
+            ret = match_rule(r, match) 
           end
-          ret = match_rule(r, match) 
         end, ls)
       else
         _.each(function(e) ret = match_rule(r, e) end, ls)
