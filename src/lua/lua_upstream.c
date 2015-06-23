@@ -184,7 +184,7 @@ lua_upstream_list_create (lua_State *L)
 	def = luaL_checkstring (L, 1);
 	if (def) {
 		if (lua_gettop (L) >= 2) {
-			default_port = luaL_checkinteger (L, 2);
+			default_port = luaL_checknumber (L, 2);
 		}
 
 		tokens = g_strsplit_set (def, ",;", 0);
