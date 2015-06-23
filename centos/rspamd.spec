@@ -83,6 +83,9 @@ lua.
         -DWANT_SYSTEMD_UNITS=ON \
         -DSYSTEMDDIR=%{_unitdir} \
 %endif
+%if 0%{?suse_version}
+        -DCMAKE_SKIP_INSTALL_RPATH=ON \
+%endif
         -DLOGDIR=%{_localstatedir}/log/rspamd \
         -DEXAMPLESDIR=%{_datadir}/examples/rspamd \
         -DPLUGINSDIR=%{_datadir}/rspamd \
