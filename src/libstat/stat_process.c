@@ -124,7 +124,7 @@ preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
 			res->cl_runtime = cl_runtime;
 			res->st_runtime = st_runtime;
 
-			if (st_runtime->backend->process_token (t, res,
+			if (st_runtime->backend->process_token (cbdata->task, t, res,
 					st_runtime->backend->ctx)) {
 
 				if (cl_runtime->clcf->max_tokens > 0 &&
@@ -226,11 +226,11 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 			st_runtime->backend = bk;
 
 			if (stcf->is_spam) {
-				cl_runtime->total_spam += bk->total_learns (backend_runtime,
+				cl_runtime->total_spam += bk->total_learns (task, backend_runtime,
 						bk->ctx);
 			}
 			else {
-				cl_runtime->total_ham += bk->total_learns (backend_runtime,
+				cl_runtime->total_ham += bk->total_learns (task, backend_runtime,
 						bk->ctx);
 			}
 
@@ -461,7 +461,7 @@ rspamd_stat_learn_token (gpointer k, gpointer v, gpointer d)
 			res = &g_array_index (t->results, struct rspamd_token_result, i);
 			st_runtime = (struct rspamd_statfile_runtime *)curst->data;
 
-			if (st_runtime->backend->learn_token (t, res,
+			if (st_runtime->backend->learn_token (cbdata->task, t, res,
 					st_runtime->backend->ctx)) {
 				cl_runtime->processed_tokens ++;
 
@@ -596,19 +596,22 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 						st_run = (struct rspamd_statfile_runtime *)curst->data;
 
 						if (unlearn && spam != st_run->st->is_spam) {
-							nrev = st_run->backend->dec_learns (st_run->backend_runtime,
+							nrev = st_run->backend->dec_learns (task,
+									st_run->backend_runtime,
 									st_run->backend->ctx);
 							msg_debug ("unlearned %s, new revision: %ul",
 									st_run->st->symbol, nrev);
 						}
 						else {
-							nrev = st_run->backend->inc_learns (st_run->backend_runtime,
+							nrev = st_run->backend->inc_learns (task,
+								st_run->backend_runtime,
 								st_run->backend->ctx);
 							msg_debug ("learned %s, new revision: %ul",
 								st_run->st->symbol, nrev);
 						}
 
-						st_run->backend->finalize_learn (st_run->backend_runtime,
+						st_run->backend->finalize_learn (task,
+														st_run->backend_runtime,
 														st_run->backend->ctx);
 
 						curst = g_list_next (curst);
@@ -662,7 +665,7 @@ rspamd_stat_statistics (struct rspamd_config *cfg, guint64 *total_learns)
 
 				backend_runtime = bk->runtime (NULL, stcf, FALSE, bk->ctx);
 
-				learns += bk->total_learns (backend_runtime, bk->ctx);
+				learns += bk->total_learns (NULL, backend_runtime, bk->ctx);
 				elt = bk->get_stat (backend_runtime, bk->ctx);
 
 				if (elt != NULL) {

@@ -937,7 +937,7 @@ rspamd_mmaped_file_runtime (struct rspamd_task *task,
 }
 
 gboolean
-rspamd_mmaped_file_process_token (rspamd_token_t *tok,
+rspamd_mmaped_file_process_token (struct rspamd_task *task, rspamd_token_t *tok,
 		struct rspamd_token_result *res,
 		gpointer p)
 {
@@ -971,7 +971,7 @@ rspamd_mmaped_file_process_token (rspamd_token_t *tok,
 }
 
 gboolean
-rspamd_mmaped_file_learn_token (rspamd_token_t *tok,
+rspamd_mmaped_file_learn_token (struct rspamd_task *task, rspamd_token_t *tok,
 		struct rspamd_token_result *res,
 		gpointer p)
 {
@@ -1001,7 +1001,7 @@ rspamd_mmaped_file_learn_token (rspamd_token_t *tok,
 }
 
 gulong
-rspamd_mmaped_file_total_learns (gpointer runtime,
+rspamd_mmaped_file_total_learns (struct rspamd_task *task, gpointer runtime,
 		gpointer ctx)
 {
 	rspamd_mmaped_file_t *mf = (rspamd_mmaped_file_t *)runtime;
@@ -1016,7 +1016,7 @@ rspamd_mmaped_file_total_learns (gpointer runtime,
 }
 
 gulong
-rspamd_mmaped_file_inc_learns (gpointer runtime,
+rspamd_mmaped_file_inc_learns (struct rspamd_task *task, gpointer runtime,
 		gpointer ctx)
 {
 	rspamd_mmaped_file_t *mf = (rspamd_mmaped_file_t *)runtime;
@@ -1032,7 +1032,7 @@ rspamd_mmaped_file_inc_learns (gpointer runtime,
 }
 
 gulong
-rspamd_mmaped_file_dec_learns (gpointer runtime,
+rspamd_mmaped_file_dec_learns (struct rspamd_task *task, gpointer runtime,
 		gpointer ctx)
 {
 	rspamd_mmaped_file_t *mf = (rspamd_mmaped_file_t *)runtime;
@@ -1080,7 +1080,7 @@ rspamd_mmaped_file_get_stat (gpointer runtime,
 }
 
 void
-rspamd_mmaped_file_finalize_learn (gpointer runtime,
+rspamd_mmaped_file_finalize_learn (struct rspamd_task *task, gpointer runtime,
 		gpointer ctx)
 {
 	rspamd_mmaped_file_t *mf = (rspamd_mmaped_file_t *)runtime;

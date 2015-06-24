@@ -45,15 +45,19 @@ struct rspamd_stat_backend {
 	gpointer (*init)(struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg);
 	gpointer (*runtime)(struct rspamd_task *task,
 			struct rspamd_statfile_config *stcf, gboolean learn, gpointer ctx);
-	gboolean (*process_token)(struct token_node_s *tok,
+	gboolean (*process_token)(struct rspamd_task *task, struct token_node_s *tok,
 			struct rspamd_token_result *res, gpointer ctx);
-	gboolean (*learn_token)(struct token_node_s *tok,
+	gboolean (*learn_token)(struct rspamd_task *task, struct token_node_s *tok,
 			struct rspamd_token_result *res, gpointer ctx);
-	gulong (*total_learns)(struct rspamd_statfile_runtime *runtime, gpointer ctx);
-	void (*finalize_learn)(struct rspamd_statfile_runtime *runtime, gpointer ctx);
-	gulong (*inc_learns)(struct rspamd_statfile_runtime *runtime, gpointer ctx);
-	gulong (*dec_learns)(struct rspamd_statfile_runtime *runtime, gpointer ctx);
-	ucl_object_t* (*get_stat)(struct rspamd_statfile_runtime *runtime, gpointer ctx);
+	gulong (*total_learns)(struct rspamd_task *task,
+			gpointer runtime, gpointer ctx);
+	void (*finalize_learn)(struct rspamd_task *task,
+			gpointer runtime, gpointer ctx);
+	gulong (*inc_learns)(struct rspamd_task *task,
+			gpointer runtime, gpointer ctx);
+	gulong (*dec_learns)(struct rspamd_task *task,
+			gpointer runtime, gpointer ctx);
+	ucl_object_t* (*get_stat)(gpointer runtime, gpointer ctx);
 	void (*close)(gpointer ctx);
 	gpointer ctx;
 };
@@ -63,21 +67,28 @@ struct rspamd_stat_backend {
 		gpointer rspamd_##name##_runtime (struct rspamd_task *task, \
 				struct rspamd_statfile_config *stcf, \
 				gboolean learn, gpointer ctx); \
-		gboolean rspamd_##name##_process_token (struct token_node_s *tok, \
+		gboolean rspamd_##name##_process_token (struct rspamd_task *task, \
+				struct token_node_s *tok, \
 				struct rspamd_token_result *res, \
 				gpointer ctx); \
-		gboolean rspamd_##name##_learn_token (struct token_node_s *tok, \
+		gboolean rspamd_##name##_learn_token (struct rspamd_task *task, \
+				struct token_node_s *tok, \
 				struct rspamd_token_result *res, \
 				gpointer ctx); \
-		void rspamd_##name##_finalize_learn (gpointer runtime, \
+		void rspamd_##name##_finalize_learn (struct rspamd_task *task, \
+				gpointer runtime, \
 				gpointer ctx); \
-		gulong rspamd_##name##_total_learns (gpointer runtime, \
+		gulong rspamd_##name##_total_learns (struct rspamd_task *task, \
+				gpointer runtime, \
 				gpointer ctx); \
-		gulong rspamd_##name##_inc_learns (gpointer runtime, \
+		gulong rspamd_##name##_inc_learns (struct rspamd_task *task, \
+				gpointer runtime, \
 				gpointer ctx); \
-		gulong rspamd_##name##_dec_learns (gpointer runtime, \
-						gpointer ctx); \
-		gulong rspamd_##name##_learns (gpointer runtime, \
+		gulong rspamd_##name##_dec_learns (struct rspamd_task *task, \
+				gpointer runtime, \
+				gpointer ctx); \
+		gulong rspamd_##name##_learns (struct rspamd_task *task, \
+				gpointer runtime, \
 				gpointer ctx); \
 		ucl_object_t * rspamd_##name##_get_stat (gpointer runtime, \
 				gpointer ctx); \

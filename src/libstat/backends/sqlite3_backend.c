@@ -476,7 +476,7 @@ rspamd_sqlite3_runtime (struct rspamd_task *task,
 }
 
 gboolean
-rspamd_sqlite3_process_token (struct token_node_s *tok,
+rspamd_sqlite3_process_token (struct rspamd_task *task, struct token_node_s *tok,
 		struct rspamd_token_result *res, gpointer p)
 {
 	struct rspamd_stat_sqlite3_db *bk;
@@ -513,7 +513,7 @@ rspamd_sqlite3_process_token (struct token_node_s *tok,
 }
 
 gboolean
-rspamd_sqlite3_learn_token (struct token_node_s *tok,
+rspamd_sqlite3_learn_token (struct rspamd_task *task, struct token_node_s *tok,
 		struct rspamd_token_result *res, gpointer p)
 {
 	struct rspamd_stat_sqlite3_db *bk;
@@ -549,7 +549,7 @@ rspamd_sqlite3_learn_token (struct token_node_s *tok,
 }
 
 void
-rspamd_sqlite3_finalize_learn (gpointer runtime,
+rspamd_sqlite3_finalize_learn (struct rspamd_task *task, gpointer runtime,
 		gpointer ctx)
 {
 	struct rspamd_stat_sqlite3_db *bk = runtime;
@@ -565,7 +565,7 @@ rspamd_sqlite3_finalize_learn (gpointer runtime,
 }
 
 gulong
-rspamd_sqlite3_total_learns (gpointer runtime,
+rspamd_sqlite3_total_learns (struct rspamd_task *task, gpointer runtime,
 		gpointer ctx)
 {
 	struct rspamd_stat_sqlite3_db *bk = runtime;
@@ -579,7 +579,7 @@ rspamd_sqlite3_total_learns (gpointer runtime,
 }
 
 gulong
-rspamd_sqlite3_inc_learns (gpointer runtime,
+rspamd_sqlite3_inc_learns (struct rspamd_task *task, gpointer runtime,
 		gpointer ctx)
 {
 	struct rspamd_stat_sqlite3_db *bk = runtime;
@@ -594,7 +594,7 @@ rspamd_sqlite3_inc_learns (gpointer runtime,
 }
 
 gulong
-rspamd_sqlite3_dec_learns (gpointer runtime,
+rspamd_sqlite3_dec_learns (struct rspamd_task *task, gpointer runtime,
 		gpointer ctx)
 {
 	struct rspamd_stat_sqlite3_db *bk = runtime;
@@ -609,7 +609,7 @@ rspamd_sqlite3_dec_learns (gpointer runtime,
 }
 
 gulong
-rspamd_sqlite3_learns (gpointer runtime,
+rspamd_sqlite3_learns (struct rspamd_task *task, gpointer runtime,
 		gpointer ctx)
 {
 	struct rspamd_stat_sqlite3_db *bk = runtime;
