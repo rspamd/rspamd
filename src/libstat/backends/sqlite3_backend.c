@@ -41,6 +41,16 @@ struct rspamd_stat_sqlite3_db {
 
 struct rspamd_stat_sqlite3_ctx {
 	GHashTable *files;
+	gboolean enable_users;
+	gboolean enable_languages;
+};
+
+struct rspamd_stat_sqlite3_rt {
+	struct rspamd_stat_sqlite3_ctx *ctx;
+	struct rspamd_task *task;
+	struct rspamd_stat_sqlite3_db *db;
+	const gchar *user;
+	const gchar *language;
 };
 
 static const char *create_tables_sql =
@@ -56,10 +66,11 @@ static const char *create_tables_sql =
 		"learns INTEGER"
 		");"
 		"CREATE TABLE tokens("
-		"token INTEGER PRIMARY KEY,"
+		"token INTEGER NOT NULL,"
 		"user INTEGER REFERENCES users(id) ON DELETE CASCADE,"
 		"language INTEGER REFERENCES languages(id) ON DELETE CASCADE,"
-		"value INTEGER"
+		"value INTEGER,"
+		"CONSTRAINT tid UNIQUE (token, user, language) ON CONFLICT REPLACE"
 		");"
 		"CREATE UNIQUE INDEX IF NOT EXISTS un ON users(name);"
 		"CREATE UNIQUE INDEX IF NOT EXISTS ln ON languages(name);"
@@ -472,7 +483,19 @@ rspamd_sqlite3_runtime (struct rspamd_task *task,
 		struct rspamd_statfile_config *stcf, gboolean learn, gpointer p)
 {
 	struct rspamd_stat_sqlite3_ctx *ctx = p;
-	return g_hash_table_lookup (ctx->files, stcf);
+	struct rspamd_stat_sqlite3_rt *rt = NULL;
+	struct rspamd_stat_sqlite3_db *bk;
+
+	bk = g_hash_table_lookup (ctx->files, stcf);
+
+	if (bk) {
+		rt = rspamd_mempool_alloc (task->task_pool, sizeof (*rt));
+		rt->ctx = ctx;
+		rt->db = bk;
+		rt->task = task;
+	}
+
+	return rt;
 }
 
 gboolean
@@ -480,6 +503,7 @@ rspamd_sqlite3_process_token (struct rspamd_task *task, struct token_node_s *tok
 		struct rspamd_token_result *res, gpointer p)
 {
 	struct rspamd_stat_sqlite3_db *bk;
+	struct rspamd_stat_sqlite3_rt *rt;
 	gint64 iv = 0, idx;
 
 	g_assert (res != NULL);
@@ -488,7 +512,8 @@ rspamd_sqlite3_process_token (struct rspamd_task *task, struct token_node_s *tok
 	g_assert (tok != NULL);
 	g_assert (tok->datalen >= sizeof (guint32) * 2);
 
-	bk = res->st_runtime->backend_runtime;
+	rt = res->st_runtime->backend_runtime;
+	bk = rt->db;
 
 	if (bk == NULL) {
 		/* Statfile is does not exist, so all values are zero */
@@ -517,6 +542,7 @@ rspamd_sqlite3_learn_token (struct rspamd_task *task, struct token_node_s *tok,
 		struct rspamd_token_result *res, gpointer p)
 {
 	struct rspamd_stat_sqlite3_db *bk;
+	struct rspamd_stat_sqlite3_rt *rt;
 	gint64 iv = 0, idx;
 
 	g_assert (res != NULL);
@@ -525,7 +551,8 @@ rspamd_sqlite3_learn_token (struct rspamd_task *task, struct token_node_s *tok,
 	g_assert (tok != NULL);
 	g_assert (tok->datalen >= sizeof (guint32) * 2);
 
-	bk = res->st_runtime->backend_runtime;
+	rt = res->st_runtime->backend_runtime;
+	bk = rt->db;
 
 	if (bk == NULL) {
 		/* Statfile is does not exist, so all values are zero */
@@ -582,10 +609,12 @@ gulong
 rspamd_sqlite3_inc_learns (struct rspamd_task *task, gpointer runtime,
 		gpointer ctx)
 {
-	struct rspamd_stat_sqlite3_db *bk = runtime;
+	struct rspamd_stat_sqlite3_rt *rt = runtime;
+	struct rspamd_stat_sqlite3_db *bk;
 	guint64 res;
 
-	g_assert (bk != NULL);
+	g_assert (rt != NULL);
+	bk = rt->db;
 	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_INC_LEARNS,
 			SQLITE3_DEFAULT, SQLITE3_DEFAULT);
@@ -597,10 +626,12 @@ gulong
 rspamd_sqlite3_dec_learns (struct rspamd_task *task, gpointer runtime,
 		gpointer ctx)
 {
-	struct rspamd_stat_sqlite3_db *bk = runtime;
+	struct rspamd_stat_sqlite3_rt *rt = runtime;
+	struct rspamd_stat_sqlite3_db *bk;
 	guint64 res;
 
-	g_assert (bk != NULL);
+	g_assert (rt != NULL);
+	bk = rt->db;
 	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_DEC_LEARNS,
 			SQLITE3_DEFAULT, SQLITE3_DEFAULT);
@@ -612,10 +643,12 @@ gulong
 rspamd_sqlite3_learns (struct rspamd_task *task, gpointer runtime,
 		gpointer ctx)
 {
-	struct rspamd_stat_sqlite3_db *bk = runtime;
+	struct rspamd_stat_sqlite3_rt *rt = runtime;
+	struct rspamd_stat_sqlite3_db *bk;
 	guint64 res;
 
-	g_assert (bk);
+	g_assert (rt != NULL);
+	bk = rt->db;
 	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 
 	return res;
