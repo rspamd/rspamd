@@ -332,7 +332,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 	gchar zero, numbuf[G_ASCII_DTOSTR_BUF_SIZE], *p, *last, c;
 	const gchar *buf_start = fmt;
 	gint d;
-	long double f, scale;
+	gdouble f, scale;
 	glong written = 0, wr, slen;
 	gint64 i64;
 	guint64 ui64;
@@ -572,10 +572,10 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 			case 'f':
 			case 'F':
 				if (*fmt == 'f') {
-					f = (long double) va_arg (args, double);
+					f = (gdouble) va_arg (args, double);
 				}
 				else {
-					f = (long double) va_arg (args, long double);
+					f = (gdouble) va_arg (args, long double);
 				}
 
 				if (isnormal (f)) {
@@ -634,10 +634,10 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 			case 'g':
 			case 'G':
 				if (*fmt == 'g') {
-					f = (long double) va_arg (args, double);
+					f = (gdouble) va_arg (args, double);
 				}
 				else {
-					f = (long double) va_arg (args, long double);
+					f = (gdouble) va_arg (args, long double);
 				}
 
 				g_ascii_formatd (numbuf, sizeof (numbuf), "%g", (double)f);
