@@ -1,3 +1,10 @@
+0.9.8:
+	* Fix critical bug in bayes classifier (#305)
+	* Fix critical bug in RBL module (by @fatalbanana)
+	* Fix and rework settings plugin.
+	* Fix get_all_opts for a case of non-iterable options.
+	* Use tld for redirector's matching.
+
 0.9.7:
 	* Add whitelist_exception setting to RBL module (by @fatalbanana)
 	* Don't use RWL_MAILSPIKE_POSSIBLE or DNSWL_BLOCKED for whitelisting (by
