@@ -578,7 +578,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 					f = (gdouble) va_arg (args, long double);
 				}
 
-				if (isnormal (f)) {
+				if (isfinite (f)) {
 					p = numbuf;
 					last = p + sizeof (numbuf);
 					if (f < 0) {
