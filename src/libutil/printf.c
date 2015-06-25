@@ -577,43 +577,57 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 				else {
 					f = (long double) va_arg (args, long double);
 				}
-				p = numbuf;
-				last = p + sizeof (numbuf);
-				if (f < 0) {
-					*p++ = '-';
-					f = -f;
-				}
-				if (frac_width == 0) {
-					frac_width = 6;
-				}
 
-				ui64 = (gint64) f;
-
-				p = rspamd_sprintf_num (p, last, ui64, zero, 0, width);
-
-				if (frac_width) {
-
-					if (p < last) {
-						*p++ = '.';
+				if (isnormal (f)) {
+					p = numbuf;
+					last = p + sizeof (numbuf);
+					if (f < 0) {
+						*p++ = '-';
+						f = -f;
+					}
+					if (frac_width == 0) {
+						frac_width = 6;
 					}
 
-					scale = 1.0;
+					ui64 = (gint64) f;
 
-					for (i = 0; i < frac_width; i++) {
-						scale *= 10.0;
+					p = rspamd_sprintf_num (p, last, ui64, zero, 0, width);
+
+					if (frac_width) {
+
+						if (p < last) {
+							*p++ = '.';
+						}
+
+						scale = 1.0;
+
+						for (i = 0; i < frac_width; i++) {
+							scale *= 10.0;
+						}
+
+						/*
+						 * (gint64) cast is required for msvc6:
+						 * it can not convert guint64 to double
+						 */
+						ui64 = (guint64) ((f - (gint64) ui64) * scale);
+
+						p = rspamd_sprintf_num (p, last, ui64, '0', 0, frac_width);
 					}
 
-					/*
-					 * (gint64) cast is required for msvc6:
-					 * it can not convert guint64 to double
-					 */
-					ui64 = (guint64) ((f - (gint64) ui64) * scale);
-
-					p = rspamd_sprintf_num (p, last, ui64, '0', 0, frac_width);
+					slen = p - numbuf;
+					RSPAMD_PRINTF_APPEND (numbuf, slen);
 				}
-
-				slen = p - numbuf;
-				RSPAMD_PRINTF_APPEND (numbuf, slen);
+				else if (isnan (f)) {
+					RSPAMD_PRINTF_APPEND ("NaN", 3);
+				}
+				else {
+					if (signbit (f)) {
+						RSPAMD_PRINTF_APPEND ("-Inf", 4);
+					}
+					else {
+						RSPAMD_PRINTF_APPEND ("+Inf", 4);
+					}
+				}
 
 				continue;
 
