@@ -1081,8 +1081,8 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 	if (surbl_module_ctx->use_redirector) {
 		/* Search in trie */
 		if (surbl_module_ctx->redirector_trie) {
-			idx = acism_lookup (surbl_module_ctx->redirector_trie, url->host,
-					url->hostlen, surbl_redirector_trie_cb, url, &state, true);
+			idx = acism_lookup (surbl_module_ctx->redirector_trie, url->tld,
+					url->tldlen, surbl_redirector_trie_cb, url, &state, true);
 			if (idx > 0) {
 				pat = &g_array_index (surbl_module_ctx->redirector_ptrs,
 						ac_trie_pat_t, idx - 1);
