@@ -412,7 +412,7 @@ local function process_settings_map(string)
     end
   end
 end
-rspamd_logger.errx('hui: %1, %2', set_section[1], type(set_section))
+
 if set_section[1] and type(set_section[1]) == "string" then
   -- Just a map of ucl
   if rspamd_config:add_map(set_section[1], "settings map", process_settings_map) then
