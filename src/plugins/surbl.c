@@ -1115,8 +1115,8 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 						pat->ptr);
 				if (re == NULL) {
 					/* Perform exact match */
-					if (pat->len == url->hostlen && memcmp (pat->ptr,
-							url->host, pat->len) == 0) {
+					if (pat->len == url->tldlen && memcmp (pat->ptr,
+							url->tld, pat->len) == 0) {
 						found = TRUE;
 					}
 				}
