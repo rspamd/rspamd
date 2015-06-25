@@ -411,6 +411,7 @@ lua_config_get_all_opt (lua_State * L)
 	const gchar *mname;
 	const ucl_object_t *obj, *cur, *cur_elt;
 	ucl_object_iter_t it = NULL;
+	gint i;
 
 	if (cfg) {
 		mname = luaL_checkstring (L, 2);
@@ -418,7 +419,8 @@ lua_config_get_all_opt (lua_State * L)
 		if (mname) {
 			obj = ucl_obj_get_key (cfg->rcl_obj, mname);
 			/* Flatten object */
-			if (obj != NULL && ucl_object_type (obj) == UCL_OBJECT) {
+			if (obj != NULL && (ucl_object_type (obj) == UCL_OBJECT ||
+					ucl_object_type (obj) == UCL_ARRAY)) {
 
 				lua_newtable (L);
 				it = ucl_object_iterate_new (obj);
@@ -434,6 +436,18 @@ lua_config_get_all_opt (lua_State * L)
 				}
 
 				ucl_object_iterate_free (it);
+
+				return 1;
+			}
+			else if (obj != NULL) {
+				lua_newtable (L);
+				i = 1;
+
+				LL_FOREACH (obj, cur) {
+					lua_pushnumber (L, i++);
+					ucl_object_push_lua (L, cur, true);
+					lua_settable (L, -3);
+				}
 
 				return 1;
 			}
