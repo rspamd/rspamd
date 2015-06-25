@@ -177,7 +177,7 @@ bayes_classify (struct classifier_ctx * ctx,
 			s = 1 - inv_chi_square (-2. * rt->ham_prob,
 					2 * rt->processed_tokens);
 
-			if (isnormal (s) && isnormal (h)) {
+			if (isfinite (s) && isfinite (h)) {
 				final_prob = (s + 1.0 - h) / 2.;
 				msg_debug ("<%s> got ham prob %.2f -> %.2f and spam prob %.2f -> %.2f,"
 						" %L tokens processed of %ud total tokens",
@@ -189,12 +189,12 @@ bayes_classify (struct classifier_ctx * ctx,
 				 * We have some overflow, hence we need to check which class
 				 * is NaN
 				 */
-				if (isnormal (h)) {
+				if (isfinite (h)) {
 					final_prob = 1.0;
 					msg_debug ("<%s> spam class is overflowed, as we have no"
 							" ham samples", task->message_id);
 				}
-				else if (isnormal (s)){
+				else if (isfinite (s)){
 					final_prob = 0.0;
 					msg_debug ("<%s> spam class is overflowed, as we have no"
 							" spam samples", task->message_id);
