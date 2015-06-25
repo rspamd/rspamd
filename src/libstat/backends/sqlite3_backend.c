@@ -73,6 +73,7 @@ static const char *create_tables_sql =
 		"CONSTRAINT tid UNIQUE (token, user, language) ON CONFLICT REPLACE"
 		");"
 		"CREATE UNIQUE INDEX IF NOT EXISTS un ON users(name);"
+		"CREATE INDEX IF NOT EXISTS tok ON tokens(token);"
 		"CREATE UNIQUE INDEX IF NOT EXISTS ln ON languages(name);"
 		"PRAGMA user_version=" SQLITE3_SCHEMA_VERSION ";"
 		"INSERT INTO users(id, name, learns) VALUES(0, '" SQLITE3_DEFAULT "',0);"
@@ -332,8 +333,8 @@ rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
 	if ((rc = sqlite3_open_v2 (path, &sqlite,
 			flags, NULL)) != SQLITE_OK) {
 		g_set_error (err, rspamd_sqlite3_quark (),
-			rc, "cannot open sqlite db %s: %d",
-			path, rc);
+			rc, "cannot open sqlite db %s: %s",
+			path, sqlite3_errstr (rc));
 
 		return NULL;
 	}
@@ -344,16 +345,18 @@ rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
 	}
 
 	/* Check user_version */
-	g_assert (sqlite3_prepare_v2 (sqlite, user_version, -1, &stmt, NULL)
-			== SQLITE_OK);
-	g_assert (sqlite3_step (stmt) == SQLITE_ROW);
+	if (!create) {
+		g_assert (sqlite3_prepare_v2 (sqlite, user_version, -1, &stmt, NULL)
+				== SQLITE_OK);
+		g_assert (sqlite3_step (stmt) == SQLITE_ROW);
 
-	if (sqlite3_column_int (stmt, 0) != atoi (SQLITE3_SCHEMA_VERSION)) {
-		msg_warn ("bad sqlite database: %s, try to recreate it", path);
-		create = TRUE;
+		if (sqlite3_column_int (stmt, 0) != atoi (SQLITE3_SCHEMA_VERSION)) {
+			msg_warn ("bad sqlite database: %s, try to recreate it", path);
+			create = TRUE;
+		}
+
+		sqlite3_finalize (stmt);
 	}
-
-	sqlite3_finalize (stmt);
 
 	if (create) {
 		if (sqlite3_exec (sqlite, create_tables_sql, NULL, NULL, NULL) != SQLITE_OK) {
@@ -579,9 +582,11 @@ void
 rspamd_sqlite3_finalize_learn (struct rspamd_task *task, gpointer runtime,
 		gpointer ctx)
 {
-	struct rspamd_stat_sqlite3_db *bk = runtime;
+	struct rspamd_stat_sqlite3_rt *rt = runtime;
+	struct rspamd_stat_sqlite3_db *bk;
 
-	g_assert (bk != NULL);
+	g_assert (rt != NULL);
+	bk = rt->db;
 
 	if (bk->in_transaction) {
 		rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
@@ -595,11 +600,12 @@ gulong
 rspamd_sqlite3_total_learns (struct rspamd_task *task, gpointer runtime,
 		gpointer ctx)
 {
-	struct rspamd_stat_sqlite3_db *bk = runtime;
+	struct rspamd_stat_sqlite3_rt *rt = runtime;
+	struct rspamd_stat_sqlite3_db *bk;
 	guint64 res;
 
-	g_assert (bk != NULL);
-
+	g_assert (rt != NULL);
+	bk = rt->db;
 	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 
 	return res;
