@@ -29,23 +29,17 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -- https://rspamd.com/doc/configuration/settings.html
 
 local set_section = rspamd_config:get_all_opt("settings")
-local settings = {}
+local settings = {
+  [1] = {},
+  [2] = {},
+  [3] = {}
+}
 local settings_initialized = false
 local max_pri = 0
 local rspamd_logger = require "rspamd_logger"
 local rspamd_ip = require "rspamd_ip"
 local rspamd_regexp = require "rspamd_regexp"
-
--- Functional utilities
-local function filter(func, tbl)
-  local newtbl= {}
-  for i,v in pairs(tbl) do
-    if func(v) then
-      newtbl[i]=v
-    end
-  end
-  return newtbl
-end
+require "fun" ()
 
 -- Check limit for a task
 local function check_settings(task)
@@ -236,6 +230,7 @@ local function process_settings_table(tbl)
 
   -- Check the setting element internal data
   local process_setting_elt = function(name, elt)
+  
     -- Process IP address
     local function process_ip(ip)
       local out = {}
@@ -279,7 +274,6 @@ local function process_settings_table(tbl)
 
     local function process_addr(addr)
       local out = {}
-
       if type(addr) == "table" then
         for i,v in ipairs(addr) do
           table.insert(out, process_addr(v))
@@ -364,25 +358,26 @@ local function process_settings_table(tbl)
       rspamd_logger.err("no actions in settings: " .. name)
       return nil
     end
-
+    
     return out
   end
 
   settings_initialized = false
   -- filter trash in the input
   local ft = filter(
-    function(elt)
+    function(_, elt)
       if type(elt) == "table" then
         return true
       end
       return false
     end, tbl)
+  
   -- clear all settings
-
   max_pri = 0
-  for k,v in pairs(settings) do settings[k]=nil end
+  local nrules = 0
+  for k,v in pairs(settings) do settings[k]={} end
   -- fill new settings by priority
-  for k,v in pairs(ft) do
+  for_each(function(k, v)
     local pri = get_priority(v)
     if pri > max_pri then max_pri = pri end
     if not settings[pri] then
@@ -391,13 +386,13 @@ local function process_settings_table(tbl)
     local s = process_setting_elt(k, v)
     if s then
       settings[pri][k] = s
+      nrules = nrules + 1
     end
-  end
+  end, ft)
 
   settings_initialized = true
-  --local dumper = require 'pl.pretty'.dump
-  --dumper(settings)
-
+  rspamd_logger.infox('loaded %1 elements of settings', nrules)
+  
   return true
 end
 
@@ -417,11 +412,13 @@ local function process_settings_map(string)
     end
   end
 end
-
-if type(set_section) == "string" then
+rspamd_logger.errx('hui: %1, %2', set_section[1], type(set_section))
+if set_section[1] and type(set_section[1]) == "string" then
   -- Just a map of ucl
-  if rspamd_config:add_map(set_section, "settings map", process_settings_map) then
+  if rspamd_config:add_map(set_section[1], "settings map", process_settings_map) then
     rspamd_config:register_pre_filter(check_settings)
+  else
+    rspamd_logger.errx('cannot load settings from %1', set_section)
   end
 elseif type(set_section) == "table" then
   if process_settings_table(set_section) then
