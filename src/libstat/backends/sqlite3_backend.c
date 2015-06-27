@@ -333,7 +333,7 @@ rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
 
 	if ((rc = sqlite3_open_v2 (path, &sqlite,
 			flags, NULL)) != SQLITE_OK) {
-#if SQLITE_VERSION_NUMBER >= 3007015
+#if SQLITE_VERSION_NUMBER >= 3008000
 		g_set_error (err, rspamd_sqlite3_quark (),
 			rc, "cannot open sqlite db %s: %s",
 			path, sqlite3_errstr (rc));
