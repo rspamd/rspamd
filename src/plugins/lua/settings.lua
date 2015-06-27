@@ -29,6 +29,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -- https://rspamd.com/doc/configuration/settings.html
 
 local set_section = rspamd_config:get_all_opt("settings")
+if not set_section then return end
 local settings = {
   [1] = {},
   [2] = {},
