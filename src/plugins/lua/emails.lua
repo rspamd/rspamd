@@ -37,8 +37,8 @@ local function check_email_rule(task, rule, addr)
 	local function emails_dns_cb(resolver, to_resolve, results, err)
 		task:inc_dns_req()
 		if results then
-			logger.info(string.format('<%s> email: [%s] resolved for symbol: %s', 
-				task:get_message_id(), to_resolve, rule['symbol']))
+			logger.infox('<%1> email: [%2] resolved for symbol: %3', 
+				task:get_message_id(), to_resolve, rule['symbol'])
 			task:insert_result(rule['symbol'], 1)
 		end
 	end
@@ -56,15 +56,15 @@ local function check_email_rule(task, rule, addr)
 			local key = addr:get_host()
 			if rule['map']:get_key(key) then
 				task:insert_result(rule['symbol'], 1)
-				logger.info(string.format('<%s> email: \'%s\' is found in list: %s', 
-					task:get_message_id(), key, rule['symbol']))
+				logger.infox('<%1> email: \'%2\' is found in list: %3', 
+					task:get_message_id(), key, rule['symbol'])
 			end
 		else
 			local key = string.format('%s@%s', addr:get_user(), addr:get_host())
 			if rule['map']:get_key(key) then
 				task:insert_result(rule['symbol'], 1)
-				logger.info(string.format('<%s> email: \'%s\' is found in list: %s', 
-					task:get_message_id(), key, rule['symbol']))
+				logger.infox('<%1> email: \'%2\' is found in list: %3', 
+					task:get_message_id(), key, rule['symbol'])
 			end
 		end
 	end
@@ -84,16 +84,6 @@ local function check_emails(task)
 				checked[to_check] = true
 			end 
 		end
-	end
-end
-
-
--- Registration
-if type(rspamd_config.get_api_version) ~= 'nil' then
-	if rspamd_config:get_api_version() >= 2 then
-		rspamd_config:register_module_option('emails', 'rule', 'string')
-	else
-		logger.err('Invalid rspamd version for this plugin')
 	end
 end
 
