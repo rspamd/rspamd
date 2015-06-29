@@ -377,6 +377,8 @@ rspamd_fuzzy_backend_open_db (const gchar *path, GError **err)
 {
 	struct rspamd_fuzzy_backend *bk;
 	sqlite3 *sqlite;
+	static const char sqlite_wal[] = "PRAGMA journal_mode=WAL;",
+			fallback_journal[] = "PRAGMA journal_mode=OFF;";
 	int rc;
 
 	if ((rc = sqlite3_open_v2 (path, &sqlite,
@@ -400,6 +402,11 @@ rspamd_fuzzy_backend_open_db (const gchar *path, GError **err)
 			== SQLITE_OK) {
 		bk->count = sqlite3_column_int64 (
 				prepared_stmts[RSPAMD_FUZZY_BACKEND_COUNT].stmt, 0);
+	}
+
+	if (sqlite3_exec (sqlite, sqlite_wal, NULL, NULL, NULL) != SQLITE_OK) {
+		msg_warn ("WAL mode is not supported, locking issues might occur");
+		sqlite3_exec (sqlite, fallback_journal, NULL, NULL, NULL);
 	}
 
 	rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_START,
