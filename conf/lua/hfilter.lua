@@ -418,7 +418,6 @@ local symbols_rcpt = {
 local symbols_mid = {
   "HFILTER_MID_NORESOLVE_MX",
   "HFILTER_MID_NORES_A_OR_MX",
-  "HFILTER_MID_NOT_FQDN",
   "HFILTER_MID_NOT_FQDN"
 }
 local symbols_url = {
