@@ -35,8 +35,13 @@ context("Regexp unit tests", function()
   test("Regexp capture", function()
     local cases = {
       {'Body=(\\S+)(?: Fuz1=(\\S+))?(?: Fuz2=(\\S+))?', 
-        'mc-filter4 1120; Body=1 Fuz1=1 Fuz2=1', 
-        {'Body=1 Fuz1=1 Fuz2=1', '1', '1', '1'}}
+        'mc-filter4 1120; Body=1 Fuz1=2 Fuz2=3', 
+        {'Body=1 Fuz1=2 Fuz2=3', '1', '2', '3'}},
+      {'Body=(\\S+)(?: Fuz1=(\\S+))?(?: Fuz2=(\\S+))?', 
+      'mc-filter4 1120; Body=1 Fuz1=2', {'Body=1 Fuz1=2', '1', '2'}},
+      {'Body=(\\S+)(?: Fuz1=(\\S+))?(?: Fuz2=(\\S+))?', 
+      'mc-filter4 1120; Body=1 Fuz1=2 mc-filter4 1120; Body=1 Fuz1=2 Fuz2=3', 
+      {'Body=1 Fuz1=2', '1', '2'}, {'Body=1 Fuz1=2 Fuz2=3', '1', '2', '3'}},
     }
     for _,c in ipairs(cases) do
       local r = re.create_cached(c[1])
@@ -45,9 +50,11 @@ context("Regexp unit tests", function()
       
       assert_not_nil(res, "cannot find pattern")
       
-      for n,m in ipairs(res[1]) do
-        assert_equal(m, c[3][n], string.format("'%s' doesn't match with '%s'",
-          c[3][n], c[1]))
+      for k = 3, table.maxn(c) do
+        for n,m in ipairs(c[k]) do
+          assert_equal(res[k - 2][n], c[k][n], string.format("'%s' doesn't match with '%s'",
+            c[k][n], res[k - 2][n]))
+        end
       end
     end
   end)
