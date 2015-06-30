@@ -292,15 +292,38 @@ static int
 lua_regexp_search (lua_State *L)
 {
 	struct rspamd_lua_regexp *re = lua_check_regexp (L);
-	const gchar *data;
+	const gchar *data = NULL;
+	struct rspamd_lua_text *t;
 	const gchar *start = NULL, *end = NULL;
 	gint i;
-	gsize len;
-	gboolean matched = FALSE;
+	gsize len, capn;
+	gboolean matched = FALSE, capture = FALSE, raw = FALSE;
+	GArray *captures = NULL;
+	struct rspamd_re_capture *cap;
 
 	if (re && !IS_DESTROYED (re)) {
-		data = luaL_checklstring (L, 2, &len);
+		if (lua_type (L, 2) == LUA_TSTRING) {
+			data = luaL_checklstring (L, 2, &len);
+		}
+		else if (lua_type (L, 2) == LUA_TUSERDATA) {
+			t = lua_check_text (L, 2);
+			if (t != NULL) {
+				data = t->start;
+				len = t->len;
+			}
+		}
+
+		if (lua_gettop (L) >= 3) {
+			raw = lua_toboolean (L, 3);
+		}
+
 		if (data) {
+			if (lua_gettop (L) >= 4) {
+				capture = TRUE;
+				captures = g_array_new (FALSE, TRUE,
+						sizeof (struct rspamd_re_capture));
+			}
+
 			lua_newtable (L);
 			i = 0;
 
@@ -308,15 +331,39 @@ lua_regexp_search (lua_State *L)
 				len = MIN (len, re->match_limit);
 			}
 
-			while (rspamd_regexp_search (re->re, data, len, &start, &end, FALSE)) {
-				lua_pushlstring (L, start, end - start);
-				lua_rawseti (L, -2, ++i);
+			while (rspamd_regexp_search (re->re, data, len, &start, &end, raw,
+					captures)) {
+
+				if (capture) {
+					lua_newtable (L);
+					lua_pushlstring (L, start, end - start);
+					lua_rawseti (L, -2, 1);
+
+					for (capn = 0; capn < captures->len; capn ++) {
+						cap = &g_array_index (captures, struct rspamd_re_capture,
+								capn);
+						lua_pushlstring (L, cap->p, cap->len);
+						lua_rawseti (L, -2, capn + 1);
+					}
+
+					lua_rawseti (L, -3, ++i);
+				}
+				else {
+					lua_rawseti (L, -2, ++i);
+				}
+
 				matched = TRUE;
 			}
+
 			if (!matched) {
 				lua_pop (L, 1);
 				lua_pushnil (L);
 			}
+
+			if (capture) {
+				g_array_free (captures, TRUE);
+			}
+
 			return 1;
 		}
 	}
@@ -365,7 +412,7 @@ lua_regexp_match (lua_State *L)
 				len = MIN (len, re->match_limit);
 			}
 
-			if (rspamd_regexp_search (re->re, data, len, NULL, NULL, raw)) {
+			if (rspamd_regexp_search (re->re, data, len, NULL, NULL, raw, NULL)) {
 				lua_pushboolean (L, TRUE);
 			}
 			else {
@@ -428,7 +475,8 @@ lua_regexp_matchn (lua_State *L)
 			}
 
 			for (;;) {
-				if (rspamd_regexp_search (re->re, data, len, &start, &end, raw)) {
+				if (rspamd_regexp_search (re->re, data, len, &start, &end, raw,
+						NULL)) {
 					matches ++;
 				}
 				else {
@@ -492,7 +540,8 @@ lua_regexp_split (lua_State *L)
 			lua_newtable (L);
 			i = 0;
 			old_start = data;
-			while (rspamd_regexp_search (re->re, data, len, &start, &end, FALSE)) {
+			while (rspamd_regexp_search (re->re, data, len, &start, &end, FALSE,
+					NULL)) {
 				if (start - old_start > 0) {
 					if (!is_text) {
 						lua_pushlstring (L, old_start, start - old_start);
