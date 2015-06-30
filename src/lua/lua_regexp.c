@@ -274,19 +274,31 @@ lua_regexp_set_limit (lua_State *L)
 }
 
 /***
- * @method re:search(line)
+ * @method re:search(line[, raw[, capture]])
  * Search line in regular expression object. If line matches then this
  * function returns the table of captured strings. Otherwise, nil is returned.
+ * If `raw` is specified, then input is treated as raw data not encoded in `utf-8`.
+ * If `capture` is true, then this function saves all captures to the table of
+ * values, so the first element is the whole matched string and the
+ * subsequent elements are ordered captures defined within pattern.
  *
  * @param {string} line match the specified line against regexp object
- * @return {table or nil} table of strings matched or nil
+ * @param {bool} match raw regexp instead of utf8 one
+ * @param {bool} capture perform subpatterns capturing
+ * @return {table or nil} table of strings or tables (if `capture` is true) or nil if not matched
  * @example
  * local re = regexp.create_cached('/^\s*([0-9]+)\s*$/')
  * -- returns nil
  * local m1 = re:search('blah')
  * local m2 = re:search('   190   ')
- * -- prints '190'
+ * -- prints '   190    '
  * print(m2[1])
+ *
+ * local m3 = re:search('   100500 ')
+ * -- prints '   100500 '
+ * print(m3[1][1])
+ * -- prints '100500' capture
+ * print(m3[1][2])
  */
 static int
 lua_regexp_search (lua_State *L)
