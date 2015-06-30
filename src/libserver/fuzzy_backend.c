@@ -404,8 +404,9 @@ rspamd_fuzzy_backend_open_db (const gchar *path, GError **err)
 				prepared_stmts[RSPAMD_FUZZY_BACKEND_COUNT].stmt, 0);
 	}
 
-	if (sqlite3_exec (sqlite, sqlite_wal, NULL, NULL, NULL) != SQLITE_OK) {
-		msg_warn ("WAL mode is not supported, locking issues might occur");
+	if ((rc = sqlite3_exec (sqlite, sqlite_wal, NULL, NULL, NULL)) != SQLITE_OK) {
+		msg_warn ("WAL mode is not supported (%d), locking issues might occur",
+				rc);
 		sqlite3_exec (sqlite, fallback_journal, NULL, NULL, NULL);
 	}
 
