@@ -593,7 +593,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 					state = PARSE_OP;
 				}
 				else if (rspamd_regexp_search (num_re, p, end - p, NULL, NULL,
-						FALSE)) {
+						FALSE, NULL)) {
 					c = p;
 					state = PARSE_LIM;
 				}
