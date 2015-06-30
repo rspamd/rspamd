@@ -348,14 +348,12 @@ lua_regexp_search (lua_State *L)
 
 				if (capture) {
 					lua_newtable (L);
-					lua_pushlstring (L, start, end - start);
-					lua_rawseti (L, -2, 1);
 
 					for (capn = 0; capn < captures->len; capn ++) {
 						cap = &g_array_index (captures, struct rspamd_re_capture,
 								capn);
 						lua_pushlstring (L, cap->p, cap->len);
-						lua_rawseti (L, -2, capn + 2);
+						lua_rawseti (L, -2, capn + 1);
 					}
 
 					lua_rawseti (L, -2, ++i);

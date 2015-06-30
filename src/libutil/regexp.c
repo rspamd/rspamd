@@ -335,7 +335,7 @@ fin:
 	rspamd_regexp_generate_id (pattern, flags, res->id);
 
 	/* Check number of captures */
-	if (pcre_fullinfo (res->re, res->extra, PCRE_INFO_CAPTURECOUNT,
+	if (pcre_fullinfo (res->raw_re, res->extra, PCRE_INFO_CAPTURECOUNT,
 			&ncaptures) == 0) {
 		res->ncaptures = ncaptures;
 	}
@@ -445,9 +445,9 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 
 			g_assert (g_array_get_element_size (captures) ==
 					sizeof (struct rspamd_re_capture));
-			g_array_set_size (captures, rc - 1);
+			g_array_set_size (captures, rc);
 
-			for (i = 0; i < rc - 1; i ++) {
+			for (i = 0; i < rc; i ++) {
 				elt = &g_array_index (captures, struct rspamd_re_capture, i);
 				elt->p = mt + ovec[i * 2];
 				elt->len = (mt + ovec[i * 2 + 1]) - elt->p;
