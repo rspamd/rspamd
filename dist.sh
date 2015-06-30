@@ -1,7 +1,9 @@
 #!/bin/sh
 
-if [ $# -ne 1 ] ; then
-	echo "Usage: dist.sh <filename>"
+TAR=${2:-"tar"}
+
+if [ $# -lt 1 ] ; then
+	echo "Usage: dist.sh <filename> [tar_command]"
 	exit 1
 fi
 
@@ -21,5 +23,5 @@ for sub in $SUBMODULES ; do
 	(cd $sub && git ls-files | sed -e "s|^|$sub/|" >> $OUT)
 done
 
-tar -c --exclude='.[^/]*' --exclude='*.xz' --exclude='*.gz' --no-recursion --transform "s|^|$PREFIX/|" -a -T $OUT -v -f $FNAME
+${TAR} -c --exclude='.[^/]*' --exclude='*.xz' --exclude='*.gz' --no-recursion --transform "s|^|$PREFIX/|" -a -T $OUT -v -f $FNAME
 rm -f $OUT
