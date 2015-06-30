@@ -32,6 +32,26 @@ context("Regexp unit tests", function()
     end
   end)
   
+  test("Regexp capture", function()
+    local cases = {
+      {'Body=(\\S+)(?: Fuz1=(\\S+))?(?: Fuz2=(\\S+))?', 
+        'mc-filter4 1120; Body=1 Fuz1=1 Fuz2=1', 
+        {'Body=1 Fuz1=1 Fuz2=1', '1', '1', '1'}}
+    }
+    for _,c in ipairs(cases) do
+      local r = re.create_cached(c[1])
+      assert_not_nil(r, "cannot parse " .. c[1])
+      local res = r:search(c[2], false, true)
+      
+      assert_not_nil(res, "cannot find pattern")
+      
+      for n,m in ipairs(res[1]) do
+        assert_equal(m, c[3][n], string.format("'%s' doesn't match with '%s'",
+          c[3][n], c[1]))
+      end
+    end
+  end)
+  
   test("Regexp split", function()
     local cases = {
       {'\\s', 'one', {'one'}}, -- one arg
