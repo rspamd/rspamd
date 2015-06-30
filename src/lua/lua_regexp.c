@@ -343,12 +343,13 @@ lua_regexp_search (lua_State *L)
 						cap = &g_array_index (captures, struct rspamd_re_capture,
 								capn);
 						lua_pushlstring (L, cap->p, cap->len);
-						lua_rawseti (L, -2, capn + 1);
+						lua_rawseti (L, -2, capn + 2);
 					}
 
-					lua_rawseti (L, -3, ++i);
+					lua_rawseti (L, -2, ++i);
 				}
 				else {
+					lua_pushlstring (L, start, end - start);
 					lua_rawseti (L, -2, ++i);
 				}
 
