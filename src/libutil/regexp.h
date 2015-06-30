@@ -29,6 +29,10 @@
 
 typedef struct rspamd_regexp_s rspamd_regexp_t;
 struct rspamd_regexp_cache;
+struct rspamd_re_capture {
+	const char *p;
+	gsize len;
+};
 
 /**
  * Create new rspamd regexp
@@ -47,11 +51,14 @@ rspamd_regexp_t* rspamd_regexp_new (const gchar *pattern, const gchar *flags,
  * @param len
  * @param start position of start of match
  * @param start position of end of match
+ * @param raw
+ * @param captures array of captured strings of type rspamd_fstring_capture or NULL
  * @return
  */
 gboolean rspamd_regexp_search (rspamd_regexp_t *re,
 		const gchar *text, gsize len,
-		const gchar **start, const gchar **end, gboolean raw);
+		const gchar **start, const gchar **end, gboolean raw,
+		GArray *captures);
 
 
 /**
