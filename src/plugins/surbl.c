@@ -1098,7 +1098,7 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 					}
 				}
 				else if (rspamd_regexp_search (re, url->string, 0,
-						NULL, NULL, TRUE)) {
+						NULL, NULL, TRUE, NULL)) {
 					found = TRUE;
 				}
 

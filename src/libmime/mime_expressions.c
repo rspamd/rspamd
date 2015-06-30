@@ -732,7 +732,7 @@ rspamd_mime_regexp_element_process (struct rspamd_task *task,
 		len = max_re_data;
 	}
 
-	while (rspamd_regexp_search (re->regexp, data, len, &start, &end, raw)) {
+	while (rspamd_regexp_search (re->regexp, data, len, &start, &end, raw, NULL)) {
 		r++;
 
 		if (!re->is_multiple) {
@@ -1783,7 +1783,7 @@ match_smtp_data (struct rspamd_task *task,
 
 		if ((r = rspamd_task_re_cache_check (task,
 				rspamd_regexp_get_pattern (re))) == -1) {
-			r = rspamd_regexp_search (re, what, 0, NULL, NULL, FALSE);
+			r = rspamd_regexp_search (re, what, 0, NULL, NULL, FALSE, NULL);
 			rspamd_task_re_cache_add (task, rspamd_regexp_get_pattern (re), r);
 		}
 		return r;
@@ -1976,7 +1976,7 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 					if ((r = rspamd_task_re_cache_check (task,
 							rspamd_regexp_get_pattern (re))) == -1) {
 						r = rspamd_regexp_search (re, param_data, 0,
-								NULL, NULL, FALSE);
+								NULL, NULL, FALSE, NULL);
 						rspamd_task_re_cache_add (task,
 								rspamd_regexp_get_pattern (re), r);
 					}
@@ -2150,7 +2150,7 @@ rspamd_content_type_check (struct rspamd_task *task,
 				if ((r = rspamd_task_re_cache_check (task,
 						rspamd_regexp_get_pattern (re))) == -1) {
 					r = rspamd_regexp_search (re, param_data, 0,
-							NULL, NULL, FALSE);
+							NULL, NULL, FALSE, NULL);
 					rspamd_task_re_cache_add (task,
 							rspamd_regexp_get_pattern (re), r);
 				}
@@ -2216,7 +2216,7 @@ compare_subtype (struct rspamd_task *task, GMimeContentType * ct,
 		if ((r = rspamd_task_re_cache_check (task,
 				rspamd_regexp_get_pattern (re))) == -1) {
 			r = rspamd_regexp_search (re, ct->subtype, 0,
-					NULL, NULL, FALSE);
+					NULL, NULL, FALSE, NULL);
 			rspamd_task_re_cache_add (task,
 					rspamd_regexp_get_pattern (re), r);
 		}
@@ -2277,7 +2277,7 @@ common_has_content_part (struct rspamd_task * task,
 			if ((r = rspamd_task_re_cache_check (task,
 					rspamd_regexp_get_pattern (re))) == -1) {
 				r = rspamd_regexp_search (re, ct->type, 0,
-						NULL, NULL, FALSE);
+						NULL, NULL, FALSE, NULL);
 				/* Also check subtype and length of the part */
 				if (r && param_subtype) {
 					r = compare_len (part, min_len, max_len) &&
