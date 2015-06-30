@@ -366,9 +366,6 @@ rspamd_fuzzy_backend_create_db (const gchar *path, gboolean add_index,
 		rspamd_fuzzy_backend_run_sql (create_index_sql, bk, NULL);
 	}
 
-	rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_START,
-			bk, NULL);
-
 	return bk;
 }
 
@@ -377,8 +374,6 @@ rspamd_fuzzy_backend_open_db (const gchar *path, GError **err)
 {
 	struct rspamd_fuzzy_backend *bk;
 	sqlite3 *sqlite;
-	static const char sqlite_wal[] = "PRAGMA journal_mode=WAL;",
-			fallback_journal[] = "PRAGMA journal_mode=OFF;";
 	int rc;
 
 	if ((rc = sqlite3_open_v2 (path, &sqlite,
@@ -394,24 +389,6 @@ rspamd_fuzzy_backend_open_db (const gchar *path, GError **err)
 	bk->path = g_strdup (path);
 	bk->db = sqlite;
 	bk->expired = 0;
-
-	/* Cleanup database */
-	rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_VACUUM, bk, NULL);
-
-	if (rspamd_fuzzy_backend_run_stmt (bk, RSPAMD_FUZZY_BACKEND_COUNT)
-			== SQLITE_OK) {
-		bk->count = sqlite3_column_int64 (
-				prepared_stmts[RSPAMD_FUZZY_BACKEND_COUNT].stmt, 0);
-	}
-
-	if ((rc = sqlite3_exec (sqlite, sqlite_wal, NULL, NULL, NULL)) != SQLITE_OK) {
-		msg_warn ("WAL mode is not supported (%d), locking issues might occur",
-				rc);
-		sqlite3_exec (sqlite, fallback_journal, NULL, NULL, NULL);
-	}
-
-	rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_START,
-				bk, NULL);
 
 	return bk;
 }
@@ -491,6 +468,9 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 	gchar *dir, header[4];
 	gint fd, r;
 	struct rspamd_fuzzy_backend *res;
+	static const char sqlite_wal[] = "PRAGMA journal_mode=WAL;",
+			fallback_journal[] = "PRAGMA journal_mode=OFF;";
+	int rc;
 
 	/* First of all we check path for existence */
 	dir = g_path_get_dirname (path);
@@ -550,6 +530,24 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 		}
 		g_clear_error (err);
 	}
+
+	if ((rc = sqlite3_exec (res->db, sqlite_wal, NULL, NULL, NULL)) != SQLITE_OK) {
+		msg_warn ("WAL mode is not supported (%d), locking issues might occur",
+				rc);
+		sqlite3_exec (res->db, fallback_journal, NULL, NULL, NULL);
+	}
+
+	/* Cleanup database */
+	rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_VACUUM, res, NULL);
+
+	if (rspamd_fuzzy_backend_run_stmt (res, RSPAMD_FUZZY_BACKEND_COUNT)
+			== SQLITE_OK) {
+		res->count = sqlite3_column_int64 (
+				prepared_stmts[RSPAMD_FUZZY_BACKEND_COUNT].stmt, 0);
+	}
+
+	rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_START,
+				res, NULL);
 
 	return res;
 }
