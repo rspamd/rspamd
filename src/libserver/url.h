@@ -11,11 +11,11 @@ struct mime_text_part;
 struct rspamd_url {
 	gchar *string;
 	gint protocol;
+	guint port;
 
 	gchar *user;
 	gchar *password;
 	gchar *host;
-	gchar *port;
 	gchar *data;
 	gchar *query;
 	gchar *fragment;

@@ -1092,6 +1092,8 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 		}
 	}
 
+	uri->port = u.port;
+
 	if (!uri->hostlen) {
 		return URI_ERRNO_BAD_FORMAT;
 	}
