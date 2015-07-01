@@ -791,6 +791,18 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				}
 				st = parse_suffix_slash;
 			}
+			else if (t == '?') {
+				pt = strtoul (c, NULL, 10);
+				if (pt == 0 || pt > 65535) {
+					goto out;
+				}
+				if (u != NULL) {
+					u->port = pt;
+				}
+
+				c = p + 1;
+				st = parse_query;
+			}
 			else if (!g_ascii_isdigit (t)) {
 				if (strict || !g_ascii_isspace (t)) {
 					goto out;
