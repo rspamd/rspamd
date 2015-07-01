@@ -638,6 +638,9 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 					goto out;
 				}
 			}
+			else if (!g_ascii_isxdigit (t) && t != ':' && t != '.') {
+				goto out;
+			}
 			p ++;
 			break;
 		case parse_user:
@@ -1146,13 +1149,11 @@ static const gchar url_braces[] = {
 };
 
 static gboolean
-is_open_brace (gchar c)
+is_url_start (gchar c)
 {
 	if (c == '(' ||
 		c == '{' ||
-		c == '[' ||
 		c == '<' ||
-		c == '|' ||
 		c == '\'') {
 		return TRUE;
 	}
@@ -1217,11 +1218,18 @@ url_tld_start (const gchar *begin,
 	while (p >= begin) {
 		if ((!is_domain (*p) && *p != '.' &&
 			*p != '/') || g_ascii_isspace (*p)) {
+
+			if (!is_url_start (*p) && !g_ascii_isspace (*p)) {
+				return FALSE;
+			}
+
 			p++;
+
 			if (!g_ascii_isalnum (*p)) {
 				/* Urls cannot start with strange symbols */
 				return FALSE;
 			}
+
 			match->m_begin = p;
 			return TRUE;
 		}
@@ -1299,16 +1307,19 @@ url_web_start (const gchar *begin,
 {
 	/* Check what we have found */
 	if (pos > begin &&
-		(g_ascii_strncasecmp (pos, "www",
-		3) == 0 || g_ascii_strncasecmp (pos, "ftp", 3) == 0)) {
-		if (!is_open_brace (*(pos - 1)) && !g_ascii_isspace (*(pos - 1))) {
+		(g_ascii_strncasecmp (pos, "www",3) == 0 ||
+		 g_ascii_strncasecmp (pos, "ftp", 3) == 0)) {
+
+		if (!is_url_start (*(pos - 1)) && !g_ascii_isspace (*(pos - 1))) {
 			return FALSE;
 		}
 	}
+
 	if (*pos == '.') {
 		/* Urls cannot start with . */
 		return FALSE;
 	}
+
 	match->m_begin = pos;
 
 	return TRUE;
