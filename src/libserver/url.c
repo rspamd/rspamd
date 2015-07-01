@@ -451,9 +451,13 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				st = parse_prefix_question;
 				p ++;
 			}
-			else {
+			else if (t != '/') {
 				c = p;
 				st = parse_user;
+			}
+			else {
+				/* Skip multiple slashes */
+				p ++;
 			}
 			break;
 		case parse_prefix_question:
@@ -608,14 +612,21 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 			p ++;
 			break;
 		case parse_slash_slash:
-			c = p;
-			st = parse_domain;
-			slash = p;
 
-			if (*p == '[') {
-				st = parse_ipv6;
-				p ++;
+			if (t != '/') {
 				c = p;
+				st = parse_domain;
+				slash = p;
+
+				if (*p == '[') {
+					st = parse_ipv6;
+					p ++;
+					c = p;
+				}
+			}
+			else {
+				/* Skip multiple slashes */
+				p ++;
 			}
 			break;
 		case parse_ipv6:
