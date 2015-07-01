@@ -805,7 +805,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				c = p + 1;
 				st = parse_query;
 			}
-			else if (!is_urlsafe (t)) {
+			else if (is_lwsp (t)) {
 				if (strict) {
 					if (g_ascii_isspace (t)) {
 						goto set;
@@ -826,7 +826,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				c = p + 1;
 				st = parse_part;
 			}
-			else if (!is_urlsafe (t)) {
+			else if (is_lwsp (t)) {
 				if (strict) {
 					if (g_ascii_isspace (t)) {
 						goto set;
@@ -840,7 +840,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 			p ++;
 			break;
 		case parse_part:
-			if (!is_urlsafe (t)) {
+			if (is_lwsp (t)) {
 				if (strict) {
 					if (g_ascii_isspace (t)) {
 						goto set;
