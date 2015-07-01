@@ -48,4 +48,37 @@ context("URL check functions", function()
     pool:destroy()
   end)
   
+  -- Some cases from https://code.google.com/p/google-url/source/browse/trunk/src/url_canon_unittest.cc
+  test("Parse urls", function()
+    local pool = mpool.create()
+    -- input, parseable, {host, port, user, password, path, query, part}
+    local cases = {
+      {"http://www.google.com/foo?bar=baz#", true, {
+        host = 'www.google.com', path = 'foo', query = 'bar=baz', tld = 'google.com'}
+      },
+    }
+    
+    for _,c in ipairs(cases) do
+      local res = url.create(pool, c[1])
+      
+      if c[2] then
+        assert_not_nil(res, "cannot parse " .. c[1])
+        
+        local uf = res:to_table()
+        
+        for k,v in pairs(c[3]) do
+          assert_not_nil(uf[k], k .. ' is missing in url, must be ' .. v)
+          assert_equal(uf[k], v)
+        end
+        for k,v in pairs(uf) do
+          if k ~= 'url' and k ~= 'protocol' and k ~= 'tld' then
+            assert_not_nil(c[3][k], k .. ' should be absent but it is ' .. v)
+          end
+        end
+      else
+        assert_nil(res, "should not parse " .. c[1])
+      end
+    end
+  end
+  )
 end)
