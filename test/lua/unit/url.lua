@@ -54,8 +54,18 @@ context("URL check functions", function()
     -- input, parseable, {host, port, user, password, path, query, part}
     local cases = {
       {"http://www.google.com/foo?bar=baz#", true, {
-        host = 'www.google.com', path = 'foo', query = 'bar=baz', tld = 'google.com'}
-      },
+        host = 'www.google.com', path = 'foo', query = 'bar=baz', tld = 'google.com'
+      }},
+      {"http://[www.google.com]/", false},
+      {"ht\ttp:@www.google.com:80/;p?#", false},
+      {"http://user:pass@/", false},
+      {"http://foo:-80/", false},
+      {"http:////////user:@google.com:99?foo", true, {
+        host = 'google.com', user = 'user', port = 99, query = 'foo'
+      }},
+      {"http://%25DOMAIN:foobar@foodomain.com/", true, {
+        host = 'foodomain.com', user = '%25DOMAIN'
+      }}
     }
     
     for _,c in ipairs(cases) do
@@ -68,15 +78,15 @@ context("URL check functions", function()
         
         for k,v in pairs(c[3]) do
           assert_not_nil(uf[k], k .. ' is missing in url, must be ' .. v)
-          assert_equal(uf[k], v)
+          assert_equal(uf[k], v, 'expected ' .. v .. ' for ' .. k .. ' but got ' .. uf[k])
         end
         for k,v in pairs(uf) do
           if k ~= 'url' and k ~= 'protocol' and k ~= 'tld' then
-            assert_not_nil(c[3][k], k .. ' should be absent but it is ' .. v)
+            assert_not_nil(c[3][k], k .. ' should be absent but it is ' .. v .. ' in: ' .. c[1])
           end
         end
       else
-        assert_nil(res, "should not parse " .. c[1])
+        assert_nil(res, "should not parse " .. c[1] .. ' parsed to: ' .. tostring(res))
       end
     end
   end
