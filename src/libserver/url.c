@@ -737,7 +737,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				p ++;
 			}
 			else {
-				if (*p != '.' && *p != '-' && *p != '_') {
+				if (*p != '.' && *p != '-' && *p != '_' && *p != '%') {
 					uc = g_utf8_get_char_validated (p, last - p);
 
 					if (uc == (gunichar)-1) {
@@ -1127,7 +1127,25 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	/* Now decode url symbols */
 	uri->string = p;
 	uri->urllen = len;
-	rspamd_unescape_uri (uri->string, uri->string, len);
+
+	if (uri->userlen == 0) {
+		rspamd_unescape_uri (uri->string, uri->string, len);
+	}
+	else {
+		rspamd_unescape_uri (uri->string, uri->string, uri->protocollen);
+		rspamd_unescape_uri (uri->host, uri->host, uri->hostlen);
+
+		if (uri->datalen) {
+			rspamd_unescape_uri (uri->data, uri->data, uri->datalen);
+		}
+		if (uri->querylen) {
+			rspamd_unescape_uri (uri->query, uri->query, uri->querylen);
+		}
+		if (uri->fragmentlen) {
+			rspamd_unescape_uri (uri->fragment, uri->fragment, uri->fragmentlen);
+		}
+	}
+
 	rspamd_str_lc (uri->string, uri->protocollen);
 	rspamd_str_lc_utf8 (uri->host,   uri->hostlen);
 
