@@ -48,8 +48,11 @@ local mistake = res:to_table() -- INVALID! as pool is destroyed
 /* URL methods */
 LUA_FUNCTION_DEF (url, get_length);
 LUA_FUNCTION_DEF (url, get_host);
+LUA_FUNCTION_DEF (url, get_port);
 LUA_FUNCTION_DEF (url, get_user);
 LUA_FUNCTION_DEF (url, get_path);
+LUA_FUNCTION_DEF (url, get_query);
+LUA_FUNCTION_DEF (url, get_fragment);
 LUA_FUNCTION_DEF (url, get_text);
 LUA_FUNCTION_DEF (url, get_tld);
 LUA_FUNCTION_DEF (url, to_table);
@@ -61,8 +64,11 @@ LUA_FUNCTION_DEF (url, all);
 static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF (url, get_length),
 	LUA_INTERFACE_DEF (url, get_host),
+	LUA_INTERFACE_DEF (url, get_port),
 	LUA_INTERFACE_DEF (url, get_user),
 	LUA_INTERFACE_DEF (url, get_path),
+	LUA_INTERFACE_DEF (url, get_query),
+	LUA_INTERFACE_DEF (url, get_fragment),
 	LUA_INTERFACE_DEF (url, get_text),
 	LUA_INTERFACE_DEF (url, get_tld),
 	LUA_INTERFACE_DEF (url, to_table),
@@ -126,6 +132,25 @@ lua_url_get_host (lua_State *L)
 }
 
 /***
+ * @method url:get_port()
+ * Get port of the url
+ * @return {number} url port
+ */
+static gint
+lua_url_get_port (lua_State *L)
+{
+	struct rspamd_lua_url *url = lua_check_url (L, 1);
+
+	if (url != NULL) {
+		lua_pushnumber (L, url->url->port);
+	}
+	else {
+		lua_pushnil (L);
+	}
+	return 1;
+}
+
+/***
  * @method url:get_user()
  * Get user part of the url (e.g. username in email)
  * @return {string} user part of URL
@@ -157,6 +182,46 @@ lua_url_get_path (lua_State *L)
 
 	if (url != NULL && url->url->datalen > 0) {
 		lua_pushlstring (L, url->url->data, url->url->datalen);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+/***
+ * @method url:get_query()
+ * Get query of the url
+ * @return {string} query part of URL
+ */
+static gint
+lua_url_get_query (lua_State *L)
+{
+	struct rspamd_lua_url *url = lua_check_url (L, 1);
+
+	if (url != NULL && url->url->querylen > 0) {
+		lua_pushlstring (L, url->url->query, url->url->querylen);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+/***
+ * @method url:get_fragment()
+ * Get fragment of the url
+ * @return {string} fragment part of URL
+ */
+static gint
+lua_url_get_fragment (lua_State *L)
+{
+	struct rspamd_lua_url *url = lua_check_url (L, 1);
+
+	if (url != NULL && url->url->fragmentlen > 0) {
+		lua_pushlstring (L, url->url->fragment, url->url->fragmentlen);
 	}
 	else {
 		lua_pushnil (L);
@@ -280,6 +345,12 @@ lua_url_to_table (lua_State *L)
 			lua_settable (L, -3);
 		}
 
+		if (u->port != 0) {
+			lua_pushstring (L, "port");
+			lua_pushnumber (L, u->port);
+			lua_settable (L, -3);
+		}
+
 		if (u->tldlen > 0) {
 			lua_pushstring (L, "tld");
 			lua_pushlstring (L, u->tld, u->tldlen);
@@ -297,6 +368,19 @@ lua_url_to_table (lua_State *L)
 			lua_pushlstring (L, u->data, u->datalen);
 			lua_settable (L, -3);
 		}
+
+		if (u->querylen > 0) {
+			lua_pushstring (L, "query");
+			lua_pushlstring (L, u->query, u->querylen);
+			lua_settable (L, -3);
+		}
+
+		if (u->fragmentlen > 0) {
+			lua_pushstring (L, "fragment");
+			lua_pushlstring (L, u->fragment, u->fragmentlen);
+			lua_settable (L, -3);
+		}
+
 
 		lua_pushstring (L, "protocol");
 
