@@ -363,7 +363,7 @@ lua_url_to_table (lua_State *L)
 			lua_settable (L, -3);
 		}
 
-		if (u->hostlen > 0) {
+		if (u->datalen > 0) {
 			lua_pushstring (L, "path");
 			lua_pushlstring (L, u->data, u->datalen);
 			lua_settable (L, -3);
