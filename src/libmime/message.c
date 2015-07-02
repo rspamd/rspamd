@@ -32,14 +32,20 @@
 #include "utlist.h"
 #include "tokenizers/tokenizers.h"
 #include "libstemmer.h"
+#include "acism.h"
 
 #include <iconv.h>
 
 #define RECURSION_LIMIT 5
 #define UTF8_CHARSET "UTF-8"
+#define GTUBE_SYMBOL "GTUBE"
 
 #define SET_PART_RAW(part) ((part)->flags &= ~RSPAMD_MIME_PART_FLAG_UTF)
 #define SET_PART_UTF(part) ((part)->flags |= RSPAMD_MIME_PART_FLAG_UTF)
+
+static ac_trie_t *gtube_trie = NULL;
+static const gchar gtube_pattern[] = "XJS*C4JDBQADN1.NSBN3*2IDNEN*"
+		"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
 
 static GQuark
 rspamd_message_quark (void)
@@ -1247,6 +1253,44 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 	}
 }
 
+static int
+rspamd_gtube_cb (int strnum, int textpos, void *context)
+{
+	return TRUE;
+}
+
+static gboolean
+rspamd_check_gtube (struct rspamd_task *task, struct mime_text_part *part)
+{
+	static ac_trie_pat_t pat[1] = {
+		{
+			.ptr = gtube_pattern,
+			.len = sizeof (gtube_pattern) - 1
+		}
+	};
+	gint state = 0;
+
+	g_assert (part != NULL);
+
+	if (gtube_trie == NULL) {
+		gtube_trie = acism_create (pat, G_N_ELEMENTS (pat));
+	}
+
+	if (part->content && part->content->len > sizeof (gtube_pattern)) {
+		if (acism_lookup (gtube_trie, part->content->data, part->content->len,
+				rspamd_gtube_cb, NULL, &state, FALSE)) {
+			task->flags |= RSPAMD_TASK_FLAG_SKIP;
+			task->flags |= RSPAMD_TASK_FLAG_GTUBE;
+			msg_info ("<%s>: gtube pattern has been found in part of length %ud",
+					task->message_id, part->content->len);
+
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
 static void
 process_text_part (struct rspamd_task *task,
 	GByteArray *part_content,
@@ -1347,6 +1391,23 @@ process_text_part (struct rspamd_task *task,
 		task->text_parts = g_list_prepend (task->text_parts, text_part);
 	}
 	else {
+		return;
+	}
+
+	if (rspamd_check_gtube (task, text_part)) {
+		struct metric_result *mres;
+
+		mres = rspamd_create_metric_result (task, DEFAULT_METRIC);
+
+		if (mres != NULL) {
+			mres->score = mres->metric->actions[METRIC_ACTION_REJECT].score;
+			mres->action = METRIC_ACTION_REJECT;
+		}
+
+		task->pre_result.action = METRIC_ACTION_REJECT;
+		task->pre_result.str = "Gtube pattern";
+		rspamd_task_insert_result (task, GTUBE_SYMBOL, 0, NULL);
+
 		return;
 	}
 
