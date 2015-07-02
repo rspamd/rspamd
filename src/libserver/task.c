@@ -247,6 +247,14 @@ rspamd_task_load_message (struct rspamd_task *task,
 	task->msg.start = start;
 	task->msg.len = len;
 
+	if (task->msg.len == 0) {
+		msg_warn ("message has invalid message length: %ud",
+				task->msg.len);
+		g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+				"Invalid length");
+		return FALSE;
+	}
+
 	if (msg) {
 		rspamd_protocol_handle_headers (task, msg);
 	}
