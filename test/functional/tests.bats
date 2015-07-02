@@ -12,6 +12,17 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 	echo $output | grep 'Action: reject'
 }
 
+@test "Test rspamd encrypted using gtube" {
+	export RSPAMD_CONFIG="$BATS_TEST_DIRNAME/configs/trivial.conf"
+	run_rspamd
+	run ${RSPAMC} -h localhost:56789 \
+		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
+		"$BATS_TEST_DIRNAME/messages/gtube.eml"
+	[ "$status" -eq 0 ]
+	
+	echo $output | grep 'Action: reject'
+}
+
 @test "Test rspamd spamc gtube" {
 	export RSPAMD_CONFIG="$BATS_TEST_DIRNAME/configs/trivial.conf"
 	run_rspamd
