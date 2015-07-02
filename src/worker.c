@@ -115,7 +115,6 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 	}
 
 	if (!rspamd_task_load_message (task, msg, chunk, len)) {
-		rspamd_session_destroy (task->s);
 		return 0;
 	}
 
