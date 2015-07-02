@@ -65,7 +65,22 @@ context("URL check functions", function()
       }},
       {"http://%25DOMAIN:foobar@foodomain.com/", true, {
         host = 'foodomain.com', user = '%25DOMAIN'
-      }}
+      }},
+      {"http://0.0xFFFFFF", true, {
+        host = '0.255.255.255'
+      }},
+      {"http://030052000001", true, {
+        host = '192.168.0.1'
+      }},
+      {"http://0xc0.052000001", true, {
+        host = '192.168.0.1'
+      }},
+      {"http://192.168.0.1.", true, {
+        host = '192.168.0.1'
+      }},
+      {"http://[::eeee:192.168.0.1]", true, {
+        host = '::eeee:c0a8:1'
+      }},
     }
     
     for _,c in ipairs(cases) do
@@ -78,7 +93,7 @@ context("URL check functions", function()
         
         for k,v in pairs(c[3]) do
           assert_not_nil(uf[k], k .. ' is missing in url, must be ' .. v)
-          assert_equal(uf[k], v, 'expected ' .. v .. ' for ' .. k .. ' but got ' .. uf[k])
+          assert_equal(uf[k], v, 'expected ' .. v .. ' for ' .. k .. ' but got ' .. uf[k] .. ' in url ' .. c[1])
         end
         for k,v in pairs(uf) do
           if k ~= 'url' and k ~= 'protocol' and k ~= 'tld' then

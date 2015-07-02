@@ -670,14 +670,14 @@ format_surbl_request (rspamd_mempool_t * pool,
 	len = hostname->len + slen + 2;
 
 	p = hostname->begin;
+	is_numeric = url->is_numeric;
+
 	while (p - hostname->begin < (gint)hostname->len && dots_num < MAX_LEVELS) {
 		if (*p == '.') {
 			dots[dots_num] = p;
 			dots_num++;
 		}
-		else if (!g_ascii_isdigit (*p)) {
-			is_numeric = FALSE;
-		}
+
 		p++;
 	}
 
