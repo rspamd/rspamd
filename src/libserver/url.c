@@ -1007,17 +1007,22 @@ rspamd_tld_trie_callback (int strnum, int textpos, void *context)
 static gboolean
 rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 {
-	const gchar *p, *end;
-	gchar buf[INET6_ADDRSTRLEN + 1];
+	const gchar *p, *end, *c;
+	gchar buf[INET6_ADDRSTRLEN + 1], *errstr;
 	struct in_addr in4;
 	struct in6_addr in6;
-	gboolean ret = FALSE;
+	gboolean ret = FALSE, check_num = TRUE;
+	guint32 n, dots, t, i, shift, nshift;
 
 	p = uri->host;
 	end = p + uri->hostlen;
 
 	if (*p == '[' && *(end - 1) == ']') {
 		p ++;
+		end --;
+	}
+
+	while (*(end - 1) == '.' && end > p) {
 		end --;
 	}
 
@@ -1047,6 +1052,78 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 		uri->is_numeric = TRUE;
 		ret = TRUE;
 	}
+	else {
+		/* Try also numeric notation */
+		c = p;
+		n = 0;
+		dots = 0;
+		shift = 0;
+
+		while (p <= end && check_num) {
+			if (shift < 32 && ((*p == '.' && dots < 3) || (p == end && dots <= 3))) {
+				g_assert (p - c + 1 < (gint)sizeof (buf));
+				rspamd_strlcpy (buf, c, p - c + 1);
+				c = p + 1;
+				dots ++;
+				t = strtoul (buf, &errstr, 0);
+
+				if (errstr == NULL || *errstr == '\0') {
+
+					nshift = (t == 0 ? shift + 8 : shift);
+
+					for (i = 0; i < 4; i ++) {
+						if ((t >> 8 * i) > 0) {
+							nshift += 8;
+						}
+						else {
+							break;
+						}
+					}
+					/*
+					 * Here we need to find the proper shift of the previous
+					 * components, so we check possible cases:
+					 * 1) 1 octet
+					 * 2) 2 octets
+					 * 3) 3 octets
+					 * 4) 4 octets
+					 */
+					switch (i) {
+					case 4:
+						n |= (GUINT32_FROM_BE (t)) << shift;
+						break;
+					case 3:
+						n |= (GUINT32_FROM_BE (t)) << (shift - 8);
+						break;
+					case 2:
+						n |= (GUINT16_FROM_BE (t)) << shift;
+						break;
+					default:
+						n |= t << shift;
+						break;
+					}
+
+					shift = nshift;
+				}
+				else {
+					check_num = FALSE;
+				}
+			}
+
+			p ++;
+		}
+
+		if (check_num && dots <= 3) {
+			memcpy (&in4, &n, sizeof (in4));
+			uri->host = rspamd_mempool_alloc (pool, INET_ADDRSTRLEN + 1);
+			memset (uri->host, 0, INET_ADDRSTRLEN + 1);
+			inet_ntop (AF_INET, &in4, uri->host, INET_ADDRSTRLEN);
+			uri->hostlen = strlen (uri->host);
+			uri->tld = uri->host;
+			uri->tldlen = uri->hostlen;
+			uri->is_numeric = TRUE;
+			ret = TRUE;
+		}
+	}
 
 	return ret;
 }
@@ -1056,7 +1133,7 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 		rspamd_mempool_t *pool)
 {
 	struct http_parser_url u;
-	gchar *p, *comp, t;
+	gchar *p, *comp;
 	const gchar *end;
 	guint i, complen, ret;
 	gint state = 0;
