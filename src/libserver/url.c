@@ -1004,6 +1004,53 @@ rspamd_tld_trie_callback (int strnum, int textpos, void *context)
 	return 1;
 }
 
+static gboolean
+rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
+{
+	const gchar *p, *end;
+	gchar buf[INET6_ADDRSTRLEN + 1];
+	struct in_addr in4;
+	struct in6_addr in6;
+	gboolean ret = FALSE;
+
+	p = uri->host;
+	end = p + uri->hostlen;
+
+	if (*p == '[' && *(end - 1) == ']') {
+		p ++;
+		end --;
+	}
+
+	if (end - p > (gint)sizeof (buf) - 1) {
+		return FALSE;
+	}
+
+	rspamd_strlcpy (buf, p, end - p + 1);
+
+	if (inet_pton (AF_INET, buf, &in4) == 1) {
+		uri->host = rspamd_mempool_alloc (pool, INET_ADDRSTRLEN + 1);
+		memset (uri->host, 0, INET_ADDRSTRLEN + 1);
+		inet_ntop (AF_INET, &in4, uri->host, INET_ADDRSTRLEN);
+		uri->hostlen = strlen (uri->host);
+		uri->tld = uri->host;
+		uri->tldlen = uri->hostlen;
+		uri->is_numeric = TRUE;
+		ret = TRUE;
+	}
+	else if (inet_pton (AF_INET6, buf, &in6) == 1) {
+		uri->host = rspamd_mempool_alloc (pool, INET6_ADDRSTRLEN + 1);
+		memset (uri->host, 0, INET6_ADDRSTRLEN + 1);
+		inet_ntop (AF_INET6, &in6, uri->host, INET6_ADDRSTRLEN);
+		uri->hostlen = strlen (uri->host);
+		uri->tld = uri->host;
+		uri->tldlen = uri->hostlen;
+		uri->is_numeric = TRUE;
+		ret = TRUE;
+	}
+
+	return ret;
+}
+
 enum uri_errno
 rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 		rspamd_mempool_t *pool)
@@ -1164,12 +1211,8 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	if (acism_lookup (url_scanner->search_trie, uri->host, uri->hostlen,
 			rspamd_tld_trie_callback, uri, &state, true) == 0) {
 		/* Ignore URL's without TLD if it is not a numeric URL */
-		for (i = 0; i < uri->hostlen; i ++) {
-			t = uri->host[i];
-
-			if (g_ascii_isalpha (t)) {
-				return URI_ERRNO_BAD_FORMAT;
-			}
+		if (!rspamd_url_is_ip (uri, pool)) {
+			return URI_ERRNO_BAD_FORMAT;
 		}
 	}
 

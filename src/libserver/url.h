@@ -36,6 +36,7 @@ struct rspamd_url {
 	guint urllen;
 
 	gboolean is_phished; /* URI maybe phishing */
+	gboolean is_numeric; /* URI contains IP address */
 };
 
 enum uri_errno {
