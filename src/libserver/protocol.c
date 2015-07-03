@@ -391,7 +391,13 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		case 'u':
 		case 'U':
 			if (g_ascii_strncasecmp (headern, USER_HEADER, hlen) == 0) {
-				task->user = hv->str;
+				/*
+				 * We must ignore User header in case of spamc, as SA has
+				 * different meaning of this header
+				 */
+				if (!RSPAMD_TASK_IS_SPAMC (task)) {
+					task->user = hv->str;
+				}
 			}
 			if (g_ascii_strncasecmp (headern, URLS_HEADER, hlen) == 0) {
 				if (h->value->len == sizeof ("extended") - 1 &&
