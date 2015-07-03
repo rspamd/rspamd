@@ -1,3 +1,31 @@
+0.9.9:
+	* Don't use RWL_SPAMHAUS_WL (unknown result) for whitelisting (by @fatalbanana)
+	* Import updated public suffix list (by @fatalbanana)
+	* Remove debug message
+	* Fix settings (by @fatalbanana)
+	* Remove duplicated symbol registration
+	* Use WAL for fuzzy storage
+	* RBL fixes (by @fatalbanana):
+		- silence errors;
+		- yield unknown results from RBLs;
+		- fix scoring for DNSWL;
+		- fix use of RBL name as symbol;
+		- ignore RBL names that would not be yielded;
+	* Support captures in regular expressions
+	* Add captures support to lua_regexp
+	* Support dist on FreeBSD and Darwin
+	* Add RCVD_IN_DNSWL_NONE as whitelisting exclusion (by @fatalbanana)
+	* Multiple fixes to URL detection:
+		- support port definition;
+		- fix query and path recognition;
+		- fix parsing of multiple slashes in URL;
+		- fix parsing query just after port;
+		- fix path field in `url:to_table` method;
+		- improve support of IP based URLs.
+	* Set ignore_whitelists = true for RECEIVED_SPAMHAUS_XBL (by @fatalbanana)
+	* Add GTUBE support
+	* Ignore User header in SA mode
+
 0.9.8:
 	* Fix critical bug in bayes classifier (#305)
 	* Fix critical bug in RBL module (by @fatalbanana)
