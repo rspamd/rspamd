@@ -43,6 +43,7 @@ struct symbols_cache {
 	GHashTable *items_by_symbol;
 	GPtrArray *items_by_order;
 	GPtrArray *items_by_id;
+	GList *delayed_deps;
 	rspamd_mempool_t *static_pool;
 	gdouble max_weight;
 	guint used_items;
@@ -90,6 +91,11 @@ struct cache_dependency {
 	struct cache_item *item;
 	gchar *sym;
 	gint id;
+};
+
+struct delayed_cache_dependency {
+	gchar *from;
+	gchar *to;
 };
 
 struct cache_savepoint {
@@ -189,9 +195,28 @@ post_cache_init (struct symbols_cache *cache)
 {
 	struct cache_item *it, *dit;
 	struct cache_dependency *dep, *rdep;
+	struct delayed_cache_dependency *ddep;
+	GList *cur;
 	guint i, j;
 
 	g_ptr_array_sort_with_data (cache->items_by_order, cache_logic_cmp, cache);
+
+	cur = cache->delayed_deps;
+	while (cur) {
+		ddep = cur->data;
+
+		it = g_hash_table_lookup (cache->items_by_symbol, ddep->from);
+
+		if (it == NULL) {
+			msg_err ("cannot register delayed dependency between %s and %s, "
+					"%s is missing", ddep->from, ddep->to, ddep->from);
+		}
+		else {
+			rspamd_symbols_cache_add_dependency (cache, it->id, ddep->to);
+		}
+
+		cur = g_list_next (cur);
+	}
 
 	for (i = 0; i < cache->items_by_id->len; i ++) {
 		it = g_ptr_array_index (cache->items_by_id, i);
@@ -560,6 +585,9 @@ rspamd_symbols_cache_add_symbol_callback_prio (struct symbols_cache *cache,
 void
 rspamd_symbols_cache_destroy (struct symbols_cache *cache)
 {
+	GList *cur;
+	struct delayed_cache_dependency *ddep;
+
 	if (cache != NULL) {
 
 		if (cache->cfg->cache_filename) {
@@ -569,6 +597,20 @@ rspamd_symbols_cache_destroy (struct symbols_cache *cache)
 				msg_err ("cannot save cache data to %s",
 						cache->cfg->cache_filename);
 			}
+		}
+
+		if (cache->delayed_deps) {
+			cur = cache->delayed_deps;
+
+			while (cur) {
+				ddep = cur->data;
+				g_free (ddep->from);
+				g_free (ddep->to);
+				g_slice_free1 (sizeof (*ddep), ddep);
+				cur = g_list_next (cur);
+			}
+
+			g_list_free (cache->delayed_deps);
 		}
 
 		g_hash_table_destroy (cache->items_by_symbol);
@@ -1251,4 +1293,20 @@ rspamd_symbols_cache_add_dependency (struct symbols_cache *cache,
 	/* Will be filled later */
 	dep->item = NULL;
 	g_ptr_array_add (source->deps, dep);
+}
+
+void
+rspamd_symbols_cache_add_delayed_dependency (struct symbols_cache *cache,
+		const gchar *from, const gchar *to)
+{
+	struct delayed_cache_dependency *ddep;
+
+	g_assert (from != NULL);
+	g_assert (to != NULL);
+
+	ddep = g_slice_alloc (sizeof (*ddep));
+	ddep->from = g_strdup (from);
+	ddep->to = g_strdup (to);
+
+	cache->delayed_deps = g_list_prepend (cache->delayed_deps, ddep);
 }

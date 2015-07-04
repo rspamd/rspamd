@@ -182,4 +182,13 @@ void rspamd_symbols_cache_inc_frequency (struct symbols_cache *cache,
 void rspamd_symbols_cache_add_dependency (struct symbols_cache *cache,
 		gint id_from, const gchar *to);
 
+/**
+ * Add delayed dependency that is resolved on cache post-load routine
+ * @param cache
+ * @param from
+ * @param to
+ */
+void rspamd_symbols_cache_add_delayed_dependency (struct symbols_cache *cache,
+		const gchar *from, const gchar *to);
+
 #endif
