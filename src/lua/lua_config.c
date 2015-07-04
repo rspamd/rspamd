@@ -209,7 +209,7 @@ LUA_FUNCTION_DEF (config, register_callback_symbol_priority);
  * @method rspamd_config:register_dependency(id, dep)
  * Create a dependency between symbol identified by `id` and a symbol identified
  * by some symbolic name `dep`
- * @param {number} id id of source (returned by all register_*_symbol)
+ * @param {number|string} id id or name of source (numeric id is returned by all register_*_symbol)
  * @param {string} dep dependency name
  * @example
 local function cb(task)
@@ -218,6 +218,8 @@ end
 
 local id = rspamd_config:register_symbol('SYM', 1.0, cb)
 rspamd_config:register_dependency(id, 'OTHER_SYM')
+-- Alternative form
+rspamd_config:register_dependency('SYMBOL_FROM', 'SYMBOL_TO')
  */
 LUA_FUNCTION_DEF (config, register_dependency);
 
@@ -235,7 +237,7 @@ LUA_FUNCTION_DEF (config, set_metric_symbol);
  * @method rspamd_config:add_composite(name, expression)
  * @param {string} name name of composite symbol
  * @param {string} expression symbolic expression of the composite rule
- * @return {bool} true if a composite has been added sucessfully
+ * @return {bool} true if a composite has been added successfully
  */
 LUA_FUNCTION_DEF (config, add_composite);
 /***
@@ -1138,14 +1140,24 @@ static gint
 lua_config_register_dependency (lua_State * L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
-	const gchar *name = NULL;
+	const gchar *name = NULL, *from = NULL;
 	gint id;
 
-	id = luaL_checknumber (L, 2);
-	name = luaL_checkstring (L, 3);
+	if (lua_type (L, 2) == LUA_TNUMBER) {
+		id = luaL_checknumber (L, 2);
+		name = luaL_checkstring (L, 3);
 
-	if (id > 0 && name != NULL) {
-		rspamd_symbols_cache_add_dependency (cfg->cache, id, name);
+		if (id > 0 && name != NULL) {
+			rspamd_symbols_cache_add_dependency (cfg->cache, id, name);
+		}
+	}
+	else {
+		from = luaL_checkstring (L,2);
+		name = luaL_checkstring (L, 3);
+
+		if (from != NULL && name != NULL) {
+			rspamd_symbols_cache_add_delayed_dependency (cfg->cache, from, name);
+		}
 	}
 
 	return 0;
