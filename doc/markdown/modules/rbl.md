@@ -45,6 +45,14 @@ Use this RBL to test reverse DNS names of message senders (hostnames passed to r
 
 Use this RBL to test parameters sent for HELO/EHLO at SMTP time.
 
+- default_dkim (false)
+
+Use this RBL to test domains found in validated DKIM signatures.
+
+- default_dkim_domainonly (true)
+
+If true test top-level domain only, otherwise test entire domain found in DKIM signature.
+
 - default_emails (false)
 
 Use this RBL to test email addresses in form [localpart].[domainpart].[rbl] or if set to "domain_only" uses [domainpart].[rbl].

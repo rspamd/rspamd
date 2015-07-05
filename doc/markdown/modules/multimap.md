@@ -39,7 +39,7 @@ Type attribute means what is matched with this map. The following types are supp
 * `from` - matches envelope from (or header `From` if envelope from is absent)
 * `rcpt` - matches any of envelope rcpt or header `To` if envelope info is missing
 * `header` - matches any header specified (must have `header = "Header-Name"` configuration attribute)
-* `dnsbl` - matches source IP against some DNS blacklist (see [RBL](rbl.md) documentation for details)
+* `dnsbl` - matches source IP against some DNS blacklist (consider using [RBL](rbl.md) module for this)
 
 DNS maps has historic support.
 
