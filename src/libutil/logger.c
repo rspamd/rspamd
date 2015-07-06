@@ -385,7 +385,7 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log,
 	const gchar *fmt,
 	va_list args)
 {
-	static gchar logbuf[RSPAMD_LOGBUF_SIZE];
+	gchar logbuf[RSPAMD_LOGBUF_SIZE];
 	u_char *end;
 
 	if (rspamd_log == NULL) {
@@ -402,10 +402,10 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log,
 		}
 	}
 	else if (log_level <= rspamd_log->cfg->log_level) {
-		rspamd_mempool_lock_mutex (rspamd_log->mtx);
 		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
 		*end = '\0';
 		rspamd_escape_log_string (logbuf);
+		rspamd_mempool_lock_mutex (rspamd_log->mtx);
 		rspamd_log->log_func (NULL,
 			function,
 			log_level,
