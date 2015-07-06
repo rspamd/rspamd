@@ -86,6 +86,7 @@ static gboolean gen_keypair = FALSE;
 static gboolean encrypt_password = FALSE;
 /* List of workers that are pending to start */
 static GList *workers_pending = NULL;
+static GHashTable *vars = NULL;
 
 #ifdef HAVE_SA_SIGINFO
 static siginfo_t static_sg[64];
@@ -215,7 +216,7 @@ print_signals_info (void)
 
 
 static void
-read_cmd_line (gint argc, gchar **argv, struct rspamd_config *cfg)
+read_cmd_line (gint *argc, gchar ***argv, struct rspamd_config *cfg)
 {
 	GError *error = NULL;
 	GOptionContext *context;
@@ -226,10 +227,12 @@ read_cmd_line (gint argc, gchar **argv, struct rspamd_config *cfg)
 	g_option_context_set_summary (context,
 		"Summary:\n  Rspamd daemon version " RVERSION "\n  Release id: " RID);
 	g_option_context_add_main_entries (context, entries, NULL);
-	if (!g_option_context_parse (context, &argc, &argv, &error)) {
+
+	if (!g_option_context_parse (context, argc, argv, &error)) {
 		fprintf (stderr, "option parsing failed: %s\n", error->message);
 		exit (1);
 	}
+
 	cfg->no_fork = no_fork;
 	cfg->config_test = config_test;
 	cfg->rspamd_user = rspamd_user;
@@ -768,7 +771,7 @@ load_rspamd_config (struct rspamd_config *cfg, gboolean init_modules)
 	cfg->cache = rspamd_symbols_cache_new ();
 
 	if (!rspamd_config_read (cfg, cfg->cfg_name, NULL,
-		config_logger, rspamd_main)) {
+		config_logger, rspamd_main, vars)) {
 		return FALSE;
 	}
 
@@ -1067,7 +1070,28 @@ main (gint argc, gchar **argv, gchar **env)
 
 	other_workers = g_array_new (FALSE, TRUE, sizeof (pid_t));
 
-	read_cmd_line (argc, argv, rspamd_main->cfg);
+	read_cmd_line (&argc, &argv, rspamd_main->cfg);
+
+	if (argc > 0) {
+		/* Parse variables */
+		for (i = 0; i < argc; i ++) {
+			/* XXX: inefficient, but executed merely once */
+			if (strchr (argv[i], '=') != NULL) {
+				gchar *k, *v;
+
+				k = g_strdup (argv[i]);
+				v = g_strdup (strchr (k, '=') + 1);
+				*(strchr (k, '=')) = '\0';
+
+				if (vars == NULL) {
+					vars = g_hash_table_new_full (rspamd_strcase_hash,
+							rspamd_strcase_equal, g_free, g_free);
+				}
+
+				g_hash_table_insert (vars, k, v);
+			}
+		}
+	}
 
 	if (rspamd_main->cfg->config_test || is_debug) {
 		rspamd_main->cfg->log_level = G_LOG_LEVEL_DEBUG;
