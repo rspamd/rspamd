@@ -922,6 +922,7 @@ rspamd_controller_learn_fin_task (void *ud)
 
 	if (rspamd_learn_task_spam (session->cl, task, session->is_spam, &err) ==
 			RSPAMD_STAT_PROCESS_ERROR) {
+		msg_info ("cannot learn <%s>: %e", task->message_id);
 		rspamd_controller_send_error (conn_ent, 500 + err->code, err->message);
 		return TRUE;
 	}
