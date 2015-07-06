@@ -106,7 +106,7 @@ lua_util_load_rspamd_config (lua_State *L)
 		rspamd_init_cfg (cfg, FALSE);
 		cfg->cache = rspamd_symbols_cache_new ();
 
-		if (rspamd_config_read (cfg, cfg_name, NULL, NULL, NULL)) {
+		if (rspamd_config_read (cfg, cfg_name, NULL, NULL, NULL, NULL)) {
 			msg_err ("cannot load config from %s", cfg_name);
 			lua_pushnil (L);
 		}

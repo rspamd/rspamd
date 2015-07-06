@@ -644,8 +644,11 @@ rspamd_include_map_handler (const guchar *data, gsize len,
 #define RSPAMD_VERSION_MACRO "VERSION"
 
 void
-rspamd_ucl_add_conf_variables (struct ucl_parser *parser)
+rspamd_ucl_add_conf_variables (struct ucl_parser *parser, GHashTable *vars)
 {
+	GHashTableIter it;
+	gpointer k, v;
+
 	ucl_parser_register_variable (parser,
 										 RSPAMD_CONFDIR_MACRO,
 																RSPAMD_CONFDIR);
@@ -663,6 +666,14 @@ rspamd_ucl_add_conf_variables (struct ucl_parser *parser)
 	ucl_parser_register_variable (parser,  RSPAMD_PREFIX_MACRO,
 																RSPAMD_PREFIX);
 	ucl_parser_register_variable (parser, RSPAMD_VERSION_MACRO, RVERSION);
+
+	if (vars != NULL) {
+		g_hash_table_iter_init (&it, vars);
+
+		while (g_hash_table_iter_next (&it, &k, &v)) {
+			ucl_parser_register_variable (parser, k, v);
+		}
+	}
 }
 
 void

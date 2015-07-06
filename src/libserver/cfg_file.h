@@ -363,7 +363,8 @@ struct rspamd_statfile_config * rspamd_config_new_statfile (
  */
 gboolean rspamd_config_read (struct rspamd_config *cfg,
 	const gchar *filename, const gchar *convert_to,
-	rspamd_rcl_section_fin_t logger_fin, gpointer logger_ud);
+	rspamd_rcl_section_fin_t logger_fin, gpointer logger_ud,
+	GHashTable *vars);
 
 /*
  * Register symbols of classifiers inside metrics
@@ -385,7 +386,7 @@ struct rspamd_classifier_config * rspamd_config_find_classifier (
 void rspamd_ucl_add_conf_macros (struct ucl_parser *parser,
 	struct rspamd_config *cfg);
 
-void rspamd_ucl_add_conf_variables (struct ucl_parser *parser);
+void rspamd_ucl_add_conf_variables (struct ucl_parser *parser, GHashTable *vars);
 
 /**
  * Initialize rspamd filtering system (lua and C filters)
