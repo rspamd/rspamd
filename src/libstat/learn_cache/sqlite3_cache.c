@@ -202,9 +202,11 @@ rspamd_stat_cache_sqlite3_process (struct rspamd_task *task,
 		while (cur) {
 			part = (struct mime_text_part *)cur->data;
 
-			for (i = 0; i < part->words->len; i ++) {
-				word = &g_array_index (part->words, rspamd_fstring_t, i);
-				blake2b_update (&st, word->begin, word->len);
+			if (part->words != NULL) {
+				for (i = 0; i < part->words->len; i ++) {
+					word = &g_array_index (part->words, rspamd_fstring_t, i);
+					blake2b_update (&st, word->begin, word->len);
+				}
 			}
 
 			cur = g_list_next (cur);
