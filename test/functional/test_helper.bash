@@ -11,3 +11,7 @@ function run_rspamd() {
 function teardown() {
 	pkill -TERM rspamd
 }
+
+function clear_stats() {
+	rm -f /tmp/rspamd-bats-cache.sqlite /tmp/rspamd-bats-bayes.spam /tmp/rspamd-bats-bayes.ham || true	
+}
