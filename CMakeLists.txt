@@ -276,10 +276,8 @@ ENDFUNCTION(INSTALL_IF_NOT_EXISTS)
 # LIB_SUFFIXES - list of library suffixes
 # MODULES - modules to search using pkg_config
 MACRO(ProcessPackage PKG_NAME)
+
 	CMAKE_PARSE_ARGUMENTS(PKG "OPTIONAL" "ROOT;INCLUDE;LIBRARY" "INCLUDE_SUFFIXES;LIB_SUFFIXES;MODULES" ${ARGN})
-	IF(NOT PKG_NAME)
-		MESSAGE(FATAL_ERROR "No package name specified")
-	ENDIF()
 	IF(NOT PKG_LIBRARY)
 		SET(PKG_LIBRARY "${PKG_NAME}")
 	ENDIF()
@@ -292,6 +290,7 @@ MACRO(ProcessPackage PKG_NAME)
 	ENDIF()
 
 	IF(${PKG_NAME}_FOUND)
+		MESSAGE(STATUS "Found package ${PKG_NAME} in pkg-config modules ${PKG_MODULES}")
 		SET(WITH_${PKG_NAME} 1)
 		IF(ENABLE_STATIC MATCHES "ON")
 			SET(_XPREFIX "${PKG_NAME}_STATIC")
@@ -300,11 +299,11 @@ MACRO(ProcessPackage PKG_NAME)
 		ENDIF(ENABLE_STATIC MATCHES "ON")
 		FOREACH(_arg ${${_XPREFIX}_INCLUDE_DIRS})
 			INCLUDE_DIRECTORIES("${_arg}")
-			SET(${var}_INCLUDE "${_arg}")
+			SET(${PKG_NAME}_INCLUDE "${_arg}")
 		ENDFOREACH(_arg ${${_XPREFIX}_INCLUDE_DIRS})
 		FOREACH(_arg ${${_XPREFIX}_LIBRARY_DIRS})
 			LINK_DIRECTORIES("${_arg}")
-			SET(${var}_LIBRARY "${_arg}")
+			SET(${PKG_NAME}_LIBRARY "${_arg}")
 		ENDFOREACH(_arg ${${_XPREFIX}_LIBRARY_DIRS})
 		# Handle other CFLAGS and LDFLAGS
 		FOREACH(_arg ${${_XPREFIX}_CFLAGS_OTHER})
@@ -314,6 +313,7 @@ MACRO(ProcessPackage PKG_NAME)
 			SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${_arg}")
 		ENDFOREACH(_arg ${${_XPREFIX}_LDFLAGS_OTHER})
 		LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "${${_XPREFIX}_LIBRARIES}")
+		INCLUDE_DIRECTORIES(${${_XPREFIX}_INCLUDEDIR})
 	ELSE()
 		# Try some more heuristic
 		FIND_LIBRARY(_lib NAMES ${PKG_LIBRARY}
@@ -337,9 +337,9 @@ MACRO(ProcessPackage PKG_NAME)
 		INCLUDE_DIRECTORIES("${_incl}")
 		LINK_DIRECTORIES("${_lib_path}")
 		LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ${_lib})
-		SET(${var}_INCLUDE "${_incl}")
-		SET(${var}_LIBRARY "${_lib_path}")
-		MESSAGE(STATUS "Found ${_name0} ${ARGN} in '${_lib_path}' (library) and '${_incl}' (include).")
+		SET(${PKG_NAME}_INCLUDE "${_incl}")
+		SET(${PKG_NAME}_LIBRARY "${_lib_path}")
+		MESSAGE(STATUS "Found ${PKG_NAME} in '${_lib_path}' (library) and '${_incl}' (include).")
 	ENDIF(${PKG_NAME}_FOUND)
 ENDMACRO(ProcessPackage name)
 
@@ -544,15 +544,20 @@ IF(OPENSSL_FOUND)
 	INCLUDE_DIRECTORIES("${OPENSSL_INCLUDE_DIR}")
 ENDIF(OPENSSL_FOUND)
 
-ProcessPackage(GLIB2 glib-2.0>=2.28)
-ProcessPackage(GTHREAD gthread-2.0)
-ProcessPackage(PCRE pcre libpcre pcre3 libpcre3)
-ProcessPackage(GMIME2 gmime-2.6 gmime-2.4 gmime-2.0)
-ProcessPackage(LIBEVENT event libevent)
-ProcessPackage(SQLITE sqlite3 sqlite)
-IF(GMIME2_VERSION VERSION_GREATER "2.4.0")
+ProcessPackage(GLIB2 LIBRARY glib-2.0 INCLUDE glib.h INCLUDE_SUFFIXES include/glib 
+	ROOT ${GLIB_ROOT} MODULES glib-2.0>=2.28)
+ProcessPackage(PCRE LIBRARY pcre INCLUDE pcre.h INCLUDE_SUFFIXES include/pcre 
+	ROOT ${PCRE_ROOT} MODULES pcre libpcre pcre3 libpcre3)
+ProcessPackage(GMIME LIBRARY gmime-2.4 INCLUDE gmime.h INCLUDE_SUFFIXES include/gmime 
+	ROOT ${GMIME_ROOT} MODULES gmime-2.6 gmime-2.4 gmime-2.0)
+ProcessPackage(LIBEVENT LIBRARY event INCLUDE event.h INCLUDE_SUFFIXES include/event 
+	ROOT ${EVENT_ROOT} MODULES event libevent)
+ProcessPackage(SQLITE3 LIBRARY sqlite3 INCLUDE sqlite3.h INCLUDE_SUFFIXES include/sqlite3 include/sqlite 
+	ROOT ${SQLITE3_ROOT} MODULES sqlite3 sqlite)
+IF(GMIME2_VERSION VERSION_GREATER "2.4.0" OR NOT GMIME2_VERSION)
 	SET(GMIME24 1)
-ENDIF(GMIME2_VERSION VERSION_GREATER "2.4.0")
+ENDIF()
+
 LIST(APPEND CMAKE_REQUIRED_INCLUDES "${PCRE_INCLUDE}")
 IF(PCRE_LIBRARY)
 	SET(CMAKE_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES};-L${PCRE_LIBRARY};-lpcre")
@@ -561,38 +566,17 @@ ELSE(PCRE_LIBRARY)
 ENDIF(PCRE_LIBRARY)
 # Libhiredis pc file is so special
 IF(ENABLE_HIREDIS MATCHES "ON")
-	ProcessPackage(HIREDIS hiredis libhiredis)
+	ProcessPackage(HIREDIS LIBRARY hiredis INCLUDE hiredis.h INCLUDE_SUFFIXES include/hiredis
+		ROOT ${HIREDIS_ROOT} MODULES hiredis libhiredis)
 	SET(WITH_HIREDIS 1)
-	FIND_PATH(LIBHIREDIS_INCLUDE hiredis.h 
-		HINTS "${RSPAMD_SEARCH_PATH}"
-		PATH_SUFFIXES "include" "include/hiredis"
-		PATHS	${RSPAMD_DEFAULT_INCLUDE_PATHS}
-		DOC "Path where the hiredis header files can be found")
-
-	IF(LIBHIREDIS_INCLUDE)
-		   INCLUDE_DIRECTORIES("${LIBHIREDIS_INCLUDE}")
-	ENDIF(LIBHIREDIS_INCLUDE)
 ENDIF(ENABLE_HIREDIS MATCHES "ON")
 
 
 # Google performance tools
 
 IF(ENABLE_GPERF_TOOLS MATCHES "ON")
-	FIND_PATH(GPERF_INCLUDE google/profiler.h
-			PATH_SUFFIXES "include" "include/google"
-			PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS}
-			DOC "Path where google perftools includes can be found")
-	INCLUDE_DIRECTORIES("${GPERF_INCLUDE}")
-	FIND_LIBRARY(GPERF_LIBRARY NAMES profiler 
-				  HINTS "${RSPAMD_SEARCH_PATH}"
-				  PATH_SUFFIXES lib64 lib "lib/google"
-				  PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS}
-				  DOC "Path where the gperf library can be found")
-	IF(NOT GPERF_LIBRARY)
-		MESSAGE(FATAL_ERROR "gperf tools support is enabled but not found in system")
-	ENDIF(NOT GPERF_LIBRARY)
-	GET_FILENAME_COMPONENT(GPERF_PATH "${GPERF_LIBRARY}" PATH)
-	LINK_DIRECTORIES("${GPERF_PATH}")
+	ProcessPackage(GPERF LIBRARY profiler INCLUDE profiler.h INCLUDE_SUFFIXES include/google
+		ROOT ${GPERF_ROOT})
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-omit-frame-pointer")
 	SET(WITH_GPERF_TOOLS 1)
 ENDIF(ENABLE_GPERF_TOOLS MATCHES "ON")
@@ -932,7 +916,8 @@ IF(ENABLE_URL_INCLUDE MATCHES "ON")
 					DOC "Path to libfetch header")
 	ELSE(LIBFETCH_LIBRARY)
 		# Try to find libcurl
-		ProcessPackage(CURL libcurl)
+		ProcessPackage(CURL LIBRARY curl INCLUDE curl.h INCLUDE_SUFFIXES include/curl 
+			ROOT ${CURL_ROOT})
 		IF(NOT CURL_FOUND)
 			MESSAGE(WARNING "Neither libcurl nor libfetch were found, no support of URL includes in configuration")
 		ENDIF(NOT CURL_FOUND)
