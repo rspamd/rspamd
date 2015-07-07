@@ -1075,13 +1075,13 @@ main (gint argc, gchar **argv, gchar **env)
 	if (argc > 0) {
 		/* Parse variables */
 		for (i = 0; i < argc; i ++) {
-			/* XXX: inefficient, but executed merely once */
 			if (strchr (argv[i], '=') != NULL) {
-				gchar *k, *v;
+				gchar *k, *v, *t;
 
 				k = g_strdup (argv[i]);
-				v = g_strdup (strchr (k, '=') + 1);
-				*(strchr (k, '=')) = '\0';
+				t = strchr (k, '=');
+				v = g_strdup (t + 1);
+				*t = '\0';
 
 				if (vars == NULL) {
 					vars = g_hash_table_new_full (rspamd_strcase_hash,
