@@ -1612,7 +1612,7 @@ lua_push_symbol_result (lua_State *L,
 			lua_pushnumber (L, s->score);
 			lua_settable (L, -3);
 
-			if (s->def) {
+			if (s->def && s->def->gr) {
 				lua_pushstring (L, "group");
 				lua_pushstring (L, s->def->gr->name);
 				lua_settable (L, -3);
