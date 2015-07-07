@@ -1,0 +1,22 @@
+Return-Path: <example@example.net>
+Date: 29 Apr 2015 04:56:53 -0000
+MIME-Version: 1.0
+From: example@example.net
+Subject: This is the subject
+Content-Type: multipart/alternative;
+ boundary="=_1ad00c4b74ff9921bb562f02b6e6df7a"
+Message-ID: <mid1234@example.net>
+To: example@example.net
+
+--=_1ad00c4b74ff9921bb562f02b6e6df7a
+Content-Type: text/plain; charset="ISO-8859-1"
+Content-Transfer-Encoding: 7bit
+
+
+--=_1ad00c4b74ff9921bb562f02b6e6df7a
+Content-Type: text/html; charset="ISO-8859-1"
+Content-Transfer-Encoding: quoted-printable
+
+<b>HTML part only. The previous part makes the controller process crash</b>
+
+--=_1ad00c4b74ff9921bb562f02b6e6df7a--

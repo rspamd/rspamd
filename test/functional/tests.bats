@@ -94,6 +94,28 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 	clear_stats
 }
 
+@test "Test learn message with an empty part" {
+	clear_stats
+	export RSPAMD_CONFIG="$BATS_TEST_DIRNAME/configs/stats.conf"
+	run_rspamd
+	run ${RSPAMC} -h localhost:56790 \
+		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
+		learn_spam \
+		"$BATS_TEST_DIRNAME/messages/empty_part.eml"
+	[ "$status" -eq 0 ]
+	
+	echo $output | egrep 'success.*true'
+	
+	run ${RSPAMC} -h localhost:56789 \
+		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
+		symbols \
+		"$BATS_TEST_DIRNAME/messages/empty_part.eml"
+	[ "$status" -eq 0 ]
+	
+	echo $output | grep 'BAYES_SPAM'
+	clear_stats
+}
+
 @test "Test rspamd dependencies" {
 	clear_stats
 	sed -e 's|@@LUA_SCRIPT@@|${CURDIR}/functional/cases/deps.lua|' < \
