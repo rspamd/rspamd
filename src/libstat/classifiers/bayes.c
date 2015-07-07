@@ -167,43 +167,37 @@ bayes_classify (struct classifier_ctx * ctx,
 		g_tree_foreach (input, bayes_classify_callback, rt);
 	}
 	else {
+		h = 1 - inv_chi_square (-2. * rt->spam_prob,
+				2 * rt->processed_tokens);
+		s = 1 - inv_chi_square (-2. * rt->ham_prob,
+				2 * rt->processed_tokens);
 
-		if (rt->spam_prob == 0) {
-			final_prob = 0;
+		if (isfinite (s) && isfinite (h)) {
+			final_prob = (s + 1.0 - h) / 2.;
+			msg_debug ("<%s> got ham prob %.2f -> %.2f and spam prob %.2f -> %.2f,"
+					" %L tokens processed of %ud total tokens",
+					task->message_id, rt->ham_prob, h, rt->spam_prob, s,
+					rt->processed_tokens, g_tree_nnodes (input));
 		}
 		else {
-			h = 1 - inv_chi_square (-2. * rt->spam_prob,
-					2 * rt->processed_tokens);
-			s = 1 - inv_chi_square (-2. * rt->ham_prob,
-					2 * rt->processed_tokens);
-
-			if (isfinite (s) && isfinite (h)) {
-				final_prob = (s + 1.0 - h) / 2.;
-				msg_debug ("<%s> got ham prob %.2f -> %.2f and spam prob %.2f -> %.2f,"
-						" %L tokens processed of %ud total tokens",
-						task->message_id, rt->ham_prob, h, rt->spam_prob, s,
-						rt->processed_tokens, g_tree_nnodes (input));
+			/*
+			 * We have some overflow, hence we need to check which class
+			 * is NaN
+			 */
+			if (isfinite (h)) {
+				final_prob = 1.0;
+				msg_debug ("<%s> spam class is overflowed, as we have no"
+						" ham samples", task->message_id);
+			}
+			else if (isfinite (s)){
+				final_prob = 0.0;
+				msg_debug ("<%s> ham class is overflowed, as we have no"
+						" spam samples", task->message_id);
 			}
 			else {
-				/*
-				 * We have some overflow, hence we need to check which class
-				 * is NaN
-				 */
-				if (isfinite (h)) {
-					final_prob = 1.0;
-					msg_debug ("<%s> spam class is overflowed, as we have no"
-							" ham samples", task->message_id);
-				}
-				else if (isfinite (s)){
-					final_prob = 0.0;
-					msg_debug ("<%s> spam class is overflowed, as we have no"
-							" spam samples", task->message_id);
-				}
-				else {
-					final_prob = 0.5;
-					msg_warn ("<%s> spam and ham classes are both overflowed",
-							task->message_id);
-				}
+				final_prob = 0.5;
+				msg_warn ("<%s> spam and ham classes are both overflowed",
+						task->message_id);
 			}
 		}
 
@@ -228,7 +222,8 @@ bayes_classify (struct classifier_ctx * ctx,
 
 			if (selected_st == NULL) {
 				msg_err (
-					"unexpected classifier error: cannot select desired statfile");
+					"unexpected classifier error: cannot select desired statfile, "
+					"prob: %.4f", final_prob);
 			}
 			else {
 				/* Correctly scale HAM */
