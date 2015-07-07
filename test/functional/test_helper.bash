@@ -1,10 +1,13 @@
+TMPDIR=${BATS_TMPDIR}
+
 function run_rspamd() {
+	TMPDIR=${BATS_TMPDIR}
 	RSPAMD_USER=${RSPAMD_USER:-"nobody"}
 	RSPAMD_GROUP=${RSPAMD_GROUP:-"nogroup"}
 	RSPAMD=${RSPAMD:-"$BATS_TEST_DIRNAME/../../src/rspamd"}
 	
-	if [ -f /tmp/rspamd-bats.log ] ; then rm -f /tmp/rspamd-bats.log ; fi
-	${RSPAMD} -c ${RSPAMD_CONFIG} -u ${RSPAMD_USER} -g ${RSPAMD_GROUP}
+	if [ -f ${TMPDIR}/rspamd-bats.log ] ; then rm -f ${TMPDIR}/rspamd-bats.log ; fi
+	${RSPAMD} -c ${RSPAMD_CONFIG} -u ${RSPAMD_USER} -g ${RSPAMD_GROUP} TMPDIR=${TMPDIR}
 }
 
 
@@ -13,5 +16,5 @@ function teardown() {
 }
 
 function clear_stats() {
-	rm -f /tmp/rspamd-bats-cache.sqlite /tmp/rspamd-bats-bayes.spam /tmp/rspamd-bats-bayes.ham || true	
+	rm -f ${TMPDIR}/rspamd-bats-cache.sqlite ${TMPDIR}/rspamd-bats-bayes.spam ${TMPDIR}/rspamd-bats-bayes.ham || true	
 }
