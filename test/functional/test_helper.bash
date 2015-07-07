@@ -12,7 +12,7 @@ function run_rspamd() {
 
 
 function teardown() {
-	pkill -TERM rspamd
+	pkill -TERM rspamd || true
 }
 
 function clear_stats() {
