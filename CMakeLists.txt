@@ -263,115 +263,84 @@ ENDFUNCTION(INSTALL_IF_NOT_EXISTS)
 
 # Process required package by using FindPackage and calling for INCLUDE_DIRECTORIES and
 # setting list of required libraries
-MACRO(ProcessPackage var _name0)
-	IF(NOT RSPAMD_SEARCH_PATH)
-		PKG_SEARCH_MODULE(${var} "${_name0}" ${ARGN})
-		IF(${var}_FOUND)
-			SET(WITH_${var} 1)
-			IF(ENABLE_STATIC MATCHES "ON")
-				SET(_XPREFIX "${var}_STATIC")
-			ELSE(ENABLE_STATIC MATCHES "ON")
-				SET(_XPREFIX "${var}")
-			ENDIF(ENABLE_STATIC MATCHES "ON")
-			FOREACH(_arg ${${_XPREFIX}_INCLUDE_DIRS})
-				INCLUDE_DIRECTORIES("${_arg}")
-				SET(${var}_INCLUDE "${_arg}")
-			ENDFOREACH(_arg ${${_XPREFIX}_INCLUDE_DIRS})
-			FOREACH(_arg ${${_XPREFIX}_LIBRARY_DIRS})
-				LINK_DIRECTORIES("${_arg}")
-				SET(${var}_LIBRARY "${_arg}")
-			ENDFOREACH(_arg ${${_XPREFIX}_LIBRARY_DIRS})
-			# Handle other CFLAGS and LDFLAGS
-			FOREACH(_arg ${${_XPREFIX}_CFLAGS_OTHER})
-				SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${_arg}")
-			ENDFOREACH(_arg ${${_XPREFIX}_CFLAGS_OTHER})
-			FOREACH(_arg ${${_XPREFIX}_LDFLAGS_OTHER})
-				SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${_arg}")
-			ENDFOREACH(_arg ${${_XPREFIX}_LDFLAGS_OTHER})
-			LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "${${_XPREFIX}_LIBRARIES}")
-		ELSE(${var}_FOUND)
-			# Try some more heuristic
-			FIND_LIBRARY(_lib NAMES "${_name0}" ${ARGN}
-						HINTS
-						"${RSPAMD_SEARCH_PATH}"
-						PATH_SUFFIXES lib64 lib
-						PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS})
-			IF(NOT _lib)
-				MESSAGE(FATAL_ERROR "Packages ${_name0} ${ARGN} could not be found, no library")
-			ENDIF(NOT _lib)
-			
-			FIND_PATH(_incl "${_name0}.h" 
-							HINTS "${RSPAMD_SEARCH_PATH}"
-							PATH_SUFFIXES "include" "include/${_name0}" ${ARGN}
-							PATHS 	${RSPAMD_DEFAULT_INCLUDE_PATHS})
-			IF(NOT _incl)
-				MESSAGE(FATAL_ERROR "Packages ${_name0} ${ARGN} could not be found, no header")
-			ENDIF(NOT _incl)
-			
-			GET_FILENAME_COMPONENT(_lib_path "${_lib}" PATH)
-			INCLUDE_DIRECTORIES("${_incl}")
-			LINK_DIRECTORIES("${_lib_path}")
-			LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ${_lib})
-			SET(${var}_INCLUDE "${_incl}")
-			SET(${var}_LIBRARY "${_lib_path}")
-			MESSAGE(STATUS "Found ${_name0} ${ARGN} in '${_lib_path}' (library) and '${_incl}' (include).")
-		ENDIF(${var}_FOUND)
-	ELSE(NOT RSPAMD_SEARCH_PATH)
-		# Try heuristic first
-		FIND_LIBRARY(_lib NAMES "${_name0}" ${ARGN}
+# Usage:
+# ProcessPackage(VAR [OPTIONAL] [ROOT path] [INCLUDE path]
+#	[LIBRARY path] [INCLUDE_SUFFIXES path1 path2 ...] [LIB_SUFFIXES path1 path2 ...]
+#	[MODULES module1 module2 ...])
+# params:
+# OPTIONAL - do not fail if a package has not been found
+# ROOT - defines root directory for a package
+# INCLUDE - name of the include file to check
+# LIBRARY - name of the library to check 
+# INCLUDE_SUFFIXES - list of include suffixes (relative to ROOT)
+# LIB_SUFFIXES - list of library suffixes
+# MODULES - modules to search using pkg_config
+MACRO(ProcessPackage PKG_NAME)
+	CMAKE_PARSE_ARGUMENTS(PKG "OPTIONAL" "ROOT;INCLUDE;LIBRARY" "INCLUDE_SUFFIXES;LIB_SUFFIXES;MODULES" ${ARGN})
+	IF(NOT PKG_NAME)
+		MESSAGE(FATAL_ERROR "No package name specified")
+	ENDIF()
+	IF(NOT PKG_LIBRARY)
+		SET(PKG_LIBRARY "${PKG_NAME}")
+	ENDIF()
+	IF(NOT PKG_INCLUDE)
+		SET(PKG_INCLUDE "${PKG_NAME}.h")
+	ENDIF()
+
+	IF(NOT PKG_ROOT AND PKG_MODULES)
+		PKG_SEARCH_MODULE(${PKG_NAME} ${PKG_MODULES})
+	ENDIF()
+
+	IF(${PKG_NAME}_FOUND)
+		SET(WITH_${PKG_NAME} 1)
+		IF(ENABLE_STATIC MATCHES "ON")
+			SET(_XPREFIX "${PKG_NAME}_STATIC")
+		ELSE(ENABLE_STATIC MATCHES "ON")
+			SET(_XPREFIX "${PKG_NAME}")
+		ENDIF(ENABLE_STATIC MATCHES "ON")
+		FOREACH(_arg ${${_XPREFIX}_INCLUDE_DIRS})
+			INCLUDE_DIRECTORIES("${_arg}")
+			SET(${var}_INCLUDE "${_arg}")
+		ENDFOREACH(_arg ${${_XPREFIX}_INCLUDE_DIRS})
+		FOREACH(_arg ${${_XPREFIX}_LIBRARY_DIRS})
+			LINK_DIRECTORIES("${_arg}")
+			SET(${var}_LIBRARY "${_arg}")
+		ENDFOREACH(_arg ${${_XPREFIX}_LIBRARY_DIRS})
+		# Handle other CFLAGS and LDFLAGS
+		FOREACH(_arg ${${_XPREFIX}_CFLAGS_OTHER})
+			SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${_arg}")
+		ENDFOREACH(_arg ${${_XPREFIX}_CFLAGS_OTHER})
+		FOREACH(_arg ${${_XPREFIX}_LDFLAGS_OTHER})
+			SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${_arg}")
+		ENDFOREACH(_arg ${${_XPREFIX}_LDFLAGS_OTHER})
+		LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "${${_XPREFIX}_LIBRARIES}")
+	ELSE()
+		# Try some more heuristic
+		FIND_LIBRARY(_lib NAMES ${PKG_LIBRARY}
 					HINTS
-					"${RSPAMD_SEARCH_PATH}"
-					PATH_SUFFIXES lib64 lib
+					"${PKG_ROOT}" "${RSPAMD_SEARCH_PATH}"
+					PATH_SUFFIXES "${PKG_LIB_SUFFIXES}" lib64 lib
 					PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS})
-		IF(_lib)
-			FIND_PATH(_incl "${_name0}.h" 
-							HINTS "${RSPAMD_SEARCH_PATH}"
-							PATH_SUFFIXES "include" "include/${_name0}" ${ARGN}
-							PATHS 	${RSPAMD_DEFAULT_INCLUDE_PATHS})
-			IF(_incl)
-				GET_FILENAME_COMPONENT(_lib_path "${_lib}" PATH)
-				INCLUDE_DIRECTORIES("${_incl}")
-				LINK_DIRECTORIES("${_lib_path}")
-				MESSAGE(STATUS "Found ${_name0} ${ARGN} in '${_lib_path}' (library) and '${_incl}' (include).")
-				SET(${var}_INCLUDE "${_incl}")
-				SET(${var}_LIBRARY "${_lib_path}")
-				LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ${_lib})
-			ENDIF(_incl)
-		ENDIF(_lib)
+		IF(NOT _lib)
+			MESSAGE(FATAL_ERROR "Cannot find library ${PKG_LIBRARY} for package ${PKG_NAME}")
+		ENDIF(NOT _lib)
 		
-		IF(NOT _incl OR NOT _lib)
-			PKG_SEARCH_MODULE(${var} "${_name0}" ${ARGN})
-			IF(${var}_FOUND)
-				SET(WITH_${var} 1)
-				IF(ENABLE_STATIC MATCHES "ON")
-					SET(_XPREFIX "${var}_STATIC")
-				ELSE(ENABLE_STATIC MATCHES "ON")
-					SET(_XPREFIX "${var}")
-				ENDIF(ENABLE_STATIC MATCHES "ON")
-				FOREACH(_arg ${${_XPREFIX}_INCLUDE_DIRS})
-					INCLUDE_DIRECTORIES("${_arg}")
-					SET(${var}_INCLUDE "${_arg}")
-				ENDFOREACH(_arg ${${_XPREFIX}_INCLUDE_DIRS})
-				FOREACH(_arg ${${_XPREFIX}_LIBRARY_DIRS})
-					LINK_DIRECTORIES("${_arg}")
-					SET(${var}_LIBRARY "${_arg}")
-				ENDFOREACH(_arg ${${_XPREFIX}_LIBRARY_DIRS})
-				# Handle other CFLAGS and LDFLAGS
-				FOREACH(_arg ${${_XPREFIX}_CFLAGS_OTHER})
-					SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${_arg}")
-				ENDFOREACH(_arg ${${_XPREFIX}_CFLAGS_OTHER})
-				FOREACH(_arg ${${_XPREFIX}_LDFLAGS_OTHER})
-					SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${_arg}")
-				ENDFOREACH(_arg ${${_XPREFIX}_LDFLAGS_OTHER})
-				LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "${${_XPREFIX}_LIBRARIES}")
-			ELSE(${var}_FOUND)
-				MESSAGE(FATAL_ERROR "Packages ${_name0} ${ARGN} could not be found")
-			ENDIF(${var}_FOUND)
-		ENDIF(NOT _incl OR NOT _lib)
-	ENDIF(NOT RSPAMD_SEARCH_PATH)
-	# Cleanup
-	UNSET(_lib CACHE)
-	UNSET(_incl CACHE)
+		FIND_PATH(_incl "${PKG_INCLUDE}" 
+						HINTS "${PKG_ROOT}" "${RSPAMD_SEARCH_PATH}"
+						PATH_SUFFIXES "${PKG_INCLUDE_SUFFIXES}" "include" 
+						PATHS 	${RSPAMD_DEFAULT_INCLUDE_PATHS})
+		IF(NOT _incl)
+			MESSAGE(FATAL_ERROR "Cannot find header ${PKG_INCLUDE} for package ${PKG_NAME}")
+		ENDIF(NOT _incl)
+		
+		GET_FILENAME_COMPONENT(_lib_path "${_lib}" PATH)
+		INCLUDE_DIRECTORIES("${_incl}")
+		LINK_DIRECTORIES("${_lib_path}")
+		LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ${_lib})
+		SET(${var}_INCLUDE "${_incl}")
+		SET(${var}_LIBRARY "${_lib_path}")
+		MESSAGE(STATUS "Found ${_name0} ${ARGN} in '${_lib_path}' (library) and '${_incl}' (include).")
+	ENDIF(${PKG_NAME}_FOUND)
 ENDMACRO(ProcessPackage name)
 
 MACRO(ADD_PRECOMPILED_HEADER _target _input)
