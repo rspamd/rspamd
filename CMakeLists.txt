@@ -277,7 +277,9 @@ ENDFUNCTION(INSTALL_IF_NOT_EXISTS)
 # MODULES - modules to search using pkg_config
 MACRO(ProcessPackage PKG_NAME)
 
-	CMAKE_PARSE_ARGUMENTS(PKG "OPTIONAL" "ROOT;INCLUDE;LIBRARY" "INCLUDE_SUFFIXES;LIB_SUFFIXES;MODULES" ${ARGN})
+	CMAKE_PARSE_ARGUMENTS(PKG "OPTIONAL" "ROOT;INCLUDE" 
+		"LIBRARY;INCLUDE_SUFFIXES;LIB_SUFFIXES;MODULES" ${ARGN})
+
 	IF(NOT PKG_LIBRARY)
 		SET(PKG_LIBRARY "${PKG_NAME}")
 	ENDIF()
@@ -288,6 +290,8 @@ MACRO(ProcessPackage PKG_NAME)
 	IF(NOT PKG_ROOT AND PKG_MODULES)
 		PKG_SEARCH_MODULE(${PKG_NAME} ${PKG_MODULES})
 	ENDIF()
+
+	MESSAGE(STATUS ${CMAKE_INCLUDE_PATH} ${CMAKE_FRAMEWORK_PATH} ${CMAKE_PREFIX_PATH} ${CMAKE_LIBRARY_ARCHITECTURE} "test")
 
 	IF(${PKG_NAME}_FOUND)
 		MESSAGE(STATUS "Found package ${PKG_NAME} in pkg-config modules ${PKG_MODULES}")
@@ -317,9 +321,9 @@ MACRO(ProcessPackage PKG_NAME)
 	ELSE()
 		# Try some more heuristic
 		FIND_LIBRARY(_lib NAMES ${PKG_LIBRARY}
-					HINTS
-					"${PKG_ROOT}" "${RSPAMD_SEARCH_PATH}"
+					HINTS "${PKG_ROOT}" "${RSPAMD_SEARCH_PATH}"
 					PATH_SUFFIXES "${PKG_LIB_SUFFIXES}" lib64 lib
+					NO_DEFAULT_PATH
 					PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS})
 		IF(NOT _lib)
 			MESSAGE(FATAL_ERROR "Cannot find library ${PKG_LIBRARY} for package ${PKG_NAME}")
@@ -327,7 +331,8 @@ MACRO(ProcessPackage PKG_NAME)
 		
 		FIND_PATH(_incl "${PKG_INCLUDE}" 
 						HINTS "${PKG_ROOT}" "${RSPAMD_SEARCH_PATH}"
-						PATH_SUFFIXES "${PKG_INCLUDE_SUFFIXES}" "include" 
+						PATH_SUFFIXES "${PKG_INCLUDE_SUFFIXES}" "include"
+						NO_DEFAULT_PATH
 						PATHS 	${RSPAMD_DEFAULT_INCLUDE_PATHS})
 		IF(NOT _incl)
 			MESSAGE(FATAL_ERROR "Cannot find header ${PKG_INCLUDE} for package ${PKG_NAME}")
@@ -339,7 +344,8 @@ MACRO(ProcessPackage PKG_NAME)
 		LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ${_lib})
 		SET(${PKG_NAME}_INCLUDE "${_incl}")
 		SET(${PKG_NAME}_LIBRARY "${_lib_path}")
-		MESSAGE(STATUS "Found ${PKG_NAME} in '${_lib_path}' (library) and '${_incl}' (include).")
+		SET(${PKG_NAME}_FOUND 1)
+		MESSAGE(STATUS "Found package ${PKG_NAME} in '${_lib_path}' (${_lib}) and '${_incl}' (${PKG_INCLUDE}).")
 	ENDIF(${PKG_NAME}_FOUND)
 ENDMACRO(ProcessPackage name)
 
@@ -408,25 +414,15 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
 	ENDIF(ENABLE_REDIRECTOR MATCHES "ON")
 	MESSAGE(STATUS "Configuring for FreeBSD")
 	# Find util library
-
-	FIND_LIBRARY(LIBUTIL_LIBRARY NAMES util 
-					HINTS "${RSPAMD_SEARCH_PATH}"
-						PATH_SUFFIXES lib64 lib
-					  PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS}
-					 DOC "Path where the libutil library can be found")
-	IF(LIBUTIL_LIBRARY)
-		FIND_FILE(_LIBUTIL_H 
-					HINTS "${RSPAMD_SEARCH_PATH}" 
-					NAMES libutil.h PATH ${RSPAMD_DEFAULT_INCLUDE_PATHS}
-					PATH_SUFFIXES include
-					DOC "Path to libutil header")
-		IF(_LIBUTIL_H)
-			SET(HAVE_LIBUTIL_H 1)
-			LIST(APPEND RSPAMD_REQUIRED_LIBRARIES util)
-			CHECK_FUNCTION_EXISTS(pidfile_open HAVE_PIDFILE)
-			CHECK_FUNCTION_EXISTS(pidfile_fileno HAVE_PIDFILE_FILENO)
-		ENDIF(_LIBUTIL_H)
-	ENDIF(LIBUTIL_LIBRARY)
+	ProcessPackage(LIBUTIL LIBRARY util INCLUDE libutil.h
+		ROOT ${LIBUTIL_ROOT_DIR} OPTIONAL)
+	IF(LIBUTIL_FOUND)
+		SET(HAVE_LIBUTIL_H 1)
+		LIST(APPEND RSPAMD_REQUIRED_LIBRARIES util)
+		LIST(APPEND CMAKE_REQUIRED_LIBRARIES util)
+		CHECK_FUNCTION_EXISTS(pidfile_open HAVE_PIDFILE)
+		CHECK_FUNCTION_EXISTS(pidfile_fileno HAVE_PIDFILE_FILENO)
+	ENDIF()
 	SET(POE_LOOP "Loop::Kqueue")
 	SET(TAR "gtar")
 ENDIF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
@@ -439,6 +435,7 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 	ENDIF(ENABLE_LUAJIT MATCHES "ON")
 	MESSAGE(STATUS "Configuring for Darwin")
 	SET(TAR "gnutar")
+	SET(CMAKE_FIND_FRAMEWORK "LAST")
 ENDIF(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 
 IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -545,15 +542,17 @@ IF(OPENSSL_FOUND)
 ENDIF(OPENSSL_FOUND)
 
 ProcessPackage(GLIB2 LIBRARY glib-2.0 INCLUDE glib.h INCLUDE_SUFFIXES include/glib 
-	ROOT ${GLIB_ROOT} MODULES glib-2.0>=2.28)
+	ROOT ${GLIB_ROOT_DIR} MODULES glib-2.0>=2.28)
 ProcessPackage(PCRE LIBRARY pcre INCLUDE pcre.h INCLUDE_SUFFIXES include/pcre 
-	ROOT ${PCRE_ROOT} MODULES pcre libpcre pcre3 libpcre3)
-ProcessPackage(GMIME LIBRARY gmime-2.4 INCLUDE gmime.h INCLUDE_SUFFIXES include/gmime 
-	ROOT ${GMIME_ROOT} MODULES gmime-2.6 gmime-2.4 gmime-2.0)
+	ROOT ${PCRE_ROOT_DIR} MODULES pcre libpcre pcre3 libpcre3)
+ProcessPackage(GMIME LIBRARY gmime-2.6 gmime-2.4 gmime-2.2 gmime-2 INCLUDE gmime.h INCLUDE_SUFFIXES include/gmime 
+	ROOT ${GMIME_ROOT_DIR} MODULES gmime-2.6 gmime-2.4 gmime-2.0)
 ProcessPackage(LIBEVENT LIBRARY event INCLUDE event.h INCLUDE_SUFFIXES include/event 
-	ROOT ${EVENT_ROOT} MODULES event libevent)
+	ROOT ${LIBEVENT_ROOT_DIR} MODULES event libevent)
 ProcessPackage(SQLITE3 LIBRARY sqlite3 INCLUDE sqlite3.h INCLUDE_SUFFIXES include/sqlite3 include/sqlite 
-	ROOT ${SQLITE3_ROOT} MODULES sqlite3 sqlite)
+	ROOT ${SQLITE3_ROOT_DIR} MODULES sqlite3 sqlite)
+ProcessPackage(ICONV LIBRARY iconv libiconv libiconv-2 c INCLUDE iconv.h INCLUDE_SUFFIXES include/libiconv
+	ROOT ${ICONV_ROOT_DIR} MODULES iconv)
 IF(GMIME2_VERSION VERSION_GREATER "2.4.0" OR NOT GMIME2_VERSION)
 	SET(GMIME24 1)
 ENDIF()
@@ -567,7 +566,7 @@ ENDIF(PCRE_LIBRARY)
 # Libhiredis pc file is so special
 IF(ENABLE_HIREDIS MATCHES "ON")
 	ProcessPackage(HIREDIS LIBRARY hiredis INCLUDE hiredis.h INCLUDE_SUFFIXES include/hiredis
-		ROOT ${HIREDIS_ROOT} MODULES hiredis libhiredis)
+		ROOT ${HIREDIS_ROOT_DIR} MODULES hiredis libhiredis)
 	SET(WITH_HIREDIS 1)
 ENDIF(ENABLE_HIREDIS MATCHES "ON")
 
@@ -576,7 +575,7 @@ ENDIF(ENABLE_HIREDIS MATCHES "ON")
 
 IF(ENABLE_GPERF_TOOLS MATCHES "ON")
 	ProcessPackage(GPERF LIBRARY profiler INCLUDE profiler.h INCLUDE_SUFFIXES include/google
-		ROOT ${GPERF_ROOT})
+		ROOT ${GPERF_ROOT_DIR})
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-omit-frame-pointer")
 	SET(WITH_GPERF_TOOLS 1)
 ENDIF(ENABLE_GPERF_TOOLS MATCHES "ON")
@@ -737,42 +736,11 @@ CHECK_FUNCTION_EXISTS(clock_gettime HAVE_CLOCK_GETTIME)
 CHECK_FUNCTION_EXISTS(memset_s HAVE_MEMSET_S)
 CHECK_FUNCTION_EXISTS(explicit_bzero HAVE_EXPLICIT_BZERO)
 CHECK_C_SOURCE_COMPILES(
-"#include <stddef.h>
-void cmkcheckweak() __attribute__((weak));
-int main(int argc, char** argv) {
-  return cmkcheckweak == NULL;
-}" HAVE_WEAK_SYMBOLS)
-
-IF(NOT ICONV_ROOT_DIR)
-	FIND_PATH(ICONV_INCLUDE_DIR iconv.h 
-			HINTS "${RSPAMD_SEARCH_PATH}"
-			PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS}
-			PATH_SUFFIXES include include/libiconv
-			DOC "Path where the libiconv headers can be found")
-	FIND_LIBRARY(ICONV_LIBRARIES NAMES iconv libiconv libiconv-2 c
-			HINTS "${RSPAMD_SEARCH_PATH}"
-			PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS}
-			PATH_SUFFIXES lib64 lib
-			DOC "Path where the libiconv library can be found")
-ELSE(NOT ICONV_ROOT_DIR)
-	FIND_PATH(ICONV_INCLUDE_DIR iconv.h 
-				HINTS "${RSPAMD_SEARCH_PATH}"
-				 PATHS "${ICONV_ROOT_DIR}"
-				 PATH_SUFFIXES include include/libiconv
-				 DOC "Path where the libiconv headers can be found"
-				 NO_DEFAULT_PATH)
-	FIND_LIBRARY(ICONV_LIBRARIES NAMES iconv libiconv libiconv-2 c
-				HINTS "${RSPAMD_SEARCH_PATH}"
-				 PATHS "${ICONV_ROOT_DIR}"
-				 PATH_SUFFIXES lib64 lib
-				 DOC "Path where the libiconv library can be found"
-				 NO_DEFAULT_PATH)
-ENDIF(NOT ICONV_ROOT_DIR)
-IF(ICONV_INCLUDE_DIR AND ICONV_LIBRARIES)
-	SET(ICONV_FOUND TRUE)
-ENDIF(ICONV_INCLUDE_DIR AND ICONV_LIBRARIES)
-INCLUDE_DIRECTORIES(${ICONV_INCLUDE_DIR})
-LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ${ICONV_LIBRARIES})
+	"#include <stddef.h>
+	void cmkcheckweak() __attribute__((weak));
+	int main(int argc, char** argv) {
+  		return cmkcheckweak == NULL;
+	}" HAVE_WEAK_SYMBOLS)
 
 IF(ICONV_FOUND)
 	CHECK_C_SOURCE_COMPILES("
@@ -787,12 +755,6 @@ int main(){
 	return 0;
 }
 " ICONV_SECOND_ARGUMENT_IS_CONST)
-ENDIF(ICONV_FOUND)
-
-IF(ICONV_FOUND)
-	MESSAGE(STATUS "Found Iconv: ${ICONV_LIBRARIES}")
-ELSE(ICONV_FOUND)
-	MESSAGE(FATAL_ERROR "Could not find Iconv")
 ENDIF(ICONV_FOUND)
 
 # Check macros
