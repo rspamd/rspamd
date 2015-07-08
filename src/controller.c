@@ -297,7 +297,7 @@ static gboolean rspamd_controller_check_password(
 	const struct rspamd_controller_pbkdf *pbkdf = NULL;
 
 	/* Access list logic */
-	if (!rspamd_inet_address_get_af (session->from_addr) == AF_UNIX) {
+	if (rspamd_inet_address_get_af (session->from_addr) == AF_UNIX) {
 		msg_info ("allow unauthorized connection from a unix socket");
 		return TRUE;
 	}
