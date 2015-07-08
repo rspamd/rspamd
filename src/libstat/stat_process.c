@@ -219,6 +219,15 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 			backend_runtime = bk->runtime (task, stcf, op != RSPAMD_CLASSIFY_OP,
 					bk->ctx);
 
+			if (backend_runtime == NULL && op != RSPAMD_CLASSIFY_OP) {
+				/* Assume backend absence as fatal error */
+				g_set_error (err, rspamd_stat_quark(), 500,
+					"cannot open backend for statfile %s", stcf->symbol);
+				g_list_free (cl_runtimes);
+
+				return NULL;
+			}
+
 			st_runtime = rspamd_mempool_alloc0 (task->task_pool,
 					sizeof (*st_runtime));
 			st_runtime->st = stcf;
