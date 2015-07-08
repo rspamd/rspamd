@@ -44,7 +44,8 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 
 @test "Test rspamd learn" {
 	clear_stats
-	export RSPAMD_CONFIG="$BATS_TEST_DIRNAME/configs/stats.conf"
+	export RSPAMD_CONFIG="$BATS_TEST_DIRNAME/configs/stats.conf" \
+		STATSDIR=${BATS_TMPDIR}
 	run_rspamd
 	run ${RSPAMC} -h localhost:56790 \
 		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
@@ -66,7 +67,8 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 
 @test "Test rspamd re-learn" {
 	clear_stats
-	export RSPAMD_CONFIG="$BATS_TEST_DIRNAME/configs/stats.conf"
+	export RSPAMD_CONFIG="$BATS_TEST_DIRNAME/configs/stats.conf" \
+		STATSDIR=${BATS_TMPDIR}
 	run_rspamd
 	run ${RSPAMC} -h localhost:56790 \
 		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
@@ -96,7 +98,8 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 
 @test "Test learn message with an empty part" {
 	clear_stats
-	export RSPAMD_CONFIG="$BATS_TEST_DIRNAME/configs/stats.conf"
+	export RSPAMD_CONFIG="$BATS_TEST_DIRNAME/configs/stats.conf" \
+		STATSDIR=${BATS_TMPDIR}
 	run_rspamd
 	run ${RSPAMC} -h localhost:56790 \
 		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
@@ -121,7 +124,8 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 	sed -e 's|@@LUA_SCRIPT@@|${CURDIR}/functional/cases/deps.lua|' < \
 		"$BATS_TEST_DIRNAME/configs/lua_test.conf" > \
 		"$BATS_TMPDIR/rspamd.conf"
-	export RSPAMD_CONFIG="$BATS_TMPDIR/rspamd.conf"
+	export RSPAMD_CONFIG="$BATS_TMPDIR/rspamd.conf" \
+		STATSDIR=${BATS_TMPDIR}
 	run_rspamd
 	run ${RSPAMC} -h localhost:56789 \
 		symbols \
