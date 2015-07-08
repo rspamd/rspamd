@@ -119,6 +119,38 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 	clear_stats
 }
 
+@test "Test rspamd re-learn sqlite3 backend" {
+	export RSPAMD_CONFIG="$BATS_TEST_DIRNAME/configs/stats.conf" \
+		STATSDIR=${BATS_TMPDIR} \
+		STATS_BACKEND="sqlite3"
+	clear_stats
+	run_rspamd
+	run ${RSPAMC} -h localhost:56790 \
+		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
+		learn_spam \
+		"$BATS_TEST_DIRNAME/messages/spam_message.eml"
+	[ "$status" -eq 0 ]
+	
+	echo $output | egrep 'success.*true'
+	
+	run ${RSPAMC} -h localhost:56790 \
+		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
+		learn_ham \
+		"$BATS_TEST_DIRNAME/messages/spam_message.eml"
+	[ "$status" -eq 0 ]
+	
+	echo $output | egrep 'success.*true'
+	
+	run ${RSPAMC} -h localhost:56789 \
+		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
+		symbols \
+		"$BATS_TEST_DIRNAME/messages/spam_message.eml"
+	[ "$status" -eq 0 ]
+	
+	echo $output | grep 'BAYES_HAM'
+	clear_stats
+}
+
 @test "Test learn message with bad statfiles" {
 	export RSPAMD_CONFIG="$BATS_TEST_DIRNAME/configs/stats.conf" \
 		STATSDIR=/non/existent
@@ -134,7 +166,6 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 }
 
 @test "Test rspamd dependencies" {
-	clear_stats
 	sed -e 's|@@LUA_SCRIPT@@|${CURDIR}/functional/cases/deps.lua|' < \
 		"$BATS_TEST_DIRNAME/configs/lua_test.conf" > \
 		"$BATS_TMPDIR/rspamd.conf"
@@ -147,5 +178,4 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 	[ "$status" -eq 0 ]
 	
 	echo $output | grep 'DEP10'
-	clear_stats
 }
