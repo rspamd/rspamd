@@ -5,6 +5,7 @@
 #
 
 ############################# INITIAL SECTION #############################################
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8.0 FATAL_ERROR)
 
 PROJECT(rspamd C)
 ENABLE_LANGUAGE(ASM)
@@ -24,7 +25,6 @@ ENDIF(NOT RSPAMD_USER)
 # Default for SysV Init
 SET(RSPAMD_WORKER_NORMAL "*:11333")
 SET(RSPAMD_WORKER_CONTROLLER "*:11334")
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8.0 FATAL_ERROR)
 SET_PROPERTY(GLOBAL PROPERTY ALLOW_DUPLICATE_CUSTOM_TARGETS 1)
 
 ############################# OPTIONS SECTION #############################################
@@ -108,7 +108,7 @@ IF(NOT SYSTEMDDIR)
 ENDIF(NOT SYSTEMDDIR)
 
 SET(RSPAMD_DEFAULT_INCLUDE_PATHS "/opt;/usr;/usr/local;/opt/local;/usr/pkg;/opt/csw;/sw")
-SET(RSPAMD_DEFAULT_LIBRARY_PATHS "/usr/local;/usr/pkg;/usr;~/Library/Frameworks;/Library/Frameworks;/sw;/opt/local;/opt/csw;/opt")
+SET(RSPAMD_DEFAULT_LIBRARY_PATHS "/usr/local;/usr/pkg;/usr;/Library/Frameworks;/sw;/opt/local;/opt/csw;/opt")
 
 ############################# INCLUDE SECTION #############################################
 
@@ -117,11 +117,11 @@ INCLUDE(CheckFunctionExists)
 INCLUDE(CheckSymbolExists)
 INCLUDE(CheckCSourceCompiles)
 INCLUDE(CheckLibraryExists)
-INCLUDE(FindPkgConfig)
 INCLUDE(CheckCCompilerFlag)
-INCLUDE(FindPerl)
-INCLUDE(FindOpenSSL)
 INCLUDE(CMakeParseArguments)
+
+FIND_PACKAGE(PkgConfig REQUIRED)
+FIND_PACKAGE(Perl REQUIRED)
 
 ############################# MACRO SECTION #############################################
 
@@ -290,9 +290,7 @@ MACRO(ProcessPackage PKG_NAME)
 	IF(NOT PKG_ROOT AND PKG_MODULES)
 		PKG_SEARCH_MODULE(${PKG_NAME} ${PKG_MODULES})
 	ENDIF()
-
-	MESSAGE(STATUS ${CMAKE_INCLUDE_PATH} ${CMAKE_FRAMEWORK_PATH} ${CMAKE_PREFIX_PATH} ${CMAKE_LIBRARY_ARCHITECTURE} "test")
-
+	
 	IF(${PKG_NAME}_FOUND)
 		MESSAGE(STATUS "Found package ${PKG_NAME} in pkg-config modules ${PKG_MODULES}")
 		SET(WITH_${PKG_NAME} 1)
@@ -326,7 +324,11 @@ MACRO(ProcessPackage PKG_NAME)
 					NO_DEFAULT_PATH
 					PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS})
 		IF(NOT _lib)
-			MESSAGE(FATAL_ERROR "Cannot find library ${PKG_LIBRARY} for package ${PKG_NAME}")
+			IF(OPTIONAL)
+				MESSAGE("Cannot find library ${PKG_LIBRARY} for package ${PKG_NAME}")
+			ELSE()
+				MESSAGE(FATAL_ERROR "Cannot find library ${PKG_LIBRARY} for package ${PKG_NAME}")
+			ENDIF()
 		ENDIF(NOT _lib)
 		
 		FIND_PATH(_incl "${PKG_INCLUDE}" 
@@ -335,18 +337,27 @@ MACRO(ProcessPackage PKG_NAME)
 						NO_DEFAULT_PATH
 						PATHS 	${RSPAMD_DEFAULT_INCLUDE_PATHS})
 		IF(NOT _incl)
-			MESSAGE(FATAL_ERROR "Cannot find header ${PKG_INCLUDE} for package ${PKG_NAME}")
+			IF(OPTIONAL)
+				MESSAGE("Cannot find header ${PKG_INCLUDE} for package ${PKG_NAME}")
+			ELSE()
+				MESSAGE(FATAL_ERROR "Cannot find header ${PKG_INCLUDE} for package ${PKG_NAME}")
+			ENDIF()
 		ENDIF(NOT _incl)
 		
-		GET_FILENAME_COMPONENT(_lib_path "${_lib}" PATH)
-		INCLUDE_DIRECTORIES("${_incl}")
-		LINK_DIRECTORIES("${_lib_path}")
-		LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ${_lib})
-		SET(${PKG_NAME}_INCLUDE "${_incl}")
-		SET(${PKG_NAME}_LIBRARY "${_lib_path}")
-		SET(${PKG_NAME}_FOUND 1)
-		MESSAGE(STATUS "Found package ${PKG_NAME} in '${_lib_path}' (${_lib}) and '${_incl}' (${PKG_INCLUDE}).")
+		IF(_incl AND _lib)
+			GET_FILENAME_COMPONENT(_lib_path "${_lib}" PATH)
+			INCLUDE_DIRECTORIES("${_incl}")
+			LINK_DIRECTORIES("${_lib_path}")
+			LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ${_lib})
+			SET(${PKG_NAME}_INCLUDE "${_incl}")
+			SET(${PKG_NAME}_LIBRARY "${_lib_path}")
+			SET(${PKG_NAME}_FOUND 1)
+			MESSAGE(STATUS "Found package ${PKG_NAME} in '${_lib_path}' (${_lib}) and '${_incl}' (${PKG_INCLUDE}).")
+		ENDIF()
 	ENDIF(${PKG_NAME}_FOUND)
+
+	UNSET(_lib CACHE)
+	UNSET(_incl CACHE)
 ENDMACRO(ProcessPackage name)
 
 MACRO(ADD_PRECOMPILED_HEADER _target _input)
@@ -435,7 +446,7 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 	ENDIF(ENABLE_LUAJIT MATCHES "ON")
 	MESSAGE(STATUS "Configuring for Darwin")
 	SET(TAR "gnutar")
-	SET(CMAKE_FIND_FRAMEWORK "LAST")
+	SET(CMAKE_FIND_FRAMEWORK "NEVER")
 ENDIF(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 
 IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -553,6 +564,9 @@ ProcessPackage(SQLITE3 LIBRARY sqlite3 INCLUDE sqlite3.h INCLUDE_SUFFIXES includ
 	ROOT ${SQLITE3_ROOT_DIR} MODULES sqlite3 sqlite)
 ProcessPackage(ICONV LIBRARY iconv libiconv libiconv-2 c INCLUDE iconv.h INCLUDE_SUFFIXES include/libiconv
 	ROOT ${ICONV_ROOT_DIR} MODULES iconv)
+ProcessPackage(OPENSSL LIBRARY crypto INCLUDE opensslconf.h INCLUDE_SUFFIXES include/openssl
+	ROOT ${OPENSSL_ROOT_DIR} MODULES openssl)
+
 IF(GMIME2_VERSION VERSION_GREATER "2.4.0" OR NOT GMIME2_VERSION)
 	SET(GMIME24 1)
 ENDIF()
