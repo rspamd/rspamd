@@ -43,9 +43,9 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 }
 
 @test "Test rspamd learn" {
-	clear_stats
 	export RSPAMD_CONFIG="$BATS_TEST_DIRNAME/configs/stats.conf" \
 		STATSDIR=${BATS_TMPDIR}
+	clear_stats
 	run_rspamd
 	run ${RSPAMC} -h localhost:56790 \
 		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
@@ -66,9 +66,9 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 }
 
 @test "Test rspamd re-learn" {
-	clear_stats
 	export RSPAMD_CONFIG="$BATS_TEST_DIRNAME/configs/stats.conf" \
 		STATSDIR=${BATS_TMPDIR}
+	clear_stats
 	run_rspamd
 	run ${RSPAMC} -h localhost:56790 \
 		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
@@ -97,9 +97,9 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 }
 
 @test "Test learn message with an empty part" {
-	clear_stats
 	export RSPAMD_CONFIG="$BATS_TEST_DIRNAME/configs/stats.conf" \
 		STATSDIR=${BATS_TMPDIR}
+	clear_stats
 	run_rspamd
 	run ${RSPAMC} -h localhost:56790 \
 		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
@@ -117,6 +117,20 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 	
 	echo $output | grep 'BAYES_SPAM'
 	clear_stats
+}
+
+@test "Test learn message with bad statfiles" {
+	export RSPAMD_CONFIG="$BATS_TEST_DIRNAME/configs/stats.conf" \
+		STATSDIR=/non/existent
+	run_rspamd
+	run ${RSPAMC} -h localhost:56790 \
+		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
+		learn_spam \
+		"$BATS_TEST_DIRNAME/messages/empty_part.eml"
+	[ "$status" -eq 0 ]
+	
+	echo $output >&2
+	echo $output | egrep 'cannot open backend'
 }
 
 @test "Test rspamd dependencies" {
