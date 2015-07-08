@@ -24,9 +24,12 @@
 #include "config.h"
 #include "main.h"
 #include "stat_internal.h"
-#include "hiredis.h"
-#include "adapters/libevent.h"
 #include "upstream.h"
+
+#ifdef WITH_HIREDIS
+#include "hiredis/hiredis.h"
+#include "hiredis/adapters/libevent.h"
+#endif
 
 #define REDIS_CTX(p) (struct redis_stat_ctx *)(p)
 #define REDIS_RUNTIME(p) (struct redis_stat_runtime *)(p)

@@ -25,9 +25,9 @@
 #include "dns.h"
 
 #ifdef WITH_HIREDIS
-#include "hiredis.h"
-#include "async.h"
-#include "adapters/libevent.h"
+#include "hiredis/hiredis.h"
+#include "hiredis/async.h"
+#include "hiredis/adapters/libevent.h"
 #endif
 
 #define REDIS_DEFAULT_TIMEOUT 1.0
