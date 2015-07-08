@@ -11,26 +11,34 @@ SET(SIPHASHSRC ${CMAKE_CURRENT_SOURCE_DIR}/siphash/siphash.c
 
 # For now we support only x86_64 architecture with optimizations
 IF(${ARCH} STREQUAL "x86_64")
-	ASM_OP(HAVE_AVX2 "vpaddq %ymm0, %ymm0, %ymm0" "avx2")
-	ASM_OP(HAVE_AVX "vpaddq %xmm0, %xmm0, %xmm0" "avx")
-	ASM_OP(HAVE_SSE2 "pmuludq %xmm0, %xmm0" "sse2")
-	ASM_OP(HAVE_SSE3 "lddqu 0(%esi), %xmm0" "sse3")
-	ASM_OP(HAVE_SSSE3 "pshufb %xmm0, %xmm0" "ssse3")
-	ASM_OP(HAVE_SSE41 "pblendw \$0, %xmm0, %xmm0" "sse41")
+	SET(ASM_CODE "vpaddq %ymm0, %ymm0, %ymm0")
+	ASM_OP(HAVE_AVX2 "avx2")
+	SET(ASM_CODE "vpaddq %xmm0, %xmm0, %xmm0")
+	ASM_OP(HAVE_AVX "avx")
+	SET(ASM_CODE "pmuludq %xmm0, %xmm0")
+	ASM_OP(HAVE_SSE2 "sse2")
+	SET(ASM_CODE "lddqu 0(%esi), %xmm0")
+	ASM_OP(HAVE_SSE3 "sse3")
+	SET(ASM_CODE "pshufb %xmm0, %xmm0")
+	ASM_OP(HAVE_SSSE3 "ssse3")
+	SET(ASM_CODE "pblendw \$0, %xmm0, %xmm0")
+	ASM_OP(HAVE_SSE41 "sse41")
 	
-	ASM_OP(HAVE_SLASHMACRO "
+	SET(ASM_CODE "
 	.macro TEST1 op
 	\\op %eax, %eax
 	.endm
 	TEST1 xorl
-	" "slash macro convention")
+	")
+	ASM_OP(HAVE_SLASHMACRO "slash macro convention")
 	
-	ASM_OP(HAVE_DOLLARMACRO "
+	SET(ASM_CODE "
 	.macro TEST1 op
 	$0 %eax, %eax
 	.endm
 	TEST1 xorl
-	" "dollar macro convention")
+	")
+	ASM_OP(HAVE_DOLLARMACRO "dollar macro convention")
 	
 	SET(CURVESRC ${CMAKE_CURRENT_SOURCE_DIR}/curve25519/curve25519-donna-c64.c)
 	SET(POLYSRC ${POLYSRC} ${CMAKE_CURRENT_SOURCE_DIR}/poly1305/ref-64.c)
