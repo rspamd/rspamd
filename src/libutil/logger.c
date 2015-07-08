@@ -226,7 +226,7 @@ rspamd_log_close_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 				}
 				/* It is safe to use temporary buffer here as it is not static */
 				file_log_function (NULL,
-					__FUNCTION__,
+					G_STRFUNC,
 					rspamd_log->cfg->log_level,
 					tmpbuf,
 					TRUE,
@@ -628,7 +628,7 @@ file_log_function (const gchar * log_domain,
 						arg);
 				}
 				file_log_function (log_domain,
-					__FUNCTION__,
+					G_STRFUNC,
 					log_level,
 					tmpbuf,
 					forced,
@@ -665,7 +665,7 @@ file_log_function (const gchar * log_domain,
 					rspamd_log->saved_function = NULL;
 				}
 				file_log_function (log_domain,
-					__FUNCTION__,
+					G_STRFUNC,
 					log_level,
 					tmpbuf,
 					forced,

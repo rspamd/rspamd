@@ -33,7 +33,7 @@
 #define G_DISPATCHER_ERROR dispatcher_error_quark ()
 #define debug_ip(...) rspamd_conditional_debug (rspamd_main->logger, \
 		NULL, \
-		__FUNCTION__, \
+		G_STRFUNC, \
 		__VA_ARGS__)
 
 static void dispatcher_cb (gint fd, short what, void *arg);

@@ -174,14 +174,14 @@ lua_common_log_line (GLogLevelFlags level, lua_State *L, const gchar *msg)
 		if (level == G_LOG_LEVEL_DEBUG) {
 			rspamd_conditional_debug (rspamd_main->logger,
 				NULL,
-				__FUNCTION__,
+				G_STRFUNC,
 				"%s",
 				msg);
 		}
 		else {
 			rspamd_common_log_function (rspamd_main->logger,
 				level,
-				__FUNCTION__,
+				G_STRFUNC,
 				"%s",
 				msg);
 		}
