@@ -12,7 +12,13 @@ function run_rspamd() {
 
 
 function teardown() {
-	pkill -TERM rspamd || true
+	( 
+	pgrep rspamd > /dev/null 2>&1
+	while [ $? -eq 0 ] ; do
+		pkill -TERM rspamd || true 
+		pgrep rspamd > /dev/null 2>&1
+	done
+	) || true
 }
 
 function clear_stats() {
