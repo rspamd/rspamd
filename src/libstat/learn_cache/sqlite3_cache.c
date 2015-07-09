@@ -33,7 +33,7 @@
 #include <sqlite3.h>
 
 static const char *create_tables_sql =
-		"BEGIN;"
+		"BEGIN IMMEDIATE;"
 		"CREATE TABLE IF NOT EXISTS learns("
 		"id INTEGER PRIMARY KEY,"
 		"flag INTEGER NOT NULL,"
@@ -54,11 +54,13 @@ rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
 	struct rspamd_stat_sqlite3_ctx *new = NULL;
 	struct rspamd_classifier_config *clf;
 	const ucl_object_t *obj, *elt;
+	static const char sqlite_wal[] = "PRAGMA journal_mode=WAL;",
+			fallback_journal[] = "PRAGMA journal_mode=OFF;";
 	GList *cur;
 	gchar dbpath[PATH_MAX];
 	sqlite3 *sqlite;
 	gboolean has_sqlite_cache = FALSE;
-	gint rc;
+	gint rc, fd;
 
 	rspamd_snprintf (dbpath, sizeof (dbpath), SQLITE_CACHE_PATH);
 	cur = cfg->classifiers;
@@ -93,12 +95,20 @@ rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
 
 	if (has_sqlite_cache) {
 		if ((rc = sqlite3_open_v2 (dbpath, &sqlite,
-				SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE|SQLITE_OPEN_NOMUTEX, NULL))
+				SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE, NULL))
 				!= SQLITE_OK) {
-			msg_err ("Cannot open sqlite db %s: %s", SQLITE_CACHE_PATH,
+			msg_err ("Cannot open sqlite db %s: %s", dbpath,
 					sqlite3_errmsg (sqlite));
 
 			return NULL;
+		}
+		else {
+			msg_debug ("opened sqlite cache at the path %s", dbpath);
+		}
+
+		if (sqlite3_exec (sqlite, sqlite_wal, NULL, NULL, NULL) != SQLITE_OK) {
+			msg_warn ("WAL mode is not supported, locking issues might occur");
+			sqlite3_exec (sqlite, fallback_journal, NULL, NULL, NULL);
 		}
 
 		if ((rc = sqlite3_exec (sqlite, create_tables_sql, NULL, NULL, NULL))
@@ -106,6 +116,8 @@ rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
 			msg_err ("Cannot initialize sqlite db %s: %s", SQLITE_CACHE_PATH,
 					sqlite3_errmsg (sqlite));
 			sqlite3_close (sqlite);
+			rspamd_file_unlock (fd, FALSE);
+			close (fd);
 
 			return NULL;
 		}
@@ -122,9 +134,14 @@ rspamd_stat_cache_sqlite3_check (const guchar *h, gsize len, gboolean is_spam,
 		struct rspamd_stat_sqlite3_ctx *ctx)
 {
 	static const gchar select_sql[] = "SELECT flag FROM learns WHERE digest=?1";
-	static const gchar insert_sql[] = "INSERT INTO learns(digest, flag) VALUES "
-				"(?1, ?2);";
-	static const gchar update_sql[] = "UPDATE learns SET flag=?1 WHERE digest=?2";
+	static const gchar insert_sql[] = ""
+			""
+			"INSERT INTO learns(digest, flag) VALUES (?1, ?2);"
+			"";
+	static const gchar update_sql[] = ""
+			""
+			"UPDATE learns SET flag=?1 WHERE digest=?2;"
+			"";
 	sqlite3_stmt *st = NULL;
 	gint rc, ret = RSPAMD_LEARN_OK, flag;
 
@@ -151,33 +168,47 @@ rspamd_stat_cache_sqlite3_check (const guchar *h, gsize len, gboolean is_spam,
 			/* Need to relearn */
 			if ((rc = sqlite3_prepare_v2 (ctx->db, update_sql,
 					-1, &st, NULL)) != SQLITE_OK) {
-				msg_err ("Cannot prepare sql %s: %s", update_sql,
+				msg_err ("cannot prepare sql %s: %s", update_sql,
 						sqlite3_errmsg (ctx->db));
 			}
 			else {
 				sqlite3_bind_int (st, 1, is_spam ? 1 : 0);
 				sqlite3_bind_text (st, 2, h, len, SQLITE_STATIC);
-				sqlite3_step (st);
+
+				if ((rc = sqlite3_step (st)) != SQLITE_DONE) {
+					msg_err ("error during executing sql %s: %s", update_sql,
+							sqlite3_errmsg (ctx->db));
+				}
+
 				sqlite3_finalize (st);
 			}
 
 			return RSPAMD_LEARN_UNLEARN;
 		}
 	}
-	else {
+	else if (rc != SQLITE_ERROR && rc != SQLITE_BUSY) {
 		/* Insert result new id */
 		sqlite3_finalize (st);
 		if ((rc = sqlite3_prepare_v2 (ctx->db, insert_sql,
 				-1, &st, NULL)) != SQLITE_OK) {
-			msg_err ("Cannot prepare sql %s: %s", insert_sql,
+			msg_err ("cannot prepare sql %s: %s", insert_sql,
 					sqlite3_errmsg (ctx->db));
 		}
 		else {
 			sqlite3_bind_text (st, 1, h, len, SQLITE_STATIC);
 			sqlite3_bind_int (st, 2, is_spam ? 1 : 0);
-			sqlite3_step (st);
+
+			if ((rc = sqlite3_step (st)) != SQLITE_DONE) {
+				msg_err ("error during executing sql %s: %s", insert_sql,
+						sqlite3_errmsg (ctx->db));
+			}
+
 			sqlite3_finalize (st);
 		}
+	}
+	else {
+		msg_err ("error during executing sql %s: %s", select_sql,
+				sqlite3_errmsg (ctx->db));
 	}
 
 	return ret;
