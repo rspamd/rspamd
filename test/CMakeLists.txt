@@ -30,8 +30,8 @@ TARGET_LINK_LIBRARIES(rspamd-test stemmer)
 TARGET_LINK_LIBRARIES(rspamd-test rspamd-actrie)
 
 ADD_CUSTOM_TARGET(rspamd-func-test COMMAND 
-		"${CMAKE_SOURCE_DIR}/contrib/bats/bats" 
-		"${CMAKE_CURRENT_BINARY_DIR}/functional/tests.bats")
+		"/bin/sh"
+		"${CMAKE_CURRENT_BINARY_DIR}/functional/tests.sh")
 		
 ADD_DEPENDENCIES(rspamd-func-test rspamd-test)
 ADD_DEPENDENCIES(rspamd-func-test rspamc)
@@ -43,7 +43,7 @@ IF(NOT "${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
 	ADD_CUSTOM_TARGET(units-dir COMMAND
 		${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/lua/unit"
 	)
-	ADD_DEPENDENCIES(rspamd-test units-dir)
+	ADD_DEPENDENCIES(rspamd-func-test units-dir)
 	FOREACH(_LF IN LISTS LUA_TESTS)
 		GET_FILENAME_COMPONENT(_NM "${_LF}" NAME)
 		IF("${_LF}" MATCHES "^.*/unit/.*$")
@@ -55,7 +55,7 @@ IF(NOT "${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
 			${CMAKE_COMMAND} -E copy_if_different ${_LF} ${_DS}
 			SOURCES "${_LF}"
 		)
-		ADD_DEPENDENCIES(rspamd-test "${_NM}")
+		ADD_DEPENDENCIES(rspamd-func-test "${_NM}")
 	ENDFOREACH()
 	
 	ADD_CUSTOM_TARGET(functional-dir COMMAND
@@ -65,7 +65,7 @@ IF(NOT "${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
 		COMMAND ${CMAKE_COMMAND} -E make_directory 
 		"${CMAKE_CURRENT_BINARY_DIR}/functional/messages"
 	)
-	ADD_DEPENDENCIES(rspamd-test functional-dir)
+	ADD_DEPENDENCIES(rspamd-func-test functional-dir)
 	FILE(GLOB_RECURSE BATS_TESTS "${CMAKE_CURRENT_SOURCE_DIR}/functional/*")
 	FOREACH(_LF IN LISTS BATS_TESTS)
 		GET_FILENAME_COMPONENT(_NM "${_LF}" NAME)
@@ -75,6 +75,6 @@ IF(NOT "${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
 			${CMAKE_COMMAND} -E copy_if_different ${_LF} ${_DS}
 			SOURCES "${_LF}"
 		)
-		ADD_DEPENDENCIES(rspamd-test "${_NM}")
+		ADD_DEPENDENCIES(rspamd-func-test "${_NM}")
 	ENDFOREACH()
 ENDIF()
