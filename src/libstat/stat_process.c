@@ -356,11 +356,12 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 	struct rspamd_stat_classifier *cls;
 	struct rspamd_classifier_config *clcf;
 	struct rspamd_stat_ctx *st_ctx;
+	struct rspamd_statfile_runtime *st_run;
 	struct rspamd_tokenizer_runtime *tklist = NULL, *tok;
 	struct rspamd_classifier_runtime *cl_run;
 	struct classifier_ctx *cl_ctx;
 	GList *cl_runtimes;
-	GList *cur;
+	GList *cur, *curst;
 	gboolean ret = RSPAMD_STAT_PROCESS_ERROR, compat = TRUE;
 	const ucl_object_t *obj;
 
@@ -438,6 +439,16 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 					ret = RSPAMD_STAT_PROCESS_OK;
 				}
 			}
+		}
+
+		curst = cl_run->st_runtime;
+
+		while (curst) {
+			st_run = curst->data;
+			st_run->backend->finalize_learn (task,
+					st_run->backend_runtime,
+					st_run->backend->ctx);
+			curst = g_list_next (curst);
 		}
 
 		cur = g_list_next (cur);

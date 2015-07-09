@@ -47,6 +47,8 @@ struct rspamd_stat_backend {
 			struct rspamd_statfile_config *stcf, gboolean learn, gpointer ctx);
 	gboolean (*process_token)(struct rspamd_task *task, struct token_node_s *tok,
 			struct rspamd_token_result *res, gpointer ctx);
+	void (*finalize_process)(struct rspamd_task *task,
+			gpointer runtime, gpointer ctx);
 	gboolean (*learn_token)(struct rspamd_task *task, struct token_node_s *tok,
 			struct rspamd_token_result *res, gpointer ctx);
 	gulong (*total_learns)(struct rspamd_task *task,
@@ -70,6 +72,9 @@ struct rspamd_stat_backend {
 		gboolean rspamd_##name##_process_token (struct rspamd_task *task, \
 				struct token_node_s *tok, \
 				struct rspamd_token_result *res, \
+				gpointer ctx); \
+		void rspamd_##name##_finalize_process (struct rspamd_task *task, \
+				gpointer runtime, \
 				gpointer ctx); \
 		gboolean rspamd_##name##_learn_token (struct rspamd_task *task, \
 				struct token_node_s *tok, \

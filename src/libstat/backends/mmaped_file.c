@@ -1089,3 +1089,9 @@ rspamd_mmaped_file_finalize_learn (struct rspamd_task *task, gpointer runtime,
 		msync (mf->map, mf->len, MS_INVALIDATE | MS_ASYNC);
 	}
 }
+
+void
+rspamd_mmaped_file_finalize_process (struct rspamd_task *task, gpointer runtime,
+		gpointer ctx)
+{
+}

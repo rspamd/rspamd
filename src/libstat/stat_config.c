@@ -60,6 +60,7 @@ static struct rspamd_stat_tokenizer stat_tokenizers[] = {
 		.init = rspamd_##eltn##_init, \
 		.runtime = rspamd_##eltn##_runtime, \
 		.process_token = rspamd_##eltn##_process_token, \
+		.finalize_process = rspamd_##eltn##_finalize_process, \
 		.learn_token = rspamd_##eltn##_learn_token, \
 		.finalize_learn = rspamd_##eltn##_finalize_learn, \
 		.total_learns = rspamd_##eltn##_total_learns, \
