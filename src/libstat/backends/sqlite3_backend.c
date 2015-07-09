@@ -330,6 +330,13 @@ rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
 	if (create) {
 		flags |= SQLITE_OPEN_CREATE;
 	}
+	else if (access (path, R_OK) == -1) {
+		g_set_error (err, rspamd_sqlite3_quark (),
+					errno, "cannot open sqlite file %s: %s",
+					path, strerror (errno));
+
+		return NULL;
+	}
 
 	if ((rc = sqlite3_open_v2 (path, &sqlite,
 			flags, NULL)) != SQLITE_OK) {
