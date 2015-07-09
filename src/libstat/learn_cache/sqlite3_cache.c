@@ -54,8 +54,8 @@ rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
 	struct rspamd_stat_sqlite3_ctx *new = NULL;
 	struct rspamd_classifier_config *clf;
 	const ucl_object_t *obj, *elt;
-	static const char sqlite_wal[] = "PRAGMA journal_mode=WAL;",
-			fallback_journal[] = "PRAGMA journal_mode=OFF;";
+	static const char sqlite_wal[] = "PRAGMA journal_mode=\"wal\";",
+			fallback_journal[] = "PRAGMA journal_mode=\"off\";";
 	GList *cur;
 	gchar dbpath[PATH_MAX];
 	sqlite3 *sqlite;

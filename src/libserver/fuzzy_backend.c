@@ -468,8 +468,8 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 	gchar *dir, header[4];
 	gint fd, r;
 	struct rspamd_fuzzy_backend *res;
-	static const char sqlite_wal[] = "PRAGMA journal_mode=WAL;",
-			fallback_journal[] = "PRAGMA journal_mode=OFF;";
+	static const char sqlite_wal[] = "PRAGMA journal_mode=\"wal\";",
+			fallback_journal[] = "PRAGMA journal_mode=\"off\";";
 	int rc;
 
 	/* First of all we check path for existence */
