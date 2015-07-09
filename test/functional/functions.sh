@@ -1,5 +1,4 @@
-function save_error()
-{
+save_error() {
 	_where=$1
 	_reason=$2
 
@@ -10,8 +9,7 @@ function save_error()
 	exit 1
 }
 
-function run_rspamd() 
-{
+run_rspamd() {
 	RSPAMD_USER=${RSPAMD_USER:-"nobody"}
 	RSPAMD_GROUP=${RSPAMD_GROUP:-"nogroup"}
 	RSPAMD=${RSPAMD:-"$TEST_DIRNAME/../../src/rspamd"}
@@ -36,8 +34,7 @@ function run_rspamd()
 }
 
 
-function teardown() 
-{
+teardown() {
 	RSPAMD_PID=`cat ${TMPDIR}/rspamd.pid`
 
 	if [ F"${RSPAMD_PID}" != F"" ] ; then
@@ -58,8 +55,7 @@ function teardown()
 	fi
 }
 
-function check_output() 
-{
+check_output() {
 	_pattern="$1"
 
 	echo "$output" | egrep "$_pattern" > /dev/null 2>&1
@@ -74,8 +70,7 @@ function check_output()
 	return 0
 }
 
-function run_rspamc()
-{
+run_rspamc() {
 	_command=$1
 	shift
 	_rspamc="$TEST_DIRNAME/../../src/client/rspamc"
@@ -98,8 +93,7 @@ function run_rspamc()
 	return 1
 }
 
-function run()
-{
+run() {
 	_command=$1
 	shift
 

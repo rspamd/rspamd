@@ -11,13 +11,11 @@ SKIPPED_TESTS=0
 
 . ${TEST_DIRNAME}/functions.sh
 
-function make_tempdir()
-{
+make_tempdir() {
 	export TMPDIR=`mktemp -d /tmp/rspamd-test-XXXXXX`
 }
 
-function run_test()
-{
+run_test() {
 	TEST_NAME=`basename $1 | sed -e 's/.sh$//'`
 	TEST_DESCRIPTION=`head -1 $1 | sed -e 's/^# *//'`
 
