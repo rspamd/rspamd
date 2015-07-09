@@ -54,7 +54,7 @@ struct rspamd_stat_sqlite3_rt {
 };
 
 static const char *create_tables_sql =
-		"BEGIN;"
+		"BEGIN IMMEDIATE;"
 		"CREATE TABLE users("
 		"id INTEGER PRIMARY KEY,"
 		"name TEXT,"
@@ -537,6 +537,11 @@ rspamd_sqlite3_process_token (struct rspamd_task *task, struct token_node_s *tok
 	if (rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_TOKEN,
 			idx, rt->user_id, rt->lang_id, &iv) == SQLITE_OK) {
 		res->value = iv;
+
+		/* TODO: purge empty values */
+		if (iv == 0) {
+			return FALSE;
+		}
 	}
 	else {
 		res->value = 0.0;
@@ -628,9 +633,9 @@ rspamd_sqlite3_inc_learns (struct rspamd_task *task, gpointer runtime,
 
 	g_assert (rt != NULL);
 	bk = rt->db;
-	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_INC_LEARNS,
 			SQLITE3_DEFAULT, SQLITE3_DEFAULT);
+	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 
 	return res;
 }
@@ -645,9 +650,9 @@ rspamd_sqlite3_dec_learns (struct rspamd_task *task, gpointer runtime,
 
 	g_assert (rt != NULL);
 	bk = rt->db;
-	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_DEC_LEARNS,
 			SQLITE3_DEFAULT, SQLITE3_DEFAULT);
+	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 
 	return res;
 }
