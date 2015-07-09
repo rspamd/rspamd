@@ -60,14 +60,13 @@ function teardown()
 
 function check_output() 
 {
-	_output="$1"
-	_pattern="$2"
+	_pattern="$1"
 
-	echo "$_output" | egrep "$_pattern" > /dev/null 2>&1
+	echo "$output" | egrep "$_pattern" > /dev/null 2>&1
 	
 	_saved_exit=$?
 	if [ $_saved_exit -ne 0 ] ; then
-		echo "$_output" > ${TMPDIR}/rspamc.output
+		echo "$output" > ${TMPDIR}/rspamc.err
 		save_error 'rspamc' "Expected pattern $_pattern is not found"
 		return $_saved_exit
 	fi
@@ -86,13 +85,13 @@ function run_rspamc()
 		*) _host="localhost:56789" ;;
 	esac
 
-	output=`$_rspamc -h $_host $@ 2>&1`
+	output=`$_rspamc -h $_host $_command $@ 2>&1`
+	echo "$output" > ${TMPDIR}/rspamc.output
 
 	if [ $? -eq 0 ] ; then
 		export output
 		return 0
 	else
-		echo $output > ${TMPDIR}/rspamc.output
 		save_error 'rspamc' "Wrong exit code"
 	fi
 
@@ -105,12 +104,12 @@ function run()
 	shift
 
 	output=`$_command $@ 2>&1`
+	echo "$output" > "${TMPDIR}/${_command}.output"
 
 	if [ $? -eq 0 ] ; then
 		export output
 		return 0
 	else
-		echo $output > ${TMPDIR}/${_command}.output
 		save_error "${_command}" "Wrong exit code"
 	fi
 
