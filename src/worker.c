@@ -37,6 +37,7 @@
 #include "libmime/message.h"
 #include "main.h"
 #include "keypairs_cache.h"
+#include "libstat/stat_api.h"
 
 #include "lua/lua_common.h"
 
@@ -301,6 +302,7 @@ start_worker (struct rspamd_worker *worker)
 
 	/* XXX: stupid default */
 	ctx->keys_cache = rspamd_keypair_cache_new (256);
+	rspamd_stat_init (worker->srv->cfg);
 
 	event_base_loop (ctx->ev_base, 0);
 
