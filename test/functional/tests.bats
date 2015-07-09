@@ -9,7 +9,7 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 		"$BATS_TEST_DIRNAME/messages/gtube.eml"
 	[ "$status" -eq 0 ]
 	
-	echo $output | grep 'Action: reject'
+	check_output $output 'Action: reject'
 }
 
 @test "Test rspamd encrypted using gtube" {
@@ -20,7 +20,7 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 		"$BATS_TEST_DIRNAME/messages/gtube.eml"
 	[ "$status" -eq 0 ]
 	
-	echo $output | grep 'Action: reject'
+	check_output $output 'Action: reject'
 }
 
 @test "Test rspamd spamc gtube" {
@@ -28,8 +28,7 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 	run_rspamd
 	run perl $BATS_TEST_DIRNAME/cases/spamc.pl "$BATS_TEST_DIRNAME/messages/gtube.eml"
 	[ "$status" -eq 0 ]
-	
-	echo $output | grep 'GTUBE'
+	check_output $output 'GTUBE'
 }
 
 @test "Test rspamd streamlined gtube" {
@@ -38,8 +37,7 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 	run_rspamd
 	run perl $BATS_TEST_DIRNAME/cases/http_streamline.pl "$BATS_TEST_DIRNAME/messages/gtube.eml"
 	[ "$status" -eq 0 ]
-	
-	echo $output | grep 'Action: reject'
+	check_output $output 'Action: reject'
 }
 
 @test "Test rspamd learn" {
@@ -52,16 +50,14 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 		learn_spam \
 		"$BATS_TEST_DIRNAME/messages/spam_message.eml"
 	[ "$status" -eq 0 ]
-	
-	echo $output | egrep 'success.*true'
+	check_output $output 'success.*true'
 	
 	run ${RSPAMC} -h localhost:56789 \
 		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
 		symbols \
 		"$BATS_TEST_DIRNAME/messages/spam_message.eml"
 	[ "$status" -eq 0 ]
-	
-	echo $output | grep 'BAYES_SPAM'
+	check_output $output 'BAYES_SPAM'
 	clear_stats
 }
 
@@ -75,24 +71,21 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 		learn_spam \
 		"$BATS_TEST_DIRNAME/messages/spam_message.eml"
 	[ "$status" -eq 0 ]
-	
-	echo $output | egrep 'success.*true'
+	check_output $output 'success.*true'
 	
 	run ${RSPAMC} -h localhost:56790 \
 		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
 		learn_ham \
 		"$BATS_TEST_DIRNAME/messages/spam_message.eml"
 	[ "$status" -eq 0 ]
-	
-	echo $output | egrep 'success.*true'
+	check_output $output 'success.*true'
 	
 	run ${RSPAMC} -h localhost:56789 \
 		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
 		symbols \
 		"$BATS_TEST_DIRNAME/messages/spam_message.eml"
 	[ "$status" -eq 0 ]
-	
-	echo $output | grep 'BAYES_HAM'
+	check_output $output 'BAYES_HAM'
 	clear_stats
 }
 
@@ -106,16 +99,14 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 		learn_spam \
 		"$BATS_TEST_DIRNAME/messages/empty_part.eml"
 	[ "$status" -eq 0 ]
-	
-	echo $output | egrep 'success.*true'
+	check_output $output 'success.*true'
 	
 	run ${RSPAMC} -h localhost:56789 \
 		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
 		symbols \
 		"$BATS_TEST_DIRNAME/messages/empty_part.eml"
 	[ "$status" -eq 0 ]
-	
-	echo $output | grep 'BAYES_SPAM'
+	check_output $output 'BAYES_SPAM'
 	clear_stats
 }
 
@@ -130,24 +121,21 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 		learn_spam \
 		"$BATS_TEST_DIRNAME/messages/spam_message.eml"
 	[ "$status" -eq 0 ]
-	
-	echo $output | egrep 'success.*true'
+	check_output $output 'success.*true'
 	
 	run ${RSPAMC} -h localhost:56790 \
 		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
 		learn_ham \
 		"$BATS_TEST_DIRNAME/messages/spam_message.eml"
 	[ "$status" -eq 0 ]
-	
-	echo $output | egrep 'success.*true'
+	check_output $output 'success.*true'
 	
 	run ${RSPAMC} -h localhost:56789 \
 		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
 		symbols \
 		"$BATS_TEST_DIRNAME/messages/spam_message.eml"
 	[ "$status" -eq 0 ]
-	
-	echo $output | grep 'BAYES_HAM'
+	check_output $output 'BAYES_HAM'
 	clear_stats
 }
 
@@ -163,7 +151,7 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 		"$BATS_TEST_DIRNAME/messages/spam_message.eml"
 	[ "$status" -eq 0 ]
 	
-	echo $output | egrep 'success.*true'
+	check_output $output 'success.*true'
 	
 	run ${RSPAMC} -h localhost:56789 \
 		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
@@ -171,7 +159,7 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 		"$BATS_TEST_DIRNAME/messages/spam_message.eml"
 	[ "$status" -eq 0 ]
 	
-	echo $output | grep 'BAYES_SPAM'
+	check_output $output 'BAYES_SPAM'
 	clear_stats
 }
 
@@ -187,7 +175,7 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 		"$BATS_TEST_DIRNAME/messages/spam_message.eml"
 	[ "$status" -eq 0 ]
 	
-	echo $output | egrep 'success.*true'
+	check_output $output 'success.*true'
 	
 	run ${RSPAMC} -h localhost:56789 \
 		--key y3ms1knmetxf8gdeixkf74b6tbpxqugmxzqksnjodiqei7tksyty \
@@ -195,7 +183,7 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 		"$BATS_TEST_DIRNAME/messages/spam_message.eml"
 	[ "$status" -eq 0 ]
 	
-	echo $output | grep 'BAYES_SPAM'
+	check_output $output 'BAYES_SPAM'
 	clear_stats
 }
 
@@ -209,8 +197,7 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 		"$BATS_TEST_DIRNAME/messages/empty_part.eml"
 	[ "$status" -eq 0 ]
 	
-	echo $output >&2
-	echo $output | egrep 'cannot open backend'
+	check_output $output 'cannot open backend'
 }
 
 @test "Test rspamd dependencies" {
@@ -225,5 +212,5 @@ RSPAMC="$BATS_TEST_DIRNAME/../../src/client/rspamc"
 		"$BATS_TEST_DIRNAME/messages/spam_message.eml"
 	[ "$status" -eq 0 ]
 	
-	echo $output | grep 'DEP10'
+	check_output $output 'DEP10'
 }
