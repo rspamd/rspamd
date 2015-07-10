@@ -68,4 +68,13 @@ gint rspamd_sqlite3_run_prstmt (sqlite3 *db, GArray *stmts,
  */
 void rspamd_sqlite3_close_prstmt (sqlite3 *db, GArray *stmts);
 
+/**
+ * Creates or opens sqlite database trying to share it between processes
+ * @param path
+ * @param create_sql
+ * @return
+ */
+sqlite3 * rspamd_sqlite3_open_or_create (const gchar *path, const
+		gchar *create_sql, GError **err);
+
 #endif /* SRC_LIBUTIL_SQLITE_UTILS_H_ */

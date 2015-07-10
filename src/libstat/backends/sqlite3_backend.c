@@ -181,150 +181,28 @@ rspamd_sqlite3_backend_quark (void)
 	return g_quark_from_static_string ("sqlite3-stat-backend");
 }
 
-static gboolean
-rspamd_sqlite3_wait (const gchar *lock)
-{
-	gint fd;
-	struct timespec sleep_ts = {
-		.tv_sec = 0,
-		.tv_nsec = 1000000
-	};
-
-	fd = open (lock, O_RDONLY);
-
-	if (fd == -1) {
-		msg_err ("cannot open lock file %s: %s", lock, strerror (errno));
-
-		return FALSE;
-	}
-
-	while (!rspamd_file_lock (fd, TRUE)) {
-		if (nanosleep (&sleep_ts, NULL) == -1 && errno != EINTR) {
-			close (fd);
-			msg_err ("cannot sleep open lock file %s: %s", lock, strerror (errno));
-
-			return FALSE;
-		}
-	}
-
-	rspamd_file_unlock (fd, FALSE);
-
-	close (fd);
-
-	return TRUE;
-}
-
 static struct rspamd_stat_sqlite3_db *
 rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
 		gboolean create, GError **err)
 {
 	struct rspamd_stat_sqlite3_db *bk;
-	sqlite3 *sqlite;
-	sqlite3_stmt *stmt;
-	gint rc, flags, lock_fd;
-	gchar lock_path[PATH_MAX];
-	static const char sqlite_wal[] = "PRAGMA journal_mode=\"wal\";",
-			fallback_journal[] = "PRAGMA journal_mode=\"off\";",
-			user_version[] = "PRAGMA user_version;";
 
-	flags = SQLITE_OPEN_READWRITE;
-#ifdef SQLITE_OPEN_SHAREDCACHE
-	flags |= SQLITE_OPEN_SHAREDCACHE;
-#endif
-#ifdef SQLITE_OPEN_WAL
-	flags |= SQLITE_OPEN_WAL;
-#endif
-
-	if (create) {
-		flags |= SQLITE_OPEN_CREATE;
-
-		rspamd_snprintf (lock_path, sizeof (lock_path), "%s.lock", path);
-		lock_fd = open (lock_path, O_WRONLY|O_CREAT|O_EXCL, 00600);
-
-		if (lock_fd == -1 && (errno == EEXIST || errno == EBUSY)) {
-			if (!rspamd_sqlite3_wait (lock_path)) {
-				g_set_error (err, rspamd_sqlite3_backend_quark (),
-						errno, "cannot create sqlite file %s: %s",
-						path, strerror (errno));
-
-				return NULL;
-			}
-
-			/* At this point we have database created */
-			create = FALSE;
-		}
-		else {
-			g_assert (rspamd_file_lock (lock_fd, FALSE));
-		}
-	}
-	else if (access (path, R_OK) == -1) {
-		g_set_error (err, rspamd_sqlite3_backend_quark (),
-					errno, "cannot open sqlite file %s: %s",
-					path, strerror (errno));
-
-		return NULL;
-	}
-
-	if ((rc = sqlite3_open_v2 (path, &sqlite,
-			flags, NULL)) != SQLITE_OK) {
-#if SQLITE_VERSION_NUMBER >= 3008000
-		g_set_error (err, rspamd_sqlite3_backend_quark (),
-			rc, "cannot open sqlite db %s: %s",
-			path, sqlite3_errstr (rc));
-#else
-		g_set_error (err, rspamd_sqlite3_backend_quark (),
-			rc, "cannot open sqlite db %s: %d",
-			path, rc);
-#endif
-
-		return NULL;
-	}
-
-	if (sqlite3_exec (sqlite, sqlite_wal, NULL, NULL, NULL) != SQLITE_OK) {
-		msg_warn ("WAL mode is not supported, locking issues might occur");
-		sqlite3_exec (sqlite, fallback_journal, NULL, NULL, NULL);
-	}
-
-	/* Check user_version */
-	if (!create) {
-		g_assert (sqlite3_prepare_v2 (sqlite, user_version, -1, &stmt, NULL)
-				== SQLITE_OK);
-		g_assert (sqlite3_step (stmt) == SQLITE_ROW);
-
-		if (sqlite3_column_int (stmt, 0) != atoi (SQLITE3_SCHEMA_VERSION)) {
-			msg_warn ("bad sqlite database: %s, try to recreate it", path);
-			create = TRUE;
-		}
-
-		sqlite3_finalize (stmt);
-	}
-
-	if (create) {
-		if (sqlite3_exec (sqlite, create_tables_sql, NULL, NULL, NULL) != SQLITE_OK) {
-			g_set_error (err, rspamd_sqlite3_backend_quark (),
-					-1, "cannot execute create sql `%s`: %s",
-					create_tables_sql, sqlite3_errmsg (sqlite));
-			sqlite3_close (sqlite);
-			rspamd_file_unlock (lock_fd, FALSE);
-			unlink (lock_path);
-			close (lock_fd);
-
-			return NULL;
-		}
-
-		rspamd_file_unlock (lock_fd, FALSE);
-		unlink (lock_path);
-		close (lock_fd);
-	}
 
 	bk = g_slice_alloc0 (sizeof (*bk));
-	bk->sqlite = sqlite;
-	bk->prstmt = rspamd_sqlite3_init_prstmt (sqlite, prepared_stmts,
+	bk->sqlite = rspamd_sqlite3_open_or_create (path, create_tables_sql, err);
+
+	if (bk->sqlite == NULL) {
+		g_slice_free1 (sizeof (*bk), bk);
+
+		return NULL;
+	}
+
+	bk->prstmt = rspamd_sqlite3_init_prstmt (bk->sqlite, prepared_stmts,
 			RSPAMD_STAT_BACKEND_MAX, err);
 
 	if (bk->prstmt == NULL) {
+		sqlite3_close (bk->sqlite);
 		g_slice_free1 (sizeof (*bk), bk);
-		sqlite3_close (sqlite);
 
 		return NULL;
 	}
@@ -374,21 +252,15 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 
 				filename = ucl_object_tostring (filenameo);
 
-				if ((bk = rspamd_sqlite3_opendb (filename, stf->opts, FALSE,
+				if ((bk = rspamd_sqlite3_opendb (filename, stf->opts, TRUE,
 						&err)) == NULL) {
 					msg_err ("cannot open sqlite3 db: %e", err);
-					g_error_free (err);
-					err = NULL;
-
-					bk = rspamd_sqlite3_opendb (filename, stf->opts, TRUE,
-							&err);
 				}
 
 				if (bk != NULL) {
 					g_hash_table_insert (new->files, stf, bk);
 				}
 				else {
-					msg_err ("cannot create sqlite3 db: %e", err);
 					g_error_free (err);
 					err = NULL;
 				}
