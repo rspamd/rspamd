@@ -248,6 +248,13 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 		break;
 	}
 
+	if (u.field_set & (1 << UF_QUERY)) {
+		/* In case if we have a query, we need to store it somewhere */
+		task->msg.start = msg->url->str + u.field_data[UF_QUERY].off;
+		task->msg.len = u.field_data[UF_QUERY].len;
+		task->flags |= RSPAMD_TASK_FLAG_FILE;
+	}
+
 	return TRUE;
 
 err:

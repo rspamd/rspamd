@@ -235,58 +235,110 @@ rspamd_task_free_soft (gpointer ud)
 	rspamd_task_free (task, FALSE);
 }
 
+static void
+rspamd_task_unmapper (gpointer ud)
+{
+	struct rspamd_task *task = ud;
+
+	munmap ((void *)task->msg.start, task->msg.len);
+}
+
 gboolean
 rspamd_task_load_message (struct rspamd_task *task,
 	struct rspamd_http_message *msg, const gchar *start, gsize len)
 {
-	guint control_len;
+	guint control_len, r;
 	struct ucl_parser *parser;
 	ucl_object_t *control_obj;
-
-	debug_task ("got input of length %z", task->msg.len);
-	task->msg.start = start;
-	task->msg.len = len;
-
-	if (task->msg.len == 0) {
-		msg_warn ("message has invalid message length: %ud",
-				task->msg.len);
-		g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
-				"Invalid length");
-		return FALSE;
-	}
+	gchar filepath[PATH_MAX];
+	gint fd;
+	gpointer map;
+	struct stat st;
 
 	if (msg) {
 		rspamd_protocol_handle_headers (task, msg);
 	}
 
-	if (task->flags & RSPAMD_TASK_FLAG_HAS_CONTROL) {
-		/* We have control chunk, so we need to process it separately */
-		if (task->msg.len < task->message_len) {
-			msg_warn ("message has invalid message length: %ud and total len: %ud",
-					task->message_len, task->msg.len);
+	if (task->flags & RSPAMD_TASK_FLAG_FILE) {
+		g_assert (task->msg.len > 0);
+
+		r = rspamd_strlcpy (filepath, task->msg.start,
+				MIN (sizeof (filepath), task->msg.len + 1));
+
+		rspamd_unescape_uri (filepath, filepath, r);
+
+		if (access (filepath, R_OK) == -1 || stat (filepath, &st) == -1) {
+			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"Invalid file (%s): %s", filepath, strerror (errno));
+			return FALSE;
+		}
+
+		fd = open (filepath, O_RDONLY);
+
+		if (fd == -1) {
+			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"Cannot open file (%s): %s", filepath, strerror (errno));
+			return FALSE;
+		}
+
+		map = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+
+
+		if (map == MAP_FAILED) {
+			close (fd);
+			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+					"Cannot mmap file (%s): %s", filepath, strerror (errno));
+			return FALSE;
+		}
+
+		close (fd);
+		task->msg.start = map;
+		task->msg.len = st.st_size;
+
+		rspamd_mempool_add_destructor (task->task_pool, rspamd_task_unmapper, task);
+	}
+	else {
+		debug_task ("got input of length %z", task->msg.len);
+		task->msg.start = start;
+		task->msg.len = len;
+
+		if (task->msg.len == 0) {
+			msg_warn ("message has invalid message length: %ud",
+					task->msg.len);
 			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
 					"Invalid length");
 			return FALSE;
 		}
-		control_len = task->msg.len - task->message_len;
 
-		if (control_len > 0) {
-			parser = ucl_parser_new (UCL_PARSER_KEY_LOWERCASE);
-
-			if (!ucl_parser_add_chunk (parser, task->msg.start, control_len)) {
-				msg_warn ("processing of control chunk failed: %s",
-					ucl_parser_get_error (parser));
-				ucl_parser_free (parser);
+		if (task->flags & RSPAMD_TASK_FLAG_HAS_CONTROL) {
+			/* We have control chunk, so we need to process it separately */
+			if (task->msg.len < task->message_len) {
+				msg_warn ("message has invalid message length: %ud and total len: %ud",
+						task->message_len, task->msg.len);
+				g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
+						"Invalid length");
+				return FALSE;
 			}
-			else {
-				control_obj = ucl_parser_get_object (parser);
-				ucl_parser_free (parser);
-				rspamd_protocol_handle_control (task, control_obj);
-				ucl_object_unref (control_obj);
-			}
+			control_len = task->msg.len - task->message_len;
 
-			task->msg.start += control_len;
-			task->msg.len -= control_len;
+			if (control_len > 0) {
+				parser = ucl_parser_new (UCL_PARSER_KEY_LOWERCASE);
+
+				if (!ucl_parser_add_chunk (parser, task->msg.start, control_len)) {
+					msg_warn ("processing of control chunk failed: %s",
+							ucl_parser_get_error (parser));
+					ucl_parser_free (parser);
+				}
+				else {
+					control_obj = ucl_parser_get_object (parser);
+					ucl_parser_free (parser);
+					rspamd_protocol_handle_control (task, control_obj);
+					ucl_object_unref (control_obj);
+				}
+
+				task->msg.start += control_len;
+				task->msg.len -= control_len;
+			}
 		}
 	}
 

@@ -89,6 +89,7 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_FLAG_HAS_CONTROL (1 << 9)
 #define RSPAMD_TASK_FLAG_PROCESSING (1 << 10)
 #define RSPAMD_TASK_FLAG_GTUBE (1 << 11)
+#define RSPAMD_TASK_FLAG_FILE (1 << 12)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_JSON(task) (((task)->flags & RSPAMD_TASK_FLAG_JSON))
