@@ -427,7 +427,7 @@ rspamd_sqlite3_learn_token (struct rspamd_task *task, struct token_node_s *tok,
 
 	if (rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_SET_TOKEN,
-			idx, rt->user_id, rt->lang_id, iv) == SQLITE_OK) {
+			idx, rt->user_id, rt->lang_id, iv) != SQLITE_OK) {
 		return FALSE;
 	}
 
@@ -482,6 +482,13 @@ rspamd_sqlite3_inc_learns (struct rspamd_task *task, gpointer runtime,
 	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_INC_LEARNS,
 			SQLITE3_DEFAULT, SQLITE3_DEFAULT);
+
+	if (bk->in_transaction) {
+		rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+				RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
+		bk->in_transaction = FALSE;
+	}
+
 	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 
@@ -501,6 +508,13 @@ rspamd_sqlite3_dec_learns (struct rspamd_task *task, gpointer runtime,
 	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_DEC_LEARNS,
 			SQLITE3_DEFAULT, SQLITE3_DEFAULT);
+
+	if (bk->in_transaction) {
+		rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+				RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
+		bk->in_transaction = FALSE;
+	}
+
 	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 
