@@ -30,21 +30,93 @@
 #include "ucl.h"
 #include "fstring.h"
 #include "message.h"
-#include <sqlite3.h>
+#include "libutil/sqlite_utils.h"
 
 static const char *create_tables_sql =
-		"BEGIN IMMEDIATE;"
+		""
 		"CREATE TABLE IF NOT EXISTS learns("
 		"id INTEGER PRIMARY KEY,"
 		"flag INTEGER NOT NULL,"
 		"digest TEXT NOT NULL);"
 		"CREATE UNIQUE INDEX IF NOT EXISTS d ON learns(digest);"
-		"COMMIT;";
+		"";
 
 #define SQLITE_CACHE_PATH RSPAMD_DBDIR "/learn_cache.sqlite"
 
+enum rspamd_stat_sqlite3_stmt_idx {
+	RSPAMD_STAT_CACHE_TRANSACTION_START_IM = 0,
+	RSPAMD_STAT_CACHE_TRANSACTION_START_DEF,
+	RSPAMD_STAT_CACHE_TRANSACTION_COMMIT,
+	RSPAMD_STAT_CACHE_TRANSACTION_ROLLBACK,
+	RSPAMD_STAT_CACHE_GET_LEARN,
+	RSPAMD_STAT_CACHE_ADD_LEARN,
+	RSPAMD_STAT_CACHE_UPDATE_LEARN,
+	RSPAMD_STAT_CACHE_MAX
+};
+
+static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_CACHE_MAX] =
+{
+	{
+		.idx = RSPAMD_STAT_CACHE_TRANSACTION_START_IM,
+		.sql = "BEGIN IMMEDIATE TRANSACTION;",
+		.args = "",
+		.stmt = NULL,
+		.result = SQLITE_DONE,
+		.ret = ""
+	},
+	{
+		.idx = RSPAMD_STAT_CACHE_TRANSACTION_START_DEF,
+		.sql = "BEGIN DEFERRED TRANSACTION;",
+		.args = "",
+		.stmt = NULL,
+		.result = SQLITE_DONE,
+		.ret = ""
+	},
+	{
+		.idx = RSPAMD_STAT_CACHE_TRANSACTION_COMMIT,
+		.sql = "COMMIT;",
+		.args = "",
+		.stmt = NULL,
+		.result = SQLITE_DONE,
+		.ret = ""
+	},
+	{
+		.idx = RSPAMD_STAT_CACHE_TRANSACTION_ROLLBACK,
+		.sql = "ROLLBACK;",
+		.args = "",
+		.stmt = NULL,
+		.result = SQLITE_DONE,
+		.ret = ""
+	},
+	{
+		.idx = RSPAMD_STAT_CACHE_GET_LEARN,
+		.sql = "SELECT flag FROM learns WHERE digest=?1",
+		.args = "V",
+		.stmt = NULL,
+		.result = SQLITE_ROW,
+		.ret = "I"
+	},
+	{
+		.idx = RSPAMD_STAT_CACHE_ADD_LEARN,
+		.sql = "INSERT INTO learns(digest, flag) VALUES (?1, ?2);",
+		.args = "VI",
+		.stmt = NULL,
+		.result = SQLITE_DONE,
+		.ret = ""
+	},
+	{
+		.idx = RSPAMD_STAT_CACHE_UPDATE_LEARN,
+		.sql = "UPDATE learns SET flag=?1 WHERE digest=?2;",
+		.args = "VI",
+		.stmt = NULL,
+		.result = SQLITE_DONE,
+		.ret = ""
+	}
+};
+
 struct rspamd_stat_sqlite3_ctx {
 	sqlite3 *db;
+	GArray *prstmt;
 };
 
 gpointer
@@ -54,13 +126,11 @@ rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
 	struct rspamd_stat_sqlite3_ctx *new = NULL;
 	struct rspamd_classifier_config *clf;
 	const ucl_object_t *obj, *elt;
-	static const char sqlite_wal[] = "PRAGMA journal_mode=\"wal\";",
-			fallback_journal[] = "PRAGMA journal_mode=\"off\";";
 	GList *cur;
 	gchar dbpath[PATH_MAX];
 	sqlite3 *sqlite;
 	gboolean has_sqlite_cache = FALSE;
-	gint rc, fd;
+	GError *err = NULL;
 
 	rspamd_snprintf (dbpath, sizeof (dbpath), SQLITE_CACHE_PATH);
 	cur = cfg->classifiers;
@@ -94,36 +164,28 @@ rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
 	}
 
 	if (has_sqlite_cache) {
-		if ((rc = sqlite3_open_v2 (dbpath, &sqlite,
-				SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE, NULL))
-				!= SQLITE_OK) {
-			msg_err ("Cannot open sqlite db %s: %s", dbpath,
-					sqlite3_errmsg (sqlite));
+		sqlite = rspamd_sqlite3_open_or_create (dbpath, create_tables_sql, &err);
 
-			return NULL;
+		if (sqlite == NULL) {
+			msg_err ("cannot open sqlite3 cache: %e", err);
+			g_error_free (err);
+			err = NULL;
 		}
 		else {
-			msg_debug ("opened sqlite cache at the path %s", dbpath);
+			new = g_slice_alloc (sizeof (*new));
+			new->db = sqlite;
+			new->prstmt = rspamd_sqlite3_init_prstmt (sqlite, prepared_stmts,
+					RSPAMD_STAT_CACHE_MAX, &err);
+
+			if (new->prstmt == NULL) {
+				msg_err ("cannot open sqlite3 cache: %e", err);
+				g_error_free (err);
+				err = NULL;
+				sqlite3_close (sqlite);
+				g_slice_free1 (sizeof (*new), new);
+				new = NULL;
+			}
 		}
-
-		if (sqlite3_exec (sqlite, sqlite_wal, NULL, NULL, NULL) != SQLITE_OK) {
-			msg_warn ("WAL mode is not supported, locking issues might occur");
-			sqlite3_exec (sqlite, fallback_journal, NULL, NULL, NULL);
-		}
-
-		if ((rc = sqlite3_exec (sqlite, create_tables_sql, NULL, NULL, NULL))
-				!= SQLITE_OK) {
-			msg_err ("Cannot initialize sqlite db %s: %s", SQLITE_CACHE_PATH,
-					sqlite3_errmsg (sqlite));
-			sqlite3_close (sqlite);
-			rspamd_file_unlock (fd, FALSE);
-			close (fd);
-
-			return NULL;
-		}
-
-		new = g_slice_alloc (sizeof (*new));
-		new->db = sqlite;
 	}
 
 	return new;
@@ -133,82 +195,44 @@ static rspamd_learn_t
 rspamd_stat_cache_sqlite3_check (const guchar *h, gsize len, gboolean is_spam,
 		struct rspamd_stat_sqlite3_ctx *ctx)
 {
-	static const gchar select_sql[] = "SELECT flag FROM learns WHERE digest=?1";
-	static const gchar insert_sql[] = ""
-			""
-			"INSERT INTO learns(digest, flag) VALUES (?1, ?2);"
-			"";
-	static const gchar update_sql[] = ""
-			""
-			"UPDATE learns SET flag=?1 WHERE digest=?2;"
-			"";
-	sqlite3_stmt *st = NULL;
-	gint rc, ret = RSPAMD_LEARN_OK, flag;
+	gint rc, ret = RSPAMD_LEARN_OK;
+	gint64 flag;
 
-	if ((rc = sqlite3_prepare_v2 (ctx->db, select_sql,
-			-1, &st, NULL)) != SQLITE_OK) {
-		msg_err ("Cannot prepare sql %s: %s", select_sql, sqlite3_errmsg (ctx->db));
-		return RSPAMD_LEARN_OK;
-	}
+	rspamd_sqlite3_run_prstmt (ctx->db, ctx->prstmt,
+			RSPAMD_STAT_CACHE_TRANSACTION_START_DEF);
+	rc = rspamd_sqlite3_run_prstmt (ctx->db, ctx->prstmt,
+			RSPAMD_STAT_CACHE_GET_LEARN, (gint64)len, h, &flag);
+	rspamd_sqlite3_run_prstmt (ctx->db, ctx->prstmt,
+			RSPAMD_STAT_CACHE_TRANSACTION_COMMIT);
 
-	sqlite3_bind_text (st, 1, h, len, SQLITE_STATIC);
-
-	rc = sqlite3_step (st);
-
-	if (rc == SQLITE_ROW) {
+	if (rc == SQLITE_OK) {
 		/* We have some existing record in the table */
-		flag = sqlite3_column_int (st, 0);
-		sqlite3_finalize (st);
-
 		if ((flag && is_spam) || (!flag && !is_spam)) {
 			/* Already learned */
 			ret = RSPAMD_LEARN_INGORE;
 		}
 		else {
 			/* Need to relearn */
-			if ((rc = sqlite3_prepare_v2 (ctx->db, update_sql,
-					-1, &st, NULL)) != SQLITE_OK) {
-				msg_err ("cannot prepare sql %s: %s", update_sql,
-						sqlite3_errmsg (ctx->db));
-			}
-			else {
-				sqlite3_bind_int (st, 1, is_spam ? 1 : 0);
-				sqlite3_bind_text (st, 2, h, len, SQLITE_STATIC);
-
-				if ((rc = sqlite3_step (st)) != SQLITE_DONE) {
-					msg_err ("error during executing sql %s: %s", update_sql,
-							sqlite3_errmsg (ctx->db));
-				}
-
-				sqlite3_finalize (st);
-			}
+			flag = is_spam ? 1 : 0;
+			rspamd_sqlite3_run_prstmt (ctx->db, ctx->prstmt,
+					RSPAMD_STAT_CACHE_TRANSACTION_START_IM);
+			rspamd_sqlite3_run_prstmt (ctx->db, ctx->prstmt,
+					RSPAMD_STAT_CACHE_UPDATE_LEARN, (gint64)len, h, flag);
+			rspamd_sqlite3_run_prstmt (ctx->db, ctx->prstmt,
+					RSPAMD_STAT_CACHE_TRANSACTION_COMMIT);
 
 			return RSPAMD_LEARN_UNLEARN;
 		}
 	}
-	else if (rc != SQLITE_ERROR && rc != SQLITE_BUSY) {
-		/* Insert result new id */
-		sqlite3_finalize (st);
-		if ((rc = sqlite3_prepare_v2 (ctx->db, insert_sql,
-				-1, &st, NULL)) != SQLITE_OK) {
-			msg_err ("cannot prepare sql %s: %s", insert_sql,
-					sqlite3_errmsg (ctx->db));
-		}
-		else {
-			sqlite3_bind_text (st, 1, h, len, SQLITE_STATIC);
-			sqlite3_bind_int (st, 2, is_spam ? 1 : 0);
-
-			if ((rc = sqlite3_step (st)) != SQLITE_DONE) {
-				msg_err ("error during executing sql %s: %s", insert_sql,
-						sqlite3_errmsg (ctx->db));
-			}
-
-			sqlite3_finalize (st);
-		}
-	}
 	else {
-		msg_err ("error during executing sql %s: %s", select_sql,
-				sqlite3_errmsg (ctx->db));
+		/* Insert result new id */
+		flag = is_spam ? 1 : 0;
+		rspamd_sqlite3_run_prstmt (ctx->db, ctx->prstmt,
+				RSPAMD_STAT_CACHE_TRANSACTION_START_IM);
+		rspamd_sqlite3_run_prstmt (ctx->db, ctx->prstmt,
+				RSPAMD_STAT_CACHE_ADD_LEARN, (gint64)len, h, flag);
+		rspamd_sqlite3_run_prstmt (ctx->db, ctx->prstmt,
+				RSPAMD_STAT_CACHE_TRANSACTION_COMMIT);
 	}
 
 	return ret;
@@ -257,6 +281,7 @@ rspamd_stat_cache_sqlite3_close (gpointer c)
 	struct rspamd_stat_sqlite3_ctx *ctx = (struct rspamd_stat_sqlite3_ctx *)c;
 
 	if (ctx != NULL) {
+		rspamd_sqlite3_close_prstmt (ctx->db, ctx->prstmt);
 		sqlite3_close (ctx->db);
 		g_slice_free1 (sizeof (*ctx), ctx);
 	}

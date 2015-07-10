@@ -73,6 +73,7 @@ rspamd_sqlite3_run_prstmt (sqlite3 *db, GArray *stmts,
 	va_list ap;
 	sqlite3_stmt *stmt;
 	gint i, rowid, nargs, j;
+	gint64 len;
 	struct rspamd_sqlite3_prstmt *nst;
 	const char *argtypes;
 
@@ -99,6 +100,16 @@ rspamd_sqlite3_run_prstmt (sqlite3 *db, GArray *stmts,
 			for (j = 0; j < nargs; j ++, rowid ++) {
 				sqlite3_bind_text (stmt, rowid, va_arg (ap, const char*), -1,
 					SQLITE_STATIC);
+			}
+
+			nargs = 1;
+			break;
+		case 'V':
+
+			for (j = 0; j < nargs; j ++, rowid ++) {
+				len = va_arg (ap, gint64);
+				sqlite3_bind_text (stmt, rowid, va_arg (ap, const char*), len,
+						SQLITE_STATIC);
 			}
 
 			nargs = 1;
