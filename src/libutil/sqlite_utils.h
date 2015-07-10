@@ -29,6 +29,8 @@
 #include "config.h"
 #include "sqlite3.h"
 
+#define RSPAMD_SQLITE3_STMT_MULTIPLE (1 << 0)
+
 struct rspamd_sqlite3_prstmt {
 	gint idx;
 	const gchar *sql;
@@ -36,6 +38,7 @@ struct rspamd_sqlite3_prstmt {
 	sqlite3_stmt *stmt;
 	gint result;
 	const gchar *ret;
+	gint flags;
 };
 
 /**

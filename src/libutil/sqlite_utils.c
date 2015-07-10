@@ -156,11 +156,19 @@ rspamd_sqlite3_run_prstmt (sqlite3 *db, GArray *stmts,
 			}
 		}
 
+		if (!(nst->flags & RSPAMD_SQLITE3_STMT_MULTIPLE)) {
+			sqlite3_reset (stmt);
+		}
+
 		return SQLITE_OK;
 	}
 	else if (retcode != SQLITE_DONE) {
 		msg_debug ("failed to execute query %s: %d, %s", nst->sql,
 				retcode, sqlite3_errmsg (db));
+	}
+
+	if (!(nst->flags & RSPAMD_SQLITE3_STMT_MULTIPLE)) {
+		sqlite3_reset (stmt);
 	}
 
 	return retcode;
