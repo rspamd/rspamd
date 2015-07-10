@@ -108,15 +108,19 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 	ctx = task->worker->ctx;
 
 	if (!rspamd_protocol_handle_request (task, msg)) {
-		return 0;
+		msg_err ("cannot handle request: %e", task->err);
+		task->flags |= RSPAMD_TASK_FLAG_SKIP;
 	}
-
-	if (task->cmd == CMD_PING) {
-		return 0;
-	}
-
-	if (!rspamd_task_load_message (task, msg, chunk, len)) {
-		return 0;
+	else {
+		if (task->cmd == CMD_PING) {
+			task->flags |= RSPAMD_TASK_FLAG_SKIP;
+		}
+		else {
+			if (!rspamd_task_load_message (task, msg, chunk, len)) {
+				msg_err ("cannot load message: %e", task->err);
+				task->flags |= RSPAMD_TASK_FLAG_SKIP;
+			}
+		}
 	}
 
 	rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL);

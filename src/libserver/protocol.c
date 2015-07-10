@@ -149,25 +149,41 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 {
 	GList *cur;
 	struct custom_command *cmd;
+	struct http_parser_url u;
 	const gchar *p;
+	gsize pathlen;
 
 	if (msg->url == NULL || msg->url->len == 0) {
 		g_set_error (&task->err, rspamd_protocol_quark(), 400, "missing command");
 		return FALSE;
 	}
 
-	if (msg->url->str[0] == '/') {
-		p = &msg->url->str[1];
+	if (http_parser_parse_url (msg->url->str, msg->url->len, 0, &u) != 0) {
+		g_set_error (&task->err, rspamd_protocol_quark(), 400, "bad request URL");
+
+		return FALSE;
 	}
-	else {
-		p = msg->url->str;
+
+	if (!(u.field_set & (1 << UF_PATH))) {
+		g_set_error (&task->err, rspamd_protocol_quark(), 400,
+				"bad request URL: missing path");
+
+		return FALSE;
+	}
+
+	p = msg->url->str + u.field_data[UF_PATH].off;
+	pathlen = u.field_data[UF_PATH].len;
+
+	if (*p == '/') {
+		p ++;
+		pathlen --;
 	}
 
 	switch (*p) {
 	case 'c':
 	case 'C':
 		/* check */
-		if (g_ascii_strcasecmp (p + 1, MSG_CMD_CHECK + 1) == 0) {
+		if (g_ascii_strncasecmp (p + 1, MSG_CMD_CHECK + 1, pathlen) == 0) {
 			task->cmd = CMD_CHECK;
 		}
 		else {
@@ -177,10 +193,10 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	case 's':
 	case 'S':
 		/* symbols, skip */
-		if (g_ascii_strcasecmp (p + 1, MSG_CMD_SYMBOLS + 1) == 0) {
+		if (g_ascii_strncasecmp (p + 1, MSG_CMD_SYMBOLS + 1, pathlen) == 0) {
 			task->cmd = CMD_SYMBOLS;
 		}
-		else if (g_ascii_strcasecmp (p + 1, MSG_CMD_SKIP + 1) == 0) {
+		else if (g_ascii_strncasecmp (p + 1, MSG_CMD_SKIP + 1, pathlen) == 0) {
 			task->cmd = CMD_SKIP;
 		}
 		else {
@@ -190,10 +206,10 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	case 'p':
 	case 'P':
 		/* ping, process */
-		if (g_ascii_strcasecmp (p + 1, MSG_CMD_PING + 1) == 0) {
+		if (g_ascii_strncasecmp (p + 1, MSG_CMD_PING + 1, pathlen) == 0) {
 			task->cmd = CMD_PING;
 		}
-		else if (g_ascii_strcasecmp (p + 1, MSG_CMD_PROCESS + 1) == 0) {
+		else if (g_ascii_strncasecmp (p + 1, MSG_CMD_PROCESS + 1, pathlen) == 0) {
 			task->cmd = CMD_PROCESS;
 		}
 		else {
@@ -203,10 +219,11 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	case 'r':
 	case 'R':
 		/* report, report_ifspam */
-		if (g_ascii_strcasecmp (p + 1, MSG_CMD_REPORT + 1) == 0) {
+		if (g_ascii_strncasecmp (p + 1, MSG_CMD_REPORT + 1, pathlen) == 0) {
 			task->cmd = CMD_REPORT;
 		}
-		else if (g_ascii_strcasecmp (p + 1, MSG_CMD_REPORT_IFSPAM + 1) == 0) {
+		else if (g_ascii_strncasecmp (p + 1, MSG_CMD_REPORT_IFSPAM + 1,
+				pathlen) == 0) {
 			task->cmd = CMD_REPORT_IFSPAM;
 		}
 		else {
@@ -217,7 +234,7 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 		cur = custom_commands;
 		while (cur) {
 			cmd = cur->data;
-			if (g_ascii_strcasecmp (p, cmd->name) == 0) {
+			if (g_ascii_strncasecmp (p, cmd->name, pathlen) == 0) {
 				task->cmd = CMD_OTHER;
 				task->custom_cmd = cmd;
 				break;
@@ -234,8 +251,8 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	return TRUE;
 
 err:
-	g_set_error (&task->err, rspamd_protocol_quark(), 400, "invalid command: %s",
-			p);
+	g_set_error (&task->err, rspamd_protocol_quark(), 400, "invalid command: %*.s",
+			(gint)pathlen, p);
 
 	return FALSE;
 }
