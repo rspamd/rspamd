@@ -23,19 +23,18 @@
  */
 
 #include "config.h"
-#include "stat_internal.h"
 #include "main.h"
 #include "sqlite3.h"
+#include "libutil/sqlite_utils.h"
+#include "libstat/stat_internal.h"
 
 #define SQLITE3_BACKEND_TYPE "sqlite3"
 #define SQLITE3_SCHEMA_VERSION "1"
 #define SQLITE3_DEFAULT "default"
 
-struct rspamd_sqlite3_prstmt;
-
 struct rspamd_stat_sqlite3_db {
 	sqlite3 *sqlite;
-	struct rspamd_sqlite3_prstmt *prstmt;
+	GArray *prstmt;
 	gboolean in_transaction;
 };
 
@@ -93,14 +92,7 @@ enum rspamd_stat_sqlite3_stmt_idx {
 	RSPAMD_STAT_BACKEND_MAX
 };
 
-static struct rspamd_sqlite3_prstmt {
-	enum rspamd_stat_sqlite3_stmt_idx idx;
-	const gchar *sql;
-	const gchar *args;
-	sqlite3_stmt *stmt;
-	gint result;
-	const gchar *ret;
-} prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
+static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 {
 	{
 		.idx = RSPAMD_STAT_BACKEND_TRANSACTION_START_IM,
@@ -184,142 +176,9 @@ static struct rspamd_sqlite3_prstmt {
 };
 
 static GQuark
-rspamd_sqlite3_quark (void)
+rspamd_sqlite3_backend_quark (void)
 {
 	return g_quark_from_static_string ("sqlite3-stat-backend");
-}
-
-static gboolean
-rspamd_sqlite3_init_prstmt (struct rspamd_stat_sqlite3_db *db, GError **err)
-{
-	int i;
-
-	for (i = 0; i < RSPAMD_STAT_BACKEND_MAX; i ++) {
-		if (db->prstmt[i].stmt != NULL) {
-			/* Skip already prepared statements */
-			continue;
-		}
-		if (sqlite3_prepare_v2 (db->sqlite, db->prstmt[i].sql, -1,
-				&db->prstmt[i].stmt, NULL) != SQLITE_OK) {
-			g_set_error (err, rspamd_sqlite3_quark (),
-				-1, "Cannot initialize prepared sql `%s`: %s",
-				db->prstmt[i].sql, sqlite3_errmsg (db->sqlite));
-
-			return FALSE;
-		}
-	}
-
-	return TRUE;
-}
-
-static int
-rspamd_sqlite3_run_prstmt (struct rspamd_stat_sqlite3_db *db, int idx, ...)
-{
-	gint retcode;
-	va_list ap;
-	sqlite3_stmt *stmt;
-	gint i, rowid, nargs, j;
-	const char *argtypes;
-
-	if (idx < 0 || idx >= RSPAMD_STAT_BACKEND_MAX) {
-
-		return -1;
-	}
-
-	stmt = db->prstmt[idx].stmt;
-	if (stmt == NULL) {
-		if ((retcode = sqlite3_prepare_v2 (db->sqlite, db->prstmt[idx].sql, -1,
-				&db->prstmt[idx].stmt, NULL)) != SQLITE_OK) {
-			msg_err ("Cannot initialize prepared sql `%s`: %s",
-					db->prstmt[idx].sql, sqlite3_errmsg (db->sqlite));
-
-			return retcode;
-		}
-		stmt = db->prstmt[idx].stmt;
-	}
-
-	msg_debug ("executing `%s`", db->prstmt[idx].sql);
-	argtypes = db->prstmt[idx].args;
-	sqlite3_reset (stmt);
-	va_start (ap, idx);
-	nargs = 1;
-
-	for (i = 0, rowid = 1; argtypes[i] != '\0'; i ++) {
-		switch (argtypes[i]) {
-		case 'T':
-
-			for (j = 0; j < nargs; j ++, rowid ++) {
-				sqlite3_bind_text (stmt, rowid, va_arg (ap, const char*), -1,
-					SQLITE_STATIC);
-			}
-
-			nargs = 1;
-			break;
-		case 'I':
-
-			for (j = 0; j < nargs; j ++, rowid ++) {
-				sqlite3_bind_int64 (stmt, rowid, va_arg (ap, gint64));
-			}
-
-			nargs = 1;
-			break;
-		case 'S':
-
-			for (j = 0; j < nargs; j ++, rowid ++) {
-				sqlite3_bind_int (stmt, rowid, va_arg (ap, gint));
-			}
-
-			nargs = 1;
-			break;
-		case '*':
-			nargs = va_arg (ap, gint);
-			break;
-		}
-	}
-
-	va_end (ap);
-	retcode = sqlite3_step (stmt);
-
-	if (retcode == db->prstmt[idx].result) {
-		argtypes = db->prstmt[idx].ret;
-
-		for (i = 0; argtypes != NULL && argtypes[i] != '\0'; i ++) {
-			switch (argtypes[i]) {
-			case 'T':
-				*va_arg (ap, char**) = g_strdup (sqlite3_column_text (stmt, i));
-				break;
-			case 'I':
-				*va_arg (ap, gint64*) = sqlite3_column_int64 (stmt, i);
-				break;
-			case 'S':
-				*va_arg (ap, int*) = sqlite3_column_int (stmt, i);
-				break;
-			}
-		}
-
-		return SQLITE_OK;
-	}
-	else if (retcode != SQLITE_DONE) {
-		msg_debug ("failed to execute query %s: %d, %s", db->prstmt[idx].sql,
-				retcode, sqlite3_errmsg (db->sqlite));
-	}
-
-	return retcode;
-}
-
-static void
-rspamd_sqlite3_close_prstmt (struct rspamd_stat_sqlite3_db *db)
-{
-	int i;
-
-	for (i = 0; i < RSPAMD_STAT_BACKEND_MAX; i++) {
-		if (db->prstmt[i].stmt != NULL) {
-			sqlite3_finalize (db->prstmt[i].stmt);
-			db->prstmt[i].stmt = NULL;
-		}
-	}
-
-	return;
 }
 
 static gboolean
@@ -369,6 +228,12 @@ rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
 			user_version[] = "PRAGMA user_version;";
 
 	flags = SQLITE_OPEN_READWRITE;
+#ifdef SQLITE_OPEN_SHAREDCACHE
+	flags |= SQLITE_OPEN_SHAREDCACHE;
+#endif
+#ifdef SQLITE_OPEN_WAL
+	flags |= SQLITE_OPEN_WAL;
+#endif
 
 	if (create) {
 		flags |= SQLITE_OPEN_CREATE;
@@ -378,7 +243,7 @@ rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
 
 		if (lock_fd == -1 && (errno == EEXIST || errno == EBUSY)) {
 			if (!rspamd_sqlite3_wait (lock_path)) {
-				g_set_error (err, rspamd_sqlite3_quark (),
+				g_set_error (err, rspamd_sqlite3_backend_quark (),
 						errno, "cannot create sqlite file %s: %s",
 						path, strerror (errno));
 
@@ -393,7 +258,7 @@ rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
 		}
 	}
 	else if (access (path, R_OK) == -1) {
-		g_set_error (err, rspamd_sqlite3_quark (),
+		g_set_error (err, rspamd_sqlite3_backend_quark (),
 					errno, "cannot open sqlite file %s: %s",
 					path, strerror (errno));
 
@@ -403,11 +268,11 @@ rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
 	if ((rc = sqlite3_open_v2 (path, &sqlite,
 			flags, NULL)) != SQLITE_OK) {
 #if SQLITE_VERSION_NUMBER >= 3008000
-		g_set_error (err, rspamd_sqlite3_quark (),
+		g_set_error (err, rspamd_sqlite3_backend_quark (),
 			rc, "cannot open sqlite db %s: %s",
 			path, sqlite3_errstr (rc));
 #else
-		g_set_error (err, rspamd_sqlite3_quark (),
+		g_set_error (err, rspamd_sqlite3_backend_quark (),
 			rc, "cannot open sqlite db %s: %d",
 			path, rc);
 #endif
@@ -436,7 +301,7 @@ rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
 
 	if (create) {
 		if (sqlite3_exec (sqlite, create_tables_sql, NULL, NULL, NULL) != SQLITE_OK) {
-			g_set_error (err, rspamd_sqlite3_quark (),
+			g_set_error (err, rspamd_sqlite3_backend_quark (),
 					-1, "cannot execute create sql `%s`: %s",
 					create_tables_sql, sqlite3_errmsg (sqlite));
 			sqlite3_close (sqlite);
@@ -454,10 +319,13 @@ rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
 
 	bk = g_slice_alloc0 (sizeof (*bk));
 	bk->sqlite = sqlite;
-	bk->prstmt = g_slice_alloc0 (sizeof (prepared_stmts));
-	memcpy (bk->prstmt, prepared_stmts, sizeof (prepared_stmts));
+	bk->prstmt = rspamd_sqlite3_init_prstmt (sqlite, prepared_stmts,
+			RSPAMD_STAT_BACKEND_MAX, err);
 
-	if (!rspamd_sqlite3_init_prstmt (bk, err)) {
+	if (bk->prstmt == NULL) {
+		g_slice_free1 (sizeof (*bk), bk);
+		sqlite3_close (sqlite);
+
 		return NULL;
 	}
 
@@ -552,11 +420,12 @@ rspamd_sqlite3_close (gpointer p)
 
 		if (bk->sqlite) {
 			if (bk->in_transaction) {
-				rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
+				rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+						RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
 			}
 
+			rspamd_sqlite3_close_prstmt (bk->sqlite, bk->prstmt);
 			sqlite3_close (bk->sqlite);
-			rspamd_sqlite3_close_prstmt (bk);
 			g_slice_free1 (sizeof (*bk), bk);
 		}
 	}
@@ -608,14 +477,16 @@ rspamd_sqlite3_process_token (struct rspamd_task *task, struct token_node_s *tok
 	}
 
 	if (!bk->in_transaction) {
-		rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_TRANSACTION_START_DEF);
+		rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+				RSPAMD_STAT_BACKEND_TRANSACTION_START_DEF);
 		bk->in_transaction = TRUE;
 	}
 
 	memcpy (&idx, tok->data, sizeof (idx));
 
 	/* TODO: language and user support */
-	if (rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_TOKEN,
+	if (rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+			RSPAMD_STAT_BACKEND_GET_TOKEN,
 			idx, rt->user_id, rt->lang_id, &iv) == SQLITE_OK) {
 		res->value = iv;
 
@@ -644,7 +515,8 @@ rspamd_sqlite3_finalize_process (struct rspamd_task *task, gpointer runtime,
 	bk = rt->db;
 
 	if (bk->in_transaction) {
-		rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
+		rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+				RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
 		bk->in_transaction = FALSE;
 	}
 
@@ -674,15 +546,17 @@ rspamd_sqlite3_learn_token (struct rspamd_task *task, struct token_node_s *tok,
 	}
 
 	if (!bk->in_transaction) {
-		rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_TRANSACTION_START_IM);
+		rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+				RSPAMD_STAT_BACKEND_TRANSACTION_START_IM);
 		bk->in_transaction = TRUE;
 	}
 
 	iv = res->value;
 	memcpy (&idx, tok->data, sizeof (idx));
 
-	if (rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_SET_TOKEN,
-				idx, rt->user_id, rt->lang_id, iv) == SQLITE_OK) {
+	if (rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+			RSPAMD_STAT_BACKEND_SET_TOKEN,
+			idx, rt->user_id, rt->lang_id, iv) == SQLITE_OK) {
 		return FALSE;
 	}
 
@@ -700,7 +574,8 @@ rspamd_sqlite3_finalize_learn (struct rspamd_task *task, gpointer runtime,
 	bk = rt->db;
 
 	if (bk->in_transaction) {
-		rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
+		rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+				RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
 		bk->in_transaction = FALSE;
 	}
 
@@ -717,7 +592,8 @@ rspamd_sqlite3_total_learns (struct rspamd_task *task, gpointer runtime,
 
 	g_assert (rt != NULL);
 	bk = rt->db;
-	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
+	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+			RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 
 	return res;
 }
@@ -732,9 +608,11 @@ rspamd_sqlite3_inc_learns (struct rspamd_task *task, gpointer runtime,
 
 	g_assert (rt != NULL);
 	bk = rt->db;
-	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_INC_LEARNS,
+	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+			RSPAMD_STAT_BACKEND_INC_LEARNS,
 			SQLITE3_DEFAULT, SQLITE3_DEFAULT);
-	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
+	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+			RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 
 	return res;
 }
@@ -749,9 +627,11 @@ rspamd_sqlite3_dec_learns (struct rspamd_task *task, gpointer runtime,
 
 	g_assert (rt != NULL);
 	bk = rt->db;
-	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_DEC_LEARNS,
+	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+			RSPAMD_STAT_BACKEND_DEC_LEARNS,
 			SQLITE3_DEFAULT, SQLITE3_DEFAULT);
-	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
+	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+			RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 
 	return res;
 }
@@ -766,7 +646,8 @@ rspamd_sqlite3_learns (struct rspamd_task *task, gpointer runtime,
 
 	g_assert (rt != NULL);
 	bk = rt->db;
-	rspamd_sqlite3_run_prstmt (bk, RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
+	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+			RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 
 	return res;
 }
