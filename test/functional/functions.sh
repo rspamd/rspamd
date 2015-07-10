@@ -4,6 +4,13 @@ save_error() {
 
 	printf 'Failed in %s: %s\n' "$_where" "$_reason" > ${TMPDIR}/test.err
 	mkdir -p /tmp/rspamd-failed-tests/${TEST_NAME} || true
+	# Save logs
+	RSPAMD_PID=`cat ${TMPDIR}/rspamd.pid`
+
+	if [ F"${RSPAMD_PID}" != F"" ] ; then
+		kill -USR1 ${RSPAMD_PID} > /dev/null 2>&1
+		sleep 0.5
+	fi
 	cp -rf ${TMPDIR}/* /tmp/rspamd-failed-tests/${TEST_NAME}
 
 	exit 1
