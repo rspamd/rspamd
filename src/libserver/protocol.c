@@ -183,7 +183,7 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	case 'c':
 	case 'C':
 		/* check */
-		if (g_ascii_strncasecmp (p + 1, MSG_CMD_CHECK + 1, pathlen) == 0) {
+		if (g_ascii_strncasecmp (p, MSG_CMD_CHECK, pathlen) == 0) {
 			task->cmd = CMD_CHECK;
 		}
 		else {
@@ -193,10 +193,10 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	case 's':
 	case 'S':
 		/* symbols, skip */
-		if (g_ascii_strncasecmp (p + 1, MSG_CMD_SYMBOLS + 1, pathlen) == 0) {
+		if (g_ascii_strncasecmp (p, MSG_CMD_SYMBOLS, pathlen) == 0) {
 			task->cmd = CMD_SYMBOLS;
 		}
-		else if (g_ascii_strncasecmp (p + 1, MSG_CMD_SKIP + 1, pathlen) == 0) {
+		else if (g_ascii_strncasecmp (p, MSG_CMD_SKIP, pathlen) == 0) {
 			task->cmd = CMD_SKIP;
 		}
 		else {
@@ -206,10 +206,10 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	case 'p':
 	case 'P':
 		/* ping, process */
-		if (g_ascii_strncasecmp (p + 1, MSG_CMD_PING + 1, pathlen) == 0) {
+		if (g_ascii_strncasecmp (p, MSG_CMD_PING, pathlen) == 0) {
 			task->cmd = CMD_PING;
 		}
-		else if (g_ascii_strncasecmp (p + 1, MSG_CMD_PROCESS + 1, pathlen) == 0) {
+		else if (g_ascii_strncasecmp (p, MSG_CMD_PROCESS, pathlen) == 0) {
 			task->cmd = CMD_PROCESS;
 		}
 		else {
@@ -219,10 +219,10 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	case 'r':
 	case 'R':
 		/* report, report_ifspam */
-		if (g_ascii_strncasecmp (p + 1, MSG_CMD_REPORT + 1, pathlen) == 0) {
+		if (g_ascii_strncasecmp (p, MSG_CMD_REPORT, pathlen) == 0) {
 			task->cmd = CMD_REPORT;
 		}
-		else if (g_ascii_strncasecmp (p + 1, MSG_CMD_REPORT_IFSPAM + 1,
+		else if (g_ascii_strncasecmp (p, MSG_CMD_REPORT_IFSPAM,
 				pathlen) == 0) {
 			task->cmd = CMD_REPORT_IFSPAM;
 		}

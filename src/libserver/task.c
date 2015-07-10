@@ -265,7 +265,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 		r = rspamd_strlcpy (filepath, task->msg.start,
 				MIN (sizeof (filepath), task->msg.len + 1));
 
-		rspamd_unescape_uri (filepath, filepath, r);
+		rspamd_unescape_uri (filepath, filepath, r + 1);
 
 		if (access (filepath, R_OK) == -1 || stat (filepath, &st) == -1) {
 			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
