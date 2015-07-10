@@ -187,7 +187,6 @@ rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
 {
 	struct rspamd_stat_sqlite3_db *bk;
 
-
 	bk = g_slice_alloc0 (sizeof (*bk));
 	bk->sqlite = rspamd_sqlite3_open_or_create (path, create_tables_sql, err);
 
