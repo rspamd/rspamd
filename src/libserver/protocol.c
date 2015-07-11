@@ -252,7 +252,30 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 		/* In case if we have a query, we need to store it somewhere */
 		task->msg.start = msg->url->str + u.field_data[UF_QUERY].off;
 		task->msg.len = u.field_data[UF_QUERY].len;
-		task->flags |= RSPAMD_TASK_FLAG_FILE;
+
+		/* Check URL query parameters */
+		p = memchr (task->msg.start, '=', task->msg.len);
+
+		if (p != NULL) {
+			if (p != task->msg.start &&
+				(memcmp (task->msg.start, "file",
+					(p - task->msg.start)) == 0 ||
+				memcmp (task->msg.start, "path",
+					(p - task->msg.start)) == 0)) {
+				task->flags |= RSPAMD_TASK_FLAG_FILE;
+				task->msg.start = p + 1;
+				task->msg.len -= (p - task->msg.start) + 1;
+				task->flags |= RSPAMD_TASK_FLAG_FILE;
+			}
+			else {
+				msg_err ("invalid query parameter: %*s", task->msg.len,
+						task->msg.start);
+			}
+		}
+		else {
+			/* Just file url afterwards */
+			task->flags |= RSPAMD_TASK_FLAG_FILE;
+		}
 	}
 
 	return TRUE;

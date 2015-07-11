@@ -6,3 +6,9 @@ export RSPAMD_CONFIG="$TEST_DIRNAME/configs/trivial.conf"
 run_rspamd
 run perl "$TEST_DIRNAME/cases/scan_file.pl" "$TEST_DIRNAME/messages/gtube.eml"
 check_output 'GTUBE'
+
+run perl "$TEST_DIRNAME/cases/scan_file.pl" "file=$TEST_DIRNAME/messages/gtube.eml"
+check_output 'GTUBE'
+
+run perl "$TEST_DIRNAME/cases/scan_file.pl" "path=$TEST_DIRNAME/messages/gtube.eml"
+check_output 'GTUBE'
