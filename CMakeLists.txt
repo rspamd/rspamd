@@ -566,7 +566,7 @@ ProcessPackage(SQLITE3 LIBRARY sqlite3 INCLUDE sqlite3.h INCLUDE_SUFFIXES includ
 	ROOT ${SQLITE3_ROOT_DIR} MODULES sqlite3 sqlite)
 ProcessPackage(ICONV LIBRARY iconv libiconv libiconv-2 c INCLUDE iconv.h INCLUDE_SUFFIXES include/libiconv
 	ROOT ${ICONV_ROOT_DIR} MODULES iconv)
-ProcessPackage(OPENSSL LIBRARY crypto INCLUDE opensslconf.h INCLUDE_SUFFIXES include/openssl
+ProcessPackage(OPENSSL LIBRARY crypto INCLUDE err.h INCLUDE_SUFFIXES include/openssl
 	ROOT ${OPENSSL_ROOT_DIR} MODULES openssl)
 
 #Check for openssl (required for dkim)
