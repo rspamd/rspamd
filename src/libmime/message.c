@@ -1729,7 +1729,7 @@ rspamd_message_parse (struct rspamd_task *task)
 		}
 
 		/* Extract data from received header if we were not given IP */
-		if (task->received && (task->flags & RSPAMD_TASK_FLAG_NO_IP)) {
+		if (task->received->len > 0 && (task->flags & RSPAMD_TASK_FLAG_NO_IP)) {
 			recv = g_ptr_array_index (task->received, 0);
 			if (recv->real_ip) {
 				if (!rspamd_parse_inet_address (&task->from_addr, recv->real_ip)) {
