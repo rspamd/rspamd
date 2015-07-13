@@ -1191,8 +1191,7 @@ resolve_stat_filename (rspamd_mempool_t * pool,
 }
 
 const gchar *
-calculate_check_time (gdouble start_real, gdouble start_virtual, gint resolution,
-	guint32 *scan_time)
+rspamd_log_check_time (gdouble start_real, gdouble start_virtual, gint resolution)
 {
 	double vdiff, diff, end_real, end_virtual;
 	static gchar res[64];
@@ -1202,8 +1201,6 @@ calculate_check_time (gdouble start_real, gdouble start_virtual, gint resolution
 	end_virtual = rspamd_get_virtual_ticks ();
 	vdiff = (end_virtual - start_virtual) * 1000;
 	diff = (end_real - start_real) * 1000;
-
-	*scan_time = diff;
 
 	sprintf (fmt, "%%.%dfms real, %%.%dfms virtual", resolution, resolution);
 	snprintf (res, sizeof (res), fmt, diff, vdiff);

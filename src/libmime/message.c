@@ -1334,7 +1334,7 @@ process_text_part (struct rspamd_task *task,
 			text_part->flags |= RSPAMD_MIME_PART_FLAG_EMPTY;
 			text_part->orig = NULL;
 			text_part->content = NULL;
-			task->text_parts = g_list_prepend (task->text_parts, text_part);
+			g_ptr_array_add (task->text_parts, text_part);
 			return;
 		}
 		text_part->orig = part_content;
@@ -1363,7 +1363,7 @@ process_text_part (struct rspamd_task *task,
 		rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) free_byte_array_callback,
 			text_part->content);
-		task->text_parts = g_list_prepend (task->text_parts, text_part);
+		g_ptr_array_add (task->text_parts, text_part);
 	}
 	else if (g_mime_content_type_is_type (type, "text", "*")) {
 
@@ -1377,7 +1377,7 @@ process_text_part (struct rspamd_task *task,
 			text_part->flags |= RSPAMD_MIME_PART_FLAG_EMPTY;
 			text_part->orig = NULL;
 			text_part->content = NULL;
-			task->text_parts = g_list_prepend (task->text_parts, text_part);
+			g_ptr_array_add (task->text_parts, text_part);
 			return;
 		}
 
@@ -1388,7 +1388,7 @@ process_text_part (struct rspamd_task *task,
 		text_part->orig = part_content;
 		rspamd_url_text_extract (task->task_pool, task, text_part, FALSE);
 		rspamd_fuzzy_from_text_part (text_part, task->task_pool, task->cfg->max_diff);
-		task->text_parts = g_list_prepend (task->text_parts, text_part);
+		g_ptr_array_add (task->text_parts, text_part);
 	}
 	else {
 		return;
@@ -1434,6 +1434,12 @@ process_text_part (struct rspamd_task *task,
 	}
 }
 
+struct mime_foreach_data {
+	struct rspamd_task *task;
+	guint parser_recursion;
+	GMimeObject *parent;
+};
+
 #ifdef GMIME24
 static void
 mime_foreach_callback (GMimeObject * parent,
@@ -1444,15 +1450,15 @@ static void
 mime_foreach_callback (GMimeObject * part, gpointer user_data)
 #endif
 {
-	struct rspamd_task *task = (struct rspamd_task *)user_data;
+	struct mime_foreach_data *md = user_data;
+	struct rspamd_task *task;
 	struct mime_part *mime_part;
 	GMimeContentType *type;
 	GMimeDataWrapper *wrapper;
 	GMimeStream *part_stream;
 	GByteArray *part_content;
 
-	task->parts_count++;
-
+	task = md->task;
 	/* 'part' points to the current part node that g_mime_message_foreach_part() is iterating over */
 
 	/* find out what class 'part' is... */
@@ -1466,15 +1472,15 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 		   g_mime_message_foreach_part() again here. */
 
 		message = g_mime_message_part_get_message ((GMimeMessagePart *) part);
-		if (task->scan_milliseconds++ < RECURSION_LIMIT) {
+		if (md->parser_recursion++ < RECURSION_LIMIT) {
 #ifdef GMIME24
-			g_mime_message_foreach (message, mime_foreach_callback, task);
+			g_mime_message_foreach (message, mime_foreach_callback, md);
 #else
-			g_mime_message_foreach_part (message, mime_foreach_callback, task);
+			g_mime_message_foreach_part (message, mime_foreach_callback, md);
 #endif
 		}
 		else {
-			msg_err ("too deep mime recursion detected: %d", task->scan_milliseconds);
+			msg_err ("too deep mime recursion detected: %d", md->parser_recursion);
 			return;
 		}
 #ifndef GMIME24
@@ -1493,14 +1499,14 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 	}
 	else if (GMIME_IS_MULTIPART (part)) {
 		/* multipart/mixed, multipart/alternative, multipart/related, multipart/signed, multipart/encrypted, etc... */
-		task->parser_parent_part = part;
+		md->parent = part;
 #ifndef GMIME24
 		debug_task ("detected multipart part");
 		/* we'll get to finding out if this is a signed/encrypted multipart later... */
 		if (task->parser_recursion++ < RECURSION_LIMIT) {
 			g_mime_multipart_foreach ((GMimeMultipart *) part,
 				mime_foreach_callback,
-				task);
+				md);
 		}
 		else {
 			msg_err ("endless recursion detected: %d", task->parser_recursion);
@@ -1563,7 +1569,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 
 				mime_part->type = type;
 				mime_part->content = part_content;
-				mime_part->parent = task->parser_parent_part;
+				mime_part->parent = md->parent;
 				mime_part->filename = g_mime_part_get_filename (GMIME_PART (
 							part));
 				mime_part->mime = part;
@@ -1571,13 +1577,13 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 				debug_task ("found part with content-type: %s/%s",
 					type->type,
 					type->subtype);
-				task->parts = g_list_prepend (task->parts, mime_part);
+				g_ptr_array_add (task->parts, mime_part);
 				/* Skip empty parts */
 				process_text_part (task,
 					part_content,
 					type,
 					mime_part,
-					task->parser_parent_part,
+					md->parent,
 					(part_content->len <= 0));
 			}
 			else {
@@ -1618,6 +1624,7 @@ rspamd_message_parse (struct rspamd_task *task)
 	GList *first, *cur;
 	GMimePart *part;
 	GMimeDataWrapper *wrapper;
+	struct mime_foreach_data md;
 	struct received_header *recv;
 	gchar *mid, *url_str;
 	const gchar *url_end, *p, *end;
@@ -1675,25 +1682,21 @@ rspamd_message_parse (struct rspamd_task *task)
 			task->message_id = "undef";
 		}
 
-		/*
-		 * XXX: we use this strange value to save bytes in the task for
-		 * saving foreach recursion
-		 */
-		task->scan_milliseconds = 0;
+		memset (&md, 0, sizeof (md));
+		md.task = task;
 #ifdef GMIME24
-		g_mime_message_foreach (message, mime_foreach_callback, task);
+		g_mime_message_foreach (message, mime_foreach_callback, &md);
 #else
 		/*
 		 * This is rather strange, but gmime 2.2 do NOT pass top-level part to foreach callback
 		 * so we need to set up parent part by hands
 		 */
-		task->parser_parent_part = g_mime_message_get_mime_part (message);
-		g_object_unref (task->parser_parent_part);
-		g_mime_message_foreach_part (message, mime_foreach_callback, task);
+		md.parent = g_mime_message_get_mime_part (message);
+		g_object_unref (md.parent);
+		g_mime_message_foreach_part (message, mime_foreach_callback, &md);
 #endif
-		task->scan_milliseconds = 0;
 
-		debug_task ("found %d parts in message", task->parts_count);
+		debug_task ("found %ud parts in message", task->parts->len);
 		if (task->queue_id == NULL) {
 			task->queue_id = "undef";
 		}
@@ -1721,13 +1724,13 @@ rspamd_message_parse (struct rspamd_task *task)
 				rspamd_mempool_alloc0 (task->task_pool,
 					sizeof (struct received_header));
 			parse_recv_header (task->task_pool, cur->data, recv);
-			task->received = g_list_prepend (task->received, recv);
+			g_ptr_array_add (task->received, recv);
 			cur = g_list_next (cur);
 		}
 
 		/* Extract data from received header if we were not given IP */
 		if (task->received && (task->flags & RSPAMD_TASK_FLAG_NO_IP)) {
-			recv = task->received->data;
+			recv = g_ptr_array_index (task->received, 0);
 			if (recv->real_ip) {
 				if (!rspamd_parse_inet_address (&task->from_addr, recv->real_ip)) {
 					msg_warn ("cannot get IP from received header: '%s'",
@@ -1771,18 +1774,14 @@ rspamd_message_parse (struct rspamd_task *task)
 		rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) destroy_message, task->message);
 
-		/*
-		 * XXX: we use this strange value to save bytes in the task for
-		 * saving foreach recursion
-		 */
-		task->scan_milliseconds = 0;
+		memset (&md, 0, sizeof (md));
+		md.task = task;
 #ifdef GMIME24
-		g_mime_message_foreach (task->message, mime_foreach_callback, task);
+		g_mime_message_foreach (task->message, mime_foreach_callback, &md);
 #else
 		g_mime_message_foreach_part (task->message, mime_foreach_callback,
-			task);
+			&md);
 #endif
-		task->scan_milliseconds = 0;
 		/* Generate message ID */
 		mid = g_mime_utils_generate_message_id ("localhost.localdomain");
 		rspamd_mempool_add_destructor (task->task_pool,
@@ -1790,6 +1789,7 @@ rspamd_message_parse (struct rspamd_task *task)
 		g_mime_message_set_message_id (task->message, mid);
 		task->message_id = mid;
 		task->queue_id = mid;
+
 		/* Set headers for message */
 		if (task->subject) {
 			g_mime_message_set_subject (task->message, task->subject);

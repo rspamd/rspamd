@@ -642,15 +642,14 @@ rspamd_protocol_handle_request (struct rspamd_task *task,
 static void
 write_hashes_to_log (struct rspamd_task *task, GString *logbuf)
 {
-	GList *cur;
 	struct mime_text_part *text_part;
+	guint i;
 
-	cur = task->text_parts;
+	for (i = 0; i < task->text_parts->len; i ++) {
+		text_part = g_ptr_array_index (task->text_parts, i);
 
-	while (cur) {
-		text_part = cur->data;
 		if (text_part->fuzzy) {
-			if (cur->next != NULL) {
+			if (i != task->text_parts->len - 1) {
 				rspamd_printf_gstring (logbuf,
 					" part: %Xd,",
 					text_part->fuzzy->h);
@@ -660,7 +659,6 @@ write_hashes_to_log (struct rspamd_task *task, GString *logbuf)
 					text_part->fuzzy->h);
 			}
 		}
-		cur = g_list_next (cur);
 	}
 }
 
@@ -923,10 +921,9 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 
 		rspamd_printf_gstring (logbuf, "]), len: %z, time: %s, dns req: %d,",
 				task->msg.len,
-				calculate_check_time (task->time_real,
+				rspamd_log_check_time (task->time_real,
 						task->time_virtual,
-						task->cfg->clock_res,
-						&task->scan_milliseconds),
+						task->cfg->clock_res),
 				task->dns_requests);
 	}
 

@@ -212,9 +212,8 @@ smtp_metric_callback (gpointer key, gpointer value, gpointer ud)
 			cd->log_size - cd->log_offset,
 			"]), len: %z, time: %s,",
 			task->msg.len,
-			calculate_check_time (task->time_real, task->time_virtual,
-					task->cfg->clock_res,
-					&task->scan_milliseconds));
+			rspamd_log_check_time (task->time_real, task->time_virtual,
+					task->cfg->clock_res));
 }
 
 gboolean

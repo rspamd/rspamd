@@ -94,6 +94,16 @@ rspamd_task_new (struct rspamd_worker *worker)
 	rspamd_mempool_add_destructor (new_task->task_pool,
 		(rspamd_mempool_destruct_t) g_hash_table_unref,
 		new_task->urls);
+	new_task->parts = g_ptr_array_sized_new (4);
+	rspamd_mempool_add_destructor (new_task->task_pool,
+			rspamd_ptr_array_free_hard, new_task->parts);
+	new_task->text_parts = g_ptr_array_sized_new (2);
+	rspamd_mempool_add_destructor (new_task->task_pool,
+			rspamd_ptr_array_free_hard, new_task->text_parts);
+	new_task->received = g_ptr_array_sized_new (8);
+	rspamd_mempool_add_destructor (new_task->task_pool,
+			rspamd_ptr_array_free_hard, new_task->received);
+
 	new_task->sock = -1;
 	new_task->flags |= (RSPAMD_TASK_FLAG_MIME|RSPAMD_TASK_FLAG_JSON);
 	new_task->pre_result.action = METRIC_ACTION_NOACTION;
@@ -159,57 +169,56 @@ rspamd_task_restore (void *arg)
 void
 rspamd_task_free (struct rspamd_task *task, gboolean is_soft)
 {
-	GList *part;
 	struct mime_part *p;
 	struct mime_text_part *tp;
+	guint i;
 
 	if (task) {
 		debug_task ("free pointer %p", task);
-		while ((part = g_list_first (task->parts))) {
-			task->parts = g_list_remove_link (task->parts, part);
-			p = (struct mime_part *) part->data;
-			g_byte_array_free (p->content, TRUE);
-			g_list_free_1 (part);
-		}
-		if (task->text_parts) {
-			part = task->text_parts;
-			while (part) {
-				tp = (struct mime_text_part *)part->data;
-				if (tp->words) {
-					g_array_free (tp->words, TRUE);
-				}
-				if (tp->normalized_words) {
-					g_array_free (tp->normalized_words, TRUE);
-				}
-				part = g_list_next (part);
-			}
 
-			g_list_free (task->text_parts);
+		for (i = 0; i < task->parts->len; i ++) {
+			p = g_ptr_array_index (task->parts, i);
+			g_byte_array_free (p->content, TRUE);
 		}
+
+		for (i = 0; i < task->text_parts->len; i ++) {
+			tp = g_ptr_array_index (task->text_parts, i);
+			if (tp->words) {
+				g_array_free (tp->words, TRUE);
+			}
+			if (tp->normalized_words) {
+				g_array_free (tp->normalized_words, TRUE);
+			}
+		}
+
 		if (task->images) {
 			g_list_free (task->images);
 		}
+
 		if (task->messages) {
 			g_list_free (task->messages);
 		}
-		if (task->received) {
-			g_list_free (task->received);
-		}
+
 		if (task->http_conn != NULL) {
 			rspamd_http_connection_unref (task->http_conn);
 		}
+
 		if (task->sock != -1) {
 			close (task->sock);
 		}
+
 		if (task->settings != NULL) {
 			ucl_object_unref (task->settings);
 		}
+
 		if (task->client_addr) {
 			rspamd_inet_address_destroy (task->client_addr);
 		}
+
 		if (task->from_addr) {
 			rspamd_inet_address_destroy (task->from_addr);
 		}
+
 		if (task->err) {
 			g_error_free (task->err);
 		}

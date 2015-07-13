@@ -960,16 +960,15 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 	struct rspamd_image *image;
 	struct rspamd_fuzzy_cmd *cmd;
 	gsize hashlen;
-	GList *cur;
+	guint i;
 	GPtrArray *res;
 
-	cur = task->text_parts;
 	res = g_ptr_array_new ();
 
-	while (cur) {
-		part = cur->data;
+	for (i = 0; i < task->text_parts->len; i ++) {
+		part = g_ptr_array_index (task->text_parts, i);
+
 		if (IS_PART_EMPTY (part)) {
-			cur = g_list_next (cur);
 			continue;
 		}
 
@@ -977,17 +976,17 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 		if (fuzzy_module_ctx->min_bytes > part->content->len) {
 			msg_info ("<%s>, part is shorter than %d symbols, skip fuzzy check",
 				task->message_id, fuzzy_module_ctx->min_bytes);
-			cur = g_list_next (cur);
 			continue;
 		}
 		/* Check length of hash */
 		hashlen = strlen (part->fuzzy->hash_pipe);
+
 		if (hashlen == 0) {
 			msg_info ("<%s>, part hash empty, skip fuzzy check",
 				task->message_id, fuzzy_module_ctx->min_hash_len);
-			cur = g_list_next (cur);
 			continue;
 		}
+
 		if (fuzzy_module_ctx->min_hash_len != 0 &&
 			hashlen * part->fuzzy->block_size <
 			fuzzy_module_ctx->min_hash_len) {
@@ -995,7 +994,6 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 				"<%s>, part hash is shorter than %d symbols, skip fuzzy check",
 				task->message_id,
 				fuzzy_module_ctx->min_hash_len);
-			cur = g_list_next (cur);
 			continue;
 		}
 
@@ -1012,10 +1010,11 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 		if (cmd) {
 			g_ptr_array_add (res, cmd);
 		}
-
-		cur = g_list_next (cur);
 	}
+
 	/* Process images */
+	GList *cur;
+
 	cur = task->images;
 	while (cur) {
 		image = cur->data;
@@ -1045,10 +1044,11 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 		}
 		cur = g_list_next (cur);
 	}
+
 	/* Process other parts */
-	cur = task->parts;
-	while (cur) {
-		mime_part = cur->data;
+	for (i = 0; i < task->parts->len; i ++) {
+		mime_part = g_ptr_array_index (task->parts, i);
+
 		if (mime_part->content->len > 0 &&
 			fuzzy_check_content_type (rule, mime_part->type)) {
 			if (fuzzy_module_ctx->min_bytes <= 0 || mime_part->content->len >=
@@ -1071,7 +1071,6 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 				}
 			}
 		}
-		cur = g_list_next (cur);
 	}
 
 	if (res->len == 0) {

@@ -107,78 +107,72 @@ struct custom_command {
  * Worker task structure
  */
 struct rspamd_task {
-	struct rspamd_worker *worker;                               /**< pointer to worker object						*/
-	struct custom_command *custom_cmd;                          /**< custom command if any							*/
-	guint processed_stages;										/**< bits of stages that are processed				*/
-	enum rspamd_command cmd;                                    /**< command										*/
-	gint sock;                                                  /**< socket descriptor								*/
-	guint flags;												/**< Bit flags										*/
-	guint message_len;											/**< Message length									*/
-
-	gchar *helo;                                                /**< helo header value								*/
-	gchar *queue_id;                                            /**< queue id if specified							*/
-	const gchar *message_id;                                    /**< message id										*/
-
-	rspamd_inet_addr_t *from_addr;                              /**< from addr for a task							*/
-	rspamd_inet_addr_t *client_addr;                            /**< address of connected socket					*/
-	gchar *deliver_to;                                          /**< address to deliver								*/
-	gchar *user;                                                /**< user to deliver								*/
-	gchar *subject;                                             /**< subject (for non-mime)							*/
-	gchar *hostname;                                            /**< hostname reported by MTA						*/
-	GHashTable *request_headers;                                /**< HTTP headers in a request						*/
-	GHashTable *reply_headers;                                  /**< Custom reply headers							*/
+	struct rspamd_worker *worker;					/**< pointer to worker object						*/
+	struct custom_command *custom_cmd;				/**< custom command if any							*/
+	guint processed_stages;							/**< bits of stages that are processed				*/
+	enum rspamd_command cmd;						/**< command										*/
+	gint sock;										/**< socket descriptor								*/
+	guint flags;									/**< Bit flags										*/
+	guint message_len;								/**< Message length									*/
+	guint32 dns_requests;							/**< number of DNS requests per this task			*/
+	gchar *helo;									/**< helo header value								*/
+	gchar *queue_id;								/**< queue id if specified							*/
+	const gchar *message_id;						/**< message id										*/
+	rspamd_inet_addr_t *from_addr;					/**< from addr for a task							*/
+	rspamd_inet_addr_t *client_addr;				/**< address of connected socket					*/
+	gchar *deliver_to;								/**< address to deliver								*/
+	gchar *user;									/**< user to deliver								*/
+	gchar *subject;									/**< subject (for non-mime)							*/
+	gchar *hostname;								/**< hostname reported by MTA						*/
+	GHashTable *request_headers;					/**< HTTP headers in a request						*/
+	GHashTable *reply_headers;						/**< Custom reply headers							*/
 	struct {
 		const gchar *start;
 		gsize len;
-	} msg;                                                      /**< message buffer									*/
-	struct rspamd_http_connection *http_conn;                   /**< HTTP server connection							*/
-	struct rspamd_async_session * s;                             /**< async session object							*/
-	gint parts_count;                                           /**< mime parts count								*/
-	GMimeMessage *message;                                      /**< message, parsed with GMime						*/
-	GMimeObject *parser_parent_part;                            /**< current parent part							*/
-	GList *parts;                                               /**< list of parsed parts							*/
-	GList *text_parts;                                          /**< list of text parts								*/
-	rspamd_fstring_t raw_headers_content;                       /**< list of raw headers							*/
-	GList *received;                                            /**< list of received headers						*/
-	GHashTable *urls;                                           /**< list of parsed urls							*/
-	GHashTable *emails;                                         /**< list of parsed emails							*/
-	GList *images;                                              /**< list of images									*/
-	GHashTable *raw_headers;                                    /**< list of raw headers							*/
-	GHashTable *results;                                        /**< hash table of metric_result indexed by
-	                                                             *    metric's name									*/
-	GHashTable *tokens;                                         /**< hash table of tokens indexed by tokenizer
-	                                                             *    pointer                                       */
-
-	InternetAddressList *rcpt_mime;                         	/**< list of all recipients                         */
-	InternetAddressList *rcpt_envelope;                         /**< list of all recipients                         */
+	} msg;											/**< message buffer									*/
+	struct rspamd_http_connection *http_conn;		/**< HTTP server connection							*/
+	struct rspamd_async_session * s;				/**< async session object							*/
+	GMimeMessage *message;							/**< message, parsed with GMime						*/
+	GPtrArray *parts;								/**< list of parsed parts							*/
+	GPtrArray *text_parts;							/**< list of text parts								*/
+	rspamd_fstring_t raw_headers_content;			/**< list of raw headers							*/
+	GPtrArray *received;							/**< list of received headers						*/
+	GHashTable *urls;								/**< list of parsed urls							*/
+	GHashTable *emails;								/**< list of parsed emails							*/
+	GList *images;									/**< list of images									*/
+	GHashTable *raw_headers;						/**< list of raw headers							*/
+	GHashTable *results;							/**< hash table of metric_result indexed by
+													 *    metric's name									*/
+	GHashTable *tokens;								/**< hash table of tokens indexed by tokenizer
+													 *    pointer										*/
+	InternetAddressList *rcpt_mime;					/**< list of all recipients							*/
+	InternetAddressList *rcpt_envelope;				/**< list of all recipients							*/
 	InternetAddressList *from_mime;
 	InternetAddressList *from_envelope;
 
-	GList *messages;                                            /**< list of messages that would be reported		*/
-	GHashTable *re_cache;                                       /**< cache for matched or not matched regexps		*/
-	struct rspamd_config *cfg;                                  /**< pointer to config object						*/
+	GList *messages;								/**< list of messages that would be reported		*/
+	GHashTable *re_cache;							/**< cache for matched or not matched regexps		*/
+	struct rspamd_config *cfg;						/**< pointer to config object						*/
 	GError *err;
-	rspamd_mempool_t *task_pool;                                    /**< memory pool for task							*/
+	rspamd_mempool_t *task_pool;					/**< memory pool for task							*/
 	double time_real;
 	double time_virtual;
 	struct timeval tv;
-	guint32 scan_milliseconds;                                  /**< how much milliseconds passed					*/
-	gboolean (*fin_callback)(struct rspamd_task *task, void *arg); /**< calback for filters finalizing					*/
-	void *fin_arg;                                              /**< argument for fin callback						*/
+	gboolean (*fin_callback)(struct rspamd_task *task, void *arg);
+													/**< calback for filters finalizing					*/
+	void *fin_arg;									/**< argument for fin callback						*/
 
-	guint32 dns_requests;                                       /**< number of DNS requests per this task			*/
+	struct rspamd_dns_resolver *resolver;			/**< DNS resolver									*/
+	struct event_base *ev_base;						/**< Event base										*/
 
-	struct rspamd_dns_resolver *resolver;                       /**< DNS resolver									*/
-	struct event_base *ev_base;                                 /**< Event base										*/
-
-	gpointer checkpoint;										/**< Opaque checkpoint data						*/
+	gpointer checkpoint;							/**< Opaque checkpoint data							*/
 
 	struct {
-		enum rspamd_metric_action action;                       /**< Action of pre filters							*/
-		gchar *str;                                             /**< String describing action						*/
-	} pre_result;                                               /**< Result of pre-filters							*/
+		enum rspamd_metric_action action;			/**< Action of pre filters							*/
+		gchar *str;									/**< String describing action						*/
+	} pre_result;									/**< Result of pre-filters							*/
 
-	ucl_object_t *settings;                                     /**< Settings applied to task						*/
+	ucl_object_t *settings;							/**< Settings applied to task						*/
 };
 
 /**

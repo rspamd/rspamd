@@ -308,12 +308,10 @@ rspamd_stat_process_tokenize (struct rspamd_tokenizer_config *cf,
 	struct mime_text_part *part;
 	GArray *words;
 	gchar *sub;
-	GList *cur;
+	guint i;
 
-	cur = task->text_parts;
-
-	while (cur != NULL) {
-		part = (struct mime_text_part *)cur->data;
+	for (i = 0; i < task->text_parts->len; i ++) {
+		part = g_ptr_array_index (task->text_parts, i);
 
 		if (!IS_PART_EMPTY (part) && part->words != NULL) {
 			if (compat) {
@@ -325,8 +323,6 @@ rspamd_stat_process_tokenize (struct rspamd_tokenizer_config *cf,
 					part->normalized_words, tok->tokens, IS_PART_UTF (part));
 			}
 		}
-
-		cur = g_list_next (cur);
 	}
 
 	if (task->subject != NULL) {

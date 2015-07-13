@@ -260,17 +260,14 @@ lua_trie_search_mime (lua_State *L)
 	ac_trie_t *trie = lua_check_trie (L, 1);
 	struct rspamd_task *task = lua_check_task (L, 2);
 	struct mime_text_part *part;
-	GList *cur;
 	const gchar *text;
 	gint state = 0;
-	gsize len;
+	gsize len, i;
 	gboolean found = FALSE;
 
 	if (trie) {
-		cur = task->text_parts;
-
-		while (cur) {
-			part = cur->data;
+		for (i = 0; i < task->text_parts->len; i ++) {
+			part = g_ptr_array_index (task->text_parts, i);
 
 			if (!IS_PART_EMPTY (part) && part->content != NULL) {
 				text = part->content->data;
@@ -280,8 +277,6 @@ lua_trie_search_mime (lua_State *L)
 					found = TRUE;
 				}
 			}
-
-			cur = g_list_next (cur);
 		}
 	}
 

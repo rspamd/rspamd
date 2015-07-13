@@ -886,23 +886,22 @@ lua_task_get_emails (lua_State * L)
 static gint
 lua_task_get_text_parts (lua_State * L)
 {
-	gint i = 1;
+	guint i;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	GList *cur;
 	struct mime_text_part *part, **ppart;
 
 	if (task != NULL) {
 		lua_newtable (L);
-		cur = task->text_parts;
-		while (cur) {
-			part = cur->data;
+
+		for (i = 0; i < task->text_parts->len; i ++) {
+			part = g_ptr_array_index (task->text_parts, i);
 			ppart = lua_newuserdata (L, sizeof (struct mime_text_part *));
 			*ppart = part;
 			rspamd_lua_setclass (L, "rspamd{textpart}", -1);
 			/* Make it array */
-			lua_rawseti (L, -2, i++);
-			cur = g_list_next (cur);
+			lua_rawseti (L, -2, i + 1);
 		}
+
 		return 1;
 	}
 	lua_pushnil (L);
@@ -912,22 +911,20 @@ lua_task_get_text_parts (lua_State * L)
 static gint
 lua_task_get_parts (lua_State * L)
 {
-	gint i = 1;
+	guint i;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	GList *cur;
 	struct mime_part *part, **ppart;
 
 	if (task != NULL) {
 		lua_newtable (L);
-		cur = task->parts;
-		while (cur) {
-			part = cur->data;
+
+		for (i = 0; i < task->parts->len; i ++) {
+			part = g_ptr_array_index (task->text_parts, i);
 			ppart = lua_newuserdata (L, sizeof (struct mime_part *));
 			*ppart = part;
 			rspamd_lua_setclass (L, "rspamd{mimepart}", -1);
 			/* Make it array */
-			lua_rawseti (L, -2, i++);
-			cur = g_list_next (cur);
+			lua_rawseti (L, -2, i + 1);
 		}
 		return 1;
 	}
@@ -1153,23 +1150,23 @@ static gint
 lua_task_get_received_headers (lua_State * L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
-	GList *cur;
 	struct received_header *rh;
-	gint i = 1;
+	guint i;
 
 	if (task) {
 		lua_newtable (L);
-		cur = g_list_first (task->received);
-		while (cur) {
-			rh = cur->data;
+
+		for (i = 0; i < task->received->len; i ++) {
+			rh = g_ptr_array_index (task->received, i);
+
 			if (rh->is_error || G_UNLIKELY (
 					rh->from_ip == NULL &&
 					rh->real_ip == NULL &&
 					rh->real_hostname == NULL &&
 					rh->by_hostname == NULL)) {
-				cur = g_list_next (cur);
 				continue;
 			}
+
 			lua_newtable (L);
 			rspamd_lua_table_set (L, "from_hostname", rh->from_hostname);
 			lua_pushstring (L, "from_ip");
@@ -1180,8 +1177,7 @@ lua_task_get_received_headers (lua_State * L)
 			rspamd_lua_ip_push_fromstring (L, rh->real_ip);
 			lua_settable (L, -3);
 			rspamd_lua_table_set (L, "by_hostname", rh->by_hostname);
-			lua_rawseti (L, -2, i++);
-			cur = g_list_next (cur);
+			lua_rawseti (L, -2, i + 1);
 		}
 	}
 	else {

@@ -205,16 +205,15 @@ check_part (struct mime_text_part *part, gboolean raw_mode)
 static void
 chartable_symbol_callback (struct rspamd_task *task, void *unused)
 {
-	GList *cur;
+	guint i;
 	struct mime_text_part *part;
 
-	cur = g_list_first (task->text_parts);
-	while (cur) {
-		part = cur->data;
+	for (i = 0; i < task->text_parts->len; i ++) {
+		part = g_ptr_array_index (task->text_parts, i);
+
 		if (!IS_PART_EMPTY (part) && check_part (part, task->cfg->raw_mode)) {
 			rspamd_task_insert_result (task, chartable_module_ctx->symbol, 1, NULL);
 		}
-		cur = g_list_next (cur);
 	}
 
 }

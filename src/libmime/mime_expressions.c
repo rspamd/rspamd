@@ -790,6 +790,7 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 	const gchar *in;
 	gint ret = 0;
 	GList *cur, *headerlist;
+	guint i;
 	rspamd_regexp_t *regexp;
 	struct url_regexp_param callback_param = {
 		.task = task,
@@ -888,12 +889,11 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 		break;
 	case REGEXP_MIME:
 		/* Iterate throught text parts */
-		cur = g_list_first (task->text_parts);
-		while (cur) {
-			part = (struct mime_text_part *)cur->data;
+		for (i = 0; i < task->text_parts->len; i ++) {
+			part = g_ptr_array_index (task->text_parts, i);
+
 			/* Skip empty parts */
 			if (IS_PART_EMPTY (part)) {
-				cur = g_list_next (cur);
 				continue;
 			}
 
@@ -918,10 +918,7 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 			if (!re->is_multiple && ret) {
 				break;
 			}
-
-			cur = g_list_next (cur);
 		}
-
 
 		break;
 	case REGEXP_MESSAGE:
@@ -1179,7 +1176,6 @@ rspamd_parts_distance (struct rspamd_task * task, GArray * args, void *unused)
 {
 	gint threshold, threshold2 = -1, diff;
 	struct mime_text_part *p1, *p2;
-	GList *cur;
 	struct expression_argument *arg;
 	GMimeObject *parent;
 	const GMimeContentType *ct;
@@ -1244,18 +1240,12 @@ rspamd_parts_distance (struct rspamd_task * task, GArray * args, void *unused)
 		}
 	}
 
-	if (g_list_length (task->text_parts) == 2) {
-		cur = g_list_first (task->text_parts);
-		p1 = cur->data;
-		cur = g_list_next (cur);
+	if (task->text_parts->len == 2) {
+		p1 = g_ptr_array_index (task->text_parts, 0);
+		p2 = g_ptr_array_index (task->text_parts, 1);
 		pdiff = rspamd_mempool_alloc (task->task_pool, sizeof (gint));
 		*pdiff = -1;
 
-		if (cur == NULL) {
-			msg_info ("bad parts list");
-			return FALSE;
-		}
-		p2 = cur->data;
 		/* First of all check parent object */
 		if (p1->parent && p1->parent == p2->parent) {
 			parent = p1->parent;
@@ -1462,20 +1452,17 @@ rspamd_has_only_html_part (struct rspamd_task * task, GArray * args,
 	void *unused)
 {
 	struct mime_text_part *p;
-	GList *cur;
 	gboolean res = FALSE;
 
-	cur = g_list_first (task->text_parts);
-	while (cur) {
-		p = cur->data;
+	if (task->text_parts->len == 1) {
+		p = g_ptr_array_index (task->text_parts, 0);
+
 		if (IS_PART_HTML (p)) {
 			res = TRUE;
 		}
 		else {
 			res = FALSE;
-			break;
 		}
-		cur = g_list_next (cur);
 	}
 
 	return res;
@@ -1633,12 +1620,12 @@ gboolean
 rspamd_is_html_balanced (struct rspamd_task * task, GArray * args, void *unused)
 {
 	struct mime_text_part *p;
-	GList *cur;
+	guint i;
 	gboolean res = TRUE;
 
-	cur = g_list_first (task->text_parts);
-	while (cur) {
-		p = cur->data;
+	for (i = 0; i < task->text_parts->len; i ++) {
+
+		p = g_ptr_array_index (task->text_parts, i);
 		if (!IS_PART_EMPTY (p) && IS_PART_HTML (p)) {
 			if (p->flags & RSPAMD_MIME_PART_FLAG_BALANCED) {
 				res = TRUE;
@@ -1648,7 +1635,6 @@ rspamd_is_html_balanced (struct rspamd_task * task, GArray * args, void *unused)
 				break;
 			}
 		}
-		cur = g_list_next (cur);
 	}
 
 	return res;
@@ -1681,9 +1667,9 @@ gboolean
 rspamd_has_html_tag (struct rspamd_task * task, GArray * args, void *unused)
 {
 	struct mime_text_part *p;
-	GList *cur;
 	struct expression_argument *arg;
 	struct html_tag *tag;
+	guint i;
 	gboolean res = FALSE;
 	struct html_callback_data cd;
 
@@ -1705,12 +1691,12 @@ rspamd_has_html_tag (struct rspamd_task * task, GArray * args, void *unused)
 		return FALSE;
 	}
 
-	cur = g_list_first (task->text_parts);
 	cd.res = &res;
 	cd.tag = tag;
 
-	while (cur && res == FALSE) {
-		p = cur->data;
+	for (i = 0; i < task->text_parts->len && res; i ++) {
+		p = g_ptr_array_index (task->text_parts, i);
+
 		if (!IS_PART_EMPTY (p) && IS_PART_HTML (p) && p->html_nodes) {
 			g_node_traverse (p->html_nodes,
 				G_PRE_ORDER,
@@ -1719,7 +1705,6 @@ rspamd_has_html_tag (struct rspamd_task * task, GArray * args, void *unused)
 				search_html_node_callback,
 				&cd);
 		}
-		cur = g_list_next (cur);
 	}
 
 	return res;
@@ -1730,17 +1715,15 @@ gboolean
 rspamd_has_fake_html (struct rspamd_task * task, GArray * args, void *unused)
 {
 	struct mime_text_part *p;
-	GList *cur;
+	guint i;
 	gboolean res = FALSE;
 
-	cur = g_list_first (task->text_parts);
+	for (i = 0; i < task->text_parts->len && res; i ++) {
+		p = g_ptr_array_index (task->text_parts, i);
 
-	while (cur && res == FALSE) {
-		p = cur->data;
 		if (!IS_PART_EMPTY (p) && IS_PART_HTML (p) && p->html_nodes == NULL) {
 			res = TRUE;
 		}
-		cur = g_list_next (cur);
 	}
 
 	return res;
@@ -1921,8 +1904,8 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 	GMimeObject *part;
 	GMimeContentType *ct;
 	gint r;
+	guint i;
 	gboolean recursive = FALSE, result = FALSE;
-	GList *cur = NULL;
 	struct mime_part *cur_part;
 
 	if (args == NULL || args->len < 2) {
@@ -1935,109 +1918,14 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 	param_name = arg->data;
 	arg_pattern = &g_array_index (args, struct expression_argument, 1);
 
-
-	part = g_mime_message_get_mime_part (task->message);
-	if (part) {
+	for (i = 0; i < task->text_parts->len; i ++) {
+		cur_part = g_ptr_array_index (task->text_parts, i);
+		part = cur_part->mime;
 		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
+
 		if (args->len >= 3) {
 			arg1 = &g_array_index (args, struct expression_argument, 2);
 			if (g_ascii_strncasecmp (arg1->data, "true",
-				sizeof ("true") - 1) == 0) {
-				recursive = TRUE;
-			}
-		}
-		else {
-			/*
-			 * If user did not specify argument, let's assume that he wants
-			 * recursive search if mime part is multipart/mixed
-			 */
-			if (g_mime_content_type_is_type (ct, "multipart", "*")) {
-				recursive = TRUE;
-			}
-		}
-
-		if (recursive) {
-			cur = task->parts;
-		}
-
-#ifndef GMIME24
-		g_object_unref (part);
-#endif
-		for (;; ) {
-			if ((param_data =
-				g_mime_content_type_get_parameter ((GMimeContentType *)ct,
-				param_name)) == NULL) {
-				result = FALSE;
-			}
-			else {
-				if (arg_pattern->type == EXPRESSION_ARGUMENT_REGEXP) {
-					re = arg_pattern->data;
-
-					if ((r = rspamd_task_re_cache_check (task,
-							rspamd_regexp_get_pattern (re))) == -1) {
-						r = rspamd_regexp_search (re, param_data, 0,
-								NULL, NULL, FALSE, NULL);
-						rspamd_task_re_cache_add (task,
-								rspamd_regexp_get_pattern (re), r);
-					}
-				}
-				else {
-					/* Just do strcasecmp */
-					if (g_ascii_strcasecmp (param_data, arg_pattern->data) == 0) {
-						return TRUE;
-					}
-				}
-			}
-			/* Get next part */
-			if (!recursive) {
-				return result;
-			}
-			else if (cur != NULL) {
-				cur_part = cur->data;
-				if (cur_part->type != NULL) {
-					ct = cur_part->type;
-				}
-				cur = g_list_next (cur);
-			}
-			else {
-				/* All is done */
-				return result;
-			}
-		}
-	}
-
-	return FALSE;
-}
-
-static gboolean
-rspamd_content_type_has_param (struct rspamd_task * task,
-	GArray * args,
-	void *unused)
-{
-	gchar *param_name;
-	const gchar *param_data;
-	struct expression_argument *arg, *arg1;
-	GMimeObject *part;
-	GMimeContentType *ct;
-	gboolean recursive = FALSE, result = FALSE;
-	GList *cur = NULL;
-	struct mime_part *cur_part;
-
-	if (args == NULL || args->len < 1) {
-		msg_warn ("no parameters to function");
-		return FALSE;
-	}
-
-	arg = &g_array_index (args, struct expression_argument, 0);
-	g_assert (arg->type == EXPRESSION_ARGUMENT_NORMAL);
-	param_name = arg->data;
-
-	part = g_mime_message_get_mime_part (task->message);
-	if (part) {
-		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
-		if (args->len >= 2) {
-			arg1 = &g_array_index (args, struct expression_argument, 2);
-			if (g_ascii_strncasecmp (arg1->data, "true",
 					sizeof ("true") - 1) == 0) {
 				recursive = TRUE;
 			}
@@ -2051,99 +1939,16 @@ rspamd_content_type_has_param (struct rspamd_task * task,
 				recursive = TRUE;
 			}
 		}
-
-		if (recursive) {
-			cur = task->parts;
-		}
-
 #ifndef GMIME24
 		g_object_unref (part);
 #endif
-		for (;; ) {
-			if ((param_data =
+
+		if ((param_data =
 				g_mime_content_type_get_parameter ((GMimeContentType *)ct,
-				param_name)) != NULL) {
-				return TRUE;
-			}
-			/* Get next part */
-			if (!recursive) {
-				return result;
-			}
-			else if (cur != NULL) {
-				cur_part = cur->data;
-				if (cur_part->type != NULL) {
-					ct = cur_part->type;
-				}
-				cur = g_list_next (cur);
-			}
-			else {
-				/* All is done */
-				return result;
-			}
-		}
-
-	}
-
-	return TRUE;
-}
-
-static gboolean
-rspamd_content_type_check (struct rspamd_task *task,
-	GArray * args,
-	gboolean check_subtype)
-{
-	const gchar *param_data;
-	rspamd_regexp_t *re;
-	struct expression_argument *arg1, *arg_pattern;
-	GMimeObject *part;
-	GMimeContentType *ct;
-	gint r;
-	gboolean recursive = FALSE, result = FALSE;
-	GList *cur = NULL;
-	struct mime_part *cur_part;
-
-	if (args == NULL) {
-		msg_warn ("no parameters to function");
-		return FALSE;
-	}
-	arg_pattern = &g_array_index (args, struct expression_argument, 0);
-
-	part = g_mime_message_get_mime_part (task->message);
-	if (part) {
-		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
-		if (args->len >= 2) {
-			arg1 = &g_array_index (args, struct expression_argument, 1);
-			if (g_ascii_strncasecmp (arg1->data, "true",
-					sizeof ("true") - 1) == 0) {
-				recursive = TRUE;
-			}
+						param_name)) == NULL) {
+			result = FALSE;
 		}
 		else {
-			/*
-			 * If user did not specify argument, let's assume that he wants
-			 * recursive search if mime part is multipart/mixed
-			 */
-			if (g_mime_content_type_is_type (ct, "multipart", "*")) {
-				recursive = TRUE;
-			}
-		}
-
-		if (recursive) {
-			cur = task->parts;
-		}
-
-#ifndef GMIME24
-		g_object_unref (part);
-#endif
-		for (;;) {
-
-			if (check_subtype) {
-				param_data = ct->subtype;
-			}
-			else {
-				param_data = ct->type;
-			}
-
 			if (arg_pattern->type == EXPRESSION_ARGUMENT_REGEXP) {
 				re = arg_pattern->data;
 
@@ -2161,23 +1966,154 @@ rspamd_content_type_check (struct rspamd_task *task,
 					return TRUE;
 				}
 			}
-			/* Get next part */
-			if (!recursive) {
-				return result;
+		}
+		/* Get next part */
+		if (!recursive) {
+			break;
+		}
+	}
+
+	return FALSE;
+}
+
+static gboolean
+rspamd_content_type_has_param (struct rspamd_task * task,
+	GArray * args,
+	void *unused)
+{
+	gchar *param_name;
+	const gchar *param_data;
+	struct expression_argument *arg, *arg1;
+	GMimeObject *part;
+	GMimeContentType *ct;
+	gboolean recursive = FALSE, result = FALSE;
+	guint i;
+	struct mime_part *cur_part;
+
+	if (args == NULL || args->len < 1) {
+		msg_warn ("no parameters to function");
+		return FALSE;
+	}
+
+	arg = &g_array_index (args, struct expression_argument, 0);
+	g_assert (arg->type == EXPRESSION_ARGUMENT_NORMAL);
+	param_name = arg->data;
+
+	for (i = 0; i < task->text_parts->len; i ++) {
+		cur_part = g_ptr_array_index (task->text_parts, i);
+		part = cur_part->mime;
+		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
+
+		if (args->len >= 2) {
+			arg1 = &g_array_index (args, struct expression_argument, 2);
+			if (g_ascii_strncasecmp (arg1->data, "true",
+					sizeof ("true") - 1) == 0) {
+				recursive = TRUE;
 			}
-			else if (cur != NULL) {
-				cur_part = cur->data;
-				if (cur_part->type != NULL) {
-					ct = cur_part->type;
-				}
-				cur = g_list_next (cur);
-			}
-			else {
-				/* All is done */
-				return result;
+		}
+		else {
+			/*
+			 * If user did not specify argument, let's assume that he wants
+			 * recursive search if mime part is multipart/mixed
+			 */
+			if (g_mime_content_type_is_type (ct, "multipart", "*")) {
+				recursive = TRUE;
 			}
 		}
 
+#ifndef GMIME24
+		g_object_unref (part);
+#endif
+		if ((param_data =
+				g_mime_content_type_get_parameter ((GMimeContentType *)ct,
+						param_name)) != NULL) {
+			return TRUE;
+		}
+		/* Get next part */
+		if (!recursive) {
+			break;
+		}
+	}
+
+	return result;
+}
+
+static gboolean
+rspamd_content_type_check (struct rspamd_task *task,
+	GArray * args,
+	gboolean check_subtype)
+{
+	const gchar *param_data;
+	rspamd_regexp_t *re;
+	struct expression_argument *arg1, *arg_pattern;
+	GMimeObject *part;
+	GMimeContentType *ct;
+	gint r;
+	guint i;
+	gboolean recursive = FALSE;
+	struct mime_part *cur_part;
+
+	if (args == NULL || args->len < 1) {
+		msg_warn ("no parameters to function");
+		return FALSE;
+	}
+
+	arg_pattern = &g_array_index (args, struct expression_argument, 0);
+
+	for (i = 0; i < task->text_parts->len; i ++) {
+		cur_part = g_ptr_array_index (task->text_parts, i);
+		part = cur_part->mime;
+		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
+
+		if (args->len >= 2) {
+			arg1 = &g_array_index (args, struct expression_argument, 1);
+			if (g_ascii_strncasecmp (arg1->data, "true",
+					sizeof ("true") - 1) == 0) {
+				recursive = TRUE;
+			}
+		}
+		else {
+			/*
+			 * If user did not specify argument, let's assume that he wants
+			 * recursive search if mime part is multipart/mixed
+			 */
+			if (g_mime_content_type_is_type (ct, "multipart", "*")) {
+				recursive = TRUE;
+			}
+		}
+
+#ifndef GMIME24
+		g_object_unref (part);
+#endif
+		if (check_subtype) {
+			param_data = ct->subtype;
+		}
+		else {
+			param_data = ct->type;
+		}
+
+		if (arg_pattern->type == EXPRESSION_ARGUMENT_REGEXP) {
+			re = arg_pattern->data;
+
+			if ((r = rspamd_task_re_cache_check (task,
+					rspamd_regexp_get_pattern (re))) == -1) {
+				r = rspamd_regexp_search (re, param_data, 0,
+						NULL, NULL, FALSE, NULL);
+				rspamd_task_re_cache_add (task,
+						rspamd_regexp_get_pattern (re), r);
+			}
+		}
+		else {
+			/* Just do strcasecmp */
+			if (g_ascii_strcasecmp (param_data, arg_pattern->data) == 0) {
+				return TRUE;
+			}
+		}
+
+		/* Get next part */
+		if (!recursive) {
+			break;
+		}
 	}
 
 	return FALSE;
@@ -2258,16 +2194,15 @@ common_has_content_part (struct rspamd_task * task,
 {
 	rspamd_regexp_t *re;
 	struct mime_part *part;
-	GList *cur;
 	GMimeContentType *ct;
 	gint r;
+	guint i;
 
-	cur = g_list_first (task->parts);
-	while (cur) {
-		part = cur->data;
+	for (i = 0; i < task->text_parts->len; i ++) {
+		part = g_ptr_array_index (task->text_parts, i);
 		ct = part->type;
+
 		if (ct == NULL) {
-			cur = g_list_next (cur);
 			continue;
 		}
 
@@ -2304,7 +2239,6 @@ common_has_content_part (struct rspamd_task * task,
 				}
 			}
 		}
-		cur = g_list_next (cur);
 	}
 
 	return FALSE;
