@@ -186,24 +186,20 @@ local configure_ip_score_module = function()
 end
 
 -- Registration
-if rspamd_config:get_api_version() >= 9 then
-  rspamd_config:register_module_option('ip_score', 'keystorage_host', 'string')
-  rspamd_config:register_module_option('ip_score', 'keystorage_port', 'uint')
-  rspamd_config:register_module_option('ip_score', 'metric', 'string')
-  rspamd_config:register_module_option('ip_score', 'reject_score', 'int')
-  rspamd_config:register_module_option('ip_score', 'add_header_score', 'int')
-  rspamd_config:register_module_option('ip_score', 'no_action_score', 'int')
-  rspamd_config:register_module_option('ip_score', 'symbol', 'string')
-  rspamd_config:register_module_option('ip_score', 'normalize_score', 'uint')
-  rspamd_config:register_module_option('ip_score', 'whitelist', 'map')
-  rspamd_config:register_module_option('ip_score', 'expire', 'uint')
+rspamd_config:register_module_option('ip_score', 'keystorage_host', 'string')
+rspamd_config:register_module_option('ip_score', 'keystorage_port', 'uint')
+rspamd_config:register_module_option('ip_score', 'metric', 'string')
+rspamd_config:register_module_option('ip_score', 'reject_score', 'int')
+rspamd_config:register_module_option('ip_score', 'add_header_score', 'int')
+rspamd_config:register_module_option('ip_score', 'no_action_score', 'int')
+rspamd_config:register_module_option('ip_score', 'symbol', 'string')
+rspamd_config:register_module_option('ip_score', 'normalize_score', 'uint')
+rspamd_config:register_module_option('ip_score', 'whitelist', 'map')
+rspamd_config:register_module_option('ip_score', 'expire', 'uint')
 
-  configure_ip_score_module()
-  if upstreams and normalize_score > 0 then
-    -- Register ip_score module
-    rspamd_config:register_symbol(symbol, 1.0, ip_score_check)
-    rspamd_config:register_post_filter(ip_score_set)
-  end
-else
-  rspamd_logger.err('cannot register module ip_score as it requires at least 9 version of lua API and rspamd >= 0.4.6')
+configure_ip_score_module()
+if upstreams and normalize_score > 0 then
+  -- Register ip_score module
+  rspamd_config:register_symbol(symbol, 1.0, ip_score_check)
+  rspamd_config:register_post_filter(ip_score_set)
 end
