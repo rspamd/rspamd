@@ -38,17 +38,15 @@ static void process_image (struct rspamd_task *task, struct mime_part *part);
 void
 process_images (struct rspamd_task *task)
 {
-	GList *cur;
+	guint i;
 	struct mime_part *part;
 
-	cur = task->parts;
-	while (cur) {
-		part = cur->data;
+	for (i = 0; i < task->parts->len; i ++) {
+		part = g_ptr_array_index (task->parts, i);
 		if (g_mime_content_type_is_type (part->type, "image",
 			"*") && part->content->len > 0) {
 			process_image (task, part);
 		}
-		cur = g_list_next (cur);
 	}
 
 }
