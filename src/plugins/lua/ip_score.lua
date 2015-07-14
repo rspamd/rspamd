@@ -36,11 +36,18 @@ local default_port = 6379
 local asn_provider = 'origin.asn.cymru.com'
 local upstreams = nil
 local metric = 'default'
+local scores = {
+  ['reject'] = 3,
+  ['add header'] = 1,
+  ['rewrite subject'] = 1,
+  ['no action'] = -2
+}
+
 local reject_score = 3
 local add_header_score = 1
 local no_action_score = -2
 local symbol = 'IP_SCORE'
-local prefix = 'i:'
+local score_hash = 'ip_score'
 local asn_prefix = 'a:'
 local country_prefix = 'c:'
 local ipnet_prefix = 'n:'
@@ -48,7 +55,7 @@ local ipnet_prefix = 'n:'
 local normalize_score = 100
 local whitelist = nil
 local expire = 240
-local asn_re = rspamd_regexp.create_cached("/|/")
+local asn_re = rspamd_regexp.create_cached("[\\|\\s]")
 
 local function asn_check(task)
   local ip = task:get_from_ip()
@@ -96,45 +103,10 @@ end
 
 -- Set score based on metric's action
 local ip_score_set = function(task)
-  -- Callback generator
-  local make_key_cb = function(ip)
-    local cb = function(task, err, data)
-      if err then
-        rspamd_logger.info('got error while IP score changing: ' .. err)
-      end
+  local score_set_cb = function(task, err, data)
+    if err then
+      rspamd_logger.infox('got error while IP score changing: %1', err)
     end
-    return cb
-  end
-  
-  local function process_action(ip, asn, country, ipnet, score)
-    local cmd
-    
-    if score > 0 then
-      cmd = 'INCRBY'
-    else
-      cmd = 'DECRBY'
-      score = -score
-    end
-    
-    local args = {}
-    
-    if asn then
-      table.insert(args, asn_prefix .. asn)
-      table.insert(args, score)
-    end
-    if country then
-      table.insert(args, country_prefix .. country)
-      table.insert(args, score)
-    end
-    if ipnet then
-      table.insert(args, ipnet_prefix .. ipnet)
-      table.insert(args, score)
-    end
-    
-    table.insert(args, prefix .. ip:to_string())
-    table.insert(args, score)
-    
-    return cmd, args
   end
 
   local action = task:get_metric_action(metric)
@@ -153,33 +125,39 @@ local ip_score_set = function(task)
 
   local asn, country, ipnet = ip_score_get_task_vars(task)
 
-  local cmd, args
-  
-  if action then
-    local cb = make_key_cb(ip)
-    -- Now check action
-    if action == 'reject' then
-      cmd, args = process_action(ip, asn, country, ipnet, reject_score)
-    elseif action == 'add header' then
-      cmd, args = process_action(ip, asn, country, ipnet, add_header_score)
-    elseif action == 'no action' then
-      cmd, args = process_action(ip, asn, country, ipnet, no_action_score)
-    end
+  rspamd_logger.infox('%1', action)
+  local score = 0
+  if scores[action] then
+    score = scores[action]
   end
   
-  if cmd then
+  if score ~= 0 then
     local hkey = ip:to_string()
-    if country then
-      hkey = country
-    elseif asn then
-      hkey = asn
-    elseif ipnet then
-      hkey = ipnet
-    end
-    
     local upstream = upstreams:get_upstream_by_hash(hkey)
     local addr = upstream:get_addr()
-    rspamd_redis.make_request(task, addr, make_key_cb(ip), cmd, args)
+    rspamd_redis.make_request(task, addr, score_set_cb, 
+      'HINCRBY', {score_hash, hkey, score})
+    if country then
+      hkey = country_prefix .. country
+      local upstream = upstreams:get_upstream_by_hash(hkey)
+      local addr = upstream:get_addr()
+      rspamd_redis.make_request(task, addr, score_set_cb, 
+        'HINCRBY', {score_hash, hkey, score})
+    end
+    if asn then
+      hkey = asn_prefix .. asn
+      local upstream = upstreams:get_upstream_by_hash(hkey)
+      local addr = upstream:get_addr()
+      rspamd_redis.make_request(task, addr, score_set_cb, 
+        'HINCRBY', {score_hash, hkey, score})
+    end
+    if ipnet then
+      hkey = ipnet_prefix .. ipnet
+      local upstream = upstreams:get_upstream_by_hash(hkey)
+      local addr = upstream:get_addr()
+      rspamd_redis.make_request(task, addr, score_set_cb, 
+        'HINCRBY', {score_hash, hkey, score})
+    end
   end
 end
 
@@ -188,7 +166,7 @@ local ip_score_check = function(task)
   local asn, country, ipnet = ip_score_get_task_vars(task)
 
   local ip_score_redis_cb = function(task, err, data)
-    local function normalize_score(score)
+    local function calculate_score(score)
       -- Normalize
       local nscore
       if score > 0 and score > normalize_score then
@@ -206,30 +184,29 @@ local ip_score_check = function(task)
       -- Key is not found or error occurred
       return
     elseif data then
-      
-      if data[1] and type(data[1]) == 'number' then
-        local asn_score = normalize_score(tonumber(data[1]))
+      if data[1] and type(data[1]) ~= 'userdata' then
+        local asn_score = calculate_score(tonumber(data[1]))
         task:insert_result(symbol, asn_score, 'asn: ' .. asn)
       end
-      if data[2] and type(data[2]) == 'number' then
-        local country_score = normalize_score(tonumber(data[2]))
+      if data[2] and type(data[2]) ~= 'userdata' then
+        local country_score = calculate_score(tonumber(data[2]))
         task:insert_result(symbol, country_score, 'country: ' .. country)
       end
-      if data[3] and type(data[3]) == 'number' then
-        local ipnet_score = normalize_score(tonumber(data[3]))
-        task:insert_result(symbol, ipnet_score, 'ipnet: ' .. country)
+      if data[3] and type(data[3]) ~= 'userdata' then
+        local ipnet_score = calculate_score(tonumber(data[3]))
+        task:insert_result(symbol, ipnet_score, 'ipnet: ' .. ipnet)
       end
-      if data[4] and type(data[4]) == 'number' then
-        local ip_score = normalize_score(tonumber(data[4]))
+      if data[4] and type(data[4]) ~= 'userdata' then
+        local ip_score = calculate_score(tonumber(data[4]))
         task:insert_result(symbol, ip_score, 'ip')
       end
     end
   end
   
   local function create_get_command(ip, asn, country, ipnet)
-    local cmd = 'MGET'
+    local cmd = 'HMGET'
     
-    local args = {}
+    local args = {score_hash}
     
     if asn then
       table.insert(args, asn_prefix .. asn)
@@ -250,7 +227,7 @@ local ip_score_check = function(task)
       table.insert(args, ipnet_prefix)
     end
     
-    table.insert(args, prefix .. ip:to_string())
+    table.insert(args, ip:to_string())
     
     return cmd, args
   end
