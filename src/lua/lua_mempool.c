@@ -199,11 +199,42 @@ lua_mempool_get_variable (lua_State *L)
 {
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 	const gchar *var = luaL_checkstring (L, 2);
+	const gchar *type = NULL;
 	gchar *value;
 
 	if (mempool && var) {
 		value = rspamd_mempool_get_variable (mempool, var);
+
+		if (lua_gettop (L) >= 3) {
+			type = luaL_checkstring (L, 3);
+		}
+
 		if (value) {
+
+			if (type) {
+				if (g_ascii_strcasecmp (type, "double") == 0) {
+					lua_pushnumber (L, *(gdouble *)value);
+				}
+				else if (g_ascii_strcasecmp (type, "int") == 0) {
+					lua_pushnumber (L, *(gint *)value);
+				}
+				else if (g_ascii_strcasecmp (type, "int64") == 0) {
+					lua_pushnumber (L, *(gint64 *)value);
+				}
+				else if (g_ascii_strcasecmp (type, "bool") == 0) {
+					lua_pushboolean (L, *(gboolean *)value);
+				}
+				else if (g_ascii_strcasecmp (type, "string") == 0) {
+					lua_pushstring (L, (const gchar *)value);
+				}
+				else {
+					msg_err ("unknown type for get_variable: %s", type);
+					lua_pushnil (L);
+				}
+
+				return 1;
+			}
+
 			lua_pushstring (L, value);
 		}
 		else {
