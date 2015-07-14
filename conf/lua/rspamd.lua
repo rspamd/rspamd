@@ -34,6 +34,7 @@ dofile('regexp/fraud.lua')
 dofile('regexp/drugs.lua')
 
 local reconf = config['regexp']
+local util = require "rspamd_util"
 
 -- Uncategorized rules
 
@@ -48,7 +49,22 @@ reconf['R_WHITE_ON_WHITE'] = string.format('(!(%s) & (%s))', r_bgcolor, r_font_c
 reconf['R_FLASH_REDIR_IMGSHACK'] = '/^(?:http:\\/\\/)?img\\d{1,5}\\.imageshack\\.us\\/\\S+\\.swf/U'
 
 -- Different text parts
-reconf['R_PARTS_DIFFER'] = 'compare_parts_distance(50)';
+reconf['R_PARTS_DIFFER'] = function(task)
+  local distance = task:get_mempool():get_variable('parts_distance', 'int')
+  
+  if distance then
+    print(distance)
+    local nd = tonumber(distance)
+    
+    if nd < 50 then
+      local score = 1 - util.tanh(nd / 100.0)
+      
+      task:insert_result('R_PARTS_DIFFER', score, tostring(nd) .. '%')
+    end
+  end
+  
+  return false
+end
 
 rspamd_config.R_EMPTY_IMAGE = function (task)
 	parts = task:get_text_parts()
