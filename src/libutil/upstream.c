@@ -353,13 +353,13 @@ rspamd_upstreams_create (void)
 gsize
 rspamd_upstreams_count (struct upstream_list *ups)
 {
-	return ups->ups->len;
+	return ups != NULL ? ups->ups->len : 0;
 }
 
 gsize
 rspamd_upstreams_alive (struct upstream_list *ups)
 {
-	return ups->alive->len;
+	return ups != NULL ? ups->alive->len : 0;
 }
 
 static void
