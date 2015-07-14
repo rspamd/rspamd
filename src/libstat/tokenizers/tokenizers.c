@@ -32,7 +32,7 @@
 
 typedef gboolean (*token_get_function) (rspamd_fstring_t * buf, gchar **pos,
 		rspamd_fstring_t * token,
-		GList **exceptions, gboolean is_utf, gsize *rl);
+		GList **exceptions, gboolean is_utf, gsize *rl, gboolean check_signature);
 
 const gchar t_delimiters[255] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
@@ -79,7 +79,7 @@ token_node_compare_func (gconstpointer a, gconstpointer b)
 static gboolean
 rspamd_tokenizer_get_word_compat (rspamd_fstring_t * buf,
 		gchar **cur, rspamd_fstring_t * token,
-		GList **exceptions, gboolean is_utf, gsize *rl)
+		GList **exceptions, gboolean is_utf, gsize *rl, gboolean unused)
 {
 	gsize remain, pos;
 	guchar *p;
@@ -171,17 +171,19 @@ rspamd_tokenizer_get_word_compat (rspamd_fstring_t * buf,
 static gboolean
 rspamd_tokenizer_get_word (rspamd_fstring_t * buf,
 		gchar **cur, rspamd_fstring_t * token,
-		GList **exceptions, gboolean is_utf, gsize *rl)
+		GList **exceptions, gboolean is_utf, gsize *rl,
+		gboolean check_signature)
 {
-	gsize remain, pos;
-	gchar *p, *next_p;
+	gsize remain, pos, siglen = 0;
+	gchar *p, *next_p, *sig = NULL;
 	gunichar uc;
 	guint processed = 0;
 	struct process_exception *ex = NULL;
 	enum {
 		skip_delimiters = 0,
 		feed_token,
-		skip_exception
+		skip_exception,
+		process_signature
 	} state = skip_delimiters;
 
 	if (buf == NULL) {
@@ -227,10 +229,18 @@ rspamd_tokenizer_get_word (rspamd_fstring_t * buf,
 				state = skip_exception;
 				continue;
 			}
-			else if (g_unichar_isgraph (uc) && !g_unichar_ispunct (uc)) {
-				state = feed_token;
-				token->begin = p;
-				continue;
+			else if (g_unichar_isgraph (uc)) {
+				if (!g_unichar_ispunct (uc)) {
+					state = feed_token;
+					token->begin = p;
+					continue;
+				}
+				else if (check_signature && pos != 0 && (*p == '_' || *p == '-')) {
+					sig = p;
+					siglen = remain;
+					state = process_signature;
+					continue;
+				}
 			}
 			break;
 		case feed_token:
@@ -246,6 +256,16 @@ rspamd_tokenizer_get_word (rspamd_fstring_t * buf,
 			*cur = p + ex->len;
 			*exceptions = g_list_next (*exceptions);
 			goto set_token;
+			break;
+		case process_signature:
+			if (*p == '\r' || *p == '\n') {
+				msg_debug ("signature found: %*s", siglen, sig);
+				return FALSE;
+			}
+			else if (*p != ' ' && *p != '-' && *p != '_') {
+				state = skip_delimiters;
+				continue;
+			}
 			break;
 		}
 
@@ -269,7 +289,8 @@ set_token:
 
 GArray *
 rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
-		gsize min_len, GList *exceptions, gboolean compat)
+		gsize min_len, GList *exceptions, gboolean compat,
+		gboolean check_signature)
 {
 	rspamd_fstring_t token, buf;
 	gchar *pos = NULL;
@@ -297,7 +318,7 @@ rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 
 	res = g_array_sized_new (FALSE, FALSE, sizeof (rspamd_fstring_t), 128);
 
-	while (func (&buf, &pos, &token, &cur, is_utf, &l)) {
+	while (func (&buf, &pos, &token, &cur, is_utf, &l, check_signature)) {
 		if (l == 0 || (min_len > 0 && l < min_len)) {
 			token.begin = pos;
 			continue;

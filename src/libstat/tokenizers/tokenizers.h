@@ -28,7 +28,8 @@ gint token_node_compare_func (gconstpointer a, gconstpointer b);
 
 /* Tokenize text into array of words (rspamd_fstring_t type) */
 GArray * rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
-		gsize min_len, GList *exceptions, gboolean compat);
+		gsize min_len, GList *exceptions, gboolean compat,
+		gboolean check_signature);
 
 /* OSB tokenize function */
 gint rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
