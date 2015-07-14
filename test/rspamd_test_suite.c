@@ -2,6 +2,7 @@
 #include "main.h"
 #include "cfg_file.h"
 #include "regexp.h"
+#include "libstat/stat_api.h"
 #include "tests.h"
 
 struct rspamd_main             *rspamd_main = NULL;
@@ -31,6 +32,7 @@ main (int argc, char **argv)
 	g_test_init (&argc, &argv, NULL);
 
 	rspamd_init_libs ();
+	rspamd_stat_init (cfg);
 
 	base = event_init ();
 
