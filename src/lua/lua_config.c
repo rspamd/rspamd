@@ -572,7 +572,7 @@ rspamd_lua_call_post_filters (struct rspamd_task *task)
 		*ptask = task;
 
 		if (lua_pcall (cd->L, 1, 0, 0) != 0) {
-			msg_info ("call to %s failed: %s",
+			msg_err ("call to %s failed: %s",
 				cd->cb_is_ref ? "local function" :
 				cd->callback.name,
 				lua_tostring (cd->L, -1));
