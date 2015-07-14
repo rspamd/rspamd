@@ -1179,6 +1179,7 @@ rspamd_parts_distance (struct rspamd_task * task, GArray * args, void *unused)
 	struct expression_argument *arg;
 	GMimeObject *parent;
 	const GMimeContentType *ct;
+	guint tw, dw;
 	gint *pdiff;
 
 	if (args == NULL || args->len == 0) {
@@ -1276,18 +1277,21 @@ rspamd_parts_distance (struct rspamd_task * task, GArray * args, void *unused)
 				NULL);
 			return FALSE;
 		}
-		if (!IS_PART_EMPTY (p1) && !IS_PART_EMPTY (p2)) {
-			if (p1->diff_str != NULL && p2->diff_str != NULL) {
-				diff = rspamd_diff_distance_normalized (p1->diff_str,
-						p2->diff_str);
-			}
-			else {
-				diff = rspamd_fuzzy_compare_parts (p1, p2);
-			}
-			debug_task (
+		if (!IS_PART_EMPTY (p1) && !IS_PART_EMPTY (p2) &&
+				p1->normalized_words && p2->normalized_words) {
+
+			tw = 0;
+			dw = 0;
+			diff = 100;
+			/* XXX: Need levenshtein distance for a set of words */
+
+			msg_debug (
+				"different words: %d, total words: %d, "
 				"got likeliness between parts of %d%%, threshold is %d%%",
+				dw, tw,
 				diff,
 				threshold);
+
 			*pdiff = diff;
 			rspamd_mempool_set_variable (task->task_pool,
 				"parts_distance",

@@ -1360,7 +1360,6 @@ process_text_part (struct rspamd_task *task,
 		}
 		rspamd_url_text_extract (task->task_pool, task, text_part, TRUE);
 
-		rspamd_fuzzy_from_text_part (text_part, task->task_pool, task->cfg->max_diff);
 		rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) free_byte_array_callback,
 			text_part->content);
@@ -1388,7 +1387,6 @@ process_text_part (struct rspamd_task *task,
 				text_part);
 		text_part->orig = part_content;
 		rspamd_url_text_extract (task->task_pool, task, text_part, FALSE);
-		rspamd_fuzzy_from_text_part (text_part, task->task_pool, task->cfg->max_diff);
 		g_ptr_array_add (task->text_parts, text_part);
 	}
 	else {

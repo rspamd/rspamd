@@ -118,4 +118,7 @@ gchar * rspamd_fstr_c_str (rspamd_fstring_t *str, rspamd_mempool_t *pool);
  */
 void rspamd_fstrstrip (rspamd_fstring_t *str);
 
+gboolean rspamd_fstring_equal (const rspamd_fstring_t *s1,
+		const rspamd_fstring_t *s2);
+
 #endif

@@ -466,3 +466,16 @@ rspamd_fstrstrip (rspamd_fstring_t * str)
 
 	str->len = r;
 }
+
+gboolean
+rspamd_fstring_equal (const rspamd_fstring_t *s1,
+		const rspamd_fstring_t *s2)
+{
+	g_assert (s1 != NULL && s2 != NULL);
+
+	if (s1->len == s2->len) {
+		return (memcmp (s1->begin, s2->begin, s1->len) == 0);
+	}
+
+	return FALSE;
+}

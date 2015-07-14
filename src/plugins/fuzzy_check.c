@@ -978,18 +978,15 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 				task->message_id, fuzzy_module_ctx->min_bytes);
 			continue;
 		}
-		/* Check length of hash */
-		hashlen = strlen (part->fuzzy->hash_pipe);
 
-		if (hashlen == 0) {
+		if (part->words == NULL || part->words->len == 0) {
 			msg_info ("<%s>, part hash empty, skip fuzzy check",
 				task->message_id, fuzzy_module_ctx->min_hash_len);
 			continue;
 		}
 
 		if (fuzzy_module_ctx->min_hash_len != 0 &&
-			hashlen * part->fuzzy->block_size <
-			fuzzy_module_ctx->min_hash_len) {
+			part->words->len < fuzzy_module_ctx->min_hash_len) {
 			msg_info (
 				"<%s>, part hash is shorter than %d symbols, skip fuzzy check",
 				task->message_id,
@@ -997,14 +994,6 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 			continue;
 		}
 
-		/*
-		 * Try legacy first
-		 */
-		cmd = fuzzy_cmd_from_text_part (rule, c, flag, value, task->task_pool,
-				part, TRUE, NULL);
-		if (cmd) {
-			g_ptr_array_add (res, cmd);
-		}
 		cmd = fuzzy_cmd_from_text_part (rule, c, flag, value, task->task_pool,
 				part, FALSE, NULL);
 		if (cmd) {
