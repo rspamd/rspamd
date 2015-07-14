@@ -1918,8 +1918,8 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 	param_name = arg->data;
 	arg_pattern = &g_array_index (args, struct expression_argument, 1);
 
-	for (i = 0; i < task->text_parts->len; i ++) {
-		cur_part = g_ptr_array_index (task->text_parts, i);
+	for (i = 0; i < task->parts->len; i ++) {
+		cur_part = g_ptr_array_index (task->parts, i);
 		part = cur_part->mime;
 		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
 
@@ -1999,8 +1999,8 @@ rspamd_content_type_has_param (struct rspamd_task * task,
 	g_assert (arg->type == EXPRESSION_ARGUMENT_NORMAL);
 	param_name = arg->data;
 
-	for (i = 0; i < task->text_parts->len; i ++) {
-		cur_part = g_ptr_array_index (task->text_parts, i);
+	for (i = 0; i < task->parts->len; i ++) {
+		cur_part = g_ptr_array_index (task->parts, i);
 		part = cur_part->mime;
 		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
 
@@ -2060,8 +2060,8 @@ rspamd_content_type_check (struct rspamd_task *task,
 
 	arg_pattern = &g_array_index (args, struct expression_argument, 0);
 
-	for (i = 0; i < task->text_parts->len; i ++) {
-		cur_part = g_ptr_array_index (task->text_parts, i);
+	for (i = 0; i < task->parts->len; i ++) {
+		cur_part = g_ptr_array_index (task->parts, i);
 		part = cur_part->mime;
 		ct = (GMimeContentType *)g_mime_object_get_content_type (part);
 
@@ -2198,8 +2198,8 @@ common_has_content_part (struct rspamd_task * task,
 	gint r;
 	guint i;
 
-	for (i = 0; i < task->text_parts->len; i ++) {
-		part = g_ptr_array_index (task->text_parts, i);
+	for (i = 0; i < task->parts->len; i ++) {
+		part = g_ptr_array_index (task->parts, i);
 		ct = part->type;
 
 		if (ct == NULL) {
