@@ -26,20 +26,20 @@
 
 /* Lua bindings */
 LUA_FUNCTION_DEF (mempool, create);
-LUA_FUNCTION_DEF (mempool, memory_pool_add_destructor);
-LUA_FUNCTION_DEF (mempool, memory_pool_delete);
-LUA_FUNCTION_DEF (mempool, memory_pool_stat);
-LUA_FUNCTION_DEF (mempool, memory_pool_suggest_size);
-LUA_FUNCTION_DEF (mempool, memory_pool_set_variable);
-LUA_FUNCTION_DEF (mempool, memory_pool_get_variable);
+LUA_FUNCTION_DEF (mempool, add_destructor);
+LUA_FUNCTION_DEF (mempool, delete);
+LUA_FUNCTION_DEF (mempool, stat);
+LUA_FUNCTION_DEF (mempool, suggest_size);
+LUA_FUNCTION_DEF (mempool, set_variable);
+LUA_FUNCTION_DEF (mempool, get_variable);
 
 static const struct luaL_reg mempoollib_m[] = {
-	LUA_INTERFACE_DEF (mempool, memory_pool_add_destructor),
-	LUA_INTERFACE_DEF (mempool, memory_pool_stat),
-	LUA_INTERFACE_DEF (mempool, memory_pool_suggest_size),
-	LUA_INTERFACE_DEF (mempool, memory_pool_set_variable),
-	LUA_INTERFACE_DEF (mempool, memory_pool_get_variable),
-	{"destroy", lua_mempool_memory_pool_delete},
+	LUA_INTERFACE_DEF (mempool, add_destructor),
+	LUA_INTERFACE_DEF (mempool, stat),
+	LUA_INTERFACE_DEF (mempool, suggest_size),
+	LUA_INTERFACE_DEF (mempool, set_variable),
+	LUA_INTERFACE_DEF (mempool, get_variable),
+	{"destroy", lua_mempool_delete},
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -99,7 +99,7 @@ lua_mempool_destructor_func (gpointer p)
 }
 
 static int
-lua_mempool_memory_pool_add_destructor (lua_State *L)
+lua_mempool_add_destructor (lua_State *L)
 {
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 	struct lua_mempool_udata *ud;
@@ -129,7 +129,7 @@ lua_mempool_memory_pool_add_destructor (lua_State *L)
 }
 
 static int
-lua_mempool_memory_pool_delete (lua_State *L)
+lua_mempool_delete (lua_State *L)
 {
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 
@@ -145,7 +145,7 @@ lua_mempool_memory_pool_delete (lua_State *L)
 }
 
 static int
-lua_mempool_memory_pool_stat (lua_State *L)
+lua_mempool_stat (lua_State *L)
 {
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 
@@ -160,7 +160,7 @@ lua_mempool_memory_pool_stat (lua_State *L)
 }
 
 static int
-lua_mempool_memory_pool_suggest_size (lua_State *L)
+lua_mempool_suggest_size (lua_State *L)
 {
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 
@@ -176,7 +176,7 @@ lua_mempool_memory_pool_suggest_size (lua_State *L)
 }
 
 static int
-lua_mempool_memory_pool_set_variable (lua_State *L)
+lua_mempool_set_variable (lua_State *L)
 {
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 	const gchar *var = luaL_checkstring (L, 2),
@@ -195,7 +195,7 @@ lua_mempool_memory_pool_set_variable (lua_State *L)
 }
 
 static int
-lua_mempool_memory_pool_get_variable (lua_State *L)
+lua_mempool_get_variable (lua_State *L)
 {
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 	const gchar *var = luaL_checkstring (L, 2);
