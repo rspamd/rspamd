@@ -24,25 +24,75 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ]]--
 
--- IP score is a module that set ip score of specific ip and
+-- IP score is a module that set ip score of specific ip, asn, country
+local rspamd_logger = require "rspamd_logger"
+local rspamd_redis = require "rspamd_redis"
+local upstream_list = require "rspamd_upstream_list"
+local rspamd_regexp = require "rspamd_regexp"
+local _ = require "fun"
 
 -- Default settings
 local default_port = 6379
+local asn_provider = 'origin.asn.cymru.com'
 local upstreams = nil
 local metric = 'default'
 local reject_score = 3
 local add_header_score = 1
 local no_action_score = -2
 local symbol = 'IP_SCORE'
-local prefix = 'ip_score:'
+local prefix = 'i:'
+local asn_prefix = 'a:'
+local country_prefix = 'c:'
+local ipnet_prefix = 'n:'
 -- This score is used for normalization of scores from keystorage
 local normalize_score = 100
 local whitelist = nil
 local expire = 240
-local rspamd_logger = require "rspamd_logger"
-local rspamd_redis = require "rspamd_redis"
-local upstream_list = require "rspamd_upstream_list"
-local _ = require "fun"
+local asn_re = rspamd_regexp.create_cached("/|/")
+
+local function asn_check(task)
+  local ip = task:get_from_ip()
+  
+  local function asn_dns_cb(resolver, to_resolve, results, err, key)
+    if results and results[1] then
+      local parts = asn_re:split(results[1])
+      -- "15169 | 8.8.8.0/24 | US | arin |" for 8.8.8.8
+      if parts[1] then
+        task:get_mempool():set_variable("asn", parts[1])
+      end
+      if parts[2] then
+        task:get_mempool():set_variable("ipnet", parts[2])
+      end
+      if parts[3] then
+        task:get_mempool():set_variable("country", parts[3])
+      end
+    end
+  end
+  
+  if ip and ip:is_valid() then
+    local req_name = rspamd_logger.slog("%1.%2",
+      table.concat(ip:inversed_str_octets(), '.'), asn_provider)
+    
+    task:get_resolver():resolve_txt(task:get_session(), task:get_mempool(),
+        req_name, asn_dns_cb)
+  end
+end
+
+local function ip_score_get_task_vars(task)
+  local pool = task:get_mempool()
+  local asn, country, ipnet
+  if pool:get_variable("asn") then
+    asn = pool:get_variable("asn")
+  end
+  if pool:get_variable("country") then
+    country = pool:get_variable("country")
+  end
+  if pool:get_variable("ipnet") then
+    ipnet = pool:get_variable("ipnet")
+  end
+  
+  return asn, country, ipnet
+end
 
 -- Set score based on metric's action
 local ip_score_set = function(task)
@@ -56,16 +106,33 @@ local ip_score_set = function(task)
     return cb
   end
   
-  local function process_action(ip, score)
-    local cmd = 'INCRBY'
-    local args = {}
-    table.insert(args, prefix .. ip:to_string())
+  local function process_action(ip, asn, country, ipnet, score)
+    local cmd
+    
     if score > 0 then
-      table.insert(args, score)
+      cmd = 'INCRBY'
     else
       cmd = 'DECRBY'
-      table.insert(args, -score)
+      score = -score
     end
+    
+    local args = {}
+    
+    if asn then
+      table.insert(args, asn_prefix .. asn)
+      table.insert(args, score)
+    end
+    if country then
+      table.insert(args, country_prefix .. country)
+      table.insert(args, score)
+    end
+    if ipnet then
+      table.insert(args, ipnet_prefix .. ipnet)
+      table.insert(args, score)
+    end
+    
+    table.insert(args, prefix .. ip:to_string())
+    table.insert(args, score)
     
     return cmd, args
   end
@@ -84,21 +151,33 @@ local ip_score_set = function(task)
     end
   end
 
+  local asn, country, ipnet = ip_score_get_task_vars(task)
+
   local cmd, args
+  
   if action then
     local cb = make_key_cb(ip)
     -- Now check action
     if action == 'reject' then
-      cmd, args = process_action(ip, reject_score)
+      cmd, args = process_action(ip, asn, country, ipnet, reject_score)
     elseif action == 'add header' then
-      cmd, args = process_action(ip, add_header_score)
+      cmd, args = process_action(ip, asn, country, ipnet, add_header_score)
     elseif action == 'no action' then
-      cmd, args = process_action(ip, no_action_score)
+      cmd, args = process_action(ip, asn, country, ipnet, no_action_score)
     end
   end
   
   if cmd then
-    local upstream = upstreams:get_upstream_by_hash(ip:to_string())
+    local hkey = ip:to_string()
+    if country then
+      hkey = country
+    elseif asn then
+      hkey = asn
+    elseif ipnet then
+      hkey = ipnet
+    end
+    
+    local upstream = upstreams:get_upstream_by_hash(hkey)
     local addr = upstream:get_addr()
     rspamd_redis.make_request(task, addr, make_key_cb(ip), cmd, args)
   end
@@ -106,27 +185,76 @@ end
 
 -- Check score for ip in keystorage
 local ip_score_check = function(task)
-  local cb = function(task, err, data)
+  local asn, country, ipnet = ip_score_get_task_vars(task)
+
+  local ip_score_redis_cb = function(task, err, data)
+    local function normalize_score(score)
+      -- Normalize
+      local nscore
+      if score > 0 and score > normalize_score then
+        nscore = 1
+      elseif score < 0 and score < -normalize_score then
+        nscore = -1
+      else
+        nscore = score / normalize_score
+      end
+      
+      return nscore
+    end
+    
     if err then
       -- Key is not found or error occurred
       return
     elseif data then
-      local score = tonumber(data)
-      if not score then
-        return
-      end
       
-      -- Normalize
-      if score > 0 and score > normalize_score then
-        score = 1
-      elseif score < 0 and score < -normalize_score then
-        score = -1
-      else
-        score = score / normalize_score
+      if data[1] and type(data[1]) == 'number' then
+        local asn_score = normalize_score(tonumber(data[1]))
+        task:insert_result(symbol, asn_score, 'asn: ' .. asn)
       end
-      task:insert_result(symbol, score)
+      if data[2] and type(data[2]) == 'number' then
+        local country_score = normalize_score(tonumber(data[2]))
+        task:insert_result(symbol, country_score, 'country: ' .. country)
+      end
+      if data[3] and type(data[3]) == 'number' then
+        local ipnet_score = normalize_score(tonumber(data[3]))
+        task:insert_result(symbol, ipnet_score, 'ipnet: ' .. country)
+      end
+      if data[4] and type(data[4]) == 'number' then
+        local ip_score = normalize_score(tonumber(data[4]))
+        task:insert_result(symbol, ip_score, 'ip')
+      end
     end
   end
+  
+  local function create_get_command(ip, asn, country, ipnet)
+    local cmd = 'MGET'
+    
+    local args = {}
+    
+    if asn then
+      table.insert(args, asn_prefix .. asn)
+    else
+      -- fake arg
+      table.insert(args, asn_prefix)
+    end
+    if country then
+      table.insert(args, country_prefix .. country)
+    else
+      -- fake arg
+      table.insert(args, country_prefix)
+    end
+    if ipnet then
+      table.insert(args, ipnet_prefix .. ipnet)
+    else
+      -- fake arg
+      table.insert(args, ipnet_prefix)
+    end
+    
+    table.insert(args, prefix .. ip:to_string())
+    
+    return cmd, args
+  end
+  
   local ip = task:get_from_ip()
   if ip:is_valid() then
     if whitelist then
@@ -135,9 +263,11 @@ local ip_score_check = function(task)
         return
       end
     end
+
+    local cmd, args = create_get_command(ip, asn, country, ipnet)
     local upstream = upstreams:get_upstream_by_hash(ip:to_string())
     local addr = upstream:get_addr()
-    rspamd_redis.make_request(task, addr, cb, 'GET', {prefix .. ip:to_string()})
+    rspamd_redis.make_request(task, addr, ip_score_redis_cb, cmd, args)
   end
 end
 
@@ -176,6 +306,9 @@ local configure_ip_score_module = function()
     if opts['prefix'] then
       prefix = opts['prefix']
     end
+    if opts['asn_provider'] then
+      asn_provider = opts['asn_provider']
+    end
     if opts['servers'] then
       upstreams = upstream_list.create(opts['servers'], default_port)
       if not upstreams then
@@ -200,6 +333,9 @@ rspamd_config:register_module_option('ip_score', 'expire', 'uint')
 configure_ip_score_module()
 if upstreams and normalize_score > 0 then
   -- Register ip_score module
+  if asn_provider then
+    rspamd_config:register_pre_filter(asn_check)
+  end
   rspamd_config:register_symbol(symbol, 1.0, ip_score_check)
   rspamd_config:register_post_filter(ip_score_set)
 end
