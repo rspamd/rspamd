@@ -1254,6 +1254,49 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 	}
 }
 
+#define MIN3(a, b, c) ((a) < (b) ? ((a) < (c) ? (a) : (c)) : ((b) < (c) ? (b) : (c)))
+
+static gint
+rspamd_words_levenshtein_distance (GArray *w1, GArray *w2)
+{
+	guint s1len, s2len, x, y, lastdiag, olddiag;
+	guint *column;
+	rspamd_fstring_t *s1, *s2;
+	gint eq;
+	static const guint max_words = 8192;
+
+	s1len = w1->len;
+	s2len = w2->len;
+
+	if (s1len > max_words) {
+		msg_err ("cannot compare parts with more than %ud words: %ud",
+				max_words, s1len);
+		return 0;
+	}
+
+	column = g_alloca ((s1len + 1) * sizeof (guint));
+
+	for (y = 1; y <= s1len; y++) {
+		column[y] = y;
+	}
+
+	for (x = 1; x <= s2len; x++) {
+		column[0] = x;
+
+		for (y = 1, lastdiag = x - 1; y <= s1len; y++) {
+			olddiag = column[y];
+			s1 = &g_array_index (w1, rspamd_fstring_t, y - 1);
+			s2 = &g_array_index (w1, rspamd_fstring_t, x - 1);
+			eq = rspamd_fstring_equal (s1, s2) ? 0 : 1;
+			column[y] = MIN3 (column[y] + 1, column[y - 1] + 1,
+					lastdiag + (eq));
+			lastdiag = olddiag;
+		}
+	}
+
+	return column[s1len];
+}
+
 static int
 rspamd_gtube_cb (int strnum, int textpos, void *context)
 {
@@ -1624,6 +1667,9 @@ rspamd_message_parse (struct rspamd_task *task)
 	GList *first, *cur;
 	GMimePart *part;
 	GMimeDataWrapper *wrapper;
+	GMimeObject *parent;
+	const GMimeContentType *ct;
+	struct mime_text_part *p1, *p2;
 	struct mime_foreach_data md;
 	struct received_header *recv;
 	gchar *mid, *url_str;
@@ -1631,7 +1677,8 @@ rspamd_message_parse (struct rspamd_task *task)
 	struct rspamd_url *subject_url;
 	gsize len;
 	gint64 hdr_start, hdr_end;
-	gint rc, state = 0;
+	gint rc, state = 0, diff, *pdiff;
+	guint tw, dw;
 
 	tmp = rspamd_mempool_alloc (task->task_pool, sizeof (GByteArray));
 	p = task->msg.start;
@@ -1861,6 +1908,55 @@ rspamd_message_parse (struct rspamd_task *task)
 			}
 			p = url_end + 1;
 		}
+	}
+
+	/* Calculate distance for 2-parts messages */
+	if (task->text_parts->len == 2) {
+		p1 = g_ptr_array_index (task->text_parts, 0);
+		p2 = g_ptr_array_index (task->text_parts, 1);
+
+		/* First of all check parent object */
+		if (p1->parent && p1->parent == p2->parent) {
+			parent = p1->parent;
+			ct = g_mime_object_get_content_type (parent);
+			if (ct == NULL ||
+					!g_mime_content_type_is_type ((GMimeContentType *)ct,
+							"multipart", "alternative")) {
+				debug_task (
+						"two parts are not belong to multipart/alternative container, skip check");
+			}
+		}
+		else {
+			debug_task (
+					"message contains two parts but they are in different multi-parts");
+		}
+
+		if (!IS_PART_EMPTY (p1) && !IS_PART_EMPTY (p2) &&
+				p1->normalized_words && p2->normalized_words) {
+
+			tw = MAX (p1->normalized_words->len, p2->normalized_words->len);
+			dw = rspamd_words_levenshtein_distance (p1->normalized_words,
+					p2->normalized_words);
+			diff = tw > 0 ? (100.0 * (gdouble)(tw - dw) / (gdouble)tw) : 100;
+
+			msg_info (
+					"different words: %d, total words: %d, "
+					"got likeliness between parts of %d%%",
+					dw, tw,
+					diff);
+
+			pdiff = rspamd_mempool_alloc (task->task_pool, sizeof (gint));
+			*pdiff = diff;
+			rspamd_mempool_set_variable (task->task_pool,
+					"parts_distance",
+					pdiff,
+					NULL);
+		}
+	}
+	else {
+		debug_task (
+				"message has too many text parts, so do not try to compare "
+				"them with each other");
 	}
 
 	return TRUE;

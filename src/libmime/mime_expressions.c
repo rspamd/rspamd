@@ -1165,42 +1165,6 @@ rspamd_header_exists (struct rspamd_task * task, GArray * args, void *unused)
 	return FALSE;
 }
 
-#define MIN3(a, b, c) ((a) < (b) ? ((a) < (c) ? (a) : (c)) : ((b) < (c) ? (b) : (c)))
-
-static gint
-rspamd_words_levenshtein_distance (GArray *w1, GArray *w2)
-{
-	guint s1len, s2len, x, y, lastdiag, olddiag;
-	guint *column;
-	rspamd_fstring_t *s1, *s2;
-	gint eq;
-
-	s1len = w1->len;
-	s2len = w2->len;
-
-	column = g_alloca ((s1len + 1) * sizeof (guint));
-
-	for (y = 1; y <= s1len; y++) {
-		column[y] = y;
-	}
-
-	for (x = 1; x <= s2len; x++) {
-		column[0] = x;
-
-		for (y = 1, lastdiag = x - 1; y <= s1len; y++) {
-			olddiag = column[y];
-			s1 = &g_array_index (w1, rspamd_fstring_t, y - 1);
-			s2 = &g_array_index (w1, rspamd_fstring_t, x - 1);
-			eq = rspamd_fstring_equal (s1, s2) ? 0 : 1;
-			column[y] = MIN3 (column[y] + 1, column[y - 1] + 1,
-					lastdiag + (eq));
-			lastdiag = olddiag;
-		}
-	}
-
-	return column[s1len];
-}
-
 
 /*
  * This function is designed to find difference between text/html and text/plain parts
@@ -1212,11 +1176,7 @@ gboolean
 rspamd_parts_distance (struct rspamd_task * task, GArray * args, void *unused)
 {
 	gint threshold, threshold2 = -1, diff;
-	struct mime_text_part *p1, *p2;
 	struct expression_argument *arg;
-	GMimeObject *parent;
-	const GMimeContentType *ct;
-	guint tw, dw;
 	gint *pdiff;
 
 	if (args == NULL || args->len == 0) {
@@ -1278,98 +1238,6 @@ rspamd_parts_distance (struct rspamd_task * task, GArray * args, void *unused)
 		}
 	}
 
-	if (task->text_parts->len == 2) {
-		p1 = g_ptr_array_index (task->text_parts, 0);
-		p2 = g_ptr_array_index (task->text_parts, 1);
-		pdiff = rspamd_mempool_alloc (task->task_pool, sizeof (gint));
-		*pdiff = -1;
-
-		/* First of all check parent object */
-		if (p1->parent && p1->parent == p2->parent) {
-			parent = p1->parent;
-			ct = g_mime_object_get_content_type (parent);
-#ifndef GMIME24
-			if (ct == NULL ||
-				!g_mime_content_type_is_type (ct, "multipart", "alternative")) {
-#else
-			if (ct == NULL ||
-				!g_mime_content_type_is_type ((GMimeContentType *)ct,
-				"multipart", "alternative")) {
-#endif
-				debug_task (
-					"two parts are not belong to multipart/alternative container, skip check");
-				rspamd_mempool_set_variable (task->task_pool,
-					"parts_distance",
-					pdiff,
-					NULL);
-				return FALSE;
-			}
-		}
-		else {
-			debug_task (
-				"message contains two parts but they are in different multi-parts");
-			rspamd_mempool_set_variable (task->task_pool,
-				"parts_distance",
-				pdiff,
-				NULL);
-			return FALSE;
-		}
-		if (!IS_PART_EMPTY (p1) && !IS_PART_EMPTY (p2) &&
-				p1->normalized_words && p2->normalized_words) {
-
-			tw = MAX (p1->normalized_words->len, p2->normalized_words->len);
-			dw = rspamd_words_levenshtein_distance (p1->normalized_words,
-					p2->normalized_words);
-			diff = tw > 0 ? (100.0 * (gdouble)(tw - dw) / (gdouble)tw) : 100;
-
-			msg_debug (
-				"different words: %d, total words: %d, "
-				"got likeliness between parts of %d%%, threshold is %d%%",
-				dw, tw,
-				diff,
-				threshold);
-
-			*pdiff = diff;
-			rspamd_mempool_set_variable (task->task_pool,
-				"parts_distance",
-				pdiff,
-				NULL);
-			if (threshold2 > 0) {
-				if (diff >=
-					MIN (threshold,
-					threshold2) && diff < MAX (threshold, threshold2)) {
-					return TRUE;
-				}
-			}
-			else {
-				if (diff <= threshold) {
-					return TRUE;
-				}
-			}
-		}
-		else if ((IS_PART_EMPTY (p1) &&
-			!IS_PART_EMPTY (p2)) || (!IS_PART_EMPTY (p1)&& IS_PART_EMPTY (p2))) {
-			/* Empty and non empty parts are different */
-			*pdiff = 0;
-			rspamd_mempool_set_variable (task->task_pool,
-				"parts_distance",
-				pdiff,
-				NULL);
-			return TRUE;
-		}
-	}
-	else {
-		debug_task (
-			"message has too many text parts, so do not try to compare them with each other");
-		rspamd_mempool_set_variable (task->task_pool,
-			"parts_distance",
-			pdiff,
-			NULL);
-		return FALSE;
-	}
-
-	rspamd_mempool_set_variable (task->task_pool, "parts_distance", pdiff,
-		NULL);
 	return FALSE;
 }
 
