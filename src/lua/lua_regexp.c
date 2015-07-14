@@ -568,6 +568,9 @@ lua_regexp_split (lua_State *L)
 					lua_rawseti (L, -2, ++i);
 					matched = TRUE;
 				}
+				else if (start == end) {
+					break;
+				}
 				old_start = end;
 			}
 

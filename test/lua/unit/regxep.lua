@@ -68,6 +68,9 @@ context("Regexp unit tests", function()
       {'\\s', '  one   two  ', {'one', 'two'}}, -- multiple delimiters
       {'\\s', '  one   ', {'one'}}, -- multiple delimiters
       {'[:,]', ',,,:::one,two,,', {'one', 'two'}}, -- multiple delimiters
+      {'[\\|\\s]', '16265 | 1.1.1.0/22 | TR | ripencc | 2014-02-28', 
+        {'16265', '1.1.1.0/22', 'TR', 'ripencc', '2014-02-28'}}, -- practical
+      {'|', '16265 | 1.1.1.0/22 | TR | ripencc | 2014-02-28', {}} -- bad re
     }
   
     for _,c in ipairs(cases) do
