@@ -1165,6 +1165,43 @@ rspamd_header_exists (struct rspamd_task * task, GArray * args, void *unused)
 	return FALSE;
 }
 
+#define MIN3(a, b, c) ((a) < (b) ? ((a) < (c) ? (a) : (c)) : ((b) < (c) ? (b) : (c)))
+
+static gint
+rspamd_words_levenshtein_distance (GArray *w1, GArray *w2)
+{
+	guint s1len, s2len, x, y, lastdiag, olddiag;
+	guint *column;
+	rspamd_fstring_t *s1, *s2;
+	gint eq;
+
+	s1len = w1->len;
+	s2len = w2->len;
+
+	column = g_alloca ((s1len + 1) * sizeof (guint));
+
+	for (y = 1; y <= s1len; y++) {
+		column[y] = y;
+	}
+
+	for (x = 1; x <= s2len; x++) {
+		column[0] = x;
+
+		for (y = 1, lastdiag = x - 1; y <= s1len; y++) {
+			olddiag = column[y];
+			s1 = &g_array_index (w1, rspamd_fstring_t, y - 1);
+			s2 = &g_array_index (w1, rspamd_fstring_t, x - 1);
+			eq = rspamd_fstring_equal (s1, s2) ? 0 : 1;
+			column[y] = MIN3 (column[y] + 1, column[y - 1] + 1,
+					lastdiag + (eq));
+			lastdiag = olddiag;
+		}
+	}
+
+	return column[s1len];
+}
+
+
 /*
  * This function is designed to find difference between text/html and text/plain parts
  * It takes one argument: difference threshold, if we have two text parts, compare
@@ -1280,10 +1317,10 @@ rspamd_parts_distance (struct rspamd_task * task, GArray * args, void *unused)
 		if (!IS_PART_EMPTY (p1) && !IS_PART_EMPTY (p2) &&
 				p1->normalized_words && p2->normalized_words) {
 
-			tw = 0;
-			dw = 0;
-			diff = 100;
-			/* XXX: Need levenshtein distance for a set of words */
+			tw = MAX (p1->normalized_words->len, p2->normalized_words->len);
+			dw = rspamd_words_levenshtein_distance (p1->normalized_words,
+					p2->normalized_words);
+			diff = tw > 0 ? (100.0 * (gdouble)(tw - dw) / (gdouble)tw) : 100;
 
 			msg_debug (
 				"different words: %d, total words: %d, "
