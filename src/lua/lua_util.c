@@ -69,6 +69,13 @@ LUA_FUNCTION_DEF (util, decode_base64);
  */
 LUA_FUNCTION_DEF (util, tokenize_text);
 LUA_FUNCTION_DEF (util, process_message);
+/***
+ * @function util.tanh(num)
+ * Calculates hyperbolic tanhent of the specified floating point value
+ * @param {number} num input number
+ * @return {number} hyperbolic tanhent of the variable
+ */
+LUA_FUNCTION_DEF (util, tanh);
 
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
@@ -78,6 +85,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, encode_base64),
 	LUA_INTERFACE_DEF (util, decode_base64),
 	LUA_INTERFACE_DEF (util, tokenize_text),
+	LUA_INTERFACE_DEF (util, tanh),
 	{NULL, NULL}
 };
 
@@ -421,6 +429,16 @@ lua_util_tokenize_text (lua_State *L)
 	}
 
 	g_list_free (exceptions);
+
+	return 1;
+}
+
+static gint
+lua_util_tanh (lua_State *L)
+{
+	gdouble in = luaL_checknumber (L, 1);
+
+	lua_pushnumber (L, tanh (in));
 
 	return 1;
 }
