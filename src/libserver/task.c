@@ -430,7 +430,8 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		break;
 
 	case RSPAMD_TASK_STAGE_CLASSIFIERS:
-		if (!rspamd_stat_classify (task, task->cfg->lua_state, &task->err)) {
+		if (rspamd_stat_classify (task, task->cfg->lua_state, &task->err) ==
+				RSPAMD_STAT_PROCESS_ERROR) {
 			ret = FALSE;
 		}
 		break;

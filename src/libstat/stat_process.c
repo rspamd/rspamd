@@ -400,7 +400,7 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 	/* Initialize classifiers and statfiles runtime */
 	if ((cl_runtimes = rspamd_stat_preprocess (st_ctx, task, tklist, L,
 			RSPAMD_CLASSIFY_OP, FALSE, err)) == NULL) {
-		return RSPAMD_STAT_PROCESS_ERROR;
+		return RSPAMD_STAT_PROCESS_OK;
 	}
 
 	cur = cl_runtimes;
