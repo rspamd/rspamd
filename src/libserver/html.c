@@ -210,12 +210,12 @@ typedef enum
 #define CM_OMITST       (1 << 21)
 
 /* XML tag */
-#define FL_XML          (1 << 0)
+#define FL_XML          (1 << 22)
 /* Closing tag */
-#define FL_CLOSING      (1 << 1)
+#define FL_CLOSING      (1 << 23)
 /* Fully closed tag (e.g. <a attrs />) */
-#define FL_CLOSED       (1 << 2)
-#define FL_BROKEN       (1 << 3)
+#define FL_CLOSED       (1 << 24)
+#define FL_BROKEN       (1 << 25)
 
 struct html_tag_def {
 	gint id;
@@ -648,7 +648,7 @@ tag_find (const void *skey, const void *elt)
 	const struct html_tag *tag = skey;
 	const struct html_tag_def *d = elt;
 
-	return g_ascii_strcnasecmp (tag->name.start, d->name, tag->name.len);
+	return g_ascii_strncasecmp (tag->name.start, d->name, tag->name.len);
 }
 
 static gint
@@ -669,70 +669,10 @@ entity_cmp_num (const void *m1, const void *m2)
 	return p1->code - p2->code;
 }
 
-static GNode *
-construct_html_node (rspamd_mempool_t * pool, gchar *text, gsize tag_len)
-{
-	struct html_node *html;
-	GNode *n = NULL;
-	struct html_tag key, *found;
-	gchar t;
-
-	if (text == NULL || *text == '\0') {
-		return NULL;
-	}
-
-	html = rspamd_mempool_alloc0 (pool, sizeof (struct html_node));
-
-	/* Check whether this tag is fully closed */
-	if (*(text + tag_len - 1) == '/') {
-		html->flags |= FL_CLOSED;
-	}
-
-	/* Check xml tag */
-	if (*text == '?' &&
-		g_ascii_strncasecmp (text + 1, "xml", sizeof ("xml") - 1) == 0) {
-		html->flags |= FL_XML;
-		html->tag = NULL;
-	}
-	else if (*text == '!') {
-		html->flags |= FL_SGML;
-		html->tag = NULL;
-	}
-	else {
-		if (*text == '/') {
-			html->flags |= FL_CLOSING;
-			text++;
-		}
-
-		/* Find end of tag name */
-		key.name = text;
-		while (*text && g_ascii_isalnum (*(++text))) ;
-
-		t = *text;
-		*text = '\0';
-
-		/* Match tag id by tag name */
-		if ((found =
-			bsearch (&key, tag_defs, G_N_ELEMENTS (tag_defs),
-			sizeof (struct html_tag), tag_cmp)) != NULL) {
-			*text = t;
-			html->tag = found;
-		}
-		else {
-			*text = t;
-			return NULL;
-		}
-	}
-
-	n = g_node_new (html);
-
-	return n;
-}
-
 static gboolean
-check_balance (GNode * node, GNode ** cur_level)
+rspamd_html_check_balance (GNode * node, GNode ** cur_level)
 {
-	struct html_node *arg = node->data, *tmp;
+	struct html_tag *arg = node->data, *tmp;
 	GNode *cur;
 
 	if (arg->flags & FL_CLOSING) {
@@ -740,8 +680,7 @@ check_balance (GNode * node, GNode ** cur_level)
 		cur = node->parent;
 		while (cur && cur->data) {
 			tmp = cur->data;
-			if ((tmp->tag &&
-				arg->tag) && tmp->tag->id == arg->tag->id &&
+			if (tmp->id == arg->id &&
 				(tmp->flags & FL_CLOSED) == 0) {
 				tmp->flags |= FL_CLOSED;
 				/* Destroy current node as we find corresponding parent node */
@@ -763,12 +702,6 @@ check_balance (GNode * node, GNode ** cur_level)
 struct html_tag *
 get_tag_by_name (const gchar *name)
 {
-	struct html_tag key;
-
-	key.name = name;
-
-	return bsearch (&key, tag_defs, G_N_ELEMENTS (tag_defs),
-			   sizeof (struct html_tag), tag_cmp);
 }
 
 /* Decode HTML entitles in text */
@@ -1082,76 +1015,53 @@ add_html_node (struct rspamd_task *task,
 	gsize remain,
 	GNode ** cur_level)
 {
-	GNode *new;
-	struct html_node *data;
+}
 
-	/* First call of this function */
-	if (part->html_nodes == NULL) {
-		/* Insert root node */
-		new = g_node_new (NULL);
-		*cur_level = new;
-		part->html_nodes = new;
+static gboolean
+rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
+		struct html_tag *tag, GNode **cur_level)
+{
+	GNode *nnode;
+
+	if (hc->html_tags == NULL) {
+		nnode = g_node_new (NULL);
+		*cur_level = nnode;
+		hc->html_tags = nnode;
 		rspamd_mempool_add_destructor (pool,
 			(rspamd_mempool_destruct_t) g_node_destroy,
-			part->html_nodes);
-		/* Call once again with root node */
-		return add_html_node (task,
-				   pool,
-				   part,
-				   tag_text,
-				   tag_len,
-				   remain,
-				   cur_level);
+			nnode);
 	}
-	else {
-		new = construct_html_node (pool, tag_text, tag_len);
-		if (new == NULL) {
-			debug_task ("cannot construct HTML node for text '%*s'",
-				tag_len,
-				tag_text);
+
+	nnode = g_node_new (tag);
+
+	if (tag->flags & FL_CLOSING) {
+		if (!*cur_level) {
+			debug_task ("bad parent node");
 			return FALSE;
 		}
-		data = new->data;
-		if (data->tag &&
-			(data->tag->id == Tag_A ||
-			data->tag->id == Tag_IMG) && ((data->flags & FL_CLOSING) == 0)) {
-			parse_tag_url (task, part, data->tag->id, tag_text, tag_len,
-				remain);
-		}
+		g_node_append (*cur_level, nnode);
 
-		if (data->flags & FL_CLOSING) {
-			if (!*cur_level) {
-				debug_task ("bad parent node");
-				return FALSE;
-			}
-			g_node_append (*cur_level, new);
-			if (!check_balance (new, cur_level)) {
-				debug_task (
+		if (!rspamd_html_check_balance (nnode, cur_level)) {
+			debug_task (
 					"mark part as unbalanced as it has not pairable closing tags");
-				part->flags &= ~RSPAMD_MIME_PART_FLAG_BALANCED;
-			}
-		}
-		else if ((data->flags & (FL_XML|FL_SGML)) == 0) {
-
-			g_node_append (*cur_level, new);
-			if ((data->flags & FL_CLOSED) == 0) {
-				*cur_level = new;
-			}
-			/* Skip some tags */
-			if (data->tag && (data->tag->id == Tag_STYLE ||
-				data->tag->id == Tag_SCRIPT ||
-				data->tag->id == Tag_OBJECT ||
-				data->tag->id == Tag_TITLE)) {
-				return FALSE;
-			}
-		}
-		else {
-			/* Destroy ignored nodes */
-			g_node_destroy (new);
+			hc->flags |= RSPAMD_HTML_FLAG_UNBALANCED;
 		}
 	}
+	else {
+		g_node_append (*cur_level, nnode);
 
-	return TRUE;
+		if ((tag->flags & FL_CLOSED) == 0) {
+			*cur_level = nnode;
+		}
+
+		if (tag->flags & (CM_HEAD|CM_EMPTY|CM_UNKNOWN|FL_BROKEN)) {
+			return FALSE;
+		}
+
+		return TRUE;
+	}
+
+	return FALSE;
 }
 
 static void
@@ -1421,11 +1331,12 @@ gboolean
 rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 		GByteArray *in)
 {
-	const guchar *p, *c, *end, t, *tag_start = NULL;
-	guchar *savep = NULL;
+	const guchar *p, *c, *end, *tag_start = NULL;
+	guchar *savep = NULL, t;
 	gboolean closing = FALSE;
 	GByteArray *dest;
 	guint obrace = 0, ebrace = 0;
+	GNode *cur_level = NULL;
 	gint substate;
 	struct html_tag *cur_tag;
 	enum {
@@ -1599,7 +1510,7 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 			break;
 
 		case content_ignore:
-			if (p != '<') {
+			if (t != '<') {
 				p ++;
 			}
 			else {
@@ -1608,7 +1519,7 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 			break;
 
 		case content_write:
-			if (p != '<') {
+			if (t != '<') {
 				p ++;
 			}
 			else {
@@ -1624,6 +1535,17 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 			rspamd_html_parse_tag_content (pool, hc, cur_tag,
 					p, &substate, &savep);
 			if (t == '>') {
+				if (closing) {
+					cur_tag->flags |= FL_CLOSING;
+
+					if (cur_tag->flags & FL_CLOSED) {
+						/* Bad mix of closed and closing */
+						hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+					}
+
+					closing = FALSE;
+				}
+
 				state = tag_end;
 				continue;
 			}
@@ -1636,7 +1558,7 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 			savep = NULL;
 
 			if (cur_tag != NULL) {
-				if (rspamd_html_process_tag (pool, hc, cur_tag)) {
+				if (rspamd_html_process_tag (pool, hc, cur_tag, &cur_level)) {
 					state = content_write;
 				}
 				else {

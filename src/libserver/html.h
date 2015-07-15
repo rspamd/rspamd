@@ -35,11 +35,6 @@ struct html_tag {
 	gint flags;
 };
 
-struct html_node {
-	struct html_tag tag;
-	gint flags;
-};
-
 /* Forwarded declaration */
 struct rspamd_task;
 
