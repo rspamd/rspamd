@@ -236,7 +236,7 @@ unbreak_tag:
 				*rp = ';';
 				if (rp - estart > 0) {
 					dlen = rp - estart + 1;
-					decode_entitles (estart, &dlen);
+					rspamd_html_decode_entitles_inplace (estart, &dlen);
 					rp = estart + dlen;
 				}
 			}
@@ -1398,7 +1398,7 @@ process_text_part (struct rspamd_task *task,
 				NULL);
 
 		if (text_part->html_nodes != NULL) {
-			decode_entitles (text_part->content->data,
+			rspamd_html_decode_entitles_inplace (text_part->content->data,
 				&text_part->content->len);
 		}
 		rspamd_url_text_extract (task->task_pool, task, text_part, TRUE);
