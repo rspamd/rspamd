@@ -37,8 +37,8 @@ phishing {
 	# For certain domains from the specified strict maps
 	# use another symbol for phishing plugin
 	strict_domains = [
-		"PAYPAL_PHISHING:${CONFDIR}/paypal.map",
-		"REDIRECTOR_FALSE:${CONFDIR}/redirectors.map"
+		"${CONFDIR}/paypal.map:PAYPAL_PHISHING",
+		"${CONFDIR}/redirectors.map:REDIRECTOR_FALSE"
 	];
 }
 ~~~
