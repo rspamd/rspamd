@@ -1155,7 +1155,7 @@ add_html_node (struct rspamd_task *task,
 }
 
 static void
-rspamd_html_parse_tag_content (struct rspamd_task *task,
+rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 		struct html_content *hc, struct html_tag *tag, const guchar *in,
 		gint *statep, guchar **savep)
 {
@@ -1418,7 +1418,8 @@ rspamd_html_parse_tag_content (struct rspamd_task *task,
 }
 
 gboolean
-rspamd_html_process_part (struct rspamd_task *task, struct mime_text_part *part)
+rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
+		GByteArray *in)
 {
 	const guchar *p, *c, *end, t, *tag_start = NULL;
 	guchar *savep = NULL;
@@ -1443,12 +1444,13 @@ rspamd_html_process_part (struct rspamd_task *task, struct mime_text_part *part)
 		content_write,
 	} state = parse_start;
 
-	g_assert (part != NULL);
-	g_assert (part->orig != NULL);
+	g_assert (in != NULL);
+	g_assert (hc != NULL);
+	g_assert (pool != NULL);
 
 	if (!tags_sorted) {
 		qsort (tag_defs, G_N_ELEMENTS (
-				tag_defs), sizeof (struct html_tag), tag_cmp);
+				tag_defs), sizeof (struct html_tag_def), tag_cmp);
 		tags_sorted = 1;
 	}
 	if (!entities_sorted) {
@@ -1460,12 +1462,11 @@ rspamd_html_process_part (struct rspamd_task *task, struct mime_text_part *part)
 		entities_sorted = 1;
 	}
 
-	part->html = rspamd_mempool_alloc0 (task->task_pool, sizeof (*part->html));
-	dest = g_byte_array_sized_new (part->orig->len / 3 * 2);
+	dest = g_byte_array_sized_new (in->len / 3 * 2);
 
-	p = part->orig->data;
+	p = in->data;
 	c = p;
-	end = p + part->orig->len;
+	end = p + in->len;
 
 	while (p < end) {
 		t = *p;
@@ -1477,7 +1478,7 @@ rspamd_html_process_part (struct rspamd_task *task, struct mime_text_part *part)
 			}
 			else {
 				/* We have no starting tag, so assume that it's content */
-				part->html->flags |= RSPAMD_HTML_FLAG_BAD_START;
+				hc->flags |= RSPAMD_HTML_FLAG_BAD_START;
 				state = content_write;
 			}
 
@@ -1495,7 +1496,7 @@ rspamd_html_process_part (struct rspamd_task *task, struct mime_text_part *part)
 				break;
 			case '?':
 				state = xml_tag;
-				part->html->flags |= RSPAMD_HTML_FLAG_XML;
+				hc->flags |= RSPAMD_HTML_FLAG_XML;
 				p ++;
 				break;
 			case '/':
@@ -1505,7 +1506,7 @@ rspamd_html_process_part (struct rspamd_task *task, struct mime_text_part *part)
 				break;
 			case '>':
 				/* Empty tag */
-				part->html->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
 				state = tag_end;
 				p ++;
 				tag_start = NULL;
@@ -1514,7 +1515,7 @@ rspamd_html_process_part (struct rspamd_task *task, struct mime_text_part *part)
 				state = tag_content;
 				substate = 0;
 				savep = NULL;
-				cur_tag = rspamd_mempool_alloc0 (sizeof (*cur_tag));
+				cur_tag = rspamd_mempool_alloc0 (pool, sizeof (*cur_tag));
 				break;
 			}
 
@@ -1546,7 +1547,7 @@ rspamd_html_process_part (struct rspamd_task *task, struct mime_text_part *part)
 			}
 			else if (t == '>') {
 				/* Misformed xml tag */
-				part->html->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
 				state = tag_end;
 				continue;
 			}
@@ -1559,7 +1560,7 @@ rspamd_html_process_part (struct rspamd_task *task, struct mime_text_part *part)
 				state = tag_end;
 			}
 			else {
-				part->html->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
 				p ++;
 			}
 			break;
@@ -1579,7 +1580,7 @@ rspamd_html_process_part (struct rspamd_task *task, struct mime_text_part *part)
 
 		case comment_tag:
 			if (t != '-')  {
-				part->html->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
 			}
 			p ++;
 			ebrace = 0;
@@ -1620,7 +1621,7 @@ rspamd_html_process_part (struct rspamd_task *task, struct mime_text_part *part)
 			break;
 
 		case tag_content:
-			rspamd_html_parse_tag_content (task, part->html, cur_tag,
+			rspamd_html_parse_tag_content (pool, hc, cur_tag,
 					p, &substate, &savep);
 			if (t == '>') {
 				state = tag_end;
@@ -1635,7 +1636,7 @@ rspamd_html_process_part (struct rspamd_task *task, struct mime_text_part *part)
 			savep = NULL;
 
 			if (cur_tag != NULL) {
-				if (rspamd_html_process_tag (task, part->html, cur_tag)) {
+				if (rspamd_html_process_tag (pool, hc, cur_tag)) {
 					state = content_write;
 				}
 				else {
