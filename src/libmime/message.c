@@ -1131,7 +1131,7 @@ process_text_part (struct rspamd_task *task,
 				text_part->orig,
 				type,
 				text_part);
-		text_part->html = rspamd_mempool_alloc (task->task_pool,
+		text_part->html = rspamd_mempool_alloc0 (task->task_pool,
 				sizeof (*text_part->html));
 		text_part->parent = parent;
 		text_part->mime_part = mime_part;
