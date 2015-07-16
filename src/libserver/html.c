@@ -1018,17 +1018,6 @@ parse_tag_url (struct rspamd_task *task,
 	}
 }
 
-gboolean
-add_html_node (struct rspamd_task *task,
-	rspamd_mempool_t * pool,
-	struct mime_text_part *part,
-	gchar *tag_text,
-	gsize tag_len,
-	gsize remain,
-	GNode ** cur_level)
-{
-}
-
 static gboolean
 rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 		struct html_tag *tag, GNode **cur_level, gboolean *balanced)

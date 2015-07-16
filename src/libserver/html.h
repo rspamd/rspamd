@@ -42,16 +42,6 @@ struct html_content {
 	GNode *html_tags;
 	gint flags;
 };
-/*
- * Add a single node to the tags tree
- */
-gboolean add_html_node (struct rspamd_task *task,
-	rspamd_mempool_t *pool,
-	struct mime_text_part *part,
-	gchar *tag_text,
-	gsize tag_len,
-	gsize remain,
-	GNode **cur_level);
 
 /*
  * Get tag structure by its name (binary search is used)
