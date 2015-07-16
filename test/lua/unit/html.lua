@@ -21,7 +21,7 @@ context("HTML processing", function()
     <b>stuff</p>?
   </body>
 </html>
-      ]], 'Hello, world! test data stuff?'},
+      ]], "Hello, world! test\r\ndata\r\nstuff?"},
       {[[
 <?xml version="1.0" encoding="iso-8859-1"?>
  <!DOCTYPE html 
@@ -39,7 +39,7 @@ context("HTML processing", function()
        
      </p>
    </body>
- </html>]], 'Hello, world!'},
+ </html>]], '\r\nHello, world!\r\n'},
        {[[
 <!DOCTYPE html>
 <html lang="en">
@@ -53,13 +53,10 @@ context("HTML processing", function()
   --></head>
   <body>
     <!-- page content -->
-    Hello, world! <b>test</b>
-    <p>data<>
-    </P>
-    <b>stuff</p>?
+    Hello, world!
   </body>
 </html>
-      ]], 'Hello, world! test data stuff?'},
+      ]], 'Hello, world!'},
     }
     
     for _,c in ipairs(cases) do

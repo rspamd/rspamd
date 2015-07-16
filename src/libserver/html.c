@@ -1031,7 +1031,7 @@ add_html_node (struct rspamd_task *task,
 
 static gboolean
 rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
-		struct html_tag *tag, GNode **cur_level)
+		struct html_tag *tag, GNode **cur_level, gboolean *balanced)
 {
 	GNode *nnode;
 
@@ -1046,17 +1046,29 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 
 	nnode = g_node_new (tag);
 
+	if (tag->params) {
+		rspamd_mempool_add_destructor (pool,
+				(rspamd_mempool_destruct_t) g_list_free,
+				tag->params);
+	}
+
 	if (tag->flags & FL_CLOSING) {
 		if (!*cur_level) {
 			debug_task ("bad parent node");
+			g_node_destroy (nnode);
 			return FALSE;
 		}
+
 		g_node_append (*cur_level, nnode);
 
 		if (!rspamd_html_check_balance (nnode, cur_level)) {
 			debug_task (
 					"mark part as unbalanced as it has not pairable closing tags");
 			hc->flags |= RSPAMD_HTML_FLAG_UNBALANCED;
+			*balanced = FALSE;
+		}
+		else {
+			*balanced = TRUE;
 		}
 	}
 	else {
@@ -1386,7 +1398,7 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 {
 	const guchar *p, *c, *end, *tag_start = NULL, *savep = NULL;
 	guchar t;
-	gboolean closing = FALSE, need_decode = FALSE, save_space = FALSE;
+	gboolean closing = FALSE, need_decode = FALSE, save_space = FALSE, balanced;
 	GByteArray *dest;
 	guint obrace = 0, ebrace = 0;
 	GNode *cur_level = NULL;
@@ -1678,17 +1690,28 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 			savep = NULL;
 
 			if (cur_tag != NULL) {
-				if (rspamd_html_process_tag (pool, hc, cur_tag, &cur_level)) {
+				balanced = TRUE;
+
+				if (rspamd_html_process_tag (pool, hc, cur_tag, &cur_level,
+						&balanced)) {
 					state = content_write;
 					need_decode = FALSE;
 				}
 				else {
 					state = content_ignore;
 				}
+
+				if ((cur_tag->id == Tag_P || cur_tag->id == Tag_BR ||
+						cur_tag->id == Tag_HR) && balanced) {
+					/* Insert newline */
+					g_byte_array_append (dest, "\r\n", 2);
+					save_space = FALSE;
+				}
 			}
 			else {
 				state = content_write;
 			}
+
 
 			p++;
 			c = p;
