@@ -1560,6 +1560,10 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 				state = tag_end;
 				continue;
 			}
+			else {
+				ebrace = 0;
+			}
+
 			p ++;
 			break;
 
