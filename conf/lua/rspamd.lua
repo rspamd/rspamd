@@ -53,7 +53,6 @@ rspamd_conf.R_PARTS_DIFFER = function(task)
   local distance = task:get_mempool():get_variable('parts_distance', 'int')
   
   if distance then
-    print(distance)
     local nd = tonumber(distance)
     
     if nd < 50 then
