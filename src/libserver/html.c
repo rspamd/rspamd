@@ -816,69 +816,19 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 }
 
 static void
-check_phishing (struct rspamd_task *task,
+rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 	struct rspamd_url *href_url,
-	const gchar *url_text,
-	gsize remain,
-	tag_id_t id)
+	const guchar *url_text,
+	gsize len)
 {
 	struct rspamd_url *text_url;
-	gchar *url_str;
-	const gchar *p, *c;
-	gchar tagbuf[128];
-	struct html_tag *tag;
-	gsize len = 0;
 	gint rc, state = 0;
+	gchar *url_str = NULL;
 
-	p = url_text;
-	while (len < remain) {
-		if (*p == '<') {
-			/* Check tag name */
-			if (*(p + 1) == '/') {
-				c = p + 2;
-			}
-			else {
-				c = p + 1;
-			}
-			while (len < remain) {
-				if (!g_ascii_isspace (*p) && *p != '>') {
-					p++;
-					len++;
-				}
-				else {
-					break;
-				}
-			}
-			rspamd_strlcpy (tagbuf, c, MIN ((gint)sizeof(tagbuf), p - c + 1));
-			if ((tag = get_tag_by_name (tagbuf)) != NULL) {
-				if (tag->id == id) {
-					break;
-				}
-				else if (tag->id == Tag_IMG) {
-					/* We should ignore IMG tag here */
-					while (len < remain && *p != '>' && *p != '<') {
-						p++;
-						len++;
-					}
-					if (*p == '>' && len < remain) {
-						p++;
-					}
-
-					remain -= p - url_text;
-					url_text = p;
-					len = 0;
-					continue;
-				}
-			}
-		}
-		len++;
-		p++;
-	}
-
-	if (rspamd_url_find (task->task_pool, url_text, len, NULL, NULL, &url_str,
+	if (rspamd_url_find (pool, url_text, len, NULL, NULL, &url_str,
 		TRUE, &state) && url_str != NULL) {
-		text_url = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct rspamd_url));
-		rc = rspamd_url_parse (text_url, url_str, strlen (url_str), task->task_pool);
+		text_url = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_url));
+		rc = rspamd_url_parse (text_url, url_str, strlen (url_str), pool);
 
 		if (rc == URI_ERRNO_OK) {
 			if (href_url->hostlen != text_url->hostlen || memcmp (href_url->host,
@@ -1381,6 +1331,34 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 	*statep = state;
 }
 
+static struct rspamd_url *
+rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag)
+{
+	struct html_tag_component *comp;
+	struct rspamd_url *url;
+	GList *cur;
+	gint rc;
+
+	cur = tag->params;
+
+	while (cur) {
+		comp = cur->data;
+
+		if (comp->type == RSPAMD_HTML_COMPONENT_HREF) {
+			url = rspamd_mempool_alloc (pool, sizeof (*url));
+			rc = rspamd_url_parse (url, (gchar *)comp->start, comp->len, pool);
+
+			if (rc == URI_ERRNO_OK) {
+				return url;
+			}
+		}
+
+		cur = g_list_next (cur);
+	}
+
+	return NULL;
+}
+
 GByteArray*
 rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 		GByteArray *in, GList **exceptions, GHashTable *urls)
@@ -1393,6 +1371,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 	GNode *cur_level = NULL;
 	gint substate, len, href_offset = -1;
 	struct html_tag *cur_tag = NULL;
+	struct rspamd_url *url = NULL, *turl;
 	struct process_exception *ex;
 	enum {
 		parse_start = 0,
@@ -1700,7 +1679,24 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 
 				if (cur_tag->id == Tag_A) {
 					if (!(cur_tag->flags & (FL_CLOSED|FL_CLOSING))) {
-						href_offset = dest->len;
+						url = rspamd_html_process_url_tag (pool, cur_tag);
+
+						if (url != NULL) {
+
+							turl = g_hash_table_lookup (urls, url);
+
+							if (turl != NULL && turl->phished_url == NULL) {
+								g_hash_table_insert (urls, url, url);
+							}
+							else if (turl == NULL) {
+								g_hash_table_insert (urls, url, url);
+							}
+							else {
+								url = NULL;
+							}
+
+							href_offset = dest->len;
+						}
 					}
 					else if (cur_tag->flags & FL_CLOSING) {
 						/* Insert exception */
@@ -1713,7 +1709,14 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 							*exceptions = g_list_prepend (*exceptions, ex);
 						}
 
+						if (url != NULL && (gint)dest->len > href_offset) {
+							rspamd_html_url_is_phished (pool, url,
+									dest->data + href_offset,
+									dest->len - href_offset);
+						}
+
 						href_offset = -1;
+						url = NULL;
 					}
 				}
 			}
