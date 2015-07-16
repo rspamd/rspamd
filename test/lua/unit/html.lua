@@ -40,6 +40,26 @@ context("HTML processing", function()
      </p>
    </body>
  </html>]], 'Hello, world!'},
+       {[[
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>title</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="script.js"></script>
+    <style><!--
+- -a -a -a -- --- -
+  --></head>
+  <body>
+    <!-- page content -->
+    Hello, world! <b>test</b>
+    <p>data<>
+    </P>
+    <b>stuff</p>?
+  </body>
+</html>
+      ]], 'Hello, world! test data stuff?'},
     }
     
     for _,c in ipairs(cases) do
