@@ -49,7 +49,7 @@ reconf['R_WHITE_ON_WHITE'] = string.format('(!(%s) & (%s))', r_bgcolor, r_font_c
 reconf['R_FLASH_REDIR_IMGSHACK'] = '/^(?:http:\\/\\/)?img\\d{1,5}\\.imageshack\\.us\\/\\S+\\.swf/U'
 
 -- Different text parts
-rspamd_conf.R_PARTS_DIFFER = function(task)
+rspamd_config.R_PARTS_DIFFER = function(task)
   local distance = task:get_mempool():get_variable('parts_distance', 'int')
   
   if distance then
