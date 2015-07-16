@@ -24,6 +24,7 @@
 #include "lua_common.h"
 #include "task.h"
 #include "main.h"
+#include "html.h"
 #include "cfg_rcl.h"
 #include "tokenizers/tokenizers.h"
 
@@ -77,6 +78,14 @@ LUA_FUNCTION_DEF (util, process_message);
  */
 LUA_FUNCTION_DEF (util, tanh);
 
+/***
+ * @function util.parse_html(input)
+ * Parses HTML and returns the according text
+ * @param {string|text} in input HTML
+ * @return {rspamd_text} processed text with no HTML tags
+ */
+LUA_FUNCTION_DEF (util, parse_html);
+
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
 	LUA_INTERFACE_DEF (util, load_rspamd_config),
@@ -86,6 +95,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, decode_base64),
 	LUA_INTERFACE_DEF (util, tokenize_text),
 	LUA_INTERFACE_DEF (util, tanh),
+	LUA_INTERFACE_DEF (util, parse_html),
 	{NULL, NULL}
 };
 
@@ -439,6 +449,53 @@ lua_util_tanh (lua_State *L)
 	gdouble in = luaL_checknumber (L, 1);
 
 	lua_pushnumber (L, tanh (in));
+
+	return 1;
+}
+
+static gint
+lua_util_parse_html (lua_State *L)
+{
+	struct rspamd_lua_text *t;
+	const gchar *start = NULL;
+	gsize len;
+	GByteArray *res, *in;
+	rspamd_mempool_t *pool;
+	struct html_content *hc;
+
+	if (lua_type (L, 1) == LUA_TUSERDATA) {
+		t = lua_check_text (L, 1);
+
+		if (t != NULL) {
+			start = t->start;
+			len = t->len;
+		}
+	}
+	else if (lua_type (L, 1) == LUA_TSTRING) {
+		start = luaL_checklstring (L, 1, &len);
+	}
+
+	if (start != NULL) {
+		pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
+		hc = rspamd_mempool_alloc0 (pool, sizeof (*hc));
+		in = g_byte_array_sized_new (len);
+		g_byte_array_append (in, start, len);
+
+		res = rspamd_html_process_part (pool, hc, in);
+
+		t = lua_newuserdata (L, sizeof (*t));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+		t->start = res->data;
+		t->len = res->len;
+		t->own = TRUE;
+
+		g_byte_array_free (res, FALSE);
+		g_byte_array_free (in, TRUE);
+		rspamd_mempool_delete (pool);
+	}
+	else {
+		lua_pushnil (L);
+	}
 
 	return 1;
 }
