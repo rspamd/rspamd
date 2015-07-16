@@ -1365,7 +1365,7 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 	*statep = state;
 }
 
-gboolean
+GByteArray*
 rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 		GByteArray *in)
 {
@@ -1635,5 +1635,5 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 		}
 	}
 
-	return TRUE;
+	return dest;
 }
