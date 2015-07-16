@@ -1382,8 +1382,8 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 }
 
 GByteArray*
-rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
-		GByteArray *in)
+rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
+		GByteArray *in, GList **exceptions, GHashTable *urls)
 {
 	const guchar *p, *c, *end, *tag_start = NULL, *savep = NULL;
 	guchar t;
@@ -1391,8 +1391,9 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 	GByteArray *dest;
 	guint obrace = 0, ebrace = 0;
 	GNode *cur_level = NULL;
-	gint substate, len;
+	gint substate, len, href_offset = -1;
 	struct html_tag *cur_tag = NULL;
+	struct process_exception *ex;
 	enum {
 		parse_start = 0,
 		tag_begin,
@@ -1696,6 +1697,25 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 					g_byte_array_append (dest, "\r\n", 2);
 					save_space = FALSE;
 				}
+
+				if (cur_tag->id == Tag_A) {
+					if (!(cur_tag->flags & (FL_CLOSED|FL_CLOSING))) {
+						href_offset = dest->len;
+					}
+					else if (cur_tag->flags & FL_CLOSING) {
+						/* Insert exception */
+						if (exceptions && href_offset != -1
+								&& (gint)dest->len > href_offset) {
+							ex = rspamd_mempool_alloc (pool, sizeof (*ex));
+							ex->pos = href_offset;
+							ex->len = dest->len - href_offset;
+
+							*exceptions = g_list_prepend (*exceptions, ex);
+						}
+
+						href_offset = -1;
+					}
+				}
 			}
 			else {
 				state = content_write;
@@ -1710,4 +1730,12 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 	}
 
 	return dest;
+}
+
+GByteArray*
+rspamd_html_process_part (rspamd_mempool_t *pool,
+		struct html_content *hc,
+		GByteArray *in)
+{
+	return rspamd_html_process_part_full (pool, hc, in, NULL, NULL);
 }

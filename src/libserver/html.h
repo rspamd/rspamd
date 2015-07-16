@@ -57,4 +57,8 @@ GByteArray* rspamd_html_process_part (rspamd_mempool_t *pool,
 		struct html_content *hc,
 		GByteArray *in);
 
+GByteArray* rspamd_html_process_part_full (rspamd_mempool_t *pool,
+		struct html_content *hc,
+		GByteArray *in, GList **exceptions, GHashTable *urls);
+
 #endif

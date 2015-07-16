@@ -1137,10 +1137,12 @@ process_text_part (struct rspamd_task *task,
 		text_part->mime_part = mime_part;
 
 		text_part->flags |= RSPAMD_MIME_PART_FLAG_BALANCED;
-		text_part->content = rspamd_html_process_part (
+		text_part->content = rspamd_html_process_part_full (
 				task->task_pool,
 				text_part->html,
-				part_content);
+				part_content,
+				&text_part->urls_offset,
+				task->urls);
 
 		rspamd_url_text_extract (task->task_pool, task, text_part, TRUE);
 
