@@ -705,19 +705,19 @@ get_tag_by_name (const gchar *name)
 }
 
 /* Decode HTML entitles in text */
-void
-rspamd_html_decode_entitles_inplace (gchar *s, guint * len)
+guint
+rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 {
 	guint l, rep_len;
 	gchar *t = s, *h = s, *e = s, *end_ptr;
 	gint state = 0, val, base;
 	entity *found, key;
 
-	if (len == NULL || *len == 0) {
+	if (len == 0) {
 		l = strlen (s);
 	}
 	else {
-		l = *len;
+		l = len;
 	}
 
 	while (h - s < (gint)l) {
@@ -796,11 +796,8 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint * len)
 			break;
 		}
 	}
-	*t = '\0';
 
-	if (len != NULL) {
-		*len = t - s;
-	}
+	return (t - s);
 }
 
 static void
@@ -965,7 +962,7 @@ parse_tag_url (struct rspamd_task *task,
 
 		url_text = rspamd_mempool_alloc (task->task_pool, len + 1);
 		rspamd_strlcpy (url_text, c, len + 1);
-		rspamd_html_decode_entitles_inplace (url_text, &len);
+		len = rspamd_html_decode_entitles_inplace (url_text, len);
 
 		if (g_ascii_strncasecmp (url_text, "http",
 			sizeof ("http") - 1) != 0 &&
@@ -1064,10 +1061,46 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 	return FALSE;
 }
 
+static gboolean
+rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
+		const guchar *begin, const guchar *end,
+		struct html_tag *tag)
+{
+	struct html_tag_component *comp;
+	gint len;
+	gboolean ret = FALSE;
+
+	g_assert (end >= begin);
+	len = rspamd_html_decode_entitles_inplace ((gchar *)begin, end - begin);
+
+	if (len == 3) {
+		if (g_ascii_strncasecmp (begin, "src", len) == 0) {
+			comp = rspamd_mempool_alloc (pool, sizeof (*comp));
+			comp->type = RSPAMD_HTML_COMPONENT_HREF;
+			comp->start = NULL;
+			comp->len = 0;
+			tag->params = g_list_prepend (tag->params, comp);
+			ret = TRUE;
+		}
+	}
+	else if (len == 4) {
+		if (g_ascii_strncasecmp (begin, "href", len) == 0) {
+			comp = rspamd_mempool_alloc (pool, sizeof (*comp));
+			comp->type = RSPAMD_HTML_COMPONENT_HREF;
+			comp->start = NULL;
+			comp->len = 0;
+			tag->params = g_list_prepend (tag->params, comp);
+			ret = TRUE;
+		}
+	}
+
+	return ret;
+}
+
 static void
 rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 		struct html_content *hc, struct html_tag *tag, const guchar *in,
-		gint *statep, guchar **savep)
+		gint *statep, guchar const **savep)
 {
 	enum {
 		parse_start = 0,
@@ -1088,8 +1121,8 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 		ignore_bad_tag
 	} state;
 	struct html_tag_def *found;
-	struct html_tag_component *comp;
 	gboolean store = FALSE;
+	struct html_tag_component *comp;
 
 	state = *statep;
 
@@ -1121,6 +1154,11 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 				state = ignore_bad_tag;
 			}
 			else {
+				/* We can safely modify tag's name here, as it is already parsed */
+				tag->name.len = rspamd_html_decode_entitles_inplace (
+						(gchar *)tag->name.start,
+						tag->name.len);
+
 				found = bsearch (tag, tag_defs, G_N_ELEMENTS (tag_defs),
 					sizeof (tag_defs[0]), tag_find);
 				if (found == NULL) {
@@ -1155,14 +1193,7 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 				return;
 			}
 
-			if (g_ascii_strncasecmp (*savep, "href", in - *savep) == 0 ||
-					g_ascii_strncasecmp (*savep, "src", in - *savep) == 0) {
-				comp->type = RSPAMD_HTML_COMPONENT_HREF;
-				comp->start = NULL;
-				comp->len = 0;
-				tag->params = g_list_prepend (tag->params, comp);
-			}
-			else {
+			if (!rspamd_html_parse_tag_component (pool, *savep, in, tag)) {
 				/* Ignore unknown params */
 				*savep = NULL;
 			}
@@ -1320,6 +1351,13 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 		}
 		break;
 
+	case spaces_after_param:
+		if (!g_ascii_isspace (*in)) {
+			state = parse_attr_name;
+			*savep = in;
+		}
+		break;
+
 	case ignore_bad_tag:
 		break;
 	}
@@ -1331,13 +1369,13 @@ gboolean
 rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 		GByteArray *in)
 {
-	const guchar *p, *c, *end, *tag_start = NULL;
-	guchar *savep = NULL, t;
-	gboolean closing = FALSE;
+	const guchar *p, *c, *end, *tag_start = NULL, *savep = NULL;
+	guchar t;
+	gboolean closing = FALSE, need_decode = FALSE;
 	GByteArray *dest;
 	guint obrace = 0, ebrace = 0;
 	GNode *cur_level = NULL;
-	gint substate;
+	gint substate, len;
 	struct html_tag *cur_tag;
 	enum {
 		parse_start = 0,
@@ -1521,14 +1559,36 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 		case content_write:
 			if (t != '<') {
 				p ++;
+
+				if (t == '&') {
+					need_decode = TRUE;
+				}
 			}
 			else {
 				if (c != p) {
-					g_byte_array_append (dest, c, p - c);
+
+					if (need_decode) {
+						len = rspamd_html_decode_entitles_inplace ((gchar *)c,
+								p - c);
+					}
+					else {
+						len = p - c;
+					}
+
+					g_byte_array_append (dest, c, len);
 				}
 
 				state = tag_begin;
 			}
+			break;
+
+		case sgml_content:
+			/* TODO: parse DOCTYPE here */
+			if (t == '>') {
+				state = tag_end;
+				continue;
+			}
+			p ++;
 			break;
 
 		case tag_content:
@@ -1560,6 +1620,7 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 			if (cur_tag != NULL) {
 				if (rspamd_html_process_tag (pool, hc, cur_tag, &cur_level)) {
 					state = content_write;
+					need_decode = FALSE;
 				}
 				else {
 					state = content_ignore;

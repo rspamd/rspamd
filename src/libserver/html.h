@@ -61,7 +61,7 @@ struct html_tag * get_tag_by_name (const gchar *name);
 /*
  * Decode HTML entitles in text. Text is modified in place.
  */
-void rspamd_html_decode_entitles_inplace (gchar *s, guint *len);
+guint rspamd_html_decode_entitles_inplace (gchar *s, guint len);
 
 gboolean rspamd_html_process_part (rspamd_mempool_t *pool,
 		struct html_content *hc,
