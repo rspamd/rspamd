@@ -1391,6 +1391,7 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 		xml_tag_end,
 		content_ignore,
 		content_write,
+		content_ignore_sp
 	} state = parse_start;
 
 	g_assert (in != NULL);
@@ -1558,10 +1559,25 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 
 		case content_write:
 			if (t != '<') {
-				p ++;
-
 				if (t == '&') {
 					need_decode = TRUE;
+				}
+				else if (g_ascii_isspace (t)) {
+
+					if (c != p) {
+						if (need_decode) {
+							len = rspamd_html_decode_entitles_inplace ((gchar *)c,
+									p - c);
+						}
+						else {
+							len = p - c;
+						}
+
+						g_byte_array_append (dest, c, len);
+					}
+
+					c = p;
+					state = content_ignore_sp;
 				}
 			}
 			else {
@@ -1579,7 +1595,28 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 				}
 
 				state = tag_begin;
+				continue;
 			}
+
+			p ++;
+			break;
+
+		case content_ignore_sp:
+			if (!g_ascii_isspace (t)) {
+				c = p;
+				state = content_write;
+
+				if (t != '<') {
+					/* Append one space if needed */
+					if (dest->len > 0 &&
+							!g_ascii_isspace (dest->data[dest->len - 1])) {
+						g_byte_array_append (dest, " ", 1);
+					}
+				}
+				continue;
+			}
+
+			p ++;
 			break;
 
 		case sgml_content:
@@ -1627,9 +1664,11 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 				}
 			}
 			else {
-				/* Do not save content of SGML/XML tags */
-				state = content_ignore;
+				state = content_write;
 			}
+
+			p++;
+			c = p;
 			cur_tag = NULL;
 			break;
 		}
