@@ -638,8 +638,16 @@ tag_cmp (const void *m1, const void *m2)
 {
 	const struct html_tag_def *p1 = m1;
 	const struct html_tag_def *p2 = m2;
+	gsize l1, l2;
 
-	return g_ascii_strcasecmp (p1->name, p2->name);
+	l1 = strlen (p1->name);
+	l2 = strlen (p2->name);
+
+	if (l1 == l2) {
+		return g_ascii_strcasecmp (p1->name, p2->name);
+	}
+
+	return l1 - l2;
 }
 
 static gint
@@ -647,8 +655,15 @@ tag_find (const void *skey, const void *elt)
 {
 	const struct html_tag *tag = skey;
 	const struct html_tag_def *d = elt;
+	gsize tlen;
 
-	return g_ascii_strncasecmp (tag->name.start, d->name, tag->name.len);
+	tlen = strlen (d->name);
+
+	if (tlen == tag->name.len) {
+		return g_ascii_strncasecmp (tag->name.start, d->name, tag->name.len);
+	}
+
+	return tag->name.len - tlen;
 }
 
 static gint
@@ -1058,7 +1073,7 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 		return TRUE;
 	}
 
-	return FALSE;
+	return TRUE;
 }
 
 static gboolean
@@ -1371,12 +1386,12 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 {
 	const guchar *p, *c, *end, *tag_start = NULL, *savep = NULL;
 	guchar t;
-	gboolean closing = FALSE, need_decode = FALSE;
+	gboolean closing = FALSE, need_decode = FALSE, save_space = FALSE;
 	GByteArray *dest;
 	guint obrace = 0, ebrace = 0;
 	GNode *cur_level = NULL;
 	gint substate, len;
-	struct html_tag *cur_tag;
+	struct html_tag *cur_tag = NULL;
 	enum {
 		parse_start = 0,
 		tag_begin,
@@ -1558,11 +1573,13 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 			break;
 
 		case content_write:
+
 			if (t != '<') {
 				if (t == '&') {
 					need_decode = TRUE;
 				}
 				else if (g_ascii_isspace (t)) {
+					save_space = TRUE;
 
 					if (c != p) {
 						if (need_decode) {
@@ -1578,6 +1595,16 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 
 					c = p;
 					state = content_ignore_sp;
+				}
+				else {
+					if (save_space) {
+						/* Append one space if needed */
+						if (dest->len > 0 &&
+								!g_ascii_isspace (dest->data[dest->len - 1])) {
+							g_byte_array_append (dest, " ", 1);
+						}
+						save_space = FALSE;
+					}
 				}
 			}
 			else {
@@ -1605,14 +1632,6 @@ rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
 			if (!g_ascii_isspace (t)) {
 				c = p;
 				state = content_write;
-
-				if (t != '<') {
-					/* Append one space if needed */
-					if (dest->len > 0 &&
-							!g_ascii_isspace (dest->data[dest->len - 1])) {
-						g_byte_array_append (dest, " ", 1);
-					}
-				}
 				continue;
 			}
 
