@@ -1031,7 +1031,7 @@ rspamd_words_levenshtein_distance (GArray *w1, GArray *w2)
 		for (y = 1, lastdiag = x - 1; y <= s1len; y++) {
 			olddiag = column[y];
 			s1 = &g_array_index (w1, rspamd_fstring_t, y - 1);
-			s2 = &g_array_index (w1, rspamd_fstring_t, x - 1);
+			s2 = &g_array_index (w2, rspamd_fstring_t, x - 1);
 			eq = rspamd_fstring_equal (s1, s2) ? 0 : 1;
 			column[y] = MIN3 (column[y] + 1, column[y - 1] + 1,
 					lastdiag + (eq));
