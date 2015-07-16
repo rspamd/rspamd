@@ -38,7 +38,7 @@ Content-Type: text/plain
 
 Test.
 ]]
-    local obj = rspamd_util.process_message(cfg, msg)
-    print(logger.slog("result: %1", obj))
+    --local obj = rspamd_util.process_message(cfg, msg)
+    --print(logger.slog("result: %1", obj))
   end)
 end)
