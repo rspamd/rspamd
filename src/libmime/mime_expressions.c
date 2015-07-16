@@ -1559,11 +1559,11 @@ static gboolean
 search_html_node_callback (GNode * node, gpointer data)
 {
 	struct html_callback_data *cd = data;
-	struct html_node *nd;
+	struct html_tag *nd;
 
 	nd = node->data;
 	if (nd) {
-		if (nd->tag == cd->tag) {
+		if (nd->id == cd->tag->id) {
 			*cd->res = TRUE;
 			return TRUE;
 		}
@@ -1606,8 +1606,9 @@ rspamd_has_html_tag (struct rspamd_task * task, GArray * args, void *unused)
 	for (i = 0; i < task->text_parts->len && res; i ++) {
 		p = g_ptr_array_index (task->text_parts, i);
 
-		if (!IS_PART_EMPTY (p) && IS_PART_HTML (p) && p->html_nodes) {
-			g_node_traverse (p->html_nodes,
+		if (!IS_PART_EMPTY (p) && IS_PART_HTML (p) && p->html) {
+			/* TODO: too slow */
+			g_node_traverse (p->html->html_tags,
 				G_PRE_ORDER,
 				G_TRAVERSE_ALL,
 				-1,
@@ -1630,7 +1631,7 @@ rspamd_has_fake_html (struct rspamd_task * task, GArray * args, void *unused)
 	for (i = 0; i < task->text_parts->len && res; i ++) {
 		p = g_ptr_array_index (task->text_parts, i);
 
-		if (!IS_PART_EMPTY (p) && IS_PART_HTML (p) && p->html_nodes == NULL) {
+		if (!IS_PART_EMPTY (p) && IS_PART_HTML (p) && p->html->html_tags == NULL) {
 			res = TRUE;
 		}
 	}

@@ -11,6 +11,7 @@
 
 struct rspamd_task;
 struct controller_session;
+struct html_content;
 
 struct mime_part {
 	GMimeContentType *type;
@@ -40,7 +41,7 @@ struct mime_text_part {
 	const gchar *real_charset;
 	GByteArray *orig;
 	GByteArray *content;
-	GNode *html_nodes;
+	struct html_content *html;
 	GList *urls_offset;	/**< list of offsets of urls						*/
 	rspamd_fuzzy_t *fuzzy;
 	rspamd_fuzzy_t *double_fuzzy;

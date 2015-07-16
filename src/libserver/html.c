@@ -31,7 +31,199 @@
 
 static sig_atomic_t tags_sorted = 0;
 
-static struct html_tag tag_defs[] = {
+/* Known HTML tags */
+typedef enum
+{
+	Tag_UNKNOWN, /**< Unknown tag! */
+	Tag_A,      /**< A */
+	Tag_ABBR,   /**< ABBR */
+	Tag_ACRONYM, /**< ACRONYM */
+	Tag_ADDRESS, /**< ADDRESS */
+	Tag_ALIGN,  /**< ALIGN */
+	Tag_APPLET, /**< APPLET */
+	Tag_AREA,   /**< AREA */
+	Tag_B,      /**< B */
+	Tag_BASE,   /**< BASE */
+	Tag_BASEFONT, /**< BASEFONT */
+	Tag_BDO,    /**< BDO */
+	Tag_BGSOUND, /**< BGSOUND */
+	Tag_BIG,    /**< BIG */
+	Tag_BLINK,  /**< BLINK */
+	Tag_BLOCKQUOTE, /**< BLOCKQUOTE */
+	Tag_BODY,   /**< BODY */
+	Tag_BR,     /**< BR */
+	Tag_BUTTON, /**< BUTTON */
+	Tag_CAPTION, /**< CAPTION */
+	Tag_CENTER, /**< CENTER */
+	Tag_CITE,   /**< CITE */
+	Tag_CODE,   /**< CODE */
+	Tag_COL,    /**< COL */
+	Tag_COLGROUP, /**< COLGROUP */
+	Tag_COMMENT, /**< COMMENT */
+	Tag_DD,     /**< DD */
+	Tag_DEL,    /**< DEL */
+	Tag_DFN,    /**< DFN */
+	Tag_DIR,    /**< DIR */
+	Tag_DIV,    /**< DIF */
+	Tag_DL,     /**< DL */
+	Tag_DT,     /**< DT */
+	Tag_EM,     /**< EM */
+	Tag_EMBED,  /**< EMBED */
+	Tag_FIELDSET, /**< FIELDSET */
+	Tag_FONT,   /**< FONT */
+	Tag_FORM,   /**< FORM */
+	Tag_FRAME,  /**< FRAME */
+	Tag_FRAMESET, /**< FRAMESET */
+	Tag_H1,     /**< H1 */
+	Tag_H2,     /**< H2 */
+	Tag_H3,     /**< H3 */
+	Tag_H4,     /**< H4 */
+	Tag_H5,     /**< H5 */
+	Tag_H6,     /**< H6 */
+	Tag_HEAD,   /**< HEAD */
+	Tag_HR,     /**< HR */
+	Tag_HTML,   /**< HTML */
+	Tag_I,      /**< I */
+	Tag_IFRAME, /**< IFRAME */
+	Tag_ILAYER, /**< ILAYER */
+	Tag_IMG,    /**< IMG */
+	Tag_INPUT,  /**< INPUT */
+	Tag_INS,    /**< INS */
+	Tag_ISINDEX, /**< ISINDEX */
+	Tag_KBD,    /**< KBD */
+	Tag_KEYGEN, /**< KEYGEN */
+	Tag_LABEL,  /**< LABEL */
+	Tag_LAYER,  /**< LAYER */
+	Tag_LEGEND, /**< LEGEND */
+	Tag_LI,     /**< LI */
+	Tag_LINK,   /**< LINK */
+	Tag_LISTING, /**< LISTING */
+	Tag_MAP,    /**< MAP */
+	Tag_MARQUEE, /**< MARQUEE */
+	Tag_MENU,   /**< MENU */
+	Tag_META,   /**< META */
+	Tag_MULTICOL, /**< MULTICOL */
+	Tag_NOBR,   /**< NOBR */
+	Tag_NOEMBED, /**< NOEMBED */
+	Tag_NOFRAMES, /**< NOFRAMES */
+	Tag_NOLAYER, /**< NOLAYER */
+	Tag_NOSAVE, /**< NOSAVE */
+	Tag_NOSCRIPT, /**< NOSCRIPT */
+	Tag_OBJECT, /**< OBJECT */
+	Tag_OL,     /**< OL */
+	Tag_OPTGROUP, /**< OPTGROUP */
+	Tag_OPTION, /**< OPTION */
+	Tag_P,      /**< P */
+	Tag_PARAM,  /**< PARAM */
+	Tag_PLAINTEXT, /**< PLAINTEXT */
+	Tag_PRE,    /**< PRE */
+	Tag_Q,      /**< Q */
+	Tag_RB,     /**< RB */
+	Tag_RBC,    /**< RBC */
+	Tag_RP,     /**< RP */
+	Tag_RT,     /**< RT */
+	Tag_RTC,    /**< RTC */
+	Tag_RUBY,   /**< RUBY */
+	Tag_S,      /**< S */
+	Tag_SAMP,   /**< SAMP */
+	Tag_SCRIPT, /**< SCRIPT */
+	Tag_SELECT, /**< SELECT */
+	Tag_SERVER, /**< SERVER */
+	Tag_SERVLET, /**< SERVLET */
+	Tag_SMALL,  /**< SMALL */
+	Tag_SPACER, /**< SPACER */
+	Tag_SPAN,   /**< SPAN */
+	Tag_STRIKE, /**< STRIKE */
+	Tag_STRONG, /**< STRONG */
+	Tag_STYLE,  /**< STYLE */
+	Tag_SUB,    /**< SUB */
+	Tag_SUP,    /**< SUP */
+	Tag_TABLE,  /**< TABLE */
+	Tag_TBODY,  /**< TBODY */
+	Tag_TD,     /**< TD */
+	Tag_TEXTAREA, /**< TEXTAREA */
+	Tag_TFOOT,  /**< TFOOT */
+	Tag_TH,     /**< TH */
+	Tag_THEAD,  /**< THEAD */
+	Tag_TITLE,  /**< TITLE */
+	Tag_TR,     /**< TR */
+	Tag_TT,     /**< TT */
+	Tag_U,      /**< U */
+	Tag_UL,     /**< UL */
+	Tag_VAR,    /**< VAR */
+	Tag_WBR,    /**< WBR */
+	Tag_XMP,    /**< XMP */
+	Tag_XML,    /**< XML */
+	Tag_NEXTID, /**< NEXTID */
+
+	N_TAGS      /**< Must be last */
+} tag_id_t;
+
+#define CM_UNKNOWN      0
+/* Elements with no content. Map to HTML specification. */
+#define CM_EMPTY        (1 << 0)
+/* Elements that appear outside of "BODY". */
+#define CM_HTML         (1 << 1)
+/* Elements that can appear within HEAD. */
+#define CM_HEAD         (1 << 2)
+/* HTML "block" elements. */
+#define CM_BLOCK        (1 << 3)
+/* HTML "inline" elements. */
+#define CM_INLINE       (1 << 4)
+/* Elements that mark list item ("LI"). */
+#define CM_LIST         (1 << 5)
+/* Elements that mark definition list item ("DL", "DT"). */
+#define CM_DEFLIST      (1 << 6)
+/* Elements that can appear inside TABLE. */
+#define CM_TABLE        (1 << 7)
+/* Used for "THEAD", "TFOOT" or "TBODY". */
+#define CM_ROWGRP       (1 << 8)
+/* Used for "TD", "TH" */
+#define CM_ROW          (1 << 9)
+/* Elements whose content must be protected against white space movement.
+   Includes some elements that can found in forms. */
+#define CM_FIELD        (1 << 10)
+/* Used to avoid propagating inline emphasis inside some elements
+   such as OBJECT or APPLET. */
+#define CM_OBJECT       (1 << 11)
+/* Elements that allows "PARAM". */
+#define CM_PARAM        (1 << 12)
+/* "FRAME", "FRAMESET", "NOFRAMES". Used in ParseFrameSet. */
+#define CM_FRAMES       (1 << 13)
+/* Heading elements (h1, h2, ...). */
+#define CM_HEADING      (1 << 14)
+/* Elements with an optional end tag. */
+#define CM_OPT          (1 << 15)
+/* Elements that use "align" attribute for vertical position. */
+#define CM_IMG          (1 << 16)
+/* Elements with inline and block model. Used to avoid calling InlineDup. */
+#define CM_MIXED        (1 << 17)
+/* Elements whose content needs to be indented only if containing one
+   CM_BLOCK element. */
+#define CM_NO_INDENT    (1 << 18)
+/* Elements that are obsolete (such as "dir", "menu"). */
+#define CM_OBSOLETE     (1 << 19)
+/* User defined elements. Used to determine how attributes wihout value
+   should be printed. */
+#define CM_NEW          (1 << 20)
+/* Elements that cannot be omitted. */
+#define CM_OMITST       (1 << 21)
+
+/* XML tag */
+#define FL_XML          (1 << 22)
+/* Closing tag */
+#define FL_CLOSING      (1 << 23)
+/* Fully closed tag (e.g. <a attrs />) */
+#define FL_CLOSED       (1 << 24)
+#define FL_BROKEN       (1 << 25)
+
+struct html_tag_def {
+	gint id;
+	const gchar *name;
+	gint flags;
+};
+
+static struct html_tag_def tag_defs[] = {
 	/* W3C defined elements */
 	{Tag_A, "a", (CM_INLINE)},
 	{Tag_ABBR, "abbr", (CM_INLINE)},
@@ -444,10 +636,19 @@ static entity entities_defs_num[ (G_N_ELEMENTS (entities_defs)) ];
 static gint
 tag_cmp (const void *m1, const void *m2)
 {
-	const struct html_tag *p1 = m1;
-	const struct html_tag *p2 = m2;
+	const struct html_tag_def *p1 = m1;
+	const struct html_tag_def *p2 = m2;
 
 	return g_ascii_strcasecmp (p1->name, p2->name);
+}
+
+static gint
+tag_find (const void *skey, const void *elt)
+{
+	const struct html_tag *tag = skey;
+	const struct html_tag_def *d = elt;
+
+	return g_ascii_strncasecmp (tag->name.start, d->name, tag->name.len);
 }
 
 static gint
@@ -468,70 +669,10 @@ entity_cmp_num (const void *m1, const void *m2)
 	return p1->code - p2->code;
 }
 
-static GNode *
-construct_html_node (rspamd_mempool_t * pool, gchar *text, gsize tag_len)
-{
-	struct html_node *html;
-	GNode *n = NULL;
-	struct html_tag key, *found;
-	gchar t;
-
-	if (text == NULL || *text == '\0') {
-		return NULL;
-	}
-
-	html = rspamd_mempool_alloc0 (pool, sizeof (struct html_node));
-
-	/* Check whether this tag is fully closed */
-	if (*(text + tag_len - 1) == '/') {
-		html->flags |= FL_CLOSED;
-	}
-
-	/* Check xml tag */
-	if (*text == '?' &&
-		g_ascii_strncasecmp (text + 1, "xml", sizeof ("xml") - 1) == 0) {
-		html->flags |= FL_XML;
-		html->tag = NULL;
-	}
-	else if (*text == '!') {
-		html->flags |= FL_SGML;
-		html->tag = NULL;
-	}
-	else {
-		if (*text == '/') {
-			html->flags |= FL_CLOSING;
-			text++;
-		}
-
-		/* Find end of tag name */
-		key.name = text;
-		while (*text && g_ascii_isalnum (*(++text))) ;
-
-		t = *text;
-		*text = '\0';
-
-		/* Match tag id by tag name */
-		if ((found =
-			bsearch (&key, tag_defs, G_N_ELEMENTS (tag_defs),
-			sizeof (struct html_tag), tag_cmp)) != NULL) {
-			*text = t;
-			html->tag = found;
-		}
-		else {
-			*text = t;
-			return NULL;
-		}
-	}
-
-	n = g_node_new (html);
-
-	return n;
-}
-
 static gboolean
-check_balance (GNode * node, GNode ** cur_level)
+rspamd_html_check_balance (GNode * node, GNode ** cur_level)
 {
-	struct html_node *arg = node->data, *tmp;
+	struct html_tag *arg = node->data, *tmp;
 	GNode *cur;
 
 	if (arg->flags & FL_CLOSING) {
@@ -539,8 +680,7 @@ check_balance (GNode * node, GNode ** cur_level)
 		cur = node->parent;
 		while (cur && cur->data) {
 			tmp = cur->data;
-			if ((tmp->tag &&
-				arg->tag) && tmp->tag->id == arg->tag->id &&
+			if (tmp->id == arg->id &&
 				(tmp->flags & FL_CLOSED) == 0) {
 				tmp->flags |= FL_CLOSED;
 				/* Destroy current node as we find corresponding parent node */
@@ -562,28 +702,22 @@ check_balance (GNode * node, GNode ** cur_level)
 struct html_tag *
 get_tag_by_name (const gchar *name)
 {
-	struct html_tag key;
-
-	key.name = name;
-
-	return bsearch (&key, tag_defs, G_N_ELEMENTS (tag_defs),
-			   sizeof (struct html_tag), tag_cmp);
 }
 
 /* Decode HTML entitles in text */
-void
-decode_entitles (gchar *s, guint * len)
+guint
+rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 {
 	guint l, rep_len;
 	gchar *t = s, *h = s, *e = s, *end_ptr;
 	gint state = 0, val, base;
 	entity *found, key;
 
-	if (len == NULL || *len == 0) {
+	if (len == 0) {
 		l = strlen (s);
 	}
 	else {
-		l = *len;
+		l = len;
 	}
 
 	while (h - s < (gint)l) {
@@ -662,11 +796,8 @@ decode_entitles (gchar *s, guint * len)
 			break;
 		}
 	}
-	*t = '\0';
 
-	if (len != NULL) {
-		*len = t - s;
-	}
+	return (t - s);
 }
 
 static void
@@ -831,7 +962,7 @@ parse_tag_url (struct rspamd_task *task,
 
 		url_text = rspamd_mempool_alloc (task->task_pool, len + 1);
 		rspamd_strlcpy (url_text, c, len + 1);
-		decode_entitles (url_text, &len);
+		len = rspamd_html_decode_entitles_inplace (url_text, len);
 
 		if (g_ascii_strncasecmp (url_text, "http",
 			sizeof ("http") - 1) != 0 &&
@@ -881,12 +1012,394 @@ add_html_node (struct rspamd_task *task,
 	gsize remain,
 	GNode ** cur_level)
 {
-	GNode *new;
-	struct html_node *data;
+}
+
+static gboolean
+rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
+		struct html_tag *tag, GNode **cur_level)
+{
+	GNode *nnode;
+
+	if (hc->html_tags == NULL) {
+		nnode = g_node_new (NULL);
+		*cur_level = nnode;
+		hc->html_tags = nnode;
+		rspamd_mempool_add_destructor (pool,
+			(rspamd_mempool_destruct_t) g_node_destroy,
+			nnode);
+	}
+
+	nnode = g_node_new (tag);
+
+	if (tag->flags & FL_CLOSING) {
+		if (!*cur_level) {
+			debug_task ("bad parent node");
+			return FALSE;
+		}
+		g_node_append (*cur_level, nnode);
+
+		if (!rspamd_html_check_balance (nnode, cur_level)) {
+			debug_task (
+					"mark part as unbalanced as it has not pairable closing tags");
+			hc->flags |= RSPAMD_HTML_FLAG_UNBALANCED;
+		}
+	}
+	else {
+		g_node_append (*cur_level, nnode);
+
+		if ((tag->flags & FL_CLOSED) == 0) {
+			*cur_level = nnode;
+		}
+
+		if (tag->flags & (CM_HEAD|CM_EMPTY|CM_UNKNOWN|FL_BROKEN)) {
+			return FALSE;
+		}
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+static gboolean
+rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
+		const guchar *begin, const guchar *end,
+		struct html_tag *tag)
+{
+	struct html_tag_component *comp;
+	gint len;
+	gboolean ret = FALSE;
+
+	g_assert (end >= begin);
+	len = rspamd_html_decode_entitles_inplace ((gchar *)begin, end - begin);
+
+	if (len == 3) {
+		if (g_ascii_strncasecmp (begin, "src", len) == 0) {
+			comp = rspamd_mempool_alloc (pool, sizeof (*comp));
+			comp->type = RSPAMD_HTML_COMPONENT_HREF;
+			comp->start = NULL;
+			comp->len = 0;
+			tag->params = g_list_prepend (tag->params, comp);
+			ret = TRUE;
+		}
+	}
+	else if (len == 4) {
+		if (g_ascii_strncasecmp (begin, "href", len) == 0) {
+			comp = rspamd_mempool_alloc (pool, sizeof (*comp));
+			comp->type = RSPAMD_HTML_COMPONENT_HREF;
+			comp->start = NULL;
+			comp->len = 0;
+			tag->params = g_list_prepend (tag->params, comp);
+			ret = TRUE;
+		}
+	}
+
+	return ret;
+}
+
+static void
+rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
+		struct html_content *hc, struct html_tag *tag, const guchar *in,
+		gint *statep, guchar const **savep)
+{
+	enum {
+		parse_start = 0,
+		parse_name,
+		parse_attr_name,
+		parse_equal,
+		parse_start_dquote,
+		parse_dqvalue,
+		parse_end_dquote,
+		parse_start_squote,
+		parse_sqvalue,
+		parse_end_squote,
+		parse_value,
+		spaces_after_name,
+		spaces_before_eq,
+		spaces_after_eq,
+		spaces_after_param,
+		ignore_bad_tag
+	} state;
+	struct html_tag_def *found;
+	gboolean store = FALSE;
+	struct html_tag_component *comp;
+
+	state = *statep;
+
+	switch (state) {
+	case parse_start:
+		if (!g_ascii_isalpha (*in) && !g_ascii_isspace (*in)) {
+			hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+			state = ignore_bad_tag;
+		}
+		else if (g_ascii_isalpha (*in)) {
+			state = parse_name;
+			tag->name.start = in;
+		}
+		break;
+
+	case parse_name:
+		if (g_ascii_isspace (*in) || *in == '>' || *in == '/') {
+			g_assert (in >= tag->name.start);
+
+			if (*in == '/') {
+				tag->flags |= FL_CLOSED;
+			}
+
+			tag->name.len = in - tag->name.start;
+
+			if (tag->name.len == 0) {
+				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+				tag->flags |= FL_BROKEN;
+				state = ignore_bad_tag;
+			}
+			else {
+				/* We can safely modify tag's name here, as it is already parsed */
+				tag->name.len = rspamd_html_decode_entitles_inplace (
+						(gchar *)tag->name.start,
+						tag->name.len);
+
+				found = bsearch (tag, tag_defs, G_N_ELEMENTS (tag_defs),
+					sizeof (tag_defs[0]), tag_find);
+				if (found == NULL) {
+					hc->flags |= RSPAMD_HTML_FLAG_UNKNOWN_ELEMENTS;
+					tag->id = -1;
+				}
+				else {
+					tag->id = found->id;
+					tag->flags = found->flags;
+				}
+			}
+
+			state = spaces_after_name;
+		}
+		break;
+
+	case parse_attr_name:
+		if (*savep == NULL) {
+			state = ignore_bad_tag;
+		}
+		else {
+			if (*in == '=') {
+				state = parse_equal;
+			}
+			else if (g_ascii_isspace (*in)) {
+				state = spaces_before_eq;
+			}
+			else if (*in == '/') {
+				tag->flags |= FL_CLOSED;
+			}
+			else {
+				return;
+			}
+
+			if (!rspamd_html_parse_tag_component (pool, *savep, in, tag)) {
+				/* Ignore unknown params */
+				*savep = NULL;
+			}
+		}
+
+		break;
+
+	case spaces_after_name:
+		if (!g_ascii_isspace (*in)) {
+			*savep = in;
+			if (*in == '/') {
+				tag->flags |= FL_CLOSED;
+			}
+			else if (*in != '>') {
+				state = parse_attr_name;
+			}
+		}
+		break;
+
+	case spaces_before_eq:
+		if (*in == '=') {
+			state = parse_equal;
+		}
+		else if (!g_ascii_isspace (*in)) {
+			hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+			tag->flags |= FL_BROKEN;
+			state = ignore_bad_tag;
+		}
+		break;
+
+	case spaces_after_eq:
+		if (*in == '"') {
+			state = parse_start_dquote;
+		}
+		else if (*in == '\'') {
+			state = parse_start_squote;
+		}
+		else if (!g_ascii_isspace (*in)) {
+			if (*savep != NULL) {
+				/* We need to save this param */
+				*savep = in;
+			}
+			state = parse_value;
+		}
+		break;
+
+	case parse_equal:
+		if (g_ascii_isspace (*in)) {
+			state = spaces_after_eq;
+		}
+		else if (*in == '"') {
+			state = parse_start_dquote;
+		}
+		else if (*in == '\'') {
+			state = parse_start_squote;
+		}
+		else {
+			if (*savep != NULL) {
+				/* We need to save this param */
+				*savep = in;
+			}
+			state = parse_value;
+		}
+		break;
+
+	case parse_start_dquote:
+		if (*in == '"') {
+			if (*savep != NULL) {
+				/* We have an empty attribute value */
+				savep = NULL;
+			}
+			state = spaces_after_param;
+		}
+		else {
+			if (*savep != NULL) {
+				/* We need to save this param */
+				*savep = in;
+			}
+			state = parse_dqvalue;
+		}
+		break;
+
+	case parse_start_squote:
+		if (*in == '\'') {
+			if (*savep != NULL) {
+				/* We have an empty attribute value */
+				savep = NULL;
+			}
+			state = spaces_after_param;
+		}
+		else {
+			if (*savep != NULL) {
+				/* We need to save this param */
+				*savep = in;
+			}
+			state = parse_sqvalue;
+		}
+		break;
+
+	case parse_dqvalue:
+		if (*in == '"') {
+			store = TRUE;
+			state = parse_end_dquote;
+		}
+		if (store) {
+			if (*savep != NULL) {
+				g_assert (tag->params != NULL);
+				comp = (g_list_first (tag->params))->data;
+				comp->len = in - *savep;
+				comp->start = *savep;
+				*savep = NULL;
+			}
+		}
+		break;
+
+	case parse_sqvalue:
+		if (*in == '\'') {
+			store = TRUE;
+			state = parse_end_squote;
+		}
+		if (store) {
+			if (*savep != NULL) {
+				g_assert (tag->params != NULL);
+				comp = (g_list_first (tag->params))->data;
+				comp->len = in - *savep;
+				comp->start = *savep;
+				*savep = NULL;
+			}
+		}
+		break;
+
+	case parse_value:
+		if (g_ascii_isspace (*in) || *in == '>' || *in == '/') {
+			if (*in == '/') {
+				tag->flags |= FL_CLOSED;
+			}
+			store = TRUE;
+			state = spaces_after_param;
+		}
+		if (store) {
+			if (*savep != NULL) {
+				g_assert (tag->params != NULL);
+				comp = (g_list_first (tag->params))->data;
+				comp->len = in - *savep;
+				comp->start = *savep;
+				*savep = NULL;
+			}
+		}
+		break;
+
+	case parse_end_dquote:
+	case parse_end_squote:
+		if (g_ascii_isspace (*in)) {
+			state = spaces_after_param;
+		}
+		break;
+
+	case spaces_after_param:
+		if (!g_ascii_isspace (*in)) {
+			state = parse_attr_name;
+			*savep = in;
+		}
+		break;
+
+	case ignore_bad_tag:
+		break;
+	}
+
+	*statep = state;
+}
+
+GByteArray*
+rspamd_html_process_part (rspamd_mempool_t *pool, struct html_content *hc,
+		GByteArray *in)
+{
+	const guchar *p, *c, *end, *tag_start = NULL, *savep = NULL;
+	guchar t;
+	gboolean closing = FALSE, need_decode = FALSE;
+	GByteArray *dest;
+	guint obrace = 0, ebrace = 0;
+	GNode *cur_level = NULL;
+	gint substate, len;
+	struct html_tag *cur_tag;
+	enum {
+		parse_start = 0,
+		tag_begin,
+		sgml_tag,
+		xml_tag,
+		compound_tag,
+		comment_tag,
+		comment_content,
+		sgml_content,
+		tag_content,
+		tag_end,
+		xml_tag_end,
+		content_ignore,
+		content_write,
+	} state = parse_start;
+
+	g_assert (in != NULL);
+	g_assert (hc != NULL);
+	g_assert (pool != NULL);
 
 	if (!tags_sorted) {
 		qsort (tag_defs, G_N_ELEMENTS (
-				tag_defs), sizeof (struct html_tag), tag_cmp);
+				tag_defs), sizeof (struct html_tag_def), tag_cmp);
 		tags_sorted = 1;
 	}
 	if (!entities_sorted) {
@@ -898,75 +1411,229 @@ add_html_node (struct rspamd_task *task,
 		entities_sorted = 1;
 	}
 
-	/* First call of this function */
-	if (part->html_nodes == NULL) {
-		/* Insert root node */
-		new = g_node_new (NULL);
-		*cur_level = new;
-		part->html_nodes = new;
-		rspamd_mempool_add_destructor (pool,
-			(rspamd_mempool_destruct_t) g_node_destroy,
-			part->html_nodes);
-		/* Call once again with root node */
-		return add_html_node (task,
-				   pool,
-				   part,
-				   tag_text,
-				   tag_len,
-				   remain,
-				   cur_level);
+	dest = g_byte_array_sized_new (in->len / 3 * 2);
+
+	p = in->data;
+	c = p;
+	end = p + in->len;
+
+	while (p < end) {
+		t = *p;
+
+		switch (state) {
+		case parse_start:
+			if (t == '<') {
+				state = tag_begin;
+			}
+			else {
+				/* We have no starting tag, so assume that it's content */
+				hc->flags |= RSPAMD_HTML_FLAG_BAD_START;
+				state = content_write;
+			}
+
+			break;
+		case tag_begin:
+			switch (t) {
+			case '<':
+				p ++;
+				tag_start = p;
+				closing = FALSE;
+				break;
+			case '!':
+				state = sgml_tag;
+				p ++;
+				break;
+			case '?':
+				state = xml_tag;
+				hc->flags |= RSPAMD_HTML_FLAG_XML;
+				p ++;
+				break;
+			case '/':
+				closing = TRUE;
+				p ++;
+				tag_start = p;
+				break;
+			case '>':
+				/* Empty tag */
+				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+				state = tag_end;
+				p ++;
+				tag_start = NULL;
+				break;
+			default:
+				state = tag_content;
+				substate = 0;
+				savep = NULL;
+				cur_tag = rspamd_mempool_alloc0 (pool, sizeof (*cur_tag));
+				break;
+			}
+
+			break;
+
+		case sgml_tag:
+			switch (t) {
+			case '[':
+				state = compound_tag;
+				obrace = 1;
+				ebrace = 0;
+				p ++;
+				break;
+			case '-':
+				state = comment_tag;
+				p ++;
+				break;
+			default:
+				state = sgml_content;
+				tag_start = p;
+				break;
+			}
+
+			break;
+
+		case xml_tag:
+			if (t == '?') {
+				state = xml_tag_end;
+			}
+			else if (t == '>') {
+				/* Misformed xml tag */
+				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+				state = tag_end;
+				continue;
+			}
+			/* We efficiently ignore xml tags */
+			p ++;
+			break;
+
+		case xml_tag_end:
+			if (t == '>') {
+				state = tag_end;
+			}
+			else {
+				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+				p ++;
+			}
+			break;
+
+		case compound_tag:
+			if (t == '[') {
+				obrace ++;
+			}
+			else if (t == ']') {
+				ebrace ++;
+			}
+			else if (t == '>' && obrace == ebrace) {
+				state = tag_end;
+			}
+			p ++;
+			break;
+
+		case comment_tag:
+			if (t != '-')  {
+				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+			}
+			p ++;
+			ebrace = 0;
+			state = comment_content;
+			break;
+
+		case comment_content:
+			if (t == '-') {
+				ebrace ++;
+			}
+			else if (t == '>' && ebrace == 2) {
+				state = tag_end;
+				continue;
+			}
+			p ++;
+			break;
+
+		case content_ignore:
+			if (t != '<') {
+				p ++;
+			}
+			else {
+				state = tag_begin;
+			}
+			break;
+
+		case content_write:
+			if (t != '<') {
+				p ++;
+
+				if (t == '&') {
+					need_decode = TRUE;
+				}
+			}
+			else {
+				if (c != p) {
+
+					if (need_decode) {
+						len = rspamd_html_decode_entitles_inplace ((gchar *)c,
+								p - c);
+					}
+					else {
+						len = p - c;
+					}
+
+					g_byte_array_append (dest, c, len);
+				}
+
+				state = tag_begin;
+			}
+			break;
+
+		case sgml_content:
+			/* TODO: parse DOCTYPE here */
+			if (t == '>') {
+				state = tag_end;
+				continue;
+			}
+			p ++;
+			break;
+
+		case tag_content:
+			rspamd_html_parse_tag_content (pool, hc, cur_tag,
+					p, &substate, &savep);
+			if (t == '>') {
+				if (closing) {
+					cur_tag->flags |= FL_CLOSING;
+
+					if (cur_tag->flags & FL_CLOSED) {
+						/* Bad mix of closed and closing */
+						hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+					}
+
+					closing = FALSE;
+				}
+
+				state = tag_end;
+				continue;
+			}
+			p ++;
+			break;
+
+		case tag_end:
+			tag_start = NULL;
+			substate = 0;
+			savep = NULL;
+
+			if (cur_tag != NULL) {
+				if (rspamd_html_process_tag (pool, hc, cur_tag, &cur_level)) {
+					state = content_write;
+					need_decode = FALSE;
+				}
+				else {
+					state = content_ignore;
+				}
+			}
+			else {
+				/* Do not save content of SGML/XML tags */
+				state = content_ignore;
+			}
+			cur_tag = NULL;
+			break;
+		}
 	}
-	else {
-		new = construct_html_node (pool, tag_text, tag_len);
-		if (new == NULL) {
-			debug_task ("cannot construct HTML node for text '%*s'",
-				tag_len,
-				tag_text);
-			return FALSE;
-		}
-		data = new->data;
-		if (data->tag &&
-			(data->tag->id == Tag_A ||
-			data->tag->id == Tag_IMG) && ((data->flags & FL_CLOSING) == 0)) {
-			parse_tag_url (task, part, data->tag->id, tag_text, tag_len,
-				remain);
-		}
 
-		if (data->flags & FL_CLOSING) {
-			if (!*cur_level) {
-				debug_task ("bad parent node");
-				return FALSE;
-			}
-			g_node_append (*cur_level, new);
-			if (!check_balance (new, cur_level)) {
-				debug_task (
-					"mark part as unbalanced as it has not pairable closing tags");
-				part->flags &= ~RSPAMD_MIME_PART_FLAG_BALANCED;
-			}
-		}
-		else if ((data->flags & (FL_XML|FL_SGML)) == 0) {
-
-			g_node_append (*cur_level, new);
-			if ((data->flags & FL_CLOSED) == 0) {
-				*cur_level = new;
-			}
-			/* Skip some tags */
-			if (data->tag && (data->tag->id == Tag_STYLE ||
-				data->tag->id == Tag_SCRIPT ||
-				data->tag->id == Tag_OBJECT ||
-				data->tag->id == Tag_TITLE)) {
-				return FALSE;
-			}
-		}
-		else {
-			/* Destroy ignored nodes */
-			g_node_destroy (new);
-		}
-	}
-
-	return TRUE;
+	return dest;
 }
-
-/*
- * vi:ts=4
- */
