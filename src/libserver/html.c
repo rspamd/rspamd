@@ -1243,7 +1243,7 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag)
 	while (cur) {
 		comp = cur->data;
 
-		if (comp->type == RSPAMD_HTML_COMPONENT_HREF) {
+		if (comp->type == RSPAMD_HTML_COMPONENT_HREF && comp->len > 0) {
 			url = rspamd_mempool_alloc (pool, sizeof (*url));
 			rc = rspamd_url_parse (url, (gchar *)comp->start, comp->len, pool);
 
