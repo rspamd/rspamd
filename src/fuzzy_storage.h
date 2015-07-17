@@ -3,7 +3,6 @@
 
 #include "config.h"
 #include "main.h"
-#include "fuzzy.h"
 #include "shingles.h"
 
 #define RSPAMD_FUZZY_VERSION 3
@@ -12,14 +11,6 @@
 #define FUZZY_CHECK 0
 #define FUZZY_WRITE 1
 #define FUZZY_DEL 2
-
-struct legacy_fuzzy_cmd {
-	u_char cmd;
-	guint32 blocksize;
-	gint32 value;
-	gint32 flag;
-	u_char hash[FUZZY_HASHLEN];
-};
 
 RSPAMD_PACKED(rspamd_fuzzy_cmd) {
 	guint8 version;

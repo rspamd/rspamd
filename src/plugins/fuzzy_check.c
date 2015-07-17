@@ -563,46 +563,34 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 	rspamd_fstring_t *word;
 	GArray *words;
 
-	if (legacy || part->words == NULL || part->words->len == 0) {
-		cmd = rspamd_mempool_alloc0 (pool, sizeof (*cmd));
+	shcmd = rspamd_mempool_alloc0 (pool, sizeof (*shcmd));
 
-		cmd->shingles_count = 0;
-		rspamd_strlcpy (cmd->digest, part->fuzzy->hash_pipe, sizeof (cmd->digest));
+	/*
+	 * Generate hash from all words in the part
+	 */
+	g_assert (blake2b_init_key (&st, BLAKE2B_OUTBYTES, rule->hash_key->str,
+			rule->hash_key->len) != -1);
+	words = fuzzy_preprocess_words (part, pool);
 
-		if (size != NULL) {
-			*size = sizeof (struct rspamd_fuzzy_cmd);
-		}
+	for (i = 0; i < words->len; i ++) {
+		word = &g_array_index (words, rspamd_fstring_t, i);
+		blake2b_update (&st, word->begin, word->len);
 	}
-	else {
-		shcmd = rspamd_mempool_alloc0 (pool, sizeof (*shcmd));
+	blake2b_final (&st, shcmd->basic.digest, sizeof (shcmd->basic.digest));
 
-		/*
-		 * Generate hash from all words in the part
-		 */
-		g_assert (blake2b_init_key (&st, BLAKE2B_OUTBYTES, rule->hash_key->str,
-				rule->hash_key->len) != -1);
-		words = fuzzy_preprocess_words (part, pool);
+	msg_debug ("loading shingles with key %*xs", 16, rule->shingles_key->str);
+	sh = rspamd_shingles_generate (words,
+			rule->shingles_key->str, pool,
+			rspamd_shingles_default_filter, NULL);
+	if (sh != NULL) {
+		memcpy (&shcmd->sgl, sh, sizeof (shcmd->sgl));
+		shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
+	}
 
-		for (i = 0; i < words->len; i ++) {
-			word = &g_array_index (words, rspamd_fstring_t, i);
-			blake2b_update (&st, word->begin, word->len);
-		}
-		blake2b_final (&st, shcmd->basic.digest, sizeof (shcmd->basic.digest));
+	cmd = (struct rspamd_fuzzy_cmd *)shcmd;
 
-		msg_debug ("loading shingles with key %*xs", 16, rule->shingles_key->str);
-		sh = rspamd_shingles_generate (words,
-				rule->shingles_key->str, pool,
-				rspamd_shingles_default_filter, NULL);
-		if (sh != NULL) {
-			memcpy (&shcmd->sgl, sh, sizeof (shcmd->sgl));
-			shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
-		}
-
-		cmd = (struct rspamd_fuzzy_cmd *)shcmd;
-
-		if (size != NULL) {
-			*size = sizeof (struct rspamd_fuzzy_shingle_cmd);
-		}
+	if (size != NULL) {
+		*size = sizeof (struct rspamd_fuzzy_shingle_cmd);
 	}
 
 	cmd->tag = ottery_rand_uint32 ();
@@ -959,7 +947,6 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 	struct mime_part *mime_part;
 	struct rspamd_image *image;
 	struct rspamd_fuzzy_cmd *cmd;
-	gsize hashlen;
 	guint i;
 	GPtrArray *res;
 

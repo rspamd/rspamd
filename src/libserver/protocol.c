@@ -645,20 +645,9 @@ write_hashes_to_log (struct rspamd_task *task, GString *logbuf)
 	struct mime_text_part *text_part;
 	guint i;
 
+	/* TODO: rework parts hashes */
 	for (i = 0; i < task->text_parts->len; i ++) {
 		text_part = g_ptr_array_index (task->text_parts, i);
-
-		if (text_part->fuzzy) {
-			if (i != task->text_parts->len - 1) {
-				rspamd_printf_gstring (logbuf,
-					" part: %Xd,",
-					text_part->fuzzy->h);
-			}
-			else {
-				rspamd_printf_gstring (logbuf, " part: %Xd",
-					text_part->fuzzy->h);
-			}
-		}
 	}
 }
 

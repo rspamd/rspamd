@@ -27,7 +27,6 @@
 #include "cfg_file.h"
 #include "main.h"
 #include "message.h"
-#include "fuzzy.h"
 #include "mime_expressions.h"
 #include "html.h"
 #include "lua/lua_common.h"

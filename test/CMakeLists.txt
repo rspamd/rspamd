@@ -1,6 +1,5 @@
 SET(TESTSRC		rspamd_mem_pool_test.c
 				rspamd_statfile_test.c
-				rspamd_fuzzy_test.c
 				rspamd_url_test.c
 				rspamd_dns_test.c
 				rspamd_async_test.c

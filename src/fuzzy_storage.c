@@ -34,7 +34,6 @@
 #include "cfg_file.h"
 #include "url.h"
 #include "message.h"
-#include "fuzzy.h"
 #include "bloom.h"
 #include "map.h"
 #include "fuzzy_storage.h"
@@ -80,19 +79,11 @@ struct rspamd_fuzzy_storage_ctx {
 	struct rspamd_fuzzy_backend *backend;
 };
 
-struct rspamd_legacy_fuzzy_node {
-	gint32 value;
-	gint32 flag;
-	guint64 time;
-	rspamd_fuzzy_t h;
-};
-
 struct fuzzy_session {
 	struct rspamd_worker *worker;
 	struct rspamd_fuzzy_cmd *cmd;
 	gint fd;
 	guint64 time;
-	gboolean legacy;
 	rspamd_inet_addr_t *addr;
 	struct rspamd_fuzzy_storage_ctx *ctx;
 };
@@ -114,28 +105,9 @@ rspamd_fuzzy_write_reply (struct fuzzy_session *session,
 		struct rspamd_fuzzy_reply *rep)
 {
 	gint r;
-	gchar buf[64];
 
-	if (session->legacy) {
-		if (rep->prob > 0.5) {
-			if (session->cmd->cmd == FUZZY_CHECK) {
-				r = rspamd_snprintf (buf, sizeof (buf), "OK %d %d" CRLF,
-						rep->value, rep->flag);
-			}
-			else {
-				r = rspamd_snprintf (buf, sizeof (buf), "OK" CRLF);
-			}
-
-		}
-		else {
-			r = rspamd_snprintf (buf, sizeof (buf), "ERR" CRLF);
-		}
-		r = rspamd_inet_address_sendto (session->fd, buf, r, 0, session->addr);
-	}
-	else {
-		r = rspamd_inet_address_sendto (session->fd, rep, sizeof (*rep), 0,
-				session->addr);
-	}
+	r = rspamd_inet_address_sendto (session->fd, rep, sizeof (*rep), 0,
+			session->addr);
 
 	if (r == -1) {
 		if (errno == EINTR) {
@@ -240,8 +212,7 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 	struct fuzzy_session session;
 	gint r;
 	guint8 buf[2048];
-	struct rspamd_fuzzy_cmd *cmd = NULL, lcmd;
-	struct legacy_fuzzy_cmd *l;
+	struct rspamd_fuzzy_cmd *cmd = NULL;
 	enum rspamd_fuzzy_epoch epoch = RSPAMD_FUZZY_EPOCH_MAX;
 
 	session.worker = worker;
@@ -262,22 +233,8 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 			return;
 		}
 
-		if ((guint)r == sizeof (struct legacy_fuzzy_cmd)) {
-			session.legacy = TRUE;
-			l = (struct legacy_fuzzy_cmd *)buf;
-			lcmd.version = 2;
-			memcpy (lcmd.digest, l->hash, sizeof (lcmd.digest));
-			lcmd.cmd = l->cmd;
-			lcmd.flag = l->flag;
-			lcmd.shingles_count = 0;
-			lcmd.value = l->value;
-			lcmd.tag = 0;
-			cmd = &lcmd;
-			epoch = RSPAMD_FUZZY_EPOCH6;
-		}
-		else if ((guint)r >= sizeof (struct rspamd_fuzzy_cmd)) {
+		if ((guint)r >= sizeof (struct rspamd_fuzzy_cmd)) {
 			/* Check shingles count sanity */
-			session.legacy = FALSE;
 			cmd = (struct rspamd_fuzzy_cmd *)buf;
 			epoch = rspamd_fuzzy_command_valid (cmd, r);
 			if (epoch == RSPAMD_FUZZY_EPOCH_MAX) {

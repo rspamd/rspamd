@@ -7,7 +7,6 @@
 #define RSPAMD_MESSAGE_H
 
 #include "config.h"
-#include "fuzzy.h"
 
 struct rspamd_task;
 struct controller_session;
@@ -43,11 +42,8 @@ struct mime_text_part {
 	GByteArray *content;
 	struct html_content *html;
 	GList *urls_offset;	/**< list of offsets of urls						*/
-	rspamd_fuzzy_t *fuzzy;
-	rspamd_fuzzy_t *double_fuzzy;
 	GMimeObject *parent;
 	struct mime_part *mime_part;
-	rspamd_fstring_t *diff_str;
 	GArray *words;
 	GArray *normalized_words;
 	guint nlines;

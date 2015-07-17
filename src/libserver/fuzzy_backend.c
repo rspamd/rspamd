@@ -24,19 +24,8 @@
 #include "config.h"
 #include "main.h"
 #include "fuzzy_backend.h"
-#include "fuzzy_storage.h"
 
 #include <sqlite3.h>
-
-/* Magic sequence for hashes file */
-#define FUZZY_FILE_MAGIC "rsh"
-
-struct rspamd_legacy_fuzzy_node {
-	gint32 value;
-	gint32 flag;
-	guint64 time;
-	rspamd_fuzzy_t h;
-};
 
 struct rspamd_fuzzy_backend {
 	sqlite3 *db;
@@ -44,7 +33,6 @@ struct rspamd_fuzzy_backend {
 	gsize count;
 	gsize expired;
 };
-
 
 static const char *create_tables_sql =
 		"BEGIN;"
@@ -393,80 +381,11 @@ rspamd_fuzzy_backend_open_db (const gchar *path, GError **err)
 	return bk;
 }
 
-/*
- * Convert old database to the new format
- */
-static gboolean
-rspamd_fuzzy_backend_convert (const gchar *path, int fd, GError **err)
-{
-	gchar tmpdb[PATH_MAX];
-	struct rspamd_fuzzy_backend *nbackend;
-	struct stat st;
-	gint off;
-	guint8 *map, *p, *end;
-	struct rspamd_legacy_fuzzy_node *n;
-
-	rspamd_snprintf (tmpdb, sizeof (tmpdb), "%s.converted", path);
-	(void)unlink (tmpdb);
-	nbackend = rspamd_fuzzy_backend_create_db (tmpdb, FALSE, err);
-
-	if (nbackend == NULL) {
-		return FALSE;
-	}
-
-	(void)fstat (fd, &st);
-	(void)lseek (fd, 0, SEEK_SET);
-
-	off = sizeof (FUZZY_FILE_MAGIC);
-	if (off >= st.st_size) {
-		msg_warn ("old fuzzy storage is empty or corrupted, remove it");
-	}
-	else {
-		if ((map = mmap (NULL, st.st_size - off, PROT_READ, MAP_SHARED, fd,
-				0)) == MAP_FAILED) {
-			g_set_error (err, rspamd_fuzzy_backend_quark (),
-					errno, "Cannot mmap file %s: %s",
-					path, strerror (errno));
-			rspamd_fuzzy_backend_close (nbackend);
-
-			return FALSE;
-		}
-
-		end = map + st.st_size;
-		p = map + off;
-
-		rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_START,
-				nbackend, NULL);
-		while (p < end) {
-			n = (struct rspamd_legacy_fuzzy_node *)p;
-			/* Convert node flag, digest, value, time  */
-			if (rspamd_fuzzy_backend_run_stmt (nbackend, RSPAMD_FUZZY_BACKEND_INSERT,
-					(gint)n->flag, n->h.hash_pipe,
-					(gint64)n->value, n->time) != SQLITE_OK) {
-				msg_warn ("Cannot execute init sql %s: %s",
-						prepared_stmts[RSPAMD_FUZZY_BACKEND_INSERT].sql,
-						sqlite3_errmsg (nbackend->db));
-			}
-			p += sizeof (struct rspamd_legacy_fuzzy_node);
-		}
-
-		munmap (map, st.st_size);
-		rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT,
-				nbackend, NULL);
-	}
-
-	rspamd_fuzzy_backend_run_sql (create_index_sql, nbackend, NULL);
-	rspamd_fuzzy_backend_close (nbackend);
-	rename (tmpdb, path);
-
-	return TRUE;
-}
-
 struct rspamd_fuzzy_backend*
 rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 {
-	gchar *dir, header[4];
-	gint fd, r;
+	gchar *dir;
+	gint fd;
 	struct rspamd_fuzzy_backend *res;
 	static const char sqlite_wal[] = "PRAGMA journal_mode=\"wal\";",
 			fallback_journal[] = "PRAGMA journal_mode=\"off\";";
@@ -499,21 +418,6 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 					path, strerror (errno));
 
 			return NULL;
-		}
-	}
-	else {
-
-		/* Check for legacy format */
-		if ((r = read (fd, header, sizeof (header))) == sizeof (header)) {
-			if (memcmp (header, FUZZY_FILE_MAGIC, sizeof (header) - 1) == 0) {
-				msg_info ("Trying to convert old fuzzy database");
-				if (!rspamd_fuzzy_backend_convert (path, fd, err)) {
-					close (fd);
-					return NULL;
-				}
-				msg_info ("Old database converted");
-			}
-			close (fd);
 		}
 	}
 

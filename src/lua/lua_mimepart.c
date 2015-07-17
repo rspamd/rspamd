@@ -86,12 +86,6 @@ LUA_FUNCTION_DEF (textpart, is_empty);
  */
 LUA_FUNCTION_DEF (textpart, is_html);
 /***
- * @method text_part:get_fuzzy()
- * Returns base32 encoded value of fuzzy hash of the specified part
- * @return {string} fuzzy hash value
- */
-LUA_FUNCTION_DEF (textpart, get_fuzzy);
-/***
  * @method text_part:get_language()
  * Returns the code of the most used unicode script in the text part. Does not work with raw parts
  * @return {string} short abbreviation (such as `ru`) for the script's language
@@ -103,16 +97,6 @@ LUA_FUNCTION_DEF (textpart, get_language);
  * @return {mimepart} mimepart object
  */
 LUA_FUNCTION_DEF (textpart, get_mimepart);
-/***
- * @method text_part:compare_distance(other)
- * Calculates the difference to another text part.  This function is intended to work with
- * the parts of `multipart/alternative` container only. If the two parts are not the parts of the
- * same `multipart/alternative` container, then they are considered as unrelated and
- * `-1` is returned.
- * @param {text_part} other text part to compare
- * @return {integer} commodity percentage (e.g. the same strings give `100`, different give `0` and unrelated give `-1`)
- */
-LUA_FUNCTION_DEF (textpart, compare_distance);
 
 static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, is_utf),
@@ -121,10 +105,8 @@ static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, get_lines_count),
 	LUA_INTERFACE_DEF (textpart, is_empty),
 	LUA_INTERFACE_DEF (textpart, is_html),
-	LUA_INTERFACE_DEF (textpart, get_fuzzy),
 	LUA_INTERFACE_DEF (textpart, get_language),
 	LUA_INTERFACE_DEF (textpart, get_mimepart),
-	LUA_INTERFACE_DEF (textpart, compare_distance),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -353,24 +335,6 @@ lua_textpart_is_html (lua_State * L)
 	return 1;
 }
 
-static gint
-lua_textpart_get_fuzzy (lua_State * L)
-{
-	struct mime_text_part *part = lua_check_textpart (L);
-	gchar *out;
-
-	if (part == NULL || IS_PART_EMPTY (part)) {
-		lua_pushnil (L);
-		return 1;
-	}
-
-	out = rspamd_encode_base32 (part->fuzzy->hash_pipe,
-			strlen (part->fuzzy->hash_pipe));
-	lua_pushstring (L, out);
-	g_free (out);
-
-	return 1;
-}
 
 static gint
 lua_textpart_get_language (lua_State * L)
@@ -405,60 +369,6 @@ lua_textpart_get_mimepart (lua_State * L)
 	}
 
 	lua_pushnil (L);
-	return 1;
-}
-
-static gint
-lua_textpart_compare_distance (lua_State * L)
-{
-	struct mime_text_part *part = lua_check_textpart (L), *other;
-	void *ud = luaL_checkudata (L, 2, "rspamd{textpart}");
-	gint diff = -1;
-	GMimeObject *parent;
-	const GMimeContentType *ct;
-
-	luaL_argcheck (L, ud != NULL, 2, "'textpart' expected");
-	other = ud ? *((struct mime_text_part **)ud) : NULL;
-
-	if (other != NULL && part->parent && part->parent == other->parent) {
-		parent = part->parent;
-		ct = g_mime_object_get_content_type (parent);
-#ifndef GMIME24
-		if (ct == NULL ||
-			!g_mime_content_type_is_type (ct, "multipart", "alternative")) {
-#else
-		if (ct == NULL ||
-			!g_mime_content_type_is_type ((GMimeContentType *)ct, "multipart",
-			"alternative")) {
-#endif
-			diff = -1;
-
-		}
-		else {
-			if (!IS_PART_EMPTY (part) && !IS_PART_EMPTY (other)) {
-				if (part->diff_str != NULL && other->diff_str != NULL) {
-					diff = rspamd_diff_distance (part->diff_str,
-							other->diff_str);
-				}
-				else {
-					diff = rspamd_fuzzy_compare_parts (part, other);
-				}
-			}
-			else if ((IS_PART_EMPTY (part) &&
-				!IS_PART_EMPTY (other)) || (!IS_PART_EMPTY (part) &&
-						IS_PART_EMPTY (other))) {
-				/* Empty and non empty parts are different */
-				diff = 0;
-			}
-		}
-	}
-	else {
-		diff = -1;
-	}
-
-
-	lua_pushinteger (L, diff);
-
 	return 1;
 }
 
