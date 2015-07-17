@@ -916,7 +916,7 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 			*cur_level = nnode;
 		}
 
-		if (tag->flags & (CM_HEAD|CM_EMPTY|CM_UNKNOWN|FL_BROKEN)) {
+		if (tag->flags & (CM_HEAD|CM_UNKNOWN|FL_BROKEN)) {
 			return FALSE;
 		}
 
