@@ -7,6 +7,7 @@
 #include "fstring.h"
 #include "ucl.h"
 #include "addr.h"
+#include "str_util.h"
 
 struct rspamd_config;
 struct rspamd_main;
@@ -105,11 +106,6 @@ void rspamd_signals_init (struct sigaction *sa, void (*sig_handler)(gint));
  * Send specified signal to each worker
  */
 void rspamd_pass_signal (GHashTable *, gint );
-/*
- * Convert string to lowercase
- */
-void rspamd_str_lc (gchar *str, guint size);
-void rspamd_str_lc_utf8 (gchar *str, guint size);
 
 #ifndef HAVE_SETPROCTITLE
 /*
@@ -167,27 +163,6 @@ gboolean rspamd_file_lock (gint fd, gboolean async);
 gboolean rspamd_file_unlock (gint fd, gboolean async);
 
 /*
- * Hash table utility functions for case insensitive hashing
- */
-guint rspamd_strcase_hash (gconstpointer key);
-gboolean rspamd_strcase_equal (gconstpointer v, gconstpointer v2);
-
-/*
- * Hash table utility functions for case sensitive hashing
- */
-guint rspamd_str_hash (gconstpointer key);
-gboolean rspamd_str_equal (gconstpointer v, gconstpointer v2);
-
-
-/*
- * Hash table utility functions for hashing fixed strings
- */
-guint rspamd_fstring_icase_hash (gconstpointer key);
-gboolean rspamd_fstring_icase_equal (gconstpointer v, gconstpointer v2);
-guint rspamd_gstring_icase_hash (gconstpointer key);
-gboolean rspamd_gstring_icase_equal (gconstpointer v, gconstpointer v2);
-
-/*
  * Google perf-tools initialization function
  */
 void gperf_profiler_init (struct rspamd_config *cfg, const gchar *descr);
@@ -202,27 +177,6 @@ void g_ptr_array_unref (GPtrArray *array);
 void g_queue_clear (GQueue *queue);
 #endif
 
-
-/**
- * Copy src to dest limited to len, in compare with standart strlcpy(3) rspamd strlcpy does not
- * traverse the whole string and it is possible to use it for non NULL terminated strings. This is
- * more like memccpy(dst, src, size, '\0')
- *
- * @param dst destination string
- * @param src source string
- * @param siz length of destination buffer
- * @return bytes copied
- */
-gsize rspamd_strlcpy (gchar *dst, const gchar *src, gsize siz);
-
-/**
- * Lowercase strlcpy variant
- * @param dst
- * @param src
- * @param siz
- * @return
- */
-gsize rspamd_strlcpy_tolower (gchar *dst, const gchar *src, gsize siz);
 
 /*
  * Convert milliseconds to timeval fields
@@ -244,21 +198,6 @@ gboolean rspamd_emails_cmp (gconstpointer a, gconstpointer b);
 
 /* Compare two urls for building emails hash */
 gboolean rspamd_urls_cmp (gconstpointer a, gconstpointer b);
-
-/*
- * Find string find in string s ignoring case
- */
-gchar * rspamd_strncasestr (const gchar *s, const gchar *find, gint len);
-
-/*
- * Try to convert string of length to long
- */
-gboolean rspamd_strtol (const gchar *s, gsize len, glong *value);
-
-/*
- * Try to convert string of length to unsigned long
- */
-gboolean rspamd_strtoul (const gchar *s, gsize len, gulong *value);
 
 /**
  * Try to allocate a file on filesystem (using fallocate or posix_fallocate)
@@ -385,13 +324,6 @@ void rspamd_hash_table_copy (GHashTable *src, GHashTable *dst,
 	gpointer (*value_copy_func)(gconstpointer data, gpointer ud),
 	gpointer ud);
 
-/**
- * Utility function to provide mem_pool copy for rspamd_hash_table_copy function
- * @param data string to copy
- * @param ud memory pool to use
- * @return
- */
-gpointer rspamd_str_pool_copy (gconstpointer data, gpointer ud);
 
 /**
  * Read passphrase from tty
@@ -412,32 +344,6 @@ gint rspamd_read_passphrase (gchar *buf, gint size, gint rwflag, gpointer key);
 void rspamd_ucl_emit_gstring (ucl_object_t *obj,
 	enum ucl_emitter emit_type,
 	GString *target);
-
-/**
- * Encode string using base32 encoding
- * @param in input
- * @param inlen input length
- * @return freshly allocated base32 encoding of a specified string
- */
-gchar * rspamd_encode_base32 (const guchar *in, gsize inlen);
-
-/**
- * Decode string using base32 encoding
- * @param in input
- * @param inlen input length
- * @return freshly allocated base32 decoded value or NULL if input is invalid
- */
-guchar* rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen);
-
-/**
- * Encode string using base64 encoding
- * @param in input
- * @param inlen input length
- * @param str_len maximum string length (if <= 0 then no lines are split)
- * @return freshly allocated base64 encoded value or NULL if input is invalid
- */
-gchar * rspamd_encode_base64 (const guchar *in, gsize inlen, gint str_len,
-		gsize *outlen);
 
 /**
  * Portably return the current clock ticks as seconds
