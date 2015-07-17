@@ -1515,10 +1515,15 @@ url_email_start (const gchar *begin,
 	if (pos > begin && *pos == '@') {
 		/* Try to extract it with username */
 		p = pos - 1;
-		while (p > begin && is_atom (*p)) {
+		while (p > begin && is_urlsafe (*p) && *p != ':') {
 			p--;
 		}
-		if (!is_atom (*p) && p != pos - 1) {
+
+		/*
+		 * If we've found something special but not ':' then we can try this as
+		 * email address
+		 */
+		if (!is_urlsafe (*p) && p != pos - 1 && *p != ':') {
 			match->m_begin = p + 1;
 			return TRUE;
 		}
