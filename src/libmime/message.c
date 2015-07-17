@@ -1674,22 +1674,25 @@ rspamd_message_parse (struct rspamd_task *task)
 						p1->normalized_words && p2->normalized_words) {
 
 					tw = MAX (p1->normalized_words->len, p2->normalized_words->len);
-					dw = rspamd_words_levenshtein_distance (p1->normalized_words,
-							p2->normalized_words);
-					diff = tw > 0 ? (100.0 * (gdouble)(tw - dw) / (gdouble)tw) : 100;
 
-					msg_info (
-							"different words: %d, total words: %d, "
-							"got likeliness between parts of %d%%",
-							dw, tw,
-							diff);
+					if (tw > 0) {
+						dw = rspamd_words_levenshtein_distance (p1->normalized_words,
+								p2->normalized_words);
+						diff = tw > 0 ? (100.0 * (gdouble)(tw - dw) / (gdouble)tw) : 100;
 
-					pdiff = rspamd_mempool_alloc (task->task_pool, sizeof (gint));
-					*pdiff = diff;
-					rspamd_mempool_set_variable (task->task_pool,
-							"parts_distance",
-							pdiff,
-							NULL);
+						msg_info (
+								"different words: %d, total words: %d, "
+								"got likeliness between parts of %d%%",
+								dw, tw,
+								diff);
+
+						pdiff = rspamd_mempool_alloc (task->task_pool, sizeof (gint));
+						*pdiff = diff;
+						rspamd_mempool_set_variable (task->task_pool,
+								"parts_distance",
+								pdiff,
+								NULL);
+					}
 				}
 			}
 		}
