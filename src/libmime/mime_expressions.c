@@ -1550,37 +1550,13 @@ rspamd_is_html_balanced (struct rspamd_task * task, GArray * args, void *unused)
 
 }
 
-struct html_callback_data {
-	struct html_tag *tag;
-	gboolean *res;
-};
-
-static gboolean
-search_html_node_callback (GNode * node, gpointer data)
-{
-	struct html_callback_data *cd = data;
-	struct html_tag *nd;
-
-	nd = node->data;
-	if (nd) {
-		if (nd->id == cd->tag->id) {
-			*cd->res = TRUE;
-			return TRUE;
-		}
-	}
-
-	return FALSE;
-}
-
 gboolean
 rspamd_has_html_tag (struct rspamd_task * task, GArray * args, void *unused)
 {
 	struct mime_text_part *p;
 	struct expression_argument *arg;
-	struct html_tag *tag;
 	guint i;
 	gboolean res = FALSE;
-	struct html_callback_data cd;
 
 	if (args == NULL) {
 		msg_warn ("no parameters to function");
@@ -1593,27 +1569,11 @@ rspamd_has_html_tag (struct rspamd_task * task, GArray * args, void *unused)
 		return FALSE;
 	}
 
-	tag = get_tag_by_name (arg->data);
-	if (tag == NULL) {
-		msg_warn ("unknown tag type passed as argument: %s",
-			(gchar *)arg->data);
-		return FALSE;
-	}
-
-	cd.res = &res;
-	cd.tag = tag;
-
 	for (i = 0; i < task->text_parts->len && res; i ++) {
 		p = g_ptr_array_index (task->text_parts, i);
 
 		if (!IS_PART_EMPTY (p) && IS_PART_HTML (p) && p->html) {
-			/* TODO: too slow */
-			g_node_traverse (p->html->html_tags,
-				G_PRE_ORDER,
-				G_TRAVERSE_ALL,
-				-1,
-				search_html_node_callback,
-				&cd);
+			res = rspamd_html_tag_seen (p->html, arg->data);
 		}
 	}
 

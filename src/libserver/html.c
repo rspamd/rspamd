@@ -714,9 +714,26 @@ rspamd_html_check_balance (GNode * node, GNode ** cur_level)
 	return FALSE;
 }
 
-struct html_tag *
-get_tag_by_name (const gchar *name)
+gboolean
+rspamd_html_tag_seen (struct html_content *hc, const gchar *tagname)
 {
+	struct html_tag tag;
+	struct html_tag_def *found;
+
+	g_assert (hc != NULL);
+	g_assert (hc->tags_seen != NULL);
+
+	tag.name.start = tagname;
+	tag.name.len = strlen (tagname);
+
+	found = bsearch (&tag, tag_defs, G_N_ELEMENTS (tag_defs),
+			sizeof (tag_defs[0]), tag_find);
+
+	if (found) {
+		return isset (hc->tags_seen, found->id);
+	}
+
+	return FALSE;
 }
 
 /* Decode HTML entitles in text */
@@ -1291,6 +1308,8 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 		entities_sorted = 1;
 	}
 
+	hc->tags_seen = rspamd_mempool_alloc0 (pool, NBYTES (G_N_ELEMENTS (tag_defs)));
+
 	dest = g_byte_array_sized_new (in->len / 3 * 2);
 
 	p = in->data;
@@ -1551,6 +1570,10 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 				}
 				else {
 					state = content_ignore;
+				}
+
+				if (cur_tag->id != -1 && cur_tag->id < N_TAGS) {
+					setbit (hc->tags_seen, cur_tag->id);
 				}
 
 				if ((cur_tag->id == Tag_P || cur_tag->id == Tag_BR ||

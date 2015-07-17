@@ -41,12 +41,8 @@ struct rspamd_task;
 struct html_content {
 	GNode *html_tags;
 	gint flags;
+	guchar *tags_seen;
 };
-
-/*
- * Get tag structure by its name (binary search is used)
- */
-struct html_tag * get_tag_by_name (const gchar *name);
 
 /*
  * Decode HTML entitles in text. Text is modified in place.
@@ -60,5 +56,10 @@ GByteArray* rspamd_html_process_part (rspamd_mempool_t *pool,
 GByteArray* rspamd_html_process_part_full (rspamd_mempool_t *pool,
 		struct html_content *hc,
 		GByteArray *in, GList **exceptions, GHashTable *urls, GHashTable *emails);
+
+/*
+ * Returns true if a specified tag has been seen in a part
+ */
+gboolean rspamd_html_tag_seen (struct html_content *hc, const gchar *tagname);
 
 #endif
