@@ -1142,7 +1142,8 @@ process_text_part (struct rspamd_task *task,
 				text_part->html,
 				part_content,
 				&text_part->urls_offset,
-				task->urls);
+				task->urls,
+				task->emails);
 
 		rspamd_url_text_extract (task->task_pool, task, text_part, TRUE);
 

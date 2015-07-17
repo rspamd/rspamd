@@ -1243,12 +1243,13 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag)
 
 GByteArray*
 rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
-		GByteArray *in, GList **exceptions, GHashTable *urls)
+		GByteArray *in, GList **exceptions, GHashTable *urls,  GHashTable *emails)
 {
 	const guchar *p, *c, *end, *tag_start = NULL, *savep = NULL;
 	guchar t;
 	gboolean closing = FALSE, need_decode = FALSE, save_space = FALSE, balanced;
 	GByteArray *dest;
+	GHashTable *target_tbl;
 	guint obrace = 0, ebrace = 0;
 	GNode *cur_level = NULL;
 	gint substate, len, href_offset = -1;
@@ -1565,13 +1566,20 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 
 						if (url != NULL) {
 
-							turl = g_hash_table_lookup (urls, url);
+							if (url->protocol == PROTOCOL_MAILTO) {
+								target_tbl = emails;
+							}
+							else {
+								target_tbl = urls;
+							}
+
+							turl = g_hash_table_lookup (target_tbl, url);
 
 							if (turl != NULL && turl->phished_url == NULL) {
-								g_hash_table_insert (urls, url, url);
+								g_hash_table_insert (target_tbl, url, url);
 							}
 							else if (turl == NULL) {
-								g_hash_table_insert (urls, url, url);
+								g_hash_table_insert (target_tbl, url, url);
 							}
 							else {
 								url = NULL;
@@ -1622,5 +1630,5 @@ rspamd_html_process_part (rspamd_mempool_t *pool,
 		struct html_content *hc,
 		GByteArray *in)
 {
-	return rspamd_html_process_part_full (pool, hc, in, NULL, NULL);
+	return rspamd_html_process_part_full (pool, hc, in, NULL, NULL, NULL);
 }
