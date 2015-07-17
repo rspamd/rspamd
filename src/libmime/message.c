@@ -1145,7 +1145,9 @@ process_text_part (struct rspamd_task *task,
 				task->urls,
 				task->emails);
 
-		rspamd_url_text_extract (task->task_pool, task, text_part, TRUE);
+		if (text_part->content->len == 0) {
+			text_part->flags |= RSPAMD_MIME_PART_FLAG_EMPTY;
+		}
 
 		rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) free_byte_array_callback,
