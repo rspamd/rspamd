@@ -693,7 +693,7 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 
 	/* Check whether this item is skipped */
 	skipped = !ghost;
-	if (item->type == SYMBOL_TYPE_NORMAL &&
+	if (item->type == SYMBOL_TYPE_NORMAL && cache->cfg &&
 			g_hash_table_lookup (cache->cfg->metrics_symbols, item->symbol) == NULL) {
 		cur = g_list_first (cache->cfg->metrics_list);
 		while (cur) {
