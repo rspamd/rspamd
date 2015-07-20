@@ -187,23 +187,24 @@ lua_mempool_set_variable (lua_State *L)
 		gchar *s;
 		gboolean b;
 	} val;
-
+	gsize slen;
 	gint i, len = 0, type;
 
 	if (mempool && var) {
 
-		for (i = 3; i < lua_gettop (L); i ++) {
+		for (i = 3; i <= lua_gettop (L); i ++) {
 			type = lua_type (L, i);
 
 			if (type == LUA_TNUMBER) {
 				/* We have some ambiguity here between integer and double */
 				len += sizeof (gdouble);
 			}
-			if (type == LUA_TBOOLEAN) {
+			else if (type == LUA_TBOOLEAN) {
 				len += sizeof (gboolean);
 			}
 			else if (type == LUA_TSTRING) {
-				len += sizeof (gchar *);
+				(void)lua_tolstring (L, i, &slen);
+				len += slen + 1;
 			}
 			else {
 				msg_err ("cannot handle lua type %s", lua_typename (L, type));
@@ -217,7 +218,7 @@ lua_mempool_set_variable (lua_State *L)
 			value = rspamd_mempool_alloc (mempool, len);
 			vp = value;
 
-			for (i = 3; i < lua_gettop (L); i ++) {
+			for (i = 3; i <= lua_gettop (L); i ++) {
 				type = lua_type (L, i);
 
 				if (type == LUA_TNUMBER) {
@@ -231,9 +232,10 @@ lua_mempool_set_variable (lua_State *L)
 					vp += sizeof (gboolean);
 				}
 				else if (type == LUA_TSTRING) {
-					val.s = rspamd_mempool_strdup (mempool, lua_tostring (L, i));
-					memcpy (vp, &val, sizeof (gchar *));
-					vp += sizeof (gchar *);
+					val.s = rspamd_mempool_strdup (mempool,
+							lua_tolstring (L, i, &slen));
+					memcpy (vp, val.s, slen + 1);
+					vp += slen + 1;
 				}
 				else {
 					msg_err ("cannot handle lua type %s", lua_typename (L, type));
@@ -260,7 +262,7 @@ lua_mempool_get_variable (lua_State *L)
 	const gchar *var = luaL_checkstring (L, 2);
 	const gchar *type = NULL, *pt;
 	gchar *value, *pv;
-	guint len, nvar;
+	guint len, nvar, slen;
 
 	if (mempool && var) {
 		value = rspamd_mempool_get_variable (mempool, var);
@@ -276,7 +278,7 @@ lua_mempool_get_variable (lua_State *L)
 				pv = value;
 				nvar = 0;
 
-				while ((len = strcspn (pt, ",")) > 0) {
+				while ((len = strcspn (pt, ", ")) > 0) {
 					if (len == sizeof ("double") - 1 &&
 							g_ascii_strncasecmp (pt, "double", len) == 0) {
 						lua_pushnumber (L, *(gdouble *)pv);
@@ -299,16 +301,17 @@ lua_mempool_get_variable (lua_State *L)
 					}
 					else if (len == sizeof ("string") - 1 &&
 							g_ascii_strncasecmp (pt, "string", len) == 0) {
-						lua_pushstring (L, (const gchar *)pv);
-						pv += sizeof (gchar *);
+						slen = strlen ((const gchar *)pv);
+						lua_pushlstring (L, (const gchar *)pv, slen);
+						pv += slen + 1;
 					}
 					else {
-						msg_err ("unknown type for get_variable: %s", type);
+						msg_err ("unknown type for get_variable: %s", pt);
 						lua_pushnil (L);
 					}
 
 					pt += len;
-					pt += strspn (pt, ",");
+					pt += strspn (pt, ", ");
 
 					nvar ++;
 				}
