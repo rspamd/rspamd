@@ -179,12 +179,70 @@ static int
 lua_mempool_set_variable (lua_State *L)
 {
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
-	const gchar *var = luaL_checkstring (L, 2),
-	*value = luaL_checkstring (L, 3);
+	const gchar *var = luaL_checkstring (L, 2);
+	gpointer value;
+	gchar *vp;
+	union {
+		gdouble d;
+		gchar *s;
+		gboolean b;
+	} val;
 
-	if (mempool && var && value) {
-		rspamd_mempool_set_variable (mempool, var,
-			rspamd_mempool_strdup (mempool, value), NULL);
+	gint i, len = 0, type;
+
+	if (mempool && var) {
+
+		for (i = 3; i < lua_gettop (L); i ++) {
+			type = lua_type (L, i);
+
+			if (type == LUA_TNUMBER) {
+				/* We have some ambiguity here between integer and double */
+				len += sizeof (gdouble);
+			}
+			if (type == LUA_TBOOLEAN) {
+				len += sizeof (gboolean);
+			}
+			else if (type == LUA_TSTRING) {
+				len += sizeof (gchar *);
+			}
+			else {
+				msg_err ("cannot handle lua type %s", lua_typename (L, type));
+			}
+		}
+
+		if (len == 0) {
+			msg_err ("no values specified");
+		}
+		else {
+			value = rspamd_mempool_alloc (mempool, len);
+			vp = value;
+
+			for (i = 3; i < lua_gettop (L); i ++) {
+				type = lua_type (L, i);
+
+				if (type == LUA_TNUMBER) {
+					val.d = lua_tonumber (L, i);
+					memcpy (vp, &val, sizeof (gdouble));
+					vp += sizeof (gdouble);
+				}
+				else if (type == LUA_TBOOLEAN) {
+					val.b = lua_toboolean (L, i);
+					memcpy (vp, &val, sizeof (gboolean));
+					vp += sizeof (gboolean);
+				}
+				else if (type == LUA_TSTRING) {
+					val.s = rspamd_mempool_strdup (mempool, lua_tostring (L, i));
+					memcpy (vp, &val, sizeof (gchar *));
+					vp += sizeof (gchar *);
+				}
+				else {
+					msg_err ("cannot handle lua type %s", lua_typename (L, type));
+				}
+			}
+
+			rspamd_mempool_set_variable (mempool, var, value, NULL);
+		}
+
 		return 0;
 	}
 	else {
@@ -193,6 +251,7 @@ lua_mempool_set_variable (lua_State *L)
 
 	return 1;
 }
+
 
 static int
 lua_mempool_get_variable (lua_State *L)
