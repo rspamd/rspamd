@@ -1155,6 +1155,8 @@ main (gint argc, gchar **argv, gchar **env)
 
 		res = TRUE;
 
+		rspamd_symbols_cache_init (rspamd_main->cfg->cache, rspamd_main->cfg);
+
 		if (!rspamd_init_filters (rspamd_main->cfg, FALSE)) {
 			res = FALSE;
 		}
