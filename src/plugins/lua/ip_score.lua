@@ -33,28 +33,25 @@ local _ = require "fun"
 
 -- Default settings
 local default_port = 6379
-local asn_provider = 'origin.asn.cymru.com'
 local upstreams = nil
-local metric = 'default'
-local scores = {
-  ['reject'] = 3,
-  ['add header'] = 1,
-  ['rewrite subject'] = 1,
-  ['no action'] = -2
+local whitelist = nil
+
+local options = {
+  asn_provider = 'origin.asn.cymru.com',
+  scores = {
+    ['reject'] = 1.0,
+    ['add header'] = 0.25,
+    ['rewrite subject'] = 0.25,
+    ['no action'] = -1.0
+  },
+  symbol = 'IP_SCORE',
+  hash = 'ip_score',
+  asn_prefix = 'a:',
+  country_prefix = 'c:',
+  ipnet_prefix = 'n:',
+  servers = '',
 }
 
-local reject_score = 3
-local add_header_score = 1
-local no_action_score = -2
-local symbol = 'IP_SCORE'
-local score_hash = 'ip_score'
-local asn_prefix = 'a:'
-local country_prefix = 'c:'
-local ipnet_prefix = 'n:'
--- This score is used for normalization of scores from keystorage
-local normalize_score = 100
-local whitelist = nil
-local expire = 240
 local asn_re = rspamd_regexp.create_cached("[\\|\\s]")
 
 local function asn_check(task)
@@ -253,59 +250,21 @@ end
 local configure_ip_score_module = function()
   local opts =  rspamd_config:get_all_opt('ip_score')
   if opts then
-    if opts['metric'] then
-      metric = opts['metric']
+    for k,v in pairs(opts) do
+      options[k] = v
     end
-    if opts['reject_score'] then
-      reject_score = opts['reject_score']
-    end
-    if opts['add_header_score'] then
-      add_header_score = opts['add_header_score']
-    end
-    if opts['no_action_score'] then
-      no_action_score = opts['no_action_score']
-    end
-    if opts['symbol'] then
-      symbol = opts['symbol']
-    end
-    if opts['normalize_score'] then
-      normalize_score = opts['normalize_score']
-    end
-    if opts['threshold'] then
-      normalize_score = opts['normalize_score']
-    end
-    if opts['whitelist'] then
-      whitelist = rspamd_config:add_radix_map(opts['whitelist'])
-    end
-    if opts['expire'] then
-      expire = opts['expire']
-    end
-    if opts['prefix'] then
-      prefix = opts['prefix']
-    end
-    if opts['asn_provider'] then
-      asn_provider = opts['asn_provider']
-    end
-    if opts['servers'] then
+    if options['servers'] then
       upstreams = upstream_list.create(opts['servers'], default_port)
       if not upstreams then
         rspamd_logger.err('no servers are specified')
       end
     end
+    if options['whitelist'] then
+      whitelist = rspamd_config:add_radix_map(opts['whitelist'])
+    end
   end
 end
 
--- Registration
-rspamd_config:register_module_option('ip_score', 'keystorage_host', 'string')
-rspamd_config:register_module_option('ip_score', 'keystorage_port', 'uint')
-rspamd_config:register_module_option('ip_score', 'metric', 'string')
-rspamd_config:register_module_option('ip_score', 'reject_score', 'int')
-rspamd_config:register_module_option('ip_score', 'add_header_score', 'int')
-rspamd_config:register_module_option('ip_score', 'no_action_score', 'int')
-rspamd_config:register_module_option('ip_score', 'symbol', 'string')
-rspamd_config:register_module_option('ip_score', 'normalize_score', 'uint')
-rspamd_config:register_module_option('ip_score', 'whitelist', 'map')
-rspamd_config:register_module_option('ip_score', 'expire', 'uint')
 
 configure_ip_score_module()
 if upstreams and normalize_score > 0 then

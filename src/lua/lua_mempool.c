@@ -184,7 +184,7 @@ lua_mempool_set_variable (lua_State *L)
 	gchar *vp;
 	union {
 		gdouble d;
-		gchar *s;
+		const gchar *s;
 		gboolean b;
 	} val;
 	gsize slen;
@@ -232,8 +232,7 @@ lua_mempool_set_variable (lua_State *L)
 					vp += sizeof (gboolean);
 				}
 				else if (type == LUA_TSTRING) {
-					val.s = rspamd_mempool_strdup (mempool,
-							lua_tolstring (L, i, &slen));
+					val.s = lua_tolstring (L, i, &slen);
 					memcpy (vp, val.s, slen + 1);
 					vp += slen + 1;
 				}
