@@ -199,8 +199,9 @@ lua_mempool_get_variable (lua_State *L)
 {
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 	const gchar *var = luaL_checkstring (L, 2);
-	const gchar *type = NULL;
-	gchar *value;
+	const gchar *type = NULL, *pt;
+	gchar *value, *pv;
+	guint len, nvar;
 
 	if (mempool && var) {
 		value = rspamd_mempool_get_variable (mempool, var);
@@ -212,27 +213,48 @@ lua_mempool_get_variable (lua_State *L)
 		if (value) {
 
 			if (type) {
-				if (g_ascii_strcasecmp (type, "double") == 0) {
-					lua_pushnumber (L, *(gdouble *)value);
-				}
-				else if (g_ascii_strcasecmp (type, "int") == 0) {
-					lua_pushnumber (L, *(gint *)value);
-				}
-				else if (g_ascii_strcasecmp (type, "int64") == 0) {
-					lua_pushnumber (L, *(gint64 *)value);
-				}
-				else if (g_ascii_strcasecmp (type, "bool") == 0) {
-					lua_pushboolean (L, *(gboolean *)value);
-				}
-				else if (g_ascii_strcasecmp (type, "string") == 0) {
-					lua_pushstring (L, (const gchar *)value);
-				}
-				else {
-					msg_err ("unknown type for get_variable: %s", type);
-					lua_pushnil (L);
+				pt = type;
+				pv = value;
+				nvar = 0;
+
+				while ((len = strcspn (pt, ",")) > 0) {
+					if (len == sizeof ("double") - 1 &&
+							g_ascii_strncasecmp (pt, "double", len) == 0) {
+						lua_pushnumber (L, *(gdouble *)pv);
+						pv += sizeof (gdouble);
+					}
+					else if (len == sizeof ("int") - 1 &&
+							g_ascii_strncasecmp (pt, "int", len) == 0) {
+						lua_pushnumber (L, *(gint *)pv);
+						pv += sizeof (gint);
+					}
+					else if (len == sizeof ("int64") - 1 &&
+							g_ascii_strncasecmp (pt, "int64", len) == 0) {
+						lua_pushnumber (L, *(gint64 *)pv);
+						pv += sizeof (gint64);
+					}
+					else if (len == sizeof ("bool") - 1 &&
+							g_ascii_strncasecmp (pt, "bool", len) == 0) {
+						lua_pushboolean (L, *(gboolean *)pv);
+						pv += sizeof (gboolean);
+					}
+					else if (len == sizeof ("string") - 1 &&
+							g_ascii_strncasecmp (pt, "string", len) == 0) {
+						lua_pushstring (L, (const gchar *)pv);
+						pv += sizeof (gchar *);
+					}
+					else {
+						msg_err ("unknown type for get_variable: %s", type);
+						lua_pushnil (L);
+					}
+
+					pt += len;
+					pt += strspn (pt, ",");
+
+					nvar ++;
 				}
 
-				return 1;
+				return nvar;
 			}
 
 			lua_pushstring (L, value);
