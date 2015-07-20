@@ -24,13 +24,73 @@
 #include "lua_common.h"
 #include "mem_pool.h"
 
+/***
+ * @module rspamd_mempool
+ * Rspamd memory pool is used to allocate memory attached to specific objects,
+ * namely it was initially used for memory allocation for rspamd_task.
+ *
+ * All memory allocated by the pool is destroyed when the associated object is
+ * destroyed. This allows a sort of controlled garbage collection for memory
+ * allocated from the pool. Memory pools are extensively used by rspamd internal
+ * components and provide some powerful features, such as destructors or
+ * persistent variables.
+ * @example
+local mempool = require "rspamd_mempool"
+local pool = mempool.create()
+
+pool:set_variable('a', 'bcd', 1, 1.01, false)
+local v1, v2, v3, v4 = pool:get_variable('a', 'string,double,double,bool')
+pool:destroy()
+ */
+
 /* Lua bindings */
+/***
+ * @function mempool.create([size])
+ * Creates a memory pool of a specified `size` or platform dependent optimal size (normally, a page size)
+ * @param {number} size size of a page inside pool
+ * @return {rspamd_mempool} new pool object (that should be removed by explicit call to `pool:destroy()`)
+ */
 LUA_FUNCTION_DEF (mempool, create);
+/***
+ * @method mempool:add_destructor(func)
+ * Adds new destructor function to the pool
+ * @param {function} func function to be called when the pool is destroyed
+ */
 LUA_FUNCTION_DEF (mempool, add_destructor);
+/***
+ * @method mempool:destroy()
+ * Destroys memory pool cleaning all variables and calling all destructors registered (both C and Lua ones)
+ */
 LUA_FUNCTION_DEF (mempool, delete);
 LUA_FUNCTION_DEF (mempool, stat);
 LUA_FUNCTION_DEF (mempool, suggest_size);
+/***
+ * @method mempool:set_variable(name, [value1[, value2 ...]])
+ * Sets a variable that's valid during memory pool lifetime. This function allows
+ * to pack multiple values inside a single variable. Currently supported types are:
+ *
+ * - `string`: packed as null terminated C string (so no `\0` are allowed)
+ * - `number`: packed as C double
+ * - `boolean`: packed as bool
+ * @param {string} name variable's name to set
+ */
 LUA_FUNCTION_DEF (mempool, set_variable);
+/***
+ * @method mempool:get_variable(name[, type])
+ * Unpacks mempool variable to lua If `type` is not specified, then a variable is
+ * assumed to be zero-terminated C string. Otherwise, `type` is a comma separated (spaces are ignored)
+ * list of types that should be unpacked from a variable's content. The following types
+ * are supported:
+ *
+ * - `string`: null terminated C string (so no `\0` are allowed)
+ * - `double`: returned as lua number
+ * - `int`: unpack a single integer
+ * - `int64`: unpack 64-bits integer
+ * - `boolean`: unpack boolean
+ * @param {string} name variable's name to get
+ * @param {string} type list of types to be extracted
+ * @return {variable list} list of variables extracted (but **not** a table)
+ */
 LUA_FUNCTION_DEF (mempool, get_variable);
 
 static const struct luaL_reg mempoollib_m[] = {
@@ -39,6 +99,7 @@ static const struct luaL_reg mempoollib_m[] = {
 	LUA_INTERFACE_DEF (mempool, suggest_size),
 	LUA_INTERFACE_DEF (mempool, set_variable),
 	LUA_INTERFACE_DEF (mempool, get_variable),
+	LUA_INTERFACE_DEF (mempool, delete),
 	{"destroy", lua_mempool_delete},
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
