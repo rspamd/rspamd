@@ -33,5 +33,7 @@ context("Memory pool unit tests", function()
     assert_equal(v2, 1)
     assert_equal(v3, 1.01)
     assert_equal(v4, false)
+    
+    pool:destroy()
   end)
 end)
