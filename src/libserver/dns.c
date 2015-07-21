@@ -117,6 +117,32 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	return TRUE;
 }
 
+gboolean make_dns_request_task (struct rspamd_task *task,
+	dns_callback_type cb,
+	gpointer ud,
+	enum rdns_request_type type,
+	const char *name)
+{
+	gboolean ret;
+
+	if (task->dns_requests >= task->cfg->dns_max_requests) {
+		return FALSE;
+	}
+
+	ret = make_dns_request (task->resolver, task->s, task->task_pool, cb, ud,
+			type, name);
+
+	if (ret) {
+		task->dns_requests ++;
+
+		if (task->dns_requests >= task->cfg->dns_max_requests) {
+			msg_info ("<%s> stop resolving on reaching %ud requests",
+					task->message_id, task->dns_requests);
+		}
+	}
+
+	return ret;
+}
 
 struct rspamd_dns_resolver *
 dns_resolver_init (rspamd_logger_t *logger,
