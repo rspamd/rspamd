@@ -29,8 +29,8 @@ SET_PROPERTY(GLOBAL PROPERTY ALLOW_DUPLICATE_CUSTOM_TARGETS 1)
 
 ############################# OPTIONS SECTION #############################################
 
-OPTION(DEBUG_MODE          "Enable debug output [default: ON]"                  ON)
-OPTION(ENABLE_OPTIMIZATION "Enable optimization [default: OFF]"                 OFF)
+OPTION(DEBUG_MODE          "Enable debug output [default: OFF]"                 OFF)
+OPTION(ENABLE_OPTIMIZATION "Enable extra optimizations [default: OFF]"          OFF)
 OPTION(SKIP_RELINK_RPATH   "Skip relinking and full RPATH for the install tree" OFF)
 OPTION(ENABLE_REDIRECTOR   "Enable redirector install [default: OFF]"           OFF)
 OPTION(ENABLE_GPERF_TOOLS  "Enable google perftools [default: OFF]"             OFF)
@@ -693,13 +693,13 @@ IF(NOT CMAKE_C_OPT_FLAGS)
 	IF(ENABLE_OPTIMIZATION MATCHES "ON")
 		SET(CMAKE_C_OPT_FLAGS "-O3 -fstrict-aliasing")
 	ELSE(ENABLE_OPTIMIZATION MATCHES "ON")
-		SET(CMAKE_C_OPT_FLAGS "-O0 -fstrict-aliasing")
+		IF(DEBUG_MODE MATCHES "ON")
+			SET(CMAKE_C_OPT_FLAGS "-g -O0 -fstrict-aliasing")
+		ELSE(DEBUG_MODE MATCHES "ON")
+			SET(CMAKE_C_OPT_FLAGS "-g -O2 -fstrict-aliasing")
+		ENDIF(DEBUG_MODE MATCHES "ON")
 	ENDIF(ENABLE_OPTIMIZATION MATCHES "ON")
 ENDIF(NOT CMAKE_C_OPT_FLAGS)
-
-IF(DEBUG_MODE MATCHES "ON")
-	SET(CMAKE_BUILD_TYPE "Debug")
-ENDIF(DEBUG_MODE MATCHES "ON")
 
 SET(CMAKE_C_FLAGS "${CMAKE_C_OPT_FLAGS} ${CMAKE_C_FLAGS} ${CMAKE_C_WARN_FLAGS}")
  
