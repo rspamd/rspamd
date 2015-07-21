@@ -150,6 +150,7 @@ unbreak_tag:
 						p - tbegin,
 						end - tbegin,
 						&level_ptr);
+				*(rp ++) = ' ';
 				break;
 
 			case 2:         /* PHP */
