@@ -92,6 +92,13 @@ LUA_FUNCTION_DEF (mempool, set_variable);
  * @return {variable list} list of variables extracted (but **not** a table)
  */
 LUA_FUNCTION_DEF (mempool, get_variable);
+/***
+ * @method mempool:has_variable(name)
+ * Checks if the specified variable `name` exists in the memory pool
+ * @param {string} name variable's name to get
+ * @return {boolean} `true` if variable exists and `false` otherwise
+ */
+LUA_FUNCTION_DEF (mempool, has_variable);
 
 static const struct luaL_reg mempoollib_m[] = {
 	LUA_INTERFACE_DEF (mempool, add_destructor),
@@ -99,6 +106,7 @@ static const struct luaL_reg mempoollib_m[] = {
 	LUA_INTERFACE_DEF (mempool, suggest_size),
 	LUA_INTERFACE_DEF (mempool, set_variable),
 	LUA_INTERFACE_DEF (mempool, get_variable),
+	LUA_INTERFACE_DEF (mempool, has_variable),
 	LUA_INTERFACE_DEF (mempool, delete),
 	{"destroy", lua_mempool_delete},
 	{"__tostring", rspamd_lua_class_tostring},
@@ -388,6 +396,24 @@ lua_mempool_get_variable (lua_State *L)
 	else {
 		lua_pushnil (L);
 	}
+
+	return 1;
+}
+
+static int
+lua_mempool_has_variable (lua_State *L)
+{
+	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
+	const gchar *var = luaL_checkstring (L, 2);
+	gboolean ret = FALSE;
+
+	if (mempool && var) {
+		if (rspamd_mempool_get_variable (mempool, var) != NULL) {
+			ret = TRUE;
+		}
+	}
+
+	lua_pushboolean (L, ret);
 
 	return 1;
 }
