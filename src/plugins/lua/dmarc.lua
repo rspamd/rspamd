@@ -92,8 +92,11 @@ local function dmarc_callback(task)
     local lookup_domain = string.sub(to_resolve, 8)
     if not results then
       if lookup_domain ~= dmarc_domain then
-        task:get_resolver():resolve_txt(task:get_session(),
-        task:get_mempool(), '_dmarc.' .. dmarc_domain, dmarc_dns_cb)
+        local resolve_name = '_dmarc.' .. dmarc_domain
+        task:get_resolver():resolve_txt({
+          task=task, 
+          name = resolve_name, 
+          callback = dmarc_dns_cb})
         return
       end
       
@@ -191,8 +194,12 @@ local function dmarc_callback(task)
 
     if not found_policy then
       if lookup_domain ~= dmarc_domain then
-        task:get_resolver():resolve_txt(task:get_session(),
-        task:get_mempool(), '_dmarc.' .. dmarc_domain, dmarc_dns_cb)
+        local resolve_name = '_dmarc.' .. dmarc_domain
+        task:get_resolver():resolve_txt({
+          task=task, 
+          name = resolve_name, 
+          callback = dmarc_dns_cb})
+
         return
       else
         return
@@ -266,8 +273,11 @@ local function dmarc_callback(task)
   end
   
   -- Do initial request
-  task:get_resolver():resolve_txt(task:get_session(), task:get_mempool(),
-        '_dmarc.' .. from[1]['domain'], dmarc_dns_cb)
+  local resolve_name = '_dmarc.' .. from[1]['domain']
+  task:get_resolver():resolve_txt({
+    task=task, 
+    name = resolve_name, 
+    callback = dmarc_dns_cb})
 end
 
 local opts = rspamd_config:get_all_opt('dmarc')

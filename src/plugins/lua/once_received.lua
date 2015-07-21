@@ -79,8 +79,10 @@ local function check_quantity_received (task)
         
         if r['real_ip'] and r['real_ip']:is_valid() then
           -- Try to resolve it again
-          task:get_resolver():resolve_ptr(task:get_session(), task:get_mempool(), 
-            r['real_ip']:to_string(), recv_dns_cb)
+          task:get_resolver():resolve_ptr({task = task,
+            name = r['real_ip']:to_string(), 
+            callback = recv_dns_cb
+          })
         else
           task:insert_result(symbol_strict, 1)
         end

@@ -37,17 +37,6 @@ local function ip_to_rbl(ip, rbl)
 end
 
 local function check_multimap(task)
-  -- Generate dns callback closure
-  local function dns_cb_generator(r)
-    local cb = function (resolver, to_resolve, results, err, rbl)
-      task:inc_dns_req()
-      if results then
-        task:insert_result(r['symbol'], 1, r['map'])
-      end
-    end
-    return cb
-  end
-
   -- Match a single value for against a single rule
   local function match_rule(r, value)
     local ret = false
@@ -142,9 +131,17 @@ local function check_multimap(task)
   -- RBL rules
   if ip:is_valid() then
     _.each(function(r)
-      task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
-        ip_to_rbl(ip, r['map']), dns_cb_generator(r))
-    end,
+        local cb = function (resolver, to_resolve, results, err, rbl)
+          if results then
+            task:insert_result(r['symbol'], 1, r['map'])
+          end
+        end
+        
+        task:get_resolver():resolve_a({task = task,
+          name = ip_to_rbl(ip, r['map']),
+          callback = cb,
+          })
+      end,
     _.filter(function(r) return r['type'] == 'dnsbl' end, rules))
   end
 end

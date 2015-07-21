@@ -168,25 +168,27 @@ local function rbl_cb (task)
 	      return
 	    end
 	  end
-	  task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
-	    havegot['helo'] .. '.' .. rbl['rbl'], rbl_dns_cb, k)
+	  task:get_resolver():resolve_a({task = task,
+	    name = havegot['helo'] .. '.' .. rbl['rbl'], 
+	    callback = rbl_dns_cb, 
+	    option = k})
 	end)()
       end
 
       if rbl['dkim'] then
-	(function()
-	  if notgot['dkim'] then
-	    return
-	  end
-	  if not havegot['dkim'] then
+        (function()
+          if notgot['dkim'] then
+            return
+          end
+          if not havegot['dkim'] then
             local das = task:get_symbol(symbols['dkim_allow_symbol'])
             if das and das[1] and das[1]['options'] and das[1]['options'][0] then
               havegot['dkim'] = das[1]['options']
-	    else
-	      notgot['dkim'] = true
-	      return
-	    end
-	  end
+            else
+              notgot['dkim'] = true
+              return
+            end
+          end
           for _, d in pairs(havegot['dkim']) do
             if rbl['dkim_domainonly'] then
               local url_from = rspamd_url.create(task:get_mempool(), d)
@@ -196,10 +198,13 @@ local function rbl_cb (task)
                 return
               end
             end
-	    task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
-	      d .. '.' .. rbl['rbl'], rbl_dns_cb, k)
+            
+            task:get_resolver():resolve_a({task = task,
+              name = d .. '.' .. rbl['rbl'], 
+              callback = rbl_dns_cb, 
+              option = k})
           end
-	end)()
+        end)()
       end
 
       if rbl['emails'] then
@@ -235,13 +240,17 @@ local function rbl_cb (task)
           end
           if rbl['emails'] == 'domain_only' then
             for domain, _ in pairs(havegot['emails']) do
-              task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
-                domain .. '.' .. rbl['rbl'], rbl_dns_cb, k)
+              task:get_resolver():resolve_a({task = task,
+                name = domain .. '.' .. rbl['rbl'], 
+                callback = rbl_dns_cb, 
+                option = k})
             end
           else
             for _, email in pairs(havegot['emails']) do
-              task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
-                email .. '.' .. rbl['rbl'], rbl_dns_cb, k)
+              task:get_resolver():resolve_a({task = task,
+                name = email .. '.' .. rbl['rbl'], 
+                callback = rbl_dns_cb, 
+                option = k})
             end
           end
         end)()
@@ -259,8 +268,10 @@ local function rbl_cb (task)
 	      return
 	    end
 	  end
-	  task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
-	    havegot['rdns'] .. '.' .. rbl['rbl'], rbl_dns_cb, k)
+	  task:get_resolver():resolve_a({task = task,
+	    name = havegot['rdns'] .. '.' .. rbl['rbl'],
+	    callback = rbl_dns_cb, 
+	    option = k})
 	end)()
       end
 
@@ -278,8 +289,10 @@ local function rbl_cb (task)
 	  end
 	  if (havegot['from']:get_version() == 6 and rbl['ipv6']) or
 	    (havegot['from']:get_version() == 4 and rbl['ipv4']) then
-	    task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
-	      ip_to_rbl(havegot['from'], rbl['rbl']), rbl_dns_cb, k)
+	    task:get_resolver():resolve_a({task = task,
+	      name = ip_to_rbl(havegot['from'], rbl['rbl']), 
+	      callback = rbl_dns_cb, 
+	      option = k})
 	  end
 	end)()
       end
@@ -303,8 +316,10 @@ local function rbl_cb (task)
                 ((rbl['exclude_private_ips'] and not is_private_ip(rh['real_ip'])) or
                 not rbl['exclude_private_ips']) and ((rbl['exclude_local_ips'] and
                 not is_excluded_ip(rh['real_ip'])) or not rbl['exclude_local_ips']) then
-                  task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
-                    ip_to_rbl(rh['real_ip'], rbl['rbl']), rbl_dns_cb, k)
+                  task:get_resolver():resolve_a({task = task,
+                    name = ip_to_rbl(rh['real_ip'], rbl['rbl']), 
+                    callback = rbl_dns_cb, 
+                    option = k})
               end
 	    end
 	  end
