@@ -254,7 +254,7 @@ rspamd_config:register_pre_filter(check_function)
  */
 LUA_FUNCTION_DEF (config, register_pre_filter);
 /***
- * @method rspamd_config:register_pre_filter(callback)
+ * @method rspamd_config:register_post_filter(callback)
  * Register function to be called after symbols are processed.
  * @param {function} callback callback function
  */
