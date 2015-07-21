@@ -1266,6 +1266,11 @@ rspamd_rcl_config_init (void)
 		rspamd_rcl_parse_struct_integer,
 		G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server),
 		RSPAMD_CL_FLAG_INT_32);
+	rspamd_rcl_add_default_handler (sub,
+		"dns_max_requests",
+		rspamd_rcl_parse_struct_integer,
+		G_STRUCT_OFFSET (struct rspamd_config, dns_max_requests),
+		RSPAMD_CL_FLAG_INT_32);
 
 	/* New DNS configuration */
 	ssub = rspamd_rcl_add_section (&sub->subsections, "dns", NULL,
