@@ -277,7 +277,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 		lua_gettable (L, -2);
 
 		if (to_resolve == NULL || lua_type (L, -1) != LUA_TFUNCTION) {
-			lua_pop (L, 1);
+			lua_pop (L, 2);
 			msg_err ("DNS request has bad params");
 			lua_pushboolean (L, FALSE);
 			return 1;
@@ -314,6 +314,13 @@ lua_dns_resolver_resolve_common (lua_State *L,
 			}
 			lua_pop (L, 1);
 		}
+
+		lua_pushstring (L, "option");
+		lua_gettable (L, -2);
+		if (lua_type (L, -1) == LUA_TSTRING) {
+			user_str = luaL_checkstring (L, -1);
+		}
+		lua_pop (L, 1);
 
 		lua_pop (L, 1);
 	}
