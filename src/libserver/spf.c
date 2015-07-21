@@ -452,18 +452,15 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 					/* Now resolve A record for this MX */
 					msg_debug ("resolve %s after resolving of MX",
 							elt_data->content.mx.name);
-					if (make_dns_request (task->resolver, task->s,
-						task->task_pool,
+					if (make_dns_request_task (task,
 						spf_record_dns_callback, (void *)cb, RDNS_REQUEST_A,
 						elt_data->content.mx.name)) {
-						task->dns_requests++;
 						cb->rec->requests_inflight++;
 					}
-					if (make_dns_request (task->resolver, task->s,
-						task->task_pool,
+
+					if (make_dns_request_task (task,
 						spf_record_dns_callback, (void *)cb, RDNS_REQUEST_AAAA,
 						elt_data->content.mx.name)) {
-						task->dns_requests++;
 						cb->rec->requests_inflight++;
 					}
 				}
@@ -481,20 +478,16 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 					if (spf_check_ptr_host (cb, elt_data->content.ptr.name)) {
 						msg_debug ("resolve %s after resolving of PTR",
 								elt_data->content.ptr.name);
-						if (make_dns_request (task->resolver, task->s,
-								task->task_pool,
+						if (make_dns_request_task (task,
 								spf_record_dns_callback, (void *)cb,
 								RDNS_REQUEST_A,
 								elt_data->content.ptr.name)) {
-							task->dns_requests++;
 							cb->rec->requests_inflight++;
 						}
-						if (make_dns_request (task->resolver, task->s,
-								task->task_pool,
+						if (make_dns_request_task (task,
 								spf_record_dns_callback, (void *)cb,
 								RDNS_REQUEST_AAAA,
 								elt_data->content.ptr.name)) {
-							task->dns_requests++;
 							cb->rec->requests_inflight++;
 						}
 					}
@@ -759,9 +752,8 @@ parse_spf_a (struct spf_record *rec, struct spf_addr *addr)
 	cb->resolved = resolved;
 	msg_debug ("resolve a %s", host);
 
-	if (make_dns_request (task->resolver, task->s, task->task_pool,
+	if (make_dns_request_task (task,
 		spf_record_dns_callback, (void *)cb, RDNS_REQUEST_A, host)) {
-		task->dns_requests++;
 		rec->requests_inflight++;
 		return TRUE;
 	}
@@ -801,9 +793,8 @@ parse_spf_ptr (struct spf_record *rec, struct spf_addr *addr)
 
 	rspamd_mempool_add_destructor (task->task_pool, free, ptr);
 	msg_debug ("resolve ptr %s for %s", ptr, host);
-	if (make_dns_request (task->resolver, task->s, task->task_pool,
+	if (make_dns_request_task (task,
 		spf_record_dns_callback, (void *)cb, RDNS_REQUEST_PTR, ptr)) {
-		task->dns_requests++;
 		rec->requests_inflight++;
 
 		return TRUE;
@@ -838,9 +829,8 @@ parse_spf_mx (struct spf_record *rec, struct spf_addr *addr)
 	cb->resolved = resolved;
 
 	msg_debug ("resolve mx for %s", host);
-	if (make_dns_request (task->resolver, task->s, task->task_pool,
+	if (make_dns_request_task (task,
 		spf_record_dns_callback, (void *)cb, RDNS_REQUEST_MX, host)) {
-		task->dns_requests++;
 		rec->requests_inflight++;
 
 		return TRUE;
@@ -989,9 +979,8 @@ parse_spf_include (struct spf_record *rec, struct spf_addr *addr)
 	addr->flags |= RSPAMD_SPF_FLAG_REFRENCE;
 	msg_debug ("resolve include %s", domain);
 
-	if (make_dns_request (task->resolver, task->s, task->task_pool,
+	if (make_dns_request_task (task,
 		spf_record_dns_callback, (void *)cb, RDNS_REQUEST_TXT, domain)) {
-		task->dns_requests++;
 		rec->requests_inflight++;
 
 		return TRUE;
@@ -1053,9 +1042,8 @@ parse_spf_redirect (struct spf_record *rec,
 	cb->resolved = rspamd_spf_new_addr_list (rec, domain);
 	msg_debug ("resolve redirect %s", domain);
 
-	if (make_dns_request (task->resolver, task->s, task->task_pool,
+	if (make_dns_request_task (task,
 		spf_record_dns_callback, (void *)cb, RDNS_REQUEST_TXT, domain)) {
-		task->dns_requests++;
 		rec->requests_inflight++;
 
 		return TRUE;
@@ -1091,9 +1079,8 @@ parse_spf_exists (struct spf_record *rec, struct spf_addr *addr)
 	cb->resolved = resolved;
 
 	msg_debug ("resolve exists %s", host);
-	if (make_dns_request (task->resolver, task->s, task->task_pool,
+	if (make_dns_request_task (task,
 		spf_record_dns_callback, (void *)cb, RDNS_REQUEST_A, host)) {
-		task->dns_requests++;
 		rec->requests_inflight++;
 
 		return TRUE;
@@ -1694,10 +1681,9 @@ resolve_spf (struct rspamd_task *task, spf_cb_t callback)
 		return FALSE;
 	}
 
-	if (make_dns_request (task->resolver, task->s, task->task_pool,
+	if (make_dns_request_task (task,
 			spf_dns_callback,
 			(void *)rec, RDNS_REQUEST_TXT, rec->sender_domain)) {
-		task->dns_requests++;
 		rec->requests_inflight++;
 		return TRUE;
 	}

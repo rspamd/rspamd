@@ -610,10 +610,19 @@ lua_tcp_request (lua_State *L)
 		}
 	}
 	else {
-		if (!make_dns_request (resolver, session, NULL, lua_tcp_dns_handler, cbd,
-				RDNS_REQUEST_A, host)) {
-			lua_tcp_push_error (cbd, "cannot resolve host");
-			lua_tcp_maybe_free (cbd);
+		if (task == NULL) {
+			if (!make_dns_request (resolver, session, NULL, lua_tcp_dns_handler, cbd,
+					RDNS_REQUEST_A, host)) {
+				lua_tcp_push_error (cbd, "cannot resolve host");
+				lua_tcp_maybe_free (cbd);
+			}
+		}
+		else {
+			if (!make_dns_request_task (task, lua_tcp_dns_handler, cbd,
+					RDNS_REQUEST_A, host)) {
+				lua_tcp_push_error (cbd, "cannot resolve host");
+				lua_tcp_maybe_free (cbd);
+			}
 		}
 	}
 

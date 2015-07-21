@@ -191,8 +191,7 @@ rspamd_dkim_context_t * rspamd_create_dkim_context (const gchar *sig,
  * @return
  */
 gboolean rspamd_get_dkim_key (rspamd_dkim_context_t *ctx,
-	struct rspamd_dns_resolver *resolver,
-	struct rspamd_async_session *s,
+	struct rspamd_task *task,
 	dkim_key_handler_f handler,
 	gpointer ud);
 

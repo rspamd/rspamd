@@ -856,10 +856,9 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 			rspamd_mempool_strdup (task->task_pool, surbl_req);
 		debug_task ("send surbl dns request %s", surbl_req);
 
-		if (make_dns_request (task->resolver, task->s, task->task_pool,
+		if (make_dns_request_task (task,
 			dns_callback,
 			(void *)param, RDNS_REQUEST_A, surbl_req)) {
-			task->dns_requests++;
 			param->w = rspamd_session_get_watcher (task->s);
 			rspamd_session_watcher_push (task->s);
 		}

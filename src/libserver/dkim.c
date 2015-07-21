@@ -995,8 +995,7 @@ rspamd_dkim_dns_cb (struct rdns_reply *reply, gpointer arg)
  */
 gboolean
 rspamd_get_dkim_key (rspamd_dkim_context_t *ctx,
-	struct rspamd_dns_resolver *resolver,
-	struct rspamd_async_session *s,
+	struct rspamd_task *task,
 	dkim_key_handler_f handler,
 	gpointer ud)
 {
@@ -1012,9 +1011,7 @@ rspamd_get_dkim_key (rspamd_dkim_context_t *ctx,
 	cbdata->handler = handler;
 	cbdata->ud = ud;
 
-	return make_dns_request (resolver,
-			   s,
-			   ctx->pool,
+	return make_dns_request_task (task,
 			   rspamd_dkim_dns_cb,
 			   cbdata,
 			   RDNS_REQUEST_TXT,

@@ -458,12 +458,23 @@ lua_http_request (lua_State *L)
 		}
 	}
 	else {
-		if (!make_dns_request (resolver, session, NULL, lua_http_dns_handler, cbd,
-				RDNS_REQUEST_A, msg->host->str)) {
-			lua_http_maybe_free (cbd);
-			lua_pushboolean (L, FALSE);
+		if (task == NULL) {
+			if (!make_dns_request (resolver, session, NULL, lua_http_dns_handler, cbd,
+					RDNS_REQUEST_A, msg->host->str)) {
+				lua_http_maybe_free (cbd);
+				lua_pushboolean (L, FALSE);
 
-			return 1;
+				return 1;
+			}
+		}
+		else {
+			if (!make_dns_request_task (task, lua_http_dns_handler, cbd,
+					RDNS_REQUEST_A, msg->host->str)) {
+				lua_http_maybe_free (cbd);
+				lua_pushboolean (L, FALSE);
+
+				return 1;
+			}
 		}
 	}
 

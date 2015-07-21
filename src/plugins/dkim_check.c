@@ -502,10 +502,8 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 					}
 					else {
 						debug_task ("request key for %s from DNS", ctx->dns_key);
-						task->dns_requests++;
 						rspamd_get_dkim_key (ctx,
-								task->resolver,
-								task->s,
+								task,
 								dkim_module_key_handler,
 								cur);
 					}
