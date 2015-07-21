@@ -827,6 +827,10 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 	f.begin = url->host;
 	f.len = url->hostlen;
 
+	if (task->dns_requests >= task->cfg->dns_max_requests) {
+		return;
+	}
+
 	if ((surbl_req = format_surbl_request (task->task_pool, &f, suffix, TRUE,
 		&err, forced, tree, url)) != NULL) {
 		param =
