@@ -63,6 +63,7 @@ struct rspamd_classifier_runtime {
 	GList *st_runtime;
 	guint start_pos;
 	guint end_pos;
+	gboolean skipped;
 };
 
 struct rspamd_token_result {
