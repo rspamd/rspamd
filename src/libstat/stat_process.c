@@ -112,6 +112,8 @@ preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
 					g_tree_nnodes (cbdata->tok->tokens),
 					cl_runtime->clcf->min_tokens);
 			cur = g_list_next (cur);
+			cl_runtime->skipped = TRUE;
+
 			continue;
 		}
 
@@ -413,6 +415,11 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 		cl_run = (struct rspamd_classifier_runtime *)cur->data;
 		cl_run->stage = RSPAMD_STAT_STAGE_POST;
 
+		if (cl_run->skipped) {
+			cur = g_list_next (cur);
+			continue;
+		}
+
 		if (cl_run->cl) {
 			if (cl_ctx != NULL) {
 				if (cl_run->cl->classify_func (cl_ctx, cl_run->tok->tokens,
@@ -572,7 +579,7 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 	while (cur) {
 		cl_run = (struct rspamd_classifier_runtime *)cur->data;
 
-		if (cl_run->cl) {
+		if (cl_run->cl && !cl_run->skipped) {
 			cl_ctx = cl_run->cl->init_func (task->task_pool, cl_run->clcf);
 
 			if (cl_ctx != NULL) {

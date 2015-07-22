@@ -256,12 +256,14 @@ bayes_learn_spam_callback (gpointer key, gpointer value, gpointer data)
 	for (i = rt->start_pos; i < rt->end_pos; i++) {
 		res = &g_array_index (node->results, struct rspamd_token_result, i);
 
-		if (res->st_runtime->st->is_spam) {
-			res->value ++;
-		}
-		else if (res->value > 0) {
-			/* Unlearning */
-			res->value --;
+		if (res->st_runtime) {
+			if (res->st_runtime->st->is_spam) {
+				res->value ++;
+			}
+			else if (res->value > 0) {
+				/* Unlearning */
+				res->value --;
+			}
 		}
 	}
 
@@ -280,11 +282,13 @@ bayes_learn_ham_callback (gpointer key, gpointer value, gpointer data)
 	for (i = rt->start_pos; i < rt->end_pos; i++) {
 		res = &g_array_index (node->results, struct rspamd_token_result, i);
 
-		if (!res->st_runtime->st->is_spam) {
-			res->value ++;
-		}
-		else if (res->value > 0) {
-			res->value --;
+		if (res->st_runtime) {
+			if (!res->st_runtime->st->is_spam) {
+				res->value ++;
+			}
+			else if (res->value > 0) {
+				res->value --;
+			}
 		}
 	}
 
