@@ -208,20 +208,21 @@ typedef enum
 #define CM_NEW          (1 << 20)
 /* Elements that cannot be omitted. */
 #define CM_OMITST       (1 << 21)
-
+/* Unique elements */
+#define CM_UNIQUE       (1 << 22)
 /* XML tag */
-#define FL_XML          (1 << 22)
+#define FL_XML          (1 << 23)
 /* Closing tag */
-#define FL_CLOSING      (1 << 23)
+#define FL_CLOSING      (1 << 24)
 /* Fully closed tag (e.g. <a attrs />) */
-#define FL_CLOSED       (1 << 24)
-#define FL_BROKEN       (1 << 25)
-#define FL_IGNORE       (1 << 26)
+#define FL_CLOSED       (1 << 25)
+#define FL_BROKEN       (1 << 26)
+#define FL_IGNORE       (1 << 27)
 
 struct html_tag_def {
 	gint id;
 	const gchar *name;
-	gint flags;
+	guint flags;
 };
 
 static struct html_tag_def tag_defs[] = {
@@ -238,7 +239,7 @@ static struct html_tag_def tag_defs[] = {
 	{Tag_BDO, "bdo", (CM_INLINE)},
 	{Tag_BIG, "big", (CM_INLINE)},
 	{Tag_BLOCKQUOTE, "blockquote", (CM_BLOCK)},
-	{Tag_BODY, "body", (CM_HTML | CM_OPT | CM_OMITST)},
+	{Tag_BODY, "body", (CM_HTML | CM_OPT | CM_OMITST | CM_UNIQUE)},
 	{Tag_BR, "br", (CM_INLINE | CM_EMPTY)},
 	{Tag_BUTTON, "button", (CM_INLINE)},
 	{Tag_CAPTION, "caption", (CM_TABLE)},
@@ -266,9 +267,9 @@ static struct html_tag_def tag_defs[] = {
 	{Tag_H4, "h4", (CM_BLOCK | CM_HEADING)},
 	{Tag_H5, "h5", (CM_BLOCK | CM_HEADING)},
 	{Tag_H6, "h6", (CM_BLOCK | CM_HEADING)},
-	{Tag_HEAD, "head", (CM_HTML | CM_OPT | CM_OMITST)},
+	{Tag_HEAD, "head", (CM_HTML | CM_OPT | CM_OMITST | CM_UNIQUE)},
 	{Tag_HR, "hr", (CM_BLOCK | CM_EMPTY)},
-	{Tag_HTML, "html", (CM_HTML | CM_OPT | CM_OMITST)},
+	{Tag_HTML, "html", (CM_HTML | CM_OPT | CM_OMITST | CM_UNIQUE)},
 	{Tag_I, "i", (CM_INLINE)},
 	{Tag_IFRAME, "iframe", (CM_INLINE)},
 	{Tag_IMG, "img", (CM_INLINE | CM_IMG | CM_EMPTY)},
@@ -320,7 +321,7 @@ static struct html_tag_def tag_defs[] = {
 	{Tag_TFOOT, "tfoot", (CM_TABLE | CM_ROWGRP | CM_OPT)},
 	{Tag_TH, "th", (CM_ROW | CM_OPT | CM_NO_INDENT)},
 	{Tag_THEAD, "thead", (CM_TABLE | CM_ROWGRP | CM_OPT)},
-	{Tag_TITLE, "title", (CM_HEAD)},
+	{Tag_TITLE, "title", (CM_HEAD | CM_UNIQUE)},
 	{Tag_TR, "tr", (CM_TABLE | CM_OPT)},
 	{Tag_TT, "tt", (CM_INLINE)},
 	{Tag_U, "u", (CM_INLINE)},
@@ -1596,6 +1597,12 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 				}
 
 				if (cur_tag->id != -1 && cur_tag->id < N_TAGS) {
+					if (cur_tag->flags & CM_UNIQUE) {
+						if (isset (hc->tags_seen, cur_tag->id)) {
+							/* Duplicate tag has been found */
+							hc->flags |= RSPAMD_HTML_FLAG_DUPLICATE_ELEMENTS;
+						}
+					}
 					setbit (hc->tags_seen, cur_tag->id);
 				}
 
