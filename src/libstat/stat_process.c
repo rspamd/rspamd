@@ -345,7 +345,7 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 	struct classifier_ctx *cl_ctx;
 	GList *cl_runtimes;
 	GList *cur;
-	gboolean ret = RSPAMD_STAT_PROCESS_ERROR, compat = TRUE;
+	gboolean ret = RSPAMD_STAT_PROCESS_OK, compat = TRUE;
 	const ucl_object_t *obj;
 
 	st_ctx = rspamd_stat_get_ctx ();
@@ -513,7 +513,7 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 	gulong nrev;
 	rspamd_learn_t learn_res = RSPAMD_LEARN_OK;
 	guint i;
-	gboolean compat = TRUE;
+	gboolean compat = TRUE, learned = FALSE;
 
 	st_ctx = rspamd_stat_get_ctx ();
 	g_assert (st_ctx != NULL);
@@ -588,6 +588,7 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 					msg_debug ("learned %s classifier %s", spam ? "spam" : "ham",
 							cl_run->clcf->name);
 					ret = RSPAMD_STAT_PROCESS_OK;
+					learned = TRUE;
 
 					cbdata.classifier_runtimes = cur;
 					cbdata.task = task;
@@ -629,6 +630,11 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 		}
 
 		cur = g_list_next (cur);
+	}
+
+	if (!learned) {
+		g_set_error (err, rspamd_stat_quark (), 500, "message cannot be learned"
+				" for any classifier defined");
 	}
 
 	return ret;
