@@ -14,7 +14,7 @@ rspamc.1: rspamc.1.md
 	
 lua-doc: lua_regexp lua_ip lua_config lua_task lua_ucl lua_http lua_trie \
 	lua_dns lua_redis lua_upstream lua_expression lua_mimepart lua_logger lua_url \
-	lua_tcp lua_mempool
+	lua_tcp lua_mempool lua_html
 
 lua_regexp: ../src/lua/lua_regexp.c
 	$(LUADOC) < ../src/lua/lua_regexp.c > markdown/lua/regexp.md
@@ -47,4 +47,6 @@ lua_url: ../src/lua/lua_url.c
 lua_tcp: ../src/lua/lua_tcp.c
 	$(LUADOC) < ../src/lua/lua_tcp.c > markdown/lua/tcp.md
 lua_mempool: ../src/lua/lua_mempool.c
-	$(LUADOC) < ../src/lua/lua_mempool.c > markdown/lua/mempool.md	
+	$(LUADOC) < ../src/lua/lua_mempool.c > markdown/lua/mempool.md
+lua_html: ../src/lua/lua_html.c
+	$(LUADOC) < ../src/lua/lua_html.c > markdown/lua/html.md
