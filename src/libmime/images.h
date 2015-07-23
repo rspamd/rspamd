@@ -9,6 +9,7 @@ enum known_image_types {
 	IMAGE_TYPE_JPG,
 	IMAGE_TYPE_GIF,
 	IMAGE_TYPE_BMP,
+	IMAGE_TYPE_HTML,
 	IMAGE_TYPE_UNKNOWN = 9000
 };
 

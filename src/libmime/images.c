@@ -247,6 +247,9 @@ image_type_str (enum known_image_types type)
 	case IMAGE_TYPE_BMP:
 		return "BMP";
 		break;
+	case IMAGE_TYPE_HTML:
+		return "HTML";
+		break;
 	default:
 		break;
 	}
