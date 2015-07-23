@@ -27,6 +27,7 @@
 #include "sqlite3.h"
 #include "libutil/sqlite_utils.h"
 #include "libstat/stat_internal.h"
+#include "libmime/message.h"
 
 #define SQLITE3_BACKEND_TYPE "sqlite3"
 #define SQLITE3_SCHEMA_VERSION "1"
@@ -154,8 +155,8 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 	},
 	{
 		.idx = RSPAMD_STAT_BACKEND_INC_LEARNS,
-		.sql = "UPDATE languages SET learns=learns + 1 WHERE name=?1;"
-				"UPDATE users SET learns=learns + 1 WHERE name=?2;",
+		.sql = "UPDATE languages SET learns=learns + 1 WHERE id=?1;"
+				"UPDATE users SET learns=learns + 1 WHERE id=?2;",
 		.stmt = NULL,
 		.args = "TT",
 		.result = SQLITE_DONE,
@@ -163,8 +164,8 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 	},
 	{
 		.idx = RSPAMD_STAT_BACKEND_DEC_LEARNS,
-		.sql = "UPDATE languages SET learns=learns - 1 WHERE name=?1;"
-				"UPDATE users SET learns=learns - 1 WHERE name=?2;",
+		.sql = "UPDATE languages SET learns=learns - 1 WHERE id=?1;"
+				"UPDATE users SET learns=learns - 1 WHERE id=?2;",
 		.stmt = NULL,
 		.args = "TT",
 		.result = SQLITE_DONE,
@@ -262,6 +263,47 @@ rspamd_sqlite3_get_user (struct rspamd_stat_sqlite3_db *db,
 
 			rc =  rspamd_sqlite3_run_prstmt (db->sqlite, db->prstmt,
 					RSPAMD_STAT_BACKEND_INSERT_USER, user, &id);
+		}
+	}
+
+	return id;
+}
+
+static gint64
+rspamd_sqlite3_get_language (struct rspamd_stat_sqlite3_db *db,
+		struct rspamd_task *task, gboolean learn)
+{
+	gint64 id = 0; /* Default language is 0 */
+	gint rc;
+	guint i;
+	const gchar *language = NULL;
+	struct mime_text_part *tp;
+
+	for (i = 0; i < task->text_parts->len; i ++) {
+		tp = g_ptr_array_index (task->text_parts, i);
+
+		if (tp->lang_code != NULL && tp->lang_code[0] != '\0' &&
+				strcmp (tp->lang_code, "en") != 0) {
+			language = tp->language;
+			break;
+		}
+	}
+
+	/* XXX: We ignore multiple languages but default + extra */
+	if (language != NULL) {
+		rc = rspamd_sqlite3_run_prstmt (db->sqlite, db->prstmt,
+				RSPAMD_STAT_BACKEND_GET_LANGUAGE, language, &id);
+
+		if (rc != SQLITE_OK && learn) {
+			/* We need to insert a new language */
+			if (!db->in_transaction) {
+				rspamd_sqlite3_run_prstmt (db->sqlite, db->prstmt,
+						RSPAMD_STAT_BACKEND_TRANSACTION_START_IM);
+				db->in_transaction = TRUE;
+			}
+
+			rc =  rspamd_sqlite3_run_prstmt (db->sqlite, db->prstmt,
+					RSPAMD_STAT_BACKEND_INSERT_LANGUAGE, language, &id);
 		}
 	}
 
@@ -402,11 +444,12 @@ rspamd_sqlite3_runtime (struct rspamd_task *task,
 	bk = g_hash_table_lookup (ctx->files, stcf);
 
 	if (bk) {
-		rt = rspamd_mempool_alloc0 (task->task_pool, sizeof (*rt));
+		rt = rspamd_mempool_alloc (task->task_pool, sizeof (*rt));
 		rt->ctx = ctx;
 		rt->db = bk;
 		rt->task = task;
 		rt->user_id = -1;
+		rt->lang_id = -1;
 	}
 
 	return rt;
@@ -443,6 +486,10 @@ rspamd_sqlite3_process_token (struct rspamd_task *task, struct token_node_s *tok
 
 	if (rt->user_id == -1) {
 		rt->user_id = rspamd_sqlite3_get_user (bk, task, FALSE);
+	}
+
+	if (rt->lang_id == -1) {
+		rt->lang_id = rspamd_sqlite3_get_language (bk, task, FALSE);
 	}
 
 	memcpy (&idx, tok->data, sizeof (idx));
@@ -518,6 +565,10 @@ rspamd_sqlite3_learn_token (struct rspamd_task *task, struct token_node_s *tok,
 		rt->user_id = rspamd_sqlite3_get_user (bk, task, TRUE);
 	}
 
+	if (rt->lang_id == -1) {
+		rt->lang_id = rspamd_sqlite3_get_language (bk, task, FALSE);
+	}
+
 	iv = res->value;
 	memcpy (&idx, tok->data, sizeof (idx));
 
@@ -577,7 +628,7 @@ rspamd_sqlite3_inc_learns (struct rspamd_task *task, gpointer runtime,
 	bk = rt->db;
 	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_INC_LEARNS,
-			SQLITE3_DEFAULT, SQLITE3_DEFAULT);
+			rt->user_id, rt->lang_id);
 
 	if (bk->in_transaction) {
 		rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
@@ -603,7 +654,7 @@ rspamd_sqlite3_dec_learns (struct rspamd_task *task, gpointer runtime,
 	bk = rt->db;
 	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_DEC_LEARNS,
-			SQLITE3_DEFAULT, SQLITE3_DEFAULT);
+			rt->user_id, rt->lang_id);
 
 	if (bk->in_transaction) {
 		rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
