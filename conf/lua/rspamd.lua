@@ -62,22 +62,6 @@ rspamd_config.R_PARTS_DIFFER = function(task)
   return false
 end
 
-rspamd_config.R_EMPTY_IMAGE = function (task)
-	parts = task:get_text_parts()
-	if parts then
-		for _,part in ipairs(parts) do
-			if part:is_empty() then
-				images = task:get_images()
-				if images then
-					return true
-				end
-				return false
-			end
-		end
-	end
-	return false
-end
-
 -- Date issues
 rspamd_config.MISSING_DATE = function(task)
 	if rspamd_config:get_api_version() >= 5 then

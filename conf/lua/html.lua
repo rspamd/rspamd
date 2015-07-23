@@ -15,6 +15,7 @@
 
 local reconf = config['regexp']
 local rspamd_regexp = require "rspamd_regexp"
+local rspamd_logger = require "rspamd_logger"
 
 -- Messages that have only HTML part
 reconf['MIME_HTML_ONLY'] = 'has_only_html_part()'
@@ -50,4 +51,26 @@ rspamd_config.HTML_SHORT_LINK_IMG_2 = function(task)
 end
 rspamd_config.HTML_SHORT_LINK_IMG_3 = function(task)
   return check_html_image(task, 1536, 2048)
+end
+rspamd_config.R_EMPTY_IMAGE = function(task)
+  local tp = task:get_text_parts()
+  
+  for _,p in ipairs(tp) do
+    if p:is_html() then
+      local hc = p:get_html()
+      local lines = p:get_lines_count()
+      
+      if lines < 5 then
+        local images = hc:get_images()
+        
+        if images then
+          for _,i in ipairs(images) do
+            if i['height'] + i['width'] >= 400 then
+              return true
+            end
+          end
+        end
+      end
+    end
+  end
 end
