@@ -68,6 +68,12 @@ LUA_FUNCTION_DEF (textpart, get_content);
  */
 LUA_FUNCTION_DEF (textpart, get_length);
 /***
+ * @method mime_part:get_raw_length()
+ * Get length of the **raw** content of the part (e.g. HTML with tags unstripped)
+ * @return {integer} length of part in **bytes**
+ */
+LUA_FUNCTION_DEF (textpart, get_raw_length);
+/***
  * @method mime_part:get_lines_count()
  * Get lines number in the part
  * @return {integer} number of lines in the part
@@ -108,6 +114,7 @@ static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, is_utf),
 	LUA_INTERFACE_DEF (textpart, get_content),
 	LUA_INTERFACE_DEF (textpart, get_length),
+	LUA_INTERFACE_DEF (textpart, get_raw_length),
 	LUA_INTERFACE_DEF (textpart, get_lines_count),
 	LUA_INTERFACE_DEF (textpart, is_empty),
 	LUA_INTERFACE_DEF (textpart, is_html),
@@ -282,11 +289,31 @@ lua_textpart_get_length (lua_State * L)
 		return 1;
 	}
 
-	if (IS_PART_EMPTY (part)) {
+	if (IS_PART_EMPTY (part) || part->content == NULL) {
 		lua_pushnumber (L, 0);
 	}
 	else {
 		lua_pushnumber (L, part->content->len);
+	}
+
+	return 1;
+}
+
+static gint
+lua_textpart_get_raw_length (lua_State * L)
+{
+	struct mime_text_part *part = lua_check_textpart (L);
+
+	if (part == NULL) {
+		lua_pushnil (L);
+		return 1;
+	}
+
+	if (IS_PART_EMPTY (part) || part->orig == NULL) {
+		lua_pushnumber (L, 0);
+	}
+	else {
+		lua_pushnumber (L, part->orig->len);
 	}
 
 	return 1;
