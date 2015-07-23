@@ -2034,7 +2034,7 @@ lua_image_get_type (lua_State *L)
 	struct rspamd_image *img = lua_check_image (L);
 
 	if (img != NULL) {
-		lua_pushstring (L, image_type_str (img->type));
+		lua_pushstring (L, rspamd_image_type_str (img->type));
 	}
 	else {
 		lua_pushnil (L);

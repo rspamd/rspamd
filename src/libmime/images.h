@@ -4,31 +4,33 @@
 #include "config.h"
 #include "main.h"
 
-enum known_image_types {
-	IMAGE_TYPE_PNG,
+struct html_image;
+
+enum rspamd_image_type {
+	IMAGE_TYPE_PNG = 0,
 	IMAGE_TYPE_JPG,
 	IMAGE_TYPE_GIF,
 	IMAGE_TYPE_BMP,
-	IMAGE_TYPE_HTML,
-	IMAGE_TYPE_UNKNOWN = 9000
+	IMAGE_TYPE_UNKNOWN
 };
 
 struct rspamd_image {
-	enum known_image_types type;
+	enum rspamd_image_type type;
 	GByteArray *data;
 	guint32 width;
 	guint32 height;
 	const gchar *filename;
+	struct html_image *html_image;
 };
 
 /*
  * Process images from a worker task
  */
-void process_images (struct rspamd_task *task);
+void rspamd_images_process (struct rspamd_task *task);
 
 /*
  * Get textual representation of an image's type
  */
-const gchar * image_type_str (enum known_image_types type);
+const gchar * rspamd_image_type_str (enum rspamd_image_type type);
 
 #endif /* IMAGES_H_ */

@@ -1506,7 +1506,7 @@ rspamd_message_parse (struct rspamd_task *task)
 					task->raw_headers_content.len);
 		}
 
-		process_images (task);
+		rspamd_images_process (task);
 
 		/* Parse received headers */
 		first =

@@ -37,7 +37,7 @@ static void process_image (struct rspamd_task *task, struct mime_part *part);
 
 
 void
-process_images (struct rspamd_task *task)
+rspamd_images_process (struct rspamd_task *task)
 {
 	guint i;
 	struct mime_part *part;
@@ -52,7 +52,7 @@ process_images (struct rspamd_task *task)
 
 }
 
-static enum known_image_types
+static enum rspamd_image_type
 detect_image_type (GByteArray *data)
 {
 	if (data->len > sizeof (png_signature) / sizeof (png_signature[0])) {
@@ -230,7 +230,7 @@ process_image (struct rspamd_task *task, struct mime_part *part)
 
 	if (img != NULL) {
 		debug_task ("detected %s image of size %ud x %ud in message <%s>",
-			image_type_str (img->type),
+			rspamd_image_type_str (img->type),
 			img->width, img->height,
 			task->message_id);
 		img->filename = part->filename;
@@ -286,7 +286,7 @@ process_image (struct rspamd_task *task, struct mime_part *part)
 }
 
 const gchar *
-image_type_str (enum known_image_types type)
+rspamd_image_type_str (enum rspamd_image_type type)
 {
 	switch (type) {
 	case IMAGE_TYPE_PNG:
@@ -300,9 +300,6 @@ image_type_str (enum known_image_types type)
 		break;
 	case IMAGE_TYPE_BMP:
 		return "BMP";
-		break;
-	case IMAGE_TYPE_HTML:
-		return "HTML";
 		break;
 	default:
 		break;
