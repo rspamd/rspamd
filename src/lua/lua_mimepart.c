@@ -86,6 +86,12 @@ LUA_FUNCTION_DEF (textpart, is_empty);
  */
 LUA_FUNCTION_DEF (textpart, is_html);
 /***
+ * @method text_part:get_html()
+ * Returns html content of the specified part
+ * @return {html} html content
+ */
+LUA_FUNCTION_DEF (textpart, get_html);
+/***
  * @method text_part:get_language()
  * Returns the code of the most used unicode script in the text part. Does not work with raw parts
  * @return {string} short abbreviation (such as `ru`) for the script's language
@@ -105,6 +111,7 @@ static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, get_lines_count),
 	LUA_INTERFACE_DEF (textpart, is_empty),
 	LUA_INTERFACE_DEF (textpart, is_html),
+	LUA_INTERFACE_DEF (textpart, get_html),
 	LUA_INTERFACE_DEF (textpart, get_language),
 	LUA_INTERFACE_DEF (textpart, get_mimepart),
 	{"__tostring", rspamd_lua_class_tostring},
@@ -335,6 +342,23 @@ lua_textpart_is_html (lua_State * L)
 	return 1;
 }
 
+static gint
+lua_textpart_get_html (lua_State * L)
+{
+	struct mime_text_part *part = lua_check_textpart (L);
+	struct html_content **phc;
+
+	if (part == NULL || part->html == NULL) {
+		lua_pushnil (L);
+	}
+	else {
+		phc = lua_newuserdata (L, sizeof (*phc));
+		rspamd_lua_setclass (L, "rspamd{html}", -1);
+		*phc = part->html;
+	}
+
+	return 1;
+}
 
 static gint
 lua_textpart_get_language (lua_State * L)
