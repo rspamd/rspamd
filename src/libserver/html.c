@@ -992,7 +992,7 @@ rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
 			tag->params = g_list_prepend (tag->params, comp);
 			ret = TRUE;
 		}
-		else if (len == 5 && g_ascii_strncasecmp (begin, "height", len) == 0) {
+		else if (len == 6 && g_ascii_strncasecmp (begin, "height", len) == 0) {
 			comp = rspamd_mempool_alloc (pool, sizeof (*comp));
 			comp->type = RSPAMD_HTML_COMPONENT_HEIGHT;
 			comp->start = NULL;
