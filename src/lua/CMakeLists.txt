@@ -22,6 +22,7 @@ SET(LUASRC			  ${CMAKE_CURRENT_SOURCE_DIR}/lua_common.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_mimepart.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_url.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_util.c
-					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_tcp.c)
+					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_tcp.c
+					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_html.c)
 
 SET(RSPAMD_LUA ${LUASRC} PARENT_SCOPE)
