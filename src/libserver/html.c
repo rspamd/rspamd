@@ -982,6 +982,25 @@ rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
 			ret = TRUE;
 		}
 	}
+	else if (tag->id == Tag_IMG) {
+		/* Check width and height if presented */
+		if (len == 5 && g_ascii_strncasecmp (begin, "width", len) == 0) {
+			comp = rspamd_mempool_alloc (pool, sizeof (*comp));
+			comp->type = RSPAMD_HTML_COMPONENT_WIDTH;
+			comp->start = NULL;
+			comp->len = 0;
+			tag->params = g_list_prepend (tag->params, comp);
+			ret = TRUE;
+		}
+		else if (len == 5 && g_ascii_strncasecmp (begin, "height", len) == 0) {
+			comp = rspamd_mempool_alloc (pool, sizeof (*comp));
+			comp->type = RSPAMD_HTML_COMPONENT_HEIGHT;
+			comp->start = NULL;
+			comp->len = 0;
+			tag->params = g_list_prepend (tag->params, comp);
+			ret = TRUE;
+		}
+	}
 
 	return ret;
 }
@@ -1280,6 +1299,57 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag)
 	}
 
 	return NULL;
+}
+
+static void
+rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
+		struct html_content *hc)
+{
+	struct html_tag_component *comp;
+	struct html_image *img;
+	rspamd_fstring_t fstr;
+	GList *cur;
+	gulong val;
+
+	cur = tag->params;
+	img = rspamd_mempool_alloc0 (pool, sizeof (*img));
+
+	while (cur) {
+		comp = cur->data;
+
+		if (comp->type == RSPAMD_HTML_COMPONENT_HREF && comp->len > 0) {
+			fstr.begin = (gchar *)comp->start;
+			fstr.len = comp->len;
+			img->src = rspamd_mempool_fstrdup (pool, &fstr);
+
+			if (comp->len > sizeof ("cid:") - 1 && memcmp (comp->start,
+					"cid:", sizeof ("cid:") - 1) == 0) {
+				/* We have an embedded image */
+				img->flags |= RSPAMD_HTML_FLAG_IMAGE_EMBEDDED;
+			}
+			else {
+				img->flags |= RSPAMD_HTML_FLAG_IMAGE_EXTERNAL;
+			}
+		}
+		else if (comp->type == RSPAMD_HTML_COMPONENT_HEIGHT) {
+			if (rspamd_strtoul (comp->start, comp->len, &val)) {
+				img->height = val;
+			}
+		}
+		else if (comp->type == RSPAMD_HTML_COMPONENT_WIDTH) {
+			if (rspamd_strtoul (comp->start, comp->len, &val)) {
+				img->width = val;
+			}
+		}
+	}
+
+	if (hc->images == NULL) {
+		hc->images = g_ptr_array_sized_new (4);
+		rspamd_mempool_add_destructor (pool, rspamd_ptr_array_free_hard,
+				hc->images);
+	}
+
+	g_ptr_array_add (hc->images, img);
 }
 
 GByteArray*
@@ -1626,16 +1696,18 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 								target_tbl = urls;
 							}
 
-							turl = g_hash_table_lookup (target_tbl, url);
+							if (target_tbl != NULL) {
+								turl = g_hash_table_lookup (target_tbl, url);
 
-							if (turl != NULL && turl->phished_url == NULL) {
-								g_hash_table_insert (target_tbl, url, url);
-							}
-							else if (turl == NULL) {
-								g_hash_table_insert (target_tbl, url, url);
-							}
-							else {
-								url = NULL;
+								if (turl != NULL && turl->phished_url == NULL) {
+									g_hash_table_insert (target_tbl, url, url);
+								}
+								else if (turl == NULL) {
+									g_hash_table_insert (target_tbl, url, url);
+								}
+								else {
+									url = NULL;
+								}
 							}
 
 							href_offset = dest->len;
@@ -1661,6 +1733,9 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 						href_offset = -1;
 						url = NULL;
 					}
+				}
+				else if (cur_tag->id == Tag_IMG && !(cur_tag->flags & FL_CLOSING)) {
+					rspamd_html_process_img_tag (pool, cur_tag, hc);
 				}
 			}
 			else {

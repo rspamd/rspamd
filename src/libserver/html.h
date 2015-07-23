@@ -8,12 +8,21 @@
 #include "config.h"
 #include "mem_pool.h"
 
+/*
+ * HTML content flags
+ */
 #define RSPAMD_HTML_FLAG_BAD_START (1 << 0)
 #define RSPAMD_HTML_FLAG_BAD_ELEMENTS (1 << 1)
 #define RSPAMD_HTML_FLAG_XML (1 << 2)
 #define RSPAMD_HTML_FLAG_UNBALANCED (1 << 3)
 #define RSPAMD_HTML_FLAG_UNKNOWN_ELEMENTS (1 << 4)
 #define RSPAMD_HTML_FLAG_DUPLICATE_ELEMENTS (1 << 5)
+
+/*
+ * Image flags
+ */
+#define RSPAMD_HTML_FLAG_IMAGE_EMBEDDED (1 << 0)
+#define RSPAMD_HTML_FLAG_IMAGE_EXTERNAL (1 << 1)
 
 enum html_component_type {
 	RSPAMD_HTML_COMPONENT_NAME = 0,
@@ -27,6 +36,13 @@ struct html_tag_component {
 	enum html_component_type type;
 	const guchar *start;
 	guint len;
+};
+
+struct html_image {
+	guint height;
+	guint width;
+	guint flags;
+	gchar *src;
 };
 
 struct html_tag {
@@ -43,6 +59,7 @@ struct html_content {
 	GNode *html_tags;
 	gint flags;
 	guchar *tags_seen;
+	GPtrArray *images;
 };
 
 /*
