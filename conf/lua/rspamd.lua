@@ -32,15 +32,12 @@ dofile('regexp/headers.lua')
 dofile('regexp/lotto.lua')
 dofile('regexp/fraud.lua')
 dofile('regexp/drugs.lua')
+dofile('html.lua')
 
 local reconf = config['regexp']
 local util = require "rspamd_util"
 
 -- Uncategorized rules
-
-local html_length_1024_1536 = 'has_content_part_len(\'text\', \'html\', 1024, 1536)'
-local html_link_image = '/<img /iPr'
-reconf['HTML_SHORT_LINK_IMG_2'] = string.format('(%s) & (%s)', html_length_1024_1536, html_link_image)
 
 -- Local rules
 local r_bgcolor = '/BGCOLOR=/iP'

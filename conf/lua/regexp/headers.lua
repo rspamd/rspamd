@@ -70,10 +70,6 @@ reconf['R_MISSING_CHARSET']= string.format('content_type_is_type(text) & !conten
 -- Subject seems to be spam
 reconf['R_SAJDING'] = 'Subject=/\\bsajding(?:om|a)?\\b/iH'
 
--- Messages that have only HTML part
-reconf['MIME_HTML_ONLY'] = 'has_only_html_part()'
-
-
 -- Find forged Outlook MUA 
 -- Yahoo groups messages
 local yahoo_bulk = 'Received=/from \\[\\S+\\] by \\S+\\.(?:groups|scd|dcn)\\.yahoo\\.com with NNFMP/H'
