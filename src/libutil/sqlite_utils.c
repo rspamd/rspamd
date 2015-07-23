@@ -153,6 +153,9 @@ rspamd_sqlite3_run_prstmt (sqlite3 *db, GArray *stmts,
 			case 'S':
 				*va_arg (ap, int*) = sqlite3_column_int (stmt, i);
 				break;
+			case 'L':
+				*va_arg (ap, gint64*) = sqlite3_last_insert_rowid (db);
+				break;
 			}
 		}
 

@@ -69,6 +69,7 @@ static const char *create_tables_sql =
 		"user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
 		"language INTEGER NOT NULL REFERENCES languages(id) ON DELETE CASCADE,"
 		"value INTEGER,"
+		"modified INTEGER,"
 		"CONSTRAINT tid UNIQUE (token, user, language) ON CONFLICT REPLACE"
 		");"
 		"CREATE UNIQUE INDEX IF NOT EXISTS un ON users(name);"
@@ -89,6 +90,10 @@ enum rspamd_stat_sqlite3_stmt_idx {
 	RSPAMD_STAT_BACKEND_INC_LEARNS,
 	RSPAMD_STAT_BACKEND_DEC_LEARNS,
 	RSPAMD_STAT_BACKEND_GET_LEARNS,
+	RSPAMD_STAT_BACKEND_GET_LANGUAGE,
+	RSPAMD_STAT_BACKEND_GET_USER,
+	RSPAMD_STAT_BACKEND_INSERT_LANGUAGE,
+	RSPAMD_STAT_BACKEND_INSERT_USER,
 	RSPAMD_STAT_BACKEND_MAX
 };
 
@@ -140,8 +145,8 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 	},
 	{
 		.idx = RSPAMD_STAT_BACKEND_SET_TOKEN,
-		.sql = "INSERT OR REPLACE INTO tokens (token, user, language, value) "
-				"VALUES (?1, ?2, ?3, ?4);",
+		.sql = "INSERT OR REPLACE INTO tokens (token, user, language, value, modified) "
+				"VALUES (?1, ?2, ?3, ?4, strftime('%s','now'));",
 		.stmt = NULL,
 		.args = "IIII",
 		.result = SQLITE_DONE,
@@ -172,6 +177,38 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.args = "",
 		.result = SQLITE_ROW,
 		.ret = "I"
+	},
+	{
+		.idx = RSPAMD_STAT_BACKEND_GET_LANGUAGE,
+		.sql = "SELECT id FROM languages WHERE name=?1;",
+		.stmt = NULL,
+		.args = "T",
+		.result = SQLITE_ROW,
+		.ret = "I"
+	},
+	{
+		.idx = RSPAMD_STAT_BACKEND_GET_USER,
+		.sql = "SELECT id FROM users WHERE name=?1;",
+		.stmt = NULL,
+		.args = "T",
+		.result = SQLITE_ROW,
+		.ret = "I"
+	},
+	{
+		.idx = RSPAMD_STAT_BACKEND_INSERT_USER,
+		.sql = "INSERT INTO users (name, learns) VALUES (?1, 0);",
+		.stmt = NULL,
+		.args = "T",
+		.result = SQLITE_ROW,
+		.ret = "L"
+	},
+	{
+		.idx = RSPAMD_STAT_BACKEND_INSERT_LANGUAGE,
+		.sql = "INSERT INTO languages (name, learns) VALUES (?1, 0);",
+		.stmt = NULL,
+		.args = "T",
+		.result = SQLITE_ROW,
+		.ret = "L"
 	}
 };
 
@@ -179,6 +216,56 @@ static GQuark
 rspamd_sqlite3_backend_quark (void)
 {
 	return g_quark_from_static_string ("sqlite3-stat-backend");
+}
+
+static gint64
+rspamd_sqlite3_get_user (struct rspamd_stat_sqlite3_db *db,
+		struct rspamd_task *task, gboolean learn)
+{
+	gint64 id = 0; /* Default user is 0 */
+	gint rc;
+	const gchar *user = NULL;
+	const InternetAddress *ia;
+
+	if (task->deliver_to != NULL) {
+		/* Use deliver-to value if presented */
+		user = task->deliver_to;
+	}
+	if (task->user != NULL) {
+		/* Use user value if presented */
+		user = task->user;
+	}
+	else if (task->rcpt_envelope != NULL) {
+		/* Check envelope recipients */
+		if (internet_address_list_length (task->rcpt_envelope) == 1) {
+			/* XXX: we support now merely single recipient statistics */
+			ia = internet_address_list_get_address (task->rcpt_envelope, 0);
+
+			if (ia != NULL) {
+				user = internet_address_mailbox_get_addr (INTERNET_ADDRESS_MAILBOX (ia));
+			}
+		}
+	}
+
+	/* XXX: We ignore now mime recipients as they could be easily forged */
+	if (user != NULL) {
+		rc = rspamd_sqlite3_run_prstmt (db->sqlite, db->prstmt,
+				RSPAMD_STAT_BACKEND_GET_USER, user, &id);
+
+		if (rc != SQLITE_OK && learn) {
+			/* We need to insert a new user */
+			if (!db->in_transaction) {
+				rspamd_sqlite3_run_prstmt (db->sqlite, db->prstmt,
+						RSPAMD_STAT_BACKEND_TRANSACTION_START_IM);
+				db->in_transaction = TRUE;
+			}
+
+			rc =  rspamd_sqlite3_run_prstmt (db->sqlite, db->prstmt,
+					RSPAMD_STAT_BACKEND_INSERT_USER, user, &id);
+		}
+	}
+
+	return id;
 }
 
 static struct rspamd_stat_sqlite3_db *
@@ -319,6 +406,7 @@ rspamd_sqlite3_runtime (struct rspamd_task *task,
 		rt->ctx = ctx;
 		rt->db = bk;
 		rt->task = task;
+		rt->user_id = -1;
 	}
 
 	return rt;
@@ -351,6 +439,10 @@ rspamd_sqlite3_process_token (struct rspamd_task *task, struct token_node_s *tok
 		rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
 				RSPAMD_STAT_BACKEND_TRANSACTION_START_DEF);
 		bk->in_transaction = TRUE;
+	}
+
+	if (rt->user_id == -1) {
+		rt->user_id = rspamd_sqlite3_get_user (bk, task, FALSE);
 	}
 
 	memcpy (&idx, tok->data, sizeof (idx));
@@ -420,6 +512,10 @@ rspamd_sqlite3_learn_token (struct rspamd_task *task, struct token_node_s *tok,
 		rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
 				RSPAMD_STAT_BACKEND_TRANSACTION_START_IM);
 		bk->in_transaction = TRUE;
+	}
+
+	if (rt->user_id == -1) {
+		rt->user_id = rspamd_sqlite3_get_user (bk, task, TRUE);
 	}
 
 	iv = res->value;
