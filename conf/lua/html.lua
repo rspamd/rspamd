@@ -58,9 +58,9 @@ rspamd_config.R_EMPTY_IMAGE = function(task)
   for _,p in ipairs(tp) do
     if p:is_html() then
       local hc = p:get_html()
-      local lines = p:get_lines_count()
+      local len = p:get_length()
       
-      if lines < 5 then
+      if len < 50 then
         local images = hc:get_images()
         
         if images then
