@@ -838,7 +838,8 @@ static void
 rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 	struct rspamd_url *href_url,
 	const guchar *url_text,
-	gsize len)
+	gsize len,
+	gboolean *url_found)
 {
 	struct rspamd_url *text_url;
 	gint rc, state = 0;
@@ -859,6 +860,8 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 					href_url->phished_url = text_url;
 				}
 			}
+
+			*url_found = TRUE;
 		}
 		else {
 			msg_info ("extract of url '%s' failed: %s",
@@ -1360,7 +1363,8 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 {
 	const guchar *p, *c, *end, *tag_start = NULL, *savep = NULL;
 	guchar t;
-	gboolean closing = FALSE, need_decode = FALSE, save_space = FALSE, balanced;
+	gboolean closing = FALSE, need_decode = FALSE, save_space = FALSE,
+			balanced, url_text;
 	GByteArray *dest;
 	GHashTable *target_tbl;
 	guint obrace = 0, ebrace = 0;
@@ -1717,22 +1721,22 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 					}
 					else if (cur_tag->flags & FL_CLOSING) {
 						/* Insert exception */
-						if (exceptions && href_offset != -1
-								&& (gint)dest->len > href_offset) {
-							ex = rspamd_mempool_alloc (pool, sizeof (*ex));
-							ex->pos = href_offset;
-							ex->len = dest->len - href_offset;
-
-							*exceptions = g_list_prepend (*exceptions, ex);
-						}
-
 						if (url != NULL && (gint)dest->len > href_offset) {
 							rspamd_html_url_is_phished (pool, url,
 									dest->data + href_offset,
-									dest->len - href_offset);
+									dest->len - href_offset,
+									&url_text);
+							if (exceptions && url_text) {
+								ex = rspamd_mempool_alloc (pool, sizeof (*ex));
+								ex->pos = href_offset;
+								ex->len = dest->len - href_offset;
+
+								*exceptions = g_list_prepend (*exceptions, ex);
+							}
 						}
 
 						href_offset = -1;
+						url_text = FALSE;
 						url = NULL;
 					}
 				}
