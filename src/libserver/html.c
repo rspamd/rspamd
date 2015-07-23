@@ -1341,6 +1341,8 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 				img->width = val;
 			}
 		}
+
+		cur = g_list_next (cur);
 	}
 
 	if (hc->images == NULL) {
