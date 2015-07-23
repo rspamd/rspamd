@@ -53,20 +53,20 @@ rspamd_config.HTML_SHORT_LINK_IMG_3 = function(task)
   return check_html_image(task, 1536, 2048)
 end
 rspamd_config.R_EMPTY_IMAGE = function(task)
-  local tp = task:get_text_parts()
+  local tp = task:get_text_parts() -- get text parts in a message
   
-  for _,p in ipairs(tp) do
-    if p:is_html() then
-      local hc = p:get_html()
-      local len = p:get_length()
+  for _,p in ipairs(tp) do -- iterate over text parts array using `ipairs`
+    if p:is_html() then -- if the current part is html part
+      local hc = p:get_html() -- we get HTML context
+      local len = p:get_length() -- and part's length
       
-      if len < 50 then
-        local images = hc:get_images()
+      if len < 50 then -- if we have a part that has less than 50 bytes of text
+        local images = hc:get_images() -- then we check for HTML images
         
-        if images then
-          for _,i in ipairs(images) do
-            if i['height'] + i['width'] >= 400 then
-              return true
+        if images then -- if there are images
+          for _,i in ipairs(images) do -- then iterate over images in the part
+            if i['height'] + i['width'] >= 400 then -- if we have a large image
+              return true -- add symbol
             end
           end
         end

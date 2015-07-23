@@ -33,17 +33,27 @@
  * This module provides different methods to access HTML tags. To get HTML context
  * from an HTML part you could use method `part:get_html()`
  * @example
-rspamd_config.R_HTML_IMAGE = function (task)
-	parts = task:get_text_parts()
-	if parts then
-		for _,part in ipairs(parts) do
-			if part:is_html() then
-				local html = part:get_html()
-				-- Do something with html
-			end
-		end
-	end
-	return false
+rspamd_config.R_EMPTY_IMAGE = function(task)
+  local tp = task:get_text_parts() -- get text parts in a message
+
+  for _,p in ipairs(tp) do -- iterate over text parts array using `ipairs`
+    if p:is_html() then -- if the current part is html part
+      local hc = p:get_html() -- we get HTML context
+      local len = p:get_length() -- and part's length
+
+      if len < 50 then -- if we have a part that has less than 50 bytes of text
+        local images = hc:get_images() -- then we check for HTML images
+
+        if images then -- if there are images
+          for _,i in ipairs(images) do -- then iterate over images in the part
+            if i['height'] + i['width'] >= 400 then -- if we have a large image
+              return true -- add symbol
+            end
+          end
+        end
+      end
+    end
+  end
 end
  */
 
