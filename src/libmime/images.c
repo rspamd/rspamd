@@ -25,6 +25,7 @@
 #include "images.h"
 #include "main.h"
 #include "message.h"
+#include "html.h"
 
 static const guint8 png_signature[] = {137, 80, 78, 71, 13, 10, 26, 10};
 static const guint8 jpg_sig1[] = {0xff, 0xd8};
@@ -199,8 +200,14 @@ process_bmp_image (struct rspamd_task *task, GByteArray *data)
 static void
 process_image (struct rspamd_task *task, struct mime_part *part)
 {
-	enum known_image_types type;
+	enum rspamd_image_type type;
 	struct rspamd_image *img = NULL;
+	struct raw_header *rh;
+	struct mime_text_part *tp;
+	struct html_image *himg;
+	const gchar *cid, *html_cid;
+	guint cid_len, i, j;
+
 	if ((type = detect_image_type (part->content)) != IMAGE_TYPE_UNKNOWN) {
 		switch (type) {
 		case IMAGE_TYPE_PNG:
@@ -228,6 +235,53 @@ process_image (struct rspamd_task *task, struct mime_part *part)
 			task->message_id);
 		img->filename = part->filename;
 		task->images = g_list_prepend (task->images, img);
+
+		/* Check Content-Id */
+		rh = g_hash_table_lookup (part->raw_headers, "Content-Id");
+
+		if (rh != NULL) {
+			cid = rh->decoded;
+			if (*cid == '<') {
+				cid ++;
+			}
+			cid_len = strlen (cid);
+
+			if (cid_len > 0) {
+				if (cid[cid_len - 1] == '>') {
+					cid_len --;
+				}
+
+				for (i = 0; i < task->text_parts->len; i ++) {
+					tp = g_ptr_array_index (task->text_parts, i);
+
+					if (IS_PART_HTML (tp) && tp->html != NULL &&
+							tp->html->images != NULL) {
+						for (j = 0; j < tp->html->images->len; j ++) {
+							himg = g_ptr_array_index (tp->html->images, j);
+
+							if ((himg->flags & RSPAMD_HTML_FLAG_IMAGE_EMBEDDED) &&
+									himg->src) {
+								html_cid = himg->src;
+
+								if (strncmp (html_cid, "cid:", 4) == 0) {
+									html_cid += 4;
+								}
+
+								if (strlen (html_cid) == cid_len &&
+										memcmp (html_cid, cid, cid_len) == 0) {
+									img->html_image = himg;
+
+									debug_task ("found linked image by cid: <%s>",
+											cid);
+								}
+							}
+						}
+					}
+				}
+
+			}
+
+		}
 	}
 }
 
