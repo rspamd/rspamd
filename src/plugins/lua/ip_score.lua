@@ -326,8 +326,8 @@ local configure_ip_score_module = function()
     for k,v in pairs(opts) do
       options[k] = v
     end
-    if options['servers'] then
-      upstreams = upstream_list.create(opts['servers'], default_port)
+    if options['servers'] and options['servers'] ~= '' then
+      upstreams = upstream_list.create(options['servers'], default_port)
       if not upstreams then
         rspamd_logger.err('no servers are specified')
       end
