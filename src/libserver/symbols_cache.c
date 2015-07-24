@@ -869,6 +869,10 @@ rspamd_symbols_cache_metric_limit (struct rspamd_task *task,
 	struct metric *metric;
 	double ms;
 
+	if (task->flags & RSPAMD_TASK_FLAG_PASS_ALL) {
+		return FALSE;
+	}
+
 	cur = task->cfg->metrics_list;
 
 	if (cp->lim == 0.0) {
