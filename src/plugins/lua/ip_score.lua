@@ -155,6 +155,11 @@ local ip_score_set = function(task)
   
   local pool = task:get_mempool()
   local asn, country, ipnet = ip_score_get_task_vars(task)
+  
+  if not pool:has_variable('ip_score') then
+    return
+  end
+  
   local asn_score,total_asn,
         country_score,total_country,
         ipnet_score,total_ipnet,
