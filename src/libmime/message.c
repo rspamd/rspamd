@@ -402,7 +402,7 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 	end = p + len;
 	c = p;
 
-	while (p < end) {
+	while (p <= end) {
 		/* FSM for processing headers */
 		switch (state) {
 		case 0:
@@ -485,7 +485,7 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 				next_state = 3;
 				err_state = 4;
 			}
-			else if (*(p + 1) == '\0') {
+			else if (p + 1 == end) {
 				state = 4;
 			}
 			else {
@@ -525,6 +525,7 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 			if (*(tp - 1) == ' ') {
 				tp--;
 			}
+
 			*tp = '\0';
 			new->value = tmp;
 			new->decoded = g_mime_utils_header_decode_text (new->value);
@@ -542,7 +543,7 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 			break;
 		case 99:
 			/* Folding state */
-			if (*(p + 1) == '\0') {
+			if (p + 1 == end) {
 				state = err_state;
 			}
 			else {
@@ -584,7 +585,7 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 				p++;
 				state = next_state;
 			}
-			else if (*(p + 1) == '\0') {
+			else if (p + 1 == end) {
 				state = next_state;
 				p++;
 			}
