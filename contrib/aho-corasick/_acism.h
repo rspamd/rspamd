@@ -42,11 +42,9 @@ typedef int (*qsort_cmp)(const void *, const void *);
 typedef uint16_t  SYMBOL;
 typedef unsigned _SYMBOL; // An efficient stacklocal SYMBOL
 
-enum { 
-    IS_MATCH  = (TRAN)1 << (8*sizeof(TRAN) - 1),
-    IS_SUFFIX = (TRAN)1 << (8*sizeof(TRAN) - 2),
-    T_FLAGS   = IS_MATCH | IS_SUFFIX
-};
+#define IS_MATCH  ((TRAN)1 << (8*sizeof(TRAN) - 1))
+#define IS_SUFFIX ((TRAN)1 << (8*sizeof(TRAN) - 2))
+#define T_FLAGS (IS_MATCH | IS_SUFFIX)
 
 typedef struct { STATE state; STRNO strno; } STRASH;
 
