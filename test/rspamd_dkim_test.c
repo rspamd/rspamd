@@ -60,6 +60,7 @@ session_fin (gpointer unused)
 void
 rspamd_dkim_test_func ()
 {
+#if 0
 	rspamd_dkim_context_t *ctx;
 	rspamd_dkim_key_t *key;
 	rspamd_mempool_t *pool;
@@ -90,4 +91,5 @@ rspamd_dkim_test_func ()
 	g_assert (rspamd_get_dkim_key (ctx, resolver, s, test_key_handler, s));
 
 	event_base_loop (base, 0);
+#endif
 }
