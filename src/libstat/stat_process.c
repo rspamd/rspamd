@@ -318,11 +318,11 @@ rspamd_stat_process_tokenize (struct rspamd_tokenizer_config *cf,
 		if (!IS_PART_EMPTY (part) && part->words != NULL) {
 			if (compat) {
 				tok->tokenizer->tokenize_func (cf, task->task_pool,
-					part->words, tok->tokens, IS_PART_UTF (part));
+					part->words, tok->tokens, IS_PART_UTF (part), NULL);
 			}
 			else {
 				tok->tokenizer->tokenize_func (cf, task->task_pool,
-					part->normalized_words, tok->tokens, IS_PART_UTF (part));
+					part->normalized_words, tok->tokens, IS_PART_UTF (part), NULL);
 			}
 		}
 	}
@@ -342,7 +342,8 @@ rspamd_stat_process_tokenize (struct rspamd_tokenizer_config *cf,
 					task->task_pool,
 					words,
 					tok->tokens,
-					TRUE);
+					TRUE,
+					"SUBJECT");
 			g_array_free (words, TRUE);
 		}
 	}

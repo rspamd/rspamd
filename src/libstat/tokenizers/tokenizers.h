@@ -19,7 +19,8 @@ struct rspamd_stat_tokenizer {
 			rspamd_mempool_t *pool,
 			GArray *words,
 			GTree *result,
-			gboolean is_utf);
+			gboolean is_utf,
+			const gchar *prefix);
 };
 
 /* Compare two token nodes */
@@ -36,7 +37,8 @@ gint rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
 	rspamd_mempool_t *pool,
 	GArray *input,
 	GTree *tokens,
-	gboolean is_utf);
+	gboolean is_utf,
+	const gchar *prefix);
 
 gpointer rspamd_tokenizer_osb_get_config (struct rspamd_tokenizer_config *cf,
 		gsize *len);

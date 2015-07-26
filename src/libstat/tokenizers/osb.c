@@ -212,12 +212,13 @@ rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
 	rspamd_mempool_t * pool,
 	GArray * input,
 	GTree * tree,
-	gboolean is_utf)
+	gboolean is_utf,
+	const gchar *prefix)
 {
 	rspamd_token_t *new = NULL;
 	rspamd_fstring_t *token;
 	struct rspamd_osb_tokenizer_config *osb_cf;
-	guint64 *hashpipe, cur;
+	guint64 *hashpipe, cur, seed;
 	guint32 h1, h2;
 	guint processed = 0, i, w, window_size;
 
@@ -236,6 +237,13 @@ rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
 
 	window_size = osb_cf->window_size;
 
+	if (prefix) {
+		seed = XXH64 (prefix, strlen (prefix), osb_cf->seed);
+	}
+	else {
+		seed = osb_cf->seed;
+	}
+
 	hashpipe = g_alloca (window_size * sizeof (hashpipe[0]));
 	memset (hashpipe, 0xfe, window_size * sizeof (hashpipe[0]));
 
@@ -253,6 +261,10 @@ rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
 			else {
 				rspamd_cryptobox_siphash ((guchar *)&cur, token->begin,
 						token->len, osb_cf->sk);
+
+				if (prefix) {
+					cur ^= seed;
+				}
 			}
 		}
 
