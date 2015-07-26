@@ -298,6 +298,44 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 	return cl_runtimes;
 }
 
+static void
+rspamd_stat_tokenize_header (struct rspamd_tokenizer_config *cf,
+		struct rspamd_task *task, struct rspamd_tokenizer_runtime *tok,
+		const gchar *name, const gchar *prefix)
+{
+	struct raw_header *rh, *cur;
+	GArray *ar;
+	rspamd_fstring_t str;
+
+	rh = g_hash_table_lookup (task->raw_headers, name);
+
+	if (rh != NULL) {
+		ar = g_array_sized_new (FALSE, FALSE, sizeof (str), 4);
+
+		LL_FOREACH (rh, cur) {
+			if (cur->value != NULL) {
+				str.begin = cur->value;
+				str.len = strlen (cur->value);
+				g_array_append_val (ar, str);
+			}
+			if (cur->decoded != NULL) {
+				str.begin = cur->decoded;
+				str.len = strlen (cur->decoded);
+				g_array_append_val (ar, str);
+			}
+		}
+
+		tok->tokenizer->tokenize_func (cf,
+				task->task_pool,
+				ar,
+				tok->tokens,
+				TRUE,
+				prefix);
+
+		g_array_free (ar, TRUE);
+	}
+}
+
 /*
  * Tokenize task using the tokenizer specified
  */
@@ -347,6 +385,11 @@ rspamd_stat_process_tokenize (struct rspamd_tokenizer_config *cf,
 			g_array_free (words, TRUE);
 		}
 	}
+
+	rspamd_stat_tokenize_header (cf, task, tok, "User-Agent", "UA:");
+	rspamd_stat_tokenize_header (cf, task, tok, "X-Mailer", "XM:");
+	rspamd_stat_tokenize_header (cf, task, tok, "Content-Type", "CT:");
+	rspamd_stat_tokenize_header (cf, task, tok, "X-MimeOLE", "XMOLE:");
 }
 
 
