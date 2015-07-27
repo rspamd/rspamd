@@ -79,7 +79,7 @@ rspamd_tokenizer_osb_default_config (void)
 		memcpy (def.magic, osb_tokenizer_magic, sizeof (osb_tokenizer_magic));
 		def.version = DEFAULT_OSB_VERSION;
 		def.window_size = DEFAULT_FEATURE_WINDOW_SIZE;
-		def.ht = RSPAMD_OSB_HASH_COMPAT;
+		def.ht = RSPAMD_OSB_HASH_XXHASH;
 		def.seed = 0xdeadbabe;
 	}
 
