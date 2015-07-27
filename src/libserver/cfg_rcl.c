@@ -1044,6 +1044,7 @@ rspamd_rcl_classifier_handler (rspamd_mempool_t *pool,
 				}
 				else if (g_ascii_strcasecmp (key, "tokenizer") == 0) {
 					tkcf = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*tkcf));
+
 					if (ucl_object_type (val) == UCL_STRING) {
 						tkcf->name = ucl_object_tostring (val);
 					}
@@ -1052,6 +1053,13 @@ rspamd_rcl_classifier_handler (rspamd_mempool_t *pool,
 						if (cur != NULL) {
 							tkcf->name = ucl_object_tostring (cur);
 							tkcf->opts = val;
+						}
+						else {
+							cur = ucl_object_find_key (val, "type");
+							if (cur != NULL) {
+								tkcf->name = ucl_object_tostring (cur);
+								tkcf->opts = val;
+							}
 						}
 					}
 				}
