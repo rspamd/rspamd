@@ -74,6 +74,7 @@ rspamd_sqlite3_run_prstmt (sqlite3 *db, GArray *stmts,
 	sqlite3_stmt *stmt;
 	gint i, rowid, nargs, j;
 	gint64 len;
+	gpointer p;
 	struct rspamd_sqlite3_prstmt *nst;
 	const char *argtypes;
 
@@ -105,6 +106,7 @@ rspamd_sqlite3_run_prstmt (sqlite3 *db, GArray *stmts,
 			nargs = 1;
 			break;
 		case 'V':
+		case 'B':
 
 			for (j = 0; j < nargs; j ++, rowid ++) {
 				len = va_arg (ap, gint64);
@@ -155,6 +157,14 @@ rspamd_sqlite3_run_prstmt (sqlite3 *db, GArray *stmts,
 				break;
 			case 'L':
 				*va_arg (ap, gint64*) = sqlite3_last_insert_rowid (db);
+				break;
+			case 'B':
+				len = sqlite3_column_bytes (stmt, i);
+				g_assert (len >= 0);
+				p = g_malloc (len);
+				memcpy (p, sqlite3_column_blob (stmt, i), len);
+				*va_arg (ap, gint64*) = len;
+				*va_arg (ap, gpointer*) = p;
 				break;
 			}
 		}
