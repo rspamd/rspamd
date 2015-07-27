@@ -55,6 +55,7 @@ struct rspamd_stat_sqlite3_rt {
 
 static const char *create_tables_sql =
 		"BEGIN IMMEDIATE;"
+		"CREATE TABLE tokenizer(data BLOB);"
 		"CREATE TABLE users("
 		"id INTEGER PRIMARY KEY,"
 		"name TEXT,"
@@ -95,6 +96,8 @@ enum rspamd_stat_sqlite3_stmt_idx {
 	RSPAMD_STAT_BACKEND_GET_USER,
 	RSPAMD_STAT_BACKEND_INSERT_LANGUAGE,
 	RSPAMD_STAT_BACKEND_INSERT_USER,
+	RSPAMD_STAT_BACKEND_SAVE_TOKENIZER,
+	RSPAMD_STAT_BACKEND_LOAD_TOKENIZER,
 	RSPAMD_STAT_BACKEND_MAX
 };
 
@@ -210,6 +213,22 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.args = "T",
 		.result = SQLITE_ROW,
 		.ret = "L"
+	},
+	{
+		.idx = RSPAMD_STAT_BACKEND_SAVE_TOKENIZER,
+		.sql = "INSERT INTO tokenizer(data) VALUES (?1);",
+		.stmt = NULL,
+		.args = "B",
+		.result = SQLITE_ROW,
+		.ret = ""
+	},
+	{
+		.idx = RSPAMD_STAT_BACKEND_LOAD_TOKENIZER,
+		.sql = "SELECT data FROM tokenizer;",
+		.stmt = NULL,
+		.args = "",
+		.result = SQLITE_ROW,
+		.ret = "B"
 	}
 };
 
@@ -311,10 +330,15 @@ rspamd_sqlite3_get_language (struct rspamd_stat_sqlite3_db *db,
 }
 
 static struct rspamd_stat_sqlite3_db *
-rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
+rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
+		struct rspamd_statfile_config *stcf,
+		const gchar *path, const ucl_object_t *opts,
 		gboolean create, GError **err)
 {
 	struct rspamd_stat_sqlite3_db *bk;
+	struct rspamd_stat_tokenizer *tokenizer;
+	gpointer tk_conf;
+	guint64 sz;
 
 	bk = g_slice_alloc0 (sizeof (*bk));
 	bk->sqlite = rspamd_sqlite3_open_or_create (path, create_tables_sql, err);
@@ -333,6 +357,26 @@ rspamd_sqlite3_opendb (const gchar *path, const ucl_object_t *opts,
 		g_slice_free1 (sizeof (*bk), bk);
 
 		return NULL;
+	}
+
+	/* Check tokenizer configuration */
+	if (rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+			RSPAMD_STAT_BACKEND_LOAD_TOKENIZER, &sz, &tk_conf) != SQLITE_OK) {
+		g_assert (stcf->clcf->tokenizer != NULL);
+		tokenizer = rspamd_stat_get_tokenizer (stcf->clcf->tokenizer->name);
+		g_assert (tokenizer != NULL);
+		tk_conf = tokenizer->get_config (pool, stcf->clcf->tokenizer, (gsize *)&sz);
+
+		if (!rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+					RSPAMD_STAT_BACKEND_SAVE_TOKENIZER, sz, tk_conf) != SQLITE_OK) {
+			sqlite3_close (bk->sqlite);
+			g_slice_free1 (sizeof (*bk), bk);
+
+			return NULL;
+		}
+	}
+	else {
+		g_free (tk_conf);
 	}
 
 	return bk;
@@ -379,8 +423,8 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 
 				filename = ucl_object_tostring (filenameo);
 
-				if ((bk = rspamd_sqlite3_opendb (filename, stf->opts, TRUE,
-						&err)) == NULL) {
+				if ((bk = rspamd_sqlite3_opendb (cfg->cfg_pool, stf, filename,
+						stf->opts, TRUE, &err)) == NULL) {
 					msg_err ("cannot open sqlite3 db: %e", err);
 				}
 
@@ -694,6 +738,24 @@ gpointer
 rspamd_sqlite3_load_tokenizer_config (gpointer runtime,
 		gsize *len)
 {
-	/* TODO: unbreak */
-	return NULL;
+	gpointer tk_conf, copied_conf;
+	guint64 sz;
+	struct rspamd_stat_sqlite3_rt *rt = runtime;
+	struct rspamd_stat_sqlite3_db *bk;
+
+	g_assert (rt != NULL);
+	bk = rt->db;
+
+	g_assert (rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+				RSPAMD_STAT_BACKEND_LOAD_TOKENIZER, &sz, &tk_conf) == SQLITE_OK);
+	g_assert (sz > 0);
+	copied_conf = rspamd_mempool_alloc (rt->task->task_pool, sz);
+	memcpy (copied_conf, tk_conf, sz);
+	g_free (tk_conf);
+
+	if (*len) {
+		*len = sz;
+	}
+
+	return copied_conf;
 }
