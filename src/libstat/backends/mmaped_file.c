@@ -120,7 +120,8 @@ rspamd_mmaped_file_t * rspamd_mmaped_file_is_open (
 rspamd_mmaped_file_t * rspamd_mmaped_file_open (rspamd_mmaped_file_ctx * pool,
 		const gchar *filename, size_t size, struct rspamd_statfile_config *stcf);
 gint rspamd_mmaped_file_create (rspamd_mmaped_file_ctx * pool,
-		const gchar *filename, size_t size, struct rspamd_statfile_config *stcf);
+		const gchar *filename, size_t size, struct rspamd_statfile_config *stcf,
+		rspamd_mempool_t *mempool);
 
 double
 rspamd_mmaped_file_get_block (rspamd_mmaped_file_ctx * pool,
@@ -452,7 +453,7 @@ rspamd_mmaped_file_reindex (rspamd_mmaped_file_ctx * pool,
 	}
 
 	/* Now create new file with required size */
-	if (rspamd_mmaped_file_create (pool, filename, size, stcf) != 0) {
+	if (rspamd_mmaped_file_create (pool, filename, size, stcf, pool->pool) != 0) {
 		msg_err ("cannot create new file");
 		g_free (backup);
 		return NULL;
@@ -543,8 +544,6 @@ rspamd_mmaped_file_open (rspamd_mmaped_file_ctx * pool,
 {
 	struct stat st;
 	rspamd_mmaped_file_t *new_file;
-	struct rspamd_stat_tokenizer *tokenizer;
-	struct stat_file_header *header;
 
 	if ((new_file = rspamd_mmaped_file_is_open (pool, stcf)) != NULL) {
 		return new_file;
@@ -615,22 +614,7 @@ rspamd_mmaped_file_open (rspamd_mmaped_file_ctx * pool,
 
 	rspamd_mmaped_file_preload (new_file);
 
-	/* Check tokenizer compatibility */
-	header = new_file->map;
 	g_assert (stcf->clcf != NULL);
-	g_assert (stcf->clcf->tokenizer != NULL);
-	tokenizer = rspamd_stat_get_tokenizer (stcf->clcf->tokenizer->name);
-	g_assert (tokenizer != NULL);
-
-	if (!tokenizer->compatible_config (stcf->clcf->tokenizer, header->unused,
-			header->tokenizer_conf_len)) {
-		msg_err ("mmapped statfile %s is not compatible with the tokenizer "
-				"defined", new_file->filename);
-		munmap (new_file->map, st.st_size);
-		g_slice_free1 (sizeof (*new_file), new_file);
-
-		return NULL;
-	}
 
 	g_hash_table_insert (pool->files, stcf, new_file);
 
@@ -664,7 +648,7 @@ rspamd_mmaped_file_close_file (rspamd_mmaped_file_ctx * pool,
 
 gint
 rspamd_mmaped_file_create (rspamd_mmaped_file_ctx * pool, const gchar *filename,
-		size_t size, struct rspamd_statfile_config *stcf)
+		size_t size, struct rspamd_statfile_config *stcf, rspamd_mempool_t *mempool)
 {
 	struct stat_file_header header = {
 		.magic = {'r', 's', 'd'},
@@ -722,7 +706,7 @@ rspamd_mmaped_file_create (rspamd_mmaped_file_ctx * pool, const gchar *filename,
 	g_assert (stcf->clcf->tokenizer != NULL);
 	tokenizer = rspamd_stat_get_tokenizer (stcf->clcf->tokenizer->name);
 	g_assert (tokenizer != NULL);
-	tok_conf = tokenizer->get_config (stcf->clcf->tokenizer, &tok_conf_len);
+	tok_conf = tokenizer->get_config (mempool, stcf->clcf->tokenizer, &tok_conf_len);
 	header.tokenizer_conf_len = tok_conf_len;
 	g_assert (tok_conf_len < sizeof (header.unused) - sizeof (guint64));
 	memcpy (header.unused, tok_conf, tok_conf_len);
@@ -819,20 +803,25 @@ rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 		clf = cur->data;
 
 		curst = clf->statfiles;
-		while (curst) {
-			stf = curst->data;
 
+		if (clf->backend == NULL) {
 			/*
 			 * By default, all statfiles are treated as mmaped files
 			 */
-			if (stf->backend == NULL ||
-					strcmp (stf->backend, MMAPED_BACKEND_TYPE) == 0) {
+			clf->backend = MMAPED_BACKEND_TYPE;
+		}
+
+		if (strcmp (clf->backend, MMAPED_BACKEND_TYPE) == 0) {
+			while (curst) {
+				stf = curst->data;
 				/*
 				 * Check configuration sanity
 				 */
 				filenameo = ucl_object_find_key (stf->opts, "filename");
+
 				if (filenameo == NULL || ucl_object_type (filenameo) != UCL_STRING) {
 					filenameo = ucl_object_find_key (stf->opts, "path");
+
 					if (filenameo == NULL || ucl_object_type (filenameo) != UCL_STRING) {
 						msg_err ("statfile %s has no filename defined", stf->symbol);
 						curst = curst->next;
@@ -843,6 +832,7 @@ rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 				filename = ucl_object_tostring (filenameo);
 
 				sizeo = ucl_object_find_key (stf->opts, "size");
+
 				if (sizeo == NULL || ucl_object_type (sizeo) != UCL_INT) {
 					msg_err ("statfile %s has no size defined", stf->symbol);
 					curst = curst->next;
@@ -854,9 +844,9 @@ rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 				rspamd_mmaped_file_open (new, filename, size, stf);
 
 				ctx->statfiles ++;
-			}
 
-			curst = curst->next;
+				curst = curst->next;
+			}
 		}
 
 		cur = g_list_next (cur);
@@ -927,7 +917,7 @@ rspamd_mmaped_file_runtime (struct rspamd_task *task,
 		size = ucl_object_toint (sizeo);
 
 		if (learn) {
-			rspamd_mmaped_file_create (ctx, filename, size, stcf);
+			rspamd_mmaped_file_create (ctx, filename, size, stcf, task->task_pool);
 		}
 
 		mf = rspamd_mmaped_file_open (ctx, filename, size, stcf);
@@ -1094,4 +1084,21 @@ void
 rspamd_mmaped_file_finalize_process (struct rspamd_task *task, gpointer runtime,
 		gpointer ctx)
 {
+}
+
+gpointer
+rspamd_mmaped_file_load_tokenizer_config (gpointer runtime,
+		gsize *len)
+{
+	rspamd_mmaped_file_t *mf = runtime;
+	struct stat_file_header *header;
+
+	g_assert (mf != NULL);
+	header = mf->map;
+
+	if (len) {
+		*len = header->tokenizer_conf_len;
+	}
+
+	return header->unused;
 }

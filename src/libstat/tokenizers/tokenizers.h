@@ -14,10 +14,12 @@ struct rspamd_tokenizer_runtime;
 /* Common tokenizer structure */
 struct rspamd_stat_tokenizer {
 	gchar *name;
-	gpointer (*get_config) (struct rspamd_tokenizer_config *cf, gsize *len);
+	gpointer (*get_config) (rspamd_mempool_t *pool,
+			struct rspamd_tokenizer_config *cf, gsize *len);
 	gboolean (*compatible_config) (struct rspamd_tokenizer_runtime *rt,
 			gpointer ptr, gsize len);
-	gboolean (*load_config) (struct rspamd_tokenizer_runtime *rt,
+	gboolean (*load_config) (rspamd_mempool_t *pool,
+			struct rspamd_tokenizer_runtime *rt,
 			gpointer ptr, gsize len);
 	gboolean (*is_compat) (struct rspamd_tokenizer_runtime *rt);
 	gint (*tokenize_func)(struct rspamd_tokenizer_runtime *rt,
@@ -43,7 +45,8 @@ gint rspamd_tokenizer_osb (struct rspamd_tokenizer_runtime *rt,
 	gboolean is_utf,
 	const gchar *prefix);
 
-gpointer rspamd_tokenizer_osb_get_config (struct rspamd_tokenizer_config *cf,
+gpointer rspamd_tokenizer_osb_get_config (rspamd_mempool_t *pool,
+		struct rspamd_tokenizer_config *cf,
 		gsize *len);
 
 gboolean
@@ -51,7 +54,8 @@ rspamd_tokenizer_osb_compatible_config (struct rspamd_tokenizer_runtime *rt,
 			gpointer ptr, gsize len);
 
 gboolean
-rspamd_tokenizer_osb_load_config (struct rspamd_tokenizer_runtime *rt,
+rspamd_tokenizer_osb_load_config (rspamd_mempool_t *pool,
+		struct rspamd_tokenizer_runtime *rt,
 		gpointer ptr, gsize len);
 
 gboolean

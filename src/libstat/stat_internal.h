@@ -39,6 +39,7 @@ struct rspamd_tokenizer_runtime {
 	GTree *tokens;
 	const gchar *name;
 	struct rspamd_stat_tokenizer *tokenizer;
+	struct rspamd_tokenizer_config *tkcf;
 	gpointer config;
 	gsize conf_len;
 };

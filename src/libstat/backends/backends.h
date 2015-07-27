@@ -99,7 +99,7 @@ struct rspamd_stat_backend {
 				gpointer ctx); \
 		ucl_object_t * rspamd_##name##_get_stat (gpointer runtime, \
 				gpointer ctx); \
-		void rspamd_##name##_load_tokenizer_config (gpointer runtime, \
+		gpointer rspamd_##name##_load_tokenizer_config (gpointer runtime, \
 				gsize *len); \
 		void rspamd_##name##_close (gpointer ctx)
 

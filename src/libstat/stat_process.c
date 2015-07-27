@@ -162,12 +162,13 @@ rspamd_stat_get_tokenizer_runtime (struct rspamd_tokenizer_config *cf,
 		return NULL;
 	}
 
-	if (!tok->tokenizer->load_config (tok, conf, conf_len)) {
+	if (!tok->tokenizer->load_config (task->task_pool, tok, conf, conf_len)) {
 		return NULL;
 	}
 
 	tok->config = conf;
 	tok->conf_len = conf_len;
+	tok->tkcf = cf;
 	tok->tokens = g_tree_new (token_node_compare_func);
 	rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t)g_tree_destroy, tok->tokens);

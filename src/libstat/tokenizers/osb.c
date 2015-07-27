@@ -154,19 +154,28 @@ rspamd_tokenizer_osb_config_from_ucl (rspamd_mempool_t * pool,
 }
 
 gpointer
-rspamd_tokenizer_osb_get_config (struct rspamd_tokenizer_config *cf,
+rspamd_tokenizer_osb_get_config (rspamd_mempool_t *pool,
+		struct rspamd_tokenizer_config *cf,
 		gsize *len)
 {
 	struct rspamd_osb_tokenizer_config *osb_cf, *def;
 
 	if (cf != NULL && cf->opts != NULL) {
-		osb_cf = rspamd_tokenizer_osb_config_from_ucl (NULL, cf->opts);
+		osb_cf = rspamd_tokenizer_osb_config_from_ucl (pool, cf->opts);
 	}
 	else {
 		def = rspamd_tokenizer_osb_default_config ();
-		osb_cf = g_slice_alloc (sizeof (*osb_cf));
+		osb_cf = rspamd_mempool_alloc (pool, sizeof (*osb_cf));
 		memcpy (osb_cf, def, sizeof (*osb_cf));
+		/* Do not write sipkey to statfile */
 	}
+
+	if (osb_cf->ht == RSPAMD_OSB_HASH_SIPHASH) {
+		msg_info ("siphash key is not stored into statfiles, so you'd need to "
+				"keep it inside the configuration");
+	}
+
+	memset (osb_cf->sk, 0, sizeof (osb_cf->sk));
 
 	if (len != NULL) {
 		*len = sizeof (*osb_cf);
@@ -176,13 +185,14 @@ rspamd_tokenizer_osb_get_config (struct rspamd_tokenizer_config *cf,
 }
 
 gboolean
-rspamd_tokenizer_osb_compatible_config (struct rspamd_tokenizer_config *cf,
+rspamd_tokenizer_osb_compatible_config (struct rspamd_tokenizer_runtime *rt,
 			gpointer ptr, gsize len)
 {
 	struct rspamd_osb_tokenizer_config *osb_cf, *test_cf;
 	gboolean ret = FALSE;
 
-	test_cf = rspamd_tokenizer_osb_get_config (cf, NULL);
+	test_cf = rt->config;
+	g_assert (test_cf != NULL);
 
 	if (len == sizeof (*osb_cf)) {
 		osb_cf = ptr;
@@ -193,7 +203,8 @@ rspamd_tokenizer_osb_compatible_config (struct rspamd_tokenizer_config *cf,
 		else {
 			if (osb_cf->version == DEFAULT_OSB_VERSION) {
 				/* We can compare them directly now */
-				ret = memcmp (osb_cf, test_cf, sizeof (*osb_cf)) == 0;
+				ret = (memcmp (osb_cf, test_cf, sizeof (*osb_cf)
+						- sizeof (osb_cf->sk))) == 0;
 			}
 		}
 	}
@@ -208,10 +219,9 @@ rspamd_tokenizer_osb_compatible_config (struct rspamd_tokenizer_config *cf,
 }
 
 gint
-rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
+rspamd_tokenizer_osb (struct rspamd_tokenizer_runtime *rt,
 	rspamd_mempool_t * pool,
 	GArray * input,
-	GTree * tree,
 	gboolean is_utf,
 	const gchar *prefix)
 {
@@ -221,6 +231,7 @@ rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
 	guint64 *hashpipe, cur, seed;
 	guint32 h1, h2;
 	guint processed = 0, i, w, window_size;
+	GTree *tree = rt->tokens;
 
 	g_assert (tree != NULL);
 
@@ -228,13 +239,7 @@ rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
 		return FALSE;
 	}
 
-	if (cf != NULL && cf->opts != NULL) {
-		osb_cf = rspamd_tokenizer_osb_config_from_ucl (pool, cf->opts);
-	}
-	else {
-		osb_cf = rspamd_tokenizer_osb_default_config ();
-	}
-
+	osb_cf = rt->config;
 	window_size = osb_cf->window_size;
 
 	if (prefix) {
@@ -334,6 +339,32 @@ rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
 	return TRUE;
 }
 
-/*
- * vi:ts=4
- */
+
+gboolean
+rspamd_tokenizer_osb_load_config (rspamd_mempool_t *pool,
+		struct rspamd_tokenizer_runtime *rt,
+		gpointer ptr, gsize len)
+{
+	struct rspamd_osb_tokenizer_config *osb_cf;
+
+	if (ptr == NULL) {
+		osb_cf = rspamd_tokenizer_osb_config_from_ucl (pool, rt->tkcf->opts);
+	}
+	else {
+		g_assert (len == sizeof (*osb_cf));
+		osb_cf = ptr;
+	}
+
+	rt->config = osb_cf;
+	rt->conf_len = sizeof (*osb_cf);
+
+	return TRUE;
+}
+
+gboolean
+rspamd_tokenizer_osb_is_compat (struct rspamd_tokenizer_runtime *rt)
+{
+	struct rspamd_osb_tokenizer_config *osb_cf = rt->config;
+
+	return (osb_cf->ht == RSPAMD_OSB_HASH_COMPAT);
+}
