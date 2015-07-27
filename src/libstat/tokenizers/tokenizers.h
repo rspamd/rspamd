@@ -19,6 +19,7 @@ struct rspamd_stat_tokenizer {
 			gpointer ptr, gsize len);
 	gboolean (*load_config) (struct rspamd_tokenizer_runtime *rt,
 			gpointer ptr, gsize len);
+	gboolean (*is_compat) (struct rspamd_tokenizer_runtime *rt);
 	gint (*tokenize_func)(struct rspamd_tokenizer_runtime *rt,
 			rspamd_mempool_t *pool,
 			GArray *words,
@@ -52,6 +53,9 @@ rspamd_tokenizer_osb_compatible_config (struct rspamd_tokenizer_runtime *rt,
 gboolean
 rspamd_tokenizer_osb_load_config (struct rspamd_tokenizer_runtime *rt,
 		gpointer ptr, gsize len);
+
+gboolean
+rspamd_tokenizer_osb_is_compat (struct rspamd_tokenizer_runtime *rt);
 
 #endif
 /*
