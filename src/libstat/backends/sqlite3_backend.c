@@ -203,7 +203,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.sql = "INSERT INTO users (name, learns) VALUES (?1, 0);",
 		.stmt = NULL,
 		.args = "T",
-		.result = SQLITE_ROW,
+		.result = SQLITE_DONE,
 		.ret = "L"
 	},
 	{
@@ -211,7 +211,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.sql = "INSERT INTO languages (name, learns) VALUES (?1, 0);",
 		.stmt = NULL,
 		.args = "T",
-		.result = SQLITE_ROW,
+		.result = SQLITE_DONE,
 		.ret = "L"
 	},
 	{
@@ -219,7 +219,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.sql = "INSERT INTO tokenizer(data) VALUES (?1);",
 		.stmt = NULL,
 		.args = "B",
-		.result = SQLITE_ROW,
+		.result = SQLITE_DONE,
 		.ret = ""
 	},
 	{
