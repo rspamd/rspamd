@@ -397,6 +397,7 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 {
 	gint st;
 	gboolean ret = TRUE;
+	GError *stat_error = NULL;
 
 	/* Avoid nested calls */
 	if (task->flags & RSPAMD_TASK_FLAG_PROCESSING) {
@@ -430,9 +431,10 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		break;
 
 	case RSPAMD_TASK_STAGE_CLASSIFIERS:
-		if (rspamd_stat_classify (task, task->cfg->lua_state, &task->err) ==
+		if (rspamd_stat_classify (task, task->cfg->lua_state, &stat_error) ==
 				RSPAMD_STAT_PROCESS_ERROR) {
-			ret = FALSE;
+			msg_err ("classify error: %e", stat_error);
+			g_error_free (stat_error);
 		}
 		break;
 
