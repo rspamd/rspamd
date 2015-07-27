@@ -140,6 +140,12 @@ rspamd_tokenizer_osb_config_from_ucl (rspamd_mempool_t * pool,
 
 		}
 	}
+	else {
+		elt = ucl_object_find_key (obj, "compat");
+		if (elt != NULL && ucl_object_toboolean (elt)) {
+			cf->ht = RSPAMD_OSB_HASH_COMPAT;
+		}
+	}
 
 	elt = ucl_object_find_key (obj, "window");
 	if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
