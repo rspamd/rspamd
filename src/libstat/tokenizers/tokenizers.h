@@ -15,10 +15,11 @@ struct rspamd_stat_tokenizer {
 	gpointer (*get_config) (struct rspamd_tokenizer_config *cf, gsize *len);
 	gboolean (*compatible_config) (struct rspamd_tokenizer_config *cf,
 			gpointer ptr, gsize len);
-	gint (*tokenize_func)(struct rspamd_tokenizer_config *cf,
+	gboolean (*load_config) (struct rspamd_tokenizer_runtime *rt,
+			gpointer ptr, gsize len);
+	gint (*tokenize_func)(struct rspamd_tokenizer_runtime *rt,
 			rspamd_mempool_t *pool,
 			GArray *words,
-			GTree *result,
 			gboolean is_utf,
 			const gchar *prefix);
 };
@@ -33,10 +34,9 @@ GArray * rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 		gboolean check_signature);
 
 /* OSB tokenize function */
-gint rspamd_tokenizer_osb (struct rspamd_tokenizer_config *cf,
+gint rspamd_tokenizer_osb (struct rspamd_tokenizer_runtime *rt,
 	rspamd_mempool_t *pool,
 	GArray *input,
-	GTree *tokens,
 	gboolean is_utf,
 	const gchar *prefix);
 
@@ -46,6 +46,10 @@ gpointer rspamd_tokenizer_osb_get_config (struct rspamd_tokenizer_config *cf,
 gboolean
 rspamd_tokenizer_osb_compatible_config (struct rspamd_tokenizer_config *cf,
 			gpointer ptr, gsize len);
+
+gboolean
+rspamd_tokenizer_osb_load_config (struct rspamd_tokenizer_runtime *rt,
+		gpointer ptr, gsize len);
 
 #endif
 /*

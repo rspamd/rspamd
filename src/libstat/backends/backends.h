@@ -61,6 +61,8 @@ struct rspamd_stat_backend {
 			gpointer runtime, gpointer ctx);
 	ucl_object_t* (*get_stat)(gpointer runtime, gpointer ctx);
 	void (*close)(gpointer ctx);
+
+	gpointer (*load_tokenizer_config)(gpointer runtime, gsize *sz);
 	gpointer ctx;
 };
 
@@ -97,6 +99,8 @@ struct rspamd_stat_backend {
 				gpointer ctx); \
 		ucl_object_t * rspamd_##name##_get_stat (gpointer runtime, \
 				gpointer ctx); \
+		void rspamd_##name##_load_tokenizer_config (gpointer runtime, \
+				gsize *len); \
 		void rspamd_##name##_close (gpointer ctx)
 
 RSPAMD_STAT_BACKEND_DEF(mmaped_file);

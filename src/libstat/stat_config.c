@@ -45,13 +45,15 @@ static struct rspamd_stat_tokenizer stat_tokenizers[] = {
 		.name = "osb-text",
 		.get_config = rspamd_tokenizer_osb_get_config,
 		.compatible_config = rspamd_tokenizer_osb_compatible_config,
-		.tokenize_func = rspamd_tokenizer_osb
+		.tokenize_func = rspamd_tokenizer_osb,
+		.load_config = rspamd_tokenizer_osb_load_config
 	},
 	{
 		.name = "osb",
 		.get_config = rspamd_tokenizer_osb_get_config,
 		.compatible_config = rspamd_tokenizer_osb_compatible_config,
-		.tokenize_func = rspamd_tokenizer_osb
+		.tokenize_func = rspamd_tokenizer_osb,
+		.load_config = rspamd_tokenizer_osb_load_config
 	},
 };
 
@@ -67,6 +69,7 @@ static struct rspamd_stat_tokenizer stat_tokenizers[] = {
 		.inc_learns = rspamd_##eltn##_inc_learns, \
 		.dec_learns = rspamd_##eltn##_dec_learns, \
 		.get_stat = rspamd_##eltn##_get_stat, \
+		.load_tokenizer_config = rspamd_##eltn##_load_tokenizer_config, \
 		.close = rspamd_##eltn##_close \
 	}
 

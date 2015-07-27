@@ -39,12 +39,14 @@ struct rspamd_tokenizer_runtime {
 	GTree *tokens;
 	const gchar *name;
 	struct rspamd_stat_tokenizer *tokenizer;
-	struct rspamd_tokenizer_runtime *next;
+	gpointer config;
+	gsize conf_len;
 };
 
 struct rspamd_statfile_runtime {
 	struct rspamd_statfile_config *st;
 	struct rspamd_stat_backend *backend;
+	struct rspamd_tokenizer_runtime *tok;
 	gpointer backend_runtime;
 	guint64 hits;
 	guint64 total_hits;
@@ -53,7 +55,7 @@ struct rspamd_statfile_runtime {
 struct rspamd_classifier_runtime {
 	struct rspamd_classifier_config *clcf;
 	struct rspamd_stat_classifier *cl;
-	struct rspamd_tokenizer_runtime *tok;
+	GHashTable *tokenizers;
 	double ham_prob;
 	double spam_prob;
 	enum stat_process_stage stage;
@@ -69,7 +71,6 @@ struct rspamd_classifier_runtime {
 struct rspamd_token_result {
 	double value;
 	struct rspamd_statfile_runtime *st_runtime;
-
 	struct rspamd_classifier_runtime *cl_runtime;
 };
 

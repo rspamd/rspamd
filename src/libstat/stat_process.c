@@ -42,42 +42,136 @@ struct preprocess_cb_data {
 	gboolean spam;
 };
 
+static void
+rspamd_stat_tokenize_header (struct rspamd_task *task,
+		struct rspamd_tokenizer_runtime *tok,
+		const gchar *name, const gchar *prefix)
+{
+	struct raw_header *rh, *cur;
+	GArray *ar;
+	rspamd_fstring_t str;
+
+	rh = g_hash_table_lookup (task->raw_headers, name);
+
+	if (rh != NULL) {
+		ar = g_array_sized_new (FALSE, FALSE, sizeof (str), 4);
+
+		LL_FOREACH (rh, cur) {
+			if (cur->value != NULL) {
+				str.begin = cur->value;
+				str.len = strlen (cur->value);
+				g_array_append_val (ar, str);
+			}
+			if (cur->decoded != NULL) {
+				str.begin = cur->decoded;
+				str.len = strlen (cur->decoded);
+				g_array_append_val (ar, str);
+			}
+		}
+
+		tok->tokenizer->tokenize_func (tok,
+				task->task_pool,
+				ar,
+				tok->tokens,
+				TRUE,
+				prefix);
+
+		g_array_free (ar, TRUE);
+	}
+}
+
+/*
+ * Tokenize task using the tokenizer specified
+ */
+static void
+rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
+		struct rspamd_task *task, struct rspamd_tokenizer_runtime *tok)
+{
+	struct mime_text_part *part;
+	GArray *words;
+	gchar *sub;
+	guint i;
+
+	for (i = 0; i < task->text_parts->len; i ++) {
+		part = g_ptr_array_index (task->text_parts, i);
+
+		if (!IS_PART_EMPTY (part) && part->words != NULL) {
+			if (compat) {
+				tok->tokenizer->tokenize_func (tok, task->task_pool,
+					part->words, tok->tokens, IS_PART_UTF (part), NULL);
+			}
+			else {
+				tok->tokenizer->tokenize_func (tok, task->task_pool,
+					part->normalized_words, tok->tokens, IS_PART_UTF (part), NULL);
+			}
+		}
+
+		/* TODO: compare parts distance */
+	}
+
+	if (task->subject != NULL) {
+		sub = task->subject;
+	}
+	else {
+		sub = (gchar *)g_mime_message_get_subject (task->message);
+	}
+
+	if (sub != NULL) {
+		words = rspamd_tokenize_text (sub, strlen (sub), TRUE, 0, NULL, compat,
+				FALSE);
+		if (words != NULL) {
+			tok->tokenizer->tokenize_func (tok,
+					task->task_pool,
+					words,
+					TRUE,
+					"SUBJECT");
+			g_array_free (words, TRUE);
+		}
+	}
+
+	rspamd_stat_tokenize_header (task, tok, "User-Agent", "UA:");
+	rspamd_stat_tokenize_header (task, tok, "X-Mailer", "XM:");
+	rspamd_stat_tokenize_header (task, tok, "Content-Type", "CT:");
+	rspamd_stat_tokenize_header (task, tok, "X-MimeOLE", "XMOLE:");
+}
+
 static struct rspamd_tokenizer_runtime *
 rspamd_stat_get_tokenizer_runtime (struct rspamd_tokenizer_config *cf,
-		rspamd_mempool_t *pool,
-		struct rspamd_tokenizer_runtime **ls)
+		struct rspamd_stat_ctx *st_ctx,
+		struct rspamd_task *task,
+		struct rspamd_classifier_runtime *cl_runtime,
+		gpointer conf, gsize conf_len)
 {
 	struct rspamd_tokenizer_runtime *tok = NULL, *cur;
 	const gchar *name;
 
 	if (cf == NULL || cf->name == NULL) {
 		name = RSPAMD_DEFAULT_TOKENIZER;
+		cf->name = name;
 	}
 	else {
 		name = cf->name;
 	}
 
-	LL_FOREACH (*ls, cur) {
-		if (strcmp (cur->name, name) == 0) {
-			tok = cur;
-			break;
-		}
+	tok = rspamd_mempool_alloc (task->task_pool, sizeof (*tok));
+	tok->tokenizer = rspamd_stat_get_tokenizer (name);
+
+	if (tok->tokenizer == NULL) {
+		return NULL;
 	}
 
-	if (tok == NULL) {
-		tok = rspamd_mempool_alloc (pool, sizeof (*tok));
-		tok->tokenizer = rspamd_stat_get_tokenizer (name);
-
-		if (tok->tokenizer == NULL) {
-			return NULL;
-		}
-
-		tok->tokens = g_tree_new (token_node_compare_func);
-		rspamd_mempool_add_destructor (pool,
-				(rspamd_mempool_destruct_t)g_tree_destroy, tok->tokens);
-		tok->name = name;
-		LL_PREPEND(*ls, tok);
+	if (!tok->tokenizer->load_config (tok, conf, conf_len)) {
+		return NULL;
 	}
+
+	tok->config = conf;
+	tok->conf_len = conf_len;
+	tok->tokens = g_tree_new (token_node_compare_func);
+	rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t)g_tree_destroy, tok->tokens);
+	tok->name = name;
+	rspamd_stat_process_tokenize (st_ctx, task, tok);
+	g_hash_table_insert (cl_runtime, tok, tok);
 
 	return tok;
 }
@@ -150,9 +244,29 @@ preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
 	return FALSE;
 }
 
+static gboolean
+rspamd_tokenizer_equal (gconstpointer a, gconstpointer b)
+{
+	struct rspamd_tokenizer_runtime *ta = a, *tb = b;
+
+	if (ta->conf_len == tb->conf_len) {
+		return memcmp (ta->config, tb->config, ta->conf_len) == 0;
+	}
+
+	return FALSE;
+}
+
+static guint
+rspamd_tokenizer_hash (gconstpointer a)
+{
+	struct rspamd_tokenizer_runtime *ta = a;
+
+	return XXH64 (ta->config, ta->conf_len, 0xdeadbabe);
+}
+
 static GList*
 rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
-		struct rspamd_task *task, struct rspamd_tokenizer_runtime *tklist,
+		struct rspamd_task *task,
 		lua_State *L, gint op, gboolean spam, GError **err)
 {
 	struct rspamd_classifier_config *clcf;
@@ -164,6 +278,7 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 	GList *cur, *st_list = NULL, *curst;
 	GList *cl_runtimes = NULL;
 	guint result_size = 0, start_pos = 0, end_pos = 0;
+	struct rspamd_tokenizer_runtime *tok_runtime, srch_tok;
 	struct preprocess_cb_data cbdata;
 
 	cur = g_list_first (task->cfg->classifiers);
@@ -187,6 +302,11 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 		/* Now init runtime values */
 		cl_runtime = rspamd_mempool_alloc0 (task->task_pool, sizeof (*cl_runtime));
 		cl_runtime->cl = rspamd_stat_get_classifier (clcf->classifier);
+		cl_runtime->tokenizers = g_hash_table_new (rspamd_tokenizer_hash,
+				rspamd_tokenizer_equal);
+		rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t)g_hash_table_destroy,
+				cl_runtime->tokenizers);
 
 		if (cl_runtime->cl == NULL) {
 			g_set_error (err, rspamd_stat_quark(), 500,
@@ -196,9 +316,6 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 		}
 
 		cl_runtime->clcf = clcf;
-		cl_runtime->tok = rspamd_stat_get_tokenizer_runtime (clcf->tokenizer,
-				task->task_pool,
-				&tklist);
 
 		curst = st_list;
 		while (curst != NULL) {
@@ -239,11 +356,23 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 				}
 			}
 
+			srch_tok.config = bk->load_tokenizer_config (backend_runtime,
+					&srch_tok.conf_len);
+
 			st_runtime = rspamd_mempool_alloc0 (task->task_pool,
 					sizeof (*st_runtime));
 			st_runtime->st = stcf;
 			st_runtime->backend_runtime = backend_runtime;
 			st_runtime->backend = bk;
+			st_runtime->tok = g_hash_table_lookup (cl_runtime->tokenizers, &srch_tok);
+
+			if (st_runtime->tok == NULL) {
+				st_runtime->tok = rspamd_stat_get_tokenizer_runtime (clcf->tokenizer,
+						st_ctx, task, cl_runtime, srch_tok.config,
+						srch_tok.conf_len);
+
+				g_assert (st_runtime->tok != NULL);
+			}
 
 			if (stcf->is_spam) {
 				cl_runtime->total_spam += bk->total_learns (task, backend_runtime,
@@ -298,101 +427,6 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 	return cl_runtimes;
 }
 
-static void
-rspamd_stat_tokenize_header (struct rspamd_tokenizer_config *cf,
-		struct rspamd_task *task, struct rspamd_tokenizer_runtime *tok,
-		const gchar *name, const gchar *prefix)
-{
-	struct raw_header *rh, *cur;
-	GArray *ar;
-	rspamd_fstring_t str;
-
-	rh = g_hash_table_lookup (task->raw_headers, name);
-
-	if (rh != NULL) {
-		ar = g_array_sized_new (FALSE, FALSE, sizeof (str), 4);
-
-		LL_FOREACH (rh, cur) {
-			if (cur->value != NULL) {
-				str.begin = cur->value;
-				str.len = strlen (cur->value);
-				g_array_append_val (ar, str);
-			}
-			if (cur->decoded != NULL) {
-				str.begin = cur->decoded;
-				str.len = strlen (cur->decoded);
-				g_array_append_val (ar, str);
-			}
-		}
-
-		tok->tokenizer->tokenize_func (cf,
-				task->task_pool,
-				ar,
-				tok->tokens,
-				TRUE,
-				prefix);
-
-		g_array_free (ar, TRUE);
-	}
-}
-
-/*
- * Tokenize task using the tokenizer specified
- */
-static void
-rspamd_stat_process_tokenize (struct rspamd_tokenizer_config *cf,
-		struct rspamd_stat_ctx *st_ctx,
-		struct rspamd_task *task, struct rspamd_tokenizer_runtime *tok,
-		gboolean compat)
-{
-	struct mime_text_part *part;
-	GArray *words;
-	gchar *sub;
-	guint i;
-
-	for (i = 0; i < task->text_parts->len; i ++) {
-		part = g_ptr_array_index (task->text_parts, i);
-
-		if (!IS_PART_EMPTY (part) && part->words != NULL) {
-			if (compat) {
-				tok->tokenizer->tokenize_func (cf, task->task_pool,
-					part->words, tok->tokens, IS_PART_UTF (part), NULL);
-			}
-			else {
-				tok->tokenizer->tokenize_func (cf, task->task_pool,
-					part->normalized_words, tok->tokens, IS_PART_UTF (part), NULL);
-			}
-		}
-	}
-
-	if (task->subject != NULL) {
-		sub = task->subject;
-	}
-	else {
-		sub = (gchar *)g_mime_message_get_subject (task->message);
-	}
-
-	if (sub != NULL) {
-		words = rspamd_tokenize_text (sub, strlen (sub), TRUE, 0, NULL, compat,
-				FALSE);
-		if (words != NULL) {
-			tok->tokenizer->tokenize_func (cf,
-					task->task_pool,
-					words,
-					tok->tokens,
-					TRUE,
-					"SUBJECT");
-			g_array_free (words, TRUE);
-		}
-	}
-
-	rspamd_stat_tokenize_header (cf, task, tok, "User-Agent", "UA:");
-	rspamd_stat_tokenize_header (cf, task, tok, "X-Mailer", "XM:");
-	rspamd_stat_tokenize_header (cf, task, tok, "Content-Type", "CT:");
-	rspamd_stat_tokenize_header (cf, task, tok, "X-MimeOLE", "XMOLE:");
-}
-
-
 rspamd_stat_result_t
 rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 {
@@ -424,11 +458,6 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 
-		obj = ucl_object_find_key (clcf->opts, "compat");
-		if (obj != NULL) {
-			compat = ucl_object_toboolean (obj);
-		}
-
 		tok = rspamd_stat_get_tokenizer_runtime (clcf->tokenizer, task->task_pool,
 				&tklist);
 
@@ -439,7 +468,7 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 
-		rspamd_stat_process_tokenize (clcf->tokenizer, st_ctx, task, tok, compat);
+		rspamd_stat_process_tokenize (clcf->tokenizer, st_ctx, task, tok);
 
 		cur = g_list_next (cur);
 	}
@@ -583,7 +612,7 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 	gulong nrev;
 	rspamd_learn_t learn_res = RSPAMD_LEARN_OK;
 	guint i;
-	gboolean compat = TRUE, learned = FALSE;
+	gboolean learned = FALSE;
 
 	st_ctx = rspamd_stat_get_ctx ();
 	g_assert (st_ctx != NULL);
@@ -601,11 +630,6 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 
-		obj = ucl_object_find_key (clcf->opts, "compat");
-		if (obj != NULL) {
-			compat = ucl_object_toboolean (obj);
-		}
-
 		tok = rspamd_stat_get_tokenizer_runtime (clcf->tokenizer, task->task_pool,
 				&tklist);
 
@@ -616,7 +640,7 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 
-		rspamd_stat_process_tokenize (clcf->tokenizer, st_ctx, task, tok, compat);
+		rspamd_stat_process_tokenize (clcf->tokenizer, st_ctx, task, tok);
 
 		cur = g_list_next (cur);
 	}
