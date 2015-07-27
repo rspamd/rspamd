@@ -9,11 +9,13 @@
 
 #define RSPAMD_DEFAULT_TOKENIZER "osb"
 
+struct rspamd_tokenizer_runtime;
+
 /* Common tokenizer structure */
 struct rspamd_stat_tokenizer {
 	gchar *name;
 	gpointer (*get_config) (struct rspamd_tokenizer_config *cf, gsize *len);
-	gboolean (*compatible_config) (struct rspamd_tokenizer_config *cf,
+	gboolean (*compatible_config) (struct rspamd_tokenizer_runtime *rt,
 			gpointer ptr, gsize len);
 	gboolean (*load_config) (struct rspamd_tokenizer_runtime *rt,
 			gpointer ptr, gsize len);
@@ -44,7 +46,7 @@ gpointer rspamd_tokenizer_osb_get_config (struct rspamd_tokenizer_config *cf,
 		gsize *len);
 
 gboolean
-rspamd_tokenizer_osb_compatible_config (struct rspamd_tokenizer_config *cf,
+rspamd_tokenizer_osb_compatible_config (struct rspamd_tokenizer_runtime *rt,
 			gpointer ptr, gsize len);
 
 gboolean

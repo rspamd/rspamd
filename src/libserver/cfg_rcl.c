@@ -1494,6 +1494,11 @@ rspamd_rcl_config_init (void)
 		rspamd_rcl_parse_struct_integer,
 		G_STRUCT_OFFSET (struct rspamd_classifier_config, max_tokens),
 		RSPAMD_CL_FLAG_INT_32);
+	rspamd_rcl_add_default_handler (sub,
+		"backend",
+		rspamd_rcl_parse_struct_string,
+		G_STRUCT_OFFSET (struct rspamd_classifier_config, backend),
+		0);
 
 	/*
 	 * Statfile defaults
@@ -1518,11 +1523,6 @@ rspamd_rcl_config_init (void)
 		"spam",
 		rspamd_rcl_parse_struct_boolean,
 		G_STRUCT_OFFSET (struct rspamd_statfile_config, is_spam),
-		0);
-	rspamd_rcl_add_default_handler (ssub,
-		"backend",
-		rspamd_rcl_parse_struct_string,
-		G_STRUCT_OFFSET (struct rspamd_statfile_config, backend),
 		0);
 
 	/**

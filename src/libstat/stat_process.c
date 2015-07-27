@@ -220,8 +220,8 @@ preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
 			res->cl_runtime = cl_runtime;
 			res->st_runtime = st_runtime;
 
-			if (st_runtime->backend->process_token (cbdata->task, t, res,
-					st_runtime->backend->ctx)) {
+			if (cl_runtime->backend->process_token (cbdata->task, t, res,
+					cl_runtime->backend->ctx)) {
 
 				if (cl_runtime->clcf->max_tokens > 0 &&
 						cl_runtime->processed_tokens > cl_runtime->clcf->max_tokens) {
@@ -237,31 +237,12 @@ preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
 			i ++;
 			curst = g_list_next (curst);
 		}
+
 		cur = g_list_next (cur);
 	}
 
 
 	return FALSE;
-}
-
-static gboolean
-rspamd_tokenizer_equal (gconstpointer a, gconstpointer b)
-{
-	struct rspamd_tokenizer_runtime *ta = a, *tb = b;
-
-	if (ta->conf_len == tb->conf_len) {
-		return memcmp (ta->config, tb->config, ta->conf_len) == 0;
-	}
-
-	return FALSE;
-}
-
-static guint
-rspamd_tokenizer_hash (gconstpointer a)
-{
-	struct rspamd_tokenizer_runtime *ta = a;
-
-	return XXH64 (ta->config, ta->conf_len, 0xdeadbabe);
 }
 
 static GList*
@@ -274,11 +255,13 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 	struct rspamd_classifier_runtime *cl_runtime;
 	struct rspamd_statfile_runtime *st_runtime;
 	struct rspamd_stat_backend *bk;
-	gpointer backend_runtime;
+	gpointer backend_runtime, tok_config;
 	GList *cur, *st_list = NULL, *curst;
 	GList *cl_runtimes = NULL;
+	GHashTableIter it;
 	guint result_size = 0, start_pos = 0, end_pos = 0;
-	struct rspamd_tokenizer_runtime *tok_runtime, srch_tok;
+	gsize conf_len;
+	struct rspamd_tokenizer_runtime *tok_runtime;
 	struct preprocess_cb_data cbdata;
 
 	cur = g_list_first (task->cfg->classifiers);
@@ -302,11 +285,6 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 		/* Now init runtime values */
 		cl_runtime = rspamd_mempool_alloc0 (task->task_pool, sizeof (*cl_runtime));
 		cl_runtime->cl = rspamd_stat_get_classifier (clcf->classifier);
-		cl_runtime->tokenizers = g_hash_table_new (rspamd_tokenizer_hash,
-				rspamd_tokenizer_equal);
-		rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t)g_hash_table_destroy,
-				cl_runtime->tokenizers);
 
 		if (cl_runtime->cl == NULL) {
 			g_set_error (err, rspamd_stat_quark(), 500,
@@ -316,6 +294,12 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 		}
 
 		cl_runtime->clcf = clcf;
+		bk = rspamd_stat_get_backend (clcf->backend);
+		if (bk == NULL) {
+			msg_warn ("backend of type %s is not defined", clcf->backend);
+			cur = g_list_next (cur);
+			continue;
+		}
 
 		curst = st_list;
 		while (curst != NULL) {
@@ -323,14 +307,6 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 
 			/* On learning skip statfiles that do not belong to class */
 			if (op == RSPAMD_LEARN_OP && (spam != stcf->is_spam)) {
-				curst = g_list_next (curst);
-				continue;
-			}
-
-			bk = rspamd_stat_get_backend (stcf->backend);
-
-			if (bk == NULL) {
-				msg_warn ("backend of type %s is not defined", stcf->backend);
 				curst = g_list_next (curst);
 				continue;
 			}
@@ -350,29 +326,42 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 				else {
 					/* Just skip this element */
 					msg_warn ("backend of type %s does not exist: %s",
-							stcf->backend, stcf->symbol);
+							clcf->backend, stcf->symbol);
 					curst = g_list_next (curst);
 					continue;
 				}
 			}
 
-			srch_tok.config = bk->load_tokenizer_config (backend_runtime,
-					&srch_tok.conf_len);
+			tok_config = bk->load_tokenizer_config (backend_runtime,
+					&conf_len);
+
+			if (cl_runtime->tok == NULL) {
+				cl_runtime->tok = rspamd_stat_get_tokenizer_runtime (clcf->tokenizer,
+						st_ctx, task, cl_runtime, tok_config, conf_len);
+
+				if (cl_runtime->tok == NULL) {
+					g_set_error (err, rspamd_stat_quark(), 500,
+							"cannot initialize tokenizer for statfile %s", stcf->symbol);
+					g_list_free (cl_runtimes);
+
+					return NULL;
+				}
+			}
+			else {
+				if (!cl_runtime->tok->tokenizer->compatible_config (
+						cl_runtime->tok, tok_config, conf_len)) {
+					g_set_error (err, rspamd_stat_quark(), 500,
+							"incompatible tokenizer for statfile %s", stcf->symbol);
+					g_list_free (cl_runtimes);
+
+					return NULL;
+				}
+			}
 
 			st_runtime = rspamd_mempool_alloc0 (task->task_pool,
 					sizeof (*st_runtime));
 			st_runtime->st = stcf;
 			st_runtime->backend_runtime = backend_runtime;
-			st_runtime->backend = bk;
-			st_runtime->tok = g_hash_table_lookup (cl_runtime->tokenizers, &srch_tok);
-
-			if (st_runtime->tok == NULL) {
-				st_runtime->tok = rspamd_stat_get_tokenizer_runtime (clcf->tokenizer,
-						st_ctx, task, cl_runtime, srch_tok.config,
-						srch_tok.conf_len);
-
-				g_assert (st_runtime->tok != NULL);
-			}
 
 			if (stcf->is_spam) {
 				cl_runtime->total_spam += bk->total_learns (task, backend_runtime,
@@ -420,7 +409,7 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 		cbdata.classifier_runtimes = cl_runtimes;
 		cbdata.task = task;
 		cbdata.tok = cl_runtime->tok;
-		g_tree_foreach (cl_runtime->tok->tokens, preprocess_init_stat_token,
+		g_tree_foreach (cbdata.tok->tokens, preprocess_init_stat_token,
 				&cbdata);
 	}
 
@@ -522,9 +511,9 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 
 		while (curst) {
 			st_run = curst->data;
-			st_run->backend->finalize_process (task,
+			cl_run->backend->finalize_process (task,
 					st_run->backend_runtime,
-					st_run->backend->ctx);
+					cl_run->backend->ctx);
 			curst = g_list_next (curst);
 		}
 
@@ -567,8 +556,8 @@ rspamd_stat_learn_token (gpointer k, gpointer v, gpointer d)
 			res = &g_array_index (t->results, struct rspamd_token_result, i);
 			st_runtime = (struct rspamd_statfile_runtime *)curst->data;
 
-			if (st_runtime->backend->learn_token (cbdata->task, t, res,
-					st_runtime->backend->ctx)) {
+			if (cl_runtime->backend->learn_token (cbdata->task, t, res,
+					cl_runtime->backend->ctx)) {
 				cl_runtime->processed_tokens ++;
 
 				if (cl_runtime->clcf->max_tokens > 0 &&
@@ -698,23 +687,23 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 						st_run = (struct rspamd_statfile_runtime *)curst->data;
 
 						if (unlearn && spam != st_run->st->is_spam) {
-							nrev = st_run->backend->dec_learns (task,
+							nrev = cl_run->backend->dec_learns (task,
 									st_run->backend_runtime,
-									st_run->backend->ctx);
+									cl_run->backend->ctx);
 							msg_debug ("unlearned %s, new revision: %ul",
 									st_run->st->symbol, nrev);
 						}
 						else {
-							nrev = st_run->backend->inc_learns (task,
+							nrev = cl_run->backend->inc_learns (task,
 								st_run->backend_runtime,
-								st_run->backend->ctx);
+								cl_run->backend->ctx);
 							msg_debug ("learned %s, new revision: %ul",
 								st_run->st->symbol, nrev);
 						}
 
-						st_run->backend->finalize_learn (task,
-														st_run->backend_runtime,
-														st_run->backend->ctx);
+						cl_run->backend->finalize_learn (task,
+								st_run->backend_runtime,
+								cl_run->backend->ctx);
 
 						curst = g_list_next (curst);
 					}
@@ -762,10 +751,10 @@ rspamd_stat_statistics (struct rspamd_config *cfg, guint64 *total_learns)
 			while (curst != NULL) {
 				stcf = (struct rspamd_statfile_config *)curst->data;
 
-				bk = rspamd_stat_get_backend (stcf->backend);
+				bk = rspamd_stat_get_backend (clcf->backend);
 
 				if (bk == NULL) {
-					msg_warn ("backend of type %s is not defined", stcf->backend);
+					msg_warn ("backend of type %s is not defined", clcf->backend);
 					curst = g_list_next (curst);
 					continue;
 				}

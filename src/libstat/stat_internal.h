@@ -45,8 +45,6 @@ struct rspamd_tokenizer_runtime {
 
 struct rspamd_statfile_runtime {
 	struct rspamd_statfile_config *st;
-	struct rspamd_stat_backend *backend;
-	struct rspamd_tokenizer_runtime *tok;
 	gpointer backend_runtime;
 	guint64 hits;
 	guint64 total_hits;
@@ -55,7 +53,8 @@ struct rspamd_statfile_runtime {
 struct rspamd_classifier_runtime {
 	struct rspamd_classifier_config *clcf;
 	struct rspamd_stat_classifier *cl;
-	GHashTable *tokenizers;
+	struct rspamd_stat_backend *backend;
+	struct rspamd_tokenizer_runtime *tok;
 	double ham_prob;
 	double spam_prob;
 	enum stat_process_stage stage;

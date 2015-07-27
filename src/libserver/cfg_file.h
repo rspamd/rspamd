@@ -104,7 +104,6 @@ struct rspamd_statfile_config {
 	gchar *label;                                   /**< label of this statfile								*/
 	ucl_object_t *opts;                             /**< other options										*/
 	gboolean is_spam;                               /**< spam flag											*/
-	const gchar *backend;							/**< name of statfile's backend							*/
 	struct rspamd_classifier_config *clcf;			/**< parent pointer of classifier configuration			*/
 	gpointer data;									/**< opaque data 										*/
 };
@@ -123,6 +122,7 @@ struct rspamd_classifier_config {
 	gchar *metric;                                  /**< metric of this classifier                          */
 	gchar *classifier;                  			/**< classifier interface                               */
 	struct rspamd_tokenizer_config *tokenizer;      /**< tokenizer used for classifier						*/
+	const gchar *backend;							/**< name of statfile's backend							*/
 	ucl_object_t *opts;                             /**< other options                                      */
 	GList *pre_callbacks;                           /**< list of callbacks that are called before classification */
 	GList *post_callbacks;                          /**< list of callbacks that are called after classification */
