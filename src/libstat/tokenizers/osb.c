@@ -347,8 +347,16 @@ rspamd_tokenizer_osb_load_config (rspamd_mempool_t *pool,
 {
 	struct rspamd_osb_tokenizer_config *osb_cf;
 
-	if (ptr == NULL) {
+	if (ptr == NULL || len == 0) {
 		osb_cf = rspamd_tokenizer_osb_config_from_ucl (pool, rt->tkcf->opts);
+
+		if (osb_cf->ht != RSPAMD_OSB_HASH_COMPAT) {
+			/* Trying to load incompatible configuration */
+			msg_err ("cannot load tokenizer configuration from a legacy statfile,"
+					" maybe you have forgotten to set 'compat' option in the "
+					"tokenizer configuration");
+			return FALSE;
+		}
 	}
 	else {
 		g_assert (len == sizeof (*osb_cf));

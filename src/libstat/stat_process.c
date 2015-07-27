@@ -157,6 +157,7 @@ rspamd_stat_get_tokenizer_runtime (struct rspamd_tokenizer_config *cf,
 
 	tok = rspamd_mempool_alloc (task->task_pool, sizeof (*tok));
 	tok->tokenizer = rspamd_stat_get_tokenizer (name);
+	tok->tkcf = cf;
 
 	if (tok->tokenizer == NULL) {
 		return NULL;
@@ -168,7 +169,6 @@ rspamd_stat_get_tokenizer_runtime (struct rspamd_tokenizer_config *cf,
 
 	tok->config = conf;
 	tok->conf_len = conf_len;
-	tok->tkcf = cf;
 	tok->tokens = g_tree_new (token_node_compare_func);
 	rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t)g_tree_destroy, tok->tokens);
@@ -295,12 +295,16 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 		}
 
 		cl_runtime->clcf = clcf;
+
 		bk = rspamd_stat_get_backend (clcf->backend);
 		if (bk == NULL) {
-			msg_warn ("backend of type %s is not defined", clcf->backend);
-			cur = g_list_next (cur);
-			continue;
+			g_set_error (err, rspamd_stat_quark(), 500,
+					"backend %s is not defined", clcf->backend);
+			g_list_free (cl_runtimes);
+			return NULL;
 		}
+
+		cl_runtime->backend = bk;
 
 		curst = st_list;
 		while (curst != NULL) {
@@ -348,15 +352,14 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 					return NULL;
 				}
 			}
-			else {
-				if (!cl_runtime->tok->tokenizer->compatible_config (
-						cl_runtime->tok, tok_config, conf_len)) {
-					g_set_error (err, rspamd_stat_quark(), 500,
-							"incompatible tokenizer for statfile %s", stcf->symbol);
-					g_list_free (cl_runtimes);
 
-					return NULL;
-				}
+			if (!cl_runtime->tok->tokenizer->compatible_config (
+					cl_runtime->tok, tok_config, conf_len)) {
+				g_set_error (err, rspamd_stat_quark(), 500,
+						"incompatible tokenizer for statfile %s", stcf->symbol);
+				g_list_free (cl_runtimes);
+
+				return NULL;
 			}
 
 			st_runtime = rspamd_mempool_alloc0 (task->task_pool,
