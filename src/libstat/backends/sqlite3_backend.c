@@ -359,12 +359,11 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 
 	while (cur) {
 		clf = cur->data;
+		if (clf->backend && strcmp (clf->backend, SQLITE3_BACKEND_TYPE) == 0) {
+			curst = clf->statfiles;
 
-		curst = clf->statfiles;
-		while (curst) {
-			stf = curst->data;
-
-			if (stf->backend && strcmp (stf->backend, SQLITE3_BACKEND_TYPE) == 0) {
+			while (curst) {
+				stf = curst->data;
 				/*
 				 * Check configuration sanity
 				 */
@@ -394,9 +393,9 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 				}
 
 				ctx->statfiles ++;
-			}
 
-			curst = curst->next;
+				curst = curst->next;
+			}
 		}
 
 		cur = g_list_next (cur);
@@ -688,5 +687,13 @@ ucl_object_t *
 rspamd_sqlite3_get_stat (gpointer runtime,
 		gpointer ctx)
 {
+	return NULL;
+}
+
+gpointer
+rspamd_sqlite3_load_tokenizer_config (gpointer runtime,
+		gsize *len)
+{
+	/* TODO: unbreak */
 	return NULL;
 }

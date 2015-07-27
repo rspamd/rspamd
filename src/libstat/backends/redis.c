@@ -294,14 +294,16 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 	while (cur) {
 		clf = cur->data;
 
-		curst = clf->statfiles;
-		while (curst) {
-			stf = curst->data;
+		if (clf->backend != NULL && strcmp (clf->backend, REDIS_BACKEND_TYPE)) {
 
-			/*
-			 * By default, all statfiles are treated as mmaped files
-			 */
-			if (stf->backend != NULL && strcmp (stf->backend, REDIS_BACKEND_TYPE)) {
+			curst = clf->statfiles;
+			while (curst) {
+				stf = curst->data;
+
+				/*
+				 * By default, all statfiles are treated as mmaped files
+				 */
+
 				/*
 				 * Check configuration sanity
 				 */
@@ -355,16 +357,16 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 					if (rspamd_redis_expand_object (backend->redis_object, stf,
 							NULL, NULL) == 0) {
 						msg_err ("statfile %s cannot write servers configuration",
-							stf->symbol);
+								stf->symbol);
 					}
 				}
 
 				g_hash_table_insert (new->redis_elts, stf, backend);
 
 				ctx->statfiles ++;
-			}
 
-			curst = curst->next;
+				curst = curst->next;
+			}
 		}
 
 		cur = g_list_next (cur);
