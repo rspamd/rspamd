@@ -361,6 +361,7 @@ rspamd_tokenizer_osb_load_config (rspamd_mempool_t *pool,
 			msg_err ("cannot load tokenizer configuration from a legacy statfile,"
 					" maybe you have forgotten to set 'compat' option in the "
 					"tokenizer configuration");
+
 			return FALSE;
 		}
 	}

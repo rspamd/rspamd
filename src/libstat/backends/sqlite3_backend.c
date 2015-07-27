@@ -85,6 +85,7 @@ static const char *create_tables_sql =
 enum rspamd_stat_sqlite3_stmt_idx {
 	RSPAMD_STAT_BACKEND_TRANSACTION_START_IM = 0,
 	RSPAMD_STAT_BACKEND_TRANSACTION_START_DEF,
+	RSPAMD_STAT_BACKEND_TRANSACTION_START_EXCL,
 	RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT,
 	RSPAMD_STAT_BACKEND_TRANSACTION_ROLLBACK,
 	RSPAMD_STAT_BACKEND_GET_TOKEN,
@@ -114,6 +115,14 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 	{
 		.idx = RSPAMD_STAT_BACKEND_TRANSACTION_START_DEF,
 		.sql = "BEGIN DEFERRED TRANSACTION;",
+		.args = "",
+		.stmt = NULL,
+		.result = SQLITE_DONE,
+		.ret = ""
+	},
+	{
+		.idx = RSPAMD_STAT_BACKEND_TRANSACTION_START_EXCL,
+		.sql = "BEGIN EXCLUSIVE TRANSACTION;",
 		.args = "",
 		.stmt = NULL,
 		.result = SQLITE_DONE,
@@ -339,6 +348,10 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 	struct rspamd_stat_tokenizer *tokenizer;
 	gpointer tk_conf;
 	guint64 sz;
+	struct timespec sleep_ts = {
+			.tv_sec = 0,
+			.tv_nsec = 1000000
+	};
 
 	bk = g_slice_alloc0 (sizeof (*bk));
 	bk->sqlite = rspamd_sqlite3_open_or_create (path, create_tables_sql, err);
@@ -360,6 +373,12 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 	}
 
 	/* Check tokenizer configuration */
+
+	while (rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+			RSPAMD_STAT_BACKEND_TRANSACTION_START_EXCL) != SQLITE_OK) {
+		nanosleep (&sleep_ts, NULL);
+	}
+
 	if (rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_LOAD_TOKENIZER, &sz, &tk_conf) != SQLITE_OK) {
 		g_assert (stcf->clcf->tokenizer != NULL);
@@ -367,7 +386,7 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 		g_assert (tokenizer != NULL);
 		tk_conf = tokenizer->get_config (pool, stcf->clcf->tokenizer, (gsize *)&sz);
 
-		if (!rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+		if (rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
 					RSPAMD_STAT_BACKEND_SAVE_TOKENIZER, sz, tk_conf) != SQLITE_OK) {
 			sqlite3_close (bk->sqlite);
 			g_slice_free1 (sizeof (*bk), bk);
@@ -378,6 +397,9 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 	else {
 		g_free (tk_conf);
 	}
+
+	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+				RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
 
 	return bk;
 }
@@ -753,7 +775,7 @@ rspamd_sqlite3_load_tokenizer_config (gpointer runtime,
 	memcpy (copied_conf, tk_conf, sz);
 	g_free (tk_conf);
 
-	if (*len) {
+	if (len) {
 		*len = sz;
 	}
 
