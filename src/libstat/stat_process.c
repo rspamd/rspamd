@@ -25,7 +25,9 @@
 #include "stat_api.h"
 #include "main.h"
 #include "stat_internal.h"
-#include "message.h"
+#include "libmime/message.h"
+#include "libmime/images.h"
+#include "libserver/html.h"
 #include "lua/lua_common.h"
 #include <utlist.h>
 
@@ -45,16 +47,14 @@ struct preprocess_cb_data {
 static void
 rspamd_stat_tokenize_header (struct rspamd_task *task,
 		struct rspamd_tokenizer_runtime *tok,
-		const gchar *name, const gchar *prefix)
+		const gchar *name, const gchar *prefix, GArray *ar)
 {
 	struct raw_header *rh, *cur;
-	GArray *ar;
 	rspamd_fstring_t str;
 
 	rh = g_hash_table_lookup (task->raw_headers, name);
 
 	if (rh != NULL) {
-		ar = g_array_sized_new (FALSE, FALSE, sizeof (str), 4);
 
 		LL_FOREACH (rh, cur) {
 			if (cur->value != NULL) {
@@ -68,15 +68,94 @@ rspamd_stat_tokenize_header (struct rspamd_task *task,
 				g_array_append_val (ar, str);
 			}
 		}
-
-		tok->tokenizer->tokenize_func (tok,
-				task->task_pool,
-				ar,
-				TRUE,
-				prefix);
-
-		g_array_free (ar, TRUE);
 	}
+}
+
+static void
+rspamd_stat_tokenize_parts_metadata (struct rspamd_task *task,
+		struct rspamd_tokenizer_runtime *tok)
+{
+	struct rspamd_image *img;
+	struct mime_part *part;
+	struct mime_text_part *tp;
+	GList *cur;
+	GArray *ar;
+	rspamd_fstring_t elt;
+	guint i;
+
+	ar = g_array_sized_new (FALSE, FALSE, sizeof (elt), 4);
+
+	/* Insert images */
+	cur = g_list_first (task->images);
+
+	while (cur) {
+		img = cur->data;
+
+		/* If an image has a linked HTML part, then we push its details to the stat */
+		if (img->html_image) {
+			elt.begin = (gchar *)&img->html_image->height;
+			elt.len = sizeof (img->html_image->height);
+			g_array_append_val (ar, elt);
+			elt.begin = (gchar *)&img->html_image->width;
+			elt.len = sizeof (img->html_image->width);
+			g_array_append_val (ar, elt);
+			elt.begin = (gchar *)&img->type;
+			elt.len = sizeof (img->type);
+			g_array_append_val (ar, elt);
+
+			if (img->filename) {
+				elt.begin = (gchar *)img->filename;
+				elt.len = strlen (elt.begin);
+				g_array_append_val (ar, elt);
+			}
+		}
+
+		cur = g_list_next (cur);
+	}
+
+	/* Process mime parts */
+	for (i = 0; i < task->parts->len; i ++) {
+		part = g_ptr_array_index (task->parts, i);
+
+		if (GMIME_IS_MULTIPART (part->mime)) {
+			elt.begin = (gchar *)g_mime_multipart_get_boundary (
+					GMIME_MULTIPART (part->mime));
+
+			if (elt.begin) {
+				elt.len = strlen (elt.begin);
+				g_array_append_val (ar, elt);
+			}
+		}
+	}
+
+	/* Process text parts metadata */
+	for (i = 0; i < task->text_parts->len; i ++) {
+		tp = g_ptr_array_index (task->text_parts, i);
+
+		if (tp->language != NULL && tp->language[0] != '\0') {
+			elt.begin = (gchar *)tp->language;
+			elt.len = strlen (elt.begin);
+			g_array_append_val (ar, elt);
+		}
+		if (tp->real_charset != NULL) {
+			elt.begin = (gchar *)tp->real_charset;
+			elt.len = strlen (elt.begin);
+			g_array_append_val (ar, elt);
+		}
+	}
+
+	rspamd_stat_tokenize_header (task, tok, "User-Agent", "UA:", ar);
+	rspamd_stat_tokenize_header (task, tok, "X-Mailer", "XM:", ar);
+	rspamd_stat_tokenize_header (task, tok, "Content-Type", "CT:", ar);
+	rspamd_stat_tokenize_header (task, tok, "X-MimeOLE", "XMOLE:", ar);
+
+	tok->tokenizer->tokenize_func (tok,
+			task->task_pool,
+			ar,
+			TRUE,
+			"META:");
+
+	g_array_free (ar, TRUE);
 }
 
 /*
@@ -131,10 +210,7 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 		}
 	}
 
-	rspamd_stat_tokenize_header (task, tok, "User-Agent", "UA:");
-	rspamd_stat_tokenize_header (task, tok, "X-Mailer", "XM:");
-	rspamd_stat_tokenize_header (task, tok, "Content-Type", "CT:");
-	rspamd_stat_tokenize_header (task, tok, "X-MimeOLE", "XMOLE:");
+	rspamd_stat_tokenize_parts_metadata (task, tok);
 }
 
 static struct rspamd_tokenizer_runtime *
