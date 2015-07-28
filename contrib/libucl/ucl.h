@@ -135,7 +135,9 @@ typedef enum ucl_emitter {
 	UCL_EMIT_JSON = 0, /**< Emit fine formatted JSON */
 	UCL_EMIT_JSON_COMPACT, /**< Emit compacted JSON */
 	UCL_EMIT_CONFIG, /**< Emit human readable config format */
-	UCL_EMIT_YAML /**< Emit embedded YAML format */
+	UCL_EMIT_YAML, /**< Emit embedded YAML format */
+	UCL_EMIT_MSGPACK, /**< Emit msgpack output */
+	UCL_EMIT_MAX /**< Unsupported emitter type */
 } ucl_emitter_t;
 
 /**
@@ -623,6 +625,19 @@ UCL_EXTERN const ucl_object_t* ucl_object_find_key (const ucl_object_t *obj,
 		const char *key);
 
 /**
+ * Return object identified by a key in the specified object, if the first key is
+ * not found then look for the next one. This process is repeated unless
+ * the next argument in the list is not NULL. So, `ucl_object_find_any_key(obj, key, NULL)`
+ * is equal to `ucl_object_find_key(obj, key)`
+ * @param obj object to get a key from (must be of type UCL_OBJECT)
+ * @param key key to search
+ * @param ... list of alternative keys to search (NULL terminated)
+ * @return object matching the specified key or NULL if key was not found
+ */
+UCL_EXTERN const ucl_object_t* ucl_object_find_any_key (const ucl_object_t *obj,
+		const char *key, ...);
+
+/**
  * Return object identified by a fixed size key in the specified object
  * @param obj object to get a key from (must be of type UCL_OBJECT)
  * @param key key to search
@@ -883,6 +898,18 @@ UCL_EXTERN bool ucl_parser_add_string (struct ucl_parser *parser,
 		const char *data,size_t len);
 
 /**
+ * Load ucl object from a string
+ * @param parser parser structure
+ * @param data the pointer to the string
+ * @param len the length of the string, if `len` is 0 then `data` must be zero-terminated string
+ * @param priority the desired priority of a chunk (only 4 least significant bits
+ * are considered for this parameter)
+ * @return true if string has been added and false in case of error
+ */
+UCL_EXTERN bool ucl_parser_add_string_priority (struct ucl_parser *parser,
+		const char *data, size_t len, unsigned priority);
+
+/**
  * Load and add data from a file
  * @param parser parser structure
  * @param filename the name of file
@@ -891,6 +918,18 @@ UCL_EXTERN bool ucl_parser_add_string (struct ucl_parser *parser,
  */
 UCL_EXTERN bool ucl_parser_add_file (struct ucl_parser *parser,
 		const char *filename);
+
+/**
+ * Load and add data from a file
+ * @param parser parser structure
+ * @param filename the name of file
+ * @param err if *err is NULL it is set to parser error
+ * @param priority the desired priority of a chunk (only 4 least significant bits
+ * are considered for this parameter)
+ * @return true if chunk has been added and false in case of error
+ */
+UCL_EXTERN bool ucl_parser_add_file_priority (struct ucl_parser *parser,
+		const char *filename, unsigned priority);
 
 /**
  * Load and add data from a file descriptor
@@ -903,6 +942,28 @@ UCL_EXTERN bool ucl_parser_add_fd (struct ucl_parser *parser,
 		int fd);
 
 /**
+ * Load and add data from a file descriptor
+ * @param parser parser structure
+ * @param filename the name of file
+ * @param err if *err is NULL it is set to parser error
+ * @param priority the desired priority of a chunk (only 4 least significant bits
+ * are considered for this parameter)
+ * @return true if chunk has been added and false in case of error
+ */
+UCL_EXTERN bool ucl_parser_add_fd_priority (struct ucl_parser *parser,
+		int fd, unsigned priority);
+
+/**
+ * Provide a UCL_ARRAY of paths to search for include files. The object is
+ * copied so caller must unref the object.
+ * @param parser parser structure
+ * @param paths UCL_ARRAY of paths to search
+ * @return true if the path search array was replaced in the parser
+ */
+UCL_EXTERN bool ucl_set_include_path (struct ucl_parser *parser,
+		ucl_object_t *paths);
+
+/**
  * Get a top object for a parser (refcount is increased)
  * @param parser parser structure
  * @param err if *err is NULL it is set to parser error
@@ -911,10 +972,32 @@ UCL_EXTERN bool ucl_parser_add_fd (struct ucl_parser *parser,
 UCL_EXTERN ucl_object_t* ucl_parser_get_object (struct ucl_parser *parser);
 
 /**
- * Get the error string if failing
+ * Get the error string if parsing has been failed
  * @param parser parser object
+ * @return error description
  */
 UCL_EXTERN const char *ucl_parser_get_error(struct ucl_parser *parser);
+
+/**
+ * Get the code of the last error
+ * @param parser parser object
+ * @return error code
+ */
+UCL_EXTERN int ucl_parser_get_error_code(struct ucl_parser *parser);
+
+/**
+ * Get the current column number within parser
+ * @param parser parser object
+ * @return current column number
+ */
+UCL_EXTERN unsigned ucl_parser_get_column(struct ucl_parser *parser);
+
+/**
+ * Get the current line number within parser
+ * @param parser parser object
+ * @return current line number
+ */
+UCL_EXTERN unsigned ucl_parser_get_linenum(struct ucl_parser *parser);
 
 /**
  * Clear the error in the parser
@@ -1022,6 +1105,17 @@ struct ucl_emitter_context {
  */
 UCL_EXTERN unsigned char *ucl_object_emit (const ucl_object_t *obj,
 		enum ucl_emitter emit_type);
+
+/**
+ * Emit object to a string that can contain `\0` inside
+ * @param obj object
+ * @param emit_type if type is #UCL_EMIT_JSON then emit json, if type is
+ * #UCL_EMIT_CONFIG then emit config like object
+ * @param len the resulting length
+ * @return dump of an object (must be freed after using) or NULL in case of error
+ */
+UCL_EXTERN unsigned char *ucl_object_emit_len (const ucl_object_t *obj,
+		enum ucl_emitter emit_type, size_t *len);
 
 /**
  * Emit object to a string

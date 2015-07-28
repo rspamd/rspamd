@@ -67,6 +67,7 @@ ucl_set_err (struct ucl_parser *parser, int code, const char *str, UT_string **e
 	else {
 		filename = "<unknown>";
 	}
+
 	if (chunk->pos < chunk->end) {
 		if (isgraph (*chunk->pos)) {
 			fmt_string = "error while parsing %s: "
@@ -84,6 +85,8 @@ ucl_set_err (struct ucl_parser *parser, int code, const char *str, UT_string **e
 		ucl_create_err (err, "error while parsing %s: at the end of chunk: %s",
 			filename, str);
 	}
+
+	parser->err_code = code;
 }
 
 /**
@@ -513,7 +516,7 @@ ucl_copy_or_store_ptr (struct ucl_parser *parser,
 		/* Copy string */
 		*dst = UCL_ALLOC (in_len + 1);
 		if (*dst == NULL) {
-			ucl_set_err (parser, 0, "cannot allocate memory for a string",
+			ucl_set_err (parser, UCL_EINTERNAL, "cannot allocate memory for a string",
 					&parser->err);
 			return false;
 		}
@@ -585,7 +588,7 @@ ucl_add_parser_stack (ucl_object_t *obj, struct ucl_parser *parser, bool is_arra
 
 	st = UCL_ALLOC (sizeof (struct ucl_stack));
 	if (st == NULL) {
-		ucl_set_err (parser, 0, "cannot allocate memory for an object",
+		ucl_set_err (parser, UCL_EINTERNAL, "cannot allocate memory for an object",
 				&parser->err);
 		ucl_object_unref (obj);
 		return NULL;
@@ -858,6 +861,7 @@ set_obj:
  * Parse possible number
  * @param parser
  * @param chunk
+ * @param obj
  * @return true if a number has been parsed
  */
 static bool
@@ -877,7 +881,8 @@ ucl_lex_number (struct ucl_parser *parser,
 		return true;
 	}
 	else if (ret == ERANGE) {
-		ucl_set_err (parser, ERANGE, "numeric value out of range", &parser->err);
+		ucl_set_err (parser, UCL_ESYNTAX, "numeric value out of range",
+				&parser->err);
 	}
 
 	return false;
@@ -887,6 +892,9 @@ ucl_lex_number (struct ucl_parser *parser,
  * Parse quoted string with possible escapes
  * @param parser
  * @param chunk
+ * @param need_unescape
+ * @param ucl_escape
+ * @param var_expand
  * @return true if a string has been parsed
  */
 static bool
@@ -973,6 +981,7 @@ ucl_parser_append_elt (struct ucl_parser *parser, ucl_hash_t *cont,
 		/* Implicit array */
 		top->flags |= UCL_OBJECT_MULTIVALUE;
 		DL_APPEND (top, elt);
+		parser->stack->obj->len ++;
 	}
 	else {
 		if ((top->flags & UCL_OBJECT_MULTIVALUE) != 0) {
@@ -996,6 +1005,8 @@ ucl_parser_append_elt (struct ucl_parser *parser, ucl_hash_t *cont,
  * Parse a key in an object
  * @param parser
  * @param chunk
+ * @param next_key
+ * @param end_of_object
  * @return true if a key has been parsed
  */
 static bool
@@ -1246,6 +1257,8 @@ ucl_parse_key (struct ucl_parser *parser, struct ucl_chunk *chunk,
  * Parse a cl string
  * @param parser
  * @param chunk
+ * @param var_expand
+ * @param need_unescape
  * @return true if a key has been parsed
  */
 static bool
@@ -1315,6 +1328,8 @@ ucl_parse_string_value (struct ucl_parser *parser,
  * @param chunk
  * @param term
  * @param term_len
+ * @param beg
+ * @param var_expand
  * @return size of multiline string or 0 in case of error
  */
 static int
@@ -1505,6 +1520,7 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 						}
 
 						obj->type = UCL_STRING;
+						obj->flags |= UCL_OBJECT_MULTILINE;
 						if ((str_len = ucl_copy_or_store_ptr (parser, c,
 								&obj->trash_stack[UCL_TRASH_VALUE],
 								&obj->value.sv, str_len - 1, false,
@@ -1552,7 +1568,7 @@ parse_string:
 			}
 			str_len = chunk->pos - c - stripped_spaces;
 			if (str_len <= 0) {
-				ucl_set_err (parser, 0, "string value must not be empty",
+				ucl_set_err (parser, UCL_ESYNTAX, "string value must not be empty",
 						&parser->err);
 				return false;
 			}
@@ -1675,6 +1691,9 @@ ucl_parse_after_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
  * Handle macro data
  * @param parser
  * @param chunk
+ * @param marco
+ * @param macro_start
+ * @param macro_len
  * @return
  */
 static bool
@@ -1813,6 +1832,7 @@ ucl_parse_macro_arguments (struct ucl_parser *parser,
 			if (chunk->remain == 0) {
 				goto restore_chunk;
 			}
+			args_len ++;
 			ucl_chunk_skipc (chunk, p);
 			break;
 		case 99:
@@ -1865,8 +1885,6 @@ restore_chunk:
 /**
  * Handle the main states of rcl parser
  * @param parser parser structure
- * @param data the pointer to the beginning of a chunk
- * @param len the length of a chunk
  * @return true if chunk has been parsed and false in case of error
  */
 static bool
@@ -2096,8 +2114,11 @@ ucl_parser_new (int flags)
 	ucl_parser_register_macro (new, "include", ucl_include_handler, new);
 	ucl_parser_register_macro (new, "try_include", ucl_try_include_handler, new);
 	ucl_parser_register_macro (new, "includes", ucl_includes_handler, new);
+	ucl_parser_register_macro (new, "priority", ucl_priority_handler, new);
+	ucl_parser_register_macro (new, "load", ucl_load_handler, new);
 
 	new->flags = flags;
+	new->includepaths = NULL;
 
 	/* Initial assumption about filevars */
 	ucl_parser_set_filevars (new, NULL, false);
@@ -2258,8 +2279,8 @@ ucl_parser_add_chunk (struct ucl_parser *parser, const unsigned char *data,
 }
 
 bool
-ucl_parser_add_string (struct ucl_parser *parser, const char *data,
-		size_t len)
+ucl_parser_add_string_priority (struct ucl_parser *parser, const char *data,
+		size_t len, unsigned priority)
 {
 	if (data == NULL) {
 		ucl_create_err (&parser->err, "invalid string added");
@@ -2269,5 +2290,40 @@ ucl_parser_add_string (struct ucl_parser *parser, const char *data,
 		len = strlen (data);
 	}
 
-	return ucl_parser_add_chunk (parser, (const unsigned char *)data, len);
+	return ucl_parser_add_chunk_priority (parser,
+			(const unsigned char *)data, len, priority);
+}
+
+bool
+ucl_parser_add_string (struct ucl_parser *parser, const char *data,
+		size_t len)
+{
+	if (parser == NULL) {
+		return false;
+	}
+
+	return ucl_parser_add_string_priority (parser,
+			(const unsigned char *)data, len, parser->default_priority);
+}
+
+bool
+ucl_set_include_path (struct ucl_parser *parser, ucl_object_t *paths)
+{
+	if (parser == NULL || paths == NULL) {
+		return false;
+	}
+
+	if (parser->includepaths == NULL) {
+		parser->includepaths = ucl_object_copy (paths);
+	}
+	else {
+		ucl_object_unref (parser->includepaths);
+		parser->includepaths = ucl_object_copy (paths);
+	}
+
+	if (parser->includepaths == NULL) {
+		return false;
+	}
+
+	return true;
 }

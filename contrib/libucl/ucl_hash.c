@@ -371,6 +371,11 @@ ucl_hash_iterate (ucl_hash_t *hashlin, ucl_hash_iter_t *iter)
 
 	if (it == NULL) {
 		it = UCL_ALLOC (sizeof (*it));
+
+		if (it == NULL) {
+			return NULL;
+		}
+
 		it->cur = &hashlin->ar.a[0];
 		it->end = it->cur + hashlin->ar.n;
 	}
