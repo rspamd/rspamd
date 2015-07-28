@@ -98,6 +98,9 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_task *task,
 
 		/* If an image has a linked HTML part, then we push its details to the stat */
 		if (img->html_image) {
+			elt.begin = (gchar *)"image";
+			elt.len = 5;
+			g_array_append_val (ar, elt);
 			elt.begin = (gchar *)&img->html_image->height;
 			elt.len = sizeof (img->html_image->height);
 			g_array_append_val (ar, elt);
