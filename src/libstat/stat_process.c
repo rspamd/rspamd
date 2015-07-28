@@ -57,6 +57,11 @@ rspamd_stat_tokenize_header (struct rspamd_task *task,
 	if (rh != NULL) {
 
 		LL_FOREACH (rh, cur) {
+			if (cur->name != NULL) {
+				str.begin = cur->name;
+				str.len = strlen (cur->name);
+				g_array_append_val (ar, str);
+			}
 			if (cur->decoded != NULL) {
 				str.begin = cur->decoded;
 				str.len = strlen (cur->decoded);
