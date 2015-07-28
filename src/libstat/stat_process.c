@@ -152,10 +152,13 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_task *task,
 		}
 	}
 
-	rspamd_stat_tokenize_header (task, tok, "User-Agent", "UA:", ar);
-	rspamd_stat_tokenize_header (task, tok, "X-Mailer", "XM:", ar);
-	rspamd_stat_tokenize_header (task, tok, "Content-Type", "CT:", ar);
-	rspamd_stat_tokenize_header (task, tok, "X-MimeOLE", "XMOLE:", ar);
+	cur = g_list_first (task->cfg->classify_headers);
+
+	while (cur) {
+		rspamd_stat_tokenize_header (task, tok, cur->data, "UA:", ar);
+
+		cur = g_list_next (cur);
+	}
 
 	tok->tokenizer->tokenize_func (tok,
 			task->task_pool,

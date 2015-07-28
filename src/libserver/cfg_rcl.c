@@ -1313,6 +1313,12 @@ rspamd_rcl_config_init (void)
 		rspamd_rcl_parse_struct_integer,
 		G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server),
 		RSPAMD_CL_FLAG_INT_32);
+	rspamd_rcl_add_default_handler (ssub,
+		"classify_headers",
+		rspamd_rcl_parse_struct_string_list,
+		G_STRUCT_OFFSET (struct rspamd_config, classify_headers),
+		0);
+
 
 	/* New upstreams configuration */
 	ssub = rspamd_rcl_add_section (&sub->subsections, "upstream", NULL,
