@@ -73,6 +73,8 @@ rspamd_stat_tokenize_header (struct rspamd_task *task,
 				g_array_append_val (ar, str);
 			}
 		}
+
+		msg_debug ("added stat tokens for header '%s'", name);
 	}
 }
 
@@ -116,6 +118,8 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_task *task,
 				elt.len = strlen (elt.begin);
 				g_array_append_val (ar, elt);
 			}
+
+			msg_debug ("added stat tokens for image '%s'", img->html_image->src);
 		}
 
 		cur = g_list_next (cur);
@@ -131,6 +135,7 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_task *task,
 
 			if (elt.begin) {
 				elt.len = strlen (elt.begin);
+				msg_debug ("added stat tokens for mime boundary '%s'", elt.begin);
 				g_array_append_val (ar, elt);
 			}
 		}
@@ -143,11 +148,13 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_task *task,
 		if (tp->language != NULL && tp->language[0] != '\0') {
 			elt.begin = (gchar *)tp->language;
 			elt.len = strlen (elt.begin);
+			msg_debug ("added stat tokens for part language '%s'", elt.begin);
 			g_array_append_val (ar, elt);
 		}
 		if (tp->real_charset != NULL) {
 			elt.begin = (gchar *)tp->real_charset;
 			elt.len = strlen (elt.begin);
+			msg_debug ("added stat tokens for part charset '%s'", elt.begin);
 			g_array_append_val (ar, elt);
 		}
 	}
