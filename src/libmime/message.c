@@ -1247,6 +1247,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 	GMimeDataWrapper *wrapper;
 	GMimeStream *part_stream;
 	GByteArray *part_content;
+	gchar *hdrs;
 
 	task = md->task;
 	/* 'part' points to the current part node that g_mime_message_foreach_part() is iterating over */
@@ -1289,7 +1290,6 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 	}
 	else if (GMIME_IS_MULTIPART (part)) {
 		/* multipart/mixed, multipart/alternative, multipart/related, multipart/signed, multipart/encrypted, etc... */
-		md->parent = part;
 #ifndef GMIME24
 		debug_task ("detected multipart part");
 		/* we'll get to finding out if this is a signed/encrypted multipart later... */
@@ -1303,6 +1303,36 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 			return;
 		}
 #endif
+		type = (GMimeContentType *) g_mime_object_get_content_type (GMIME_OBJECT (
+				part));
+		mime_part = rspamd_mempool_alloc0 (task->task_pool,
+				sizeof (struct mime_part));
+
+		hdrs = g_mime_object_get_headers (GMIME_OBJECT (part));
+		mime_part->raw_headers = g_hash_table_new (rspamd_strcase_hash,
+				rspamd_strcase_equal);
+		rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t) g_hash_table_destroy,
+				mime_part->raw_headers);
+		if (hdrs != NULL) {
+			process_raw_headers (task, mime_part->raw_headers,
+					hdrs, strlen (hdrs));
+			g_free (hdrs);
+		}
+
+		mime_part->type = type;
+		/* XXX: we don't need it, but it's sometimes dereferenced */
+		mime_part->content = g_byte_array_new ();
+		mime_part->parent = md->parent;
+		mime_part->filename = NULL;
+		mime_part->mime = part;
+
+		debug_task ("found part with content-type: %s/%s",
+				type->type,
+				type->subtype);
+		g_ptr_array_add (task->parts, mime_part);
+
+		md->parent = part;
 	}
 	else if (GMIME_IS_PART (part)) {
 		/* a normal leaf part, could be text/plain or image/jpeg etc */
@@ -1334,7 +1364,6 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 			part_stream = g_mime_stream_mem_new ();
 			if (g_mime_data_wrapper_write_to_stream (wrapper,
 				part_stream) != -1) {
-				gchar *hdrs;
 
 				g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (
 						part_stream), FALSE);
