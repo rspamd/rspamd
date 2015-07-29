@@ -35,6 +35,8 @@
 #define RSPAMD_LEARN_OP 1
 #define RSPAMD_UNLEARN_OP 2
 
+static const gint similarity_treshold = 80;
+
 struct preprocess_cb_data {
 	struct rspamd_task *task;
 	GList *classifier_runtimes;
@@ -187,9 +189,11 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 	GArray *words;
 	gchar *sub;
 	guint i;
+	gint *pdiff;
 	gboolean compat;
 
 	compat = tok->tokenizer->is_compat (tok);
+	pdiff = rspamd_mempool_get_variable (task->task_pool, "parts_distance");
 
 	for (i = 0; i < task->text_parts->len; i ++) {
 		part = g_ptr_array_index (task->text_parts, i);
@@ -205,7 +209,11 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 			}
 		}
 
-		/* TODO: compare parts distance */
+		if (pdiff != NULL && *pdiff > similarity_treshold) {
+			msg_debug ("message has two common parts (%d%%), so skip the last one",
+					*pdiff);
+			break;
+		}
 	}
 
 	if (task->subject != NULL) {
