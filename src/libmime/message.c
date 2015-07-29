@@ -1683,7 +1683,7 @@ rspamd_message_parse (struct rspamd_task *task)
 								p2->normalized_words);
 						diff = tw > 0 ? (100.0 * (gdouble)(tw - dw) / (gdouble)tw) : 100;
 
-						msg_info (
+						debug_task (
 								"different words: %d, total words: %d, "
 								"got likeliness between parts of %d%%",
 								dw, tw,
