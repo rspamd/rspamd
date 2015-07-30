@@ -53,18 +53,18 @@ Nightly builds are not as stable as mainline ones but they contain additional fe
 
 To use nightly builds on CentOS 6, please follow these instructions:
 
-	# wget -O /etc/yum.repos.d/rspamd-nightly.repo http://rspamd.com/CentOS/6/nightly/x86_64/rspamd.repo
-	# rpm --import http://rspamd.com/CentOS/6/nightly/x86_64/nightly.key
-	# yum update
-	# yum install rspamd
+	wget -O /etc/yum.repos.d/rspamd-nightly.repo http://rspamd.com/CentOS/6/nightly/x86_64/rspamd.repo
+	rpm --import http://rspamd.com/CentOS/6/nightly/x86_64/nightly.key
+	yum update
+	yum install rspamd
 
 To use nightly builds on Debian based distirbutive, do the following (we assume that `codename` is your distributive name):
 
-	# wget -O- http://rspamd.com/apt/gpg.key | sudo apt-key add -
-	# echo "deb http://rspamd.com/apt/ codename main" > /etc/apt/sources.d/rspamd.conf
-	# echo "deb-src http://rspamd.com/apt/ codename main" >> /etc/apt/sources.d/rspamd.conf
-	# apt-get update
-	# apt-get install rspamd
+	wget -O- http://rspamd.com/apt/gpg.key | apt-key add -
+	echo "deb http://rspamd.com/apt/ codename main" > /etc/apt/sources.d/rspamd.conf
+	echo "deb-src http://rspamd.com/apt/ codename main" >> /etc/apt/sources.d/rspamd.conf
+	apt-get update
+	apt-get install rspamd
 
 To learn your codename, you could try command `lsb_release -s -c` from the package called `lsb-release`.
 
