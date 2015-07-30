@@ -76,7 +76,7 @@ local yahoo_bulk = 'Received=/from \\[\\S+\\] by \\S+\\.(?:groups|scd|dcn)\\.yah
 -- Outlook MUA
 local outlook_mua = 'X-Mailer=/^Microsoft Outlook\\b/H'
 local any_outlook_mua = 'X-Mailer=/^Microsoft Outlook\\b/H'
-reconf['FORGED_OUTLOOK_HTML'] = string.format('!%s & %s & %s', yahoo_bulk, outlook_mua, reconf['MIME_HTML_ONLY'])
+reconf['FORGED_OUTLOOK_HTML'] = string.format('!%s & %s & %s', yahoo_bulk, outlook_mua, 'has_only_html_part()')
 
 -- Recipients seems to be likely with each other (only works when recipients count is more than 5 recipients)
 reconf['SUSPICIOUS_RECIPS'] = 'compare_recipients_distance(0.65)'
