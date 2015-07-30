@@ -1528,7 +1528,7 @@ rspamd_message_parse (struct rspamd_task *task)
 		hdr_end = g_mime_parser_get_headers_end (parser);
 		if (hdr_start != -1 && hdr_end != -1) {
 			g_assert (hdr_start < hdr_end);
-			g_assert (hdr_end < (gint64)len);
+			g_assert (hdr_end <= (gint64)len);
 			task->raw_headers_content.begin = (gchar *)(p + hdr_start);
 			task->raw_headers_content.len = (guint64)(hdr_end - hdr_start);
 			process_raw_headers (task, task->raw_headers,
