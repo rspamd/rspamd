@@ -1602,6 +1602,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		}
 	}
 
+	event_del (&priv->ev);
 	event_set (&priv->ev, fd, EV_WRITE, rspamd_http_event_handler, conn);
 
 	if (base != NULL) {
