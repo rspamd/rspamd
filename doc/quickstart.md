@@ -30,6 +30,35 @@ Users of NetBSD (and other systems with pkgsrc) can use [pkgsrc](http://pkgsrc.s
 
 OSX users can install from [MacPorts](https://trac.macports.org/browser/trunk/dports/mail/rspamd/Portfile).
 
+## Nightly releases
+
+If you'd like to test the current rspamd version, you might use nightly builds that are currently available for **CentOS 6** and debian based distributives:
+
+- Debian wheezy
+- Debian jessie
+- Ubuntu precise
+- Ubuntu trusty
+- Ubuntu vivid
+
+Nightly builds are not as stable as mainline ones but they contain additional features and bugs are fixed very fast when detected.
+
+To use nightly builds on CentOS 6, please follow these instructions:
+
+    # wget -O /etc/yum.repos.d/rspamd-nightly.repo http://rspamd.com/CentOS/6/nightly/x86_64/rspamd.repo
+    # rpm --import http://rspamd.com/CentOS/6/nightly/x86_64/nightly.key
+    # yum update
+    # yum install rspamd
+
+To use nightly builds on Debian based distirbutive, do the following (we assume that `codename` is your distributive name):
+
+    # wget -O- http://rspamd.com/apt/gpg.key | sudo apt-key add -
+    # echo "deb http://rspamd.com/apt/ codename main" > /etc/apt/sources.d/rspamd.conf
+    # echo "deb-src http://rspamd.com/apt/ codename main" >> /etc/apt/sources.d/rspamd.conf
+    # apt-get update
+    # apt-get install rspamd
+
+To learn your codename, you could try command `lsb_release -s -c` from the package called `lsb-release`.
+
 
 ## Build from sources
 
