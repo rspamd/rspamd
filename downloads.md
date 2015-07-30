@@ -59,10 +59,12 @@ To use nightly builds on CentOS 6, please follow these instructions:
 	yum install rspamd
 
 To use nightly builds on Debian based distirbutive, do the following (we assume that `codename` is your distributive name):
-
+	
+	apt-get install -y lsb-release # optional
+	CODENAME=`lsb_release -c -s`
 	wget -O- http://rspamd.com/apt/gpg.key | apt-key add -
-	echo "deb http://rspamd.com/apt/ codename main" > /etc/apt/sources.d/rspamd.conf
-	echo "deb-src http://rspamd.com/apt/ codename main" >> /etc/apt/sources.d/rspamd.conf
+	echo "deb http://rspamd.com/apt/ $CODENAME main" > /etc/apt/sources.d/rspamd.conf
+	echo "deb-src http://rspamd.com/apt/ $CODENAME main" >> /etc/apt/sources.d/rspamd.conf
 	apt-get update
 	apt-get install rspamd
 
