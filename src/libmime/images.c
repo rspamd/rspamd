@@ -102,7 +102,7 @@ process_png_image (struct rspamd_task *task, GByteArray *data)
 		return NULL;
 	}
 
-	img = rspamd_mempool_alloc (task->task_pool, sizeof (struct rspamd_image));
+	img = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct rspamd_image));
 	img->type = IMAGE_TYPE_PNG;
 	img->data = data;
 
@@ -124,7 +124,7 @@ process_jpg_image (struct rspamd_task *task, GByteArray *data)
 	gsize remain;
 	struct rspamd_image *img;
 
-	img = rspamd_mempool_alloc (task->task_pool, sizeof (struct rspamd_image));
+	img = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct rspamd_image));
 	img->type = IMAGE_TYPE_JPG;
 	img->data = data;
 
@@ -158,7 +158,7 @@ process_gif_image (struct rspamd_task *task, GByteArray *data)
 		return NULL;
 	}
 
-	img = rspamd_mempool_alloc (task->task_pool, sizeof (struct rspamd_image));
+	img = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct rspamd_image));
 	img->type = IMAGE_TYPE_GIF;
 	img->data = data;
 
@@ -178,14 +178,12 @@ process_bmp_image (struct rspamd_task *task, GByteArray *data)
 	gint32 t;
 	guint8 *p;
 
-
-
 	if (data->len < 28) {
 		msg_info ("bad bmp detected (maybe striped): <%s>", task->message_id);
 		return NULL;
 	}
 
-	img = rspamd_mempool_alloc (task->task_pool, sizeof (struct rspamd_image));
+	img = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct rspamd_image));
 	img->type = IMAGE_TYPE_BMP;
 	img->data = data;
 	p = data->data + 18;
