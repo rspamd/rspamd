@@ -1527,13 +1527,16 @@ rspamd_message_parse (struct rspamd_task *task)
 		hdr_start = g_mime_parser_get_headers_begin (parser);
 		hdr_end = g_mime_parser_get_headers_end (parser);
 		if (hdr_start != -1 && hdr_end != -1) {
-			g_assert (hdr_start < hdr_end);
+			g_assert (hdr_start <= hdr_end);
 			g_assert (hdr_end <= (gint64)len);
 			task->raw_headers_content.begin = (gchar *)(p + hdr_start);
 			task->raw_headers_content.len = (guint64)(hdr_end - hdr_start);
-			process_raw_headers (task, task->raw_headers,
-					task->raw_headers_content.begin,
-					task->raw_headers_content.len);
+
+			if (task->raw_headers_content.len > 0) {
+				process_raw_headers (task, task->raw_headers,
+						task->raw_headers_content.begin,
+						task->raw_headers_content.len);
+			}
 		}
 
 		rspamd_images_process (task);
