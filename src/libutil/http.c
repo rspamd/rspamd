@@ -1592,7 +1592,8 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 			/* No CRLF for compatibility reply */
 			priv->wr_total -= 2;
 		}
-		if (msg->body != NULL) {
+
+		if (pbody != NULL) {
 
 			if (msg->body_buf.str == NULL && msg->body_buf.len == 0) {
 				msg->body_buf.str = msg->body->str;
