@@ -58,6 +58,7 @@ static gboolean json = FALSE;
 static gboolean headers = FALSE;
 static gboolean raw = FALSE;
 static gboolean extended_urls = FALSE;
+static gboolean mime_output = FALSE;
 static gchar *key = NULL;
 
 static GOptionEntry entries[] =
@@ -111,7 +112,9 @@ static GOptionEntry entries[] =
 	{ "key", 0, 0, G_OPTION_ARG_STRING, &key,
 	   "Use specified pubkey to encrypt request", NULL },
 	{ "exec", 'e', 0, G_OPTION_ARG_STRING, &execute,
-	   "Execute the specified command with the message filtered", NULL },
+	   "Execute the specified command and pass output to it", NULL },
+	{ "mime", 'e', 0, G_OPTION_ARG_NONE, &mime_output,
+	   "Execute the specified command and pass output to it", NULL },
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -784,6 +787,64 @@ rspamc_output_headers (FILE *out, struct rspamd_http_message *msg)
 }
 
 static void
+rspamc_client_execute_cmd (struct rspamc_command *cmd, ucl_object_t *result,
+		GString *input)
+{
+	gchar **eargv;
+	gint eargc, infd, outfd, errfd;
+	GError *err = NULL;
+	GPid cld;
+	FILE *out;
+	gchar *ucl_out;
+
+	if (!g_shell_parse_argv (execute, &eargc, &eargv, &err)) {
+		rspamd_fprintf (stderr, "Cannot execute %s: %e", execute, err);
+		g_error_free (err);
+
+		return;
+	}
+
+	if (!g_spawn_async_with_pipes (NULL, eargv, NULL,
+			G_SPAWN_SEARCH_PATH|G_SPAWN_DEFAULT, NULL, NULL, &cld,
+			&infd, &outfd, &errfd, &err)) {
+
+		rspamd_fprintf (stderr, "Cannot execute %s: %e", execute, err);
+		g_error_free (err);
+	}
+	else {
+		out = fdopen (infd, "w");
+
+		if (result != NULL) {
+			if (raw || cmd->command_output_func == NULL) {
+				if (json) {
+					ucl_out = ucl_object_emit (result, UCL_EMIT_JSON);
+				}
+				else {
+					ucl_out = ucl_object_emit (result, UCL_EMIT_CONFIG);
+				}
+				rspamd_fprintf (out, "%s", ucl_out);
+				free (ucl_out);
+			}
+			else {
+				cmd->command_output_func (out, result);
+			}
+
+			ucl_object_unref (result);
+		}
+		else if (err != NULL) {
+			rspamd_fprintf (out, "%s\n", err->message);
+		}
+
+		rspamd_fprintf (out, "\n");
+		fflush (out);
+
+		fclose (out);
+	}
+
+	g_strfreev (eargv);
+}
+
+static void
 rspamc_client_cb (struct rspamd_client_connection *conn,
 	struct rspamd_http_message *msg,
 	const gchar *name, ucl_object_t *result, GString *input,
@@ -795,38 +856,47 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 	FILE *out = stdout;
 
 	cmd = cbdata->cmd;
-	if (cmd->need_input) {
-		rspamd_fprintf (out, "Results for file: %s\n", cbdata->filename);
+
+	if (execute) {
+		/* Pass all to the external command */
+		rspamc_client_execute_cmd (cmd, result, input);
 	}
 	else {
-		rspamd_fprintf (out, "Results for command: %s\n", cmd->name);
-	}
-	if (result != NULL) {
-		if (headers && msg != NULL) {
-			rspamc_output_headers (out, msg);
-		}
-		if (raw || cmd->command_output_func == NULL) {
-			if (json) {
-				ucl_out = ucl_object_emit (result, UCL_EMIT_JSON);
-			}
-			else {
-				ucl_out = ucl_object_emit (result, UCL_EMIT_CONFIG);
-			}
-			rspamd_fprintf (out, "%s", ucl_out);
-			free (ucl_out);
+		if (cmd->need_input) {
+			rspamd_fprintf (out, "Results for file: %s\n", cbdata->filename);
 		}
 		else {
-			cmd->command_output_func (out, result);
+			rspamd_fprintf (out, "Results for command: %s\n", cmd->name);
 		}
 
-		ucl_object_unref (result);
-	}
-	else if (err != NULL) {
-		rspamd_fprintf (out, "%s\n", err->message);
-	}
 
-	rspamd_fprintf (out, "\n");
-	fflush (out);
+		if (result != NULL) {
+			if (headers && msg != NULL) {
+				rspamc_output_headers (out, msg);
+			}
+			if (raw || cmd->command_output_func == NULL) {
+				if (json) {
+					ucl_out = ucl_object_emit (result, UCL_EMIT_JSON);
+				}
+				else {
+					ucl_out = ucl_object_emit (result, UCL_EMIT_CONFIG);
+				}
+				rspamd_fprintf (out, "%s", ucl_out);
+				free (ucl_out);
+			}
+			else {
+				cmd->command_output_func (out, result);
+			}
+
+			ucl_object_unref (result);
+		}
+		else if (err != NULL) {
+			rspamd_fprintf (out, "%s\n", err->message);
+		}
+
+		rspamd_fprintf (out, "\n");
+		fflush (out);
+	}
 
 	rspamd_client_destroy (conn);
 	g_free (cbdata->filename);
