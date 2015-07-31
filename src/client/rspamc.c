@@ -115,10 +115,10 @@ static GOptionEntry entries[] =
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
-static void rspamc_symbols_output (ucl_object_t *obj);
-static void rspamc_uptime_output (ucl_object_t *obj);
-static void rspamc_counters_output (ucl_object_t *obj);
-static void rspamc_stat_output (ucl_object_t *obj);
+static void rspamc_symbols_output (FILE *out, ucl_object_t *obj);
+static void rspamc_uptime_output (FILE *out, ucl_object_t *obj);
+static void rspamc_counters_output (FILE *out, ucl_object_t *obj);
+static void rspamc_stat_output (FILE *out, ucl_object_t *obj);
 
 enum rspamc_command_type {
 	RSPAMC_COMMAND_UNKNOWN = 0,
@@ -143,7 +143,7 @@ struct rspamc_command {
 	gboolean is_controller;
 	gboolean is_privileged;
 	gboolean need_input;
-	void (*command_output_func)(ucl_object_t *obj);
+	void (*command_output_func)(FILE *, ucl_object_t *obj);
 } rspamc_commands[] = {
 	{
 		.cmd = RSPAMC_COMMAND_SYMBOLS,
@@ -415,49 +415,49 @@ add_options (GHashTable *opts)
 }
 
 static void
-rspamc_symbol_output (const ucl_object_t *obj)
+rspamc_symbol_output (FILE *out, const ucl_object_t *obj)
 {
 	const ucl_object_t *val, *cur;
 	ucl_object_iter_t it = NULL;
 	gboolean first = TRUE;
 
-	rspamd_fprintf (stdout, "Symbol: %s ", ucl_object_key (obj));
+	rspamd_fprintf (out, "Symbol: %s ", ucl_object_key (obj));
 	val = ucl_object_find_key (obj, "score");
 
 	if (val != NULL) {
-		rspamd_fprintf (stdout, "(%.2f)", ucl_object_todouble (val));
+		rspamd_fprintf (out, "(%.2f)", ucl_object_todouble (val));
 	}
 	val = ucl_object_find_key (obj, "options");
 	if (val != NULL && val->type == UCL_ARRAY) {
-		rspamd_fprintf (stdout, "[");
+		rspamd_fprintf (out, "[");
 
 		while ((cur = ucl_iterate_object (val, &it, TRUE)) != NULL) {
 			if (first) {
-				rspamd_fprintf (stdout, "%s", ucl_object_tostring (cur));
+				rspamd_fprintf (out, "%s", ucl_object_tostring (cur));
 				first = FALSE;
 			}
 			else {
-				rspamd_fprintf (stdout, ", %s", ucl_object_tostring (cur));
+				rspamd_fprintf (out, ", %s", ucl_object_tostring (cur));
 			}
 		}
-		rspamd_fprintf (stdout, "]");
+		rspamd_fprintf (out, "]");
 	}
-	rspamd_fprintf (stdout, "\n");
+	rspamd_fprintf (out, "\n");
 }
 
 static void
-rspamc_metric_output (const ucl_object_t *obj)
+rspamc_metric_output (FILE *out, const ucl_object_t *obj)
 {
 	ucl_object_iter_t it = NULL;
 	const ucl_object_t *cur;
 	gdouble score = 0, required_score = 0;
 	gint got_scores = 0;
 
-	rspamd_fprintf (stdout, "[Metric: %s]\n", ucl_object_key (obj));
+	rspamd_fprintf (out, "[Metric: %s]\n", ucl_object_key (obj));
 
 	while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
 		if (g_ascii_strcasecmp (ucl_object_key (cur), "is_spam") == 0) {
-			rspamd_fprintf (stdout, "Spam: %s\n", ucl_object_toboolean (cur) ?
+			rspamd_fprintf (out, "Spam: %s\n", ucl_object_toboolean (cur) ?
 				"true" : "false");
 		}
 		else if (g_ascii_strcasecmp (ucl_object_key (cur), "score") == 0) {
@@ -470,13 +470,13 @@ rspamc_metric_output (const ucl_object_t *obj)
 			got_scores++;
 		}
 		else if (g_ascii_strcasecmp (ucl_object_key (cur), "action") == 0) {
-			rspamd_fprintf (stdout, "Action: %s\n", ucl_object_tostring (cur));
+			rspamd_fprintf (out, "Action: %s\n", ucl_object_tostring (cur));
 		}
 		else if (cur->type == UCL_OBJECT) {
-			rspamc_symbol_output (cur);
+			rspamc_symbol_output (out, cur);
 		}
 		if (got_scores == 2) {
-			rspamd_fprintf (stdout,
+			rspamd_fprintf (out,
 				"Score: %.2f / %.2f\n",
 				score,
 				required_score);
@@ -486,7 +486,7 @@ rspamc_metric_output (const ucl_object_t *obj)
 }
 
 static void
-rspamc_symbols_output (ucl_object_t *obj)
+rspamc_symbols_output (FILE *out, ucl_object_t *obj)
 {
 	ucl_object_iter_t it = NULL, mit = NULL;
 	const ucl_object_t *cur, *cmesg;
@@ -494,11 +494,11 @@ rspamc_symbols_output (ucl_object_t *obj)
 
 	while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
 		if (g_ascii_strcasecmp (ucl_object_key (cur), "message-id") == 0) {
-			rspamd_fprintf (stdout, "Message-ID: %s\n", ucl_object_tostring (
+			rspamd_fprintf (out, "Message-ID: %s\n", ucl_object_tostring (
 					cur));
 		}
 		else if (g_ascii_strcasecmp (ucl_object_key (cur), "queue-id") == 0) {
-			rspamd_fprintf (stdout, "Queue-ID: %s\n",
+			rspamd_fprintf (out, "Queue-ID: %s\n",
 				ucl_object_tostring (cur));
 		}
 		else if (g_ascii_strcasecmp (ucl_object_key (cur), "urls") == 0) {
@@ -508,43 +508,43 @@ rspamc_symbols_output (ucl_object_t *obj)
 			else {
 				emitted = ucl_object_emit (cur, UCL_EMIT_JSON);
 			}
-			rspamd_fprintf (stdout, "Urls: %s\n", emitted);
+			rspamd_fprintf (out, "Urls: %s\n", emitted);
 			free (emitted);
 		}
 		else if (g_ascii_strcasecmp (ucl_object_key (cur), "emails") == 0) {
 			emitted = ucl_object_emit (cur, UCL_EMIT_JSON_COMPACT);
-			rspamd_fprintf (stdout, "Emails: %s\n", emitted);
+			rspamd_fprintf (out, "Emails: %s\n", emitted);
 			free (emitted);
 		}
 		else if (g_ascii_strcasecmp (ucl_object_key (cur), "error") == 0) {
-			rspamd_fprintf (stdout, "Scan error: %s\n", ucl_object_tostring (
+			rspamd_fprintf (out, "Scan error: %s\n", ucl_object_tostring (
 					cur));
 		}
 		else if (g_ascii_strcasecmp (ucl_object_key (cur), "messages") == 0) {
 			if (cur->type == UCL_ARRAY) {
 				mit = NULL;
 				while ((cmesg = ucl_iterate_object (cur, &mit, true)) != NULL) {
-					rspamd_fprintf (stdout, "Message: %s\n",
+					rspamd_fprintf (out, "Message: %s\n",
 							ucl_object_tostring (cmesg));
 				}
 			}
 		}
 		else if (cur->type == UCL_OBJECT) {
 			/* Parse metric */
-			rspamc_metric_output (cur);
+			rspamc_metric_output (out, cur);
 		}
 	}
 }
 
 static void
-rspamc_uptime_output (ucl_object_t *obj)
+rspamc_uptime_output (FILE *out, ucl_object_t *obj)
 {
 	const ucl_object_t *elt;
 	int64_t seconds, days, hours, minutes;
 
 	elt = ucl_object_find_key (obj, "version");
 	if (elt != NULL) {
-		rspamd_fprintf (stdout, "Rspamd version: %s\n", ucl_object_tostring (
+		rspamd_fprintf (out, "Rspamd version: %s\n", ucl_object_tostring (
 				elt));
 	}
 
@@ -578,7 +578,7 @@ rspamc_uptime_output (ucl_object_t *obj)
 }
 
 static void
-rspamc_counters_output (ucl_object_t *obj)
+rspamc_counters_output (FILE *out, ucl_object_t *obj)
 {
 	const ucl_object_t *cur, *sym, *weight, *freq, *tim;
 	ucl_object_iter_t iter = NULL;
@@ -689,72 +689,72 @@ rspamc_stat_statfile (const ucl_object_t *obj, GString *out)
 }
 
 static void
-rspamc_stat_output (ucl_object_t *obj)
+rspamc_stat_output (FILE *out, ucl_object_t *obj)
 {
-	GString *out;
+	GString *out_str;
 	ucl_object_iter_t iter = NULL;
 	const ucl_object_t *st, *cur;
 	gint64 scanned;
 
-	out = g_string_sized_new (BUFSIZ);
+	out_str = g_string_sized_new (BUFSIZ);
 
 	scanned = ucl_object_toint (ucl_object_find_key (obj, "scanned"));
-	rspamd_printf_gstring (out, "Messages scanned: %L\n",
+	rspamd_printf_gstring (out_str, "Messages scanned: %L\n",
 		scanned);
 
 	if (scanned > 0) {
-		rspamc_stat_actions (obj, out, scanned);
+		rspamc_stat_actions (obj, out_str, scanned);
 	}
 
-	rspamd_printf_gstring (out, "Messages learned: %L\n",
+	rspamd_printf_gstring (out_str, "Messages learned: %L\n",
 		ucl_object_toint (ucl_object_find_key (obj, "learned")));
-	rspamd_printf_gstring (out, "Connections count: %L\n",
+	rspamd_printf_gstring (out_str, "Connections count: %L\n",
 		ucl_object_toint (ucl_object_find_key (obj, "connections")));
-	rspamd_printf_gstring (out, "Control connections count: %L\n",
+	rspamd_printf_gstring (out_str, "Control connections count: %L\n",
 		ucl_object_toint (ucl_object_find_key (obj, "control_connections")));
 	/* Pools */
-	rspamd_printf_gstring (out, "Pools allocated: %L\n",
+	rspamd_printf_gstring (out_str, "Pools allocated: %L\n",
 		ucl_object_toint (ucl_object_find_key (obj, "pools_allocated")));
-	rspamd_printf_gstring (out, "Pools freed: %L\n",
+	rspamd_printf_gstring (out_str, "Pools freed: %L\n",
 		ucl_object_toint (ucl_object_find_key (obj, "pools_freed")));
-	rspamd_printf_gstring (out, "Bytes allocated: %HL\n",
+	rspamd_printf_gstring (out_str, "Bytes allocated: %HL\n",
 		ucl_object_toint (ucl_object_find_key (obj, "bytes_allocated")));
-	rspamd_printf_gstring (out, "Memory chunks allocated: %L\n",
+	rspamd_printf_gstring (out_str, "Memory chunks allocated: %L\n",
 		ucl_object_toint (ucl_object_find_key (obj, "chunks_allocated")));
-	rspamd_printf_gstring (out, "Shared chunks allocated: %L\n",
+	rspamd_printf_gstring (out_str, "Shared chunks allocated: %L\n",
 		ucl_object_toint (ucl_object_find_key (obj, "shared_chunks_allocated")));
-	rspamd_printf_gstring (out, "Chunks freed: %L\n",
+	rspamd_printf_gstring (out_str, "Chunks freed: %L\n",
 		ucl_object_toint (ucl_object_find_key (obj, "chunks_freed")));
-	rspamd_printf_gstring (out, "Oversized chunks: %L\n",
+	rspamd_printf_gstring (out_str, "Oversized chunks: %L\n",
 		ucl_object_toint (ucl_object_find_key (obj, "chunks_oversized")));
 	/* Fuzzy */
-	rspamd_printf_gstring (out, "Fuzzy hashes stored: %L\n",
+	rspamd_printf_gstring (out_str, "Fuzzy hashes stored: %L\n",
 		ucl_object_toint (ucl_object_find_key (obj, "fuzzy_stored")));
-	rspamd_printf_gstring (out, "Fuzzy hashes expired: %L\n",
+	rspamd_printf_gstring (out_str, "Fuzzy hashes expired: %L\n",
 		ucl_object_toint (ucl_object_find_key (obj, "fuzzy_expired")));
 
 	st = ucl_object_find_key (obj, "fuzzy_checked");
 	if (st != NULL && ucl_object_type (st) == UCL_ARRAY) {
-		rspamd_printf_gstring (out, "Fuzzy hashes checked: ");
+		rspamd_printf_gstring (out_str, "Fuzzy hashes checked: ");
 		iter = NULL;
 
 		while ((cur = ucl_iterate_object (st, &iter, true)) != NULL) {
-			rspamd_printf_gstring (out, "%hL ", ucl_object_toint (cur));
+			rspamd_printf_gstring (out_str, "%hL ", ucl_object_toint (cur));
 		}
 
-		rspamd_printf_gstring (out, "\n");
+		rspamd_printf_gstring (out_str, "\n");
 	}
 
 	st = ucl_object_find_key (obj, "fuzzy_found");
 	if (st != NULL && ucl_object_type (st) == UCL_ARRAY) {
-		rspamd_printf_gstring (out, "Fuzzy hashes found: ");
+		rspamd_printf_gstring (out_str, "Fuzzy hashes found: ");
 		iter = NULL;
 
 		while ((cur = ucl_iterate_object (st, &iter, true)) != NULL) {
-			rspamd_printf_gstring (out, "%hL ", ucl_object_toint (cur));
+			rspamd_printf_gstring (out_str, "%hL ", ucl_object_toint (cur));
 		}
 
-		rspamd_printf_gstring (out, "\n");
+		rspamd_printf_gstring (out_str, "\n");
 	}
 
 	st = ucl_object_find_key (obj, "statfiles");
@@ -762,25 +762,25 @@ rspamc_stat_output (ucl_object_t *obj)
 		iter = NULL;
 
 		while ((cur = ucl_iterate_object (st, &iter, true)) != NULL) {
-			rspamc_stat_statfile (cur, out);
+			rspamc_stat_statfile (cur, out_str);
 		}
 	}
-	rspamd_printf_gstring (out, "Total learns: %L\n",
+	rspamd_printf_gstring (out_str, "Total learns: %L\n",
 			ucl_object_toint (ucl_object_find_key (obj, "total_learns")));
 
-	rspamd_fprintf (stdout, "%v", out);
+	rspamd_fprintf (out, "%v", out_str);
 }
 
 static void
-rspamc_output_headers (struct rspamd_http_message *msg)
+rspamc_output_headers (FILE *out, struct rspamd_http_message *msg)
 {
 	struct rspamd_http_header *h;
 
 	LL_FOREACH (msg->headers, h)
 	{
-		rspamd_fprintf (stdout, "%v: %v\n", h->name, h->value);
+		rspamd_fprintf (out, "%v: %v\n", h->name, h->value);
 	}
-	rspamd_fprintf (stdout, "\n");
+	rspamd_fprintf (out, "\n");
 }
 
 static void
@@ -789,42 +789,44 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 	const gchar *name, ucl_object_t *result, GString *input,
 	gpointer ud, GError *err)
 {
-	gchar *out;
+	gchar *ucl_out;
 	struct rspamc_callback_data *cbdata = (struct rspamc_callback_data *)ud;
 	struct rspamc_command *cmd;
+	FILE *out = stdout;
 
 	cmd = cbdata->cmd;
 	if (cmd->need_input) {
-		rspamd_fprintf (stdout, "Results for file: %s\n", cbdata->filename);
+		rspamd_fprintf (out, "Results for file: %s\n", cbdata->filename);
 	}
 	else {
-		rspamd_fprintf (stdout, "Results for command: %s\n", cmd->name);
+		rspamd_fprintf (out, "Results for command: %s\n", cmd->name);
 	}
 	if (result != NULL) {
 		if (headers && msg != NULL) {
-			rspamc_output_headers (msg);
+			rspamc_output_headers (out, msg);
 		}
 		if (raw || cmd->command_output_func == NULL) {
 			if (json) {
-				out = ucl_object_emit (result, UCL_EMIT_JSON);
+				ucl_out = ucl_object_emit (result, UCL_EMIT_JSON);
 			}
 			else {
-				out = ucl_object_emit (result, UCL_EMIT_CONFIG);
+				ucl_out = ucl_object_emit (result, UCL_EMIT_CONFIG);
 			}
-			printf ("%s", out);
-			free (out);
+			rspamd_fprintf (out, "%s", ucl_out);
+			free (ucl_out);
 		}
 		else {
-			cmd->command_output_func (result);
+			cmd->command_output_func (out, result);
 		}
+
 		ucl_object_unref (result);
 	}
 	else if (err != NULL) {
-		rspamd_fprintf (stdout, "%s\n", err->message);
+		rspamd_fprintf (out, "%s\n", err->message);
 	}
 
-	rspamd_fprintf (stdout, "\n");
-	fflush (stdout);
+	rspamd_fprintf (out, "\n");
+	fflush (out);
 
 	rspamd_client_destroy (conn);
 	g_free (cbdata->filename);
