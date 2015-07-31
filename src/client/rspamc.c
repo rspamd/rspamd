@@ -45,6 +45,7 @@ static gchar *helo = "localhost.localdomain";
 static gchar *hostname = "localhost";
 static gchar *classifier = "bayes";
 static gchar *local_addr = NULL;
+static gchar *execute = NULL;
 static gint weight = 0;
 static gint flag = 0;
 static gint max_requests = 8;
@@ -109,6 +110,8 @@ static GOptionEntry entries[] =
 	   "Output urls in extended format", NULL },
 	{ "key", 0, 0, G_OPTION_ARG_STRING, &key,
 	   "Use specified pubkey to encrypt request", NULL },
+	{ "exec", 'e', 0, G_OPTION_ARG_STRING, &execute,
+	   "Execute the specified command with the message filtered", NULL },
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
