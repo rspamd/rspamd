@@ -240,7 +240,7 @@ LUA_FUNCTION_DEF (task, get_header_full);
 /***
  * @method task:get_raw_headers()
  * Get all undecoded headers of a message as a string
- * @reeturn {string} all raw headers for a message
+ * @return {rspamd_text} all raw headers for a message as opaque text
  */
 LUA_FUNCTION_DEF (task, get_raw_headers);
 
