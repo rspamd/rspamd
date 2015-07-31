@@ -783,7 +783,7 @@ rspamc_output_headers (struct rspamd_http_message *msg)
 static void
 rspamc_client_cb (struct rspamd_client_connection *conn,
 	struct rspamd_http_message *msg,
-	const gchar *name, ucl_object_t *result,
+	const gchar *name, ucl_object_t *result, GString *input,
 	gpointer ud, GError *err)
 {
 	gchar *out;

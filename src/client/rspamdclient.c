@@ -53,6 +53,7 @@ struct rspamd_client_connection {
 struct rspamd_client_request {
 	struct rspamd_client_connection *conn;
 	struct rspamd_http_message *msg;
+	GString *input;
 	rspamd_client_callback cb;
 	gpointer ud;
 };
@@ -62,6 +63,21 @@ GQuark
 rspamd_client_error_quark (void)
 {
 	return g_quark_from_static_string ("rspamd-client-error");
+}
+
+static void
+rspamd_client_request_free (struct rspamd_client_request *req)
+{
+	if (req != NULL) {
+		if (req->conn) {
+			req->conn->req = NULL;
+		}
+		if (req->input) {
+			g_string_free (req->input, TRUE);
+		}
+
+		g_slice_free1 (sizeof (*req), req);
+	}
 }
 
 static gint
@@ -81,7 +97,8 @@ rspamd_client_error_handler (struct rspamd_http_connection *conn, GError *err)
 	struct rspamd_client_connection *c;
 
 	c = req->conn;
-	req->cb (c, NULL, c->server_name->str, NULL, req->ud, err);
+	req->cb (c, NULL, c->server_name->str, NULL, req->input, req->ud, err);
+	rspamd_client_request_free (req);
 }
 
 static gint
@@ -111,8 +128,9 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 			err = g_error_new (RCLIENT_ERROR, msg->code, "HTTP error: %d, %s",
 					msg->code,
 					msg->status ? msg->status->str : "unknown error");
-			req->cb (c, msg, c->server_name->str, NULL, req->ud, err);
+			req->cb (c, msg, c->server_name->str, NULL, req->input, req->ud, err);
 			g_error_free (err);
+			rspamd_client_request_free (req);
 			return 0;
 		}
 
@@ -121,14 +139,16 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 			err = g_error_new (RCLIENT_ERROR, msg->code, "Cannot parse UCL: %s",
 					ucl_parser_get_error (parser));
 			ucl_parser_free (parser);
-			req->cb (c, msg, c->server_name->str, NULL, req->ud, err);
+			req->cb (c, msg, c->server_name->str, NULL, req->input, req->ud, err);
 			g_error_free (err);
+			rspamd_client_request_free (req);
 			return 0;
 		}
 
 		req->cb (c, msg, c->server_name->str, ucl_parser_get_object (
-				parser), req->ud, NULL);
+				parser), req->input, req->ud, NULL);
 		ucl_parser_free (parser);
+		rspamd_client_request_free (req);
 	}
 
 	return 0;
@@ -190,8 +210,9 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 	gchar *p, *hn, *hv;
 	gsize remain, old_len;
 	GHashTableIter it;
+	GString *input = NULL;
 
-	req = g_slice_alloc (sizeof (struct rspamd_client_request));
+	req = g_slice_alloc0 (sizeof (struct rspamd_client_request));
 	req->conn = conn;
 	req->cb = cb;
 	req->ud = ud;
@@ -203,31 +224,37 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 
 	if (in != NULL) {
 		/* Read input stream */
-		req->msg->body = g_string_sized_new (BUFSIZ);
+		input = g_string_sized_new (BUFSIZ);
+
 		while (!feof (in)) {
-			p = req->msg->body->str + req->msg->body->len;
-			remain = req->msg->body->allocated_len - req->msg->body->len - 1;
+			p = input->str + input->len;
+			remain = input->allocated_len - input->len - 1;
 			if (remain == 0) {
-				old_len = req->msg->body->len;
-				g_string_set_size (req->msg->body, old_len * 2);
-				req->msg->body->len = old_len;
+				old_len = input->len;
+				g_string_set_size (input, old_len * 2);
+				input->len = old_len;
 				continue;
 			}
 			remain = fread (p, 1, remain, in);
 			if (remain > 0) {
-				req->msg->body->len += remain;
-				req->msg->body->str[req->msg->body->len] = '\0';
+				input->len += remain;
+				input->str[input->len] = '\0';
 			}
 		}
 		if (ferror (in) != 0) {
 			g_set_error (err, RCLIENT_ERROR, ferror (
 					in), "input IO error: %s", strerror (ferror (in)));
 			g_slice_free1 (sizeof (struct rspamd_client_request), req);
+			g_string_free (input, TRUE);
 			return FALSE;
 		}
+
+		req->msg->body = g_string_new_len (input->str, input->len);
+		req->input = input;
 	}
 	else {
 		req->msg->body = NULL;
+		req->input = NULL;
 	}
 
 	/* Convert headers */

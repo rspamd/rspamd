@@ -43,6 +43,7 @@ typedef void (*rspamd_client_callback) (
 	struct rspamd_http_message *msg,
 	const gchar *name,
 	ucl_object_t *result,
+	GString *input,
 	gpointer ud,
 	GError *err);
 
