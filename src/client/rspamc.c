@@ -118,6 +118,17 @@ static GOptionEntry entries[] =
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
+/* Copy to avoid linking with librspamdserver */
+enum rspamd_metric_action {
+	METRIC_ACTION_REJECT = 0,
+	METRIC_ACTION_SOFT_REJECT,
+	METRIC_ACTION_REWRITE_SUBJECT,
+	METRIC_ACTION_ADD_HEADER,
+	METRIC_ACTION_GREYLIST,
+	METRIC_ACTION_NOACTION,
+	METRIC_ACTION_MAX
+};
+
 static void rspamc_symbols_output (FILE *out, ucl_object_t *obj);
 static void rspamc_uptime_output (FILE *out, ucl_object_t *obj);
 static void rspamc_counters_output (FILE *out, ucl_object_t *obj);
@@ -786,6 +797,110 @@ rspamc_output_headers (FILE *out, struct rspamd_http_message *msg)
 	rspamd_fprintf (out, "\n");
 }
 
+static gboolean
+rspamd_action_from_str (const gchar *data, gint *result)
+{
+	if (g_ascii_strncasecmp (data, "reject", sizeof ("reject") - 1) == 0) {
+		*result = METRIC_ACTION_REJECT;
+	}
+	else if (g_ascii_strncasecmp (data, "greylist",
+		sizeof ("greylist") - 1) == 0) {
+		*result = METRIC_ACTION_GREYLIST;
+	}
+	else if (g_ascii_strncasecmp (data, "add_header", sizeof ("add_header") -
+		1) == 0) {
+		*result = METRIC_ACTION_ADD_HEADER;
+	}
+	else if (g_ascii_strncasecmp (data, "rewrite_subject",
+		sizeof ("rewrite_subject") - 1) == 0) {
+		*result = METRIC_ACTION_REWRITE_SUBJECT;
+	}
+	else if (g_ascii_strncasecmp (data, "add header", sizeof ("add header") -
+			1) == 0) {
+		*result = METRIC_ACTION_ADD_HEADER;
+	}
+	else if (g_ascii_strncasecmp (data, "rewrite subject",
+			sizeof ("rewrite subject") - 1) == 0) {
+		*result = METRIC_ACTION_REWRITE_SUBJECT;
+	}
+	else if (g_ascii_strncasecmp (data, "soft_reject",
+			sizeof ("soft_reject") - 1) == 0) {
+		*result = METRIC_ACTION_SOFT_REJECT;
+	}
+	else if (g_ascii_strncasecmp (data, "soft reject",
+			sizeof ("soft reject") - 1) == 0) {
+		*result = METRIC_ACTION_SOFT_REJECT;
+	}
+	else {
+		return FALSE;
+	}
+	return TRUE;
+}
+
+static void
+rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input)
+{
+	GMimeStream *stream;
+	GByteArray ar;
+	GMimeParser *parser;
+	GMimeMessage *message;
+	const ucl_object_t *metric, *res;
+	const gchar *action = "no action";
+	gint act;
+	gboolean is_spam = FALSE;
+	const gchar *hdr_scanned, *hdr_spam;
+
+	ar.data = input->str;
+	ar.len = input->len;
+
+	stream = g_mime_stream_mem_new_with_byte_array (&ar);
+	g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (stream), FALSE);
+	parser = g_mime_parser_new_with_stream (stream);
+	g_object_unref (stream);
+
+	message = g_mime_parser_construct_message (parser);
+
+	if (message == NULL) {
+		rspamd_fprintf (stderr,"cannot construct mime from stream");
+		return;
+	}
+
+	metric = ucl_object_find_key (result, "default");
+
+	if (metric != NULL) {
+		res = ucl_object_find_key (metric, "action");
+
+		if (res) {
+			action = ucl_object_tostring (res);
+		}
+	}
+
+	rspamd_action_from_str (action, &act);
+
+	if (act < METRIC_ACTION_GREYLIST) {
+		is_spam = TRUE;
+	}
+
+	hdr_scanned = "rspamc " RVERSION;
+	g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Scanner",
+			hdr_scanned);
+	if (is_spam) {
+		hdr_spam = "yes";
+		g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam", hdr_spam);
+	}
+
+	g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Action",
+			action);
+
+	/* Write message */
+	stream = g_mime_stream_file_new (out);
+	g_mime_stream_file_set_owner (GMIME_STREAM_FILE (stream), FALSE);
+	g_mime_object_write_to_stream (GMIME_OBJECT (message), stream);
+	g_object_unref (stream);
+	g_object_unref (message);
+	g_object_unref (parser);
+}
+
 static void
 rspamc_client_execute_cmd (struct rspamc_command *cmd, ucl_object_t *result,
 		GString *input)
@@ -815,18 +930,24 @@ rspamc_client_execute_cmd (struct rspamc_command *cmd, ucl_object_t *result,
 		out = fdopen (infd, "w");
 
 		if (result != NULL) {
-			if (raw || cmd->command_output_func == NULL) {
-				if (json) {
-					ucl_out = ucl_object_emit (result, UCL_EMIT_JSON);
-				}
-				else {
-					ucl_out = ucl_object_emit (result, UCL_EMIT_CONFIG);
-				}
-				rspamd_fprintf (out, "%s", ucl_out);
-				free (ucl_out);
+
+			if (cmd->cmd == RSPAMC_COMMAND_SYMBOLS && mime_output && input) {
+				rspamc_mime_output (out, result, input);
 			}
 			else {
-				cmd->command_output_func (out, result);
+				if (raw || cmd->command_output_func == NULL) {
+					if (json) {
+						ucl_out = ucl_object_emit (result, UCL_EMIT_JSON);
+					}
+					else {
+						ucl_out = ucl_object_emit (result, UCL_EMIT_CONFIG);
+					}
+					rspamd_fprintf (out, "%s", ucl_out);
+					free (ucl_out);
+				}
+				else {
+					cmd->command_output_func (out, result);
+				}
 			}
 
 			ucl_object_unref (result);
@@ -835,7 +956,6 @@ rspamc_client_execute_cmd (struct rspamc_command *cmd, ucl_object_t *result,
 			rspamd_fprintf (out, "%s\n", err->message);
 		}
 
-		rspamd_fprintf (out, "\n");
 		fflush (out);
 
 		fclose (out);
@@ -1028,6 +1148,7 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	ev_base = event_init ();
+	g_mime_init (0);
 
 	/* Now read other args from argc and argv */
 	if (argc == 1) {
@@ -1114,6 +1235,7 @@ main (gint argc, gchar **argv, gchar **env)
 	event_base_loop (ev_base, 0);
 
 	g_hash_table_destroy (kwattrs);
+	g_mime_shutdown ();
 
 	return 0;
 }
