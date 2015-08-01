@@ -805,7 +805,7 @@ rspamc_client_execute_cmd (struct rspamc_command *cmd, ucl_object_t *result,
 	}
 
 	if (!g_spawn_async_with_pipes (NULL, eargv, NULL,
-			G_SPAWN_SEARCH_PATH|G_SPAWN_DEFAULT, NULL, NULL, &cld,
+			G_SPAWN_SEARCH_PATH, NULL, NULL, &cld,
 			&infd, &outfd, &errfd, &err)) {
 
 		rspamd_fprintf (stderr, "Cannot execute %s: %e", execute, err);
