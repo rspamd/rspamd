@@ -1116,6 +1116,12 @@ rspamd_mmaped_file_get_stat (gpointer runtime,
 				rspamd_mmaped_file_get_used (mf)), "used", 0, false);
 		ucl_object_insert_key (res, ucl_object_fromstring (mf->cf->symbol),
 				"symbol", 0, false);
+		ucl_object_insert_key (res, ucl_object_fromstring ("mmap"),
+				"type", 0, false);
+		ucl_object_insert_key (res, ucl_object_fromint (0),
+				"languages", 0, false);
+		ucl_object_insert_key (res, ucl_object_fromint (0),
+				"users", 0, false);
 
 		if (mf->cf->label) {
 			ucl_object_insert_key (res, ucl_object_fromstring (mf->cf->label),
