@@ -98,7 +98,6 @@ rspamd_client_error_handler (struct rspamd_http_connection *conn, GError *err)
 
 	c = req->conn;
 	req->cb (c, NULL, c->server_name->str, NULL, req->input, req->ud, err);
-	rspamd_client_request_free (req);
 }
 
 static gint
@@ -130,7 +129,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 					msg->status ? msg->status->str : "unknown error");
 			req->cb (c, msg, c->server_name->str, NULL, req->input, req->ud, err);
 			g_error_free (err);
-			rspamd_client_request_free (req);
+
 			return 0;
 		}
 
@@ -141,14 +140,13 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 			ucl_parser_free (parser);
 			req->cb (c, msg, c->server_name->str, NULL, req->input, req->ud, err);
 			g_error_free (err);
-			rspamd_client_request_free (req);
+
 			return 0;
 		}
 
 		req->cb (c, msg, c->server_name->str, ucl_parser_get_object (
 				parser), req->input, req->ud, NULL);
 		ucl_parser_free (parser);
-		rspamd_client_request_free (req);
 	}
 
 	return 0;
@@ -280,7 +278,7 @@ rspamd_client_destroy (struct rspamd_client_connection *conn)
 	if (conn != NULL) {
 		rspamd_http_connection_unref (conn->http_conn);
 		if (conn->req != NULL) {
-			g_slice_free1 (sizeof (struct rspamd_client_request), conn->req);
+			rspamd_client_request_free (conn->req);
 		}
 		close (conn->fd);
 		if (conn->key) {
