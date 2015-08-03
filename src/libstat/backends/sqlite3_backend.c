@@ -806,7 +806,7 @@ rspamd_sqlite3_get_stat (gpointer runtime,
 			0, false);
 	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_NTOKENS, &rev);
-	ucl_object_insert_key (res, ucl_object_fromint (rev), "total",  0, false);
+	ucl_object_insert_key (res, ucl_object_fromint (rev), "total", 0, false);
 	ucl_object_insert_key (res, ucl_object_fromint (rev), "used", 0, false);
 	ucl_object_insert_key (res, ucl_object_fromstring (rt->cf->symbol),
 			"symbol", 0, false);
@@ -814,12 +814,12 @@ rspamd_sqlite3_get_stat (gpointer runtime,
 			"type", 0, false);
 	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_NLANGUAGES, &rev);
-	ucl_object_insert_key (res, ucl_object_fromint (0),
-			"languages", rev, false);
+	ucl_object_insert_key (res, ucl_object_fromint (rev),
+			"languages", 0, false);
 	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_NUSERS, &rev);
-	ucl_object_insert_key (res, ucl_object_fromint (0),
-			"users", rev, false);
+	ucl_object_insert_key (res, ucl_object_fromint (rev),
+			"users", 0, false);
 
 	if (rt->cf->label) {
 		ucl_object_insert_key (res, ucl_object_fromstring (rt->cf->label),

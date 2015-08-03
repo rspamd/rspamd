@@ -824,7 +824,7 @@ rspamd_stat_result_t rspamd_stat_statistics (struct rspamd_task *task,
 		}
 	}
 
-	if (*target) {
+	if (target) {
 		*target = res;
 	}
 
