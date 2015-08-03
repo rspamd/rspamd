@@ -678,8 +678,8 @@ rspamc_stat_actions (ucl_object_t *obj, GString *out, gint64 scanned)
 static void
 rspamc_stat_statfile (const ucl_object_t *obj, GString *out)
 {
-	gint64 version, size, blocks, used_blocks;
-	const gchar *label, *symbol;
+	gint64 version, size, blocks, used_blocks, nlanguages, nusers;
+	const gchar *label, *symbol, *type;
 
 	version = ucl_object_toint (ucl_object_find_key (obj, "revision"));
 	size = ucl_object_toint (ucl_object_find_key (obj, "size"));
@@ -687,19 +687,24 @@ rspamc_stat_statfile (const ucl_object_t *obj, GString *out)
 	used_blocks = ucl_object_toint (ucl_object_find_key (obj, "used"));
 	label = ucl_object_tostring (ucl_object_find_key (obj, "label"));
 	symbol = ucl_object_tostring (ucl_object_find_key (obj, "symbol"));
+	type = ucl_object_tostring (ucl_object_find_key (obj, "type"));
+	nlanguages = ucl_object_toint (ucl_object_find_key (obj, "languages"));
+	nusers = ucl_object_toint (ucl_object_find_key (obj, "users"));
 
 	if (label) {
-		rspamd_printf_gstring (out, "Statfile: %s <%s> ", symbol, label);
+		rspamd_printf_gstring (out, "Statfile: %s <%s> type: %s; ", symbol,
+				label, type);
 	}
 	else {
-		rspamd_printf_gstring (out, "Statfile: %s ", symbol);
+		rspamd_printf_gstring (out, "Statfile: %s type: %s; ", symbol, type);
 	}
-
-	if (blocks != 0) {
-		rspamd_printf_gstring (out, "length: %HL; free blocks: %HL; total blocks: %HL; "
-				"free: %.2f%%; learned: %L\n", size, blocks - used_blocks, blocks,
-				(blocks - used_blocks) * 100.0 / (gdouble)blocks, version);
-	}
+	rspamd_printf_gstring (out, "length: %HL; free blocks: %HL; total blocks: %HL; "
+			"free: %.2f%%; learned: %L; users: %L; languages: %L\n",
+			size,
+			blocks - used_blocks, blocks,
+			blocks > 0 ? (blocks - used_blocks) * 100.0 / (gdouble)blocks : 0,
+			version,
+			nusers, nlanguages);
 }
 
 static void
