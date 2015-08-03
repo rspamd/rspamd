@@ -35,6 +35,7 @@
 
 struct rspamd_stat_sqlite3_db {
 	sqlite3 *sqlite;
+	gchar *fname;
 	GArray *prstmt;
 	gboolean in_transaction;
 };
@@ -49,6 +50,7 @@ struct rspamd_stat_sqlite3_rt {
 	struct rspamd_stat_sqlite3_ctx *ctx;
 	struct rspamd_task *task;
 	struct rspamd_stat_sqlite3_db *db;
+	struct rspamd_statfile_config *cf;
 	gint64 user_id;
 	gint64 lang_id;
 };
@@ -99,6 +101,9 @@ enum rspamd_stat_sqlite3_stmt_idx {
 	RSPAMD_STAT_BACKEND_INSERT_USER,
 	RSPAMD_STAT_BACKEND_SAVE_TOKENIZER,
 	RSPAMD_STAT_BACKEND_LOAD_TOKENIZER,
+	RSPAMD_STAT_BACKEND_NTOKENS,
+	RSPAMD_STAT_BACKEND_NLANGUAGES,
+	RSPAMD_STAT_BACKEND_NUSERS,
 	RSPAMD_STAT_BACKEND_MAX
 };
 
@@ -238,6 +243,30 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.args = "",
 		.result = SQLITE_ROW,
 		.ret = "B"
+	},
+	{
+		.idx = RSPAMD_STAT_BACKEND_NTOKENS,
+		.sql = "SELECT COUNT(*) FROM tokens;",
+		.stmt = NULL,
+		.args = "",
+		.result = SQLITE_ROW,
+		.ret = "I"
+	},
+	{
+		.idx = RSPAMD_STAT_BACKEND_NLANGUAGES,
+		.sql = "SELECT COUNT(*) FROM languages;",
+		.stmt = NULL,
+		.args = "",
+		.result = SQLITE_ROW,
+		.ret = "I"
+	},
+	{
+		.idx = RSPAMD_STAT_BACKEND_NUSERS,
+		.sql = "SELECT COUNT(*) FROM users;",
+		.stmt = NULL,
+		.args = "",
+		.result = SQLITE_ROW,
+		.ret = "I"
 	}
 };
 
@@ -361,6 +390,8 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 
 		return NULL;
 	}
+
+	bk->fname = g_strdup (path);
 
 	bk->prstmt = rspamd_sqlite3_init_prstmt (bk->sqlite, prepared_stmts,
 			RSPAMD_STAT_BACKEND_MAX, err);
@@ -491,6 +522,7 @@ rspamd_sqlite3_close (gpointer p)
 
 			rspamd_sqlite3_close_prstmt (bk->sqlite, bk->prstmt);
 			sqlite3_close (bk->sqlite);
+			g_free (bk->fname);
 			g_slice_free1 (sizeof (*bk), bk);
 		}
 	}
@@ -515,6 +547,7 @@ rspamd_sqlite3_runtime (struct rspamd_task *task,
 		rt->task = task;
 		rt->user_id = -1;
 		rt->lang_id = -1;
+		rt->cf = stcf;
 	}
 
 	return rt;
@@ -753,7 +786,47 @@ ucl_object_t *
 rspamd_sqlite3_get_stat (gpointer runtime,
 		gpointer ctx)
 {
-	return NULL;
+	ucl_object_t *res = NULL;
+	struct rspamd_stat_sqlite3_rt *rt = runtime;
+	struct rspamd_stat_sqlite3_db *bk;
+	struct stat st;
+	gint64 rev;
+
+	g_assert (rt != NULL);
+	bk = rt->db;
+
+	(void)stat (bk->fname, &st);
+	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+				RSPAMD_STAT_BACKEND_GET_LEARNS, &rev);
+
+	res = ucl_object_typed_new (UCL_OBJECT);
+	ucl_object_insert_key (res, ucl_object_fromint (rev), "revision",
+			0, false);
+	ucl_object_insert_key (res, ucl_object_fromint (st.st_size), "size",
+			0, false);
+	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+			RSPAMD_STAT_BACKEND_NTOKENS, &rev);
+	ucl_object_insert_key (res, ucl_object_fromint (rev), "total",  0, false);
+	ucl_object_insert_key (res, ucl_object_fromint (rev), "used", 0, false);
+	ucl_object_insert_key (res, ucl_object_fromstring (rt->cf->symbol),
+			"symbol", 0, false);
+	ucl_object_insert_key (res, ucl_object_fromstring ("sqlite3"),
+			"type", 0, false);
+	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+			RSPAMD_STAT_BACKEND_NLANGUAGES, &rev);
+	ucl_object_insert_key (res, ucl_object_fromint (0),
+			"languages", rev, false);
+	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+			RSPAMD_STAT_BACKEND_NUSERS, &rev);
+	ucl_object_insert_key (res, ucl_object_fromint (0),
+			"users", rev, false);
+
+	if (rt->cf->label) {
+		ucl_object_insert_key (res, ucl_object_fromstring (rt->cf->label),
+				"label", 0, false);
+	}
+
+	return res;
 }
 
 gpointer
