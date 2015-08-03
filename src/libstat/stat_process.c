@@ -768,8 +768,10 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 	return ret;
 }
 
-ucl_object_t *
-rspamd_stat_statistics (struct rspamd_config *cfg, guint64 *total_learns)
+rspamd_stat_result_t rspamd_stat_statistics (struct rspamd_task *task,
+		struct rspamd_config *cfg,
+		guint64 *total_learns,
+		ucl_object_t **target)
 {
 	struct rspamd_classifier_config *clcf;
 	struct rspamd_statfile_config *stcf;
@@ -801,9 +803,9 @@ rspamd_stat_statistics (struct rspamd_config *cfg, guint64 *total_learns)
 					continue;
 				}
 
-				backend_runtime = bk->runtime (NULL, stcf, FALSE, bk->ctx);
+				backend_runtime = bk->runtime (task, stcf, FALSE, bk->ctx);
 
-				learns += bk->total_learns (NULL, backend_runtime, bk->ctx);
+				learns += bk->total_learns (task, backend_runtime, bk->ctx);
 				elt = bk->get_stat (backend_runtime, bk->ctx);
 
 				if (elt != NULL) {
@@ -822,5 +824,9 @@ rspamd_stat_statistics (struct rspamd_config *cfg, guint64 *total_learns)
 		}
 	}
 
-	return res;
+	if (*target) {
+		*target = res;
+	}
+
+	return RSPAMD_STAT_PROCESS_OK;
 }

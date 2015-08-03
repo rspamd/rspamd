@@ -1465,6 +1465,48 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 	return 0;
 }
 
+struct rspamd_stat_cbdata {
+	struct rspamd_http_connection_entry *conn_ent;
+	ucl_object_t *top;
+	ucl_object_t *stat;
+	struct rspamd_task *task;
+	guint64 learned;
+};
+
+static gboolean
+rspamd_controller_stat_fin_task (void *ud)
+{
+	struct rspamd_stat_cbdata *cbdata = ud;
+	struct rspamd_controller_session *session;
+	struct rspamd_http_connection_entry *conn_ent;
+	ucl_object_t *top;
+
+	conn_ent = cbdata->conn_ent;
+	session = conn_ent->ud;
+	top = cbdata->top;
+
+	ucl_object_insert_key (top,
+			ucl_object_fromint (cbdata->learned), "total_learns", 0, false);
+
+	if (cbdata->stat) {
+		ucl_object_insert_key (top, cbdata->stat, "statfiles", 0, false);
+	}
+
+	rspamd_controller_send_ucl (conn_ent, top);
+
+
+	return TRUE;
+}
+
+static void
+rspamd_controller_stat_cleanup_task (void *ud)
+{
+	struct rspamd_stat_cbdata *cbdata = ud;
+
+	rspamd_task_free_hard (cbdata->task);
+	ucl_object_unref (cbdata->top);
+}
+
 /*
  * Stat command handler:
  * request: /stat (/resetstat)
@@ -1480,14 +1522,35 @@ rspamd_controller_handle_stat_common (
 	struct rspamd_controller_session *session = conn_ent->ud;
 	ucl_object_t *top, *sub;
 	gint i;
-	guint64 learned  = 0, spam = 0, ham = 0;
+	guint64 spam = 0, ham = 0;
 	rspamd_mempool_stat_t mem_st;
 	struct rspamd_stat *stat, stat_copy;
+	struct rspamd_controller_worker_ctx *ctx;
+	struct rspamd_task *task;
+	struct rspamd_stat_cbdata *cbdata;
 
 	rspamd_mempool_stat (&mem_st);
 	memcpy (&stat_copy, session->ctx->worker->srv->stat, sizeof (stat_copy));
 	stat = &stat_copy;
+	task = rspamd_task_new (session->ctx->worker);
+
+	ctx = session->ctx;
+	task->resolver = ctx->resolver;
+	task->ev_base = ctx->ev_base;
+	cbdata = rspamd_mempool_alloc0 (session->pool, sizeof (*cbdata));
+	cbdata->conn_ent = conn_ent;
+	cbdata->task = task;
 	top = ucl_object_typed_new (UCL_OBJECT);
+	cbdata->top = top;
+
+	task->s = rspamd_session_create (session->pool,
+			rspamd_controller_stat_fin_task,
+			NULL,
+			rspamd_controller_stat_cleanup_task,
+			cbdata);
+	task->fin_arg = cbdata;
+	task->http_conn = rspamd_http_connection_ref (conn_ent->conn);;
+	task->sock = conn_ent->conn->fd;
 
 	ucl_object_insert_key (top, ucl_object_fromint (
 			stat->messages_scanned), "scanned", 0, false);
@@ -1561,13 +1624,6 @@ rspamd_controller_handle_stat_common (
 
 	ucl_object_insert_key (top, sub, "fuzzy_found", 0, false);
 
-	/* Now write statistics for each statfile */
-
-	sub = rspamd_stat_statistics (session->ctx->cfg, &learned);
-	ucl_object_insert_key (top, sub, "statfiles", 0, false);
-	ucl_object_insert_key (top,
-			ucl_object_fromint (learned), "total_learns", 0, false);
-
 	if (do_reset) {
 		session->ctx->srv->stat->messages_scanned = 0;
 		session->ctx->srv->stat->messages_learned = 0;
@@ -1580,8 +1636,11 @@ rspamd_controller_handle_stat_common (
 		rspamd_mempool_stat_reset ();
 	}
 
-	rspamd_controller_send_ucl (conn_ent, top);
-	ucl_object_unref (top);
+	/* Now write statistics for each statfile */
+	rspamd_stat_statistics (task, session->ctx->cfg, &cbdata->learned,
+			&cbdata->stat);
+	session->task = task;
+	rspamd_session_pending (task->s);
 
 	return 0;
 }

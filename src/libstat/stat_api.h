@@ -80,8 +80,10 @@ rspamd_stat_result_t rspamd_stat_learn (struct rspamd_task *task,
  * @param total_learns the total number of learns is stored here
  * @return array of statistical information
  */
-ucl_object_t * rspamd_stat_statistics (struct rspamd_config *cfg,
-		guint64 *total_learns);
+rspamd_stat_result_t rspamd_stat_statistics (struct rspamd_task *task,
+		struct rspamd_config *cfg,
+		guint64 *total_learns,
+		ucl_object_t **res);
 
 void rspamd_stat_unload (void);
 
