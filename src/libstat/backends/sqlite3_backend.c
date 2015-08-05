@@ -175,7 +175,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.sql = "UPDATE languages SET learns=learns + 1 WHERE id=?1;"
 				"UPDATE users SET learns=learns + 1 WHERE id=?2;",
 		.stmt = NULL,
-		.args = "TT",
+		.args = "II",
 		.result = SQLITE_DONE,
 		.ret = ""
 	},
@@ -184,7 +184,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.sql = "UPDATE languages SET learns=learns - 1 WHERE id=?1;"
 				"UPDATE users SET learns=learns - 1 WHERE id=?2;",
 		.stmt = NULL,
-		.args = "TT",
+		.args = "II",
 		.result = SQLITE_DONE,
 		.ret = ""
 	},
