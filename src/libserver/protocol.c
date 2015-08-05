@@ -262,7 +262,6 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 					(p - task->msg.start)) == 0 ||
 				memcmp (task->msg.start, "path",
 					(p - task->msg.start)) == 0)) {
-				task->flags |= RSPAMD_TASK_FLAG_FILE;
 				task->msg.start = p + 1;
 				task->msg.len -= (p - task->msg.start) + 1;
 				task->flags |= RSPAMD_TASK_FLAG_FILE;

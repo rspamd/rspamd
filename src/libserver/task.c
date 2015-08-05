@@ -259,8 +259,8 @@ rspamd_task_load_message (struct rspamd_task *task,
 	guint control_len, r;
 	struct ucl_parser *parser;
 	ucl_object_t *control_obj;
-	gchar filepath[PATH_MAX];
-	gint fd;
+	gchar filepath[PATH_MAX], *fp;
+	gint fd, flen;
 	gpointer map;
 	struct stat st;
 
@@ -275,18 +275,28 @@ rspamd_task_load_message (struct rspamd_task *task,
 				MIN (sizeof (filepath), task->msg.len + 1));
 
 		rspamd_unescape_uri (filepath, filepath, r + 1);
+		flen = strlen (filepath);
 
-		if (access (filepath, R_OK) == -1 || stat (filepath, &st) == -1) {
+		if (filepath[0] == '"' && flen > 2) {
+			/* We need to unquote filepath */
+			fp = &filepath[1];
+			fp[flen - 2] = '\0';
+		}
+		else {
+			fp = &filepath[0];
+		}
+
+		if (access (fp, R_OK) == -1 || stat (fp, &st) == -1) {
 			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
-					"Invalid file (%s): %s", filepath, strerror (errno));
+					"Invalid file (%s): %s", fp, strerror (errno));
 			return FALSE;
 		}
 
-		fd = open (filepath, O_RDONLY);
+		fd = open (fp, O_RDONLY);
 
 		if (fd == -1) {
 			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
-					"Cannot open file (%s): %s", filepath, strerror (errno));
+					"Cannot open file (%s): %s", fp, strerror (errno));
 			return FALSE;
 		}
 
@@ -296,7 +306,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 		if (map == MAP_FAILED) {
 			close (fd);
 			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
-					"Cannot mmap file (%s): %s", filepath, strerror (errno));
+					"Cannot mmap file (%s): %s", fp, strerror (errno));
 			return FALSE;
 		}
 
