@@ -25,6 +25,7 @@
 #include "config.h"
 #include "util.h"
 #include "main.h"
+#include "libserver/worker_util.h"
 #include "protocol.h"
 #include "upstream.h"
 #include "cfg_file.h"

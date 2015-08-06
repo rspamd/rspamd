@@ -4,7 +4,7 @@ MACRO(_AddModulesForced MLIST)
 	SET(MODULES_ID ${_MODULES_ID} CACHE INTERNAL "Modules ID" FORCE)
 	SET(MODULES_C "${CMAKE_CURRENT_BINARY_DIR}/modules.c")
 	FILE(WRITE "${MODULES_C}"
-		"/* ${MODULES_ID} */\n#include \"config.h\"\n")
+		"/* ${MODULES_ID} */\n#include \"main.h\"\n")
 	
 	# Handle even old cmake
 	LIST(LENGTH ${MLIST} MLIST_COUNT)
@@ -28,7 +28,7 @@ ENDMACRO(_AddModulesForced MLIST)
 MACRO(_AddWorkersForced WLIST)
 	SET(WORKERS_C "${CMAKE_CURRENT_BINARY_DIR}/workers.c")
 	FILE(WRITE "${WORKERS_C}"
-		"#include \"config.h\"\n")
+		"#include \"main.h\"\n")
 	
 	# Handle even old cmake
 	LIST(LENGTH ${WLIST} WLIST_COUNT)

@@ -14,21 +14,6 @@ struct rspamd_task;
 struct rspamd_settings;
 struct rspamd_classifier_config;
 
-typedef double (*metric_cons_func)(struct rspamd_task *task,
-	const gchar *metric_name, const gchar *func_name);
-typedef void (*filter_func)(struct rspamd_task *task);
-
-enum filter_type { C_FILTER, PERL_FILTER };
-
-/**
- * Filter structure
- */
-struct filter {
-	gchar *func_name;                               /**< function name							*/
-	enum filter_type type;                          /**< filter type (c or perl)				*/
-	module_t *module;
-};
-
 /**
  * Rspamd symbol
  */
@@ -50,7 +35,6 @@ struct metric_action {
 struct metric {
 	const gchar *name;                              /**< name of metric									*/
 	gchar *func_name;                               /**< name of consolidation function					*/
-	metric_cons_func func;                          /**< c consolidation function						*/
 	gboolean accept_unknown_symbols;                /**< if true unknown symbols are registered here	*/
 	gdouble unknown_weight;                         /**< weight of unknown symbols						*/
 	gdouble grow_factor;                            /**< grow factor for metric							*/

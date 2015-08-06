@@ -19,8 +19,6 @@
 #include "libserver/events.h"
 #include "libserver/roll_history.h"
 #include "libserver/task.h"
-#include "libserver/worker_util.h"
-#include "libmime/filter.h"
 
 
 /* Default values */
@@ -76,10 +74,38 @@ struct rspamd_controller_pbkdf {
 	gsize key_len;
 };
 
+/**
+ * Common structure representing C module context
+ */
+struct module_s;
+struct module_ctx {
+	gint (*filter)(struct rspamd_task *task);                   /**< pointer to headers process function			*/
+	struct module_s *mod;										/**< module pointer									*/
+	gboolean enabled;											/**< true if module is enabled in configuration		*/
+};
 
 /**
  * Module
  */
+typedef struct module_s {
+	const gchar *name;
+	int (*module_init_func)(struct rspamd_config *cfg, struct module_ctx **ctx);
+	int (*module_config_func)(struct rspamd_config *cfg);
+	int (*module_reconfig_func)(struct rspamd_config *cfg);
+	int (*module_attach_controller_func)(struct module_ctx *ctx,
+		GHashTable *custom_commands);
+} module_t;
+
+typedef struct worker_s {
+	const gchar *name;
+	gpointer (*worker_init_func)(struct rspamd_config *cfg);
+	void (*worker_start_func)(struct rspamd_worker *worker);
+	gboolean has_socket;
+	gboolean unique;
+	gboolean threaded;
+	gboolean killable;
+	gint listen_type;
+} worker_t;
 
 struct pidfh;
 struct rspamd_config;
@@ -193,14 +219,6 @@ struct controller_session {
 	struct event_base *ev_base;                                 /**< Event base										*/
 };
 
-/**
- * Common structure representing C module context
- */
-struct module_ctx {
-	gint (*filter)(struct rspamd_task *task);                   /**< pointer to headers process function			*/
-	module_t *mod;												/**< module pointer									*/
-	gboolean enabled;											/**< true if module is enabled in configuration		*/
-};
 
 /**
  * Register custom controller function
@@ -209,7 +227,6 @@ void register_custom_controller_command (const gchar *name,
 	controller_func_t handler,
 	gboolean privilleged,
 	gboolean require_message);
-
 /**
  * If set, reopen log file on next write
  */

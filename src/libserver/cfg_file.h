@@ -20,6 +20,8 @@
 struct expression;
 struct tokenizer;
 struct rspamd_stat_classifier;
+struct module_s;
+struct worker_s;
 
 enum { VAL_UNDEF=0, VAL_TRUE, VAL_FALSE };
 
@@ -145,7 +147,7 @@ struct rspamd_worker_bind_conf {
  * Config params for rspamd worker
  */
 struct rspamd_worker_conf {
-	worker_t *worker;                               /**< pointer to worker type								*/
+	struct worker_s *worker;                        /**< pointer to worker type								*/
 	GQuark type;                                    /**< type of worker										*/
 	struct rspamd_worker_bind_conf *bind_conf;      /**< bind configuration									*/
 	guint16 count;                                  /**< number of workers									*/
@@ -265,7 +267,8 @@ struct rspamd_config {
 	guint32 min_word_len;							/**< minimum length of the word to be considered		*/
 
 	GList *classify_headers;						/**< list of headers using for statistics				*/
-	module_t *compiled_modules;						/**< list of compiled C modules							*/
+	struct module_s **compiled_modules;				/**< list of compiled C modules							*/
+	struct worker_s **compiled_workers;				/**< list of compiled C modules							*/
 };
 
 

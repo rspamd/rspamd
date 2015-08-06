@@ -26,13 +26,7 @@
 #include "config.h"
 #include "util.h"
 #include "http.h"
-
-/**
- * Return worker's control structure by its type
- * @param type
- * @return worker's control structure or NULL
- */
-worker_t * rspamd_get_worker_by_type (GQuark type);
+#include "main.h"
 
 #ifndef HAVE_SA_SIGINFO
 typedef void (*rspamd_sig_handler_t) (gint);
@@ -97,5 +91,14 @@ void rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
  */
 void rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
 	ucl_object_t *obj);
+
+/**
+ * Return worker's control structure by its type
+ * @param type
+ * @return worker's control structure or NULL
+ */
+worker_t * rspamd_get_worker_by_type (struct rspamd_config *cfg, GQuark type);
+
+void rspamd_worker_stop_accept (struct rspamd_worker *worker);
 
 #endif /* WORKER_UTIL_H_ */

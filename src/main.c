@@ -31,6 +31,7 @@
 #include "kvstorage_server.h"
 #include "libserver/symbols_cache.h"
 #include "lua/lua_common.h"
+#include "libserver/worker_util.h"
 #include "ottery.h"
 #include "xxhash.h"
 #include "utlist.h"
@@ -100,6 +101,10 @@ static GArray *other_workers = NULL;
 static GHashTable *listen_sockets = NULL;
 
 struct rspamd_main *rspamd_main;
+
+/* Defined in modules.c */
+extern module_t *modules[];
+extern worker_t *workers[];
 
 /* Commandline options */
 static GOptionEntry entries[] =
@@ -769,6 +774,8 @@ static gboolean
 load_rspamd_config (struct rspamd_config *cfg, gboolean init_modules)
 {
 	cfg->cache = rspamd_symbols_cache_new ();
+	cfg->compiled_modules = modules;
+	cfg->compiled_workers = workers;
 
 	if (!rspamd_config_read (cfg, cfg->cfg_name, NULL,
 		config_logger, rspamd_main, vars)) {

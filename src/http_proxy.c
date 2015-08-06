@@ -32,6 +32,7 @@
 #include "libserver/dns.h"
 #include "libmime/message.h"
 #include "main.h"
+#include "libserver/worker_util.h"
 #include "keypairs_cache.h"
 #include "ottery.h"
 

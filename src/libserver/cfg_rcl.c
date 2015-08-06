@@ -29,6 +29,7 @@
 #include "lua/lua_common.h"
 #include "expression.h"
 #include "composites.h"
+#include "libserver/worker_util.h"
 
 struct rspamd_rcl_default_handler_data {
 	struct rspamd_rcl_struct_parser pd;
@@ -576,7 +577,7 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		qtype = g_quark_try_string (worker_type);
 		if (qtype != 0) {
 			wrk = rspamd_config_new_worker (cfg, NULL);
-			wrk->worker = rspamd_get_worker_by_type (qtype);
+			wrk->worker = rspamd_get_worker_by_type (cfg, qtype);
 			if (wrk->worker == NULL) {
 				g_set_error (err,
 					CFG_RCL_ERROR,

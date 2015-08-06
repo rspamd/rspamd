@@ -25,6 +25,7 @@
 #include "main.h"
 #include "message.h"
 #include "lua/lua_common.h"
+#include "worker_util.h"
 
 /**
  * Return worker's control structure by its type
@@ -32,12 +33,12 @@
  * @return worker's control structure or NULL
  */
 worker_t *
-rspamd_get_worker_by_type (GQuark type)
+rspamd_get_worker_by_type (struct rspamd_config *cfg, GQuark type)
 {
 	worker_t **cur;
 
-	cur = &workers[0];
-	while (*cur) {
+	cur = cfg->compiled_workers;
+	while (cur && *cur) {
 		if (g_quark_from_string ((*cur)->name) == type) {
 			return *cur;
 		}

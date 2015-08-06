@@ -38,6 +38,7 @@
 #include "main.h"
 #include "keypairs_cache.h"
 #include "libstat/stat_api.h"
+#include "libserver/worker_util.h"
 
 #include "lua/lua_common.h"
 

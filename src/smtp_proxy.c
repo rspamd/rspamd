@@ -26,6 +26,7 @@
 #include "libserver/proxy.h"
 #include "main.h"
 #include "smtp.h"
+#include "libserver/worker_util.h"
 
 /*
  * SMTP proxy is a simple smtp proxy worker for dns resolving and

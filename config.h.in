@@ -508,32 +508,5 @@ typedef off_t goffset;
 # define NBYTES(nbits)   (((nbits) + BITSPERBYTE - 1) / BITSPERBYTE)
 #endif
 
-/* Forwarded declaration */
-struct module_ctx;
-struct rspamd_config;
-struct rspamd_worker;
-
-typedef struct module_s {
-	const gchar *name;
-	int (*module_init_func)(struct rspamd_config *cfg, struct module_ctx **ctx);
-	int (*module_config_func)(struct rspamd_config *cfg);
-	int (*module_reconfig_func)(struct rspamd_config *cfg);
-	int (*module_attach_controller_func)(struct module_ctx *ctx, 
-		GHashTable *custom_commands);
-} module_t;
-
-typedef struct worker_s {
-	const gchar *name;
-	gpointer (*worker_init_func)(struct rspamd_config *cfg);
-	void (*worker_start_func)(struct rspamd_worker *worker);
-	gboolean has_socket;
-	gboolean unique;
-	gboolean threaded;
-	gboolean killable;
-	gint listen_type;
-} worker_t;
-
-extern module_t *modules[];
-extern worker_t *workers[];
 
 #endif

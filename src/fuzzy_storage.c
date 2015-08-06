@@ -39,6 +39,7 @@
 #include "fuzzy_storage.h"
 #include "fuzzy_backend.h"
 #include "ottery.h"
+#include "libserver/worker_util.h"
 
 /* This number is used as expire time in seconds for cache items  (2 days) */
 #define DEFAULT_EXPIRE 172800L

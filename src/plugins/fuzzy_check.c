@@ -43,6 +43,7 @@
 #include "libmime/message.h"
 #include "libutil/map.h"
 #include "libmime/images.h"
+#include "libserver/worker_util.h"
 #include "fuzzy_storage.h"
 #include "utlist.h"
 #include "main.h"

@@ -28,6 +28,7 @@
 #include "libutil/map.h"
 #include "libstat/stat_api.h"
 #include "main.h"
+#include "libserver/worker_util.h"
 #include "utlist.h"
 
 #include "blake2.h" 

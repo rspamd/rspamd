@@ -873,7 +873,7 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 
 	/* Init all compiled modules */
 	if (!reconfig) {
-		for (pmod = cfg->compiled_modules; *pmod != NULL; pmod ++) {
+		for (pmod = cfg->compiled_modules; pmod != NULL && *pmod != NULL; pmod ++) {
 			mod = *pmod;
 			mod_ctx = g_slice_alloc0 (sizeof (struct module_ctx));
 
