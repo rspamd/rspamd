@@ -795,7 +795,7 @@ rspamd_rcl_add_module_path (struct rspamd_config *cfg,
 	struct stat st;
 	struct script_module *cur_mod;
 	glob_t globbuf;
-	gchar *pattern;
+	gchar *pattern, *ext_pos;
 	size_t len;
 	guint i;
 
@@ -823,6 +823,15 @@ rspamd_rcl_add_module_path (struct rspamd_config *cfg,
 						sizeof (struct script_module));
 				cur_mod->path = rspamd_mempool_strdup (cfg->cfg_pool,
 						globbuf.gl_pathv[i]);
+				cur_mod->name = g_path_get_basename (cur_mod->path);
+				rspamd_mempool_add_destructor (cfg->cfg_pool, g_free,
+						cur_mod->name);
+				ext_pos = strstr (cur_mod->name, ".lua");
+
+				if (ext_pos != NULL) {
+					*ext_pos = '\0';
+				}
+
 				cfg->script_modules = g_list_prepend (cfg->script_modules,
 						cur_mod);
 			}

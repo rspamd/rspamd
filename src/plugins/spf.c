@@ -108,6 +108,10 @@ spf_module_config (struct rspamd_config *cfg)
 	gint res = TRUE, cb_id;
 	guint cache_size, cache_expire;
 
+	if (!rspamd_config_is_module_enabled (cfg, "spf")) {
+		return TRUE;
+	}
+
 	spf_module_ctx->whitelist_ip = radix_create_compressed ();
 
 	if ((value =

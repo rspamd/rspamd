@@ -346,6 +346,10 @@ surbl_module_config (struct rspamd_config *cfg)
 	gint cb_id;
 	gboolean has_subsymbols;
 
+	if (!rspamd_config_is_module_enabled (cfg, "surbl")) {
+		return TRUE;
+	}
+
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "surbl", "redirector")) != NULL) {
 		surbl_module_ctx->redirectors = rspamd_upstreams_create ();

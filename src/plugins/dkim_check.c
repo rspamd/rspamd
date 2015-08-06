@@ -116,6 +116,10 @@ dkim_module_config (struct rspamd_config *cfg)
 	guint cache_size, cache_expire;
 	gboolean got_trusted = FALSE;
 
+	if (!rspamd_config_is_module_enabled (cfg, "dkim")) {
+		return TRUE;
+	}
+
 	dkim_module_ctx->whitelist_ip = radix_create_compressed ();
 
 	if ((value =

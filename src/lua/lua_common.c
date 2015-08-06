@@ -294,6 +294,11 @@ rspamd_init_lua_filters (struct rspamd_config *cfg)
 	while (cur) {
 		module = cur->data;
 		if (module->path) {
+			if (!rspamd_config_is_module_enabled (cfg, module->name)) {
+				cur = g_list_next (cur);
+				continue;
+			}
+
 			if (luaL_loadfile (L, module->path) != 0) {
 				msg_info ("load of %s failed: %s", module->path,
 					lua_tostring (L, -1));

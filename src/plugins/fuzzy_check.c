@@ -417,6 +417,10 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 	const ucl_object_t *value, *cur;
 	gint res = TRUE, cb_id;
 
+	if (!rspamd_config_is_module_enabled (cfg, "fuzzy_check")) {
+		return TRUE;
+	}
+
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "fuzzy_check", "symbol")) != NULL) {
 		fuzzy_module_ctx->default_symbol = ucl_obj_tostring (value);

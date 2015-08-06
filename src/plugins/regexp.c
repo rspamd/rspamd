@@ -114,6 +114,10 @@ regexp_module_config (struct rspamd_config *cfg)
 	ucl_object_iter_t it = NULL;
 	gint res = TRUE;
 
+	if (!rspamd_config_is_module_enabled (cfg, "regexp")) {
+		return TRUE;
+	}
+
 	sec = ucl_object_find_key (cfg->rcl_obj, "regexp");
 	if (sec == NULL) {
 		msg_err ("regexp module enabled, but no rules are defined");

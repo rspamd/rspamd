@@ -82,6 +82,10 @@ chartable_module_config (struct rspamd_config *cfg)
 	const ucl_object_t *value;
 	gint res = TRUE;
 
+	if (!rspamd_config_is_module_enabled (cfg, "chartable")) {
+		return TRUE;
+	}
+
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "chartable", "symbol")) != NULL) {
 		chartable_module_ctx->symbol = ucl_obj_tostring (value);

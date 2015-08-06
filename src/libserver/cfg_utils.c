@@ -1059,15 +1059,8 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 	conf = ucl_object_find_key (cfg->rcl_obj, module_name);
 
 	if (conf == NULL) {
-		if (is_c) {
-			msg_info ("internal module %s is enabled but has not configured",
-					module_name);
-		}
-		else {
-			msg_info ("lua module %s is disabled as it has not configured",
-								module_name);
-			return FALSE;
-		}
+		msg_info ("%s module %s is enabled but has not been configured",
+				is_c ? "internal" : "lua", module_name);
 	}
 	else {
 		enabled = ucl_object_find_key (conf, "enabled");
@@ -1087,7 +1080,7 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 	if (gr) {
 		if (gr->disabled) {
 			msg_info ("%s module %s is disabled in the configuration as "
-					"its group is disabled",
+					"its group has been disabled",
 					is_c ? "internal" : "lua", module_name);
 			return FALSE;
 		}
