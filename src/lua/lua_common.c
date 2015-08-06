@@ -32,6 +32,11 @@ const luaL_reg null_reg[] = {
 	{NULL, NULL}
 };
 
+static GQuark
+lua_error_quark (void)
+{
+	return g_quark_from_static_string ("lua-routines");
+}
 
 /* Util functions */
 /**
@@ -560,4 +565,231 @@ rspamd_lua_add_preload (lua_State *L, const gchar *name, lua_CFunction func)
 	lua_pushcfunction (L, func);
 	lua_setfield (L, -2, name);
 	lua_pop (L, 1);
+}
+
+
+gboolean
+rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
+		GError **err, const gchar *extraction_pattern, ...)
+{
+	const gchar *p, *key = NULL, *end, *cls;
+	va_list ap;
+	gboolean required = FALSE, failed = FALSE;
+	gchar classbuf[128];
+	enum {
+		read_key = 0,
+		read_arg,
+		read_class_start,
+		read_class,
+		read_semicolon
+	} state = read_key;
+	gsize keylen = 0, *valuelen, clslen;
+
+	if (pos < 0) {
+		/* Get absolute pos */
+		pos = lua_gettop (L) + pos + 1;
+	}
+
+	g_assert (extraction_pattern != NULL);
+	g_assert (lua_type (L, pos) == LUA_TTABLE);
+
+	p = extraction_pattern;
+	end = p + strlen (extraction_pattern);
+
+	va_start (ap, extraction_pattern);
+
+	while (p <= end) {
+		switch (state) {
+		case read_key:
+			if (*p == '=') {
+				if (key == NULL) {
+					g_set_error (err, lua_error_quark (), 1, "cannot read key");
+					va_end (ap);
+
+					return FALSE;
+				}
+
+				state = read_arg;
+				keylen = p - key;
+			}
+			else if (*p == '*') {
+				required = TRUE;
+			}
+			else {
+				key = p;
+			}
+			p ++;
+			break;
+		case read_arg:
+			g_assert (keylen != 0);
+			lua_pushlstring (L, key, keylen);
+			lua_gettable (L, pos);
+
+			switch (g_ascii_toupper (*p)) {
+			case 'S':
+				if (lua_type (L, -1) == LUA_TSTRING) {
+					*(va_arg (ap, const gchar **)) = lua_tostring (L, -1);
+				}
+				else {
+					failed = TRUE;
+					*(va_arg (ap, const gchar **)) = NULL;
+				}
+				lua_pop (L, 1);
+				break;
+
+			case 'I':
+				if (lua_type (L, -1) == LUA_TNUMBER) {
+					*(va_arg (ap, gint64 *)) = lua_tonumber (L, -1);
+				}
+				else {
+					failed = TRUE;
+					*(va_arg (ap,  gint64 *)) = 0;
+				}
+				lua_pop (L, 1);
+				break;
+
+			case 'B':
+				if (lua_type (L, -1) == LUA_TBOOLEAN) {
+					*(va_arg (ap, gboolean *)) = lua_toboolean (L, -1);
+				}
+				else {
+					failed = TRUE;
+					*(va_arg (ap,  gboolean *)) = 0;
+				}
+				lua_pop (L, 1);
+				break;
+
+			case 'N':
+				if (lua_type (L, -1) == LUA_TNUMBER) {
+					*(va_arg (ap, gdouble *)) = lua_tonumber (L, -1);
+				}
+				else {
+					failed = TRUE;
+					*(va_arg (ap,  gdouble *)) = 0;
+				}
+				lua_pop (L, 1);
+				break;
+
+			case 'V':
+				valuelen = va_arg (ap, gsize *);
+				if (lua_type (L, -1) == LUA_TSTRING) {
+					*(va_arg (ap, const gchar **)) = lua_tolstring (L, -1,
+							valuelen);
+				}
+				else {
+					failed = TRUE;
+					*(va_arg (ap, const char **)) = NULL;
+					*valuelen = 0;
+				}
+				lua_pop (L, 1);
+				break;
+			case 'U':
+				if (lua_type (L, -1) != LUA_TUSERDATA) {
+					failed = TRUE;
+				}
+				state = read_class_start;
+				clslen = 0;
+				cls = NULL;
+				p ++;
+				continue;
+			}
+
+			if (failed && required) {
+				g_set_error (err, lua_error_quark (), 2, "required parameter "
+						"%.*s is missing", (gint)keylen, key);
+				va_end (ap);
+
+				return FALSE;
+			}
+
+			/* Reset read params */
+			state = read_semicolon;
+			failed = FALSE;
+			required = FALSE;
+			keylen = 0;
+			key = NULL;
+			p ++;
+			break;
+
+		case read_class_start:
+			if (*p == '{') {
+				cls = p + 1;
+				state = read_class;
+			}
+			else {
+				lua_pop (L, 1);
+				g_set_error (err, lua_error_quark (), 2, "missing classname for "
+						"%.*s", (gint)keylen, key);
+				va_end (ap);
+
+				return FALSE;
+			}
+			p ++;
+			break;
+
+		case read_class:
+			if (*p == '}') {
+				clslen = p - cls;
+			}
+			if (clslen == 0) {
+				lua_pop (L, 1);
+				g_set_error (err, lua_error_quark (), 2, "empty classname for "
+						"%*.s", (gint)keylen, key);
+				va_end (ap);
+
+				return FALSE;
+			}
+
+			rspamd_snprintf (classbuf, sizeof (classbuf), "{%*s}",
+					(gint)clslen, cls);
+
+			if (!failed && rspamd_lua_check_class (L, -1, classbuf)) {
+				*(va_arg (ap, gpointer *)) = lua_touserdata (L, -1);
+			}
+			else {
+				*(va_arg (ap, gpointer *)) = NULL;
+				failed = TRUE;
+			}
+			lua_pop (L, 1);
+
+			if (failed && required) {
+				g_set_error (err, lua_error_quark (), 2, "required parameter "
+						"%.*s is missing", (gint)keylen, key);
+				va_end (ap);
+
+				return FALSE;
+			}
+
+			/* Reset read params */
+			state = read_semicolon;
+			failed = FALSE;
+			required = FALSE;
+			keylen = 0;
+			key = NULL;
+			p ++;
+			break;
+
+		case read_semicolon:
+			if (*p == ':') {
+				state = read_key;
+				key = NULL;
+				keylen = 0;
+				failed = FALSE;
+			}
+			else {
+				g_set_error (err, lua_error_quark (), 2, "bad format string: %s",
+						extraction_pattern);
+				va_end (ap);
+
+				return FALSE;
+			}
+
+			p++;
+			break;
+		}
+	}
+
+	va_end (ap);
+
+	return TRUE;
 }

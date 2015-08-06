@@ -260,6 +260,26 @@ void rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg);
 struct memory_pool_s * rspamd_lua_check_mempool (lua_State * L, gint pos);
 struct rspamd_config * lua_check_config (lua_State * L, gint pos);
 
+/**
+ * Extract an arguments from lua table according to format string. Supported arguments are:
+ * key=[*]S|I|N|B|V|U{a-z};[key=...]
+ * - S - const char *
+ * - I - gint64_t
+ * - N - double
+ * - B - boolean
+ * - V - size_t + const char *
+ * - U{classname} - userdata of the following class (stored in gpointer)
+ *
+ * If any of format string is prefixed with `*` then it is treated as required argument
+ * @param L lua state
+ * @param pos at which pos start extraction
+ * @param err error pointer
+ * @param extraction_pattern static pattern
+ * @return TRUE if a table has been parsed
+ */
+gboolean rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
+		GError **err, const gchar *extraction_pattern, ...);
+
 
 #endif /* WITH_LUA */
 #endif /* RSPAMD_LUA_H */
