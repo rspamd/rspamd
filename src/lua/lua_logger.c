@@ -232,7 +232,7 @@ lua_logger_out_str (lua_State *L, gint pos, gchar *outbuf, gsize len)
 	gsize r = 0;
 
 	if (str) {
-		r = rspamd_strlcpy (outbuf, str, len);
+		r = rspamd_strlcpy (outbuf, str, len + 1);
 	}
 
 	return r;
@@ -247,10 +247,10 @@ lua_logger_out_num (lua_State *L, gint pos, gchar *outbuf, gsize len)
 
 	if ((gdouble)(glong)num == num) {
 		inum = num;
-		r = rspamd_snprintf (outbuf, len, "%l", inum);
+		r = rspamd_snprintf (outbuf, len + 1, "%l", inum);
 	}
 	else {
-		r = rspamd_snprintf (outbuf, len, "%f", num);
+		r = rspamd_snprintf (outbuf, len + 1, "%f", num);
 	}
 
 	return r;
@@ -262,7 +262,7 @@ lua_logger_out_boolean (lua_State *L, gint pos, gchar *outbuf, gsize len)
 	gboolean val = lua_toboolean (L, pos);
 	gsize r = 0;
 
-	r = rspamd_strlcpy (outbuf, val ? "true" : "false", len);
+	r = rspamd_strlcpy (outbuf, val ? "true" : "false", len + 1);
 
 	return r;
 }
@@ -272,7 +272,7 @@ lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len)
 {
 	gint r;
 
-	if (!lua_getmetatable (L, pos)) {
+	if (!lua_getmetatable (L, pos) || len == 0) {
 		return 0;
 	}
 
@@ -292,14 +292,16 @@ lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len)
 		return 0;
 	}
 
-	r = rspamd_snprintf (outbuf, len, "%s(%p)", lua_tostring (L, -1),
+	r = rspamd_snprintf (outbuf, len + 1, "%s(%p)", lua_tostring (L, -1),
 			lua_touserdata (L, pos));
 	lua_pop (L, 3);
 
 	return r;
 }
 
-#define MOVE_BUF(d, remain, r) if ((remain) - (r) == 0) break; (d) += (r); (remain) -= (r)
+#define MOVE_BUF(d, remain, r)	\
+	(d) += (r); (remain) -= (r); 	\
+	if ((remain) == 0) { lua_pop (L, 1); break; }
 
 static gsize
 lua_logger_out_table (lua_State *L, gint pos, gchar *outbuf, gsize len)
@@ -309,12 +311,12 @@ lua_logger_out_table (lua_State *L, gint pos, gchar *outbuf, gsize len)
 	gboolean first = TRUE;
 	gint i;
 
-	if (!lua_istable (L, pos)) {
+	if (!lua_istable (L, pos) || remain == 0) {
 		return 0;
 	}
 
 	lua_pushvalue (L, pos);
-	r = rspamd_snprintf (d, remain, "{");
+	r = rspamd_snprintf (d, remain + 1, "{");
 	remain -= r;
 	d += r;
 
@@ -328,11 +330,11 @@ lua_logger_out_table (lua_State *L, gint pos, gchar *outbuf, gsize len)
 		}
 
 		if (!first) {
-			r = rspamd_snprintf (d, remain, ", ");
+			r = rspamd_snprintf (d, remain + 1, ", ");
 			MOVE_BUF(d, remain, r);
 		}
 
-		r = rspamd_snprintf (d, remain, "[%d] = ", i);
+		r = rspamd_snprintf (d, remain + 1, "[%d] = ", i);
 		MOVE_BUF(d, remain, r);
 		r = lua_logger_out_type (L, -1, d, remain);
 		MOVE_BUF(d, remain, r);
@@ -342,7 +344,7 @@ lua_logger_out_table (lua_State *L, gint pos, gchar *outbuf, gsize len)
 	}
 
 	/* Get string keys (pairs) */
-	for (lua_pushnil (L); lua_next (L, -2) && remain > 0; lua_pop (L, 1)) {
+	for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
 		/* 'key' is at index -2 and 'value' is at index -1 */
 
 		if (lua_type (L, -2) == LUA_TNUMBER) {
@@ -350,11 +352,11 @@ lua_logger_out_table (lua_State *L, gint pos, gchar *outbuf, gsize len)
 		}
 
 		if (!first) {
-			r = rspamd_snprintf (d, remain, ", ");
+			r = rspamd_snprintf (d, remain + 1, ", ");
 			MOVE_BUF(d, remain, r);
 		}
 
-		r = rspamd_snprintf (d, remain, "[%s] = ",
+		r = rspamd_snprintf (d, remain + 1, "[%s] = ",
 				lua_tostring (L, -2));
 		MOVE_BUF(d, remain, r);
 		r = lua_logger_out_type (L, lua_gettop (L), d, remain);
@@ -365,7 +367,7 @@ lua_logger_out_table (lua_State *L, gint pos, gchar *outbuf, gsize len)
 
 	lua_pop (L, 1);
 
-	r = rspamd_snprintf (d, remain, "}");
+	r = rspamd_snprintf (d, remain + 1, "}");
 	d += r;
 
 	return (d - outbuf);
@@ -377,6 +379,10 @@ lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf, gsize len)
 {
 	gint type;
 	gsize r = 0;
+
+	if (len == 0) {
+		return 0;
+	}
 
 	type = lua_type (L, pos);
 
@@ -417,7 +423,7 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 	} state = copy_char;
 
 	d = logbuf;
-	remain = sizeof (logbuf);
+	remain = sizeof (logbuf) - 1;
 	s = lua_tostring (L, 1);
 	c = s;
 
@@ -498,7 +504,7 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 	}
 
 	if (is_string) {
-		lua_pushlstring (L, logbuf, sizeof (logbuf) - remain);
+		lua_pushlstring (L, logbuf, sizeof (logbuf) - remain - 1);
 		return 1;
 	}
 	else {
