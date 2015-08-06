@@ -78,6 +78,8 @@ struct rspamd_symbols_group {
 	gchar *name;
 	struct rspamd_symbol_def *symbols;
 	gdouble max_score;
+	gboolean disabled;
+	gboolean one_shot;
 };
 
 /**
@@ -263,6 +265,7 @@ struct rspamd_config {
 	guint32 min_word_len;							/**< minimum length of the word to be considered		*/
 
 	GList *classify_headers;						/**< list of headers using for statistics				*/
+	module_t *compiled_modules;						/**< list of compiled C modules							*/
 };
 
 
@@ -421,6 +424,22 @@ gboolean rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 		const gchar *metric,
 		const gchar *symbol, gdouble score, const gchar *description,
 		const gchar *group, gboolean one_shot, gboolean rewrite_existing);
+
+/**
+ * Checks if a specified C or lua module is enabled or disabled in the config.
+ * The logic of check is the following:
+ *
+ * - For C modules, we check `filters` line and enable module only if it is found there
+ * - For LUA modules we check the corresponding configuration section:
+ *   - if section exists, then we check `enabled` key and check its value
+ *   - if section is absent, we consider module as disabled
+ * - For both C and LUA modules we check if the group with the module name is disabled in the default metric
+ * @param cfg config file
+ * @param module_name module name
+ * @return TRUE if a module is enabled
+ */
+gboolean rspamd_config_is_module_enabled (struct rspamd_config *cfg,
+		const gchar *module_name);
 
 #endif /* ifdef CFG_FILE_H */
 /*

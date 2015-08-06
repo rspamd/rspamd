@@ -873,7 +873,7 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 
 	/* Init all compiled modules */
 	if (!reconfig) {
-		for (pmod = modules; *pmod != NULL; pmod ++) {
+		for (pmod = cfg->compiled_modules; *pmod != NULL; pmod ++) {
 			mod = *pmod;
 			mod_ctx = g_slice_alloc0 (sizeof (struct module_ctx));
 
@@ -1014,6 +1014,84 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 	sym_def->gr = sym_group;
 
 	LL_PREPEND (sym_group->symbols, sym_def);
+
+	return TRUE;
+}
+
+gboolean
+rspamd_config_is_module_enabled (struct rspamd_config *cfg,
+		const gchar *module_name)
+{
+	gboolean is_c = FALSE;
+	struct metric *metric;
+	const ucl_object_t *conf, *enabled;
+	GList *cur;
+	struct rspamd_symbols_group *gr;
+
+	metric = cfg->default_metric;
+
+	if (g_hash_table_lookup (cfg->c_modules, module_name)) {
+		is_c = TRUE;
+	}
+
+	if (is_c) {
+		gboolean found = FALSE;
+
+		cur = g_list_first (cfg->filters);
+
+		while (cur) {
+			if (strcmp (cur->data, module_name) == 0) {
+				found = TRUE;
+				break;
+			}
+
+			cur = g_list_next (cur);
+		}
+
+		if (!found) {
+			msg_info ("internal module %s is disable in `filters` line",
+					module_name);
+
+			return FALSE;
+		}
+	}
+
+	conf = ucl_object_find_key (cfg->rcl_obj, module_name);
+
+	if (conf == NULL) {
+		if (is_c) {
+			msg_info ("internal module %s is enabled but has not configured",
+					module_name);
+		}
+		else {
+			msg_info ("lua module %s is disabled as it has not configured",
+								module_name);
+			return FALSE;
+		}
+	}
+	else {
+		enabled = ucl_object_find_key (conf, "enabled");
+
+		if (enabled && ucl_object_type (enabled) == UCL_BOOLEAN) {
+			if (!ucl_object_toboolean (enabled)) {
+				msg_info ("%s module %s is disabled in the configuration",
+						is_c ? "internal" : "lua", module_name);
+				return FALSE;
+			}
+		}
+	}
+
+	/* Now we check symbols group */
+	gr = g_hash_table_lookup (cfg->symbols_groups, module_name);
+
+	if (gr) {
+		if (gr->disabled) {
+			msg_info ("%s module %s is disabled in the configuration as "
+					"its group is disabled",
+					is_c ? "internal" : "lua", module_name);
+			return FALSE;
+		}
+	}
 
 	return TRUE;
 }

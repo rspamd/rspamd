@@ -250,9 +250,10 @@ rspamd_rcl_options_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
  */
 static gboolean
 rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
-	const ucl_object_t *obj, const gchar *group, gboolean is_legacy, GError **err)
+	const ucl_object_t *obj, struct rspamd_symbols_group *gr,
+	gboolean is_legacy, GError **err)
 {
-	const gchar *description = NULL, *sym_name;
+	const gchar *description = NULL, *sym_name, *group;
 	gdouble symbol_score;
 	const ucl_object_t *val;
 	gboolean one_shot = FALSE;
@@ -280,8 +281,12 @@ rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
 		sym_name = ucl_object_key (obj);
 	}
 
-	if (group == NULL) {
+	if (gr == NULL) {
 		group = "ungrouped";
+	}
+	else {
+		group = gr->name;
+		one_shot = gr->one_shot;
 	}
 
 	if (ucl_object_todouble_safe (obj, &symbol_score)) {
@@ -336,7 +341,7 @@ rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
 static gboolean
 rspamd_rcl_symbols_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		struct rspamd_config *cfg, struct metric *metric,
-		const gchar *group, gboolean new, GError **err)
+		struct rspamd_symbols_group *gr, gboolean new, GError **err)
 {
 	const ucl_object_t *val, *cur;
 	ucl_object_iter_t it = NULL;
@@ -350,7 +355,7 @@ rspamd_rcl_symbols_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 		it = NULL;
 		while ((cur = ucl_iterate_object (val, &it, true)) != NULL) {
-			if (!rspamd_rcl_insert_symbol (cfg, metric, cur, group, FALSE, err)) {
+			if (!rspamd_rcl_insert_symbol (cfg, metric, cur, gr, FALSE, err)) {
 				return FALSE;
 			}
 		}
@@ -369,7 +374,7 @@ rspamd_rcl_symbols_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 			it = NULL;
 			while ((cur = ucl_iterate_object (val, &it, false)) != NULL) {
-				if (!rspamd_rcl_insert_symbol (cfg, metric, cur, group, TRUE, err)) {
+				if (!rspamd_rcl_insert_symbol (cfg, metric, cur, gr, TRUE, err)) {
 					return FALSE;
 				}
 			}
@@ -504,23 +509,41 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 				elt = ucl_object_find_key (cur, "name");
 
 				if (elt) {
+					gr = g_hash_table_lookup (cfg->symbols_groups,
+							ucl_object_tostring (elt));
+					if (gr == NULL) {
+						gr =
+								rspamd_mempool_alloc0 (cfg->cfg_pool,
+										sizeof (struct rspamd_symbols_group));
+						gr->name = rspamd_mempool_strdup (cfg->cfg_pool,
+								ucl_object_tostring (elt));
+						g_hash_table_insert (cfg->symbols_groups, gr->name, gr);
+					}
+
+					elt = ucl_object_find_key (cur, "max_score");
+
+					if (elt) {
+						gr->max_score = ucl_object_todouble (elt);
+					}
+
+					elt = ucl_object_find_key (cur, "disabled");
+
+					if (elt) {
+						gr->disabled = ucl_object_toboolean (elt);
+					}
+
+					elt = ucl_object_find_key (cur, "one_shot");
+
+					if (elt) {
+						gr->one_shot = ucl_object_toboolean (elt);
+					}
+
 					if (!rspamd_rcl_symbols_handler (pool, cur, cfg, metric,
-							ucl_object_tostring (elt),
-							!have_symbols, err)) {
+							gr, !have_symbols, err)) {
 						return FALSE;
 					}
 
 					have_symbols = TRUE;
-					gr = g_hash_table_lookup (cfg->symbols_groups,
-							ucl_object_tostring (elt));
-
-					if (gr != NULL) {
-						elt = ucl_object_find_key (cur, "max_score");
-
-						if (elt) {
-							gr->max_score = ucl_object_todouble (elt);
-						}
-					}
 				}
 			}
 		}
