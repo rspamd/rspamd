@@ -48,8 +48,7 @@ lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 
 	/* Get module opt structure */
 	if ((metric = g_hash_table_lookup (cfg->metrics, name)) == NULL) {
-		metric = rspamd_config_new_metric (cfg, metric);
-		metric->name = rspamd_mempool_strdup (cfg->cfg_pool, name);
+		metric = rspamd_config_new_metric (cfg, metric, name);
 	}
 
 	/* Now iterate throught module table */

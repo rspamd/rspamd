@@ -378,14 +378,9 @@ rspamd_config_post_load (struct rspamd_config *cfg)
 
 	if ((def_metric =
 		g_hash_table_lookup (cfg->metrics, DEFAULT_METRIC)) == NULL) {
-		def_metric = rspamd_config_new_metric (cfg, NULL);
-		def_metric->name = DEFAULT_METRIC;
+		def_metric = rspamd_config_new_metric (cfg, NULL, DEFAULT_METRIC);
 		def_metric->actions[METRIC_ACTION_REJECT].score = DEFAULT_SCORE;
-		cfg->metrics_list = g_list_prepend (cfg->metrics_list, def_metric);
-		g_hash_table_insert (cfg->metrics, DEFAULT_METRIC, def_metric);
 	}
-
-	cfg->default_metric = def_metric;
 
 	if (cfg->tld_file == NULL) {
 		/* Try to guess tld file */
@@ -546,9 +541,11 @@ rspamd_config_new_statfile (struct rspamd_config *cfg,
 }
 
 struct metric *
-rspamd_config_new_metric (struct rspamd_config *cfg, struct metric *c)
+rspamd_config_new_metric (struct rspamd_config *cfg, struct metric *c,
+		const gchar *name)
 {
 	int i;
+
 	if (c == NULL) {
 		c = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
 		c->grow_factor = 1.0;
@@ -558,12 +555,20 @@ rspamd_config_new_metric (struct rspamd_config *cfg, struct metric *c)
 			c->actions[i].score = -1.0;
 		}
 		c->subject = SPAM_SUBJECT;
+		c->name = rspamd_mempool_strdup (cfg->cfg_pool, name);
 		rspamd_mempool_add_destructor (cfg->cfg_pool,
 			(rspamd_mempool_destruct_t) g_hash_table_destroy,
 			c->symbols);
 		rspamd_mempool_add_destructor (cfg->cfg_pool,
 			(rspamd_mempool_destruct_t) g_hash_table_destroy,
 			c->descriptions);
+
+		g_hash_table_insert (cfg->metrics, (void *)c->name, c);
+		cfg->metrics_list = g_list_prepend (cfg->metrics_list, c);
+
+		if (strcmp (c->name, DEFAULT_METRIC) == 0) {
+			cfg->default_metric = c;
+		}
 	}
 
 	return c;

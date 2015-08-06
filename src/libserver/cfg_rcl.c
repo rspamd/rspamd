@@ -320,8 +320,17 @@ rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
 		return FALSE;
 	}
 
-	return rspamd_config_add_metric_symbol (cfg, metric->name, sym_name,
-			symbol_score, description, group, one_shot, TRUE);
+	if (!rspamd_config_add_metric_symbol (cfg, metric->name, sym_name,
+			symbol_score, description, group, one_shot, TRUE)) {
+		g_set_error (err,
+			CFG_RCL_ERROR,
+			EINVAL,
+			"cannot add symbol: %s to metric %s",
+			sym_name, metric->name);
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 static gboolean
@@ -402,8 +411,7 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 	metric = g_hash_table_lookup (cfg->metrics, metric_name);
 	if (metric == NULL) {
-		metric = rspamd_config_new_metric (cfg, metric);
-		metric->name = metric_name;
+		metric = rspamd_config_new_metric (cfg, metric, metric_name);
 	}
 	else {
 		new = FALSE;
@@ -522,15 +530,6 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	if (!rspamd_rcl_symbols_handler (pool, obj, cfg, metric, NULL,
 			!have_symbols && !have_unknown, err)) {
 		return FALSE;
-	}
-
-	/* Insert the resulting metric */
-	if (new) {
-		g_hash_table_insert (cfg->metrics, (void *)metric->name, metric);
-		cfg->metrics_list = g_list_prepend (cfg->metrics_list, metric);
-		if (strcmp (metric->name, DEFAULT_METRIC) == 0) {
-			cfg->default_metric = metric;
-		}
 	}
 
 	return TRUE;

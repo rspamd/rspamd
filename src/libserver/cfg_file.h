@@ -353,7 +353,7 @@ struct rspamd_worker_conf * rspamd_config_new_worker (struct rspamd_config *cfg,
  * Return a new metric structure, setting default and non-conflicting attributes
  */
 struct metric * rspamd_config_new_metric (struct rspamd_config *cfg,
-	struct metric *c);
+	struct metric *c, const gchar *name);
 /*
  * Return a new statfile structure, setting default and non-conflicting attributes
  */
