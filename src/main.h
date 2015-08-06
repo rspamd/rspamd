@@ -227,10 +227,6 @@ void register_custom_controller_command (const gchar *name,
 	controller_func_t handler,
 	gboolean privilleged,
 	gboolean require_message);
-/**
- * If set, reopen log file on next write
- */
-extern struct rspamd_main *rspamd_main;
 
 #endif
 

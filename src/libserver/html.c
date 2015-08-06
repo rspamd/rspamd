@@ -900,7 +900,7 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 
 		if (tag->flags & FL_CLOSING) {
 			if (!*cur_level) {
-				debug_task ("bad parent node");
+				msg_debug ("bad parent node");
 				g_node_destroy (nnode);
 				return FALSE;
 			}
@@ -908,7 +908,7 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 			g_node_append (*cur_level, nnode);
 
 			if (!rspamd_html_check_balance (nnode, cur_level)) {
-				debug_task (
+				msg_debug (
 						"mark part as unbalanced as it has not pairable closing tags");
 				hc->flags |= RSPAMD_HTML_FLAG_UNBALANCED;
 				*balanced = FALSE;

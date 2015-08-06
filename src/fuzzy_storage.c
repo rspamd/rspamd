@@ -49,6 +49,7 @@
 
 #define INVALID_NODE_TIME (guint64) - 1
 
+extern struct rspamd_main *rspamd_main;
 /* Init functions */
 gpointer init_fuzzy (struct rspamd_config *cfg);
 void start_fuzzy (struct rspamd_worker *worker);

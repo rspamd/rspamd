@@ -67,6 +67,7 @@
 
 #define RSPAMD_PBKDF_ID_V1 1
 
+extern struct rspamd_main *rspamd_main;
 gpointer init_controller_worker (struct rspamd_config *cfg);
 void start_controller_worker (struct rspamd_worker *worker);
 

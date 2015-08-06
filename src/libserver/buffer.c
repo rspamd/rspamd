@@ -31,7 +31,7 @@
 #include "utlist.h"
 
 #define G_DISPATCHER_ERROR dispatcher_error_quark ()
-#define debug_ip(...) rspamd_conditional_debug (rspamd_main->logger, \
+#define debug_ip(...) rspamd_conditional_debug (NULL, \
 		NULL, \
 		G_STRFUNC, \
 		__VA_ARGS__)

@@ -111,28 +111,6 @@ void rspamd_log_nodebug (rspamd_logger_t *logger);
 /* Typical functions */
 
 /* Logging in postfix style */
-#if defined(RSPAMD_MAIN)
-#define msg_err(...)    rspamd_common_log_function (rspamd_main->logger, \
-		G_LOG_LEVEL_CRITICAL, \
-		G_STRFUNC, \
-		__VA_ARGS__)
-#define msg_warn(...)   rspamd_common_log_function (rspamd_main->logger, \
-		G_LOG_LEVEL_WARNING, \
-		G_STRFUNC, \
-		__VA_ARGS__)
-#define msg_info(...)   rspamd_common_log_function (rspamd_main->logger, \
-		G_LOG_LEVEL_INFO, \
-		G_STRFUNC, \
-		__VA_ARGS__)
-#define msg_debug(...)  rspamd_conditional_debug (rspamd_main->logger, \
-		NULL, \
-		G_STRFUNC, \
-		__VA_ARGS__)
-#define debug_task(...) rspamd_conditional_debug (rspamd_main->logger, \
-		task->from_addr, \
-		G_STRFUNC, \
-		__VA_ARGS__)
-#else
 #define msg_err(...)    rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
 		G_STRFUNC, \
 		__VA_ARGS__)
@@ -145,9 +123,8 @@ void rspamd_log_nodebug (rspamd_logger_t *logger);
 #define msg_debug(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
 		G_STRFUNC, \
 		__VA_ARGS__)
-#define debug_task(...) rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+#define debug_task(...) rspamd_conditional_debug (NULL, \
+		task->from_addr, \
 		G_STRFUNC, \
 		__VA_ARGS__)
-#endif
-
 #endif

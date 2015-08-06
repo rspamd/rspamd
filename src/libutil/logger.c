@@ -777,6 +777,10 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
 	va_list vp;
 	u_char *end;
 
+	if (rspamd_log == NULL) {
+		rspamd_log = default_logger;
+	}
+
 	if (rspamd_log->cfg->log_level >= G_LOG_LEVEL_DEBUG ||
 		rspamd_log->is_debug) {
 		if (rspamd_log->debug_ip && addr != NULL) {

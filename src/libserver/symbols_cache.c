@@ -962,15 +962,7 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 		rspamd_session_watch_start (task->s, rspamd_symbols_cache_watcher_cb,
 				item);
 
-		if (item->symbol != NULL &&
-				G_UNLIKELY (check_debug_symbol (task->cfg, item->symbol))) {
-			rspamd_log_debug (rspamd_main->logger);
-			item->func (task, item->user_data);
-			rspamd_log_nodebug (rspamd_main->logger);
-		}
-		else {
-			item->func (task, item->user_data);
-		}
+		item->func (task, item->user_data);
 
 		t2 = rspamd_get_ticks ();
 		diff = (t2 - t1) * 1000000;

@@ -384,7 +384,7 @@ append_raw_header (GHashTable *target, struct raw_header *rh)
 	else {
 		g_hash_table_insert (target, rh->name, rh);
 	}
-	debug_task ("add raw header %s: %s", rh->name, rh->value);
+	msg_debug ("add raw header %s: %s", rh->name, rh->value);
 }
 
 /* Convert raw headers to a list of struct raw_header * */

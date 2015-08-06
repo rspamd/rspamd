@@ -43,6 +43,7 @@
 
 #define SMTP_MAXERRORS 15
 
+extern struct rspamd_main *rspamd_main;
 
 /* Init functions */
 gpointer init_smtp_proxy (struct rspamd_config *cfg);

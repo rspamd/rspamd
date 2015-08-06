@@ -38,7 +38,7 @@
 
 /* Rotate keys each minute by default */
 #define DEFAULT_ROTATION_TIME 60.0
-
+extern struct rspamd_main *rspamd_main;
 gpointer init_http_proxy (struct rspamd_config *cfg);
 void start_http_proxy (struct rspamd_worker *worker);
 
