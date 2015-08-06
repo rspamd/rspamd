@@ -1167,12 +1167,12 @@ static gint
 lua_config_set_metric_symbol (lua_State * L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
-	GList *metric_list;
 	gchar *name;
-	const gchar *metric_name = DEFAULT_METRIC, *description = NULL;
+	const gchar *metric_name = DEFAULT_METRIC, *description = NULL,
+			*group = NULL;
 	double weight;
-	struct rspamd_symbol_def *s;
 	struct metric *metric;
+	gboolean one_shot = FALSE;
 
 	if (cfg) {
 		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
@@ -1184,6 +1184,13 @@ lua_config_set_metric_symbol (lua_State * L)
 		if (lua_gettop (L) > 4 && lua_type (L, 5) == LUA_TSTRING) {
 			metric_name = luaL_checkstring (L, 5);
 		}
+		if (lua_gettop (L) > 5 && lua_type (L, 6) == LUA_TSTRING) {
+			group = luaL_checkstring (L, 6);
+		}
+		if (lua_gettop (L) > 6 && lua_type (L, 7) == LUA_TBOOLEAN) {
+			one_shot = lua_toboolean (L, 7);
+		}
+		/* XXX: table API */
 
 		metric = g_hash_table_lookup (cfg->metrics, metric_name);
 
@@ -1191,39 +1198,8 @@ lua_config_set_metric_symbol (lua_State * L)
 			msg_err ("metric named %s is not defined", metric_name);
 		}
 		else if (name != NULL) {
-			s = g_hash_table_lookup (metric->symbols, name);
-
-			if (s == NULL) {
-				msg_debug ("set new symbol %s in metric %s with weight %.2f",
-						name, metric_name, weight);
-				s = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*s));
-				s->name = rspamd_mempool_strdup (cfg->cfg_pool, name);
-				s->weight_ptr = rspamd_mempool_alloc (cfg->cfg_pool,
-										sizeof (gdouble));
-
-				if (description != NULL) {
-					s->description =  rspamd_mempool_strdup (cfg->cfg_pool,
-							description);
-				}
-
-				g_hash_table_insert (metric->symbols, s->name, s);
-				if ((metric_list =
-						g_hash_table_lookup (cfg->metrics_symbols, s->name)) == NULL) {
-					metric_list = g_list_prepend (NULL, metric);
-					rspamd_mempool_add_destructor (cfg->cfg_pool,
-							(rspamd_mempool_destruct_t)g_list_free,
-							metric_list);
-					g_hash_table_insert (cfg->metrics_symbols, s->name, metric_list);
-				}
-				else {
-					/* Slow but keep start element of list in safe */
-					if (!g_list_find (metric_list, metric)) {
-						metric_list = g_list_append (metric_list, metric);
-					}
-				}
-			}
-
-			*s->weight_ptr = weight;
+			rspamd_config_add_metric_symbol (cfg, metric_name, name,
+					weight, description, group, one_shot, FALSE);
 		}
 	}
 
@@ -1303,8 +1279,9 @@ lua_config_newindex (lua_State *L)
 		}
 		else if (lua_type (L, 3) == LUA_TTABLE) {
 			gint type = SYMBOL_TYPE_NORMAL, priority = 0, idx;
-			gdouble weight = 1.0;
-			const char *type_str;
+			gdouble weight = 1.0, score;
+			const char *type_str, *group = NULL, *description = NULL;
+			gboolean one_shot = FALSE;
 
 			/*
 			 * Table can have the following attributes:
@@ -1312,6 +1289,11 @@ lua_config_newindex (lua_State *L)
 			 * "weight" - optional weight
 			 * "priority" - optional priority
 			 * "type" - optional type (normal, virtual, callback)
+			 * -- Metric options
+			 * "score" - optional default score (overrided by metric)
+			 * "group" - optional default group
+			 * "one_shot" - optional one shot mode
+			 * "description" - optional description
 			 */
 			lua_pushstring (L, "callback");
 			lua_gettable (L, -2);
@@ -1369,6 +1351,55 @@ lua_config_newindex (lua_State *L)
 					priority,
 					type,
 					-1);
+
+			/*
+			 * Now check if a symbol has not been registered in any metric and
+			 * insert default value if applicable
+			 */
+			if (g_hash_table_lookup (cfg->metrics_symbols, name) == NULL) {
+				lua_pushstring (L, "score");
+				lua_gettable (L, -2);
+
+				if (lua_type (L, -1) == LUA_TNUMBER) {
+					score = lua_tonumber (L, -1);
+					lua_pop (L, 1);
+
+					/* If score defined, then we can check other metric fields */
+					lua_pushstring (L, "group");
+					lua_gettable (L, -2);
+
+					if (lua_type (L, -1) == LUA_TSTRING) {
+						group = lua_tostring (L, -1);
+					}
+					lua_pop (L, 1);
+
+					lua_pushstring (L, "description");
+					lua_gettable (L, -2);
+
+					if (lua_type (L, -1) == LUA_TSTRING) {
+						description = lua_tostring (L, -1);
+					}
+					lua_pop (L, 1);
+
+					lua_pushstring (L, "one_shot");
+					lua_gettable (L, -2);
+
+					if (lua_type (L, -1) == LUA_TBOOLEAN) {
+						one_shot = lua_toboolean (L, -1);
+					}
+					lua_pop (L, 1);
+
+					/*
+					 * Do not override the existing symbols, since we are
+					 * having default values here
+					 */
+					rspamd_config_add_metric_symbol (cfg, NULL, name, score,
+							description, group, one_shot, FALSE);
+				}
+				else {
+					lua_pop (L, 1);
+				}
+			}
 		}
 	}
 
