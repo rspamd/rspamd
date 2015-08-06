@@ -272,7 +272,7 @@ lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len)
 {
 	gint r;
 
-	if (!lua_getmetatable (L, pos) || len == 0) {
+	if (!lua_getmetatable (L, pos)) {
 		return 0;
 	}
 
@@ -398,6 +398,9 @@ lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf, gsize len)
 		break;
 	case LUA_TUSERDATA:
 		r = lua_logger_out_userdata (L, pos, outbuf, len);
+		break;
+	case LUA_TFUNCTION:
+		r = rspamd_snprintf (outbuf, len + 1, "function");
 		break;
 	default:
 		/* Try to push everything as string using tostring magic */
