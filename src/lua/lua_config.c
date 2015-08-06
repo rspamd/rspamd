@@ -1167,37 +1167,51 @@ static gint
 lua_config_set_metric_symbol (lua_State * L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
-	gchar *name;
 	const gchar *metric_name = DEFAULT_METRIC, *description = NULL,
-			*group = NULL;
+			*group = NULL, *name = NULL;
 	double weight;
 	struct metric *metric;
 	gboolean one_shot = FALSE;
+	GError *err = NULL;
 
 	if (cfg) {
-		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
-		weight = luaL_checknumber (L, 3);
 
-		if (lua_gettop (L) > 3 && lua_type (L, 4) == LUA_TSTRING) {
-			description = luaL_checkstring (L, 4);
+		if (lua_type (L, 2) == LUA_TTABLE) {
+			if (!rspamd_lua_parse_table_arguments (L, 2, &err,
+					"name=*S;score=N;description=S;"
+					"group=S;one_shot=B;metric=S",
+					&name, &weight, &description,
+					&group, &one_shot, &metric_name)) {
+				msg_err ("bad arguments: %e", err);
+				g_error_free (err);
+
+				return 0;
+			}
 		}
-		if (lua_gettop (L) > 4 && lua_type (L, 5) == LUA_TSTRING) {
-			metric_name = luaL_checkstring (L, 5);
+		else {
+			name = luaL_checkstring (L, 2);
+			weight = luaL_checknumber (L, 3);
+
+			if (lua_gettop (L) > 3 && lua_type (L, 4) == LUA_TSTRING) {
+				description = luaL_checkstring (L, 4);
+			}
+			if (lua_gettop (L) > 4 && lua_type (L, 5) == LUA_TSTRING) {
+				metric_name = luaL_checkstring (L, 5);
+			}
+			if (lua_gettop (L) > 5 && lua_type (L, 6) == LUA_TSTRING) {
+				group = luaL_checkstring (L, 6);
+			}
+			if (lua_gettop (L) > 6 && lua_type (L, 7) == LUA_TBOOLEAN) {
+				one_shot = lua_toboolean (L, 7);
+			}
 		}
-		if (lua_gettop (L) > 5 && lua_type (L, 6) == LUA_TSTRING) {
-			group = luaL_checkstring (L, 6);
-		}
-		if (lua_gettop (L) > 6 && lua_type (L, 7) == LUA_TBOOLEAN) {
-			one_shot = lua_toboolean (L, 7);
-		}
-		/* XXX: table API */
 
 		metric = g_hash_table_lookup (cfg->metrics, metric_name);
 
 		if (metric == NULL) {
 			msg_err ("metric named %s is not defined", metric_name);
 		}
-		else if (name != NULL) {
+		else if (name != NULL && weight > 0) {
 			rspamd_config_add_metric_symbol (cfg, metric_name, name,
 					weight, description, group, one_shot, FALSE);
 		}
