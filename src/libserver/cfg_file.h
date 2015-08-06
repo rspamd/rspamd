@@ -406,6 +406,22 @@ gboolean rspamd_init_filters (struct rspamd_config *cfg, bool reconfig);
  */
 void rspamd_init_cfg (struct rspamd_config *cfg, gboolean init_lua);
 
+/**
+ * Add new symbol to the metric
+ * @param metric metric's name (or NULL for the default metric)
+ * @param symbol symbol's name
+ * @param score symbol's score
+ * @param description optional description
+ * @param group optional group name
+ * @param one_shot TRUE if symbol can add its score once
+ * @param rewrite_existing TRUE if we need to rewrite the existing symbol
+ * @return TRUE if symbol has been inserted or FALSE if `rewrite_existing` is not enabled and symbol already exists
+ */
+gboolean rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
+		const gchar *metric,
+		const gchar *symbol, gdouble score, const gchar *description,
+		const gchar *group, gboolean one_shot, gboolean rewrite_existing);
+
 #endif /* ifdef CFG_FILE_H */
 /*
  * vi:ts=4

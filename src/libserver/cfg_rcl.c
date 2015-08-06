@@ -253,11 +253,8 @@ rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
 	const ucl_object_t *obj, const gchar *group, gboolean is_legacy, GError **err)
 {
 	const gchar *description = NULL, *sym_name;
-	gdouble symbol_score, *score_ptr;
+	gdouble symbol_score;
 	const ucl_object_t *val;
-	struct rspamd_symbols_group *sym_group;
-	struct rspamd_symbol_def *sym_def;
-	GList *metric_list;
 	gboolean one_shot = FALSE;
 
 	/*
@@ -323,53 +320,8 @@ rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
 		return FALSE;
 	}
 
-	sym_def =
-		rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct rspamd_symbol_def));
-	score_ptr = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (gdouble));
-
-	*score_ptr = symbol_score;
-	sym_def->weight_ptr = score_ptr;
-	sym_def->name = rspamd_mempool_strdup (cfg->cfg_pool, sym_name);
-	sym_def->description = (gchar *)description;
-	sym_def->one_shot = one_shot;
-
-	msg_debug ("registered symbol %s with weight %.2f in metric %s and group %s",
-			sym_def->name, symbol_score, metric->name, group);
-
-	g_hash_table_insert (metric->symbols, sym_def->name, sym_def);
-
-	if ((metric_list =
-		g_hash_table_lookup (cfg->metrics_symbols, sym_def->name)) == NULL) {
-		metric_list = g_list_prepend (NULL, metric);
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)g_list_free,
-			metric_list);
-		g_hash_table_insert (cfg->metrics_symbols, sym_def->name, metric_list);
-	}
-	else {
-		/* Slow but keep start element of list in safe */
-		if (!g_list_find (metric_list, metric)) {
-			metric_list = g_list_append (metric_list, metric);
-		}
-	}
-
-	/* Search for symbol group */
-	sym_group = g_hash_table_lookup (cfg->symbols_groups, group);
-	if (sym_group == NULL) {
-		/* Create new group */
-		sym_group =
-			rspamd_mempool_alloc0 (cfg->cfg_pool,
-				sizeof (struct rspamd_symbols_group));
-		sym_group->name = rspamd_mempool_strdup (cfg->cfg_pool, group);
-		sym_group->symbols = NULL;
-		g_hash_table_insert (cfg->symbols_groups, sym_group->name, sym_group);
-	}
-
-	sym_def->gr = sym_group;
-
-	LL_PREPEND (sym_group->symbols, sym_def);
-
-	return TRUE;
+	return rspamd_config_add_metric_symbol (cfg, metric->name, sym_name,
+			symbol_score, description, group, one_shot, TRUE);
 }
 
 static gboolean
