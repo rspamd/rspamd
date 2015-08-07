@@ -1010,20 +1010,6 @@ ADD_SUBDIRECTORY(test)
 
 
 CONFIGURE_FILE(config.h.in src/config.h)
-CONFIGURE_FILE(contrib/exim/local_scan.c.in contrib/exim/local_scan_rspamd.c @ONLY)
-
-SET(CONFFILES 
-	conf/common.conf
-	conf/composites.conf
-	conf/metrics.conf
-	conf/modules.conf
-	conf/statistic.conf
-	conf/2tld.inc
-	conf/logging.inc
-	conf/options.inc
-	conf/surbl-whitelist.inc
-	conf/worker-controller.inc
-	conf/worker-normal.inc)
 
 ##################### INSTALLATION ##########################################
 
@@ -1038,18 +1024,15 @@ INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${RULESDIR})")
 # Install configs only if they are unchanged
 LIST(LENGTH CONFFILES CONFLIST_COUNT)
 MATH(EXPR CONFLIST_MAX ${CONFLIST_COUNT}-1)
-	
-FOREACH(CONF_IDX RANGE ${CONFLIST_MAX})
-	LIST(GET CONFFILES ${CONF_IDX} CONF_FILE)
-	IF(BUILD_PORT)
-		INSTALL_IF_NOT_EXISTS(${CONF_FILE} ${CONFDIR} ${CONF_FILE} ".sample")
-	ELSE(BUILD_PORT)
-		INSTALL_IF_NOT_EXISTS(${CONF_FILE} ${CONFDIR} ${CONF_FILE} "")
-	ENDIF(BUILD_PORT)
-	IF(INSTALL_EXAMPLES MATCHES "ON")
-		INSTALL(FILES ${CONF_FILE} DESTINATION ${EXAMPLESDIR})
-	ENDIF(INSTALL_EXAMPLES MATCHES "ON")
-ENDFOREACH(CONF_IDX RANGE ${CONFLIST_MAX})
+
+FILE(GLOB_RECURSE CONF_FILES RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/conf" 
+	"${CMAKE_CURRENT_SOURCE_DIR}/conf/*" )
+FOREACH(CONF_FILE ${CONF_FILES})
+	GET_FILENAME_COMPONENT(_rp ${CONF_FILE} PATH)
+	INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${CONFDIR}/${_rp})")
+	INSTALL(FILES "${CMAKE_CURRENT_SOURCE_DIR}/conf/${CONF_FILE}" 
+		DESTINATION ${CONFDIR}/${_rp})
+ENDFOREACH(CONF_FILE)
 
 # Main config is special due to systemd
 IF(WANT_SYSTEMD_UNITS MATCHES "ON")
