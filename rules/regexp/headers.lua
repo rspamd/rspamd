@@ -32,11 +32,16 @@ reconf['SUBJECT_NEEDS_ENCODING'] = string.format('!(%s) & !(%s) & (%s)', subject
 -- Detects that there is no space in From header (e.g. Some Name<some@host>)
 reconf['R_NO_SPACE_IN_FROM'] = 'From=/\\S<[-\\w\\.]+\\@[-\\w\\.]+>/X'
 
--- Detects missing subject
-local has_subject = 'header_exists(Subject)'
-local empty_subject = 'Subject=/^$/'
--- Final rule
-reconf['MISSING_SUBJECT'] = string.format('!(%s) | (%s)', has_subject, empty_subject)
+
+rspamd_config.MISSING_SUBJECT = function(task)
+  local hdr = task:get_header('Subject')
+  
+  if not hdr or #hdr == 0 then
+    return true
+  end
+  
+  return false
+end
 
 -- Detects bad content-transfer-encoding for text parts
 -- For text parts (text/plain and text/html mainly)
