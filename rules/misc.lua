@@ -26,16 +26,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 -- This is main lua config file for rspamd
 
-config['regexp'] = {}
-
-dofile('regexp/headers.lua')
-dofile('regexp/lotto.lua')
-dofile('regexp/fraud.lua')
-dofile('regexp/drugs.lua')
-dofile('html.lua')
+local util = require "rspamd_util"
 
 local reconf = config['regexp']
-local util = require "rspamd_util"
+
 
 -- Uncategorized rules
 
@@ -48,17 +42,17 @@ reconf['R_FLASH_REDIR_IMGSHACK'] = '/^(?:http:\\/\\/)?img\\d{1,5}\\.imageshack\\
 -- Different text parts
 rspamd_config.R_PARTS_DIFFER = function(task)
   local distance = task:get_mempool():get_variable('parts_distance', 'int')
-  
+
   if distance then
     local nd = tonumber(distance)
-    
+
     if nd < 50 then
       local score = 1 - util.tanh(nd / 100.0)
-      
+
       task:insert_result('R_PARTS_DIFFER', score, tostring(nd) .. '%')
     end
   end
-  
+
   return false
 end
 
@@ -69,7 +63,7 @@ rspamd_config.MISSING_DATE = function(task)
 			return true
 		end
 	end
-	
+
 	return false
 end
 rspamd_config.DATE_IN_FUTURE = function(task)
@@ -81,7 +75,7 @@ rspamd_config.DATE_IN_FUTURE = function(task)
 			return true
 		end
 	end
-	
+
 	return false
 end
 rspamd_config.DATE_IN_PAST = function(task)
@@ -93,28 +87,6 @@ rspamd_config.DATE_IN_PAST = function(task)
 			return true
 		end
 	end
-	
+
 	return false
-end
-
-local function file_exists(filename)
-	local file = io.open(filename)
-	if file then
-		io.close(file)
-		return true
-	else
-		return false
-	end
-end
-
-if file_exists('hfilter.lua') then
-  dofile('hfilter.lua')
-end
-
-if file_exists('rspamd.local.lua') then
-	dofile('rspamd.local.lua')
-end
-
-if file_exists('rspamd.classifiers.lua') then
-	dofile('rspamd.classifiers.lua')
 end

@@ -661,10 +661,23 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	return TRUE;
 }
 
+#define RSPAMD_CONFDIR_INDEX "CONFDIR"
+#define RSPAMD_RUNDIR_INDEX "RUNDIR"
+#define RSPAMD_DBDIR_INDEX "DBDIR"
+#define RSPAMD_LOGDIR_INDEX "LOGDIR"
+#define RSPAMD_PLUGINSDIR_INDEX "PLUGINSDIR"
+#define RSPAMD_RULESDIR_INDEX "RULESDIR"
+#define RSPAMD_WWWDIR_INDEX "WWWDIR"
+#define RSPAMD_PREFIX_INDEX "PREFIX"
+#define RSPAMD_VERSION_INDEX "VERSION"
+
 static void
-rspamd_rcl_set_lua_globals (struct rspamd_config *cfg, lua_State *L)
+rspamd_rcl_set_lua_globals (struct rspamd_config *cfg, lua_State *L,
+		GHashTable *vars)
 {
 	struct rspamd_config **pcfg;
+	GHashTableIter it;
+	gpointer k, v;
 
 	/* First check for global variable 'config' */
 	lua_getglobal (L, "config");
@@ -701,6 +714,31 @@ rspamd_rcl_set_lua_globals (struct rspamd_config *cfg, lua_State *L)
 	lua_pop (L, 4);
 
 	rspamd_lua_set_path (L, cfg);
+
+	/* Set known paths as rspamd_paths global */
+	lua_getglobal (L, "rspamd_paths");
+	if (lua_isnil (L, -1)) {
+		lua_newtable (L);
+		rspamd_lua_table_set (L, RSPAMD_CONFDIR_INDEX, RSPAMD_CONFDIR);
+		rspamd_lua_table_set (L, RSPAMD_RUNDIR_INDEX, RSPAMD_RUNDIR);
+		rspamd_lua_table_set (L, RSPAMD_DBDIR_INDEX, RSPAMD_DBDIR);
+		rspamd_lua_table_set (L, RSPAMD_LOGDIR_INDEX, RSPAMD_LOGDIR);
+		rspamd_lua_table_set (L, RSPAMD_WWWDIR_INDEX, RSPAMD_WWWDIR);
+		rspamd_lua_table_set (L, RSPAMD_PLUGINSDIR_INDEX, RSPAMD_PLUGINSDIR);
+		rspamd_lua_table_set (L, RSPAMD_RULESDIR_INDEX, RSPAMD_RULESDIR);
+		rspamd_lua_table_set (L, RSPAMD_PREFIX_INDEX, RSPAMD_PREFIX);
+
+		/* Override from vars if needed */
+		if (vars != NULL) {
+			g_hash_table_iter_init (&it, vars);
+
+			while (g_hash_table_iter_next (&it, &k, &v)) {
+				rspamd_lua_table_set (L, k, v);
+			}
+		}
+
+		lua_setglobal (L, "rspamd_paths");
+	}
 }
 
 static gboolean
@@ -738,7 +776,6 @@ rspamd_rcl_lua_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 				g_free (tmp2);
 				return FALSE;
 			}
-			rspamd_rcl_set_lua_globals (cfg, L);
 			/* Now do it */
 			if (lua_pcall (L, 0, LUA_MULTRET, 0) != 0) {
 				g_set_error (err,
@@ -2298,6 +2335,7 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	ucl_parser_free (parser);
 
 	top = rspamd_rcl_config_init ();
+	rspamd_rcl_set_lua_globals (cfg, cfg->lua_state, vars);
 	err = NULL;
 
 	if (logger_fin != NULL) {
