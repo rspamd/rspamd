@@ -28,33 +28,65 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 local util = require "rspamd_util"
 
-config['regexp'] = {}
 local reconf = config['regexp']
 
-local local_conf = rspamd_paths['CONFDIR']
-local local_rules = rspamd_paths['RULESDIR']
 
-dofile(local_rules .. '/regexp/headers.lua')
-dofile(local_rules .. '/regexp/lotto.lua')
-dofile(local_rules .. '/regexp/fraud.lua')
-dofile(local_rules .. '/regexp/drugs.lua')
-dofile(local_rules .. '/html.lua')
-dofile(local_rules .. '/misc.lua')
+-- Uncategorized rules
 
-local function file_exists(filename)
-	local file = io.open(filename)
-	if file then
-		io.close(file)
-		return true
-	else
-		return false
+-- Local rules
+local r_bgcolor = '/BGCOLOR=/iP'
+local r_font_color = '/font color=[\\"\']?\\#FFFFFF[\\"\']?/iP'
+reconf['R_WHITE_ON_WHITE'] = string.format('(!(%s) & (%s))', r_bgcolor, r_font_color)
+reconf['R_FLASH_REDIR_IMGSHACK'] = '/^(?:http:\\/\\/)?img\\d{1,5}\\.imageshack\\.us\\/\\S+\\.swf/U'
+
+-- Different text parts
+rspamd_config.R_PARTS_DIFFER = function(task)
+  local distance = task:get_mempool():get_variable('parts_distance', 'int')
+
+  if distance then
+    local nd = tonumber(distance)
+
+    if nd < 50 then
+      local score = 1 - util.tanh(nd / 100.0)
+
+      task:insert_result('R_PARTS_DIFFER', score, tostring(nd) .. '%')
+    end
+  end
+
+  return false
+end
+
+-- Date issues
+rspamd_config.MISSING_DATE = function(task)
+	if rspamd_config:get_api_version() >= 5 then
+		if not task:get_header_raw('Date') then
+			return true
+		end
 	end
-end
 
-if file_exists(local_conf .. 'rspamd.local.lua') then
-	dofile(local_conf .. 'rspamd.local.lua')
+	return false
 end
+rspamd_config.DATE_IN_FUTURE = function(task)
+	if rspamd_config:get_api_version() >= 5 then
+		local dm = task:get_date{format = 'message'}
+		local dt = task:get_date{format = 'connect'}
+		-- An 2 hour
+		if dm > 0 and dm - dt > 7200 then
+			return true
+		end
+	end
 
-if file_exists(local_rules .. 'rspamd.classifiers.lua') then
-	dofile(local_rules .. 'rspamd.classifiers.lua')
+	return false
+end
+rspamd_config.DATE_IN_PAST = function(task)
+	if rspamd_config:get_api_version() >= 5 then
+    local dm = task:get_date{format = 'message', gmt = true}
+    local dt = task:get_date{format = 'connect', gmt = true}
+		-- A day
+		if dm > 0 and dt - dm > 86400 then
+			return true
+		end
+	end
+
+	return false
 end
