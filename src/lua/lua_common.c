@@ -165,16 +165,6 @@ lua_add_actions_global (lua_State *L)
 	lua_setglobal (L, "rspamd_actions");
 }
 
-#define RSPAMD_CONFDIR_INDEX "CONFDIR"
-#define RSPAMD_RUNDIR_INDEX "RUNDIR"
-#define RSPAMD_DBDIR_INDEX "DBDIR"
-#define RSPAMD_LOGDIR_INDEX "LOGDIR"
-#define RSPAMD_PLUGINSDIR_INDEX "PLUGINSDIR"
-#define RSPAMD_RULESDIR_INDEX "RULESDIR"
-#define RSPAMD_WWWDIR_INDEX "WWWDIR"
-#define RSPAMD_PREFIX_INDEX "PREFIX"
-#define RSPAMD_VERSION_INDEX "VERSION"
-
 void
 rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg)
 {
@@ -217,21 +207,6 @@ rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg)
 	lua_pushstring (L, path_buf);
 	lua_setfield (L, -2, "path");
 	lua_pop (L, 1);
-
-	/* Set known paths as rspamd_paths global */
-	lua_getglobal (L, "rspamd_paths");
-	if (lua_isnil (L, -1)) {
-		lua_newtable (L);
-		rspamd_lua_table_set (L, RSPAMD_CONFDIR_INDEX, RSPAMD_CONFDIR);
-		rspamd_lua_table_set (L, RSPAMD_RUNDIR_INDEX, RSPAMD_RUNDIR);
-		rspamd_lua_table_set (L, RSPAMD_DBDIR_INDEX, RSPAMD_DBDIR);
-		rspamd_lua_table_set (L, RSPAMD_LOGDIR_INDEX, RSPAMD_LOGDIR);
-		rspamd_lua_table_set (L, RSPAMD_WWWDIR_INDEX, RSPAMD_WWWDIR);
-		rspamd_lua_table_set (L, RSPAMD_PLUGINSDIR_INDEX, RSPAMD_PLUGINSDIR);
-		rspamd_lua_table_set (L, RSPAMD_RULESDIR_INDEX, RSPAMD_RULESDIR);
-		rspamd_lua_table_set (L, RSPAMD_PREFIX_INDEX, RSPAMD_PREFIX);
-		lua_setglobal (L, "rspamd_paths");
-	}
 }
 
 lua_State *
