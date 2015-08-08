@@ -1065,6 +1065,11 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 	if (conf == NULL) {
 		msg_info ("%s module %s is enabled but has not been configured",
 				is_c ? "internal" : "lua", module_name);
+
+		if (!is_c) {
+			msg_info ("%s disabling unconfigured lua module", module_name);
+			return FALSE;
+		}
 	}
 	else {
 		enabled = ucl_object_find_key (conf, "enabled");
