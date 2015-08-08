@@ -562,7 +562,6 @@ nederland.lc
 nederlands.lc
 net23.net
 net84.net
-net.et
 netfast.org
 netfirms.com
 netfreehost.com
