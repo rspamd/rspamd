@@ -43,34 +43,57 @@ local function check_html_image(task, min, max)
   end
 end
 
-rspamd_config.HTML_SHORT_LINK_IMG_1 = function(task)
-  return check_html_image(task, 0, 1024)
-end
-rspamd_config.HTML_SHORT_LINK_IMG_2 = function(task)
-  return check_html_image(task, 1024, 1536)
-end
-rspamd_config.HTML_SHORT_LINK_IMG_3 = function(task)
-  return check_html_image(task, 1536, 2048)
-end
-rspamd_config.R_EMPTY_IMAGE = function(task)
-  local tp = task:get_text_parts() -- get text parts in a message
+rspamd_config.HTML_SHORT_LINK_IMG_1 = { 
+  callback = function(task)
+    return check_html_image(task, 0, 1024)
+  end,
+  score = 3.0,
+  group = 'html',
+  description = 'Short html part (0..1K) with a link to an image'
+}
   
-  for _,p in ipairs(tp) do -- iterate over text parts array using `ipairs`
-    if p:is_html() then -- if the current part is html part
-      local hc = p:get_html() -- we get HTML context
-      local len = p:get_length() -- and part's length
-      
-      if len < 50 then -- if we have a part that has less than 50 bytes of text
-        local images = hc:get_images() -- then we check for HTML images
+rspamd_config.HTML_SHORT_LINK_IMG_2 = {
+  callback = function(task)
+    return check_html_image(task, 1024, 1536)
+  end,
+  score = 1.0,
+  group = 'html',
+  description = 'Short html part (1K..1.5K) with a link to an image'
+}
+
+rspamd_config.HTML_SHORT_LINK_IMG_3 = {
+  callback = function(task)
+    return check_html_image(task, 1536, 2048)
+  end,
+  score = 0.5,
+  group = 'html',
+  description = 'Short html part (1.5K..2K) with a link to an image'
+}
+rspamd_config.R_EMPTY_IMAGE = {
+  callback = function(task)
+    local tp = task:get_text_parts() -- get text parts in a message
+    
+    for _,p in ipairs(tp) do -- iterate over text parts array using `ipairs`
+      if p:is_html() then -- if the current part is html part
+        local hc = p:get_html() -- we get HTML context
+        local len = p:get_length() -- and part's length
         
-        if images then -- if there are images
-          for _,i in ipairs(images) do -- then iterate over images in the part
-            if i['height'] + i['width'] >= 400 then -- if we have a large image
-              return true -- add symbol
+        if len < 50 then -- if we have a part that has less than 50 bytes of text
+          local images = hc:get_images() -- then we check for HTML images
+          
+          if images then -- if there are images
+            for _,i in ipairs(images) do -- then iterate over images in the part
+              if i['height'] + i['width'] >= 400 then -- if we have a large image
+                return true -- add symbol
+              end
             end
           end
         end
       end
     end
-  end
-end
+  end,
+
+  score = 2.0,
+  group = 'html',
+  description = 'Message contains empty parts and image'
+}
