@@ -1,3 +1,77 @@
+0.9.9:
+	* Don't use RWL_SPAMHAUS_WL (unknown result) for whitelisting (by @fatalbanana)
+	* Import updated public suffix list (by @fatalbanana)
+	* Remove debug message
+	* Fix settings (by @fatalbanana)
+	* Remove duplicated symbol registration
+	* Use WAL for fuzzy storage
+	* RBL fixes (by @fatalbanana):
+		- silence errors;
+		- yield unknown results from RBLs;
+		- fix scoring for DNSWL;
+		- fix use of RBL name as symbol;
+		- ignore RBL names that would not be yielded;
+	* Support captures in regular expressions
+	* Add captures support to lua_regexp
+	* Support dist on FreeBSD and Darwin
+	* Add RCVD_IN_DNSWL_NONE as whitelisting exclusion (by @fatalbanana)
+	* Multiple fixes to URL detection:
+		- support port definition;
+		- fix query and path recognition;
+		- fix parsing of multiple slashes in URL;
+		- fix parsing query just after port;
+		- fix path field in `url:to_table` method;
+		- improve support of IP based URLs.
+	* Set ignore_whitelists = true for RECEIVED_SPAMHAUS_XBL (by @fatalbanana)
+	* Add GTUBE support
+	* Ignore User header in SA mode
+
+0.9.8:
+	* Fix critical bug in bayes classifier (#305)
+	* Fix critical bug in RBL module (by @fatalbanana)
+	* Fix and rework settings plugin.
+	* Fix get_all_opts for a case of non-iterable options.
+	* Use tld for redirector's matching.
+
+0.9.7:
+	* Add whitelist_exception setting to RBL module (by @fatalbanana)
+	* Don't use RWL_MAILSPIKE_POSSIBLE or DNSWL_BLOCKED for whitelisting (by
+	  @fatalbanana)
+	* Fix extreme cases in bayes classifier.
+	* Fix parsing of urls with '?' at the end of hostname.
+	* Update interface.
+	* Fix number of issues with webui interaction.
+	* Fix saving maps.
+	* Allow user@ and @domain matches in multimap.
+	* Fix issues with bounces From processing.
+	* Fix abs/fabs misuse.
+	* Fix builds on suse and arch linux distributions.
+
+0.9.6:
+	* Fix memory leak if mime cannot be parsed.
+	* Fix dkim cache expiration.
+	* Fix issues with redirector HTTP response.
+	* Fix abnormal connection closing with certains messages with a high score
+	  (issue #296)
+	* Fix redirector installation.
+	* Use specific POE loop for some systems.
+	* Fix number of issues in URL redirector.
+	* Fix selecting URLs for sending to redirector.
+
+0.9.5:
+	* Avoid double free when extending HTTP message.
+	* Fix double free if multiple classifiers are defined.
+	* Fix misprint in spamassassin plugin.
+	* Fix cpuid invocation on i386.
+	* Fix ownership issues for zero-copy decode.
+	* Allow __len metamethod on rspamd{text}.
+	* Add base64 decoding lua utility.
+	* Fix build on FreeBSD
+	* Skip spaces at the beginning of mime messages.
+	* DBL_ABUSE_REDIR should not have significant weight.
+	* Allow to split by lua_regexp rspamd{text} objects.
+	* Allow to specify custom stop pattern for lua_tcp.
+
 0.9.4:
 	* Fix critical bugs in tokenization algorithm
 	* Write unit tests for tokenization
