@@ -29,6 +29,7 @@
 #include "cfg_rcl.h"
 #include "message.h"
 #include "utlist.h"
+#include "http.h"
 
 /* Max line size */
 #define OUTBUFSIZ BUFSIZ
@@ -148,10 +149,12 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	struct rspamd_http_message *msg)
 {
 	GList *cur;
+	GHashTable *query_args;
 	struct custom_command *cmd;
 	struct http_parser_url u;
 	const gchar *p;
 	gsize pathlen;
+	GString lookup, *res;
 
 	if (msg->url == NULL || msg->url->len == 0) {
 		g_set_error (&task->err, rspamd_protocol_quark(), 400, "missing command");
@@ -250,31 +253,30 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 
 	if (u.field_set & (1 << UF_QUERY)) {
 		/* In case if we have a query, we need to store it somewhere */
-		task->msg.start = msg->url->str + u.field_data[UF_QUERY].off;
-		task->msg.len = u.field_data[UF_QUERY].len;
+		query_args = rspamd_http_message_parse_query (msg);
 
-		/* Check URL query parameters */
-		p = memchr (task->msg.start, '=', task->msg.len);
+		lookup.str = (gchar *)"file";
+		lookup.len = sizeof ("file") - 1;
 
-		if (p != NULL) {
-			if (p != task->msg.start &&
-				(memcmp (task->msg.start, "file",
-					(p - task->msg.start)) == 0 ||
-				memcmp (task->msg.start, "path",
-					(p - task->msg.start)) == 0)) {
-				task->msg.start = p + 1;
-				task->msg.len -= (p - task->msg.start) + 1;
-				task->flags |= RSPAMD_TASK_FLAG_FILE;
-			}
-			else {
-				msg_err ("invalid query parameter: %*s", task->msg.len,
-						task->msg.start);
-			}
+		res = g_hash_table_lookup (query_args, &lookup);
+
+		if (res == NULL) {
+			lookup.str = (gchar *)"path";
+			lookup.len = sizeof ("path") - 1;
+			res = g_hash_table_lookup (query_args, &lookup);
+		}
+
+		if (res == NULL) {
+			/* Treat the whole query as path */
+			task->msg.start = msg->url->str + u.field_data[UF_QUERY].off;
+			task->msg.len = u.field_data[UF_QUERY].len;
 		}
 		else {
-			/* Just file url afterwards */
-			task->flags |= RSPAMD_TASK_FLAG_FILE;
+			task->msg.start = rspamd_mempool_strdup (task->task_pool, res->str);
+			task->msg.len = res->len;
 		}
+
+		g_hash_table_unref (query_args);
 	}
 
 	return TRUE;
