@@ -276,6 +276,8 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 			task->msg.len = res->len;
 		}
 
+		task->flags |= RSPAMD_TASK_FLAG_FILE;
+
 		g_hash_table_unref (query_args);
 	}
 

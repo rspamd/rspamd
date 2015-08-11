@@ -2393,7 +2393,7 @@ rspamd_http_message_parse_query (struct rspamd_http_message *msg)
 						g_assert (key != NULL);
 						if (p > c) {
 							value = g_string_sized_new (p - c);
-							g_string_append_len (key, c, p - c);
+							g_string_append_len (value, c, p - c);
 							value->len = rspamd_decode_url (value->str, value->str,
 									value->len);
 						}
