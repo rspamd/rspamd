@@ -205,8 +205,12 @@ rspamd_unescape_uri (gchar *dst, const gchar *src, gsize size)
 				state = sw_quoted;
 				break;
 			}
-
-			*d++ = ch;
+			else if (ch == '+') {
+				*d++ = ' ';
+			}
+			else {
+				*d++ = ch;
+			}
 			break;
 
 		case sw_quoted:
