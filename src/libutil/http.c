@@ -1896,7 +1896,7 @@ rspamd_http_router_is_subdir (const gchar *parent, const gchar *sub)
 
 static gboolean
 rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
-	struct rspamd_http_message *msg, gboolean expand_path)
+	GString *lookup, gboolean expand_path)
 {
 	struct stat st;
 	gint fd;
@@ -1904,7 +1904,7 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 	struct rspamd_http_message *reply_msg;
 
 	rspamd_snprintf (filebuf, sizeof (filebuf), "%s%c%v",
-		entry->rt->default_fs_path, G_DIR_SEPARATOR, msg->url);
+		entry->rt->default_fs_path, G_DIR_SEPARATOR, lookup);
 
 	if (realpath (filebuf, realbuf) == NULL ||
 		lstat (realbuf, &st) == -1) {
@@ -1913,9 +1913,9 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 
 	if (S_ISDIR (st.st_mode) && expand_path) {
 		/* Try to append 'index.html' to the url */
-		g_string_append_printf (msg->url, "%c%s", G_DIR_SEPARATOR,
+		g_string_append_printf (lookup, "%c%s", G_DIR_SEPARATOR,
 			"index.html");
-		return rspamd_http_router_try_file (entry, msg, FALSE);
+		return rspamd_http_router_try_file (entry, lookup, FALSE);
 	}
 	else if (!S_ISREG (st.st_mode)) {
 		return FALSE;
@@ -1973,9 +1973,13 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 	gpointer found;
 	struct rspamd_http_message *err_msg;
 	GError *err;
+	GString lookup;
+	struct http_parser_url u;
 
 	G_STATIC_ASSERT (sizeof (rspamd_http_router_handler_t) ==
 		sizeof (gpointer));
+
+	memset (&lookup, 0, sizeof (lookup));
 
 	if (entry->is_reply) {
 		/* Request is finished, it is safe to free a connection */
@@ -1984,23 +1988,35 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 	else {
 		/* Search for path */
 		if (msg->url != NULL && msg->url->len != 0) {
-			found = g_hash_table_lookup (entry->rt->paths, msg->url->str);
+
+			http_parser_parse_url (msg->url->str, msg->url->len, TRUE, &u);
+
+			if (u.field_set & (1 << UF_PATH)) {
+				lookup.str = msg->url->str + u.field_data[UF_PATH].off;
+				lookup.len = u.field_data[UF_PATH].len;
+			}
+			else {
+				lookup.str = msg->url->str;
+				lookup.len = msg->url->len;
+			}
+
+			found = g_hash_table_lookup (entry->rt->paths, &lookup);
 			memcpy (&handler, &found, sizeof (found));
-			msg_debug ("requested known path: %v", msg->url);
+			msg_debug ("requested known path: %v", &lookup);
 		}
 		entry->is_reply = TRUE;
 		if (handler != NULL) {
 			return handler (entry, msg);
 		}
 		else {
-			if (entry->rt->default_fs_path == NULL ||
-				!rspamd_http_router_try_file (entry, msg, TRUE)) {
+			if (entry->rt->default_fs_path == NULL || lookup.len == 0 ||
+				!rspamd_http_router_try_file (entry, &lookup, TRUE)) {
 				err = g_error_new (HTTP_ERROR, 404,
 						"Not found");
 				if (entry->rt->error_handler != NULL) {
 					entry->rt->error_handler (entry, err);
 				}
-				msg_info ("path: %v not found", msg->url);
+				msg_info ("path: %v not found", &lookup);
 				err_msg = rspamd_http_new_message (HTTP_RESPONSE);
 				err_msg->date = time (NULL);
 				err_msg->code = err->code;
@@ -2033,7 +2049,8 @@ rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 	struct stat st;
 
 	new = g_slice_alloc0 (sizeof (struct rspamd_http_connection_router));
-	new->paths = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+	new->paths = g_hash_table_new_full (rspamd_gstring_icase_hash,
+			rspamd_gstring_icase_equal, rspamd_gstring_free_hard, NULL);
 	new->conns = NULL;
 	new->error_handler = eh;
 	new->finish_handler = fh;
@@ -2084,12 +2101,14 @@ rspamd_http_router_add_path (struct rspamd_http_connection_router *router,
 	const gchar *path, rspamd_http_router_handler_t handler)
 {
 	gpointer ptr;
+	GString *key;
 	G_STATIC_ASSERT (sizeof (rspamd_http_router_handler_t) ==
 		sizeof (gpointer));
 
 	if (path != NULL && handler != NULL && router != NULL) {
 		memcpy (&ptr, &handler, sizeof (ptr));
-		g_hash_table_insert (router->paths, (gpointer)path, ptr);
+		key = g_string_new (path);
+		g_hash_table_insert (router->paths, key, ptr);
 	}
 }
 
