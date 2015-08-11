@@ -398,4 +398,12 @@ void rspamd_http_router_handle_socket (
  */
 void rspamd_http_router_free (struct rspamd_http_connection_router *router);
 
+/**
+ * Extract arguments from a messsage's URI contained inside query string decoding
+ * them if needed
+ * @param msg HTTP request message
+ * @return new GHashTable which maps GString * to GString * (table must be freed by a caller)
+ */
+GHashTable* rspamd_http_message_parse_query (struct rspamd_http_message *msg);
+
 #endif /* HTTP_H_ */

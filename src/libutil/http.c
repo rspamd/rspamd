@@ -2325,3 +2325,108 @@ rspamd_http_connection_make_peer_key (const gchar *key)
 
 	return kp;
 }
+
+GHashTable *
+rspamd_http_message_parse_query (struct rspamd_http_message *msg)
+{
+	GHashTable *res;
+	GString *key = NULL, *value = NULL;
+	const gchar *p, *c, *end;
+	struct http_parser_url u;
+	enum {
+		parse_key,
+		parse_eqsign,
+		parse_value,
+		parse_ampersand
+	} state = parse_key;
+
+	res = g_hash_table_new_full (rspamd_gstring_icase_hash,
+			rspamd_gstring_icase_equal, rspamd_gstring_free_hard,
+			rspamd_gstring_free_hard);
+
+	if (msg->url && msg->url->len > 0) {
+		http_parser_parse_url (msg->url->str, msg->url->len, TRUE, &u);
+
+		if (u.field_set & (1 << UF_QUERY)) {
+			p = msg->url->str + u.field_data[UF_QUERY].off;
+			c = p;
+			end = p + u.field_data[UF_QUERY].len;
+
+			while (p <= end) {
+				switch (state) {
+				case parse_key:
+					if ((*p == '&' || p == end) && p > c) {
+						/* We have a single parameter without a value */
+						key = g_string_sized_new (p - c);
+						g_string_append_len (key, c, p - c);
+						key->len = rspamd_decode_url (key->str, key->str,
+								key->len);
+						value = g_string_new ("");
+						g_hash_table_insert (res, key, value);
+						state = parse_ampersand;
+					}
+					else if (*p == '=' && p > c) {
+						/* We have something like key=value */
+						key = g_string_sized_new (p - c);
+						g_string_append_len (key, c, p - c);
+						key->len = rspamd_decode_url (key->str, key->str,
+								key->len);
+						state = parse_eqsign;
+					}
+					else {
+						p ++;
+					}
+					break;
+
+				case parse_eqsign:
+					if (*p != '=') {
+						c = p;
+						state = parse_value;
+					}
+					else {
+						p ++;
+					}
+					break;
+
+				case parse_value:
+					if ((*p == '&' || p == end) && p >= c) {
+						g_assert (key != NULL);
+						if (p > c) {
+							value = g_string_sized_new (p - c);
+							g_string_append_len (key, c, p - c);
+							value->len = rspamd_decode_url (value->str, value->str,
+									value->len);
+						}
+						else {
+							value = g_string_new ("");
+						}
+
+						g_hash_table_insert (res, key, value);
+						key = value = NULL;
+						state = parse_ampersand;
+					}
+					else {
+						p ++;
+					}
+					break;
+
+				case parse_ampersand:
+					if (*p != '&') {
+						c = p;
+						state = parse_key;
+					}
+					else {
+						p ++;
+					}
+					break;
+				}
+			}
+		}
+
+		if (state != parse_ampersand && key != NULL) {
+			g_string_free (key, TRUE);
+		}
+	}
+
+	return res;
+}
