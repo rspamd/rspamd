@@ -294,6 +294,8 @@ static gboolean rspamd_controller_check_password(
 {
 	const gchar *check;
 	const GString *password;
+	GString lookup;
+	GHashTable *query_args = NULL;
 	struct rspamd_controller_worker_ctx *ctx = session->ctx;
 	gboolean check_normal = TRUE, check_enable = TRUE, ret = TRUE;
 	const struct rspamd_controller_pbkdf *pbkdf = NULL;
@@ -315,6 +317,21 @@ static gboolean rspamd_controller_check_password(
 	password = rspamd_http_message_find_header (msg, "Password");
 
 	if (password == NULL) {
+		/* Try to get password from query args */
+		query_args = rspamd_http_message_parse_query (msg);
+
+		lookup.str = (gchar *)"password";
+		lookup.len = sizeof ("password") - 1;
+
+		password = g_hash_table_lookup (query_args, &lookup);
+	}
+
+	if (password == NULL) {
+
+		if (query_args != NULL) {
+			g_hash_table_unref (query_args);
+		}
+
 		if (ctx->secure_map == NULL) {
 			if (ctx->password == NULL && !is_enable) {
 				return TRUE;
@@ -390,6 +407,10 @@ static gboolean rspamd_controller_check_password(
 				check_enable = FALSE;
 			}
 		}
+	}
+
+	if (query_args != NULL) {
+		g_hash_table_unref (query_args);
 	}
 
 	if (check_normal == FALSE && check_enable == FALSE) {
