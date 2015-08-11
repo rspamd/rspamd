@@ -128,6 +128,15 @@ guchar* rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen);
 gchar * rspamd_encode_base64 (const guchar *in, gsize inlen, gint str_len,
 		gsize *outlen);
 
+/**
+ * Decode URL encoded string in-place and return new length of a string, src and dst are NULL terminated
+ * @param dst
+ * @param src
+ * @param size
+ * @return
+ */
+gsize rspamd_decode_url (gchar *dst, const gchar *src, gsize size);
+
 #ifndef g_tolower
 #   define g_tolower(x) (((x) >= 'A' && (x) <= 'Z') ? (x) - 'A' + 'a' : (x))
 #endif

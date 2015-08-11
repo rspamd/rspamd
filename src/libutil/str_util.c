@@ -707,3 +707,91 @@ end:
 
 	return out;
 }
+
+gsize
+rspamd_decode_url (gchar *dst, const gchar *src, gsize size)
+{
+	gchar *d, ch, c, decoded;
+	const gchar *s;
+	enum {
+		sw_usual = 0,
+		sw_quoted,
+		sw_quoted_second
+	} state;
+
+	d = dst;
+	s = src;
+
+	state = 0;
+	decoded = 0;
+
+	while (size--) {
+
+		ch = *s++;
+
+		switch (state) {
+		case sw_usual:
+
+			if (ch == '%') {
+				state = sw_quoted;
+				break;
+			}
+			else if (ch == '+') {
+				*d++ = ' ';
+			}
+			else {
+				*d++ = ch;
+			}
+			break;
+
+		case sw_quoted:
+
+			if (ch >= '0' && ch <= '9') {
+				decoded = (ch - '0');
+				state = sw_quoted_second;
+				break;
+			}
+
+			c = (ch | 0x20);
+			if (c >= 'a' && c <= 'f') {
+				decoded = (c - 'a' + 10);
+				state = sw_quoted_second;
+				break;
+			}
+
+			/* the invalid quoted character */
+
+			state = sw_usual;
+
+			*d++ = ch;
+
+			break;
+
+		case sw_quoted_second:
+
+			state = sw_usual;
+
+			if (ch >= '0' && ch <= '9') {
+				ch = ((decoded << 4) + ch - '0');
+				*d++ = ch;
+
+				break;
+			}
+
+			c = (u_char) (ch | 0x20);
+			if (c >= 'a' && c <= 'f') {
+				ch = ((decoded << 4) + c - 'a' + 10);
+
+				*d++ = ch;
+				break;
+			}
+
+			/* the invalid quoted character */
+			break;
+		}
+	}
+
+	*d = '\0';
+
+	return (d - dst);
+}

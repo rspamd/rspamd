@@ -274,7 +274,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 		r = rspamd_strlcpy (filepath, task->msg.start,
 				MIN (sizeof (filepath), task->msg.len + 1));
 
-		rspamd_unescape_uri (filepath, filepath, r + 1);
+		rspamd_decode_url (filepath, filepath, r + 1);
 		flen = strlen (filepath);
 
 		if (filepath[0] == '"' && flen > 2) {

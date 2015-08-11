@@ -122,7 +122,5 @@ struct rspamd_url *
 rspamd_url_get_next (rspamd_mempool_t *pool,
 		const gchar *start, gchar const **pos, gint *statep);
 
-void
-rspamd_unescape_uri (gchar *dst, const gchar *src, gsize size);
 
 #endif
