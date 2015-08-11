@@ -2411,7 +2411,7 @@ rspamd_http_message_parse_query (struct rspamd_http_message *msg)
 					break;
 
 				case parse_ampersand:
-					if (*p != '&') {
+					if (*p != '&' && p != end) {
 						c = p;
 						state = parse_key;
 					}
