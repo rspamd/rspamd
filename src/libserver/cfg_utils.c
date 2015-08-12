@@ -701,7 +701,7 @@ symbols_classifiers_callback (gpointer key, gpointer value, gpointer ud)
 	struct rspamd_config *cfg = ud;
 
 	/* Actually, statistics should act like any ordinary symbol */
-	rspamd_symbols_cache_add_symbol (cfg->cache, key, 1.0, 0, NULL, NULL,
+	rspamd_symbols_cache_add_symbol (cfg->cache, key, 0, NULL, NULL,
 			SYMBOL_TYPE_COMPOSITE, -1);
 }
 

@@ -146,11 +146,12 @@ regexp_module_config (struct rspamd_config *cfg)
 				res = FALSE;
 			}
 			else {
-				rspamd_symbols_cache_add_symbol_normal (cfg->cache,
+				rspamd_symbols_cache_add_symbol (cfg->cache,
 						cur_item->symbol,
-						1,
+						0,
 						process_regexp_item,
-						cur_item);
+						cur_item,
+						SYMBOL_TYPE_NORMAL, -1);
 			}
 		}
 		else if (value->type == UCL_USERDATA) {
@@ -158,11 +159,12 @@ regexp_module_config (struct rspamd_config *cfg)
 					sizeof (struct regexp_module_item));
 			cur_item->symbol = ucl_object_key (value);
 			cur_item->lua_function = ucl_object_toclosure (value);
-			rspamd_symbols_cache_add_symbol_normal (cfg->cache,
+			rspamd_symbols_cache_add_symbol (cfg->cache,
 				cur_item->symbol,
-				1,
+				0,
 				process_regexp_item,
-				cur_item);
+				cur_item,
+				SYMBOL_TYPE_NORMAL, -1);
 		}
 		else {
 			msg_warn ("unknown type of attribute %s for regexp module",

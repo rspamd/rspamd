@@ -920,7 +920,6 @@ rspamd_register_symbol_fromlua (lua_State *L,
 
 	ret = rspamd_symbols_cache_add_symbol (cfg->cache,
 			name,
-			weight,
 			priority,
 			lua_metric_symbol_callback,
 			cd,
@@ -1012,16 +1011,18 @@ lua_config_register_symbols (lua_State *L)
 				while (lua_next (L, -2)) {
 					lua_pushvalue (L, -2);
 					sym = luaL_checkstring (L, -2);
-					rspamd_symbols_cache_add_symbol_virtual (cfg->cache, sym,
-							weight, ret);
+					rspamd_symbols_cache_add_symbol (cfg->cache, sym,
+							0, NULL, NULL,
+							SYMBOL_TYPE_VIRTUAL, ret);
 					lua_pop (L, 2);
 				}
 				lua_pop (L, 1);
 			}
 			else if (lua_type (L, i) == LUA_TSTRING) {
 				sym = luaL_checkstring (L, i);
-				rspamd_symbols_cache_add_symbol_virtual (cfg->cache, sym,
-						weight, ret);
+				rspamd_symbols_cache_add_symbol (cfg->cache, sym,
+						0, NULL, NULL,
+						SYMBOL_TYPE_VIRTUAL, ret);
 			}
 		}
 	}
@@ -1048,8 +1049,9 @@ lua_config_register_virtual_symbol (lua_State * L)
 		}
 
 		if (name) {
-			ret = rspamd_symbols_cache_add_symbol_virtual (cfg->cache, name,
-					weight, parent);
+			ret = rspamd_symbols_cache_add_symbol (cfg->cache, name,
+					0, NULL, NULL,
+					SYMBOL_TYPE_VIRTUAL, parent);
 		}
 	}
 
@@ -1257,7 +1259,7 @@ lua_config_add_composite (lua_State * L)
 
 				if (new) {
 					rspamd_symbols_cache_add_symbol (cfg->cache, name,
-							1, 0, NULL, NULL, SYMBOL_TYPE_COMPOSITE, -1);
+							0, NULL, NULL, SYMBOL_TYPE_COMPOSITE, -1);
 				}
 
 				ret = TRUE;

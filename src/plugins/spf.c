@@ -167,17 +167,27 @@ spf_module_config (struct rspamd_config *cfg)
 		}
 	}
 
-	cb_id = rspamd_symbols_cache_add_symbol_normal (cfg->cache,
+	cb_id = rspamd_symbols_cache_add_symbol (cfg->cache,
 		spf_module_ctx->symbol_fail,
-		1,
+		0,
 		spf_symbol_callback,
-		NULL);
-	rspamd_symbols_cache_add_symbol_virtual (cfg->cache,
-			spf_module_ctx->symbol_softfail, 1, cb_id);
-	rspamd_symbols_cache_add_symbol_virtual (cfg->cache,
-			spf_module_ctx->symbol_neutral, 1, cb_id);
-	rspamd_symbols_cache_add_symbol_virtual (cfg->cache,
-			spf_module_ctx->symbol_allow, 1, cb_id);
+		NULL,
+		SYMBOL_TYPE_NORMAL|SYMBOL_TYPE_FINE, -1);
+	rspamd_symbols_cache_add_symbol (cfg->cache,
+			spf_module_ctx->symbol_softfail, 0,
+			NULL, NULL,
+			SYMBOL_TYPE_VIRTUAL,
+			cb_id);
+	rspamd_symbols_cache_add_symbol (cfg->cache,
+			spf_module_ctx->symbol_neutral, 0,
+			NULL, NULL,
+			SYMBOL_TYPE_VIRTUAL,
+			cb_id);
+	rspamd_symbols_cache_add_symbol (cfg->cache,
+			spf_module_ctx->symbol_allow, 0,
+			NULL, NULL,
+			SYMBOL_TYPE_VIRTUAL,
+			cb_id);
 
 	spf_module_ctx->spf_hash = rspamd_lru_hash_new (
 			cache_size,

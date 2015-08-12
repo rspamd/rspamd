@@ -228,18 +228,24 @@ dkim_module_config (struct rspamd_config *cfg)
 			"trusted_only option is set and no trusted domains are defined; disabling dkim module completely as it is useless in this case");
 	}
 	else {
-		cb_id = rspamd_symbols_cache_add_symbol_normal (cfg->cache,
+		cb_id = rspamd_symbols_cache_add_symbol (cfg->cache,
 			dkim_module_ctx->symbol_reject,
-			1,
+			0,
 			dkim_symbol_callback,
-			NULL);
-		rspamd_symbols_cache_add_symbol_virtual (cfg->cache,
+			NULL,
+			SYMBOL_TYPE_NORMAL|SYMBOL_TYPE_FINE,
+			-1);
+		rspamd_symbols_cache_add_symbol (cfg->cache,
 			dkim_module_ctx->symbol_tempfail,
-			1,
+			0,
+			NULL, NULL,
+			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
 			cb_id);
-		rspamd_symbols_cache_add_symbol_virtual (cfg->cache,
+		rspamd_symbols_cache_add_symbol (cfg->cache,
 			dkim_module_ctx->symbol_allow,
-			1,
+			0,
+			NULL, NULL,
+			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
 			cb_id);
 
 		dkim_module_ctx->dkim_hash = rspamd_lru_hash_new (

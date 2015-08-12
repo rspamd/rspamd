@@ -104,11 +104,13 @@ chartable_module_config (struct rspamd_config *cfg)
 		chartable_module_ctx->threshold = DEFAULT_THRESHOLD;
 	}
 
-	rspamd_symbols_cache_add_symbol_normal (cfg->cache,
+	rspamd_symbols_cache_add_symbol (cfg->cache,
 		chartable_module_ctx->symbol,
-		1,
+		0,
 		chartable_symbol_callback,
-		NULL);
+		NULL,
+		SYMBOL_TYPE_NORMAL,
+		-1);
 
 	return res;
 }
