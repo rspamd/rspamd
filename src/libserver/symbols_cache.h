@@ -37,12 +37,13 @@ struct symbols_cache;
 typedef void (*symbol_func_t)(struct rspamd_task *task, gpointer user_data);
 
 enum rspamd_symbol_type {
-	SYMBOL_TYPE_NORMAL,
-	SYMBOL_TYPE_VIRTUAL,
-	SYMBOL_TYPE_CALLBACK,
-	SYMBOL_TYPE_GHOST,
-	SYMBOL_TYPE_SKIPPED,
-	SYMBOL_TYPE_COMPOSITE
+	SYMBOL_TYPE_NORMAL = (1 << 0),
+	SYMBOL_TYPE_VIRTUAL = (1 << 1),
+	SYMBOL_TYPE_CALLBACK = (1 << 2),
+	SYMBOL_TYPE_GHOST = (1 << 3),
+	SYMBOL_TYPE_SKIPPED = (1 << 4),
+	SYMBOL_TYPE_COMPOSITE = (1 << 5),
+	SYMBOL_TYPE_FINE = (1 << 6)
 };
 
 /**
@@ -64,53 +65,6 @@ gboolean rspamd_symbols_cache_init (struct symbols_cache* cache,
 	struct rspamd_config *cfg);
 
 /**
- * Register function for symbols parsing
- * @param name name of symbol
- * @param func pointer to handler
- * @param user_data pointer to user_data
- */
-gint rspamd_symbols_cache_add_symbol_normal (struct symbols_cache *cache,
-	const gchar *name,
-	double weight,
-	symbol_func_t func,
-	gpointer user_data);
-
-
-/**
- * Register virtual symbol
- * @param name name of symbol
- * @param weight initial weight
- * @param parent associated callback parent
- */
-gint rspamd_symbols_cache_add_symbol_virtual (struct symbols_cache *cache,
-	const gchar *name,
-	double weight,
-	gint parent);
-
-/**
- * Register callback function for symbols parsing
- * @param name name of symbol
- * @param func pointer to handler
- * @param user_data pointer to user_data
- */
-gint rspamd_symbols_cache_add_symbol_callback (struct symbols_cache *cache,
-	double weight,
-	symbol_func_t func,
-	gpointer user_data);
-
-/**
- * Register function for symbols parsing with strict priority
- * @param name name of symbol
- * @param func pointer to handler
- * @param user_data pointer to user_data
- */
-gint rspamd_symbols_cache_add_symbol_callback_prio (struct symbols_cache *cache,
-	double weight,
-	gint priority,
-	symbol_func_t func,
-	gpointer user_data);
-
-/**
  * Generic function to register a symbol
  * @param cache
  * @param name
@@ -123,7 +77,6 @@ gint rspamd_symbols_cache_add_symbol_callback_prio (struct symbols_cache *cache,
  */
 gint rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	const gchar *name,
-	double weight,
 	gint priority,
 	symbol_func_t func,
 	gpointer user_data,

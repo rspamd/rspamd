@@ -80,7 +80,6 @@ struct cache_item {
 	/* Priority */
 	gint priority;
 	gint id;
-	gdouble metric_weight;
 
 	/* Dependencies */
 	GPtrArray *deps;
@@ -332,6 +331,11 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 
 		if (item) {
 			/* Copy saved info */
+			/*
+			 * XXX: don't save or load weight, it should be obtained from the
+			 * metric
+			 */
+#if 0
 			elt = ucl_object_find_key (cur, "weight");
 
 			if (elt) {
@@ -340,7 +344,7 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 					item->weight = w;
 				}
 			}
-
+#endif
 			elt = ucl_object_find_key (cur, "time");
 			if (elt) {
 				item->avg_time = ucl_object_todouble (elt);
@@ -447,7 +451,6 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 gint
 rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	const gchar *name,
-	double weight,
 	gint priority,
 	symbol_func_t func,
 	gpointer user_data,
@@ -490,9 +493,8 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	item->user_data = user_data;
 	item->priority = priority;
 	item->type = type;
-	item->weight = weight;
 
-	if (item->weight < 0 && item->priority == 0) {
+	if ((type & SYMBOL_TYPE_FINE) && item->priority == 0) {
 		/* Make priority for negative weighted symbols */
 		item->priority = 1;
 	}
@@ -518,69 +520,6 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	return item->id;
 }
 
-gint
-rspamd_symbols_cache_add_symbol_normal (struct symbols_cache *cache,
-	const gchar *name, double weight,
-	symbol_func_t func, gpointer user_data)
-{
-	return rspamd_symbols_cache_add_symbol (cache,
-		name,
-		weight,
-		0,
-		func,
-		user_data,
-		SYMBOL_TYPE_NORMAL,
-		-1);
-}
-
-gint
-rspamd_symbols_cache_add_symbol_virtual (struct symbols_cache *cache,
-	const gchar *name,
-	double weight,
-	gint parent)
-{
-	return rspamd_symbols_cache_add_symbol (cache,
-		name,
-		weight,
-		0,
-		NULL,
-		NULL,
-		SYMBOL_TYPE_VIRTUAL,
-		parent);
-}
-
-gint
-rspamd_symbols_cache_add_symbol_callback (struct symbols_cache *cache,
-	double weight,
-	symbol_func_t func,
-	gpointer user_data)
-{
-	return rspamd_symbols_cache_add_symbol (cache,
-		NULL,
-		weight,
-		0,
-		func,
-		user_data,
-		SYMBOL_TYPE_CALLBACK,
-		-1);
-}
-
-gint
-rspamd_symbols_cache_add_symbol_callback_prio (struct symbols_cache *cache,
-	double weight,
-	gint priority,
-	symbol_func_t func,
-	gpointer user_data)
-{
-	return rspamd_symbols_cache_add_symbol (cache,
-		NULL,
-		weight,
-		priority,
-		func,
-		user_data,
-		SYMBOL_TYPE_CALLBACK,
-		-1);
-}
 
 void
 rspamd_symbols_cache_destroy (struct symbols_cache *cache)
@@ -662,21 +601,6 @@ rspamd_symbols_cache_init (struct symbols_cache* cache,
 	return res;
 }
 
-static gboolean
-check_debug_symbol (struct rspamd_config *cfg, const gchar *symbol)
-{
-	GList *cur;
-
-	cur = cfg->debug_symbols;
-	while (cur) {
-		if (strcmp (symbol, (const gchar *)cur->data) == 0) {
-			return TRUE;
-		}
-		cur = g_list_next (cur);
-	}
-
-	return FALSE;
-}
 
 static void
 rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
@@ -776,11 +700,7 @@ rspamd_symbols_cache_metric_validate_cb (gpointer k, gpointer v, gpointer ud)
 	item = g_hash_table_lookup (cache->items_by_symbol, sym);
 
 	if (item) {
-		item->metric_weight = weight;
-
-		if (fabs (item->weight) < fabs (weight) || weight < 0) {
-			item->weight = weight;
-		}
+		item->weight = weight;
 	}
 }
 
