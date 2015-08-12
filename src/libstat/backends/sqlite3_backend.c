@@ -38,12 +38,12 @@ struct rspamd_stat_sqlite3_db {
 	gchar *fname;
 	GArray *prstmt;
 	gboolean in_transaction;
+	gboolean enable_users;
+	gboolean enable_languages;
 };
 
 struct rspamd_stat_sqlite3_ctx {
 	GHashTable *files;
-	gboolean enable_users;
-	gboolean enable_languages;
 };
 
 struct rspamd_stat_sqlite3_rt {
@@ -443,7 +443,7 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 	struct rspamd_classifier_config *clf;
 	struct rspamd_statfile_config *stf;
 	GList *cur, *curst;
-	const ucl_object_t *filenameo;
+	const ucl_object_t *filenameo, *lang_enabled, *users_enabled;
 	const gchar *filename;
 	struct rspamd_stat_sqlite3_db *bk;
 	GError *err = NULL;
@@ -487,6 +487,24 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 				else {
 					g_error_free (err);
 					err = NULL;
+				}
+
+				users_enabled = ucl_object_find_any_key (clf->opts, "per_user",
+						"users_enabled", NULL);
+				if (users_enabled != NULL) {
+					bk->enable_users = ucl_object_toboolean (users_enabled);
+				}
+				else {
+					bk->enable_users = FALSE;
+				}
+
+				lang_enabled = ucl_object_find_any_key (clf->opts,
+						"per_language", "languages_enabled", NULL);
+				if (lang_enabled != NULL) {
+					bk->enable_languages = ucl_object_toboolean (lang_enabled);
+				}
+				else {
+					bk->enable_languages = FALSE;
 				}
 
 				ctx->statfiles ++;
@@ -583,22 +601,30 @@ rspamd_sqlite3_process_token (struct rspamd_task *task, struct token_node_s *tok
 	}
 
 	if (rt->user_id == -1) {
-		rt->user_id = rspamd_sqlite3_get_user (bk, task, FALSE);
+		if (bk->enable_users) {
+			rt->user_id = rspamd_sqlite3_get_user (bk, task, FALSE);
+		}
+		else {
+			rt->user_id = 0;
+		}
 	}
 
 	if (rt->lang_id == -1) {
-		rt->lang_id = rspamd_sqlite3_get_language (bk, task, FALSE);
+		if (bk->enable_languages) {
+			rt->lang_id = rspamd_sqlite3_get_language (bk, task, FALSE);
+		}
+		else {
+			rt->lang_id = 0;
+		}
 	}
 
 	memcpy (&idx, tok->data, sizeof (idx));
 
-	/* TODO: language and user support */
 	if (rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_GET_TOKEN,
 			idx, rt->user_id, rt->lang_id, &iv) == SQLITE_OK) {
 		res->value = iv;
 
-		/* TODO: purge empty values */
 		if (iv == 0) {
 			return FALSE;
 		}
