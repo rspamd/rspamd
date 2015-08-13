@@ -662,13 +662,29 @@ rspamd_pass_signal (GHashTable * workers, gint signo)
 
 #ifndef HAVE_SETPROCTITLE
 
+#if !defined(DARWIN) && !defined(SOLARIS) && !defined(__APPLE__)
 static gchar *title_buffer = 0;
 static size_t title_buffer_size = 0;
 static gchar *title_progname, *title_progname_full;
+#endif
 
 gint
 setproctitle (const gchar *fmt, ...)
 {
+#if defined(DARWIN) || defined(SOLARIS) || defined(__APPLE__)
+	GString *dest;
+	va_list ap;
+
+	dest = g_string_new ("");
+	va_start (ap, fmt);
+	rspamd_vprintf_gstring (dest, fmt, ap);
+	va_end (ap);
+
+	g_set_prgname (dest->str);
+	g_string_free (dest, TRUE);
+
+	return 0;
+#else
 	if (!title_buffer || !title_buffer_size) {
 		errno = ENOMEM;
 		return -1;
@@ -711,6 +727,7 @@ setproctitle (const gchar *fmt, ...)
 	memset (title_buffer + written, '\0', title_buffer_size - written);
 
 	return 0;
+#endif
 }
 
 /*
