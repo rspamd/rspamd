@@ -360,6 +360,8 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		return FALSE;
 	}
 
+	*sym_def->weight_ptr = sym_def->score;
+
 	return TRUE;
 }
 

@@ -189,7 +189,6 @@ rspamd_config_free (struct rspamd_config *cfg)
 	g_hash_table_unref (cfg->cfg_params);
 	g_hash_table_destroy (cfg->metrics_symbols);
 	g_hash_table_destroy (cfg->classifiers_symbols);
-	g_hash_table_unref (cfg->symbols_groups);
 
 	if (cfg->checksum) {
 		g_free (cfg->checksum);
@@ -1005,7 +1004,7 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 		group = "ungrouped";
 	}
 
-	sym_group = g_hash_table_lookup (cfg->symbols_groups, group);
+	sym_group = g_hash_table_lookup (metric->groups, group);
 	if (sym_group == NULL) {
 		/* Create new group */
 		sym_group =
@@ -1013,12 +1012,11 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 				sizeof (struct rspamd_symbols_group));
 		sym_group->name = rspamd_mempool_strdup (cfg->cfg_pool, group);
 		sym_group->symbols = NULL;
-		g_hash_table_insert (cfg->symbols_groups, sym_group->name, sym_group);
+		g_hash_table_insert (metric->groups, sym_group->name, sym_group);
 	}
 
 	sym_def->gr = sym_group;
-
-	LL_PREPEND (sym_group->symbols, sym_def);
+	g_hash_table_insert (sym_group->symbols, sym_def->name, sym_def);
 
 	return TRUE;
 }
@@ -1085,7 +1083,7 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 	}
 
 	/* Now we check symbols group */
-	gr = g_hash_table_lookup (cfg->symbols_groups, module_name);
+	gr = g_hash_table_lookup (metric->groups, module_name);
 
 	if (gr) {
 		if (gr->disabled) {
