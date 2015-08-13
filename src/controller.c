@@ -503,9 +503,10 @@ rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message *msg)
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
-	GHashTableIter it;
+	GHashTableIter it, sit;
 	struct rspamd_symbols_group *gr;
-	struct rspamd_symbol_def *sym, *cur;
+	struct rspamd_symbol_def *sym;
+	struct metric *metric;
 	ucl_object_t *obj, *top, *sym_obj, *group_symbols;
 	gpointer k, v;
 
@@ -515,29 +516,33 @@ rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 
 	top = ucl_object_typed_new (UCL_ARRAY);
 
-	/* Go through all symbols groups */
-	g_hash_table_iter_init (&it, session->ctx->cfg->symbols_groups);
+	/* Go through all symbols groups in the default metric */
+	metric = g_hash_table_lookup (session->ctx->cfg->metrics, DEFAULT_METRIC);
+	g_assert (metric != NULL);
+	g_hash_table_iter_init (&it, metric->groups);
+
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		gr = v;
 		obj = ucl_object_typed_new (UCL_OBJECT);
 		ucl_object_insert_key (obj, ucl_object_fromstring (
 				gr->name), "group", 0, false);
 		/* Iterate through all symbols */
-		sym = gr->symbols;
 
+		g_hash_table_iter_init (&sit, gr->symbols);
 		group_symbols = ucl_object_typed_new (UCL_ARRAY);
 
-		LL_FOREACH (sym, cur) {
+		while (g_hash_table_iter_next (&sit, &k, &v)) {
+			sym = v;
 			sym_obj = ucl_object_typed_new (UCL_OBJECT);
 
-			ucl_object_insert_key (sym_obj, ucl_object_fromstring (cur->name),
+			ucl_object_insert_key (sym_obj, ucl_object_fromstring (sym->name),
 				"symbol", 0, false);
 			ucl_object_insert_key (sym_obj,
-				ucl_object_fromdouble (*cur->weight_ptr),
+				ucl_object_fromdouble (*sym->weight_ptr),
 				"weight", 0, false);
-			if (cur->description) {
+			if (sym->description) {
 				ucl_object_insert_key (sym_obj,
-					ucl_object_fromstring (cur->description),
+					ucl_object_fromstring (sym->description),
 					"description", 0, false);
 			}
 

@@ -574,6 +574,24 @@ rspamd_config_new_metric (struct rspamd_config *cfg, struct metric *c,
 	return c;
 }
 
+struct rspamd_symbols_group *
+rspamd_config_new_group (struct rspamd_config *cfg, struct metric *metric,
+		const gchar *name)
+{
+	struct rspamd_symbols_group *gr;
+
+	gr = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*gr));
+	gr->symbols = g_hash_table_new (rspamd_strcase_hash,
+			rspamd_strcase_equal);
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)g_hash_table_unref, gr->symbols);
+	gr->name = rspamd_mempool_strdup (cfg->cfg_pool, name);
+
+	g_hash_table_insert (metric->groups, gr->name, gr);
+
+	return gr;
+}
+
 struct rspamd_worker_conf *
 rspamd_config_new_worker (struct rspamd_config *cfg,
 	struct rspamd_worker_conf *c)
@@ -971,6 +989,7 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 	score_ptr = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (gdouble));
 
 	*score_ptr = score;
+	sym_def->score = score;
 	sym_def->weight_ptr = score_ptr;
 	sym_def->name = rspamd_mempool_strdup (cfg->cfg_pool, symbol);
 	sym_def->one_shot = one_shot;
@@ -1007,12 +1026,7 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 	sym_group = g_hash_table_lookup (metric->groups, group);
 	if (sym_group == NULL) {
 		/* Create new group */
-		sym_group =
-			rspamd_mempool_alloc0 (cfg->cfg_pool,
-				sizeof (struct rspamd_symbols_group));
-		sym_group->name = rspamd_mempool_strdup (cfg->cfg_pool, group);
-		sym_group->symbols = NULL;
-		g_hash_table_insert (metric->groups, sym_group->name, sym_group);
+		sym_group = rspamd_config_new_group (cfg, metric, group);
 	}
 
 	sym_def->gr = sym_group;

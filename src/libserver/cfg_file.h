@@ -17,6 +17,9 @@
 #define DEFAULT_BIND_PORT 11333
 #define DEFAULT_CONTROL_PORT 11334
 
+/* Default metric name */
+#define DEFAULT_METRIC "default"
+
 struct expression;
 struct tokenizer;
 struct rspamd_stat_classifier;
@@ -360,6 +363,13 @@ struct rspamd_worker_conf * rspamd_config_new_worker (struct rspamd_config *cfg,
  */
 struct metric * rspamd_config_new_metric (struct rspamd_config *cfg,
 	struct metric *c, const gchar *name);
+
+/*
+ * Return new symbols group definition
+ */
+struct rspamd_symbols_group * rspamd_config_new_group (
+		struct rspamd_config *cfg, struct metric *metric,
+		const gchar *name);
 /*
  * Return a new statfile structure, setting default and non-conflicting attributes
  */

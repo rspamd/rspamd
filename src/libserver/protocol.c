@@ -815,7 +815,9 @@ rspamd_metric_symbol_ucl (struct rspamd_task *task, struct metric *m,
 		rspamd_printf_gstring (logbuf, "%s,", sym->name);
 	}
 
-	description = g_hash_table_lookup (m->descriptions, sym->name);
+	if (sym->def != NULL) {
+		description = sym->def->description;
+	}
 
 	obj = ucl_object_typed_new (UCL_OBJECT);
 	ucl_object_insert_key (obj, ucl_object_fromstring (

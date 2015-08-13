@@ -259,7 +259,6 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 	const guchar *p;
 	gint fd;
 	gpointer map;
-	double w;
 
 	fd = open (name, O_RDONLY);
 

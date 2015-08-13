@@ -40,7 +40,7 @@ static void
 lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 {
 	GList *metric_list;
-	gchar *symbol, *old_desc;
+	gchar *symbol;
 	const gchar *desc;
 	struct metric *metric;
 	gdouble *score;
@@ -75,20 +75,7 @@ lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 				lua_gettable (L, -2);
 				if (lua_isstring (L, -1)) {
 					desc = lua_tostring (L, -1);
-					old_desc =
-						g_hash_table_lookup (metric->descriptions, symbol);
-					if (old_desc) {
-						msg_info ("replacing description for symbol %s",
-							symbol);
-						g_hash_table_replace (metric->descriptions,
-							symbol,
-							rspamd_mempool_strdup (cfg->cfg_pool, desc));
-					}
-					else {
-						g_hash_table_insert (metric->descriptions,
-							symbol,
-							rspamd_mempool_strdup (cfg->cfg_pool, desc));
-					}
+					s->description = rspamd_mempool_strdup (cfg->cfg_pool, desc);
 				}
 				lua_pop (L, 1);
 			}

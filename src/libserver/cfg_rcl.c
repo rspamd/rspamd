@@ -273,16 +273,8 @@ rspamd_rcl_group_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	gr = g_hash_table_lookup (metric->groups, key);
 
 	if (gr == NULL) {
-		gr = rspamd_mempool_alloc0 (pool, sizeof (*gr));
-		gr->symbols = g_hash_table_new (rspamd_strcase_hash,
-				rspamd_strcase_equal);
-		rspamd_mempool_add_destructor (pool,
-				(rspamd_mempool_destruct_t)g_hash_table_unref, gr->symbols);
-		gr->name = rspamd_mempool_strdup (pool, key);
-
-		g_hash_table_insert (metric->groups, gr->name);
+		gr = rspamd_config_new_group (sd->cfg, metric, key);
 	}
-
 
 	if (!rspamd_rcl_section_parse_defaults (section, pool, obj,
 			metric, err)) {
@@ -360,7 +352,9 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		return FALSE;
 	}
 
-	*sym_def->weight_ptr = sym_def->score;
+	if (ucl_object_find_key (obj, "score") != NULL) {
+		*sym_def->weight_ptr = sym_def->score;
+	}
 
 	return TRUE;
 }
@@ -402,30 +396,17 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		const gchar *key, gpointer ud,
 		struct rspamd_rcl_section *section, GError **err)
 {
-	const ucl_object_t *val, *cur, *elt;
+	const ucl_object_t *val, *cur;
 	struct rspamd_config *cfg = ud;
-	const gchar *metric_name, *subject_name, *semicolon, *act_str;
 	struct metric *metric;
-	struct rspamd_symbols_group *gr;
-
-	gboolean new = TRUE, have_actions = FALSE, have_symbols = FALSE,
-			have_unknown = FALSE;
-	gdouble unknown_weight;
-	ucl_object_iter_t it = NULL;
 	struct rspamd_rcl_section *subsection;
 	struct rspamd_rcl_symbol_data sd;
 
 	g_assert (key != NULL);
 
-	metric_name = key;
-
-	metric = g_hash_table_lookup (cfg->metrics, metric_name);
+	metric = g_hash_table_lookup (cfg->metrics, key);
 	if (metric == NULL) {
-		metric = rspamd_config_new_metric (cfg, metric, metric_name);
-	}
-	else {
-		new = FALSE;
-		have_symbols = TRUE;
+		metric = rspamd_config_new_metric (cfg, metric, key);
 	}
 
 	if (!rspamd_rcl_section_parse_defaults (section, cfg->cfg_pool, obj,

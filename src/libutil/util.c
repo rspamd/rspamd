@@ -738,7 +738,7 @@ setproctitle (const gchar *fmt, ...)
 gint
 init_title (gint argc, gchar *argv[], gchar *envp[])
 {
-#if defined(DARWIN) || defined(SOLARIS)
+#if defined(DARWIN) || defined(SOLARIS) || defined(__APPLE__)
 	/* XXX: try to handle these OSes too */
 	return 0;
 #else

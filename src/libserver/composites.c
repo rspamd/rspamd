@@ -143,6 +143,9 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 	struct symbol *ms;
 	struct rspamd_symbols_group *gr;
 	struct rspamd_symbol_def *sdef;
+	struct metric *metric;
+	GHashTableIter it;
+	gpointer k, v;
 	gint rc = 0;
 	gchar t = '\0';
 
@@ -157,11 +160,17 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 	}
 
 	if (strncmp (sym, "g:", 2) == 0) {
-		gr = g_hash_table_lookup (cd->task->cfg->symbols_groups, sym + 2);
+		metric = g_hash_table_lookup (cd->task->cfg->metrics, DEFAULT_METRIC);
+		g_assert (metric != NULL);
+		gr = g_hash_table_lookup (metric->groups, sym + 2);
 
 		if (gr != NULL) {
-			LL_FOREACH (gr->symbols, sdef) {
+			g_hash_table_iter_init (&it, gr->symbols);
+
+			while (g_hash_table_iter_next (&it, &k, &v)) {
+				sdef = v;
 				rc = rspamd_composite_process_single_symbol (cd, sdef->name, &ms);
+
 				if (rc) {
 					break;
 				}

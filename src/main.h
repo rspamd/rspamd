@@ -25,8 +25,6 @@
 #define FIXED_CONFIG_FILE RSPAMD_CONFDIR "/rspamd.conf"
 /* Time in seconds to exit for old worker */
 #define SOFT_SHUTDOWN_TIME 10
-/* Default metric name */
-#define DEFAULT_METRIC "default"
 
 /* Spam subject */
 #define SPAM_SUBJECT "*** SPAM *** "
