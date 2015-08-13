@@ -41,6 +41,7 @@ struct rspamd_rcl_default_handler_data {
 struct rspamd_rcl_section {
 	const gchar *name;                  /**< name of section */
 	const gchar *key_attr;
+	const gchar *default_key;
 	rspamd_rcl_handler_t handler;       /**< handler of section attributes */
 	enum ucl_type type;         /**< type of attribute */
 	gboolean required;                  /**< whether this param is required */
@@ -1520,6 +1521,9 @@ rspamd_rcl_config_init (void)
 			UCL_OBJECT,
 			FALSE,
 			TRUE);
+	/* Default classifier is 'bayes' for now */
+	sub->default_key = "bayes";
+
 	rspamd_rcl_add_default_handler (sub,
 		"min_tokens",
 		rspamd_rcl_parse_struct_integer,
@@ -1621,6 +1625,7 @@ rspamd_rcl_process_section (struct rspamd_rcl_section *sec,
 	ucl_object_iter_t it;
 	const ucl_object_t *cur;
 	gboolean is_nested = TRUE;
+	const gchar *key = NULL;
 
 	g_assert (obj != NULL);
 	g_assert (sec->handler != NULL);
@@ -1661,9 +1666,18 @@ rspamd_rcl_process_section (struct rspamd_rcl_section *sec,
 			cur = ucl_object_find_key (obj, sec->key_attr);
 
 			if (cur == NULL) {
-				g_set_error (err, CFG_RCL_ERROR, EINVAL, "required attribute %s"
-						" is missing for section %s", sec->key_attr, sec->name);
-				return FALSE;
+				if (sec->default_key == NULL) {
+					g_set_error (err, CFG_RCL_ERROR, EINVAL, "required attribute "
+							"'%s' is missing for section '%s'", sec->key_attr,
+							sec->name);
+					return FALSE;
+				}
+				else {
+					msg_info ("using default key '%s' for mandatory field '%s' "
+							"for section '%s'", sec->default_key, sec->key_attr,
+							sec->name);
+					key = sec->default_key;
+				}
 			}
 			else if (ucl_object_type (cur) != UCL_STRING) {
 				g_set_error (err, CFG_RCL_ERROR, EINVAL, "required attribute %s"
@@ -1672,13 +1686,12 @@ rspamd_rcl_process_section (struct rspamd_rcl_section *sec,
 				return FALSE;
 			}
 			else {
-				return sec->handler (pool, obj, ucl_object_tostring (cur),
-						ptr, sec, err);
+				key = ucl_object_tostring (cur);
 			}
 		}
 	}
 
-	return sec->handler (pool, obj, NULL, ptr, sec, err);
+	return sec->handler (pool, obj, key, ptr, sec, err);
 }
 
 gboolean
