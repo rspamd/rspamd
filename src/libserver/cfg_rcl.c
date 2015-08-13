@@ -352,7 +352,7 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		return FALSE;
 	}
 
-	if (ucl_object_find_key (obj, "score") != NULL) {
+	if (ucl_object_find_any_key (obj, "score", "weight", NULL) != NULL) {
 		*sym_def->weight_ptr = sym_def->score;
 	}
 
@@ -1417,6 +1417,11 @@ rspamd_rcl_config_init (void)
 			rspamd_rcl_parse_struct_double,
 			G_STRUCT_OFFSET (struct rspamd_symbol_def, score),
 			0);
+	rspamd_rcl_add_default_handler (ssub,
+			"weight",
+			rspamd_rcl_parse_struct_double,
+			G_STRUCT_OFFSET (struct rspamd_symbol_def, score),
+			0);
 
 	/* Actions part */
 	ssub = rspamd_rcl_add_section (&sub->subsections,
@@ -1468,6 +1473,11 @@ rspamd_rcl_config_init (void)
 			0);
 	rspamd_rcl_add_default_handler (sssub,
 			"score",
+			rspamd_rcl_parse_struct_double,
+			G_STRUCT_OFFSET (struct rspamd_symbol_def, score),
+			0);
+	rspamd_rcl_add_default_handler (sssub,
+			"weight",
 			rspamd_rcl_parse_struct_double,
 			G_STRUCT_OFFSET (struct rspamd_symbol_def, score),
 			0);
