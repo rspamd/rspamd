@@ -53,7 +53,8 @@ struct rspamd_rcl_struct_parser {
 		RSPAMD_CL_FLAG_INT_64 = 0x1 << 7,
 		RSPAMD_CL_FLAG_UINT = 0x1 << 8,
 		RSPAMD_CL_FLAG_INT_SIZE = 0x1 << 9,
-		RSPAMD_CL_FLAG_STRING_PATH = 0x1 << 10
+		RSPAMD_CL_FLAG_STRING_PATH = 0x1 << 10,
+		RSPAMD_CL_FLAG_BOOLEAN_INVERSE = 0x1 << 11
 	} flags;
 };
 

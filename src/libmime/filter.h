@@ -39,9 +39,9 @@ struct metric {
 	gdouble unknown_weight;                         /**< weight of unknown symbols						*/
 	gdouble grow_factor;                            /**< grow factor for metric							*/
 	GHashTable *symbols;                            /**< weights of symbols in metric					*/
-	GHashTable *descriptions;                       /**< descriptions of symbols in metric				*/
-	struct metric_action actions[METRIC_ACTION_MAX]; /**< all actions of the metric					*/
 	gchar *subject;                                 /**< subject rewrite string							*/
+	GHashTable * groups; 		                    /**< groups of symbols								*/
+	struct metric_action actions[METRIC_ACTION_MAX]; /**< all actions of the metric						*/
 };
 
 /**

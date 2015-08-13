@@ -78,7 +78,7 @@ enum lua_var_type {
 struct rspamd_symbol_def;
 struct rspamd_symbols_group {
 	gchar *name;
-	struct rspamd_symbol_def *symbols;
+	GHashTable *symbols;
 	gdouble max_score;
 	gboolean disabled;
 	gboolean one_shot;
@@ -91,9 +91,10 @@ struct rspamd_symbol_def {
 	gchar *name;
 	gchar *description;
 	gdouble *weight_ptr;
+	gdouble score;
 	struct rspamd_symbols_group *gr;
+	GList *groups;
 	gboolean one_shot;
-	struct rspamd_symbol_def *next;
 };
 
 
@@ -215,7 +216,6 @@ struct rspamd_config {
 	struct rspamd_worker_cfg_parser *wrk_parsers;   /**< hash for worker config parsers, indexed by worker quarks */
 	ucl_object_t *rcl_obj;                  /**< rcl object											*/
 	GHashTable * metrics;                            /**< hash of metrics indexed by metric name				*/
-	GHashTable * symbols_groups;                     /**< groups of symbols									*/
 	GList * metrics_list;                            /**< linked list of metrics								*/
 	GHashTable * metrics_symbols;                    /**< hash table of metrics indexed by symbol			*/
 	GHashTable * c_modules;                          /**< hash of c modules indexed by module name			*/

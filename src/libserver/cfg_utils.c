@@ -165,7 +165,6 @@ rspamd_config_defaults (struct rspamd_config *cfg)
 			rspamd_str_equal);
 	cfg->cfg_params = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->metrics_symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-	cfg->symbols_groups = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 
 	cfg->map_timeout = DEFAULT_MAP_TIMEOUT;
 
@@ -550,18 +549,20 @@ rspamd_config_new_metric (struct rspamd_config *cfg, struct metric *c,
 		c = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct metric));
 		c->grow_factor = 1.0;
 		c->symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-		c->descriptions = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+		c->groups = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+
 		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
 			c->actions[i].score = -1.0;
 		}
+
 		c->subject = SPAM_SUBJECT;
 		c->name = rspamd_mempool_strdup (cfg->cfg_pool, name);
 		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t) g_hash_table_destroy,
+			(rspamd_mempool_destruct_t) g_hash_table_unref,
 			c->symbols);
 		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t) g_hash_table_destroy,
-			c->descriptions);
+			(rspamd_mempool_destruct_t) g_hash_table_unref,
+			c->groups);
 
 		g_hash_table_insert (cfg->metrics, (void *)c->name, c);
 		cfg->metrics_list = g_list_prepend (cfg->metrics_list, c);

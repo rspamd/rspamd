@@ -249,98 +249,114 @@ rspamd_rcl_options_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 			cfg, err);
 }
 
-/**
- * Insert a symbol to the metric
- * @param cfg
- * @param metric
- * @param obj symbol rcl object (either float value or an object)
- * @param err
- * @return
- */
-static gboolean
-rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
-	const ucl_object_t *obj, struct rspamd_symbols_group *gr,
-	gboolean is_legacy, GError **err)
-{
-	const gchar *description = NULL, *sym_name, *group;
-	gdouble symbol_score;
-	const ucl_object_t *val;
-	gboolean one_shot = FALSE;
+struct rspamd_rcl_symbol_data {
+	struct metric *metric;
+	struct rspamd_symbols_group *gr;
+	struct rspamd_config *cfg;
+};
 
-	/*
-	 * We allow two type of definitions:
-	 * symbol = weight
-	 * or
-	 * symbol {
-	 *	weight = ...;
-	 *	description = ...;
-	 *	group = ...;
-	 *	one_shot = true/false;
-	 * }
-	 */
-	if (is_legacy) {
-		val = ucl_object_find_key (obj, "name");
-		if (val == NULL) {
-			g_set_error (err, CFG_RCL_ERROR, EINVAL, "symbol name is missing");
-			return FALSE;
-		}
-		sym_name = ucl_object_tostring (val);
-	}
-	else {
-		sym_name = ucl_object_key (obj);
-	}
+static gboolean
+rspamd_rcl_group_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
+		const gchar *key, gpointer ud,
+		struct rspamd_rcl_section *section, GError **err)
+{
+	struct rspamd_rcl_symbol_data *sd = ud;
+	struct metric *metric;
+	struct rspamd_symbols_group *gr;
+	const ucl_object_t *val, *cur;
+	struct rspamd_rcl_section *subsection;
+
+	g_assert (key != NULL);
+
+	metric = sd->metric;
+
+	gr = g_hash_table_lookup (metric->groups, key);
 
 	if (gr == NULL) {
-		group = "ungrouped";
-	}
-	else {
-		group = gr->name;
-		one_shot = gr->one_shot;
+		gr = rspamd_mempool_alloc0 (pool, sizeof (*gr));
+		gr->symbols = g_hash_table_new (rspamd_strcase_hash,
+				rspamd_strcase_equal);
+		rspamd_mempool_add_destructor (pool,
+				(rspamd_mempool_destruct_t)g_hash_table_unref, gr->symbols);
+		gr->name = rspamd_mempool_strdup (pool, key);
+
+		g_hash_table_insert (metric->groups, gr->name);
 	}
 
-	if (ucl_object_todouble_safe (obj, &symbol_score)) {
-		description = NULL;
-	}
-	else if (obj->type == UCL_OBJECT) {
-		val = ucl_object_find_key (obj, "weight");
-		if (val == NULL || !ucl_object_todouble_safe (val, &symbol_score)) {
-			g_set_error (err,
-				CFG_RCL_ERROR,
-				EINVAL,
-				"invalid symbol score: %s",
-				sym_name);
-			return FALSE;
-		}
-		val = ucl_object_find_key (obj, "description");
-		if (val != NULL) {
-			description = ucl_object_tostring (val);
-		}
-		val = ucl_object_find_key (obj, "group");
-		if (val != NULL) {
-			group = ucl_object_tostring (val);
-			msg_warn ("legacy 'group' parameter inside symbol definition");
-		}
-		val = ucl_object_find_key (obj, "one_shot");
-		if (val != NULL) {
-			one_shot = ucl_object_toboolean (val);
-		}
-	}
-	else {
-		g_set_error (err,
-			CFG_RCL_ERROR,
-			EINVAL,
-			"invalid symbol type: %s",
-			sym_name);
+
+	if (!rspamd_rcl_section_parse_defaults (section, pool, obj,
+			metric, err)) {
 		return FALSE;
 	}
 
-	if (!rspamd_config_add_metric_symbol (cfg, metric->name, sym_name,
-			symbol_score, description, group, one_shot, TRUE)) {
-		g_set_error (err,
-			CFG_RCL_ERROR,
-			EINVAL,
-			"cannot add symbol: %s to metric %s",
-			sym_name, metric->name);
+	sd->gr = gr;
+
+	/* Handle symbols */
+	val = ucl_object_find_key (obj, "symbol");
+	if (val != NULL && ucl_object_type (val) == UCL_OBJECT) {
+		HASH_FIND_STR (section->subsections, "symbol", subsection);
+		g_assert (subsection != NULL);
+
+		LL_FOREACH (val, cur) {
+			if (!rspamd_rcl_process_section (subsection, sd, cur,
+					pool, err)) {
+				return FALSE;
+			}
+		}
+	}
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
+		const gchar *key, gpointer ud,
+		struct rspamd_rcl_section *section, GError **err)
+{
+	struct rspamd_rcl_symbol_data *sd = ud;
+	struct rspamd_symbol_def *sym_def;
+	struct metric *metric;
+	struct rspamd_config *cfg;
+	GList *metric_list;
+
+	g_assert (key != NULL);
+	metric = sd->metric;
+	g_assert (metric != NULL);
+	cfg = sd->cfg;
+
+	sym_def = g_hash_table_lookup (metric->symbols, key);
+
+	if (sym_def == NULL) {
+		sym_def = rspamd_mempool_alloc0 (pool, sizeof (*sym_def));
+		sym_def->name = rspamd_mempool_strdup (pool, key);
+		sym_def->gr = sd->gr;
+		sym_def->weight_ptr = rspamd_mempool_alloc (pool, sizeof (gdouble));
+
+		g_hash_table_insert (metric->symbols, sym_def->name, sym_def);
+
+		if (sd->gr) {
+			g_hash_table_insert (sd->gr->symbols, sym_def->name, sym_def);
+		}
+		if ((metric_list =
+				g_hash_table_lookup (cfg->metrics_symbols, sym_def->name)) == NULL) {
+			metric_list = g_list_prepend (NULL, metric);
+			rspamd_mempool_add_destructor (cfg->cfg_pool,
+					(rspamd_mempool_destruct_t)g_list_free,
+					metric_list);
+			g_hash_table_insert (cfg->metrics_symbols, sym_def->name, metric_list);
+		}
+		else {
+			if (!g_list_find (metric_list, metric)) {
+				metric_list = g_list_append (metric_list, metric);
+			}
+		}
+	}
+	else {
+		msg_warn ("redefining symbol '%s' in metric '%s'", key, metric->name);
+	}
+
+	if (!rspamd_rcl_section_parse_defaults (section, pool, obj,
+			sym_def, err)) {
 		return FALSE;
 	}
 
@@ -348,53 +364,31 @@ rspamd_rcl_insert_symbol (struct rspamd_config *cfg, struct metric *metric,
 }
 
 static gboolean
-rspamd_rcl_symbols_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
-		struct rspamd_config *cfg, struct metric *metric,
-		struct rspamd_symbols_group *gr, gboolean new, GError **err)
+rspamd_rcl_actions_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
+		const gchar *key, gpointer ud,
+		struct rspamd_rcl_section *section, GError **err)
 {
-	const ucl_object_t *val, *cur;
+	gdouble action_score;
+	struct metric_action *action;
+	struct metric *metric = ud;
+	gint action_value;
+	const ucl_object_t *cur;
 	ucl_object_iter_t it = NULL;
 
-	val = ucl_object_find_key (obj, "symbols");
-	if (val != NULL) {
-		if (val->type != UCL_OBJECT) {
-			g_set_error (err, CFG_RCL_ERROR, EINVAL,
-					"symbols must be an object");
-			return FALSE;
-		}
-		it = NULL;
-		while ((cur = ucl_iterate_object (val, &it, true)) != NULL) {
-			if (!rspamd_rcl_insert_symbol (cfg, metric, cur, gr, FALSE, err)) {
-				return FALSE;
-			}
-		}
-	}
-	else {
-		/* Legacy variant */
-		val = ucl_object_find_key (obj, "symbol");
-		if (val != NULL) {
-			if (val->type != UCL_OBJECT) {
-				g_set_error (err,
-						CFG_RCL_ERROR,
-						EINVAL,
-						"symbols must be an object");
-				return FALSE;
-			}
-
-			it = NULL;
-			while ((cur = ucl_iterate_object (val, &it, false)) != NULL) {
-				if (!rspamd_rcl_insert_symbol (cfg, metric, cur, gr, TRUE, err)) {
-					return FALSE;
-				}
-			}
-		}
-		else if (new) {
+	while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
+		if (!rspamd_action_from_str (ucl_object_key (cur), &action_value) ||
+				!ucl_object_todouble_safe (cur, &action_score)) {
 			g_set_error (err,
 					CFG_RCL_ERROR,
 					EINVAL,
-					"metric %s has no symbols",
-					metric->name);
+					"invalid action definition: '%s'",
+					ucl_object_key (cur));
 			return FALSE;
+		}
+		else {
+			action = &metric->actions[action_value];
+			action->action = action_value;
+			action->score = action_score;
 		}
 	}
 
@@ -410,19 +404,18 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	struct rspamd_config *cfg = ud;
 	const gchar *metric_name, *subject_name, *semicolon, *act_str;
 	struct metric *metric;
-	struct metric_action *action;
 	struct rspamd_symbols_group *gr;
-	gdouble action_score, grow_factor;
-	gint action_value;
+
 	gboolean new = TRUE, have_actions = FALSE, have_symbols = FALSE,
 			have_unknown = FALSE;
 	gdouble unknown_weight;
 	ucl_object_iter_t it = NULL;
+	struct rspamd_rcl_section *subsection;
+	struct rspamd_rcl_symbol_data sd;
 
-	val = ucl_object_find_key (obj, "name");
-	if (val == NULL || !ucl_object_tostring_safe (val, &metric_name)) {
-		metric_name = DEFAULT_METRIC;
-	}
+	g_assert (key != NULL);
+
+	metric_name = key;
 
 	metric = g_hash_table_lookup (cfg->metrics, metric_name);
 	if (metric == NULL) {
@@ -433,12 +426,9 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		have_symbols = TRUE;
 	}
 
-	val = ucl_object_find_key (obj, "unknown_weight");
-	if (val && ucl_object_todouble_safe (val, &unknown_weight) &&
-			unknown_weight != 0.) {
-		metric->unknown_weight = unknown_weight;
-		metric->accept_unknown_symbols = TRUE;
-		have_unknown = TRUE;
+	if (!rspamd_rcl_section_parse_defaults (section, cfg->cfg_pool, obj,
+			metric, err)) {
+		return FALSE;
 	}
 
 	/* Handle actions */
@@ -449,120 +439,49 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 				"actions must be an object");
 			return FALSE;
 		}
-		while ((cur = ucl_iterate_object (val, &it, true)) != NULL) {
-			if (!rspamd_action_from_str (ucl_object_key (cur), &action_value) ||
-				!ucl_object_todouble_safe (cur, &action_score)) {
-				g_set_error (err,
-					CFG_RCL_ERROR,
-					EINVAL,
-					"invalid action definition: %s",
-					ucl_object_key (cur));
-				return FALSE;
-			}
-			action = &metric->actions[action_value];
-			action->action = action_value;
-			action->score = action_score;
-		}
-	}
-	else if (new) {
-		/* Switch to legacy mode */
-		val = ucl_object_find_key (obj, "required_score");
-		if (val != NULL && ucl_object_todouble_safe (val, &action_score)) {
-			action = &metric->actions[METRIC_ACTION_REJECT];
-			action->action = METRIC_ACTION_REJECT;
-			action->score = action_score;
-			have_actions = TRUE;
-		}
-		val = ucl_object_find_key (obj, "action");
-		LL_FOREACH (val, cur)
-		{
-			if (cur->type == UCL_STRING) {
-				act_str = ucl_object_tostring (cur);
-				semicolon = strchr (act_str, ':');
-				if (semicolon != NULL) {
-					if (rspamd_action_from_str (act_str, &action_value)) {
-						action_score = strtod (semicolon + 1, NULL);
-						action = &metric->actions[action_value];
-						action->action = action_value;
-						action->score = action_score;
-						have_actions = TRUE;
-					}
-				}
-			}
-		}
-		if (new && !have_actions) {
-			g_set_error (err,
-				CFG_RCL_ERROR,
-				EINVAL,
-				"metric %s has no actions",
-				metric_name);
+
+		HASH_FIND_STR (section->subsections, "actions", subsection);
+		g_assert (subsection != NULL);
+		if (!rspamd_rcl_process_section (subsection, metric, val,
+				cfg->cfg_pool, err)) {
 			return FALSE;
 		}
 	}
 
-	val = ucl_object_find_key (obj, "grow_factor");
-	if (val && ucl_object_todouble_safe (val, &grow_factor)) {
-		metric->grow_factor = grow_factor;
-	}
-
-	val = ucl_object_find_key (obj, "subject");
-	if (val && ucl_object_tostring_safe (val, &subject_name)) {
-		metric->subject = (gchar *)subject_name;
-	}
+	/* No more legacy mode */
 
 	/* Handle grouped symbols */
 	val = ucl_object_find_key (obj, "group");
 	if (val != NULL && ucl_object_type (val) == UCL_OBJECT) {
-		it = NULL;
-		while ((cur = ucl_iterate_object (val, &it, false))) {
-			if (ucl_object_type (cur) == UCL_OBJECT) {
-				elt = ucl_object_find_key (cur, "name");
+		HASH_FIND_STR (section->subsections, "group", subsection);
+		g_assert (subsection != NULL);
+		sd.gr = NULL;
+		sd.cfg = cfg;
+		sd.metric = metric;
 
-				if (elt) {
-					gr = g_hash_table_lookup (cfg->symbols_groups,
-							ucl_object_tostring (elt));
-					if (gr == NULL) {
-						gr =
-								rspamd_mempool_alloc0 (cfg->cfg_pool,
-										sizeof (struct rspamd_symbols_group));
-						gr->name = rspamd_mempool_strdup (cfg->cfg_pool,
-								ucl_object_tostring (elt));
-						g_hash_table_insert (cfg->symbols_groups, gr->name, gr);
-					}
-
-					elt = ucl_object_find_key (cur, "max_score");
-
-					if (elt) {
-						gr->max_score = ucl_object_todouble (elt);
-					}
-
-					elt = ucl_object_find_key (cur, "disabled");
-
-					if (elt) {
-						gr->disabled = ucl_object_toboolean (elt);
-					}
-
-					elt = ucl_object_find_key (cur, "one_shot");
-
-					if (elt) {
-						gr->one_shot = ucl_object_toboolean (elt);
-					}
-
-					if (!rspamd_rcl_symbols_handler (pool, cur, cfg, metric,
-							gr, !have_symbols, err)) {
-						return FALSE;
-					}
-
-					have_symbols = TRUE;
-				}
+		LL_FOREACH (val, cur) {
+			if (!rspamd_rcl_process_section (subsection, &sd, cur,
+					cfg->cfg_pool, err)) {
+				return FALSE;
 			}
 		}
 	}
 
 	/* Handle symbols */
-	if (!rspamd_rcl_symbols_handler (pool, obj, cfg, metric, NULL,
-			!have_symbols && !have_unknown, err)) {
-		return FALSE;
+	val = ucl_object_find_key (obj, "symbol");
+	if (val != NULL && ucl_object_type (val) == UCL_OBJECT) {
+		HASH_FIND_STR (section->subsections, "symbol", subsection);
+		g_assert (subsection != NULL);
+		sd.gr = NULL;
+		sd.cfg = cfg;
+		sd.metric = metric;
+
+		LL_FOREACH (val, cur) {
+			if (!rspamd_rcl_process_section (subsection, &sd, cur,
+					cfg->cfg_pool, err)) {
+				return FALSE;
+			}
+		}
 	}
 
 	return TRUE;
@@ -1230,7 +1149,7 @@ rspamd_rcl_add_default_handler (struct rspamd_rcl_section *section,
 struct rspamd_rcl_section *
 rspamd_rcl_config_init (void)
 {
-	struct rspamd_rcl_section *new = NULL, *sub, *ssub;
+	struct rspamd_rcl_section *new = NULL, *sub, *ssub, *sssub;
 
 	/*
 	 * Important notice:
@@ -1476,6 +1395,99 @@ rspamd_rcl_config_init (void)
 			UCL_OBJECT,
 			FALSE,
 			TRUE);
+	sub->default_key = DEFAULT_METRIC;
+	rspamd_rcl_add_default_handler (sub,
+			"unknown_weight",
+			rspamd_rcl_parse_struct_double,
+			G_STRUCT_OFFSET (struct metric, unknown_weight),
+			0);
+	rspamd_rcl_add_default_handler (sub,
+			"grow_factor",
+			rspamd_rcl_parse_struct_double,
+			G_STRUCT_OFFSET (struct metric, grow_factor),
+			0);
+	rspamd_rcl_add_default_handler (sub,
+			"subject",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct metric, subject),
+			0);
+
+	/* Ungrouped symbols */
+	ssub = rspamd_rcl_add_section (&sub->subsections,
+			"symbol", "name",
+			rspamd_rcl_symbol_handler,
+			UCL_OBJECT,
+			TRUE,
+			TRUE);
+	rspamd_rcl_add_default_handler (ssub,
+			"description",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_symbol_def, description),
+			0);
+	rspamd_rcl_add_default_handler (ssub,
+			"one_shot",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_symbol_def, one_shot),
+			0);
+	rspamd_rcl_add_default_handler (ssub,
+			"score",
+			rspamd_rcl_parse_struct_double,
+			G_STRUCT_OFFSET (struct rspamd_symbol_def, score),
+			0);
+
+	/* Actions part */
+	ssub = rspamd_rcl_add_section (&sub->subsections,
+			"actions", NULL,
+			rspamd_rcl_actions_handler,
+			UCL_OBJECT,
+			TRUE,
+			TRUE);
+
+	/* Group part */
+	ssub = rspamd_rcl_add_section (&sub->subsections,
+			"group", "name",
+			rspamd_rcl_group_handler,
+			UCL_OBJECT,
+			TRUE,
+			TRUE);
+	rspamd_rcl_add_default_handler (ssub,
+			"disabled",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_symbols_group, disabled),
+			0);
+	rspamd_rcl_add_default_handler (ssub,
+			"enabled",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_symbols_group, disabled),
+			RSPAMD_CL_FLAG_BOOLEAN_INVERSE);
+	rspamd_rcl_add_default_handler (ssub,
+			"max_score",
+			rspamd_rcl_parse_struct_double,
+			G_STRUCT_OFFSET (struct rspamd_symbols_group, max_score),
+			0);
+
+	/* Grouped symbols */
+	sssub = rspamd_rcl_add_section (&ssub->subsections,
+			"symbol", "name",
+			rspamd_rcl_symbol_handler,
+			UCL_OBJECT,
+			TRUE,
+			TRUE);
+	rspamd_rcl_add_default_handler (sssub,
+			"description",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_symbol_def, description),
+			0);
+	rspamd_rcl_add_default_handler (sssub,
+			"one_shot",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_symbol_def, one_shot),
+			0);
+	rspamd_rcl_add_default_handler (sssub,
+			"score",
+			rspamd_rcl_parse_struct_double,
+			G_STRUCT_OFFSET (struct rspamd_symbol_def, score),
+			0);
 
 	/**
 	 * Worker section
@@ -2199,6 +2211,10 @@ rspamd_rcl_parse_struct_boolean (rspamd_mempool_t *pool,
 			EINVAL,
 			"cannot convert an object to boolean");
 		return FALSE;
+	}
+
+	if (pd->flags & RSPAMD_CL_FLAG_BOOLEAN_INVERSE) {
+		*target = !*target;
 	}
 
 	return TRUE;
