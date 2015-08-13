@@ -247,6 +247,7 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 		}
 		else {
 			/* Discard input */
+			server_stat->fuzzy_hashes_checked[RSPAMD_FUZZY_EPOCH6] ++;
 			msg_debug ("invalid fuzzy command of size %d received", r);
 		}
 		if (cmd != NULL) {
