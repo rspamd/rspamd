@@ -554,6 +554,7 @@ rspamd_protocol_control_parser_init (void)
 		sub = rspamd_rcl_add_section (&control_parser,
 				"*",
 				NULL,
+				NULL,
 				UCL_OBJECT,
 				FALSE,
 				TRUE);

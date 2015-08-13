@@ -67,7 +67,16 @@ struct rspamd_rcl_struct_parser {
  */
 typedef gboolean (*rspamd_rcl_handler_t) (rspamd_mempool_t *pool,
 	const ucl_object_t *obj,
-	gpointer ud, struct rspamd_rcl_section *section, GError **err);
+	const gchar *key,
+	gpointer ud,
+	struct rspamd_rcl_section *section,
+	GError **err);
+
+typedef gboolean (*rspamd_rcl_default_handler_t) (rspamd_mempool_t *pool,
+	const ucl_object_t *obj,
+	gpointer ud,
+	struct rspamd_rcl_section *section,
+	GError **err);
 
 /**
  * A handler type that is called at the end of section parsing
@@ -88,7 +97,7 @@ typedef void (*rspamd_rcl_section_fin_t)(rspamd_mempool_t *pool, gpointer ud);
 struct rspamd_rcl_default_handler_data * rspamd_rcl_add_default_handler (
 	struct rspamd_rcl_section *section,
 	const gchar *name,
-	rspamd_rcl_handler_t handler,
+	rspamd_rcl_default_handler_t handler,
 	gsize offset,
 	gint flags);
 
@@ -96,6 +105,7 @@ struct rspamd_rcl_default_handler_data * rspamd_rcl_add_default_handler (
  * Add new section to the configuration
  * @param top top section
  * @param name the name of the section
+ * @param key_attr name of the attribute that should be used as key attribute
  * @param handler handler function for all attributes
  * @param type type of object handled by a handler
  * @param required whether at least one of these sections is required
@@ -104,7 +114,8 @@ struct rspamd_rcl_default_handler_data * rspamd_rcl_add_default_handler (
  */
 struct rspamd_rcl_section * rspamd_rcl_add_section (
 	struct rspamd_rcl_section **top,
-	const gchar *name, rspamd_rcl_handler_t handler,
+	const gchar *name, const gchar *key_attr,
+	rspamd_rcl_handler_t handler,
 	enum ucl_type type, gboolean required, gboolean strict_type);
 
 /**
@@ -305,13 +316,13 @@ gboolean rspamd_rcl_parse_struct_mime_addr (rspamd_mempool_t *pool,
 void rspamd_rcl_register_worker_option (struct rspamd_config *cfg,
 	gint type,
 	const gchar *name,
-	rspamd_rcl_handler_t handler,
+	rspamd_rcl_default_handler_t handler,
 	gpointer target,
 	gsize offset,
 	gint flags);
 
 /**
- * Regiester a default parser for a worker
+ * Register a default parser for a worker
  * @param cfg config structure
  * @param type type of worker (GQuark)
  * @param func handler function
