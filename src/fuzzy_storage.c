@@ -292,6 +292,7 @@ init_fuzzy (struct rspamd_config *cfg)
 	ctx = g_malloc0 (sizeof (struct rspamd_fuzzy_storage_ctx));
 
 	ctx->sync_timeout = DEFAULT_SYNC_TIMEOUT;
+	ctx->expire = DEFAULT_EXPIRE;
 
 	rspamd_rcl_register_worker_option (cfg, type, "hashfile",
 		rspamd_rcl_parse_struct_string, ctx,
