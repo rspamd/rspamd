@@ -46,8 +46,12 @@ ucl_hash_seed (void)
 	static uint64_t seed;
 
 	if (seed == 0) {
+#ifdef UCL_RANDOM_FUNCTION
+		seed = UCL_RANDOM_FUNCTION;
+#else
 		/* Not very random but can be useful for our purposes */
 		seed = time (NULL);
+#endif
 	}
 
 	return seed;
@@ -88,7 +92,14 @@ static const unsigned char lc_map[256] = {
 		0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
 };
 
-#if (defined(WORD_BIT) && WORD_BIT == 64) || (defined(__WORDSIZE) && __WORDSIZE == 64)
+#if (defined(WORD_BIT) && WORD_BIT == 64) || \
+	(defined(__WORDSIZE) && __WORDSIZE == 64) || \
+	defined(__x86_64__) || \
+	defined(__amd64__)
+#define UCL64_BIT_HASH 1
+#endif
+
+#ifdef UCL64_BIT_HASH
 static inline uint32_t
 ucl_hash_func (const ucl_object_t *o)
 {
@@ -115,7 +126,7 @@ ucl_hash_equal (const ucl_object_t *k1, const ucl_object_t *k2)
 KHASH_INIT (ucl_hash_node, const ucl_object_t *, struct ucl_hash_elt, 1,
 		ucl_hash_func, ucl_hash_equal)
 
-#if (defined(WORD_BIT) && WORD_BIT == 64) || (defined(__WORDSIZE) && __WORDSIZE == 64)
+#ifdef UCL64_BIT_HASH
 static inline uint32_t
 ucl_hash_caseless_func (const ucl_object_t *o)
 {

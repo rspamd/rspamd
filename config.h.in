@@ -66,32 +66,32 @@
 
  #ifdef HAVE_ENDIAN_H
  #include <endian.h>
- #else 
+ #else
  #ifdef HAVE_SYS_ENDIAN_H
  #include <sys/endian.h>
  #else
  #ifdef HAVE_MACHINE_ENDIAN_H
  #include <machine/endian.h>
  #else
- #define LITTLE_ENDIAN   1234    
- #define BIG_ENDIAN      4321    
+ #define LITTLE_ENDIAN   1234
+ #define BIG_ENDIAN      4321
  #if defined(i386) || defined(__i386) || defined(__amd64) || \
  	 defined(BIT_ZERO_ON_RIGHT) || defined(__x86__)
  #define BYTE_ORDER      LITTLE_ENDIAN
  #endif
- 
+
  #if defined(__sparc) || defined(__sparc__) || defined(__powerpc__)
  #define BYTE_ORDER      BIG_ENDIAN
  #endif
- 
+
  #endif /* HAVE_MACHINE_ENDIAN_H */
  #endif /* HAVE_SYS_ENDIAN_H */
  #endif /* HAVE_ENDIAN_H */
- 
+
  #if !defined(BYTE_ORDER)
  # error "Undefined or unknown BYTE_ORDER"
  #endif
- 
+
 #ifdef _MSC_VER
 # define RSPAMD_PACKED(name) \
     __pragma(pack(push, 1)) struct name __pragma(pack(pop))
@@ -509,5 +509,7 @@ typedef off_t goffset;
 # define NBYTES(nbits)   (((nbits) + BITSPERBYTE - 1) / BITSPERBYTE)
 #endif
 
+extern uint64_t ottery_rand_uint64(void);
+#define UCL_RANDOM_FUNCTION ottery_rand_uint64()
 
 #endif

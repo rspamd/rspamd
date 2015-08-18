@@ -1226,6 +1226,12 @@ ucl_parse_key (struct ucl_parser *parser, struct ucl_chunk *chunk,
 		 */
 		unsigned priold = ucl_object_get_priority (tobj),
 				prinew = ucl_object_get_priority (nobj);
+
+		/* Special case for inherited objects */
+		if (tobj->flags & UCL_OBJECT_INHERITED) {
+			prinew = priold + 1;
+		}
+
 		if (priold == prinew) {
 			ucl_parser_append_elt (parser, container, tobj, nobj);
 		}
@@ -2066,12 +2072,29 @@ ucl_state_machine (struct ucl_parser *parser)
 					macro_start, macro_len);
 			parser->state = parser->prev_state;
 			if (macro_escaped == NULL) {
-				ret = macro->handler (macro_start, macro_len, macro_args,
-						macro->ud);
+				if (macro->is_context) {
+					ret = macro->h.context_handler (macro_start, macro_len,
+							macro_args,
+							parser->top_obj,
+							macro->ud);
+				}
+				else {
+					ret = macro->h.handler (macro_start, macro_len, macro_args,
+							macro->ud);
+				}
 			}
 			else {
-				ret = macro->handler (macro_escaped, macro_len, macro_args,
+				if (macro->is_context) {
+					ret = macro->h.context_handler (macro_escaped, macro_len,
+							macro_args,
+							parser->top_obj,
+							macro->ud);
+				}
+				else {
+					ret = macro->h.handler (macro_escaped, macro_len, macro_args,
 						macro->ud);
+				}
+
 				UCL_FREE (macro_len + 1, macro_escaped);
 			}
 
@@ -2116,6 +2139,7 @@ ucl_parser_new (int flags)
 	ucl_parser_register_macro (new, "includes", ucl_includes_handler, new);
 	ucl_parser_register_macro (new, "priority", ucl_priority_handler, new);
 	ucl_parser_register_macro (new, "load", ucl_load_handler, new);
+	ucl_parser_register_context_macro (new, "inherit", ucl_inherit_handler, new);
 
 	new->flags = flags;
 	new->includepaths = NULL;
@@ -2147,14 +2171,39 @@ ucl_parser_register_macro (struct ucl_parser *parser, const char *macro,
 	if (macro == NULL || handler == NULL) {
 		return;
 	}
+
 	new = UCL_ALLOC (sizeof (struct ucl_macro));
 	if (new == NULL) {
 		return;
 	}
+
 	memset (new, 0, sizeof (struct ucl_macro));
-	new->handler = handler;
+	new->h.handler = handler;
 	new->name = strdup (macro);
 	new->ud = ud;
+	HASH_ADD_KEYPTR (hh, parser->macroes, new->name, strlen (new->name), new);
+}
+
+void
+ucl_parser_register_context_macro (struct ucl_parser *parser, const char *macro,
+		ucl_context_macro_handler handler, void* ud)
+{
+	struct ucl_macro *new;
+
+	if (macro == NULL || handler == NULL) {
+		return;
+	}
+
+	new = UCL_ALLOC (sizeof (struct ucl_macro));
+	if (new == NULL) {
+		return;
+	}
+
+	memset (new, 0, sizeof (struct ucl_macro));
+	new->h.context_handler = handler;
+	new->name = strdup (macro);
+	new->ud = ud;
+	new->is_context = true;
 	HASH_ADD_KEYPTR (hh, parser->macroes, new->name, strlen (new->name), new);
 }
 

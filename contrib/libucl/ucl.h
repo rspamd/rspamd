@@ -176,12 +176,13 @@ typedef enum ucl_string_flags {
  * Basic flags for an object
  */
 typedef enum ucl_object_flags {
-	UCL_OBJECT_ALLOCATED_KEY = 0x1, /**< An object has key allocated internally */
-	UCL_OBJECT_ALLOCATED_VALUE = 0x2, /**< An object has a string value allocated internally */
-	UCL_OBJECT_NEED_KEY_ESCAPE = 0x4, /**< The key of an object need to be escaped on output */
-	UCL_OBJECT_EPHEMERAL = 0x8, /**< Temporary object that does not need to be freed really */
-	UCL_OBJECT_MULTILINE = 0x10, /**< String should be displayed as multiline string */
-	UCL_OBJECT_MULTIVALUE = 0x20 /**< Object is a key with multiple values */
+	UCL_OBJECT_ALLOCATED_KEY = (1 << 0), /**< An object has key allocated internally */
+	UCL_OBJECT_ALLOCATED_VALUE = (1 << 1), /**< An object has a string value allocated internally */
+	UCL_OBJECT_NEED_KEY_ESCAPE = (1 << 2), /**< The key of an object need to be escaped on output */
+	UCL_OBJECT_EPHEMERAL = (1 << 3), /**< Temporary object that does not need to be freed really */
+	UCL_OBJECT_MULTILINE = (1 << 4), /**< String should be displayed as multiline string */
+	UCL_OBJECT_MULTIVALUE = (1 << 5), /**< Object is a key with multiple values */
+	UCL_OBJECT_INHERITED = (1 << 6) /**< Object has been inherited from another */
 } ucl_object_flags_t;
 
 /**
@@ -805,6 +806,21 @@ typedef bool (*ucl_macro_handler) (const unsigned char *data, size_t len,
 		const ucl_object_t *arguments,
 		void* ud);
 
+/**
+ * Context dependent macro handler for a parser
+ * @param data the content of macro
+ * @param len the length of content
+ * @param arguments arguments object
+ * @param context previously parsed context
+ * @param ud opaque user data
+ * @param err error pointer
+ * @return true if macro has been parsed
+ */
+typedef bool (*ucl_context_macro_handler) (const unsigned char *data, size_t len,
+		const ucl_object_t *arguments,
+		const ucl_object_t *context,
+		void* ud);
+
 /* Opaque parser */
 struct ucl_parser;
 
@@ -831,8 +847,21 @@ UCL_EXTERN bool ucl_parser_set_default_priority (struct ucl_parser *parser,
  * @param handler handler (it is called immediately after macro is parsed)
  * @param ud opaque user data for a handler
  */
-UCL_EXTERN void ucl_parser_register_macro (struct ucl_parser *parser, const char *macro,
+UCL_EXTERN void ucl_parser_register_macro (struct ucl_parser *parser,
+		const char *macro,
 		ucl_macro_handler handler, void* ud);
+
+/**
+ * Register new context dependent handler for a macro
+ * @param parser parser object
+ * @param macro macro name (without leading dot)
+ * @param handler handler (it is called immediately after macro is parsed)
+ * @param ud opaque user data for a handler
+ */
+UCL_EXTERN void ucl_parser_register_context_macro (struct ucl_parser *parser,
+		const char *macro,
+		ucl_context_macro_handler handler,
+		void* ud);
 
 /**
  * Handler to detect unregistered variables
