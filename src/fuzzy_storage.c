@@ -346,7 +346,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	if ((ctx->backend = rspamd_fuzzy_backend_open (ctx->hashfile, &err)) == NULL) {
 		msg_err ("cannot open backend: %e", err);
 		g_error_free (err);
-		exit (EXIT_FAILURE);
+		exit (EXIT_SUCCESS);
 	}
 
 	server_stat->fuzzy_hashes = rspamd_fuzzy_backend_count (ctx->backend);

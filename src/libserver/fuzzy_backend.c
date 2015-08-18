@@ -391,6 +391,11 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 			fallback_journal[] = "PRAGMA journal_mode=\"off\";";
 	int rc;
 
+	if (path == NULL) {
+		g_set_error (err, rspamd_fuzzy_backend_quark (),
+				ENOENT, "Path has not been specified");
+		return NULL;
+	}
 	/* First of all we check path for existence */
 	dir = g_path_get_dirname (path);
 	if (dir == NULL) {
