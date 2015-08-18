@@ -1635,10 +1635,10 @@ rspamd_rcl_process_section (struct rspamd_rcl_section *sec,
 	g_assert (obj != NULL);
 	g_assert (sec->handler != NULL);
 
-	it = ucl_object_iterate_new (obj);
+	it = NULL;
 
 	if (sec->key_attr != NULL) {
-		while ((cur = ucl_object_iterate_safe (it, false)) != NULL) {
+		while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
 			if (ucl_object_type (cur) != UCL_OBJECT) {
 				is_nested = FALSE;
 				break;
@@ -1649,20 +1649,16 @@ rspamd_rcl_process_section (struct rspamd_rcl_section *sec,
 		is_nested = FALSE;
 	}
 
-	ucl_object_iterate_free (it);
-
 	if (is_nested) {
 		/* Just reiterate on all subobjects */
-		it = ucl_object_iterate_new (obj);
+		it = NULL;
 
-		while ((cur = ucl_object_iterate_safe (it, false)) != NULL) {
+		while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
 			if (!sec->handler (pool, cur, ucl_object_key (cur), ptr, sec, err)) {
-				ucl_object_iterate_free (it);
 				return FALSE;
 			}
 		}
 
-		ucl_object_iterate_free (it);
 		return TRUE;
 	}
 	else {
