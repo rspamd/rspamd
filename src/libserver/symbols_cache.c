@@ -359,7 +359,7 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 				item->frequency = ucl_object_toint (elt);
 			}
 
-			if (item->type == SYMBOL_TYPE_VIRTUAL && item->parent != -1) {
+			if ((item->type & SYMBOL_TYPE_VIRTUAL) && item->parent != -1) {
 				g_assert (item->parent < (gint)cache->items_by_id->len);
 				parent = g_ptr_array_index (cache->items_by_id, item->parent);
 
@@ -468,7 +468,7 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 			name);
 	}
 
-	if (name != NULL) {
+	if (name != NULL && type != SYMBOL_TYPE_CALLBACK) {
 		if (g_hash_table_lookup (cache->items_by_symbol, name) != NULL) {
 			msg_err ("skip duplicate symbol registration for %s", name);
 			return -1;
@@ -512,7 +512,7 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	rspamd_mempool_add_destructor (cache->static_pool,
 			rspamd_ptr_array_free_hard, item->rdeps);
 
-	if (name != NULL) {
+	if (name != NULL && type != SYMBOL_TYPE_CALLBACK) {
 		g_hash_table_insert (cache->items_by_symbol, item->symbol, item);
 	}
 
@@ -616,7 +616,7 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 
 	/* Check whether this item is skipped */
 	skipped = !ghost;
-	if (item->type == SYMBOL_TYPE_NORMAL && cache->cfg &&
+	if ((item->type & SYMBOL_TYPE_NORMAL) && cache->cfg &&
 			g_hash_table_lookup (cache->cfg->metrics_symbols, item->symbol) == NULL) {
 		cur = g_list_first (cache->cfg->metrics_list);
 		while (cur) {
@@ -650,7 +650,7 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 	}
 
 	if (skipped) {
-		item->type = SYMBOL_TYPE_SKIPPED;
+		item->type |= SYMBOL_TYPE_SKIPPED;
 		msg_warn ("symbol %s is not registered in any metric, so skip its check",
 				item->symbol);
 	}
@@ -664,7 +664,7 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 		item->priority ++;
 	}
 
-	if (item->type == SYMBOL_TYPE_VIRTUAL && item->parent != -1) {
+	if ((item->type & SYMBOL_TYPE_VIRTUAL) && item->parent != -1) {
 		g_assert (item->parent < (gint)cache->items_by_id->len);
 		parent = g_ptr_array_index (cache->items_by_id, item->parent);
 
@@ -870,7 +870,7 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 	double t1, t2;
 	guint64 diff;
 
-	if (item->type == SYMBOL_TYPE_NORMAL || item->type == SYMBOL_TYPE_CALLBACK) {
+	if (item->type & (SYMBOL_TYPE_NORMAL|SYMBOL_TYPE_CALLBACK)) {
 
 		g_assert (item->func != NULL);
 		/* Check has been started */
@@ -1060,12 +1060,12 @@ rspamd_symbols_cache_counters_cb (gpointer v, gpointer ud)
 
 	top = cbd->top;
 
-	if (item->type != SYMBOL_TYPE_CALLBACK) {
+	if (!(item->type & SYMBOL_TYPE_CALLBACK)) {
 		obj = ucl_object_typed_new (UCL_OBJECT);
 		ucl_object_insert_key (obj, ucl_object_fromstring (item->symbol),
 				"symbol", 0, false);
 
-		if (item->type == SYMBOL_TYPE_VIRTUAL && item->parent != -1) {
+		if ((item->type & SYMBOL_TYPE_VIRTUAL) && item->parent != -1) {
 			g_assert (item->parent < (gint)cbd->cache->items_by_id->len);
 			parent = g_ptr_array_index (cbd->cache->items_by_id,
 					item->parent);
@@ -1128,8 +1128,7 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 	for (i = 0; i < cache->items_by_order->len; i ++) {
 		item = g_ptr_array_index (cache->items_by_order, i);
 
-		if (item->type == SYMBOL_TYPE_CALLBACK ||
-				item->type == SYMBOL_TYPE_NORMAL) {
+		if (item->type & (SYMBOL_TYPE_CALLBACK|SYMBOL_TYPE_NORMAL)) {
 			if (item->cd->number > 0) {
 				item->avg_counter += item->cd->number + 1;
 				item->avg_time = item->avg_time +
