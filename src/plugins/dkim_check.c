@@ -28,7 +28,7 @@
  * Allowed options:
  * - symbol_allow (string): symbol to insert in case of allow (default: 'R_DKIM_ALLOW')
  * - symbol_reject (string): symbol to insert (default: 'R_DKIM_REJECT')
- * - symbol_rempfail (string): symbol to insert in case of temporary fail (default: 'R_DKIM_TEMPFAIL')
+ * - symbol_tempfail (string): symbol to insert in case of temporary fail (default: 'R_DKIM_TEMPFAIL')
  * - whitelist (map): map of whitelisted networks
  * - domains (map): map of domains to check
  * - strict_multiplier (number): multiplier for strict domains
