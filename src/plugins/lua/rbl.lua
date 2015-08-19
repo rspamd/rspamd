@@ -41,6 +41,11 @@ local symbols = {
   dkim_allow_symbol = 'R_DKIM_ALLOW',
 }
 
+local dkim_config = rspamd_config:get_all_opt("dkim")
+if dkim_config['symbol_allow'] then
+  symbols['dkim_allow_symbol'] = dkim_config['symbol_allow']
+end
+
 local function validate_dns(lstr)
   if lstr:match('%.%.') then
     return false
