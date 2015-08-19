@@ -20,9 +20,6 @@ And the following URLs are considered as phished:
     <a href="http://t.co/xxx">http://example.com</a>
     <a href="http://redir.to/example.com">http://example.com</a>
 
-Unfortunately, rspamd can generate false positives for different redirectors or
-URL shorteners. In future rspamd releases, this issue is going to be fixed.
-
 ## Configuration of phishing module
 
 Here is an example of full module configuraition.
@@ -34,15 +31,29 @@ phishing {
 	# Check only domains from this list
 	domains = "file:///path/to/map";
 	
+	# Make exclusions for known redirectors
+	redirector_domains = [
+		# URL/path for map, colon, name of symbol
+		"${CONFDIR}/redirectors.map:REDIRECTOR_FALSE"
+	];
 	# For certain domains from the specified strict maps
 	# use another symbol for phishing plugin
 	strict_domains = [
-		"${CONFDIR}/paypal.map:PAYPAL_PHISHING",
-		"${CONFDIR}/redirectors.map:REDIRECTOR_FALSE"
+		"${CONFDIR}/paypal.map:PAYPAL_PHISHING"
 	];
 }
 ~~~
 
-If `domains` is unspecified then rspamd checks all domains for phishing. `strict_domains`
-allows fine-grained control to avoid false positives and enforce some really bad phishing
-mails, such as bank phishing or other payments system phishing.
+If an anchoring (actual as opposed to phished) domain is found in a map
+referenced by the `redirector_domains` setting then the related symbol is
+yielded and the URL is not checked further. This allows making exclusions
+for known redirectors, especially ESPs.
+
+Further to this, if the phished domain is found in a map referenced by
+`strict_domains` the related symbol is yielded and the URL not checked
+further. This allows fine-grained control to avoid false positives and
+enforce some really bad phishing mails, such as bank phishing or other
+payments system phishing.
+
+Finally, the default symbol is yielded- if `domains` is specified then
+only if the phished domain is found in the related map.
