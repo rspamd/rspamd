@@ -1,3 +1,12 @@
+0.9.10:
+	* Do not dereference null pointer on learning.
+	* Fix some extreme cases in BAYES.
+	* Add a workaround to avoid bad HTML messages breaking.
+	* Build with -O2 flags by default.
+	* Add constraints to limit DNS requests count per task.
+	* Add workaround for SURBL DNS flood.
+	* Set error if rspamd cannot learn anything.
+
 0.9.9:
 	* Don't use RWL_SPAMHAUS_WL (unknown result) for whitelisting (by @fatalbanana)
 	* Import updated public suffix list (by @fatalbanana)
@@ -368,7 +377,7 @@
     * Fix roll history IP storage
     * Rework ipv4/ipv6 handling in parsing addresses:
 		- turn off support of IPV6_V6ONLY socket option;
-		- create ipv6 socket prior to ipv4 one to handle systems with v6/v4 
+		- create ipv6 socket prior to ipv4 one to handle systems with v6/v4
 		sockets enabled (Linux)
     * Remove CBL as it's wholly included in Spamhaus XBL (by @fatalbanana)
     * Remove nszones.com fake RBL (by @citrin)
@@ -526,7 +535,7 @@
 	 - fixed modules that use DNS.
 	* Lua modules once_received and emails reworked for new resolver API and UCL.
 	* Debian package was polished.
-	* Fixed a bug in fuzzy_check module that prevents correct processing messages 
+	* Fixed a bug in fuzzy_check module that prevents correct processing messages
 	  without valid parts.
 
 0.6.2:
@@ -562,7 +571,7 @@
 	* Simplify build system and unify configuration for all platforms.
 	* Improved URL detector (reduced false positive rate).
 	* Lua 5.2 is now the default and fully supported version.
-	* Tons of bugfixes and minor improvements.	
+	* Tons of bugfixes and minor improvements.
 
 0.5.6:
 	* Fix bug with counters incrementing in rolling history

@@ -11,7 +11,7 @@ ENABLE_LANGUAGE(ASM)
 
 SET(RSPAMD_VERSION_MAJOR 0)
 SET(RSPAMD_VERSION_MINOR 9)
-SET(RSPAMD_VERSION_PATCH 9)
+SET(RSPAMD_VERSION_PATCH 10)
 
 SET(RSPAMD_VERSION         "${RSPAMD_VERSION_MAJOR}.${RSPAMD_VERSION_MINOR}.${RSPAMD_VERSION_PATCH}")
 SET(RSPAMD_MASTER_SITE_URL "https://rspamd.com")
@@ -129,30 +129,30 @@ MACRO(FindLua _major _minor)
 	# Find lua libraries
 	UNSET(LUA_INCLUDE_DIR CACHE)
 	UNSET(LUA_LIBRARY CACHE)
-	
+
 	IF(ENABLE_LUAJIT MATCHES "ON")
 		MESSAGE(STATUS "Check for luajit ${_major}.${_minor}")
 		FIND_PATH(LUA_INCLUDE_DIR lua.h
 		  HINTS
 		  "${RSPAMD_SEARCH_PATH}"
 		  $ENV{LUA_DIR}
-		  PATH_SUFFIXES "include/luajit-2.0" 
-		  				"include/luajit${_major}${_minor}" 
-		  				"include/luajit${_major}.${_minor}" 
+		  PATH_SUFFIXES "include/luajit-2.0"
+		  				"include/luajit${_major}${_minor}"
+		  				"include/luajit${_major}.${_minor}"
 		  				"include/luajit-${_major}.${_minor}"
-		  				"include/luajit" 
-		  				"include/lua${_major}${_minor}" 
-		  				"include/lua${_major}.${_minor}" 
+		  				"include/luajit"
+		  				"include/lua${_major}${_minor}"
+		  				"include/lua${_major}.${_minor}"
 		  				"include/lua-${_major}.${_minor}"
 		  				include/lua include
 		  PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS}
 		)
-		FIND_LIBRARY(LUA_LIBRARY 
-		 	NAMES luajit 
+		FIND_LIBRARY(LUA_LIBRARY
+		 	NAMES luajit
 		  		"luajit-2.0"
 		  		"luajit2.0"
 		  		"luajit${_major}${_minor}"
-		  		"luajit${_major}.${_minor}" 
+		  		"luajit${_major}.${_minor}"
 		  		"luajit-${_major}.${_minor}"
 			HINTS
 				"${RSPAMD_SEARCH_PATH}"
@@ -161,7 +161,7 @@ MACRO(FindLua _major _minor)
 		  	PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS}
 		 	DOC "Lua library"
 		)
-		
+
 		IF(NOT LUA_LIBRARY OR NOT LUA_INCLUDE_DIR)
 			MESSAGE(STATUS "Fallback from luajit to plain lua")
 			SET(ENABLE_LUAJIT "OFF")
@@ -170,16 +170,16 @@ MACRO(FindLua _major _minor)
 			  HINTS
 			  "${RSPAMD_SEARCH_PATH}"
 			  $ENV{LUA_DIR}
-			  PATH_SUFFIXES "include/lua${_major}${_minor}" 
-			  				"include/lua${_major}.${_minor}" 
+			  PATH_SUFFIXES "include/lua${_major}${_minor}"
+			  				"include/lua${_major}.${_minor}"
 			  				"include/lua-${_major}.${_minor}"
 			  				include/lua include
 			  PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS}
 			)
-			FIND_LIBRARY(LUA_LIBRARY 
-			 	NAMES lua 
+			FIND_LIBRARY(LUA_LIBRARY
+			 	NAMES lua
 			  		"lua${_major}${_minor}"
-			  		"lua${_major}.${_minor}" 
+			  		"lua${_major}.${_minor}"
 			  		"lua-${_major}.${_minor}"
 				HINTS
 					"${RSPAMD_SEARCH_PATH}"
@@ -195,16 +195,16 @@ MACRO(FindLua _major _minor)
 		  HINTS
 		  "${RSPAMD_SEARCH_PATH}"
 		  $ENV{LUA_DIR}
-		  PATH_SUFFIXES "include/lua${_major}${_minor}" 
-		  				"include/lua${_major}.${_minor}" 
+		  PATH_SUFFIXES "include/lua${_major}${_minor}"
+		  				"include/lua${_major}.${_minor}"
 		  				"include/lua-${_major}.${_minor}"
 		  				include/lua include
 		  PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS}
 		)
-		FIND_LIBRARY(LUA_LIBRARY 
-		 	NAMES lua 
+		FIND_LIBRARY(LUA_LIBRARY
+		 	NAMES lua
 		  		"lua${_major}${_minor}"
-		  		"lua${_major}.${_minor}" 
+		  		"lua${_major}.${_minor}"
 		  		"lua-${_major}.${_minor}"
 			HINTS
 				"${RSPAMD_SEARCH_PATH}"
@@ -293,15 +293,15 @@ MACRO(ProcessPackage var _name0)
 			IF(NOT _lib)
 				MESSAGE(FATAL_ERROR "Packages ${_name0} ${ARGN} could not be found, no library")
 			ENDIF(NOT _lib)
-			
-			FIND_PATH(_incl "${_name0}.h" 
+
+			FIND_PATH(_incl "${_name0}.h"
 							HINTS "${RSPAMD_SEARCH_PATH}"
 							PATH_SUFFIXES "include" "include/${_name0}" ${ARGN}
 							PATHS 	${RSPAMD_DEFAULT_INCLUDE_PATHS})
 			IF(NOT _incl)
 				MESSAGE(FATAL_ERROR "Packages ${_name0} ${ARGN} could not be found, no header")
 			ENDIF(NOT _incl)
-			
+
 			GET_FILENAME_COMPONENT(_lib_path "${_lib}" PATH)
 			INCLUDE_DIRECTORIES("${_incl}")
 			LINK_DIRECTORIES("${_lib_path}")
@@ -318,7 +318,7 @@ MACRO(ProcessPackage var _name0)
 					PATH_SUFFIXES lib64 lib
 					PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS})
 		IF(_lib)
-			FIND_PATH(_incl "${_name0}.h" 
+			FIND_PATH(_incl "${_name0}.h"
 							HINTS "${RSPAMD_SEARCH_PATH}"
 							PATH_SUFFIXES "include" "include/${_name0}" ${ARGN}
 							PATHS 	${RSPAMD_DEFAULT_INCLUDE_PATHS})
@@ -332,7 +332,7 @@ MACRO(ProcessPackage var _name0)
 				LIST(APPEND RSPAMD_REQUIRED_LIBRARIES ${_lib})
 			ENDIF(_incl)
 		ENDIF(_lib)
-		
+
 		IF(NOT _incl OR NOT _lib)
 			PKG_SEARCH_MODULE(${var} "${_name0}" ${ARGN})
 		    IF(${var}_FOUND)
@@ -434,14 +434,14 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
 	MESSAGE(STATUS "Configuring for FreeBSD")
 	# Find util library
 
-	FIND_LIBRARY(LIBUTIL_LIBRARY NAMES util 
+	FIND_LIBRARY(LIBUTIL_LIBRARY NAMES util
 					HINTS "${RSPAMD_SEARCH_PATH}"
 						PATH_SUFFIXES lib64 lib
 	                  PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS}
 	                 DOC "Path where the libutil library can be found")
 	IF(LIBUTIL_LIBRARY)
-		FIND_FILE(_LIBUTIL_H 
-					HINTS "${RSPAMD_SEARCH_PATH}" 
+		FIND_FILE(_LIBUTIL_H
+					HINTS "${RSPAMD_SEARCH_PATH}"
 					NAMES libutil.h PATH ${RSPAMD_DEFAULT_INCLUDE_PATHS}
 					PATH_SUFFIXES include
 					DOC "Path to libutil header")
@@ -472,11 +472,11 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     	SET(CMAKE_C_FLAGS  "-D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE ${CMAKE_C_FLAGS}")
     ENDIF(BUILD_CPU_MODE STREQUAL "32")
     # Workaround with architecture specific includes
-    IF(IS_DIRECTORY "/usr/include/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu/") 
+    IF(IS_DIRECTORY "/usr/include/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu/")
     	INCLUDE_DIRECTORIES("/usr/include/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu/")
     	LIST(APPEND CMAKE_REQUIRED_INCLUDES "/usr/include/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu/")
     ENDIF(IS_DIRECTORY "/usr/include/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu/")
-    
+
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES rt)
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES dl)
 	#XXX: gio bug workaround
@@ -496,7 +496,7 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
  	IF(NOT BUILD_CPU_MODE)
 	 	SET (BUILD_CPU_MODE "32")
 	ENDIF(NOT BUILD_CPU_MODE)
-	
+
 	IF("${CMAKE_C_COMPILER_ID}" MATCHES SunPro)
 		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Xa -xregs=no%frameptr -xstrconst -xc99")
 		SET(SUN_BUILD32 "-xtarget=generic")
@@ -508,7 +508,7 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
 		ENDIF(ENABLE_OPTIMIZATION MATCHES "ON")
 	ELSE("${CMAKE_C_COMPILER_ID}" MATCHES SunPro)
 		set(SUN_BUILD32 "-m32")
-		set(SUN_BUILD64 "-m64")		
+		set(SUN_BUILD64 "-m64")
 	ENDIF("${CMAKE_C_COMPILER_ID}" MATCHES SunPro)
 
  	IF (BUILD_CPU_MODE STREQUAL "32")
@@ -524,7 +524,7 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
     ENDIF (BUILD_CPU_MODE STREQUAL "32")
 
  	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D__EXTENSIONS__ -DSOLARIS -D_POSIX_SOURCE -D_POSIX_C_SOURCE=200112L")
-    
+
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES rt)
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES dl)
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES resolv)
@@ -588,7 +588,7 @@ ENDIF(PCRE_LIBRARY)
 IF(ENABLE_HIREDIS MATCHES "ON")
 	ProcessPackage(HIREDIS hiredis libhiredis)
 	SET(WITH_HIREDIS 1)
-	FIND_PATH(LIBHIREDIS_INCLUDE hiredis.h 
+	FIND_PATH(LIBHIREDIS_INCLUDE hiredis.h
 		HINTS "${RSPAMD_SEARCH_PATH}"
 		PATH_SUFFIXES "include" "include/hiredis"
 		PATHS	${RSPAMD_DEFAULT_INCLUDE_PATHS}
@@ -608,7 +608,7 @@ IF(ENABLE_GPERF_TOOLS MATCHES "ON")
 			PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS}
 			DOC "Path where google perftools includes can be found")
 	INCLUDE_DIRECTORIES("${GPERF_INCLUDE}")
-	FIND_LIBRARY(GPERF_LIBRARY NAMES profiler 
+	FIND_LIBRARY(GPERF_LIBRARY NAMES profiler
 	              HINTS "${RSPAMD_SEARCH_PATH}"
                   PATH_SUFFIXES lib64 lib "lib/google"
                   PATHS ${RSPAMD_DEFAULT_LIBRARY_PATHS}
@@ -682,12 +682,12 @@ ENDIF(SUPPORT_PEDANTIC_FLAG)
 IF(SUPPORT_STD_FLAG)
 	SET(CMAKE_C_WARN_FLAGS "${CMAKE_C_WARN_FLAGS} -std=c99")
 ENDIF(SUPPORT_STD_FLAG)
- 
+
 CHECK_C_COMPILER_FLAG(-fPIC SUPPORT_FPIC)
 IF(SUPPORT_FPIC)
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
 ENDIF(SUPPORT_FPIC)
- 
+
  # Optimization flags
 IF(NOT CMAKE_C_OPT_FLAGS)
 	IF(ENABLE_OPTIMIZATION MATCHES "ON")
@@ -702,7 +702,7 @@ IF(NOT CMAKE_C_OPT_FLAGS)
 ENDIF(NOT CMAKE_C_OPT_FLAGS)
 
 SET(CMAKE_C_FLAGS "${CMAKE_C_OPT_FLAGS} ${CMAKE_C_FLAGS} ${CMAKE_C_WARN_FLAGS}")
- 
+
 # Check platform specific includes
 CHECK_INCLUDE_FILES(sys/types.h HAVE_SYS_TYPES_H)
 CHECK_INCLUDE_FILES(sys/time.h  HAVE_SYS_TIME_H)
@@ -785,7 +785,7 @@ int main(int argc, char** argv) {
 }" HAVE_WEAK_SYMBOLS)
 
 IF(NOT ICONV_ROOT_DIR)
-	FIND_PATH(ICONV_INCLUDE_DIR iconv.h 
+	FIND_PATH(ICONV_INCLUDE_DIR iconv.h
 			HINTS "${RSPAMD_SEARCH_PATH}"
 			PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS}
             PATH_SUFFIXES include include/libiconv
@@ -796,7 +796,7 @@ IF(NOT ICONV_ROOT_DIR)
             PATH_SUFFIXES lib64 lib
             DOC "Path where the libiconv library can be found")
 ELSE(NOT ICONV_ROOT_DIR)
-	FIND_PATH(ICONV_INCLUDE_DIR iconv.h 
+	FIND_PATH(ICONV_INCLUDE_DIR iconv.h
 				HINTS "${RSPAMD_SEARCH_PATH}"
 			     PATHS "${ICONV_ROOT_DIR}"
 			     PATH_SUFFIXES include include/libiconv
@@ -858,20 +858,20 @@ CHECK_SYMBOL_EXISTS(PCRE_CONFIG_JIT "pcre.h" HAVE_PCRE_JIT)
 # Some PCRE implementations are lacking of pcre_jit_exec fast path
 SET(_PCRE_FAST_TEST "
 #include \"pcre.h\"
-int main (void) 
+int main (void)
 {
 	int rc;
 	int ovector[30];
 	pcre *re;
 	pcre_extra *extra;
 	pcre_jit_stack *jit_stack;
-	
+
 	re = pcre_compile(\"abc\", 0, NULL, NULL, NULL);
 	extra = pcre_study(re, PCRE_STUDY_JIT_COMPILE, NULL);
 	jit_stack = pcre_jit_stack_alloc(32*1024, 512*1024);
 	pcre_assign_jit_stack(extra, NULL, jit_stack);
 	rc = pcre_jit_exec(re, extra, \"abc\", 3, 0, 0, ovector, 30, jit_stack);
-	
+
 	return rc;
 }
 ")
@@ -951,7 +951,7 @@ IF(ENABLE_URL_INCLUDE MATCHES "ON")
                     DOC "Path where the libfetch library can be found")
     IF(LIBFETCH_LIBRARY)
     	FIND_FILE(HAVE_FETCH_H HINTS "${RSPAMD_SEARCH_PATH}"
-    		NAMES fetch.h 
+    		NAMES fetch.h
     		PATH_SUFFIXES include
     		PATHS ${RSPAMD_DEFAULT_INCLUDE_PATHS}
     				DOC "Path to libfetch header")
@@ -973,14 +973,14 @@ SET(ID "unknown")
 FIND_PROGRAM(HG "git")
 
 IF(HG)
-    EXECUTE_PROCESS(COMMAND "${HG}" rev-parse --verify HEAD 
+    EXECUTE_PROCESS(COMMAND "${HG}" rev-parse --verify HEAD
     	WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     	OUTPUT_VARIABLE HG_ID ERROR_QUIET)
     IF(HG_ID)
         STRING(SUBSTRING "${HG_ID}" 0 10 RSPAMD_ID)
         MESSAGE(STATUS "Git revision: ${RSPAMD_ID}")
     ELSE(HG_ID)
-        FIND_FILE(HG_ARCH ".hg_archival.txt" "${CMAKE_CURRENT_SOURCE_DIR}")   
+        FIND_FILE(HG_ARCH ".hg_archival.txt" "${CMAKE_CURRENT_SOURCE_DIR}")
         IF(HG_ARCH)
             FILE(READ ${HG_ARCH} HG_ID)
             IF(HG_ID)
@@ -991,7 +991,7 @@ IF(HG)
     ENDIF(HG_ID)
 ELSE(HG)
 # Now check .hg_archival.txt
-    FIND_FILE(HG_ARCH ".hg_archival.txt" "${CMAKE_CURRENT_SOURCE_DIR}")   
+    FIND_FILE(HG_ARCH ".hg_archival.txt" "${CMAKE_CURRENT_SOURCE_DIR}")
     IF(HG_ARCH)
         FILE(READ ${HG_ARCH} HG_ID)
         IF(HG_ID)
@@ -1000,10 +1000,10 @@ ELSE(HG)
         ENDIF(HG_ID)
     ENDIF(HG_ARCH)
 ENDIF(HG)
- 
+
 
 ################################ SOURCES SECTION ###########################
-INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src" 
+INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src"
 					"${CMAKE_BINARY_DIR}/src"
 					"${CMAKE_BINARY_DIR}/src/libcryptobox"
 					"${CMAKE_SOURCE_DIR}/contrib/libucl"
@@ -1081,7 +1081,7 @@ ADD_SUBDIRECTORY(test)
 CONFIGURE_FILE(config.h.in src/config.h)
 CONFIGURE_FILE(contrib/exim/local_scan.c.in contrib/exim/local_scan_rspamd.c @ONLY)
 
-SET(CONFFILES 
+SET(CONFFILES
 	conf/common.conf
 	conf/composites.conf
 	conf/metrics.conf
@@ -1106,7 +1106,7 @@ INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${PLUGINSDIR}/lua)")
 # Install configs only if they are unchanged
 LIST(LENGTH CONFFILES CONFLIST_COUNT)
 MATH(EXPR CONFLIST_MAX ${CONFLIST_COUNT}-1)
-	
+
 FOREACH(CONF_IDX RANGE ${CONFLIST_MAX})
 	LIST(GET CONFFILES ${CONF_IDX} CONF_FILE)
 	IF(BUILD_PORT)
@@ -1140,7 +1140,7 @@ ENDIF(INSTALL_EXAMPLES MATCHES "ON")
 
 # Lua plugins
 
-FILE(GLOB LUA_PLUGINS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/src/plugins/lua" 
+FILE(GLOB LUA_PLUGINS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/src/plugins/lua"
 	"${CMAKE_CURRENT_SOURCE_DIR}/src/plugins/lua/*.lua" )
 FOREACH(LUA_PLUGIN ${LUA_PLUGINS})
 	GET_FILENAME_COMPONENT(_rp ${LUA_PLUGIN} PATH)
@@ -1152,7 +1152,7 @@ ENDFOREACH(LUA_PLUGIN)
 INSTALL(FILES "contrib/lua-fun/fun.lua" DESTINATION ${PLUGINSDIR}/lua)
 
 # Install TLD list
-INSTALL(FILES "contrib/publicsuffix/effective_tld_names.dat" DESTINATION 
+INSTALL(FILES "contrib/publicsuffix/effective_tld_names.dat" DESTINATION
 	"${PLUGINSDIR}")
 
 # Redirector
@@ -1164,7 +1164,7 @@ ENDIF(ENABLE_REDIRECTOR MATCHES "ON")
 
 # Lua config
 INSTALL(CODE "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}${CONFDIR}/lua)")
-FILE(GLOB_RECURSE LUA_CONFIGS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/conf/lua" 
+FILE(GLOB_RECURSE LUA_CONFIGS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/conf/lua"
 	"${CMAKE_CURRENT_SOURCE_DIR}/conf/lua/*.lua")
 FOREACH(LUA_CONF ${LUA_CONFIGS})
 	GET_FILENAME_COMPONENT(_rp ${LUA_CONF} PATH)
