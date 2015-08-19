@@ -920,7 +920,10 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 		for (i = 0; i < item->deps->len; i ++) {
 			dep = g_ptr_array_index (item->deps, i);
 
-			g_assert (dep->item != NULL);
+			if (dep->item == NULL) {
+				/* Assume invalid deps as done */
+				continue;
+			}
 
 			if (!isset (checkpoint->processed_bits, dep->id * 2 + 1)) {
 				if (!isset (checkpoint->processed_bits, dep->id * 2)) {
