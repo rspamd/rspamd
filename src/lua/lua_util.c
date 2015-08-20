@@ -86,6 +86,15 @@ LUA_FUNCTION_DEF (util, tanh);
  */
 LUA_FUNCTION_DEF (util, parse_html);
 
+/***
+ * @function util.levenshtein_distance(s1, s2)
+ * Returns levenstein distance between two strings
+ * @param {string} s1 the first string
+ * @param {string} s2 the second string
+ * @return {number} number of differences in two strings
+ */
+LUA_FUNCTION_DEF (util, levenshtein_distance);
+
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
 	LUA_INTERFACE_DEF (util, load_rspamd_config),
@@ -96,6 +105,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, tokenize_text),
 	LUA_INTERFACE_DEF (util, tanh),
 	LUA_INTERFACE_DEF (util, parse_html),
+	LUA_INTERFACE_DEF (util, levenshtein_distance),
 	{NULL, NULL}
 };
 
@@ -496,6 +506,25 @@ lua_util_parse_html (lua_State *L)
 	else {
 		lua_pushnil (L);
 	}
+
+	return 1;
+}
+
+static gint
+lua_util_levenshtein_distance (lua_State *L)
+{
+	const gchar *s1, *s2;
+	gsize s1len, s2len;
+	gint dist = 0;
+
+	s1 = luaL_checklstring (L, 1, &s1len);
+	s2 = luaL_checklstring (L, 2, &s2len);
+
+	if (s1 && s2) {
+		dist = rspamd_strings_levenshtein_distance (s1, s1len, s2, s2len);
+	}
+
+	lua_pushnumber (L, dist);
 
 	return 1;
 }
