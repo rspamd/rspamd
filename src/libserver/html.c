@@ -1411,6 +1411,7 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 		p ++;
 		rspamd_strlcpy (hexbuf, p, MIN ((gint)sizeof(hexbuf), end - p + 1));
 		cl->d.val = strtoul (hexbuf, NULL, 16);
+		cl->valid = TRUE;
 	}
 	else {
 		/* Compare color by name */
@@ -1424,6 +1425,7 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 			cl->d.comp.r = el->r;
 			cl->d.comp.g = el->g;
 			cl->d.comp.b = el->b;
+			cl->valid = TRUE;
 		}
 	}
 }
@@ -1524,7 +1526,7 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 
 	cur = tag->params;
 	bl = rspamd_mempool_alloc0 (pool, sizeof (*bl));
-	bl->id = tag->id;
+	bl->tag = tag;
 
 	while (cur) {
 		comp = cur->data;
@@ -1536,11 +1538,10 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 			msg_debug ("got color: %xd", bl->font_color.d.val);
 		}
 		else if (comp->type == RSPAMD_HTML_COMPONENT_STYLE && comp->len > 0) {
-			fstr.begin = (gchar *)comp->start;
-			fstr.len = comp->len;
-			bl->style = rspamd_mempool_fstrdup (pool, &fstr);
-			msg_debug ("got style: %s", bl->style);
-			rspamd_html_process_style (pool, bl, hc, bl->style, comp->len);
+			bl->style.len = comp->len;
+			bl->style.start =  comp->start;
+			msg_debug ("got style: %*s", (gint)bl->style.len, bl->style.start);
+			rspamd_html_process_style (pool, bl, hc, comp->start, comp->len);
 		}
 		else if (comp->type == RSPAMD_HTML_COMPONENT_CLASS && comp->len > 0) {
 			fstr.begin = (gchar *)comp->start;

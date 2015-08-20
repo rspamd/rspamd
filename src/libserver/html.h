@@ -64,13 +64,14 @@ struct html_color {
 		} comp;
 		guint32 val;
 	} d;
+	gboolean valid;
 };
 
 struct html_block {
-	gint id;
+	struct html_tag *tag;
 	struct html_color font_color;
 	struct html_color background_color;
-	gchar *style;
+	struct html_tag_component style;
 	guint font_size;
 	gchar *class;
 };
