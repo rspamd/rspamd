@@ -28,6 +28,8 @@ enum html_component_type {
 	RSPAMD_HTML_COMPONENT_NAME = 0,
 	RSPAMD_HTML_COMPONENT_HREF,
 	RSPAMD_HTML_COMPONENT_COLOR,
+	RSPAMD_HTML_COMPONENT_STYLE,
+	RSPAMD_HTML_COMPONENT_CLASS,
 	RSPAMD_HTML_COMPONENT_WIDTH,
 	RSPAMD_HTML_COMPONENT_HEIGHT
 };
@@ -45,6 +47,15 @@ struct html_image {
 	gchar *src;
 };
 
+struct html_block {
+	gint id;
+	gchar *font_color;
+	gchar *background_color;
+	gchar *style;
+	guint font_size;
+	gchar *class;
+};
+
 struct html_tag {
 	gint id;
 	struct html_tag_component name;
@@ -60,6 +71,7 @@ struct html_content {
 	gint flags;
 	guchar *tags_seen;
 	GPtrArray *images;
+	GPtrArray *blocks;
 };
 
 /*

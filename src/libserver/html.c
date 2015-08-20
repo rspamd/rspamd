@@ -218,6 +218,7 @@ typedef enum
 #define FL_CLOSED       (1 << 25)
 #define FL_BROKEN       (1 << 26)
 #define FL_IGNORE       (1 << 27)
+#define FL_BLOCK        (1 << 28)
 
 struct html_tag_def {
 	gint id;
@@ -233,7 +234,7 @@ static struct html_tag_def tag_defs[] = {
 	{Tag_ADDRESS, "address", (CM_BLOCK)},
 	{Tag_APPLET, "applet", (CM_OBJECT | CM_IMG | CM_INLINE | CM_PARAM)},
 	{Tag_AREA, "area", (CM_BLOCK | CM_EMPTY)},
-	{Tag_B, "b", (CM_INLINE)},
+	{Tag_B, "b", (CM_INLINE|FL_BLOCK)},
 	{Tag_BASE, "base", (CM_HEAD | CM_EMPTY)},
 	{Tag_BASEFONT, "basefont", (CM_INLINE | CM_EMPTY)},
 	{Tag_BDO, "bdo", (CM_INLINE)},
@@ -241,7 +242,7 @@ static struct html_tag_def tag_defs[] = {
 	{Tag_BLOCKQUOTE, "blockquote", (CM_BLOCK)},
 	{Tag_BODY, "body", (CM_HTML | CM_OPT | CM_OMITST | CM_UNIQUE)},
 	{Tag_BR, "br", (CM_INLINE | CM_EMPTY)},
-	{Tag_BUTTON, "button", (CM_INLINE)},
+	{Tag_BUTTON, "button", (CM_INLINE|FL_BLOCK)},
 	{Tag_CAPTION, "caption", (CM_TABLE)},
 	{Tag_CENTER, "center", (CM_BLOCK)},
 	{Tag_CITE, "cite", (CM_INLINE)},
@@ -252,12 +253,12 @@ static struct html_tag_def tag_defs[] = {
 	{Tag_DEL, "del", (CM_INLINE | CM_BLOCK | CM_MIXED)},
 	{Tag_DFN, "dfn", (CM_INLINE)},
 	{Tag_DIR, "dir", (CM_BLOCK | CM_OBSOLETE)},
-	{Tag_DIV, "div", (CM_BLOCK)},
-	{Tag_DL, "dl", (CM_BLOCK)},
+	{Tag_DIV, "div", (CM_BLOCK|FL_BLOCK)},
+	{Tag_DL, "dl", (CM_BLOCK|FL_BLOCK)},
 	{Tag_DT, "dt", (CM_DEFLIST | CM_OPT | CM_NO_INDENT)},
 	{Tag_EM, "em", (CM_INLINE)},
 	{Tag_FIELDSET, "fieldset", (CM_BLOCK)},
-	{Tag_FONT, "font", (CM_INLINE)},
+	{Tag_FONT, "font", (CM_INLINE|FL_BLOCK)},
 	{Tag_FORM, "form", (CM_BLOCK)},
 	{Tag_FRAME, "frame", (CM_FRAMES | CM_EMPTY)},
 	{Tag_FRAMESET, "frameset", (CM_HTML | CM_FRAMES)},
@@ -279,7 +280,7 @@ static struct html_tag_def tag_defs[] = {
 	{Tag_KBD, "kbd", (CM_INLINE)},
 	{Tag_LABEL, "label", (CM_INLINE)},
 	{Tag_LEGEND, "legend", (CM_INLINE)},
-	{Tag_LI, "li", (CM_LIST | CM_OPT | CM_NO_INDENT)},
+	{Tag_LI, "li", (CM_LIST | CM_OPT | CM_NO_INDENT | FL_BLOCK)},
 	{Tag_LINK, "link", (CM_HEAD | CM_EMPTY)},
 	{Tag_LISTING, "listing", (CM_BLOCK | CM_OBSOLETE)},
 	{Tag_MAP, "map", (CM_INLINE)},
@@ -289,10 +290,10 @@ static struct html_tag_def tag_defs[] = {
 	{Tag_NOSCRIPT, "noscript", (CM_BLOCK | CM_INLINE | CM_MIXED)},
 	{Tag_OBJECT, "object",
 	 (CM_OBJECT | CM_HEAD | CM_IMG | CM_INLINE | CM_PARAM)},
-	{Tag_OL, "ol", (CM_BLOCK)},
+	{Tag_OL, "ol", (CM_BLOCK | FL_BLOCK)},
 	{Tag_OPTGROUP, "optgroup", (CM_FIELD | CM_OPT)},
 	{Tag_OPTION, "option", (CM_FIELD | CM_OPT)},
-	{Tag_P, "p", (CM_BLOCK | CM_OPT)},
+	{Tag_P, "p", (CM_BLOCK | CM_OPT | FL_BLOCK)},
 	{Tag_PARAM, "param", (CM_INLINE | CM_EMPTY)},
 	{Tag_PLAINTEXT, "plaintext", (CM_BLOCK | CM_OBSOLETE)},
 	{Tag_PRE, "pre", (CM_BLOCK)},
@@ -308,7 +309,7 @@ static struct html_tag_def tag_defs[] = {
 	{Tag_SCRIPT, "script", (CM_HEAD | CM_MIXED | CM_BLOCK | CM_INLINE)},
 	{Tag_SELECT, "select", (CM_INLINE | CM_FIELD)},
 	{Tag_SMALL, "small", (CM_INLINE)},
-	{Tag_SPAN, "span", (CM_INLINE)},
+	{Tag_SPAN, "span", (CM_INLINE|FL_BLOCK)},
 	{Tag_STRIKE, "strike", (CM_INLINE)},
 	{Tag_STRONG, "strong", (CM_INLINE)},
 	{Tag_STYLE, "style", (CM_HEAD)},
@@ -316,16 +317,16 @@ static struct html_tag_def tag_defs[] = {
 	{Tag_SUP, "sup", (CM_INLINE)},
 	{Tag_TABLE, "table", (CM_BLOCK)},
 	{Tag_TBODY, "tbody", (CM_TABLE | CM_ROWGRP | CM_OPT)},
-	{Tag_TD, "td", (CM_ROW | CM_OPT | CM_NO_INDENT)},
+	{Tag_TD, "td", (CM_ROW | CM_OPT | CM_NO_INDENT | FL_BLOCK)},
 	{Tag_TEXTAREA, "textarea", (CM_INLINE | CM_FIELD)},
 	{Tag_TFOOT, "tfoot", (CM_TABLE | CM_ROWGRP | CM_OPT)},
 	{Tag_TH, "th", (CM_ROW | CM_OPT | CM_NO_INDENT)},
 	{Tag_THEAD, "thead", (CM_TABLE | CM_ROWGRP | CM_OPT)},
 	{Tag_TITLE, "title", (CM_HEAD | CM_UNIQUE)},
-	{Tag_TR, "tr", (CM_TABLE | CM_OPT)},
+	{Tag_TR, "tr", (CM_TABLE | CM_OPT| FL_BLOCK)},
 	{Tag_TT, "tt", (CM_INLINE)},
 	{Tag_U, "u", (CM_INLINE)},
-	{Tag_UL, "ul", (CM_BLOCK)},
+	{Tag_UL, "ul", (CM_BLOCK|FL_BLOCK)},
 	{Tag_VAR, "var", (CM_INLINE)},
 	{Tag_XMP, "xmp", (CM_BLOCK | CM_OBSOLETE)},
 	{Tag_NEXTID, "nextid", (CM_HEAD | CM_EMPTY)},
@@ -953,6 +954,15 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 	return TRUE;
 }
 
+#define NEW_COMPONENT(comp_type) do {							\
+	comp = rspamd_mempool_alloc (pool, sizeof (*comp));			\
+	comp->type = (comp_type);									\
+	comp->start = NULL;											\
+	comp->len = 0;												\
+	tag->params = g_list_prepend (tag->params, comp);			\
+	ret = TRUE;													\
+} while(0)
+
 static gboolean
 rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
 		const guchar *begin, const guchar *end,
@@ -967,41 +977,34 @@ rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
 
 	if (len == 3) {
 		if (g_ascii_strncasecmp (begin, "src", len) == 0) {
-			comp = rspamd_mempool_alloc (pool, sizeof (*comp));
-			comp->type = RSPAMD_HTML_COMPONENT_HREF;
-			comp->start = NULL;
-			comp->len = 0;
-			tag->params = g_list_prepend (tag->params, comp);
-			ret = TRUE;
+			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_HREF);
 		}
 	}
 	else if (len == 4) {
 		if (g_ascii_strncasecmp (begin, "href", len) == 0) {
-			comp = rspamd_mempool_alloc (pool, sizeof (*comp));
-			comp->type = RSPAMD_HTML_COMPONENT_HREF;
-			comp->start = NULL;
-			comp->len = 0;
-			tag->params = g_list_prepend (tag->params, comp);
-			ret = TRUE;
+			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_HREF);
 		}
 	}
 	else if (tag->id == Tag_IMG) {
 		/* Check width and height if presented */
 		if (len == 5 && g_ascii_strncasecmp (begin, "width", len) == 0) {
-			comp = rspamd_mempool_alloc (pool, sizeof (*comp));
-			comp->type = RSPAMD_HTML_COMPONENT_WIDTH;
-			comp->start = NULL;
-			comp->len = 0;
-			tag->params = g_list_prepend (tag->params, comp);
-			ret = TRUE;
+			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_WIDTH);
 		}
 		else if (len == 6 && g_ascii_strncasecmp (begin, "height", len) == 0) {
-			comp = rspamd_mempool_alloc (pool, sizeof (*comp));
-			comp->type = RSPAMD_HTML_COMPONENT_HEIGHT;
-			comp->start = NULL;
-			comp->len = 0;
-			tag->params = g_list_prepend (tag->params, comp);
-			ret = TRUE;
+			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_HEIGHT);
+		}
+	}
+	else if (tag->flags & FL_BLOCK) {
+		if (len == 5){
+			if (g_ascii_strncasecmp (begin, "color", len) == 0) {
+				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_COLOR);
+			}
+			else if (g_ascii_strncasecmp (begin, "style", len) == 0) {
+				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_STYLE);
+			}
+			else if (g_ascii_strncasecmp (begin, "class", len) == 0) {
+				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_CLASS);
+			}
 		}
 	}
 
@@ -1355,6 +1358,135 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 	}
 
 	g_ptr_array_add (hc->images, img);
+}
+
+static void
+rspamd_html_process_style (rspamd_mempool_t *pool, struct html_block *bl,
+		struct html_content *hc, const gchar *style, guint len)
+{
+	const gchar *p, *c, *end, *key = NULL;
+	enum {
+		read_key,
+		read_colon,
+		read_value,
+		skip_spaces,
+	} state = skip_spaces, next_state = read_key;
+	rspamd_fstring_t fstr;
+	guint klen = 0;
+
+	p = style;
+	c = p;
+	end = p + len;
+
+	while (p <= end) {
+		switch(state) {
+		case read_key:
+			if (*p == ':') {
+				key = c;
+				klen = p - c;
+				state = skip_spaces;
+				next_state = read_value;
+			}
+			else if (g_ascii_isspace (*p)) {
+				key = c;
+				klen = p - c;
+				state = skip_spaces;
+				next_state = read_colon;
+			}
+
+			p ++;
+			break;
+
+		case read_colon:
+			if (*p == ':') {
+				state = skip_spaces;
+				next_state = read_value;
+			}
+
+			p ++;
+			break;
+
+		case read_value:
+			if (*p == ';' || p == end) {
+				if (key && klen && p - c > 0) {
+					if ((klen == 5 && g_ascii_strncasecmp (key, "color", 5) == 0)
+					|| (klen == 10 && g_ascii_strncasecmp (key, "font-color", 10) == 0)) {
+						fstr.begin = (gchar *)c;
+						fstr.len = p - c;
+						bl->font_color = rspamd_mempool_fstrdup (pool, &fstr);
+						msg_debug ("got color: %s", bl->font_color);
+					}
+				}
+
+				key = NULL;
+				klen = 0;
+				state = skip_spaces;
+				next_state = read_key;
+			}
+
+			p ++;
+			break;
+
+		case skip_spaces:
+			if (!g_ascii_isspace (*p)) {
+				c = p;
+				state = next_state;
+			}
+			else {
+				p ++;
+			}
+
+			break;
+		}
+	}
+}
+
+static void
+rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
+		struct html_content *hc)
+{
+	struct html_tag_component *comp;
+	struct html_block *bl;
+	rspamd_fstring_t fstr;
+	GList *cur;
+
+	cur = tag->params;
+	bl = rspamd_mempool_alloc0 (pool, sizeof (*bl));
+	bl->id = tag->id;
+
+	while (cur) {
+		comp = cur->data;
+
+		if (comp->type == RSPAMD_HTML_COMPONENT_COLOR && comp->len > 0) {
+			fstr.begin = (gchar *)comp->start;
+			fstr.len = comp->len;
+			bl->font_color = rspamd_mempool_fstrdup (pool, &fstr);
+			msg_debug ("got color: %s", bl->font_color);
+		}
+		else if (comp->type == RSPAMD_HTML_COMPONENT_STYLE && comp->len > 0) {
+			fstr.begin = (gchar *)comp->start;
+			fstr.len = comp->len;
+			bl->style = rspamd_mempool_fstrdup (pool, &fstr);
+			msg_debug ("got style: %s", bl->style);
+			rspamd_html_process_style (pool, bl, hc, bl->style, comp->len);
+		}
+		else if (comp->type == RSPAMD_HTML_COMPONENT_CLASS && comp->len > 0) {
+			fstr.begin = (gchar *)comp->start;
+			fstr.len = comp->len;
+			bl->class = rspamd_mempool_fstrdup (pool, &fstr);
+			msg_debug ("got class: %s", bl->class);
+		}
+
+		cur = g_list_next (cur);
+	}
+
+	if (hc->blocks == NULL) {
+		hc->blocks = g_ptr_array_sized_new (64);
+		rspamd_mempool_add_destructor (pool, rspamd_ptr_array_free_hard,
+				hc->blocks);
+	}
+
+	g_ptr_array_add (hc->blocks, bl);
 }
 
 GByteArray*
@@ -1742,6 +1874,10 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 				}
 				else if (cur_tag->id == Tag_IMG && !(cur_tag->flags & FL_CLOSING)) {
 					rspamd_html_process_img_tag (pool, cur_tag, hc);
+				}
+				else if (!(cur_tag->flags & FL_CLOSING) &&
+						(cur_tag->flags & FL_BLOCK)) {
+					rspamd_html_process_block_tag (pool, cur_tag, hc);
 				}
 			}
 			else {
