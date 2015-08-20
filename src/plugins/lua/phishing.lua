@@ -56,12 +56,6 @@ local function phishing_cb(task)
         if not found and table.maxn(strict_domains) > 0 then
           local tld = purl:get_tld()
           if tld then
-            for _,rule in ipairs(redirector_domains) do
-              if rule['map']:get_key(url:get_tld()) then
-                task:insert_result(rule['symbol'], 1, purl:get_host())
-                found = true
-              end
-            end
             for _,rule in ipairs(strict_domains) do
               if rule['map']:get_key(tld) then
                 task:insert_result(rule['symbol'], 1, purl:get_host())
