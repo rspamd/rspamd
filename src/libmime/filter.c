@@ -30,7 +30,6 @@
 #include "cfg_file.h"
 #include "util.h"
 #include "expression.h"
-#include "diff.h"
 #include "libstat/stat_api.h"
 #include "utlist.h"
 

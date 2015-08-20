@@ -31,7 +31,6 @@
 #include "util.h"
 #include "images.h"
 #include "cfg_file.h"
-#include "diff.h"
 
 /***
  * @module rspamd_task

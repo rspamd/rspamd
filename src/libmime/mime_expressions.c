@@ -30,7 +30,6 @@
 #include "mime_expressions.h"
 #include "html.h"
 #include "lua/lua_common.h"
-#include "diff.h"
 
 gboolean rspamd_compare_encoding (struct rspamd_task *task,
 	GArray * args,

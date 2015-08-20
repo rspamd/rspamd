@@ -3,7 +3,6 @@ SET(LIBRSPAMDUTILSRC
 								${CMAKE_CURRENT_SOURCE_DIR}/addr.c
 								${CMAKE_CURRENT_SOURCE_DIR}/aio_event.c
 								${CMAKE_CURRENT_SOURCE_DIR}/bloom.c
-								${CMAKE_CURRENT_SOURCE_DIR}/diff.c
 								${CMAKE_CURRENT_SOURCE_DIR}/expression.c
 								${CMAKE_CURRENT_SOURCE_DIR}/fstring.c
 								${CMAKE_CURRENT_SOURCE_DIR}/hash.c

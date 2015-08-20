@@ -24,7 +24,6 @@
 
 #include "lua_common.h"
 #include "message.h"
-#include "diff.h"
 
 /* Textpart methods */
 /***
