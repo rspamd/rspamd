@@ -32,6 +32,7 @@ local domains = nil
 local strict_domains = {}
 local redirector_domains = {}
 local rspamd_logger = require "rspamd_logger"
+local util = require "rspamd_util"
 local opts = rspamd_config:get_all_opt('phishing')
 
 local function phishing_cb(task)
@@ -42,38 +43,46 @@ local function phishing_cb(task)
       if url:is_phished() then
         local found = false
         local purl = url:get_phished()
-        if table.maxn(redirector_domains) > 0 then
-          local tld = url:get_tld()
-          if tld then
-            for _,rule in ipairs(redirector_domains) do
-              if rule['map']:get_key(url:get_tld()) then
-                task:insert_result(rule['symbol'], 1, url:get_host())
-                found = true
-              end
+        local tld = url:get_tld()
+        local ptld = purl:get_tld()
+
+        if not ptld or not tld then
+          return
+        end
+
+        local weight = 1.0
+        local dist = util.levenshtein_distance(tld, ptld)
+        dist = 2 * dist / (#tld + #ptld)
+
+        if dist > 0.3 and dist <= 1.0 then
+          -- Use distance to penalize the total weight
+          weight = util.tanh(3 * (1 - dist + 0.1))
+        end
+        rspamd_logger.debugx("distance: %1 -> %2: %3", tld, ptld, dist)
+
+        if #redirector_domains > 0 then
+          for _,rule in ipairs(redirector_domains) do
+            if rule['map']:get_key(url:get_tld()) then
+              task:insert_result(rule['symbol'], weight, ptld)
+              found = true
             end
           end
         end
-        if not found and table.maxn(strict_domains) > 0 then
-          local tld = purl:get_tld()
-          if tld then
-            for _,rule in ipairs(strict_domains) do
-              if rule['map']:get_key(tld) then
-                task:insert_result(rule['symbol'], 1, purl:get_host())
-                found = true
-              end
+        if not found and #strict_domains > 0 then
+          for _,rule in ipairs(strict_domains) do
+            if rule['map']:get_key(ptld) then
+              task:insert_result(rule['symbol'], 1.0, ptld)
+              found = true
             end
           end
         end
         if not found then
           if domains then
-            local tld = purl:get_tld()
-            if tld then
-              if domains:get_key(tld) then
-                task:insert_result(symbol, 1, purl:get_host())
-              end
+            if domains:get_key(ptld) then
+              task:insert_result(symbol, weight, ptld)
             end
           else
-            task:insert_result(symbol, 1, purl:get_host())
+            task:insert_result(symbol, weight, ptld)
           end
         end
       end
