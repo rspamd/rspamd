@@ -1360,6 +1360,87 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 	g_ptr_array_add (hc->images, img);
 }
 
+/* Keep sorted by name */
+struct html_color_match {
+	const char *name;
+	guint8 r;
+	guint8 g;
+	guint8 b;
+} html_colors[] = {
+	{"black", 0x00, 0x00, 0x00},
+	{"blue", 0x00, 0x00, 0xFF},
+	{"brown", 0xA5, 0x2A, 0x2A},
+	{"cyan", 0x00, 0xFF, 0xFF},
+	{"darkblue", 0x00, 0x0, 0x0A0},
+	{"gray", 0x80, 0x80, 0x80},
+	{"green", 0x00, 0x80, 0x00},
+	{"lightblue", 0xAD, 0xD8, 0xE6},
+	{"lime", 0x00, 0xFF, 0x00},
+	{"magenta", 0xFF, 0x00, 0xFF},
+	{"maroon", 0x80, 0x00, 0x00},
+	{"olive", 0x80, 0x80, 0x00},
+	{"orange", 0xFF, 0xA5, 0x00},
+	{"purple", 0x80, 0x00, 0x80},
+	{"red",0xFF, 0x00, 0x00},
+	{"silver", 0xC0, 0xC0, 0xC0},
+	{"white", 0xFF, 0xFF, 0xFF},
+	{"yellow", 0xFF, 0xFF, 0x00},
+};
+
+static gint
+rspamd_html_color_cmp (const void *key, const void *elt)
+{
+	const rspamd_fstring_t *fk = key;
+	const struct html_color_match *el = elt;
+
+	return g_ascii_strncasecmp (fk->begin, el->name, fk->len);
+}
+
+static void
+rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
+{
+	const gchar *p = line, *end = line + len;
+	char hexbuf[3] = {0, 0, 0};
+	rspamd_fstring_t search;
+	struct html_color_match *el;
+
+	memset (cl, 0, sizeof (*cl));
+
+	if (*p == '#') {
+		/* HEX color */
+		p ++;
+
+		if (end - p >= 2) {
+			memcpy (hexbuf, p, 2);
+			cl->d.comp.r = strtoul (hexbuf, NULL, 16);
+		}
+		p += 2;
+		if (end - p >= 2) {
+			memcpy (hexbuf, p, 2);
+			cl->d.comp.g = strtoul (hexbuf, NULL, 16);
+		}
+		p += 2;
+		if (end - p >= 2) {
+			memcpy (hexbuf, p, 2);
+			cl->d.comp.b = strtoul (hexbuf, NULL, 16);
+		}
+	}
+	else {
+		/* Compare color by name */
+		search.begin = (gchar *)line;
+		search.len = len;
+
+		el = bsearch (&search, html_colors, G_N_ELEMENTS (html_colors),
+				sizeof (html_colors[0]), rspamd_html_color_cmp);
+
+		if (el != NULL) {
+			cl->d.comp.r = el->r;
+			cl->d.comp.g = el->g;
+			cl->d.comp.b = el->b;
+		}
+	}
+}
+
 static void
 rspamd_html_process_style (rspamd_mempool_t *pool, struct html_block *bl,
 		struct html_content *hc, const gchar *style, guint len)
@@ -1371,7 +1452,6 @@ rspamd_html_process_style (rspamd_mempool_t *pool, struct html_block *bl,
 		read_value,
 		skip_spaces,
 	} state = skip_spaces, next_state = read_key;
-	rspamd_fstring_t fstr;
 	guint klen = 0;
 
 	p = style;
@@ -1411,10 +1491,15 @@ rspamd_html_process_style (rspamd_mempool_t *pool, struct html_block *bl,
 				if (key && klen && p - c > 0) {
 					if ((klen == 5 && g_ascii_strncasecmp (key, "color", 5) == 0)
 					|| (klen == 10 && g_ascii_strncasecmp (key, "font-color", 10) == 0)) {
-						fstr.begin = (gchar *)c;
-						fstr.len = p - c;
-						bl->font_color = rspamd_mempool_fstrdup (pool, &fstr);
-						msg_debug ("got color: %s", bl->font_color);
+
+						rspamd_html_process_color (c, p - c, &bl->font_color);
+						msg_debug ("got color: %xd", bl->font_color.d.val);
+					}
+					if (klen == 16 && g_ascii_strncasecmp (key,
+							"background-color", 16) == 0) {
+
+						rspamd_html_process_color (c, p - c, &bl->background_color);
+						msg_debug ("got bgcolor: %xd", bl->background_color.d.val);
 					}
 				}
 
@@ -1460,8 +1545,8 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 		if (comp->type == RSPAMD_HTML_COMPONENT_COLOR && comp->len > 0) {
 			fstr.begin = (gchar *)comp->start;
 			fstr.len = comp->len;
-			bl->font_color = rspamd_mempool_fstrdup (pool, &fstr);
-			msg_debug ("got color: %s", bl->font_color);
+			rspamd_html_process_color (comp->start, comp->len, &bl->font_color);
+			msg_debug ("got color: %xd", bl->font_color.d.val);
 		}
 		else if (comp->type == RSPAMD_HTML_COMPONENT_STYLE && comp->len > 0) {
 			fstr.begin = (gchar *)comp->start;

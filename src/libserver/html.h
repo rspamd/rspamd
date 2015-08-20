@@ -47,10 +47,29 @@ struct html_image {
 	gchar *src;
 };
 
+struct html_color {
+	union {
+		struct {
+#if !defined(BYTE_ORDER) || BYTE_ORDER == LITTLE_ENDIAN
+			guint8 b;
+			guint8 g;
+			guint8 r;
+			guint8 alpha;
+#else
+			guint8 alpha;
+			guint8 r;
+			guint8 g;
+			guint8 b;
+#endif
+		} comp;
+		guint32 val;
+	} d;
+};
+
 struct html_block {
 	gint id;
-	gchar *font_color;
-	gchar *background_color;
+	struct html_color font_color;
+	struct html_color background_color;
 	gchar *style;
 	guint font_size;
 	gchar *class;
