@@ -795,3 +795,52 @@ rspamd_decode_url (gchar *dst, const gchar *src, gsize size)
 
 	return (d - dst);
 }
+#define MIN3(a, b, c) ((a) < (b) ? ((a) < (c) ? (a) : (c)) : ((b) < (c) ? (b) : (c)))
+
+gint
+rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
+		const gchar *s2, gsize s2len)
+{
+	guint x, y, lastdiag, olddiag;
+	gchar c1, c2;
+	guint *column;
+	gint eq;
+	static const guint max_cmp = 8192;
+
+	g_assert (s1 != NULL);
+	g_assert (s2 != NULL);
+
+	if (s1len == 0) {
+		s1len = strlen (s1);
+	}
+	if (s2len == 0) {
+		s2len = strlen (s2);
+	}
+
+	if (MAX(s1len, s2len) > max_cmp) {
+		/* Cannot compare too many characters */
+		return 0;
+	}
+
+	column = g_alloca ((s1len + 1) * sizeof (guint));
+
+	for (y = 1; y <= s1len; y++) {
+		column[y] = y;
+	}
+
+	for (x = 1; x <= s2len; x++) {
+		column[0] = x;
+
+		for (y = 1, lastdiag = x - 1; y <= s1len; y++) {
+			olddiag = column[y];
+			c1 = s1[y - 1];
+			c2 = s2[x - 1];
+			eq = (c1 == c2) ? 0 : 1;
+			column[y] = MIN3 (column[y] + 1, column[y - 1] + 1,
+					lastdiag + (eq));
+			lastdiag = olddiag;
+		}
+	}
+
+	return column[s1len];
+}

@@ -141,4 +141,15 @@ gsize rspamd_decode_url (gchar *dst, const gchar *src, gsize size);
 #   define g_tolower(x) (((x) >= 'A' && (x) <= 'Z') ? (x) - 'A' + 'a' : (x))
 #endif
 
+/**
+ * Return levenstein distance between two strings
+ * @param s1
+ * @param s1len
+ * @param s2
+ * @param s2len
+ * @return
+ */
+gint rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
+		const gchar *s2, gsize s2len);
+
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */
