@@ -1400,7 +1400,7 @@ static void
 rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 {
 	const gchar *p = line, *end = line + len;
-	char hexbuf[3] = {0, 0, 0};
+	char hexbuf[7];
 	rspamd_fstring_t search;
 	struct html_color_match *el;
 
@@ -1409,21 +1409,8 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 	if (*p == '#') {
 		/* HEX color */
 		p ++;
-
-		if (end - p >= 2) {
-			memcpy (hexbuf, p, 2);
-			cl->d.comp.r = strtoul (hexbuf, NULL, 16);
-		}
-		p += 2;
-		if (end - p >= 2) {
-			memcpy (hexbuf, p, 2);
-			cl->d.comp.g = strtoul (hexbuf, NULL, 16);
-		}
-		p += 2;
-		if (end - p >= 2) {
-			memcpy (hexbuf, p, 2);
-			cl->d.comp.b = strtoul (hexbuf, NULL, 16);
-		}
+		rspamd_strlcpy (hexbuf, p, MIN ((gint)sizeof(hexbuf), end - p + 1));
+		cl->d.val = strtoul (hexbuf, NULL, 16);
 	}
 	else {
 		/* Compare color by name */
