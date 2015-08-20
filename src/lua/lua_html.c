@@ -82,7 +82,7 @@ LUA_FUNCTION_DEF (html, has_property);
 
 /***
  * @method html:get_images()
- * Returns table of images found in html. Each image is, in turn, a table with the following fields:
+ * Returns a table of images found in html. Each image is, in turn, a table with the following fields:
  *
  * - `src` - link to the source
  * - `height` - height in pixels
@@ -92,10 +92,23 @@ LUA_FUNCTION_DEF (html, has_property);
  */
 LUA_FUNCTION_DEF (html, get_images);
 
+/***
+ * @method html:get_blocks()
+ * Retruns a table of html blocks. Each block provides the following data:
+ *
+ * `tag` - corresponding tag
+ * `color` - a triplet (r g b) for font color
+ * `bgcolor` - a triplet (r g b) for background color
+ * `style` - rspamd{text} with the full style description
+ * @return {table} table of blocks in html part
+ */
+LUA_FUNCTION_DEF (html, get_blocks);
+
 static const struct luaL_reg htmllib_m[] = {
 	LUA_INTERFACE_DEF (html, has_tag),
 	LUA_INTERFACE_DEF (html, has_property),
 	LUA_INTERFACE_DEF (html, get_images),
+	LUA_INTERFACE_DEF (html, get_blocks),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -198,6 +211,72 @@ lua_html_get_images (lua_State *L)
 				lua_pushstring (L, "embedded");
 				lua_pushboolean (L, img->flags & RSPAMD_HTML_FLAG_IMAGE_EMBEDDED);
 				lua_settable (L, -3);
+
+				lua_rawseti (L, -2, i + 1);
+			}
+		}
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_html_get_blocks (lua_State *L)
+{
+	struct html_content *hc = lua_check_html (L, 1);
+	struct html_block *bl;
+	struct rspamd_lua_text *t;
+	guint i;
+
+	if (hc != NULL) {
+		lua_newtable (L);
+
+		if (hc->blocks) {
+			for (i = 0; i < hc->blocks->len; i ++) {
+				bl = g_ptr_array_index (hc->blocks, i);
+
+				lua_newtable (L);
+
+				if (bl->tag) {
+					lua_pushstring (L, "tag");
+					lua_pushlstring (L, bl->tag->name.start, bl->tag->name.len);
+					lua_settable (L, -3);
+				}
+
+				if (bl->font_color.valid) {
+					lua_pushstring (L, "color");
+					lua_newtable (L);
+					lua_pushnumber (L, bl->font_color.d.comp.r);
+					lua_rawseti (L, -2, 1);
+					lua_pushnumber (L, bl->font_color.d.comp.g);
+					lua_rawseti (L, -2, 2);
+					lua_pushnumber (L, bl->font_color.d.comp.b);
+					lua_rawseti (L, -2, 3);
+					lua_settable (L, -3);
+				}
+				if (bl->background_color.valid) {
+					lua_pushstring (L, "color");
+					lua_newtable (L);
+					lua_pushnumber (L, bl->background_color.d.comp.r);
+					lua_rawseti (L, -2, 1);
+					lua_pushnumber (L, bl->background_color.d.comp.g);
+					lua_rawseti (L, -2, 2);
+					lua_pushnumber (L, bl->background_color.d.comp.b);
+					lua_rawseti (L, -2, 3);
+					lua_settable (L, -3);
+				}
+
+				if (bl->style.len > 0) {
+					lua_pushstring (L, "style");
+					t = lua_newuserdata (L, sizeof (*t));
+					t->start = bl->style.start;
+					t->len = bl->style.len;
+					t->own = FALSE;
+					lua_settable (L, -3);
+				}
 
 				lua_rawseti (L, -2, i + 1);
 			}
