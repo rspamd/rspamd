@@ -764,6 +764,9 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 		g_set_error (err, rspamd_stat_quark (), 500, "message cannot be learned"
 				" for any classifier defined");
 	}
+	else {
+		g_atomic_int_inc (&task->worker->srv->stat->messages_learned);
+	}
 
 	return ret;
 }
