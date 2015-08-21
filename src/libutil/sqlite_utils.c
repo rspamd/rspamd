@@ -249,7 +249,7 @@ rspamd_sqlite3_open_or_create (const gchar *path, const
 	gchar lock_path[PATH_MAX], dbdir[PATH_MAX], *pdir;
 	static const char sqlite_wal[] = "PRAGMA journal_mode=\"wal\";",
 			exclusive_lock_sql[] = "PRAGMA locking_mode=\"exclusive\";";
-	gboolean create = FALSE;
+	gboolean create = FALSE, has_lock = FALSE;
 
 	flags = SQLITE_OPEN_READWRITE;
 #ifdef SQLITE_OPEN_SHAREDCACHE
@@ -272,32 +272,35 @@ rspamd_sqlite3_open_or_create (const gchar *path, const
 
 	rspamd_snprintf (lock_path, sizeof (lock_path), "%s.lock", path);
 
-	if (access (path, R_OK) == -1 || access (lock_path, R_OK) != -1) {
+	if (access (path, R_OK) == -1) {
 		flags |= SQLITE_OPEN_CREATE;
+		create = TRUE;
+	}
 
-		rspamd_snprintf (lock_path, sizeof (lock_path), "%s.lock", path);
-		lock_fd = open (lock_path, O_WRONLY|O_CREAT|O_EXCL, 00600);
 
-		if (lock_fd == -1 && (errno == EEXIST || errno == EBUSY)) {
-			msg_debug ("checking %s to wait for db being created", lock_path);
+	rspamd_snprintf (lock_path, sizeof (lock_path), "%s.lock", path);
+	lock_fd = open (lock_path, O_WRONLY|O_CREAT|O_EXCL, 00600);
 
-			if (!rspamd_sqlite3_wait (lock_path)) {
-				g_set_error (err, rspamd_sqlite3_quark (),
-						errno, "cannot create sqlite file %s: %s",
-						path, strerror (errno));
+	if (lock_fd == -1 && (errno == EEXIST || errno == EBUSY)) {
+		msg_debug ("checking %s to wait for db being initialized", lock_path);
 
-				return NULL;
-			}
+		if (!rspamd_sqlite3_wait (lock_path)) {
+			g_set_error (err, rspamd_sqlite3_quark (),
+					errno, "cannot create sqlite file %s: %s",
+					path, strerror (errno));
 
-			/* At this point we have database created */
-			create = FALSE;
+			return NULL;
 		}
-		else {
-			msg_debug ("locking %s to block creating", lock_path);
 
-			g_assert (rspamd_file_lock (lock_fd, FALSE));
-			create = TRUE;
-		}
+		/* At this point we have database created */
+		create = FALSE;
+		has_lock = FALSE;
+	}
+	else {
+		msg_debug ("locking %s to block other processes", lock_path);
+
+		g_assert (rspamd_file_lock (lock_fd, FALSE));
+		has_lock = TRUE;
 	}
 
 	if ((rc = sqlite3_open_v2 (path, &sqlite,
@@ -338,12 +341,8 @@ rspamd_sqlite3_open_or_create (const gchar *path, const
 			return NULL;
 		}
 
-		msg_debug ("removing lock from %s", lock_path);
-
 		sqlite3_close (sqlite);
-		rspamd_file_unlock (lock_fd, FALSE);
-		unlink (lock_path);
-		close (lock_fd);
+
 
 		/* Reopen in normal mode */
 		msg_debug ("reopening %s in normal mode", path);
@@ -360,7 +359,9 @@ rspamd_sqlite3_open_or_create (const gchar *path, const
 					rc, "cannot open sqlite db after creation %s: %d",
 					path, rc);
 	#endif
-
+			rspamd_file_unlock (lock_fd, FALSE);
+			unlink (lock_path);
+			close (lock_fd);
 			return NULL;
 		}
 	}
@@ -368,6 +369,13 @@ rspamd_sqlite3_open_or_create (const gchar *path, const
 	if (sqlite3_exec (sqlite, sqlite_wal, NULL, NULL, NULL) != SQLITE_OK) {
 		msg_warn ("WAL mode is not supported (%s), locking issues might occur",
 				sqlite3_errmsg (sqlite));
+	}
+
+	if (has_lock) {
+		msg_debug ("removing lock from %s", lock_path);
+		rspamd_file_unlock (lock_fd, FALSE);
+		unlink (lock_path);
+		close (lock_fd);
 	}
 
 	return sqlite;
