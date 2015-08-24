@@ -51,10 +51,10 @@ local function file_exists(filename)
 	end
 end
 
-if file_exists(local_conf .. 'rspamd.local.lua') then
-	dofile(local_conf .. 'rspamd.local.lua')
+if file_exists(local_conf .. '/rspamd.local.lua') then
+	dofile(local_conf .. '/rspamd.local.lua')
 end
 
-if file_exists(local_rules .. 'rspamd.classifiers.lua') then
-	dofile(local_rules .. 'rspamd.classifiers.lua')
+if file_exists(local_rules .. '/rspamd.classifiers.lua') then
+	dofile(local_rules .. '/rspamd.classifiers.lua')
 end
