@@ -62,11 +62,10 @@ local function check_query_settings(task)
   if query_maxscore then
     -- We have score limits redefined by request
     local ms = tonumber(tostring(query_maxscore))
-
     if ms then
       local nset = {
         default = {
-          actions {
+          actions = {
             reject = ms
           }
         }
@@ -75,7 +74,7 @@ local function check_query_settings(task)
       local query_softscore = task:get_request_header('softscore')
       if query_softscore then
         local ss = tonumber(tostring(query_softscore))
-        nset['default']['actions']['add_header'] = ss
+        nset['default']['actions']['add header'] = ss
       end
       
       task:set_settings(nset)
@@ -466,13 +465,11 @@ end
 
 if set_section[1] and type(set_section[1]) == "string" then
   -- Just a map of ucl
-  if rspamd_config:add_map(set_section[1], "settings map", process_settings_map) then
-    rspamd_config:register_pre_filter(check_settings)
-  else
+  if not rspamd_config:add_map(set_section[1], "settings map", process_settings_map) then
     rspamd_logger.errx('cannot load settings from %1', set_section)
   end
 elseif type(set_section) == "table" then
-  if process_settings_table(set_section) then
-    rspamd_config:register_pre_filter(check_settings)
-  end
+  process_settings_table(set_section)
 end
+
+rspamd_config:register_pre_filter(check_settings)
