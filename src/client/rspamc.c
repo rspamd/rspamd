@@ -837,6 +837,14 @@ rspamd_action_from_str (const gchar *data, gint *result)
 			sizeof ("soft reject") - 1) == 0) {
 		*result = METRIC_ACTION_SOFT_REJECT;
 	}
+	else if (g_ascii_strncasecmp (data, "no_action",
+			sizeof ("soft_reject") - 1) == 0) {
+		*result = METRIC_ACTION_NOACTION;
+	}
+	else if (g_ascii_strncasecmp (data, "no action",
+			sizeof ("soft reject") - 1) == 0) {
+		*result = METRIC_ACTION_NOACTION;
+	}
 	else {
 		return FALSE;
 	}
@@ -855,6 +863,7 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input)
 	gint act;
 	gboolean is_spam = FALSE;
 	const gchar *hdr_scanned, *hdr_spam;
+	gchar *json_header, *json_header_encoded;
 
 	ar.data = input->str;
 	ar.len = input->len;
@@ -897,6 +906,23 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input)
 
 	g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Action",
 			action);
+
+	if (json || raw) {
+		/* We also append json data as a specific header */
+		if (json) {
+			json_header = ucl_object_emit (result, UCL_EMIT_JSON);
+		}
+		else {
+			json_header = ucl_object_emit (result, UCL_EMIT_CONFIG);
+		}
+
+		json_header_encoded = rspamd_encode_base64_fold (json_header,
+				strlen (json_header), 60, NULL);
+		free (json_header);
+		g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Result",
+				json_header_encoded);
+		g_free (json_header_encoded);
+	}
 
 	/* Write message */
 	stream = g_mime_stream_file_new (out);
