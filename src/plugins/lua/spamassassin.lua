@@ -32,6 +32,7 @@ local rspamd_regexp = require "rspamd_regexp"
 local rspamd_expression = require "rspamd_expression"
 local rspamd_mempool = require "rspamd_mempool"
 local rspamd_trie = require "rspamd_trie"
+local util = require "rspamd_util"
 local _ = require "fun"
 
 --local dumper = require 'pl.pretty'.dump
@@ -109,26 +110,39 @@ local function handle_header_def(hline, cur_rule)
       
       if cur_param['header'] == 'MESSAGEID' then
         -- Special case for spamassassin
-        cur_param['header'] = 'Message-ID'
-        rspamd_logger.info('MESSAGEID support is limited in ' .. cur_rule['symbol'])
+        cur_param['header'] = {'Message-ID', 'X-Message-ID', 'Resent-Message-ID'}
+      elseif cur_param['header'] == 'ToCc' then
+        cur_param['header'] = {'To', 'Cc', 'Bcc'}
       end
       
       _.each(function(func)
           if func == 'addr' then
             cur_param['function'] = function(str)
-              local at = string.find(str, '@')
-              if at then
-                return string.sub(str, at + 1)
+              local addr_parsed = util.parse_addr(str)
+              local ret = {}
+              if addr_parsed then
+                for i,elt in ipairs(addr_parsed) do
+                  if elt['addr'] then
+                    table.insert(ret, elt['addr'])
+                  end
+                end
               end
-              return str
+              
+              return ret
             end
           elseif func == 'name' then
             cur_param['function'] = function(str)
-              local at = string.find(str, '@')
-              if at then
-                return string.sub(str, 1, at - 1)
+              local addr_parsed = util.parse_addr(str)
+              local ret = {}
+              if addr_parsed then
+                for i,elt in ipairs(addr_parsed) do
+                  if elt['name'] then
+                    table.insert(ret, elt['name'])
+                  end
+                end
               end
-              return str
+              
+              return ret
             end
           elseif func == 'raw' then
             cur_param['raw'] = true
@@ -646,41 +660,57 @@ end, replace['rules'])
 _.each(function(k, r)
     local f = function(task)
       local raw = false
-      local str = _.foldl(function(acc, h)
-        local hdr = task:get_header_full(h['header'], h['strong'])
-        if hdr then
-          for n, rh in ipairs(hdr) do
-            -- Subject for optimization
-            local str
-            if h['raw'] then
-              str =  rh['value']
-              raw = true
-            else
-              str =  rh['decoded']
-            end
-            if not str then return 0 end
-            
-            if h['function'] then
-              str = h['function'](str)
-            end
-            
-            acc = acc .. str
-            end
-        elseif r['unset'] then
-          acc = acc .. r['unset']
+      local check = {}
+      _.each(function(h)
+        local headers = {}
+        if type(h['header']) == 'string' then
+          table.insert(headers, h['header'])
+        else
+          headers = h['header']
         end
         
-        return acc
-      end, '', r['header'])
+        for i,hname in ipairs(headers) do
+          local hdr = task:get_header_full(hname, h['strong'])
+          if hdr then
+            for n, rh in ipairs(hdr) do
+              -- Subject for optimization
+              local str
+              if h['raw'] then
+                str =  rh['value']
+                raw = true
+              else
+                str =  rh['decoded']
+              end
+              if not str then return 0 end
+              
+              if h['function'] then
+                str = h['function'](str)
+              end
+              
+              if type(str) == 'string' then
+                table.insert(check, str)
+              else
+                for ii,c in ipairs(str) do
+                  table.insert(check, c)
+                end
+              end
+            end
+          elseif r['unset'] then
+            table.insert(check, r['unset'])
+          end
+        end
+      end, r['header'])
       
-      if str == '' then
+      if #check == 0 then
         if r['not'] then return 1 end
         return 0
       end
       
-      local match = sa_regexp_match(str, r['re'], raw, r)
-      if (match and not r['not']) or (not match and r['not']) then
-        return match
+      for i,c in ipairs(check) do
+        local match = sa_regexp_match(c, r['re'], raw, r)
+        if (match and not r['not']) or (not match and r['not']) then
+          return match
+        end
       end
       
       return 0
