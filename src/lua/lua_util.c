@@ -29,6 +29,12 @@
 #include "tokenizers/tokenizers.h"
 
 /***
+ * @module rspamd_util
+ * This module contains some generic purpose utilities that could be useful for
+ * testing and production rules.
+ */
+
+/***
  * @function util.create_event_base()
  * Creates new event base for processing asynchronous events
  * @return {ev_base} new event processing base
