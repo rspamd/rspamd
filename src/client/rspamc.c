@@ -60,6 +60,7 @@ static gboolean raw = FALSE;
 static gboolean extended_urls = FALSE;
 static gboolean mime_output = FALSE;
 static gchar *key = NULL;
+static GList *children;
 
 static GOptionEntry entries[] =
 {
@@ -925,13 +926,14 @@ rspamc_client_execute_cmd (struct rspamc_command *cmd, ucl_object_t *result,
 	}
 
 	if (!g_spawn_async_with_pipes (NULL, eargv, NULL,
-			G_SPAWN_SEARCH_PATH, NULL, NULL, &cld,
+			G_SPAWN_SEARCH_PATH|G_SPAWN_DO_NOT_REAP_CHILD, NULL, NULL, &cld,
 			&infd, &outfd, &errfd, &err)) {
 
 		rspamd_fprintf (stderr, "Cannot execute %s: %e", execute, err);
 		g_error_free (err);
 	}
 	else {
+		children = g_list_prepend (children, GSIZE_TO_POINTER (cld));
 		out = fdopen (infd, "w");
 
 		if (result != NULL) {
@@ -1134,12 +1136,15 @@ rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
-	gint i, start_argc, cur_req = 0;
+	gint i, start_argc, cur_req = 0, res;
 	GHashTable *kwattrs;
+	GList *cur;
+	GPid cld;
 	struct rspamc_command *cmd;
 	FILE *in = NULL;
 	struct event_base *ev_base;
 	struct stat st;
+	struct sigaction sigpipe_act;
 
 	kwattrs = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 
@@ -1154,6 +1159,13 @@ main (gint argc, gchar **argv, gchar **env)
 
 	ev_base = event_init ();
 	g_mime_init (0);
+
+	/* Ignore sigpipe */
+	sigemptyset (&sigpipe_act.sa_mask);
+	sigaddset (&sigpipe_act.sa_mask, SIGPIPE);
+	sigpipe_act.sa_handler = SIG_IGN;
+	sigpipe_act.sa_flags = 0;
+	sigaction (SIGPIPE, &sigpipe_act, NULL);
 
 	/* Now read other args from argc and argv */
 	if (argc == 1) {
@@ -1241,6 +1253,24 @@ main (gint argc, gchar **argv, gchar **env)
 
 	g_hash_table_destroy (kwattrs);
 	g_mime_shutdown ();
+
+	/* Wait for children processes */
+	cur = g_list_first (children);
+
+	while (cur) {
+		cld = GPOINTER_TO_SIZE (cur->data);
+
+		if (waitpid (cld, &res, 0) == -1) {
+			fprintf (stderr, "Cannot wait for %d: %s", (gint)cld,
+					strerror (errno));
+		}
+
+		cur = g_list_next (cur);
+	}
+
+	if (children != NULL) {
+		g_list_free (children);
+	}
 
 	return 0;
 }
