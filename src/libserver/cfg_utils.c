@@ -985,7 +985,7 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 	}
 
 	sym_def =
-		rspamd_mempool_alloc (cfg->cfg_pool, sizeof (struct rspamd_symbol_def));
+		rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_symbol_def));
 	score_ptr = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (gdouble));
 
 	*score_ptr = score;
