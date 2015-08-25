@@ -372,13 +372,17 @@ get_specific_action_score (const ucl_object_t *metric,
 		struct metric_action *action)
 {
 	const ucl_object_t *act, *sact;
+	const gchar *act_name;
 	double score;
 
 	if (metric) {
 		act = ucl_object_find_key (metric, "actions");
 		if (act) {
-			sact = ucl_object_find_key (act, rspamd_action_to_str (action->action));
+			act_name = rspamd_action_to_str (action->action);
+			sact = ucl_object_find_key (act, act_name);
 			if (sact != NULL && ucl_object_todouble_safe (sact, &score)) {
+				msg_debug ("found override score %.2f for action %s in settings",
+						score, act_name);
 				return score;
 			}
 		}

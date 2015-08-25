@@ -552,6 +552,7 @@ rspamd_config_new_metric (struct rspamd_config *cfg, struct metric *c,
 
 		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
 			c->actions[i].score = -1.0;
+			c->actions[i].action = i;
 		}
 
 		c->subject = SPAM_SUBJECT;

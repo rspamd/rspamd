@@ -866,15 +866,9 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	gchar action_char;
 
 	m = mres->metric;
+	mres->action = rspamd_check_action_metric (task, mres->score,
+					&required_score, m);
 
-	/* XXX: handle settings */
-	if (mres->action == METRIC_ACTION_MAX) {
-		mres->action = rspamd_check_action_metric (task, mres->score,
-				&required_score, m);
-	}
-	else {
-		required_score = mres->metric->actions[mres->action].score;
-	}
 	action = mres->action;
 	is_spam = (action == METRIC_ACTION_REJECT);
 
