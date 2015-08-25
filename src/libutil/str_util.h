@@ -129,6 +129,16 @@ gchar * rspamd_encode_base64 (const guchar *in, gsize inlen, gint str_len,
 		gsize *outlen);
 
 /**
+ * Encode and fold string using base64 encoding
+ * @param in input
+ * @param inlen input length
+ * @param str_len maximum string length (if <= 0 then no lines are split)
+ * @return freshly allocated base64 encoded value or NULL if input is invalid
+ */
+gchar * rspamd_encode_base64_fold (const guchar *in, gsize inlen, gint str_len,
+		gsize *outlen);
+
+/**
  * Decode URL encoded string in-place and return new length of a string, src and dst are NULL terminated
  * @param dst
  * @param src

@@ -565,13 +565,15 @@ rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen)
 }
 
 
-gchar *
-rspamd_encode_base64 (const guchar *in, gsize inlen, gint str_len, gsize *outlen)
+static gchar *
+rspamd_encode_base64_common (const guchar *in, gsize inlen, gint str_len,
+		gsize *outlen, gboolean fold)
 {
 #define CHECK_SPLIT \
 	do { if (str_len > 0 && cols >= str_len) { \
 				*o++ = '\r'; \
 				*o++ = '\n'; \
+				if (fold) *o++ = '\t'; \
 				cols = 0; \
 	} } \
 while (0)
@@ -588,7 +590,7 @@ while (0)
 
 	if (str_len > 0) {
 		g_assert (str_len > 8);
-		allocated_len += (allocated_len / str_len + 1) * 2 + 1;
+		allocated_len += (allocated_len / str_len + 1) * (fold ? 3 : 2) + 1;
 	}
 
 	out = g_malloc (allocated_len);
@@ -621,6 +623,9 @@ while (0)
 
 			*o++ = '\r';
 			*o++ = '\n';
+			if (fold) {
+				*o ++ = '\t';
+			}
 
 			/* Remaining bytes */
 			while (shift >= 16) {
@@ -706,6 +711,20 @@ end:
 	}
 
 	return out;
+}
+
+gchar *
+rspamd_encode_base64 (const guchar *in, gsize inlen, gint str_len,
+		gsize *outlen)
+{
+	return rspamd_encode_base64_common (in, inlen, str_len, outlen, FALSE);
+}
+
+gchar *
+rspamd_encode_base64_fold (const guchar *in, gsize inlen, gint str_len,
+		gsize *outlen)
+{
+	return rspamd_encode_base64_common (in, inlen, str_len, outlen, TRUE);
 }
 
 gsize
