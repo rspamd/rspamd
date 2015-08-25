@@ -95,6 +95,18 @@ LUA_FUNCTION_DEF (util, parse_html);
  */
 LUA_FUNCTION_DEF (util, levenshtein_distance);
 
+/***
+ * @function util.parse_addr(str)
+ * Parse rfc822 address to components. Returns a table of components:
+ *
+ * - `name`: name of address (e.g. Some User)
+ * - `addr`: address part (e.g. user@example.com)
+ *
+ * @param {string} str input string
+ * @return {table} resulting table of components
+ */
+LUA_FUNCTION_DEF (util, parse_addr);
+
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
 	LUA_INTERFACE_DEF (util, load_rspamd_config),
@@ -106,6 +118,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, tanh),
 	LUA_INTERFACE_DEF (util, parse_html),
 	LUA_INTERFACE_DEF (util, levenshtein_distance),
+	LUA_INTERFACE_DEF (util, parse_addr),
 	{NULL, NULL}
 };
 
@@ -525,6 +538,50 @@ lua_util_levenshtein_distance (lua_State *L)
 	}
 
 	lua_pushnumber (L, dist);
+
+	return 1;
+}
+
+static gint
+lua_util_parse_addr (lua_State *L)
+{
+	InternetAddressList *ia;
+	InternetAddress *addr;
+	const gchar *str = luaL_checkstring (L, 1);
+	int i, cnt;
+
+	if (str) {
+		ia = internet_address_list_parse_string (str);
+
+		if (ia == NULL) {
+			lua_pushnil (L);
+		}
+		else {
+			cnt = internet_address_list_length (ia);
+			lua_newtable (L);
+
+			for (i = 0; i < cnt; i ++) {
+				addr = internet_address_list_get_address (ia, i);
+
+				lua_newtable (L);
+				lua_pushstring (L, "name");
+				lua_pushstring (L, internet_address_get_name (addr));
+				lua_settable (L, -3);
+
+				if (INTERNET_ADDRESS_IS_MAILBOX (addr)) {
+					lua_pushstring (L, "addr");
+					lua_pushstring (L, internet_address_mailbox_get_addr (
+							INTERNET_ADDRESS_MAILBOX (addr)));
+					lua_settable (L, -3);
+				}
+
+				lua_rawseti (L, -2, (i + 1));
+			}
+		}
+	}
+	else {
+		lua_pushnil (L);
+	}
 
 	return 1;
 }
