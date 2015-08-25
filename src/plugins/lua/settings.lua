@@ -40,7 +40,52 @@ local max_pri = 0
 local rspamd_logger = require "rspamd_logger"
 local rspamd_ip = require "rspamd_ip"
 local rspamd_regexp = require "rspamd_regexp"
+local ucl = require "ucl"
 require "fun" ()
+
+-- Checks for overrided settings within query params and returns 'true' if
+-- settings are overrided
+local function check_query_settings(task)
+  -- Try 'settings' attribute
+  local query_set = task:get_request_header('settings')
+  if query_set then
+    local parser = ucl.parser()
+    local res,err = parser:parse_string(tostring(query_set))
+    if res then
+      task:set_settings(parser:get_object())
+      
+      return true
+    end
+  end
+  
+  local query_maxscore = task:get_request_header('maxscore')
+  if query_maxscore then
+    -- We have score limits redefined by request
+    local ms = tonumber(tostring(query_maxscore))
+
+    if ms then
+      local nset = {
+        default = {
+          actions {
+            reject = ms
+          }
+        }
+      }
+
+      local query_softscore = task:get_request_header('softscore')
+      if query_softscore then
+        local ss = tonumber(tostring(query_softscore))
+        nset['default']['actions']['add_header'] = ss
+      end
+      
+      task:set_settings(nset)
+      
+      return true
+    end
+  end
+  
+  return false
+end
 
 -- Check limit for a task
 local function check_settings(task)
@@ -164,7 +209,12 @@ local function check_settings(task)
 
     return nil
   end
-
+  
+  -- Check if we have override as query argument
+  if check_query_settings(task) then
+    return
+  end
+  
   -- Do not waste resources
   if not settings_initialized then
     return
