@@ -150,11 +150,13 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 {
 	GList *cur;
 	GHashTable *query_args;
+	GHashTableIter it;
 	struct custom_command *cmd;
 	struct http_parser_url u;
 	const gchar *p;
 	gsize pathlen;
-	GString lookup, *res;
+	GString lookup, *res, *key, *value;
+	gpointer k, v;
 
 	if (msg->url == NULL || msg->url->len == 0) {
 		g_set_error (&task->err, rspamd_protocol_quark(), 400, "missing command");
@@ -277,6 +279,17 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 		}
 
 		task->flags |= RSPAMD_TASK_FLAG_FILE;
+
+		/* Insert the rest of query params as HTTP headers */
+		g_hash_table_iter_init (&it, query_args);
+
+		while (g_hash_table_iter_next (&it, &k, &v)) {
+			key = k;
+			value = v;
+			/* Steal strings */
+			g_hash_table_iter_steal (&it);
+			g_hash_table_insert (task->request_headers, key, value);
+		}
 
 		g_hash_table_unref (query_args);
 	}
