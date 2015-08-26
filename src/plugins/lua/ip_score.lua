@@ -39,6 +39,7 @@ local whitelist = nil
 
 local options = {
   asn_provider = 'origin.asn.cymru.com', -- provider for ASN data
+  asn6_provider = 'origin6.asn.cymru.com', -- provider for ASN data
   actions = { -- how each action is treated in scoring
     ['reject'] = 1.0,
     ['add header'] = 0.25,
@@ -83,8 +84,12 @@ local function asn_check(task)
   end
   
   if ip and ip:is_valid() then
+    local asn_provider = 'asn_provider'
+    if ip:get_version() == 6 then
+      asn_provider = 'asn6_provider'
+    end
     local req_name = rspamd_logger.slog("%1.%2",
-      table.concat(ip:inversed_str_octets(), '.'), options['asn_provider'])
+      table.concat(ip:inversed_str_octets(), '.'), options[asn_provider])
     
     task:get_resolver():resolve_txt(task:get_session(), task:get_mempool(),
         req_name, asn_dns_cb)
