@@ -253,26 +253,27 @@ local ip_score_check = function(task)
       ip_score = normalize_score(ip_score, total_ip, options['scores']['ip'])
       
       local total_score = 0.0
-      local description = ''
+      local description_t = {}
+
       if ip_score ~= 0 then
         total_score = total_score + ip_score
-        description = description .. 'ip,'
-      end
-      if asn_score ~= 0 then
-        total_score = total_score + asn_score
-        description = description .. 'asn:' .. asn .. ','
-      end
-      if country_score ~= 0 then
-        total_score = total_score + country_score
-        description = description .. 'country:' .. country .. ','
+        table.insert(description_t, 'ip: ' .. '(' .. math.floor(ip_score * 1000) / 100 .. ')')
       end
       if ipnet_score ~= 0 then
         total_score = total_score + ipnet_score
-        description = description .. 'ipnet:' .. ipnet .. ','
+        table.insert(description_t, 'ipnet: ' .. ipnet .. '(' .. math.floor(ipnet_score * 1000) / 100 .. ')')
+      end
+      if asn_score ~= 0 then
+        total_score = total_score + asn_score
+        table.insert(description_t, 'asn: ' .. asn .. '(' .. math.floor(asn_score * 1000) / 100 .. ')')
+      end
+      if country_score ~= 0 then
+        total_score = total_score + country_score
+        table.insert(description_t, 'country: ' .. country .. '(' .. math.floor(country_score * 1000) / 100 .. ')')
       end
       
       if total_score ~= 0 then
-        task:insert_result(options['symbol'], total_score, description)
+        task:insert_result(options['symbol'], total_score, table.concat(description_t, ', '))
       end
     end
   end
