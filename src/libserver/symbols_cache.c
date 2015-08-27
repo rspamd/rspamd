@@ -481,6 +481,7 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 
 	item = rspamd_mempool_alloc0_shared (cache->static_pool,
 			sizeof (struct cache_item));
+	item->condition_cb = -1;
 	/*
 	 * We do not share cd to skip locking, instead we'll just calculate it on
 	 * save or accumulate
@@ -523,6 +524,29 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	return item->id;
 }
 
+gboolean
+rspamd_symbols_cache_add_condition (struct symbols_cache *cache, gint id, lua_State *L, gint cbref)
+{
+	struct cache_item *item;
+
+	g_assert (cache != NULL);
+
+	if (id < 0 || id >= cache->items_by_id->len) {
+		return FALSE;
+	}
+
+	item = g_ptr_array_index (cache->items_by_id, id);
+
+	if (item->condition_cb != -1) {
+		/* We already have a condition, so we need to remove old cbref first */
+		msg_warn ("rewriting condition for symbol %s", item->symbol);
+		luaL_unref (L, LUA_REGISTRYINDEX, item->condition_cb);
+	}
+
+	item->condition_cb = cbref;
+
+	return TRUE;
+}
 
 void
 rspamd_symbols_cache_destroy (struct symbols_cache *cache)
@@ -1261,4 +1285,24 @@ rspamd_symbols_cache_add_delayed_dependency (struct symbols_cache *cache,
 	ddep->to = g_strdup (to);
 
 	cache->delayed_deps = g_list_prepend (cache->delayed_deps, ddep);
+}
+
+gint
+rspamd_symbols_cache_find_symbol (struct symbols_cache *cache, const gchar *name)
+{
+	struct cache_item *item;
+
+	g_assert (cache != NULL);
+
+	if (name == NULL) {
+		return -1;
+	}
+
+	item = g_hash_table_lookup (cache->items_by_symbol, name);
+
+	if (item != NULL) {
+		return item->id;
+	}
+
+	return -1;
 }

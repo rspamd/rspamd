@@ -27,6 +27,7 @@
 
 #include "config.h"
 #include "ucl.h"
+#include "lua/lua_common.h"
 
 #define MAX_SYMBOL 128
 
@@ -82,6 +83,24 @@ gint rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	gpointer user_data,
 	enum rspamd_symbol_type type,
 	gint parent);
+
+/**
+ * Add condition to the specific symbol in cache
+ * @param cache
+ * @param id id of symbol
+ * @param L lua state pointer
+ * @param cbref callback reference (returned by luaL_ref)
+ * @return TRUE if condition has been added
+ */
+gboolean rspamd_symbols_cache_add_condition (struct symbols_cache *cache, gint id, lua_State *L, gint cbref);
+
+/**
+ * Find symbol in cache by id and returns its id
+ * @param cache
+ * @param name
+ * @return id of symbol or (-1) if a symbol has not been found
+ */
+gint rspamd_symbols_cache_find_symbol (struct symbols_cache *cache, const gchar *name);
 
 /**
  * Call function for cached symbol using saved callback
