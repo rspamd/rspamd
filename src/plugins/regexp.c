@@ -109,9 +109,9 @@ gint
 regexp_module_config (struct rspamd_config *cfg)
 {
 	struct regexp_module_item *cur_item;
-	const ucl_object_t *sec, *value;
+	const ucl_object_t *sec, *value, *elt;
 	ucl_object_iter_t it = NULL;
-	gint res = TRUE;
+	gint res = TRUE, id;
 
 	if (!rspamd_config_is_module_enabled (cfg, "regexp")) {
 		return TRUE;
@@ -154,6 +154,7 @@ regexp_module_config (struct rspamd_config *cfg)
 			}
 		}
 		else if (value->type == UCL_USERDATA) {
+			/* Just a lua function */
 			cur_item = rspamd_mempool_alloc0 (regexp_module_ctx->regexp_pool,
 					sizeof (struct regexp_module_item));
 			cur_item->symbol = ucl_object_key (value);
@@ -164,6 +165,74 @@ regexp_module_config (struct rspamd_config *cfg)
 				process_regexp_item,
 				cur_item,
 				SYMBOL_TYPE_NORMAL, -1);
+		}
+		else if (value->type == UCL_OBJECT) {
+			const gchar *description = NULL, *group = NULL, *metric = DEFAULT_METRIC;
+			gdouble score = 0.0;
+			gboolean one_shot = FALSE;
+
+			/* We have some lua table, extract its arguments */
+			elt = ucl_object_find_key (value, "callback");
+
+			if (elt == NULL || elt->type != UCL_USERDATA) {
+				msg_err ("no callback defined for regexp symbol: %s", ucl_object_key (value));
+			}
+			else {
+				cur_item = rspamd_mempool_alloc0 (
+						regexp_module_ctx->regexp_pool,
+						sizeof (struct regexp_module_item));
+				cur_item->symbol = ucl_object_key (value);
+				cur_item->lua_function = ucl_object_toclosure (value);
+				id = rspamd_symbols_cache_add_symbol (cfg->cache,
+						cur_item->symbol,
+						0,
+						process_regexp_item,
+						cur_item,
+						SYMBOL_TYPE_NORMAL, -1);
+
+				elt = ucl_object_find_key (value, "condition");
+
+				if (elt != NULL && ucl_object_type (elt) == UCL_USERDATA) {
+					struct ucl_lua_funcdata *conddata;
+
+					conddata = ucl_object_toclosure (elt);
+					rspamd_symbols_cache_add_condition (cfg->cache, id,
+							conddata->L, conddata->idx);
+				}
+
+				elt = ucl_object_find_key (value, "metric");
+
+				if (elt) {
+					metric = ucl_object_tostring (elt);
+				}
+
+				elt = ucl_object_find_key (value, "description");
+
+				if (elt) {
+					description = ucl_object_tostring (elt);
+				}
+
+				elt = ucl_object_find_key (value, "group");
+
+				if (elt) {
+					group = ucl_object_tostring (elt);
+				}
+
+				elt = ucl_object_find_key (value, "score");
+
+				if (elt) {
+					score = ucl_object_todouble (elt);
+				}
+
+				elt = ucl_object_find_key (value, "one_shot");
+
+				if (elt) {
+					one_shot = ucl_object_toboolean (elt);
+				}
+
+				rspamd_config_add_metric_symbol (cfg, metric, cur_item->symbol,
+						score, description, group, one_shot, FALSE);
+			}
 		}
 		else {
 			msg_warn ("unknown type of attribute %s for regexp module",
