@@ -287,8 +287,18 @@ LUA_FUNCTION_DEF (config, get_key);
  * @method rspamd_config:__newindex(name, callback)
  * This metamethod is called if new indicies are added to the `rspamd_config` object.
  * Technically, it is the equialent of @see rspamd_config:register_symbol where `weight` is 1.0.
+ * There is also table form invocation that allows to control more things:
+ *
+ * - `callback`: has the same meaning and acts as function of task
+ * - `score`: default score for a symbol
+ * - `group`: default group for a symbol
+ * - `description`: default symbol's description
+ * - `priority`: additional priority value
+ * - `one_shot`: default value for one shot attribute
+ * - `condition`: function of task that can enable or disable this specific rule's execution
  * @param {string} name index name
- * @param {function} callback callback to be called
+ * @param {function/table} callback callback to be called
+ * @return {number} id of the new symbol added
  * @example
 rspamd_config.R_EMPTY_IMAGE = function (task)
 	parts = task:get_text_parts()
@@ -306,6 +316,21 @@ rspamd_config.R_EMPTY_IMAGE = function (task)
 	end
 	return false
 end
+
+rspamd_config.SYMBOL = {
+	callback = function(task)
+ 	...
+ 	end,
+ 	score = 5.1,
+ 	description = 'sample symbol',
+ 	group = 'sample symbols',
+ 	condition = function(task)
+ 		if task:get_from()[1]['addr'] == 'user@example.com' then
+ 			return false
+ 		end
+ 		return true
+ 	end
+}
  */
 LUA_FUNCTION_DEF (config, newindex);
 
@@ -1277,6 +1302,7 @@ lua_config_newindex (lua_State *L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *name;
+	gint id;
 
 	name = luaL_checkstring (L, 2);
 
@@ -1311,11 +1337,12 @@ lua_config_newindex (lua_State *L)
 			 * "one_shot" - optional one shot mode
 			 * "description" - optional description
 			 */
+			lua_pushvalue (L, 3);
 			lua_pushstring (L, "callback");
 			lua_gettable (L, -2);
 
 			if (lua_type (L, -1) != LUA_TFUNCTION) {
-				lua_pop (L, 1);
+				lua_pop (L, 2);
 				msg_info ("cannot find callback definition for %s", name);
 				return 0;
 			}
@@ -1359,7 +1386,7 @@ lua_config_newindex (lua_State *L)
 			}
 			lua_pop (L, 1);
 
-			rspamd_register_symbol_fromlua (L,
+			id = rspamd_register_symbol_fromlua (L,
 					cfg,
 					name,
 					idx,
@@ -1367,6 +1394,23 @@ lua_config_newindex (lua_State *L)
 					priority,
 					type,
 					-1);
+
+			if (id != -1) {
+				/* Check for condition */
+				lua_pushstring (L, "condition");
+				lua_gettable (L, -2);
+
+				if (lua_type (L, -1) == LUA_TFUNCTION) {
+					gint condref;
+
+					/* Here we pop function from the stack, so no lua_pop is required */
+					condref = luaL_ref (L, LUA_REGISTRYINDEX);
+					rspamd_symbols_cache_add_condition (cfg->cache, id, L, condref);
+				}
+				else {
+					lua_pop (L, 1);
+				}
+			}
 
 			/*
 			 * Now check if a symbol has not been registered in any metric and
@@ -1416,6 +1460,9 @@ lua_config_newindex (lua_State *L)
 					lua_pop (L, 1);
 				}
 			}
+
+			/* Remove table from stack */
+			lua_pop (L, 1);
 		}
 	}
 
