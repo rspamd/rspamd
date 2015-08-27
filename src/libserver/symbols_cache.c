@@ -28,6 +28,7 @@
 #include "message.h"
 #include "symbols_cache.h"
 #include "cfg_file.h"
+#include "lua/lua_common.h"
 
 static const guchar rspamd_symbols_cache_magic[8] = {'r', 's', 'c', 1, 0, 0, 0, 0 };
 
@@ -74,6 +75,9 @@ struct cache_item {
 	/* Callback data */
 	symbol_func_t func;
 	gpointer user_data;
+
+	/* Condition of execution */
+	gint condition_cb;
 
 	/* Parent symbol id for virtual symbols */
 	gint parent;
@@ -869,34 +873,65 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 	guint pending_before, pending_after;
 	double t1, t2;
 	guint64 diff;
+	struct rspamd_task **ptask;
+	lua_State *L;
+	gboolean check = TRUE;
 
 	if (item->type & (SYMBOL_TYPE_NORMAL|SYMBOL_TYPE_CALLBACK)) {
 
 		g_assert (item->func != NULL);
 		/* Check has been started */
 		setbit (checkpoint->processed_bits, item->id * 2);
-		t1 = rspamd_get_ticks ();
-		pending_before = rspamd_session_events_pending (task->s);
-		/* Watch for events appeared */
-		rspamd_session_watch_start (task->s, rspamd_symbols_cache_watcher_cb,
-				item);
 
-		item->func (task, item->user_data);
+		if (item->condition_cb != -1) {
+			/* We also executes condition callback to check if we need this symbol */
+			L = task->cfg->lua_state;
+			lua_rawgeti (L, LUA_REGISTRYINDEX, item->condition_cb);
+			ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
+			rspamd_lua_setclass (L, "rspamd{task}", -1);
+			*ptask = task;
 
-		t2 = rspamd_get_ticks ();
-		diff = (t2 - t1) * 1000000;
-		rspamd_set_counter (item, diff);
-		rspamd_session_watch_stop (task->s);
-		pending_after = rspamd_session_events_pending (task->s);
+			if (lua_pcall (L, 1, 1, 0) != 0) {
+				msg_info ("call to condition for %s failed: %s",
+						item->symbol, lua_tostring (L, -1));
+			}
+			else {
+				check = lua_toboolean (L, -1);
+				lua_pop (L, 1);
+			}
+		}
 
-		if (pending_before == pending_after) {
-			/* No new events registered */
+		if (check) {
+			t1 = rspamd_get_ticks ();
+			pending_before = rspamd_session_events_pending (task->s);
+			/* Watch for events appeared */
+			rspamd_session_watch_start (task->s, rspamd_symbols_cache_watcher_cb,
+					item);
+
+			item->func (task, item->user_data);
+
+			t2 = rspamd_get_ticks ();
+			diff = (t2 - t1) * 1000000;
+			rspamd_set_counter (item, diff);
+			rspamd_session_watch_stop (task->s);
+			pending_after = rspamd_session_events_pending (task->s);
+
+			if (pending_before == pending_after) {
+				/* No new events registered */
+				setbit (checkpoint->processed_bits, item->id * 2 + 1);
+
+				return TRUE;
+			}
+
+			return FALSE;
+		}
+		else {
+			msg_debug ("skipping check of %s as its condition is false",
+					item->symbol);
 			setbit (checkpoint->processed_bits, item->id * 2 + 1);
 
 			return TRUE;
 		}
-
-		return FALSE;
 	}
 	else {
 		setbit (checkpoint->processed_bits, item->id * 2);
