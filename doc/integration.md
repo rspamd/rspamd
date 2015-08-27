@@ -6,36 +6,24 @@ title: Rspamd integration
 # Rspamd integration
 
 This document describes several methods of integration rspamd to popular MTA. Among them are:
-* exim
-* postfix
-* sendmail
-* haraka
 
-Also this document describes rspamd smtp proxy mode suitable for any MTA.
+* [Exim](http://exim.org)
+* [Postfix](http://postfix/org)
+* [Sendmail](http://sendmail.org)
+* [Haraka](https://haraka.github.io/)
+
+Also this document describes rspamd LDA proxy mode that can be used for any MTA.
 
 ## Integration with exim MTA
 
-Exim may use rspamd just like spamd from SA. But for more convenient interaction it is useful to apply a patch to exim that improves communication.
+Starting from Exim 4.86, you can use rspamd directly just like spamassassin:
 
-### Using spam.c patch
+![exim scheme](../img/rspamd_exim.png "Rspamd and exim interaction")
 
-For FreeBSD users you can just enable integration with rspamd when building exim from the ports by typing 
-
-	# make config
-
-and selecting the appropriate option in the dialog.
-
-For other systems and exim < 4.86 there is a patch which placed in rspamd source tree: src/contrib/exim/patch-exim-src_spam.c.diff
-
-It should be applied in exim's source directory:
-
-{% highlight sh %}
-patch -p1 < patch-exim-src_spam.c.diff
-{% endhighlight %}
-
-After patching you can use rspamd just like spamassassin spamd. Here is an example of such configuration:
+Here is an example of exim configuration:
 
 {% highlight make %}
+# Please mention the variant parameter
 spamd_address = 127.0.0.1 11333 variant=rspamd
 
 acl_smtp_data = acl_check_spam
@@ -60,50 +48,23 @@ acl_check_spam:
         message = Message discarded as high-probability spam
 {% endhighlight %}
 
-The other ways for integration with exim are local scan patch and dlfunc.
-
-### Using local scan
-
-To enable exim local scan please copy file from contrib/exim directory to exim source tree: Local/local_scan.c, edit Local/Makefile to add
-{% highlight make %}
-LOCAL_SCAN_SOURCE=Local/local_scan.c
-LOCAL_SCAN_HAS_OPTIONS=yes
-{% endhighlight %}
-and compile exim.
-For exim compilation with local scan feature details please visit [exim specification](http://www.exim.org/exim-html-current/doc/html/spec_html/ch42.html).
-
-#### Example configuration
-{% highlight make %}
-local_scan_timeout = 50s
-
-begin local_scan
-       rspam_ip = 127.0.0.1
-       rspam_port = 11333
-       rspam_skip_sasl_authenticated = true
-       # don't reject message if on of recipients from this list
-       rspam_skip_rcpt = postmaster@example.com : some_user@example.com
-       rspam_message = "Spam rejected; If this is not spam, please contact <postmaster@example.com>"
-{% endhighlight %}
-
-### Using dlfunc
-
-For using dlfunc please visit <http://mta.org.ua/exim-4.70-conf/dlfunc/rspamd/> get provided file (rspamd.c) and examine sample configuration. For building of rspamd dlfunc you may use the following command:
-
-	cc rspamd.c -fPIC -fpic -shared -I<exim_directory>/build-<exim_build_system>/ -o exim-dlfunc.so
-
 ## Using rspamd with postfix MTA
 
-For using rspamd in postfix it is required to use milter. I'd recommend to use special milter that support rspamd checks - rmilter. Rmilter can be obtained from github as well: <http://github.com/vstakhov/rmilter>.
+For using rspamd in postfix it is recommended to use milter, namely `rmilter`. The interactions between postfix and rspamd are depicted in the following image:
+
+![postfix scheme](../img/rspamd_postfix.png "Rspamd and postfix interaction")
+
+Rmilter can be downloaded from github: <http://github.com/vstakhov/rmilter>.
 
 ### Configuring rmilter to work with rspamd
 
-First of all build and install rmilter:
+First of all build and install rmilter from the source (or use your OS packages if applicable):
 
 	% ./configure
 	% make
 	# make install
 
-Then copy rmilter.conf.sample to rmilter.conf and edit parameters. All parameters are described in rmilter.8 manual page. Here is an example of configuration of rspamd:
+Then copy rmilter.conf.sample to rmilter.conf and edit parameters. All parameters are described in `rmilter.8` manual page. Here is an example of configuration for rspamd:
 
 {% highlight nginx %}
 spamd {
@@ -187,3 +148,30 @@ Then compile m4 to cf in an ordinary way.
 A plugin implementing Rspamd integration for Haraka can be found in the [Haraka git repository](https://github.com/baudehlo/Haraka/); documentation can be found [here](https://github.com/baudehlo/Haraka/blob/master/docs/plugins/rspamd.md).
 
 To install: copy `plugins/rspamd.js` to your local plugins directory and `config/rspamd.ini` to your local config directory; add `rspamd` to your `config/plugins` file in the `DATA` section and edit `config/rspamd.ini` to suit.
+
+
+## LDA mode
+
+In LDA mode, MTA calls rspamd client `rspamc` that scans a message on `rspamd` and appends scan results to the source message.
+The overall scheme is demonstrated in the following picture:
+
+![lda scheme](../img/rspamd_lda.png "Rspamd as LDA")
+
+To enable LDA mode, `rspamc` has the following options implemented:
+
+- `--exec "/path/to/lda params"`: executes the binary specified to deliver modified message
+- `--mime`: modify message instead of printing scan results only
+- `--json`: optionally add the full ouptut as base64 encoded `JSON`
+
+Here is an example of using `rspamc` + `dovecot` as LDA implemented using `fetchmail`:
+
+    mda "/usr/bin/rspamc --mime --exec \"/usr/lib/dovecot/deliver -d %T\""
+
+In this mode, `rspamc` cannot reject or greylist messages, but it appends the following headers that could be used for further filtering by means of LDA (for example, `sieve`):
+
+- `X-Spam-Scanner`: name and version of rspamd
+- `X-Spam`: has value `yes` if rspamd detects that a message as a spam (either `reject` or `add header` actions)
+- `X-Spam-Action`: the desired action for a message (e.g. `no action`, `add header` or `reject`)
+- `X-Spam-Result`: contains base64 encoded `JSON` reply from rspamd if `--json` option was given to `rspamc`
+
+Please mention, that despite of the fact that this method can be used with any MTA (or even without MTA), it has more overhead than other methods and it cannot apply certain actions, namely, greylisting (however, that could also be implemented using external tools).
