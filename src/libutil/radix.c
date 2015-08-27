@@ -527,7 +527,7 @@ radix_create_compressed (void)
 		return NULL;
 	}
 
-	tree->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
+	tree->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	tree->size = 0;
 	tree->root = NULL;
 

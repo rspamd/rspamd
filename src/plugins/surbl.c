@@ -276,8 +276,7 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 
 	surbl_module_ctx->use_redirector = 0;
 	surbl_module_ctx->suffixes = NULL;
-	surbl_module_ctx->surbl_pool = rspamd_mempool_new (
-		rspamd_mempool_suggest_size ());
+	surbl_module_ctx->surbl_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 
 	surbl_module_ctx->tld2_file = NULL;
 	surbl_module_ctx->whitelist_file = NULL;
@@ -622,8 +621,7 @@ surbl_module_reconfig (struct rspamd_config *cfg)
 	/* Reinit module */
 	surbl_module_ctx->use_redirector = 0;
 	surbl_module_ctx->suffixes = NULL;
-	surbl_module_ctx->surbl_pool = rspamd_mempool_new (
-		rspamd_mempool_suggest_size ());
+	surbl_module_ctx->surbl_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 
 	surbl_module_ctx->tld2_file = NULL;
 	surbl_module_ctx->whitelist_file = NULL;

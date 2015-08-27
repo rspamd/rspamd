@@ -14,7 +14,7 @@ rspamd_mem_pool_test_func ()
 	pid_t pid;
 	int ret;
 
-	pool = rspamd_mempool_new (sizeof (TEST_BUF));
+	pool = rspamd_mempool_new (sizeof (TEST_BUF), NULL);
 	tmp = rspamd_mempool_alloc (pool, sizeof (TEST_BUF));
 	tmp2 = rspamd_mempool_alloc (pool, sizeof (TEST_BUF) * 2);
 	tmp3 = rspamd_mempool_alloc_shared (pool, sizeof (TEST_BUF));

@@ -29,6 +29,7 @@
 #include "util.h"
 #include "main.h"
 #include "utlist.h"
+#include "ottery.h"
 
 /* Sleep time for spin lock in nanoseconds */
 #define MUTEX_SLEEP_TIME 10000000L
@@ -152,10 +153,13 @@ pool_chain_new_shared (gsize size)
  * @return new memory pool object
  */
 rspamd_mempool_t *
-rspamd_mempool_new (gsize size)
+rspamd_mempool_new (gsize size, const gchar *tag)
 {
 	rspamd_mempool_t *new;
 	gpointer map;
+	unsigned char uidbuf[10];
+	const gchar hexdigits[] = "0123456789abcdef";
+	unsigned i;
 
 	g_return_val_if_fail (size > 0, NULL);
 	/* Allocate statistic structure if it is not allocated before */
@@ -215,6 +219,22 @@ rspamd_mempool_new (gsize size)
 	/* Set it upon first call of set variable */
 	new->variables = NULL;
 	new->elt_len = size;
+
+	if (tag) {
+		rspamd_strlcpy (new->tag.tagname, tag, sizeof (new->tag.tagname));
+	}
+	else {
+		new->tag.tagname[0] = '\0';
+	}
+
+	/* Generate new uid */
+	ottery_rand_bytes (uidbuf, sizeof (uidbuf));
+	for (i = 0; i < G_N_ELEMENTS (uidbuf); i ++) {
+		new->tag.uid[i * 2] = hexdigits[(uidbuf[i] >> 4) & 0xf];
+		new->tag.uid[i * 2 + 2] = hexdigits[uidbuf[i] & 0xf];
+	}
+	new->tag.uid[19] = '\0';
+
 	mem_pool_stat->pools_allocated++;
 
 	return new;

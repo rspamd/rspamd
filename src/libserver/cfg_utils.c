@@ -942,8 +942,7 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 void
 rspamd_init_cfg (struct rspamd_config *cfg, gboolean init_lua)
 {
-	cfg->cfg_pool = rspamd_mempool_new (
-			rspamd_mempool_suggest_size ());
+	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	rspamd_config_defaults (cfg);
 
 	if (init_lua) {

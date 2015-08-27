@@ -59,7 +59,7 @@ rspamd_task_new (struct rspamd_worker *worker)
 	new_task->time_real = rspamd_get_ticks ();
 	new_task->time_virtual = rspamd_get_virtual_ticks ();
 
-	new_task->task_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
+	new_task->task_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 
 	new_task->results = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	rspamd_mempool_add_destructor (new_task->task_pool,

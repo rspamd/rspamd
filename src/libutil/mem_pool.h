@@ -82,6 +82,14 @@ struct _pool_destructors {
 };
 
 /**
+ * Tag to use for logging purposes
+ */
+struct rspamd_mempool_tag {
+	gchar tagname[20];                      /**< readable name							*/
+	gchar uid[20];                          /**< unique id								*/
+};
+
+/**
  * Memory pool type
  */
 struct rspamd_mutex_s;
@@ -92,6 +100,7 @@ typedef struct memory_pool_s {
 	struct _pool_destructors *destructors;  /**< destructors chain						*/
 	GHashTable *variables;                  /**< private memory pool variables			*/
 	gsize elt_len;							/**< size of an element						*/
+	struct rspamd_mempool_tag tag;          /**< memory pool tag						*/
 } rspamd_mempool_t;
 
 /**
@@ -114,7 +123,7 @@ typedef struct memory_pool_stat_s {
  * @param size size of pool's page
  * @return new memory pool object
  */
-rspamd_mempool_t * rspamd_mempool_new (gsize size);
+rspamd_mempool_t *rspamd_mempool_new (gsize size, const gchar *tag);
 
 /**
  * Get memory from pool

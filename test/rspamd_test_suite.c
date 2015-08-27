@@ -17,12 +17,12 @@ main (int argc, char **argv)
 
 	rspamd_main = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
 	memset (rspamd_main, 0, sizeof (struct rspamd_main));
-	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
+	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	rspamd_main->cfg = (struct rspamd_config *)g_malloc (sizeof (struct rspamd_config));
 	cfg = rspamd_main->cfg;
 	memset (cfg, 0, sizeof (struct rspamd_config));
 	rspamd_init_cfg (cfg, FALSE);
-	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
+	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	cfg->log_type = RSPAMD_LOG_CONSOLE;
 	cfg->log_level = G_LOG_LEVEL_INFO;
 

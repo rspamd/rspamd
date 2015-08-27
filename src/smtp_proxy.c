@@ -928,7 +928,7 @@ accept_socket (gint fd, short what, void *arg)
 
 	ctx = worker->ctx;
 	session = g_slice_alloc0 (sizeof (struct smtp_proxy_session));
-	session->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
+	session->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 
 
 	session->sock = nfd;
@@ -979,7 +979,7 @@ init_smtp_proxy (struct rspamd_config *cfg)
 	type = g_quark_try_string ("smtp_proxy");
 
 	ctx = g_malloc0 (sizeof (struct smtp_worker_ctx));
-	ctx->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
+	ctx->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 
 	/* Set default values */
 	ctx->smtp_timeout_raw = 300000;

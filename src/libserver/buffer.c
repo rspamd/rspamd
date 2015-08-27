@@ -603,7 +603,7 @@ rspamd_create_dispatcher (struct event_base *base,
 
 	new = g_slice_alloc0 (sizeof (rspamd_io_dispatcher_t));
 
-	new->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
+	new->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	if (tv != NULL) {
 		new->tv = rspamd_mempool_alloc (new->pool, sizeof (struct timeval));
 		memcpy (new->tv, tv, sizeof (struct timeval));

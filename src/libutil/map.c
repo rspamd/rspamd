@@ -471,7 +471,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 	}
 	/* Constant pool */
 	if (cfg->map_pool == NULL) {
-		cfg->map_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
+		cfg->map_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	}
 	new_map = rspamd_mempool_alloc0 (cfg->map_pool, sizeof (struct rspamd_map));
 	new_map->read_callback = read_callback;
@@ -588,7 +588,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 		new_map->map_data = hdata;
 	}
 	/* Temp pool */
-	new_map->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
+	new_map->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 
 	cfg->maps = g_list_prepend (cfg->maps, new_map);
 

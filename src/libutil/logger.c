@@ -294,7 +294,7 @@ rspamd_set_logger (struct rspamd_config *cfg,
 		rspamd->logger = g_malloc (sizeof (rspamd_logger_t));
 		memset (rspamd->logger, 0, sizeof (rspamd_logger_t));
 		/* Small pool for interlocking */
-		rspamd->logger->pool = rspamd_mempool_new (512);
+		rspamd->logger->pool = rspamd_mempool_new (512, NULL);
 		rspamd->logger->mtx = rspamd_mempool_get_mutex (rspamd->logger->pool);
 	}
 

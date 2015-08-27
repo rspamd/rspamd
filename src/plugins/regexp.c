@@ -98,8 +98,7 @@ regexp_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
 	regexp_module_ctx = g_malloc (sizeof (struct regexp_ctx));
 
-	regexp_module_ctx->regexp_pool = rspamd_mempool_new (
-		rspamd_mempool_suggest_size ());
+	regexp_module_ctx->regexp_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 
 	*ctx = (struct module_ctx *)regexp_module_ctx;
 
@@ -184,8 +183,7 @@ regexp_module_reconfig (struct rspamd_config *cfg)
 	rspamd_mempool_delete (regexp_module_ctx->regexp_pool);
 	memset (regexp_module_ctx, 0, sizeof (*regexp_module_ctx));
 	regexp_module_ctx->ctx = saved_ctx;
-	regexp_module_ctx->regexp_pool = rspamd_mempool_new (
-		rspamd_mempool_suggest_size ());
+	regexp_module_ctx->regexp_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 
 	return regexp_module_config (cfg);
 }

@@ -594,7 +594,7 @@ rspamd_symbols_cache_new (void)
 
 	cache = g_slice_alloc0 (sizeof (struct symbols_cache));
 	cache->static_pool =
-			rspamd_mempool_new (rspamd_mempool_suggest_size ());
+			rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	cache->items_by_symbol = g_hash_table_new (rspamd_str_hash,
 			rspamd_str_equal);
 	cache->items_by_order = g_ptr_array_new ();

@@ -408,8 +408,7 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
 	fuzzy_module_ctx = g_malloc0 (sizeof (struct fuzzy_ctx));
 
-	fuzzy_module_ctx->fuzzy_pool = rspamd_mempool_new (
-		rspamd_mempool_suggest_size ());
+	fuzzy_module_ctx->fuzzy_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	fuzzy_module_ctx->cfg = cfg;
 
 	*ctx = (struct module_ctx *)fuzzy_module_ctx;
@@ -519,8 +518,7 @@ fuzzy_check_module_reconfig (struct rspamd_config *cfg)
 	rspamd_mempool_delete (fuzzy_module_ctx->fuzzy_pool);
 	memset (fuzzy_module_ctx, 0, sizeof (*fuzzy_module_ctx));
 	fuzzy_module_ctx->ctx = saved_ctx;
-	fuzzy_module_ctx->fuzzy_pool = rspamd_mempool_new (
-		rspamd_mempool_suggest_size ());
+	fuzzy_module_ctx->fuzzy_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	fuzzy_module_ctx->cfg = cfg;
 
 	return fuzzy_check_module_config (cfg);

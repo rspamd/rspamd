@@ -203,7 +203,7 @@ void
 rspamd_http_test_func (void)
 {
 	struct event_base *ev_base = event_init ();
-	rspamd_mempool_t *pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
+	rspamd_mempool_t *pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	gpointer serv_key, client_key, peer_key;
 	struct rspamd_keypair_cache *c;
 	rspamd_mempool_mutex_t *mtx;

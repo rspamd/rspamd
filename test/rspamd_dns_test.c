@@ -74,11 +74,11 @@ rspamd_dns_test_func ()
 
 	cfg = (struct rspamd_config *)g_malloc (sizeof (struct rspamd_config));
 	bzero (cfg, sizeof (struct rspamd_config));
-	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
+	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	cfg->dns_retransmits = 2;
 	cfg->dns_timeout = 0.5;
 
-	pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
+	pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 
 	s = rspamd_session_create (pool, session_fin, NULL, NULL, NULL);
 

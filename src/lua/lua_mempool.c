@@ -140,8 +140,7 @@ rspamd_lua_check_mempool (lua_State * L, gint pos)
 static int
 lua_mempool_create (lua_State *L)
 {
-	struct memory_pool_s *mempool = rspamd_mempool_new (
-		rspamd_mempool_suggest_size ()), **pmempool;
+	struct memory_pool_s *mempool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL), **pmempool;
 
 	if (mempool) {
 		pmempool = lua_newuserdata (L, sizeof (struct memory_pool_s *));

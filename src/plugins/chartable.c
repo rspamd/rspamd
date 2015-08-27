@@ -67,8 +67,7 @@ chartable_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
 	chartable_module_ctx = g_malloc (sizeof (struct chartable_ctx));
 
-	chartable_module_ctx->chartable_pool = rspamd_mempool_new (
-		rspamd_mempool_suggest_size ());
+	chartable_module_ctx->chartable_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 
 	*ctx = (struct module_ctx *)chartable_module_ctx;
 
@@ -119,7 +118,7 @@ gint
 chartable_module_reconfig (struct rspamd_config *cfg)
 {
 	rspamd_mempool_delete (chartable_module_ctx->chartable_pool);
-	chartable_module_ctx->chartable_pool = rspamd_mempool_new (1024);
+	chartable_module_ctx->chartable_pool = rspamd_mempool_new (1024, NULL);
 
 	return chartable_module_config (cfg);
 }

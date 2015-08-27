@@ -1029,8 +1029,7 @@ do_encrypt_password (void)
 static void
 rspamd_init_main (struct rspamd_main *rspamd)
 {
-	rspamd->server_pool = rspamd_mempool_new (
-		rspamd_mempool_suggest_size ());
+	rspamd->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	rspamd_main->stat = rspamd_mempool_alloc0_shared (rspamd_main->server_pool,
 		sizeof (struct rspamd_stat));
 	/* Create rolling history */

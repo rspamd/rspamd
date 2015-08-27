@@ -848,7 +848,7 @@ rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 	gsize size;
 
 	new = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (rspamd_mmaped_file_ctx));
-	new->pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
+	new->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	new->lock = rspamd_mempool_get_mutex (new->pool);
 	new->mlock_ok = cfg->mlock_statfile_pool;
 	new->files = g_hash_table_new (g_direct_hash, g_direct_equal);

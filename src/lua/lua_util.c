@@ -505,7 +505,7 @@ lua_util_parse_html (lua_State *L)
 	}
 
 	if (start != NULL) {
-		pool = rspamd_mempool_new (rspamd_mempool_suggest_size ());
+		pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 		hc = rspamd_mempool_alloc0 (pool, sizeof (*hc));
 		in = g_byte_array_sized_new (len);
 		g_byte_array_append (in, start, len);

@@ -100,8 +100,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
 	dkim_module_ctx = g_malloc0 (sizeof (struct dkim_ctx));
 
-	dkim_module_ctx->dkim_pool = rspamd_mempool_new (
-		rspamd_mempool_suggest_size ());
+	dkim_module_ctx->dkim_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 
 	*ctx = (struct module_ctx *)dkim_module_ctx;
 
@@ -278,8 +277,7 @@ dkim_module_reconfig (struct rspamd_config *cfg)
 
 	memset (dkim_module_ctx, 0, sizeof (*dkim_module_ctx));
 	dkim_module_ctx->ctx = saved_ctx;
-	dkim_module_ctx->dkim_pool = rspamd_mempool_new (
-		rspamd_mempool_suggest_size ());
+	dkim_module_ctx->dkim_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 
 	return dkim_module_config (cfg);
 }
