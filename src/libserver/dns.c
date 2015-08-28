@@ -177,9 +177,8 @@ dns_resolver_init (rspamd_logger_t *logger,
 	if (cfg != NULL) {
 		rdns_resolver_set_log_level (new->r, cfg->log_level);
 	}
-	rdns_resolver_set_logger (new->r,
-		(rdns_log_function)rspamd_common_logv,
-		logger);
+	rspamd_common_logv (new->r, (rdns_log_function) rspamd_common_logv, NULL,
+			NULL, logger, NULL, NULL);
 
 	if (cfg == NULL || cfg->nameservers == NULL) {
 		/* Parse resolv.conf */
