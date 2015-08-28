@@ -150,6 +150,19 @@ gboolean make_dns_request_task (struct rspamd_task *task,
 	return ret;
 }
 
+static void rspamd_rnds_log_bridge (
+		void *log_data,
+		enum rdns_log_level level,
+		const char *function,
+		const char *format,
+		va_list args)
+{
+	rspamd_logger_t *logger = log_data;
+
+	rspamd_common_logv (logger, (GLogLevelFlags)level, "rdns", NULL,
+			function, format, args);
+}
+
 struct rspamd_dns_resolver *
 dns_resolver_init (rspamd_logger_t *logger,
 	struct event_base *ev_base,
@@ -177,8 +190,8 @@ dns_resolver_init (rspamd_logger_t *logger,
 	if (cfg != NULL) {
 		rdns_resolver_set_log_level (new->r, cfg->log_level);
 	}
-	rspamd_common_logv (new->r, (rdns_log_function) rspamd_common_logv, NULL,
-			NULL, logger, NULL, NULL);
+
+	rdns_resolver_set_logger (new->r, rspamd_rnds_log_bridge, logger);
 
 	if (cfg == NULL || cfg->nameservers == NULL) {
 		/* Parse resolv.conf */
