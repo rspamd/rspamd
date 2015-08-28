@@ -95,19 +95,19 @@ struct spf_record {
 #undef SPF_DEBUG
 
 #define msg_err_spf(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
-        rec->task->task_pool->tag.tagname, rec->task->task_pool->tag.uid, \
+        "spf", rec->task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_warn_spf(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
-        rec->task->task_pool->tag.tagname, rec->task->task_pool->tag.uid, \
+        "spf", rec->task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_info_spf(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
-        rec->task->task_pool->tag.tagname, rec->task->task_pool->tag.uid, \
+        "spf", rec->task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_debug_spf(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        rec->task->task_pool->tag.tagname, rec->task->task_pool->tag.uid, \
+        "spf", rec->task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
 
