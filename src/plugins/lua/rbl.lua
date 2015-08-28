@@ -79,49 +79,38 @@ end
 
 local function rbl_cb (task)
   local function rbl_dns_cb(resolver, to_resolve, results, err, key)
-    if results then
-      local thisrbl = nil
-      for k,r in pairs(rbls) do
-        if k == key then
-          thisrbl = r
-          break
+    if not results then return end
+    if not rbls[key] then return end
+    if rbls[key]['returncodes'] == nil and rbls[key]['symbol'] ~= nil then
+      task:insert_result(rbls[key]['symbol'], 1)
+      return
+    end
+    for _,result in pairs(results) do
+      local ipstr = result:to_string()
+      local foundrc = false
+      for s,i in pairs(rbls[key]['returncodes']) do
+        if type(i) == 'string' then
+          if string.find(ipstr, '^' .. i .. '$') then
+            foundrc = true
+            task:insert_result(s, 1)
+            break
+          end
+        elseif type(i) == 'table' then
+          for _,v in pairs(i) do
+            if string.find(ipstr, '^' .. v .. '$') then
+              foundrc = true
+              task:insert_result(s, 1)
+              break
+            end
+          end
         end
       end
-      if thisrbl ~= nil then
-        if thisrbl['returncodes'] == nil then
-          if thisrbl['symbol'] ~= nil then
-            task:insert_result(thisrbl['symbol'], 1)
-          end
+      if not foundrc then
+        if rbls[key]['unknown'] and rbls[key]['symbol'] then
+          task:insert_result(rbls[key]['symbol'], 1)
         else
-          for _,result in pairs(results) do 
-            local ipstr = result:to_string()
-            local foundrc = false
-            for s,i in pairs(thisrbl['returncodes']) do
-              if type(i) == 'string' then
-                if string.find(ipstr, '^' .. i .. '$') then
-                  foundrc = true
-                  task:insert_result(s, 1)
-                  break
-                end
-              elseif type(i) == 'table' then
-                for _,v in pairs(i) do
-                  if string.find(ipstr, '^' .. v .. '$') then
-                    foundrc = true
-                    task:insert_result(s, 1)
-                    break
-                  end
-                end
-              end
-            end
-            if not foundrc then
-              if thisrbl['unknown'] and thisrbl['symbol'] then
-                task:insert_result(thisrbl['symbol'], 1)
-              else
-                rspamd_logger.errx(task, 'RBL %1 returned unknown result: %2',
-                  thisrbl['rbl'], ipstr)
-              end
-            end
-          end
+          rspamd_logger.errx(task, 'RBL %1 returned unknown result: %2',
+            rbls[key]['rbl'], ipstr)
         end
       end
     end
