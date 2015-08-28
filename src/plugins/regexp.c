@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2012, Vsevolod Stakhov
+ * Copyright (c) 2009-2015, Vsevolod Stakhov
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -167,22 +167,48 @@ regexp_module_config (struct rspamd_config *cfg)
 				SYMBOL_TYPE_NORMAL, -1);
 		}
 		else if (value->type == UCL_OBJECT) {
-			const gchar *description = NULL, *group = NULL, *metric = DEFAULT_METRIC;
+			const gchar *description = NULL, *group = NULL,
+					*metric = DEFAULT_METRIC;
 			gdouble score = 0.0;
-			gboolean one_shot = FALSE;
+			gboolean one_shot = FALSE, is_lua = FALSE, valid_expression = TRUE;
 
 			/* We have some lua table, extract its arguments */
 			elt = ucl_object_find_key (value, "callback");
 
 			if (elt == NULL || elt->type != UCL_USERDATA) {
-				msg_err ("no callback defined for regexp symbol: %s", ucl_object_key (value));
+
+				/* Try plain regexp expression */
+				elt = ucl_object_find_any_key (value, "regexp", "re", NULL);
+
+				if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
+					cur_item = rspamd_mempool_alloc0 (regexp_module_ctx->regexp_pool,
+							sizeof (struct regexp_module_item));
+					cur_item->symbol = ucl_object_key (value);
+					if (!read_regexp_expression (regexp_module_ctx->regexp_pool,
+							cur_item, ucl_object_key (value),
+							ucl_obj_tostring (elt), cfg)) {
+						res = FALSE;
+					}
+					else {
+						valid_expression = TRUE;
+					}
+				}
+				else {
+					msg_err (
+							"no callback/expression defined for regexp symbol: "
+									"%s", ucl_object_key (value));
+				}
 			}
 			else {
+				is_lua = TRUE;
 				cur_item = rspamd_mempool_alloc0 (
 						regexp_module_ctx->regexp_pool,
 						sizeof (struct regexp_module_item));
 				cur_item->symbol = ucl_object_key (value);
 				cur_item->lua_function = ucl_object_toclosure (value);
+			}
+
+			if (cur_item && (is_lua || valid_expression)) {
 				id = rspamd_symbols_cache_add_symbol (cfg->cache,
 						cur_item->symbol,
 						0,
