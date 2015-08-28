@@ -1,9 +1,32 @@
-## Introduction
+# UCL configuration language
+
+**Table of Contents**  *generated with [DocToc](http://doctoc.herokuapp.com/)*
+
+- [Introduction](#introduction)
+- [Basic structure](#basic-structure)
+- [Improvements to the json notation](#improvements-to-the-json-notation)
+	- [General syntax sugar](#general-syntax-sugar)
+	- [Automatic arrays creation](#automatic-arrays-creation)
+	- [Named keys hierarchy](#named-keys-hierarchy)
+	- [Convenient numbers and booleans](#convenient-numbers-and-booleans)
+- [General improvements](#general-improvements)
+	- [Commments](#commments)
+	- [Macros support](#macros-support)
+	- [Variables support](#variables-support)
+	- [Multiline strings](#multiline-strings)
+- [Emitter](#emitter)
+- [Validation](#validation)
+- [Performance](#performance)
+- [Conclusion](#conclusion)
+
+## Introduction {#introduction}
 
 This document describes the main features and principles of the configuration
 language called `UCL` - universal configuration language.
 
-## Basic structure
+If you are looking for the libucl API documentation you can find it at [this page](doc/api.md).
+
+## Basic structure {#basic-structure}
 
 UCL is heavily infused by `nginx` configuration as the example of a convenient configuration
 system. However, UCL is fully compatible with `JSON` format and is able to parse json files.
@@ -55,7 +78,7 @@ section {
 }
 ~~~
 
-## Improvements to the json notation.
+## Improvements to the json notation. {#improvements-to-the-json-notation}
 
 There are various things that make ucl configuration more convenient for editing than strict json:
 
@@ -123,7 +146,7 @@ is converted to:
 
 ### Named keys hierarchy
 
-UCL accepts named keys and organise them into objects hierarchy internally. Here is an example of this process:
+UCL accepts named keys and organize them into objects hierarchy internally. Here is an example of this process:
 
 ~~~nginx
 section "blah" {
@@ -139,10 +162,10 @@ is converted to the following object:
 ~~~nginx
 section {
 	blah {
-			key = value;
+		key = value;
 	}
 	foo {
-			key = value;
+		key = value;
 	}
 }
 ~~~
@@ -160,9 +183,9 @@ is presented as:
 ~~~nginx    
 section {
 	blah {
-			foo {
-					key = value;
-			}
+		foo {
+			key = value;
+		}
 	}
 }
 ~~~
@@ -173,12 +196,13 @@ section {
     + `[kKmMgG]` - standard 10 base multipliers (so `1k` is translated to 1000)
     + `[kKmMgG]b` - 2 power multipliers (so `1kb` is translated to 1024)
     + `[s|min|d|w|y]` - time multipliers, all time values are translated to float number of seconds, for example `10min` is translated to 600.0 and `10ms` is translated to 0.01
+* Hexadecimal integers can be used by `0x` prefix, for example `key = 0xff`. However, floating point values can use decimal base only.
 * Booleans can be specified as `true` or `yes` or `on` and `false` or `no` or `off`.
 * It is still possible to treat numbers and booleans as strings by enclosing them in double quotes.
 
-## General improvements
+## General improvements {#general-improvements}
 
-### Commments
+### Commments {#comments}
 
 UCL supports different style of comments:
 
@@ -203,19 +227,74 @@ UCL supports external macros both multiline and single line ones:
 ~~~nginx
 .macro "sometext";
 .macro {
-     Some long text
-     ....
+    Some long text
+    ....
 };
 ~~~
 
-There are two internal macros provided by UCL:
+Moreover, each macro can accept an optional list of arguments in braces. These
+arguments themselves are the UCL object that is parsed and passed to a macro as
+options:
 
-* `include` - read a file `/path/to/file` or an url `http://example.com/file` and include it to the current place of
-UCL configuration;
-* `includes` - read a file or an url like the previous macro, but fetch and check the signature file (which is obtained
-by `.sig` suffix appending).
+~~~nginx
+.macro(param=value) "something";
+.macro(param={key=value}) "something";
+.macro(.include "params.conf") "something";
+.macro(#this is multiline macro
+param = [value1, value2]) "something";
+.macro(key="()") "something";
+~~~
 
-Public keys which are used for the last command are specified by the concrete UCL user.
+UCL also provide a convenient `include` macro to load content from another files
+to the current UCL object. This macro accepts either path to file:
+
+~~~nginx
+.include "/full/path.conf"
+.include "./relative/path.conf"
+.include "${CURDIR}/path.conf"
+~~~
+
+or URL (if ucl is built with url support provided by either `libcurl` or `libfetch`):
+
+	.include "http://example.com/file.conf"
+
+`.include` macro supports a set of options:
+
+* `try` (default: **false**) - if this option is `true` than UCL treats errors on loading of
+this file as non-fatal. For example, such a file can be absent but it won't stop the parsing
+of the top-level document.
+* `sign` (default: **false**) - if this option is `true` UCL loads and checks the signature for
+a file from path named `<FILEPATH>.sig`. Trusted public keys should be provided for UCL API after
+parser is created but before any configurations are parsed.
+* `glob` (default: **false**) - if this option is `true` UCL treats the filename as GLOB pattern and load
+all files that matches the specified pattern (normally the format of patterns is defined in `glob` manual page
+for your operating system). This option is meaningless for URL includes.
+* `url` (default: **true**) - allow URL includes.
+* `path` (default: empty) - A UCL_ARRAY of directories to search for the include file.
+Search ends after the first patch, unless `glob` is true, then all matches are included.
+* `prefix` (default false) - Put included contents inside an object, instead
+of loading them into the root. If no `key` is provided, one is automatically generated based on each files basename()
+* `key` (default: <empty string>) - Key to load contents of include into. If
+the key already exists, it must be the correct type
+* `target` (default: object) - Specify if the `prefix` `key` should be an
+object or an array.
+* `priority` (default: 0) - specify priority for the include (see below).
+* `duplicate` (default: 'append') - specify policy of duplicates resolving:
+	- `append` - default strategy, if we have new object of higher priority then it replaces old one, if we have new object with less priority it is ignored completely, and if we have two duplicate objects with the same priority then we have a multi-value key (implicit array)
+	- `merge` - if we have object or array, then new keys are merged inside, if we have a plain object then an implicit array is formed (regardeless of priorities)
+	- `error` - create error on duplicate keys and stop parsing
+	- `rewrite` - always rewrite an old value with new one (ignoring priorities)
+
+Priorities are used by UCL parser to manage the policy of objects rewriting during including other files
+as following:
+
+* If we have two objects with the same priority then we form an implicit array
+* If a new object has bigger priority then we overwrite an old one
+* If a new object has lower priority then we ignore it
+
+By default, the priority of top-level object is set to zero (lowest priority). Currently,
+you can define up to 16 priorities (from 0 to 15). Includes with bigger priorities will
+rewrite keys from the objects with lower priorities as specified by the policy.
 
 ### Variables support
 
@@ -235,14 +314,13 @@ to change in future libucl releases.
 ### Multiline strings
 
 UCL can handle multiline strings as well as single line ones. It uses shell/perl like notation for such objects:
-
-
-	key = <<EOD
-	some text
-	splitted to
-	lines
-	EOD
-
+~~~
+key = <<EOD
+some text
+splitted to
+lines
+EOD
+~~~
 
 In this example `key` will be interpreted as the following string: `some text\nsplitted to\nlines`.
 Here are some rules for this syntax:
@@ -252,15 +330,16 @@ Here are some rules for this syntax:
 * To finish multiline string you need to include a terminator string just after newline and followed by a newline (no spaces or other characters are allowed as well);
 * The initial and the final newlines are not inserted to the resulting string, but you can still specify newlines at the begin and at the end of a value, for example:
 
-	key <<EOD
-	
-	some
-	text
-	
-	EOD
+~~~
+key <<EOD
 
+some
+text
 
-## Emitter
+EOD
+~~~
+
+## Emitter {#emitter}
 
 Each UCL object can be serialized to one of the three supported formats:
 
@@ -269,35 +348,42 @@ Each UCL object can be serialized to one of the three supported formats:
 * `Configuration` - nginx like notation;
 * `YAML` - yaml inlined notation.
 
-## Performance
+## Validation {#validation}
+
+UCL allows validation of objects. It uses the same schema that is used for json: [json schema v4](http://json-schema.org). UCL supports the full set of json schema with the exception of remote references. This feature is unlikely useful for configuration objects. Of course, a schema definition can be in UCL format instead of JSON that simplifies schemas writing. Moreover, since UCL supports multiple values for keys in an object it is possible to specify generic integer constraints `maxValues` and `minValues` to define the limits of values count in a single key. UCL currently is not absolutely strict about validation schemas themselves, therefore UCL users should supply valid schemas (as it is defined in json-schema draft v4) to ensure that the input objects are validated properly.
+
+## Performance {#performance}
 
 Are UCL parser and emitter fast enough? Well, there are some numbers.
 I got a 19Mb file that consist of ~700 thousands lines of json (obtained via
-<http://www.json-generator.com/>). Then I checked jansson library that performs json
+http://www.json-generator.com/). Then I checked jansson library that performs json
 parsing and emitting and compared it with UCL. Here are results:
 
-	jansson: parsed json in 1.3899 seconds
-	jansson: emitted object in 0.2609 seconds
-	
-	ucl: parsed input in 0.6649 seconds
-	ucl: emitted config in 0.2423 seconds
-	ucl: emitted json in 0.2329 seconds
-	ucl: emitted compact json in 0.1811 seconds
-	ucl: emitted yaml in 0.2489 seconds
+~~~
+jansson: parsed json in 1.3899 seconds
+jansson: emitted object in 0.2609 seconds
+
+ucl: parsed input in 0.6649 seconds
+ucl: emitted config in 0.2423 seconds
+ucl: emitted json in 0.2329 seconds
+ucl: emitted compact json in 0.1811 seconds
+ucl: emitted yaml in 0.2489 seconds
+~~~
 
 So far, UCL seems to be significantly faster than jansson on parsing and slightly faster on emitting. Moreover,
-UCL compiled with optimizations (-O3) performs significantly faster:
+UCL compiled with optimizations (-O3) performs faster:
 
-	ucl: parsed input in 0.3002 seconds
-	ucl: emitted config in 0.1174 seconds
-	ucl: emitted json in 0.1174 seconds
-	ucl: emitted compact json in 0.0991 seconds
-	ucl: emitted yaml in 0.1354 seconds
+~~~
+ucl: parsed input in 0.3002 seconds
+ucl: emitted config in 0.1174 seconds
+ucl: emitted json in 0.1174 seconds
+ucl: emitted compact json in 0.0991 seconds
+ucl: emitted yaml in 0.1354 seconds
+~~~
 
+You can do your own benchmarks by running `make check` in libucl top directory.
 
-You can do your own benchmarks by running `make test` in libucl top directory.
-
-## Conclusion
+## Conclusion {#conclusion}
 
 UCL has clear design that should be very convenient for reading and writing. At the same time it is compatible with
 JSON language and therefore can be used as a simple JSON parser. Macroes logic provides an ability to extend configuration

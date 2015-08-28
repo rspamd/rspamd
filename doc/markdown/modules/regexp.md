@@ -11,7 +11,7 @@ functions and lua functions. Rspamd supports the following operators in expressi
 * `&&` - logical AND (can be also written as `and` or even `&`)
 * `||` - logical OR (`or` `|`)
 * `!` - logical NOT (`not`)
-* `+` - logical PLUS, usually used with comparisions:
+* `+` - logical PLUS, usually used with comparisons:
 	- `>` more than
 	- `<` less than
 	- `>=` more or equal

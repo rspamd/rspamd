@@ -4,7 +4,7 @@ This document describes incompatible changes introduced in the recent rspamd
 versions. Here you can find information about how to overcome this incompatibilities
 and update your rules and configuration according to these changes.
 
-## Migrating from rspamd 0.6 to rspamd 0.7
+## Migrating from rspamd 0.6 to rspamd 0.7 {#0607}
 
 ### Webui changes
 

@@ -1,8 +1,8 @@
-# Rspamd lua API
+# Rspamd lua API {#top}
 
 Rspamd lua api is a core part of rspamd functionality. Lua is used for writing rules and plugins in rspamd. There are several objects and libraries that simplify classifying of mail.
 
-## Using lua API from rules 
+## Using lua API from rules {#luarules}
 
 Many lua rules are shipped with rspamd. They can be included to rspamd by using tag **lua** in rspamd.conf:
 
@@ -10,7 +10,7 @@ Many lua rules are shipped with rspamd. They can be included to rspamd by using 
 lua = "$CONFDIR/lua/rspamd.lua"
 ~~~
 
-### Global configuration tables
+### Global configuration tables {#luaglobal}
 
 While load of this file rspamd defines two global variables:
 - *config* - a global table of modules configuration. Here is a sample of usage of this table:
@@ -98,7 +98,7 @@ end
 
 * *rspamd_config* - is a global object that allows you to modify configuration and register new symbols.
 
-### Writing complex rules
+## Writing advanced rules {#luarules}
 
 So by using these two tables it is possible to configure rules and metrics. Also note that it is possible to use any lua functions and rspamd libraries:
 
@@ -171,7 +171,7 @@ rspamd_config.R_EMPTY_IMAGE = {
 
 Using lua in rules provides many abilities to write complex mail filtering rules.
 
-## Writing lua plugins
+## Writing lua plugins {#luaplugins}
 
 Plugins are more complex filters than ordinary rules. Plugins can have their own configuration parameters and multiple callbacks. Plugins can make DNS requests, read from rspamd maps and insert custom results.
 
@@ -263,11 +263,11 @@ local function sample_symbol_cb(task)
 end
 ~~~
 
-## Conclusions
+## Conclusions {#luaconclusion}
 
 Lua plugins is a powerful tool for creating complex filters that can access practically all features of rspamd. Lua plugins can be used for writing custom rules and interact with rspamd in many ways, can use maps and make DNS requests. Rspamd is shipped with a couple of lua plugins that can be used as examples while writing your own plugins.
 
-## References
+## References {#luareference}
 
 - [Lua manual](http://www.lua.org/manual/5.2/)
 - [Programming in lua](http://www.lua.org/pil/)
