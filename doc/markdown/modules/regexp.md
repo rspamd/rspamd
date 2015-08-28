@@ -97,5 +97,32 @@ Many of these functions are just legacy but they are supported in terms of compa
 
 ### Lua atoms
 
-Lua atoms now can be lua global functions names. This is supported merely for compatibility and it is 
-a subject of future redesign.
+Lua atoms now can be lua global functions names or callbacks. This is 
+a compatibility feature for previously written rules.
+
+### Regexp objects
+
+From rspamd 1.0, it is possible to add more power to regexp rules by using of
+table notation while writing rules. A table can have the following fields:
+
+- `callback`: lua callback for the rule
+- `re`: regular expression (mutually exclusive with `callback` option)
+- `condition`: function of task that determines when a rule should be executed
+- `score`: default score
+- `description`: default description
+- `one_shot`: default one shot settings
+
+Here is an example of table form definition of regexp rule:
+
+~~~lua
+config['regexp']['RE_TEST'] = {
+    re = '/test/P',
+    score = 10.0,
+    condition = function(task)
+        if task:get_header('Subject') then
+            return true
+        end
+        return false
+    end,
+}
+~~~

@@ -99,6 +99,7 @@ end
 * *rspamd_config* - is a global object that allows you to modify configuration and register new symbols.
 
 ### Writing complex rules
+
 So by using these two tables it is possible to configure rules and metrics. Also note that it is possible to use any lua functions and rspamd libraries:
 
 ~~~lua
@@ -112,30 +113,7 @@ rspamd_logger.info('Loaded test rule: ' .. rulebody)
 Also it is possible to declare functions and use `closures` when defining rspamd rules:
 
 ~~~lua
--- Insert generic symbol
-rspamd_config.R_EMPTY_IMAGE = function (task)
-    -- Get text parts from message
-    parts = task:get_text_parts()
-    -- Iterate through all text parts
-    if parts then
-        for _,part in ipairs(parts) do
-            -- Find empty parts
-            if part:is_empty() then
-                -- Get all images
-                images = task:get_images()
-                if images then
-                    -- We have images and empty part, insert symbol with image 
-                    -- filename as an option
-                    return true, image[1]:get_filename()
-                end
-                return false
-            end
-        end
-    end
-    return false
-end
-
--- Here is a sample of using other function inside rule
+-- Here is a sample of using closure function inside rule
 local function check_headers_tab(task, header_name)
     -- Extract raw headers from message
     local raw_headers = task:get_raw_header(header_name)
@@ -154,6 +132,41 @@ end
 rspamd_config.HEADER_TAB_FROM_WHITELISTED = function(task) return check_headers_tab(task, "From") end
 rspamd_config.HEADER_TAB_TO_WHITELISTED = function(task) return check_headers_tab(task, "To") end
 rspamd_config.HEADER_TAB_DATE_WHITELISTED = function(task) return check_headers_tab(task, "Date") end
+
+-- Table form of rule definition
+rspamd_config.R_EMPTY_IMAGE = {
+    callback = function(task)
+      local tp = task:get_text_parts() -- get text parts in a message
+      
+      for _,p in ipairs(tp) do -- iterate over text parts array using `ipairs`
+        if p:is_html() then -- if the current part is html part
+          local hc = p:get_html() -- we get HTML context
+          local len = p:get_length() -- and part's length
+          
+          if len < 50 then -- if we have a part that has less than 50 bytes of text
+            local images = hc:get_images() -- then we check for HTML images
+            
+            if images then -- if there are images
+              for _,i in ipairs(images) do -- then iterate over images in the part
+                if i['height'] + i['width'] >= 400 then -- if we have a large image
+                  return true -- add symbol
+                end
+              end
+            end
+          end
+        end
+      end
+    end,
+    score = 10.0,
+    condition = function(task)
+        if task:get_header('Subject') then
+            return true
+        end
+        return false
+    end,
+    description = 'No text parts and a large image',
+    score = 3.1,
+}
 ~~~
 
 Using lua in rules provides many abilities to write complex mail filtering rules.
@@ -178,14 +191,6 @@ local config_param = 'default'
 local function sample_callback(task)
 end
 
--- Registration
-
--- Check API version
-if type(rspamd_config.get_api_version) ~= 'nil' then
-    if rspamd_config:get_api_version() >= 1 then
-        rspamd_config:register_module_option('maillist', 'symbol', 'string')
-    end
-end
 
 -- Reading configuration
 
@@ -195,7 +200,7 @@ if opts then
     if opts['config'] then
         config_param = opts['config'] 
         -- Register callback
-        rspamd_config:register_symbol('some_symbol', 1.0, sample_callback)
+        rspamd_config:register_symbol('some_symbol', sample_callback)
     end
 end
 ~~~
