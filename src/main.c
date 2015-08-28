@@ -50,6 +50,23 @@
 #define HAVE_SETLOCALE 1
 #endif
 
+#define msg_err_main(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_main(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+        rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_main(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_main(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
 /* 2 seconds to fork new process in place of dead one */
 #define SOFT_FORK_TIME 2
 
@@ -208,11 +225,11 @@ print_signals_info (void)
 
 	while ((inf = g_queue_pop_head (signals_info))) {
 		if (inf->si_signo == SIGCHLD) {
-			msg_info ("got SIGCHLD from child: %P; reason: '%s'",
+			msg_info_main ("got SIGCHLD from child: %P; reason: '%s'",
 				inf->si_pid, chldsigcode (inf->si_code));
 		}
 		else {
-			msg_info ("got signal: '%s'; received from pid: %P; uid: %ul",
+			msg_info_main ("got signal: '%s'; received from pid: %P; uid: %ul",
 				g_strsignal (inf->si_signo), inf->si_pid, (gulong)inf->si_uid);
 		}
 	}
@@ -283,7 +300,7 @@ detect_priv (struct rspamd_main *rspamd)
 
 	if (euid == 0) {
 		if (!rspamd->cfg->rspamd_user && !is_insecure) {
-			msg_err (
+			msg_err_main (
 				"cannot run rspamd workers as root user, please add -u and -g options to select a proper unprivilleged user or specify --insecure flag");
 			exit (EXIT_FAILURE);
 		}
@@ -296,14 +313,14 @@ detect_priv (struct rspamd_main *rspamd)
 			rspamd->is_privilleged = TRUE;
 			pwd = getpwnam (rspamd->cfg->rspamd_user);
 			if (pwd == NULL) {
-				msg_err ("user specified does not exists (%s), aborting",
+				msg_err_main ("user specified does not exists (%s), aborting",
 					strerror (errno));
 				exit (-errno);
 			}
 			if (rspamd->cfg->rspamd_group) {
 				grp = getgrnam (rspamd->cfg->rspamd_group);
 				if (grp == NULL) {
-					msg_err ("group specified does not exists (%s), aborting",
+					msg_err_main ("group specified does not exists (%s), aborting",
 						strerror (errno));
 					exit (-errno);
 				}
@@ -327,18 +344,18 @@ drop_priv (struct rspamd_main *rspamd)
 {
 	if (rspamd->is_privilleged) {
 		if (setgid (rspamd->workers_gid) == -1) {
-			msg_err ("cannot setgid to %d (%s), aborting",
+			msg_err_main ("cannot setgid to %d (%s), aborting",
 				(gint)rspamd->workers_gid,
 				strerror (errno));
 			exit (-errno);
 		}
 		if (rspamd->cfg->rspamd_user &&
 			initgroups (rspamd->cfg->rspamd_user, rspamd->workers_gid) == -1) {
-			msg_err ("initgroups failed (%s), aborting", strerror (errno));
+			msg_err_main ("initgroups failed (%s), aborting", strerror (errno));
 			exit (-errno);
 		}
 		if (setuid (rspamd->workers_uid) == -1) {
-			msg_err ("cannot setuid to %d (%s), aborting",
+			msg_err_main ("cannot setuid to %d (%s), aborting",
 				(gint)rspamd->workers_uid,
 				strerror (errno));
 			exit (-errno);
@@ -382,11 +399,11 @@ reread_config (struct rspamd_main *rspamd)
 	if (!load_rspamd_config (tmp_cfg, FALSE)) {
 		rspamd_set_logger (rspamd_main->cfg, g_quark_try_string (
 				"main"), rspamd_main);
-		msg_err ("cannot parse new config file, revert to old one");
+		msg_err_main ("cannot parse new config file, revert to old one");
 		rspamd_config_free (tmp_cfg);
 	}
 	else {
-		msg_debug ("replacing config");
+		msg_debug_main ("replacing config");
 		rspamd_symbols_cache_destroy (rspamd_main->cfg->cache);
 		rspamd_config_free (rspamd->cfg);
 		g_free (rspamd->cfg);
@@ -400,7 +417,7 @@ reread_config (struct rspamd_main *rspamd)
 
 		rspamd_init_filters (rspamd->cfg, TRUE);
 		rspamd_symbols_cache_init (rspamd->cfg->cache, rspamd->cfg);
-		msg_info ("config has been reread successfully");
+		msg_info_main ("config has been reread successfully");
 	}
 }
 
@@ -414,7 +431,7 @@ set_worker_limits (struct rspamd_worker_conf *cf)
 		rlmt.rlim_max = (rlim_t) cf->rlimit_nofile;
 
 		if (setrlimit (RLIMIT_NOFILE, &rlmt) == -1) {
-			msg_warn ("cannot set files rlimit: %d, %s",
+			msg_warn_main ("cannot set files rlimit: %d, %s",
 				cf->rlimit_nofile,
 				strerror (errno));
 		}
@@ -425,7 +442,7 @@ set_worker_limits (struct rspamd_worker_conf *cf)
 		rlmt.rlim_max = (rlim_t) cf->rlimit_maxcore;
 
 		if (setrlimit (RLIMIT_CORE, &rlmt) == -1) {
-			msg_warn ("cannot set max core rlimit: %d, %s",
+			msg_warn_main ("cannot set max core rlimit: %d, %s",
 				cf->rlimit_maxcore,
 				strerror (errno));
 		}
@@ -474,11 +491,11 @@ fork_worker (struct rspamd_main *rspamd, struct rspamd_worker_conf *cf)
 			g_thread_init (NULL);
 # endif
 #endif
-			msg_info ("starting %s process %P", cf->worker->name, getpid ());
+			msg_info_main ("starting %s process %P", cf->worker->name, getpid ());
 			cf->worker->worker_start_func (cur);
 			break;
 		case -1:
-			msg_err ("cannot fork main process. %s", strerror (errno));
+			msg_err_main ("cannot fork main process. %s", strerror (errno));
 			rspamd_pidfile_remove (rspamd->pfh);
 			exit (-errno);
 			break;
@@ -505,7 +522,7 @@ set_alarm (guint seconds)
 	itv.it_value.tv_usec = 0;
 
 	if (setitimer (ITIMER_REAL, &itv, NULL) == -1) {
-		msg_err ("set alarm failed: %s", strerror (errno));
+		msg_err_main ("set alarm failed: %s", strerror (errno));
 	}
 #else
 	(void)alarm (seconds);
@@ -556,11 +573,11 @@ systemd_get_socket (gint number)
 		if ((err == NULL || *err == '\0') && num_passed > number) {
 			sock = number + sd_listen_fds_start;
 			if (fstat (sock, &st) == -1) {
-				msg_warn ("cannot stat systemd descriptor %d", sock);
+				msg_warn_main ("cannot stat systemd descriptor %d", sock);
 				return NULL;
 			}
 			if (!S_ISSOCK (st.st_mode)) {
-				msg_warn ("systemd descriptor %d is not a socket", sock);
+				msg_warn_main ("systemd descriptor %d is not a socket", sock);
 				errno = EINVAL;
 				return NULL;
 			}
@@ -571,13 +588,13 @@ systemd_get_socket (gint number)
 			result = g_list_prepend (result, GINT_TO_POINTER (sock));
 		}
 		else if (num_passed <= number) {
-			msg_warn ("systemd LISTEN_FDS does not contain the expected fd: %d",
+			msg_warn_main ("systemd LISTEN_FDS does not contain the expected fd: %d",
 					num_passed);
 			errno = EOVERFLOW;
 		}
 	}
 	else {
-		msg_warn ("cannot get systemd variable 'LISTEN_FDS'");
+		msg_warn_main ("cannot get systemd variable 'LISTEN_FDS'");
 		errno = ENOENT;
 	}
 
@@ -647,7 +664,7 @@ spawn_workers (struct rspamd_main *rspamd)
 		listen_ok = FALSE;
 
 		if (cf->worker == NULL) {
-			msg_err ("type of worker is unspecified, skip spawning");
+			msg_err_main ("type of worker is unspecified, skip spawning");
 		}
 		else {
 			if (cf->worker->has_socket) {
@@ -665,7 +682,7 @@ spawn_workers (struct rspamd_main *rspamd)
 							ls = systemd_get_socket (bcf->cnt);
 						}
 						if (ls == NULL) {
-							msg_err ("cannot listen on socket %s: %s",
+							msg_err_main ("cannot listen on socket %s: %s",
 								bcf->name,
 								strerror (errno));
 						}
@@ -689,7 +706,7 @@ spawn_workers (struct rspamd_main *rspamd)
 			if (listen_ok) {
 				if (cf->worker->unique) {
 					if (cf->count > 1) {
-						msg_warn ("cannot spawn more than 1 %s worker, so spawn one",
+						msg_warn_main ("cannot spawn more than 1 %s worker, so spawn one",
 								cf->worker->name);
 					}
 					fork_worker (rspamd, cf);
@@ -704,7 +721,7 @@ spawn_workers (struct rspamd_main *rspamd)
 				}
 			}
 			else {
-				msg_err ("cannot create listen socket for %s at %s",
+				msg_err_main ("cannot create listen socket for %s at %s",
 						g_quark_to_string (cf->type), cf->bind_conf->name);
 
 				exit (EXIT_FAILURE);
@@ -721,7 +738,7 @@ kill_old_workers (gpointer key, gpointer value, gpointer unused)
 	struct rspamd_worker *w = value;
 
 	kill (w->pid, SIGUSR2);
-	msg_info ("send signal to worker %P", w->pid);
+	msg_info_main ("send signal to worker %P", w->pid);
 }
 
 static gboolean
@@ -740,18 +757,18 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 		if (errno == EINTR) {
 			got_alarm = 1;
 			if (w->cf->worker->killable) {
-				msg_info ("terminate worker %P with SIGKILL", w->pid);
+				msg_info_main ("terminate worker %P with SIGKILL", w->pid);
 				kill (w->pid, SIGKILL);
 			}
 			else {
-				msg_info ("waiting for workers to sync");
+				msg_info_main ("waiting for workers to sync");
 				wait_for_workers (key, value, unused);
 				return TRUE;
 			}
 		}
 	}
 
-	msg_info ("%s process %P terminated %s", g_quark_to_string (
+	msg_info_main ("%s process %P terminated %s", g_quark_to_string (
 			w->type), w->pid,
 		got_alarm ? "hardly" : "softly");
 	g_free (w->cf);
@@ -766,7 +783,7 @@ reopen_log_handler (gpointer key, gpointer value, gpointer unused)
 	struct rspamd_worker *w = value;
 
 	if (kill (w->pid, SIGUSR1) == -1) {
-		msg_err ("kill failed for pid %P: %s", w->pid, strerror (errno));
+		msg_err_main ("kill failed for pid %P: %s", w->pid, strerror (errno));
 	}
 }
 
@@ -784,12 +801,12 @@ load_rspamd_config (struct rspamd_config *cfg, gboolean init_modules)
 
 	/* Strictly set temp dir */
 	if (!cfg->temp_dir) {
-		msg_warn ("tempdir is not set, trying to use $TMPDIR");
+		msg_warn_main ("tempdir is not set, trying to use $TMPDIR");
 		cfg->temp_dir =
 			rspamd_mempool_strdup (cfg->cfg_pool, getenv ("TMPDIR"));
 
 		if (!cfg->temp_dir) {
-			msg_warn ("$TMPDIR is empty too, using /tmp as default");
+			msg_warn_main ("$TMPDIR is empty too, using /tmp as default");
 			cfg->temp_dir = rspamd_mempool_strdup (cfg->cfg_pool, "/tmp");
 		}
 	}
@@ -816,7 +833,7 @@ perform_lua_tests (struct rspamd_config *cfg)
 	for (i = 0; i < tests_num; i++) {
 
 		if (luaL_loadfile (L, lua_tests[i]) != 0) {
-			msg_err ("load of %s failed: %s", lua_tests[i],
+			msg_err_main ("load of %s failed: %s", lua_tests[i],
 				lua_tostring (L, -1));
 			res = EXIT_FAILURE;
 			continue;
@@ -831,14 +848,14 @@ perform_lua_tests (struct rspamd_config *cfg)
 
 		/* do the call (0 arguments, N result) */
 		if (lua_pcall (L, 0, LUA_MULTRET, 0) != 0) {
-			msg_info ("init of %s failed: %s", lua_tests[i], lua_tostring (L,
+			msg_info_main ("init of %s failed: %s", lua_tests[i], lua_tostring (L,
 				-1));
 			res = EXIT_FAILURE;
 			continue;
 		}
 		if (lua_gettop (L) != 0) {
 			if (lua_tonumber (L, -1) == -1) {
-				msg_info ("%s returned -1 that indicates configuration error",
+				msg_info_main ("%s returned -1 that indicates configuration error",
 					lua_tests[i]);
 				res = EXIT_FAILURE;
 				continue;
@@ -854,11 +871,11 @@ static gint
 perform_configs_sign (void)
 {
 #ifndef HAVE_OPENSSL
-	msg_err ("cannot sign files without openssl support");
+	msg_err_main ("cannot sign files without openssl support");
 	return EXIT_FAILURE;
 #else
 # if (OPENSSL_VERSION_NUMBER < 0x10000000L)
-	msg_err ("must have openssl at least 1.0.0 to perform this action");
+	msg_err_main ("must have openssl at least 1.0.0 to perform this action");
 	return EXIT_FAILURE;
 # else
 	gint i, tests_num, res = EXIT_SUCCESS, fd;
@@ -876,35 +893,35 @@ perform_configs_sign (void)
 	/* Load private key */
 	fbio = BIO_new_file (privkey, "r");
 	if (fbio == NULL) {
-		msg_err ("cannot open private key %s, %s", privkey,
+		msg_err_main ("cannot open private key %s, %s", privkey,
 			ERR_error_string (ERR_get_error (), NULL));
 		return ERR_get_error ();
 	}
 	if (!PEM_read_bio_PrivateKey (fbio, &key, rspamd_read_passphrase, NULL)) {
-		msg_err ("cannot read private key %s, %s", privkey,
+		msg_err_main ("cannot read private key %s, %s", privkey,
 			ERR_error_string (ERR_get_error (), NULL));
 		return ERR_get_error ();
 	}
 
 	key_ctx = EVP_PKEY_CTX_new (key, NULL);
 	if (key_ctx == NULL) {
-		msg_err ("cannot parse private key %s, %s", privkey,
+		msg_err_main ("cannot parse private key %s, %s", privkey,
 			ERR_error_string (ERR_get_error (), NULL));
 		return ERR_get_error ();
 	}
 
 	if (EVP_PKEY_sign_init (key_ctx) <= 0) {
-		msg_err ("cannot parse private key %s, %s", privkey,
+		msg_err_main ("cannot parse private key %s, %s", privkey,
 			ERR_error_string (ERR_get_error (), NULL));
 		return ERR_get_error ();
 	}
 	if (EVP_PKEY_CTX_set_rsa_padding (key_ctx, RSA_PKCS1_PADDING) <= 0) {
-		msg_err ("cannot init private key %s, %s", privkey,
+		msg_err_main ("cannot init private key %s, %s", privkey,
 			ERR_error_string (ERR_get_error (), NULL));
 		return ERR_get_error ();
 	}
 	if (EVP_PKEY_CTX_set_signature_md (key_ctx, EVP_sha256 ()) <= 0) {
-		msg_err ("cannot init signature private key %s, %s", privkey,
+		msg_err_main ("cannot init signature private key %s, %s", privkey,
 			ERR_error_string (ERR_get_error (), NULL));
 		return ERR_get_error ();
 	}
@@ -916,15 +933,15 @@ perform_configs_sign (void)
 	for (i = 0; i < tests_num; i++) {
 		cur_file = sign_configs[i];
 		if (realpath (cur_file, in_file) == NULL) {
-			msg_err ("cannot resolve %s: %s", cur_file, strerror (errno));
+			msg_err_main ("cannot resolve %s: %s", cur_file, strerror (errno));
 			continue;
 		}
 		if (stat (in_file, &st) == -1) {
-			msg_err ("cannot stat %s: %s", in_file, strerror (errno));
+			msg_err_main ("cannot stat %s: %s", in_file, strerror (errno));
 			continue;
 		}
 		if ((fd = open (in_file, O_RDONLY)) == -1) {
-			msg_err ("cannot open %s: %s", in_file, strerror (errno));
+			msg_err_main ("cannot open %s: %s", in_file, strerror (errno));
 			continue;
 		}
 
@@ -932,7 +949,7 @@ perform_configs_sign (void)
 			mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd,
 			0)) == MAP_FAILED) {
 			close (fd);
-			msg_err ("cannot mmap %s: %s", in_file, strerror (errno));
+			msg_err_main ("cannot mmap %s: %s", in_file, strerror (errno));
 			continue;
 		}
 
@@ -945,7 +962,7 @@ perform_configs_sign (void)
 		munmap (map, st.st_size);
 
 		if (EVP_PKEY_sign (key_ctx, NULL, &siglen, dig, diglen) <= 0) {
-			msg_err ("cannot sign %s using private key %s, %s",
+			msg_err_main ("cannot sign %s using private key %s, %s",
 				in_file,
 				privkey,
 				ERR_error_string (ERR_get_error (), NULL));
@@ -954,7 +971,7 @@ perform_configs_sign (void)
 
 		sig = OPENSSL_malloc (siglen);
 		if (EVP_PKEY_sign (key_ctx, sig, &siglen, dig, diglen) <= 0) {
-			msg_err ("cannot sign %s using private key %s, %s",
+			msg_err_main ("cannot sign %s using private key %s, %s",
 				in_file,
 				privkey,
 				ERR_error_string (ERR_get_error (), NULL));
@@ -965,13 +982,13 @@ perform_configs_sign (void)
 		rspamd_snprintf (out_file, sizeof (out_file), "%s.sig", in_file);
 		fd = open (out_file, O_WRONLY | O_CREAT | O_TRUNC, 00644);
 		if (fd == -1) {
-			msg_err ("cannot open output file %s: %s", out_file, strerror (
+			msg_err_main ("cannot open output file %s: %s", out_file, strerror (
 					errno));
 			OPENSSL_free (sig);
 			continue;
 		}
 		if (write (fd, sig, siglen) == -1) {
-			msg_err ("cannot write to output file %s: %s", out_file,
+			msg_err_main ("cannot write to output file %s: %s", out_file,
 				strerror (errno));
 		}
 		OPENSSL_free (sig);
@@ -1029,7 +1046,8 @@ do_encrypt_password (void)
 static void
 rspamd_init_main (struct rspamd_main *rspamd)
 {
-	rspamd->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
+	rspamd->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
+			"main");
 	rspamd_main->stat = rspamd_mempool_alloc0_shared (rspamd_main->server_pool,
 		sizeof (struct rspamd_stat));
 	/* Create rolling history */
@@ -1175,7 +1193,7 @@ main (gint argc, gchar **argv, gchar **env)
 			res = FALSE;
 		}
 		if (dump_cache) {
-			msg_err ("Use rspamc counters for dumping cache");
+			msg_err_main ("Use rspamc counters for dumping cache");
 			exit (EXIT_FAILURE);
 		}
 		fprintf (stderr, "syntax %s\n", res ? "OK" : "BAD");
@@ -1199,7 +1217,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	gperf_profiler_init (rspamd_main->cfg, "main");
 
-	msg_info ("rspamd " RVERSION " is starting, build id: " RID);
+	msg_info_main ("rspamd " RVERSION " is starting, build id: " RID);
 	rspamd_main->cfg->cfg_name = rspamd_mempool_strdup (
 		rspamd_main->cfg->cfg_pool,
 		rspamd_main->cfg->cfg_name);
@@ -1219,7 +1237,7 @@ main (gint argc, gchar **argv, gchar **env)
 	if (rspamd_main->cfg->pid_file == NULL) {
 		msg_info("pid file is not specified, skipping writing it");
 	} else if (rspamd_write_pid (rspamd_main) == -1) {
-		msg_err ("cannot write pid file %s", rspamd_main->cfg->pid_file);
+		msg_err_main ("cannot write pid file %s", rspamd_main->cfg->pid_file);
 		exit (-errno);
 	}
 
@@ -1252,7 +1270,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Signal processing cycle */
 	for (;; ) {
-		msg_debug ("calling sigsuspend");
+		msg_debug_main ("calling sigsuspend");
 		sigemptyset (&signals.sa_mask);
 		sigsuspend (&signals.sa_mask);
 #ifdef HAVE_SA_SIGINFO
@@ -1264,13 +1282,13 @@ main (gint argc, gchar **argv, gchar **env)
 #endif
 		if (do_terminate) {
 			do_terminate = 0;
-			msg_info ("catch termination signal, waiting for children");
+			msg_info_main ("catch termination signal, waiting for children");
 			rspamd_pass_signal (rspamd_main->workers, SIGTERM);
 			break;
 		}
 		if (child_dead) {
 			child_dead = 0;
-			msg_debug ("catch SIGCHLD signal, finding terminated worker");
+			msg_debug_main ("catch SIGCHLD signal, finding terminated worker");
 			/* Remove dead child form children list */
 			wrk = waitpid (0, &res, 0);
 			if ((cur =
@@ -1283,20 +1301,20 @@ main (gint argc, gchar **argv, gchar **env)
 
 				if (WIFEXITED (res) && WEXITSTATUS (res) == 0) {
 					/* Normal worker termination, do not fork one more */
-					msg_info ("%s process %P terminated normally",
+					msg_info_main ("%s process %P terminated normally",
 						g_quark_to_string (cur->type),
 						cur->pid);
 				}
 				else {
 					if (WIFSIGNALED (res)) {
-						msg_warn (
+						msg_warn_main (
 							"%s process %P terminated abnormally by signal: %d",
 							g_quark_to_string (cur->type),
 							cur->pid,
 							WTERMSIG (res));
 					}
 					else {
-						msg_warn ("%s process %P terminated abnormally",
+						msg_warn_main ("%s process %P terminated abnormally",
 							g_quark_to_string (cur->type),
 							cur->pid);
 					}
@@ -1310,7 +1328,7 @@ main (gint argc, gchar **argv, gchar **env)
 				for (i = 0; i < (gint)other_workers->len; i++) {
 					if (g_array_index (other_workers, pid_t, i) == wrk) {
 						g_array_remove_index_fast (other_workers, i);
-						msg_info ("related process %P terminated", wrk);
+						msg_info_main ("related process %P terminated", wrk);
 					}
 				}
 			}
@@ -1320,7 +1338,7 @@ main (gint argc, gchar **argv, gchar **env)
 			rspamd_log_reopen_priv (rspamd_main->logger,
 				rspamd_main->workers_uid,
 				rspamd_main->workers_gid);
-			msg_info ("rspamd " RVERSION " is restarting");
+			msg_info_main ("rspamd " RVERSION " is restarting");
 			g_hash_table_foreach (rspamd_main->workers, kill_old_workers, NULL);
 			rspamd_map_remove_all (rspamd_main->cfg);
 			reread_config (rspamd_main);
@@ -1367,7 +1385,7 @@ main (gint argc, gchar **argv, gchar **env)
 			rspamd_main->cfg->history_file);
 	}
 
-	msg_info ("terminating...");
+	msg_info_main ("terminating...");
 	rspamd_symbols_cache_destroy (rspamd_main->cfg->cache);
 	rspamd_log_close (rspamd_main->logger);
 	rspamd_config_free (rspamd_main->cfg);
