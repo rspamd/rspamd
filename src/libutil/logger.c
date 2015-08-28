@@ -749,20 +749,25 @@ file_log_function (const gchar *log_domain,
 			}
 			if (function != NULL) {
 				mr = rspamd_snprintf (m, mremain, "%s: ", function);
+				m += mr;
+				mremain -= mr;
 			}
 			else {
 				mr = rspamd_snprintf (m, mremain, ": ", function);
+				m += mr;
+				mremain -= mr;
 			}
 
 			/* Construct IOV for log line */
 			iov[0].iov_base = tmpbuf;
 			iov[0].iov_len = r;
 			iov[1].iov_base = modulebuf;
-			iov[1].iov_len = mr;
+			iov[1].iov_len = m - modulebuf;
 			iov[2].iov_base = (void *) message;
 			iov[2].iov_len = mlen;
 			iov[3].iov_base = (void *) &lf_chr;
 			iov[3].iov_len = 1;
+
 			if (rspamd_log->cfg->log_color) {
 				iov[4].iov_base = "\033[0m";
 				iov[4].iov_len = sizeof ("\033[0m") - 1;
