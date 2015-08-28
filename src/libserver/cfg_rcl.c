@@ -183,7 +183,7 @@ rspamd_rcl_logging_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	}
 	else {
 		/* No type specified */
-		msg_warn (
+		msg_warn_config (
 			"logging type is not specified correctly, log output to the console");
 	}
 
@@ -344,7 +344,7 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 	}
 	else {
-		msg_warn ("redefining symbol '%s' in metric '%s'", key, metric->name);
+		msg_warn_config ("redefining symbol '%s' in metric '%s'", key, metric->name);
 	}
 
 	if (!rspamd_rcl_section_parse_defaults (section, pool, obj,
@@ -684,7 +684,7 @@ rspamd_rcl_lua_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 					lua_src,
 					lua_tostring (L, -1));
 				if (chdir (cur_dir) == -1) {
-					msg_err ("cannot chdir to %s: %s", cur_dir,
+					msg_err_config ("cannot chdir to %s: %s", cur_dir,
 						strerror (errno));
 				}
 				g_free (cur_dir);
@@ -701,7 +701,7 @@ rspamd_rcl_lua_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 					lua_src,
 					lua_tostring (L, -1));
 				if (chdir (cur_dir) == -1) {
-					msg_err ("cannot chdir to %s: %s", cur_dir,
+					msg_err_config ("cannot chdir to %s: %s", cur_dir,
 						strerror (errno));
 				}
 				g_free (cur_dir);
@@ -714,7 +714,7 @@ rspamd_rcl_lua_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 			g_set_error (err, CFG_RCL_ERROR, ENOENT, "cannot chdir to %s: %s",
 				lua_src, strerror (errno));
 			if (chdir (cur_dir) == -1) {
-				msg_err ("cannot chdir to %s: %s", cur_dir, strerror (errno));
+				msg_err_config ("cannot chdir to %s: %s", cur_dir, strerror (errno));
 			}
 			g_free (cur_dir);
 			g_free (tmp1);
@@ -723,7 +723,7 @@ rspamd_rcl_lua_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 		}
 		if (chdir (cur_dir) == -1) {
-			msg_err ("cannot chdir to %s: %s", cur_dir, strerror (errno));
+			msg_err_config ("cannot chdir to %s: %s", cur_dir, strerror (errno));
 		}
 		g_free (cur_dir);
 		g_free (tmp1);
@@ -905,7 +905,7 @@ rspamd_rcl_statfile_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 		val = ucl_object_find_key (obj, "spam");
 		if (val == NULL) {
-			msg_info (
+			msg_info_config (
 				"statfile %s has no explicit 'spam' setting, trying to guess by symbol",
 				st->symbol);
 			if (rspamd_strncasestr (st->symbol, "spam",
@@ -924,7 +924,7 @@ rspamd_rcl_statfile_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 					st->symbol);
 				return FALSE;
 			}
-			msg_info ("guessed that statfile with symbol %s is %s",
+			msg_info_config ("guessed that statfile with symbol %s is %s",
 				st->symbol,
 				st->is_spam ?
 				"spam" : "ham");
@@ -1011,7 +1011,7 @@ rspamd_rcl_classifier_handler (rspamd_mempool_t *pool,
 		}
 	}
 	else {
-		msg_err ("fatal configuration error, cannot parse statfile definition");
+		msg_err_config ("fatal configuration error, cannot parse statfile definition");
 	}
 
 	if (tkcf == NULL) {
@@ -1048,7 +1048,7 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 	composite_name = key;
 
 	if (g_hash_table_lookup (cfg->composite_symbols, composite_name) != NULL) {
-		msg_warn ("composite %s is redefined", composite_name);
+		msg_warn_config ("composite %s is redefined", composite_name);
 		new = FALSE;
 	}
 
@@ -1064,11 +1064,11 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 	if (!rspamd_parse_expression (composite_expression, 0, &composite_expr_subr,
 				NULL, cfg->cfg_pool, err, &expr)) {
 		if (err && *err) {
-			msg_err ("cannot parse composite expression for %s: %e",
+			msg_err_config ("cannot parse composite expression for %s: %e",
 				composite_name, *err);
 		}
 		else {
-			msg_err ("cannot parse composite expression for %s: unknown error",
+			msg_err_config ("cannot parse composite expression for %s: unknown error",
 				composite_name);
 		}
 
@@ -2337,7 +2337,7 @@ rspamd_rcl_register_worker_option (struct rspamd_config *cfg,
 
 	HASH_FIND_STR (nparser->parsers, name, nhandler);
 	if (nhandler != NULL) {
-		msg_warn (
+		msg_warn_config (
 			"handler for parameter %s is already registered for worker type %s",
 			name,
 			g_quark_to_string (type));
@@ -2388,18 +2388,18 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	struct ucl_parser *parser;
 
 	if (stat (filename, &st) == -1) {
-		msg_err ("cannot stat %s: %s", filename, strerror (errno));
+		msg_err_config ("cannot stat %s: %s", filename, strerror (errno));
 		return FALSE;
 	}
 	if ((fd = open (filename, O_RDONLY)) == -1) {
-		msg_err ("cannot open %s: %s", filename, strerror (errno));
+		msg_err_config ("cannot open %s: %s", filename, strerror (errno));
 		return FALSE;
 
 	}
 	/* Now mmap this file to simplify reading process */
 	if ((data =
 		mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
-		msg_err ("cannot mmap %s: %s", filename, strerror (errno));
+		msg_err_config ("cannot mmap %s: %s", filename, strerror (errno));
 		close (fd);
 		return FALSE;
 	}
@@ -2409,7 +2409,7 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	rspamd_ucl_add_conf_variables (parser, vars);
 	rspamd_ucl_add_conf_macros (parser, cfg);
 	if (!ucl_parser_add_chunk (parser, data, st.st_size)) {
-		msg_err ("ucl parser error: %s", ucl_parser_get_error (parser));
+		msg_err_config ("ucl parser error: %s", ucl_parser_get_error (parser));
 		ucl_parser_free (parser);
 		munmap (data, st.st_size);
 		return FALSE;
@@ -2431,7 +2431,7 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	}
 
 	if (!rspamd_rcl_parse (top, cfg, cfg->cfg_pool, cfg->rcl_obj, &err)) {
-		msg_err ("rcl parse error: %e", err);
+		msg_err_config ("rcl parse error: %e", err);
 		g_error_free (err);
 		return FALSE;
 	}

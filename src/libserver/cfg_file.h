@@ -308,12 +308,6 @@ const ucl_object_t * rspamd_config_get_module_opt (struct rspamd_config *cfg,
 	const gchar *module_name,
 	const gchar *opt_name);
 
-/**
- * Parse limit
- * @param limit string representation of limit (eg. 1M)
- * @return numeric value of limit
- */
-guint64 rspamd_config_parse_limit (const gchar *limit, guint len);
 
 /**
  * Parse flag
@@ -453,6 +447,23 @@ gboolean rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
  */
 gboolean rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 		const gchar *module_name);
+
+#define msg_err_config(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        cfg->cfg_pool->tag.tagname, cfg->cfg_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_config(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+        cfg->cfg_pool->tag.tagname, cfg->cfg_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_config(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        cfg->cfg_pool->tag.tagname, cfg->cfg_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_config(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        cfg->cfg_pool->tag.tagname, cfg->cfg_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
 
 #endif /* ifdef CFG_FILE_H */
 /*

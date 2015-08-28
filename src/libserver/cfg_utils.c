@@ -120,14 +120,14 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 			LL_PREPEND (cf->bind_conf, cnf);
 		}
 		else {
-			msg_err ("cannot parse bind line: %s", str);
+			msg_err_config ("cannot parse bind line: %s", str);
 			ret = FALSE;
 		}
 	}
 	else {
 		if (!rspamd_parse_host_port_priority_strv (tokens, &cnf->addrs,
 				NULL, &cnf->name, DEFAULT_BIND_PORT, cfg->cfg_pool)) {
-			msg_err ("cannot parse bind line: %s", str);
+			msg_err_config ("cannot parse bind line: %s", str);
 			ret = FALSE;
 		}
 		else {
@@ -213,43 +213,6 @@ rspamd_config_get_module_opt (struct rspamd_config *cfg,
 	return res;
 }
 
-guint64
-rspamd_config_parse_limit (const gchar *limit, guint len)
-{
-	guint64 result = 0;
-	const gchar *err_str;
-
-	if (!limit || *limit == '\0' || len == 0) {
-		return 0;
-	}
-
-	errno = 0;
-	result = strtoull (limit, (gchar **)&err_str, 10);
-
-	if (*err_str != '\0') {
-		/* Megabytes */
-		if (*err_str == 'm' || *err_str == 'M') {
-			result *= 1048576L;
-		}
-		/* Kilobytes */
-		else if (*err_str == 'k' || *err_str == 'K') {
-			result *= 1024;
-		}
-		/* Gigabytes */
-		else if (*err_str == 'g' || *err_str == 'G') {
-			result *= 1073741824L;
-		}
-		else if (len > 0 && err_str - limit != (gint)len) {
-			msg_warn ("invalid limit value '%s' at position '%s'",
-				limit,
-				err_str);
-			result = 0;
-		}
-	}
-
-	return result;
-}
-
 gchar
 rspamd_config_parse_flag (const gchar *str, guint len)
 {
@@ -313,12 +276,12 @@ rspamd_config_calculate_checksum (struct rspamd_config *cfg)
 
 	/* Compute checksum for config file that should be used by xml dumper */
 	if ((fd = open (cfg->cfg_name, O_RDONLY)) == -1) {
-		msg_err (
+		msg_err_config (
 			"config file %s is no longer available, cannot calculate checksum");
 		return FALSE;
 	}
 	if (stat (cfg->cfg_name, &st) == -1) {
-		msg_err ("cannot stat %s: %s", cfg->cfg_name, strerror (errno));
+		msg_err_config ("cannot stat %s: %s", cfg->cfg_name, strerror (errno));
 		close (fd);
 		return FALSE;
 	}
@@ -326,7 +289,7 @@ rspamd_config_calculate_checksum (struct rspamd_config *cfg)
 	/* Now mmap this file to simplify reading process */
 	if ((map =
 		mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
-		msg_err ("cannot mmap %s: %s", cfg->cfg_name, strerror (errno));
+		msg_err_config ("cannot mmap %s: %s", cfg->cfg_name, strerror (errno));
 		close (fd);
 		return FALSE;
 	}
@@ -388,13 +351,13 @@ rspamd_config_post_load (struct rspamd_config *cfg)
 				G_DIR_SEPARATOR, "effective_tld_names.dat");
 
 		if (access (fpath->str, R_OK)) {
-			msg_warn ("url_tld option is not specified but %s is available,"
+			msg_warn_config ("url_tld option is not specified but %s is available,"
 					" therefore this file is assumed as TLD file for URL"
 					" extraction", fpath->str);
 			cfg->tld_file = rspamd_mempool_strdup (cfg->cfg_pool, fpath->str);
 		}
 		else {
-			msg_err ("no url_tld option has been specified, URL's detection "
+			msg_err_config ("no url_tld option has been specified, URL's detection "
 					"will be awfully broken");
 		}
 
@@ -843,6 +806,7 @@ rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 	guint32 checksum;
 	ucl_object_iter_t it = NULL;
 	const ucl_object_t *cur;
+	struct rspamd_config *cfg = data->map->cfg;
 
 	if (prev != NULL) {
 		if (prev->buf != NULL) {
@@ -852,7 +816,7 @@ rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 	}
 
 	if (cbdata == NULL) {
-		msg_err ("map fin error: new data is NULL");
+		msg_err_config ("map fin error: new data is NULL");
 		return;
 	}
 
@@ -862,7 +826,7 @@ rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 		parser = ucl_parser_new (0);
 		if (!ucl_parser_add_chunk (parser, cbdata->buf->str,
 			cbdata->buf->len)) {
-			msg_err ("cannot parse map %s: %s",
+			msg_err_config ("cannot parse map %s: %s",
 				data->map->uri,
 				ucl_parser_get_error (parser));
 			ucl_parser_free (parser);
@@ -881,7 +845,7 @@ rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 		}
 	}
 	else {
-		msg_info ("do not reload map %s, checksum is the same: %d",
+		msg_info_config ("do not reload map %s, checksum is the same: %d",
 			data->map->uri,
 			checksum);
 	}
@@ -922,7 +886,7 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 
 			if (reconfig) {
 				(void)mod->module_reconfig_func (cfg);
-				msg_debug ("reconfig of %s", mod->name);
+				msg_debug_config ("reconfig of %s", mod->name);
 			}
 			else {
 				(void)mod->module_config_func (cfg);
@@ -930,7 +894,7 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 		}
 
 		if (mod_ctx == NULL) {
-			msg_warn ("requested unknown module %s", cur->data);
+			msg_warn_config ("requested unknown module %s", cur->data);
 		}
 
 		cur = g_list_next (cur);
@@ -942,7 +906,7 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 void
 rspamd_init_cfg (struct rspamd_config *cfg, gboolean init_lua)
 {
-	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "config");
+	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "cfg");
 	rspamd_config_defaults (cfg);
 
 	if (init_lua) {
@@ -974,13 +938,13 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 	metric = g_hash_table_lookup (cfg->metrics, metric_name);
 
 	if (metric == NULL) {
-		msg_err ("metric %s has not been found", metric_name);
+		msg_err_config ("metric %s has not been found", metric_name);
 		return FALSE;
 	}
 
 	if (g_hash_table_lookup (cfg->metrics_symbols, symbol) != NULL &&
 			!rewrite_existing) {
-		msg_debug ("symbol %s has been already registered, do not override");
+		msg_debug_config ("symbol %s has been already registered, do not override");
 		return FALSE;
 	}
 
@@ -998,7 +962,7 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 		sym_def->description = rspamd_mempool_strdup (cfg->cfg_pool, description);
 	}
 
-	msg_debug ("registered symbol %s with weight %.2f in metric %s and group %s",
+	msg_debug_config ("registered symbol %s with weight %.2f in metric %s and group %s",
 			sym_def->name, score, metric->name, group);
 
 	g_hash_table_insert (metric->symbols, sym_def->name, sym_def);
@@ -1066,7 +1030,7 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 		}
 
 		if (!found) {
-			msg_info ("internal module %s is disable in `filters` line",
+			msg_info_config ("internal module %s is disable in `filters` line",
 					module_name);
 
 			return FALSE;
@@ -1076,11 +1040,11 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 	conf = ucl_object_find_key (cfg->rcl_obj, module_name);
 
 	if (conf == NULL) {
-		msg_info ("%s module %s is enabled but has not been configured",
+		msg_info_config ("%s module %s is enabled but has not been configured",
 				is_c ? "internal" : "lua", module_name);
 
 		if (!is_c) {
-			msg_info ("%s disabling unconfigured lua module", module_name);
+			msg_info_config ("%s disabling unconfigured lua module", module_name);
 			return FALSE;
 		}
 	}
@@ -1089,7 +1053,7 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 
 		if (enabled && ucl_object_type (enabled) == UCL_BOOLEAN) {
 			if (!ucl_object_toboolean (enabled)) {
-				msg_info ("%s module %s is disabled in the configuration",
+				msg_info_config ("%s module %s is disabled in the configuration",
 						is_c ? "internal" : "lua", module_name);
 				return FALSE;
 			}
@@ -1101,7 +1065,7 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 
 	if (gr) {
 		if (gr->disabled) {
-			msg_info ("%s module %s is disabled in the configuration as "
+			msg_info_config ("%s module %s is disabled in the configuration as "
 					"its group has been disabled",
 					is_c ? "internal" : "lua", module_name);
 			return FALSE;
