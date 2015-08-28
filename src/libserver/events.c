@@ -33,6 +33,23 @@
 #define RSPAMD_SESSION_IS_WATCHING(s) ((s)->flags & RSPAMD_SESSION_FLAG_WATCHING)
 #define RSPAMD_SESSION_IS_DESTROYING(s) ((s)->flags & RSPAMD_SESSION_FLAG_DESTROYING)
 
+#define msg_err_session(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
+        session->pool->tag.tagname, session->pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_session(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+        session->pool->tag.tagname, session->pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_session(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        session->pool->tag.tagname, session->pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_session(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        session->pool->tag.tagname, session->pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
 struct rspamd_async_watcher {
 	event_watcher_t cb;
 	guint remain;
@@ -119,7 +136,7 @@ rspamd_session_add_event (struct rspamd_async_session *session,
 	struct rspamd_async_event *new;
 
 	if (session == NULL) {
-		msg_info ("session is NULL");
+		msg_info_session ("session is NULL");
 		return;
 	}
 
@@ -139,7 +156,7 @@ rspamd_session_add_event (struct rspamd_async_session *session,
 
 	g_hash_table_insert (session->events, new, new);
 
-	msg_debug ("added event: %p, pending %d events, subsystem: %s",
+	msg_debug_session ("added event: %p, pending %d events, subsystem: %s",
 		user_data,
 		g_hash_table_size (session->events),
 		g_quark_to_string (subsystem));
@@ -153,7 +170,7 @@ rspamd_session_remove_event (struct rspamd_async_session *session,
 	struct rspamd_async_event search_ev, *found_ev;
 
 	if (session == NULL) {
-		msg_info ("session is NULL");
+		msg_info_session ("session is NULL");
 		return;
 	}
 
@@ -163,7 +180,7 @@ rspamd_session_remove_event (struct rspamd_async_session *session,
 	found_ev = g_hash_table_lookup (session->events, &search_ev);
 	g_assert (found_ev != NULL);
 
-	msg_debug ("removed event: %p, subsystem: %s, pending %d events", ud,
+	msg_debug_session ("removed event: %p, subsystem: %s, pending %d events", ud,
 			g_quark_to_string (found_ev->subsystem),
 			g_hash_table_size (session->events));
 	/* Remove event */
@@ -205,7 +222,7 @@ gboolean
 rspamd_session_destroy (struct rspamd_async_session *session)
 {
 	if (session == NULL) {
-		msg_info ("session is NULL");
+		msg_info_session ("session is NULL");
 		return FALSE;
 	}
 

@@ -865,7 +865,7 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 			*url_found = TRUE;
 		}
 		else {
-			msg_info ("extract of url '%s' failed: %s",
+			msg_info_pool ("extract of url '%s' failed: %s",
 					url_str,
 					rspamd_url_strerror (rc));
 		}
@@ -901,7 +901,7 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 
 		if (tag->flags & FL_CLOSING) {
 			if (!*cur_level) {
-				msg_debug ("bad parent node");
+				msg_debug_pool ("bad parent node");
 				g_node_destroy (nnode);
 				return FALSE;
 			}
@@ -909,7 +909,7 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 			g_node_append (*cur_level, nnode);
 
 			if (!rspamd_html_check_balance (nnode, cur_level)) {
-				msg_debug (
+				msg_debug_pool (
 						"mark part as unbalanced as it has not pairable closing tags");
 				hc->flags |= RSPAMD_HTML_FLAG_UNBALANCED;
 				*balanced = FALSE;
@@ -1482,13 +1482,13 @@ rspamd_html_process_style (rspamd_mempool_t *pool, struct html_block *bl,
 					|| (klen == 10 && g_ascii_strncasecmp (key, "font-color", 10) == 0)) {
 
 						rspamd_html_process_color (c, p - c, &bl->font_color);
-						msg_debug ("got color: %xd", bl->font_color.d.val);
+						msg_debug_pool ("got color: %xd", bl->font_color.d.val);
 					}
 					if (klen == 16 && g_ascii_strncasecmp (key,
 							"background-color", 16) == 0) {
 
 						rspamd_html_process_color (c, p - c, &bl->background_color);
-						msg_debug ("got bgcolor: %xd", bl->background_color.d.val);
+						msg_debug_pool ("got bgcolor: %xd", bl->background_color.d.val);
 					}
 				}
 
@@ -1535,19 +1535,19 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 			fstr.begin = (gchar *)comp->start;
 			fstr.len = comp->len;
 			rspamd_html_process_color (comp->start, comp->len, &bl->font_color);
-			msg_debug ("got color: %xd", bl->font_color.d.val);
+			msg_debug_pool ("got color: %xd", bl->font_color.d.val);
 		}
 		else if (comp->type == RSPAMD_HTML_COMPONENT_STYLE && comp->len > 0) {
 			bl->style.len = comp->len;
 			bl->style.start =  comp->start;
-			msg_debug ("got style: %*s", (gint)bl->style.len, bl->style.start);
+			msg_debug_pool ("got style: %*s", (gint)bl->style.len, bl->style.start);
 			rspamd_html_process_style (pool, bl, hc, comp->start, comp->len);
 		}
 		else if (comp->type == RSPAMD_HTML_COMPONENT_CLASS && comp->len > 0) {
 			fstr.begin = (gchar *)comp->start;
 			fstr.len = comp->len;
 			bl->class = rspamd_mempool_fstrdup (pool, &fstr);
-			msg_debug ("got class: %s", bl->class);
+			msg_debug_pool ("got class: %s", bl->class);
 		}
 
 		cur = g_list_next (cur);

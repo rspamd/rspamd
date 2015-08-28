@@ -355,7 +355,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		case 'F':
 			if (g_ascii_strncasecmp (headern, FROM_HEADER, hlen) == 0) {
 				if (!rspamd_task_add_sender (task, hv->str)) {
-					msg_err ("bad from header: '%v'", hv);
+					msg_err_task ("bad from header: '%v'", hv);
 					validh = FALSE;
 				}
 			}
@@ -395,7 +395,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		case 'R':
 			if (g_ascii_strncasecmp (headern, RCPT_HEADER, hlen) == 0) {
 				if (!rspamd_task_add_recipient (task, hv->str)) {
-					msg_err ("bad from header: '%v'", h->value);
+					msg_err_task ("bad from header: '%v'", h->value);
 					validh = FALSE;
 				}
 				debug_task ("read rcpt header, value: %v", hv);
@@ -409,7 +409,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		case 'I':
 			if (g_ascii_strncasecmp (headern, IP_ADDR_HEADER, hlen) == 0) {
 				if (!rspamd_parse_inet_address (&task->from_addr, hv->str)) {
-					msg_err ("bad ip header: '%v'", hv);
+					msg_err_task ("bad ip header: '%v'", hv);
 					return FALSE;
 				}
 				debug_task ("read IP header, value: %v", hv);
@@ -482,7 +482,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				task->message_len = strtoul (hv->str, NULL, 10);
 
 				if (task->message_len == 0) {
-					msg_err ("Invalid message length header: %v", hv);
+					msg_err_task ("Invalid message length header: %v", hv);
 					validh = FALSE;
 				}
 				else {
@@ -505,7 +505,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 	}
 
 	if (!res && task->cfg->strict_protocol_headers) {
-		msg_err (
+		msg_err_task (
 			"deny processing of a request with incorrect or unknown headers");
 		g_set_error (&task->err, rspamd_protocol_quark(), 400, "invalid header command");
 		return FALSE;
@@ -620,7 +620,7 @@ rspamd_protocol_handle_control (struct rspamd_task *task,
 
 	if (!rspamd_rcl_parse (control_parser, task, task->task_pool,
 			control, &err)) {
-		msg_warn ("cannot parse control block: %e", err);
+		msg_warn_task ("cannot parse control block: %e", err);
 		g_error_free (err);
 
 		return FALSE;
@@ -684,8 +684,9 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 	struct tree_cb_data *cb = ud;
 	struct rspamd_url *url = value;
 	ucl_object_t *obj, *elt;
+	struct rspamd_task *task = cb->task;
 
-	if (!(cb->task->flags & RSPAMD_TASK_FLAG_EXT_URLS)) {
+	if (!(task->flags & RSPAMD_TASK_FLAG_EXT_URLS)) {
 		obj = ucl_object_fromlstring (url->host, url->hostlen);
 	}
 	else {
@@ -710,11 +711,11 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 	ucl_array_append (cb->top, obj);
 
 	if (cb->task->cfg->log_urls) {
-		msg_info ("<%s> URL: %s - %s: %s",
-			cb->task->message_id,
-			cb->task->user ?
-			cb->task->user : "unknown",
-			rspamd_inet_address_to_string (cb->task->from_addr),
+		msg_info_task ("<%s> URL: %s - %s: %s",
+			task->message_id,
+			task->user ?
+			task->user : "unknown",
+			rspamd_inet_address_to_string (task->from_addr),
 			struri (url));
 	}
 }
@@ -1104,7 +1105,7 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	}
 
 	if (!(task->flags & RSPAMD_TASK_FLAG_NO_LOG)) {
-		msg_info ("%v", logbuf);
+		msg_info_task ("%v", logbuf);
 	}
 	g_string_free (logbuf, TRUE);
 
@@ -1146,7 +1147,7 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 
 	if (rspamd_http_connection_is_encrypted (task->http_conn)) {
-		msg_info ("<%s> writing encrypted reply", task->message_id);
+		msg_info_task ("<%s> writing encrypted reply", task->message_id);
 	}
 
 	if (!RSPAMD_TASK_IS_JSON (task)) {
@@ -1191,7 +1192,7 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 			ctype = "text/plain";
 			break;
 		case CMD_OTHER:
-			msg_err ("BROKEN");
+			msg_err_task ("BROKEN");
 			break;
 		}
 	}
