@@ -322,7 +322,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 		task->msg.len = len;
 
 		if (task->msg.len == 0) {
-			msg_warn ("message has invalid message length: %ud",
+			msg_warn_task ("message has invalid message length: %ud",
 					task->msg.len);
 			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
 					"Invalid length");
@@ -332,7 +332,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 		if (task->flags & RSPAMD_TASK_FLAG_HAS_CONTROL) {
 			/* We have control chunk, so we need to process it separately */
 			if (task->msg.len < task->message_len) {
-				msg_warn ("message has invalid message length: %ud and total len: %ud",
+				msg_warn_task ("message has invalid message length: %ud and total len: %ud",
 						task->message_len, task->msg.len);
 				g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
 						"Invalid length");
@@ -344,7 +344,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 				parser = ucl_parser_new (UCL_PARSER_KEY_LOWERCASE);
 
 				if (!ucl_parser_add_chunk (parser, task->msg.start, control_len)) {
-					msg_warn ("processing of control chunk failed: %s",
+					msg_warn_task ("processing of control chunk failed: %s",
 							ucl_parser_get_error (parser));
 					ucl_parser_free (parser);
 				}
@@ -443,7 +443,7 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 	case RSPAMD_TASK_STAGE_CLASSIFIERS:
 		if (rspamd_stat_classify (task, task->cfg->lua_state, &stat_error) ==
 				RSPAMD_STAT_PROCESS_ERROR) {
-			msg_err ("classify error: %e", stat_error);
+			msg_err_task ("classify error: %e", stat_error);
 			g_error_free (stat_error);
 		}
 		break;
