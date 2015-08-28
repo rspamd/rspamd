@@ -168,7 +168,7 @@ local ip_score_set = function(task)
   local asn_score,total_asn,
         country_score,total_country,
         ipnet_score,total_ipnet,
-        ip_score, total_ip = pool:get_variable('ip_score', 
+        ip_score, total_ip = pool:get_variable('ip_score',
         'double,double,double,double,double,double,double,double')
 
   local score_mult = 0
@@ -182,23 +182,21 @@ local ip_score_set = function(task)
 
   score = score_mult * rspamd_util.tanh (2.718 * score)
 
-  if score ~= 0 then
-    local hkey = ip_score_hash_key(asn, country, ipnet, ip)
-    local upstream = upstreams:get_upstream_by_hash(hkey)
-    local addr = upstream:get_addr()
-    
-    asn_score,total_asn = new_score_set(score, asn_score, total_asn)
-    country_score,total_country = new_score_set(score, country_score, total_country)
-    ipnet_score,total_ipnet = new_score_set(score, ipnet_score, total_ipnet)
-    ip_score,total_ip = new_score_set(score, ip_score, total_ip)
-    
-    rspamd_redis.make_request(task, addr, score_set_cb, 
-      'HMSET', {options['hash'], 
-      options['asn_prefix'] .. asn, string.format('%f|%d', asn_score, total_asn),
-      options['country_prefix'] .. country, string.format('%f|%d', country_score, total_country),
-      options['ipnet_prefix'] .. ipnet, string.format('%f|%d', ipnet_score, total_ipnet),
-      ip:to_string(), string.format('%f|%d', ip_score, total_ip)})
-  end
+  local hkey = ip_score_hash_key(asn, country, ipnet, ip)
+  local upstream = upstreams:get_upstream_by_hash(hkey)
+  local addr = upstream:get_addr()
+
+  asn_score,total_asn = new_score_set(score, asn_score, total_asn)
+  country_score,total_country = new_score_set(score, country_score, total_country)
+  ipnet_score,total_ipnet = new_score_set(score, ipnet_score, total_ipnet)
+  ip_score,total_ip = new_score_set(score, ip_score, total_ip)
+
+  rspamd_redis.make_request(task, addr, score_set_cb,
+    'HMSET', {options['hash'],
+    options['asn_prefix'] .. asn, string.format('%f|%d', asn_score, total_asn),
+    options['country_prefix'] .. country, string.format('%f|%d', country_score, total_country),
+    options['ipnet_prefix'] .. ipnet, string.format('%f|%d', ipnet_score, total_ipnet),
+    ip:to_string(), string.format('%f|%d', ip_score, total_ip)})
 end
 
 -- Check score for ip in keystorage
