@@ -30,6 +30,23 @@
 #include "cfg_file.h"
 #include "lua/lua_common.h"
 
+#define msg_err_cache(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        cache->static_pool->tag.tagname, cache->static_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_cache(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+        cache->static_pool->tag.tagname, cache->static_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_cache(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        cache->static_pool->tag.tagname, cache->static_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_cache(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        cache->static_pool->tag.tagname, cache->static_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
 static const guchar rspamd_symbols_cache_magic[8] = {'r', 's', 'c', 1, 0, 0, 0, 0 };
 
 struct rspamd_symbols_cache_header {
@@ -152,14 +169,14 @@ cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 		t2 = i2->avg_time;
 		w1 = SCORE_FUN (weight1, f1, t1);
 		w2 = SCORE_FUN (weight2, f2, t2);
-		msg_debug ("%s -> %.2f, %s -> %.2f", i1->symbol, w1 * 1000.0,
+		msg_debug_cache ("%s -> %.2f, %s -> %.2f", i1->symbol, w1 * 1000.0,
 				i2->symbol, w2 * 1000.0);
 	}
 	else {
 		/* Strict sorting */
 		w1 = abs (i1->priority);
 		w2 = abs (i2->priority);
-		msg_debug ("priority: %s -> %.2f, %s -> %.2f", i1->symbol, w1 * 1000.0,
+		msg_debug_cache ("priority: %s -> %.2f, %s -> %.2f", i1->symbol, w1 * 1000.0,
 				i2->symbol, w2 * 1000.0);
 	}
 
@@ -211,7 +228,7 @@ post_cache_init (struct symbols_cache *cache)
 		it = g_hash_table_lookup (cache->items_by_symbol, ddep->from);
 
 		if (it == NULL) {
-			msg_err ("cannot register delayed dependency between %s and %s, "
+			msg_err_cache ("cannot register delayed dependency between %s and %s, "
 					"%s is missing", ddep->from, ddep->to, ddep->from);
 		}
 		else {
@@ -241,10 +258,10 @@ post_cache_init (struct symbols_cache *cache)
 				dep->item = dit;
 				dep->id = dit->id;
 
-				msg_debug ("add dependency from %d on %d", it->id, dit->id);
+				msg_debug_cache ("add dependency from %d on %d", it->id, dit->id);
 			}
 			else {
-				msg_err ("cannot find dependency on symbol %s", dep->sym);
+				msg_err_cache ("cannot find dependency on symbol %s", dep->sym);
 			}
 		}
 	}
@@ -267,14 +284,14 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 	fd = open (name, O_RDONLY);
 
 	if (fd == -1) {
-		msg_info ("cannot open file %s, error %d, %s", name,
+		msg_info_cache ("cannot open file %s, error %d, %s", name,
 			errno, strerror (errno));
 		return FALSE;
 	}
 
 	if (fstat (fd, &st) == -1) {
 		close (fd);
-		msg_info ("cannot stat file %s, error %d, %s", name,
+		msg_info_cache ("cannot stat file %s, error %d, %s", name,
 				errno, strerror (errno));
 		return FALSE;
 	}
@@ -282,7 +299,7 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 	if (st.st_size < (gint)sizeof (*hdr)) {
 		close (fd);
 		errno = EINVAL;
-		msg_info ("cannot use file %s, error %d, %s", name,
+		msg_info_cache ("cannot use file %s, error %d, %s", name,
 				errno, strerror (errno));
 		return FALSE;
 	}
@@ -291,7 +308,7 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 
 	if (map == MAP_FAILED) {
 		close (fd);
-		msg_info ("cannot mmap file %s, error %d, %s", name,
+		msg_info_cache ("cannot mmap file %s, error %d, %s", name,
 				errno, strerror (errno));
 		return FALSE;
 	}
@@ -301,7 +318,7 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 
 	if (memcmp (hdr->magic, rspamd_symbols_cache_magic,
 			sizeof (rspamd_symbols_cache_magic)) != 0) {
-		msg_info ("cannot use file %s, bad magic", name);
+		msg_info_cache ("cannot use file %s, bad magic", name);
 		munmap (map, st.st_size);
 		return FALSE;
 	}
@@ -310,7 +327,7 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 	p = (const guchar *)(hdr + 1);
 
 	if (!ucl_parser_add_chunk (parser, p, st.st_size - sizeof (*hdr))) {
-		msg_info ("cannot use file %s, cannot parse: %s", name,
+		msg_info_cache ("cannot use file %s, cannot parse: %s", name,
 				ucl_parser_get_error (parser));
 		munmap (map, st.st_size);
 		ucl_parser_free (parser);
@@ -322,7 +339,7 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 	ucl_parser_free (parser);
 
 	if (top == NULL || ucl_object_type (top) != UCL_OBJECT) {
-		msg_info ("cannot use file %s, bad object", name);
+		msg_info_cache ("cannot use file %s, bad object", name);
 		ucl_object_unref (top);
 		return FALSE;
 	}
@@ -408,7 +425,7 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 	fd = open (name, O_CREAT | O_TRUNC | O_WRONLY, 00644);
 
 	if (fd == -1) {
-		msg_info ("cannot open file %s, error %d, %s", name,
+		msg_info_cache ("cannot open file %s, error %d, %s", name,
 				errno, strerror (errno));
 		return FALSE;
 	}
@@ -418,7 +435,7 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 			sizeof (rspamd_symbols_cache_magic));
 
 	if (write (fd, &hdr, sizeof (hdr)) == -1) {
-		msg_info ("cannot write to file %s, error %d, %s", name,
+		msg_info_cache ("cannot write to file %s, error %d, %s", name,
 				errno, strerror (errno));
 		close (fd);
 
@@ -465,16 +482,16 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	g_assert (cache != NULL);
 
 	if (name == NULL && type != SYMBOL_TYPE_CALLBACK) {
-		msg_warn ("no name for non-callback symbol!");
+		msg_warn_cache ("no name for non-callback symbol!");
 	}
 	else if (type == SYMBOL_TYPE_VIRTUAL && parent == -1) {
-		msg_warn ("no parent symbol is associated with virtual symbol %s",
+		msg_warn_cache ("no parent symbol is associated with virtual symbol %s",
 			name);
 	}
 
 	if (name != NULL && type != SYMBOL_TYPE_CALLBACK) {
 		if (g_hash_table_lookup (cache->items_by_symbol, name) != NULL) {
-			msg_err ("skip duplicate symbol registration for %s", name);
+			msg_err_cache ("skip duplicate symbol registration for %s", name);
 			return -1;
 		}
 	}
@@ -506,7 +523,7 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	item->id = cache->used_items;
 	item->parent = parent;
 	cache->used_items ++;
-	msg_debug ("used items: %d, added symbol: %s", cache->used_items, name);
+	msg_debug_cache ("used items: %d, added symbol: %s", cache->used_items, name);
 	rspamd_set_counter (item, 0);
 	g_ptr_array_add (cache->items_by_id, item);
 	g_ptr_array_add (cache->items_by_order, item);
@@ -539,7 +556,7 @@ rspamd_symbols_cache_add_condition (struct symbols_cache *cache, gint id, lua_St
 
 	if (item->condition_cb != -1) {
 		/* We already have a condition, so we need to remove old cbref first */
-		msg_warn ("rewriting condition for symbol %s", item->symbol);
+		msg_warn_cache ("rewriting condition for symbol %s", item->symbol);
 		luaL_unref (L, LUA_REGISTRYINDEX, item->condition_cb);
 	}
 
@@ -560,7 +577,7 @@ rspamd_symbols_cache_destroy (struct symbols_cache *cache)
 			/* Try to sync values to the disk */
 			if (!rspamd_symbols_cache_save_items (cache,
 					cache->cfg->cache_filename)) {
-				msg_err ("cannot save cache data to %s",
+				msg_err_cache ("cannot save cache data to %s",
 						cache->cfg->cache_filename);
 			}
 		}
@@ -594,7 +611,7 @@ rspamd_symbols_cache_new (void)
 
 	cache = g_slice_alloc0 (sizeof (struct symbols_cache));
 	cache->static_pool =
-			rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
+			rspamd_mempool_new (rspamd_mempool_suggest_size (), "symcache");
 	cache->items_by_symbol = g_hash_table_new (rspamd_str_hash,
 			rspamd_str_equal);
 	cache->items_by_order = g_ptr_array_new ();
@@ -666,7 +683,7 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 				g_hash_table_insert (cache->cfg->metrics_symbols,
 						item->symbol, mlist);
 
-				msg_info ("adding unknown symbol %s to metric %s", item->symbol,
+				msg_info_cache ("adding unknown symbol %s to metric %s", item->symbol,
 						m->name);
 			}
 
@@ -679,12 +696,12 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 
 	if (skipped) {
 		item->type |= SYMBOL_TYPE_SKIPPED;
-		msg_warn ("symbol %s is not registered in any metric, so skip its check",
+		msg_warn_cache ("symbol %s is not registered in any metric, so skip its check",
 				item->symbol);
 	}
 
 	if (ghost) {
-		msg_debug ("symbol %s is registered as ghost symbol, it won't be inserted "
+		msg_debug_cache ("symbol %s is registered as ghost symbol, it won't be inserted "
 				"to any metric", item->symbol);
 	}
 
@@ -740,7 +757,7 @@ rspamd_symbols_cache_validate (struct symbols_cache *cache,
 	GList *cur, *metric_symbols;
 
 	if (cache == NULL) {
-		msg_err ("empty cache is invalid");
+		msg_err_cache ("empty cache is invalid");
 		return FALSE;
 	}
 
@@ -761,7 +778,7 @@ rspamd_symbols_cache_validate (struct symbols_cache *cache,
 		item = g_hash_table_lookup (cache->items_by_symbol, cur->data);
 
 		if (item == NULL) {
-			msg_warn (
+			msg_warn_cache (
 				"symbol '%s' has its score defined but there is no "
 				"corresponding rule registered",
 				cur->data);
@@ -885,7 +902,7 @@ rspamd_symbols_cache_watcher_cb (gpointer sessiond, gpointer ud)
 		}
 	}
 
-	msg_debug ("finished watcher, %ud symbols waiting", remain);
+	msg_debug_task ("finished watcher, %ud symbols waiting", remain);
 }
 
 static gboolean
@@ -916,7 +933,7 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 			*ptask = task;
 
 			if (lua_pcall (L, 1, 1, 0) != 0) {
-				msg_info ("call to condition for %s failed: %s",
+				msg_info_task ("call to condition for %s failed: %s",
 						item->symbol, lua_tostring (L, -1));
 			}
 			else {
@@ -950,7 +967,7 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 			return FALSE;
 		}
 		else {
-			msg_debug ("skipping check of %s as its condition is false",
+			msg_debug_task ("skipping check of %s as its condition is false",
 					item->symbol);
 			setbit (checkpoint->processed_bits, item->id * 2 + 1);
 
@@ -998,11 +1015,13 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 							checkpoint)) {
 						/* Now started, but has events pending */
 						ret = FALSE;
-						msg_debug ("started check of %d symbol as dep for %d",
+						msg_debug_task ("started check of %d symbol as dep for "
+										"%d",
 								dep->id, item->id);
 					}
 					else {
-						msg_debug ("dependency %d for symbol %d is already processed",
+						msg_debug_task ("dependency %d for symbol %d is "
+								"already processed",
 								dep->id, item->id);
 					}
 				}
@@ -1012,7 +1031,8 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 				}
 			}
 			else {
-				msg_debug ("dependency %d for symbol %d is already checked",
+				msg_debug_task ("dependency %d for symbol %d is already "
+						"checked",
 						dep->id, item->id);
 			}
 		}
@@ -1047,7 +1067,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 
 			wl = ucl_object_find_key (task->settings, "whitelist");
 			if (wl != NULL) {
-				msg_info ("<%s> is whitelisted", task->message_id);
+				msg_info_task ("<%s> is whitelisted", task->message_id);
 				task->flags |= RSPAMD_TASK_FLAG_SKIP;
 				return TRUE;
 			}
@@ -1057,7 +1077,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		checkpoint = task->checkpoint;
 	}
 
-	msg_debug ("symbols processing stage at pass: %d", checkpoint->pass);
+	msg_debug_task ("symbols processing stage at pass: %d", checkpoint->pass);
 
 	if (checkpoint->pass == 0) {
 
@@ -1068,7 +1088,8 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		 */
 		for (i = 0; i < (gint)cache->used_items; i ++) {
 			if (rspamd_symbols_cache_metric_limit (task, checkpoint)) {
-				msg_info ("<%s> has already scored more than %.2f, so do not "
+				msg_info_task ("<%s> has already scored more than %.2f, so do "
+								"not "
 						"plan any more checks", task->message_id,
 						checkpoint->rs->score);
 				return TRUE;
@@ -1078,7 +1099,8 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 			if (!isset (checkpoint->processed_bits, item->id * 2)) {
 				if (!rspamd_symbols_cache_check_deps (task, cache, item,
 						checkpoint)) {
-					msg_debug ("blocked execution of %d unless deps are resolved",
+					msg_debug_task ("blocked execution of %d unless deps are "
+									"resolved",
 							item->id);
 					g_ptr_array_add (checkpoint->waitq, item);
 					continue;
@@ -1178,7 +1200,7 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 
 	/* Plan new event */
 	tm = rspamd_time_jitter (cache->reload_time, 0);
-	msg_info ("resort symbols cache, next reload in %.2f seconds", tm);
+	msg_info_cache ("resort symbols cache, next reload in %.2f seconds", tm);
 	g_assert (cache != NULL);
 	evtimer_set (&cache->resort_ev, rspamd_symbols_cache_resort_cb, cache);
 	double_to_tv (tm, &tv);
