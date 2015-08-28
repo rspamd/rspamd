@@ -576,7 +576,7 @@ file_log_function (const gchar *log_domain,
 		gboolean forced,
 		gpointer arg)
 {
-	static gchar tmpbuf[256], timebuf[32], modulebuf[64];
+	gchar tmpbuf[256], timebuf[32], modulebuf[64];
 	gchar *m;
 	time_t now;
 	struct tm *tms;
