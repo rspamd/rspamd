@@ -21,6 +21,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <blake2.h>
 #include "cfg_rcl.h"
 #include "main.h"
 #include "uthash_strcase.h"
@@ -2386,6 +2387,7 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	GError *err = NULL;
 	struct rspamd_rcl_section *top, *logger;
 	struct ucl_parser *parser;
+	unsigned char cksumbuf[BLAKE2B_OUTBYTES];
 
 	if (stat (filename, &st) == -1) {
 		msg_err_config ("cannot stat %s: %s", filename, strerror (errno));
@@ -2405,15 +2407,20 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	}
 	close (fd);
 
+	blake2b (cksumbuf, data, NULL, sizeof (cksumbuf), st.st_size, 0);
+	cfg->checksum = rspamd_encode_base32 (cksumbuf, sizeof (cksumbuf));
+
 	parser = ucl_parser_new (0);
 	rspamd_ucl_add_conf_variables (parser, vars);
 	rspamd_ucl_add_conf_macros (parser, cfg);
+
 	if (!ucl_parser_add_chunk (parser, data, st.st_size)) {
 		msg_err_config ("ucl parser error: %s", ucl_parser_get_error (parser));
 		ucl_parser_free (parser);
 		munmap (data, st.st_size);
 		return FALSE;
 	}
+
 	munmap (data, st.st_size);
 	cfg->rcl_obj = ucl_parser_get_object (parser);
 	ucl_parser_free (parser);

@@ -31,19 +31,19 @@
 #include "lua/lua_common.h"
 
 #define msg_err_cache(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
-        cache->static_pool->tag.tagname, cache->static_pool->tag.uid, \
+        cache->static_pool->tag.tagname, cache->cfg->checksum, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_warn_cache(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
-        cache->static_pool->tag.tagname, cache->static_pool->tag.uid, \
+        cache->static_pool->tag.tagname, cache->cfg->checksum, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_info_cache(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
-        cache->static_pool->tag.tagname, cache->static_pool->tag.uid, \
+        cache->static_pool->tag.tagname, cache->cfg->checksum, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_debug_cache(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        cache->static_pool->tag.tagname, cache->static_pool->tag.uid, \
+        cache->static_pool->tag.tagname, cache->cfg->checksum, \
         G_STRFUNC, \
         __VA_ARGS__)
 
@@ -605,7 +605,7 @@ rspamd_symbols_cache_destroy (struct symbols_cache *cache)
 }
 
 struct symbols_cache*
-rspamd_symbols_cache_new (void)
+rspamd_symbols_cache_new (struct rspamd_config *cfg)
 {
 	struct symbols_cache *cache;
 
@@ -620,27 +620,27 @@ rspamd_symbols_cache_new (void)
 	cache->reload_time = CACHE_RELOAD_TIME;
 	cache->total_freq = 1;
 	cache->max_weight = 1.0;
+	cache->cfg = cfg;
 
 	return cache;
 }
 
 gboolean
-rspamd_symbols_cache_init (struct symbols_cache* cache,
-		struct rspamd_config *cfg)
+rspamd_symbols_cache_init (struct symbols_cache* cache)
 {
 	gboolean res;
 
 	g_assert (cache != NULL);
-	cache->cfg = cfg;
+
 
 	/* Just in-memory cache */
-	if (cfg->cache_filename == NULL) {
+	if (cache->cfg->cache_filename == NULL) {
 		post_cache_init (cache);
 		return TRUE;
 	}
 
 	/* Copy saved cache entries */
-	res = rspamd_symbols_cache_load_items (cache, cfg->cache_filename);
+	res = rspamd_symbols_cache_load_items (cache, cache->cfg->cache_filename);
 
 	return res;
 }

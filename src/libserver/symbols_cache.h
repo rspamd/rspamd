@@ -50,7 +50,7 @@ enum rspamd_symbol_type {
  * Creates new cache structure
  * @return
  */
-struct symbols_cache* rspamd_symbols_cache_new (void);
+struct symbols_cache* rspamd_symbols_cache_new (struct rspamd_config *cfg);
 
 /**
  * Remove the cache structure syncing data if needed
@@ -61,8 +61,7 @@ void rspamd_symbols_cache_destroy (struct symbols_cache *cache);
 /**
  * Load symbols cache from file, must be called _after_ init_symbols_cache
  */
-gboolean rspamd_symbols_cache_init (struct symbols_cache* cache,
-	struct rspamd_config *cfg);
+gboolean rspamd_symbols_cache_init (struct symbols_cache* cache);
 
 /**
  * Generic function to register a symbol

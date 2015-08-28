@@ -392,7 +392,7 @@ reread_config (struct rspamd_main *rspamd)
 	rspamd_init_cfg (tmp_cfg, TRUE);
 	cfg_file = rspamd_mempool_strdup (tmp_cfg->cfg_pool,
 			rspamd->cfg->cfg_name);
-	tmp_cfg->cache = rspamd_symbols_cache_new ();
+	tmp_cfg->cache = rspamd_symbols_cache_new (tmp_cfg);
 	/* Save some variables */
 	tmp_cfg->cfg_name = cfg_file;
 
@@ -416,7 +416,7 @@ reread_config (struct rspamd_main *rspamd)
 		}
 
 		rspamd_init_filters (rspamd->cfg, TRUE);
-		rspamd_symbols_cache_init (rspamd->cfg->cache, rspamd->cfg);
+		rspamd_symbols_cache_init (rspamd->cfg->cache);
 		msg_info_main ("config has been reread successfully");
 	}
 }
@@ -790,7 +790,7 @@ reopen_log_handler (gpointer key, gpointer value, gpointer unused)
 static gboolean
 load_rspamd_config (struct rspamd_config *cfg, gboolean init_modules)
 {
-	cfg->cache = rspamd_symbols_cache_new ();
+	cfg->cache = rspamd_symbols_cache_new (cfg);
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;
 
@@ -1179,7 +1179,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 		res = TRUE;
 
-		rspamd_symbols_cache_init (rspamd_main->cfg->cache, rspamd_main->cfg);
+		rspamd_symbols_cache_init (rspamd_main->cfg->cache);
 
 		if (!rspamd_init_filters (rspamd_main->cfg, FALSE)) {
 			res = FALSE;
@@ -1247,7 +1247,7 @@ main (gint argc, gchar **argv, gchar **env)
 	setproctitle ("main process");
 
 	/* Init config cache */
-	rspamd_symbols_cache_init (rspamd_main->cfg->cache, rspamd_main->cfg);
+	rspamd_symbols_cache_init (rspamd_main->cfg->cache);
 
 	/* Validate cache */
 	(void)rspamd_symbols_cache_validate (rspamd_main->cfg->cache, rspamd_main->cfg, FALSE);

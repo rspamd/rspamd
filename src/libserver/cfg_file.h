@@ -449,19 +449,19 @@ gboolean rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 		const gchar *module_name);
 
 #define msg_err_config(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
-        cfg->cfg_pool->tag.tagname, cfg->cfg_pool->tag.uid, \
+        cfg->cfg_pool->tag.tagname, cfg->checksum, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_warn_config(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
-        cfg->cfg_pool->tag.tagname, cfg->cfg_pool->tag.uid, \
+        cfg->cfg_pool->tag.tagname, cfg->checksum, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_info_config(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
-        cfg->cfg_pool->tag.tagname, cfg->cfg_pool->tag.uid, \
+        cfg->cfg_pool->tag.tagname, cfg->checksum, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_debug_config(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        cfg->cfg_pool->tag.tagname, cfg->cfg_pool->tag.uid, \
+        cfg->cfg_pool->tag.tagname, cfg->checksum, \
         G_STRFUNC, \
         __VA_ARGS__)
 
