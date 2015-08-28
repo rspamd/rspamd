@@ -24,8 +24,6 @@
 This document describes the main features and principles of the configuration
 language called `UCL` - universal configuration language.
 
-If you are looking for the libucl API documentation you can find it at [this page](doc/api.md).
-
 ## Basic structure {#basic-structure}
 
 UCL is heavily infused by `nginx` configuration as the example of a convenient configuration
@@ -315,13 +313,11 @@ to change in future libucl releases.
 
 UCL can handle multiline strings as well as single line ones. It uses shell/perl like notation for such objects:
 
-```
-key = <<EOD
-some text
-splitted to
-lines
-EOD
-``
+    key = <<EOD
+    some text
+    splitted to
+    lines
+    EOD
 
 In this example `key` will be interpreted as the following string: `some text\nsplitted to\nlines`.
 Here are some rules for this syntax:
@@ -331,14 +327,14 @@ Here are some rules for this syntax:
 * To finish multiline string you need to include a terminator string just after newline and followed by a newline (no spaces or other characters are allowed as well);
 * The initial and the final newlines are not inserted to the resulting string, but you can still specify newlines at the begin and at the end of a value, for example:
 
-```
-key <<EOD
 
-some
-text
+    key <<EOD
+    
+    some
+    text
+    
+    EOD
 
-EOD
-```
 
 ## Emitter {#emitter}
 
@@ -360,27 +356,25 @@ I got a 19Mb file that consist of ~700 thousands lines of json (obtained via
 http://www.json-generator.com/). Then I checked jansson library that performs json
 parsing and emitting and compared it with UCL. Here are results:
 
-```
-jansson: parsed json in 1.3899 seconds
-jansson: emitted object in 0.2609 seconds
-
-ucl: parsed input in 0.6649 seconds
-ucl: emitted config in 0.2423 seconds
-ucl: emitted json in 0.2329 seconds
-ucl: emitted compact json in 0.1811 seconds
-ucl: emitted yaml in 0.2489 seconds
-```
+    jansson: parsed json in 1.3899 seconds
+    jansson: emitted object in 0.2609 seconds
+    
+    ucl: parsed input in 0.6649 seconds
+    ucl: emitted config in 0.2423 seconds
+    ucl: emitted json in 0.2329 seconds
+    ucl: emitted compact json in 0.1811 seconds
+    ucl: emitted yaml in 0.2489 seconds
 
 So far, UCL seems to be significantly faster than jansson on parsing and slightly faster on emitting. Moreover,
 UCL compiled with optimizations (-O3) performs faster:
 
-```
-ucl: parsed input in 0.3002 seconds
-ucl: emitted config in 0.1174 seconds
-ucl: emitted json in 0.1174 seconds
-ucl: emitted compact json in 0.0991 seconds
-ucl: emitted yaml in 0.1354 seconds
-```
+
+    ucl: parsed input in 0.3002 seconds
+    ucl: emitted config in 0.1174 seconds
+    ucl: emitted json in 0.1174 seconds
+    ucl: emitted compact json in 0.0991 seconds
+    ucl: emitted yaml in 0.1354 seconds
+
 
 You can do your own benchmarks by running `make check` in libucl top directory.
 
