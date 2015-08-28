@@ -231,7 +231,7 @@ rspamd_mempool_new (gsize size, const gchar *tag)
 	ottery_rand_bytes (uidbuf, sizeof (uidbuf));
 	for (i = 0; i < G_N_ELEMENTS (uidbuf); i ++) {
 		new->tag.uid[i * 2] = hexdigits[(uidbuf[i] >> 4) & 0xf];
-		new->tag.uid[i * 2 + 2] = hexdigits[uidbuf[i] & 0xf];
+		new->tag.uid[i * 2 + 1] = hexdigits[uidbuf[i] & 0xf];
 	}
 	new->tag.uid[19] = '\0';
 
