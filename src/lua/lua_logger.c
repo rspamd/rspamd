@@ -61,7 +61,8 @@ print(str)
 -- Output: a=string, b=1.50000, c=1, d={[1] = aa, [2] = 1, [3] = bb} e={[key]=value, [key2]=1.0}
  */
 
-static gsize lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf, gsize len);
+static gsize lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf,
+		gsize len);
 
 /* Logger methods */
 /***
@@ -126,17 +127,17 @@ LUA_FUNCTION_DEF (logger, debugx);
 LUA_FUNCTION_DEF (logger, slog);
 
 static const struct luaL_reg loggerlib_f[] = {
-	LUA_INTERFACE_DEF (logger, err),
-	LUA_INTERFACE_DEF (logger, warn),
-	LUA_INTERFACE_DEF (logger, info),
-	LUA_INTERFACE_DEF (logger, debug),
-	LUA_INTERFACE_DEF (logger, errx),
-	LUA_INTERFACE_DEF (logger, warnx),
-	LUA_INTERFACE_DEF (logger, infox),
-	LUA_INTERFACE_DEF (logger, debugx),
-	LUA_INTERFACE_DEF (logger, slog),
-	{"__tostring", rspamd_lua_class_tostring},
-	{NULL, NULL}
+		LUA_INTERFACE_DEF (logger, err),
+		LUA_INTERFACE_DEF (logger, warn),
+		LUA_INTERFACE_DEF (logger, info),
+		LUA_INTERFACE_DEF (logger, debug),
+		LUA_INTERFACE_DEF (logger, errx),
+		LUA_INTERFACE_DEF (logger, warnx),
+		LUA_INTERFACE_DEF (logger, infox),
+		LUA_INTERFACE_DEF (logger, debugx),
+		LUA_INTERFACE_DEF (logger, slog),
+		{"__tostring", rspamd_lua_class_tostring},
+		{NULL, NULL}
 };
 
 static void
@@ -146,7 +147,7 @@ lua_common_log_line (GLogLevelFlags level, lua_State *L, const gchar *msg)
 	gchar func_buf[128], *p;
 
 	if (lua_getstack (L, 1, &d) == 1) {
-		(void)lua_getinfo (L, "Sl", &d);
+		(void) lua_getinfo (L, "Sl", &d);
 		if ((p = strrchr (d.short_src, '/')) == NULL) {
 			p = d.short_src;
 		}
@@ -154,43 +155,51 @@ lua_common_log_line (GLogLevelFlags level, lua_State *L, const gchar *msg)
 			p++;
 		}
 		rspamd_snprintf (func_buf, sizeof (func_buf), "%s:%d", p,
-			d.currentline);
+				d.currentline);
 		if (level == G_LOG_LEVEL_DEBUG) {
 			rspamd_conditional_debug (NULL,
-				NULL,
-				func_buf,
-				"%s",
-				msg);
+					NULL,
+					"lua",
+					NULL,
+					func_buf,
+					"%s",
+					msg);
 		}
 		else {
 			rspamd_common_log_function (NULL,
-				level,
-				func_buf,
-				"%s",
-				msg);
+					level,
+					"lua",
+					NULL,
+					func_buf,
+					"%s",
+					msg);
 		}
 	}
 	else {
 		if (level == G_LOG_LEVEL_DEBUG) {
 			rspamd_conditional_debug (NULL,
-				NULL,
-				G_STRFUNC,
-				"%s",
-				msg);
+					NULL,
+					"lua",
+					NULL,
+					G_STRFUNC,
+					"%s",
+					msg);
 		}
 		else {
 			rspamd_common_log_function (NULL,
-				level,
-				G_STRFUNC,
-				"%s",
-				msg);
+					level,
+					"lua",
+					NULL,
+					G_STRFUNC,
+					"%s",
+					msg);
 		}
 	}
 }
 
 /*** Logger interface ***/
 static gint
-lua_logger_err (lua_State * L)
+lua_logger_err (lua_State *L)
 {
 	const gchar *msg;
 	msg = luaL_checkstring (L, 1);
@@ -199,7 +208,7 @@ lua_logger_err (lua_State * L)
 }
 
 static gint
-lua_logger_warn (lua_State * L)
+lua_logger_warn (lua_State *L)
 {
 	const gchar *msg;
 	msg = luaL_checkstring (L, 1);
@@ -208,7 +217,7 @@ lua_logger_warn (lua_State * L)
 }
 
 static gint
-lua_logger_info (lua_State * L)
+lua_logger_info (lua_State *L)
 {
 	const gchar *msg;
 	msg = luaL_checkstring (L, 1);
@@ -217,7 +226,7 @@ lua_logger_info (lua_State * L)
 }
 
 static gint
-lua_logger_debug (lua_State * L)
+lua_logger_debug (lua_State *L)
 {
 	const gchar *msg;
 	msg = luaL_checkstring (L, 1);
@@ -245,7 +254,7 @@ lua_logger_out_num (lua_State *L, gint pos, gchar *outbuf, gsize len)
 	glong inum;
 	gsize r = 0;
 
-	if ((gdouble)(glong)num == num) {
+	if ((gdouble) (glong) num == num) {
 		inum = num;
 		r = rspamd_snprintf (outbuf, len + 1, "%l", inum);
 	}
@@ -299,9 +308,9 @@ lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len)
 	return r;
 }
 
-#define MOVE_BUF(d, remain, r)	\
-	(d) += (r); (remain) -= (r); 	\
-	if ((remain) == 0) { lua_pop (L, 1); break; }
+#define MOVE_BUF(d, remain, r)    \
+    (d) += (r); (remain) -= (r);    \
+    if ((remain) == 0) { lua_pop (L, 1); break; }
 
 static gsize
 lua_logger_out_table (lua_State *L, gint pos, gchar *outbuf, gsize len)
@@ -321,7 +330,7 @@ lua_logger_out_table (lua_State *L, gint pos, gchar *outbuf, gsize len)
 	d += r;
 
 	/* Get numeric keys (ipairs) */
-	for (i = 1; ; i ++) {
+	for (i = 1; ; i++) {
 		lua_rawgeti (L, -1, i);
 
 		if (lua_isnil (L, -1)) {
@@ -372,6 +381,7 @@ lua_logger_out_table (lua_State *L, gint pos, gchar *outbuf, gsize len)
 
 	return (d - outbuf);
 }
+
 #undef MOVE_BUF
 
 static gsize
@@ -387,25 +397,25 @@ lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf, gsize len)
 	type = lua_type (L, pos);
 
 	switch (type) {
-	case LUA_TNUMBER:
-		r = lua_logger_out_num (L, pos, outbuf, len);
-		break;
-	case LUA_TBOOLEAN:
-		r = lua_logger_out_boolean (L, pos, outbuf, len);
-		break;
-	case LUA_TTABLE:
-		r = lua_logger_out_table (L, pos, outbuf, len);
-		break;
-	case LUA_TUSERDATA:
-		r = lua_logger_out_userdata (L, pos, outbuf, len);
-		break;
-	case LUA_TFUNCTION:
-		r = rspamd_snprintf (outbuf, len + 1, "function");
-		break;
-	default:
-		/* Try to push everything as string using tostring magic */
-		r = lua_logger_out_str (L, pos, outbuf, len);
-		break;
+		case LUA_TNUMBER:
+			r = lua_logger_out_num (L, pos, outbuf, len);
+			break;
+		case LUA_TBOOLEAN:
+			r = lua_logger_out_boolean (L, pos, outbuf, len);
+			break;
+		case LUA_TTABLE:
+			r = lua_logger_out_table (L, pos, outbuf, len);
+			break;
+		case LUA_TUSERDATA:
+			r = lua_logger_out_userdata (L, pos, outbuf, len);
+			break;
+		case LUA_TFUNCTION:
+			r = rspamd_snprintf (outbuf, len + 1, "function");
+			break;
+		default:
+			/* Try to push everything as string using tostring magic */
+			r = lua_logger_out_str (L, pos, outbuf, len);
+			break;
 	}
 
 	return r;
@@ -436,59 +446,59 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 
 	while (remain > 0 && *s != '\0') {
 		switch (state) {
-		case copy_char:
-			if (*s == '%') {
-				state = got_percent;
-				s ++;
-			}
-			else {
-				*d++ = *s++;
-				remain --;
-			}
-			break;
-		case got_percent:
-			if (g_ascii_isdigit (*s)) {
-				state = parse_arg_num;
-				c = s;
-			}
-			else {
-				*d++ = *s++;
-				state = copy_char;
-			}
-			break;
-		case parse_arg_num:
-			if (g_ascii_isdigit (*s)) {
-				s ++;
-			}
-			else {
-				arg_num = strtoul (c, NULL, 10);
-
-				if (arg_num < 1 || arg_num > (guint)lua_gettop (L) + 1) {
-					msg_err ("wrong argument number: %ud", arg_num);
-
-					if (is_string) {
-						lua_pushnil (L);
-						return 1;
-					}
-					else {
-						return 0;
-					}
+			case copy_char:
+				if (*s == '%') {
+					state = got_percent;
+					s++;
 				}
+				else {
+					*d++ = *s++;
+					remain--;
+				}
+				break;
+			case got_percent:
+				if (g_ascii_isdigit (*s)) {
+					state = parse_arg_num;
+					c = s;
+				}
+				else {
+					*d++ = *s++;
+					state = copy_char;
+				}
+				break;
+			case parse_arg_num:
+				if (g_ascii_isdigit (*s)) {
+					s++;
+				}
+				else {
+					arg_num = strtoul (c, NULL, 10);
 
-				r = lua_logger_out_type (L, arg_num + 1, d, remain);
-				g_assert (r <= remain);
-				remain -= r;
-				d += r;
-				state = copy_char;
-			}
-			break;
+					if (arg_num < 1 || arg_num > (guint) lua_gettop (L) + 1) {
+						msg_err ("wrong argument number: %ud", arg_num);
+
+						if (is_string) {
+							lua_pushnil (L);
+							return 1;
+						}
+						else {
+							return 0;
+						}
+					}
+
+					r = lua_logger_out_type (L, arg_num + 1, d, remain);
+					g_assert (r <= remain);
+					remain -= r;
+					d += r;
+					state = copy_char;
+				}
+				break;
 		}
 	}
 
 	if (state == parse_arg_num) {
 		arg_num = strtoul (c, NULL, 10);
 
-		if (arg_num < 1 || arg_num > (guint)lua_gettop (L) + 1) {
+		if (arg_num < 1 || arg_num > (guint) lua_gettop (L) + 1) {
 			msg_err ("wrong argument number: %ud", arg_num);
 
 			if (is_string) {
@@ -519,31 +529,31 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 }
 
 static gint
-lua_logger_errx (lua_State * L)
+lua_logger_errx (lua_State *L)
 {
 	return lua_logger_logx (L, G_LOG_LEVEL_CRITICAL, FALSE);
 }
 
 static gint
-lua_logger_warnx (lua_State * L)
+lua_logger_warnx (lua_State *L)
 {
 	return lua_logger_logx (L, G_LOG_LEVEL_WARNING, FALSE);
 }
 
 static gint
-lua_logger_infox (lua_State * L)
+lua_logger_infox (lua_State *L)
 {
 	return lua_logger_logx (L, G_LOG_LEVEL_INFO, FALSE);
 }
 
 static gint
-lua_logger_debugx (lua_State * L)
+lua_logger_debugx (lua_State *L)
 {
 	return lua_logger_logx (L, G_LOG_LEVEL_DEBUG, FALSE);
 }
 
 static gint
-lua_logger_slog (lua_State * L)
+lua_logger_slog (lua_State *L)
 {
 	return lua_logger_logx (L, 0, TRUE);
 }
@@ -560,7 +570,7 @@ lua_load_logger (lua_State *L)
 }
 
 void
-luaopen_logger (lua_State * L)
+luaopen_logger (lua_State *L)
 {
 	rspamd_lua_add_preload (L, "rspamd_logger", lua_load_logger);
 }
