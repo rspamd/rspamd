@@ -659,7 +659,7 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 		/* Parse reverse reply and start resolve of this ip */
 		if (reply->code != RDNS_RC_NOERROR) {
 			rspamd_conditional_debug (rspamd_main->logger,
-				NULL, G_STRFUNC, "DNS error: %s",
+				NULL, "rdns", NULL, G_STRFUNC, "DNS error: %s",
 				rdns_strerror (reply->code));
 
 			if (reply->code == RDNS_RC_NXDOMAIN) {
@@ -688,7 +688,7 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 	case SMTP_PROXY_STATE_RESOLVE_NORMAL:
 		if (reply->code != RDNS_RC_NOERROR) {
 			rspamd_conditional_debug (rspamd_main->logger,
-				NULL, G_STRFUNC, "DNS error: %s",
+				NULL, "rdns", NULL, G_STRFUNC, "DNS error: %s",
 				rdns_strerror (reply->code));
 
 			if (reply->code == RDNS_RC_NXDOMAIN) {

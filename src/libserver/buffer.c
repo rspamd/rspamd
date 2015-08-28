@@ -33,6 +33,7 @@
 #define G_DISPATCHER_ERROR dispatcher_error_quark ()
 #define debug_ip(...) rspamd_conditional_debug (NULL, \
 		NULL, \
+		d->pool->tag.tagname, d->pool->tag.uid, \
 		G_STRFUNC, \
 		__VA_ARGS__)
 
