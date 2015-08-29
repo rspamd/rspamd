@@ -2409,6 +2409,9 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 
 	blake2b (cksumbuf, data, NULL, sizeof (cksumbuf), st.st_size, 0);
 	cfg->checksum = rspamd_encode_base32 (cksumbuf, sizeof (cksumbuf));
+	/* Also change the tag of cfg pool to be equal to the checksum */
+	rspamd_strlcpy (cfg->cfg_pool->tag.uid, cfg->checksum,
+			MIN (sizeof (cfg->cfg_pool->tag.uid), strlen (cfg->checksum)));
 
 	parser = ucl_parser_new (0);
 	rspamd_ucl_add_conf_variables (parser, vars);

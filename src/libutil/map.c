@@ -486,8 +486,12 @@ rspamd_map_add (struct rspamd_config *cfg,
 	}
 	/* Constant pool */
 	if (cfg->map_pool == NULL) {
-		cfg->map_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
+		cfg->map_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
+				"map");
+		memcpy (cfg->map_pool->tag.uid, cfg->cfg_pool->tag.uid,
+				sizeof (cfg->map_pool->tag.uid));
 	}
+
 	new_map = rspamd_mempool_alloc0 (cfg->map_pool, sizeof (struct rspamd_map));
 	new_map->read_callback = read_callback;
 	new_map->fin_callback = fin_callback;
