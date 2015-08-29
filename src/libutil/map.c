@@ -608,7 +608,9 @@ rspamd_map_add (struct rspamd_config *cfg,
 		new_map->map_data = hdata;
 	}
 	/* Temp pool */
-	new_map->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
+	new_map->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "map");
+	memcpy (cfg->map_pool->tag.uid, cfg->cfg_pool->tag.uid,
+			sizeof (cfg->map_pool->tag.uid));
 
 	cfg->maps = g_list_prepend (cfg->maps, new_map);
 
