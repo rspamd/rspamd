@@ -65,7 +65,12 @@ rspamd_worker_usr2_handler (gint fd, short what, void *arg)
 		tv.tv_sec = SOFT_SHUTDOWN_TIME;
 		tv.tv_usec = 0;
 		wanna_die = 1;
-		msg_info ("worker's shutdown is pending in %d sec", SOFT_SHUTDOWN_TIME);
+		rspamd_default_log_function (G_LOG_LEVEL_INFO,
+				sigh->worker->srv->server_pool->tag.tagname,
+				sigh->worker->srv->server_pool->tag.uid,
+				G_STRFUNC,
+				"worker's shutdown is pending in %d sec",
+				SOFT_SHUTDOWN_TIME);
 		event_base_loopexit (sigh->base, &tv);
 		if (sigh->post_handler) {
 			sigh->post_handler (sigh->handler_data);
@@ -98,7 +103,12 @@ rspamd_worker_term_handler (gint fd, short what, void *arg)
 	struct timeval tv;
 
 	if (!wanna_die) {
-		msg_info ("terminating after receiving %s signal", strsignal (sigh->signo));
+		rspamd_default_log_function (G_LOG_LEVEL_INFO,
+				sigh->worker->srv->server_pool->tag.tagname,
+				sigh->worker->srv->server_pool->tag.uid,
+				G_STRFUNC,
+				"terminating after receiving %s signal",
+				strsignal (sigh->signo));
 		wanna_die = 1;
 		tv.tv_sec = 0;
 		tv.tv_usec = 0;
