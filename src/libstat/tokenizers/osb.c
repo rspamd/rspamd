@@ -135,7 +135,7 @@ rspamd_tokenizer_osb_config_from_ucl (rspamd_mempool_t * pool,
 				}
 			}
 			else {
-				msg_warn ("siphash cannot be used without key");
+				msg_warn_pool ("siphash cannot be used without key");
 			}
 
 		}
@@ -151,7 +151,7 @@ rspamd_tokenizer_osb_config_from_ucl (rspamd_mempool_t * pool,
 	if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
 		cf->window_size = ucl_object_toint (elt);
 		if (cf->window_size > DEFAULT_FEATURE_WINDOW_SIZE * 4) {
-			msg_err ("too large window size: %d", cf->window_size);
+			msg_err_pool ("too large window size: %d", cf->window_size);
 			cf->window_size = DEFAULT_FEATURE_WINDOW_SIZE;
 		}
 	}
@@ -177,8 +177,8 @@ rspamd_tokenizer_osb_get_config (rspamd_mempool_t *pool,
 	}
 
 	if (osb_cf->ht == RSPAMD_OSB_HASH_SIPHASH) {
-		msg_info ("siphash key is not stored into statfiles, so you'd need to "
-				"keep it inside the configuration");
+		msg_info_pool ("siphash key is not stored into statfiles, so you'd "
+				"need to keep it inside the configuration");
 	}
 
 	memset (osb_cf->sk, 0, sizeof (osb_cf->sk));
@@ -358,9 +358,9 @@ rspamd_tokenizer_osb_load_config (rspamd_mempool_t *pool,
 
 		if (osb_cf->ht != RSPAMD_OSB_HASH_COMPAT) {
 			/* Trying to load incompatible configuration */
-			msg_err ("cannot load tokenizer configuration from a legacy statfile,"
-					" maybe you have forgotten to set 'compat' option in the "
-					"tokenizer configuration");
+			msg_err_pool ("cannot load tokenizer configuration from a legacy "
+					"statfile; maybe you have forgotten to set 'compat' option"
+					" in the tokenizer configuration");
 
 			return FALSE;
 		}

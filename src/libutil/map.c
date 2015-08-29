@@ -83,9 +83,10 @@ connect_http (struct rspamd_map *map,
 	gboolean is_async)
 {
 	gint sock;
+	struct rspamd_config *cfg = map->cfg;
 
 	if ((sock = rspamd_socket_tcp (data->addr, FALSE, is_async)) == -1) {
-		msg_info ("cannot connect to http server %s: %d, %s",
+		msg_info_config ("cannot connect to http server %s: %d, %s",
 			data->host,
 			errno,
 			strerror (errno));
@@ -143,8 +144,11 @@ http_map_error (struct rspamd_http_connection *conn,
 	GError *err)
 {
 	struct http_callback_data *cbd = conn->ud;
+	struct rspamd_config *cfg;
 
-	msg_err ("connection with http server terminated incorrectly: %s",
+	cfg = cbd->map->cfg;
+
+	msg_err_config ("connection with http server terminated incorrectly: %s",
 			err->message);
 	free_http_cbdata (cbd);
 }
@@ -155,8 +159,11 @@ http_map_finish (struct rspamd_http_connection *conn,
 {
 	struct http_callback_data *cbd = conn->ud;
 	struct rspamd_map *map;
+	struct rspamd_config *cfg;
 
 	map = cbd->map;
+	cfg = map->cfg;
+
 	if (msg->code == 200) {
 		if (cbd->remain_buf != NULL) {
 			map->read_callback (map->pool, cbd->remain_buf->str,
@@ -166,15 +173,15 @@ http_map_finish (struct rspamd_http_connection *conn,
 		map->fin_callback (map->pool, &cbd->cbdata);
 		*map->user_data = cbd->cbdata.cur_data;
 		cbd->data->last_checked = msg->date;
-		msg_info ("read map data from %s", cbd->data->host);
+		msg_info_config ("read map data from %s", cbd->data->host);
 	}
 	else if (msg->code == 304) {
-		msg_debug ("data is not modified for server %s",
+		msg_debug_config ("data is not modified for server %s",
 				cbd->data->host);
 		cbd->data->last_checked = msg->date;
 	}
 	else {
-		msg_info ("cannot load map %s from %s: HTTP error %d",
+		msg_info_config ("cannot load map %s from %s: HTTP error %d",
 				map->uri, cbd->data->host, msg->code);
 	}
 
@@ -238,14 +245,15 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 	gchar buf[BUFSIZ], *remain;
 	ssize_t r;
 	gint fd, rlen, tlen;
+	struct rspamd_config *cfg = map->cfg;
 
 	if (map->read_callback == NULL || map->fin_callback == NULL) {
-		msg_err ("bad callback for reading map file");
+		msg_err_config ("bad callback for reading map file");
 		return;
 	}
 
 	if ((fd = open (data->filename, O_RDONLY)) == -1) {
-		msg_warn ("cannot open file '%s': %s", data->filename,
+		msg_warn_config ("cannot open file '%s': %s", data->filename,
 			strerror (errno));
 		return;
 	}
@@ -300,9 +308,12 @@ file_callback (gint fd, short what, void *ud)
 	struct rspamd_map *map = ud;
 	struct file_map_data *data = map->map_data;
 	struct stat st;
+	struct rspamd_config *cfg;
+
+	cfg = map->cfg;
 
 	if (g_atomic_int_get (map->locked)) {
-		msg_info (
+		msg_info_config (
 			"don't try to reread map as it is locked by other process, will reread it later");
 		jitter_timeout_event (map, TRUE, FALSE);
 		return;
@@ -321,7 +332,7 @@ file_callback (gint fd, short what, void *ud)
 		return;
 	}
 
-	msg_info ("rereading map file %s", data->filename);
+	msg_info_config ("rereading map file %s", data->filename);
 	read_map_file (map, data);
 	g_atomic_int_set (map->locked, 0);
 }
@@ -333,12 +344,16 @@ static void
 http_callback (gint fd, short what, void *ud)
 {
 	struct rspamd_map *map = ud;
-	struct http_map_data *data = map->map_data;
+	struct http_map_data *data;
 	gint sock;
 	struct http_callback_data *cbd;
+	struct rspamd_config *cfg;
+
+	data = map->map_data;
+	cfg = map->cfg;
 
 	if (g_atomic_int_get (map->locked)) {
-		msg_info (
+		msg_info_config (
 			"don't try to reread map as it is locked by other process, will reread it later");
 		if (data->conn->ud == NULL) {
 			jitter_timeout_event (map, TRUE, TRUE);
@@ -371,7 +386,7 @@ http_callback (gint fd, short what, void *ud)
 		cbd->tv.tv_usec = 0;
 		cbd->fd = sock;
 		data->conn->ud = cbd;
-		msg_debug ("reading map data from %s", data->host);
+		msg_debug_config ("reading map data from %s", data->host);
 		write_http_request (cbd);
 	}
 }
@@ -502,11 +517,12 @@ rspamd_map_add (struct rspamd_config *cfg,
 				sizeof (struct file_map_data));
 		if (access (def, R_OK) == -1) {
 			if (errno != ENOENT) {
-				msg_err ("cannot open file '%s': %s", def, strerror (errno));
+				msg_err_config ("cannot open file '%s': %s", def, strerror
+						(errno));
 				return FALSE;
 
 			}
-			msg_info (
+			msg_info_config (
 				"map '%s' is not found, but it can be loaded automatically later",
 				def);
 			/* We still can add this file */
@@ -531,7 +547,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 				portbuf[i++] = *p++;
 			}
 			if (*p != '/') {
-				msg_info ("bad http map definition: %s", def);
+				msg_info_config ("bad http map definition: %s", def);
 				return FALSE;
 			}
 			portbuf[i] = '\0';
@@ -543,7 +559,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 			hdata->port = 80;
 			/* Now separate host from path */
 			if ((p = strchr (def, '/')) == NULL) {
-				msg_info ("bad http map definition: %s", def);
+				msg_info_config ("bad http map definition: %s", def);
 				return FALSE;
 			}
 			hostend = p;
@@ -567,14 +583,14 @@ rspamd_map_add (struct rspamd_config *cfg,
 				(rspamd_mempool_destruct_t)freeaddrinfo, hdata->addr);
 		}
 		else {
-			msg_err ("address resolution for %s failed: %s",
+			msg_err_config ("address resolution for %s failed: %s",
 				hdata->host,
 				gai_strerror (r));
 			return FALSE;
 		}
 		/* Now try to connect */
 		if ((s = rspamd_socket_tcp (hdata->addr, FALSE, FALSE)) == -1) {
-			msg_info ("cannot connect to http server %s: %d, %s",
+			msg_info_config ("cannot connect to http server %s: %d, %s",
 				hdata->host,
 				errno,
 				strerror (errno));
@@ -623,7 +639,7 @@ abstract_parse_kv_list (rspamd_mempool_t * pool,
 					value[p - c] = '\0';
 					value = g_strstrip (value);
 					func (data->cur_data, key, value);
-					msg_debug ("insert kv pair: %s -> %s", key, value);
+					msg_debug_pool ("insert kv pair: %s -> %s", key, value);
 				}
 				data->state = 99;
 			}
@@ -635,7 +651,7 @@ abstract_parse_kv_list (rspamd_mempool_t * pool,
 
 					value = g_strstrip (value);
 					func (data->cur_data, key, value);
-					msg_debug ("insert kv pair: %s -> %s", key, value);
+					msg_debug_pool ("insert kv pair: %s -> %s", key, value);
 				}
 				else if (key == NULL && p - c > 0) {
 					/* Key only line */
@@ -645,7 +661,7 @@ abstract_parse_kv_list (rspamd_mempool_t * pool,
 					value = rspamd_mempool_alloc (pool, 1);
 					*value = '\0';
 					func (data->cur_data, key, value);
-					msg_debug ("insert kv pair: %s -> %s", key, value);
+					msg_debug_pool ("insert kv pair: %s -> %s", key, value);
 				}
 				data->state = 100;
 				key = NULL;
@@ -822,7 +838,8 @@ rspamd_hosts_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 		g_hash_table_destroy (data->prev_data);
 	}
 	if (data->cur_data) {
-		msg_info ("read hash of %z elements", g_hash_table_size (data->cur_data));
+		msg_info_pool ("read hash of %z elements", g_hash_table_size
+				(data->cur_data));
 	}
 }
 
@@ -850,7 +867,8 @@ rspamd_kv_list_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 		g_hash_table_destroy (data->prev_data);
 	}
 	if (data->cur_data) {
-		msg_info ("read hash of %z elements", g_hash_table_size (data->cur_data));
+		msg_info_pool ("read hash of %z elements", g_hash_table_size
+				(data->cur_data));
 	}
 }
 
@@ -877,6 +895,7 @@ rspamd_radix_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 		radix_destroy_compressed (data->prev_data);
 	}
 	if (data->cur_data) {
-		msg_info ("read radix trie of %z elements", radix_get_size (data->cur_data));
+		msg_info_pool ("read radix trie of %z elements", radix_get_size
+				(data->cur_data));
 	}
 }

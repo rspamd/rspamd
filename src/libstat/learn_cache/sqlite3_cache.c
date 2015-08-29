@@ -167,7 +167,7 @@ rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
 		sqlite = rspamd_sqlite3_open_or_create (dbpath, create_tables_sql, &err);
 
 		if (sqlite == NULL) {
-			msg_err ("cannot open sqlite3 cache: %e", err);
+			msg_err_config ("cannot open sqlite3 cache: %e", err);
 			g_error_free (err);
 			err = NULL;
 		}
@@ -178,7 +178,7 @@ rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
 					RSPAMD_STAT_CACHE_MAX, &err);
 
 			if (new->prstmt == NULL) {
-				msg_err ("cannot open sqlite3 cache: %e", err);
+				msg_err_config ("cannot open sqlite3 cache: %e", err);
 				g_error_free (err);
 				err = NULL;
 				sqlite3_close (sqlite);

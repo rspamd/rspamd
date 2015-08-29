@@ -106,17 +106,18 @@ rspamd_stat_init (struct rspamd_config *cfg)
 	stat_ctx->tokenizers_count = G_N_ELEMENTS (stat_tokenizers);
 	stat_ctx->caches = stat_caches;
 	stat_ctx->caches_count = G_N_ELEMENTS (stat_caches);
+	stat_ctx->cfg = cfg;
 
 	/* Init backends */
 	for (i = 0; i < stat_ctx->backends_count; i ++) {
 		stat_ctx->backends[i].ctx = stat_ctx->backends[i].init (stat_ctx, cfg);
-		msg_debug ("added backend %s", stat_ctx->backends[i].name);
+		msg_debug_config ("added backend %s", stat_ctx->backends[i].name);
 	}
 
 	/* Init caches */
 	for (i = 0; i < stat_ctx->caches_count; i ++) {
 		stat_ctx->caches[i].ctx = stat_ctx->caches[i].init (stat_ctx, cfg);
-		msg_debug ("added cache %s", stat_ctx->caches[i].name);
+		msg_debug_config ("added cache %s", stat_ctx->caches[i].name);
 	}
 }
 
@@ -124,13 +125,14 @@ void
 rspamd_stat_close (void)
 {
 	guint i;
+	struct rspamd_config *cfg = stat_ctx->cfg;
 
 	g_assert (stat_ctx != NULL);
 
 	for (i = 0; i < stat_ctx->backends_count; i ++) {
 		if (stat_ctx->backends[i].close != NULL) {
 			stat_ctx->backends[i].close (stat_ctx->backends[i].ctx);
-			msg_debug ("closed backend %s", stat_ctx->backends[i].name);
+			msg_debug_config ("closed backend %s", stat_ctx->backends[i].name);
 		}
 	}
 }

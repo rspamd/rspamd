@@ -76,7 +76,7 @@ rspamd_stat_tokenize_header (struct rspamd_task *task,
 			}
 		}
 
-		msg_debug ("added stat tokens for header '%s'", name);
+		msg_debug_task ("added stat tokens for header '%s'", name);
 	}
 }
 
@@ -121,7 +121,7 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_task *task,
 				g_array_append_val (ar, elt);
 			}
 
-			msg_debug ("added stat tokens for image '%s'", img->html_image->src);
+			msg_debug_task ("added stat tokens for image '%s'", img->html_image->src);
 		}
 
 		cur = g_list_next (cur);
@@ -137,7 +137,7 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_task *task,
 
 			if (elt.begin) {
 				elt.len = strlen (elt.begin);
-				msg_debug ("added stat tokens for mime boundary '%s'", elt.begin);
+				msg_debug_task ("added stat tokens for mime boundary '%s'", elt.begin);
 				g_array_append_val (ar, elt);
 			}
 		}
@@ -150,13 +150,13 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_task *task,
 		if (tp->language != NULL && tp->language[0] != '\0') {
 			elt.begin = (gchar *)tp->language;
 			elt.len = strlen (elt.begin);
-			msg_debug ("added stat tokens for part language '%s'", elt.begin);
+			msg_debug_task ("added stat tokens for part language '%s'", elt.begin);
 			g_array_append_val (ar, elt);
 		}
 		if (tp->real_charset != NULL) {
 			elt.begin = (gchar *)tp->real_charset;
 			elt.len = strlen (elt.begin);
-			msg_debug ("added stat tokens for part charset '%s'", elt.begin);
+			msg_debug_task ("added stat tokens for part charset '%s'", elt.begin);
 			g_array_append_val (ar, elt);
 		}
 	}
@@ -210,7 +210,7 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 		}
 
 		if (pdiff != NULL && *pdiff > similarity_treshold) {
-			msg_debug ("message has two common parts (%d%%), so skip the last one",
+			msg_debug_task ("message has two common parts (%d%%), so skip the last one",
 					*pdiff);
 			break;
 		}
@@ -288,8 +288,10 @@ preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
 	struct rspamd_classifier_runtime *cl_runtime;
 	struct rspamd_token_result *res;
 	GList *cur, *curst;
+	struct rspamd_task *task;
 	gint i = 0;
 
+	task = cbdata->task;
 	t->results = g_array_sized_new (FALSE, TRUE,
 			sizeof (struct rspamd_token_result), cbdata->results_count);
 	g_array_set_size (t->results, cbdata->results_count);
@@ -304,7 +306,7 @@ preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
 		if (cl_runtime->clcf->min_tokens > 0 &&
 				(guint32)g_tree_nnodes (cbdata->tok->tokens) < cl_runtime->clcf->min_tokens) {
 			/* Skip this classifier */
-			msg_debug ("<%s> contains less tokens than required for %s classifier: "
+			msg_debug_task ("<%s> contains less tokens than required for %s classifier: "
 					"%ud < %ud", cbdata->task->message_id, cl_runtime->clcf->name,
 					g_tree_nnodes (cbdata->tok->tokens),
 					cl_runtime->clcf->min_tokens);
@@ -328,7 +330,7 @@ preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
 
 				if (cl_runtime->clcf->max_tokens > 0 &&
 						cl_runtime->processed_tokens > cl_runtime->clcf->max_tokens) {
-					msg_debug ("<%s> contains more tokens than allowed for %s classifier: "
+					msg_debug_task ("<%s> contains more tokens than allowed for %s classifier: "
 							"%ud > %ud", cbdata->task, cl_runtime->clcf->name,
 							cl_runtime->processed_tokens,
 							cl_runtime->clcf->max_tokens);
@@ -495,7 +497,7 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 		cl_runtime->start_pos = start_pos;
 		cl_runtime->end_pos = end_pos;
 
-		msg_debug ("added runtime for %s classifier from %ud to %ud",
+		msg_debug_task ("added runtime for %s classifier from %ud to %ud",
 				clcf->name, start_pos, end_pos);
 
 		start_pos = end_pos;
@@ -603,9 +605,11 @@ rspamd_stat_learn_token (gpointer k, gpointer v, gpointer d)
 	struct rspamd_statfile_runtime *st_runtime;
 	struct rspamd_classifier_runtime *cl_runtime;
 	struct rspamd_token_result *res;
+	struct rspamd_task *task;
 	GList *cur, *curst;
 	gint i = 0;
 
+	task = cbdata->task;
 	cur = g_list_first (cbdata->classifier_runtimes);
 
 	while (cur) {
@@ -614,7 +618,7 @@ rspamd_stat_learn_token (gpointer k, gpointer v, gpointer d)
 		if (cl_runtime->clcf->min_tokens > 0 &&
 				(guint32)g_tree_nnodes (cbdata->tok->tokens) < cl_runtime->clcf->min_tokens) {
 			/* Skip this classifier */
-			msg_debug ("<%s> contains less tokens than required for %s classifier: "
+			msg_debug_task ("<%s> contains less tokens than required for %s classifier: "
 					"%ud < %ud", cbdata->task->message_id, cl_runtime->clcf->name,
 					g_tree_nnodes (cbdata->tok->tokens),
 					cl_runtime->clcf->min_tokens);
@@ -634,7 +638,7 @@ rspamd_stat_learn_token (gpointer k, gpointer v, gpointer d)
 
 				if (cl_runtime->clcf->max_tokens > 0 &&
 						cl_runtime->processed_tokens > cl_runtime->clcf->max_tokens) {
-					msg_debug ("<%s> contains more tokens than allowed for %s classifier: "
+					msg_debug_task ("<%s> contains more tokens than allowed for %s classifier: "
 							"%ud > %ud", cbdata->task, cl_runtime->clcf->name,
 							cl_runtime->processed_tokens,
 							cl_runtime->clcf->max_tokens);
@@ -710,7 +714,7 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 			if (cl_ctx != NULL) {
 				if (cl_run->cl->learn_spam_func (cl_ctx, cl_run->tok->tokens,
 						cl_run, task, spam, err)) {
-					msg_debug ("learned %s classifier %s", spam ? "spam" : "ham",
+					msg_debug_task ("learned %s classifier %s", spam ? "spam" : "ham",
 							cl_run->clcf->name);
 					ret = RSPAMD_STAT_PROCESS_OK;
 					learned = TRUE;
@@ -732,14 +736,14 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 							nrev = cl_run->backend->dec_learns (task,
 									st_run->backend_runtime,
 									cl_run->backend->ctx);
-							msg_debug ("unlearned %s, new revision: %ul",
+							msg_debug_task ("unlearned %s, new revision: %ul",
 									st_run->st->symbol, nrev);
 						}
 						else {
 							nrev = cl_run->backend->inc_learns (task,
 								st_run->backend_runtime,
 								cl_run->backend->ctx);
-							msg_debug ("learned %s, new revision: %ul",
+							msg_debug_task ("learned %s, new revision: %ul",
 								st_run->st->symbol, nrev);
 						}
 

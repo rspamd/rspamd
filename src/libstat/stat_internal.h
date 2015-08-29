@@ -93,6 +93,7 @@ struct rspamd_stat_ctx {
 	guint caches_count;
 
 	guint statfiles;
+	struct rspamd_config *cfg;
 };
 
 typedef enum rspamd_learn_cache_result {
