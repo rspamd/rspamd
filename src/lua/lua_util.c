@@ -154,7 +154,7 @@ lua_util_load_rspamd_config (lua_State *L)
 		cfg->cache = rspamd_symbols_cache_new (cfg);
 
 		if (rspamd_config_read (cfg, cfg_name, NULL, NULL, NULL, NULL)) {
-			msg_err ("cannot load config from %s", cfg_name);
+			msg_err_config ("cannot load config from %s", cfg_name);
 			lua_pushnil (L);
 		}
 		else {
@@ -188,7 +188,7 @@ lua_util_config_from_ucl (lua_State *L)
 		top = rspamd_rcl_config_init ();
 
 		if (!rspamd_rcl_parse (top, cfg, cfg->cfg_pool, cfg->rcl_obj, &err)) {
-			msg_err ("rcl parse error: %s", err->message);
+			msg_err_config ("rcl parse error: %s", err->message);
 			ucl_object_unref (obj);
 			lua_pushnil (L);
 		}

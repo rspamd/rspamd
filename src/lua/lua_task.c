@@ -801,7 +801,7 @@ lua_task_set_pre_result (lua_State * L)
 			else {
 				task->pre_result.str = "unknown";
 			}
-			msg_info ("<%s>: set pre-result to %s: '%s'",
+			msg_info_task ("<%s>: set pre-result to %s: '%s'",
 						task->message_id, rspamd_action_to_str (action),
 						task->pre_result.str);
 		}
@@ -1870,7 +1870,7 @@ lua_task_learn (lua_State *L)
 	cl = rspamd_config_find_classifier (task->cfg, clname);
 
 	if (cl == NULL) {
-		msg_warn ("classifier %s is not found", clname);
+		msg_warn_task ("classifier %s is not found", clname);
 		lua_pushboolean (L, FALSE);
 		lua_pushstring (L, "classifier not found");
 		ret = 2;

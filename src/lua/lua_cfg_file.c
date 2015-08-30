@@ -67,7 +67,7 @@ lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 					*score = lua_tonumber (L, -1);
 				}
 				else {
-					msg_warn ("cannot get weight of symbol: %s", symbol);
+					msg_warn_config("cannot get weight of symbol: %s", symbol);
 					continue;
 				}
 				lua_pop (L, 1);
@@ -85,13 +85,13 @@ lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 				*score = lua_tonumber (L, -1);
 			}
 			else {
-				msg_warn ("cannot get weight of symbol: %s", symbol);
+				msg_warn_config("cannot get weight of symbol: %s", symbol);
 				continue;
 			}
 			/* Insert symbol */
 			if ((s =
 				g_hash_table_lookup (metric->symbols, symbol)) != NULL) {
-				msg_info ("replacing weight for symbol %s: %.2f -> %.2f",
+				msg_info_config("replacing weight for symbol %s: %.2f -> %.2f",
 					symbol,
 					*s->weight_ptr,
 					*score);
@@ -184,7 +184,7 @@ rspamd_lua_post_load_config (struct rspamd_config *cfg)
 				sym = rspamd_mempool_strdup (cfg->cfg_pool, name);
 				if (!rspamd_parse_expression (val, 0, &composite_expr_subr, NULL,
 							cfg->cfg_pool, &err, &expr)) {
-					msg_err ("cannot parse composite expression '%s': %s", val,
+					msg_err_config("cannot parse composite expression '%s': %s", val,
 							err->message);
 					g_error_free (err);
 					err = NULL;
@@ -194,7 +194,7 @@ rspamd_lua_post_load_config (struct rspamd_config *cfg)
 				if ((old_expr =
 					g_hash_table_lookup (cfg->composite_symbols,
 					name)) != NULL) {
-					msg_info ("replacing composite symbol %s", name);
+					msg_info_config("replacing composite symbol %s", name);
 					g_hash_table_replace (cfg->composite_symbols, sym, expr);
 				}
 				else {
@@ -285,14 +285,14 @@ rspamd_lua_check_condition (struct rspamd_config *cfg, const gchar *condition)
 	g_strlcat (condbuf, condition, hostlen);
 	/* Evaluate condition */
 	if (luaL_dostring (L, condbuf) != 0) {
-		msg_err ("eval of '%s' failed: '%s'", condition, lua_tostring (L, -1));
+		msg_err_config("eval of '%s' failed: '%s'", condition, lua_tostring (L, -1));
 		g_free (condbuf);
 		return FALSE;
 	}
 	/* Get global variable res to get result */
 	lua_getglobal (L, FAKE_RES_VAR);
 	if (!lua_isboolean (L, -1)) {
-		msg_err ("bad string evaluated: %s, type: %s", condbuf,
+		msg_err_config("bad string evaluated: %s, type: %s", condbuf,
 			lua_typename (L, lua_type (L, -1)));
 		g_free (condbuf);
 		return FALSE;

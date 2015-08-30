@@ -597,7 +597,7 @@ rspamd_lua_call_post_filters (struct rspamd_task *task)
 		*ptask = task;
 
 		if (lua_pcall (cd->L, 1, 0, 0) != 0) {
-			msg_err ("call to %s failed: %s",
+			msg_err_task ("call to %s failed: %s",
 				cd->cb_is_ref ? "local function" :
 				cd->callback.name,
 				lua_tostring (cd->L, -1));
@@ -665,7 +665,7 @@ rspamd_lua_call_pre_filters (struct rspamd_task *task)
 		*ptask = task;
 
 		if (lua_pcall (cd->L, 1, 0, 0) != 0) {
-			msg_info ("call to %s failed: %s",
+			msg_info_task ("call to %s failed: %s",
 				cd->cb_is_ref ? "local function" :
 				cd->callback.name,
 				lua_tostring (cd->L, -1));
@@ -718,7 +718,7 @@ lua_config_add_radix_map (lua_State *L)
 		*r = radix_create_compressed ();
 		if (!rspamd_map_add (cfg, map_line, description, rspamd_radix_read,
 			rspamd_radix_fin, (void **)r)) {
-			msg_warn ("invalid radix map %s", map_line);
+			msg_warn_config ("invalid radix map %s", map_line);
 			radix_destroy_compressed (*r);
 			lua_pushnil (L);
 			return 1;
@@ -762,12 +762,13 @@ lua_config_radix_from_config (lua_State *L)
 			rspamd_lua_setclass (L, "rspamd{radix}", -1);
 			return 1;
 		} else {
-			msg_warn ("Couldnt find config option [%s][%s]", mname, optname);
+			msg_warn_config ("Couldnt find config option [%s][%s]", mname,
+					optname);
 			lua_pushnil (L);
 			return 1;
 		}
 	} else {
-		msg_warn ("Couldnt find config option");
+		msg_warn_config ("Couldnt find config option");
 		lua_pushnil (L);
 		return 1;
 	}
@@ -821,7 +822,7 @@ lua_config_add_kv_map (lua_State *L)
 		*r = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 		if (!rspamd_map_add (cfg, map_line, description, rspamd_kv_list_read, rspamd_kv_list_fin,
 			(void **)r)) {
-			msg_warn ("invalid hash map %s", map_line);
+			msg_warn_config ("invalid hash map %s", map_line);
 			g_hash_table_destroy (*r);
 			lua_pushnil (L);
 			return 1;
@@ -884,7 +885,7 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 	*ptask = task;
 
 	if (lua_pcall (cd->L, 1, LUA_MULTRET, 0) != 0) {
-		msg_info ("call to (%s)%s failed: %s", cd->symbol,
+		msg_info_task ("call to (%s)%s failed: %s", cd->symbol,
 			cd->cb_is_ref ? "local function" : cd->callback.name,
 			lua_tostring (cd->L, -1));
 	}
@@ -1001,7 +1002,7 @@ lua_config_register_symbols (lua_State *L)
 	gdouble weight = 1.0;
 
 	if (lua_gettop (L) < 3) {
-		msg_err ("not enough arguments to register a function");
+		msg_err_config ("not enough arguments to register a function");
 		return 0;
 	}
 	if (cfg) {
@@ -1209,7 +1210,7 @@ lua_config_set_metric_symbol (lua_State * L)
 					"group=S;one_shot=B;metric=S",
 					&name, &weight, &description,
 					&group, &one_shot, &metric_name)) {
-				msg_err ("bad arguments: %e", err);
+				msg_err_config ("bad arguments: %e", err);
 				g_error_free (err);
 
 				return 0;
@@ -1236,7 +1237,7 @@ lua_config_set_metric_symbol (lua_State * L)
 		metric = g_hash_table_lookup (cfg->metrics, metric_name);
 
 		if (metric == NULL) {
-			msg_err ("metric named %s is not defined", metric_name);
+			msg_err_config ("metric named %s is not defined", metric_name);
 		}
 		else if (name != NULL && weight > 0) {
 			rspamd_config_add_metric_symbol (cfg, metric_name, name,
@@ -1265,13 +1266,14 @@ lua_config_add_composite (lua_State * L)
 		if (name && expr_str) {
 			if (!rspamd_parse_expression (expr_str, 0, &composite_expr_subr,
 					NULL, cfg->cfg_pool, &err, &expr)) {
-				msg_err ("cannot parse composite expression %s: %e", expr_str,
+				msg_err_config ("cannot parse composite expression %s: %e",
+						expr_str,
 						err);
 				g_error_free (err);
 			}
 			else {
 				if (g_hash_table_lookup (cfg->composite_symbols, name) != NULL) {
-					msg_warn ("composite %s is redefined", name);
+					msg_warn_config ("composite %s is redefined", name);
 					new = FALSE;
 				}
 				composite = rspamd_mempool_alloc (cfg->cfg_pool,
@@ -1343,7 +1345,8 @@ lua_config_newindex (lua_State *L)
 
 			if (lua_type (L, -1) != LUA_TFUNCTION) {
 				lua_pop (L, 2);
-				msg_info ("cannot find callback definition for %s", name);
+				msg_info_config ("cannot find callback definition for %s",
+						name);
 				return 0;
 			}
 			idx = luaL_ref (L, LUA_REGISTRYINDEX);
@@ -1380,7 +1383,7 @@ lua_config_newindex (lua_State *L)
 					type = SYMBOL_TYPE_CALLBACK;
 				}
 				else {
-					msg_info ("unknown type: %s", type_str);
+					msg_info_config ("unknown type: %s", type_str);
 				}
 
 			}
@@ -1521,7 +1524,7 @@ lua_map_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 		cbdata = (struct lua_map_callback_data *)data->cur_data;
 	}
 	else {
-		msg_err ("no data read for map");
+		msg_err_pool ("no data read for map");
 		return;
 	}
 
@@ -1530,7 +1533,7 @@ lua_map_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 		lua_pushlstring (cbdata->L, cbdata->data->str, cbdata->data->len);
 
 		if (lua_pcall (cbdata->L, 1, 0, 0) != 0) {
-			msg_info ("call to %s failed: %s", "local function",
+			msg_info_pool ("call to %s failed: %s", "local function",
 				lua_tostring (cbdata->L, -1));
 		}
 	}
@@ -1567,7 +1570,7 @@ lua_config_add_map (lua_State *L)
 			*pcbdata = cbdata;
 			if (!rspamd_map_add (cfg, map_line, description, lua_map_read, lua_map_fin,
 				(void **)pcbdata)) {
-				msg_warn ("invalid hash map %s", map_line);
+				msg_warn_config ("invalid hash map %s", map_line);
 				lua_pushboolean (L, false);
 			}
 			else {
@@ -1575,7 +1578,7 @@ lua_config_add_map (lua_State *L)
 			}
 		}
 		else {
-			msg_warn ("invalid callback argument for map %s", map_line);
+			msg_warn_config ("invalid callback argument for map %s", map_line);
 			lua_pushboolean (L, false);
 		}
 	}

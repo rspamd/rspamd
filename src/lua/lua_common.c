@@ -304,7 +304,7 @@ rspamd_init_lua_filters (struct rspamd_config *cfg)
 			}
 
 			if (luaL_loadfile (L, module->path) != 0) {
-				msg_info ("load of %s failed: %s", module->path,
+				msg_info_config ("load of %s failed: %s", module->path,
 					lua_tostring (L, -1));
 				cur = g_list_next (cur);
 				continue;
@@ -318,14 +318,14 @@ rspamd_init_lua_filters (struct rspamd_config *cfg)
 
 			/* do the call (0 arguments, N result) */
 			if (lua_pcall (L, 0, LUA_MULTRET, 0) != 0) {
-				msg_info ("init of %s failed: %s", module->path,
+				msg_info_config ("init of %s failed: %s", module->path,
 					lua_tostring (L, -1));
 				cur = g_list_next (cur);
 				continue;
 			}
 			if (lua_gettop (L) != 0) {
 				if (lua_tonumber (L, -1) == -1) {
-					msg_info (
+					msg_info_config (
 						"%s returned -1 that indicates configuration error",
 						module->path);
 				}
@@ -356,12 +356,12 @@ rspamd_lua_call_filter (const gchar *function, struct rspamd_task *task)
 	*ptask = task;
 
 	if (lua_pcall (L, 1, 1, 0) != 0) {
-		msg_info ("call to %s failed", function);
+		msg_info_task ("call to %s failed", function);
 	}
 
 	/* retrieve result */
 	if (!lua_isnumber (L, -1)) {
-		msg_info ("function %s must return a number", function);
+		msg_info_task ("function %s must return a number", function);
 	}
 	result = lua_tonumber (L, -1);
 	lua_pop (L, 1);             /* pop returned value */
@@ -385,12 +385,12 @@ rspamd_lua_call_chain_filter (const gchar *function,
 		lua_pushnumber (L, marks[i]);
 	}
 	if (lua_pcall (L, number, 1, 0) != 0) {
-		msg_info ("call to %s failed", function);
+		msg_info_task ("call to %s failed", function);
 	}
 
 	/* retrieve result */
 	if (!lua_isnumber (L, -1)) {
-		msg_info ("function %s must return a number", function);
+		msg_info_task ("function %s must return a number", function);
 	}
 	result = lua_tonumber (L, -1);
 	lua_pop (L, 1);             /* pop returned value */
@@ -415,19 +415,23 @@ lua_consolidation_callback (gpointer key, gpointer value, gpointer arg)
 	struct symbol *s = (struct symbol *)value;
 	struct consolidation_callback_data *data =
 		(struct consolidation_callback_data *)arg;
-	lua_State *L = data->task->cfg->lua_state;
+	lua_State *L;
+	struct rspamd_task *task;
+
+	L = data->task->cfg->lua_state;
+	task = data->task;
 
 	lua_getglobal (L, data->func);
 
 	lua_pushstring (L, (const gchar *)key);
 	lua_pushnumber (L, s->score);
 	if (lua_pcall (L, 2, 1, 0) != 0) {
-		msg_info ("call to %s failed", data->func);
+		msg_info_task ("call to %s failed", data->func);
 	}
 
 	/* retrieve result */
 	if (!lua_isnumber (L, -1)) {
-		msg_info ("function %s must return a number", data->func);
+		msg_info_task ("function %s must return a number", data->func);
 	}
 	res = lua_tonumber (L, -1);
 	lua_pop (L, 1);             /* pop returned value */
@@ -467,7 +471,7 @@ rspamd_lua_normalize (struct rspamd_config *cfg, long double score, void *params
 
 	/* Call specified function and put input score on stack */
 	if (!p->data) {
-		msg_info ("bad function name while calling normalizer");
+		msg_info_config ("bad function name while calling normalizer");
 		return score;
 	}
 
@@ -475,12 +479,12 @@ rspamd_lua_normalize (struct rspamd_config *cfg, long double score, void *params
 	lua_pushnumber (L, score);
 
 	if (lua_pcall (L, 1, 1, 0) != 0) {
-		msg_info ("call to %s failed", p->data);
+		msg_info_config ("call to %s failed", p->data);
 	}
 
 	/* retrieve result */
 	if (!lua_isnumber (L, -1)) {
-		msg_info ("function %s must return a number", p->data);
+		msg_info_config ("function %s must return a number", p->data);
 	}
 	res = lua_tonumber (L, -1);
 	lua_pop (L, 1);

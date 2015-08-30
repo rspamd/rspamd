@@ -98,7 +98,7 @@ call_classifier_pre_callback (struct rspamd_classifier_config *ccf,
 	lua_pushboolean (L, is_spam);
 
 	if (lua_pcall (L, 4, 1, 0) != 0) {
-		msg_warn ("error running pre classifier callback %s",
+		msg_warn_task ("error running pre classifier callback %s",
 			lua_tostring (L, -1));
 	}
 	else {
@@ -194,7 +194,7 @@ rspamd_lua_call_cls_post_callbacks (struct rspamd_classifier_config *ccf,
 		lua_pushnumber (L, out);
 
 		if (lua_pcall (L, 3, 1, 0) != 0) {
-			msg_warn ("error running function %s: %s", cd->name,
+			msg_warn_task ("error running function %s: %s", cd->name,
 				lua_tostring (L, -1));
 		}
 		else {
