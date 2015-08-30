@@ -60,6 +60,23 @@ worker_t normal_worker = {
 	SOCK_STREAM                 /* TCP socket */
 };
 
+#define msg_err_ctx(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
+        "controller", ctx->cfg->cfg_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_ctx(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+        "controller", ctx->cfg->cfg_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_ctx(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        "controller", ctx->cfg->cfg_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_ctx(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        "controller", ctx->cfg->cfg_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
 /*
  * Worker's context
  */
@@ -86,6 +103,8 @@ struct rspamd_worker_ctx {
 	gpointer key;
 	/* Keys cache */
 	struct rspamd_keypair_cache *keys_cache;
+	/* Configuration */
+	struct rspamd_config *cfg;
 };
 
 /*
@@ -110,7 +129,7 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 	ctx = task->worker->ctx;
 
 	if (!rspamd_protocol_handle_request (task, msg)) {
-		msg_err ("cannot handle request: %e", task->err);
+		msg_err_task ("cannot handle request: %e", task->err);
 		task->flags |= RSPAMD_TASK_FLAG_SKIP;
 	}
 	else {
@@ -119,7 +138,7 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 		}
 		else {
 			if (!rspamd_task_load_message (task, msg, chunk, len)) {
-				msg_err ("cannot load message: %e", task->err);
+				msg_err_task ("cannot load message: %e", task->err);
 				task->flags |= RSPAMD_TASK_FLAG_SKIP;
 			}
 		}
@@ -135,7 +154,7 @@ rspamd_worker_error_handler (struct rspamd_http_connection *conn, GError *err)
 {
 	struct rspamd_task *task = (struct rspamd_task *) conn->ud;
 
-	msg_info ("abnormally closing connection from: %s, error: %e",
+	msg_info_task ("abnormally closing connection from: %s, error: %e",
 		rspamd_inet_address_to_string (task->client_addr), err);
 	/* Terminate session immediately */
 	rspamd_session_destroy (task->s);
@@ -149,7 +168,7 @@ rspamd_worker_finish_handler (struct rspamd_http_connection *conn,
 
 	if (task->processed_stages & RSPAMD_TASK_STAGE_REPLIED) {
 		/* We are done here */
-		msg_debug ("normally closing connection from: %s",
+		msg_debug_task ("normally closing connection from: %s",
 			rspamd_inet_address_to_string (task->client_addr));
 		rspamd_session_destroy (task->s);
 	}
@@ -168,14 +187,14 @@ accept_socket (gint fd, short what, void *arg)
 {
 	struct rspamd_worker *worker = (struct rspamd_worker *) arg;
 	struct rspamd_worker_ctx *ctx;
-	struct rspamd_task *new_task;
+	struct rspamd_task *task;
 	rspamd_inet_addr_t *addr;
 	gint nfd;
 
 	ctx = worker->ctx;
 
 	if (ctx->max_tasks != 0 && ctx->tasks > ctx->max_tasks) {
-		msg_info ("current tasks is now: %uD while maximum is: %uD",
+		msg_info_ctx ("current tasks is now: %uD while maximum is: %uD",
 			ctx->tasks,
 			ctx->max_tasks);
 		return;
@@ -183,7 +202,7 @@ accept_socket (gint fd, short what, void *arg)
 
 	if ((nfd =
 		rspamd_accept_from_socket (fd, &addr)) == -1) {
-		msg_warn ("accept failed: %s", strerror (errno));
+		msg_warn_ctx ("accept failed: %s", strerror (errno));
 		return;
 	}
 	/* Check for EAGAIN */
@@ -191,48 +210,48 @@ accept_socket (gint fd, short what, void *arg)
 		return;
 	}
 
-	new_task = rspamd_task_new (worker);
+	task = rspamd_task_new (worker);
 
-	msg_info ("accepted connection from %s port %d",
+	msg_info_task ("accepted connection from %s port %d",
 		rspamd_inet_address_to_string (addr),
 		rspamd_inet_address_get_port (addr));
 
 	/* Copy some variables */
 	if (ctx->is_mime) {
-		new_task->flags |= RSPAMD_TASK_FLAG_MIME;
+		task->flags |= RSPAMD_TASK_FLAG_MIME;
 	}
 	else {
-		new_task->flags &= ~RSPAMD_TASK_FLAG_MIME;
+		task->flags &= ~RSPAMD_TASK_FLAG_MIME;
 	}
 
-	new_task->sock = nfd;
-	new_task->client_addr = addr;
+	task->sock = nfd;
+	task->client_addr = addr;
 
 	worker->srv->stat->connections_count++;
-	new_task->resolver = ctx->resolver;
+	task->resolver = ctx->resolver;
 
-	new_task->http_conn = rspamd_http_connection_new (
+	task->http_conn = rspamd_http_connection_new (
 		rspamd_worker_body_handler,
 		rspamd_worker_error_handler,
 		rspamd_worker_finish_handler,
 		0,
 		RSPAMD_HTTP_SERVER,
 		ctx->keys_cache);
-	new_task->ev_base = ctx->ev_base;
+	task->ev_base = ctx->ev_base;
 	ctx->tasks++;
-	rspamd_mempool_add_destructor (new_task->task_pool,
+	rspamd_mempool_add_destructor (task->task_pool,
 		(rspamd_mempool_destruct_t)reduce_tasks_count, &ctx->tasks);
 
 	/* Set up async session */
-	new_task->s = rspamd_session_create (new_task->task_pool, rspamd_task_fin,
-			rspamd_task_restore, rspamd_task_free_hard, new_task);
+	task->s = rspamd_session_create (task->task_pool, rspamd_task_fin,
+			rspamd_task_restore, rspamd_task_free_hard, task);
 
 	if (ctx->key) {
-		rspamd_http_connection_set_key (new_task->http_conn, ctx->key);
+		rspamd_http_connection_set_key (task->http_conn, ctx->key);
 	}
 
-	rspamd_http_connection_read_message (new_task->http_conn,
-		new_task,
+	rspamd_http_connection_read_message (task->http_conn,
+			task,
 		nfd,
 		&ctx->io_tv,
 		ctx->ev_base);
@@ -250,6 +269,7 @@ init_worker (struct rspamd_config *cfg)
 
 	ctx->is_mime = TRUE;
 	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;
+	ctx->cfg = cfg;
 
 	rspamd_rcl_register_worker_option (cfg, type, "mime",
 		rspamd_rcl_parse_struct_boolean, ctx,
@@ -324,7 +344,3 @@ start_worker (struct rspamd_worker *worker)
 
 	exit (EXIT_SUCCESS);
 }
-
-/*
- * vi:ts=4
- */

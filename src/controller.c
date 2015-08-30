@@ -58,6 +58,39 @@
 #define PATH_STAT_RESET "/statreset"
 #define PATH_COUNTERS "/counters"
 
+#define msg_err_session(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
+        session->pool->tag.tagname, session->pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_session(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+        session->pool->tag.tagname, session->pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_session(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        session->pool->tag.tagname, session->pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_session(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        session->pool->tag.tagname, session->pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_err_ctx(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
+        "controller", ctx->cfg->cfg_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_ctx(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+        "controller", ctx->cfg->cfg_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_ctx(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        "controller", ctx->cfg->cfg_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_ctx(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        "controller", ctx->cfg->cfg_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
 /* Graph colors */
 #define COLOR_CLEAN "#58A458"
 #define COLOR_PROBABLE_SPAM "#D67E7E"
@@ -233,8 +266,10 @@ rspamd_encrypted_password_get_str (const gchar * password, gsize skip,
 	return str;
 }
 
-static gboolean rspamd_check_encrypted_password (const GString * password,
-		const gchar * check, const struct rspamd_controller_pbkdf *pbkdf)
+static gboolean
+rspamd_check_encrypted_password (struct rspamd_controller_worker_ctx *ctx,
+		const GString * password, const gchar * check,
+		const struct rspamd_controller_pbkdf *pbkdf)
 {
 	const gchar *salt, *hash;
 	gchar *salt_decoded, *key_decoded;
@@ -255,7 +290,7 @@ static gboolean rspamd_check_encrypted_password (const GString * password,
 
 		if (salt_decoded == NULL || salt_len != pbkdf->salt_len) {
 			/* We have some unknown salt here */
-			msg_info ("incorrect salt: %z, while %z expected",
+			msg_info_ctx ("incorrect salt: %z, while %z expected",
 					salt_len, pbkdf->salt_len);
 			return FALSE;
 		}
@@ -264,7 +299,7 @@ static gboolean rspamd_check_encrypted_password (const GString * password,
 
 		if (key_decoded == NULL || key_len != pbkdf->key_len) {
 			/* We have some unknown salt here */
-			msg_info ("incorrect key: %z, while %z expected",
+			msg_info_ctx ("incorrect key: %z, while %z expected",
 					key_len, pbkdf->key_len);
 			return FALSE;
 		}
@@ -275,7 +310,7 @@ static gboolean rspamd_check_encrypted_password (const GString * password,
 				local_key, pbkdf->key_len, pbkdf->rounds);
 
 		if (!rspamd_constant_memcmp (key_decoded, local_key, pbkdf->key_len)) {
-			msg_info ("incorrect or absent password has been specified");
+			msg_info_ctx ("incorrect or absent password has been specified");
 			ret = FALSE;
 		}
 
@@ -302,13 +337,13 @@ static gboolean rspamd_controller_check_password(
 
 	/* Access list logic */
 	if (rspamd_inet_address_get_af (session->from_addr) == AF_UNIX) {
-		msg_info ("allow unauthorized connection from a unix socket");
+		msg_info_session ("allow unauthorized connection from a unix socket");
 		return TRUE;
 	}
 	else if (ctx->secure_map
 			&& radix_find_compressed_addr (ctx->secure_map, session->from_addr)
 					!= RADIX_NO_VALUE) {
-		msg_info ("allow unauthorized connection from a trusted IP %s",
+		msg_info_session ("allow unauthorized connection from a trusted IP %s",
 				rspamd_inet_address_to_string (session->from_addr));
 		return TRUE;
 	}
@@ -341,7 +376,7 @@ static gboolean rspamd_controller_check_password(
 				return TRUE;
 			}
 		}
-		msg_info ("absent password has been specified");
+		msg_info_session ("absent password has been specified");
 		ret = FALSE;
 	}
 	else {
@@ -361,12 +396,12 @@ static gboolean rspamd_controller_check_password(
 					ret = rspamd_constant_memcmp (password->str, check, password->len);
 				}
 				else {
-					ret = rspamd_check_encrypted_password (password, check,
+					ret = rspamd_check_encrypted_password (ctx, password, check,
 							pbkdf);
 				}
 			}
 			else {
-				msg_warn (
+				msg_warn_session (
 						"no password to check while executing a privileged command");
 				if (ctx->secure_map) {
 					msg_info("deny unauthorized connection");
@@ -384,7 +419,8 @@ static gboolean rspamd_controller_check_password(
 							password->len);
 				}
 				else {
-					check_normal = rspamd_check_encrypted_password (password,
+					check_normal = rspamd_check_encrypted_password (ctx,
+							password,
 							check, pbkdf);
 				}
 
@@ -399,7 +435,8 @@ static gboolean rspamd_controller_check_password(
 							password->len);
 				}
 				else {
-					check_enable = rspamd_check_encrypted_password (password,
+					check_enable = rspamd_check_encrypted_password (ctx,
+							password,
 							check, pbkdf);
 				}
 			}
@@ -705,14 +742,14 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	idstr = rspamd_http_message_find_header (msg, "Map");
 
 	if (idstr == NULL) {
-		msg_info ("absent map id");
+		msg_info_session ("absent map id");
 		rspamd_controller_send_error (conn_ent, 400, "400 id header missing");
 		return 0;
 	}
 
 	id = strtoul (idstr->str, &errstr, 10);
 	if (*errstr != '\0' && !g_ascii_isspace (*errstr)) {
-		msg_info ("invalid map id");
+		msg_info_session ("invalid map id");
 		rspamd_controller_send_error (conn_ent, 400, "400 invalid map id");
 		return 0;
 	}
@@ -729,13 +766,13 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	if (!found) {
-		msg_info ("map not found");
+		msg_info_session ("map not found");
 		rspamd_controller_send_error (conn_ent, 404, "404 map not found");
 		return 0;
 	}
 
 	if (stat (map->uri, &st) == -1 || (fd = open (map->uri, O_RDONLY)) == -1) {
-		msg_err ("cannot open map %s: %s", map->uri, strerror (errno));
+		msg_err_session ("cannot open map %s: %s", map->uri, strerror (errno));
 		rspamd_controller_send_error (conn_ent, 500, "500 map open error");
 		return 0;
 	}
@@ -749,7 +786,7 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	if (read (fd, reply->body->str, st.st_size) == -1) {
 		close (fd);
 		rspamd_http_message_free (reply);
-		msg_err ("cannot read map %s: %s", map->uri, strerror (errno));
+		msg_err_session ("cannot read map %s: %s", map->uri, strerror (errno));
 		rspamd_controller_send_error (conn_ent, 500, "500 map read error");
 		return 0;
 	}
@@ -950,13 +987,13 @@ rspamd_controller_learn_fin_task (void *ud)
 
 	if (rspamd_learn_task_spam (session->cl, task, session->is_spam, &err) ==
 			RSPAMD_STAT_PROCESS_ERROR) {
-		msg_info ("cannot learn <%s>: %e", task->message_id, err);
+		msg_info_session ("cannot learn <%s>: %e", task->message_id, err);
 		rspamd_controller_send_error (conn_ent, err->code, err->message);
 
 		return TRUE;
 	}
 	/* Successful learn */
-	msg_info ("<%s> learned message as %s: %s",
+	msg_info_session ("<%s> learned message as %s: %s",
 		rspamd_inet_address_to_string (session->from_addr),
 		session->is_spam ? "spam" : "ham",
 		task->message_id);
@@ -1010,7 +1047,7 @@ rspamd_controller_handle_learn_common (
 	}
 
 	if (msg->body == NULL || msg->body->len == 0) {
-		msg_err ("got zero length body, cannot continue");
+		msg_err_session ("got zero length body, cannot continue");
 		rspamd_controller_send_error (conn_ent,
 			400,
 			"Empty body is not permitted");
@@ -1047,7 +1084,7 @@ rspamd_controller_handle_learn_common (
 	}
 
 	if (!rspamd_task_process (task, RSPAMD_TASK_PROCESS_LEARN)) {
-		msg_warn ("message cannot be processed for %s", task->message_id);
+		msg_warn_session ("message cannot be processed for %s", task->message_id);
 		rspamd_controller_send_error (conn_ent, task->err->code, task->err->message);
 		rspamd_session_destroy (task->s);
 		return 0;
@@ -1112,7 +1149,7 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	if (msg->body == NULL || msg->body->len == 0) {
-		msg_err ("got zero length body, cannot continue");
+		msg_err_session ("got zero length body, cannot continue");
 		rspamd_controller_send_error (conn_ent,
 			400,
 			"Empty body is not permitted");
@@ -1141,7 +1178,7 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	if (!rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL)) {
-		msg_warn ("message cannot be processed for %s", task->message_id);
+		msg_warn_session ("message cannot be processed for %s", task->message_id);
 		rspamd_controller_send_error (conn_ent, task->err->code, task->err->message);
 		rspamd_session_destroy (task->s);
 		return 0;
@@ -1184,7 +1221,7 @@ rspamd_controller_handle_saveactions (
 	}
 
 	if (msg->body == NULL || msg->body->len == 0) {
-		msg_err ("got zero length body, cannot continue");
+		msg_err_session ("got zero length body, cannot continue");
 		rspamd_controller_send_error (conn_ent,
 			400,
 			"Empty body is not permitted");
@@ -1193,7 +1230,7 @@ rspamd_controller_handle_saveactions (
 
 	metric = g_hash_table_lookup (ctx->cfg->metrics, DEFAULT_METRIC);
 	if (metric == NULL) {
-		msg_err ("cannot find default metric");
+		msg_err_session ("cannot find default metric");
 		rspamd_controller_send_error (conn_ent, 500,
 			"Default metric is absent");
 		return 0;
@@ -1201,7 +1238,7 @@ rspamd_controller_handle_saveactions (
 
 	/* Now check for dynamic config */
 	if (!ctx->cfg->dynamic_conf) {
-		msg_err ("dynamic conf has not been defined");
+		msg_err_session ("dynamic conf has not been defined");
 		rspamd_controller_send_error (conn_ent,
 			500,
 			"No dynamic_rules setting defined");
@@ -1212,7 +1249,7 @@ rspamd_controller_handle_saveactions (
 	ucl_parser_add_chunk (parser, msg->body->str, msg->body->len);
 
 	if ((error = ucl_parser_get_error (parser)) != NULL) {
-		msg_err ("cannot parse input: %s", error);
+		msg_err_session ("cannot parse input: %s", error);
 		rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
 		ucl_parser_free (parser);
 		return 0;
@@ -1222,7 +1259,7 @@ rspamd_controller_handle_saveactions (
 	ucl_parser_free (parser);
 
 	if (obj->type != UCL_ARRAY || obj->len != 3) {
-		msg_err ("input is not an array of 3 elements");
+		msg_err_session ("input is not an array of 3 elements");
 		rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
 		ucl_object_unref (obj);
 		return 0;
@@ -1252,7 +1289,7 @@ rspamd_controller_handle_saveactions (
 	}
 
 	if (dump_dynamic_config (ctx->cfg)) {
-		msg_info ("<%s> modified %d actions",
+		msg_info_session ("<%s> modified %d actions",
 			rspamd_inet_address_to_string (session->from_addr),
 			added);
 
@@ -1298,7 +1335,7 @@ rspamd_controller_handle_savesymbols (
 	}
 
 	if (msg->body == NULL || msg->body->len == 0) {
-		msg_err ("got zero length body, cannot continue");
+		msg_err_session ("got zero length body, cannot continue");
 		rspamd_controller_send_error (conn_ent,
 			400,
 			"Empty body is not permitted");
@@ -1307,7 +1344,7 @@ rspamd_controller_handle_savesymbols (
 
 	metric = g_hash_table_lookup (ctx->cfg->metrics, DEFAULT_METRIC);
 	if (metric == NULL) {
-		msg_err ("cannot find default metric");
+		msg_err_session ("cannot find default metric");
 		rspamd_controller_send_error (conn_ent, 500,
 			"Default metric is absent");
 		return 0;
@@ -1315,7 +1352,7 @@ rspamd_controller_handle_savesymbols (
 
 	/* Now check for dynamic config */
 	if (!ctx->cfg->dynamic_conf) {
-		msg_err ("dynamic conf has not been defined");
+		msg_err_session ("dynamic conf has not been defined");
 		rspamd_controller_send_error (conn_ent,
 			500,
 			"No dynamic_rules setting defined");
@@ -1326,7 +1363,7 @@ rspamd_controller_handle_savesymbols (
 	ucl_parser_add_chunk (parser, msg->body->str, msg->body->len);
 
 	if ((error = ucl_parser_get_error (parser)) != NULL) {
-		msg_err ("cannot parse input: %s", error);
+		msg_err_session ("cannot parse input: %s", error);
 		rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
 		ucl_parser_free (parser);
 		return 0;
@@ -1336,7 +1373,7 @@ rspamd_controller_handle_savesymbols (
 	ucl_parser_free (parser);
 
 	if (obj->type != UCL_ARRAY) {
-		msg_err ("input is not an array");
+		msg_err_session ("input is not an array");
 		rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
 		ucl_object_unref (obj);
 		return 0;
@@ -1344,7 +1381,7 @@ rspamd_controller_handle_savesymbols (
 
 	while ((cur = ucl_iterate_object (obj, &iter, true))) {
 		if (cur->type != UCL_OBJECT) {
-			msg_err ("json array data error");
+			msg_err_session ("json array data error");
 			rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
 			ucl_object_unref (obj);
 			return 0;
@@ -1357,7 +1394,7 @@ rspamd_controller_handle_savesymbols (
 		if (sym && fabs (*sym->weight_ptr - val) > 0.01) {
 			if (!add_dynamic_symbol (ctx->cfg, DEFAULT_METRIC,
 				ucl_object_tostring (jname), val)) {
-				msg_err ("add symbol failed for %s",
+				msg_err_session ("add symbol failed for %s",
 					ucl_object_tostring (jname));
 				rspamd_controller_send_error (conn_ent, 506,
 					"Add symbol failed");
@@ -1370,7 +1407,7 @@ rspamd_controller_handle_savesymbols (
 
 	if (added > 0) {
 		if (dump_dynamic_config (ctx->cfg)) {
-			msg_info ("<%s> modified %d symbols",
+			msg_info_session ("<%s> modified %d symbols",
 					rspamd_inet_address_to_string (session->from_addr),
 					added);
 
@@ -1381,7 +1418,7 @@ rspamd_controller_handle_savesymbols (
 		}
 	}
 	else {
-		msg_err ("no symbols to save");
+		msg_err_session ("no symbols to save");
 		rspamd_controller_send_error (conn_ent, 404, "No symbols to save");
 	}
 
@@ -1418,7 +1455,7 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	if (msg->body == NULL || msg->body->len == 0) {
-		msg_err ("got zero length body, cannot continue");
+		msg_err_session ("got zero length body, cannot continue");
 		rspamd_controller_send_error (conn_ent,
 			400,
 			"Empty body is not permitted");
@@ -1428,14 +1465,14 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 	idstr = rspamd_http_message_find_header (msg, "Map");
 
 	if (idstr == NULL) {
-		msg_info ("absent map id");
+		msg_info_session ("absent map id");
 		rspamd_controller_send_error (conn_ent, 400, "Map id not specified");
 		return 0;
 	}
 
 	id = strtoul (idstr->str, &errstr, 10);
 	if (*errstr != '\0' && !g_ascii_isspace (*errstr)) {
-		msg_info ("invalid map id: %V", idstr);
+		msg_info_session ("invalid map id: %V", idstr);
 		rspamd_controller_send_error (conn_ent, 400, "Map id is invalid");
 		return 0;
 	}
@@ -1452,13 +1489,13 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	if (!found) {
-		msg_info ("map not found: %d", id);
+		msg_info_session ("map not found: %d", id);
 		rspamd_controller_send_error (conn_ent, 404, "Map id not found");
 		return 0;
 	}
 
 	if (g_atomic_int_get (map->locked)) {
-		msg_info ("map locked: %s", map->uri);
+		msg_info_session ("map locked: %s", map->uri);
 		rspamd_controller_send_error (conn_ent, 404, "Map is locked");
 		return 0;
 	}
@@ -1468,20 +1505,20 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 	fd = open (map->uri, O_WRONLY | O_TRUNC);
 	if (fd == -1) {
 		g_atomic_int_set (map->locked, 0);
-		msg_info ("map %s open error: %s", map->uri, strerror (errno));
+		msg_info_session ("map %s open error: %s", map->uri, strerror (errno));
 		rspamd_controller_send_error (conn_ent, 404, "Map id not found");
 		return 0;
 	}
 
 	if (write (fd, msg->body->str, msg->body->len) == -1) {
-		msg_info ("map %s write error: %s", map->uri, strerror (errno));
+		msg_info_session ("map %s write error: %s", map->uri, strerror (errno));
 		close (fd);
 		g_atomic_int_set (map->locked, 0);
 		rspamd_controller_send_error (conn_ent, 500, "Map write error");
 		return 0;
 	}
 
-	msg_info ("<%s>, map %s saved",
+	msg_info_session ("<%s>, map %s saved",
 		rspamd_inet_address_to_string (session->from_addr),
 		map->uri);
 	/* Close and unlock */
@@ -1697,7 +1734,7 @@ rspamd_controller_handle_statreset (
 		return 0;
 	}
 
-	msg_info ("<%s> reset stat",
+	msg_info_session ("<%s> reset stat",
 			rspamd_inet_address_to_string (session->from_addr));
 	return rspamd_controller_handle_stat_common (conn_ent, msg, TRUE);
 }
@@ -1745,7 +1782,7 @@ rspamd_controller_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 
 	cmd = g_hash_table_lookup (session->ctx->custom_commands, msg->url->str);
 	if (cmd == NULL || cmd->handler == NULL) {
-		msg_err ("custom command %V has not been found", msg->url);
+		msg_err_session ("custom command %V has not been found", msg->url);
 		rspamd_controller_send_error (conn_ent, 404, "No command associated");
 		return 0;
 	}
@@ -1755,7 +1792,7 @@ rspamd_controller_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 	if (cmd->require_message && (msg->body == NULL || msg->body->len == 0)) {
-		msg_err ("got zero length body, cannot continue");
+		msg_err_session ("got zero length body, cannot continue");
 		rspamd_controller_send_error (conn_ent,
 			400,
 			"Empty body is not permitted");
@@ -1769,7 +1806,9 @@ static void
 rspamd_controller_error_handler (struct rspamd_http_connection_entry *conn_ent,
 	GError *err)
 {
-	msg_err ("http error occurred: %s", err->message);
+	struct rspamd_controller_session *session = conn_ent->ud;
+
+	msg_err_session ("http error occurred: %s", err->message);
 }
 
 static void
@@ -1794,7 +1833,7 @@ rspamd_controller_accept_socket (gint fd, short what, void *arg)
 {
 	struct rspamd_worker *worker = (struct rspamd_worker *) arg;
 	struct rspamd_controller_worker_ctx *ctx;
-	struct rspamd_controller_session *nsession;
+	struct rspamd_controller_session *session;
 	rspamd_inet_addr_t *addr;
 	gint nfd;
 
@@ -1802,7 +1841,7 @@ rspamd_controller_accept_socket (gint fd, short what, void *arg)
 
 	if ((nfd =
 		rspamd_accept_from_socket (fd, &addr)) == -1) {
-		msg_warn ("accept failed: %s", strerror (errno));
+		msg_warn_ctx ("accept failed: %s", strerror (errno));
 		return;
 	}
 	/* Check for EAGAIN */
@@ -1810,17 +1849,19 @@ rspamd_controller_accept_socket (gint fd, short what, void *arg)
 		return;
 	}
 
-	nsession = g_slice_alloc0 (sizeof (struct rspamd_controller_session));
-	nsession->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
-	nsession->ctx = ctx;
+	session = g_slice_alloc0 (sizeof (struct rspamd_controller_session));
+	session->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
+			"csession");
+	session->ctx = ctx;
 
-	nsession->from_addr = addr;
+	session->from_addr = addr;
 
-	rspamd_http_router_handle_socket (ctx->http, nfd, nsession);
+	rspamd_http_router_handle_socket (ctx->http, nfd, session);
 }
 
 static void
-rspamd_controller_password_sane (const gchar *password, const gchar *type)
+rspamd_controller_password_sane (struct rspamd_controller_worker_ctx *ctx,
+		const gchar *password, const gchar *type)
 {
 	const struct rspamd_controller_pbkdf *pbkdf = &pbkdf_list[0];
 	GString *msg;
@@ -1828,7 +1869,8 @@ rspamd_controller_password_sane (const gchar *password, const gchar *type)
 	gchar *encoded_salt, *encoded_key;
 
 	if (password == NULL) {
-		msg_warn ("%s is not set, so you should filter controller availability "
+		msg_warn_ctx ("%s is not set, so you should filter controller "
+				"availability "
 				"by using of firewall or `secure_ip` option", type);
 		return;
 	}
@@ -1854,7 +1896,7 @@ rspamd_controller_password_sane (const gchar *password, const gchar *type)
 		rspamd_printf_gstring (msg, "$%d$%s$%s", pbkdf->id, encoded_salt,
 				encoded_key);
 
-		msg_warn ("%v", msg);
+		msg_warn_ctx ("%v", msg);
 
 		g_string_free (msg, TRUE);
 		g_free (encoded_salt);
@@ -1953,7 +1995,7 @@ start_controller_worker (struct rspamd_worker *worker)
 				/* Fallback to the plain IP */
 				if (!radix_add_generic_iplist (secure_ip,
 						&ctx->secure_map)) {
-					msg_warn ("cannot load or parse ip list from '%s'",
+					msg_warn_ctx ("cannot load or parse ip list from '%s'",
 							secure_ip);
 				}
 			}
@@ -1961,8 +2003,9 @@ start_controller_worker (struct rspamd_worker *worker)
 		}
 	}
 
-	rspamd_controller_password_sane (ctx->password, "normal password");
-	rspamd_controller_password_sane (ctx->enable_password, "enable password");
+	rspamd_controller_password_sane (ctx, ctx->password, "normal password");
+	rspamd_controller_password_sane (ctx, ctx->enable_password, "enable "
+			"password");
 
 	/* Accept event */
 	cache = rspamd_keypair_cache_new (256);
