@@ -210,7 +210,7 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 	GString *re_flags;
 
 	if (line == NULL) {
-		msg_err ("cannot parse NULL line");
+		msg_err_pool ("cannot parse NULL line");
 		return NULL;
 	}
 
@@ -225,7 +225,7 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 		line++;
 	}
 	if (*line == '\0') {
-		msg_warn ("got empty regexp");
+		msg_warn_pool ("got empty regexp");
 		return NULL;
 	}
 	start = line;
@@ -268,7 +268,7 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 	}
 	else {
 		/* We got header name earlier but have not found // expression, so it is invalid regexp */
-		msg_warn (
+		msg_warn_pool (
 			"got no header name (eg. header=) but without corresponding regexp, %s",
 			src);
 		return NULL;
@@ -279,7 +279,7 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 		end++;
 	}
 	if (end == begin || *end != '/') {
-		msg_warn ("no trailing / in regexp %s", src);
+		msg_warn_pool ("no trailing / in regexp %s", src);
 		return NULL;
 	}
 	/* Parse flags */
@@ -361,7 +361,7 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 	g_string_free (re_flags, TRUE);
 
 	if (result->regexp == NULL || err != NULL) {
-		msg_warn ("could not read regexp: %s while reading regexp %s",
+		msg_warn_pool ("could not read regexp: %s while reading regexp %s",
 				err ? err->message : "unknown error",
 						src);
 		return NULL;
@@ -739,7 +739,7 @@ rspamd_mime_regexp_element_process (struct rspamd_task *task,
 	}
 
 	if (G_UNLIKELY (re->is_test)) {
-		msg_info (
+		msg_info_task (
 				"process %s test regexp %s returned %d",
 				rspamd_mime_regexp_type_to_string (re),
 				re->regexp_text,
@@ -761,19 +761,21 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 {
 	struct url_regexp_param *param = data;
 	struct rspamd_url *url = value;
+	struct rspamd_task *task;
 	gint ret;
 
 	if (param->found && ! param->re->is_multiple) {
 		return;
 	}
 
+	task = param->task;
 	ret = rspamd_mime_regexp_element_process (param->task, param->re,
 			struri (url), 0, FALSE);
 
 	param->found = ret;
 
 	if (G_UNLIKELY (param->re->is_test)) {
-		msg_info ("process test regexp %s for url %s returned FALSE",
+		msg_info_task ("process test regexp %s for url %s returned FALSE",
 			struri (url));
 	}
 }
@@ -799,7 +801,7 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 	struct raw_header *rh;
 
 	if (re == NULL) {
-		msg_info ("invalid regexp passed");
+		msg_info_task ("invalid regexp passed");
 		return 0;
 	}
 
@@ -808,14 +810,14 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 
 	switch (re->type) {
 	case REGEXP_NONE:
-		msg_warn ("bad error detected: %s has invalid regexp type",
+		msg_warn_task ("bad error detected: %s has invalid regexp type",
 			re->regexp_text);
 		break;
 	case REGEXP_HEADER:
 	case REGEXP_RAW_HEADER:
 		/* Check header's name */
 		if (re->header == NULL) {
-			msg_info ("header regexp without header name: '%s'",
+			msg_info_task ("header regexp without header name: '%s'",
 				re->regexp_text);
 			rspamd_task_re_cache_add (task, re->regexp_text, 0);
 			return 0;
@@ -832,7 +834,7 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 		if (headerlist == NULL) {
 			/* Header is not found */
 			if (G_UNLIKELY (re->is_test)) {
-				msg_info (
+				msg_info_task (
 					"process test regexp %s for header %s returned FALSE: no header found",
 					re->regexp_text,
 					re->header);
@@ -945,7 +947,7 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 		ret = callback_param.found;
 		break;
 	default:
-		msg_warn ("bad error detected: %p is not a valid regexp object", re);
+		msg_warn_task ("bad error detected: %p is not a valid regexp object", re);
 		return 0;
 		break;
 	}
@@ -1067,7 +1069,7 @@ rspamd_mime_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 		rspamd_lua_task_push (L, task);
 
 		if (lua_pcall (L, 1, 1, 0) != 0) {
-			msg_info ("lua call to global function '%s' for atom '%s' failed: %s",
+			msg_info_task ("lua call to global function '%s' for atom '%s' failed: %s",
 				mime_atom->d.lua_function,
 				mime_atom->str,
 				lua_tostring (L, -1));
@@ -1080,7 +1082,7 @@ rspamd_mime_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 				ret = lua_tonumber (L, 1);
 			}
 			else {
-				msg_err ("%s returned wrong return type: %s",
+				msg_err_task ("%s returned wrong return type: %s",
 						mime_atom->str, lua_typename (L, lua_type (L, -1)));
 			}
 			/* Remove result */
@@ -1129,7 +1131,7 @@ rspamd_compare_encoding (struct rspamd_task *task, GArray * args, void *unused)
 
 	arg = &g_array_index (args, struct expression_argument, 0);
 	if (!arg || arg->type != EXPRESSION_ARGUMENT_NORMAL) {
-		msg_warn ("invalid argument to function is passed");
+		msg_warn_task ("invalid argument to function is passed");
 		return FALSE;
 	}
 
@@ -1149,7 +1151,7 @@ rspamd_header_exists (struct rspamd_task * task, GArray * args, void *unused)
 
 	arg = &g_array_index (args, struct expression_argument, 0);
 	if (!arg || arg->type != EXPRESSION_ARGUMENT_NORMAL) {
-		msg_warn ("invalid argument to function is passed");
+		msg_warn_task ("invalid argument to function is passed");
 		return FALSE;
 	}
 
@@ -1185,27 +1187,27 @@ rspamd_parts_distance (struct rspamd_task * task, GArray * args, void *unused)
 		errno = 0;
 		arg = &g_array_index (args, struct expression_argument, 0);
 		if (!arg || arg->type != EXPRESSION_ARGUMENT_NORMAL) {
-			msg_warn ("invalid argument to function is passed");
+			msg_warn_task ("invalid argument to function is passed");
 			return FALSE;
 		}
 
 		threshold = strtoul ((gchar *)arg->data, NULL, 10);
 		if (errno != 0) {
-			msg_info ("bad numeric value for threshold \"%s\", assume it 100",
+			msg_info_task ("bad numeric value for threshold \"%s\", assume it 100",
 				(gchar *)arg->data);
 			threshold = 100;
 		}
 		if (args->len >= 2) {
 			arg = &g_array_index (args, struct expression_argument, 1);
 			if (!arg || arg->type != EXPRESSION_ARGUMENT_NORMAL) {
-				msg_warn ("invalid argument to function is passed");
+				msg_warn_task ("invalid argument to function is passed");
 				return FALSE;
 			}
 
 			errno = 0;
 			threshold2 = strtoul ((gchar *)arg->data, NULL, 10);
 			if (errno != 0) {
-				msg_info ("bad numeric value for threshold \"%s\", ignore it",
+				msg_info_task ("bad numeric value for threshold \"%s\", ignore it",
 					(gchar *)arg->data);
 				threshold2 = -1;
 			}
@@ -1259,13 +1261,13 @@ rspamd_recipients_distance (struct rspamd_task *task, GArray * args,
 	gint num, i, j, hits = 0, total = 0;
 
 	if (args == NULL) {
-		msg_warn ("no parameters to function");
+		msg_warn_task ("no parameters to function");
 		return FALSE;
 	}
 
 	arg = &g_array_index (args, struct expression_argument, 0);
 	if (!arg || arg->type != EXPRESSION_ARGUMENT_NORMAL) {
-		msg_warn ("invalid argument to function is passed");
+		msg_warn_task ("invalid argument to function is passed");
 		return FALSE;
 	}
 
@@ -1273,7 +1275,7 @@ rspamd_recipients_distance (struct rspamd_task *task, GArray * args,
 	threshold = strtod ((gchar *)arg->data, NULL);
 
 	if (errno != 0) {
-		msg_warn ("invalid numeric value '%s': %s",
+		msg_warn_task ("invalid numeric value '%s': %s",
 			(gchar *)arg->data,
 			strerror (errno));
 		return FALSE;
@@ -1467,13 +1469,13 @@ rspamd_compare_transfer_encoding (struct rspamd_task * task,
 	struct expression_argument *arg;
 
 	if (args == NULL) {
-		msg_warn ("no parameters to function");
+		msg_warn_task ("no parameters to function");
 		return FALSE;
 	}
 
 	arg = &g_array_index (args, struct expression_argument, 0);
 	if (!arg || arg->type != EXPRESSION_ARGUMENT_NORMAL) {
-		msg_warn ("invalid argument to function is passed");
+		msg_warn_task ("invalid argument to function is passed");
 		return FALSE;
 	}
 
@@ -1484,7 +1486,7 @@ rspamd_compare_transfer_encoding (struct rspamd_task * task,
 	enc_req = g_mime_content_encoding_from_string (arg->data);
 	if (enc_req == GMIME_CONTENT_ENCODING_DEFAULT) {
 #endif
-		msg_warn ("bad encoding type: %s", (gchar *)arg->data);
+		msg_warn_task ("bad encoding type: %s", (gchar *)arg->data);
 		return FALSE;
 	}
 
@@ -1557,13 +1559,13 @@ rspamd_has_html_tag (struct rspamd_task * task, GArray * args, void *unused)
 	gboolean res = FALSE;
 
 	if (args == NULL) {
-		msg_warn ("no parameters to function");
+		msg_warn_task ("no parameters to function");
 		return FALSE;
 	}
 
 	arg = &g_array_index (args, struct expression_argument, 0);
 	if (!arg || arg->type != EXPRESSION_ARGUMENT_NORMAL) {
-		msg_warn ("invalid argument to function is passed");
+		msg_warn_task ("invalid argument to function is passed");
 		return FALSE;
 	}
 
@@ -1609,7 +1611,7 @@ rspamd_raw_header_exists (struct rspamd_task *task, GArray * args, void *unused)
 
 	arg = &g_array_index (args, struct expression_argument, 0);
 	if (!arg || arg->type != EXPRESSION_ARGUMENT_NORMAL) {
-		msg_warn ("invalid argument to function is passed");
+		msg_warn_task ("invalid argument to function is passed");
 		return FALSE;
 	}
 
@@ -1628,7 +1630,7 @@ match_smtp_data (struct rspamd_task *task,
 		/* This is a regexp */
 		re = arg->data;
 		if (re == NULL) {
-			msg_warn ("cannot compile regexp for function");
+			msg_warn_task ("cannot compile regexp for function");
 			return FALSE;
 		}
 
@@ -1656,14 +1658,14 @@ rspamd_check_smtp_data (struct rspamd_task *task, GArray * args, void *unused)
 	gint i, ialen;
 
 	if (args == NULL) {
-		msg_warn ("no parameters to function");
+		msg_warn_task ("no parameters to function");
 		return FALSE;
 	}
 
 	arg = &g_array_index (args, struct expression_argument, 0);
 
 	if (!arg || !arg->data || arg->type != EXPRESSION_ARGUMENT_NORMAL) {
-		msg_warn ("no parameters to function");
+		msg_warn_task ("no parameters to function");
 		return FALSE;
 	}
 	else {
@@ -1675,7 +1677,7 @@ rspamd_check_smtp_data (struct rspamd_task *task, GArray * args, void *unused)
 				what = rspamd_task_get_sender (task);
 			}
 			else {
-				msg_warn ("bad argument to function: %s", type);
+				msg_warn_task ("bad argument to function: %s", type);
 				return FALSE;
 			}
 			break;
@@ -1685,7 +1687,7 @@ rspamd_check_smtp_data (struct rspamd_task *task, GArray * args, void *unused)
 				what = task->helo;
 			}
 			else {
-				msg_warn ("bad argument to function: %s", type);
+				msg_warn_task ("bad argument to function: %s", type);
 				return FALSE;
 			}
 			break;
@@ -1695,7 +1697,7 @@ rspamd_check_smtp_data (struct rspamd_task *task, GArray * args, void *unused)
 				what = task->user;
 			}
 			else {
-				msg_warn ("bad argument to function: %s", type);
+				msg_warn_task ("bad argument to function: %s", type);
 				return FALSE;
 			}
 			break;
@@ -1705,7 +1707,7 @@ rspamd_check_smtp_data (struct rspamd_task *task, GArray * args, void *unused)
 				what = task->subject;
 			}
 			else {
-				msg_warn ("bad argument to function: %s", type);
+				msg_warn_task ("bad argument to function: %s", type);
 				return FALSE;
 			}
 			break;
@@ -1715,12 +1717,12 @@ rspamd_check_smtp_data (struct rspamd_task *task, GArray * args, void *unused)
 				ia = task->rcpt_mime;
 			}
 			else {
-				msg_warn ("bad argument to function: %s", type);
+				msg_warn_task ("bad argument to function: %s", type);
 				return FALSE;
 			}
 			break;
 		default:
-			msg_warn ("bad argument to function: %s", type);
+			msg_warn_task ("bad argument to function: %s", type);
 			return FALSE;
 		}
 	}
@@ -1777,7 +1779,7 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 	struct mime_part *cur_part;
 
 	if (args == NULL || args->len < 2) {
-		msg_warn ("no parameters to function");
+		msg_warn_task ("no parameters to function");
 		return FALSE;
 	}
 
@@ -1859,7 +1861,7 @@ rspamd_content_type_has_param (struct rspamd_task * task,
 	struct mime_part *cur_part;
 
 	if (args == NULL || args->len < 1) {
-		msg_warn ("no parameters to function");
+		msg_warn_task ("no parameters to function");
 		return FALSE;
 	}
 
@@ -1922,7 +1924,7 @@ rspamd_content_type_check (struct rspamd_task *task,
 	struct mime_part *cur_part;
 
 	if (args == NULL || args->len < 1) {
-		msg_warn ("no parameters to function");
+		msg_warn_task ("no parameters to function");
 		return FALSE;
 	}
 
@@ -2011,7 +2013,7 @@ compare_subtype (struct rspamd_task *task, GMimeContentType * ct,
 	gint r = 0;
 
 	if (subtype == NULL || ct == NULL) {
-		msg_warn ("invalid parameters passed");
+		msg_warn_task ("invalid parameters passed");
 		return FALSE;
 	}
 	if (subtype->type == EXPRESSION_ARGUMENT_REGEXP) {
@@ -2118,7 +2120,7 @@ rspamd_has_content_part (struct rspamd_task * task, GArray * args, void *unused)
 	struct expression_argument *param_type = NULL, *param_subtype = NULL;
 
 	if (args == NULL) {
-		msg_warn ("no parameters to function");
+		msg_warn_task ("no parameters to function");
 		return FALSE;
 	}
 
@@ -2140,7 +2142,7 @@ rspamd_has_content_part_len (struct rspamd_task * task,
 	struct expression_argument *arg;
 
 	if (args == NULL) {
-		msg_warn ("no parameters to function");
+		msg_warn_task ("no parameters to function");
 		return FALSE;
 	}
 
@@ -2156,7 +2158,7 @@ rspamd_has_content_part_len (struct rspamd_task * task,
 			g_assert (arg->type == EXPRESSION_ARGUMENT_NORMAL);
 
 			if (errno != 0) {
-				msg_warn ("invalid numeric value '%s': %s",
+				msg_warn_task ("invalid numeric value '%s': %s",
 					(gchar *)arg->data,
 					strerror (errno));
 				return FALSE;
@@ -2168,7 +2170,7 @@ rspamd_has_content_part_len (struct rspamd_task * task,
 				max = strtoul (arg->data, NULL, 10);
 
 				if (errno != 0) {
-					msg_warn ("invalid numeric value '%s': %s",
+					msg_warn_task ("invalid numeric value '%s': %s",
 						(gchar *)arg->data,
 						strerror (errno));
 					return FALSE;

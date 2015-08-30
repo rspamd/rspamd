@@ -371,7 +371,8 @@ parse_recv_header (rspamd_mempool_t * pool,
 }
 
 static void
-append_raw_header (GHashTable *target, struct raw_header *rh)
+append_raw_header (struct rspamd_task *task,
+		GHashTable *target, struct raw_header *rh)
 {
 	struct raw_header *lp;
 
@@ -384,7 +385,7 @@ append_raw_header (GHashTable *target, struct raw_header *rh)
 	else {
 		g_hash_table_insert (target, rh->name, rh);
 	}
-	msg_debug ("add raw header %s: %s", rh->name, rh->value);
+	msg_debug_task ("add raw header %s: %s", rh->name, rh->value);
 }
 
 /* Convert raw headers to a list of struct raw_header * */
@@ -531,14 +532,14 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 			new->decoded = g_mime_utils_header_decode_text (new->value);
 			rspamd_mempool_add_destructor (task->task_pool,
 					(rspamd_mempool_destruct_t)g_free, new->decoded);
-			append_raw_header (target, new);
+			append_raw_header (task, target, new);
 			state = 0;
 			break;
 		case 5:
 			/* Header has only name, no value */
 			new->value = "";
 			new->decoded = NULL;
-			append_raw_header (target, new);
+			append_raw_header (task, target, new);
 			state = 0;
 			break;
 		case 99:
@@ -748,7 +749,7 @@ convert_text_to_utf (struct rspamd_task *task,
 		return part_content;
 	}
 	if (!charset_validate (task->task_pool, charset, &ocharset)) {
-		msg_info (
+		msg_info_task (
 			"<%s>: has invalid charset",
 			task->message_id);
 		SET_PART_RAW (text_part);
@@ -762,7 +763,7 @@ convert_text_to_utf (struct rspamd_task *task,
 			return part_content;
 		}
 		else {
-			msg_info (
+			msg_info_task (
 				"<%s>: contains invalid utf8 characters, assume it as raw",
 				task->message_id);
 			SET_PART_RAW (text_part);
@@ -776,7 +777,7 @@ convert_text_to_utf (struct rspamd_task *task,
 				&write_bytes,
 				&err);
 		if (res_str == NULL) {
-			msg_warn ("<%s>: cannot convert from %s to utf8: %s",
+			msg_warn_task ("<%s>: cannot convert from %s to utf8: %s",
 					task->message_id,
 					ocharset,
 					err ? err->message : "unknown problem");
@@ -952,7 +953,7 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 	if (part->language && part->language[0] != '\0' && IS_PART_UTF (part)) {
 		stem = sb_stemmer_new (part->language, "UTF_8");
 		if (stem == NULL) {
-			msg_info ("<%s> cannot create lemmatizer for %s language",
+			msg_info_task ("<%s> cannot create lemmatizer for %s language",
 				task->message_id, part->language);
 		}
 	}
@@ -1002,8 +1003,9 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 
 #define MIN3(a, b, c) ((a) < (b) ? ((a) < (c) ? (a) : (c)) : ((b) < (c) ? (b) : (c)))
 
-static gint
-rspamd_words_levenshtein_distance (GArray *w1, GArray *w2)
+static guint
+rspamd_words_levenshtein_distance (struct rspamd_task *task,
+		GArray *w1, GArray *w2)
 {
 	guint s1len, s2len, x, y, lastdiag, olddiag;
 	guint *column;
@@ -1015,7 +1017,7 @@ rspamd_words_levenshtein_distance (GArray *w1, GArray *w2)
 	s2len = w2->len;
 
 	if (s1len > max_words) {
-		msg_err ("cannot compare parts with more than %ud words: %ud",
+		msg_err_task ("cannot compare parts with more than %ud words: %ud",
 				max_words, s1len);
 		return 0;
 	}
@@ -1071,7 +1073,7 @@ rspamd_check_gtube (struct rspamd_task *task, struct mime_text_part *part)
 				rspamd_gtube_cb, NULL, &state, FALSE)) {
 			task->flags |= RSPAMD_TASK_FLAG_SKIP;
 			task->flags |= RSPAMD_TASK_FLAG_GTUBE;
-			msg_info ("<%s>: gtube pattern has been found in part of length %ud",
+			msg_info_task ("<%s>: gtube pattern has been found in part of length %ud",
 					task->message_id, part->content->len);
 
 			return TRUE;
@@ -1271,7 +1273,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 #endif
 		}
 		else {
-			msg_err ("too deep mime recursion detected: %d", md->parser_recursion);
+			msg_err_task ("too deep mime recursion detected: %d", md->parser_recursion);
 			return;
 		}
 #ifndef GMIME24
@@ -1299,7 +1301,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 				md);
 		}
 		else {
-			msg_err ("endless recursion detected: %d", task->parser_recursion);
+			msg_err_task ("endless recursion detected: %d", task->parser_recursion);
 			return;
 		}
 #endif
@@ -1345,7 +1347,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 #endif
 
 		if (type == NULL) {
-			msg_warn ("type of part is unknown, assume text/plain");
+			msg_warn_task ("type of part is unknown, assume text/plain");
 			type = g_mime_content_type_new ("text", "plain");
 #ifdef GMIME24
 			rspamd_mempool_add_destructor (task->task_pool,
@@ -1406,7 +1408,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 					(part_content->len <= 0));
 			}
 			else {
-				msg_warn ("write to stream failed: %d, %s", errno,
+				msg_warn_task ("write to stream failed: %d, %s", errno,
 					strerror (errno));
 			}
 #ifndef GMIME24
@@ -1414,7 +1416,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 #endif
 		}
 		else {
-			msg_warn ("cannot get wrapper for mime part, type of part: %s/%s",
+			msg_warn_task ("cannot get wrapper for mime part, type of part: %s/%s",
 				type->type,
 				type->subtype);
 		}
@@ -1429,7 +1431,6 @@ destroy_message (void *pointer)
 {
 	GMimeMessage *msg = pointer;
 
-	msg_debug ("freeing pointer %p", msg);
 	g_object_unref (msg);
 }
 
@@ -1487,7 +1488,7 @@ rspamd_message_parse (struct rspamd_task *task)
 		message = g_mime_parser_construct_message (parser);
 
 		if (message == NULL) {
-			msg_warn ("cannot construct mime from stream");
+			msg_warn_task ("cannot construct mime from stream");
 			g_set_error (&task->err, rspamd_message_quark(), RSPAMD_FILTER_ERROR,\
 				"cannot parse MIME in the message");
 			/* TODO: backport to 0.9 */
@@ -1559,7 +1560,7 @@ rspamd_message_parse (struct rspamd_task *task)
 			recv = g_ptr_array_index (task->received, 0);
 			if (recv->real_ip) {
 				if (!rspamd_parse_inet_address (&task->from_addr, recv->real_ip)) {
-					msg_warn ("cannot get IP from received header: '%s'",
+					msg_warn_task ("cannot get IP from received header: '%s'",
 							recv->real_ip);
 					task->from_addr = NULL;
 				}
@@ -1676,7 +1677,7 @@ rspamd_message_parse (struct rspamd_task *task)
 						}
 					}
 					else if (rc != URI_ERRNO_OK) {
-						msg_info ("extract of url '%s' failed: %s",
+						msg_info_task ("extract of url '%s' failed: %s",
 								url_str,
 								rspamd_url_strerror (rc));
 					}
@@ -1711,7 +1712,8 @@ rspamd_message_parse (struct rspamd_task *task)
 					tw = MAX (p1->normalized_words->len, p2->normalized_words->len);
 
 					if (tw > 0) {
-						dw = rspamd_words_levenshtein_distance (p1->normalized_words,
+						dw = rspamd_words_levenshtein_distance (task,
+								p1->normalized_words,
 								p2->normalized_words);
 						diff = tw > 0 ? (100.0 * (gdouble)(tw - dw) / (gdouble)tw) : 100;
 

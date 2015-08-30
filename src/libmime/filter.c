@@ -132,7 +132,7 @@ insert_metric_result (struct rspamd_task *task,
 	/* XXX: does not take grow factor into account */
 	if (gr != NULL && gr_score != NULL && gr->max_score > 0.0) {
 		if (*gr_score >= gr->max_score) {
-			msg_info ("maximum group score %.2f for group %s has been reached,"
+			msg_info_task ("maximum group score %.2f for group %s has been reached,"
 					" ignoring symbol %s with weight %.2f", gr->max_score,
 					gr->name, symbol, w);
 			return;
@@ -368,7 +368,8 @@ rspamd_action_to_str (enum rspamd_metric_action action)
 }
 
 static double
-get_specific_action_score (const ucl_object_t *metric,
+get_specific_action_score (struct rspamd_task *task,
+		const ucl_object_t *metric,
 		struct metric_action *action)
 {
 	const ucl_object_t *act, *sact;
@@ -381,7 +382,7 @@ get_specific_action_score (const ucl_object_t *metric,
 			act_name = rspamd_action_to_str (action->action);
 			sact = ucl_object_find_key (act, act_name);
 			if (sact != NULL && ucl_object_todouble_safe (sact, &score)) {
-				msg_debug ("found override score %.2f for action %s in settings",
+				msg_debug_task ("found override score %.2f for action %s in settings",
 						score, act_name);
 				return score;
 			}
@@ -408,7 +409,7 @@ rspamd_check_action_metric (struct rspamd_task *task,
 		double sc;
 
 		action = &metric->actions[i];
-		sc = get_specific_action_score (ms, action);
+		sc = get_specific_action_score (task, ms, action);
 
 		if (sc < 0) {
 			continue;
