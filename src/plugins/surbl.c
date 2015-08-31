@@ -317,7 +317,7 @@ register_bit_symbols (struct rspamd_config *cfg, struct suffix_item *suffix,
 			rspamd_symbols_cache_add_symbol (cfg->cache, bit->symbol,
 					0, NULL, NULL,
 					SYMBOL_TYPE_VIRTUAL, parent_id);
-			msg_debug ("bit: %d", bit->bit);
+			msg_debug_config ("bit: %d", bit->bit);
 		}
 	}
 	else if (suffix->bits != NULL) {
@@ -451,7 +451,8 @@ surbl_module_config (struct rspamd_config *cfg)
 		{
 			cur = ucl_obj_get_key (cur_rule, "suffix");
 			if (cur == NULL) {
-				msg_err ("surbl rule must have explicit symbol definition");
+				msg_err_config ("surbl rule must have explicit symbol "
+						"definition");
 				continue;
 			}
 			new_suffix = rspamd_mempool_alloc0 (surbl_module_ctx->surbl_pool,
@@ -468,7 +469,7 @@ surbl_module_config (struct rspamd_config *cfg)
 
 			cur = ucl_obj_get_key (cur_rule, "symbol");
 			if (cur == NULL) {
-				msg_warn (
+				msg_warn_config (
 					"surbl rule for suffix %s lacks symbol, using %s as symbol",
 					new_suffix->suffix,
 					DEFAULT_SURBL_SYMBOL);
@@ -522,7 +523,7 @@ surbl_module_config (struct rspamd_config *cfg)
 							p ++;
 						}
 
-						msg_debug ("add new bit suffix: %d with symbol: %s",
+						msg_debug_config ("add new bit suffix: %d with symbol: %s",
 							(gint)new_bit->bit, new_bit->symbol);
 						g_array_append_val (new_suffix->bits, *new_bit);
 						has_subsymbols = TRUE;
@@ -550,7 +551,7 @@ surbl_module_config (struct rspamd_config *cfg)
 								sizeof (struct surbl_bit_item));
 
 						if (inet_pton (AF_INET, ip_val, &bit) != 1) {
-							msg_err ("cannot parse ip %s: %s", ip_val,
+							msg_err_config ("cannot parse ip %s: %s", ip_val,
 									strerror (errno));
 							continue;
 						}
@@ -566,7 +567,7 @@ surbl_module_config (struct rspamd_config *cfg)
 							p ++;
 						}
 
-						msg_debug ("add new IP suffix: %d with symbol: %s",
+						msg_debug_config ("add new IP suffix: %d with symbol: %s",
 								(gint)new_bit->bit, new_bit->symbol);
 						g_hash_table_insert (new_suffix->ips, &new_bit->bit,
 								new_bit);
@@ -591,7 +592,8 @@ surbl_module_config (struct rspamd_config *cfg)
 	}
 	/* Add default suffix */
 	if (surbl_module_ctx->suffixes == NULL) {
-		msg_err ("surbl module loaded but no suffixes defined, skip checks");
+		msg_err_config ("surbl module loaded but no suffixes defined, skip "
+				"checks");
 		return TRUE;
 	}
 
@@ -696,7 +698,8 @@ format_surbl_request (rspamd_mempool_t * pool,
 		/* This is ip address */
 		if (suffix != NULL && (suffix->options & SURBL_OPTION_NOIP) != 0) {
 			/* Ignore such requests */
-			msg_info ("ignore request of ip url for list %s", suffix->symbol);
+			msg_info_pool ("ignore request of ip url for list %s",
+					suffix->symbol);
 			return NULL;
 		}
 		result = rspamd_mempool_alloc (pool, len);
@@ -714,7 +717,8 @@ format_surbl_request (rspamd_mempool_t * pool,
 		/* This is number */
 		if (suffix != NULL && (suffix->options & SURBL_OPTION_NOIP) != 0) {
 			/* Ignore such requests */
-			msg_info ("ignore request of ip url for list %s", suffix->symbol);
+			msg_info_pool ("ignore request of ip url for list %s",
+					suffix->symbol);
 			return NULL;
 		}
 		rspamd_strlcpy (num_buf, hostname->begin,
@@ -722,7 +726,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 		errno = 0;
 		ip_num = strtoull (num_buf, NULL, 10);
 		if (errno != 0) {
-			msg_info ("cannot convert ip to number '%s': %s",
+			msg_info_pool ("cannot convert ip to number '%s': %s",
 				num_buf,
 				strerror (errno));
 			g_set_error (err, SURBL_ERROR, /* error domain */
@@ -806,7 +810,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 
 	if (tree != NULL) {
 		if (g_hash_table_lookup (tree, result) != NULL) {
-			msg_debug ("url %s is already registered", result);
+			msg_debug_pool ("url %s is already registered", result);
 			g_set_error (err, SURBL_ERROR,
 				DUPLICATE_ERROR,
 				"URL is duplicated: %s",
@@ -820,7 +824,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 
 	if (!forced &&
 		g_hash_table_lookup (surbl_module_ctx->whitelist, result) != NULL) {
-		msg_debug ("url %s is whitelisted", result);
+		msg_debug_pool ("url %s is whitelisted", result);
 		g_set_error (err, SURBL_ERROR,
 			WHITELIST_ERROR,
 			"URL is whitelisted: %s",
@@ -833,7 +837,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 		rspamd_snprintf (result + r, len - r, ".%s", suffix->suffix);
 	}
 
-	msg_debug ("request: %s, dots: %d, level: %d, orig: %*s",
+	msg_debug_pool ("request: %s, dots: %d, level: %d, orig: %*s",
 		result,
 		dots_num,
 		level,
@@ -875,7 +879,7 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 	}
 	else if (err != NULL && err->code != WHITELIST_ERROR && err->code !=
 		DUPLICATE_ERROR) {
-		msg_info ("cannot format url string for surbl %s, %e", struri (
+		msg_info_task ("cannot format url string for surbl %s, %e", struri (
 				url), err);
 		g_error_free (err);
 		return;
@@ -929,11 +933,14 @@ static void
 dns_callback (struct rdns_reply *reply, gpointer arg)
 {
 	struct dns_param *param = (struct dns_param *)arg;
+	struct rspamd_task *task;
 	struct rdns_reply_entry *elt;
 
+	task = param->task;
 	/* If we have result from DNS server, this url exists in SURBL, so increase score */
 	if (reply->code == RDNS_RC_NOERROR && reply->entries) {
-		msg_info ("<%s> domain [%s] is in surbl %s", param->task->message_id,
+		msg_info_task ("<%s> domain [%s] is in surbl %s",
+				param->task->message_id,
 			param->host_resolve, param->suffix->suffix);
 		elt = reply->entries;
 		if (elt->type == RDNS_REQUEST_A) {
@@ -942,7 +949,7 @@ dns_callback (struct rdns_reply *reply, gpointer arg)
 		}
 	}
 	else {
-		msg_debug ("<%s> domain [%s] is not in surbl %s",
+		msg_debug_task ("<%s> domain [%s] is not in surbl %s",
 			param->task->message_id, param->host_resolve,
 			param->suffix->suffix);
 	}
@@ -964,8 +971,10 @@ surbl_redirector_error (struct rspamd_http_connection *conn,
 	GError *err)
 {
 	struct redirector_param *param = (struct redirector_param *)conn->ud;
+	struct rspamd_task *task;
 
-	msg_err ("connection with http server %s terminated incorrectly: %e",
+	task = param->task;
+	msg_err_task ("connection with http server %s terminated incorrectly: %e",
 		rspamd_inet_address_to_string (rspamd_upstream_addr (param->redirector)),
 		err);
 	rspamd_upstream_fail (param->redirector);
@@ -978,15 +987,17 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 		struct rspamd_http_message *msg)
 {
 	struct redirector_param *param = (struct redirector_param *)conn->ud;
+	struct rspamd_task *task;
 	gint r, urllen;
 	const GString *hdr;
 	gchar *urlstr;
 
+	task = param->task;
 	if (msg->code == 200) {
 		hdr = rspamd_http_message_find_header (msg, "Uri");
 
 		if (hdr != NULL) {
-			msg_info ("<%s> got reply from redirector: '%s' -> '%v'",
+			msg_info_task ("<%s> got reply from redirector: '%s' -> '%v'",
 					param->task->message_id,
 					struri (param->url),
 					hdr);
@@ -1007,7 +1018,7 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 		}
 	}
 	else {
-		msg_info ("<%s> could not resolve '%s' on redirector",
+		msg_info_task ("<%s> could not resolve '%s' on redirector",
 				param->task->message_id,
 				struri (param->url));
 	}
@@ -1039,7 +1050,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 	}
 
 	if (s == -1) {
-		msg_info ("<%s> cannot create tcp socket failed: %s",
+		msg_info_task ("<%s> cannot create tcp socket failed: %s",
 			task->message_id,
 			strerror (errno));
 		make_surbl_requests (url, task, suffix, FALSE, tree);
@@ -1072,7 +1083,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 	rspamd_http_connection_write_message (param->conn, msg, NULL,
 			NULL, param, s, timeout, task->ev_base);
 
-	msg_info (
+	msg_info_task (
 		"<%s> registered redirector call for %s to %s, according to rule: %s",
 		task->message_id,
 		struri (url),
