@@ -59,7 +59,9 @@ local options = {
   ipnet_prefix = 'n:', -- prefix for ipnet hashes
   servers = '', -- list of servers
   lower_bound = 10, -- minimum number of messages to be scored
-  metric = 'default'
+  metric = 'default',
+  min_score = nil,
+  max_score = nil
 }
 
 local asn_re = rspamd_regexp.create_cached("[\\|\\s]")
@@ -185,7 +187,7 @@ local ip_score_set = function(task)
   local hkey = ip_score_hash_key(asn, country, ipnet, ip)
   local upstream = upstreams:get_upstream_by_hash(hkey)
   local addr = upstream:get_addr()
-
+ 
   asn_score,total_asn = new_score_set(score, asn_score, total_asn)
   country_score,total_country = new_score_set(score, country_score, total_country)
   ipnet_score,total_ipnet = new_score_set(score, ipnet_score, total_ipnet)
@@ -274,7 +276,10 @@ local ip_score_check = function(task)
         total_score = total_score + country_score
         table.insert(description_t, 'country: ' .. country .. '(' .. math.floor(country_score * 1000) / 100 .. ')')
       end
-      
+
+      if options['max_score'] and (total_score*10) > options['max_score'] then total_score = options['max_score']/10 end
+      if options['min_score'] and (total_score*10) < options['min_score'] then total_score = options['min_score']/10 end
+ 
       if total_score ~= 0 then
         task:insert_result(options['symbol'], total_score, table.concat(description_t, ', '))
       end
