@@ -95,7 +95,7 @@ chartable_module_config (struct rspamd_config *cfg)
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "chartable", "threshold")) != NULL) {
 		if (!ucl_obj_todouble_safe (value, &chartable_module_ctx->threshold)) {
-			msg_warn ("invalid numeric value");
+			msg_warn_config ("invalid numeric value");
 			chartable_module_ctx->threshold = DEFAULT_THRESHOLD;
 		}
 	}

@@ -151,7 +151,7 @@ parse_flags (struct fuzzy_rule *rule,
 	const gchar *sym = NULL;
 
 	if (val->type == UCL_STRING) {
-		msg_err (
+		msg_err_config (
 			"string mappings are deprecated and no longer supported, use new style configuration");
 	}
 	else if (val->type == UCL_OBJECT) {
@@ -183,15 +183,15 @@ parse_flags (struct fuzzy_rule *rule,
 						cb_id);
 			}
 			else {
-				msg_err ("fuzzy_map parameter has no flag definition");
+				msg_err_config ("fuzzy_map parameter has no flag definition");
 			}
 		}
 		else {
-			msg_err ("fuzzy_map parameter has no symbol definition");
+			msg_err_config ("fuzzy_map parameter has no symbol definition");
 		}
 	}
 	else {
-		msg_err ("fuzzy_map parameter is of an unsupported type");
+		msg_err_config ("fuzzy_map parameter is of an unsupported type");
 	}
 }
 
@@ -307,7 +307,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 	const char *k = NULL;
 
 	if (obj->type != UCL_OBJECT) {
-		msg_err ("invalid rule definition");
+		msg_err_config ("invalid rule definition");
 		return -1;
 	}
 
@@ -380,7 +380,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 	rule->shingles_key->len = 16;
 
 	if (rspamd_upstreams_count (rule->servers) == 0) {
-		msg_err ("no servers defined for fuzzy rule with symbol: %s",
+		msg_err_config ("no servers defined for fuzzy rule with symbol: %s",
 			rule->symbol);
 		return -1;
 	}
@@ -503,7 +503,7 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 	}
 
 	if (fuzzy_module_ctx->fuzzy_rules == NULL) {
-		msg_warn ("fuzzy module is enabled but no rules are defined");
+		msg_warn_config ("fuzzy module is enabled but no rules are defined");
 	}
 
 	return res;
@@ -589,7 +589,8 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 	}
 	blake2b_final (&st, shcmd->basic.digest, sizeof (shcmd->basic.digest));
 
-	msg_debug ("loading shingles with key %*xs", 16, rule->shingles_key->str);
+	msg_debug_pool ("loading shingles with key %*xs", 16,
+			rule->shingles_key->str);
 	sh = rspamd_shingles_generate (words,
 			rule->shingles_key->str, pool,
 			rspamd_shingles_default_filter, NULL);
@@ -739,12 +740,15 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 {
 	struct fuzzy_client_session *session = arg;
 	const struct rspamd_fuzzy_reply *rep;
+	struct rspamd_task *task;
 	struct fuzzy_mapping *map;
 	guchar buf[2048], *p;
 	const gchar *symbol;
 	gint r;
 	double nval;
 	gint ret = -1;
+
+	task = session->task;
 
 	if (what == EV_WRITE) {
 		if (!fuzzy_cmd_vector_to_wire (fd, session->commands)) {
@@ -783,7 +787,7 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 				if (rep->prob > 0.5) {
 					nval = fuzzy_normalize (rep->value, session->rule->max_score);
 					nval *= rep->prob;
-					msg_info (
+					msg_info_task (
 							"<%s>, found fuzzy hash with weight: %.2f, in list: %s:%d%s",
 							session->task->message_id,
 							nval,
@@ -818,7 +822,7 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 		return;
 	}
 	else if (ret == -1) {
-		msg_err ("got error on IO with server %s, %d, %s",
+		msg_err_task ("got error on IO with server %s, %d, %s",
 			rspamd_upstream_name (session->server),
 			errno,
 			strerror (errno));
@@ -839,10 +843,13 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 	struct fuzzy_learn_session *session = arg;
 	const struct rspamd_fuzzy_reply *rep;
 	struct fuzzy_mapping *map;
+	struct rspamd_task *task;
 	guchar buf[2048], *p;
 	const gchar *symbol;
 	gint r;
 	gint ret = 0;
+
+	task = session->task;
 
 	if (what == EV_WRITE) {
 		/* Send commands to storage */
@@ -863,7 +870,7 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 	}
 	else if (what == EV_READ) {
 		if ((r = read (fd, buf, sizeof (buf) - 1)) == -1) {
-			msg_info ("cannot process fuzzy hash for message <%s>",
+			msg_info_task ("cannot process fuzzy hash for message <%s>",
 					session->task->message_id);
 			if (*(session->err) == NULL) {
 				g_set_error (session->err,
@@ -888,14 +895,17 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 				}
 
 				if (rep->prob > 0.5) {
-					msg_info ("processed fuzzy hash, list: %s:%d for message <%s>",
+					msg_info_task ("processed fuzzy hash, list: %s:%d for "
+									"message <%s>",
 							symbol,
 							rep->flag,
 							session->task->message_id);
 					ret = 1;
 				}
 				else {
-					msg_info ("cannot process fuzzy hash for message <%s>, list %s:%d",
+					msg_info_task ("cannot process fuzzy hash for message "
+							"<%s>, "
+							"list %s:%d",
 							session->task->message_id,
 							symbol,
 							rep->flag);
@@ -923,7 +933,7 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 		return;
 	}
 	else if (ret == -1) {
-		msg_err ("got error in IO with server %s, %d, %s",
+		msg_err_task ("got error in IO with server %s, %d, %s",
 				rspamd_upstream_name (session->server), errno, strerror (errno));
 		rspamd_upstream_fail (session->server);
 	}
@@ -972,20 +982,21 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 
 		/* Check length of part */
 		if (fuzzy_module_ctx->min_bytes > part->content->len) {
-			msg_info ("<%s>, part is shorter than %d symbols, skip fuzzy check",
+			msg_info_task ("<%s>, part is shorter than %d symbols, skip fuzzy "
+							"check",
 				task->message_id, fuzzy_module_ctx->min_bytes);
 			continue;
 		}
 
 		if (part->words == NULL || part->words->len == 0) {
-			msg_info ("<%s>, part hash empty, skip fuzzy check",
+			msg_info_task ("<%s>, part hash empty, skip fuzzy check",
 				task->message_id, fuzzy_module_ctx->min_hash_len);
 			continue;
 		}
 
 		if (fuzzy_module_ctx->min_hash_len != 0 &&
 			part->words->len < fuzzy_module_ctx->min_hash_len) {
-			msg_info (
+			msg_info_task (
 				"<%s>, part hash is shorter than %d symbols, skip fuzzy check",
 				task->message_id,
 				fuzzy_module_ctx->min_hash_len);
@@ -1083,7 +1094,7 @@ register_fuzzy_client_call (struct rspamd_task *task,
 	if (selected) {
 		if ((sock = rspamd_inet_address_connect (rspamd_upstream_addr (selected),
 				SOCK_DGRAM, TRUE)) == -1) {
-			msg_warn ("cannot connect to %s, %d, %s",
+			msg_warn_task ("cannot connect to %s, %d, %s",
 				rspamd_upstream_name (selected),
 				errno,
 				strerror (errno));
@@ -1123,7 +1134,7 @@ fuzzy_symbol_callback (struct rspamd_task *task, void *unused)
 	if (fuzzy_module_ctx->whitelist) {
 		if (radix_find_compressed_addr (fuzzy_module_ctx->whitelist,
 				task->from_addr) != RADIX_NO_VALUE) {
-			msg_info ("<%s>, address %s is whitelisted, skip fuzzy check",
+			msg_info_task ("<%s>, address %s is whitelisted, skip fuzzy check",
 				task->message_id,
 				rspamd_inet_address_to_string (task->from_addr));
 			return;
@@ -1215,7 +1226,8 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	err = rspamd_mempool_alloc0 (task->task_pool, sizeof (GError *));
 	r = rspamd_message_parse (task);
 	if (r == -1) {
-		msg_warn ("<%s>: cannot process message for fuzzy", task->message_id);
+		msg_warn_task ("<%s>: cannot process message for fuzzy",
+				task->message_id);
 		rspamd_task_free (task, FALSE);
 		rspamd_controller_send_error (conn_ent, 400,
 			"Message processing error");
@@ -1256,7 +1268,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	if (res == -1) {
-		msg_warn ("<%s>: cannot send fuzzy request: %s", task->message_id,
+		msg_warn_task ("<%s>: cannot send fuzzy request: %s", task->message_id,
 				strerror (errno));
 		rspamd_controller_send_error (conn_ent, 400, "Message sending error");
 		rspamd_task_free (task, FALSE);
@@ -1264,12 +1276,14 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	}
 	else if (!processed) {
 		if (rules) {
-			msg_warn ("<%s>: no content to generate fuzzy", task->message_id);
+			msg_warn_task ("<%s>: no content to generate fuzzy",
+					task->message_id);
 			rspamd_controller_send_error (conn_ent, 404,
 				"No content to generate fuzzy for flag %d", flag);
 		}
 		else {
-			msg_warn ("<%s>: no fuzzy rules found for flag %d", task->message_id,
+			msg_warn_task ("<%s>: no fuzzy rules found for flag %d",
+					task->message_id,
 				flag);
 			rspamd_controller_send_error (conn_ent, 404,
 				"No fuzzy rules matched for flag %d", flag);

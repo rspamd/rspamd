@@ -244,7 +244,7 @@ spf_check_element (struct spf_addr *addr, struct rspamd_task *task)
 		/* Compare the first bytes */
 		bmask = mask / CHAR_BIT;
 		if (bmask > addrlen) {
-			msg_info ("bad mask length: %d", mask);
+			msg_info_task ("bad mask length: %d", mask);
 		}
 		else if (memcmp (s, d, bmask) == 0) {
 
@@ -362,7 +362,8 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 			}
 			else {
 				if (!resolve_spf (task, spf_plugin_callback)) {
-					msg_info ("cannot make spf request for [%s]", task->message_id);
+					msg_info_task ("cannot make spf request for [%s]",
+							task->message_id);
 				}
 				else {
 					rspamd_session_add_event (task->s, spf_plugin_fin, NULL,

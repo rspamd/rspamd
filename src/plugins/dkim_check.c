@@ -180,7 +180,7 @@ dkim_module_config (struct rspamd_config *cfg)
 		if (!rspamd_map_add (cfg, ucl_obj_tostring (value),
 			"DKIM domains", rspamd_kv_list_read, rspamd_kv_list_fin,
 			(void **)&dkim_module_ctx->dkim_domains)) {
-			msg_warn ("cannot load dkim domains list from %s",
+			msg_warn_config ("cannot load dkim domains list from %s",
 				ucl_obj_tostring (value));
 		}
 		else {
@@ -192,7 +192,7 @@ dkim_module_config (struct rspamd_config *cfg)
 		if (!rspamd_map_add (cfg, ucl_obj_tostring (value),
 				"DKIM domains", rspamd_kv_list_read, rspamd_kv_list_fin,
 				(void **)&dkim_module_ctx->dkim_domains)) {
-			msg_warn ("cannot load dkim domains list from %s",
+			msg_warn_config ("cannot load dkim domains list from %s",
 					ucl_obj_tostring (value));
 		}
 		else {
@@ -223,7 +223,7 @@ dkim_module_config (struct rspamd_config *cfg)
 	}
 
 	if (dkim_module_ctx->trusted_only && !got_trusted) {
-		msg_err (
+		msg_err_config (
 			"trusted_only option is set and no trusted domains are defined; disabling dkim module completely as it is useless in this case");
 	}
 	else {
@@ -255,7 +255,7 @@ dkim_module_config (struct rspamd_config *cfg)
 
 
 #ifndef HAVE_OPENSSL
-		msg_warn (
+		msg_warn_config (
 			"openssl is not found so dkim rsa check is disabled, only check body hash, it is NOT safe to trust these results");
 #endif
 	}
@@ -311,6 +311,7 @@ dkim_module_check (struct dkim_check_result *res)
 	gboolean all_done = TRUE, got_allow = FALSE;
 	const gchar *strict_value;
 	struct dkim_check_result *first, *cur, *sel = NULL;
+	struct rspamd_task *task = res->task;
 
 	first = res->first;
 
@@ -320,7 +321,7 @@ dkim_module_check (struct dkim_check_result *res)
 		}
 
 		if (cur->key != NULL && cur->res == -1) {
-			msg_debug ("check dkim signature for %s domain from %s",
+			msg_debug_task ("check dkim signature for %s domain from %s",
 					cur->ctx->domain,
 					cur->ctx->dns_key);
 			cur->res = rspamd_dkim_check (cur->ctx, cur->key, cur->task);
@@ -443,11 +444,11 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 			FALSE);
 	if (hlist != NULL) {
 		/* Check whitelist */
-		msg_debug ("dkim signature found");
+		msg_debug_task ("dkim signature found");
 		if (radix_find_compressed_addr (dkim_module_ctx->whitelist_ip,
 				task->from_addr) == RADIX_NO_VALUE) {
 			/* Parse signature */
-			msg_debug ("create dkim signature");
+			msg_debug_task ("create dkim signature");
 
 			while (hlist != NULL) {
 				rh = (struct raw_header *)hlist->data;
@@ -474,12 +475,13 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 						&err);
 				if (ctx == NULL) {
 					if (err != NULL) {
-						msg_info ("<%s> cannot parse DKIM context: %s",
+						msg_info_task ("<%s> cannot parse DKIM context: %s",
 								task->message_id, err->message);
 						g_error_free (err);
 					}
 					else {
-						msg_info ("<%s> cannot parse DKIM context: unknown error",
+						msg_info_task ("<%s> cannot parse DKIM context: "
+								"unknown error",
 								task->message_id);
 					}
 
@@ -495,7 +497,8 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 							(dkim_module_ctx->dkim_domains == NULL ||
 									g_hash_table_lookup (dkim_module_ctx->dkim_domains,
 											ctx->domain) == NULL)) {
-						msg_debug ("skip dkim check for %s domain", ctx->domain);
+						msg_debug_task ("skip dkim check for %s domain",
+								ctx->domain);
 						hlist = g_list_next (hlist);
 
 						continue;

@@ -78,7 +78,8 @@ read_regexp_expression (rspamd_mempool_t * pool,
 
 	if (!rspamd_parse_expression (line, 0, &mime_expr_subr, cfg, pool, &err,
 			&e)) {
-		msg_warn ("%s = \"%s\" is invalid regexp expression: %e", symbol, line,
+		msg_warn_pool ("%s = \"%s\" is invalid regexp expression: %e", symbol,
+				line,
 				err);
 		g_error_free (err);
 
@@ -119,7 +120,7 @@ regexp_module_config (struct rspamd_config *cfg)
 
 	sec = ucl_object_find_key (cfg->rcl_obj, "regexp");
 	if (sec == NULL) {
-		msg_err ("regexp module enabled, but no rules are defined");
+		msg_err_config ("regexp module enabled, but no rules are defined");
 		return TRUE;
 	}
 
@@ -133,7 +134,7 @@ regexp_module_config (struct rspamd_config *cfg)
 		}
 		else if (g_ascii_strncasecmp (ucl_object_key (value), "max_threads",
 			sizeof ("max_threads") - 1) == 0) {
-			msg_warn ("regexp module is now single threaded, max_threads is ignored");
+			msg_warn_config ("regexp module is now single threaded, max_threads is ignored");
 		}
 		else if (value->type == UCL_STRING) {
 			cur_item = rspamd_mempool_alloc0 (regexp_module_ctx->regexp_pool,
@@ -194,7 +195,7 @@ regexp_module_config (struct rspamd_config *cfg)
 					}
 				}
 				else {
-					msg_err (
+					msg_err_config (
 							"no callback/expression defined for regexp symbol: "
 									"%s", ucl_object_key (value));
 				}
@@ -261,7 +262,7 @@ regexp_module_config (struct rspamd_config *cfg)
 			}
 		}
 		else {
-			msg_warn ("unknown type of attribute %s for regexp module",
+			msg_warn_config ("unknown type of attribute %s for regexp module",
 				ucl_object_key (value));
 		}
 	}
@@ -311,7 +312,7 @@ static gboolean rspamd_lua_call_expression_func(
 					lua_pushboolean (L, (gboolean) GPOINTER_TO_SIZE(arg->data));
 					break;
 				default:
-					msg_err("cannot pass custom params to lua function");
+					msg_err_task ("cannot pass custom params to lua function");
 					return FALSE;
 				}
 			}
@@ -320,7 +321,7 @@ static gboolean rspamd_lua_call_expression_func(
 	}
 
 	if (lua_pcall (L, nargs + 1, 1, 0) != 0) {
-		msg_info("call to lua function failed: %s", lua_tostring (L, -1));
+		msg_info_task ("call to lua function failed: %s", lua_tostring (L, -1));
 		return FALSE;
 	}
 	pop++;
@@ -332,7 +333,7 @@ static gboolean rspamd_lua_call_expression_func(
 		*res = lua_toboolean (L, -1);
 	}
 	else {
-		msg_info("lua function must return a boolean");
+		msg_info_task ("lua function must return a boolean");
 	}
 
 	lua_pop (L, pop);
@@ -353,7 +354,8 @@ process_regexp_item (struct rspamd_task *task, void *user_data)
 		res = FALSE;
 		if (!rspamd_lua_call_expression_func (item->lua_function, task, NULL,
 				&res)) {
-			msg_err ("error occurred when checking symbol %s", item->symbol);
+			msg_err_task ("error occurred when checking symbol %s",
+					item->symbol);
 		}
 	}
 	else {
@@ -362,7 +364,7 @@ process_regexp_item (struct rspamd_task *task, void *user_data)
 			res = rspamd_process_expression (item->expr, 0, task);
 		}
 		else {
-			msg_warn ("FIXME: %s symbol is broken with new expressions",
+			msg_warn_task ("FIXME: %s symbol is broken with new expressions",
 					item->symbol);
 		}
 	}
