@@ -477,11 +477,11 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 
 	if (rspamd_session_events_pending (task->s) != 0) {
 		/* We have events pending, so we consider this stage as incomplete */
-		msg_debug ("need more work on stage %d", st);
+		msg_debug_task ("need more work on stage %d", st);
 	}
 	else {
 		/* Mark the current stage as done and go to the next stage */
-		msg_debug ("completed stage %d", st);
+		msg_debug_task ("completed stage %d", st);
 		task->processed_stages |= st;
 
 		/* Reset checkpoint */
