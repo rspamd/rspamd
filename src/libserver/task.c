@@ -472,6 +472,11 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 	task->flags &= ~RSPAMD_TASK_FLAG_PROCESSING;
 
 	if (!ret || RSPAMD_TASK_IS_PROCESSED (task)) {
+		if (!ret) {
+			/* Set processed flags */
+			task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
+		}
+
 		return ret;
 	}
 
