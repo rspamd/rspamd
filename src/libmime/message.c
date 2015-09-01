@@ -1744,6 +1744,15 @@ rspamd_message_parse (struct rspamd_task *task)
 				"them with each other");
 	}
 
+	if (task->queue_id) {
+		msg_info_task ("loaded message; id: <%s>; queue-id: <%s>",
+				task->message_id, task->queue_id);
+	}
+	else {
+		msg_info_task ("loaded message; id: <%s>",
+				task->message_id);
+	}
+
 	return TRUE;
 }
 
