@@ -36,7 +36,7 @@ local logger = require "rspamd_logger"
 local function check_email_rule(task, rule, addr)
   local function emails_dns_cb(resolver, to_resolve, results, err)
     if results then
-      logger.infox('<%1> email: [%2] resolved for symbol: %3', 
+      logger.infox(task, '<%1> email: [%2] resolved for symbol: %3',
         task:get_message_id(), to_resolve, rule['symbol'])
       task:insert_result(rule['symbol'], 1)
     end
@@ -58,14 +58,14 @@ local function check_email_rule(task, rule, addr)
       local key = addr:get_host()
       if rule['map']:get_key(key) then
         task:insert_result(rule['symbol'], 1)
-        logger.infox('<%1> email: \'%2\' is found in list: %3', 
+        logger.infox(task, '<%1> email: \'%2\' is found in list: %3',
           task:get_message_id(), key, rule['symbol'])
       end
     else
       local key = string.format('%s@%s', addr:get_user(), addr:get_host())
       if rule['map']:get_key(key) then
         task:insert_result(rule['symbol'], 1)
-        logger.infox('<%1> email: \'%2\' is found in list: %3', 
+        logger.infox(task, '<%1> email: \'%2\' is found in list: %3',
           task:get_message_id(), key, rule['symbol'])
       end
     end
@@ -102,7 +102,7 @@ if opts and type(opts) == 'table' then
         rule['map'] = rspamd_config:add_hash_map (rule['name'])
       end
       if not rule['symbol'] or (not rule['map'] and not rule['dnsbl']) then
-        logger.err('incomplete rule')
+        logger.errx(rspamd_config, 'incomplete rule')
       else
         table.insert(rules, rule)
       end

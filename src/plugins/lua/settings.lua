@@ -219,7 +219,7 @@ local function check_settings(task)
     return
   end
 
-  rspamd_logger.info("check for settings")
+  rspamd_logger.infox(task, "check for settings")
   local ip = task:get_from_ip()
   local from = task:get_from()
   local rcpt = task:get_recipients()
@@ -244,8 +244,8 @@ local function check_settings(task)
       for name, rule in pairs(settings[pri]) do
         local rule = check_specific_setting(name, rule, ip, from, rcpt, user)
         if rule then
-          rspamd_logger.info(string.format("<%s> apply settings according to rule %s",
-            task:get_message_id(), name))
+          rspamd_logger.infox(task, "<%1> apply settings according to rule %2",
+            task:get_message_id(), name)
           task:set_settings(rule)
         end
       end
@@ -255,7 +255,7 @@ local function check_settings(task)
 end
 
 -- Process settings based on their priority
-local function process_settings_table(tbl)
+local function process_settings_table(task, tbl)
   local get_priority = function(elt)
     local pri_tonum = function(p)
       if p then
@@ -300,7 +300,7 @@ local function process_settings_table(tbl)
             out[1] = res
             out[2] = 0
           else
-            rspamd_logger.err("bad IP address: " .. ip)
+            rspamd_logger.errx(task, "bad IP address: " .. ip)
             return nil
           end
         else
@@ -311,7 +311,7 @@ local function process_settings_table(tbl)
             out[1] = res
             out[2] = mask
           else
-            rspamd_logger.err("bad IP address: " .. ip)
+            rspamd_logger.errx(task, "bad IP address: " .. ip)
             return nil
           end
         end
@@ -336,7 +336,7 @@ local function process_settings_table(tbl)
           if re then
             out['regexp'] = re
           else
-            rspamd_logger.err("bad regexp: " .. addr)
+            rspamd_logger.errx(task, "bad regexp: " .. addr)
             return nil
           end
 
@@ -405,7 +405,7 @@ local function process_settings_table(tbl)
     elseif elt['whitelist'] or elt['want_spam'] then
       out['whitelist'] = true
     else
-      rspamd_logger.err("no actions in settings: " .. name)
+      rspamd_logger.errx(rspamd_config, "no actions in settings: " .. name)
       return nil
     end
     
@@ -441,7 +441,7 @@ local function process_settings_table(tbl)
   end, ft)
 
   settings_initialized = true
-  rspamd_logger.infox('loaded %1 elements of settings', nrules)
+  rspamd_logger.infox(rspamd_config, 'loaded %1 elements of settings', nrules)
   
   return true
 end
@@ -452,7 +452,7 @@ local function process_settings_map(string)
   local parser = ucl.parser()
   local res,err = parser:parse_string(string)
   if not res then
-    rspamd_logger.warn('cannot parse settings map: ' .. err)
+    rspamd_logger.warnx(rspamd_config, 'cannot parse settings map: ' .. err)
   else
     local obj = parser:get_object()
     if obj['settings'] then
@@ -466,7 +466,7 @@ end
 if set_section[1] and type(set_section[1]) == "string" then
   -- Just a map of ucl
   if not rspamd_config:add_map(set_section[1], "settings map", process_settings_map) then
-    rspamd_logger.errx('cannot load settings from %1', set_section)
+    rspamd_logger.errx(rspamd_config, 'cannot load settings from %1', set_section)
   end
 elseif type(set_section) == "table" then
   process_settings_table(set_section)

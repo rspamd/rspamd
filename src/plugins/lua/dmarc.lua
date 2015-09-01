@@ -79,11 +79,11 @@ local function dmarc_callback(task)
   
   local function dmarc_report_cb(task, err, data)
     if not err then
-      rspamd_logger.info(string.format('<%s> dmarc report saved for %s',
-        task:get_message_id(), from[1]['domain']))
+      rspamd_logger.infox(task, '<%1> dmarc report saved for %2',
+        task:get_message_id(), from[1]['domain'])
     else
-      rspamd_logger.err(string.format('<%s> dmarc report is not saved for %s: %s',
-        task:get_message_id(), from[1]['domain'], err))
+      rspamd_logger.errx(task, '<%1> dmarc report is not saved for %2: %3',
+        task:get_message_id(), from[1]['domain'], err)
     end
   end
   
@@ -286,11 +286,11 @@ if not opts or type(opts) ~= 'table' then
 end
 
 if not opts['servers'] then
-  rspamd_logger.err('no servers are specified for dmarc stats')
+  rspamd_logger.errx(rspamd_config, 'no servers are specified for dmarc stats')
 else
   upstreams = upstream_list.create(opts['servers'], default_port)
   if not upstreams then
-    rspamd_logger.err('cannot parse servers parameter')
+    rspamd_logger.errx(rspamd_config, 'cannot parse servers parameter')
   end
 end
 

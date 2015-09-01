@@ -59,7 +59,7 @@ local function tries_callback(task)
       local pattern = patterns[idx]
       
       if param['multi'] or not matched[pattern] then
-        rspamd_logger.debugx("<%1> matched pattern %2 at pos %3",
+        rspamd_logger.debugx(task, "<%1> matched pattern %2 at pos %3",
           task:get_message_id(), pattern, pos)
         task:insert_result(param['symbol'], 1.0)
         if not param['multi'] then
@@ -96,10 +96,10 @@ local function process_trie_file(symbol, cf)
   file = io.open(cf['file'])
   
   if not file then
-    rspamd_logger.errx('Cannot open trie file %1', cf['file'])
+    rspamd_logger.errx(rspamd_config, 'Cannot open trie file %1', cf['file'])
   else
     if cf['binary'] then
-      rspamd_logger.errx('binary trie patterns are not implemented yet: %1', 
+      rspamd_logger.errx(rspamd_config, 'binary trie patterns are not implemented yet: %1',
         cf['file'])
     else
       for line in file:lines() do
@@ -114,7 +114,7 @@ local function process_trie_conf(symbol, cf)
   local raw = false
   
   if type(cf) ~= 'table' then
-    rspamd_logger.errx('invalid value for symbol %1: "%2", expected table', 
+    rspamd_logger.errx(rspamd_config, 'invalid value for symbol %1: "%2", expected table',
       symbol, cf)
     return
   end
@@ -138,19 +138,19 @@ if opts then
   
   if #raw_patterns > 0 then
     raw_trie = rspamd_trie.create(raw_patterns)
-    rspamd_logger.infox('registered raw search trie from %1 patterns', #raw_patterns)
+    rspamd_logger.infox(rspamd_config, 'registered raw search trie from %1 patterns', #raw_patterns)
 	end
 
   if #mime_patterns > 0 then
     mime_trie = rspamd_trie.create(mime_patterns)
-    rspamd_logger.infox('registered mime search trie from %1 patterns', #mime_patterns)
+    rspamd_logger.infox(rspamd_config, 'registered mime search trie from %1 patterns', #mime_patterns)
   end
   
   local id = -1
   if mime_trie or raw_trie then
     id = rspamd_config:register_callback_symbol('TRIE', 1.0, tries_callback)
   else
-    rspamd_logger.err('no tries defined')
+    rspamd_logger.errx(rspamd_config, 'no tries defined')
   end
   
   if id ~= -1 then

@@ -100,7 +100,7 @@ local function check_limits(task, args)
   --- Called when value was set on server
   local function rate_set_key_cb(task, err, data)
     if err then
-      rspamd_logger.info('got error while getting limit: ' .. err)
+      rspamd_logger.infox(task, 'got error while getting limit: %1', err)
       upstream:fail()
     else
       upstream:ok()
@@ -126,7 +126,7 @@ local function check_limits(task, args)
         end
       end, _.zip(parse_limits(data), _.map(function(a) return a[1] end, args)))
     elseif err then
-      rspamd_logger.info('got error while getting limit: ' .. err)
+      rspamd_logger.infox(task, 'got error while getting limit: %1', err)
       upstream:fail()
     end
   end
@@ -147,7 +147,7 @@ local function set_limits(task, args)
 
   local function rate_set_key_cb(task, err, data)
     if err then
-      rspamd_logger.info('got error while setting limit: ' .. err)
+      rspamd_logger.infox(task, 'got error while setting limit: %1', err)
       upstream:fail()
     else
       upstream:ok()
@@ -181,7 +181,7 @@ local function set_limits(task, args)
       local cmd = generate_format_string(values, true)
       rspamd_redis.make_request(task, addr, rate_set_key_cb, cmd, values)
     elseif err then
-      rspamd_logger.info('got error while setting limit: ' .. err)
+      rspamd_logger.infox(task, 'got error while setting limit: %1', err)
       upstream:fail()
     end
   end
@@ -221,7 +221,7 @@ local function rate_test_set(task, func)
   if ip and ip:is_valid() and whitelisted_ip then
     if whitelisted_ip:get_key(ip) then
       -- Do not check whitelisted ip
-      rspamd_logger.info('skip ratelimit for whitelisted IP')
+      rspamd_logger.infox(task, 'skip ratelimit for whitelisted IP')
       return
     end
   end
@@ -234,7 +234,7 @@ local function rate_test_set(task, func)
       _.any(function(w) return r == w end, whitelisted_rcpts) end, 
       rcpts_user) then
       
-      rspamd_logger.info('skip ratelimit for whitelisted recipient')
+      rspamd_logger.infox(task, 'skip ratelimit for whitelisted recipient')
       return
     end
   end
@@ -319,7 +319,7 @@ local function parse_limit(str)
   end
 
   if table.maxn(params) ~= 3 then
-    rspamd_logger.err('invalid limit definition: ' .. str)
+    rspamd_logger.errx(rspamd_config, 'invalid limit definition: ' .. str)
     return
   end
 
@@ -336,7 +336,7 @@ local function parse_limit(str)
   elseif params[1] == 'user' then
     set_limit(settings['user'], params[2], params[3])
   else
-    rspamd_logger.err('invalid limit type: ' .. params[1])
+    rspamd_logger.errx(rspamd_config, 'invalid limit type: ' .. params[1])
   end
 end
 
@@ -376,11 +376,11 @@ if opts then
   end
 
   if not opts['servers'] then
-    rspamd_logger.err('no servers are specified')
+    rspamd_logger.errx(rspamd_config, 'no servers are specified')
   else
     upstreams = upstream_list.create(opts['servers'], default_port)
     if not upstreams then
-      rspamd_logger.err('no servers are specified')
+      rspamd_logger.errx(rspamd_config, 'no servers are specified')
     else
       rspamd_config:register_pre_filter(rate_test)
       rspamd_config:register_post_filter(rate_set)

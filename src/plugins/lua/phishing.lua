@@ -58,7 +58,7 @@ local function phishing_cb(task)
           -- Use distance to penalize the total weight
           weight = util.tanh(3 * (1 - dist + 0.1))
         end
-        rspamd_logger.debugx("distance: %1 -> %2: %3", tld, ptld, dist)
+        rspamd_logger.debugx(task, "distance: %1 -> %2: %3", tld, ptld, dist)
 
         if #redirector_domains > 0 then
           for _,rule in ipairs(redirector_domains) do
@@ -109,10 +109,10 @@ local function phishing_map(mapname, phishmap)
           local rule = {symbol = sym, map = rmap}
           table.insert(phishmap, rule)
         else
-          rspamd_logger.info('cannot add map: ' .. map .. ' for symbol: ' .. sym)
+          rspamd_logger.infox(rspamd_config, 'cannot add map: ' .. map .. ' for symbol: ' .. sym)
         end
       else
-        rspamd_logger.info(mapname .. ' option must be in format <map>:<symbol>')
+        rspamd_logger.infox(rspamd_config, mapname .. ' option must be in format <map>:<symbol>')
       end
     end
   end

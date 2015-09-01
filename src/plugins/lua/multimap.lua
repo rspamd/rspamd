@@ -148,13 +148,13 @@ end
 
 local function add_multimap_rule(key, newrule)
   if not newrule['map'] then
-    rspamd_logger.err('incomplete rule')
+    rspamd_logger.errx(rspamd_config, 'incomplete rule')
     return nil
   end
   if not newrule['symbol'] and key then
     newrule['symbol'] = key
   elseif not newrule['symbol'] then
-    rspamd_logger.err('incomplete rule')
+    rspamd_logger.errx(rspamd_config, 'incomplete rule')
     return nil
   end
   -- Check cdb flag
@@ -164,22 +164,26 @@ local function add_multimap_rule(key, newrule)
     if newrule['cdb'] then
       return newrule
     else
-      rspamd_logger.warn('Cannot add rule: map doesn\'t exists: ' .. newrule['map'])
+      rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
+          newrule['map'])
     end
   else
     if newrule['type'] == 'ip' then
-      newrule['radix'] = rspamd_config:add_radix_map (newrule['map'], newrule['description'])
+      newrule['radix'] = rspamd_config:add_radix_map (newrule['map'],
+        newrule['description'])
       if newrule['radix'] then
         return newrule
       else
-        rspamd_logger.warn('Cannot add rule: map doesn\'t exists: ' .. newrule['map'])
+        rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
+            newrule['map'])
       end
     elseif newrule['type'] == 'header' or newrule['type'] == 'rcpt' or newrule['type'] == 'from' then
       newrule['hash'] = rspamd_config:add_hash_map (newrule['map'], newrule['description'])
       if newrule['hash'] then
         return newrule
       else
-        rspamd_logger.warn('Cannot add rule: map doesn\'t exists: ' .. newrule['map'])
+        rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
+          newrule['map'])
       end
     elseif newrule['type'] == 'dnsbl' then
       return newrule 
@@ -195,12 +199,12 @@ if opts and type(opts) == 'table' then
     if type(m) == 'table' then
       local rule = add_multimap_rule(k, m)
       if not rule then
-        rspamd_logger.err('cannot add rule: "'..k..'"')
+        rspamd_logger.errx(rspamd_config, 'cannot add rule: "'..k..'"')
       else
         table.insert(rules, rule)
       end
     else
-      rspamd_logger.err('parameter ' .. k .. ' is invalid, must be an object')
+      rspamd_logger.errx(rspamd_config, 'parameter ' .. k .. ' is invalid, must be an object')
     end
   end
   -- add fake symbol to check all maps inside a single callback

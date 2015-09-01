@@ -149,8 +149,8 @@ local function handle_header_def(hline, cur_rule)
           elseif func == 'case' then
             cur_param['strong'] = true
           else
-            rspamd_logger.warn(string.format('Function %s is not supported in %s',
-              func, cur_rule['symbol']))
+            rspamd_logger.warnx(rspamd_config, 'Function %1 is not supported in %2',
+              func, cur_rule['symbol'])
           end
         end, _.tail(args))
         table.insert(hdr_params, cur_param)
@@ -207,7 +207,7 @@ local function gen_eval_rule(arg)
               if r then
                 r:match(h)
               else
-                rspamd_logger.infox('cannot create regexp %1', re)
+                rspamd_logger.infox(rspamd_config, 'cannot create regexp %1', re)
                 return 0
               end
             end
@@ -241,7 +241,8 @@ local function maybe_parse_sa_function(line)
   arg = elts[2]
   local func_cache = {}
   
-  rspamd_logger.debugx('trying to parse SA function %1 with args %2', elts[1], elts[2])
+  rspamd_logger.debugx(rspamd_config, 'trying to parse SA function %1 with args %2',
+    elts[1], elts[2])
   local substitutions = {
     {'^exists:', 
       function(task) -- filter
@@ -260,7 +261,8 @@ local function maybe_parse_sa_function(line)
         end
         
         if not func then
-          rspamd_logger.errx('cannot find appropriate eval rule for function %1', arg)
+          rspamd_logger.errx(rspamd_config, 'cannot find appropriate eval rule for function %1',
+            arg)
         else
           return func(task)
         end
@@ -388,8 +390,8 @@ local function process_sa_conf(f)
         cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
         
         if not cur_rule['re'] then
-          rspamd_logger.warn(string.format("Cannot parse regexp '%s' for %s",
-            cur_rule['re_expr'], cur_rule['symbol']))
+          rspamd_logger.warnx(rspamd_config, "Cannot parse regexp '%1' for %2",
+            cur_rule['re_expr'], cur_rule['symbol'])
         else
           handle_header_def(words[3], cur_rule)
         end
@@ -410,7 +412,7 @@ local function process_sa_conf(f)
           cur_rule['function'] = func
           valid_rule = true
         else
-          rspamd_logger.infox('unknown function %1', args)
+          rspamd_logger.infox(rspamd_config, 'unknown function %1', args)
         end
       end
     elseif words[1] == "body" and slash then
@@ -533,7 +535,8 @@ end
 
 if freemail_domains then
   freemail_trie = rspamd_trie.create(freemail_domains)
-  rspamd_logger.infox('loaded %1 freemail domains definitions', #freemail_domains)
+  rspamd_logger.infox(rspamd_config, 'loaded %1 freemail domains definitions',
+    #freemail_domains)
 end
 
 local function sa_regexp_match(data, re, raw, rule)
@@ -644,10 +647,10 @@ _.each(function(r)
     if res then
       local nre = rspamd_regexp.create_cached(nexpr)
       if not nre then
-        rspamd_logger.errx('cannot apply replacement for rule %1', r)
+        rspamd_logger.errx(rspamd_config, 'cannot apply replacement for rule %1', r)
         rule['re'] = nil
       else
-        rspamd_logger.debugx('replace %1 -> %2', r, nexpr)
+        rspamd_logger.debugx(rspamd_config, 'replace %1 -> %2', r, nexpr)
         rule['re'] = nre
         rule['re_expr'] = nexpr
         nre:set_limit(match_limit)
@@ -855,13 +858,13 @@ local function process_atom(atom, task)
     end
     
     if not res then
-      rspamd_logger.debugx('atom: %1, NULL result', atom)
+      rspamd_logger.debugx(task, 'atom: %1, NULL result', atom)
     elseif res > 0 then
-      rspamd_logger.debugx('atom: %1, result: %2', atom, res)
+      rspamd_logger.debugx(task, 'atom: %1, result: %2', atom, res)
     end
     return res
   else
-    rspamd_logger.debugx('Cannot find atom ' .. atom)
+    rspamd_logger.debugx(task, 'Cannot find atom ' .. atom)
   end
   return 0
 end
@@ -888,7 +891,7 @@ _.each(function(k, r)
     expression = rspamd_expression.create(r['meta'],  
       {parse_atom, process_atom}, sa_mempool)
     if not expression then
-      rspamd_logger.err('Cannot parse expression ' .. r['meta'])
+      rspamd_logger.errx(rspamd_config, 'Cannot parse expression ' .. r['meta'])
     else
       if r['score'] then
         rspamd_config:set_metric_symbol(k, r['score'], r['description'])

@@ -39,7 +39,8 @@ local function check_quantity_received (task)
     if not results then
       task:insert_result(symbol_strict, 1)
     else
-      rspamd_logger.info(string.format('SMTP resolver failed to resolve: %s is %s', to_resolve, results[1]))
+      rspamd_logger.infox(task, 'SMTP resolver failed to resolve: %1 is %2',
+        to_resolve, results[1])
       local i = true
       for _,h in ipairs(bad_hosts) do
         if string.find(results[1], h) then

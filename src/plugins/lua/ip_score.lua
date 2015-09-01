@@ -135,7 +135,7 @@ local ip_score_set = function(task)
 
   local score_set_cb = function(task, err, data)
     if err then
-      rspamd_logger.infox('got error while IP score changing: %1', err)
+      rspamd_logger.infox(task, 'got error while IP score changing: %1', err)
     end
   end
 
@@ -335,7 +335,7 @@ local configure_ip_score_module = function()
     if options['servers'] and options['servers'] ~= '' then
       upstreams = upstream_list.create(options['servers'], default_port)
       if not upstreams then
-        rspamd_logger.err('no servers are specified')
+        rspamd_logger.errx(rspamd_config, 'no servers are specified')
       end
     end
     if options['whitelist'] then

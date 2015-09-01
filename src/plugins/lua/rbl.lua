@@ -117,8 +117,8 @@ local function rbl_cb (task)
               if thisrbl['unknown'] and thisrbl['symbol'] then
                 task:insert_result(thisrbl['symbol'], 1)
               else
-                rspamd_logger.err('RBL ' .. thisrbl['rbl'] ..
-                  ' returned unknown result ' .. ipstr)
+                rspamd_logger.errx(task, 'RBL %1 returned unknown result: %2',
+                  thisrbl['rbl'], ipstr)
               end
             end
           end
