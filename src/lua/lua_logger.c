@@ -141,7 +141,8 @@ static const struct luaL_reg loggerlib_f[] = {
 };
 
 static void
-lua_common_log_line (GLogLevelFlags level, lua_State *L, const gchar *msg)
+lua_common_log_line (GLogLevelFlags level, lua_State *L,
+	   const gchar *msg, const gchar *uid)
 {
 	lua_Debug d;
 	gchar func_buf[128], *p;
@@ -160,7 +161,7 @@ lua_common_log_line (GLogLevelFlags level, lua_State *L, const gchar *msg)
 			rspamd_conditional_debug (NULL,
 					NULL,
 					"lua",
-					NULL,
+					uid,
 					func_buf,
 					"%s",
 					msg);
@@ -169,7 +170,7 @@ lua_common_log_line (GLogLevelFlags level, lua_State *L, const gchar *msg)
 			rspamd_common_log_function (NULL,
 					level,
 					"lua",
-					NULL,
+					uid,
 					func_buf,
 					"%s",
 					msg);
@@ -180,7 +181,7 @@ lua_common_log_line (GLogLevelFlags level, lua_State *L, const gchar *msg)
 			rspamd_conditional_debug (NULL,
 					NULL,
 					"lua",
-					NULL,
+					uid,
 					G_STRFUNC,
 					"%s",
 					msg);
@@ -189,7 +190,7 @@ lua_common_log_line (GLogLevelFlags level, lua_State *L, const gchar *msg)
 			rspamd_common_log_function (NULL,
 					level,
 					"lua",
-					NULL,
+					uid,
 					G_STRFUNC,
 					"%s",
 					msg);
@@ -203,7 +204,7 @@ lua_logger_err (lua_State *L)
 {
 	const gchar *msg;
 	msg = luaL_checkstring (L, 1);
-	lua_common_log_line (G_LOG_LEVEL_CRITICAL, L, msg);
+	lua_common_log_line (G_LOG_LEVEL_CRITICAL, L, msg, NULL);
 	return 0;
 }
 
@@ -212,7 +213,7 @@ lua_logger_warn (lua_State *L)
 {
 	const gchar *msg;
 	msg = luaL_checkstring (L, 1);
-	lua_common_log_line (G_LOG_LEVEL_WARNING, L, msg);
+	lua_common_log_line (G_LOG_LEVEL_WARNING, L, msg, NULL);
 	return 0;
 }
 
@@ -221,7 +222,7 @@ lua_logger_info (lua_State *L)
 {
 	const gchar *msg;
 	msg = luaL_checkstring (L, 1);
-	lua_common_log_line (G_LOG_LEVEL_INFO, L, msg);
+	lua_common_log_line (G_LOG_LEVEL_INFO, L, msg, NULL);
 	return 0;
 }
 
@@ -230,7 +231,7 @@ lua_logger_debug (lua_State *L)
 {
 	const gchar *msg;
 	msg = luaL_checkstring (L, 1);
-	lua_common_log_line (G_LOG_LEVEL_DEBUG, L, msg);
+	lua_common_log_line (G_LOG_LEVEL_DEBUG, L, msg, NULL);
 	return 0;
 }
 
@@ -426,9 +427,9 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 {
 	gchar logbuf[BUFSIZ];
 	gchar *d;
-	const gchar *s, *c;
+	const gchar *s, *c, *clsname, *uid = NULL;
 	gsize remain, r;
-	guint arg_num = 0;
+	guint arg_num = 0, fmt_pos;
 	enum {
 		copy_char = 0,
 		got_percent,
@@ -437,7 +438,59 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 
 	d = logbuf;
 	remain = sizeof (logbuf) - 1;
-	s = lua_tostring (L, 1);
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		fmt_pos = 1;
+	}
+	else if (lua_type (L, 1) == LUA_TUSERDATA) {
+		fmt_pos = 2;
+		lua_getmetatable (L, 1);
+		lua_pushstring (L, "__index");
+		lua_gettable (L, -2);
+
+		lua_istable (L, -1);
+		lua_pushstring (L, "class");
+		lua_gettable (L, -2);
+
+		clsname = lua_tostring (L, -1);
+
+		if (strcmp (clsname, "rspamd{task}") == 0) {
+			struct rspamd_task *task = lua_check_task (L, 1);
+
+			if (task) {
+				uid = task->task_pool->tag.uid;
+			}
+		}
+		else if (strcmp (clsname, "rspamd{mempool}")) {
+			rspamd_mempool_t  *pool;
+
+			pool = rspamd_lua_check_mempool (L, 1);
+
+			if (pool) {
+				uid = pool->tag.uid;
+			}
+		}
+		else if (strcmp (clsname, "rspamd{config}")) {
+			struct rspamd_config *cfg;
+
+			cfg = lua_check_config (L, 1);
+
+			if (cfg) {
+				uid = cfg->checksum;
+			}
+		}
+
+		/* Metatable, __index, classname */
+		lua_pop (L, 3);
+	}
+	else {
+		/* Bad argument type */
+		msg_err ("bad format string type: %s", lua_typename (L, lua_type (L,
+				1)));
+		return 0;
+	}
+
+	s = lua_tostring (L, fmt_pos);
 	c = s;
 
 	if (s == NULL) {
@@ -522,7 +575,7 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 	}
 	else {
 		*d = '\0';
-		lua_common_log_line (level, L, logbuf);
+		lua_common_log_line (level, L, logbuf, uid);
 	}
 
 	return 0;
