@@ -386,6 +386,23 @@ rspamd_log_flush (rspamd_logger_t *rspamd_log)
 	}
 }
 
+static inline gboolean
+rspamd_logger_need_log (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
+		const gchar *module)
+{
+	g_assert (rspamd_log != NULL);
+
+	if (log_level <= rspamd_log->cfg->log_level) {
+		return TRUE;
+	}
+
+	if (rspamd_log->cfg->debug_modules != NULL && module != NULL &&
+		g_hash_table_lookup (rspamd_log->cfg->debug_modules, module)) {
+		return TRUE;
+	}
+
+	return FALSE;
+}
 
 void
 rspamd_common_logv (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
@@ -406,7 +423,7 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
 			fprintf (stderr, "%s\n", logbuf);
 		}
 	}
-	else if (log_level <= rspamd_log->cfg->log_level) {
+	else if (rspamd_logger_need_log (rspamd_log, log_level, module)) {
 		rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
 		rspamd_escape_log_string (logbuf);
 		rspamd_mempool_lock_mutex (rspamd_log->mtx);
@@ -814,7 +831,7 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
 		rspamd_log = default_logger;
 	}
 
-	if (rspamd_log->cfg->log_level >= G_LOG_LEVEL_DEBUG ||
+	if (rspamd_logger_need_log (rspamd_log, G_LOG_LEVEL_DEBUG, module) ||
 		rspamd_log->is_debug) {
 		if (rspamd_log->debug_ip && addr != NULL) {
 			if (radix_find_compressed_addr (rspamd_log->debug_ip, addr)
