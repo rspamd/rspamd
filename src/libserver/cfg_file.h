@@ -199,6 +199,7 @@ struct rspamd_config {
 	gchar *debug_ip_map;                            /**< turn on debugging for specified ip addresses       */
 	gboolean log_urls;                              /**< whether we should log URLs                         */
 	GList *debug_symbols;                           /**< symbols to debug									*/
+	GHashTable *debug_modules;                      /**< logging modules to debug							*/
 	gboolean log_color;                             /**< output colors for console output                   */
 	gboolean log_extended;                          /**< log extended information							*/
 
