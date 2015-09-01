@@ -1121,10 +1121,10 @@ rspamd_rcl_add_section (struct rspamd_rcl_section **top,
 
 struct rspamd_rcl_default_handler_data *
 rspamd_rcl_add_default_handler (struct rspamd_rcl_section *section,
-	const gchar *name,
-	rspamd_rcl_default_handler_t handler,
-	gsize offset,
-	gint flags)
+		const gchar *name,
+		rspamd_rcl_default_handler_t handler,
+		goffset offset,
+		gint flags)
 {
 	struct rspamd_rcl_default_handler_data *new;
 
@@ -2115,6 +2115,35 @@ rspamd_rcl_parse_struct_keypair (rspamd_mempool_t *pool,
 	return FALSE;
 }
 
+static void
+rspamd_rcl_insert_string_list_item (gpointer *target, rspamd_mempool_t *pool,
+		const gchar *src, gboolean is_hash)
+{
+	union {
+		GHashTable *hv;
+		GList *lv;
+		gpointer p;
+	} d;
+	gchar *val;
+
+	d.p = *target;
+
+	if (is_hash) {
+		if (d.hv == NULL) {
+			d.hv = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+		}
+
+		val = rspamd_mempool_strdup (pool, src);
+		g_hash_table_insert (d.hv, val, val);
+	}
+	else {
+		val = rspamd_mempool_strdup (pool, src);
+		d.lv = g_list_prepend (d.lv, val);
+	}
+
+	*target = d.p;
+}
+
 gboolean
 rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 	const ucl_object_t *obj,
@@ -2123,13 +2152,16 @@ rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 	GError **err)
 {
 	struct rspamd_rcl_struct_parser *pd = ud;
-	GList **target;
+	gpointer *target;
 	gchar *val, **strvec, **cvec;
 	const ucl_object_t *cur;
 	const gsize num_str_len = 32;
 	ucl_object_iter_t iter = NULL;
+	gboolean is_hash;
 
-	target = (GList **)(((gchar *)pd->user_struct) + pd->offset);
+
+	is_hash = pd->flags & RSPAMD_CL_FLAG_STRING_LIST_HASH;
+	target = (gpointer *)(((gchar *)pd->user_struct) + pd->offset);
 
 	iter = ucl_object_iterate_new (obj);
 
@@ -2140,8 +2172,7 @@ rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 			cvec = strvec;
 
 			while (*cvec) {
-				*target = g_list_prepend (*target,
-						rspamd_mempool_strdup (pool, *cvec));
+				rspamd_rcl_insert_string_list_item (target, pool, *cvec, is_hash);
 				cvec ++;
 			}
 
@@ -2167,7 +2198,8 @@ rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 					"cannot convert an object or array to string");
 			return FALSE;
 		}
-		*target = g_list_prepend (*target, val);
+
+		rspamd_rcl_insert_string_list_item (target, pool, val, is_hash);
 	}
 
 	if (*target == NULL) {
@@ -2179,9 +2211,12 @@ rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 	}
 
 	/* Add a destructor */
-	rspamd_mempool_add_destructor (pool,
-		(rspamd_mempool_destruct_t)g_list_free,
-		*target);
+
+	if (!is_hash) {
+		rspamd_mempool_add_destructor (pool,
+				(rspamd_mempool_destruct_t) g_list_free,
+				*target);
+	}
 
 	return TRUE;
 }

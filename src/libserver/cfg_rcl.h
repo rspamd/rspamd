@@ -54,7 +54,8 @@ struct rspamd_rcl_struct_parser {
 		RSPAMD_CL_FLAG_UINT = 0x1 << 8,
 		RSPAMD_CL_FLAG_INT_SIZE = 0x1 << 9,
 		RSPAMD_CL_FLAG_STRING_PATH = 0x1 << 10,
-		RSPAMD_CL_FLAG_BOOLEAN_INVERSE = 0x1 << 11
+		RSPAMD_CL_FLAG_BOOLEAN_INVERSE = 0x1 << 11,
+		RSPAMD_CL_FLAG_STRING_LIST_HASH = 0x1 << 12
 	} flags;
 };
 
@@ -96,11 +97,11 @@ typedef void (*rspamd_rcl_section_fin_t)(rspamd_mempool_t *pool, gpointer ud);
  * @return newly created structure
  */
 struct rspamd_rcl_default_handler_data * rspamd_rcl_add_default_handler (
-	struct rspamd_rcl_section *section,
-	const gchar *name,
-	rspamd_rcl_default_handler_t handler,
-	gsize offset,
-	gint flags);
+		struct rspamd_rcl_section *section,
+		const gchar *name,
+		rspamd_rcl_default_handler_t handler,
+		goffset offset,
+		gint flags);
 
 /**
  * Add new section to the configuration
