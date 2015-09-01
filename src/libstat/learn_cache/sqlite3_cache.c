@@ -164,7 +164,8 @@ rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
 	}
 
 	if (has_sqlite_cache) {
-		sqlite = rspamd_sqlite3_open_or_create (dbpath, create_tables_sql, &err);
+		sqlite = rspamd_sqlite3_open_or_create (cfg->cfg_pool,
+				dbpath, create_tables_sql, &err);
 
 		if (sqlite == NULL) {
 			msg_err_config ("cannot open sqlite3 cache: %e", err);
@@ -192,17 +193,18 @@ rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
 }
 
 static rspamd_learn_t
-rspamd_stat_cache_sqlite3_check (const guchar *h, gsize len, gboolean is_spam,
+rspamd_stat_cache_sqlite3_check (rspamd_mempool_t *pool,
+		const guchar *h, gsize len, gboolean is_spam,
 		struct rspamd_stat_sqlite3_ctx *ctx)
 {
 	gint rc, ret = RSPAMD_LEARN_OK;
 	gint64 flag;
 
-	rspamd_sqlite3_run_prstmt (ctx->db, ctx->prstmt,
+	rspamd_sqlite3_run_prstmt (pool, ctx->db, ctx->prstmt,
 			RSPAMD_STAT_CACHE_TRANSACTION_START_DEF);
-	rc = rspamd_sqlite3_run_prstmt (ctx->db, ctx->prstmt,
+	rc = rspamd_sqlite3_run_prstmt (pool, ctx->db, ctx->prstmt,
 			RSPAMD_STAT_CACHE_GET_LEARN, (gint64)len, h, &flag);
-	rspamd_sqlite3_run_prstmt (ctx->db, ctx->prstmt,
+	rspamd_sqlite3_run_prstmt (pool, ctx->db, ctx->prstmt,
 			RSPAMD_STAT_CACHE_TRANSACTION_COMMIT);
 
 	if (rc == SQLITE_OK) {
@@ -214,11 +216,11 @@ rspamd_stat_cache_sqlite3_check (const guchar *h, gsize len, gboolean is_spam,
 		else {
 			/* Need to relearn */
 			flag = is_spam ? 1 : 0;
-			rspamd_sqlite3_run_prstmt (ctx->db, ctx->prstmt,
+			rspamd_sqlite3_run_prstmt (pool, ctx->db, ctx->prstmt,
 					RSPAMD_STAT_CACHE_TRANSACTION_START_IM);
-			rspamd_sqlite3_run_prstmt (ctx->db, ctx->prstmt,
+			rspamd_sqlite3_run_prstmt (pool, ctx->db, ctx->prstmt,
 					RSPAMD_STAT_CACHE_UPDATE_LEARN, (gint64)len, h, flag);
-			rspamd_sqlite3_run_prstmt (ctx->db, ctx->prstmt,
+			rspamd_sqlite3_run_prstmt (pool, ctx->db, ctx->prstmt,
 					RSPAMD_STAT_CACHE_TRANSACTION_COMMIT);
 
 			return RSPAMD_LEARN_UNLEARN;
@@ -227,11 +229,11 @@ rspamd_stat_cache_sqlite3_check (const guchar *h, gsize len, gboolean is_spam,
 	else {
 		/* Insert result new id */
 		flag = is_spam ? 1 : 0;
-		rspamd_sqlite3_run_prstmt (ctx->db, ctx->prstmt,
+		rspamd_sqlite3_run_prstmt (pool, ctx->db, ctx->prstmt,
 				RSPAMD_STAT_CACHE_TRANSACTION_START_IM);
-		rspamd_sqlite3_run_prstmt (ctx->db, ctx->prstmt,
+		rspamd_sqlite3_run_prstmt (pool, ctx->db, ctx->prstmt,
 				RSPAMD_STAT_CACHE_ADD_LEARN, (gint64)len, h, flag);
-		rspamd_sqlite3_run_prstmt (ctx->db, ctx->prstmt,
+		rspamd_sqlite3_run_prstmt (pool, ctx->db, ctx->prstmt,
 				RSPAMD_STAT_CACHE_TRANSACTION_COMMIT);
 	}
 
@@ -265,7 +267,8 @@ rspamd_stat_cache_sqlite3_process (struct rspamd_task *task,
 
 		blake2b_final (&st, out, sizeof (out));
 
-		return rspamd_stat_cache_sqlite3_check (out, sizeof (out), is_spam, ctx);
+		return rspamd_stat_cache_sqlite3_check (task->task_pool,
+				out, sizeof (out), is_spam, ctx);
 	}
 
 	return RSPAMD_LEARN_OK;

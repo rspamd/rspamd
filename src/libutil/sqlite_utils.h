@@ -27,6 +27,7 @@
 #define SRC_LIBUTIL_SQLITE_UTILS_H_
 
 #include "config.h"
+#include "mem_pool.h"
 #include "sqlite3.h"
 
 #define RSPAMD_SQLITE3_STMT_MULTIPLE (1 << 0)
@@ -61,7 +62,7 @@ GArray* rspamd_sqlite3_init_prstmt (sqlite3 *db,
  * @param idx
  * @return
  */
-gint rspamd_sqlite3_run_prstmt (sqlite3 *db, GArray *stmts,
+gint rspamd_sqlite3_run_prstmt (rspamd_mempool_t *pool, sqlite3 *db, GArray *stmts,
 		gint idx, ...);
 
 /**
@@ -77,7 +78,7 @@ void rspamd_sqlite3_close_prstmt (sqlite3 *db, GArray *stmts);
  * @param create_sql
  * @return
  */
-sqlite3 * rspamd_sqlite3_open_or_create (const gchar *path, const
+sqlite3 * rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 		gchar *create_sql, GError **err);
 
 #endif /* SRC_LIBUTIL_SQLITE_UTILS_H_ */

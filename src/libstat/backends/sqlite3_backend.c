@@ -44,6 +44,7 @@ struct rspamd_stat_sqlite3_db {
 
 struct rspamd_stat_sqlite3_ctx {
 	GHashTable *files;
+	rspamd_mempool_t *pool;
 };
 
 struct rspamd_stat_sqlite3_rt {
@@ -307,18 +308,18 @@ rspamd_sqlite3_get_user (struct rspamd_stat_sqlite3_db *db,
 
 	/* XXX: We ignore now mime recipients as they could be easily forged */
 	if (user != NULL) {
-		rc = rspamd_sqlite3_run_prstmt (db->sqlite, db->prstmt,
+		rc = rspamd_sqlite3_run_prstmt (task->task_pool, db->sqlite, db->prstmt,
 				RSPAMD_STAT_BACKEND_GET_USER, user, &id);
 
 		if (rc != SQLITE_OK && learn) {
 			/* We need to insert a new user */
 			if (!db->in_transaction) {
-				rspamd_sqlite3_run_prstmt (db->sqlite, db->prstmt,
+				rspamd_sqlite3_run_prstmt (task->task_pool, db->sqlite, db->prstmt,
 						RSPAMD_STAT_BACKEND_TRANSACTION_START_IM);
 				db->in_transaction = TRUE;
 			}
 
-			rc =  rspamd_sqlite3_run_prstmt (db->sqlite, db->prstmt,
+			rc =  rspamd_sqlite3_run_prstmt (task->task_pool, db->sqlite, db->prstmt,
 					RSPAMD_STAT_BACKEND_INSERT_USER, user, &id);
 		}
 	}
@@ -348,18 +349,18 @@ rspamd_sqlite3_get_language (struct rspamd_stat_sqlite3_db *db,
 
 	/* XXX: We ignore multiple languages but default + extra */
 	if (language != NULL) {
-		rc = rspamd_sqlite3_run_prstmt (db->sqlite, db->prstmt,
+		rc = rspamd_sqlite3_run_prstmt (task->task_pool, db->sqlite, db->prstmt,
 				RSPAMD_STAT_BACKEND_GET_LANGUAGE, language, &id);
 
 		if (rc != SQLITE_OK && learn) {
 			/* We need to insert a new language */
 			if (!db->in_transaction) {
-				rspamd_sqlite3_run_prstmt (db->sqlite, db->prstmt,
+				rspamd_sqlite3_run_prstmt (task->task_pool, db->sqlite, db->prstmt,
 						RSPAMD_STAT_BACKEND_TRANSACTION_START_IM);
 				db->in_transaction = TRUE;
 			}
 
-			rc =  rspamd_sqlite3_run_prstmt (db->sqlite, db->prstmt,
+			rc =  rspamd_sqlite3_run_prstmt (task->task_pool, db->sqlite, db->prstmt,
 					RSPAMD_STAT_BACKEND_INSERT_LANGUAGE, language, &id);
 		}
 	}
@@ -383,7 +384,7 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 	};
 
 	bk = g_slice_alloc0 (sizeof (*bk));
-	bk->sqlite = rspamd_sqlite3_open_or_create (path, create_tables_sql, err);
+	bk->sqlite = rspamd_sqlite3_open_or_create (pool, path, create_tables_sql, err);
 
 	if (bk->sqlite == NULL) {
 		g_slice_free1 (sizeof (*bk), bk);
@@ -405,19 +406,19 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 
 	/* Check tokenizer configuration */
 
-	while (rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+	while (rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_TRANSACTION_START_EXCL) != SQLITE_OK) {
 		nanosleep (&sleep_ts, NULL);
 	}
 
-	if (rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+	if (rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_LOAD_TOKENIZER, &sz, &tk_conf) != SQLITE_OK) {
 		g_assert (stcf->clcf->tokenizer != NULL);
 		tokenizer = rspamd_stat_get_tokenizer (stcf->clcf->tokenizer->name);
 		g_assert (tokenizer != NULL);
 		tk_conf = tokenizer->get_config (pool, stcf->clcf->tokenizer, (gsize *)&sz);
 
-		if (rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+		if (rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
 					RSPAMD_STAT_BACKEND_SAVE_TOKENIZER, sz, tk_conf) != SQLITE_OK) {
 			sqlite3_close (bk->sqlite);
 			g_slice_free1 (sizeof (*bk), bk);
@@ -429,7 +430,7 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 		g_free (tk_conf);
 	}
 
-	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+	rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
 				RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
 
 	return bk;
@@ -450,6 +451,7 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 
 	new = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*new));
 	new->files = g_hash_table_new (g_direct_hash, g_direct_equal);
+	new->pool = cfg->cfg_pool;
 
 	/* Iterate over all classifiers and load matching statfiles */
 	cur = cfg->classifiers;
@@ -468,7 +470,7 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 				if (filenameo == NULL || ucl_object_type (filenameo) != UCL_STRING) {
 					filenameo = ucl_object_find_key (stf->opts, "path");
 					if (filenameo == NULL || ucl_object_type (filenameo) != UCL_STRING) {
-						msg_err ("statfile %s has no filename defined", stf->symbol);
+						msg_err_config ("statfile %s has no filename defined", stf->symbol);
 						curst = curst->next;
 						continue;
 					}
@@ -478,7 +480,7 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 
 				if ((bk = rspamd_sqlite3_opendb (cfg->cfg_pool, stf, filename,
 						stf->opts, TRUE, &err)) == NULL) {
-					msg_err ("cannot open sqlite3 db: %e", err);
+					msg_err_config ("cannot open sqlite3 db: %e", err);
 				}
 
 				if (bk != NULL) {
@@ -534,7 +536,7 @@ rspamd_sqlite3_close (gpointer p)
 
 		if (bk->sqlite) {
 			if (bk->in_transaction) {
-				rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+				rspamd_sqlite3_run_prstmt (ctx->pool, bk->sqlite, bk->prstmt,
 						RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
 			}
 
@@ -595,7 +597,7 @@ rspamd_sqlite3_process_token (struct rspamd_task *task, struct token_node_s *tok
 	}
 
 	if (!bk->in_transaction) {
-		rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+		rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
 				RSPAMD_STAT_BACKEND_TRANSACTION_START_DEF);
 		bk->in_transaction = TRUE;
 	}
@@ -620,7 +622,7 @@ rspamd_sqlite3_process_token (struct rspamd_task *task, struct token_node_s *tok
 
 	memcpy (&idx, tok->data, sizeof (idx));
 
-	if (rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+	if (rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_GET_TOKEN,
 			idx, rt->user_id, rt->lang_id, &iv) == SQLITE_OK) {
 		res->value = iv;
@@ -649,7 +651,7 @@ rspamd_sqlite3_finalize_process (struct rspamd_task *task, gpointer runtime,
 	bk = rt->db;
 
 	if (bk->in_transaction) {
-		rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+		rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
 				RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
 		bk->in_transaction = FALSE;
 	}
@@ -680,7 +682,7 @@ rspamd_sqlite3_learn_token (struct rspamd_task *task, struct token_node_s *tok,
 	}
 
 	if (!bk->in_transaction) {
-		rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+		rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
 				RSPAMD_STAT_BACKEND_TRANSACTION_START_IM);
 		bk->in_transaction = TRUE;
 	}
@@ -696,7 +698,7 @@ rspamd_sqlite3_learn_token (struct rspamd_task *task, struct token_node_s *tok,
 	iv = res->value;
 	memcpy (&idx, tok->data, sizeof (idx));
 
-	if (rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+	if (rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_SET_TOKEN,
 			idx, rt->user_id, rt->lang_id, iv) != SQLITE_OK) {
 		return FALSE;
@@ -716,7 +718,7 @@ rspamd_sqlite3_finalize_learn (struct rspamd_task *task, gpointer runtime,
 	bk = rt->db;
 
 	if (bk->in_transaction) {
-		rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+		rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
 				RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
 		bk->in_transaction = FALSE;
 	}
@@ -734,7 +736,7 @@ rspamd_sqlite3_total_learns (struct rspamd_task *task, gpointer runtime,
 
 	g_assert (rt != NULL);
 	bk = rt->db;
-	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+	rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 
 	return res;
@@ -750,17 +752,17 @@ rspamd_sqlite3_inc_learns (struct rspamd_task *task, gpointer runtime,
 
 	g_assert (rt != NULL);
 	bk = rt->db;
-	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+	rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_INC_LEARNS,
 			rt->user_id, rt->lang_id);
 
 	if (bk->in_transaction) {
-		rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+		rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
 				RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
 		bk->in_transaction = FALSE;
 	}
 
-	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+	rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 
 	return res;
@@ -776,17 +778,17 @@ rspamd_sqlite3_dec_learns (struct rspamd_task *task, gpointer runtime,
 
 	g_assert (rt != NULL);
 	bk = rt->db;
-	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+	rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_DEC_LEARNS,
 			rt->user_id, rt->lang_id);
 
 	if (bk->in_transaction) {
-		rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+		rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
 				RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
 		bk->in_transaction = FALSE;
 	}
 
-	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+	rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 
 	return res;
@@ -802,7 +804,7 @@ rspamd_sqlite3_learns (struct rspamd_task *task, gpointer runtime,
 
 	g_assert (rt != NULL);
 	bk = rt->db;
-	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+	rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_GET_LEARNS, &res);
 
 	return res;
@@ -815,14 +817,16 @@ rspamd_sqlite3_get_stat (gpointer runtime,
 	ucl_object_t *res = NULL;
 	struct rspamd_stat_sqlite3_rt *rt = runtime;
 	struct rspamd_stat_sqlite3_db *bk;
+	rspamd_mempool_t *pool;
 	struct stat st;
 	gint64 rev;
 
 	g_assert (rt != NULL);
 	bk = rt->db;
+	pool = rt->ctx->pool;
 
 	(void)stat (bk->fname, &st);
-	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+	rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
 				RSPAMD_STAT_BACKEND_GET_LEARNS, &rev);
 
 	res = ucl_object_typed_new (UCL_OBJECT);
@@ -830,7 +834,7 @@ rspamd_sqlite3_get_stat (gpointer runtime,
 			0, false);
 	ucl_object_insert_key (res, ucl_object_fromint (st.st_size), "size",
 			0, false);
-	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+	rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_NTOKENS, &rev);
 	ucl_object_insert_key (res, ucl_object_fromint (rev), "total", 0, false);
 	ucl_object_insert_key (res, ucl_object_fromint (rev), "used", 0, false);
@@ -838,11 +842,11 @@ rspamd_sqlite3_get_stat (gpointer runtime,
 			"symbol", 0, false);
 	ucl_object_insert_key (res, ucl_object_fromstring ("sqlite3"),
 			"type", 0, false);
-	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+	rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_NLANGUAGES, &rev);
 	ucl_object_insert_key (res, ucl_object_fromint (rev),
 			"languages", 0, false);
-	rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+	rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_NUSERS, &rev);
 	ucl_object_insert_key (res, ucl_object_fromint (rev),
 			"users", 0, false);
@@ -867,7 +871,7 @@ rspamd_sqlite3_load_tokenizer_config (gpointer runtime,
 	g_assert (rt != NULL);
 	bk = rt->db;
 
-	g_assert (rspamd_sqlite3_run_prstmt (bk->sqlite, bk->prstmt,
+	g_assert (rspamd_sqlite3_run_prstmt (rt->ctx->pool, bk->sqlite, bk->prstmt,
 				RSPAMD_STAT_BACKEND_LOAD_TOKENIZER, &sz, &tk_conf) == SQLITE_OK);
 	g_assert (sz > 0);
 	copied_conf = rspamd_mempool_alloc (rt->task->task_pool, sz);
