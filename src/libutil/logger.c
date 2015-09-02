@@ -63,6 +63,8 @@ struct rspamd_logger_s {
 	guint64 last_line_cksum;
 	gchar *saved_message;
 	gchar *saved_function;
+	gchar *saved_module;
+	gchar *saved_id;
 	rspamd_mempool_t *pool;
 	rspamd_mempool_mutex_t *mtx;
 };
@@ -220,16 +222,23 @@ rspamd_log_close_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 							rspamd_log->repeats);
 					rspamd_log->repeats = 0;
 					if (rspamd_log->saved_message) {
-						file_log_function (NULL, NULL, NULL,
+						file_log_function (NULL,
+								rspamd_log->saved_module,
+								rspamd_log->saved_id,
 								rspamd_log->saved_function,
 								rspamd_log->cfg->log_level,
 								rspamd_log->saved_message,
 								TRUE,
 								rspamd_log);
+
 						g_free (rspamd_log->saved_message);
 						g_free (rspamd_log->saved_function);
+						g_free (rspamd_log->saved_module);
+						g_free (rspamd_log->saved_id);
 						rspamd_log->saved_message = NULL;
 						rspamd_log->saved_function = NULL;
+						rspamd_log->saved_module = NULL;
+						rspamd_log->saved_id = NULL;
 					}
 					/* It is safe to use temporary buffer here as it is not static */
 					file_log_function (NULL, NULL, NULL,
@@ -632,9 +641,15 @@ file_log_function (const gchar *log_domain,
 			if (rspamd_log->repeats > REPEATS_MIN && rspamd_log->repeats <
 													 REPEATS_MAX) {
 				/* Do not log anything */
-				if (rspamd_log->saved_message == 0) {
+				if (rspamd_log->saved_message == NULL) {
 					rspamd_log->saved_message = g_strdup (message);
 					rspamd_log->saved_function = g_strdup (function);
+					if (module) {
+						rspamd_log->saved_module = g_strdup (module);
+					}
+					if (id) {
+						rspamd_log->saved_id = g_strdup (id);
+					}
 				}
 				return;
 			}
@@ -646,12 +661,23 @@ file_log_function (const gchar *log_domain,
 				rspamd_log->repeats = 0;
 				/* It is safe to use temporary buffer here as it is not static */
 				if (rspamd_log->saved_message) {
-					file_log_function (log_domain, "logger", NULL,
+					file_log_function (log_domain,
+							rspamd_log->saved_module,
+							rspamd_log->saved_id,
 							rspamd_log->saved_function,
 							log_level,
 							rspamd_log->saved_message,
 							forced,
 							arg);
+
+					g_free (rspamd_log->saved_message);
+					g_free (rspamd_log->saved_function);
+					g_free (rspamd_log->saved_module);
+					g_free (rspamd_log->saved_id);
+					rspamd_log->saved_message = NULL;
+					rspamd_log->saved_function = NULL;
+					rspamd_log->saved_module = NULL;
+					rspamd_log->saved_id = NULL;
 				}
 				file_log_function (log_domain, "logger", NULL,
 						G_STRFUNC,
@@ -680,17 +706,25 @@ file_log_function (const gchar *log_domain,
 						rspamd_log->repeats);
 				rspamd_log->repeats = 0;
 				if (rspamd_log->saved_message) {
-					file_log_function (log_domain, "logger", NULL,
+					file_log_function (log_domain,
+							rspamd_log->saved_module,
+							rspamd_log->saved_id,
 							rspamd_log->saved_function,
 							log_level,
 							rspamd_log->saved_message,
 							forced,
 							arg);
+
 					g_free (rspamd_log->saved_message);
 					g_free (rspamd_log->saved_function);
+					g_free (rspamd_log->saved_module);
+					g_free (rspamd_log->saved_id);
 					rspamd_log->saved_message = NULL;
 					rspamd_log->saved_function = NULL;
+					rspamd_log->saved_module = NULL;
+					rspamd_log->saved_id = NULL;
 				}
+
 				file_log_function (log_domain,
 						"logger", NULL,
 						G_STRFUNC,
