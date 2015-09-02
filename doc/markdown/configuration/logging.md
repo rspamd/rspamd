@@ -39,7 +39,7 @@ Here is summary of logging parameters:
     + `task` - task messages
     + `cfg` - configuration messages
     + `symcache` - messages from symbols cache
-    + `sqlite` - messages from sqlite backends
+    + `fuzzy_backend` - messages from fuzzy backend
     + `lua` - messages from lua code
     + `spf` - messages from spf module
     + `dkim` - messages from dkim module
