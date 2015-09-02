@@ -573,7 +573,7 @@ syslog_log_function (const gchar *log_domain,
 			}
 		}
 
-		syslog (syslog_level, "<%*.s>; %s; %s: %s",
+		syslog (syslog_level, "<%.*s>; %s; %s: %s",
 				LOG_ID, id != NULL ? id : "",
 				module != NULL ? module : "",
 				function != NULL ? function : "",
