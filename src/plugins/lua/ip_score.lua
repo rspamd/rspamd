@@ -36,6 +36,7 @@ local _ = require "fun"
 local default_port = 6379
 local upstreams = nil
 local whitelist = nil
+local asn_cc_whitelist = nil
 
 local options = {
   asn_provider = 'origin.asn.cymru.com', -- provider for ASN data
@@ -152,21 +153,13 @@ local ip_score_set = function(task)
     return
   end
   
-  -- Check whitelist
-  if whitelist then
-    if whitelist:get_key(ip) then
-      -- Address is whitelisted
-      return
-    end
-  end
-  
   local pool = task:get_mempool()
   local asn, country, ipnet = ip_score_get_task_vars(task)
   
   if not pool:has_variable('ip_score') then
     return
   end
-  
+
   local asn_score,total_asn,
         country_score,total_country,
         ipnet_score,total_ipnet,
@@ -317,9 +310,19 @@ local ip_score_check = function(task)
   
   local ip = task:get_from_ip()
   if ip:is_valid() then
+    -- Check IP whitelist
     if whitelist then
       if whitelist:get_key(task:get_from_ip()) then
         -- Address is whitelisted
+        return
+      end
+    end
+    -- Check ASN & country whitelist
+    if asn_cc_whitelist then
+      if asn_cc_whitelist:get_key(country) then
+        return
+      end
+      if asn_cc_whitelist:get_key(asn) then
         return
       end
     end
@@ -348,6 +351,9 @@ local configure_ip_score_module = function()
     end
     if options['whitelist'] then
       whitelist = rspamd_config:add_radix_map(opts['whitelist'])
+    end
+    if options['asn_cc_whitelist'] then
+      asn_cc_whitelist = rspamd_config:add_hash_map(opts['asn_cc_whitelist'])
     end
   end
 end
