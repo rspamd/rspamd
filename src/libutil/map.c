@@ -274,7 +274,16 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 			/* copy remaining buffer to start of buffer */
 			rlen = r - (remain - buf);
 			memmove (buf, remain, rlen);
+			remain = buf + rlen;
 		}
+	}
+
+	if (remain != NULL && remain > buf) {
+		rlen = remain - buf;
+		memmove (buf, remain, rlen);
+		buf[rlen] = '\0';
+		tlen += rlen;
+		map->read_callback (map->pool, buf, rlen, &cbdata);
 	}
 
 	close (fd);
@@ -617,6 +626,33 @@ rspamd_map_add (struct rspamd_config *cfg,
 	return TRUE;
 }
 
+static gchar*
+strip_map_elt (rspamd_mempool_t *pool, const gchar *start,
+		size_t len)
+{
+	gchar *res = NULL;
+	const gchar *c = start, *p = start + len - 1;
+
+	/* Strip starting spaces */
+	while (g_ascii_isspace (*c)) {
+		c ++;
+	}
+
+	/* Strip ending spaces */
+	while (g_ascii_isspace (*p) && p >= c) {
+		p --;
+	}
+
+	/* One symbol up */
+	p ++;
+
+	if (p - c > 0) {
+		res = rspamd_mempool_alloc (pool, p - c + 1);
+		rspamd_strlcpy (res, c, p - c + 1);
+	}
+
+	return res;
+}
 
 /**
  * FSM for parsing lists
@@ -628,12 +664,13 @@ abstract_parse_kv_list (rspamd_mempool_t * pool,
 	struct map_cb_data *data,
 	insert_func func)
 {
-	gchar *c, *p, *key = NULL, *value = NULL;
+	gchar *c, *p, *key = NULL, *value = NULL, *end;
 
 	p = chunk;
 	c = p;
+	end = p + len;
 
-	while (p - chunk < len) {
+	while (p <= end) {
 		switch (data->state) {
 		case 0:
 			/* read key */
@@ -649,7 +686,7 @@ abstract_parse_kv_list (rspamd_mempool_t * pool,
 				}
 				data->state = 99;
 			}
-			else if (*p == '\r' || *p == '\n' || p - chunk == len - 1) {
+			else if (*p == '\r' || *p == '\n' || p == end) {
 				if (key != NULL && p - c >= 0) {
 					value = rspamd_mempool_alloc (pool, p - c + 1);
 					memcpy (value, c, p - c);
@@ -736,52 +773,45 @@ rspamd_parse_abstract_list (rspamd_mempool_t * pool,
 	struct map_cb_data *data,
 	insert_func func)
 {
-	gchar *s, *p, *str, *start;
+	gchar *p, *c, *end, *s;
 
 	p = chunk;
-	start = p;
+	c = p;
+	end = p + len;
 
-	str = g_malloc (len + 1);
-	s = str;
-
-	while (p - chunk < len) {
+	while (p <= end) {
 		switch (data->state) {
 		/* READ_SYMBOL */
 		case 0:
 			if (*p == '#') {
 				/* Got comment */
-				if (s != str) {
+				if (p > c) {
 					/* Save previous string in lines like: "127.0.0.1 #localhost" */
-					*s = '\0';
-					s = rspamd_mempool_strdup (pool, g_strstrip (str));
-					if (strlen (s) > 0) {
+					s = strip_map_elt (pool, c, p - c);
+
+					if (s) {
 						func (data->cur_data, s, hash_fill);
 					}
-					s = str;
-					start = p;
+					c = p;
 				}
 				data->state = 1;
 			}
-			else if (*p == '\r' || *p == '\n') {
+			else if (*p == '\r' || *p == '\n' || p == end) {
 				/* Got EOL marker, save stored string */
-				if (s != str) {
-					*s = '\0';
-					s = rspamd_mempool_strdup (pool, g_strstrip (str));
-					if (strlen (s) > 0) {
-						func (data->cur_data, s, hash_fill);
-					}
-					s = str;
+				s = strip_map_elt (pool, c, p - c);
+
+				if (s) {
+					func (data->cur_data, s, hash_fill);
 				}
 				/* Skip EOL symbols */
-				while ((*p == '\r' || *p == '\n') && p - chunk < len) {
+				while ((*p == '\r' || *p == '\n') && p <= end) {
 					p++;
 				}
-				start = p;
+
+				c = p;
+				p ++;
 			}
 			else {
-				/* Store new string in s */
-				*s = *p;
-				s++;
 				p++;
 			}
 			break;
@@ -789,11 +819,11 @@ rspamd_parse_abstract_list (rspamd_mempool_t * pool,
 		case 1:
 			/* Skip comment till end of line */
 			if (*p == '\r' || *p == '\n') {
-				while ((*p == '\r' || *p == '\n') && p - chunk < len) {
+				while ((*p == '\r' || *p == '\n') && p <= end) {
 					p++;
 				}
-				s = str;
-				start = p;
+				c = p;
+				p ++;
 				data->state = 0;
 			}
 			else {
@@ -803,9 +833,7 @@ rspamd_parse_abstract_list (rspamd_mempool_t * pool,
 		}
 	}
 
-	g_free (str);
-
-	return start;
+	return c;
 }
 
 /**
