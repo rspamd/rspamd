@@ -39,6 +39,7 @@ local whitelist = nil
 
 local options = {
   asn_provider = 'origin.asn.cymru.com', -- provider for ASN data
+  asn6_provider = 'origin6.asn.cymru.com', -- provider for ASN data
   actions = { -- how each action is treated in scoring
     ['reject'] = 1.0,
     ['add header'] = 0.25,
@@ -58,7 +59,9 @@ local options = {
   ipnet_prefix = 'n:', -- prefix for ipnet hashes
   servers = '', -- list of servers
   lower_bound = 10, -- minimum number of messages to be scored
-  metric = 'default'
+  metric = 'default',
+  min_score = nil,
+  max_score = nil
 }
 
 local asn_re = rspamd_regexp.create_cached("[\\|\\s]")
@@ -83,8 +86,12 @@ local function asn_check(task)
   end
   
   if ip and ip:is_valid() then
+    local asn_provider = 'asn_provider'
+    if ip:get_version() == 6 then
+      asn_provider = 'asn6_provider'
+    end
     local req_name = rspamd_logger.slog("%1.%2",
-      table.concat(ip:inversed_str_octets(), '.'), options['asn_provider'])
+      table.concat(ip:inversed_str_octets(), '.'), options[asn_provider])
     
     task:get_resolver():resolve_txt(task:get_session(), task:get_mempool(),
         req_name, asn_dns_cb)
@@ -163,7 +170,7 @@ local ip_score_set = function(task)
   local asn_score,total_asn,
         country_score,total_country,
         ipnet_score,total_ipnet,
-        ip_score, total_ip = pool:get_variable('ip_score', 
+        ip_score, total_ip = pool:get_variable('ip_score',
         'double,double,double,double,double,double,double,double')
 
   local score_mult = 0
@@ -177,23 +184,21 @@ local ip_score_set = function(task)
 
   score = score_mult * rspamd_util.tanh (2.718 * score)
 
-  if score ~= 0 then
-    local hkey = ip_score_hash_key(asn, country, ipnet, ip)
-    local upstream = upstreams:get_upstream_by_hash(hkey)
-    local addr = upstream:get_addr()
-    
-    asn_score,total_asn = new_score_set(score, asn_score, total_asn)
-    country_score,total_country = new_score_set(score, country_score, total_country)
-    ipnet_score,total_ipnet = new_score_set(score, ipnet_score, total_ipnet)
-    ip_score,total_ip = new_score_set(score, ip_score, total_ip)
-    
-    rspamd_redis.make_request(task, addr, score_set_cb, 
-      'HMSET', {options['hash'], 
-      options['asn_prefix'] .. asn, string.format('%f|%d', asn_score, total_asn),
-      options['country_prefix'] .. country, string.format('%f|%d', country_score, total_country),
-      options['ipnet_prefix'] .. ipnet, string.format('%f|%d', ipnet_score, total_ipnet),
-      ip:to_string(), string.format('%f|%d', ip_score, total_ip)})
-  end
+  local hkey = ip_score_hash_key(asn, country, ipnet, ip)
+  local upstream = upstreams:get_upstream_by_hash(hkey)
+  local addr = upstream:get_addr()
+ 
+  asn_score,total_asn = new_score_set(score, asn_score, total_asn)
+  country_score,total_country = new_score_set(score, country_score, total_country)
+  ipnet_score,total_ipnet = new_score_set(score, ipnet_score, total_ipnet)
+  ip_score,total_ip = new_score_set(score, ip_score, total_ip)
+
+  rspamd_redis.make_request(task, addr, score_set_cb,
+    'HMSET', {options['hash'],
+    options['asn_prefix'] .. asn, string.format('%f|%d', asn_score, total_asn),
+    options['country_prefix'] .. country, string.format('%f|%d', country_score, total_country),
+    options['ipnet_prefix'] .. ipnet, string.format('%f|%d', ipnet_score, total_ipnet),
+    ip:to_string(), string.format('%f|%d', ip_score, total_ip)})
 end
 
 -- Check score for ip in keystorage
@@ -271,7 +276,10 @@ local ip_score_check = function(task)
         total_score = total_score + country_score
         table.insert(description_t, 'country: ' .. country .. '(' .. math.floor(country_score * 1000) / 100 .. ')')
       end
-      
+
+      if options['max_score'] and (total_score*10) > options['max_score'] then total_score = options['max_score']/10 end
+      if options['min_score'] and (total_score*10) < options['min_score'] then total_score = options['min_score']/10 end
+ 
       if total_score ~= 0 then
         task:insert_result(options['symbol'], total_score, table.concat(description_t, ', '))
       end
