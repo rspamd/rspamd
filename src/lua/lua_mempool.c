@@ -100,6 +100,14 @@ LUA_FUNCTION_DEF (mempool, get_variable);
  */
 LUA_FUNCTION_DEF (mempool, has_variable);
 
+/***
+ * @method mempool:delete_variable(name)
+ * Removes the specified variable `name` from the memory pool
+ * @param {string} name variable's name to remove
+ * @return {boolean} `true` if variable exists and has been removed
+ */
+LUA_FUNCTION_DEF (mempool, delete_variable);
+
 static const struct luaL_reg mempoollib_m[] = {
 	LUA_INTERFACE_DEF (mempool, add_destructor),
 	LUA_INTERFACE_DEF (mempool, stat),
@@ -107,6 +115,7 @@ static const struct luaL_reg mempoollib_m[] = {
 	LUA_INTERFACE_DEF (mempool, set_variable),
 	LUA_INTERFACE_DEF (mempool, get_variable),
 	LUA_INTERFACE_DEF (mempool, has_variable),
+	LUA_INTERFACE_DEF (mempool, delete_variable),
 	LUA_INTERFACE_DEF (mempool, delete),
 	{"destroy", lua_mempool_delete},
 	{"__tostring", rspamd_lua_class_tostring},
@@ -409,6 +418,26 @@ lua_mempool_has_variable (lua_State *L)
 	if (mempool && var) {
 		if (rspamd_mempool_get_variable (mempool, var) != NULL) {
 			ret = TRUE;
+		}
+	}
+
+	lua_pushboolean (L, ret);
+
+	return 1;
+}
+
+static int
+lua_mempool_delete_variable (lua_State *L)
+{
+	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
+	const gchar *var = luaL_checkstring (L, 2);
+	gboolean ret = FALSE;
+
+	if (mempool && var) {
+		if (rspamd_mempool_get_variable (mempool, var) != NULL) {
+			ret = TRUE;
+
+			rspamd_mempool_remove_variable (mempool, var);
 		}
 	}
 

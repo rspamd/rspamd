@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2012, Vsevolod Stakhov
+ * Copyright (c) 2009-2015, Vsevolod Stakhov
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -887,7 +887,10 @@ rspamd_mempool_get_variable (rspamd_mempool_t *pool, const gchar *name)
 	return g_hash_table_lookup (pool->variables, name);
 }
 
-
-/*
- * vi:ts=4
- */
+void
+rspamd_mempool_remove_variable (rspamd_mempool_t *pool, const gchar *name)
+{
+	if (pool->variables != NULL) {
+		g_hash_table_remove (pool->variables, name);
+	}
+}

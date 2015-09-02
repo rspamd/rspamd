@@ -321,5 +321,12 @@ void rspamd_mempool_set_variable (rspamd_mempool_t *pool, const gchar *name,
 gpointer rspamd_mempool_get_variable (rspamd_mempool_t *pool,
 	const gchar *name);
 
+/**
+ * Removes variable from memory pool
+ * @param pool memory pool object
+ * @param name name of variable
+ */
+void rspamd_mempool_remove_variable (rspamd_mempool_t *pool,
+		const gchar *name);
 
 #endif
