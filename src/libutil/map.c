@@ -275,10 +275,14 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 		tlen += r;
 		buf[r] = '\0';
 		remain = map->read_callback (map->pool, buf, r, &cbdata);
+
 		if (remain != NULL) {
 			/* copy remaining buffer to start of buffer */
 			rlen = r - (remain - buf);
 			memmove (buf, remain, rlen);
+		}
+		else {
+			rlen = 0;
 		}
 	}
 
