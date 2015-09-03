@@ -388,6 +388,7 @@ radix_uncompress_node (radix_compressed_t *tree,
 				nnode->d.n.right = node;
 			}
 		}
+		tree->size ++;
 	}
 
 	return value;
@@ -458,6 +459,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 	else if (next->value == RADIX_NO_VALUE) {
 		msg_debug ("insert value node with %p", value);
 		next->value = value;
+		tree->size ++;
 	}
 	else {
 		if (next->skipped) {
@@ -483,6 +485,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 					node->d.n.left = next;
 				}
 				oldval = next->value;
+				tree->size ++;
 			}
 			else {
 				/*
@@ -505,6 +508,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 					next->d.n.right = NULL;
 				}
 				oldval = next->value;
+				tree->size ++;
 			}
 		}
 		else {
