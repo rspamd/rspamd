@@ -542,13 +542,14 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 }
 
 gboolean
-rspamd_symbols_cache_add_condition (struct symbols_cache *cache, gint id, lua_State *L, gint cbref)
+rspamd_symbols_cache_add_condition (struct symbols_cache *cache, gint id,
+		lua_State *L, gint cbref)
 {
 	struct cache_item *item;
 
 	g_assert (cache != NULL);
 
-	if (id < 0 || id >= cache->items_by_id->len) {
+	if (id < 0 || id >= (gint)cache->items_by_id->len) {
 		return FALSE;
 	}
 

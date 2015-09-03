@@ -287,7 +287,7 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 	}
 
 	if (remain != NULL && remain > buf) {
-		g_assert (rlen <= sizeof (buf) - 2);
+		g_assert (rlen <= (gint)sizeof (buf) - 2);
 		buf[rlen++] = '\n';
 		buf[rlen] = '\0';
 		tlen += rlen;

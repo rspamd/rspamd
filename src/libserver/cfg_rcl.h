@@ -39,24 +39,26 @@ struct rspamd_rcl_section;
 struct rspamd_config;
 struct rspamd_rcl_default_handler_data;
 
+enum rspamd_rcl_flag {
+	RSPAMD_CL_FLAG_TIME_FLOAT = 0x1 << 0,
+	RSPAMD_CL_FLAG_TIME_TIMEVAL = 0x1 << 1,
+	RSPAMD_CL_FLAG_TIME_TIMESPEC = 0x1 << 2,
+	RSPAMD_CL_FLAG_TIME_INTEGER = 0x1 << 3,
+	RSPAMD_CL_FLAG_TIME_UINT_32 = 0x1 << 4,
+	RSPAMD_CL_FLAG_INT_16 = 0x1 << 5,
+	RSPAMD_CL_FLAG_INT_32 = 0x1 << 6,
+	RSPAMD_CL_FLAG_INT_64 = 0x1 << 7,
+	RSPAMD_CL_FLAG_UINT = 0x1 << 8,
+	RSPAMD_CL_FLAG_INT_SIZE = 0x1 << 9,
+	RSPAMD_CL_FLAG_STRING_PATH = 0x1 << 10,
+	RSPAMD_CL_FLAG_BOOLEAN_INVERSE = 0x1 << 11,
+	RSPAMD_CL_FLAG_STRING_LIST_HASH = 0x1 << 12
+};
+
 struct rspamd_rcl_struct_parser {
 	gpointer user_struct;
 	goffset offset;
-	enum {
-		RSPAMD_CL_FLAG_TIME_FLOAT = 0x1 << 0,
-		RSPAMD_CL_FLAG_TIME_TIMEVAL = 0x1 << 1,
-		RSPAMD_CL_FLAG_TIME_TIMESPEC = 0x1 << 2,
-		RSPAMD_CL_FLAG_TIME_INTEGER = 0x1 << 3,
-		RSPAMD_CL_FLAG_TIME_UINT_32 = 0x1 << 4,
-		RSPAMD_CL_FLAG_INT_16 = 0x1 << 5,
-		RSPAMD_CL_FLAG_INT_32 = 0x1 << 6,
-		RSPAMD_CL_FLAG_INT_64 = 0x1 << 7,
-		RSPAMD_CL_FLAG_UINT = 0x1 << 8,
-		RSPAMD_CL_FLAG_INT_SIZE = 0x1 << 9,
-		RSPAMD_CL_FLAG_STRING_PATH = 0x1 << 10,
-		RSPAMD_CL_FLAG_BOOLEAN_INVERSE = 0x1 << 11,
-		RSPAMD_CL_FLAG_STRING_LIST_HASH = 0x1 << 12
-	} flags;
+	enum rspamd_rcl_flag flags;
 };
 
 /**
