@@ -31,6 +31,7 @@
 #include "main.h"
 #include "util.h"
 #include "mem_pool.h"
+#include "blake2.h"
 
 static const gchar *hash_fill = "1";
 
@@ -83,10 +84,12 @@ connect_http (struct rspamd_map *map,
 	gboolean is_async)
 {
 	gint sock;
-	struct rspamd_config *cfg = map->cfg;
+	rspamd_mempool_t *pool;
+
+	pool = map->pool;
 
 	if ((sock = rspamd_socket_tcp (data->addr, FALSE, is_async)) == -1) {
-		msg_info_config ("cannot connect to http server %s: %d, %s",
+		msg_info_pool ("cannot connect to http server %s: %d, %s",
 			data->host,
 			errno,
 			strerror (errno));
@@ -144,11 +147,11 @@ http_map_error (struct rspamd_http_connection *conn,
 	GError *err)
 {
 	struct http_callback_data *cbd = conn->ud;
-	struct rspamd_config *cfg;
+	rspamd_mempool_t *pool;
 
-	cfg = cbd->map->cfg;
+	pool = cbd->map->pool;
 
-	msg_err_config ("connection with http server terminated incorrectly: %s",
+	msg_err_pool ("connection with http server terminated incorrectly: %s",
 			err->message);
 	free_http_cbdata (cbd);
 }
@@ -159,10 +162,10 @@ http_map_finish (struct rspamd_http_connection *conn,
 {
 	struct http_callback_data *cbd = conn->ud;
 	struct rspamd_map *map;
-	struct rspamd_config *cfg;
+	rspamd_mempool_t *pool;
 
 	map = cbd->map;
-	cfg = map->cfg;
+	pool = cbd->map->pool;
 
 	if (msg->code == 200) {
 		if (cbd->remain_buf != NULL) {
@@ -173,15 +176,15 @@ http_map_finish (struct rspamd_http_connection *conn,
 		map->fin_callback (map->pool, &cbd->cbdata);
 		*map->user_data = cbd->cbdata.cur_data;
 		cbd->data->last_checked = msg->date;
-		msg_info_config ("read map data from %s", cbd->data->host);
+		msg_info_pool ("read map data from %s", cbd->data->host);
 	}
 	else if (msg->code == 304) {
-		msg_debug_config ("data is not modified for server %s",
+		msg_debug_pool ("data is not modified for server %s",
 				cbd->data->host);
 		cbd->data->last_checked = msg->date;
 	}
 	else {
-		msg_info_config ("cannot load map %s from %s: HTTP error %d",
+		msg_info_pool ("cannot load map %s from %s: HTTP error %d",
 				map->uri, cbd->data->host, msg->code);
 	}
 
@@ -245,15 +248,15 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 	gchar buf[BUFSIZ], *remain;
 	ssize_t r;
 	gint fd, rlen, tlen;
-	struct rspamd_config *cfg = map->cfg;
+	rspamd_mempool_t *pool = map->pool;
 
 	if (map->read_callback == NULL || map->fin_callback == NULL) {
-		msg_err_config ("bad callback for reading map file");
+		msg_err_pool ("bad callback for reading map file");
 		return;
 	}
 
 	if ((fd = open (data->filename, O_RDONLY)) == -1) {
-		msg_warn_config ("cannot open file '%s': %s", data->filename,
+		msg_warn_pool ("cannot open file '%s': %s", data->filename,
 			strerror (errno));
 		return;
 	}
@@ -317,12 +320,12 @@ file_callback (gint fd, short what, void *ud)
 	struct rspamd_map *map = ud;
 	struct file_map_data *data = map->map_data;
 	struct stat st;
-	struct rspamd_config *cfg;
+	rspamd_mempool_t *pool;
 
-	cfg = map->cfg;
+	pool = map->pool;
 
 	if (g_atomic_int_get (map->locked)) {
-		msg_info_config (
+		msg_info_pool (
 			"don't try to reread map as it is locked by other process, will reread it later");
 		jitter_timeout_event (map, TRUE, FALSE);
 		return;
@@ -341,7 +344,7 @@ file_callback (gint fd, short what, void *ud)
 		return;
 	}
 
-	msg_info_config ("rereading map file %s", data->filename);
+	msg_info_pool ("rereading map file %s", data->filename);
 	read_map_file (map, data);
 	g_atomic_int_set (map->locked, 0);
 }
@@ -356,13 +359,13 @@ http_callback (gint fd, short what, void *ud)
 	struct http_map_data *data;
 	gint sock;
 	struct http_callback_data *cbd;
-	struct rspamd_config *cfg;
+	rspamd_mempool_t *pool;
 
 	data = map->map_data;
-	cfg = map->cfg;
+	pool = map->pool;
 
 	if (g_atomic_int_get (map->locked)) {
-		msg_info_config (
+		msg_info_pool (
 			"don't try to reread map as it is locked by other process, will reread it later");
 		if (data->conn->ud == NULL) {
 			jitter_timeout_event (map, TRUE, TRUE);
@@ -395,7 +398,7 @@ http_callback (gint fd, short what, void *ud)
 		cbd->tv.tv_usec = 0;
 		cbd->fd = sock;
 		data->conn->ud = cbd;
-		msg_debug_config ("reading map data from %s", data->host);
+		msg_debug_pool ("reading map data from %s", data->host);
 		write_http_request (cbd);
 	}
 }
@@ -485,9 +488,10 @@ rspamd_map_add (struct rspamd_config *cfg,
 	const gchar *def, *p, *hostend;
 	struct file_map_data *fdata;
 	struct http_map_data *hdata;
-	gchar portbuf[6];
+	gchar portbuf[6], *cksum_encoded, cksum[BLAKE2B_OUTBYTES];
 	gint i, s, r;
 	struct addrinfo hints, *res;
+	rspamd_mempool_t *pool;
 
 	/* First of all detect protocol line */
 	if (!rspamd_map_check_proto (map_line, (int *)&proto, &def)) {
@@ -617,9 +621,15 @@ rspamd_map_add (struct rspamd_config *cfg,
 		new_map->map_data = hdata;
 	}
 	/* Temp pool */
+	blake2b (cksum, new_map->uri, NULL, sizeof (cksum), strlen (new_map->uri), 0);
+	cksum_encoded = rspamd_encode_base32 (cksum, sizeof (cksum));
 	new_map->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "map");
-	memcpy (cfg->map_pool->tag.uid, cfg->cfg_pool->tag.uid,
-			sizeof (cfg->map_pool->tag.uid));
+	memcpy (new_map->pool->tag.uid, cksum_encoded,
+			sizeof (new_map->pool->tag.uid));
+	g_free (cksum_encoded);
+	pool = new_map->pool;
+	msg_info_pool ("added map %s", new_map->uri);
+
 
 	cfg->maps = g_list_prepend (cfg->maps, new_map);
 
