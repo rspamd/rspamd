@@ -28,6 +28,23 @@
 #include "main.h"
 #include "mem_pool.h"
 
+#define msg_err_radix(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        "radix", tree->pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_radix(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+        "radix", tree->pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_radix(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        "radix", tree->pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_radix(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        "radix", tree->pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
 struct radix_compressed_node {
 	union {
 		struct {
@@ -115,7 +132,7 @@ radix_find_compressed (radix_compressed_t * tree, guint8 *key, gsize keylen)
 	value = RADIX_NO_VALUE;
 	node = tree->root;
 
-	msg_debug ("trying to find key");
+	msg_debug_radix ("trying to find key");
 	while (node && kremain) {
 		if (node->skipped) {
 			/* It is obviously a leaf node */
@@ -130,7 +147,7 @@ radix_find_compressed (radix_compressed_t * tree, guint8 *key, gsize keylen)
 			value = node->value;
 		}
 
-		msg_debug ("finding value cur value: %ul, left: %p, "
+		msg_debug_radix ("finding value cur value: %ul, left: %p, "
 						"right: %p, go %s", value, node->d.n.left,
 						node->d.n.right, (*k & bit) ? "right" : "left");
 		if (kv & bit) {
@@ -172,7 +189,7 @@ radix_uncompress_path (radix_compressed_t *tree,
 	node->skipped = FALSE;
 	node->value = RADIX_NO_VALUE;
 
-	msg_debug ("uncompress %ud levels of tree", levels_uncompress);
+	msg_debug_radix ("uncompress %ud levels of tree", levels_uncompress);
 
 	/* Uncompress the desired path */
 	while (levels_uncompress) {
@@ -202,7 +219,7 @@ radix_uncompress_path (radix_compressed_t *tree,
 	}
 
 	/* Attach leaf node, that was previously a compressed node */
-	msg_debug ("attach leaf node to %s with value %p", (*nkey & bit) ? "right" : "left",
+	msg_debug_radix ("attach leaf node to %s with value %p", (*nkey & bit) ? "right" : "left",
 			leaf->value);
 	if (*nkey & bit) {
 		node->d.n.right = leaf;
@@ -239,7 +256,7 @@ radix_make_leaf_node (radix_compressed_t *tree,
 		memset (node, 0, sizeof (*node));
 	}
 	node->value = value;
-	msg_debug ("insert new leaf node with value %p", value);
+	msg_debug_radix ("insert new leaf node with value %p", value);
 
 	return node;
 }
@@ -279,13 +296,13 @@ radix_replace_node (radix_compressed_t *tree,
 		memcpy (node->d.s.key, key, node->d.s.keylen);
 		oldval = node->value;
 		node->value = value;
-		msg_debug ("replace value for leaf node with: %p, old value: %p",
+		msg_debug_radix ("replace value for leaf node with: %p, old value: %p",
 				value, oldval);
 	}
 	else {
 		oldval = node->value;
 		node->value = value;
-		msg_debug ("replace value for node with: %p, old value: %p",
+		msg_debug_radix ("replace value for node with: %p, old value: %p",
 							value, oldval);
 	}
 
@@ -309,7 +326,7 @@ radix_uncompress_node (radix_compressed_t *tree,
 	gboolean masked = FALSE;
 	struct radix_compressed_node *leaf;
 
-	msg_debug ("want to uncompress nodes from level %ud to level %ud, "
+	msg_debug_radix ("want to uncompress nodes from level %ud to level %ud, "
 			"compressed node level: %ud",
 			cur_level, target_level, node->d.s.level);
 	while (cur_level < target_level) {
@@ -317,12 +334,12 @@ radix_uncompress_node (radix_compressed_t *tree,
 		guint8 nb = *nkey & bit;
 
 		if (cur_level >= node->d.s.level) {
-			msg_debug ("found available masked path at level %ud", cur_level);
+			msg_debug_radix ("found available masked path at level %ud", cur_level);
 			masked = TRUE;
 			break;
 		}
 		if (kb != nb) {
-			msg_debug ("found available path at level %ud", cur_level);
+			msg_debug_radix ("found available path at level %ud", cur_level);
 			break;
 		}
 
@@ -358,7 +375,7 @@ radix_uncompress_node (radix_compressed_t *tree,
 		 * - otherwise we insert new compressed leaf node
 		 */
 		if (cur_level == target_level) {
-			msg_debug ("insert detached leaf node with value: %p", value);
+			msg_debug_radix ("insert detached leaf node with value: %p", value);
 			nnode->value = value;
 		}
 		else if (masked) {
@@ -372,7 +389,7 @@ radix_uncompress_node (radix_compressed_t *tree,
 			else {
 				leaf = nnode->d.n.right;
 			}
-			msg_debug ("move leaf node with value: %p, to level %ud, "
+			msg_debug_radix ("move leaf node with value: %p, to level %ud, "
 					"set leaf node value to %p and level %ud", nnode->value,
 					cur_level, value, target_level);
 			radix_move_up_compressed_leaf (tree, leaf, nnode, value, key, keylen,
@@ -413,7 +430,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 	node = tree->root;
 
 	g_assert (keybits >= masklen);
-	msg_debug ("want insert value %p with mask %z", value, masklen);
+	msg_debug_radix ("want insert value %p with mask %z", value, masklen);
 
 	node = tree->root;
 	next = node;
@@ -457,7 +474,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 		tree->size ++;
 	}
 	else if (next->value == RADIX_NO_VALUE) {
-		msg_debug ("insert value node with %p", value);
+		msg_debug_radix ("insert value node with %p", value);
 		next->value = value;
 		tree->size ++;
 	}
@@ -495,7 +512,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 				node = radix_make_leaf_node (tree, key, keylen,
 						target_level, value, TRUE);
 				*prev = next;
-				msg_debug ("move leaf node with value: %p, to level %ud, "
+				msg_debug_radix ("move leaf node with value: %p, to level %ud, "
 						"set leaf node value to %p and level %ud", next->value,
 						cur_level, value, target_level);
 				next->skipped = FALSE;
@@ -595,7 +612,7 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 			/* Get mask */
 			k = strtoul (ipnet, &err_str, 10);
 			if (errno != 0) {
-				msg_warn (
+				msg_warn_radix (
 						"invalid netmask, error detected on symbol: %s, erorr: %s",
 						err_str,
 						strerror (errno));
@@ -611,7 +628,7 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 			af = AF_INET6;
 		}
 		else {
-			msg_warn ("invalid IP address: %s", token);
+			msg_warn_radix ("invalid IP address: %s", token);
 		}
 
 		if (af == AF_INET) {
