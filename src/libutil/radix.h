@@ -104,4 +104,9 @@ gboolean radix_add_generic_iplist (const gchar *ip_list,
  */
 gsize radix_get_size (radix_compressed_t *tree);
 
+/**
+ * Returns memory pool associated with the radix tree
+ */
+rspamd_mempool_t* radix_get_pool (radix_compressed_t *tree);
+
 #endif

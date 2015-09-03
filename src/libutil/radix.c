@@ -675,6 +675,15 @@ radix_get_size (radix_compressed_t *tree)
 
 	return 0;
 }
-/*
- * vi:ts=4
- */
+
+
+rspamd_mempool_t *
+radix_get_pool (radix_compressed_t *tree)
+{
+
+	if (tree != NULL) {
+		return tree->pool;
+	}
+
+	return NULL;
+}
