@@ -47,8 +47,10 @@ local e = {
 }
 
 -- New extended interface
+-- %<number> means numeric arguments and %s means the next argument
+-- for example %1, %2, %s: %s would mean the third argument
 
-rspamd_logger.infox('a=%1, b=%2, c=%3, d=%4, e=%5', a, b, c, d, e)
+rspamd_logger.infox('a=%1, b=%2, c=%3, d=%4, e=%s', a, b, c, d, e)
 -- Output: a=string, b=1.50000, c=1, d={[1] = aa, [2] = 1, [3] = bb} e={[key]=value, [key2]=1.0}
 
 -- Legacy interface (can handle merely strings)
@@ -449,7 +451,6 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 		lua_pushstring (L, "__index");
 		lua_gettable (L, -2);
 
-		lua_istable (L, -1);
 		lua_pushstring (L, "class");
 		lua_gettable (L, -2);
 
@@ -493,7 +494,7 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 
 	s = lua_tostring (L, fmt_pos);
 	c = s;
-	cur_arg = fmt_pos + 1;
+	cur_arg = fmt_pos;
 
 	if (s == NULL) {
 		return 0;
@@ -531,7 +532,7 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 						arg_num = strtoul (c, NULL, 10);
 						arg_num += fmt_pos - 1;
 						/* Update the current argument */
-						cur_arg = arg_num + 1;
+						cur_arg = arg_num;
 					}
 					else {
 						/* We have non numeric argument, e.g. %s */
