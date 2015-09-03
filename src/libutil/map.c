@@ -940,8 +940,14 @@ rspamd_radix_read (rspamd_mempool_t * pool,
 	gint len,
 	struct map_cb_data *data)
 {
+	radix_compressed_t *tree;
+	rspamd_mempool_t *rpool;
+
 	if (data->cur_data == NULL) {
-		data->cur_data = radix_create_compressed ();
+		tree = radix_create_compressed ();
+		rpool = radix_get_pool (tree);
+		memcpy (rpool->tag.uid, pool->tag.uid, sizeof (rpool->tag.uid));
+		data->cur_data = tree;
 	}
 	return rspamd_parse_abstract_list (pool,
 			   chunk,
