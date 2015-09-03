@@ -461,7 +461,7 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 				uid = task->task_pool->tag.uid;
 			}
 		}
-		else if (strcmp (clsname, "rspamd{mempool}")) {
+		else if (strcmp (clsname, "rspamd{mempool}") == 0) {
 			rspamd_mempool_t  *pool;
 
 			pool = rspamd_lua_check_mempool (L, 1);
@@ -470,7 +470,7 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 				uid = pool->tag.uid;
 			}
 		}
-		else if (strcmp (clsname, "rspamd{config}")) {
+		else if (strcmp (clsname, "rspamd{config}") == 0) {
 			struct rspamd_config *cfg;
 
 			cfg = lua_check_config (L, 1);
