@@ -169,6 +169,8 @@ http_map_finish (struct rspamd_http_connection *conn,
 
 	if (msg->code == 200) {
 		if (cbd->remain_buf != NULL) {
+			/* Append \n to avoid issues */
+			g_string_append_c (cbd->remain_buf, '\n');
 			map->read_callback (map->pool, cbd->remain_buf->str,
 					cbd->remain_buf->len, &cbd->cbdata);
 		}
@@ -268,7 +270,7 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 
 	rlen = 0;
 	tlen = 0;
-	while ((r = read (fd, buf + rlen, sizeof (buf) - rlen - 1)) > 0) {
+	while ((r = read (fd, buf + rlen, sizeof (buf) - rlen - 2)) > 0) {
 		r += rlen;
 		tlen += r;
 		buf[r] = '\0';
@@ -277,13 +279,12 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 			/* copy remaining buffer to start of buffer */
 			rlen = r - (remain - buf);
 			memmove (buf, remain, rlen);
-			remain = buf + rlen;
 		}
 	}
 
 	if (remain != NULL && remain > buf) {
-		rlen = remain - buf;
-		memmove (buf, remain, rlen);
+		g_assert (rlen <= sizeof (buf) - 2);
+		buf[rlen++] = '\n';
 		buf[rlen] = '\0';
 		tlen += rlen;
 		map->read_callback (map->pool, buf, rlen, &cbdata);
@@ -680,7 +681,7 @@ abstract_parse_kv_list (rspamd_mempool_t * pool,
 	c = p;
 	end = p + len;
 
-	while (p <= end) {
+	while (p < end) {
 		switch (data->state) {
 		case 0:
 			/* read key */
@@ -696,7 +697,7 @@ abstract_parse_kv_list (rspamd_mempool_t * pool,
 				}
 				data->state = 99;
 			}
-			else if (*p == '\r' || *p == '\n' || p == end) {
+			else if (*p == '\r' || *p == '\n') {
 				if (key != NULL && p - c >= 0) {
 					value = rspamd_mempool_alloc (pool, p - c + 1);
 					memcpy (value, c, p - c);
@@ -748,7 +749,7 @@ abstract_parse_kv_list (rspamd_mempool_t * pool,
 			/* SKIP_COMMENT */
 			/* Skip comment till end of line */
 			if (*p == '\r' || *p == '\n') {
-				while ((*p == '\r' || *p == '\n') && p - chunk < len) {
+				while ((*p == '\r' || *p == '\n') && p < end) {
 					p++;
 				}
 				c = p;
@@ -761,7 +762,7 @@ abstract_parse_kv_list (rspamd_mempool_t * pool,
 			break;
 		case 100:
 			/* Skip \r\n and whitespaces */
-			if (*p == '\r' || *p == '\n' || *p == '\0' || g_ascii_isspace (*p)) {
+			if (*p == '\r' || *p == '\n' || g_ascii_isspace (*p)) {
 				p++;
 			}
 			else {
@@ -789,7 +790,7 @@ rspamd_parse_abstract_list (rspamd_mempool_t * pool,
 	c = p;
 	end = p + len;
 
-	while (p <= end) {
+	while (p < end) {
 		switch (data->state) {
 		/* READ_SYMBOL */
 		case 0:
@@ -804,10 +805,10 @@ rspamd_parse_abstract_list (rspamd_mempool_t * pool,
 						msg_debug_pool ("insert element (before comment): %s", s);
 					}
 				}
-				c = NULL;
+				c = p;
 				data->state = 1;
 			}
-			else if (*p == '\r' || *p == '\n' || p == end) {
+			else if (*p == '\r' || *p == '\n') {
 				/* Got EOL marker, save stored string */
 				s = strip_map_elt (pool, c, p - c);
 
