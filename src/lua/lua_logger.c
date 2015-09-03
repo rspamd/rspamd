@@ -429,7 +429,8 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 	gchar *d;
 	const gchar *s, *c, *clsname, *uid = NULL;
 	gsize remain, r;
-	guint arg_num = 0, fmt_pos;
+	guint arg_num = 0, fmt_pos, cur_arg;
+	bool num_arg = false;
 	enum {
 		copy_char = 0,
 		got_percent,
@@ -492,6 +493,7 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 
 	s = lua_tostring (L, fmt_pos);
 	c = s;
+	cur_arg = fmt_pos + 1;
 
 	if (s == NULL) {
 		return 0;
@@ -510,7 +512,7 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 				}
 				break;
 			case got_percent:
-				if (g_ascii_isdigit (*s)) {
+				if (g_ascii_isdigit (*s) || *s == 's') {
 					state = parse_arg_num;
 					c = s;
 				}
@@ -522,9 +524,20 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 			case parse_arg_num:
 				if (g_ascii_isdigit (*s)) {
 					s++;
+					num_arg = true;
 				}
 				else {
-					arg_num = strtoul (c, NULL, 10);
+					if (num_arg) {
+						arg_num = strtoul (c, NULL, 10);
+						arg_num += fmt_pos - 1;
+						/* Update the current argument */
+						cur_arg = arg_num + 1;
+					}
+					else {
+						/* We have non numeric argument, e.g. %s */
+						arg_num = cur_arg ++;
+						s ++;
+					}
 
 					if (arg_num < 1 || arg_num > (guint) lua_gettop (L) + 1) {
 						msg_err ("wrong argument number: %ud", arg_num);
@@ -549,7 +562,14 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 	}
 
 	if (state == parse_arg_num) {
-		arg_num = strtoul (c, NULL, 10);
+		if (num_arg) {
+			arg_num = strtoul (c, NULL, 10);
+			arg_num += fmt_pos - 1;
+		}
+		else {
+			/* We have non numeric argument, e.g. %s */
+			arg_num = cur_arg;
+		}
 
 		if (arg_num < 1 || arg_num > (guint) lua_gettop (L) + 1) {
 			msg_err ("wrong argument number: %ud", arg_num);
