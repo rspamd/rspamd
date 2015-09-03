@@ -751,7 +751,7 @@ abstract_parse_kv_list (rspamd_mempool_t * pool,
 			break;
 		case 100:
 			/* Skip \r\n and whitespaces */
-			if (*p == '\r' || *p == '\n' || g_ascii_isspace (*p)) {
+			if (*p == '\r' || *p == '\n' || *p == '\0' || g_ascii_isspace (*p)) {
 				p++;
 			}
 			else {
@@ -791,9 +791,10 @@ rspamd_parse_abstract_list (rspamd_mempool_t * pool,
 
 					if (s) {
 						func (data->cur_data, s, hash_fill);
+						msg_debug_pool ("insert element (before comment): %s", s);
 					}
-					c = p;
 				}
+				c = NULL;
 				data->state = 1;
 			}
 			else if (*p == '\r' || *p == '\n' || p == end) {
@@ -802,14 +803,20 @@ rspamd_parse_abstract_list (rspamd_mempool_t * pool,
 
 				if (s) {
 					func (data->cur_data, s, hash_fill);
+					msg_debug_pool ("insert element (before EOL): %s", s);
 				}
 				/* Skip EOL symbols */
-				while ((*p == '\r' || *p == '\n') && p <= end) {
+				while ((*p == '\r' || *p == '\n') && p < end) {
 					p++;
 				}
 
-				c = p;
-				p ++;
+				if (p == end) {
+					p ++;
+					c = NULL;
+				}
+				else {
+					c = p;
+				}
 			}
 			else {
 				p++;
@@ -819,11 +826,17 @@ rspamd_parse_abstract_list (rspamd_mempool_t * pool,
 		case 1:
 			/* Skip comment till end of line */
 			if (*p == '\r' || *p == '\n') {
-				while ((*p == '\r' || *p == '\n') && p <= end) {
+				while ((*p == '\r' || *p == '\n') && p < end) {
 					p++;
 				}
-				c = p;
-				p ++;
+
+				if (p == end) {
+					p ++;
+					c = NULL;
+				}
+				else {
+					c = p;
+				}
 				data->state = 0;
 			}
 			else {
@@ -831,6 +844,10 @@ rspamd_parse_abstract_list (rspamd_mempool_t * pool,
 			}
 			break;
 		}
+	}
+
+	if (c >= end) {
+		c = NULL;
 	}
 
 	return c;
