@@ -18,6 +18,10 @@ For immediate help and discussions you can use IRC channel *#rspamd* in <http://
 
 You can read more about IRC [here](irc.html).
 
+## Twitter
+
+Please follow [@rspamd](https://twitter.com/rspamd) for the most recent project news and updates.
+
 ## Issue tracker
 
 If you find a bug in rspamd or would like to request a feature you can use issue trackers for rspamd project:
