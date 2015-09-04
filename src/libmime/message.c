@@ -1373,7 +1373,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 							part_stream));
 				g_object_unref (part_stream);
 				mime_part =
-					rspamd_mempool_alloc (task->task_pool,
+					rspamd_mempool_alloc0 (task->task_pool,
 						sizeof (struct mime_part));
 
 				hdrs = g_mime_object_get_headers (GMIME_OBJECT (part));

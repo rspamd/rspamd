@@ -918,7 +918,7 @@ lua_task_get_parts (lua_State * L)
 		lua_newtable (L);
 
 		for (i = 0; i < task->parts->len; i ++) {
-			part = g_ptr_array_index (task->text_parts, i);
+			part = g_ptr_array_index (task->parts, i);
 			ppart = lua_newuserdata (L, sizeof (struct mime_part *));
 			*ppart = part;
 			rspamd_lua_setclass (L, "rspamd{mimepart}", -1);
