@@ -861,6 +861,8 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input, GError *err
 	const ucl_object_t *metric, *res;
 	const gchar *action = "no action";
 	gint act;
+	gdouble score = 0.0, required_score = 0.0;
+	gchar scorebuf[32];
 	gboolean is_spam = FALSE;
 	const gchar *hdr_scanned, *hdr_spam;
 	gchar *json_header, *json_header_encoded;
@@ -889,6 +891,16 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input, GError *err
 			if (res) {
 				action = ucl_object_tostring (res);
 			}
+
+			res = ucl_object_find_key (metric, "score");
+			if (res) {
+				score = ucl_object_todouble (res);
+			}
+
+			res = ucl_object_find_key (metric, "required_score");
+			if (res) {
+				required_score = ucl_object_todouble (res);
+			}
 		}
 
 		rspamd_action_from_str (action, &act);
@@ -907,6 +919,11 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input, GError *err
 
 		g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Action",
 				action);
+
+		rspamd_snprintf (scorebuf, sizeof (scorebuf), "%.2f / %.2f", score,
+				required_score);
+		g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Score",
+				scorebuf);
 
 		if (json || raw) {
 			/* We also append json data as a specific header */
