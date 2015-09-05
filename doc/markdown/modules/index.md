@@ -26,6 +26,7 @@ rspamd internal functions and lua rules.
 public DNS black lists to filter messages with malicious URLs.
 - [spf](spf.md): checks SPF records for messages processed.
 - [dkim](dkim.md): performs DKIM signatures checks.
+- [dmarc](dmarc.md): performs DKIM signatures checks.
 - [fuzzy_check](fuzzy_check.md): checks messages fuzzy hashes against public blacklists.
 - [chartable](chartable.md): checks character sets of text parts in messages.
 
