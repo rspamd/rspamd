@@ -105,6 +105,12 @@ requires input.
 -n *parallel_count*, \--max-requests=*parallel_count*
 :	Maximum number of requests to rspamd executed in parallel (8 by default)
 
+-e *command*, \--execute=*command*
+:	Execute the specified command with either mime output (if `mime` option is also specified) or formatted rspamd output
+
+\--mime
+:	Output the full mime message instead of scanning results only
+
 \--commands
 :	List available commands
 
