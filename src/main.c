@@ -28,7 +28,6 @@
 #include "smtp.h"
 #include "libutil/map.h"
 #include "fuzzy_storage.h"
-#include "kvstorage_server.h"
 #include "libserver/symbols_cache.h"
 #include "lua/lua_common.h"
 #include "libserver/worker_util.h"

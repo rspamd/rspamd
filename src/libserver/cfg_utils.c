@@ -30,7 +30,6 @@
 #include "uthash_strcase.h"
 #include "filter.h"
 #include "lua/lua_common.h"
-#include "kvstorage_config.h"
 #include "map.h"
 #include "dynamic_cfg.h"
 #include "utlist.h"
