@@ -167,9 +167,19 @@ of host that was used by surbl module (if enabled).
 .RS
 .RE
 .TP
-.B \-n \f[I]parallel_count\f[],
-\-\-max\-requests=\f[I]parallel_count\f[]
+.B \-n \f[I]parallel_count\f[], \-\-max\-requests=\f[I]parallel_count\f[]
 Maximum number of requests to rspamd executed in parallel (8 by default)
+.RS
+.RE
+.TP
+.B \-e \f[I]command\f[], \-\-execute=\f[I]command\f[]
+Execute the specified command with either mime output (if \f[C]mime\f[]
+option is also specified) or formatted rspamd output
+.RS
+.RE
+.TP
+.B \-\-mime
+Output the full mime message instead of scanning results only
 .RS
 .RE
 .TP
