@@ -45,56 +45,52 @@ typedef struct url_match_s {
 #define URL_FLAG_TLD_MATCH (1 << 1)
 #define URL_FLAG_STAR_MATCH (1 << 2)
 
+struct url_callback_data;
+
 struct url_matcher {
 	gchar *pattern;
 	const gchar *prefix;
 
-	gboolean (*start) (const gchar *begin, const gchar *end, const gchar *pos,
+	gboolean (*start) (struct url_callback_data *cb,
+			const gchar *pos,
 			url_match_t *match);
 
-	gboolean (*end) (const gchar *begin, const gchar *end, const gchar *pos,
+	gboolean (*end) (struct url_callback_data *cb,
+			const gchar *pos,
 			url_match_t *match);
 
 	gint flags;
 };
 
-static gboolean url_file_start (const gchar *begin,
-		const gchar *end,
+static gboolean url_file_start (struct url_callback_data *cb,
 		const gchar *pos,
 		url_match_t *match);
 
-static gboolean url_file_end (const gchar *begin,
-		const gchar *end,
+static gboolean url_file_end (struct url_callback_data *cb,
 		const gchar *pos,
 		url_match_t *match);
 
-static gboolean url_web_start (const gchar *begin,
-		const gchar *end,
+static gboolean url_web_start (struct url_callback_data *cb,
 		const gchar *pos,
 		url_match_t *match);
 
-static gboolean url_web_end (const gchar *begin,
-		const gchar *end,
+static gboolean url_web_end (struct url_callback_data *cb,
 		const gchar *pos,
 		url_match_t *match);
 
-static gboolean url_tld_start (const gchar *begin,
-		const gchar *end,
+static gboolean url_tld_start (struct url_callback_data *cb,
 		const gchar *pos,
 		url_match_t *match);
 
-static gboolean url_tld_end (const gchar *begin,
-		const gchar *end,
+static gboolean url_tld_end (struct url_callback_data *cb,
 		const gchar *pos,
 		url_match_t *match);
 
-static gboolean url_email_start (const gchar *begin,
-		const gchar *end,
+static gboolean url_email_start (struct url_callback_data *cb,
 		const gchar *pos,
 		url_match_t *match);
 
-static gboolean url_email_end (const gchar *begin,
-		const gchar *end,
+static gboolean url_email_end (struct url_callback_data *cb,
 		const gchar *pos,
 		url_match_t *match);
 
@@ -133,6 +129,18 @@ struct url_matcher static_matchers[] = {
 		/* Likely emails */
 		{"@",         "mailto://", url_email_start, url_email_end,
 				URL_FLAG_NOHTML}
+};
+
+struct url_callback_data {
+	const gchar *begin;
+	gchar *url_str;
+	rspamd_mempool_t *pool;
+	gint len;
+	gboolean is_html;
+	const gchar *start;
+	const gchar *fin;
+	const gchar *end;
+	const gchar *last_at;
 };
 
 struct url_match_scanner {
@@ -1255,8 +1263,7 @@ is_url_start (gchar c)
 }
 
 static gboolean
-url_file_start (const gchar *begin,
-		const gchar *end,
+url_file_start (struct url_callback_data *cb,
 		const gchar *pos,
 		url_match_t *match)
 {
@@ -1265,8 +1272,7 @@ url_file_start (const gchar *begin,
 }
 
 static gboolean
-url_file_end (const gchar *begin,
-		const gchar *end,
+url_file_end (struct url_callback_data *cb,
 		const gchar *pos,
 		url_match_t *match)
 {
@@ -1287,11 +1293,11 @@ url_file_end (const gchar *begin,
 		}
 	}
 
-	while (p < end && *p != stop && is_urlsafe (*p)) {
+	while (p < cb->end && *p != stop && is_urlsafe (*p)) {
 		p++;
 	}
 
-	if (p == begin) {
+	if (p == cb->begin) {
 		return FALSE;
 	}
 	match->m_len = p - match->m_begin;
@@ -1301,15 +1307,14 @@ url_file_end (const gchar *begin,
 }
 
 static gboolean
-url_tld_start (const gchar *begin,
-		const gchar *end,
+url_tld_start (struct url_callback_data *cb,
 		const gchar *pos,
 		url_match_t *match)
 {
 	const gchar *p = pos;
 
 	/* Try to find the start of the url by finding any non-urlsafe character or whitespace/punctuation */
-	while (p >= begin) {
+	while (p >= cb->begin) {
 		if ((!is_domain (*p) && *p != '.' &&
 			 *p != '/') || g_ascii_isspace (*p)) {
 
@@ -1327,12 +1332,12 @@ url_tld_start (const gchar *begin,
 			match->m_begin = p;
 			return TRUE;
 		}
-		else if (p == begin && p != pos) {
+		else if (p == cb->begin && p != pos) {
 			match->m_begin = p;
 			return TRUE;
 		}
 		else if (*p == '.') {
-			if (p == begin) {
+			if (p == cb->begin) {
 				/* Urls cannot start with a dot */
 				return FALSE;
 			}
@@ -1352,8 +1357,7 @@ url_tld_start (const gchar *begin,
 }
 
 static gboolean
-url_tld_end (const gchar *begin,
-		const gchar *end,
+url_tld_end (struct url_callback_data *cb,
 		const gchar *pos,
 		url_match_t *match)
 {
@@ -1361,7 +1365,7 @@ url_tld_end (const gchar *begin,
 
 	/* A url must be finished by tld, so it must be followed by space character */
 	p = pos + strlen (match->pattern);
-	if (p == end || g_ascii_isspace (*p) || *p == ',') {
+	if (p == cb->end || g_ascii_isspace (*p) || *p == ',') {
 		match->m_len = p - match->m_begin;
 		return TRUE;
 	}
@@ -1370,22 +1374,21 @@ url_tld_end (const gchar *begin,
 		p = match->m_begin;
 		/* Check common prefix */
 		if (g_ascii_strncasecmp (p, "http://", sizeof ("http://") - 1) == 0) {
-			return url_web_end (begin,
-					end,
+			return url_web_end (cb,
 					match->m_begin + sizeof ("http://") - 1,
 					match);
 		}
 		else {
-			return url_web_end (begin, end, match->m_begin, match);
+			return url_web_end (cb, match->m_begin, match);
 		}
 
 	}
 	else if (*p == '.') {
 		p++;
-		if (p < end) {
+		if (p < cb->end) {
 			if (g_ascii_isspace (*p) || *p == '/' ||
 				*p == '?' || *p == ':') {
-				return url_web_end (begin, end, match->m_begin, match);
+				return url_web_end (cb, match->m_begin, match);
 			}
 		}
 	}
@@ -1394,13 +1397,12 @@ url_tld_end (const gchar *begin,
 }
 
 static gboolean
-url_web_start (const gchar *begin,
-		const gchar *end,
+url_web_start (struct url_callback_data *cb,
 		const gchar *pos,
 		url_match_t *match)
 {
 	/* Check what we have found */
-	if (pos > begin &&
+	if (pos > cb->begin &&
 		(g_ascii_strncasecmp (pos, "www", 3) == 0 ||
 		 g_ascii_strncasecmp (pos, "ftp", 3) == 0)) {
 
@@ -1420,14 +1422,13 @@ url_web_start (const gchar *begin,
 }
 
 static gboolean
-url_web_end (const gchar *begin,
-		const gchar *end,
+url_web_end (struct url_callback_data *cb,
 		const gchar *pos,
 		url_match_t *match)
 {
 	const gchar *last = NULL;
 
-	if (rspamd_web_parse (NULL, pos, end - pos, &last, FALSE) != 0) {
+	if (rspamd_web_parse (NULL, pos, cb->end - pos, &last, FALSE) != 0) {
 		return FALSE;
 	}
 
@@ -1438,17 +1439,16 @@ url_web_end (const gchar *begin,
 
 
 static gboolean
-url_email_start (const gchar *begin,
-		const gchar *end,
+url_email_start (struct url_callback_data *cb,
 		const gchar *pos,
 		url_match_t *match)
 {
 	const gchar *p;
 	/* Check what we have found */
-	if (pos > begin && *pos == '@') {
+	if (pos > cb->begin && *pos == '@') {
 		/* Try to extract it with username */
 		p = pos - 1;
-		while (p > begin && is_urlsafe (*p) && *p != ':') {
+		while (p > cb->begin && is_urlsafe (*p) && *p != ':') {
 			p--;
 		}
 
@@ -1460,7 +1460,7 @@ url_email_start (const gchar *begin,
 			match->m_begin = p + 1;
 			return TRUE;
 		}
-		else if (p == begin) {
+		else if (p == cb->begin) {
 			match->m_begin = p;
 			return TRUE;
 		}
@@ -1476,8 +1476,7 @@ url_email_start (const gchar *begin,
 }
 
 static gboolean
-url_email_end (const gchar *begin,
-		const gchar *end,
+url_email_end (struct url_callback_data *cb,
 		const gchar *pos,
 		url_match_t *match)
 {
@@ -1489,7 +1488,7 @@ url_email_end (const gchar *begin,
 		got_at = TRUE;
 	}
 
-	while (p < end && (is_domain (*p) || *p == '_'
+	while (p < cb->end && (is_domain (*p) || *p == '_'
 					   || (*p == '@' && !got_at) ||
 					   *p == '.')) {
 
@@ -1501,7 +1500,7 @@ url_email_end (const gchar *begin,
 	}
 
 	/* Strip strange symbols at the end */
-	if (got_at && p < end) {
+	if (got_at && p < cb->end) {
 		while (p >= match->m_begin &&
 			   (!is_domain (*p) || *p == '.' || *p == '_')) {
 			p--;
@@ -1510,7 +1509,6 @@ url_email_end (const gchar *begin,
 	}
 
 	match->m_len = p - match->m_begin;
-	match->add_prefix = TRUE;
 
 	return got_at;
 }
@@ -1589,17 +1587,6 @@ rspamd_url_text_extract (rspamd_mempool_t *pool,
 	}
 }
 
-struct url_callback_data {
-	const gchar *begin;
-	gchar *url_str;
-	rspamd_mempool_t *pool;
-	gint len;
-	gboolean is_html;
-	const gchar *start;
-	const gchar *fin;
-	const gchar *end;
-};
-
 static gint
 rspamd_url_trie_callback (int strnum, int textpos, void *context)
 {
@@ -1646,16 +1633,16 @@ rspamd_url_trie_callback (int strnum, int textpos, void *context)
 	m.add_prefix = FALSE;
 	pos = cb->begin + textpos - pat->len;
 
-	if (matcher->start (cb->begin, cb->end, pos,
-			&m) && matcher->end (cb->begin, cb->end, pos, &m)) {
+	if (matcher->start (cb, pos, &m) &&
+			matcher->end (cb, pos, &m)) {
 		if (m.add_prefix || matcher->prefix[0] != '\0') {
-			cb->len = m.m_len + strlen (matcher->prefix) + 1;
+			cb->len = m.m_len + strlen (matcher->prefix);
 			cb->url_str = rspamd_mempool_alloc (cb->pool, cb->len + 1);
-			rspamd_snprintf (cb->url_str,
-					cb->len,
+			cb->len = rspamd_snprintf (cb->url_str,
+					cb->len + 1,
 					"%s%*s",
 					m.prefix,
-					m.m_len,
+					(gint)m.m_len,
 					m.m_begin);
 		}
 		else {
