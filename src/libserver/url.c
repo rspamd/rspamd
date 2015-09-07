@@ -24,6 +24,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <http_parser.h>
 #include "config.h"
 #include "url.h"
 #include "util.h"
@@ -334,7 +335,7 @@ rspamd_url_init (const gchar *tld_file)
 
 static gint
 rspamd_mailto_parse (struct http_parser_url *u, const gchar *str, gsize len,
-		gchar const **end)
+		gchar const **end, gboolean strict)
 {
 	const gchar *p = str, *c = str, *last = str + len;
 	gchar t;
@@ -473,6 +474,10 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str, gsize len,
 	out:
 	if (end != NULL) {
 		*end = p;
+	}
+
+	if (!strict) {
+		return 1;
 	}
 
 	return ret;
@@ -1126,7 +1131,7 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	if (len > sizeof ("mailto:") - 1) {
 		/* For mailto: urls we also need to add slashes to make it a valid URL */
 		if (g_ascii_strncasecmp (p, "mailto:", sizeof ("mailto:") - 1) == 0) {
-			ret = rspamd_mailto_parse (&u, uristring, len, &end);
+			ret = rspamd_mailto_parse (&u, uristring, len, &end, TRUE);
 		}
 		else {
 			ret = rspamd_web_parse (&u, uristring, len, &end, TRUE);
@@ -1443,35 +1448,13 @@ url_email_start (struct url_callback_data *cb,
 		const gchar *pos,
 		url_match_t *match)
 {
-	const gchar *p;
-	/* Check what we have found */
-	if (pos > cb->begin && *pos == '@') {
-		/* Try to extract it with username */
-		p = pos - 1;
-		while (p > cb->begin && is_urlsafe (*p) && *p != ':') {
-			p--;
-		}
+	if (!match->prefix || match->prefix[0] == '\0') {
+		/* We have mailto:// at the beginning */
+		match->m_begin = pos;
 
-		/*
-		 * If we've found something special but not ':' then we can try this as
-		 * email address
-		 */
-		if (!is_urlsafe (*p) && p != pos - 1 && *p != ':') {
-			match->m_begin = p + 1;
-			return TRUE;
-		}
-		else if (p == cb->begin) {
-			match->m_begin = p;
-			return TRUE;
-		}
+		return TRUE;
 	}
-	else {
-		p = pos + strlen (match->pattern);
-		if (is_atom (*p)) {
-			match->m_begin = pos;
-			return TRUE;
-		}
-	}
+
 	return FALSE;
 }
 
@@ -1480,37 +1463,29 @@ url_email_end (struct url_callback_data *cb,
 		const gchar *pos,
 		url_match_t *match)
 {
-	const gchar *p;
-	gboolean got_at = FALSE;
+	const gchar *last = NULL;
+	struct http_parser_url u;
 
-	p = pos + strlen (match->pattern);
-	if (*pos == '@') {
-		got_at = TRUE;
-	}
-
-	while (p < cb->end && (is_domain (*p) || *p == '_'
-					   || (*p == '@' && !got_at) ||
-					   *p == '.')) {
-
-		if (*p == '@') {
-			got_at = TRUE;
+	if (!match->prefix || match->prefix[0] == '\0') {
+		/* We have mailto:// at the beginning */
+		if (rspamd_mailto_parse (&u, pos, cb->end - pos, &last, FALSE) != 0) {
+			return FALSE;
 		}
 
-		p++;
-	}
-
-	/* Strip strange symbols at the end */
-	if (got_at && p < cb->end) {
-		while (p >= match->m_begin &&
-			   (!is_domain (*p) || *p == '.' || *p == '_')) {
-			p--;
+		if (!(u.field_set & (1 << UF_USERINFO))) {
+			return FALSE;
 		}
-		p++;
+
+		cb->last_at = match->m_begin + u.field_data[UF_USERINFO].off +
+				u.field_data[UF_USERINFO].len;
+
+		g_assert (*cb->last_at == '@');
+		match->m_len = (last - pos);
+
+		return TRUE;
 	}
 
-	match->m_len = p - match->m_begin;
-
-	return got_at;
+	return FALSE;
 }
 
 void
