@@ -1077,6 +1077,11 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 		}
 		else if (err != NULL) {
 			rspamd_fprintf (out, "%s\n", err->message);
+
+			if (json && msg != NULL && msg->body != NULL) {
+				/* We can also output the resulting json */
+				rspamd_fprintf (out, "%v\n", msg->body);
+			}
 		}
 
 		rspamd_fprintf (out, "\n");
