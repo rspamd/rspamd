@@ -1454,6 +1454,16 @@ url_email_start (struct url_callback_data *cb,
 
 		return TRUE;
 	}
+	else {
+		/* Just '@' */
+
+		/* Check if this match is a part of the previous mailto: email */
+		if (cb->last_at != NULL && cb->last_at == pos) {
+			cb->last_at = NULL;
+		}
+
+		return FALSE;
+	}
 
 	return FALSE;
 }
@@ -1463,7 +1473,7 @@ url_email_end (struct url_callback_data *cb,
 		const gchar *pos,
 		url_match_t *match)
 {
-	const gchar *last = NULL;
+	const gchar *last = NULL, *c, *p;
 	struct http_parser_url u;
 
 	if (!match->prefix || match->prefix[0] == '\0') {
@@ -1483,6 +1493,47 @@ url_email_end (struct url_callback_data *cb,
 		match->m_len = (last - pos);
 
 		return TRUE;
+	}
+	else {
+		/*
+		 * Here we have just '@', so we need to find both start and end of the
+		 * pattern
+		 */
+		g_assert (*pos == '@');
+
+		if (pos >= cb->end - 2 || pos <= cb->begin + 1) {
+			/* Boundary violation */
+			return FALSE;
+		}
+
+		if (!g_ascii_isalnum (pos[1]) || !g_ascii_isalnum (*(pos - 1))) {
+			return FALSE;
+		}
+
+		c = pos - 1;
+		while (c > cb->begin && is_usersafe (*c)) {
+			c --;
+		}
+		/* Rewind to the first alphanumeric character */
+		while (c < pos && !g_ascii_isalnum (c)) {
+			c ++;
+		}
+
+		/* Find the end of email */
+		p = pos + 1;
+		while (p < cb->end && is_domain (*p)) {
+			p ++;
+		}
+		/* Rewind it again to avoid bad emails to be detected */
+		while (p > pos && !g_ascii_isalnum (*p)) {
+			p --;
+		}
+
+		if (p > c) {
+			match->m_begin = c;
+			match->m_len = p - c;
+			return TRUE;
+		}
 	}
 
 	return FALSE;
