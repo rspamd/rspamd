@@ -309,8 +309,8 @@ static const unsigned int url_scanner_table[256] = {
 		IS_URLSAFE|IS_DOMAIN|IS_MAILSAFE
 };
 
-#define is_lwsp(x) ((url_scanner_table[(guint)(x)] & IS_LWSP) != 0)
-#define is_mailsafe(x) ((url_scanner_table[(guint)(x)] & (IS_MAILSAFE)) != 0)
+#define is_lwsp(x) ((url_scanner_table[(guchar)(x)] & IS_LWSP) != 0)
+#define is_mailsafe(x) ((url_scanner_table[(guchar)(x)] & (IS_MAILSAFE)) != 0)
 #define is_domain(x) ((url_scanner_table[(guchar)(x)] & IS_DOMAIN) != 0)
 #define is_urlsafe(x) ((url_scanner_table[(guchar)(x)] & (IS_URLSAFE)) != 0)
 
