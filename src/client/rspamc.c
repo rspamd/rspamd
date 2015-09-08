@@ -1047,40 +1047,45 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 		rspamc_client_execute_cmd (cmd, result, input, err);
 	}
 	else {
-		if (cmd->need_input) {
-			rspamd_fprintf (out, "Results for file: %s\n", cbdata->filename);
+
+		if (cmd->cmd == RSPAMC_COMMAND_SYMBOLS && mime_output && input) {
+			rspamc_mime_output (out, result, input, err);
 		}
 		else {
-			rspamd_fprintf (out, "Results for command: %s\n", cmd->name);
-		}
-
-
-		if (result != NULL) {
-			if (headers && msg != NULL) {
-				rspamc_output_headers (out, msg);
-			}
-			if (raw || cmd->command_output_func == NULL) {
-				if (json) {
-					ucl_out = ucl_object_emit (result, UCL_EMIT_JSON);
-				}
-				else {
-					ucl_out = ucl_object_emit (result, UCL_EMIT_CONFIG);
-				}
-				rspamd_fprintf (out, "%s", ucl_out);
-				free (ucl_out);
+			if (cmd->need_input) {
+				rspamd_fprintf (out, "Results for file: %s\n", cbdata->filename);
 			}
 			else {
-				cmd->command_output_func (out, result);
+				rspamd_fprintf (out, "Results for command: %s\n", cmd->name);
 			}
 
-			ucl_object_unref (result);
-		}
-		else if (err != NULL) {
-			rspamd_fprintf (out, "%s\n", err->message);
+			if (result != NULL) {
+				if (headers && msg != NULL) {
+					rspamc_output_headers (out, msg);
+				}
+				if (raw || cmd->command_output_func == NULL) {
+					if (json) {
+						ucl_out = ucl_object_emit (result, UCL_EMIT_JSON);
+					}
+					else {
+						ucl_out = ucl_object_emit (result, UCL_EMIT_CONFIG);
+					}
+					rspamd_fprintf (out, "%s", ucl_out);
+					free (ucl_out);
+				}
+				else {
+					cmd->command_output_func (out, result);
+				}
 
-			if (json && msg != NULL && msg->body != NULL) {
-				/* We can also output the resulting json */
-				rspamd_fprintf (out, "%v\n", msg->body);
+				ucl_object_unref (result);
+			}
+			else if (err != NULL) {
+				rspamd_fprintf (out, "%s\n", err->message);
+
+				if (json && msg != NULL && msg->body != NULL) {
+					/* We can also output the resulting json */
+					rspamd_fprintf (out, "%v\n", msg->body);
+				}
 			}
 		}
 
