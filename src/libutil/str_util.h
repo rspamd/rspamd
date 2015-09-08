@@ -162,4 +162,12 @@ gsize rspamd_decode_url (gchar *dst, const gchar *src, gsize size);
 gint rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
 		const gchar *s2, gsize s2len);
 
+/**
+ * Fold header using rfc822 rules, return new GString from the previous one
+ * @param name name of header (used just for folding)
+ * @param value value of header
+ * @return new GString with the folded value
+ */
+GString * rspamd_header_value_fold (const gchar *name, const gchar *value);
+
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */

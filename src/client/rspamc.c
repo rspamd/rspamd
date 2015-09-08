@@ -858,8 +858,10 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input, GError *err
 	GByteArray ar;
 	GMimeParser *parser;
 	GMimeMessage *message;
-	const ucl_object_t *metric, *res;
+	const ucl_object_t *cur, *metric, *res;
+	ucl_object_iter_t it = NULL;
 	const gchar *action = "no action";
+	GString *symbuf;
 	gint act;
 	gdouble score = 0.0, required_score = 0.0;
 	gchar scorebuf[32];
@@ -934,6 +936,26 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input, GError *err
 		*sc = '\0';
 		g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Level",
 				scorebuf);
+
+		/* Short description of all symbols */
+		symbuf = g_string_sized_new (64);
+
+		while ((cur = ucl_iterate_object (metric, &it, true)) != NULL) {
+
+			if (ucl_object_type (cur) == UCL_OBJECT) {
+				rspamd_printf_gstring (symbuf, "%s,", ucl_object_key (cur));
+			}
+		}
+		/* Trim the last comma */
+		if (symbuf->str[symbuf->len - 1] == ',') {
+			g_string_erase (symbuf, symbuf->len - 1, 1);
+		}
+
+		sc = g_mime_utils_header_encode_text (symbuf->str);
+		g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Symbols",
+				sc);
+		g_free (sc);
+		g_string_free (symbuf, TRUE);
 
 		if (json || raw) {
 			/* We also append json data as a specific header */

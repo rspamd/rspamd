@@ -863,3 +863,167 @@ rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
 
 	return column[s1len];
 }
+
+GString *
+rspamd_header_value_fold (const gchar *name, const gchar *value)
+{
+	GString *res;
+	const guint fold_max = 76;
+	guint cur_len;
+	const gchar *p, *c;
+	gboolean first_token = TRUE;
+	enum {
+		fold_before,
+		fold_after
+	} fold_type;
+	enum {
+		read_token,
+		read_quoted,
+		after_quote,
+		fold_token,
+	} state = read_token, next_state = read_token;
+
+	g_assert (name != NULL);
+	g_assert (value != NULL);
+
+	res = g_string_sized_new (strlen (value));
+
+	c = value;
+	p = c;
+	/* name:<WSP> */
+	cur_len = strlen (name) + 2;
+
+	while (*p) {
+		switch (state) {
+		case read_token:
+			if (*p == ',' || *p == ';') {
+				/* We have something similar to the token's end, so check len */
+				if (cur_len > fold_max * 0.8 && cur_len < fold_max) {
+					/* We want fold */
+					fold_type = fold_after;
+					state = fold_token;
+					next_state = read_token;
+				}
+				else if (cur_len > fold_max && !first_token) {
+					fold_type = fold_before;
+					state = fold_token;
+					next_state = read_token;
+				}
+				else {
+					g_string_append_len (res, c, p - c);
+					c = p;
+					first_token = FALSE;
+				}
+				p ++;
+			}
+			else if (*p == '"') {
+				/* Fold before quoted tokens */
+				g_string_append_len (res, c, p - c);
+				c = p;
+				state = read_quoted;
+			}
+			else if (*p == '\r') {
+				/* Reset line length */
+				cur_len = 0;
+
+				while (g_ascii_isspace (*p)) {
+					p ++;
+				}
+
+				g_string_append_len (res, c, p - c);
+				c = p;
+			}
+			else if (g_ascii_isspace (*p)) {
+				if (cur_len > fold_max * 0.8 && cur_len < fold_max) {
+					/* We want fold */
+					fold_type = fold_after;
+					state = fold_token;
+					next_state = read_token;
+				}
+				else if (cur_len > fold_max && !first_token) {
+					fold_type = fold_before;
+					state = fold_token;
+					next_state = read_token;
+				}
+				else {
+					g_string_append_len (res, c, p - c);
+					c = p;
+					first_token = FALSE;
+					p ++;
+				}
+			}
+			else {
+				p ++;
+				cur_len ++;
+			}
+			break;
+		case fold_token:
+			/* Here, we have token start at 'c' and token end at 'p' */
+			if (fold_type == fold_after) {
+				g_string_append_len (res, c, p - c);
+				g_string_append_len (res, "\r\n\t", 3);
+
+				/* Skip space if needed */
+				if (g_ascii_isspace (*p)) {
+					p ++;
+				}
+			}
+			else {
+				/* Skip space if needed */
+				if (g_ascii_isspace (*c)) {
+					c ++;
+				}
+
+				g_string_append_len (res, "\r\n\t", 3);
+				g_string_append_len (res, c, p - c);
+			}
+
+			c = p;
+			state = next_state;
+			cur_len = 0;
+			first_token = TRUE;
+			break;
+
+		case read_quoted:
+			if (p != c && *p == '"') {
+				state = after_quote;
+			}
+			p ++;
+			cur_len ++;
+			break;
+
+		case after_quote:
+			state = read_token;
+			/* Skip one more character after the quote */
+			p ++;
+			cur_len ++;
+			g_string_append_len (res, c, p - c);
+			c = p;
+			first_token = TRUE;
+			break;
+		}
+	}
+
+	/* Last token */
+	switch (state) {
+	case read_token:
+		if (cur_len > fold_max && !first_token) {
+			g_string_append_len (res, "\r\n\t", 3);
+			g_string_append_len (res, c, p - c);
+		}
+		else {
+			g_string_append_len (res, c, p - c);
+		}
+		break;
+	case read_quoted:
+	case after_quote:
+		g_string_append_len (res, c, p - c);
+		break;
+
+	default:
+		g_assert (p == c);
+		break;
+	}
+
+	return res;
+}
