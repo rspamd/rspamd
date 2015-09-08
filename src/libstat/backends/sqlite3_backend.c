@@ -98,8 +98,8 @@ enum rspamd_stat_sqlite3_stmt_idx {
 	RSPAMD_STAT_BACKEND_GET_LEARNS,
 	RSPAMD_STAT_BACKEND_GET_LANGUAGE,
 	RSPAMD_STAT_BACKEND_GET_USER,
-	RSPAMD_STAT_BACKEND_INSERT_LANGUAGE,
 	RSPAMD_STAT_BACKEND_INSERT_USER,
+	RSPAMD_STAT_BACKEND_INSERT_LANGUAGE,
 	RSPAMD_STAT_BACKEND_SAVE_TOKENIZER,
 	RSPAMD_STAT_BACKEND_LOAD_TOKENIZER,
 	RSPAMD_STAT_BACKEND_NTOKENS,
@@ -110,7 +110,7 @@ enum rspamd_stat_sqlite3_stmt_idx {
 
 static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 {
-	{
+	[RSPAMD_STAT_BACKEND_TRANSACTION_START_IM] = {
 		.idx = RSPAMD_STAT_BACKEND_TRANSACTION_START_IM,
 		.sql = "BEGIN IMMEDIATE TRANSACTION;",
 		.args = "",
@@ -118,7 +118,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.result = SQLITE_DONE,
 		.ret = ""
 	},
-	{
+	[RSPAMD_STAT_BACKEND_TRANSACTION_START_DEF] = {
 		.idx = RSPAMD_STAT_BACKEND_TRANSACTION_START_DEF,
 		.sql = "BEGIN DEFERRED TRANSACTION;",
 		.args = "",
@@ -126,7 +126,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.result = SQLITE_DONE,
 		.ret = ""
 	},
-	{
+	[RSPAMD_STAT_BACKEND_TRANSACTION_START_EXCL] = {
 		.idx = RSPAMD_STAT_BACKEND_TRANSACTION_START_EXCL,
 		.sql = "BEGIN EXCLUSIVE TRANSACTION;",
 		.args = "",
@@ -134,7 +134,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.result = SQLITE_DONE,
 		.ret = ""
 	},
-	{
+	[RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT] = {
 		.idx = RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT,
 		.sql = "COMMIT;",
 		.args = "",
@@ -142,7 +142,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.result = SQLITE_DONE,
 		.ret = ""
 	},
-	{
+	[RSPAMD_STAT_BACKEND_TRANSACTION_ROLLBACK] = {
 		.idx = RSPAMD_STAT_BACKEND_TRANSACTION_ROLLBACK,
 		.sql = "ROLLBACK;",
 		.args = "",
@@ -150,7 +150,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.result = SQLITE_DONE,
 		.ret = ""
 	},
-	{
+	[RSPAMD_STAT_BACKEND_GET_TOKEN] = {
 		.idx = RSPAMD_STAT_BACKEND_GET_TOKEN,
 		.sql = "SELECT value FROM tokens "
 				"LEFT JOIN languages ON tokens.language=languages.id "
@@ -162,7 +162,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.result = SQLITE_ROW,
 		.ret = "I"
 	},
-	{
+	[RSPAMD_STAT_BACKEND_SET_TOKEN] = {
 		.idx = RSPAMD_STAT_BACKEND_SET_TOKEN,
 		.sql = "INSERT OR REPLACE INTO tokens (token, user, language, value, modified) "
 				"VALUES (?1, ?2, ?3, ?4, strftime('%s','now'));",
@@ -171,7 +171,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.result = SQLITE_DONE,
 		.ret = ""
 	},
-	{
+	[RSPAMD_STAT_BACKEND_INC_LEARNS] = {
 		.idx = RSPAMD_STAT_BACKEND_INC_LEARNS,
 		.sql = "UPDATE languages SET learns=learns + 1 WHERE id=?1;"
 				"UPDATE users SET learns=learns + 1 WHERE id=?2;",
@@ -180,7 +180,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.result = SQLITE_DONE,
 		.ret = ""
 	},
-	{
+	[RSPAMD_STAT_BACKEND_DEC_LEARNS] = {
 		.idx = RSPAMD_STAT_BACKEND_DEC_LEARNS,
 		.sql = "UPDATE languages SET learns=learns - 1 WHERE id=?1;"
 				"UPDATE users SET learns=learns - 1 WHERE id=?2;",
@@ -189,7 +189,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.result = SQLITE_DONE,
 		.ret = ""
 	},
-	{
+	[RSPAMD_STAT_BACKEND_GET_LEARNS] = {
 		.idx = RSPAMD_STAT_BACKEND_GET_LEARNS,
 		.sql = "SELECT sum(learns) FROM languages;",
 		.stmt = NULL,
@@ -197,7 +197,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.result = SQLITE_ROW,
 		.ret = "I"
 	},
-	{
+	[RSPAMD_STAT_BACKEND_GET_LANGUAGE] = {
 		.idx = RSPAMD_STAT_BACKEND_GET_LANGUAGE,
 		.sql = "SELECT id FROM languages WHERE name=?1;",
 		.stmt = NULL,
@@ -205,7 +205,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.result = SQLITE_ROW,
 		.ret = "I"
 	},
-	{
+	[RSPAMD_STAT_BACKEND_GET_USER] = {
 		.idx = RSPAMD_STAT_BACKEND_GET_USER,
 		.sql = "SELECT id FROM users WHERE name=?1;",
 		.stmt = NULL,
@@ -213,7 +213,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.result = SQLITE_ROW,
 		.ret = "I"
 	},
-	{
+	[RSPAMD_STAT_BACKEND_INSERT_USER] = {
 		.idx = RSPAMD_STAT_BACKEND_INSERT_USER,
 		.sql = "INSERT INTO users (name, learns) VALUES (?1, 0);",
 		.stmt = NULL,
@@ -221,7 +221,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.result = SQLITE_DONE,
 		.ret = "L"
 	},
-	{
+	[RSPAMD_STAT_BACKEND_INSERT_LANGUAGE] = {
 		.idx = RSPAMD_STAT_BACKEND_INSERT_LANGUAGE,
 		.sql = "INSERT INTO languages (name, learns) VALUES (?1, 0);",
 		.stmt = NULL,
@@ -229,7 +229,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.result = SQLITE_DONE,
 		.ret = "L"
 	},
-	{
+	[RSPAMD_STAT_BACKEND_SAVE_TOKENIZER] = {
 		.idx = RSPAMD_STAT_BACKEND_SAVE_TOKENIZER,
 		.sql = "INSERT INTO tokenizer(data) VALUES (?1);",
 		.stmt = NULL,
@@ -237,7 +237,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.result = SQLITE_DONE,
 		.ret = ""
 	},
-	{
+	[RSPAMD_STAT_BACKEND_LOAD_TOKENIZER] = {
 		.idx = RSPAMD_STAT_BACKEND_LOAD_TOKENIZER,
 		.sql = "SELECT data FROM tokenizer;",
 		.stmt = NULL,
@@ -245,7 +245,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.result = SQLITE_ROW,
 		.ret = "B"
 	},
-	{
+	[RSPAMD_STAT_BACKEND_NTOKENS] = {
 		.idx = RSPAMD_STAT_BACKEND_NTOKENS,
 		.sql = "SELECT COUNT(*) FROM tokens;",
 		.stmt = NULL,
@@ -253,7 +253,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.result = SQLITE_ROW,
 		.ret = "I"
 	},
-	{
+	[RSPAMD_STAT_BACKEND_NLANGUAGES] = {
 		.idx = RSPAMD_STAT_BACKEND_NLANGUAGES,
 		.sql = "SELECT COUNT(*) FROM languages;",
 		.stmt = NULL,
@@ -261,7 +261,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.result = SQLITE_ROW,
 		.ret = "I"
 	},
-	{
+	[RSPAMD_STAT_BACKEND_NUSERS] = {
 		.idx = RSPAMD_STAT_BACKEND_NUSERS,
 		.sql = "SELECT COUNT(*) FROM users;",
 		.stmt = NULL,
@@ -701,11 +701,21 @@ rspamd_sqlite3_learn_token (struct rspamd_task *task, struct token_node_s *tok,
 	}
 
 	if (rt->user_id == -1) {
-		rt->user_id = rspamd_sqlite3_get_user (bk, task, TRUE);
+		if (bk->enable_users) {
+			rt->user_id = rspamd_sqlite3_get_user (bk, task, TRUE);
+		}
+		else {
+			rt->user_id = 0;
+		}
 	}
 
 	if (rt->lang_id == -1) {
-		rt->lang_id = rspamd_sqlite3_get_language (bk, task, TRUE);
+		if (bk->enable_languages) {
+			rt->lang_id = rspamd_sqlite3_get_language (bk, task, TRUE);
+		}
+		else {
+			rt->lang_id = 0;
+		}
 	}
 
 	iv = res->value;
