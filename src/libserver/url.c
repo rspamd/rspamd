@@ -477,7 +477,7 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str, gsize len,
 	}
 
 	if (!strict) {
-		return 1;
+		return 0;
 	}
 
 	return ret;
@@ -1452,7 +1452,6 @@ url_email_start (struct url_callback_data *cb,
 		/* We have mailto:// at the beginning */
 		match->m_begin = pos;
 
-		return TRUE;
 	}
 	else {
 		/* Just '@' */
@@ -1460,12 +1459,11 @@ url_email_start (struct url_callback_data *cb,
 		/* Check if this match is a part of the previous mailto: email */
 		if (cb->last_at != NULL && cb->last_at == pos) {
 			cb->last_at = NULL;
+			return FALSE;
 		}
-
-		return FALSE;
 	}
 
-	return FALSE;
+	return TRUE;
 }
 
 static gboolean
@@ -1515,7 +1513,7 @@ url_email_end (struct url_callback_data *cb,
 			c --;
 		}
 		/* Rewind to the first alphanumeric character */
-		while (c < pos && !g_ascii_isalnum (c)) {
+		while (c < pos && !g_ascii_isalnum (*c)) {
 			c ++;
 		}
 
