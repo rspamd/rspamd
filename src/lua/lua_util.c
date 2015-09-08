@@ -113,6 +113,16 @@ LUA_FUNCTION_DEF (util, levenshtein_distance);
  */
 LUA_FUNCTION_DEF (util, parse_addr);
 
+/***
+ * @function util.fold_header(name, value)
+ * Fold rfc822 header according to the folding rules
+ *
+ * @param {string} name name of the header
+ * @param {string} value value of the header
+ * @return {string} Folded value of the header
+ */
+LUA_FUNCTION_DEF (util, fold_header);
+
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
 	LUA_INTERFACE_DEF (util, load_rspamd_config),
@@ -125,6 +135,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, parse_html),
 	LUA_INTERFACE_DEF (util, levenshtein_distance),
 	LUA_INTERFACE_DEF (util, parse_addr),
+	LUA_INTERFACE_DEF (util, fold_header),
 	{NULL, NULL}
 };
 
@@ -589,6 +600,30 @@ lua_util_parse_addr (lua_State *L)
 		lua_pushnil (L);
 	}
 
+	return 1;
+}
+
+static gint
+lua_util_fold_header (lua_State *L)
+{
+	const gchar *name, *value;
+	GString *folded;
+
+	name = luaL_checkstring (L, 1);
+	value = luaL_checkstring (L, 2);
+
+	if (name && value) {
+		folded = rspamd_header_value_fold (name, value);
+
+		if (folded) {
+			lua_pushlstring (L, folded->str, folded->len);
+			g_string_free (folded, TRUE);
+
+			return 1;
+		}
+	}
+
+	lua_pushnil (L);
 	return 1;
 }
 
