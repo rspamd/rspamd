@@ -115,7 +115,7 @@ static GOptionEntry entries[] =
 	{ "exec", 'e', 0, G_OPTION_ARG_STRING, &execute,
 	   "Execute the specified command and pass output to it", NULL },
 	{ "mime", 'e', 0, G_OPTION_ARG_NONE, &mime_output,
-	   "Execute the specified command and pass output to it", NULL },
+	   "Write mime body of message with headers instead of just a scan's result", NULL },
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
