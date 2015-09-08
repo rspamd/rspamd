@@ -865,7 +865,7 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input, GError *err
 	gchar scorebuf[32];
 	gboolean is_spam = FALSE;
 	const gchar *hdr_scanned, *hdr_spam;
-	gchar *json_header, *json_header_encoded;
+	gchar *json_header, *json_header_encoded, *sc;
 
 	ar.data = input->str;
 	ar.len = input->len;
@@ -923,6 +923,16 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input, GError *err
 		rspamd_snprintf (scorebuf, sizeof (scorebuf), "%.2f / %.2f", score,
 				required_score);
 		g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Score",
+				scorebuf);
+
+		/* SA style stars header */
+		for (sc = scorebuf; sc < scorebuf + sizeof (scorebuf) - 1 && score > 0;
+			 sc ++, score -= 1.0) {
+			*sc = '*';
+		}
+
+		*sc = '\0';
+		g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Level",
 				scorebuf);
 
 		if (json || raw) {
