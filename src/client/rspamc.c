@@ -861,7 +861,7 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input, GError *err
 	const ucl_object_t *cur, *metric, *res;
 	ucl_object_iter_t it = NULL;
 	const gchar *action = "no action";
-	GString *symbuf;
+	GString *symbuf, *folded_symbuf;
 	gint act;
 	gdouble score = 0.0, required_score = 0.0;
 	gchar scorebuf[32];
@@ -951,10 +951,10 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input, GError *err
 			g_string_erase (symbuf, symbuf->len - 1, 1);
 		}
 
-		sc = g_mime_utils_header_encode_text (symbuf->str);
+		folded_symbuf = rspamd_header_value_fold ("X-Spam-Symbols", symbuf->str);
 		g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Symbols",
-				sc);
-		g_free (sc);
+				folded_symbuf->str);
+		g_string_free (folded_symbuf, TRUE);
 		g_string_free (symbuf, TRUE);
 
 		if (json || raw) {
