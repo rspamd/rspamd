@@ -509,6 +509,16 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 					bk->enable_languages = FALSE;
 				}
 
+				if (bk->enable_languages) {
+					msg_info_config ("enable per language statistics for %s",
+							stf->symbol);
+				}
+
+				if (bk->enable_users) {
+					msg_info_config ("enable per users statistics for %s",
+							stf->symbol);
+				}
+
 				ctx->statfiles ++;
 
 				curst = curst->next;
@@ -656,6 +666,9 @@ rspamd_sqlite3_finalize_process (struct rspamd_task *task, gpointer runtime,
 		bk->in_transaction = FALSE;
 	}
 
+	rt->lang_id = -1;
+	rt->user_id = -1;
+
 	return;
 }
 
@@ -692,7 +705,7 @@ rspamd_sqlite3_learn_token (struct rspamd_task *task, struct token_node_s *tok,
 	}
 
 	if (rt->lang_id == -1) {
-		rt->lang_id = rspamd_sqlite3_get_language (bk, task, FALSE);
+		rt->lang_id = rspamd_sqlite3_get_language (bk, task, TRUE);
 	}
 
 	iv = res->value;

@@ -708,6 +708,17 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 	while (cur) {
 		cl_run = (struct rspamd_classifier_runtime *)cur->data;
 
+		curst = cl_run->st_runtime;
+
+		/* Needed to finalize pre-process stage */
+		while (curst) {
+			st_run = curst->data;
+			cl_run->backend->finalize_process (task,
+					st_run->backend_runtime,
+					cl_run->backend->ctx);
+			curst = g_list_next (curst);
+		}
+
 		if (cl_run->cl && !cl_run->skipped) {
 			cl_ctx = cl_run->cl->init_func (task->task_pool, cl_run->clcf);
 
