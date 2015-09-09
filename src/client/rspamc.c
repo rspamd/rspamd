@@ -951,7 +951,9 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input, GError *err
 			g_string_erase (symbuf, symbuf->len - 1, 1);
 		}
 
-		folded_symbuf = rspamd_header_value_fold ("X-Spam-Symbols", symbuf->str);
+		folded_symbuf = rspamd_header_value_fold ("X-Spam-Symbols",
+				symbuf->str,
+				0);
 		g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Symbols",
 				symbuf->str);
 		g_string_free (folded_symbuf, TRUE);

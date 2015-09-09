@@ -865,10 +865,12 @@ rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
 }
 
 GString *
-rspamd_header_value_fold (const gchar *name, const gchar *value)
+rspamd_header_value_fold (const gchar *name,
+		const gchar *value,
+		guint fold_max)
 {
 	GString *res;
-	const guint fold_max = 76;
+	const guint default_fold_max = 76;
 	guint cur_len;
 	const gchar *p, *c;
 	gboolean first_token = TRUE;
@@ -885,6 +887,11 @@ rspamd_header_value_fold (const gchar *name, const gchar *value)
 
 	g_assert (name != NULL);
 	g_assert (value != NULL);
+
+	/* Filter insane values */
+	if (fold_max < 20) {
+		fold_max = default_fold_max;
+	}
 
 	res = g_string_sized_new (strlen (value));
 

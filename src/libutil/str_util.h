@@ -168,6 +168,8 @@ gint rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
  * @param value value of header
  * @return new GString with the folded value
  */
-GString * rspamd_header_value_fold (const gchar *name, const gchar *value);
+GString *rspamd_header_value_fold (const gchar *name,
+		const gchar *value,
+		guint fold_max);
 
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */
