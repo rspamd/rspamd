@@ -46,6 +46,9 @@ context("Headers folding unit test", function()
       {{"Content-Type", "Content-Type: multipart/mixed;\r\n\tboundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\" abc def ghfdgfdsgj fdshfgfsdgfdsg hfsdgjfsdg fgsfgjsg"},
         "Content-Type: multipart/mixed;\r\n\tboundary=\"---- =_NextPart_000_01BDBF1F.DA8F77EE\" abc def ghfdgfdsgj\r\n\tfdshfgfsdgfdsg hfsdgjfsdg fgsfgjsg"
       },
+      {{"X-Spam-Symbols", "Returnpath_BL2,HFILTER_FROM_BOUNCE,R_PARTS_DIFFER,R_IP_PBL,R_ONE_RCPT,R_googleredir,R_TO_SEEMS_AUTO,R_SPF_NEUTRAL,R_PRIORITY_3,RBL_SPAMHAUS_PBL,HFILTER_MID_NOT_FQDN,MISSING_CTE,R_HAS_URL,RBL_SPAMHAUS_CSS,RBL_SPAMHAUS_XBL,BAYES_SPAM,RECEIVED_RBL10"},
+      "Returnpath_BL2,HFILTER_FROM_BOUNCE,R_PARTS_DIFFER,\r\n\tR_IP_PBL,R_ONE_RCPT,R_googleredir,R_TO_SEEMS_AUTO,R_SPF_NEUTRAL,R_PRIORITY_3,\r\n\tRBL_SPAMHAUS_PBL,HFILTER_MID_NOT_FQDN,MISSING_CTE,R_HAS_URL,RBL_SPAMHAUS_CSS,\r\n\tRBL_SPAMHAUS_XBL,BAYES_SPAM,RECEIVED_RBL10"
+      },
     }
 
     for _,c in ipairs(cases) do
