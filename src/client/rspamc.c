@@ -277,6 +277,7 @@ struct rspamc_command {
 struct rspamc_callback_data {
 	struct rspamc_command *cmd;
 	gchar *filename;
+	gdouble start;
 };
 
 /*
@@ -852,7 +853,8 @@ rspamd_action_from_str (const gchar *data, gint *result)
 }
 
 static void
-rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input, GError *err)
+rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
+		gdouble time, GError *err)
 {
 	GMimeStream *stream;
 	GByteArray ar;
@@ -914,6 +916,10 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input, GError *err
 		hdr_scanned = "rspamc " RVERSION;
 		g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Scanner",
 				hdr_scanned);
+		rspamd_snprintf (scorebuf, sizeof (scorebuf), "%.3f", time);
+		g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Scan-Time",
+				scorebuf);
+
 		if (is_spam) {
 			hdr_spam = "yes";
 			g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam", hdr_spam);
@@ -1004,7 +1010,7 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input, GError *err
 
 static void
 rspamc_client_execute_cmd (struct rspamc_command *cmd, ucl_object_t *result,
-		GString *input, GError *err)
+		GString *input, gdouble time, GError *err)
 {
 	gchar **eargv;
 	gint eargc, infd, outfd, errfd;
@@ -1032,7 +1038,7 @@ rspamc_client_execute_cmd (struct rspamc_command *cmd, ucl_object_t *result,
 		out = fdopen (infd, "w");
 
 		if (cmd->cmd == RSPAMC_COMMAND_SYMBOLS && mime_output && input) {
-			rspamc_mime_output (out, result, input, err);
+			rspamc_mime_output (out, result, input, time, err);
 		}
 		else if (result) {
 			if (raw || cmd->command_output_func == NULL) {
@@ -1073,24 +1079,28 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 	struct rspamc_callback_data *cbdata = (struct rspamc_callback_data *)ud;
 	struct rspamc_command *cmd;
 	FILE *out = stdout;
+	gdouble finish = rspamd_get_ticks (), diff;
 
 	cmd = cbdata->cmd;
+	diff = finish - cbdata->start;
 
 	if (execute) {
 		/* Pass all to the external command */
-		rspamc_client_execute_cmd (cmd, result, input, err);
+		rspamc_client_execute_cmd (cmd, result, input, diff, err);
 	}
 	else {
 
 		if (cmd->cmd == RSPAMC_COMMAND_SYMBOLS && mime_output && input) {
-			rspamc_mime_output (out, result, input, err);
+			rspamc_mime_output (out, result, input, diff, err);
 		}
 		else {
 			if (cmd->need_input) {
-				rspamd_fprintf (out, "Results for file: %s\n", cbdata->filename);
+				rspamd_fprintf (out, "Results for file: %s (%.3f seconds)\n",
+						cbdata->filename, diff);
 			}
 			else {
-				rspamd_fprintf (out, "Results for command: %s\n", cmd->name);
+				rspamd_fprintf (out, "Results for command: %s (%.3f seconds)\n",
+						cmd->name, diff);
 			}
 
 			if (result != NULL) {
@@ -1167,6 +1177,8 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 		cbdata = g_slice_alloc (sizeof (struct rspamc_callback_data));
 		cbdata->cmd = cmd;
 		cbdata->filename = g_strdup (name);
+		cbdata->start = rspamd_get_ticks ();
+
 		if (cmd->need_input) {
 			rspamd_client_command (conn, cmd->path, attrs, in, rspamc_client_cb,
 				cbdata, &err);
