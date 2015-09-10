@@ -453,6 +453,10 @@ rspamd_mailto_parse (struct http_parser_url *u, const gchar *str, gsize len,
 		parse_query
 	} st = parse_mailto;
 
+	if (u != NULL) {
+		memset (u, 0, sizeof (*u));
+	}
+
 	while (p < last) {
 		t = *p;
 
@@ -609,6 +613,10 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 		parse_query,
 		parse_part
 	} st = parse_protocol;
+
+	if (u != NULL) {
+		memset (u, 0, sizeof (*u));
+	}
 
 	while (p < last) {
 		t = *p;
