@@ -56,7 +56,7 @@ local function dmarc_report(task, spf_ok, dkim_ok)
   if not ip:is_valid() then
     return nil
   end
-  local res = string.format('%d:%s:%s:%s', task:get_date(0),
+  local res = string.format('%d,%s,%s,%s', task:get_date(0),
     ip:to_string(), tostring(spf_ok), tostring(dkim_ok))
     
   return res

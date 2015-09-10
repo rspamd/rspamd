@@ -36,7 +36,7 @@ When you have this module enabled, it also adds symbols:
 
 When a message violates DMARC policy, rspamd adds the following information to `redis` server:
 
-    unixtime:ip:spf_result:dkim_result
+    unixtime,ip,spf_result,dkim_result
 
 where results are `true` or `false` meaning allow and reject values accordingly.
 Unixtime and IP are inserted in text form. Keys are therefore `lists` in redis terminology.
