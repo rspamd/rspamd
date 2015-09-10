@@ -248,7 +248,8 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 	gint rc, flags, lock_fd;
 	gchar lock_path[PATH_MAX], dbdir[PATH_MAX], *pdir;
 	static const char sqlite_wal[] = "PRAGMA journal_mode=\"wal\";",
-			exclusive_lock_sql[] = "PRAGMA locking_mode=\"exclusive\";";
+			exclusive_lock_sql[] = "PRAGMA locking_mode=\"exclusive\";",
+			fsync_sql[] = "PRAGMA database.synchronous=1;";
 	gboolean create = FALSE, has_lock = FALSE;
 
 	flags = SQLITE_OPEN_READWRITE;
@@ -368,6 +369,11 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 
 	if (sqlite3_exec (sqlite, sqlite_wal, NULL, NULL, NULL) != SQLITE_OK) {
 		msg_warn_pool ("WAL mode is not supported (%s), locking issues might occur",
+				sqlite3_errmsg (sqlite));
+	}
+
+	if (sqlite3_exec (sqlite, fsync_sql, NULL, NULL, NULL) != SQLITE_OK) {
+		msg_warn_pool ("cannot set database.synchronous: %s",
 				sqlite3_errmsg (sqlite));
 	}
 
