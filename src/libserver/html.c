@@ -1892,7 +1892,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 						cur_tag->id == Tag_HR || cur_tag->id == Tag_TR ||
 						cur_tag->id == Tag_DIV) && balanced) {
 					/* Insert newline */
-					if (dest->data[dest->len - 1] != '\n') {
+					if (dest->len > 0 && dest->data[dest->len - 1] != '\n') {
 						g_byte_array_append (dest, "\r\n", 2);
 					}
 					save_space = FALSE;
