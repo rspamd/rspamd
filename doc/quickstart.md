@@ -201,30 +201,28 @@ Rspamd is shipped with [pre-built statistics](https://rspamd.com/rspamd_statisti
 `${CONFDIR}/statistics.conf` contains the following setting:
 
 
-```
-classifier {
-	type = "bayes";
-	tokenizer {
-		name = "osb";
+	classifier {
+		type = "bayes";
+		tokenizer {
+			name = "osb";
+		}
+		cache {
+			path = "${DBDIR}/learn_cache.sqlite";
+		}
+		min_tokens = 11;
+		backend = "sqlite3";
+		languages_enabled = true;
+		statfile {
+			symbol = "BAYES_HAM";
+			path = "${DBDIR}/bayes.ham.sqlite";
+			spam = false;
+		}
+		statfile {
+			symbol = "BAYES_SPAM";
+			path = "${DBDIR}/bayes.spam.sqlite";
+			spam = true;
+		}
 	}
-	cache {
-		path = "${DBDIR}/learn_cache.sqlite";
-	}
-	min_tokens = 11;
-	backend = "sqlite3";
-	languages_enabled = true;
-	statfile {
-		symbol = "BAYES_HAM";
-		path = "${DBDIR}/bayes.ham.sqlite";
-		spam = false;
-	}
-	statfile {
-		symbol = "BAYES_SPAM";
-		path = "${DBDIR}/bayes.spam.sqlite";
-		spam = true;
-	}
-}
-```
 
 Then you can download two files using the following commands:
 
