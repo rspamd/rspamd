@@ -1201,7 +1201,7 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 
 	/* Plan new event */
 	tm = rspamd_time_jitter (cache->reload_time, 0);
-	msg_info_cache ("resort symbols cache, next reload in %.2f seconds", tm);
+	msg_debug_cache ("resort symbols cache, next reload in %.2f seconds", tm);
 	g_assert (cache != NULL);
 	evtimer_set (&cache->resort_ev, rspamd_symbols_cache_resort_cb, cache);
 	double_to_tv (tm, &tv);
