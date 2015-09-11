@@ -316,7 +316,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 
 	if ((value = ucl_object_find_key (obj, "mime_types")) != NULL) {
 		it = NULL;
-		while ((cur = ucl_iterate_object (value, &it, obj->type == UCL_ARRAY))
+		while ((cur = ucl_iterate_object (value, &it, value->type == UCL_ARRAY))
 				!= NULL) {
 			rule->mime_types = g_list_concat (rule->mime_types,
 					parse_mime_types (ucl_obj_tostring (cur)));
