@@ -195,6 +195,48 @@ Moreover, you can store encrypted password for better security. To generate such
 
 Then you can copy this string and store it in the configuration file. Rspamd uses [PBKDF2](http://en.wikipedia.org/wiki/PBKDF2) algorithm that makes it very hard to brute-force this password even if it has been compromised.
 
+### Pre-built statistics
+
+Rspamd is shipped with [pre-built statistics](https://rspamd.com/rspamd_statistics). Since version 1.0 release, we would recommend to bootstrap your `BAYES` statistics using sqlite3. To load the pre-built statistics, please ensure, that your 
+`${CONFDIR}/statistics.conf` contains the following setting:
+
+
+```
+classifier {
+	type = "bayes";
+	tokenizer {
+		name = "osb";
+	}
+	cache {
+		path = "${DBDIR}/learn_cache.sqlite";
+	}
+	min_tokens = 11;
+	backend = "sqlite3";
+	languages_enabled = true;
+	statfile {
+		symbol = "BAYES_HAM";
+		path = "${DBDIR}/bayes.ham.sqlite";
+		spam = false;
+	}
+	statfile {
+		symbol = "BAYES_SPAM";
+		path = "${DBDIR}/bayes.spam.sqlite";
+		spam = true;
+	}
+}
+```
+
+Then you can download two files using the following commands:
+
+	wget -O /var/lib/rspamd/bayes.spam.sqlite http://rspamd.com/rspamd_statistics/bayes.spam.sqlite
+	wget -O /var/lib/rspamd/bayes.ham.sqlite http://rspamd.com/rspamd_statistics/bayes.ham.sqlite
+
+Don't forget to change ownership to allow rspamd user (usually `_rspamd`) to learn further messages into these statistics:
+
+	chown _rspamd:_rspamd /var/lib/rspamd/bayes.*.sqlite
+
+Afterwards, you would have pre-learned statistics for several languages.
+
 ### Configuring RBLs
 
 Though Rspamd is free to use for any purpose many of the RBLs used in the default configuration aren't & care should be taken to see that your use cases are not infringing. Notes about specific RBLs follow below (please follow the links for details):
