@@ -197,7 +197,7 @@ Then you can copy this string and store it in the configuration file. Rspamd use
 
 ### Pre-built statistics
 
-Rspamd is shipped with [pre-built statistics](https://rspamd.com/rspamd_statistics). Since version 1.0 release, we would recommend to bootstrap your `BAYES` statistics using sqlite3. To load the pre-built statistics, please ensure, that your 
+Rspamd is shipped with [pre-built statistics](https://rspamd.com/rspamd_statistics/). Since version 1.0 release, we would recommend to bootstrap your `BAYES` statistics using sqlite3. To load the pre-built statistics, please ensure, that your 
 `${CONFDIR}/statistics.conf` contains the following setting:
 
 
