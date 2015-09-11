@@ -396,4 +396,9 @@ guint64 rspamd_hash_seed (void);
  */
 gdouble rspamd_time_jitter (gdouble in, gdouble jitter);
 
+/* Special case for ancient libevent */
+#if !defined(LIBEVENT_VERSION_NUMBER) || LIBEVENT_VERSION_NUMBER < 0x02000000UL
+struct event_base * event_get_base (struct event *ev);
+#endif
+
 #endif
