@@ -64,39 +64,39 @@ Directives that can be defined in config file:
 
     - `pidfile`: specify path to pidfile
 
-        > Default: `/var/run/rmilter.pid`
+        + Default: `/var/run/rmilter.pid`
 
     - `tempdir`: specify path to temporary directory. For maximum performance it is
     recommended to put it on memory file system.
 
-        > Default: `$TMPDIR`
+        + Default: `$TMPDIR`
 
     - `bind_socket`: socket credits for local bind:
 
         1.  `unix:/path/to/file` - bind to local socket
         2.  `inet:[port@host]` - bind to inet socket
 
-        > Default: `bind_socket = unix:/var/tmp/rmilter.sock`
+        + Default: `bind_socket = unix:/var/tmp/rmilter.sock`
 
     - `max_size`: maximum size of scanned message for clamav, spamd and dcc.
 
-        > Default: `0 (no limit)`
+        + Default: `0 (no limit)`
 
     - `strict_auth`: strict checks for mails from authenticated senders
 
-        > Default: `no`
+        + Default: `no`
 
     - `spf_domains`: list of domains that would be checked with spf
 
-        > Default: `empty (spf disabled)`
+        + Default: `empty (spf disabled)`
 
     - `use_dcc`: flag that specify whether we should use dcc checks for mail
 
-        > Default: `no`
+        + Default: `no`
 
     - `whitelist`: global recipients whitelist
 
-        > Default: `no`
+        + Default: `no`
 
 -   Clamav section:
 
@@ -107,32 +107,32 @@ Directives that can be defined in config file:
 
 		Sockets are separated by `,`
 
-        > Default: `empty`
+        + Default: `empty`
 
     - `connect_timeout`: timeout in miliseconds for connecting to clamav
 
-        > Default: `1s`
+        + Default: `1s`
 
     - `port_timeout`: timeout in miliseconds for waiting for clamav port response
 
-        > Default: `4s`
+        + Default: `4s`
 
     - `results_timeout`: timeout in miliseconds for waiting for clamav response
 
-        > Default: `20s`
+        + Default: `20s`
 
     - `error_time`: time in seconds during which we are counting errors
 
-        > Default: `10`
+        + Default: `10`
 
     - `dead_time`: time in seconds during which we are thinking that server is down
 
-        > Default: `300`
+        + Default: `300`
 
     - `maxerrors`: maximum number of errors that can occur during error_time to make
     us thinking that this upstream is dead
 
-        > Default: `10`
+        + Default: `10`
 
 -   Spamd section:
 
@@ -145,28 +145,28 @@ Directives that can be defined in config file:
 
     	Sockets are separated by `,`.
 
-        > Default: `empty (spam checks disabled)`
+        + Default: `empty (spam checks disabled)`
 
     - `connect_timeout`: timeout in miliseconds for connecting to spamd
 
-        > Default: `1s`
+        + Default: `1s`
 
     - `results_timeout`: timeout in miliseconds for waiting for spamd response
 
-        > Default: `20s`
+        + Default: `20s`
 
     - `error_time`: time in seconds during which we are counting errors
 
-        > Default: `10`
+        + Default: `10`
 
     - `dead_time`: time in seconds during which we are thinking that server is down
 
-        > Default: `300`
+        + Default: `300`
 
     - `maxerrors`: maximum number of errors that can occur during error_time to make
     us thinking that this upstream is dead
 
-        > Default: `10`
+        + Default: `10`
 
     - `reject_message`: reject message for spam (quoted string)
 
@@ -174,11 +174,11 @@ Directives that can be defined in config file:
 
     - `spamd_soft_fail`: if action is not reject use it for other actions (flag)
 
-        > Default: `true`
+        + Default: `true`
 
     - `spamd_greylist`: greylist message only if action is greylist (flag)
 
-        > Default: `true`
+        + Default: `true`
 
     - `spam_header`: add specified header if action is add_header and
     spamd_soft_fail os turned on
@@ -192,12 +192,12 @@ Directives that can be defined in config file:
 
     - `whitelist`: list of ips or nets that should be not checked with spamd
 
-        > Default: `empty`
+        + Default: `empty`
 
     - `extended_spam_headers`: add extended spamd headers to messages, is useful for debugging or
     private mail servers (flag)
 
-        > Default: `false`
+        + Default: `false`
 
 -   Memcached section:
 
@@ -205,127 +205,127 @@ Directives that can be defined in config file:
     `host[:port][, host[:port]]`
     It is possible to make memcached mirroring (for two servers only), its syntax is `{server1,server2}`
 
-        > Default: `empty`
+        + Default: `empty`
 
     - `servers_white`: memcached servers for whitelisting in format similar to that is
     used in *servers_grey*
 
-        > Default: `empty`
+        + Default: `empty`
 
     - `servers_limits`: memcached servers used for limits storing, can not be mirrored
 
-        > Default: `empty`
+        + Default: `empty`
 
     - `connect_timeout`: timeout in miliseconds for connecting to memcached
 
-        > Default: `1s`
+        + Default: `1s`
 
     - `error_time`: time in seconds during which we are counting errors
 
-        > Default: `10`
+        + Default: `10`
 
     - `dead_time`: time in seconds during which we are thinking that server is down
 
-        > Default: `300`
+        + Default: `300`
 
     - `maxerrors`: maximum number of errors that can occur during error_time to make
     us thinking that this upstream is dead
 
-        > Default: `10`
+        + Default: `10`
 
     - `protocol`: protocol that is using for connecting to memcached (tcp or udp)
 
-        > Default: `udp`
+        + Default: `udp`
 
 -   Beanstalk section:
 
     - `servers`: beanstalk servers for pushing headers in format:
     `host[:port][, host:port]`
 
-        > Default: `empty`
+        + Default: `empty`
 
     - `copy_server`: address of server to which rmilter should send all messages copies
 
-        > Default: `empty`
+        + Default: `empty`
 
     - `spam_server`: address of server to which rmilter should send spam messages
     copies
 
-        > Default: `empty`
+        + Default: `empty`
 
     - `connect_timeout`: timeout in miliseconds for connecting to beanstalk
 
-        > Default: `1s`
+        + Default: `1s`
 
     - `error_time`: time in seconds during which we are counting errors
 
-        > Default: `10`
+        + Default: `10`
 
     - `dead_time`: time in seconds during which we are thinking that server is down
 
-        > Default: `300`
+        + Default: `300`
 
     - `maxerrors`: maximum number of errors that can occur during error_time to make
     us thinking that this upstream is dead
 
-        > Default: `10`
+        + Default: `10`
 
     - `id_regexp`: regexp that defines for which messages we should put the whole
     message to beanstalk, not only headers, now this regexp checks only
     `In-Reply-To` headers
 
-        > Default: `empty`
+        + Default: `empty`
 
     - `send_beanstalk_headers`: defines whether we should send headers to beanstalk servers (from
     servers option)
 
-        > Default: `no`
+        + Default: `no`
 
     - `send_beanstalk_copy`: defines whether we should send copy of messages to beanstalk
     server (from copy_server option)
 
-        > Default: `no`
+        + Default: `no`
 
     - `send_beanstalk_spam`: defines whether we should send copy of spam messages to beanstalk
     server (from spam_server option)
 
-        > Default: `no`
+        + Default: `no`
 
     - `protocol`: protocol that is using for connecting to beanstalk (tcp or udp)
 
-        > Default: `tcp`
+        + Default: `tcp`
 
 -   Greylisting section:
 
     - `timeout (required)`: time during which we mark message greylisted
 
-        > Default: `300s`
+        + Default: `300s`
 
     - `expire (required)`: time during which we save a greylisting record
 
-        > Default: `empty (greylisting disabled)`
+        + Default: `empty (greylisting disabled)`
 
     - `whitelist`: list of ip addresses or networks that should be whitelisted from
     greylisting
 
-        > Default: `empty`
+        + Default: `empty`
 
     - `awl_enable`: enable internal auto-whitelist mechanics
 
-        > Default: `no`
+        + Default: `no`
 
     - `awl_pool`: size for in-memory auto whitelist
 
-        > Default: `10M`
+        + Default: `10M`
 
     - `awl_hits`: number of messages (from this ip) that passes greylisting to put
     this ip into whitelist
 
-        > Default: `10`
+        + Default: `10`
 
     - `awl_ttl`: time to live for ip address in auto whitelist
 
-        > Default: `3600s`
+        + Default: `3600s`
 
 -   Limits section.
 
@@ -347,37 +347,37 @@ Directives that can be defined in config file:
 
     - `limit_whitelist_ip`: don't check limits for specified ips
 
-        > Default: `empty`
+        + Default: `empty`
 
     - `limit_whitelist_rcpt`: don't check limits for specified recipients
 
-        > Default: `no`
+        + Default: `no`
 
     - `limit_bounce_addrs`: list of address that require more strict limits
 
-        > Default: `postmaster, mailer-daemon, symantec_antivirus_for_smtp_gateways, null, fetchmail-daemon`
+        + Default: `postmaster, mailer-daemon, symantec_antivirus_for_smtp_gateways, null, fetchmail-daemon`
 
     - `limit_bounce_to`: limits bucket for bounce messages (only rcpt to)
 
-        > Default: `5:0.000277778`
+        + Default: `5:0.000277778`
 
     - `limit_bounce_to_ip`: limits bucket for bounce messages (only rcpt to per one source ip)
 
-        > Default: `5:0.000277778`
+        + Default: `5:0.000277778`
 
     - `limit_to`: limits bucket for non-bounce messages (only rcpt to)
 
-        > Default: `20:0.016666667`
+        + Default: `20:0.016666667`
 
     - `limit_to_ip`: limits bucket for non-bounce messages (only rcpt to per one source
     ip)
 
-        > Default: `30:0.025`
+        + Default: `30:0.025`
 
     - `limit_to_ip_from`: limits bucket for non-bounce messages (msg from, rcpt to per one
     source ip)
 
-        > Default: `100:0.033333333`
+        + Default: `100:0.033333333`
 
 -   DKIM section.
 
@@ -387,19 +387,19 @@ Directives that can be defined in config file:
 
     - `header_canon`: canonization of headers (simple or relaxed)
 
-        > Default: `simple`
+        + Default: `simple`
 
     - `body_canon`: canonization of body (simple or relaxed)
 
-        > Default: `simple`
+        + Default: `simple`
 
     - `sign_alg`: signature algorithm (`sha1` and `sha256`)
 
-        > Default: `sha1`
+        + Default: `sha1`
     
     - `auth_only`: sign mail for authorized users only
 
-        > Default: `yes`
+        + Default: `yes`
 
     - `domain`: domain entry must be enclosed in a separate section
 
