@@ -1,3 +1,8 @@
+---
+layout: default
+title: Rspamd milter
+---
+
 # Rmilter - rspamd milter
 
 ## Introduction
