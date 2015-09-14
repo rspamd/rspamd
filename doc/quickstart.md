@@ -51,7 +51,7 @@ To use nightly builds on CentOS 6, please follow these instructions:
 
 There are also builds for other rpm distributives (Centos 7, Centos 6, Fedora 21 and Fedora 22). Their installation is quite similar:
 
-    wget -O /etc/yum.repos.d/rspamd-experimental.repo http://rspamd.com/rpm/${YOUR_DISTRIBUTIVE}/rspamd.repo
+    wget -O /etc/yum.repos.d/rspamd-experimental.repo http://rspamd.com/rpm/${YOUR_DISTRIBUTIVE}/rspamd-experimental.repo
     rpm --import http://rspamd.com/rpm/gpg.key
     yum update
     yum install rspamd
