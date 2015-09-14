@@ -291,6 +291,8 @@ rspamd_init_lua_filters (struct rspamd_config *cfg)
 	GList *cur;
 	struct script_module *module;
 	lua_State *L = cfg->lua_state;
+	GString *tb;
+	gint err_idx;
 
 	rspamd_lua_set_path (L, cfg);
 	cur = g_list_first (cfg->script_modules);
@@ -303,10 +305,17 @@ rspamd_init_lua_filters (struct rspamd_config *cfg)
 				continue;
 			}
 
+			tb = g_string_new ("");
+			lua_pushlightuserdata (L, tb);
+			lua_pushcclosure (L, &rspamd_lua_traceback, 1);
+			err_idx = lua_gettop (L);
+
 			if (luaL_loadfile (L, module->path) != 0) {
-				msg_info_config ("load of %s failed: %s", module->path,
+				msg_err_config ("load of %s failed: %s", module->path,
 					lua_tostring (L, -1));
 				cur = g_list_next (cur);
+				g_string_free (tb, TRUE);
+				lua_pop (L, 1); /* Error function */
 				continue;
 			}
 
@@ -316,21 +325,18 @@ rspamd_init_lua_filters (struct rspamd_config *cfg)
 			*pcfg = cfg;
 			lua_setglobal (L, "rspamd_config");
 
-			/* do the call (0 arguments, N result) */
-			if (lua_pcall (L, 0, LUA_MULTRET, 0) != 0) {
-				msg_info_config ("init of %s failed: %s", module->path,
-					lua_tostring (L, -1));
+			if (lua_pcall (L, 0, 0, err_idx) != 0) {
+				msg_err_config ("init of %s failed: %v",
+						module->path,
+						tb);
 				cur = g_list_next (cur);
+				g_string_free (tb, TRUE);
+				lua_pop (L, 1);
 				continue;
 			}
-			if (lua_gettop (L) != 0) {
-				if (lua_tonumber (L, -1) == -1) {
-					msg_info_config (
-						"%s returned -1 that indicates configuration error",
-						module->path);
-				}
-				lua_pop (L, lua_gettop (L));
-			}
+
+			g_string_free (tb, TRUE);
+			lua_pop (L, 1); /* Error function */
 		}
 		cur = g_list_next (cur);
 	}
@@ -805,4 +811,24 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 	va_end (ap);
 
 	return TRUE;
+}
+
+gint
+rspamd_lua_traceback (lua_State *L)
+{
+	lua_Debug d;
+	GString *tb = lua_touserdata (L, lua_upvalueindex(1));
+	const gchar *msg = lua_tostring (L, 1);
+	gint i = 1;
+
+	g_string_append_printf (tb, "%s; trace:", msg);
+
+	while (lua_getstack (L, i++, &d)) {
+		lua_getinfo (L, "nSl", &d);
+		g_string_append_printf (tb, " [%d]:{%s:%d - %s [%s]};",
+				i - 1, d.short_src, d.currentline,
+				(d.name ? d.name : "<unknown>"), d.what);
+	}
+
+	return 0;
 }

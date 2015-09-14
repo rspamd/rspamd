@@ -281,5 +281,6 @@ gboolean rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 		GError **err, const gchar *extraction_pattern, ...);
 
 
+gint rspamd_lua_traceback (lua_State *L);
 #endif /* WITH_LUA */
 #endif /* RSPAMD_LUA_H */
