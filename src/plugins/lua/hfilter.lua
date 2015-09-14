@@ -32,7 +32,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 --local dumper = require 'pl.pretty'.dump
 local rspamd_regexp = require "rspamd_regexp"
-
+local rspamc_local_helo = "rspamc.local"
 local checks_hellohost = {
   ['[.-]gprs[.-]'] = 5, ['gprs[.-][0-9]'] = 5, ['[0-9][.-]?gprs'] = 5, 
   ['[.-]cdma[.-]'] = 5, ['cdma[.-][0-9]'] = 5, ['[0-9][.-]?cdma'] = 5, 
@@ -73,24 +73,35 @@ local checks_hellohost = {
 
 local checks_hello = {
   ['^[^\\.]+$'] = 5, -- for helo=COMPUTER, ANNA, etc... Without dot in helo
-  ['localhost$'] = 5,
   ['^(dsl)?(device|speedtouch)\\.lan$'] = 5,
   ['\\.(lan|local|home|localdomain|intra|in-addr.arpa|priv|online|user|veloxzon)$'] = 5
 }
 
 local checks_hello_badip = {
-  ['^0\\.'] = 5, ['^::1$'] = 5, --loopback ipv4, ipv6
-  ['^127\\.'] = 5, ['^10\\.'] = 5, ['^192\\.168\\.'] = 5, --local ipv4
-  ['^172\\.1[6-9]\\.'] = 5, ['^172\\.2[0-9]\\.'] = 5, ['^172\\.3[01]\\.'] = 5,  --local ipv4
+  ['^0\\.'] = 5,
+  ['^::1$'] = 5, --loopback ipv4, ipv6
+  ['^127\\.'] = 5,
+  ['^10\\.'] = 5,
+  ['^192\\.168\\.'] = 5, --local ipv4
+  ['^172\\.1[6-9]\\.'] = 5,
+  ['^172\\.2[0-9]\\.'] = 5,
+  ['^172\\.3[01]\\.'] = 5,  --local ipv4
   ['^169\\.254\\.'] = 5, --chanel ipv4
   ['^192\\.0\\.0\\.'] = 5, --IETF Protocol
   ['^192\\.88\\.99\\.'] = 5, --RFC3068
-  ['^100.6[4-9]\\.'] = 5, ['^100.[7-9]\\d\\.'] = 5, ['^100.1[01]\\d\\.'] = 5, ['^100.12[0-7]\\d\\.'] = 5, --RFC6598
+  ['^100.6[4-9]\\.'] = 5,
+  ['^100.[7-9]\\d\\.'] = 5,
+  ['^100.1[01]\\d\\.'] = 5,
+  ['^100.12[0-7]\\d\\.'] = 5, --RFC6598
   ['^\\d\\.\\d\\.\\d\\.255$'] = 5, --multicast ipv4
-  ['^192\\.0\\.2\\.'] = 5, ['^198\\.51\\.100\\.'] = 5, ['^203\\.0\\.113\\.'] = 5,  --sample
-  ['^fe[89ab][0-9a-f]::'] = 5, ['^fe[cdf][0-9a-f]:'] = 5, --local ipv6 (fe80:: - febf::, fec0:: - feff::)
+  ['^192\\.0\\.2\\.'] = 5,
+  ['^198\\.51\\.100\\.'] = 5,
+  ['^203\\.0\\.113\\.'] = 5,  --sample
+  ['^fe[89ab][0-9a-f]::'] = 5,
+  ['^fe[cdf][0-9a-f]:'] = 5, --local ipv6 (fe80:: - febf::, fec0:: - feff::)
   ['^2001:db8::'] = 5, --reserved RFC 3849 for ipv6
-  ['^fc00::'] = 5, ['^ffxx::'] = 5 --unicast, multicast ipv6
+  ['^fc00::'] = 5,
+  ['^ffxx::'] = 5 --unicast, multicast ipv6
 }
 
 local checks_hello_bareip = {
@@ -215,9 +226,14 @@ local function hfilter(task)
       --One text part--
       local total_parts_len = 0
       local text_parts_count = 0
+      local lines_max = 0
       local selected_text_part = nil
       for _,p in ipairs(parts) do
         total_parts_len = total_parts_len + p:get_length()
+
+        if p:get_lines_count() > lines_max then
+          lines_max = p:get_lines_count()
+        end
 
         if not p:is_html() then
           text_parts_count = text_parts_count + 1
@@ -234,10 +250,8 @@ local function hfilter(task)
           if total_url_len > 0 then
             if total_url_len + 7 > total_parts_len then
               task:insert_result('HFILTER_URL_ONLY', 1.00)
-            elseif text_parts_count == 1 and selected_text_part and selected_text_part:get_length() < 1024 then
-              if selected_text_part:get_lines_count() < 2 then
-                task:insert_result('HFILTER_URL_ONELINE', 1.00)
-              end
+            elseif lines_max > 0 and lines_max < 2 then
+              task:insert_result('HFILTER_URL_ONELINE', 1.00)
             end
           end
         end
@@ -259,52 +273,54 @@ local function hfilter(task)
   
   -- Check's HELO
   local weight_helo = 0
-  if config['helo_enabled'] then  
+  if config['helo_enabled'] then
     local helo = task:get_helo()
     if helo then
-      helo = string.gsub(helo, '[%[%]]', '')
-      -- Regexp check HELO (checks_hello_badip)
-      local find_badip = false
-      for regexp,weight in pairs(checks_hello_badip) do
-        if check_regexp(helo, regexp) then
-          task:insert_result('HFILTER_HELO_BADIP', 1.0)
-          find_badip = true
-          break
-        end
-      end
-      
-      -- Regexp check HELO (checks_hello_bareip)
-      local find_bareip = false
-      if not find_badip then
-        for _,regexp in pairs(checks_hello_bareip) do
+      if helo ~= rspamc_local_helo then
+        helo = string.gsub(helo, '[%[%]]', '')
+        -- Regexp check HELO (checks_hello_badip)
+        local find_badip = false
+        for regexp,weight in pairs(checks_hello_badip) do
           if check_regexp(helo, regexp) then
-            task:insert_result('HFILTER_HELO_BAREIP', 1.0)
-            find_bareip = true
+            task:insert_result('HFILTER_HELO_BADIP', 1.0)
+            find_badip = true
             break
           end
         end
-      end    
-      
-      if not find_badip and not find_bareip then
-        -- Regexp check HELO (checks_hello)
-        for regexp,weight in pairs(checks_hello) do
-          if check_regexp(helo, regexp) then
-            weight_helo = weight
-            break
-          end
-        end        
-        -- Regexp check HELO (checks_hellohost)
-        for regexp,weight in pairs(checks_hellohost) do
-          if check_regexp(helo, regexp) then
-            if weight > weight_helo then
-              weight_helo = weight
+
+        -- Regexp check HELO (checks_hello_bareip)
+        local find_bareip = false
+        if not find_badip then
+          for _,regexp in pairs(checks_hello_bareip) do
+            if check_regexp(helo, regexp) then
+              task:insert_result('HFILTER_HELO_BAREIP', 1.0)
+              find_bareip = true
+              break
             end
-            break
           end
-        end        
-        --FQDN check HELO
-        if ip and helo and weight_helo == 0 then
-          check_host(task, helo, 'HELO', ip, hostname)
+        end
+
+        if not find_badip and not find_bareip then
+          -- Regexp check HELO (checks_hello)
+          for regexp,weight in pairs(checks_hello) do
+            if check_regexp(helo, regexp) then
+              weight_helo = weight
+              break
+            end
+          end
+          -- Regexp check HELO (checks_hellohost)
+          for regexp,weight in pairs(checks_hellohost) do
+            if check_regexp(helo, regexp) then
+              if weight > weight_helo then
+                weight_helo = weight
+              end
+              break
+            end
+          end
+          --FQDN check HELO
+          if ip and helo and weight_helo == 0 then
+            check_host(task, helo, 'HELO', ip, hostname)
+          end
         end
       end
     else
@@ -356,8 +372,10 @@ local function hfilter(task)
         end
       end
     else
-      task:insert_result('HFILTER_FROM_BOUNCE', 1.00)
-      frombounce = true
+      if helo and helo ~= rspamc_local_helo then
+        task:insert_result('HFILTER_FROM_BOUNCE', 1.00)
+        frombounce = true
+      end
     end
   end
   
