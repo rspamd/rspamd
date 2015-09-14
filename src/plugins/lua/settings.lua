@@ -255,7 +255,7 @@ local function check_settings(task)
 end
 
 -- Process settings based on their priority
-local function process_settings_table(task, tbl)
+local function process_settings_table(tbl)
   local get_priority = function(elt)
     local pri_tonum = function(p)
       if p then
@@ -300,7 +300,7 @@ local function process_settings_table(task, tbl)
             out[1] = res
             out[2] = 0
           else
-            rspamd_logger.errx(task, "bad IP address: " .. ip)
+            rspamd_logger.errx(rspamd_config, "bad IP address: " .. ip)
             return nil
           end
         else
@@ -311,7 +311,7 @@ local function process_settings_table(task, tbl)
             out[1] = res
             out[2] = mask
           else
-            rspamd_logger.errx(task, "bad IP address: " .. ip)
+            rspamd_logger.errx(rspamd_config, "bad IP address: " .. ip)
             return nil
           end
         end
@@ -336,7 +336,7 @@ local function process_settings_table(task, tbl)
           if re then
             out['regexp'] = re
           else
-            rspamd_logger.errx(task, "bad regexp: " .. addr)
+            rspamd_logger.errx(rspamd_config, "bad regexp: " .. addr)
             return nil
           end
 
@@ -421,7 +421,7 @@ local function process_settings_table(task, tbl)
       end
       return false
     end, tbl)
-  
+
   -- clear all settings
   max_pri = 0
   local nrules = 0
