@@ -325,6 +325,6 @@ rspamd_config:register_virtual_symbol('DMARC_POLICY_ALLOW', -1, id)
 rspamd_config:register_virtual_symbol('DMARC_POLICY_REJECT', 1, id)
 rspamd_config:register_virtual_symbol('DMARC_POLICY_QUARANTINE', 1, id)
 rspamd_config:register_virtual_symbol('DMARC_POLICY_SOFTFAIL', 1, id)
-rspamd_config:register_dependency(id, opts['spf_allow_symbol'])
-rspamd_config:register_dependency(id, opts['dkim_allow_symbol'])
+rspamd_config:register_dependency(id, symbols['spf_allow_symbol'])
+rspamd_config:register_dependency(id, symbols['dkim_allow_symbol'])
 
