@@ -305,9 +305,7 @@ rspamd_init_lua_filters (struct rspamd_config *cfg)
 				continue;
 			}
 
-			tb = g_string_new ("");
-			lua_pushlightuserdata (L, tb);
-			lua_pushcclosure (L, &rspamd_lua_traceback, 1);
+			lua_pushcfunction (L, &rspamd_lua_traceback);
 			err_idx = lua_gettop (L);
 
 			if (luaL_loadfile (L, module->path) != 0) {
@@ -315,7 +313,7 @@ rspamd_init_lua_filters (struct rspamd_config *cfg)
 					lua_tostring (L, -1));
 				cur = g_list_next (cur);
 				g_string_free (tb, TRUE);
-				lua_pop (L, 1); /* Error function */
+				lua_pop (L, 1); /*  Error function */
 				continue;
 			}
 
@@ -326,16 +324,16 @@ rspamd_init_lua_filters (struct rspamd_config *cfg)
 			lua_setglobal (L, "rspamd_config");
 
 			if (lua_pcall (L, 0, 0, err_idx) != 0) {
+				tb = lua_touserdata (L, -1);
 				msg_err_config ("init of %s failed: %v",
 						module->path,
 						tb);
 				cur = g_list_next (cur);
 				g_string_free (tb, TRUE);
-				lua_pop (L, 1);
+				lua_pop (L, 2); /* Result and error function */
 				continue;
 			}
 
-			g_string_free (tb, TRUE);
 			lua_pop (L, 1); /* Error function */
 		}
 		cur = g_list_next (cur);
@@ -817,10 +815,11 @@ gint
 rspamd_lua_traceback (lua_State *L)
 {
 	lua_Debug d;
-	GString *tb = lua_touserdata (L, lua_upvalueindex(1));
+	GString *tb;
 	const gchar *msg = lua_tostring (L, 1);
 	gint i = 1;
 
+	tb = g_string_sized_new (100);
 	g_string_append_printf (tb, "%s; trace:", msg);
 
 	while (lua_getstack (L, i++, &d)) {
@@ -830,5 +829,7 @@ rspamd_lua_traceback (lua_State *L)
 				(d.name ? d.name : "<unknown>"), d.what);
 	}
 
-	return 0;
+	lua_pushlightuserdata (L, tb);
+
+	return 1;
 }

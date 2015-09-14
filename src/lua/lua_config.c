@@ -876,9 +876,7 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 	lua_State *L = cd->L;
 	GString *tb;
 
-	tb = g_string_new ("");
-	lua_pushlightuserdata (L, tb);
-	lua_pushcclosure (L, &rspamd_lua_traceback, 1);
+	lua_pushcfunction (L, &rspamd_lua_traceback);
 	err_idx = lua_gettop (L);
 
 	level ++;
@@ -895,9 +893,10 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 	*ptask = task;
 
 	if (lua_pcall (L, 1, LUA_MULTRET, err_idx) != 0) {
-
-		msg_err_task ("call to (%s)%s failed: %v", cd->symbol,
-			cd->cb_is_ref ? "local function" : cd->callback.name, tb);
+		tb = lua_touserdata (L, -1);
+		msg_err_task ("call to (%s) failed: %v", cd->symbol, tb);
+		g_string_free (tb, TRUE);
+		lua_pop (L, 1);
 	}
 	else {
 		nresults = lua_gettop (L) - level;
@@ -936,7 +935,6 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 		}
 	}
 
-	g_string_free (tb, TRUE);
 	lua_pop (L, 1); /* Error function */
 }
 
