@@ -1220,7 +1220,7 @@ lua_config_set_metric_symbol (lua_State * L)
 
 		if (lua_type (L, 2) == LUA_TTABLE) {
 			if (!rspamd_lua_parse_table_arguments (L, 2, &err,
-					"name=*S;score=N;description=S;"
+					"*name=S;score=N;description=S;"
 					"group=S;one_shot=B;metric=S",
 					&name, &weight, &description,
 					&group, &one_shot, &metric_name)) {
@@ -1248,12 +1248,16 @@ lua_config_set_metric_symbol (lua_State * L)
 			}
 		}
 
+		if (metric_name == NULL) {
+			metric_name = DEFAULT_METRIC;
+		}
+
 		metric = g_hash_table_lookup (cfg->metrics, metric_name);
 
 		if (metric == NULL) {
 			msg_err_config ("metric named %s is not defined", metric_name);
 		}
-		else if (name != NULL && weight > 0) {
+		else if (name != NULL && weight != 0) {
 			rspamd_config_add_metric_symbol (cfg, metric_name, name,
 					weight, description, group, one_shot, FALSE);
 		}

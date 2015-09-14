@@ -629,10 +629,10 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 				state = read_arg;
 				keylen = p - key;
 			}
-			else if (*p == '*') {
+			else if (*p == '*' && key == NULL) {
 				required = TRUE;
 			}
-			else {
+			else if (key == NULL) {
 				key = p;
 			}
 			p ++;
@@ -787,15 +787,16 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 			break;
 
 		case read_semicolon:
-			if (*p == ':') {
+			if (*p == ';' || p == end) {
 				state = read_key;
 				key = NULL;
 				keylen = 0;
 				failed = FALSE;
 			}
 			else {
-				g_set_error (err, lua_error_quark (), 2, "bad format string: %s",
-						extraction_pattern);
+				g_set_error (err, lua_error_quark (), 2, "bad format string: %s,"
+								" at char %c, position %d",
+						extraction_pattern, *p, (int)(p - extraction_pattern));
 				va_end (ap);
 
 				return FALSE;
