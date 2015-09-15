@@ -1122,7 +1122,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 			if (!isset (checkpoint->processed_bits, item->id * 2)) {
 				if (!rspamd_symbols_cache_check_deps (task, cache, item,
 						checkpoint)) {
-					continue;
+					break;
 				}
 
 				rspamd_symbols_cache_check_symbol (task, cache, item, checkpoint);
