@@ -477,6 +477,8 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 			task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
 		}
 
+		msg_debug_task ("task is processed", st);
+
 		return ret;
 	}
 

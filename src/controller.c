@@ -1002,26 +1002,43 @@ rspamd_controller_learn_fin_task (void *ud)
 	return TRUE;
 }
 
+static void
+rspamd_controller_scan_reply (struct rspamd_task *task)
+{
+	struct rspamd_http_message *msg;
+	struct rspamd_http_connection_entry *conn_ent = task->fin_arg;
+
+	conn_ent = task->fin_arg;
+	msg = rspamd_http_new_message (HTTP_RESPONSE);
+	msg->date = time (NULL);
+	msg->code = 200;
+	rspamd_protocol_http_reply (msg, task);
+	rspamd_http_connection_reset (conn_ent->conn);
+	rspamd_http_connection_write_message (conn_ent->conn, msg, NULL,
+			"application/json", conn_ent, conn_ent->conn->fd, conn_ent->rt->ptv,
+			conn_ent->rt->ev_base);
+	conn_ent->is_reply = TRUE;
+}
+
 static gboolean
 rspamd_controller_check_fin_task (void *ud)
 {
 	struct rspamd_task *task = ud;
-	struct rspamd_http_connection_entry *conn_ent;
-	struct rspamd_http_message *msg;
 
-	/* Task is already finished or skipped */
-	if (RSPAMD_TASK_IS_PROCESSED (task) || !rspamd_task_process (task,
-			RSPAMD_TASK_PROCESS_ALL)) {
-		conn_ent = task->fin_arg;
-		msg = rspamd_http_new_message (HTTP_RESPONSE);
-		msg->date = time (NULL);
-		msg->code = 200;
-		rspamd_protocol_http_reply (msg, task);
-		rspamd_http_connection_reset (conn_ent->conn);
-		rspamd_http_connection_write_message (conn_ent->conn, msg, NULL,
-				"application/json", conn_ent, conn_ent->conn->fd, conn_ent->rt->ptv,
-				conn_ent->rt->ev_base);
-		conn_ent->is_reply = TRUE;
+	msg_debug_task ("finish task");
+
+	if (RSPAMD_TASK_IS_PROCESSED (task)) {
+		rspamd_controller_scan_reply (task);
+		return TRUE;
+	}
+
+	if (!rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL)) {
+		rspamd_controller_scan_reply (task);
+		return TRUE;
+	}
+
+	if (RSPAMD_TASK_IS_PROCESSED (task)) {
+		rspamd_controller_scan_reply (task);
 		return TRUE;
 	}
 
@@ -1170,6 +1187,8 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	task->fin_arg = conn_ent;
 	task->http_conn = rspamd_http_connection_ref (conn_ent->conn);
 	task->sock = conn_ent->conn->fd;
+	task->flags |= RSPAMD_TASK_FLAG_MIME;
+	task->resolver = ctx->resolver;
 
 	if (!rspamd_task_load_message (task, msg, msg->body->str, msg->body->len)) {
 		rspamd_controller_send_error (conn_ent, task->err->code, task->err->message);
