@@ -50,7 +50,7 @@ rspamd_rrd_test_func ()
 	g_assert ((rrd = rspamd_rrd_create (tmpfile, 2, 2, 1, ticks, &err)) != NULL);
 	/* Add RRA */
 	rrd_make_default_rra ("AVERAGE", pdp_per_cdp, rows_cnt, &rra[0]);
-	rrd_make_default_rra ("AVERAGE", pdp_per_cdp / 2, rows_cnt, &rra[1]);
+	rrd_make_default_rra ("AVERAGE", pdp_per_cdp / 4, rows_cnt, &rra[1]);
 	ar.data = rra;
 	ar.len = sizeof (rra);
 	g_assert (rspamd_rrd_add_rra (rrd, &ar, &err));
@@ -79,7 +79,7 @@ rspamd_rrd_test_func ()
 	}
 
 	/* Add some more points */
-	for (i = 0; i < pdp_per_cdp * rows_cnt / 2; i ++) {
+	for (i = 0; i < pdp_per_cdp * rows_cnt / 4; i ++) {
 		t[0] = i + rspamd_time_jitter (1.0, 0.0);
 		t[1] = cnt ++;
 		ar.data = t;
@@ -103,5 +103,4 @@ rspamd_rrd_test_func ()
 	/* Finish */
 	rspamd_rrd_close (rrd);
 	/* unlink (tmpfile); */
-
 }
