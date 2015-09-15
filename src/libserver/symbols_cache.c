@@ -895,7 +895,7 @@ rspamd_symbols_cache_watcher_cb (gpointer sessiond, gpointer ud)
 				if (!rspamd_symbols_cache_check_deps (task, cache, it,
 						checkpoint)) {
 					remain ++;
-					continue;
+					break;
 				}
 
 				rspamd_symbols_cache_check_symbol (task, cache, it, checkpoint);
@@ -1010,6 +1010,8 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 							checkpoint)) {
 						g_ptr_array_add (checkpoint->waitq, item);
 						ret = FALSE;
+						msg_debug_task ("delayed dependency %d for symbol %d",
+								dep->id, item->id);
 					}
 					else if (!rspamd_symbols_cache_check_symbol (task, cache,
 							dep->item,
