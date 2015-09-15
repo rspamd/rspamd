@@ -25,31 +25,39 @@
 #include "tests.h"
 #include "rrd.h"
 #include "main.h"
+#include "ottery.h"
+
+const int rows_cnt = 10;
+const int pdp_per_cdp = 20;
 
 void
 rspamd_rrd_test_func ()
 {
 	gchar  tmpfile[PATH_MAX];
-	struct rrd_rra_def rra;
-	struct rrd_ds_def ds;
+	struct rrd_rra_def rra[2];
+	struct rrd_ds_def ds[2];
 	GArray ar;
 	GError *err = NULL;
 	struct rspamd_rrd_file *rrd;
+	gdouble ticks;
 	gint i;
-	gdouble t;
+	gdouble t[2], cnt = 0.0;
 
 	rspamd_snprintf (tmpfile, sizeof (tmpfile), "/tmp/rspamd_rrd.rrd");
 
 	/* Create sample rrd */
-	g_assert ((rrd = rspamd_rrd_create (tmpfile, 1, 1, 1, &err)) != NULL);
+	ticks = rspamd_get_calendar_ticks ();
+	g_assert ((rrd = rspamd_rrd_create (tmpfile, 2, 2, 1, ticks, &err)) != NULL);
 	/* Add RRA */
-	rrd_make_default_rra ("AVERAGE", 2, 4, &rra);
-	ar.data = &rra;
+	rrd_make_default_rra ("AVERAGE", pdp_per_cdp, rows_cnt, &rra[0]);
+	rrd_make_default_rra ("AVERAGE", pdp_per_cdp / 2, rows_cnt, &rra[1]);
+	ar.data = rra;
 	ar.len = sizeof (rra);
 	g_assert (rspamd_rrd_add_rra (rrd, &ar, &err));
 	/* Add DS */
-	rrd_make_default_ds ("test", 1, &ds);
-	ar.data = &ds;
+	rrd_make_default_ds ("test", "COUNTER", 1, &ds[0]);
+	rrd_make_default_ds ("test1", "COUNTER", 1, &ds[1]);
+	ar.data = ds;
 	ar.len = sizeof (ds);
 	g_assert (rspamd_rrd_add_ds (rrd, &ar, &err));
 	/* Finalize */
@@ -60,15 +68,40 @@ rspamd_rrd_test_func ()
 	/* Reopen */
 	g_assert ((rrd = rspamd_rrd_open (tmpfile, &err)) != NULL);
 	/* Add some points */
-	for (i = 0; i < 20; i += 10) {
-		sleep (1);
-		t = i;
-		ar.data = &t;
-		ar.len = sizeof (gdouble);
-		g_assert (rspamd_rrd_add_record (rrd, &ar, &err));
+	for (i = 0; i < pdp_per_cdp * rows_cnt / 2; i ++) {
+		t[0] = i;
+		t[1] = cnt ++;
+		ar.data = t;
+		ar.len = sizeof (t);
+		ticks += 1.0;
+		g_assert (rspamd_rrd_add_record (rrd, &ar, ticks, &err));
 
 	}
+
+	/* Add some more points */
+	for (i = 0; i < pdp_per_cdp * rows_cnt / 2; i ++) {
+		t[0] = i + rspamd_time_jitter (1.0, 0.0);
+		t[1] = cnt ++;
+		ar.data = t;
+		ar.len = sizeof (t);
+		ticks += rspamd_time_jitter (0.5, 0.7);
+		g_assert (rspamd_rrd_add_record (rrd, &ar, ticks, &err));
+
+	}
+
+	/* Add some more points */
+	for (i = 0; i < pdp_per_cdp * rows_cnt / 4; i ++) {
+		t[0] = i + rspamd_time_jitter (1.0, 0.0);
+		t[1] = cnt ++;
+		ar.data = t;
+		ar.len = sizeof (t);
+		ticks += rspamd_time_jitter (0.5, 0.7);
+		g_assert (rspamd_rrd_add_record (rrd, &ar, ticks, &err));
+
+	}
+
 	/* Finish */
 	rspamd_rrd_close (rrd);
 	/* unlink (tmpfile); */
+
 }
