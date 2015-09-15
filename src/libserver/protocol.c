@@ -1041,6 +1041,17 @@ rspamd_protocol_write_ucl (struct rspamd_task *task, GString *logbuf)
 		if (task->user) {
 			rspamd_printf_gstring (logbuf, "user: %s, ", task->user);
 		}
+		else if (task->from_envelope) {
+			InternetAddress *ia;
+
+			ia = internet_address_list_get_address (task->from_envelope, 0);
+
+			if (ia && INTERNET_ADDRESS_IS_MAILBOX (ia)) {
+				InternetAddressMailbox *iamb = INTERNET_ADDRESS_MAILBOX (ia);
+
+				rspamd_printf_gstring (logbuf, "from: %s, ", iamb->addr);
+			}
+		}
 	}
 
 	g_hash_table_iter_init (&hiter, task->results);
