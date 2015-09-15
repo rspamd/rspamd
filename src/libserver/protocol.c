@@ -685,6 +685,8 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 	struct rspamd_url *url = value;
 	ucl_object_t *obj, *elt;
 	struct rspamd_task *task = cb->task;
+	const gchar *user_field = "unknown";
+	gboolean has_user = FALSE;
 
 	if (!(task->flags & RSPAMD_TASK_FLAG_EXT_URLS)) {
 		obj = ucl_object_fromlstring (url->host, url->hostlen);
@@ -711,10 +713,26 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 	ucl_array_append (cb->top, obj);
 
 	if (cb->task->cfg->log_urls) {
-		msg_info_task ("<%s> URL: %s - %s: %s",
+		if (task->user) {
+			user_field = task->user;
+			has_user = TRUE;
+		}
+		else if (task->from_envelope) {
+			InternetAddress *ia;
+
+			ia = internet_address_list_get_address (task->from_envelope, 0);
+
+			if (ia && INTERNET_ADDRESS_IS_MAILBOX (ia)) {
+				InternetAddressMailbox *iamb = INTERNET_ADDRESS_MAILBOX (ia);
+
+				user_field = iamb->addr;
+			}
+		}
+
+		msg_info_task ("<%s> %s: %s; ip: %s; URL: %s",
 			task->message_id,
-			task->user ?
-			task->user : "unknown",
+			has_user ? "user" : "from",
+			user_field,
 			rspamd_inet_address_to_string (task->from_addr),
 			struri (url));
 	}
