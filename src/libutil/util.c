@@ -1856,6 +1856,22 @@ rspamd_get_virtual_ticks (void)
 	return res;
 }
 
+gdouble
+rspamd_get_calendar_ticks (void)
+{
+	gdouble res;
+	struct timeval tv;
+
+	if (gettimeofday (&tv, NULL) == 0) {
+		res = (gdouble)tv.tv_sec + tv.tv_usec / 1e6f;
+	}
+	else {
+		res = time (NULL);
+	}
+
+	return res;
+}
+
 /* Required for tweetnacl */
 void
 randombytes (guchar *buf, guint64 len)

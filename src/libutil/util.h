@@ -357,6 +357,12 @@ gdouble rspamd_get_ticks (void);
  */
 gdouble rspamd_get_virtual_ticks (void);
 
+
+/**
+ * Return the real timestamp as unixtime
+ */
+gdouble rspamd_get_calendar_ticks (void);
+
 /**
  * Special utility to help array freeing in rspamd_mempool
  * @param p
