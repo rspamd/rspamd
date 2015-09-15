@@ -56,6 +56,7 @@ struct rrd_file_head {
 };
 
 enum rrd_dst_type {
+	RRD_DST_INVALID = -1,
 	RRD_DST_COUNTER = 0,  /* data source types available */
 	RRD_DST_ABSOLUTE,
 	RRD_DST_GAUGE,
@@ -87,6 +88,7 @@ struct rrd_ds_def {
 /* RRA definition */
 
 enum rrd_cf_type {
+	RRD_CF_INVALID = -1,
 	RRD_CF_AVERAGE = 0,    /* data consolidation functions */
 	RRD_CF_MINIMUM,
 	RRD_CF_MAXIMUM,
@@ -295,11 +297,12 @@ struct rspamd_rrd_file * rspamd_rrd_open (const gchar *filename, GError **err);
  * @param err error pointer
  * @return TRUE if file has been created
  */
-struct rspamd_rrd_file * rspamd_rrd_create (const gchar *filename,
-	gulong ds_count,
-	gulong rra_count,
-	gulong pdp_step,
-	GError **err);
+struct rspamd_rrd_file *rspamd_rrd_create (const gchar *filename,
+		gulong ds_count,
+		gulong rra_count,
+		gulong pdp_step,
+		gdouble initial_ticks,
+		GError **err);
 
 /**
  * Add data sources to rrd file
@@ -338,9 +341,10 @@ gboolean rspamd_rrd_finalize (struct rspamd_rrd_file *file, GError **err);
  * @param err error pointer
  * @return TRUE if a row has been added
  */
-gboolean rspamd_rrd_add_record (struct rspamd_rrd_file * file,
-	GArray *points,
-	GError **err);
+gboolean rspamd_rrd_add_record (struct rspamd_rrd_file *file,
+		GArray *points,
+		gdouble ticks,
+		GError **err);
 
 /**
  * Close rrd file
@@ -384,6 +388,7 @@ void rrd_make_default_rra (const gchar *cf_name,
  * Create default DS
  */
 void rrd_make_default_ds (const gchar *name,
-	gulong pdp_step,
-	struct rrd_ds_def *ds);
+		const gchar *type,
+		gulong pdp_step,
+		struct rrd_ds_def *ds);
 #endif /* RRD_H_ */

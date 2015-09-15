@@ -52,7 +52,8 @@ rrd_dst_from_string (const gchar *str)
 	else if (g_ascii_strcasecmp (str, "derive") == 0) {
 		return RRD_DST_DERIVE;
 	}
-	return -1;
+
+	return RRD_DST_INVALID;
 }
 
 /**
@@ -99,7 +100,7 @@ rrd_cf_from_string (const gchar *str)
 	}
 	/* XXX: add other CF functions supported by rrd */
 
-	return -1;
+	return RRD_CF_INVALID;
 }
 
 /**
@@ -132,6 +133,9 @@ rrd_make_default_rra (const gchar *cf_name,
 	gulong rows,
 	struct rrd_rra_def *rra)
 {
+	g_assert (cf_name != NULL);
+	g_assert (rrd_cf_from_string (cf_name) != RRD_CF_INVALID);
+
 	rra->pdp_cnt = pdp_cnt;
 	rra->row_cnt = rows;
 	rspamd_strlcpy (rra->cf_nam, cf_name, sizeof (rra->cf_nam));
@@ -140,10 +144,17 @@ rrd_make_default_rra (const gchar *cf_name,
 }
 
 void
-rrd_make_default_ds (const gchar *name, gulong pdp_step, struct rrd_ds_def *ds)
+rrd_make_default_ds (const gchar *name,
+		const gchar *type,
+		gulong pdp_step,
+		struct rrd_ds_def *ds)
 {
+	g_assert (name != NULL);
+	g_assert (type != NULL);
+	g_assert (rrd_dst_from_string (type) != RRD_DST_INVALID);
+
 	rspamd_strlcpy (ds->ds_nam, name,	   sizeof (ds->ds_nam));
-	rspamd_strlcpy (ds->dst,	"COUNTER", sizeof (ds->dst));
+	rspamd_strlcpy (ds->dst,	type, sizeof (ds->dst));
 	memset (ds->par, 0, sizeof (ds->par));
 	ds->par[RRD_DS_mrhb_cnt].lv = pdp_step * 2;
 	ds->par[RRD_DS_min_val].dv = NAN;
@@ -379,10 +390,11 @@ rspamd_rrd_open (const gchar *filename, GError **err)
  */
 struct rspamd_rrd_file *
 rspamd_rrd_create (const gchar *filename,
-	gulong ds_count,
-	gulong rra_count,
-	gulong pdp_step,
-	GError **err)
+		gulong ds_count,
+		gulong rra_count,
+		gulong pdp_step,
+		gdouble initial_ticks,
+		GError **err)
 {
 	struct rspamd_rrd_file *new;
 	struct rrd_file_head head;
@@ -394,7 +406,6 @@ rspamd_rrd_create (const gchar *filename,
 	struct rrd_rra_ptr rra_ptr;
 	gint fd;
 	guint i, j;
-	struct timeval tv;
 
 	/* Open file */
 	fd = open (filename, O_RDWR | O_CREAT | O_TRUNC, 0644);
@@ -450,9 +461,8 @@ rspamd_rrd_create (const gchar *filename,
 	}
 
 	/* Fill live header */
-	gettimeofday (&tv, NULL);
-	lh.last_up = tv.tv_sec;
-	lh.last_up_usec = tv.tv_usec;
+	lh.last_up = (glong)initial_ticks;
+	lh.last_up_usec = (glong)((initial_ticks - lh.last_up) * 1e6f);
 
 	if (write (fd, &lh, sizeof (lh)) != sizeof (lh)) {
 		close (fd);
@@ -464,8 +474,9 @@ rspamd_rrd_create (const gchar *filename,
 	/* Fill pdp prep */
 	memcpy (&pdp.last_ds, "U", sizeof ("U"));
 	memset (&pdp.scratch, 0, sizeof (pdp.scratch));
-	pdp.scratch[PDP_val].dv = 0.;
+	pdp.scratch[PDP_val].dv = NAN;
 	pdp.scratch[PDP_unkn_sec_cnt].lv = 0;
+
 	for (i = 0; i < ds_count; i++) {
 		if (write (fd, &pdp, sizeof (pdp)) != sizeof (pdp)) {
 			close (fd);
@@ -479,8 +490,9 @@ rspamd_rrd_create (const gchar *filename,
 	/* Fill cdp prep */
 	memset (&cdp.scratch, 0, sizeof (cdp.scratch));
 	cdp.scratch[CDP_val].dv = NAN;
+	cdp.scratch[CDP_unkn_pdp_cnt].lv = 0;
+
 	for (i = 0; i < rra_count; i++) {
-		cdp.scratch[CDP_unkn_pdp_cnt].lv = 0;
 		for (j = 0; j < ds_count; j++) {
 			if (write (fd, &cdp, sizeof (cdp)) != sizeof (cdp)) {
 				close (fd);
@@ -669,10 +681,10 @@ rspamd_rrd_update_pdp_prep (struct rspamd_rrd_file *file,
 
 		if (file->ds_def[i].par[RRD_DS_mrhb_cnt].lv < interval) {
 			rspamd_strlcpy (file->pdp_prep[i].last_ds, "U",
-				sizeof (file->pdp_prep[i].last_ds));
+					sizeof (file->pdp_prep[i].last_ds));
+			pdp_new[i] = NAN;
 		}
-
-		if (file->ds_def[i].par[RRD_DS_mrhb_cnt].lv >= interval) {
+		else {
 			switch (type) {
 			case RRD_DST_COUNTER:
 			case RRD_DST_DERIVE:
@@ -694,9 +706,7 @@ rspamd_rrd_update_pdp_prep (struct rspamd_rrd_file *file,
 				return FALSE;
 			}
 		}
-		else {
-			pdp_new[i] = NAN;
-		}
+
 		/* Copy value to the last_ds */
 		if (!isnan (vals[i])) {
 			rspamd_snprintf (file->pdp_prep[i].last_ds,
@@ -973,15 +983,16 @@ rspamd_rrd_write_rra (struct rspamd_rrd_file *file, gulong *rra_steps)
  * @return TRUE if a row has been added
  */
 gboolean
-rspamd_rrd_add_record (struct rspamd_rrd_file * file,
-	GArray *points,
-	GError **err)
+rspamd_rrd_add_record (struct rspamd_rrd_file *file,
+		GArray *points,
+		gdouble ticks,
+		GError **err)
 {
 	gdouble interval, *pdp_new, *pdp_temp, pre_int, post_int;
 	guint i;
+	glong seconds, microseconds;
 	gulong pdp_steps, cur_pdp_count, prev_pdp_step, cur_pdp_step,
 		prev_pdp_age, cur_pdp_age, *rra_steps, pdp_offset;
-	struct timeval tv;
 
 	if (file == NULL || file->stat_head->ds_cnt * sizeof (gdouble) !=
 		points->len) {
@@ -992,13 +1003,14 @@ rspamd_rrd_add_record (struct rspamd_rrd_file * file,
 	}
 
 	/* Get interval */
-	gettimeofday (&tv, NULL);
-	interval = (gdouble)(tv.tv_sec - file->live_head->last_up) +
-		(gdouble)(tv.tv_usec - file->live_head->last_up_usec) / 1e6f;
+	seconds = (glong)ticks;
+	microseconds = (glong)((ticks - seconds) * 1000000.);
+	interval = ticks - ((gdouble)file->live_head->last_up +
+			file->live_head->last_up_usec / 1000000.);
 
 	/* Update PDP preparation values */
-	pdp_new = g_malloc (sizeof (gdouble) * file->stat_head->ds_cnt);
-	pdp_temp = g_malloc (sizeof (gdouble) * file->stat_head->ds_cnt);
+	pdp_new = g_malloc0 (sizeof (gdouble) * file->stat_head->ds_cnt);
+	pdp_temp = g_malloc0 (sizeof (gdouble) * file->stat_head->ds_cnt);
 	/* How much steps need to be updated in each RRA */
 	rra_steps = g_malloc0 (sizeof (gulong) * file->stat_head->rra_cnt);
 
@@ -1019,16 +1031,16 @@ rspamd_rrd_add_record (struct rspamd_rrd_file * file,
 	/* Time in seconds for last pdp update */
 	prev_pdp_step = file->live_head->last_up - prev_pdp_age;
 	/* Age in seconds from current time to required pdp time */
-	cur_pdp_age = tv.tv_sec % file->stat_head->pdp_step;
+	cur_pdp_age = seconds % file->stat_head->pdp_step;
 	/* Time of desired pdp step */
-	cur_pdp_step = tv.tv_sec - cur_pdp_age;
+	cur_pdp_step = seconds - cur_pdp_age;
 
 	if (cur_pdp_step > prev_pdp_step) {
 		pre_int =
 			(gdouble)(cur_pdp_step -
 			file->live_head->last_up) -
 			((double)file->live_head->last_up_usec) / 1e6f;
-		post_int = (gdouble)cur_pdp_age + ((double)tv.tv_usec) / 1e6f;
+		post_int = (gdouble)cur_pdp_age + microseconds / 1e6f;
 	}
 	else {
 		pre_int = interval;
@@ -1096,8 +1108,8 @@ rspamd_rrd_add_record (struct rspamd_rrd_file * file,
 			rspamd_rrd_write_rra (file, rra_steps);
 		}
 	}
-	file->live_head->last_up = tv.tv_sec;
-	file->live_head->last_up_usec = tv.tv_usec;
+	file->live_head->last_up = seconds;
+	file->live_head->last_up_usec = microseconds;
 
 	/* Sync and invalidate */
 	msync (file->map, file->size, MS_ASYNC | MS_INVALIDATE);
