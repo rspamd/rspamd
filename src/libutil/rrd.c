@@ -657,8 +657,9 @@ rspamd_rrd_finalize (struct rspamd_rrd_file *file, GError **err)
 	/* Adjust CDP */
 	for (i = 0; i < file->stat_head->rra_cnt; i++) {
 		file->cdp_prep->scratch[CDP_unkn_pdp_cnt].lv = 0;
-		/* Randomize row pointer */
-		file->rra_ptr->cur_row = g_random_int () % file->rra_def[i].row_cnt;
+		/* Randomize row pointer (disabled) */
+		/* file->rra_ptr->cur_row = g_random_int () % file->rra_def[i].row_cnt; */
+		file->rra_ptr->cur_row = file->rra_def[i].row_cnt - 1;
 		/* Calculate values count */
 		count += file->rra_def[i].row_cnt * file->stat_head->ds_cnt;
 	}
@@ -952,9 +953,12 @@ rspamd_rrd_update_cdp (struct rspamd_rrd_file *file,
 					}
 				}
 
-				msg_debug_rrd ("update cdp %d with value %.3f, "
+				scratch[CDP_unkn_pdp_cnt].lv = 0;
+
+				msg_debug_rrd ("update cdp for DS %d with value %.3f, "
 						"stored value: %.3f, carry: %.3f",
-						i, last_cdp, cur_cdp, scratch[CDP_val].dv);
+						i, last_cdp,
+						scratch[CDP_primary_val].dv, scratch[CDP_val].dv);
 			}
 			/* In this case we just need to update cdp_prep for this RRA */
 			else {
@@ -1015,33 +1019,33 @@ rspamd_rrd_update_cdp (struct rspamd_rrd_file *file,
 void
 rspamd_rrd_write_rra (struct rspamd_rrd_file *file, gulong *rra_steps)
 {
-	guint i, j, scratch_idx, cdp_idx, k;
+	guint i, j, ds_cnt;
 	struct rrd_rra_def *rra;
-	gdouble *rra_row;
+	struct rrd_cdp_prep *cdp;
+	gdouble *rra_row = file->rrd_value, *cur_row;
 
+
+	ds_cnt = file->stat_head->ds_cnt;
 	/* Iterate over all RRA */
 	for (i = 0; i < file->stat_head->rra_cnt; i++) {
 		rra = &file->rra_def[i];
-		/* How much steps need to be updated */
-		for (j = 0, scratch_idx = CDP_primary_val;
-			j < rra_steps[i];
-			j++, scratch_idx = CDP_secondary_val) {
+
+		if (rra_steps[i] > 0) {
+
 			/* Move row ptr */
 			if (++file->rra_ptr[i].cur_row >= rra->row_cnt) {
 				file->rra_ptr[i].cur_row = 0;
 			}
 			/* Calculate seek */
-			rra_row = file->rrd_value +
-				(file->stat_head->ds_cnt * i + file->rra_ptr[i].cur_row);
+			cdp = &file->cdp_prep[ds_cnt * i];
+			cur_row = rra_row + ds_cnt * file->rra_ptr[i].cur_row;
 			/* Iterate over DS */
-			for (k = 0; k < file->stat_head->ds_cnt; k++) {
-				cdp_idx = i * file->stat_head->ds_cnt + k;
-				memcpy (rra_row,
-					&file->cdp_prep[cdp_idx].scratch[scratch_idx].dv,
-					sizeof (gdouble));
-				rra_row++;
+			for (j = 0; j < ds_cnt; j++) {
+				cur_row[j] = cdp[j].scratch[CDP_primary_val].dv;
 			}
 		}
+
+		rra_row += rra->row_cnt * ds_cnt;
 	}
 }
 
