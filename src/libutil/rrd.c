@@ -795,8 +795,6 @@ rspamd_rrd_update_pdp_step (struct rspamd_rrd_file *file,
 	gdouble *pdp_new,
 	gdouble *pdp_temp,
 	gdouble interval,
-	gdouble pre_int,
-	gdouble post_int,
 	gulong pdp_diff)
 {
 	guint i;
@@ -807,13 +805,13 @@ rspamd_rrd_update_pdp_step (struct rspamd_rrd_file *file,
 	for (i = 0; i < file->stat_head->ds_cnt; i++) {
 		scratch = file->pdp_prep[i].scratch;
 		heartbeat = file->ds_def[i].par[RRD_DS_mrhb_cnt].lv;
+
 		if (!isnan (pdp_new[i])) {
 			if (isnan (scratch[PDP_val].dv)) {
 				scratch[PDP_val].dv = 0;
 			}
-			scratch[PDP_val].dv += pdp_new[i] / interval * pre_int;
-			pre_int = 0.0;
 		}
+
 		/* Check interval value for heartbeat for this DS */
 		if ((interval > heartbeat) ||
 			(file->stat_head->pdp_step / 2.0 < scratch[PDP_unkn_sec_cnt].lv)) {
@@ -821,15 +819,15 @@ rspamd_rrd_update_pdp_step (struct rspamd_rrd_file *file,
 		}
 		else {
 			pdp_temp[i] = scratch[PDP_val].dv /
-				((double) (pdp_diff - scratch[PDP_unkn_sec_cnt].lv) - pre_int);
+				((double) (pdp_diff - scratch[PDP_unkn_sec_cnt].lv));
 		}
 
 		if (isnan (pdp_new[i])) {
-			scratch[PDP_unkn_sec_cnt].lv = floor (post_int);
+			scratch[PDP_unkn_sec_cnt].lv = interval;
 			scratch[PDP_val].dv = NAN;
 		} else {
 			scratch[PDP_unkn_sec_cnt].lv = 0;
-			scratch[PDP_val].dv = pdp_new[i] / interval * post_int;
+			scratch[PDP_val].dv = pdp_new[i] / interval;
 		}
 
 		msg_debug_rrd ("new temp PDP %ud, %.3f -> %.3f, scratch: %3f",
@@ -1060,7 +1058,7 @@ rspamd_rrd_add_record (struct rspamd_rrd_file *file,
 		gdouble ticks,
 		GError **err)
 {
-	gdouble interval, *pdp_new, *pdp_temp, pre_int, post_int;
+	gdouble interval, *pdp_new, *pdp_temp;
 	guint i;
 	glong seconds, microseconds;
 	gulong pdp_steps, cur_pdp_count, prev_pdp_step, cur_pdp_step,
@@ -1108,18 +1106,6 @@ rspamd_rrd_add_record (struct rspamd_rrd_file *file,
 	cur_pdp_age = seconds % file->stat_head->pdp_step;
 	/* Time of desired pdp step */
 	cur_pdp_step = seconds - cur_pdp_age;
-
-	if (cur_pdp_step > prev_pdp_step) {
-		pre_int =
-			(gdouble)(cur_pdp_step -
-			file->live_head->last_up) -
-			((double)file->live_head->last_up_usec) / 1e6f;
-		post_int = (gdouble)cur_pdp_age + microseconds / 1e6f;
-	}
-	else {
-		pre_int = interval;
-		post_int = 0;
-	}
 	cur_pdp_count = cur_pdp_step / file->stat_head->pdp_step;
 	pdp_steps = (cur_pdp_step - prev_pdp_step) / file->stat_head->pdp_step;
 
@@ -1152,8 +1138,6 @@ rspamd_rrd_add_record (struct rspamd_rrd_file *file,
 			pdp_new,
 			pdp_temp,
 			interval,
-			pre_int,
-			post_int,
 			pdp_steps * file->stat_head->pdp_step);
 
 
