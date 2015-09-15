@@ -2067,9 +2067,6 @@ rspamd_controller_password_sane (struct rspamd_controller_worker_ctx *ctx,
 		const gchar *password, const gchar *type)
 {
 	const struct rspamd_controller_pbkdf *pbkdf = &pbkdf_list[0];
-	GString *msg;
-	guchar *salt, *key;
-	gchar *encoded_salt, *encoded_key;
 
 	if (password == NULL) {
 		msg_warn_ctx ("%s is not set, so you should filter controller "
@@ -2082,28 +2079,9 @@ rspamd_controller_password_sane (struct rspamd_controller_worker_ctx *ctx,
 
 	if (!rspamd_is_encrypted_password (password, NULL)) {
 		/* Suggest encryption to a user */
-		msg = g_string_new (NULL);
 
-		rspamd_printf_gstring (msg, "your %s is not encrypted, we strongly "
-				"recommend to replace it with the encrypted version: ", type);
-		salt = g_alloca (pbkdf->salt_len);
-		key = g_alloca (pbkdf->key_len);
-		ottery_rand_bytes (salt, pbkdf->salt_len);
-		/* Derive key */
-		rspamd_cryptobox_pbkdf (password, strlen (password),
-				salt, pbkdf->salt_len, key, pbkdf->key_len, pbkdf->rounds);
-
-		encoded_salt = rspamd_encode_base32 (salt, pbkdf->salt_len);
-		encoded_key = rspamd_encode_base32 (key, pbkdf->key_len);
-
-		rspamd_printf_gstring (msg, "$%d$%s$%s", pbkdf->id, encoded_salt,
-				encoded_key);
-
-		msg_warn_ctx ("%v", msg);
-
-		g_string_free (msg, TRUE);
-		g_free (encoded_salt);
-		g_free (encoded_key);
+		msg_warn_ctx ("your %s is not encrypted, we strongly "
+				"recommend to replace it with the encrypted one", type);
 	}
 }
 
