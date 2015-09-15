@@ -38,6 +38,8 @@
 /* 60 seconds for worker's IO */
 #define DEFAULT_WORKER_IO_TIMEOUT 60000
 
+#define DEFAULT_STATS_PATH RSPAMD_DBDIR "/stats.ucl"
+
 /* HTTP paths */
 #define PATH_AUTH "/auth"
 #define PATH_SYMBOLS "/symbols"
@@ -148,6 +150,9 @@ struct rspamd_controller_worker_ctx {
 
 	/* Static files dir */
 	gchar *static_files_dir;
+
+	/* Saved statistics path */
+	gchar *saved_stats_path;
 
 	/* Custom commands registered by plugins */
 	GHashTable *custom_commands;
@@ -1879,6 +1884,185 @@ rspamd_controller_accept_socket (gint fd, short what, void *arg)
 }
 
 static void
+rspamd_controller_load_saved_stats (struct rspamd_controller_worker_ctx *ctx)
+{
+	struct ucl_parser *parser;
+	ucl_object_t *obj;
+	const ucl_object_t *elt, *subelt;
+	struct rspamd_stat *stat, stat_copy;
+	gint i;
+
+	g_assert (ctx->saved_stats_path != NULL);
+
+	if (access (ctx->saved_stats_path, R_OK) == -1) {
+		msg_err_ctx ("cannot load controller stats from %s: %s",
+				ctx->saved_stats_path, strerror (errno));
+		return;
+	}
+
+	parser = ucl_parser_new (0);
+
+	if (!ucl_parser_add_file (parser, ctx->saved_stats_path)) {
+		msg_err_ctx ("cannot parse controller stats from %s: %s",
+				ctx->saved_stats_path, ucl_parser_get_error (parser));
+		ucl_parser_free (parser);
+
+		return;
+	}
+
+	obj = ucl_parser_get_object (parser);
+	ucl_parser_free (parser);
+
+	stat = ctx->srv->stat;
+	memcpy (&stat_copy, stat, sizeof (stat_copy));
+
+	elt = ucl_object_find_key (obj, "scanned");
+
+	if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
+		stat_copy.messages_scanned = ucl_object_toint (elt);
+	}
+
+	elt = ucl_object_find_key (obj, "actions");
+
+	if (elt != NULL) {
+		for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
+			subelt = ucl_object_find_key (elt, rspamd_action_to_str (i));
+
+			if (subelt && ucl_object_type (subelt) == UCL_INT) {
+				stat_copy.actions_stat[i] = ucl_object_toint (subelt);
+			}
+		}
+	}
+
+	elt = ucl_object_find_key (obj, "connections_count");
+
+	if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
+		stat_copy.connections_count = ucl_object_toint (elt);
+	}
+
+	elt = ucl_object_find_key (obj, "control_connections_count");
+
+	if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
+		stat_copy.control_connections_count = ucl_object_toint (elt);
+	}
+
+	elt = ucl_object_find_key (obj, "fuzzy_stored");
+
+	if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
+		stat_copy.fuzzy_hashes = ucl_object_toint (elt);
+	}
+
+	elt = ucl_object_find_key (obj, "fuzzy_expired");
+
+	if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
+		stat_copy.fuzzy_hashes_expired = ucl_object_toint (elt);
+	}
+
+	elt = ucl_object_find_key (obj, "fuzzy_checked");
+
+	if (elt && ucl_object_type (elt) == UCL_ARRAY) {
+		for (i = 0; i < RSPAMD_FUZZY_EPOCH_MAX; i++) {
+			subelt = ucl_array_find_index (elt, i);
+
+			if (subelt && ucl_object_type (subelt) == UCL_INT) {
+				stat_copy.fuzzy_hashes_checked[i] = ucl_object_toint (subelt);
+			}
+		}
+	}
+
+	elt = ucl_object_find_key (obj, "fuzzy_found");
+
+	if (elt && ucl_object_type (elt) == UCL_ARRAY) {
+		for (i = 0; i < RSPAMD_FUZZY_EPOCH_MAX; i++) {
+			subelt = ucl_array_find_index (elt, i);
+
+			if (subelt && ucl_object_type (subelt) == UCL_INT) {
+				stat_copy.fuzzy_hashes_found[i] = ucl_object_toint (subelt);
+			}
+		}
+	}
+
+	ucl_object_unref (obj);
+	memcpy (stat, &stat_copy, sizeof (stat_copy));
+}
+
+static void
+rspamd_controller_store_saved_stats (struct rspamd_controller_worker_ctx *ctx)
+{
+	struct rspamd_stat *stat;
+	ucl_object_t *top, *sub;
+	gint i, fd;
+
+	g_assert (ctx->saved_stats_path != NULL);
+
+	fd = open (ctx->saved_stats_path, O_WRONLY|O_CREAT|O_TRUNC, 00644);
+
+	if (fd == -1) {
+		msg_err_ctx ("cannot load controller stats from %s: %s",
+				ctx->saved_stats_path, strerror (errno));
+		return;
+	}
+
+	if (rspamd_file_lock (fd, FALSE) == -1) {
+		msg_err_ctx ("cannot load controller stats from %s: %s",
+				ctx->saved_stats_path, strerror (errno));
+		close (fd);
+
+		return;
+	}
+
+	stat = ctx->srv->stat;
+
+	top = ucl_object_typed_new (UCL_OBJECT);
+	ucl_object_insert_key (top, ucl_object_fromint (
+			stat->messages_scanned), "scanned", 0, false);
+
+	if (stat->messages_scanned > 0) {
+		sub = ucl_object_typed_new (UCL_OBJECT);
+		for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
+			ucl_object_insert_key (sub,
+					ucl_object_fromint (stat->actions_stat[i]),
+					rspamd_action_to_str (i), 0, false);
+		}
+		ucl_object_insert_key (top, sub, "actions", 0, false);
+	}
+
+	ucl_object_insert_key (top,
+			ucl_object_fromint (stat->connections_count), "connections", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (stat->control_connections_count),
+			"control_connections", 0, false);
+
+	ucl_object_insert_key (top,
+			ucl_object_fromint (stat->fuzzy_hashes), "fuzzy_stored", 0, false);
+	ucl_object_insert_key (top,
+			ucl_object_fromint (
+					stat->fuzzy_hashes_expired), "fuzzy_expired", 0, false);
+
+	/* Fuzzy epoch statistics */
+	sub = ucl_object_typed_new (UCL_ARRAY);
+
+	for (i = RSPAMD_FUZZY_EPOCH6; i < RSPAMD_FUZZY_EPOCH_MAX; i ++) {
+		ucl_array_append (sub, ucl_object_fromint (stat->fuzzy_hashes_checked[i]));
+	}
+
+	ucl_object_insert_key (top, sub, "fuzzy_checked", 0, false);
+	sub = ucl_object_typed_new (UCL_ARRAY);
+
+	for (i = RSPAMD_FUZZY_EPOCH6; i < RSPAMD_FUZZY_EPOCH_MAX; i ++) {
+		ucl_array_append (sub, ucl_object_fromint (stat->fuzzy_hashes_found[i]));
+	}
+
+	ucl_object_insert_key (top, sub, "fuzzy_found", 0, false);
+
+	ucl_object_emit_full (top, UCL_EMIT_JSON_COMPACT,
+			ucl_object_emit_fd_funcs (fd));
+
+	rspamd_file_unlock (fd, FALSE);
+	close (fd);
+}
+
+static void
 rspamd_controller_password_sane (struct rspamd_controller_worker_ctx *ctx,
 		const gchar *password, const gchar *type)
 {
@@ -1973,6 +2157,10 @@ init_controller_worker (struct rspamd_config *cfg)
 		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
 		key), 0);
 
+	rspamd_rcl_register_worker_option (cfg, type, "stats_path",
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, saved_stats_path), 0);
+
 	return ctx;
 }
 
@@ -2021,6 +2209,14 @@ start_controller_worker (struct rspamd_worker *worker)
 			cur = g_list_next (cur);
 		}
 	}
+
+	if (ctx->saved_stats_path == NULL) {
+		/* Assume default path */
+		ctx->saved_stats_path = rspamd_mempool_strdup (worker->srv->cfg->cfg_pool,
+				DEFAULT_STATS_PATH);
+	}
+
+	rspamd_controller_load_saved_stats (ctx);
 
 	rspamd_controller_password_sane (ctx, ctx->password, "normal password");
 	rspamd_controller_password_sane (ctx, ctx->enable_password, "enable "
@@ -2123,5 +2319,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_stat_close ();
 	rspamd_http_router_free (ctx->http);
 	rspamd_log_close (rspamd_main->logger);
+	rspamd_controller_store_saved_stats (ctx);
+
 	exit (EXIT_SUCCESS);
 }
