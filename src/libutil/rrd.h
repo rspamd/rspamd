@@ -93,25 +93,6 @@ enum rrd_cf_type {
 	RRD_CF_MINIMUM,
 	RRD_CF_MAXIMUM,
 	RRD_CF_LAST,
-	RRD_CF_HWPREDICT,
-	/* An array of predictions using the seasonal
-	 * Holt-Winters algorithm. Requires an RRA of type
-	 * CF_SEASONAL for this data source. */
-	RRD_CF_SEASONAL,
-	/* An array of seasonal effects. Requires an RRA of
-	 * type CF_HWPREDICT for this data source. */
-	RRD_CF_DEVPREDICT,
-	/* An array of deviation predictions based upon
-	 * smoothed seasonal deviations. Requires an RRA of
-	 * type CF_DEVSEASONAL for this data source. */
-	RRD_CF_DEVSEASONAL,
-	/* An array of smoothed seasonal deviations. Requires
-	 * an RRA of type CF_HWPREDICT for this data source.
-	 * */
-	RRD_CF_FAILURES,
-	/* HWPREDICT that follows a moving baseline */
-	RRD_CF_MHWPREDICT
-	/* new entries must come last !!! */
 };
 
 
@@ -121,50 +102,6 @@ enum rrd_rra_param {
 	RRA_cdp_xff_val = 0,  /* what part of the consolidated
 	                       * datapoint must be known, to produce a
 	                       * valid entry in the rra */
-	/* CF_HWPREDICT: */
-	RRA_hw_alpha = 1,
-	/* exponential smoothing parameter for the intercept in
-	 * the Holt-Winters prediction algorithm. */
-	RRA_hw_beta = 2,
-	/* exponential smoothing parameter for the slope in
-	 * the Holt-Winters prediction algorithm. */
-
-	RRA_dependent_rra_idx = 3,
-	/* For CF_HWPREDICT: index of the RRA with the seasonal
-	 * effects of the Holt-Winters algorithm (of type
-	 * CF_SEASONAL).
-	 * For CF_DEVPREDICT: index of the RRA with the seasonal
-	 * deviation predictions (of type CF_DEVSEASONAL).
-	 * For CF_SEASONAL: index of the RRA with the Holt-Winters
-	 * intercept and slope coefficient (of type CF_HWPREDICT).
-	 * For CF_DEVSEASONAL: index of the RRA with the
-	 * Holt-Winters prediction (of type CF_HWPREDICT).
-	 * For CF_FAILURES: index of the CF_DEVSEASONAL array.
-	 * */
-
-	/* CF_SEASONAL and CF_DEVSEASONAL: */
-	RRA_seasonal_gamma = 1,
-	/* exponential smoothing parameter for seasonal effects. */
-
-	RRA_seasonal_smoothing_window = 2,
-	/* fraction of the season to include in the running average
-	 * smoother */
-
-	/* RRA_dependent_rra_idx = 3, */
-
-	RRA_seasonal_smooth_idx = 4,
-	/* an integer between 0 and row_count - 1 which
-	 * is index in the seasonal cycle for applying
-	 * the period smoother. */
-
-	/* CF_FAILURES: */
-	RRA_delta_pos = 1,  /* confidence bound scaling parameters */
-	RRA_delta_neg = 2,
-	/* RRA_dependent_rra_idx = 3, */
-	RRA_window_len = 4,
-	RRA_failure_threshold = 5
-	    /* For CF_FAILURES, number of violations within the last
-	     * window required to mark a failure. */
 };
 
 
@@ -275,6 +212,7 @@ struct rspamd_rrd_file {
 	guint8 * map; /* mmapped area */
 	gsize size; /* its size */
 	gboolean finalized;
+	gchar *id;
 };
 
 

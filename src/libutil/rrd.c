@@ -21,9 +21,29 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <blake2.h>
 #include "config.h"
 #include "rrd.h"
 #include "util.h"
+#include "logger.h"
+
+#define msg_err_rrd(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        "rrd", file->id, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_rrd(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+        "rrd", file->id, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_rrd(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        "rrd", file->id, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_rrd(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        "rrd", file->id, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
 
 static GQuark
 rrd_error_quark (void)
@@ -303,6 +323,29 @@ rspamd_rrd_adjust_pointers (struct rspamd_rrd_file *file, gboolean completed)
 	}
 }
 
+static void
+rspamd_rrd_calculate_checksum (struct rspamd_rrd_file *file)
+{
+	guchar sigbuf[BLAKE2B_OUTBYTES];
+	struct rrd_ds_def *ds;
+	guint i;
+	blake2b_state st;
+
+	if (file->finalized) {
+		blake2b_init (&st, BLAKE2B_OUTBYTES);
+		blake2b_update (&st, file->filename, strlen (file->filename));
+
+		for (i = 0; i < file->stat_head->ds_cnt; i ++) {
+			ds = &file->ds_def[i];
+			blake2b_update (&st, ds->ds_nam, sizeof (ds->ds_nam));
+		}
+
+		blake2b_final (&st, sigbuf, BLAKE2B_OUTBYTES);
+
+		file->id = rspamd_encode_base32 (sigbuf, sizeof (sigbuf));
+	}
+}
+
 /**
  * Open completed or incompleted rrd file
  * @param filename
@@ -313,7 +356,7 @@ rspamd_rrd_adjust_pointers (struct rspamd_rrd_file *file, gboolean completed)
 static struct rspamd_rrd_file *
 rspamd_rrd_open_common (const gchar *filename, gboolean completed, GError **err)
 {
-	struct rspamd_rrd_file *new;
+	struct rspamd_rrd_file *file;
 	gint fd;
 	struct stat st;
 
@@ -321,9 +364,9 @@ rspamd_rrd_open_common (const gchar *filename, gboolean completed, GError **err)
 		return NULL;
 	}
 
-	new = g_slice_alloc0 (sizeof (struct rspamd_rrd_file));
+	file = g_slice_alloc0 (sizeof (struct rspamd_rrd_file));
 
-	if (new == NULL) {
+	if (file == NULL) {
 		g_set_error (err, rrd_error_quark (), ENOMEM, "not enough memory");
 		return NULL;
 	}
@@ -343,28 +386,29 @@ rspamd_rrd_open_common (const gchar *filename, gboolean completed, GError **err)
 		return FALSE;
 	}
 	/* Mmap file */
-	new->size = st.st_size;
-	if ((new->map =
+	file->size = st.st_size;
+	if ((file->map =
 		mmap (NULL, st.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd,
 		0)) == MAP_FAILED) {
 		close (fd);
 		g_set_error (err,
 			rrd_error_quark (), ENOMEM, "mmap failed: %s", strerror (errno));
-		g_slice_free1 (sizeof (struct rspamd_rrd_file), new);
+		g_slice_free1 (sizeof (struct rspamd_rrd_file), file);
 		return NULL;
 	}
 
 	close (fd);
 
 	/* Adjust pointers */
-	rspamd_rrd_adjust_pointers (new, completed);
+	rspamd_rrd_adjust_pointers (file, completed);
 
 	/* Mark it as finalized */
-	new->finalized = completed;
+	file->finalized = completed;
 
-	new->filename = g_strdup (filename);
+	file->filename = g_strdup (filename);
+	rspamd_rrd_calculate_checksum (file);
 
-	return new;
+	return file;
 }
 
 /**
@@ -376,7 +420,13 @@ rspamd_rrd_open_common (const gchar *filename, gboolean completed, GError **err)
 struct rspamd_rrd_file *
 rspamd_rrd_open (const gchar *filename, GError **err)
 {
-	return rspamd_rrd_open_common (filename, TRUE, err);
+	struct rspamd_rrd_file *file;
+
+	if ((file = rspamd_rrd_open_common (filename, TRUE, err))) {
+		msg_info_rrd ("rrd file opened: %s", filename);
+	}
+
+	return file;
 }
 
 /**
@@ -655,6 +705,8 @@ rspamd_rrd_finalize (struct rspamd_rrd_file *file, GError **err)
 	rspamd_rrd_adjust_pointers (file, TRUE);
 
 	file->finalized = TRUE;
+	rspamd_rrd_calculate_checksum (file);
+	msg_info_rrd ("rrd file created: %s", file->filename);
 
 	return TRUE;
 }
@@ -683,6 +735,8 @@ rspamd_rrd_update_pdp_prep (struct rspamd_rrd_file *file,
 			rspamd_strlcpy (file->pdp_prep[i].last_ds, "U",
 					sizeof (file->pdp_prep[i].last_ds));
 			pdp_new[i] = NAN;
+			msg_debug_rrd ("adding unknown point interval %.3f is less than heartbeat %.3f",
+					interval, file->ds_def[i].par[RRD_DS_mrhb_cnt].lv);
 		}
 		else {
 			switch (type) {
@@ -690,17 +744,21 @@ rspamd_rrd_update_pdp_prep (struct rspamd_rrd_file *file,
 			case RRD_DST_DERIVE:
 				if (file->pdp_prep[i].last_ds[0] == 'U') {
 					pdp_new[i] = NAN;
+					msg_debug_rrd ("last point is NaN for point %ud", i);
 				}
 				else {
 					pdp_new[i] = vals[i] - strtod (file->pdp_prep[i].last_ds,
 							NULL);
+					msg_debug_rrd ("new PDP %ud, %.3f", i, pdp_new[i]);
 				}
 				break;
 			case RRD_DST_GAUGE:
 				pdp_new[i] = vals[i] * interval;
+				msg_debug_rrd ("new PDP %ud, %.3f", i, pdp_new[i]);
 				break;
 			case RRD_DST_ABSOLUTE:
 				pdp_new[i] = vals[i];
+				msg_debug_rrd ("new PDP %ud, %.3f", i, pdp_new[i]);
 				break;
 			default:
 				return FALSE;
@@ -773,6 +831,10 @@ rspamd_rrd_update_pdp_step (struct rspamd_rrd_file *file,
 			scratch[PDP_unkn_sec_cnt].lv = 0;
 			scratch[PDP_val].dv = pdp_new[i] / interval * post_int;
 		}
+
+		msg_debug_rrd ("new temp PDP %ud, %.3f -> %.3f, scratch: %3f",
+				i, pdp_new[i], pdp_temp[i],
+				scratch[PDP_val].dv);
 	}
 }
 
@@ -811,6 +873,7 @@ rspamd_rrd_update_cdp (struct rspamd_rrd_file *file,
 		if (rra->pdp_cnt > 1) {
 			/* Do we have any CDP to update for this rra ? */
 			if (rra_steps[rra_index] > 0) {
+
 				if (isnan (pdp_temp[i])) {
 					/* New pdp is nan */
 					/* Increment unknown points count */
@@ -861,6 +924,7 @@ rspamd_rrd_update_cdp (struct rspamd_rrd_file *file,
 						break;
 					}
 				}
+
 				/* Init carry of this CDP */
 				pdp_in_cdp = (pdp_steps - pdp_offset) / rra->pdp_cnt;
 				if (pdp_in_cdp == 0 || isnan (pdp_temp[i])) {
@@ -889,6 +953,10 @@ rspamd_rrd_update_cdp (struct rspamd_rrd_file *file,
 						scratch[CDP_val].dv = pdp_temp[i];
 					}
 				}
+
+				msg_debug_rrd ("update cdp %d with value %.3f, "
+						"stored value: %.3f, carry: %.3f",
+						i, last_cdp, cur_cdp, scratch[CDP_val].dv);
 			}
 			/* In this case we just need to update cdp_prep for this RRA */
 			else {
@@ -923,6 +991,10 @@ rspamd_rrd_update_cdp (struct rspamd_rrd_file *file,
 						break;
 					}
 				}
+
+				msg_debug_rrd ("aggregate cdp %d with pdp %.3f, "
+						"stored value: %.3f",
+						i, pdp_temp[i], scratch[CDP_val].dv);
 			}
 		}
 		else {
@@ -1007,6 +1079,8 @@ rspamd_rrd_add_record (struct rspamd_rrd_file *file,
 	microseconds = (glong)((ticks - seconds) * 1000000.);
 	interval = ticks - ((gdouble)file->live_head->last_up +
 			file->live_head->last_up_usec / 1000000.);
+
+	msg_debug_rrd ("update rrd record after %.3f seconds", interval);
 
 	/* Update PDP preparation values */
 	pdp_new = g_malloc0 (sizeof (gdouble) * file->stat_head->ds_cnt);
@@ -1097,6 +1171,10 @@ rspamd_rrd_add_record (struct rspamd_rrd_file *file,
 				/* This rra have not passed enough pdp steps */
 				rra_steps[i] = 0;
 			}
+
+			msg_debug_rrd ("cdp: %d, rra steps: %d(%d), pdp steps: %d",
+					i, rra_steps[i], pdp_offset, pdp_steps);
+
 			/* Update this specific CDP */
 			rspamd_rrd_update_cdp (file,
 				pdp_steps,
@@ -1135,9 +1213,9 @@ rspamd_rrd_close (struct rspamd_rrd_file * file)
 	}
 
 	munmap (file->map, file->size);
-	if (file->filename != NULL) {
-		g_free (file->filename);
-	}
+	g_free (file->filename);
+	g_free (file->id);
+
 	g_slice_free1 (sizeof (struct rspamd_rrd_file), file);
 
 	return 0;
