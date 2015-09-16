@@ -1502,7 +1502,17 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx,
 			}
 		}
 		else {
-			elt = &g_array_index (to_sign, struct rspamd_dkim_sign_chunk, 0);
+			/* Try to find the proper header by domain */
+			for (i = to_sign->len - 1; i >= 0; i--) {
+				elt = &g_array_index (to_sign,
+						struct rspamd_dkim_sign_chunk,
+						i);
+				if (rspamd_substring_search (elt->begin, elt->len,
+							ctx->domain, strlen (ctx->domain)) != -1) {
+					break;
+				}
+			}
+
 			if (elt->append_crlf) {
 				rspamd_dkim_signature_update (ctx, elt->begin, elt->len + 1);
 			}
