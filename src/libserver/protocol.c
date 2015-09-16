@@ -1052,9 +1052,10 @@ rspamd_protocol_write_ucl (struct rspamd_task *task, GString *logbuf)
 
 	if (logbuf != NULL) {
 		rspamd_printf_gstring (logbuf,
-				"id: <%s>, qid: <%s>, ",
+				"id: <%s>, qid: <%s>, ip: %s, ",
 				task->message_id,
-				task->queue_id);
+				task->queue_id,
+				rspamd_inet_address_to_string (task->from_addr));
 
 		if (task->user) {
 			rspamd_printf_gstring (logbuf, "user: %s, ", task->user);
