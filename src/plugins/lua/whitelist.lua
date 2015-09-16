@@ -41,13 +41,20 @@ local function whitelist_cb(symbol, rule, task)
   if from and from[1] and from[1]['domain'] then
     local domain = from[1]['domain']
     local found = false
+    local mult = 1.0
 
     if rule['map'] then
-      if rule['map']:get_key(domain) then
+      local val = rule['map']:get_key(domain)
+      if val then
         found = true
+
+        if #val > 0 then
+          mult = tonumber(val)
+        end
       end
     else
-      if rule['domains'][domain] then
+      mult = rule['domains'][domain]
+      if mult then
         found = true
       end
     end
@@ -78,7 +85,7 @@ local function whitelist_cb(symbol, rule, task)
     end
 
     if found then
-      task:insert_result(symbol, 1.0, domain)
+      task:insert_result(symbol, mult, domain)
     end
   end
 
@@ -114,11 +121,21 @@ local configure_whitelist_module = function()
     each(function(symbol, rule)
       if rule['domains'] then
         if type(rule['domains']) == 'string' then
-          rule['map'] = rspamd_config:add_hash_map(rule['domains'])
+          rule['map'] = rspamd_config:add_kv_map(rule['domains'])
         elseif type(rule['domains']) == 'table' then
           -- Transform ['domain1', 'domain2' ...] to indexes:
           -- {'domain1' = 1, 'domain2' = 1 ...]
-          rule['domains'] = tomap(zip(rule['domains'], ones()))
+          rule['domains'] = tomap(map(function(d)
+            local name = d
+            local value = 1
+
+            if type(d) == 'table' then
+              name = d[1]
+              value = tonumber(d[2])
+            end
+
+            return name,value
+          end, rule['domains']))
         else
           rspamd_logger.errx(rspamd_config, 'whitelist %s has bad "domains" value',
             symbol)

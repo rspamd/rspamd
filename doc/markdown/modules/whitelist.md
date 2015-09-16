@@ -31,6 +31,16 @@ You can also set the default metric settings using the ordinary attributes, such
 - `one_shot`: default one shot mode
 - `description`: default description
 
+Within lists, you can also use optional `multiplier` argument that defines additional
+multiplier for the score added by this module. For example, let's define twice bigger
+score for `github.com`:
+
+    ["github.com", 2.0]
+
+or if using map:
+
+    github.com 2.0
+
 ## Configuration example
 
 ~~~nginx
@@ -56,9 +66,9 @@ whitelist {
             valid_spf = true;
             valid_dkim = true;
             domains = [
-                "github.com",
+                ["github.com", 2.0],
             ]
-            score = -7.0
+            score = -3.0
         }
         
         WHITELIST_DMARC_DKIM = {
