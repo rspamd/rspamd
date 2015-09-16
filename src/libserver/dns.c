@@ -142,7 +142,7 @@ gboolean make_dns_request_task (struct rspamd_task *task,
 		task->dns_requests ++;
 
 		if (task->dns_requests >= task->cfg->dns_max_requests) {
-			msg_info ("<%s> stop resolving on reaching %ud requests",
+			msg_info_task ("<%s> stop resolving on reaching %ud requests",
 					task->message_id, task->dns_requests);
 		}
 	}
@@ -196,7 +196,7 @@ dns_resolver_init (rspamd_logger_t *logger,
 	if (cfg == NULL || cfg->nameservers == NULL) {
 		/* Parse resolv.conf */
 		if (!rdns_resolver_parse_resolv_conf (new->r, "/etc/resolv.conf")) {
-			msg_err (
+			msg_err_config (
 				"cannot parse resolv.conf and no nameservers defined, so no ways to resolve addresses");
 			rdns_resolver_release (new->r);
 			new->r = NULL;
@@ -214,7 +214,7 @@ dns_resolver_init (rspamd_logger_t *logger,
 				p++;
 				priority = strtoul (p, &err, 10);
 				if (err != NULL && *err != '\0') {
-					msg_info (
+					msg_info_config (
 						"bad character '%x', must be 'm' or 's' or a numeric priority",
 						*err);
 				}
@@ -224,7 +224,7 @@ dns_resolver_init (rspamd_logger_t *logger,
 			}
 			if (!rdns_resolver_add_server (new->r, begin, 53, priority,
 				cfg->dns_io_per_server)) {
-				msg_warn ("cannot parse ip address of nameserver: %s", begin);
+				msg_warn_config ("cannot parse ip address of nameserver: %s", begin);
 				cur = g_list_next (cur);
 				continue;
 			}
