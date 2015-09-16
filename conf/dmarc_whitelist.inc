@@ -14,6 +14,7 @@ box.com
 chase.com
 evernote.com
 facebook.com
+facebookmail.com
 fedex.com
 force.com
 google.ae
