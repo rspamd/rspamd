@@ -1034,3 +1034,38 @@ rspamd_header_value_fold (const gchar *name,
 
 	return res;
 }
+
+#define RKHASH(a, b, h) ((((h) - (a)*d) << 1) + (b))
+
+goffset
+rspamd_substring_search (const gchar *in, gsize inlen,
+		const gchar *srch, gsize srchlen)
+{
+	gint d, hash_srch, hash_in;
+	gsize i, j;
+
+	/* Preprocessing */
+	for (d = i = 1; i < srchlen; ++i) {
+		/* computes d = 2^(m-1) with the left-shift operator */
+		d = (d << 1);
+	}
+
+	for (hash_in = hash_srch = i = 0; i < srchlen; ++i) {
+		hash_srch = ((hash_srch << 1) + srch[i]);
+		hash_in = ((hash_in << 1) + in[i]);
+	}
+
+	/* Searching */
+	j = 0;
+	while (j <= inlen - srchlen) {
+
+		if (hash_srch == hash_in && memcmp (srch, in + j, srchlen) == 0) {
+			return (goffset)j;
+		}
+
+		hash_in = RKHASH (in[j], in[j + srchlen], hash_in);
+		++j;
+	}
+
+	return -1;
+}

@@ -172,4 +172,15 @@ GString *rspamd_header_value_fold (const gchar *name,
 		const gchar *value,
 		guint fold_max);
 
+/**
+ * Search for a substring `srch` in the text `in` using Karp-Rabin algorithm
+ * @param in input
+ * @param inlen input len
+ * @param srch search string
+ * @param srchlen length of the search string
+ * @return position of the first substring match or (-1) if not found
+ */
+goffset rspamd_substring_search (const gchar *in, gsize inlen,
+	const gchar *srch, gsize srchlen);
+
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */
