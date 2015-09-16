@@ -41,17 +41,12 @@ local function whitelist_cb(symbol, rule, task)
   local from = task:get_from(1)
   if from and from[1] and from[1]['domain'] then
     local domain = from[1]['domain']
-    local url_domain = rspamd_url.create('http://' .. domain)
+    local url_domain = rspamd_url.create(task:get_mempool(), 'http://' .. domain)
     local found = false
     local mult = 1.0
 
     if url_domain then
-      -- Get tld + 1 component
-      local tld = url_domain:get_tld()
-      local host = url_domain:get_host()
-
-      domain = string.match(host, string.format('[^.].%s$', tld)
-      rspamd_logger.errx(domain)
+      domain = url_domain:get_tld()
     end
 
     if rule['map'] then
