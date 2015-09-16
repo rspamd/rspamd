@@ -312,7 +312,6 @@ rspamd_init_lua_filters (struct rspamd_config *cfg)
 				msg_err_config ("load of %s failed: %s", module->path,
 					lua_tostring (L, -1));
 				cur = g_list_next (cur);
-				g_string_free (tb, TRUE);
 				lua_pop (L, 1); /*  Error function */
 				continue;
 			}

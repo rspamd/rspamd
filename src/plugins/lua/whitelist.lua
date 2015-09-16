@@ -25,6 +25,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ]]--
 
 local rspamd_logger = require "rspamd_logger"
+local rspamd_url = require "rspamd_url"
 local ucl = require "ucl"
 require "fun" ()
 
@@ -40,8 +41,18 @@ local function whitelist_cb(symbol, rule, task)
   local from = task:get_from(1)
   if from and from[1] and from[1]['domain'] then
     local domain = from[1]['domain']
+    local url_domain = rspamd_url.create('http://' .. domain)
     local found = false
     local mult = 1.0
+
+    if url_domain then
+      -- Get tld + 1 component
+      local tld = url_domain:get_tld()
+      local host = url_domain:get_host()
+
+      domain = string.match(host, string.format('[^.].%s$', tld)
+      rspamd_logger.errx(domain)
+    end
 
     if rule['map'] then
       local val = rule['map']:get_key(domain)
