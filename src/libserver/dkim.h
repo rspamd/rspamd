@@ -147,6 +147,7 @@ typedef struct rspamd_dkim_context_s {
 	GPtrArray *hlist;
 	guint ver;
 	gchar *dns_key;
+	const gchar *dkim_header;
 	GChecksum *headers_hash;
 	GChecksum *body_hash;
 } rspamd_dkim_context_t;

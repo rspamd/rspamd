@@ -819,6 +819,8 @@ rspamd_create_dkim_context (const gchar *sig,
 		(rspamd_mempool_destruct_t)g_checksum_free,
 		ctx->headers_hash);
 
+	ctx->dkim_header = sig;
+
 	return ctx;
 }
 
@@ -1576,9 +1578,9 @@ rspamd_dkim_canonize_header (rspamd_dkim_context_t *ctx,
 				}
 			}
 			else {
-				/* For signature check just use the first dkim header */
+				/* For signature check just use the saved dkim header */
 				rspamd_dkim_canonize_header_relaxed (ctx,
-					rh->value,
+					ctx->dkim_header,
 					header_name,
 					is_sig);
 			}
