@@ -11,8 +11,8 @@ adschemist.com
 airbnb.com
 airtel.in
 alibaba.com
-aliexpress.com
-alipay.com
+aliexpress.com 2.0
+alipay.com 2.0
 allrecipes.com
 amazon.ca
 amazon.cn
@@ -92,7 +92,7 @@ force.com
 freepik.com
 gap.com
 gawker.com
-github.com
+github.com 2.0
 gizmodo.com
 godaddy.com
 goo.gl
