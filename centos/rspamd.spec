@@ -38,7 +38,11 @@ Requires(pre):  shadow
 BuildRequires:  sqlite-devel
 Requires(pre):  shadow-utils
 %endif
-Requires:       lua
+%if 0%{?fedora_version} >= 22 || 0%{?suse_version} >= 1320
+BuildRequires:  luajit-devel,hiredis-devel
+%else
+BuildRequires:  lua-devel
+%endif
 %if 0%{?el6}
 Requires:       logrotate
 Requires(post): chkconfig
@@ -78,6 +82,13 @@ lua.
 %endif
 %if 0%{?suse_version}
         -DCMAKE_SKIP_INSTALL_RPATH=ON \
+%endif
+%if 0%{?fedora_version} >= 22 || 0%{?suse_version} >= 1320
+		-DENABLE_LUAJIT=ON \
+		-DENABLE_HIREDIS=ON \
+%else
+		-DENABLE_LUAJIT=OFF \
+		-DENABLE_HIREDIS=OFF \
 %endif
         -DLOGDIR=%{_localstatedir}/log/rspamd \
         -DEXAMPLESDIR=%{_datadir}/examples/rspamd \
