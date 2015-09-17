@@ -4,7 +4,51 @@ This document describes incompatible changes introduced in the recent rspamd
 versions. Here you can find information about how to overcome this incompatibilities
 and update your rules and configuration according to these changes.
 
-## Migrating from rspamd 0.6 to rspamd 0.7 {#0607}
+## Migrating from rspamd 0.9 to rspamd 1.0
+
+In rspamd 1.0, the default settings for statistics tokenization has been changed to `modern`, meaning
+that now tokens are generated from the normalized words and there are various improvements incompatible with the
+statistics model used in pre 1.0 versions. Therefore, to use all these advantages you should either **relearn**
+your statistics or continue using your old statistics **without** new features by adding `compat` parameter:
+
+~~~nginx
+classifier {
+...
+    tokenizer {
+        compat = true;
+    }
+...
+}
+~~~
+
+The recommended way to create statistics now is `sqlite3` backend (which is incompatible with old mmap backend however):
+
+~~~nginx
+classifier {
+    type = "bayes";
+    tokenizer {
+        name = "osb";
+    }
+    cache {
+        path = "${DBDIR}/learn_cache.sqlite";
+    }
+    min_tokens = 11;
+    backend = "sqlite3";
+    languages_enabled = true;
+    statfile {
+        symbol = "BAYES_HAM";
+        path = "${DBDIR}/bayes.ham.sqlite";
+        spam = false;
+    }
+    statfile {
+        symbol = "BAYES_SPAM";
+        path = "${DBDIR}/bayes.spam.sqlite";
+        spam = true;
+    }
+}
+~~~
+
+## Migrating from rspamd 0.6 to rspamd 0.7
 
 ### Webui changes
 
