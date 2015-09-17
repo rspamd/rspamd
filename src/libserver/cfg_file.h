@@ -202,6 +202,7 @@ struct rspamd_config {
 	GHashTable *debug_modules;                      /**< logging modules to debug							*/
 	gboolean log_color;                             /**< output colors for console output                   */
 	gboolean log_extended;                          /**< log extended information							*/
+	gboolean log_systemd;                           /**< special case for systemd logger					*/
 
 	gboolean mlock_statfile_pool;                   /**< use mlock (2) for locking statfiles				*/
 

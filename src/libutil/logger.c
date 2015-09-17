@@ -748,9 +748,12 @@ file_log_function (const gchar *log_domain,
 		}
 
 		/* Format time */
-		tms = localtime (&now);
+		if (!rspamd_log->cfg->log_systemd) {
+			tms = localtime (&now);
 
-		strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", tms);
+			strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", tms);
+		}
+
 		cptype = g_quark_to_string (rspamd_log->process_type);
 
 		if (rspamd_log->cfg->log_color) {
@@ -771,12 +774,20 @@ file_log_function (const gchar *log_domain,
 			r = 0;
 		}
 
-		r += rspamd_snprintf (tmpbuf + r,
-				sizeof (tmpbuf) - r,
-				"%s #%P(%s) ",
-				timebuf,
-				rspamd_log->pid,
-				cptype);
+		if (!rspamd_log->cfg->log_systemd) {
+			r += rspamd_snprintf (tmpbuf + r,
+					sizeof (tmpbuf) - r,
+					"%s #%P(%s) ",
+					timebuf,
+					rspamd_log->pid,
+					cptype);
+		}
+		else {
+			r += rspamd_snprintf (tmpbuf + r,
+					sizeof (tmpbuf) - r,
+					"(%s) ",
+					cptype);
+		}
 
 		modulebuf[0] = '\0';
 		mremain = sizeof (modulebuf);
