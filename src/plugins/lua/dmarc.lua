@@ -226,14 +226,16 @@ local function dmarc_callback(task)
       end
     end
     local das = task:get_symbol(symbols['dkim_allow_symbol'])
-    if das and das[1] and das[1]['options'] and das[1]['options'][0] then
-      if from[1]['domain'] == das[1]['options'][0] then
-        dkim_ok = true
-      elseif not strict_dkim then
-        if string.sub(das[1]['options'][0],
-          -string.len('.' .. lookup_domain))
-        == '.' .. lookup_domain then
+    if das and das[1] and das[1]['options'] then
+      for i,dkim_domain in ipairs(das[1]['options']) do
+        if from[1]['domain'] == dkim_domain then
           dkim_ok = true
+        elseif not strict_dkim then
+          if string.sub(dkim_domain,
+            -string.len('.' .. lookup_domain))
+              == '.' .. lookup_domain then
+            dkim_ok = true
+          end
         end
       end
     end
