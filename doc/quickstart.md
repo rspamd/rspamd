@@ -11,16 +11,42 @@ This guide describes the main procedures to get and start working with rspamd.
 
 ### Arch, CentOS, Debian, Fedora, openSUSE, SLE, Ubuntu
 
-The recommended way to install Rspamd is using binary packages from [our project on the openSUSE build service](https://software.opensuse.org/download.html?project=home%3Acebka&package=rspamd) which is expected to always offer the best available version.
+Rspamd project provides packages for some rpm and deb based repositories:
 
-Rspamd is also available in Debian's [testing](https://packages.debian.org/source/testing/rspamd) and [unstable](https://packages.debian.org/source/unstable/rspamd) distributions and the universe repository in [some versions](http://packages.ubuntu.com/search?keywords=rspamd&searchon=names&suite=all&section=all) of Ubuntu.
+- Debian wheezy (amd64, i386)
+- Debian jessie (amd64, i386)
+- Ubuntu precise (amd64, i386)
+- Ubuntu trusty (amd64, i386)
+- Ubuntu vivid (amd64, i386)
+- CentOS 6 (amd64), need EPEL
+- CentOS 7 (amd64), need EPEL
+- Fedora 21 (amd64)
+- Fedora 22 (amd64)
 
-For CentOS 6 on x86_64 platform you might also use the optimized version of rspamd with pcre-jit, luajit and hiredis bundled. This also contain gmime 2.6 build compatible with the major centos environment. To use this reporitory you can do the following steps:
+Installation for rpm based distributives:
 
-	# wget -O /etc/yum.repos.d/rspamd.repo http://rspamd.com/CentOS/6/os/x86_64/rspamd.repo
-	# rpm --import http://rspamd.com/vsevolod.pubkey
-	# yum update
-	# yum install rspamd
+    wget -O /etc/yum.repos.d/rspamd.repo http://rspamd.com/rpm-stable/${YOUR_DISTRIBUTIVE}/rspamd.repo
+    rpm --import http://rspamd.com/rpm-stable/gpg.key
+    yum update
+    yum install rspamd
+
+Where `${YOUR_DISTRIBUTIVE}` is the short name of your os (e.g. `centos-7` or `fedora-22`).
+
+Installation for deb based distributives:
+
+    apt-get install -y lsb-release # optional
+    CODENAME=`lsb_release -c -s`
+    wget -O- http://rspamd.com/apt-stable/gpg.key | apt-key add -
+	echo "deb http://rspamd.com/apt-stable/ $CODENAME main" > /etc/apt/sources.list.d/rspamd.list
+	echo "deb-src http://rspamd.com/apt-stable/ $CODENAME main" >> /etc/apt/sources.list.d/rspamd.list
+    apt-get update
+    apt-get install rspamd
+
+To learn your codename, you could try command `lsb_release -s -c` from the package called `lsb-release`.
+
+For other distributives you could also check [our project on the openSUSE build service](https://software.opensuse.org/download.html?project=home%3Acebka&package=rspamd).
+
+Rspamd is also available in Debian's [testing](https://packages.debian.org/source/testing/rspamd) and [unstable](https://packages.debian.org/source/unstable/rspamd) distributions and the universe repository in [some versions](http://packages.ubuntu.com/search?keywords=rspamd&searchon=names&suite=all&section=all) of Ubuntu. However, we are looking for an active maintainer for rspamd in these 'official' repos, as now rspamd is terribly outdated there.
 
 ### Other operating systems
 
@@ -42,13 +68,6 @@ If you'd like to test the current rspamd version, you might use nightly builds t
 
 Nightly builds are not as stable as mainline ones but they contain additional features and bugs are fixed very fast when detected.
 
-To use nightly builds on CentOS 6, please follow these instructions:
-
-    wget -O /etc/yum.repos.d/rspamd-nightly.repo http://rspamd.com/CentOS/6/nightly/x86_64/rspamd.repo
-    rpm --import http://rspamd.com/CentOS/6/nightly/x86_64/nightly.key
-    yum update
-    yum install rspamd
-
 There are also builds for other rpm distributives (Centos 7, Centos 6, Fedora 21 and Fedora 22). Their installation is quite similar:
 
     wget -O /etc/yum.repos.d/rspamd-experimental.repo http://rspamd.com/rpm/${YOUR_DISTRIBUTIVE}/rspamd-experimental.repo
@@ -69,7 +88,6 @@ To use nightly builds on Debian based distirbutive, do the following (we assume 
     apt-get install rspamd
 
 To learn your codename, you could try command `lsb_release -s -c` from the package called `lsb-release`.
-
 
 ## Build from sources
 
