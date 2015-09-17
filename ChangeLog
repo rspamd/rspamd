@@ -1,3 +1,92 @@
+1.0.0:
+	* Rework symbols processing:
+		- Improve sorting logic for symbols
+		- Organize processing into multiple stages
+		- Added asynchronous watchers for symbols
+		- Added ability to organize dependencies between symbols
+	* Fixed URL redirector:
+		- Use optimized POE loop
+		- Organize dependencies
+		- Fix startup
+	* New sqlite3 backend:
+		- Allow to have per-languages and per-user statistics
+		- Allow sqlite3 to be used as statistics backend
+	* Store tokenizer configuration within statfiles
+	* Improve bayes statistics:
+		- Use headers and images metainformation in bayes
+		- Suggest using of pre-processed tokens for statistics
+		- Fix tokens normalization for OSB algorithm
+	* Rewrite url parsing:
+		- Fix numerous issues with url extraction and normalization
+		- Fix mailto urls
+	* Fix settings plugin to allow custom actions scores
+	* Improve rbl plugin
+	* Allow capturing patterns in rspamd lua regexp library
+	* Add GTUBE support
+	* Fix spamc legacy support
+	* Add DKIM support to RBL module
+	* Fix issues with multiple DKIM signatures
+	* Fix issue if rspamd cannot create statfiles (#331)
+	* Rework parts and task structure:
+		- Now text_parts, parts and received are arrays
+		- Pre-allocate arrays with some reasonable defaults
+		- Use arrays instead of lists in plugins and checks
+		- Remove unused fields from task structure
+		- Rework mime_foreach callback function
+		- Remove deprecated scan_milliseconds field
+	* Add ip_score plugin support (not enabled by default):
+		- Can check for asn/country and network using DNS lookups
+		- Can store and load reputation from redis server
+	* Improve PARTS_DIFFER rule to count merely different words
+	* New HTML parser:
+		- Parses HTML parts using a set of state machines
+		- Extracts useful data and exports it to lua functions:
+			+ Styles
+			+ Images
+			+ URLs
+			+ Colors
+			+ Structure elements
+		- Added HTML rules for some checks
+	* New version of LUA DNS API
+	* Table versions of many functions in LUA API
+	* Improve rspamc client:
+		- Print execution time
+		- Allow executing of external commands and passing output to them
+		- Allow mime output mode when rspamc alters message according to rspamd
+		  checks and send it to an external command or stdout
+	* Allow scanning of local files using HTTP requests
+	* Rework configuration system:
+		- Rules are now moved from the $CONFDIR to $RULESDIR to avoid ambiguity
+		- All modules configurations are now split in $CONFDIR/modules.d/* to
+		  simplify upgrades
+		- Move hfilter to plugins
+		- Allow plugins and rules to define default scores to simplify metrics
+		  setup
+		- Include overrides for all modules to honor local/automatic parameters
+		- Tune scores for many modules
+	* Rework and enable DMARC plugin
+	* Add whitelist plugin for SPF/DKIM/DMARC based whitelisting
+	* Add some common domains to whitelists shipped with rspamd
+	* Rework logging:
+		- Now each log entry supports module name and a `tag`. Tag is used to
+		  identify unique objects (such as tasks) when checking log files
+		- It is possible to turn on debugging for the specific modules
+		- Systemd logging is fixed
+	* Improve spamassassin plugin.
+		- Now headers are matched more like SA
+		- Improve support of Message-ID
+		- Add support of ToCc header type
+		- Fix :addr and :name in headers regexps
+	* Resurrect rrd support code
+	* Save controller stats between restarts
+	* Fixed tonns of bugs
+	* Added tonns of minor improvements and features
+	* Added more unit tests
+	* Create functional tests framework
+	* Added documentation for missing modules
+	* Added rpm/deb repositories and scripts
+	* Updated WebUI and libucl externals
+
 0.9.10:
 	* Do not dereference null pointer on learning.
 	* Fix some extreme cases in BAYES.
