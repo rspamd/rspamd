@@ -140,7 +140,7 @@ Sendmail can use rspamd via rmilter as well as postfix.
 
 And configure it just like for postfix. Sendmail configuration may be like this:
 
-	INPUT_MAIL_FILTER(`rmilter', `S=unix:/var/run/rmilter/rmilter.sock, F=T')
+	MAIL_FILTER(`rmilter', `S=unix:/run/rmilter/rmilter.sock, F=T')
 	define(`confINPUT_MAIL_FILTERS', `rmilter')
 
 Then compile m4 to cf in an ordinary way.
