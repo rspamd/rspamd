@@ -12,9 +12,11 @@
 			$('body').scrollspy({ target: '#navbar-spy', offset: offset + 10 });
 
 			$('.nav-stacked li a').click(function(event) {
-				event.preventDefault();
-				$($(this).attr('href'))[0].scrollIntoView();
-				scrollBy(0, -offset);
+				if ($(this).attr('href') == '#') {
+					event.preventDefault();
+					$($(this).attr('href'))[0].scrollIntoView();
+					scrollBy(0, -offset);
+				}
 			});
 		}
 		);
