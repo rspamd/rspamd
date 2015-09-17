@@ -1,0 +1,49 @@
+{% include top.html %}	 
+	 <div class="container">
+
+	 <div class="row">
+	 <div class="col-sm-3" id="navbar-spy">
+	 <!-- Docs navigation -->
+	 	<ul data-spy="affix" class="nav nav-pills nav-stacked affix" role="navigation" data-offset-top="50" data-offset-bottom="50">
+			<li class="nav-header"><h4>Rspamd documentation</h4></li>
+			<li><a  href="/doc/index.html">Documentation index</a></li>
+			<li class ="nav-header"><h4>Rmilter documentation</h4></li>
+			<li><a href="#introduction">Introduction</a></li>
+			<li class="divider"></li>
+			<li><a href="#configuration-format">Configuration format</a></li>
+			<li><a href="#common-sections">Common sections</a></li>
+			<li><a href="#global-section">Global section</a></li>
+			<li><a href="#clamav-section">Clamav section</a></li>
+			<li><a href="#spamd-section">Spamd section</a></li>
+			<li><a href="#memcached-section">Memcached section</a></li>
+			<li><a href="#beanstalk-section">Beanstalk section</a></li>
+			<li><a href="#greylisting-section">Greylisting section</a></li>
+			<li><a href="#limits-section">Limits section</a></li>
+			<li><a href="#dkim-section">DKIM section</a></li>
+			<li><a href="#example-configuration">Example configuration</a></li>
+			<li><a href="#the-order-of-checks">The order of checks</a></li>
+			<li><a href="#keys-used-in-memcached">Keys used in memcached</a></li>
+			<li><a href="#postfix-settings">Postfix settings</a></li>
+		</ul>
+	 </div>
+
+	 <div class="col-sm-9">
+     <div class="body-content">
+                {{ content }}
+      </div>
+	 </div>
+
+	 </div> <!-- row -->
+
+      <!-- Site footer -->
+	  <hr>
+	  <footer>
+	    <p class="pull-right"><a href="#top">Back to top</a></p> 
+		<!--
+        <p>Code licensed under the <a href="http://www.apache.org/licenses/LICENSE-2.0">Apache License v2.0</a>.</p>
+        <p>Based on <a href="http://getbootstrap.com">Bootstrap</a>. Icons from <a href="http://fortawesome.github.io/Font-Awesome/">Font Awesome</a>. Web fonts from <a href="http://www.google.com/webfonts">Google</a>.</p>
+		-->
+      </footer>
+
+    </div> <!-- /container -->
+{% include bottom.html %}
