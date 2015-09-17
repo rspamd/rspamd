@@ -71,21 +71,38 @@ local function whitelist_cb(symbol, rule, task)
         if not task:get_symbol(options['spf_allow_symbol']) then
           found = false
           rspamd_logger.debugx(task, "domain %s has been found in whitelist %s" ..
-            "but it doesn't have valid SPF record", domain, symbol)
+            " but it doesn't have valid SPF record", domain, symbol)
         end
       end
       if rule['valid_dkim'] then
-        if not task:get_symbol(options['dkim_allow_symbol']) then
+        local sym = task:get_symbol(options['dkim_allow_symbol'])
+        if not sym then
           found = false
           rspamd_logger.debugx(task, "domain %s has been found in whitelist %s" ..
-              "but it doesn't have valid DKIM", domain, symbol)
+              " but it doesn't have valid DKIM", domain, symbol)
+        else
+          -- Check dkim signatures as they might be for different domains
+          found = false
+          local dkim_opts = sym[1]['options']
+
+          if dkim_opts then
+            for i,d in ipairs(dkim_opts) do
+              if d == domain then
+                found = true
+              end
+            end
+          end
+          if not found then
+            rspamd_logger.debugx(task, "domain %s has been found in whitelist %s" ..
+                " but it doesn't have matching DKIM signature", domain, symbol)
+          end
         end
       end
       if rule['valid_dmarc'] then
         if not task:get_symbol(options['dmarc_allow_symbol']) then
           found = false
           rspamd_logger.debugx(task, "domain %s has been found in whitelist %s" ..
-              "but it doesn't have valid DMARC", domain, symbol)
+              " but it doesn't have valid DMARC", domain, symbol)
         end
       end
     end
