@@ -1598,7 +1598,7 @@ lua_push_symbol_result (lua_State *L,
 	metric_res = g_hash_table_lookup (task->results, metric->name);
 	if (metric_res) {
 		if ((s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
-			j = 0;
+			j = 1;
 			lua_newtable (L);
 			lua_pushstring (L, "metric");
 			lua_pushstring (L, metric->name);
