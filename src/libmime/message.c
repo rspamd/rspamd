@@ -528,6 +528,11 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 			}
 
 			*tp = '\0';
+			/* Strip the initial spaces that could also be added by folding */
+			while (*tmp != '\0' && g_ascii_isspace (*tmp)) {
+				tmp ++;
+			}
+
 			new->value = tmp;
 			new->decoded = g_mime_utils_header_decode_text (new->value);
 			rspamd_mempool_add_destructor (task->task_pool,
