@@ -1,5 +1,5 @@
 ---
-layout: doc
+layout: doc_quickstart
 title: Rspamd quick start
 ---
 

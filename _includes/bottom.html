@@ -1,7 +1,24 @@
-	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
-	<script src="//netdna.bootstrapcdn.com/bootstrap/3.0.0-rc1/js/bootstrap.min.js"></script>
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.js"></script>
+	<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 	<script type="text/javascript"
 	   src="//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+	
+	<script>
+		// Fix for offsets in links
+		$(document).ready(
+		function() {
+			var offset = 50;
+
+			$('body').scrollspy({ target: '#navbar-spy', offset: offset + 10 });
+
+			$('.nav-stacked li a').click(function(event) {
+				event.preventDefault();
+				$($(this).attr('href'))[0].scrollIntoView();
+				scrollBy(0, -offset);
+			});
+		}
+		);
+	</script>
 
   </body>
 </html>

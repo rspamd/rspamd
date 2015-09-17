@@ -4,6 +4,11 @@
   padding-right: 15px;
 }
 
+body {
+  position: relative;
+  padding-top: 50px;
+}
+
 .affix {
   top: 20px;
   width: auto;
@@ -12,7 +17,7 @@
 }
 
 /* Responsive: Portrait tablets and up */
-@media screen and (min-width: 768px) {
+@media screen and (min-width: 1024px) {
   /* Let the jumbotron breathe */
   .jumbotron {
     margin-top: 20px;
