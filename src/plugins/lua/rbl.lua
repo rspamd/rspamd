@@ -176,14 +176,14 @@ local function rbl_cb (task)
           end
           if not havegot['dkim'] then
             local das = task:get_symbol(symbols['dkim_allow_symbol'])
-            if das and das[1] and das[1]['options'] and das[1]['options'][0] then
+            if das and das[1] and das[1]['options'] then
               havegot['dkim'] = das[1]['options']
             else
               notgot['dkim'] = true
               return
             end
           end
-          for _, d in pairs(havegot['dkim']) do
+          for _, d in ipairs(havegot['dkim']) do
             if rbl['dkim_domainonly'] then
               local url_from = rspamd_url.create(task:get_mempool(), d)
               if url_from then
