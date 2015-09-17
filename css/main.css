@@ -4,6 +4,13 @@
   padding-right: 15px;
 }
 
+.affix {
+  top: 20px;
+  width: auto;
+  position: static;
+  margin-top: 50px;
+}
+
 /* Responsive: Portrait tablets and up */
 @media screen and (min-width: 768px) {
   /* Let the jumbotron breathe */
@@ -16,5 +23,11 @@
   /* Remove padding from wrapping element since we kick in the grid classes here */
   .body-content {
     padding: 0;
+  }
+  .affix {
+    top: 20px;
+    width: auto;
+    position: fixed;
+	margin-top: 50px;
   }
 }
