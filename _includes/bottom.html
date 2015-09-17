@@ -12,7 +12,7 @@
 			$('body').scrollspy({ target: '#navbar-spy', offset: offset + 10 });
 
 			$('.nav-stacked li a').click(function(event) {
-				if ($(this).attr('href') == '#') {
+				if ($(this).attr('href')[0] == '#') {
 					event.preventDefault();
 					$($(this).attr('href'))[0].scrollIntoView();
 					scrollBy(0, -offset);
