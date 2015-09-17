@@ -8,7 +8,7 @@ title: Rspamd integration
 This document describes several methods of integration rspamd to popular MTA. Among them are:
 
 * [Exim](http://exim.org)
-* [Postfix](http://postfix.org)
+* [Postfix](http://www.postfix.org)
 * [Sendmail](http://sendmail.org)
 * [Haraka](https://haraka.github.io/)
 
