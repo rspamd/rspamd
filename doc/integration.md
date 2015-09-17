@@ -7,46 +7,12 @@ title: Rspamd integration
 
 This document describes several methods of integration rspamd to popular MTA. Among them are:
 
-* [Exim](http://exim.org)
 * [Postfix](http://www.postfix.org)
+* [Exim](http://exim.org)
 * [Sendmail](http://sendmail.org)
 * [Haraka](https://haraka.github.io/)
 
 Also this document describes rspamd LDA proxy mode that can be used for any MTA.
-
-## Integration with exim MTA
-
-Starting from Exim 4.86, you can use rspamd directly just like spamassassin:
-
-![exim scheme](../img/rspamd_exim.png "Rspamd and exim interaction")
-
-Here is an example of exim configuration:
-
-{% highlight make %}
-# Please mention the variant parameter
-spamd_address = 127.0.0.1 11333 variant=rspamd
-
-acl_smtp_data = acl_check_spam
-
-
-acl_check_spam:
-  # do not scan messages submitted from our own hosts
-  accept hosts = +relay_from_hosts
-  # do not scan messages from submission port
-  accept condition = ${if eq {$interface_port}{587} {yes}{no}}
-  # skip scanning for authenticated users
-  accept authenticated = *
-  warn  spam = nobody:true
-  # add spam-score header
-  warn  condition = ${if eq{$spam_action}{add header}}
-        message = X-Spam-Score: $spam_score ($spam_bar)
-  # add report header
-  warn  condition = ${if eq{$spam_action}{add header}}
-        message = X-Spam-Report: $spam_report
-  # discard high-scoring mail
-  deny  condition = ${if eq{$spam_action}{reject}}
-        message = Message discarded as high-probability spam
-{% endhighlight %}
 
 ## Using rspamd with postfix MTA
 
@@ -64,7 +30,8 @@ First of all build and install rmilter from the source (or use your OS packages 
 	% make
 	# make install
 
-Then copy rmilter.conf.sample to rmilter.conf and edit parameters. All parameters are described in `rmilter.8` manual page. Here is an example of configuration for rspamd:
+Rmilter configuration is described in the [documentation](https://rspamd.com/rmilter/)
+Here is an example of configuration for rspamd:
 
 {% highlight nginx %}
 spamd {
@@ -130,6 +97,41 @@ milter_protocol = 6
 milter_mail_macros = i {mail_addr} {client_addr} {client_name} {auth_authen}
 # skip mail without checks if milter will die
 milter_default_action = accept
+{% endhighlight %}
+
+
+## Integration with exim MTA
+
+Starting from Exim 4.86, you can use rspamd directly just like spamassassin:
+
+![exim scheme](../img/rspamd_exim.png "Rspamd and exim interaction")
+
+Here is an example of exim configuration:
+
+{% highlight make %}
+# Please mention the variant parameter
+spamd_address = 127.0.0.1 11333 variant=rspamd
+
+acl_smtp_data = acl_check_spam
+
+
+acl_check_spam:
+  # do not scan messages submitted from our own hosts
+  accept hosts = +relay_from_hosts
+  # do not scan messages from submission port
+  accept condition = ${if eq {$interface_port}{587} {yes}{no}}
+  # skip scanning for authenticated users
+  accept authenticated = *
+  warn  spam = nobody:true
+  # add spam-score header
+  warn  condition = ${if eq{$spam_action}{add header}}
+        message = X-Spam-Score: $spam_score ($spam_bar)
+  # add report header
+  warn  condition = ${if eq{$spam_action}{add header}}
+        message = X-Spam-Report: $spam_report
+  # discard high-scoring mail
+  deny  condition = ${if eq{$spam_action}{reject}}
+        message = Message discarded as high-probability spam
 {% endhighlight %}
 
 ## Using rspamd with sendmail MTA
