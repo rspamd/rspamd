@@ -4,11 +4,12 @@
 %define rspamd_logdir    %{_localstatedir}/log/rspamd
 %define rspamd_confdir   %{_sysconfdir}/rspamd
 %define rspamd_pluginsdir   %{_datadir}/rspamd
+%define rspamd_rulesdir   %{_datadir}/rspamd/rules
 %define rspamd_wwwdir   %{_datadir}/rspamd/www
 
 Name:           rspamd
-Version:        0.9.4
-Release:        1
+Version:        1.0.0
+Release: 1
 Summary:        Rapid spam filtering system
 Group:          System Environment/Daemons
 
@@ -21,12 +22,8 @@ License:        BSD2c
 %endif
 URL:            https://rspamd.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
-BuildRequires:  glib2-devel,libevent-devel,openssl-devel,pcre-devel,perl,luajit-devel,hiredis-devel
-%if 0%{?el6}
-BuildRequires:  cmake28,gmime24-devel
-%else
-BuildRequires:  cmake,gmime-devel
-%endif
+BuildRequires:  glib2-devel,libevent-devel,openssl-devel,pcre-devel,perl
+BuildRequires:  cmake,gmime
 %if 0%{?suse_version} || 0%{?el7} || 0%{?fedora}
 BuildRequires:  systemd
 Requires(pre):  systemd
@@ -66,10 +63,6 @@ lua.
 %endif
 
 %build
-%if 0%{?el6}
-%define __cmake /usr/bin/env cmake28
-%endif # el6
-
 %{__cmake} \
 		-DCMAKE_C_OPT_FLAGS="%{optflags}" \
         -DCMAKE_INSTALL_PREFIX=%{_prefix} \
@@ -194,6 +187,8 @@ fi
 %config(noreplace) %{rspamd_confdir}/options.inc
 %config(noreplace) %{rspamd_confdir}/worker-controller.inc
 %config(noreplace) %{rspamd_confdir}/worker-normal.inc
+%config(noreplace) %{rspamd_confdir}/modules.d/*
+%config(noreplace) %{rspamd_confdir}/rspamd.systemd.conf
 %if 0%{?el6}
 %config(noreplace) %{_sysconfdir}/logrotate.d/%{name}
 %endif
@@ -201,15 +196,18 @@ fi
 %dir %{rspamd_logdir}
 %endif
 %attr(-, _rspamd, _rspamd) %dir %{rspamd_home}
-%dir %{rspamd_confdir}/lua/regexp
-%dir %{rspamd_confdir}/lua
+%dir %{rspamd_rulesdir}/regexp
+%dir %{rspamd_rulesdir}
 %dir %{rspamd_confdir}
+%dir %{rspamd_confdir}/modules.d
 %dir %{rspamd_pluginsdir}/lua
 %dir %{rspamd_pluginsdir}
 %dir %{rspamd_wwwdir}
 %dir %{_libdir}/rspamd
 %config(noreplace) %{rspamd_confdir}/2tld.inc
 %config(noreplace) %{rspamd_confdir}/surbl-whitelist.inc
+%config(noreplace) %{rspamd_confdir}/spf_dkim_whitelist.inc
+%config(noreplace) %{rspamd_confdir}/dmarc_whitelist.inc
 %{rspamd_pluginsdir}/lua/forged_recipients.lua
 %{rspamd_pluginsdir}/lua/maillist.lua
 %{rspamd_pluginsdir}/lua/multimap.lua
@@ -222,20 +220,29 @@ fi
 %{rspamd_pluginsdir}/lua/ip_score.lua
 %{rspamd_pluginsdir}/lua/settings.lua
 %{rspamd_pluginsdir}/lua/fun.lua
+%{rspamd_pluginsdir}/lua/hfilter.lua
 %{rspamd_pluginsdir}/lua/spamassassin.lua
 %{rspamd_pluginsdir}/lua/dmarc.lua
-%{rspamd_confdir}/lua/regexp/drugs.lua
-%{rspamd_confdir}/lua/regexp/fraud.lua
-%{rspamd_confdir}/lua/regexp/headers.lua
-%{rspamd_confdir}/lua/regexp/lotto.lua
-%{rspamd_confdir}/lua/rspamd.lua
-%{rspamd_confdir}/lua/hfilter.lua
-%{rspamd_confdir}/lua/rspamd.classifiers.lua
+%{rspamd_pluginsdir}/lua/whitelist.lua
+%{rspamd_rulesdir}/regexp/drugs.lua
+%{rspamd_rulesdir}/regexp/fraud.lua
+%{rspamd_rulesdir}/regexp/headers.lua
+%{rspamd_rulesdir}/regexp/lotto.lua
+%{rspamd_rulesdir}/rspamd.lua
+%{rspamd_rulesdir}/html.lua
+%{rspamd_rulesdir}/misc.lua
+%{rspamd_rulesdir}/rspamd.classifiers.lua
 %{rspamd_wwwdir}/*
 %{_libdir}/rspamd/*
 %{_datadir}/rspamd/effective_tld_names.dat
 
 %changelog
+* Thu Sep 17 2015 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 1.0.0-1
+- Update to 1.0.0
+
+* Fri May 29 2015 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.9.9-1
+- Update to 0.9.9
+
 * Thu May 21 2015 Vsevolod Stakhov <vsevolod-at-highsecure.ru> 0.9.4-1
 - Update to 0.9.4
 
