@@ -43,8 +43,9 @@ settings {
 			symbol1 = 10.0;
 			symbol2 = 0.0;
 			actions {
-				reject = 100.0
-				greylist = 10.0
+				reject = 100.0;
+				greylist = 10.0;
+				"add header" = 5.0; # Please mention a space instead of underscore
 			}
 		}
 	}
