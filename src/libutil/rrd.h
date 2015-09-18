@@ -329,4 +329,10 @@ void rrd_make_default_ds (const gchar *name,
 		const gchar *type,
 		gulong pdp_step,
 		struct rrd_ds_def *ds);
+
+/**
+ * Open or create the default rspamd rrd file
+ */
+struct rspamd_rrd_file *rspamd_rrd_file_default (const gchar *path,
+		GError **err);
 #endif /* RRD_H_ */

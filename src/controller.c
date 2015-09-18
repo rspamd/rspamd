@@ -34,6 +34,7 @@
 #include "blake2.h" 
 #include "cryptobox.h"
 #include "ottery.h"
+#include "libutil/rrd.h"
 
 /* 60 seconds for worker's IO */
 #define DEFAULT_WORKER_IO_TIMEOUT 60000
@@ -102,6 +103,11 @@
 
 #define RSPAMD_PBKDF_ID_V1 1
 
+const struct timeval rrd_update_time = {
+		.tv_sec = 1,
+		.tv_usec = 0
+};
+
 extern struct rspamd_main *rspamd_main;
 gpointer init_controller_worker (struct rspamd_config *cfg);
 void start_controller_worker (struct rspamd_worker *worker);
@@ -162,6 +168,10 @@ struct rspamd_controller_worker_ctx {
 
 	/* Local keypair */
 	gpointer key;
+
+	struct event *rrd_event;
+	struct rspamd_rrd_file *rrd;
+
 };
 
 struct rspamd_controller_session {
@@ -1884,6 +1894,52 @@ rspamd_controller_accept_socket (gint fd, short what, void *arg)
 }
 
 static void
+rspamd_controller_rrd_update (gint fd, short what, void *arg)
+{
+	struct rspamd_controller_worker_ctx *ctx = arg;
+	struct rspamd_stat *stat;
+	GArray ar;
+	gdouble points[4];
+	GError *err = NULL;
+	guint i, j;
+	gdouble val;
+
+	g_assert (ctx->rrd != NULL);
+	stat = ctx->srv->stat;
+
+	for (i = METRIC_ACTION_REJECT, j = 0;
+		 i <= METRIC_ACTION_NOACTION && j < G_N_ELEMENTS (points);
+		 i++) {
+		switch (i) {
+		case METRIC_ACTION_SOFT_REJECT:
+			break;
+		case METRIC_ACTION_REWRITE_SUBJECT:
+			val = stat->actions_stat[i];
+			break;
+		case METRIC_ACTION_ADD_HEADER:
+			val += stat->actions_stat[i];
+			points[j++] = val;
+			break;
+		default:
+			val = stat->actions_stat[i];
+			points[j++] = val;
+		}
+	}
+
+	ar.data = (gchar *)points;
+	ar.len = sizeof (points);
+
+	if (!rspamd_rrd_add_record (ctx->rrd, &ar, rspamd_get_calendar_ticks (),
+			&err)) {
+		msg_err_ctx ("cannot update rrd file: %e", err);
+		g_error_free (err);
+	}
+
+	/* Plan new event */
+	evtimer_add (ctx->rrd_event, &rrd_update_time);
+}
+
+static void
 rspamd_controller_load_saved_stats (struct rspamd_controller_worker_ctx *ctx)
 {
 	struct ucl_parser *parser;
@@ -2196,6 +2252,18 @@ start_controller_worker (struct rspamd_worker *worker)
 
 	rspamd_controller_load_saved_stats (ctx);
 
+	/* RRD collector */
+	if (ctx->cfg->rrd_file) {
+		ctx->rrd = rspamd_rrd_file_default (ctx->cfg->rrd_file, NULL);
+
+		if (ctx->rrd) {
+			ctx->rrd_event = g_slice_alloc (sizeof (*ctx->rrd));
+			evtimer_set (ctx->rrd_event, rspamd_controller_rrd_update, ctx);
+			event_base_set (ctx->ev_base, ctx->rrd_event);
+			event_add (ctx->rrd_event, &rrd_update_time);
+		}
+	}
+
 	rspamd_controller_password_sane (ctx, ctx->password, "normal password");
 	rspamd_controller_password_sane (ctx, ctx->enable_password, "enable "
 			"password");
@@ -2298,6 +2366,10 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_http_router_free (ctx->http);
 	rspamd_log_close (rspamd_main->logger);
 	rspamd_controller_store_saved_stats (ctx);
+
+	if (ctx->rrd) {
+		rspamd_rrd_close (ctx->rrd);
+	}
 
 	exit (EXIT_SUCCESS);
 }

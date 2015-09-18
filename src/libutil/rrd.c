@@ -1208,3 +1208,77 @@ rspamd_rrd_close (struct rspamd_rrd_file * file)
 
 	return 0;
 }
+
+struct rspamd_rrd_file *
+rspamd_rrd_file_default (const gchar *path,
+		GError **err)
+{
+	struct rspamd_rrd_file *rrd;
+	struct rrd_ds_def ds[4];
+	struct rrd_rra_def rra[4];
+	GArray ar;
+
+	g_assert (path != NULL);
+
+	if (access (path, R_OK) != -1) {
+		/* We can open rrd file */
+		rrd = rspamd_rrd_open (path, err);
+
+		if (rrd == NULL) {
+			return NULL;
+		}
+
+		/* XXX: check rrd file sanity */
+		return rrd;
+	}
+
+	/* Try to create new rrd file */
+
+	rrd = rspamd_rrd_create (path, 4, 4, 1, rspamd_get_calendar_ticks (), err);
+
+	if (rrd == NULL) {
+		return NULL;
+	}
+
+	/* Create DS and RRA */
+	rrd_make_default_ds ("spam", rrd_dst_to_string (RRD_DST_COUNTER), 1, &ds[0]);
+	rrd_make_default_ds ("probable", rrd_dst_to_string (RRD_DST_COUNTER), 1,
+			&ds[1]);
+	rrd_make_default_ds ("greylist", rrd_dst_to_string (RRD_DST_COUNTER), 1,
+			&ds[2]);
+	rrd_make_default_ds ("ham", rrd_dst_to_string (RRD_DST_COUNTER), 1, &ds[3]);
+	ar.data = (gchar *)ds;
+	ar.len = sizeof (ds);
+
+	if (!rspamd_rrd_add_ds (rrd, &ar, err)) {
+		rspamd_rrd_close (rrd);
+		return NULL;
+	}
+
+	/* Once per minute for 1 day */
+	rrd_make_default_rra (rrd_cf_to_string (RRD_CF_AVERAGE),
+			60, 24 * 60, &rra[0]);
+	/* Once per 5 minutes for 1 week */
+	rrd_make_default_rra (rrd_cf_to_string (RRD_CF_AVERAGE),
+			5 * 60, 7 * 24 * 60 / 5, &rra[1]);
+	/* Once per hour for 1 month */
+	rrd_make_default_rra (rrd_cf_to_string (RRD_CF_AVERAGE),
+			60 * 60, 30 * 24 * 60 / 3600, &rra[2]);
+	/* Once per day for 1 year */
+	rrd_make_default_rra (rrd_cf_to_string (RRD_CF_AVERAGE),
+			60 * 60 * 24, 365 * 24 * 60 / (60 * 60 * 24), &rra[3]);
+	ar.data = (gchar *)rra;
+	ar.len = sizeof (rra);
+
+	if (!rspamd_rrd_add_rra (rrd, &ar, err)) {
+		rspamd_rrd_close (rrd);
+		return NULL;
+	}
+
+	if (!rspamd_rrd_finalize (rrd, err)) {
+		rspamd_rrd_close (rrd);
+		return NULL;
+	}
+
+	return rrd;
+}
