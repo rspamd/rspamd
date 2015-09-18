@@ -250,8 +250,8 @@ Then you can download two files using the following commands:
 For some systems, namely old centos (6 or 7) the shipped sqlite version won't be able to use pre-shipped statfiles. For that purposes, there are also the raw sql dumps for statfiles which could
 be used in the following way:
 	
-	wget -O /var/lib/rspamd/bayes.spam.sqlite http://rspamd.com/rspamd_statistics/bayes.spam.sql.xz
-	wget -O /var/lib/rspamd/bayes.ham.sqlite http://rspamd.com/rspamd_statistics/bayes.ham.sql.xz
+	wget http://rspamd.com/rspamd_statistics/bayes.spam.sql.xz
+	wget http://rspamd.com/rspamd_statistics/bayes.ham.sql.xz
 	xz -cd bayes.spam.sql.xz | sqlite3 /var/lib/rspamd/bayes.spam.sqlite
 	xz -cd bayes.ham.sql.xz | sqlite3 /var/lib/rspamd/bayes.ham.sqlite
 
