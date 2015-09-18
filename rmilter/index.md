@@ -8,7 +8,7 @@ title: Rspamd milter
 ## Introduction
 
 Rmilter is used to integrate rspamd and `milter` compatible MTA, for example [postfix](http://postfix.org) or [sendmail](http://sendmail.org).
-Rmilter can also do other useful stuff: 
+Rmilter can also do other useful stuff:
 
 -   Clamav scanning (via unix or tcp socket).
 -   Rspamd scanning
@@ -82,6 +82,8 @@ Defines global options.
 - `whitelist`: global recipients whitelist
 	+ Default: `no`
 
+Back to [top](#).
+
 ## Clamav section
 
 Specifies clamav antivirus scanners.
@@ -103,6 +105,8 @@ Specifies clamav antivirus scanners.
 	+ Default: `300`
 - `maxerrors`: maximum number of errors that can occur during error_time to make rmilter thinking that this upstream is dead
 	+ Default: `10`
+
+Back to [top](#).
 
 ## Spamd section
 
@@ -138,6 +142,8 @@ Specifies rspamd or spamassassin spam scanners.
 - `extended_spam_headers`: add extended spamd headers to messages, is useful for debugging or private mail servers (flag)
 	+ Default: `false`
 
+Back to [top](#).
+
 ## Memcached section
 
 Defines memcached servers for grey/whitelisting and ratelimits.
@@ -157,7 +163,9 @@ Defines memcached servers for grey/whitelisting and ratelimits.
 - `maxerrors`: maximum number of errors that can occur during error_time to make rmilter thinking that this upstream is dead
 	+ Default: `10`
 - `protocol`: protocol that is using for connecting to memcached (tcp or udp)
-	+ Default: `udp`
+	+ Default: `tcp`
+
+Back to [top](#).
 
 ## Beanstalk section
 
@@ -188,6 +196,8 @@ Defines [beanstalk](http://kr.github.com/beanstalkd/) servers for copying messag
 - `protocol`: protocol that is using for connecting to beanstalk (tcp or udp)
 	+ Default: `tcp`
 
+Back to [top](#).
+
 ## Greylisting section
 
 Greylisting related options.
@@ -206,6 +216,8 @@ Greylisting related options.
 	+ Default: `10`
 - `awl_ttl`: time to live for ip address in auto whitelist
 	+ Default: `3600s`
+
+Back to [top](#).
 
 ## Limits section
 
@@ -234,6 +246,8 @@ each second). It can be schematically displayed as following:
 - `limit_to_ip_from`: limits bucket for non-bounce messages (msg from, rcpt to per one source ip)
 	+ Default: `100:0.033333333`
 
+Back to [top](#).
+
 ## DKIM section
 
 Dkim can be used to sign messages by. Dkim support must be
@@ -250,7 +264,9 @@ provided by opendkim library.
 - `domain`: domain entry must be enclosed in a separate section
     +   `key` - path to private key
     +   `domain` - domain to be used for signing (this matches with SMTP FROM data). If domain is `*` then rmilter tries to search key in the `key` path as `keypath/domain.selector.key` for any domain.
-    +   `selector` - dkim DNS selector (e.g. for selector *dkim* and domain *example.com* DNS TXT record should be for dkim._domainkey.example.com).
+    +   `selector` - dkim DNS selector (e.g. for selector *dkim* and domain *example.com* DNS TXT record should be for `dkim._domainkey.example.com`).
+
+Back to [top](#).
 
 ## The order of checks
 
@@ -267,6 +283,8 @@ provided by opendkim library.
 11. Beanstalk (EOM)
 12. DKIM add signature (EOM)
 
+Back to [top](#).
+
 ## Keys used in memcached
 
 -   *rcpt* - bucket for rcpt filter
@@ -277,6 +295,8 @@ provided by opendkim library.
 -   *md5(from . ip . to)* - key for greylisting triplet (hexed string of
     md5 value)
 
+Back to [top](#).
+
 ## Postfix settings
 
 There are several useful settings for postfix to work with this milter:
@@ -284,3 +304,118 @@ There are several useful settings for postfix to work with this milter:
     smtpd_milters = unix:/var/run/rmilter/rmilter.sock
     milter_mail_macros =  i {mail_addr} {client_addr} {client_name} {auth_authen}
     milter_protocol = 6
+
+Back to [top](#).
+
+## Useful rmilter recipies
+
+This section contains a number of useful configuration recipies and best practices for rmilter.
+
+### Setup DKIM signing of outcoming email for authenticated users
+
+With this setup you should generate keys and store them in `/etc/dkim/<domain>.<selector>.key`
+This could be done, for example by using `opendkim-genkey`:
+
+    opendkim-genkey --domain=example.com --selector=dkim
+
+That will generate `dkim.private` file with private key and `dkim.txt` with the suggested `TXT` record for your domain.
+
+    dkim {
+        domain {
+          key = /etc/dkim;
+          domain = "*";
+          selector = "dkim";
+        };
+        header_canon = relaxed;
+        body_canon = relaxed;
+        sign_alg = sha256;
+    };
+
+Please note, that rmilter will sign merely mail for the **authenticated** users, hence you should also ensure that `{auth_authen}` macro
+is passed to milter on `MAIL FROM` stage:
+
+    milter_mail_macros =  i {mail_addr} {client_addr} {client_name} {auth_authen}
+
+Back to [top](#).
+
+### Setup whitelisting of reply messages
+
+It is possible to store `Message-ID` headers for authenticated users and whitelist replies to that messages by using of rmilter. To enable this
+feature, please ensure that you have `memcached` server running and add the following lines to memcached section:
+
+    memcached {
+      ...
+      # servers_id - memcached servers used for message id storing, can not be mirrored
+      servers_id = localhost;
+
+      # id_prefix - prefix for extracting message ids from memcached
+      # Default: empty (no prefix is prepended to key)
+      id_prefix = "message_id.";
+    }
+
+Back to [top](#).
+
+### Mirror some messages to evaluate rspamd filtering quality
+
+Sometimes it might be useful to watch how messages are processed by rspamd. For this purposes, rmilter
+can mirror some percentage of messages to [beanstalk](http://kr.github.io/beanstalkd/) service and check them using rspamc.
+First of all, install `beanstalk` in your system (in this example I assume that beanstalk is running on port 11300). Then grab
+a small routine [bean-fetcher](https://github.com/vstakhov/bean-fetcher). This routine would get messages from beanstalk and feed them to
+rspamc. Here is an example configuration file:
+
+~~~ini
+[instance1]
+host = 127.0.0.1
+port = 11300
+command = /usr/bin/rspamc --mime --ucl --exec '/usr/lib/dovecot/dovecot-lda -d user'
+~~~
+
+It is also possible, for example, to compare output for different rspamd versions or rules sets:
+
+~~~ini
+[instance1]
+host = 127.0.0.1
+port = 11300
+command = [ "/usr/bin/rspamc --mime --ucl --exec '/usr/lib/dovecot/dovecot-lda -d user1'", "/usr/bin/rspamc -h other_host:11333 --mime --ucl --exec '/usr/lib/dovecot/dovecot-lda -d user2'" ]
+~~~
+
+Then setup rmilter to mirror some traffic:
+
+~~~
+beanstalk {
+  copy_server = localhost:11300;
+  send_beanstalk_copy = yes;
+  # Please mention that copy probability is floating point number from 0.0 to 1.0
+  copy_probability = 0.1;
+}
+~~~
+
+Afterwards, it might be useful also to setup dovecot-sieve for sorting messages between folders by their spam scores:
+
+~~~
+require ["copy", "fileinto"];
+
+if header :contains "X-Spam-Symbols" "BAYES_SPAM" {
+        fileinto :copy "bayes_spam";
+}
+if header :contains "X-Spam-Symbols" "BAYES_HAM" {
+        fileinto :copy "bayes_ham";
+}
+
+if header :is "X-Spam-Action" "reject" {
+        fileinto "Spam";
+}
+if header :is "X-Spam-Action" "add header" {
+        fileinto "Probable";
+}
+if header :is "X-Spam-Action" "no action" {
+        fileinto "Ham";
+}
+if header :is "X-Spam-Action" "greylist" {
+        fileinto "Greylist";
+}
+~~~
+
+This script sort messages according their spam action and also copies messages with statistics symbols `BAYES_HAM` and `BAYES_SPAM` to the appropriate folders for further analysis.
+
+Back to [top](#).
