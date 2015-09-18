@@ -213,17 +213,9 @@ Rate limits are implemented as leaked bucket, so first value is
 bucket burst - is peak value for messages in bucket (after reaching
 it bucket is counted as overflowed and new messages are rejected),
 second value is rate (how much messages can be removed from bucket
-each second). It can be schematically displayed:
+each second). It can be schematically displayed as following:
 
-    |------------------|          <----- current value
-    |                  |
-    |------------------|          <----- burst
-    |                  |
-    |                  |
-    |                  |
-    |                  |
-    \                  /
-     ----------------- .....      <----- rate (speed of emptying)
+![Leaked bucket scheme](https://rspamd.com/img/rspamd-schemes.006.jpg "Leaking bucket")
 
 - `limit_whitelist_ip`: don't check limits for specified ips
 	+ Default: `empty`
