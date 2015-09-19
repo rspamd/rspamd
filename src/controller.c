@@ -1936,6 +1936,7 @@ rspamd_controller_rrd_update (gint fd, short what, void *arg)
 	}
 
 	/* Plan new event */
+	event_del (ctx->rrd_event);
 	evtimer_add (ctx->rrd_event, &rrd_update_time);
 }
 
@@ -2257,7 +2258,7 @@ start_controller_worker (struct rspamd_worker *worker)
 		ctx->rrd = rspamd_rrd_file_default (ctx->cfg->rrd_file, NULL);
 
 		if (ctx->rrd) {
-			ctx->rrd_event = g_slice_alloc (sizeof (*ctx->rrd));
+			ctx->rrd_event = g_slice_alloc0 (sizeof (*ctx->rrd_event));
 			evtimer_set (ctx->rrd_event, rspamd_controller_rrd_update, ctx);
 			event_base_set (ctx->ev_base, ctx->rrd_event);
 			event_add (ctx->rrd_event, &rrd_update_time);
