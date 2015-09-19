@@ -44,9 +44,7 @@
  */
 struct rspamd_worker {
 	pid_t pid;                                                  /**< pid of worker									*/
-	gboolean is_initialized;                                    /**< is initialized									*/
-	gboolean is_dying;                                          /**< if worker is going to shutdown					*/
-	gboolean pending;                                           /**< if worker is pending to run					*/
+	guint index;                                                /**< index number									*/
 	struct rspamd_main *srv;                                    /**< pointer to server structure					*/
 	GQuark type;                                                /**< process type									*/
 	GHashTable *signal_events;									/**< signal events									*/

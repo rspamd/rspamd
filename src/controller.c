@@ -2254,7 +2254,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_controller_load_saved_stats (ctx);
 
 	/* RRD collector */
-	if (ctx->cfg->rrd_file) {
+	if (ctx->cfg->rrd_file && worker->index == 0) {
 		ctx->rrd = rspamd_rrd_file_default (ctx->cfg->rrd_file, NULL);
 
 		if (ctx->rrd) {
@@ -2263,6 +2263,9 @@ start_controller_worker (struct rspamd_worker *worker)
 			event_base_set (ctx->ev_base, ctx->rrd_event);
 			event_add (ctx->rrd_event, &rrd_update_time);
 		}
+	}
+	else {
+		ctx->rrd = NULL;
 	}
 
 	rspamd_controller_password_sane (ctx, ctx->password, "normal password");

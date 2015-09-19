@@ -73,7 +73,7 @@
 #define HARD_TERMINATION_TIME 10
 
 static struct rspamd_worker * fork_worker (struct rspamd_main *,
-	struct rspamd_worker_conf *);
+	struct rspamd_worker_conf *, guint);
 static gboolean load_rspamd_config (struct rspamd_config *cfg,
 	gboolean init_modules);
 
@@ -449,7 +449,8 @@ set_worker_limits (struct rspamd_worker_conf *cf)
 }
 
 static struct rspamd_worker *
-fork_worker (struct rspamd_main *rspamd, struct rspamd_worker_conf *cf)
+fork_worker (struct rspamd_main *rspamd, struct rspamd_worker_conf *cf,
+		guint index)
 {
 	struct rspamd_worker *cur;
 	/* Starting worker process */
@@ -461,7 +462,7 @@ fork_worker (struct rspamd_main *rspamd, struct rspamd_worker_conf *cf)
 		cur->pid = fork ();
 		cur->cf = g_malloc (sizeof (struct rspamd_worker_conf));
 		memcpy (cur->cf, cf, sizeof (struct rspamd_worker_conf));
-		cur->pending = FALSE;
+		cur->index = index;
 		cur->ctx = cf->ctx;
 		switch (cur->pid) {
 		case 0:
@@ -611,7 +612,7 @@ fork_delayed (struct rspamd_main *rspamd)
 		cf = cur->data;
 
 		workers_pending = g_list_remove_link (workers_pending, cur);
-		fork_worker (rspamd, cf);
+		fork_worker (rspamd, cf, cf->count);
 		g_list_free_1 (cur);
 	}
 }
@@ -708,14 +709,14 @@ spawn_workers (struct rspamd_main *rspamd)
 						msg_warn_main ("cannot spawn more than 1 %s worker, so spawn one",
 								cf->worker->name);
 					}
-					fork_worker (rspamd, cf);
+					fork_worker (rspamd, cf, 0);
 				}
 				else if (cf->worker->threaded) {
-					fork_worker (rspamd, cf);
+					fork_worker (rspamd, cf, 0);
 				}
 				else {
 					for (i = 0; i < cf->count; i++) {
-						fork_worker (rspamd, cf);
+						fork_worker (rspamd, cf, i);
 					}
 				}
 			}
