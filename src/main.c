@@ -529,10 +529,21 @@ set_alarm (guint seconds)
 #endif
 }
 
+struct waiting_worker {
+	struct rspamd_worker_conf *cf;
+	guint oldindex;
+};
+
 static void
-delay_fork (struct rspamd_worker_conf *cf)
+delay_fork (struct rspamd_worker_conf *cf, guint index)
 {
-	workers_pending = g_list_prepend (workers_pending, cf);
+	struct waiting_worker *nw;
+
+	nw = g_slice_alloc (sizeof (*nw));
+	nw->cf = cf;
+	nw->oldindex = index;
+
+	workers_pending = g_list_prepend (workers_pending, nw);
 	set_alarm (SOFT_FORK_TIME);
 }
 
@@ -605,15 +616,16 @@ static void
 fork_delayed (struct rspamd_main *rspamd)
 {
 	GList *cur;
-	struct rspamd_worker_conf *cf;
+	struct waiting_worker *w;
 
 	while (workers_pending != NULL) {
 		cur = workers_pending;
-		cf = cur->data;
+		w = cur->data;
 
 		workers_pending = g_list_remove_link (workers_pending, cur);
-		fork_worker (rspamd, cf, cf->count);
+		fork_worker (rspamd, w->cf, w->oldindex);
 		g_list_free_1 (cur);
+		g_slice_free1 (sizeof (*w), w);
 	}
 }
 
@@ -1319,7 +1331,7 @@ main (gint argc, gchar **argv, gchar **env)
 							cur->pid);
 					}
 					/* Fork another worker in replace of dead one */
-					delay_fork (cur->cf);
+					delay_fork (cur->cf, cur->index);
 				}
 
 				g_free (cur);
