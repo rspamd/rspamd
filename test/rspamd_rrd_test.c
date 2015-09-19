@@ -27,14 +27,14 @@
 #include "main.h"
 #include "ottery.h"
 
-const int rows_cnt = 10;
-const int pdp_per_cdp = 20;
+const int rows_cnt = 20;
+const int pdp_per_cdp = 60;
 
 void
 rspamd_rrd_test_func ()
 {
 	gchar  tmpfile[PATH_MAX];
-	struct rrd_rra_def rra[2];
+	struct rrd_rra_def rra[4];
 	struct rrd_ds_def ds[2];
 	GArray ar;
 	GError *err = NULL;
@@ -44,13 +44,16 @@ rspamd_rrd_test_func ()
 	gdouble t[2], cnt = 0.0;
 
 	rspamd_snprintf (tmpfile, sizeof (tmpfile), "/tmp/rspamd_rrd.rrd");
+	unlink (tmpfile);
 
 	/* Create sample rrd */
 	ticks = rspamd_get_calendar_ticks ();
-	g_assert ((rrd = rspamd_rrd_create (tmpfile, 2, 2, 1, ticks, &err)) != NULL);
+	g_assert ((rrd = rspamd_rrd_create (tmpfile, 2, 4, 1, ticks, &err)) != NULL);
 	/* Add RRA */
 	rrd_make_default_rra ("AVERAGE", pdp_per_cdp, rows_cnt, &rra[0]);
-	rrd_make_default_rra ("AVERAGE", pdp_per_cdp / 4, rows_cnt, &rra[1]);
+	rrd_make_default_rra ("AVERAGE", pdp_per_cdp / 2, rows_cnt, &rra[1]);
+	rrd_make_default_rra ("AVERAGE", pdp_per_cdp / 4, rows_cnt, &rra[2]);
+	rrd_make_default_rra ("AVERAGE", pdp_per_cdp / 10, rows_cnt, &rra[3]);
 	ar.data = rra;
 	ar.len = sizeof (rra);
 	g_assert (rspamd_rrd_add_rra (rrd, &ar, &err));
@@ -84,18 +87,21 @@ rspamd_rrd_test_func ()
 		t[1] = cnt ++;
 		ar.data = t;
 		ar.len = sizeof (t);
-		ticks += rspamd_time_jitter (0.5, 0.7);
+		ticks += 1.0;
 		g_assert (rspamd_rrd_add_record (rrd, &ar, ticks, &err));
 
 	}
 
+	/* Add undefined interval */
+	ticks += 200;
+
 	/* Add some more points */
-	for (i = 0; i < pdp_per_cdp * rows_cnt / 4; i ++) {
-		t[0] = i + rspamd_time_jitter (1.0, 0.0);
+	for (i = 0; i < pdp_per_cdp * rows_cnt / 8; i ++) {
+		t[0] = i;
 		t[1] = cnt ++;
 		ar.data = t;
 		ar.len = sizeof (t);
-		ticks += rspamd_time_jitter (0.5, 0.7);
+		ticks += 1.0;
 		g_assert (rspamd_rrd_add_record (rrd, &ar, ticks, &err));
 
 	}
