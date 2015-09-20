@@ -175,7 +175,11 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
     else
       for _,mx in pairs(results) do
         if mx['name'] then
-          task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), mx['name'], check_host_cb_mx_a)
+          task:get_resolver():resolve_a({
+            task=task, 
+            name = mx['name'], 
+            callback = check_host_cb_mx_a
+          })
         end
       end
     end
@@ -184,7 +188,11 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
     task:inc_dns_req()
 
     if not results then
-      task:get_resolver():resolve_mx(task:get_session(), task:get_mempool(), host, check_host_cb_mx)
+      task:get_resolver():resolve_mx({
+        task=task, 
+        name = host, 
+        callback = check_host_cb_mx
+      })
     elseif eq_ip ~= '' then
       for _,result in pairs(results) do 
         if result:to_string() == eq_ip then
@@ -208,7 +216,11 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
 
   if check_fqdn(host) then
     if eq_host == '' or eq_host ~= 'unknown' or eq_host ~= host then
-      task:get_resolver():resolve_a(task:get_session(), task:get_mempool(), host, check_host_cb_a)
+      task:get_resolver():resolve_a({
+        task=task, 
+        name = host, 
+        callback = check_host_cb_a
+      })
     end
   else
     task:insert_result('HFILTER_' .. symbol_suffix .. '_NOT_FQDN', 1.0)
