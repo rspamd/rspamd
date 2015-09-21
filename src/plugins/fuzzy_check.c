@@ -822,8 +822,9 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 		return;
 	}
 	else if (ret == -1) {
-		msg_err_task ("got error on IO with server %s, %d, %s",
+		msg_err_task ("got error on IO with server %s, on %s, %d, %s",
 			rspamd_upstream_name (session->server),
+			session->state == 1 ? "read" : "write",
 			errno,
 			strerror (errno));
 		rspamd_upstream_fail (session->server);
