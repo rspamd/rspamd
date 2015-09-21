@@ -1105,9 +1105,6 @@ register_fuzzy_client_call (struct rspamd_task *task,
 			session =
 				rspamd_mempool_alloc (task->task_pool,
 					sizeof (struct fuzzy_client_session));
-			event_set (&session->ev, sock, EV_WRITE, fuzzy_io_callback,
-				session);
-			event_base_set (session->task->ev_base, &session->ev);
 			msec_to_tv (fuzzy_module_ctx->io_timeout, &session->tv);
 			session->state = 0;
 			session->commands = commands;
@@ -1115,6 +1112,9 @@ register_fuzzy_client_call (struct rspamd_task *task,
 			session->fd = sock;
 			session->server = selected;
 			session->rule = rule;
+			event_set (&session->ev, sock, EV_WRITE, fuzzy_io_callback,
+					session);
+			event_base_set (session->task->ev_base, &session->ev);
 			event_add (&session->ev, &session->tv);
 			rspamd_session_add_event (task->s,
 				fuzzy_io_fin,
