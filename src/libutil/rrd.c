@@ -1323,6 +1323,7 @@ rspamd_rrd_query (struct rspamd_rrd_file *file,
 		rra = &file->rra_def[i];
 
 		if (i == rra_num) {
+			res->cur_row = file->rra_ptr[i].cur_row % rra->row_cnt;
 			break;
 		}
 

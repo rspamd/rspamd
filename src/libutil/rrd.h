@@ -344,6 +344,7 @@ struct rspamd_rrd_query_result {
 	gulong pdp_per_cdp;
 	gulong ds_count;
 	gdouble last_update;
+	gulong cur_row;
 	const gdouble *data;
 };
 

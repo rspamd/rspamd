@@ -61,6 +61,7 @@
 #define PATH_STAT_RESET "/statreset"
 #define PATH_COUNTERS "/counters"
 
+
 #define msg_err_session(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
         session->pool->tag.tagname, session->pool->tag.uid, \
         G_STRFUNC, \
@@ -900,6 +901,137 @@ rspamd_controller_handle_pie_chart (
 
 	rspamd_controller_send_ucl (conn_ent, top);
 	ucl_object_unref (top);
+
+	return 0;
+}
+
+/*
+ * Graph command handler:
+ * request: /graph?type=<hourly|daily|weekly|monthly>
+ * headers: Password
+ * reply: json [
+ *      { label: "Foo", data: 11 },
+ *      { label: "Bar", data: 20 },
+ *      {...}
+ * ]
+ */
+static int
+rspamd_controller_handle_graph (
+		struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	GHashTable *query;
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct rspamd_controller_worker_ctx *ctx;
+	GString srch, *value;
+	struct rspamd_rrd_query_result *rrd_result;
+	gulong i, j, ts, start_row, cnt;
+	ucl_object_t *res, *elt[4], *data_elt;
+	enum {
+		rra_hourly = 0,
+		rra_daily,
+		rra_weekly,
+		rra_monthly,
+		rra_invalid
+	} rra_num = rra_invalid;
+
+	ctx = session->ctx;
+
+	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
+		return 0;
+	}
+
+	if (ctx->rrd == NULL) {
+		msg_err_session ("no rrd configured");
+		rspamd_controller_send_error (conn_ent, 404, "no rrd configured for graphs");
+
+		return 0;
+	}
+
+	query = rspamd_http_message_parse_query (msg);
+	srch.str = (gchar *)"type";
+	srch.len = 4;
+
+	if (query == NULL || (value = g_hash_table_lookup (query, &srch)) == NULL) {
+		msg_err_session ("absent graph type query");
+		rspamd_controller_send_error (conn_ent, 400, "absent graph type");
+
+		if (query) {
+			g_hash_table_unref (query);
+		}
+
+		return 0;
+	}
+
+	if (strncmp (value->str, "hourly", value->len) == 0) {
+		rra_num = rra_hourly;
+	}
+	else if (strncmp (value->str, "daily", value->len) == 0) {
+		rra_num = rra_hourly;
+	}
+	else if (strncmp (value->str, "weekly", value->len) == 0) {
+		rra_num = rra_hourly;
+	}
+	else if (strncmp (value->str, "monthly", value->len) == 0) {
+		rra_num = rra_monthly;
+	}
+
+	g_hash_table_unref (query);
+
+	if (rra_num == rra_invalid) {
+		msg_err_session ("invalid graph type query");
+		rspamd_controller_send_error (conn_ent, 400, "invalid graph type");
+
+		return 0;
+	}
+
+	rrd_result = rspamd_rrd_query (ctx->rrd, rra_num);
+
+	if (rrd_result == NULL) {
+		msg_err_session ("cannot query rrd");
+		rspamd_controller_send_error (conn_ent, 500, "cannot query rrd");
+
+		return 0;
+	}
+
+	g_assert (rrd_result->ds_count == G_N_ELEMENTS (elt));
+
+	res = ucl_object_typed_new (UCL_ARRAY);
+	/* How much full updates happened since the last update */
+	ts = rrd_result->last_update / rrd_result->pdp_per_cdp;
+
+	for (i = 0; i < rrd_result->ds_count; i ++) {
+		elt[i] = ucl_object_typed_new (UCL_ARRAY);
+	}
+
+	start_row = rrd_result->cur_row == rrd_result->rra_rows - 1 ?
+				0 : rrd_result->cur_row;
+
+	for (i = start_row, cnt = 0; cnt < rrd_result->rra_rows; cnt ++) {
+		for (j = 0; j < rrd_result->ds_count; j++) {
+			data_elt = ucl_object_typed_new (UCL_OBJECT);
+			ucl_object_insert_key (data_elt,
+					ucl_object_fromint ((ts - i % (rrd_result->cur_row + 1)) *
+					rrd_result->pdp_per_cdp),
+					"x", 1,
+					false);
+			ucl_object_insert_key (data_elt,
+					ucl_object_fromdouble (rrd_result->data[i *
+							rrd_result->ds_count + j]),
+					"y", 1,
+					false);
+			ucl_array_append (elt[j], data_elt);
+		}
+
+		i = start_row == 0 ? i + 1 : (i + 1) % start_row;
+	}
+
+	for (i = 0; i < rrd_result->ds_count; i++) {
+		ucl_array_append (res, elt[i]);
+	}
+
+	rspamd_controller_send_ucl (conn_ent, res);
+	ucl_object_unref (res);
 
 	return 0;
 }
@@ -2280,56 +2412,59 @@ start_controller_worker (struct rspamd_worker *worker)
 
 	/* Add callbacks for different methods */
 	rspamd_http_router_add_path (ctx->http,
-				PATH_AUTH,
-		rspamd_controller_handle_auth);
+			PATH_AUTH,
+			rspamd_controller_handle_auth);
 	rspamd_http_router_add_path (ctx->http,
-			 PATH_SYMBOLS,
-		rspamd_controller_handle_symbols);
+			PATH_SYMBOLS,
+			rspamd_controller_handle_symbols);
 	rspamd_http_router_add_path (ctx->http,
-			 PATH_ACTIONS,
-		rspamd_controller_handle_actions);
+			PATH_ACTIONS,
+			rspamd_controller_handle_actions);
 	rspamd_http_router_add_path (ctx->http,
-				PATH_MAPS,
-		rspamd_controller_handle_maps);
+			PATH_MAPS,
+			rspamd_controller_handle_maps);
 	rspamd_http_router_add_path (ctx->http,
-			 PATH_GET_MAP,
-		rspamd_controller_handle_get_map);
+			PATH_GET_MAP,
+			rspamd_controller_handle_get_map);
 	rspamd_http_router_add_path (ctx->http,
-		   PATH_PIE_CHART,
-		rspamd_controller_handle_pie_chart);
+			PATH_PIE_CHART,
+			rspamd_controller_handle_pie_chart);
 	rspamd_http_router_add_path (ctx->http,
-			 PATH_HISTORY,
-		rspamd_controller_handle_history);
+			PATH_GRAPH,
+			rspamd_controller_handle_graph);
 	rspamd_http_router_add_path (ctx->http,
-		  PATH_LEARN_SPAM,
-		rspamd_controller_handle_learnspam);
+			PATH_HISTORY,
+			rspamd_controller_handle_history);
 	rspamd_http_router_add_path (ctx->http,
-		   PATH_LEARN_HAM,
-		rspamd_controller_handle_learnham);
+			PATH_LEARN_SPAM,
+			rspamd_controller_handle_learnspam);
 	rspamd_http_router_add_path (ctx->http,
-		PATH_SAVE_ACTIONS,
-		rspamd_controller_handle_saveactions);
+			PATH_LEARN_HAM,
+			rspamd_controller_handle_learnham);
 	rspamd_http_router_add_path (ctx->http,
-		PATH_SAVE_SYMBOLS,
-		rspamd_controller_handle_savesymbols);
+			PATH_SAVE_ACTIONS,
+			rspamd_controller_handle_saveactions);
+	rspamd_http_router_add_path (ctx->http,
+			PATH_SAVE_SYMBOLS,
+			rspamd_controller_handle_savesymbols);
 	rspamd_http_router_add_path (ctx->http,
 			PATH_SAVE_MAP,
-		rspamd_controller_handle_savemap);
+			rspamd_controller_handle_savemap);
 	rspamd_http_router_add_path (ctx->http,
-				PATH_SCAN,
-		rspamd_controller_handle_scan);
+			PATH_SCAN,
+			rspamd_controller_handle_scan);
 	rspamd_http_router_add_path (ctx->http,
-			   PATH_CHECK,
-		rspamd_controller_handle_scan);
+			PATH_CHECK,
+			rspamd_controller_handle_scan);
 	rspamd_http_router_add_path (ctx->http,
-				PATH_STAT,
-		rspamd_controller_handle_stat);
+			PATH_STAT,
+			rspamd_controller_handle_stat);
 	rspamd_http_router_add_path (ctx->http,
-		  PATH_STAT_RESET,
-		rspamd_controller_handle_statreset);
+			PATH_STAT_RESET,
+			rspamd_controller_handle_statreset);
 	rspamd_http_router_add_path (ctx->http,
 			PATH_COUNTERS,
-		rspamd_controller_handle_counters);
+			rspamd_controller_handle_counters);
 
 	if (ctx->key) {
 		rspamd_http_router_set_key (ctx->http, ctx->key);
