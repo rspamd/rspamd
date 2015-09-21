@@ -1292,3 +1292,44 @@ rspamd_rrd_file_default (const gchar *path,
 
 	return file;
 }
+
+struct rspamd_rrd_query_result *
+rspamd_rrd_query (struct rspamd_rrd_file *file,
+		gulong rra_num)
+{
+	struct rspamd_rrd_query_result *res;
+	struct rrd_rra_def *rra;
+	const gdouble *rra_offset = NULL;
+	guint i;
+
+	g_assert (file != NULL);
+
+
+	if (rra_num > file->stat_head->rra_cnt) {
+		msg_err_rrd ("requested unexisting rra: %l", rra_num);
+
+		return NULL;
+	}
+
+	res = g_slice_alloc0 (sizeof (*res));
+	res->ds_count = file->stat_head->ds_cnt;
+	res->last_update = (gdouble)file->live_head->last_up +
+			((gdouble)file->live_head->last_up_usec / 1e6f);
+	res->pdp_per_cdp = file->rra_def[rra_num].pdp_cnt;
+	res->rra_rows = file->rra_def[rra_num].row_cnt;
+	rra_offset = file->rrd_value;
+
+	for (i = 0; i < file->stat_head->rra_cnt; i++) {
+		rra = &file->rra_def[i];
+
+		if (i == rra_num) {
+			break;
+		}
+
+		rra_offset += rra->row_cnt * res->ds_count;
+	}
+
+	res->data = rra_offset;
+
+	return res;
+}

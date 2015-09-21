@@ -335,4 +335,24 @@ void rrd_make_default_ds (const gchar *name,
  */
 struct rspamd_rrd_file *rspamd_rrd_file_default (const gchar *path,
 		GError **err);
+
+/**
+ * Returned by querying rrd database
+ */
+struct rspamd_rrd_query_result {
+	gulong rra_rows;
+	gulong pdp_per_cdp;
+	gulong ds_count;
+	gdouble last_update;
+	const gdouble *data;
+};
+
+/**
+ * Return RRA data
+ * @param file rrd file
+ * @param rra_num number of rra to return data for
+ * @return query result structure, that should be freed (using g_slice_free1) after usage
+ */
+struct rspamd_rrd_query_result * rspamd_rrd_query (struct rspamd_rrd_file *file,
+	gulong rra_num);
 #endif /* RRD_H_ */
