@@ -1213,7 +1213,7 @@ struct rspamd_rrd_file *
 rspamd_rrd_file_default (const gchar *path,
 		GError **err)
 {
-	struct rspamd_rrd_file *rrd;
+	struct rspamd_rrd_file *file;
 	struct rrd_ds_def ds[4];
 	struct rrd_rra_def rra[4];
 	GArray ar;
@@ -1222,21 +1222,31 @@ rspamd_rrd_file_default (const gchar *path,
 
 	if (access (path, R_OK) != -1) {
 		/* We can open rrd file */
-		rrd = rspamd_rrd_open (path, err);
+		file = rspamd_rrd_open (path, err);
 
-		if (rrd == NULL) {
+		if (file == NULL) {
 			return NULL;
 		}
 
-		/* XXX: check rrd file sanity */
-		return rrd;
+
+		if (file->stat_head->ds_cnt != 4 || file->stat_head->rra_cnt != 4) {
+			msg_err_rrd ("rrd file is not suitable for rspamd: it has "
+					"%d ds and %d rra", file->stat_head->ds_cnt,
+					file->stat_head->rra_cnt);
+			g_set_error (err, rrd_error_quark (), EINVAL, "bad rrd file");
+			rspamd_rrd_close (file);
+
+			return NULL;
+		}
+
+		return file;
 	}
 
 	/* Try to create new rrd file */
 
-	rrd = rspamd_rrd_create (path, 4, 4, 1, rspamd_get_calendar_ticks (), err);
+	file = rspamd_rrd_create (path, 4, 4, 1, rspamd_get_calendar_ticks (), err);
 
-	if (rrd == NULL) {
+	if (file == NULL) {
 		return NULL;
 	}
 
@@ -1250,8 +1260,8 @@ rspamd_rrd_file_default (const gchar *path,
 	ar.data = (gchar *)ds;
 	ar.len = sizeof (ds);
 
-	if (!rspamd_rrd_add_ds (rrd, &ar, err)) {
-		rspamd_rrd_close (rrd);
+	if (!rspamd_rrd_add_ds (file, &ar, err)) {
+		rspamd_rrd_close (file);
 		return NULL;
 	}
 
@@ -1270,15 +1280,15 @@ rspamd_rrd_file_default (const gchar *path,
 	ar.data = (gchar *)rra;
 	ar.len = sizeof (rra);
 
-	if (!rspamd_rrd_add_rra (rrd, &ar, err)) {
-		rspamd_rrd_close (rrd);
+	if (!rspamd_rrd_add_rra (file, &ar, err)) {
+		rspamd_rrd_close (file);
 		return NULL;
 	}
 
-	if (!rspamd_rrd_finalize (rrd, err)) {
-		rspamd_rrd_close (rrd);
+	if (!rspamd_rrd_finalize (file, err)) {
+		rspamd_rrd_close (file);
 		return NULL;
 	}
 
-	return rrd;
+	return file;
 }
