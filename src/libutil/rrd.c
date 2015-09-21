@@ -1261,12 +1261,12 @@ rspamd_rrd_file_default (const gchar *path,
 	/* Once per 5 minutes for 1 week */
 	rrd_make_default_rra (rrd_cf_to_string (RRD_CF_AVERAGE),
 			5 * 60, 7 * 24 * 60 / 5, &rra[1]);
-	/* Once per hour for 1 month */
+	/* Once per 10 mins for 1 month */
 	rrd_make_default_rra (rrd_cf_to_string (RRD_CF_AVERAGE),
-			60 * 60, 30 * 24 * 60 / 3600, &rra[2]);
-	/* Once per day for 1 year */
+			60 * 10, 30 * 24 * 6, &rra[2]);
+	/* Once per hour for 1 year */
 	rrd_make_default_rra (rrd_cf_to_string (RRD_CF_AVERAGE),
-			60 * 60 * 24, 365 * 24 * 60 / (60 * 60 * 24), &rra[3]);
+			60 * 60, 365 * 24, &rra[3]);
 	ar.data = (gchar *)rra;
 	ar.len = sizeof (rra);
 
