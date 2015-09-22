@@ -139,6 +139,9 @@ struct rspamd_controller_worker_ctx {
 	gchar *password;
 	/* Privilleged password */
 	gchar *enable_password;
+	/* Cached versions of the passwords */
+	rspamd_fstring_t cached_password;
+	rspamd_fstring_t cached_enable_password;
 	/* HTTP server */
 	struct rspamd_http_connection_router *http;
 	/* Server's start time */
@@ -285,13 +288,37 @@ rspamd_encrypted_password_get_str (const gchar * password, gsize skip,
 static gboolean
 rspamd_check_encrypted_password (struct rspamd_controller_worker_ctx *ctx,
 		const GString * password, const gchar * check,
-		const struct rspamd_controller_pbkdf *pbkdf)
+		const struct rspamd_controller_pbkdf *pbkdf,
+		gboolean is_enable)
 {
 	const gchar *salt, *hash;
 	gchar *salt_decoded, *key_decoded;
 	gsize salt_len, key_len;
 	gboolean ret = TRUE;
 	guchar *local_key;
+	rspamd_fstring_t *cache;
+
+	/* First of all check cached versions to save resources */
+	if (is_enable && ctx->cached_enable_password.len != 0) {
+		if (password->len != ctx->cached_enable_password.len ||
+				!rspamd_constant_memcmp (password->str,
+						ctx->cached_enable_password.begin, password->len)) {
+			msg_info_ctx ("incorrect or absent enable password has been specified");
+			return FALSE;
+		}
+
+		return TRUE;
+	}
+	else if (!is_enable && ctx->cached_password.len != 0) {
+		if (password->len != ctx->cached_password.len ||
+				!rspamd_constant_memcmp (password->str,
+						ctx->cached_password.begin, password->len)) {
+			msg_info_ctx ("incorrect or absent password has been specified");
+			return FALSE;
+		}
+
+		return TRUE;
+	}
 
 	g_assert (pbkdf != NULL);
 	/* get salt */
@@ -334,6 +361,21 @@ rspamd_check_encrypted_password (struct rspamd_controller_worker_ctx *ctx,
 		g_free (key_decoded);
 	}
 
+	if (ret) {
+		/* Save cached version */
+		cache = is_enable ? &ctx->cached_enable_password : &ctx->cached_password;
+
+		if (cache->len == 0) {
+			/* Mmap region */
+			cache->begin = mmap (NULL, password->len, PROT_WRITE,
+					MAP_PRIVATE | MAP_ANON, -1, 0);
+			memcpy (cache->begin, password->str, password->len);
+			(void)mprotect (cache->begin, password->len, PROT_READ);
+			(void)mlock (cache->begin, password->len);
+			cache->len = password->len;
+		}
+	}
+
 	return ret;
 }
 
@@ -348,7 +390,8 @@ static gboolean rspamd_controller_check_password(
 	GString lookup;
 	GHashTable *query_args = NULL;
 	struct rspamd_controller_worker_ctx *ctx = session->ctx;
-	gboolean check_normal = TRUE, check_enable = TRUE, ret = TRUE;
+	gboolean check_normal = TRUE, check_enable = TRUE, ret = TRUE,
+		use_enable = FALSE;
 	const struct rspamd_controller_pbkdf *pbkdf = NULL;
 
 	/* Access list logic */
@@ -400,6 +443,7 @@ static gboolean rspamd_controller_check_password(
 			/* For privileged commands we strictly require enable password */
 			if (ctx->enable_password != NULL) {
 				check = ctx->enable_password;
+				use_enable = TRUE;
 			}
 			else {
 				/* Use just a password (legacy mode) */
@@ -413,7 +457,7 @@ static gboolean rspamd_controller_check_password(
 				}
 				else {
 					ret = rspamd_check_encrypted_password (ctx, password, check,
-							pbkdf);
+							pbkdf, use_enable);
 				}
 			}
 			else {
@@ -437,7 +481,7 @@ static gboolean rspamd_controller_check_password(
 				else {
 					check_normal = rspamd_check_encrypted_password (ctx,
 							password,
-							check, pbkdf);
+							check, pbkdf, FALSE);
 				}
 
 			}
@@ -453,7 +497,7 @@ static gboolean rspamd_controller_check_password(
 				else {
 					check_enable = rspamd_check_encrypted_password (ctx,
 							password,
-							check, pbkdf);
+							check, pbkdf, TRUE);
 				}
 			}
 			else {
@@ -1017,7 +1061,7 @@ rspamd_controller_handle_graph (
 					false);
 			ucl_object_insert_key (data_elt,
 					ucl_object_fromdouble (rrd_result->data[i *
-							rrd_result->ds_count + j]),
+					rrd_result->ds_count + j]),
 					"y", 1,
 					false);
 			ucl_array_append (elt[j], data_elt);
@@ -2508,6 +2552,14 @@ start_controller_worker (struct rspamd_worker *worker)
 
 	if (ctx->rrd) {
 		rspamd_rrd_close (ctx->rrd);
+	}
+
+	if (ctx->cached_password.len > 0) {
+		munmap (ctx->cached_password.begin, ctx->cached_password.len);
+	}
+
+	if (ctx->cached_enable_password.len > 0) {
+		munmap (ctx->cached_enable_password.begin, ctx->cached_enable_password.len);
 	}
 
 	exit (EXIT_SUCCESS);
