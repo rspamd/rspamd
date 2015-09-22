@@ -489,6 +489,8 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 				else {
 					g_error_free (err);
 					err = NULL;
+					curst = curst->next;
+					continue;
 				}
 
 				users_enabled = ucl_object_find_any_key (clf->opts, "per_user",
