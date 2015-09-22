@@ -53,6 +53,11 @@ end
 
 if file_exists(local_conf .. '/rspamd.local.lua') then
 	dofile(local_conf .. '/rspamd.local.lua')
+else
+	-- Legacy lua/rspamd.local.lua
+	if file_exists(local_conf .. '/lua/rspamd.local.lua') then
+		dofile(local_conf .. '/lua/rspamd.local.lua')
+	end
 end
 
 if file_exists(local_rules .. '/rspamd.classifiers.lua') then
