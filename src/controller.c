@@ -1282,24 +1282,22 @@ rspamd_controller_handle_learn_common (
 			task);
 	task->fin_arg = conn_ent;
 	task->http_conn = rspamd_http_connection_ref (conn_ent->conn);;
-	task->sock = conn_ent->conn->fd;
+	task->sock = -1;
+	session->task = task;
+	session->cl = cl;
 
 
 	if (!rspamd_task_load_message (task, msg, msg->body->str, msg->body->len)) {
 		rspamd_controller_send_error (conn_ent, task->err->code, task->err->message);
-		rspamd_session_destroy (task->s);
 		return 0;
 	}
 
 	if (!rspamd_task_process (task, RSPAMD_TASK_PROCESS_LEARN)) {
-		msg_warn_session ("message cannot be processed for %s", task->message_id);
+		msg_warn_session ("<%s> message cannot be processed", task->message_id);
 		rspamd_controller_send_error (conn_ent, task->err->code, task->err->message);
-		rspamd_session_destroy (task->s);
 		return 0;
 	}
 
-	session->task = task;
-	session->cl = cl;
 	session->is_spam = is_spam;
 	rspamd_session_pending (task->s);
 
@@ -2035,6 +2033,7 @@ rspamd_controller_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 	}
 
 	rspamd_inet_address_destroy (session->from_addr);
+	msg_debug_session ("destroy session %p", session);
 	g_slice_free1 (sizeof (struct rspamd_controller_session), session);
 }
 
