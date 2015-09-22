@@ -969,7 +969,7 @@ rspamd_controller_handle_graph (
 	struct rspamd_controller_worker_ctx *ctx;
 	GString srch, *value;
 	struct rspamd_rrd_query_result *rrd_result;
-	gulong i, j, ts, start_row, cnt;
+	gulong i, j, ts, start_row, cnt, t;
 	ucl_object_t *res, *elt[4], *data_elt;
 	enum {
 		rra_hourly = 0,
@@ -1042,7 +1042,7 @@ rspamd_controller_handle_graph (
 
 	res = ucl_object_typed_new (UCL_ARRAY);
 	/* How much full updates happened since the last update */
-	ts = rrd_result->last_update / rrd_result->pdp_per_cdp;
+	ts = rrd_result->last_update / rrd_result->pdp_per_cdp - rrd_result->rra_rows;
 
 	for (i = 0; i < rrd_result->ds_count; i ++) {
 		elt[i] = ucl_object_typed_new (UCL_ARRAY);
@@ -1054,9 +1054,9 @@ rspamd_controller_handle_graph (
 	for (i = start_row, cnt = 0; cnt < rrd_result->rra_rows; cnt ++) {
 		for (j = 0; j < rrd_result->ds_count; j++) {
 			data_elt = ucl_object_typed_new (UCL_OBJECT);
+			t = ts * rrd_result->pdp_per_cdp;
 			ucl_object_insert_key (data_elt,
-					ucl_object_fromint ((ts - i % (rrd_result->cur_row + 1)) *
-					rrd_result->pdp_per_cdp),
+					ucl_object_fromint (t),
 					"x", 1,
 					false);
 			ucl_object_insert_key (data_elt,
@@ -1068,6 +1068,7 @@ rspamd_controller_handle_graph (
 		}
 
 		i = start_row == 0 ? i + 1 : (i + 1) % start_row;
+		ts ++;
 	}
 
 	for (i = 0; i < rrd_result->ds_count; i++) {
