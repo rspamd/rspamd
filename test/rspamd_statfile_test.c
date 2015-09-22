@@ -1,5 +1,5 @@
 #include "config.h"
-#include "main.h"
+#include "rspamd.h"
 #include "tests.h"
 #include "ottery.h"
 

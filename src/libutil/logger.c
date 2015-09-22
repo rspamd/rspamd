@@ -26,7 +26,7 @@
 #include "config.h"
 #include "logger.h"
 #include "util.h"
-#include "main.h"
+#include "rspamd.h"
 #include "map.h"
 #include "xxhash.h"
 

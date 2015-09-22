@@ -25,7 +25,7 @@
 
 #include "config.h"
 #include "dns.h"
-#include "main.h"
+#include "rspamd.h"
 #include "utlist.h"
 #include "uthash.h"
 #include "rdns_event.h"

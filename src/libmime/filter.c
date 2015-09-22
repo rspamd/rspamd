@@ -25,7 +25,7 @@
 #include "config.h"
 #include "mem_pool.h"
 #include "filter.h"
-#include "main.h"
+#include "rspamd.h"
 #include "message.h"
 #include "cfg_file.h"
 #include "util.h"

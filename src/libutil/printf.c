@@ -25,7 +25,7 @@
 
 #include "printf.h"
 #include "fstring.h"
-#include "main.h"
+#include "rspamd.h"
 
 /**
  * From FreeBSD libutil code

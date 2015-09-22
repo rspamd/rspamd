@@ -24,7 +24,7 @@
 
 #include "config.h"
 #include "util.h"
-#include "main.h"
+#include "rspamd.h"
 #include "libserver/worker_util.h"
 #include "protocol.h"
 #include "upstream.h"

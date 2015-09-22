@@ -22,7 +22,7 @@
  */
 
 #include "config.h"
-#include "main.h"
+#include "rspamd.h"
 #include "proxy.h"
 
 static void rspamd_proxy_backend_handler (gint fd, gshort what, gpointer data);

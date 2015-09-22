@@ -23,7 +23,7 @@
 
 #include "config.h"
 #include "tests.h"
-#include "main.h"
+#include "rspamd.h"
 #include "dkim.h"
 
 static const gchar test_dkim_sig[] = "v=1; a=rsa-sha256; c=relaxed/relaxed; "

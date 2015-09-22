@@ -28,7 +28,7 @@
 #include "config.h"
 #include "map.h"
 #include "http.h"
-#include "main.h"
+#include "rspamd.h"
 #include "util.h"
 #include "mem_pool.h"
 #include "blake2.h"

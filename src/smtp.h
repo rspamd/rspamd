@@ -5,7 +5,7 @@
 #include "libutil/upstream.h"
 #include "libmime/smtp_utils.h"
 #include "libmime/smtp_proto.h"
-#include "main.h"
+#include "rspamd.h"
 
 struct rspamd_dns_resolver;
 

@@ -46,7 +46,7 @@
 #include "libserver/worker_util.h"
 #include "fuzzy_storage.h"
 #include "utlist.h"
-#include "main.h"
+#include "rspamd.h"
 #include "blake2.h"
 #include "ottery.h"
 

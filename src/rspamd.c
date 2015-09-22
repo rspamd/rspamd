@@ -23,9 +23,7 @@
  */
 
 #include "config.h"
-#include "main.h"
-#include "lmtp.h"
-#include "smtp.h"
+#include "rspamd.h"
 #include "libutil/map.h"
 #include "fuzzy_storage.h"
 #include "libserver/symbols_cache.h"

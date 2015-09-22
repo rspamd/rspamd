@@ -22,7 +22,7 @@
  */
 
 #include "config.h"
-#include "main.h"
+#include "rspamd.h"
 #include "filter.h"
 #include "smtp.h"
 #include "smtp_proto.h"

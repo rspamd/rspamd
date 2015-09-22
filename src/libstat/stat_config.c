@@ -25,7 +25,7 @@
 
 #include "config.h"
 #include "stat_api.h"
-#include "main.h"
+#include "rspamd.h"
 #include "cfg_rcl.h"
 #include "stat_internal.h"
 

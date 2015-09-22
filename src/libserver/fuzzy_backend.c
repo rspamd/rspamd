@@ -22,7 +22,7 @@
  */
 
 #include "config.h"
-#include "main.h"
+#include "rspamd.h"
 #include "fuzzy_backend.h"
 
 #include <sqlite3.h>

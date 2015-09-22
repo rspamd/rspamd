@@ -22,7 +22,7 @@
  */
 
 #include "config.h"
-#include "main.h"
+#include "rspamd.h"
 #include "message.h"
 #include "dkim.h"
 #include "dns.h"

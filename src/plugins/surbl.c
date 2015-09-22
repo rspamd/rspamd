@@ -45,7 +45,7 @@
 #include "libmime/message.h"
 #include "libutil/hash.h"
 #include "libutil/map.h"
-#include "main.h"
+#include "rspamd.h"
 #include "surbl.h"
 #include "regexp.h"
 #include "acism.h"

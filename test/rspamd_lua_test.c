@@ -22,7 +22,7 @@
  */
 
 #include "config.h"
-#include "main.h"
+#include "rspamd.h"
 #include "util.h"
 #include "lua/lua_common.h"
 

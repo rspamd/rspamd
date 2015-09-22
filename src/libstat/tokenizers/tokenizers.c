@@ -26,7 +26,7 @@
  * Common tokenization functions
  */
 
-#include "main.h"
+#include "rspamd.h"
 #include "tokenizers.h"
 #include "stat_internal.h"
 

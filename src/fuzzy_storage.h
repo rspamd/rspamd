@@ -2,7 +2,7 @@
 #define RSPAMD_FUZZY_STORAGE_H
 
 #include "config.h"
-#include "main.h"
+#include "rspamd.h"
 #include "shingles.h"
 
 #define RSPAMD_FUZZY_VERSION 3

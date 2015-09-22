@@ -3,7 +3,7 @@
 
 #include "config.h"
 #include "acism.h"
-#include "main.h"
+#include "rspamd.h"
 
 #define DEFAULT_REDIRECTOR_PORT 8080
 #define DEFAULT_SURBL_WEIGHT 10

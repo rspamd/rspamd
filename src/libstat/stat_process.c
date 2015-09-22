@@ -23,7 +23,7 @@
 
 #include "config.h"
 #include "stat_api.h"
-#include "main.h"
+#include "rspamd.h"
 #include "stat_internal.h"
 #include "libmime/message.h"
 #include "libmime/images.h"

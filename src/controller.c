@@ -27,7 +27,7 @@
 #include "libutil/rrd.h"
 #include "libutil/map.h"
 #include "libstat/stat_api.h"
-#include "main.h"
+#include "rspamd.h"
 #include "libserver/worker_util.h"
 #include "utlist.h"
 

@@ -26,7 +26,7 @@
  * Bayesian classifier
  */
 #include "classifiers.h"
-#include "main.h"
+#include "rspamd.h"
 #include "filter.h"
 #include "cfg_file.h"
 #include "stat_internal.h"

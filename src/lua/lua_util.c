@@ -23,7 +23,7 @@
 
 #include "lua_common.h"
 #include "task.h"
-#include "main.h"
+#include "rspamd.h"
 #include "html.h"
 #include "cfg_rcl.h"
 #include "tokenizers/tokenizers.h"

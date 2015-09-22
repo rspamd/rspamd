@@ -2,7 +2,7 @@
 #define IMAGES_H_
 
 #include "config.h"
-#include "main.h"
+#include "rspamd.h"
 
 struct html_image;
 

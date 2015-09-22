@@ -23,7 +23,7 @@
  */
 
 #include "config.h"
-#include "main.h"
+#include "rspamd.h"
 #include "events.h"
 #include "xxhash.h"
 

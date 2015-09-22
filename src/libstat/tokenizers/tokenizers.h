@@ -4,7 +4,7 @@
 #include "config.h"
 #include "mem_pool.h"
 #include "fstring.h"
-#include "main.h"
+#include "rspamd.h"
 #include "stat_api.h"
 
 #define RSPAMD_DEFAULT_TOKENIZER "osb"

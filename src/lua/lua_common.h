@@ -8,7 +8,7 @@
 #include <lauxlib.h>
 #include <lualib.h>
 
-#include "main.h"
+#include "rspamd.h"
 #include "ucl.h"
 #include "lua_ucl.h"
 

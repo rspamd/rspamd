@@ -29,7 +29,7 @@
 #include "url.h"
 #include "util.h"
 #include "fstring.h"
-#include "main.h"
+#include "rspamd.h"
 #include "message.h"
 #include "http.h"
 #include "acism.h"

@@ -33,7 +33,7 @@
 #include "mime_expressions.h"
 #include "libutil/map.h"
 #include "lua/lua_common.h"
-#include "main.h"
+#include "rspamd.h"
 
 struct regexp_module_item {
 	struct rspamd_expression *expr;

@@ -23,7 +23,7 @@
  */
 
 #include "config.h"
-#include "main.h"
+#include "rspamd.h"
 #include "cfg_file.h"
 #include "util.h"
 #include "smtp.h"

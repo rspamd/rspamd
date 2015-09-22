@@ -35,7 +35,7 @@
 #include "libserver/url.h"
 #include "libserver/dns.h"
 #include "libmime/message.h"
-#include "main.h"
+#include "rspamd.h"
 #include "keypairs_cache.h"
 #include "libstat/stat_api.h"
 #include "libserver/worker_util.h"

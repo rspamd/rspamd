@@ -24,7 +24,7 @@
 
 #include "config.h"
 #include "util.h"
-#include "main.h"
+#include "rspamd.h"
 #include "message.h"
 #include "cfg_file.h"
 #include "html.h"

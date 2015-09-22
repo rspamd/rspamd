@@ -22,7 +22,7 @@
  */
 
 #include "config.h"
-#include "main.h"
+#include "rspamd.h"
 #include "map.h"
 #include "filter.h"
 #include "dynamic_cfg.h"

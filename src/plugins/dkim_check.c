@@ -42,7 +42,7 @@
 #include "libserver/dkim.h"
 #include "libutil/hash.h"
 #include "libutil/map.h"
-#include "main.h"
+#include "rspamd.h"
 #include "utlist.h"
 
 #define DEFAULT_SYMBOL_REJECT "R_DKIM_REJECT"

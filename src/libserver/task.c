@@ -22,7 +22,7 @@
  */
 
 #include "task.h"
-#include "main.h"
+#include "rspamd.h"
 #include "filter.h"
 #include "protocol.h"
 #include "message.h"

@@ -23,7 +23,7 @@
 
 #include "config.h"
 #include "images.h"
-#include "main.h"
+#include "rspamd.h"
 #include "message.h"
 #include "html.h"
 

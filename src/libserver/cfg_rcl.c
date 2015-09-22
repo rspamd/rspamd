@@ -23,7 +23,7 @@
 
 #include <blake2.h>
 #include "cfg_rcl.h"
-#include "main.h"
+#include "rspamd.h"
 #include "uthash_strcase.h"
 #include "utlist.h"
 #include "cfg_file.h"

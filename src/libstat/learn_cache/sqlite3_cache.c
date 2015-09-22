@@ -23,7 +23,7 @@
 
 #include "config.h"
 #include "learn_cache.h"
-#include "main.h"
+#include "rspamd.h"
 #include "stat_api.h"
 #include "stat_internal.h"
 #include "blake2.h"

@@ -26,7 +26,7 @@
 #include "config.h"
 #include "util.h"
 #include "http.h"
-#include "main.h"
+#include "rspamd.h"
 
 #ifndef HAVE_SA_SIGINFO
 typedef void (*rspamd_sig_handler_t) (gint);

@@ -24,7 +24,7 @@
  */
 
 #include "config.h"
-#include "main.h"
+#include "rspamd.h"
 #include "upstream.h"
 #include "ottery.h"
 

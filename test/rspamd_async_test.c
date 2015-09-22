@@ -23,7 +23,7 @@
 
 #include "config.h"
 #include "tests.h"
-#include "main.h"
+#include "rspamd.h"
 #include "aio_event.h"
 #include "mem_pool.h"
 

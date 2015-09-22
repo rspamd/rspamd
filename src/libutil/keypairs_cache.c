@@ -24,7 +24,7 @@
  */
 
 #include "config.h"
-#include "main.h"
+#include "rspamd.h"
 #include "keypairs_cache.h"
 #include "keypair_private.h"
 #include "hash.h"

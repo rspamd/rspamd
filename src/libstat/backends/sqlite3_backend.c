@@ -23,7 +23,7 @@
  */
 
 #include "config.h"
-#include "main.h"
+#include "rspamd.h"
 #include "sqlite3.h"
 #include "libutil/sqlite_utils.h"
 #include "libstat/stat_internal.h"

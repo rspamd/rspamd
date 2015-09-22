@@ -27,7 +27,7 @@
 #include "fstring.h"
 #include "logger.h"
 #include "util.h"
-#include "main.h"
+#include "rspamd.h"
 #include "utlist.h"
 #include "ottery.h"
 

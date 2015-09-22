@@ -3,7 +3,7 @@
 #include "tests.h"
 #include "dns.h"
 #include "logger.h"
-#include "main.h"
+#include "rspamd.h"
 #include "events.h"
 #include "cfg_file.h"
 

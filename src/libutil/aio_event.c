@@ -23,7 +23,7 @@
 
 #include "config.h"
 #include "aio_event.h"
-#include "main.h"
+#include "rspamd.h"
 
 #ifdef HAVE_SYS_EVENTFD_H
 #include <sys/eventfd.h>

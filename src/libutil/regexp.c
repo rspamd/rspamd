@@ -28,7 +28,7 @@
 #include "blake2.h"
 #include "ref.h"
 #include "util.h"
-#include "main.h"
+#include "rspamd.h"
 #include <pcre.h>
 
 typedef guchar regexp_id_t[BLAKE2B_OUTBYTES];

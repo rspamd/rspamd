@@ -24,7 +24,7 @@
 #include "config.h"
 #include "utlist.h"
 #include "libserver/proxy.h"
-#include "main.h"
+#include "rspamd.h"
 #include "smtp.h"
 #include "libserver/worker_util.h"
 

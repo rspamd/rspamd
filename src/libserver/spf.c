@@ -25,7 +25,7 @@
 #include "config.h"
 #include "dns.h"
 #include "spf.h"
-#include "main.h"
+#include "rspamd.h"
 #include "message.h"
 #include "filter.h"
 #include "utlist.h"

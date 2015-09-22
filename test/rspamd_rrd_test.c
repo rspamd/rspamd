@@ -24,7 +24,7 @@
 #include "config.h"
 #include "tests.h"
 #include "rrd.h"
-#include "main.h"
+#include "rspamd.h"
 #include "ottery.h"
 
 const int rows_cnt = 20;

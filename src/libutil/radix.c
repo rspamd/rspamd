@@ -25,7 +25,7 @@
 
 #include "config.h"
 #include "radix.h"
-#include "main.h"
+#include "rspamd.h"
 #include "mem_pool.h"
 
 #define msg_err_radix(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
