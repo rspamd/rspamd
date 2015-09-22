@@ -863,10 +863,15 @@ rspamd_symbols_cache_metric_limit (struct rspamd_task *task,
 		}
 	}
 
-	g_assert (cp->rs != NULL);
+	if (cp->rs) {
 
-	if (cp->rs->score > cp->lim) {
-		return TRUE;
+		if (cp->rs->score > cp->lim) {
+			return TRUE;
+		}
+	}
+	else {
+		/* No reject score define, always check all rules */
+		cp->lim = -1;
 	}
 
 	return FALSE;
