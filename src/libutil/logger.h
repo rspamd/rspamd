@@ -68,6 +68,11 @@ void rspamd_glib_log_function (const gchar *log_domain,
 		GLogLevelFlags log_level, const gchar *message, gpointer arg);
 
 /**
+ * Log function for printing glib assertions
+ */
+void rspamd_glib_printerr_function (const gchar *message);
+
+/**
  * Function with variable number of arguments support
  */
 void rspamd_common_log_function (rspamd_logger_t *logger,

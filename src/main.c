@@ -1143,6 +1143,7 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_set_logger (rspamd_main->cfg, type, rspamd_main);
 	(void)rspamd_log_open (rspamd_main->logger);
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
+	g_set_printerr_handler (rspamd_glib_printerr_function);
 
 	detect_priv (rspamd_main);
 

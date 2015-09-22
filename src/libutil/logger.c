@@ -920,6 +920,13 @@ rspamd_glib_log_function (const gchar *log_domain,
 	}
 }
 
+void
+rspamd_glib_printerr_function (const gchar *message)
+{
+	rspamd_common_logv (NULL, G_LOG_LEVEL_CRITICAL, "glib", NULL, G_STRFUNC,
+			message, NULL);
+}
+
 /**
  * Temporary turn on debugging
  */
