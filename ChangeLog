@@ -1,3 +1,20 @@
+1.0.1:
+	* Add writing to rrd from the controller
+	* Fixed lots of bugs in rrd code
+	* Adopt new DNS API in hfilter plugin (by @AlexeySa)
+	* Allow only one controller process to manage rrd file
+	* Set event base for fuzzy calls
+	* Improve fuzzy IO errors logging
+	* Add rra extraction function to rrd library
+	* Add graph handler to the controller
+	* Cache correct passwords to avoid too high CPU usage when working with webui
+	* Controller sockets are owned by router do not export them to task
+	* Optimize logging by skipping hash table search if it's empty
+	* Fix loading issue whith broken statfiles
+	* Print assertions from glib to rspamd logger
+	* Load legacy `lua/rspamd.local.lua`
+	* Update webui with some fixes to learning and scanning
+
 1.0.0:
 	* Rework symbols processing:
 		- Improve sorting logic for symbols
