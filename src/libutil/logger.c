@@ -406,7 +406,9 @@ rspamd_logger_need_log (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
 	}
 
 	if (rspamd_log->cfg->debug_modules != NULL && module != NULL &&
+		g_hash_table_size (rspamd_log->cfg->debug_modules) > 0 &&
 		g_hash_table_lookup (rspamd_log->cfg->debug_modules, module)) {
+
 		return TRUE;
 	}
 
