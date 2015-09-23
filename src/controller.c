@@ -913,10 +913,8 @@ rspamd_controller_handle_pie_chart (
 	total = ctx->srv->stat->messages_scanned;
 	if (total != 0) {
 
-		data[0] = ctx->srv->stat->actions_stat[METRIC_ACTION_NOACTION] / total *
-			100.;
-		data[1] = ctx->srv->stat->actions_stat[METRIC_ACTION_SOFT_REJECT] / total *
-			100.;
+		data[0] = ctx->srv->stat->actions_stat[METRIC_ACTION_NOACTION];
+		data[1] = ctx->srv->stat->actions_stat[METRIC_ACTION_SOFT_REJECT];
 		data[2] = (ctx->srv->stat->actions_stat[METRIC_ACTION_ADD_HEADER] +
 			ctx->srv->stat->actions_stat[METRIC_ACTION_REWRITE_SUBJECT]);
 		data[3] = ctx->srv->stat->actions_stat[METRIC_ACTION_GREYLIST];
