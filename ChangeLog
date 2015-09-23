@@ -1,3 +1,19 @@
+1.0.2:
+	* Fix critical bug in webui that prevents password from being sent
+	* Rework webui view:
+		- Switch to d3.js for graphs
+		- Improve piechart look
+		- Rework colors for piechart
+		- Fix layout for symbols
+		- Fix refresh button
+	* Add descriptions for whitelist maps
+	* Fix build on arm (#379)
+	* Fix issue with the last element in the radix trie
+	* Add more tests for radix trie algorithm
+	* Allow to extract URLs from query strings of other URLs (#361)
+	* Initialize rrd fields before writing to file
+	* Fix double free if no password has been specified
+
 1.0.1:
 	* Add writing to rrd from the controller
 	* Fixed lots of bugs in rrd code
