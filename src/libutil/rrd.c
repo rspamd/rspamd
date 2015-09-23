@@ -483,6 +483,7 @@ rspamd_rrd_create (const gchar *filename,
 	}
 
 	/* Fill DS section */
+	memset (&ds, 0, sizeof (ds));
 	memset (&ds.ds_nam, 0, sizeof (ds.ds_nam));
 	memcpy (&ds.dst, "COUNTER", sizeof ("COUNTER"));
 	memset (&ds.par, 0, sizeof (ds.par));
@@ -497,6 +498,7 @@ rspamd_rrd_create (const gchar *filename,
 	}
 
 	/* Fill RRA section */
+	memset (&rra, 0, sizeof (rra));
 	memcpy (&rra.cf_nam, "AVERAGE", sizeof ("AVERAGE"));
 	rra.pdp_cnt = 1;
 	memset (&rra.par, 0, sizeof (rra.par));
@@ -511,6 +513,7 @@ rspamd_rrd_create (const gchar *filename,
 	}
 
 	/* Fill live header */
+	memset (&lh, 0, sizeof (lh));
 	lh.last_up = (glong)initial_ticks;
 	lh.last_up_usec = (glong)((initial_ticks - lh.last_up) * 1e6f);
 
@@ -522,6 +525,7 @@ rspamd_rrd_create (const gchar *filename,
 	}
 
 	/* Fill pdp prep */
+	memset (&pdp, 0, sizeof (pdp));
 	memcpy (&pdp.last_ds, "U", sizeof ("U"));
 	memset (&pdp.scratch, 0, sizeof (pdp.scratch));
 	pdp.scratch[PDP_val].dv = NAN;
@@ -538,6 +542,7 @@ rspamd_rrd_create (const gchar *filename,
 	}
 
 	/* Fill cdp prep */
+	memset (&cdp, 0, sizeof (cdp));
 	memset (&cdp.scratch, 0, sizeof (cdp.scratch));
 	cdp.scratch[CDP_val].dv = NAN;
 	cdp.scratch[CDP_unkn_pdp_cnt].lv = 0;
