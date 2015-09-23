@@ -144,7 +144,8 @@ local configure_whitelist_module = function()
     each(function(symbol, rule)
       if rule['domains'] then
         if type(rule['domains']) == 'string' then
-          rule['map'] = rspamd_config:add_kv_map(rule['domains'])
+          rule['map'] = rspamd_config:add_kv_map(rule['domains'],
+            "Whitelist map for " .. symbol)
         elseif type(rule['domains']) == 'table' then
           -- Transform ['domain1', 'domain2' ...] to indexes:
           -- {'domain1' = 1, 'domain2' = 1 ...]
