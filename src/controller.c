@@ -874,7 +874,7 @@ rspamd_controller_pie_element (enum rspamd_metric_action action,
 		[METRIC_ACTION_REJECT] = "#993300",
 		[METRIC_ACTION_SOFT_REJECT] = "#cc9966",
 		[METRIC_ACTION_REWRITE_SUBJECT] = "#ff6600",
-		[METRIC_ACTION_ADD_HEADER] = "#ffcc66",
+		[METRIC_ACTION_ADD_HEADER] = "#CD853F",
 		[METRIC_ACTION_GREYLIST] = "#6666cc",
 		[METRIC_ACTION_NOACTION] = "#66cc00"
 	};
@@ -883,6 +883,7 @@ rspamd_controller_pie_element (enum rspamd_metric_action action,
 			"color", 0, false);
 	ucl_object_insert_key (res, ucl_object_fromstring (label), "label", 0, false);
 	ucl_object_insert_key (res, ucl_object_fromdouble (data), "data", 0, false);
+	ucl_object_insert_key (res, ucl_object_fromdouble (data), "value", 0, false);
 
 	return res;
 }
@@ -922,12 +923,9 @@ rspamd_controller_handle_pie_chart (
 		data[1] = ctx->srv->stat->actions_stat[METRIC_ACTION_SOFT_REJECT] / total *
 			100.;
 		data[2] = (ctx->srv->stat->actions_stat[METRIC_ACTION_ADD_HEADER] +
-			ctx->srv->stat->actions_stat[METRIC_ACTION_REWRITE_SUBJECT]) /
-			total * 100.;
-		data[3] = ctx->srv->stat->actions_stat[METRIC_ACTION_GREYLIST] / total *
-			100.;
-		data[4] = ctx->srv->stat->actions_stat[METRIC_ACTION_REJECT] / total *
-			100.;
+			ctx->srv->stat->actions_stat[METRIC_ACTION_REWRITE_SUBJECT]);
+		data[3] = ctx->srv->stat->actions_stat[METRIC_ACTION_GREYLIST];
+		data[4] = ctx->srv->stat->actions_stat[METRIC_ACTION_REJECT];
 	}
 	else {
 		memset (data, 0, sizeof (data));
