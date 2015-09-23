@@ -871,11 +871,11 @@ rspamd_controller_pie_element (enum rspamd_metric_action action,
 {
 	ucl_object_t *res = ucl_object_typed_new (UCL_OBJECT);
 	const char *colors[METRIC_ACTION_MAX] = {
-		[METRIC_ACTION_REJECT] = "#993300",
+		[METRIC_ACTION_REJECT] = "#FF0000",
 		[METRIC_ACTION_SOFT_REJECT] = "#cc9966",
 		[METRIC_ACTION_REWRITE_SUBJECT] = "#ff6600",
-		[METRIC_ACTION_ADD_HEADER] = "#CD853F",
-		[METRIC_ACTION_GREYLIST] = "#6666cc",
+		[METRIC_ACTION_ADD_HEADER] = "#FFD700",
+		[METRIC_ACTION_GREYLIST] = "#436EEE",
 		[METRIC_ACTION_NOACTION] = "#66cc00"
 	};
 
