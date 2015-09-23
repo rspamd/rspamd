@@ -421,11 +421,6 @@ static gboolean rspamd_controller_check_password(
 	}
 
 	if (password == NULL) {
-
-		if (query_args != NULL) {
-			g_hash_table_unref (query_args);
-		}
-
 		if (ctx->secure_map == NULL) {
 			if (ctx->password == NULL && !is_enable) {
 				return TRUE;
