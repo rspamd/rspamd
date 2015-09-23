@@ -923,8 +923,9 @@ rspamd_glib_log_function (const gchar *log_domain,
 void
 rspamd_glib_printerr_function (const gchar *message)
 {
-	rspamd_common_logv (NULL, G_LOG_LEVEL_CRITICAL, "glib", NULL, G_STRFUNC,
-			message, NULL);
+	rspamd_common_log_function (NULL, G_LOG_LEVEL_CRITICAL, "glib",
+			NULL, G_STRFUNC,
+			"%s", message);
 }
 
 /**
