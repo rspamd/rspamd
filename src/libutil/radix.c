@@ -132,9 +132,11 @@ radix_find_compressed (radix_compressed_t * tree, guint8 *key, gsize keylen)
 	value = RADIX_NO_VALUE;
 	node = tree->root;
 
-	msg_debug_radix ("trying to find key");
+	msg_debug_radix ("trying to find key: %*xs", (gint)keylen, key);
 	while (node && kremain) {
 		if (node->skipped) {
+			msg_debug_radix ("finding in the compressed node: %p at level %d",
+				node->value, cur_level);
 			/* It is obviously a leaf node */
 			if (radix_compare_compressed (node, key, keylen, cur_level)) {
 				return node->value;
@@ -147,9 +149,11 @@ radix_find_compressed (radix_compressed_t * tree, guint8 *key, gsize keylen)
 			value = node->value;
 		}
 
-		msg_debug_radix ("finding value cur value: %ul, left: %p, "
-						"right: %p, go %s", value, node->d.n.left,
-						node->d.n.right, (*k & bit) ? "right" : "left");
+		msg_debug_radix ("finding value cur value: %p, left: %p, "
+				"right: %p, go %s, level: %d",
+				node->value, node->d.n.left,
+				node->d.n.right, (kv & bit) ? "right" : "left",
+				cur_level);
 		if (kv & bit) {
 			node = node->d.n.right;
 		}
@@ -165,6 +169,18 @@ radix_find_compressed (radix_compressed_t * tree, guint8 *key, gsize keylen)
 			kremain --;
 		}
 		cur_level ++;
+	}
+
+	if (node) {
+		/* We still have a node but no more key, so we can search for skipped node */
+		if (node->skipped) {
+			msg_debug_radix ("finding in the compressed node: %p at level %d",
+					node->value, cur_level);
+			/* It is obviously a leaf node */
+			if (radix_compare_compressed (node, key, keylen, cur_level)) {
+				return node->value;
+			}
+		}
 	}
 
 	return value;
@@ -189,15 +205,19 @@ radix_uncompress_path (radix_compressed_t *tree,
 	node->skipped = FALSE;
 	node->value = RADIX_NO_VALUE;
 
-	msg_debug_radix ("uncompress %ud levels of tree", levels_uncompress);
+	msg_debug_radix (
+			"uncompress %ud levels of tree from %ud to %ud, stored key: %*xs",
+			levels_uncompress,
+			start_level,
+			start_level + levels_uncompress,
+			leaf->d.s.keylen,
+			leaf->d.s.key);
 
 	/* Uncompress the desired path */
 	while (levels_uncompress) {
 		next = rspamd_mempool_alloc (tree->pool, sizeof (*node));
 
 		next->skipped = FALSE;
-		next->d.n.right = NULL;
-		next->d.n.left = NULL;
 		next->value = RADIX_NO_VALUE;
 
 		if (*nkey & bit) {
@@ -208,6 +228,10 @@ radix_uncompress_path (radix_compressed_t *tree,
 			node->d.n.left = next;
 			node->d.n.right = NULL;
 		}
+
+		msg_debug_radix ("uncompress path for node: %p, left: %p, "
+				"right: %p, go %s", node->value, node->d.n.left,
+				node->d.n.right, (*nkey & bit) ? "right" : "left");
 
 		bit >>= 1;
 		if (bit == 0) {
@@ -256,7 +280,8 @@ radix_make_leaf_node (radix_compressed_t *tree,
 		memset (node, 0, sizeof (*node));
 	}
 	node->value = value;
-	msg_debug_radix ("insert new leaf node with value %p", value);
+	msg_debug_radix ("insert new leaf node with value %p to level %d",
+			value, level);
 
 	return node;
 }
@@ -430,7 +455,8 @@ radix_insert_compressed (radix_compressed_t * tree,
 	node = tree->root;
 
 	g_assert (keybits >= masklen);
-	msg_debug_radix ("want insert value %p with mask %z", value, masklen);
+	msg_debug_radix ("want insert value %p with mask %z, key: %*xs",
+			value, masklen, (int)keylen, key);
 
 	node = tree->root;
 	next = node;
