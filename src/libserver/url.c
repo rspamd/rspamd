@@ -1655,7 +1655,7 @@ rspamd_url_text_extract (rspamd_mempool_t *pool,
 {
 	gint rc, state = 0;
 	gchar *url_str = NULL;
-	struct rspamd_url *new;
+	struct rspamd_url *url;
 	struct process_exception *ex;
 	const gchar *p, *end, *begin, *url_start, *url_end;
 
@@ -1671,34 +1671,69 @@ rspamd_url_text_extract (rspamd_mempool_t *pool,
 		if (rspamd_url_find (pool, p, end - p, &url_start, &url_end, &url_str,
 				is_html, &state)) {
 			if (url_str != NULL) {
-				new = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_url));
+				url = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_url));
 				ex =
 						rspamd_mempool_alloc0 (pool,
 								sizeof (struct process_exception));
-				if (new != NULL) {
+				if (url != NULL) {
 					g_strstrip (url_str);
-					rc = rspamd_url_parse (new, url_str, strlen (url_str),
+					rc = rspamd_url_parse (url, url_str, strlen (url_str),
 							pool);
 					if (rc == URI_ERRNO_OK &&
-						new->hostlen > 0) {
+						url->hostlen > 0) {
 						ex->pos = url_start - begin;
 						ex->len = url_end - url_start;
-						if (new->protocol == PROTOCOL_MAILTO) {
-							if (new->userlen > 0) {
-								if (!g_hash_table_lookup (task->emails, new)) {
-									g_hash_table_insert (task->emails, new,
-											new);
+						if (url->protocol == PROTOCOL_MAILTO) {
+							if (url->userlen > 0) {
+								if (!g_hash_table_lookup (task->emails, url)) {
+									g_hash_table_insert (task->emails, url,
+											url);
 								}
 							}
 						}
 						else {
-							if (!g_hash_table_lookup (task->urls, new)) {
-								g_hash_table_insert (task->urls, new, new);
+							if (!g_hash_table_lookup (task->urls, url)) {
+								g_hash_table_insert (task->urls, url, url);
 							}
 						}
 						part->urls_offset = g_list_prepend (
 								part->urls_offset,
 								ex);
+
+						/* We also search the query for additional url inside */
+						if (url->querylen > 0) {
+							gint nstate = 0;
+							struct rspamd_url *query_url;
+
+							if (rspamd_url_find (pool,
+									url->query,
+									url->querylen,
+									NULL,
+									NULL,
+									&url_str,
+									is_html,
+									&nstate)) {
+
+								query_url = rspamd_mempool_alloc0 (pool,
+										sizeof (struct rspamd_url));
+								rc = rspamd_url_parse (query_url,
+										url_str,
+										strlen (url_str),
+										pool);
+								if (rc == URI_ERRNO_OK &&
+										url->hostlen > 0) {
+									msg_debug_task ("found url %s in query of url"
+											" %*s", url_str, url->querylen, url->query);
+
+									if (!g_hash_table_lookup (task->urls,
+											query_url)) {
+										g_hash_table_insert (task->urls,
+												query_url,
+												query_url);
+									}
+								}
+							}
+						}
 					}
 					else if (rc != URI_ERRNO_OK) {
 						msg_info_task ("extract of url '%s' failed: %s",
