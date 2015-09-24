@@ -54,12 +54,23 @@
 #include <mach/mach_time.h>
 #endif
 
+#include "blake2.h"
+
 /* Check log messages intensity once per minute */
 #define CHECK_TIME 60
 /* More than 2 log messages per second */
 #define BUF_INTENSITY 2
 /* Default connect timeout for sync sockets */
 #define CONNECT_TIMEOUT 3
+
+const struct rspamd_controller_pbkdf pbkdf_list[] = {
+		{
+				.id = RSPAMD_PBKDF_ID_V1,
+				.rounds = 16000,
+				.salt_len = 20,
+				.key_len = BLAKE2B_OUTBYTES / 2
+		}
+};
 
 gint
 rspamd_socket_nonblocking (gint fd)
@@ -1988,6 +1999,30 @@ rspamd_time_jitter (gdouble in, gdouble jitter)
 	}
 
 	return in + jitter * res;
+}
+
+gboolean
+rspamd_constant_memcmp (const guchar *a, const guchar *b, gsize len)
+{
+	gsize lena, lenb, i;
+	gint acc = 0;
+
+	if (len == 0) {
+		lena = strlen (a);
+		lenb = strlen (b);
+
+		if (lena != lenb) {
+			return FALSE;
+		}
+
+		len = lena;
+	}
+
+	for (i = 0; i < len; i++) {
+		acc |= a[i] ^ b[i];
+	}
+
+	return acc == 0;
 }
 
 #if !defined(LIBEVENT_VERSION_NUMBER) || LIBEVENT_VERSION_NUMBER < 0x02000000UL

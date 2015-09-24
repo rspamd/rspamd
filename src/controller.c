@@ -102,8 +102,6 @@
 #define COLOR_REJECT "#CB4B4B"
 #define COLOR_TOTAL "#9440ED"
 
-#define RSPAMD_PBKDF_ID_V1 1
-
 const struct timeval rrd_update_time = {
 		.tv_sec = 1,
 		.tv_usec = 0
@@ -186,40 +184,6 @@ struct rspamd_controller_session {
 	rspamd_inet_addr_t *from_addr;
 	gboolean is_spam;
 };
-
-
-const struct rspamd_controller_pbkdf pbkdf_list[] = {
-	{
-		.id = RSPAMD_PBKDF_ID_V1,
-		.rounds = 16000,
-		.salt_len = 20,
-		.key_len = BLAKE2B_OUTBYTES / 2
-	}
-};
-
-static gboolean
-rspamd_constant_memcmp (const guchar *a, const guchar *b, gsize len)
-{
-	gsize lena, lenb, i;
-	gint acc = 0;
-
-	if (len == 0) {
-		lena = strlen (a);
-		lenb = strlen (b);
-
-		if (lena != lenb) {
-			return FALSE;
-		}
-
-		len = lena;
-	}
-
-	for (i = 0; i < len; i ++) {
-		acc |= a[i] ^ b[i];
-	}
-
-	return acc == 0;
-}
 
 static gboolean
 rspamd_is_encrypted_password (const gchar *password,
