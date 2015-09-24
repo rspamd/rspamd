@@ -1050,7 +1050,9 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 	struct rspamd_expression *expr;
 	struct rspamd_config *cfg = ud;
 	struct rspamd_composite *composite;
-	const gchar *composite_name, *composite_expression;
+	const gchar *composite_name, *composite_expression, *group, *metric,
+		*description;
+	gdouble score;
 	gboolean new = TRUE;
 
 	g_assert (key != NULL);
@@ -1096,6 +1098,38 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 	if (new) {
 		rspamd_symbols_cache_add_symbol (cfg->cache, composite_name, 0,
 			NULL, NULL, SYMBOL_TYPE_COMPOSITE, -1);
+	}
+
+	val = ucl_object_find_key (obj, "score");
+	if (val != NULL && ucl_object_todouble_safe (val, &score)) {
+		/* Also set score in the metric */
+
+		val = ucl_object_find_key (obj, "group");
+		if (val != NULL) {
+			group = ucl_object_tostring (val);
+		}
+		else {
+			group = "composite";
+		}
+
+		val = ucl_object_find_key (obj, "metric");
+		if (val != NULL) {
+			metric = ucl_object_tostring (val);
+		}
+		else {
+			metric = DEFAULT_METRIC;
+		}
+
+		val = ucl_object_find_key (obj, "description");
+		if (val != NULL) {
+			description = ucl_object_tostring (val);
+		}
+		else {
+			description = composite_expression;
+		}
+
+		rspamd_config_add_metric_symbol (cfg, metric, composite_name, score,
+				description, group, FALSE, FALSE);
 	}
 
 	return TRUE;
