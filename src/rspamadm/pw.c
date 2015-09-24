@@ -178,6 +178,12 @@ rspamadm_pw_check (void)
 	pbkdf = &pbkdf_list[0];
 	g_assert (pbkdf != NULL);
 
+	if (encrypted_pwd->len < pbkdf->salt_len + pbkdf->key_len + 3) {
+		msg_err ("incorrect salt: password length: %d, must be at least %z characters",
+				encrypted_pwd->len, pbkdf->salt_len);
+		exit (EXIT_FAILURE);
+	}
+
 	/* get salt */
 	salt = rspamd_encrypted_password_get_str (encrypted_pwd->str, 3, &salt_len);
 	/* get hash */
