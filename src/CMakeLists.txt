@@ -70,6 +70,7 @@ ADD_SUBDIRECTORY(libserver)
 ADD_SUBDIRECTORY(libmime)
 ADD_SUBDIRECTORY(libstat)
 ADD_SUBDIRECTORY(client)
+ADD_SUBDIRECTORY(rspamadm)
 				
 SET(RSPAMDSRC	controller.c
 				fuzzy_storage.c
