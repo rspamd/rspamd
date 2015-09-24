@@ -46,6 +46,9 @@
 #ifdef HAVE_READPASSPHRASE_H
 #include <readpassphrase.h>
 #endif
+#ifdef HAVE_LOCALE_H
+#include <locale.h>
+#endif
 
 #ifdef __APPLE__
 #include <mach/mach_time.h>
@@ -1920,12 +1923,17 @@ rspamd_init_libs (void)
 	ottery_init (NULL);
 
 	rspamd_cryptobox_init ();
-#ifdef HAVE_SETLOCALE
-	/* Set locale setting to C locale to avoid problems in future */
-	setlocale (LC_ALL, "C");
-	setlocale (LC_CTYPE, "C");
-	setlocale (LC_MESSAGES, "C");
-	setlocale (LC_TIME, "C");
+#ifdef HAVE_LOCALE_H
+	if (getenv ("LANG") == NULL) {
+		setlocale (LC_ALL, "C");
+		setlocale (LC_CTYPE, "C");
+		setlocale (LC_MESSAGES, "C");
+		setlocale (LC_TIME, "C");
+	}
+	else {
+		/* Just set the default locale */
+		setlocale (LC_ALL, "");
+	}
 #endif
 
 #ifdef HAVE_OPENSSL

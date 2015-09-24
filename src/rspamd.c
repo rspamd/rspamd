@@ -42,10 +42,6 @@
 #include <openssl/rsa.h>
 #include <openssl/pem.h>
 #endif
-#ifdef HAVE_LOCALE_H
-#include <locale.h>
-#define HAVE_SETLOCALE 1
-#endif
 
 #define msg_err_main(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
@@ -101,7 +97,7 @@ static gboolean gen_keypair = FALSE;
 static gboolean encrypt_password = FALSE;
 /* List of workers that are pending to start */
 static GList *workers_pending = NULL;
-static GHashTable *vars = NULL;
+static GHashTable *ucl_vars = NULL;
 
 #ifdef HAVE_SA_SIGINFO
 static siginfo_t static_sg[64];
@@ -805,7 +801,7 @@ load_rspamd_config (struct rspamd_config *cfg, gboolean init_modules)
 	cfg->compiled_workers = workers;
 
 	if (!rspamd_config_read (cfg, cfg->cfg_name, NULL,
-		config_logger, rspamd_main, vars)) {
+		config_logger, rspamd_main, ucl_vars)) {
 		return FALSE;
 	}
 
@@ -1117,12 +1113,12 @@ main (gint argc, gchar **argv, gchar **env)
 				v = g_strdup (t + 1);
 				*t = '\0';
 
-				if (vars == NULL) {
-					vars = g_hash_table_new_full (rspamd_strcase_hash,
+				if (ucl_vars == NULL) {
+					ucl_vars = g_hash_table_new_full (rspamd_strcase_hash,
 							rspamd_strcase_equal, g_free, g_free);
 				}
 
-				g_hash_table_insert (vars, k, v);
+				g_hash_table_insert (ucl_vars, k, v);
 			}
 		}
 	}
