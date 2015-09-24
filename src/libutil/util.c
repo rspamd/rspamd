@@ -1933,6 +1933,8 @@ rspamd_init_libs (void)
 	else {
 		/* Just set the default locale */
 		setlocale (LC_ALL, "");
+		/* But for some issues we still want C locale */
+		setlocale (LC_NUMERIC, "C");
 	}
 #endif
 
