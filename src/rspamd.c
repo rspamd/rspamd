@@ -1168,7 +1168,7 @@ main (gint argc, gchar **argv, gchar **env)
 		keypair_out = rspamd_http_connection_print_key (keypair,
 				RSPAMD_KEYPAIR_PUBKEY|RSPAMD_KEYPAIR_PRIVKEY|RSPAMD_KEYPAIR_ID|
 				RSPAMD_KEYPAIR_BASE32|RSPAMD_KEYPAIR_HUMAN);
-		rspamd_printf ("%V", keypair_out);
+		rspamd_printf ("%v", keypair_out);
 		exit (EXIT_SUCCESS);
 	}
 

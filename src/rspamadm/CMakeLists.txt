@@ -1,4 +1,4 @@
-SET(RSPAMADMSRC rspamadm.c commands.c pw.c)
+SET(RSPAMADMSRC rspamadm.c commands.c pw.c keypair.c)
 
 ADD_EXECUTABLE(rspamadm ${RSPAMADMSRC})
 TARGET_LINK_LIBRARIES(rspamadm rspamd-server)

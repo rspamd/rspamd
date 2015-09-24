@@ -24,10 +24,12 @@
 #include "rspamadm.h"
 
 extern struct rspamadm_command pw_command;
+extern struct rspamadm_command keypair_command;
 
 const struct rspamadm_command *commands[] = {
 	&help_command,
 	&pw_command,
+	&keypair_command,
 	NULL
 };
 

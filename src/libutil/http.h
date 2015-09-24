@@ -199,7 +199,8 @@ gboolean rspamd_http_connection_is_encrypted (struct rspamd_http_connection *con
 /** Encode output with base 32 */
 #define RSPAMD_KEYPAIR_BASE32 0x8
 /** Human readable output */
-#define RSPAMD_KEYPAIR_HUMAN 0x16
+#define RSPAMD_KEYPAIR_HUMAN 0x10
+#define RSPAMD_KEYPAIR_HEX 0x20
 /**
  * Print keypair encoding it if needed
  * @param key key to print

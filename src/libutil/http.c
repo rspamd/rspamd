@@ -2230,13 +2230,14 @@ rspamd_http_print_key_component (guchar *data, gsize datalen,
 		g_string_append_printf (res, "%s", b32);
 		g_free (b32);
 	}
+	else if (how & RSPAMD_KEYPAIR_HEX) {
+		rspamd_printf_gstring (res, "%*xs", (gint)datalen, data);
+	}
 	else {
 		g_string_append_len (res, data, datalen);
 	}
 
-	if (how & RSPAMD_KEYPAIR_HUMAN) {
-		g_string_append_c (res, '\n');
-	}
+	g_string_append_c (res, '\n');
 }
 
 GString *
