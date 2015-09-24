@@ -1979,7 +1979,7 @@ rspamd_rcl_parse_struct_double (rspamd_mempool_t *pool,
 		g_set_error (err,
 			CFG_RCL_ERROR,
 			EINVAL,
-			"cannot convert param to double");
+			"cannot convert param %s to double", ucl_object_key (obj));
 		return FALSE;
 	}
 
@@ -2007,7 +2007,7 @@ rspamd_rcl_parse_struct_time (rspamd_mempool_t *pool,
 		g_set_error (err,
 			CFG_RCL_ERROR,
 			EINVAL,
-			"cannot convert param to double");
+				"cannot convert param %s to double", ucl_object_key (obj));
 		return FALSE;
 	}
 
@@ -2039,7 +2039,7 @@ rspamd_rcl_parse_struct_time (rspamd_mempool_t *pool,
 		g_set_error (err,
 			CFG_RCL_ERROR,
 			EINVAL,
-			"invalid flags to parse time value");
+			"invalid flags to parse time value in %s", ucl_object_key (obj));
 		return FALSE;
 	}
 
@@ -2078,7 +2078,8 @@ rspamd_rcl_parse_struct_keypair (rspamd_mempool_t *pool,
 			g_set_error (err,
 					CFG_RCL_ERROR,
 					EINVAL,
-					"invalid string with keypair content");
+					"invalid string with keypair content for %s",
+					ucl_object_key (obj));
 			return FALSE;
 		}
 	}
@@ -2088,7 +2089,8 @@ rspamd_rcl_parse_struct_keypair (rspamd_mempool_t *pool,
 			g_set_error (err,
 					CFG_RCL_ERROR,
 					EINVAL,
-					"no sane pubkey found in the keypair");
+					"no sane pubkey found in the keypair: %s",
+					ucl_object_key (obj));
 			return FALSE;
 		}
 		elt = ucl_object_find_key (obj, "privkey");
@@ -2096,7 +2098,8 @@ rspamd_rcl_parse_struct_keypair (rspamd_mempool_t *pool,
 			g_set_error (err,
 					CFG_RCL_ERROR,
 					EINVAL,
-					"no sane privkey found in the keypair");
+					"no sane privkey found in the keypair: %s",
+					ucl_object_key (obj));
 			return FALSE;
 		}
 	}
@@ -2105,7 +2108,8 @@ rspamd_rcl_parse_struct_keypair (rspamd_mempool_t *pool,
 		g_set_error (err,
 				CFG_RCL_ERROR,
 				EINVAL,
-				"no sane pubkey or privkey found in the keypair");
+				"no sane pubkey or privkey found in the keypair: %s",
+				ucl_object_key (obj));
 		return FALSE;
 	}
 
@@ -2126,7 +2130,8 @@ rspamd_rcl_parse_struct_keypair (rspamd_mempool_t *pool,
 	g_set_error (err,
 			CFG_RCL_ERROR,
 			EINVAL,
-			"cannot load the keypair specified");
+			"cannot load the keypair specified: %s",
+			ucl_object_key (obj));
 	return FALSE;
 }
 
@@ -2210,7 +2215,8 @@ rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 			g_set_error (err,
 					CFG_RCL_ERROR,
 					EINVAL,
-					"cannot convert an object or array to string");
+					"cannot convert an object or array to string: %s",
+					ucl_object_key (obj));
 			return FALSE;
 		}
 
@@ -2221,7 +2227,8 @@ rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 		g_set_error (err,
 				CFG_RCL_ERROR,
 				EINVAL,
-				"an array of strings is expected");
+				"an array of strings is expected: %s",
+				ucl_object_key (obj));
 		return FALSE;
 	}
 
@@ -2256,9 +2263,10 @@ rspamd_rcl_parse_struct_boolean (rspamd_mempool_t *pool,
 	}
 	else {
 		g_set_error (err,
-			CFG_RCL_ERROR,
-			EINVAL,
-			"cannot convert an object to boolean");
+				CFG_RCL_ERROR,
+				EINVAL,
+				"cannot convert an object to boolean: %s",
+				ucl_object_key (obj));
 		return FALSE;
 	}
 
@@ -2295,9 +2303,10 @@ rspamd_rcl_parse_struct_addr (rspamd_mempool_t *pool,
 	}
 	else {
 		g_set_error (err,
-			CFG_RCL_ERROR,
-			EINVAL,
-			"cannot convert an object to inet address");
+				CFG_RCL_ERROR,
+				EINVAL,
+				"cannot convert an object to inet address: %s",
+				ucl_object_key (obj));
 		return FALSE;
 	}
 
@@ -2351,7 +2360,8 @@ rspamd_rcl_parse_struct_mime_addr (rspamd_mempool_t *pool,
 				g_set_error (err,
 						CFG_RCL_ERROR,
 						EINVAL,
-						"cannot parse inet address: %s", val);
+						"cannot parse inet address: %s in %s", val,
+						ucl_object_key (obj));
 				ucl_object_iterate_free (it);
 
 				return FALSE;
@@ -2361,7 +2371,8 @@ rspamd_rcl_parse_struct_mime_addr (rspamd_mempool_t *pool,
 			g_set_error (err,
 					CFG_RCL_ERROR,
 					EINVAL,
-					"cannot get inet address from ucl object");
+					"cannot get inet address from ucl object in %s",
+					ucl_object_key (obj));
 			ucl_object_iterate_free (it);
 
 			return FALSE;
