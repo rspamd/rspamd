@@ -23,8 +23,11 @@
  */
 #include "rspamadm.h"
 
+extern struct rspamadm_command pw_command;
+
 const struct rspamadm_command *commands[] = {
 	&help_command,
+	&pw_command,
 	NULL
 };
 

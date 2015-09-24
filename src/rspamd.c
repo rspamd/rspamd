@@ -150,8 +150,6 @@ static GOptionEntry entries[] =
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
-extern const struct rspamd_controller_pbkdf pbkdf_list[];
-
 #ifndef HAVE_SA_SIGINFO
 static void
 sig_handler (gint signo)
@@ -1018,7 +1016,7 @@ do_encrypt_password (void)
 	const struct rspamd_controller_pbkdf *pbkdf;
 	guchar *salt, *key;
 	gchar *encoded_salt, *encoded_key;
-	gchar password[BUFSIZ];
+	gchar password[8192];
 	gsize plen;
 
 	pbkdf = &pbkdf_list[0];

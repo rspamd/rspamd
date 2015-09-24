@@ -224,6 +224,9 @@ void register_custom_controller_command (const gchar *name,
 	gboolean privilleged,
 	gboolean require_message);
 
+#define RSPAMD_PBKDF_ID_V1 1
+extern const struct rspamd_controller_pbkdf pbkdf_list[];
+
 #endif
 
 /*

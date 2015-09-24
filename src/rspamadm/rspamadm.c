@@ -282,7 +282,7 @@ main (gint argc, gchar **argv, gchar **env)
 			nargv[i] = g_strdup (argv[i + nargc]);
 		}
 
-		targc = argc - nargc - 1;
+		targc = argc - nargc;
 		targv = nargv;
 		cmd->run (targc, targv);
 		g_strfreev (nargv);
