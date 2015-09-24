@@ -88,7 +88,6 @@ rspamadm_usage (GOptionContext *context)
 static void
 rspamadm_commands (GOptionContext *context)
 {
-	gchar *help_str;
 	const struct rspamadm_command **cmd;
 
 	printf ("Rspamadm %s\n", RVERSION);
@@ -179,10 +178,10 @@ main (gint argc, gchar **argv, gchar **env)
 	struct rspamd_config *cfg;
 	struct rspamd_main *rspamd_main;
 	GQuark process_quark;
-	gchar **nargv;
+	gchar **nargv, **targv;
 	const gchar *cmd_name;
 	const struct rspamadm_command *cmd;
-	gint i, nargc;
+	gint i, nargc, targc;
 
 	ucl_vars = g_hash_table_new_full (rspamd_strcase_hash,
 		rspamd_strcase_equal, g_free, g_free);
@@ -216,7 +215,7 @@ main (gint argc, gchar **argv, gchar **env)
 	setproctitle ("rspamdadm");
 
 	/* Now read options and store everything till the first non-dash argument */
-	nargv = g_slice_alloc0 (sizeof (gchar *) * (argc + 1));
+	nargv = g_malloc0 (sizeof (gchar *) * (argc + 1));
 	nargv[0] = g_strdup (argv[0]);
 
 	for (i = 1, nargc = 1; i < argc; i ++) {
@@ -242,11 +241,15 @@ main (gint argc, gchar **argv, gchar **env)
 					RID);
 	g_option_context_set_main_group (context, og);
 
-	if (!g_option_context_parse (context, &nargc, &nargv, &error)) {
+	targv = nargv;
+	targc = nargc;
+	if (!g_option_context_parse (context, &targc, &targv, &error)) {
 		fprintf (stderr, "option parsing failed: %s\n", error->message);
 		g_error_free (error);
 		exit (1);
 	}
+
+	g_strfreev (nargv);
 
 	if (show_version) {
 		rspamadm_version ();
@@ -272,7 +275,17 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	if (nargc < argc) {
-		cmd->run (argc - nargc - 1, &argv[nargc]);
+		nargv = g_malloc0 (sizeof (gchar *) * (argc - nargc + 1));
+		nargv[0] = g_strdup_printf ("%s %s", argv[0], cmd_name);
+
+		for (i = 1; i < argc - nargc; i ++) {
+			nargv[i] = g_strdup (argv[i + nargc]);
+		}
+
+		targc = argc - nargc - 1;
+		targv = nargv;
+		cmd->run (targc, targv);
+		g_strfreev (nargv);
 	}
 	else {
 		cmd->run (0, NULL);
