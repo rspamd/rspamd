@@ -1913,9 +1913,16 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 
 	if (S_ISDIR (st.st_mode) && expand_path) {
 		/* Try to append 'index.html' to the url */
-		g_string_append_printf (lookup, "%c%s", G_DIR_SEPARATOR,
-			"index.html");
-		return rspamd_http_router_try_file (entry, lookup, FALSE);
+		GString *nlookup;
+		gboolean ret;
+
+		nlookup = g_string_sized_new (lookup->len + sizeof ("index.html") + 1);
+		rspamd_printf_gstring (nlookup, "%v%c%s", lookup, G_DIR_SEPARATOR,
+				"index.html");
+		ret = rspamd_http_router_try_file (entry, nlookup, FALSE);
+		g_string_free (nlookup, TRUE);
+
+		return ret;
 	}
 	else if (!S_ISREG (st.st_mode)) {
 		return FALSE;
