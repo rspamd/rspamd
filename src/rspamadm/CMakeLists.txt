@@ -1,4 +1,12 @@
-SET(RSPAMADMSRC rspamadm.c commands.c pw.c keypair.c)
+SET(RSPAMADMSRC rspamadm.c commands.c pw.c keypair.c configtest.c
+        ${CMAKE_BINARY_DIR}/src/workers.c
+        ${CMAKE_BINARY_DIR}/src/modules.c
+        ${CMAKE_SOURCE_DIR}/src/controller.c
+        ${CMAKE_SOURCE_DIR}/src/fuzzy_storage.c
+        ${CMAKE_SOURCE_DIR}/src/lua_worker.c
+        ${CMAKE_SOURCE_DIR}/src/smtp_proxy.c
+        ${CMAKE_SOURCE_DIR}/src/worker.c
+        ${CMAKE_SOURCE_DIR}/src/http_proxy.c)
 
 ADD_EXECUTABLE(rspamadm ${RSPAMADMSRC})
 TARGET_LINK_LIBRARIES(rspamadm rspamd-server)

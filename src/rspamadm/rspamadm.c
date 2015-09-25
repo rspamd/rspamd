@@ -32,6 +32,7 @@ static gboolean list_commands = FALSE;
 static gboolean show_help = FALSE;
 static gboolean show_version = FALSE;
 GHashTable *ucl_vars = NULL;
+struct rspamd_main *rspamd_main = NULL;
 
 static void rspamadm_help (gint argc, gchar **argv);
 static const char* rspamadm_help_help (gboolean full_help);
@@ -176,7 +177,6 @@ main (gint argc, gchar **argv, gchar **env)
 	GOptionContext *context;
 	GOptionGroup *og;
 	struct rspamd_config *cfg;
-	struct rspamd_main *rspamd_main;
 	GQuark process_quark;
 	gchar **nargv, **targv;
 	const gchar *cmd_name;
