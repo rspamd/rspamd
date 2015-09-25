@@ -1154,18 +1154,21 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	}
 	ucl_object_unref (top);
 
-	/* Update stat for default metric */
-	metric_res = g_hash_table_lookup (task->results, DEFAULT_METRIC);
-	if (metric_res != NULL) {
-		action = rspamd_check_action_metric (task, metric_res->score, &required_score,
-				metric_res->metric);
-		if (action <= METRIC_ACTION_NOACTION) {
-			task->worker->srv->stat->actions_stat[action]++;
+	if (!(task->flags & RSPAMD_TASK_FLAG_NO_STAT)) {
+		/* Update stat for default metric */
+		metric_res = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+		if (metric_res != NULL) {
+			action = rspamd_check_action_metric (task, metric_res->score, &required_score,
+					metric_res->metric);
+			if (action <= METRIC_ACTION_NOACTION) {
+				task->worker->srv->stat->actions_stat[action]++;
+			}
 		}
-	}
 
-	/* Increase counters */
-	task->worker->srv->stat->messages_scanned++;
+		/* Increase counters */
+
+		task->worker->srv->stat->messages_scanned++;
+	}
 }
 
 void
