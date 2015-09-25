@@ -42,15 +42,13 @@ worker {
 }
 {% endhighlight %}
 
-Password option should be changed for sure for your specific configuration. Encrypted password using is encouraged (`rspamd --encrypt-password`).
+Password option should be changed for sure for your specific configuration. Encrypted password using is encouraged (`rspamadm pw --encrypt`).
 
 ##Interface setup.
 
 Interface itself is written in pure HTML5/js and, hence, it requires zero setup.
 Just enter a password for webui access and you are ready.
 
-
 ##Contact information.
 
-Rspamd interface is `Apache-2.0` licensed software. For all questions rlated to this
-product please email to `rspamd-interface <at> highsecure.ru`.
+Rspamd interface is `Apache-2.0` licensed software.
