@@ -1783,6 +1783,9 @@ rspamd_controller_handle_stat_common (
 
 	ucl_object_insert_key (top, ucl_object_fromint (
 			stat->messages_scanned), "scanned", 0, false);
+	ucl_object_insert_key (top, ucl_object_fromint (
+			stat->messages_learned), "learned", 0, false);
+
 	if (stat->messages_scanned > 0) {
 		sub = ucl_object_typed_new (UCL_OBJECT);
 		for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
