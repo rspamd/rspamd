@@ -2110,6 +2110,12 @@ rspamd_controller_load_saved_stats (struct rspamd_controller_worker_ctx *ctx)
 		stat_copy.messages_scanned = ucl_object_toint (elt);
 	}
 
+	elt = ucl_object_find_key (obj, "learned");
+
+	if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
+		stat_copy.messages_learned = ucl_object_toint (elt);
+	}
+
 	elt = ucl_object_find_key (obj, "actions");
 
 	if (elt != NULL) {
@@ -2204,6 +2210,8 @@ rspamd_controller_store_saved_stats (struct rspamd_controller_worker_ctx *ctx)
 	top = ucl_object_typed_new (UCL_OBJECT);
 	ucl_object_insert_key (top, ucl_object_fromint (
 			stat->messages_scanned), "scanned", 0, false);
+	ucl_object_insert_key (top, ucl_object_fromint (
+			stat->messages_learned), "learned", 0, false);
 
 	if (stat->messages_scanned > 0) {
 		sub = ucl_object_typed_new (UCL_OBJECT);
