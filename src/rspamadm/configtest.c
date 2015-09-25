@@ -59,11 +59,11 @@ rspamadm_configtest_help (gboolean full_help)
 	const char *help_str;
 
 	if (full_help) {
-		help_str = "Perform configuration file test\n"
+		help_str = "Perform configuration file test\n\n"
 				"Usage: rspamadm configtest [-q -c <config_name>]\n"
-				"Where options are:\n"
-				"-q quiet output\n"
-				"-c config file to test\n"
+				"Where options are:\n\n"
+				"-q: quiet output\n"
+				"-c: config file to test\n"
 				"--help: shows available options and commands";
 	}
 	else {

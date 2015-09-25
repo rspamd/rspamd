@@ -62,9 +62,9 @@ rspamadm_pw_help (gboolean full_help)
 	const char *help_str;
 
 	if (full_help) {
-		help_str = "Manipulate with passwords in rspamd\n"
+		help_str = "Manipulate with passwords in rspamd\n\n"
 				"Usage: rspamadm pw [command]\n"
-				"Where commands are:\n"
+				"Where commands are:\n\n"
 				"--encrypt: encrypt password (this is a default command)\n"
 				"--check: check encrypted password using encrypted password\n"
 				"--help: shows available options and commands";

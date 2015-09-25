@@ -72,7 +72,6 @@ static void
 rspamadm_version (void)
 {
 	printf ("Rspamadm %s\n", RVERSION);
-	exit (EXIT_SUCCESS);
 }
 
 static void
@@ -82,12 +81,10 @@ rspamadm_usage (GOptionContext *context)
 
 	help_str = g_option_context_get_help (context, TRUE, NULL);
 	printf ("%s", help_str);
-
-	exit (EXIT_SUCCESS);
 }
 
 static void
-rspamadm_commands (GOptionContext *context)
+rspamadm_commands ()
 {
 	const struct rspamadm_command **cmd;
 
@@ -98,11 +95,11 @@ rspamadm_commands (GOptionContext *context)
 	cmd = commands;
 
 	while (*cmd) {
-		printf ("  %-18s %-60s\n", (*cmd)->name, (*cmd)->help (FALSE));
+		if (!((*cmd)->flags & RSPAMADM_FLAG_NOHELP)) {
+			printf ("  %-18s %-60s\n", (*cmd)->name, (*cmd)->help (FALSE));
+		}
 		cmd ++;
 	}
-
-	exit (EXIT_SUCCESS);
 }
 
 static const char *
@@ -125,13 +122,17 @@ static void
 rspamadm_help (gint argc, gchar **argv)
 {
 	const gchar *cmd_name;
-	const struct rspamadm_command *cmd;
+	const struct rspamadm_command *cmd, **cmd_list;
 
-	if (argc == 0) {
+	printf ("Rspamadm %s\n", RVERSION);
+	printf ("Usage: rspamadm [global_options] command [command_options]\n\n");
+
+	if (argc <= 1) {
 		cmd_name = "help";
 	}
 	else {
 		cmd_name = argv[1];
+		printf ("Showing help for %s command\n\n", cmd_name);
 	}
 
 	cmd = rspamadm_search_command (cmd_name);
@@ -141,7 +142,22 @@ rspamadm_help (gint argc, gchar **argv)
 		exit (EXIT_FAILURE);
 	}
 
-	printf ("%s\n", cmd->help (TRUE));
+	if (strcmp (cmd_name, "help") == 0) {
+		printf ("Available commands:\n");
+
+		cmd_list = commands;
+
+		while (*cmd_list) {
+			if (!((*cmd_list)->flags & RSPAMADM_FLAG_NOHELP)) {
+				printf ("  %-18s %-60s\n", (*cmd_list)->name,
+						(*cmd_list)->help (FALSE));
+			}
+			cmd_list++;
+		}
+	}
+	else {
+		printf ("%s\n", cmd->help (TRUE));
+	}
 }
 
 static gboolean
@@ -253,12 +269,15 @@ main (gint argc, gchar **argv, gchar **env)
 
 	if (show_version) {
 		rspamadm_version ();
+		exit (EXIT_SUCCESS);
 	}
 	if (show_help) {
 		rspamadm_usage (context);
+		exit (EXIT_SUCCESS);
 	}
 	if (list_commands) {
-		rspamadm_commands (context);
+		rspamadm_commands ();
+		exit (EXIT_SUCCESS);
 	}
 
 	cmd_name = argv[nargc];

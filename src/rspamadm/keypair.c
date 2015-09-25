@@ -55,11 +55,11 @@ rspamadm_keypair_help (gboolean full_help)
 	const char *help_str;
 
 	if (full_help) {
-		help_str = "Create key pairs for httpcrypt\n"
+		help_str = "Create key pairs for httpcrypt\n\n"
 				"Usage: rspamadm keypair [-x -r]\n"
-				"Where options are:\n"
-				"-x encode with hex instead of base32\n"
-				"-r print raw base32/hex\n"
+				"Where options are:\n\n"
+				"-x: encode with hex instead of base32\n"
+				"-r: print raw base32/hex\n"
 				"--help: shows available options and commands";
 	}
 	else {
