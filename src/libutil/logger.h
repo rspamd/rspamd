@@ -123,6 +123,15 @@ void rspamd_log_debug (rspamd_logger_t *logger);
  */
 void rspamd_log_nodebug (rspamd_logger_t *logger);
 
+/**
+ * Return array of counters (4 numbers):
+ * 0 - errors
+ * 1 - warnings
+ * 2 - info messages
+ * 3 - debug messages
+ */
+const guint64* rspamd_log_counters (rspamd_logger_t *logger);
+
 /* Typical functions */
 
 /* Logging in postfix style */

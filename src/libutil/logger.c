@@ -67,6 +67,7 @@ struct rspamd_logger_s {
 	gchar *saved_id;
 	rspamd_mempool_t *pool;
 	rspamd_mempool_mutex_t *mtx;
+	guint64 log_cnt[4];
 };
 
 static const gchar lf_chr = '\n';
@@ -434,17 +435,36 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
 			fprintf (stderr, "%s\n", logbuf);
 		}
 	}
-	else if (rspamd_logger_need_log (rspamd_log, log_level, module)) {
-		rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
-		rspamd_escape_log_string (logbuf);
-		rspamd_mempool_lock_mutex (rspamd_log->mtx);
-		rspamd_log->log_func (NULL, module, id,
-				function,
-				log_level,
-				logbuf,
-				FALSE,
-				rspamd_log);
-		rspamd_mempool_unlock_mutex (rspamd_log->mtx);
+	else {
+		if (rspamd_logger_need_log (rspamd_log, log_level, module)) {
+			rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
+			rspamd_escape_log_string (logbuf);
+			rspamd_mempool_lock_mutex (rspamd_log->mtx);
+			rspamd_log->log_func (NULL, module, id,
+					function,
+					log_level,
+					logbuf,
+					FALSE,
+					rspamd_log);
+			rspamd_mempool_unlock_mutex (rspamd_log->mtx);
+		}
+
+		switch (log_level) {
+		case G_LOG_LEVEL_CRITICAL:
+			rspamd_log->log_cnt[0] ++;
+			break;
+		case G_LOG_LEVEL_WARNING:
+			rspamd_log->log_cnt[1]++;
+			break;
+		case G_LOG_LEVEL_INFO:
+			rspamd_log->log_cnt[2]++;
+			break;
+		case G_LOG_LEVEL_DEBUG:
+			rspamd_log->log_cnt[3]++;
+			break;
+		default:
+			break;
+		}
 	}
 }
 
