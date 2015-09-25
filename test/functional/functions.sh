@@ -96,7 +96,7 @@ run_rspamc() {
 	_rspamc="$TEST_DIRNAME/../../src/client/rspamc"
 
 	case $_command in
-		learn_spam|learn_ham|fuzzy_add|fuzzy_del|stats) _host="localhost:56790" ;;
+		learn_spam|learn_ham|fuzzy_add|fuzzy_del|stat) _host="localhost:56790" ;;
 		*) _host="localhost:56789" ;;
 	esac
 
