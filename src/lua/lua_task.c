@@ -464,6 +464,33 @@ LUA_FUNCTION_DEF (task, cache_set);
  */
 LUA_FUNCTION_DEF (task, get_size);
 
+/***
+ * @method task:set_flag(flag_name[, set])
+ * Set specific flag for task:
+ *
+ * - `no_log`: do not log task summary
+ * - `no_stat`: do not include task into scanned stats
+ * - `pass_all`: check all filters for task
+ * - `extended_urls`: output extended info about urls
+ * - `skip`: skip task processing
+ * @param {string} flag to set
+ * @param {boolean} set set or clear flag (default is set)
+ */
+LUA_FUNCTION_DEF (task, set_flag);
+
+/***
+ * @method task:get_flags()
+ * Get list of flags for task:
+ *
+ * - `no_log`: do not log task summary
+ * - `no_stat`: do not include task into scanned stats
+ * - `pass_all`: check all filters for task
+ * - `extended_urls`: output extended info about urls
+ * - `skip`: skip task processing
+ * @return {array of strings} table with all flags as strings
+ */
+LUA_FUNCTION_DEF (task, get_flags);
+
 static const struct luaL_reg tasklib_f[] = {
 	LUA_INTERFACE_DEF (task, create_empty),
 	LUA_INTERFACE_DEF (task, create_from_buffer),
@@ -520,6 +547,8 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, cache_get),
 	LUA_INTERFACE_DEF (task, cache_set),
 	LUA_INTERFACE_DEF (task, get_size),
+	LUA_INTERFACE_DEF (task, set_flag),
+	LUA_INTERFACE_DEF (task, get_flags),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -1848,6 +1877,113 @@ lua_task_get_size (lua_State *L)
 	return 1;
 }
 
+/**
+* - `no_log`: do
+not log
+task summary
+* - `no_stat`: do
+not include
+task into
+scanned stats
+* - `pass_all`:
+check all
+filters for task
+* - `extended_urls`:
+output extended
+info about
+urls
+* - `skip`:
+skip task
+processing
+*/
+
+#define LUA_TASK_FLAG(flag, set) do { \
+	task->flags = (set) ? (task->flags | (flag)) : (task->flags & ~(flag)); \
+} while(0)
+
+static gint
+lua_task_set_flag (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *flag = luaL_checkstring (L, 2);
+	gboolean set = TRUE;
+
+	if (lua_gettop (L) >= 3) {
+		set = lua_toboolean (L, 3);
+	}
+
+	if (task != NULL && flag != NULL) {
+		if (strcmp (flag, "pass_all") == 0) {
+			LUA_TASK_FLAG (RSPAMD_TASK_FLAG_PASS_ALL, set);
+		}
+		else if (strcmp (flag, "no_log") == 0) {
+			LUA_TASK_FLAG (RSPAMD_TASK_FLAG_NO_LOG, set);
+		}
+		else if (strcmp (flag, "no_stat") == 0) {
+			LUA_TASK_FLAG (RSPAMD_TASK_FLAG_NO_STAT, set);
+		}
+		else if (strcmp (flag, "skip") == 0) {
+			LUA_TASK_FLAG (RSPAMD_TASK_FLAG_SKIP, set);
+		}
+		else if (strcmp (flag, "extended_urls") == 0) {
+			LUA_TASK_FLAG (RSPAMD_TASK_FLAG_EXT_URLS, set);
+		}
+		else {
+			msg_warn_task ("unknown flag requested: %s", flag);
+		}
+	}
+
+	return 0;
+}
+
+#undef LUA_TASK_FLAG
+
+static gint
+lua_task_get_flags (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	gint idx = 1;
+	guint flags, bit, i;
+
+	lua_newtable (L);
+
+	if (task) {
+		flags = task->flags;
+
+		for (i = 0; i < sizeof (guint) * NBBY; i ++) {
+			bit = (1U << i);
+
+			if (flags & bit) {
+				switch (bit) {
+				case RSPAMD_TASK_FLAG_PASS_ALL:
+					lua_pushstring (L, "pass_all");
+					lua_rawseti (L, -2, idx ++);
+					break;
+				case RSPAMD_TASK_FLAG_NO_LOG:
+					lua_pushstring (L, "no_log");
+					lua_rawseti (L, -2, idx++);
+					break;
+				case RSPAMD_TASK_FLAG_NO_STAT:
+					lua_pushstring (L, "no_stat");
+					lua_rawseti (L, -2, idx++);
+					break;
+				case RSPAMD_TASK_FLAG_SKIP:
+					lua_pushstring (L, "skip");
+					lua_rawseti (L, -2, idx++);
+					break;
+				case RSPAMD_TASK_FLAG_EXT_URLS:
+					lua_pushstring (L, "extended_urls");
+					lua_rawseti (L, -2, idx++);
+					break;
+				default:
+					break;
+				}
+			}
+		}
+	}
+
+	return 1;
+}
 
 static gint
 lua_task_learn (lua_State *L)
