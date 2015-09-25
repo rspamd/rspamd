@@ -53,7 +53,7 @@ static GOptionEntry entries[] = {
 			"Enable verbose logging", NULL},
 	{"list-commands", 'l', 0, G_OPTION_ARG_NONE, &list_commands,
 			"List available commands", NULL},
-	{"var", 0, 0, G_OPTION_ARG_CALLBACK, rspamadm_parse_ucl_var,
+	{"var", 0, 0, G_OPTION_ARG_CALLBACK, (gpointer)rspamadm_parse_ucl_var,
 			"Redefine UCL variable", NULL},
 	{"help", 'h', 0, G_OPTION_ARG_NONE, &show_help,
 			"Show help", NULL},

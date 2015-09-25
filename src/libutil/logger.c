@@ -965,3 +965,13 @@ rspamd_log_nodebug (rspamd_logger_t *rspamd_log)
 {
 	rspamd_log->is_debug = FALSE;
 }
+
+const guint64 *
+rspamd_log_counters (rspamd_logger_t *logger)
+{
+	if (logger) {
+		return logger->log_cnt;
+	}
+
+	return NULL;
+}

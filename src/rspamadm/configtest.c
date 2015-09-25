@@ -30,6 +30,7 @@
 
 static gboolean quiet = FALSE;
 static gchar *config = NULL;
+static gboolean strict = FALSE;
 extern struct rspamd_main *rspamd_main;
 /* Defined in modules.c */
 extern module_t *modules[];
@@ -50,6 +51,8 @@ static GOptionEntry entries[] = {
 				"Supress output", NULL},
 		{"config", 'c', 0, G_OPTION_ARG_STRING, &config,
 				"Config file to test",     NULL},
+		{"strict", 's', 0, G_OPTION_ARG_NONE, &strict,
+				"Stop on any error in config", NULL},
 		{NULL,  0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -104,6 +107,7 @@ rspamadm_configtest (gint argc, gchar **argv)
 	struct rspamd_config *cfg = rspamd_main->cfg;
 	gboolean ret = FALSE;
 	worker_t **pworker;
+	const guint64 *log_cnt;
 
 	context = g_option_context_new (
 			"keypair - create encryption keys");
@@ -163,6 +167,17 @@ rspamadm_configtest (gint argc, gchar **argv)
 		if (!rspamd_symbols_cache_validate (rspamd_main->cfg->cache,
 				rspamd_main->cfg,
 				FALSE)) {
+			ret = FALSE;
+		}
+	}
+
+	if (strict && ret) {
+		log_cnt = rspamd_log_counters (rspamd_main->logger);
+
+		if (log_cnt && log_cnt[0] > 0) {
+			if (!quiet) {
+				rspamd_printf ("%L errors found\n", log_cnt[0]);
+			}
 			ret = FALSE;
 		}
 	}
