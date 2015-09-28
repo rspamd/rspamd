@@ -283,6 +283,22 @@ elseif type(set_section) == "table" then
 end
  */
 LUA_FUNCTION_DEF (config, get_key);
+
+/***
+ * @method rspamd_config:add_condition(symbol, condition)
+ * Adds condition callback for specified symbol
+ * @param {string} symbol symbol's name
+ * @param {function} condition condition callback
+ * @return {boolean} true if condition has been added
+ * @example
+
+rspamd_config:add_condition('FUZZY_DENIED', function(task)
+  if some_map:find_key(task:get_from()) then return false end
+  return true
+end)
+ */
+LUA_FUNCTION_DEF (config, add_condition);
+
 /***
  * @method rspamd_config:__newindex(name, callback)
  * This metamethod is called if new indicies are added to the `rspamd_config` object.
@@ -357,6 +373,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_post_filter),
 	LUA_INTERFACE_DEF (config, get_api_version),
 	LUA_INTERFACE_DEF (config, get_key),
+	LUA_INTERFACE_DEF (config, add_condition),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
 	{NULL, NULL}
@@ -1488,6 +1505,30 @@ lua_config_newindex (lua_State *L)
 	}
 
 	return 0;
+}
+
+static gint
+lua_config_add_condition (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *sym = luaL_checkstring (L, 2);
+	gboolean ret = FALSE;
+	gint condref;
+
+	if (cfg && sym && lua_type (L, 3) == LUA_TFUNCTION) {
+		lua_pushvalue (L, 3);
+		condref = luaL_ref (L, LUA_REGISTRYINDEX);
+
+		ret = rspamd_symbols_cache_add_condition_delayed (cfg->cache, sym, L,
+				condref);
+
+		if (!ret) {
+			luaL_unref (L, LUA_REGISTRYINDEX, condref);
+		}
+	}
+
+	lua_pushboolean (L, ret);
+	return 1;
 }
 
 struct lua_map_callback_data {
