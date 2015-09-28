@@ -71,7 +71,7 @@ static const gchar *create_tables_sql =
 static const gchar *select_digests_sql =
 				"SELECT * FROM digests;";
 static const gchar *select_shingles_sql =
-				"SELECT * FROM shingles WHERE digest_id=?1;";
+				"SELECT * FROM shingles;";
 
 enum statement_idx {
 	TRANSACTION_START = 0,
@@ -197,6 +197,7 @@ struct fuzzy_merge_op {
 			guint flag;
 			gint64 value;
 			gint64 tm;
+			gint64 id;
 		} dgst;
 		struct {
 			guint number;
@@ -231,13 +232,13 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 	GPtrArray *source_dbs;
 	GArray *prstmt;
 	GPtrArray *ops;
-	GHashTable *unique_ops;
+	GHashTable *unique_ops, *digests_id;
 	rspamd_mempool_t *pool;
 	guint i, nsrc;
 	guint64 old_count, inserted = 0, updated = 0, shingles_inserted = 0;
 	gint64 value, flag, tm, dig_id, src_value, src_flag;
 	sqlite3 *src;
-	sqlite3_stmt *stmt;
+	sqlite3_stmt *stmt, *shgl_stmt;
 	struct fuzzy_merge_op *nop, *op;
 
 	context = g_option_context_new (
@@ -315,6 +316,8 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 			exit (1);
 		}
 
+		/* Temporary index for inserted IDs */
+		digests_id = g_hash_table_new (g_int64_hash, g_int64_equal);
 
 		while (sqlite3_step (stmt) == SQLITE_ROW) {
 			/* id, flag, digest, value, time */
@@ -341,6 +344,7 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 					nop->data.dgst.flag = flag;
 					/* Update time as well */
 					nop->data.dgst.tm = sqlite3_column_int64 (stmt, 4);
+					nop->data.dgst.id = sqlite3_column_int64 (stmt, 0);
 
 					if ((op = g_hash_table_lookup (unique_ops, nop)) == NULL) {
 						g_ptr_array_add (ops, nop);
@@ -354,8 +358,6 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 				}
 			}
 			else {
-				sqlite3_stmt *shgl_stmt;
-
 				/* Digest has not been found in the destination db, insert it */
 				nop = g_slice_alloc (sizeof (*nop));
 				nop->op = OP_INSERT;
@@ -365,10 +367,13 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 				nop->data.dgst.value = src_value;
 				/* Update time as well */
 				nop->data.dgst.tm = sqlite3_column_int64 (stmt, 4);
+				nop->data.dgst.id = sqlite3_column_int64 (stmt, 0);
 
 				if ((op = g_hash_table_lookup (unique_ops, nop)) == NULL) {
 					g_ptr_array_add (ops, nop);
 					g_hash_table_insert (unique_ops, nop, nop);
+					g_hash_table_insert (digests_id, &nop->data.dgst.id,
+							nop);
 				}
 				else {
 					continue;
@@ -378,30 +383,46 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 				 * If we have no digest registered, we also need to check
 				 * shingles associated with this digest
 				 */
-				if (sqlite3_prepare_v2 (src,
-						select_shingles_sql,
-						-1,
-						&shgl_stmt,
-						NULL) != SQLITE_OK) {
-					sqlite3_bind_int64 (shgl_stmt,
-							sqlite3_column_int64 (stmt, 0), 1);
 
-					while (sqlite3_step (shgl_stmt) == SQLITE_ROW) {
-						/* value, number, digest_id */
-						nop->op = OP_INSERT_SHINGLE;
-						memcpy (nop->digest, digest, sizeof (nop->digest));
-						nop->data.shgl.number = sqlite3_column_int64 (shgl_stmt, 1);
-						nop->data.shgl.value = sqlite3_column_int64 (shgl_stmt,
-								0);
-						g_ptr_array_add (ops, nop);
-					}
-
-					sqlite3_finalize (shgl_stmt);
-				}
 			}
 		}
 
+		/* We also need to scan all shingles and select those that
+		 * are to be inserted
+		 */
+		if (sqlite3_prepare_v2 (src,
+				select_shingles_sql,
+				-1,
+				&shgl_stmt,
+				NULL) == SQLITE_OK) {
+			sqlite3_bind_int64 (shgl_stmt,
+					sqlite3_column_int64 (stmt, 0), 1);
+
+			while (sqlite3_step (shgl_stmt) == SQLITE_ROW) {
+				gint64 id = sqlite3_column_int64 (shgl_stmt, 2);
+
+				if ((op = g_hash_table_lookup (digests_id, &id)) != NULL) {
+					/* value, number, digest_id */
+					nop = g_slice_alloc (sizeof (*nop));
+					nop->op = OP_INSERT_SHINGLE;
+					memcpy (nop->digest, op->digest, sizeof (nop->digest));
+					nop->data.shgl.number = sqlite3_column_int64 (shgl_stmt, 1);
+					nop->data.shgl.value = sqlite3_column_int64 (shgl_stmt,
+							0);
+					g_ptr_array_add (ops, nop);
+				}
+			}
+
+			sqlite3_finalize (shgl_stmt);
+		}
+		else {
+			rspamd_fprintf (stderr, "cannot prepare statement %s: %s\n",
+					select_shingles_sql, sqlite3_errmsg (src));
+			exit (1);
+		}
+
 		/* Cleanup */
+		g_hash_table_unref (digests_id);
 		sqlite3_finalize (stmt);
 		sqlite3_close (src);
 	}
