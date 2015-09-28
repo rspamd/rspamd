@@ -1,3 +1,27 @@
+1.0.3:
+	* Fix piechart clean slice (#380)
+	* Fix controller crashes when GString is reallocated (#381)
+	* Correctly set locale before start
+	* Set C locale for numeric values
+	* Add rspamadm routine:
+		- add `pw` command to manage passwords
+		- add `help` command for displaying help
+		- add `configtest` command to check configuration files
+		- add `keypair` command for generating encryption keys
+		- add `fuzzy_merge` routine to merge fuzzy sqlite databases
+		- add a simple manual page for rspamadm
+	* Allow metric registration for composite expressions
+	* Add strict mode for configtest
+	* Add logger counters
+	* Save and show learned messages count (#383)
+	* Add `no_stat` flag
+	* Add `task:set_flag` and `task:get_flags` (#382)
+	* Enable foreign keys in sqlite3
+	* Remove orphaned shingles from fuzzy storage
+	* Optimize synchronization steps for fuzzy storage
+	* Allow delayed conditions registration
+	* Add lua API for conditions registering
+
 1.0.2:
 	* Fix critical bug in webui that prevents password from being sent
 	* Rework webui view:
