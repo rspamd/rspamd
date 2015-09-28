@@ -302,6 +302,8 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 
 	for (i = 0; i < nsrc; i++) {
 		const guchar *digest;
+		guint64 nsrc_ops = 0, ndup_dst = 0, ndup_other = 0, nupdated = 0,
+				nsrc_shingles = 0;
 
 		src = g_ptr_array_index (source_dbs, i);
 		
@@ -349,16 +351,28 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 					if ((op = g_hash_table_lookup (unique_ops, nop)) == NULL) {
 						g_ptr_array_add (ops, nop);
 						g_hash_table_insert (unique_ops, nop, nop);
+						nupdated ++;
 					}
 					else {
 						if (op->data.dgst.value < nop->data.dgst.value) {
 							op->data.dgst.value = nop->data.dgst.value;
+							op->data.dgst.tm = nop->data.dgst.tm;
+							nupdated ++;
 						}
+						else {
+							ndup_other ++;
+						}
+						g_slice_free1 (sizeof (*nop), nop);
 					}
+				}
+				else {
+					ndup_dst ++;
 				}
 			}
 			else {
-				/* Digest has not been found in the destination db, insert it */
+				/* Digest has not been found, but maybe we have the same in other
+				 * sources ?
+				 */
 				nop = g_slice_alloc (sizeof (*nop));
 				nop->op = OP_INSERT;
 				memcpy (nop->digest, digest,
@@ -374,16 +388,20 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 					g_hash_table_insert (unique_ops, nop, nop);
 					g_hash_table_insert (digests_id, &nop->data.dgst.id,
 							nop);
+					nsrc_ops ++;
 				}
 				else {
-					continue;
+					if (op->data.dgst.value < nop->data.dgst.value) {
+						op->data.dgst.value = nop->data.dgst.value;
+						op->data.dgst.tm = nop->data.dgst.tm;
+						op->data.dgst.tm = nop->data.dgst.tm;
+						nupdated++;
+					}
+					else {
+						ndup_other++;
+					}
+					g_slice_free1 (sizeof (*nop), nop);
 				}
-
-				/*
-				 * If we have no digest registered, we also need to check
-				 * shingles associated with this digest
-				 */
-
 			}
 		}
 
@@ -410,6 +428,7 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 					nop->data.shgl.value = sqlite3_column_int64 (shgl_stmt,
 							0);
 					g_ptr_array_add (ops, nop);
+					nsrc_shingles ++;
 				}
 			}
 
@@ -421,6 +440,17 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 			exit (1);
 		}
 
+		if (!quiet) {
+			rspamd_printf ("processed %s: %L new hashes, %L duplicate hashes (other sources), "
+							"%L duplicate hashes (destination), %L hashes to update, "
+							"%L shingles to insert\n\n",
+					sources[i],
+					nsrc_ops,
+					ndup_other,
+					ndup_dst,
+					nupdated,
+					nsrc_shingles);
+		}
 		/* Cleanup */
 		g_hash_table_unref (digests_id);
 		sqlite3_finalize (stmt);
