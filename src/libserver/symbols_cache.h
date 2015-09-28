@@ -90,10 +90,25 @@ gint rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
  * @param cbref callback reference (returned by luaL_ref)
  * @return TRUE if condition has been added
  */
-gboolean rspamd_symbols_cache_add_condition (struct symbols_cache *cache, gint id, lua_State *L, gint cbref);
+gboolean rspamd_symbols_cache_add_condition (struct symbols_cache *cache,
+		gint id, lua_State *L, gint cbref);
+
 
 /**
- * Find symbol in cache by id and returns its id
+ * Add delayed condition to the specific symbol in cache. So symbol can be absent
+ * to the moment of addition
+ * @param cache
+ * @param id id of symbol
+ * @param L lua state pointer
+ * @param cbref callback reference (returned by luaL_ref)
+ * @return TRUE if condition has been added
+ */
+gboolean rspamd_symbols_cache_add_condition_delayed (struct symbols_cache *cache,
+		const gchar *sym, lua_State *L, gint cbref);
+
+/**
+ * Find symbol in cache by id and returns its id resolving virtual symbols if
+ * applicable
  * @param cache
  * @param name
  * @return id of symbol or (-1) if a symbol has not been found

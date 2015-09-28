@@ -62,6 +62,7 @@ struct symbols_cache {
 	GPtrArray *items_by_order;
 	GPtrArray *items_by_id;
 	GList *delayed_deps;
+	GList *delayed_conditions;
 	rspamd_mempool_t *static_pool;
 	gdouble max_weight;
 	guint used_items;
@@ -116,6 +117,12 @@ struct cache_dependency {
 struct delayed_cache_dependency {
 	gchar *from;
 	gchar *to;
+};
+
+struct delayed_cache_condition {
+	gchar *sym;
+	gint cbref;
+	lua_State *L;
 };
 
 struct cache_savepoint {
@@ -216,8 +223,10 @@ post_cache_init (struct symbols_cache *cache)
 	struct cache_item *it, *dit;
 	struct cache_dependency *dep, *rdep;
 	struct delayed_cache_dependency *ddep;
+	struct delayed_cache_condition *dcond;
 	GList *cur;
 	guint i, j;
+	gint id;
 
 	g_ptr_array_sort_with_data (cache->items_by_order, cache_logic_cmp, cache);
 
@@ -225,7 +234,13 @@ post_cache_init (struct symbols_cache *cache)
 	while (cur) {
 		ddep = cur->data;
 
-		it = g_hash_table_lookup (cache->items_by_symbol, ddep->from);
+		id = rspamd_symbols_cache_find_symbol (cache, ddep->from);
+		if (id != -1) {
+			it = g_ptr_array_index (cache->items_by_id, id);
+		}
+		else {
+			it = NULL;
+		}
 
 		if (it == NULL) {
 			msg_err_cache ("cannot register delayed dependency between %s and %s, "
@@ -233,6 +248,32 @@ post_cache_init (struct symbols_cache *cache)
 		}
 		else {
 			rspamd_symbols_cache_add_dependency (cache, it->id, ddep->to);
+		}
+
+		cur = g_list_next (cur);
+	}
+
+	cur = cache->delayed_conditions;
+	while (cur) {
+		dcond = cur->data;
+
+		id = rspamd_symbols_cache_find_symbol (cache, dcond->sym);
+		if (id != -1) {
+			it = g_ptr_array_index (cache->items_by_id, id);
+		}
+		else {
+			it = NULL;
+		}
+
+		if (it == NULL) {
+			msg_err_cache (
+					"cannot register delayed condition for %s",
+					dcond->sym);
+			luaL_unref (dcond->L, LUA_REGISTRYINDEX, dcond->cbref);
+		}
+		else {
+			rspamd_symbols_cache_add_condition (cache, it->id, dcond->L,
+					dcond->cbref);
 		}
 
 		cur = g_list_next (cur);
@@ -563,14 +604,45 @@ rspamd_symbols_cache_add_condition (struct symbols_cache *cache, gint id,
 
 	item->condition_cb = cbref;
 
+	msg_debug_cache ("adding condition at lua ref %d to %s (%d)",
+			cbref, item->symbol, item->id);
+
 	return TRUE;
 }
+
+gboolean rspamd_symbols_cache_add_condition_delayed (struct symbols_cache *cache,
+		const gchar *sym, lua_State *L, gint cbref)
+{
+	gint id;
+	struct delayed_cache_condition *ncond;
+
+	g_assert (cache != NULL);
+	g_assert (sym != NULL);
+
+	id = rspamd_symbols_cache_find_symbol (cache, sym);
+
+	if (id != -1) {
+		/* We already know id, so just register a direct condition */
+		return rspamd_symbols_cache_add_condition (cache, id, L, cbref);
+	}
+
+	ncond = g_slice_alloc (sizeof (*ncond));
+	ncond->sym = g_strdup (sym);
+	ncond->cbref = cbref;
+	ncond->L = L;
+
+	cache->delayed_conditions = g_list_prepend (cache->delayed_conditions, ncond);
+
+	return TRUE;
+}
+
 
 void
 rspamd_symbols_cache_destroy (struct symbols_cache *cache)
 {
 	GList *cur;
 	struct delayed_cache_dependency *ddep;
+	struct delayed_cache_condition *dcond;
 
 	if (cache != NULL) {
 
@@ -595,6 +667,19 @@ rspamd_symbols_cache_destroy (struct symbols_cache *cache)
 			}
 
 			g_list_free (cache->delayed_deps);
+		}
+
+		if (cache->delayed_conditions) {
+			cur = cache->delayed_conditions;
+
+			while (cur) {
+				dcond = cur->data;
+				g_free (dcond->sym);
+				g_slice_free1 (sizeof (*dcond), dcond);
+				cur = g_list_next (cur);
+			}
+
+			g_list_free (cache->delayed_conditions);
 		}
 
 		g_hash_table_destroy (cache->items_by_symbol);
@@ -1331,7 +1416,12 @@ rspamd_symbols_cache_find_symbol (struct symbols_cache *cache, const gchar *name
 	item = g_hash_table_lookup (cache->items_by_symbol, name);
 
 	if (item != NULL) {
-		return item->id;
+
+		while (item != NULL && item->parent != -1) {
+			item = g_ptr_array_index (cache->items_by_id, item->parent);
+		}
+
+		return item ? item->id : -1;
 	}
 
 	return -1;
