@@ -267,18 +267,19 @@ sync_callback (gint fd, short what, void *arg)
 	gdouble next_check;
 
 	ctx = worker->ctx;
+	/* Call backend sync */
+	rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, FALSE);
+
+	server_stat->fuzzy_hashes_expired = rspamd_fuzzy_backend_expired (ctx->backend);
+
 	/* Timer event */
+	event_del (&tev);
 	evtimer_set (&tev, sync_callback, worker);
 	event_base_set (ctx->ev_base, &tev);
 	/* Plan event with jitter */
 	next_check = rspamd_time_jitter (ctx->sync_timeout, 0);
 	double_to_tv (next_check, &tmv);
 	evtimer_add (&tev, &tmv);
-
-	/* Call backend sync */
-	rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire);
-
-	server_stat->fuzzy_hashes_expired = rspamd_fuzzy_backend_expired (ctx->backend);
 }
 
 gpointer
@@ -352,12 +353,12 @@ start_fuzzy (struct rspamd_worker *worker)
 
 	server_stat->fuzzy_hashes = rspamd_fuzzy_backend_count (ctx->backend);
 
+	rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
 	/* Timer event */
 	evtimer_set (&tev, sync_callback, worker);
 	event_base_set (ctx->ev_base, &tev);
 	/* Plan event with jitter */
-	next_check = ctx->sync_timeout * (1. + ((gdouble)ottery_rand_uint32 ()) /
-			G_MAXUINT32);
+	next_check = rspamd_time_jitter (ctx->sync_timeout, 0);
 	double_to_tv (next_check, &tmv);
 	evtimer_add (&tev, &tmv);
 
@@ -379,7 +380,7 @@ start_fuzzy (struct rspamd_worker *worker)
 
 	event_base_loop (ctx->ev_base, 0);
 
-	rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire);
+	rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
 	rspamd_fuzzy_backend_close (ctx->backend);
 	rspamd_log_close (rspamd_main->logger);
 	exit (EXIT_SUCCESS);

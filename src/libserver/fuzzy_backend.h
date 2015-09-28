@@ -75,7 +75,8 @@ gboolean rspamd_fuzzy_backend_del (
  * @return
  */
 gboolean rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend,
-		gint64 expire);
+		gint64 expire,
+		gboolean clean_orphaned);
 
 /**
  * Close storage

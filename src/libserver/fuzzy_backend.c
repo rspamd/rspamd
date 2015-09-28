@@ -179,8 +179,8 @@ static struct rspamd_fuzzy_stmts {
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_EXPIRE,
-		.sql = "DELETE FROM digests WHERE time < ?1;",
-		.args = "I",
+		.sql = "DELETE FROM digests WHERE id = (SELECT id FROM digests WHERE time < ?1 LIMIT ?2);",
+		.args = "II",
 		.stmt = NULL,
 		.result = SQLITE_DONE
 	},
@@ -412,26 +412,13 @@ rspamd_fuzzy_backend_open_db (const gchar *path, GError **err)
 struct rspamd_fuzzy_backend*
 rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 {
-	struct orphaned_shingle_elt {
-		gint64 value;
-		gint64 number;
-	};
-
 	gchar *dir;
 	gint fd;
 	struct rspamd_fuzzy_backend *backend;
 	static const char sqlite_wal[] = "PRAGMA journal_mode=\"wal\";",
 			fallback_journal[] = "PRAGMA journal_mode=\"off\";",
-			foreign_keys[] = "PRAGMA foreign_keys=\"ON\";",
-			orphaned_shingles[] =	"SELECT shingles.value,shingles.number "
-									"FROM shingles "
-									"LEFT JOIN digests ON "
-									"shingles.digest_id=digests.id WHERE "
-									"digests.id IS NULL;";
-	sqlite3_stmt *stmt;
-	GArray *orphaned;
-	struct orphaned_shingle_elt orphaned_elt, *pelt;
-	gint rc, i;
+			foreign_keys[] = "PRAGMA foreign_keys=\"ON\";";
+	gint rc;
 
 	if (path == NULL) {
 		g_set_error (err, rspamd_fuzzy_backend_quark (),
@@ -492,49 +479,6 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 			SQLITE_OK) {
 		msg_warn_fuzzy_backend ("foreign keys are not supported: %s",
 				sqlite3_errmsg (backend->db));
-	}
-
-	/* Cleanup database */
-	if ((rc = sqlite3_prepare_v2 (backend->db, orphaned_shingles, -1, &stmt,
-				NULL)) != SQLITE_OK) {
-		msg_warn_fuzzy_backend ("cannot cleanup shingles: %s",
-				sqlite3_errmsg (backend->db));
-	}
-	else {
-		orphaned = g_array_new (FALSE, FALSE, sizeof (struct orphaned_shingle_elt));
-
-		while (sqlite3_step (stmt) == SQLITE_ROW) {
-			orphaned_elt.value = sqlite3_column_int64 (stmt, 0);
-			orphaned_elt.number = sqlite3_column_int64 (stmt, 1);
-			g_array_append_val (orphaned, orphaned_elt);
-		}
-
-		sqlite3_finalize (stmt);
-		msg_info_fuzzy_backend ("going to delete %ud orphaned shingles",
-				orphaned->len);
-
-		if (orphaned->len > 0) {
-			/* Need to delete orphaned elements */
-			rspamd_fuzzy_backend_run_simple (
-					RSPAMD_FUZZY_BACKEND_TRANSACTION_START,
-					backend,
-					NULL);
-
-			for (i = 0; i < (gint)orphaned->len; i++) {
-				pelt = &g_array_index (orphaned, struct orphaned_shingle_elt, i);
-				rspamd_fuzzy_backend_run_stmt (backend,
-						RSPAMD_FUZZY_BACKEND_DELETE_ORPHANED,
-						pelt->value, pelt->number);
-			}
-
-			rspamd_fuzzy_backend_run_simple (
-					RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT,
-					backend,
-					NULL);
-			msg_info_fuzzy_backend ("deleted %ud orphaned shingles", orphaned->len);
-		}
-
-		g_array_free (orphaned, TRUE);
 	}
 
 	rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_VACUUM, backend, NULL);
@@ -728,12 +672,29 @@ rspamd_fuzzy_backend_del (struct rspamd_fuzzy_backend *backend,
 }
 
 gboolean
-rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend, gint64 expire)
+rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend,
+		gint64 expire,
+		gboolean clean_orphaned)
 {
+	struct orphaned_shingle_elt {
+		gint64 value;
+		gint64 number;
+	};
+
+	/* Do not do more than 5k ops per step */
+	const guint64 max_changes = 5000;
 	gboolean ret = FALSE;
 	gint64 expire_lim, expired;
-	gint rc;
+	gint rc, i;
 	GError *err = NULL;
+	static const gchar orphaned_shingles[] = "SELECT shingles.value,shingles.number "
+			"FROM shingles "
+			"LEFT JOIN digests ON "
+			"shingles.digest_id=digests.id WHERE "
+			"digests.id IS NULL;";
+	sqlite3_stmt *stmt;
+	GArray *orphaned;
+	struct orphaned_shingle_elt orphaned_elt, *pelt;
 
 	/* Perform expire */
 	if (expire > 0) {
@@ -741,7 +702,7 @@ rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend, gint64 expire)
 
 		if (expire_lim > 0) {
 			rc = rspamd_fuzzy_backend_run_stmt (backend,
-					RSPAMD_FUZZY_BACKEND_EXPIRE, expire_lim);
+					RSPAMD_FUZZY_BACKEND_EXPIRE, expire_lim, max_changes);
 
 			if (rc == SQLITE_OK) {
 				expired = sqlite3_changes (backend->db);
@@ -756,8 +717,54 @@ rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend, gint64 expire)
 						sqlite3_errmsg (backend->db));
 			}
 		}
-
 	}
+
+	/* Cleanup database */
+	if (clean_orphaned) {
+		if ((rc = sqlite3_prepare_v2 (backend->db, orphaned_shingles, -1, &stmt,
+				NULL)) != SQLITE_OK) {
+			msg_warn_fuzzy_backend ("cannot cleanup shingles: %s",
+					sqlite3_errmsg (backend->db));
+		}
+		else {
+			orphaned = g_array_new (FALSE,
+					FALSE,
+					sizeof (struct orphaned_shingle_elt));
+
+			while (sqlite3_step (stmt) == SQLITE_ROW) {
+				orphaned_elt.value = sqlite3_column_int64 (stmt, 0);
+				orphaned_elt.number = sqlite3_column_int64 (stmt, 1);
+				g_array_append_val (orphaned, orphaned_elt);
+
+				if (orphaned->len > max_changes) {
+					break;
+				}
+			}
+
+			sqlite3_finalize (stmt);
+
+			if (orphaned->len > 0) {
+				msg_info_fuzzy_backend ("going to delete %ud orphaned shingles",
+						orphaned->len);
+				/* Need to delete orphaned elements */
+
+				for (i = 0; i < (gint) orphaned->len; i++) {
+					pelt = &g_array_index (orphaned,
+							struct orphaned_shingle_elt,
+							i);
+					rspamd_fuzzy_backend_run_stmt (backend,
+							RSPAMD_FUZZY_BACKEND_DELETE_ORPHANED,
+							pelt->value, pelt->number);
+				}
+
+				msg_info_fuzzy_backend ("deleted %ud orphaned shingles",
+						orphaned->len);
+			}
+
+			g_array_free (orphaned, TRUE);
+		}
+	}
+
 	ret = rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT,
 			backend, &err);
 
