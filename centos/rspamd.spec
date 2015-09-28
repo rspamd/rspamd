@@ -185,8 +185,10 @@ fi
 %endif
 %{_mandir}/man8/%{name}.*
 %{_mandir}/man1/rspamc.*
+%{_mandir}/man1/rspamadm.*
 %{_bindir}/rspamd
 %{_bindir}/rspamc
+%{_bindir}/rspamadm
 %config(noreplace) %{rspamd_confdir}/%{name}.conf
 %config(noreplace) %{rspamd_confdir}/%{name}.sysvinit.conf
 %config(noreplace) %{rspamd_confdir}/composites.conf
