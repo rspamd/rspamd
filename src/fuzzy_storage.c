@@ -265,12 +265,17 @@ sync_callback (gint fd, short what, void *arg)
 	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
 	struct rspamd_fuzzy_storage_ctx *ctx;
 	gdouble next_check;
+	guint64 old_expired, new_expired;
 
 	ctx = worker->ctx;
 	/* Call backend sync */
+	old_expired = rspamd_fuzzy_backend_expired (ctx->backend);
 	rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
+	new_expired = rspamd_fuzzy_backend_expired (ctx->backend);
 
-	server_stat->fuzzy_hashes_expired = rspamd_fuzzy_backend_expired (ctx->backend);
+	if (old_expired < new_expired) {
+		server_stat->fuzzy_hashes_expired += new_expired - old_expired;
+	}
 
 	/* Timer event */
 	event_del (&tev);
