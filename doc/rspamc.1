@@ -1,7 +1,7 @@
 .TH "RSPAMC" "1" "" "Rspamd User Manual" ""
 .SH NAME
 .PP
-rspamc \- rspamd command line client
+\f[C]rspamc\f[] \- rspamd command line client
 .SH SYNOPSIS
 .PP
 rspamc [\f[I]options\f[]] [\f[I]command\f[]] [\f[I]input\-file\f[]]...
@@ -9,41 +9,41 @@ rspamc [\f[I]options\f[]] [\f[I]command\f[]] [\f[I]input\-file\f[]]...
 rspamc \-\-help
 .SH DESCRIPTION
 .PP
-Rspamc is a simple client for checking messages using rspamd or for
-learning rspamd by messages.
-Rspamc supports the following commands:
+\f[C]rspamc\f[] is a simple client for checking messages using rspamd or
+for learning rspamd by messages.
+\f[C]rspamc\f[] supports the following commands:
 .IP \[bu] 2
 Scan commands:
 .RS 2
 .IP \[bu] 2
-\f[I]symbols\f[]: scan message and show symbols (default command)
+\f[C]symbols\f[]: scan message and show symbols (default command)
 .RE
 .IP \[bu] 2
 Control commands
 .RS 2
 .IP \[bu] 2
-\f[I]learn_spam\f[]: learn message as spam
+\f[C]learn_spam\f[]: learn message as spam
 .IP \[bu] 2
-\f[I]learn_ham\f[]: learn message as ham
+\f[C]learn_ham\f[]: learn message as ham
 .IP \[bu] 2
-\f[I]fuzzy_add\f[]: add message to fuzzy storage (check \f[C]\-f\f[] and
+\f[C]fuzzy_add\f[]: add message to fuzzy storage (check \f[C]\-f\f[] and
 \f[C]\-w\f[] options for this command)
 .IP \[bu] 2
-\f[I]fuzzy_del\f[]: delete message from fuzzy storage (check
+\f[C]fuzzy_del\f[]: delete message from fuzzy storage (check
 \f[C]\-f\f[] option for this command)
 .IP \[bu] 2
-\f[I]stat\f[]: show rspamd statistics
+\f[C]stat\f[]: show rspamd statistics
 .IP \[bu] 2
-\f[I]stat_reset\f[]: show and reset rspamd statistics (useful for
+\f[C]stat_reset\f[]: show and reset rspamd statistics (useful for
 graphs)
 .IP \[bu] 2
-\f[I]counters\f[]: display rspamd symbols statistics
+\f[C]counters\f[]: display rspamd symbols statistics
 .IP \[bu] 2
-\f[I]uptime\f[]: show rspamd uptime
+\f[C]uptime\f[]: show rspamd uptime
 .IP \[bu] 2
-\f[I]add_symbol\f[]: add or modify symbol settings in rspamd
+\f[C]add_symbol\f[]: add or modify symbol settings in rspamd
 .IP \[bu] 2
-\f[I]add_action\f[]: add or modify action settings
+\f[C]add_action\f[]: add or modify action settings
 .RE
 .PP
 Control commands that modifies rspamd state are considered as privileged
@@ -54,7 +54,7 @@ This depends on a controller\[aq]s settings and is discussed in
 .PP
 \f[C]Input\ files\f[] may be either regular file(s) or a directory to
 scan.
-If no files are specified rspamc reads from the standard input.
+If no files are specified \f[C]rspamc\f[] reads from the standard input.
 Controller commands usually does not accept any input, however learn*
 and fuzzy* commands requires input.
 .SH OPTIONS
@@ -189,8 +189,8 @@ List available commands
 .RE
 .SH RETURN VALUE
 .PP
-On exit rspamc returns \f[C]0\f[] if operation was successfull and an
-error code otherwise.
+On exit \f[C]rspamc\f[] returns \f[C]0\f[] if operation was successfull
+and an error code otherwise.
 .SH EXAMPLES
 .PP
 Check stdin:

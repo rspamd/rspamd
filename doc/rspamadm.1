@@ -1,0 +1,113 @@
+.TH "RSPAMADM" "1" "" "Rspamd User Manual" ""
+.SH NAME
+.PP
+rspamadm \- rspamd administration utility
+.SH SYNOPSIS
+.PP
+rspamadm [\f[I]global_options\f[]] [\f[I]command\f[]]
+[\f[I]command_options\f[]]...
+.PP
+rspamadm \-l
+.PP
+rspamadm help
+.PP
+rspamadm help
+.PP
+rspamadm \-\-help
+.SH DESCRIPTION
+.PP
+\f[C]rspamadm\f[] is a routine to manage rspamd spam filtering system.
+It is intended to perform such actions as merging databases, performing
+configuration tests, encrypting passwords, signing configurations and so
+on.
+You can get a list of available commands by running
+.IP
+.nf
+\f[C]
+rspamadm\ \-l
+\f[]
+.fi
+.SH OPTIONS
+.TP
+.B \-h, \-\-help
+Show help message
+.RS
+.RE
+.TP
+.B \-v, \-\-verbose
+Enable verbose output
+.RS
+.RE
+.TP
+.B \-l, \-\-list\-commands
+List available commands
+.RS
+.RE
+.TP
+.B \-\-version
+Show version
+.RS
+.RE
+.TP
+.B \-\-var=\f[I]value\f[]
+Redefine ucl variable in format \f[C]VARIABLE=VALUE\f[]
+.RS
+.RE
+.SH RETURN VALUE
+.PP
+On exit \f[C]rspamadm\f[] returns \f[C]0\f[] if operation was
+successfull and an error code otherwise.
+.SH EXAMPLES
+.PP
+Get help for pw command:
+.IP
+.nf
+\f[C]
+rspamadm\ help\ pw
+rspamadm\ pw\ \-\-help
+\f[]
+.fi
+.PP
+Encrypt controller\[aq]s password:
+.IP
+.nf
+\f[C]
+rspamadm\ pw\ encrypt
+\f[]
+.fi
+.PP
+Merge fuzzy databases:
+.IP
+.nf
+\f[C]
+rspamadm\ fuzzy_merge\ \-s\ data1.sqlite\ \-s\ data2.sqlite\ \-t\ dest.sqlite
+\f[]
+.fi
+.PP
+Perform configuration test:
+.IP
+.nf
+\f[C]
+rspamadm\ configtest\ \-c\ rspamd.conf
+\f[]
+.fi
+.PP
+Test configuration strictly and redefine some ucl vars:
+.IP
+.nf
+\f[C]
+rspamadm\ \-\-var=DBDIR=/tmp\ configtest\ \-c\ ./rspamd.conf\ \-s
+\f[]
+.fi
+.PP
+Generate a keypair to use for HTTPCrypt encryption:
+.IP
+.nf
+\f[C]
+rspamadm\ keypair
+\f[]
+.fi
+.SH SEE ALSO
+.PP
+Rspamd documentation and source codes may be downloaded from
+<https://rspamd.com/>.
