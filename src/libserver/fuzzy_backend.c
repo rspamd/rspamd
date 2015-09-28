@@ -408,7 +408,8 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 	gint fd;
 	struct rspamd_fuzzy_backend *backend;
 	static const char sqlite_wal[] = "PRAGMA journal_mode=\"wal\";",
-			fallback_journal[] = "PRAGMA journal_mode=\"off\";";
+			fallback_journal[] = "PRAGMA journal_mode=\"off\";",
+			foreign_keys[] = "PRAGMA foreign_keys=\"ON\";";
 	int rc;
 
 	if (path == NULL) {
@@ -464,6 +465,11 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 		msg_warn_fuzzy_backend ("WAL mode is not supported (%d), locking issues might occur",
 				rc);
 		sqlite3_exec (backend->db, fallback_journal, NULL, NULL, NULL);
+	}
+
+	if ((rc = sqlite3_exec (backend->db, foreign_keys, NULL, NULL, NULL)) !=
+			SQLITE_OK) {
+		msg_warn_fuzzy_backend ("foreign keys are not supported", rc);
 	}
 
 	/* Cleanup database */
