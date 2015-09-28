@@ -233,13 +233,13 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 	g_option_context_add_main_entries (context, entries, NULL);
 
 	if (!g_option_context_parse (context, &argc, &argv, &error)) {
-		fprintf (stderr, "option parsing failed: %s\n", error->message);
+		rspamd_fprintf(stderr, "option parsing failed: %s\n", error->message);
 		g_error_free (error);
 		exit (1);
 	}
 
 	if (target == NULL || sources == NULL || sources[0] == NULL) {
-		fprintf (stderr, "no sources or no destination has been specified\n");
+		rspamd_fprintf(stderr, "no sources or no destination has been specified\n");
 		exit (1);
 	}
 
@@ -248,7 +248,7 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 			&error);
 
 	if (dest_db == NULL) {
-		fprintf (stderr, "cannot open destination: %s\n", error->message);
+		rspamd_fprintf(stderr, "cannot open destination: %s\n", error->message);
 		g_error_free (error);
 		exit (1);
 	}
@@ -257,7 +257,7 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 			STMAX, &error);
 
 	if (prstmt == NULL) {
-		fprintf (stderr, "cannot init prepared statements: %s\n", error->message);
+		rspamd_fprintf(stderr, "cannot init prepared statements: %s\n", error->message);
 		g_error_free (error);
 		exit (1);
 	}
@@ -272,7 +272,7 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 		src = rspamd_sqlite3_open_or_create (pool, sources[i], NULL, &error);
 
 		if (src == NULL) {
-			fprintf (stderr, "cannot open source %s: %s\n", sources[i],
+			rspamd_fprintf(stderr, "cannot open source %s: %s\n", sources[i],
 					error->message);
 			g_error_free (error);
 			exit (1);
@@ -285,10 +285,15 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 		const guchar *digest;
 
 		src = g_ptr_array_index (source_dbs, i);
+		
+		if (!quiet) {
+			rspamd_printf ("reading data from %s\n", sources[i]);
+		}
 
 		if (sqlite3_prepare_v2 (src, select_digests_sql, -1, &stmt, NULL) !=
 					SQLITE_OK) {
-			fprintf (stderr, "cannot prepare statement %s\n", select_digests_sql);
+			rspamd_fprintf(stderr, "cannot prepare statement %s: %s\n",
+					select_digests_sql, sqlite3_errmsg (src));
 			exit (1);
 		}
 
@@ -365,13 +370,18 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 		sqlite3_finalize (stmt);
 		sqlite3_close (src);
 	}
+	
+	if (!quiet) {
+		rspamd_printf ("start writing to %s, %ud ops pending\n", target, ops->len);
+	}
 
 	/* Start transaction */
 	if (rspamd_sqlite3_run_prstmt (pool,
 			dest_db,
 			prstmt,
-			TRANSACTION_START) == SQLITE_OK) {
-		fprintf (stderr, "cannot start transaction in destination\n");
+			TRANSACTION_START) != SQLITE_OK) {
+		rspamd_fprintf (stderr, "cannot start transaction in destination: %s\n",
+				sqlite3_errmsg (dest_db));
 		exit (1);
 	}
 
@@ -390,7 +400,8 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 					(gint64)sizeof (op->data.dgst.digest), op->data.dgst.digest,
 					op->data.dgst.value,
 					op->data.dgst.tm) != SQLITE_OK) {
-				fprintf (stderr, "cannot insert digest\n");
+				rspamd_fprintf(stderr, "cannot insert digest: %s\n",
+						sqlite3_errmsg (dest_db));
 				goto err;
 			}
 
@@ -405,7 +416,8 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 					op->data.dgst.tm,
 					(gint64) sizeof (op->data.dgst.digest),
 					op->data.dgst.digest) != SQLITE_OK) {
-				fprintf (stderr, "cannot update digest\n");
+				rspamd_fprintf(stderr, "cannot update digest: %s\n",
+						sqlite3_errmsg (dest_db));
 				goto err;
 			}
 
@@ -427,7 +439,8 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 						(gint64)op->data.shgl.value,
 						(gint64)op->data.shgl.number,
 						dig_id) != SQLITE_OK) {
-					fprintf (stderr, "cannot insert shingle\n");
+					rspamd_fprintf(stderr, "cannot insert shingle: %s\n",
+							sqlite3_errmsg (dest_db));
 					goto err;
 				}
 
@@ -442,10 +455,15 @@ rspamadm_fuzzy_merge (gint argc, gchar **argv)
 	}
 
 	/* Normal closing */
-	rspamd_sqlite3_run_prstmt (pool,
+	if (rspamd_sqlite3_run_prstmt (pool,
 			dest_db,
 			prstmt,
-			TRANSACTION_COMMIT);
+			TRANSACTION_COMMIT) != SQLITE_OK) {
+		rspamd_fprintf (stderr, "cannot commit transaction: %s\n",
+				sqlite3_errmsg (dest_db));
+		goto err;
+	}
+
 	rspamd_sqlite3_close_prstmt (dest_db, prstmt);
 	sqlite3_close (dest_db);
 	g_array_free (ops, TRUE);
