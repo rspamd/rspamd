@@ -268,7 +268,7 @@ sync_callback (gint fd, short what, void *arg)
 
 	ctx = worker->ctx;
 	/* Call backend sync */
-	rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, FALSE);
+	rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
 
 	server_stat->fuzzy_hashes_expired = rspamd_fuzzy_backend_expired (ctx->backend);
 

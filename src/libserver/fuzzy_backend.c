@@ -70,6 +70,7 @@ static const char *create_index_sql =
 		"BEGIN;"
 		"CREATE UNIQUE INDEX IF NOT EXISTS d ON digests(digest);"
 		"CREATE INDEX IF NOT EXISTS t ON digests(time);"
+		"CREATE INDEX IF NOT EXISTS dgst_id ON shingles(digest_id);"
 		"CREATE UNIQUE INDEX IF NOT EXISTS s ON shingles(value, number);"
 		"COMMIT;";
 enum rspamd_fuzzy_statement_idx {
@@ -179,7 +180,7 @@ static struct rspamd_fuzzy_stmts {
 	},
 	{
 		.idx = RSPAMD_FUZZY_BACKEND_EXPIRE,
-		.sql = "DELETE FROM digests WHERE id = (SELECT id FROM digests WHERE time < ?1 LIMIT ?2);",
+		.sql = "DELETE FROM digests WHERE id IN (SELECT id FROM digests WHERE time < ?1 LIMIT ?2);",
 		.args = "II",
 		.stmt = NULL,
 		.result = SQLITE_DONE
@@ -377,10 +378,6 @@ rspamd_fuzzy_backend_create_db (const gchar *path, gboolean add_index,
 		return NULL;
 	}
 
-	if (add_index) {
-		rspamd_fuzzy_backend_run_sql (create_index_sql, bk, NULL);
-	}
-
 	return bk;
 }
 
@@ -417,7 +414,8 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 	struct rspamd_fuzzy_backend *backend;
 	static const char sqlite_wal[] = "PRAGMA journal_mode=\"wal\";",
 			fallback_journal[] = "PRAGMA journal_mode=\"off\";",
-			foreign_keys[] = "PRAGMA foreign_keys=\"ON\";";
+			foreign_keys[] = "PRAGMA foreign_keys=\"ON\";",
+			secure_delete[] = "PRAGMA secure_delete=\"OFF\";";
 	gint rc;
 
 	if (path == NULL) {
@@ -481,6 +479,12 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 				sqlite3_errmsg (backend->db));
 	}
 
+	if ((rc = sqlite3_exec (backend->db, secure_delete, NULL, NULL, NULL)) !=
+			SQLITE_OK) {
+		msg_warn_fuzzy_backend ("cannot disable secure delete: %s",
+				sqlite3_errmsg (backend->db));
+	}
+
 	rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_VACUUM, backend, NULL);
 
 	if (rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_COUNT)
@@ -488,6 +492,8 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 		backend->count = sqlite3_column_int64 (
 				prepared_stmts[RSPAMD_FUZZY_BACKEND_COUNT].stmt, 0);
 	}
+
+	rspamd_fuzzy_backend_run_sql (create_index_sql, backend, NULL);
 
 	rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_START,
 			backend, NULL);
