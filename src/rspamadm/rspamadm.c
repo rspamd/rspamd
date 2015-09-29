@@ -203,8 +203,8 @@ main (gint argc, gchar **argv, gchar **env)
 		rspamd_strcase_equal, g_free, g_free);
 	ottery_init (NULL);
 	process_quark = g_quark_from_static_string ("rspamadm");
-	cfg = g_slice_alloc0 (sizeof (*cfg));
-	rspamd_main = g_slice_alloc0 (sizeof (*rspamd_main));
+	cfg = g_malloc0 (sizeof (*cfg));
+	rspamd_main = g_malloc0 (sizeof (*rspamd_main));
 	rspamd_init_libs ();
 	rspamd_init_cfg (cfg, TRUE);
 	rspamd_main->cfg = cfg;
