@@ -29,25 +29,25 @@
 #include "config.h"
 #include "util.h"
 #include "rspamd.h"
-#include "protocol.h"
-#include "upstream.h"
-#include "cfg_file.h"
-#include "url.h"
-#include "message.h"
-#include "bloom.h"
 #include "map.h"
 #include "fuzzy_storage.h"
 #include "fuzzy_backend.h"
 #include "ottery.h"
 #include "libserver/worker_util.h"
+#include "cryptobox.h"
+#include "keypairs_cache.h"
+#include "keypair_private.h"
 
 /* This number is used as expire time in seconds for cache items  (2 days) */
 #define DEFAULT_EXPIRE 172800L
 /* Resync value in seconds */
 #define DEFAULT_SYNC_TIMEOUT 60.0
+#define DEFAULT_KEYPAIR_CACHE_SIZE 512
 
 
 #define INVALID_NODE_TIME (guint64) - 1
+
+static const guchar fuzzy_encrypted_magic[4] = {'r', 's', 'f', 'e'};
 
 extern struct rspamd_main *rspamd_main;
 /* Init functions */
@@ -76,18 +76,37 @@ struct rspamd_fuzzy_storage_ctx {
 	gdouble sync_timeout;
 	radix_compressed_t *update_ips;
 	gchar *update_map;
+	guint keypair_cache_size;
 	struct event_base *ev_base;
-
+	/* Local keypair */
+	gpointer key;
+	struct rspamd_keypair_cache *keypair_cache;
 	struct rspamd_fuzzy_backend *backend;
+};
+
+enum fuzzy_cmd_type {
+	CMD_NORMAL,
+	CMD_SHINGLE,
+	CMD_ENCRYPTED_NORMAL,
+	CMD_ENCRYPTED_SHINGLE
 };
 
 struct fuzzy_session {
 	struct rspamd_worker *worker;
-	struct rspamd_fuzzy_cmd *cmd;
+
+	union {
+		struct rspamd_fuzzy_encrypted_shingle_cmd enc_shingle;
+		struct rspamd_fuzzy_encrypted_cmd enc_normal;
+		struct rspamd_fuzzy_cmd normal;
+		struct rspamd_fuzzy_shingle_cmd shingle;
+	} cmd;
+	enum rspamd_fuzzy_epoch epoch;
+	enum fuzzy_cmd_type cmd_type;
 	gint fd;
 	guint64 time;
 	rspamd_inet_addr_t *addr;
 	struct rspamd_fuzzy_storage_ctx *ctx;
+	guchar nm[rspamd_cryptobox_NMBYTES];
 };
 
 static gboolean
@@ -104,16 +123,16 @@ rspamd_fuzzy_check_client (struct fuzzy_session *session)
 
 static void
 rspamd_fuzzy_write_reply (struct fuzzy_session *session,
-		struct rspamd_fuzzy_reply *rep)
+		gconstpointer data, gsize len)
 {
-	gint r;
+	gssize r;
 
-	r = rspamd_inet_address_sendto (session->fd, rep, sizeof (*rep), 0,
+	r = rspamd_inet_address_sendto (session->fd, data, len, 0,
 			session->addr);
 
 	if (r == -1) {
 		if (errno == EINTR) {
-			rspamd_fuzzy_write_reply (session, rep);
+			rspamd_fuzzy_write_reply (session, data, len);
 		}
 		else {
 			msg_err ("error while writing reply: %s", strerror (errno));
@@ -122,51 +141,79 @@ rspamd_fuzzy_write_reply (struct fuzzy_session *session,
 }
 
 static void
-rspamd_fuzzy_process_command (struct fuzzy_session *session,
-		enum rspamd_fuzzy_epoch epoch)
+rspamd_fuzzy_process_command (struct fuzzy_session *session)
 {
-	struct rspamd_fuzzy_reply rep = {0, 0, 0, 0.0};
-	gboolean res = FALSE;
+	gboolean res = FALSE, encrypted = FALSE;
+	struct rspamd_fuzzy_cmd *cmd;
+	struct rspamd_fuzzy_encrypted_reply rep;
+	struct rspamd_fuzzy_reply result;
 
-	if (session->cmd->cmd == FUZZY_CHECK) {
-		rep = rspamd_fuzzy_backend_check (session->ctx->backend, session->cmd,
+	switch (session->cmd_type) {
+	case CMD_NORMAL:
+		cmd = &session->cmd.normal;
+		break;
+	case CMD_SHINGLE:
+		cmd = &session->cmd.shingle.basic;
+		break;
+	case CMD_ENCRYPTED_NORMAL:
+		cmd = &session->cmd.enc_normal.cmd;
+		encrypted = TRUE;
+		break;
+	case CMD_ENCRYPTED_SHINGLE:
+		cmd = &session->cmd.enc_shingle.cmd.basic;
+		encrypted = TRUE;
+		break;
+	}
+
+	if (cmd->cmd == FUZZY_CHECK) {
+		result = rspamd_fuzzy_backend_check (session->ctx->backend, cmd,
 				session->ctx->expire);
 		/* XXX: actually, these updates are not atomic, but we don't care */
-		server_stat->fuzzy_hashes_checked[epoch] ++;
+		server_stat->fuzzy_hashes_checked[session->epoch] ++;
 
-		if (rep.prob > 0.5) {
-			server_stat->fuzzy_hashes_found[epoch] ++;
+		if (result.prob > 0.5) {
+			server_stat->fuzzy_hashes_found[session->epoch] ++;
 		}
 	}
 	else {
-		rep.flag = session->cmd->flag;
+		result.flag = cmd->flag;
 		if (rspamd_fuzzy_check_client (session)) {
-			if (session->cmd->cmd == FUZZY_WRITE) {
-				res = rspamd_fuzzy_backend_add (session->ctx->backend,
-						session->cmd);
+			if (cmd->cmd == FUZZY_WRITE) {
+				res = rspamd_fuzzy_backend_add (session->ctx->backend, cmd);
 			}
 			else {
-				res = rspamd_fuzzy_backend_del (session->ctx->backend,
-						session->cmd);
+				res = rspamd_fuzzy_backend_del (session->ctx->backend, cmd);
 			}
 			if (!res) {
-				rep.value = 404;
-				rep.prob = 0.0;
+				result.value = 404;
+				result.prob = 0.0;
 			}
 			else {
-				rep.value = 0;
-				rep.prob = 1.0;
+				result.value = 0;
+				result.prob = 1.0;
 			}
 		}
 		else {
-			rep.value = 403;
-			rep.prob = 0.0;
+			result.value = 403;
+			result.prob = 0.0;
 		}
+
 		server_stat->fuzzy_hashes = rspamd_fuzzy_backend_count (session->ctx->backend);
 	}
 
-	rep.tag = session->cmd->tag;
-	rspamd_fuzzy_write_reply (session, &rep);
+	result.tag = cmd->tag;
+	memcpy (&rep.rep, &result, sizeof (result));
+
+	if (encrypted) {
+		/* We need also to encrypt reply */
+		ottery_rand_bytes (rep.hdr.nonce, sizeof (rep.hdr.nonce));
+		rspamd_cryptobox_encrypt_nm_inplace ((guchar *)&rep.rep, sizeof (rep.rep),
+				rep.hdr.nonce, session->nm, rep.hdr.mac);
+		rspamd_fuzzy_write_reply (session, &rep, sizeof (rep));
+	}
+	else {
+		rspamd_fuzzy_write_reply (session, &rep.rep, sizeof (rep.rep));
+	}
 }
 
 
@@ -204,6 +251,119 @@ rspamd_fuzzy_command_valid (struct rspamd_fuzzy_cmd *cmd, gint r)
 
 	return ret;
 }
+
+static gboolean
+rspamd_fuzzy_decrypt_command (struct fuzzy_session *s)
+{
+	struct rspamd_fuzzy_encrypted_req_hdr *hdr;
+	guchar *payload;
+	gsize payload_len;
+	struct rspamd_http_keypair rk;
+
+	if (s->cmd_type == CMD_ENCRYPTED_NORMAL) {
+		hdr = &s->cmd.enc_normal.hdr;
+		payload = (guchar *)&s->cmd.enc_normal.cmd;
+		payload_len = sizeof (s->cmd.enc_normal.cmd);
+	}
+	else {
+		hdr = &s->cmd.enc_shingle.hdr;
+		payload = (guchar *) &s->cmd.enc_shingle.cmd;
+		payload_len = sizeof (s->cmd.enc_shingle.cmd);
+	}
+
+	/* Compare magic */
+	if (memcmp (hdr->magic, fuzzy_encrypted_magic, sizeof (hdr->magic)) != 0) {
+		msg_debug ("invalid magic for the encrypted packet");
+		return FALSE;
+	}
+
+	/* Now process keypair */
+	memcpy (rk.pk, hdr->pubkey, sizeof (rk.pk));
+	rspamd_keypair_cache_process (s->ctx->keypair_cache, s->ctx->key, &rk);
+
+	/* Now decrypt request */
+	if (!rspamd_cryptobox_decrypt_nm_inplace (payload, payload_len, hdr->nonce,
+				rk.nm, hdr->mac)) {
+		msg_debug ("decryption failed");
+		rspamd_explicit_memzero (rk.nm, sizeof (rk.nm));
+		return FALSE;
+	}
+
+	memcpy (s->nm, rk.nm, sizeof (s->nm));
+	rspamd_explicit_memzero (rk.nm, sizeof (rk.nm));
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_fuzzy_cmd_from_wire (guchar *buf, guint buflen, struct fuzzy_session *s)
+{
+	enum rspamd_fuzzy_epoch epoch;
+
+	/* For now, we assume that recvfrom returns a complete datagramm */
+	switch (buflen) {
+	case sizeof (struct rspamd_fuzzy_cmd):
+		s->cmd_type = CMD_NORMAL;
+		memcpy (&s->cmd.normal, buf, sizeof (s->cmd.normal));
+		epoch = rspamd_fuzzy_command_valid (&s->cmd.normal, buflen);
+
+		if (epoch == RSPAMD_FUZZY_EPOCH_MAX) {
+			msg_debug ("invalid fuzzy command of size %d received", buflen);
+			return FALSE;
+		}
+		s->epoch = epoch;
+		break;
+	case sizeof (struct rspamd_fuzzy_shingle_cmd):
+		s->cmd_type = CMD_SHINGLE;
+		memcpy (&s->cmd.shingle, buf, sizeof (s->cmd.shingle));
+		epoch = rspamd_fuzzy_command_valid (&s->cmd.shingle.basic, buflen);
+
+		if (epoch == RSPAMD_FUZZY_EPOCH_MAX) {
+			msg_debug ("invalid fuzzy command of size %d received", buflen);
+			return FALSE;
+		}
+		s->epoch = epoch;
+		break;
+	case sizeof (struct rspamd_fuzzy_encrypted_cmd):
+		s->cmd_type = CMD_ENCRYPTED_NORMAL;
+		memcpy (&s->cmd.enc_normal, buf, sizeof (s->cmd.enc_normal));
+
+		if (!rspamd_fuzzy_decrypt_command (s)) {
+			return FALSE;
+		}
+		epoch = rspamd_fuzzy_command_valid (&s->cmd.enc_normal.cmd,
+				sizeof (s->cmd.enc_normal.cmd));
+
+		if (epoch == RSPAMD_FUZZY_EPOCH_MAX) {
+			msg_debug ("invalid fuzzy command of size %d received", buflen);
+			return FALSE;
+		}
+		s->epoch = epoch;
+		break;
+	case sizeof (struct rspamd_fuzzy_encrypted_shingle_cmd):
+		s->cmd_type = CMD_ENCRYPTED_SHINGLE;
+		memcpy (&s->cmd.enc_shingle, buf, sizeof (s->cmd.enc_shingle));
+
+		if (!rspamd_fuzzy_decrypt_command (s)) {
+			return FALSE;
+		}
+		epoch = rspamd_fuzzy_command_valid (&s->cmd.enc_shingle.cmd.basic,
+				sizeof (s->cmd.enc_shingle.cmd));
+
+		if (epoch == RSPAMD_FUZZY_EPOCH_MAX) {
+			msg_debug ("invalid fuzzy command of size %d received", buflen);
+			return FALSE;
+		}
+		s->epoch = epoch;
+		break;
+	default:
+		msg_debug ("invalid fuzzy command of size %d received", buflen);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
 /*
  * Accept new connection and construct task
  */
@@ -212,10 +372,8 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 {
 	struct rspamd_worker *worker = (struct rspamd_worker *)arg;
 	struct fuzzy_session session;
-	gint r;
-	guint8 buf[2048];
-	struct rspamd_fuzzy_cmd *cmd = NULL;
-	enum rspamd_fuzzy_epoch epoch = RSPAMD_FUZZY_EPOCH_MAX;
+	gssize r;
+	guint8 buf[512];
 
 	session.worker = worker;
 	session.fd = fd;
@@ -235,28 +393,20 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 			return;
 		}
 
-		if ((guint)r >= sizeof (struct rspamd_fuzzy_cmd)) {
+		if (rspamd_fuzzy_cmd_from_wire (buf, r, &session)) {
 			/* Check shingles count sanity */
-			cmd = (struct rspamd_fuzzy_cmd *)buf;
-			epoch = rspamd_fuzzy_command_valid (cmd, r);
-			if (epoch == RSPAMD_FUZZY_EPOCH_MAX) {
-				/* Bad input */
-				msg_debug ("invalid fuzzy command of size %d received", r);
-				cmd = NULL;
-			}
+			rspamd_fuzzy_process_command (&session);
 		}
 		else {
 			/* Discard input */
 			server_stat->fuzzy_hashes_checked[RSPAMD_FUZZY_EPOCH6] ++;
 			msg_debug ("invalid fuzzy command of size %d received", r);
 		}
-		if (cmd != NULL) {
-			session.cmd = cmd;
-			rspamd_fuzzy_process_command (&session, epoch);
-		}
 
 		rspamd_inet_address_destroy (session.addr);
 	}
+
+	rspamd_explicit_memzero (session.nm, sizeof (session.nm));
 }
 
 static void
@@ -299,6 +449,7 @@ init_fuzzy (struct rspamd_config *cfg)
 
 	ctx->sync_timeout = DEFAULT_SYNC_TIMEOUT;
 	ctx->expire = DEFAULT_EXPIRE;
+	ctx->keypair_cache_size = DEFAULT_KEYPAIR_CACHE_SIZE;
 
 	rspamd_rcl_register_worker_option (cfg, type, "hashfile",
 		rspamd_rcl_parse_struct_string, ctx,
@@ -330,6 +481,14 @@ init_fuzzy (struct rspamd_config *cfg)
 		rspamd_rcl_parse_struct_string, ctx,
 		G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, update_map), 0);
 
+	rspamd_rcl_register_worker_option (cfg, type, "keypair",
+			rspamd_rcl_parse_struct_keypair, ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, key), 0);
+
+	rspamd_rcl_register_worker_option (cfg, type, "keypair_cache_size",
+			rspamd_rcl_parse_struct_integer, ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, keypair_cache_size),
+			RSPAMD_CL_FLAG_UINT);
 
 	return ctx;
 }
@@ -357,6 +516,11 @@ start_fuzzy (struct rspamd_worker *worker)
 	}
 
 	server_stat->fuzzy_hashes = rspamd_fuzzy_backend_count (ctx->backend);
+
+	if (ctx->key && ctx->keypair_cache_size > 0) {
+		/* Create keypairs cache */
+		ctx->keypair_cache = rspamd_keypair_cache_new (ctx->keypair_cache_size);
+	}
 
 	rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
 	/* Timer event */
@@ -388,5 +552,13 @@ start_fuzzy (struct rspamd_worker *worker)
 	rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
 	rspamd_fuzzy_backend_close (ctx->backend);
 	rspamd_log_close (rspamd_main->logger);
+
+	if (ctx->keypair_cache) {
+		rspamd_keypair_cache_destroy (ctx->keypair_cache);
+	}
+	if (ctx->key) {
+		rspamd_http_connection_key_unref (ctx->key);
+	}
+
 	exit (EXIT_SUCCESS);
 }

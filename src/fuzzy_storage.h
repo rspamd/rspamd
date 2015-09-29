@@ -4,6 +4,7 @@
 #include "config.h"
 #include "rspamd.h"
 #include "shingles.h"
+#include "cryptobox.h"
 
 #define RSPAMD_FUZZY_VERSION 3
 
@@ -32,6 +33,34 @@ RSPAMD_PACKED(rspamd_fuzzy_reply) {
 	guint32 flag;
 	guint32 tag;
 	float prob;
+};
+
+RSPAMD_PACKED(rspamd_fuzzy_encrypted_req_hdr) {
+	guchar magic[4];
+	guchar reserved[8];
+	guchar pubkey[rspamd_cryptobox_PKBYTES];
+	guchar nonce[rspamd_cryptobox_NONCEBYTES];
+	guchar mac[rspamd_cryptobox_MACBYTES];
+};
+
+RSPAMD_PACKED(rspamd_fuzzy_encrypted_cmd) {
+	struct rspamd_fuzzy_encrypted_req_hdr hdr;
+	struct rspamd_fuzzy_cmd cmd;
+};
+
+RSPAMD_PACKED(rspamd_fuzzy_encrypted_shingle_cmd) {
+	struct rspamd_fuzzy_encrypted_req_hdr hdr;
+	struct rspamd_fuzzy_shingle_cmd cmd;
+};
+
+RSPAMD_PACKED(rspamd_fuzzy_encrypted_rep_hdr) {
+	guchar nonce[rspamd_cryptobox_NONCEBYTES];
+	guchar mac[rspamd_cryptobox_MACBYTES];
+};
+
+RSPAMD_PACKED(rspamd_fuzzy_encrypted_reply) {
+	struct rspamd_fuzzy_encrypted_rep_hdr hdr;
+	struct rspamd_fuzzy_reply rep;
 };
 
 #endif
