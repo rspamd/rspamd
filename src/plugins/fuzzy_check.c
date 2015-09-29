@@ -49,6 +49,9 @@
 #include "rspamd.h"
 #include "blake2.h"
 #include "ottery.h"
+#include "cryptobox.h"
+#include "keypairs_cache.h"
+#include "http.h"
 
 #define DEFAULT_SYMBOL "R_FUZZY_HASH"
 #define DEFAULT_UPSTREAM_ERROR_TIME 10
@@ -71,12 +74,13 @@ struct fuzzy_mime_type {
 
 struct fuzzy_rule {
 	struct upstream_list *servers;
-	gint servers_num;
 	const gchar *symbol;
 	GHashTable *mappings;
 	GList *mime_types;
 	GString *hash_key;
 	GString *shingles_key;
+	gpointer local_key;
+	gpointer peer_key;
 	double max_score;
 	gboolean read_only;
 	gboolean skip_unknown;
@@ -90,6 +94,7 @@ struct fuzzy_ctx {
 	const gchar *default_symbol;
 	guint32 min_hash_len;
 	radix_compressed_t *whitelist;
+	struct rspamd_keypair_cache *keypairs_cache;
 	guint32 min_bytes;
 	guint32 min_height;
 	guint32 min_width;
@@ -296,6 +301,13 @@ fuzzy_free_rule (gpointer r)
 
 	g_string_free (rule->hash_key, TRUE);
 	g_string_free (rule->shingles_key, TRUE);
+
+	if (rule->local_key) {
+		rspamd_http_connection_key_unref (rule->local_key);
+	}
+	if (rule->peer_key) {
+		rspamd_http_connection_key_unref (rule->peer_key);
+	}
 }
 
 static gint
@@ -355,6 +367,19 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 		}
 	}
 
+	if ((value = ucl_object_find_key (obj, "encryption_key")) != NULL) {
+		/* Create key from user's input */
+		k = ucl_object_tostring (value);
+		if (k == NULL || (rule->peer_key =
+					rspamd_http_connection_make_peer_key (k)) == NULL) {
+			msg_err_config ("bad encryption key value: %s",
+					k);
+			return -1;
+		}
+
+		rule->local_key = rspamd_http_connection_gen_key ();
+	}
+
 	if ((value = ucl_object_find_key (obj, "fuzzy_key")) != NULL) {
 		/* Create key from user's input */
 		k = ucl_object_tostring (value);
@@ -410,6 +435,8 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 
 	fuzzy_module_ctx->fuzzy_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	fuzzy_module_ctx->cfg = cfg;
+	/* TODO: this should match rules count actually */
+	fuzzy_module_ctx->keypairs_cache = rspamd_keypair_cache_new (32);
 
 	*ctx = (struct module_ctx *)fuzzy_module_ctx;
 
