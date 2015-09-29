@@ -403,7 +403,25 @@ ENDMACRO()
 ############################# CONFIG SECTION #############################################
 # Initial set
 
-INCLUDE_DIRECTORIES(src/libutil src/libserver src/libmime src/libstat src/libcryptobox)
+# Prefer local include dirs to system ones
+INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src"
+		"${CMAKE_SOURCE_DIR}/src/libutil"
+		"${CMAKE_SOURCE_DIR}/src/libserver"
+		"${CMAKE_SOURCE_DIR}/src/libmime"
+		"${CMAKE_SOURCE_DIR}/src/libstat"
+		"${CMAKE_SOURCE_DIR}/src/libcryptobox"
+		"${CMAKE_SOURCE_DIR}/contrib/libucl"
+		"${CMAKE_SOURCE_DIR}/contrib/uthash"
+		"${CMAKE_SOURCE_DIR}/contrib/http-parser"
+		"${CMAKE_SOURCE_DIR}/contrib/libottery"
+		"${CMAKE_SOURCE_DIR}/contrib/xxhash"
+		"${CMAKE_SOURCE_DIR}/contrib/cdb"
+		"${CMAKE_SOURCE_DIR}/contrib/snowball/include"
+		"${CMAKE_SOURCE_DIR}/contrib/blake2"
+		"${CMAKE_SOURCE_DIR}/contrib/librdns"
+		"${CMAKE_SOURCE_DIR}/contrib/aho-corasick"
+		"${CMAKE_BINARY_DIR}/src" #Stored in the binary dir
+		"${CMAKE_BINARY_DIR}/src/libcryptobox")
 
 IF(CMAKE_INSTALL_PREFIX)
 	SET(PREFIX ${CMAKE_INSTALL_PREFIX})
@@ -946,22 +964,7 @@ ELSE(HG)
 		ENDIF(HG_ID)
 	ENDIF(HG_ARCH)
 ENDIF(HG)
- 
 
-################################ SOURCES SECTION ###########################
-INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src" 
-					"${CMAKE_BINARY_DIR}/src"
-					"${CMAKE_BINARY_DIR}/src/libcryptobox"
-					"${CMAKE_SOURCE_DIR}/contrib/libucl"
-					"${CMAKE_SOURCE_DIR}/contrib/uthash"
-					"${CMAKE_SOURCE_DIR}/contrib/http-parser"
-					"${CMAKE_SOURCE_DIR}/contrib/libottery"
-					"${CMAKE_SOURCE_DIR}/contrib/xxhash"
-					"${CMAKE_SOURCE_DIR}/contrib/cdb"
-					"${CMAKE_SOURCE_DIR}/contrib/snowball/include"
-					"${CMAKE_SOURCE_DIR}/contrib/blake2"
-					"${CMAKE_SOURCE_DIR}/contrib/librdns"
-					"${CMAKE_SOURCE_DIR}/contrib/aho-corasick")
 
 ################################ SUBDIRS SECTION ###########################
 
