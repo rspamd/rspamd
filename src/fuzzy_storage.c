@@ -47,8 +47,6 @@
 
 #define INVALID_NODE_TIME (guint64) - 1
 
-static const guchar fuzzy_encrypted_magic[4] = {'r', 's', 'f', 'e'};
-
 extern struct rspamd_main *rspamd_main;
 /* Init functions */
 gpointer init_fuzzy (struct rspamd_config *cfg);

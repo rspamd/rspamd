@@ -63,4 +63,6 @@ RSPAMD_PACKED(rspamd_fuzzy_encrypted_reply) {
 	struct rspamd_fuzzy_reply rep;
 };
 
+static const guchar fuzzy_encrypted_magic[4] = {'r', 's', 'f', 'e'};
+
 #endif
