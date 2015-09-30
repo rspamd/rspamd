@@ -1069,3 +1069,111 @@ rspamd_substring_search (const gchar *in, gsize inlen,
 
 	return -1;
 }
+
+goffset
+rspamd_string_find_eoh (GString *input)
+{
+	const gchar *p, *c = NULL, *end;
+	enum {
+		skip_char = 0,
+		got_cr,
+		got_lf,
+		got_linebreak,
+		got_linebreak_cr,
+		got_linebreak_lf
+	} state = skip_char;
+
+	g_assert (input != NULL);
+
+	p = input->str;
+	end = p + input->len;
+
+	while (p < end) {
+		switch (state) {
+		case skip_char:
+			if (*p == '\r') {
+				p++;
+				state = got_cr;
+			}
+			else if (*p == '\n') {
+				p++;
+				state = got_lf;
+			}
+			else {
+				p++;
+			}
+			break;
+
+		case got_cr:
+			if (*p == '\r') {
+				/*
+				 * Double \r\r, so need to check the current char
+				 * if it is '\n', then we have \r\r\n sequence, that is NOT
+				 * double end of line
+				 */
+				if (p < end && p[1] == '\n') {
+					p++;
+					state = got_lf;
+				}
+				else {
+					/* We have \r\r[^\n] */
+					return p - input->str;
+				}
+			}
+			else if (*p == '\n') {
+				p++;
+				state = got_lf;
+			}
+			else {
+				p++;
+				state = skip_char;
+			}
+			break;
+		case got_lf:
+			if (*p == '\n') {
+				/* We have \n\n, which is obviously end of headers */
+				return p - input->str;
+			}
+			else if (*p == '\r') {
+				state = got_linebreak;
+			}
+			else {
+				p++;
+				state = skip_char;
+			}
+			break;
+		case got_linebreak:
+			if (*p == '\r') {
+				c = p;
+				p++;
+				state = got_linebreak_cr;
+			}
+			else if (*p == '\n') {
+				c = p;
+				p++;
+				state = got_linebreak_lf;
+			}
+			else {
+				p++;
+				state = skip_char;
+			}
+			break;
+		case got_linebreak_cr:
+			if (*p == '\r') {
+				/* Got double \r\r after \n, so does not treat it as EOH */
+				state = got_linebreak_cr;
+				p++;
+			}
+			else if (*p == '\n') {
+				state = got_linebreak_lf;
+				p++;
+			}
+			break;
+		case got_linebreak_lf:
+			g_assert (c != NULL);
+			return c - input->str;
+		}
+	}
+
+	return -1;
+}

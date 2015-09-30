@@ -183,4 +183,13 @@ GString *rspamd_header_value_fold (const gchar *name,
 goffset rspamd_substring_search (const gchar *in, gsize inlen,
 	const gchar *srch, gsize srchlen);
 
+
+/**
+ * Search for end-of-headers mark in the input string. Returns position just after
+ * the last header in message (but before the last newline character).
+ * Hence, to obtain the real EOH position, it is also required to skip
+ * space characters
+ */
+goffset rspamd_string_find_eoh (GString *input);
+
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */
