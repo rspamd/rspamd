@@ -336,7 +336,8 @@ rspamd_fuzzy_cmd_from_wire (guchar *buf, guint buflen, struct fuzzy_session *s)
 			msg_debug ("invalid fuzzy command of size %d received", buflen);
 			return FALSE;
 		}
-		s->epoch = epoch;
+		/* Encrypted is epoch 10 at least */
+		s->epoch = RSPAMD_FUZZY_EPOCH10;
 		break;
 	case sizeof (struct rspamd_fuzzy_encrypted_shingle_cmd):
 		s->cmd_type = CMD_ENCRYPTED_SHINGLE;
@@ -352,7 +353,8 @@ rspamd_fuzzy_cmd_from_wire (guchar *buf, guint buflen, struct fuzzy_session *s)
 			msg_debug ("invalid fuzzy command of size %d received", buflen);
 			return FALSE;
 		}
-		s->epoch = epoch;
+
+		s->epoch = RSPAMD_FUZZY_EPOCH10;
 		break;
 	default:
 		msg_debug ("invalid fuzzy command of size %d received", buflen);
