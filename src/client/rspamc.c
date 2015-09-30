@@ -1271,8 +1271,8 @@ main (gint argc, gchar **argv, gchar **env)
 		exit (EXIT_SUCCESS);
 	}
 
-	ev_base = event_init ();
-	g_mime_init (0);
+	rspamd_init_libs ();
+	ev_base = event_base_new ();
 
 	/* Ignore sigpipe */
 	sigemptyset (&sigpipe_act.sa_mask);
