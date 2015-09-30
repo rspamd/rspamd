@@ -28,6 +28,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <glib-unix.h>
 #include "rspamdclient.h"
 #include "utlist.h"
 
@@ -856,35 +857,25 @@ static void
 rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 		gdouble time, GError *err)
 {
-	GMimeStream *stream;
-	GByteArray ar;
-	GMimeParser *parser;
-	GMimeMessage *message;
 	const ucl_object_t *cur, *metric, *res;
 	ucl_object_iter_t it = NULL;
 	const gchar *action = "no action";
-	GString *symbuf, *folded_symbuf;
-	gint act;
-	gdouble score = 0.0, required_score = 0.0;
 	gchar scorebuf[32];
+	GString *symbuf, *folded_symbuf, *added_headers;
+	gint act;
+	goffset headers_pos;
+	gdouble score = 0.0, required_score = 0.0;
 	gboolean is_spam = FALSE;
-	const gchar *hdr_scanned, *hdr_spam;
 	gchar *json_header, *json_header_encoded, *sc;
 
-	ar.data = input->str;
-	ar.len = input->len;
+	headers_pos = rspamd_string_find_eoh (input);
 
-	stream = g_mime_stream_mem_new_with_byte_array (&ar);
-	g_mime_stream_mem_set_owner (GMIME_STREAM_MEM (stream), FALSE);
-	parser = g_mime_parser_new_with_stream (stream);
-	g_object_unref (stream);
-
-	message = g_mime_parser_construct_message (parser);
-
-	if (message == NULL) {
-		rspamd_fprintf (stderr,"cannot construct mime from stream");
+	if (headers_pos == -1) {
+		rspamd_fprintf (stderr,"cannot find end of headers position");
 		return;
 	}
+
+	added_headers = g_string_sized_new (127);
 
 	if (result) {
 		metric = ucl_object_find_key (result, "default");
@@ -913,25 +904,19 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 			is_spam = TRUE;
 		}
 
-		hdr_scanned = "rspamc " RVERSION;
-		g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Scanner",
-				hdr_scanned);
-		rspamd_snprintf (scorebuf, sizeof (scorebuf), "%.3f", time);
-		g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Scan-Time",
-				scorebuf);
+		rspamd_printf_gstring (added_headers, "X-Spam-Scanner: %s\r\n",
+				"rspamc " RVERSION);
+		rspamd_printf_gstring (added_headers, "X-Spam-Scan-Time: %.3f\r\n",
+				time);
 
 		if (is_spam) {
-			hdr_spam = "yes";
-			g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam", hdr_spam);
+			rspamd_printf_gstring (added_headers, "X-Spam: yes\r\n");
 		}
 
-		g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Action",
+		rspamd_printf_gstring (added_headers, "X-Spam-Action: %s\r\n",
 				action);
-
-		rspamd_snprintf (scorebuf, sizeof (scorebuf), "%.2f / %.2f", score,
-				required_score);
-		g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Score",
-				scorebuf);
+		rspamd_printf_gstring (added_headers, "X-Spam-Score: %.2f / %.2f\r\n",
+				score, required_score);
 
 		/* SA style stars header */
 		for (sc = scorebuf; sc < scorebuf + sizeof (scorebuf) - 1 && score > 0;
@@ -940,7 +925,7 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 		}
 
 		*sc = '\0';
-		g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Level",
+		rspamd_printf_gstring (added_headers, "X-Spam-Level: %s\r\n",
 				scorebuf);
 
 		/* Short description of all symbols */
@@ -960,8 +945,8 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 		folded_symbuf = rspamd_header_value_fold ("X-Spam-Symbols",
 				symbuf->str,
 				0);
-		g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Symbols",
-				symbuf->str);
+		rspamd_printf_gstring (added_headers, "X-Spam-Symbols: %V\r\n",
+				folded_symbuf);
 		g_string_free (folded_symbuf, TRUE);
 		g_string_free (symbuf, TRUE);
 
@@ -977,7 +962,8 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 			json_header_encoded = rspamd_encode_base64_fold (json_header,
 					strlen (json_header), 60, NULL);
 			free (json_header);
-			g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Result",
+			rspamd_printf_gstring (added_headers,
+					"X-Spam-Result: %s\r\n",
 					json_header_encoded);
 			g_free (json_header_encoded);
 		}
@@ -985,27 +971,23 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 		ucl_object_unref (result);
 	}
 	else {
-		hdr_scanned = "rspamc " RVERSION;
-		g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Scanner",
-				hdr_scanned);
-
-		if (err && err->message) {
-			g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Error",
-					err->message);
-		}
-		else {
-			g_mime_object_append_header (GMIME_OBJECT (message), "X-Spam-Error",
-					"Unknown error");
-		}
+		rspamd_printf_gstring (added_headers, "X-Spam-Scanner: %s\r\n",
+				"rspamc " RVERSION);
+		rspamd_printf_gstring (added_headers, "X-Spam-Scan-Time: %.3f\r\n",
+				time);
+		rspamd_printf_gstring (added_headers, "X-Spam-Error: %e\r\n",
+				err);
 	}
 
 	/* Write message */
-	stream = g_mime_stream_file_new (out);
-	g_mime_stream_file_set_owner (GMIME_STREAM_FILE (stream), FALSE);
-	g_mime_object_write_to_stream (GMIME_OBJECT (message), stream);
-	g_object_unref (stream);
-	g_object_unref (message);
-	g_object_unref (parser);
+	if (rspamd_fprintf (out, "%*s", (gint)headers_pos, input->str)
+			== headers_pos) {
+		if (rspamd_fprintf (out, "%V", added_headers) == (gint)added_headers->len) {
+			rspamd_fprintf (out, "%s", input->str + headers_pos);
+		}
+	}
+
+	g_string_free (added_headers, TRUE);
 }
 
 static void
