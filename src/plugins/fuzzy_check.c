@@ -786,7 +786,7 @@ static const struct rspamd_fuzzy_reply *
 fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
 		struct fuzzy_rule *rule)
 {
-	const guchar *p = *pos;
+	guchar *p = *pos;
 	gint remain = *r;
 	guint i, required_size;
 	struct fuzzy_cmd_io *io;
@@ -824,13 +824,16 @@ fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
 			return NULL;
 		}
 
-		rep = &encrep.rep;
+		/* Copy decrypted over the input wire */
+		memcpy (p, &encrep.rep, sizeof (encrep.rep));
 	}
 	else {
-		rep = (const struct rspamd_fuzzy_reply *) p;
+
 		*pos += required_size;
 		*r -= required_size;
 	}
+
+	rep = (const struct rspamd_fuzzy_reply *) p;
 	/*
 	 * Search for tag
 	 */
@@ -859,6 +862,8 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 	struct fuzzy_mapping *map;
 	guchar buf[2048], *p;
 	const gchar *symbol;
+	struct fuzzy_cmd_io *io;
+	guint i;
 	gint r;
 	double nval;
 	gint ret = -1;
@@ -948,7 +953,17 @@ fuzzy_io_callback (gint fd, short what, void *arg)
 	}
 	else {
 		rspamd_upstream_ok (session->server);
-		if (session->commands->len == 0) {
+		guint nreplied = 0;
+
+		for (i = 0; i < session->commands->len; i++) {
+			io = g_ptr_array_index (session->commands, i);
+
+			if (io->replied) {
+				nreplied++;
+			}
+		}
+
+		if (nreplied == session->commands->len) {
 			rspamd_session_remove_event (session->task->s, fuzzy_io_fin, session);
 		}
 	}
@@ -987,8 +1002,8 @@ fuzzy_learn_callback (gint fd, short what, void *arg)
 	}
 	else if (what == EV_READ) {
 		if ((r = read (fd, buf, sizeof (buf) - 1)) == -1) {
-			msg_info_task ("cannot process fuzzy hash for message <%s>",
-					session->task->message_id);
+			msg_info_task ("cannot process fuzzy hash for message <%s>: %s",
+					session->task->message_id, strerror (errno));
 			if (*(session->err) == NULL) {
 				g_set_error (session->err,
 						g_quark_from_static_string ("fuzzy check"),
