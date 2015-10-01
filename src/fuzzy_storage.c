@@ -258,6 +258,11 @@ rspamd_fuzzy_decrypt_command (struct fuzzy_session *s)
 	gsize payload_len;
 	struct rspamd_http_keypair rk;
 
+	if (s->ctx->key == NULL) {
+		msg_warn ("received encrypted request when encryption is not enabled");
+		return FALSE;
+	}
+
 	if (s->cmd_type == CMD_ENCRYPTED_NORMAL) {
 		hdr = &s->cmd.enc_normal.hdr;
 		payload = (guchar *)&s->cmd.enc_normal.cmd;
