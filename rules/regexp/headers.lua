@@ -57,7 +57,7 @@ reconf['MISSING_TO']= '!raw_header_exists(To)';
 
 -- Detects undisclosed recipients
 local undisc_rcpt = 'To=/^<?undisclosed[- ]recipient/Hi'
-reconf['R_UNDISC_RCPT'] = string.format('(%s) | (%s)', reconf['MISSING_TO'], undisc_rcpt)
+reconf['R_UNDISC_RCPT'] = string.format('(%s)', undisc_rcpt)
 
 -- Detects missing Message-Id
 local has_mid = 'header_exists(Message-Id)'
