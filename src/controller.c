@@ -1088,6 +1088,8 @@ rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
 			obj = ucl_object_typed_new (UCL_OBJECT);
 			ucl_object_insert_key (obj, ucl_object_fromstring (
 					timebuf),		  "time", 0, false);
+			ucl_object_insert_key (obj, ucl_object_fromint (
+					row->tv.tv_sec), "unix_time", 0, false);
 			ucl_object_insert_key (obj, ucl_object_fromstring (
 					row->message_id), "id",	  0, false);
 			ucl_object_insert_key (obj, ucl_object_fromstring (row->from_addr),
