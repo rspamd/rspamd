@@ -440,7 +440,8 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 	struct rspamd_stat_sqlite3_db *bk;
 	struct rspamd_stat_tokenizer *tokenizer;
 	gpointer tk_conf;
-	guint64 sz;
+	gsize sz = 0;
+	gchar *tok_conf_encoded;
 	struct timespec sleep_ts = {
 			.tv_sec = 0,
 			.tv_nsec = 1000000
@@ -475,19 +476,30 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 	}
 
 	if (rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
-			RSPAMD_STAT_BACKEND_LOAD_TOKENIZER, &sz, &tk_conf) != SQLITE_OK) {
+			RSPAMD_STAT_BACKEND_LOAD_TOKENIZER, &sz, &tk_conf) != SQLITE_OK ||
+			sz == 0) {
+
+		msg_info_pool ("absent tokenizer conf in %s, creating a new one",
+				bk->fname);
 		g_assert (stcf->clcf->tokenizer != NULL);
 		tokenizer = rspamd_stat_get_tokenizer (stcf->clcf->tokenizer->name);
 		g_assert (tokenizer != NULL);
-		tk_conf = tokenizer->get_config (pool, stcf->clcf->tokenizer, (gsize *)&sz);
+		tk_conf = tokenizer->get_config (pool, stcf->clcf->tokenizer, &sz);
+
+		/* Encode to base32 */
+		tok_conf_encoded = rspamd_encode_base32 (tk_conf, sz);
 
 		if (rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
-					RSPAMD_STAT_BACKEND_SAVE_TOKENIZER, sz, tk_conf) != SQLITE_OK) {
+				RSPAMD_STAT_BACKEND_SAVE_TOKENIZER,
+				(gint64)strlen (tok_conf_encoded),
+				tok_conf_encoded) != SQLITE_OK) {
 			sqlite3_close (bk->sqlite);
 			g_slice_free1 (sizeof (*bk), bk);
+			g_free (tok_conf_encoded);
 
 			return NULL;
 		}
+		g_free (tok_conf_encoded);
 	}
 	else {
 		g_free (tk_conf);
@@ -1013,9 +1025,21 @@ rspamd_sqlite3_load_tokenizer_config (gpointer runtime,
 	g_assert (rspamd_sqlite3_run_prstmt (rt->ctx->pool, bk->sqlite, bk->prstmt,
 				RSPAMD_STAT_BACKEND_LOAD_TOKENIZER, &sz, &tk_conf) == SQLITE_OK);
 	g_assert (sz > 0);
-	copied_conf = rspamd_mempool_alloc (rt->task->task_pool, sz);
-	memcpy (copied_conf, tk_conf, sz);
-	g_free (tk_conf);
+	/*
+	 * Here we can have either decoded or undecoded version of tokenizer config
+	 * XXX: dirty hack to check if we have osb magic here
+	 */
+	if (sz > 7 && memcmp (tk_conf, "osbtokv", 7) == 0) {
+		copied_conf = rspamd_mempool_alloc (rt->task->task_pool, sz);
+		memcpy (copied_conf, tk_conf, sz);
+		g_free (tk_conf);
+	}
+	else {
+		/* Need to decode */
+		copied_conf = rspamd_decode_base32 (tk_conf, sz, &sz);
+		g_free (tk_conf);
+		rspamd_mempool_add_destructor (rt->task->task_pool, g_free, copied_conf);
+	}
 
 	if (len) {
 		*len = sz;
