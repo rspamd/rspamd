@@ -230,6 +230,7 @@
 #cmakedefine HAVE_PCRE_JIT_FAST  1
 #cmakedefine HAVE_GET_CPUID      1
 #cmakedefine HAVE_CPUID_H        1
+#cmakedefine HAVE_DIRENT_H       1
 
 /* Configure allocator */
 #define uthash_malloc(sz) g_slice_alloc(sz)
@@ -445,6 +446,10 @@
 
 #ifdef HAVE_SCHED_YIELD
 #include <sched.h>
+#endif
+
+#ifdef HAVE_DIRENT_H
+#include <dirent.h>
 #endif
 
 #include <errno.h>
