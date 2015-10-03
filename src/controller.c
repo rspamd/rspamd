@@ -50,6 +50,7 @@
 #define PATH_GRAPH "/graph"
 #define PATH_PIE_CHART "/pie"
 #define PATH_HISTORY "/history"
+#define PATH_HISTORY_RESET "/historyreset"
 #define PATH_LEARN_SPAM "/learnspam"
 #define PATH_LEARN_HAM "/learnham"
 #define PATH_SAVE_ACTIONS "/saveactions"
@@ -1123,6 +1124,34 @@ rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
 	return 0;
 }
 
+static int
+rspamd_controller_handle_history_reset (struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg)
+{
+	struct rspamd_controller_session *session = conn_ent->ud;
+	struct rspamd_controller_worker_ctx *ctx;
+
+	ctx = session->ctx;
+
+	if (!rspamd_controller_check_password (conn_ent, session, msg, TRUE)) {
+		return 0;
+	}
+
+	rspamd_mempool_lock_mutex (ctx->srv->history->mtx);
+	ctx->srv->history->need_lock = TRUE;
+	/* Copy locked */
+	memset (ctx->srv->history->rows, 0, sizeof (ctx->srv->history->rows));
+	ctx->srv->history->cur_row = 0;
+	rspamd_mempool_unlock_mutex (ctx->srv->history->mtx);
+
+	/* Successful learn */
+	msg_info_session ("<%s> reseted history",
+			rspamd_inet_address_to_string (session->from_addr));
+	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
+
+	return 0;
+}
+
 static gboolean
 rspamd_controller_learn_fin_task (void *ud)
 {
@@ -1141,6 +1170,7 @@ rspamd_controller_learn_fin_task (void *ud)
 
 		return TRUE;
 	}
+
 	/* Successful learn */
 	msg_info_session ("<%s> learned message as %s: %s",
 		rspamd_inet_address_to_string (session->from_addr),
@@ -2447,6 +2477,9 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_http_router_add_path (ctx->http,
 			PATH_HISTORY,
 			rspamd_controller_handle_history);
+	rspamd_http_router_add_path (ctx->http,
+			PATH_HISTORY_RESET,
+			rspamd_controller_handle_history_reset);
 	rspamd_http_router_add_path (ctx->http,
 			PATH_LEARN_SPAM,
 			rspamd_controller_handle_learnspam);
