@@ -25,10 +25,6 @@
 #include "config.h"
 #include "util.h"
 #include "http.h"
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <dirent.h>
-#include <glib-unix.h>
 #include "rspamdclient.h"
 #include "utlist.h"
 
