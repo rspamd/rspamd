@@ -6,7 +6,7 @@ SET(RSPAMADMSRC rspamadm.c commands.c pw.c keypair.c configtest.c
         ${CMAKE_SOURCE_DIR}/src/lua_worker.c
         ${CMAKE_SOURCE_DIR}/src/smtp_proxy.c
         ${CMAKE_SOURCE_DIR}/src/worker.c
-        ${CMAKE_SOURCE_DIR}/src/http_proxy.c fuzzy_merge.c)
+        ${CMAKE_SOURCE_DIR}/src/http_proxy.c fuzzy_merge.c configdump.c)
 
 ADD_EXECUTABLE(rspamadm ${RSPAMADMSRC})
 TARGET_LINK_LIBRARIES(rspamadm rspamd-server)

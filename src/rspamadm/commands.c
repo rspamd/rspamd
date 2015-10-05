@@ -27,6 +27,7 @@ extern struct rspamadm_command pw_command;
 extern struct rspamadm_command keypair_command;
 extern struct rspamadm_command configtest_command;
 extern struct rspamadm_command fuzzy_merge_command;
+extern struct rspamadm_command configdump_command;
 
 const struct rspamadm_command *commands[] = {
 	&help_command,
@@ -34,6 +35,7 @@ const struct rspamadm_command *commands[] = {
 	&keypair_command,
 	&configtest_command,
 	&fuzzy_merge_command,
+	&configdump_command,
 	NULL
 };
 
