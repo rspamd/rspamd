@@ -250,7 +250,8 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 	static const char sqlite_wal[] = "PRAGMA journal_mode=\"wal\";",
 			exclusive_lock_sql[] = "PRAGMA locking_mode=\"exclusive\";",
 			fsync_sql[] = "PRAGMA synchronous=1;",
-			foreign_keys[] = "PRAGMA foreign_keys=\"ON\";";
+			foreign_keys[] = "PRAGMA foreign_keys=\"ON\";",
+			enable_mmap[] = "PRAGMA mmap_size=268435456;";
 	gboolean create = FALSE, has_lock = FALSE;
 
 	flags = SQLITE_OPEN_READWRITE;
@@ -381,6 +382,13 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 	if ((rc = sqlite3_exec (sqlite, foreign_keys, NULL, NULL, NULL)) !=
 			SQLITE_OK) {
 		msg_warn_pool ("cannot enable foreign keys: %s",
+				sqlite3_errmsg (sqlite));
+	}
+
+	if (sizeof (gpointer) >= 8 &&
+		(rc = sqlite3_exec (sqlite, enable_mmap, NULL, NULL, NULL)) !=
+			SQLITE_OK) {
+		msg_warn_pool ("cannot enable mmap: %s",
 				sqlite3_errmsg (sqlite));
 	}
 

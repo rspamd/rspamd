@@ -415,7 +415,8 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 	static const char sqlite_wal[] = "PRAGMA journal_mode=\"wal\";",
 			fallback_journal[] = "PRAGMA journal_mode=\"off\";",
 			foreign_keys[] = "PRAGMA foreign_keys=\"ON\";",
-			secure_delete[] = "PRAGMA secure_delete=\"OFF\";";
+			secure_delete[] = "PRAGMA secure_delete=\"OFF\";",
+			enable_mmap[] = "PRAGMA mmap_size=268435456;";
 	gint rc;
 
 	if (path == NULL) {
@@ -482,6 +483,13 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 	if ((rc = sqlite3_exec (backend->db, secure_delete, NULL, NULL, NULL)) !=
 			SQLITE_OK) {
 		msg_warn_fuzzy_backend ("cannot disable secure delete: %s",
+				sqlite3_errmsg (backend->db));
+	}
+
+	if (sizeof (gpointer) >= 8 &&
+			(rc = sqlite3_exec (backend->db, enable_mmap, NULL, NULL, NULL)) !=
+			SQLITE_OK) {
+		msg_warn_fuzzy_backend ("cannot enable mmap: %s",
 				sqlite3_errmsg (backend->db));
 	}
 
