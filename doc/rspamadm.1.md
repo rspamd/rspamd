@@ -69,6 +69,14 @@ Test configuration strictly and redefine some ucl vars:
     rspamadm --var=DBDIR=/tmp configtest -c ./rspamd.conf -s
 
 
+Dump the processed configuration:
+
+    rspamadm configdump
+
+Dump the processed configuration as JSON string:
+
+    rspamadm configdump -j
+
 Generate a keypair to use for HTTPCrypt encryption:
 
     rspamadm keypair
