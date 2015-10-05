@@ -48,7 +48,3 @@ Password option should be changed for sure for your specific configuration. Encr
 
 Interface itself is written in pure HTML5/js and, hence, it requires zero setup.
 Just enter a password for webui access and you are ready.
-
-##Contact information.
-
-Rspamd interface is `Apache-2.0` licensed software.
