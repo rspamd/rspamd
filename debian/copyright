@@ -26,7 +26,7 @@ Files: contrib/uthash/*
 Copyright: 2003-2013 Troy D. Hanson http://troydhanson.github.com/uthash/
 License: BSD-1-Clause
 
-Files: conf/lua/regexp/*
+Files: rules/regexp/*
 Copyright: 2000-2012 The Apache Software Foundation
 License: Apache-2.0
 
@@ -99,8 +99,9 @@ Copyright: 2014, Vsevolod Stakhov <vsevolod@highsecure.ru>
 License: MIT
 
 Files: interface/* 
-Copyright: 2000-2012 The Apache Software Foundation
-License: Apache-2.0
+Copyright:  2012-2013 Anton Simonov <untone@gmail.com>
+            2014-2015 Vsevolod Stakhov <vsevolod@highsecure.ru>
+License: MIT
 
 Files: contrib/cdb*
 Copyright: Michael Tokarev <mjt@corpit.ru>
