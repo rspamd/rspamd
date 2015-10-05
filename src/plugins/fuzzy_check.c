@@ -1117,33 +1117,42 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 		event_set (&session->ev, fd, EV_READ,
 				fuzzy_controller_io_callback, session);
 		event_add (&session->ev, NULL);
+		return;
 	}
 	else if (ret == -1) {
 		msg_err_task ("got error in IO with server %s, %d, %s",
 				rspamd_upstream_name (session->server), errno, strerror (errno));
-
-		goto cleanup;
+		rspamd_upstream_fail (session->server);
 	}
-	else {
-		(*session->saved)--;
 
-		if (*session->saved == 0) {
-			goto cleanup;
-		}
-		else {
-			/* Read more */
-			event_del (&session->ev);
-			event_set (&session->ev, fd, EV_READ,
-					fuzzy_controller_io_callback, session);
-			event_add (&session->ev, NULL);
-		}
+	/*
+	 * XXX: actually, we check merely a single reply, which is not correct...
+	 * XXX: when we send a command, we do not check if *all* commands have been
+	 * written
+	 * XXX: please, please, change this code some day
+	 */
+	(*session->saved)--;
+	rspamd_http_connection_unref (session->http_entry->conn);
+	event_del (&session->ev);
+	event_del (&session->timev);
+	close (session->fd);
+
+	if (*session->saved == 0) {
+		goto cleanup;
 	}
 
 	return;
 
 cleanup:
+	/*
+	 * When we send learn commands to fuzzy storages, this code is executed
+	 * *once* when we have queried all storages. We also don't know which
+	 * storage has been failed.
+	 *
+	 * Therefore, we cleanup sessions earlier and actually this code is wrong.
+	 */
+
 	if (*(session->err) != NULL) {
-		rspamd_upstream_fail (session->server);
 		rspamd_controller_send_error (session->http_entry,
 				(*session->err)->code, (*session->err)->message);
 		g_error_free (*session->err);
@@ -1155,10 +1164,7 @@ cleanup:
 	}
 
 	rspamd_task_free (session->task, TRUE);
-	rspamd_http_connection_unref (session->http_entry->conn);
-	event_del (&session->ev);
-	event_del (&session->timev);
-	close (session->fd);
+
 }
 
 static void
