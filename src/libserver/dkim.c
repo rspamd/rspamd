@@ -1630,9 +1630,9 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	g_return_val_if_fail (task->msg.len > 0, DKIM_ERROR);
 
 	/* First of all find place of body */
-	p = task->msg.start;
+	p = task->msg.begin;
 
-	end = task->msg.start + task->msg.len;
+	end = task->msg.begin + task->msg.len;
 
 	while (p <= end) {
 		/* Search for \r\n\r\n at the end of headers */
