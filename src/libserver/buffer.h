@@ -10,7 +10,7 @@
 #include "mem_pool.h"
 #include "fstring.h"
 
-typedef gboolean (*dispatcher_read_callback_t)(rspamd_fstring_t *in, void *user_data);
+typedef gboolean (*dispatcher_read_callback_t)(rspamd_ftok_t *in, void *user_data);
 typedef gboolean (*dispatcher_write_callback_t)(void *user_data);
 typedef void (*dispatcher_err_callback_t)(GError *err, void *user_data);
 
@@ -26,9 +26,15 @@ enum io_policy {
 /**
  * Buffer structure
  */
+struct rspamd_buffer_buf {
+	gsize size;
+	gsize len;
+	guchar *begin;
+};
+
 typedef struct rspamd_buffer_s {
-	rspamd_fstring_t *data;                                                  /**< buffer logic			*/
-	gchar *pos;                                                     /**< current position		*/
+	struct rspamd_buffer_buf *data;
+	guchar *pos;                                                     /**< current position		*/
 } rspamd_buffer_t;
 
 struct rspamd_out_buffer_s {
@@ -110,19 +116,6 @@ gboolean rspamd_dispatcher_write (rspamd_io_dispatcher_t *d,
 	const void *data,
 	size_t len, gboolean delayed,
 	gboolean allocated) G_GNUC_WARN_UNUSED_RESULT;
-
-/**
- * Write a GString to dispatcher
- * @param d dipatcher object
- * @param str string to write
- * @param delayed delay write
- * @param free_on_write free string after writing to a socket
- * @return TRUE if write has been queued successfully
- */
-gboolean rspamd_dispatcher_write_string (rspamd_io_dispatcher_t *d,
-	GString *str,
-	gboolean delayed,
-	gboolean free_on_write) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Send specified descriptor to dispatcher

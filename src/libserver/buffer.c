@@ -310,14 +310,27 @@ write_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean is_delayed)
 	return TRUE;
 }
 
+static struct rspamd_buffer_buf *
+allocate_buffer (rspamd_mempool_t *pool, gsize size)
+{
+	struct rspamd_buffer_buf *b;
+
+	b = rspamd_mempool_alloc_tmp (pool, sizeof (*b));
+	b->begin = rspamd_mempool_alloc_tmp (pool, size);
+	b->size = size;
+	b->len = 0;
+
+	return b;
+}
+
 static void
 read_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 {
 	ssize_t r;
 	GError *err = NULL;
-	rspamd_fstring_t res;
-	gchar *c, *b;
-	gchar *end;
+	rspamd_ftok_t res;
+	guchar *c, *b;
+	guchar *end;
 	size_t len;
 	enum io_policy saved_policy;
 
@@ -330,10 +343,10 @@ read_buffers (gint fd, rspamd_io_dispatcher_t * d, gboolean skip_read)
 		d->in_buf =
 			rspamd_mempool_alloc_tmp (d->pool, sizeof (rspamd_buffer_t));
 		if (d->policy == BUFFER_LINE || d->policy == BUFFER_ANY) {
-			d->in_buf->data = rspamd_fstralloc_tmp (d->pool, d->default_buf_size);
+			d->in_buf->data = allocate_buffer (d->pool, d->default_buf_size);
 		}
 		else {
-			d->in_buf->data = rspamd_fstralloc_tmp (d->pool, d->nchars + 1);
+			d->in_buf->data = allocate_buffer (d->pool, d->nchars + 1);
 		}
 		d->in_buf->pos = d->in_buf->data->begin;
 	}
@@ -657,7 +670,7 @@ rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t * d,
 	enum io_policy policy,
 	size_t nchars)
 {
-	rspamd_fstring_t *tmp;
+	struct rspamd_buffer_buf *tmp;
 	gint t;
 
 	if (d->policy != policy || nchars != d->nchars) {
@@ -666,7 +679,7 @@ rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t * d,
 		/* Resize input buffer if needed */
 		if (policy == BUFFER_CHARACTER && nchars != 0) {
 			if (d->in_buf && d->in_buf->data->size < nchars) {
-				tmp = rspamd_fstralloc_tmp (d->pool, d->nchars + 1);
+				tmp = allocate_buffer (d->pool, d->nchars + 1);
 				memcpy (tmp->begin, d->in_buf->data->begin,
 					d->in_buf->data->len);
 				t = d->in_buf->pos - d->in_buf->data->begin;
@@ -677,7 +690,7 @@ rspamd_set_dispatcher_policy (rspamd_io_dispatcher_t * d,
 		}
 		else if (policy == BUFFER_LINE || policy == BUFFER_ANY) {
 			if (d->in_buf && d->nchars < d->default_buf_size) {
-				tmp = rspamd_fstralloc_tmp (d->pool, d->default_buf_size);
+				tmp = allocate_buffer (d->pool, d->default_buf_size);
 				memcpy (tmp->begin, d->in_buf->data->begin,
 					d->in_buf->data->len);
 				t = d->in_buf->pos - d->in_buf->data->begin;
@@ -715,33 +728,6 @@ rspamd_dispatcher_write (rspamd_io_dispatcher_t * d,
 		newbuf->data->allocated_len = len;
 		newbuf->allocated = FALSE;
 	}
-
-	APPEND_OUT_BUFFER (d, newbuf);
-
-	if (!delayed) {
-		debug_ip ("plan write event");
-		return write_buffers (d->fd, d, FALSE);
-	}
-	/* Otherwise plan write event */
-	event_del (d->ev);
-	event_set (d->ev, d->fd, EV_WRITE, dispatcher_cb, (void *)d);
-	event_base_set (d->ev_base, d->ev);
-	event_add (d->ev, d->tv);
-
-	return TRUE;
-}
-
-gboolean
-rspamd_dispatcher_write_string (rspamd_io_dispatcher_t *d,
-	GString *str,
-	gboolean delayed,
-	gboolean free_on_write)
-{
-	struct rspamd_out_buffer_s *newbuf;
-
-	newbuf = g_slice_alloc (sizeof (struct rspamd_out_buffer_s));
-	newbuf->data = str;
-	newbuf->allocated = free_on_write;
 
 	APPEND_OUT_BUFFER (d, newbuf);
 
@@ -824,7 +810,3 @@ rspamd_dispacther_cleanup (rspamd_io_dispatcher_t *d)
 }
 
 #undef debug_ip
-
-/*
- * vi:ts=4
- */
