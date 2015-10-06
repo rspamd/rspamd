@@ -26,6 +26,7 @@
 #define PRINTF_H_
 
 #include "config.h"
+#include "fstring.h"
 
 /*
  * supported formats:
@@ -77,6 +78,9 @@ gchar * rspamd_vsnprintf (gchar *buf, glong max, const gchar *fmt,
 	va_list args);
 glong rspamd_printf_gstring (GString *s, const gchar *fmt, ...);
 glong rspamd_vprintf_gstring (GString *s, const gchar *fmt, va_list args);
+
+glong rspamd_printf_fstring (rspamd_fstring_t **s, const gchar *fmt, ...);
+glong rspamd_vprintf_fstring (rspamd_fstring_t **s, const gchar *fmt, va_list args);
 
 glong rspamd_vprintf_common (rspamd_printf_append_func func,
 	gpointer apd,
