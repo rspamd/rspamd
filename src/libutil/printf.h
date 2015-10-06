@@ -44,7 +44,8 @@
  *	%P						    pid_t
  *	%r				            rlim_t
  *	%p						    void *
- *	%V						    f_str_t *
+ *	%V						    rspamd_fstring_t *
+ *	%T						    rspamd_ftok_t
  *	%v                          GString *
  *	%s						    null-terminated string
  *	%xs                         hex encoded string
@@ -52,6 +53,7 @@
  *	%Z						    '\0'
  *	%N						    '\n'
  *	%c						    gchar
+ *	%t						    time_t
  *	%e                          GError *
  *	%%						    %
  *

@@ -338,6 +338,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 	guint64 ui64;
 	guint width, sign, hex, humanize, bytes, frac_width, i;
 	rspamd_fstring_t *v;
+	rspamd_ftok_t *tok;
 	GString *gs;
 	GError *err;
 	gboolean bv;
@@ -457,6 +458,11 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 
 				continue;
 
+			case 'T':
+				tok = va_arg (args, rspamd_ftok_t *);
+				RSPAMD_PRINTF_APPEND (tok->begin, tok->len);
+				continue;
+
 			case 'v':
 				gs = va_arg (args, GString *);
 				RSPAMD_PRINTF_APPEND (gs->str, gs->len);
@@ -523,7 +529,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 				sign = 1;
 				break;
 
-			case 'T':
+			case 't':
 				i64 = (gint64) va_arg (args, time_t);
 				sign = 1;
 				break;
