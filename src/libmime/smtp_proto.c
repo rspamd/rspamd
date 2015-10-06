@@ -374,7 +374,7 @@ smtp_upstream_write_list (GList *args, gchar *buf, size_t buflen)
 
 	while (cur && r < buflen - 3) {
 		arg = cur->data;
-		r += rspamd_snprintf (buf + r, buflen - r, " %V", arg);
+		r += rspamd_snprintf (buf + r, buflen - r, " %T", arg);
 		cur = g_list_next (cur);
 	}
 
@@ -409,7 +409,7 @@ smtp_upstream_read_socket (rspamd_ftok_t * in, void *arg)
 	gchar outbuf[BUFSIZ];
 	gint r;
 
-	msg_debug ("in: %V, state: %d", in, session->upstream_state);
+	msg_debug ("in: %T, state: %d", in, session->upstream_state);
 	switch (session->upstream_state) {
 	case SMTP_STATE_GREETING:
 		r = check_smtp_ustream_reply (in, '2');
@@ -715,7 +715,7 @@ smtp_upstream_read_socket (rspamd_ftok_t * in, void *arg)
 		return FALSE;
 		break;
 	default:
-		msg_err ("got upstream reply at unexpected state: %d, reply: %V",
+		msg_err ("got upstream reply at unexpected state: %d, reply: %T",
 			session->upstream_state,
 			in);
 		session->state = SMTP_STATE_CRITICAL_ERROR;

@@ -772,7 +772,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 				if (level == 0) {
 					r = rspamd_snprintf (result,
 							len,
-							"%V",
+							"%T",
 							hostname);
 				}
 				else {
@@ -791,7 +791,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 			else {
 				r = rspamd_snprintf (result,
 						len,
-						"%V",
+						"%T",
 						hostname);
 			}
 		}
