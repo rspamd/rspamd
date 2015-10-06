@@ -734,9 +734,9 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 }
 
 static void
-proxy_parse_smtp_input (rspamd_fstring_t *line, struct smtp_proxy_session *session)
+proxy_parse_smtp_input (rspamd_ftok_t *line, struct smtp_proxy_session *session)
 {
-	gchar *p, *c, *end;
+	const gchar *p, *c, *end;
 	gsize len;
 
 	p = line->begin;
@@ -788,10 +788,10 @@ proxy_parse_smtp_input (rspamd_fstring_t *line, struct smtp_proxy_session *sessi
  * Callback that is called when there is data to read in buffer
  */
 static gboolean
-smtp_proxy_read_socket (rspamd_fstring_t * in, void *arg)
+smtp_proxy_read_socket (rspamd_ftok_t * in, void *arg)
 {
 	struct smtp_proxy_session *session = arg;
-	gchar *p;
+	const gchar *p;
 
 	if (session->state != SMTP_PROXY_STATE_REJECT_EMULATE) {
 		/* This can be called only if client is using invalid pipelining */

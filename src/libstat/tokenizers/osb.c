@@ -232,7 +232,7 @@ rspamd_tokenizer_osb (struct rspamd_tokenizer_runtime *rt,
 	const gchar *prefix)
 {
 	rspamd_token_t *new = NULL;
-	rspamd_fstring_t *token;
+	rspamd_ftok_t *token;
 	struct rspamd_osb_tokenizer_config *osb_cf;
 	guint64 *hashpipe, cur, seed;
 	guint32 h1, h2;
@@ -259,7 +259,7 @@ rspamd_tokenizer_osb (struct rspamd_tokenizer_runtime *rt,
 	memset (hashpipe, 0xfe, window_size * sizeof (hashpipe[0]));
 
 	for (w = 0; w < input->len; w ++) {
-		token = &g_array_index (input, rspamd_fstring_t, w);
+		token = &g_array_index (input, rspamd_ftok_t, w);
 
 		if (osb_cf->ht == RSPAMD_OSB_HASH_COMPAT) {
 			cur = rspamd_fstrhash_lc (token, is_utf);

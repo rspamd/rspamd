@@ -26,8 +26,6 @@
 #include "mem_pool.h"
 #include "fstring.h"
 #include "logger.h"
-#include "util.h"
-#include "rspamd.h"
 #include "utlist.h"
 #include "ottery.h"
 
@@ -424,11 +422,25 @@ rspamd_mempool_fstrdup (rspamd_mempool_t * pool, const struct f_str_s *src)
 	}
 
 	newstr = rspamd_mempool_alloc (pool, src->len + 1);
-	memcpy (newstr, src->begin, src->len);
+	memcpy (newstr, src->str, src->len);
 	newstr[src->len] = '\0';
 	return newstr;
 }
 
+gchar *
+rspamd_mempool_ftokdup (rspamd_mempool_t *pool, const rspamd_ftok_t *src)
+{
+	gchar *newstr;
+
+	if (src == NULL) {
+		return NULL;
+	}
+
+	newstr = rspamd_mempool_alloc (pool, src->len + 1);
+	memcpy (newstr, src->begin, src->len);
+	newstr[src->len] = '\0';
+	return newstr;
+}
 
 gchar *
 rspamd_mempool_strdup_shared (rspamd_mempool_t * pool, const gchar *src)

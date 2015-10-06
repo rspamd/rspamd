@@ -41,7 +41,7 @@ rspamd_shingles_generate (GArray *input,
 	guchar shabuf[BLAKE2B_OUTBYTES], *out_key;
 	const guchar *cur_key;
 	GString *row;
-	rspamd_fstring_t *word;
+	rspamd_ftok_t *word;
 	blake2b_state bs;
 	guint64 val;
 	gint i, j, beg = 0;
@@ -84,7 +84,7 @@ rspamd_shingles_generate (GArray *input,
 	for (i = 0; i <= (gint)input->len; i ++) {
 		if (i - beg >= SHINGLES_WINDOW || i == (gint)input->len) {
 			for (j = beg; j < i; j ++) {
-				word = &g_array_index (input, rspamd_fstring_t, j);
+				word = &g_array_index (input, rspamd_ftok_t, j);
 				g_string_append_len (row, word->begin, word->len);
 			}
 			beg++;

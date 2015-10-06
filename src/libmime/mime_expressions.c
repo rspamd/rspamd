@@ -125,6 +125,12 @@ struct rspamd_function_atom {
 	GArray *args;	/**< its args										*/
 };
 
+enum rspamd_mime_atom_type {
+	MIME_ATOM_REGEXP = 0,
+	MIME_ATOM_INTERNAL_FUNCTION,
+	MIME_ATOM_LUA_FUNCTION
+};
+
 struct rspamd_mime_atom {
 	gchar *str;
 	union {
@@ -132,11 +138,7 @@ struct rspamd_mime_atom {
 		struct rspamd_function_atom *func;
 		const gchar *lua_function;
 	} d;
-	enum {
-		MIME_ATOM_REGEXP = 0,
-		MIME_ATOM_INTERNAL_FUNCTION,
-		MIME_ATOM_LUA_FUNCTION
-	} type;
+	enum rspamd_mime_atom_type type;
 };
 
 /*
@@ -923,7 +925,7 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 		break;
 	case REGEXP_MESSAGE:
 		raw = TRUE;
-		ct = (guint8 *)task->msg.start;
+		ct = (guint8 *)task->msg.begin;
 		clen = task->msg.len;
 
 		ret = rspamd_mime_regexp_element_process (task, re, ct, clen, raw);

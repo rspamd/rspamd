@@ -249,7 +249,7 @@ rspamd_task_unmapper (gpointer ud)
 {
 	struct rspamd_task *task = ud;
 
-	munmap ((void *)task->msg.start, task->msg.len);
+	munmap ((void *)task->msg.begin, task->msg.len);
 }
 
 gboolean
@@ -271,7 +271,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 	if (task->flags & RSPAMD_TASK_FLAG_FILE) {
 		g_assert (task->msg.len > 0);
 
-		r = rspamd_strlcpy (filepath, task->msg.start,
+		r = rspamd_strlcpy (filepath, task->msg.begin,
 				MIN (sizeof (filepath), task->msg.len + 1));
 
 		rspamd_decode_url (filepath, filepath, r + 1);
@@ -311,14 +311,14 @@ rspamd_task_load_message (struct rspamd_task *task,
 		}
 
 		close (fd);
-		task->msg.start = map;
+		task->msg.begin = map;
 		task->msg.len = st.st_size;
 
 		rspamd_mempool_add_destructor (task->task_pool, rspamd_task_unmapper, task);
 	}
 	else {
 		debug_task ("got input of length %z", task->msg.len);
-		task->msg.start = start;
+		task->msg.begin = start;
 		task->msg.len = len;
 
 		if (task->msg.len == 0) {
@@ -343,7 +343,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 			if (control_len > 0) {
 				parser = ucl_parser_new (UCL_PARSER_KEY_LOWERCASE);
 
-				if (!ucl_parser_add_chunk (parser, task->msg.start, control_len)) {
+				if (!ucl_parser_add_chunk (parser, task->msg.begin, control_len)) {
 					msg_warn_task ("processing of control chunk failed: %s",
 							ucl_parser_get_error (parser));
 					ucl_parser_free (parser);
@@ -355,7 +355,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 					ucl_object_unref (control_obj);
 				}
 
-				task->msg.start += control_len;
+				task->msg.begin += control_len;
 				task->msg.len -= control_len;
 			}
 		}

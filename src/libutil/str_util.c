@@ -215,9 +215,10 @@ rspamd_str_equal (gconstpointer v, gconstpointer v2)
 }
 
 gboolean
-rspamd_fstring_icase_equal (gconstpointer v, gconstpointer v2)
+rspamd_ftok_icase_equal (gconstpointer v, gconstpointer v2)
 {
-	const rspamd_fstring_t *f1 = v, *f2 = v2;
+	const rspamd_ftok_t *f1 = v, *f2 = v2;
+
 	if (f1->len == f2->len &&
 		g_ascii_strncasecmp (f1->begin, f2->begin, f1->len) == 0) {
 		return TRUE;
@@ -228,9 +229,9 @@ rspamd_fstring_icase_equal (gconstpointer v, gconstpointer v2)
 
 
 guint
-rspamd_fstring_icase_hash (gconstpointer key)
+rspamd_ftok_icase_hash (gconstpointer key)
 {
-	const rspamd_fstring_t *f = key;
+	const rspamd_ftok_t *f = key;
 
 	return rspamd_icase_hash (f->begin, f->len);
 }

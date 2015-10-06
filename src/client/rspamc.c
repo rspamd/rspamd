@@ -941,7 +941,7 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 		folded_symbuf = rspamd_header_value_fold ("X-Spam-Symbols",
 				symbuf->str,
 				0);
-		rspamd_printf_gstring (added_headers, "X-Spam-Symbols: %V\r\n",
+		rspamd_printf_gstring (added_headers, "X-Spam-Symbols: %v\r\n",
 				folded_symbuf);
 		g_string_free (folded_symbuf, TRUE);
 		g_string_free (symbuf, TRUE);
@@ -978,7 +978,8 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 	/* Write message */
 	if (rspamd_fprintf (out, "%*s", (gint)headers_pos, input->str)
 			== headers_pos) {
-		if (rspamd_fprintf (out, "%V", added_headers) == (gint)added_headers->len) {
+		if (rspamd_fprintf (out, "%v", added_headers)
+				== (gint)added_headers->len) {
 			rspamd_fprintf (out, "%s", input->str + headers_pos);
 		}
 	}

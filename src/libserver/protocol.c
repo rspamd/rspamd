@@ -270,11 +270,11 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 
 		if (res == NULL) {
 			/* Treat the whole query as path */
-			task->msg.start = msg->url->str + u.field_data[UF_QUERY].off;
+			task->msg.begin = msg->url->str + u.field_data[UF_QUERY].off;
 			task->msg.len = u.field_data[UF_QUERY].len;
 		}
 		else {
-			task->msg.start = rspamd_mempool_strdup (task->task_pool, res->str);
+			task->msg.begin = rspamd_mempool_strdup (task->task_pool, res->str);
 			task->msg.len = res->len;
 		}
 

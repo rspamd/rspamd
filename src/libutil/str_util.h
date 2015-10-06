@@ -53,8 +53,8 @@ gboolean rspamd_str_equal (gconstpointer v, gconstpointer v2);
 /*
  * Hash table utility functions for hashing fixed strings
  */
-guint rspamd_fstring_icase_hash (gconstpointer key);
-gboolean rspamd_fstring_icase_equal (gconstpointer v, gconstpointer v2);
+guint rspamd_ftok_icase_hash (gconstpointer key);
+gboolean rspamd_ftok_icase_equal (gconstpointer v, gconstpointer v2);
 guint rspamd_gstring_icase_hash (gconstpointer key);
 gboolean rspamd_gstring_icase_equal (gconstpointer v, gconstpointer v2);
 

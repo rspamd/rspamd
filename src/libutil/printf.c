@@ -219,6 +219,18 @@ rspamd_printf_append_gstring (const gchar *buf, glong buflen, gpointer ud)
 	return buflen;
 }
 
+static glong
+rspamd_printf_append_fstring (const gchar *buf, glong buflen, gpointer ud)
+{
+	rspamd_fstring_t **dst = ud;
+
+	if (buflen > 0) {
+		*dst = rspamd_fstring_append (*dst, buf, buflen);
+	}
+
+	return buflen;
+}
+
 glong
 rspamd_fprintf (FILE *f, const gchar *fmt, ...)
 {
@@ -307,6 +319,25 @@ rspamd_vprintf_gstring (GString *s, const gchar *fmt, va_list args)
 	return rspamd_vprintf_common (rspamd_printf_append_gstring, s, fmt, args);
 }
 
+glong
+rspamd_printf_fstring (rspamd_fstring_t **s, const gchar *fmt, ...)
+{
+	va_list args;
+	glong r;
+
+	va_start (args, fmt);
+	r = rspamd_vprintf_fstring (s, fmt, args);
+	va_end (args);
+
+	return r;
+}
+
+glong
+rspamd_vprintf_fstring (rspamd_fstring_t **s, const gchar *fmt, va_list args)
+{
+	return rspamd_vprintf_common (rspamd_printf_append_fstring, s, fmt, args);
+}
+
 #define RSPAMD_PRINTF_APPEND(buf, len)                                         \
 	do {                                                                       \
 		RSPAMD_PRINTF_APPEND_BUF(buf, len);                                    \
@@ -338,6 +369,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 	guint64 ui64;
 	guint width, sign, hex, humanize, bytes, frac_width, i;
 	rspamd_fstring_t *v;
+	rspamd_ftok_t *tok;
 	GString *gs;
 	GError *err;
 	gboolean bv;
@@ -453,8 +485,13 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 
 			case 'V':
 				v = va_arg (args, rspamd_fstring_t *);
-				RSPAMD_PRINTF_APPEND (v->begin, v->len);
+				RSPAMD_PRINTF_APPEND (v->str, v->len);
 
+				continue;
+
+			case 'T':
+				tok = va_arg (args, rspamd_ftok_t *);
+				RSPAMD_PRINTF_APPEND (tok->begin, tok->len);
 				continue;
 
 			case 'v':
@@ -523,7 +560,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 				sign = 1;
 				break;
 
-			case 'T':
+			case 't':
 				i64 = (gint64) va_arg (args, time_t);
 				sign = 1;
 				break;

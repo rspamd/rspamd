@@ -52,7 +52,7 @@ rspamd_stat_tokenize_header (struct rspamd_task *task,
 		const gchar *name, const gchar *prefix, GArray *ar)
 {
 	struct raw_header *rh, *cur;
-	rspamd_fstring_t str;
+	rspamd_ftok_t str;
 
 	rh = g_hash_table_lookup (task->raw_headers, name);
 
@@ -89,7 +89,7 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_task *task,
 	struct mime_text_part *tp;
 	GList *cur;
 	GArray *ar;
-	rspamd_fstring_t elt;
+	rspamd_ftok_t elt;
 	guint i;
 
 	ar = g_array_sized_new (FALSE, FALSE, sizeof (elt), 4);

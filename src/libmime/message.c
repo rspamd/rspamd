@@ -112,8 +112,7 @@ parse_recv_header (rspamd_mempool_t * pool,
 		RSPAMD_RECV_STATE_PARSE_IP,
 		RSPAMD_RECV_STATE_SKIP_SPACES,
 		RSPAMD_RECV_STATE_ERROR
-	}                               state = RSPAMD_RECV_STATE_INIT,
-		next_state = RSPAMD_RECV_STATE_INIT;
+	} state = RSPAMD_RECV_STATE_INIT, next_state = RSPAMD_RECV_STATE_INIT;
 	gboolean is_exim = FALSE;
 
 	line = rh->decoded;
@@ -949,7 +948,7 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 		struct mime_text_part *part)
 {
 	struct sb_stemmer *stem = NULL;
-	rspamd_fstring_t *w;
+	rspamd_ftok_t *w;
 	const guchar *r;
 	gchar *temp_word;
 	guint i, nlen;
@@ -971,7 +970,7 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 
 	if (tmp) {
 		for (i = 0; i < tmp->len; i ++) {
-			w = &g_array_index (tmp, rspamd_fstring_t, i);
+			w = &g_array_index (tmp, rspamd_ftok_t, i);
 			if (stem) {
 				r = sb_stemmer_stem (stem, w->begin, w->len);
 			}
@@ -980,21 +979,23 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 				if (stem != NULL && r != NULL) {
 					nlen = strlen (r);
 					nlen = MIN (nlen, w->len);
-					w->begin = rspamd_mempool_alloc (task->task_pool, nlen);
-					memcpy (w->begin, r, nlen);
+					temp_word = rspamd_mempool_alloc (task->task_pool, nlen);
+					memcpy (temp_word, r, nlen);
+					w->begin = temp_word;
 					w->len = nlen;
 				}
 				else {
-					temp_word = w->begin;
-					w->begin = rspamd_mempool_alloc (task->task_pool, w->len);
-					memcpy (w->begin, temp_word, w->len);
+					temp_word = rspamd_mempool_alloc (task->task_pool, w->len);
+					memcpy (temp_word, w->begin, w->len);
 
 					if (IS_PART_UTF (part)) {
-						rspamd_str_lc_utf8 (w->begin, w->len);
+						rspamd_str_lc_utf8 (temp_word, w->len);
 					}
 					else {
-						rspamd_str_lc (w->begin, w->len);
+						rspamd_str_lc (temp_word, w->len);
 					}
+
+					w->begin = temp_word;
 				}
 			}
 		}
@@ -1463,8 +1464,9 @@ rspamd_message_parse (struct rspamd_task *task)
 	guint tw, dw;
 
 	tmp = rspamd_mempool_alloc (task->task_pool, sizeof (GByteArray));
-	p = task->msg.start;
+	p = task->msg.begin;
 	len = task->msg.len;
+
 	/* Skip any space characters to avoid some bad messages to be unparsed */
 	while (g_ascii_isspace (*p) && len > 0) {
 		p ++;

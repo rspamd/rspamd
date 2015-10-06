@@ -247,7 +247,7 @@ rspamd_stat_cache_sqlite3_process (struct rspamd_task *task,
 	struct rspamd_stat_sqlite3_ctx *ctx = (struct rspamd_stat_sqlite3_ctx *)c;
 	struct mime_text_part *part;
 	blake2b_state st;
-	rspamd_fstring_t *word;
+	rspamd_ftok_t *word;
 	guchar out[BLAKE2B_OUTBYTES];
 	guint i, j;
 
@@ -259,7 +259,7 @@ rspamd_stat_cache_sqlite3_process (struct rspamd_task *task,
 
 			if (part->words != NULL) {
 				for (j = 0; j < part->words->len; j ++) {
-					word = &g_array_index (part->words, rspamd_fstring_t, j);
+					word = &g_array_index (part->words, rspamd_ftok_t, j);
 					blake2b_update (&st, word->begin, word->len);
 				}
 			}

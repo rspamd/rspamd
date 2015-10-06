@@ -621,7 +621,7 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 	struct rspamd_shingle *sh;
 	guint i;
 	blake2b_state st;
-	rspamd_fstring_t *word;
+	rspamd_ftok_t *word;
 	GArray *words;
 	struct fuzzy_cmd_io *io;
 	struct rspamd_http_keypair *lk, *rk;
@@ -645,7 +645,7 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 	words = fuzzy_preprocess_words (part, pool);
 
 	for (i = 0; i < words->len; i ++) {
-		word = &g_array_index (words, rspamd_fstring_t, i);
+		word = &g_array_index (words, rspamd_ftok_t, i);
 		blake2b_update (&st, word->begin, word->len);
 	}
 	blake2b_final (&st, shcmd->basic.digest, sizeof (shcmd->basic.digest));
@@ -1466,7 +1466,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 
 	/* Allocate message from string */
 	/* XXX: what about encrypted messsages ? */
-	task->msg.start = msg->body->str;
+	task->msg.begin = msg->body->str;
 	task->msg.len = msg->body->len;
 
 	saved = rspamd_mempool_alloc0 (task->task_pool, sizeof (gint));

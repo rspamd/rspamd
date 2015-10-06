@@ -244,8 +244,8 @@ lua_util_process_message (lua_State *L)
 		task = rspamd_task_new (NULL);
 		task->cfg = cfg;
 		task->ev_base = base;
-		task->msg.start = rspamd_mempool_alloc (task->task_pool, mlen + 1);
-		rspamd_strlcpy ((gpointer)task->msg.start, message, mlen + 1);
+		task->msg.begin = rspamd_mempool_alloc (task->task_pool, mlen);
+		rspamd_strlcpy ((gpointer)task->msg.begin, message, mlen);
 		task->msg.len = mlen;
 		task->fin_callback = lua_util_task_fin;
 		task->fin_arg = &res;
@@ -397,7 +397,7 @@ lua_util_tokenize_text (lua_State *L)
 	struct rspamd_lua_text *t;
 	struct process_exception *ex;
 	GArray *res;
-	rspamd_fstring_t *w;
+	rspamd_ftok_t *w;
 	gboolean compat = FALSE, check_sig = FALSE;
 
 	if (lua_type (L, 1) == LUA_TSTRING) {
@@ -465,7 +465,7 @@ lua_util_tokenize_text (lua_State *L)
 		lua_newtable (L);
 
 		for (i = 0; i < res->len; i ++) {
-			w = &g_array_index (res, rspamd_fstring_t, i);
+			w = &g_array_index (res, rspamd_ftok_t, i);
 			lua_pushlstring (L, w->begin, w->len);
 			lua_rawseti (L, -2, i + 1);
 		}

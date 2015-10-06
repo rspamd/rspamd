@@ -128,16 +128,13 @@ struct rspamd_task {
 	gchar *hostname;								/**< hostname reported by MTA						*/
 	GHashTable *request_headers;					/**< HTTP headers in a request						*/
 	GHashTable *reply_headers;						/**< Custom reply headers							*/
-	struct {
-		const gchar *start;
-		gsize len;
-	} msg;											/**< message buffer									*/
+	rspamd_ftok_t msg;								/**< message buffer									*/
 	struct rspamd_http_connection *http_conn;		/**< HTTP server connection							*/
 	struct rspamd_async_session * s;				/**< async session object							*/
 	GMimeMessage *message;							/**< message, parsed with GMime						*/
 	GPtrArray *parts;								/**< list of parsed parts							*/
 	GPtrArray *text_parts;							/**< list of text parts								*/
-	rspamd_fstring_t raw_headers_content;			/**< list of raw headers							*/
+	rspamd_ftok_t raw_headers_content;				/**< list of raw headers							*/
 	GPtrArray *received;							/**< list of received headers						*/
 	GHashTable *urls;								/**< list of parsed urls							*/
 	GHashTable *emails;								/**< list of parsed emails							*/
