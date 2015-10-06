@@ -42,16 +42,18 @@ generate_fuzzy_words (gsize cnt, gsize max_len)
 {
 	GArray *res;
 	gsize i, wlen;
-	rspamd_fstring_t w;
+	rspamd_ftok_t w;
+	char *t;
 
-	res = g_array_sized_new (FALSE, FALSE, sizeof (rspamd_fstring_t), cnt);
+	res = g_array_sized_new (FALSE, FALSE, sizeof (rspamd_ftok_t), cnt);
 
 	for (i = 0; i < cnt; i ++) {
 		wlen = ottery_rand_range (max_len) + 1;
 
-		w.len = w.size = wlen;
-		w.begin = g_malloc (wlen);
-		generate_random_string (w.begin, wlen);
+		w.len = wlen;
+		t = g_malloc (wlen);
+		generate_random_string (t, wlen);
+		w.begin = t;
 		g_array_append_val (res, w);
 	}
 
@@ -62,12 +64,12 @@ static void
 permute_vector (GArray *in, gdouble prob)
 {
 	gsize i, total = 0;
-	rspamd_fstring_t *w;
+	rspamd_ftok_t *w;
 
 	for (i = 0; i < in->len; i ++) {
 		if (ottery_rand_unsigned () <= G_MAXUINT * prob) {
-			w = &g_array_index (in, rspamd_fstring_t, i);
-			generate_random_string (w->begin, w->len);
+			w = &g_array_index (in, rspamd_ftok_t, i);
+			generate_random_string ((gchar *)w->begin, w->len);
 			total ++;
 		}
 	}
@@ -78,11 +80,11 @@ static void
 free_fuzzy_words (GArray *ar)
 {
 	gsize i;
-	rspamd_fstring_t *w;
+	rspamd_ftok_t *w;
 
 	for (i = 0; i < ar->len; i ++) {
-		w = &g_array_index (ar, rspamd_fstring_t, i);
-		g_free (w->begin);
+		w = &g_array_index (ar, rspamd_ftok_t, i);
+		g_free ((gpointer)w->begin);
 	}
 }
 
