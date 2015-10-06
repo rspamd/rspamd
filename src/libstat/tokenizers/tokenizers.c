@@ -30,8 +30,8 @@
 #include "tokenizers.h"
 #include "stat_internal.h"
 
-typedef gboolean (*token_get_function) (rspamd_fstring_t * buf, gchar **pos,
-		rspamd_fstring_t * token,
+typedef gboolean (*token_get_function) (rspamd_ftok_t * buf, gchar const **pos,
+		rspamd_ftok_t * token,
 		GList **exceptions, gboolean is_utf, gsize *rl, gboolean check_signature);
 
 const gchar t_delimiters[255] = {
@@ -77,12 +77,12 @@ token_node_compare_func (gconstpointer a, gconstpointer b)
 
 /* Get next word from specified f_str_t buf */
 static gboolean
-rspamd_tokenizer_get_word_compat (rspamd_fstring_t * buf,
-		gchar **cur, rspamd_fstring_t * token,
+rspamd_tokenizer_get_word_compat (rspamd_ftok_t * buf,
+		gchar const **cur, rspamd_ftok_t * token,
 		GList **exceptions, gboolean is_utf, gsize *rl, gboolean unused)
 {
 	gsize remain, pos;
-	guchar *p;
+	const gchar *p;
 	struct process_exception *ex = NULL;
 
 	if (buf == NULL) {
@@ -134,11 +134,11 @@ rspamd_tokenizer_get_word_compat (rspamd_fstring_t * buf,
 		pos++;
 		p++;
 		remain--;
-	} while (remain > 0 && t_delimiters[*p]);
+	} while (remain > 0 && t_delimiters[(guchar)*p]);
 
 	token->begin = p;
 
-	while (remain > 0 && !t_delimiters[*p]) {
+	while (remain > 0 && !t_delimiters[(guchar)*p]) {
 		if (ex != NULL && ex->pos == pos) {
 			*exceptions = g_list_next (*exceptions);
 			*cur = p + ex->len;
@@ -169,13 +169,13 @@ rspamd_tokenizer_get_word_compat (rspamd_fstring_t * buf,
 }
 
 static gboolean
-rspamd_tokenizer_get_word (rspamd_fstring_t * buf,
-		gchar **cur, rspamd_fstring_t * token,
+rspamd_tokenizer_get_word (rspamd_ftok_t * buf,
+		gchar const **cur, rspamd_ftok_t * token,
 		GList **exceptions, gboolean is_utf, gsize *rl,
 		gboolean check_signature)
 {
 	gsize remain, pos, siglen = 0;
-	gchar *p, *next_p, *sig = NULL;
+	const gchar *p, *next_p, *sig = NULL;
 	gunichar uc;
 	guint processed = 0;
 	struct process_exception *ex = NULL;
@@ -292,8 +292,8 @@ rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 		gsize min_len, GList *exceptions, gboolean compat,
 		gboolean check_signature)
 {
-	rspamd_fstring_t token, buf;
-	gchar *pos = NULL;
+	rspamd_ftok_t token, buf;
+	const gchar *pos = NULL;
 	gsize l;
 	GArray *res;
 	GList *cur = exceptions;
@@ -305,7 +305,6 @@ rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 
 	buf.begin = text;
 	buf.len = len;
-	buf.size = buf.len;
 	token.begin = NULL;
 	token.len = 0;
 
@@ -316,7 +315,7 @@ rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 		func = rspamd_tokenizer_get_word;
 	}
 
-	res = g_array_sized_new (FALSE, FALSE, sizeof (rspamd_fstring_t), 128);
+	res = g_array_sized_new (FALSE, FALSE, sizeof (rspamd_ftok_t), 128);
 
 	while (func (&buf, &pos, &token, &cur, is_utf, &l, FALSE)) {
 		if (l == 0 || (min_len > 0 && l < min_len)) {

@@ -183,7 +183,7 @@ fstrhash_c (gchar c, guint32 hval)
  * Return hash value for a string
  */
 guint32
-rspamd_fstrhash_lc (const rspamd_fstring_t * str, gboolean is_utf)
+rspamd_fstrhash_lc (const rspamd_ftok_t * str, gboolean is_utf)
 {
 	gsize i;
 	guint32 j, hval;
@@ -195,11 +195,11 @@ rspamd_fstrhash_lc (const rspamd_fstring_t * str, gboolean is_utf)
 		return 0;
 	}
 
-	p = str->str;
+	p = str->begin;
 	hval = str->len;
 
 	if (is_utf) {
-		while (end < str->str + str->len) {
+		while (end < str->begin + str->len) {
 			if (!g_utf8_validate (p, str->len, &end)) {
 				return rspamd_fstrhash_lc (str, FALSE);
 			}

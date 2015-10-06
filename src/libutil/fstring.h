@@ -86,7 +86,7 @@ char * rspamd_fstring_cstr (const rspamd_fstring_t *str);
 /*
  * Return fast hash value for fixed string converted to lowercase
  */
-guint32 rspamd_fstrhash_lc (const rspamd_fstring_t *str, gboolean is_utf);
+guint32 rspamd_fstrhash_lc (const rspamd_ftok_t *str, gboolean is_utf);
 
 /**
  * Return true if two strings are equal
