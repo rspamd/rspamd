@@ -179,6 +179,17 @@ gchar * rspamd_mempool_strdup (rspamd_mempool_t * pool, const gchar *src);
 gchar * rspamd_mempool_fstrdup (rspamd_mempool_t * pool,
 	const struct f_str_s *src);
 
+struct f_str_tok;
+
+/**
+ * Make a copy of fixed string token in pool as null terminated string
+ * @param pool memory pool object
+ * @param src source string
+ * @return pointer to newly created string that is copy of src
+ */
+gchar * rspamd_mempool_ftokdup (rspamd_mempool_t *pool,
+		const struct f_str_tok *src);
+
 /**
  * Allocate piece of shared memory
  * @param pool memory pool object
@@ -201,7 +212,7 @@ void rspamd_mempool_lock_shared (rspamd_mempool_t *pool, void *pointer);
  * @param pool memory pool object
  * @param pointer pointer of shared memory object that is to be unlocked (the whole page that contains that object is locked)
  */
-void rspamd_mempool_lock_shared (rspamd_mempool_t *pool, void *pointer);
+void rspamd_mempool_unlock_shared (rspamd_mempool_t *pool, void *pointer);
 
 /**
  * Add destructor callback to pool
