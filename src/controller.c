@@ -139,8 +139,8 @@ struct rspamd_controller_worker_ctx {
 	/* Privilleged password */
 	gchar *enable_password;
 	/* Cached versions of the passwords */
-	rspamd_fstring_t cached_password;
-	rspamd_fstring_t cached_enable_password;
+	rspamd_ftok_t cached_password;
+	rspamd_ftok_t cached_enable_password;
 	/* HTTP server */
 	struct rspamd_http_connection_router *http;
 	/* Server's start time */
@@ -261,7 +261,8 @@ rspamd_check_encrypted_password (struct rspamd_controller_worker_ctx *ctx,
 	gsize salt_len, key_len;
 	gboolean ret = TRUE;
 	guchar *local_key;
-	rspamd_fstring_t *cache;
+	rspamd_ftok_t *cache;
+	gpointer m;
 
 	/* First of all check cached versions to save resources */
 	if (is_enable && ctx->cached_enable_password.len != 0) {
@@ -332,11 +333,12 @@ rspamd_check_encrypted_password (struct rspamd_controller_worker_ctx *ctx,
 
 		if (cache->len == 0) {
 			/* Mmap region */
-			cache->begin = mmap (NULL, password->len, PROT_WRITE,
+			m = mmap (NULL, password->len, PROT_WRITE,
 					MAP_PRIVATE | MAP_ANON, -1, 0);
-			memcpy (cache->begin, password->str, password->len);
-			(void)mprotect (cache->begin, password->len, PROT_READ);
-			(void)mlock (cache->begin, password->len);
+			memcpy (m, password->str, password->len);
+			(void)mprotect (m, password->len, PROT_READ);
+			(void)mlock (m, password->len);
+			cache->begin = m;
 			cache->len = password->len;
 		}
 	}
@@ -2386,6 +2388,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	gpointer key, value;
 	struct rspamd_keypair_cache *cache;
 	gchar *secure_ip;
+	gpointer m;
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"controller",
@@ -2556,11 +2559,13 @@ start_controller_worker (struct rspamd_worker *worker)
 	}
 
 	if (ctx->cached_password.len > 0) {
-		munmap (ctx->cached_password.begin, ctx->cached_password.len);
+		m = (gpointer)ctx->cached_password.begin;
+		munmap (m, ctx->cached_password.len);
 	}
 
 	if (ctx->cached_enable_password.len > 0) {
-		munmap (ctx->cached_enable_password.begin, ctx->cached_enable_password.len);
+		m = (gpointer) ctx->cached_enable_password.begin;
+		munmap (m, ctx->cached_enable_password.len);
 	}
 
 	exit (EXIT_SUCCESS);
