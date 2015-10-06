@@ -48,11 +48,25 @@ rspamd_fstring_t *
 rspamd_fstring_sized_new (gsize initial_size)
 {
 	rspamd_fstring_t *s;
-	gsize real_size = MAX(default_initial_size, initial_size);
+	gsize real_size = MAX (default_initial_size, initial_size);
 
 	g_assert (posix_memalign ((void **)&s, 16, real_size + sizeof (*s)) == 0);
 	s->len = 0;
 	s->allocated = real_size;
+
+	return s;
+}
+
+rspamd_fstring_t *
+rspamd_fstring_new_init (const gchar *init, gsize len)
+{
+	rspamd_fstring_t *s;
+	gsize real_size = MAX (default_initial_size, len);
+
+	g_assert (posix_memalign ((void **) &s, 16, real_size + sizeof (*s)) == 0);
+	s->len = len;
+	s->allocated = real_size;
+	memcpy (s->str, init, len);
 
 	return s;
 }

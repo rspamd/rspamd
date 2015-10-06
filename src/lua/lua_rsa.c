@@ -298,16 +298,13 @@ lua_rsa_signature_load (lua_State *L)
 			sig = g_malloc (sizeof (rspamd_fstring_t));
 			if (fstat (fd, &st) == -1 ||
 				(data =
-				mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd,
-				0)) == MAP_FAILED) {
+				mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0))
+						== MAP_FAILED) {
 				msg_err ("cannot mmap file %s: %s", filename, strerror (errno));
 				lua_pushnil (L);
 			}
 			else {
-				sig->size = st.st_size;
-				sig->len = sig->size;
-				sig->begin = g_malloc (sig->len);
-				memcpy (sig->begin, data, sig->len);
+				sig = rspamd_fstring_new_init (data, st.st_size);
 				psig = lua_newuserdata (L, sizeof (rspamd_fstring_t *));
 				rspamd_lua_setclass (L, "rspamd{rsa_signature}", -1);
 				*psig = sig;
@@ -352,7 +349,7 @@ lua_rsa_signature_save (lua_State *L)
 			lua_pushboolean (L, FALSE);
 		}
 		else {
-			while (write (fd, sig->begin, sig->len) == -1) {
+			while (write (fd, sig->str, sig->len) == -1) {
 				if (errno == EINTR) {
 					continue;
 				}
@@ -378,14 +375,11 @@ lua_rsa_signature_create (lua_State *L)
 {
 	rspamd_fstring_t *sig, **psig;
 	const gchar *data;
+	gsize dlen;
 
-	data = luaL_checkstring (L, 1);
+	data = luaL_checklstring (L, 1, &dlen);
 	if (data != NULL) {
-		sig = g_malloc (sizeof (rspamd_fstring_t));
-		sig->len = strlen (data);
-		sig->size = sig->len;
-		sig->begin = g_malloc (sig->len);
-		memcpy (sig->begin, data, sig->len);
+		sig = rspamd_fstring_new_init (data, dlen);
 		psig = lua_newuserdata (L, sizeof (rspamd_fstring_t *));
 		rspamd_lua_setclass (L, "rspamd{rsa_signature}", -1);
 		*psig = sig;
@@ -399,12 +393,7 @@ lua_rsa_signature_gc (lua_State *L)
 {
 	rspamd_fstring_t *sig = lua_check_rsa_sign (L, 1);
 
-	if (sig != NULL) {
-		if (sig->begin != NULL) {
-			g_free (sig->begin);
-		}
-		g_free (sig);
-	}
+	rspamd_fstring_free (sig);
 
 	return 0;
 }
@@ -435,7 +424,7 @@ lua_rsa_verify_memory (lua_State *L)
 	if (rsa != NULL && signature != NULL && data != NULL) {
 		data_sig = g_compute_checksum_for_string (G_CHECKSUM_SHA256, data, -1);
 		ret = RSA_verify (NID_sha1, data_sig, strlen (data_sig),
-				signature->begin, signature->len, rsa);
+				signature->str, signature->len, rsa);
 		if (ret == 0) {
 			msg_info ("cannot check rsa signature for data: %s",
 				ERR_error_string (ERR_get_error (), NULL));
@@ -496,7 +485,7 @@ lua_rsa_verify_file (lua_State *L)
 						data,
 						st.st_size);
 				ret = RSA_verify (NID_sha1, data_sig, strlen (data_sig),
-						signature->begin, signature->len, rsa);
+						signature->str, signature->len, rsa);
 				if (ret == 0) {
 					msg_info ("cannot check rsa signature for file: %s, %s",
 						filename, ERR_error_string (ERR_get_error (), NULL));
@@ -534,26 +523,22 @@ lua_rsa_sign_memory (lua_State *L)
 	RSA *rsa;
 	rspamd_fstring_t *signature, **psig;
 	const gchar *data;
-	gchar *data_sig;
+	guchar *data_sig;
 	gint ret;
 
 	rsa = lua_check_rsa_privkey (L, 1);
 	data = luaL_checkstring (L, 2);
 
 	if (rsa != NULL && data != NULL) {
-		signature = g_malloc (sizeof (rspamd_fstring_t));
-		signature->len = RSA_size (rsa);
-		signature->size = signature->len;
-		signature->begin = g_malloc (signature->len);
+		signature = rspamd_fstring_sized_new (RSA_size (rsa));
 		data_sig = g_compute_checksum_for_string (G_CHECKSUM_SHA256, data, -1);
 		ret = RSA_sign (NID_sha1, data_sig, strlen (data_sig),
-				signature->begin, (guint *)&signature->len, rsa);
+				signature->str, (guint *)&signature->len, rsa);
 		if (ret == 0) {
 			msg_info ("cannot make a signature for data: %s",
 				ERR_error_string (ERR_get_error (), NULL));
 			lua_pushnil (L);
-			g_free (signature->begin);
-			g_free (signature);
+			rspamd_fstring_free (signature);
 		}
 		else {
 			psig = lua_newuserdata (L, sizeof (rspamd_fstring_t *));
@@ -607,21 +592,17 @@ lua_rsa_sign_file (lua_State *L)
 				lua_pushnil (L);
 			}
 			else {
-				signature = g_malloc (sizeof (rspamd_fstring_t));
-				signature->len = RSA_size (rsa);
-				signature->size = signature->len;
-				signature->begin = g_malloc (signature->len);
+				signature = rspamd_fstring_sized_new (RSA_size (rsa));
 				data_sig = g_compute_checksum_for_string (G_CHECKSUM_SHA256,
 						data,
 						st.st_size);
 				ret = RSA_sign (NID_sha1, data_sig, strlen (data_sig),
-						signature->begin, (guint *)&signature->len, rsa);
+						signature->str, (guint *)&signature->len, rsa);
 				if (ret == 0) {
 					msg_info ("cannot make a signature for data: %s",
 						ERR_error_string (ERR_get_error (), NULL));
 					lua_pushnil (L);
-					g_free (signature->begin);
-					g_free (signature);
+					rspamd_fstring_free (signature);
 				}
 				else {
 					psig = lua_newuserdata (L, sizeof (rspamd_fstring_t *));

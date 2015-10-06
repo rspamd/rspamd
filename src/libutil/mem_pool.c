@@ -424,7 +424,7 @@ rspamd_mempool_fstrdup (rspamd_mempool_t * pool, const struct f_str_s *src)
 	}
 
 	newstr = rspamd_mempool_alloc (pool, src->len + 1);
-	memcpy (newstr, src->begin, src->len);
+	memcpy (newstr, src->str, src->len);
 	newstr[src->len] = '\0';
 	return newstr;
 }

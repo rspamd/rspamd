@@ -453,7 +453,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 
 			case 'V':
 				v = va_arg (args, rspamd_fstring_t *);
-				RSPAMD_PRINTF_APPEND (v->begin, v->len);
+				RSPAMD_PRINTF_APPEND (v->str, v->len);
 
 				continue;
 

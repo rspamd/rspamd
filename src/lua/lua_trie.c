@@ -303,7 +303,7 @@ lua_trie_search_rawmsg (lua_State *L)
 	gboolean found = FALSE;
 
 	if (trie) {
-		text = task->msg.start;
+		text = task->msg.begin;
 		len = task->msg.len;
 
 		if (lua_trie_search_str (L, trie, text, len, &state) != 0) {

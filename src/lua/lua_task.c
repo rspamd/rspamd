@@ -638,8 +638,8 @@ lua_task_create_from_buffer (lua_State *L)
 		ptask = lua_newuserdata (L, sizeof (gpointer));
 		rspamd_lua_setclass (L, "rspamd{task}", -1);
 		*ptask = task;
-		task->msg.start = rspamd_mempool_alloc (task->task_pool, len + 1);
-		memcpy ((gpointer)task->msg.start, data, len);
+		task->msg.begin = rspamd_mempool_alloc (task->task_pool, len);
+		memcpy ((gpointer)task->msg.begin, data, len);
 		task->msg.len = len;
 	}
 	return 1;
@@ -883,7 +883,7 @@ lua_task_get_content (lua_State * L)
 		t = lua_newuserdata (L, sizeof (*t));
 		rspamd_lua_setclass (L, "rspamd{text}", -1);
 		t->len = task->msg.len;
-		t->start = task->msg.start;
+		t->start = task->msg.begin;
 		t->own = FALSE;
 
 		return 1;

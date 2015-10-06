@@ -56,6 +56,11 @@ rspamd_fstring_t* rspamd_fstring_new (void);
 rspamd_fstring_t *rspamd_fstring_sized_new (gsize initial_size);
 
 /**
+ * Create new fixed length string and initialize it with the initial data
+ */
+rspamd_fstring_t *rspamd_fstring_new_init (const gchar *init, gsize len);
+
+/**
  * Free fixed length string
  */
 void rspamd_fstring_free (rspamd_fstring_t *str);

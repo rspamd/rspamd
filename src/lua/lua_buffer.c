@@ -91,7 +91,7 @@ lua_io_read_cb (rspamd_fstring_t * in, void *arg)
 		lua_newuserdata (cbdata->L, sizeof (struct rspamd_io_dispatcher_s *));
 	rspamd_lua_setclass (cbdata->L, "rspamd{io_dispatcher}", -1);
 	*pdispatcher = cbdata->d;
-	lua_pushlstring (cbdata->L, in->begin, in->len);
+	lua_pushlstring (cbdata->L, in->str, in->len);
 
 	if (lua_pcall (cbdata->L, 2, 1, 0) != 0) {
 		msg_info ("call to session finalizer failed: %s",
