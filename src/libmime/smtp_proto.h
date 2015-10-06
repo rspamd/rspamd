@@ -24,20 +24,21 @@
 
 #define MAX_SMTP_UPSTREAMS 128
 
+enum smtp_command_type {
+	SMTP_COMMAND_HELO = 0,
+	SMTP_COMMAND_EHLO,
+	SMTP_COMMAND_QUIT,
+	SMTP_COMMAND_NOOP,
+	SMTP_COMMAND_MAIL,
+	SMTP_COMMAND_RCPT,
+	SMTP_COMMAND_RSET,
+	SMTP_COMMAND_DATA,
+	SMTP_COMMAND_VRFY,
+	SMTP_COMMAND_EXPN,
+	SMTP_COMMAND_HELP
+};
 struct smtp_command {
-	enum {
-		SMTP_COMMAND_HELO,
-		SMTP_COMMAND_EHLO,
-		SMTP_COMMAND_QUIT,
-		SMTP_COMMAND_NOOP,
-		SMTP_COMMAND_MAIL,
-		SMTP_COMMAND_RCPT,
-		SMTP_COMMAND_RSET,
-		SMTP_COMMAND_DATA,
-		SMTP_COMMAND_VRFY,
-		SMTP_COMMAND_EXPN,
-		SMTP_COMMAND_HELP
-	} command;
+	enum smtp_command_type command;
 	GList *args;
 };
 
@@ -53,7 +54,7 @@ gchar * make_smtp_error (rspamd_mempool_t *pool,
  * Parse a single SMTP command
  */
 gboolean parse_smtp_command (struct smtp_session *session,
-	rspamd_fstring_t *line,
+	rspamd_ftok_t *line,
 	struct smtp_command **cmd);
 
 /*
@@ -79,7 +80,7 @@ gboolean parse_smtp_rcpt (struct smtp_session *session,
 /*
  * Read a line from SMTP upstream
  */
-gboolean smtp_upstream_read_socket (rspamd_fstring_t * in, void *arg);
+gboolean smtp_upstream_read_socket (rspamd_ftok_t * in, void *arg);
 
 /*
  * Write to SMTP upstream

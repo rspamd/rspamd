@@ -57,7 +57,7 @@ make_smtp_error (rspamd_mempool_t *pool,
 
 gboolean
 parse_smtp_command (struct smtp_session *session,
-	rspamd_fstring_t *line,
+	rspamd_ftok_t *line,
 	struct smtp_command **cmd)
 {
 	enum {
@@ -66,9 +66,10 @@ parse_smtp_command (struct smtp_session *session,
 		SMTP_PARSE_ARGUMENT,
 		SMTP_PARSE_DONE
 	}                              state;
-	gchar *p, *c, ch, cmd_buf[4];
+	const gchar *p, *c;
+	gchar ch, cmd_buf[4];
 	guint i;
-	rspamd_fstring_t *arg = NULL;
+	rspamd_ftok_t *arg = NULL;
 	struct smtp_command *pcmd;
 
 	if (line->len == 0) {
@@ -176,8 +177,9 @@ parse_smtp_command (struct smtp_session *session,
 				}
 				arg->len = p - c;
 				arg->begin = rspamd_mempool_alloc (session->pool, arg->len);
-				memcpy (arg->begin, c, arg->len);
+				memcpy ((gchar *)arg->begin, c, arg->len);
 				pcmd->args = g_list_prepend (pcmd->args, arg);
+
 				if (ch == ' ' || ch == ':') {
 					state = SMTP_PARSE_SPACES;
 				}
@@ -209,10 +211,10 @@ end:
 }
 
 static gboolean
-check_smtp_path (rspamd_fstring_t *path)
+check_smtp_path (rspamd_ftok_t *path)
 {
 	guint i;
-	gchar *p;
+	const gchar *p;
 
 	p = path->begin;
 	if (*p != '<' || path->len < 2) {
@@ -230,7 +232,7 @@ check_smtp_path (rspamd_fstring_t *path)
 gboolean
 parse_smtp_helo (struct smtp_session *session, struct smtp_command *cmd)
 {
-	rspamd_fstring_t *arg;
+	rspamd_ftok_t *arg;
 
 	if (cmd->args == NULL) {
 		session->error = SMTP_ERROR_BAD_ARGUMENTS;
@@ -265,7 +267,7 @@ parse_smtp_helo (struct smtp_session *session, struct smtp_command *cmd)
 gboolean
 parse_smtp_from (struct smtp_session *session, struct smtp_command *cmd)
 {
-	rspamd_fstring_t *arg;
+	rspamd_ftok_t *arg;
 	GList *cur = cmd->args;
 
 	if (cmd->args == NULL) {
@@ -303,7 +305,7 @@ parse_smtp_from (struct smtp_session *session, struct smtp_command *cmd)
 gboolean
 parse_smtp_rcpt (struct smtp_session *session, struct smtp_command *cmd)
 {
-	rspamd_fstring_t *arg;
+	rspamd_ftok_t *arg;
 	GList *cur = cmd->args;
 
 	if (cmd->args == NULL) {
@@ -339,9 +341,9 @@ parse_smtp_rcpt (struct smtp_session *session, struct smtp_command *cmd)
 
 /* Return -1 if there are some error, 1 if all is ok and 0 in case of incomplete reply */
 static gint
-check_smtp_ustream_reply (rspamd_fstring_t *in, gchar success_code)
+check_smtp_ustream_reply (rspamd_ftok_t *in, gchar success_code)
 {
-	gchar *p;
+	const gchar *p;
 
 	/* Check for 250 at the begin of line */
 	if (in->len >= sizeof ("220 ") - 1) {
@@ -368,7 +370,7 @@ smtp_upstream_write_list (GList *args, gchar *buf, size_t buflen)
 {
 	GList *cur = args;
 	size_t r = 0;
-	rspamd_fstring_t *arg;
+	rspamd_ftok_t *arg;
 
 	while (cur && r < buflen - 3) {
 		arg = cur->data;
@@ -401,7 +403,7 @@ smtp_upstream_write_socket (void *arg)
 }
 
 gboolean
-smtp_upstream_read_socket (rspamd_fstring_t * in, void *arg)
+smtp_upstream_read_socket (rspamd_ftok_t * in, void *arg)
 {
 	struct smtp_session *session = arg;
 	gchar outbuf[BUFSIZ];
