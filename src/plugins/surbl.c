@@ -91,8 +91,7 @@ exception_insert (gpointer st, gconstpointer key, gpointer value)
 	GHashTable **t = st;
 	gint level = 0;
 	const gchar *p = key;
-	rspamd_fstring_t *val;
-
+	rspamd_ftok_t *val;
 
 	while (*p) {
 		if (*p == '.') {
@@ -107,12 +106,12 @@ exception_insert (gpointer st, gconstpointer key, gpointer value)
 		return;
 	}
 
-	val = g_malloc (sizeof (rspamd_fstring_t));
-	val->begin = (gchar *)key;
+	val = g_malloc (sizeof (rspamd_ftok_t));
+	val->begin = key;
 	val->len = strlen (key);
 	if (t[level] == NULL) {
-		t[level] = g_hash_table_new_full (rspamd_fstring_icase_hash,
-				rspamd_fstring_icase_equal,
+		t[level] = g_hash_table_new_full (rspamd_ftok_icase_hash,
+				rspamd_ftok_icase_equal,
 				g_free,
 				NULL);
 	}
@@ -654,7 +653,7 @@ surbl_module_reconfig (struct rspamd_config *cfg)
 
 static gchar *
 format_surbl_request (rspamd_mempool_t * pool,
-	rspamd_fstring_t * hostname,
+	rspamd_ftok_t * hostname,
 	struct suffix_item *suffix,
 	gboolean append_suffix,
 	GError ** err,
@@ -663,12 +662,12 @@ format_surbl_request (rspamd_mempool_t * pool,
 	struct rspamd_url *url)
 {
 	GHashTable *t;
-	gchar *result = NULL, *dots[MAX_LEVELS],
-		num_buf[sizeof("18446744073709551616")], *p;
+	gchar *result = NULL, num_buf[sizeof("18446744073709551616")];
+	const gchar *p, *dots[MAX_LEVELS];
 	gint len, slen, r, i, dots_num = 0, level = MAX_LEVELS;
 	gboolean is_numeric = TRUE, found_exception = FALSE;
 	guint64 ip_num;
-	rspamd_fstring_t f;
+	rspamd_ftok_t f;
 
 	if (G_LIKELY (suffix != NULL)) {
 		slen = strlen (suffix->suffix);
@@ -852,7 +851,7 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 	struct suffix_item *suffix, gboolean forced, GHashTable *tree)
 {
 	gchar *surbl_req;
-	rspamd_fstring_t f;
+	rspamd_ftok_t f;
 	GError *err = NULL;
 	struct dns_param *param;
 
