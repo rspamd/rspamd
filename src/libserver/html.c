@@ -1350,7 +1350,7 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 {
 	struct html_tag_component *comp;
 	struct html_image *img;
-	rspamd_fstring_t fstr;
+	rspamd_ftok_t fstr;
 	GList *cur;
 	gulong val;
 
@@ -1363,7 +1363,7 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 		if (comp->type == RSPAMD_HTML_COMPONENT_HREF && comp->len > 0) {
 			fstr.begin = (gchar *)comp->start;
 			fstr.len = comp->len;
-			img->src = rspamd_mempool_fstrdup (pool, &fstr);
+			img->src = rspamd_mempool_ftokdup (pool, &fstr);
 
 			if (comp->len > sizeof ("cid:") - 1 && memcmp (comp->start,
 					"cid:", sizeof ("cid:") - 1) == 0) {
@@ -1427,7 +1427,7 @@ struct html_color_match {
 static gint
 rspamd_html_color_cmp (const void *key, const void *elt)
 {
-	const rspamd_fstring_t *fk = key;
+	const rspamd_ftok_t *fk = key;
 	const struct html_color_match *el = elt;
 
 	return g_ascii_strncasecmp (fk->begin, el->name, fk->len);
@@ -1438,7 +1438,7 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 {
 	const gchar *p = line, *end = line + len;
 	char hexbuf[7];
-	rspamd_fstring_t search;
+	rspamd_ftok_t search;
 	struct html_color_match *el;
 
 	memset (cl, 0, sizeof (*cl));
@@ -1452,7 +1452,7 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 	}
 	else {
 		/* Compare color by name */
-		search.begin = (gchar *)line;
+		search.begin = line;
 		search.len = len;
 
 		el = bsearch (&search, html_colors, G_N_ELEMENTS (html_colors),
@@ -1558,7 +1558,7 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 {
 	struct html_tag_component *comp;
 	struct html_block *bl;
-	rspamd_fstring_t fstr;
+	rspamd_ftok_t fstr;
 	GList *cur;
 
 	cur = tag->params;
@@ -1583,7 +1583,7 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 		else if (comp->type == RSPAMD_HTML_COMPONENT_CLASS && comp->len > 0) {
 			fstr.begin = (gchar *)comp->start;
 			fstr.len = comp->len;
-			bl->class = rspamd_mempool_fstrdup (pool, &fstr);
+			bl->class = rspamd_mempool_ftokdup (pool, &fstr);
 			msg_debug_pool ("got class: %s", bl->class);
 		}
 
