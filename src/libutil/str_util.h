@@ -197,4 +197,24 @@ goffset rspamd_substring_search (const gchar *in, gsize inlen,
  */
 goffset rspamd_string_find_eoh (GString *input);
 
+/**
+ * Emit UCL object to gstring
+ * @param obj object to emit
+ * @param emit_type emitter type
+ * @param target target string
+ */
+void rspamd_ucl_emit_gstring (ucl_object_t *obj,
+		enum ucl_emitter emit_type,
+		GString *target);
+
+/**
+ * Emit UCL object to fstring
+ * @param obj object to emit
+ * @param emit_type emitter type
+ * @param target target string
+ */
+void rspamd_ucl_emit_fstring (ucl_object_t *obj,
+		enum ucl_emitter emit_type,
+		rspamd_fstring_t **target);
+
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */

@@ -80,6 +80,11 @@ void rspamd_fstring_free (rspamd_fstring_t *str);
 rspamd_fstring_t* rspamd_fstring_append (rspamd_fstring_t *str,
 		const char *in, gsize len) G_GNUC_WARN_UNUSED_RESULT;
 
+/**
+ * Append `len` repeated chars `c` to string `str`
+ */
+rspamd_fstring_t *rspamd_fstring_append_chars (rspamd_fstring_t *str,
+		char c, gsize len) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Erase `len` characters at postion `pos`
@@ -137,5 +142,10 @@ gint rspamd_ftok_cmp (const rspamd_ftok_t *s1,
  * tok is expected to be allocated with g_slice_alloc
  */
 void rspamd_fstring_mapped_ftok_free (gpointer p);
+
+/**
+ * Map token to a specified string. Token must be freed using g_slice_free1
+ */
+rspamd_ftok_t *rspamd_ftok_map (const rspamd_fstring_t *s);
 
 #endif

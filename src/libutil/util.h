@@ -336,16 +336,6 @@ void rspamd_hash_table_copy (GHashTable *src, GHashTable *dst,
 gint rspamd_read_passphrase (gchar *buf, gint size, gint rwflag, gpointer key);
 
 /**
- * Emit UCL object to gstring
- * @param obj object to emit
- * @param emit_type emitter type
- * @param target target string
- */
-void rspamd_ucl_emit_gstring (ucl_object_t *obj,
-	enum ucl_emitter emit_type,
-	GString *target);
-
-/**
  * Portably return the current clock ticks as seconds
  * @return
  */

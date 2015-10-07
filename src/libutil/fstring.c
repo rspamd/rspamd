@@ -144,6 +144,22 @@ rspamd_fstring_append (rspamd_fstring_t *str, const char *in, gsize len)
 	return str;
 }
 
+rspamd_fstring_t *
+rspamd_fstring_append_chars (rspamd_fstring_t *str,
+		char c, gsize len)
+{
+	gsize avail = fstravail (str);
+
+	if (avail < len) {
+		str = rspamd_fstring_grow (str, len);
+	}
+
+	memset (str->str + str->len, c, len);
+	str->len += len;
+
+	return str;
+}
+
 void
 rspamd_fstring_erase (rspamd_fstring_t *str, gsize pos, gsize len)
 {
@@ -329,4 +345,16 @@ rspamd_fstring_mapped_ftok_free (gpointer p)
 	storage = (rspamd_fstring_t *) (tok->begin - 2 * sizeof (gsize));
 	rspamd_fstring_free (storage);
 	g_slice_free1 (sizeof (*tok), tok);
+}
+
+rspamd_ftok_t *
+rspamd_ftok_map (const rspamd_fstring_t *s)
+{
+	rspamd_ftok_t *tok;
+
+	g_assert (s != NULL);
+
+	tok = g_slice_alloc (sizeof (*tok));
+	tok->begin = s->str;
+	tok->len = s->len;
 }

@@ -1226,3 +1226,151 @@ rspamd_string_find_eoh (GString *input)
 
 	return -1;
 }
+
+/*
+ * GString ucl emitting functions
+ */
+static int
+rspamd_gstring_append_character (unsigned char c, size_t len, void *ud)
+{
+	GString *buf = ud;
+	gsize old_len;
+
+	if (len == 1) {
+		g_string_append_c (buf, c);
+	}
+	else {
+		if (buf->allocated_len - buf->len <= len) {
+			old_len = buf->len;
+			g_string_set_size (buf, buf->len + len + 1);
+			buf->len = old_len;
+		}
+		memset (&buf->str[buf->len], c, len);
+		buf->len += len;
+	}
+
+	return 0;
+}
+
+static int
+rspamd_gstring_append_len (const unsigned char *str, size_t len, void *ud)
+{
+	GString *buf = ud;
+
+	g_string_append_len (buf, str, len);
+
+	return 0;
+}
+
+static int
+rspamd_gstring_append_int (int64_t val, void *ud)
+{
+	GString *buf = ud;
+
+	rspamd_printf_gstring (buf, "%L", (intmax_t) val);
+	return 0;
+}
+
+static int
+rspamd_gstring_append_double (double val, void *ud)
+{
+	GString *buf = ud;
+	const double delta = 0.0000001;
+
+	if (val == (double) (int) val) {
+		rspamd_printf_gstring (buf, "%.1f", val);
+	}
+	else if (fabs (val - (double) (int) val) < delta) {
+		/* Write at maximum precision */
+		rspamd_printf_gstring (buf, "%.*g", DBL_DIG, val);
+	}
+	else {
+		rspamd_printf_gstring (buf, "%f", val);
+	}
+
+	return 0;
+}
+
+void
+rspamd_ucl_emit_gstring (ucl_object_t *obj,
+		enum ucl_emitter emit_type,
+		GString *target)
+{
+	struct ucl_emitter_functions func = {
+			.ucl_emitter_append_character = rspamd_gstring_append_character,
+			.ucl_emitter_append_len = rspamd_gstring_append_len,
+			.ucl_emitter_append_int = rspamd_gstring_append_int,
+			.ucl_emitter_append_double = rspamd_gstring_append_double
+	};
+
+	func.ud = target;
+	ucl_object_emit_full (obj, emit_type, &func);
+}
+
+/*
+ * FString ucl emitting functions
+ */
+static int
+rspamd_fstring_emit_append_character (unsigned char c, size_t len, void *ud)
+{
+	rspamd_fstring_t **buf = ud;
+
+	*buf = rspamd_fstring_append_chars (*buf, c, len);
+
+	return 0;
+}
+
+static int
+rspamd_fstring_emit_append_len (const unsigned char *str, size_t len, void *ud)
+{
+	rspamd_fstring_t **buf = ud;
+
+	*buf = rspamd_fstring_append (*buf, str, len);
+
+	return 0;
+}
+
+static int
+rspamd_fstring_emit_append_int (int64_t val, void *ud)
+{
+	rspamd_fstring_t **buf = ud;
+
+	rspamd_printf_fstring (buf, "%L", (intmax_t) val);
+	return 0;
+}
+
+static int
+rspamd_fstring_emit_append_double (double val, void *ud)
+{
+	rspamd_fstring_t **buf = ud;
+	const double delta = 0.0000001;
+
+	if (val == (double)((gint) val)) {
+		rspamd_printf_fstring (buf, "%.1f", val);
+	}
+	else if (fabs (val - (double) (int) val) < delta) {
+		/* Write at maximum precision */
+		rspamd_printf_fstring (buf, "%.*g", DBL_DIG, val);
+	}
+	else {
+		rspamd_printf_fstring (buf, "%f", val);
+	}
+
+	return 0;
+}
+
+void
+rspamd_ucl_emit_fstring (ucl_object_t *obj,
+		enum ucl_emitter emit_type,
+		rspamd_fstring_t **buf)
+{
+	struct ucl_emitter_functions func = {
+			.ucl_emitter_append_character = rspamd_fstring_emit_append_character,
+			.ucl_emitter_append_len = rspamd_fstring_emit_append_len,
+			.ucl_emitter_append_int = rspamd_fstring_emit_append_int,
+			.ucl_emitter_append_double = rspamd_fstring_emit_append_double
+	};
+
+	func.ud = buf;
+	ucl_object_emit_full (obj, emit_type, &func);
+}
