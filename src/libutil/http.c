@@ -2465,7 +2465,7 @@ rspamd_http_message_parse_query (struct rspamd_http_message *msg)
 					if ((*p == '&' || p == end) && p >= c) {
 						g_assert (key != NULL);
 						if (p > c) {
-							value = rspamd_fstring_new_init ("", 0);
+							value = rspamd_fstring_new_init (c, p - c);
 							value_tok = g_slice_alloc (sizeof (*value_tok));
 							value_tok->begin = value->str;
 							value_tok->len = rspamd_decode_url (value->str,
