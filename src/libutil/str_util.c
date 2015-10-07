@@ -124,9 +124,6 @@ rspamd_lc_cmp (const gchar *s, const gchar *d, gsize l)
 		if (cmp1.n != cmp2.n) {
 			return cmp1.n - cmp2.n;
 		}
-
-		s += 4;
-		d += 4;
 	}
 
 	while (leftover > 0) {
