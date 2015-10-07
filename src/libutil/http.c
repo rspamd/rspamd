@@ -1443,15 +1443,14 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 			if (encrypted) {
 				/* Internal reply (encrypted) */
 				meth_len = rspamd_snprintf (repbuf, sizeof (repbuf),
-						"HTTP/1.1 %d %s\r\n"
+						"HTTP/1.1 %d %V\r\n"
 						"Connection: close\r\n"
 						"Server: %s\r\n"
 						"Date: %s\r\n"
 						"Content-Length: %z\r\n"
 						"Content-Type: %s", /* NO \r\n at the end ! */
 						msg->code,
-						msg->status ? msg->status->str :
-								rspamd_http_code_to_str (msg->code),
+						msg->status,
 						"rspamd/" RVERSION,
 						datebuf,
 						bodylen,
@@ -1468,15 +1467,14 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 						enclen);
 			}
 			else {
-				rspamd_printf_fstring (&buf, "HTTP/1.1 %d %s\r\n"
+				rspamd_printf_fstring (&buf, "HTTP/1.1 %d %V\r\n"
 						"Connection: close\r\n"
 						"Server: %s\r\n"
 						"Date: %s\r\n"
 						"Content-Length: %z\r\n"
 						"Content-Type: %s\r\n",
 						msg->code,
-						msg->status ? msg->status->str :
-							rspamd_http_code_to_str (msg->code),
+						msg->status,
 						"rspamd/" RVERSION,
 						datebuf,
 						bodylen,
@@ -1573,6 +1571,11 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		}
 	}
 
+	/* Setup external request body */
+	priv->out[0].iov_base = buf->str;
+	priv->out[0].iov_len = buf->len;
+
+	/* Buf will be used eventually for encryption */
 	if (encrypted) {
 		gint meth_offset, nonce_offset, mac_offset;
 
@@ -1610,10 +1613,6 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 
 	/* During previous writes, buf might be reallocated and changed */
 	priv->buf->data = buf;
-
-	/* Now set up all iov */
-	priv->out[0].iov_base = buf->str;
-	priv->out[0].iov_len = buf->len;
 
 	if (encrypted) {
 		/* Finish external HTTP request */
