@@ -1733,7 +1733,7 @@ rspamd_http_message_from_url (const gchar *url)
 	}
 
 	msg->host = rspamd_fstring_new_init (host, pu.field_data[UF_HOST].len);
-	msg->host = rspamd_fstring_append (msg->url, path, pathlen);
+	msg->host = rspamd_fstring_append (msg->host, path, pathlen);
 
 	return msg;
 }
