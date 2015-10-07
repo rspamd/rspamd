@@ -796,7 +796,7 @@ rspamc_output_headers (FILE *out, struct rspamd_http_message *msg)
 
 	LL_FOREACH (msg->headers, h)
 	{
-		rspamd_fprintf (out, "%v: %v\n", h->name, h->value);
+		rspamd_fprintf (out, "%T: %T\n", h->name, h->value);
 	}
 	rspamd_fprintf (out, "\n");
 }
@@ -1107,7 +1107,7 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 
 				if (json && msg != NULL && msg->body != NULL) {
 					/* We can also output the resulting json */
-					rspamd_fprintf (out, "%v\n", msg->body);
+					rspamd_fprintf (out, "%V\n", msg->body);
 				}
 			}
 		}
