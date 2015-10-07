@@ -29,6 +29,11 @@
 #include "config.h"
 
 /**
+ * Compare two memory regions of size `l` using case insensitive matching
+ */
+gint rspamd_lc_cmp (const gchar *s, const gchar *d, gsize l);
+
+/**
  * Convert string to lowercase in-place using ASCII conversion
  */
 void rspamd_str_lc (gchar *str, guint size);

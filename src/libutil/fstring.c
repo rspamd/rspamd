@@ -23,6 +23,7 @@
  */
 
 #include "fstring.h"
+#include "str_util.h"
 
 static const gsize default_initial_size = 48;
 /* Maximum size when we double the size of new string */
@@ -257,56 +258,6 @@ rspamd_fstring_equal (const rspamd_fstring_t *s1,
 	return FALSE;
 }
 
-extern const guchar lc_map[256];
-
-static gint
-rspamd_fstring_lc_cmp (const gchar *s, const gchar *d, gsize l)
-{
-	guint fp, i;
-	guchar c1, c2, c3, c4;
-	union {
-		guchar c[4];
-		guint32 n;
-	} cmp1, cmp2;
-	gsize leftover = l % 4;
-	gint ret = 0;
-
-	fp = l - leftover;
-
-	for (i = 0; i != fp; i += 4) {
-		c1 = s[i], c2 = s[i + 1], c3 = s[i + 2], c4 = s[i + 3];
-		cmp1.c[0] = lc_map[c1];
-		cmp1.c[1] = lc_map[c2];
-		cmp1.c[2] = lc_map[c3];
-		cmp1.c[3] = lc_map[c4];
-
-		c1 = d[i], c2 = d[i + 1], c3 = d[i + 2], c4 = d[i + 3];
-		cmp2.c[0] = lc_map[c1];
-		cmp2.c[1] = lc_map[c2];
-		cmp2.c[2] = lc_map[c3];
-		cmp2.c[3] = lc_map[c4];
-
-		if (cmp1.n != cmp2.n) {
-			return cmp1.n - cmp2.n;
-		}
-
-		s += 4;
-		d += 4;
-	}
-
-	while (leftover > 0) {
-		if (g_ascii_tolower (*s) != g_ascii_tolower (*d)) {
-			return (*s) - (*d);
-		}
-
-		leftover--;
-		s++;
-		d++;
-	}
-
-	return ret;
-}
-
 gint
 rspamd_fstring_casecmp (const rspamd_fstring_t *s1,
 		const rspamd_fstring_t *s2)
@@ -316,7 +267,7 @@ rspamd_fstring_casecmp (const rspamd_fstring_t *s1,
 	g_assert (s1 != NULL && s2 != NULL);
 
 	if (s1->len == s2->len) {
-		ret = rspamd_fstring_lc_cmp (s1->str, s2->str, s1->len);
+		ret = rspamd_lc_cmp (s1->str, s2->str, s1->len);
 	}
 	else {
 		ret = s1->len - s2->len;
@@ -347,7 +298,7 @@ rspamd_ftok_casecmp (const rspamd_ftok_t *s1,
 	g_assert (s1 != NULL && s2 != NULL);
 
 	if (s1->len == s2->len) {
-		ret = rspamd_fstring_lc_cmp (s1->begin, s2->begin, s1->len);
+		ret = rspamd_lc_cmp (s1->begin, s2->begin, s1->len);
 	}
 	else {
 		ret = s1->len - s2->len;

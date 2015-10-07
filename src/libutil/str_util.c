@@ -28,7 +28,7 @@
 #include "mem_pool.h"
 #include "xxhash.h"
 
-const guchar lc_map[256] = {
+static const guchar lc_map[256] = {
 		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
 		0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 		0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
@@ -92,6 +92,54 @@ rspamd_str_lc (gchar *str, guint size)
 		*dest++ = lc_map[(guchar)str[i]];
 	}
 
+}
+
+gint
+rspamd_lc_cmp (const gchar *s, const gchar *d, gsize l)
+{
+	guint fp, i;
+	guchar c1, c2, c3, c4;
+	union {
+		guchar c[4];
+		guint32 n;
+	} cmp1, cmp2;
+	gsize leftover = l % 4;
+	gint ret = 0;
+
+	fp = l - leftover;
+
+	for (i = 0; i != fp; i += 4) {
+		c1 = s[i], c2 = s[i + 1], c3 = s[i + 2], c4 = s[i + 3];
+		cmp1.c[0] = lc_map[c1];
+		cmp1.c[1] = lc_map[c2];
+		cmp1.c[2] = lc_map[c3];
+		cmp1.c[3] = lc_map[c4];
+
+		c1 = d[i], c2 = d[i + 1], c3 = d[i + 2], c4 = d[i + 3];
+		cmp2.c[0] = lc_map[c1];
+		cmp2.c[1] = lc_map[c2];
+		cmp2.c[2] = lc_map[c3];
+		cmp2.c[3] = lc_map[c4];
+
+		if (cmp1.n != cmp2.n) {
+			return cmp1.n - cmp2.n;
+		}
+
+		s += 4;
+		d += 4;
+	}
+
+	while (leftover > 0) {
+		if (g_ascii_tolower (*s) != g_ascii_tolower (*d)) {
+			return (*s) - (*d);
+		}
+
+		leftover--;
+		s++;
+		d++;
+	}
+
+	return ret;
 }
 
 /*
