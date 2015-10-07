@@ -62,7 +62,7 @@ void rspamd_protocol_http_reply (struct rspamd_http_message *msg,
  * @return
  */
 ucl_object_t * rspamd_protocol_write_ucl (struct rspamd_task *task,
-		GString *logbuf);
+		rspamd_fstring_t **logbuf);
 
 /**
  * Write reply for specified task command

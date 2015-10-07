@@ -34,6 +34,7 @@
 #include "config.h"
 #include "http_parser.h"
 #include "keypairs_cache.h"
+#include "fstring.h"
 
 enum rspamd_http_connection_type {
 	RSPAMD_HTTP_SERVER,
@@ -44,9 +45,9 @@ enum rspamd_http_connection_type {
  * HTTP header structure
  */
 struct rspamd_http_header {
-	GString *name;
-	GString *value;
-	GString *combined;
+	rspamd_ftok_t *name;
+	rspamd_ftok_t *value;
+	rspamd_fstring_t *combined;
 	struct rspamd_http_header *next, *prev;
 };
 
@@ -59,13 +60,13 @@ struct rspamd_http_header {
  * HTTP message structure, used for requests and replies
  */
 struct rspamd_http_message {
-	GString *url;
-	GString *host;
+	rspamd_fstring_t *url;
+	rspamd_fstring_t *host;
 	unsigned port;
-	GString *status;
+	rspamd_fstring_t *status;
 	struct rspamd_http_header *headers;
-	GString *body;
-	GString body_buf;
+	rspamd_fstring_t *body;
+	rspamd_ftok_t body_buf;
 	gpointer peer_key;
 	enum http_parser_type type;
 	time_t date;
@@ -326,8 +327,9 @@ void rspamd_http_message_add_header (struct rspamd_http_message *msg,
  * @param msg message
  * @param name name of header
  */
-const GString * rspamd_http_message_find_header (struct rspamd_http_message *msg,
-	const gchar *name);
+const rspamd_ftok_t * rspamd_http_message_find_header (
+		struct rspamd_http_message *msg,
+		const gchar *name);
 
 /**
  * Remove specific header from a message
@@ -403,7 +405,8 @@ void rspamd_http_router_free (struct rspamd_http_connection_router *router);
  * Extract arguments from a messsage's URI contained inside query string decoding
  * them if needed
  * @param msg HTTP request message
- * @return new GHashTable which maps GString * to GString * (table must be freed by a caller)
+ * @return new GHashTable which maps rspamd_ftok_t* to rspamd_ftok_t*
+ * (table must be freed by a caller)
  */
 GHashTable* rspamd_http_message_parse_query (struct rspamd_http_message *msg);
 

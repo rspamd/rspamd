@@ -112,7 +112,7 @@ rspamd_protocol_quark (void)
  * Remove <> from the fixed string and copy it to the pool
  */
 static gchar *
-rspamd_protocol_escape_braces (struct rspamd_task *task, GString *in)
+rspamd_protocol_escape_braces (struct rspamd_task *task, rspamd_fstring_t *in)
 {
 	gint len = 0;
 	gchar *orig, *p, *res;
@@ -155,7 +155,7 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	struct http_parser_url u;
 	const gchar *p;
 	gsize pathlen;
-	GString lookup, *res, *key, *value;
+	rspamd_ftok_t *key, *value;
 	gpointer k, v;
 
 	if (msg->url == NULL || msg->url->len == 0) {
@@ -257,29 +257,6 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 		/* In case if we have a query, we need to store it somewhere */
 		query_args = rspamd_http_message_parse_query (msg);
 
-		lookup.str = (gchar *)"file";
-		lookup.len = sizeof ("file") - 1;
-
-		res = g_hash_table_lookup (query_args, &lookup);
-
-		if (res == NULL) {
-			lookup.str = (gchar *)"path";
-			lookup.len = sizeof ("path") - 1;
-			res = g_hash_table_lookup (query_args, &lookup);
-		}
-
-		if (res == NULL) {
-			/* Treat the whole query as path */
-			task->msg.begin = msg->url->str + u.field_data[UF_QUERY].off;
-			task->msg.len = u.field_data[UF_QUERY].len;
-		}
-		else {
-			task->msg.begin = rspamd_mempool_strdup (task->task_pool, res->str);
-			task->msg.len = res->len;
-		}
-
-		task->flags |= RSPAMD_TASK_FLAG_FILE;
-
 		/* Insert the rest of query params as HTTP headers */
 		g_hash_table_iter_init (&it, query_args);
 
@@ -308,20 +285,24 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 	struct rspamd_http_message *msg)
 {
 	gchar *headern;
-	GString *hn, *hv;
+	rspamd_fstring_t *hn, *hv;
+	rspamd_ftok_t *hn_tok, *hv_tok;
 	gboolean res = TRUE, validh, fl, has_ip = FALSE;
 	gsize hlen;
 	struct rspamd_http_header *h;
 
 	LL_FOREACH (msg->headers, h)
 	{
-		hn = g_string_new_len (h->name->str, h->name->len);
-		hv = g_string_new_len (h->value->str, h->value->len);
+		hn = rspamd_fstring_new_init (h->name->begin, h->name->len);
+		hv = rspamd_fstring_new_init (h->value->begin, h->value->len);
+		hn_tok = rspamd_ftok_map (hn);
+		hv_tok = rspamd_ftok_map (hv);
+
 		headern = hn->str;
 		hlen = hn->len;
 		validh = TRUE;
 
-		g_hash_table_insert (task->request_headers, hn, hv);
+		g_hash_table_insert (task->request_headers, hn_tok, hv_tok);
 
 		switch (headern[0]) {
 		case 'd':
@@ -332,7 +313,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					task->deliver_to);
 			}
 			else {
-				debug_task ("wrong header: %v", hn);
+				debug_task ("wrong header: %V", hn);
 				validh = FALSE;
 			}
 			break;
@@ -347,7 +328,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				debug_task ("read hostname header, value: %s", task->hostname);
 			}
 			else {
-				debug_task ("wrong header: %v", hn);
+				debug_task ("wrong header: %V", hn);
 				validh = FALSE;
 			}
 			break;
@@ -355,12 +336,12 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		case 'F':
 			if (g_ascii_strncasecmp (headern, FROM_HEADER, hlen) == 0) {
 				if (!rspamd_task_add_sender (task, hv->str)) {
-					msg_err_task ("bad from header: '%v'", hv);
+					msg_err_task ("bad from header: '%V'", hv);
 					validh = FALSE;
 				}
 			}
 			else {
-				debug_task ("wrong header: %v", hn);
+				debug_task ("wrong header: %V", hn);
 				validh = FALSE;
 			}
 			break;
@@ -376,7 +357,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				}
 			}
 			else {
-				debug_task ("wrong header: %v", hn);
+				debug_task ("wrong header: %V", hn);
 				validh = FALSE;
 			}
 			break;
@@ -387,7 +368,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				debug_task ("read queue_id header, value: %s", task->queue_id);
 			}
 			else {
-				debug_task ("wrong header: %v", hn);
+				debug_task ("wrong header: %V", hn);
 				validh = FALSE;
 			}
 			break;
@@ -395,13 +376,13 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		case 'R':
 			if (g_ascii_strncasecmp (headern, RCPT_HEADER, hlen) == 0) {
 				if (!rspamd_task_add_recipient (task, hv->str)) {
-					msg_err_task ("bad from header: '%v'", h->value);
+					msg_err_task ("bad from header: '%V'", h->value);
 					validh = FALSE;
 				}
-				debug_task ("read rcpt header, value: %v", hv);
+				debug_task ("read rcpt header, value: %V", hv);
 			}
 			else {
-				debug_task ("wrong header: %v", hn);
+				debug_task ("wrong header: %V", hn);
 				validh = FALSE;
 			}
 			break;
@@ -409,14 +390,14 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		case 'I':
 			if (g_ascii_strncasecmp (headern, IP_ADDR_HEADER, hlen) == 0) {
 				if (!rspamd_parse_inet_address (&task->from_addr, hv->str)) {
-					msg_err_task ("bad ip header: '%v'", hv);
+					msg_err_task ("bad ip header: '%V'", hv);
 					return FALSE;
 				}
-				debug_task ("read IP header, value: %v", hv);
+				debug_task ("read IP header, value: %V", hv);
 				has_ip = TRUE;
 			}
 			else {
-				debug_task ("wrong header: %v", hn);
+				debug_task ("wrong header: %V", hn);
 				validh = FALSE;
 			}
 			break;
@@ -482,7 +463,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				task->message_len = strtoul (hv->str, NULL, 10);
 
 				if (task->message_len == 0) {
-					msg_err_task ("Invalid message length header: %v", hv);
+					msg_err_task ("Invalid message length header: %V", hv);
 					validh = FALSE;
 				}
 				else {
@@ -494,7 +475,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			}
 			break;
 		default:
-			debug_task ("unknown header: %v", hn);
+			debug_task ("unknown header: %V", hn);
 			validh = FALSE;
 			break;
 		}
@@ -657,7 +638,7 @@ rspamd_protocol_handle_request (struct rspamd_task *task,
 }
 
 static void
-write_hashes_to_log (struct rspamd_task *task, GString *logbuf)
+write_hashes_to_log (struct rspamd_task *task, rspamd_fstring_t **logbuf)
 {
 	struct mime_text_part *text_part;
 	guint i;
@@ -838,13 +819,13 @@ rspamd_str_list_ucl (GList *str_list)
 
 static ucl_object_t *
 rspamd_metric_symbol_ucl (struct rspamd_task *task, struct metric *m,
-	struct symbol *sym, GString *logbuf)
+	struct symbol *sym, rspamd_fstring_t **logbuf)
 {
 	ucl_object_t *obj = NULL;
 	const gchar *description = NULL;
 
 	if (logbuf != NULL) {
-		rspamd_printf_gstring (logbuf, "%s,", sym->name);
+		rspamd_printf_fstring (logbuf, "%s,", sym->name);
 	}
 
 	if (sym->def != NULL) {
@@ -871,7 +852,7 @@ rspamd_metric_symbol_ucl (struct rspamd_task *task, struct metric *m,
 static ucl_object_t *
 rspamd_metric_result_ucl (struct rspamd_task *task,
 	struct metric_result *mres,
-	GString *logbuf)
+	rspamd_fstring_t **logbuf)
 {
 	GHashTableIter hiter;
 	struct symbol *sym;
@@ -902,7 +883,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	}
 
 	if (logbuf != NULL) {
-		rspamd_printf_gstring (logbuf, "(%s: %c (%s): [%.2f/%.2f] [",
+		rspamd_printf_fstring (logbuf, "(%s: %c (%s): [%.2f/%.2f] [",
 				m->name, action_char,
 				rspamd_action_to_str (action),
 				mres->score, required_score);
@@ -936,11 +917,13 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 
 	if (logbuf != NULL) {
 		/* Cut the trailing comma if needed */
-		if (logbuf->str[logbuf->len - 1] == ',') {
-			logbuf->len--;
+		rspamd_fstring_t *log = *logbuf;
+
+		if (log->str[log->len - 1] == ',') {
+			log->len--;
 		}
 
-		rspamd_printf_gstring (logbuf, "]), len: %z, time: %s, dns req: %d,",
+		rspamd_printf_fstring (logbuf, "]), len: %z, time: %s, dns req: %d,",
 				task->msg.len,
 				rspamd_log_check_time (task->time_real,
 						task->time_virtual,
@@ -954,7 +937,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 static void
 rspamd_ucl_torspamc_output (struct rspamd_task *task,
 	ucl_object_t *top,
-	GString *out)
+	rspamd_fstring_t **out)
 {
 	const ucl_object_t *metric, *score,
 	*required_score, *is_spam, *elt, *cur;
@@ -965,14 +948,14 @@ rspamd_ucl_torspamc_output (struct rspamd_task *task,
 		score = ucl_object_find_key (metric, "score");
 		required_score = ucl_object_find_key (metric, "required_score");
 		is_spam = ucl_object_find_key (metric, "is_spam");
-		g_string_append_printf (out,
+		rspamd_printf_fstring (out,
 			"Metric: default; %s; %.2f / %.2f / 0.0\r\n",
 			ucl_object_toboolean (is_spam) ? "True" : "False",
 			ucl_object_todouble (score),
 			ucl_object_todouble (required_score));
 		elt = ucl_object_find_key (metric, "action");
 		if (elt != NULL) {
-			g_string_append_printf (out, "Action: %s\r\n",
+			rspamd_printf_fstring (out, "Action: %s\r\n",
 				ucl_object_tostring (elt));
 		}
 
@@ -981,7 +964,7 @@ rspamd_ucl_torspamc_output (struct rspamd_task *task,
 			if (elt->type == UCL_OBJECT) {
 				const ucl_object_t *sym_score;
 				sym_score = ucl_object_find_key (elt, "score");
-				g_string_append_printf (out, "Symbol: %s(%.2f)\r\n",
+				rspamd_printf_fstring (out, "Symbol: %s(%.2f)\r\n",
 					ucl_object_key (elt),
 					ucl_object_todouble (sym_score));
 			}
@@ -989,7 +972,7 @@ rspamd_ucl_torspamc_output (struct rspamd_task *task,
 
 		elt = ucl_object_find_key (metric, "subject");
 		if (elt != NULL) {
-			g_string_append_printf (out, "Subject: %s\r\n",
+			rspamd_printf_fstring (out, "Subject: %s\r\n",
 				ucl_object_tostring (elt));
 		}
 	}
@@ -999,30 +982,31 @@ rspamd_ucl_torspamc_output (struct rspamd_task *task,
 		iter = NULL;
 		while ((cur = ucl_iterate_object (elt, &iter, true)) != NULL) {
 			if (cur->type == UCL_STRING) {
-				g_string_append_printf (out, "Message: %s\r\n",
+				rspamd_printf_fstring (out, "Message: %s\r\n",
 						ucl_object_tostring (cur));
 			}
 		}
 	}
 
-	g_string_append_printf (out, "Message-ID: %s\r\n", task->message_id);
+	rspamd_printf_fstring (out, "Message-ID: %s\r\n", task->message_id);
 }
 
 static void
 rspamd_ucl_tospamc_output (struct rspamd_task *task,
 	ucl_object_t *top,
-	GString *out)
+	rspamd_fstring_t **out)
 {
 	const ucl_object_t *metric, *score,
 		*required_score, *is_spam, *elt;
 	ucl_object_iter_t iter = NULL;
+	rspamd_fstring_t *f;
 
 	metric = ucl_object_find_key (top, DEFAULT_METRIC);
 	if (metric != NULL) {
 		score = ucl_object_find_key (metric, "score");
 		required_score = ucl_object_find_key (metric, "required_score");
 		is_spam = ucl_object_find_key (metric, "is_spam");
-		g_string_append_printf (out,
+		rspamd_printf_fstring (out,
 			"Spam: %s ; %.2f / %.2f\r\n\r\n",
 			ucl_object_toboolean (is_spam) ? "True" : "False",
 			ucl_object_todouble (score),
@@ -1030,20 +1014,22 @@ rspamd_ucl_tospamc_output (struct rspamd_task *task,
 
 		while ((elt = ucl_iterate_object (metric, &iter, true)) != NULL) {
 			if (elt->type == UCL_OBJECT) {
-				g_string_append_printf (out, "%s,",
+				rspamd_printf_fstring (out, "%s,",
 					ucl_object_key (elt));
 			}
 		}
 		/* Ugly hack, but the whole spamc is ugly */
-		if (out->str[out->len - 1] == ',') {
-			g_string_truncate (out, out->len - 1);
-			g_string_append (out, CRLF);
+		f = *out;
+		if (f->str[f->len - 1] == ',') {
+			f->len --;
+
+			*out = rspamd_fstring_append (*out, CRLF, 2);
 		}
 	}
 }
 
 ucl_object_t *
-rspamd_protocol_write_ucl (struct rspamd_task *task, GString *logbuf)
+rspamd_protocol_write_ucl (struct rspamd_task *task, rspamd_fstring_t **logbuf)
 {
 	struct metric_result *metric_res;
 	ucl_object_t *top = NULL, *obj;
@@ -1051,14 +1037,14 @@ rspamd_protocol_write_ucl (struct rspamd_task *task, GString *logbuf)
 	gpointer h, v;
 
 	if (logbuf != NULL) {
-		rspamd_printf_gstring (logbuf,
+		rspamd_printf_fstring (logbuf,
 				"id: <%s>, qid: <%s>, ip: %s, ",
 				task->message_id,
 				task->queue_id,
 				rspamd_inet_address_to_string (task->from_addr));
 
 		if (task->user) {
-			rspamd_printf_gstring (logbuf, "user: %s, ", task->user);
+			rspamd_printf_fstring (logbuf, "user: %s, ", task->user);
 		}
 		else if (task->from_envelope) {
 			InternetAddress *ia;
@@ -1068,7 +1054,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task, GString *logbuf)
 			if (ia && INTERNET_ADDRESS_IS_MAILBOX (ia)) {
 				InternetAddressMailbox *iamb = INTERNET_ADDRESS_MAILBOX (ia);
 
-				rspamd_printf_gstring (logbuf, "from: %s, ", iamb->addr);
+				rspamd_printf_fstring (logbuf, "from: %s, ", iamb->addr);
 			}
 		}
 	}
@@ -1109,7 +1095,7 @@ void
 rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	struct rspamd_task *task)
 {
-	GString *logbuf;
+	rspamd_fstring_t *logbuf;
 	struct metric_result *metric_res;
 	GHashTableIter hiter;
 	gpointer h, v;
@@ -1118,40 +1104,42 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	gint action;
 
 	/* Output the first line - check status */
-	logbuf = g_string_sized_new (BUFSIZ);
+	logbuf = rspamd_fstring_sized_new (1000);
 
 	/* Write custom headers */
 	g_hash_table_iter_init (&hiter, task->reply_headers);
 	while (g_hash_table_iter_next (&hiter, &h, &v)) {
-		GString *hn = (GString *)h, *hv = (GString *)v;
+		rspamd_ftok_t *hn = h, *hv = v;
 
-		rspamd_http_message_add_header (msg, hn->str, hv->str);
+		rspamd_http_message_add_header (msg, hn->begin, hv->begin);
 	}
 
-	top = rspamd_protocol_write_ucl (task, logbuf);
+	top = rspamd_protocol_write_ucl (task, &logbuf);
 
 	if (!(task->flags & RSPAMD_TASK_FLAG_NO_LOG)) {
 		rspamd_roll_history_update (task->worker->srv->history, task);
 	}
 
 	if (!(task->flags & RSPAMD_TASK_FLAG_NO_LOG)) {
-		msg_info_task ("%v", logbuf);
+		msg_info_task ("%V", logbuf);
 	}
-	g_string_free (logbuf, TRUE);
 
-	msg->body = g_string_sized_new (BUFSIZ);
+	rspamd_fstring_free (logbuf);
+
+	msg->body = rspamd_fstring_sized_new (1000);
 
 	if (msg->method < HTTP_SYMBOLS && !RSPAMD_TASK_IS_SPAMC (task)) {
-		rspamd_ucl_emit_gstring (top, UCL_EMIT_JSON_COMPACT, msg->body);
+		rspamd_ucl_emit_fstring (top, UCL_EMIT_JSON_COMPACT, &msg->body);
 	}
 	else {
 		if (RSPAMD_TASK_IS_SPAMC (task)) {
-			rspamd_ucl_tospamc_output (task, top, msg->body);
+			rspamd_ucl_tospamc_output (task, top, &msg->body);
 		}
 		else {
-			rspamd_ucl_torspamc_output (task, top, msg->body);
+			rspamd_ucl_torspamc_output (task, top, &msg->body);
 		}
 	}
+
 	ucl_object_unref (top);
 
 	if (!(task->flags & RSPAMD_TASK_FLAG_NO_STAT)) {
@@ -1200,14 +1188,15 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 
 		top = ucl_object_typed_new (UCL_OBJECT);
 		msg->code = 500 + task->err->code % 100;
-		msg->status = g_string_new (task->err->message);
+		msg->status = rspamd_fstring_new_init (task->err->message,
+				strlen (task->err->message));
 		ucl_object_insert_key (top, ucl_object_fromstring (task->err->message),
 			"error", 0, false);
 		ucl_object_insert_key (top,
 			ucl_object_fromstring (g_quark_to_string (task->err->domain)),
 			"error_domain", 0, false);
-		msg->body = g_string_sized_new (256);
-		rspamd_ucl_emit_gstring (top, UCL_EMIT_JSON_COMPACT, msg->body);
+		msg->body = rspamd_fstring_sized_new (256);
+		rspamd_ucl_emit_fstring (top, UCL_EMIT_JSON_COMPACT, &msg->body);
 		ucl_object_unref (top);
 	}
 	else {
@@ -1221,7 +1210,7 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 			rspamd_protocol_http_reply (msg, task);
 			break;
 		case CMD_PING:
-			msg->body = g_string_new ("pong" CRLF);
+			msg->body = rspamd_fstring_new_init ("pong" CRLF, 6);
 			ctype = "text/plain";
 			break;
 		case CMD_OTHER:

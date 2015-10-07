@@ -27,6 +27,12 @@
 #define SRC_LIBUTIL_STR_UTIL_H_
 
 #include "config.h"
+#include "ucl.h"
+
+/**
+ * Compare two memory regions of size `l` using case insensitive matching
+ */
+gint rspamd_lc_cmp (const gchar *s, const gchar *d, gsize l);
 
 /**
  * Convert string to lowercase in-place using ASCII conversion
@@ -191,5 +197,25 @@ goffset rspamd_substring_search (const gchar *in, gsize inlen,
  * space characters
  */
 goffset rspamd_string_find_eoh (GString *input);
+
+/**
+ * Emit UCL object to gstring
+ * @param obj object to emit
+ * @param emit_type emitter type
+ * @param target target string
+ */
+void rspamd_ucl_emit_gstring (ucl_object_t *obj,
+		enum ucl_emitter emit_type,
+		GString *target);
+
+/**
+ * Emit UCL object to fstring
+ * @param obj object to emit
+ * @param emit_type emitter type
+ * @param target target string
+ */
+void rspamd_ucl_emit_fstring (ucl_object_t *obj,
+		enum ucl_emitter emit_type,
+		rspamd_fstring_t **target);
 
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */

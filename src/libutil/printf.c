@@ -485,7 +485,9 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 
 			case 'V':
 				v = va_arg (args, rspamd_fstring_t *);
-				RSPAMD_PRINTF_APPEND (v->str, v->len);
+				if (v) {
+					RSPAMD_PRINTF_APPEND (v->str, v->len);
+				}
 
 				continue;
 
@@ -496,7 +498,9 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 
 			case 'v':
 				gs = va_arg (args, GString *);
-				RSPAMD_PRINTF_APPEND (gs->str, gs->len);
+				if (gs) {
+					RSPAMD_PRINTF_APPEND (gs->str, gs->len);
+				}
 
 				continue;
 

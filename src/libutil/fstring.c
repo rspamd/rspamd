@@ -23,6 +23,7 @@
  */
 
 #include "fstring.h"
+#include "str_util.h"
 
 static const gsize default_initial_size = 48;
 /* Maximum size when we double the size of new string */
@@ -69,6 +70,24 @@ rspamd_fstring_new_init (const gchar *init, gsize len)
 	memcpy (s->str, init, len);
 
 	return s;
+}
+
+rspamd_fstring_t *
+rspamd_fstring_assign (rspamd_fstring_t *str, const gchar *init, gsize len)
+{
+	gsize avail = str->allocated;
+
+	if (avail < len) {
+		str = rspamd_fstring_grow (str, len);
+	}
+
+	if (len > 0) {
+		memcpy (str->str, init, len);
+	}
+
+	str->len = len;
+
+	return str;
 }
 
 void
@@ -120,6 +139,22 @@ rspamd_fstring_append (rspamd_fstring_t *str, const char *in, gsize len)
 	}
 
 	memcpy (str->str + str->len, in, len);
+	str->len += len;
+
+	return str;
+}
+
+rspamd_fstring_t *
+rspamd_fstring_append_chars (rspamd_fstring_t *str,
+		char c, gsize len)
+{
+	gsize avail = fstravail (str);
+
+	if (avail < len) {
+		str = rspamd_fstring_grow (str, len);
+	}
+
+	memset (str->str + str->len, c, len);
 	str->len += len;
 
 	return str;
@@ -237,4 +272,91 @@ rspamd_fstring_equal (const rspamd_fstring_t *s1,
 	}
 
 	return FALSE;
+}
+
+gint
+rspamd_fstring_casecmp (const rspamd_fstring_t *s1,
+		const rspamd_fstring_t *s2)
+{
+	gint ret = 0;
+
+	g_assert (s1 != NULL && s2 != NULL);
+
+	if (s1->len == s2->len) {
+		ret = rspamd_lc_cmp (s1->str, s2->str, s1->len);
+	}
+	else {
+		ret = s1->len - s2->len;
+	}
+
+	return ret;
+}
+
+gint
+rspamd_fstring_cmp (const rspamd_fstring_t *s1,
+		const rspamd_fstring_t *s2)
+{
+	g_assert (s1 != NULL && s2 != NULL);
+
+	if (s1->len == s2->len) {
+		return memcmp (s1->str, s2->str, s1->len);
+	}
+
+	return s1->len - s2->len;
+}
+
+gint
+rspamd_ftok_casecmp (const rspamd_ftok_t *s1,
+		const rspamd_ftok_t *s2)
+{
+	gint ret = 0;
+
+	g_assert (s1 != NULL && s2 != NULL);
+
+	if (s1->len == s2->len) {
+		ret = rspamd_lc_cmp (s1->begin, s2->begin, s1->len);
+	}
+	else {
+		ret = s1->len - s2->len;
+	}
+
+	return ret;
+}
+
+gint
+rspamd_ftok_cmp (const rspamd_ftok_t *s1,
+		const rspamd_ftok_t *s2)
+{
+	g_assert (s1 != NULL && s2 != NULL);
+
+	if (s1->len == s2->len) {
+		return memcmp (s1->begin, s2->begin, s1->len);
+	}
+
+	return s1->len - s2->len;
+}
+
+void
+rspamd_fstring_mapped_ftok_free (gpointer p)
+{
+	rspamd_ftok_t *tok = p;
+	rspamd_fstring_t *storage;
+
+	storage = (rspamd_fstring_t *) (tok->begin - 2 * sizeof (gsize));
+	rspamd_fstring_free (storage);
+	g_slice_free1 (sizeof (*tok), tok);
+}
+
+rspamd_ftok_t *
+rspamd_ftok_map (const rspamd_fstring_t *s)
+{
+	rspamd_ftok_t *tok;
+
+	g_assert (s != NULL);
+
+	tok = g_slice_alloc (sizeof (*tok));
+	tok->begin = s->str;
+	tok->len = s->len;
+
+	return tok;
 }

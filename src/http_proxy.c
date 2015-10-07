@@ -295,7 +295,7 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 {
 	struct http_proxy_session *session = conn->ud;
 	struct rspamd_http_upstream *backend = NULL;
-	const GString *host;
+	const rspamd_ftok_t *host;
 	gchar hostbuf[512];
 
 	if (!session->replied) {
@@ -305,7 +305,7 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 			backend = session->ctx->default_upstream;
 		}
 		else {
-			rspamd_strlcpy (hostbuf, host->str, sizeof (hostbuf));
+			rspamd_strlcpy (hostbuf, host->begin, MIN(host->len + 1, sizeof (hostbuf)));
 			backend = g_hash_table_lookup (session->ctx->upstreams, hostbuf);
 
 			if (backend == NULL) {

@@ -252,7 +252,7 @@ rspamd_encrypted_password_get_str (const gchar * password, gsize skip,
 
 static gboolean
 rspamd_check_encrypted_password (struct rspamd_controller_worker_ctx *ctx,
-		const GString * password, const gchar * check,
+		const rspamd_ftok_t * password, const gchar * check,
 		const struct rspamd_controller_pbkdf *pbkdf,
 		gboolean is_enable)
 {
@@ -267,7 +267,7 @@ rspamd_check_encrypted_password (struct rspamd_controller_worker_ctx *ctx,
 	/* First of all check cached versions to save resources */
 	if (is_enable && ctx->cached_enable_password.len != 0) {
 		if (password->len != ctx->cached_enable_password.len ||
-				!rspamd_constant_memcmp (password->str,
+				!rspamd_constant_memcmp (password->begin,
 						ctx->cached_enable_password.begin, password->len)) {
 			msg_info_ctx ("incorrect or absent enable password has been specified");
 			return FALSE;
@@ -277,7 +277,7 @@ rspamd_check_encrypted_password (struct rspamd_controller_worker_ctx *ctx,
 	}
 	else if (!is_enable && ctx->cached_password.len != 0) {
 		if (password->len != ctx->cached_password.len ||
-				!rspamd_constant_memcmp (password->str,
+				!rspamd_constant_memcmp (password->begin,
 						ctx->cached_password.begin, password->len)) {
 			msg_info_ctx ("incorrect or absent password has been specified");
 			return FALSE;
@@ -314,7 +314,7 @@ rspamd_check_encrypted_password (struct rspamd_controller_worker_ctx *ctx,
 		}
 
 		local_key = g_alloca (pbkdf->key_len);
-		rspamd_cryptobox_pbkdf (password->str, password->len,
+		rspamd_cryptobox_pbkdf (password->begin, password->len,
 				salt_decoded, salt_len,
 				local_key, pbkdf->key_len, pbkdf->rounds);
 
@@ -335,7 +335,7 @@ rspamd_check_encrypted_password (struct rspamd_controller_worker_ctx *ctx,
 			/* Mmap region */
 			m = mmap (NULL, password->len, PROT_WRITE,
 					MAP_PRIVATE | MAP_ANON, -1, 0);
-			memcpy (m, password->str, password->len);
+			memcpy (m, password->begin, password->len);
 			(void)mprotect (m, password->len, PROT_READ);
 			(void)mlock (m, password->len);
 			cache->begin = m;
@@ -353,8 +353,8 @@ static gboolean rspamd_controller_check_password(
 		struct rspamd_http_message *msg, gboolean is_enable)
 {
 	const gchar *check;
-	const GString *password;
-	GString lookup;
+	const rspamd_ftok_t *password;
+	rspamd_ftok_t lookup;
 	GHashTable *query_args = NULL;
 	struct rspamd_controller_worker_ctx *ctx = session->ctx;
 	gboolean check_normal = TRUE, check_enable = TRUE, ret = TRUE,
@@ -381,7 +381,7 @@ static gboolean rspamd_controller_check_password(
 		/* Try to get password from query args */
 		query_args = rspamd_http_message_parse_query (msg);
 
-		lookup.str = (gchar *)"password";
+		lookup.begin = (gchar *)"password";
 		lookup.len = sizeof ("password") - 1;
 
 		password = g_hash_table_lookup (query_args, &lookup);
@@ -415,7 +415,7 @@ static gboolean rspamd_controller_check_password(
 			}
 			if (check != NULL) {
 				if (!rspamd_is_encrypted_password (check, &pbkdf)) {
-					ret = rspamd_constant_memcmp (password->str, check, password->len);
+					ret = rspamd_constant_memcmp (password->begin, check, password->len);
 				}
 				else {
 					ret = rspamd_check_encrypted_password (ctx, password, check,
@@ -437,7 +437,7 @@ static gboolean rspamd_controller_check_password(
 			if (ctx->password != NULL) {
 				check = ctx->password;
 				if (!rspamd_is_encrypted_password (check, &pbkdf)) {
-					check_normal = rspamd_constant_memcmp (password->str, check,
+					check_normal = rspamd_constant_memcmp (password->begin, check,
 							password->len);
 				}
 				else {
@@ -453,7 +453,7 @@ static gboolean rspamd_controller_check_password(
 			if (ctx->enable_password != NULL) {
 				check = ctx->enable_password;
 				if (!rspamd_is_encrypted_password (check, &pbkdf)) {
-					check_enable = rspamd_constant_memcmp (password->str, check,
+					check_enable = rspamd_constant_memcmp (password->begin, check,
 							password->len);
 				}
 				else {
@@ -748,11 +748,10 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_controller_session *session = conn_ent->ud;
 	GList *cur;
 	struct rspamd_map *map;
-	const GString *idstr;
-	gchar *errstr;
+	const rspamd_ftok_t *idstr;
 	struct stat st;
 	gint fd;
-	guint32 id;
+	gulong id;
 	gboolean found = FALSE;
 	struct rspamd_http_message *reply;
 
@@ -769,8 +768,7 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	id = strtoul (idstr->str, &errstr, 10);
-	if (*errstr != '\0' && !g_ascii_isspace (*errstr)) {
+	if (!rspamd_strtoul (idstr->begin, idstr->len, &id)) {
 		msg_info_session ("invalid map id");
 		rspamd_controller_send_error (conn_ent, 400, "400 invalid map id");
 		return 0;
@@ -802,7 +800,7 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	reply = rspamd_http_new_message (HTTP_RESPONSE);
 	reply->date = time (NULL);
 	reply->code = 200;
-	reply->body = g_string_sized_new (st.st_size);
+	reply->body = rspamd_fstring_sized_new (st.st_size);
 
 	/* Read the whole buffer */
 	if (read (fd, reply->body->str, st.st_size) == -1) {
@@ -814,7 +812,6 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	reply->body->len = st.st_size;
-	reply->body->str[reply->body->len] = '\0';
 
 	close (fd);
 
@@ -925,7 +922,7 @@ rspamd_controller_handle_graph (
 	GHashTable *query;
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct rspamd_controller_worker_ctx *ctx;
-	GString srch, *value;
+	rspamd_ftok_t srch, *value;
 	struct rspamd_rrd_query_result *rrd_result;
 	gulong i, j, ts, start_row, cnt, t;
 	ucl_object_t *res, *elt[4], *data_elt;
@@ -951,7 +948,7 @@ rspamd_controller_handle_graph (
 	}
 
 	query = rspamd_http_message_parse_query (msg);
-	srch.str = (gchar *)"type";
+	srch.begin = (gchar *)"type";
 	srch.len = 4;
 
 	if (query == NULL || (value = g_hash_table_lookup (query, &srch)) == NULL) {
@@ -965,16 +962,16 @@ rspamd_controller_handle_graph (
 		return 0;
 	}
 
-	if (strncmp (value->str, "hourly", value->len) == 0) {
+	if (strncmp (value->begin, "hourly", value->len) == 0) {
 		rra_num = rra_hourly;
 	}
-	else if (strncmp (value->str, "daily", value->len) == 0) {
+	else if (strncmp (value->begin, "daily", value->len) == 0) {
 		rra_num = rra_hourly;
 	}
-	else if (strncmp (value->str, "weekly", value->len) == 0) {
+	else if (strncmp (value->begin, "weekly", value->len) == 0) {
 		rra_num = rra_hourly;
 	}
-	else if (strncmp (value->str, "monthly", value->len) == 0) {
+	else if (strncmp (value->begin, "monthly", value->len) == 0) {
 		rra_num = rra_monthly;
 	}
 
@@ -1277,7 +1274,7 @@ rspamd_controller_handle_learn_common (
 	session->cl = cl;
 
 
-	if (!rspamd_task_load_message (task, msg, msg->body->str, msg->body->len)) {
+	if (!rspamd_task_load_message (task, msg, msg->body_buf.begin, msg->body_buf.len)) {
 		rspamd_controller_send_error (conn_ent, task->err->code, task->err->message);
 		return 0;
 	}
@@ -1369,7 +1366,7 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	task->flags |= RSPAMD_TASK_FLAG_MIME;
 	task->resolver = ctx->resolver;
 
-	if (!rspamd_task_load_message (task, msg, msg->body->str, msg->body->len)) {
+	if (!rspamd_task_load_message (task, msg, msg->body_buf.begin, msg->body_buf.len)) {
 		rspamd_controller_send_error (conn_ent, task->err->code, task->err->message);
 		rspamd_session_destroy (task->s);
 		return 0;
@@ -1444,7 +1441,7 @@ rspamd_controller_handle_saveactions (
 	}
 
 	parser = ucl_parser_new (0);
-	ucl_parser_add_chunk (parser, msg->body->str, msg->body->len);
+	ucl_parser_add_chunk (parser, msg->body_buf.begin, msg->body_buf.len);
 
 	if ((error = ucl_parser_get_error (parser)) != NULL) {
 		msg_err_session ("cannot parse input: %s", error);
@@ -1558,7 +1555,7 @@ rspamd_controller_handle_savesymbols (
 	}
 
 	parser = ucl_parser_new (0);
-	ucl_parser_add_chunk (parser, msg->body->str, msg->body->len);
+	ucl_parser_add_chunk (parser, msg->body_buf.begin, msg->body_buf.len);
 
 	if ((error = ucl_parser_get_error (parser)) != NULL) {
 		msg_err_session ("cannot parse input: %s", error);
@@ -1640,9 +1637,8 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 	GList *cur;
 	struct rspamd_map *map;
 	struct rspamd_controller_worker_ctx *ctx;
-	const GString *idstr;
-	gchar *errstr;
-	guint32 id;
+	const rspamd_ftok_t *idstr;
+	gulong id;
 	gboolean found = FALSE;
 	gint fd;
 
@@ -1668,9 +1664,8 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	id = strtoul (idstr->str, &errstr, 10);
-	if (*errstr != '\0' && !g_ascii_isspace (*errstr)) {
-		msg_info_session ("invalid map id: %v", idstr);
+	if (!rspamd_strtoul (idstr->begin, idstr->len, &id)) {
+		msg_info_session ("invalid map id: %T", idstr);
 		rspamd_controller_send_error (conn_ent, 400, "Map id is invalid");
 		return 0;
 	}
@@ -1708,7 +1703,7 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	if (write (fd, msg->body->str, msg->body->len) == -1) {
+	if (write (fd, msg->body_buf.begin, msg->body_buf.len) == -1) {
 		msg_info_session ("map %s write error: %s", map->uri, strerror (errno));
 		close (fd);
 		g_atomic_int_set (map->locked, 0);
@@ -1983,7 +1978,7 @@ rspamd_controller_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 
 	cmd = g_hash_table_lookup (session->ctx->custom_commands, msg->url->str);
 	if (cmd == NULL || cmd->handler == NULL) {
-		msg_err_session ("custom command %v has not been found", msg->url);
+		msg_err_session ("custom command %V has not been found", msg->url);
 		rspamd_controller_send_error (conn_ent, 404, "No command associated");
 		return 0;
 	}

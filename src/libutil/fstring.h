@@ -48,17 +48,26 @@ typedef struct f_str_tok {
 /**
  * Create new fixed length string
  */
-rspamd_fstring_t* rspamd_fstring_new (void);
+rspamd_fstring_t* rspamd_fstring_new (void)
+		G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Create new fixed length string with preallocated size
  */
-rspamd_fstring_t *rspamd_fstring_sized_new (gsize initial_size);
+rspamd_fstring_t *rspamd_fstring_sized_new (gsize initial_size)
+		G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Create new fixed length string and initialize it with the initial data
  */
-rspamd_fstring_t *rspamd_fstring_new_init (const gchar *init, gsize len);
+rspamd_fstring_t *rspamd_fstring_new_init (const gchar *init, gsize len)
+		G_GNUC_WARN_UNUSED_RESULT;
+
+/**
+ * Assign new value to fixed string
+ */
+rspamd_fstring_t *rspamd_fstring_assign (rspamd_fstring_t *str,
+		const gchar *init, gsize len) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Free fixed length string
@@ -71,6 +80,11 @@ void rspamd_fstring_free (rspamd_fstring_t *str);
 rspamd_fstring_t* rspamd_fstring_append (rspamd_fstring_t *str,
 		const char *in, gsize len) G_GNUC_WARN_UNUSED_RESULT;
 
+/**
+ * Append `len` repeated chars `c` to string `str`
+ */
+rspamd_fstring_t *rspamd_fstring_append_chars (rspamd_fstring_t *str,
+		char c, gsize len) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Erase `len` characters at postion `pos`
@@ -81,7 +95,8 @@ void rspamd_fstring_erase (rspamd_fstring_t *str, gsize pos, gsize len);
  * Convert fixed string to a zero terminated string. This string should be
  * freed by a caller
  */
-char * rspamd_fstring_cstr (const rspamd_fstring_t *str);
+char * rspamd_fstring_cstr (const rspamd_fstring_t *str)
+		G_GNUC_WARN_UNUSED_RESULT;
 
 /*
  * Return fast hash value for fixed string converted to lowercase
@@ -93,5 +108,44 @@ guint32 rspamd_fstrhash_lc (const rspamd_ftok_t *str, gboolean is_utf);
  */
 gboolean rspamd_fstring_equal (const rspamd_fstring_t *s1,
 		const rspamd_fstring_t *s2);
+
+/**
+ * Compare two fixed strings ignoring case
+ */
+gint rspamd_fstring_casecmp (const rspamd_fstring_t *s1,
+		const rspamd_fstring_t *s2);
+
+/**
+ * Compare two fixed strings
+ */
+gint rspamd_fstring_cmp (const rspamd_fstring_t *s1,
+		const rspamd_fstring_t *s2);
+
+/**
+ * Compare two fixed tokens ignoring case
+ */
+gint rspamd_ftok_casecmp (const rspamd_ftok_t *s1,
+		const rspamd_ftok_t *s2);
+
+/**
+ * Compare two fixed tokens
+ */
+gint rspamd_ftok_cmp (const rspamd_ftok_t *s1,
+		const rspamd_ftok_t *s2);
+
+/**
+ * Free fstring_t that is mapped to ftok_t
+ *
+ * | len | allocated | <data> -- fstring_t
+ *                     <begin> -- tok
+ *
+ * tok is expected to be allocated with g_slice_alloc
+ */
+void rspamd_fstring_mapped_ftok_free (gpointer p);
+
+/**
+ * Map token to a specified string. Token must be freed using g_slice_free1
+ */
+rspamd_ftok_t *rspamd_ftok_map (const rspamd_fstring_t *s);
 
 #endif

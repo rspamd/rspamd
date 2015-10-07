@@ -123,10 +123,10 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 		return 0;
 	}
 	else {
-		if (msg->body == NULL || msg->body->len == 0 || msg->code != 200) {
-			err = g_error_new (RCLIENT_ERROR, msg->code, "HTTP error: %d, %s",
+		if (msg->body == NULL || msg->body_buf.len == 0 || msg->code != 200) {
+			err = g_error_new (RCLIENT_ERROR, msg->code, "HTTP error: %d, %.*s",
 					msg->code,
-					msg->status ? msg->status->str : "unknown error");
+					(gint)msg->status->len, msg->status->str);
 			req->cb (c, msg, c->server_name->str, NULL, req->input, req->ud, err);
 			g_error_free (err);
 
@@ -134,7 +134,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 		}
 
 		parser = ucl_parser_new (0);
-		if (!ucl_parser_add_chunk (parser, msg->body->str, msg->body->len)) {
+		if (!ucl_parser_add_chunk (parser, msg->body_buf.begin, msg->body_buf.len)) {
 			err = g_error_new (RCLIENT_ERROR, msg->code, "Cannot parse UCL: %s",
 					ucl_parser_get_error (parser));
 			ucl_parser_free (parser);
@@ -247,7 +247,7 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 			return FALSE;
 		}
 
-		req->msg->body = g_string_new_len (input->str, input->len);
+		req->msg->body = rspamd_fstring_new_init (input->str, input->len);
 		req->input = input;
 	}
 	else {
@@ -261,8 +261,8 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 		rspamd_http_message_add_header (req->msg, hn, hv);
 	}
 
-	g_string_append_c (req->msg->url, '/');
-	g_string_append (req->msg->url, command);
+	req->msg->url = rspamd_fstring_append (req->msg->url, "/", 1);
+	req->msg->url = rspamd_fstring_append (req->msg->url, command, strlen (command));
 
 	conn->req = req;
 

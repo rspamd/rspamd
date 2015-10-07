@@ -111,7 +111,7 @@ write_http_request (struct http_callback_data *cbd)
 
 	msg = rspamd_http_new_message (HTTP_REQUEST);
 
-	msg->url = g_string_new (cbd->data->path);
+	msg->url = rspamd_fstring_new_init (cbd->data->path, strlen (cbd->data->path));
 	if (cbd->data->last_checked != 0) {
 		tm = gmtime (&cbd->data->last_checked);
 		strftime (datebuf, sizeof (datebuf), "%a, %d %b %Y %H:%M:%S %Z", tm);
