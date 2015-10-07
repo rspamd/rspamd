@@ -116,4 +116,16 @@ gint rspamd_fstring_casecmp (const rspamd_fstring_t *s1,
 gint rspamd_fstring_cmp (const rspamd_fstring_t *s1,
 		const rspamd_fstring_t *s2);
 
+/**
+ * Compare two fixed tokens ignoring case
+ */
+gint rspamd_ftok_casecmp (const rspamd_ftok_t *s1,
+		const rspamd_ftok_t *s2);
+
+/**
+ * Compare two fixed tokens
+ */
+gint rspamd_ftok_cmp (const rspamd_ftok_t *s1,
+		const rspamd_ftok_t *s2);
+
 #endif
