@@ -165,6 +165,7 @@ gboolean rspamd_file_unlock (gint fd, gboolean async);
  * Google perf-tools initialization function
  */
 void gperf_profiler_init (struct rspamd_config *cfg, const gchar *descr);
+void gperf_profiler_stop (void);
 
 /*
  * Workarounds for older versions of glib

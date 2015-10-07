@@ -1137,22 +1137,31 @@ gperf_profiler_init (struct rspamd_config *cfg, const gchar *descr)
 {
 #if defined(WITH_GPERF_TOOLS)
 	gchar prof_path[PATH_MAX];
+	const gchar *prefix;
 
 	if (getenv ("CPUPROFILE")) {
 
 		/* disable inherited Profiler enabled in master process */
 		ProfilerStop ();
 	}
-	/* Try to create temp directory for gmon.out and chdir to it */
-	if (cfg->profile_path == NULL) {
-		cfg->profile_path =
-			g_strdup_printf ("%s/rspamd-profile", cfg->temp_dir);
+
+	if (cfg != NULL) {
+		/* Try to create temp directory for gmon.out and chdir to it */
+		if (cfg->profile_path == NULL) {
+			cfg->profile_path =
+				g_strdup_printf ("%s/rspamd-profile", cfg->temp_dir);
+		}
+
+		prefix = cfg->profile_path;
+	}
+	else {
+		prefix = "/tmp/rspamd-profile";
 	}
 
 	snprintf (prof_path,
 		sizeof (prof_path),
 		"%s-%s.%d",
-		cfg->profile_path,
+		prefix,
 		descr,
 		(gint)getpid ());
 	if (ProfilerStart (prof_path)) {
@@ -1162,7 +1171,14 @@ gperf_profiler_init (struct rspamd_config *cfg, const gchar *descr)
 	else {
 		msg_warn ("cannot start google perftools profiler");
 	}
+#endif
+}
 
+void
+gperf_profiler_stop (void)
+{
+#if defined(WITH_GPERF_TOOLS)
+	ProfilerStop ();
 #endif
 }
 
