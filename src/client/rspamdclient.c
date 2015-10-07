@@ -247,7 +247,7 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 			return FALSE;
 		}
 
-		req->msg->body = g_string_new_len (input->str, input->len);
+		req->msg->body = rspamd_fstring_new_init (input->str, input->len);
 		req->input = input;
 	}
 	else {
@@ -261,8 +261,8 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 		rspamd_http_message_add_header (req->msg, hn, hv);
 	}
 
-	g_string_append_c (req->msg->url, '/');
-	g_string_append (req->msg->url, command);
+	req->msg->url = rspamd_fstring_append (req->msg->url, "/", 1);
+	req->msg->url = rspamd_fstring_append (req->msg->url, command, strlen (command));
 
 	conn->req = req;
 
