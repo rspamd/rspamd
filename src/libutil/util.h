@@ -5,7 +5,6 @@
 #include "mem_pool.h"
 #include "printf.h"
 #include "fstring.h"
-#include "ucl.h"
 #include "addr.h"
 #include "str_util.h"
 

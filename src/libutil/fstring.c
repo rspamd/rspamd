@@ -357,4 +357,6 @@ rspamd_ftok_map (const rspamd_fstring_t *s)
 	tok = g_slice_alloc (sizeof (*tok));
 	tok->begin = s->str;
 	tok->len = s->len;
+
+	return tok;
 }

@@ -27,6 +27,7 @@
 #define SRC_LIBUTIL_STR_UTIL_H_
 
 #include "config.h"
+#include "ucl.h"
 
 /**
  * Compare two memory regions of size `l` using case insensitive matching
