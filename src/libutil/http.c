@@ -634,6 +634,7 @@ rspamd_http_on_body (http_parser * parser, const gchar *at, size_t length)
 
 	/* Append might cause realloc */
 	priv->msg->body_buf.begin = priv->msg->body->str;
+	priv->msg->body_buf.len = priv->msg->body->len;
 
 	if ((conn->opts & RSPAMD_HTTP_BODY_PARTIAL) && !priv->encrypted) {
 		/* Incremental update is impossible for encrypted requests so far */
@@ -1506,10 +1507,10 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 					enclen);
 			}
 			else {
-				rspamd_printf_fstring (&buf, "%s %s HTTP/1.0\r\n"
+				rspamd_printf_fstring (&buf, "%s %V HTTP/1.0\r\n"
 					"Content-Length: %z\r\n",
 					http_method_str (msg->method),
-					msg->url->str,
+					msg->url,
 					bodylen);
 			}
 		}
@@ -1538,22 +1539,22 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 			}
 			else {
 				if (host != NULL) {
-					rspamd_printf_fstring (&buf, "%s %s HTTP/1.1\r\n"
+					rspamd_printf_fstring (&buf, "%s %V HTTP/1.1\r\n"
 									"Connection: close\r\n"
 									"Host: %s\r\n"
 									"Content-Length: %z\r\n",
 							http_method_str (msg->method),
-							msg->url->str,
+							msg->url,
 							host,
 							bodylen);
 				}
 				else {
-					rspamd_printf_fstring (&buf, "%s %s HTTP/1.1\r\n"
+					rspamd_printf_fstring (&buf, "%s %V HTTP/1.1\r\n"
 									"Connection: close\r\n"
 									"Host: %V\r\n"
 									"Content-Length: %z\r\n",
 							http_method_str (msg->method),
-							msg->url->str,
+							msg->url,
 							msg->host,
 							bodylen);
 				}
@@ -2061,7 +2062,7 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 
 			found = g_hash_table_lookup (entry->rt->paths, &lookup);
 			memcpy (&handler, &found, sizeof (found));
-			msg_debug ("requested known path: %v", &lookup);
+			msg_debug ("requested known path: %T", &lookup);
 		}
 		entry->is_reply = TRUE;
 		if (handler != NULL) {
