@@ -988,7 +988,7 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 	struct redirector_param *param = (struct redirector_param *)conn->ud;
 	struct rspamd_task *task;
 	gint r, urllen;
-	const GString *hdr;
+	const rspamd_ftok_t *hdr;
 	gchar *urlstr;
 
 	task = param->task;
@@ -1003,7 +1003,7 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 			urllen = hdr->len;
 			urlstr = rspamd_mempool_alloc (param->task->task_pool,
 					urllen + 1);
-			rspamd_strlcpy (urlstr, hdr->str, urllen + 1);
+			rspamd_strlcpy (urlstr, hdr->begin, urllen + 1);
 			r = rspamd_url_parse (param->url, urlstr, urllen,
 					param->task->task_pool);
 
@@ -1066,7 +1066,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 			RSPAMD_HTTP_CLIENT_SIMPLE,
 			RSPAMD_HTTP_CLIENT, NULL);
 	msg = rspamd_http_new_message (HTTP_REQUEST);
-	g_string_assign (msg->url, struri (url));
+	msg->url = rspamd_fstring_assign (msg->url, struri (url), strlen (struri (url)));
 	param->sock = s;
 	param->suffix = suffix;
 	param->redirector = selected;

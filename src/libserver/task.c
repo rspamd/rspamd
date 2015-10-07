@@ -71,15 +71,15 @@ rspamd_task_new (struct rspamd_worker *worker)
 		new_task->re_cache);
 	new_task->raw_headers = g_hash_table_new (rspamd_strcase_hash,
 			rspamd_strcase_equal);
-	new_task->request_headers = g_hash_table_new_full (rspamd_gstring_icase_hash,
-		rspamd_gstring_icase_equal, rspamd_gstring_free_hard,
-		rspamd_gstring_free_hard);
+	new_task->request_headers = g_hash_table_new_full (rspamd_ftok_icase_hash,
+			rspamd_ftok_icase_equal, rspamd_fstring_mapped_ftok_free,
+			rspamd_fstring_mapped_ftok_free);
 	rspamd_mempool_add_destructor (new_task->task_pool,
 		(rspamd_mempool_destruct_t) g_hash_table_unref,
 		new_task->request_headers);
-	new_task->reply_headers = g_hash_table_new_full (rspamd_gstring_icase_hash,
-			rspamd_gstring_icase_equal, rspamd_gstring_free_hard,
-			rspamd_gstring_free_hard);
+	new_task->reply_headers = g_hash_table_new_full (rspamd_ftok_icase_hash,
+			rspamd_ftok_icase_equal, rspamd_fstring_mapped_ftok_free,
+			rspamd_fstring_mapped_ftok_free);
 	rspamd_mempool_add_destructor (new_task->task_pool,
 		(rspamd_mempool_destruct_t) g_hash_table_unref,
 		new_task->reply_headers);
@@ -261,6 +261,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 	ucl_object_t *control_obj;
 	gchar filepath[PATH_MAX], *fp;
 	gint fd, flen;
+	rspamd_ftok_t srch, *tok;
 	gpointer map;
 	struct stat st;
 
@@ -268,11 +269,19 @@ rspamd_task_load_message (struct rspamd_task *task,
 		rspamd_protocol_handle_headers (task, msg);
 	}
 
-	if (task->flags & RSPAMD_TASK_FLAG_FILE) {
-		g_assert (task->msg.len > 0);
+	srch.begin = "file";
+	srch.len = 4;
+	tok = g_hash_table_lookup (task->request_headers, &srch);
 
-		r = rspamd_strlcpy (filepath, task->msg.begin,
-				MIN (sizeof (filepath), task->msg.len + 1));
+	if (tok == NULL) {
+		srch.begin = "path";
+		srch.len = 4;
+		tok = g_hash_table_lookup (task->request_headers, &srch);
+	}
+
+	if (tok) {
+		r = rspamd_strlcpy (filepath, tok->begin,
+				MIN (sizeof (filepath), tok->len + 1));
 
 		rspamd_decode_url (filepath, filepath, r + 1);
 		flen = strlen (filepath);
