@@ -94,4 +94,13 @@ guint32 rspamd_fstrhash_lc (const rspamd_ftok_t *str, gboolean is_utf);
 gboolean rspamd_fstring_equal (const rspamd_fstring_t *s1,
 		const rspamd_fstring_t *s2);
 
+/**
+ * Compare two fixed strings ignoring case
+ */
+gint rspamd_fstring_casecmp (const rspamd_fstring_t *s1,
+		const rspamd_fstring_t *s2);
+
+gint rspamd_fstring_cmp (const rspamd_fstring_t *s1,
+		const rspamd_fstring_t *s2);
+
 #endif
