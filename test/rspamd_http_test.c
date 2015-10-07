@@ -29,8 +29,8 @@
 #include "ottery.h"
 #include "cryptobox.h"
 
-static const int file_blocks = 8;
-static const int pconns = 10;
+static const int file_blocks = 1;
+static const int pconns = 100;
 static const int ntests = 3000;
 
 static void
@@ -69,12 +69,21 @@ rspamd_server_accept (gint fd, short what, void *arg)
 }
 
 static void
+rspamd_http_term_handler (gint fd, short what, void *arg)
+{
+	struct event_base *ev_base = arg;
+	struct timeval tv = {0, 0};
+
+	event_base_loopexit (ev_base, &tv);
+}
+
+static void
 rspamd_http_server_func (const gchar *path, rspamd_inet_addr_t *addr,
 		rspamd_mempool_mutex_t *mtx, gpointer kp, struct rspamd_keypair_cache *c)
 {
 	struct rspamd_http_connection_router *rt;
 	struct event_base *ev_base = event_init ();
-	struct event accept_ev;
+	struct event accept_ev, term_ev;
 	gint fd;
 
 	rt = rspamd_http_router_new (rspamd_server_error, rspamd_server_finish,
@@ -88,6 +97,9 @@ rspamd_http_server_func (const gchar *path, rspamd_inet_addr_t *addr,
 	event_base_set (ev_base, &accept_ev);
 	event_add (&accept_ev, NULL);
 
+	evsignal_set (&term_ev, SIGTERM, rspamd_http_term_handler, ev_base);
+	event_base_set (ev_base, &term_ev);
+	event_add (&term_ev, NULL);
 
 	rspamd_mempool_unlock_mutex (mtx);
 	event_base_loop (ev_base, 0);
@@ -209,7 +221,7 @@ rspamd_http_test_func (void)
 	rspamd_mempool_mutex_t *mtx;
 	rspamd_inet_addr_t *addr;
 	gdouble ts1, ts2;
-	gchar filepath[PATH_MAX], buf[512];
+	gchar filepath[PATH_MAX], buf[500];
 	gint fd, i, j;
 	pid_t sfd;
 	GString *b32_key;
@@ -237,7 +249,9 @@ rspamd_http_test_func (void)
 	g_assert (sfd != -1);
 
 	if (sfd == 0) {
+		gperf_profiler_init (NULL, "plain-http-server");
 		rspamd_http_server_func ("/tmp/", addr, mtx, serv_key, c);
+		gperf_profiler_stop ();
 		exit (EXIT_SUCCESS);
 	}
 
@@ -245,6 +259,7 @@ rspamd_http_test_func (void)
 	usleep (100000);
 
 	/* Do client stuff */
+	gperf_profiler_init (NULL, "plain-http-client");
 	for (i = 0; i < ntests; i ++) {
 		for (j = 0; j < pconns; j ++) {
 			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, addr,
@@ -256,6 +271,7 @@ rspamd_http_test_func (void)
 		diff = (ts2 - ts1) * 1000.0;
 		total_diff += diff;
 	}
+	gperf_profiler_stop ();
 
 	msg_info ("Made %d connections of size %d in %.6f ms, %.6f cps",
 			ntests * pconns,
@@ -266,6 +282,20 @@ rspamd_http_test_func (void)
 			mean, std);
 
 	/* Now test encrypted */
+	kill (sfd, SIGTERM);
+	wait (&i);
+	sfd = fork ();
+	g_assert (sfd != -1);
+
+	if (sfd == 0) {
+		gperf_profiler_init (NULL, "cached-http-server");
+		rspamd_http_server_func ("/tmp/", addr, mtx, serv_key, c);
+		gperf_profiler_stop ();
+		exit (EXIT_SUCCESS);
+	}
+
+	//rspamd_mempool_lock_mutex (mtx);
+	usleep (100000);
 	b32_key = rspamd_http_connection_print_key (serv_key,
 			RSPAMD_KEYPAIR_PUBKEY|RSPAMD_KEYPAIR_BASE32);
 	g_assert (b32_key != NULL);
@@ -273,6 +303,7 @@ rspamd_http_test_func (void)
 	g_assert (peer_key != NULL);
 	total_diff = 0.0;
 
+	gperf_profiler_init (NULL, "cached-http-client");
 	for (i = 0; i < ntests; i ++) {
 		for (j = 0; j < pconns; j ++) {
 			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, addr,
@@ -284,6 +315,7 @@ rspamd_http_test_func (void)
 		diff = (ts2 - ts1) * 1000.0;
 		total_diff += diff;
 	}
+	gperf_profiler_stop ();
 
 	msg_info ("Made %d encrypted connections of size %d in %.6f ms, %.6f cps",
 			ntests * pconns,
@@ -300,7 +332,9 @@ rspamd_http_test_func (void)
 	g_assert (sfd != -1);
 
 	if (sfd == 0) {
+		gperf_profiler_init (NULL, "fair-http-server");
 		rspamd_http_server_func ("/tmp/", addr, mtx, serv_key, NULL);
+		gperf_profiler_stop ();
 		exit (EXIT_SUCCESS);
 	}
 
@@ -308,6 +342,7 @@ rspamd_http_test_func (void)
 	usleep (100000);
 	total_diff = 0.0;
 
+	gperf_profiler_init (NULL, "fair-http-client");
 	for (i = 0; i < ntests; i ++) {
 		for (j = 0; j < pconns; j ++) {
 			rspamd_http_client_func (filepath + sizeof ("/tmp") - 1, addr,
@@ -319,6 +354,7 @@ rspamd_http_test_func (void)
 		diff = (ts2 - ts1) * 1000.0;
 		total_diff += diff;
 	}
+	gperf_profiler_stop ();
 
 	msg_info ("Made %d uncached encrypted connections of size %d in %.6f ms, %.6f cps",
 			ntests * pconns,
