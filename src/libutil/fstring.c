@@ -319,3 +319,14 @@ rspamd_ftok_cmp (const rspamd_ftok_t *s1,
 
 	return s1->len - s2->len;
 }
+
+void
+rspamd_fstring_mapped_ftok_free (gpointer p)
+{
+	rspamd_ftok_t *tok = p;
+	rspamd_fstring_t *storage;
+
+	storage = (rspamd_fstring_t *) (tok->begin - 2 * sizeof (gsize));
+	rspamd_fstring_free (storage);
+	g_slice_free1 (sizeof (*tok), tok);
+}

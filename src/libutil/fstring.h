@@ -128,4 +128,14 @@ gint rspamd_ftok_casecmp (const rspamd_ftok_t *s1,
 gint rspamd_ftok_cmp (const rspamd_ftok_t *s1,
 		const rspamd_ftok_t *s2);
 
+/**
+ * Free fstring_t that is mapped to ftok_t
+ *
+ * | len | allocated | <data> -- fstring_t
+ *                     <begin> -- tok
+ *
+ * tok is expected to be allocated with g_slice_alloc
+ */
+void rspamd_fstring_mapped_ftok_free (gpointer p);
+
 #endif
