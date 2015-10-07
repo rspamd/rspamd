@@ -1274,7 +1274,7 @@ rspamd_controller_handle_learn_common (
 	session->cl = cl;
 
 
-	if (!rspamd_task_load_message (task, msg, msg->body->str, msg->body->len)) {
+	if (!rspamd_task_load_message (task, msg, msg->body_buf.begin, msg->body_buf.len)) {
 		rspamd_controller_send_error (conn_ent, task->err->code, task->err->message);
 		return 0;
 	}
@@ -1366,7 +1366,7 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	task->flags |= RSPAMD_TASK_FLAG_MIME;
 	task->resolver = ctx->resolver;
 
-	if (!rspamd_task_load_message (task, msg, msg->body->str, msg->body->len)) {
+	if (!rspamd_task_load_message (task, msg, msg->body_buf.begin, msg->body_buf.len)) {
 		rspamd_controller_send_error (conn_ent, task->err->code, task->err->message);
 		rspamd_session_destroy (task->s);
 		return 0;
@@ -1441,7 +1441,7 @@ rspamd_controller_handle_saveactions (
 	}
 
 	parser = ucl_parser_new (0);
-	ucl_parser_add_chunk (parser, msg->body->str, msg->body->len);
+	ucl_parser_add_chunk (parser, msg->body_buf.begin, msg->body_buf.len);
 
 	if ((error = ucl_parser_get_error (parser)) != NULL) {
 		msg_err_session ("cannot parse input: %s", error);
@@ -1555,7 +1555,7 @@ rspamd_controller_handle_savesymbols (
 	}
 
 	parser = ucl_parser_new (0);
-	ucl_parser_add_chunk (parser, msg->body->str, msg->body->len);
+	ucl_parser_add_chunk (parser, msg->body_buf.begin, msg->body_buf.len);
 
 	if ((error = ucl_parser_get_error (parser)) != NULL) {
 		msg_err_session ("cannot parse input: %s", error);
@@ -1703,7 +1703,7 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	if (write (fd, msg->body->str, msg->body->len) == -1) {
+	if (write (fd, msg->body_buf.begin, msg->body_buf.len) == -1) {
 		msg_info_session ("map %s write error: %s", map->uri, strerror (errno));
 		close (fd);
 		g_atomic_int_set (map->locked, 0);
