@@ -123,7 +123,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 		return 0;
 	}
 	else {
-		if (msg->body == NULL || msg->body->len == 0 || msg->code != 200) {
+		if (msg->body == NULL || msg->body_buf.len == 0 || msg->code != 200) {
 			err = g_error_new (RCLIENT_ERROR, msg->code, "HTTP error: %d, %.*s",
 					msg->code,
 					(gint)msg->status->len, msg->status->str);
@@ -134,7 +134,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 		}
 
 		parser = ucl_parser_new (0);
-		if (!ucl_parser_add_chunk (parser, msg->body->str, msg->body->len)) {
+		if (!ucl_parser_add_chunk (parser, msg->body_buf.begin, msg->body_buf.len)) {
 			err = g_error_new (RCLIENT_ERROR, msg->code, "Cannot parse UCL: %s",
 					ucl_parser_get_error (parser));
 			ucl_parser_free (parser);
