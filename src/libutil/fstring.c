@@ -71,6 +71,24 @@ rspamd_fstring_new_init (const gchar *init, gsize len)
 	return s;
 }
 
+rspamd_fstring_t *
+rspamd_fstring_assign (rspamd_fstring_t *str, const gchar *init, gsize len)
+{
+	gsize avail = str->allocated;
+
+	if (avail < len) {
+		str = rspamd_fstring_grow (str, len);
+	}
+
+	if (len > 0) {
+		memcpy (str->str, init, len);
+	}
+
+	str->len = len;
+
+	return str;
+}
+
 void
 rspamd_fstring_free (rspamd_fstring_t *str)
 {

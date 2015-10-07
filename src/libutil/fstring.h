@@ -48,17 +48,26 @@ typedef struct f_str_tok {
 /**
  * Create new fixed length string
  */
-rspamd_fstring_t* rspamd_fstring_new (void);
+rspamd_fstring_t* rspamd_fstring_new (void)
+		G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Create new fixed length string with preallocated size
  */
-rspamd_fstring_t *rspamd_fstring_sized_new (gsize initial_size);
+rspamd_fstring_t *rspamd_fstring_sized_new (gsize initial_size)
+		G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Create new fixed length string and initialize it with the initial data
  */
-rspamd_fstring_t *rspamd_fstring_new_init (const gchar *init, gsize len);
+rspamd_fstring_t *rspamd_fstring_new_init (const gchar *init, gsize len)
+		G_GNUC_WARN_UNUSED_RESULT;
+
+/**
+ * Assign new value to fixed string
+ */
+rspamd_fstring_t *rspamd_fstring_assign (rspamd_fstring_t *str,
+		const gchar *init, gsize len) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Free fixed length string
@@ -81,7 +90,8 @@ void rspamd_fstring_erase (rspamd_fstring_t *str, gsize pos, gsize len);
  * Convert fixed string to a zero terminated string. This string should be
  * freed by a caller
  */
-char * rspamd_fstring_cstr (const rspamd_fstring_t *str);
+char * rspamd_fstring_cstr (const rspamd_fstring_t *str)
+		G_GNUC_WARN_UNUSED_RESULT;
 
 /*
  * Return fast hash value for fixed string converted to lowercase
@@ -100,6 +110,9 @@ gboolean rspamd_fstring_equal (const rspamd_fstring_t *s1,
 gint rspamd_fstring_casecmp (const rspamd_fstring_t *s1,
 		const rspamd_fstring_t *s2);
 
+/**
+ * Compare two fixed strings
+ */
 gint rspamd_fstring_cmp (const rspamd_fstring_t *s1,
 		const rspamd_fstring_t *s2);
 
