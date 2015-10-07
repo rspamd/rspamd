@@ -1696,14 +1696,15 @@ rspamd_http_message_from_url (const gchar *url)
 	struct http_parser_url pu;
 	struct rspamd_http_message *msg;
 	const gchar *host, *path;
-	size_t pathlen;
+	size_t pathlen, urllen;
 
 	if (url == NULL) {
 		return NULL;
 	}
 
+	urllen = strlen (url);
 	memset (&pu, 0, sizeof (pu));
-	if (http_parser_parse_url (url, strlen (url), FALSE, &pu) != 0) {
+	if (http_parser_parse_url (url, urllen, FALSE, &pu) != 0) {
 		msg_warn ("cannot parse URL: %s", url);
 		return NULL;
 	}
@@ -1733,7 +1734,7 @@ rspamd_http_message_from_url (const gchar *url)
 	}
 
 	msg->host = rspamd_fstring_new_init (host, pu.field_data[UF_HOST].len);
-	msg->host = rspamd_fstring_append (msg->host, path, pathlen);
+	msg->url = rspamd_fstring_new_init (path, pathlen);
 
 	return msg;
 }
@@ -2295,7 +2296,9 @@ rspamd_http_print_key_component (guchar *data, gsize datalen,
 		g_string_append_len (res, data, datalen);
 	}
 
-	g_string_append_c (res, '\n');
+	if (how & RSPAMD_KEYPAIR_HUMAN) {
+		g_string_append_c (res, '\n');
+	}
 }
 
 GString *
