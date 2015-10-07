@@ -126,7 +126,7 @@ rspamd_client_finish (struct rspamd_http_connection *conn,
 	struct client_cbdata *cb = conn->ud;
 	struct timespec ts;
 
-	*(cb->lat) = rspamd_get_ticks () * 1000.;
+	*(cb->lat) = rspamd_get_ticks () * 1000. - cb->ts;
 	close (conn->fd);
 	rspamd_http_connection_unref (conn);
 	g_free (cb);
@@ -161,7 +161,7 @@ rspamd_http_client_func (const gchar *path, rspamd_inet_addr_t *addr,
 	}
 
 	cb = g_malloc (sizeof (*cb));
-	cb->ts = rspamd_get_ticks ();
+	cb->ts = rspamd_get_ticks () * 1000.;
 	cb->lat = latency;
 	rspamd_http_connection_write_message (conn, msg, NULL, NULL, cb,
 			fd, NULL, ev_base);
@@ -241,7 +241,8 @@ rspamd_http_test_func (void)
 		exit (EXIT_SUCCESS);
 	}
 
-	rspamd_mempool_lock_mutex (mtx);
+	//rspamd_mempool_lock_mutex (mtx);
+	usleep (100000);
 
 	/* Do client stuff */
 	for (i = 0; i < ntests; i ++) {
@@ -303,7 +304,8 @@ rspamd_http_test_func (void)
 		exit (EXIT_SUCCESS);
 	}
 
-	rspamd_mempool_lock_mutex (mtx);
+	//rspamd_mempool_lock_mutex (mtx);
+	usleep (100000);
 	total_diff = 0.0;
 
 	for (i = 0; i < ntests; i ++) {
