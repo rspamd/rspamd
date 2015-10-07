@@ -168,7 +168,9 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 	/* Headers */
 	lua_newtable (cbd->L);
 	LL_FOREACH (msg->headers, h) {
-		rspamd_lua_table_set (cbd->L, h->name->str, h->value->str);
+		lua_pushlstring (cbd->L, h->name->begin, h->name->len);
+		lua_pushlstring (cbd->L, h->value->begin, h->value->len);
+		lua_settable (cbd->L, -3);
 	}
 	if (lua_pcall (cbd->L, 4, 0, 0) != 0) {
 		msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));
@@ -269,8 +271,9 @@ lua_http_push_headers (lua_State *L, struct rspamd_http_message *msg)
 static gint
 lua_http_request (lua_State *L)
 {
-	const gchar *url;
+	const gchar *url, *lua_body;
 	gint cbref;
+	gsize bodylen;
 	struct event_base *ev_base;
 	struct rspamd_http_message *msg;
 	struct lua_http_cbdata *cbd;
@@ -403,17 +406,14 @@ lua_http_request (lua_State *L)
 		lua_pushstring (L, "body");
 		lua_gettable (L, -2);
 		if (lua_type (L, -1) == LUA_TSTRING) {
-			msg->body = g_string_new (lua_tostring (L, -1));
+			lua_body = lua_tolstring (L, -1, &bodylen);
+			msg->body = rspamd_fstring_new_init (lua_body, bodylen);
 		}
 		else if (lua_type (L, -1) == LUA_TUSERDATA) {
 			t = lua_check_text (L, -1);
+			/* TODO: think about zero-copy possibilities */
 			if (t) {
-				/* XXX: is it safe ? */
-				msg->body = g_string_new (NULL);
-				msg->body->str = (gchar *)t->start;
-				msg->body->len = t->len;
-				/* It is not safe unless we set len to avoid body_buf to be freed */
-				msg->body_buf.len = t->len;
+				msg->body = rspamd_fstring_new_init (t->start, t->len);
 			}
 		}
 
