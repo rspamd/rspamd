@@ -280,6 +280,8 @@ rspamd_task_load_message (struct rspamd_task *task,
 	}
 
 	if (tok) {
+		debug_task ("want to scan file %T", tok);
+
 		r = rspamd_strlcpy (filepath, tok->begin,
 				MIN (sizeof (filepath), tok->len + 1));
 
