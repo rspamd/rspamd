@@ -33,6 +33,7 @@
 #include "message.h"
 #include "map.h"
 #include "dns.h"
+#include "unix-std.h"
 
 #include "lua/lua_common.h"
 

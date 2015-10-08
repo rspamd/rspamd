@@ -29,12 +29,11 @@
 #include "libstat/stat_api.h"
 #include "rspamd.h"
 #include "libserver/worker_util.h"
-#include "utlist.h"
-
-#include "blake2.h" 
 #include "cryptobox.h"
 #include "ottery.h"
 #include "libutil/rrd.h"
+#include "unix-std.h"
+#include <math.h>
 
 /* 60 seconds for worker's IO */
 #define DEFAULT_WORKER_IO_TIMEOUT 60000

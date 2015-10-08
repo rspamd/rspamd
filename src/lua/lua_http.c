@@ -26,6 +26,7 @@
 #include "dns.h"
 #include "http.h"
 #include "utlist.h"
+#include "unix-std.h"
 
 /***
  * @module rspamd_http

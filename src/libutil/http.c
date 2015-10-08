@@ -32,7 +32,7 @@
 #include "ottery.h"
 #include "keypair_private.h"
 #include "cryptobox.h"
-#include <limits.h>
+#include "unix-std.h"
 
 #define ENCRYPTED_VERSION " HTTP/1.0"
 

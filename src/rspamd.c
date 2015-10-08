@@ -26,15 +26,42 @@
 #include "rspamd.h"
 #include "libutil/map.h"
 #include "fuzzy_storage.h"
-#include "libserver/symbols_cache.h"
 #include "lua/lua_common.h"
 #include "libserver/worker_util.h"
 #include "ottery.h"
 #include "xxhash.h"
 #include "utlist.h"
-#include "libstat/stat_api.h"
-#include "cryptobox.h"
-#include "regexp.h"
+#include "unix-std.h"
+/* sysexits */
+#ifdef HAVE_SYSEXITS_H
+#include <sysexits.h>
+#endif
+/* pwd and grp */
+#ifdef HAVE_PWD_H
+#include <pwd.h>
+#endif
+#ifdef HAVE_GRP_H
+#include <grp.h>
+#endif
+
+#include <signal.h>
+#ifdef HAVE_SIGINFO_H
+#include <siginfo.h>
+#endif
+/* sys/resource.h */
+#ifdef HAVE_SYS_RESOURCE_H
+#include <sys/resource.h>
+#endif
+#ifdef HAVE_SYS_WAIT_H
+#include <sys/wait.h>
+#endif
+#ifdef HAVE_LIBUTIL_H
+#include <libutil.h>
+#endif
+#ifdef WITH_GPERF_TOOLS
+#include <google/profiler.h>
+#endif
+
 #ifdef HAVE_OPENSSL
 #include <openssl/rand.h>
 #include <openssl/err.h>

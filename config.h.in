@@ -281,53 +281,6 @@
 #include <stdbool.h>
 #endif
 
-/* queue */
-#ifdef HAVE_COMPATIBLE_QUEUE_H
-#ifdef HAVE_SYS_QUEUE_H
-#include <sys/queue.h>
-#endif
-#else
-#include "queue.h"
-#endif
-
-/* sys/socket */
-#ifdef HAVE_SYS_SOCKET_H
-#include <sys/socket.h>
-#endif
-
-/* sys/file.h */
-#ifdef HAVE_SYS_FILE_H
-#include <sys/file.h>
-#endif
-
-/* sys/uio.h */
-#ifdef HAVE_SYS_UIO_H
-#include <sys/uio.h>
-#endif
-
-/* sys/mman */
-#ifdef HAVE_SYS_MMAN_H
-#include <sys/mman.h>
-#endif
-
-/* netinet issues */
-#ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
-#endif
-#ifdef HAVE_ARPA_INET_H
-#include <arpa/inet.h>
-#endif
-
-/* unix sockets */
-#ifdef HAVE_SYS_UN_H
-#include <sys/un.h>
-#endif
-
-/* netdb */
-#ifdef HAVE_NETDB_H
-#include <netdb.h>
-#endif
-
 /* stdlib */
 #ifdef HAVE_STDLIB_H
 #include <stdlib.h>
@@ -343,124 +296,17 @@
 #include <time.h>
 #endif
 
-/* timedb */
-#ifdef HAVE_SYS_TIMEB_H
-#include <sys/timeb.h>
+#ifdef HAVE_STDLIB_H
+#include <stdlib.h>
 #endif
-
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
-
-/* sysexits */
-#ifdef HAVE_SYSEXITS_H
-#include <sysexits.h>
-#endif
-
-/* unistd */
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
-
 
 /* string */
 #ifdef HAVE_STRING_H
 #include <string.h>
 #endif
 
-/* strings */
-#ifdef HAVE_STRINGS_H
-#include <strings.h>
-#endif
-
-/* fcntl */
-#ifdef HAVE_FCNTL_H
-#include <fcntl.h>
-#endif
-
-/* Linux specific falloc.h */
-#ifdef HAVE_LINUX_FALLOC_H
-#include <linux/falloc.h>
-#endif
-
-/* poll */
-#ifdef HAVE_POLL_H
-#include <poll.h>
-#endif
-
-/* sys/stat */
-#ifdef HAVE_SYS_STAT_H
-#include <sys/stat.h>
-#endif
-
-/* sys/wait */
-#ifdef HAVE_SYS_WAIT_H
-#include <sys/wait.h>
-#endif
-
-/* sys/resource.h */
-#ifdef HAVE_SYS_RESOURCE_H
-#include <sys/resource.h>
-#endif
-
-/* math */
-#ifdef HAVE_MATH_H
-#include <math.h>
-#endif
-
-/* libutil */
-#ifdef HAVE_LIBUTIL_H
-#include <libutil.h>
-#endif
-
-/* pwd and grp */
-#ifdef HAVE_PWD_H
-#include <pwd.h>
-#endif
-
-#ifdef HAVE_GRP_H
-#include <grp.h>
-#endif
-
-#ifdef HAVE_GLOB_H
-#include <glob.h>
-#endif
-
-/* syslog */
-#ifdef HAVE_SYSLOG_H
-#include <syslog.h>
-#endif
-
-#ifdef HAVE_LIBGEN_H
-#include <libgen.h>
-#define HAVE_DIRNAME 1
-#endif
-
-#ifdef HAVE_SEARCH_H
-#include <search.h>
-#endif
-
-#ifdef WITH_GPERF_TOOLS
-#include <google/profiler.h>
-#endif
-
-#ifdef HAVE_SCHED_YIELD
-#include <sched.h>
-#endif
-
-#ifdef HAVE_DIRENT_H
-#include <dirent.h>
-#endif
-
 #include <errno.h>
-#include <signal.h>
-#ifdef HAVE_SIGINFO_H
-# include <siginfo.h>
-#endif
-#include <event.h>
-#if _EVENT_NUMERIC_VERSION > 0x02000000
-# include <event2/thread.h>
-#endif
+
 #include <glib.h>
 
 
@@ -476,14 +322,6 @@
 
 #if (GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 14)
 typedef off_t goffset;
-#endif
-
-#ifndef BUILD_STATIC
-#include <gmodule.h>
-#endif
-
-#ifndef NO_GMIME
-#include <gmime/gmime.h>
 #endif
 
 #ifndef ALIGN

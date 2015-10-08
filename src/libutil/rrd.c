@@ -26,6 +26,8 @@
 #include "rrd.h"
 #include "util.h"
 #include "logger.h"
+#include "unix-std.h"
+#include <math.h>
 
 #define msg_err_rrd(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         "rrd", file->id, \

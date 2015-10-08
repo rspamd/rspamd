@@ -25,6 +25,7 @@
 #include "config.h"
 #include "libutil/logger.h"
 #include "libutil/sqlite_utils.h"
+#include "unix-std.h"
 
 
 static GQuark

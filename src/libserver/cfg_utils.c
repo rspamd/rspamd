@@ -34,6 +34,8 @@
 #include "dynamic_cfg.h"
 #include "utlist.h"
 #include "stat_api.h"
+#include "unix-std.h"
+#include <math.h>
 
 #define DEFAULT_SCORE 10.0
 

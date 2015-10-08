@@ -18,6 +18,7 @@
 */
 
 #include "_acism.h"
+#include "unix-std.h"
 
 #define BACK ((SYMBOL)0)
 #define ROOT ((STATE) 0)

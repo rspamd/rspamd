@@ -28,7 +28,7 @@
 #include "config.h"
 #include "ucl.h"
 #include <lua.h>
-#define MAX_SYMBOL 128
+#include <event.h>
 
 struct rspamd_task;
 struct rspamd_config;

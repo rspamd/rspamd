@@ -29,6 +29,8 @@
 #include "symbols_cache.h"
 #include "cfg_file.h"
 #include "lua/lua_common.h"
+#include "unix-std.h"
+#include <math.h>
 
 #define msg_err_cache(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         cache->static_pool->tag.tagname, cache->cfg->checksum, \

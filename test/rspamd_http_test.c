@@ -28,6 +28,12 @@
 #include "tests.h"
 #include "ottery.h"
 #include "cryptobox.h"
+#include "unix-std.h"
+#include <math.h>
+
+#ifdef HAVE_SYS_WAIT_H
+#include <sys/wait.h>
+#endif
 
 static const int file_blocks = 1;
 static const int pconns = 100;

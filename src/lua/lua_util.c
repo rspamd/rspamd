@@ -27,6 +27,7 @@
 #include "html.h"
 #include "cfg_rcl.h"
 #include "tokenizers/tokenizers.h"
+#include <math.h>
 
 /***
  * @module rspamd_util

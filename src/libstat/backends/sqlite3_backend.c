@@ -29,6 +29,7 @@
 #include "libstat/stat_internal.h"
 #include "libmime/message.h"
 #include "lua/lua_common.h"
+#include "unix-std.h"
 
 #define SQLITE3_BACKEND_TYPE "sqlite3"
 #define SQLITE3_SCHEMA_VERSION "1"

@@ -9,6 +9,8 @@
 #define TINYCDB_VERSION 0.77
 
 #include "config.h"
+#include "unix-std.h"
+#include <event.h>
 
 /*
  * OpenBSD fix

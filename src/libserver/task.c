@@ -29,6 +29,7 @@
 #include "lua/lua_common.h"
 #include "composites.h"
 #include "stat_api.h"
+#include "unix-std.h"
 
 static GQuark
 rspamd_task_quark (void)

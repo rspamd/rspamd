@@ -3,6 +3,7 @@
 
 #include "config.h"
 #include "ref.h"
+#include "addr.h"
 
 struct rspamd_task;
 struct spf_resolved;

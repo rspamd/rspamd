@@ -7,6 +7,7 @@
 #define RSPAMD_MESSAGE_H
 
 #include "config.h"
+#include <gmime/gmime.h>
 
 struct rspamd_task;
 struct controller_session;

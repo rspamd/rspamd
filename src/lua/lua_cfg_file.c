@@ -23,10 +23,9 @@
  */
 
 #include "lua_common.h"
-#include "symbols_cache.h"
 #include "expression.h"
-#include "filter.h"
 #include "composites.h"
+#include "unix-std.h"
 #ifdef HAVE_SYS_UTSNAME_H
 #include <sys/utsname.h>
 #endif

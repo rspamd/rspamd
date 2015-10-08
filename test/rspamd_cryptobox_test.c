@@ -29,6 +29,7 @@
 #include "fstring.h"
 #include "ottery.h"
 #include "cryptobox.h"
+#include "unix-std.h"
 
 static const int mapping_size = 64 * 8192 + 1;
 static const int max_seg = 32;

@@ -35,6 +35,7 @@
 #include "libserver/worker_util.h"
 #include "keypairs_cache.h"
 #include "ottery.h"
+#include "unix-std.h"
 
 /* Rotate keys each minute by default */
 #define DEFAULT_ROTATION_TIME 60.0

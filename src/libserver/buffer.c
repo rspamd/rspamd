@@ -25,6 +25,7 @@
 #include "config.h"
 #include "buffer.h"
 #include "rspamd.h"
+#include "unix-std.h"
 #ifdef HAVE_SYS_SENDFILE_H
 #include <sys/sendfile.h>
 #endif

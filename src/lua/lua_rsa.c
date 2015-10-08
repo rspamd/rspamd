@@ -29,6 +29,7 @@
  */
 
 #include "lua_common.h"
+#include "unix-std.h"
 
 #ifdef HAVE_OPENSSL
 #include <openssl/err.h>

@@ -24,6 +24,7 @@
 #include "config.h"
 #include "rspamd.h"
 #include "proxy.h"
+#include "unix-std.h"
 
 static void rspamd_proxy_backend_handler (gint fd, gshort what, gpointer data);
 static void rspamd_proxy_client_handler (gint fd, gshort what, gpointer data);

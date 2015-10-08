@@ -31,6 +31,15 @@
 #include "expression.h"
 #include "composites.h"
 #include "libserver/worker_util.h"
+#include "unix-std.h"
+
+#ifdef HAVE_SYSLOG_H
+#include <syslog.h>
+#endif
+
+#ifdef HAVE_GLOB_H
+#include <glob.h>
+#endif
 
 struct rspamd_rcl_default_handler_data {
 	struct rspamd_rcl_struct_parser pd;
@@ -103,6 +112,7 @@ rspamd_rcl_logging_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 		else if (g_ascii_strcasecmp (log_type, "syslog") == 0) {
 			/* Need to get facility */
+#ifdef HAVE_SYSLOG_H
 			cfg->log_facility = LOG_DAEMON;
 			cfg->log_type = RSPAMD_LOG_SYSLOG;
 			val = ucl_object_find_key (obj, "facility");
@@ -168,6 +178,7 @@ rspamd_rcl_logging_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 					return FALSE;
 				}
 			}
+#endif
 		}
 		else if (g_ascii_strcasecmp (log_type,
 			"stderr") == 0 || g_ascii_strcasecmp (log_type, "console") == 0) {

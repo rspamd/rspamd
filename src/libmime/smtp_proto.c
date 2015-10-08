@@ -29,6 +29,7 @@
 #include "smtp.h"
 #include "smtp_proto.h"
 #include "smtp_utils.h"
+#include "unix-std.h"
 
 gchar *
 make_smtp_error (rspamd_mempool_t *pool,

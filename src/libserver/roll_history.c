@@ -26,6 +26,7 @@
 #include "config.h"
 #include "rspamd.h"
 #include "roll_history.h"
+#include "unix-std.h"
 
 static const gchar rspamd_history_magic[] = {'r', 's', 'h', '1'};
 

@@ -26,6 +26,7 @@
 
 #include "config.h"
 #include "ucl.h"
+#include <event.h>
 
 struct rspamd_client_connection;
 struct rspamd_http_message;

@@ -28,6 +28,7 @@
 #include "cryptobox.h"
 #include "rspamd.h"
 #include "rspamadm.h"
+#include "unix-std.h"
 
 static void rspamadm_pw (gint argc, gchar **argv);
 static const char *rspamadm_pw_help (gboolean full_help);

@@ -2,6 +2,8 @@
 #define RSPAMD_MAP_H
 
 #include "config.h"
+#include <event.h>
+
 #include "mem_pool.h"
 #include "radix.h"
 

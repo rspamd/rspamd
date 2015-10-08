@@ -24,6 +24,7 @@
 #include "config.h"
 #include "rspamd.h"
 #include "fuzzy_backend.h"
+#include "unix-std.h"
 
 #include <sqlite3.h>
 

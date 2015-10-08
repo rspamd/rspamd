@@ -24,7 +24,7 @@
 #include "rspamdclient.h"
 #include "util.h"
 #include "http.h"
-#include "keypairs_cache.h"
+#include "unix-std.h"
 
 #ifdef HAVE_FETCH_H
 #include <fetch.h>

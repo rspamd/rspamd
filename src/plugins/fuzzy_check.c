@@ -46,13 +46,11 @@
 #include "libserver/worker_util.h"
 #include "fuzzy_storage.h"
 #include "utlist.h"
-#include "rspamd.h"
 #include "blake2.h"
 #include "ottery.h"
-#include "cryptobox.h"
-#include "keypairs_cache.h"
 #include "keypair_private.h"
-#include "http.h"
+#include "unix-std.h"
+#include <math.h>
 
 #define DEFAULT_SYMBOL "R_FUZZY_HASH"
 #define DEFAULT_UPSTREAM_ERROR_TIME 10

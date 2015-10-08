@@ -26,6 +26,10 @@
 #include "message.h"
 #include "lua/lua_common.h"
 #include "worker_util.h"
+#include "unix-std.h"
+#ifdef WITH_GPERF_TOOLS
+#include <google/profiler.h>
+#endif
 
 /**
  * Return worker's control structure by its type

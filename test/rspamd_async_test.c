@@ -22,11 +22,9 @@
  */
 
 #include "config.h"
-#include "tests.h"
 #include "rspamd.h"
 #include "aio_event.h"
-#include "mem_pool.h"
-
+#include "unix-std.h"
 
 extern struct event_base *base;
 

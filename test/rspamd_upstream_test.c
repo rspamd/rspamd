@@ -25,8 +25,8 @@
 
 #include "config.h"
 #include "rspamd.h"
-#include "upstream.h"
 #include "ottery.h"
+#include <math.h>
 
 const char *test_upstream_list = "microsoft.com:443:1,google.com:80:2,kernel.org:443:3";
 const char *new_upstream_list = "freebsd.org:80";

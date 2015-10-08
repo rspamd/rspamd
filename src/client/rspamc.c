@@ -27,6 +27,11 @@
 #include "http.h"
 #include "rspamdclient.h"
 #include "utlist.h"
+#include "unix-std.h"
+
+#ifdef HAVE_SYS_WAIT_H
+#include <sys/wait.h>
+#endif
 
 #define DEFAULT_PORT 11333
 #define DEFAULT_CONTROL_PORT 11334
@@ -1345,7 +1350,6 @@ main (gint argc, gchar **argv, gchar **env)
 	event_base_loop (ev_base, 0);
 
 	g_hash_table_destroy (kwattrs);
-	g_mime_shutdown ();
 
 	/* Wait for children processes */
 	cur = g_list_first (children);

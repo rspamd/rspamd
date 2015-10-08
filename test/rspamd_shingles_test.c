@@ -24,8 +24,8 @@
 #include "config.h"
 #include "rspamd.h"
 #include "shingles.h"
-#include "fstring.h"
 #include "ottery.h"
+#include <math.h>
 
 static void
 generate_random_string (char *begin, size_t len)

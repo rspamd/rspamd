@@ -25,6 +25,11 @@
 #include "rspamd.h"
 #include "util.h"
 #include "lua/lua_common.h"
+#include "unix-std.h"
+
+#ifdef HAVE_GLOB_H
+#include <glob.h>
+#endif
 
 static const char *lua_src = BUILDROOT "/test/lua/tests.lua";
 

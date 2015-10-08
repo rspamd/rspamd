@@ -26,6 +26,7 @@
 #include "map.h"
 #include "filter.h"
 #include "dynamic_cfg.h"
+#include "unix-std.h"
 
 struct config_json_buf {
 	GString *buf;

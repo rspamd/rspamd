@@ -26,6 +26,11 @@
 #include "rspamadm.h"
 #include "rspamd.h"
 #include "ottery.h"
+#include "unix-std.h"
+
+#ifdef HAVE_LIBUTIL_H
+#include <libutil.h>
+#endif
 
 static gboolean verbose = FALSE;
 static gboolean list_commands = FALSE;

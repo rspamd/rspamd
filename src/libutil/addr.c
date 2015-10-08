@@ -26,6 +26,17 @@
 #include "util.h"
 #include "logger.h"
 
+#include "unix-std.h"
+/* pwd and grp */
+#ifdef HAVE_PWD_H
+#include <pwd.h>
+#endif
+
+#ifdef HAVE_GRP_H
+#include <grp.h>
+#endif
+
+
 enum {
 	RSPAMD_IPV6_UNDEFINED = 0,
 	RSPAMD_IPV6_SUPPORTED,

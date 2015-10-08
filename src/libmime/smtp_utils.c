@@ -23,9 +23,8 @@
 
 #include "config.h"
 #include "rspamd.h"
-#include "filter.h"
 #include "smtp.h"
-#include "smtp_proto.h"
+#include "unix-std.h"
 
 void
 free_smtp_session (gpointer arg)

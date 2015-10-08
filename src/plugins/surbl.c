@@ -43,14 +43,11 @@
 
 #include "config.h"
 #include "libmime/message.h"
-#include "libutil/hash.h"
 #include "libutil/map.h"
 #include "rspamd.h"
 #include "surbl.h"
-#include "regexp.h"
-#include "acism.h"
-
 #include "utlist.h"
+#include "unix-std.h"
 
 static struct surbl_ctx *surbl_module_ctx = NULL;
 

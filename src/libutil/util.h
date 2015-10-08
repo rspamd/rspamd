@@ -8,6 +8,11 @@
 #include "addr.h"
 #include "str_util.h"
 
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
+#endif
+#include <event.h>
+
 struct rspamd_config;
 struct rspamd_main;
 struct workq;

@@ -28,6 +28,11 @@
 #include "logger.h"
 #include "utlist.h"
 #include "ottery.h"
+#include "unix-std.h"
+
+#ifdef HAVE_SCHED_YIELD
+#include <sched.h>
+#endif
 
 /* Sleep time for spin lock in nanoseconds */
 #define MUTEX_SLEEP_TIME 10000000L

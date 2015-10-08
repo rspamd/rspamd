@@ -25,7 +25,7 @@
 
 #include "printf.h"
 #include "fstring.h"
-#include "rspamd.h"
+#include <math.h>
 
 /**
  * From FreeBSD libutil code
@@ -449,7 +449,6 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 					if (*fmt == '*') {
 						d = (gint)va_arg (args, gint);
 						if (G_UNLIKELY (d < 0)) {
-							msg_err ("critical error: fraction width is less than 0");
 							return 0;
 						}
 						frac_width = (guint)d;
@@ -466,7 +465,6 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 				case '*':
 					d = (gint)va_arg (args, gint);
 					if (G_UNLIKELY (d < 0)) {
-						msg_err ("critical error: size is less than 0");
 						return 0;
 					}
 					slen = (glong)d;
@@ -715,7 +713,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 				continue;
 
 			case 'N':
-				c = LF;
+				c = '\n';
 				RSPAMD_PRINTF_APPEND (&c, 1);
 
 				continue;

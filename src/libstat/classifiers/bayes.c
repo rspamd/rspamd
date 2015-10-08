@@ -30,6 +30,7 @@
 #include "filter.h"
 #include "cfg_file.h"
 #include "stat_internal.h"
+#include "math.h"
 
 static inline GQuark
 bayes_error_quark (void)

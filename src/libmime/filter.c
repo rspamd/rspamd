@@ -27,15 +27,9 @@
 #include "filter.h"
 #include "rspamd.h"
 #include "message.h"
-#include "cfg_file.h"
-#include "util.h"
-#include "expression.h"
-#include "libstat/stat_api.h"
-#include "utlist.h"
+#include "lua/lua_common.h"
+#include <math.h>
 
-#ifdef WITH_LUA
-#   include "lua/lua_common.h"
-#endif
 
 #define COMMON_PART_FACTOR 95
 

@@ -26,6 +26,7 @@
 #include "buffer.h"
 #include "dns.h"
 #include "utlist.h"
+#include "unix-std.h"
 
 static void lua_tcp_handler (int fd, short what, gpointer ud);
 /***

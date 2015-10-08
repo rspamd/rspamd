@@ -27,8 +27,7 @@
 #include "util.h"
 #include "cfg_file.h"
 #include "rspamd.h"
-#include "filter.h"
-#include "message.h"
+#include "unix-std.h"
 
 #include "xxhash.h"
 #include "ottery.h"
@@ -49,9 +48,31 @@
 #ifdef HAVE_LOCALE_H
 #include <locale.h>
 #endif
-
+/* libutil */
+#ifdef HAVE_LIBUTIL_H
+#include <libutil.h>
+#endif
 #ifdef __APPLE__
 #include <mach/mach_time.h>
+#endif
+#ifdef WITH_GPERF_TOOLS
+#include <google/profiler.h>
+#endif
+/* poll */
+#ifdef HAVE_POLL_H
+#include <poll.h>
+#endif
+
+#ifdef HAVE_SIGINFO_H
+#include <siginfo.h>
+#endif
+/* sys/wait */
+#ifdef HAVE_SYS_WAIT_H
+#include <sys/wait.h>
+#endif
+/* sys/resource.h */
+#ifdef HAVE_SYS_RESOURCE_H
+#include <sys/resource.h>
 #endif
 
 #include "blake2.h"

@@ -29,6 +29,11 @@
 #include "rspamd.h"
 #include "map.h"
 #include "xxhash.h"
+#include "unix-std.h"
+
+#ifdef HAVE_SYSLOG_H
+#include <syslog.h>
+#endif
 
 /* How much message should be repeated before it is count to be repeated one */
 #define REPEATS_MIN 3
@@ -174,9 +179,11 @@ rspamd_log_open_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 			rspamd_log->enabled = TRUE;
 			return 0;
 		case RSPAMD_LOG_SYSLOG:
+#ifdef HAVE_SYSLOG_H
 			openlog ("rspamd", LOG_NDELAY | LOG_PID,
 					rspamd_log->cfg->log_facility);
 			rspamd_log->enabled = TRUE;
+#endif
 			return 0;
 		case RSPAMD_LOG_FILE:
 			rspamd_log->fd = open (rspamd_log->cfg->log_file,
@@ -212,7 +219,9 @@ rspamd_log_close_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 			/* Do nothing special */
 			break;
 		case RSPAMD_LOG_SYSLOG:
+#ifdef HAVE_SYSLOG_H
 			closelog ();
+#endif
 			break;
 		case RSPAMD_LOG_FILE:
 			if (rspamd_log->enabled) {
@@ -576,7 +585,7 @@ syslog_log_function (const gchar *log_domain,
 		gpointer arg)
 {
 	rspamd_logger_t *rspamd_log = arg;
-
+#ifdef HAVE_SYSLOG_H
 	struct {
 		GLogLevelFlags glib_level;
 		gint syslog_level;
@@ -607,6 +616,7 @@ syslog_log_function (const gchar *log_domain,
 			module != NULL ? module : "",
 			function != NULL ? function : "",
 			message);
+#endif
 }
 
 /**

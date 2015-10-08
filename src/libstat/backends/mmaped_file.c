@@ -24,7 +24,7 @@
 
 #include "config.h"
 #include "stat_internal.h"
-#include "rspamd.h"
+#include "unix-std.h"
 
 #define CHAIN_LENGTH 128
 

@@ -30,6 +30,8 @@
 #include "mem_pool.h"
 #include "dns.h"
 
+#include <gmime/gmime.h>
+
 enum rspamd_command {
 	CMD_CHECK,
 	CMD_SYMBOLS,

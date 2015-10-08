@@ -27,6 +27,7 @@
 
 #include "config.h"
 #include "buffer.h"
+#include <event.h>
 
 /**
  * @file proxy.h

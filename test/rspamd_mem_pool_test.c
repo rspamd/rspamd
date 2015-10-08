@@ -1,6 +1,12 @@
 #include "config.h"
 #include "mem_pool.h"
 #include "tests.h"
+#include "unix-std.h"
+#include <math.h>
+
+#ifdef HAVE_SYS_WAIT_H
+#include <sys/wait.h>
+#endif
 
 #define TEST_BUF "test bufffer"
 #define TEST2_BUF "test bufffertest bufffer"

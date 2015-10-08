@@ -23,6 +23,8 @@
 
 #include "lua_common.h"
 #include "buffer.h"
+#include "unix-std.h"
+#include <math.h>
 
 /* Public prototypes */
 struct rspamd_io_dispatcher_s * lua_check_io_dispatcher (lua_State * L);

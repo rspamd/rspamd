@@ -22,8 +22,10 @@
  */
 
 #include "config.h"
+#include <event.h>
 #include "aio_event.h"
 #include "rspamd.h"
+#include "unix-std.h"
 
 #ifdef HAVE_SYS_EVENTFD_H
 #include <sys/eventfd.h>

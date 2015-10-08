@@ -32,6 +32,7 @@
 #include "util.h"
 #include "mem_pool.h"
 #include "blake2.h"
+#include "unix-std.h"
 
 static const gchar *hash_fill = "1";
 
