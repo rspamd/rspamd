@@ -571,18 +571,30 @@ err:
 	return NULL;
 }
 
-gint
+gboolean
 rspamd_socketpair (gint pair[2])
 {
-	gint r;
+	gint r, serrno;
 
-	r = socketpair (AF_LOCAL, SOCK_STREAM, 0, pair);
+#ifdef HAVE_SOCK_SEQPACKET
+	r = socketpair (AF_LOCAL, SOCK_SEQPACKET, 0, pair);
+
+	if (r == -1) {
+		msg_warn ("seqpacket socketpair failed: %d, '%s'",
+				errno,
+				strerror (errno));
+		r = socketpair (AF_LOCAL, SOCK_DGRAM, 0, pair);
+	}
+#else
+	r = socketpair (AF_LOCAL, SOCK_DGRAM, 0, pair);
+#endif
 
 	if (r == -1) {
 		msg_warn ("socketpair failed: %d, '%s'", errno, strerror (
 				errno), pair[0], pair[1]);
 		return -1;
 	}
+
 	/* Set close on exec */
 	if (fcntl (pair[0], F_SETFD, FD_CLOEXEC) == -1) {
 		msg_warn ("fcntl failed: %d, '%s'", errno, strerror (errno));
@@ -593,12 +605,15 @@ rspamd_socketpair (gint pair[2])
 		goto out;
 	}
 
-	return 0;
+	return TRUE;
 
 out:
+	serrno = errno;
 	close (pair[0]);
 	close (pair[1]);
-	return (-1);
+	errno = serrno;
+
+	return FALSE;
 }
 
 gint
