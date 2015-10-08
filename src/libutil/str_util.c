@@ -1289,7 +1289,7 @@ rspamd_gstring_append_double (double val, void *ud)
 }
 
 void
-rspamd_ucl_emit_gstring (ucl_object_t *obj,
+rspamd_ucl_emit_gstring (const ucl_object_t *obj,
 		enum ucl_emitter emit_type,
 		GString *target)
 {
@@ -1357,7 +1357,7 @@ rspamd_fstring_emit_append_double (double val, void *ud)
 }
 
 void
-rspamd_ucl_emit_fstring (ucl_object_t *obj,
+rspamd_ucl_emit_fstring (const ucl_object_t *obj,
 		enum ucl_emitter emit_type,
 		rspamd_fstring_t **buf)
 {

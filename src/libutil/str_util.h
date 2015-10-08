@@ -204,7 +204,7 @@ goffset rspamd_string_find_eoh (GString *input);
  * @param emit_type emitter type
  * @param target target string
  */
-void rspamd_ucl_emit_gstring (ucl_object_t *obj,
+void rspamd_ucl_emit_gstring (const ucl_object_t *obj,
 		enum ucl_emitter emit_type,
 		GString *target);
 
@@ -214,7 +214,7 @@ void rspamd_ucl_emit_gstring (ucl_object_t *obj,
  * @param emit_type emitter type
  * @param target target string
  */
-void rspamd_ucl_emit_fstring (ucl_object_t *obj,
+void rspamd_ucl_emit_fstring (const ucl_object_t *obj,
 		enum ucl_emitter emit_type,
 		rspamd_fstring_t **target);
 
