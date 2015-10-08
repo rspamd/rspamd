@@ -818,6 +818,7 @@ CHECK_SYMBOL_EXISTS(getaddrinfo "sys/types.h;sys/socket.h;netdb.h" HAVE_GETADDRI
 CHECK_SYMBOL_EXISTS(sched_yield "sched.h" HAVE_SCHED_YIELD)
 CHECK_SYMBOL_EXISTS(__get_cpuid "cpuid.h" HAVE_GET_CPUID)
 CHECK_SYMBOL_EXISTS(PCRE_CONFIG_JIT "pcre.h" HAVE_PCRE_JIT)
+CHECK_SYMBOL_EXISTS(SOCK_SEQPACKET "sys/types.h;sys/socket.h" HAVE_SOCK_SEQPACKET)
 
 # Some PCRE implementations are lacking of pcre_jit_exec fast path
 SET(_PCRE_FAST_TEST "
