@@ -175,6 +175,7 @@ struct rspamd_config {
 	gchar *cfg_name;                                /**< name of config file								*/
 	gchar *pid_file;                                /**< name of pid file									*/
 	gchar *temp_dir;                                /**< dir for temp files									*/
+	gchar *control_socket_path;                     /**< path to the control socket							*/
 #ifdef WITH_GPERF_TOOLS
 	gchar *profile_path;
 #endif

@@ -1295,6 +1295,11 @@ rspamd_rcl_config_init (void)
 		rspamd_rcl_parse_struct_string_list,
 		G_STRUCT_OFFSET (struct rspamd_config, classify_headers),
 		0);
+	rspamd_rcl_add_default_handler (sub,
+		"control_socket",
+		rspamd_rcl_parse_struct_string,
+		G_STRUCT_OFFSET (struct rspamd_config, control_socket_path),
+		0);
 
 	/* New DNS configuration */
 	ssub = rspamd_rcl_add_section (&sub->subsections, "dns", NULL, NULL,
