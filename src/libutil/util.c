@@ -669,7 +669,12 @@ rspamd_signals_init (struct sigaction *signals, void (*sig_handler)(gint))
 	sigaddset (&signals->sa_mask, SIGUSR1);
 	sigaddset (&signals->sa_mask, SIGUSR2);
 	sigaddset (&signals->sa_mask, SIGALRM);
-
+#ifdef SIGPOLL
+	sigaddset (&signals->sa_mask, SIGPOLL);
+#endif
+#ifdef SIGIO
+	sigaddset (&signals->sa_mask, SIGIO);
+#endif
 
 #ifdef HAVE_SA_SIGINFO
 	signals->sa_flags = SA_SIGINFO;
