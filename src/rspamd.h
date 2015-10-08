@@ -53,14 +53,21 @@ struct rspamd_worker {
 	gpointer ctx;                                               /**< worker's specific data							*/
 };
 
+struct rspamd_worker_signal_handler;
+
+struct rspamd_worker_signal_cb {
+	void (*handler) (struct rspamd_worker_signal_handler *, void *ud);
+	void *handler_data;
+	struct rspamd_worker_signal_cb *next, *prev;
+};
+
 struct rspamd_worker_signal_handler {
 	gint signo;
 	gboolean enabled;
 	struct event ev;
 	struct event_base *base;
 	struct rspamd_worker *worker;
-	void (*post_handler)(void *ud);
-	void *handler_data;
+	struct rspamd_worker_signal_cb *cb;
 };
 
 struct rspamd_controller_pbkdf {

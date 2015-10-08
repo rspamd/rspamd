@@ -27,6 +27,8 @@
 #include "lua/lua_common.h"
 #include "worker_util.h"
 #include "unix-std.h"
+#include "utlist.h"
+
 #ifdef WITH_GPERF_TOOLS
 #include <google/profiler.h>
 #endif
@@ -58,10 +60,8 @@ sig_atomic_t wanna_die = 0;
  * Config reload is designed by sending sigusr2 to active workers and pending shutdown of them
  */
 static void
-rspamd_worker_usr2_handler (gint fd, short what, void *arg)
+rspamd_worker_usr2_handler (struct rspamd_worker_signal_handler *sigh, void *arg)
 {
-	struct rspamd_worker_signal_handler *sigh =
-		(struct rspamd_worker_signal_handler *)arg;
 	/* Do not accept new connections, preparing to end worker's process */
 	struct timeval tv;
 
@@ -76,9 +76,6 @@ rspamd_worker_usr2_handler (gint fd, short what, void *arg)
 				"worker's shutdown is pending in %d sec",
 				SOFT_SHUTDOWN_TIME);
 		event_base_loopexit (sigh->base, &tv);
-		if (sigh->post_handler) {
-			sigh->post_handler (sigh->handler_data);
-		}
 		rspamd_worker_stop_accept (sigh->worker);
 	}
 }
@@ -87,23 +84,14 @@ rspamd_worker_usr2_handler (gint fd, short what, void *arg)
  * Reopen log is designed by sending sigusr1 to active workers and pending shutdown of them
  */
 static void
-rspamd_worker_usr1_handler (gint fd, short what, void *arg)
+rspamd_worker_usr1_handler (struct rspamd_worker_signal_handler *sigh, void *arg)
 {
-	struct rspamd_worker_signal_handler *sigh =
-			(struct rspamd_worker_signal_handler *)arg;
-
 	rspamd_log_reopen (sigh->worker->srv->logger);
-
-	if (sigh->post_handler) {
-		sigh->post_handler (sigh->handler_data);
-	}
 }
 
 static void
-rspamd_worker_term_handler (gint fd, short what, void *arg)
+rspamd_worker_term_handler (struct rspamd_worker_signal_handler *sigh, void *arg)
 {
-	struct rspamd_worker_signal_handler *sigh =
-			(struct rspamd_worker_signal_handler *)arg;
 	struct timeval tv;
 
 	if (!wanna_die) {
@@ -116,14 +104,28 @@ rspamd_worker_term_handler (gint fd, short what, void *arg)
 		wanna_die = 1;
 		tv.tv_sec = 0;
 		tv.tv_usec = 0;
-		if (sigh->post_handler) {
-			sigh->post_handler (sigh->handler_data);
-		}
+
 		event_base_loopexit (sigh->base, &tv);
 #ifdef WITH_GPERF_TOOLS
 		ProfilerStop ();
 #endif
 		rspamd_worker_stop_accept (sigh->worker);
+	}
+}
+
+static void
+rspamd_worker_signal_handler (int fd, short what, void *arg)
+{
+	struct rspamd_worker_signal_handler *sigh =
+			(struct rspamd_worker_signal_handler *) arg;
+	struct rspamd_worker_signal_cb *cb;
+
+	cb = sigh->cb;
+
+	/* Call all signal handlers registered */
+	while (cb) {
+		cb->handler (sigh, cb->handler_data);
+		cb = cb->next;
 	}
 }
 
@@ -139,23 +141,37 @@ rspamd_worker_ignore_signal (int signo)
 	sigaction (signo, &sig, NULL);
 }
 
-static void
+void
 rspamd_worker_set_signal_handler (int signo, struct rspamd_worker *worker,
-		struct event_base *base, void (*handler)(int, short, void *))
+		struct event_base *base,
+		void (*handler)(struct rspamd_worker_signal_handler *sigh, void *),
+		void *handler_data)
 {
 	struct rspamd_worker_signal_handler *sigh;
+	struct rspamd_worker_signal_cb *cb;
 
-	sigh = g_malloc0 (sizeof (*sigh));
-	sigh->signo = signo;
-	sigh->worker = worker;
-	sigh->base = base;
-	sigh->enabled = TRUE;
+	sigh = g_hash_table_lookup (worker->signal_events, GINT_TO_POINTER (signo));
 
-	signal_set (&sigh->ev, signo, handler, sigh);
-	event_base_set (base, &sigh->ev);
-	signal_add (&sigh->ev, NULL);
+	if (sigh == NULL) {
+		sigh = g_malloc0 (sizeof (*sigh));
+		sigh->signo = signo;
+		sigh->worker = worker;
+		sigh->base = base;
+		sigh->enabled = TRUE;
 
-	g_hash_table_insert (worker->signal_events, GINT_TO_POINTER (signo), sigh);
+		signal_set (&sigh->ev, signo, rspamd_worker_signal_handler, sigh);
+		event_base_set (base, &sigh->ev);
+		signal_add (&sigh->ev, NULL);
+
+		g_hash_table_insert (worker->signal_events,
+				GINT_TO_POINTER (signo),
+				sigh);
+	}
+
+	cb = g_malloc0 (sizeof (*cb));
+	cb->handler = handler;
+	cb->handler_data = handler_data;
+	DL_APPEND (sigh->cb, cb);
 }
 
 static void
@@ -169,17 +185,17 @@ rspamd_worker_init_signals (struct rspamd_worker *worker, struct event_base *bas
 
 	/* A set of terminating signals */
 	rspamd_worker_set_signal_handler (SIGTERM, worker, base,
-			rspamd_worker_term_handler);
+			rspamd_worker_term_handler, NULL);
 	rspamd_worker_set_signal_handler (SIGINT, worker, base,
-			rspamd_worker_term_handler);
+			rspamd_worker_term_handler, NULL);
 	rspamd_worker_set_signal_handler (SIGHUP, worker, base,
-			rspamd_worker_term_handler);
+			rspamd_worker_term_handler, NULL);
 
 	/* Special purpose signals */
 	rspamd_worker_set_signal_handler (SIGUSR1, worker, base,
-			rspamd_worker_usr1_handler);
+			rspamd_worker_usr1_handler, NULL);
 	rspamd_worker_set_signal_handler (SIGUSR2, worker, base,
-			rspamd_worker_usr2_handler);
+			rspamd_worker_usr2_handler, NULL);
 
 	/* Unblock all signals processed */
 	sigemptyset (&signals.sa_mask);

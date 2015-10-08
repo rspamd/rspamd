@@ -507,7 +507,6 @@ start_fuzzy (struct rspamd_worker *worker)
 	struct rspamd_fuzzy_storage_ctx *ctx = worker->ctx;
 	GError *err = NULL;
 	gdouble next_check;
-	struct event usr2_
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"fuzzy",

@@ -35,6 +35,7 @@ typedef void (*rspamd_sig_handler_t) (gint, siginfo_t *, void *);
 #endif
 
 struct rspamd_worker;
+struct rspamd_worker_signal_handler;
 
 /**
  * Prepare worker's startup
@@ -47,6 +48,15 @@ struct rspamd_worker;
 struct event_base *
 rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 	void (*accept_handler)(int, short, void *));
+
+/**
+ * Set special signal handler for a worker
+ */
+void rspamd_worker_set_signal_handler (int signo,
+		struct rspamd_worker *worker,
+		struct event_base *base,
+		void (*handler) (struct rspamd_worker_signal_handler *, void *),
+		void *handler_data);
 
 /**
  * Stop accepting new connections for a worker
