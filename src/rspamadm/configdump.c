@@ -26,11 +26,13 @@
 #include "rspamadm.h"
 #include "cfg_file.h"
 #include "cfg_rcl.h"
+#include "utlist.h"
 #include "rspamd.h"
 
 static gboolean json = FALSE;
 static gboolean compact = FALSE;
 static gchar *config = NULL;
+static gchar **sections = NULL;
 extern struct rspamd_main *rspamd_main;
 /* Defined in modules.c */
 extern module_t *modules[];
@@ -53,6 +55,8 @@ static GOptionEntry entries[] = {
 				"Compacted json output", NULL},
 		{"config", 'c', 0, G_OPTION_ARG_STRING, &config,
 				"Config file to test",     NULL},
+		{"section", 's', 0, G_OPTION_ARG_STRING_ARRAY, &sections,
+				"Sections to dump",      NULL},
 		{NULL,  0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -63,11 +67,12 @@ rspamadm_configdump_help (gboolean full_help)
 
 	if (full_help) {
 		help_str = "Perform configuration file dump\n\n"
-				"Usage: rspamadm configdump [-c <config_name> -j --compact]\n"
+				"Usage: rspamadm configdump [-c <config_name> -j --compact [-s <section> [-s <section>]]]\n"
 				"Where options are:\n\n"
 				"-j: output plain json\n"
 				"--compact: output compacted json\n"
 				"-c: config file to test\n"
+				"-s: specify section to dump (can be multiple)\n"
 				"--help: shows available options and commands";
 	}
 	else {
@@ -94,15 +99,38 @@ config_logger (rspamd_mempool_t *pool, gpointer ud)
 }
 
 static void
+rspamadm_dump_section_obj (const ucl_object_t *obj)
+{
+	rspamd_fstring_t *output;
+
+	output = rspamd_fstring_new ();
+
+	if (json) {
+		rspamd_ucl_emit_fstring (obj, UCL_EMIT_JSON, &output);
+	}
+	else if (compact) {
+		rspamd_ucl_emit_fstring (obj, UCL_EMIT_JSON_COMPACT, &output);
+	}
+	else {
+		rspamd_ucl_emit_fstring (obj, UCL_EMIT_CONFIG, &output);
+	}
+
+	rspamd_printf ("%V", output);
+
+	rspamd_fstring_free (output);
+}
+
+static void
 rspamadm_configdump (gint argc, gchar **argv)
 {
 	GOptionContext *context;
 	GError *error = NULL;
 	const gchar *confdir;
+	const ucl_object_t *obj, *cur;
 	struct rspamd_config *cfg = rspamd_main->cfg;
 	gboolean ret = FALSE;
 	worker_t **pworker;
-	GString *output;
+	gchar **sec;
 
 	context = g_option_context_new (
 			"keypair - create encryption keys");
@@ -168,21 +196,41 @@ rspamadm_configdump (gint argc, gchar **argv)
 
 	if (ret) {
 		/* Output configuration */
-		output = g_string_new ("");
 
-		if (json) {
-			rspamd_ucl_emit_gstring (cfg->rcl_obj, UCL_EMIT_JSON, output);
-		}
-		else if (compact) {
-			rspamd_ucl_emit_gstring (cfg->rcl_obj, UCL_EMIT_JSON_COMPACT, output);
+
+		if (!sections) {
+			rspamadm_dump_section_obj (cfg->rcl_obj);
 		}
 		else {
-			rspamd_ucl_emit_gstring (cfg->rcl_obj, UCL_EMIT_CONFIG, output);
+			sec = sections;
+
+			while (*sec != NULL) {
+				obj = ucl_object_find_key (cfg->rcl_obj, *sec);
+
+				if (!obj) {
+					rspamd_printf ("Section %s NOT FOUND\n", *sec);
+				}
+				else {
+					LL_FOREACH (obj, cur) {
+						if (!json && !compact) {
+							rspamd_printf ("*** Section %s ***\n", *sec);
+						}
+						rspamadm_dump_section_obj (cur);
+
+						if (!json && !compact) {
+							rspamd_printf ("*** End of section %s ***\n", *sec);
+						}
+						else {
+							rspamd_printf ("\n");
+						}
+					}
+				}
+
+				sec ++;
+			}
+
+			g_strfreev (sections);
 		}
-
-		rspamd_printf ("%v", output);
-
-		g_string_free (output, TRUE);
 	}
 
 	if (!ret) {
