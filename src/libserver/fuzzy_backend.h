@@ -35,7 +35,8 @@ struct rspamd_fuzzy_backend;
  * @param err error pointer
  * @return backend structure or NULL
  */
-struct rspamd_fuzzy_backend* rspamd_fuzzy_backend_open (const gchar *path,
+struct rspamd_fuzzy_backend *rspamd_fuzzy_backend_open (const gchar *path,
+		gboolean vacuum,
 		GError **err);
 
 /**

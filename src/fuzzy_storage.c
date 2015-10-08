@@ -507,6 +507,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	struct rspamd_fuzzy_storage_ctx *ctx = worker->ctx;
 	GError *err = NULL;
 	gdouble next_check;
+	struct event usr2_
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"fuzzy",
@@ -514,7 +515,10 @@ start_fuzzy (struct rspamd_worker *worker)
 	server_stat = worker->srv->stat;
 
 
-	if ((ctx->backend = rspamd_fuzzy_backend_open (ctx->hashfile, &err)) == NULL) {
+	/*
+	 * Open DB and perform VACUUM
+	 */
+	if ((ctx->backend = rspamd_fuzzy_backend_open (ctx->hashfile, TRUE, &err)) == NULL) {
 		msg_err ("cannot open backend: %e", err);
 		g_error_free (err);
 		exit (EXIT_SUCCESS);

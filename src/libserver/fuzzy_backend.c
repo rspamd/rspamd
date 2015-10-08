@@ -407,8 +407,10 @@ rspamd_fuzzy_backend_open_db (const gchar *path, GError **err)
 	return bk;
 }
 
-struct rspamd_fuzzy_backend*
-rspamd_fuzzy_backend_open (const gchar *path, GError **err)
+struct rspamd_fuzzy_backend *
+rspamd_fuzzy_backend_open (const gchar *path,
+		gboolean vacuum,
+		GError **err)
 {
 	gchar *dir;
 	gint fd;
@@ -494,7 +496,11 @@ rspamd_fuzzy_backend_open (const gchar *path, GError **err)
 				sqlite3_errmsg (backend->db));
 	}
 
-	rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_VACUUM, backend, NULL);
+	if (vacuum) {
+		rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_VACUUM,
+				backend,
+				NULL);
+	}
 
 	if (rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_COUNT)
 			== SQLITE_OK) {
