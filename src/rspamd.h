@@ -43,14 +43,16 @@
  * Worker process structure
  */
 struct rspamd_worker {
-	pid_t pid;                                                  /**< pid of worker									*/
-	guint index;                                                /**< index number									*/
-	struct rspamd_main *srv;                                    /**< pointer to server structure					*/
-	GQuark type;                                                /**< process type									*/
-	GHashTable *signal_events;									/**< signal events									*/
-	GList *accept_events;                                       /**< socket events									*/
-	struct rspamd_worker_conf *cf;                                      /**< worker config data								*/
-	gpointer ctx;                                               /**< worker's specific data							*/
+	pid_t pid;                      /**< pid of worker									*/
+	guint index;                    /**< index number									*/
+	struct rspamd_main *srv;        /**< pointer to server structure					*/
+	GQuark type;                    /**< process type									*/
+	GHashTable *signal_events;      /**< signal events									*/
+	GList *accept_events;           /**< socket events									*/
+	struct rspamd_worker_conf *cf;  /**< worker config data								*/
+	gpointer ctx;                   /**< worker's specific data							*/
+	gint control_pipe[2];           /**< control pipe. [0] is used by main process,
+	                                                   [1] is used by a worker			*/
 };
 
 struct rspamd_worker_signal_handler;

@@ -473,35 +473,41 @@ fork_worker (struct rspamd_main *rspamd, struct rspamd_worker_conf *cf,
 {
 	struct rspamd_worker *cur;
 	/* Starting worker process */
-	cur = (struct rspamd_worker *)g_malloc (sizeof (struct rspamd_worker));
-	if (cur) {
-		bzero (cur, sizeof (struct rspamd_worker));
-		cur->srv = rspamd;
-		cur->type = cf->type;
-		cur->pid = fork ();
-		cur->cf = g_malloc (sizeof (struct rspamd_worker_conf));
-		memcpy (cur->cf, cf, sizeof (struct rspamd_worker_conf));
-		cur->index = index;
-		cur->ctx = cf->ctx;
-		switch (cur->pid) {
-		case 0:
-			/* Update pid for logging */
-			rspamd_log_update_pid (cf->type, rspamd->logger);
-			/* Lock statfile pool if possible XXX */
-			/* Init PRNG after fork */
-			ottery_init (NULL);
-			g_random_set_seed (ottery_rand_uint32 ());
-			/* Drop privilleges */
-			drop_priv (rspamd);
-			/* Set limits */
-			set_worker_limits (cf);
-			setproctitle ("%s process", cf->worker->name);
-			rspamd_pidfile_close (rspamd->pfh);
-			/* Do silent log reopen to avoid collisions */
-			rspamd_log_close (rspamd->logger);
-			rspamd_log_open (rspamd->logger);
+	cur = (struct rspamd_worker *)g_malloc0 (sizeof (struct rspamd_worker));
+
+	if (!rspamd_socketpair (cur->control_pipe)) {
+		msg_err ("socketpair failure: %s", strerror (errno));
+		exit (-errno);
+	}
+
+	cur->srv = rspamd;
+	cur->type = cf->type;
+	cur->cf = g_malloc (sizeof (struct rspamd_worker_conf));
+	memcpy (cur->cf, cf, sizeof (struct rspamd_worker_conf));
+	cur->index = index;
+	cur->ctx = cf->ctx;
+
+	cur->pid = fork ();
+
+	switch (cur->pid) {
+	case 0:
+		/* Update pid for logging */
+		rspamd_log_update_pid (cf->type, rspamd->logger);
+		/* Lock statfile pool if possible XXX */
+		/* Init PRNG after fork */
+		ottery_init (NULL);
+		g_random_set_seed (ottery_rand_uint32 ());
+		/* Drop privilleges */
+		drop_priv (rspamd);
+		/* Set limits */
+		set_worker_limits (cf);
+		setproctitle ("%s process", cf->worker->name);
+		rspamd_pidfile_close (rspamd->pfh);
+		/* Do silent log reopen to avoid collisions */
+		rspamd_log_close (rspamd->logger);
+		rspamd_log_open (rspamd->logger);
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
-# if (GLIB_MINOR_VERSION > 20)
+		# if (GLIB_MINOR_VERSION > 20)
 			/* Ugly hack for old glib */
 			if (!g_thread_get_initialized ()) {
 				g_thread_init (NULL);
@@ -510,20 +516,28 @@ fork_worker (struct rspamd_main *rspamd, struct rspamd_worker_conf *cf,
 			g_thread_init (NULL);
 # endif
 #endif
-			msg_info_main ("starting %s process %P", cf->worker->name, getpid ());
-			cf->worker->worker_start_func (cur);
-			break;
-		case -1:
-			msg_err_main ("cannot fork main process. %s", strerror (errno));
-			rspamd_pidfile_remove (rspamd->pfh);
-			exit (-errno);
-			break;
-		default:
-			/* Insert worker into worker's table, pid is index */
-			g_hash_table_insert (rspamd->workers, GSIZE_TO_POINTER (
-					cur->pid), cur);
-			break;
-		}
+		msg_info_main ("starting %s process %P", cf->worker->name, getpid ());
+		/* Close parent part of socketpair */
+		close (cur->control_pipe[0]);
+		/* Set non-blocking on the worker part of socketpair */
+		rspamd_socket_nonblocking (cur->control_pipe[1]);
+		/* Execute worker */
+		cf->worker->worker_start_func (cur);
+		break;
+	case -1:
+		msg_err_main ("cannot fork main process. %s", strerror (errno));
+		rspamd_pidfile_remove (rspamd->pfh);
+		exit (-errno);
+		break;
+	default:
+		/* Close worker part of socketpair */
+		close (cur->control_pipe[1]);
+		/* Set blocking on the main part of socketpair */
+		rspamd_socket_nonblocking (cur->control_pipe[0]);
+		/* Insert worker into worker's table, pid is index */
+		g_hash_table_insert (rspamd->workers, GSIZE_TO_POINTER (
+				cur->pid), cur);
+		break;
 	}
 
 	return cur;
