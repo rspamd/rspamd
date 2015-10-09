@@ -285,8 +285,8 @@ rspamd_parse_unix_path (rspamd_inet_addr_t **target, const char *src)
 	#endif
 
 	addr->u.un->mode = 00644;
-	addr->u.un->mode = 0;
-	addr->u.un->group = 0;
+	addr->u.un->owner = (uid_t)-1;
+	addr->u.un->group = (gid_t)-1;
 
 	cur_tok = &tokens[1];
 	pwlen = sysconf (_SC_GETPW_R_SIZE_MAX);
@@ -602,11 +602,15 @@ rspamd_inet_address_listen (const rspamd_inet_addr_t *addr, gint type,
 		if (addr->af == AF_UNIX) {
 			path = addr->u.un->addr.sun_path;
 			/* Try to set mode and owner */
-			if (chown (path, addr->u.un->owner, addr->u.un->group) == -1) {
-				msg_info ("cannot change owner for %s to %d:%d: %s",
-						path, addr->u.un->owner, addr->u.un->group,
-						strerror (errno));
+
+			if (addr->u.un->owner != (uid_t)-1 || addr->u.un->group != (gid_t)-1) {
+				if (chown (path, addr->u.un->owner, addr->u.un->group) == -1) {
+					msg_info ("cannot change owner for %s to %d:%d: %s",
+							path, addr->u.un->owner, addr->u.un->group,
+							strerror (errno));
+				}
 			}
+
 			if (chmod (path, addr->u.un->mode) == -1) {
 				msg_info ("cannot change mode for %s to %od %s",
 						path, addr->u.un->mode, strerror (errno));
