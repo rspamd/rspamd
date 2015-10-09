@@ -95,15 +95,12 @@
 #define SOFT_FORK_TIME 2
 
 /* 10 seconds after getting termination signal to terminate all workers with SIGKILL */
-#define HARD_TERMINATION_TIME 10
+#define TERMINATION_ATTEMPTS 40
 
 static struct rspamd_worker * fork_worker (struct rspamd_main *,
 	struct rspamd_worker_conf *, guint);
 static gboolean load_rspamd_config (struct rspamd_config *cfg,
 	gboolean init_modules);
-
-/* Signals */
-static sig_atomic_t got_alarm = 0;
 
 /* Control socket */
 static gint control_fd;
@@ -126,6 +123,8 @@ static gboolean encrypt_password = FALSE;
 /* List of workers that are pending to start */
 static GList *workers_pending = NULL;
 static GHashTable *ucl_vars = NULL;
+
+static guint term_attempts = 0;
 
 /* List of unrelated forked processes */
 static GArray *other_workers = NULL;
@@ -711,30 +710,24 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 	struct rspamd_worker *w = value;
 	gint res = 0;
 
-	if (got_alarm) {
-		got_alarm = 0;
-		/* Set alarm for hard termination but with less time */
-		set_alarm (HARD_TERMINATION_TIME / 10);
-	}
-
-	if (waitpid (w->pid, &res, 0) == -1) {
-		if (errno == EINTR) {
-			got_alarm = 1;
+	if (waitpid (w->pid, &res, WNOHANG) <= 0) {
+		if (term_attempts == 0) {
 			if (w->cf->worker->killable) {
 				msg_info_main ("terminate worker %P with SIGKILL", w->pid);
 				kill (w->pid, SIGKILL);
 			}
 			else {
 				msg_info_main ("waiting for workers to sync");
-				wait_for_workers (key, value, unused);
-				return TRUE;
+				return FALSE;
 			}
 		}
+
+		return FALSE;
 	}
 
 	msg_info_main ("%s process %P terminated %s", g_quark_to_string (
 			w->type), w->pid,
-		got_alarm ? "hardly" : "softly");
+			WTERMSIG (res) == SIGKILL ? "hardly" : "softly");
 	g_free (w->cf);
 	g_free (w);
 
@@ -913,12 +906,26 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 		g_free (cur);
 	}
 	else {
-		for (i = 0; i < (gint) other_workers->len; i++) {
+		for (i = 0; i < other_workers->len; i++) {
 			if (g_array_index (other_workers, pid_t, i) == wrk) {
 				g_array_remove_index_fast (other_workers, i);
 				msg_info_main ("related process %P terminated", wrk);
 			}
 		}
+	}
+}
+
+static void
+rspamd_final_term_handler (gint signo, short what, gpointer arg)
+{
+	struct event_base *ev_base = arg;
+
+	term_attempts --;
+
+	g_hash_table_foreach_remove (rspamd_main->workers, wait_for_workers, NULL);
+
+	if (g_hash_table_size (rspamd_main->workers) == 0) {
+		event_base_loopexit (ev_base, NULL);
 	}
 }
 
@@ -932,6 +939,7 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_inet_addr_t *control_addr = NULL;
 	struct event_base *ev_base;
 	struct event term_ev, int_ev, cld_ev, hup_ev, usr1_ev, control_ev;
+	struct timeval term_tv;
 
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
 	g_thread_init (NULL);
@@ -1189,14 +1197,26 @@ main (gint argc, gchar **argv, gchar **env)
 	/* Set alarm for hard termination */
 	if (getenv ("G_SLICE") != NULL) {
 		/* Special case if we are likely running with valgrind */
-		set_alarm (HARD_TERMINATION_TIME * 10);
+		term_attempts = TERMINATION_ATTEMPTS * 10;
 	}
 	else {
-		set_alarm (HARD_TERMINATION_TIME);
+		term_attempts = TERMINATION_ATTEMPTS;
 	}
+
+	/* Check each 200 ms */
+	term_tv.tv_sec = 0;
+	term_tv.tv_usec = 200;
 
 	/* Wait for workers termination */
 	g_hash_table_foreach_remove (rspamd_main->workers, wait_for_workers, NULL);
+
+	event_del (&term_ev);
+	event_set (&term_ev, -1, EV_TIMEOUT|EV_PERSIST,
+			rspamd_final_term_handler, ev_base);
+	event_base_set (ev_base, &term_ev);
+	event_add (&term_ev, &term_tv);
+
+	event_base_loop (ev_base, 0);
 
 	/* Maybe save roll history */
 	if (rspamd_main->cfg->history_file) {
@@ -1215,7 +1235,7 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_config_free (rspamd_main->cfg);
 	g_free (rspamd_main->cfg);
 	g_free (rspamd_main);
-
+	event_base_free (ev_base);
 	g_mime_shutdown ();
 
 #ifdef HAVE_OPENSSL
