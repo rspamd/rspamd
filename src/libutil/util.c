@@ -691,6 +691,12 @@ rspamd_signals_init (struct sigaction *signals, void (*sig_handler)(gint))
 	sigaction (SIGUSR1, signals, NULL);
 	sigaction (SIGUSR2, signals, NULL);
 	sigaction (SIGALRM, signals, NULL);
+#ifdef SIGPOLL
+	sigaction (SIGPOLL, signals, NULL);
+#endif
+#ifdef SIGIO
+	sigaction (SIGIO, signals, NULL);
+#endif
 
 	/* Ignore SIGPIPE as we handle write errors manually */
 	sigemptyset (&sigpipe_act.sa_mask);
