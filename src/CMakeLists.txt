@@ -85,7 +85,7 @@ SET(PLUGINSSRC	plugins/surbl.c
 				plugins/chartable.c
 				plugins/fuzzy_check.c
 				plugins/spf.c
-				plugins/dkim_check.c libutil/unix-std.h)
+				plugins/dkim_check.c libutil/unix-std.h libserver/rspamd_control.c libserver/rspamd_control.h)
 				
 SET(MODULES_LIST surbl regexp chartable fuzzy_check spf dkim)
 SET(WORKERS_LIST normal controller smtp_proxy fuzzy lua http_proxy)

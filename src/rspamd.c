@@ -28,6 +28,7 @@
 #include "fuzzy_storage.h"
 #include "lua/lua_common.h"
 #include "libserver/worker_util.h"
+#include "libserver/rspamd_control.h"
 #include "ottery.h"
 #include "xxhash.h"
 #include "utlist.h"
@@ -74,33 +75,15 @@
 #include <openssl/evp.h>
 #endif
 
-#define msg_err_main(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
-        rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
-        G_STRFUNC, \
-        __VA_ARGS__)
-#define msg_warn_main(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
-        rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
-        G_STRFUNC, \
-        __VA_ARGS__)
-#define msg_info_main(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
-        rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
-        G_STRFUNC, \
-        __VA_ARGS__)
-#define msg_debug_main(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
-        rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
-        G_STRFUNC, \
-        __VA_ARGS__)
-
 /* 2 seconds to fork new process in place of dead one */
 #define SOFT_FORK_TIME 2
 
 /* 10 seconds after getting termination signal to terminate all workers with SIGKILL */
 #define TERMINATION_ATTEMPTS 40
 
-static struct rspamd_worker * fork_worker (struct rspamd_main *,
-	struct rspamd_worker_conf *, guint);
-static gboolean load_rspamd_config (struct rspamd_config *cfg,
-	gboolean init_modules);
+static gboolean load_rspamd_config (struct rspamd_main *rspamd_main,
+		struct rspamd_config *cfg,
+		gboolean init_modules);
 
 /* Control socket */
 static gint control_fd;
@@ -129,8 +112,6 @@ static GArray *other_workers = NULL;
 
 /* List of active listen sockets indexed by worker type */
 static GHashTable *listen_sockets = NULL;
-
-struct rspamd_main *rspamd_main;
 
 /* Defined in modules.c */
 extern module_t *modules[];
@@ -224,7 +205,7 @@ read_cmd_line (gint *argc, gchar ***argv, struct rspamd_config *cfg)
 
 /* Detect privilleged mode */
 static void
-detect_priv (struct rspamd_main *rspamd)
+detect_priv (struct rspamd_main *rspamd_main)
 {
 	struct passwd *pwd;
 	struct group *grp;
@@ -233,104 +214,82 @@ detect_priv (struct rspamd_main *rspamd)
 	euid = geteuid ();
 
 	if (euid == 0) {
-		if (!rspamd->cfg->rspamd_user && !is_insecure) {
+		if (!rspamd_main->cfg->rspamd_user && !is_insecure) {
 			msg_err_main (
 				"cannot run rspamd workers as root user, please add -u and -g options to select a proper unprivilleged user or specify --insecure flag");
 			exit (EXIT_FAILURE);
 		}
 		else if (is_insecure) {
-			rspamd->is_privilleged = TRUE;
-			rspamd->workers_uid = 0;
-			rspamd->workers_gid = 0;
+			rspamd_main->is_privilleged = TRUE;
+			rspamd_main->workers_uid = 0;
+			rspamd_main->workers_gid = 0;
 		}
 		else {
-			rspamd->is_privilleged = TRUE;
-			pwd = getpwnam (rspamd->cfg->rspamd_user);
+			rspamd_main->is_privilleged = TRUE;
+			pwd = getpwnam (rspamd_main->cfg->rspamd_user);
 			if (pwd == NULL) {
 				msg_err_main ("user specified does not exists (%s), aborting",
 					strerror (errno));
 				exit (-errno);
 			}
-			if (rspamd->cfg->rspamd_group) {
-				grp = getgrnam (rspamd->cfg->rspamd_group);
+			if (rspamd_main->cfg->rspamd_group) {
+				grp = getgrnam (rspamd_main->cfg->rspamd_group);
 				if (grp == NULL) {
 					msg_err_main ("group specified does not exists (%s), aborting",
 						strerror (errno));
 					exit (-errno);
 				}
-				rspamd->workers_gid = grp->gr_gid;
+				rspamd_main->workers_gid = grp->gr_gid;
 			}
 			else {
-				rspamd->workers_gid = (gid_t)-1;
+				rspamd_main->workers_gid = (gid_t)-1;
 			}
-			rspamd->workers_uid = pwd->pw_uid;
+			rspamd_main->workers_uid = pwd->pw_uid;
 		}
 	}
 	else {
-		rspamd->is_privilleged = FALSE;
-		rspamd->workers_uid = (uid_t)-1;
-		rspamd->workers_gid = (gid_t)-1;
-	}
-}
-
-static void
-drop_priv (struct rspamd_main *rspamd)
-{
-	if (rspamd->is_privilleged) {
-		if (setgid (rspamd->workers_gid) == -1) {
-			msg_err_main ("cannot setgid to %d (%s), aborting",
-				(gint)rspamd->workers_gid,
-				strerror (errno));
-			exit (-errno);
-		}
-		if (rspamd->cfg->rspamd_user &&
-			initgroups (rspamd->cfg->rspamd_user, rspamd->workers_gid) == -1) {
-			msg_err_main ("initgroups failed (%s), aborting", strerror (errno));
-			exit (-errno);
-		}
-		if (setuid (rspamd->workers_uid) == -1) {
-			msg_err_main ("cannot setuid to %d (%s), aborting",
-				(gint)rspamd->workers_uid,
-				strerror (errno));
-			exit (-errno);
-		}
+		rspamd_main->is_privilleged = FALSE;
+		rspamd_main->workers_uid = (uid_t)-1;
+		rspamd_main->workers_gid = (gid_t)-1;
 	}
 }
 
 static void
 config_logger (rspamd_mempool_t *pool, gpointer ud)
 {
-	struct rspamd_main *rm = ud;
+	struct rspamd_main *rspamd_main = ud;
 
 	if (config_test) {
 		/* Explicitly set logger type to console in case of config testing */
-		rm->cfg->log_type = RSPAMD_LOG_CONSOLE;
+		rspamd_main->cfg->log_type = RSPAMD_LOG_CONSOLE;
 	}
 
-	rspamd_set_logger (rm->cfg, g_quark_try_string ("main"), rm);
-	if (rspamd_log_open_priv (rm->logger, rm->workers_uid, rm->workers_gid) == -1) {
+	rspamd_set_logger (rspamd_main->cfg, g_quark_try_string ("main"),
+			rspamd_main);
+	if (rspamd_log_open_priv (rspamd_main->logger,
+			rspamd_main->workers_uid, rspamd_main->workers_gid) == -1) {
 		fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
 		exit (EXIT_FAILURE);
 	}
 }
 
 static void
-reread_config (struct rspamd_main *rspamd)
+reread_config (struct rspamd_main *rspamd_main)
 {
 	struct rspamd_config *tmp_cfg;
 	gchar *cfg_file;
 
 	tmp_cfg = (struct rspamd_config *)g_malloc0 (sizeof (struct rspamd_config));
-	tmp_cfg->c_modules = g_hash_table_ref (rspamd->cfg->c_modules);
-	rspamd_set_logger (tmp_cfg,  g_quark_try_string ("main"), rspamd);
+	tmp_cfg->c_modules = g_hash_table_ref (rspamd_main->cfg->c_modules);
+	rspamd_set_logger (tmp_cfg,  g_quark_try_string ("main"), rspamd_main);
 	rspamd_init_cfg (tmp_cfg, TRUE);
 	cfg_file = rspamd_mempool_strdup (tmp_cfg->cfg_pool,
-			rspamd->cfg->cfg_name);
+			rspamd_main->cfg->cfg_name);
 	tmp_cfg->cache = rspamd_symbols_cache_new (tmp_cfg);
 	/* Save some variables */
 	tmp_cfg->cfg_name = cfg_file;
 
-	if (!load_rspamd_config (tmp_cfg, FALSE)) {
+	if (!load_rspamd_config (rspamd_main, tmp_cfg, FALSE)) {
 		rspamd_set_logger (rspamd_main->cfg, g_quark_try_string (
 				"main"), rspamd_main);
 		msg_err_main ("cannot parse new config file, revert to old one");
@@ -339,128 +298,24 @@ reread_config (struct rspamd_main *rspamd)
 	else {
 		msg_debug_main ("replacing config");
 		rspamd_symbols_cache_destroy (rspamd_main->cfg->cache);
-		rspamd_config_free (rspamd->cfg);
-		g_free (rspamd->cfg);
+		rspamd_config_free (rspamd_main->cfg);
+		g_free (rspamd_main->cfg);
 
-		rspamd->cfg = tmp_cfg;
-		rspamd_set_logger (tmp_cfg,  g_quark_try_string ("main"), rspamd);
+		rspamd_main->cfg = tmp_cfg;
+		rspamd_set_logger (tmp_cfg,  g_quark_try_string ("main"), rspamd_main);
 		/* Force debug log */
 		if (is_debug) {
-			rspamd->cfg->log_level = G_LOG_LEVEL_DEBUG;
+			rspamd_main->cfg->log_level = G_LOG_LEVEL_DEBUG;
 		}
 
-		rspamd_init_filters (rspamd->cfg, TRUE);
-		rspamd_symbols_cache_init (rspamd->cfg->cache);
+		rspamd_init_filters (rspamd_main->cfg, TRUE);
+		rspamd_symbols_cache_init (rspamd_main->cfg->cache);
 		msg_info_main ("config has been reread successfully");
 	}
 }
 
-static void
-set_worker_limits (struct rspamd_worker_conf *cf)
-{
-	struct rlimit rlmt;
-
-	if (cf->rlimit_nofile != 0) {
-		rlmt.rlim_cur = (rlim_t) cf->rlimit_nofile;
-		rlmt.rlim_max = (rlim_t) cf->rlimit_nofile;
-
-		if (setrlimit (RLIMIT_NOFILE, &rlmt) == -1) {
-			msg_warn_main ("cannot set files rlimit: %d, %s",
-				cf->rlimit_nofile,
-				strerror (errno));
-		}
-	}
-
-	if (cf->rlimit_maxcore != 0) {
-		rlmt.rlim_cur = (rlim_t) cf->rlimit_maxcore;
-		rlmt.rlim_max = (rlim_t) cf->rlimit_maxcore;
-
-		if (setrlimit (RLIMIT_CORE, &rlmt) == -1) {
-			msg_warn_main ("cannot set max core rlimit: %d, %s",
-				cf->rlimit_maxcore,
-				strerror (errno));
-		}
-	}
-}
-
-static struct rspamd_worker *
-fork_worker (struct rspamd_main *rspamd, struct rspamd_worker_conf *cf,
-		guint index)
-{
-	struct rspamd_worker *cur;
-	/* Starting worker process */
-	cur = (struct rspamd_worker *)g_malloc0 (sizeof (struct rspamd_worker));
-
-	if (!rspamd_socketpair (cur->control_pipe)) {
-		msg_err ("socketpair failure: %s", strerror (errno));
-		exit (-errno);
-	}
-
-	cur->srv = rspamd;
-	cur->type = cf->type;
-	cur->cf = g_malloc (sizeof (struct rspamd_worker_conf));
-	memcpy (cur->cf, cf, sizeof (struct rspamd_worker_conf));
-	cur->index = index;
-	cur->ctx = cf->ctx;
-
-	cur->pid = fork ();
-
-	switch (cur->pid) {
-	case 0:
-		/* Update pid for logging */
-		rspamd_log_update_pid (cf->type, rspamd->logger);
-		/* Lock statfile pool if possible XXX */
-		/* Init PRNG after fork */
-		ottery_init (NULL);
-		g_random_set_seed (ottery_rand_uint32 ());
-		/* Drop privilleges */
-		drop_priv (rspamd);
-		/* Set limits */
-		set_worker_limits (cf);
-		setproctitle ("%s process", cf->worker->name);
-		rspamd_pidfile_close (rspamd->pfh);
-		/* Do silent log reopen to avoid collisions */
-		rspamd_log_close (rspamd->logger);
-		rspamd_log_open (rspamd->logger);
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
-		# if (GLIB_MINOR_VERSION > 20)
-			/* Ugly hack for old glib */
-			if (!g_thread_get_initialized ()) {
-				g_thread_init (NULL);
-			}
-# else
-			g_thread_init (NULL);
-# endif
-#endif
-		msg_info_main ("starting %s process %P", cf->worker->name, getpid ());
-		/* Close parent part of socketpair */
-		close (cur->control_pipe[0]);
-		/* Set non-blocking on the worker part of socketpair */
-		rspamd_socket_nonblocking (cur->control_pipe[1]);
-		/* Execute worker */
-		cf->worker->worker_start_func (cur);
-		break;
-	case -1:
-		msg_err_main ("cannot fork main process. %s", strerror (errno));
-		rspamd_pidfile_remove (rspamd->pfh);
-		exit (-errno);
-		break;
-	default:
-		/* Close worker part of socketpair */
-		close (cur->control_pipe[1]);
-		/* Set blocking on the main part of socketpair */
-		rspamd_socket_nonblocking (cur->control_pipe[0]);
-		/* Insert worker into worker's table, pid is index */
-		g_hash_table_insert (rspamd->workers, GSIZE_TO_POINTER (
-				cur->pid), cur);
-		break;
-	}
-
-	return cur;
-}
-
 struct waiting_worker {
-	struct event_base *ev_base;
+	struct rspamd_main *rspamd_main;
 	struct event wait_ev;
 	struct rspamd_worker_conf *cf;
 	guint oldindex;
@@ -472,14 +327,14 @@ rspamd_fork_delayed_cb (gint signo, short what, gpointer arg)
 	struct waiting_worker *w = arg;
 
 	event_del (&w->wait_ev);
-	fork_worker (rspamd_main, w->cf, w->oldindex);
+	rspamd_fork_worker (w->rspamd_main, w->cf, w->oldindex);
 	g_slice_free1 (sizeof (*w), w);
 }
 
 static void
 rspamd_fork_delayed (struct rspamd_worker_conf *cf,
 		guint index,
-		struct event_base *ev_base)
+		struct rspamd_main *rspamd_main)
 {
 	struct waiting_worker *nw;
 	struct timeval tv;
@@ -487,11 +342,11 @@ rspamd_fork_delayed (struct rspamd_worker_conf *cf,
 	nw = g_slice_alloc (sizeof (*nw));
 	nw->cf = cf;
 	nw->oldindex = index;
-	nw->ev_base = ev_base;
+	nw->rspamd_main = rspamd_main;
 	tv.tv_sec = SOFT_FORK_TIME;
 	tv.tv_usec = 0;
 	event_set (&nw->wait_ev, -1, EV_TIMEOUT, rspamd_fork_delayed_cb, nw);
-	event_base_set (ev_base, &nw->wait_ev);
+	event_base_set (rspamd_main->ev_base, &nw->wait_ev);
 	event_add (&nw->wait_ev, &tv);
 }
 
@@ -515,7 +370,7 @@ create_listen_socket (GPtrArray *addrs, guint cnt, gint listen_type)
 }
 
 static GList *
-systemd_get_socket (gint number)
+systemd_get_socket (struct rspamd_main *rspamd_main, gint number)
 {
 	int sock, num_passed, flags;
 	GList *result = NULL;
@@ -590,7 +445,7 @@ make_listen_key (struct rspamd_worker_bind_conf *cf)
 }
 
 static void
-spawn_workers (struct rspamd_main *rspamd)
+spawn_workers (struct rspamd_main *rspamd_main)
 {
 	GList *cur, *ls;
 	struct rspamd_worker_conf *cf;
@@ -600,7 +455,7 @@ spawn_workers (struct rspamd_main *rspamd)
 	struct rspamd_worker_bind_conf *bcf;
 	gboolean listen_ok = FALSE;
 
-	cur = rspamd->cfg->workers;
+	cur = rspamd_main->cfg->workers;
 
 	while (cur) {
 		cf = cur->data;
@@ -622,7 +477,7 @@ spawn_workers (struct rspamd_main *rspamd)
 									cf->worker->listen_type);
 						}
 						else {
-							ls = systemd_get_socket (bcf->cnt);
+							ls = systemd_get_socket (rspamd_main, bcf->cnt);
 						}
 						if (ls == NULL) {
 							msg_err_main ("cannot listen on socket %s: %s",
@@ -652,14 +507,14 @@ spawn_workers (struct rspamd_main *rspamd)
 						msg_warn_main ("cannot spawn more than 1 %s worker, so spawn one",
 								cf->worker->name);
 					}
-					fork_worker (rspamd, cf, 0);
+					rspamd_fork_worker (rspamd_main, cf, 0);
 				}
 				else if (cf->worker->threaded) {
-					fork_worker (rspamd, cf, 0);
+					rspamd_fork_worker (rspamd_main, cf, 0);
 				}
 				else {
 					for (i = 0; i < cf->count; i++) {
-						fork_worker (rspamd, cf, i);
+						rspamd_fork_worker (rspamd_main, cf, i);
 					}
 				}
 			}
@@ -679,7 +534,9 @@ static void
 kill_old_workers (gpointer key, gpointer value, gpointer unused)
 {
 	struct rspamd_worker *w = value;
+	struct rspamd_main *rspamd_main;
 
+	rspamd_main = w->srv;
 	kill (w->pid, SIGUSR2);
 	msg_info_main ("send signal to worker %P", w->pid);
 }
@@ -688,7 +545,10 @@ static gboolean
 wait_for_workers (gpointer key, gpointer value, gpointer unused)
 {
 	struct rspamd_worker *w = value;
+	struct rspamd_main *rspamd_main;
 	gint res = 0;
+
+	rspamd_main = w->srv;
 
 	if (waitpid (w->pid, &res, WNOHANG) <= 0) {
 		if (term_attempts == 0) {
@@ -718,6 +578,9 @@ static void
 reopen_log_handler (gpointer key, gpointer value, gpointer unused)
 {
 	struct rspamd_worker *w = value;
+	struct rspamd_main *rspamd_main;
+
+	rspamd_main = w->srv;
 
 	if (kill (w->pid, SIGUSR1) == -1) {
 		msg_err_main ("kill failed for pid %P: %s", w->pid, strerror (errno));
@@ -725,7 +588,8 @@ reopen_log_handler (gpointer key, gpointer value, gpointer unused)
 }
 
 static gboolean
-load_rspamd_config (struct rspamd_config *cfg, gboolean init_modules)
+load_rspamd_config (struct rspamd_main *rspamd_main,
+		struct rspamd_config *cfg, gboolean init_modules)
 {
 	cfg->cache = rspamd_symbols_cache_new (cfg);
 	cfg->compiled_modules = modules;
@@ -782,17 +646,19 @@ do_encrypt_password (void)
 static void
 rspamd_term_handler (gint signo, short what, gpointer arg)
 {
-	struct event_base *ev_base = arg;
+	struct rspamd_main *rspamd_main = arg;
 
 	msg_info_main ("catch termination signal, waiting for children");
 	rspamd_pass_signal (rspamd_main->workers, SIGTERM);
 
-	event_base_loopexit (ev_base, NULL);
+	event_base_loopexit (rspamd_main->ev_base, NULL);
 }
 
 static void
 rspamd_usr1_handler (gint signo, short what, gpointer arg)
 {
+	struct rspamd_main *rspamd_main = arg;
+
 	rspamd_log_reopen_priv (rspamd_main->logger,
 			rspamd_main->workers_uid,
 			rspamd_main->workers_gid);
@@ -803,6 +669,8 @@ rspamd_usr1_handler (gint signo, short what, gpointer arg)
 static void
 rspamd_hup_handler (gint signo, short what, gpointer arg)
 {
+	struct rspamd_main *rspamd_main = arg;
+
 	rspamd_log_reopen_priv (rspamd_main->logger,
 			rspamd_main->workers_uid,
 			rspamd_main->workers_gid);
@@ -818,7 +686,7 @@ rspamd_hup_handler (gint signo, short what, gpointer arg)
 static void
 rspamd_cld_handler (gint signo, short what, gpointer arg)
 {
-	struct event_base *ev_base = arg;
+	struct rspamd_main *rspamd_main = arg;
 	guint i;
 	gint res = 0;
 	struct rspamd_worker *cur;
@@ -876,7 +744,7 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 						WEXITSTATUS (res));
 			}
 			/* Fork another worker in replace of dead one */
-			rspamd_fork_delayed (cur->cf, cur->index, ev_base);
+			rspamd_fork_delayed (cur->cf, cur->index, rspamd_main);
 		}
 
 		g_free (cur);
@@ -894,14 +762,14 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 static void
 rspamd_final_term_handler (gint signo, short what, gpointer arg)
 {
-	struct event_base *ev_base = arg;
+	struct rspamd_main *rspamd_main = arg;
 
 	term_attempts --;
 
 	g_hash_table_foreach_remove (rspamd_main->workers, wait_for_workers, NULL);
 
 	if (g_hash_table_size (rspamd_main->workers) == 0) {
-		event_base_loopexit (ev_base, NULL);
+		event_base_loopexit (rspamd_main->ev_base, NULL);
 	}
 }
 
@@ -909,6 +777,7 @@ rspamd_final_term_handler (gint signo, short what, gpointer arg)
 static void
 rspamd_control_handler (gint fd, short what, gpointer arg)
 {
+	struct rspamd_main *rspamd_main = arg;
 	rspamd_inet_addr_t *addr;
 	gint nfd;
 
@@ -937,6 +806,7 @@ main (gint argc, gchar **argv, gchar **env)
 	struct event_base *ev_base;
 	struct event term_ev, int_ev, cld_ev, hup_ev, usr1_ev, control_ev;
 	struct timeval term_tv;
+	struct rspamd_main *rspamd_main;
 
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
 	g_thread_init (NULL);
@@ -1041,7 +911,7 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	/* Load config */
-	if (!load_rspamd_config (rspamd_main->cfg, TRUE)) {
+	if (!load_rspamd_config (rspamd_main, rspamd_main->cfg, TRUE)) {
 		exit (EXIT_FAILURE);
 	}
 
@@ -1140,24 +1010,25 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Init event base */
 	ev_base = event_init ();
+	rspamd_main->ev_base = ev_base;
 	/* Unblock signals */
 	sigemptyset (&signals.sa_mask);
 	sigprocmask (SIG_SETMASK, &signals.sa_mask, NULL);
 
 	/* Set events for signals */
-	evsignal_set (&term_ev, SIGTERM, rspamd_term_handler, ev_base);
+	evsignal_set (&term_ev, SIGTERM, rspamd_term_handler, rspamd_main);
 	event_base_set (ev_base, &term_ev);
 	event_add (&term_ev, NULL);
-	evsignal_set (&int_ev, SIGINT, rspamd_term_handler, ev_base);
+	evsignal_set (&int_ev, SIGINT, rspamd_term_handler, rspamd_main);
 	event_base_set (ev_base, &int_ev);
 	event_add (&int_ev, NULL);
-	evsignal_set (&hup_ev, SIGHUP, rspamd_hup_handler, ev_base);
+	evsignal_set (&hup_ev, SIGHUP, rspamd_hup_handler, rspamd_main);
 	event_base_set (ev_base, &hup_ev);
 	event_add (&hup_ev, NULL);
-	evsignal_set (&cld_ev, SIGCHLD, rspamd_cld_handler, ev_base);
+	evsignal_set (&cld_ev, SIGCHLD, rspamd_cld_handler, rspamd_main);
 	event_base_set (ev_base, &cld_ev);
 	event_add (&cld_ev, NULL);
-	evsignal_set (&usr1_ev, SIGUSR1, rspamd_usr1_handler, ev_base);
+	evsignal_set (&usr1_ev, SIGUSR1, rspamd_usr1_handler, rspamd_main);
 	event_base_set (ev_base, &usr1_ev);
 	event_add (&usr1_ev, NULL);
 
@@ -1165,7 +1036,7 @@ main (gint argc, gchar **argv, gchar **env)
 		msg_info_main ("listening for control commands on %s",
 				rspamd_inet_address_to_string (control_addr));
 		event_set (&control_ev, control_fd, EV_READ|EV_PERSIST,
-				rspamd_control_handler, ev_base);
+				rspamd_control_handler, rspamd_main);
 		event_base_set (ev_base, &control_ev);
 		event_add (&control_ev, NULL);
 	}
@@ -1194,7 +1065,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	event_del (&term_ev);
 	event_set (&term_ev, -1, EV_TIMEOUT|EV_PERSIST,
-			rspamd_final_term_handler, ev_base);
+			rspamd_final_term_handler, rspamd_main);
 	event_base_set (ev_base, &term_ev);
 	event_add (&term_ev, &term_tv);
 

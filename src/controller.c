@@ -107,7 +107,6 @@ const struct timeval rrd_update_time = {
 		.tv_usec = 0
 };
 
-extern struct rspamd_main *rspamd_main;
 gpointer init_controller_worker (struct rspamd_config *cfg);
 void start_controller_worker (struct rspamd_worker *worker);
 
@@ -2545,7 +2544,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	g_mime_shutdown ();
 	rspamd_stat_close ();
 	rspamd_http_router_free (ctx->http);
-	rspamd_log_close (rspamd_main->logger);
+	rspamd_log_close (worker->srv->logger);
 	rspamd_controller_store_saved_stats (ctx);
 
 	if (ctx->rrd) {

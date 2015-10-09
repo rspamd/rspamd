@@ -39,7 +39,7 @@
 
 /* Rotate keys each minute by default */
 #define DEFAULT_ROTATION_TIME 60.0
-extern struct rspamd_main *rspamd_main;
+
 gpointer init_http_proxy (struct rspamd_config *cfg);
 void start_http_proxy (struct rspamd_worker *worker);
 
@@ -473,7 +473,7 @@ start_http_proxy (struct rspamd_worker *worker)
 	event_base_loop (ctx->ev_base, 0);
 
 	g_mime_shutdown ();
-	rspamd_log_close (rspamd_main->logger);
+	rspamd_log_close (worker->srv->logger);
 
 	if (ctx->key) {
 		rspamd_http_connection_key_unref (ctx->key);

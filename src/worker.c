@@ -44,7 +44,6 @@
 
 /* 60 seconds for worker's IO */
 #define DEFAULT_WORKER_IO_TIMEOUT 60000
-extern struct rspamd_main *rspamd_main;
 
 gpointer init_worker (struct rspamd_config *cfg);
 void start_worker (struct rspamd_worker *worker);
@@ -334,7 +333,7 @@ start_worker (struct rspamd_worker *worker)
 
 	g_mime_shutdown ();
 	rspamd_stat_close ();
-	rspamd_log_close (rspamd_main->logger);
+	rspamd_log_close (worker->srv->logger);
 
 	if (ctx->key) {
 		rspamd_http_connection_key_unref (ctx->key);

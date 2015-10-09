@@ -43,9 +43,6 @@
 #define DEFAULT_PROXY_BUF_LEN 100 * 1024
 
 #define SMTP_MAXERRORS 15
-
-extern struct rspamd_main *rspamd_main;
-
 /* Init functions */
 gpointer init_smtp_proxy (struct rspamd_config *cfg);
 void start_smtp_proxy (struct rspamd_worker *worker);
@@ -659,7 +656,7 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 	case SMTP_PROXY_STATE_RESOLVE_REVERSE:
 		/* Parse reverse reply and start resolve of this ip */
 		if (reply->code != RDNS_RC_NOERROR) {
-			rspamd_conditional_debug (rspamd_main->logger,
+			rspamd_conditional_debug (session->worker->srv->logger,
 				NULL, "rdns", NULL, G_STRFUNC, "DNS error: %s",
 				rdns_strerror (reply->code));
 
@@ -688,7 +685,7 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 		break;
 	case SMTP_PROXY_STATE_RESOLVE_NORMAL:
 		if (reply->code != RDNS_RC_NOERROR) {
-			rspamd_conditional_debug (rspamd_main->logger,
+			rspamd_conditional_debug (session->worker->srv->logger,
 				NULL, "rdns", NULL, G_STRFUNC, "DNS error: %s",
 				rdns_strerror (reply->code));
 
@@ -1083,7 +1080,7 @@ start_smtp_proxy (struct rspamd_worker *worker)
 
 	event_base_loop (ctx->ev_base, 0);
 
-	rspamd_log_close (rspamd_main->logger);
+	rspamd_log_close (worker->srv->logger);
 	exit (EXIT_SUCCESS);
 }
 

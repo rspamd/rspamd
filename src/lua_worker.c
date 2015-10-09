@@ -43,7 +43,7 @@
 
 /* 60 seconds for worker's IO */
 #define DEFAULT_WORKER_IO_TIMEOUT 60000
-extern struct rspamd_main *rspamd_main;
+
 gpointer init_lua_worker (struct rspamd_config *cfg);
 void start_lua_worker (struct rspamd_worker *worker);
 
@@ -409,7 +409,7 @@ start_lua_worker (struct rspamd_worker *worker)
 		luaL_unref (L, LUA_REGISTRYINDEX, ctx->cbref_fin);
 	}
 
-	rspamd_log_close (rspamd_main->logger);
+	rspamd_log_close (worker->srv->logger);
 	exit (EXIT_SUCCESS);
 }
 
