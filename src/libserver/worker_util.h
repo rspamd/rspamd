@@ -111,4 +111,27 @@ worker_t * rspamd_get_worker_by_type (struct rspamd_config *cfg, GQuark type);
 
 void rspamd_worker_stop_accept (struct rspamd_worker *worker);
 
+/**
+ * Fork new worker with the specified configuration
+ */
+struct rspamd_worker *rspamd_fork_worker (struct rspamd_main *,
+		struct rspamd_worker_conf *, guint);
+
+#define msg_err_main(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_main(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+        rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_main(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_main(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
 #endif /* WORKER_UTIL_H_ */

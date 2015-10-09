@@ -28,6 +28,7 @@
 #include "worker_util.h"
 #include "unix-std.h"
 #include "utlist.h"
+#include "ottery.h"
 
 #ifdef WITH_GPERF_TOOLS
 #include <google/profiler.h>
@@ -361,4 +362,136 @@ rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
 		entry->rt->ptv,
 		entry->rt->ev_base);
 	entry->is_reply = TRUE;
+}
+
+static void
+rspamd_worker_drop_priv (struct rspamd_main *rspamd_main)
+{
+	if (rspamd_main->is_privilleged) {
+		if (setgid (rspamd_main->workers_gid) == -1) {
+			msg_err_main ("cannot setgid to %d (%s), aborting",
+					(gint) rspamd_main->workers_gid,
+					strerror (errno));
+			exit (-errno);
+		}
+		if (rspamd_main->cfg->rspamd_user &&
+				initgroups (rspamd_main->cfg->rspamd_user, rspamd_main->workers_gid) ==
+						-1) {
+			msg_err_main ("initgroups failed (%s), aborting", strerror (errno));
+			exit (-errno);
+		}
+		if (setuid (rspamd_main->workers_uid) == -1) {
+			msg_err_main ("cannot setuid to %d (%s), aborting",
+					(gint) rspamd_main->workers_uid,
+					strerror (errno));
+			exit (-errno);
+		}
+	}
+}
+
+static void
+rspamd_worker_set_limits (struct rspamd_main *rspamd_main,
+		struct rspamd_worker_conf *cf)
+{
+	struct rlimit rlmt;
+
+	if (cf->rlimit_nofile != 0) {
+		rlmt.rlim_cur = (rlim_t) cf->rlimit_nofile;
+		rlmt.rlim_max = (rlim_t) cf->rlimit_nofile;
+
+		if (setrlimit (RLIMIT_NOFILE, &rlmt) == -1) {
+			msg_warn_main ("cannot set files rlimit: %d, %s",
+					cf->rlimit_nofile,
+					strerror (errno));
+		}
+	}
+
+	if (cf->rlimit_maxcore != 0) {
+		rlmt.rlim_cur = (rlim_t) cf->rlimit_maxcore;
+		rlmt.rlim_max = (rlim_t) cf->rlimit_maxcore;
+
+		if (setrlimit (RLIMIT_CORE, &rlmt) == -1) {
+			msg_warn_main ("cannot set max core rlimit: %d, %s",
+					cf->rlimit_maxcore,
+					strerror (errno));
+		}
+	}
+}
+
+struct rspamd_worker *
+rspamd_fork_worker (struct rspamd_main *rspamd_main,
+		struct rspamd_worker_conf *cf,
+		guint index)
+{
+	struct rspamd_worker *cur;
+	/* Starting worker process */
+	cur = (struct rspamd_worker *) g_malloc0 (sizeof (struct rspamd_worker));
+
+	if (!rspamd_socketpair (cur->control_pipe)) {
+		msg_err ("socketpair failure: %s", strerror (errno));
+		exit (-errno);
+	}
+
+	cur->srv = rspamd_main;
+	cur->type = cf->type;
+	cur->cf = g_malloc (sizeof (struct rspamd_worker_conf));
+	memcpy (cur->cf, cf, sizeof (struct rspamd_worker_conf));
+	cur->index = index;
+	cur->ctx = cf->ctx;
+
+	cur->pid = fork ();
+
+	switch (cur->pid) {
+	case 0:
+		/* Update pid for logging */
+		rspamd_log_update_pid (cf->type, rspamd_main->logger);
+		/* Lock statfile pool if possible XXX */
+		/* Init PRNG after fork */
+		ottery_init (NULL);
+		g_random_set_seed (ottery_rand_uint32 ());
+		/* Drop privilleges */
+		rspamd_worker_drop_priv (rspamd_main);
+		/* Set limits */
+		rspamd_worker_set_limits (rspamd_main, cf);
+		setproctitle ("%s process", cf->worker->name);
+		rspamd_pidfile_close (rspamd_main->pfh);
+		/* Do silent log reopen to avoid collisions */
+		rspamd_log_close (rspamd_main->logger);
+		rspamd_log_open (rspamd_main->logger);
+
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
+# if (GLIB_MINOR_VERSION > 20)
+		/* Ugly hack for old glib */
+		if (!g_thread_get_initialized ()) {
+			g_thread_init (NULL);
+		}
+# else
+		g_thread_init (NULL);
+# endif
+#endif
+		msg_info_main ("starting %s process %P", cf->worker->name, getpid ());
+		/* Close parent part of socketpair */
+		close (cur->control_pipe[0]);
+		/* Set non-blocking on the worker part of socketpair */
+		rspamd_socket_nonblocking (cur->control_pipe[1]);
+		/* Execute worker */
+		cf->worker->worker_start_func (cur);
+		break;
+	case -1:
+		msg_err_main ("cannot fork main process. %s", strerror (errno));
+		rspamd_pidfile_remove (rspamd_main->pfh);
+		exit (-errno);
+		break;
+	default:
+		/* Close worker part of socketpair */
+		close (cur->control_pipe[1]);
+		/* Set blocking on the main part of socketpair */
+		rspamd_socket_nonblocking (cur->control_pipe[0]);
+		/* Insert worker into worker's table, pid is index */
+		g_hash_table_insert (rspamd_main->workers, GSIZE_TO_POINTER (
+				cur->pid), cur);
+		break;
+	}
+
+	return cur;
 }
