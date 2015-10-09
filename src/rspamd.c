@@ -120,8 +120,6 @@ static gboolean is_debug = FALSE;
 static gboolean is_insecure = FALSE;
 static gboolean gen_keypair = FALSE;
 static gboolean encrypt_password = FALSE;
-/* List of workers that are pending to start */
-static GList *workers_pending = NULL;
 static GHashTable *ucl_vars = NULL;
 
 static guint term_attempts = 0;
@@ -461,41 +459,40 @@ fork_worker (struct rspamd_main *rspamd, struct rspamd_worker_conf *cf,
 	return cur;
 }
 
-static void
-set_alarm (guint seconds)
-{
-#ifdef HAVE_SETITIMER
-	static struct itimerval itv;
-
-	itv.it_interval.tv_sec = 0;
-	itv.it_interval.tv_usec = 0;
-	itv.it_value.tv_sec = seconds;
-	itv.it_value.tv_usec = 0;
-
-	if (setitimer (ITIMER_REAL, &itv, NULL) == -1) {
-		msg_err_main ("set alarm failed: %s", strerror (errno));
-	}
-#else
-	(void)alarm (seconds);
-#endif
-}
-
 struct waiting_worker {
+	struct event_base *ev_base;
+	struct event wait_ev;
 	struct rspamd_worker_conf *cf;
 	guint oldindex;
 };
 
 static void
-delay_fork (struct rspamd_worker_conf *cf, guint index)
+rspamd_fork_delayed_cb (gint signo, short what, gpointer arg)
+{
+	struct waiting_worker *w = arg;
+
+	event_del (&w->wait_ev);
+	fork_worker (rspamd_main, w->cf, w->oldindex);
+	g_slice_free1 (sizeof (*w), w);
+}
+
+static void
+rspamd_fork_delayed (struct rspamd_worker_conf *cf,
+		guint index,
+		struct event_base *ev_base)
 {
 	struct waiting_worker *nw;
+	struct timeval tv;
 
 	nw = g_slice_alloc (sizeof (*nw));
 	nw->cf = cf;
 	nw->oldindex = index;
-
-	workers_pending = g_list_prepend (workers_pending, nw);
-	set_alarm (SOFT_FORK_TIME);
+	nw->ev_base = ev_base;
+	tv.tv_sec = SOFT_FORK_TIME;
+	tv.tv_usec = 0;
+	event_set (&nw->wait_ev, -1, EV_TIMEOUT, rspamd_fork_delayed_cb, nw);
+	event_base_set (ev_base, &nw->wait_ev);
+	event_add (&nw->wait_ev, &tv);
 }
 
 static GList *
@@ -561,23 +558,6 @@ systemd_get_socket (gint number)
 	}
 
 	return result;
-}
-
-static void
-fork_delayed (struct rspamd_main *rspamd)
-{
-	GList *cur;
-	struct waiting_worker *w;
-
-	while (workers_pending != NULL) {
-		cur = workers_pending;
-		w = cur->data;
-
-		workers_pending = g_list_remove_link (workers_pending, cur);
-		fork_worker (rspamd, w->cf, w->oldindex);
-		g_list_free_1 (cur);
-		g_slice_free1 (sizeof (*w), w);
-	}
 }
 
 static inline uintptr_t
@@ -813,8 +793,6 @@ rspamd_term_handler (gint signo, short what, gpointer arg)
 static void
 rspamd_usr1_handler (gint signo, short what, gpointer arg)
 {
-	struct event_base *ev_base = arg;
-
 	rspamd_log_reopen_priv (rspamd_main->logger,
 			rspamd_main->workers_uid,
 			rspamd_main->workers_gid);
@@ -825,8 +803,6 @@ rspamd_usr1_handler (gint signo, short what, gpointer arg)
 static void
 rspamd_hup_handler (gint signo, short what, gpointer arg)
 {
-	struct event_base *ev_base = arg;
-
 	rspamd_log_reopen_priv (rspamd_main->logger,
 			rspamd_main->workers_uid,
 			rspamd_main->workers_gid);
@@ -900,7 +876,7 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 						WEXITSTATUS (res));
 			}
 			/* Fork another worker in replace of dead one */
-			delay_fork (cur->cf, cur->index);
+			rspamd_fork_delayed (cur->cf, cur->index, ev_base);
 		}
 
 		g_free (cur);
@@ -1194,7 +1170,6 @@ main (gint argc, gchar **argv, gchar **env)
 
 	event_base_loop (ev_base, 0);
 
-	/* Set alarm for hard termination */
 	if (getenv ("G_SLICE") != NULL) {
 		/* Special case if we are likely running with valgrind */
 		term_attempts = TERMINATION_ATTEMPTS * 10;
@@ -1245,7 +1220,3 @@ main (gint argc, gchar **argv, gchar **env)
 
 	return (res);
 }
-
-/*
- * vi:ts=4
- */
