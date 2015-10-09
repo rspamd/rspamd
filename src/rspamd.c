@@ -905,6 +905,27 @@ rspamd_final_term_handler (gint signo, short what, gpointer arg)
 	}
 }
 
+/* Control socket handler */
+static void
+rspamd_control_handler (gint fd, short what, gpointer arg)
+{
+	rspamd_inet_addr_t *addr;
+	gint nfd;
+
+	if ((nfd =
+				 rspamd_accept_from_socket (fd, &addr)) == -1) {
+		msg_warn_main ("accept failed: %s", strerror (errno));
+		return;
+	}
+	/* Check for EAGAIN */
+	if (nfd == 0) {
+		return;
+	}
+
+	msg_info_main ("accepted control connection from %s",
+			rspamd_inet_address_to_string (addr));
+}
+
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
@@ -1096,40 +1117,12 @@ main (gint argc, gchar **argv, gchar **env)
 		}
 		else {
 			control_fd = rspamd_inet_address_listen (control_addr, SOCK_STREAM,
-					FALSE);
+					TRUE);
 			if (control_fd == -1) {
 				msg_err_main ("cannot open control socket at path: %s",
 						rspamd_main->cfg->control_socket_path);
 			}
-			else {
-				/* Generate SIGIO on reads from this socket */
-				if (fcntl (control_fd, F_SETOWN, getpid ()) == -1) {
-					msg_err_main ("fnctl to set F_SETOWN failed: %s",
-							strerror (errno));
-				}
-#ifdef HAVE_SETSIG
-				if (ioctl (control_fd, I_SETSIG, S_INPUT) == -1) {
-					msg_err_main ("ioctl I_SETSIG to set S_INPUT failed: %s",
-							strerror (errno));
-				}
-#elif defined(HAVE_OASYNC)
-				gint flags = fcntl (control_fd, F_GETFL);
-
-				if (flags == -1 || fcntl (control_fd, F_SETFL,
-						flags | O_ASYNC | O_NONBLOCK) == -1) {
-					msg_err_main ("fnctl F_SETFL to set O_ASYNC failed: %s",
-							strerror (errno));
-				}
-#else
-				msg_err_main ("cannot get notifications about the control socket");
-#endif
-			}
 		}
-	}
-
-	if (control_fd != -1) {
-		msg_info_main ("listening for control commands on %s",
-				rspamd_inet_address_to_string (control_addr));
 	}
 
 	/* Maybe read roll history */
@@ -1168,7 +1161,21 @@ main (gint argc, gchar **argv, gchar **env)
 	event_base_set (ev_base, &usr1_ev);
 	event_add (&usr1_ev, NULL);
 
+	if (control_fd != -1) {
+		msg_info_main ("listening for control commands on %s",
+				rspamd_inet_address_to_string (control_addr));
+		event_set (&control_ev, control_fd, EV_READ|EV_PERSIST,
+				rspamd_control_handler, ev_base);
+		event_base_set (ev_base, &control_ev);
+		event_add (&control_ev, NULL);
+	}
+
 	event_base_loop (ev_base, 0);
+
+	if (control_fd != -1) {
+		event_del (&control_ev);
+		close (control_fd);
+	}
 
 	if (getenv ("G_SLICE") != NULL) {
 		/* Special case if we are likely running with valgrind */
@@ -1200,10 +1207,6 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	msg_info_main ("terminating...");
-
-	if (control_fd != -1) {
-		close (control_fd);
-	}
 
 	rspamd_symbols_cache_destroy (rspamd_main->cfg->cache);
 	rspamd_log_close (rspamd_main->logger);
