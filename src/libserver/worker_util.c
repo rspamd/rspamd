@@ -33,6 +33,17 @@
 #ifdef WITH_GPERF_TOOLS
 #include <google/profiler.h>
 #endif
+/* sys/resource.h */
+#ifdef HAVE_SYS_RESOURCE_H
+#include <sys/resource.h>
+#endif
+/* pwd and grp */
+#ifdef HAVE_PWD_H
+#include <pwd.h>
+#endif
+#ifdef HAVE_GRP_H
+#include <grp.h>
+#endif
 
 /**
  * Return worker's control structure by its type

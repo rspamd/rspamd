@@ -49,10 +49,6 @@
 #ifdef HAVE_SIGINFO_H
 #include <siginfo.h>
 #endif
-/* sys/resource.h */
-#ifdef HAVE_SYS_RESOURCE_H
-#include <sys/resource.h>
-#endif
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>
 #endif
