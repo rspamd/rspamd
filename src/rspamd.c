@@ -70,11 +70,8 @@
 #endif
 
 #ifdef HAVE_OPENSSL
-#include <openssl/rand.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
-#include <openssl/rsa.h>
-#include <openssl/pem.h>
 #endif
 
 #define msg_err_main(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
@@ -791,223 +788,21 @@ load_rspamd_config (struct rspamd_config *cfg, gboolean init_modules)
 static gint
 perform_lua_tests (struct rspamd_config *cfg)
 {
-	gint i, tests_num, res = EXIT_SUCCESS;
-	gchar *cur_script;
-	lua_State *L = cfg->lua_state;
-
-	tests_num = g_strv_length (lua_tests);
-
-	for (i = 0; i < tests_num; i++) {
-
-		if (luaL_loadfile (L, lua_tests[i]) != 0) {
-			msg_err_main ("load of %s failed: %s", lua_tests[i],
-				lua_tostring (L, -1));
-			res = EXIT_FAILURE;
-			continue;
-		}
-
-		cur_script = g_strdup (lua_tests[i]);
-		lua_pushstring (L, cur_script);
-		lua_setglobal (L, "test_script");
-		lua_pushstring (L, dirname (cur_script));
-		lua_setglobal (L, "test_dir");
-		g_free (cur_script);
-
-		/* do the call (0 arguments, N result) */
-		if (lua_pcall (L, 0, LUA_MULTRET, 0) != 0) {
-			msg_info_main ("init of %s failed: %s", lua_tests[i], lua_tostring (L,
-				-1));
-			res = EXIT_FAILURE;
-			continue;
-		}
-		if (lua_gettop (L) != 0) {
-			if (lua_tonumber (L, -1) == -1) {
-				msg_info_main ("%s returned -1 that indicates configuration error",
-					lua_tests[i]);
-				res = EXIT_FAILURE;
-				continue;
-			}
-			lua_pop (L, lua_gettop (L));
-		}
-	}
-
-	return res;
+	rspamd_fprintf (stderr, "use rspamadm lua for this operation\n");
+	return EXIT_FAILURE;
 }
 
 static gint
 perform_configs_sign (void)
 {
-#ifndef HAVE_OPENSSL
-	msg_err_main ("cannot sign files without openssl support");
+	rspamd_fprintf (stderr, "use rspamadm sign for this operation\n");
 	return EXIT_FAILURE;
-#else
-# if (OPENSSL_VERSION_NUMBER < 0x10000000L)
-	msg_err_main ("must have openssl at least 1.0.0 to perform this action");
-	return EXIT_FAILURE;
-# else
-	gint i, tests_num, res = EXIT_SUCCESS, fd;
-	guint diglen;
-	gchar *cur_file, in_file[PATH_MAX],
-		out_file[PATH_MAX], dig[EVP_MAX_MD_SIZE];
-	gsize siglen;
-	struct stat st;
-	gpointer map, sig;
-	EVP_PKEY *key = NULL;
-	BIO *fbio;
-	EVP_PKEY_CTX *key_ctx = NULL;
-	EVP_MD_CTX *sign_ctx = NULL;
-
-	/* Load private key */
-	fbio = BIO_new_file (privkey, "r");
-	if (fbio == NULL) {
-		msg_err_main ("cannot open private key %s, %s", privkey,
-			ERR_error_string (ERR_get_error (), NULL));
-		return ERR_get_error ();
-	}
-	if (!PEM_read_bio_PrivateKey (fbio, &key, rspamd_read_passphrase, NULL)) {
-		msg_err_main ("cannot read private key %s, %s", privkey,
-			ERR_error_string (ERR_get_error (), NULL));
-		return ERR_get_error ();
-	}
-
-	key_ctx = EVP_PKEY_CTX_new (key, NULL);
-	if (key_ctx == NULL) {
-		msg_err_main ("cannot parse private key %s, %s", privkey,
-			ERR_error_string (ERR_get_error (), NULL));
-		return ERR_get_error ();
-	}
-
-	if (EVP_PKEY_sign_init (key_ctx) <= 0) {
-		msg_err_main ("cannot parse private key %s, %s", privkey,
-			ERR_error_string (ERR_get_error (), NULL));
-		return ERR_get_error ();
-	}
-	if (EVP_PKEY_CTX_set_rsa_padding (key_ctx, RSA_PKCS1_PADDING) <= 0) {
-		msg_err_main ("cannot init private key %s, %s", privkey,
-			ERR_error_string (ERR_get_error (), NULL));
-		return ERR_get_error ();
-	}
-	if (EVP_PKEY_CTX_set_signature_md (key_ctx, EVP_sha256 ()) <= 0) {
-		msg_err_main ("cannot init signature private key %s, %s", privkey,
-			ERR_error_string (ERR_get_error (), NULL));
-		return ERR_get_error ();
-	}
-
-	sign_ctx = EVP_MD_CTX_create ();
-
-	tests_num = g_strv_length (sign_configs);
-
-	for (i = 0; i < tests_num; i++) {
-		cur_file = sign_configs[i];
-		if (realpath (cur_file, in_file) == NULL) {
-			msg_err_main ("cannot resolve %s: %s", cur_file, strerror (errno));
-			continue;
-		}
-		if (stat (in_file, &st) == -1) {
-			msg_err_main ("cannot stat %s: %s", in_file, strerror (errno));
-			continue;
-		}
-		if ((fd = open (in_file, O_RDONLY)) == -1) {
-			msg_err_main ("cannot open %s: %s", in_file, strerror (errno));
-			continue;
-		}
-
-		if ((map =
-			mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd,
-			0)) == MAP_FAILED) {
-			close (fd);
-			msg_err_main ("cannot mmap %s: %s", in_file, strerror (errno));
-			continue;
-		}
-
-		close (fd);
-		/* Now try to sign */
-		EVP_DigestInit (sign_ctx, EVP_sha256 ());
-		EVP_DigestUpdate (sign_ctx, map, st.st_size);
-		EVP_DigestFinal (sign_ctx, dig, &diglen);
-
-		munmap (map, st.st_size);
-
-		if (EVP_PKEY_sign (key_ctx, NULL, &siglen, dig, diglen) <= 0) {
-			msg_err_main ("cannot sign %s using private key %s, %s",
-				in_file,
-				privkey,
-				ERR_error_string (ERR_get_error (), NULL));
-			continue;
-		}
-
-		sig = OPENSSL_malloc (siglen);
-		if (EVP_PKEY_sign (key_ctx, sig, &siglen, dig, diglen) <= 0) {
-			msg_err_main ("cannot sign %s using private key %s, %s",
-				in_file,
-				privkey,
-				ERR_error_string (ERR_get_error (), NULL));
-			OPENSSL_free (sig);
-			continue;
-		}
-
-		rspamd_snprintf (out_file, sizeof (out_file), "%s.sig", in_file);
-		fd = open (out_file, O_WRONLY | O_CREAT | O_TRUNC, 00644);
-		if (fd == -1) {
-			msg_err_main ("cannot open output file %s: %s", out_file, strerror (
-					errno));
-			OPENSSL_free (sig);
-			continue;
-		}
-		if (write (fd, sig, siglen) == -1) {
-			msg_err_main ("cannot write to output file %s: %s", out_file,
-				strerror (errno));
-		}
-		OPENSSL_free (sig);
-		close (fd);
-	}
-
-	/* Cleanup */
-	EVP_MD_CTX_destroy (sign_ctx);
-	EVP_PKEY_CTX_free (key_ctx);
-	EVP_PKEY_free (key);
-	BIO_free (fbio);
-
-	return res;
-# endif
-#endif
 }
 
 static void
 do_encrypt_password (void)
 {
-	const struct rspamd_controller_pbkdf *pbkdf;
-	guchar *salt, *key;
-	gchar *encoded_salt, *encoded_key;
-	gchar password[8192];
-	gsize plen;
-
-	pbkdf = &pbkdf_list[0];
-	g_assert (pbkdf != NULL);
-
-	plen = rspamd_read_passphrase (password, sizeof (password), 0, NULL);
-
-	if (plen == 0) {
-		fprintf (stderr, "Invalid password\n");
-		exit (EXIT_FAILURE);
-	}
-
-	salt = g_alloca (pbkdf->salt_len);
-	key = g_alloca (pbkdf->key_len);
-	ottery_rand_bytes (salt, pbkdf->salt_len);
-	/* Derive key */
-	rspamd_cryptobox_pbkdf (password, strlen (password),
-			salt, pbkdf->salt_len, key, pbkdf->key_len, pbkdf->rounds);
-
-	encoded_salt = rspamd_encode_base32 (salt, pbkdf->salt_len);
-	encoded_key = rspamd_encode_base32 (key, pbkdf->key_len);
-
-	rspamd_printf ("$%d$%s$%s\n", pbkdf->id, encoded_salt,
-			encoded_key);
-
-	g_free (encoded_salt);
-	g_free (encoded_key);
-	rspamd_explicit_memzero (password, sizeof (password));
+	rspamd_fprintf (stderr, "use rspamadm pw for this operation\n");
 }
 
 /* Signal handlers */
@@ -1134,8 +929,6 @@ main (gint argc, gchar **argv, gchar **env)
 	struct sigaction signals, sigpipe_act;
 	worker_t **pworker;
 	GQuark type;
-	gpointer keypair;
-	GString *keypair_out;
 	rspamd_inet_addr_t *control_addr = NULL;
 	struct event_base *ev_base;
 	struct event term_ev, int_ev, cld_ev, hup_ev, usr1_ev, control_ev;
@@ -1228,16 +1021,8 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Same for keypair creation */
 	if (gen_keypair) {
-		keypair = rspamd_http_connection_gen_key ();
-		if (keypair == NULL) {
-			exit (EXIT_FAILURE);
-		}
-		keypair_out = rspamd_http_connection_print_key (keypair,
-				RSPAMD_KEYPAIR_PUBKEY | RSPAMD_KEYPAIR_PRIVKEY |
-						RSPAMD_KEYPAIR_ID |
-						RSPAMD_KEYPAIR_BASE32 | RSPAMD_KEYPAIR_HUMAN);
-		rspamd_printf ("%v", keypair_out);
-		exit (EXIT_SUCCESS);
+		rspamd_fprintf (stderr, "use rspamadm keypair for this operation\n");
+		exit (EXIT_FAILURE);
 	}
 
 	if (encrypt_password) {
@@ -1246,32 +1031,8 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	if (rspamd_main->cfg->config_test || dump_cache) {
-		if (!load_rspamd_config (rspamd_main->cfg, FALSE)) {
-			exit (EXIT_FAILURE);
-		}
-
-		res = TRUE;
-
-		rspamd_symbols_cache_init (rspamd_main->cfg->cache);
-
-		if (!rspamd_init_filters (rspamd_main->cfg, FALSE)) {
-			res = FALSE;
-		}
-
-		/* Insert classifiers symbols */
-		rspamd_config_insert_classify_symbols (rspamd_main->cfg);
-
-		if (!rspamd_symbols_cache_validate (rspamd_main->cfg->cache,
-				rspamd_main->cfg,
-				FALSE)) {
-			res = FALSE;
-		}
-		if (dump_cache) {
-			msg_err_main ("Use rspamc counters for dumping cache");
-			exit (EXIT_FAILURE);
-		}
-		fprintf (stderr, "syntax %s\n", res ? "OK" : "BAD");
-		return res ? EXIT_SUCCESS : EXIT_FAILURE;
+		rspamd_fprintf (stderr, "use rspamadm configtest for this operation\n");
+		exit (EXIT_FAILURE);
 	}
 
 	/* Load config */
