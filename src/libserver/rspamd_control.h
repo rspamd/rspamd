@@ -25,6 +25,64 @@
 #ifndef RSPAMD_RSPAMD_CONTROL_H
 #define RSPAMD_RSPAMD_CONTROL_H
 
+#include "config.h"
 
+struct rspamd_main;
+struct rspamd_worker;
+
+enum rspamd_control_type {
+	RSPAMD_CONTROL_STAT = 0,
+	RSPAMD_CONTROL_RELOAD,
+	RSPAMD_CONTROL_MAX
+};
+
+struct rspamd_control_command {
+	enum rspamd_control_type type;
+	union {
+		struct {
+			guint unused;
+		} stat;
+		struct {
+			guint unused;
+		} reload;
+	} cmd;
+};
+
+struct rspamd_control_reply {
+	enum rspamd_control_type type;
+	union {
+		struct {
+			guint conns;
+			guint64 uptime;
+		} stat;
+		struct {
+			guint status;
+		} reload;
+	} reply;
+};
+
+typedef gboolean (*rspamd_worker_control_handler) (struct rspamd_main *rspamd_main,
+		struct rspamd_worker *worker, gint fd,
+		struct rspamd_control_command *cmd,
+		gpointer ud);
+
+/**
+ * Process client socket connection
+ */
+void rspamd_control_process_client_socket (struct rspamd_main *rspamd_main,
+		gint fd);
+
+/**
+ * Register default handlers for a worker
+ */
+void rspamd_control_worker_add_default_handler (struct rspamd_worker *worker);
+
+/**
+ * Register custom handler for a specific control command for this worker
+ */
+void rspamd_control_worker_add_cmd_handler (struct rspamd_worker *worker,
+		enum rspamd_control_type type,
+		rspamd_worker_control_handler handler,
+		gpointer ud);
 
 #endif
