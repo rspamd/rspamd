@@ -138,6 +138,7 @@ rspamd_cryptobox_init (void)
 	chacha_load ();
 	poly1305_load ();
 	siphash_load ();
+	curve25519_load ();
 }
 
 void

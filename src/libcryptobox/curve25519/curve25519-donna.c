@@ -891,10 +891,9 @@ static void crecip (limb *out, const limb *z)
 	/* 2^255 - 21 */fmul (out, t1, z11);
 }
 
-int curve25519 (u8 *mypublic, const u8 *secret, const u8 *basepoint)
+int scalarmult_donna32 (u8 *mypublic, const u8 *secret, const u8 *basepoint)
 {
 	limb bp[10], x[10], z[11], zmone[10];
-	int i;
 
 	fexpand (bp, basepoint);
 	cmult (x, z, secret, bp);
