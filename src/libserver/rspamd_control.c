@@ -334,12 +334,25 @@ rspamd_control_default_cmd_handler (gint fd,
 {
 	struct rspamd_control_reply rep;
 	gssize r;
+	struct rusage rusg;
 
 	memset (&rep, 0, sizeof (rep));
 	rep.type = cmd->type;
 
 	switch (cmd->type) {
 	case RSPAMD_CONTROL_STAT:
+		if (getrusage (RUSAGE_SELF, &rusg) == -1) {
+			msg_err ("cannot get rusage stats: %s",
+					strerror (errno));
+		}
+		else {
+			rep.reply.stat.utime = tv_to_double (&rusg.ru_utime);
+			rep.reply.stat.systime = tv_to_double (&rusg.ru_stime);
+			rep.reply.stat.maxrss = rusg.ru_maxrss;
+		}
+
+		rep.reply.stat.conns = cd->worker->nconns;
+		rep.reply.stat.utime = rspamd_get_calendar_ticks () - cd->worker->start_time;
 		break;
 	case RSPAMD_CONTROL_RELOAD:
 		break;

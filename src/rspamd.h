@@ -45,6 +45,8 @@
 struct rspamd_worker {
 	pid_t pid;                      /**< pid of worker									*/
 	guint index;                    /**< index number									*/
+	guint nconns;                   /**< current connections count						*/
+	gdouble start_time;             /**< start time										*/
 	struct rspamd_main *srv;        /**< pointer to server structure					*/
 	GQuark type;                    /**< process type									*/
 	GHashTable *signal_events;      /**< signal events									*/

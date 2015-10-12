@@ -193,6 +193,7 @@ void g_queue_clear (GQueue *queue);
 									   ((dbl) - (int)(dbl)) * 1000 * 1000; \
 } while (0)
 #define tv_to_msec(tv) ((tv)->tv_sec * 1000LLU + (tv)->tv_usec / 1000LLU)
+#define tv_to_double(tv) ((tv)->tv_sec + (tv)->tv_usec / 1e6f)
 #define ts_to_usec(ts) ((ts)->tv_sec * 1000000LLU +							\
 	(ts)->tv_nsec / 1000LLU)
 
