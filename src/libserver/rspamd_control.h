@@ -53,7 +53,10 @@ struct rspamd_control_reply {
 	union {
 		struct {
 			guint conns;
-			guint64 uptime;
+			gdouble uptime;
+			gdouble utime;
+			gdouble systime;
+			gulong maxrss;
 		} stat;
 		struct {
 			guint status;

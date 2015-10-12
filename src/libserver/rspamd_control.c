@@ -33,6 +33,10 @@ static struct timeval io_timeout = {
 		.tv_sec = 30,
 		.tv_usec = 0
 };
+static struct timeval worker_io_timeout = {
+		.tv_sec = 0,
+		.tv_usec = 500000
+};
 
 struct rspamd_control_session;
 
@@ -141,6 +145,50 @@ rspamd_control_connection_close (struct rspamd_control_session *session)
 }
 
 static void
+rspamd_control_write_reply (struct rspamd_control_session *session)
+{
+	ucl_object_t *rep, *cur;
+	struct rspamd_control_reply_elt *elt;
+	gchar tmpbuf[64];
+
+	rep = ucl_object_typed_new (UCL_OBJECT);
+
+	DL_FOREACH (session->replies, elt) {
+		rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "%p", elt->wrk->pid);
+		cur = ucl_object_typed_new (UCL_OBJECT);
+
+		ucl_object_insert_key (cur, ucl_object_fromstring (g_quark_to_string (
+				elt->wrk->type)), "type", 0, false);
+
+		switch (elt->session->cmd.type) {
+		case RSPAMD_CONTROL_STAT:
+			ucl_object_insert_key (cur, ucl_object_fromint (
+					elt->reply.reply.stat.conns), "conns", 0, false);
+			ucl_object_insert_key (cur, ucl_object_fromdouble (
+					elt->reply.reply.stat.utime), "utime", 0, false);
+			ucl_object_insert_key (cur, ucl_object_fromdouble (
+					elt->reply.reply.stat.systime), "systime", 0, false);
+			ucl_object_insert_key (cur, ucl_object_fromdouble (
+					elt->reply.reply.stat.uptime), "uptime", 0, false);
+			ucl_object_insert_key (cur, ucl_object_fromint (
+					elt->reply.reply.stat.maxrss), "maxrss", 0, false);
+			break;
+		case RSPAMD_CONTROL_RELOAD:
+			ucl_object_insert_key (cur, ucl_object_fromint (
+					elt->reply.reply.reload.status), "status", 0, false);
+			break;
+		default:
+			break;
+		}
+
+		ucl_object_insert_key (rep, cur, tmpbuf, 0, true);
+	}
+
+	rspamd_control_send_ucl (session, rep);
+	ucl_object_unref (rep);
+}
+
+static void
 rspamd_control_wrk_io (gint fd, short what, gpointer ud)
 {
 	struct rspamd_control_reply_elt *elt = ud;
@@ -155,7 +203,7 @@ rspamd_control_wrk_io (gint fd, short what, gpointer ud)
 	event_del (&elt->io_ev);
 
 	if (elt->session->replies_remain == 0) {
-		/* TODO: add reply logic */
+		rspamd_control_write_reply (elt->session);
 		rspamd_control_connection_close (elt->session);
 	}
 }
@@ -229,7 +277,7 @@ rspamd_control_finish_hadler (struct rspamd_http_connection *conn,
 							rep_elt);
 					event_base_set (session->rspamd_main->ev_base,
 							&rep_elt->io_ev);
-					event_add (&rep_elt->io_ev, &io_timeout);
+					event_add (&rep_elt->io_ev, &worker_io_timeout);
 
 					DL_APPEND (session->replies, rep_elt);
 					session->replies_remain ++;
