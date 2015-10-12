@@ -486,18 +486,29 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 				if (v) {
 					RSPAMD_PRINTF_APPEND (v->str, v->len);
 				}
+				else {
+					RSPAMD_PRINTF_APPEND ("(NULL)", 6);
+				}
 
 				continue;
 
 			case 'T':
 				tok = va_arg (args, rspamd_ftok_t *);
-				RSPAMD_PRINTF_APPEND (tok->begin, tok->len);
+				if (tok) {
+					RSPAMD_PRINTF_APPEND (tok->begin, tok->len);
+				}
+				else {
+					RSPAMD_PRINTF_APPEND ("(NULL)", 6);
+				}
 				continue;
 
 			case 'v':
 				gs = va_arg (args, GString *);
 				if (gs) {
 					RSPAMD_PRINTF_APPEND (gs->str, gs->len);
+				}
+				else {
+					RSPAMD_PRINTF_APPEND ("(NULL)", 6);
 				}
 
 				continue;
