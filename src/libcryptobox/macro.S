@@ -156,7 +156,7 @@
 
 /* pic support */
 .macro LOAD_VAR_PIC var, reg
-#if (IS_X86_32)
+#if !defined(__LP64__)
 	#if defined(HAVE_SLASHMACRO)
 		call 1f
 		1:
