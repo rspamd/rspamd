@@ -184,10 +184,16 @@ scalarmult_avx (unsigned char *q,
 	fe var[3];
 	fe51 x_51;
 	fe51 z_51;
+	unsigned char e[32];
+
+	memcpy (e, n, 32);
+	e[0] &= 248;
+	e[31] &= 127;
+	e[31] |= 64;
 
 	fe_frombytes (x1, p);
 
-	ladder_avx (var, n);
+	ladder_avx (var, e);
 
 	z_51.v[0] = (z2[1] << 26) + z2[0];
 	z_51.v[1] = (z2[3] << 26) + z2[2];

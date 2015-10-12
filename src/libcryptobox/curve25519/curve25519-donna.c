@@ -894,11 +894,18 @@ static void crecip (limb *out, const limb *z)
 int scalarmult_donna32 (u8 *mypublic, const u8 *secret, const u8 *basepoint)
 {
 	limb bp[10], x[10], z[11], zmone[10];
+	unsigned char e[32];
+
+	memcpy (e, secret, 32);
+	e[0] &= 248;
+	e[31] &= 127;
+	e[31] |= 64;
 
 	fexpand (bp, basepoint);
-	cmult (x, z, secret, bp);
+	cmult (x, z, e, bp);
 	crecip (zmone, z);
 	fmul (z, x, zmone);
 	fcontract (mypublic, z);
+
 	return 0;
 }

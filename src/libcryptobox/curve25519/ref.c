@@ -6,7 +6,10 @@ Derived from public domain code by D. J. Bernstein.
 20140216 tweak: Mask top bit of point input.
 */
 
-static void add (unsigned int out[32], const unsigned int a[32],
+#include "config.h"
+
+static void add (unsigned int out[32],
+		const unsigned int a[32],
 		const unsigned int b[32])
 {
 	unsigned int j;
@@ -21,7 +24,8 @@ static void add (unsigned int out[32], const unsigned int a[32],
 	out[31] = u;
 }
 
-static void sub (unsigned int out[32], const unsigned int a[32],
+static void curve25519_ref_sub (unsigned int out[32],
+		const unsigned int a[32],
 		const unsigned int b[32])
 {
 	unsigned int j;
@@ -36,7 +40,7 @@ static void sub (unsigned int out[32], const unsigned int a[32],
 	out[31] = u;
 }
 
-static void squeeze (unsigned int a[32])
+static void curve25519_ref_squeeze (unsigned int a[32])
 {
 	unsigned int j;
 	unsigned int u;
@@ -58,10 +62,12 @@ static void squeeze (unsigned int a[32])
 	a[31] = u;
 }
 
-static const unsigned int minusp[32] = { 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128 };
+static const unsigned int minusp[32] = {
+		19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 128
+};
 
-static void freeze (unsigned int a[32])
+static void curve25519_ref_freeze (unsigned int a[32])
 {
 	unsigned int aorig[32];
 	unsigned int j;
@@ -75,7 +81,8 @@ static void freeze (unsigned int a[32])
 		a[j] ^= negative & (aorig[j] ^ a[j]);
 }
 
-static void mult (unsigned int out[32], const unsigned int a[32],
+static void curve25519_ref_mult (unsigned int out[32],
+		const unsigned int a[32],
 		const unsigned int b[32])
 {
 	unsigned int i;
@@ -90,10 +97,10 @@ static void mult (unsigned int out[32], const unsigned int a[32],
 			u += 38 * a[j] * b[i + 32 - j];
 		out[i] = u;
 	}
-	squeeze (out);
+	curve25519_ref_squeeze (out);
 }
 
-static void mult121665 (unsigned int out[32], const unsigned int a[32])
+static void curve25519_ref_mult121665 (unsigned int out[32], const unsigned int a[32])
 {
 	unsigned int j;
 	unsigned int u;
@@ -116,7 +123,7 @@ static void mult121665 (unsigned int out[32], const unsigned int a[32])
 	out[j] = u;
 }
 
-static void square (unsigned int out[32], const unsigned int a[32])
+static void curve25519_ref_square (unsigned int out[32], const unsigned int a[32])
 {
 	unsigned int i;
 	unsigned int j;
@@ -135,11 +142,14 @@ static void square (unsigned int out[32], const unsigned int a[32])
 		}
 		out[i] = u;
 	}
-	squeeze (out);
+	curve25519_ref_squeeze (out);
 }
 
-static void select (unsigned int p[64], unsigned int q[64],
-		const unsigned int r[64], const unsigned int s[64], unsigned int b)
+static void curve25519_ref_select (unsigned int p[64],
+		unsigned int q[64],
+		const unsigned int r[64],
+		const unsigned int s[64],
+		unsigned int b)
 {
 	unsigned int j;
 	unsigned int t;
@@ -188,26 +198,26 @@ static void mainloop (unsigned int work[64], const unsigned char e[32])
 	for (pos = 254; pos >= 0; --pos) {
 		b = e[pos / 8] >> (pos & 7);
 		b &= 1;
-		select (xzmb, xzm1b, xzm, xzm1, b);
+		curve25519_ref_select (xzmb, xzm1b, xzm, xzm1, b);
 		add (a0, xzmb, xzmb + 32);
-		sub (a0 + 32, xzmb, xzmb + 32);
+		curve25519_ref_sub (a0 + 32, xzmb, xzmb + 32);
 		add (a1, xzm1b, xzm1b + 32);
-		sub (a1 + 32, xzm1b, xzm1b + 32);
-		square (b0, a0);
-		square (b0 + 32, a0 + 32);
-		mult (b1, a1, a0 + 32);
-		mult (b1 + 32, a1 + 32, a0);
+		curve25519_ref_sub (a1 + 32, xzm1b, xzm1b + 32);
+		curve25519_ref_square (b0, a0);
+		curve25519_ref_square (b0 + 32, a0 + 32);
+		curve25519_ref_mult (b1, a1, a0 + 32);
+		curve25519_ref_mult (b1 + 32, a1 + 32, a0);
 		add (c1, b1, b1 + 32);
-		sub (c1 + 32, b1, b1 + 32);
-		square (r, c1 + 32);
-		sub (s, b0, b0 + 32);
-		mult121665 (t, s);
+		curve25519_ref_sub (c1 + 32, b1, b1 + 32);
+		curve25519_ref_square (r, c1 + 32);
+		curve25519_ref_sub (s, b0, b0 + 32);
+		curve25519_ref_mult121665 (t, s);
 		add (u, t, b0);
-		mult (xznb, b0, b0 + 32);
-		mult (xznb + 32, s, u);
-		square (xzn1b, c1);
-		mult (xzn1b + 32, r, work);
-		select (xzm, xzm1, xznb, xzn1b, b);
+		curve25519_ref_mult (xznb, b0, b0 + 32);
+		curve25519_ref_mult (xznb + 32, s, u);
+		curve25519_ref_square (xzn1b, c1);
+		curve25519_ref_mult (xzn1b + 32, r, work);
+		curve25519_ref_select (xzm, xzm1, xznb, xzn1b, b);
 	}
 
 	for (j = 0; j < 64; ++j)
@@ -228,91 +238,98 @@ static void recip (unsigned int out[32], const unsigned int z[32])
 	unsigned int t1[32];
 	int i;
 
-	/* 2 */square (z2, z);
-	/* 4 */square (t1, z2);
-	/* 8 */square (t0, t1);
-	/* 9 */mult (z9, t0, z);
-	/* 11 */mult (z11, z9, z2);
-	/* 22 */square (t0, z11);
-	/* 2^5 - 2^0 = 31 */mult (z2_5_0, t0, z9);
+	/* 2 */ curve25519_ref_square (z2, z);
+	/* 4 */ curve25519_ref_square (t1, z2);
+	/* 8 */ curve25519_ref_square (t0, t1);
+	/* 9 */ curve25519_ref_mult (z9, t0, z);
+	/* 11 */ curve25519_ref_mult (z11, z9, z2);
+	/* 22 */ curve25519_ref_square (t0, z11);
+	/* 2^5 - 2^0 = 31 */ curve25519_ref_mult (z2_5_0, t0, z9);
 
-	/* 2^6 - 2^1 */square (t0, z2_5_0);
-	/* 2^7 - 2^2 */square (t1, t0);
-	/* 2^8 - 2^3 */square (t0, t1);
-	/* 2^9 - 2^4 */square (t1, t0);
-	/* 2^10 - 2^5 */square (t0, t1);
-	/* 2^10 - 2^0 */mult (z2_10_0, t0, z2_5_0);
+	/* 2^6 - 2^1 */ curve25519_ref_square (t0, z2_5_0);
+	/* 2^7 - 2^2 */ curve25519_ref_square (t1, t0);
+	/* 2^8 - 2^3 */ curve25519_ref_square (t0, t1);
+	/* 2^9 - 2^4 */ curve25519_ref_square (t1, t0);
+	/* 2^10 - 2^5 */ curve25519_ref_square (t0, t1);
+	/* 2^10 - 2^0 */ curve25519_ref_mult (z2_10_0, t0, z2_5_0);
 
-	/* 2^11 - 2^1 */square (t0, z2_10_0);
-	/* 2^12 - 2^2 */square (t1, t0);
-	/* 2^20 - 2^10 */for (i = 2; i < 10; i += 2) {
-		square (t0, t1);
-		square (t1, t0);
+	/* 2^11 - 2^1 */ curve25519_ref_square (t0, z2_10_0);
+	/* 2^12 - 2^2 */ curve25519_ref_square (t1, t0);
+	/* 2^20 - 2^10 */ for (i = 2; i < 10; i += 2) {
+		curve25519_ref_square (t0, t1);
+		curve25519_ref_square (t1, t0);
 	}
-	/* 2^20 - 2^0 */mult (z2_20_0, t1, z2_10_0);
+	/* 2^20 - 2^0 */ curve25519_ref_mult (z2_20_0, t1, z2_10_0);
 
-	/* 2^21 - 2^1 */square (t0, z2_20_0);
-	/* 2^22 - 2^2 */square (t1, t0);
-	/* 2^40 - 2^20 */for (i = 2; i < 20; i += 2) {
-		square (t0, t1);
-		square (t1, t0);
+	/* 2^21 - 2^1 */ curve25519_ref_square (t0, z2_20_0);
+	/* 2^22 - 2^2 */ curve25519_ref_square (t1, t0);
+	/* 2^40 - 2^20 */ for (i = 2; i < 20; i += 2) {
+		curve25519_ref_square (t0, t1);
+		curve25519_ref_square (t1, t0);
 	}
-	/* 2^40 - 2^0 */mult (t0, t1, z2_20_0);
+	/* 2^40 - 2^0 */ curve25519_ref_mult (t0, t1, z2_20_0);
 
-	/* 2^41 - 2^1 */square (t1, t0);
-	/* 2^42 - 2^2 */square (t0, t1);
-	/* 2^50 - 2^10 */for (i = 2; i < 10; i += 2) {
-		square (t1, t0);
-		square (t0, t1);
+	/* 2^41 - 2^1 */ curve25519_ref_square (t1, t0);
+	/* 2^42 - 2^2 */ curve25519_ref_square (t0, t1);
+	/* 2^50 - 2^10 */ for (i = 2; i < 10; i += 2) {
+		curve25519_ref_square (t1, t0);
+		curve25519_ref_square (t0, t1);
 	}
-	/* 2^50 - 2^0 */mult (z2_50_0, t0, z2_10_0);
+	/* 2^50 - 2^0 */ curve25519_ref_mult (z2_50_0, t0, z2_10_0);
 
-	/* 2^51 - 2^1 */square (t0, z2_50_0);
-	/* 2^52 - 2^2 */square (t1, t0);
-	/* 2^100 - 2^50 */for (i = 2; i < 50; i += 2) {
-		square (t0, t1);
-		square (t1, t0);
+	/* 2^51 - 2^1 */ curve25519_ref_square (t0, z2_50_0);
+	/* 2^52 - 2^2 */ curve25519_ref_square (t1, t0);
+	/* 2^100 - 2^50 */ for (i = 2; i < 50; i += 2) {
+		curve25519_ref_square (t0, t1);
+		curve25519_ref_square (t1, t0);
 	}
-	/* 2^100 - 2^0 */mult (z2_100_0, t1, z2_50_0);
+	/* 2^100 - 2^0 */ curve25519_ref_mult (z2_100_0, t1, z2_50_0);
 
-	/* 2^101 - 2^1 */square (t1, z2_100_0);
-	/* 2^102 - 2^2 */square (t0, t1);
-	/* 2^200 - 2^100 */for (i = 2; i < 100; i += 2) {
-		square (t1, t0);
-		square (t0, t1);
+	/* 2^101 - 2^1 */ curve25519_ref_square (t1, z2_100_0);
+	/* 2^102 - 2^2 */ curve25519_ref_square (t0, t1);
+	/* 2^200 - 2^100 */ for (i = 2; i < 100; i += 2) {
+		curve25519_ref_square (t1, t0);
+		curve25519_ref_square (t0, t1);
 	}
-	/* 2^200 - 2^0 */mult (t1, t0, z2_100_0);
+	/* 2^200 - 2^0 */ curve25519_ref_mult (t1, t0, z2_100_0);
 
-	/* 2^201 - 2^1 */square (t0, t1);
-	/* 2^202 - 2^2 */square (t1, t0);
-	/* 2^250 - 2^50 */for (i = 2; i < 50; i += 2) {
-		square (t0, t1);
-		square (t1, t0);
+	/* 2^201 - 2^1 */ curve25519_ref_square (t0, t1);
+	/* 2^202 - 2^2 */ curve25519_ref_square (t1, t0);
+	/* 2^250 - 2^50 */ for (i = 2; i < 50; i += 2) {
+		curve25519_ref_square (t0, t1);
+		curve25519_ref_square (t1, t0);
 	}
-	/* 2^250 - 2^0 */mult (t0, t1, z2_50_0);
+	/* 2^250 - 2^0 */ curve25519_ref_mult (t0, t1, z2_50_0);
 
-	/* 2^251 - 2^1 */square (t1, t0);
-	/* 2^252 - 2^2 */square (t0, t1);
-	/* 2^253 - 2^3 */square (t1, t0);
-	/* 2^254 - 2^4 */square (t0, t1);
-	/* 2^255 - 2^5 */square (t1, t0);
-	/* 2^255 - 21 */mult (out, t1, z11);
+	/* 2^251 - 2^1 */ curve25519_ref_square (t1, t0);
+	/* 2^252 - 2^2 */ curve25519_ref_square (t0, t1);
+	/* 2^253 - 2^3 */ curve25519_ref_square (t1, t0);
+	/* 2^254 - 2^4 */ curve25519_ref_square (t0, t1);
+	/* 2^255 - 2^5 */ curve25519_ref_square (t1, t0);
+	/* 2^255 - 21 */ curve25519_ref_mult (out, t1, z11);
 }
 
-int curve25519 (unsigned char *q, const unsigned char *n,
+int scalarmult_ref (unsigned char *q,
+		const unsigned char *n,
 		const unsigned char *p)
 {
 	unsigned int work[96];
+	unsigned char e[32];
 	unsigned int i;
-
+	for (i = 0; i < 32; ++i)
+		e[i] = n[i];
+	e[0] &= 248;
+	e[31] &= 127;
+	e[31] |= 64;
 	for (i = 0; i < 32; ++i)
 		work[i] = p[i];
 	work[31] &= 127;
-	mainloop (work, n);
+	mainloop (work, e);
 	recip (work + 32, work + 32);
-	mult (work + 64, work, work + 32);
-	freeze (work + 64);
+	curve25519_ref_mult (work + 64, work, work + 32);
+	curve25519_ref_freeze (work + 64);
 	for (i = 0; i < 32; ++i)
 		q[i] = work[64 + i];
 	return 0;
 }
+

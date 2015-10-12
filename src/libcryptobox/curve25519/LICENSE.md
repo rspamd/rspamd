@@ -44,3 +44,6 @@ language called qhasm and uses the floating point registers.
 This is, almost, a clean room reimplementation from the curve25519 paper. It
 uses many of the tricks described therein. Only the crecip function is taken
 from the sample implementation.
+
+avx code:
+public domain implementation by Tung Chou
