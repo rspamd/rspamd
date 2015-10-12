@@ -158,7 +158,7 @@ rspamd_control_write_reply (struct rspamd_control_session *session)
 	rep = ucl_object_typed_new (UCL_OBJECT);
 
 	DL_FOREACH (session->replies, elt) {
-		rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "%p", elt->wrk->pid);
+		rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "%P", elt->wrk->pid);
 		cur = ucl_object_typed_new (UCL_OBJECT);
 
 		ucl_object_insert_key (cur, ucl_object_fromstring (g_quark_to_string (
@@ -199,7 +199,7 @@ rspamd_control_wrk_io (gint fd, short what, gpointer ud)
 
 	if (read (elt->wrk->control_pipe[0], &elt->reply, sizeof (elt->reply)) !=
 				sizeof (elt->reply)) {
-		msg_err ("cannot read request from the worker %p (%s): %s",
+		msg_err ("cannot read request from the worker %P (%s): %s",
 				elt->wrk->pid, g_quark_to_string (elt->wrk->type), strerror (errno));
 	}
 
@@ -208,7 +208,6 @@ rspamd_control_wrk_io (gint fd, short what, gpointer ud)
 
 	if (elt->session->replies_remain == 0) {
 		rspamd_control_write_reply (elt->session);
-		rspamd_control_connection_close (elt->session);
 	}
 }
 
@@ -287,7 +286,7 @@ rspamd_control_finish_hadler (struct rspamd_http_connection *conn,
 					session->replies_remain ++;
 				}
 				else {
-					msg_err ("cannot write request to the worker %p (%s): %s",
+					msg_err ("cannot write request to the worker %P (%s): %s",
 						wrk->pid, g_quark_to_string (wrk->type), strerror (errno));
 				}
 			}
@@ -352,7 +351,7 @@ rspamd_control_default_cmd_handler (gint fd,
 		}
 
 		rep.reply.stat.conns = cd->worker->nconns;
-		rep.reply.stat.utime = rspamd_get_calendar_ticks () - cd->worker->start_time;
+		rep.reply.stat.uptime = rspamd_get_calendar_ticks () - cd->worker->start_time;
 		break;
 	case RSPAMD_CONTROL_RELOAD:
 		break;

@@ -29,6 +29,7 @@
 #include "unix-std.h"
 #include "utlist.h"
 #include "ottery.h"
+#include "rspamd_control.h"
 
 #ifdef WITH_GPERF_TOOLS
 #include <google/profiler.h>
@@ -246,6 +247,7 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 	ev_base = event_init ();
 
 	rspamd_worker_init_signals (worker, ev_base);
+	rspamd_control_worker_add_default_handler (worker, ev_base);
 
 	/* Accept all sockets */
 	cur = worker->cf->listen_socks;
@@ -469,6 +471,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		/* Do silent log reopen to avoid collisions */
 		rspamd_log_close (rspamd_main->logger);
 		rspamd_log_open (rspamd_main->logger);
+		cur->start_time = rspamd_get_calendar_ticks ();
 
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
 # if (GLIB_MINOR_VERSION > 20)
