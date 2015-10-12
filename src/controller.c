@@ -177,6 +177,7 @@ struct rspamd_controller_worker_ctx {
 
 struct rspamd_controller_session {
 	struct rspamd_controller_worker_ctx *ctx;
+	struct rspamd_worker *wrk;
 	rspamd_mempool_t *pool;
 	struct rspamd_task *task;
 	struct rspamd_classifier_config *cl;
@@ -2018,6 +2019,7 @@ rspamd_controller_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 		rspamd_mempool_delete (session->pool);
 	}
 
+	session->wrk->nconns --;
 	rspamd_inet_address_destroy (session->from_addr);
 	msg_debug_session ("destroy session %p", session);
 	g_slice_free1 (sizeof (struct rspamd_controller_session), session);
@@ -2050,6 +2052,8 @@ rspamd_controller_accept_socket (gint fd, short what, void *arg)
 	session->ctx = ctx;
 
 	session->from_addr = addr;
+	session->wrk = worker;
+	worker->nconns ++;
 
 	rspamd_http_router_handle_socket (ctx->http, nfd, session);
 }

@@ -92,8 +92,6 @@ struct rspamd_worker_ctx {
 	gboolean allow_learn;
 	/* DNS resolver */
 	struct rspamd_dns_resolver *resolver;
-	/* Current tasks */
-	guint32 tasks;
 	/* Limit of tasks */
 	guint32 max_tasks;
 	/* Events base */
@@ -112,9 +110,9 @@ struct rspamd_worker_ctx {
 static void
 reduce_tasks_count (gpointer arg)
 {
-	guint32 *tasks = arg;
+	guint *nconns = arg;
 
-	(*tasks)--;
+	(*nconns)--;
 }
 
 static gint
@@ -192,9 +190,9 @@ accept_socket (gint fd, short what, void *arg)
 
 	ctx = worker->ctx;
 
-	if (ctx->max_tasks != 0 && ctx->tasks > ctx->max_tasks) {
+	if (ctx->max_tasks != 0 && worker->nconns > ctx->max_tasks) {
 		msg_info_ctx ("current tasks is now: %uD while maximum is: %uD",
-			ctx->tasks,
+				worker->nconns,
 			ctx->max_tasks);
 		return;
 	}
@@ -237,9 +235,9 @@ accept_socket (gint fd, short what, void *arg)
 		RSPAMD_HTTP_SERVER,
 		ctx->keys_cache);
 	task->ev_base = ctx->ev_base;
-	ctx->tasks++;
+	worker->nconns++;
 	rspamd_mempool_add_destructor (task->task_pool,
-		(rspamd_mempool_destruct_t)reduce_tasks_count, &ctx->tasks);
+		(rspamd_mempool_destruct_t)reduce_tasks_count, &worker->nconns);
 
 	/* Set up async session */
 	task->s = rspamd_session_create (task->task_pool, rspamd_task_fin,

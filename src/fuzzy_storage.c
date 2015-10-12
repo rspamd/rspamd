@@ -386,6 +386,8 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 
 	/* Got some data */
 	if (what == EV_READ) {
+		worker->nconns++;
+
 		while ((r = rspamd_inet_address_recvfrom (fd, buf, sizeof (buf), 0,
 			&session.addr)) == -1) {
 			if (errno == EINTR) {
@@ -408,6 +410,7 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 		}
 
 		rspamd_inet_address_destroy (session.addr);
+		worker->nconns --;
 	}
 
 	rspamd_explicit_memzero (session.nm, sizeof (session.nm));
