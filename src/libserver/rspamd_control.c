@@ -29,6 +29,10 @@
 #include "unix-std.h"
 #include "utlist.h"
 
+#ifdef HAVE_SYS_RESOURCE_H
+#include <sys/resource.h>
+#endif
+
 static struct timeval io_timeout = {
 		.tv_sec = 30,
 		.tv_usec = 0
@@ -193,7 +197,7 @@ rspamd_control_wrk_io (gint fd, short what, gpointer ud)
 {
 	struct rspamd_control_reply_elt *elt = ud;
 
-	if (read (elt->wrk->control_pipe[1], &elt->reply, sizeof (elt->reply)) !=
+	if (read (elt->wrk->control_pipe[0], &elt->reply, sizeof (elt->reply)) !=
 				sizeof (elt->reply)) {
 		msg_err ("cannot read request from the worker %p (%s): %s",
 				elt->wrk->pid, g_quark_to_string (elt->wrk->type), strerror (errno));
@@ -313,10 +317,87 @@ rspamd_control_process_client_socket (struct rspamd_main *rspamd_main,
 			&io_timeout, rspamd_main->ev_base);
 }
 
-void
-rspamd_control_worker_add_default_handler (struct rspamd_worker *worker)
-{
+struct rspamd_worker_control_data {
+	struct event io_ev;
+	struct rspamd_worker *worker;
+	struct event_base *ev_base;
+	struct {
+		rspamd_worker_control_handler handler;
+		gpointer ud;
+	} handlers[RSPAMD_CONTROL_MAX];
+};
 
+static void
+rspamd_control_default_cmd_handler (gint fd,
+		struct rspamd_worker_control_data *cd,
+		struct rspamd_control_command *cmd)
+{
+	struct rspamd_control_reply rep;
+	gssize r;
+
+	memset (&rep, 0, sizeof (rep));
+	rep.type = cmd->type;
+
+	switch (cmd->type) {
+	case RSPAMD_CONTROL_STAT:
+		break;
+	case RSPAMD_CONTROL_RELOAD:
+		break;
+	default:
+		break;
+	}
+
+	r = write (fd, &rep, sizeof (rep));
+
+	if (r != sizeof (rep)) {
+		msg_err ("cannot write reply to the control socket: %s",
+				strerror (errno));
+	}
+}
+
+static void
+rspamd_control_default_worker_handler (gint fd, short what, gpointer ud)
+{
+	struct rspamd_worker_control_data *cd = ud;
+	struct rspamd_control_command cmd;
+
+	gssize r;
+
+
+	r = read (fd, &cmd, sizeof (cmd));
+
+	if (r != sizeof (cmd)) {
+		msg_err ("cannot read request from the control socket: %s",
+				strerror (errno));
+	}
+	else if ((gint)cmd.type >= 0 && cmd.type < RSPAMD_CONTROL_MAX) {
+
+		if (cd->handlers[cmd.type].handler) {
+			cd->handlers[cmd.type].handler (cd->worker->srv, cd->worker,
+					fd, &cmd, cd->handlers[cmd.type].ud);
+		}
+		else {
+			rspamd_control_default_cmd_handler (fd, cd, &cmd);
+		}
+	}
+}
+
+void
+rspamd_control_worker_add_default_handler (struct rspamd_worker *worker,
+		struct event_base *ev_base)
+{
+	struct rspamd_worker_control_data *cd;
+
+	cd = g_slice_alloc0 (sizeof (*cd));
+	cd->worker = worker;
+	cd->ev_base = ev_base;
+
+	event_set (&cd->io_ev, worker->control_pipe[1], EV_READ | EV_PERSIST,
+			rspamd_control_default_worker_handler, cd);
+	event_base_set (ev_base, &cd->io_ev);
+	event_add (&cd->io_ev, NULL);
+
+	worker->control_data = cd;
 }
 
 /**
@@ -328,5 +409,13 @@ rspamd_control_worker_add_cmd_handler (struct rspamd_worker *worker,
 		rspamd_worker_control_handler handler,
 		gpointer ud)
 {
+	struct rspamd_worker_control_data *cd;
 
+	g_assert (type >= 0 && type < RSPAMD_CONTROL_MAX);
+	g_assert (handler != NULL);
+	g_assert (worker->control_data != NULL);
+
+	cd = worker->control_data;
+	cd->handlers[type].handler = handler;
+	cd->handlers[type].ud = ud;
 }

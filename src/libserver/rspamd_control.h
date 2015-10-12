@@ -78,7 +78,8 @@ void rspamd_control_process_client_socket (struct rspamd_main *rspamd_main,
 /**
  * Register default handlers for a worker
  */
-void rspamd_control_worker_add_default_handler (struct rspamd_worker *worker);
+void rspamd_control_worker_add_default_handler (struct rspamd_worker *worker,
+		struct event_base *ev_base);
 
 /**
  * Register custom handler for a specific control command for this worker

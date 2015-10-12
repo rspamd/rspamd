@@ -53,6 +53,7 @@ struct rspamd_worker {
 	gpointer ctx;                   /**< worker's specific data							*/
 	gint control_pipe[2];           /**< control pipe. [0] is used by main process,
 	                                                   [1] is used by a worker			*/
+	gpointer control_data;          /**< used by control protocol to handle commands	*/
 };
 
 struct rspamd_worker_signal_handler;
