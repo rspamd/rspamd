@@ -312,13 +312,13 @@ rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 
 	va_start (args, error_msg);
-	msg->status = rspamd_fstring_sized_new (128);
+	msg->status = rspamd_fstring_new ();
 	rspamd_vprintf_fstring (&msg->status, error_msg, args);
 	va_end (args);
 
 	msg->date = time (NULL);
 	msg->code = code;
-	msg->body = rspamd_fstring_sized_new (128);
+	msg->body = rspamd_fstring_new ();
 	rspamd_printf_fstring (&msg->body, "{\"error\":\"%V\"}", msg->status);
 	rspamd_http_connection_reset (entry->conn);
 	rspamd_http_connection_write_message (entry->conn,
@@ -341,6 +341,7 @@ rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 	msg->date = time (NULL);
 	msg->code = 200;
+	msg->status = rspamd_fstring_new_init ("OK", 2);
 	msg->body = rspamd_fstring_new_init (str, strlen (str));
 	rspamd_http_connection_reset (entry->conn);
 	rspamd_http_connection_write_message (entry->conn,
@@ -363,6 +364,7 @@ rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 	msg->date = time (NULL);
 	msg->code = 200;
+	msg->status = rspamd_fstring_new_init ("OK", 2);
 	msg->body = rspamd_fstring_sized_new (BUFSIZ);
 	rspamd_ucl_emit_fstring (obj, UCL_EMIT_JSON_COMPACT, &msg->body);
 	rspamd_http_connection_reset (entry->conn);
