@@ -162,9 +162,17 @@ end
 -- eq_host: host for comparing or empty string
 local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
 
+  local failed_address = 0
+  local failed_mx_address = 0
+
   local function check_host_cb_mx_a(resolver, to_resolve, results, err)
     task:inc_dns_req()
+
     if not results then
+      failed_mx_address = failed_mx_address + 1
+    end
+
+    if failed_mx_address >= 2 then
       task:insert_result('HFILTER_' .. symbol_suffix .. '_NORESOLVE_MX', 1.0)
     end
   end
@@ -175,9 +183,14 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
     else
       for _,mx in pairs(results) do
         if mx['name'] then
-          task:get_resolver():resolve_a({
+          task:get_resolver():resolve('a', {
             task=task, 
             name = mx['name'], 
+            callback = check_host_cb_mx_a
+          })
+          task:get_resolver():resolve('aaaa', {
+            task = task,
+            name = mx['name'],
             callback = check_host_cb_mx_a
           })
         end
@@ -188,18 +201,25 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
     task:inc_dns_req()
 
     if not results then
+      failed_address = failed_address + 1
+    else
+      if eq_ip ~= '' then
+        for _,result in pairs(results) do
+          if result:to_string() == eq_ip then
+            return true
+          end
+        end
+        task:insert_result('HFILTER_' .. symbol_suffix .. '_IP_A', 1.0)
+      end
+    end
+
+    if not failed_address >= 2 then
+      -- No A or AAAA records
       task:get_resolver():resolve_mx({
-        task=task, 
-        name = host, 
+        task = task,
+        name = host,
         callback = check_host_cb_mx
       })
-    elseif eq_ip ~= '' then
-      for _,result in pairs(results) do 
-        if result:to_string() == eq_ip then
-          return true
-        end
-      end
-      task:insert_result('HFILTER_' .. symbol_suffix .. '_IP_A', 1.0)
     end
   end
 
@@ -216,9 +236,15 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
 
   if check_fqdn(host) then
     if eq_host == '' or eq_host ~= 'unknown' or eq_host ~= host then
-      task:get_resolver():resolve_a({
+      task:get_resolver():resolve('a', {
         task=task, 
         name = host, 
+        callback = check_host_cb_a
+      })
+      -- Check ipv6 as well
+      task:get_resolver():resolve('aaaa', {
+        task = task,
+        name = host,
         callback = check_host_cb_a
       })
     end
