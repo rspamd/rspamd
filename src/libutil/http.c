@@ -441,7 +441,7 @@ rspamd_http_parse_key (rspamd_ftok_t *data, struct rspamd_http_connection *conn,
 						key_len >= sizeof (kp->pk)) {
 					if (memcmp (priv->local_key->id, decoded_id,
 							RSPAMD_HTTP_KEY_ID_LEN) == 0) {
-						kp = g_slice_alloc (sizeof (*kp));
+						kp = g_slice_alloc0 (sizeof (*kp));
 						REF_INIT_RETAIN (kp, rspamd_http_keypair_dtor);
 						memcpy (kp->pk, decoded_key, sizeof (kp->pk));
 						priv->msg->peer_key = kp;
@@ -688,20 +688,16 @@ rspamd_http_decrypt_message (struct rspamd_http_connection *conn,
 	dec_len = msg->body->len - rspamd_cryptobox_NONCEBYTES -
 			rspamd_cryptobox_MACBYTES;
 
-	if (conn->cache) {
-		if (!rspamd_cryptobox_decrypt_nm_inplace (m, dec_len, nonce,
-				peer_key->nm, m - rspamd_cryptobox_MACBYTES)) {
-			msg_err ("cannot verify encrypted message");
-			return -1;
-		}
+	if (!peer_key->has_nm) {
+		/* We still save NM for the following encryption */
+		rspamd_cryptobox_nm (peer_key->nm, peer_key->pk, priv->local_key->sk);
+		peer_key->has_nm = TRUE;
 	}
-	else {
-		if (!rspamd_cryptobox_decrypt_inplace (m, dec_len, nonce,
-				peer_key->pk, priv->local_key->sk,
-				m - rspamd_cryptobox_MACBYTES)) {
-			msg_err ("cannot verify encrypted message");
-			return -1;
-		}
+
+	if (!rspamd_cryptobox_decrypt_nm_inplace (m, dec_len, nonce,
+			peer_key->nm, m - rspamd_cryptobox_MACBYTES)) {
+		msg_err ("cannot verify encrypted message");
+		return -1;
 	}
 
 	/* Cleanup message */
@@ -1229,17 +1225,15 @@ rspamd_http_connection_encrypt_message (
 
 	cnt = i;
 
-	if (conn->cache) {
-		rspamd_cryptobox_encryptv_nm_inplace (segments,
+	if (!peer_key->has_nm) {
+		rspamd_cryptobox_nm (peer_key->nm, peer_key->pk, priv->local_key->sk);
+		peer_key->has_nm = TRUE;
+	}
+
+	rspamd_cryptobox_encryptv_nm_inplace (segments,
 			cnt,
 			np,
 			peer_key->nm, mp);
-	}
-	else {
-		rspamd_cryptobox_encryptv_inplace (segments,
-				cnt, np,
-				peer_key->pk, priv->local_key->sk, mp);
-	}
 
 	/*
 	 * iov[0] = base HTTP request
@@ -2384,7 +2378,7 @@ rspamd_http_connection_make_peer_key (const gchar *key)
 	pk_decoded = rspamd_decode_base32 (key, strlen (key), &dec_len);
 
 	if (pk_decoded != NULL && dec_len == rspamd_cryptobox_PKBYTES) {
-		kp = g_slice_alloc (sizeof (*kp));
+		kp = g_slice_alloc0 (sizeof (*kp));
 		REF_INIT_RETAIN (kp, rspamd_http_keypair_dtor);
 		memcpy (kp->pk, pk_decoded, sizeof (kp->pk));
 		blake2b (kp->id, kp->pk, NULL, sizeof (kp->id), sizeof (kp->pk), 0);

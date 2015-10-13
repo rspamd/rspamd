@@ -392,7 +392,7 @@ rspamd_cryptobox_siphash (unsigned char *out, const unsigned char *in,
  * Code based on IEEE Std 802.11-2007, Annex H.4.2.
  */
 gboolean
-rspamd_cryptobox_pbkdf(const char *pass, gsize pass_len,
+rspamd_cryptobox_pbkdf (const char *pass, gsize pass_len,
 		const guint8 *salt, gsize salt_len, guint8 *key, gsize key_len,
 		unsigned int rounds)
 {

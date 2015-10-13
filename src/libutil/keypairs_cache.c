@@ -107,6 +107,7 @@ rspamd_keypair_cache_process (struct rspamd_keypair_cache *c,
 	g_assert (new != NULL);
 
 	memcpy (kp_remote->nm, new->nm, rspamd_cryptobox_NMBYTES);
+	kp_remote->has_nm = TRUE;
 #if 0
 	memcpy (kp_local->nm, new->nm, rspamd_cryptobox_NMBYTES);
 #endif
