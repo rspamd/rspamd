@@ -536,6 +536,10 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 		cur_cnt, max_cnt;
 	const char *digest;
 
+	if (backend == NULL) {
+		return rep;
+	}
+
 	/* Try direct match first of all */
 	rc = rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK,
 			cmd->digest);
@@ -645,6 +649,10 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 	gint64 id;
 	const struct rspamd_fuzzy_shingle_cmd *shcmd;
 
+	if (backend == NULL) {
+		return FALSE;
+	}
+
 	rc = rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK,
 				cmd->digest);
 
@@ -684,6 +692,10 @@ rspamd_fuzzy_backend_del (struct rspamd_fuzzy_backend *backend,
 {
 	int rc;
 
+	if (backend == NULL) {
+		return FALSE;
+	}
+
 	rc = rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_DELETE,
 			cmd->digest);
 
@@ -701,6 +713,10 @@ rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend,
 		gint64 value;
 		gint64 number;
 	};
+
+	if (backend == NULL) {
+		return FALSE;
+	}
 
 	/* Do not do more than 5k ops per step */
 	const guint64 max_changes = 5000;
@@ -794,7 +810,7 @@ rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend,
 			backend, NULL);
 	}
 	else {
-		msg_warn_fuzzy_backend ("cannot synchronise fuzzy backend: %e", err);
+		msg_warn_fuzzy_backend ("cannot synchronize fuzzy backend: %e", err);
 		g_error_free (err);
 	}
 
@@ -806,6 +822,9 @@ void
 rspamd_fuzzy_backend_close (struct rspamd_fuzzy_backend *backend)
 {
 	if (backend != NULL) {
+		rspamd_fuzzy_backend_run_simple (RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT,
+				backend, NULL);
+
 		if (backend->db != NULL) {
 			rspamd_fuzzy_backend_close_stmts (backend);
 			sqlite3_close (backend->db);
@@ -827,11 +846,11 @@ rspamd_fuzzy_backend_close (struct rspamd_fuzzy_backend *backend)
 gsize
 rspamd_fuzzy_backend_count (struct rspamd_fuzzy_backend *backend)
 {
-	return backend->count;
+	return backend != NULL ? backend->count : 0;
 }
 
 gsize
 rspamd_fuzzy_backend_expired (struct rspamd_fuzzy_backend *backend)
 {
-	return backend->expired;
+	return backend != NULL ? backend->expired : 0;
 }
