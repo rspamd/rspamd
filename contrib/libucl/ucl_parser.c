@@ -562,7 +562,8 @@ ucl_copy_or_store_ptr (struct ucl_parser *parser,
  * @return
  */
 static inline ucl_object_t *
-ucl_add_parser_stack (ucl_object_t *obj, struct ucl_parser *parser, bool is_array, int level)
+ucl_parser_add_container (ucl_object_t *obj, struct ucl_parser *parser,
+		bool is_array, int level)
 {
 	struct ucl_stack *st;
 
@@ -573,7 +574,9 @@ ucl_add_parser_stack (ucl_object_t *obj, struct ucl_parser *parser, bool is_arra
 		else {
 			obj->type = UCL_OBJECT;
 		}
-		obj->value.ov = ucl_hash_create (parser->flags & UCL_PARSER_KEY_LOWERCASE);
+		if (obj->value.ov == NULL) {
+			obj->value.ov = ucl_hash_create (parser->flags & UCL_PARSER_KEY_LOWERCASE);
+		}
 		parser->state = UCL_STATE_KEY;
 	}
 	else {
@@ -1001,6 +1004,98 @@ ucl_parser_append_elt (struct ucl_parser *parser, ucl_hash_t *cont,
 	}
 }
 
+bool
+ucl_parser_process_object_element (struct ucl_parser *parser, ucl_object_t *nobj)
+{
+	ucl_hash_t *container;
+	ucl_object_t *tobj;
+
+	container = parser->stack->obj->value.ov;
+
+	tobj = __DECONST (ucl_object_t *, ucl_hash_search_obj (container, nobj));
+	if (tobj == NULL) {
+		container = ucl_hash_insert_object (container, nobj,
+				parser->flags & UCL_PARSER_KEY_LOWERCASE);
+		nobj->prev = nobj;
+		nobj->next = NULL;
+		parser->stack->obj->len ++;
+	}
+	else {
+		unsigned priold = ucl_object_get_priority (tobj),
+				prinew = ucl_object_get_priority (nobj);
+		switch (parser->chunks->strategy) {
+
+		case UCL_DUPLICATE_APPEND:
+			/*
+			 * The logic here is the following:
+			 *
+			 * - if we have two objects with the same priority, then we form an
+			 * implicit or explicit array
+			 * - if a new object has bigger priority, then we overwrite an old one
+			 * - if a new object has lower priority, then we ignore it
+			 */
+
+
+			/* Special case for inherited objects */
+			if (tobj->flags & UCL_OBJECT_INHERITED) {
+				prinew = priold + 1;
+			}
+
+			if (priold == prinew) {
+				ucl_parser_append_elt (parser, container, tobj, nobj);
+			}
+			else if (priold > prinew) {
+				/*
+				 * We add this new object to a list of trash objects just to ensure
+				 * that it won't come to any real object
+				 * XXX: rather inefficient approach
+				 */
+				DL_APPEND (parser->trash_objs, nobj);
+			}
+			else {
+				ucl_hash_replace (container, tobj, nobj);
+				ucl_object_unref (tobj);
+			}
+
+			break;
+
+		case UCL_DUPLICATE_REWRITE:
+			/* We just rewrite old values regardless of priority */
+			ucl_hash_replace (container, tobj, nobj);
+			ucl_object_unref (tobj);
+
+			break;
+
+		case UCL_DUPLICATE_ERROR:
+			ucl_create_err (&parser->err, "error while parsing %s: "
+					"line: %d, column: %d: duplicate element for key '%s' "
+					"has been found",
+					parser->cur_file ? parser->cur_file : "<unknown>",
+					parser->chunks->line, parser->chunks->column, nobj->key);
+			return false;
+
+		case UCL_DUPLICATE_MERGE:
+			/*
+			 * Here we do have some old object so we just push it on top of objects stack
+			 */
+			if (tobj->type == UCL_OBJECT || tobj->type == UCL_ARRAY) {
+				ucl_object_unref (nobj);
+				nobj = tobj;
+			}
+			else {
+				/* For other types we create implicit array as usual */
+				ucl_parser_append_elt (parser, container, tobj, nobj);
+			}
+			break;
+		}
+	}
+
+	parser->stack->obj->value.ov = container;
+	parser->cur_obj = nobj;
+
+	return true;
+}
+
 /**
  * Parse a key in an object
  * @param parser
@@ -1018,8 +1113,7 @@ ucl_parse_key (struct ucl_parser *parser, struct ucl_chunk *chunk,
 	bool got_quote = false, got_eq = false, got_semicolon = false,
 			need_unescape = false, ucl_escape = false, var_expand = false,
 			got_content = false, got_sep = false;
-	ucl_object_t *nobj, *tobj;
-	ucl_hash_t *container;
+	ucl_object_t *nobj;
 	ssize_t keylen;
 
 	p = chunk->pos;
@@ -1204,57 +1298,17 @@ ucl_parse_key (struct ucl_parser *parser, struct ucl_chunk *chunk,
 		return false;
 	}
 
-	container = parser->stack->obj->value.ov;
 	nobj->key = key;
 	nobj->keylen = keylen;
-	tobj = __DECONST (ucl_object_t *, ucl_hash_search_obj (container, nobj));
-	if (tobj == NULL) {
-		container = ucl_hash_insert_object (container, nobj,
-				parser->flags & UCL_PARSER_KEY_LOWERCASE);
-		nobj->prev = nobj;
-		nobj->next = NULL;
-		parser->stack->obj->len ++;
-	}
-	else {
-		/*
-		 * The logic here is the following:
-		 *
-		 * - if we have two objects with the same priority, then we form an
-		 * implicit or explicit array
-		 * - if a new object has bigger priority, then we overwrite an old one
-		 * - if a new object has lower priority, then we ignore it
-		 */
-		unsigned priold = ucl_object_get_priority (tobj),
-				prinew = ucl_object_get_priority (nobj);
 
-		/* Special case for inherited objects */
-		if (tobj->flags & UCL_OBJECT_INHERITED) {
-			prinew = priold + 1;
-		}
-
-		if (priold == prinew) {
-			ucl_parser_append_elt (parser, container, tobj, nobj);
-		}
-		else if (priold > prinew) {
-			/*
-			 * We add this new object to a list of trash objects just to ensure
-			 * that it won't come to any real object
-			 * XXX: rather inefficient approach
-			 */
-			DL_APPEND (parser->trash_objs, nobj);
-		}
-		else {
-			ucl_hash_replace (container, tobj, nobj);
-			ucl_object_unref (tobj);
-		}
+	if (!ucl_parser_process_object_element (parser, nobj)) {
+		return false;
 	}
 
 	if (ucl_escape) {
 		nobj->flags |= UCL_OBJECT_NEED_KEY_ESCAPE;
 	}
 
-	parser->stack->obj->value.ov = container;
-	parser->cur_obj = nobj;
 
 	return true;
 }
@@ -1387,8 +1441,8 @@ ucl_parse_multiline_string (struct ucl_parser *parser,
 	return len;
 }
 
-static ucl_object_t*
-ucl_get_value_object (struct ucl_parser *parser)
+static inline ucl_object_t*
+ucl_parser_get_container (struct ucl_parser *parser)
 {
 	ucl_object_t *t, *obj = NULL;
 
@@ -1400,7 +1454,12 @@ ucl_get_value_object (struct ucl_parser *parser)
 		/* Object must be allocated */
 		obj = ucl_object_new_full (UCL_NULL, parser->chunks->priority);
 		t = parser->stack->obj;
-		ucl_array_append (t, obj);
+
+		if (!ucl_array_append (t, obj)) {
+			ucl_object_unref (obj);
+			return NULL;
+		}
+
 		parser->cur_obj = obj;
 	}
 	else {
@@ -1451,7 +1510,7 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 				return false;
 			}
 
-			obj = ucl_get_value_object (parser);
+			obj = ucl_parser_get_container (parser);
 			str_len = chunk->pos - c - 2;
 			obj->type = UCL_STRING;
 			if ((str_len = ucl_copy_or_store_ptr (parser, c + 1,
@@ -1468,9 +1527,9 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 			return true;
 			break;
 		case '{':
-			obj = ucl_get_value_object (parser);
+			obj = ucl_parser_get_container (parser);
 			/* We have a new object */
-			obj = ucl_add_parser_stack (obj, parser, false, parser->stack->level);
+			obj = ucl_parser_add_container (obj, parser, false, parser->stack->level);
 			if (obj == NULL) {
 				return false;
 			}
@@ -1480,9 +1539,9 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 			return true;
 			break;
 		case '[':
-			obj = ucl_get_value_object (parser);
+			obj = ucl_parser_get_container (parser);
 			/* We have a new array */
-			obj = ucl_add_parser_stack (obj, parser, true, parser->stack->level);
+			obj = ucl_parser_add_container (obj, parser, true, parser->stack->level);
 			if (obj == NULL) {
 				return false;
 			}
@@ -1502,7 +1561,7 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 			}
 			break;
 		case '<':
-			obj = ucl_get_value_object (parser);
+			obj = ucl_parser_get_container (parser);
 			/* We have something like multiline value, which must be <<[A-Z]+\n */
 			if (chunk->end - p > 3) {
 				if (memcmp (p, "<<", 2) == 0) {
@@ -1545,7 +1604,7 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 		default:
 parse_string:
 			if (obj == NULL) {
-				obj = ucl_get_value_object (parser);
+				obj = ucl_parser_get_container (parser);
 			}
 
 			/* Parse atom */
@@ -1905,17 +1964,6 @@ ucl_state_machine (struct ucl_parser *parser)
 	bool next_key = false, end_of_object = false, ret;
 
 	if (parser->top_obj == NULL) {
-		if (*chunk->pos == '[') {
-			obj = ucl_add_parser_stack (NULL, parser, true, 0);
-		}
-		else {
-			obj = ucl_add_parser_stack (NULL, parser, false, 0);
-		}
-		if (obj == NULL) {
-			return false;
-		}
-		parser->top_obj = obj;
-		parser->cur_obj = obj;
 		parser->state = UCL_STATE_INIT;
 	}
 
@@ -1939,7 +1987,9 @@ ucl_state_machine (struct ucl_parser *parser)
 						UCL_CHARACTER_WHITESPACE_UNSAFE)) {
 					ucl_chunk_skipc (chunk, p);
 				}
+
 				p = chunk->pos;
+
 				if (*p == '[') {
 					parser->state = UCL_STATE_VALUE;
 					ucl_chunk_skipc (chunk, p);
@@ -1950,6 +2000,23 @@ ucl_state_machine (struct ucl_parser *parser)
 						ucl_chunk_skipc (chunk, p);
 					}
 				}
+
+				if (parser->top_obj == NULL) {
+					if (parser->state == UCL_STATE_VALUE) {
+						obj = ucl_parser_add_container (NULL, parser, true, 0);
+					}
+					else {
+						obj = ucl_parser_add_container (NULL, parser, false, 0);
+					}
+
+					if (obj == NULL) {
+						return false;
+					}
+
+					parser->top_obj = obj;
+					parser->cur_obj = obj;
+				}
+
 			}
 			break;
 		case UCL_STATE_KEY:
@@ -1983,7 +2050,7 @@ ucl_state_machine (struct ucl_parser *parser)
 			else if (parser->state != UCL_STATE_MACRO_NAME) {
 				if (next_key && parser->stack->obj->type == UCL_OBJECT) {
 					/* Parse more keys and nest objects accordingly */
-					obj = ucl_add_parser_stack (parser->cur_obj, parser, false,
+					obj = ucl_parser_add_container (parser->cur_obj, parser, false,
 							parser->stack->level + 1);
 					if (obj == NULL) {
 						return false;
@@ -2270,8 +2337,9 @@ ucl_parser_set_variables_handler (struct ucl_parser *parser,
 }
 
 bool
-ucl_parser_add_chunk_priority (struct ucl_parser *parser, const unsigned char *data,
-		size_t len, unsigned priority)
+ucl_parser_add_chunk_full (struct ucl_parser *parser, const unsigned char *data,
+		size_t len, unsigned priority, enum ucl_duplicate_strategy strat,
+		enum ucl_parse_type parse_type)
 {
 	struct ucl_chunk *chunk;
 
@@ -2300,19 +2368,42 @@ ucl_parser_add_chunk_priority (struct ucl_parser *parser, const unsigned char *d
 		chunk->line = 1;
 		chunk->column = 0;
 		chunk->priority = priority;
+		chunk->strategy = strat;
+		chunk->parse_type = parse_type;
 		LL_PREPEND (parser->chunks, chunk);
 		parser->recursion ++;
+
 		if (parser->recursion > UCL_MAX_RECURSION) {
 			ucl_create_err (&parser->err, "maximum include nesting limit is reached: %d",
 					parser->recursion);
 			return false;
 		}
-		return ucl_state_machine (parser);
+
+		switch (parse_type) {
+		default:
+		case UCL_PARSE_UCL:
+			return ucl_state_machine (parser);
+		case UCL_PARSE_MSGPACK:
+			return ucl_parse_msgpack (parser);
+		}
 	}
 
 	ucl_create_err (&parser->err, "a parser is in an invalid state");
 
 	return false;
+}
+
+bool
+ucl_parser_add_chunk_priority (struct ucl_parser *parser,
+		const unsigned char *data, size_t len, unsigned priority)
+{
+	/* We dereference parser, so this check is essential */
+	if (parser == NULL) {
+		return false;
+	}
+
+	return ucl_parser_add_chunk_full (parser, data, len,
+				priority, UCL_DUPLICATE_APPEND, UCL_PARSE_UCL);
 }
 
 bool
@@ -2323,8 +2414,8 @@ ucl_parser_add_chunk (struct ucl_parser *parser, const unsigned char *data,
 		return false;
 	}
 
-	return ucl_parser_add_chunk_priority (parser, data, len,
-			parser->default_priority);
+	return ucl_parser_add_chunk_full (parser, data, len,
+			parser->default_priority, UCL_DUPLICATE_APPEND, UCL_PARSE_UCL);
 }
 
 bool

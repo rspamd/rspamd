@@ -498,7 +498,14 @@ ucl_emit_msgpack_elt (struct ucl_emitter_context *ctx,
 
 	case UCL_STRING:
 		ucl_emitter_print_key_msgpack (print_key, ctx, obj);
-		ucl_emitter_print_string_msgpack (ctx, obj->value.sv, obj->len);
+
+		if (obj->flags & UCL_OBJECT_BINARY) {
+			ucl_emitter_print_binary_string_msgpack (ctx, obj->value.sv,
+					obj->len);
+		}
+		else {
+			ucl_emitter_print_string_msgpack (ctx, obj->value.sv, obj->len);
+		}
 		break;
 
 	case UCL_NULL:
@@ -509,27 +516,31 @@ ucl_emit_msgpack_elt (struct ucl_emitter_context *ctx,
 	case UCL_OBJECT:
 		ucl_emitter_print_key_msgpack (print_key, ctx, obj);
 		ucl_emit_msgpack_start_obj (ctx, obj, print_key);
-		it = ucl_object_iterate_new (obj);
+		it = NULL;
 
-		while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
+		while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
 			LL_FOREACH (cur, celt) {
 				ucl_emit_msgpack_elt (ctx, celt, false, true);
+				/* XXX:
+				 * in msgpack the length of objects is encoded within a single elt
+				 * so in case of multi-value keys we are using merely the first
+				 * element ignoring others
+				 */
+				break;
 			}
 		}
 
-		ucl_object_iterate_free (it);
 		break;
 
 	case UCL_ARRAY:
 		ucl_emitter_print_key_msgpack (print_key, ctx, obj);
 		ucl_emit_msgpack_start_array (ctx, obj, print_key);
-		it = ucl_object_iterate_new (obj);
+		it = NULL;
 
-		while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
+		while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
 			ucl_emit_msgpack_elt (ctx, cur, false, false);
 		}
 
-		ucl_object_iterate_free (it);
 		break;
 
 	case UCL_USERDATA:

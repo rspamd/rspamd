@@ -157,7 +157,7 @@ struct ucl_macro {
 struct ucl_stack {
 	ucl_object_t *obj;
 	struct ucl_stack *next;
-	int level;
+	uint64_t level;
 };
 
 struct ucl_chunk {
@@ -168,6 +168,8 @@ struct ucl_chunk {
 	unsigned int line;
 	unsigned int column;
 	unsigned priority;
+	enum ucl_duplicate_strategy strategy;
+	enum ucl_parse_type parse_type;
 	struct ucl_chunk *next;
 };
 
@@ -303,6 +305,8 @@ ucl_create_err (UT_string **err, const char *fmt, ...)
 __attribute__ (( format( printf, 2, 3) ));
 #endif
 
+#undef UCL_FATAL_ERRORS
+
 static inline void
 ucl_create_err (UT_string **err, const char *fmt, ...)
 
@@ -314,6 +318,10 @@ ucl_create_err (UT_string **err, const char *fmt, ...)
 		utstring_printf_va (*err, fmt, ap);
 		va_end (ap);
 	}
+
+#ifdef UCL_FATAL_ERRORS
+	assert (0);
+#endif
 }
 
 /**
@@ -478,6 +486,15 @@ void ucl_emitter_print_string_msgpack (struct ucl_emitter_context *ctx,
 		const char *s, size_t len);
 
 /**
+ * Print binary string to the msgpack output
+ * @param ctx
+ * @param s
+ * @param len
+ */
+void ucl_emitter_print_binary_string_msgpack (struct ucl_emitter_context *ctx,
+		const char *s, size_t len);
+
+/**
  * Print array preamble for msgpack
  * @param ctx
  * @param len
@@ -498,7 +515,7 @@ void ucl_emitter_print_object_msgpack (struct ucl_emitter_context *ctx,
  */
 void ucl_emitter_print_null_msgpack (struct ucl_emitter_context *ctx);
 /**
- * Print object's key if needed to the msgpakc output
+ * Print object's key if needed to the msgpack output
  * @param print_key
  * @param ctx
  * @param obj
@@ -506,5 +523,21 @@ void ucl_emitter_print_null_msgpack (struct ucl_emitter_context *ctx);
 void ucl_emitter_print_key_msgpack (bool print_key,
 		struct ucl_emitter_context *ctx,
 		const ucl_object_t *obj);
+
+/**
+ * Add new element to an object using the current merge strategy and priority
+ * @param parser
+ * @param nobj
+ * @return
+ */
+bool ucl_parser_process_object_element (struct ucl_parser *parser,
+		ucl_object_t *nobj);
+
+/**
+ * Parse msgpack chunk
+ * @param parser
+ * @return
+ */
+bool ucl_parse_msgpack (struct ucl_parser *parser);
 
 #endif /* UCL_INTERNAL_H_ */

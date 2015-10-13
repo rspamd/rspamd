@@ -1,4 +1,4 @@
-/* Copyright (c) 2013, Vsevolod Stakhov
+/* Copyright (c) 2013-2015, Vsevolod Stakhov
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -182,8 +182,28 @@ typedef enum ucl_object_flags {
 	UCL_OBJECT_EPHEMERAL = (1 << 3), /**< Temporary object that does not need to be freed really */
 	UCL_OBJECT_MULTILINE = (1 << 4), /**< String should be displayed as multiline string */
 	UCL_OBJECT_MULTIVALUE = (1 << 5), /**< Object is a key with multiple values */
-	UCL_OBJECT_INHERITED = (1 << 6) /**< Object has been inherited from another */
+	UCL_OBJECT_INHERITED = (1 << 6), /**< Object has been inherited from another */
+	UCL_OBJECT_BINARY = (1 << 7) /**< Object contains raw binary data */
 } ucl_object_flags_t;
+
+/**
+ * Duplicate policy types
+ */
+enum ucl_duplicate_strategy {
+	UCL_DUPLICATE_APPEND = 0, /**< Default policy to merge based on priorities */
+	UCL_DUPLICATE_MERGE,     /**< Merge new object with old one */
+	UCL_DUPLICATE_REWRITE,   /**< Rewrite old keys */
+	UCL_DUPLICATE_ERROR      /**< Stop parsing on duplicate found */
+};
+
+/**
+ * Input format type
+ */
+enum ucl_parse_type {
+	UCL_PARSE_UCL = 0, /**< Default ucl format */
+	UCL_PARSE_MSGPACK, /**< Message pack input format */
+	UCL_PARSE_CSEXP /**< Canonical S-expressions */
+};
 
 /**
  * UCL object structure. Please mention that the most of fields should not be touched by
@@ -195,7 +215,7 @@ typedef struct ucl_object_s {
 	 */
 	union {
 		int64_t iv;							/**< Int value of an object */
-		const char *sv;					/**< String value of an object */
+		const char *sv;						/**< String value of an object */
 		double dv;							/**< Double value of an object */
 		void *av;							/**< Array					*/
 		void *ov;							/**< Object					*/
@@ -915,6 +935,21 @@ UCL_EXTERN bool ucl_parser_add_chunk (struct ucl_parser *parser,
  */
 UCL_EXTERN bool ucl_parser_add_chunk_priority (struct ucl_parser *parser,
 		const unsigned char *data, size_t len, unsigned priority);
+
+/**
+ * Full version of ucl_add_chunk with priority and duplicate strategy
+ * @param parser parser structure
+ * @param data the pointer to the beginning of a chunk
+ * @param len the length of a chunk
+ * @param priority the desired priority of a chunk (only 4 least significant bits
+ * are considered for this parameter)
+ * @param strat duplicates merging strategy
+ * @param parse_type input format
+ * @return true if chunk has been added and false in case of error
+ */
+UCL_EXTERN bool ucl_parser_add_chunk_full (struct ucl_parser *parser,
+		const unsigned char *data, size_t len, unsigned priority,
+		enum ucl_duplicate_strategy strat, enum ucl_parse_type parse_type);
 
 /**
  * Load ucl object from a string
