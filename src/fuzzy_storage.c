@@ -26,6 +26,7 @@
  * Rspamd fuzzy storage server
  */
 
+#include <libserver/rspamd_control.h>
 #include "config.h"
 #include "util.h"
 #include "rspamd.h"
@@ -34,6 +35,7 @@
 #include "fuzzy_backend.h"
 #include "ottery.h"
 #include "libserver/worker_util.h"
+#include "libserver/rspamd_control.h"
 #include "cryptobox.h"
 #include "keypairs_cache.h"
 #include "keypair_private.h"
@@ -425,13 +427,16 @@ sync_callback (gint fd, short what, void *arg)
 	guint64 old_expired, new_expired;
 
 	ctx = worker->ctx;
-	/* Call backend sync */
-	old_expired = rspamd_fuzzy_backend_expired (ctx->backend);
-	rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
-	new_expired = rspamd_fuzzy_backend_expired (ctx->backend);
 
-	if (old_expired < new_expired) {
-		server_stat->fuzzy_hashes_expired += new_expired - old_expired;
+	if (ctx->backend) {
+		/* Call backend sync */
+		old_expired = rspamd_fuzzy_backend_expired (ctx->backend);
+		rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
+		new_expired = rspamd_fuzzy_backend_expired (ctx->backend);
+
+		if (old_expired < new_expired) {
+			server_stat->fuzzy_hashes_expired += new_expired - old_expired;
+		}
 	}
 
 	/* Timer event */
@@ -442,6 +447,45 @@ sync_callback (gint fd, short what, void *arg)
 	next_check = rspamd_time_jitter (ctx->sync_timeout, 0);
 	double_to_tv (next_check, &tmv);
 	evtimer_add (&tev, &tmv);
+}
+
+static gboolean
+rspamd_fuzzy_storage_reload (struct rspamd_main *rspamd_main,
+		struct rspamd_worker *worker, gint fd,
+		struct rspamd_control_command *cmd,
+		gpointer ud)
+{
+	struct rspamd_fuzzy_storage_ctx *ctx = ud;
+	GError *err = NULL;
+	struct rspamd_control_reply rep;
+
+	msg_info ("reloading fuzzy storage after receiving reload command");
+
+	if (ctx->backend) {
+		/* Close backend and reopen it one more time */
+		rspamd_fuzzy_backend_close (ctx->backend);
+	}
+
+	memset (&rep, 0, sizeof (rep));
+	rep.type = RSPAMD_CONTROL_RELOAD;
+
+	if ((ctx->backend = rspamd_fuzzy_backend_open (ctx->hashfile,
+			TRUE,
+			&err)) == NULL) {
+		msg_err ("cannot open backend after reload: %e", err);
+		g_error_free (err);
+		rep.reply.reload.status = err->code;
+	}
+	else {
+		rep.reply.reload.status = 0;
+	}
+
+	if (write (fd, &rep, sizeof (rep)) != sizeof (rep)) {
+		msg_err ("cannot write reply to the control socket: %s",
+				strerror (errno));
+	}
+
+	return TRUE;
 }
 
 gpointer
@@ -541,6 +585,9 @@ start_fuzzy (struct rspamd_worker *worker)
 	double_to_tv (next_check, &tmv);
 	evtimer_add (&tev, &tmv);
 
+	/* Register custom reload command for the control socket */
+	rspamd_control_worker_add_cmd_handler (worker, RSPAMD_CONTROL_RELOAD,
+			rspamd_fuzzy_storage_reload, ctx);
 	/* Create radix tree */
 	if (ctx->update_map != NULL) {
 		if (!rspamd_map_add (worker->srv->cfg, ctx->update_map,
