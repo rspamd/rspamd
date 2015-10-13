@@ -96,16 +96,42 @@ struct lua_dns_cbdata {
 static int
 lua_dns_get_type (lua_State *L, int argno)
 {
-	int type;
+	int type = RDNS_REQUEST_A;
+	const gchar *strtype;
 
-	lua_pushvalue (L, argno);
-	lua_gettable (L, lua_upvalueindex (1));
+	if (lua_type (L, argno) != LUA_TSTRING) {
+		lua_pushvalue (L, argno);
+		lua_gettable (L, lua_upvalueindex (1));
 
-	type = lua_tonumber (L, -1);
-	lua_pop (L, 1);
-	if (type == 0) {
-		rspamd_lua_typerror (L, argno, "dns_request_type");
+		type = lua_tonumber (L, -1);
+		lua_pop (L, 1);
+		if (type == 0) {
+			rspamd_lua_typerror (L, argno, "dns_request_type");
+		}
 	}
+	else {
+		strtype = lua_tostring (L, argno);
+
+		if (g_ascii_strcasecmp (strtype, "a") == 0) {
+			type = RDNS_REQUEST_A;
+		}
+		else if (g_ascii_strcasecmp (strtype, "aaaa") == 0) {
+			type = RDNS_REQUEST_AAAA;
+		}
+		else if (g_ascii_strcasecmp (strtype, "mx") == 0) {
+			type = RDNS_REQUEST_MX;
+		}
+		else if (g_ascii_strcasecmp (strtype, "txt") == 0) {
+			type = RDNS_REQUEST_TXT;
+		}
+		else if (g_ascii_strcasecmp (strtype, "ptr") == 0) {
+			type = RDNS_REQUEST_PTR;
+		}
+		else {
+			msg_err ("bad DNS type: %s", strtype);
+		}
+	}
+
 	return type;
 }
 
