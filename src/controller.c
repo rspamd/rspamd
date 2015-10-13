@@ -1974,8 +1974,12 @@ rspamd_controller_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct rspamd_custom_controller_command *cmd;
+	gchar *url_str;
 
-	cmd = g_hash_table_lookup (session->ctx->custom_commands, msg->url->str);
+	url_str = rspamd_fstring_cstr (msg->url);
+	cmd = g_hash_table_lookup (session->ctx->custom_commands, url_str);
+	g_free (url_str);
+
 	if (cmd == NULL || cmd->handler == NULL) {
 		msg_err_session ("custom command %V has not been found", msg->url);
 		rspamd_controller_send_error (conn_ent, 404, "No command associated");
