@@ -213,7 +213,7 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
       end
     end
 
-    if not failed_address >= 2 then
+    if failed_address >= 2 then
       -- No A or AAAA records
       task:get_resolver():resolve_mx({
         task = task,
