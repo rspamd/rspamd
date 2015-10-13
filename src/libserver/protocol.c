@@ -389,7 +389,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		case 'i':
 		case 'I':
 			if (g_ascii_strncasecmp (headern, IP_ADDR_HEADER, hlen) == 0) {
-				if (!rspamd_parse_inet_address (&task->from_addr, hv->str)) {
+				if (!rspamd_parse_inet_address (&task->from_addr, hv->str, 0)) {
 					msg_err_task ("bad ip header: '%V'", hv);
 					return FALSE;
 				}

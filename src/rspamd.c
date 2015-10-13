@@ -979,7 +979,8 @@ main (gint argc, gchar **argv, gchar **env)
 	control_fd = -1;
 	if (rspamd_main->cfg->control_socket_path) {
 		if (!rspamd_parse_inet_address (&control_addr,
-				rspamd_main->cfg->control_socket_path)) {
+				rspamd_main->cfg->control_socket_path,
+				0)) {
 			msg_err_main ("cannot parse inet address %s",
 					rspamd_main->cfg->control_socket_path);
 		}

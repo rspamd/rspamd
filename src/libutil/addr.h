@@ -64,13 +64,36 @@ rspamd_inet_addr_t * rspamd_inet_address_from_sa (const struct sockaddr *sa,
 		socklen_t slen);
 
 /**
+ * Parse string with ipv6 address of length `len` to `target` which should be
+ * at least sizeof (in6_addr_t)
+ * @param text input string
+ * @param len lenth of `text` (if 0, then `text` must be zero terminated)
+ * @param target target structure
+ * @return TRUE if the address has been parsed, otherwise `target` content is undefined
+ */
+gboolean rspamd_parse_inet_address_ip6 (const guchar *text, gsize len,
+		gpointer target);
+
+/**
+ * Parse string with ipv4 address of length `len` to `target` which should be
+ * at least sizeof (in4_addr_t)
+ * @param text input string
+ * @param len lenth of `text` (if 0, then `text` must be zero terminated)
+ * @param target target structure
+ * @return TRUE if the address has been parsed, otherwise `target` content is undefined
+ */
+gboolean rspamd_parse_inet_address_ip4 (const guchar *text, gsize len,
+		gpointer target);
+
+/**
  * Try to parse address from string
  * @param target target to fill
  * @param src IP string representation
  * @return TRUE if addr has been parsed
  */
 gboolean rspamd_parse_inet_address (rspamd_inet_addr_t **target,
-	const char *src);
+		const char *src,
+		gsize srclen);
 
 /**
  * Returns string representation of inet address

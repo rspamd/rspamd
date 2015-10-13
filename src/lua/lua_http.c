@@ -449,7 +449,7 @@ lua_http_request (lua_State *L)
 		rspamd_session_watcher_push (session);
 	}
 
-	if (rspamd_parse_inet_address (&cbd->addr, msg->host->str)) {
+	if (rspamd_parse_inet_address (&cbd->addr, msg->host->str, 0)) {
 		/* Host is numeric IP, no need to resolve */
 		if (!lua_http_make_connection (cbd)) {
 			lua_http_maybe_free (cbd);

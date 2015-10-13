@@ -600,7 +600,7 @@ lua_tcp_request (lua_State *L)
 				g_quark_from_static_string ("lua tcp"));
 	}
 
-	if (rspamd_parse_inet_address (&cbd->addr, host)) {
+	if (rspamd_parse_inet_address (&cbd->addr, host, 0)) {
 		rspamd_inet_address_set_port (cbd->addr, port);
 		/* Host is numeric IP, no need to resolve */
 		if (!lua_tcp_make_connection (cbd)) {

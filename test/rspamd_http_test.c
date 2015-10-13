@@ -244,7 +244,7 @@ rspamd_http_test_func (void)
 
 	mtx = rspamd_mempool_get_mutex (pool);
 
-	rspamd_parse_inet_address (&addr, "127.0.0.1");
+	rspamd_parse_inet_address (&addr, "127.0.0.1", 0);
 	rspamd_inet_address_set_port (addr, ottery_rand_range (30000) + 32768);
 	serv_key = rspamd_http_connection_gen_key ();
 	client_key = rspamd_http_connection_gen_key ();

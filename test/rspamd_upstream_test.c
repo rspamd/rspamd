@@ -138,9 +138,9 @@ rspamd_upstream_test_func (void)
 	nls = rspamd_upstreams_create ();
 	g_assert (rspamd_upstreams_add_upstream (nls, "127.0.0.1", 0, NULL));
 	up = rspamd_upstream_get (nls, RSPAMD_UPSTREAM_RANDOM);
-	rspamd_parse_inet_address(&paddr, "127.0.0.2");
+	rspamd_parse_inet_address (&paddr, "127.0.0.2", 0);
 	g_assert (rspamd_upstream_add_addr (up, paddr));
-	rspamd_parse_inet_address(&paddr, "::1");
+	rspamd_parse_inet_address (&paddr, "::1", 0);
 	g_assert (rspamd_upstream_add_addr (up, paddr));
 	addr = rspamd_upstream_addr (up);
 	for (i = 0; i < 256; i ++) {

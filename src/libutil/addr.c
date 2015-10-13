@@ -352,7 +352,175 @@ err:
 }
 
 gboolean
-rspamd_parse_inet_address (rspamd_inet_addr_t **target, const char *src)
+rspamd_parse_inet_address_ip4 (const guchar *text, gsize len, gpointer target)
+{
+	const guchar *p;
+	guchar c;
+	guint32 addr = 0, *addrptr = target;
+	guint octet = 0, n = 0;
+
+	g_assert (text != NULL);
+	g_assert (target != NULL);
+
+	if (len == 0) {
+		len = strlen (text);
+	}
+
+	for (p = text; p < text + len; p++) {
+		c = *p;
+
+		if (c >= '0' && c <= '9') {
+			octet = octet * 10 + (c - '0');
+
+			if (octet > 255) {
+				return FALSE;
+			}
+
+			continue;
+		}
+
+		if (c == '.') {
+			addr = (addr << 8) + octet;
+			octet = 0;
+			n++;
+			continue;
+		}
+
+		return FALSE;
+	}
+
+	if (n == 3) {
+		addr = (addr << 8) + octet;
+		*addrptr = ntohl (addr);
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+gboolean
+rspamd_parse_inet_address_ip6 (const guchar *text, gsize len, gpointer target)
+{
+	guchar t, *zero = NULL, *s, *d,  *addr = target;
+	const guchar *p, *digit = NULL;
+	gsize len4 = 0;
+	guint n = 8, nibbles = 0, word = 0;
+
+	g_assert (text != NULL);
+	g_assert (target != NULL);
+
+	if (len == 0) {
+		len = strlen (text);
+	}
+
+	/* Ignore trailing semicolon */
+	if (text[0] == ':') {
+		p = text + 1;
+		len--;
+	}
+	else {
+		p = text;
+	}
+
+	for (/* void */; len; len--) {
+		t = *p++;
+
+		if (t == ':') {
+			if (nibbles) {
+				digit = p;
+				len4 = len;
+				*addr++ = (u_char) (word >> 8);
+				*addr++ = (u_char) (word & 0xff);
+
+				if (--n) {
+					nibbles = 0;
+					word = 0;
+					continue;
+				}
+			} else {
+				if (zero == NULL) {
+					digit = p;
+					len4 = len;
+					zero = addr;
+					continue;
+				}
+			}
+
+			return FALSE;
+		}
+
+		if (t == '.' && nibbles) {
+			if (n < 2 || digit == NULL) {
+				return FALSE;
+			}
+
+			/* IPv4 encoded in IPv6 */
+			if (!rspamd_parse_inet_address_ip4 (digit, len4 - 1, &word)) {
+				return FALSE;
+			}
+
+			word = ntohl (word);
+			*addr++ = (guchar) ((word >> 24) & 0xff);
+			*addr++ = (guchar) ((word >> 16) & 0xff);
+			n--;
+			break;
+		}
+
+		if (++nibbles > 4) {
+			/* Too many dots */
+			return FALSE;
+		}
+
+		/* Restore from hex */
+		if (t >= '0' && t <= '9') {
+			word = word * 16 + (t - '0');
+			continue;
+		}
+
+		t |= 0x20;
+
+		if (t >= 'a' && t <= 'f') {
+			word = word * 16 + (t - 'a') + 10;
+			continue;
+		}
+
+		return FALSE;
+	}
+
+	if (nibbles == 0 && zero == NULL) {
+		return FALSE;
+	}
+
+	*addr++ = (guchar) (word >> 8);
+	*addr++ = (guchar) (word & 0xff);
+
+	if (--n) {
+		if (zero) {
+			n *= 2;
+			s = addr - 1;
+			d = s + n;
+			while (s >= zero) {
+				*d-- = *s--;
+			}
+			memset (zero, 0, n);
+
+			return TRUE;
+		}
+
+	} else {
+		if (zero == NULL) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
+gboolean
+rspamd_parse_inet_address (rspamd_inet_addr_t **target,
+		const char *src,
+		gsize srclen)
 {
 	gboolean ret = FALSE;
 	rspamd_inet_addr_t *addr = NULL;
@@ -360,10 +528,14 @@ rspamd_parse_inet_address (rspamd_inet_addr_t **target, const char *src)
 	const char *end;
 	char ipbuf[INET6_ADDRSTRLEN + 1];
 	guint iplen;
-	guint portnum;
+	gulong portnum;
 
 	g_assert (src != NULL);
 	g_assert (target != NULL);
+
+	if (srclen == 0) {
+		srclen = strlen (src);
+	}
 
 	rspamd_ip_check_ipv6 ();
 
@@ -388,7 +560,8 @@ rspamd_parse_inet_address (rspamd_inet_addr_t **target, const char *src)
 		rspamd_strlcpy (ipbuf, src + 1, iplen);
 
 		if (ipv6_status == RSPAMD_IPV6_SUPPORTED &&
-				inet_pton (AF_INET6, ipbuf, &su.s6.sin6_addr) == 1) {
+				rspamd_parse_inet_address_ip6 (ipbuf, iplen - 1,
+						&su.s6.sin6_addr)) {
 			addr = rspamd_inet_addr_create (AF_INET6);
 			memcpy (&addr->u.in.addr.s6.sin6_addr, &su.s6.sin6_addr,
 					sizeof (struct in6_addr));
@@ -397,7 +570,7 @@ rspamd_parse_inet_address (rspamd_inet_addr_t **target, const char *src)
 
 		if (ret && end[1] == ':') {
 			/* Port part */
-			portnum = strtoul (end + 1, NULL, 10);
+			rspamd_strtoul (end + 1, srclen - iplen - 1, &portnum);
 			rspamd_inet_address_set_port (addr, portnum);
 		}
 	}
@@ -406,7 +579,7 @@ rspamd_parse_inet_address (rspamd_inet_addr_t **target, const char *src)
 		if ((end = strchr (src, ':')) != NULL) {
 			/* This is either port number and ipv4 addr or ipv6 addr */
 			if (ipv6_status == RSPAMD_IPV6_SUPPORTED &&
-					inet_pton (AF_INET6, src, &su.s6.sin6_addr) == 1) {
+					rspamd_parse_inet_address_ip6 (src, srclen, &su.s6.sin6_addr)) {
 				addr = rspamd_inet_addr_create (AF_INET6);
 				memcpy (&addr->u.in.addr.s6.sin6_addr, &su.s6.sin6_addr,
 						sizeof (struct in6_addr));
@@ -423,25 +596,26 @@ rspamd_parse_inet_address (rspamd_inet_addr_t **target, const char *src)
 					rspamd_strlcpy (ipbuf, src, iplen);
 				}
 
-				if (inet_pton (AF_INET, ipbuf, &su.s4.sin_addr) == 1) {
+				if (rspamd_parse_inet_address_ip4 (ipbuf, iplen - 1,
+						&su.s4.sin_addr)) {
 					addr = rspamd_inet_addr_create (AF_INET);
 					memcpy (&addr->u.in.addr.s4.sin_addr, &su.s4.sin_addr,
 							sizeof (struct in_addr));
-					portnum = strtoul (end + 1, NULL, 10);
+					rspamd_strtoul (end + 1, srclen - iplen - 1, &portnum);
 					rspamd_inet_address_set_port (addr, portnum);
 					ret = TRUE;
 				}
 			}
 		}
 		else {
-			if (inet_pton (AF_INET, src, &su.s4.sin_addr) == 1) {
+			if (rspamd_parse_inet_address_ip4 (src, srclen, &su.s4.sin_addr)) {
 				addr = rspamd_inet_addr_create (AF_INET);
 				memcpy (&addr->u.in.addr.s4.sin_addr, &su.s4.sin_addr,
 						sizeof (struct in_addr));
 				ret = TRUE;
 			}
 			else if (ipv6_status == RSPAMD_IPV6_SUPPORTED &&
-					inet_pton (AF_INET6, src, &su.s6.sin6_addr) == 1) {
+					rspamd_parse_inet_address_ip6 (src, srclen, &su.s6.sin6_addr)) {
 				addr = rspamd_inet_addr_create (AF_INET6);
 				memcpy (&addr->u.in.addr.s6.sin6_addr, &su.s6.sin6_addr,
 						sizeof (struct in6_addr));
@@ -820,7 +994,7 @@ rspamd_parse_host_port_priority_strv (gchar **tokens,
 					rspamd_ptr_array_free_hard, *addrs);
 		}
 
-		if (!rspamd_parse_inet_address (&cur_addr, tokens[0])) {
+		if (!rspamd_parse_inet_address (&cur_addr, tokens[0], 0)) {
 			msg_err ("cannot parse unix socket definition %s: %s",
 					tokens[0],
 					strerror (errno));
