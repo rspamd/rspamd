@@ -97,3 +97,47 @@ rspamd_config.R_EMPTY_IMAGE = {
   group = 'html',
   description = 'Message contains empty parts and image'
 }
+
+rspamd_config.R_SUSPICIOUS_IMAGES = {
+  callback = function(task)
+    local tp = task:get_text_parts() -- get text parts in a message
+
+    for _, p in ipairs(tp) do
+      local h = p:get_html()
+
+      if h then
+        local l = p:get_words_count()
+        local img = h:get_images()
+        local pic_words = 0
+
+        if img then
+          for _, i in ipairs(img) do
+            if i['embedded'] then
+              local dim = i['width'] + i['height']
+
+              -- do not trigger on small and large images
+              if dim > 100 and dim < 3000 then
+                -- We assume that a single picture 100x200 contains approx 3 words of text
+                pic_words = pic_words + dim / 100
+              end
+            end
+          end
+        end
+
+        if l + pic_words > 0 then
+          local rel = pic_words / (l + pic_words)
+
+          if rel > 0.5 then
+            return true, (rel - 0.5) * 2
+          end
+        end
+      end
+    end
+
+    return false
+  end,
+
+  score = 5.0,
+  group = 'html',
+  description = 'Message contains many suspicious messages'
+}
