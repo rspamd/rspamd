@@ -360,3 +360,19 @@ rspamd_ftok_map (const rspamd_fstring_t *s)
 
 	return tok;
 }
+
+char *
+rspamd_fstring_cstr (const rspamd_fstring_t *s)
+{
+	char *result;
+
+	if (s == NULL) {
+		return NULL;
+	}
+
+	result = g_malloc (s->len + 1);
+	memcpy (result, s->str, s->len);
+	result[s->len] = '\0';
+
+	return result;
+}
