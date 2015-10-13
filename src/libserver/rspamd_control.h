@@ -26,6 +26,7 @@
 #define RSPAMD_RSPAMD_CONTROL_H
 
 #include "config.h"
+#include <event.h>
 
 struct rspamd_main;
 struct rspamd_worker;
