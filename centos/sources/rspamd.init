@@ -28,6 +28,7 @@
 [ "$NETWORKING" = "no" ] && exit 0
 
 rspamd="/usr/bin/rspamd"
+rspamadm="/usr/bin/rspamadm"
 prog=$(basename $rspamd)
 
 RSPAMD_CONF_FILE="/etc/rspamd/rspamd.sysvinit.conf"
@@ -87,7 +88,7 @@ force_reload() {
 }
 
 configtest() {
-  $rspamd -u $RSPAMD_USER -g $RSPAMD_GROUP -t -c $RSPAMD_CONF_FILE
+  $rspamadm configtest -c $RSPAMD_CONF_FILE
 }
 
 rh_status() {

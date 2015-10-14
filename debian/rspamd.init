@@ -16,6 +16,7 @@ PATH=/sbin:/usr/sbin:/bin:/usr/bin
 DESC="Rspamd"
 NAME=rspamd
 DAEMON=/usr/bin/$NAME
+RSPAMADM=/usr/bin/rspamdadm
 DAEMON_ARGS="-c /etc/rspamd/rspamd.sysvinit.conf"
 DESC="rapid spam filtering system"
 PIDFILE=/run/rspamd/$NAME.pid
@@ -42,7 +43,7 @@ do_start()
 	#   2 if daemon could not be started
 	mkdir -m 755 -p /run/rspamd
 	chown _rspamd:_rspamd /run/rspamd
-	start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON --test > /dev/null \
+	$RSPAMADM configtest $DAEMON_ARGS > /dev/null \
 		|| return 1
 	start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON -- \
 		$DAEMON_ARGS -u _rspamd -g _rspamd \
