@@ -1,3 +1,37 @@
+1.0.5:
+	* Add rspamd control interface:
+		- support `stat` command to get runtime stats of rspamd workers
+		- support `reload` command to reload runtime elements (e.g. sqlite3 databases)
+	* Rework curve25519 library for modular design:
+		- add Sandy2x implementation by Tung Chou
+		- fix CPU detection for variables loading assembly
+		- add testing for curve25519 ECDH
+	* New fixed strings library
+	* Add `R_SUSPICIOUS_IMAGES` rule
+	* Enable mmap in sqlite3
+	* Use new strings in the HTTP code
+	* Improve google perftools invocation
+	* Improve performance profiling in http test
+	* Reorganize includes to reduce namespace pollution
+	* Allow specific sections printing in configdump command
+	* Rework workers signals handlers to be chained if needed
+	* Update socketpair utility function
+	* Add control_path option for rspamd control protocol
+	* Fix ownership when listening on UNIX sockets
+	* Rework signals processing in main
+	* Remove extra tools from rspamd (they live in rspamadm now)
+	* Remove global rspamd_main
+	* Add global timeout for the overall task processing (8 seconds by default)
+	* Sanitize NULL values for fuzzy backend
+	* Store NM between encrypt/decrypt
+	* Add textpart:get_words_count method
+	* Fix generic DNS request in lua
+	* Tune hfilter weights
+	* Add support of IPv6 in hfilter
+	* Fix parsing of HTTP headers with IP addresses
+	* Sync with the recent libucl
+	* Various minor bugfixes
+
 1.0.4:
 	* Add configdump routine to rspamadm
 	* Implement retransmits for fuzzy_check plugin
