@@ -645,7 +645,7 @@ rspamd_term_handler (gint signo, short what, gpointer arg)
 	struct rspamd_main *rspamd_main = arg;
 
 	msg_info_main ("catch termination signal, waiting for children");
-	rspamd_pass_signal (rspamd_main->workers, SIGTERM);
+	rspamd_pass_signal (rspamd_main->workers, signo);
 
 	event_base_loopexit (rspamd_main->ev_base, NULL);
 }

@@ -112,8 +112,8 @@ rspamd_worker_term_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 				sigh->worker->srv->server_pool->tag.tagname,
 				sigh->worker->srv->server_pool->tag.uid,
 				G_STRFUNC,
-				"terminating after receiving %s signal",
-				strsignal (sigh->signo));
+				"terminating after receiving signal %s",
+				g_strsignal (sigh->signo));
 		wanna_die = 1;
 		tv.tv_sec = 0;
 		tv.tv_usec = 0;
