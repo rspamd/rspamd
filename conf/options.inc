@@ -21,3 +21,5 @@ classify_headers = [
 	"Content-Type",
 	"X-MimeOLE",
 ];
+
+control_socket = "$DBDIR/rspamd.sock mode=0600";
