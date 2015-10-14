@@ -2,3 +2,4 @@
 
 type = "normal";
 mime = true;
+task_timeout = 8s;
