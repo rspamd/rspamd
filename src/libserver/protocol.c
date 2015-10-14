@@ -114,34 +114,32 @@ rspamd_protocol_quark (void)
 static gchar *
 rspamd_protocol_escape_braces (struct rspamd_task *task, rspamd_fstring_t *in)
 {
-	gint len = 0;
-	gchar *orig, *p, *res;
+	guint nchars = 0;
+	const gchar *p;
+	rspamd_ftok_t tok;
 
 	g_assert (in != NULL);
 	g_assert (in->len > 0);
 
-	orig = in->str;
+	p = in->str;
 
-	while ((g_ascii_isspace (*orig) || *orig ==
-		'<') && orig - in->str < (gint)in->len) {
-		orig++;
+	while ((g_ascii_isspace (*p) || *p == '<') && nchars < in->len) {
+		p++;
+		nchars ++;
 	}
 
-	res = rspamd_mempool_alloc (task->task_pool,
-			in->len - (orig - in->str));
+	tok.begin = p;
 
 	p = in->str + in->len - 1;
-	len = in->len - (orig - in->str);
+	tok.len = in->len - nchars;
 
 	while ((!g_ascii_isspace (*p) && *p !=
-		'>') && p > orig) {
+		'>') && tok.len > 0) {
 		p--;
-		len--;
+		tok.len --;
 	}
 
-	rspamd_strlcpy (res, orig, len + 1);
-
-	return res;
+	return rspamd_mempool_ftokdup (task->task_pool, &tok);
 }
 
 static gboolean
@@ -280,15 +278,18 @@ err:
 	return FALSE;
 }
 
+#define IF_HEADER(name) \
+	srch.begin = (name); \
+	srch.len = sizeof (name) - 1; \
+	if (rspamd_ftok_casecmp (hn_tok, &srch) == 0)
+
 gboolean
 rspamd_protocol_handle_headers (struct rspamd_task *task,
 	struct rspamd_http_message *msg)
 {
-	gchar *headern;
 	rspamd_fstring_t *hn, *hv;
-	rspamd_ftok_t *hn_tok, *hv_tok;
-	gboolean res = TRUE, validh, fl, has_ip = FALSE;
-	gsize hlen;
+	rspamd_ftok_t *hn_tok, *hv_tok, srch;
+	gboolean fl, has_ip = FALSE;
 	struct rspamd_http_header *h;
 
 	LL_FOREACH (msg->headers, h)
@@ -298,56 +299,47 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		hn_tok = rspamd_ftok_map (hn);
 		hv_tok = rspamd_ftok_map (hv);
 
-		headern = hn->str;
-		hlen = hn->len;
-		validh = TRUE;
-
 		g_hash_table_insert (task->request_headers, hn_tok, hv_tok);
 
-		switch (headern[0]) {
+		switch (*hn_tok->begin) {
 		case 'd':
 		case 'D':
-			if (g_ascii_strncasecmp (headern, DELIVER_TO_HEADER, hlen) == 0) {
+			IF_HEADER (DELIVER_TO_HEADER) {
 				task->deliver_to = rspamd_protocol_escape_braces (task, hv);
 				debug_task ("read deliver-to header, value: %s",
 					task->deliver_to);
 			}
 			else {
 				debug_task ("wrong header: %V", hn);
-				validh = FALSE;
 			}
 			break;
 		case 'h':
 		case 'H':
-			if (g_ascii_strncasecmp (headern, HELO_HEADER, hlen) == 0) {
-				task->helo = hv->str;
+			IF_HEADER (HELO_HEADER) {
+				task->helo = rspamd_mempool_ftokdup (task->task_pool, hv_tok);
 				debug_task ("read helo header, value: %s", task->helo);
 			}
-			else if (g_ascii_strncasecmp (headern, HOSTNAME_HEADER, hlen) == 0) {
-				task->hostname = hv->str;
+			IF_HEADER (HOSTNAME_HEADER) {
+				task->hostname = rspamd_mempool_ftokdup (task->task_pool,
+						hv_tok);
 				debug_task ("read hostname header, value: %s", task->hostname);
-			}
-			else {
-				debug_task ("wrong header: %V", hn);
-				validh = FALSE;
 			}
 			break;
 		case 'f':
 		case 'F':
-			if (g_ascii_strncasecmp (headern, FROM_HEADER, hlen) == 0) {
-				if (!rspamd_task_add_sender (task, hv->str)) {
+			IF_HEADER (FROM_HEADER) {
+				if (!rspamd_task_add_sender (task,
+						rspamd_mempool_ftokdup (task->task_pool, hv_tok))) {
 					msg_err_task ("bad from header: '%V'", hv);
-					validh = FALSE;
 				}
 			}
 			else {
 				debug_task ("wrong header: %V", hn);
-				validh = FALSE;
 			}
 			break;
 		case 'j':
 		case 'J':
-			if (g_ascii_strncasecmp (headern, JSON_HEADER, hlen) == 0) {
+			IF_HEADER (JSON_HEADER) {
 				fl = rspamd_config_parse_flag (hv->str, hv->len);
 				if (fl) {
 					task->flags |= RSPAMD_TASK_FLAG_JSON;
@@ -358,37 +350,35 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			}
 			else {
 				debug_task ("wrong header: %V", hn);
-				validh = FALSE;
 			}
 			break;
 		case 'q':
 		case 'Q':
-			if (g_ascii_strncasecmp (headern, QUEUE_ID_HEADER, hlen) == 0) {
-				task->queue_id = hv->str;
+			IF_HEADER (QUEUE_ID_HEADER) {
+				task->queue_id = rspamd_mempool_ftokdup (task->task_pool,
+						hv_tok);
 				debug_task ("read queue_id header, value: %s", task->queue_id);
 			}
 			else {
 				debug_task ("wrong header: %V", hn);
-				validh = FALSE;
 			}
 			break;
 		case 'r':
 		case 'R':
-			if (g_ascii_strncasecmp (headern, RCPT_HEADER, hlen) == 0) {
-				if (!rspamd_task_add_recipient (task, hv->str)) {
+			IF_HEADER (RCPT_HEADER) {
+				if (!rspamd_task_add_recipient (task,
+						rspamd_mempool_ftokdup (task->task_pool, hv_tok))) {
 					msg_err_task ("bad from header: '%V'", h->value);
-					validh = FALSE;
 				}
 				debug_task ("read rcpt header, value: %V", hv);
 			}
 			else {
 				debug_task ("wrong header: %V", hn);
-				validh = FALSE;
 			}
 			break;
 		case 'i':
 		case 'I':
-			if (g_ascii_strncasecmp (headern, IP_ADDR_HEADER, hlen) == 0) {
+			IF_HEADER (IP_ADDR_HEADER) {
 				if (!rspamd_parse_inet_address (&task->from_addr, hv->str, hv->len)) {
 					msg_err_task ("bad ip header: '%V'", hv);
 					return FALSE;
@@ -398,98 +388,76 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			}
 			else {
 				debug_task ("wrong header: %V", hn);
-				validh = FALSE;
 			}
 			break;
 		case 'p':
 		case 'P':
-			if (g_ascii_strncasecmp (headern, PASS_HEADER, hlen) == 0) {
-				if (hv->len == sizeof ("all") - 1 &&
-					g_ascii_strncasecmp (hv->str, "all", hv->len) == 0) {
+			IF_HEADER (PASS_HEADER) {
+				srch.begin = "all";
+				srch.len = 3;
+
+				if (rspamd_ftok_casecmp (hv_tok, &srch) == 0) {
 					task->flags |= RSPAMD_TASK_FLAG_PASS_ALL;
 					debug_task ("pass all filters");
 				}
 			}
-			else {
-				validh = FALSE;
-			}
 			break;
 		case 's':
 		case 'S':
-			if (g_ascii_strncasecmp (headern, SUBJECT_HEADER, hlen) == 0) {
-				task->subject = hv->str;
-			}
-			else {
-				validh = FALSE;
+			IF_HEADER (SUBJECT_HEADER) {
+				task->subject = rspamd_mempool_ftokdup (task->task_pool, hv_tok);
 			}
 			break;
 		case 'u':
 		case 'U':
-			if (g_ascii_strncasecmp (headern, USER_HEADER, hlen) == 0) {
+			IF_HEADER (USER_HEADER) {
 				/*
 				 * We must ignore User header in case of spamc, as SA has
 				 * different meaning of this header
 				 */
 				if (!RSPAMD_TASK_IS_SPAMC (task)) {
-					task->user = hv->str;
+					task->user = rspamd_mempool_ftokdup (task->task_pool,
+							hv_tok);
 				}
 			}
-			if (g_ascii_strncasecmp (headern, URLS_HEADER, hlen) == 0) {
-				if (h->value->len == sizeof ("extended") - 1 &&
-						g_ascii_strncasecmp (hv->str, "extended",
-								hv->len) == 0) {
+			IF_HEADER (URLS_HEADER) {
+				srch.begin = "extended";
+				srch.len = 8;
+
+				if (rspamd_ftok_casecmp (hv_tok, &srch) == 0) {
 					task->flags |= RSPAMD_TASK_FLAG_EXT_URLS;
 					debug_task ("extended urls information");
 				}
 			}
-			else {
-				validh = FALSE;
-			}
 			break;
 		case 'l':
 		case 'L':
-			if (g_ascii_strncasecmp (headern, NO_LOG_HEADER, hlen) == 0) {
-				if (g_ascii_strncasecmp (hv->str, "no", hv->len) == 0) {
+			IF_HEADER (NO_LOG_HEADER) {
+				srch.begin = "no";
+				srch.len = 2;
+
+				if (rspamd_ftok_casecmp (hv_tok, &srch) == 0) {
 					task->flags |= RSPAMD_TASK_FLAG_NO_LOG;
 				}
-			}
-			else {
-				validh = FALSE;
 			}
 			break;
 		case 'm':
 		case 'M':
-			if (g_ascii_strncasecmp (headern, MLEN_HEADER, hlen) == 0) {
-				task->message_len = strtoul (hv->str, NULL, 10);
-
-				if (task->message_len == 0) {
+			IF_HEADER (MLEN_HEADER) {
+				if (!rspamd_strtoul (hv_tok->begin,
+						hv_tok->len,
+						&task->message_len)) {
 					msg_err_task ("Invalid message length header: %V", hv);
-					validh = FALSE;
 				}
 				else {
 					task->flags |= RSPAMD_TASK_FLAG_HAS_CONTROL;
 				}
 			}
-			else {
-				validh = FALSE;
-			}
 			break;
 		default:
 			debug_task ("unknown header: %V", hn);
-			validh = FALSE;
 			break;
 		}
-
-		if (!validh) {
-			res = FALSE;
-		}
-	}
-
-	if (!res && task->cfg->strict_protocol_headers) {
-		msg_err_task (
-			"deny processing of a request with incorrect or unknown headers");
-		g_set_error (&task->err, rspamd_protocol_quark(), 400, "invalid header command");
-		return FALSE;
 	}
 
 	if (task->hostname == NULL || task->hostname[0] == '\0') {

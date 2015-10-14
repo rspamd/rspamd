@@ -117,8 +117,8 @@ struct rspamd_task {
 	enum rspamd_command cmd;						/**< command										*/
 	gint sock;										/**< socket descriptor								*/
 	guint flags;									/**< Bit flags										*/
-	guint message_len;								/**< Message length									*/
 	guint32 dns_requests;							/**< number of DNS requests per this task			*/
+	gulong message_len;								/**< Message length									*/
 	gchar *helo;									/**< helo header value								*/
 	gchar *queue_id;								/**< queue id if specified							*/
 	const gchar *message_id;						/**< message id										*/
