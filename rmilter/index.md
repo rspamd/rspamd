@@ -278,8 +278,8 @@ Back to [top](#).
 6.  SPF (EOM)
 7.  Message size (EOM) if failed, skip clamav, dcc and spamd checks
 8.  DCC (EOM)
-9.  Clamav (EOM)
 10. Spamassassin (EOM)
+9.  Clamav (EOM)
 11. Beanstalk (EOM)
 12. DKIM add signature (EOM)
 
