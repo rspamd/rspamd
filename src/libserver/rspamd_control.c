@@ -152,11 +152,14 @@ rspamd_control_connection_close (struct rspamd_control_session *session)
 static void
 rspamd_control_write_reply (struct rspamd_control_session *session)
 {
-	ucl_object_t *rep, *cur;
+	ucl_object_t *rep, *cur, *workers;
 	struct rspamd_control_reply_elt *elt;
 	gchar tmpbuf[64];
+	gdouble total_utime = 0, total_systime = 0;
+	guint total_conns = 0;
 
 	rep = ucl_object_typed_new (UCL_OBJECT);
+	workers = ucl_object_typed_new (UCL_OBJECT);
 
 	DL_FOREACH (session->replies, elt) {
 		rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "%P", elt->wrk->pid);
@@ -177,6 +180,11 @@ rspamd_control_write_reply (struct rspamd_control_session *session)
 					elt->reply.reply.stat.uptime), "uptime", 0, false);
 			ucl_object_insert_key (cur, ucl_object_fromint (
 					elt->reply.reply.stat.maxrss), "maxrss", 0, false);
+
+			total_utime += elt->reply.reply.stat.utime;
+			total_systime += elt->reply.reply.stat.systime;
+			total_conns += elt->reply.reply.stat.conns;
+
 			break;
 		case RSPAMD_CONTROL_RELOAD:
 			ucl_object_insert_key (cur, ucl_object_fromint (
@@ -186,7 +194,22 @@ rspamd_control_write_reply (struct rspamd_control_session *session)
 			break;
 		}
 
-		ucl_object_insert_key (rep, cur, tmpbuf, 0, true);
+		ucl_object_insert_key (workers, cur, tmpbuf, 0, true);
+	}
+
+	ucl_object_insert_key (rep, workers, "workers", 0, false);
+
+	if (session->cmd.type == RSPAMD_CONTROL_STAT) {
+		/* Total stats */
+		cur = ucl_object_typed_new (UCL_OBJECT);
+		ucl_object_insert_key (cur, ucl_object_fromint (
+				total_conns), "conns", 0, false);
+		ucl_object_insert_key (cur, ucl_object_fromdouble (
+				total_utime), "utime", 0, false);
+		ucl_object_insert_key (cur, ucl_object_fromdouble (
+				total_systime), "systime", 0, false);
+
+		ucl_object_insert_key (rep, cur, "total", 0, false);
 	}
 
 	rspamd_control_send_ucl (session, rep);
