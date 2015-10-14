@@ -46,7 +46,7 @@ modules {
 In this file, we open lua script placed in `$CONFDIR/lua/rspamd.lua` and load
 lua rules from it. Then we include global [options](options.md) section followed
 by [logging](logging.md) logging configuration. [Metrics](metrics.md) section defines
-metric settings, including rules weights and rspamd actions. [Workers](workers.md)
+metric settings, including rules weights and rspamd actions. [Workers](../workers/index.md)
 section specifies rspamd workers settings. [Composites](composites.md) is an utility
 section that describes composite symbols. Statistical filters are defined in 
 [statistic](statistic.md) section. Rspamd stores modules configuration (for both lua
