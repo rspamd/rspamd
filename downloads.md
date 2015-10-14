@@ -5,7 +5,7 @@ title: Downloads
 
 # Downloading rspamd
 
-<p><a class="btn btn-primary btn-lg" href="/downloads/rspamd-1.0.4.tar.xz">Download rspamd-1.0.4</a></p>
+<p><a class="btn btn-primary btn-lg" href="/downloads/rspamd-1.0.5.tar.xz">Download rspamd-1.0.5</a></p>
 <p><iframe src="//rspamd.com/github-btn.html?user=vstakhov&repo=rspamd&type=watch&count=true&size=large"
   allowtransparency="true" frameborder="0" scrolling="0" width="170" height="30"></iframe></p>
 
@@ -34,7 +34,7 @@ For CentOS 6 on x86_64 platform you might also use the optimized version of rspa
 These packages are also tested on the recent Ubuntu 14.04 LTS. However, you might want to fix `systemd` specific routines 
 in `/etc/rspamd/workers.conf` and `/etc/rspamd/logging.conf`.
 
-If you want to check the integrity of your source archive downloaded, then you could use the following [GPG signature](/downloads/rspamd-1.0.4.tar.xz.asc).
+If you want to check the integrity of your source archive downloaded, then you could use the following [GPG signature](/downloads/rspamd-1.0.5.tar.xz.asc).
 This signature can be verified against my [GPG public key](https://rspamd.com/vsevolod.pubkey). 
 
 There is a [guide](https://rspamd.com/doc/quickstart.html) that describes the process of rspamd installation and initial configuration for various operating systems.
