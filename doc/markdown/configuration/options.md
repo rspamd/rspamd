@@ -7,6 +7,7 @@ The default options are depicted in the following example configuration snippet:
 
 ~~~nginx
 filters = "chartable,dkim,spf,surbl,regexp,fuzzy_check";
+raw_mode = false;
 one_shot = false;
 cache_file = "$DBDIR/symbols.cache";
 map_watch_interval = 1min;
@@ -20,6 +21,14 @@ dns {
 }
 tempdir = "/tmp";
 url_tld = "${PLUGINSDIR}/effective_tld_names.dat";
+classify_headers = [
+	"User-Agent",
+	"X-Mailer",
+	"Content-Type",
+	"X-MimeOLE",
+];
+
+control_socket = "$DBDIR/rspamd.sock mode=0600";
 ~~~
 
 ## Global options
@@ -37,6 +46,8 @@ symbol).
 * `url_tld`: path to file with top level domain suffixes used by rspamd to find URL's in messages; by default this file is shipped with rspamd and should not be touched manually.
 * `pid_file`: file used to store pid of the rspamd main process (not used with sytemd).
 * `min_word_len`: minimum size in letters (valid for utf8 texts as well) for a sequence of characters to be treated as a word; normally rspamd skips sequences if they are shorter or equal to three symbols.
+* `control_socket`: path/bind credits for the control socket
+* `classify_headers`: list of headers that are processed by statistics
 
 ## DNS options
 
