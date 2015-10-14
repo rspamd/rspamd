@@ -228,8 +228,18 @@ rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t **target)
 	addr->slen = len;
 
 	if (addr->af == AF_UNIX) {
-		addr->u.un = g_slice_alloc (sizeof (*addr->u.un));
-		memcpy (&addr->u.un->addr, &su.su, sizeof (struct sockaddr_un));
+		addr->u.un = g_slice_alloc0 (sizeof (*addr->u.un));
+		/* Get name from the listening socket */
+		len = sizeof (su);
+
+		if (getsockname (sock, &su.sa, &len) != -1) {
+			memcpy (&addr->u.un->addr, &su.su, MIN (len,
+					sizeof (struct sockaddr_un)));
+		}
+		else {
+			/* Just copy socket address */
+			memcpy (&addr->u.un->addr, &su.sa, sizeof (struct sockaddr));
+		}
 	}
 	else {
 		memcpy (&addr->u.in.addr, &su, MIN (len, sizeof (addr->u.in.addr)));
