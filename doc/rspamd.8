@@ -18,11 +18,6 @@ Rspamd is designed to process connections completely asynchronous and do
 not block anywhere in code.
 .SH OPTIONS
 .TP
-.B \-t, \-\-config\-test
-Perform config test and exit
-.RS
-.RE
-.TP
 .B \-f, \-\-no\-fork
 Do not daemonize main process
 .RS
@@ -48,33 +43,8 @@ Path to pidfile
 .RS
 .RE
 .TP
-.B \-C, \-\-dump\-cache
-Dump symbols cache stats and exit
-.RS
-.RE
-.TP
-.B \-d, \-\-debug
-Force debug output
-.RS
-.RE
-.TP
 .B \-i, \-\-insecure
 Ignore running workers as privileged users (insecure)
-.RS
-.RE
-.TP
-.B \-\-test\-lua=\f[I]path\f[]
-Specify lua file(s) to test
-.RS
-.RE
-.TP
-.B \-\-sign\-config=\f[I]path\f[]
-Specify config file(s) to sign
-.RS
-.RE
-.TP
-.B \-\-private\-key=\f[I]path\f[]
-Specify private key to sign
 .RS
 .RE
 .SH EXAMPLES
@@ -100,22 +70,6 @@ Run rspamd specifying user and group:
 .nf
 \f[C]
 rspamd\ \-u\ rspamd\ \-g\ rspamd\ \-c\ /etc/rspamd/rspamd.conf
-\f[]
-.fi
-.PP
-Test lua scripts using rspamd API:
-.IP
-.nf
-\f[C]
-rspamd\ \-\-test\-lua=~/test1.lua\ \-\-test\-lua=~/test2.lua
-\f[]
-.fi
-.PP
-Sign config files for \f[C]\&.includes\f[] macro:
-.IP
-.nf
-\f[C]
-rspamd\ \-\-private\-key=sign.key\ \-\-sign\-config=rspamd.conf
 \f[]
 .fi
 .SH SEE ALSO

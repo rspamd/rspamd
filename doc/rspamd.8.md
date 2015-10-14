@@ -19,9 +19,6 @@ Rspamd is designed to process connections completely asynchronous and do not blo
 
 # OPTIONS
 
--t, \--config-test
-:	Perform config test and exit
-
 -f, \--no-fork
 :	Do not daemonize main process
 
@@ -37,24 +34,8 @@ Rspamd is designed to process connections completely asynchronous and do not blo
 -p *path*, \--pid=*path*
 :	Path to pidfile
 
--C, \--dump-cache
-:	Dump symbols cache stats and exit
-
--d, \--debug
-:	Force debug output
-
 -i, \--insecure
 :	Ignore running workers as privileged users (insecure)
-
-\--test-lua=*path*
-:	Specify lua file(s) to test
-
-\--sign-config=*path*
-:	Specify config file(s) to sign
-
-\--private-key=*path*
-:	Specify private key to sign
-
 
 # EXAMPLES
 
@@ -69,14 +50,6 @@ Run rspamd in foreground with custom configuration:
 Run rspamd specifying user and group:
 
 	rspamd -u rspamd -g rspamd -c /etc/rspamd/rspamd.conf
-
-Test lua scripts using rspamd API:
-
-	rspamd --test-lua=~/test1.lua --test-lua=~/test2.lua
-
-Sign config files for `.includes` macro:
-
-	rspamd --private-key=sign.key --sign-config=rspamd.conf
 
 # SEE ALSO
 
