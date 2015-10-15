@@ -40,6 +40,8 @@
 #include <cpuid.h>
 #endif
 
+#include <signal.h>
+
 unsigned long cpu_config = 0;
 
 static const guchar n0[16] = {0};
@@ -89,6 +91,64 @@ rspamd_cryptobox_cpuid (gint cpu[4], gint info)
 #endif
 }
 
+static sig_atomic_t ok = 0;
+
+static void
+rspamd_cryptobox_ill_handler (int signo)
+{
+	ok = 0;
+}
+
+static gboolean
+rspamd_cryptobox_test_instr (gint instr)
+{
+	void (*old_handler) (int);
+
+#if defined(__GNUC__)
+	ok = 1;
+	old_handler = signal (SIGILL, rspamd_cryptobox_ill_handler);
+
+	switch (instr) {
+#ifdef HAVE_SSE2
+	case CPUID_SSE2:
+		__asm__ volatile ("pmuludq %xmm0, %xmm0");
+		break;
+#endif
+#ifdef HAVE_SSE3
+	case CPUID_SSE3:
+		__asm__ volatile ("movshdup %xmm0, %xmm0");
+		break;
+#endif
+#ifdef HAVE_SSSE3
+	case CPUID_SSSE3:
+		__asm__ volatile ("pshufb %xmm0, %xmm0");
+		break;
+#endif
+#ifdef HAVE_SSE41
+	case CPUID_SSE41:
+		__asm__ volatile ("pcmpeqq %xmm0, %xmm0");
+		break;
+#endif
+#ifdef HAVE_AVX
+	case CPUID_AVX:
+		__asm__ volatile ("vpaddq %xmm0, %xmm0, %xmm0");
+		break;
+#endif
+#ifdef HAVE_AVX2
+	case CPUID_AVX2:
+		__asm__ volatile ("vpaddq %ymm0, %ymm0, %ymm0");\
+		break;
+#endif
+	default:
+		break;
+	}
+
+	signal (SIGILL, old_handler);
+#endif
+
+	return ok == 1;
+}
+
 void
 rspamd_cryptobox_init (void)
 {
@@ -102,25 +162,38 @@ rspamd_cryptobox_init (void)
 		/* Check OSXSAVE bit first of all */
 		if ((cpu[2] & ((gint)1 << 9))) {
 			if ((cpu[3] & ((gint)1 << 26))) {
-				cpu_config |= CPUID_SSE2;
+				if (rspamd_cryptobox_test_instr (CPUID_SSE2)) {
+					cpu_config |= CPUID_SSE2;
+				}
 			}
 			if ((cpu[2] & ((gint)1 << 28))) {
-				cpu_config |= CPUID_AVX;
+				if (rspamd_cryptobox_test_instr (CPUID_AVX)) {
+					cpu_config |= CPUID_AVX;
+				}
 			}
 			if ((cpu[2] & ((gint)1 << 0))) {
-				cpu_config |= CPUID_SSE3;
+				if (rspamd_cryptobox_test_instr (CPUID_SSE3)) {
+					cpu_config |= CPUID_SSE3;
+				}
 			}
 			if ((cpu[2] & ((gint)1 << 9))) {
-				cpu_config |= CPUID_SSSE3;
+				if (rspamd_cryptobox_test_instr (CPUID_SSSE3)) {
+					cpu_config |= CPUID_SSSE3;
+				}
 			}
 			if ((cpu[2] & ((gint)1 << 19))) {
-				cpu_config |= CPUID_SSE41;
+				if (rspamd_cryptobox_test_instr (CPUID_SSE41)) {
+					cpu_config |= CPUID_SSE41;
+				}
 			}
 
 			if (nid > 7) {
 				rspamd_cryptobox_cpuid (cpu, 7);
-				if ((cpu[1] & ((gint)1 <<  5))) {
-					cpu_config |= CPUID_AVX2;
+
+				if ((cpu[1] & ((gint) 1 << 5))) {
+					if (rspamd_cryptobox_test_instr (CPUID_AVX2)) {
+						cpu_config |= CPUID_AVX2;
+					}
 				}
 			}
 		}
