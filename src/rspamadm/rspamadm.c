@@ -89,7 +89,7 @@ rspamadm_usage (GOptionContext *context)
 }
 
 static void
-rspamadm_commands ()
+rspamadm_commands (void)
 {
 	const struct rspamadm_command **cmd;
 
