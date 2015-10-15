@@ -29,7 +29,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -- https://rspamd.com/doc/configuration/settings.html
 
 local set_section = rspamd_config:get_all_opt("settings")
-if not set_section then return end
+
 local settings = {
   [1] = {},
   [2] = {},
@@ -461,6 +461,8 @@ local function process_settings_map(string)
       process_settings_table(obj)
     end
   end
+
+  return res
 end
 
 if set_section[1] and type(set_section[1]) == "string" then
