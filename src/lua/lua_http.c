@@ -191,7 +191,7 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 	fd = rspamd_inet_address_connect (cbd->addr, SOCK_STREAM, TRUE);
 
 	if (fd == -1) {
-		msg_info ("cannot connect to %v", cbd->msg->host);
+		msg_info ("cannot connect to %V", cbd->msg->host);
 		return FALSE;
 	}
 	cbd->fd = fd;
