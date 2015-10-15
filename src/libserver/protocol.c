@@ -709,8 +709,11 @@ emails_protocol_cb (gpointer key, gpointer value, gpointer ud)
 	struct rspamd_url *url = value;
 	ucl_object_t *obj;
 
-	obj = ucl_object_fromlstring (url->user, url->userlen + url->hostlen + 1);
-	ucl_array_append (cb->top, obj);
+	if (url->userlen > 0 && url->hostlen > 0) {
+		obj = ucl_object_fromlstring (url->user,
+				url->userlen + url->hostlen + 1);
+		ucl_array_append (cb->top, obj);
+	}
 }
 
 static ucl_object_t *
