@@ -56,16 +56,12 @@ CURVE25519_DECLARE(avx);
 CURVE25519_DECLARE(ref);
 #define CURVE25519_REF CURVE25519_IMPL(0, "ref", ref)
 
-#if !defined(__LP64__)
-CURVE25519_DECLARE(donna32);
-#define CURVE25519_GENERIC CURVE25519_IMPL(0, "donna32", donna32)
-#else
-CURVE25519_DECLARE(donna64);
-#define CURVE25519_GENERIC CURVE25519_IMPL(0, "donna64", donna64)
-#endif
+CURVE25519_DECLARE(donna);
+#define CURVE25519_DONNA CURVE25519_IMPL(0, "donna", donna)
+
 
 static const curve25519_impl_t curve25519_list[] = {
-		CURVE25519_GENERIC,
+		CURVE25519_DONNA,
 #if defined(CURVE25519_AVX)
 		CURVE25519_AVX,
 #endif

@@ -477,7 +477,7 @@ static void crecip (felem out, const felem z)
 	/* 2^255 - 21 */fmul (out, t0, a);
 }
 
-int scalarmult_donna64 (u8 *mypublic, const u8 *secret, const u8 *basepoint)
+int scalarmult_donna (u8 *mypublic, const u8 *secret, const u8 *basepoint)
 {
 	limb bp[5], x[5], z[5], zmone[5];
 	unsigned char e[32];
