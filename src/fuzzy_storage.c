@@ -605,6 +605,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	rspamd_map_watch (worker->srv->cfg, ctx->ev_base);
 
 	event_base_loop (ctx->ev_base, 0);
+	rspamd_worker_block_signals ();
 
 	rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
 	rspamd_fuzzy_backend_close (ctx->backend);

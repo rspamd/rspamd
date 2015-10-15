@@ -1043,12 +1043,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	event_base_loop (ev_base, 0);
 	/* We need to block signals unless children are waited for */
-	sigaddset (&signals.sa_mask, SIGTERM);
-	sigaddset (&signals.sa_mask, SIGINT);
-	sigaddset (&signals.sa_mask, SIGHUP);
-	sigaddset (&signals.sa_mask, SIGUSR1);
-	sigaddset (&signals.sa_mask, SIGUSR2);
-	sigprocmask (SIG_BLOCK, &signals.sa_mask, NULL);
+	rspamd_worker_block_signals ();
 
 	if (control_fd != -1) {
 		event_del (&control_ev);

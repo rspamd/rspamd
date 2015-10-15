@@ -2548,6 +2548,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_stat_init (worker->srv->cfg);
 
 	event_base_loop (ctx->ev_base, 0);
+	rspamd_worker_block_signals ();
 
 	g_mime_shutdown ();
 	rspamd_stat_close ();

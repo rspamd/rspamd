@@ -394,6 +394,8 @@ start_lua_worker (struct rspamd_worker *worker)
 	rspamd_map_watch (worker->srv->cfg, ctx->ev_base);
 
 	event_base_loop (ctx->ev_base, 0);
+	rspamd_worker_block_signals ();
+
 	luaL_unref (L, LUA_REGISTRYINDEX, ctx->cbref_accept);
 	if (ctx->cbref_fin != 0) {
 		/* Call finalizer function */

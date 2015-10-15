@@ -471,6 +471,7 @@ start_http_proxy (struct rspamd_worker *worker)
 	event_add (&ctx->rotate_ev, &rot_tv);
 
 	event_base_loop (ctx->ev_base, 0);
+	rspamd_worker_block_signals ();
 
 	g_mime_shutdown ();
 	rspamd_log_close (worker->srv->logger);

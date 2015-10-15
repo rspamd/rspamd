@@ -112,6 +112,11 @@ worker_t * rspamd_get_worker_by_type (struct rspamd_config *cfg, GQuark type);
 void rspamd_worker_stop_accept (struct rspamd_worker *worker);
 
 /**
+ * Block signals before terminations
+ */
+void rspamd_worker_block_signals (void);
+
+/**
  * Fork new worker with the specified configuration
  */
 struct rspamd_worker *rspamd_fork_worker (struct rspamd_main *,

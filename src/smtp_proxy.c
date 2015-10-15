@@ -1079,6 +1079,7 @@ start_smtp_proxy (struct rspamd_worker *worker)
 	umask (S_IWGRP | S_IWOTH | S_IROTH | S_IRGRP);
 
 	event_base_loop (ctx->ev_base, 0);
+	rspamd_worker_block_signals ();
 
 	rspamd_log_close (worker->srv->logger);
 	exit (EXIT_SUCCESS);

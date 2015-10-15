@@ -511,3 +511,17 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 
 	return cur;
 }
+
+void
+rspamd_worker_block_signals (void)
+{
+	sigset_t set;
+
+	sigemptyset (&set);
+	sigaddset (&set, SIGTERM);
+	sigaddset (&set, SIGINT);
+	sigaddset (&set, SIGHUP);
+	sigaddset (&set, SIGUSR1);
+	sigaddset (&set, SIGUSR2);
+	sigprocmask (SIG_BLOCK, &set, NULL);
+}
