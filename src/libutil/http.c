@@ -2394,7 +2394,7 @@ rspamd_http_message_parse_query (struct rspamd_http_message *msg)
 {
 	GHashTable *res;
 	rspamd_fstring_t *key = NULL, *value = NULL;
-	rspamd_ftok_t *key_tok, *value_tok;
+	rspamd_ftok_t *key_tok = NULL, *value_tok = NULL;
 	const gchar *p, *c, *end;
 	struct http_parser_url u;
 	enum {
@@ -2423,24 +2423,23 @@ rspamd_http_message_parse_query (struct rspamd_http_message *msg)
 					if ((*p == '&' || p == end) && p > c) {
 						/* We have a single parameter without a value */
 						key = rspamd_fstring_new_init (c, p - c);
-						key_tok = g_slice_alloc (sizeof (*key_tok));
-						key_tok->begin = key->str;
+						key_tok = rspamd_ftok_map (key);
 						key_tok->len = rspamd_decode_url (key->str, key->str,
 								key->len);
+
 						value = rspamd_fstring_new_init ("", 0);
-						value_tok = g_slice_alloc (sizeof (*value_tok));
-						value_tok->begin = value->str;
-						value_tok->len = value->len;
-						g_hash_table_insert (res, key_tok, value_tok);
+						value_tok = rspamd_ftok_map (value);
+
+						g_hash_table_replace (res, key_tok, value_tok);
 						state = parse_ampersand;
 					}
 					else if (*p == '=' && p > c) {
 						/* We have something like key=value */
 						key = rspamd_fstring_new_init (c, p - c);
-						key_tok = g_slice_alloc (sizeof (*key_tok));
-						key_tok->begin = key->str;
+						key_tok = rspamd_ftok_map (key);
 						key_tok->len = rspamd_decode_url (key->str, key->str,
 								key->len);
+
 						state = parse_eqsign;
 					}
 					else {
@@ -2463,21 +2462,19 @@ rspamd_http_message_parse_query (struct rspamd_http_message *msg)
 						g_assert (key != NULL);
 						if (p > c) {
 							value = rspamd_fstring_new_init (c, p - c);
-							value_tok = g_slice_alloc (sizeof (*value_tok));
-							value_tok->begin = value->str;
+							value_tok = rspamd_ftok_map (value);
 							value_tok->len = rspamd_decode_url (value->str,
 									value->str,
 									value->len);
 						}
 						else {
 							value = rspamd_fstring_new_init ("", 0);
-							value_tok = g_slice_alloc (sizeof (*value_tok));
-							value_tok->begin = value->str;
-							value_tok->len = value->len;
+							value_tok = rspamd_ftok_map (value);
 						}
 
-						g_hash_table_insert (res, key_tok, value_tok);
+						g_hash_table_replace (res, key_tok, value_tok);
 						key = value = NULL;
+						key_tok = value_tok = NULL;
 						state = parse_ampersand;
 					}
 					else {

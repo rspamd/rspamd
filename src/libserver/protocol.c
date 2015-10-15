@@ -263,7 +263,7 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 			value = v;
 			/* Steal strings */
 			g_hash_table_iter_steal (&it);
-			g_hash_table_insert (task->request_headers, key, value);
+			g_hash_table_replace (task->request_headers, key, value);
 		}
 
 		g_hash_table_unref (query_args);
@@ -299,7 +299,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		hn_tok = rspamd_ftok_map (hn);
 		hv_tok = rspamd_ftok_map (hv);
 
-		g_hash_table_insert (task->request_headers, hn_tok, hv_tok);
+		g_hash_table_replace (task->request_headers, hn_tok, hv_tok);
 
 		switch (*hn_tok->begin) {
 		case 'd':
