@@ -14,6 +14,11 @@
 #ifndef OTTERY_LOCKING_H_HEADER_INCLUDED_
 #define OTTERY_LOCKING_H_HEADER_INCLUDED_
 
+/* We don't need locks when building rspamd */
+#ifdef BUILD_RSPAMD
+#define OTTERY_NO_LOCKS
+#endif
+
 /* Locks */
 #ifdef OTTERY_NO_LOCKS
 /* Nothing here. */

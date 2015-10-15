@@ -1914,9 +1914,9 @@ rspamd_init_libs (void)
 {
 	struct rlimit rlim;
 
+	rspamd_cryptobox_init ();
 	ottery_init (NULL);
 
-	rspamd_cryptobox_init ();
 #ifdef HAVE_LOCALE_H
 	if (getenv ("LANG") == NULL) {
 		setlocale (LC_ALL, "C");

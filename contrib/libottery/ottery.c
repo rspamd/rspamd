@@ -183,59 +183,62 @@ ottery_get_impl(const char *impl)
     &ottery_prf_chacha12_krovetz_1_,
     &ottery_prf_chacha8_krovetz_1_,
 #endif
-    &ottery_prf_chacha20_merged_,
-    &ottery_prf_chacha12_merged_,
-    &ottery_prf_chacha8_merged_,
+#ifdef BUILD_RSPAMD
+    &ottery_prf_chacha20_cryptobox_,
+#endif
+	&ottery_prf_chacha20_merged_,
+	&ottery_prf_chacha12_merged_,
+	&ottery_prf_chacha8_merged_,
 
-    NULL,
+	NULL,
   };
   const uint32_t cap = ottery_get_cpu_capabilities_();
 
   for (i = 0; ALL_PRFS[i]; ++i) {
-    const struct ottery_prf *prf = ALL_PRFS[i];
-    if ((prf->required_cpucap & cap) != prf->required_cpucap)
-      continue;
-    if (impl == NULL)
-      return prf;
-    if (!strcmp(impl, prf->name))
-      return prf;
-    if (!strcmp(impl, prf->impl))
-      return prf;
-    if (!strcmp(impl, prf->flav))
-      return prf;
+	const struct ottery_prf *prf = ALL_PRFS[i];
+	if ((prf->required_cpucap & cap) != prf->required_cpucap)
+	  continue;
+	if (impl == NULL)
+	  return prf;
+	if (!strcmp(impl, prf->name))
+	  return prf;
+	if (!strcmp(impl, prf->impl))
+	  return prf;
+	if (!strcmp(impl, prf->flav))
+	  return prf;
   }
   return NULL;
 }
 
 int
 ottery_config_force_implementation(struct ottery_config *cfg,
-                                   const char *impl)
+								   const char *impl)
 {
   const struct ottery_prf *prf = ottery_get_impl(impl);
   if (prf) {
-    cfg->impl = prf;
-    return 0;
+	cfg->impl = prf;
+	return 0;
   }
   return OTTERY_ERR_INVALID_ARGUMENT;
 }
 
 void
 ottery_config_set_manual_prf_(struct ottery_config *cfg,
-                              const struct ottery_prf *prf)
+							  const struct ottery_prf *prf)
 {
   cfg->impl = prf;
 }
 
 void
 ottery_config_set_urandom_device(struct ottery_config *cfg,
-                                 const char *fname)
+								 const char *fname)
 {
   cfg->entropy_config.urandom_fname = fname;
 }
 
 void
 ottery_config_set_urandom_fd(struct ottery_config *cfg,
-                             int fd)
+							 int fd)
 {
   cfg->entropy_config.urandom_fd = fd;
   cfg->entropy_config.urandom_fd_is_set = (fd >= 0);
@@ -243,8 +246,8 @@ ottery_config_set_urandom_fd(struct ottery_config *cfg,
 
 void
 ottery_config_set_egd_socket(struct ottery_config *cfg,
-                             const struct sockaddr *addr,
-                             int len)
+							 const struct sockaddr *addr,
+							 int len)
 {
   cfg->entropy_config.egd_sockaddr = addr;
   cfg->entropy_config.egd_socklen = len;
@@ -252,18 +255,18 @@ ottery_config_set_egd_socket(struct ottery_config *cfg,
 
 void
 ottery_config_disable_entropy_sources(struct ottery_config *cfg,
-                                      uint32_t disabled_sources)
+									  uint32_t disabled_sources)
 {
   cfg->entropy_config.disabled_sources =
-    (disabled_sources & OTTERY_ENTROPY_ALL_SOURCES);
+	(disabled_sources & OTTERY_ENTROPY_ALL_SOURCES);
 }
 
 void
 ottery_config_mark_entropy_sources_weak(struct ottery_config *cfg,
-                                        uint32_t disabled_sources)
+										uint32_t disabled_sources)
 {
   cfg->entropy_config.weak_sources =
-    (disabled_sources & OTTERY_ENTROPY_ALL_SOURCES);
+	(disabled_sources & OTTERY_ENTROPY_ALL_SOURCES);
 }
 
 /**
@@ -307,8 +310,8 @@ ottery_st_nextblock_nolock(struct ottery_state_nolock *st)
  */
 static int
 ottery_st_initialize(struct ottery_state *st,
-                     const struct ottery_config *config,
-                     int locked)
+					 const struct ottery_config *config,
+					 int locked)
 {
   const struct ottery_prf *prf = NULL;
   struct ottery_config cfg_tmp;
@@ -317,46 +320,46 @@ ottery_st_initialize(struct ottery_state *st,
    * error now, and not a crash when the SIMD instructions start to fail.
    */
   if (((uintptr_t)st) & 0xf)
-    return OTTERY_ERR_STATE_ALIGNMENT;
+	return OTTERY_ERR_STATE_ALIGNMENT;
 
   if (!config) {
-    ottery_config_init(&cfg_tmp);
-    config = &cfg_tmp;
+	ottery_config_init(&cfg_tmp);
+	config = &cfg_tmp;
   }
 
   prf = config->impl;
 
   if (!prf)
-    prf = ottery_get_impl(NULL);
+	prf = ottery_get_impl(NULL);
 
   memset(st, 0, sizeof(*st));
 
   if (locked) {
-    /* Now set up the spinlock or mutex or hybrid thing. */
-    if (INIT_LOCK(&st->mutex))
-      return OTTERY_ERR_LOCK_INIT;
+	/* Now set up the spinlock or mutex or hybrid thing. */
+	if (INIT_LOCK(&st->mutex))
+	  return OTTERY_ERR_LOCK_INIT;
   }
 
   /* Check invariants for PRF, in case we wrote some bad code. */
   if ((prf->state_len > MAX_STATE_LEN) ||
-      (prf->state_bytes > MAX_STATE_BYTES) ||
-      (prf->state_bytes > prf->output_len) ||
-      (prf->output_len > MAX_OUTPUT_LEN))
-    return OTTERY_ERR_INTERNAL;
+	  (prf->state_bytes > MAX_STATE_BYTES) ||
+	  (prf->state_bytes > prf->output_len) ||
+	  (prf->output_len > MAX_OUTPUT_LEN))
+	return OTTERY_ERR_INTERNAL;
 
   /* Check whether some of our structure size assumptions are right. */
   if ((sizeof(struct ottery_state) > OTTERY_STATE_DUMMY_SIZE_) ||
-      (sizeof(struct ottery_config) > OTTERY_CONFIG_DUMMY_SIZE_))
-    return OTTERY_ERR_INTERNAL;
+	  (sizeof(struct ottery_config) > OTTERY_CONFIG_DUMMY_SIZE_))
+	return OTTERY_ERR_INTERNAL;
 
   memcpy(&st->entropy_config, &config->entropy_config,
-         sizeof(struct ottery_entropy_config));
+		 sizeof(struct ottery_entropy_config));
 
   /* Copy the PRF into place. */
   memcpy(&st->prf, prf, sizeof(*prf));
 
   if ((err = ottery_st_reseed(st)))
-    return err;
+	return err;
 
   /* Set the magic number last, or else we might look like we succeeded
    * when we didn't */
@@ -378,24 +381,24 @@ ottery_st_reseed(struct ottery_state *st)
   size_t buflen = ottery_get_entropy_bufsize_(st->prf.state_bytes);
   uint8_t *buf = alloca(buflen);
   if (!buf)
-    return OTTERY_ERR_INIT_STRONG_RNG;
+	return OTTERY_ERR_INIT_STRONG_RNG;
 
   if ((err = ottery_get_entropy_(&st->entropy_config, &st->entropy_state, 0,
-                                  buf, st->prf.state_bytes,
-                                  &buflen,
-                                  &flags)))
-    return err;
+								  buf, st->prf.state_bytes,
+								  &buflen,
+								  &flags)))
+	return err;
   if (buflen < st->prf.state_bytes)
-    return OTTERY_ERR_ACCESS_STRONG_RNG;
+	return OTTERY_ERR_ACCESS_STRONG_RNG;
   /* The first state_bytes bytes become the initial key. */
   st->prf.setup(st->state, buf);
   /* If there are more bytes, we mix them into the key with add_seed */
   if (buflen > st->prf.state_bytes)
-    ottery_st_add_seed_impl(st,
-                            buf + st->prf.state_bytes,
-                            buflen - st->prf.state_bytes,
-                            0,
-                            0);
+	ottery_st_add_seed_impl(st,
+							buf + st->prf.state_bytes,
+							buflen - st->prf.state_bytes,
+							0,
+							0);
   ottery_memclear_(buf, buflen);
   st->last_entropy_flags = flags;
   st->entropy_src_flags = flags;
@@ -415,7 +418,7 @@ ottery_st_init(struct ottery_state *st, const struct ottery_config *cfg)
 
 int
 ottery_st_init_nolock(struct ottery_state_nolock *st,
-                      const struct ottery_config *cfg)
+					  const struct ottery_config *cfg)
 {
   return ottery_st_initialize(st, cfg, 0);
 }
@@ -425,8 +428,8 @@ ottery_st_add_seed_impl(struct ottery_state *st, const uint8_t *seed, size_t n, 
 {
 #ifndef OTTERY_NO_INIT_CHECK
   if (check_magic && UNLIKELY(st->magic != MAGIC(st))) {
-    ottery_fatal_error_(OTTERY_ERR_STATE_INIT);
-    return OTTERY_ERR_STATE_INIT;
+	ottery_fatal_error_(OTTERY_ERR_STATE_INIT);
+	return OTTERY_ERR_STATE_INIT;
   }
 #endif
 
@@ -437,40 +440,40 @@ ottery_st_add_seed_impl(struct ottery_state *st, const uint8_t *seed, size_t n, 
   uint32_t flags = 0;
 
   if (!seed || !n) {
-    int err;
-    tmp_seed_len = ottery_get_entropy_bufsize_(st->prf.state_bytes);
-    tmp_seed = alloca(tmp_seed_len);
-    if (!tmp_seed)
-      return OTTERY_ERR_INIT_STRONG_RNG;
-    n = tmp_seed_len;
-    if ((err = ottery_get_entropy_(&st->entropy_config, &st->entropy_state, 0,
-                                    tmp_seed, st->prf.state_bytes,
-                                    &n,
-                                    &flags)))
-      return err;
-    if (n < st->prf.state_bytes)
-      return OTTERY_ERR_ACCESS_STRONG_RNG;
-    seed = tmp_seed;
+	int err;
+	tmp_seed_len = ottery_get_entropy_bufsize_(st->prf.state_bytes);
+	tmp_seed = alloca(tmp_seed_len);
+	if (!tmp_seed)
+	  return OTTERY_ERR_INIT_STRONG_RNG;
+	n = tmp_seed_len;
+	if ((err = ottery_get_entropy_(&st->entropy_config, &st->entropy_state, 0,
+									tmp_seed, st->prf.state_bytes,
+									&n,
+									&flags)))
+	  return err;
+	if (n < st->prf.state_bytes)
+	  return OTTERY_ERR_ACCESS_STRONG_RNG;
+	seed = tmp_seed;
   }
 
   if (locking)
-    LOCK(st);
+	LOCK(st);
   /* The algorithm here is really easy. We grab a block of output from the
    * PRNG, that the first (state_bytes) bytes of that, XOR it with up to
    * (state_bytes) bytes of our new seed data, and use that to set our new
    * state. We do this over and over until we have no more seed data to add.
    */
   while (n) {
-    unsigned i;
-    size_t m = n > st->prf.state_bytes/2 ? st->prf.state_bytes/2 : n;
-    ottery_st_nextblock_nolock_norekey(st);
-    for (i = 0; i < m; ++i) {
-      st->buffer[i] ^= seed[i];
-    }
-    st->prf.setup(st->state, st->buffer);
-    st->block_counter = 0;
-    n -= m;
-    seed += m;
+	unsigned i;
+	size_t m = n > st->prf.state_bytes/2 ? st->prf.state_bytes/2 : n;
+	ottery_st_nextblock_nolock_norekey(st);
+	for (i = 0; i < m; ++i) {
+	  st->buffer[i] ^= seed[i];
+	}
+	st->prf.setup(st->state, st->buffer);
+	st->block_counter = 0;
+	n -= m;
+	seed += m;
   }
 
   /* Now make sure that st->buffer is set up with the new state. */
@@ -480,11 +483,11 @@ ottery_st_add_seed_impl(struct ottery_state *st, const uint8_t *seed, size_t n, 
   st->last_entropy_flags = flags;
 
   if (locking)
-    UNLOCK(st);
+	UNLOCK(st);
 
   /* If we used stack-allocated seed material, wipe it. */
   if (tmp_seed)
-    ottery_memclear_(tmp_seed, tmp_seed_len);
+	ottery_memclear_(tmp_seed, tmp_seed_len);
 
   return 0;
 }
@@ -541,9 +544,9 @@ void
 ottery_fatal_error_(int error)
 {
   if (ottery_fatal_handler)
-    ottery_fatal_handler(error);
+	ottery_fatal_handler(error);
   else
-    abort();
+	abort();
 }
 
 void
@@ -561,8 +564,8 @@ ottery_st_rand_check_init(struct ottery_state *st)
 {
 #ifndef OTTERY_NO_INIT_CHECK
   if (UNLIKELY(st->magic != MAGIC(st))) {
-    ottery_fatal_error_(OTTERY_ERR_STATE_INIT);
-    return -1;
+	ottery_fatal_error_(OTTERY_ERR_STATE_INIT);
+	return -1;
   }
 #else
   (void)st;
@@ -576,12 +579,12 @@ ottery_st_rand_check_pid(struct ottery_state *st)
 {
 #ifndef OTTERY_NO_PID_CHECK
   if (UNLIKELY(st->pid != getpid())) {
-    int err;
-    if ((err = ottery_st_reseed(st))) {
-      ottery_fatal_error_(OTTERY_ERR_FLAG_POSTFORK_RESEED|err);
-      return -1;
-    }
-    st->pid = getpid();
+	int err;
+	if ((err = ottery_st_reseed(st))) {
+	  ottery_fatal_error_(OTTERY_ERR_FLAG_POSTFORK_RESEED|err);
+	  return -1;
+	}
+	st->pid = getpid();
   }
 #else
   (void) st;
@@ -593,11 +596,11 @@ static inline int
 ottery_st_rand_lock_and_check(struct ottery_state *st)
 {
   if (ottery_st_rand_check_init(st))
-    return -1;
+	return -1;
   LOCK(st);
   if (ottery_st_rand_check_pid(st)) {
-    UNLOCK(st);
-    return -1;
+	UNLOCK(st);
+	return -1;
   }
   return 0;
 }
@@ -606,9 +609,9 @@ static inline int
 ottery_st_rand_check_nolock(struct ottery_state_nolock *st)
 {
   if (ottery_st_rand_check_init(st))
-    return -1;
+	return -1;
   if (ottery_st_rand_check_pid(st))
-    return -1;
+	return -1;
   return 0;
 }
 
@@ -624,36 +627,36 @@ ottery_st_rand_check_nolock(struct ottery_state_nolock *st)
  */
 static inline void
 ottery_st_rand_bytes_from_buf(struct ottery_state *st, uint8_t *out,
-                              size_t n)
+							  size_t n)
 {
   if (n + st->pos < st->prf.output_len) {
-    memcpy(out, st->buffer+st->pos, n);
-    CLEARBUF(st->buffer+st->pos, n);
-    st->pos += n;
+	memcpy(out, st->buffer+st->pos, n);
+	CLEARBUF(st->buffer+st->pos, n);
+	st->pos += n;
   } else {
-    unsigned cpy = st->prf.output_len - st->pos;
-    memcpy(out, st->buffer+st->pos, cpy);
-    n -= cpy;
-    out += cpy;
-    ottery_st_nextblock_nolock(st);
-    memcpy(out, st->buffer+st->pos, n);
-    CLEARBUF(st->buffer, n);
-    st->pos += n;
-    assert(st->pos < st->prf.output_len);
+	unsigned cpy = st->prf.output_len - st->pos;
+	memcpy(out, st->buffer+st->pos, cpy);
+	n -= cpy;
+	out += cpy;
+	ottery_st_nextblock_nolock(st);
+	memcpy(out, st->buffer+st->pos, n);
+	CLEARBUF(st->buffer, n);
+	st->pos += n;
+	assert(st->pos < st->prf.output_len);
   }
 }
 
 static void
 ottery_st_rand_bytes_impl(struct ottery_state *st, void *out_,
-                          size_t n)
+						  size_t n)
 {
   uint8_t *out = out_;
   size_t cpy;
 
   if (n + st->pos < st->prf.output_len * 2 - st->prf.state_bytes - 1) {
-    /* Fulfill it all from the buffer simply if possible. */
-    ottery_st_rand_bytes_from_buf(st, out, n);
-    return;
+	/* Fulfill it all from the buffer simply if possible. */
+	ottery_st_rand_bytes_from_buf(st, out, n);
+	return;
   }
 
   /* Okay. That's not going to happen.  Well, take what we can... */
@@ -664,15 +667,15 @@ ottery_st_rand_bytes_impl(struct ottery_state *st, void *out_,
 
   /* Then take whole blocks so long as we need them, without stirring... */
   while (n >= st->prf.output_len) {
-    /* (We could save a memcpy here if we generated the block directly at out
-     * rather than doing the memcpy here. First we'd need to make sure that we
-     * had gotten the block aligned to a 16-byte boundary, though, and we'd
-     * have some other tricky bookkeeping to do. Let's call this good enough
-     * for now.) */
-    ottery_st_nextblock_nolock_norekey(st);
-    memcpy(out, st->buffer, st->prf.output_len);
-    out += st->prf.output_len;
-    n -= st->prf.output_len;
+	/* (We could save a memcpy here if we generated the block directly at out
+	 * rather than doing the memcpy here. First we'd need to make sure that we
+	 * had gotten the block aligned to a 16-byte boundary, though, and we'd
+	 * have some other tricky bookkeeping to do. Let's call this good enough
+	 * for now.) */
+	ottery_st_nextblock_nolock_norekey(st);
+	memcpy(out, st->buffer, st->prf.output_len);
+	out += st->prf.output_len;
+	n -= st->prf.output_len;
   }
 
   /* Then stir for the last part. */
@@ -684,7 +687,7 @@ void
 ottery_st_rand_bytes(struct ottery_state *st, void *out_, size_t n)
 {
   if (ottery_st_rand_lock_and_check(st))
-    return;
+	return;
   ottery_st_rand_bytes_impl(st, out_, n);
   UNLOCK(st);
 }
@@ -693,7 +696,7 @@ void
 ottery_st_rand_bytes_nolock(struct ottery_state_nolock *st, void *out_, size_t n)
 {
   if (ottery_st_rand_check_nolock(st))
-    return;
+	return;
   ottery_st_rand_bytes_impl(st, out_, n);
 }
 
@@ -705,7 +708,7 @@ ottery_st_rand_bytes_nolock(struct ottery_state_nolock *st, void *out_, size_t n
  * @param p a pointer to the bytes to read from.
  **/
 #define INT_ASSIGN_PTR(type, r, p) do { \
-    memcpy(&r, p, sizeof(type));        \
+	memcpy(&r, p, sizeof(type));        \
 } while (0)
 
 /**
@@ -715,38 +718,38 @@ ottery_st_rand_bytes_nolock(struct ottery_state_nolock *st, void *out_, size_t n
  * @param inttype The type of integer to generate.
  **/
 #define OTTERY_RETURN_RAND_INTTYPE_IMPL(st, inttype, unlock) do {      \
-    inttype result;                                                    \
-    if (sizeof(inttype) + (st)->pos <= (st)->prf.output_len) {         \
-      INT_ASSIGN_PTR(inttype, result, (st)->buffer + (st)->pos);       \
-      CLEARBUF((st)->buffer + (st)->pos, sizeof(inttype));             \
-      (st)->pos += sizeof(inttype);                                    \
-      if (st->pos == (st)->prf.output_len) {                           \
-        ottery_st_nextblock_nolock(st);                                \
-      }                                                                \
-    } else {                                                           \
-      /* Our handling of this case here is significantly simpler */    \
-      /* than that of ottery_st_rand_bytes_from_buf, at the expense */ \
-      /* of wasting up to sizeof(inttype)-1 bytes. Since inttype */    \
-      /* is at most 8 bytes long, that's not such a big deal. */       \
-      ottery_st_nextblock_nolock(st);                                  \
-      INT_ASSIGN_PTR(inttype, result, (st)->buffer + (st)->pos);       \
-      CLEARBUF((st)->buffer, sizeof(inttype));                         \
-      (st)->pos += sizeof(inttype);                                    \
-    }                                                                  \
-    unlock;                                                            \
-    return result;                                                     \
+	inttype result;                                                    \
+	if (sizeof(inttype) + (st)->pos <= (st)->prf.output_len) {         \
+	  INT_ASSIGN_PTR(inttype, result, (st)->buffer + (st)->pos);       \
+	  CLEARBUF((st)->buffer + (st)->pos, sizeof(inttype));             \
+	  (st)->pos += sizeof(inttype);                                    \
+	  if (st->pos == (st)->prf.output_len) {                           \
+		ottery_st_nextblock_nolock(st);                                \
+	  }                                                                \
+	} else {                                                           \
+	  /* Our handling of this case here is significantly simpler */    \
+	  /* than that of ottery_st_rand_bytes_from_buf, at the expense */ \
+	  /* of wasting up to sizeof(inttype)-1 bytes. Since inttype */    \
+	  /* is at most 8 bytes long, that's not such a big deal. */       \
+	  ottery_st_nextblock_nolock(st);                                  \
+	  INT_ASSIGN_PTR(inttype, result, (st)->buffer + (st)->pos);       \
+	  CLEARBUF((st)->buffer, sizeof(inttype));                         \
+	  (st)->pos += sizeof(inttype);                                    \
+	}                                                                  \
+	unlock;                                                            \
+	return result;                                                     \
 } while (0)
 
 #define OTTERY_RETURN_RAND_INTTYPE(st, inttype) do {          \
-    if (ottery_st_rand_lock_and_check(st))                    \
-      return (inttype)0;                                      \
-    OTTERY_RETURN_RAND_INTTYPE_IMPL(st, inttype, UNLOCK(st)); \
+	if (ottery_st_rand_lock_and_check(st))                    \
+	  return (inttype)0;                                      \
+	OTTERY_RETURN_RAND_INTTYPE_IMPL(st, inttype, UNLOCK(st)); \
 } while (0)
 
 #define OTTERY_RETURN_RAND_INTTYPE_NOLOCK(st, inttype) do { \
-    if (ottery_st_rand_check_nolock(st))                    \
-      return (inttype)0;                                    \
-    OTTERY_RETURN_RAND_INTTYPE_IMPL(st, inttype, );         \
+	if (ottery_st_rand_check_nolock(st))                    \
+	  return (inttype)0;                                    \
+	OTTERY_RETURN_RAND_INTTYPE_IMPL(st, inttype, );         \
 } while (0)
 
 unsigned
@@ -792,7 +795,7 @@ ottery_st_rand_range_nolock(struct ottery_state_nolock *st, unsigned upper)
   unsigned divisor = lim ? (UINT_MAX / lim) : 1;
   unsigned n;
   do {
-    n = (ottery_st_rand_unsigned_nolock(st) / divisor);
+	n = (ottery_st_rand_unsigned_nolock(st) / divisor);
   } while (n > upper);
 
   return n;
@@ -805,7 +808,7 @@ ottery_st_rand_range64_nolock(struct ottery_state_nolock *st, uint64_t upper)
   uint64_t divisor = lim ? (UINT64_MAX / lim) : 1;
   uint64_t n;
   do {
-    n = (ottery_st_rand_uint64_nolock(st) / divisor);
+	n = (ottery_st_rand_uint64_nolock(st) / divisor);
   } while (n > upper);
 
   return n;
@@ -816,7 +819,7 @@ ottery_st_rand_range(struct ottery_state *state, unsigned upper)
 {
   unsigned n;
   if (ottery_st_rand_check_init(state))
-    return 0;
+	return 0;
   LOCK(state);
   n = ottery_st_rand_range_nolock(state, upper);
   UNLOCK(state);
@@ -828,7 +831,7 @@ ottery_st_rand_range64(struct ottery_state *state, uint64_t upper)
 {
   uint64_t n;
   if (ottery_st_rand_check_init(state))
-    return 0;
+	return 0;
   LOCK(state);
   n = ottery_st_rand_range64_nolock(state, upper);
   UNLOCK(state);

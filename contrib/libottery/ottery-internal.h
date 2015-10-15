@@ -15,7 +15,11 @@
 #define OTTERY_INTERNAL_H_HEADER_INCLUDED_
 #include <stdint.h>
 #include <sys/types.h>
+
+#ifdef BUILD_RSPAMD
 #include "config.h"
+#endif
+
 #include "ottery-threading.h"
 
 
@@ -300,6 +304,10 @@ void ottery_disable_cpu_capabilities_(uint32_t disable);
 extern const struct ottery_prf ottery_prf_chacha8_merged_;
 extern const struct ottery_prf ottery_prf_chacha12_merged_;
 extern const struct ottery_prf ottery_prf_chacha20_merged_;
+
+#ifdef BUILD_RSPAMD
+extern const struct ottery_prf ottery_prf_chacha20_cryptobox_;
+#endif
 /**@}*/
 
 /**
