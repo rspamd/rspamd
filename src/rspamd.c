@@ -1057,7 +1057,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Check each 200 ms */
 	term_tv.tv_sec = 0;
-	term_tv.tv_usec = 200;
+	term_tv.tv_usec = 200000;
 
 	/* Wait for workers termination */
 	g_hash_table_foreach_remove (rspamd_main->workers, wait_for_workers, NULL);
