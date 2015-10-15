@@ -23,19 +23,6 @@ run_rspamd() {
 	STATS_BACKEND=${STATS_BACKEND:-"mmap"}
 	STATS_HASH=${STATS_HASH:-"compat"}
 	STATS_KEY=${STATS_KEY:-"osipg87ms5gzsis33fdrhaqn5wocp6qfofzxjbw8k1wh9yb6adty"}
-	
-	${RSPAMD} -c ${RSPAMD_CONFIG} -u ${RSPAMD_USER} -g ${RSPAMD_GROUP} -t \
-		TMPDIR=${TMPDIR} \
-		STATSDIR=${STATSDIR} \
-		LUADIR=${LUADIR} \
-		STATS_BACKEND=${STATS_BACKEND} \
-		STATS_HASH=${STATS_HASH} \
-		TESTDIR=${TEST_DIRNAME} \
-		STATS_KEY=${STATS_KEY} > ${TMPDIR}/rspamd.out 2>&1
-
-	if [ $? -ne 0 ] ; then
-		save_error 'rspamd' 'cannot lint rspamd configuration'
-	fi
 
 	${RSPAMD} -c ${RSPAMD_CONFIG} -u ${RSPAMD_USER} -g ${RSPAMD_GROUP} \
 		TMPDIR=${TMPDIR} \
