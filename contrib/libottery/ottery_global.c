@@ -24,7 +24,7 @@
 #ifdef __GNUC__
 #define UNLIKELY(x) __builtin_expect((x), 0)
 #else
-#define UNLIKELY(x)
+#define UNLIKELY(x) (x)
 #endif
 
 /** Flag: true iff ottery_global_state_ is initialized. */
