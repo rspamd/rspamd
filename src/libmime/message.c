@@ -1015,7 +1015,7 @@ rspamd_words_levenshtein_distance (struct rspamd_task *task,
 {
 	guint s1len, s2len, x, y, lastdiag, olddiag;
 	guint *column;
-	rspamd_fstring_t *s1, *s2;
+	rspamd_ftok_t *s1, *s2;
 	gint eq;
 	static const guint max_words = 8192;
 
@@ -1039,9 +1039,9 @@ rspamd_words_levenshtein_distance (struct rspamd_task *task,
 
 		for (y = 1, lastdiag = x - 1; y <= s1len; y++) {
 			olddiag = column[y];
-			s1 = &g_array_index (w1, rspamd_fstring_t, y - 1);
-			s2 = &g_array_index (w2, rspamd_fstring_t, x - 1);
-			eq = rspamd_fstring_equal (s1, s2) ? 0 : 1;
+			s1 = &g_array_index (w1, rspamd_ftok_t, y - 1);
+			s2 = &g_array_index (w2, rspamd_ftok_t, x - 1);
+			eq = rspamd_ftok_cmp (s1, s2) == 0 ? 0 : 1;
 			column[y] = MIN3 (column[y] + 1, column[y - 1] + 1,
 					lastdiag + (eq));
 			lastdiag = olddiag;
@@ -1724,7 +1724,7 @@ rspamd_message_parse (struct rspamd_task *task)
 						dw = rspamd_words_levenshtein_distance (task,
 								p1->normalized_words,
 								p2->normalized_words);
-						diff = tw > 0 ? (100.0 * (gdouble)(tw - dw) / (gdouble)tw) : 100;
+						diff = (100.0 * (gdouble)(tw - dw) / (gdouble)tw);
 
 						debug_task (
 								"different words: %d, total words: %d, "
