@@ -749,8 +749,9 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 
 	/* Check whether this item is skipped */
 	skipped = !ghost;
-	if ((item->type & SYMBOL_TYPE_NORMAL) && cache->cfg &&
-			g_hash_table_lookup (cache->cfg->metrics_symbols, item->symbol) == NULL) {
+	if ((item->type & (SYMBOL_TYPE_NORMAL|SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_COMPOSITE))
+			&& cache->cfg
+			&& g_hash_table_lookup (cache->cfg->metrics_symbols, item->symbol) == NULL) {
 		cur = g_list_first (cache->cfg->metrics_list);
 		while (cur) {
 			m = cur->data;
@@ -759,7 +760,7 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 				GList *mlist;
 
 				skipped = FALSE;
-				item->weight = item->weight * (m->unknown_weight);
+				item->weight = m->unknown_weight;
 				s = rspamd_mempool_alloc0 (cache->static_pool,
 						sizeof (*s));
 				s->name = item->symbol;

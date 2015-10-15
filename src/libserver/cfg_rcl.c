@@ -426,6 +426,10 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		return FALSE;
 	}
 
+	if (metric->unknown_weight > 0) {
+		metric->accept_unknown_symbols = TRUE;
+	}
+
 	/* Handle actions */
 	val = ucl_object_find_key (obj, "actions");
 	if (val != NULL) {
