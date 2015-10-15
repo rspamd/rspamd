@@ -2420,7 +2420,7 @@ rspamd_http_message_parse_query (struct rspamd_http_message *msg)
 			while (p <= end) {
 				switch (state) {
 				case parse_key:
-					if ((*p == '&' || p == end) && p > c) {
+					if ((p == end || *p == '&') && p > c) {
 						/* We have a single parameter without a value */
 						key = rspamd_fstring_new_init (c, p - c);
 						key_tok = rspamd_ftok_map (key);
@@ -2458,7 +2458,7 @@ rspamd_http_message_parse_query (struct rspamd_http_message *msg)
 					break;
 
 				case parse_value:
-					if ((*p == '&' || p == end) && p >= c) {
+					if ((p == end || *p == '&') && p >= c) {
 						g_assert (key != NULL);
 						if (p > c) {
 							value = rspamd_fstring_new_init (c, p - c);
@@ -2483,7 +2483,7 @@ rspamd_http_message_parse_query (struct rspamd_http_message *msg)
 					break;
 
 				case parse_ampersand:
-					if (*p != '&' && p != end) {
+					if (p != end && *p != '&') {
 						c = p;
 						state = parse_key;
 					}
