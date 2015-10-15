@@ -75,7 +75,7 @@
 #define SOFT_FORK_TIME 2
 
 /* 10 seconds after getting termination signal to terminate all workers with SIGKILL */
-#define TERMINATION_ATTEMPTS 40
+#define TERMINATION_ATTEMPTS 50
 
 static gboolean load_rspamd_config (struct rspamd_main *rspamd_main,
 		struct rspamd_config *cfg,
@@ -554,7 +554,6 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 			}
 			else {
 				msg_info_main ("waiting for workers to sync");
-				return FALSE;
 			}
 		}
 
@@ -760,7 +759,9 @@ rspamd_final_term_handler (gint signo, short what, gpointer arg)
 {
 	struct rspamd_main *rspamd_main = arg;
 
-	term_attempts --;
+	if (term_attempts) {
+		term_attempts--;
+	}
 
 	g_hash_table_foreach_remove (rspamd_main->workers, wait_for_workers, NULL);
 
@@ -1041,6 +1042,13 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	event_base_loop (ev_base, 0);
+	/* We need to block signals unless children are waited for */
+	sigaddset (&signals.sa_mask, SIGTERM);
+	sigaddset (&signals.sa_mask, SIGINT);
+	sigaddset (&signals.sa_mask, SIGHUP);
+	sigaddset (&signals.sa_mask, SIGUSR1);
+	sigaddset (&signals.sa_mask, SIGUSR2);
+	sigprocmask (SIG_BLOCK, &signals.sa_mask, NULL);
 
 	if (control_fd != -1) {
 		event_del (&control_ev);
