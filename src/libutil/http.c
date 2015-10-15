@@ -604,7 +604,7 @@ rspamd_http_on_headers_complete (http_parser * parser)
 	}
 
 	if (parser->content_length != 0 && parser->content_length != ULLONG_MAX) {
-		priv->msg->body = rspamd_fstring_sized_new (parser->content_length + 1);
+		priv->msg->body = rspamd_fstring_sized_new (parser->content_length);
 	}
 	else {
 		priv->msg->body = rspamd_fstring_new ();

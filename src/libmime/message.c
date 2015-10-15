@@ -1468,7 +1468,7 @@ rspamd_message_parse (struct rspamd_task *task)
 	len = task->msg.len;
 
 	/* Skip any space characters to avoid some bad messages to be unparsed */
-	while (g_ascii_isspace (*p) && len > 0) {
+	while (len > 0 && g_ascii_isspace (*p)) {
 		p ++;
 		len --;
 	}
