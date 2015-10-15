@@ -21,7 +21,11 @@
  * Evaluate the condition 'x', while hinting to the compiler that it is
  * likely to be false.
  */
+#ifdef __GNUC__
 #define UNLIKELY(x) __builtin_expect((x), 0)
+#else
+#define UNLIKELY(x)
+#endif
 
 /** Flag: true iff ottery_global_state_ is initialized. */
 static int ottery_global_state_initialized_ = 0;
@@ -31,13 +35,13 @@ static struct ottery_state ottery_global_state_;
 
 /** Initialize ottery_global_state_ if it has not been initialize. */
 #define CHECK_INIT(rv) do {                                 \
-    if (UNLIKELY(!ottery_global_state_initialized_)) {      \
-      int err;                                              \
-      if ((err = ottery_init(NULL))) {                      \
-        ottery_fatal_error_(OTTERY_ERR_FLAG_GLOBAL_PRNG_INIT|err); \
-        return rv;                                          \
-      }                                                     \
-    }                                                       \
+	if (UNLIKELY(!ottery_global_state_initialized_)) {      \
+	  int err;                                              \
+	  if ((err = ottery_init(NULL))) {                      \
+		ottery_fatal_error_(OTTERY_ERR_FLAG_GLOBAL_PRNG_INIT|err); \
+		return rv;                                          \
+	  }                                                     \
+	}                                                       \
 } while (0)
 
 int
@@ -45,7 +49,7 @@ ottery_init(const struct ottery_config *cfg)
 {
   int n = ottery_st_init(&ottery_global_state_, cfg);
   if (n == 0)
-    ottery_global_state_initialized_ = 1;
+	ottery_global_state_initialized_ = 1;
   return n;
 }
 
@@ -60,8 +64,8 @@ void
 ottery_wipe(void)
 {
   if (ottery_global_state_initialized_) {
-    ottery_global_state_initialized_ = 0;
-    ottery_st_wipe(&ottery_global_state_);
+	ottery_global_state_initialized_ = 0;
+	ottery_st_wipe(&ottery_global_state_);
   }
 }
 
