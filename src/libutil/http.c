@@ -1742,7 +1742,7 @@ rspamd_http_message_free (struct rspamd_http_message *msg)
 	{
 		rspamd_fstring_free (hdr->combined);
 		g_slice_free1 (sizeof (*hdr->name), hdr->name);
-		g_slice_free1 (sizeof (*hdr->name), hdr->value);
+		g_slice_free1 (sizeof (*hdr->value), hdr->value);
 		g_slice_free1 (sizeof (struct rspamd_http_header), hdr);
 	}
 	if (msg->body != NULL) {
@@ -1778,8 +1778,8 @@ rspamd_http_message_add_header (struct rspamd_http_message *msg,
 		vlen = strlen (value);
 		hdr->combined = rspamd_fstring_sized_new (nlen + vlen + 4);
 		rspamd_printf_fstring (&hdr->combined, "%s: %s\r\n", name, value);
-		hdr->value = g_slice_alloc (sizeof (GString));
-		hdr->name = g_slice_alloc (sizeof (GString));
+		hdr->value = g_slice_alloc (sizeof (*hdr->value));
+		hdr->name = g_slice_alloc (sizeof (*hdr->name));
 		hdr->name->begin = hdr->combined->str;
 		hdr->name->len = nlen;
 		hdr->value->begin = hdr->combined->str + nlen + 2;
