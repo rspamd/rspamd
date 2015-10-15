@@ -407,5 +407,10 @@ gboolean rspamd_constant_memcmp (const guchar *a, const guchar *b, gsize len);
 #if !defined(LIBEVENT_VERSION_NUMBER) || LIBEVENT_VERSION_NUMBER < 0x02000000UL
 struct event_base * event_get_base (struct event *ev);
 #endif
+/* CentOS libevent */
+#ifndef evsignal_set
+#define evsignal_set(ev, x, cb, arg)    \
+    event_set((ev), (x), EV_SIGNAL|EV_PERSIST, (cb), (arg))
+#endif
 
 #endif
