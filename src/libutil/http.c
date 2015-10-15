@@ -517,6 +517,7 @@ rspamd_http_finish_header (struct rspamd_http_connection *conn,
 			priv->header->name->len - 4;
 	priv->header->value->begin = priv->header->combined->str +
 			priv->header->name->len + 2;
+	priv->header->name->begin = priv->header->combined->str;
 	DL_APPEND (priv->msg->headers, priv->header);
 
 	rspamd_http_check_special_header (conn, priv);
@@ -577,7 +578,6 @@ rspamd_http_on_header_value (http_parser * parser,
 		priv->new_header = TRUE;
 		priv->header->combined = rspamd_fstring_append (priv->header->combined,
 				": ", 2);
-		priv->header->name->begin = priv->header->combined->str;
 		priv->header->name->len = priv->header->combined->len - 2;
 	}
 
