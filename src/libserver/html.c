@@ -846,6 +846,8 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 	gint rc, state = 0;
 	gchar *url_str = NULL;
 
+	*url_found = FALSE;
+
 	if (rspamd_url_find (pool, url_text, len, NULL, NULL, &url_str,
 		TRUE, &state) && url_str != NULL) {
 		text_url = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_url));
