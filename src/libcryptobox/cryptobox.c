@@ -27,6 +27,7 @@
 #include <string.h>
 #endif
 
+#include "config.h"
 #include "cryptobox.h"
 #include "platform_config.h"
 #include "chacha20/chacha.h"
@@ -37,15 +38,6 @@
 #include "blake2.h"
 #ifdef HAVE_CPUID_H
 #include <cpuid.h>
-#endif
-
-
-#ifndef ALIGNED
-#if defined(_MSC_VER)
-# define ALIGNED(x) __declspec(align(x))
-#else
-# define ALIGNED(x) __attribute__((aligned(x)))
-#endif
 #endif
 
 unsigned long cpu_config = 0;
@@ -174,7 +166,7 @@ void rspamd_cryptobox_encrypt_nm_inplace (guchar *data, gsize len,
 		const rspamd_nm_t nm, rspamd_sig_t sig)
 {
 	poly1305_state mac_ctx;
-	guchar ALIGNED(32) subkey[CHACHA_BLOCKBYTES];
+	guchar RSPAMD_ALIGNED(32) subkey[CHACHA_BLOCKBYTES];
 	chacha_state s;
 	gsize r;
 
@@ -215,7 +207,7 @@ void rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segm
 		const rspamd_nm_t nm, rspamd_sig_t sig)
 {
 	struct rspamd_cryptobox_segment *cur = segments, *start_seg = segments;
-	guchar ALIGNED(32) subkey[CHACHA_BLOCKBYTES],
+	guchar RSPAMD_ALIGNED(32) subkey[CHACHA_BLOCKBYTES],
 		outbuf[CHACHA_BLOCKBYTES * 16];
 	poly1305_state mac_ctx;
 	guchar *out, *in;
@@ -308,7 +300,7 @@ rspamd_cryptobox_decrypt_nm_inplace (guchar *data, gsize len,
 		const rspamd_nonce_t nonce, const rspamd_nm_t nm, const rspamd_sig_t sig)
 {
 	poly1305_state mac_ctx;
-	guchar ALIGNED(32) subkey[CHACHA_BLOCKBYTES];
+	guchar RSPAMD_ALIGNED(32) subkey[CHACHA_BLOCKBYTES];
 	rspamd_sig_t mac;
 	chacha_state s;
 	gsize r;

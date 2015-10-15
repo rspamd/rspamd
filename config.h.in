@@ -102,6 +102,18 @@
 #endif
 
 
+#ifndef RSPAMD_ALIGNED
+#if defined(_MSC_VER)
+# define RSPAMD_ALIGNED(x) __declspec(align(x))
+#elif defined(__GNUC__)
+# define RSPAMD_ALIGNED(x) __attribute__((aligned(x)))
+#else
+# define RSPAMD_ALIGNED(x)
+#endif
+#endif
+
+
+
 #cmakedefine HAVE_SYS_QUEUE_H    1
 #cmakedefine HAVE_SYS_MMAN_H     1
 #cmakedefine HAVE_SYS_SOCKET_H   1
@@ -339,7 +351,9 @@ typedef off_t goffset;
 
 #ifndef PARAM_H_HAS_BITSET
 /* Bit map related macros. */
-#define NBBY    8               /* number of bits in a byte */
+#ifndef NBBY
+# define NBBY    8               /* number of bits in a byte */
+#endif
 #define setbit(a, \
 		i)     (((unsigned char *)(a))[(i) / NBBY] |= 1 << ((i) % NBBY))
 #define clrbit(a, \

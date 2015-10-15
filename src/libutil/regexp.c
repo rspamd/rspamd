@@ -664,9 +664,12 @@ rspamd_regexp_library_init (void)
 		rc = pcre_config (PCRE_CONFIG_JIT, &jit);
 
 		if (rc == 0 && jit == 1) {
+#ifdef PCRE_CONFIG_JITTARGET
 			pcre_config (PCRE_CONFIG_JITTARGET, &str);
-
 			msg_info ("pcre is compiled with JIT for %s", str);
+#else
+			msg_info ("pcre is compiled with JIT for unknown target");
+#endif
 
 			can_jit = TRUE;
 		}
