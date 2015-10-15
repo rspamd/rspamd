@@ -33,12 +33,6 @@
 #define OTTERY_NO_PID_CHECK
 #endif
 
-/**
- * Evaluate the condition 'x', while hinting to the compiler that it is
- * likely to be false.
- */
-#define UNLIKELY(x) __builtin_expect((x), 0)
-
 /** Magic number for deciding whether an ottery_state is initialized. */
 #define MAGIC_BASIS 0x11b07734
 

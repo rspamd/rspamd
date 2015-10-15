@@ -17,15 +17,6 @@
 #include "ottery.h"
 #include "ottery_st.h"
 
-/**
- * Evaluate the condition 'x', while hinting to the compiler that it is
- * likely to be false.
- */
-#ifdef __GNUC__
-#define UNLIKELY(x) __builtin_expect((x), 0)
-#else
-#define UNLIKELY(x) (x)
-#endif
 
 /** Flag: true iff ottery_global_state_ is initialized. */
 static int ottery_global_state_initialized_ = 0;

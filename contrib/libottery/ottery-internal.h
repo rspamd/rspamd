@@ -185,6 +185,16 @@ struct ottery_prf {
   void (*generate)(void *state, uint8_t *output, uint32_t idx);
 };
 
+/**
+ * Evaluate the condition 'x', while hinting to the compiler that it is
+ * likely to be false.
+ */
+#ifdef __GNUC__
+#define UNLIKELY(x) __builtin_expect((x), 0)
+#else
+#define UNLIKELY(x) (x)
+#endif
+
 #ifdef OTTERY_INTERNAL
 struct ottery_config {
   /** The PRF that we should use.  If NULL, we use the default. */
