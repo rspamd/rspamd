@@ -41,6 +41,7 @@
 #endif
 
 #include <signal.h>
+#include <setjmp.h>
 
 unsigned long cpu_config = 0;
 
@@ -92,11 +93,13 @@ rspamd_cryptobox_cpuid (gint cpu[4], gint info)
 }
 
 static sig_atomic_t ok = 0;
+static jmp_buf j;
 
 static void
 rspamd_cryptobox_ill_handler (int signo)
 {
 	ok = 0;
+	longjmp (j, -1);
 }
 
 static gboolean
@@ -107,6 +110,12 @@ rspamd_cryptobox_test_instr (gint instr)
 #if defined(__GNUC__)
 	ok = 1;
 	old_handler = signal (SIGILL, rspamd_cryptobox_ill_handler);
+
+	if (setjmp (j) != 0) {
+		signal (SIGILL, old_handler);
+
+		return FALSE;
+	}
 
 	switch (instr) {
 #ifdef HAVE_SSE2
@@ -146,6 +155,7 @@ rspamd_cryptobox_test_instr (gint instr)
 	signal (SIGILL, old_handler);
 #endif
 
+	/* We actually never return here if SIGILL has been caught */
 	return ok == 1;
 }
 
