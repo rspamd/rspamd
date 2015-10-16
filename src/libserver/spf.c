@@ -751,6 +751,11 @@ parse_spf_domain_mask (struct spf_record *rec, struct spf_addr *addr,
 		host = hostbuf;
 	}
 
+	if (cur_mask == 0) {
+		addr->m.dual.mask_v4 = 32;
+		addr->m.dual.mask_v6 = 64;
+	}
+
 	return host;
 }
 
