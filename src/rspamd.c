@@ -905,8 +905,34 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	if (rspamd_main->cfg->config_test || dump_cache) {
-		rspamd_fprintf (stderr, "use rspamadm configtest for this operation\n");
-		exit (EXIT_FAILURE);
+		if (!load_rspamd_config (rspamd_main, rspamd_main->cfg, FALSE)) {
+			exit (EXIT_FAILURE);
+		}
+
+		res = TRUE;
+
+		rspamd_symbols_cache_init (rspamd_main->cfg->cache);
+
+		if (!rspamd_init_filters (rspamd_main->cfg, FALSE)) {
+			res = FALSE;
+		}
+
+		/* Insert classifiers symbols */
+		rspamd_config_insert_classify_symbols (rspamd_main->cfg);
+
+		if (!rspamd_symbols_cache_validate (rspamd_main->cfg->cache,
+				rspamd_main->cfg,
+				FALSE)) {
+			res = FALSE;
+		}
+
+		if (dump_cache) {
+			msg_err_main ("Use rspamc counters for dumping cache");
+			exit (EXIT_FAILURE);
+		}
+
+		fprintf (stderr, "syntax %s\n", res ? "OK" : "BAD");
+		return res ? EXIT_SUCCESS : EXIT_FAILURE;
 	}
 
 	/* Load config */
