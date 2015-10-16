@@ -2466,6 +2466,15 @@ rspamd_http_message_parse_query (struct rspamd_http_message *msg)
 							value_tok->len = rspamd_decode_url (value->str,
 									value->str,
 									value->len);
+							/* Detect quotes for value */
+							if (value_tok->begin[0] == '"') {
+								memmove (value->str, value->str + 1,
+										value_tok->len - 1);
+								value_tok->len --;
+							}
+							if (value_tok->begin[value_tok->len - 1] == '"') {
+								value_tok->len --;
+							}
 						}
 						else {
 							value = rspamd_fstring_new_init ("", 0);
