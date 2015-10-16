@@ -30,11 +30,11 @@
 #include "blake2.h"
 #include "cryptobox.h"
 
-struct rspamd_http_keypair {
+struct RSPAMD_ALIGNED(32) rspamd_http_keypair  {
 	guchar pk[rspamd_cryptobox_PKBYTES];
-	guchar sk[rspamd_cryptobox_SKBYTES];
+	guchar RSPAMD_ALIGNED(32) sk[rspamd_cryptobox_SKBYTES];
 	guchar id[BLAKE2B_OUTBYTES];
-	guchar nm[rspamd_cryptobox_NMBYTES];
+	guchar RSPAMD_ALIGNED(32) nm[rspamd_cryptobox_NMBYTES];
 	gboolean has_nm;
 	ref_entry_t ref;
 };

@@ -91,29 +91,6 @@
  #if !defined(BYTE_ORDER)
  # error "Undefined or unknown BYTE_ORDER"
  #endif
-
-#ifdef _MSC_VER
-# define RSPAMD_PACKED(name) \
-    __pragma(pack(push, 1)) struct name __pragma(pack(pop))
-#elif defined(__GNUC__)
-# define RSPAMD_PACKED(name) struct __attribute__((packed)) name
-#else
-# define RSPAMD_PACKED(name) struct name
-#endif
-
-
-#ifndef RSPAMD_ALIGNED
-#if defined(_MSC_VER)
-# define RSPAMD_ALIGNED(x) __declspec(align(x))
-#elif defined(__GNUC__)
-# define RSPAMD_ALIGNED(x) __attribute__((aligned(x)))
-#else
-# define RSPAMD_ALIGNED(x)
-#endif
-#endif
-
-
-
 #cmakedefine HAVE_SYS_QUEUE_H    1
 #cmakedefine HAVE_SYS_MMAN_H     1
 #cmakedefine HAVE_SYS_SOCKET_H   1
@@ -341,14 +318,6 @@
 typedef off_t goffset;
 #endif
 
-#ifndef ALIGN
-#if defined(_MSC_VER)
-# define ALIGN(x) __declspec(align(x))
-#else
-# define ALIGN(x) __attribute__((aligned(x)))
-#endif
-#endif
-
 #ifndef PARAM_H_HAS_BITSET
 /* Bit map related macros. */
 #ifndef NBBY
@@ -362,6 +331,25 @@ typedef off_t goffset;
 	(((const unsigned char *)(a))[(i) / NBBY] & (1 << ((i) % NBBY)))
 #define isclr(a,i)                                                      \
 	((((const unsigned char *)(a))[(i) / NBBY] & (1 << ((i) % NBBY))) == 0)
+#endif
+
+#ifdef _MSC_VER
+# define RSPAMD_PACKED(name) \
+    __pragma(pack(push, 1)) struct name __pragma(pack(pop))
+#elif defined(__GNUC__)
+# define RSPAMD_PACKED(name) struct __attribute__((packed)) name
+#else
+# define RSPAMD_PACKED(name) struct name
+#endif
+
+#ifndef RSPAMD_ALIGNED
+#if defined(_MSC_VER)
+# define RSPAMD_ALIGNED(x) __declspec(align(x))
+#elif defined(__GNUC__)
+# define RSPAMD_ALIGNED(x) __attribute__((aligned(x)))
+#else
+# define RSPAMD_ALIGNED(x)
+#endif
 #endif
 
 #ifndef BITSPERBYTE
