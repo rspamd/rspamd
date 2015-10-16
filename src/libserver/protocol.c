@@ -264,6 +264,8 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 			/* Steal strings */
 			g_hash_table_iter_steal (&it);
 			g_hash_table_replace (task->request_headers, key, value);
+			msg_debug_task ("added header \"%T\" -> \"%T\" from HTTP query",
+					key, value);
 		}
 
 		g_hash_table_unref (query_args);
