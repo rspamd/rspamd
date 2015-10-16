@@ -1,3 +1,27 @@
+1.0.6:
+	* Fix build on i386
+	* Update CentOS7 service file patch (by @fatalbanana)
+	* Fix path to rspamadm in Debian init script (by @fatalbanana)
+	* Fix broken '_SC_GETPW_R_SIZE_MAX' on FreeBSD
+	* Fix portability issues
+	* Use cryptobox chacha for libottery
+	* Better support of 32 bit builds
+	* Fix header name tokens setup
+	* Fix levenstein distance method for words
+	* Add workaround for old libevent (#400)
+	* Fix microseconds in termination timer
+	* Fix some more issues with fixed strings
+	* Explicitly test CPU instructions even after CPUID call
+	* Do not check out of boundary memory
+	* Do not output broken emails
+	* Fix unknown symbols registration
+	* Handle SIGILL using longjmp
+	* Block signals when exiting event loop
+	* Fix incorrect allocation size
+	* Slightly optimize alignment
+	* Restore rspamd -t for compatibility
+	* Add more sanity checks for emails
+
 1.0.5:
 	* Add rspamd control interface:
 		- support `stat` command to get runtime stats of rspamd workers
