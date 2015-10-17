@@ -34,7 +34,6 @@
 
 static gchar *control_path = RSPAMD_DBDIR "/rspamd.sock";
 gboolean json = FALSE;
-gboolean ucl = FALSE;
 gboolean compact = FALSE;
 gdouble timeout = 1.0;
 
@@ -51,8 +50,6 @@ struct rspamadm_command control_command = {
 static GOptionEntry entries[] = {
 		{"json", 'j', 0, G_OPTION_ARG_NONE, &json,
 				"Output json",                    NULL},
-		{"ucl", 'u', 0, G_OPTION_ARG_NONE, &ucl,
-				"Output UCL",     NULL},
 		{"compact", 'c', 0, G_OPTION_ARG_NONE, &compact,
 				"Output compacted", NULL},
 		{"socket", 's', 0, G_OPTION_ARG_STRING, &control_path,
@@ -98,7 +95,37 @@ static gint
 rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 		struct rspamd_http_message *msg)
 {
-	rspamd_fprintf (stdout, "Result: %V\n", msg->body);
+	struct ucl_parser *parser;
+	ucl_object_t *obj;
+	rspamd_fstring_t *out;
+
+	parser = ucl_parser_new (0);
+
+	if (!ucl_parser_add_chunk (parser, msg->body->str, msg->body->len)) {
+		rspamd_fprintf (stderr, "cannot parse server's reply: %s\n",
+				ucl_parser_get_error (parser));
+		ucl_parser_free (parser);
+	}
+	else {
+		obj = ucl_parser_get_object (parser);
+		out = rspamd_fstring_new ();
+
+		if (json) {
+			rspamd_ucl_emit_fstring (obj, UCL_EMIT_JSON, &out);
+		}
+		else if (compact) {
+			rspamd_ucl_emit_fstring (obj, UCL_EMIT_JSON_COMPACT, &out);
+		}
+		else {
+			rspamd_ucl_emit_fstring (obj, UCL_EMIT_CONFIG, &out);
+		}
+
+		rspamd_fprintf (stdout, "%V", out);
+
+		rspamd_fstring_free (out);
+		ucl_object_unref (obj);
+		ucl_parser_free (parser);
+	}
 
 	return 0;
 }
