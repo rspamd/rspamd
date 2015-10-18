@@ -142,7 +142,6 @@ rspamd_client_finish (struct rspamd_http_connection *conn,
 	struct rspamd_http_message *msg)
 {
 	struct client_cbdata *cb = conn->ud;
-	struct timespec ts;
 
 	*(cb->lat) = rspamd_get_ticks () * 1000. - cb->ts;
 	close (conn->fd);
@@ -196,7 +195,7 @@ cmpd (const void *p1, const void *p2)
 double
 rspamd_http_calculate_mean (double *lats, double *std)
 {
-	gint i;
+	guint i;
 	gdouble mean = 0., dev = 0.;
 
 	qsort (lats, ntests * pconns, sizeof (double), cmpd);
@@ -229,7 +228,8 @@ rspamd_http_test_func (void)
 	gdouble ts1, ts2;
 	gchar filepath[PATH_MAX], *buf;
 	gchar *env;
-	gint fd, i, j;
+	gint fd, res;
+	guint i, j;
 	pid_t sfd;
 	GString *b32_key;
 	double diff, total_diff = 0.0, latency[pconns * ntests], mean, std;
@@ -299,9 +299,9 @@ rspamd_http_test_func (void)
 	msg_info ("Latency: %.6f ms mean, %.6f dev",
 			mean, std);
 
-	/* Now test encrypted */
+	/* Switch to openssl mode */
 	kill (sfd, SIGTERM);
-	wait (&i);
+	wait (&res);
 	sfd = fork ();
 	g_assert (sfd != -1);
 
@@ -345,7 +345,7 @@ rspamd_http_test_func (void)
 
 	/* Restart server */
 	kill (sfd, SIGTERM);
-	wait (&i);
+	wait (&res);
 	sfd = fork ();
 	g_assert (sfd != -1);
 
@@ -381,6 +381,105 @@ rspamd_http_test_func (void)
 	mean = rspamd_http_calculate_mean (latency, &std);
 	msg_info ("Latency: %.6f ms mean, %.6f dev",
 			mean, std);
+
+	/* AES mode */
+	if (rspamd_cryptobox_openssl_mode (TRUE)) {
+		kill (sfd, SIGTERM);
+		wait (&res);
+		sfd = fork ();
+		g_assert (sfd != -1);
+
+		if (sfd == 0) {
+			gperf_profiler_init (NULL, "cached-http-server-aes");
+			rspamd_http_server_func ("/tmp/", addr, mtx, serv_key, c);
+			gperf_profiler_stop ();
+			exit (EXIT_SUCCESS);
+		}
+
+		//rspamd_mempool_lock_mutex (mtx);
+		usleep (100000);
+		b32_key = rspamd_http_connection_print_key (serv_key,
+				RSPAMD_KEYPAIR_PUBKEY | RSPAMD_KEYPAIR_BASE32);
+		g_assert (b32_key != NULL);
+		peer_key = rspamd_http_connection_make_peer_key (b32_key->str);
+		g_assert (peer_key != NULL);
+		total_diff = 0.0;
+
+		gperf_profiler_init (NULL, "cached-http-client-aes");
+		for (i = 0; i < ntests; i++) {
+			for (j = 0; j < pconns; j++) {
+				rspamd_http_client_func (filepath + sizeof ("/tmp") - 1,
+						addr,
+						client_key,
+						peer_key,
+						c,
+						ev_base,
+						&latency[i * pconns + j]);
+			}
+			ts1 = rspamd_get_ticks ();
+			event_base_loop (ev_base, 0);
+			ts2 = rspamd_get_ticks ();
+			diff = (ts2 - ts1) * 1000.0;
+			total_diff += diff;
+		}
+		gperf_profiler_stop ();
+
+		msg_info (
+				"Made %d aes encrypted connections of size %d in %.6f ms, %.6f cps",
+				ntests * pconns,
+				file_size,
+				total_diff,
+				ntests * pconns / total_diff * 1000.);
+		mean = rspamd_http_calculate_mean (latency, &std);
+		msg_info ("Latency: %.6f ms mean, %.6f dev",
+				mean, std);
+
+		/* Restart server */
+		kill (sfd, SIGTERM);
+		wait (&res);
+		sfd = fork ();
+		g_assert (sfd != -1);
+
+		if (sfd == 0) {
+			gperf_profiler_init (NULL, "fair-http-server-aes");
+			rspamd_http_server_func ("/tmp/", addr, mtx, serv_key, NULL);
+			gperf_profiler_stop ();
+			exit (EXIT_SUCCESS);
+		}
+
+		//rspamd_mempool_lock_mutex (mtx);
+		usleep (100000);
+		total_diff = 0.0;
+
+		gperf_profiler_init (NULL, "fair-http-client-aes");
+		for (i = 0; i < ntests; i++) {
+			for (j = 0; j < pconns; j++) {
+				rspamd_http_client_func (filepath + sizeof ("/tmp") - 1,
+						addr,
+						client_key,
+						peer_key,
+						c,
+						ev_base,
+						&latency[i * pconns + j]);
+			}
+			ts1 = rspamd_get_ticks ();
+			event_base_loop (ev_base, 0);
+			ts2 = rspamd_get_ticks ();
+			diff = (ts2 - ts1) * 1000.0;
+			total_diff += diff;
+		}
+		gperf_profiler_stop ();
+
+		msg_info (
+				"Made %d uncached aes encrypted connections of size %d in %.6f ms, %.6f cps",
+				ntests * pconns,
+				file_size,
+				total_diff,
+				ntests * pconns / total_diff * 1000.);
+		mean = rspamd_http_calculate_mean (latency, &std);
+		msg_info ("Latency: %.6f ms mean, %.6f dev",
+				mean, std);
+	}
 
 	close (fd);
 	unlink (filepath);
