@@ -21,7 +21,7 @@ struct f_str_s;
 
 #define MEM_ALIGNMENT   16    /* Better for SSE */
 #define align_ptr(p, a)                                                   \
-	(guint8 *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
+    (guint8 *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
 
 /**
  * Destructor type definition

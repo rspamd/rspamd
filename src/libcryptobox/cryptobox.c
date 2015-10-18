@@ -39,11 +39,16 @@
 #ifdef HAVE_CPUID_H
 #include <cpuid.h>
 #endif
+#ifdef HAVE_OPENSSL
+#include <openssl/evp.h>
+#endif
 
 #include <signal.h>
 #include <setjmp.h>
 
 unsigned long cpu_config = 0;
+
+static gboolean use_openssl = FALSE;
 
 static const guchar n0[16] = {0};
 
@@ -55,6 +60,10 @@ _dummy_symbol_to_prevent_lto(void * const pnt, const size_t len)
 	(void) len;
 }
 #endif
+
+#define CRYPTOBOX_ALIGNMENT   32    /* Better for AVX */
+#define cryptobox_align_ptr(p, a)                                             \
+    (void *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
 
 void
 rspamd_explicit_memzero(void * const pnt, const gsize len)
@@ -244,28 +253,180 @@ rspamd_cryptobox_nm (rspamd_nm_t nm, const rspamd_pk_t pk, const rspamd_sk_t sk)
 	rspamd_explicit_memzero (e, rspamd_cryptobox_SKBYTES);
 }
 
-void rspamd_cryptobox_encrypt_nm_inplace (guchar *data, gsize len,
-		const rspamd_nonce_t nonce,
-		const rspamd_nm_t nm, rspamd_sig_t sig)
+static gsize
+rspamd_cryptobox_encrypt_ctx_len (void)
 {
-	poly1305_state mac_ctx;
+	return sizeof (chacha_state) + CRYPTOBOX_ALIGNMENT;
+}
+
+static gsize
+rspamd_cryptobox_auth_ctx_len (void)
+{
+	return sizeof (poly1305_state) + CRYPTOBOX_ALIGNMENT;
+}
+
+static void *
+rspamd_cryptobox_encrypt_init (void *enc_ctx, const rspamd_nonce_t nonce,
+		const rspamd_nm_t nm)
+{
+	chacha_state *s;
+
+	s = cryptobox_align_ptr (enc_ctx, CRYPTOBOX_ALIGNMENT);
+	xchacha_init (s, (const chacha_key *) nm, (const chacha_iv24 *) nonce, 20);
+
+	return s;
+}
+
+static void *
+rspamd_cryptobox_auth_init (void *auth_ctx, void *enc_ctx)
+{
+	poly1305_state *mac_ctx;
 	guchar RSPAMD_ALIGNED(32) subkey[CHACHA_BLOCKBYTES];
-	chacha_state s;
+
+	mac_ctx = cryptobox_align_ptr (auth_ctx, CRYPTOBOX_ALIGNMENT);
+	memset (subkey, 0, sizeof (subkey));
+	chacha_update (enc_ctx, subkey, subkey, sizeof (subkey));
+	poly1305_init (mac_ctx, (const poly1305_key *) subkey);
+	rspamd_explicit_memzero (subkey, sizeof (subkey));
+
+	return mac_ctx;
+}
+
+static gboolean
+rspamd_cryptobox_encrypt_update (void *enc_ctx, const guchar *in, gsize inlen,
+		guchar *out, gsize *outlen)
+{
 	gsize r;
 
-	xchacha_init (&s, (const chacha_key *)nm, (const chacha_iv24 *)nonce, 20);
+	r = chacha_update (enc_ctx, in, out, inlen);
+
+	if (outlen != NULL) {
+		*outlen = r;
+	}
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_cryptobox_auth_update (void *auth_ctx, const guchar *in, gsize inlen)
+{
+	poly1305_update (auth_ctx, in, inlen);
+
+	return TRUE;
+}
+
+static gsize
+rspamd_cryptobox_encrypt_final (void *enc_ctx, guchar *out)
+{
+	return chacha_final (enc_ctx, out);
+}
+
+static gboolean
+rspamd_cryptobox_auth_final (void *auth_ctx, rspamd_sig_t sig)
+{
+	poly1305_finish (auth_ctx, sig);
+
+	return TRUE;
+}
+
+static void *
+rspamd_cryptobox_decrypt_init (void *enc_ctx, const rspamd_nonce_t nonce,
+		const rspamd_nm_t nm)
+{
+	chacha_state *s;
+
+	s = cryptobox_align_ptr (enc_ctx, CRYPTOBOX_ALIGNMENT);
+	xchacha_init (s, (const chacha_key *) nm, (const chacha_iv24 *) nonce, 20);
+
+	return s;
+}
+
+static void *
+rspamd_cryptobox_auth_verify_init (void *auth_ctx, void *enc_ctx)
+{
+	poly1305_state *mac_ctx;
+	guchar RSPAMD_ALIGNED(32) subkey[CHACHA_BLOCKBYTES];
+
+	mac_ctx = cryptobox_align_ptr (auth_ctx, CRYPTOBOX_ALIGNMENT);
 	memset (subkey, 0, sizeof (subkey));
-	chacha_update (&s, subkey, subkey, sizeof (subkey));
-
-	r = chacha_update (&s, data, data, len);
-	chacha_final (&s, data + r);
-
-	poly1305_init (&mac_ctx, (const poly1305_key *)subkey);
-	poly1305_update (&mac_ctx, data, len);
-	poly1305_finish (&mac_ctx, sig);
-
-	rspamd_explicit_memzero (&mac_ctx, sizeof (mac_ctx));
+	chacha_update (enc_ctx, subkey, subkey, sizeof (subkey));
+	poly1305_init (mac_ctx, (const poly1305_key *) subkey);
 	rspamd_explicit_memzero (subkey, sizeof (subkey));
+
+	return mac_ctx;
+}
+
+static gboolean
+rspamd_cryptobox_decrypt_update (void *enc_ctx, const guchar *in, gsize inlen,
+		guchar *out, gsize *outlen)
+{
+	gsize r;
+
+	r = chacha_update (enc_ctx, in, out, inlen);
+
+	if (outlen != NULL) {
+		*outlen = r;
+	}
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_cryptobox_auth_verify_update (void *auth_ctx, const guchar *in, gsize inlen)
+{
+	poly1305_update (auth_ctx, in, inlen);
+
+	return TRUE;
+}
+
+static gsize
+rspamd_cryptobox_decrypt_final (void *enc_ctx, guchar *out)
+{
+	return chacha_final (enc_ctx, out);
+}
+
+static gboolean
+rspamd_cryptobox_auth_verify_final (void *auth_ctx, const rspamd_sig_t sig)
+{
+	rspamd_sig_t mac;
+
+	poly1305_finish (auth_ctx, mac);
+
+	if (!poly1305_verify (mac, sig)) {
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+
+static void
+rspamd_cryptobox_cleanup (void *enc_ctx, void *auth_ctx)
+{
+	rspamd_explicit_memzero (auth_ctx, sizeof (poly1305_state));
+}
+
+void rspamd_cryptobox_encrypt_nm_inplace (guchar *data, gsize len,
+		const rspamd_nonce_t nonce,
+		const rspamd_nm_t nm,
+		rspamd_sig_t sig)
+{
+	gsize r;
+	void *enc_ctx, *auth_ctx;
+
+	enc_ctx = g_alloca (rspamd_cryptobox_encrypt_ctx_len ());
+	auth_ctx = g_alloca (rspamd_cryptobox_auth_ctx_len ());
+
+	enc_ctx = rspamd_cryptobox_encrypt_init (enc_ctx, nonce, nm);
+	auth_ctx = rspamd_cryptobox_auth_init (auth_ctx, enc_ctx);
+
+	rspamd_cryptobox_encrypt_update (enc_ctx, data, len, data, &r);
+	rspamd_cryptobox_encrypt_final (enc_ctx, data + r);
+
+	rspamd_cryptobox_auth_update (auth_ctx, data, len);
+	rspamd_cryptobox_auth_final (auth_ctx, sig);
+
+	rspamd_cryptobox_cleanup (enc_ctx, auth_ctx);
 }
 
 static void
@@ -284,23 +445,23 @@ rspamd_cryptobox_flush_outbuf (struct rspamd_cryptobox_segment *st,
 	}
 }
 
-void rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segments,
+void
+rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segments,
 		gsize cnt,
 		const rspamd_nonce_t nonce,
 		const rspamd_nm_t nm, rspamd_sig_t sig)
 {
 	struct rspamd_cryptobox_segment *cur = segments, *start_seg = segments;
-	guchar RSPAMD_ALIGNED(32) subkey[CHACHA_BLOCKBYTES],
-		outbuf[CHACHA_BLOCKBYTES * 16];
-	poly1305_state mac_ctx;
+	guchar outbuf[CHACHA_BLOCKBYTES * 16];
+	void *enc_ctx, *auth_ctx;
 	guchar *out, *in;
-	chacha_state s;
 	gsize r, remain, inremain, seg_offset;
 
-	xchacha_init (&s, (const chacha_key *)nm, (const chacha_iv24 *)nonce, 20);
-	memset (subkey, 0, sizeof (subkey));
-	chacha_update (&s, subkey, subkey, sizeof (subkey));
-	poly1305_init (&mac_ctx, (const poly1305_key *)subkey);
+	enc_ctx = g_alloca (rspamd_cryptobox_encrypt_ctx_len ());
+	auth_ctx = g_alloca (rspamd_cryptobox_auth_ctx_len ());
+
+	enc_ctx = rspamd_cryptobox_encrypt_init (enc_ctx, nonce, nm);
+	auth_ctx = rspamd_cryptobox_auth_init (auth_ctx, enc_ctx);
 
 	remain = sizeof (outbuf);
 	out = outbuf;
@@ -319,8 +480,9 @@ void rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segm
 			cur ++;
 
 			if (remain == 0) {
-				chacha_update (&s, outbuf, outbuf, sizeof (outbuf));
-				poly1305_update (&mac_ctx, outbuf, sizeof (outbuf));
+				rspamd_cryptobox_encrypt_update (enc_ctx, outbuf, sizeof (outbuf),
+						outbuf, NULL);
+				rspamd_cryptobox_auth_update (auth_ctx, outbuf, sizeof (outbuf));
 				rspamd_cryptobox_flush_outbuf (start_seg, outbuf,
 						sizeof (outbuf), seg_offset);
 				start_seg = cur;
@@ -331,8 +493,9 @@ void rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segm
 		}
 		else {
 			memcpy (out, cur->data, remain);
-			chacha_update (&s, outbuf, outbuf, sizeof (outbuf));
-			poly1305_update (&mac_ctx, outbuf, sizeof (outbuf));
+			rspamd_cryptobox_encrypt_update (enc_ctx, outbuf, sizeof (outbuf),
+					outbuf, NULL);
+			rspamd_cryptobox_auth_update (auth_ctx, outbuf, sizeof (outbuf));
 			rspamd_cryptobox_flush_outbuf (start_seg, outbuf, sizeof (outbuf),
 					seg_offset);
 			seg_offset = 0;
@@ -346,8 +509,14 @@ void rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segm
 			while (inremain > 0) {
 				if (sizeof (outbuf) <= inremain) {
 					memcpy (outbuf, in, sizeof (outbuf));
-					chacha_update (&s, outbuf, outbuf, sizeof (outbuf));
-					poly1305_update (&mac_ctx, outbuf, sizeof (outbuf));
+					rspamd_cryptobox_encrypt_update (enc_ctx,
+							outbuf,
+							sizeof (outbuf),
+							outbuf,
+							NULL);
+					rspamd_cryptobox_auth_update (auth_ctx,
+							outbuf,
+							sizeof (outbuf));
 					memcpy (in, outbuf, sizeof (outbuf));
 					in += sizeof (outbuf);
 					inremain -= sizeof (outbuf);
@@ -366,48 +535,44 @@ void rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segm
 		}
 	}
 
-	r = chacha_update (&s, outbuf, outbuf, sizeof (outbuf) - remain);
+	rspamd_cryptobox_encrypt_update (enc_ctx, outbuf, sizeof (outbuf) - remain,
+			outbuf, &r);
 	out = outbuf + r;
-	chacha_final (&s, out);
-	poly1305_update (&mac_ctx, outbuf, sizeof (outbuf) - remain);
-	poly1305_finish (&mac_ctx, sig);
+	rspamd_cryptobox_encrypt_final (enc_ctx, out);
+
+	rspamd_cryptobox_auth_update (auth_ctx, outbuf, sizeof (outbuf) - remain);
+	rspamd_cryptobox_auth_final (auth_ctx, sig);
 
 	rspamd_cryptobox_flush_outbuf (start_seg, outbuf, sizeof (outbuf) - remain,
 			seg_offset);
-	rspamd_explicit_memzero (&mac_ctx, sizeof (mac_ctx));
-	rspamd_explicit_memzero (subkey, sizeof (subkey));
+	rspamd_cryptobox_cleanup (auth_ctx, enc_ctx);
 }
 
 gboolean
 rspamd_cryptobox_decrypt_nm_inplace (guchar *data, gsize len,
 		const rspamd_nonce_t nonce, const rspamd_nm_t nm, const rspamd_sig_t sig)
 {
-	poly1305_state mac_ctx;
-	guchar RSPAMD_ALIGNED(32) subkey[CHACHA_BLOCKBYTES];
-	rspamd_sig_t mac;
-	chacha_state s;
 	gsize r;
 	gboolean ret = TRUE;
+	void *enc_ctx, *auth_ctx;
 
-	/* Generate MAC key */
-	xchacha_init (&s, (const chacha_key *)nm, (const chacha_iv24 *)nonce, 20);
-	memset (subkey, 0, sizeof (subkey));
-	chacha_update (&s, subkey, subkey, sizeof (subkey));
+	enc_ctx = g_alloca (rspamd_cryptobox_encrypt_ctx_len ());
+	auth_ctx = g_alloca (rspamd_cryptobox_auth_ctx_len ());
 
-	poly1305_init (&mac_ctx, (const poly1305_key *)subkey);
-	poly1305_update (&mac_ctx, data, len);
-	poly1305_finish (&mac_ctx, mac);
+	enc_ctx = rspamd_cryptobox_decrypt_init (enc_ctx, nonce, nm);
+	auth_ctx = rspamd_cryptobox_auth_verify_init (auth_ctx, enc_ctx);
 
-	if (!poly1305_verify (mac, sig)) {
+	rspamd_cryptobox_auth_verify_update (auth_ctx, data, len);
+
+	if (!rspamd_cryptobox_auth_verify_final (auth_ctx, sig)) {
 		ret = FALSE;
 	}
 	else {
-		r = chacha_update (&s, data, data, len);
-		chacha_final (&s, data + r);
+		rspamd_cryptobox_decrypt_update (enc_ctx, data, len, data, &r);
+		rspamd_cryptobox_decrypt_final (enc_ctx, data + r);
 	}
 
-	rspamd_explicit_memzero (&mac_ctx, sizeof (mac_ctx));
-	rspamd_explicit_memzero (subkey, sizeof (subkey));
+	rspamd_cryptobox_cleanup (enc_ctx, auth_ctx);
 
 	return ret;
 }
@@ -518,4 +683,10 @@ rspamd_cryptobox_pbkdf (const char *pass, gsize pass_len,
 	rspamd_explicit_memzero (obuf, sizeof (obuf));
 
 	return TRUE;
+}
+
+void
+rspamd_cryptobox_openssl_mode (gboolean enable)
+{
+	use_openssl = enable;
 }
