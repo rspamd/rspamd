@@ -463,6 +463,7 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 	struct ucl_emitter_functions *efunc;
 	gpointer k, v;
 	gint fd;
+	FILE *f;
 	bool ret;
 
 	fd = open (name, O_CREAT | O_TRUNC | O_WRONLY, 00644);
@@ -503,10 +504,13 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 		ucl_object_insert_key (top, elt, k, 0, false);
 	}
 
-	efunc = ucl_object_emit_fd_funcs (fd);
+	f = fdopen (fd, "a");
+	g_assert (f != NULL);
+
+	efunc = ucl_object_emit_file_funcs (f);
 	ret = ucl_object_emit_full (top, UCL_EMIT_JSON_COMPACT, efunc);
 	ucl_object_emit_funcs_free (efunc);
-	close (fd);
+	fclose (f);
 
 	return ret;
 }
