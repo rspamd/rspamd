@@ -1071,6 +1071,12 @@ main (gint argc, gchar **argv, gchar **env)
 	/* We need to block signals unless children are waited for */
 	rspamd_worker_block_signals ();
 
+	event_del (&term_ev);
+	event_del (&int_ev);
+	event_del (&hup_ev);
+	event_del (&cld_ev);
+	event_del (&usr1_ev);
+
 	if (control_fd != -1) {
 		event_del (&control_ev);
 		close (control_fd);
@@ -1091,13 +1097,13 @@ main (gint argc, gchar **argv, gchar **env)
 	/* Wait for workers termination */
 	g_hash_table_foreach_remove (rspamd_main->workers, wait_for_workers, NULL);
 
-	event_del (&term_ev);
 	event_set (&term_ev, -1, EV_TIMEOUT|EV_PERSIST,
 			rspamd_final_term_handler, rspamd_main);
 	event_base_set (ev_base, &term_ev);
 	event_add (&term_ev, &term_tv);
 
 	event_base_loop (ev_base, 0);
+	event_del (&term_ev);
 
 	/* Maybe save roll history */
 	if (rspamd_main->cfg->history_file) {
