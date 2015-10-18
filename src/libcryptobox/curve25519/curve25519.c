@@ -45,7 +45,6 @@ typedef struct curve25519_impl_s {
     {(cpuflags), desc, scalarmult_##ext}
 
 #if defined(__LP64__)
-
 #if defined(HAVE_AVX)
 CURVE25519_DECLARE(avx);
 #define CURVE25519_AVX CURVE25519_IMPL(CPUID_AVX, "avx", avx)
@@ -56,12 +55,16 @@ CURVE25519_DECLARE(avx);
 CURVE25519_DECLARE(ref);
 #define CURVE25519_REF CURVE25519_IMPL(0, "ref", ref)
 
+#if (ARCH == x86_64) || (ARCH == i386)
 CURVE25519_DECLARE(donna);
-#define CURVE25519_DONNA CURVE25519_IMPL(0, "donna", donna)
+#define CURVE25519_GENERIC CURVE25519_IMPL(0, "donna", donna)
+#else
+#define CURVE25519_GENERIC CURVE25519_REF
+#endif
 
 
 static const curve25519_impl_t curve25519_list[] = {
-		CURVE25519_DONNA,
+		CURVE25519_GENERIC,
 #if defined(CURVE25519_AVX)
 		CURVE25519_AVX,
 #endif
