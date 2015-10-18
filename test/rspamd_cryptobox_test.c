@@ -172,6 +172,7 @@ rspamd_cryptobox_test_func (void)
 	struct rspamd_cryptobox_segment *seg;
 	double t1, t2;
 	gint i, cnt, ms;
+	gboolean checked_openssl = FALSE;
 
 	map = create_mapping (mapping_size, &begin, &end);
 
@@ -188,6 +189,22 @@ rspamd_cryptobox_test_func (void)
 	check_result (key, nonce, mac, begin, end);
 
 	msg_info ("baseline encryption: %.6f", t2 - t1);
+
+	if (rspamd_cryptobox_openssl_mode (TRUE)) {
+		t1 = rspamd_get_ticks ();
+		rspamd_cryptobox_encrypt_nm_inplace (begin,
+				end - begin,
+				nonce,
+				key,
+				mac);
+		t2 = rspamd_get_ticks ();
+		check_result (key, nonce, mac, begin, end);
+
+		msg_info ("openssl baseline encryption: %.6f", t2 - t1);
+		rspamd_cryptobox_openssl_mode (FALSE);
+	}
+
+start:
 	/* A single chunk as vector */
 	seg[0].data = begin;
 	seg[0].len = end - begin;
@@ -329,5 +346,10 @@ rspamd_cryptobox_test_func (void)
 		if (i % 1000 == 0) {
 			msg_info ("constrainted fuzz iterations: %d", i);
 		}
+	}
+
+	if (!checked_openssl && rspamd_cryptobox_openssl_mode (TRUE)) {
+		checked_openssl = TRUE;
+		goto start;
 	}
 }

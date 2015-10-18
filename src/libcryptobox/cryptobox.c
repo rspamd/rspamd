@@ -314,6 +314,7 @@ rspamd_cryptobox_encrypt_init (void *enc_ctx, const rspamd_nonce_t nonce,
 		EVP_CIPHER_CTX *s;
 
 		s = cryptobox_align_ptr (enc_ctx, CRYPTOBOX_ALIGNMENT);
+		memset (s, 0, sizeof (*s));
 		g_assert (EVP_EncryptInit_ex (s, EVP_aes_256_gcm (), NULL, NULL, NULL) == 1);
 		g_assert (EVP_CIPHER_CTX_ctrl (s, EVP_CTRL_GCM_SET_IVLEN, 24, NULL) == 1);
 		g_assert (EVP_EncryptInit_ex (s, NULL, NULL, nm, nonce) == 1);
@@ -477,6 +478,7 @@ rspamd_cryptobox_decrypt_init (void *enc_ctx, const rspamd_nonce_t nonce,
 		EVP_CIPHER_CTX *s;
 
 		s = cryptobox_align_ptr (enc_ctx, CRYPTOBOX_ALIGNMENT);
+		memset (s, 0, sizeof (*s));
 		g_assert (EVP_DecryptInit_ex(s, EVP_aes_256_gcm (), NULL, NULL, NULL) == 1);
 		g_assert (EVP_CIPHER_CTX_ctrl (s, EVP_CTRL_GCM_SET_IVLEN, 24, NULL) == 1);
 		g_assert (EVP_DecryptInit_ex (s, NULL, NULL, nm, nonce) == 1);
@@ -639,7 +641,7 @@ rspamd_cryptobox_cleanup (void *enc_ctx, void *auth_ctx)
 #else
 		EVP_CIPHER_CTX *s = enc_ctx;
 
-		EVP_CIPHER_CTX_free (s);
+		EVP_CIPHER_CTX_cleanup (s);
 #endif
 	}
 }
@@ -923,12 +925,12 @@ rspamd_cryptobox_pbkdf (const char *pass, gsize pass_len,
 	return TRUE;
 }
 
-void
+gboolean
 rspamd_cryptobox_openssl_mode (gboolean enable)
 {
 #ifdef HAVE_USABLE_OPENSSL
 	use_openssl = enable;
-#else
-	g_assert (0);
 #endif
+
+	return use_openssl;
 }

@@ -178,6 +178,6 @@ gboolean rspamd_cryptobox_pbkdf(const char *pass, gsize pass_len,
  * Enable openssl mode in rspamd_cryptobox
  * @param enable if TRUE then crypto code will use openssl, chacha20/poly1305 otherwize
  */
-void rspamd_cryptobox_openssl_mode (gboolean enable);
+gboolean rspamd_cryptobox_openssl_mode (gboolean enable);
 
 #endif /* CRYPTOBOX_H_ */
