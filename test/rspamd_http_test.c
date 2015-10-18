@@ -35,9 +35,9 @@
 #include <sys/wait.h>
 #endif
 
-static const int file_blocks = 1;
-static const int pconns = 100;
-static const int ntests = 3000;
+static guint file_size = 500;
+static guint pconns = 100;
+static guint ntests = 3000;
 
 static void
 rspamd_server_error (struct rspamd_http_connection_entry *conn_ent,
@@ -227,7 +227,8 @@ rspamd_http_test_func (void)
 	rspamd_mempool_mutex_t *mtx;
 	rspamd_inet_addr_t *addr;
 	gdouble ts1, ts2;
-	gchar filepath[PATH_MAX], buf[500];
+	gchar filepath[PATH_MAX], *buf;
+	gchar *env;
 	gint fd, i, j;
 	pid_t sfd;
 	GString *b32_key;
@@ -237,10 +238,21 @@ rspamd_http_test_func (void)
 	rspamd_snprintf (filepath, sizeof (filepath), "/tmp/http-test-XXXXXX");
 	g_assert ((fd = mkstemp (filepath)) != -1);
 
-	for (i = 0; i < file_blocks; i ++) {
-		memset (buf, 0, sizeof (buf));
-		g_assert (write (fd, buf, sizeof (buf)) == sizeof (buf));
+	/* Read environment */
+	if ((env = getenv ("RSPAMD_HTTP_CONNS")) != NULL) {
+		pconns = strtoul (env, NULL, 10);
 	}
+	if ((env = getenv ("RSPAMD_HTTP_TESTS")) != NULL) {
+		ntests = strtoul (env, NULL, 10);
+	}
+	if ((env = getenv ("RSPAMD_HTTP_SIZE")) != NULL) {
+		file_size = strtoul (env, NULL, 10);
+	}
+
+	buf = g_malloc (file_size);
+	memset (buf, 0, file_size);
+	g_assert (write (fd, buf, file_size) == file_size);
+	g_free (buf);
 
 	mtx = rspamd_mempool_get_mutex (pool);
 
@@ -281,7 +293,7 @@ rspamd_http_test_func (void)
 
 	msg_info ("Made %d connections of size %d in %.6f ms, %.6f cps",
 			ntests * pconns,
-			sizeof (buf) * file_blocks,
+			file_size,
 			total_diff, ntests * pconns / total_diff * 1000.);
 	mean = rspamd_http_calculate_mean (latency, &std);
 	msg_info ("Latency: %.6f ms mean, %.6f dev",
@@ -325,7 +337,7 @@ rspamd_http_test_func (void)
 
 	msg_info ("Made %d encrypted connections of size %d in %.6f ms, %.6f cps",
 			ntests * pconns,
-			sizeof (buf) * file_blocks,
+			file_size,
 			total_diff, ntests * pconns / total_diff * 1000.);
 	mean = rspamd_http_calculate_mean (latency, &std);
 	msg_info ("Latency: %.6f ms mean, %.6f dev",
@@ -364,7 +376,7 @@ rspamd_http_test_func (void)
 
 	msg_info ("Made %d uncached encrypted connections of size %d in %.6f ms, %.6f cps",
 			ntests * pconns,
-			sizeof (buf) * file_blocks,
+			file_size,
 			total_diff, ntests * pconns / total_diff * 1000.);
 	mean = rspamd_http_calculate_mean (latency, &std);
 	msg_info ("Latency: %.6f ms mean, %.6f dev",
