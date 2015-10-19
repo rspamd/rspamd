@@ -40,6 +40,7 @@ dofile(local_rules .. '/regexp/fraud.lua')
 dofile(local_rules .. '/regexp/drugs.lua')
 dofile(local_rules .. '/html.lua')
 dofile(local_rules .. '/misc.lua')
+dofile(local_rules .. '/http_headers.lua')
 
 local function file_exists(filename)
 	local file = io.open(filename)
