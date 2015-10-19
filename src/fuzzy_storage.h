@@ -38,9 +38,9 @@ RSPAMD_PACKED(rspamd_fuzzy_reply) {
 RSPAMD_PACKED(rspamd_fuzzy_encrypted_req_hdr) {
 	guchar magic[4];
 	guchar reserved[8];
-	guchar pubkey[rspamd_cryptobox_PKBYTES];
-	guchar nonce[rspamd_cryptobox_NONCEBYTES];
-	guchar mac[rspamd_cryptobox_MACBYTES];
+	guchar pubkey[32];
+	guchar nonce[rspamd_cryptobox_MAX_NONCEBYTES];
+	guchar mac[rspamd_cryptobox_MAX_MACBYTES];
 };
 
 RSPAMD_PACKED(rspamd_fuzzy_encrypted_cmd) {
@@ -54,8 +54,8 @@ RSPAMD_PACKED(rspamd_fuzzy_encrypted_shingle_cmd) {
 };
 
 RSPAMD_PACKED(rspamd_fuzzy_encrypted_rep_hdr) {
-	guchar nonce[rspamd_cryptobox_NONCEBYTES];
-	guchar mac[rspamd_cryptobox_MACBYTES];
+	guchar nonce[rspamd_cryptobox_MAX_NONCEBYTES];
+	guchar mac[rspamd_cryptobox_MAX_MACBYTES];
 };
 
 RSPAMD_PACKED(rspamd_fuzzy_encrypted_reply) {

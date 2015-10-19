@@ -105,7 +105,7 @@ struct fuzzy_session {
 	guint64 time;
 	rspamd_inet_addr_t *addr;
 	struct rspamd_fuzzy_storage_ctx *ctx;
-	guchar nm[rspamd_cryptobox_NMBYTES];
+	guchar nm[rspamd_cryptobox_MAX_NMBYTES];
 };
 
 static gboolean
