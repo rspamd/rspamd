@@ -48,6 +48,7 @@ static gchar *hostname = "localhost";
 static gchar *classifier = "bayes";
 static gchar *local_addr = NULL;
 static gchar *execute = NULL;
+static gchar *sort = NULL;
 static gchar **http_headers = NULL;
 static gint weight = 0;
 static gint flag = 0;
@@ -121,6 +122,8 @@ static GOptionEntry entries[] =
 	   "Write mime body of message with headers instead of just a scan's result", NULL },
 	{"header", 0, 0, G_OPTION_ARG_STRING_ARRAY, &http_headers,
 		"Add custom HTTP header to query (can be repeated)", NULL},
+	{"sort", 0, 0, G_OPTION_ARG_STRING, &sort,
+		"Sort output in a specific order (name, weight, time)", NULL},
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -618,6 +621,68 @@ rspamc_uptime_output (FILE *out, ucl_object_t *obj)
 	}
 }
 
+static gint
+rspamc_counters_sort (const ucl_object_t **o1, const ucl_object_t **o2)
+{
+	gint order1 = 0, order2 = 0, c;
+	const ucl_object_t *elt1, *elt2;
+	gboolean inverse = FALSE;
+	gchar **args;
+
+	if (sort != NULL) {
+		args = g_strsplit_set (sort, ":", 2);
+		if (args && args[0]) {
+			if (args[1] && g_ascii_strcasecmp (args[1], "desc") == 0) {
+				inverse = TRUE;
+			}
+
+			if (g_ascii_strcasecmp (args[0], "name") == 0) {
+				elt1 = ucl_object_find_key (*o1, "symbol");
+				elt2 = ucl_object_find_key (*o2, "symbol");
+
+				if (elt1 && elt2) {
+					c = strcmp (ucl_object_tostring (elt1),
+							ucl_object_tostring (elt2));
+
+					order1 = c > 0 ? 1 : 0;
+					order2 = c < 0 ? 1 : 0;
+				}
+			}
+			else if (g_ascii_strcasecmp (args[0], "weight") == 0) {
+				elt1 = ucl_object_find_key (*o1, "weight");
+				elt2 = ucl_object_find_key (*o2, "weight");
+
+				if (elt1 && elt2) {
+					order1 = ucl_object_todouble (elt1) * 1000.0;
+					order2 = ucl_object_todouble (elt2) * 1000.0;
+				}
+			}
+			else if (g_ascii_strcasecmp (args[0], "frequency") == 0) {
+				elt1 = ucl_object_find_key (*o1, "frequency");
+				elt2 = ucl_object_find_key (*o2, "frequency");
+
+				if (elt1 && elt2) {
+					order1 = ucl_object_toint (elt1);
+					order2 = ucl_object_toint (elt2);
+				}
+			}
+			else if (g_ascii_strcasecmp (args[0], "time") == 0) {
+				elt1 = ucl_object_find_key (*o1, "time");
+				elt2 = ucl_object_find_key (*o2, "time");
+
+				if (elt1 && elt2) {
+					order1 = ucl_object_todouble (elt1) * 1000000;
+					order2 = ucl_object_todouble (elt2) * 1000000;
+				}
+			}
+
+			g_strfreev (args);
+		}
+	}
+
+	return (inverse ? (order2 - order1) : (order1 - order2));
+}
+
 static void
 rspamc_counters_output (FILE *out, ucl_object_t *obj)
 {
@@ -630,6 +695,12 @@ rspamc_counters_output (FILE *out, ucl_object_t *obj)
 		rspamd_printf ("Bad output\n");
 		return;
 	}
+
+	/* Sort symbols by their order */
+	if (sort != NULL) {
+		ucl_object_array_sort (obj, rspamc_counters_sort);
+	}
+
 	/* Find maximum width of symbol's name */
 	while ((cur = ucl_iterate_object (obj, &iter, true)) != NULL) {
 		sym = ucl_object_find_key (cur, "symbol");
