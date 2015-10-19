@@ -1092,7 +1092,7 @@ surbl_redirector_trie_cb (int strnum, int textpos, void *context)
 {
 	struct rspamd_url *url = context;
 
-	if (textpos == (gint)url->hostlen) {
+	if (textpos == (gint)url->tldlen) {
 		return strnum + 1;
 	}
 
