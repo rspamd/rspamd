@@ -30,6 +30,7 @@
 
 static gboolean hex_encode = FALSE;
 static gboolean raw = FALSE;
+static gboolean openssl = FALSE;
 
 static void rspamadm_keypair (gint argc, gchar **argv);
 static const char *rspamadm_keypair_help (gboolean full_help);
@@ -46,6 +47,8 @@ static GOptionEntry entries[] = {
 				"Use hex encoding",                         NULL},
 		{"raw", 'r', 0, G_OPTION_ARG_NONE, &raw,
 				"Print just keys, no description", NULL},
+		{"openssl", 's', 0, G_OPTION_ARG_NONE, &openssl,
+				"Generate openssl nistp256 keypair not curve25519 one", NULL},
 		{NULL,       0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -60,6 +63,7 @@ rspamadm_keypair_help (gboolean full_help)
 				"Where options are:\n\n"
 				"-x: encode with hex instead of base32\n"
 				"-r: print raw base32/hex\n"
+				"-s: generate openssl nistp256 keypair\n"
 				"--help: shows available options and commands";
 	}
 	else {
@@ -91,6 +95,13 @@ rspamadm_keypair (gint argc, gchar **argv)
 		fprintf (stderr, "option parsing failed: %s\n", error->message);
 		g_error_free (error);
 		exit (1);
+	}
+
+	if (openssl) {
+		if (!rspamd_cryptobox_openssl_mode (TRUE)) {
+			fprintf (stderr, "cannot enable openssl mode (incompatible openssl)\n");
+			exit (1);
+		}
 	}
 
 	keypair = rspamd_http_connection_gen_key ();
