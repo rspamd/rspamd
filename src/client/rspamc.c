@@ -48,6 +48,7 @@ static gchar *hostname = "localhost";
 static gchar *classifier = "bayes";
 static gchar *local_addr = NULL;
 static gchar *execute = NULL;
+static gchar **http_headers = NULL;
 static gint weight = 0;
 static gint flag = 0;
 static gint max_requests = 8;
@@ -118,6 +119,8 @@ static GOptionEntry entries[] =
 	   "Execute the specified command and pass output to it", NULL },
 	{ "mime", 'e', 0, G_OPTION_ARG_NONE, &mime_output,
 	   "Write mime body of message with headers instead of just a scan's result", NULL },
+	{"header", 0, 0, G_OPTION_ARG_STRING_ARRAY, &http_headers,
+		"Add custom HTTP header to query (can be repeated)", NULL},
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -389,6 +392,7 @@ static void
 add_options (GHashTable *opts)
 {
 	GString *numbuf;
+	gchar **hdr;
 
 	if (ip != NULL) {
 		g_hash_table_insert (opts, "Ip", ip);
@@ -429,6 +433,25 @@ add_options (GHashTable *opts)
 	}
 	if (extended_urls) {
 		g_hash_table_insert (opts, "URL-Format", "extended");
+	}
+
+	hdr = http_headers;
+
+	while (*hdr != NULL) {
+		gchar **kv = g_strsplit_set (*hdr, ":=", 2);
+
+		if (kv == NULL || kv[1] == NULL) {
+			g_hash_table_insert (opts, *hdr, "");
+
+			if (kv) {
+				g_strfreev (kv);
+			}
+		}
+		else {
+			g_hash_table_insert (opts, kv[0], kv[1]);
+		}
+
+		hdr ++;
 	}
 }
 

@@ -111,6 +111,9 @@ requires input.
 \--mime
 :	Output the full mime message instead of scanning results only
 
+\--header=*header*
+:	Add custom HTTP header for a request. You may specify header in format `name=value` or just `name` for an empty header. This option can be repeated multiple times.
+
 \--commands
 :	List available commands
 
