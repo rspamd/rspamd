@@ -50,6 +50,8 @@
 #ifdef HAVE_USABLE_OPENSSL
 #include <openssl/evp.h>
 #include <openssl/ec.h>
+
+#define CRYPTOBOX_CURVE_NID NID_X9_62_prime256v1
 #endif
 
 #include <signal.h>
@@ -250,11 +252,12 @@ rspamd_cryptobox_keypair (rspamd_pk_t pk, rspamd_sk_t sk)
 		g_assert (0);
 #else
 		EC_KEY *ec_sec;
-		const BIGNUM *bn_sec, *bn_pub;
+		const BIGNUM *bn_sec;
+		BIGNUM *bn_pub;
 		const EC_POINT *ec_pub;
 		gint len;
 
-		ec_sec = EC_KEY_new_by_curve_name (NID_X9_62_prime256v1);
+		ec_sec = EC_KEY_new_by_curve_name (CRYPTOBOX_CURVE_NID);
 		g_assert (ec_sec != NULL);
 		g_assert (EC_KEY_generate_key (ec_sec) != 0);
 
@@ -266,11 +269,13 @@ rspamd_cryptobox_keypair (rspamd_pk_t pk, rspamd_sk_t sk)
 				ec_pub, POINT_CONVERSION_COMPRESSED, NULL, NULL);
 
 		len = BN_num_bits (bn_sec) / NBBY;
-		g_assert (len <= sizeof (rspamd_sk_t));
+		g_assert (len <= (gint)sizeof (rspamd_sk_t));
 		BN_bn2bin (bn_sec, sk);
 		len = BN_num_bits (bn_pub) / NBBY;
-		g_assert (len <= sizeof (rspamd_pk_t));
+		g_assert (len <= (gint)sizeof (rspamd_pk_t));
 		BN_bn2bin (bn_pub, pk);
+		BN_free (bn_pub);
+		EC_KEY_free (ec_sec);
 #endif
 	}
 }
