@@ -989,6 +989,9 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 	gchar *urlstr;
 
 	task = param->task;
+
+	g_hash_table_remove (param->tree, struri (param->url));
+
 	if (msg->code == 200) {
 		hdr = rspamd_http_message_find_header (msg, "Uri");
 
@@ -1149,11 +1152,17 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 								g_list_prepend (NULL, rspamd_mempool_strdup
 										(task->task_pool, pat->ptr)));
 					}
-					register_redirector_call (url,
-							param->task,
-							param->suffix,
-							pat->ptr,
-							param->tree);
+
+					if (g_hash_table_lookup (param->tree, struri (url)) == NULL) {
+						g_hash_table_insert (param->tree, struri (url), url);
+
+						register_redirector_call (url,
+								param->task,
+								param->suffix,
+								pat->ptr,
+								param->tree);
+					}
+
 					return;
 				}
 			}
