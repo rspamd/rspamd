@@ -437,7 +437,7 @@ add_options (GHashTable *opts)
 
 	hdr = http_headers;
 
-	while (*hdr != NULL) {
+	while (hdr != NULL && *hdr != NULL) {
 		gchar **kv = g_strsplit_set (*hdr, ":=", 2);
 
 		if (kv == NULL || kv[1] == NULL) {
