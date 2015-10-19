@@ -671,6 +671,32 @@ rspamd_http_on_body_decrypted (http_parser * parser, const gchar *at, size_t len
 }
 
 static int
+rspamd_http_on_headers_complete_decrypted (http_parser *parser)
+{
+	struct rspamd_http_connection *conn =
+			(struct rspamd_http_connection *) parser->data;
+	struct rspamd_http_connection_private *priv;
+
+	priv = conn->priv;
+
+	if (priv->header != NULL) {
+		rspamd_http_finish_header (conn, priv);
+
+		priv->header = NULL;
+		priv->new_header = FALSE;
+	}
+
+	if (parser->flags & F_SPAMC) {
+		priv->msg->flags |= RSPAMD_HTTP_FLAG_SPAMC;
+	}
+
+	priv->msg->method = parser->method;
+	priv->msg->code = parser->status_code;
+
+	return 0;
+}
+
+static int
 rspamd_http_decrypt_message (struct rspamd_http_connection *conn,
 		struct rspamd_http_connection_private *priv,
 		struct rspamd_http_keypair *peer_key)
@@ -724,6 +750,7 @@ rspamd_http_decrypt_message (struct rspamd_http_connection *conn,
 	decrypted_cb.on_status = rspamd_http_on_status;
 	decrypted_cb.on_header_field = rspamd_http_on_header_field;
 	decrypted_cb.on_header_value = rspamd_http_on_header_value;
+	decrypted_cb.on_headers_complete = rspamd_http_on_headers_complete_decrypted;
 	decrypted_cb.on_body = rspamd_http_on_body_decrypted;
 	decrypted_parser.data = conn;
 	decrypted_parser.content_length = dec_len;
