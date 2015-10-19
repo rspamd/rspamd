@@ -273,7 +273,7 @@ rspamd_cryptobox_keypair (rspamd_pk_t pk, rspamd_sk_t sk)
 		g_assert (len <= (gint)sizeof (rspamd_sk_t));
 		BN_bn2bin (bn_sec, sk);
 		len = BN_num_bytes (bn_pub);
-		g_assert (len <= rspamd_cryptobox_pk_bytes ());
+		g_assert (len <= (gint)rspamd_cryptobox_pk_bytes ());
 		BN_bn2bin (bn_pub, pk);
 		BN_free (bn_pub);
 		EC_KEY_free (ec_sec);
@@ -317,9 +317,7 @@ rspamd_cryptobox_nm (rspamd_nm_t nm, const rspamd_pk_t pk, const rspamd_sk_t sk)
 		g_assert (bn_sec != NULL);
 
 		g_assert (EC_KEY_set_private_key (lk, bn_sec) == 1);
-		ec_pub = EC_POINT_new (EC_KEY_get0_group (lk));
-		g_assert (EC_POINT_set_compressed_coordinates_GF2m (EC_KEY_get0_group (lk),
-				ec_pub, bn_pub, pk[0] & 1, NULL) == 1);
+		ec_pub = EC_POINT_bn2point (EC_KEY_get0_group (lk), bn_pub, NULL, NULL);
 		g_assert (ec_pub != NULL);
 		len = ECDH_compute_key (s, sizeof (s), ec_pub, lk, NULL);
 		g_assert (len == sizeof (s));
