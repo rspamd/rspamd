@@ -31,10 +31,10 @@
 #include "cryptobox.h"
 
 struct RSPAMD_ALIGNED(32) rspamd_http_keypair  {
-	guchar pk[rspamd_cryptobox_PKBYTES];
-	guchar RSPAMD_ALIGNED(32) sk[rspamd_cryptobox_SKBYTES];
+	guchar RSPAMD_ALIGNED(32) sk[rspamd_cryptobox_MAX_SKBYTES];
+	guchar RSPAMD_ALIGNED(32) nm[rspamd_cryptobox_MAX_NMBYTES];
+	guchar RSPAMD_ALIGNED(32) pk[rspamd_cryptobox_MAX_PKBYTES];
 	guchar id[BLAKE2B_OUTBYTES];
-	guchar RSPAMD_ALIGNED(32) nm[rspamd_cryptobox_NMBYTES];
 	gboolean has_nm;
 	ref_entry_t ref;
 };
