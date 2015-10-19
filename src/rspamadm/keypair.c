@@ -27,6 +27,7 @@
 #include "cryptobox.h"
 #include "printf.h"
 #include "http.h"
+#include "keypair_private.h"
 
 static gboolean hex_encode = FALSE;
 static gboolean raw = FALSE;

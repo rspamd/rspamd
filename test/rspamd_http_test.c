@@ -257,7 +257,7 @@ rspamd_http_test_func (void)
 	mtx = rspamd_mempool_get_mutex (pool);
 
 	rspamd_parse_inet_address (&addr, "127.0.0.1", 0);
-	rspamd_inet_address_set_port (addr, ottery_rand_range (30000) + 32768);
+	rspamd_inet_address_set_port (addr, 43898);
 	serv_key = rspamd_http_connection_gen_key ();
 	client_key = rspamd_http_connection_gen_key ();
 	c = rspamd_keypair_cache_new (16);
@@ -384,6 +384,10 @@ rspamd_http_test_func (void)
 
 	/* AES mode */
 	if (rspamd_cryptobox_openssl_mode (TRUE)) {
+		serv_key = rspamd_http_connection_gen_key ();
+		client_key = rspamd_http_connection_gen_key ();
+		c = rspamd_keypair_cache_new (16);
+
 		kill (sfd, SIGTERM);
 		wait (&res);
 		sfd = fork ();
@@ -412,7 +416,7 @@ rspamd_http_test_func (void)
 						addr,
 						client_key,
 						peer_key,
-						c,
+						NULL,
 						ev_base,
 						&latency[i * pconns + j]);
 			}
