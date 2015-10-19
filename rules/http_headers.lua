@@ -34,18 +34,20 @@ rspamd_config:add_condition("R_DKIM_ALLOW", function(task)
   if hdr then
     local parser = ucl.parser()
     local res, err = parser:parse_string(tostring(hdr))
-    if not res or type(res) ~= 'table' then
+    if not res then
       logger.infox(task, "cannot parse DKIM header: %1", err)
       return true
     end
 
-    if res['result'] then
-      if res['result'] == 'pass' or res['result'] == 'allow' then
-        task:insert_result('R_DKIM_ALLOW', 1.0)
-      elseif res['result'] == 'fail' or res['result'] == 'reject' then
-        task:insert_result('R_DKIM_REJECT', 1.0)
-      elseif res['result'] == 'tempfail' or res['result'] == 'softfail' then
-        task:insert_result('R_DKIM_TEMPFAIL', 1.0)
+    local obj = parser:get_object()
+
+    if obj['result'] then
+      if obj['result'] == 'pass' or obj['result'] == 'allow' then
+        task:insert_result('R_DKIM_ALLOW', 1.0, 'http header')
+      elseif obj['result'] == 'fail' or obj['result'] == 'reject' then
+        task:insert_result('R_DKIM_REJECT', 1.0, 'http header')
+      elseif obj['result'] == 'tempfail' or obj['result'] == 'softfail' then
+        task:insert_result('R_DKIM_TEMPFAIL', 1.0, 'http header')
       end
 
       return false
@@ -62,20 +64,22 @@ rspamd_config:add_condition("R_SPF_ALLOW", function(task)
   if hdr then
     local parser = ucl.parser()
     local res, err = parser:parse_string(tostring(hdr))
-    if not res or type(res) ~= 'table' then
+    if not res then
       logger.infox(task, "cannot parse SPF header: %1", err)
       return true
     end
 
-    if res['result'] then
-      if res['result'] == 'pass' or res['result'] == 'allow' then
-        task:insert_result('R_SPF_ALLOW', 1.0)
-      elseif res['result'] == 'fail' or res['result'] == 'reject' then
-        task:insert_result('R_SPF_FAIL', 1.0)
-      elseif res['result'] == 'neutral' then
-        task:insert_result('R_SPF_NEUTRAL', 1.0)
-      elseif res['result'] == 'tempfail' or res['result'] == 'softfail' then
-        task:insert_result('R_SPF_TEMPFAIL', 1.0)
+    local obj = parser:get_object()
+
+    if obj['result'] then
+      if obj['result'] == 'pass' or obj['result'] == 'allow' then
+        task:insert_result('R_SPF_ALLOW', 1.0, 'http header')
+      elseif obj['result'] == 'fail' or obj['result'] == 'reject' then
+        task:insert_result('R_SPF_FAIL', 1.0, 'http header')
+      elseif obj['result'] == 'neutral' then
+        task:insert_result('R_SPF_NEUTRAL', 1.0, 'http header')
+      elseif obj['result'] == 'tempfail' or obj['result'] == 'softfail' then
+        task:insert_result('R_SPF_TEMPFAIL', 1.0, 'http header')
       end
 
       return false
@@ -91,20 +95,22 @@ rspamd_config:add_condition("DMARC_POLICY_ALLOW", function(task)
   if hdr then
     local parser = ucl.parser()
     local res, err = parser:parse_string(tostring(hdr))
-    if not res or type(res) ~= 'table' then
+    if not res then
       logger.infox(task, "cannot parse DMARC header: %1", err)
       return true
     end
 
-    if res['result'] then
-      if res['result'] == 'pass' or res['result'] == 'allow' then
-        task:insert_result('DMARC_POLICY_ALLOW', 1.0)
-      elseif res['result'] == 'fail' or res['result'] == 'reject' then
-        task:insert_result('DMARC_POLICY_REJECT', 1.0)
-      elseif res['result'] == 'quarantine' then
-        task:insert_result('DMARC_POLICY_QUARANTINE', 1.0)
-      elseif res['result'] == 'tempfail' or res['result'] == 'softfail' then
-        task:insert_result('DMARC_POLICY_SOFTFAIL', 1.0)
+    local obj = parser:get_object()
+
+    if obj['result'] then
+      if obj['result'] == 'pass' or obj['result'] == 'allow' then
+        task:insert_result('DMARC_POLICY_ALLOW', 1.0, 'http header')
+      elseif obj['result'] == 'fail' or obj['result'] == 'reject' then
+        task:insert_result('DMARC_POLICY_REJECT', 1.0, 'http header')
+      elseif obj['result'] == 'quarantine' then
+        task:insert_result('DMARC_POLICY_QUARANTINE', 1.0, 'http header')
+      elseif obj['result'] == 'tempfail' or obj['result'] == 'softfail' then
+        task:insert_result('DMARC_POLICY_SOFTFAIL', 1.0, 'http header')
       end
 
       return false
