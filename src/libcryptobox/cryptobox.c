@@ -45,7 +45,11 @@
 #if OPENSSL_VERSION_NUMBER >= 0x1000104fL
 #define HAVE_USABLE_OPENSSL 1
 #endif
+#endif
+
+#ifdef HAVE_USABLE_OPENSSL
 #include <openssl/evp.h>
+#include <openssl/ec.h>
 #endif
 
 #include <signal.h>
@@ -233,12 +237,42 @@ rspamd_cryptobox_init (void)
 void
 rspamd_cryptobox_keypair (rspamd_pk_t pk, rspamd_sk_t sk)
 {
-	ottery_rand_bytes (sk, rspamd_cryptobox_SKBYTES);
-	sk[0] &= 248;
-	sk[31] &= 127;
-	sk[31] |= 64;
+	if (G_LIKELY (!use_openssl)) {
+		ottery_rand_bytes (sk, rspamd_cryptobox_SKBYTES);
+		sk[0] &= 248;
+		sk[31] &= 127;
+		sk[31] |= 64;
 
-	curve25519 (pk, sk, curve25519_basepoint);
+		curve25519 (pk, sk, curve25519_basepoint);
+	}
+	else {
+#ifndef HAVE_USABLE_OPENSSL
+		g_assert (0);
+#else
+		EC_KEY *ec_sec;
+		const BIGNUM *bn_sec, *bn_pub;
+		const EC_POINT *ec_pub;
+		gint len;
+
+		ec_sec = EC_KEY_new_by_curve_name (NID_X9_62_prime256v1);
+		g_assert (ec_sec != NULL);
+		g_assert (EC_KEY_generate_key (ec_sec) != 0);
+
+		bn_sec = EC_KEY_get0_private_key (ec_sec);
+		g_assert (bn_sec != NULL);
+		ec_pub = EC_KEY_get0_public_key (ec_sec);
+		g_assert (ec_pub != NULL);
+		bn_pub = EC_POINT_point2bn (EC_KEY_get0_group (ec_sec),
+				ec_pub, POINT_CONVERSION_COMPRESSED, NULL, NULL);
+
+		len = BN_num_bits (bn_sec) / NBBY;
+		g_assert (len <= sizeof (rspamd_sk_t));
+		BN_bn2bin (bn_sec, sk);
+		len = BN_num_bits (bn_pub) / NBBY;
+		g_assert (len <= sizeof (rspamd_pk_t));
+		BN_bn2bin (bn_pub, pk);
+#endif
+	}
 }
 
 void
