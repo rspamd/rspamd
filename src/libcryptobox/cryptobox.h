@@ -30,18 +30,18 @@ struct rspamd_cryptobox_segment {
 	gsize len;
 };
 
-#define rspamd_cryptobox_NONCEBYTES 24
-#define rspamd_cryptobox_PKBYTES 32
-#define rspamd_cryptobox_SKBYTES 32
-#define rspamd_cryptobox_MACBYTES 16
-#define rspamd_cryptobox_NMBYTES 32
+#define rspamd_cryptobox_MAX_NONCEBYTES 24
+#define rspamd_cryptobox_MAX_PKBYTES 65
+#define rspamd_cryptobox_MAX_SKBYTES 32
+#define rspamd_cryptobox_MAX_MACBYTES 16
+#define rspamd_cryptobox_MAX_NMBYTES 32
 #define rspamd_cryptobox_SIPKEYBYTES 16
 
-typedef guchar rspamd_pk_t[rspamd_cryptobox_PKBYTES];
-typedef guchar rspamd_sk_t[rspamd_cryptobox_SKBYTES];
-typedef guchar rspamd_sig_t[rspamd_cryptobox_MACBYTES];
-typedef guchar rspamd_nm_t[rspamd_cryptobox_NMBYTES];
-typedef guchar rspamd_nonce_t[rspamd_cryptobox_NONCEBYTES];
+typedef guchar rspamd_pk_t[rspamd_cryptobox_MAX_PKBYTES];
+typedef guchar rspamd_sk_t[rspamd_cryptobox_MAX_SKBYTES];
+typedef guchar rspamd_sig_t[rspamd_cryptobox_MAX_MACBYTES];
+typedef guchar rspamd_nm_t[rspamd_cryptobox_MAX_NMBYTES];
+typedef guchar rspamd_nonce_t[rspamd_cryptobox_MAX_NONCEBYTES];
 typedef guchar rspamd_sipkey_t[rspamd_cryptobox_SIPKEYBYTES];
 
 /**
@@ -179,5 +179,30 @@ gboolean rspamd_cryptobox_pbkdf(const char *pass, gsize pass_len,
  * @param enable if TRUE then crypto code will use openssl, chacha20/poly1305 otherwize
  */
 gboolean rspamd_cryptobox_openssl_mode (gboolean enable);
+
+/**
+ * Real size of rspamd cryptobox public key
+ */
+guint rspamd_cryptobox_pk_bytes (void);
+
+/**
+ * Real size of crypto nonce
+ */
+guint rspamd_cryptobox_nonce_bytes (void);
+
+/**
+ * Real size of rspamd cryptobox secret key
+ */
+guint rspamd_cryptobox_sk_bytes (void);
+
+/**
+ * Real size of rspamd cryptobox shared key
+ */
+guint rspamd_cryptobox_nm_bytes (void);
+
+/**
+ * Real size of rspamd cryptobox MAC signature
+ */
+guint rspamd_cryptobox_mac_bytes (void);
 
 #endif /* CRYPTOBOX_H_ */

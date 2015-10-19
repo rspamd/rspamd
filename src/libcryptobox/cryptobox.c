@@ -50,6 +50,7 @@
 #ifdef HAVE_USABLE_OPENSSL
 #include <openssl/evp.h>
 #include <openssl/ec.h>
+#include <openssl/ecdh.h>
 
 #define CRYPTOBOX_CURVE_NID NID_X9_62_prime256v1
 #endif
@@ -240,7 +241,7 @@ void
 rspamd_cryptobox_keypair (rspamd_pk_t pk, rspamd_sk_t sk)
 {
 	if (G_LIKELY (!use_openssl)) {
-		ottery_rand_bytes (sk, rspamd_cryptobox_SKBYTES);
+		ottery_rand_bytes (sk, rspamd_cryptobox_MAX_SKBYTES);
 		sk[0] &= 248;
 		sk[31] &= 127;
 		sk[31] |= 64;
@@ -266,13 +267,13 @@ rspamd_cryptobox_keypair (rspamd_pk_t pk, rspamd_sk_t sk)
 		ec_pub = EC_KEY_get0_public_key (ec_sec);
 		g_assert (ec_pub != NULL);
 		bn_pub = EC_POINT_point2bn (EC_KEY_get0_group (ec_sec),
-				ec_pub, POINT_CONVERSION_COMPRESSED, NULL, NULL);
+				ec_pub, POINT_CONVERSION_UNCOMPRESSED, NULL, NULL);
 
-		len = BN_num_bits (bn_sec) / NBBY;
+		len = BN_num_bytes (bn_sec);
 		g_assert (len <= (gint)sizeof (rspamd_sk_t));
 		BN_bn2bin (bn_sec, sk);
-		len = BN_num_bits (bn_pub) / NBBY;
-		g_assert (len <= (gint)sizeof (rspamd_pk_t));
+		len = BN_num_bytes (bn_pub);
+		g_assert (len <= rspamd_cryptobox_pk_bytes ());
 		BN_bn2bin (bn_pub, pk);
 		BN_free (bn_pub);
 		EC_KEY_free (ec_sec);
@@ -283,18 +284,55 @@ rspamd_cryptobox_keypair (rspamd_pk_t pk, rspamd_sk_t sk)
 void
 rspamd_cryptobox_nm (rspamd_nm_t nm, const rspamd_pk_t pk, const rspamd_sk_t sk)
 {
-	guchar s[rspamd_cryptobox_PKBYTES];
-	guchar e[rspamd_cryptobox_SKBYTES];
+	if (G_LIKELY (!use_openssl)) {
+		guchar s[32];
+		guchar e[32];
 
-	memcpy (e, sk, rspamd_cryptobox_SKBYTES);
-	e[0] &= 248;
-	e[31] &= 127;
-	e[31] |= 64;
+		memcpy (e, sk, 32);
+		e[0] &= 248;
+		e[31] &= 127;
+		e[31] |= 64;
 
-	curve25519 (s, e, pk);
-	hchacha (s, n0, nm, 20);
+		curve25519 (s, e, pk);
+		hchacha (s, n0, nm, 20);
 
-	rspamd_explicit_memzero (e, rspamd_cryptobox_SKBYTES);
+		rspamd_explicit_memzero (e, 32);
+	}
+	else {
+#ifndef HAVE_USABLE_OPENSSL
+		g_assert (0);
+#else
+		EC_KEY *lk;
+		EC_POINT *ec_pub;
+		BIGNUM *bn_pub, *bn_sec;
+		gint len;
+		guchar s[32];
+
+		lk = EC_KEY_new_by_curve_name (CRYPTOBOX_CURVE_NID);
+		g_assert (lk != NULL);
+
+		bn_pub = BN_bin2bn (pk, rspamd_cryptobox_pk_bytes (), NULL);
+		g_assert (bn_pub != NULL);
+		bn_sec = BN_bin2bn (sk, sizeof (rspamd_sk_t), NULL);
+		g_assert (bn_sec != NULL);
+
+		g_assert (EC_KEY_set_private_key (lk, bn_sec) == 1);
+		ec_pub = EC_POINT_new (EC_KEY_get0_group (lk));
+		g_assert (EC_POINT_set_compressed_coordinates_GF2m (EC_KEY_get0_group (lk),
+				ec_pub, bn_pub, pk[0] & 1, NULL) == 1);
+		g_assert (ec_pub != NULL);
+		len = ECDH_compute_key (s, sizeof (s), ec_pub, lk, NULL);
+		g_assert (len == sizeof (s));
+
+		/* Still do hchacha iteration since we are not using SHA1 KDF */
+		hchacha (s, n0, nm, 20);
+
+		EC_KEY_free (lk);
+		EC_POINT_free (ec_pub);
+		BN_free (bn_sec);
+		BN_free (bn_pub);
+#endif
+	}
 }
 
 static gsize
@@ -861,7 +899,7 @@ rspamd_cryptobox_decrypt_inplace (guchar *data, gsize len,
 		const rspamd_nonce_t nonce,
 		const rspamd_pk_t pk, const rspamd_sk_t sk, const rspamd_sig_t sig)
 {
-	guchar nm[rspamd_cryptobox_NMBYTES];
+	guchar nm[rspamd_cryptobox_MAX_NMBYTES];
 	gboolean ret;
 
 	rspamd_cryptobox_nm (nm, pk, sk);
@@ -877,7 +915,7 @@ rspamd_cryptobox_encrypt_inplace (guchar *data, gsize len,
 		const rspamd_nonce_t nonce,
 		const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_sig_t sig)
 {
-	guchar nm[rspamd_cryptobox_NMBYTES];
+	guchar nm[rspamd_cryptobox_MAX_NMBYTES];
 
 	rspamd_cryptobox_nm (nm, pk, sk);
 	rspamd_cryptobox_encrypt_nm_inplace (data, len, nonce, nm, sig);
@@ -890,7 +928,7 @@ rspamd_cryptobox_encryptv_inplace (struct rspamd_cryptobox_segment *segments,
 		const rspamd_nonce_t nonce,
 		const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_sig_t sig)
 {
-	guchar nm[rspamd_cryptobox_NMBYTES];
+	guchar nm[rspamd_cryptobox_MAX_NMBYTES];
 
 	rspamd_cryptobox_nm (nm, pk, sk);
 	rspamd_cryptobox_encryptv_nm_inplace (segments, cnt, nonce, nm, sig);
@@ -972,4 +1010,45 @@ rspamd_cryptobox_openssl_mode (gboolean enable)
 #endif
 
 	return use_openssl;
+}
+
+guint
+rspamd_cryptobox_pk_bytes (void)
+{
+	if (G_UNLIKELY (!use_openssl)) {
+		return 32;
+	}
+	else {
+		return 65;
+	}
+}
+
+guint
+rspamd_cryptobox_nonce_bytes (void)
+{
+	if (G_UNLIKELY (!use_openssl)) {
+		return 24;
+	}
+	else {
+		return 16;
+	}
+}
+
+
+guint
+rspamd_cryptobox_sk_bytes (void)
+{
+	return 32;
+}
+
+guint
+rspamd_cryptobox_nm_bytes (void)
+{
+	return 32;
+}
+
+guint
+rspamd_cryptobox_mac_bytes (void)
+{
+	return 16;
 }
