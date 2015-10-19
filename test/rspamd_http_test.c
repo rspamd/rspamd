@@ -38,6 +38,7 @@
 static guint file_size = 500;
 static guint pconns = 100;
 static guint ntests = 3000;
+static guint nservers = 1;
 
 static void
 rspamd_server_error (struct rspamd_http_connection_entry *conn_ent,
@@ -84,21 +85,18 @@ rspamd_http_term_handler (gint fd, short what, void *arg)
 }
 
 static void
-rspamd_http_server_func (const gchar *path, rspamd_inet_addr_t *addr,
-		rspamd_mempool_mutex_t *mtx, gpointer kp, struct rspamd_keypair_cache *c)
+rspamd_http_server_func (gint fd, const gchar *path, rspamd_inet_addr_t *addr,
+		gpointer kp, struct rspamd_keypair_cache *c)
 {
 	struct rspamd_http_connection_router *rt;
 	struct event_base *ev_base = event_init ();
 	struct event accept_ev, term_ev;
-	gint fd;
 
 	rt = rspamd_http_router_new (rspamd_server_error, rspamd_server_finish,
 			NULL, ev_base, path, c);
 	g_assert (rt != NULL);
 
 	rspamd_http_router_set_key (rt, kp);
-
-	g_assert ((fd = rspamd_inet_address_listen (addr, SOCK_STREAM, TRUE)) != -1);
 	event_set (&accept_ev, fd, EV_READ | EV_PERSIST, rspamd_server_accept, rt);
 	event_base_set (ev_base, &accept_ev);
 	event_add (&accept_ev, NULL);
@@ -107,7 +105,6 @@ rspamd_http_server_func (const gchar *path, rspamd_inet_addr_t *addr,
 	event_base_set (ev_base, &term_ev);
 	event_add (&term_ev, NULL);
 
-	rspamd_mempool_unlock_mutex (mtx);
 	event_base_loop (ev_base, 0);
 }
 
@@ -216,6 +213,42 @@ rspamd_http_calculate_mean (double *lats, double *std)
 	return mean;
 }
 
+static void
+rspamd_http_start_servers (pid_t *sfd, rspamd_inet_addr_t *addr,
+		gpointer serv_key, struct rspamd_keypair_cache *c)
+{
+	guint i;
+	gint fd;
+
+	g_assert ((fd = rspamd_inet_address_listen (addr, SOCK_STREAM, TRUE)) != -1);
+
+	for (i = 0; i < nservers; i ++) {
+		sfd[i] = fork ();
+		g_assert (sfd[i] != -1);
+
+		if (sfd[i] == 0) {
+			gperf_profiler_init (NULL, "plain-http-server");
+			rspamd_http_server_func (fd, "/tmp/", addr, serv_key, c);
+			gperf_profiler_stop ();
+			exit (EXIT_SUCCESS);
+		}
+	}
+
+	close (fd);
+}
+
+static void
+rspamd_http_stop_servers (pid_t *sfd)
+{
+	guint i;
+	gint res;
+
+	for (i = 0; i < nservers; i++) {
+		kill (sfd[i], SIGTERM);
+		wait (&res);
+	}
+}
+
 void
 rspamd_http_test_func (void)
 {
@@ -228,9 +261,9 @@ rspamd_http_test_func (void)
 	gdouble ts1, ts2;
 	gchar filepath[PATH_MAX], *buf;
 	gchar *env;
-	gint fd, res;
+	gint fd;
 	guint i, j;
-	pid_t sfd;
+	pid_t *sfd;
 	GString *b32_key;
 	double diff, total_diff = 0.0, latency[pconns * ntests], mean, std;
 
@@ -248,6 +281,11 @@ rspamd_http_test_func (void)
 	if ((env = getenv ("RSPAMD_HTTP_SIZE")) != NULL) {
 		file_size = strtoul (env, NULL, 10);
 	}
+	if ((env = getenv ("RSPAMD_HTTP_SERVERS")) != NULL) {
+		nservers = strtoul (env, NULL, 10);
+	}
+
+	sfd = g_alloca (sizeof (*sfd) * nservers);
 
 	buf = g_malloc (file_size);
 	memset (buf, 0, file_size);
@@ -262,18 +300,7 @@ rspamd_http_test_func (void)
 	client_key = rspamd_http_connection_gen_key ();
 	c = rspamd_keypair_cache_new (16);
 
-	rspamd_mempool_lock_mutex (mtx);
-	sfd = fork ();
-	g_assert (sfd != -1);
-
-	if (sfd == 0) {
-		gperf_profiler_init (NULL, "plain-http-server");
-		rspamd_http_server_func ("/tmp/", addr, mtx, serv_key, c);
-		gperf_profiler_stop ();
-		exit (EXIT_SUCCESS);
-	}
-
-	//rspamd_mempool_lock_mutex (mtx);
+	rspamd_http_start_servers (sfd, addr, serv_key, NULL);
 	usleep (100000);
 
 	/* Do client stuff */
@@ -299,18 +326,9 @@ rspamd_http_test_func (void)
 	msg_info ("Latency: %.6f ms mean, %.6f dev",
 			mean, std);
 
-	/* Switch to openssl mode */
-	kill (sfd, SIGTERM);
-	wait (&res);
-	sfd = fork ();
-	g_assert (sfd != -1);
+	rspamd_http_stop_servers (sfd);
 
-	if (sfd == 0) {
-		gperf_profiler_init (NULL, "cached-http-server");
-		rspamd_http_server_func ("/tmp/", addr, mtx, serv_key, c);
-		gperf_profiler_stop ();
-		exit (EXIT_SUCCESS);
-	}
+	rspamd_http_start_servers (sfd, addr, serv_key, c);
 
 	//rspamd_mempool_lock_mutex (mtx);
 	usleep (100000);
@@ -344,19 +362,10 @@ rspamd_http_test_func (void)
 			mean, std);
 
 	/* Restart server */
-	kill (sfd, SIGTERM);
-	wait (&res);
-	sfd = fork ();
-	g_assert (sfd != -1);
+	rspamd_http_stop_servers (sfd);
+	/* No keypairs cache */
+	rspamd_http_start_servers (sfd, addr, serv_key, NULL);
 
-	if (sfd == 0) {
-		gperf_profiler_init (NULL, "fair-http-server");
-		rspamd_http_server_func ("/tmp/", addr, mtx, serv_key, NULL);
-		gperf_profiler_stop ();
-		exit (EXIT_SUCCESS);
-	}
-
-	//rspamd_mempool_lock_mutex (mtx);
 	usleep (100000);
 	total_diff = 0.0;
 
@@ -388,17 +397,10 @@ rspamd_http_test_func (void)
 		client_key = rspamd_http_connection_gen_key ();
 		c = rspamd_keypair_cache_new (16);
 
-		kill (sfd, SIGTERM);
-		wait (&res);
-		sfd = fork ();
-		g_assert (sfd != -1);
-
-		if (sfd == 0) {
-			gperf_profiler_init (NULL, "cached-http-server-aes");
-			rspamd_http_server_func ("/tmp/", addr, mtx, serv_key, c);
-			gperf_profiler_stop ();
-			exit (EXIT_SUCCESS);
-		}
+		/* Restart server */
+		rspamd_http_stop_servers (sfd);
+		/* No keypairs cache */
+		rspamd_http_start_servers (sfd, addr, serv_key, c);
 
 		//rspamd_mempool_lock_mutex (mtx);
 		usleep (100000);
@@ -439,17 +441,9 @@ rspamd_http_test_func (void)
 				mean, std);
 
 		/* Restart server */
-		kill (sfd, SIGTERM);
-		wait (&res);
-		sfd = fork ();
-		g_assert (sfd != -1);
-
-		if (sfd == 0) {
-			gperf_profiler_init (NULL, "fair-http-server-aes");
-			rspamd_http_server_func ("/tmp/", addr, mtx, serv_key, NULL);
-			gperf_profiler_stop ();
-			exit (EXIT_SUCCESS);
-		}
+		rspamd_http_stop_servers (sfd);
+		/* No keypairs cache */
+		rspamd_http_start_servers (sfd, addr, serv_key, NULL);
 
 		//rspamd_mempool_lock_mutex (mtx);
 		usleep (100000);
@@ -487,5 +481,5 @@ rspamd_http_test_func (void)
 
 	close (fd);
 	unlink (filepath);
-	kill (sfd, SIGTERM);
+	rspamd_http_stop_servers (sfd);
 }
