@@ -309,7 +309,6 @@ __attribute__ (( format( printf, 2, 3) ));
 
 static inline void
 ucl_create_err (UT_string **err, const char *fmt, ...)
-
 {
 	if (*err == NULL) {
 		utstring_new (*err);

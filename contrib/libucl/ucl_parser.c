@@ -2102,20 +2102,36 @@ ucl_state_machine (struct ucl_parser *parser)
 					*p != '(') {
 				ucl_chunk_skipc (chunk, p);
 			}
-			else if (p - c > 0) {
-				/* We got macro name */
-				macro_len = (size_t)(p - c);
-				HASH_FIND (hh, parser->macroes, c, macro_len, macro);
-				if (macro == NULL) {
-					ucl_create_err (&parser->err, "error on line %d at column %d: "
-							"unknown macro: '%.*s', character: '%c'",
-								chunk->line, chunk->column, (int)(p - c), c, *chunk->pos);
+			else {
+				if (p - c > 0) {
+					/* We got macro name */
+					macro_len = (size_t) (p - c);
+					HASH_FIND (hh, parser->macroes, c, macro_len, macro);
+					if (macro == NULL) {
+						ucl_create_err (&parser->err,
+								"error on line %d at column %d: "
+										"unknown macro: '%.*s', character: '%c'",
+								chunk->line,
+								chunk->column,
+								(int) (p - c),
+								c,
+								*chunk->pos);
+						parser->state = UCL_STATE_ERROR;
+						return false;
+					}
+					/* Now we need to skip all spaces */
+					SKIP_SPACES_COMMENTS(parser, chunk, p);
+					parser->state = UCL_STATE_MACRO;
+				}
+				else {
+					/* We have invalid macro name */
+					ucl_create_err (&parser->err,
+							"error on line %d at column %d: invalid macro name",
+							chunk->line,
+							chunk->column);
 					parser->state = UCL_STATE_ERROR;
 					return false;
 				}
-				/* Now we need to skip all spaces */
-				SKIP_SPACES_COMMENTS(parser, chunk, p);
-				parser->state = UCL_STATE_MACRO;
 			}
 			break;
 		case UCL_STATE_MACRO:

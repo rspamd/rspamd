@@ -3219,7 +3219,7 @@ ucl_object_compare (const ucl_object_t *o1, const ucl_object_t *o2)
 
 void
 ucl_object_array_sort (ucl_object_t *ar,
-		int (*cmp)(const ucl_object_t *o1, const ucl_object_t *o2))
+		int (*cmp)(const ucl_object_t **o1, const ucl_object_t **o2))
 {
 	UCL_ARRAY_GET (vec, ar);
 
