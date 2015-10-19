@@ -438,12 +438,12 @@ rspamd_http_parse_key (rspamd_ftok_t *data, struct rspamd_http_connection *conn,
 					eq_pos - 1, &key_len);
 			if (decoded_id != NULL && decoded_key != NULL) {
 				if (id_len >= RSPAMD_HTTP_KEY_ID_LEN  &&
-						key_len >= sizeof (kp->pk)) {
+						key_len >= rspamd_cryptobox_pk_bytes ()) {
 					if (memcmp (priv->local_key->id, decoded_id,
 							RSPAMD_HTTP_KEY_ID_LEN) == 0) {
 						kp = g_slice_alloc0 (sizeof (*kp));
 						REF_INIT_RETAIN (kp, rspamd_http_keypair_dtor);
-						memcpy (kp->pk, decoded_key, sizeof (kp->pk));
+						memcpy (kp->pk, decoded_key, rspamd_cryptobox_pk_bytes ());
 						priv->msg->peer_key = kp;
 
 						if (conn->cache && priv->msg->peer_key) {
@@ -732,7 +732,6 @@ rspamd_http_decrypt_message (struct rspamd_http_connection *conn,
 			dec_len) != (size_t)dec_len) {
 		msg_err ("HTTP parser error: %s when parsing encrypted request",
 				http_errno_description (decrypted_parser.http_errno));
-
 		return -1;
 	}
 

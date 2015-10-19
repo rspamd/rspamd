@@ -391,7 +391,8 @@ rspamd_cryptobox_encrypt_init (void *enc_ctx, const rspamd_nonce_t nonce,
 		s = cryptobox_align_ptr (enc_ctx, CRYPTOBOX_ALIGNMENT);
 		memset (s, 0, sizeof (*s));
 		g_assert (EVP_EncryptInit_ex (s, EVP_aes_256_gcm (), NULL, NULL, NULL) == 1);
-		g_assert (EVP_CIPHER_CTX_ctrl (s, EVP_CTRL_GCM_SET_IVLEN, 24, NULL) == 1);
+		g_assert (EVP_CIPHER_CTX_ctrl (s, EVP_CTRL_GCM_SET_IVLEN,
+				rspamd_cryptobox_nonce_bytes (), NULL) == 1);
 		g_assert (EVP_EncryptInit_ex (s, NULL, NULL, nm, nonce) == 1);
 
 		return s;
@@ -555,7 +556,8 @@ rspamd_cryptobox_decrypt_init (void *enc_ctx, const rspamd_nonce_t nonce,
 		s = cryptobox_align_ptr (enc_ctx, CRYPTOBOX_ALIGNMENT);
 		memset (s, 0, sizeof (*s));
 		g_assert (EVP_DecryptInit_ex(s, EVP_aes_256_gcm (), NULL, NULL, NULL) == 1);
-		g_assert (EVP_CIPHER_CTX_ctrl (s, EVP_CTRL_GCM_SET_IVLEN, 24, NULL) == 1);
+		g_assert (EVP_CIPHER_CTX_ctrl (s, EVP_CTRL_GCM_SET_IVLEN,
+				rspamd_cryptobox_nonce_bytes (), NULL) == 1);
 		g_assert (EVP_DecryptInit_ex (s, NULL, NULL, nm, nonce) == 1);
 
 		return s;
