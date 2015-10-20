@@ -30,6 +30,7 @@
 #include "cryptobox.h"
 #include "unix-std.h"
 #include <math.h>
+#include <netinet/tcp.h>
 
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>
@@ -124,10 +125,12 @@ rspamd_http_client_func (struct event_base *ev_base, double *latency)
 	struct rspamd_http_connection *conn;
 	gchar urlbuf[PATH_MAX];
 	struct client_cbdata *cb;
-	gint fd;
+	gint fd, flags;
 
 	g_assert (
 			(fd = rspamd_inet_address_connect (addr, SOCK_STREAM, TRUE)) != -1);
+	flags = 1;
+	setsockopt (fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof (flags));
 	conn = rspamd_http_connection_new (rspamd_client_body, rspamd_client_err,
 			rspamd_client_finish, RSPAMD_HTTP_CLIENT_SIMPLE,
 			RSPAMD_HTTP_CLIENT, c);

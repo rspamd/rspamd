@@ -139,26 +139,31 @@ rspamd_server_accept (gint fd, short what, void *arg)
 	rspamd_inet_addr_t *addr;
 	gint nfd;
 
-	if ((nfd =
-				 rspamd_accept_from_socket (fd, &addr)) == -1) {
-		rspamd_fprintf (stderr, "accept failed: %s", strerror (errno));
-		return;
-	}
-	/* Check for EAGAIN */
-	if (nfd == 0) {
-		return;
-	}
+	do {
+		if ((nfd =
+					 rspamd_accept_from_socket (fd, &addr)) == -1) {
+			rspamd_fprintf (stderr, "accept failed: %s", strerror (errno));
+			return;
+		}
+		/* Check for EAGAIN */
+		if (nfd == 0) {
+			return;
+		}
 
-	rspamd_inet_address_destroy (addr);
-	session = g_slice_alloc (sizeof (*session));
-	session->conn = rspamd_http_connection_new (NULL, rspamd_server_error,
-			rspamd_server_finish, 0, RSPAMD_HTTP_SERVER, c);
-	rspamd_http_connection_set_key (session->conn, server_key);
-	rspamd_http_connection_read_message (session->conn, session, nfd, &io_tv,
-			ev_base);
-	session->reply = FALSE;
-	session->fd = nfd;
-	session->ev_base = ev_base;
+		rspamd_inet_address_destroy (addr);
+		session = g_slice_alloc (sizeof (*session));
+		session->conn = rspamd_http_connection_new (NULL, rspamd_server_error,
+				rspamd_server_finish, 0, RSPAMD_HTTP_SERVER, c);
+		rspamd_http_connection_set_key (session->conn, server_key);
+		rspamd_http_connection_read_message (session->conn,
+				session,
+				nfd,
+				&io_tv,
+				ev_base);
+		session->reply = FALSE;
+		session->fd = nfd;
+		session->ev_base = ev_base;
+	} while (nfd > 0);
 }
 
 static void
