@@ -1012,8 +1012,8 @@ ADD_SUBDIRECTORY(contrib/libucl)
 ADD_SUBDIRECTORY(contrib/librdns)
 ADD_SUBDIRECTORY(contrib/aho-corasick)
 ADD_SUBDIRECTORY(src)
-
 ADD_SUBDIRECTORY(test)
+ADD_SUBDIRECTORY(utils)
 
 ############################ TARGETS SECTION ###############################
 
@@ -1078,13 +1078,6 @@ INSTALL(FILES "contrib/lua-fun/fun.lua" DESTINATION ${PLUGINSDIR}/lua)
 # Install TLD list
 INSTALL(FILES "contrib/publicsuffix/effective_tld_names.dat" DESTINATION 
 	"${PLUGINSDIR}")
-
-# Redirector
-IF(ENABLE_REDIRECTOR MATCHES "ON")
-	CONFIGURE_FILE(utils/redirector.pl.in utils/redirector.pl @ONLY)
-	INSTALL(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/utils/redirector.pl"
-		DESTINATION bin RENAME rspamd-redirector)
-ENDIF(ENABLE_REDIRECTOR MATCHES "ON")
 
 # Lua config
 FILE(GLOB_RECURSE LUA_CONFIGS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/rules" 
