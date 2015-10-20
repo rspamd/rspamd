@@ -294,10 +294,10 @@ rspamd_http_bench_cld (int fd, short what, void *arg)
 {
 	gint res;
 
-	wait (&res);
-
-	if (--workers_left == 0) {
-		event_loopexit (NULL);
+	while (waitpid (-1, &res, WNOHANG) > 0) {
+		if (--workers_left == 0) {
+			event_loopexit (NULL);
+		}
 	}
 }
 
