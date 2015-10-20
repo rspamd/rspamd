@@ -42,14 +42,15 @@ static gchar *server_key = NULL;
 static guint cache_size = 10;
 static guint nworkers = 1;
 static gboolean openssl_mode = FALSE;
-double *latency, mean, std;
-static guint32 *pdiff;
 static guint file_size = 500;
 static guint pconns = 100;
-static guint ntests = 3000;
+static gdouble test_time = 10.0;
 static rspamd_inet_addr_t *addr;
 static gchar *latencies_file = NULL;
 static guint32 workers_left = 0;
+static guint32 *conns_done = NULL;
+static const guint store_latencies = 100;
+static guint32 conns_pending = 0;
 
 static GOptionEntry entries[] = {
 		{"port",    'p', 0, G_OPTION_ARG_INT,  &port,
@@ -62,8 +63,8 @@ static GOptionEntry entries[] = {
 				"Size of payload to transfer (default: 500)", NULL},
 		{"conns", 'C', 0, G_OPTION_ARG_INT, &pconns,
 				"Number of parallel connections (default: 100)", NULL},
-		{"tests", 't', 0, G_OPTION_ARG_INT, &ntests,
-				"Number of tests to execute (default: 3000)", NULL},
+		{"time", 't', 0, G_OPTION_ARG_DOUBLE, &test_time,
+				"Time to run tests (default: 10.0 sec)", NULL},
 		{"openssl", 'o', 0, G_OPTION_ARG_NONE, &openssl_mode,
 				"Use openssl crypto",                      NULL},
 		{"host", 'h', 0, G_OPTION_ARG_STRING, &host,
@@ -74,6 +75,13 @@ static GOptionEntry entries[] = {
 				"Write latencies to the specified file", NULL},
 		{NULL,      0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
+
+struct lat_elt {
+	gdouble lat;
+	guchar checked;
+};
+
+static struct lat_elt *latencies;
 
 static gint
 rspamd_client_body (struct rspamd_http_connection *conn,
@@ -86,8 +94,10 @@ rspamd_client_body (struct rspamd_http_connection *conn,
 }
 
 struct client_cbdata {
-	double *lat;
+	struct lat_elt *lat;
+	guint32 *wconns;
 	gdouble ts;
+	struct event_base *ev_base;
 };
 
 static void
@@ -107,16 +117,24 @@ rspamd_client_finish (struct rspamd_http_connection *conn,
 {
 	struct client_cbdata *cb = conn->ud;
 
-	*(cb->lat) = rspamd_get_ticks () - cb->ts;
+	cb->lat->lat = rspamd_get_ticks () - cb->ts;
+	cb->lat->checked = TRUE;
+	(*cb->wconns) ++;
+	conns_pending --;
 	close (conn->fd);
 	rspamd_http_connection_unref (conn);
 	g_free (cb);
+
+	if (conns_pending == 0) {
+		event_base_loopexit (cb->ev_base, NULL);
+	}
 
 	return 0;
 }
 
 static void
-rspamd_http_client_func (struct event_base *ev_base, double *latency,
+rspamd_http_client_func (struct event_base *ev_base, struct lat_elt *latency,
+		guint32 *wconns,
 		gpointer peer_key, gpointer client_key, struct rspamd_keypair_cache *c)
 {
 	struct rspamd_http_message *msg;
@@ -146,20 +164,22 @@ rspamd_http_client_func (struct event_base *ev_base, double *latency,
 	cb = g_malloc (sizeof (*cb));
 	cb->ts = rspamd_get_ticks ();
 	cb->lat = latency;
+	cb->ev_base = ev_base;
+	cb->wconns = wconns;
+	latency->checked = FALSE;
 	rspamd_http_connection_write_message (conn, msg, NULL, NULL, cb,
 			fd, NULL, ev_base);
 }
 
 static void
-rspamd_worker_func (gpointer d)
+rspamd_worker_func (struct lat_elt *plat, guint32 *wconns)
 {
 	guint i, j;
 	struct event_base *ev_base;
-	gint *nt = d;
+	struct itimerval itv;
 	struct rspamd_keypair_cache *c = NULL;
 	gpointer client_key = NULL;
 	gpointer peer_key = NULL;
-	gdouble ts1, ts2;
 
 	if (server_key) {
 		peer_key = rspamd_http_connection_make_peer_key (server_key);
@@ -170,49 +190,59 @@ rspamd_worker_func (gpointer d)
 			c = rspamd_keypair_cache_new (cache_size);
 		}
 	}
-	ev_base = event_init ();
 
-	for (i = 0; i < ntests; i++) {
+	memset (&itv, 0, sizeof (itv));
+	double_to_tv (test_time, &itv.it_value);
+
+	ev_base = event_init ();
+	g_assert (setitimer (ITIMER_REAL, &itv, NULL) != -1);
+
+	for (i = 0; ; i = (i + 1) % store_latencies) {
 		for (j = 0; j < pconns; j++) {
-			rspamd_http_client_func (ev_base, &latency[(*nt) * pconns * ntests
-					+ i * pconns + j], peer_key, client_key, c);
+			rspamd_http_client_func (ev_base, &plat[i * pconns + j],
+					wconns, peer_key, client_key, c);
 		}
 
-		ts1 = rspamd_get_ticks ();
-		event_base_loop (ev_base, 0);
-		ts2 = rspamd_get_ticks ();
+		conns_pending = pconns;
 
-		g_atomic_int_add (pdiff, (guint32)((ts2 - ts1) * 1000000.));
+		event_base_loop (ev_base, 0);
 	}
 }
 
 static int
 cmpd (const void *p1, const void *p2)
 {
-	const double *d1 = p1, *d2 = p2;
+	const struct lat_elt *d1 = p1, *d2 = p2;
 
-	return (*d1) - (*d2);
+	return (d1->lat) - (d2->lat);
 }
 
 double
-rspamd_http_calculate_mean (double *lats, double *std)
+rspamd_http_calculate_mean (struct lat_elt *lats, double *std)
 {
-	guint i;
+	guint i, cnt, checked = 0;
 	gdouble mean = 0., dev = 0.;
 
-	qsort (lats, ntests * pconns, sizeof (double), cmpd);
+	cnt = store_latencies * pconns;
+	qsort (lats, cnt, sizeof (*lats), cmpd);
 
-	for (i = 0; i < ntests * pconns; i++) {
-		mean += lats[i];
+	for (i = 0; i < cnt; i++) {
+		if (lats[i].checked) {
+			mean += lats[i].lat;
+			checked ++;
+		}
 	}
 
-	mean /= ntests * pconns;
+	g_assert (checked > 0);
+	mean /= checked;
 
-	for (i = 0; i < ntests * pconns; i++) {
-		dev += (lats[i] - mean) * (lats[i] - mean);
+	for (i = 0; i < cnt; i++) {
+		if (lats[i].checked) {
+			dev += pow ((lats[i].lat - mean), 2);
+		}
 	}
 
-	dev /= ntests * pconns;
+	dev /= checked;
 
 	*std = sqrt (dev);
 	return mean;
@@ -227,11 +257,9 @@ rspamd_http_start_workers (pid_t *sfd)
 		g_assert (sfd[i] != -1);
 
 		if (sfd[i] == 0) {
-			gint *nt = g_malloc (sizeof (gint));
-
-			*nt = i;
 			gperf_profiler_init (NULL, "http-bench");
-			rspamd_worker_func (nt);
+			rspamd_worker_func (&latencies[i * pconns * store_latencies],
+					&conns_done[i]);
 			gperf_profiler_stop ();
 			exit (EXIT_SUCCESS);
 		}
@@ -283,8 +311,10 @@ main (int argc, char **argv)
 	struct event_base *ev_base;
 	rspamd_mempool_t *pool = rspamd_mempool_new (8192, "http-bench");
 	struct event term_ev, int_ev, cld_ev;
-	gdouble total_diff;
+	gdouble total_done;
 	FILE *lat_file;
+	gdouble mean, std;
+	guint i;
 
 	rspamd_init_libs ();
 
@@ -311,11 +341,11 @@ main (int argc, char **argv)
 	g_assert (addr != NULL);
 	rspamd_inet_address_set_port (addr, port);
 
-	latency = rspamd_mempool_alloc_shared (pool,
-			nworkers * pconns * ntests * sizeof (gdouble));
+	latencies = rspamd_mempool_alloc_shared (pool,
+			nworkers * pconns * store_latencies * sizeof (*latencies));
 	sfd  = g_malloc (sizeof (*sfd) * nworkers);
-	pdiff = rspamd_mempool_alloc_shared (pool, sizeof (guint32));
-	*pdiff = 0;
+	conns_done = rspamd_mempool_alloc_shared (pool, sizeof (guint32) * nworkers);
+	memset (conns_done, 0, sizeof (guint32) * nworkers);
 
 	rspamd_http_start_workers (sfd);
 
@@ -334,15 +364,18 @@ main (int argc, char **argv)
 
 	event_base_loop (ev_base, 0);
 
-	total_diff = *pdiff / nworkers / 1000000.0;
+	total_done = 0;
+	for (i = 0; i < nworkers; i ++) {
+		total_done += conns_done[i];
+	}
 
 	rspamd_printf ("Made %d connections of size %d in %.6fs, %.6f cps, %.6f MB/sec\n",
-			nworkers * ntests * pconns,
+			(gint)total_done,
 			file_size,
-			total_diff,
-			nworkers * ntests * pconns / total_diff,
-			nworkers * ntests * pconns * file_size / total_diff / (1024.0 * 1024.0));
-	mean = rspamd_http_calculate_mean (latency, &std);
+			test_time,
+			total_done / test_time,
+			total_done * file_size / test_time / (1024.0 * 1024.0));
+	mean = rspamd_http_calculate_mean (latencies, &std);
 	rspamd_printf ("Latency: %.6f ms mean, %.6f dev\n",
 			mean * 1000.0, std * 1000.0);
 
@@ -350,10 +383,10 @@ main (int argc, char **argv)
 		lat_file = fopen (latencies_file, "w");
 
 		if (lat_file) {
-			guint i;
-
-			for (i = 0; i < nworkers * pconns * ntests; i ++) {
-				rspamd_fprintf (lat_file, "%.6f\n", latency[i]);
+			for (i = 0; i < store_latencies * pconns; i ++) {
+				if (latencies[i].checked) {
+					rspamd_fprintf (lat_file, "%.6f\n", latencies[i].lat);
+				}
 			}
 
 			fclose (lat_file);
