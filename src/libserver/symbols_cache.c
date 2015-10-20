@@ -203,7 +203,7 @@ cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
  * Set counter for a symbol
  */
 static double
-rspamd_set_counter (struct cache_item *item, guint32 value)
+rspamd_set_counter (struct cache_item *item, gdouble value)
 {
 	struct counter_data *cd;
 	cd = item->cd;
@@ -213,7 +213,7 @@ rspamd_set_counter (struct cache_item *item, guint32 value)
 		cd->value = 0;
 	}
 
-	cd->value = cd->value + (value - cd->value) / (++cd->number);
+	cd->value = cd->value + (value - cd->value) / (gdouble)(++cd->number);
 
 	return cd->value;
 }
@@ -1011,7 +1011,7 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 {
 	guint pending_before, pending_after;
 	double t1, t2;
-	guint64 diff;
+	gdouble diff;
 	struct rspamd_task **ptask;
 	lua_State *L;
 	gboolean check = TRUE;
@@ -1050,7 +1050,7 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 			item->func (task, item->user_data);
 
 			t2 = rspamd_get_ticks ();
-			diff = (t2 - t1) * 1000000;
+			diff = (t2 - t1) * 1000000.;
 			rspamd_set_counter (item, diff);
 			rspamd_session_watch_stop (task->s);
 			pending_after = rspamd_session_events_pending (task->s);
@@ -1317,7 +1317,7 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 				item->avg_counter += item->cd->number + 1;
 				item->avg_time = item->avg_time +
 						(item->cd->value - item->avg_time) /
-						item->avg_counter;
+								(gdouble)item->avg_counter;
 				item->cd->value = item->avg_time;
 				item->cd->number = item->avg_counter;
 			}
