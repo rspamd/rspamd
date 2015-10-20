@@ -43,7 +43,7 @@ static GHashTable *maps = NULL;
 static struct rspamd_keypair_cache *c;
 static gpointer server_key;
 static struct timeval io_tv = {
-		.tv_sec = 5,
+		.tv_sec = 20,
 		.tv_usec = 0
 };
 
@@ -71,8 +71,12 @@ static void
 rspamd_server_error (struct rspamd_http_connection *conn,
 		GError *err)
 {
-	msg_err ("http error occurred: %s", err->message);
-	g_assert (0);
+	struct rspamd_http_server_session *session = conn->ud;
+
+	rspamd_fprintf (stderr, "http error occurred: %s\n", err->message);
+	rspamd_http_connection_unref (conn);
+	close (session->fd);
+	g_slice_free1 (sizeof (*session), session);
 }
 
 static int
@@ -102,6 +106,7 @@ rspamd_server_finish (struct rspamd_http_connection *conn,
 			reply->code = 200;
 			reply->status = rspamd_fstring_new_init ("OK", 2);
 			reply->body = rspamd_fstring_sized_new (size);
+			reply->body->len = size;
 			memset (reply->body->str, 0, size);
 		}
 		else {
@@ -134,7 +139,7 @@ rspamd_server_accept (gint fd, short what, void *arg)
 
 	if ((nfd =
 				 rspamd_accept_from_socket (fd, &addr)) == -1) {
-		msg_warn ("accept failed: %s", strerror (errno));
+		rspamd_fprintf (stderr, "accept failed: %s", strerror (errno));
 		return;
 	}
 	/* Check for EAGAIN */
@@ -222,6 +227,7 @@ rspamd_http_server_term (int fd, short what, void *arg)
 	pid_t *sfd = arg;
 
 	rspamd_http_stop_servers (sfd);
+	event_loopexit (NULL);
 }
 
 int
