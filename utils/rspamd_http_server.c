@@ -47,8 +47,6 @@ static struct timeval io_tv = {
 		.tv_usec = 0
 };
 
-
-
 static GOptionEntry entries[] = {
 		{"port",       'p', 0, G_OPTION_ARG_INT,     &port,
 				"Port number (default: 43000)",                  NULL},

@@ -42,19 +42,13 @@ static gchar *server_key = NULL;
 static guint cache_size = 10;
 static guint nworkers = 1;
 static gboolean openssl_mode = FALSE;
-static struct rspamd_keypair_cache *c;
-static gpointer client_key;
-static gpointer peer_key;
-static struct timeval io_tv = {
-		.tv_sec = 20,
-		.tv_usec = 0
-};
-double diff, total_diff = 0.0, *latency, mean, std;
+double *latency, mean, std;
+static guint32 *pdiff;
 static guint file_size = 500;
 static guint pconns = 100;
 static guint ntests = 3000;
 static rspamd_inet_addr_t *addr;
-static rspamd_mutex_t *mtx_event;
+static guint32 workers_left = 0;
 
 static GOptionEntry entries[] = {
 		{"port",    'p', 0, G_OPTION_ARG_INT,  &port,
@@ -119,7 +113,8 @@ rspamd_client_finish (struct rspamd_http_connection *conn,
 }
 
 static void
-rspamd_http_client_func (struct event_base *ev_base, double *latency)
+rspamd_http_client_func (struct event_base *ev_base, double *latency,
+		gpointer peer_key, gpointer client_key, struct rspamd_keypair_cache *c)
 {
 	struct rspamd_http_message *msg;
 	struct rspamd_http_connection *conn;
@@ -149,29 +144,43 @@ rspamd_http_client_func (struct event_base *ev_base, double *latency)
 	cb->ts = rspamd_get_ticks ();
 	cb->lat = latency;
 	rspamd_http_connection_write_message (conn, msg, NULL, NULL, cb,
-			fd, &io_tv, ev_base);
+			fd, NULL, ev_base);
 }
 
-static void *
-rspamd_bench_thread_func (gpointer d)
+static void
+rspamd_worker_func (gpointer d)
 {
 	guint i, j;
 	struct event_base *ev_base;
 	gint *nt = d;
+	struct rspamd_keypair_cache *c = NULL;
+	gpointer client_key = NULL;
+	gpointer peer_key = NULL;
+	gdouble ts1, ts2;
 
-	rspamd_mutex_lock (mtx_event);
+	if (server_key) {
+		peer_key = rspamd_http_connection_make_peer_key (server_key);
+		g_assert (peer_key != NULL);
+		client_key = rspamd_http_connection_gen_key ();
+
+		if (cache_size > 0) {
+			c = rspamd_keypair_cache_new (cache_size);
+		}
+	}
 	ev_base = event_init ();
-	rspamd_mutex_unlock (mtx_event);
 
 	for (i = 0; i < ntests; i++) {
 		for (j = 0; j < pconns; j++) {
 			rspamd_http_client_func (ev_base, &latency[(*nt) * pconns * ntests
-					+ i * pconns + j]);
+					+ i * pconns + j], peer_key, client_key, c);
 		}
-		event_base_loop (ev_base, 0);
-	}
 
-	return NULL;
+		ts1 = rspamd_get_ticks ();
+		event_base_loop (ev_base, 0);
+		ts2 = rspamd_get_ticks ();
+
+		g_atomic_int_add (pdiff, (guint32)((ts2 - ts1) * 1000000.));
+	}
 }
 
 static int
@@ -206,14 +215,72 @@ rspamd_http_calculate_mean (double *lats, double *std)
 	return mean;
 }
 
+static void
+rspamd_http_start_workers (pid_t *sfd)
+{
+	guint i;
+	for (i = 0; i < nworkers; i++) {
+		sfd[i] = fork ();
+		g_assert (sfd[i] != -1);
+
+		if (sfd[i] == 0) {
+			gint *nt = g_malloc (sizeof (gint));
+
+			*nt = i;
+			gperf_profiler_init (NULL, "http-bench");
+			rspamd_worker_func (nt);
+			gperf_profiler_stop ();
+			exit (EXIT_SUCCESS);
+		}
+
+		workers_left ++;
+	}
+}
+
+static void
+rspamd_http_stop_workers (pid_t *sfd)
+{
+	guint i;
+	gint res;
+
+	for (i = 0; i < nworkers; i++) {
+		kill (sfd[i], SIGTERM);
+		wait (&res);
+	}
+}
+
+static void
+rspamd_http_bench_term (int fd, short what, void *arg)
+{
+	pid_t *sfd = arg;
+
+	rspamd_http_stop_workers (sfd);
+	event_loopexit (NULL);
+}
+
+static void
+rspamd_http_bench_cld (int fd, short what, void *arg)
+{
+	gint res;
+
+	wait (&res);
+
+	if (--workers_left == 0) {
+		event_loopexit (NULL);
+	}
+}
+
+
 int
 main (int argc, char **argv)
 {
 	GOptionContext *context;
 	GError *error = NULL;
-	GThread **workers;
-	guint i;
-	gdouble ts1, ts2;
+	pid_t *sfd;
+	struct event_base *ev_base;
+	rspamd_mempool_t *pool = rspamd_mempool_new (8192, "http-bench");
+	struct event term_ev, int_ev, cld_ev;
+	gdouble total_diff;
 
 	rspamd_init_libs ();
 
@@ -236,48 +303,34 @@ main (int argc, char **argv)
 		g_assert (rspamd_cryptobox_openssl_mode (TRUE));
 	}
 
-	if (server_key) {
-		peer_key = rspamd_http_connection_make_peer_key (server_key);
-		g_assert (peer_key != NULL);
-		client_key = rspamd_http_connection_gen_key ();
-
-		if (cache_size > 0) {
-			c = rspamd_keypair_cache_new (cache_size);
-		}
-	}
-
-	mtx_event = rspamd_mutex_new ();
 	rspamd_parse_inet_address (&addr, host, 0);
 	g_assert (addr != NULL);
 	rspamd_inet_address_set_port (addr, port);
 
-	latency = g_malloc0 (nworkers * pconns * ntests * sizeof (gdouble));
-	workers = g_malloc (sizeof (*workers) * nworkers);
+	latency = rspamd_mempool_alloc_shared (pool,
+			nworkers * pconns * ntests * sizeof (gdouble));
+	sfd  = g_malloc (sizeof (*sfd) * nworkers);
+	pdiff = rspamd_mempool_alloc_shared (pool, sizeof (guint32));
+	*pdiff = 0;
 
-	gperf_profiler_init (NULL, "http-bench");
+	rspamd_http_start_workers (sfd);
 
-	rspamd_mutex_lock (mtx_event);
-	for (i = 0; i < nworkers; i ++) {
-		gint *nt = g_malloc (sizeof (gint));
-		*nt = i;
-		workers[i] = rspamd_create_thread ("bench-worker",
-				rspamd_bench_thread_func,
-				nt,
-				NULL);
-	}
-	rspamd_mutex_unlock (mtx_event);
+	ev_base = event_init ();
 
-	ts1 = rspamd_get_ticks ();
+	event_set (&term_ev, SIGTERM, EV_SIGNAL, rspamd_http_bench_term, sfd);
+	event_base_set (ev_base, &term_ev);
+	event_add (&term_ev, NULL);
+	event_set (&int_ev, SIGINT, EV_SIGNAL, rspamd_http_bench_term, sfd);
+	event_base_set (ev_base, &int_ev);
+	event_add (&int_ev, NULL);
+	event_set (&cld_ev, SIGCHLD, EV_SIGNAL|EV_PERSIST,
+			rspamd_http_bench_cld, NULL);
+	event_base_set (ev_base, &cld_ev);
+	event_add (&cld_ev, NULL);
 
-	for (i = 0; i < nworkers; i++) {
-		g_thread_join (workers[i]);
-	}
+	event_base_loop (ev_base, 0);
 
-	ts2 = rspamd_get_ticks ();
-
-	gperf_profiler_stop ();
-
-	total_diff = ts2 - ts1;
+	total_diff = *pdiff / nworkers / 1000000.0;
 
 	rspamd_printf ("Made %d connections of size %d in %.6fs, %.6f cps, %.6f MB/sec\n",
 			nworkers * ntests * pconns,
@@ -288,6 +341,8 @@ main (int argc, char **argv)
 	mean = rspamd_http_calculate_mean (latency, &std);
 	rspamd_printf ("Latency: %.6f ms mean, %.6f dev\n",
 			mean * 1000.0, std * 1000.0);
+
+	rspamd_mempool_delete (pool);
 
 	return 0;
 }
