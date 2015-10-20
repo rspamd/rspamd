@@ -47,6 +47,8 @@ static struct timeval io_tv = {
 		.tv_usec = 0
 };
 
+
+
 static GOptionEntry entries[] = {
 		{"port",       'p', 0, G_OPTION_ARG_INT,     &port,
 				"Port number (default: 43000)",                  NULL},
@@ -245,7 +247,7 @@ main (int argc, gchar **argv)
 	rspamd_init_libs ();
 
 	context = g_option_context_new (
-			"rspamd_http_server - test server for benchmarks");
+			"rspamd-http-server - test server for benchmarks");
 	g_option_context_set_summary (context,
 			"Summary:\n  Rspamd test HTTP server "
 					RVERSION
