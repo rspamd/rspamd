@@ -265,7 +265,7 @@ rspamd_http_test_func (void)
 	guint i, j;
 	pid_t *sfd;
 	GString *b32_key;
-	double diff, total_diff = 0.0, latency[pconns * ntests], mean, std;
+	double diff, total_diff = 0.0, *latency, mean, std;
 
 	rspamd_cryptobox_init ();
 	rspamd_snprintf (filepath, sizeof (filepath), "/tmp/http-test-XXXXXX");
@@ -286,6 +286,7 @@ rspamd_http_test_func (void)
 	}
 
 	sfd = g_alloca (sizeof (*sfd) * nservers);
+	latency = g_malloc0 (pconns * ntests * sizeof (gdouble));
 
 	buf = g_malloc (file_size);
 	memset (buf, 0, file_size);
