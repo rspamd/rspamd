@@ -48,6 +48,7 @@ static guint file_size = 500;
 static guint pconns = 100;
 static guint ntests = 3000;
 static rspamd_inet_addr_t *addr;
+static gchar *latencies_file = NULL;
 static guint32 workers_left = 0;
 
 static GOptionEntry entries[] = {
@@ -69,6 +70,8 @@ static GOptionEntry entries[] = {
 				"Connect to the specified host (default: localhost)", NULL},
 		{"key", 'k', 0, G_OPTION_ARG_STRING, &server_key,
 				"Use the specified key (base32 encoded)", NULL},
+		{"latency", 'l', 0, G_OPTION_ARG_FILENAME, &latencies_file,
+				"Write latencies to the specified file", NULL},
 		{NULL,      0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -281,6 +284,7 @@ main (int argc, char **argv)
 	rspamd_mempool_t *pool = rspamd_mempool_new (8192, "http-bench");
 	struct event term_ev, int_ev, cld_ev;
 	gdouble total_diff;
+	FILE *lat_file;
 
 	rspamd_init_libs ();
 
@@ -341,6 +345,20 @@ main (int argc, char **argv)
 	mean = rspamd_http_calculate_mean (latency, &std);
 	rspamd_printf ("Latency: %.6f ms mean, %.6f dev\n",
 			mean * 1000.0, std * 1000.0);
+
+	if (latencies_file) {
+		lat_file = fopen (latencies_file, "w");
+
+		if (lat_file) {
+			guint i;
+
+			for (i = 0; i < nworkers * pconns * ntests; i ++) {
+				rspamd_fprintf (lat_file, "%.6f\n", latency[i]);
+			}
+
+			fclose (lat_file);
+		}
+	}
 
 	rspamd_mempool_delete (pool);
 
