@@ -61,7 +61,7 @@ static GOptionEntry entries[] = {
 				"Size of payload to transfer (default: 500)", NULL},
 		{"conns", 'C', 0, G_OPTION_ARG_INT, &pconns,
 				"Number of parallel connections (default: 100)", NULL},
-		{"tests", 't', 0, G_OPTION_ARG_INT, &pconns,
+		{"tests", 't', 0, G_OPTION_ARG_INT, &ntests,
 				"Number of tests to execute (default: 3000)", NULL},
 		{"openssl", 'o', 0, G_OPTION_ARG_NONE, &openssl_mode,
 				"Use openssl crypto",                      NULL},
