@@ -996,7 +996,7 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 		hdr = rspamd_http_message_find_header (msg, "Uri");
 
 		if (hdr != NULL) {
-			msg_info_task ("<%s> got reply from redirector: '%s' -> '%v'",
+			msg_info_task ("<%s> got reply from redirector: '%s' -> '%T'",
 					param->task->message_id,
 					struri (param->url),
 					hdr);
