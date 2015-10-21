@@ -316,7 +316,7 @@ main (int argc, char **argv)
 	struct event_base *ev_base;
 	rspamd_mempool_t *pool = rspamd_mempool_new (8192, "http-bench");
 	struct event term_ev, int_ev, cld_ev;
-	gdouble total_done;
+	guint64 total_done;
 	FILE *lat_file;
 	gdouble mean, std;
 	guint i;
@@ -374,26 +374,27 @@ main (int argc, char **argv)
 		total_done += conns_done[i];
 	}
 
+	mean = rspamd_http_calculate_mean (latencies, &std);
+
 	if (!csv_output) {
 		rspamd_printf (
-				"Made %d connections of size %d in %.6fs, %.6f cps, %.6f MB/sec\n",
-				(gint) total_done,
+				"Made %L connections of size %d in %.6fs, %.6f cps, %.6f MB/sec\n",
+				total_done,
 				file_size,
 				test_time,
 				total_done / test_time,
 				total_done * file_size / test_time / (1024.0 * 1024.0));
-		mean = rspamd_http_calculate_mean (latencies, &std);
 		rspamd_printf ("Latency: %.6f ms mean, %.6f dev\n",
 				mean * 1000.0, std * 1000.0);
 	}
 	else {
 		/* size,connections,time,mean,stddev,conns,workers */
-		rspamd_printf ("%ud,%.0f,%.1f,%.6f,%.6f,%ud,%ud\n",
+		rspamd_printf ("%ud,%L,%.1f,%.6f,%.6f,%ud,%ud\n",
 				file_size,
 				total_done,
 				test_time,
-				mean,
-				std,
+				mean*1000.0,
+				std*1000.0,
 				pconns,
 				nworkers);
 	}
