@@ -40,6 +40,7 @@ static guint cache_size = 10;
 static guint nworkers = 1;
 static gboolean openssl_mode = FALSE;
 static GHashTable *maps = NULL;
+static ghcar *key = NULL;
 static struct rspamd_keypair_cache *c;
 static gpointer server_key;
 static struct timeval io_tv = {
@@ -56,6 +57,8 @@ static GOptionEntry entries[] = {
 				"Number of workers to start (default: 1)", NULL},
 		{"openssl", 'o', 0, G_OPTION_ARG_NONE, &openssl_mode,
 				"Use openssl crypto", NULL},
+		{"key", 'k', 0, G_OPTION_ARG_STRING, &key,
+				"Use static keypair instead of new one (base32 encoded sk || pk)", NULL},
 		{NULL,            0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -270,10 +273,20 @@ main (int argc, gchar **argv)
 		g_assert (rspamd_cryptobox_openssl_mode (TRUE));
 	}
 
-	server_key = rspamd_http_connection_gen_key ();
-	b32_key = rspamd_http_connection_print_key (server_key,
-			RSPAMD_KEYPAIR_PUBKEY | RSPAMD_KEYPAIR_BASE32);
-	rspamd_printf ("key: %v\n", b32_key);
+	if (key == NULL) {
+		server_key = rspamd_http_connection_gen_key ();
+		b32_key = rspamd_http_connection_print_key (server_key,
+				RSPAMD_KEYPAIR_PUBKEY | RSPAMD_KEYPAIR_BASE32);
+		rspamd_printf ("key: %v\n", b32_key);
+	}
+	else {
+		server_key = rspamd_http_connection_make_key (key, strlen (key));
+
+		if (server_key == NULL) {
+			rspamd_fprintf (stderr, "cannot load key %s\n", key);
+			exit (EXIT_FAILURE);
+		}
+	}
 
 	if (cache_size > 0) {
 		c = rspamd_keypair_cache_new (cache_size);
