@@ -40,7 +40,7 @@ static guint cache_size = 10;
 static guint nworkers = 1;
 static gboolean openssl_mode = FALSE;
 static GHashTable *maps = NULL;
-static ghcar *key = NULL;
+static gchar *key = NULL;
 static struct rspamd_keypair_cache *c;
 static gpointer server_key;
 static struct timeval io_tv = {

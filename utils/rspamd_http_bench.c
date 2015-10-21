@@ -45,11 +45,14 @@ static gboolean openssl_mode = FALSE;
 static guint file_size = 500;
 static guint pconns = 100;
 static gdouble test_time = 10.0;
-static rspamd_inet_addr_t *addr;
 static gchar *latencies_file = NULL;
+static gboolean csv_output = FALSE;
+
+/* Dynamic vars */
+static rspamd_inet_addr_t *addr;
 static guint32 workers_left = 0;
 static guint32 *conns_done = NULL;
-static const guint store_latencies = 100;
+static const guint store_latencies = 1000;
 static guint32 conns_pending = 0;
 
 static GOptionEntry entries[] = {
@@ -73,6 +76,8 @@ static GOptionEntry entries[] = {
 				"Use the specified key (base32 encoded)", NULL},
 		{"latency", 'l', 0, G_OPTION_ARG_FILENAME, &latencies_file,
 				"Write latencies to the specified file", NULL},
+		{"csv", 0, 0, G_OPTION_ARG_NONE, &csv_output,
+				"Output CSV", NULL},
 		{NULL,      0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -369,15 +374,29 @@ main (int argc, char **argv)
 		total_done += conns_done[i];
 	}
 
-	rspamd_printf ("Made %d connections of size %d in %.6fs, %.6f cps, %.6f MB/sec\n",
-			(gint)total_done,
-			file_size,
-			test_time,
-			total_done / test_time,
-			total_done * file_size / test_time / (1024.0 * 1024.0));
-	mean = rspamd_http_calculate_mean (latencies, &std);
-	rspamd_printf ("Latency: %.6f ms mean, %.6f dev\n",
-			mean * 1000.0, std * 1000.0);
+	if (!csv_output) {
+		rspamd_printf (
+				"Made %d connections of size %d in %.6fs, %.6f cps, %.6f MB/sec\n",
+				(gint) total_done,
+				file_size,
+				test_time,
+				total_done / test_time,
+				total_done * file_size / test_time / (1024.0 * 1024.0));
+		mean = rspamd_http_calculate_mean (latencies, &std);
+		rspamd_printf ("Latency: %.6f ms mean, %.6f dev\n",
+				mean * 1000.0, std * 1000.0);
+	}
+	else {
+		/* size,connections,time,mean,stddev,conns,workers */
+		rspamd_printf ("%ud,%.0f,%.1f,%.6f,%.6f,%ud,%ud\n",
+				file_size,
+				total_done,
+				test_time,
+				mean,
+				std,
+				pconns,
+				nworkers);
+	}
 
 	if (latencies_file) {
 		lat_file = fopen (latencies_file, "w");
