@@ -2259,11 +2259,24 @@ gpointer
 rspamd_http_connection_make_key (gchar *key, gsize keylen)
 {
 	guchar *decoded_sk, *decoded_pk;
+	gchar *semicolon;
 	gsize decoded_len;
 	struct rspamd_http_keypair *kp;
 
-	decoded_sk = rspamd_decode_base32 (key, keylen / 2, &decoded_len);
-	decoded_pk = rspamd_decode_base32 (key + keylen / 2, keylen / 2, &decoded_len);
+	semicolon = memchr (key, ':', keylen);
+
+	if (semicolon) {
+		decoded_sk = rspamd_decode_base32 (key, semicolon - key, &decoded_len);
+		decoded_pk = rspamd_decode_base32 (semicolon + 1,
+				keylen - (semicolon - key + 1),
+				&decoded_len);
+	}
+	else {
+		decoded_sk = rspamd_decode_base32 (key, keylen / 2, &decoded_len);
+		decoded_pk = rspamd_decode_base32 (key + keylen / 2,
+				keylen / 2,
+				&decoded_len);
+	}
 
 	if (decoded_pk != NULL && decoded_sk != NULL) {
 		if (decoded_len == rspamd_cryptobox_pk_bytes ()) {
@@ -2274,7 +2287,7 @@ rspamd_http_connection_make_key (gchar *key, gsize keylen)
 			blake2b (kp->id, kp->pk, NULL, sizeof (kp->id),
 					rspamd_cryptobox_pk_bytes (), 0);
 
-			return (gpointer)kp;
+			return (gpointer) kp;
 		}
 		g_free (decoded_pk);
 		g_free (decoded_sk);
