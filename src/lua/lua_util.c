@@ -595,6 +595,8 @@ lua_util_parse_addr (lua_State *L)
 
 				lua_rawseti (L, -2, (i + 1));
 			}
+
+			g_object_unref (ia);
 		}
 	}
 	else {
