@@ -961,7 +961,7 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 	comp->type = (comp_type);									\
 	comp->start = NULL;											\
 	comp->len = 0;												\
-	tag->params = g_list_prepend (tag->params, comp);			\
+	tag->params = g_list_append (tag->params, comp);			\
 	ret = TRUE;													\
 } while(0)
 
