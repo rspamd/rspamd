@@ -25,7 +25,9 @@ ENDIF(NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 TARGET_LINK_LIBRARIES(rspamd-test rspamd-cdb)
 TARGET_LINK_LIBRARIES(rspamd-test rspamd-http-parser)
 TARGET_LINK_LIBRARIES(rspamd-test ${RSPAMD_REQUIRED_LIBRARIES})
-TARGET_LINK_LIBRARIES(rspamd-test stemmer)
+IF (ENABLE_SNOWBALL MATCHES "ON")
+	TARGET_LINK_LIBRARIES(rspamd-test stemmer)
+ENDIF()
 TARGET_LINK_LIBRARIES(rspamd-test rspamd-actrie)
 
 ADD_CUSTOM_TARGET(rspamd-func-test COMMAND 

@@ -225,6 +225,7 @@
 #cmakedefine HAVE_STROPS_H       1
 #cmakedefine HAVE_SETSIG         1
 #cmakedefine HAVE_OASYNC         1
+#cmakedefine WITH_SNOWBALL       1
 
 /* Configure allocator */
 #define uthash_malloc(sz) g_slice_alloc(sz)

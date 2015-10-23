@@ -28,7 +28,6 @@
 
 #include "tokenizers.h"
 #include "stat_internal.h"
-#include "libstemmer.h"
 #include "xxhash.h"
 #include "cryptobox.h"
 

@@ -11,7 +11,10 @@ SET(RSPAMADMSRC rspamadm.c commands.c pw.c keypair.c configtest.c
 ADD_EXECUTABLE(rspamadm ${RSPAMADMSRC})
 TARGET_LINK_LIBRARIES(rspamadm rspamd-server)
 TARGET_LINK_LIBRARIES(rspamadm ${RSPAMD_REQUIRED_LIBRARIES})
-TARGET_LINK_LIBRARIES(rspamadm stemmer)
+
+IF (ENABLE_SNOWBALL MATCHES "ON")
+    TARGET_LINK_LIBRARIES(rspamadm stemmer)
+ENDIF()
 TARGET_LINK_LIBRARIES(rspamadm rspamd-actrie)
 
 IF (NOT DEBIAN_BUILD)

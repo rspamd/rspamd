@@ -31,7 +31,11 @@
 #include "images.h"
 #include "utlist.h"
 #include "tokenizers/tokenizers.h"
+
+#ifdef WITH_SNOWBALL
 #include "libstemmer.h"
+#endif
+
 #include "acism.h"
 
 #include <iconv.h>
@@ -947,13 +951,16 @@ static void
 rspamd_normalize_text_part (struct rspamd_task *task,
 		struct mime_text_part *part)
 {
+#ifdef WITH_SNOWBALL
 	struct sb_stemmer *stem = NULL;
+#endif
 	rspamd_ftok_t *w;
 	const guchar *r;
 	gchar *temp_word;
 	guint i, nlen;
 	GArray *tmp;
 
+#ifdef WITH_SNOWBALL
 	if (part->language && part->language[0] != '\0' && IS_PART_UTF (part)) {
 		stem = sb_stemmer_new (part->language, "UTF_8");
 		if (stem == NULL) {
@@ -961,6 +968,7 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 				task->message_id, part->language);
 		}
 	}
+#endif
 
 	/* Ugly workaround */
 	tmp = rspamd_tokenize_text (part->content->data,
@@ -971,12 +979,15 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 	if (tmp) {
 		for (i = 0; i < tmp->len; i ++) {
 			w = &g_array_index (tmp, rspamd_ftok_t, i);
+			r = NULL;
+#ifdef WITH_SNOWBALL
 			if (stem) {
 				r = sb_stemmer_stem (stem, w->begin, w->len);
 			}
+#endif
 
 			if (w->len > 0 && !(w->len == 6 && memcmp (w->begin, "!!EX!!", 6) == 0)) {
-				if (stem != NULL && r != NULL) {
+				if (r != NULL) {
 					nlen = strlen (r);
 					nlen = MIN (nlen, w->len);
 					temp_word = rspamd_mempool_alloc (task->task_pool, nlen);
@@ -1001,10 +1012,11 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 		}
 		part->normalized_words = tmp;
 	}
-
+#ifdef WITH_SNOWBALL
 	if (stem != NULL) {
 		sb_stemmer_delete (stem);
 	}
+#endif
 }
 
 #define MIN3(a, b, c) ((a) < (b) ? ((a) < (c) ? (a) : (c)) : ((b) < (c) ? (b) : (c)))
