@@ -55,7 +55,7 @@ CURVE25519_DECLARE(avx);
 CURVE25519_DECLARE(ref);
 #define CURVE25519_REF CURVE25519_IMPL(0, "ref", ref)
 
-#if (ARCH == x86_64) || (ARCH == i386)
+#if defined(CMAKE_ARCH_x86_64) || defined(CMAKE_ARCH_i386)
 CURVE25519_DECLARE(donna);
 #define CURVE25519_GENERIC CURVE25519_IMPL(0, "donna", donna)
 #else

@@ -1,7 +1,8 @@
 #ifndef PLATFORM_H_CONFIG
 #define PLATFORM_H_CONFIG
 
-#define ARCH ${ARCH}
+#define ARCH "${ARCH}"
+#define CMAKE_ARCH_${ARCH} 1
 #cmakedefine HAVE_AVX2	1
 #cmakedefine HAVE_AVX	1
 #cmakedefine HAVE_SSE2	1
