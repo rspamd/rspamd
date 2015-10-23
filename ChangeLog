@@ -1,3 +1,22 @@
+1.0.7:
+	* Plugged memory leaks in internet address object & html parser
+	* Fixed static build
+	* Fixed multiple sigchld processing
+	* Fixed deletion of signal events after event processing loop
+	* Fixed build on ARM (#404 - reported by @Gottox)
+	* Fixed setting the default mask for SPF.
+	* Fixed sanitisation of HTTP query values
+	* Fixed parsing of the last header in encrypted HTTP messages
+	* Additions and fixes for test suite & benchmarks
+	* Added openssl aes-256-gcm support to libcryptobox & HTTP server
+	* Implemented support for starting multiple HTTP servers
+	* Implemented batch accept in HTTP server
+	* Added module to get data from HTTP headers (#285 - reported by @msimerson)
+	* Added `rspamadm control` command
+	* Added ability to sort counters output.
+	* Added ability to specify custom headers for rspamc client
+	* Updated libucl
+
 1.0.6:
 	* Fix build on i386
 	* Update CentOS7 service file patch (by @fatalbanana)
