@@ -81,7 +81,7 @@ void
 rspamd_roll_history_update (struct roll_history *history,
 	struct rspamd_task *task)
 {
-	gint row_num;
+	guint row_num;
 	struct roll_history_row *row;
 	struct metric_result *metric_res;
 	struct history_metric_callback_data cbdata;
@@ -332,6 +332,10 @@ gboolean
 rspamd_roll_history_save (struct roll_history *history, const gchar *filename)
 {
 	gint fd;
+	ucl_object_t *obj, *elt;
+	guint i;
+	struct roll_history_row *row;
+	struct ucl_emitter_functions *emitter_func;
 
 	g_assert (history != NULL);
 
@@ -339,6 +343,46 @@ rspamd_roll_history_save (struct roll_history *history, const gchar *filename)
 		msg_info ("cannot save history to %s: %s", filename, strerror (errno));
 		return FALSE;
 	}
+
+	obj = ucl_object_typed_new (UCL_ARRAY);
+
+	for (i = 0; i < history->nrows; i ++) {
+		row = &history->rows[i];
+
+		if (!row->completed) {
+			continue;
+		}
+
+		elt = ucl_object_typed_new (UCL_OBJECT);
+
+		ucl_object_insert_key (elt, ucl_object_fromdouble (
+				tv_to_double (&row->tv)), "time", 0, false);
+		ucl_object_insert_key (elt, ucl_object_fromstring (row->message_id),
+				"id", 0, false);
+		ucl_object_insert_key (elt, ucl_object_fromstring (row->symbols),
+				"symbols", 0, false);
+		ucl_object_insert_key (elt, ucl_object_fromstring (row->user),
+				"user", 0, false);
+		ucl_object_insert_key (elt, ucl_object_fromstring (row->from_addr),
+				"from", 0, false);
+		ucl_object_insert_key (elt, ucl_object_fromint (row->len),
+				"len", 0, false);
+		ucl_object_insert_key (elt, ucl_object_fromdouble (row->scan_time),
+				"scan_time", 0, false);
+		ucl_object_insert_key (elt, ucl_object_fromdouble (row->score),
+				"score", 0, false);
+		ucl_object_insert_key (elt, ucl_object_fromdouble (row->required_score),
+				"required_score", 0, false);
+		ucl_object_insert_key (elt, ucl_object_fromint (row->action),
+				"action", 0, false);
+
+		ucl_array_append (obj, elt);
+	}
+
+	emitter_func = ucl_object_emit_fd_funcs (fd);
+	ucl_object_emit_full (obj, UCL_EMIT_JSON_COMPACT, emitter_func);
+	ucl_object_emit_funcs_free (emitter_func);
+	ucl_object_unref (obj);
 
 	close (fd);
 
