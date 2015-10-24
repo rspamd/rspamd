@@ -1051,9 +1051,8 @@ rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct rspamd_controller_worker_ctx *ctx;
-	struct roll_history_row *row;
-	struct roll_history copied_history;
-	gint i, rows_proc, row_num;
+	struct roll_history_row *row, *copied_rows;
+	guint i, rows_proc, row_num;
 	struct tm *tm;
 	gchar timebuf[32];
 	ucl_object_t *top, *obj;
@@ -1067,19 +1066,18 @@ rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
 	top = ucl_object_typed_new (UCL_ARRAY);
 
 	/* Set lock on history */
-	rspamd_mempool_lock_mutex (ctx->srv->history->mtx);
-	ctx->srv->history->need_lock = TRUE;
-	/* Copy locked */
-	memcpy (&copied_history, ctx->srv->history, sizeof (copied_history));
-	rspamd_mempool_unlock_mutex (ctx->srv->history->mtx);
+	copied_rows = g_slice_alloc (sizeof (*copied_rows) * ctx->srv->history->nrows);
+	memcpy (copied_rows, ctx->srv->history->rows,
+			sizeof (*copied_rows) * ctx->srv->history->nrows);
 
 	/* Go through all rows */
-	row_num = copied_history.cur_row;
-	for (i = 0, rows_proc = 0; i < HISTORY_MAX_ROWS; i++, row_num++) {
-		if (row_num == HISTORY_MAX_ROWS) {
+	row_num = ctx->srv->history->cur_row;
+
+	for (i = 0, rows_proc = 0; i < ctx->srv->history->nrows; i++, row_num++) {
+		if (row_num == ctx->srv->history->nrows) {
 			row_num = 0;
 		}
-		row = &copied_history.rows[row_num];
+		row = &copied_rows[row_num];
 		/* Get only completed rows */
 		if (row->completed) {
 			tm = localtime (&row->tv.tv_sec);
@@ -1111,6 +1109,10 @@ rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
 				ucl_object_insert_key (obj, ucl_object_fromstring (
 						row->user), "user", 0, false);
 			}
+			if (row->from_addr[0] != '\0') {
+				ucl_object_insert_key (obj, ucl_object_fromstring (
+						row->from_addr), "from", 0, false);
+			}
 			ucl_array_append (top, obj);
 			rows_proc++;
 		}
@@ -1128,6 +1130,8 @@ rspamd_controller_handle_history_reset (struct rspamd_http_connection_entry *con
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct rspamd_controller_worker_ctx *ctx;
+	struct roll_history_row *row;
+	guint start_row, i, t;
 
 	ctx = session->ctx;
 
@@ -1135,14 +1139,27 @@ rspamd_controller_handle_history_reset (struct rspamd_http_connection_entry *con
 		return 0;
 	}
 
-	rspamd_mempool_lock_mutex (ctx->srv->history->mtx);
-	ctx->srv->history->need_lock = TRUE;
-	/* Copy locked */
-	memset (ctx->srv->history->rows, 0, sizeof (ctx->srv->history->rows));
-	ctx->srv->history->cur_row = 0;
-	rspamd_mempool_unlock_mutex (ctx->srv->history->mtx);
+	/* Clean from start to the current row */
+	start_row = g_atomic_int_get (&ctx->srv->history->cur_row);
 
-	/* Successful learn */
+	for (i = 0; i < start_row; i ++) {
+		t = g_atomic_int_get (&ctx->srv->history->cur_row);
+
+		/* We somehow come to the race condition */
+		if (i >= t) {
+			break;
+		}
+
+		row = &ctx->srv->history->rows[i];
+		memset (row, 0, sizeof (*row));
+	}
+
+	start_row = g_atomic_int_get (&ctx->srv->history->cur_row);
+	/* Optimistically set all bytes to zero (might cause race) */
+	memset (ctx->srv->history->rows,
+			0,
+			sizeof (*row) * (ctx->srv->history->nrows - start_row));
+
 	msg_info_session ("<%s> reseted history",
 			rspamd_inet_address_to_string (session->from_addr));
 	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
