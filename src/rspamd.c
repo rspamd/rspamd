@@ -816,8 +816,6 @@ main (gint argc, gchar **argv, gchar **env)
 			"main");
 	rspamd_main->stat = rspamd_mempool_alloc0_shared (rspamd_main->server_pool,
 			sizeof (struct rspamd_stat));
-	/* Create rolling history */
-	rspamd_main->history = rspamd_roll_history_new (rspamd_main->server_pool);
 	rspamd_main->cfg =
 			(struct rspamd_config *) g_malloc0 (sizeof (struct rspamd_config));
 
@@ -949,6 +947,10 @@ main (gint argc, gchar **argv, gchar **env)
 	if (is_debug) {
 		rspamd_main->cfg->log_level = G_LOG_LEVEL_DEBUG;
 	}
+
+	/* Create rolling history */
+	rspamd_main->history = rspamd_roll_history_new (rspamd_main->server_pool,
+			rspamd_main->cfg->history_rows);
 
 	gperf_profiler_init (rspamd_main->cfg, "main");
 

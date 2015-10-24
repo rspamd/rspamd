@@ -271,6 +271,7 @@ struct rspamd_config {
 	gdouble upstream_revive_time;					/**< revive timeout for upstreams						*/
 
 	guint32 min_word_len;							/**< minimum length of the word to be considered		*/
+	guint history_rows;								/**< number of history rows stored						*/
 
 	GList *classify_headers;						/**< list of headers using for statistics				*/
 	struct module_s **compiled_modules;				/**< list of compiled C modules							*/

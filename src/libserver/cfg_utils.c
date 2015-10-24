@@ -175,6 +175,7 @@ rspamd_config_defaults (struct rspamd_config *cfg)
 
 	cfg->min_word_len = DEFAULT_MIN_WORD;
 	cfg->dns_max_requests = 64;
+	cfg->history_rows = 200;
 }
 
 void

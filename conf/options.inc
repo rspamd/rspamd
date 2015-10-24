@@ -23,3 +23,4 @@ classify_headers = [
 ];
 
 control_socket = "$DBDIR/rspamd.sock mode=0600";
+history_rows = 200;

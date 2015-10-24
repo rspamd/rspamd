@@ -48,6 +48,7 @@ symbol).
 * `min_word_len`: minimum size in letters (valid for utf8 texts as well) for a sequence of characters to be treated as a word; normally rspamd skips sequences if they are shorter or equal to three symbols.
 * `control_socket`: path/bind credits for the control socket
 * `classify_headers`: list of headers that are processed by statistics
+* `history_rows`: number of rows in the recent history roll table
 
 ## DNS options
 

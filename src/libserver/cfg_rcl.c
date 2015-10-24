@@ -1447,6 +1447,11 @@ rspamd_rcl_config_init (void)
 		rspamd_rcl_parse_struct_string,
 		G_STRUCT_OFFSET (struct rspamd_config, tld_file),
 		RSPAMD_CL_FLAG_STRING_PATH);
+	rspamd_rcl_add_default_handler (sub,
+		"history_rows",
+		rspamd_rcl_parse_struct_integer,
+		G_STRUCT_OFFSET (struct rspamd_config, history_rows),
+		RSPAMD_CL_FLAG_UINT);
 
 	/**
 	 * Metric section
