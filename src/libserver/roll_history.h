@@ -33,11 +33,10 @@
  * and displaying them in webui
  */
 
-#define HISTORY_MAX_ID 100
-#define HISTORY_MAX_SYMBOLS 200
-#define HISTORY_MAX_USER 20
+#define HISTORY_MAX_ID 64
+#define HISTORY_MAX_SYMBOLS 128
+#define HISTORY_MAX_USER 32
 #define HISTORY_MAX_ADDR 32
-#define HISTORY_MAX_ROWS 200
 
 struct rspamd_task;
 
@@ -48,19 +47,17 @@ struct roll_history_row {
 	gchar user[HISTORY_MAX_USER];
 	gchar from_addr[HISTORY_MAX_ADDR];
 	gsize len;
-	guint scan_time;
-	gint action;
+	gdouble scan_time;
 	gdouble score;
 	gdouble required_score;
-	guint8 completed;
+	gint action;
+	guint completed;
 };
 
 struct roll_history {
-	struct roll_history_row rows[HISTORY_MAX_ROWS];
-	gint cur_row;
-	rspamd_mempool_t *pool;
-	gboolean need_lock;
-	rspamd_mempool_mutex_t *mtx;
+	struct roll_history_row *rows;
+	guint nrows;
+	guint cur_row;
 };
 
 /**
@@ -68,7 +65,8 @@ struct roll_history {
  * @param pool pool for shared memory
  * @return new structure
  */
-struct roll_history * rspamd_roll_history_new (rspamd_mempool_t *pool);
+struct roll_history * rspamd_roll_history_new (rspamd_mempool_t *pool,
+		guint max_rows);
 
 /**
  * Update roll history with data from task
