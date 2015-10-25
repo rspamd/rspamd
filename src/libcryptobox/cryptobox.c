@@ -33,9 +33,10 @@
 #include "chacha20/chacha.h"
 #include "poly1305/poly1305.h"
 #include "curve25519/curve25519.h"
+#include "blake2/blake2.h"
 #include "siphash/siphash.h"
 #include "ottery.h"
-#include "blake2.h"
+
 #ifdef HAVE_CPUID_H
 #include <cpuid.h>
 #endif
@@ -235,6 +236,7 @@ rspamd_cryptobox_init (void)
 	poly1305_load ();
 	siphash_load ();
 	curve25519_load ();
+	blake2b_load ();
 }
 
 void
