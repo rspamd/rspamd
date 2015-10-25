@@ -36,6 +36,8 @@ struct rspamd_cryptobox_segment {
 #define rspamd_cryptobox_MAX_MACBYTES 16
 #define rspamd_cryptobox_MAX_NMBYTES 32
 #define rspamd_cryptobox_SIPKEYBYTES 16
+#define rspamd_cryptobox_HASHBYTES 64
+#define rspamd_cryptobox_HASHSTATEBYTES 256
 
 typedef guchar rspamd_pk_t[rspamd_cryptobox_MAX_PKBYTES];
 typedef guchar rspamd_sk_t[rspamd_cryptobox_MAX_SKBYTES];
@@ -204,5 +206,33 @@ guint rspamd_cryptobox_nm_bytes (void);
  * Real size of rspamd cryptobox MAC signature
  */
 guint rspamd_cryptobox_mac_bytes (void);
+
+/* Hash IUF interface */
+
+/**
+ * Init cryptobox hash state using key if needed, `st` must point to the buffer
+ * with at least rspamd_cryptobox_HASHSTATEBYTES bytes length. If keylen == 0, then
+ * non-keyed hash is generated
+ */
+void rspamd_cryptobox_hash_init (void *st, const guchar *key, gsize keylen);
+
+/**
+ * Update hash with data portion
+ */
+void rspamd_cryptobox_hash_update (void *st, const guchar *data, gsize len);
+
+/**
+ * Output hash to the buffer of rspamd_cryptobox_HASHBYTES length
+ */
+void rspamd_cryptobox_hash_final (void *st, guchar *out);
+
+/**
+ * One in all function
+ */
+void rspamd_cryptobox_hash (guchar *out,
+		const guchar *data,
+		gsize len,
+		const guchar *key,
+		gsize keylen);
 
 #endif /* CRYPTOBOX_H_ */

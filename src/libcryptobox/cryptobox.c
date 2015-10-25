@@ -976,12 +976,11 @@ rspamd_cryptobox_pbkdf (const char *pass, gsize pass_len,
 		asalt[salt_len + 1] = (count >> 16) & 0xff;
 		asalt[salt_len + 2] = (count >> 8) & 0xff;
 		asalt[salt_len + 3] = count & 0xff;
-		blake2b (d1, asalt, pass, BLAKE2B_OUTBYTES, salt_len + 4, pass_len);
+		blake2b_keyed (d1, asalt, salt_len + 4, pass, pass_len);
 		memcpy (obuf, d1, sizeof(obuf));
 
 		for (i = 1; i < rounds; i++) {
-			blake2b (d2, d1, pass, BLAKE2B_OUTBYTES, BLAKE2B_OUTBYTES,
-					pass_len);
+			blake2b_keyed (d2, d1, BLAKE2B_OUTBYTES, pass, pass_len);
 			memcpy (d1, d2, sizeof(d1));
 
 			for (j = 0; j < sizeof(obuf); j++) {
@@ -1053,4 +1052,50 @@ guint
 rspamd_cryptobox_mac_bytes (void)
 {
 	return 16;
+}
+
+void
+rspamd_cryptobox_hash_init (void *st, const guchar *key, gsize keylen)
+{
+	if (key != NULL && keylen > 0) {
+		blake2b_keyed_init (st, key, keylen);
+	}
+	else {
+		blake2b_init (st);
+	}
+}
+
+/**
+ * Update hash with data portion
+ */
+void
+rspamd_cryptobox_hash_update (void *st, const guchar *data, gsize len)
+{
+	blake2b_update (st, data, len);
+}
+
+/**
+ * Output hash to the buffer of rspamd_cryptobox_HASHBYTES length
+ */
+void
+rspamd_cryptobox_hash_final (void *st, guchar *out)
+{
+	blake2b_final (st, out);
+	rspamd_explicit_memzero (st, rspamd_cryptobox_HASHSTATEBYTES);
+}
+
+/**
+ * One in all function
+ */
+void rspamd_cryptobox_hash (guchar *out,
+		const guchar *data,
+		gsize len,
+		const guchar *key,
+		gsize keylen)
+{
+	blake2b_state RSPAMD_ALIGNED(32) st;
+
+	rspamd_cryptobox_hash_init (&st, key, keylen);
+	rspamd_cryptobox_hash_update (&st, data, len);
+	rspamd_cryptobox_hash_final (&st, out);
 }
