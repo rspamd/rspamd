@@ -77,7 +77,7 @@ U64TO8 (unsigned char *p, blake2b_uint64 v)
 	p[7] = (v >> 56) & 0xff;
 }
 
-static void
+void
 blake2b_blocks_ref (blake2b_state_internal *S,
 		const unsigned char *in,
 		size_t bytes,

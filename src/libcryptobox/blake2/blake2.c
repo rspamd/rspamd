@@ -50,11 +50,6 @@ typedef struct blake2b_impl_t {
 #define BLAKE2B_IMPL(cpuflags, desc, ext) \
     {(cpuflags), desc, blake2b_blocks_##ext}
 
-#if defined(HAVE_AVX2)
-BLAKE2B_DECLARE(avx2)
-#define BLAKE2B_AVX2 BLAKE2B_IMPL(CPUID_AVX2, "avx2", avx2)
-#endif
-
 #if defined(HAVE_AVX)
 BLAKE2B_DECLARE(avx)
 #define BLAKE2B_AVX BLAKE2B_IMPL(CPUID_AVX, "avx", avx)
@@ -69,21 +64,15 @@ BLAKE2B_DECLARE(x86)
 BLAKE2B_DECLARE(ref)
 #define BLAKE2B_GENERIC BLAKE2B_IMPL(0, "generic", ref)
 
-
-
 /* list implemenations from most optimized to least, with generic as the last entry */
 static const blake2b_impl_t blake2b_list[] = {
-		/* x86 */
-#if defined(BLAKE2B_AVX2)
-		BLAKE2B_AVX2,
-#endif
+		BLAKE2B_GENERIC,
 #if defined(BLAKE2B_AVX)
 		BLAKE2B_AVX,
 #endif
 #if defined(BLAKE2B_X86)
 		BLAKE2B_X86,
 #endif
-		BLAKE2B_GENERIC
 };
 
 static const blake2b_impl_t *blake2b_opt = &blake2b_list[0];
