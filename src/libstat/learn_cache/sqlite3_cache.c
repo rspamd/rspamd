@@ -26,7 +26,7 @@
 #include "rspamd.h"
 #include "stat_api.h"
 #include "stat_internal.h"
-#include "blake2.h"
+#include "cryptobox.h"
 #include "ucl.h"
 #include "fstring.h"
 #include "message.h"
@@ -246,13 +246,13 @@ rspamd_stat_cache_sqlite3_process (struct rspamd_task *task,
 {
 	struct rspamd_stat_sqlite3_ctx *ctx = (struct rspamd_stat_sqlite3_ctx *)c;
 	struct mime_text_part *part;
-	blake2b_state st;
+	rspamd_cryptobox_hash_state_t st;
 	rspamd_ftok_t *word;
-	guchar out[BLAKE2B_OUTBYTES];
+	guchar out[rspamd_cryptobox_HASHBYTES];
 	guint i, j;
 
 	if (ctx != NULL && ctx->db != NULL) {
-		blake2b_init (&st, sizeof (out));
+		rspamd_cryptobox_hash_init (&st, NULL, 0);
 
 		for (i = 0; i < task->text_parts->len; i ++) {
 			part = g_ptr_array_index (task->text_parts, i);
@@ -260,12 +260,12 @@ rspamd_stat_cache_sqlite3_process (struct rspamd_task *task,
 			if (part->words != NULL) {
 				for (j = 0; j < part->words->len; j ++) {
 					word = &g_array_index (part->words, rspamd_ftok_t, j);
-					blake2b_update (&st, word->begin, word->len);
+					rspamd_cryptobox_hash_update (&st, word->begin, word->len);
 				}
 			}
 		}
 
-		blake2b_final (&st, out, sizeof (out));
+		rspamd_cryptobox_hash_final (&st, out);
 
 		return rspamd_stat_cache_sqlite3_check (task->task_pool,
 				out, sizeof (out), is_spam, ctx);

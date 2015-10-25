@@ -46,7 +46,7 @@
 #include "libserver/worker_util.h"
 #include "fuzzy_storage.h"
 #include "utlist.h"
-#include "blake2.h"
+#include "cryptobox.h"
 #include "ottery.h"
 #include "keypair_private.h"
 #include "unix-std.h"
@@ -401,9 +401,10 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 		/* Use some default key for all ops */
 		k = "rspamd";
 	}
-	rule->hash_key = g_string_sized_new (BLAKE2B_KEYBYTES);
-	blake2 (rule->hash_key->str, k, NULL, BLAKE2B_KEYBYTES, strlen (k), 0);
-	rule->hash_key->len = BLAKE2B_KEYBYTES;
+
+	rule->hash_key = g_string_sized_new (rspamd_cryptobox_HASHBYTES);
+	rspamd_cryptobox_hash (rule->hash_key->str, k, strlen (k), NULL, 0);
+	rule->hash_key->len = rspamd_cryptobox_HASHKEYBYTES;
 
 	if ((value = ucl_object_find_key (obj, "fuzzy_shingles_key")) != NULL) {
 		k = ucl_object_tostring (value);
@@ -411,8 +412,9 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 	if (k == NULL) {
 		k = "rspamd";
 	}
-	rule->shingles_key = g_string_sized_new (16);
-	blake2 (rule->shingles_key->str, k, NULL, 16, strlen (k), 0);
+
+	rule->shingles_key = g_string_sized_new (rspamd_cryptobox_HASHBYTES);
+	rspamd_cryptobox_hash (rule->shingles_key->str, k, strlen (k), NULL, 0);
 	rule->shingles_key->len = 16;
 
 	if (rspamd_upstreams_count (rule->servers) == 0) {
@@ -618,7 +620,7 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 	struct rspamd_fuzzy_encrypted_shingle_cmd *encshcmd;
 	struct rspamd_shingle *sh;
 	guint i;
-	blake2b_state st;
+	rspamd_cryptobox_hash_state_t st;
 	rspamd_ftok_t *word;
 	GArray *words;
 	struct fuzzy_cmd_io *io;
@@ -638,15 +640,14 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 	/*
 	 * Generate hash from all words in the part
 	 */
-	g_assert (blake2b_init_key (&st, BLAKE2B_OUTBYTES, rule->hash_key->str,
-			rule->hash_key->len) != -1);
+	rspamd_cryptobox_hash_init (&st, rule->hash_key->str, rule->hash_key->len);
 	words = fuzzy_preprocess_words (part, pool);
 
 	for (i = 0; i < words->len; i ++) {
 		word = &g_array_index (words, rspamd_ftok_t, i);
-		blake2b_update (&st, word->begin, word->len);
+		rspamd_cryptobox_hash_update (&st, word->begin, word->len);
 	}
-	blake2b_final (&st, shcmd->basic.digest, sizeof (shcmd->basic.digest));
+	rspamd_cryptobox_hash_final (&st, shcmd->basic.digest);
 
 	msg_debug_pool ("loading shingles with key %*xs", 16,
 			rule->shingles_key->str);
@@ -705,7 +706,7 @@ fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 	struct rspamd_fuzzy_cmd *cmd;
 	struct rspamd_fuzzy_encrypted_cmd *enccmd;
 	struct fuzzy_cmd_io *io;
-	blake2b_state st;
+	rspamd_cryptobox_hash_state_t st;
 	struct rspamd_http_keypair *lk, *rk;
 
 	if (rule->peer_key) {
@@ -727,10 +728,9 @@ fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 	cmd->shingles_count = 0;
 	cmd->tag = ottery_rand_uint32 ();
 	/* Use blake2b for digest */
-	g_assert (blake2b_init_key (&st, BLAKE2B_OUTBYTES, rule->hash_key->str,
-			rule->hash_key->len) != -1);
-	blake2b_update (&st, data, datalen);
-	blake2b_final (&st, cmd->digest, sizeof (cmd->digest));
+	rspamd_cryptobox_hash_init (&st, rule->hash_key->str, rule->hash_key->len);
+	rspamd_cryptobox_hash_update (&st, data, datalen);
+	rspamd_cryptobox_hash_final (&st, cmd->digest);
 
 	io = rspamd_mempool_alloc (pool, sizeof (*io));
 	io->replied = FALSE;

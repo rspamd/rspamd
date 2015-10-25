@@ -20,7 +20,7 @@ RSPAMD_PACKED(rspamd_fuzzy_cmd) {
 	guint8 flag;
 	gint32 value;
 	guint32 tag;
-	gchar digest[64];
+	gchar digest[rspamd_cryptobox_HASHBYTES];
 };
 
 RSPAMD_PACKED(rspamd_fuzzy_shingle_cmd) {

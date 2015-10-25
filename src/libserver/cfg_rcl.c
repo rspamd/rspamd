@@ -21,7 +21,6 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <blake2.h>
 #include "cfg_rcl.h"
 #include "rspamd.h"
 #include "uthash_strcase.h"
@@ -32,6 +31,7 @@
 #include "composites.h"
 #include "libserver/worker_util.h"
 #include "unix-std.h"
+#include "cryptobox.h"
 
 #ifdef HAVE_SYSLOG_H
 #include <syslog.h>
@@ -2516,7 +2516,7 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	GError *err = NULL;
 	struct rspamd_rcl_section *top, *logger;
 	struct ucl_parser *parser;
-	unsigned char cksumbuf[BLAKE2B_OUTBYTES];
+	unsigned char cksumbuf[rspamd_cryptobox_HASHBYTES];
 
 	if (stat (filename, &st) == -1) {
 		msg_err_config ("cannot stat %s: %s", filename, strerror (errno));
@@ -2536,7 +2536,7 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	}
 	close (fd);
 
-	blake2b (cksumbuf, data, NULL, sizeof (cksumbuf), st.st_size, 0);
+	rspamd_cryptobox_hash (cksumbuf, data, st.st_size, NULL, 0);
 	cfg->checksum = rspamd_encode_base32 (cksumbuf, sizeof (cksumbuf));
 	/* Also change the tag of cfg pool to be equal to the checksum */
 	rspamd_strlcpy (cfg->cfg_pool->tag.uid, cfg->checksum,
