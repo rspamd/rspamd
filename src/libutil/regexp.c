@@ -25,13 +25,13 @@
 
 #include "config.h"
 #include "regexp.h"
-#include "blake2.h"
+#include "cryptobox.h"
 #include "ref.h"
 #include "util.h"
 #include "rspamd.h"
 #include <pcre.h>
 
-typedef guchar regexp_id_t[BLAKE2B_OUTBYTES];
+typedef guchar regexp_id_t[rspamd_cryptobox_HASHBYTES];
 
 #define RSPAMD_REGEXP_FLAG_RAW (1 << 1)
 #define RSPAMD_REGEXP_FLAG_NOOPT (1 << 2)
@@ -72,16 +72,16 @@ static void
 rspamd_regexp_generate_id (const gchar *pattern, const gchar *flags,
 		regexp_id_t out)
 {
-	blake2b_state st;
+	rspamd_cryptobox_hash_state_t st;
 
-	blake2b_init (&st, sizeof (regexp_id_t));
+	rspamd_cryptobox_hash_init (&st, NULL, 0);
 
 	if (flags) {
-		blake2b_update (&st, flags, strlen (flags));
+		rspamd_cryptobox_hash_update (&st, flags, strlen (flags));
 	}
 
-	blake2b_update (&st, pattern, strlen (pattern));
-	blake2b_final (&st, out, sizeof (regexp_id_t));
+	rspamd_cryptobox_hash_update (&st, pattern, strlen (pattern));
+	rspamd_cryptobox_hash_final (&st, out);
 }
 
 static void

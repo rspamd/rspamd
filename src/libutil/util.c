@@ -75,7 +75,7 @@
 #include <sys/resource.h>
 #endif
 
-#include "blake2.h"
+#include "cryptobox.h"
 
 /* Check log messages intensity once per minute */
 #define CHECK_TIME 60
@@ -89,7 +89,7 @@ const struct rspamd_controller_pbkdf pbkdf_list[] = {
 				.id = RSPAMD_PBKDF_ID_V1,
 				.rounds = 16000,
 				.salt_len = 20,
-				.key_len = BLAKE2B_OUTBYTES / 2
+				.key_len = rspamd_cryptobox_HASHBYTES / 2
 		}
 };
 

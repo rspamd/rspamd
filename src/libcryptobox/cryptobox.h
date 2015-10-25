@@ -208,6 +208,9 @@ guint rspamd_cryptobox_nm_bytes (void);
 guint rspamd_cryptobox_mac_bytes (void);
 
 /* Hash IUF interface */
+typedef struct RSPAMD_ALIGNED(32) rspamd_cryptobox_hash_state_s  {
+	unsigned char opaque[256];
+} rspamd_cryptobox_hash_state_t;
 
 /**
  * Init cryptobox hash state using key if needed, `st` must point to the buffer

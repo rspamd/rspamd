@@ -27,14 +27,13 @@
 
 #include "config.h"
 #include "ref.h"
-#include "blake2.h"
 #include "cryptobox.h"
 
 struct RSPAMD_ALIGNED(32) rspamd_http_keypair  {
 	guchar RSPAMD_ALIGNED(32) sk[rspamd_cryptobox_MAX_SKBYTES];
 	guchar RSPAMD_ALIGNED(32) nm[rspamd_cryptobox_MAX_NMBYTES];
 	guchar RSPAMD_ALIGNED(32) pk[rspamd_cryptobox_MAX_PKBYTES];
-	guchar id[BLAKE2B_OUTBYTES];
+	guchar id[rspamd_cryptobox_HASHBYTES];
 	gboolean has_nm;
 	ref_entry_t ref;
 };

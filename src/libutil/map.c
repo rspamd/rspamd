@@ -29,9 +29,7 @@
 #include "map.h"
 #include "http.h"
 #include "rspamd.h"
-#include "util.h"
-#include "mem_pool.h"
-#include "blake2.h"
+#include "cryptobox.h"
 #include "unix-std.h"
 
 static const gchar *hash_fill = "1";
@@ -494,7 +492,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 	const gchar *def, *p, *hostend;
 	struct file_map_data *fdata;
 	struct http_map_data *hdata;
-	gchar portbuf[6], *cksum_encoded, cksum[BLAKE2B_OUTBYTES];
+	gchar portbuf[6], *cksum_encoded, cksum[rspamd_cryptobox_HASHBYTES];
 	gint i, s, r;
 	struct addrinfo hints, *res;
 	rspamd_mempool_t *pool;
@@ -627,7 +625,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 		new_map->map_data = hdata;
 	}
 	/* Temp pool */
-	blake2b (cksum, new_map->uri, NULL, sizeof (cksum), strlen (new_map->uri), 0);
+	rspamd_cryptobox_hash (cksum, new_map->uri, strlen (new_map->uri), NULL, 0);
 	cksum_encoded = rspamd_encode_base32 (cksum, sizeof (cksum));
 	new_map->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "map");
 	memcpy (new_map->pool->tag.uid, cksum_encoded,

@@ -28,7 +28,6 @@
 #include "printf.h"
 #include "logger.h"
 #include "ref.h"
-#include "blake2.h"
 #include "ottery.h"
 #include "keypair_private.h"
 #include "cryptobox.h"
@@ -1301,7 +1300,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	gboolean encrypted = FALSE;
 	gchar *b32_key, *b32_id;
 	guchar nonce[rspamd_cryptobox_MAX_NONCEBYTES], mac[rspamd_cryptobox_MAX_MACBYTES],
-		id[BLAKE2B_OUTBYTES];
+		id[rspamd_cryptobox_HASHBYTES];
 	guchar *np = NULL, *mp = NULL, *meth_pos = NULL;
 	struct rspamd_http_keypair *peer_key = NULL;
 
@@ -2262,6 +2261,7 @@ rspamd_http_connection_make_key (gchar *key, gsize keylen)
 	gchar *semicolon;
 	gsize decoded_len;
 	struct rspamd_http_keypair *kp;
+	guchar kh[rspamd_cryptobox_HASHBYTES];
 
 	semicolon = memchr (key, ':', keylen);
 
@@ -2284,8 +2284,9 @@ rspamd_http_connection_make_key (gchar *key, gsize keylen)
 			REF_INIT_RETAIN (kp, rspamd_http_keypair_dtor);
 			memcpy (kp->sk, decoded_sk, rspamd_cryptobox_sk_bytes ());
 			memcpy (kp->pk, decoded_pk, rspamd_cryptobox_pk_bytes ());
-			blake2b (kp->id, kp->pk, NULL, sizeof (kp->id),
-					rspamd_cryptobox_pk_bytes (), 0);
+			rspamd_cryptobox_hash (kh, kp->pk, rspamd_cryptobox_pk_bytes (),
+					NULL, 0);
+			memcpy (kp->id, kh, sizeof (kp->id));
 
 			return (gpointer) kp;
 		}
@@ -2300,13 +2301,15 @@ gpointer
 rspamd_http_connection_gen_key (void)
 {
 	struct rspamd_http_keypair *kp;
+	guchar kh[rspamd_cryptobox_HASHBYTES];
 
 	kp = g_slice_alloc (sizeof (*kp));
 	REF_INIT_RETAIN (kp, rspamd_http_keypair_dtor);
 
 	rspamd_cryptobox_keypair (kp->pk, kp->sk);
-	blake2b (kp->id, kp->pk, NULL, sizeof (kp->id),
-			rspamd_cryptobox_pk_bytes (), 0);
+	rspamd_cryptobox_hash (kh, kp->pk, rspamd_cryptobox_pk_bytes (),
+			NULL, 0);
+	memcpy (kp->id, kh, sizeof (kp->id));
 
 	return (gpointer)kp;
 }
@@ -2419,6 +2422,7 @@ rspamd_http_connection_make_peer_key (const gchar *key)
 	guchar *pk_decoded;
 	gsize dec_len;
 	struct rspamd_http_keypair *kp = NULL;
+	guchar kh[rspamd_cryptobox_HASHBYTES];
 
 	pk_decoded = rspamd_decode_base32 (key, strlen (key), &dec_len);
 
@@ -2426,8 +2430,9 @@ rspamd_http_connection_make_peer_key (const gchar *key)
 		kp = g_slice_alloc0 (sizeof (*kp));
 		REF_INIT_RETAIN (kp, rspamd_http_keypair_dtor);
 		memcpy (kp->pk, pk_decoded, rspamd_cryptobox_pk_bytes ());
-		blake2b (kp->id, kp->pk, NULL, sizeof (kp->id),
-				rspamd_cryptobox_pk_bytes (), 0);
+		rspamd_cryptobox_hash (kh, kp->pk, rspamd_cryptobox_pk_bytes (),
+				NULL, 0);
+		memcpy (kp->id, kh, sizeof (kp->id));
 	}
 
 	g_free (pk_decoded);

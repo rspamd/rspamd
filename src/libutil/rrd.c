@@ -21,12 +21,12 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <blake2.h>
 #include "config.h"
 #include "rrd.h"
 #include "util.h"
 #include "logger.h"
 #include "unix-std.h"
+#include "cryptobox.h"
 #include <math.h>
 
 #define msg_err_rrd(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
@@ -328,21 +328,21 @@ rspamd_rrd_adjust_pointers (struct rspamd_rrd_file *file, gboolean completed)
 static void
 rspamd_rrd_calculate_checksum (struct rspamd_rrd_file *file)
 {
-	guchar sigbuf[BLAKE2B_OUTBYTES];
+	guchar sigbuf[rspamd_cryptobox_HASHBYTES];
 	struct rrd_ds_def *ds;
 	guint i;
-	blake2b_state st;
+	rspamd_cryptobox_hash_state_t st;
 
 	if (file->finalized) {
-		blake2b_init (&st, BLAKE2B_OUTBYTES);
-		blake2b_update (&st, file->filename, strlen (file->filename));
+		rspamd_cryptobox_hash_init (&st, NULL, 0);
+		rspamd_cryptobox_hash_update (&st, file->filename, strlen (file->filename));
 
 		for (i = 0; i < file->stat_head->ds_cnt; i ++) {
 			ds = &file->ds_def[i];
-			blake2b_update (&st, ds->ds_nam, sizeof (ds->ds_nam));
+			rspamd_cryptobox_hash_update (&st, ds->ds_nam, sizeof (ds->ds_nam));
 		}
 
-		blake2b_final (&st, sigbuf, BLAKE2B_OUTBYTES);
+		rspamd_cryptobox_hash_final (&st, sigbuf);
 
 		file->id = rspamd_encode_base32 (sigbuf, sizeof (sigbuf));
 	}
