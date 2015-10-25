@@ -140,15 +140,9 @@ void
 blake2b_keyed_init (blake2b_state *S, const unsigned char *key, size_t keylen)
 {
 	unsigned char k[BLAKE2B_BLOCKBYTES] = {0};
-	if (keylen > BLAKE2B_KEYBYTES) {
-		fprintf (stderr,
-				"key size larger than %u passed to blake2b_keyed_init",
-				BLAKE2B_KEYBYTES);
-		exit (-1);
-	}
-	else {
-		memcpy (k, key, keylen);
-	}
+
+	g_assert (keylen <= BLAKE2B_KEYBYTES);
+	memcpy (k, key, keylen);
 	blake2b_init (S);
 	blake2b_update (S, k, BLAKE2B_BLOCKBYTES);
 }

@@ -37,6 +37,7 @@ struct rspamd_cryptobox_segment {
 #define rspamd_cryptobox_MAX_NMBYTES 32
 #define rspamd_cryptobox_SIPKEYBYTES 16
 #define rspamd_cryptobox_HASHBYTES 64
+#define rspamd_cryptobox_HASHKEYBYTES 64
 #define rspamd_cryptobox_HASHSTATEBYTES 256
 
 typedef guchar rspamd_pk_t[rspamd_cryptobox_MAX_PKBYTES];
