@@ -224,7 +224,9 @@ rspamd_task_free (struct rspamd_task *task, gboolean is_soft)
 			g_error_free (task->err);
 		}
 
-		event_del (&task->timeout_ev);
+		if (event_get_base (&task->timeout_ev) != NULL) {
+			event_del (&task->timeout_ev);
+		}
 
 		rspamd_mempool_delete (task->task_pool);
 		g_slice_free1 (sizeof (struct rspamd_task), task);
