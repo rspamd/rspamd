@@ -48,6 +48,10 @@ settings {
 				"add header" = 5.0; # Please mention a space instead of underscore
 			}
 		}
+		# Always add these symbols when settings rule has matched
+		symbols [
+			"symbol2", "symbol4"
+		]
 	}
 	whitelist {
 		priority = low;
@@ -69,6 +73,7 @@ So each setting has the following attributes:
 - `apply` - list of applied rules, identified by metric name (e.g. `default`)
 	+ `symbol` - modify weight of a symbol
 	+ `actions` - section of modified actions
+- `symbols` - add symbols from the list if a rule has matched
 
 Match section performs `AND` operation on different matches, for example, if you have
 `from` and `rcpt` in the same rule, then rule matches only when `from` `AND` `rcpt` match.

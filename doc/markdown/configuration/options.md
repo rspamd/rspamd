@@ -49,6 +49,7 @@ symbol).
 * `control_socket`: path/bind credits for the control socket
 * `classify_headers`: list of headers that are processed by statistics
 * `history_rows`: number of rows in the recent history roll table
+* `explicit_modules`: always load modules from the list even if they have no according configuration section in the file
 
 ## DNS options
 
