@@ -27,6 +27,7 @@
 
 #include "config.h"
 #include "mem_pool.h"
+#include "fstring.h"
 
 #define RSPAMD_EXPRESSION_MAX_PRIORITY 1024
 
@@ -92,5 +93,21 @@ gint rspamd_process_expression (struct rspamd_expression *expr, gint flags,
  * @return freshly allocated string with expression
  */
 GString *rspamd_expression_tostring (struct rspamd_expression *expr);
+
+/**
+ * Callback that is called on @see rspamd_expression_atom_foreach, atom is ephemeral
+ * and should not be modified within callback
+ */
+typedef void (*rspamd_expression_atom_foreach_cb) (const rspamd_ftok_t *atom,
+		gpointer ud);
+
+/**
+ * Traverse over all atoms in the expression
+ * @param expr expression
+ * @param cb callback to be called
+ * @param ud opaque data passed to `cb`
+ */
+void rspamd_expression_atom_foreach (struct rspamd_expression *expr,
+		rspamd_expression_atom_foreach_cb cb, gpointer cbdata);
 
 #endif /* SRC_LIBUTIL_EXPRESSION_H_ */

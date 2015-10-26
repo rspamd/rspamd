@@ -1091,3 +1091,39 @@ rspamd_expression_tostring (struct rspamd_expression *expr)
 
 	return res;
 }
+
+struct atom_foreach_cbdata {
+	rspamd_expression_atom_foreach_cb cb;
+	gpointer cbdata;
+};
+
+static gboolean
+rspamd_ast_atom_traverse (GNode *n, gpointer d)
+{
+	struct atom_foreach_cbdata *data = d;
+	struct rspamd_expression_elt *elt = n->data;
+	rspamd_ftok_t tok;
+
+	if (elt->type == ELT_ATOM) {
+		tok.begin = elt->p.atom->str;
+		tok.len = elt->p.atom->len;
+
+		data->cb (&tok, data->cbdata);
+	}
+
+	return FALSE;
+}
+
+void
+rspamd_expression_atom_foreach (struct rspamd_expression *expr,
+		rspamd_expression_atom_foreach_cb cb, gpointer cbdata)
+{
+	struct atom_foreach_cbdata data;
+
+	g_assert (expr != NULL);
+
+	data.cb = cb;
+	data.cbdata = cbdata;
+	g_node_traverse (expr->ast, G_POST_ORDER, G_TRAVERSE_ALL, -1,
+			rspamd_ast_atom_traverse, &data);
+}
