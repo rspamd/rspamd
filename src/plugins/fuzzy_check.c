@@ -1409,6 +1409,7 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 {
 	struct fuzzy_learn_session *s;
 	struct upstream *selected;
+	struct rspamd_controller_session *session = entry->ud;
 	gint sock;
 	gboolean ret = FALSE;
 
@@ -1423,7 +1424,7 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 		}
 		else {
 			s =
-				rspamd_mempool_alloc0 (task->task_pool,
+				rspamd_mempool_alloc0 (session->pool,
 					sizeof (struct fuzzy_learn_session));
 
 			msec_to_tv (fuzzy_module_ctx->io_timeout, &s->tv);
@@ -1461,6 +1462,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	struct fuzzy_ctx *ctx)
 {
 	struct fuzzy_rule *rule;
+	struct rspamd_controller_session *session = conn_ent->ud;
 	struct rspamd_task *task;
 	gboolean processed = FALSE, res = TRUE;
 	GList *cur;
@@ -1478,8 +1480,8 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	task->msg.begin = msg->body_buf.begin;
 	task->msg.len = msg->body_buf.len;
 
-	saved = rspamd_mempool_alloc0 (task->task_pool, sizeof (gint));
-	err = rspamd_mempool_alloc0 (task->task_pool, sizeof (GError *));
+	saved = rspamd_mempool_alloc0 (session->pool, sizeof (gint));
+	err = rspamd_mempool_alloc0 (session->pool, sizeof (GError *));
 	r = rspamd_message_parse (task);
 
 	if (r == -1) {
