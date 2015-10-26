@@ -1,4 +1,4 @@
-
+SECTION_RODATA
 .p2align 6
 blake2b_constants:
 .quad 0x6a09e667f3bcc908
