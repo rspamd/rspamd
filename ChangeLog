@@ -15,6 +15,17 @@
 	* Added `rspamadm control` command
 	* Added ability to sort counters output.
 	* Added ability to specify custom headers for rspamc client
+	* Fix architecture detection
+	* Converted history storage to the UCL format
+	* Allow flexible number of rows in history
+	* Fix action badges in WebUI
+	* Add universal cryptobox hash API
+	* Migrated to the optimized blake2b implementation adopted from Andrew Moon
+	* Allow explicit loading of specific modules
+	* Always load settings module
+	* Allow to add symbols from settings
+	* Fix double free in the controller fuzzy learn command
+	* Avoid endless loop when cannot open sqlite db
 	* Updated libucl
 
 1.0.6:
