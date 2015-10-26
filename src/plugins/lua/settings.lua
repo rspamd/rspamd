@@ -200,10 +200,10 @@ local function check_settings(task)
 
     if res then
       if rule['whitelist'] then
-        return {whitelist = true}
-      else
-        return rule['apply']
+        rule['apply'] = {whitelist = true}
       end
+
+      return rule
     end
 
     return nil
@@ -246,7 +246,15 @@ local function check_settings(task)
         if rule then
           rspamd_logger.infox(task, "<%1> apply settings according to rule %2",
             task:get_message_id(), name)
-          task:set_settings(rule)
+          if rule['apply'] then
+            task:set_settings(rule)
+          end
+          if rule['symbols'] then
+            -- Add symbols, specified in the settings
+            each(function(val)
+              task:insert_result(val, 1.0)
+            end, rule['symbols'])
+          end
         end
       end
     end
