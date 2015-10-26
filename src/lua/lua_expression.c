@@ -76,8 +76,16 @@ LUA_FUNCTION_DEF (expr, to_string);
  */
 LUA_FUNCTION_DEF (expr, process);
 
+/***
+ * @method rspamd_expression:atoms()
+ * Extract all atoms from the expression as table of strings
+ * @return {table/strings} list of all atoms in the expression
+ */
+LUA_FUNCTION_DEF (expr, atoms);
+
 static const struct luaL_reg exprlib_m[] = {
 	LUA_INTERFACE_DEF (expr, to_string),
+	LUA_INTERFACE_DEF (expr, atoms),
 	LUA_INTERFACE_DEF (expr, process),
 	{"__tostring", lua_expr_to_string},
 	{NULL, NULL}
@@ -289,6 +297,39 @@ lua_expr_to_string (lua_State *L)
 		else {
 			lua_pushnil (L);
 		}
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+struct lua_expr_atoms_cbdata {
+	lua_State *L;
+	gint idx;
+};
+
+static void
+lua_exr_atom_cb (const rspamd_ftok_t *tok, gpointer ud)
+{
+	struct lua_expr_atoms_cbdata *cbdata = ud;
+
+	lua_pushlstring (cbdata->L, tok->begin, tok->len);
+	lua_rawseti (cbdata->L, -2, cbdata->idx ++);
+}
+
+static gint
+lua_expr_atoms (lua_State *L)
+{
+	struct lua_expression *e = rspamd_lua_expression (L, 1);
+	struct lua_expr_atoms_cbdata cbdata;
+
+	if (e != NULL && e->expr != NULL) {
+		lua_newtable (L);
+		cbdata.L = L;
+		cbdata.idx = 1;
+		rspamd_expression_atom_foreach (e->expr, lua_exr_atom_cb, &cbdata);
 	}
 	else {
 		lua_pushnil (L);
