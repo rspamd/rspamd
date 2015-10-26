@@ -216,6 +216,7 @@ struct rspamd_config {
 	gboolean deliver_lmtp;                          /**< use LMTP instead of SMTP							*/
 
 	GList *script_modules;                          /**< linked list of script modules to load				*/
+	GHashTable *explicit_modules;                   /**< modules that should be always loaded				*/
 
 	GList *filters;                                 /**< linked list of all filters							*/
 	GList *workers;                                 /**< linked list of all workers params					*/

@@ -167,6 +167,7 @@ rspamd_config_defaults (struct rspamd_config *cfg)
 	cfg->cfg_params = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->metrics_symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->debug_modules = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+	cfg->explicit_modules = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 
 	cfg->map_timeout = DEFAULT_MAP_TIMEOUT;
 
@@ -193,10 +194,12 @@ rspamd_config_free (struct rspamd_config *cfg)
 	g_hash_table_destroy (cfg->metrics_symbols);
 	g_hash_table_unref (cfg->classifiers_symbols);
 	g_hash_table_unref (cfg->debug_modules);
+	g_hash_table_unref (cfg->explicit_modules);
 
 	if (cfg->checksum) {
 		g_free (cfg->checksum);
 	}
+
 	g_list_free (cfg->classifiers);
 	g_list_free (cfg->metrics_list);
 	rspamd_mempool_delete (cfg->cfg_pool);
@@ -1017,6 +1020,11 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 
 	if (g_hash_table_lookup (cfg->c_modules, module_name)) {
 		is_c = TRUE;
+	}
+
+	if (g_hash_table_lookup (cfg->explicit_modules, module_name) != NULL) {
+		/* Always load module */
+		return TRUE;
 	}
 
 	if (is_c) {
