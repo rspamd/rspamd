@@ -2021,16 +2021,18 @@ rspamd_controller_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 	struct rspamd_controller_session *session = conn_ent->ud;
 
 	session->ctx->worker->srv->stat->control_connections_count++;
+	msg_debug_session ("destroy session %p", session);
+
 	if (session->task != NULL) {
 		rspamd_session_destroy (session->task->s);
 	}
+
 	if (session->pool) {
 		rspamd_mempool_delete (session->pool);
 	}
 
 	session->wrk->nconns --;
 	rspamd_inet_address_destroy (session->from_addr);
-	msg_debug_session ("destroy session %p", session);
 	g_slice_free1 (sizeof (struct rspamd_controller_session), session);
 }
 
