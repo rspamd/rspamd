@@ -1161,7 +1161,10 @@ cleanup:
 				"{\"success\":true}");
 	}
 
-	rspamd_task_free (session->task, TRUE);
+	if (session->task != NULL) {
+		rspamd_task_free (session->task, TRUE);
+		session->task = NULL;
+	}
 
 }
 
@@ -1180,7 +1183,15 @@ fuzzy_controller_timer_callback (gint fd, short what, void *arg)
 		msg_err_task ("got IO timeout with server %s, after %d retransmits",
 				rspamd_upstream_name (session->server),
 				session->retransmits);
-		rspamd_task_free (session->task, TRUE);
+
+		if (*session->saved > 0 ) {
+			(*session->saved)--;
+			if (*session->saved == 0 && session->task != NULL) {
+				rspamd_task_free (session->task, TRUE);
+				session->task = NULL;
+			}
+		}
+
 		rspamd_http_connection_unref (session->http_entry->conn);
 		event_del (&session->ev);
 		event_del (&session->timev);
