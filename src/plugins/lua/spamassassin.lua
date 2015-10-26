@@ -48,6 +48,7 @@ local known_plugins = {
 local rules = {}
 local atoms = {}
 local metas = {}
+local external_deps = {}
 local freemail_domains = {}
 local freemail_trie
 local replace = {
@@ -863,6 +864,19 @@ local function process_atom(atom, task)
       rspamd_logger.debugx(task, 'atom: %1, result: %2', atom, res)
     end
     return res
+  elseif external_deps[atom] then
+    local res = task:cache_get(atom)
+    if res < 0 then
+      if task:get_symbol(atom) then
+        res = 1
+      else
+        res = 0
+      end
+      task:cache_set(atom, res)
+    end
+    rspamd_logger.debugx(task, 'external atom: %1, result: %2', atom, res)
+
+    return res
   else
     rspamd_logger.debugx(task, 'Cannot find atom ' .. atom)
   end
@@ -897,6 +911,7 @@ _.each(function(k, r)
         rspamd_config:set_metric_symbol(k, r['score'], r['description'])
       end
       rspamd_config:register_symbol(k, calculate_score(k, r), meta_cb)
+      r['expression'] = expression
       if not atoms[k] then
         atoms[k] = meta_cb
       end
@@ -905,4 +920,27 @@ _.each(function(k, r)
   _.filter(function(k, r)
       return r['type'] == 'meta'
     end,
+    rules))
+
+-- Check meta rules for foreign symbols and register dependencies
+_.each(function(k, r)
+    if r['expression'] then
+      local expr_atoms = r['expression']:atoms()
+
+      for i,a in ipairs(expr_atoms) do
+        if not atoms[a] then
+          rspamd_logger.debugx('atom %1 is foreign for SA plugin, register dependency for %2 on %3',
+              a, k, a);
+          rspamd_config:register_dependency(k, a)
+
+          if not external_deps[a] then
+            external_deps[a] = 1
+          end
+        end
+      end
+    end
+  end,
+  _.filter(function(k, r)
+    return r['type'] == 'meta'
+  end,
     rules))
