@@ -175,16 +175,6 @@ struct rspamd_controller_worker_ctx {
 
 };
 
-struct rspamd_controller_session {
-	struct rspamd_controller_worker_ctx *ctx;
-	struct rspamd_worker *wrk;
-	rspamd_mempool_t *pool;
-	struct rspamd_task *task;
-	struct rspamd_classifier_config *cl;
-	rspamd_inet_addr_t *from_addr;
-	gboolean is_spam;
-};
-
 static gboolean
 rspamd_is_encrypted_password (const gchar *password,
 		struct rspamd_controller_pbkdf const **pbkdf)
@@ -1751,12 +1741,10 @@ static gboolean
 rspamd_controller_stat_fin_task (void *ud)
 {
 	struct rspamd_stat_cbdata *cbdata = ud;
-	struct rspamd_controller_session *session;
 	struct rspamd_http_connection_entry *conn_ent;
 	ucl_object_t *top;
 
 	conn_ent = cbdata->conn_ent;
-	session = conn_ent->ud;
 	top = cbdata->top;
 
 	ucl_object_insert_key (top,

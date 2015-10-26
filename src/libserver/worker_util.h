@@ -77,6 +77,18 @@ struct rspamd_custom_controller_command {
 	rspamd_controller_func_t handler;
 };
 
+struct rspamd_controller_worker_ctx;
+
+struct rspamd_controller_session {
+	struct rspamd_controller_worker_ctx *ctx;
+	struct rspamd_worker *wrk;
+	rspamd_mempool_t *pool;
+	struct rspamd_task *task;
+	struct rspamd_classifier_config *cl;
+	rspamd_inet_addr_t *from_addr;
+	gboolean is_spam;
+};
+
 /**
  * Send error using HTTP and JSON output
  * @param entry router entry
