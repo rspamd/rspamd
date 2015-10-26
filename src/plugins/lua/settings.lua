@@ -473,12 +473,12 @@ local function process_settings_map(string)
   return res
 end
 
-if set_section[1] and type(set_section[1]) == "string" then
+if set_section and set_section[1] and type(set_section[1]) == "string" then
   -- Just a map of ucl
   if not rspamd_config:add_map(set_section[1], "settings map", process_settings_map) then
     rspamd_logger.errx(rspamd_config, 'cannot load settings from %1', set_section)
   end
-elseif type(set_section) == "table" then
+elseif set_section and type(set_section) == "table" then
   process_settings_table(set_section)
 end
 
