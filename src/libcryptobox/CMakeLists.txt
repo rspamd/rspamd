@@ -14,6 +14,22 @@ SET(BLAKE2SRC ${CMAKE_CURRENT_SOURCE_DIR}/blake2/blake2.c
 SET(CURVESRC ${CMAKE_CURRENT_SOURCE_DIR}/curve25519/ref.c
 		${CMAKE_CURRENT_SOURCE_DIR}/curve25519/curve25519.c)
 
+SET(ASM_CODE "
+	.macro TEST1 op
+	\\op %eax, %eax
+	.endm
+	TEST1 xorl
+	")
+ASM_OP(HAVE_SLASHMACRO "slash macro convention")
+
+SET(ASM_CODE "
+	.macro TEST1 op
+	$0 %eax, %eax
+	.endm
+	TEST1 xorl
+	")
+ASM_OP(HAVE_DOLLARMACRO "dollar macro convention")
+
 # For now we support only x86_64 architecture with optimizations
 IF("${ARCH}" STREQUAL "x86_64")
 	SET(ASM_CODE "vpaddq %ymm0, %ymm0, %ymm0")
@@ -28,22 +44,6 @@ IF("${ARCH}" STREQUAL "x86_64")
 	ASM_OP(HAVE_SSSE3 "ssse3")
 	SET(ASM_CODE "pblendw \$0, %xmm0, %xmm0")
 	ASM_OP(HAVE_SSE41 "sse41")
-	
-	SET(ASM_CODE "
-	.macro TEST1 op
-	\\op %eax, %eax
-	.endm
-	TEST1 xorl
-	")
-	ASM_OP(HAVE_SLASHMACRO "slash macro convention")
-	
-	SET(ASM_CODE "
-	.macro TEST1 op
-	$0 %eax, %eax
-	.endm
-	TEST1 xorl
-	")
-	ASM_OP(HAVE_DOLLARMACRO "dollar macro convention")
 
 	if ("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
 		SET(POLYSRC ${POLYSRC} ${CMAKE_CURRENT_SOURCE_DIR}/poly1305/ref-64.c)
