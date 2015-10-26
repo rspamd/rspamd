@@ -1,3 +1,12 @@
+1.0.8:
+	* Add function to traverse AST atoms
+	* Allow dependencies on rspamd symbols for SA metas
+	* Fix memory corruption when timeout is removed in fuzzy check
+	* Fix encrypted fuzzy add processing
+	* Avoid use-after-free in controller session destructor
+	* Use session pool instead of task pool in fuzzy check
+	* Fix assembly in i386 mode (#413, #412)
+
 1.0.7:
 	* Plugged memory leaks in internet address object & html parser
 	* Fixed static build
