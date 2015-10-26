@@ -443,6 +443,8 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 	gpointer tk_conf;
 	gsize sz = 0;
 	gchar *tok_conf_encoded;
+	gint ret, ntries = 0;
+	const gint max_tries = 100;
 	struct timespec sleep_ts = {
 			.tv_sec = 0,
 			.tv_nsec = 1000000
@@ -471,9 +473,19 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 
 	/* Check tokenizer configuration */
 
-	while (rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
-			RSPAMD_STAT_BACKEND_TRANSACTION_START_EXCL) != SQLITE_OK) {
+	while ((ret = rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
+			RSPAMD_STAT_BACKEND_TRANSACTION_START_EXCL)) == SQLITE_BUSY &&
+			++ntries <= max_tries) {
 		nanosleep (&sleep_ts, NULL);
+	}
+
+	if (ret != SQLITE_OK) {
+		msg_err_pool ("failed to stard transaction: %d, %s", ret,
+				sqlite3_errmsg (bk->sqlite));
+		sqlite3_close (bk->sqlite);
+		g_slice_free1 (sizeof (*bk), bk);
+
+		return NULL;
 	}
 
 	if (rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
