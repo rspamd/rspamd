@@ -8,7 +8,7 @@
 %define rspamd_wwwdir   %{_datadir}/rspamd/www
 
 Name:           rspamd
-Version:        1.0.2
+Version:        1.0.7
 Release: 1
 Summary:        Rapid spam filtering system
 Group:          System Environment/Daemons
@@ -245,6 +245,7 @@ fi
 %{rspamd_rulesdir}/html.lua
 %{rspamd_rulesdir}/misc.lua
 %{rspamd_rulesdir}/rspamd.classifiers.lua
+%{rspamd_rulesdir}/http_headers.lua
 %{rspamd_wwwdir}/*
 %{_libdir}/rspamd/*
 %{_datadir}/rspamd/effective_tld_names.dat
