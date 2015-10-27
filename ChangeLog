@@ -1,3 +1,7 @@
+1.0.9:
+	* Emergency fix in keyed blake2 to fix fuzzy hashes and encrypted password
+	* Support passwords longer than 64 symbols
+
 1.0.8:
 	* Add function to traverse AST atoms
 	* Allow dependencies on rspamd symbols for SA metas
