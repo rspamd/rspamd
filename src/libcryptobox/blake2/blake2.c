@@ -139,12 +139,31 @@ blake2b_init (blake2b_state *S)
 void
 blake2b_keyed_init (blake2b_state *S, const unsigned char *key, size_t keylen)
 {
-	unsigned char k[BLAKE2B_BLOCKBYTES] = {0};
+	unsigned char k[BLAKE2B_BLOCKBYTES];
+	blake2b_state _ks;
+	blake2b_state_internal *state = (blake2b_state_internal *)S;
 
-	g_assert (keylen <= BLAKE2B_KEYBYTES);
-	memcpy (k, key, keylen);
-	blake2b_init (S);
-	blake2b_update (S, k, BLAKE2B_BLOCKBYTES);
+	memset (k, 0, sizeof (k));
+
+	if (keylen <= BLAKE2B_KEYBYTES) {
+		memcpy (k, key, keylen);
+		blake2b_init (S);
+		state->h[1] ^= keylen;
+		blake2b_update (S, k, sizeof (k));
+	}
+	else {
+		blake2b_init (S);
+		/*
+		 * We use additional blake2 iteration to store large key
+		 * XXX: it is not compatible with the original implementation but safe
+		 */
+		blake2b_init (&_ks);
+		blake2b_update (&_ks, key, keylen);
+		blake2b_final (&_ks, k);
+		blake2b_keyed_init (S, k, BLAKE2B_KEYBYTES);
+	}
+
+	rspamd_explicit_memzero (k, sizeof (k));
 }
 
 /* hash inlen bytes from in, which may or may not be word aligned, returns the number of bytes used */
