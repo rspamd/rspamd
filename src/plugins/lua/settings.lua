@@ -247,7 +247,7 @@ local function check_settings(task)
           rspamd_logger.infox(task, "<%1> apply settings according to rule %2",
             task:get_message_id(), name)
           if rule['apply'] then
-            task:set_settings(rule)
+            task:set_settings(rule['apply'])
           end
           if rule['symbols'] then
             -- Add symbols, specified in the settings
