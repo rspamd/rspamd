@@ -65,7 +65,7 @@ You have many choices to write your definitions, so use whatever you like (even 
 
 ## Performance {#performance}
 
-Rspamd was designed to be fast. The core of rspamd is written in `C` and uses event-driven model that allows to process multiple messages simultaenously and without blocking.
+Rspamd is designed to be fast. The core of rspamd is written in `C` and uses event-driven model that allows to process multiple messages simultaenously and without blocking.
 Moreover, a set of techniques was used in rspamd to process messages faster:
 
 * **Finite state machines processing** - rspamd uses specialized finite state machines for the performance critical tasks to process input faster than a set of regular expressions.
