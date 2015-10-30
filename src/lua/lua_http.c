@@ -472,7 +472,7 @@ lua_http_request (lua_State *L)
 
 				return 1;
 			}
-			
+
 			g_free (to_resolve);
 		}
 		else {

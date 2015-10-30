@@ -1,7 +1,7 @@
 [![Build Status](https://travis-ci.org/vstakhov/rspamd.png)](https://travis-ci.org/vstakhov/rspamd)
 
 ## Introduction
-Rspamd is an advanced spam filtering system that allows evaluation of messages by a number of
+[Rspamd](https://rspamd.com) is an advanced spam filtering system that allows evaluation of messages by a number of
 rules including regular expressions, statistical analysis and custom services
 such as URL black lists. Each message is analysed by rspamd and given a `spam score`. 
 
@@ -10,7 +10,7 @@ the MTA to apply to the message- for example to pass, reject or add a header.
 Rspamd is designed to process hundreds of messages per second simultaneously and has a number of 
 features available.
 
-## Spam filtering features {#features}
+## Spam filtering features
 
 Rspamd distribution contains a number of mail processing features, including such techniques as:
 
@@ -63,7 +63,7 @@ You have many choices to write your definitions, so use whatever you like (even 
 
 * **Dynamic tables** - rspamd allows to specify some data as `dynamic maps` that are checked in runtime with updating data when they are changed. Rspamd supports file and HTTP maps.
 
-## Performance {#performance}
+## Performancу
 
 Rspamd is designed to be fast. The core of rspamd is written in `C` and uses event-driven model that allows to process multiple messages simultaenously and without blocking.
 Moreover, a set of techniques was used in rspamd to process messages faster:
@@ -88,7 +88,7 @@ allows to scale even more on the modern multi-core systems.
 * **Clever choice of data structures** - rspamd tries to use the optimal data structure for each task, for example, it uses very efficient suffix tries for fast matching of a text
 against a set of multiple patterns. Or it uses radix bit trie for storing IP addresses information that provides O(1) access time complexity.
 
-## Extensions {#extensions}
+## Extensions
 
 Besides of the `C` core rspamd provides the extensive [LUA](http://lua.org) API to access almost all the features available directly from `C`. LUA is an extremely easy
 to learn programming language, though it is powerful enough to implement complex mail filters. In fact, rspamd has a significant amout of code written completely in lua, such as
