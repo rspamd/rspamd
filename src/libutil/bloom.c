@@ -135,7 +135,7 @@ rspamd_bloom_del (rspamd_bloom_filter_t * bloom, const gchar *s)
 	}
 	len = strlen (s);
 	for (n = 0; n < bloom->nfuncs; ++n) {
-		v = XXH32 (s, len, bloom->seeds[n]) % bloom->asize;
+		v = XXH64 (s, len, bloom->seeds[n]) % bloom->asize;
 		DECBIT (bloom->a, v, t);
 	}
 
@@ -154,7 +154,7 @@ rspamd_bloom_check (rspamd_bloom_filter_t * bloom, const gchar *s)
 	}
 	len = strlen (s);
 	for (n = 0; n < bloom->nfuncs; ++n) {
-		v = XXH32 (s, len, bloom->seeds[n]) % bloom->asize;
+		v = XXH64 (s, len, bloom->seeds[n]) % bloom->asize;
 		if (!(GETBIT (bloom->a, v))) {
 			return FALSE;
 		}
