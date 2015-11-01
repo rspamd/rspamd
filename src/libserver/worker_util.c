@@ -488,7 +488,6 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		msg_info_main ("starting %s process %P", cf->worker->name, getpid ());
 		/* Close parent part of socketpair */
 		close (cur->control_pipe[0]);
-		/* Set non-blocking on the worker part of socketpair */
 		rspamd_socket_nonblocking (cur->control_pipe[1]);
 		/* Execute worker */
 		cf->worker->worker_start_func (cur);
@@ -501,7 +500,6 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 	default:
 		/* Close worker part of socketpair */
 		close (cur->control_pipe[1]);
-		/* Set blocking on the main part of socketpair */
 		rspamd_socket_nonblocking (cur->control_pipe[0]);
 		/* Insert worker into worker's table, pid is index */
 		g_hash_table_insert (rspamd_main->workers, GSIZE_TO_POINTER (
