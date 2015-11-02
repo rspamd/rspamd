@@ -465,7 +465,8 @@ lua_http_request (lua_State *L)
 			rspamd_strlcpy (to_resolve, msg->host->str, msg->host->len + 1);
 
 			if (!make_dns_request (resolver, session, NULL, lua_http_dns_handler, cbd,
-					RDNS_REQUEST_A, msg->host->str)) {
+					RDNS_REQUEST_A,
+					to_resolve)) {
 				lua_http_maybe_free (cbd);
 				lua_pushboolean (L, FALSE);
 				g_free (to_resolve);
