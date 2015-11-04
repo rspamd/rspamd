@@ -46,9 +46,6 @@
 #endif
 
 #include <signal.h>
-#ifdef HAVE_SIGINFO_H
-#include <siginfo.h>
-#endif
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>
 #endif
@@ -59,9 +56,6 @@
 #include <google/profiler.h>
 #endif
 
-#ifdef HAVE_SYS_IOCTL_H
-#include <sys/ioctl.h>
-#endif
 #ifdef HAVE_STROPS_H
 #include <stropts.h>
 #endif
