@@ -180,7 +180,7 @@ rspamd_config_defaults (struct rspamd_config *cfg)
 
 	/* Default log line */
 	cfg->log_format_str = "id: <$mid>, $if_qid{qid: <$>,} $if_ip{ip: $,}"
-			"$if_ip{ip: $,} $if_from{from: <$>,} (default: $is_spam "
+			"$if_ip{ip: $,} $if_smtp_from{from: <$>,} (default: $is_spam "
 			"($action): [$scores] [$symbols]), len: $len, time: $time_real real,"
 			" $time_virtual virtual, dns req: $dns_req";
 }
@@ -328,7 +328,7 @@ rspamd_config_process_var (struct rspamd_config *cfg, const rspamd_ftok_t *var,
 	else if (rspamd_ftok_cstr_equal (&tok, "user", TRUE)) {
 		type = RSPAMD_LOG_USER;
 	}
-	else if (rspamd_ftok_cstr_equal (&tok, "isspam", TRUE)) {
+	else if (rspamd_ftok_cstr_equal (&tok, "is_spam", TRUE)) {
 		type = RSPAMD_LOG_ISSPAM;
 	}
 	else if (rspamd_ftok_cstr_equal (&tok, "action", TRUE)) {
@@ -342,6 +342,9 @@ rspamd_config_process_var (struct rspamd_config *cfg, const rspamd_ftok_t *var,
 	}
 	else if (rspamd_ftok_cstr_equal (&tok, "ip", TRUE)) {
 		type = RSPAMD_LOG_IP;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "len", TRUE)) {
+		type = RSPAMD_LOG_LEN;
 	}
 	else if (rspamd_ftok_cstr_equal (&tok, "dns_req", TRUE)) {
 		type = RSPAMD_LOG_DNS_REQ;
