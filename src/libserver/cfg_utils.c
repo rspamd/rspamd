@@ -303,22 +303,6 @@ rspamd_config_process_var (struct rspamd_config *cfg, const rspamd_ftok_t *var,
 	}
 
 	/* Now compare variable and check what we have */
-	/*
-	RSPAMD_LOG_MID,
-			RSPAMD_LOG_QID,
-			RSPAMD_LOG_USER,
-			RSPAMD_LOG_ISSPAM,
-			RSPAMD_LOG_ACTION,
-			RSPAMD_LOG_SCORES,
-			RSPAMD_LOG_SYMBOLS,
-			RSPAMD_LOG_IP,
-			RSPAMD_LOG_DNS_REQ,
-			RSPAMD_LOG_SMTP_FROM,
-			RSPAMD_LOG_MIME_FROM,
-			RSPAMD_LOG_TIME_REAL,
-			RSPAMD_LOG_TIME_VIRTUAL,
-			RSPAMD_LOG_LUA
-	*/
 	if (rspamd_ftok_cstr_equal (&tok, "mid", TRUE)) {
 		type = RSPAMD_LOG_MID;
 	}
