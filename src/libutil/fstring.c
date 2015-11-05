@@ -376,3 +376,24 @@ rspamd_fstring_cstr (const rspamd_fstring_t *s)
 
 	return result;
 }
+
+gboolean
+rspamd_ftok_cstr_equal (const rspamd_ftok_t *s, const gchar *pat,
+		gboolean icase)
+{
+	gsize slen;
+	rspamd_ftok_t srch;
+
+	g_assert (s != NULL);
+	g_assert (pat != NULL);
+
+	slen = strlen (pat);
+	srch.begin = pat;
+	srch.len = slen;
+
+	if (icase) {
+		return (rspamd_ftok_casecmp (s, &srch) == 0);
+	}
+
+	return (rspamd_ftok_cmp (s, &srch) == 0);
+}

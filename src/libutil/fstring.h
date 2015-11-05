@@ -134,6 +134,12 @@ gint rspamd_ftok_cmp (const rspamd_ftok_t *s1,
 		const rspamd_ftok_t *s2);
 
 /**
+ * Return TRUE if ftok is equal to specified C string
+ */
+gboolean rspamd_ftok_cstr_equal (const rspamd_ftok_t *s,
+		const gchar *pat, gboolean icase);
+
+/**
  * Free fstring_t that is mapped to ftok_t
  *
  * | len | allocated | <data> -- fstring_t
