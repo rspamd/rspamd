@@ -280,42 +280,263 @@ rspamd_config_parse_flag (const gchar *str, guint len)
 	return -1;
 }
 
-gboolean
-rspamd_config_calculate_checksum (struct rspamd_config *cfg)
+static gboolean
+rspamd_config_process_var (struct rspamd_config *cfg, const rspamd_ftok_t *var,
+		const rspamd_ftok_t *content)
 {
-	gint fd;
-	void *map;
-	struct stat st;
+	guint flags = RSPAMD_LOG_FLAG_DEFAULT;
+	struct rspamd_log_format *lf;
+	enum rspamd_log_format_type type;
+	rspamd_ftok_t tok;
+	gint id;
 
-	/* Compute checksum for config file that should be used by xml dumper */
-	if ((fd = open (cfg->cfg_name, O_RDONLY)) == -1) {
-		msg_err_config (
-			"config file %s is no longer available, cannot calculate checksum");
+	g_assert (var != NULL);
+
+	if (var->len > 3 && rspamd_lc_cmp (var->begin, "if_", 3) == 0) {
+		flags |= RSPAMD_LOG_FLAG_CONDITION;
+		tok.begin = var->begin + 3;
+		tok.len = var->len - 3;
+	}
+	else {
+		tok.begin = var->begin;
+		tok.len = var->len;
+	}
+
+	/* Now compare variable and check what we have */
+	/*
+	RSPAMD_LOG_MID,
+			RSPAMD_LOG_QID,
+			RSPAMD_LOG_USER,
+			RSPAMD_LOG_ISSPAM,
+			RSPAMD_LOG_ACTION,
+			RSPAMD_LOG_SCORES,
+			RSPAMD_LOG_SYMBOLS,
+			RSPAMD_LOG_IP,
+			RSPAMD_LOG_DNS_REQ,
+			RSPAMD_LOG_SMTP_FROM,
+			RSPAMD_LOG_MIME_FROM,
+			RSPAMD_LOG_TIME_REAL,
+			RSPAMD_LOG_TIME_VIRTUAL,
+			RSPAMD_LOG_LUA
+	*/
+	if (rspamd_ftok_cstr_equal (&tok, "mid", TRUE)) {
+		type = RSPAMD_LOG_MID;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "qid", TRUE)) {
+		type = RSPAMD_LOG_QID;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "user", TRUE)) {
+		type = RSPAMD_LOG_USER;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "isspam", TRUE)) {
+		type = RSPAMD_LOG_ISSPAM;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "action", TRUE)) {
+		type = RSPAMD_LOG_ACTION;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "scores", TRUE)) {
+		type = RSPAMD_LOG_SCORES;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "symbols", TRUE)) {
+		type = RSPAMD_LOG_SYMBOLS;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "ip", TRUE)) {
+		type = RSPAMD_LOG_IP;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "dns_req", TRUE)) {
+		type = RSPAMD_LOG_DNS_REQ;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "smtp_from", TRUE)) {
+		type = RSPAMD_LOG_SMTP_FROM;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "mime_from", TRUE)) {
+		type = RSPAMD_LOG_MIME_FROM;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "time_real", TRUE)) {
+		type = RSPAMD_LOG_TIME_REAL;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "time_virtual", TRUE)) {
+		type = RSPAMD_LOG_TIME_VIRTUAL;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "lua", TRUE)) {
+		type = RSPAMD_LOG_LUA;
+	}
+	else {
+		msg_err_config ("unknown log variable: %T", &tok);
 		return FALSE;
 	}
-	if (stat (cfg->cfg_name, &st) == -1) {
-		msg_err_config ("cannot stat %s: %s", cfg->cfg_name, strerror (errno));
-		close (fd);
-		return FALSE;
+
+	lf = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*lf));
+	lf->type = type;
+	lf->flags = flags;
+
+	if (type != RSPAMD_LOG_LUA) {
+		if (content && content->len > 0) {
+			lf->data = rspamd_mempool_alloc0 (cfg->cfg_pool,
+					sizeof (rspamd_ftok_t));
+			memcpy (lf->data, &tok, sizeof (tok));
+		}
+	}
+	else {
+		/* Load lua code and ensure that we have function ref returned */
+		if (!content || content->len == 0) {
+			msg_err_config ("lua variable needs content: %T", &tok);
+			return FALSE;
+		}
+
+		if (luaL_loadbuffer (cfg->lua_state, content->begin, content->len,
+				"lua log variable") != 0) {
+			msg_err_config ("error loading lua code: '%T': %s", content,
+					lua_tostring (cfg->lua_state, -1));
+			return FALSE;
+		}
+		if (lua_pcall (cfg->lua_state, 0, 1, 0) != 0) {
+			msg_err_config ("error executing lua code: '%T': %s", content,
+					lua_tostring (cfg->lua_state, -1));
+			return FALSE;
+		}
+
+		if (lua_type (cfg->lua_state, -1) != LUA_TFUNCTION) {
+			msg_err_config ("lua variable should return function: %T", content);
+			lua_pop (cfg->lua_state, 1);
+			return FALSE;
+		}
+
+		id = luaL_ref (cfg->lua_state, LUA_REGISTRYINDEX);
+		lf->data = GINT_TO_POINTER (id);
 	}
 
-	/* Now mmap this file to simplify reading process */
-	if ((map =
-		mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
-		msg_err_config ("cannot mmap %s: %s", cfg->cfg_name, strerror (errno));
-		close (fd);
-		return FALSE;
-	}
-	close (fd);
-
-	/* Get checksum for a file */
-	cfg->checksum = g_compute_checksum_for_string (G_CHECKSUM_MD5,
-			map,
-			st.st_size);
-	munmap (map, st.st_size);
+	DL_APPEND (cfg->log_format, lf);
 
 	return TRUE;
 }
+
+static gboolean
+rspamd_config_parse_log_format (struct rspamd_config *cfg)
+{
+	const gchar *p, *c, *end;
+	struct rspamd_log_format *lf = NULL;
+	rspamd_ftok_t var, var_content;
+	enum {
+		parse_str,
+		parse_dollar,
+		parse_var_name,
+		parse_var_content,
+	} state = parse_str;
+
+	g_assert (cfg != NULL);
+	c = cfg->log_format_str;
+
+	if (c == NULL) {
+		return FALSE;
+	}
+
+	p = c;
+	end = p + strlen (p);
+
+	while (p < end) {
+		switch (state) {
+		case parse_str:
+			if (*p == '$') {
+				state = parse_dollar;
+			}
+			else {
+				p ++;
+			}
+			break;
+		case parse_dollar:
+			if (p > c) {
+				/* We have string element that we need to store */
+				lf = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*lf));
+				lf->type = RSPAMD_LOG_STRING;
+				lf->data = rspamd_mempool_alloc (cfg->cfg_pool, p - c + 1);
+				rspamd_strlcpy (lf->data, c, p - c + 1);
+				DL_APPEND (cfg->log_format, lf);
+				lf = NULL;
+			}
+			p++;
+			c = p;
+			state = parse_var_name;
+			break;
+		case parse_var_name:
+			if (*p == '{') {
+				var.begin = c;
+				var.len = p - c;
+				p ++;
+				c = p;
+				state = parse_var_content;
+			}
+			else if (g_ascii_isspace (*p)) {
+				/* Variable with no content */
+				var.begin = c;
+				var.len = p - c;
+				p++;
+				c = p;
+
+				if (!rspamd_config_process_var (cfg, &var, NULL)) {
+					return FALSE;
+				}
+
+				state = parse_str;
+			}
+			else {
+				p++;
+			}
+			break;
+		case parse_var_content:
+			if (*p == '}') {
+				var_content.begin = c;
+				var_content.len = p - c;
+				p ++;
+				c = p;
+
+				if (!rspamd_config_process_var (cfg, &var, &var_content)) {
+					return FALSE;
+				}
+
+				state = parse_str;
+			}
+			else {
+				p++;
+			}
+			break;
+		}
+	}
+
+	/* Last state */
+	switch (state) {
+	case parse_str:
+		if (p > c) {
+			/* We have string element that we need to store */
+			lf = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*lf));
+			lf->type = RSPAMD_LOG_STRING;
+			lf->data = rspamd_mempool_alloc (cfg->cfg_pool, p - c + 1);
+			rspamd_strlcpy (lf->data, c, p - c + 1);
+			DL_APPEND (cfg->log_format, lf);
+			lf = NULL;
+		}
+		break;
+
+	case parse_var_name:
+		var.begin = c;
+		var.len = p - c;
+
+		if (!rspamd_config_process_var (cfg, &var, NULL)) {
+			return FALSE;
+		}
+		break;
+	case parse_dollar:
+	case parse_var_content:
+		msg_err_config ("cannot parse log format %s: incomplete string",
+			cfg->log_format_str);
+		return FALSE;
+		break;
+	}
+
+	return TRUE;
+}
+
+
 /*
  * Perform post load actions
  */
@@ -385,6 +606,11 @@ rspamd_config_post_load (struct rspamd_config *cfg)
 
 	/* Insert classifiers symbols */
 	(void)rspamd_config_insert_classify_symbols (cfg);
+
+	/* Parse format string that we have */
+	if (!rspamd_config_parse_log_format (cfg)) {
+		msg_err_config ("cannot parse log format, task logging will not be available");
+	}
 }
 
 #if 0
