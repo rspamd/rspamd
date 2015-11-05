@@ -177,6 +177,12 @@ rspamd_config_defaults (struct rspamd_config *cfg)
 	cfg->min_word_len = DEFAULT_MIN_WORD;
 	cfg->dns_max_requests = 64;
 	cfg->history_rows = 200;
+
+	/* Default log line */
+	cfg->log_format_str = "id: <$mid>, $if_qid{qid: <$>,} $if_ip{ip: $,}"
+			"$if_ip{ip: $,} $if_from{from: <$>,} (default: $is_spam "
+			"($action): [$scores] [$symbols]), len: $len, time: $time_real real,"
+			" $time_virtual virtual, dns req: $dns_req";
 }
 
 void

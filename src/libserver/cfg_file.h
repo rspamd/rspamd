@@ -165,6 +165,38 @@ struct rspamd_worker_conf {
 	ucl_object_t *options;                  /**< other worker's options								*/
 };
 
+enum rspamd_log_format_type {
+	RSPAMD_LOG_STRING = 0,
+	RSPAMD_LOG_MID,
+	RSPAMD_LOG_QID,
+	RSPAMD_LOG_USER,
+	RSPAMD_LOG_ISSPAM,
+	RSPAMD_LOG_ACTION,
+	RSPAMD_LOG_SCORES,
+	RSPAMD_LOG_SYMBOLS,
+	RSPAMD_LOG_IP,
+	RSPAMD_LOG_DNS_REQ,
+	RSPAMD_LOG_SMTP_FROM,
+	RSPAMD_LOG_MIME_FROM,
+	RSPAMD_LOG_TIME_REAL,
+	RSPAMD_LOG_TIME_VIRTUAL,
+	RSPAMD_LOG_LUA
+};
+
+enum rspamd_log_format_flags {
+	RSPAMD_LOG_FLAG_DEFAULT = 0,
+	RSPAMD_LOG_FLAG_OPTIONAL = (1 << 0),
+	RSPAMD_LOG_FLAG_MIME_ALTERNATIVE = (1 << 1),
+	RSPAMD_LOG_FLAG_CONDITION = (1 << 2)
+};
+
+struct rspamd_log_format {
+	enum rspamd_log_format_type type;
+	guint flags;
+	gpointer data;
+	struct rspamd_log_format *prev, *next;
+};
+
 /**
  * Structure that stores all config data
  */
@@ -277,6 +309,8 @@ struct rspamd_config {
 	GList *classify_headers;						/**< list of headers using for statistics				*/
 	struct module_s **compiled_modules;				/**< list of compiled C modules							*/
 	struct worker_s **compiled_workers;				/**< list of compiled C modules							*/
+	struct rspamd_log_format *log_format;			/**< parsed log format									*/
+	gchar *log_format_str;							/**< raw log format string								*/
 };
 
 

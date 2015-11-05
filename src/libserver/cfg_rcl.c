@@ -1254,6 +1254,11 @@ rspamd_rcl_config_init (void)
 			rspamd_rcl_parse_struct_string_list,
 			G_STRUCT_OFFSET (struct rspamd_config, debug_modules),
 			RSPAMD_CL_FLAG_STRING_LIST_HASH);
+	rspamd_rcl_add_default_handler (sub,
+			"log_format",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_config, log_format_str),
+			0);
 	/**
 	 * Options section
 	 */
