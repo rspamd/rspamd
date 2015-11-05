@@ -466,7 +466,7 @@ rspamd_config_parse_log_format (struct rspamd_config *cfg)
 				c = p;
 				state = parse_var_content;
 			}
-			else if (g_ascii_isspace (*p)) {
+			else if (*p != '_' && *p != '-' && !g_ascii_isalnum (*p)) {
 				/* Variable with no content */
 				var.begin = c;
 				var.len = p - c;
