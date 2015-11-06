@@ -37,6 +37,9 @@ struct rspamd_fuzzy_backend {
 	rspamd_mempool_t *pool;
 };
 
+static const gdouble sql_sleep_time = 0.1;
+static const guint max_retries = 10;
+
 #define msg_err_fuzzy_backend(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         backend->pool->tag.tagname, backend->pool->tag.uid, \
         G_STRFUNC, \
@@ -244,6 +247,8 @@ rspamd_fuzzy_backend_run_stmt (struct rspamd_fuzzy_backend *backend, int idx, ..
 	sqlite3_stmt *stmt;
 	int i;
 	const char *argtypes;
+	guint retries = 0;
+	struct timespec ts;
 
 	if (idx < 0 || idx >= RSPAMD_FUZZY_BACKEND_MAX) {
 
@@ -288,12 +293,20 @@ rspamd_fuzzy_backend_run_stmt (struct rspamd_fuzzy_backend *backend, int idx, ..
 	}
 
 	va_end (ap);
+
+retry:
 	retcode = sqlite3_step (stmt);
 
 	if (retcode == prepared_stmts[idx].result) {
 		return SQLITE_OK;
 	}
 	else if (retcode != SQLITE_DONE) {
+		if (retcode == SQLITE_BUSY && retries++ < max_retries) {
+			double_to_ts (sql_sleep_time, &ts);
+			nanosleep (&ts, NULL);
+			goto retry;
+		}
+
 		msg_debug_fuzzy_backend ("failed to execute query %s: %d, %s", prepared_stmts[idx].sql,
 				retcode, sqlite3_errmsg (backend->db));
 	}
