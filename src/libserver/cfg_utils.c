@@ -403,7 +403,8 @@ rspamd_config_process_var (struct rspamd_config *cfg, const rspamd_ftok_t *var,
 static gboolean
 rspamd_config_parse_log_format (struct rspamd_config *cfg)
 {
-	const gchar *p, *c, *end;
+	const gchar *p, *c, *end, *s;
+	gchar *d;
 	struct rspamd_log_format *lf = NULL;
 	rspamd_ftok_t var, var_content;
 	enum {
@@ -439,8 +440,22 @@ rspamd_config_parse_log_format (struct rspamd_config *cfg)
 				lf = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*lf));
 				lf->type = RSPAMD_LOG_STRING;
 				lf->data = rspamd_mempool_alloc (cfg->cfg_pool, p - c + 1);
-				lf->len = p - c;
-				rspamd_strlcpy (lf->data, c, p - c + 1);
+				/* Filter \r\n from the destination */
+				s = c;
+				d = lf->data;
+
+				while (s < p) {
+					if (*s != '\r' && *s != '\n') {
+						*d++ = *s++;
+					}
+					else {
+						*d ++ = ' ';
+						s++;
+					}
+				}
+				*d = '\0';
+
+				lf->len = d - (char *) lf->data;
 				DL_APPEND (cfg->log_format, lf);
 				lf = NULL;
 			}
@@ -500,8 +515,22 @@ rspamd_config_parse_log_format (struct rspamd_config *cfg)
 			lf = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*lf));
 			lf->type = RSPAMD_LOG_STRING;
 			lf->data = rspamd_mempool_alloc (cfg->cfg_pool, p - c + 1);
-			lf->len = p - c;
-			rspamd_strlcpy (lf->data, c, p - c + 1);
+			/* Filter \r\n from the destination */
+			s = c;
+			d = lf->data;
+
+			while (s < p) {
+				if (*s != '\r' && *s != '\n') {
+					*d++ = *s++;
+				}
+				else {
+					*d++ = ' ';
+					s++;
+				}
+			}
+			*d = '\0';
+
+			lf->len = d - (char *)lf->data;
 			DL_APPEND (cfg->log_format, lf);
 			lf = NULL;
 		}
