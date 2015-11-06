@@ -179,8 +179,8 @@ rspamd_config_defaults (struct rspamd_config *cfg)
 	cfg->history_rows = 200;
 
 	/* Default log line */
-	cfg->log_format_str = "id: <$mid>, $if_qid{qid: <$>,} $if_ip{ip: $,}"
-			"$if_ip{ip: $,} $if_smtp_from{from: <$>,} (default: $is_spam "
+	cfg->log_format_str = "id: <$mid>,$if_qid{ qid: <$>,}$if_ip{ ip: $,}"
+			"$if_smtp_from{ from: <$>,} (default: $is_spam "
 			"($action): [$scores] [$symbols]), len: $len, time: $time_real real,"
 			" $time_virtual virtual, dns req: $dns_req";
 }
