@@ -1169,7 +1169,7 @@ rspamd_log_check_time (gdouble start, gdouble end, gint resolution)
 
 	diff = (end - start) * 1000.0;
 
-	rspamd_snprintf (fmt, sizeof (fmt), "%%.%df", resolution);
+	rspamd_snprintf (fmt, sizeof (fmt), "%%.%dfms", resolution);
 	rspamd_snprintf (res, sizeof (res), fmt, diff);
 
 	return (const gchar *)res;
