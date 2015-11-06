@@ -58,7 +58,7 @@ worker_t fuzzy_worker = {
 	init_fuzzy,                 /* Init function */
 	start_fuzzy,                /* Start function */
 	TRUE,                       /* No socket */
-	TRUE,                       /* Unique */
+	FALSE,                       /* Unique */
 	TRUE,                       /* Threaded */
 	FALSE,                      /* Non killable */
 	SOCK_DGRAM                  /* UDP socket */
@@ -388,34 +388,45 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 
 	/* Got some data */
 	if (what == EV_READ) {
-		worker->nconns++;
 
-		while ((r = rspamd_inet_address_recvfrom (fd, buf, sizeof (buf), 0,
-			&session.addr)) == -1) {
-			if (errno == EINTR) {
-				continue;
+		for (;;) {
+			worker->nconns++;
+
+			r = rspamd_inet_address_recvfrom (fd,
+					buf,
+					sizeof (buf),
+					0,
+					&session.addr);
+
+			if (r == -1) {
+				if (errno == EINTR) {
+					continue;
+				}
+				else if (errno == EAGAIN) {
+					return;
+				}
+
+				msg_err ("got error while reading from socket: %d, %s",
+						errno,
+						strerror (errno));
+				return;
 			}
-			msg_err ("got error while reading from socket: %d, %s",
-				errno,
-				strerror (errno));
-			return;
-		}
 
-		if (rspamd_fuzzy_cmd_from_wire (buf, r, &session)) {
-			/* Check shingles count sanity */
-			rspamd_fuzzy_process_command (&session);
-		}
-		else {
-			/* Discard input */
-			server_stat->fuzzy_hashes_checked[RSPAMD_FUZZY_EPOCH6] ++;
-			msg_debug ("invalid fuzzy command of size %d received", r);
-		}
+			if (rspamd_fuzzy_cmd_from_wire (buf, r, &session)) {
+				/* Check shingles count sanity */
+				rspamd_fuzzy_process_command (&session);
+			}
+			else {
+				/* Discard input */
+				server_stat->fuzzy_hashes_checked[RSPAMD_FUZZY_EPOCH6]++;
+				msg_debug ("invalid fuzzy command of size %d received", r);
+			}
 
-		rspamd_inet_address_destroy (session.addr);
-		worker->nconns --;
+			rspamd_inet_address_destroy (session.addr);
+			rspamd_explicit_memzero (session.nm, sizeof (session.nm));
+			worker->nconns--;
+		}
 	}
-
-	rspamd_explicit_memzero (session.nm, sizeof (session.nm));
 }
 
 static void
@@ -503,34 +514,34 @@ init_fuzzy (struct rspamd_config *cfg)
 	ctx->keypair_cache_size = DEFAULT_KEYPAIR_CACHE_SIZE;
 
 	rspamd_rcl_register_worker_option (cfg, type, "hashfile",
-		rspamd_rcl_parse_struct_string, ctx,
-		G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "hash_file",
-		rspamd_rcl_parse_struct_string, ctx,
-		G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "file",
-		rspamd_rcl_parse_struct_string, ctx,
-		G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "database",
-		rspamd_rcl_parse_struct_string, ctx,
-		G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "sync",
-		rspamd_rcl_parse_struct_time, ctx,
-		G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx,
-		sync_timeout), RSPAMD_CL_FLAG_TIME_FLOAT);
+			rspamd_rcl_parse_struct_time, ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx,
+					sync_timeout), RSPAMD_CL_FLAG_TIME_FLOAT);
 
 	rspamd_rcl_register_worker_option (cfg, type, "expire",
-		rspamd_rcl_parse_struct_time, ctx,
-		G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx,
-		expire), RSPAMD_CL_FLAG_TIME_FLOAT);
+			rspamd_rcl_parse_struct_time, ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx,
+					expire), RSPAMD_CL_FLAG_TIME_FLOAT);
 
 	rspamd_rcl_register_worker_option (cfg, type, "allow_update",
-		rspamd_rcl_parse_struct_string, ctx,
-		G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, update_map), 0);
+			rspamd_rcl_parse_struct_string, ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, update_map), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "keypair",
 			rspamd_rcl_parse_struct_keypair, ctx,
@@ -538,7 +549,8 @@ init_fuzzy (struct rspamd_config *cfg)
 
 	rspamd_rcl_register_worker_option (cfg, type, "keypair_cache_size",
 			rspamd_rcl_parse_struct_integer, ctx,
-			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, keypair_cache_size),
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx,
+					keypair_cache_size),
 			RSPAMD_CL_FLAG_UINT);
 
 	return ctx;
@@ -558,7 +570,6 @@ start_fuzzy (struct rspamd_worker *worker)
 			"fuzzy",
 			accept_fuzzy_socket);
 	server_stat = worker->srv->stat;
-
 
 	/*
 	 * Open DB and perform VACUUM
