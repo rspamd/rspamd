@@ -180,7 +180,7 @@ rspamd_config_defaults (struct rspamd_config *cfg)
 
 	/* Default log line */
 	cfg->log_format_str = "id: <$mid>,$if_qid{ qid: <$>,}$if_ip{ ip: $,}"
-			"$if_smtp_from{ from: <$>,} (default: $is_spam "
+			"$if_user{ user: $,}$if_smtp_from{ from: <$>,} (default: $is_spam "
 			"($action): [$scores] [$symbols]), len: $len, time: $time_real real,"
 			" $time_virtual virtual, dns req: $dns_req";
 }
@@ -361,8 +361,8 @@ rspamd_config_process_var (struct rspamd_config *cfg, const rspamd_ftok_t *var,
 		if (content && content->len > 0) {
 			lf->data = rspamd_mempool_alloc0 (cfg->cfg_pool,
 					sizeof (rspamd_ftok_t));
-			memcpy (lf->data, &tok, sizeof (tok));
-			lf->len = sizeof (tok);
+			memcpy (lf->data, content, sizeof (*content));
+			lf->len = sizeof (*content);
 		}
 	}
 	else {
