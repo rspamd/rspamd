@@ -1093,7 +1093,7 @@ rspamd_controller_handle_history (struct rspamd_http_connection_entry *conn_ent,
 					row->symbols),		  "symbols",		0, false);
 			ucl_object_insert_key (obj,	   ucl_object_fromint (
 					row->len),			  "size",			0, false);
-			ucl_object_insert_key (obj,	   ucl_object_fromint (
+			ucl_object_insert_key (obj,	   ucl_object_fromdouble (
 					row->scan_time),	  "scan_time",		0, false);
 			if (row->user[0] != '\0') {
 				ucl_object_insert_key (obj, ucl_object_fromstring (
