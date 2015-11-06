@@ -679,7 +679,7 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_LOG_QID:
-		if (task->queue_id) {
+		if (task->queue_id && strcmp (task->queue_id, "undef") != 0) {
 			ret = TRUE;
 		}
 		break;
@@ -698,6 +698,10 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 					internet_address_list_length (task->from_envelope) > 0) {
 			ret = TRUE;
 		}
+		else if (task->from_mime &&
+				internet_address_list_length (task->from_mime) > 0) {
+			ret = TRUE;
+		}
 		break;
 	case RSPAMD_LOG_MIME_FROM:
 		if (task->from_mime &&
@@ -713,22 +717,6 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 	return ret;
 }
 
-/*
- * 	RSPAMD_LOG_MID,
-	RSPAMD_LOG_QID,
-	RSPAMD_LOG_USER,
-	RSPAMD_LOG_ISSPAM,
-	RSPAMD_LOG_ACTION,
-	RSPAMD_LOG_SCORES,
-	RSPAMD_LOG_SYMBOLS,
-	RSPAMD_LOG_IP,
-	RSPAMD_LOG_LEN,
-	RSPAMD_LOG_DNS_REQ,
-	RSPAMD_LOG_SMTP_FROM,
-	RSPAMD_LOG_MIME_FROM,
-	RSPAMD_LOG_TIME_REAL,
-	RSPAMD_LOG_TIME_VIRTUAL,
- */
 static rspamd_ftok_t
 rspamd_task_log_metric_res (struct rspamd_task *task,
 		struct rspamd_log_format *lf)
@@ -815,7 +803,7 @@ rspamd_task_log_write_var (struct rspamd_task *task, rspamd_fstring_t *logbuf,
 		c = p;
 		end = p + content->len;
 
-		while (p < c) {
+		while (p < end) {
 			if (*p == '$') {
 				if (p > c) {
 					res = rspamd_fstring_append (res, c, p - c);
@@ -845,7 +833,7 @@ rspamd_task_log_variable (struct rspamd_task *task,
 	rspamd_fstring_t *res = logbuf;
 	rspamd_ftok_t var = {.begin = NULL, .len = 0};
 	static gchar numbuf[32];
-	InternetAddress *ia;
+	InternetAddress *ia = NULL;
 	InternetAddressMailbox *iamb;
 
 	switch (lf->type) {
@@ -892,8 +880,8 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		break;
 	/* Numeric vars */
 	case RSPAMD_LOG_LEN:
-		var.len = rspamd_snprintf (numbuf, sizeof (numbuf), "%ul",
-				task->message_len);
+		var.len = rspamd_snprintf (numbuf, sizeof (numbuf), "%uz",
+				task->msg.len);
 		var.begin = numbuf;
 		break;
 	case RSPAMD_LOG_DNS_REQ:
@@ -914,12 +902,23 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		break;
 	/* InternetAddress vars */
 	case RSPAMD_LOG_SMTP_FROM:
-		ia = internet_address_list_get_address (task->from_envelope, 0);
+		ia = task->from_envelope ?
+			 internet_address_list_get_address (task->from_envelope, 0) : NULL;
 
 		if (ia && INTERNET_ADDRESS_IS_MAILBOX (ia)) {
 			iamb = INTERNET_ADDRESS_MAILBOX (ia);
 			var.begin = iamb->addr;
 			var.len = strlen (var.begin);
+		}
+		else {
+			ia = task->from_mime ?
+				 internet_address_list_get_address (task->from_mime, 0) : NULL;
+
+			if (ia && INTERNET_ADDRESS_IS_MAILBOX (ia)) {
+				iamb = INTERNET_ADDRESS_MAILBOX (ia);
+				var.begin = iamb->addr;
+				var.len = strlen (var.begin);
+			}
 		}
 		break;
 	case RSPAMD_LOG_MIME_FROM:
