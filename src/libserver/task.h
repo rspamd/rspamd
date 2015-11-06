@@ -271,4 +271,9 @@ gboolean rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
 	gboolean is_spam,
 	GError **err);
 
+/**
+ * Write log line about the specified task if needed
+ */
+void rspamd_task_write_log (struct rspamd_task *task);
+
 #endif /* TASK_H_ */

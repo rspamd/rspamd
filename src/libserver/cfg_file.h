@@ -194,6 +194,7 @@ enum rspamd_log_format_flags {
 struct rspamd_log_format {
 	enum rspamd_log_format_type type;
 	guint flags;
+	gsize len;
 	gpointer data;
 	struct rspamd_log_format *prev, *next;
 };

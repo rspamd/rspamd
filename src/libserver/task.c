@@ -30,6 +30,7 @@
 #include "composites.h"
 #include "stat_api.h"
 #include "unix-std.h"
+#include <utlist.h>
 
 static GQuark
 rspamd_task_quark (void)
@@ -663,4 +664,122 @@ rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
 	GError **err)
 {
 	return rspamd_stat_learn (task, is_spam, task->cfg->lua_state, err);
+}
+
+static gboolean
+rspamd_task_log_check_condition (struct rspamd_task *task,
+		struct rspamd_log_format *lf)
+{
+	gboolean ret = FALSE;
+
+	switch (lf->type) {
+	case RSPAMD_LOG_MID:
+		if (task->message_id && strcmp (task->message_id, "undef") != 0) {
+			ret = TRUE;
+		}
+		break;
+	case RSPAMD_LOG_QID:
+		if (task->queue_id) {
+			ret = TRUE;
+		}
+		break;
+	case RSPAMD_LOG_USER:
+		if (task->user) {
+			ret = TRUE;
+		}
+		break;
+	case RSPAMD_LOG_IP:
+		if (task->from_addr && rspamd_ip_is_valid (task->from_addr)) {
+			ret = TRUE;
+		}
+		break;
+	case RSPAMD_LOG_SMTP_FROM:
+		if (task->from_envelope &&
+					internet_address_list_length (task->from_envelope) > 0) {
+			ret = TRUE;
+		}
+		break;
+	case RSPAMD_LOG_MIME_FROM:
+		if (task->from_mime &&
+				internet_address_list_length (task->from_mime) > 0) {
+			ret = TRUE;
+		}
+		break;
+	default:
+		ret = TRUE;
+		break;
+	}
+
+	return ret;
+}
+
+static rspamd_fstring_t *
+rspamd_task_log_variable (struct rspamd_task *task,
+		struct rspamd_log_format *lf, rspamd_fstring_t *logbuf)
+{
+	rspamd_fstring_t *res = logbuf;
+
+
+	return res;
+}
+
+void
+rspamd_task_write_log (struct rspamd_task *task)
+{
+	rspamd_fstring_t *logbuf;
+	struct rspamd_log_format *lf;
+	struct rspamd_task **ptask;
+	const gchar *lua_str;
+	gsize lua_str_len;
+	lua_State *L;
+
+	g_assert (task != NULL);
+
+	if (task->cfg->log_format == NULL || task->flags & RSPAMD_TASK_FLAG_NO_LOG) {
+		return;
+	}
+
+	logbuf = rspamd_fstring_sized_new (1000);
+
+	DL_FOREACH (task->cfg->log_format, lf) {
+		switch (lf->type) {
+		case RSPAMD_LOG_STRING:
+			logbuf = rspamd_fstring_append (logbuf, lf->data, lf->len);
+			break;
+		case RSPAMD_LOG_LUA:
+			L = task->cfg->lua_state;
+			lua_rawgeti (L, LUA_REGISTRYINDEX, GPOINTER_TO_INT (lf->data));
+			ptask = lua_newuserdata (L, sizeof (*ptask));
+			rspamd_lua_setclass (L, "rspamd{task}", -1);
+			*ptask = task;
+
+			if (lua_pcall (L, 1, 1, 0) != 0) {
+				msg_err_task ("call to log function failed: %s",
+						lua_tostring (L, -1));
+			}
+			else {
+				lua_str = lua_tolstring (L, -1, &lua_str_len);
+
+				if (lua_str != NULL) {
+					logbuf = rspamd_fstring_append (logbuf, lua_str, lua_str_len);
+				}
+				lua_pop (L, 1);
+			}
+			break;
+		default:
+			/* We have a variable in log format */
+			if (lf->flags & RSPAMD_LOG_FLAG_CONDITION) {
+				if (!rspamd_task_log_check_condition (task, lf)) {
+					continue;
+				}
+			}
+
+			logbuf = rspamd_task_log_variable (task, lf, logbuf);
+			break;
+		}
+	}
+
+	msg_info ("%V", logbuf);
+
+	rspamd_fstring_free (logbuf);
 }

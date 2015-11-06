@@ -362,6 +362,7 @@ rspamd_config_process_var (struct rspamd_config *cfg, const rspamd_ftok_t *var,
 			lf->data = rspamd_mempool_alloc0 (cfg->cfg_pool,
 					sizeof (rspamd_ftok_t));
 			memcpy (lf->data, &tok, sizeof (tok));
+			lf->len = sizeof (tok);
 		}
 	}
 	else {
@@ -391,6 +392,7 @@ rspamd_config_process_var (struct rspamd_config *cfg, const rspamd_ftok_t *var,
 
 		id = luaL_ref (cfg->lua_state, LUA_REGISTRYINDEX);
 		lf->data = GINT_TO_POINTER (id);
+		lf->len = 0;
 	}
 
 	DL_APPEND (cfg->log_format, lf);
@@ -437,6 +439,7 @@ rspamd_config_parse_log_format (struct rspamd_config *cfg)
 				lf = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*lf));
 				lf->type = RSPAMD_LOG_STRING;
 				lf->data = rspamd_mempool_alloc (cfg->cfg_pool, p - c + 1);
+				lf->len = p - c;
 				rspamd_strlcpy (lf->data, c, p - c + 1);
 				DL_APPEND (cfg->log_format, lf);
 				lf = NULL;
@@ -498,6 +501,7 @@ rspamd_config_parse_log_format (struct rspamd_config *cfg)
 			lf = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*lf));
 			lf->type = RSPAMD_LOG_STRING;
 			lf->data = rspamd_mempool_alloc (cfg->cfg_pool, p - c + 1);
+			lf->len = p - c;
 			rspamd_strlcpy (lf->data, c, p - c + 1);
 			DL_APPEND (cfg->log_format, lf);
 			lf = NULL;

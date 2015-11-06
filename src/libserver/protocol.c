@@ -607,19 +607,6 @@ rspamd_protocol_handle_request (struct rspamd_task *task,
 	return ret;
 }
 
-static void
-write_hashes_to_log (struct rspamd_task *task, rspamd_fstring_t **logbuf)
-{
-	struct mime_text_part *text_part;
-	guint i;
-
-	/* TODO: rework parts hashes */
-	for (i = 0; i < task->text_parts->len; i ++) {
-		text_part = g_ptr_array_index (task->text_parts, i);
-	}
-}
-
-
 /* Structure for writing tree data */
 struct tree_cb_data {
 	ucl_object_t *top;
@@ -793,14 +780,10 @@ rspamd_str_list_ucl (GList *str_list)
 
 static ucl_object_t *
 rspamd_metric_symbol_ucl (struct rspamd_task *task, struct metric *m,
-	struct symbol *sym, rspamd_fstring_t **logbuf)
+	struct symbol *sym)
 {
 	ucl_object_t *obj = NULL;
 	const gchar *description = NULL;
-
-	if (logbuf != NULL) {
-		rspamd_printf_fstring (logbuf, "%s,", sym->name);
-	}
 
 	if (sym->def != NULL) {
 		description = sym->def->description;
@@ -825,8 +808,7 @@ rspamd_metric_symbol_ucl (struct rspamd_task *task, struct metric *m,
 
 static ucl_object_t *
 rspamd_metric_result_ucl (struct rspamd_task *task,
-	struct metric_result *mres,
-	rspamd_fstring_t **logbuf)
+	struct metric_result *mres)
 {
 	GHashTableIter hiter;
 	struct symbol *sym;
@@ -837,7 +819,6 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	gpointer h, v;
 	double required_score;
 	const gchar *subject;
-	gchar action_char;
 
 	m = mres->metric;
 	mres->action = rspamd_check_action_metric (task, mres->score,
@@ -845,23 +826,6 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 
 	action = mres->action;
 	is_spam = (action == METRIC_ACTION_REJECT);
-
-	if (RSPAMD_TASK_IS_SKIPPED (task)) {
-		action_char = 'S';
-	}
-	else if (is_spam) {
-		action_char = 'T';
-	}
-	else {
-		action_char = 'F';
-	}
-
-	if (logbuf != NULL) {
-		rspamd_printf_fstring (logbuf, "(%s: %c (%s): [%.2f/%.2f] [",
-				m->name, action_char,
-				rspamd_action_to_str (action),
-				mres->score, required_score);
-	}
 
 	obj = ucl_object_typed_new (UCL_OBJECT);
 	ucl_object_insert_key (obj,	  ucl_object_frombool (is_spam),
@@ -885,24 +849,8 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	g_hash_table_iter_init (&hiter, mres->symbols);
 	while (g_hash_table_iter_next (&hiter, &h, &v)) {
 		sym = (struct symbol *)v;
-		sobj = rspamd_metric_symbol_ucl (task, m, sym, logbuf);
+		sobj = rspamd_metric_symbol_ucl (task, m, sym);
 		ucl_object_insert_key (obj, sobj, h, 0, false);
-	}
-
-	if (logbuf != NULL) {
-		/* Cut the trailing comma if needed */
-		rspamd_fstring_t *log = *logbuf;
-
-		if (log->str[log->len - 1] == ',') {
-			log->len--;
-		}
-
-		rspamd_printf_fstring (logbuf, "]), len: %z, time: %s, dns req: %d,",
-				task->msg.len,
-				rspamd_log_check_time (task->time_real,
-						task->time_virtual,
-						task->cfg->clock_res),
-				task->dns_requests);
 	}
 
 	return obj;
@@ -1003,42 +951,19 @@ rspamd_ucl_tospamc_output (struct rspamd_task *task,
 }
 
 ucl_object_t *
-rspamd_protocol_write_ucl (struct rspamd_task *task, rspamd_fstring_t **logbuf)
+rspamd_protocol_write_ucl (struct rspamd_task *task)
 {
 	struct metric_result *metric_res;
 	ucl_object_t *top = NULL, *obj;
 	GHashTableIter hiter;
 	gpointer h, v;
 
-	if (logbuf != NULL) {
-		rspamd_printf_fstring (logbuf,
-				"id: <%s>, qid: <%s>, ip: %s, ",
-				task->message_id,
-				task->queue_id,
-				rspamd_inet_address_to_string (task->from_addr));
-
-		if (task->user) {
-			rspamd_printf_fstring (logbuf, "user: %s, ", task->user);
-		}
-		else if (task->from_envelope) {
-			InternetAddress *ia;
-
-			ia = internet_address_list_get_address (task->from_envelope, 0);
-
-			if (ia && INTERNET_ADDRESS_IS_MAILBOX (ia)) {
-				InternetAddressMailbox *iamb = INTERNET_ADDRESS_MAILBOX (ia);
-
-				rspamd_printf_fstring (logbuf, "from: %s, ", iamb->addr);
-			}
-		}
-	}
-
 	g_hash_table_iter_init (&hiter, task->results);
 	top = ucl_object_typed_new (UCL_OBJECT);
 	/* Convert results to an ucl object */
 	while (g_hash_table_iter_next (&hiter, &h, &v)) {
 		metric_res = (struct metric_result *)v;
-		obj = rspamd_metric_result_ucl (task, metric_res, logbuf);
+		obj = rspamd_metric_result_ucl (task, metric_res);
 		ucl_object_insert_key (top, obj, h, 0, false);
 	}
 
@@ -1058,10 +983,6 @@ rspamd_protocol_write_ucl (struct rspamd_task *task, rspamd_fstring_t **logbuf)
 	ucl_object_insert_key (top, ucl_object_fromstring (task->message_id),
 			"message-id", 0, false);
 
-	if (logbuf != NULL) {
-		write_hashes_to_log (task, logbuf);
-	}
-
 	return top;
 }
 
@@ -1069,16 +990,12 @@ void
 rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	struct rspamd_task *task)
 {
-	rspamd_fstring_t *logbuf;
 	struct metric_result *metric_res;
 	GHashTableIter hiter;
 	gpointer h, v;
 	ucl_object_t *top = NULL;
 	gdouble required_score;
 	gint action;
-
-	/* Output the first line - check status */
-	logbuf = rspamd_fstring_sized_new (1000);
 
 	/* Write custom headers */
 	g_hash_table_iter_init (&hiter, task->reply_headers);
@@ -1088,17 +1005,13 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 		rspamd_http_message_add_header (msg, hn->begin, hv->begin);
 	}
 
-	top = rspamd_protocol_write_ucl (task, &logbuf);
+	top = rspamd_protocol_write_ucl (task);
 
 	if (!(task->flags & RSPAMD_TASK_FLAG_NO_LOG)) {
 		rspamd_roll_history_update (task->worker->srv->history, task);
 	}
 
-	if (!(task->flags & RSPAMD_TASK_FLAG_NO_LOG)) {
-		msg_info_task ("%V", logbuf);
-	}
-
-	rspamd_fstring_free (logbuf);
+	rspamd_task_write_log (task);
 
 	msg->body = rspamd_fstring_sized_new (1000);
 
