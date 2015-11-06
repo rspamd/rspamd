@@ -158,7 +158,7 @@ gchar * resolve_stat_filename (rspamd_mempool_t *pool,
 	gchar *from);
 
 const gchar *
-rspamd_log_check_time (gdouble start_real, gdouble start_virtual, gint resolution);
+rspamd_log_check_time (gdouble start, gdouble end, gint resolution);
 
 /*
  * File locking functions

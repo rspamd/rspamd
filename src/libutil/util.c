@@ -1161,19 +1161,16 @@ resolve_stat_filename (rspamd_mempool_t * pool,
 }
 
 const gchar *
-rspamd_log_check_time (gdouble start_real, gdouble start_virtual, gint resolution)
+rspamd_log_check_time (gdouble start, gdouble end, gint resolution)
 {
-	double vdiff, diff, end_real, end_virtual;
+	gdouble diff;
 	static gchar res[64];
-	static gchar fmt[sizeof ("%.10f ms real, %.10f ms virtual")];
+	gchar fmt[32];
 
-	end_real = rspamd_get_ticks ();
-	end_virtual = rspamd_get_virtual_ticks ();
-	vdiff = (end_virtual - start_virtual) * 1000;
-	diff = (end_real - start_real) * 1000;
+	diff = (end - start) * 1000.0;
 
-	sprintf (fmt, "%%.%dfms real, %%.%dfms virtual", resolution, resolution);
-	snprintf (res, sizeof (res), fmt, diff, vdiff);
+	rspamd_snprintf (fmt, sizeof (fmt), "%%.%df", resolution);
+	rspamd_snprintf (res, sizeof (res), fmt, diff);
 
 	return (const gchar *)res;
 }
