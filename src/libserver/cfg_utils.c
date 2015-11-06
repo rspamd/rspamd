@@ -460,7 +460,6 @@ rspamd_config_parse_log_format (struct rspamd_config *cfg)
 				/* Variable with no content */
 				var.begin = c;
 				var.len = p - c;
-				p++;
 				c = p;
 
 				if (!rspamd_config_process_var (cfg, &var, NULL)) {
