@@ -1,3 +1,13 @@
+1.0.10:
+	* Fix settings application (#416)
+	* Fix another issue with fixed strings
+	* Fix hash function invocation
+	* Use the proper string for make_dns_request in lua_http
+	* Fix scan time output
+	* Update webui:
+		- fix labels for greylisting
+		- fix dimension of scan time
+
 1.0.9:
 	* Emergency fix in keyed blake2 to fix fuzzy hashes and encrypted password
 	* Support passwords longer than 64 symbols
