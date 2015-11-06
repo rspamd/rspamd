@@ -47,3 +47,44 @@ Here is summary of logging parameters:
     + `dns` - messages from DNS resolver
     + `map` - messages from maps in rspamd
     + `logger` - messages from the logger itself
+
+### Log format
+
+Rspamd supports custom log format when writing information about a message to log. This feature is supported since 1.1. The format string
+looks as following:
+
+
+	log_format =<< EOD
+	id: <$mid>,$if_qid{ qid: <$>,}$if_ip{ ip: $,}$if_user{ user: $,}$if_smtp_from{ from: <$>,}
+	(default: $is_spam ($action): [$scores] [$symbols]),
+	len: $len, time: $time_real real,
+	$time_virtual virtual, dns req: $dns_req
+	EOD
+
+Newlines are replaced with spaces. Both text and variables are supported in the log format line. Each variable can have the optional
+`if_` prefix when it should be printed if the specified component in the task is presented. Moreover, each variable can have optional body,
+where dollar sign is replaced with variable value (as many times as it is found in body, e.g. `$var{$$$$}` will be replaced with variable's name repeated 4 times).
+
+Rspamd supports the following variables:
+
+- `mid` - message id
+- `qid` - queue id
+- `ip` - from IP
+- `user` - authenticated user
+- `smtp_from` - envelope from (or MIME from if SMTP from is absent)
+- `mime_from` - MIME from
+- `len` - length of essage
+- `is_spam` - one letter of spammines: `T` for spam, `F` for ham and `S` for skipped messages
+- `action` - default metric action
+- `symbols` - list of all symbols
+- `time_real` - real time of task processing
+- `time_virtual` - CPU time of task processing
+- `dns_req` - number of DNS requests
+- `lua` - custom lua script, e.g:
+
+~~~lua
+	$lua{
+		return function(task) 
+			return 'text parts: ' .. tostring(#task:get_text_parts()) end
+	}
+~~~
