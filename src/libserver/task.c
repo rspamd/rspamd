@@ -713,12 +713,233 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 	return ret;
 }
 
+/*
+ * 	RSPAMD_LOG_MID,
+	RSPAMD_LOG_QID,
+	RSPAMD_LOG_USER,
+	RSPAMD_LOG_ISSPAM,
+	RSPAMD_LOG_ACTION,
+	RSPAMD_LOG_SCORES,
+	RSPAMD_LOG_SYMBOLS,
+	RSPAMD_LOG_IP,
+	RSPAMD_LOG_LEN,
+	RSPAMD_LOG_DNS_REQ,
+	RSPAMD_LOG_SMTP_FROM,
+	RSPAMD_LOG_MIME_FROM,
+	RSPAMD_LOG_TIME_REAL,
+	RSPAMD_LOG_TIME_VIRTUAL,
+ */
+static rspamd_ftok_t
+rspamd_task_log_metric_res (struct rspamd_task *task,
+		struct rspamd_log_format *lf)
+{
+	static gchar scorebuf[32];
+	rspamd_ftok_t res = {.begin = NULL, .len = 0};
+	struct metric_result *mres;
+	GHashTableIter it;
+	gboolean first = TRUE;
+	gpointer k, v;
+	rspamd_fstring_t *symbuf;
+	struct symbol *sym;
+
+	mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+
+	if (mres != NULL) {
+		switch (lf->type) {
+		case RSPAMD_LOG_ISSPAM:
+			if (RSPAMD_TASK_IS_SKIPPED (task)) {
+				res.begin = "S";
+			}
+			else if (mres->action == METRIC_ACTION_REJECT) {
+				res.begin = "T";
+			}
+			else {
+				res.begin = "F";
+			}
+
+			res.len = 1;
+			break;
+		case RSPAMD_LOG_ACTION:
+			res.begin = rspamd_action_to_str (mres->action);
+			res.len = strlen (res.begin);
+			break;
+		case RSPAMD_LOG_SCORES:
+			res.len = rspamd_snprintf (scorebuf, sizeof (scorebuf), "%.2f/%.2f",
+					mres->score, mres->required_score);
+			res.begin = scorebuf;
+			break;
+		case RSPAMD_LOG_SYMBOLS:
+			symbuf = rspamd_fstring_sized_new (128);
+			g_hash_table_iter_init (&it, mres->symbols);
+
+			while (g_hash_table_iter_next (&it, &k, &v)) {
+				sym = (struct symbol *) v;
+
+				if (first) {
+					rspamd_printf_fstring (&symbuf, "%s", sym->name);
+					first = FALSE;
+				}
+				else {
+					rspamd_printf_fstring (&symbuf, ",%s", sym->name);
+				}
+			}
+
+			rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t)rspamd_fstring_free,
+					symbuf);
+			res.begin = symbuf->str;
+			res.len = symbuf->len;
+			break;
+		default:
+			break;
+		}
+	}
+
+	return res;
+}
+
+static rspamd_fstring_t *
+rspamd_task_log_write_var (struct rspamd_task *task, rspamd_fstring_t *logbuf,
+		const rspamd_ftok_t *var, const rspamd_ftok_t *content)
+{
+	rspamd_fstring_t *res = logbuf;
+	const gchar *p, *c, *end;
+
+	if (content == NULL) {
+		/* Just output variable */
+		res = rspamd_fstring_append (res, var->begin, var->len);
+	}
+	else {
+		/* Replace $ with variable value */
+		p = content->begin;
+		c = p;
+		end = p + content->len;
+
+		while (p < c) {
+			if (*p == '$') {
+				if (p > c) {
+					res = rspamd_fstring_append (res, c, p - c);
+				}
+
+				res = rspamd_fstring_append (res, var->begin, var->len);
+				p ++;
+				c = p;
+			}
+			else {
+				p ++;
+			}
+		}
+
+		if (p > c) {
+			res = rspamd_fstring_append (res, c, p - c);
+		}
+	}
+
+	return res;
+}
+
 static rspamd_fstring_t *
 rspamd_task_log_variable (struct rspamd_task *task,
 		struct rspamd_log_format *lf, rspamd_fstring_t *logbuf)
 {
 	rspamd_fstring_t *res = logbuf;
+	rspamd_ftok_t var = {.begin = NULL, .len = 0};
+	static gchar numbuf[32];
+	InternetAddress *ia;
+	InternetAddressMailbox *iamb;
 
+	switch (lf->type) {
+	/* String vars */
+	case RSPAMD_LOG_MID:
+		if (task->message_id) {
+			var.begin = task->message_id;
+			var.len = strlen (var.begin);
+		}
+		else {
+			var.begin = "undef";
+			var.len = 5;
+		}
+		break;
+	case RSPAMD_LOG_QID:
+		if (task->queue_id) {
+			var.begin = task->queue_id;
+			var.len = strlen (var.begin);
+		}
+		else {
+			var.begin = "undef";
+			var.len = 5;
+		}
+		break;
+	case RSPAMD_LOG_USER:
+		if (task->user) {
+			var.begin = task->user;
+			var.len = strlen (var.begin);
+		}
+		else {
+			var.begin = "undef";
+			var.len = 5;
+		}
+		break;
+	case RSPAMD_LOG_IP:
+		if (task->from_addr && rspamd_ip_is_valid (task->from_addr)) {
+			var.begin = rspamd_inet_address_to_string (task->from_addr);
+			var.len = strlen (var.begin);
+		}
+		else {
+			var.begin = "undef";
+			var.len = 5;
+		}
+		break;
+	/* Numeric vars */
+	case RSPAMD_LOG_LEN:
+		var.len = rspamd_snprintf (numbuf, sizeof (numbuf), "%ul",
+				task->message_len);
+		var.begin = numbuf;
+		break;
+	case RSPAMD_LOG_DNS_REQ:
+		var.len = rspamd_snprintf (numbuf, sizeof (numbuf), "%uD",
+				task->dns_requests);
+		var.begin = numbuf;
+		break;
+	case RSPAMD_LOG_TIME_REAL:
+		var.begin = rspamd_log_check_time (task->time_real, rspamd_get_ticks (),
+				task->cfg->clock_res);
+		var.len = strlen (var.begin);
+		break;
+	case RSPAMD_LOG_TIME_VIRTUAL:
+		var.begin = rspamd_log_check_time (task->time_virtual,
+				rspamd_get_virtual_ticks (),
+				task->cfg->clock_res);
+		var.len = strlen (var.begin);
+		break;
+	/* InternetAddress vars */
+	case RSPAMD_LOG_SMTP_FROM:
+		ia = internet_address_list_get_address (task->from_envelope, 0);
+
+		if (ia && INTERNET_ADDRESS_IS_MAILBOX (ia)) {
+			iamb = INTERNET_ADDRESS_MAILBOX (ia);
+			var.begin = iamb->addr;
+			var.len = strlen (var.begin);
+		}
+		break;
+	case RSPAMD_LOG_MIME_FROM:
+		ia = internet_address_list_get_address (task->from_mime, 0);
+
+		if (ia && INTERNET_ADDRESS_IS_MAILBOX (ia)) {
+			iamb = INTERNET_ADDRESS_MAILBOX (ia);
+			var.begin = iamb->addr;
+			var.len = strlen (var.begin);
+		}
+		break;
+	default:
+		var = rspamd_task_log_metric_res (task, lf);
+		break;
+	}
+
+	if (var.len > 0) {
+		res = rspamd_task_log_write_var (task, logbuf,
+				&var, (const rspamd_ftok_t *)lf->data);
+	}
 
 	return res;
 }
