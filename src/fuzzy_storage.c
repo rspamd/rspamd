@@ -58,8 +58,8 @@ worker_t fuzzy_worker = {
 	init_fuzzy,                 /* Init function */
 	start_fuzzy,                /* Start function */
 	TRUE,                       /* No socket */
-	FALSE,                       /* Unique */
-	TRUE,                       /* Threaded */
+	FALSE,                      /* Unique */
+	FALSE,                      /* Threaded */
 	FALSE,                      /* Non killable */
 	SOCK_DGRAM                  /* UDP socket */
 };
