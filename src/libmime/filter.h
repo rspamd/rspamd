@@ -50,11 +50,12 @@ struct metric {
 struct metric_result {
 	struct metric *metric;                          /**< pointer to metric structure			*/
 	double score;                                   /**< total score							*/
-	enum rspamd_metric_action action;				/**< the current action						*/
+	double required_score;                          /**< real required score					*/
+	double grow_factor;								/**< current grow factor					*/
 	GHashTable *symbols;                            /**< symbols of metric						*/
 	GHashTable *sym_groups;							/**< groups of symbols						*/
 	gboolean checked;                               /**< whether metric result is consolidated  */
-	double grow_factor;                             /**< current grow factor					*/
+	enum rspamd_metric_action action;                /**< the current action						*/
 };
 
 /**
