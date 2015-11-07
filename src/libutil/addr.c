@@ -845,7 +845,7 @@ rspamd_inet_address_recvfrom (gint fd, void *buf, gsize len, gint fl,
 			memcpy (&addr->u.un->addr, &su.su, sizeof (struct sockaddr_un));
 		}
 		else {
-			memcpy (&addr->u.in.addr, &su, MIN (len, sizeof (addr->u.in.addr)));
+			memcpy (&addr->u.in.addr, &su.sa, MIN (slen, sizeof (addr->u.in.addr)));
 		}
 
 		*target = addr;
