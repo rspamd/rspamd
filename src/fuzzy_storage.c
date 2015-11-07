@@ -636,14 +636,16 @@ start_fuzzy (struct rspamd_worker *worker)
 		ctx->keypair_cache = rspamd_keypair_cache_new (ctx->keypair_cache_size);
 	}
 
-	rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
-	/* Timer event */
-	evtimer_set (&tev, sync_callback, worker);
-	event_base_set (ctx->ev_base, &tev);
-	/* Plan event with jitter */
-	next_check = rspamd_time_jitter (ctx->sync_timeout, 0);
-	double_to_tv (next_check, &tmv);
-	evtimer_add (&tev, &tmv);
+	if (worker->index == 0) {
+		rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
+		/* Timer event */
+		evtimer_set (&tev, sync_callback, worker);
+		event_base_set (ctx->ev_base, &tev);
+		/* Plan event with jitter */
+		next_check = rspamd_time_jitter (ctx->sync_timeout, 0);
+		double_to_tv (next_check, &tmv);
+		evtimer_add (&tev, &tmv);
+	}
 
 	/* Register custom reload command for the control socket */
 	rspamd_control_worker_add_cmd_handler (worker, RSPAMD_CONTROL_RELOAD,
