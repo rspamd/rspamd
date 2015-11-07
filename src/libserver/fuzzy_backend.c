@@ -348,7 +348,17 @@ static gboolean
 rspamd_fuzzy_backend_run_sql (const gchar *sql, struct rspamd_fuzzy_backend *bk,
 		GError **err)
 {
-	if (sqlite3_exec (bk->db, sql, NULL, NULL, NULL) != SQLITE_OK) {
+	guint retries = 0;
+	struct timespec ts;
+	gint ret;
+
+	do {
+		ret = sqlite3_exec (bk->db, sql, NULL, NULL, NULL);
+		double_to_ts (sql_sleep_time, &ts);
+	} while (ret == SQLITE_BUSY && retries++ < max_retries &&
+			nanosleep (&ts, NULL) == 0);
+
+	if (ret != SQLITE_OK) {
 		g_set_error (err, rspamd_fuzzy_backend_quark (),
 				-1, "Cannot execute raw sql `%s`: %s",
 				sql, sqlite3_errmsg (bk->db));
