@@ -758,6 +758,11 @@ rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend,
 
 				ret = rspamd_fuzzy_backend_run_stmt (backend,
 						RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT);
+
+				if (ret != SQLITE_OK) {
+					rspamd_fuzzy_backend_run_stmt (backend,
+							RSPAMD_FUZZY_BACKEND_TRANSACTION_ROLLBACK);
+				}
 			}
 			if (ret != SQLITE_OK) {
 				msg_warn_fuzzy_backend ("cannot expire db: %s",
@@ -819,7 +824,8 @@ rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend,
 						msg_warn_fuzzy_backend (
 								"cannot synchronize fuzzy backend: %e",
 								err);
-						g_error_free (err);
+						rspamd_fuzzy_backend_run_stmt (backend,
+								RSPAMD_FUZZY_BACKEND_TRANSACTION_ROLLBACK);
 					}
 				}
 			}
