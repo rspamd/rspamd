@@ -5,23 +5,23 @@ MACRO(_AddModulesForced MLIST)
 	SET(MODULES_C "${CMAKE_CURRENT_BINARY_DIR}/modules.c")
 	FILE(WRITE "${MODULES_C}"
 		"/* ${MODULES_ID} */\n#include \"rspamd.h\"\n")
-	
+
 	# Handle even old cmake
 	LIST(LENGTH ${MLIST} MLIST_COUNT)
 	MATH(EXPR MLIST_MAX ${MLIST_COUNT}-1)
-	
+
 	FOREACH(MOD_IDX RANGE ${MLIST_MAX})
 		LIST(GET ${MLIST} ${MOD_IDX} MOD)
 		FILE(APPEND "${MODULES_C}" "extern module_t ${MOD}_module;\n")
 	ENDFOREACH(MOD_IDX RANGE ${MLIST_MAX})
-		 
+
 	FILE(APPEND "${MODULES_C}" "\n\nmodule_t *modules[] = {\n")
-	
+
 	FOREACH(MOD_IDX RANGE ${MLIST_MAX})
 		LIST(GET ${MLIST} ${MOD_IDX} MOD)
 		FILE(APPEND "${MODULES_C}" "&${MOD}_module,\n")
 	ENDFOREACH(MOD_IDX RANGE ${MLIST_MAX})
-	
+
 	FILE(APPEND "${MODULES_C}" "NULL\n};\n")
 ENDMACRO(_AddModulesForced MLIST)
 
@@ -29,7 +29,7 @@ MACRO(_AddWorkersForced WLIST)
 	SET(WORKERS_C "${CMAKE_CURRENT_BINARY_DIR}/workers.c")
 	FILE(WRITE "${WORKERS_C}"
 		"#include \"rspamd.h\"\n")
-	
+
 	# Handle even old cmake
 	LIST(LENGTH ${WLIST} WLIST_COUNT)
 	MATH(EXPR WLIST_MAX ${WLIST_COUNT}-1)
@@ -37,9 +37,9 @@ MACRO(_AddWorkersForced WLIST)
 		LIST(GET ${WLIST} ${MOD_IDX} WRK)
 		FILE(APPEND "${WORKERS_C}" "extern worker_t ${WRK}_worker;\n")
 	ENDFOREACH(MOD_IDX RANGE ${WLIST_MAX})
-	 
+
 	FILE(APPEND "${WORKERS_C}" "\n\nworker_t *workers[] = {\n")
-	
+
 	FOREACH(MOD_IDX RANGE ${WLIST_MAX})
 		LIST(GET ${WLIST} ${MOD_IDX} WRK)
 		FILE(APPEND "${WORKERS_C}" "&${WRK}_worker,\n")
@@ -63,6 +63,10 @@ MACRO(AddModules MLIST WLIST)
 ENDMACRO(AddModules MLIST WLIST)
 
 # Rspamd core components
+IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
+	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Xclang -load -Xclang ${CMAKE_CURRENT_BINARY_DIR}/../clang-plugin/librspamd-clang.so -Xclang -plugin -Xclang rspamd-ast")
+ENDIF ()
+
 ADD_SUBDIRECTORY(lua)
 ADD_SUBDIRECTORY(libcryptobox)
 ADD_SUBDIRECTORY(libutil)
@@ -71,7 +75,7 @@ ADD_SUBDIRECTORY(libmime)
 ADD_SUBDIRECTORY(libstat)
 ADD_SUBDIRECTORY(client)
 ADD_SUBDIRECTORY(rspamadm)
-				
+
 SET(RSPAMDSRC	controller.c
 				fuzzy_storage.c
 				lua_worker.c
@@ -86,7 +90,7 @@ SET(PLUGINSSRC	plugins/surbl.c
 				plugins/fuzzy_check.c
 				plugins/spf.c
 				plugins/dkim_check.c libutil/unix-std.h libserver/rspamd_control.c libserver/rspamd_control.h libcryptobox/curve25519/curve25519.c libcryptobox/curve25519/avx.c)
-				
+
 SET(MODULES_LIST surbl regexp chartable fuzzy_check spf dkim)
 SET(WORKERS_LIST normal controller smtp_proxy fuzzy lua http_proxy)
 
@@ -95,10 +99,14 @@ LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)
 ######################### LINK SECTION ###############################
 
 ADD_LIBRARY(rspamd-server STATIC ${RSPAMD_UTIL} ${RSPAMD_LUA} ${RSPAMD_SERVER}
-		${RSPAMD_STAT} ${RSPAMD_MIME} ${RSPAMD_CRYPTOBOX} 
+		${RSPAMD_STAT} ${RSPAMD_MIME} ${RSPAMD_CRYPTOBOX}
 		${CMAKE_CURRENT_BINARY_DIR}/modules.c ${PLUGINSSRC})
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-http-parser)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-cdb)
+
+IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
+	ADD_DEPENDENCIES(rspamd-server rspamd-clang)
+ENDIF()
 
 ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CMAKE_CURRENT_BINARY_DIR}/workers.c)
 SET_TARGET_PROPERTIES(rspamd PROPERTIES LINKER_LANGUAGE C)
