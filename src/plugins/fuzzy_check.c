@@ -1067,6 +1067,11 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 	}
 	else if (what == EV_READ) {
 		if ((r = read (fd, buf, sizeof (buf) - 1)) == -1) {
+			if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+				event_add (&session->ev, NULL);
+				return;
+			}
+
 			msg_info_task ("cannot process fuzzy hash for message <%s>: %s",
 					session->task->message_id, strerror (errno));
 			if (*(session->err) == NULL) {
@@ -1078,6 +1083,8 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 		}
 		else {
 			p = buf;
+			ret = 0;
+
 			while ((rep = fuzzy_process_reply (&p, &r,
 					session->commands, session->rule)) != NULL) {
 				if ((map =
