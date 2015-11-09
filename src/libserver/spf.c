@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2012, Vsevolod Stakhov
+ * Copyright (c) 2009-2015, Vsevolod Stakhov
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -637,9 +637,9 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
  */
 static const gchar *
 parse_spf_domain_mask (struct spf_record *rec, struct spf_addr *addr,
+		struct spf_resolved_element *resolved,
 		gboolean allow_mask)
 {
-	struct spf_resolved_element *resolved;
 	struct rspamd_task *task = rec->task;
 	enum {
 		parse_spf_elt = 0,
@@ -656,7 +656,6 @@ parse_spf_domain_mask (struct spf_record *rec, struct spf_addr *addr,
 	gchar t;
 	guint16 cur_mask = 0;
 
-	resolved = g_ptr_array_index (rec->resolved, rec->resolved->len - 1);
 	host = resolved->cur_domain;
 	c = p;
 
@@ -767,17 +766,16 @@ parse_spf_domain_mask (struct spf_record *rec, struct spf_addr *addr,
 }
 
 static gboolean
-parse_spf_a (struct spf_record *rec, struct spf_addr *addr)
+parse_spf_a (struct spf_record *rec,
+		struct spf_resolved_element *resolved, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
 	const gchar *host = NULL;
 	struct rspamd_task *task = rec->task;
-	struct spf_resolved_element *resolved;
 
-	resolved = g_ptr_array_index (rec->resolved, rec->resolved->len - 1);
 	CHECK_REC (rec);
 
-	host = parse_spf_domain_mask (rec, addr, TRUE);
+	host = parse_spf_domain_mask (rec, addr, resolved, TRUE);
 
 	if (host == NULL) {
 		return FALSE;
@@ -802,18 +800,17 @@ parse_spf_a (struct spf_record *rec, struct spf_addr *addr)
 }
 
 static gboolean
-parse_spf_ptr (struct spf_record *rec, struct spf_addr *addr)
+parse_spf_ptr (struct spf_record *rec,
+		struct spf_resolved_element *resolved, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
 	const gchar *host;
 	gchar *ptr;
 	struct rspamd_task *task = rec->task;
-	struct spf_resolved_element *resolved;
 
-	resolved = g_ptr_array_index (rec->resolved, rec->resolved->len - 1);
 	CHECK_REC (rec);
 
-	host = parse_spf_domain_mask (rec, addr, FALSE);
+	host = parse_spf_domain_mask (rec, addr, resolved, FALSE);
 
 	rec->dns_requests++;
 	cb = rspamd_mempool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
@@ -843,18 +840,16 @@ parse_spf_ptr (struct spf_record *rec, struct spf_addr *addr)
 }
 
 static gboolean
-parse_spf_mx (struct spf_record *rec, struct spf_addr *addr)
+parse_spf_mx (struct spf_record *rec,
+		struct spf_resolved_element *resolved, struct spf_addr *addr)
 {
 	struct spf_dns_cb *cb;
 	const gchar *host;
 	struct rspamd_task *task = rec->task;
-	struct spf_resolved_element *resolved;
-
-	resolved = g_ptr_array_index (rec->resolved, rec->resolved->len - 1);
 
 	CHECK_REC (rec);
 
-	host = parse_spf_domain_mask (rec, addr, TRUE);
+	host = parse_spf_domain_mask (rec, addr, resolved, TRUE);
 
 	if (host == NULL) {
 		return FALSE;
@@ -1044,9 +1039,7 @@ parse_spf_redirect (struct spf_record *rec,
 {
 	struct spf_dns_cb *cb;
 	const gchar *domain;
-	struct spf_addr *cur;
 	struct rspamd_task *task = rec->task;
-	guint i;
 
 	CHECK_REC (rec);
 
@@ -1060,15 +1053,6 @@ parse_spf_redirect (struct spf_record *rec,
 
 	rec->dns_requests++;
 	resolved->redirected = TRUE;
-
-	/* Now clear all elements but this one */
-	for (i = 0; i < resolved->elts->len; i++) {
-		cur = g_ptr_array_index (resolved->elts, i);
-
-		if (cur != addr) {
-			cur->flags &= ~RSPAMD_SPF_FLAG_PARSED;
-		}
-	}
 
 	cb = rspamd_mempool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
 	/* Set reference */
@@ -1461,7 +1445,7 @@ parse_spf_record (struct spf_record *rec, struct spf_resolved_element *resolved,
 			}
 			else if (g_ascii_strncasecmp (begin, SPF_A,
 					sizeof (SPF_A) - 1) == 0) {
-				res = parse_spf_a (rec, addr);
+				res = parse_spf_a (rec, resolved, addr);
 			}
 			else {
 				msg_info_spf (
@@ -1492,7 +1476,7 @@ parse_spf_record (struct spf_record *rec, struct spf_resolved_element *resolved,
 		case 'm':
 			/* mx */
 			if (g_ascii_strncasecmp (begin, SPF_MX, sizeof (SPF_MX) - 1) == 0) {
-				res = parse_spf_mx (rec, addr);
+				res = parse_spf_mx (rec, resolved, addr);
 			}
 			else {
 				msg_info_spf (
@@ -1504,7 +1488,7 @@ parse_spf_record (struct spf_record *rec, struct spf_resolved_element *resolved,
 			/* ptr */
 			if (g_ascii_strncasecmp (begin, SPF_PTR,
 					sizeof (SPF_PTR) - 1) == 0) {
-				res = parse_spf_ptr (rec, addr);
+				res = parse_spf_ptr (rec, resolved, addr);
 			}
 			else {
 				msg_info_spf (
