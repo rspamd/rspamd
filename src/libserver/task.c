@@ -330,6 +330,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 		close (fd);
 		task->msg.begin = map;
 		task->msg.len = st.st_size;
+		task->flags |= RSPAMD_TASK_FLAG_FILE;
 
 		rspamd_mempool_add_destructor (task->task_pool, rspamd_task_unmapper, task);
 	}
