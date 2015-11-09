@@ -249,7 +249,7 @@ static void
 rspamd_spf_process_reference (struct spf_resolved *target,
 		struct spf_addr *addr, struct spf_record *rec, gboolean top)
 {
-	struct spf_resolved_element *elt;
+	struct spf_resolved_element *elt, *relt;
 	struct spf_addr *cur = NULL, taddr;
 	guint i;
 
@@ -267,7 +267,7 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 
 		for (i = 0; i < elt->elts->len; i++) {
 			cur = g_ptr_array_index (elt->elts, i);
-			if (cur->flags & RSPAMD_SPF_FLAG_PARSED) {
+			if (cur->flags & RSPAMD_SPF_FLAG_REDIRECT) {
 				break;
 			}
 		}
@@ -281,7 +281,10 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 
 		g_assert (cur->flags & RSPAMD_SPF_FLAG_REFRENCE);
 		g_assert (cur->m.idx < rec->resolved->len);
-		elt = g_ptr_array_index (rec->resolved, cur->m.idx);
+		relt = g_ptr_array_index (rec->resolved, cur->m.idx);
+		msg_debug_spf ("domain %s is redirected to %s", elt->cur_domain,
+				relt->cur_domain);
+		elt = relt;
 	}
 
 	for (i = 0; i < elt->elts->len; i++) {
@@ -1065,7 +1068,7 @@ parse_spf_redirect (struct spf_record *rec,
 
 	cb = rspamd_mempool_alloc (task->task_pool, sizeof (struct spf_dns_cb));
 	/* Set reference */
-	addr->flags |= RSPAMD_SPF_FLAG_REFRENCE;
+	addr->flags |= RSPAMD_SPF_FLAG_REFRENCE | RSPAMD_SPF_FLAG_REDIRECT;
 	addr->m.idx = rec->resolved->len;
 
 	cb->rec = rec;
