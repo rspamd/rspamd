@@ -178,7 +178,7 @@ rspamadm_fuzzy_merge_help (gboolean full_help)
 				"--help: shows available options and commands";
 	}
 	else {
-		help_str = "Create encryption key pairs";
+		help_str = "Merge fuzzy databases";
 	}
 
 	return help_str;
