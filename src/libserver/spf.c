@@ -262,7 +262,7 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 		elt = g_ptr_array_index (rec->resolved, 0);
 	}
 
-	while (elt->redirected) {
+	if (elt->redirected) {
 		g_assert (elt->elts->len > 0);
 
 		for (i = 0; i < elt->elts->len; i++) {
@@ -284,7 +284,6 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 		relt = g_ptr_array_index (rec->resolved, cur->m.idx);
 		msg_debug_spf ("domain %s is redirected to %s", elt->cur_domain,
 				relt->cur_domain);
-		elt = relt;
 	}
 
 	for (i = 0; i < elt->elts->len; i++) {
@@ -297,6 +296,11 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 		else if (cur->flags & RSPAMD_SPF_FLAG_REFRENCE) {
 			/* Process reference */
 			rspamd_spf_process_reference (target, cur, rec, FALSE);
+
+			if (cur->flags & RSPAMD_SPF_FLAG_REDIRECT) {
+				/* Stop on redirected domain */
+				break;
+			}
 		}
 		else {
 			if ((cur->flags & RSPAMD_SPF_FLAG_ANY) && !top) {
