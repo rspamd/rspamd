@@ -813,6 +813,7 @@ fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
 	const struct rspamd_fuzzy_reply *rep;
 	struct rspamd_fuzzy_encrypted_reply encrep;
 	struct rspamd_http_keypair *lk, *rk;
+	gboolean found = FALSE;
 
 	if (rule->peer_key) {
 		required_size = sizeof (encrep);
@@ -860,14 +861,19 @@ fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
 	for (i = 0; i < req->len; i ++) {
 		io = g_ptr_array_index (req, i);
 
-		if (io->tag == rep->tag && !io->replied) {
-			io->replied = TRUE;
+		if (io->tag == rep->tag) {
+			if (!io->replied) {
+				io->replied = TRUE;
 
-			return rep;
+				return rep;
+			}
+			found = TRUE;
 		}
 	}
 
-	msg_info ("unexpected tag: %ud", rep->tag);
+	if (!found) {
+		msg_info ("unexpected tag: %ud", rep->tag);
+	}
 
 	return NULL;
 }
@@ -902,10 +908,15 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 	else if (session->state == 1) {
 		/* Try to read reply */
 		if ((r = read (fd, buf, sizeof (buf) - 1)) == -1) {
-			ret = -1;
+			if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+				event_add (&session->ev, NULL);
+				return;
+			}
 		}
 		else {
 			p = buf;
+			ret = 0;
+
 			while ((rep = fuzzy_process_reply (&p, &r,
 					session->commands, session->rule)) != NULL) {
 				/* Get mapping by flag */
