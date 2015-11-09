@@ -439,6 +439,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		guint index)
 {
 	struct rspamd_worker *cur;
+	gint rc;
 	/* Starting worker process */
 	cur = (struct rspamd_worker *) g_malloc0 (sizeof (struct rspamd_worker));
 
@@ -462,7 +463,12 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		rspamd_log_update_pid (cf->type, rspamd_main->logger);
 		/* Lock statfile pool if possible XXX */
 		/* Init PRNG after fork */
-		ottery_init (NULL);
+		rc = ottery_init (NULL);
+		if (rc != OTTERY_ERR_NONE) {
+			msg_err_main ("cannot initialize PRNG: %d", rc);
+			g_assert (0);
+		}
+
 		g_random_set_seed (ottery_rand_uint32 ());
 		/* Drop privilleges */
 		rspamd_worker_drop_priv (rspamd_main);
