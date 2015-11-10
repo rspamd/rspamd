@@ -26,11 +26,13 @@
 
 #include "clang/Frontend/FrontendPluginRegistry.h"
 #include "clang/AST/AST.h"
+#include "clang/AST/Expr.h"
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Sema/Sema.h"
 #include "llvm/Support/raw_ostream.h"
+#include <unordered_map>
 
 using namespace clang;
 
@@ -45,45 +47,74 @@ namespace {
 		{
 		}
 
-		bool HandleTopLevelDecl (DeclGroupRef DG) override
-		{
-			for (DeclGroupRef::iterator i = DG.begin (), e = DG.end (); i != e;
-				 ++i) {
-				const Decl *D = *i;
-				if (const NamedDecl *ND = dyn_cast<NamedDecl> (D))
-					llvm::errs () << "top-level-decl: \"" <<
-							ND->getNameAsString () << "\"\n";
-			}
-
-			return true;
-		}
-
 		void HandleTranslationUnit (ASTContext &context) override
 		{
 			struct Visitor : public RecursiveASTVisitor<Visitor> {
+				std::unordered_map<std::string, int> printf_functions;
+				ASTContext *pcontext;
 
 				Visitor (void)
 				{
-				}
+					/* name -> format string position */
+					printf_functions = {
+							{"rspamd_printf", 0},
+							{"rspamd_default_log_function", 4},
+							{"rspamd_snprintf", 2},
+							{"rspamd_fprintf", 1}
+					};
+				};
 
-				bool VisitFunctionDecl (FunctionDecl *FD)
+				bool VisitCallExpr (CallExpr *E)
 				{
-					if (FD->isLateTemplateParsed ())
-						LateParsedDecls.insert (FD);
+					auto callee = dyn_cast<NamedDecl> (E->getCalleeDecl ());
+					if (callee == NULL) {
+						llvm::errs () << "Bad callee\n";
+						return false;
+					}
+
+					auto fname = callee->getNameAsString ();
+
+					auto pos_it = printf_functions.find (fname);
+
+					if (pos_it != printf_functions.end ()) {
+						const auto args = E->getArgs ();
+						auto pos = pos_it->second;
+						auto query = args[pos];
+
+						if (!query->isEvaluatable(*pcontext)) {
+							llvm::errs () << "Cannot evaluate query\n";
+							return false;
+						}
+
+						clang::Expr::EvalResult r;
+
+						if (!query->EvaluateAsRValue (r, *pcontext)) {
+							llvm::errs () << "Cannot evaluate query\n";
+							return false;
+						}
+
+						auto qval = dyn_cast<StringLiteral> (
+								r.Val.getLValueBase ().get<const Expr *> ());
+						if (qval) {
+							llvm::errs () << "query string: "
+									<< qval->getString () << "\n";
+						}
+
+						for (auto i = pos + 1; i < E->getNumArgs (); i ++) {
+							auto arg = args[i];
+
+							if (arg) {
+								arg->dump ();
+							}
+						}
+					}
+
 					return true;
 				}
 
-				std::set<FunctionDecl *> LateParsedDecls;
 			} v;
+			v.pcontext = &context;
 			v.TraverseDecl (context.getTranslationUnitDecl ());
-			clang::Sema &sema = Instance.getSema ();
-			for (const FunctionDecl *FD : v.LateParsedDecls) {
-				clang::LateParsedTemplate *LPT = sema.LateParsedTemplateMap.lookup (
-						FD);
-				sema.LateTemplateParser (sema.OpaqueParser, *LPT);
-				llvm::errs () << "late-parsed-decl: \"" <<
-						FD->getNameAsString () << "\"\n";
-			}
 		}
 	};
 
