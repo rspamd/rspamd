@@ -1,5 +1,4 @@
 /*
- * Copyright (c) 2007-2015 University of Illinois at Urbana-Champaign.
  * Copyright (c) 2015, Vsevolod Stakhov
  * All rights reserved.
  *
@@ -23,58 +22,26 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifndef RSPAMD_PRINTF_CHECK_H
+#define RSPAMD_PRINTF_CHECK_H
 
-#include "clang/Frontend/FrontendPluginRegistry.h"
+#include <memory>
 #include "clang/AST/AST.h"
-#include "clang/AST/ASTConsumer.h"
-#include "clang/Frontend/CompilerInstance.h"
-#include "clang/Sema/Sema.h"
-#include "llvm/Support/raw_ostream.h"
-#include "printf_check.h"
-
-
-using namespace clang;
+#include "clang/AST/RecursiveASTVisitor.h"
+#include "clang/AST/Expr.h"
 
 namespace rspamd {
 
-	class RspamdASTConsumer : public ASTConsumer {
-		CompilerInstance &Instance;
+	class PrintfCheckVisitor : public clang::RecursiveASTVisitor<PrintfCheckVisitor> {
+		class impl;
+		std::unique_ptr<impl> pimpl;
 
 	public:
-		RspamdASTConsumer (CompilerInstance &Instance)
-				: Instance (Instance)
-		{
-		}
-
-		void HandleTranslationUnit (ASTContext &context) override
-		{
-			rspamd::PrintfCheckVisitor v(&context);
-			v.TraverseDecl (context.getTranslationUnitDecl ());
-		}
-	};
-
-	class RspamdASTAction : public PluginASTAction {
-	protected:
-		std::unique_ptr <ASTConsumer> CreateASTConsumer (CompilerInstance &CI,
-				llvm::StringRef) override
-		{
-			return llvm::make_unique<RspamdASTConsumer> (CI);
-		}
-
-		bool ParseArgs (const CompilerInstance &CI,
-				const std::vector <std::string> &args) override
-		{
-			return true;
-		}
-
-		void PrintHelp (llvm::raw_ostream &ros)
-		{
-			ros << "Nothing here\n";
-		}
-
+		PrintfCheckVisitor (clang::ASTContext *ctx);
+		virtual ~PrintfCheckVisitor (void);
+		bool VisitCallExpr (clang::CallExpr *E);
 	};
 
 }
 
-static FrontendPluginRegistry::Add <rspamd::RspamdASTAction>
-		X ("rspamd-ast", "rspamd ast checker");
+#endif
