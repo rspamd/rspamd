@@ -29,6 +29,7 @@
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <sstream>
 #include <ctype.h>
@@ -137,6 +138,7 @@ namespace rspamd {
 
 	class PrintfCheckVisitor::impl {
 		std::unordered_map<std::string, unsigned int> printf_functions;
+		std::unordered_set<char> format_specs;
 		ASTContext *pcontext;
 		CompilerInstance *ci;
 
@@ -278,7 +280,13 @@ namespace rspamd {
 					}
 					break;
 				case read_arg:
-					if (!isalpha (c)) {
+					auto found = format_specs.find (c);
+					if (found != format_specs.end () || !isalpha (c)) {
+
+						if (isalpha (c)) {
+							flags.push_back (c);
+						}
+						
 						auto handler = parseFlags (flags, e);
 
 						if (handler) {
@@ -332,6 +340,11 @@ namespace rspamd {
 					{"rspamd_default_log_function", 4},
 					{"rspamd_snprintf",             2},
 					{"rspamd_fprintf",              1}
+			};
+
+			format_specs = {
+					's', 'd', 'l', 'L', 'v', 'V', 'f', 'F', 'g', 'G',
+					'T', 'z', 'D', 'c', 'p', 'P', 'e'
 			};
 		};
 
