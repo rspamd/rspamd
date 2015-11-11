@@ -22,6 +22,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <sys/types.h>
 #include "printf_check.h"
 #include "clang/AST/AST.h"
 #include "clang/AST/Expr.h"
@@ -31,6 +32,9 @@
 #include <vector>
 #include <sstream>
 #include <ctype.h>
+#include <signal.h>
+#include <assert.h>
+#include <cstdint>
 
 using namespace clang;
 
@@ -50,6 +54,12 @@ namespace rspamd {
 	static bool double_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
 	static bool long_double_arg_handler (const Expr *arg,
+			struct PrintfArgChecker *ctx);
+	static bool pointer_arg_handler (const Expr *arg,
+			struct PrintfArgChecker *ctx);
+	static bool pid_arg_handler (const Expr *arg,
+			struct PrintfArgChecker *ctx);
+	static bool int64_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
 
 	using arg_parser_t = bool (*) (const Expr *, struct PrintfArgChecker *);
@@ -117,6 +127,15 @@ namespace rspamd {
 						this->pcontext);
 			case 'c':
 				return llvm::make_unique<PrintfArgChecker> (char_arg_handler,
+						this->pcontext);
+			case 'p':
+				return llvm::make_unique<PrintfArgChecker> (pointer_arg_handler,
+						this->pcontext);
+			case 'P':
+				return llvm::make_unique<PrintfArgChecker> (pid_arg_handler,
+						this->pcontext);
+			case 'L':
+				return llvm::make_unique<PrintfArgChecker> (int64_arg_handler,
 						this->pcontext);
 			default:
 				llvm::errs () << "unknown parser flag: " << type << "\n";
@@ -455,6 +474,9 @@ namespace rspamd {
 					 BuiltinType::Kind::Int},
 					"%z");
 		}
+		else {
+			assert (0);
+		}
 
 		return true;
 	}
@@ -475,5 +497,65 @@ namespace rspamd {
 				ctx,
 				{BuiltinType::Kind::LongDouble},
 				"%F or %G");
+	}
+	static bool
+	pid_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
+	{
+		if (sizeof (pid_t) == sizeof (long)) {
+			return check_builtin_type (arg,
+					ctx,
+					{BuiltinType::Kind::ULong,
+					 BuiltinType::Kind::Long},
+					"%P");
+		}
+		else if (sizeof (pid_t) == sizeof (int)) {
+			return check_builtin_type (arg,
+					ctx,
+					{BuiltinType::Kind::UInt,
+					 BuiltinType::Kind::Int},
+					"%P");
+		}
+		else {
+			assert (0);
+		}
+	}
+
+	static bool
+	pointer_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
+	{
+		auto type = arg->getType ().split ().Ty;
+
+		if (!type->isPointerType ()) {
+			print_error (
+					std::string ("bad pointer argument for %p: ") +
+							arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+
+		return true;
+	}
+
+	static bool
+	int64_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
+	{
+		if (sizeof (int64_t) == sizeof (long long)) {
+			return check_builtin_type (arg,
+					ctx,
+					{BuiltinType::Kind::ULongLong,
+					 BuiltinType::Kind::LongLong},
+					"%L");
+		}
+		else if (sizeof (int64_t) == sizeof (long)) {
+			return check_builtin_type (arg,
+					ctx,
+					{BuiltinType::Kind::ULong,
+					 BuiltinType::Kind::Long},
+					"%z");
+		}
+		else {
+			assert (0);
+		}
+
+		return true;
 	}
 };
