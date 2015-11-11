@@ -416,7 +416,7 @@ xmlrpc_error (GMarkupParseContext *context, GError *error, gpointer user_data)
 {
 	struct lua_xmlrpc_ud *ud = user_data;
 
-	msg_err ("xmlrpc parser error: %s", error->message, ud->parser_state);
+	msg_err ("xmlrpc parser error: %s", error->message);
 }
 
 static gint

@@ -330,8 +330,8 @@ preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
 
 				if (cl_runtime->clcf->max_tokens > 0 &&
 						cl_runtime->processed_tokens > cl_runtime->clcf->max_tokens) {
-					msg_debug_task ("<%s> contains more tokens than allowed for %s classifier: "
-							"%ud > %ud", cbdata->task, cl_runtime->clcf->name,
+					msg_debug_task ("message contains more tokens than allowed for %s classifier: "
+							"%uL > %ud", cl_runtime->clcf->name,
 							cl_runtime->processed_tokens,
 							cl_runtime->clcf->max_tokens);
 
@@ -638,8 +638,8 @@ rspamd_stat_learn_token (gpointer k, gpointer v, gpointer d)
 
 				if (cl_runtime->clcf->max_tokens > 0 &&
 						cl_runtime->processed_tokens > cl_runtime->clcf->max_tokens) {
-					msg_debug_task ("<%s> contains more tokens than allowed for %s classifier: "
-							"%ud > %ud", cbdata->task, cl_runtime->clcf->name,
+					msg_debug_task ("message contains more tokens than allowed for %s classifier: "
+							"%uL > %ud", cl_runtime->clcf->name,
 							cl_runtime->processed_tokens,
 							cl_runtime->clcf->max_tokens);
 

@@ -215,7 +215,7 @@ dns_resolver_init (rspamd_logger_t *logger,
 				priority = strtoul (p, &err, 10);
 				if (err != NULL && *err != '\0') {
 					msg_info_config (
-						"bad character '%x', must be 'm' or 's' or a numeric priority",
+						"bad character '%xc', must be 'm' or 's' or a numeric priority",
 						*err);
 				}
 			}

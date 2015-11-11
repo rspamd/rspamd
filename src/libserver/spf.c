@@ -1608,7 +1608,7 @@ start_spf_parse (struct spf_record *rec, struct spf_resolved_element *resolved,
 				"<%s>: spf error for domain %s: bad spf record version: %*s",
 				rec->task->message_id,
 				rec->sender_domain,
-				sizeof (SPF_VER1_STR) - 1,
+				(gint)sizeof (SPF_VER1_STR) - 1,
 				begin);
 		return FALSE;
 	}

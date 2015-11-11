@@ -225,9 +225,8 @@ make_smtp_tempfile (struct smtp_session *session)
 	session->temp_name = rspamd_mempool_alloc (session->pool, r);
 	rspamd_snprintf (session->temp_name,
 		r,
-		"%s%crspamd-XXXXXX",
-		session->cfg->temp_dir,
-		G_DIR_SEPARATOR);
+		"%s/rspamd-XXXXXX",
+		session->cfg->temp_dir);
 #ifdef HAVE_MKSTEMP
 	/* Umask is set before */
 	session->temp_fd = mkstemp (session->temp_name);

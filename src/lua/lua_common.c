@@ -516,8 +516,8 @@ rspamd_lua_dumpstack (lua_State *L)
 			break;
 
 		case LUA_TBOOLEAN: /* booleans */
-			r += rspamd_snprintf (buf + r, sizeof (buf) - r,lua_toboolean (L,
-					i) ? "bool: true" : "bool: false");
+			r += rspamd_snprintf (buf + r, sizeof (buf) - r,
+					lua_toboolean (L, i) ? "bool: true" : "bool: false");
 			break;
 
 		case LUA_TNUMBER: /* numbers */

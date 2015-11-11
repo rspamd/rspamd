@@ -1202,7 +1202,8 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 
 	if (g_hash_table_lookup (cfg->metrics_symbols, symbol) != NULL &&
 			!rewrite_existing) {
-		msg_debug_config ("symbol %s has been already registered, do not override");
+		msg_debug_config ("symbol %s has been already registered, do not override",
+				symbol);
 		return FALSE;
 	}
 

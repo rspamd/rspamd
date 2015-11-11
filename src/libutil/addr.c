@@ -930,7 +930,6 @@ rspamd_parse_host_port_priority_strv (gchar **tokens,
 			errno = ERANGE;
 			msg_warn ("cannot parse port: %s, error: %s",
 					tokens[1],
-					*err_str,
 					strerror (errno));
 			hints.ai_flags ^= AI_NUMERICSERV;
 		}

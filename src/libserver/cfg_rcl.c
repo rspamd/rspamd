@@ -2186,7 +2186,8 @@ rspamd_rcl_parse_struct_keypair (rspamd_mempool_t *pool,
 		rspamd_snprintf (keybuf, sizeof (keybuf), "%s%s", sk, pk);
 	}
 	else {
-		rspamd_snprintf (keybuf, sizeof (keybuf), "%*s%s", sem - sk, sk, pk);
+		rspamd_snprintf (keybuf, sizeof (keybuf), "%*s%s", (gint)(sem - sk),
+				sk, pk);
 	}
 
 	key = rspamd_http_connection_make_key (keybuf, strlen (keybuf));

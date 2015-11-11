@@ -903,7 +903,7 @@ rspamd_hosts_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 		g_hash_table_destroy (data->prev_data);
 	}
 	if (data->cur_data) {
-		msg_info_pool ("read hash of %z elements", g_hash_table_size
+		msg_info_pool ("read hash of %d elements", g_hash_table_size
 				(data->cur_data));
 	}
 }
@@ -932,7 +932,7 @@ rspamd_kv_list_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 		g_hash_table_destroy (data->prev_data);
 	}
 	if (data->cur_data) {
-		msg_info_pool ("read hash of %z elements", g_hash_table_size
+		msg_info_pool ("read hash of %d elements", g_hash_table_size
 				(data->cur_data));
 	}
 }

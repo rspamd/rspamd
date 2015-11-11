@@ -743,7 +743,7 @@ rspamd_rrd_update_pdp_prep (struct rspamd_rrd_file *file,
 			rspamd_strlcpy (file->pdp_prep[i].last_ds, "U",
 					sizeof (file->pdp_prep[i].last_ds));
 			pdp_new[i] = NAN;
-			msg_debug_rrd ("adding unknown point interval %.3f is less than heartbeat %.3f",
+			msg_debug_rrd ("adding unknown point interval %.3f is less than heartbeat %l",
 					interval, file->ds_def[i].par[RRD_DS_mrhb_cnt].lv);
 		}
 		else {
@@ -1167,7 +1167,7 @@ rspamd_rrd_add_record (struct rspamd_rrd_file *file,
 				rra_steps[i] = 0;
 			}
 
-			msg_debug_rrd ("cdp: %d, rra steps: %d(%d), pdp steps: %d",
+			msg_debug_rrd ("cdp: %ud, rra steps: %ul(%ul), pdp steps: %ul",
 					i, rra_steps[i], pdp_offset, pdp_steps);
 
 			/* Update this specific CDP */
@@ -1238,7 +1238,7 @@ rspamd_rrd_file_default (const gchar *path,
 
 		if (file->stat_head->ds_cnt != 4 || file->stat_head->rra_cnt != 4) {
 			msg_err_rrd ("rrd file is not suitable for rspamd: it has "
-					"%d ds and %d rra", file->stat_head->ds_cnt,
+					"%ul ds and %ul rra", file->stat_head->ds_cnt,
 					file->stat_head->rra_cnt);
 			g_set_error (err, rrd_error_quark (), EINVAL, "bad rrd file");
 			rspamd_rrd_close (file);

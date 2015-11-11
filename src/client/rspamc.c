@@ -606,7 +606,7 @@ rspamc_uptime_output (FILE *out, ucl_object_t *obj)
 		}
 		/* If uptime is less than 1 minute print only seconds */
 		else if (seconds / 60 == 0) {
-			rspamd_printf ("%L second%s\n", (gint)seconds,
+			rspamd_printf ("%L second%s\n", seconds,
 				(gint)seconds > 1 ? "s" : "");
 		}
 		/* Else print the minutes and seconds. */

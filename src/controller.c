@@ -1688,7 +1688,7 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	if (!found) {
-		msg_info_session ("map not found: %d", id);
+		msg_info_session ("map not found: %L", id);
 		rspamd_controller_send_error (conn_ent, 404, "Map id not found");
 		return 0;
 	}

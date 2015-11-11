@@ -180,7 +180,7 @@ rspamadm_pw_check (void)
 	g_assert (pbkdf != NULL);
 
 	if (encrypted_pwd->len < pbkdf->salt_len + pbkdf->key_len + 3) {
-		msg_err ("incorrect salt: password length: %d, must be at least %z characters",
+		msg_err ("incorrect salt: password length: %z, must be at least %z characters",
 				encrypted_pwd->len, pbkdf->salt_len);
 		exit (EXIT_FAILURE);
 	}

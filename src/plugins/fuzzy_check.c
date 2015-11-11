@@ -1259,7 +1259,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 
 		if (part->words == NULL || part->words->len == 0) {
 			msg_info_task ("<%s>, part hash empty, skip fuzzy check",
-				task->message_id, fuzzy_module_ctx->min_hash_len);
+				task->message_id);
 			continue;
 		}
 

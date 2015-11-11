@@ -340,7 +340,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 		task->msg.len = len;
 
 		if (task->msg.len == 0) {
-			msg_warn_task ("message has invalid message length: %ud",
+			msg_warn_task ("message has invalid message length: %uz",
 					task->msg.len);
 			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
 					"Invalid length");
@@ -350,7 +350,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 		if (task->flags & RSPAMD_TASK_FLAG_HAS_CONTROL) {
 			/* We have control chunk, so we need to process it separately */
 			if (task->msg.len < task->message_len) {
-				msg_warn_task ("message has invalid message length: %ud and total len: %ud",
+				msg_warn_task ("message has invalid message length: %ul and total len: %ul",
 						task->message_len, task->msg.len);
 				g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
 						"Invalid length");
@@ -495,7 +495,7 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 			task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
 		}
 
-		msg_debug_task ("task is processed", st);
+		msg_debug_task ("task is processed");
 
 		return ret;
 	}

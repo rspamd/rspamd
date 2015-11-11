@@ -591,7 +591,7 @@ rspamd_socketpair (gint pair[2])
 
 	if (r == -1) {
 		msg_warn ("socketpair failed: %d, '%s'", errno, strerror (
-				errno), pair[0], pair[1]);
+				errno));
 		return -1;
 	}
 

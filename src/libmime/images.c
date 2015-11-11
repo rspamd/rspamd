@@ -90,7 +90,7 @@ process_png_image (struct rspamd_task *task, GByteArray *data)
 	guint8 *p;
 
 	if (data->len < 24) {
-		msg_info_task ("bad png detected (maybe striped): <%s>", task->message_id);
+		msg_info_task ("bad png detected (maybe striped)");
 		return NULL;
 	}
 
@@ -98,7 +98,7 @@ process_png_image (struct rspamd_task *task, GByteArray *data)
 	/* Skip signature and read header section */
 	p = data->data + 12;
 	if (memcmp (p, "IHDR", 4) != 0) {
-		msg_info_task ("png doesn't begins with IHDR section", task->message_id);
+		msg_info_task ("png doesn't begins with IHDR section");
 		return NULL;
 	}
 
@@ -154,7 +154,7 @@ process_gif_image (struct rspamd_task *task, GByteArray *data)
 	guint16 t;
 
 	if (data->len < 10) {
-		msg_info_task ("bad gif detected (maybe striped): <%s>", task->message_id);
+		msg_info_task ("bad gif detected (maybe striped)");
 		return NULL;
 	}
 
@@ -179,7 +179,7 @@ process_bmp_image (struct rspamd_task *task, GByteArray *data)
 	guint8 *p;
 
 	if (data->len < 28) {
-		msg_info_task ("bad bmp detected (maybe striped): <%s>", task->message_id);
+		msg_info_task ("bad bmp detected (maybe striped)");
 		return NULL;
 	}
 

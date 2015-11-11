@@ -259,7 +259,7 @@ rspamd_tokenizer_get_word (rspamd_ftok_t * buf,
 			break;
 		case process_signature:
 			if (*p == '\r' || *p == '\n') {
-				msg_debug ("signature found: %*s", siglen, sig);
+				msg_debug ("signature found: %*s", (gint)siglen, sig);
 				return FALSE;
 			}
 			else if (*p != ' ' && *p != '-' && *p != '_') {

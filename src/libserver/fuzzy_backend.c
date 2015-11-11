@@ -503,7 +503,7 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 			else {
 				shingle_values[i] = -1;
 			}
-			msg_debug_fuzzy_backend ("looking for shingle %d -> %L: %d", i,
+			msg_debug_fuzzy_backend ("looking for shingle %L -> %L: %d", i,
 					shcmd->sgl.hashes[i], rc);
 		}
 		rspamd_fuzzy_backend_cleanup_stmt (backend,
@@ -638,7 +638,7 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 						rspamd_fuzzy_backend_run_stmt (backend,
 								RSPAMD_FUZZY_BACKEND_INSERT_SHINGLE,
 								shcmd->sgl.hashes[i], i, id);
-						msg_debug_fuzzy_backend ("add shingle %d -> %L: %d",
+						msg_debug_fuzzy_backend ("add shingle %d -> %L: %L",
 								i,
 								shcmd->sgl.hashes[i],
 								id);

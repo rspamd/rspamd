@@ -842,7 +842,7 @@ file_log_function (const gchar *log_domain,
 			mremain -= mr;
 		}
 		else {
-			mr = rspamd_snprintf (m, mremain, ": ", function);
+			mr = rspamd_snprintf (m, mremain, ": ");
 			m += mr;
 			mremain -= mr;
 		}

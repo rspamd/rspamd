@@ -136,7 +136,7 @@ radix_find_compressed (radix_compressed_t * tree, guint8 *key, gsize keylen)
 	while (node && kremain) {
 		if (node->skipped) {
 			msg_debug_radix ("finding in the compressed node: %p at level %d",
-				node->value, cur_level);
+					(gpointer)node->value, cur_level);
 			/* It is obviously a leaf node */
 			if (radix_compare_compressed (node, key, keylen, cur_level)) {
 				return node->value;
@@ -151,7 +151,7 @@ radix_find_compressed (radix_compressed_t * tree, guint8 *key, gsize keylen)
 
 		msg_debug_radix ("finding value cur value: %p, left: %p, "
 				"right: %p, go %s, level: %d",
-				node->value, node->d.n.left,
+				(gpointer)node->value, node->d.n.left,
 				node->d.n.right, (kv & bit) ? "right" : "left",
 				cur_level);
 		if (kv & bit) {
@@ -175,7 +175,7 @@ radix_find_compressed (radix_compressed_t * tree, guint8 *key, gsize keylen)
 		/* We still have a node but no more key, so we can search for skipped node */
 		if (node->skipped) {
 			msg_debug_radix ("finding in the compressed node: %p at level %d",
-					node->value, cur_level);
+					(gpointer)node->value, cur_level);
 			/* It is obviously a leaf node */
 			if (radix_compare_compressed (node, key, keylen, cur_level)) {
 				return node->value;
@@ -230,7 +230,7 @@ radix_uncompress_path (radix_compressed_t *tree,
 		}
 
 		msg_debug_radix ("uncompress path for node: %p, left: %p, "
-				"right: %p, go %s", node->value, node->d.n.left,
+				"right: %p, go %s", (gpointer)node->value, node->d.n.left,
 				node->d.n.right, (*nkey & bit) ? "right" : "left");
 
 		bit >>= 1;
@@ -244,7 +244,7 @@ radix_uncompress_path (radix_compressed_t *tree,
 
 	/* Attach leaf node, that was previously a compressed node */
 	msg_debug_radix ("attach leaf node to %s with value %p", (*nkey & bit) ? "right" : "left",
-			leaf->value);
+			(gpointer)leaf->value);
 	if (*nkey & bit) {
 		node->d.n.right = leaf;
 		node->d.n.left = NULL;
@@ -281,7 +281,7 @@ radix_make_leaf_node (radix_compressed_t *tree,
 	}
 	node->value = value;
 	msg_debug_radix ("insert new leaf node with value %p to level %d",
-			value, level);
+			(gpointer)value, level);
 
 	return node;
 }
@@ -322,13 +322,13 @@ radix_replace_node (radix_compressed_t *tree,
 		oldval = node->value;
 		node->value = value;
 		msg_debug_radix ("replace value for leaf node with: %p, old value: %p",
-				value, oldval);
+				(gpointer)value, (gpointer)oldval);
 	}
 	else {
 		oldval = node->value;
 		node->value = value;
 		msg_debug_radix ("replace value for node with: %p, old value: %p",
-							value, oldval);
+				(gpointer)value, (gpointer)oldval);
 	}
 
 	return oldval;
@@ -400,7 +400,8 @@ radix_uncompress_node (radix_compressed_t *tree,
 		 * - otherwise we insert new compressed leaf node
 		 */
 		if (cur_level == target_level) {
-			msg_debug_radix ("insert detached leaf node with value: %p", value);
+			msg_debug_radix ("insert detached leaf node with value: %p",
+					(gpointer)value);
 			nnode->value = value;
 		}
 		else if (masked) {
@@ -415,8 +416,9 @@ radix_uncompress_node (radix_compressed_t *tree,
 				leaf = nnode->d.n.right;
 			}
 			msg_debug_radix ("move leaf node with value: %p, to level %ud, "
-					"set leaf node value to %p and level %ud", nnode->value,
-					cur_level, value, target_level);
+					"set leaf node value to %p and level %ud", (gpointer)nnode->value,
+					cur_level,
+					(gpointer)value, target_level);
 			radix_move_up_compressed_leaf (tree, leaf, nnode, value, key, keylen,
 					target_level);
 		}
@@ -456,7 +458,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 
 	g_assert (keybits >= masklen);
 	msg_debug_radix ("want insert value %p with mask %z, key: %*xs",
-			value, masklen, (int)keylen, key);
+			(gpointer)value, masklen, (int)keylen, key);
 
 	node = tree->root;
 	next = node;
@@ -500,7 +502,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 		tree->size ++;
 	}
 	else if (next->value == RADIX_NO_VALUE) {
-		msg_debug_radix ("insert value node with %p", value);
+		msg_debug_radix ("insert value node with %p", (gpointer)value);
 		next->value = value;
 		tree->size ++;
 	}
@@ -539,8 +541,9 @@ radix_insert_compressed (radix_compressed_t * tree,
 						target_level, value, TRUE);
 				*prev = next;
 				msg_debug_radix ("move leaf node with value: %p, to level %ud, "
-						"set leaf node value to %p and level %ud", next->value,
-						cur_level, value, target_level);
+						"set leaf node value to %p and level %ud", (gpointer)next->value,
+						cur_level,
+						(gpointer)value, target_level);
 				next->skipped = FALSE;
 				if (*k & bit) {
 					next->d.n.right = node;

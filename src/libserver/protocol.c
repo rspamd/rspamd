@@ -370,7 +370,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			IF_HEADER (RCPT_HEADER) {
 				if (!rspamd_task_add_recipient (task,
 						rspamd_mempool_ftokdup (task->task_pool, hv_tok))) {
-					msg_err_task ("bad from header: '%V'", h->value);
+					msg_err_task ("bad from header: '%T'", h->value);
 				}
 				debug_task ("read rcpt header, value: %V", hv);
 			}
