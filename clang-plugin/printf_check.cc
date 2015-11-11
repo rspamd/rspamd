@@ -72,6 +72,9 @@ namespace rspamd {
 	static bool int64_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
 
+	static bool int32_arg_handler (const Expr *arg,
+			struct PrintfArgChecker *ctx);
+
 	static bool tok_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
 
@@ -181,6 +184,9 @@ namespace rspamd {
 			case 'L':
 				return llvm::make_unique<PrintfArgChecker> (int64_arg_handler,
 						this->pcontext, this->ci);
+			case 'D':
+				return llvm::make_unique<PrintfArgChecker> (int32_arg_handler,
+						this->pcontext, this->ci);
 			case 'T':
 				return llvm::make_unique<PrintfArgChecker> (tok_arg_handler,
 						this->pcontext, this->ci);
@@ -286,7 +292,7 @@ namespace rspamd {
 						if (isalpha (c)) {
 							flags.push_back (c);
 						}
-						
+
 						auto handler = parseFlags (flags, e);
 
 						if (handler) {
@@ -627,23 +633,43 @@ namespace rspamd {
 	static bool
 	int64_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
 	{
+		std::vector <BuiltinType::Kind> check;
+
 		if (sizeof (int64_t) == sizeof (long long)) {
-			return check_builtin_type (arg,
-					ctx,
-					{BuiltinType::Kind::ULongLong,
-					 BuiltinType::Kind::LongLong},
-					"%L");
+			check.push_back (BuiltinType::Kind::ULongLong);
+			check.push_back (BuiltinType::Kind::LongLong);
 		}
-		else if (sizeof (int64_t) == sizeof (long)) {
-			return check_builtin_type (arg,
-					ctx,
-					{BuiltinType::Kind::ULong,
-					 BuiltinType::Kind::Long},
-					"%z");
+		if (sizeof (int64_t) == sizeof (long)) {
+			check.push_back (BuiltinType::Kind::ULong);
+			check.push_back (BuiltinType::Kind::Long);
 		}
-		else {
-			assert (0);
+
+		return check_builtin_type (arg,
+				ctx,
+				check,
+				"%L");
+
+		return true;
+	}
+
+	static bool
+	int32_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
+	{
+		std::vector < BuiltinType::Kind> check;
+
+		if (sizeof (int32_t) == sizeof (long)) {
+			check.push_back (BuiltinType::Kind::ULong);
+			check.push_back (BuiltinType::Kind::Long);
 		}
+		if (sizeof (int32_t) == sizeof (int)) {
+			check.push_back (BuiltinType::Kind::UInt);
+			check.push_back (BuiltinType::Kind::Int);
+		}
+
+		return check_builtin_type (arg,
+				ctx,
+				check,
+				"%D");
 
 		return true;
 	}
