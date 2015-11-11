@@ -43,23 +43,44 @@ namespace rspamd {
 
 	static bool cstring_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
+
 	static bool int_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
+
 	static bool long_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
+
 	static bool size_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
+
 	static bool char_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
+
 	static bool double_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
+
 	static bool long_double_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
+
 	static bool pointer_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
+
 	static bool pid_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
+
 	static bool int64_arg_handler (const Expr *arg,
+			struct PrintfArgChecker *ctx);
+
+	static bool tok_arg_handler (const Expr *arg,
+			struct PrintfArgChecker *ctx);
+
+	static bool fstring_arg_handler (const Expr *arg,
+			struct PrintfArgChecker *ctx);
+
+	static bool gstring_arg_handler (const Expr *arg,
+			struct PrintfArgChecker *ctx);
+
+	static bool gerr_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
 
 	using arg_parser_t = bool (*) (const Expr *, struct PrintfArgChecker *);
@@ -69,7 +90,7 @@ namespace rspamd {
 	{
 		auto const &sm = ast->getSourceManager ();
 		auto loc = e->getExprLoc ();
-		llvm::errs() << err << " at " << loc.printToString (sm) << "\n";
+		llvm::errs () << err << " at " << loc.printToString (sm) << "\n";
 	}
 
 	struct PrintfArgChecker {
@@ -82,15 +103,18 @@ namespace rspamd {
 		ASTContext *past;
 
 		PrintfArgChecker (arg_parser_t _p, ASTContext *_ast) :
-				parser(_p), past(_ast)
+				parser (_p), past (_ast)
 		{
 			width = 0;
 			precision = 0;
 			is_unsigned = false;
 		}
-		virtual ~PrintfArgChecker () {}
 
-		bool operator () (const Expr *e)
+		virtual ~PrintfArgChecker ()
+		{
+		}
+
+		bool operator() (const Expr *e)
 		{
 			return parser (e, this);
 		}
@@ -100,16 +124,16 @@ namespace rspamd {
 		std::unordered_map<std::string, unsigned int> printf_functions;
 		ASTContext *pcontext;
 
-		std::unique_ptr<PrintfArgChecker> parseFlags (const std::string &flags)
+		std::unique_ptr <PrintfArgChecker> parseFlags (const std::string &flags)
 		{
-			auto type = flags.back();
+			auto type = flags.back ();
 
 			switch (type) {
 			case 's':
-				return llvm::make_unique<PrintfArgChecker>(cstring_arg_handler,
+				return llvm::make_unique<PrintfArgChecker> (cstring_arg_handler,
 						this->pcontext);
 			case 'd':
-				return llvm::make_unique<PrintfArgChecker>(int_arg_handler,
+				return llvm::make_unique<PrintfArgChecker> (int_arg_handler,
 						this->pcontext);
 			case 'z':
 				return llvm::make_unique<PrintfArgChecker> (size_arg_handler,
@@ -123,7 +147,8 @@ namespace rspamd {
 						this->pcontext);
 			case 'F':
 			case 'G':
-				return llvm::make_unique<PrintfArgChecker> (long_double_arg_handler,
+				return llvm::make_unique<PrintfArgChecker> (
+						long_double_arg_handler,
 						this->pcontext);
 			case 'c':
 				return llvm::make_unique<PrintfArgChecker> (char_arg_handler,
@@ -137,6 +162,18 @@ namespace rspamd {
 			case 'L':
 				return llvm::make_unique<PrintfArgChecker> (int64_arg_handler,
 						this->pcontext);
+			case 'T':
+				return llvm::make_unique<PrintfArgChecker> (tok_arg_handler,
+						this->pcontext);
+			case 'V':
+				return llvm::make_unique<PrintfArgChecker> (fstring_arg_handler,
+						this->pcontext);
+			case 'v':
+				return llvm::make_unique<PrintfArgChecker> (gstring_arg_handler,
+						this->pcontext);
+			case 'e':
+				return llvm::make_unique<PrintfArgChecker> (gerr_arg_handler,
+						this->pcontext);
 			default:
 				llvm::errs () << "unknown parser flag: " << type << "\n";
 				break;
@@ -145,7 +182,7 @@ namespace rspamd {
 			return nullptr;
 		}
 
-		std::shared_ptr<std::vector<PrintfArgChecker> >
+		std::shared_ptr <std::vector<PrintfArgChecker>>
 		genParsers (const StringRef query)
 		{
 			enum {
@@ -158,7 +195,7 @@ namespace rspamd {
 			int width, precision;
 			std::string flags;
 
-			auto res = std::make_shared<std::vector<PrintfArgChecker> >();
+			auto res = std::make_shared < std::vector < PrintfArgChecker > > ();
 
 			for (const auto c : query) {
 				switch (state) {
@@ -266,8 +303,9 @@ namespace rspamd {
 
 			return res;
 		}
+
 	public:
-		impl (ASTContext *_ctx) : pcontext(_ctx)
+		impl (ASTContext *_ctx) : pcontext (_ctx)
 		{
 			/* name -> format string position */
 			printf_functions = {
@@ -321,10 +359,12 @@ namespace rspamd {
 						std::ostringstream err_buf;
 						err_buf << "number of arguments for " << fname
 								<< " missmatches query string '" <<
-								qval->getString().str()
-								<< "', expected " << parsers->size () << " args"
-								<< ", got " << (E->getNumArgs () - (pos + 1))
-								<< " args";
+								qval->getString ().str ()
+										<< "', expected " << parsers->size () <<
+								" args"
+										<< ", got " <<
+								(E->getNumArgs () - (pos + 1))
+										<< " args";
 						print_error (err_buf.str (), E, this->pcontext);
 
 						return false;
@@ -334,7 +374,7 @@ namespace rspamd {
 							auto arg = args[i];
 
 							if (arg) {
-								if (!parsers->at(i - (pos + 1))(arg)) {
+								if (!parsers->at (i - (pos + 1)) (arg)) {
 									return false;
 								}
 							}
@@ -348,7 +388,7 @@ namespace rspamd {
 	};
 
 	PrintfCheckVisitor::PrintfCheckVisitor (ASTContext *ctx) :
-		pimpl { new impl(ctx) }
+			pimpl{new impl (ctx)}
 	{
 	}
 
@@ -374,7 +414,7 @@ namespace rspamd {
 			return false;
 		}
 
-		auto ptr_type = type->getPointeeType().split().Ty;
+		auto ptr_type = type->getPointeeType ().split ().Ty;
 
 		if (!ptr_type->isCharType ()) {
 			/* We might have gchar * here */
@@ -396,7 +436,7 @@ namespace rspamd {
 
 	static bool
 	check_builtin_type (const Expr *arg, struct PrintfArgChecker *ctx,
-			const std::vector<BuiltinType::Kind> &k, const std::string &fmt)
+			const std::vector <BuiltinType::Kind> &k, const std::string &fmt)
 	{
 		auto type = arg->getType ().split ().Ty;
 
@@ -433,8 +473,11 @@ namespace rspamd {
 	static bool
 	int_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
 	{
-		return check_builtin_type (arg, ctx, {BuiltinType::Kind::UInt,
-											  BuiltinType::Kind::Int}, "%d or *");
+		return check_builtin_type (arg,
+				ctx,
+				{BuiltinType::Kind::UInt,
+				 BuiltinType::Kind::Int},
+				"%d or *");
 	}
 
 	static bool
@@ -498,6 +541,7 @@ namespace rspamd {
 				{BuiltinType::Kind::LongDouble},
 				"%F or %G");
 	}
+
 	static bool
 	pid_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
 	{
@@ -557,5 +601,78 @@ namespace rspamd {
 		}
 
 		return true;
+	}
+
+	static bool
+	check_struct_type (const Expr *arg, struct PrintfArgChecker *ctx,
+			const std::string &sname, const std::string &fmt)
+	{
+		auto type = arg->getType ().split ().Ty;
+
+		if (!type->isPointerType ()) {
+			print_error (
+					std::string ("bad string argument for %s: ") +
+							arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+
+		auto ptr_type = type->getPointeeType ().split ().Ty;
+		auto desugared_type = ptr_type->getUnqualifiedDesugaredType ();
+
+		if (!desugared_type->isRecordType ()) {
+			print_error (
+					std::string ("not a record type for ") + fmt + " arg: " +
+							arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+
+		auto struct_type = desugared_type->getAsStructureType ();
+		auto struct_decl = struct_type->getDecl ();
+		auto struct_def = struct_decl->getNameAsString ();
+
+		if (struct_def != sname) {
+			print_error (std::string ("bad argument '") + struct_def + "' for "
+					+ fmt + " arg: " +
+					arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+
+		return true;
+	}
+
+	static bool
+	tok_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
+	{
+		return check_struct_type (arg,
+				ctx,
+				"f_str_tok",
+				"%T");
+	}
+
+	static bool
+	fstring_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
+	{
+		return check_struct_type (arg,
+				ctx,
+				"f_str_s",
+				"%V");
+	}
+
+	static bool
+	gstring_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
+	{
+		return check_struct_type (arg,
+				ctx,
+				"_GString",
+				"%v");
+	}
+
+	static bool
+	gerr_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
+	{
+		return check_struct_type (arg,
+				ctx,
+				"_GError",
+				"%e");
 	}
 };
