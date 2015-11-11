@@ -624,7 +624,7 @@ rspamd_encode_base64_common (const guchar *in, gsize inlen, gint str_len,
 	} } \
 while (0)
 
-	gsize allocated_len = (inlen / 3) * 4 + 4;
+	gsize allocated_len = (inlen / 3) * 4 + 5;
 	gchar *out, *o;
 	guint64 n;
 	guint32 rem, t, carry;
