@@ -96,6 +96,17 @@ namespace rspamd {
 		diag.Report (loc, id) << err;
 	}
 
+	static void
+	print_warning (const std::string &err, const Expr *e, const ASTContext *ast,
+			CompilerInstance *ci)
+	{
+		auto loc = e->getExprLoc ();
+		auto &diag = ci->getDiagnostics ();
+		auto id = diag.getCustomDiagID (DiagnosticsEngine::Warning,
+				"format query warning: %0");
+		diag.Report (loc, id) << err;
+	}
+
 	struct PrintfArgChecker {
 	private:
 		arg_parser_t parser;
@@ -129,7 +140,8 @@ namespace rspamd {
 		ASTContext *pcontext;
 		CompilerInstance *ci;
 
-		std::unique_ptr <PrintfArgChecker> parseFlags (const std::string &flags)
+		std::unique_ptr <PrintfArgChecker> parseFlags (const std::string &flags,
+				const Expr *e)
 		{
 			auto type = flags.back ();
 
@@ -180,7 +192,8 @@ namespace rspamd {
 				return llvm::make_unique<PrintfArgChecker> (gerr_arg_handler,
 						this->pcontext, this->ci);
 			default:
-				llvm::errs () << "unknown parser flag: " << type << "\n";
+				print_warning (std::string("unknown parser flag: ") + type,
+						e, this->pcontext, this->ci);
 				break;
 			}
 
@@ -188,7 +201,7 @@ namespace rspamd {
 		}
 
 		std::shared_ptr <std::vector<PrintfArgChecker>>
-		genParsers (const StringRef query)
+		genParsers (const StringRef query, const Expr *e)
 		{
 			enum {
 				ignore_chars = 0,
@@ -266,7 +279,7 @@ namespace rspamd {
 					break;
 				case read_arg:
 					if (!isalpha (c)) {
-						auto handler = parseFlags (flags);
+						auto handler = parseFlags (flags, e);
 
 						if (handler) {
 							auto handler_copy = *handler;
@@ -275,7 +288,6 @@ namespace rspamd {
 							res->emplace_back (std::move (handler_copy));
 						}
 						else {
-							llvm::errs () << "invalid modifier\n";
 							return nullptr;
 						}
 
@@ -294,7 +306,7 @@ namespace rspamd {
 			}
 
 			if (state == read_arg) {
-				auto handler = parseFlags (flags);
+				auto handler = parseFlags (flags, e);
 
 				if (handler) {
 					auto handler_copy = *handler;
@@ -303,7 +315,6 @@ namespace rspamd {
 					res->emplace_back (std::move (handler_copy));
 				}
 				else {
-					llvm::errs () << "invalid modifier\n";
 					return nullptr;
 				}
 			}
@@ -342,25 +353,28 @@ namespace rspamd {
 				auto query = args[pos];
 
 				if (!query->isEvaluatable (*pcontext)) {
-					llvm::errs () << "Cannot evaluate query\n";
+					print_warning (std::string ("cannot evaluate query"),
+							E, this->pcontext, this->ci);
 					return false;
 				}
 
 				clang::Expr::EvalResult r;
 
 				if (!query->EvaluateAsRValue (r, *pcontext)) {
-					llvm::errs () << "Cannot evaluate query\n";
+					print_warning (std::string ("cannot evaluate rvalue of query"),
+							E, this->pcontext, this->ci);
 					return false;
 				}
 
 				auto qval = dyn_cast<StringLiteral> (
 						r.Val.getLValueBase ().get<const Expr *> ());
 				if (!qval) {
-					llvm::errs () << "Bad or absent query string\n";
+					print_warning (std::string ("bad or absent query string"),
+							E, this->pcontext, this->ci);
 					return false;
 				}
 
-				auto parsers = genParsers (qval->getString ());
+				auto parsers = genParsers (qval->getString (), E);
 
 				if (parsers) {
 					if (parsers->size () != E->getNumArgs () - (pos + 1)) {
