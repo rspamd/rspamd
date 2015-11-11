@@ -504,7 +504,8 @@ namespace rspamd {
 		if (!found) {
 			print_error (
 					std::string ("bad argument for ") + fmt + " arg: " +
-							arg->getType ().getAsString (),
+					arg->getType ().getAsString () + ", resolved as: " +
+					builtin_type->getNameAsCString (ctx->past->getPrintingPolicy ()),
 					arg, ctx->past, ctx->pci);
 			return false;
 		}
