@@ -86,11 +86,14 @@ namespace rspamd {
 	using arg_parser_t = bool (*) (const Expr *, struct PrintfArgChecker *);
 
 	static void
-	print_error (const std::string &err, const Expr *e, const ASTContext *ast)
+	print_error (const std::string &err, const Expr *e, const ASTContext *ast,
+			CompilerInstance *ci)
 	{
-		auto const &sm = ast->getSourceManager ();
 		auto loc = e->getExprLoc ();
-		llvm::errs () << err << " at " << loc.printToString (sm) << "\n";
+		auto &diag = ci->getDiagnostics ();
+		auto id = diag.getCustomDiagID (DiagnosticsEngine::Error,
+				"format query error: %0");
+		diag.Report (loc, id) << err;
 	}
 
 	struct PrintfArgChecker {
@@ -101,9 +104,10 @@ namespace rspamd {
 		int precision;
 		bool is_unsigned;
 		ASTContext *past;
+		CompilerInstance *pci;
 
-		PrintfArgChecker (arg_parser_t _p, ASTContext *_ast) :
-				parser (_p), past (_ast)
+		PrintfArgChecker (arg_parser_t _p, ASTContext *_ast, CompilerInstance *_ci) :
+				parser (_p), past (_ast), pci(_ci)
 		{
 			width = 0;
 			precision = 0;
@@ -123,6 +127,7 @@ namespace rspamd {
 	class PrintfCheckVisitor::impl {
 		std::unordered_map<std::string, unsigned int> printf_functions;
 		ASTContext *pcontext;
+		CompilerInstance *ci;
 
 		std::unique_ptr <PrintfArgChecker> parseFlags (const std::string &flags)
 		{
@@ -131,49 +136,49 @@ namespace rspamd {
 			switch (type) {
 			case 's':
 				return llvm::make_unique<PrintfArgChecker> (cstring_arg_handler,
-						this->pcontext);
+						this->pcontext, this->ci);
 			case 'd':
 				return llvm::make_unique<PrintfArgChecker> (int_arg_handler,
-						this->pcontext);
+						this->pcontext, this->ci);
 			case 'z':
 				return llvm::make_unique<PrintfArgChecker> (size_arg_handler,
-						this->pcontext);
+						this->pcontext, this->ci);
 			case 'l':
 				return llvm::make_unique<PrintfArgChecker> (long_arg_handler,
-						this->pcontext);
+						this->pcontext, this->ci);
 			case 'f':
 			case 'g':
 				return llvm::make_unique<PrintfArgChecker> (double_arg_handler,
-						this->pcontext);
+						this->pcontext, this->ci);
 			case 'F':
 			case 'G':
 				return llvm::make_unique<PrintfArgChecker> (
 						long_double_arg_handler,
-						this->pcontext);
+						this->pcontext, this->ci);
 			case 'c':
 				return llvm::make_unique<PrintfArgChecker> (char_arg_handler,
-						this->pcontext);
+						this->pcontext, this->ci);
 			case 'p':
 				return llvm::make_unique<PrintfArgChecker> (pointer_arg_handler,
-						this->pcontext);
+						this->pcontext, this->ci);
 			case 'P':
 				return llvm::make_unique<PrintfArgChecker> (pid_arg_handler,
-						this->pcontext);
+						this->pcontext, this->ci);
 			case 'L':
 				return llvm::make_unique<PrintfArgChecker> (int64_arg_handler,
-						this->pcontext);
+						this->pcontext, this->ci);
 			case 'T':
 				return llvm::make_unique<PrintfArgChecker> (tok_arg_handler,
-						this->pcontext);
+						this->pcontext, this->ci);
 			case 'V':
 				return llvm::make_unique<PrintfArgChecker> (fstring_arg_handler,
-						this->pcontext);
+						this->pcontext, this->ci);
 			case 'v':
 				return llvm::make_unique<PrintfArgChecker> (gstring_arg_handler,
-						this->pcontext);
+						this->pcontext, this->ci);
 			case 'e':
 				return llvm::make_unique<PrintfArgChecker> (gerr_arg_handler,
-						this->pcontext);
+						this->pcontext, this->ci);
 			default:
 				llvm::errs () << "unknown parser flag: " << type << "\n";
 				break;
@@ -195,7 +200,7 @@ namespace rspamd {
 			int width, precision;
 			std::string flags;
 
-			auto res = std::make_shared < std::vector < PrintfArgChecker > > ();
+			auto res = std::make_shared<std::vector<PrintfArgChecker> > ();
 
 			for (const auto c : query) {
 				switch (state) {
@@ -217,7 +222,8 @@ namespace rspamd {
 					}
 					else if (c == '*') {
 						/* %*s - need integer argument */
-						res->emplace_back (int_arg_handler, this->pcontext);
+						res->emplace_back (int_arg_handler, this->pcontext,
+								this->ci);
 						state = read_arg;
 					}
 					else if (c == '%') {
@@ -249,7 +255,8 @@ namespace rspamd {
 						precision += c - '0';
 					}
 					else if (c == '*') {
-						res->emplace_back (int_arg_handler, this->pcontext);
+						res->emplace_back (int_arg_handler, this->pcontext,
+								this->ci);
 						state = read_arg;
 					}
 					else {
@@ -305,7 +312,8 @@ namespace rspamd {
 		}
 
 	public:
-		impl (ASTContext *_ctx) : pcontext (_ctx)
+		impl (ASTContext *_ctx, clang::CompilerInstance &_ci)
+				: pcontext (_ctx), ci(&_ci)
 		{
 			/* name -> format string position */
 			printf_functions = {
@@ -365,7 +373,7 @@ namespace rspamd {
 										<< ", got " <<
 								(E->getNumArgs () - (pos + 1))
 										<< " args";
-						print_error (err_buf.str (), E, this->pcontext);
+						print_error (err_buf.str (), E, this->pcontext, this->ci);
 
 						return false;
 					}
@@ -387,8 +395,9 @@ namespace rspamd {
 		}
 	};
 
-	PrintfCheckVisitor::PrintfCheckVisitor (ASTContext *ctx) :
-			pimpl{new impl (ctx)}
+	PrintfCheckVisitor::PrintfCheckVisitor (ASTContext *ctx,
+			clang::CompilerInstance &ci) :
+			pimpl{new impl (ctx, ci)}
 	{
 	}
 
@@ -410,7 +419,8 @@ namespace rspamd {
 		if (!type->isPointerType ()) {
 			print_error (
 					std::string ("bad string argument for %s: ") +
-							arg->getType ().getAsString (), arg, ctx->past);
+					arg->getType ().getAsString (),
+					arg, ctx->past, ctx->pci);
 			return false;
 		}
 
@@ -428,7 +438,8 @@ namespace rspamd {
 				}
 				print_error (
 						std::string ("bad string argument for %s: ") +
-								arg->getType ().getAsString (), arg, ctx->past);
+								arg->getType ().getAsString (),
+						arg, ctx->past, ctx->pci);
 				return false;
 			}
 		}
@@ -447,7 +458,8 @@ namespace rspamd {
 		if (!desugared_type->isBuiltinType ()) {
 			print_error (
 					std::string ("not a builtin type for ") + fmt + " arg: " +
-							arg->getType ().getAsString (), arg, ctx->past);
+							arg->getType ().getAsString (),
+					arg, ctx->past, ctx->pci);
 			return false;
 		}
 
@@ -465,7 +477,8 @@ namespace rspamd {
 		if (!found) {
 			print_error (
 					std::string ("bad argument for ") + fmt + " arg: " +
-							arg->getType ().getAsString (), arg, ctx->past);
+							arg->getType ().getAsString (),
+					arg, ctx->past, ctx->pci);
 			return false;
 		}
 
@@ -574,7 +587,8 @@ namespace rspamd {
 		if (!type->isPointerType ()) {
 			print_error (
 					std::string ("bad pointer argument for %p: ") +
-							arg->getType ().getAsString (), arg, ctx->past);
+							arg->getType ().getAsString (),
+					arg, ctx->past, ctx->pci);
 			return false;
 		}
 
@@ -614,7 +628,8 @@ namespace rspamd {
 		if (!type->isPointerType ()) {
 			print_error (
 					std::string ("bad string argument for %s: ") +
-							arg->getType ().getAsString (), arg, ctx->past);
+							arg->getType ().getAsString (),
+					arg, ctx->past, ctx->pci);
 			return false;
 		}
 
@@ -624,7 +639,8 @@ namespace rspamd {
 		if (!desugared_type->isRecordType ()) {
 			print_error (
 					std::string ("not a record type for ") + fmt + " arg: " +
-							arg->getType ().getAsString (), arg, ctx->past);
+							arg->getType ().getAsString (),
+					arg, ctx->past, ctx->pci);
 			return false;
 		}
 
@@ -635,7 +651,8 @@ namespace rspamd {
 		if (struct_def != sname) {
 			print_error (std::string ("bad argument '") + struct_def + "' for "
 					+ fmt + " arg: " +
-					arg->getType ().getAsString (), arg, ctx->past);
+					arg->getType ().getAsString (),
+					arg, ctx->past, ctx->pci);
 			return false;
 		}
 

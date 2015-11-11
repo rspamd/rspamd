@@ -48,7 +48,7 @@ namespace rspamd {
 
 		void HandleTranslationUnit (ASTContext &context) override
 		{
-			rspamd::PrintfCheckVisitor v(&context);
+			rspamd::PrintfCheckVisitor v(&context, Instance);
 			v.TraverseDecl (context.getTranslationUnitDecl ());
 		}
 	};

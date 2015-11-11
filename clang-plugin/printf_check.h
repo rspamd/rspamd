@@ -28,6 +28,7 @@
 #include <memory>
 #include "clang/AST/AST.h"
 #include "clang/AST/RecursiveASTVisitor.h"
+#include "clang/Frontend/CompilerInstance.h"
 #include "clang/AST/Expr.h"
 
 namespace rspamd {
@@ -37,7 +38,7 @@ namespace rspamd {
 		std::unique_ptr<impl> pimpl;
 
 	public:
-		PrintfCheckVisitor (clang::ASTContext *ctx);
+		PrintfCheckVisitor (clang::ASTContext *ctx, clang::CompilerInstance &ci);
 		virtual ~PrintfCheckVisitor (void);
 		bool VisitCallExpr (clang::CallExpr *E);
 	};
