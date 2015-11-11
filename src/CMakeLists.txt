@@ -64,7 +64,7 @@ ENDMACRO(AddModules MLIST WLIST)
 
 # Rspamd core components
 IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
-	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Xclang -load -Xclang ${CMAKE_CURRENT_BINARY_DIR}/../clang-plugin/librspamd-clang.so -Xclang -plugin -Xclang rspamd-ast")
+	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Xclang -load -Xclang ${CMAKE_CURRENT_BINARY_DIR}/../clang-plugin/librspamd-clang.so -Xclang -add-plugin -Xclang rspamd-ast")
 ENDIF ()
 
 ADD_SUBDIRECTORY(lua)
