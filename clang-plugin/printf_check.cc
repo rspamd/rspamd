@@ -87,7 +87,7 @@ namespace rspamd {
 	};
 
 	class PrintfCheckVisitor::impl {
-		std::unordered_map<std::string, int> printf_functions;
+		std::unordered_map<std::string, unsigned int> printf_functions;
 		ASTContext *pcontext;
 
 		std::unique_ptr<PrintfArgChecker> parseFlags (const std::string &flags)
@@ -215,7 +215,13 @@ namespace rspamd {
 							llvm::errs () << "invalid modifier\n";
 							return nullptr;
 						}
-						state = ignore_chars;
+
+						if (c == '%') {
+							state = read_percent;
+						}
+						else {
+							state = ignore_chars;
+						}
 					}
 					else {
 						flags.push_back (c);
