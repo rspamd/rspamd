@@ -229,7 +229,9 @@ namespace rspamd {
 
 			auto res = std::make_shared<std::vector<PrintfArgChecker> > ();
 
-			for (const auto c : query) {
+			for (auto citer = query.begin(); citer != query.end(); ++citer) {
+				auto c = *citer;
+
 				switch (state) {
 				case ignore_chars:
 					if (c == '%') {
@@ -251,14 +253,22 @@ namespace rspamd {
 						/* %*s - need integer argument */
 						res->emplace_back (int_arg_handler, this->pcontext,
 								this->ci);
-						state = read_arg;
+
+						if (*std::next (citer) == '.') {
+							++citer;
+							state = read_precision;
+						}
+						else {
+							state = read_arg;
+						}
 					}
 					else if (c == '%') {
 						/* Percent character, ignore */
 						state = ignore_chars;
 					}
 					else {
-						flags.push_back (c);
+						// Rewind iter
+						--citer;
 						state = read_arg;
 					}
 					break;
@@ -272,7 +282,8 @@ namespace rspamd {
 						precision = c - '0';
 					}
 					else {
-						flags.push_back (c);
+						// Rewind iter
+						--citer;
 						state = read_arg;
 					}
 					break;
@@ -287,7 +298,8 @@ namespace rspamd {
 						state = read_arg;
 					}
 					else {
-						flags.push_back (c);
+						// Rewind iter
+						--citer;
 						state = read_arg;
 					}
 					break;
@@ -317,6 +329,8 @@ namespace rspamd {
 						else {
 							state = ignore_chars;
 						}
+						flags.clear ();
+						width = precision = 0;
 					}
 					else {
 						flags.push_back (c);
