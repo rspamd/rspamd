@@ -511,7 +511,8 @@ namespace rspamd {
 		return check_builtin_type (arg,
 				ctx,
 				{BuiltinType::Kind::UChar,
-				 BuiltinType::Kind::SChar},
+				 BuiltinType::Kind::SChar,
+				 BuiltinType::Kind::Int}, // Because of char -> int propagation
 				"%c");
 	}
 
