@@ -41,6 +41,16 @@ namespace rspamd {
 			struct PrintfArgChecker *ctx);
 	static bool int_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
+	static bool long_arg_handler (const Expr *arg,
+			struct PrintfArgChecker *ctx);
+	static bool size_arg_handler (const Expr *arg,
+			struct PrintfArgChecker *ctx);
+	static bool char_arg_handler (const Expr *arg,
+			struct PrintfArgChecker *ctx);
+	static bool double_arg_handler (const Expr *arg,
+			struct PrintfArgChecker *ctx);
+	static bool long_double_arg_handler (const Expr *arg,
+			struct PrintfArgChecker *ctx);
 
 	using arg_parser_t = bool (*) (const Expr *, struct PrintfArgChecker *);
 
@@ -58,10 +68,16 @@ namespace rspamd {
 	public:
 		int width;
 		int precision;
+		bool is_unsigned;
 		ASTContext *past;
 
 		PrintfArgChecker (arg_parser_t _p, ASTContext *_ast) :
-				parser(_p), past(_ast) {}
+				parser(_p), past(_ast)
+		{
+			width = 0;
+			precision = 0;
+			is_unsigned = false;
+		}
 		virtual ~PrintfArgChecker () {}
 
 		bool operator () (const Expr *e)
@@ -84,6 +100,23 @@ namespace rspamd {
 						this->pcontext);
 			case 'd':
 				return llvm::make_unique<PrintfArgChecker>(int_arg_handler,
+						this->pcontext);
+			case 'z':
+				return llvm::make_unique<PrintfArgChecker> (size_arg_handler,
+						this->pcontext);
+			case 'l':
+				return llvm::make_unique<PrintfArgChecker> (long_arg_handler,
+						this->pcontext);
+			case 'f':
+			case 'g':
+				return llvm::make_unique<PrintfArgChecker> (double_arg_handler,
+						this->pcontext);
+			case 'F':
+			case 'G':
+				return llvm::make_unique<PrintfArgChecker> (long_double_arg_handler,
+						this->pcontext);
+			case 'c':
+				return llvm::make_unique<PrintfArgChecker> (char_arg_handler,
 						this->pcontext);
 			default:
 				llvm::errs () << "unknown parser flag: " << type << "\n";
@@ -361,6 +394,185 @@ namespace rspamd {
 				kind != BuiltinType::Kind::Int) {
 			print_error (std::string ("bad integer argument for %d or * arg: ") +
 					arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+
+		return true;
+	}
+
+	static bool
+	long_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
+	{
+		auto type = arg->getType ().split ().Ty;
+
+		auto desugared_type = type->getUnqualifiedDesugaredType ();
+
+		if (!desugared_type->isIntegerType ()) {
+			print_error (
+					std::string ("bad integer argument for %l arg: ") +
+							arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+		else if (!desugared_type->isBuiltinType ()) {
+			print_error (
+					std::string ("bad integer argument for %l arg: ") +
+							arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+
+		auto builtin_type = dyn_cast<BuiltinType> (desugared_type);
+		auto kind = builtin_type->getKind ();
+
+		if (kind != BuiltinType::Kind::ULong &&
+				kind != BuiltinType::Kind::Long) {
+			print_error (
+					std::string ("bad integer argument for %l arg: ") +
+							arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+
+		return true;
+	}
+
+	static bool
+	char_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
+	{
+		auto type = arg->getType ().split ().Ty;
+
+		auto desugared_type = type->getUnqualifiedDesugaredType ();
+
+		if (!desugared_type->isCharType ()) {
+			print_error (
+					std::string ("bad char argument for %c arg: ") +
+							arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+		else if (!desugared_type->isBuiltinType ()) {
+			print_error (
+					std::string ("bad char argument for %c arg: ") +
+							arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+
+		auto builtin_type = dyn_cast<BuiltinType> (desugared_type);
+		auto kind = builtin_type->getKind ();
+
+		if (kind != BuiltinType::Kind::UChar &&
+				kind != BuiltinType::Kind::SChar) {
+			print_error (
+					std::string ("bad char argument for %c arg: ") +
+							arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+
+		return true;
+	}
+
+	static bool
+	size_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
+	{
+		auto type = arg->getType ().split ().Ty;
+
+		auto desugared_type = type->getUnqualifiedDesugaredType ();
+
+		if (!desugared_type->isIntegerType ()) {
+			print_error (
+					std::string ("bad integer argument for %z arg: ") +
+							arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+		else if (!desugared_type->isBuiltinType ()) {
+			print_error (
+					std::string ("bad integer argument for %z arg: ") +
+							arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+
+		auto builtin_type = dyn_cast<BuiltinType> (desugared_type);
+		auto kind = builtin_type->getKind ();
+
+		if (sizeof (size_t) == sizeof (long)) {
+			if (kind != BuiltinType::Kind::ULong &&
+					kind != BuiltinType::Kind::Long) {
+				print_error (
+						std::string ("bad integer argument for %z arg: ") +
+								arg->getType ().getAsString (), arg, ctx->past);
+				return false;
+			}
+		}
+		else if (sizeof (size_t) == sizeof (int)) {
+			if (kind != BuiltinType::Kind::UInt &&
+					kind != BuiltinType::Kind::Int) {
+				print_error (
+						std::string ("bad integer argument for %z arg: ") +
+								arg->getType ().getAsString (), arg, ctx->past);
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	static bool
+	double_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
+	{
+		auto type = arg->getType ().split ().Ty;
+
+		auto desugared_type = type->getUnqualifiedDesugaredType ();
+
+		if (!desugared_type->isRealFloatingType ()) {
+			print_error (
+					std::string ("bad double argument for %f or %g arg: ") +
+							arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+		else if (!desugared_type->isBuiltinType ()) {
+			print_error (
+					std::string ("bad double argument for %f or %g arg: ") +
+							arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+
+		auto builtin_type = dyn_cast<BuiltinType> (desugared_type);
+		auto kind = builtin_type->getKind ();
+
+		if (kind != BuiltinType::Kind::Double) {
+			print_error (
+					std::string ("bad double argument for %f or %g arg: ") +
+							arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+
+		return true;
+	}
+
+	static bool
+	long_double_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
+	{
+		auto type = arg->getType ().split ().Ty;
+
+		auto desugared_type = type->getUnqualifiedDesugaredType ();
+
+		if (!desugared_type->isRealFloatingType ()) {
+			print_error (
+					std::string ("bad long double argument for %F or %G arg: ") +
+							arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+		else if (!desugared_type->isBuiltinType ()) {
+			print_error (
+					std::string ("bad long double argument for %F or %G arg: ") +
+							arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+
+		auto builtin_type = dyn_cast<BuiltinType> (desugared_type);
+		auto kind = builtin_type->getKind ();
+
+		if (kind != BuiltinType::Kind::LongDouble) {
+			print_error (
+					std::string ("bad long double argument for %F or %G arg: ") +
+							arg->getType ().getAsString (), arg, ctx->past);
 			return false;
 		}
 
