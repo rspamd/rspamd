@@ -37,6 +37,11 @@ using namespace clang;
 namespace rspamd {
 	struct PrintfArgChecker;
 
+	static bool cstring_arg_handler (const Expr *arg,
+			struct PrintfArgChecker *ctx);
+	static bool int_arg_handler (const Expr *arg,
+			struct PrintfArgChecker *ctx);
+
 	using arg_parser_t = bool (*) (const Expr *, struct PrintfArgChecker *);
 
 	static void
@@ -47,28 +52,18 @@ namespace rspamd {
 		llvm::errs() << err << " at " << loc.printToString (sm) << "\n";
 	}
 
-	/* Handles %s */
-	static bool
-	cstring_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
-	{
-		return true;
-	}
-
-	static bool
-	int_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
-	{
-		return true;
-	}
-
 	struct PrintfArgChecker {
 	private:
 		arg_parser_t parser;
 	public:
 		int width;
 		int precision;
+		ASTContext *past;
 
-		PrintfArgChecker (arg_parser_t _p) : parser(_p) {}
+		PrintfArgChecker (arg_parser_t _p, ASTContext *_ast) :
+				parser(_p), past(_ast) {}
 		virtual ~PrintfArgChecker () {}
+
 		bool operator () (const Expr *e)
 		{
 			return parser (e, this);
@@ -85,9 +80,11 @@ namespace rspamd {
 
 			switch (type) {
 			case 's':
-				return llvm::make_unique<PrintfArgChecker>(cstring_arg_handler);
+				return llvm::make_unique<PrintfArgChecker>(cstring_arg_handler,
+						this->pcontext);
 			case 'd':
-				return llvm::make_unique<PrintfArgChecker>(int_arg_handler);
+				return llvm::make_unique<PrintfArgChecker>(int_arg_handler,
+						this->pcontext);
 			default:
 				llvm::errs () << "unknown parser flag: " << type << "\n";
 				break;
@@ -131,7 +128,7 @@ namespace rspamd {
 					}
 					else if (c == '*') {
 						/* %*s - need integer argument */
-						res->emplace_back (int_arg_handler);
+						res->emplace_back (int_arg_handler, this->pcontext);
 						state = read_arg;
 					}
 					else if (c == '%') {
@@ -163,7 +160,7 @@ namespace rspamd {
 						precision += c - '0';
 					}
 					else if (c == '*') {
-						res->emplace_back (int_arg_handler);
+						res->emplace_back (int_arg_handler, this->pcontext);
 						state = read_arg;
 					}
 					else {
@@ -177,6 +174,8 @@ namespace rspamd {
 
 						if (handler) {
 							auto handler_copy = *handler;
+							handler_copy.precision = precision;
+							handler_copy.width = width;
 							res->emplace_back (std::move (handler_copy));
 						}
 						else {
@@ -197,6 +196,8 @@ namespace rspamd {
 
 				if (handler) {
 					auto handler_copy = *handler;
+					handler_copy.precision = precision;
+					handler_copy.width = width;
 					res->emplace_back (std::move (handler_copy));
 				}
 				else {
@@ -250,11 +251,7 @@ namespace rspamd {
 
 				auto qval = dyn_cast<StringLiteral> (
 						r.Val.getLValueBase ().get<const Expr *> ());
-				if (qval) {
-					llvm::errs () << "query string: "
-							<< qval->getString () << "\n";
-				}
-				else {
+				if (!qval) {
 					llvm::errs () << "Bad or absent query string\n";
 					return false;
 				}
@@ -304,5 +301,69 @@ namespace rspamd {
 	bool PrintfCheckVisitor::VisitCallExpr (clang::CallExpr *E)
 	{
 		return pimpl->VisitCallExpr (E);
+	}
+
+	/* Type handlers */
+	static bool
+	cstring_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
+	{
+		auto type = arg->getType ().split ().Ty;
+
+		if (!type->isPointerType ()) {
+			print_error (
+					std::string ("bad string argument for %s: ") +
+							arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+
+		auto ptr_type = type->getPointeeType().split().Ty;
+
+		if (!ptr_type->isCharType ()) {
+			/* We might have gchar * here */
+			auto desugared_type = ptr_type->getUnqualifiedDesugaredType ();
+
+			if (!desugared_type || !desugared_type->isCharType ()) {
+				if (desugared_type) {
+					desugared_type->dump ();
+				}
+				print_error (
+						std::string ("bad string argument for %s: ") +
+								arg->getType ().getAsString (), arg, ctx->past);
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	static bool
+	int_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
+	{
+		auto type = arg->getType ().split ().Ty;
+
+		auto desugared_type = type->getUnqualifiedDesugaredType ();
+
+		if (!desugared_type->isIntegerType ()) {
+			print_error (std::string ("bad integer argument for %d or * arg: ") +
+					arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+		else if (!desugared_type->isBuiltinType ()) {
+			print_error (std::string ("bad integer argument for %d or * arg: ") +
+							arg->getType ().getAsString(), arg, ctx->past);
+			return false;
+		}
+
+		auto builtin_type = dyn_cast<BuiltinType>(desugared_type);
+		auto kind = builtin_type->getKind ();
+
+		if (kind != BuiltinType::Kind::UInt &&
+				kind != BuiltinType::Kind::Int) {
+			print_error (std::string ("bad integer argument for %d or * arg: ") +
+					arg->getType ().getAsString (), arg, ctx->past);
+			return false;
+		}
+
+		return true;
 	}
 };
