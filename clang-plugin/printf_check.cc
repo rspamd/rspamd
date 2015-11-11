@@ -419,8 +419,10 @@ namespace rspamd {
 		if (!ptr_type->isCharType ()) {
 			/* We might have gchar * here */
 			auto desugared_type = ptr_type->getUnqualifiedDesugaredType ();
+			auto desugared_ptr_type = type->getUnqualifiedDesugaredType ();
 
-			if (!desugared_type || !desugared_type->isCharType ()) {
+			if (!desugared_type || (!desugared_type->isCharType () &&
+						!desugared_ptr_type->isVoidPointerType ())) {
 				if (desugared_type) {
 					desugared_type->dump ();
 				}
