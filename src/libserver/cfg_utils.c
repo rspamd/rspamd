@@ -44,6 +44,7 @@
 #define DEFAULT_MAP_TIMEOUT 10
 #define DEFAULT_MIN_WORD 4
 #define DEFAULT_MAX_WORD 40
+#define DEFAULT_WORDS_DECAY 200
 
 struct rspamd_ucl_map_cbdata {
 	struct rspamd_config *cfg;
@@ -175,7 +176,6 @@ rspamd_config_defaults (struct rspamd_config *cfg)
 	cfg->log_level = G_LOG_LEVEL_WARNING;
 	cfg->log_extended = TRUE;
 
-	cfg->min_word_len = DEFAULT_MIN_WORD;
 	cfg->dns_max_requests = 64;
 	cfg->history_rows = 200;
 
@@ -187,7 +187,9 @@ rspamd_config_defaults (struct rspamd_config *cfg)
 	/* Allow non-mime input by default */
 	cfg->allow_raw_input = TRUE;
 	/* Default maximum words processed */
-	cfg->words_decay = 200;
+	cfg->words_decay = DEFAULT_WORDS_DECAY;
+	cfg->min_word_len = DEFAULT_MIN_WORD;
+	cfg->max_word_len = DEFAULT_MAX_WORD;
 }
 
 void
