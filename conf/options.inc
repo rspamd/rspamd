@@ -25,5 +25,10 @@ classify_headers = [
 control_socket = "$DBDIR/rspamd.sock mode=0600";
 history_rows = 200;
 explicit_modules = ["settings"];
+
 # Scan messages even if they are not MIME
 allow_raw_input = true;
+
+# Start ignore words when reaching the following limit, so the total
+# amount of words processed will not be *LIKELY more than the twice of that limit
+words_decay = 200;

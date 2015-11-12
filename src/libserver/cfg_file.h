@@ -307,7 +307,9 @@ struct rspamd_config {
 	gdouble upstream_error_time;					/**< rate of upstream errors							*/
 	gdouble upstream_revive_time;					/**< revive timeout for upstreams						*/
 
-	guint32 min_word_len;							/**< minimum length of the word to be considered		*/
+	guint min_word_len;								/**< minimum length of the word to be considered		*/
+	guint max_word_len;								/**< maximum length of the word to be considered		*/
+	guint words_decay;								/**< limit for words for starting adaptive ignoring		*/
 	guint history_rows;								/**< number of history rows stored						*/
 
 	GList *classify_headers;						/**< list of headers using for statistics				*/

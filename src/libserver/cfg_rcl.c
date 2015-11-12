@@ -1210,35 +1210,35 @@ rspamd_rcl_config_init (void)
 			TRUE);
 	/* Default handlers */
 	rspamd_rcl_add_default_handler (sub,
-		"log_buffer",
-		rspamd_rcl_parse_struct_integer,
-		G_STRUCT_OFFSET (struct rspamd_config, log_buf_size),
-		0);
+			"log_buffer",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, log_buf_size),
+			0);
 	rspamd_rcl_add_default_handler (sub,
-		"log_urls",
-		rspamd_rcl_parse_struct_boolean,
-		G_STRUCT_OFFSET (struct rspamd_config, log_urls),
-		0);
+			"log_urls",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, log_urls),
+			0);
 	rspamd_rcl_add_default_handler (sub,
-		"debug_ip",
-		rspamd_rcl_parse_struct_string,
-		G_STRUCT_OFFSET (struct rspamd_config, debug_ip_map),
-		0);
+			"debug_ip",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_config, debug_ip_map),
+			0);
 	rspamd_rcl_add_default_handler (sub,
-		"debug_symbols",
-		rspamd_rcl_parse_struct_string_list,
-		G_STRUCT_OFFSET (struct rspamd_config, debug_symbols),
-		0);
+			"debug_symbols",
+			rspamd_rcl_parse_struct_string_list,
+			G_STRUCT_OFFSET (struct rspamd_config, debug_symbols),
+			0);
 	rspamd_rcl_add_default_handler (sub,
-		"log_color",
-		rspamd_rcl_parse_struct_boolean,
-		G_STRUCT_OFFSET (struct rspamd_config, log_color),
-		0);
+			"log_color",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, log_color),
+			0);
 	rspamd_rcl_add_default_handler (sub,
-		"color",
-		rspamd_rcl_parse_struct_boolean,
-		G_STRUCT_OFFSET (struct rspamd_config, log_color),
-		0);
+			"color",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, log_color),
+			0);
 	rspamd_rcl_add_default_handler (sub,
 			"log_systemd",
 			rspamd_rcl_parse_struct_boolean,
@@ -1269,204 +1269,213 @@ rspamd_rcl_config_init (void)
 			FALSE,
 			TRUE);
 	rspamd_rcl_add_default_handler (sub,
-		"cache_file",
-		rspamd_rcl_parse_struct_string,
-		G_STRUCT_OFFSET (struct rspamd_config, cache_filename),
-		RSPAMD_CL_FLAG_STRING_PATH);
+			"cache_file",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_config, cache_filename),
+			RSPAMD_CL_FLAG_STRING_PATH);
 	/* Old DNS configuration */
 	rspamd_rcl_add_default_handler (sub,
-		"dns_nameserver",
-		rspamd_rcl_parse_struct_string_list,
-		G_STRUCT_OFFSET (struct rspamd_config, nameservers),
-		0);
+			"dns_nameserver",
+			rspamd_rcl_parse_struct_string_list,
+			G_STRUCT_OFFSET (struct rspamd_config, nameservers),
+			0);
 	rspamd_rcl_add_default_handler (sub,
-		"dns_timeout",
-		rspamd_rcl_parse_struct_time,
-		G_STRUCT_OFFSET (struct rspamd_config, dns_timeout),
-		RSPAMD_CL_FLAG_TIME_FLOAT);
+			"dns_timeout",
+			rspamd_rcl_parse_struct_time,
+			G_STRUCT_OFFSET (struct rspamd_config, dns_timeout),
+			RSPAMD_CL_FLAG_TIME_FLOAT);
 	rspamd_rcl_add_default_handler (sub,
-		"dns_retransmits",
-		rspamd_rcl_parse_struct_integer,
-		G_STRUCT_OFFSET (struct rspamd_config, dns_retransmits),
-		RSPAMD_CL_FLAG_INT_32);
+			"dns_retransmits",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, dns_retransmits),
+			RSPAMD_CL_FLAG_INT_32);
 	rspamd_rcl_add_default_handler (sub,
-		"dns_sockets",
-		rspamd_rcl_parse_struct_integer,
-		G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server),
-		RSPAMD_CL_FLAG_INT_32);
+			"dns_sockets",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server),
+			RSPAMD_CL_FLAG_INT_32);
 	rspamd_rcl_add_default_handler (sub,
-		"dns_max_requests",
-		rspamd_rcl_parse_struct_integer,
-		G_STRUCT_OFFSET (struct rspamd_config, dns_max_requests),
-		RSPAMD_CL_FLAG_INT_32);
+			"dns_max_requests",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, dns_max_requests),
+			RSPAMD_CL_FLAG_INT_32);
 	rspamd_rcl_add_default_handler (sub,
-		"classify_headers",
-		rspamd_rcl_parse_struct_string_list,
-		G_STRUCT_OFFSET (struct rspamd_config, classify_headers),
-		0);
+			"classify_headers",
+			rspamd_rcl_parse_struct_string_list,
+			G_STRUCT_OFFSET (struct rspamd_config, classify_headers),
+			0);
 	rspamd_rcl_add_default_handler (sub,
-		"control_socket",
-		rspamd_rcl_parse_struct_string,
-		G_STRUCT_OFFSET (struct rspamd_config, control_socket_path),
-		0);
+			"control_socket",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_config, control_socket_path),
+			0);
 	rspamd_rcl_add_default_handler (sub,
-		"explicit_modules",
-		rspamd_rcl_parse_struct_string_list,
-		G_STRUCT_OFFSET (struct rspamd_config, explicit_modules),
-		RSPAMD_CL_FLAG_STRING_LIST_HASH);
+			"explicit_modules",
+			rspamd_rcl_parse_struct_string_list,
+			G_STRUCT_OFFSET (struct rspamd_config, explicit_modules),
+			RSPAMD_CL_FLAG_STRING_LIST_HASH);
 	rspamd_rcl_add_default_handler (sub,
-		"allow_raw_input",
-		rspamd_rcl_parse_struct_boolean,
-		G_STRUCT_OFFSET (struct rspamd_config, allow_raw_input),
-		0);
+			"allow_raw_input",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, allow_raw_input),
+			0);
+	rspamd_rcl_add_default_handler (sub,
+			"raw_mode",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, raw_mode),
+			0);
+	rspamd_rcl_add_default_handler (sub,
+			"one_shot",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, one_shot_mode),
+			0);
+	rspamd_rcl_add_default_handler (sub,
+			"check_attachements",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, check_text_attachements),
+			0);
+	rspamd_rcl_add_default_handler (sub,
+			"tempdir",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_config, temp_dir),
+			RSPAMD_CL_FLAG_STRING_PATH);
+	rspamd_rcl_add_default_handler (sub,
+			"pidfile",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_config, pid_file),
+			RSPAMD_CL_FLAG_STRING_PATH);
+	rspamd_rcl_add_default_handler (sub,
+			"filters",
+			rspamd_rcl_parse_struct_string_list,
+			G_STRUCT_OFFSET (struct rspamd_config, filters),
+			0);
+	rspamd_rcl_add_default_handler (sub,
+			"max_diff",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, max_diff),
+			RSPAMD_CL_FLAG_INT_SIZE);
+	rspamd_rcl_add_default_handler (sub,
+			"map_watch_interval",
+			rspamd_rcl_parse_struct_time,
+			G_STRUCT_OFFSET (struct rspamd_config, map_timeout),
+			RSPAMD_CL_FLAG_TIME_FLOAT);
+	rspamd_rcl_add_default_handler (sub,
+			"dynamic_conf",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_config, dynamic_conf),
+			0);
+	rspamd_rcl_add_default_handler (sub, "rrd", rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_config,
+					rrd_file), RSPAMD_CL_FLAG_STRING_PATH);
+	rspamd_rcl_add_default_handler (sub,
+			"history_file",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_config, history_file),
+			RSPAMD_CL_FLAG_STRING_PATH);
+	rspamd_rcl_add_default_handler (sub,
+			"use_mlock",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, mlock_statfile_pool),
+			0);
+	rspamd_rcl_add_default_handler (sub,
+			"strict_protocol_headers",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, strict_protocol_headers),
+			0);
+	rspamd_rcl_add_default_handler (sub,
+			"check_all_filters",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, check_all_filters),
+			0);
+	rspamd_rcl_add_default_handler (sub,
+			"all_filters",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, check_all_filters),
+			0);
+	rspamd_rcl_add_default_handler (sub,
+			"min_word_len",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, min_word_len),
+			RSPAMD_CL_FLAG_UINT);
+	rspamd_rcl_add_default_handler (sub,
+			"max_word_len",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, max_word_len),
+			RSPAMD_CL_FLAG_UINT);
+	rspamd_rcl_add_default_handler (sub,
+			"words_decay",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, words_decay),
+			RSPAMD_CL_FLAG_UINT);
+	rspamd_rcl_add_default_handler (sub,
+			"url_tld",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_config, tld_file),
+			RSPAMD_CL_FLAG_STRING_PATH);
+	rspamd_rcl_add_default_handler (sub,
+			"tld",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_config, tld_file),
+			RSPAMD_CL_FLAG_STRING_PATH);
+	rspamd_rcl_add_default_handler (sub,
+			"history_rows",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, history_rows),
+			RSPAMD_CL_FLAG_UINT);
 
 	/* New DNS configuration */
 	ssub = rspamd_rcl_add_section (&sub->subsections, "dns", NULL, NULL,
 			UCL_OBJECT, FALSE, TRUE);
 	rspamd_rcl_add_default_handler (ssub,
-		"nameserver",
-		rspamd_rcl_parse_struct_string_list,
-		G_STRUCT_OFFSET (struct rspamd_config, nameservers),
-		0);
+			"nameserver",
+			rspamd_rcl_parse_struct_string_list,
+			G_STRUCT_OFFSET (struct rspamd_config, nameservers),
+			0);
 	rspamd_rcl_add_default_handler (ssub,
-		"server",
-		rspamd_rcl_parse_struct_string_list,
-		G_STRUCT_OFFSET (struct rspamd_config, nameservers),
-		0);
+			"server",
+			rspamd_rcl_parse_struct_string_list,
+			G_STRUCT_OFFSET (struct rspamd_config, nameservers),
+			0);
 	rspamd_rcl_add_default_handler (ssub,
-		"timeout",
-		rspamd_rcl_parse_struct_time,
-		G_STRUCT_OFFSET (struct rspamd_config, dns_timeout),
-		RSPAMD_CL_FLAG_TIME_FLOAT);
+			"timeout",
+			rspamd_rcl_parse_struct_time,
+			G_STRUCT_OFFSET (struct rspamd_config, dns_timeout),
+			RSPAMD_CL_FLAG_TIME_FLOAT);
 	rspamd_rcl_add_default_handler (ssub,
-		"retransmits",
-		rspamd_rcl_parse_struct_integer,
-		G_STRUCT_OFFSET (struct rspamd_config, dns_retransmits),
-		RSPAMD_CL_FLAG_INT_32);
+			"retransmits",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, dns_retransmits),
+			RSPAMD_CL_FLAG_INT_32);
 	rspamd_rcl_add_default_handler (ssub,
-		"sockets",
-		rspamd_rcl_parse_struct_integer,
-		G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server),
-		RSPAMD_CL_FLAG_INT_32);
+			"sockets",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server),
+			RSPAMD_CL_FLAG_INT_32);
 	rspamd_rcl_add_default_handler (ssub,
-		"connections",
-		rspamd_rcl_parse_struct_integer,
-		G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server),
-		RSPAMD_CL_FLAG_INT_32);
+			"connections",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server),
+			RSPAMD_CL_FLAG_INT_32);
 
 
 	/* New upstreams configuration */
 	ssub = rspamd_rcl_add_section (&sub->subsections, "upstream", NULL, NULL,
-		UCL_OBJECT, FALSE, TRUE);
+			UCL_OBJECT, FALSE, TRUE);
 	rspamd_rcl_add_default_handler (ssub,
-		"max_errors",
-		rspamd_rcl_parse_struct_integer,
-		G_STRUCT_OFFSET (struct rspamd_config, upstream_max_errors),
-		RSPAMD_CL_FLAG_UINT);
+			"max_errors",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_config, upstream_max_errors),
+			RSPAMD_CL_FLAG_UINT);
 	rspamd_rcl_add_default_handler (ssub,
-		"error_time",
-		rspamd_rcl_parse_struct_time,
-		G_STRUCT_OFFSET (struct rspamd_config, upstream_error_time),
-		RSPAMD_CL_FLAG_TIME_FLOAT);
+			"error_time",
+			rspamd_rcl_parse_struct_time,
+			G_STRUCT_OFFSET (struct rspamd_config, upstream_error_time),
+			RSPAMD_CL_FLAG_TIME_FLOAT);
 	rspamd_rcl_add_default_handler (ssub,
-		"revive_time",
-		rspamd_rcl_parse_struct_time,
-		G_STRUCT_OFFSET (struct rspamd_config, upstream_revive_time),
-		RSPAMD_CL_FLAG_TIME_FLOAT);
-
-	rspamd_rcl_add_default_handler (sub,
-		"raw_mode",
-		rspamd_rcl_parse_struct_boolean,
-		G_STRUCT_OFFSET (struct rspamd_config, raw_mode),
-		0);
-	rspamd_rcl_add_default_handler (sub,
-		"one_shot",
-		rspamd_rcl_parse_struct_boolean,
-		G_STRUCT_OFFSET (struct rspamd_config, one_shot_mode),
-		0);
-	rspamd_rcl_add_default_handler (sub,
-		"check_attachements",
-		rspamd_rcl_parse_struct_boolean,
-		G_STRUCT_OFFSET (struct rspamd_config, check_text_attachements),
-		0);
-	rspamd_rcl_add_default_handler (sub,
-		"tempdir",
-		rspamd_rcl_parse_struct_string,
-		G_STRUCT_OFFSET (struct rspamd_config, temp_dir),
-		RSPAMD_CL_FLAG_STRING_PATH);
-	rspamd_rcl_add_default_handler (sub,
-		"pidfile",
-		rspamd_rcl_parse_struct_string,
-		G_STRUCT_OFFSET (struct rspamd_config, pid_file),
-		RSPAMD_CL_FLAG_STRING_PATH);
-	rspamd_rcl_add_default_handler (sub,
-		"filters",
-		rspamd_rcl_parse_struct_string_list,
-		G_STRUCT_OFFSET (struct rspamd_config, filters),
-		0);
-	rspamd_rcl_add_default_handler (sub,
-		"max_diff",
-		rspamd_rcl_parse_struct_integer,
-		G_STRUCT_OFFSET (struct rspamd_config, max_diff),
-		RSPAMD_CL_FLAG_INT_SIZE);
-	rspamd_rcl_add_default_handler (sub,
-		"map_watch_interval",
-		rspamd_rcl_parse_struct_time,
-		G_STRUCT_OFFSET (struct rspamd_config, map_timeout),
-		RSPAMD_CL_FLAG_TIME_FLOAT);
-	rspamd_rcl_add_default_handler (sub,
-		"dynamic_conf",
-		rspamd_rcl_parse_struct_string,
-		G_STRUCT_OFFSET (struct rspamd_config, dynamic_conf),
-		0);
-	rspamd_rcl_add_default_handler (sub, "rrd", rspamd_rcl_parse_struct_string,
-		G_STRUCT_OFFSET (struct rspamd_config,
-		rrd_file), RSPAMD_CL_FLAG_STRING_PATH);
-	rspamd_rcl_add_default_handler (sub,
-		"history_file",
-		rspamd_rcl_parse_struct_string,
-		G_STRUCT_OFFSET (struct rspamd_config, history_file),
-		RSPAMD_CL_FLAG_STRING_PATH);
-	rspamd_rcl_add_default_handler (sub,
-		"use_mlock",
-		rspamd_rcl_parse_struct_boolean,
-		G_STRUCT_OFFSET (struct rspamd_config, mlock_statfile_pool),
-		0);
-	rspamd_rcl_add_default_handler (sub,
-		"strict_protocol_headers",
-		rspamd_rcl_parse_struct_boolean,
-		G_STRUCT_OFFSET (struct rspamd_config, strict_protocol_headers),
-		0);
-	rspamd_rcl_add_default_handler (sub,
-		"check_all_filters",
-		rspamd_rcl_parse_struct_boolean,
-		G_STRUCT_OFFSET (struct rspamd_config, check_all_filters),
-		0);
-	rspamd_rcl_add_default_handler (sub,
-		"all_filters",
-		rspamd_rcl_parse_struct_boolean,
-		G_STRUCT_OFFSET (struct rspamd_config, check_all_filters),
-		0);
-	rspamd_rcl_add_default_handler (sub,
-		"min_word_len",
-		rspamd_rcl_parse_struct_integer,
-		G_STRUCT_OFFSET (struct rspamd_config, min_word_len),
-		RSPAMD_CL_FLAG_INT_32);
-	rspamd_rcl_add_default_handler (sub,
-		"url_tld",
-		rspamd_rcl_parse_struct_string,
-		G_STRUCT_OFFSET (struct rspamd_config, tld_file),
-		RSPAMD_CL_FLAG_STRING_PATH);
-	rspamd_rcl_add_default_handler (sub,
-		"tld",
-		rspamd_rcl_parse_struct_string,
-		G_STRUCT_OFFSET (struct rspamd_config, tld_file),
-		RSPAMD_CL_FLAG_STRING_PATH);
-	rspamd_rcl_add_default_handler (sub,
-		"history_rows",
-		rspamd_rcl_parse_struct_integer,
-		G_STRUCT_OFFSET (struct rspamd_config, history_rows),
-		RSPAMD_CL_FLAG_UINT);
+			"revive_time",
+			rspamd_rcl_parse_struct_time,
+			G_STRUCT_OFFSET (struct rspamd_config, upstream_revive_time),
+			RSPAMD_CL_FLAG_TIME_FLOAT);
 
 	/**
 	 * Metric section
@@ -1591,20 +1600,20 @@ rspamd_rcl_config_init (void)
 			FALSE,
 			TRUE);
 	rspamd_rcl_add_default_handler (sub,
-		"count",
-		rspamd_rcl_parse_struct_integer,
-		G_STRUCT_OFFSET (struct rspamd_worker_conf, count),
-		RSPAMD_CL_FLAG_INT_16);
+			"count",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_worker_conf, count),
+			RSPAMD_CL_FLAG_INT_16);
 	rspamd_rcl_add_default_handler (sub,
-		"max_files",
-		rspamd_rcl_parse_struct_integer,
-		G_STRUCT_OFFSET (struct rspamd_worker_conf, rlimit_nofile),
-		RSPAMD_CL_FLAG_INT_32);
+			"max_files",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_worker_conf, rlimit_nofile),
+			RSPAMD_CL_FLAG_INT_32);
 	rspamd_rcl_add_default_handler (sub,
-		"max_core",
-		rspamd_rcl_parse_struct_integer,
-		G_STRUCT_OFFSET (struct rspamd_worker_conf, rlimit_maxcore),
-		RSPAMD_CL_FLAG_INT_32);
+			"max_core",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_worker_conf, rlimit_maxcore),
+			RSPAMD_CL_FLAG_INT_32);
 
 	/**
 	 * Modules handler
@@ -1629,40 +1638,40 @@ rspamd_rcl_config_init (void)
 	sub->default_key = "bayes";
 
 	rspamd_rcl_add_default_handler (sub,
-		"min_tokens",
-		rspamd_rcl_parse_struct_integer,
-		G_STRUCT_OFFSET (struct rspamd_classifier_config, min_tokens),
-		RSPAMD_CL_FLAG_INT_32);
+			"min_tokens",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_classifier_config, min_tokens),
+			RSPAMD_CL_FLAG_INT_32);
 	rspamd_rcl_add_default_handler (sub,
-		"max_tokens",
-		rspamd_rcl_parse_struct_integer,
-		G_STRUCT_OFFSET (struct rspamd_classifier_config, max_tokens),
-		RSPAMD_CL_FLAG_INT_32);
+			"max_tokens",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_classifier_config, max_tokens),
+			RSPAMD_CL_FLAG_INT_32);
 	rspamd_rcl_add_default_handler (sub,
-		"backend",
-		rspamd_rcl_parse_struct_string,
-		G_STRUCT_OFFSET (struct rspamd_classifier_config, backend),
-		0);
+			"backend",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_classifier_config, backend),
+			0);
 
 	/*
 	 * Statfile defaults
 	 */
 	ssub = rspamd_rcl_add_section (&sub->subsections,
-		"statfile", "symbol",
-		rspamd_rcl_statfile_handler,
-		UCL_OBJECT,
-		TRUE,
-		TRUE);
+			"statfile", "symbol",
+			rspamd_rcl_statfile_handler,
+			UCL_OBJECT,
+			TRUE,
+			TRUE);
 	rspamd_rcl_add_default_handler (ssub,
-		"label",
-		rspamd_rcl_parse_struct_string,
-		G_STRUCT_OFFSET (struct rspamd_statfile_config, label),
-		0);
+			"label",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_statfile_config, label),
+			0);
 	rspamd_rcl_add_default_handler (ssub,
-		"spam",
-		rspamd_rcl_parse_struct_boolean,
-		G_STRUCT_OFFSET (struct rspamd_statfile_config, is_spam),
-		0);
+			"spam",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_statfile_config, is_spam),
+			0);
 
 	/**
 	 * Composites handler

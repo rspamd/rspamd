@@ -43,6 +43,7 @@
 #define DEFAULT_RLIMIT_MAXCORE 0
 #define DEFAULT_MAP_TIMEOUT 10
 #define DEFAULT_MIN_WORD 4
+#define DEFAULT_MAX_WORD 40
 
 struct rspamd_ucl_map_cbdata {
 	struct rspamd_config *cfg;
@@ -185,6 +186,8 @@ rspamd_config_defaults (struct rspamd_config *cfg)
 			" $time_virtual virtual, dns req: $dns_req";
 	/* Allow non-mime input by default */
 	cfg->allow_raw_input = TRUE;
+	/* Default maximum words processed */
+	cfg->words_decay = 200;
 }
 
 void
