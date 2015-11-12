@@ -151,7 +151,9 @@ INCLUDE(CheckCCompilerFlag)
 INCLUDE(CMakeParseArguments)
 
 FIND_PACKAGE(PkgConfig REQUIRED)
-FIND_PACKAGE(Perl REQUIRED)
+IF (ENABLE_SNOWBALL MATCHES "ON")
+	FIND_PACKAGE(Perl REQUIRED)
+ENDIF()
 
 ############################# MACRO SECTION #############################################
 
