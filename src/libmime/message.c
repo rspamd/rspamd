@@ -27,6 +27,7 @@
 #include "rspamd.h"
 #include "message.h"
 #include "cfg_file.h"
+#include "libutil/regexp.h"
 #include "html.h"
 #include "images.h"
 #include "utlist.h"
@@ -50,6 +51,7 @@
 static ac_trie_t *gtube_trie = NULL;
 static const gchar gtube_pattern[] = "XJS*C4JDBQADN1.NSBN3*2IDNEN*"
 		"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
+static rspamd_regexp_t *utf_compatible_re = NULL;
 
 static GQuark
 rspamd_message_quark (void)
@@ -751,6 +753,13 @@ convert_text_to_utf (struct rspamd_task *task,
 		return part_content;
 	}
 
+	if (utf_compatible_re == NULL) {
+		utf_compatible_re = rspamd_regexp_new (
+			"^(?:utf-?8.*)|(?:us-ascii)|(?:ascii)|(?:us)|(?:ISO-8859-1)|"
+			"(?:latin.*)|(?:CSASCII)$",
+			"i", NULL);
+	}
+
 	if ((charset =
 		g_mime_content_type_get_parameter (type, "charset")) == NULL) {
 		SET_PART_RAW (text_part);
@@ -764,8 +773,7 @@ convert_text_to_utf (struct rspamd_task *task,
 		return part_content;
 	}
 
-	if (g_ascii_strcasecmp (ocharset,
-		"utf-8") == 0 || g_ascii_strcasecmp (ocharset, "utf8") == 0) {
+	if (!rspamd_regexp_match (utf_compatible_re, ocharset, strlen (ocharset), TRUE)) {
 		if (g_utf8_validate (part_content->data, part_content->len, NULL)) {
 			SET_PART_UTF (text_part);
 			return part_content;
