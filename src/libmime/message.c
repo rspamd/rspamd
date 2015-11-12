@@ -1541,7 +1541,7 @@ rspamd_message_parse (struct rspamd_task *task)
 	const gchar *url_end, *p, *end;
 	struct rspamd_url *subject_url;
 	gsize len;
-	gint64 hdr_start, hdr_end;
+	goffset hdr_pos;
 	gint rc, state = 0, diff, *pdiff;
 	guint tw, dw;
 
@@ -1593,16 +1593,19 @@ rspamd_message_parse (struct rspamd_task *task)
 			}
 		}
 		else {
+			GString str;
+
 			task->message = message;
 			rspamd_mempool_add_destructor (task->task_pool,
 					(rspamd_mempool_destruct_t) destroy_message, task->message);
-			hdr_start = g_mime_parser_get_headers_begin (parser);
-			hdr_end = g_mime_parser_get_headers_end (parser);
-			if (hdr_start != -1 && hdr_end != -1) {
-				g_assert (hdr_start <= hdr_end);
-				g_assert (hdr_end <= (gint64) len);
-				task->raw_headers_content.begin = (gchar *) (p + hdr_start);
-				task->raw_headers_content.len = (guint64) (hdr_end - hdr_start);
+			str.str = tmp->data;
+			str.len = tmp->len;
+
+			hdr_pos = rspamd_string_find_eoh (&str);
+
+			if (hdr_pos > 0) {
+				task->raw_headers_content.begin = (gchar *) (p);
+				task->raw_headers_content.len = (guint64) (p + hdr_pos);
 
 				if (task->raw_headers_content.len > 0) {
 					process_raw_headers (task, task->raw_headers,
