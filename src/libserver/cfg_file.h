@@ -222,6 +222,7 @@ struct rspamd_config {
 	gboolean convert_config;                        /**< convert config to XML format						*/
 	gboolean strict_protocol_headers;               /**< strictly check protocol headers					*/
 	gboolean check_all_filters;                     /**< check all filters									*/
+	gboolean allow_raw_input;                       /**< scan messages with invalid mime					*/
 
 	gsize max_diff;                                 /**< maximum diff size for text parts					*/
 

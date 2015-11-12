@@ -183,6 +183,8 @@ rspamd_config_defaults (struct rspamd_config *cfg)
 			"$if_user{ user: $,}$if_smtp_from{ from: <$>,} (default: $is_spam "
 			"($action): [$scores] [$symbols]), len: $len, time: $time_real real,"
 			" $time_virtual virtual, dns req: $dns_req";
+	/* Allow non-mime input by default */
+	cfg->allow_raw_input = TRUE;
 }
 
 void

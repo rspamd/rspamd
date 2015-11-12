@@ -1314,6 +1314,11 @@ rspamd_rcl_config_init (void)
 		rspamd_rcl_parse_struct_string_list,
 		G_STRUCT_OFFSET (struct rspamd_config, explicit_modules),
 		RSPAMD_CL_FLAG_STRING_LIST_HASH);
+	rspamd_rcl_add_default_handler (sub,
+		"allow_raw_input",
+		rspamd_rcl_parse_struct_boolean,
+		G_STRUCT_OFFSET (struct rspamd_config, allow_raw_input),
+		0);
 
 	/* New DNS configuration */
 	ssub = rspamd_rcl_add_section (&sub->subsections, "dns", NULL, NULL,
