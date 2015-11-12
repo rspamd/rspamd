@@ -271,6 +271,7 @@ reread_config (struct rspamd_main *rspamd_main)
 
 	tmp_cfg = (struct rspamd_config *)g_malloc0 (sizeof (struct rspamd_config));
 	tmp_cfg->c_modules = g_hash_table_ref (rspamd_main->cfg->c_modules);
+	tmp_cfg->libs_ctx = rspamd_main->cfg->libs_ctx;
 	rspamd_set_logger (tmp_cfg,  g_quark_try_string ("main"), rspamd_main);
 	rspamd_init_cfg (tmp_cfg, TRUE);
 	cfg_file = rspamd_mempool_strdup (tmp_cfg->cfg_pool,
@@ -817,7 +818,7 @@ main (gint argc, gchar **argv, gchar **env)
 	init_title (argc, argv, env);
 #endif
 
-	rspamd_init_libs ();
+	rspamd_main->cfg->libs_ctx = rspamd_init_libs ();
 	rspamd_init_cfg (rspamd_main->cfg, TRUE);
 
 	memset (&signals, 0, sizeof (struct sigaction));

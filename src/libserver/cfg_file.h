@@ -25,6 +25,7 @@ struct tokenizer;
 struct rspamd_stat_classifier;
 struct module_s;
 struct worker_s;
+struct rspamd_external_libs_ctx;
 
 enum { VAL_UNDEF=0, VAL_TRUE, VAL_FALSE };
 
@@ -314,6 +315,8 @@ struct rspamd_config {
 	struct worker_s **compiled_workers;				/**< list of compiled C modules							*/
 	struct rspamd_log_format *log_format;			/**< parsed log format									*/
 	gchar *log_format_str;							/**< raw log format string								*/
+
+	struct rspamd_external_libs_ctx *libs_ctx;		/**< context for external libraries						*/
 };
 
 

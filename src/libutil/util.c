@@ -1906,11 +1906,13 @@ rspamd_gstring_free_soft (gpointer p)
 	g_string_free (ar, FALSE);
 }
 
-void
+struct rspamd_external_libs_ctx *
 rspamd_init_libs (void)
 {
 	struct rlimit rlim;
+	struct rspamd_external_libs_ctx *ctx;
 
+	ctx = g_slice_alloc0 (sizeof (*ctx));
 	rspamd_cryptobox_init ();
 	ottery_init (NULL);
 
@@ -1949,6 +1951,11 @@ rspamd_init_libs (void)
 #else
 	g_mime_init (0);
 #endif
+	ctx->libmagic = magic_open (MAGIC_MIME|MAGIC_NO_CHECK_COMPRESS|
+			MAGIC_NO_CHECK_ELF|MAGIC_NO_CHECK_TAR|MAGIC_NO_CHECK_TEXT);
+	magic_compile (ctx->libmagic, NULL);
+
+	return ctx;
 }
 
 guint64

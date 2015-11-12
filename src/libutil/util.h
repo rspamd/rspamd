@@ -385,10 +385,11 @@ void rspamd_gstring_free_hard (gpointer p);
  */
 void rspamd_gstring_free_soft (gpointer p);
 
+struct rspamd_external_libs_ctx;
 /**
  * Initialize rspamd libraries
  */
-void rspamd_init_libs (void);
+struct rspamd_external_libs_ctx* rspamd_init_libs (void);
 
 /**
  * Returns some statically initialized random hash seed

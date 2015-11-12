@@ -19,6 +19,7 @@
 #include "libserver/events.h"
 #include "libserver/roll_history.h"
 #include "libserver/task.h"
+#include <magic.h>
 
 
 /* Default values */
@@ -227,6 +228,10 @@ struct controller_session {
 	struct rspamd_task *learn_task;
 	struct rspamd_dns_resolver *resolver;                       /**< DNS resolver									*/
 	struct event_base *ev_base;                                 /**< Event base										*/
+};
+
+struct rspamd_external_libs_ctx {
+	magic_t libmagic;
 };
 
 
