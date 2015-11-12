@@ -48,6 +48,7 @@ struct mime_text_part {
 	GArray *words;
 	GArray *normalized_words;
 	guint nlines;
+	guint64 hash;
 };
 
 struct received_header {

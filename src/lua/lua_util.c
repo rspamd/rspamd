@@ -456,8 +456,8 @@ lua_util_tokenize_text (lua_State *L)
 		exceptions = g_list_reverse (exceptions);
 	}
 
-	res = rspamd_tokenize_text ((gchar *)in, len, TRUE, 0, exceptions, compat,
-			check_sig);
+	res = rspamd_tokenize_text ((gchar *)in, len, TRUE, NULL, exceptions, compat,
+			NULL);
 
 	if (res == NULL) {
 		lua_pushnil (L);

@@ -29,6 +29,7 @@
 #include "rspamd.h"
 #include "tokenizers.h"
 #include "stat_internal.h"
+#include "xxhash.h"
 
 typedef gboolean (*token_get_function) (rspamd_ftok_t * buf, gchar const **pos,
 		rspamd_ftok_t * token,
@@ -289,8 +290,8 @@ set_token:
 
 GArray *
 rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
-		gsize min_len, GList *exceptions, gboolean compat,
-		gboolean check_signature)
+		struct rspamd_config *cfg, GList *exceptions, gboolean compat,
+		guint64 *hash)
 {
 	rspamd_ftok_t token, buf;
 	const gchar *pos = NULL;
@@ -298,6 +299,11 @@ rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 	GArray *res;
 	GList *cur = exceptions;
 	token_get_function func;
+	guint min_len = 0, max_len = 0, word_decay = 0, initial_size = 128;
+	guint64 hv = 0;
+	XXH64_state_t *st;
+	gboolean decay = FALSE;
+	guint64 prob;
 
 	if (text == NULL) {
 		return NULL;
@@ -315,17 +321,70 @@ rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 		func = rspamd_tokenizer_get_word;
 	}
 
-	res = g_array_sized_new (FALSE, FALSE, sizeof (rspamd_ftok_t), 128);
+	if (cfg != NULL) {
+		min_len = cfg->min_word_len;
+		max_len = cfg->max_word_len;
+		word_decay = cfg->words_decay;
+		initial_size = word_decay * 2;
+	}
+
+	res = g_array_sized_new (FALSE, FALSE, sizeof (rspamd_ftok_t), initial_size);
+	st = XXH64_createState ();
+	XXH64_reset (st, 0);
 
 	while (func (&buf, &pos, &token, &cur, is_utf, &l, FALSE)) {
-		if (l == 0 || (min_len > 0 && l < min_len)) {
+		if (l == 0 || (min_len > 0 && l < min_len) ||
+					(max_len > 0 && l > max_len)) {
 			token.begin = pos;
 			continue;
+		}
+
+		if (!decay) {
+			XXH64_update (st, token.begin, token.len);
+
+			/* Check for decay */
+			if (word_decay > 0 && res->len > word_decay && pos - text < (gssize)len) {
+				/* Start decay */
+				gdouble decay_prob;
+
+				decay = TRUE;
+				hv = XXH64_digest (st);
+
+				/* We assume that word is 6 symbols length in average */
+				decay_prob = (gdouble)word_decay / ((len - (pos - text)) / 6.0);
+
+				if (decay_prob >= 1.0) {
+					prob = G_MAXUINT64;
+				}
+				else {
+					prob = decay_prob * G_MAXUINT64;
+				}
+			}
+		}
+		else {
+			/* Decaying probability */
+			/* LCG64 x[n] = a x[n - 1] + b mod 2^64 */
+			hv = 2862933555777941757ULL * hv + 3037000493ULL;
+
+			if (hv > prob) {
+				token.begin = pos;
+				continue;
+			}
 		}
 
 		g_array_append_val (res, token);
 		token.begin = pos;
 	}
+
+	if (!decay) {
+		hv = XXH64_digest (st);
+	}
+
+	if (hash) {
+		*hash = hv;
+	}
+
+	XXH64_freeState (st);
 
 	return res;
 }

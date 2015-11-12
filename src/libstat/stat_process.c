@@ -224,8 +224,8 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 	}
 
 	if (sub != NULL) {
-		words = rspamd_tokenize_text (sub, strlen (sub), TRUE, 0, NULL, compat,
-				FALSE);
+		words = rspamd_tokenize_text (sub, strlen (sub), TRUE, NULL, NULL, compat,
+				NULL);
 		if (words != NULL) {
 			tok->tokenizer->tokenize_func (tok,
 					task->task_pool,

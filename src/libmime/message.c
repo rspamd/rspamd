@@ -980,9 +980,9 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 
 	/* Ugly workaround */
 	tmp = rspamd_tokenize_text (part->content->data,
-			part->content->len, IS_PART_UTF (part), task->cfg->min_word_len,
+			part->content->len, IS_PART_UTF (part), task->cfg,
 			part->urls_offset, FALSE,
-			!(part->flags & RSPAMD_MIME_PART_FLAG_HTML));
+			NULL);
 
 	if (tmp) {
 		for (i = 0; i < tmp->len; i ++) {
@@ -1231,9 +1231,9 @@ process_text_part (struct rspamd_task *task,
 	/* Post process part */
 	detect_text_language (text_part);
 	text_part->words = rspamd_tokenize_text (text_part->content->data,
-			text_part->content->len, IS_PART_UTF (text_part), task->cfg->min_word_len,
+			text_part->content->len, IS_PART_UTF (text_part), task->cfg,
 			text_part->urls_offset, FALSE,
-			!(text_part->flags & RSPAMD_MIME_PART_FLAG_HTML));
+			&text_part->hash);
 	rspamd_normalize_text_part (task, text_part);
 
 	/* Calculate number of lines */
