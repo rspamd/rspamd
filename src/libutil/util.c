@@ -1958,6 +1958,18 @@ rspamd_init_libs (void)
 	return ctx;
 }
 
+void
+rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
+{
+	if (ctx != NULL) {
+		if (ctx->libmagic) {
+			magic_close (ctx->libmagic);
+		}
+
+		g_slice_free1 (sizeof (*ctx), ctx);
+	}
+}
+
 guint64
 rspamd_hash_seed (void)
 {

@@ -1113,6 +1113,7 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_symbols_cache_destroy (rspamd_main->cfg->cache);
 	rspamd_log_close (rspamd_main->logger);
 	rspamd_config_free (rspamd_main->cfg);
+	rspamd_deinit_libs (rspamd_main->cfg->libs_ctx);
 	g_free (rspamd_main->cfg);
 	g_free (rspamd_main);
 	event_base_free (ev_base);

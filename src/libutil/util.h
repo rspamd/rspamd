@@ -392,6 +392,11 @@ struct rspamd_external_libs_ctx;
 struct rspamd_external_libs_ctx* rspamd_init_libs (void);
 
 /**
+ * Destroy external libraries context
+ */
+void rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx);
+
+/**
  * Returns some statically initialized random hash seed
  * @return hash seed
  */
