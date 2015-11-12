@@ -1452,6 +1452,78 @@ destroy_message (void *pointer)
 	g_object_unref (msg);
 }
 
+/* Creates message from various data using libmagic to detect type */
+static void
+rspamd_message_from_data (struct rspamd_task *task, GByteArray *data,
+		GMimeStream *stream)
+{
+	GMimeMessage *message;
+	GMimePart *part;
+	GMimeDataWrapper *wrapper;
+	GMimeContentType *ct = NULL;
+	const char *mb = NULL;
+	gchar *mid;
+
+	g_assert (data != NULL);
+
+	message = g_mime_message_new (TRUE);
+	task->message = message;
+	if (task->from_envelope) {
+		g_mime_message_set_sender (task->message,
+				rspamd_task_get_sender (task));
+	}
+
+	if (task->cfg->libs_ctx) {
+		mb = magic_buffer (task->cfg->libs_ctx->libmagic,
+				data->data,
+				data->len);
+
+		if (mb) {
+			ct = g_mime_content_type_new_from_string (mb);
+		}
+	}
+
+	msg_warn_task ("construct fake mime of type: %s", mb);
+
+	part = g_mime_part_new ();
+
+	if (ct != NULL) {
+		g_mime_object_set_content_type (GMIME_OBJECT (part), ct);
+		g_object_unref (ct);
+	}
+
+#ifdef GMIME24
+	wrapper = g_mime_data_wrapper_new_with_stream (stream,
+			GMIME_CONTENT_ENCODING_8BIT);
+#else
+	wrapper = g_mime_data_wrapper_new_with_stream (stream,
+				GMIME_PART_ENCODING_8BIT);
+#endif
+
+	g_mime_part_set_content_object (part, wrapper);
+	g_mime_message_set_mime_part (task->message, GMIME_OBJECT (part));
+	/* Register destructors */
+	rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) g_object_unref, wrapper);
+	rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) g_object_unref, part);
+	rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) destroy_message, task->message);
+
+	/* Generate message ID */
+	mid = g_mime_utils_generate_message_id ("localhost.localdomain");
+	rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) g_free, mid);
+	g_mime_message_set_message_id (task->message, mid);
+	task->message_id = mid;
+	task->queue_id = mid;
+
+	/* Set headers for message */
+	if (task->subject) {
+		g_mime_message_set_subject (task->message, task->subject);
+	}
+}
+
 gboolean
 rspamd_message_parse (struct rspamd_task *task)
 {
@@ -1460,14 +1532,12 @@ rspamd_message_parse (struct rspamd_task *task)
 	GMimeStream *stream;
 	GByteArray *tmp;
 	GList *first, *cur;
-	GMimePart *part;
-	GMimeDataWrapper *wrapper;
 	GMimeObject *parent;
 	const GMimeContentType *ct;
 	struct mime_text_part *p1, *p2;
 	struct mime_foreach_data md;
 	struct received_header *recv;
-	gchar *mid, *url_str;
+	gchar *url_str;
 	const gchar *url_end, *p, *end;
 	struct rspamd_url *subject_url;
 	gsize len;
@@ -1498,154 +1568,119 @@ rspamd_message_parse (struct rspamd_task *task)
 	if (task->flags & RSPAMD_TASK_FLAG_MIME) {
 
 		debug_task ("construct mime parser from string length %d",
-			(gint)task->msg.len);
+				(gint) task->msg.len);
 		/* create a new parser object to parse the stream */
 		parser = g_mime_parser_new_with_stream (stream);
-		g_object_unref (stream);
 
 		/* parse the message from the stream */
 		message = g_mime_parser_construct_message (parser);
 
 		if (message == NULL) {
-			msg_warn_task ("cannot construct mime from stream");
-			g_set_error (&task->err, rspamd_message_quark(), RSPAMD_FILTER_ERROR,\
-				"cannot parse MIME in the message");
-			/* TODO: backport to 0.9 */
-			g_object_unref (parser);
-			return FALSE;
-		}
+			if (!task->cfg->allow_raw_input) {
+				msg_err_task ("cannot construct mime from stream");
+				g_set_error (&task->err,
+						rspamd_message_quark (),
+						RSPAMD_FILTER_ERROR, \
 
-		task->message = message;
-		rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t) destroy_message, task->message);
-
-		/* Save message id for future use */
-		task->message_id = g_mime_message_get_message_id (task->message);
-		if (task->message_id == NULL) {
-			task->message_id = "undef";
-		}
-
-		memset (&md, 0, sizeof (md));
-		md.task = task;
-#ifdef GMIME24
-		g_mime_message_foreach (message, mime_foreach_callback, &md);
-#else
-		/*
-		 * This is rather strange, but gmime 2.2 do NOT pass top-level part to foreach callback
-		 * so we need to set up parent part by hands
-		 */
-		md.parent = g_mime_message_get_mime_part (message);
-		g_object_unref (md.parent);
-		g_mime_message_foreach_part (message, mime_foreach_callback, &md);
-#endif
-
-		debug_task ("found %ud parts in message", task->parts->len);
-		if (task->queue_id == NULL) {
-			task->queue_id = "undef";
-		}
-
-		hdr_start = g_mime_parser_get_headers_begin (parser);
-		hdr_end = g_mime_parser_get_headers_end (parser);
-		if (hdr_start != -1 && hdr_end != -1) {
-			g_assert (hdr_start <= hdr_end);
-			g_assert (hdr_end <= (gint64)len);
-			task->raw_headers_content.begin = (gchar *)(p + hdr_start);
-			task->raw_headers_content.len = (guint64)(hdr_end - hdr_start);
-
-			if (task->raw_headers_content.len > 0) {
-				process_raw_headers (task, task->raw_headers,
-						task->raw_headers_content.begin,
-						task->raw_headers_content.len);
+						"cannot parse MIME in the message");
+				/* TODO: backport to 0.9 */
+				g_object_unref (parser);
+				return FALSE;
+			}
+			else {
+				task->flags &= ~RSPAMD_TASK_FLAG_MIME;
+				rspamd_message_from_data (task, tmp, stream);
 			}
 		}
+		else {
+			task->message = message;
+			rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t) destroy_message, task->message);
+			hdr_start = g_mime_parser_get_headers_begin (parser);
+			hdr_end = g_mime_parser_get_headers_end (parser);
+			if (hdr_start != -1 && hdr_end != -1) {
+				g_assert (hdr_start <= hdr_end);
+				g_assert (hdr_end <= (gint64) len);
+				task->raw_headers_content.begin = (gchar *) (p + hdr_start);
+				task->raw_headers_content.len = (guint64) (hdr_end - hdr_start);
 
-		rspamd_images_process (task);
-
-		/* Parse received headers */
-		first =
-			rspamd_message_get_header (task, "Received", FALSE);
-		cur = first;
-		while (cur) {
-			recv =
-				rspamd_mempool_alloc0 (task->task_pool,
-					sizeof (struct received_header));
-			parse_recv_header (task->task_pool, cur->data, recv);
-			g_ptr_array_add (task->received, recv);
-			cur = g_list_next (cur);
-		}
-
-		/* Extract data from received header if we were not given IP */
-		if (task->received->len > 0 && (task->flags & RSPAMD_TASK_FLAG_NO_IP)) {
-			recv = g_ptr_array_index (task->received, 0);
-			if (recv->real_ip) {
-				if (!rspamd_parse_inet_address (&task->from_addr,
-						recv->real_ip,
-						0)) {
-					msg_warn_task ("cannot get IP from received header: '%s'",
-							recv->real_ip);
-					task->from_addr = NULL;
+				if (task->raw_headers_content.len > 0) {
+					process_raw_headers (task, task->raw_headers,
+							task->raw_headers_content.begin,
+							task->raw_headers_content.len);
 				}
-			}
-			if (recv->real_hostname) {
-				task->hostname = recv->real_hostname;
 			}
 		}
 
 		/* free the parser (and the stream) */
+		g_object_unref (stream);
 		g_object_unref (parser);
 	}
 	else {
-		/* We got only message, no mime headers or anything like this */
-		/* Construct fake message for it */
-		message = g_mime_message_new (TRUE);
-		task->message = message;
-		if (task->from_envelope) {
-			g_mime_message_set_sender (task->message,
-					rspamd_task_get_sender (task));
-		}
-		/* Construct part for it */
-		part = g_mime_part_new_with_type ("text", "html");
-#ifdef GMIME24
-		wrapper = g_mime_data_wrapper_new_with_stream (stream,
-				GMIME_CONTENT_ENCODING_8BIT);
-#else
-		wrapper = g_mime_data_wrapper_new_with_stream (stream,
-				GMIME_PART_ENCODING_8BIT);
-#endif
-		g_mime_part_set_content_object (part, wrapper);
-		g_mime_message_set_mime_part (task->message, GMIME_OBJECT (part));
-		/* Register destructors */
-		rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t) g_object_unref,	 wrapper);
-		rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t) g_object_unref,	 part);
-		rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t) destroy_message, task->message);
-
-		memset (&md, 0, sizeof (md));
-		md.task = task;
-#ifdef GMIME24
-		g_mime_message_foreach (task->message, mime_foreach_callback, &md);
-#else
-		g_mime_message_foreach_part (task->message, mime_foreach_callback,
-			&md);
-#endif
-		/* Generate message ID */
-		mid = g_mime_utils_generate_message_id ("localhost.localdomain");
-		rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t) g_free, mid);
-		g_mime_message_set_message_id (task->message, mid);
-		task->message_id = mid;
-		task->queue_id = mid;
-
-		/* Set headers for message */
-		if (task->subject) {
-			g_mime_message_set_subject (task->message, task->subject);
-		}
+		task->flags &= ~RSPAMD_TASK_FLAG_MIME;
+		rspamd_message_from_data (task, tmp, stream);
+		g_object_unref (stream);
 	}
 
+
+	/* Save message id for future use */
+	task->message_id = g_mime_message_get_message_id (task->message);
+	if (task->message_id == NULL) {
+		task->message_id = "undef";
+	}
+
+	memset (&md, 0, sizeof (md));
+	md.task = task;
+#ifdef GMIME24
+	g_mime_message_foreach (task->message, mime_foreach_callback, &md);
+#else
+	/*
+	 * This is rather strange, but gmime 2.2 do NOT pass top-level part to foreach callback
+	 * so we need to set up parent part by hands
+	 */
+	md.parent = g_mime_message_get_mime_part (task->message);
+	g_object_unref (md.parent);
+	g_mime_message_foreach_part (task->message, mime_foreach_callback, &md);
+#endif
+
+	debug_task ("found %ud parts in message", task->parts->len);
+	if (task->queue_id == NULL) {
+		task->queue_id = "undef";
+	}
+
+	rspamd_images_process (task);
+
+	/* Parse received headers */
+	first =
+			rspamd_message_get_header (task, "Received", FALSE);
+	cur = first;
+	while (cur) {
+		recv =
+				rspamd_mempool_alloc0 (task->task_pool,
+						sizeof (struct received_header));
+		parse_recv_header (task->task_pool, cur->data, recv);
+		g_ptr_array_add (task->received, recv);
+		cur = g_list_next (cur);
+	}
+
+	/* Extract data from received header if we were not given IP */
+	if (task->received->len > 0 && (task->flags & RSPAMD_TASK_FLAG_NO_IP)) {
+		recv = g_ptr_array_index (task->received, 0);
+		if (recv->real_ip) {
+			if (!rspamd_parse_inet_address (&task->from_addr,
+					recv->real_ip,
+					0)) {
+				msg_warn_task ("cannot get IP from received header: '%s'",
+						recv->real_ip);
+				task->from_addr = NULL;
+			}
+		}
+		if (recv->real_hostname) {
+			task->hostname = recv->real_hostname;
+		}
+	}
 	/* Set mime recipients and sender for the task */
-	task->rcpt_mime = g_mime_message_get_all_recipients (message);
+	task->rcpt_mime = g_mime_message_get_all_recipients (task->message);
 	if (task->rcpt_mime) {
 #ifdef GMIME24
 		rspamd_mempool_add_destructor (task->task_pool,
@@ -1658,7 +1693,7 @@ rspamd_message_parse (struct rspamd_task *task)
 #endif
 	}
 	task->from_mime = internet_address_list_parse_string(
-			g_mime_message_get_sender (message));
+			g_mime_message_get_sender (task->message));
 	if (task->from_mime) {
 #ifdef GMIME24
 		rspamd_mempool_add_destructor (task->task_pool,
