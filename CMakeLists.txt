@@ -617,6 +617,8 @@ ProcessPackage(ICONV LIBRARY iconv libiconv libiconv-2 c INCLUDE iconv.h INCLUDE
 	ROOT ${ICONV_ROOT_DIR} MODULES iconv)
 ProcessPackage(OPENSSL LIBRARY crypto INCLUDE err.h INCLUDE_SUFFIXES include/openssl
 	ROOT ${OPENSSL_ROOT_DIR} MODULES openssl)
+ProcessPackage(MAGIC LIBRARY magic INCLUDE magic.h INCLUDE_SUFFIXES include/libmagic
+	ROOT ${LIBMAGIC_ROOT_DIR} MODULES magic)
 
 #Check for openssl (required for dkim)
 IF(WITH_OPENSSL)

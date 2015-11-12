@@ -8,7 +8,7 @@
 %define rspamd_wwwdir   %{_datadir}/rspamd/www
 
 Name:           rspamd
-Version:        1.0.9
+Version:        1.0.10
 Release: 1
 Summary:        Rapid spam filtering system
 Group:          System Environment/Daemons
@@ -23,7 +23,7 @@ License:        BSD2c
 URL:            https://rspamd.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
 BuildRequires:  glib2-devel,libevent-devel,openssl-devel,pcre-devel,perl
-BuildRequires:  cmake,gmime
+BuildRequires:  cmake,gmime,libmagic-devel
 %if 0%{?suse_version} || 0%{?el7} || 0%{?fedora}
 BuildRequires:  systemd
 Requires(pre):  systemd
