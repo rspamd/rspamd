@@ -1952,7 +1952,7 @@ rspamd_init_libs (void)
 	g_mime_init (0);
 #endif
 	ctx->libmagic = magic_open (MAGIC_MIME|MAGIC_NO_CHECK_COMPRESS|
-			MAGIC_NO_CHECK_ELF|MAGIC_NO_CHECK_TAR|MAGIC_NO_CHECK_TEXT);
+			MAGIC_NO_CHECK_ELF|MAGIC_NO_CHECK_TAR);
 	magic_compile (ctx->libmagic, NULL);
 
 	return ctx;
