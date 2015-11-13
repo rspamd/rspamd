@@ -520,9 +520,19 @@ if type(section) == "table" then
     elseif k == 'match_limit' and type(fn) == 'number' then
       match_limit = fn
     else
-      f = io.open(fn, "r")
-      if f then
-        process_sa_conf(f)
+      if type(fn) == 'table' then
+        for k,elt in ipairs(fn) do
+          f = io.open(elt, "r")
+          if f then
+            process_sa_conf(f)
+          end
+        end
+      else
+        -- assume string
+        f = io.open(fn, "r")
+        if f then
+          process_sa_conf(f)
+        end
       end
     end
   end
