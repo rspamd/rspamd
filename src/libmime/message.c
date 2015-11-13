@@ -773,7 +773,7 @@ convert_text_to_utf (struct rspamd_task *task,
 		return part_content;
 	}
 
-	if (!rspamd_regexp_match (utf_compatible_re, ocharset, strlen (ocharset), TRUE)) {
+	if (rspamd_regexp_match (utf_compatible_re, ocharset, strlen (ocharset), TRUE)) {
 		if (g_utf8_validate (part_content->data, part_content->len, NULL)) {
 			SET_PART_UTF (text_part);
 			return part_content;
