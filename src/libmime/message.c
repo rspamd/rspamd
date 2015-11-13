@@ -1611,9 +1611,9 @@ rspamd_message_parse (struct rspamd_task *task)
 
 			hdr_pos = rspamd_string_find_eoh (&str);
 
-			if (hdr_pos > 0) {
+			if (hdr_pos > 0 && hdr_pos < tmp->len) {
 				task->raw_headers_content.begin = (gchar *) (p);
-				task->raw_headers_content.len = (guint64) (p + hdr_pos);
+				task->raw_headers_content.len = (guint64) (hdr_pos);
 
 				if (task->raw_headers_content.len > 0) {
 					process_raw_headers (task, task->raw_headers,
