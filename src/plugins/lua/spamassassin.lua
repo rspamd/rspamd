@@ -59,6 +59,9 @@ local replace = {
   post = {},
   rules = {},
 }
+local internal_regexp = {
+  date_shift = rspamd_regexp.create_cached("^\\(\\s*'((?:-?\\d+)|(?:undef))'\\s*,\\s*'((?:-?\\d+)|(?:undef))'\\s*\\)$")
+}
 local section = rspamd_config:get_all_opt("spamassassin")
 
 -- Minimum score to treat symbols as meta
@@ -213,25 +216,70 @@ local function gen_eval_rule(arg)
                 return 0
               end
             end
-           
+
             return hdr_freemail
           end
         end
-        
-        return 0   
+
+        return 0
+      end
+    },
+    {
+      'check_for_missing_to_header',
+      function (task, remain)
+        if not task:get_from(1) then
+          return 1
+        end
+
+        return 0
+      end
+    },
+    {
+      'check_for_shifted_date',
+      function (task, remain)
+        -- Remain here contains two args: start and end hours shift
+        local matches = internal_regexp['date_shift']:search(remain, true, true)
+        if matches and matches[1] then
+          local min_diff = matches[1][2]
+          local max_diff = matches[1][3]
+
+          if min_diff == 'undef' then
+            min_diff = 0
+          else
+            min_diff = tonumber(min_diff) * 3600
+          end
+          if max_diff == 'undef' then
+            max_diff = 0
+          else
+            max_diff = tonumber(max_diff) * 3600
+          end
+
+          -- Now get the difference between Date and message received date
+          local dm = task:get_date { format = 'message', gmt = true}
+          local dt = task:get_date { format = 'connect', gmt = true}
+          local diff = dm - dt
+
+          if (max_diff == 0 and diff >= min_diff) or
+              (min_diff == 0 and diff <= max_diff) or
+              (diff >= min_diff and diff <= max_diff) then
+            return 1
+          end
+        end
+
+        return 0
       end
     },
   }
-  
+
   for k,f in ipairs(eval_funcs) do
     local pat = string.format('^%s', f[1])
     local first,last = string.find(arg, pat)
-    
+
     if first then
       local func_arg = string.sub(arg, last + 1)
       return function(task)
         return f[2](task, func_arg)
-      end 
+      end
     end
   end
 end
