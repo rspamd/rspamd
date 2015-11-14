@@ -346,6 +346,18 @@ rspamd_config_process_var (struct rspamd_config *cfg, const rspamd_ftok_t *var,
 	else if (rspamd_ftok_cstr_equal (&tok, "mime_from", TRUE)) {
 		type = RSPAMD_LOG_MIME_FROM;
 	}
+	else if (rspamd_ftok_cstr_equal (&tok, "smtp_rcpt", TRUE)) {
+		type = RSPAMD_LOG_SMTP_RCPT;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "mime_rcpt", TRUE)) {
+		type = RSPAMD_LOG_MIME_RCPT;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "smtp_rcpts", TRUE)) {
+		type = RSPAMD_LOG_SMTP_RCPTS;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "mime_rcpts", TRUE)) {
+		type = RSPAMD_LOG_MIME_RCPTS;
+	}
 	else if (rspamd_ftok_cstr_equal (&tok, "time_real", TRUE)) {
 		type = RSPAMD_LOG_TIME_REAL;
 	}
