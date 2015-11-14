@@ -73,6 +73,10 @@ Rspamd supports the following variables:
 - `user` - authenticated user
 - `smtp_from` - envelope from (or MIME from if SMTP from is absent)
 - `mime_from` - MIME from
+- `smtp_rcpt` - envelope rcpt (or MIME from if SMTP from is absent) - the first recipient
+- `mime_rcpt` - MIME rcpt - the first recipient
+- `smtp_rcpts` - envelope rcpts - all recipients
+- `mime_rcpts` - MIME rcpts - all recipients
 - `len` - length of essage
 - `is_spam` - one letter of spammines: `T` for spam, `F` for ham and `S` for skipped messages
 - `action` - default metric action
