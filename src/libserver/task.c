@@ -694,9 +694,27 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 			ret = TRUE;
 		}
 		break;
+	case RSPAMD_LOG_SMTP_RCPT:
+	case RSPAMD_LOG_SMTP_RCPTS:
+		if (task->rcpt_envelope &&
+					internet_address_list_length (task->rcpt_envelope) > 0) {
+			ret = TRUE;
+		}
+		else if (task->rcpt_mime &&
+				internet_address_list_length (task->rcpt_mime) > 0) {
+			ret = TRUE;
+		}
+		break;
+	case RSPAMD_LOG_MIME_RCPT:
+	case RSPAMD_LOG_MIME_RCPTS:
+		if (task->rcpt_mime &&
+				internet_address_list_length (task->rcpt_mime) > 0) {
+			ret = TRUE;
+		}
+		break;
 	case RSPAMD_LOG_SMTP_FROM:
 		if (task->from_envelope &&
-					internet_address_list_length (task->from_envelope) > 0) {
+				internet_address_list_length (task->from_envelope) > 0) {
 			ret = TRUE;
 		}
 		else if (task->from_mime &&
@@ -828,14 +846,51 @@ rspamd_task_log_write_var (struct rspamd_task *task, rspamd_fstring_t *logbuf,
 }
 
 static rspamd_fstring_t *
+rspamd_task_write_ialist (struct rspamd_task *task,
+		InternetAddressList *ialist, gint lim,
+		struct rspamd_log_format *lf,
+		rspamd_fstring_t *logbuf)
+{
+	rspamd_fstring_t *res = logbuf;
+	rspamd_ftok_t var = {.begin = NULL, .len = 0};
+	InternetAddressMailbox *iamb;
+	InternetAddress *ia = NULL;
+	gint i;
+
+	if (lim <= 0) {
+		lim = internet_address_list_length (ialist);
+	}
+
+	for (i = 0; i < lim; i++) {
+		ia = internet_address_list_get_address (ialist, i);
+
+		var.len = 0;
+		if (ia && INTERNET_ADDRESS_IS_MAILBOX (ia)) {
+			iamb = INTERNET_ADDRESS_MAILBOX (ia);
+			var.begin = iamb->addr;
+			var.len = strlen (var.begin);
+		}
+
+		if (var.len > 0) {
+			res = rspamd_task_log_write_var (task, logbuf,
+					&var, (const rspamd_ftok_t *) lf->data);
+
+			if (i != lim - 1) {
+				res = rspamd_fstring_append (res, ",", 1);
+			}
+		}
+	}
+
+	return res;
+}
+
+static rspamd_fstring_t *
 rspamd_task_log_variable (struct rspamd_task *task,
 		struct rspamd_log_format *lf, rspamd_fstring_t *logbuf)
 {
 	rspamd_fstring_t *res = logbuf;
 	rspamd_ftok_t var = {.begin = NULL, .len = 0};
 	static gchar numbuf[32];
-	InternetAddress *ia = NULL;
-	InternetAddressMailbox *iamb;
 
 	switch (lf->type) {
 	/* String vars */
@@ -903,32 +958,51 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		break;
 	/* InternetAddress vars */
 	case RSPAMD_LOG_SMTP_FROM:
-		ia = task->from_envelope ?
-			 internet_address_list_get_address (task->from_envelope, 0) : NULL;
-
-		if (ia && INTERNET_ADDRESS_IS_MAILBOX (ia)) {
-			iamb = INTERNET_ADDRESS_MAILBOX (ia);
-			var.begin = iamb->addr;
-			var.len = strlen (var.begin);
+		if (task->from_envelope) {
+			return rspamd_task_write_ialist (task, task->from_envelope, 1, lf,
+					logbuf);
 		}
-		else {
-			ia = task->from_mime ?
-				 internet_address_list_get_address (task->from_mime, 0) : NULL;
-
-			if (ia && INTERNET_ADDRESS_IS_MAILBOX (ia)) {
-				iamb = INTERNET_ADDRESS_MAILBOX (ia);
-				var.begin = iamb->addr;
-				var.len = strlen (var.begin);
-			}
+		else if (task->from_mime) {
+			return rspamd_task_write_ialist (task, task->from_mime, 1, lf,
+					logbuf);
 		}
 		break;
 	case RSPAMD_LOG_MIME_FROM:
-		ia = internet_address_list_get_address (task->from_mime, 0);
-
-		if (ia && INTERNET_ADDRESS_IS_MAILBOX (ia)) {
-			iamb = INTERNET_ADDRESS_MAILBOX (ia);
-			var.begin = iamb->addr;
-			var.len = strlen (var.begin);
+		if (task->from_mime) {
+			return rspamd_task_write_ialist (task, task->from_mime, 1, lf,
+					logbuf);
+		}
+		break;
+	case RSPAMD_LOG_SMTP_RCPT:
+		if (task->rcpt_envelope) {
+			return rspamd_task_write_ialist (task, task->rcpt_envelope, 1, lf,
+					logbuf);
+		}
+		else if (task->rcpt_mime) {
+			return rspamd_task_write_ialist (task, task->rcpt_mime, 1, lf,
+					logbuf);
+		}
+		break;
+	case RSPAMD_LOG_MIME_RCPT:
+		if (task->rcpt_mime) {
+			return rspamd_task_write_ialist (task, task->rcpt_mime, 1, lf,
+					logbuf);
+		}
+		break;
+	case RSPAMD_LOG_SMTP_RCPTS:
+		if (task->rcpt_envelope) {
+			return rspamd_task_write_ialist (task, task->rcpt_envelope, -1, lf,
+					logbuf);
+		}
+		else if (task->rcpt_mime) {
+			return rspamd_task_write_ialist (task, task->rcpt_mime, -1, lf,
+					logbuf);
+		}
+		break;
+	case RSPAMD_LOG_MIME_RCPTS:
+		if (task->rcpt_mime) {
+			return rspamd_task_write_ialist (task, task->rcpt_mime, -1, lf,
+					logbuf);
 		}
 		break;
 	default:
