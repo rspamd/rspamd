@@ -41,7 +41,7 @@ static gchar *password = NULL;
 static gchar *ip = NULL;
 static gchar *from = NULL;
 static gchar *deliver_to = NULL;
-static gchar *rcpt = NULL;
+static gchar **rcpts = NULL;
 static gchar *user = NULL;
 static gchar *helo = "rspamc.local";
 static gchar *hostname = "localhost";
@@ -99,7 +99,7 @@ static GOptionEntry entries[] =
 	  "Emulate that message is delivered to specified user", NULL },
 	{ "from", 'F', 0, G_OPTION_ARG_STRING, &from,
 	  "Emulate that message is from specified user", NULL },
-	{ "rcpt", 'r', 0, G_OPTION_ARG_STRING, &rcpt,
+	{ "rcpt", 'r', 0, G_OPTION_ARG_STRING_ARRAY, &rcpts,
 	  "Emulate that message is for specified user", NULL },
 	{ "helo", 0, 0, G_OPTION_ARG_STRING, &helo,
 	  "Imitate SMTP HELO passing from MTA", NULL },
