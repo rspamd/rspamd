@@ -66,6 +66,14 @@ static gboolean mime_output = FALSE;
 static gchar *key = NULL;
 static GList *children;
 
+#define ADD_CLIENT_HEADER(o, n, v) do { \
+    struct rspamd_http_client_header *nh; \
+    nh = g_malloc (sizeof (*nh)); \
+    nh->name = (n); \
+    nh->value = (v); \
+    g_queue_push_tail ((o), nh); \
+} while (0)
+
 static GOptionEntry entries[] =
 {
 	{ "connect", 'h', 0, G_OPTION_ARG_STRING, &connect_str,
@@ -390,52 +398,54 @@ print_commands_list (void)
 		"control commands use port 11334 while normal use 11333 by default (see -h option)\n");
 }
 
-
 static void
-add_options (GHashTable *opts)
+add_options (GQueue *opts)
 {
 	GString *numbuf;
-	gchar **hdr;
+	gchar **hdr, **rcpt;
 
 	if (ip != NULL) {
-		g_hash_table_insert (opts, "Ip", ip);
+		ADD_CLIENT_HEADER (opts, "Ip", ip);
 	}
 	if (from != NULL) {
-		g_hash_table_insert (opts, "From", from);
+		ADD_CLIENT_HEADER (opts, "From", from);
 	}
 	if (user != NULL) {
-		g_hash_table_insert (opts, "User", user);
+		ADD_CLIENT_HEADER (opts, "User", user);
 	}
-	if (rcpt != NULL) {
-		g_hash_table_insert (opts, "Rcpt", rcpt);
+	if (rcpts != NULL) {
+
+		for (rcpt = rcpts; *rcpt != NULL; rcpt ++) {
+			ADD_CLIENT_HEADER (opts, "Rcpt", *rcpt);
+		}
 	}
 	if (deliver_to != NULL) {
-		g_hash_table_insert (opts, "Deliver-To", deliver_to);
+		ADD_CLIENT_HEADER (opts, "Deliver-To", deliver_to);
 	}
 	if (helo != NULL) {
-		g_hash_table_insert (opts, "Helo", helo);
+		ADD_CLIENT_HEADER (opts, "Helo", helo);
 	}
 	if (hostname != NULL) {
-		g_hash_table_insert (opts, "Hostname", hostname);
+		ADD_CLIENT_HEADER (opts, "Hostname", hostname);
 	}
 	if (password != NULL) {
-		g_hash_table_insert (opts, "Password", password);
+		ADD_CLIENT_HEADER (opts, "Password", password);
 	}
 	if (pass_all) {
-		g_hash_table_insert (opts, "Pass", "all");
+		ADD_CLIENT_HEADER (opts, "Pass", "all");
 	}
 	if (weight != 0) {
 		numbuf = g_string_sized_new (8);
 		rspamd_printf_gstring (numbuf, "%d", weight);
-		g_hash_table_insert (opts, "Weight", numbuf->str);
+		ADD_CLIENT_HEADER (opts, "Weight", numbuf->str);
 	}
 	if (flag != 0) {
 		numbuf = g_string_sized_new (8);
 		rspamd_printf_gstring (numbuf, "%d", flag);
-		g_hash_table_insert (opts, "Flag", numbuf->str);
+		ADD_CLIENT_HEADER (opts, "Flag", numbuf->str);
 	}
 	if (extended_urls) {
-		g_hash_table_insert (opts, "URL-Format", "extended");
+		ADD_CLIENT_HEADER (opts, "URL-Format", "extended");
 	}
 
 	hdr = http_headers;
@@ -444,14 +454,14 @@ add_options (GHashTable *opts)
 		gchar **kv = g_strsplit_set (*hdr, ":=", 2);
 
 		if (kv == NULL || kv[1] == NULL) {
-			g_hash_table_insert (opts, *hdr, "");
+			ADD_CLIENT_HEADER (opts, *hdr, "");
 
 			if (kv) {
 				g_strfreev (kv);
 			}
 		}
 		else {
-			g_hash_table_insert (opts, kv[0], kv[1]);
+			ADD_CLIENT_HEADER (opts, kv[0], kv[1]);
 		}
 
 		hdr ++;
@@ -1222,7 +1232,7 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 
 static void
 rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
-	FILE *in, const gchar *name, GHashTable *attrs)
+	FILE *in, const gchar *name, GQueue *attrs)
 {
 	struct rspamd_client_connection *conn;
 	gchar **connectv;
@@ -1275,7 +1285,7 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 
 static void
 rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
-	const gchar *name, GHashTable *attrs)
+	const gchar *name, GQueue *attrs)
 {
 	DIR *d;
 	gint cur_req = 0;
@@ -1329,7 +1339,7 @@ gint
 main (gint argc, gchar **argv, gchar **env)
 {
 	gint i, start_argc, cur_req = 0, res;
-	GHashTable *kwattrs;
+	GQueue *kwattrs;
 	GList *cur;
 	GPid cld;
 	struct rspamc_command *cmd;
@@ -1338,7 +1348,7 @@ main (gint argc, gchar **argv, gchar **env)
 	struct stat st;
 	struct sigaction sigpipe_act;
 
-	kwattrs = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+	kwattrs = g_queue_new ();
 
 	read_cmd_line (&argc, &argv);
 
@@ -1386,13 +1396,13 @@ main (gint argc, gchar **argv, gchar **env)
 					exit (EXIT_FAILURE);
 				}
 				if (argc == 5) {
-					g_hash_table_insert (kwattrs, "metric", argv[2]);
-					g_hash_table_insert (kwattrs, "name",	argv[3]);
-					g_hash_table_insert (kwattrs, "value",	argv[4]);
+					ADD_CLIENT_HEADER (kwattrs, "metric", argv[2]);
+					ADD_CLIENT_HEADER (kwattrs, "name",	argv[3]);
+					ADD_CLIENT_HEADER (kwattrs, "value",	argv[4]);
 				}
 				else {
-					g_hash_table_insert (kwattrs, "name",  argv[2]);
-					g_hash_table_insert (kwattrs, "value", argv[3]);
+					ADD_CLIENT_HEADER (kwattrs, "name",  argv[2]);
+					ADD_CLIENT_HEADER (kwattrs, "value", argv[3]);
 				}
 				start_argc = argc;
 			}
@@ -1443,7 +1453,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	event_base_loop (ev_base, 0);
 
-	g_hash_table_destroy (kwattrs);
+	g_queue_free_full (kwattrs, g_free);
 
 	/* Wait for children processes */
 	cur = g_list_first (children);

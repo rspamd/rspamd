@@ -200,14 +200,15 @@ rspamd_client_init (struct event_base *ev_base, const gchar *name,
 
 gboolean
 rspamd_client_command (struct rspamd_client_connection *conn,
-	const gchar *command, GHashTable *attrs,
+	const gchar *command, GQueue *attrs,
 	FILE *in, rspamd_client_callback cb,
 	gpointer ud, GError **err)
 {
 	struct rspamd_client_request *req;
-	gchar *p, *hn, *hv;
+	struct rspamd_http_client_header *nh;
+	gchar *p;
 	gsize remain, old_len;
-	GHashTableIter it;
+	GList *cur;
 	GString *input = NULL;
 
 	req = g_slice_alloc0 (sizeof (struct rspamd_client_request));
@@ -256,9 +257,12 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 	}
 
 	/* Convert headers */
-	g_hash_table_iter_init (&it, attrs);
-	while (g_hash_table_iter_next (&it, (gpointer *)&hn, (gpointer *)&hv)) {
-		rspamd_http_message_add_header (req->msg, hn, hv);
+	cur = attrs->head;
+	while (cur != NULL) {
+		nh = cur->data;
+
+		rspamd_http_message_add_header (req->msg, nh->name, nh->value);
+		cur = g_list_next (cur);
 	}
 
 	req->msg->url = rspamd_fstring_append (req->msg->url, "/", 1);

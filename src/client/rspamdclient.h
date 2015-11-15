@@ -31,6 +31,11 @@
 struct rspamd_client_connection;
 struct rspamd_http_message;
 
+struct rspamd_http_client_header {
+	const gchar *name;
+	const gchar *value;
+};
+
 /**
  * Callback is called on client connection completed
  * @param name name of server
@@ -76,7 +81,7 @@ struct rspamd_client_connection * rspamd_client_init (
 gboolean rspamd_client_command (
 	struct rspamd_client_connection *conn,
 	const gchar *command,
-	GHashTable *attrs,
+	GQueue *attrs,
 	FILE *in,
 	rspamd_client_callback cb,
 	gpointer ud,
