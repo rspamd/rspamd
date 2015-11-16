@@ -1542,6 +1542,7 @@ rspamd_message_parse (struct rspamd_task *task)
 	GList *first, *cur;
 	GMimeObject *parent;
 	const GMimeContentType *ct;
+	struct raw_header *rh;
 	struct mime_text_part *p1, *p2;
 	struct mime_foreach_data md;
 	struct received_header *recv;
@@ -1703,18 +1704,22 @@ rspamd_message_parse (struct rspamd_task *task)
 			task->rcpt_mime);
 #endif
 	}
-	task->from_mime = internet_address_list_parse_string(
-			g_mime_message_get_sender (task->message));
-	if (task->from_mime) {
+	first = rspamd_message_get_header (task, "From", FALSE);
+
+	if (first) {
+		rh = first->data;
+		task->from_mime = internet_address_list_parse_string (rh->value);
+		if (task->from_mime) {
 #ifdef GMIME24
-		rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t) g_object_unref,
-				task->from_mime);
+			rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t) g_object_unref,
+					task->from_mime);
 #else
-		rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t) internet_address_list_destroy,
-				task->from_mime);
+			rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t) internet_address_list_destroy,
+					task->from_mime);
 #endif
+		}
 	}
 
 	/* Parse urls inside Subject header */
