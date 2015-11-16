@@ -9,7 +9,7 @@ context("URL check functions", function()
   void rspamd_url_init (const char *tld_file);
   unsigned ottery_rand_range(unsigned top);
   ]]
-  
+
   local test_dir = string.gsub(debug.getinfo(1).source, "^@(.+/)[^/]+$", "%1")
 
   ffi.C.rspamd_url_init(string.format('%s/%s', test_dir, "test_tld.dat"))
@@ -33,21 +33,21 @@ context("URL check functions", function()
 
     for _,c in ipairs(cases) do
       local res = url.create(pool, c[1])
-      
+
       assert_not_nil(res, "cannot parse " .. c[1])
       local t = res:to_table()
       --local s = logger.slog("%1 -> %2", c[1], t)
       --print(s)
       assert_not_nil(t, "cannot convert to table " .. c[1])
       assert_equal(c[2][1], t['host'])
-      
+
       if c[2][2] then
         assert_equal(c[2][2], t['user'])
       end
     end
     pool:destroy()
   end)
-  
+
   -- Some cases from https://code.google.com/p/google-url/source/browse/trunk/src/url_canon_unittest.cc
   test("Parse urls", function()
     local pool = mpool.create()
@@ -81,16 +81,19 @@ context("URL check functions", function()
       {"http://[::eeee:192.168.0.1]", true, {
         host = '::eeee:c0a8:1'
       }},
+      {"http://twitter.com#test", true, {
+        host = 'twitter.com', fragment = 'test'
+      }},
     }
-    
+
     for _,c in ipairs(cases) do
       local res = url.create(pool, c[1])
-      
+
       if c[2] then
         assert_not_nil(res, "cannot parse " .. c[1])
-        
+
         local uf = res:to_table()
-        
+
         for k,v in pairs(c[3]) do
           assert_not_nil(uf[k], k .. ' is missing in url, must be ' .. v)
           assert_equal(uf[k], v, 'expected ' .. v .. ' for ' .. k .. ' but got ' .. uf[k] .. ' in url ' .. c[1])
