@@ -851,7 +851,7 @@ rspamd_task_write_ialist (struct rspamd_task *task,
 		struct rspamd_log_format *lf,
 		rspamd_fstring_t *logbuf)
 {
-	rspamd_fstring_t *res = logbuf;
+	rspamd_fstring_t *res = logbuf, *varbuf;
 	rspamd_ftok_t var = {.begin = NULL, .len = 0};
 	InternetAddressMailbox *iamb;
 	InternetAddress *ia = NULL;
@@ -861,25 +861,32 @@ rspamd_task_write_ialist (struct rspamd_task *task,
 		lim = internet_address_list_length (ialist);
 	}
 
+	varbuf = rspamd_fstring_new ();
+
 	for (i = 0; i < lim; i++) {
 		ia = internet_address_list_get_address (ialist, i);
 
-		var.len = 0;
 		if (ia && INTERNET_ADDRESS_IS_MAILBOX (ia)) {
 			iamb = INTERNET_ADDRESS_MAILBOX (ia);
-			var.begin = iamb->addr;
-			var.len = strlen (var.begin);
+			varbuf = rspamd_fstring_append (varbuf, iamb->addr,
+					strlen (iamb->addr));
 		}
 
-		if (var.len > 0) {
-			res = rspamd_task_log_write_var (task, logbuf,
-					&var, (const rspamd_ftok_t *) lf->data);
-
+		if (varbuf->len > 0) {
 			if (i != lim - 1) {
-				res = rspamd_fstring_append (res, ",", 1);
+				varbuf = rspamd_fstring_append (varbuf, ",", 1);
 			}
 		}
 	}
+
+	if (varbuf->len > 0) {
+		var.begin = varbuf->str;
+		var.len = varbuf->len;
+		res = rspamd_task_log_write_var (task, logbuf,
+				&var, (const rspamd_ftok_t *) lf->data);
+	}
+
+	rspamd_fstring_free (varbuf);
 
 	return res;
 }
