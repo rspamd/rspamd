@@ -1352,6 +1352,22 @@ g_ptr_array_new_full (guint reserved_size,
 	return array;
 }
 #endif
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 32))
+void
+g_queue_free_full (GQueue *queue, GDestroyNotify free_func)
+{
+	GList *cur;
+
+	cur = queue->head;
+
+	while (cur) {
+		free_func (cur->data);
+		cur = g_list_next (cur);
+	}
+
+	g_queue_free (queue);
+}
+#endif
 
 guint
 rspamd_url_hash (gconstpointer u)
