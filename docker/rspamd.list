@@ -1,0 +1,2 @@
+deb http://rspamd.com/apt-stable/ jessie main
+deb-src http://rspamd.com/apt-stable/ jessie main
