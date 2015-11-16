@@ -23,16 +23,16 @@ Rspamd project provides packages for some rpm and deb based repositories:
 - Fedora 21 (amd64)
 - Fedora 22 (amd64)
 
-Installation for rpm based distributives:
+Installation for rpm based distributions:
 
-    wget -O /etc/yum.repos.d/rspamd.repo http://rspamd.com/rpm-stable/${YOUR_DISTRIBUTIVE}/rspamd.repo
+    wget -O /etc/yum.repos.d/rspamd.repo http://rspamd.com/rpm-stable/${YOUR_DISTRO}/rspamd.repo
     rpm --import http://rspamd.com/rpm-stable/gpg.key
     yum update
     yum install rspamd
 
-Where `${YOUR_DISTRIBUTIVE}` is the short name of your os (e.g. `centos-7` or `fedora-22`).
+Where `${YOUR_DISTRO}` is the short name of your os (e.g. `centos-7` or `fedora-22`).
 
-Installation for deb based distributives:
+Installation for deb based distributions:
 
     apt-get install -y lsb-release # optional
     CODENAME=`lsb_release -c -s`
@@ -44,7 +44,7 @@ Installation for deb based distributives:
 
 To learn your codename, you could try command `lsb_release -s -c` from the package called `lsb-release`.
 
-For other distributives you could also check [our project on the openSUSE build service](https://software.opensuse.org/download.html?project=home%3Acebka&package=rspamd).
+For other distributions you could also check [our project on the openSUSE build service](https://software.opensuse.org/download.html?project=home%3Acebka&package=rspamd).
 
 Rspamd is also available in Debian's [testing](https://packages.debian.org/source/testing/rspamd) and [unstable](https://packages.debian.org/source/unstable/rspamd) distributions and the universe repository in [some versions](http://packages.ubuntu.com/search?keywords=rspamd&searchon=names&suite=all&section=all) of Ubuntu. However, we are looking for an active maintainer for rspamd in these 'official' repos, as now rspamd is terribly outdated there.
 
@@ -58,7 +58,7 @@ OSX users can install from [MacPorts](https://trac.macports.org/browser/trunk/dp
 
 ## Nightly releases
 
-If you'd like to test the current rspamd version, you might use nightly builds that are currently available for **CentOS 6** and debian based distributives:
+If you'd like to test the current rspamd version, you might use nightly builds that are currently available for **CentOS 6** and debian based distributions:
 
 - Debian wheezy
 - Debian jessie
@@ -68,16 +68,16 @@ If you'd like to test the current rspamd version, you might use nightly builds t
 
 Nightly builds are not as stable as mainline ones but they contain additional features and bugs are fixed very fast when detected.
 
-There are also builds for other rpm distributives (Centos 7, Centos 6, Fedora 21 and Fedora 22). Their installation is quite similar:
+There are also builds for other rpm distributions (Centos 7, Centos 6, Fedora 21 and Fedora 22). Their installation is quite similar:
 
-    wget -O /etc/yum.repos.d/rspamd-experimental.repo http://rspamd.com/rpm/${YOUR_DISTRIBUTIVE}/rspamd-experimental.repo
+    wget -O /etc/yum.repos.d/rspamd-experimental.repo http://rspamd.com/rpm/${YOUR_DISTRO}/rspamd-experimental.repo
     rpm --import http://rspamd.com/rpm/gpg.key
     yum update
     yum install rspamd
 
-Where `${YOUR_DISTRIBUTIVE}` is the short name of your os (e.g. `centos-7` or `fedora-22`).
+Where `${YOUR_DISTRO}` is the short name of your os (e.g. `centos-7` or `fedora-22`).
 
-To use nightly builds on Debian based distirbutive, do the following (we assume that `codename` is your distributive name):
+To use nightly builds on Debian based distirbutive, do the following (we assume that `codename` is your distribution name):
 
     apt-get install -y lsb-release # optional
     CODENAME=`lsb_release -c -s`
