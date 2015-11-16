@@ -754,7 +754,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				}
 				break;
 			case parse_domain:
-				if (t == '/' || t == ':' || t == '?') {
+				if (t == '/' || t == ':' || t == '?' || t == '#') {
 					if (p - c == 0) {
 						goto out;
 					}
@@ -765,6 +765,11 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 					else if (t == '?') {
 						SET_U (u, UF_HOST);
 						st = parse_query;
+						c = p + 1;
+					}
+					else if (t == '#') {
+						SET_U (u, UF_HOST);
+						st = parse_part;
 						c = p + 1;
 					}
 					else if (!user_seen) {
