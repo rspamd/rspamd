@@ -365,7 +365,9 @@ namespace rspamd {
 					{"rspamd_printf",               0},
 					{"rspamd_default_log_function", 4},
 					{"rspamd_snprintf",             2},
-					{"rspamd_fprintf",              1}
+					{"rspamd_fprintf",              1},
+					{"rspamd_printf_gstring",       1},
+					{"rspamd_printf_fstring",       1}
 			};
 
 			format_specs = {
