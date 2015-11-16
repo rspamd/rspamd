@@ -985,6 +985,7 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 	struct redirector_param *param = (struct redirector_param *)conn->ud;
 	struct rspamd_task *task;
 	gint r, urllen;
+	struct rspamd_url *redirected_url;
 	const rspamd_ftok_t *hdr;
 	gchar *urlstr;
 
@@ -1001,18 +1002,23 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 					struri (param->url),
 					hdr);
 			urllen = hdr->len;
-			urlstr = rspamd_mempool_alloc (param->task->task_pool,
+			urlstr = rspamd_mempool_alloc (task->task_pool,
 					urllen + 1);
+			redirected_url = rspamd_mempool_alloc (task->task_pool,
+					sizeof (*redirected_url));
 			rspamd_strlcpy (urlstr, hdr->begin, urllen + 1);
-			r = rspamd_url_parse (param->url, urlstr, urllen,
-					param->task->task_pool);
+			r = rspamd_url_parse (redirected_url, urlstr, urllen,
+					task->task_pool);
 
 			if (r == URI_ERRNO_OK) {
-				make_surbl_requests (param->url,
+				make_surbl_requests (redirected_url,
 						param->task,
 						param->suffix,
 						FALSE,
 						param->tree);
+			}
+			else {
+				msg_info_task ("cannot parse redirector reply: %s", urlstr);
 			}
 		}
 	}
