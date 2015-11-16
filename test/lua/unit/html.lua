@@ -1,7 +1,7 @@
 context("HTML processing", function()
   local rspamd_util = require("rspamd_util")
   local logger = require("rspamd_logger")
-  
+
   test("Extract text from HTML", function()
     local cases = {
       {[[
@@ -21,10 +21,10 @@ context("HTML processing", function()
     <b>stuff</p>?
   </body>
 </html>
-      ]], "Hello, world! test\r\ndata\r\nstuff?"},
+      ]], "Hello, world! test data\r\nstuff?"},
       {[[
 <?xml version="1.0" encoding="iso-8859-1"?>
- <!DOCTYPE html 
+ <!DOCTYPE html
    PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
  <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
@@ -35,11 +35,11 @@ context("HTML processing", function()
    </head>
    <body>
      <p>
-       Hello,          world! 
-       
+       Hello,          world!
+
      </p>
    </body>
- </html>]], '\r\nHello, world!\r\n'},
+ </html>]], 'Hello, world!\r\n'},
        {[[
 <!DOCTYPE html>
 <html lang="en">
@@ -58,10 +58,10 @@ context("HTML processing", function()
 </html>
       ]], 'Hello, world!'},
     }
-    
+
     for _,c in ipairs(cases) do
       local t = rspamd_util.parse_html(c[1])
-      
+
       assert_not_nil(t)
       assert_equal(c[2], tostring(t))
     end
