@@ -58,7 +58,7 @@ local function dmarc_report(task, spf_ok, dkim_ok)
   end
   local res = string.format('%d,%s,%s,%s', task:get_date(0),
     ip:to_string(), tostring(spf_ok), tostring(dkim_ok))
-    
+
   return res
 end
 
@@ -66,7 +66,7 @@ local function dmarc_callback(task)
   local from = task:get_from(2)
   local dmarc_domain
 
-  if from and from[1]['domain'] and not from[2] then
+  if from and from[1] and from[1]['domain'] and not from[2] then
     local url_from = rspamd_url.create(task:get_mempool(), from[1]['domain'])
     if url_from then
       dmarc_domain = url_from:get_tld()
@@ -76,7 +76,7 @@ local function dmarc_callback(task)
   else
     return
   end
-  
+
   local function dmarc_report_cb(task, err, data)
     if not err then
       rspamd_logger.infox(task, '<%1> dmarc report saved for %2',
@@ -86,7 +86,7 @@ local function dmarc_callback(task)
         task:get_message_id(), from[1]['domain'], err)
     end
   end
-  
+
   local function dmarc_dns_cb(resolver, to_resolve, results, err, key)
 
     local lookup_domain = string.sub(to_resolve, 8)
@@ -94,12 +94,12 @@ local function dmarc_callback(task)
       if lookup_domain ~= dmarc_domain then
         local resolve_name = '_dmarc.' .. dmarc_domain
         task:get_resolver():resolve_txt({
-          task=task, 
-          name = resolve_name, 
+          task=task,
+          name = resolve_name,
           callback = dmarc_dns_cb})
         return
       end
-      
+
       return
     end
 
@@ -110,7 +110,7 @@ local function dmarc_callback(task)
     local found_policy = false
     local failed_policy = false
     local rua
-    
+
     for _,r in ipairs(results) do
       if failed_policy then break end
       (function()
@@ -183,7 +183,7 @@ local function dmarc_callback(task)
             if pct then
               pct = tonumber(pct)
             end
-            
+
             if not rua then
               rua = string.match(e, '^rua=([^%s]+)$')
             end
@@ -196,8 +196,8 @@ local function dmarc_callback(task)
       if lookup_domain ~= dmarc_domain then
         local resolve_name = '_dmarc.' .. dmarc_domain
         task:get_resolver():resolve_txt({
-          task=task, 
-          name = resolve_name, 
+          task=task,
+          name = resolve_name,
           callback = dmarc_dns_cb})
 
         return
@@ -205,7 +205,7 @@ local function dmarc_callback(task)
         return
       end
     end
-    
+
     if failed_policy then return end
 
     -- Check dkim and spf symbols
@@ -257,28 +257,28 @@ local function dmarc_callback(task)
     else
       task:insert_result('DMARC_POLICY_ALLOW', res, lookup_domain)
     end
-    
+
     if rua and not(spf_ok or dkim_ok) and upstreams then
       -- Prepare and send redis report element
       local upstream = upstreams:get_upstream_by_hash(from[1]['domain'])
       local redis_key = dmarc_redis_key_prefix .. from[1]['domain']
       local addr = upstream:get_addr()
       local report_data = dmarc_report(task, spf_ok, dkim_ok)
-      
+
       if report_data then
-        rspamd_redis.make_request(task, addr, dmarc_report_cb, 
+        rspamd_redis.make_request(task, addr, dmarc_report_cb,
           'LPUSH', {redis_key, report_data})
       end
     end
-    
+
     -- XXX: handle rua and push data to redis
   end
-  
+
   -- Do initial request
   local resolve_name = '_dmarc.' .. from[1]['domain']
   task:get_resolver():resolve_txt({
-    task=task, 
-    name = resolve_name, 
+    task=task,
+    name = resolve_name,
     callback = dmarc_dns_cb})
 end
 
