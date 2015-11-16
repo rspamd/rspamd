@@ -478,6 +478,7 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 						msg_info_task ("<%s> cannot parse DKIM context: %s",
 								task->message_id, err->message);
 						g_error_free (err);
+						err = NULL;
 					}
 					else {
 						msg_info_task ("<%s> cannot parse DKIM context: "
