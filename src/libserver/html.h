@@ -79,7 +79,7 @@ struct html_block {
 struct html_tag {
 	gint id;
 	struct html_tag_component name;
-	GList *params;
+	GQueue *params;
 	gint flags;
 };
 

@@ -895,12 +895,6 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 		/* Block tag */
 		nnode = g_node_new (tag);
 
-		if (tag->params) {
-			rspamd_mempool_add_destructor (pool,
-					(rspamd_mempool_destruct_t) g_list_free,
-					tag->params);
-		}
-
 		if (tag->flags & FL_CLOSING) {
 			if (!*cur_level) {
 				msg_debug_pool ("bad parent node");
@@ -961,7 +955,7 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 	comp->type = (comp_type);									\
 	comp->start = NULL;											\
 	comp->len = 0;												\
-	tag->params = g_list_append (tag->params, comp);			\
+	g_queue_push_tail (tag->params, comp);						\
 	ret = TRUE;													\
 } while(0)
 
@@ -1217,7 +1211,8 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 		if (store) {
 			if (*savep != NULL) {
 				g_assert (tag->params != NULL);
-				comp = (g_list_first (tag->params))->data;
+				comp = g_queue_peek_tail (tag->params);
+				g_assert (comp != NULL);
 				comp->len = in - *savep;
 				comp->start = *savep;
 				*savep = NULL;
@@ -1233,7 +1228,8 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 		if (store) {
 			if (*savep != NULL) {
 				g_assert (tag->params != NULL);
-				comp = (g_list_first (tag->params))->data;
+				comp = g_queue_peek_tail (tag->params);
+				g_assert (comp != NULL);
 				comp->len = in - *savep;
 				comp->start = *savep;
 				*savep = NULL;
@@ -1252,7 +1248,8 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 		if (store) {
 			if (*savep != NULL) {
 				g_assert (tag->params != NULL);
-				comp = (g_list_first (tag->params))->data;
+				comp = g_queue_peek_tail (tag->params);
+				g_assert (comp != NULL);
 				comp->len = in - *savep;
 				comp->start = *savep;
 				*savep = NULL;
@@ -1289,7 +1286,7 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag)
 	GList *cur;
 	gint rc;
 
-	cur = tag->params;
+	cur = tag->params->head;
 
 	while (cur) {
 		comp = cur->data;
@@ -1356,7 +1353,7 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 	GList *cur;
 	gulong val;
 
-	cur = tag->params;
+	cur = tag->params->head;
 	img = rspamd_mempool_alloc0 (pool, sizeof (*img));
 
 	while (cur) {
@@ -1563,7 +1560,7 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 	rspamd_ftok_t fstr;
 	GList *cur;
 
-	cur = tag->params;
+	cur = tag->params->head;
 	bl = rspamd_mempool_alloc0 (pool, sizeof (*bl));
 	bl->tag = tag;
 
@@ -1708,6 +1705,9 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 				substate = 0;
 				savep = NULL;
 				cur_tag = rspamd_mempool_alloc0 (pool, sizeof (*cur_tag));
+				cur_tag->params = g_queue_new ();
+				rspamd_mempool_add_destructor (pool,
+						(rspamd_mempool_destruct_t)g_queue_free, cur_tag->params);
 				break;
 			}
 
