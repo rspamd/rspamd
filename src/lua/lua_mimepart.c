@@ -315,7 +315,7 @@ lua_textpart_get_raw_length (lua_State * L)
 		return 1;
 	}
 
-	if (IS_PART_EMPTY (part) || part->orig == NULL) {
+	if (part->orig == NULL) {
 		lua_pushnumber (L, 0);
 	}
 	else {
