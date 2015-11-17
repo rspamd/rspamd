@@ -4,9 +4,9 @@
 -- The ASF licenses this file to you under the Apache License, Version 2.0
 -- (the "License"); you may not use this file except in compliance with
 -- the License.  You may obtain a copy of the License at:
--- 
+--
 --     http://www.apache.org/licenses/LICENSE-2.0
--- 
+--
 -- Unless required by applicable law or agreed to in writing, software
 -- distributed under the License is distributed on an "AS IS" BASIS,
 -- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -22,15 +22,15 @@ reconf['MIME_HTML_ONLY'] = 'has_only_html_part()'
 
 local function check_html_image(task, min, max)
   local tp = task:get_text_parts()
-  
+
   for _,p in ipairs(tp) do
     if p:is_html() then
       local hc = p:get_html()
-      local len = p:get_raw_length()
-      
+      local len = p:get_length()
+
+
       if len >= min and len < max then
         local images = hc:get_images()
-        
         if images then
           for _,i in ipairs(images) do
             if i['embedded'] then
@@ -43,7 +43,7 @@ local function check_html_image(task, min, max)
   end
 end
 
-rspamd_config.HTML_SHORT_LINK_IMG_1 = { 
+rspamd_config.HTML_SHORT_LINK_IMG_1 = {
   callback = function(task)
     return check_html_image(task, 0, 1024)
   end,
@@ -51,7 +51,7 @@ rspamd_config.HTML_SHORT_LINK_IMG_1 = {
   group = 'html',
   description = 'Short html part (0..1K) with a link to an image'
 }
-  
+
 rspamd_config.HTML_SHORT_LINK_IMG_2 = {
   callback = function(task)
     return check_html_image(task, 1024, 1536)
@@ -72,15 +72,15 @@ rspamd_config.HTML_SHORT_LINK_IMG_3 = {
 rspamd_config.R_EMPTY_IMAGE = {
   callback = function(task)
     local tp = task:get_text_parts() -- get text parts in a message
-    
+
     for _,p in ipairs(tp) do -- iterate over text parts array using `ipairs`
       if p:is_html() then -- if the current part is html part
         local hc = p:get_html() -- we get HTML context
         local len = p:get_length() -- and part's length
-        
+
         if len < 50 then -- if we have a part that has less than 50 bytes of text
           local images = hc:get_images() -- then we check for HTML images
-          
+
           if images then -- if there are images
             for _,i in ipairs(images) do -- then iterate over images in the part
               if i['height'] + i['width'] >= 400 then -- if we have a large image
