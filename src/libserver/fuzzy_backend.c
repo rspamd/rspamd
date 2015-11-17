@@ -628,8 +628,6 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 					(gint64) time (NULL));
 
 			if (rc == SQLITE_OK) {
-				backend->count++;
-
 				if (cmd->shingles_count > 0) {
 					id = sqlite3_last_insert_rowid (backend->db);
 					shcmd = (const struct rspamd_fuzzy_shingle_cmd *) cmd;
@@ -680,8 +678,6 @@ rspamd_fuzzy_backend_del (struct rspamd_fuzzy_backend *backend,
 		rc = rspamd_fuzzy_backend_run_stmt (backend,
 				RSPAMD_FUZZY_BACKEND_DELETE,
 				cmd->digest);
-
-		backend->count -= sqlite3_changes (backend->db);
 
 		rspamd_fuzzy_backend_cleanup_stmt (backend,
 				RSPAMD_FUZZY_BACKEND_DELETE);
@@ -863,7 +859,19 @@ rspamd_fuzzy_backend_close (struct rspamd_fuzzy_backend *backend)
 gsize
 rspamd_fuzzy_backend_count (struct rspamd_fuzzy_backend *backend)
 {
-	return backend != NULL ? backend->count : 0;
+	if (backend) {
+		if (rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_COUNT)
+				== SQLITE_OK) {
+			backend->count = sqlite3_column_int64 (
+					prepared_stmts[RSPAMD_FUZZY_BACKEND_COUNT].stmt, 0);
+		}
+
+		rspamd_fuzzy_backend_cleanup_stmt (backend, RSPAMD_FUZZY_BACKEND_COUNT);
+
+		return backend->count;
+	}
+
+	return 0;
 }
 
 gsize
