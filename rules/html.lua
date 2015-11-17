@@ -83,7 +83,7 @@ rspamd_config.R_EMPTY_IMAGE = {
 
           if images then -- if there are images
             for _,i in ipairs(images) do -- then iterate over images in the part
-              if i['height'] + i['width'] >= 400 then -- if we have a large image
+              if i['embedded'] and i['height'] + i['width'] >= 400 then -- if we have a large image
                 return true -- add symbol
               end
             end
