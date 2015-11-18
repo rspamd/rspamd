@@ -1961,7 +1961,6 @@ rspamd_init_libs (void)
 	rlim.rlim_cur = 100 * 1024 * 1024;
 	setrlimit (RLIMIT_STACK, &rlim);
 
-	event_init ();
 #ifdef GMIME_ENABLE_RFC2047_WORKAROUNDS
 	g_mime_init (GMIME_ENABLE_RFC2047_WORKAROUNDS);
 #else
@@ -1970,6 +1969,7 @@ rspamd_init_libs (void)
 	ctx->libmagic = magic_open (MAGIC_MIME|MAGIC_NO_CHECK_COMPRESS|
 			MAGIC_NO_CHECK_ELF|MAGIC_NO_CHECK_TAR);
 	magic_compile (ctx->libmagic, NULL);
+	REF_INIT_RETAIN (ctx, rspamd_deinit_libs);
 
 	return ctx;
 }
@@ -1983,6 +1983,13 @@ rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
 		}
 
 		g_slice_free1 (sizeof (*ctx), ctx);
+
+		g_mime_shutdown ();
+
+#ifdef HAVE_OPENSSL
+		EVP_cleanup ();
+		ERR_free_strings ();
+#endif
 	}
 }
 

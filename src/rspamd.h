@@ -232,6 +232,7 @@ struct controller_session {
 
 struct rspamd_external_libs_ctx {
 	magic_t libmagic;
+	ref_entry_t ref;
 };
 
 

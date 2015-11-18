@@ -62,6 +62,7 @@
 unsigned long cpu_config = 0;
 
 static gboolean use_openssl = FALSE;
+static gboolean cryptobox_loaded = FALSE;
 
 static const guchar n0[16] = {0};
 
@@ -186,6 +187,12 @@ rspamd_cryptobox_init (void)
 {
 	gint cpu[4], nid;
 
+	if (cryptobox_loaded) {
+		/* Ignore reload attempts */
+		return;
+	}
+
+	cryptobox_loaded = TRUE;
 	rspamd_cryptobox_cpuid (cpu, 0);
 	nid = cpu[0];
 	rspamd_cryptobox_cpuid (cpu, 1);

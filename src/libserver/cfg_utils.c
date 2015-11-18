@@ -144,9 +144,13 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 	return ret;
 }
 
-void
-rspamd_config_defaults (struct rspamd_config *cfg)
+struct rspamd_config *
+rspamd_config_defaults (void)
 {
+	struct rspamd_config *cfg;
+
+	cfg = g_slice_alloc0 (sizeof (*cfg));
+	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "cfg");
 	cfg->dns_timeout = 1000;
 	cfg->dns_retransmits = 5;
 	/* After 20 errors do throttling for 10 seconds */
@@ -190,6 +194,11 @@ rspamd_config_defaults (struct rspamd_config *cfg)
 	cfg->words_decay = DEFAULT_WORDS_DECAY;
 	cfg->min_word_len = DEFAULT_MIN_WORD;
 	cfg->max_word_len = DEFAULT_MAX_WORD;
+
+	cfg->lua_state = rspamd_lua_init (cfg);
+	cfg->cache = rspamd_symbols_cache_new (cfg);
+
+	REF_INIT_RETAIN (cfg, rspamd_config_free);
 }
 
 void
@@ -215,6 +224,9 @@ rspamd_config_free (struct rspamd_config *cfg)
 
 	g_list_free (cfg->classifiers);
 	g_list_free (cfg->metrics_list);
+	lua_close (cfg->lua_state);
+	rspamd_symbols_cache_destroy (cfg->cache);
+	REF_RELEASE (cfg->libs_ctx);
 	rspamd_mempool_delete (cfg->cfg_pool);
 }
 
@@ -578,8 +590,8 @@ rspamd_config_parse_log_format (struct rspamd_config *cfg)
 /*
  * Perform post load actions
  */
-void
-rspamd_config_post_load (struct rspamd_config *cfg)
+gboolean
+rspamd_config_post_load (struct rspamd_config *cfg, gboolean validate_cache)
 {
 #ifdef HAVE_CLOCK_GETTIME
 	struct timespec ts;
@@ -649,6 +661,16 @@ rspamd_config_post_load (struct rspamd_config *cfg)
 	if (!rspamd_config_parse_log_format (cfg)) {
 		msg_err_config ("cannot parse log format, task logging will not be available");
 	}
+
+	/* Init config cache */
+	rspamd_symbols_cache_init (cfg->cache);
+
+	/* Validate cache */
+	if (validate_cache) {
+		return rspamd_symbols_cache_validate (cfg->cache, cfg, FALSE);
+	}
+
+	return TRUE;
 }
 
 #if 0
@@ -1178,19 +1200,6 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 	}
 
 	return rspamd_init_lua_filters (cfg);
-}
-
-void
-rspamd_init_cfg (struct rspamd_config *cfg, gboolean init_lua)
-{
-	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "cfg");
-	rspamd_config_defaults (cfg);
-
-	if (init_lua) {
-		cfg->lua_state = rspamd_lua_init (cfg);
-		rspamd_mempool_add_destructor (cfg->cfg_pool,
-				(rspamd_mempool_destruct_t)lua_close, cfg->lua_state);
-	}
 }
 
 gboolean

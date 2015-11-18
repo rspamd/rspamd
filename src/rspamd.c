@@ -73,7 +73,8 @@
 
 static gboolean load_rspamd_config (struct rspamd_main *rspamd_main,
 		struct rspamd_config *cfg,
-		gboolean init_modules);
+		gboolean init_modules,
+		gboolean validate);
 
 /* Control socket */
 static gint control_fd;
@@ -160,8 +161,6 @@ read_cmd_line (gint *argc, gchar ***argv, struct rspamd_config *cfg)
 		exit (1);
 	}
 
-	cfg->no_fork = no_fork;
-	cfg->config_test = config_test;
 	cfg->rspamd_user = rspamd_user;
 	cfg->rspamd_group = rspamd_group;
 	cfg_num = cfg_names != NULL ? g_strv_length (cfg_names) : 0;
@@ -269,28 +268,24 @@ reread_config (struct rspamd_main *rspamd_main)
 	struct rspamd_config *tmp_cfg;
 	gchar *cfg_file;
 
-	tmp_cfg = (struct rspamd_config *)g_malloc0 (sizeof (struct rspamd_config));
+	tmp_cfg = rspamd_config_defaults ();
 	tmp_cfg->c_modules = g_hash_table_ref (rspamd_main->cfg->c_modules);
-	tmp_cfg->libs_ctx = rspamd_main->cfg->libs_ctx;
+	tmp_cfg->libs_ctx = REF_RETAIN (rspamd_main->cfg->libs_ctx);
 	rspamd_set_logger (tmp_cfg,  g_quark_try_string ("main"), rspamd_main);
-	rspamd_init_cfg (tmp_cfg, TRUE);
 	cfg_file = rspamd_mempool_strdup (tmp_cfg->cfg_pool,
 			rspamd_main->cfg->cfg_name);
-	tmp_cfg->cache = rspamd_symbols_cache_new (tmp_cfg);
 	/* Save some variables */
 	tmp_cfg->cfg_name = cfg_file;
 
-	if (!load_rspamd_config (rspamd_main, tmp_cfg, FALSE)) {
+	if (!load_rspamd_config (rspamd_main, tmp_cfg, FALSE, TRUE)) {
 		rspamd_set_logger (rspamd_main->cfg, g_quark_try_string (
 				"main"), rspamd_main);
 		msg_err_main ("cannot parse new config file, revert to old one");
-		rspamd_config_free (tmp_cfg);
+		REF_RELEASE (tmp_cfg);
 	}
 	else {
 		msg_debug_main ("replacing config");
-		rspamd_symbols_cache_destroy (rspamd_main->cfg->cache);
-		rspamd_config_free (rspamd_main->cfg);
-		g_free (rspamd_main->cfg);
+		REF_RELEASE (rspamd_main->cfg);
 
 		rspamd_main->cfg = tmp_cfg;
 		rspamd_set_logger (tmp_cfg,  g_quark_try_string ("main"), rspamd_main);
@@ -300,7 +295,6 @@ reread_config (struct rspamd_main *rspamd_main)
 		}
 
 		rspamd_init_filters (rspamd_main->cfg, TRUE);
-		rspamd_symbols_cache_init (rspamd_main->cfg->cache);
 		msg_info_main ("config has been reread successfully");
 	}
 }
@@ -579,9 +573,8 @@ reopen_log_handler (gpointer key, gpointer value, gpointer unused)
 
 static gboolean
 load_rspamd_config (struct rspamd_main *rspamd_main,
-		struct rspamd_config *cfg, gboolean init_modules)
+		struct rspamd_config *cfg, gboolean init_modules, gboolean validate)
 {
-	cfg->cache = rspamd_symbols_cache_new (cfg);
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;
 
@@ -603,7 +596,7 @@ load_rspamd_config (struct rspamd_main *rspamd_main,
 	}
 
 	/* Do post-load actions */
-	rspamd_config_post_load (cfg);
+	rspamd_config_post_load (cfg, validate);
 
 	if (init_modules) {
 		rspamd_init_filters (cfg, FALSE);
@@ -811,15 +804,13 @@ main (gint argc, gchar **argv, gchar **env)
 			"main");
 	rspamd_main->stat = rspamd_mempool_alloc0_shared (rspamd_main->server_pool,
 			sizeof (struct rspamd_stat));
-	rspamd_main->cfg =
-			(struct rspamd_config *) g_malloc0 (sizeof (struct rspamd_config));
+	rspamd_main->cfg = rspamd_config_defaults ();
 
 #ifndef HAVE_SETPROCTITLE
 	init_title (argc, argv, env);
 #endif
 
 	rspamd_main->cfg->libs_ctx = rspamd_init_libs ();
-	rspamd_init_cfg (rspamd_main->cfg, TRUE);
 
 	memset (&signals, 0, sizeof (struct sigaction));
 
@@ -848,7 +839,7 @@ main (gint argc, gchar **argv, gchar **env)
 		}
 	}
 
-	if (rspamd_main->cfg->config_test || is_debug) {
+	if (config_test || is_debug) {
 		rspamd_main->cfg->log_level = G_LOG_LEVEL_DEBUG;
 	}
 	else {
@@ -897,21 +888,16 @@ main (gint argc, gchar **argv, gchar **env)
 		exit (EXIT_SUCCESS);
 	}
 
-	if (rspamd_main->cfg->config_test || dump_cache) {
-		if (!load_rspamd_config (rspamd_main, rspamd_main->cfg, FALSE)) {
+	if (config_test || dump_cache) {
+		if (!load_rspamd_config (rspamd_main, rspamd_main->cfg, FALSE, FALSE)) {
 			exit (EXIT_FAILURE);
 		}
 
 		res = TRUE;
 
-		rspamd_symbols_cache_init (rspamd_main->cfg->cache);
-
 		if (!rspamd_init_filters (rspamd_main->cfg, FALSE)) {
 			res = FALSE;
 		}
-
-		/* Insert classifiers symbols */
-		rspamd_config_insert_classify_symbols (rspamd_main->cfg);
 
 		if (!rspamd_symbols_cache_validate (rspamd_main->cfg->cache,
 				rspamd_main->cfg,
@@ -929,7 +915,7 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	/* Load config */
-	if (!load_rspamd_config (rspamd_main, rspamd_main->cfg, TRUE)) {
+	if (!load_rspamd_config (rspamd_main, rspamd_main->cfg, TRUE, TRUE)) {
 		exit (EXIT_FAILURE);
 	}
 
@@ -958,8 +944,8 @@ main (gint argc, gchar **argv, gchar **env)
 			rspamd_main->cfg->cfg_name);
 
 	/* Daemonize */
-	if (!rspamd_main->cfg->no_fork && daemon (0, 0) == -1) {
-		fprintf (stderr, "Cannot daemonize\n");
+	if (!no_fork && daemon (0, 0) == -1) {
+		rspamd_fprintf (stderr, "Cannot daemonize\n");
 		exit (-errno);
 	}
 
@@ -988,13 +974,6 @@ main (gint argc, gchar **argv, gchar **env)
 	/* Set title */
 	setproctitle ("main process");
 
-	/* Init config cache */
-	rspamd_symbols_cache_init (rspamd_main->cfg->cache);
-
-	/* Validate cache */
-	(void) rspamd_symbols_cache_validate (rspamd_main->cfg->cache,
-			rspamd_main->cfg,
-			FALSE);
 
 	/* Flush log */
 	rspamd_log_flush (rspamd_main->logger);
@@ -1112,17 +1091,9 @@ main (gint argc, gchar **argv, gchar **env)
 
 	rspamd_symbols_cache_destroy (rspamd_main->cfg->cache);
 	rspamd_log_close (rspamd_main->logger);
-	rspamd_config_free (rspamd_main->cfg);
-	rspamd_deinit_libs (rspamd_main->cfg->libs_ctx);
-	g_free (rspamd_main->cfg);
+	REF_RELEASE (rspamd_main->cfg);
 	g_free (rspamd_main);
 	event_base_free (ev_base);
-	g_mime_shutdown ();
-
-#ifdef HAVE_OPENSSL
-	EVP_cleanup ();
-	ERR_free_strings ();
-#endif
 
 	return (res);
 }

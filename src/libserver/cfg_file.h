@@ -13,6 +13,7 @@
 #include "cfg_rcl.h"
 #include "ucl.h"
 #include "regexp.h"
+#include "ref.h"
 
 #define DEFAULT_BIND_PORT 11333
 #define DEFAULT_CONTROL_PORT 11334
@@ -219,8 +220,6 @@ struct rspamd_config {
 	gchar *profile_path;
 #endif
 
-	gboolean no_fork;                               /**< if 1 do not call daemon()							*/
-	gboolean config_test;                           /**< if TRUE do only config file test					*/
 	gboolean raw_mode;                              /**< work in raw mode instead of utf one				*/
 	gboolean one_shot_mode;                         /**< rules add only one symbol							*/
 	gboolean check_text_attachements;               /**< check text attachements as text					*/
@@ -323,6 +322,8 @@ struct rspamd_config {
 	gchar *log_format_str;							/**< raw log format string								*/
 
 	struct rspamd_external_libs_ctx *libs_ctx;		/**< context for external libraries						*/
+
+	ref_entry_t ref;								/**< reference counter									*/
 };
 
 
@@ -340,7 +341,7 @@ gboolean rspamd_parse_bind_line (struct rspamd_config *cfg,
  * Init default values
  * @param cfg config file
  */
-void rspamd_config_defaults (struct rspamd_config *cfg);
+struct rspamd_config * rspamd_config_defaults (void);
 
 /**
  * Free memory used by config structure
@@ -371,7 +372,8 @@ gchar rspamd_config_parse_flag (const gchar *str, guint len);
  * Do post load actions for config
  * @param cfg config file
  */
-void rspamd_config_post_load (struct rspamd_config *cfg);
+gboolean rspamd_config_post_load (struct rspamd_config *cfg,
+		gboolean validate_cache);
 
 /**
  * Calculate checksum for config file
@@ -459,13 +461,6 @@ void rspamd_ucl_add_conf_variables (struct ucl_parser *parser, GHashTable *vars)
  * @return
  */
 gboolean rspamd_init_filters (struct rspamd_config *cfg, bool reconfig);
-
-/**
- * Init configuration file structure
- * @param cfg
- * @param init_lua
- */
-void rspamd_init_cfg (struct rspamd_config *cfg, gboolean init_lua);
 
 /**
  * Add new symbol to the metric
