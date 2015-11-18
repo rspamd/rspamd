@@ -1089,8 +1089,6 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	msg_info_main ("terminating...");
-
-	rspamd_symbols_cache_destroy (rspamd_main->cfg->cache);
 	rspamd_log_close (rspamd_main->logger);
 	REF_RELEASE (rspamd_main->cfg);
 	g_free (rspamd_main);

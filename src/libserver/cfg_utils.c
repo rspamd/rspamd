@@ -226,10 +226,10 @@ rspamd_config_free (struct rspamd_config *cfg)
 
 	g_list_free (cfg->classifiers);
 	g_list_free (cfg->metrics_list);
-	lua_close (cfg->lua_state);
 	rspamd_symbols_cache_destroy (cfg->cache);
 	REF_RELEASE (cfg->libs_ctx);
 	rspamd_mempool_delete (cfg->cfg_pool);
+	lua_close (cfg->lua_state);
 	g_slice_free1 (sizeof (*cfg), cfg);
 }
 
