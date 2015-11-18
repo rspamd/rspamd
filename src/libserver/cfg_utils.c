@@ -199,6 +199,8 @@ rspamd_config_defaults (void)
 	cfg->cache = rspamd_symbols_cache_new (cfg);
 
 	REF_INIT_RETAIN (cfg, rspamd_config_free);
+
+	return cfg;
 }
 
 void
@@ -228,6 +230,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 	rspamd_symbols_cache_destroy (cfg->cache);
 	REF_RELEASE (cfg->libs_ctx);
 	rspamd_mempool_delete (cfg->cfg_pool);
+	g_slice_free1 (sizeof (*cfg), cfg);
 }
 
 const ucl_object_t *

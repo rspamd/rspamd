@@ -270,7 +270,8 @@ reread_config (struct rspamd_main *rspamd_main)
 
 	tmp_cfg = rspamd_config_defaults ();
 	tmp_cfg->c_modules = g_hash_table_ref (rspamd_main->cfg->c_modules);
-	tmp_cfg->libs_ctx = REF_RETAIN (rspamd_main->cfg->libs_ctx);
+	tmp_cfg->libs_ctx = rspamd_main->cfg->libs_ctx;
+	REF_RETAIN (tmp_cfg->libs_ctx);
 	rspamd_set_logger (tmp_cfg,  g_quark_try_string ("main"), rspamd_main);
 	cfg_file = rspamd_mempool_strdup (tmp_cfg->cfg_pool,
 			rspamd_main->cfg->cfg_name);

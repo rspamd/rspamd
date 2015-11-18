@@ -150,23 +150,11 @@ rspamadm_configtest (gint argc, gchar **argv)
 	}
 	else {
 		/* Do post-load actions */
-		rspamd_config_post_load (cfg);
-		ret = TRUE;
+		ret = rspamd_config_post_load (cfg, TRUE);
 	}
 
 	if (ret) {
-		rspamd_symbols_cache_init (rspamd_main->cfg->cache);
-
 		if (!rspamd_init_filters (rspamd_main->cfg, FALSE)) {
-			ret = FALSE;
-		}
-
-		/* Insert classifiers symbols */
-		(void) rspamd_config_insert_classify_symbols (rspamd_main->cfg);
-
-		if (!rspamd_symbols_cache_validate (rspamd_main->cfg->cache,
-				rspamd_main->cfg,
-				FALSE)) {
 			ret = FALSE;
 		}
 	}
