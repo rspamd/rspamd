@@ -180,13 +180,12 @@ struct rspamd_task {
 /**
  * Construct new task for worker
  */
-struct rspamd_task * rspamd_task_new (struct rspamd_worker *worker);
+struct rspamd_task * rspamd_task_new (struct rspamd_worker *worker,
+		struct rspamd_config *cfg);
 /**
  * Destroy task object and remove its IO dispatcher if it exists
  */
-void rspamd_task_free (struct rspamd_task *task, gboolean is_soft);
-void rspamd_task_free_hard (gpointer ud);
-void rspamd_task_free_soft (gpointer ud);
+void rspamd_task_free (struct rspamd_task *task);
 
 /**
  * Called if session was restored inside fin callback

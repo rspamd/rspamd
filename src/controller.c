@@ -1262,7 +1262,7 @@ rspamd_controller_handle_learn_common (
 		return 0;
 	}
 
-	task = rspamd_task_new (session->ctx->worker);
+	task = rspamd_task_new (session->ctx->worker, session->cfg);
 
 	task->resolver = ctx->resolver;
 	task->ev_base = ctx->ev_base;
@@ -1271,7 +1271,7 @@ rspamd_controller_handle_learn_common (
 	task->s = rspamd_session_create (session->pool,
 			rspamd_controller_learn_fin_task,
 			NULL,
-			rspamd_task_free_hard,
+			(event_finalizer_t )rspamd_task_free,
 			task);
 	task->fin_arg = conn_ent;
 	task->http_conn = rspamd_http_connection_ref (conn_ent->conn);;
@@ -1355,7 +1355,7 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	task = rspamd_task_new (session->ctx->worker);
+	task = rspamd_task_new (session->ctx->worker, session->cfg);
 	task->ev_base = session->ctx->ev_base;
 
 	task->resolver = ctx->resolver;
@@ -1364,7 +1364,7 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	task->s = rspamd_session_create (session->pool,
 			rspamd_controller_check_fin_task,
 			NULL,
-			rspamd_task_free_hard,
+			(event_finalizer_t )rspamd_task_free,
 			task);
 	task->fin_arg = conn_ent;
 	task->http_conn = rspamd_http_connection_ref (conn_ent->conn);
@@ -1765,7 +1765,7 @@ rspamd_controller_stat_cleanup_task (void *ud)
 {
 	struct rspamd_stat_cbdata *cbdata = ud;
 
-	rspamd_task_free_hard (cbdata->task);
+	rspamd_task_free (cbdata->task);
 	ucl_object_unref (cbdata->top);
 }
 
@@ -1794,7 +1794,7 @@ rspamd_controller_handle_stat_common (
 	rspamd_mempool_stat (&mem_st);
 	memcpy (&stat_copy, session->ctx->worker->srv->stat, sizeof (stat_copy));
 	stat = &stat_copy;
-	task = rspamd_task_new (session->ctx->worker);
+	task = rspamd_task_new (session->ctx->worker, session->cfg);
 
 	ctx = session->ctx;
 	task->resolver = ctx->resolver;
@@ -2033,6 +2033,7 @@ rspamd_controller_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 
 	session->wrk->nconns --;
 	rspamd_inet_address_destroy (session->from_addr);
+	REF_RELEASE (session->cfg);
 	g_slice_free1 (sizeof (struct rspamd_controller_session), session);
 }
 
@@ -2061,6 +2062,8 @@ rspamd_controller_accept_socket (gint fd, short what, void *arg)
 	session->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
 			"csession");
 	session->ctx = ctx;
+	session->cfg = ctx->cfg;
+	REF_RETAIN (session->cfg);
 
 	session->from_addr = addr;
 	session->wrk = worker;

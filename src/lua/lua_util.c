@@ -161,7 +161,7 @@ lua_util_load_rspamd_config (lua_State *L)
 	cfg_name = luaL_checkstring (L, 1);
 
 	if (cfg_name) {
-		cfg = rspamd_config_defaults ();
+		cfg = rspamd_config_new ();
 
 		if (rspamd_config_read (cfg, cfg_name, NULL, NULL, NULL, NULL)) {
 			msg_err_config ("cannot load config from %s", cfg_name);
@@ -190,7 +190,7 @@ lua_util_config_from_ucl (lua_State *L)
 
 	if (obj) {
 		cfg = g_malloc0 (sizeof (struct rspamd_config));
-		cfg = rspamd_config_defaults ();
+		cfg = rspamd_config_new ();
 
 		cfg->rcl_obj = obj;
 		cfg->cache = rspamd_symbols_cache_new (cfg);
@@ -238,8 +238,7 @@ lua_util_process_message (lua_State *L)
 	if (cfg != NULL && message != NULL) {
 		base = event_init ();
 		rspamd_init_filters (cfg, FALSE);
-		task = rspamd_task_new (NULL);
-		task->cfg = cfg;
+		task = rspamd_task_new (NULL, cfg);
 		task->ev_base = base;
 		task->msg.begin = rspamd_mempool_alloc (task->task_pool, mlen);
 		rspamd_strlcpy ((gpointer)task->msg.begin, message, mlen);
@@ -248,7 +247,7 @@ lua_util_process_message (lua_State *L)
 		task->fin_arg = &res;
 		task->resolver = dns_resolver_init (NULL, base, cfg);
 		task->s = rspamd_session_create (task->task_pool, rspamd_task_fin,
-					rspamd_task_restore, rspamd_task_free_hard, task);
+					rspamd_task_restore, (event_finalizer_t)rspamd_task_free, task);
 
 		if (!rspamd_task_load_message (task, NULL, message, mlen)) {
 			lua_pushnil (L);
@@ -266,7 +265,7 @@ lua_util_process_message (lua_State *L)
 					ucl_object_push_lua (L, rspamd_protocol_write_ucl (task),
 							true);
 					rdns_resolver_release (task->resolver->r);
-					rspamd_task_free_hard (task);
+					rspamd_session_destroy (task->s);
 				}
 			}
 			else {

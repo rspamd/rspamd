@@ -1180,7 +1180,7 @@ cleanup:
 	}
 
 	if (session->task != NULL) {
-		rspamd_task_free (session->task, TRUE);
+		rspamd_task_free (session->task);
 		session->task = NULL;
 	}
 
@@ -1205,7 +1205,7 @@ fuzzy_controller_timer_callback (gint fd, short what, void *arg)
 		if (*session->saved > 0 ) {
 			(*session->saved)--;
 			if (*session->saved == 0 && session->task != NULL) {
-				rspamd_task_free (session->task, TRUE);
+				rspamd_task_free (session->task);
 				session->task = NULL;
 			}
 		}
@@ -1489,7 +1489,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	gint r, *saved, rules = 0;
 
 	/* Prepare task */
-	task = rspamd_task_new (NULL);
+	task = rspamd_task_new (session->wrk, session->cfg);
 	task->cfg = ctx->cfg;
 	task->ev_base = conn_ent->rt->ev_base;
 
@@ -1505,7 +1505,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	if (r == -1) {
 		msg_warn_task ("<%s>: cannot process message for fuzzy",
 				task->message_id);
-		rspamd_task_free (task, FALSE);
+		rspamd_task_free (task);
 		rspamd_controller_send_error (conn_ent, 400,
 			"Message processing error");
 		return;
@@ -1550,7 +1550,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 		msg_warn_task ("<%s>: cannot send fuzzy request: %s", task->message_id,
 				strerror (errno));
 		rspamd_controller_send_error (conn_ent, 400, "Message sending error");
-		rspamd_task_free (task, FALSE);
+		rspamd_task_free (task);
 		return;
 	}
 	else if (!processed) {
@@ -1567,7 +1567,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 			rspamd_controller_send_error (conn_ent, 404,
 				"No fuzzy rules matched for flag %d", flag);
 		}
-		rspamd_task_free (task, FALSE);
+		rspamd_task_free (task);
 		return;
 	}
 

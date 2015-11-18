@@ -54,20 +54,6 @@ rspamd_config.DATE_IN_PAST = function(task)
 end
  */
 
-/* Task creation */
-/***
- * @function rspamd_task.create_empty()
- * Creates new empty task object.
- * @return {rspamd_task} task object
- */
-LUA_FUNCTION_DEF (task, create_empty);
-/***
- * @function rspamd_task.create_from_buffer(input)
- * Creates new task object and load its content from the string provided.
- * @param {string} input string that contains MIME message
- * @return {rspamd_task} task object
- */
-LUA_FUNCTION_DEF (task, create_from_buffer);
 /* Task methods */
 LUA_FUNCTION_DEF (task, get_message);
 LUA_FUNCTION_DEF (task, process_message);
@@ -492,8 +478,6 @@ LUA_FUNCTION_DEF (task, set_flag);
 LUA_FUNCTION_DEF (task, get_flags);
 
 static const struct luaL_reg tasklib_f[] = {
-	LUA_INTERFACE_DEF (task, create_empty),
-	LUA_INTERFACE_DEF (task, create_from_buffer),
 	{NULL, NULL}
 };
 
@@ -612,39 +596,6 @@ lua_check_text (lua_State * L, gint pos)
 }
 
 /* Task methods */
-
-static int
-lua_task_create_empty (lua_State *L)
-{
-	struct rspamd_task **ptask, *task;
-
-	task = rspamd_task_new (NULL);
-	ptask = lua_newuserdata (L, sizeof (gpointer));
-	rspamd_lua_setclass (L, "rspamd{task}", -1);
-	*ptask = task;
-	return 1;
-}
-
-static int
-lua_task_create_from_buffer (lua_State *L)
-{
-	struct rspamd_task **ptask, *task;
-	const gchar *data;
-	size_t len;
-
-	data = luaL_checklstring (L, 1, &len);
-	if (data) {
-		task = rspamd_task_new (NULL);
-		ptask = lua_newuserdata (L, sizeof (gpointer));
-		rspamd_lua_setclass (L, "rspamd{task}", -1);
-		*ptask = task;
-		task->msg.begin = rspamd_mempool_alloc (task->task_pool, len);
-		memcpy ((gpointer)task->msg.begin, data, len);
-		task->msg.len = len;
-	}
-	return 1;
-}
-
 static int
 lua_task_process_message (lua_State *L)
 {
@@ -695,7 +646,7 @@ lua_task_destroy (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL) {
-		rspamd_task_free (task, FALSE);
+		rspamd_task_free (task);
 	}
 
 	return 0;

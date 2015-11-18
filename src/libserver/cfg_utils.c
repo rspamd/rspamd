@@ -145,7 +145,7 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 }
 
 struct rspamd_config *
-rspamd_config_defaults (void)
+rspamd_config_new (void)
 {
 	struct rspamd_config *cfg;
 

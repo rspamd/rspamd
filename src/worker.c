@@ -233,7 +233,7 @@ accept_socket (gint fd, short what, void *arg)
 		return;
 	}
 
-	task = rspamd_task_new (worker);
+	task = rspamd_task_new (worker, ctx->cfg);
 
 	msg_info_task ("accepted connection from %s port %d",
 		rspamd_inet_address_to_string (addr),
@@ -267,7 +267,7 @@ accept_socket (gint fd, short what, void *arg)
 
 	/* Set up async session */
 	task->s = rspamd_session_create (task->task_pool, rspamd_task_fin,
-			rspamd_task_restore, rspamd_task_free_hard, task);
+			rspamd_task_restore, (event_finalizer_t )rspamd_task_free, task);
 
 	if (ctx->key) {
 		rspamd_http_connection_set_key (task->http_conn, ctx->key);

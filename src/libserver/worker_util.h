@@ -86,6 +86,7 @@ struct rspamd_controller_session {
 	struct rspamd_task *task;
 	struct rspamd_classifier_config *cl;
 	rspamd_inet_addr_t *from_addr;
+	struct rspamd_config *cfg;
 	gboolean is_spam;
 };
 

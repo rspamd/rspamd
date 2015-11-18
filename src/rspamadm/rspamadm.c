@@ -208,7 +208,7 @@ main (gint argc, gchar **argv, gchar **env)
 		rspamd_strcase_equal, g_free, g_free);
 	ottery_init (NULL);
 	process_quark = g_quark_from_static_string ("rspamadm");
-	cfg = rspamd_config_defaults ();
+	cfg = rspamd_config_new ();
 	cfg->libs_ctx = rspamd_init_libs ();
 	rspamd_main = g_malloc0 (sizeof (*rspamd_main));
 	rspamd_main->cfg = cfg;

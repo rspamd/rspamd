@@ -42,19 +42,19 @@ rspamd_task_quark (void)
  * Create new task
  */
 struct rspamd_task *
-rspamd_task_new (struct rspamd_worker *worker)
+rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg)
 {
 	struct rspamd_task *new_task;
 
+	g_assert (cfg != NULL);
+
 	new_task = g_slice_alloc0 (sizeof (struct rspamd_task));
-
 	new_task->worker = worker;
+	new_task->cfg = cfg;
+	REF_RETAIN (cfg);
 
-	if (worker) {
-		new_task->cfg = worker->srv->cfg;
-		if (new_task->cfg->check_all_filters) {
-			new_task->flags |= RSPAMD_TASK_FLAG_PASS_ALL;
-		}
+	if (cfg->check_all_filters) {
+		new_task->flags |= RSPAMD_TASK_FLAG_PASS_ALL;
 	}
 
 	gettimeofday (&new_task->tv, NULL);
@@ -169,7 +169,7 @@ rspamd_task_restore (void *arg)
  * Free all structures of worker_task
  */
 void
-rspamd_task_free (struct rspamd_task *task, gboolean is_soft)
+rspamd_task_free (struct rspamd_task *task)
 {
 	struct mime_part *p;
 	struct mime_text_part *tp;
@@ -229,25 +229,11 @@ rspamd_task_free (struct rspamd_task *task, gboolean is_soft)
 			event_del (&task->timeout_ev);
 		}
 
+		REF_RELEASE (task->cfg);
+
 		rspamd_mempool_delete (task->task_pool);
 		g_slice_free1 (sizeof (struct rspamd_task), task);
 	}
-}
-
-void
-rspamd_task_free_hard (gpointer ud)
-{
-	struct rspamd_task *task = ud;
-
-	rspamd_task_free (task, FALSE);
-}
-
-void
-rspamd_task_free_soft (gpointer ud)
-{
-	struct rspamd_task *task = ud;
-
-	rspamd_task_free (task, FALSE);
 }
 
 static void

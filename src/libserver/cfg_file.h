@@ -341,7 +341,7 @@ gboolean rspamd_parse_bind_line (struct rspamd_config *cfg,
  * Init default values
  * @param cfg config file
  */
-struct rspamd_config * rspamd_config_defaults (void);
+struct rspamd_config *rspamd_config_new (void);
 
 /**
  * Free memory used by config structure

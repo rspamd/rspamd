@@ -268,7 +268,7 @@ reread_config (struct rspamd_main *rspamd_main)
 	struct rspamd_config *tmp_cfg;
 	gchar *cfg_file;
 
-	tmp_cfg = rspamd_config_defaults ();
+	tmp_cfg = rspamd_config_new ();
 	tmp_cfg->c_modules = g_hash_table_ref (rspamd_main->cfg->c_modules);
 	tmp_cfg->libs_ctx = rspamd_main->cfg->libs_ctx;
 	REF_RETAIN (tmp_cfg->libs_ctx);
@@ -805,7 +805,7 @@ main (gint argc, gchar **argv, gchar **env)
 			"main");
 	rspamd_main->stat = rspamd_mempool_alloc0_shared (rspamd_main->server_pool,
 			sizeof (struct rspamd_stat));
-	rspamd_main->cfg = rspamd_config_defaults ();
+	rspamd_main->cfg = rspamd_config_new ();
 
 #ifndef HAVE_SETPROCTITLE
 	init_title (argc, argv, env);
