@@ -248,11 +248,20 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 	sqlite3 *sqlite;
 	gint rc, flags, lock_fd;
 	gchar lock_path[PATH_MAX], dbdir[PATH_MAX], *pdir;
-	static const char sqlite_wal[] = "PRAGMA journal_mode=\"wal\";",
-			exclusive_lock_sql[] = "PRAGMA locking_mode=\"exclusive\";",
-			fsync_sql[] = "PRAGMA synchronous=1;",
-			foreign_keys[] = "PRAGMA foreign_keys=\"ON\";",
-			enable_mmap[] = "PRAGMA mmap_size=268435456;";
+	static const char sqlite_wal[] =
+									"PRAGMA journal_mode=\"wal\";"
+									"PRAGMA wal_autocheckpoint = 16;"
+									"PRAGMA journal_size_limit = 1536;",
+			exclusive_lock_sql[] =	"PRAGMA locking_mode=\"exclusive\";",
+
+			fsync_sql[] = 			"PRAGMA synchronous=\"NORMAL\";",
+
+			foreign_keys[] = 		"PRAGMA foreign_keys=\"ON\";",
+
+			enable_mmap[] = 		"PRAGMA mmap_size=268435456;",
+
+			other_pragmas[] = 		"PRAGMA read_uncommitted=\"ON\";"
+									"PRAGMA cache_size=262144";
 	gboolean create = FALSE, has_lock = FALSE;
 
 	flags = SQLITE_OPEN_READWRITE;
@@ -306,6 +315,8 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 		g_assert (rspamd_file_lock (lock_fd, FALSE));
 		has_lock = TRUE;
 	}
+
+	sqlite3_enable_shared_cache (1);
 
 	if ((rc = sqlite3_open_v2 (path, &sqlite,
 			flags, NULL)) != SQLITE_OK) {
@@ -390,6 +401,12 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 		(rc = sqlite3_exec (sqlite, enable_mmap, NULL, NULL, NULL)) !=
 			SQLITE_OK) {
 		msg_warn_pool ("cannot enable mmap: %s",
+				sqlite3_errmsg (sqlite));
+	}
+
+	if ((rc = sqlite3_exec (sqlite, other_pragmas, NULL, NULL, NULL)) !=
+			SQLITE_OK) {
+		msg_warn_pool ("cannot execute tuning pragmas: %s",
 				sqlite3_errmsg (sqlite));
 	}
 
