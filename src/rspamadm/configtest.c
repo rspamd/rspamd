@@ -150,11 +150,16 @@ rspamadm_configtest (gint argc, gchar **argv)
 	}
 	else {
 		/* Do post-load actions */
-		ret = rspamd_config_post_load (cfg, TRUE);
+		ret = rspamd_config_post_load (cfg, FALSE);
 	}
 
 	if (ret) {
 		if (!rspamd_init_filters (rspamd_main->cfg, FALSE)) {
+			ret = FALSE;
+		}
+		if (!rspamd_symbols_cache_validate (rspamd_main->cfg->cache,
+				rspamd_main->cfg,
+				FALSE)) {
 			ret = FALSE;
 		}
 	}
