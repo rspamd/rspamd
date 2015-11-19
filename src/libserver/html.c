@@ -859,7 +859,7 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 
 				if (href_url->tldlen != text_url->tldlen || memcmp (href_url->tld,
 						text_url->tld, href_url->tldlen) != 0) {
-					href_url->is_phished = TRUE;
+					href_url->flags |= RSPAMD_URL_FLAG_PHISHED;
 					href_url->phished_url = text_url;
 				}
 			}

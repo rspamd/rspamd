@@ -678,7 +678,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 	len = hostname->len + slen + 2;
 
 	p = hostname->begin;
-	is_numeric = url->is_numeric;
+	is_numeric = url->flags & RSPAMD_URL_FLAG_NUMERIC;
 
 	while (p - hostname->begin < (gint)hostname->len && dots_num < MAX_LEVELS) {
 		if (*p == '.') {

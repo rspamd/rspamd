@@ -1383,7 +1383,7 @@ rspamd_url_hash (gconstpointer u)
 	if (url->userlen > 0) {
 		XXH64_update (&st, url->user, url->userlen);
 	}
-	XXH64_update (&st, &url->is_phished, sizeof (url->is_phished));
+	XXH64_update (&st, &url->flags, sizeof (url->flags));
 
 	return XXH64_digest (&st);
 }
@@ -1426,7 +1426,7 @@ rspamd_urls_cmp (gconstpointer a, gconstpointer b)
 	}
 	else {
 		r = g_ascii_strncasecmp (u1->host, u2->host, u1->hostlen);
-		if (r == 0 && u1->is_phished != u2->is_phished) {
+		if (r == 0 && u1->flags != u2->flags) {
 			/* Always insert phished urls to the tree */
 			return FALSE;
 		}

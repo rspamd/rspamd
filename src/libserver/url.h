@@ -8,6 +8,12 @@
 struct rspamd_task;
 struct mime_text_part;
 
+enum rspamd_url_flags {
+	RSPAMD_URL_FLAG_PHISHED = 1 << 0,
+	RSPAMD_URL_FLAG_NUMERIC = 1 << 1,
+	RSPAMD_URL_FLAG_OBSCURED = 1 << 2,
+};
+
 struct rspamd_url {
 	gchar *string;
 	gint protocol;
@@ -35,8 +41,7 @@ struct rspamd_url {
 	guint tldlen;
 	guint urllen;
 
-	gboolean is_phished; /* URI maybe phishing */
-	gboolean is_numeric; /* URI contains IP address */
+	enum rspamd_url_flags flags;
 };
 
 enum uri_errno {

@@ -645,7 +645,7 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 			ucl_object_insert_key (obj, elt, "surbl", 0, false);
 		}
 
-		elt = ucl_object_frombool (url->is_phished);
+		elt = ucl_object_frombool (url->flags & RSPAMD_URL_FLAG_PHISHED);
 		ucl_object_insert_key (obj, elt, "phished", 0, false);
 	}
 	ucl_array_append (cb->top, obj);

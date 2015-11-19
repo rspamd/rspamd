@@ -1093,7 +1093,7 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 		uri->hostlen = strlen (uri->host);
 		uri->tld = uri->host;
 		uri->tldlen = uri->hostlen;
-		uri->is_numeric = TRUE;
+		uri->flags |= RSPAMD_URL_FLAG_NUMERIC;
 		ret = TRUE;
 	}
 	else if (inet_pton (AF_INET6, buf, &in6) == 1) {
@@ -1103,7 +1103,7 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 		uri->hostlen = strlen (uri->host);
 		uri->tld = uri->host;
 		uri->tldlen = uri->hostlen;
-		uri->is_numeric = TRUE;
+		uri->flags |= RSPAMD_URL_FLAG_NUMERIC;
 		ret = TRUE;
 	}
 	else {
@@ -1175,7 +1175,7 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 			uri->hostlen = strlen (uri->host);
 			uri->tld = uri->host;
 			uri->tldlen = uri->hostlen;
-			uri->is_numeric = TRUE;
+			uri->flags |= RSPAMD_URL_FLAG_NUMERIC|RSPAMD_URL_FLAG_OBSCURED;
 			ret = TRUE;
 		}
 	}

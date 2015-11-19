@@ -261,7 +261,7 @@ lua_url_is_phished (lua_State *L)
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL) {
-		lua_pushboolean (L, url->url->is_phished);
+		lua_pushboolean (L, url->url->flags & RSPAMD_URL_FLAG_PHISHED);
 	}
 	else {
 		lua_pushnil (L);
@@ -281,7 +281,8 @@ lua_url_get_phished (lua_State *L)
 	struct rspamd_lua_url *purl, *url = lua_check_url (L, 1);
 
 	if (url) {
-		if (url->url->is_phished && url->url->phished_url != NULL) {
+		if ((url->url->flags & RSPAMD_URL_FLAG_PHISHED)
+				&& url->url->phished_url != NULL) {
 			purl = lua_newuserdata (L, sizeof (struct rspamd_lua_url));
 			rspamd_lua_setclass (L, "rspamd{url}", -1);
 			purl->url = url->url->phished_url;
@@ -476,7 +477,7 @@ lua_url_all (lua_State *L)
 			pos = text;
 			end = text + length;
 			lua_newtable (L);
-			
+
 			while (pos <= end) {
 				url = rspamd_url_get_next (pool, text, &pos, NULL);
 
