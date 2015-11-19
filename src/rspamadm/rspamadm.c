@@ -315,11 +315,8 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	rspamd_log_close (rspamd_main->logger);
-	rspamd_config_free (rspamd_main->cfg);
-	g_free (rspamd_main->cfg);
+	REF_RELEASE (rspamd_main->cfg);
 	g_free (rspamd_main);
-
-	g_mime_shutdown ();
 
 	return 0;
 }
