@@ -91,6 +91,7 @@ rspamd_sqlite3_run_prstmt (rspamd_mempool_t *pool, sqlite3 *db, GArray *stmts,
 
 	msg_debug_pool ("executing `%s`", nst->sql);
 	argtypes = nst->args;
+	sqlite3_clear_bindings (stmt);
 	sqlite3_reset (stmt);
 	va_start (ap, idx);
 	nargs = 1;
