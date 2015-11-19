@@ -1167,7 +1167,7 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 			p++;
 		}
 
-		if (check_num && dots <= 3) {
+		if (check_num && dots <= 4) {
 			memcpy (&in4, &n, sizeof (in4));
 			uri->host = rspamd_mempool_alloc (pool, INET_ADDRSTRLEN + 1);
 			memset (uri->host, 0, INET_ADDRSTRLEN + 1);
