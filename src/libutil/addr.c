@@ -562,7 +562,7 @@ rspamd_parse_inet_address (rspamd_inet_addr_t **target,
 
 	if (src[0] == '[') {
 		/* Ipv6 address in format [::1]:port or just [::1] */
-		end = strrchr (src + 1, ']');
+		end = memchr (src + 1, ']', srclen - 1);
 
 		if (end == NULL) {
 			return FALSE;
@@ -593,7 +593,7 @@ rspamd_parse_inet_address (rspamd_inet_addr_t **target,
 	}
 	else {
 
-		if ((end = strchr (src, ':')) != NULL) {
+		if ((end = memchr (src, ':', srclen)) != NULL) {
 			/* This is either port number and ipv4 addr or ipv6 addr */
 			if (ipv6_status == RSPAMD_IPV6_SUPPORTED &&
 					rspamd_parse_inet_address_ip6 (src, srclen, &su.s6.sin6_addr)) {
