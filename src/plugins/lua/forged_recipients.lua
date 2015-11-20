@@ -34,11 +34,12 @@ local symbol_sender = 'FORGED_SENDER'
 local function check_forged_headers(task)
 	local smtp_rcpt = task:get_recipients(1)
 	local res = false
-	
+	local score = 1.0
+
 	if smtp_rcpt then
 		local mime_rcpt = task:get_recipients(2)
 		local count = 0
-		if mime_rcpt then 
+		if mime_rcpt then
 			count = table.maxn(mime_rcpt)
 		end
 		if count > 0 and count < table.maxn(smtp_rcpt) then
@@ -51,11 +52,15 @@ local function check_forged_headers(task)
 						if string.lower(mr['addr']) == string.lower(sr['addr']) then
 							res = true
 							break
+						elseif string.lower(mr['user']) == string.lower(sr['user']) then
+							-- If we have the same username but for another domain, then
+							-- lower the overall score
+							score = score / 2
 						end
 					end
 				end
 				if not res then
-					task:insert_result(symbol_rcpt, 1)
+					task:insert_result(symbol_rcpt, score)
 					break
 				end
 			end
@@ -65,7 +70,7 @@ local function check_forged_headers(task)
 	local smtp_from = task:get_from(1)
 	if smtp_from and smtp_from[1] and smtp_from[1]['addr'] ~= '' then
 		local mime_from = task:get_from(2)
-		if not mime_from or not mime_from[1] or 
+		if not mime_from or not mime_from[1] or
 		  not (string.lower(mime_from[1]['addr']) == string.lower(smtp_from[1]['addr'])) then
 			task:insert_result(symbol_sender, 1)
 		end
@@ -84,7 +89,7 @@ end
 local opts =  rspamd_config:get_all_opt('forged_recipients')
 if opts then
 	if opts['symbol_rcpt'] or opts['symbol_sender'] then
-    local id = rspamd_config:register_callback_symbol(1.0, 
+    local id = rspamd_config:register_callback_symbol(1.0,
       check_forged_headers)
 		if opts['symbol_rcpt'] then
 			symbol_rcpt = opts['symbol_rcpt']
