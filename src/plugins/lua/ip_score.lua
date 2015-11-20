@@ -69,7 +69,7 @@ local asn_re = rspamd_regexp.create_cached("[\\|\\s]")
 
 local function asn_check(task)
   local ip = task:get_from_ip()
-  
+
   local function asn_dns_cb(resolver, to_resolve, results, err, key)
     if results and results[1] then
       local parts = asn_re:split(results[1])
@@ -85,7 +85,7 @@ local function asn_check(task)
       end
     end
   end
-  
+
   if ip and ip:is_valid() then
     local asn_provider = 'asn_provider'
     if ip:get_version() == 6 then
@@ -93,7 +93,7 @@ local function asn_check(task)
     end
     local req_name = rspamd_logger.slog("%1.%2",
       table.concat(ip:inversed_str_octets(), '.'), options[asn_provider])
-    
+
     task:get_resolver():resolve_txt(task:get_session(), task:get_mempool(),
         req_name, asn_dns_cb)
   end
@@ -124,7 +124,7 @@ local function ip_score_get_task_vars(task)
   if pool:get_variable("ipnet") then
     ipnet = pool:get_variable("ipnet")
   end
-  
+
   return asn, country, ipnet
 end
 
@@ -137,7 +137,7 @@ local ip_score_set = function(task)
     else
       new_total = old_total + 1
     end
-    
+
     return old_score + score, new_total
   end
 
@@ -152,10 +152,10 @@ local ip_score_set = function(task)
   if not ip or not ip:is_valid() then
     return
   end
-  
+
   local pool = task:get_mempool()
   local asn, country, ipnet = ip_score_get_task_vars(task)
-  
+
   if not pool:has_variable('ip_score') then
     return
   end
@@ -180,7 +180,7 @@ local ip_score_set = function(task)
   local hkey = ip_score_hash_key(asn, country, ipnet, ip)
   local upstream = upstreams:get_upstream_by_hash(hkey)
   local addr = upstream:get_addr()
- 
+
   asn_score,total_asn = new_score_set(score, asn_score, total_asn)
   country_score,total_country = new_score_set(score, country_score, total_country)
   ipnet_score,total_ipnet = new_score_set(score, ipnet_score, total_ipnet)
@@ -203,19 +203,19 @@ local ip_score_check = function(task)
       local parts = asn_re:split(score)
       local rep = tonumber(parts[1])
       local total = tonumber(parts[2])
-      
+
       return rep, total
     end
-    
+
     local function normalize_score(sc, total, mult)
       if total < options['lower_bound'] then
         return 0
       end
-      
+
       -- -mult to mult
       return mult * rspamd_util.tanh(2.718 * sc / total)
     end
-    
+
     if err then
       -- Key is not found or error occurred
       return
@@ -242,14 +242,14 @@ local ip_score_check = function(task)
         country_score,total_country,
         ipnet_score,total_ipnet,
         ip_score, total_ip)
-      
+
       asn_score = normalize_score(asn_score, total_asn, options['scores']['asn'])
       country_score = normalize_score(country_score, total_country,
         options['scores']['country'])
       ipnet_score = normalize_score(ipnet_score, total_ipnet,
         options['scores']['ipnet'])
       ip_score = normalize_score(ip_score, total_ip, options['scores']['ip'])
-      
+
       local total_score = 0.0
       local description_t = {}
 
@@ -272,18 +272,18 @@ local ip_score_check = function(task)
 
       if options['max_score'] and (total_score*10) > options['max_score'] then total_score = options['max_score']/10 end
       if options['min_score'] and (total_score*10) < options['min_score'] then total_score = options['min_score']/10 end
- 
+
       if total_score ~= 0 then
         task:insert_result(options['symbol'], total_score, table.concat(description_t, ', '))
       end
     end
   end
-  
+
   local function create_get_command(ip, asn, country, ipnet)
     local cmd = 'HMGET'
-    
+
     local args = {options['hash']}
-    
+
     if asn then
       table.insert(args, options['asn_prefix'] .. asn)
     else
@@ -302,12 +302,12 @@ local ip_score_check = function(task)
       -- fake arg
       table.insert(args, options['ipnet_prefix'])
     end
-    
+
     table.insert(args, ip:to_string())
-    
+
     return cmd, args
   end
-  
+
   local ip = task:get_from_ip()
   if ip:is_valid() then
     -- Check IP whitelist
@@ -344,7 +344,7 @@ local configure_ip_score_module = function()
       options[k] = v
     end
     if options['servers'] and options['servers'] ~= '' then
-      upstreams = upstream_list.create(options['servers'], default_port)
+      upstreams = upstream_list.create(rspamd_config, options['servers'], default_port)
       if not upstreams then
         rspamd_logger.errx(rspamd_config, 'no servers are specified')
       end

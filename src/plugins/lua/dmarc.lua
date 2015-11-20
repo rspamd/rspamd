@@ -290,7 +290,7 @@ end
 if not opts['servers'] then
   rspamd_logger.errx(rspamd_config, 'no servers are specified for dmarc stats')
 else
-  upstreams = upstream_list.create(opts['servers'], default_port)
+  upstreams = upstream_list.create(rspamd_config, opts['servers'], default_port)
   if not upstreams then
     rspamd_logger.errx(rspamd_config, 'cannot parse servers parameter')
   end

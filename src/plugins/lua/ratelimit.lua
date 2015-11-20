@@ -72,9 +72,9 @@ local function parse_limits(data)
       return {atime,bucket}
     end
   end
-  
-  return _.iter(data):map(function(e) 
-    if type(e) == 'string' then 
+
+  return _.iter(data):map(function(e)
+    if type(e) == 'string' then
       return parse_limit_elt(e)
     else
       return {0, 0}
@@ -111,13 +111,13 @@ local function check_limits(task, args)
     if data then
       local tv = task:get_timeval()
       local ntime = tv['tv_usec'] / 1000000. + tv['tv_sec']
-      
+
       _.each(function(elt, limit)
         local bucket = elt[2]
         local rate = limit[2]
         local threshold = limit[1]
         local atime = elt[1]
-        
+
         bucket = bucket - rate * (ntime - atime);
         if bucket > 0 then
           if bucket > threshold then
@@ -130,11 +130,11 @@ local function check_limits(task, args)
       upstream:fail()
     end
   end
-  
+
   if upstream then
     local cmd = generate_format_string(args, false)
-    
-    rspamd_redis.make_request(task, addr, rate_get_cb, cmd, 
+
+    rspamd_redis.make_request(task, addr, rate_get_cb, cmd,
       _.totable(_.map(function(l) return l[2] end, args)))
   end
 end
@@ -153,7 +153,7 @@ local function set_limits(task, args)
       upstream:ok()
     end
   end
- 
+
   local function rate_set_cb(task, err, data)
     if data then
       local tv = task:get_timeval()
@@ -164,7 +164,7 @@ local function set_limits(task, args)
         local rate = limit[1][2]
         local threshold = limit[1][1]
         local atime = elt[1]
-        
+
         if bucket > 0 then
           bucket = bucket - rate * (ntime - atime) + 1;
           if bucket < 0 then
@@ -177,7 +177,7 @@ local function set_limits(task, args)
         table.insert(values, limit[2])
         table.insert(values, lstr)
       end, _.zip(parse_limits(data), _.iter(args)))
-      
+
       local cmd = generate_format_string(values, true)
       rspamd_redis.make_request(task, addr, rate_set_key_cb, cmd, values)
     elseif err then
@@ -187,7 +187,7 @@ local function set_limits(task, args)
   end
   if upstream then
     local cmd = generate_format_string(args, false)
-    
+
     rspamd_redis.make_request(task, addr, rate_set_cb, cmd,
       _.totable(_.map(function(l) return l[2] end, args)))
   end
@@ -230,10 +230,10 @@ local function rate_test_set(task, func)
   local rcpts_user = {}
   if rcpts then
     _.each(function(r) table.insert(rcpts_user, r['user']) end, rcpts)
-    if _.any(function(r) 
-      _.any(function(w) return r == w end, whitelisted_rcpts) end, 
+    if _.any(function(r)
+      _.any(function(w) return r == w end, whitelisted_rcpts) end,
       rcpts_user) then
-      
+
       rspamd_logger.infox(task, 'skip ratelimit for whitelisted recipient')
       return
     end
@@ -269,7 +269,7 @@ local function rate_test_set(task, func)
       end
     end, rcpts)
   end
-  
+
   func(task, args)
 end
 
@@ -378,7 +378,7 @@ if opts then
   if not opts['servers'] then
     rspamd_logger.errx(rspamd_config, 'no servers are specified')
   else
-    upstreams = upstream_list.create(opts['servers'], default_port)
+    upstreams = upstream_list.create(rspamd_config, opts['servers'], default_port)
     if not upstreams then
       rspamd_logger.errx(rspamd_config, 'no servers are specified')
     else
