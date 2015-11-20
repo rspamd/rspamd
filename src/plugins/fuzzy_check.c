@@ -365,7 +365,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 	}
 
 	if ((value = ucl_object_find_key (obj, "servers")) != NULL) {
-		rule->servers = rspamd_upstreams_create ();
+		rule->servers = rspamd_upstreams_create (cfg->ups_ctx);
 		rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
 				(rspamd_mempool_destruct_t)rspamd_upstreams_destroy,
 				rule->servers);

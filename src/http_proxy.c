@@ -63,6 +63,7 @@ struct rspamd_http_upstream {
 struct http_proxy_ctx {
 	gdouble timeout;
 	struct timeval io_tv;
+	struct rspamd_config *cfg;
 	/* DNS resolver */
 	struct rspamd_dns_resolver *resolver;
 	/* Events base */
@@ -155,7 +156,7 @@ http_proxy_parse_upstream (rspamd_mempool_t *pool,
 		goto err;
 	}
 
-	up->u = rspamd_upstreams_create ();
+	up->u = rspamd_upstreams_create (ctx->cfg->ups_ctx);
 	if (!rspamd_upstreams_from_ucl (up->u, elt, 11333, NULL)) {
 		g_set_error (err, http_proxy_quark (), 100,
 				"upstream has bad hosts definition");
@@ -200,6 +201,7 @@ init_http_proxy (struct rspamd_config *cfg)
 	ctx->timeout = 5.0;
 	ctx->upstreams = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	ctx->rotate_tm = DEFAULT_ROTATION_TIME;
+	ctx->cfg = cfg;
 
 	rspamd_rcl_register_worker_option (cfg, type, "timeout",
 		rspamd_rcl_parse_struct_time, ctx,
@@ -457,8 +459,9 @@ start_http_proxy (struct rspamd_worker *worker)
 			worker->srv->cfg);
 	double_to_tv (ctx->timeout, &ctx->io_tv);
 
-	rspamd_upstreams_library_init (ctx->resolver->r, ctx->ev_base);
-	rspamd_upstreams_library_config (worker->srv->cfg);
+	ctx->cfg->ups_ctx = rspamd_upstreams_library_init (ctx->resolver->r,
+			ctx->ev_base);
+	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx);
 
 	/* XXX: stupid default */
 	ctx->keys_cache = rspamd_keypair_cache_new (256);

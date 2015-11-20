@@ -319,7 +319,7 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 					continue;
 				}
 				else {
-					backend->read_servers = rspamd_upstreams_create ();
+					backend->read_servers = rspamd_upstreams_create (cfg->ups_ctx);
 					if (!rspamd_upstreams_from_ucl (backend->read_servers, elt,
 							REDIS_DEFAULT_PORT, NULL)) {
 						msg_err ("statfile %s cannot read servers configuration",
@@ -337,7 +337,7 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg)
 					continue;
 				}
 				else {
-					backend->write_servers = rspamd_upstreams_create ();
+					backend->write_servers = rspamd_upstreams_create (cfg->ups_ctx);
 					if (!rspamd_upstreams_from_ucl (backend->write_servers, elt,
 							REDIS_DEFAULT_PORT, NULL)) {
 						msg_err ("statfile %s cannot write servers configuration",

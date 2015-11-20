@@ -168,54 +168,39 @@ lua_check_upstream_list (lua_State * L)
 }
 
 /***
- * @function upstream_list.create(def)
+ * @function upstream_list.create(cfg, def, [default_port])
  * Create new upstream list from its string definition in form `<upstream>,<upstream>;<upstream>`
+ * @param {rspamd_config} cfg configuration reference
  * @param {string} def upstream list definition
+ * @param {number} default_port default port for upstreams
  * @return {upstream_list} upstream list structure
  */
 static gint
 lua_upstream_list_create (lua_State *L)
 {
 	struct upstream_list *new = NULL, **pnew;
+	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *def;
-	char **tokens, **t;
 	guint default_port = 0;
 
-	def = luaL_checkstring (L, 1);
+	def = luaL_checkstring (L, 2);
 	if (def) {
-		if (lua_gettop (L) >= 2) {
-			default_port = luaL_checknumber (L, 2);
+		if (lua_gettop (L) >= 3) {
+			default_port = luaL_checknumber (L, 3);
 		}
 
-		tokens = g_strsplit_set (def, ",;", 0);
-		if (!tokens || !tokens[0]) {
-			goto err;
+		new = rspamd_upstreams_create (cfg->ups_ctx);
+
+		if (rspamd_upstreams_parse_line (new, def, default_port, NULL)) {
+			pnew = lua_newuserdata (L, sizeof (struct upstream_list *));
+			rspamd_lua_setclass (L, "rspamd{upstream_list}", -1);
+			*pnew = new;
 		}
-		t = tokens;
-
-		new = rspamd_upstreams_create ();
-		while (*t != NULL) {
-			if (!rspamd_upstreams_add_upstream (new, *t, default_port, NULL)) {
-				goto err;
-			}
-			t ++;
+		else {
+			rspamd_upstreams_destroy (new);
+			lua_pushnil (L);
 		}
-		pnew = lua_newuserdata (L, sizeof (struct upstream_list *));
-		rspamd_lua_setclass (L, "rspamd{upstream_list}", -1);
-
-		g_strfreev (tokens);
-		*pnew = new;
 	}
-
-	return 1;
-err:
-	if (tokens) {
-		g_strfreev (tokens);
-	}
-	if (new) {
-		rspamd_upstreams_destroy (new);
-	}
-	lua_pushnil (L);
 
 	return 1;
 }

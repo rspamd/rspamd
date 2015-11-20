@@ -309,6 +309,7 @@ struct rspamd_config {
 	guint upstream_max_errors;						/**< upstream max errors before shutting off			*/
 	gdouble upstream_error_time;					/**< rate of upstream errors							*/
 	gdouble upstream_revive_time;					/**< revive timeout for upstreams						*/
+	struct upstream_ctx *ups_ctx;					/**< upstream context									*/
 
 	guint min_word_len;								/**< minimum length of the word to be considered		*/
 	guint max_word_len;								/**< maximum length of the word to be considered		*/

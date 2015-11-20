@@ -350,7 +350,7 @@ surbl_module_config (struct rspamd_config *cfg)
 
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "surbl", "redirector")) != NULL) {
-		surbl_module_ctx->redirectors = rspamd_upstreams_create ();
+		surbl_module_ctx->redirectors = rspamd_upstreams_create (cfg->ups_ctx);
 		rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
 				(rspamd_mempool_destruct_t)rspamd_upstreams_destroy,
 				surbl_module_ctx->redirectors);
