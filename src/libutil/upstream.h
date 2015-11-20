@@ -25,15 +25,15 @@ struct upstream_ctx;
  * Init upstreams library
  * @param resolver
  */
-struct upstream_ctx* rspamd_upstreams_library_init (struct rdns_resolver *resolver,
-		struct event_base *base);
+struct upstream_ctx* rspamd_upstreams_library_init (void);
 
 /**
  * Configure attributes of upstreams library
  * @param cfg
  */
 void rspamd_upstreams_library_config (struct rspamd_config *cfg,
-		struct upstream_ctx *ctx);
+		struct upstream_ctx *ctx, struct event_base *ev_base,
+		struct rdns_resolver *resolver);
 
 /**
  * Upstream error logic

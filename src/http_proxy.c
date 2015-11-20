@@ -459,9 +459,8 @@ start_http_proxy (struct rspamd_worker *worker)
 			worker->srv->cfg);
 	double_to_tv (ctx->timeout, &ctx->io_tv);
 
-	ctx->cfg->ups_ctx = rspamd_upstreams_library_init (ctx->resolver->r,
-			ctx->ev_base);
-	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx);
+	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx,
+			ctx->ev_base, ctx->resolver->r);
 
 	/* XXX: stupid default */
 	ctx->keys_cache = rspamd_keypair_cache_new (256);

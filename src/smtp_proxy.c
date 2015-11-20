@@ -1073,9 +1073,8 @@ start_smtp_proxy (struct rspamd_worker *worker)
 			ctx->ev_base,
 			worker->srv->cfg);
 
-	worker->srv->cfg->ups_ctx = rspamd_upstreams_library_init (ctx->resolver->r,
-			ctx->ev_base);
-	rspamd_upstreams_library_config (worker->srv->cfg, worker->srv->cfg->ups_ctx);
+	rspamd_upstreams_library_config (worker->srv->cfg, worker->srv->cfg->ups_ctx,
+			ctx->ev_base, ctx->resolver->r);
 	/* Set umask */
 	umask (S_IWGRP | S_IWOTH | S_IROTH | S_IRGRP);
 

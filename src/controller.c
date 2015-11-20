@@ -2550,9 +2550,8 @@ start_controller_worker (struct rspamd_worker *worker)
 			ctx->ev_base,
 			worker->srv->cfg);
 
-	worker->srv->cfg->ups_ctx = rspamd_upstreams_library_init (ctx->resolver->r,
-			ctx->ev_base);
-	rspamd_upstreams_library_config (worker->srv->cfg, worker->srv->cfg->ups_ctx);
+	rspamd_upstreams_library_config (worker->srv->cfg, worker->srv->cfg->ups_ctx,
+			ctx->ev_base, ctx->resolver->r);
 	/* Maps events */
 	rspamd_map_watch (worker->srv->cfg, ctx->ev_base);
 	rspamd_symbols_cache_start_refresh (worker->srv->cfg->cache, ctx->ev_base);

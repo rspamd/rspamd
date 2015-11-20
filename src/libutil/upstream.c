@@ -79,6 +79,7 @@ struct upstream_ctx {
 	gdouble dns_timeout;
 	guint dns_retransmits;
 	GQueue *upstreams;
+	gboolean configured;
 	ref_entry_t ref;
 };
 
@@ -92,8 +93,12 @@ static guint default_dns_retransmits = 2;
 
 void
 rspamd_upstreams_library_config (struct rspamd_config *cfg,
-		struct upstream_ctx *ctx)
+		struct upstream_ctx *ctx, struct event_base *ev_base,
+		struct rdns_resolver *resolver)
 {
+	g_assert (ctx != NULL);
+	g_assert (cfg != NULL);
+
 	if (cfg->upstream_error_time) {
 		ctx->error_time = cfg->upstream_error_time;
 	}
@@ -109,6 +114,10 @@ rspamd_upstreams_library_config (struct rspamd_config *cfg,
 	if (cfg->dns_timeout) {
 		ctx->dns_timeout = cfg->dns_timeout;
 	}
+
+	ctx->ev_base = ev_base;
+	ctx->res = resolver;
+	ctx->configured = TRUE;
 }
 
 static void
@@ -131,8 +140,7 @@ rspamd_upstream_ctx_dtor (struct upstream_ctx *ctx)
 }
 
 struct upstream_ctx *
-rspamd_upstreams_library_init (struct rdns_resolver *resolver,
-		struct event_base *base)
+rspamd_upstreams_library_init (void)
 {
 	struct upstream_ctx *ctx;
 
@@ -144,8 +152,6 @@ rspamd_upstreams_library_init (struct rdns_resolver *resolver,
 	ctx->revive_jitter = default_revive_jitter;
 	ctx->revive_time = default_revive_time;
 
-	ctx->res = resolver;
-	ctx->ev_base = base;
 	ctx->upstreams = g_queue_new ();
 	REF_INIT_RETAIN (ctx, rspamd_upstream_ctx_dtor);
 
@@ -302,7 +308,7 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
 	g_ptr_array_remove_index (ls->alive, up->active_idx);
 	up->active_idx = -1;
 
-	if (up->ctx->res != NULL) {
+	if (up->ctx->res != NULL && up->ctx->configured) {
 		/* Resolve name of the upstream one more time */
 		if (up->name[0] != '/') {
 			REF_RETAIN (up);
@@ -318,7 +324,7 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
 
 	REF_RETAIN (up);
 	evtimer_set (&up->ev, rspamd_upstream_revive_cb, up);
-	if (up->ctx->ev_base != NULL) {
+	if (up->ctx->ev_base != NULL && up->ctx->configured) {
 		event_base_set (up->ctx->ev_base, &up->ev);
 	}
 

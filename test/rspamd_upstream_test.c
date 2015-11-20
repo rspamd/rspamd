@@ -74,9 +74,7 @@ rspamd_upstream_test_func (void)
 	struct timeval tv;
 	rspamd_inet_addr_t *addr, *next_addr, *paddr;
 
-	cfg = (struct rspamd_config *)g_malloc (sizeof (struct rspamd_config));
-	bzero (cfg, sizeof (struct rspamd_config));
-	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
+	cfg = rspamd_config_new ();
 	cfg->dns_retransmits = 2;
 	cfg->dns_timeout = 0.5;
 	cfg->upstream_max_errors = 1;
@@ -84,9 +82,7 @@ rspamd_upstream_test_func (void)
 	cfg->upstream_error_time = 2;
 
 	resolver = dns_resolver_init (NULL, ev_base, cfg);
-
-	cfg->ups_ctx = rspamd_upstreams_library_init (resolver->r, ev_base);
-	rspamd_upstreams_library_config (cfg, cfg->ups_ctx);
+	rspamd_upstreams_library_config (cfg, cfg->ups_ctx, ev_base, resolver->r);
 
 	ls = rspamd_upstreams_create (cfg->ups_ctx);
 	g_assert (rspamd_upstreams_parse_line (ls, test_upstream_list, 443, NULL));
@@ -170,4 +166,5 @@ rspamd_upstream_test_func (void)
 	g_assert (rspamd_upstreams_alive (ls) == 3);
 
 	rspamd_upstreams_destroy (ls);
+	REF_RELEASE (cfg);
 }
