@@ -85,10 +85,10 @@ rspamd_upstream_test_func (void)
 
 	resolver = dns_resolver_init (NULL, ev_base, cfg);
 
-	rspamd_upstreams_library_init (resolver->r, ev_base);
-	rspamd_upstreams_library_config (cfg);
+	cfg->ups_ctx = rspamd_upstreams_library_init (resolver->r, ev_base);
+	rspamd_upstreams_library_config (cfg, cfg->ups_ctx);
 
-	ls = rspamd_upstreams_create ();
+	ls = rspamd_upstreams_create (cfg->ups_ctx);
 	g_assert (rspamd_upstreams_parse_line (ls, test_upstream_list, 443, NULL));
 	g_assert (rspamd_upstreams_count (ls) == 3);
 
@@ -105,7 +105,7 @@ rspamd_upstream_test_func (void)
 	rspamd_upstream_test_method (ls, RSPAMD_UPSTREAM_ROUND_ROBIN, "microsoft.com");
 
 	/* Test stable hashing */
-	nls = rspamd_upstreams_create ();
+	nls = rspamd_upstreams_create (cfg->ups_ctx);
 	g_assert (rspamd_upstreams_parse_line (nls, test_upstream_list, 443, NULL));
 	g_assert (rspamd_upstreams_parse_line (nls, new_upstream_list, 443, NULL));
 	for (i = 0; i < assumptions; i ++) {
@@ -135,7 +135,7 @@ rspamd_upstream_test_func (void)
 	/*
 	 * Test v4/v6 priorities
 	 */
-	nls = rspamd_upstreams_create ();
+	nls = rspamd_upstreams_create (cfg->ups_ctx);
 	g_assert (rspamd_upstreams_add_upstream (nls, "127.0.0.1", 0, NULL));
 	up = rspamd_upstream_get (nls, RSPAMD_UPSTREAM_RANDOM);
 	rspamd_parse_inet_address (&paddr, "127.0.0.2", 0);
@@ -169,6 +169,5 @@ rspamd_upstream_test_func (void)
 	event_base_loop (ev_base, 0);
 	g_assert (rspamd_upstreams_alive (ls) == 3);
 
-	g_free (cfg);
 	rspamd_upstreams_destroy (ls);
 }
