@@ -19,19 +19,21 @@ struct rspamd_config;
 /* Opaque upstream structures */
 struct upstream;
 struct upstream_list;
+struct upstream_ctx;
 
 /**
  * Init upstreams library
  * @param resolver
  */
-void rspamd_upstreams_library_init (struct rdns_resolver *resolver,
+struct upstream_ctx* rspamd_upstreams_library_init (struct rdns_resolver *resolver,
 		struct event_base *base);
 
 /**
  * Configure attributes of upstreams library
  * @param cfg
  */
-void rspamd_upstreams_library_config (struct rspamd_config *cfg);
+void rspamd_upstreams_library_config (struct rspamd_config *cfg,
+		struct upstream_ctx *ctx);
 
 /**
  * Upstream error logic
@@ -55,7 +57,7 @@ void rspamd_upstream_ok (struct upstream *up);
  * Create new list of upstreams
  * @return
  */
-struct upstream_list* rspamd_upstreams_create (void);
+struct upstream_list* rspamd_upstreams_create (struct upstream_ctx *ctx);
 /**
  * Destroy list of upstreams
  * @param ups
