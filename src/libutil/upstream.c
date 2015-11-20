@@ -139,6 +139,12 @@ rspamd_upstream_ctx_dtor (struct upstream_ctx *ctx)
 	g_slice_free1 (sizeof (*ctx), ctx);
 }
 
+void
+rspamd_upstreams_library_unref (struct upstream_ctx *ctx)
+{
+	REF_RELEASE (ctx);
+}
+
 struct upstream_ctx *
 rspamd_upstreams_library_init (void)
 {

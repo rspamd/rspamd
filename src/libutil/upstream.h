@@ -28,6 +28,11 @@ struct upstream_ctx;
 struct upstream_ctx* rspamd_upstreams_library_init (void);
 
 /**
+ * Remove reference from upstreams library
+ */
+void rspamd_upstreams_library_unref (struct upstream_ctx *ctx);
+
+/**
  * Configure attributes of upstreams library
  * @param cfg
  */
