@@ -90,3 +90,22 @@ rspamd_config.DATE_IN_PAST = function(task)
 
 	return false
 end
+
+rspamd_config.R_SUSPICIOUS_URL = {
+  callback = function(task)
+    local urls = task:get_urls()
+
+    if urls then
+      for i,u in ipairs(urls) do
+        if u:is_obscured() then
+          return true
+        end
+      end
+    end
+    return false
+  end,
+  score = 6.0,
+  group = 'url',
+  one_shot = true,
+  description = 'Obfusicated or suspicious URL has been found in a message'
+}
