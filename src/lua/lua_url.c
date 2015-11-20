@@ -57,6 +57,7 @@ LUA_FUNCTION_DEF (url, get_text);
 LUA_FUNCTION_DEF (url, get_tld);
 LUA_FUNCTION_DEF (url, to_table);
 LUA_FUNCTION_DEF (url, is_phished);
+LUA_FUNCTION_DEF (url, is_obscured);
 LUA_FUNCTION_DEF (url, get_phished);
 LUA_FUNCTION_DEF (url, create);
 LUA_FUNCTION_DEF (url, all);
@@ -73,6 +74,7 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF (url, get_tld),
 	LUA_INTERFACE_DEF (url, to_table),
 	LUA_INTERFACE_DEF (url, is_phished),
+	LUA_INTERFACE_DEF (url, is_obscured),
 	LUA_INTERFACE_DEF (url, get_phished),
 	{"__tostring", lua_url_get_text},
 	{NULL, NULL}
@@ -262,6 +264,26 @@ lua_url_is_phished (lua_State *L)
 
 	if (url != NULL) {
 		lua_pushboolean (L, url->url->flags & RSPAMD_URL_FLAG_PHISHED);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+/***
+ * @method url:is_obscured()
+ * Check whether URL is treated as obscured or obfusicated (e.g. numbers in IP address or other hacks)
+ * @return {boolean} `true` if URL is obscured
+ */
+static gint
+lua_url_is_obscured (lua_State *L)
+{
+	struct rspamd_lua_url *url = lua_check_url (L, 1);
+
+	if (url != NULL) {
+		lua_pushboolean (L, url->url->flags & RSPAMD_URL_FLAG_OBSCURED);
 	}
 	else {
 		lua_pushnil (L);
