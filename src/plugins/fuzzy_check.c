@@ -1347,7 +1347,8 @@ register_fuzzy_client_call (struct rspamd_task *task,
 	gint sock;
 
 	/* Get upstream */
-	selected = rspamd_upstream_get (rule->servers, RSPAMD_UPSTREAM_ROUND_ROBIN);
+	selected = rspamd_upstream_get (rule->servers, RSPAMD_UPSTREAM_ROUND_ROBIN,
+			NULL, 0);
 	if (selected) {
 		if ((sock = rspamd_inet_address_connect (rspamd_upstream_addr (selected),
 				SOCK_DGRAM, TRUE)) == -1) {
@@ -1434,7 +1435,7 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 	/* Get upstream */
 
 	while ((selected = rspamd_upstream_get (rule->servers,
-			RSPAMD_UPSTREAM_SEQUENTIAL))) {
+			RSPAMD_UPSTREAM_SEQUENTIAL, NULL, 0))) {
 		/* Create UDP socket */
 		if ((sock = rspamd_inet_address_connect (rspamd_upstream_addr (selected),
 				SOCK_DGRAM, TRUE)) == -1) {

@@ -322,7 +322,8 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 			goto err;
 		}
 		else {
-			session->up = rspamd_upstream_get (backend->u, RSPAMD_UPSTREAM_ROUND_ROBIN);
+			session->up = rspamd_upstream_get (backend->u,
+					RSPAMD_UPSTREAM_ROUND_ROBIN, NULL, 0);
 
 			if (session->up == NULL) {
 				msg_err ("cannot select upstream for %s", host ? hostbuf : "default");

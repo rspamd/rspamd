@@ -274,7 +274,7 @@ lua_upstream_list_get_upstream_round_robin (lua_State *L)
 	upl = lua_check_upstream_list (L);
 	if (upl) {
 
-		selected = rspamd_upstream_get (upl, RSPAMD_UPSTREAM_ROUND_ROBIN);
+		selected = rspamd_upstream_get (upl, RSPAMD_UPSTREAM_ROUND_ROBIN, NULL, 0);
 		if (selected) {
 			pselected = lua_newuserdata (L, sizeof (struct upstream *));
 			rspamd_lua_setclass (L, "rspamd{upstream}", -1);
@@ -305,7 +305,9 @@ lua_upstream_list_get_upstream_master_slave (lua_State *L)
 	upl = lua_check_upstream_list (L);
 	if (upl) {
 
-		selected = rspamd_upstream_get (upl, RSPAMD_UPSTREAM_MASTER_SLAVE);
+		selected = rspamd_upstream_get (upl, RSPAMD_UPSTREAM_MASTER_SLAVE,
+				NULL,
+				0);
 		if (selected) {
 			pselected = lua_newuserdata (L, sizeof (struct upstream *));
 			rspamd_lua_setclass (L, "rspamd{upstream}", -1);

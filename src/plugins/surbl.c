@@ -1047,7 +1047,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 	struct rspamd_http_message *msg;
 
 	selected = rspamd_upstream_get (surbl_module_ctx->redirectors,
-			RSPAMD_UPSTREAM_ROUND_ROBIN);
+			RSPAMD_UPSTREAM_ROUND_ROBIN, url->host, url->hostlen);
 
 	if (selected) {
 		s = rspamd_inet_address_connect (rspamd_upstream_addr (selected),

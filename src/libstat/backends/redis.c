@@ -398,10 +398,16 @@ rspamd_redis_runtime (struct rspamd_task *task,
 	}
 
 	if (learn) {
-		up = rspamd_upstream_get (elt->write_servers, RSPAMD_UPSTREAM_MASTER_SLAVE);
+		up = rspamd_upstream_get (elt->write_servers,
+				RSPAMD_UPSTREAM_MASTER_SLAVE,
+				NULL,
+				0);
 	}
 	else {
-		up = rspamd_upstream_get (elt->read_servers, RSPAMD_UPSTREAM_ROUND_ROBIN);
+		up = rspamd_upstream_get (elt->read_servers,
+				RSPAMD_UPSTREAM_ROUND_ROBIN,
+				NULL,
+				0);
 	}
 
 	if (up == NULL) {

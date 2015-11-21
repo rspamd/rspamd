@@ -39,7 +39,7 @@ rspamd_upstream_test_method (struct upstream_list *ls,
 	struct upstream *up;
 
 	if (rot != RSPAMD_UPSTREAM_HASHED) {
-		up = rspamd_upstream_get (ls, rot);
+		up = rspamd_upstream_get (ls, rot, NULL, 0);
 		g_assert (up != NULL);
 		g_assert (strcmp (rspamd_upstream_name (up), expected) == 0);
 	}
@@ -133,7 +133,7 @@ rspamd_upstream_test_func (void)
 	 */
 	nls = rspamd_upstreams_create (cfg->ups_ctx);
 	g_assert (rspamd_upstreams_add_upstream (nls, "127.0.0.1", 0, NULL));
-	up = rspamd_upstream_get (nls, RSPAMD_UPSTREAM_RANDOM);
+	up = rspamd_upstream_get (nls, RSPAMD_UPSTREAM_RANDOM, NULL, 0);
 	rspamd_parse_inet_address (&paddr, "127.0.0.2", 0);
 	g_assert (rspamd_upstream_add_addr (up, paddr));
 	rspamd_parse_inet_address (&paddr, "::1", 0);
@@ -152,7 +152,7 @@ rspamd_upstream_test_func (void)
 	evtimer_set (&ev, rspamd_upstream_timeout_handler, resolver);
 	event_base_set (ev_base, &ev);
 
-	up = rspamd_upstream_get (ls, RSPAMD_UPSTREAM_MASTER_SLAVE);
+	up = rspamd_upstream_get (ls, RSPAMD_UPSTREAM_MASTER_SLAVE, NULL, 0);
 	for (i = 0; i < 100; i ++) {
 		rspamd_upstream_fail (up);
 	}

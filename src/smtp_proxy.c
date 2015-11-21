@@ -427,7 +427,7 @@ create_smtp_proxy_upstream_connection (struct smtp_proxy_session *session)
 
 	/* Try to select upstream */
 	selected = rspamd_upstream_get (session->ctx->upstreams,
-			RSPAMD_UPSTREAM_ROUND_ROBIN);
+			RSPAMD_UPSTREAM_ROUND_ROBIN, NULL, 0);
 	if (selected == NULL) {
 		msg_err ("no upstreams suitable found");
 		return FALSE;
