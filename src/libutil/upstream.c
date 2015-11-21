@@ -67,6 +67,7 @@ struct upstream_list {
 	rspamd_mutex_t *lock;
 	guint64 hash_seed;
 	guint cur_elt;
+	enum rspamd_upstream_rotation rot_alg;
 };
 
 struct upstream_ctx {
@@ -407,6 +408,7 @@ rspamd_upstreams_create (struct upstream_ctx *ctx)
 	ls->lock = rspamd_mutex_new ();
 	ls->cur_elt = 0;
 	ls->ctx = ctx;
+	ls->rot_alg = RSPAMD_UPSTREAM_UNDEF;
 
 	return ls;
 }
@@ -539,6 +541,35 @@ rspamd_upstreams_parse_line (struct upstream_list *ups,
 	gchar *tmp;
 	guint len;
 	gboolean ret = FALSE;
+
+	if (g_ascii_strncasecmp (p, "random:", sizeof ("random:") - 1) == 0) {
+		ups->rot_alg = RSPAMD_UPSTREAM_RANDOM;
+		p += sizeof ("random:") - 1;
+	}
+	else if (g_ascii_strncasecmp (p,
+			"master-slave:",
+			sizeof ("master-slave:") - 1) == 0) {
+		ups->rot_alg = RSPAMD_UPSTREAM_MASTER_SLAVE;
+		p += sizeof ("master-slave:") - 1;
+	}
+	else if (g_ascii_strncasecmp (p,
+			"round-robin:",
+			sizeof ("round-robin:") - 1) == 0) {
+		ups->rot_alg = RSPAMD_UPSTREAM_ROUND_ROBIN;
+		p += sizeof ("round-robin:") - 1;
+	}
+	else if (g_ascii_strncasecmp (p,
+			"hash:",
+			sizeof ("hash:") - 1) == 0) {
+		ups->rot_alg = RSPAMD_UPSTREAM_HASHED;
+		p += sizeof ("hash:") - 1;
+	}
+	else if (g_ascii_strncasecmp (p,
+			"sequential:",
+			sizeof ("sequential:") - 1) == 0) {
+		ups->rot_alg = RSPAMD_UPSTREAM_SEQUENTIAL;
+		p += sizeof ("sequential:") - 1;
+	}
 
 	while (p < end) {
 		len = strcspn (p, separators);
