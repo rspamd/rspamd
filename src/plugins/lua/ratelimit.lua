@@ -50,13 +50,15 @@ local settings = {
 local bounce_senders = {'postmaster', 'mailer-daemon', '', 'null', 'fetchmail-daemon', 'mdaemon'}
 -- Do not check ratelimits for these senders
 local whitelisted_rcpts = {'postmaster', 'mailer-daemon'}
-local whitelisted_ip = nil
+local whitelisted_ip
 local max_rcpt = 5
-local upstreams = nil
+local upstreams
+local ratelimit_symbol
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_redis = require "rspamd_redis"
 local upstream_list = require "rspamd_upstream_list"
+local rspamd_util = require "rspamd_util"
 local _ = require "fun"
 --local dumper = require 'pl.pretty'.dump
 
@@ -120,8 +122,17 @@ local function check_limits(task, args)
 
         bucket = bucket - rate * (ntime - atime);
         if bucket > 0 then
-          if bucket > threshold then
-            task:set_pre_result('soft reject', 'Ratelimit exceeded')
+          if ratelimit_symbol then
+            local mult = 2 * rspamd_util.tanh(bucket / (threshold * 2))
+
+            if mult > 0.5 then
+              task:insert_result(ratelimit_symbol, mult,
+                tostring(mult))
+            end
+          else
+            if bucket > threshold then
+                task:set_pre_result('soft reject', 'Ratelimit exceeded')
+            end
           end
         end
       end, _.zip(parse_limits(data), _.map(function(a) return a[1] end, args)))
@@ -340,20 +351,6 @@ local function parse_limit(str)
   end
 end
 
--- Registration
-if rspamd_config:get_api_version() >= 9 then
-  rspamd_config:register_module_option('ratelimit', 'servers', 'string')
-  rspamd_config:register_module_option('ratelimit', 'bounce_senders', 'string')
-  rspamd_config:register_module_option('ratelimit', 'whitelisted_rcpts', 'string')
-  rspamd_config:register_module_option('ratelimit', 'whitelisted_ip', 'map')
-  rspamd_config:register_module_option('ratelimit', 'limit', 'string')
-  rspamd_config:register_module_option('ratelimit', 'max_rcpt', 'uint')
-end
-
-local function parse_whitelisted_rcpts(str)
-
-end
-
 local opts =  rspamd_config:get_all_opt('ratelimit')
 if opts then
   local rates = opts['limit']
@@ -365,10 +362,17 @@ if opts then
 
   if opts['whitelisted_rcpts'] and type(opts['whitelisted_rcpts']) == 'string' then
     whitelisted_rcpts = split(opts['whitelisted_rcpts'], ',')
+  elseif type(opts['whitelisted_rcpts']) == 'table' then
+    whitelisted_rcpts = opts['whitelisted_rcpts']
   end
 
   if opts['whitelisted_ip'] then
     whitelisted_ip = rspamd_config:add_radix_map(opts['whitelisted_ip'], 'Ratelimit whitelist ip map')
+  end
+
+  if opts['symbol'] then
+    -- We want symbol instead of pre-result
+    ratelimit_symbol = opts['symbol']
   end
 
   if opts['max_rcpt'] then
@@ -382,7 +386,12 @@ if opts then
     if not upstreams then
       rspamd_logger.errx(rspamd_config, 'no servers are specified')
     else
-      rspamd_config:register_pre_filter(rate_test)
+      if not ratelimit_symbol then
+        rspamd_config:register_pre_filter(rate_test)
+      else
+        rspamd_config:register_symbol(ratelimit_symbol, 1.0, rate_test)
+      end
+
       rspamd_config:register_post_filter(rate_set)
     end
   end
