@@ -147,7 +147,8 @@ const gchar* rspamd_upstream_name (struct upstream *up);
  * @return
  */
 struct upstream* rspamd_upstream_get (struct upstream_list *ups,
-		enum rspamd_upstream_rotation type, ...);
+		enum rspamd_upstream_rotation default_type,
+		const guchar *key, gsize keylen);
 
 #endif /* UPSTREAM_H */
 /*

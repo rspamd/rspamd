@@ -741,11 +741,10 @@ rspamd_upstream_get_hashed (struct upstream_list *ups, const guint8 *key, guint 
 
 struct upstream*
 rspamd_upstream_get (struct upstream_list *ups,
-		enum rspamd_upstream_rotation type, ...)
+		enum rspamd_upstream_rotation default_type,
+		const guchar *key, gsize keylen)
 {
-	va_list ap;
-	const guint8 *key;
-	guint keylen;
+	enum rspamd_upstream_rotation type;
 
 	rspamd_mutex_lock (ups->lock);
 	if (ups->alive->len == 0) {
@@ -754,14 +753,18 @@ rspamd_upstream_get (struct upstream_list *ups,
 	}
 	rspamd_mutex_unlock (ups->lock);
 
+	type = ups->rot_alg != RSPAMD_UPSTREAM_UNDEF ? ups->rot_alg : default_type;
+
+	if (type == RSPAMD_UPSTREAM_HASHED && (keylen == 0 || key == NULL)) {
+		/* Cannot use hashed rotation when no key is specified, switch to random */
+		type = RSPAMD_UPSTREAM_RANDOM;
+	}
+
 	switch (type) {
+	default:
 	case RSPAMD_UPSTREAM_RANDOM:
 		return rspamd_upstream_get_random (ups);
 	case RSPAMD_UPSTREAM_HASHED:
-		va_start (ap, type);
-		key = va_arg (ap, const guint8 *);
-		keylen = va_arg (ap, guint);
-		va_end (ap);
 		return rspamd_upstream_get_hashed (ups, key, keylen);
 	case RSPAMD_UPSTREAM_ROUND_ROBIN:
 		return rspamd_upstream_get_round_robin (ups, TRUE);
