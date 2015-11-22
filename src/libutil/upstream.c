@@ -318,14 +318,18 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
 	if (up->ctx->res != NULL && up->ctx->configured) {
 		/* Resolve name of the upstream one more time */
 		if (up->name[0] != '/') {
-			REF_RETAIN (up);
-			rdns_make_request_full (up->ctx->res, rspamd_upstream_dns_cb, up,
-					default_dns_timeout, default_dns_retransmits,
-					1, up->name, RDNS_REQUEST_A);
-			REF_RETAIN (up);
-			rdns_make_request_full (up->ctx->res, rspamd_upstream_dns_cb, up,
-					default_dns_timeout, default_dns_retransmits,
-					1, up->name, RDNS_REQUEST_AAAA);
+
+			if (rdns_make_request_full (up->ctx->res, rspamd_upstream_dns_cb, up,
+					up->ctx->dns_timeout, up->ctx->dns_retransmits,
+					1, up->name, RDNS_REQUEST_A) != NULL) {
+				REF_RETAIN (up);
+			}
+
+			if (rdns_make_request_full (up->ctx->res, rspamd_upstream_dns_cb, up,
+					up->ctx->dns_timeout, up->ctx->dns_retransmits,
+					1, up->name, RDNS_REQUEST_AAAA) != NULL) {
+				REF_RETAIN (up);
+			}
 		}
 	}
 
@@ -335,8 +339,7 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
 		event_base_set (up->ctx->ev_base, &up->ev);
 	}
 
-	ntim = default_revive_time + ottery_rand_range (
-			default_revive_time * default_revive_jitter);
+	ntim = rspamd_time_jitter (up->ctx->revive_time, up->ctx->revive_jitter);
 	double_to_tv (ntim, &up->tv);
 	event_add (&up->ev, &up->tv);
 
@@ -364,7 +367,7 @@ rspamd_upstream_fail (struct upstream *up)
 		if (msec_cur >= msec_last) {
 			if (msec_cur > msec_last) {
 				error_rate = ((gdouble)up->errors) / (msec_cur - msec_last);
-				max_error_rate = (gdouble)default_max_errors / default_error_time;
+				max_error_rate = ((gdouble)up->ctx->max_errors) / up->ctx->error_time;
 			}
 			else {
 				error_rate = 1;
