@@ -150,6 +150,11 @@ struct upstream* rspamd_upstream_get (struct upstream_list *ups,
 		enum rspamd_upstream_rotation default_type,
 		const guchar *key, gsize keylen);
 
+/**
+ * Re-resolve addresses for all upstreams registered
+ */
+void rspamd_upstream_reresolve (struct upstream_ctx *ctx);
+
 #endif /* UPSTREAM_H */
 /*
  * vi:ts=4

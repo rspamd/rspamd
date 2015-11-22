@@ -40,6 +40,7 @@ struct upstream {
 	guint weight;
 	guint cur_weight;
 	guint errors;
+	guint dns_requests;
 	gint active_idx;
 	gchar *name;
 	struct event ev;
@@ -211,6 +212,55 @@ rspamd_upstream_set_active (struct upstream_list *ls, struct upstream *up)
 }
 
 static void
+rspamd_upstream_update_addrs (struct upstream *up)
+{
+	guint16 port;
+	guint addr_cnt;
+	struct upstream_inet_addr_entry *cur, *tmp;
+	GPtrArray *new_addrs;
+
+	/*
+	 * We need first of all get the saved port, since DNS gives us no
+	 * idea about what port has been used previously
+	 */
+	rspamd_mutex_lock (up->lock);
+
+	if (up->addrs.addr->len > 0 && up->new_addrs) {
+		port = rspamd_inet_address_get_port (g_ptr_array_index (up->addrs.addr,
+				0));
+
+		/* Free old addresses */
+		g_ptr_array_free (up->addrs.addr, TRUE);
+
+		/* Now calculate new addrs count */
+		addr_cnt = 0;
+		LL_FOREACH (up->new_addrs, cur) {
+			addr_cnt++;
+		}
+		new_addrs = g_ptr_array_new_full (addr_cnt,
+				(GDestroyNotify) rspamd_inet_address_destroy);
+
+		/* Copy addrs back */
+		LL_FOREACH (up->new_addrs, cur) {
+			rspamd_inet_address_set_port (cur->addr, port);
+			g_ptr_array_add (new_addrs, cur->addr);
+		}
+
+		up->addrs.cur = 0;
+		up->addrs.addr = new_addrs;
+		g_ptr_array_sort (up->addrs.addr, rspamd_upstream_addr_sort_func);
+	}
+
+	LL_FOREACH_SAFE (up->new_addrs, cur, tmp) {
+		/* Do not free inet address pointer since it has been transferred to up */
+		g_free (cur);
+	}
+	up->new_addrs = NULL;
+
+	rspamd_mutex_unlock (up->lock);
+}
+
+static void
 rspamd_upstream_dns_cb (struct rdns_reply *reply, void *arg)
 {
 	struct upstream *up = (struct upstream *)arg;
@@ -237,54 +287,17 @@ rspamd_upstream_dns_cb (struct rdns_reply *reply, void *arg)
 			}
 			entry = entry->next;
 		}
+
 		rspamd_mutex_unlock (up->lock);
 	}
 
+	up->dns_requests--;
+
+	if (up->dns_requests == 0) {
+		rspamd_upstream_update_addrs (up);
+	}
+
 	REF_RELEASE (up);
-}
-
-static void
-rspamd_upstream_update_addrs (struct upstream *up)
-{
-	guint16 port;
-	guint addr_cnt;
-	struct upstream_inet_addr_entry *cur, *tmp;
-	GPtrArray *new_addrs;
-
-	/*
-	 * We need first of all get the saved port, since DNS gives us no
-	 * idea about what port has been used previously
-	 */
-	if (up->addrs.addr->len > 0 && up->new_addrs) {
-		port = rspamd_inet_address_get_port (g_ptr_array_index (up->addrs.addr, 0));
-
-		/* Free old addresses */
-		g_ptr_array_free (up->addrs.addr, TRUE);
-
-		/* Now calculate new addrs count */
-		addr_cnt = 0;
-		LL_FOREACH (up->new_addrs, cur) {
-			addr_cnt ++;
-		}
-		new_addrs = g_ptr_array_new_full (addr_cnt,
-				(GDestroyNotify)rspamd_inet_address_destroy);
-
-		/* Copy addrs back */
-		LL_FOREACH (up->new_addrs, cur) {
-			rspamd_inet_address_set_port (cur->addr, port);
-			g_ptr_array_add (new_addrs, cur->addr);
-		}
-
-		up->addrs.cur = 0;
-		up->addrs.addr = new_addrs;
-		g_ptr_array_sort (up->addrs.addr, rspamd_upstream_addr_sort_func);
-	}
-
-	LL_FOREACH_SAFE (up->new_addrs, cur, tmp) {
-		/* Do not free inet address pointer since it has been transferred to up */
-		g_free (cur);
-	}
-	up->new_addrs = NULL;
 }
 
 static void
@@ -296,10 +309,6 @@ rspamd_upstream_revive_cb (int fd, short what, void *arg)
 	event_del (&up->ev);
 	if (up->ls) {
 		rspamd_upstream_set_active (up->ls, up);
-
-		if (up->new_addrs) {
-			rspamd_upstream_update_addrs (up);
-		}
 	}
 
 	rspamd_mutex_unlock (up->lock);
@@ -322,12 +331,14 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
 			if (rdns_make_request_full (up->ctx->res, rspamd_upstream_dns_cb, up,
 					up->ctx->dns_timeout, up->ctx->dns_retransmits,
 					1, up->name, RDNS_REQUEST_A) != NULL) {
+				up->dns_requests ++;
 				REF_RETAIN (up);
 			}
 
 			if (rdns_make_request_full (up->ctx->res, rspamd_upstream_dns_cb, up,
 					up->ctx->dns_timeout, up->ctx->dns_retransmits,
 					1, up->name, RDNS_REQUEST_AAAA) != NULL) {
+				up->dns_requests ++;
 				REF_RETAIN (up);
 			}
 		}
@@ -647,11 +658,6 @@ rspamd_upstream_restore_cb (gpointer elt, gpointer ls)
 	/* Here the upstreams list is already locked */
 	rspamd_mutex_lock (up->lock);
 	event_del (&up->ev);
-
-	if (up->new_addrs) {
-		rspamd_upstream_update_addrs (up);
-	}
-
 	g_ptr_array_add (ups->alive, up);
 	up->active_idx = ups->alive->len - 1;
 	rspamd_mutex_unlock (up->lock);
@@ -784,4 +790,45 @@ rspamd_upstream_get (struct upstream_list *ups,
 
 	/* Silent stupid compilers */
 	return NULL;
+}
+
+void
+rspamd_upstream_reresolve (struct upstream_ctx *ctx)
+{
+	GList *cur;
+	struct upstream *up;
+
+	cur = ctx->upstreams->head;
+
+	while (cur) {
+		up = cur->data;
+
+		if (up->name[0] != '/') {
+			if (rdns_make_request_full (ctx->res,
+					rspamd_upstream_dns_cb,
+					up,
+					ctx->dns_timeout,
+					ctx->dns_retransmits,
+					1,
+					up->name,
+					RDNS_REQUEST_A) != NULL) {
+				up->dns_requests++;
+				REF_RETAIN (up);
+			}
+
+			if (rdns_make_request_full (ctx->res,
+					rspamd_upstream_dns_cb,
+					up,
+					ctx->dns_timeout,
+					ctx->dns_retransmits,
+					1,
+					up->name,
+					RDNS_REQUEST_AAAA) != NULL) {
+				up->dns_requests++;
+				REF_RETAIN (up);
+			}
+		}
+
+		cur = g_list_next (cur);
+	}
 }
