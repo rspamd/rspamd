@@ -291,6 +291,29 @@ local function gen_eval_rule(arg)
         return 0
       end
     },
+    {
+      'check_for_mime',
+      function(task, remain)
+        local arg = string.match(remain, "^%(%s*['\"]([^%s]+)['\"]%s*%)$")
+
+        if arg then
+          if arg == 'mime_attachment' then
+            local parts = task:get_parts()
+            if parts then
+              for i,p in ipairs(parts) do
+                if p:get_filename() then
+                  return 1
+                end
+              end
+            end
+          else
+            rspamd_logger.infox(task, 'unimplemented mime check %1', arg)
+          end
+        end
+
+        return 0
+      end
+    }
   }
 
   for k,f in ipairs(eval_funcs) do
