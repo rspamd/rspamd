@@ -463,7 +463,7 @@ rspamd_upstream_dtor (struct upstream *up)
 		g_queue_delete_link (up->ctx->upstreams, up->ctx_pos);
 		REF_RELEASE (up->ctx);
 	}
-	g_list_free (up->ctx_pos);
+
 	g_slice_free1 (sizeof (*up), up);
 }
 

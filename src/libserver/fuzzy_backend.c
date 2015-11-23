@@ -685,15 +685,11 @@ rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend,
 		gint64 number;
 	};
 
-	if (backend == NULL) {
-		return FALSE;
-	}
-
 	/* Do not do more than 5k ops per step */
 	const guint64 max_changes = 5000;
 	gboolean ret = FALSE;
 	gint64 expire_lim, expired;
-	gint rc, i;
+	gint rc, i, orphaned_cnt = 0;
 	GError *err = NULL;
 	static const gchar orphaned_shingles[] = "SELECT shingles.value,shingles.number "
 			"FROM shingles "
@@ -703,6 +699,11 @@ rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend,
 	sqlite3_stmt *stmt;
 	GArray *orphaned;
 	struct orphaned_shingle_elt orphaned_elt, *pelt;
+
+
+	if (backend == NULL) {
+		return FALSE;
+	}
 
 	/* Perform expire */
 	if (expire > 0) {
@@ -779,13 +780,14 @@ rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend,
 				}
 
 				sqlite3_finalize (stmt);
+				orphaned_cnt = orphaned->len;
 
-				if (orphaned->len > 0) {
+				if (orphaned_cnt > 0) {
 					msg_info_fuzzy_backend (
 							"going to delete %ud orphaned shingles",
-							orphaned->len);
+							orphaned_cnt);
 					/* Need to delete orphaned elements */
-					for (i = 0; i < (gint) orphaned->len; i++) {
+					for (i = 0; i < (gint) orphaned_cnt; i++) {
 						pelt = &g_array_index (orphaned,
 								struct orphaned_shingle_elt,
 								i);
@@ -794,6 +796,7 @@ rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend,
 								pelt->value, pelt->number);
 					}
 				}
+
 
 				g_array_free (orphaned, TRUE);
 			}
@@ -804,7 +807,7 @@ rspamd_fuzzy_backend_sync (struct rspamd_fuzzy_backend *backend,
 			if (ret == SQLITE_OK) {
 				msg_info_fuzzy_backend (
 						"deleted %ud orphaned shingles",
-						orphaned->len);
+						orphaned_cnt);
 			}
 			else {
 				msg_warn_fuzzy_backend (
