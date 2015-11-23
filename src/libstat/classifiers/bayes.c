@@ -32,6 +32,24 @@
 #include "stat_internal.h"
 #include "math.h"
 
+#define msg_err_bayes(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        "bayes", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_bayes(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+        "bayes", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_bayes(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        "bayes", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_bayes(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        "bayes", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
+
 static inline GQuark
 bayes_error_quark (void)
 {
@@ -46,7 +64,7 @@ bayes_error_quark (void)
  * @return
  */
 static gdouble
-inv_chi_square (gdouble value, gint freedom_deg)
+inv_chi_square (struct rspamd_task *task, gdouble value, gint freedom_deg)
 {
 	double prob, sum, m;
 	gint i;
@@ -56,7 +74,7 @@ inv_chi_square (gdouble value, gint freedom_deg)
 	prob = exp (value);
 
 	if (errno == ERANGE) {
-		msg_err ("exp overflow");
+		msg_err_bayes ("exp overflow");
 		return 0;
 	}
 
@@ -71,6 +89,11 @@ inv_chi_square (gdouble value, gint freedom_deg)
 	return MIN (1.0, sum);
 }
 
+struct bayes_task_closure {
+	struct rspamd_classifier_runtime *rt;
+	struct rspamd_task *task;
+};
+
 static const double feature_weight[] = { 0, 3125, 256, 27, 4, 1 };
 
 #define PROB_COMBINE(prob, cnt, weight, assumed) (((weight) * (assumed) + (cnt) * (prob)) / ((weight) + (cnt)))
@@ -81,12 +104,17 @@ static gboolean
 bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 {
 	rspamd_token_t *node = value;
-	struct rspamd_classifier_runtime *rt = (struct rspamd_classifier_runtime *)data;
+	struct bayes_task_closure *cl = data;
+	struct rspamd_classifier_runtime *rt;
 	guint i;
 	struct rspamd_token_result *res;
 	guint64 spam_count = 0, ham_count = 0, total_count = 0;
+	struct rspamd_task *task;
 	double spam_prob, spam_freq, ham_freq, bayes_spam_prob, bayes_ham_prob,
 		ham_prob, fw, w, norm_sum, norm_sub;
+
+	rt = cl->rt;
+	task = cl->task;
 
 	for (i = rt->start_pos; i < rt->end_pos; i++) {
 		res = &g_array_index (node->results, struct rspamd_token_result, i);
@@ -122,6 +150,15 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 		rt->spam_prob += log (bayes_spam_prob);
 		rt->ham_prob += log (bayes_ham_prob);
 		res->cl_runtime->processed_tokens ++;
+
+		msg_debug_bayes ("token: total_count: %L, spam_count: %L, ham_count: %L,"
+				" spam_prob: %.3f, "
+				"ham_prob: %.3f, bayes_spam_prob: %.3f, bayes_ham_prob: %.3f, "
+				"current spam prob: %.3f, current ham prob: %.3f",
+				total_count, spam_count, ham_count,
+				spam_prob, ham_prob,
+				bayes_spam_prob, bayes_ham_prob,
+				rt->spam_prob, rt->ham_prob);
 	}
 
 	return FALSE;
@@ -151,6 +188,7 @@ bayes_classify (struct classifier_ctx * ctx,
 	struct rspamd_statfile_runtime *st, *selected_st = NULL;
 	GList *cur;
 	char *sumbuf;
+	struct bayes_task_closure cl;
 
 	g_assert (ctx != NULL);
 	g_assert (input != NULL);
@@ -158,15 +196,17 @@ bayes_classify (struct classifier_ctx * ctx,
 	g_assert (rt->end_pos > rt->start_pos);
 
 	if (rt->stage == RSPAMD_STAT_STAGE_PRE) {
-		g_tree_foreach (input, bayes_classify_callback, rt);
+		cl.rt = rt;
+		cl.task = task;
+		g_tree_foreach (input, bayes_classify_callback, &cl);
 	}
 	else {
-		h = 1 - inv_chi_square (rt->spam_prob, rt->processed_tokens);
-		s = 1 - inv_chi_square (rt->ham_prob, rt->processed_tokens);
+		h = 1 - inv_chi_square (task, rt->spam_prob, rt->processed_tokens);
+		s = 1 - inv_chi_square (task, rt->ham_prob, rt->processed_tokens);
 
 		if (isfinite (s) && isfinite (h)) {
 			final_prob = (s + 1.0 - h) / 2.;
-			msg_debug ("<%s> got ham prob %.2f -> %.2f and spam prob %.2f -> %.2f,"
+			msg_debug_bayes ("<%s> got ham prob %.2f -> %.2f and spam prob %.2f -> %.2f,"
 					" %L tokens processed of %ud total tokens",
 					task->message_id, rt->ham_prob, h, rt->spam_prob, s,
 					rt->processed_tokens, g_tree_nnodes (input));
@@ -178,17 +218,17 @@ bayes_classify (struct classifier_ctx * ctx,
 			 */
 			if (isfinite (h)) {
 				final_prob = 1.0;
-				msg_debug ("<%s> spam class is overflowed, as we have no"
+				msg_debug_bayes ("<%s> spam class is overflowed, as we have no"
 						" ham samples", task->message_id);
 			}
 			else if (isfinite (s)){
 				final_prob = 0.0;
-				msg_debug ("<%s> ham class is overflowed, as we have no"
+				msg_debug_bayes ("<%s> ham class is overflowed, as we have no"
 						" spam samples", task->message_id);
 			}
 			else {
 				final_prob = 0.5;
-				msg_warn ("<%s> spam and ham classes are both overflowed",
+				msg_warn_bayes ("<%s> spam and ham classes are both overflowed",
 						task->message_id);
 			}
 		}
@@ -213,7 +253,7 @@ bayes_classify (struct classifier_ctx * ctx,
 			}
 
 			if (selected_st == NULL) {
-				msg_err (
+				msg_err_bayes (
 					"unexpected classifier error: cannot select desired statfile, "
 					"prob: %.4f", final_prob);
 			}
