@@ -94,7 +94,11 @@ struct bayes_task_closure {
 	struct rspamd_task *task;
 };
 
-static const double feature_weight[] = { 0, 3125, 256, 27, 4, 1 };
+/*
+ * Mathematically we use pow(complexity, complexity), where complexity is the
+ * window index
+ */
+static const double feature_weight[] = { 0, 1, 4, 27, 256, 3125, 46656, 823543 };
 
 #define PROB_COMBINE(prob, cnt, weight, assumed) (((weight) * (assumed) + (cnt) * (prob)) / ((weight) + (cnt)))
 /*
@@ -151,11 +155,12 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 		rt->ham_prob += log (bayes_ham_prob);
 		res->cl_runtime->processed_tokens ++;
 
-		msg_debug_bayes ("token: total_count: %L, spam_count: %L, ham_count: %L,"
-				" spam_prob: %.3f, "
-				"ham_prob: %.3f, bayes_spam_prob: %.3f, bayes_ham_prob: %.3f, "
+		msg_debug_bayes ("token: weight: %f, total_count: %L, "
+				"spam_count: %L, ham_count: %L,"
+				"spam_prob: %.3f, ham_prob: %.3f, "
+				"bayes_spam_prob: %.3f, bayes_ham_prob: %.3f, "
 				"current spam prob: %.3f, current ham prob: %.3f",
-				total_count, spam_count, ham_count,
+				fw, total_count, spam_count, ham_count,
 				spam_prob, ham_prob,
 				bayes_spam_prob, bayes_ham_prob,
 				rt->spam_prob, rt->ham_prob);
