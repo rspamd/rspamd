@@ -48,29 +48,20 @@ bayes_error_quark (void)
 static gdouble
 inv_chi_square (gdouble value, gint freedom_deg)
 {
-	long double prob, sum;
+	double prob, sum;
 	gint i;
 
-	if ((freedom_deg & 1) != 0) {
-		msg_err ("non-odd freedom degrees count: %d", freedom_deg);
-		return 0;
-	}
-
-	value /= 2.;
 	errno = 0;
-#ifdef HAVE_EXPL
-	prob = expl (-value);
-#elif defined(HAVE_EXP2L)
-	prob = exp2l (-value * log2 (M_E));
-#else
-	prob = exp (-value);
-#endif
+	prob = exp (value);
+
 	if (errno == ERANGE) {
 		msg_err ("exp overflow");
 		return 0;
 	}
+
 	sum = prob;
-	for (i = 1; i < freedom_deg / 2; i++) {
+
+	for (i = 1; i < freedom_deg; i++) {
 		prob *= value / (gdouble)i;
 		sum += prob;
 	}
@@ -168,10 +159,8 @@ bayes_classify (struct classifier_ctx * ctx,
 		g_tree_foreach (input, bayes_classify_callback, rt);
 	}
 	else {
-		h = 1 - inv_chi_square (-2. * rt->spam_prob,
-				2 * rt->processed_tokens);
-		s = 1 - inv_chi_square (-2. * rt->ham_prob,
-				2 * rt->processed_tokens);
+		h = 1 - inv_chi_square (rt->spam_prob, rt->processed_tokens);
+		s = 1 - inv_chi_square (rt->ham_prob, rt->processed_tokens);
 
 		if (isfinite (s) && isfinite (h)) {
 			final_prob = (s + 1.0 - h) / 2.;
