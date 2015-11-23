@@ -45,7 +45,7 @@ static gchar **rcpts = NULL;
 static gchar *user = NULL;
 static gchar *helo = "rspamc.local";
 static gchar *hostname = "localhost";
-static gchar *classifier = "bayes";
+static gchar *classifier = NULL;
 static gchar *local_addr = NULL;
 static gchar *execute = NULL;
 static gchar *sort = NULL;
@@ -433,6 +433,9 @@ add_options (GQueue *opts)
 	}
 	if (pass_all) {
 		ADD_CLIENT_HEADER (opts, "Pass", "all");
+	}
+	if (classifier) {
+		ADD_CLIENT_HEADER (opts, "Classifier", classifier);
 	}
 	if (weight != 0) {
 		numbuf = g_string_sized_new (8);
