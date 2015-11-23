@@ -1134,7 +1134,7 @@ lua_task_get_received_headers (lua_State * L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct received_header *rh;
-	guint i;
+	guint i, k = 1;
 
 	if (task) {
 		lua_newtable (L);
@@ -1160,7 +1160,7 @@ lua_task_get_received_headers (lua_State * L)
 			rspamd_lua_ip_push_fromstring (L, rh->real_ip);
 			lua_settable (L, -3);
 			rspamd_lua_table_set (L, "by_hostname", rh->by_hostname);
-			lua_rawseti (L, -2, i + 1);
+			lua_rawseti (L, -2, k ++);
 		}
 	}
 	else {
