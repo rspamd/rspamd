@@ -308,7 +308,7 @@ rspamd_tokenizer_osb (struct rspamd_tokenizer_runtime *rt,
 					memcpy (new->data, &cur, sizeof (cur));
 				}
 
-				new->window_idx = i;
+				new->window_idx = i + 1;
 
 				if (g_tree_lookup (tree, new) == NULL) {
 					g_tree_insert (tree, new, new);
@@ -318,6 +318,7 @@ rspamd_tokenizer_osb (struct rspamd_tokenizer_runtime *rt,
 	}
 
 	if (processed <= window_size) {
+		memmove (hashpipe, hashpipe + (window_size - processed + 1), processed);
 		for (i = 1; i < processed; i++) {
 			new = rspamd_mempool_alloc0 (pool, sizeof (rspamd_token_t));
 			new->datalen = sizeof (gint64);
@@ -334,6 +335,8 @@ rspamd_tokenizer_osb (struct rspamd_tokenizer_runtime *rt,
 				cur = hashpipe[0] * primes[0] + hashpipe[i] * primes[i << 1];
 				memcpy (new->data, &cur, sizeof (cur));
 			}
+
+			new->window_idx = i + 1;
 
 			if (g_tree_lookup (tree, new) == NULL) {
 				g_tree_insert (tree, new, new);
