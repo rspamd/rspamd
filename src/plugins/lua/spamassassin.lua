@@ -41,7 +41,8 @@ local _ = require "fun"
 local known_plugins = {
   'Mail::SpamAssassin::Plugin::FreeMail',
   'Mail::SpamAssassin::Plugin::HeaderEval',
-  'Mail::SpamAssassin::Plugin::ReplaceTags'
+  'Mail::SpamAssassin::Plugin::ReplaceTags',
+  'Mail::SpamAssassin::Plugin::RelayEval'
 }
 
 -- Internal variables
@@ -232,6 +233,20 @@ local function gen_eval_rule(arg)
         end
 
         return 0
+      end
+    },
+    {
+      'check_relays_unparseable',
+      function(task, remain)
+        local rh_mime = task:get_header_full('Received')
+        local rh_parsed = task:get_received_headers()
+
+        local rh_cnt = 0
+        if rh_mime then rh_cnt = #rh_mime end
+        local parsed_cnt = 0
+        if rh_parsed then parsed_cnt = #rh_parsed end
+
+        return rh_cnt - parsed_cnt
       end
     },
     {
