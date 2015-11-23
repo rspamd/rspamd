@@ -1945,8 +1945,7 @@ lua_task_learn (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	gboolean is_spam = FALSE;
-	const gchar *clname;
-	struct rspamd_classifier_config *cl;
+	const gchar *clname = NULL;
 	GError *err = NULL;
 	int ret = 1;
 
@@ -1954,29 +1953,16 @@ lua_task_learn (lua_State *L)
 	if (lua_gettop (L) > 2) {
 		clname = luaL_checkstring (L, 3);
 	}
-	else {
-		clname = "bayes";
-	}
 
-	cl = rspamd_config_find_classifier (task->cfg, clname);
-
-	if (cl == NULL) {
-		msg_warn_task ("classifier %s is not found", clname);
+	if (!rspamd_learn_task_spam (task, is_spam, clname, &err)) {
 		lua_pushboolean (L, FALSE);
-		lua_pushstring (L, "classifier not found");
-		ret = 2;
+		if (err != NULL) {
+			lua_pushstring (L, err->message);
+			ret = 2;
+		}
 	}
 	else {
-		if (!rspamd_learn_task_spam (cl, task, is_spam, &err)) {
-			lua_pushboolean (L, FALSE);
-			if (err != NULL) {
-				lua_pushstring (L, err->message);
-				ret = 2;
-			}
-		}
-		else {
-			lua_pushboolean (L, TRUE);
-		}
+		lua_pushboolean (L, TRUE);
 	}
 
 	return ret;

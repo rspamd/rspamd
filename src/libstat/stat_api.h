@@ -58,6 +58,8 @@ void rspamd_stat_close (void);
 /**
  * Classify the task specified and insert symbols if needed
  * @param task
+ * @param L lua state
+ * @param err error returned
  * @return TRUE if task has been classified
  */
 rspamd_stat_result_t rspamd_stat_classify (struct rspamd_task *task,
@@ -68,10 +70,13 @@ rspamd_stat_result_t rspamd_stat_classify (struct rspamd_task *task,
  * Learn task as spam or ham, task must be processed prior to this call
  * @param task task to learn
  * @param spam if TRUE learn spam, otherwise learn ham
+ * @param L lua state
+ * @param classifier NULL to learn all classifiers, name to learn a specific one
+ * @param err error returned
  * @return TRUE if task has been learned
  */
 rspamd_stat_result_t rspamd_stat_learn (struct rspamd_task *task,
-		gboolean spam, lua_State *L,
+		gboolean spam, lua_State *L, const gchar *classifier,
 		GError **err);
 
 /**

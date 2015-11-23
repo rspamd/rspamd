@@ -1652,6 +1652,11 @@ rspamd_rcl_config_init (void)
 			rspamd_rcl_parse_struct_string,
 			G_STRUCT_OFFSET (struct rspamd_classifier_config, backend),
 			0);
+	rspamd_rcl_add_default_handler (sub,
+			"name",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_classifier_config, name),
+			0);
 
 	/*
 	 * Statfile defaults

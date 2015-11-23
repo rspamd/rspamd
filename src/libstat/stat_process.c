@@ -353,7 +353,11 @@ preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
 static GList*
 rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 		struct rspamd_task *task,
-		lua_State *L, gint op, gboolean spam, GError **err)
+		lua_State *L,
+		gint op,
+		gboolean spam,
+		const gchar *classifier,
+		GError **err)
 {
 	struct rspamd_classifier_config *clcf;
 	struct rspamd_statfile_config *stcf;
@@ -372,6 +376,15 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 	while (cur) {
 		clcf = (struct rspamd_classifier_config *)cur->data;
 		st_list = NULL;
+
+		if (classifier != NULL &&
+					(clcf->name == NULL || strcmp (clcf->name, classifier) != 0)) {
+			/* Skip this classifier */
+			msg_debug_task ("skip classifier %s, as we are requested to check %s only",
+					clcf->name, classifier);
+			cur = g_list_next (cur);
+			continue;
+		}
 
 		if (clcf->pre_callbacks != NULL) {
 			st_list = rspamd_lua_call_cls_pre_callbacks (clcf, task, FALSE,
@@ -518,6 +531,11 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 		g_tree_foreach (cbdata.tok->tokens, preprocess_init_stat_token,
 				&cbdata);
 	}
+	else if (classifier != NULL) {
+		/* We likely cannot find any classifier with this name */
+		g_set_error (err, rspamd_stat_quark (), 404,
+				"cannot find classifier %s", classifier);
+	}
 
 	return cl_runtimes;
 }
@@ -538,7 +556,7 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, GError **err)
 
 	/* Initialize classifiers and statfiles runtime */
 	if ((cl_runtimes = rspamd_stat_preprocess (st_ctx, task, L,
-			RSPAMD_CLASSIFY_OP, FALSE, err)) == NULL) {
+			RSPAMD_CLASSIFY_OP, FALSE, NULL, err)) == NULL) {
 		return RSPAMD_STAT_PROCESS_OK;
 	}
 
@@ -659,7 +677,10 @@ rspamd_stat_learn_token (gpointer k, gpointer v, gpointer d)
 }
 
 rspamd_stat_result_t
-rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
+rspamd_stat_learn (struct rspamd_task *task,
+		gboolean spam,
+		lua_State *L,
+		const gchar *classifier,
 		GError **err)
 {
 	struct rspamd_stat_ctx *st_ctx;
@@ -669,7 +690,8 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 	struct preprocess_cb_data cbdata;
 	GList *cl_runtimes;
 	GList *cur, *curst;
-	gboolean ret = RSPAMD_STAT_PROCESS_ERROR, unlearn = FALSE;
+	gboolean unlearn = FALSE;
+	rspamd_stat_result_t ret = RSPAMD_STAT_PROCESS_ERROR;
 	gulong nrev;
 	rspamd_learn_t learn_res = RSPAMD_LEARN_OK;
 	guint i;
@@ -698,8 +720,13 @@ rspamd_stat_learn (struct rspamd_task *task, gboolean spam, lua_State *L,
 	}
 
 	/* Initialize classifiers and statfiles runtime */
-	if ((cl_runtimes = rspamd_stat_preprocess (st_ctx, task, L,
-			unlearn ? RSPAMD_UNLEARN_OP : RSPAMD_LEARN_OP, spam, err)) == NULL) {
+	if ((cl_runtimes = rspamd_stat_preprocess (st_ctx,
+			task,
+			L,
+			unlearn ? RSPAMD_UNLEARN_OP : RSPAMD_LEARN_OP,
+			spam,
+			classifier,
+			err)) == NULL) {
 		return RSPAMD_STAT_PROCESS_ERROR;
 	}
 

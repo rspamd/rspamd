@@ -1168,7 +1168,7 @@ rspamd_controller_learn_fin_task (void *ud)
 	conn_ent = task->fin_arg;
 	session = conn_ent->ud;
 
-	if (rspamd_learn_task_spam (session->cl, task, session->is_spam, &err) ==
+	if (rspamd_learn_task_spam (task, session->is_spam, session->classifier, &err) ==
 			RSPAMD_STAT_PROCESS_ERROR) {
 		msg_info_session ("cannot learn <%s>: %e", task->message_id, err);
 		rspamd_controller_send_error (conn_ent, err->code, err->message);
@@ -1238,8 +1238,8 @@ rspamd_controller_handle_learn_common (
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct rspamd_controller_worker_ctx *ctx;
-	struct rspamd_classifier_config *cl;
 	struct rspamd_task *task;
+	const rspamd_ftok_t *cl_header;
 
 	ctx = session->ctx;
 
@@ -1252,13 +1252,6 @@ rspamd_controller_handle_learn_common (
 		rspamd_controller_send_error (conn_ent,
 			400,
 			"Empty body is not permitted");
-		return 0;
-	}
-
-	/* XXX: now work with only bayes */
-	cl = rspamd_config_find_classifier (ctx->cfg, "bayes");
-	if (cl == NULL) {
-		rspamd_controller_send_error (conn_ent, 400, "Classifier not found");
 		return 0;
 	}
 
@@ -1277,8 +1270,14 @@ rspamd_controller_handle_learn_common (
 	task->http_conn = rspamd_http_connection_ref (conn_ent->conn);;
 	task->sock = -1;
 	session->task = task;
-	session->cl = cl;
 
+	cl_header = rspamd_http_message_find_header (msg, "classifier");
+	if (cl_header) {
+		session->classifier = rspamd_mempool_ftokdup (session->pool, cl_header);
+	}
+	else {
+		session->classifier = NULL;
+	}
 
 	if (!rspamd_task_load_message (task, msg, msg->body_buf.begin, msg->body_buf.len)) {
 		rspamd_controller_send_error (conn_ent, task->err->code, task->err->message);

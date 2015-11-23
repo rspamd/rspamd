@@ -260,14 +260,14 @@ guint rspamd_task_re_cache_check (struct rspamd_task *task, const gchar *re);
 
 /**
  * Learn specified statfile with message in a task
- * @param statfile symbol of statfile
  * @param task worker's task object
+ * @param classifier classifier to learn (or NULL to learn all)
  * @param err pointer to GError
  * @return true if learn succeed
  */
-gboolean rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
-	struct rspamd_task *task,
+gboolean rspamd_learn_task_spam (struct rspamd_task *task,
 	gboolean is_spam,
+	const gchar *classifier,
 	GError **err);
 
 /**

@@ -645,12 +645,16 @@ rspamd_task_re_cache_check (struct rspamd_task *task, const gchar *re)
 }
 
 gboolean
-rspamd_learn_task_spam (struct rspamd_classifier_config *cl,
-	struct rspamd_task *task,
+rspamd_learn_task_spam (struct rspamd_task *task,
 	gboolean is_spam,
+	const gchar *classifier,
 	GError **err)
 {
-	return rspamd_stat_learn (task, is_spam, task->cfg->lua_state, err);
+	return rspamd_stat_learn (task,
+			is_spam,
+			task->cfg->lua_state,
+			classifier,
+			err);
 }
 
 static gboolean
