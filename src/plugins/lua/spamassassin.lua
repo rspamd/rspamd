@@ -42,7 +42,9 @@ local known_plugins = {
   'Mail::SpamAssassin::Plugin::FreeMail',
   'Mail::SpamAssassin::Plugin::HeaderEval',
   'Mail::SpamAssassin::Plugin::ReplaceTags',
-  'Mail::SpamAssassin::Plugin::RelayEval'
+  'Mail::SpamAssassin::Plugin::RelayEval',
+  'Mail::SpamAssassin::Plugin::MIMEEval',
+  'Mail::SpamAssassin::Plugin::BodyEval'
 }
 
 -- Internal variables
@@ -61,8 +63,9 @@ local replace = {
   rules = {},
 }
 local internal_regexp = {
-  date_shift = rspamd_regexp.create_cached("^\\(\\s*'((?:-?\\d+)|(?:undef))'\\s*,\\s*'((?:-?\\d+)|(?:undef))'\\s*\\)$")
+  date_shift = rspamd_regexp.create("^\\(\\s*'((?:-?\\d+)|(?:undef))'\\s*,\\s*'((?:-?\\d+)|(?:undef))'\\s*\\)$")
 }
+local func_cache = {}
 local section = rspamd_config:get_all_opt("spamassassin")
 
 -- Minimum score to treat symbols as meta
@@ -83,6 +86,10 @@ local function split(str, delim)
   end
 
   return result
+end
+
+local function trim(s)
+  return s:match "^%s*(.-)%s*$"
 end
 
 local function handle_header_def(hline, cur_rule)
@@ -304,7 +311,6 @@ local function maybe_parse_sa_function(line)
   local arg
   local elts = split(line, '[^:]+')
   arg = elts[2]
-  local func_cache = {}
 
   rspamd_logger.debugx(rspamd_config, 'trying to parse SA function %1 with args %2',
     elts[1], elts[2])
@@ -388,6 +394,9 @@ local function process_sa_conf(f)
      cur_rule['symbol'] = nsym
    end
    -- We have previous rule valid
+   if not cur_rule['symbol'] then
+     rspamd_logger.errx(rspamd_config, 'bad rule definition: %1', cur_rule)
+   end
    rules[cur_rule['symbol']] = cur_rule
    cur_rule = {}
    valid_rule = false
@@ -411,16 +420,24 @@ local function process_sa_conf(f)
   end
 
   local skip_to_endif = false
+  local if_nested = 0
   for l in f:lines() do
     (function ()
-    if string.len(l) == 0 or
-      _.nth(1, _.drop_while(function(c) return c == ' ' end, _.iter(l))) == '#' then
+    l = trim(l)
+
+    if string.len(l) == 0 or string.sub(l, 1, 1) == '#' then
       return
     end
 
     if skip_to_endif then
       if string.match(l, '^endif') then
-        skip_to_endif = false
+        if_nested = if_nested - 1
+
+        if if_nested == 0 then
+          skip_to_endif = false
+        end
+      elseif string.match(l, '^if') then
+        if_nested = if_nested + 1
       end
       return
     else
@@ -432,7 +449,21 @@ local function process_sa_conf(f)
             return false
             end, known_plugins) then
           skip_to_endif = true
+          if_nested = 1
         end
+      elseif string.match(l, '^if !plugin%(') then
+         local pname = string.match(l, '^if !plugin%(([A-Za-z:]+)%)')
+         if _.any(function(pl)
+           if pl == pname then return true end
+           return false
+         end, known_plugins) then
+           skip_to_endif = true
+           if_nested = 1
+         end
+      elseif string.match(l, '^if') then
+        -- Unknown if
+        skip_to_endif = true
+        if_nested = 1
       end
     end
 
@@ -497,33 +528,69 @@ local function process_sa_conf(f)
           rspamd_logger.infox(rspamd_config, 'unknown function %1', args)
         end
       end
-    elseif words[1] == "body" and slash then
+    elseif words[1] == "body" then
       -- body SYMBOL /regexp/
       if valid_rule then
         insert_cur_rule()
       end
-      cur_rule['type'] = 'part'
-      cur_rule['symbol'] = words[2]
-      cur_rule['re_expr'] = words_to_re(words, 2)
-      cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
-      cur_rule['raw'] = true
 
-      if cur_rule['re'] and cur_rule['symbol'] then
-        valid_rule = true
-        cur_rule['re']:set_limit(match_limit)
+      cur_rule['symbol'] = words[2]
+
+      if words[3] and (string.sub(words[3], 1, 1) == '/'
+          or string.sub(words[3], 1, 1) == 'm') then
+        cur_rule['type'] = 'part'
+        cur_rule['re_expr'] = words_to_re(words, 2)
+        cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
+        cur_rule['raw'] = true
+        if cur_rule['re'] then
+          valid_rule = true
+          cur_rule['re']:set_limit(match_limit)
+        end
+      else
+        -- might be function
+        local args = words_to_re(words, 2)
+        local func = maybe_parse_sa_function(args)
+
+        if func then
+          cur_rule['type'] = 'function'
+          cur_rule['symbol'] = words[2]
+          cur_rule['function'] = func
+          valid_rule = true
+        else
+          rspamd_logger.infox(rspamd_config, 'unknown function %1', args)
+        end
       end
-    elseif words[1] == "rawbody" or words[1] == "full" and slash then
+    elseif words[1] == "rawbody" or words[1] == "full" then
       -- body SYMBOL /regexp/
       if valid_rule then
         insert_cur_rule()
       end
-      cur_rule['type'] = 'message'
+
       cur_rule['symbol'] = words[2]
-      cur_rule['re_expr'] = words_to_re(words, 2)
-      cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
-      if cur_rule['re'] and cur_rule['symbol'] then
-        valid_rule = true
-        cur_rule['re']:set_limit(match_limit)
+
+      if words[3] and (string.sub(words[3], 1, 1) == '/'
+          or string.sub(words[3], 1, 1) == 'm') then
+        cur_rule['type'] = 'message'
+        cur_rule['re_expr'] = words_to_re(words, 2)
+        cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
+        cur_rule['raw'] = true
+        if cur_rule['re'] then
+          valid_rule = true
+          cur_rule['re']:set_limit(match_limit)
+        end
+      else
+        -- might be function
+        local args = words_to_re(words, 2)
+        local func = maybe_parse_sa_function(args)
+
+        if func then
+          cur_rule['type'] = 'function'
+          cur_rule['symbol'] = words[2]
+          cur_rule['function'] = func
+          valid_rule = true
+        else
+          rspamd_logger.infox(rspamd_config, 'unknown function %1', args)
+        end
       end
     elseif words[1] == "uri" then
       -- uri SYMBOL /regexp/
