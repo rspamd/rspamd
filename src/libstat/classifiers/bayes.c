@@ -48,10 +48,11 @@ bayes_error_quark (void)
 static gdouble
 inv_chi_square (gdouble value, gint freedom_deg)
 {
-	double prob, sum;
+	double prob, sum, m;
 	gint i;
 
 	errno = 0;
+	m = -value;
 	prob = exp (value);
 
 	if (errno == ERANGE) {
@@ -62,7 +63,8 @@ inv_chi_square (gdouble value, gint freedom_deg)
 	sum = prob;
 
 	for (i = 1; i < freedom_deg; i++) {
-		prob *= value / (gdouble)i;
+		prob *= m / (gdouble)i;
+		msg_debug_bayes ("prob: %.6f", prob);
 		sum += prob;
 	}
 
