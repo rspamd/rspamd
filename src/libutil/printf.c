@@ -40,11 +40,10 @@ rspamd_humanize_number (gchar *buf, gchar *last, gint64 num, gboolean bytes)
 	const gchar *prefixes;
 	int i, r, remainder, sign;
 	gint64 divisor;
-	gsize baselen, len = last - buf;
+	gsize len = last - buf;
 
 	remainder = 0;
 
-	baselen = 1;
 	if (!bytes) {
 		divisor = 1000;
 		prefixes = "\0\0\0k\0\0M\0\0G\0\0T\0\0P\0\0E";
@@ -54,22 +53,14 @@ rspamd_humanize_number (gchar *buf, gchar *last, gint64 num, gboolean bytes)
 		prefixes = "B\0\0k\0\0M\0\0G\0\0T\0\0P\0\0E";
 	}
 
-
 #define SCALE2PREFIX(scale)     (&prefixes[(scale) * 3])
 
 	if (num < 0) {
 		sign = -1;
 		num = -num;
-		baselen += 2; /* sign, digit */
 	}
 	else {
 		sign = 1;
-		baselen += 1; /* digit */
-	}
-
-	/* Check if enough room for `x y' + suffix + `\0' */
-	if (len < baselen + 1) {
-		return buf;
 	}
 
 	/*
@@ -82,9 +73,17 @@ rspamd_humanize_number (gchar *buf, gchar *last, gint64 num, gboolean bytes)
 		num /= divisor;
 	}
 
-	r = rspamd_snprintf (buf, len, "%L%s",
-			sign * (num + (remainder + 50) / 1000),
-			SCALE2PREFIX (i));
+	if (remainder == 0 || num > divisor / 2) {
+		r = rspamd_snprintf (buf, len, "%L%s",
+				sign * (num + (remainder + 50) / divisor),
+				SCALE2PREFIX (i));
+	}
+	else {
+		/* Floating point version */
+		r = rspamd_snprintf (buf, len, "%.2f%s",
+				sign * (num + remainder / (gdouble)divisor),
+				SCALE2PREFIX (i));
+	}
 
 #undef SCALE2PREFIX
 
