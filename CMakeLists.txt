@@ -146,6 +146,7 @@ INCLUDE(CheckIncludeFiles)
 INCLUDE(CheckFunctionExists)
 INCLUDE(CheckSymbolExists)
 INCLUDE(CheckCSourceCompiles)
+INCLUDE(CheckCSourceRuns)
 INCLUDE(CheckLibraryExists)
 INCLUDE(CheckCCompilerFlag)
 INCLUDE(CMakeParseArguments)
@@ -921,6 +922,16 @@ CHECK_C_SOURCE_COMPILES ("#include <sys/types.h>
 						  }" HAVE_ASM_PAUSE)
 ENDIF(NOT CMAKE_SYSTEM_NAME STREQUAL "SunOS")
 
+CHECK_C_SOURCE_RUNS("
+int main(int argc, char **argv) {
+        int a = 0;
+        if (__sync_bool_compare_and_swap(&a, 0, 1)) {
+                return 0;
+        }
+        return -1;
+}
+" HAVE_ATOMIC_BUILTINS)
+
 # Check queue.h compatibility
 IF(NOT HAVE_COMPATIBLE_QUEUE_H)
 	INCLUDE_DIRECTORIES(compat)
@@ -1038,6 +1049,7 @@ ADD_SUBDIRECTORY(utils)
 
 
 CONFIGURE_FILE(config.h.in src/config.h)
+ADD_DEFINITIONS("HAVE_CONFIG_H")
 
 ##################### INSTALLATION ##########################################
 

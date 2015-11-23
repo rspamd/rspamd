@@ -23,6 +23,9 @@
 #ifndef REF_H_
 #define REF_H_
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 /**
  * @file ref.h
  * A set of macros to handle refcounts

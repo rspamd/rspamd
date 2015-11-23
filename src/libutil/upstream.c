@@ -802,6 +802,7 @@ rspamd_upstream_reresolve (struct upstream_ctx *ctx)
 
 	while (cur) {
 		up = cur->data;
+		REF_RETAIN (up);
 
 		if (up->name[0] != '/') {
 			if (rdns_make_request_full (ctx->res,
@@ -829,6 +830,7 @@ rspamd_upstream_reresolve (struct upstream_ctx *ctx)
 			}
 		}
 
+		REF_RELEASE (up);
 		cur = g_list_next (cur);
 	}
 }
