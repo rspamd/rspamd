@@ -34,6 +34,7 @@ struct rspamd_worker;
 enum rspamd_control_type {
 	RSPAMD_CONTROL_STAT = 0,
 	RSPAMD_CONTROL_RELOAD,
+	RSPAMD_CONTROL_RERESOLVE,
 	RSPAMD_CONTROL_MAX
 };
 
@@ -46,6 +47,9 @@ struct rspamd_control_command {
 		struct {
 			guint unused;
 		} reload;
+		struct {
+			guint unused;
+		} reresolve;
 	} cmd;
 };
 
@@ -62,6 +66,9 @@ struct rspamd_control_reply {
 		struct {
 			guint status;
 		} reload;
+		struct {
+			guint status;
+		} reresolve;
 	} reply;
 };
 

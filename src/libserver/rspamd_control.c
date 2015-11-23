@@ -69,16 +69,23 @@ static const struct rspamd_control_cmd_match {
 		{
 				.name = {
 						.begin = "/stat",
-						.len = 5
+						.len = sizeof ("/stat") - 1
 				},
 				.type = RSPAMD_CONTROL_STAT
 		},
 		{
 				.name = {
 						.begin = "/reload",
-						.len = 7
+						.len = sizeof ("/reload") - 1
 				},
 				.type = RSPAMD_CONTROL_RELOAD
+		},
+		{
+				.name = {
+						.begin = "/reresolve",
+						.len = sizeof ("/reresolve") - 1
+				},
+				.type = RSPAMD_CONTROL_RERESOLVE
 		},
 };
 
@@ -189,6 +196,10 @@ rspamd_control_write_reply (struct rspamd_control_session *session)
 		case RSPAMD_CONTROL_RELOAD:
 			ucl_object_insert_key (cur, ucl_object_fromint (
 					elt->reply.reply.reload.status), "status", 0, false);
+			break;
+		case RSPAMD_CONTROL_RERESOLVE:
+			ucl_object_insert_key (cur, ucl_object_fromint (
+					elt->reply.reply.reresolve.status), "status", 0, false);
 			break;
 		default:
 			break;
@@ -358,6 +369,7 @@ rspamd_control_default_cmd_handler (gint fd,
 	struct rspamd_control_reply rep;
 	gssize r;
 	struct rusage rusg;
+	struct rspamd_config *cfg;
 
 	memset (&rep, 0, sizeof (rep));
 	rep.type = cmd->type;
@@ -378,6 +390,23 @@ rspamd_control_default_cmd_handler (gint fd,
 		rep.reply.stat.uptime = rspamd_get_calendar_ticks () - cd->worker->start_time;
 		break;
 	case RSPAMD_CONTROL_RELOAD:
+		break;
+	case RSPAMD_CONTROL_RERESOLVE:
+		if (cd->worker->srv->cfg) {
+			REF_RETAIN (cd->worker->srv->cfg);
+			cfg = cd->worker->srv->cfg;
+
+			if (cfg->ups_ctx) {
+				msg_info_config ("reresolving upstreams");
+				rspamd_upstream_reresolve (cfg->ups_ctx);
+			}
+
+			rep.reply.reresolve.status = 0;
+			REF_RELEASE (cfg);
+		}
+		else {
+			rep.reply.reresolve.status = EINVAL;
+		}
 		break;
 	default:
 		break;

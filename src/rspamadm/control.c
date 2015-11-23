@@ -76,7 +76,8 @@ rspamadm_control_help (gboolean full_help)
 				"--help: shows available options and commands\n\n"
 				"Supported commands:\n"
 				"stat - show statistics\n"
-				"reload - reload workers dynamic data\n";
+				"reload - reload workers dynamic data\n"
+				"reresolve - resolve upstreams addresses\n";
 	}
 	else {
 		help_str = "Manage rspamd main control interface";
@@ -144,7 +145,7 @@ rspamadm_control (gint argc, gchar **argv)
 	gint sock;
 
 	context = g_option_context_new (
-			"keypair - create encryption keys");
+			"control - manage rspamd main control interface");
 	g_option_context_set_summary (context,
 			"Summary:\n  Rspamd administration utility version "
 					RVERSION
@@ -158,7 +159,7 @@ rspamadm_control (gint argc, gchar **argv)
 		exit (1);
 	}
 
-	if (argc == 0) {
+	if (argc <= 1) {
 		rspamd_fprintf (stderr, "command required\n");
 		exit (1);
 	}
@@ -170,6 +171,9 @@ rspamadm_control (gint argc, gchar **argv)
 	}
 	else if (g_ascii_strcasecmp (cmd, "reload") == 0) {
 		path = "/reload";
+	}
+	else if (g_ascii_strcasecmp (cmd, "reresolve") == 0) {
+		path = "/reresolve";
 	}
 	else {
 		rspamd_fprintf (stderr, "unknown command: %s\n", cmd);
