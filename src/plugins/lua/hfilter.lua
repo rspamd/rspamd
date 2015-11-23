@@ -34,35 +34,35 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 local rspamd_regexp = require "rspamd_regexp"
 local rspamc_local_helo = "rspamc.local"
 local checks_hellohost = {
-  ['[.-]gprs[.-]'] = 5, ['gprs[.-][0-9]'] = 5, ['[0-9][.-]?gprs'] = 5, 
-  ['[.-]cdma[.-]'] = 5, ['cdma[.-][0-9]'] = 5, ['[0-9][.-]?cdma'] = 5, 
-  ['[.-]homeuser[.-]'] = 5, ['homeuser[.-][0-9]'] = 5, ['[0-9][.-]?homeuser'] = 5, 
-  ['[.-]dhcp[.-]'] = 5, ['dhcp[.-][0-9]'] = 5, ['[0-9][.-]?dhcp'] = 5, 
-  ['[.-]catv[.-]'] = 5, ['catv[.-][0-9]'] = 5, ['[0-9][.-]?catv'] = 5, 
-  ['[.-]wifi[.-]'] = 5, ['wifi[.-][0-9]'] = 5, ['[0-9][.-]?wifi'] = 5, 
-  ['[.-]dial-?up[.-]'] = 5, ['dial-?up[.-][0-9]'] = 5, ['[0-9][.-]?dial-?up'] = 5, 
-  ['[.-]dynamic[.-]'] = 5, ['dynamic[.-][0-9]'] = 5, ['[0-9][.-]?dynamic'] = 5, 
-  ['[.-]dyn[.-]'] = 5, ['dyn[.-][0-9]'] = 5, ['[0-9][.-]?dyn'] = 5, 
-  ['[.-]clients?[.-]'] = 5, ['clients?[.-][0-9]'] = 5, ['[0-9][.-]?clients?'] = 5, 
-  ['[.-]dynip[.-]'] = 5, ['dynip[.-][0-9]'] = 5, ['[0-9][.-]?dynip'] = 5, 
-  ['[.-]broadband[.-]'] = 5, ['broadband[.-][0-9]'] = 5, ['[0-9][.-]?broadband'] = 5, 
-  ['[.-]broad[.-]'] = 5, ['broad[.-][0-9]'] = 5, ['[0-9][.-]?broad'] = 5, 
-  ['[.-]bredband[.-]'] = 5, ['bredband[.-][0-9]'] = 5, ['[0-9][.-]?bredband'] = 5, 
-  ['[.-]nat[.-]'] = 5, ['nat[.-][0-9]'] = 5, ['[0-9][.-]?nat'] = 5, 
-  ['[.-]pptp[.-]'] = 5, ['pptp[.-][0-9]'] = 5, ['[0-9][.-]?pptp'] = 5, 
-  ['[.-]pppoe[.-]'] = 5, ['pppoe[.-][0-9]'] = 5, ['[0-9][.-]?pppoe'] = 5, 
-  ['[.-]ppp[.-]'] = 5, ['ppp[.-][0-9]'] = 5, ['[0-9][.-]?ppp'] = 5, 
-  ['[.-]modem[.-]'] = 5, ['modem[.-][0-9]'] = 5, ['[0-9][.-]?modem'] = 5, 
-  ['[.-]cablemodem[.-]'] = 5, ['cablemodem[.-][0-9]'] = 5, ['[0-9][.-]?cablemodem'] = 5, 
-  ['[.-]comcast[.-]'] = 5, ['comcast[.-][0-9]'] = 5, ['[0-9][.-]?comcast'] = 5, 
-  ['[.-][a|x]?dsl-dynamic[.-]'] = 5, ['[a|x]?dsl-dynamic[.-]?[0-9]'] = 5, ['[0-9][.-]?[a|x]?dsl-dynamic'] = 5, 
-  ['[.-][a|x]?dsl[.-]'] = 4, ['[a|x]?dsl[.-]?[0-9]'] = 4, ['[0-9][.-]?[a|x]?dsl'] = 4, 
-  ['[.-][a|x]?dsl-line[.-]'] = 4, ['[a|x]?dsl-line[.-]?[0-9]'] = 4, ['[0-9][.-]?[a|x]?dsl-line'] = 4, 
-  ['[.-]in-?addr[.-]'] = 4, ['in-?addr[.-][0-9]'] = 4, ['[0-9][.-]?in-?addr'] = 4, 
-  ['[.-]pool[.-]'] = 4, ['pool[.-][0-9]'] = 4, ['[0-9][.-]?pool'] = 4, 
-  ['[.-]fibertel[.-]'] = 4, ['fibertel[.-][0-9]'] = 4, ['[0-9][.-]?fibertel'] = 4, 
-  ['[.-]fbx[.-]'] = 4, ['fbx[.-][0-9]'] = 4, ['[0-9][.-]?fbx'] = 4, 
-  ['[.-]unused-addr[.-]'] = 3, ['unused-addr[.-][0-9]'] = 3, ['[0-9][.-]?unused-addr'] = 3, 
+  ['[.-]gprs[.-]'] = 5, ['gprs[.-][0-9]'] = 5, ['[0-9][.-]?gprs'] = 5,
+  ['[.-]cdma[.-]'] = 5, ['cdma[.-][0-9]'] = 5, ['[0-9][.-]?cdma'] = 5,
+  ['[.-]homeuser[.-]'] = 5, ['homeuser[.-][0-9]'] = 5, ['[0-9][.-]?homeuser'] = 5,
+  ['[.-]dhcp[.-]'] = 5, ['dhcp[.-][0-9]'] = 5, ['[0-9][.-]?dhcp'] = 5,
+  ['[.-]catv[.-]'] = 5, ['catv[.-][0-9]'] = 5, ['[0-9][.-]?catv'] = 5,
+  ['[.-]wifi[.-]'] = 5, ['wifi[.-][0-9]'] = 5, ['[0-9][.-]?wifi'] = 5,
+  ['[.-]dial-?up[.-]'] = 5, ['dial-?up[.-][0-9]'] = 5, ['[0-9][.-]?dial-?up'] = 5,
+  ['[.-]dynamic[.-]'] = 5, ['dynamic[.-][0-9]'] = 5, ['[0-9][.-]?dynamic'] = 5,
+  ['[.-]dyn[.-]'] = 5, ['dyn[.-][0-9]'] = 5, ['[0-9][.-]?dyn'] = 5,
+  ['[.-]clients?[.-]'] = 5, ['clients?[.-][0-9]'] = 5, ['[0-9][.-]?clients?'] = 5,
+  ['[.-]dynip[.-]'] = 5, ['dynip[.-][0-9]'] = 5, ['[0-9][.-]?dynip'] = 5,
+  ['[.-]broadband[.-]'] = 5, ['broadband[.-][0-9]'] = 5, ['[0-9][.-]?broadband'] = 5,
+  ['[.-]broad[.-]'] = 5, ['broad[.-][0-9]'] = 5, ['[0-9][.-]?broad'] = 5,
+  ['[.-]bredband[.-]'] = 5, ['bredband[.-][0-9]'] = 5, ['[0-9][.-]?bredband'] = 5,
+  ['[.-]nat[.-]'] = 5, ['nat[.-][0-9]'] = 5, ['[0-9][.-]?nat'] = 5,
+  ['[.-]pptp[.-]'] = 5, ['pptp[.-][0-9]'] = 5, ['[0-9][.-]?pptp'] = 5,
+  ['[.-]pppoe[.-]'] = 5, ['pppoe[.-][0-9]'] = 5, ['[0-9][.-]?pppoe'] = 5,
+  ['[.-]ppp[.-]'] = 5, ['ppp[.-][0-9]'] = 5, ['[0-9][.-]?ppp'] = 5,
+  ['[.-]modem[.-]'] = 5, ['modem[.-][0-9]'] = 5, ['[0-9][.-]?modem'] = 5,
+  ['[.-]cablemodem[.-]'] = 5, ['cablemodem[.-][0-9]'] = 5, ['[0-9][.-]?cablemodem'] = 5,
+  ['[.-]comcast[.-]'] = 5, ['comcast[.-][0-9]'] = 5, ['[0-9][.-]?comcast'] = 5,
+  ['[.-][a|x]?dsl-dynamic[.-]'] = 5, ['[a|x]?dsl-dynamic[.-]?[0-9]'] = 5, ['[0-9][.-]?[a|x]?dsl-dynamic'] = 5,
+  ['[.-][a|x]?dsl[.-]'] = 4, ['[a|x]?dsl[.-]?[0-9]'] = 4, ['[0-9][.-]?[a|x]?dsl'] = 4,
+  ['[.-][a|x]?dsl-line[.-]'] = 4, ['[a|x]?dsl-line[.-]?[0-9]'] = 4, ['[0-9][.-]?[a|x]?dsl-line'] = 4,
+  ['[.-]in-?addr[.-]'] = 4, ['in-?addr[.-][0-9]'] = 4, ['[0-9][.-]?in-?addr'] = 4,
+  ['[.-]pool[.-]'] = 4, ['pool[.-][0-9]'] = 4, ['[0-9][.-]?pool'] = 4,
+  ['[.-]fibertel[.-]'] = 4, ['fibertel[.-][0-9]'] = 4, ['[0-9][.-]?fibertel'] = 4,
+  ['[.-]fbx[.-]'] = 4, ['fbx[.-][0-9]'] = 4, ['[0-9][.-]?fbx'] = 4,
+  ['[.-]unused-addr[.-]'] = 3, ['unused-addr[.-][0-9]'] = 3, ['[0-9][.-]?unused-addr'] = 3,
   ['[.-]cable[.-]'] = 3, ['cable[.-][0-9]'] = 3, ['[0-9][.-]?cable'] = 3,
   ['[.-]kabel[.-]'] = 3, ['kabel[.-][0-9]'] = 3, ['[0-9][.-]?kabel'] = 3,
   ['[.-]host[.-]'] = 2, ['host[.-][0-9]'] = 2, ['[0-9][.-]?host'] = 2,
@@ -105,7 +105,7 @@ local checks_hello_badip = {
 }
 
 local checks_hello_bareip = {
-  '^\\d+[x.-]\\d+[x.-]\\d+[x.-]\\d+$', --bareip ipv4, 
+  '^\\d+[x.-]\\d+[x.-]\\d+[x.-]\\d+$', --bareip ipv4,
   '^[0-9a-f]+:' --bareip ipv6
 }
 
@@ -161,21 +161,8 @@ end
 -- eq_ip: ip for comparing or empty string
 -- eq_host: host for comparing or empty string
 local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
-
   local failed_address = 0
-  local failed_mx_address = 0
-
-  local function check_host_cb_mx_a(resolver, to_resolve, results, err)
-    task:inc_dns_req()
-
-    if not results then
-      failed_mx_address = failed_mx_address + 1
-    end
-
-    if failed_mx_address >= 2 then
-      task:insert_result('HFILTER_' .. symbol_suffix .. '_NORESOLVE_MX', 1.0)
-    end
-  end
+  
   local function check_host_cb_mx(resolver, to_resolve, results, err)
     task:inc_dns_req()
     if not results then
@@ -183,9 +170,23 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
     else
       for _,mx in pairs(results) do
         if mx['name'] then
+          local failed_mx_address = 0
+          -- Capture failed_mx_address
+          local function check_host_cb_mx_a(resolver, to_resolve, results, err)
+            task:inc_dns_req()
+
+            if not results then
+              failed_mx_address = failed_mx_address + 1
+            end
+
+            if failed_mx_address >= 2 then
+              task:insert_result('HFILTER_' .. symbol_suffix .. '_NORESOLVE_MX', 1.0)
+            end
+          end
+
           task:get_resolver():resolve('a', {
-            task=task, 
-            name = mx['name'], 
+            task=task,
+            name = mx['name'],
             callback = check_host_cb_mx_a
           })
           task:get_resolver():resolve('aaaa', {
@@ -237,8 +238,8 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
   if check_fqdn(host) then
     if eq_host == '' or eq_host ~= 'unknown' or eq_host ~= host then
       task:get_resolver():resolve('a', {
-        task=task, 
-        name = host, 
+        task=task,
+        name = host,
         callback = check_host_cb_a
       })
       -- Check ipv6 as well
@@ -296,19 +297,19 @@ local function hfilter(task)
       end
     end
   end
-  
+
   --No more checks for auth user
   if task:get_user() ~= nil then
     return false
   end
-  
+
   --local message = task:get_message()
   local ip = false
   local rip = task:get_from_ip()
   if rip and rip:is_valid() then
     ip = rip:to_string()
   end
-  
+
   -- Check's HELO
   local weight_helo = 0
   if config['helo_enabled'] then
@@ -365,11 +366,11 @@ local function hfilter(task)
       task:insert_result('HFILTER_HELO_UNKNOWN', 1.0)
     end
   end
-  
+
   -- Check's HOSTNAME
   local weight_hostname = 0
   if config['hostname_enabled'] then
-    local hostname = task:get_hostname()  
+    local hostname = task:get_hostname()
     if hostname then
       -- Check regexp HOSTNAME
       if hostname == 'unknown' then
@@ -386,14 +387,14 @@ local function hfilter(task)
       task:insert_result('HFILTER_HOSTNAME_UNKNOWN', 1.00)
     end
   end
-  
+
   --Insert weight's for HELO or HOSTNAME
   if weight_helo > 0 and weight_helo >= weight_hostname then
     task:insert_result('HFILTER_HELO_' .. weight_helo, 1.0)
   elseif weight_hostname > 0 and weight_hostname > weight_helo then
     task:insert_result('HFILTER_HOSTNAME_' .. weight_hostname, 1.0)
-  end  
-  
+  end
+
   -- MAILFROM checks --
   local frombounce = false
   if config['from_enabled'] then
@@ -416,10 +417,10 @@ local function hfilter(task)
       end
     end
   end
-  
+
   -- Recipients checks --
   if config['rcpt_enabled'] then
-    local rcpt = task:get_recipients()    
+    local rcpt = task:get_recipients()
     if rcpt then
       local count_rcpt = table.maxn(rcpt)
       if frombounce then
@@ -440,7 +441,7 @@ local function hfilter(task)
       end
     end
   end
-  
+
   return false
 end
 
@@ -452,10 +453,10 @@ local symbols_helo = {
   "HFILTER_HELO_UNKNOWN",
   "HFILTER_HELO_1",
   "HFILTER_HELO_2",
-  "HFILTER_HELO_3", 
+  "HFILTER_HELO_3",
   "HFILTER_HELO_4",
   "HFILTER_HELO_5",
-  "HFILTER_HELO_NORESOLVE_MX", 
+  "HFILTER_HELO_NORESOLVE_MX",
   "HFILTER_HELO_NORES_A_OR_MX",
   "HFILTER_HELO_IP_A",
   "HFILTER_HELO_NOT_FQDN"
