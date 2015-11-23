@@ -804,7 +804,7 @@ rspamd_upstream_reresolve (struct upstream_ctx *ctx)
 		up = cur->data;
 		REF_RETAIN (up);
 
-		if (up->name[0] != '/') {
+		if (up->name[0] != '/' && ctx->res != NULL) {
 			if (rdns_make_request_full (ctx->res,
 					rspamd_upstream_dns_cb,
 					up,
