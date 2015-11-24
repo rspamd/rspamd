@@ -1871,6 +1871,7 @@ rspamd_message_get_header (struct rspamd_task *task,
 	}
 
 	if (gret != NULL) {
+		gret = g_list_reverse (gret);
 		rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t)g_list_free, gret);
 	}
