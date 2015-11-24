@@ -277,6 +277,8 @@ rspamd_fuzzy_backend_run_stmt (struct rspamd_fuzzy_backend *backend,
 	}
 
 	stmt = prepared_stmts[idx].stmt;
+	g_assert (prepared_stmts[idx].idx == idx);
+
 	if (stmt == NULL) {
 		if ((retcode = sqlite3_prepare_v2 (backend->db, prepared_stmts[idx].sql, -1,
 				&prepared_stmts[idx].stmt, NULL)) != SQLITE_OK) {
@@ -334,7 +336,8 @@ retry:
 	}
 
 	if (auto_cleanup) {
-
+		sqlite3_clear_bindings (stmt);
+		sqlite3_reset (stmt);
 	}
 
 	return retcode;
@@ -587,11 +590,16 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 			RSPAMD_FUZZY_BACKEND_TRANSACTION_START);
 
 	if (rc != SQLITE_OK) {
+		msg_warn_fuzzy_backend ("cannot start transaction to add hash to %d -> "
+				"%*xs: %s", (gint) cmd->flag,
+				(gint) sizeof (cmd->digest), cmd->digest,
+				sqlite3_errmsg (backend->db));
 		return FALSE;
 	}
 
-	rc = rspamd_fuzzy_backend_run_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK, TRUE,
-				cmd->digest);
+	rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
+			RSPAMD_FUZZY_BACKEND_CHECK,
+			cmd->digest);
 
 	if (rc == SQLITE_OK) {
 		/* We need to increase weight */
@@ -653,12 +661,19 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 				RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT);
 	}
 	else {
-		msg_warn_fuzzy_backend ("cannot commit hash to %d -> "
+		msg_warn_fuzzy_backend ("cannot add hash to %d -> "
 				"%*xs: %s", (gint) cmd->flag,
 				(gint) sizeof (cmd->digest), cmd->digest,
 				sqlite3_errmsg (backend->db));
 		rspamd_fuzzy_backend_run_stmt (backend, TRUE,
 				RSPAMD_FUZZY_BACKEND_TRANSACTION_ROLLBACK);
+	}
+
+	if (rc != SQLITE_OK) {
+		msg_warn_fuzzy_backend ("cannot commit hash to %d -> "
+				"%*xs: %s", (gint) cmd->flag,
+				(gint) sizeof (cmd->digest), cmd->digest,
+				sqlite3_errmsg (backend->db));
 	}
 
 	return (rc == SQLITE_OK);
