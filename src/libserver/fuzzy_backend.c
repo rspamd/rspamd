@@ -290,7 +290,8 @@ rspamd_fuzzy_backend_run_stmt (struct rspamd_fuzzy_backend *backend,
 		stmt = prepared_stmts[idx].stmt;
 	}
 
-	msg_debug_fuzzy_backend ("executing `%s`", prepared_stmts[idx].sql);
+	msg_debug_fuzzy_backend ("executing `%s` %s auto cleanup",
+			prepared_stmts[idx].sql, auto_cleanup ? "with" : "without");
 	argtypes = prepared_stmts[idx].args;
 	sqlite3_clear_bindings (stmt);
 	sqlite3_reset (stmt);
@@ -324,8 +325,9 @@ retry:
 	if (retcode == prepared_stmts[idx].result) {
 		return SQLITE_OK;
 	}
-	else if (retcode != SQLITE_DONE) {
-		if (retcode == SQLITE_BUSY && retries++ < max_retries) {
+	else {
+		if ((retcode == SQLITE_BUSY ||
+				retcode == SQLITE_LOCKED) && retries++ < max_retries) {
 			double_to_ts (sql_sleep_time, &ts);
 			nanosleep (&ts, NULL);
 			goto retry;
