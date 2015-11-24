@@ -1707,6 +1707,36 @@ rspamd_message_parse (struct rspamd_task *task)
 			task->hostname = recv->real_hostname;
 		}
 	}
+
+	if (task->from_envelope == NULL) {
+		first = rspamd_message_get_header (task, "Return-Path", FALSE);
+
+		if (first) {
+			rh = first->data;
+			task->from_envelope = internet_address_list_parse_string (rh->value);
+			if (task->from_envelope) {
+#ifdef GMIME24
+				rspamd_mempool_add_destructor (task->task_pool,
+						(rspamd_mempool_destruct_t) g_object_unref,
+						task->from_envelope);
+#else
+				rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t) internet_address_list_destroy,
+					task->from_envelope);
+#endif
+			}
+		}
+	}
+
+	if (task->deliver_to == NULL) {
+		first = rspamd_message_get_header (task, "Delivered-To", FALSE);
+
+		if (first) {
+			rh = first->data;
+			task->deliver_to = rspamd_mempool_strdup (task->task_pool, rh->decoded);
+		}
+	}
+
 	/* Set mime recipients and sender for the task */
 	task->rcpt_mime = g_mime_message_get_all_recipients (task->message);
 	if (task->rcpt_mime) {
