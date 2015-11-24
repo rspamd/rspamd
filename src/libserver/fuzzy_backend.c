@@ -595,11 +595,15 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 
 	if (rc == SQLITE_OK) {
 		/* We need to increase weight */
-		if (rc == SQLITE_OK) {
-			rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
-					RSPAMD_FUZZY_BACKEND_UPDATE,
-					(gint64) cmd->value,
-					cmd->digest);
+		rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
+				RSPAMD_FUZZY_BACKEND_UPDATE,
+				(gint64) cmd->value,
+				cmd->digest);
+		if (rc != SQLITE_OK) {
+			msg_warn_fuzzy_backend ("cannot update hash to %d -> "
+					"%*xs: %s", (gint) cmd->flag,
+					(gint) sizeof (cmd->digest), cmd->digest,
+					sqlite3_errmsg (backend->db));
 		}
 	}
 	else {
@@ -617,15 +621,28 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 					shcmd = (const struct rspamd_fuzzy_shingle_cmd *) cmd;
 
 					for (i = 0; i < RSPAMD_SHINGLE_SIZE; i++) {
-						rspamd_fuzzy_backend_run_stmt (backend, TRUE,
+						rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
 								RSPAMD_FUZZY_BACKEND_INSERT_SHINGLE,
 								shcmd->sgl.hashes[i], i, id);
 						msg_debug_fuzzy_backend ("add shingle %d -> %L: %L",
 								i,
 								shcmd->sgl.hashes[i],
 								id);
+
+						if (rc != SQLITE_OK) {
+							msg_warn_fuzzy_backend ("cannot add shingle %d -> "
+									"%L: %L: %s", i,
+									shcmd->sgl.hashes[i],
+									id, sqlite3_errmsg (backend->db));
+						}
 					}
 				}
+			}
+			else {
+				msg_warn_fuzzy_backend ("cannot add hash to %d -> "
+						"%*xs: %s", (gint)cmd->flag,
+						(gint)sizeof (cmd->digest), cmd->digest,
+						sqlite3_errmsg (backend->db));
 			}
 
 			rspamd_fuzzy_backend_cleanup_stmt (backend,
@@ -638,6 +655,10 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 				RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT);
 	}
 	else {
+		msg_warn_fuzzy_backend ("cannot commit hash to %d -> "
+				"%*xs: %s", (gint) cmd->flag,
+				(gint) sizeof (cmd->digest), cmd->digest,
+				sqlite3_errmsg (backend->db));
 		rspamd_fuzzy_backend_run_stmt (backend, TRUE,
 				RSPAMD_FUZZY_BACKEND_TRANSACTION_ROLLBACK);
 	}
@@ -666,8 +687,19 @@ rspamd_fuzzy_backend_del (struct rspamd_fuzzy_backend *backend,
 	if (rc == SQLITE_OK) {
 		rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
 				RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT);
+
+		if (rc != SQLITE_OK) {
+			msg_warn_fuzzy_backend ("cannot commit delete hash from %d -> "
+					"%*xs: %s", (gint) cmd->flag,
+					(gint) sizeof (cmd->digest), cmd->digest,
+					sqlite3_errmsg (backend->db));
+		}
 	}
 	else {
+		msg_warn_fuzzy_backend ("cannot delete hash from %d -> "
+				"%*xs: %s", (gint) cmd->flag,
+				(gint) sizeof (cmd->digest), cmd->digest,
+				sqlite3_errmsg (backend->db));
 		rspamd_fuzzy_backend_run_stmt (backend, TRUE,
 				RSPAMD_FUZZY_BACKEND_TRANSACTION_ROLLBACK);
 	}
