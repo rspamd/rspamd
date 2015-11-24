@@ -116,6 +116,7 @@ parse_recv_header (rspamd_mempool_t * pool,
 		RSPAMD_RECV_STATE_BRACES_BLOCK,
 		RSPAMD_RECV_STATE_BY_BLOCK,
 		RSPAMD_RECV_STATE_PARSE_IP,
+		RSPAMD_RECV_STATE_PARSE_IP6,
 		RSPAMD_RECV_STATE_SKIP_SPACES,
 		RSPAMD_RECV_STATE_ERROR
 	} state = RSPAMD_RECV_STATE_INIT, next_state = RSPAMD_RECV_STATE_INIT;
@@ -337,23 +338,38 @@ parse_recv_header (rspamd_mempool_t * pool,
 
 		/* Extract ip */
 		case RSPAMD_RECV_STATE_PARSE_IP:
-			while (g_ascii_isxdigit (*p) || *p == '.' || *p == ':') {
-				p++;
-			}
-			if (*p != ']') {
-				/* Not an ip in fact */
-				state = RSPAMD_RECV_STATE_SKIP_SPACES;
-				p++;
+			if (*p == 'I') {
+				/* IPv6: */
+				state = RSPAMD_RECV_STATE_PARSE_IP6;
 			}
 			else {
-				*p = '\0';
-				*res = rspamd_mempool_strdup (pool, s);
-				*p = ']';
-				p++;
+				while (g_ascii_isxdigit (*p) || *p == '.' || *p == ':') {
+					p++;
+				}
+				if (*p != ']') {
+					/* Not an ip in fact */
+					state = RSPAMD_RECV_STATE_SKIP_SPACES;
+					p++;
+				}
+				else {
+					*p = '\0';
+					*res = rspamd_mempool_strdup (pool, s);
+					*p = ']';
+					p++;
+					state = RSPAMD_RECV_STATE_SKIP_SPACES;
+				}
+			}
+			break;
+		case RSPAMD_RECV_STATE_PARSE_IP6:
+			if (g_ascii_strncasecmp (p, "IPv6:", sizeof ("IPv6") - 1) == 0) {
+				p += sizeof ("IPv6") - 1;
+				s = p;
+				state = RSPAMD_RECV_STATE_PARSE_IP;
+			}
+			else {
 				state = RSPAMD_RECV_STATE_SKIP_SPACES;
 			}
 			break;
-
 		/* Skip spaces */
 		case RSPAMD_RECV_STATE_SKIP_SPACES:
 			if (!g_ascii_isspace (*p)) {
