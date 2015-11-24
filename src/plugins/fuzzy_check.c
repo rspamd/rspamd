@@ -1110,10 +1110,11 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 				else {
 					msg_info_task ("cannot process fuzzy hash for message "
 							"<%s>, "
-							"list %s:%d",
+							"list %s:%d, error: %d",
 							session->task->message_id,
 							symbol,
-							rep->flag);
+							rep->flag,
+							rep->value);
 					if (*(session->err) == NULL) {
 						g_set_error (session->err,
 							g_quark_from_static_string ("fuzzy check"),

@@ -607,47 +607,45 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 		}
 	}
 	else {
+		rc = rspamd_fuzzy_backend_run_stmt (backend, FALSE,
+				RSPAMD_FUZZY_BACKEND_INSERT,
+				(gint) cmd->flag,
+				cmd->digest,
+				(gint64) cmd->value,
+				(gint64) time (NULL));
+
 		if (rc == SQLITE_OK) {
-			rc = rspamd_fuzzy_backend_run_stmt (backend, FALSE,
-					RSPAMD_FUZZY_BACKEND_INSERT,
-					(gint) cmd->flag,
-					cmd->digest,
-					(gint64) cmd->value,
-					(gint64) time (NULL));
+			if (cmd->shingles_count > 0) {
+				id = sqlite3_last_insert_rowid (backend->db);
+				shcmd = (const struct rspamd_fuzzy_shingle_cmd *) cmd;
 
-			if (rc == SQLITE_OK) {
-				if (cmd->shingles_count > 0) {
-					id = sqlite3_last_insert_rowid (backend->db);
-					shcmd = (const struct rspamd_fuzzy_shingle_cmd *) cmd;
+				for (i = 0; i < RSPAMD_SHINGLE_SIZE; i++) {
+					rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
+							RSPAMD_FUZZY_BACKEND_INSERT_SHINGLE,
+							shcmd->sgl.hashes[i], i, id);
+					msg_debug_fuzzy_backend ("add shingle %d -> %L: %L",
+							i,
+							shcmd->sgl.hashes[i],
+							id);
 
-					for (i = 0; i < RSPAMD_SHINGLE_SIZE; i++) {
-						rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
-								RSPAMD_FUZZY_BACKEND_INSERT_SHINGLE,
-								shcmd->sgl.hashes[i], i, id);
-						msg_debug_fuzzy_backend ("add shingle %d -> %L: %L",
-								i,
+					if (rc != SQLITE_OK) {
+						msg_warn_fuzzy_backend ("cannot add shingle %d -> "
+								"%L: %L: %s", i,
 								shcmd->sgl.hashes[i],
-								id);
-
-						if (rc != SQLITE_OK) {
-							msg_warn_fuzzy_backend ("cannot add shingle %d -> "
-									"%L: %L: %s", i,
-									shcmd->sgl.hashes[i],
-									id, sqlite3_errmsg (backend->db));
-						}
+								id, sqlite3_errmsg (backend->db));
 					}
 				}
 			}
-			else {
-				msg_warn_fuzzy_backend ("cannot add hash to %d -> "
-						"%*xs: %s", (gint)cmd->flag,
-						(gint)sizeof (cmd->digest), cmd->digest,
-						sqlite3_errmsg (backend->db));
-			}
-
-			rspamd_fuzzy_backend_cleanup_stmt (backend,
-					RSPAMD_FUZZY_BACKEND_INSERT);
 		}
+		else {
+			msg_warn_fuzzy_backend ("cannot add hash to %d -> "
+					"%*xs: %s", (gint)cmd->flag,
+					(gint)sizeof (cmd->digest), cmd->digest,
+					sqlite3_errmsg (backend->db));
+		}
+
+		rspamd_fuzzy_backend_cleanup_stmt (backend,
+				RSPAMD_FUZZY_BACKEND_INSERT);
 	}
 
 	if (rc == SQLITE_OK) {
