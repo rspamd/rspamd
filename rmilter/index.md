@@ -141,6 +141,10 @@ Specifies rspamd or spamassassin spam scanners.
 	+ Default: `empty`
 - `extended_spam_headers`: add extended spamd headers to messages, is useful for debugging or private mail servers (flag)
 	+ Default: `false`
+- `spamd_never_reject`: never reject a message even if spamd action is `reject`, add header instead (flag)
+	+ Default: `false`
+- `spamd_temp_fail`: return temporary failure if spam servers could not be reached (ignore otherwise) (flag)
+	+ Default: `false`
 
 Back to [top](#).
 
