@@ -1284,7 +1284,9 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag)
 	struct html_tag_component *comp;
 	struct rspamd_url *url;
 	GList *cur;
+	const guchar *p;
 	gint rc;
+	gboolean has_spaces = FALSE;
 
 	cur = tag->params->head;
 
@@ -1292,10 +1294,35 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag)
 		comp = cur->data;
 
 		if (comp->type == RSPAMD_HTML_COMPONENT_HREF && comp->len > 0) {
+			/* Strip spaces from the url component */
+			p = comp->start;
+
+			while (g_ascii_isspace (*p) && p < comp->start + comp->len) {
+				p ++;
+				has_spaces = TRUE;
+			}
+
+			comp->start = p;
+			comp->len -= p - comp->start;
+
+			p = comp->start + comp->len - 1;
+
+			while (g_ascii_isspace (*p) && p >= comp->start) {
+				p --;
+				comp->len --;
+				has_spaces = TRUE;
+			}
+
 			url = rspamd_mempool_alloc (pool, sizeof (*url));
 			rc = rspamd_url_parse (url, (gchar *)comp->start, comp->len, pool);
 
 			if (rc == URI_ERRNO_OK) {
+
+				/* Spaces in href usually mean an attempt to obfusicate URL */
+				if (has_spaces) {
+					url->flags |= RSPAMD_URL_FLAG_OBSCURED;
+				}
+
 				return url;
 			}
 		}
