@@ -250,19 +250,21 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 	rspamd_control_worker_add_default_handler (worker, ev_base);
 
 	/* Accept all sockets */
-	cur = worker->cf->listen_socks;
-	while (cur) {
-		listen_socket = GPOINTER_TO_INT (cur->data);
-		if (listen_socket != -1) {
-			accept_event = g_slice_alloc0 (sizeof (struct event));
-			event_set (accept_event, listen_socket, EV_READ | EV_PERSIST,
-				accept_handler, worker);
-			event_base_set (ev_base, accept_event);
-			event_add (accept_event, NULL);
-			worker->accept_events = g_list_prepend (worker->accept_events,
-					accept_event);
+	if (accept_handler) {
+		cur = worker->cf->listen_socks;
+		while (cur) {
+			listen_socket = GPOINTER_TO_INT (cur->data);
+			if (listen_socket != -1) {
+				accept_event = g_slice_alloc0 (sizeof (struct event));
+				event_set (accept_event, listen_socket, EV_READ | EV_PERSIST,
+						accept_handler, worker);
+				event_base_set (ev_base, accept_event);
+				event_add (accept_event, NULL);
+				worker->accept_events = g_list_prepend (worker->accept_events,
+						accept_event);
+			}
+			cur = g_list_next (cur);
 		}
-		cur = g_list_next (cur);
 	}
 
 	return ev_base;
