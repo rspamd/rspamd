@@ -541,8 +541,7 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 						nid = g_malloc (sizeof (cmd.cmd.spair.pair_id));
 						memcpy (nid, cmd.cmd.spair.pair_id,
 								sizeof (cmd.cmd.spair.pair_id));
-						g_hash_table_insert (srv->spairs,
-								cmd.cmd.spair.pair_id, spair);
+						g_hash_table_insert (srv->spairs, nid, spair);
 						rdata->rep.reply.spair.code = 0;
 						rdata->fd = cmd.cmd.spair.pair_num ? spair[1] : spair[0];
 					}
