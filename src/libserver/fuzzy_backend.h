@@ -51,6 +51,11 @@ struct rspamd_fuzzy_reply rspamd_fuzzy_backend_check (
 		gint64 expire);
 
 /**
+ * Prepare storage for updates (by starting transaction)
+ */
+gboolean rspamd_fuzzy_backend_prepare_update (struct rspamd_fuzzy_backend *backend);
+
+/**
  * Add digest to the database
  * @param backend
  * @param cmd
@@ -69,6 +74,11 @@ gboolean rspamd_fuzzy_backend_add (
 gboolean rspamd_fuzzy_backend_del (
 		struct rspamd_fuzzy_backend *backend,
 		const struct rspamd_fuzzy_cmd *cmd);
+
+/**
+ * Commit updates to storage
+ */
+gboolean rspamd_fuzzy_backend_finish_update (struct rspamd_fuzzy_backend *backend);
 
 /**
  * Sync storage

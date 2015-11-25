@@ -150,26 +150,46 @@ rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx)
 	struct fuzzy_peer_cmd *cmd;
 	guint nupdates = 0;
 
-	cur = ctx->updates_pending->head;
-	while (cur) {
-		cmd = cur->data;
+	if (rspamd_fuzzy_backend_prepare_update (ctx->backend)) {
+		cur = ctx->updates_pending->head;
+		while (cur) {
+			cmd = cur->data;
 
-		if (cmd->cmd.normal.cmd == FUZZY_WRITE) {
-			rspamd_fuzzy_backend_add (ctx->backend, &cmd->cmd.normal);
+			if (cmd->cmd.normal.cmd == FUZZY_WRITE) {
+				rspamd_fuzzy_backend_add (ctx->backend, &cmd->cmd.normal);
+			}
+			else {
+				rspamd_fuzzy_backend_del (ctx->backend, &cmd->cmd.normal);
+			}
+
+			nupdates++;
+			cur = g_list_next (cur);
+		}
+
+		if (rspamd_fuzzy_backend_finish_update (ctx->backend)) {
+			server_stat->fuzzy_hashes = rspamd_fuzzy_backend_count (ctx->backend);
+			cur = ctx->updates_pending->head;
+
+			while (cur) {
+				cmd = cur->data;
+				g_slice_free1 (sizeof (*cmd), cmd);
+				cur = g_list_next (cur);
+			}
+
+			g_queue_clear (ctx->updates_pending);
+			msg_info ("updated fuzzy storage: %ud updates processed", nupdates);
 		}
 		else {
-			rspamd_fuzzy_backend_del (ctx->backend, &cmd->cmd.normal);
+			msg_err ("cannot commit update transaction to fuzzy backend, "
+					"%ud updates are still pending",
+					g_queue_get_length (ctx->updates_pending));
 		}
-
-		g_slice_free1 (sizeof (*cmd), cmd);
-		nupdates ++;
-		cur = g_list_next (cur);
 	}
-
-	g_queue_clear (ctx->updates_pending);
-	server_stat->fuzzy_hashes = rspamd_fuzzy_backend_count (ctx->backend);
-
-	msg_info ("updated fuzzy storage: %ud updates processed", nupdates);
+	else {
+		msg_err ("cannot start transaction in fuzzy backend, "
+				"%ud updates are still pending",
+				g_queue_get_length (ctx->updates_pending));
+	}
 }
 
 static void
