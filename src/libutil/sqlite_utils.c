@@ -219,6 +219,12 @@ rspamd_sqlite3_wait (rspamd_mempool_t *pool, const gchar *lock)
 	fd = open (lock, O_RDONLY);
 
 	if (fd == -1) {
+
+		if (errno == ENOENT) {
+			/* Lock is already released, so we can continue */
+			return TRUE;
+		}
+
 		msg_err_pool ("cannot open lock file %s: %s", lock, strerror (errno));
 
 		return FALSE;
@@ -398,12 +404,12 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 				sqlite3_errmsg (sqlite));
 	}
 
-	if (sizeof (gpointer) >= 8 &&
-		(rc = sqlite3_exec (sqlite, enable_mmap, NULL, NULL, NULL)) !=
-			SQLITE_OK) {
+#if defined(__LP64__) || defined(_LP64)
+	if ((rc = sqlite3_exec (sqlite, enable_mmap, NULL, NULL, NULL)) != SQLITE_OK) {
 		msg_warn_pool ("cannot enable mmap: %s",
 				sqlite3_errmsg (sqlite));
 	}
+#endif
 
 	if ((rc = sqlite3_exec (sqlite, other_pragmas, NULL, NULL, NULL)) !=
 			SQLITE_OK) {
