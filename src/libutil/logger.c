@@ -386,6 +386,21 @@ rspamd_log_update_pid (GQuark ptype, rspamd_logger_t *rspamd_log)
 {
 	rspamd_log->pid = getpid ();
 	rspamd_log->process_type = ptype;
+
+	/* We also need to clear all messages pending */
+	if (rspamd_log->repeats > 0) {
+		rspamd_log->repeats = 0;
+		if (rspamd_log->saved_message) {
+			g_free (rspamd_log->saved_message);
+			g_free (rspamd_log->saved_function);
+			g_free (rspamd_log->saved_module);
+			g_free (rspamd_log->saved_id);
+			rspamd_log->saved_message = NULL;
+			rspamd_log->saved_function = NULL;
+			rspamd_log->saved_module = NULL;
+			rspamd_log->saved_id = NULL;
+		}
+	}
 }
 
 /**
