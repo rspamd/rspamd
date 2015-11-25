@@ -448,6 +448,11 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		exit (-errno);
 	}
 
+	if (!rspamd_socketpair (cur->srv_pipe)) {
+		msg_err ("socketpair failure: %s", strerror (errno));
+		exit (-errno);
+	}
+
 	cur->srv = rspamd_main;
 	cur->type = cf->type;
 	cur->cf = g_malloc (sizeof (struct rspamd_worker_conf));

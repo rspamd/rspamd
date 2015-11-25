@@ -38,6 +38,10 @@ enum rspamd_control_type {
 	RSPAMD_CONTROL_MAX
 };
 
+enum rspamd_srv_type {
+	RSPAMD_SRV_SOCKETPAIR = 0,
+};
+
 struct rspamd_control_command {
 	enum rspamd_control_type type;
 	union {
@@ -72,6 +76,29 @@ struct rspamd_control_reply {
 	} reply;
 };
 
+#define PAIR_ID_LEN 16
+struct rspamd_srv_command {
+	enum rspamd_srv_type type;
+	guint64 id;
+	union {
+		struct {
+			gint af;
+			gchar pair_id[PAIR_ID_LEN];
+			guint pair_num;
+		} spair;
+	} cmd;
+};
+
+struct rspamd_srv_reply {
+	enum rspamd_srv_type type;
+	guint64 id;
+	union {
+		struct {
+			gint code;
+		} spair;
+	} reply;
+};
+
 typedef gboolean (*rspamd_worker_control_handler) (struct rspamd_main *rspamd_main,
 		struct rspamd_worker *worker, gint fd,
 		struct rspamd_control_command *cmd,
@@ -96,5 +123,11 @@ void rspamd_control_worker_add_cmd_handler (struct rspamd_worker *worker,
 		enum rspamd_control_type type,
 		rspamd_worker_control_handler handler,
 		gpointer ud);
+
+/**
+ * Start watching on srv pipe
+ */
+void rspamd_main_start_watching (struct rspamd_worker *worker,
+		struct event_base *ev_base);
 
 #endif

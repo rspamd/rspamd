@@ -56,6 +56,9 @@ struct rspamd_worker {
 	gpointer ctx;                   /**< worker's specific data							*/
 	gint control_pipe[2];           /**< control pipe. [0] is used by main process,
 	                                                   [1] is used by a worker			*/
+	gint srv_pipe[2];               /**< used by workers to request something from the
+	                                     main process. [0] - main, [1] - worker			*/
+	struct event srv_ev;            /**< used by main for read workers' requests		*/
 	gpointer control_data;          /**< used by control protocol to handle commands	*/
 };
 
@@ -160,11 +163,11 @@ struct rspamd_main {
 	/* Pid file structure */
 	rspamd_pidfh_t *pfh;                                        /**< struct pidfh for pidfile						*/
 	GQuark type;                                                /**< process type									*/
-	guint ev_initialized;                                       /**< is event system is initialized					*/
 	struct rspamd_stat *stat;                                   /**< pointer to statistics							*/
 
-	rspamd_mempool_t *server_pool;                                  /**< server's memory pool							*/
+	rspamd_mempool_t *server_pool;                              /**< server's memory pool							*/
 	GHashTable *workers;                                        /**< workers pool indexed by pid                    */
+	GHashTable *spairs;                                         /**< socket pairs requested by workers				*/
 	rspamd_logger_t *logger;
 	uid_t workers_uid;                                          /**< worker's uid running to                        */
 	gid_t workers_gid;                                          /**< worker's gid running to						*/
