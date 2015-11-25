@@ -104,6 +104,10 @@ typedef gboolean (*rspamd_worker_control_handler) (struct rspamd_main *rspamd_ma
 		struct rspamd_control_command *cmd,
 		gpointer ud);
 
+typedef void (*rspamd_srv_reply_handler) (struct rspamd_worker *worker,
+		struct rspamd_srv_reply *rep, gint rep_fd,
+		gpointer ud);
+
 /**
  * Process client socket connection
  */
@@ -127,7 +131,16 @@ void rspamd_control_worker_add_cmd_handler (struct rspamd_worker *worker,
 /**
  * Start watching on srv pipe
  */
-void rspamd_main_start_watching (struct rspamd_worker *worker,
+void rspamd_srv_start_watching (struct rspamd_worker *worker,
 		struct event_base *ev_base);
 
+
+/**
+ * Send command to srv pipe and read reply calling the specified callback at the
+ * end
+ */
+void rspamd_srv_send_command (struct rspamd_worker *worker,
+		struct event_base *ev_base,
+		struct rspamd_srv_command *cmd,
+		rspamd_srv_reply_handler handler, gpointer ud);
 #endif
