@@ -133,7 +133,7 @@ void rspamd_worker_block_signals (void);
  * Fork new worker with the specified configuration
  */
 struct rspamd_worker *rspamd_fork_worker (struct rspamd_main *,
-		struct rspamd_worker_conf *, guint);
+		struct rspamd_worker_conf *, guint idx, struct event_base *ev_base);
 
 #define msg_err_main(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \

@@ -313,7 +313,8 @@ rspamd_fork_delayed_cb (gint signo, short what, gpointer arg)
 	struct waiting_worker *w = arg;
 
 	event_del (&w->wait_ev);
-	rspamd_fork_worker (w->rspamd_main, w->cf, w->oldindex);
+	rspamd_fork_worker (w->rspamd_main, w->cf, w->oldindex,
+			w->rspamd_main->ev_base);
 	g_slice_free1 (sizeof (*w), w);
 }
 
@@ -431,7 +432,7 @@ make_listen_key (struct rspamd_worker_bind_conf *cf)
 }
 
 static void
-spawn_workers (struct rspamd_main *rspamd_main)
+spawn_workers (struct rspamd_main *rspamd_main, struct event_base *ev_base)
 {
 	GList *cur, *ls;
 	struct rspamd_worker_conf *cf;
@@ -493,14 +494,14 @@ spawn_workers (struct rspamd_main *rspamd_main)
 						msg_warn_main ("cannot spawn more than 1 %s worker, so spawn one",
 								cf->worker->name);
 					}
-					rspamd_fork_worker (rspamd_main, cf, 0);
+					rspamd_fork_worker (rspamd_main, cf, 0, ev_base);
 				}
 				else if (cf->worker->threaded) {
-					rspamd_fork_worker (rspamd_main, cf, 0);
+					rspamd_fork_worker (rspamd_main, cf, 0, ev_base);
 				}
 				else {
 					for (i = 0; i < cf->count; i++) {
-						rspamd_fork_worker (rspamd_main, cf, i);
+						rspamd_fork_worker (rspamd_main, cf, i, ev_base);
 					}
 				}
 			}
@@ -553,6 +554,7 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 	msg_info_main ("%s process %P terminated %s", g_quark_to_string (
 			w->type), w->pid,
 			WTERMSIG (res) == SIGKILL ? "hardly" : "softly");
+	event_del (&w->srv_ev);
 	g_free (w->cf);
 	g_free (w);
 
@@ -664,7 +666,7 @@ rspamd_hup_handler (gint signo, short what, gpointer arg)
 	g_hash_table_foreach (rspamd_main->workers, kill_old_workers, NULL);
 	rspamd_map_remove_all (rspamd_main->cfg);
 	reread_config (rspamd_main);
-	spawn_workers (rspamd_main);
+	spawn_workers (rspamd_main, rspamd_main->ev_base);
 }
 
 static void
@@ -731,6 +733,8 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 			rspamd_fork_delayed (cur->cf, cur->index, rspamd_main);
 		}
 
+		event_del (&cur->srv_ev);
+		g_free (cur->cf);
 		g_free (cur);
 	}
 	else {
@@ -783,6 +787,28 @@ rspamd_control_handler (gint fd, short what, gpointer arg)
 	rspamd_control_process_client_socket (rspamd_main, nfd);
 }
 
+static guint
+rspamd_spair_hash (gconstpointer p)
+{
+	return XXH64 (p, PAIR_ID_LEN, rspamd_hash_seed ());
+}
+
+static gboolean
+rspamd_spair_equal (gconstpointer a, gconstpointer b)
+{
+	return memcmp (a, b, PAIR_ID_LEN) == 0;
+}
+
+static void
+rspamd_spair_close (gpointer p)
+{
+	gint *fds = p;
+
+	close (fds[0]);
+	close (fds[1]);
+	g_free (p);
+}
+
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
@@ -806,6 +832,8 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->stat = rspamd_mempool_alloc0_shared (rspamd_main->server_pool,
 			sizeof (struct rspamd_stat));
 	rspamd_main->cfg = rspamd_config_new ();
+	rspamd_main->spairs = g_hash_table_new_full (rspamd_spair_hash,
+			rspamd_spair_equal, g_free, rspamd_spair_close);
 
 #ifndef HAVE_SETPROCTITLE
 	init_title (argc, argv, env);
@@ -1009,7 +1037,6 @@ main (gint argc, gchar **argv, gchar **env)
 #endif
 	/* Spawn workers */
 	rspamd_main->workers = g_hash_table_new (g_direct_hash, g_direct_equal);
-	spawn_workers (rspamd_main);
 
 	/* Init event base */
 	ev_base = event_init ();
@@ -1034,6 +1061,8 @@ main (gint argc, gchar **argv, gchar **env)
 	evsignal_set (&usr1_ev, SIGUSR1, rspamd_usr1_handler, rspamd_main);
 	event_base_set (ev_base, &usr1_ev);
 	event_add (&usr1_ev, NULL);
+
+	spawn_workers (rspamd_main, ev_base);
 
 	if (control_fd != -1) {
 		msg_info_main ("listening for control commands on %s",
@@ -1073,6 +1102,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Wait for workers termination */
 	g_hash_table_foreach_remove (rspamd_main->workers, wait_for_workers, NULL);
+	g_hash_table_unref (rspamd_main->spairs);
 
 	event_set (&term_ev, -1, EV_TIMEOUT|EV_PERSIST,
 			rspamd_final_term_handler, rspamd_main);

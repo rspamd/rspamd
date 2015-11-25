@@ -532,6 +532,7 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 				spair = g_hash_table_lookup (srv->spairs, cmd.cmd.spair.pair_id);
 				if (spair == NULL) {
 					spair = g_malloc (sizeof (gint) * 2);
+
 					if (rspamd_socketpair (spair) == -1) {
 						rdata->rep.reply.spair.code = errno;
 						msg_err ("cannot create socket pair: %s", strerror (errno));
