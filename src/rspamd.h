@@ -191,41 +191,11 @@ typedef gboolean (*controller_func_t)(gchar **args,
 
 struct controller_session {
 	struct rspamd_worker *worker;                               /**< pointer to worker structure (controller in fact) */
-	enum {
-		STATE_COMMAND,
-		STATE_HEADER,
-		STATE_LEARN,
-		STATE_LEARN_SPAM_PRE,
-		STATE_LEARN_SPAM,
-		STATE_REPLY,
-		STATE_QUIT,
-		STATE_OTHER,
-		STATE_WAIT,
-		STATE_WEIGHTS
-	} state;                                                    /**< current session state							*/
 	gint sock;                                                  /**< socket descriptor								*/
-	/* Access to authorized commands */
-	gboolean authorized;                                        /**< whether this session is authorized				*/
-	gboolean restful;                                           /**< whether this session is a restful session		*/
-	GHashTable *kwargs;                                         /**< keyword arguments for restful command			*/
 	struct controller_command *cmd;                             /**< real command									*/
-	rspamd_mempool_t *session_pool;                             /**< memory pool for session                        */
 	struct rspamd_config *cfg;                                  /**< pointer to config file							*/
-	gchar *learn_rcpt;                                          /**< recipient for learning							*/
-	gchar *learn_from;                                          /**< from address for learning						*/
-	struct rspamd_classifier_config *learn_classifier;
-	gchar *learn_symbol;                                            /**< symbol to train								*/
-	double learn_multiplier;                                    /**< multiplier for learning						*/
-	rspamd_io_dispatcher_t *dispatcher;                         /**< IO dispatcher object							*/
-	rspamd_fstring_t *learn_buf;                                         /**< learn input									*/
 	GList *parts;                                               /**< extracted mime parts							*/
-	gint in_class;                                              /**< positive or negative learn						*/
-	gboolean (*other_handler)(struct controller_session *session,
-		rspamd_fstring_t *in);                       /**< other command handler to execute at the end of processing */
-	void *other_data;                                           /**< and its data                                   */
-	controller_func_t custom_handler;                           /**< custom command handler							*/
 	struct rspamd_async_session * s;                             /**< async session object							*/
-	struct rspamd_task *learn_task;
 	struct rspamd_dns_resolver *resolver;                       /**< DNS resolver									*/
 	struct event_base *ev_base;                                 /**< Event base										*/
 };
