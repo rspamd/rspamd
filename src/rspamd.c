@@ -734,7 +734,6 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 		}
 
 		event_del (&cur->srv_ev);
-		g_free (cur->cf);
 		g_free (cur);
 	}
 	else {
