@@ -124,6 +124,15 @@ LUA_FUNCTION_DEF (util, parse_addr);
  */
 LUA_FUNCTION_DEF (util, fold_header);
 
+/***
+ * @function util.is_uppercase(str)
+ * Returns true if a string is all uppercase
+ *
+ * @param {string} str input string
+ * @return {bool} true if a string is all uppercase
+ */
+LUA_FUNCTION_DEF (util, is_uppercase);
+
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
 	LUA_INTERFACE_DEF (util, load_rspamd_config),
@@ -137,6 +146,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, levenshtein_distance),
 	LUA_INTERFACE_DEF (util, parse_addr),
 	LUA_INTERFACE_DEF (util, fold_header),
+	LUA_INTERFACE_DEF (util, is_uppercase),
 	{NULL, NULL}
 };
 
@@ -622,6 +632,49 @@ lua_util_fold_header (lua_State *L)
 	}
 
 	lua_pushnil (L);
+	return 1;
+}
+
+static gint
+lua_util_is_uppercase (lua_State *L)
+{
+	const gchar *str, *p;
+	gsize sz, remain;
+	gunichar uc;
+	guint nlc = 0, nuc = 0;
+
+	str = luaL_checklstring (L, 1, &sz);
+	remain = sz;
+
+	if (str && remain > 0) {
+		while (remain > 0) {
+			uc = g_utf8_get_char_validated (str, remain);
+			p = g_utf8_next_char (str);
+
+			if (p - str > (gint) remain) {
+				break;
+			}
+
+			remain -= p - str;
+
+			if (g_unichar_isupper (uc)) {
+				nuc++;
+			}
+			else if (g_unichar_islower (uc)) {
+				nlc++;
+			}
+
+			str = p;
+		}
+	}
+
+	if (nuc > 0 && nlc == 0) {
+		lua_pushboolean (L, TRUE);
+	}
+	else {
+		lua_pushboolean (L, FALSE);
+	}
+
 	return 1;
 }
 
