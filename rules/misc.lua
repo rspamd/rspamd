@@ -27,11 +27,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -- This is main lua config file for rspamd
 
 local util = require "rspamd_util"
+local rspamd_regexp = require "rspamd_regexp"
+local rspamd_logger = require "rspamd_logger"
 
 local reconf = config['regexp']
 
-
 -- Uncategorized rules
+local subject_re = rspamd_regexp.create('/^(?:(?:Re|Fwd|Fw|Aw|Antwort|Sv):\\s*)+(.+)$/i')
 
 -- Local rules
 local r_bgcolor = '/BGCOLOR=/iP'
@@ -108,4 +110,26 @@ rspamd_config.R_SUSPICIOUS_URL = {
   group = 'url',
   one_shot = true,
   description = 'Obfusicated or suspicious URL has been found in a message'
+}
+
+rspamd_config.SUBJ_ALL_CAPS = {
+  callback = function(task)
+    local sbj = task:get_header('Subject')
+
+    if sbj then
+      local stripped_subject = subject_re:search(sbj, false, true)
+      if stripped_subject and stripped_subject[1] and stripped_subject[1][2] then
+        sbj = stripped_subject[1][2]
+      end
+
+      if util.is_uppercase(sbj) then
+        return true
+      end
+    end
+
+    return false
+  end,
+  score = 3.0,
+  group = 'headers',
+  description = 'All capital letters in subject'
 }
