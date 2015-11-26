@@ -49,10 +49,12 @@ local function check_forged_headers(task)
 			for _,sr in ipairs(smtp_rcpt) do
 				if mime_rcpt then
 					for _,mr in ipairs(mime_rcpt) do
-						if string.lower(mr['addr']) == string.lower(sr['addr']) then
+						if mr['addr'] and sr['addr'] and
+								string.lower(mr['addr']) == string.lower(sr['addr']) then
 							res = true
 							break
-						elseif string.lower(mr['user']) == string.lower(sr['user']) then
+						elseif mr['user'] and sr['user'] and
+								string.lower(mr['user']) == string.lower(sr['user']) then
 							-- If we have the same username but for another domain, then
 							-- lower the overall score
 							score = score / 2
