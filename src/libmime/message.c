@@ -982,7 +982,6 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 	const guchar *r;
 	gchar *temp_word;
 	guint i, nlen;
-	GArray *tmp;
 
 #ifdef WITH_SNOWBALL
 	if (part->language && part->language[0] != '\0' && IS_PART_UTF (part)) {
@@ -1000,9 +999,9 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 			part->urls_offset, FALSE,
 			NULL);
 
-	if (tmp) {
-		for (i = 0; i < tmp->len; i ++) {
-			w = &g_array_index (tmp, rspamd_ftok_t, i);
+	if (part->normalized_words) {
+		for (i = 0; i < part->normalized_words->len; i ++) {
+			w = &g_array_index (part->normalized_words, rspamd_ftok_t, i);
 			r = NULL;
 #ifdef WITH_SNOWBALL
 			if (stem) {
