@@ -1035,13 +1035,22 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 			action = rspamd_check_action_metric (task, metric_res->score, &required_score,
 					metric_res->metric);
 			if (action <= METRIC_ACTION_NOACTION) {
+#ifndef HAVE_ATOMIC_BUILTINS
 				task->worker->srv->stat->actions_stat[action]++;
+#else
+				__atomic_add_fetch (&task->worker->srv->stat->actions_stat[action],
+						1, __ATOMIC_RELEASE);
+#endif
 			}
 		}
 
 		/* Increase counters */
-
+#ifndef HAVE_ATOMIC_BUILTINS
 		task->worker->srv->stat->messages_scanned++;
+#else
+		__atomic_add_fetch (&task->worker->srv->stat->messages_scanned,
+				1, __ATOMIC_RELEASE);
+#endif
 	}
 }
 

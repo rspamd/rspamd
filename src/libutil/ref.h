@@ -55,13 +55,13 @@ typedef struct ref_entry_s {
 #ifdef HAVE_ATOMIC_BUILTINS
 #define REF_RETAIN(obj) do {										\
 	if ((obj) != NULL) {											\
-    __sync_add_and_fetch (&(obj)->ref.refcount, 1);					\
+    __atomic_add_fetch (&(obj)->ref.refcount, 1, __ATOMIC_RELEASE);	\
 	}																\
 } while (0)
 
 #define REF_RELEASE(obj) do {										\
 	if ((obj) != NULL) {											\
-	unsigned int _rc_priv = __sync_sub_and_fetch (&(obj)->ref.refcount, 1); \
+	unsigned int _rc_priv = __atomic_sub_fetch (&(obj)->ref.refcount, 1, __ATOMIC_ACQ_REL); \
 	if (_rc_priv == 0 && (obj)->ref.dtor) {								\
 		(obj)->ref.dtor (obj);										\
 	}																\

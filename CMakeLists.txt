@@ -923,14 +923,21 @@ CHECK_C_SOURCE_COMPILES ("#include <sys/types.h>
 ENDIF(NOT CMAKE_SYSTEM_NAME STREQUAL "SunOS")
 
 CHECK_C_SOURCE_RUNS("
+#include <stdbool.h>
 int main(int argc, char **argv) {
-        int a = 0;
-        if (__sync_bool_compare_and_swap(&a, 0, 1)) {
+        int a = 0, b = 0;
+        if (__atomic_compare_exchange_n(&a, &b, 1, false, __ATOMIC_RELEASE, __ATOMIC_RELAXED)) {
                 return 0;
         }
         return -1;
 }
 " HAVE_ATOMIC_BUILTINS)
+
+IF(NOT HAVE_ATOMIC_BUILTINS)
+	MESSAGE(STATUS "atomic builtins are -NOT- supported")
+ELSE()
+	MESSAGE(STATUS "atomic builtins are supported")
+ENDIF()
 
 # Check queue.h compatibility
 IF(NOT HAVE_COMPATIBLE_QUEUE_H)

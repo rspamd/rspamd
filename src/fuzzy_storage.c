@@ -288,11 +288,21 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		result = rspamd_fuzzy_backend_check (session->ctx->backend, cmd,
 				session->ctx->expire);
 		/* XXX: actually, these updates are not atomic, but we don't care */
+#ifndef HAVE_ATOMIC_BUILTINS
 		server_stat->fuzzy_hashes_checked[session->epoch] ++;
 
 		if (result.prob > 0.5) {
 			server_stat->fuzzy_hashes_found[session->epoch] ++;
 		}
+#else
+		__atomic_add_fetch (&server_stat->fuzzy_hashes_checked[session->epoch],
+				1, __ATOMIC_RELEASE);
+
+		if (result.prob > 0.5) {
+			__atomic_add_fetch (&server_stat->fuzzy_hashes_found[session->epoch],
+					1, __ATOMIC_RELEASE);
+		}
+#endif
 	}
 	else {
 		result.flag = cmd->flag;

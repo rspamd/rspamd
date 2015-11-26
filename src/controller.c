@@ -1831,7 +1831,12 @@ rspamd_controller_handle_stat_common (
 				ham += stat->actions_stat[i];
 			}
 			if (do_reset) {
+#ifndef HAVE_ATOMIC_BUILTINS
 				session->ctx->worker->srv->stat->actions_stat[i] = 0;
+#else
+				__atomic_store_n(&session->ctx->worker->srv->stat->actions_stat[i],
+						0, __ATOMIC_RELEASE);
+#endif
 			}
 		}
 		ucl_object_insert_key (top, sub, "actions", 0, false);

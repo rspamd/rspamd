@@ -226,6 +226,7 @@
 #cmakedefine HAVE_SETSIG         1
 #cmakedefine HAVE_OASYNC         1
 #cmakedefine WITH_SNOWBALL       1
+#cmakedefine HAVE_ATOMIC_BUILTINS 1
 
 /* Configure allocator */
 #define uthash_malloc(sz) g_slice_alloc(sz)
