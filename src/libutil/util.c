@@ -1375,7 +1375,7 @@ rspamd_url_hash (gconstpointer u)
 	const struct rspamd_url *url = u;
 	XXH64_state_t st;
 
-	XXH64_reset (&st, rspamd_hash_seed ());
+	XXH64_reset (&st, 0xdeadbabe);
 
 	if (url->hostlen > 0) {
 		XXH64_update (&st, url->host, url->hostlen);
