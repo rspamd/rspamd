@@ -45,7 +45,6 @@ struct mime_text_part {
 	GList *urls_offset;	/**< list of offsets of urls						*/
 	GMimeObject *parent;
 	struct mime_part *mime_part;
-	GArray *words;
 	GArray *normalized_words;
 	guint nlines;
 	guint64 hash;

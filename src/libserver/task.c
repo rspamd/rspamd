@@ -185,9 +185,6 @@ rspamd_task_free (struct rspamd_task *task)
 
 		for (i = 0; i < task->text_parts->len; i ++) {
 			tp = g_ptr_array_index (task->text_parts, i);
-			if (tp->words) {
-				g_array_free (tp->words, TRUE);
-			}
 			if (tp->normalized_words) {
 				g_array_free (tp->normalized_words, TRUE);
 			}

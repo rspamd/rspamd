@@ -257,9 +257,9 @@ rspamd_stat_cache_sqlite3_process (struct rspamd_task *task,
 		for (i = 0; i < task->text_parts->len; i ++) {
 			part = g_ptr_array_index (task->text_parts, i);
 
-			if (part->words != NULL) {
-				for (j = 0; j < part->words->len; j ++) {
-					word = &g_array_index (part->words, rspamd_ftok_t, j);
+			if (part->normalized_words != NULL) {
+				for (j = 0; j < part->normalized_words->len; j ++) {
+					word = &g_array_index (part->normalized_words, rspamd_ftok_t, j);
 					rspamd_cryptobox_hash_update (&st, word->begin, word->len);
 				}
 			}

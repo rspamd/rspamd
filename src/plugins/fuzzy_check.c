@@ -592,17 +592,7 @@ fuzzy_io_fin (void *ud)
 static GArray *
 fuzzy_preprocess_words (struct mime_text_part *part, rspamd_mempool_t *pool)
 {
-	GArray *res;
-
-	if (!IS_PART_UTF (part) || !part->language || part->language[0] == '\0' ||
-			part->normalized_words == NULL) {
-		res = part->words;
-	}
-	else {
-		res = part->normalized_words;
-	}
-
-	return res;
+	return part->normalized_words;
 }
 
 /*
@@ -1259,14 +1249,14 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 			continue;
 		}
 
-		if (part->words == NULL || part->words->len == 0) {
+		if (part->normalized_words == NULL || part->normalized_words->len == 0) {
 			msg_info_task ("<%s>, part hash empty, skip fuzzy check",
 				task->message_id);
 			continue;
 		}
 
 		if (fuzzy_module_ctx->min_hash_len != 0 &&
-			part->words->len < fuzzy_module_ctx->min_hash_len) {
+			part->normalized_words->len < fuzzy_module_ctx->min_hash_len) {
 			msg_info_task (
 				"<%s>, part hash is shorter than %d symbols, skip fuzzy check",
 				task->message_id,

@@ -198,16 +198,11 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 	for (i = 0; i < task->text_parts->len; i ++) {
 		part = g_ptr_array_index (task->text_parts, i);
 
-		if (!IS_PART_EMPTY (part) && part->words != NULL) {
-			if (compat) {
-				tok->tokenizer->tokenize_func (tok, task->task_pool,
-					part->words, IS_PART_UTF (part), NULL);
-			}
-			else {
-				tok->tokenizer->tokenize_func (tok, task->task_pool,
+		if (!IS_PART_EMPTY (part) && part->normalized_words != NULL) {
+			tok->tokenizer->tokenize_func (tok, task->task_pool,
 					part->normalized_words, IS_PART_UTF (part), NULL);
-			}
 		}
+
 
 		if (pdiff != NULL && *pdiff > similarity_treshold) {
 			msg_debug_task ("message has two common parts (%d%%), so skip the last one",
