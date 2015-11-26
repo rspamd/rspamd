@@ -1053,7 +1053,7 @@ rspamd_lua_push_header (lua_State * L,
 			rh = rh->next;
 		}
 		else {
-			if (raw) {
+			if (!raw) {
 				val = rh->decoded;
 			}
 			else {
