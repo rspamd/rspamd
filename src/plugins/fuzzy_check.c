@@ -77,6 +77,7 @@ struct fuzzy_rule {
 	const gchar *symbol;
 	GHashTable *mappings;
 	GList *mime_types;
+	GList *fuzzy_headers;
 	GString *hash_key;
 	GString *shingles_key;
 	gpointer local_key;
@@ -137,6 +138,7 @@ struct fuzzy_cmd_io {
 };
 
 static struct fuzzy_ctx *fuzzy_module_ctx = NULL;
+static const char *default_headers = "Subject,Content-Type,Reply-To,X-Mailer";
 
 static void fuzzy_symbol_callback (struct rspamd_task *task, void *unused);
 
@@ -239,6 +241,26 @@ parse_mime_types (const gchar *str)
 			type->subtype = NULL;
 			res = g_list_prepend (res, type);
 		}
+	}
+
+	g_strfreev (strvec);
+
+	return res;
+}
+
+static GList *
+parse_fuzzy_headers (const gchar *str)
+{
+	gchar **strvec;
+	gint num, i;
+	GList *res = NULL;
+
+	strvec = g_strsplit_set (str, ",", 0);
+	num = g_strv_length (strvec);
+	for (i = 0; i < num; i++) {
+		g_strstrip (strvec[i]);
+		res = g_list_prepend (res,
+				rspamd_mempool_strdup (fuzzy_module_ctx->fuzzy_pool, strvec[i]));
 	}
 
 	g_strfreev (strvec);
@@ -350,6 +372,25 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 		rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
 			(rspamd_mempool_destruct_t)g_list_free, rule->mime_types);
 	}
+
+	if ((value = ucl_object_find_key (obj, "headers")) != NULL) {
+		it = NULL;
+		while ((cur = ucl_iterate_object (value, &it, value->type == UCL_ARRAY))
+				!= NULL) {
+			rule->fuzzy_headers = g_list_concat (rule->fuzzy_headers,
+					parse_fuzzy_headers (ucl_obj_tostring (cur)));
+		}
+	}
+	else {
+		rule->fuzzy_headers = g_list_concat (rule->fuzzy_headers,
+				parse_fuzzy_headers (default_headers));
+	}
+
+	if (rule->fuzzy_headers != NULL) {
+		rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
+				(rspamd_mempool_destruct_t) g_list_free, rule->fuzzy_headers);
+	}
+
 
 	if ((value = ucl_object_find_key (obj, "max_score")) != NULL) {
 		rule->max_score = ucl_obj_todouble (value);
@@ -593,6 +634,104 @@ static GArray *
 fuzzy_preprocess_words (struct mime_text_part *part, rspamd_mempool_t *pool)
 {
 	return part->normalized_words;
+}
+
+static struct fuzzy_cmd_io *
+fuzzy_cmd_from_task_meta (struct fuzzy_rule *rule,
+		int c,
+		gint flag,
+		guint32 weight,
+		rspamd_mempool_t *pool,
+		struct rspamd_task *task)
+{
+	struct rspamd_fuzzy_cmd *cmd;
+	struct rspamd_fuzzy_encrypted_cmd *enccmd;
+	struct fuzzy_cmd_io *io;
+	rspamd_cryptobox_hash_state_t st;
+	struct rspamd_http_keypair *lk, *rk;
+	GHashTableIter it;
+	gpointer k, v;
+	struct rspamd_url *u;
+	struct raw_header *rh;
+	GList *cur;
+
+	if (rule->peer_key) {
+		enccmd = rspamd_mempool_alloc0 (pool, sizeof (*enccmd));
+		cmd = &enccmd->cmd;
+		lk = rule->local_key;
+		rk = rule->peer_key;
+	}
+	else {
+		cmd = rspamd_mempool_alloc0 (pool, sizeof (*cmd));
+	}
+
+	cmd->cmd = c;
+	cmd->version = RSPAMD_FUZZY_VERSION;
+	if (c != FUZZY_CHECK) {
+		cmd->flag = flag;
+		cmd->value = weight;
+	}
+	cmd->shingles_count = 0;
+	cmd->tag = ottery_rand_uint32 ();
+	/* Use blake2b for digest */
+	rspamd_cryptobox_hash_init (&st, rule->hash_key->str, rule->hash_key->len);
+	/* Hash URL's */
+	g_hash_table_iter_init (&it, task->urls);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		u = v;
+		if (u->hostlen > 0) {
+			rspamd_cryptobox_hash_update (&st, u->host, u->hostlen);
+		}
+		if (u->datalen > 0) {
+			rspamd_cryptobox_hash_update (&st, u->data, u->datalen);
+		}
+	}
+	/* Now get some headers to iterate on */
+
+	cur = rule->fuzzy_headers;
+
+	while (cur) {
+		rh = g_hash_table_lookup (task->raw_headers, cur->data);
+
+		while (rh) {
+			if (rh->decoded) {
+				rspamd_cryptobox_hash_update (&st, rh->decoded,
+						strlen (rh->decoded));
+			}
+
+			rh = rh->next;
+		}
+		cur = g_list_next (cur);
+	}
+
+	rspamd_cryptobox_hash_final (&st, cmd->digest);
+
+	io = rspamd_mempool_alloc (pool, sizeof (*io));
+	io->replied = FALSE;
+	io->tag = cmd->tag;
+
+	if (rule->peer_key) {
+		g_assert (enccmd != NULL);
+		/* Encrypt data */
+		memcpy (enccmd->hdr.magic,
+				fuzzy_encrypted_magic,
+				sizeof (enccmd->hdr.magic));
+		ottery_rand_bytes (enccmd->hdr.nonce, sizeof (enccmd->hdr.nonce));
+		memcpy (enccmd->hdr.pubkey, lk->pk, sizeof (enccmd->hdr.pubkey));
+		rspamd_keypair_cache_process (fuzzy_module_ctx->keypairs_cache,
+				lk, rk);
+		rspamd_cryptobox_encrypt_nm_inplace ((guchar *) cmd, sizeof (*cmd),
+				enccmd->hdr.nonce, rk->nm, enccmd->hdr.mac);
+		io->io.iov_base = enccmd;
+		io->io.iov_len = sizeof (*enccmd);
+	}
+	else {
+		io->io.iov_base = cmd;
+		io->io.iov_len = sizeof (*cmd);
+	}
+
+	return io;
 }
 
 /*
@@ -1318,6 +1457,13 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 				}
 			}
 		}
+	}
+
+	/* Process metadata */
+	io = fuzzy_cmd_from_task_meta (rule, c, flag, value,
+			task->task_pool, task);
+	if (io) {
+		g_ptr_array_add (res, io);
 	}
 
 	if (res->len == 0) {
