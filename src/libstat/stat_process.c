@@ -515,16 +515,25 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 	}
 
 	if (cl_runtimes != NULL) {
+		/* Reverse list as we have used g_list_prepend */
+		cl_runtimes = g_list_reverse (cl_runtimes);
 		rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t)g_list_free,
+				(rspamd_mempool_destruct_t) g_list_free,
 				cl_runtimes);
+		cur = g_list_first (cl_runtimes);
 
-		cbdata.results_count = result_size;
-		cbdata.classifier_runtimes = cl_runtimes;
-		cbdata.task = task;
-		cbdata.tok = cl_runtime->tok;
-		g_tree_foreach (cbdata.tok->tokens, preprocess_init_stat_token,
-				&cbdata);
+		while (cur) {
+			cl_runtime = cur->data;
+
+			cbdata.results_count = result_size;
+			cbdata.classifier_runtimes = cl_runtimes;
+			cbdata.task = task;
+			cbdata.tok = cl_runtime->tok;
+			g_tree_foreach (cbdata.tok->tokens, preprocess_init_stat_token,
+					&cbdata);
+
+			cur = g_list_next (cur);
+		}
 	}
 	else if (classifier != NULL) {
 		/* We likely cannot find any classifier with this name */
