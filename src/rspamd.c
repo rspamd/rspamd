@@ -598,12 +598,12 @@ load_rspamd_config (struct rspamd_main *rspamd_main,
 		}
 	}
 
-	/* Do post-load actions */
-	rspamd_config_post_load (cfg, validate);
-
 	if (init_modules) {
 		rspamd_init_filters (cfg, FALSE);
 	}
+
+	/* Do post-load actions */
+	rspamd_config_post_load (cfg, validate);
 
 	return TRUE;
 }
