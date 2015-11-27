@@ -480,9 +480,17 @@ surbl_module_config (struct rspamd_config *cfg)
 					surbl_module_ctx->surbl_pool,
 					ucl_obj_tostring (cur));
 			}
+
 			cur = ucl_obj_get_key (cur_rule, "options");
 			if (cur != NULL && cur->type == UCL_STRING) {
 				if (strstr (ucl_obj_tostring (cur), "noip") != NULL) {
+					new_suffix->options |= SURBL_OPTION_NOIP;
+				}
+			}
+
+			cur = ucl_obj_get_key (cur_rule, "no_ip");
+			if (cur != NULL && cur->type == UCL_STRING) {
+				if (ucl_object_toboolean (cur)) {
 					new_suffix->options |= SURBL_OPTION_NOIP;
 				}
 			}
