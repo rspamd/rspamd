@@ -27,6 +27,7 @@
 #include "cfg_file.h"
 #include "cfg_rcl.h"
 #include "rspamd.h"
+#include "lua/lua_common.h"
 
 static gboolean quiet = FALSE;
 static gchar *config = NULL;
@@ -150,10 +151,8 @@ rspamadm_configtest (gint argc, gchar **argv)
 	}
 	else {
 		/* Do post-load actions */
-		ret = rspamd_config_post_load (cfg, FALSE);
-	}
+		rspamd_lua_post_load_config (cfg);
 
-	if (ret) {
 		if (!rspamd_init_filters (rspamd_main->cfg, FALSE)) {
 			ret = FALSE;
 		}
@@ -161,6 +160,10 @@ rspamadm_configtest (gint argc, gchar **argv)
 				rspamd_main->cfg,
 				FALSE)) {
 			ret = FALSE;
+		}
+
+		if (ret) {
+			ret = rspamd_config_post_load (cfg, FALSE);
 		}
 	}
 

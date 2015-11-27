@@ -653,8 +653,6 @@ rspamd_config_post_load (struct rspamd_config *cfg, gboolean validate_cache)
 		g_string_free (fpath, TRUE);
 	}
 
-	/* Lua options */
-	(void)rspamd_lua_post_load_config (cfg);
 	init_dynamic_config (cfg);
 
 	rspamd_url_init (cfg->tld_file);

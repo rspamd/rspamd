@@ -598,6 +598,12 @@ load_rspamd_config (struct rspamd_main *rspamd_main,
 		}
 	}
 
+	/*
+	 * As some rules are defined in lua, we need to process them, then init
+	 * modules and merely afterwards to init modules
+	 */
+	rspamd_lua_post_load_config (cfg);
+
 	if (init_modules) {
 		rspamd_init_filters (cfg, FALSE);
 	}
