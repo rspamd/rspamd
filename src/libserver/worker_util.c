@@ -469,6 +469,9 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 	case 0:
 		/* Update pid for logging */
 		rspamd_log_update_pid (cf->type, rspamd_main->logger);
+		/* Remove the inherited event base */
+		event_reinit (rspamd_main->ev_base);
+		event_base_free (rspamd_main->ev_base);
 		/* Lock statfile pool if possible XXX */
 		/* Init PRNG after fork */
 		rc = ottery_init (NULL);

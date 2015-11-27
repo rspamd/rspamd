@@ -516,6 +516,13 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 			msg_err ("cannot read from worker's srv pipe: %s",
 					strerror (errno));
 		}
+		else if (r == 0) {
+			/*
+			 * Usually this means that a worker is dead, so do not try to read
+			 * anything
+			 */
+			event_del (&worker->srv_ev);
+		}
 		else if (r != sizeof (cmd)) {
 			msg_err ("cannot read from worker's srv pipe incomplete command: %d",
 					(gint) r);
