@@ -111,7 +111,7 @@ regexp_module_config (struct rspamd_config *cfg)
 	struct regexp_module_item *cur_item;
 	const ucl_object_t *sec, *value, *elt;
 	ucl_object_iter_t it = NULL;
-	gint res = TRUE, id, nrules = 0;
+	gint res = TRUE, id, nre = 0, nlua = 0;
 
 	if (!rspamd_config_is_module_enabled (cfg, "regexp")) {
 		return TRUE;
@@ -151,6 +151,7 @@ regexp_module_config (struct rspamd_config *cfg)
 						process_regexp_item,
 						cur_item,
 						SYMBOL_TYPE_NORMAL, -1);
+				nre ++;
 			}
 		}
 		else if (value->type == UCL_USERDATA) {
@@ -165,6 +166,7 @@ regexp_module_config (struct rspamd_config *cfg)
 				process_regexp_item,
 				cur_item,
 				SYMBOL_TYPE_NORMAL, -1);
+			nlua ++;
 		}
 		else if (value->type == UCL_OBJECT) {
 			const gchar *description = NULL, *group = NULL,
@@ -191,6 +193,7 @@ regexp_module_config (struct rspamd_config *cfg)
 					}
 					else {
 						valid_expression = TRUE;
+						nre ++;
 					}
 				}
 				else {
@@ -201,6 +204,7 @@ regexp_module_config (struct rspamd_config *cfg)
 			}
 			else {
 				is_lua = TRUE;
+				nlua ++;
 				cur_item = rspamd_mempool_alloc0 (
 						regexp_module_ctx->regexp_pool,
 						sizeof (struct regexp_module_item));
@@ -215,7 +219,6 @@ regexp_module_config (struct rspamd_config *cfg)
 						process_regexp_item,
 						cur_item,
 						SYMBOL_TYPE_NORMAL, -1);
-				nrules ++;
 
 				elt = ucl_object_find_key (value, "condition");
 
@@ -267,7 +270,8 @@ regexp_module_config (struct rspamd_config *cfg)
 		}
 	}
 
-	msg_info_config ("init internal regexp module, %d regexp rules loaded", nrules);
+	msg_info_config ("init internal regexp module, %d regexp rules and %d "
+			"lua rules are loaded", nre, nlua);
 
 	return res;
 }
