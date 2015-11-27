@@ -111,6 +111,8 @@ chartable_module_config (struct rspamd_config *cfg)
 		SYMBOL_TYPE_NORMAL,
 		-1);
 
+	msg_info_config ("init internal chartable module");
+
 	return res;
 }
 

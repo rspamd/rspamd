@@ -333,6 +333,8 @@ rspamd_init_lua_filters (struct rspamd_config *cfg)
 				continue;
 			}
 
+			msg_info_config ("init lua module %s", module->name);
+
 			lua_pop (L, 1); /* Error function */
 		}
 		cur = g_list_next (cur);

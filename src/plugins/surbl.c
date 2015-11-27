@@ -341,7 +341,7 @@ surbl_module_config (struct rspamd_config *cfg)
 	ucl_object_iter_t it = NULL;
 	const gchar *redir_val, *ip_val;
 	guint32 bit;
-	gint cb_id;
+	gint cb_id, nrules = 0;
 	gboolean has_subsymbols;
 
 	if (!rspamd_config_is_module_enabled (cfg, "surbl")) {
@@ -580,6 +580,7 @@ surbl_module_config (struct rspamd_config *cfg)
 						NULL, NULL,
 						SYMBOL_TYPE_VIRTUAL,
 						cb_id);
+				nrules ++;
 			}
 			surbl_module_ctx->suffixes = g_list_prepend (
 				surbl_module_ctx->suffixes,
@@ -607,6 +608,9 @@ surbl_module_config (struct rspamd_config *cfg)
 		}
 		cur_opt = g_list_next (cur_opt);
 	}
+
+	msg_info_config ("init internal surbls module, %d uribl rules loaded",
+			nrules);
 
 	return TRUE;
 }

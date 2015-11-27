@@ -253,7 +253,7 @@ dkim_module_config (struct rspamd_config *cfg)
 				g_free,
 				(GDestroyNotify)rspamd_dkim_key_free);
 
-
+		msg_info_config ("init internal dkim module");
 #ifndef HAVE_OPENSSL
 		msg_warn_config (
 			"openssl is not found so dkim rsa check is disabled, only check body hash, it is NOT safe to trust these results");

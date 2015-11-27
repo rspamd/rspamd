@@ -195,6 +195,8 @@ spf_module_config (struct rspamd_config *cfg)
 			NULL,
 			(GDestroyNotify)spf_record_unref);
 
+	msg_info_config ("init internal spf module");
+
 	return res;
 }
 

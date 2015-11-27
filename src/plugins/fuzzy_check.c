@@ -501,7 +501,7 @@ gint
 fuzzy_check_module_config (struct rspamd_config *cfg)
 {
 	const ucl_object_t *value, *cur;
-	gint res = TRUE, cb_id;
+	gint res = TRUE, cb_id, nrules = 0;
 
 	if (!rspamd_config_is_module_enabled (cfg, "fuzzy_check")) {
 		return TRUE;
@@ -590,12 +590,16 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 
 		LL_FOREACH (value, cur) {
 			fuzzy_parse_rule (cfg, cur, cb_id);
+			nrules ++;
 		}
 	}
 
 	if (fuzzy_module_ctx->fuzzy_rules == NULL) {
 		msg_warn_config ("fuzzy module is enabled but no rules are defined");
 	}
+
+	msg_info_config ("init internal fuzzy_check module, %d rules loaded",
+			nrules);
 
 	return res;
 }

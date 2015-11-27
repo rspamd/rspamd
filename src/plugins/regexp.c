@@ -111,7 +111,7 @@ regexp_module_config (struct rspamd_config *cfg)
 	struct regexp_module_item *cur_item;
 	const ucl_object_t *sec, *value, *elt;
 	ucl_object_iter_t it = NULL;
-	gint res = TRUE, id;
+	gint res = TRUE, id, nrules = 0;
 
 	if (!rspamd_config_is_module_enabled (cfg, "regexp")) {
 		return TRUE;
@@ -215,6 +215,7 @@ regexp_module_config (struct rspamd_config *cfg)
 						process_regexp_item,
 						cur_item,
 						SYMBOL_TYPE_NORMAL, -1);
+				nrules ++;
 
 				elt = ucl_object_find_key (value, "condition");
 
@@ -265,6 +266,8 @@ regexp_module_config (struct rspamd_config *cfg)
 				ucl_object_key (value));
 		}
 	}
+
+	msg_info_config ("init internal regexp module, %d regexp rules loaded", nrules);
 
 	return res;
 }
