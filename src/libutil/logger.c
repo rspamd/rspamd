@@ -455,14 +455,12 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
 		/* Just fprintf message to stderr */
 		if (log_level >= G_LOG_LEVEL_INFO) {
 			rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
-			rspamd_escape_log_string (logbuf);
 			fprintf (stderr, "%s\n", logbuf);
 		}
 	}
 	else {
 		if (rspamd_logger_need_log (rspamd_log, log_level, module)) {
 			rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
-			rspamd_escape_log_string (logbuf);
 			rspamd_mempool_lock_mutex (rspamd_log->mtx);
 			rspamd_log->log_func (NULL, module, id,
 					function,
@@ -929,7 +927,6 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
 		va_start (vp, fmt);
 		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
 		*end = '\0';
-		rspamd_escape_log_string (logbuf);
 		va_end (vp);
 		rspamd_log->log_func (NULL, module, id,
 				function,
