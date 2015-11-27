@@ -41,6 +41,7 @@
  * - bit (string): describes a prefix for a single bit
  */
 
+#include <rdns.h>
 #include "config.h"
 #include "libmime/message.h"
 #include "libutil/map.h"
@@ -52,7 +53,8 @@
 static struct surbl_ctx *surbl_module_ctx = NULL;
 
 static void surbl_test_url (struct rspamd_task *task, void *user_data);
-static void dns_callback (struct rdns_reply *reply, gpointer arg);
+static void surbl_dns_callback (struct rdns_reply *reply, gpointer arg);
+static void surbl_dns_ip_callback (struct rdns_reply *reply, gpointer arg);
 static void process_dns_results (struct rspamd_task *task,
 	struct suffix_item *suffix, gchar *url, guint32 addr);
 
@@ -484,6 +486,19 @@ surbl_module_config (struct rspamd_config *cfg)
 					new_suffix->options |= SURBL_OPTION_NOIP;
 				}
 			}
+			cur = ucl_obj_get_key (cur_rule, "resolve_ip");
+			if (cur != NULL && cur->type == UCL_BOOLEAN) {
+				if (ucl_object_toboolean (cur)) {
+					new_suffix->options |= SURBL_OPTION_RESOLVEIP;
+				}
+			}
+
+			if ((new_suffix->options & (SURBL_OPTION_RESOLVEIP|SURBL_OPTION_NOIP)) ==
+					(SURBL_OPTION_NOIP|SURBL_OPTION_RESOLVEIP)) {
+				/* Mutually exclusive options */
+				msg_err_config ("options noip and resolve_ip are "
+						"mutually exclusive for suffix %s", new_suffix->suffix);
+			}
 
 			cb_id = rspamd_symbols_cache_add_symbol (cfg->cache,
 					"SURBL_CALLBACK",
@@ -859,7 +874,46 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 	f.begin = url->host;
 	f.len = url->hostlen;
 
-	if ((surbl_req = format_surbl_request (task->task_pool, &f, suffix, TRUE,
+	if (suffix->options & SURBL_OPTION_RESOLVEIP) {
+		/*
+		 * We need to get url real TLD, resolve it with no suffix and then
+		 * check against surbl using reverse octets printing
+		 */
+		surbl_req = format_surbl_request (task->task_pool, &f, suffix, FALSE,
+				&err, forced, tree, url);
+
+		if (surbl_req == NULL) {
+			if (err != NULL) {
+				if (err->code != WHITELIST_ERROR && err->code != DUPLICATE_ERROR) {
+					msg_info_task ("cannot format url string for surbl %s, %e",
+							struri (url),
+							err);
+				}
+				g_error_free (err);
+				return;
+			}
+		}
+		else {
+			/* XXX: We make merely A request here */
+			param =
+					rspamd_mempool_alloc (task->task_pool,
+							sizeof (struct dns_param));
+			param->url = url;
+			param->task = task;
+			param->suffix = suffix;
+			param->host_resolve =
+					rspamd_mempool_strdup (task->task_pool, surbl_req);
+			debug_task ("send surbl dns ip request %s", surbl_req);
+
+			if (make_dns_request_task (task,
+					surbl_dns_ip_callback,
+					(void *) param, RDNS_REQUEST_A, surbl_req)) {
+				param->w = rspamd_session_get_watcher (task->s);
+				rspamd_session_watcher_push (task->s);
+			}
+		}
+	}
+	else if ((surbl_req = format_surbl_request (task->task_pool, &f, suffix, TRUE,
 		&err, forced, tree, url)) != NULL) {
 		param =
 			rspamd_mempool_alloc (task->task_pool, sizeof (struct dns_param));
@@ -871,21 +925,19 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 		debug_task ("send surbl dns request %s", surbl_req);
 
 		if (make_dns_request_task (task,
-			dns_callback,
-			(void *)param, RDNS_REQUEST_A, surbl_req)) {
+				surbl_dns_callback,
+				(void *) param, RDNS_REQUEST_A, surbl_req)) {
 			param->w = rspamd_session_get_watcher (task->s);
 			rspamd_session_watcher_push (task->s);
 		}
 	}
-	else if (err != NULL && err->code != WHITELIST_ERROR && err->code !=
-		DUPLICATE_ERROR) {
-		msg_info_task ("cannot format url string for surbl %s, %e", struri (
-				url), err);
+	else if (err != NULL) {
+		if (err->code != WHITELIST_ERROR && err->code != DUPLICATE_ERROR) {
+			msg_info_task ("cannot format url string for surbl %s, %e", struri (
+					url), err);
+		}
 		g_error_free (err);
 		return;
-	}
-	else if (err != NULL) {
-		g_error_free (err);
 	}
 }
 
@@ -930,7 +982,7 @@ process_dns_results (struct rspamd_task *task,
 }
 
 static void
-dns_callback (struct rdns_reply *reply, gpointer arg)
+surbl_dns_callback (struct rdns_reply *reply, gpointer arg)
 {
 	struct dns_param *param = (struct dns_param *)arg;
 	struct rspamd_task *task;
@@ -952,6 +1004,56 @@ dns_callback (struct rdns_reply *reply, gpointer arg)
 		msg_debug_task ("<%s> domain [%s] is not in surbl %s",
 			param->task->message_id, param->host_resolve,
 			param->suffix->suffix);
+	}
+
+	rspamd_session_watcher_pop (param->task->s, param->w);
+}
+
+static void
+surbl_dns_ip_callback (struct rdns_reply *reply, gpointer arg)
+{
+	struct dns_param *param = (struct dns_param *) arg;
+	struct rspamd_task *task;
+	struct rdns_reply_entry *elt;
+	GString *to_resolve;
+	guint32 ip_addr;
+
+	task = param->task;
+	/* If we have result from DNS server, this url exists in SURBL, so increase score */
+	if (reply->code == RDNS_RC_NOERROR && reply->entries) {
+
+		LL_FOREACH (reply->entries, elt) {
+			elt = reply->entries;
+
+			if (elt->type == RDNS_REQUEST_A) {
+				to_resolve = g_string_sized_new (
+						strlen (param->suffix->suffix) +
+						sizeof ("255.255.255.255."));
+				ip_addr = elt->content.a.addr.s_addr;
+
+				/* Big endian <4>.<3>.<2>.<1> */
+				rspamd_printf_gstring (to_resolve, "%d.%d.%d.%d.%s",
+						ip_addr >> 24 & 0xff,
+						ip_addr >> 16 & 0xff,
+						ip_addr >> 8 & 0xff,
+						ip_addr & 0xff, param->suffix->suffix);
+
+				if (make_dns_request_task (task,
+						surbl_dns_callback,
+						param, RDNS_REQUEST_A, to_resolve->str)) {
+					param->w = rspamd_session_get_watcher (task->s);
+					rspamd_session_watcher_push (task->s);
+				}
+
+				g_string_free (to_resolve, TRUE);
+			}
+		}
+	}
+	else {
+		msg_debug_task ("<%s> domain [%s] cannot be resolved for SURBL check %s",
+				param->task->message_id, param->host_resolve,
+				param->suffix->suffix);
+
 	}
 
 	rspamd_session_watcher_pop (param->task->s, param->w);
