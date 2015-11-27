@@ -515,6 +515,7 @@ surbl_module_config (struct rspamd_config *cfg)
 					new_suffix,
 					SYMBOL_TYPE_CALLBACK,
 					-1);
+			nrules++;
 			new_suffix->callback_id = cb_id;
 			has_subsymbols = FALSE;
 
