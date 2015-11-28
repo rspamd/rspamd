@@ -1195,6 +1195,117 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 	return ret;
 }
 
+static void
+rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
+		enum http_parser_url_fields field)
+{
+	guint old_shift, shift = 0;
+
+	/* Shift remaining data */
+	switch (field) {
+	case UF_SCHEMA:
+		if (nlen >= uri->protocollen) {
+			return;
+		}
+		else {
+			shift = uri->protocollen - nlen;
+		}
+
+		old_shift = uri->protocollen;
+		uri->protocollen -= shift;
+		memmove (uri->string + uri->protocollen, uri->string + old_shift,
+				uri->urllen - uri->protocollen);
+		break;
+	case UF_HOST:
+		if (nlen >= uri->hostlen) {
+			return;
+		}
+		else {
+			shift = uri->hostlen - nlen;
+		}
+
+		old_shift = uri->hostlen;
+		uri->hostlen -= shift;
+		memmove (uri->host + uri->hostlen, uri->host + old_shift,
+				uri->datalen + uri->querylen + uri->fragmentlen);
+		break;
+	case UF_PATH:
+		if (nlen >= uri->datalen) {
+			return;
+		}
+		else {
+			shift = uri->datalen - nlen;
+		}
+
+		old_shift = uri->datalen;
+		uri->datalen -= shift;
+		memmove (uri->data + uri->datalen, uri->data + old_shift,
+				uri->querylen + uri->fragmentlen);
+		break;
+	case UF_QUERY:
+		if (nlen >= uri->querylen) {
+			return;
+		}
+		else {
+			shift = uri->querylen - nlen;
+		}
+
+		old_shift = uri->querylen;
+		uri->querylen -= shift;
+		memmove (uri->query + uri->querylen, uri->query + old_shift,
+				uri->fragmentlen);
+		break;
+	case UF_FRAGMENT:
+		if (nlen >= uri->fragmentlen) {
+			return;
+		}
+		else {
+			shift = uri->fragmentlen - nlen;
+		}
+
+		uri->fragmentlen -= shift;
+		break;
+	default:
+		break;
+	}
+
+	/* Now adjust lengths and offsets */
+	switch (field) {
+	case UF_SCHEMA:
+		if (uri->userlen > 0) {
+			uri->user -= shift;
+			uri->userlen -= shift;
+		}
+		if (uri->hostlen > 0) {
+			uri->host -= shift;
+			uri->hostlen -= shift;
+		}
+		/* Go forward */
+	case UF_HOST:
+		if (uri->datalen > 0) {
+			uri->data -= shift;
+			uri->datalen -= shift;
+		}
+		/* Go forward */
+	case UF_PATH:
+		if (uri->querylen > 0) {
+			uri->query -= shift;
+			uri->querylen -= shift;
+		}
+		/* Go forward */
+	case UF_QUERY:
+		if (uri->fragmentlen > 0) {
+			uri->fragment -= shift;
+			uri->fragmentlen -= shift;
+		}
+		/* Go forward */
+	case UF_FRAGMENT:
+	default:
+		uri->urllen -= shift;
+		break;
+	}
+}
+
 enum uri_errno
 rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 		rspamd_mempool_t *pool)
@@ -1203,6 +1314,7 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	gchar *p, *comp;
 	const gchar *end;
 	guint i, complen, ret;
+	gsize unquoted_len = 0;
 	gint state = 0;
 
 	const struct {
@@ -1319,22 +1431,28 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	uri->string = p;
 	uri->urllen = len;
 
-	if (uri->userlen == 0) {
-		rspamd_decode_url (uri->string, uri->string, len);
-	}
-	else {
-		rspamd_decode_url (uri->string, uri->string, uri->protocollen);
-		rspamd_decode_url (uri->host, uri->host, uri->hostlen);
+	unquoted_len = rspamd_decode_url (uri->string,
+			uri->string,
+			uri->protocollen);
+	rspamd_url_shift (uri, unquoted_len, UF_SCHEMA);
+	unquoted_len = rspamd_decode_url (uri->host, uri->host, uri->hostlen);
+	rspamd_url_shift (uri, unquoted_len, UF_HOST);
 
-		if (uri->datalen) {
-			rspamd_decode_url (uri->data, uri->data, uri->datalen);
-		}
-		if (uri->querylen) {
-			rspamd_decode_url (uri->query, uri->query, uri->querylen);
-		}
-		if (uri->fragmentlen) {
-			rspamd_decode_url (uri->fragment, uri->fragment, uri->fragmentlen);
-		}
+	if (uri->datalen) {
+		unquoted_len = rspamd_decode_url (uri->data, uri->data, uri->datalen);
+		rspamd_url_shift (uri, unquoted_len, UF_PATH);
+	}
+	if (uri->querylen) {
+		unquoted_len = rspamd_decode_url (uri->query,
+				uri->query,
+				uri->querylen);
+		rspamd_url_shift (uri, unquoted_len, UF_QUERY);
+	}
+	if (uri->fragmentlen) {
+		unquoted_len = rspamd_decode_url (uri->fragment,
+				uri->fragment,
+				uri->fragmentlen);
+		rspamd_url_shift (uri, unquoted_len, UF_FRAGMENT);
 	}
 
 	rspamd_str_lc (uri->string, uri->protocollen);

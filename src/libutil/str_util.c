@@ -856,8 +856,6 @@ rspamd_decode_url (gchar *dst, const gchar *src, gsize size)
 		}
 	}
 
-	*d = '\0';
-
 	return (d - dst);
 }
 #define MIN3(a, b, c) ((a) < (b) ? ((a) < (c) ? (a) : (c)) : ((b) < (c) ? (b) : (c)))

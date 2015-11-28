@@ -20,7 +20,6 @@ struct rspamd_url {
 	guint port;
 
 	gchar *user;
-	gchar *password;
 	gchar *host;
 	gchar *data;
 	gchar *query;
@@ -32,7 +31,6 @@ struct rspamd_url {
 
 	guint protocollen;
 	guint userlen;
-	guint passwordlen;
 	guint hostlen;
 	guint datalen;
 	guint querylen;
