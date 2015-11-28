@@ -1166,20 +1166,24 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 					 */
 					switch (i) {
 						case 4:
-							n |= GUINT32_TO_BE (t) << shift;
+							t = GUINT32_TO_BE (t);
 							break;
 						case 3:
-							n |= (GUINT32_TO_BE (t & 0xFFFFFFU) >> 8) << shift;
+							t = (GUINT32_TO_BE (t & 0xFFFFFFU) >> 8);
 							break;
 						case 2:
-							n |= GUINT16_TO_BE (t & 0xFFFFU) << shift;
+							t = GUINT16_TO_BE (t & 0xFFFFU);
 							break;
 						default:
-							n |= (t & 0xFF) << shift;
+							t = t & 0xFF;
 							break;
 					}
 
-					shift = nshift;
+					if (p != end) {
+						n |= t << shift;
+
+						shift = nshift;
+					}
 				}
 				else {
 					check_num = FALSE;
@@ -1188,6 +1192,14 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 
 			p++;
 		}
+
+		/* The last component should be last according to url normalization:
+		 * 192.168.1 -> 192.168.0.1
+		 * 192 -> 0.0.0.192
+		 * 192.168 -> 192.0.0.168
+		 */
+		shift = 8 * (4 - i);
+		n |= t << shift;
 
 		if (check_num && dots <= 4) {
 			memcpy (&in4, &n, sizeof (in4));
