@@ -1131,13 +1131,23 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 				g_assert (p - c + 1 < (gint) sizeof (buf));
 				rspamd_strlcpy (buf, c, p - c + 1);
 				c = p + 1;
-				dots++;
+
+				if (p < end && *p == '.') {
+					dots++;
+				}
+
 				t = strtoul (buf, &errstr, 0);
 
 				if (errstr == NULL || *errstr == '\0') {
 
+					/*
+					 * Even if we have zero, we need to shift by 1 octet
+					 */
 					nshift = (t == 0 ? shift + 8 : shift);
 
+					/*
+					 * Here we count number of octets encoded in this element
+					 */
 					for (i = 0; i < 4; i++) {
 						if ((t >> 8 * i) > 0) {
 							nshift += 8;
@@ -1149,23 +1159,23 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 					/*
 					 * Here we need to find the proper shift of the previous
 					 * components, so we check possible cases:
-					 * 1) 1 octet
-					 * 2) 2 octets
-					 * 3) 3 octets
-					 * 4) 4 octets
+					 * 1) 1 octet - just use it applying shift
+					 * 2) 2 octets - convert to big endian 16 bit number
+					 * 3) 3 octets - convert to big endian 24 bit number
+					 * 4) 4 octets - convert to big endian 32 bit number
 					 */
 					switch (i) {
 						case 4:
-							n |= (GUINT32_FROM_BE (t)) << shift;
+							n |= GUINT32_TO_BE (t) << shift;
 							break;
 						case 3:
-							n |= (GUINT32_FROM_BE (t)) << (shift - 8);
+							n |= (GUINT32_TO_BE (t & 0xFFFFFFU) >> 8) << shift;
 							break;
 						case 2:
-							n |= (GUINT16_FROM_BE (t)) << shift;
+							n |= GUINT16_TO_BE (t & 0xFFFFU) << shift;
 							break;
 						default:
-							n |= t << shift;
+							n |= (t & 0xFF) << shift;
 							break;
 					}
 

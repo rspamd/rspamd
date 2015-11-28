@@ -53,6 +53,9 @@ context("URL check functions", function()
     local pool = mpool.create()
     -- input, parseable, {host, port, user, password, path, query, part}
     local cases = {
+      {"http://%30%78%63%30%2e%30%32%35%30.01", true, { --0xc0.0250.01
+        host = '192.168.0.1',
+      }},
       {"http://www.google.com/foo?bar=baz#", true, {
         host = 'www.google.com', path = 'foo', query = 'bar=baz', tld = 'google.com'
       }},
