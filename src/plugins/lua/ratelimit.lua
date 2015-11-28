@@ -281,7 +281,9 @@ local function rate_test_set(task, func)
     end, rcpts)
   end
 
-  func(task, args)
+  if #args > 0 then
+    func(task, args)
+  end
 end
 
 --- Check limit
