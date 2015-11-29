@@ -772,13 +772,13 @@ tree_url_callback (gpointer key, gpointer value, void *data)
 
 	task = param->task;
 	ret = rspamd_mime_regexp_element_process (param->task, param->re,
-			struri (url), 0, FALSE);
+			url->string, url->urllen, FALSE);
 
 	param->found = ret;
 
 	if (G_UNLIKELY (param->re->is_test)) {
-		msg_info_task ("process test regexp %s for url %s returned FALSE",
-			param->re->regexp_text, struri (url));
+		msg_info_task ("process test regexp %s for url %*s returned FALSE",
+			param->re->regexp_text, url->urllen, url->string);
 	}
 }
 

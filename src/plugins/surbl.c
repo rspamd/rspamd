@@ -894,8 +894,8 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 		if (surbl_req == NULL) {
 			if (err != NULL) {
 				if (err->code != WHITELIST_ERROR && err->code != DUPLICATE_ERROR) {
-					msg_info_task ("cannot format url string for surbl %s, %e",
-							struri (url),
+					msg_info_task ("cannot format url string for surbl %*s, %e",
+							url->urllen, url->string,
 							err);
 				}
 				g_error_free (err);
@@ -942,8 +942,9 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 	}
 	else if (err != NULL) {
 		if (err->code != WHITELIST_ERROR && err->code != DUPLICATE_ERROR) {
-			msg_info_task ("cannot format url string for surbl %s, %e", struri (
-					url), err);
+			msg_info_task ("cannot format url string for surbl %*s, %e",
+					url->urllen,
+					url->string, err);
 		}
 		g_error_free (err);
 		return;
@@ -1106,15 +1107,13 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 
 	task = param->task;
 
-	g_hash_table_remove (param->tree, struri (param->url));
-
 	if (msg->code == 200) {
 		hdr = rspamd_http_message_find_header (msg, "Uri");
 
 		if (hdr != NULL) {
-			msg_info_task ("<%s> got reply from redirector: '%s' -> '%T'",
+			msg_info_task ("<%s> got reply from redirector: '%*s' -> '%T'",
 					param->task->message_id,
-					struri (param->url),
+					param->url->urllen, param->url->string,
 					hdr);
 			urllen = hdr->len;
 			urlstr = rspamd_mempool_alloc (task->task_pool,
@@ -1138,9 +1137,9 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 		}
 	}
 	else {
-		msg_info_task ("<%s> could not resolve '%s' on redirector",
+		msg_info_task ("<%s> could not resolve '%*s' on redirector",
 				param->task->message_id,
-				struri (param->url));
+				param->url->urllen, param->url->string);
 	}
 
 	rspamd_upstream_ok (param->redirector);
@@ -1187,7 +1186,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 			RSPAMD_HTTP_CLIENT_SIMPLE,
 			RSPAMD_HTTP_CLIENT, NULL);
 	msg = rspamd_http_new_message (HTTP_REQUEST);
-	msg->url = rspamd_fstring_assign (msg->url, struri (url), strlen (struri (url)));
+	msg->url = rspamd_fstring_assign (msg->url, url->string, url->urllen);
 	param->sock = s;
 	param->suffix = suffix;
 	param->redirector = selected;
@@ -1204,9 +1203,9 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 			NULL, param, s, timeout, task->ev_base);
 
 	msg_info_task (
-		"<%s> registered redirector call for %s to %s, according to rule: %s",
+		"<%s> registered redirector call for %*s to %s, according to rule: %s",
 		task->message_id,
-		struri (url),
+		url->urllen, url->string,
 		rspamd_upstream_name (param->redirector),
 		rule);
 }
@@ -1235,7 +1234,7 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 	gboolean found = FALSE;
 
 	task = param->task;
-	debug_task ("check url %s", struri (url));
+	debug_task ("check url %*s", url->urllen, url->string);
 
 	if (url->hostlen <= 0) {
 		return;
@@ -1273,16 +1272,11 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 								g_list_prepend (NULL, rspamd_mempool_strdup
 										(task->task_pool, pat->ptr)));
 					}
-
-					if (g_hash_table_lookup (param->tree, struri (url)) == NULL) {
-						g_hash_table_insert (param->tree, struri (url), url);
-
-						register_redirector_call (url,
-								param->task,
-								param->suffix,
-								pat->ptr,
-								param->tree);
-					}
+					register_redirector_call (url,
+							param->task,
+							param->suffix,
+							pat->ptr,
+							param->tree);
 
 					return;
 				}

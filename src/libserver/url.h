@@ -60,8 +60,6 @@ enum rspamd_url_protocol {
 	PROTOCOL_UNKNOWN
 };
 
-#define struri(uri) ((uri)->string)
-
 /**
  * Initialize url library
  * @param cfg

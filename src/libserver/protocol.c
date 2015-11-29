@@ -667,12 +667,12 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 			}
 		}
 
-		msg_info_task ("<%s> %s: %s; ip: %s; URL: %s",
+		msg_info_task ("<%s> %s: %s; ip: %s; URL: %*s",
 			task->message_id,
 			has_user ? "user" : "from",
 			user_field,
 			rspamd_inet_address_to_string (task->from_addr),
-			struri (url));
+			url->urllen, url->string);
 	}
 }
 
