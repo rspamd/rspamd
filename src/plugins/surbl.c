@@ -1051,8 +1051,7 @@ surbl_dns_ip_callback (struct rdns_reply *reply, gpointer arg)
 				if (make_dns_request_task (task,
 						surbl_dns_callback,
 						param, RDNS_REQUEST_A, to_resolve->str)) {
-					param->w = rspamd_session_get_watcher (task->s);
-					rspamd_session_watcher_push (task->s);
+					rspamd_session_watcher_push_specific (task->s, param->w);
 				}
 
 				g_string_free (to_resolve, TRUE);
