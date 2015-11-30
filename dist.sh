@@ -12,7 +12,13 @@ PREFIX=`basename $FNAME | sed -e 's/\.tar.*$//'`
 
 OUT=""
 while true ; do
-	OUT="/tmp/files-`strings -7 /dev/urandom | head -1 | sed -e 's/[^[:alnum:]]//g'`"
+	_mktemp=`which mktemp`
+	if [ F"$_mktemp" != "F" ] ; then
+		OUT=`$_mktemp /tmp/files-XXXXXXXX`
+		break
+	else
+		OUT="/tmp/files-`strings -7 /dev/urandom | head -1 | sed -e 's/[^[:alnum:]]//g'`"
+	fi
 	if [ ! -f "$OUT" ] ; then break ; fi
 done
 
