@@ -43,7 +43,8 @@ enum rspamd_symbol_type {
 	SYMBOL_TYPE_GHOST = (1 << 3),
 	SYMBOL_TYPE_SKIPPED = (1 << 4),
 	SYMBOL_TYPE_COMPOSITE = (1 << 5),
-	SYMBOL_TYPE_FINE = (1 << 6)
+	SYMBOL_TYPE_CLASSIFIER = (1 << 6),
+	SYMBOL_TYPE_FINE = (1 << 7)
 };
 
 /**
