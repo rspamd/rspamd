@@ -39,26 +39,25 @@ Each bucket has two parameters:
 For example, a bucket with capacity `100` and leak `1` can accept up to 100 messages but then
 will accept not more than a message per second.
 
-By default, ratelimit module has the following settings:
+By default, ratelimit module has the following settings which disable all limits:
 
 ~~~lua
 -- Default settings for limits, 1-st member is burst, second is rate and the third is numeric type
 local settings = {
   -- Limit for all mail per recipient (burst 100, rate 2 per minute)
-  to = {[1] = 100, [2] = 0.033333333, [3] = 1},
+  to = {0, 0.033333333},
   -- Limit for all mail per one source ip (burst 30, rate 1.5 per minute)
-  to_ip = {[1] = 30, [2] = 0.025, [3] = 2},
+  to_ip = {0, 0.025},
   -- Limit for all mail per one source ip and from address (burst 20, rate 1 per minute)
-  to_ip_from = {[1] = 20, [2] = 0.01666666667, [3] = 3},
+  to_ip_from = {0, 0.01666666667},
 
   -- Limit for all bounce mail (burst 10, rate 2 per hour)
-  bounce_to = {[1] = 10, [2] = 0.000555556, [3] = 4},
+  bounce_to = {0, 0.000555556},
   -- Limit for bounce mail per one source ip (burst 5, rate 1 per hour)
-  bounce_to_ip = {[1] = 5 , [2] = 0.000277778, [3] = 5},
+  bounce_to_ip = {0, 0.000277778},
 
   -- Limit for all mail per user (authuser) (burst 20, rate 1 per minute)
-  user = {[1] = 20, [2] = 0.01666666667, [3] = 6}
-
+  user = {0, 0.01666666667}
 }
 ~~~
 
@@ -73,9 +72,9 @@ the value of this option is 'postmaster, mailer-daemon'
 - `whitelisted_ip` - a map of ip addresses or networks whitelisted
 - `max_rcpts` - do not apply ratelimit if it contains more than this value of recipients (5 by default). This
 option allows to avoid too many work for setting buckets if there are a lot of recipients in a message).
-- `limit` - allows to set limit for a specific category. This option should be in the following form:
+- `rates` - a table of allowed rates in form:
 
-    type:burst:leak
+    type = [burst,leak];
 
 Where `type` is one of:
 
@@ -87,3 +86,5 @@ Where `type` is one of:
 
 `burst` is a capacity of a bucket and `leak` is a rate in messages per second.
 Both these attributes are floating point values.
+
+- `symbol` - if this option is specified, then `ratelimit` plugin just adds the corresponding symbol instead of setting pre-result, the value is scaled as $$ 2 * tanh(\frac{bucket}{threshold * 2}) $$, where `tanh` is the hyperbolic tanhent function

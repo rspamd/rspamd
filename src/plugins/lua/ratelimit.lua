@@ -31,20 +31,19 @@ local default_port = 6379
 -- Default settings for limits, 1-st member is burst, second is rate and the third is numeric type
 local settings = {
   -- Limit for all mail per recipient (burst 100, rate 2 per minute)
-  to = {[1] = 100, [2] = 0.033333333, [3] = 1},
+  to = {0, 0.033333333},
   -- Limit for all mail per one source ip (burst 30, rate 1.5 per minute)
-  to_ip = {[1] = 30, [2] = 0.025, [3] = 2},
+  to_ip = {0, 0.025},
   -- Limit for all mail per one source ip and from address (burst 20, rate 1 per minute)
-  to_ip_from = {[1] = 20, [2] = 0.01666666667, [3] = 3},
+  to_ip_from = {0, 0.01666666667},
 
   -- Limit for all bounce mail (burst 10, rate 2 per hour)
-  bounce_to = {[1] = 10, [2] = 0.000555556, [3] = 4},
+  bounce_to = {0, 0.000555556},
   -- Limit for bounce mail per one source ip (burst 5, rate 1 per hour)
-  bounce_to_ip = {[1] = 5 , [2] = 0.000277778, [3] = 5},
+  bounce_to_ip = {0, 0.000277778},
 
   -- Limit for all mail per user (authuser) (burst 20, rate 1 per minute)
-  user = {[1] = 20, [2] = 0.01666666667, [3] = 6}
-
+  user = {0, 0.01666666667}
 }
 -- Senders that are considered as bounce
 local bounce_senders = {'postmaster', 'mailer-daemon', '', 'null', 'fetchmail-daemon', 'mdaemon'}
@@ -259,24 +258,32 @@ local function rate_test_set(task, func)
   end
   -- Get user (authuser)
   local auser = task:get_user()
-  if auser then
+  if auser and settings['user'] > 0 then
     table.insert(args, {settings['user'], make_rate_key (auser, '<auth>', nil)})
   end
 
   local is_bounce = check_bounce(from_user)
 
-  if rcpts then
+  if rcpts and not auser then
     _.each(function(r)
       if is_bounce then
-        table.insert(args, {settings['bounce_to'], make_rate_key ('<>', r['addr'], nil)})
-        if ip then
-          table.insert(args, {settings['bounce_to_ip'], make_rate_key ('<>', r['addr'], ip)})
+        if settings['bounce_to'][1] > 0 then
+          table.insert(args, { settings['bounce_to'], make_rate_key('<>', r['addr'], nil) })
+        end
+        if ip and settings['bounce_to_ip'][1] > 0 then
+          table.insert(args, { settings['bounce_to_ip'], make_rate_key('<>', r['addr'], ip) })
         end
       end
-      table.insert(args, {settings['to'], make_rate_key (nil, r['addr'], nil)})
+      if settings['to'][1] > 0 then
+        table.insert(args, { settings['to'], make_rate_key(nil, r['addr'], nil) })
+      end
       if ip then
-        table.insert(args, {settings['to_ip'], make_rate_key (nil, r['addr'], ip)})
-        table.insert(args, {settings['to_ip_from'], make_rate_key (from_addr, r['addr'], ip)})
+        if settings['to_ip'][1] > 0 then
+          table.insert(args, { settings['to_ip'], make_rate_key(nil, r['addr'], ip) })
+        end
+        if settings['to_ip_from'][1] > 0 then
+          table.insert(args, { settings['to_ip_from'], make_rate_key(from_addr, r['addr'], ip) })
+        end
       end
     end, rcpts)
   end
@@ -361,6 +368,22 @@ if opts then
   elseif rates and type(rates) == 'string' then
     parse_limit(rates)
   end
+
+  if opts['rates'] and type(opts['rates']) == 'table' then
+    -- new way of setting limits
+    _.each(function(t, lim)
+      if type(lim) == 'table' and settings[t] then
+        settings[t] = lim
+      else
+        rspamd_logger.errx(rspamd_config, 'bad rate: %s: %s', t, lim)
+      end
+    end, opts['rates'])
+  end
+
+  local enabled_limits = _.totable(_.map(function(t, lim)
+    return t
+  end, _.filter(function(t, lim) return lim[1] > 0 end, settings)))
+  rspamd_logger.infox(rspamd_config, 'enabled rate buckets: %s', enabled_limits)
 
   if opts['whitelisted_rcpts'] and type(opts['whitelisted_rcpts']) == 'string' then
     whitelisted_rcpts = split(opts['whitelisted_rcpts'], ',')
