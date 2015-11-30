@@ -131,9 +131,12 @@ struct fuzzy_learn_session {
 	guint retransmits;
 };
 
+#define FUZZY_CMD_FLAG_REPLIED (1 << 0)
+#define FUZZY_CMD_FLAG_SENT (1 << 1)
+
 struct fuzzy_cmd_io {
 	guint32 tag;
-	gboolean replied;
+	guint32 flags;
 	struct iovec io;
 };
 
@@ -712,7 +715,7 @@ fuzzy_cmd_from_task_meta (struct fuzzy_rule *rule,
 	rspamd_cryptobox_hash_final (&st, cmd->digest);
 
 	io = rspamd_mempool_alloc (pool, sizeof (*io));
-	io->replied = FALSE;
+	io->flags = 0;
 	io->tag = cmd->tag;
 
 	if (rule->peer_key) {
@@ -802,7 +805,7 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 
 	io = rspamd_mempool_alloc (pool, sizeof (*io));
 	io->tag = shcmd->basic.tag;
-	io->replied = FALSE;
+	io->flags = 0;
 
 	if (rule->peer_key) {
 		g_assert (encshcmd != NULL);
@@ -866,7 +869,7 @@ fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 	rspamd_cryptobox_hash_final (&st, cmd->digest);
 
 	io = rspamd_mempool_alloc (pool, sizeof (*io));
-	io->replied = FALSE;
+	io->flags = 0;
 	io->tag = cmd->tag;
 
 	if (rule->peer_key) {
@@ -915,18 +918,41 @@ static gboolean
 fuzzy_cmd_vector_to_wire (gint fd, GPtrArray *v)
 {
 	guint i;
+	gboolean all_sent = TRUE, all_replied = TRUE;
 	struct fuzzy_cmd_io *io;
 	gboolean processed = FALSE;
 
+	/* First try to resend unsent commands */
 	for (i = 0; i < v->len; i ++) {
 		io = g_ptr_array_index (v, i);
 
-		if (!io->replied) {
+		if (io->flags & FUZZY_CMD_FLAG_REPLIED) {
+			continue;
+		}
+
+		all_replied = FALSE;
+
+		if (!(io->flags & FUZZY_CMD_FLAG_SENT)) {
 			if (!fuzzy_cmd_to_wire (fd, &io->io)) {
 				return FALSE;
 			}
 			processed = TRUE;
+			io->flags |= FUZZY_CMD_FLAG_SENT;
+			all_sent = FALSE;
 		}
+	}
+
+	if (all_sent && !all_replied) {
+		/* Now try to resend each command in the vector */
+		for (i = 0; i < v->len; i++) {
+			io = g_ptr_array_index (v, i);
+
+			if (!(io->flags & FUZZY_CMD_FLAG_REPLIED)) {
+				io->flags &= ~FUZZY_CMD_FLAG_SENT;
+			}
+		}
+
+		return fuzzy_cmd_vector_to_wire (fd, v);
 	}
 
 	return processed;
@@ -995,8 +1021,8 @@ fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
 		io = g_ptr_array_index (req, i);
 
 		if (io->tag == rep->tag) {
-			if (!io->replied) {
-				io->replied = TRUE;
+			if (!(io->flags & FUZZY_CMD_FLAG_REPLIED)) {
+				io->flags |= FUZZY_CMD_FLAG_REPLIED;
 
 				return rep;
 			}
@@ -1124,7 +1150,7 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 		for (i = 0; i < session->commands->len; i++) {
 			io = g_ptr_array_index (session->commands, i);
 
-			if (io->replied) {
+			if (io->flags & FUZZY_CMD_FLAG_REPLIED) {
 				nreplied++;
 			}
 		}
