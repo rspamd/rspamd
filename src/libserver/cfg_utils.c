@@ -658,7 +658,7 @@ rspamd_config_post_load (struct rspamd_config *cfg, gboolean validate_cache)
 	rspamd_url_init (cfg->tld_file);
 
 	/* Insert classifiers symbols */
-	(void)rspamd_config_insert_classify_symbols (cfg);
+	rspamd_config_insert_classify_symbols (cfg);
 
 	/* Parse format string that we have */
 	if (!rspamd_config_parse_log_format (cfg)) {
@@ -986,7 +986,7 @@ symbols_classifiers_callback (gpointer key, gpointer value, gpointer ud)
 
 	/* Actually, statistics should act like any ordinary symbol */
 	rspamd_symbols_cache_add_symbol (cfg->cache, key, 0, NULL, NULL,
-			SYMBOL_TYPE_COMPOSITE, -1);
+			SYMBOL_TYPE_CLASSIFIER, -1);
 }
 
 void

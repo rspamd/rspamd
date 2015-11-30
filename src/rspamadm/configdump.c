@@ -129,7 +129,7 @@ rspamadm_configdump (gint argc, gchar **argv)
 	const gchar *confdir;
 	const ucl_object_t *obj, *cur;
 	struct rspamd_config *cfg = rspamd_main->cfg;
-	gboolean ret = FALSE;
+	gboolean ret = TRUE;
 	worker_t **pworker;
 	gchar **sec;
 

@@ -106,7 +106,7 @@ rspamadm_configtest (gint argc, gchar **argv)
 	GError *error = NULL;
 	const gchar *confdir;
 	struct rspamd_config *cfg = rspamd_main->cfg;
-	gboolean ret = FALSE;
+	gboolean ret = TRUE;
 	worker_t **pworker;
 	const guint64 *log_cnt;
 
@@ -156,14 +156,15 @@ rspamadm_configtest (gint argc, gchar **argv)
 		if (!rspamd_init_filters (rspamd_main->cfg, FALSE)) {
 			ret = FALSE;
 		}
+
+		if (ret) {
+			ret = rspamd_config_post_load (cfg, FALSE);
+		}
+
 		if (!rspamd_symbols_cache_validate (rspamd_main->cfg->cache,
 				rspamd_main->cfg,
 				FALSE)) {
 			ret = FALSE;
-		}
-
-		if (ret) {
-			ret = rspamd_config_post_load (cfg, FALSE);
 		}
 	}
 
