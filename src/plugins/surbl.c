@@ -1033,7 +1033,6 @@ surbl_dns_ip_callback (struct rdns_reply *reply, gpointer arg)
 	if (reply->code == RDNS_RC_NOERROR && reply->entries) {
 
 		LL_FOREACH (reply->entries, elt) {
-			elt = reply->entries;
 
 			if (elt->type == RDNS_REQUEST_A) {
 				to_resolve = g_string_sized_new (
