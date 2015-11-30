@@ -687,11 +687,11 @@ format_surbl_request (rspamd_mempool_t * pool,
 	struct rspamd_url *url)
 {
 	GHashTable *t;
-	gchar *result = NULL, num_buf[sizeof("18446744073709551616")];
+	gchar *result = NULL;
 	const gchar *p, *dots[MAX_LEVELS];
-	gint len, slen, r, i, dots_num = 0, level = MAX_LEVELS;
-	gboolean is_numeric = TRUE, found_exception = FALSE;
-	guint64 ip_num;
+	gint r, i, dots_num = 0, level = MAX_LEVELS;
+	gsize slen, len;
+	gboolean found_exception = FALSE;
 	rspamd_ftok_t f;
 
 	if (G_LIKELY (suffix != NULL)) {
@@ -703,10 +703,10 @@ format_surbl_request (rspamd_mempool_t * pool,
 	else {
 		g_assert_not_reached ();
 	}
+
 	len = hostname->len + slen + 2;
 
 	p = hostname->begin;
-	is_numeric = url->flags & RSPAMD_URL_FLAG_NUMERIC;
 
 	while (p - hostname->begin < (gint)hostname->len && dots_num < MAX_LEVELS) {
 		if (*p == '.') {
@@ -718,7 +718,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 	}
 
 	/* Check for numeric expressions */
-	if (is_numeric && dots_num == 3) {
+	if (url->flags & RSPAMD_URL_FLAG_NUMERIC) {
 		/* This is ip address */
 		if (suffix != NULL && (suffix->options & SURBL_OPTION_NOIP) != 0) {
 			/* Ignore such requests */
@@ -726,51 +726,26 @@ format_surbl_request (rspamd_mempool_t * pool,
 					suffix->symbol);
 			return NULL;
 		}
-		result = rspamd_mempool_alloc (pool, len);
-		r = rspamd_snprintf (result, len, "%*s.%*s.%*s.%*s",
-				(gint)(hostname->len - (dots[2] - hostname->begin + 1)),
-				dots[2] + 1,
-				(gint)(dots[2] - dots[1] - 1),
-				dots[1] + 1,
-				(gint)(dots[1] - dots[0] - 1),
-				dots[0] + 1,
-				(gint)(dots[0] - hostname->begin),
-				hostname->begin);
-	}
-	else if (is_numeric && dots_num == 0) {
-		/* This is number */
-		if (suffix != NULL && (suffix->options & SURBL_OPTION_NOIP) != 0) {
-			/* Ignore such requests */
-			msg_info_pool ("ignore request of ip url for list %s",
-					suffix->symbol);
-			return NULL;
-		}
-		rspamd_strlcpy (num_buf, hostname->begin,
-			MIN (hostname->len + 1, sizeof (num_buf)));
-		errno = 0;
-		ip_num = strtoull (num_buf, NULL, 10);
-		if (errno != 0) {
-			msg_info_pool ("cannot convert ip to number '%s': %s",
-				num_buf,
-				strerror (errno));
-			g_set_error (err, SURBL_ERROR, /* error domain */
-				CONVERSION_ERROR,   /* error code */
-				"URL cannot be decoded");
-			return NULL;
-		}
 
-		len = sizeof ("255.255.255.255") + slen;
-		result = rspamd_mempool_alloc (pool, len);
-		/* Hack for bugged windows resolver */
-		ip_num &= 0xFFFFFFFF;
-		/* Get octets */
-		r = rspamd_snprintf (result,
-				len,
-				"%ud.%ud.%ud.%ud",
-				(guint32) ip_num & 0x000000FF,
-				(guint32) (ip_num & 0x0000FF00) >> 8,
-				(guint32) (ip_num & 0x00FF0000) >> 16,
-				(guint32) (ip_num & 0xFF000000) >> 24);
+		if (dots_num == 3) {
+			/* IPv4 address */
+			result = rspamd_mempool_alloc (pool, len);
+			r = rspamd_snprintf (result, len, "%*s.%*s.%*s.%*s",
+					(gint) (hostname->len - (dots[2] - hostname->begin + 1)),
+					dots[2] + 1,
+					(gint) (dots[2] - dots[1] - 1),
+					dots[1] + 1,
+					(gint) (dots[1] - dots[0] - 1),
+					dots[0] + 1,
+					(gint) (dots[0] - hostname->begin),
+					hostname->begin);
+		}
+		else {
+			/* Just pring ip as is */
+			result = rspamd_mempool_alloc (pool, len);
+			r = rspamd_snprintf (result, len, "%*s",
+					(gint)hostname->len, hostname->begin);
+		}
 	}
 	else {
 		/* Not a numeric url */
