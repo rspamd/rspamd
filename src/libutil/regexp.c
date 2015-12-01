@@ -53,6 +53,7 @@ struct rspamd_regexp_s {
 	gpointer ud;
 	gint flags;
 	gint ncaptures;
+	gint nbackref;
 };
 
 struct rspamd_regexp_cache {
@@ -340,6 +341,12 @@ fin:
 		res->ncaptures = ncaptures;
 	}
 
+	/* Check number of backrefs */
+	if (pcre_fullinfo (res->raw_re, res->extra, PCRE_INFO_BACKREFMAX,
+			&ncaptures) == 0) {
+		res->nbackref = ncaptures;
+	}
+
 	return res;
 }
 
@@ -474,6 +481,22 @@ rspamd_regexp_get_pattern (rspamd_regexp_t *re)
 	g_assert (re != NULL);
 
 	return re->pattern;
+}
+
+gint
+rspamd_regexp_get_nbackrefs (rspamd_regexp_t *re)
+{
+	g_assert (re != NULL);
+
+	return re->nbackref;
+}
+
+gint
+rspamd_regexp_get_ncaptures (rspamd_regexp_t *re)
+{
+	g_assert (re != NULL);
+
+	return re->ncaptures;
 }
 
 gboolean
