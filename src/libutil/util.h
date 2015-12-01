@@ -177,6 +177,8 @@ void gperf_profiler_stop (void);
  */
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 22))
 void g_ptr_array_unref (GPtrArray *array);
+gboolean g_int64_equal (gconstpointer v1, gconstpointer v2);
+guint g_int64_hash (gconstpointer v);
 #endif
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 14))
 void g_queue_clear (GQueue *queue);

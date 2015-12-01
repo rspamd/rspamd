@@ -1327,6 +1327,18 @@ g_ptr_array_unref (GPtrArray *array)
 {
 	g_ptr_array_free (array, TRUE);
 }
+gboolean
+g_int64_equal (gconstpointer v1, gconstpointer v2)
+{
+	return *((const gint64*) v1) == *((const gint64*) v2);
+}
+guint
+g_int64_hash (gconstpointer v)
+{
+	guint64 v64 = *(guint64 *)v;
+
+	return (guint) (v ^ (v >> 32));
+}
 #endif
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 14))
 void
