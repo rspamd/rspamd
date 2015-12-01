@@ -323,7 +323,7 @@ retry:
 	retcode = sqlite3_step (stmt);
 
 	if (retcode == prepared_stmts[idx].result) {
-		return SQLITE_OK;
+		retcode = SQLITE_OK;
 	}
 	else {
 		if ((retcode == SQLITE_BUSY ||
