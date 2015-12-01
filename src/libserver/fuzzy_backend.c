@@ -562,10 +562,10 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 					rep.flag = sqlite3_column_int (
 							prepared_stmts[RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID].stmt, 3);
 				}
-
-				rspamd_fuzzy_backend_cleanup_stmt (backend,
-						RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID);
 			}
+
+			rspamd_fuzzy_backend_cleanup_stmt (backend,
+					RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID);
 		}
 	}
 
