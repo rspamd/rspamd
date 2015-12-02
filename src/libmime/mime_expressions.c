@@ -1342,11 +1342,21 @@ rspamd_recipients_distance (struct rspamd_task *task, GArray * args,
 				/* Common name part */
 				hits++;
 			}
+#if 0
+			/* XXX: when we have a typical mail that is headed towards
+			 * several users within the same domain, then this rule
+			 * leads to a false-positive.
+			 * We actually need to match host against tld, but this is currently
+			 * too expensive.
+			 *
+			 * TODO: think about normal representation of InternetAddress shit
+			 */
 			else if (ar[i].addr && ar[j].addr &&
 				g_ascii_strcasecmp (ar[i].addr, ar[j].addr) == 0) {
 				/* Common address part, but different name */
 				hits++;
 			}
+#endif
 			total++;
 		}
 	}
