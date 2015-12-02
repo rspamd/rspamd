@@ -1285,7 +1285,9 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag)
 	struct rspamd_url *url;
 	GList *cur;
 	const guchar *p;
+	gchar *decoded;
 	gint rc;
+	gsize decoded_len;
 	gboolean has_spaces = FALSE;
 
 	cur = tag->params->head;
@@ -1313,8 +1315,13 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag)
 				has_spaces = TRUE;
 			}
 
+			/* Also we need to perform url decode */
+			decoded = rspamd_mempool_alloc (pool, comp->len + 1);
+			rspamd_strlcpy (decoded, comp->start, comp->len + 1);
+			decoded_len = rspamd_decode_url (decoded, comp->start, comp->len);
+
 			url = rspamd_mempool_alloc (pool, sizeof (*url));
-			rc = rspamd_url_parse (url, (gchar *)comp->start, comp->len, pool);
+			rc = rspamd_url_parse (url, decoded, decoded_len, pool);
 
 			if (rc == URI_ERRNO_OK) {
 
