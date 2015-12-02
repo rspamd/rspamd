@@ -1384,6 +1384,7 @@ is_recipient_list_sorted (const InternetAddressList * ia)
 {
 	const InternetAddressList *cur;
 	InternetAddress *addr;
+	InternetAddressMailbox *addr_mb;
 	gboolean res = TRUE;
 	struct addr_list current = { NULL, NULL }, previous = {
 		NULL, NULL
@@ -1403,10 +1404,14 @@ is_recipient_list_sorted (const InternetAddressList * ia)
 	for (i = 0; i < num; i++) {
 		addr =
 			internet_address_list_get_address ((InternetAddressList *)cur, i);
-		current.addr = (gchar *)internet_address_get_name (addr);
+		if (INTERNET_ADDRESS_IS_MAILBOX (addr)) {
+			addr_mb = INTERNET_ADDRESS_MAILBOX (addr);
+			current.addr = (gchar *) internet_address_mailbox_get_addr (addr_mb);
+		}
+
 		if (previous.addr != NULL) {
 			if (current.addr &&
-				g_ascii_strcasecmp (current.addr, previous.addr) < 0) {
+				g_ascii_strcasecmp (current.addr, previous.addr) <= 0) {
 				res = FALSE;
 				break;
 			}
