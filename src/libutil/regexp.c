@@ -179,6 +179,8 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 	}
 
 	rspamd_flags |= RSPAMD_REGEXP_FLAG_RAW;
+
+	regexp_flags |= PCRE_NEWLINE_ANYCRLF;
 	regexp_flags &= ~PCRE_UTF8;
 
 	if (flags_str != NULL) {
@@ -389,6 +391,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 	}
 
 	match_flags = PCRE_NEWLINE_ANYCRLF;
+
 	if ((re->flags & RSPAMD_REGEXP_FLAG_RAW) || raw) {
 		r = re->raw_re;
 		ext = re->raw_extra;
