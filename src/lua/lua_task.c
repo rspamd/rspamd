@@ -1986,14 +1986,9 @@ static gint
 lua_task_cache_get (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
-	const gchar *k = luaL_checkstring (L, 2);
-	gint res = RSPAMD_TASK_CACHE_NO_VALUE;
 
-	if (task && k) {
-		res = rspamd_task_re_cache_check (task, k);
-	}
-
-	lua_pushnumber (L, res);
+	msg_err_task ("this function is deprecated and will return nothing");
+	lua_pushnumber (L, -1);
 
 	return 1;
 }
@@ -2002,16 +1997,9 @@ static gint
 lua_task_cache_set (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
-	const gchar *k = luaL_checkstring (L, 2);
-	gint res = RSPAMD_TASK_CACHE_NO_VALUE, param = RSPAMD_TASK_CACHE_NO_VALUE;;
 
-	param = lua_tonumber (L, 3);
-	if (task && k && param >= 0) {
-		res = rspamd_task_re_cache_check (task, k);
-		rspamd_task_re_cache_add (task, k, param);
-	}
-
-	lua_pushnumber (L, res);
+	msg_err_task ("this function is deprecated and will return nothing");
+	lua_pushnumber (L, 0);
 
 	return 1;
 }

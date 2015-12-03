@@ -104,4 +104,9 @@ struct rspamd_re_cache *rspamd_re_cache_ref (struct rspamd_re_cache *cache);
  */
 guint rspamd_re_cache_set_limit (struct rspamd_re_cache *cache, guint limit);
 
+/**
+ * Convert re type to a human readable string (constant one)
+ */
+const gchar * rspamd_re_cache_type_to_string (enum rspamd_re_type type);
+
 #endif

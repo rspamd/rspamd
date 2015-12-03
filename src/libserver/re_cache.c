@@ -473,3 +473,29 @@ rspamd_re_cache_set_limit (struct rspamd_re_cache *cache, guint limit)
 
 	return old;
 }
+
+const gchar *
+rspamd_re_cache_type_to_string (enum rspamd_re_type type)
+{
+	const gchar *ret = "unknown";
+
+	switch (type) {
+	case RSPAMD_RE_HEADER:
+		ret = "header";
+		break;
+	case RSPAMD_RE_RAWHEADER:
+		ret = "raw header";
+		break;
+	case RSPAMD_RE_MIME:
+		ret = "part";
+		break;
+	case RSPAMD_RE_BODY:
+		ret = "rawbody";
+		break;
+	case RSPAMD_RE_URL:
+		ret = "url";
+		break;
+	}
+
+	return ret;
+}

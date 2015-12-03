@@ -198,7 +198,7 @@ rspamd_config_new (void)
 	cfg->lua_state = rspamd_lua_init (cfg);
 	cfg->cache = rspamd_symbols_cache_new (cfg);
 	cfg->ups_ctx = rspamd_upstreams_library_init ();
-	cfg->re_cache = rspamd_regexp_cache_new ();
+	cfg->re_cache = rspamd_re_cache_new ();
 
 	REF_INIT_RETAIN (cfg, rspamd_config_free);
 
