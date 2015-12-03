@@ -739,3 +739,11 @@ rspamd_regexp_library_finalize (void)
 		rspamd_regexp_cache_destroy (global_re_cache);
 	}
 }
+
+gpointer
+rspamd_regexp_get_id (rspamd_regexp_t *re)
+{
+	g_assert (re != NULL);
+
+	return re->id;
+}
