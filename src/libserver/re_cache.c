@@ -28,6 +28,8 @@
 #include "cryptobox.h"
 #include "ref.h"
 #include "libserver/url.h"
+#include "libserver/task.h"
+#include "libutil/util.h"
 
 struct rspamd_re_class {
 	guint64 id;
@@ -67,6 +69,36 @@ rspamd_re_cache_class_id (enum rspamd_re_type type,
 	}
 
 	return XXH64_digest (&st);
+}
+
+static void
+rspamd_re_cache_destroy (struct rspamd_re_cache *cache)
+{
+	GHashTableIter it;
+	gpointer k, v;
+	struct rspamd_re_class *re_class;
+	rspamd_regexp_t *re;
+	guint i;
+
+	g_assert (cache != NULL);
+	g_hash_table_iter_init (&it, cache->re_classes);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		re_class = v;
+		g_hash_table_iter_steal (&it);
+
+		for (i = 0; i < re_class->all_re->len; i++) {
+			re = g_ptr_array_index (re_class->all_re, i);
+
+			rspamd_regexp_set_cache_id (re, RSPAMD_INVALID_ID);
+			rspamd_regexp_unref (re);
+		}
+
+		g_slice_free1 (sizeof (*re_class), re_class);
+	}
+
+	g_hash_table_unref (cache->re_classes);
+	g_slice_free1 (sizeof (*cache), cache);
 }
 
 struct rspamd_re_cache *
@@ -412,31 +444,32 @@ rspamd_re_cache_runtime_destroy (struct rspamd_re_runtime *rt)
 }
 
 void
-rspamd_re_cache_destroy (struct rspamd_re_cache *cache)
+rspamd_re_cache_unref (struct rspamd_re_cache *cache)
 {
-	GHashTableIter it;
-	gpointer k, v;
-	struct rspamd_re_class *re_class;
-	rspamd_regexp_t *re;
-	guint i;
+	if (cache) {
+		REF_RELEASE (cache);
+	}
+}
 
-	g_assert (cache != NULL);
-	g_hash_table_iter_init (&it, cache->re_classes);
-
-	while (g_hash_table_iter_next (&it, &k, &v)) {
-		re_class = v;
-		g_hash_table_iter_steal (&it);
-
-		for (i = 0; i < re_class->all_re->len; i++) {
-			re = g_ptr_array_index (re_class->all_re, i);
-
-			rspamd_regexp_set_cache_id (re, RSPAMD_INVALID_ID);
-			rspamd_regexp_unref (re);
-		}
-
-		g_slice_free1 (sizeof (*re_class), re_class);
+struct rspamd_re_cache *
+rspamd_re_cache_ref (struct rspamd_re_cache *cache)
+{
+	if (cache) {
+		REF_RETAIN (cache);
 	}
 
-	g_hash_table_unref (cache->re_classes);
-	g_slice_free1 (sizeof (*cache), cache);
+	return cache;
+}
+
+guint
+rspamd_re_cache_set_limit (struct rspamd_re_cache *cache, guint limit)
+{
+	guint old;
+
+	g_assert (cache != NULL);
+
+	old = cache->max_re_data;
+	cache->max_re_data = limit;
+
+	return old;
 }

@@ -13,6 +13,7 @@
 #include "cfg_rcl.h"
 #include "ucl.h"
 #include "regexp.h"
+#include "libserver/re_cache.h"
 #include "ref.h"
 
 #define DEFAULT_BIND_PORT 11333
@@ -326,6 +327,8 @@ struct rspamd_config {
 	gchar *log_format_str;							/**< raw log format string								*/
 
 	struct rspamd_external_libs_ctx *libs_ctx;		/**< context for external libraries						*/
+
+	struct rspamd_re_cache *re_cache;				/**< static regexp cache								*/
 
 	ref_entry_t ref;								/**< reference counter									*/
 };

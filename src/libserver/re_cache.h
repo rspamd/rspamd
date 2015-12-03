@@ -25,11 +25,11 @@
 #define RSPAMD_RE_CACHE_H
 
 #include "config.h"
-#include "libserver/task.h"
 #include "libutil/regexp.h"
 
 struct rspamd_re_cache;
 struct rspamd_re_runtime;
+struct rspamd_task;
 
 enum rspamd_re_type {
 	RSPAMD_RE_HEADER,
@@ -91,8 +91,17 @@ gint rspamd_re_cache_process (struct rspamd_task *task,
 void rspamd_re_cache_runtime_destroy (struct rspamd_re_runtime *rt);
 
 /**
- * Destroy re cache
+ * Unref re cache
  */
-void rspamd_re_cache_destroy (struct rspamd_re_cache *cache);
+void rspamd_re_cache_unref (struct rspamd_re_cache *cache);
+/**
+ * Retain reference to re cache
+ */
+struct rspamd_re_cache *rspamd_re_cache_ref (struct rspamd_re_cache *cache);
+
+/**
+ * Set limit for all regular expressions in the cache, returns previous limit
+ */
+guint rspamd_re_cache_set_limit (struct rspamd_re_cache *cache, guint limit);
 
 #endif

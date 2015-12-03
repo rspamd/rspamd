@@ -29,6 +29,7 @@
 #include "util.h"
 #include "mem_pool.h"
 #include "dns.h"
+#include "re_cache.h"
 
 #include <gmime/gmime.h>
 
@@ -152,7 +153,7 @@ struct rspamd_task {
 	InternetAddressList *from_envelope;
 
 	GList *messages;								/**< list of messages that would be reported		*/
-	GHashTable *re_cache;							/**< cache for matched or not matched regexps		*/
+	struct rspamd_re_runtime *re_rt;				/**< regexp runtime									*/
 	struct rspamd_config *cfg;						/**< pointer to config object						*/
 	GError *err;
 	rspamd_mempool_t *task_pool;					/**< memory pool for task							*/

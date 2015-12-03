@@ -67,10 +67,7 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg)
 	rspamd_mempool_add_destructor (new_task->task_pool,
 		(rspamd_mempool_destruct_t) g_hash_table_unref,
 		new_task->results);
-	new_task->re_cache = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-	rspamd_mempool_add_destructor (new_task->task_pool,
-		(rspamd_mempool_destruct_t) g_hash_table_unref,
-		new_task->re_cache);
+	new_task->re_rt = rspamd_re_cache_runtime_new (cfg->re_cache);
 	new_task->raw_headers = g_hash_table_new (rspamd_strcase_hash,
 			rspamd_strcase_equal);
 	new_task->request_headers = g_hash_table_new_full (rspamd_ftok_icase_hash,
@@ -226,6 +223,7 @@ rspamd_task_free (struct rspamd_task *task)
 			event_del (&task->timeout_ev);
 		}
 
+		rspamd_re_cache_runtime_destroy (task->re_rt);
 		REF_RELEASE (task->cfg);
 
 		rspamd_mempool_delete (task->task_pool);

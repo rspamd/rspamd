@@ -198,6 +198,7 @@ rspamd_config_new (void)
 	cfg->lua_state = rspamd_lua_init (cfg);
 	cfg->cache = rspamd_symbols_cache_new (cfg);
 	cfg->ups_ctx = rspamd_upstreams_library_init ();
+	cfg->re_cache = rspamd_regexp_cache_new ();
 
 	REF_INIT_RETAIN (cfg, rspamd_config_free);
 
@@ -229,6 +230,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 	g_list_free (cfg->metrics_list);
 	rspamd_symbols_cache_destroy (cfg->cache);
 	REF_RELEASE (cfg->libs_ctx);
+	rspamd_re_cache_unref (cfg->re_cache);
 	rspamd_upstreams_library_unref (cfg->ups_ctx);
 	rspamd_mempool_delete (cfg->cfg_pool);
 	lua_close (cfg->lua_state);
