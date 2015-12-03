@@ -84,6 +84,45 @@ rspamd_upstream_test_func (void)
 	resolver = dns_resolver_init (NULL, ev_base, cfg);
 	rspamd_upstreams_library_config (cfg, cfg->ups_ctx, ev_base, resolver->r);
 
+	/*
+	 * Test v4/v6 priorities
+	 */
+	nls = rspamd_upstreams_create (cfg->ups_ctx);
+	g_assert (rspamd_upstreams_add_upstream (nls, "127.0.0.1", 0, NULL));
+	up = rspamd_upstream_get (nls, RSPAMD_UPSTREAM_RANDOM, NULL, 0);
+	rspamd_parse_inet_address (&paddr, "127.0.0.2", 0);
+	g_assert (rspamd_upstream_add_addr (up, paddr));
+	rspamd_parse_inet_address (&paddr, "::1", 0);
+	g_assert (rspamd_upstream_add_addr (up, paddr));
+	/* Rewind to start */
+	addr = rspamd_upstream_addr (up);
+	addr = rspamd_upstream_addr (up);
+	/* cur should be zero here */
+	addr = rspamd_upstream_addr (up);
+	next_addr = rspamd_upstream_addr (up);
+	g_assert (rspamd_inet_address_get_af (addr) == AF_INET);
+	g_assert (rspamd_inet_address_get_af (next_addr) == AF_INET);
+	next_addr = rspamd_upstream_addr (up);
+	g_assert (rspamd_inet_address_get_af (next_addr) == AF_INET6);
+	next_addr = rspamd_upstream_addr (up);
+	g_assert (rspamd_inet_address_get_af (next_addr) == AF_INET);
+	next_addr = rspamd_upstream_addr (up);
+	g_assert (rspamd_inet_address_get_af (next_addr) == AF_INET);
+	next_addr = rspamd_upstream_addr (up);
+	g_assert (rspamd_inet_address_get_af (next_addr) == AF_INET6);
+	/* Test errors with IPv6 */
+	rspamd_upstream_fail (up);
+	/* Now we should have merely IPv4 addresses in rotation */
+	addr = rspamd_upstream_addr (up);
+	for (i = 0; i < 256; i++) {
+		next_addr = rspamd_upstream_addr (up);
+		g_assert (rspamd_inet_address_get_af (addr) == AF_INET);
+		g_assert (rspamd_inet_address_get_af (next_addr) == AF_INET);
+		g_assert (rspamd_inet_address_compare (addr, next_addr) != 0);
+		addr = next_addr;
+	}
+	rspamd_upstreams_destroy (nls);
+
 	ls = rspamd_upstreams_create (cfg->ups_ctx);
 	g_assert (rspamd_upstreams_parse_line (ls, test_upstream_list, 443, NULL));
 	g_assert (rspamd_upstreams_count (ls) == 3);
@@ -128,25 +167,6 @@ rspamd_upstream_test_func (void)
 
 	rspamd_upstreams_destroy (nls);
 
-	/*
-	 * Test v4/v6 priorities
-	 */
-	nls = rspamd_upstreams_create (cfg->ups_ctx);
-	g_assert (rspamd_upstreams_add_upstream (nls, "127.0.0.1", 0, NULL));
-	up = rspamd_upstream_get (nls, RSPAMD_UPSTREAM_RANDOM, NULL, 0);
-	rspamd_parse_inet_address (&paddr, "127.0.0.2", 0);
-	g_assert (rspamd_upstream_add_addr (up, paddr));
-	rspamd_parse_inet_address (&paddr, "::1", 0);
-	g_assert (rspamd_upstream_add_addr (up, paddr));
-	addr = rspamd_upstream_addr (up);
-	for (i = 0; i < 256; i ++) {
-		next_addr = rspamd_upstream_addr (up);
-		g_assert (rspamd_inet_address_get_af (addr) == AF_INET);
-		g_assert (rspamd_inet_address_get_af (next_addr) == AF_INET);
-		g_assert (rspamd_inet_address_compare (addr, next_addr) != 0);
-		addr = next_addr;
-	}
-	rspamd_upstreams_destroy (nls);
 
 	/* Upstream fail test */
 	evtimer_set (&ev, rspamd_upstream_timeout_handler, resolver);
