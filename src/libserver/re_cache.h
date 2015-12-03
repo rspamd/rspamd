@@ -33,6 +33,7 @@ struct rspamd_re_runtime;
 
 enum rspamd_re_type {
 	RSPAMD_RE_HEADER,
+	RSPAMD_RE_RAWHEADER,
 	RSPAMD_RE_MIME,
 	RSPAMD_RE_URL,
 	RSPAMD_RE_BODY
@@ -72,13 +73,17 @@ struct rspamd_re_runtime* rspamd_re_cache_runtime_new (struct rspamd_re_cache *c
  * @param type type of object
  * @param type_data associated data with the type (e.g. header name)
  * @param datalen associated data length
+ * @param is_strong use case sensitive match when looking for headers
+ * @param is_multiple return multiple possible occurrences of the specified re
  */
-gboolean rspamd_re_cache_process (struct rspamd_task *task,
+gint rspamd_re_cache_process (struct rspamd_task *task,
 		struct rspamd_re_runtime *rt,
 		rspamd_regexp_t *re,
 		enum rspamd_re_type type,
 		gpointer type_data,
-		gsize datalen);
+		gsize datalen,
+		gboolean is_strong,
+		gboolean is_multiple);
 
 /**
  * Destroy runtime data

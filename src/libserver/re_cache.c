@@ -22,10 +22,12 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "libmime/message.h"
 #include "re_cache.h"
 #include "xxhash.h"
 #include "cryptobox.h"
 #include "ref.h"
+#include "libserver/url.h"
 
 struct rspamd_re_class {
 	guint64 id;
@@ -41,6 +43,7 @@ struct rspamd_re_cache {
 	GHashTable *re_classes;
 	ref_entry_t ref;
 	guint nre;
+	guint max_re_data;
 };
 
 struct rspamd_re_runtime {
@@ -159,18 +162,207 @@ rspamd_re_cache_runtime_new (struct rspamd_re_cache *cache)
 	rt->cache = cache;
 	REF_RETAIN (cache);
 	rt->checked = g_slice_alloc0 (NBYTES (cache->nre));
-	rt->results = g_slice_alloc0 (NBYTES (cache->nre));
+	rt->results = g_slice_alloc0 (cache->nre);
 
 	return rt;
 }
 
-gboolean
+static guint
+rspamd_re_cache_process_pcre (struct rspamd_re_cache *cache,
+		rspamd_regexp_t *re, const guchar *in, gsize len,
+		gboolean is_raw, gboolean is_multiple)
+{
+	guint r = 0;
+	const gchar *start = NULL, *end = NULL;
+
+	if (len == 0) {
+		len = strlen (in);
+	}
+
+	if (cache->max_re_data > 0 && len > cache->max_re_data) {
+		len = cache->max_re_data;
+	}
+
+	while (rspamd_regexp_search (re,
+			in,
+			len,
+			&start,
+			&end,
+			is_raw,
+			NULL)) {
+		r++;
+
+		if (!is_multiple || r >= 0xFF) {
+			break;
+		}
+	}
+
+	return r;
+}
+
+/*
+ * Calculates the specified regexp for the specified class if it's not calculated
+ */
+static guint
+rspamd_re_cache_exec_re (struct rspamd_task *task,
+		struct rspamd_re_runtime *rt,
+		rspamd_regexp_t *re,
+		struct rspamd_re_class *re_class,
+		guint64 re_id,
+		gboolean is_strong,
+		gboolean is_multiple)
+{
+	guint ret = 0, i;
+	GList *cur, *headerlist;
+	GHashTableIter it;
+	struct raw_header *rh;
+	const gchar *in;
+	gboolean raw = FALSE;
+	struct mime_text_part *part;
+	struct rspamd_url *url;
+	gpointer k, v;
+	gsize len;
+
+	switch (re_class->type) {
+	case RSPAMD_RE_HEADER:
+	case RSPAMD_RE_RAWHEADER:
+		/* Get list of specified headers */
+		headerlist = rspamd_message_get_header (task,
+				re_class->type_data,
+				FALSE);
+
+		if (headerlist) {
+			cur = headerlist;
+
+			while (cur) {
+				rh = cur->data;
+				if (re_class->type == RSPAMD_RE_RAWHEADER) {
+					in = rh->value;
+					raw = TRUE;
+				}
+				else {
+					in = rh->decoded;
+					/* Validate input */
+					if (!in || !g_utf8_validate (in, -1, NULL)) {
+						cur = g_list_next (cur);
+						continue;
+					}
+				}
+
+				/* Match re */
+				if (in) {
+					ret += rspamd_re_cache_process_pcre (rt->cache, re, in,
+							strlen (in), raw, is_multiple);
+					debug_task ("checking header %s regexp: %s -> %d",
+							re_class->type_data,
+							rspamd_regexp_get_pattern (re), ret);
+
+					if (!is_multiple && ret) {
+						break;
+					}
+				}
+			}
+		}
+		break;
+	case RSPAMD_RE_MIME:
+		/* Iterate throught text parts */
+		for (i = 0; i < task->text_parts->len; i++) {
+			part = g_ptr_array_index (task->text_parts, i);
+
+			/* Skip empty parts */
+			if (IS_PART_EMPTY (part)) {
+				continue;
+			}
+
+			/* Check raw flags */
+			if (!IS_PART_UTF (part)) {
+				raw = TRUE;
+			}
+			/* Select data for regexp */
+			if (raw) {
+				in = part->orig->data;
+				len = part->orig->len;
+			}
+			else {
+				in = part->content->data;
+				len = part->content->len;
+			}
+
+			if (len > 0) {
+				ret += rspamd_re_cache_process_pcre (rt->cache, re, in,
+						len, raw, is_multiple);
+				debug_task ("checking mime regexp: %s -> %d",
+						rspamd_regexp_get_pattern (re), ret);
+
+				if (!is_multiple && ret) {
+					break;
+				}
+			}
+		}
+		break;
+	case RSPAMD_RE_URL:
+		g_hash_table_iter_init (&it, task->urls);
+
+		while (g_hash_table_iter_next (&it, &k, &v)) {
+			if (ret && !is_multiple) {
+				break;
+			}
+
+			url = v;
+			in = url->string;
+			len = url->urllen;
+			raw = FALSE;
+
+			ret += rspamd_re_cache_process_pcre (rt->cache, re, in,
+					len, raw, is_multiple);
+		}
+
+		g_hash_table_iter_init (&it, task->emails);
+
+		while (g_hash_table_iter_next (&it, &k, &v)) {
+			if (ret && !is_multiple) {
+				break;
+			}
+
+			url = v;
+			in = url->string;
+			len = url->urllen;
+			raw = FALSE;
+
+			ret += rspamd_re_cache_process_pcre (rt->cache, re, in,
+					len, raw, is_multiple);
+		}
+
+		debug_task ("checking url regexp: %s -> %d",
+				rspamd_regexp_get_pattern (re), ret);
+		break;
+	case RSPAMD_RE_BODY:
+		raw = TRUE;
+		in = task->msg.begin;
+		len = task->msg.len;
+
+		ret = rspamd_re_cache_process_pcre (rt->cache, re, in,
+				len, raw, is_multiple);
+		debug_task ("checking rawbody regexp: %s -> %d",
+				rspamd_regexp_get_pattern (re), ret);
+		break;
+	}
+
+	setbit (rt->checked, re_id);
+	rt->results[re_id] = ret > 0xFF ? 0xFF : ret;
+
+	return ret;
+}
+
+gint
 rspamd_re_cache_process (struct rspamd_task *task,
 		struct rspamd_re_runtime *rt,
 		rspamd_regexp_t *re,
 		enum rspamd_re_type type,
 		gpointer type_data,
-		gsize datalen)
+		gsize datalen,
+		gboolean is_strong,
+		gboolean is_multiple)
 {
 	guint64 class_id, re_id;
 	struct rspamd_re_class *re_class;
@@ -180,32 +372,32 @@ rspamd_re_cache_process (struct rspamd_task *task,
 	g_assert (task != NULL);
 	g_assert (re != NULL);
 
+	cache = rt->cache;
 	re_id = rspamd_regexp_get_cache_id (re);
 
-	if (re_id == RSPAMD_INVALID_ID) {
+	if (re_id == RSPAMD_INVALID_ID || re_id > cache->nre) {
 		msg_err_task ("re '%s' has no valid id for the cache",
 				rspamd_regexp_get_pattern (re));
-		return FALSE;
+		return 0;
 	}
 
 	if (isset (rt->checked, re_id)) {
 		/* Fast path */
-		return isset (rt->results, re_id);
+		return rt->results[re_id];
 	}
 	else {
 		/* Slow path */
-		cache = rt->cache;
 		class_id = rspamd_re_cache_class_id (type, type_data, datalen);
 		re_class = g_hash_table_lookup (cache->re_classes, &class_id);
 
 		if (re_class == NULL) {
 			msg_err_task ("cannot find re class for regexp '%s'",
 					rspamd_regexp_get_pattern (re));
-			return FALSE;
+			return 0;
 		}
 	}
 
-	return FALSE;
+	return 0;
 }
 
 void
@@ -214,7 +406,7 @@ rspamd_re_cache_runtime_destroy (struct rspamd_re_runtime *rt)
 	g_assert (rt != NULL);
 
 	g_slice_free1 (NBYTES (rt->cache->nre), rt->checked);
-	g_slice_free1 (NBYTES (rt->cache->nre), rt->results);
+	g_slice_free1 (rt->cache->nre, rt->results);
 	REF_RELEASE (rt->cache);
 	g_slice_free1 (sizeof (*rt), rt);
 }
