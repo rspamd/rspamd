@@ -1246,7 +1246,10 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 	sym_def->score = score;
 	sym_def->weight_ptr = score_ptr;
 	sym_def->name = rspamd_mempool_strdup (cfg->cfg_pool, symbol);
-	sym_def->one_shot = one_shot;
+
+	if (one_shot) {
+		sym_def->flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
+	}
 
 	if (description) {
 		sym_def->description = rspamd_mempool_strdup (cfg->cfg_pool, description);

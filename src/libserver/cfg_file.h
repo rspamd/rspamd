@@ -89,6 +89,9 @@ struct rspamd_symbols_group {
 	gboolean one_shot;
 };
 
+#define RSPAMD_SYMBOL_FLAG_ONESHOT (1 << 0)
+#define RSPAMD_SYMBOL_FLAG_IGNORE (1 << 1)
+
 /**
  * Symbol definition
  */
@@ -99,7 +102,7 @@ struct rspamd_symbol_def {
 	gdouble score;
 	struct rspamd_symbols_group *gr;
 	GList *groups;
-	gboolean one_shot;
+	guint flags;
 };
 
 

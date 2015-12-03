@@ -321,6 +321,7 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	struct rspamd_symbol_def *sym_def;
 	struct metric *metric;
 	struct rspamd_config *cfg;
+	const ucl_object_t *elt;
 	GList *metric_list;
 
 	g_assert (key != NULL);
@@ -357,6 +358,18 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	}
 	else {
 		msg_warn_config ("redefining symbol '%s' in metric '%s'", key, metric->name);
+	}
+
+	if ((elt = ucl_object_find_key (obj, "one_shot")) != NULL) {
+		if (ucl_object_toboolean (elt)) {
+			sym_def->flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
+		}
+	}
+
+	if ((elt = ucl_object_find_key (obj, "ignore")) != NULL) {
+		if (ucl_object_toboolean (elt)) {
+			sym_def->flags |= RSPAMD_SYMBOL_FLAG_IGNORE;
+		}
 	}
 
 	if (!rspamd_rcl_section_parse_defaults (section, pool, obj,
@@ -408,11 +421,13 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		const gchar *key, gpointer ud,
 		struct rspamd_rcl_section *section, GError **err)
 {
-	const ucl_object_t *val, *cur;
+	const ucl_object_t *val, *cur, *elt;
+	ucl_object_iter_t it;
 	struct rspamd_config *cfg = ud;
 	struct metric *metric;
 	struct rspamd_rcl_section *subsection;
 	struct rspamd_rcl_symbol_data sd;
+	struct rspamd_symbol_def *sym_def;
 
 	g_assert (key != NULL);
 
@@ -479,6 +494,29 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 			if (!rspamd_rcl_process_section (subsection, &sd, cur,
 					cfg->cfg_pool, err)) {
 				return FALSE;
+			}
+		}
+	}
+
+	/* Handle ignored symbols */
+	val = ucl_object_find_key (obj, "ignore");
+	if (val != NULL && ucl_object_type (val) == UCL_ARRAY) {
+		LL_FOREACH (val, cur) {
+			it = NULL;
+
+			while ((elt = ucl_iterate_object (cur, &it, true)) != NULL) {
+				if (ucl_object_type (elt) == UCL_STRING) {
+					sym_def = g_hash_table_lookup (metric->symbols,
+							ucl_object_tostring (elt));
+
+					if (sym_def != NULL) {
+						sym_def->flags |= RSPAMD_SYMBOL_FLAG_IGNORE;
+					}
+					else {
+						msg_warn ("cannot find symbol %s to set ignore flag",
+								ucl_object_tostring (elt));
+					}
+				}
 			}
 		}
 	}
@@ -1516,11 +1554,6 @@ rspamd_rcl_config_init (void)
 			G_STRUCT_OFFSET (struct rspamd_symbol_def, description),
 			0);
 	rspamd_rcl_add_default_handler (ssub,
-			"one_shot",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_symbol_def, one_shot),
-			0);
-	rspamd_rcl_add_default_handler (ssub,
 			"score",
 			rspamd_rcl_parse_struct_double,
 			G_STRUCT_OFFSET (struct rspamd_symbol_def, score),
@@ -1573,11 +1606,6 @@ rspamd_rcl_config_init (void)
 			"description",
 			rspamd_rcl_parse_struct_string,
 			G_STRUCT_OFFSET (struct rspamd_symbol_def, description),
-			0);
-	rspamd_rcl_add_default_handler (sssub,
-			"one_shot",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_symbol_def, one_shot),
 			0);
 	rspamd_rcl_add_default_handler (sssub,
 			"score",

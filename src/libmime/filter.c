@@ -140,7 +140,7 @@ insert_metric_result (struct rspamd_task *task,
 
 	/* Add metric score */
 	if ((s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
-		if (sdef && sdef->one_shot) {
+		if (sdef && (sdef->flags & RSPAMD_SYMBOL_FLAG_ONESHOT)) {
 			/*
 			 * For one shot symbols we do not need to add them again, so
 			 * we just force single behaviour here

@@ -848,7 +848,12 @@ rspamd_symbols_cache_validate (struct symbols_cache *cache,
 	gboolean strict)
 {
 	struct cache_item *item;
-	GList *cur, *metric_symbols;
+	GHashTableIter it;
+	GList *cur;
+	gpointer k, v;
+	struct rspamd_symbol_def *sym_def;
+	struct metric *metric;
+	gboolean ignore_symbol = FALSE, ret = TRUE;
 
 	if (cache == NULL) {
 		msg_err_cache ("empty cache is invalid");
@@ -866,28 +871,42 @@ rspamd_symbols_cache_validate (struct symbols_cache *cache,
 			rspamd_symbols_cache_validate_cb,
 			cache);
 	/* Now check each metric item and find corresponding symbol in a cache */
-	metric_symbols = g_hash_table_get_keys (cfg->metrics_symbols);
-	cur = metric_symbols;
-	while (cur) {
-		item = g_hash_table_lookup (cache->items_by_symbol, cur->data);
+	g_hash_table_iter_init (&it, cfg->metrics_symbols);
 
-		if (item == NULL) {
-			msg_warn_cache (
-				"symbol '%s' has its score defined but there is no "
-				"corresponding rule registered",
-				cur->data);
-			if (strict) {
-				g_list_free (metric_symbols);
-				return FALSE;
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		ignore_symbol = FALSE;
+		cur = v;
+
+		while (cur) {
+			metric = cur->data;
+			sym_def = g_hash_table_lookup (metric->symbols, k);
+
+			if (sym_def && (sym_def->flags & RSPAMD_SYMBOL_FLAG_IGNORE)) {
+				ignore_symbol = TRUE;
+				break;
+			}
+
+			cur = g_list_next (cur);
+		}
+
+		if (!ignore_symbol) {
+			item = g_hash_table_lookup (cache->items_by_symbol, k);
+
+			if (item == NULL) {
+				msg_warn_cache (
+						"symbol '%s' has its score defined but there is no "
+								"corresponding rule registered",
+						k);
+				if (strict) {
+					ret = FALSE;
+				}
 			}
 		}
-		cur = g_list_next (cur);
 	}
-	g_list_free (metric_symbols);
 
 	post_cache_init (cache);
 
-	return TRUE;
+	return ret;
 }
 
 static gboolean
