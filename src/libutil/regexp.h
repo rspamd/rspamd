@@ -27,6 +27,8 @@
 
 #include "config.h"
 
+#define RSPAMD_INVALID_ID ((guint64)-1LL)
+
 typedef struct rspamd_regexp_s rspamd_regexp_t;
 struct rspamd_regexp_cache;
 struct rspamd_re_capture {
@@ -119,6 +121,16 @@ gint rspamd_regexp_get_nbackrefs (rspamd_regexp_t *re);
  * Returns number of capture groups in a regexp
  */
 gint rspamd_regexp_get_ncaptures (rspamd_regexp_t *re);
+
+/**
+ * Returns cache id for a regexp
+ */
+guint64 rspamd_regexp_get_cache_id (rspamd_regexp_t *re);
+
+/**
+ * Sets cache id for a regexp
+ */
+guint64 rspamd_regexp_set_cache_id (rspamd_regexp_t *re, guint64 id);
 
 /**
  * Create new regexp cache

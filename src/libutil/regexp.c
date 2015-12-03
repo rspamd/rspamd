@@ -51,6 +51,7 @@ struct rspamd_regexp_s {
 	regexp_id_t id;
 	ref_entry_t ref;
 	gpointer ud;
+	guint64 cache_id;
 	gint flags;
 	gint ncaptures;
 	gint nbackref;
@@ -245,6 +246,7 @@ fin:
 	REF_INIT_RETAIN (res, rspamd_regexp_dtor);
 	res->flags = rspamd_flags;
 	res->pattern = real_pattern;
+	res->cache_id = RSPAMD_INVALID_ID;
 
 	if (rspamd_flags & RSPAMD_REGEXP_FLAG_RAW) {
 		res->raw_re = r;
@@ -500,6 +502,26 @@ rspamd_regexp_get_ncaptures (rspamd_regexp_t *re)
 	g_assert (re != NULL);
 
 	return re->ncaptures;
+}
+
+guint64
+rspamd_regexp_get_cache_id (rspamd_regexp_t *re)
+{
+	g_assert (re != NULL);
+
+	return re->cache_id;
+}
+
+guint64
+rspamd_regexp_set_cache_id (rspamd_regexp_t *re, guint64 id)
+{
+	guint64 old;
+
+	g_assert (re != NULL);
+	old = re->cache_id;
+	re->cache_id = id;
+
+	return old;
 }
 
 gboolean
