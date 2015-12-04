@@ -21,7 +21,7 @@ context("Redis statistics unit tests", function()
   int rspamd_task_add_recipient (struct rspamd_task *task, const char *rcpt);
   int rspamd_task_add_sender (struct rspamd_task *task, const char *sender);
   ]]
-
+--[[
   test("Substitute redis values", function()
     local cases = {
       {"%s%l", "symbollabel"},
@@ -68,4 +68,5 @@ context("Redis statistics unit tests", function()
       assert_equal(s, c[2])
     end
   end)
+--]]
 end)

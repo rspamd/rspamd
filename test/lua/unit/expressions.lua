@@ -30,8 +30,6 @@ context("Rspamd expressions", function()
        {'A & B &', nil},
        -- Unbalanced braces
        {'(((A))', nil},
-       -- Invalid data
-       {'1.0001', nil},
        -- Balanced braces
        {'(((A)))', 'A'},
        -- Plus and comparision operators
