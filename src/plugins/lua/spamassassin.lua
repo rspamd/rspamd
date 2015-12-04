@@ -121,13 +121,6 @@ local function handle_header_def(hline, cur_rule)
       cur_param['raw'] = false
       cur_param['header'] = args[1]
 
-      if cur_param['header'] == 'MESSAGEID' then
-        -- Special case for spamassassin
-        cur_param['header'] = {'Message-ID', 'X-Message-ID', 'Resent-Message-ID'}
-      elseif cur_param['header'] == 'ToCc' then
-        cur_param['header'] = {'To', 'Cc', 'Bcc'}
-      end
-
       _.each(function(func)
           if func == 'addr' then
             cur_param['function'] = function(str)
@@ -166,7 +159,32 @@ local function handle_header_def(hline, cur_rule)
               func, cur_rule['symbol'])
           end
         end, _.tail(args))
-        table.insert(hdr_params, cur_param)
+
+        local function split_hdr_param(param, headers)
+          for i,h in ipairs(headers) do
+            local nparam = {}
+            for k,v in pairs(param) do
+              if k ~= 'header' then
+                nparam[k] = v
+              end
+            end
+
+            nparam['header'] = h
+            table.insert(hdr_params, nparam)
+          end
+        end
+        -- Some header rules require splitting to check of multiple headers
+        if cur_param['header'] == 'MESSAGEID' then
+          -- Special case for spamassassin
+          split_hdr_param(cur_param, {
+            'Message-ID',
+            'X-Message-ID',
+            'Resent-Message-ID'})
+        elseif cur_param['header'] == 'ToCc' then
+          split_hdr_param(cur_param, { 'To', 'Cc', 'Bcc' })
+        else
+          table.insert(hdr_params, cur_param)
+        end
     end
 
     cur_rule['header'] = hdr_params
@@ -523,7 +541,7 @@ local function process_sa_conf(f)
            cur_rule['re_expr'] = string.sub(cur_rule['re_expr'], 1, unset_comp - 1)
         end
 
-        cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
+        cur_rule['re'] = rspamd_regexp.create(cur_rule['re_expr'])
 
         if not cur_rule['re'] then
           rspamd_logger.warnx(rspamd_config, "Cannot parse regexp '%1' for %2",
@@ -535,7 +553,31 @@ local function process_sa_conf(f)
         if cur_rule['re'] and cur_rule['symbol'] and
           (cur_rule['header'] or cur_rule['function']) then
           valid_rule = true
-          cur_rule['re']:set_limit(match_limit)
+          if cur_rule['header'] then
+            for i,h in ipairs(cur_rule['header']) do
+              if type(h) == 'string' then
+                rspamd_config:register_regexp({
+                  re = cur_rule['re'],
+                  type = 'header',
+                  header = h})
+              else
+                if h['raw'] then
+                  rspamd_config:register_regexp({
+                    re = cur_rule['re'],
+                    type = 'rawheader',
+                    header = h['header']
+                  })
+                else
+                  rspamd_config:register_regexp({
+                    re = cur_rule['re'],
+                    type = 'header',
+                    header = h['header']
+                  })
+                end
+              end
+            end
+            cur_rule['re']:set_limit(match_limit)
+          end
         end
       else
         -- Maybe we know the function and can convert it
@@ -566,6 +608,10 @@ local function process_sa_conf(f)
         cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
         cur_rule['raw'] = true
         if cur_rule['re'] then
+          rspamd_config:register_regexp({
+            re = cur_rule['re'],
+            type = 'mime',
+          })
           valid_rule = true
           cur_rule['re']:set_limit(match_limit)
         end
@@ -599,6 +645,10 @@ local function process_sa_conf(f)
         cur_rule['raw'] = true
         if cur_rule['re'] then
           valid_rule = true
+          rspamd_config:register_regexp({
+            re = cur_rule['re'],
+            type = 'body',
+          })
           cur_rule['re']:set_limit(match_limit)
         end
       else
@@ -626,6 +676,10 @@ local function process_sa_conf(f)
       cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
       if cur_rule['re'] and cur_rule['symbol'] then
         valid_rule = true
+        rspamd_config:register_regexp({
+          re = cur_rule['re'],
+          type = 'url',
+        })
         cur_rule['re']:set_limit(match_limit)
       end
     elseif words[1] == "meta" then
@@ -834,6 +888,7 @@ _.each(function(r)
       else
         rspamd_logger.debugx(rspamd_config, 'replace %1 -> %2', r, nexpr)
         rule['re'] = nre
+        -- XXX: add removal from the cache logic
         rule['re_expr'] = nexpr
         nre:set_limit(match_limit)
       end
