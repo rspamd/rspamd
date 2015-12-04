@@ -758,7 +758,7 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 				return FALSE;
 			}
 
-			rspamd_snprintf (classbuf, sizeof (classbuf), "{%*s}",
+			rspamd_snprintf (classbuf, sizeof (classbuf), "rspamd{%*s}",
 					(gint)clslen, cls);
 
 			if (!failed && rspamd_lua_check_class (L, -1, classbuf)) {
