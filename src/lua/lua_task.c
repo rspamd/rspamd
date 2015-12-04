@@ -2028,7 +2028,7 @@ lua_task_process_regexp (lua_State *L)
 	 */
 	if (task != NULL) {
 		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
-					"re=*U{regexp};type=*S;header=V;strong=B;multiple=B",
+					"*re=U{regexp};*type=S;header=V;strong=B;multiple=B",
 					&re, &type_str, &header_len, &header_str,
 					&strong, &multiple)) {
 			msg_err_task ("cannot get parameters list: %e", err);
@@ -2037,30 +2037,32 @@ lua_task_process_regexp (lua_State *L)
 				g_error_free (err);
 			}
 		}
-
-		if (strcmp (type_str, "header") == 0) {
-			type = RSPAMD_RE_HEADER;
-		}
-		else if (strcmp (type_str, "rawheader") == 0) {
-			type = RSPAMD_RE_RAWHEADER;
-		}
-		else if (strcmp (type_str, "mime") == 0) {
-			type = RSPAMD_RE_MIME;
-		}
-		else if (strcmp (type_str, "body") == 0) {
-			type = RSPAMD_RE_BODY;
-		}
-		else if (strcmp (type_str, "url") == 0) {
-			type = RSPAMD_RE_URL;
-		}
-
-		if ((type == RSPAMD_RE_HEADER || type == RSPAMD_RE_RAWHEADER)
-				&& header_str == NULL) {
-			msg_err_task ("header argument is mandatory for header/rawheader regexps");
-		}
 		else {
-			ret = rspamd_re_cache_process (task, task->re_rt, re->re, type,
-					(gpointer)header_str, header_len, strong, multiple);
+			if (strcmp (type_str, "header") == 0) {
+				type = RSPAMD_RE_HEADER;
+			}
+			else if (strcmp (type_str, "rawheader") == 0) {
+				type = RSPAMD_RE_RAWHEADER;
+			}
+			else if (strcmp (type_str, "mime") == 0) {
+				type = RSPAMD_RE_MIME;
+			}
+			else if (strcmp (type_str, "body") == 0) {
+				type = RSPAMD_RE_BODY;
+			}
+			else if (strcmp (type_str, "url") == 0) {
+				type = RSPAMD_RE_URL;
+			}
+
+			if ((type == RSPAMD_RE_HEADER || type == RSPAMD_RE_RAWHEADER)
+					&& header_str == NULL) {
+				msg_err_task (
+						"header argument is mandatory for header/rawheader regexps");
+			}
+			else {
+				ret = rspamd_re_cache_process (task, task->re_rt, re->re, type,
+						(gpointer) header_str, header_len, strong, multiple);
+			}
 		}
 	}
 
