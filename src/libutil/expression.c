@@ -51,13 +51,14 @@ enum rspamd_expression_op {
 	OP_CBRACE /* ) */
 };
 
-struct rspamd_expression_elt {
-	enum {
-		ELT_OP = 0,
-		ELT_ATOM,
-		ELT_LIMIT
-	} type;
+enum rspamd_expression_elt_type {
+	ELT_OP = 0,
+	ELT_ATOM,
+	ELT_LIMIT
+};
 
+struct rspamd_expression_elt {
+	enum rspamd_expression_elt_type type;
 	union {
 		rspamd_expression_atom_t *atom;
 		enum rspamd_expression_op op;
@@ -602,10 +603,15 @@ rspamd_parse_expression (const gchar *line, gsize len,
 					atom = subr->parse (p, end - p, pool, subr_data, err);
 					if (atom == NULL || atom->len == 0) {
 						/* We couldn't parse the atom, so go out */
-						g_set_error (err, rspamd_expr_quark (),
-								500,
-								"Cannot parse atom: callback function failed"
-								" to parse '%.*s'", (int)(end - p), p);
+						if (err != NULL && *err == NULL) {
+							g_set_error (err,
+									rspamd_expr_quark (),
+									500,
+									"Cannot parse atom: callback function failed"
+											" to parse '%.*s'",
+									(int) (end - p),
+									p);
+						}
 						goto err;
 					}
 
