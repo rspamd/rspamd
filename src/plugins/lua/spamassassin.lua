@@ -909,13 +909,8 @@ _.each(function(k, r)
       local check = {}
       _.each(function(h)
         local headers = {}
-        if type(h['header']) == 'string' then
-          table.insert(headers, h['header'])
-        else
-          headers = h['header']
-        end
+        local hname = h['header']
 
-        for i,hname in ipairs(headers) do
           local hdr = task:get_header_full(hname, h['strong'])
           if hdr then
             for n, rh in ipairs(hdr) do
@@ -944,7 +939,6 @@ _.each(function(k, r)
           elseif r['unset'] then
             table.insert(check, r['unset'])
           end
-        end
       end, r['header'])
 
       if #check == 0 then
@@ -1001,22 +995,11 @@ _.each(function(k, r)
 -- Parts rules
 _.each(function(k, r)
     local f = function(task)
-      local parts = task:get_text_parts()
-      if parts then
-        for n, part in ipairs(parts) do
-          -- Subject for optimization
-          if not part:is_empty() then
-            local content = part:get_content()
-            local raw = false
-
-            if not part:is_utf() or r['raw'] then raw = true end
-
-            return sa_regexp_match(content, r['re'], raw, r)
-          end
-        end
-      end
-
-      return 0
+      return task:process_regexp({
+        re = r['re'],
+        type = 'mime',
+        multiple = r['multiple']
+      })
     end
     if r['score'] then
       local real_score = r['score'] * calculate_score(k, r)
@@ -1035,7 +1018,11 @@ _.each(function(k, r)
 -- Raw body rules
 _.each(function(k, r)
     local f = function(task)
-      return sa_regexp_match(task:get_content(), r['re'], true, r)
+      return task:process_regexp({
+        re = r['re'],
+        type = 'body',
+        multiple = r['multiple']
+      })
     end
     if r['score'] then
       local real_score = r['score'] * calculate_score(k, r)
@@ -1054,14 +1041,11 @@ _.each(function(k, r)
 -- URL rules
 _.each(function(k, r)
     local f = function(task)
-      local urls = task:get_urls()
-      for _,u in ipairs(urls) do
-        local res = sa_regexp_match(u:get_text(), r['re'], true, r)
-        if res > 0 then
-          return res
-        end
-      end
-      return 0
+      return task:process_regexp({
+        re = r['re'],
+        type = 'url',
+        multiple = r['multiple']
+      })
     end
     if r['score'] then
       local real_score = r['score'] * calculate_score(k, r)
@@ -1094,11 +1078,7 @@ end
 local function process_atom(atom, task)
   local atom_cb = atoms[atom]
   if atom_cb then
-    local res = task:cache_get(atom)
-    if res < 0 then
-      res = atom_cb(task)
-      task:cache_set(atom, res)
-    end
+    local res = atom_cb(task)
 
     if not res then
       rspamd_logger.debugx(task, 'atom: %1, NULL result', atom)
@@ -1107,14 +1087,9 @@ local function process_atom(atom, task)
     end
     return res
   elseif external_deps[atom] then
-    local res = task:cache_get(atom)
-    if res < 0 then
-      if task:get_symbol(atom) then
-        res = 1
-      else
-        res = 0
-      end
-      task:cache_set(atom, res)
+    local res = 0
+    if task:get_symbol(atom) then
+      res = 1
     end
     rspamd_logger.debugx(task, 'external atom: %1, result: %2', atom, res)
 
@@ -1130,13 +1105,9 @@ _.each(function(k, r)
     local expression = nil
     -- Meta function callback
     local meta_cb = function(task)
-      local res = task:cache_get(k)
-      if res < 0 then
-        res = 0
-        if expression then
-          res = expression:process(task)
-        end
-        task:cache_set(k, res)
+      local res = 0
+      if expression then
+        res = expression:process(task)
       end
       if res > 0 then
         task:insert_result(k, res)
