@@ -5,7 +5,7 @@ context("Rspamd expressions", function()
   local rspamd_mempool = require "rspamd_mempool"
   local rspamd_regexp = require "rspamd_regexp"
   local split_re = rspamd_regexp.create('/\\s+|\\)|\\(/')
-  
+
   local function parse_func(str)
     -- extract token till the first space character
     local token = str
@@ -16,20 +16,22 @@ context("Rspamd expressions", function()
     -- Return token name
     return token
   end
-  
+
   test("Expression creation function", function()
     local function process_func(token, task)
       -- Do something using token and task
     end
-    
+
     local pool = rspamd_mempool.create()
-    
+
     local cases = {
        {'A & B | !C', 'C ! A B & |'},
        {'A & (B | !C)', 'A B C ! | &'},
        {'A & B &', nil},
        -- Unbalanced braces
        {'(((A))', nil},
+       -- Invalid data
+       {'1.0001', nil},
        -- Balanced braces
        {'(((A)))', 'A'},
        -- Plus and comparision operators
@@ -44,9 +46,9 @@ context("Rspamd expressions", function()
        {'A & B | ! C', 'C ! A B & |'},
     }
     for _,c in ipairs(cases) do
-      local expr,err = rspamd_expression.create(c[1], 
+      local expr,err = rspamd_expression.create(c[1],
         {parse_func, process_func}, pool)
-      
+
       if not c[2] then
         assert_nil(expr, "Should not be able to parse " .. c[1])
       else
@@ -60,14 +62,14 @@ context("Rspamd expressions", function()
   end)
   test("Expression process function", function()
     local function process_func(token, input)
-    
+
       --print(token)
       local t = input[token]
-      
+
       if t then return 1 end
       return 0
     end
-    
+
     local pool = rspamd_mempool.create()
     local atoms = {
       A = true,
@@ -89,7 +91,7 @@ context("Rspamd expressions", function()
        {'!!C', 1},
     }
     for _,c in ipairs(cases) do
-      local expr,err = rspamd_expression.create(c[1], 
+      local expr,err = rspamd_expression.create(c[1],
         {parse_func, process_func}, pool)
 
       assert_not_nil(expr, "Cannot parse " .. c[1])
@@ -98,7 +100,7 @@ context("Rspamd expressions", function()
       assert_equal(res, c[2], string.format("Processed expr '%s' returned '%d', expected: '%d'",
         expr:to_string(), res, c[2]))
     end
-    
+
     pool:destroy()
   end)
 end)
