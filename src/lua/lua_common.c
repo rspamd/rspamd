@@ -648,9 +648,22 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 				if (lua_type (L, -1) == LUA_TSTRING) {
 					*(va_arg (ap, const gchar **)) = lua_tostring (L, -1);
 				}
-				else {
+				else if (lua_type (L, -1) == LUA_TNIL) {
 					failed = TRUE;
 					*(va_arg (ap, const gchar **)) = NULL;
+				}
+				else {
+					g_set_error (err,
+							lua_error_quark (),
+							1,
+							"bad type for key:"
+									" %.*s: '%s', '%s' is expected",
+							(gint) keylen,
+							key,
+							lua_typename (L, lua_type (L, -1)), "string");
+					va_end (ap);
+
+					return FALSE;
 				}
 				lua_pop (L, 1);
 				break;
@@ -659,9 +672,23 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 				if (lua_type (L, -1) == LUA_TNUMBER) {
 					*(va_arg (ap, gint64 *)) = lua_tonumber (L, -1);
 				}
-				else {
+				else if (lua_type (L, -1) == LUA_TNIL) {
 					failed = TRUE;
 					*(va_arg (ap,  gint64 *)) = 0;
+				}
+				else {
+					g_set_error (err,
+							lua_error_quark (),
+							1,
+							"bad type for key:"
+									" %.*s: '%s', '%s' is expected",
+							(gint) keylen,
+							key,
+							lua_typename (L, lua_type (L, -1)),
+							"int64");
+					va_end (ap);
+
+					return FALSE;
 				}
 				lua_pop (L, 1);
 				break;
@@ -670,9 +697,23 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 				if (lua_type (L, -1) == LUA_TBOOLEAN) {
 					*(va_arg (ap, gboolean *)) = lua_toboolean (L, -1);
 				}
-				else {
+				else if (lua_type (L, -1) == LUA_TNIL) {
 					failed = TRUE;
 					*(va_arg (ap,  gboolean *)) = 0;
+				}
+				else {
+					g_set_error (err,
+							lua_error_quark (),
+							1,
+							"bad type for key:"
+									" %.*s: '%s', '%s' is expected",
+							(gint) keylen,
+							key,
+							lua_typename (L, lua_type (L, -1)),
+							"bool");
+					va_end (ap);
+
+					return FALSE;
 				}
 				lua_pop (L, 1);
 				break;
@@ -681,9 +722,23 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 				if (lua_type (L, -1) == LUA_TNUMBER) {
 					*(va_arg (ap, gdouble *)) = lua_tonumber (L, -1);
 				}
-				else {
+				else if (lua_type (L, -1) == LUA_TNIL) {
 					failed = TRUE;
 					*(va_arg (ap,  gdouble *)) = 0;
+				}
+				else {
+					g_set_error (err,
+							lua_error_quark (),
+							1,
+							"bad type for key:"
+									" %.*s: '%s', '%s' is expected",
+							(gint) keylen,
+							key,
+							lua_typename (L, lua_type (L, -1)),
+							"double");
+					va_end (ap);
+
+					return FALSE;
 				}
 				lua_pop (L, 1);
 				break;
@@ -694,22 +749,54 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 					*(va_arg (ap, const gchar **)) = lua_tolstring (L, -1,
 							valuelen);
 				}
-				else {
+				else if (lua_type (L, -1) == LUA_TNIL) {
 					failed = TRUE;
 					*(va_arg (ap, const char **)) = NULL;
 					*valuelen = 0;
 				}
+				else {
+					g_set_error (err,
+							lua_error_quark (),
+							1,
+							"bad type for key:"
+									" %.*s: '%s', '%s' is expected",
+							(gint) keylen,
+							key,
+							lua_typename (L, lua_type (L, -1)),
+							"string");
+					va_end (ap);
+
+					return FALSE;
+				}
 				lua_pop (L, 1);
 				break;
 			case 'U':
-				if (lua_type (L, -1) != LUA_TUSERDATA) {
+				if (lua_type (L, -1) == LUA_TNIL) {
 					failed = TRUE;
 				}
+				else if (lua_type (L, -1) != LUA_TUSERDATA) {
+					g_set_error (err,
+							lua_error_quark (),
+							1,
+							"bad type for key:"
+									" %.*s: '%s', '%s' is expected",
+							(gint) keylen,
+							key,
+							lua_typename (L, lua_type (L, -1)),
+							"int64");
+					va_end (ap);
+
+					return FALSE;
+				}
+
 				state = read_class_start;
 				clslen = 0;
 				cls = NULL;
 				p ++;
 				continue;
+			default:
+				g_assert (0);
+				break;
 			}
 
 			if (failed && required) {
@@ -748,42 +835,64 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 		case read_class:
 			if (*p == '}') {
 				clslen = p - cls;
-			}
-			if (clslen == 0) {
+				if (clslen == 0) {
+					lua_pop (L, 1);
+					g_set_error (err,
+							lua_error_quark (),
+							2,
+							"empty classname for "
+									"%*.s",
+							(gint) keylen,
+							key);
+					va_end (ap);
+
+					return FALSE;
+				}
+
+				rspamd_snprintf (classbuf, sizeof (classbuf), "rspamd{%*s}",
+						(gint) clslen, cls);
+
+				if (!failed && rspamd_lua_check_class (L, -1, classbuf)) {
+					*(va_arg (ap, void **)) = *(void **)lua_touserdata (L, -1);
+				}
+				else {
+					if (!failed) {
+						g_set_error (err,
+								lua_error_quark (),
+								2,
+								"invalid class for key %*.s, expected %s, got %s",
+								(gint) keylen,
+								key,
+								classbuf,
+								lua_tostring (L, -1));
+						va_end (ap);
+
+						return FALSE;
+					}
+				}
+
 				lua_pop (L, 1);
-				g_set_error (err, lua_error_quark (), 2, "empty classname for "
-						"%*.s", (gint)keylen, key);
-				va_end (ap);
 
-				return FALSE;
+				if (failed && required) {
+					g_set_error (err,
+							lua_error_quark (),
+							2,
+							"required parameter "
+									"%.*s is missing",
+							(gint) keylen,
+							key);
+					va_end (ap);
+
+					return FALSE;
+				}
+
+				/* Reset read params */
+				state = read_semicolon;
+				failed = FALSE;
+				required = FALSE;
+				keylen = 0;
+				key = NULL;
 			}
-
-			rspamd_snprintf (classbuf, sizeof (classbuf), "rspamd{%*s}",
-					(gint)clslen, cls);
-
-			if (!failed && rspamd_lua_check_class (L, -1, classbuf)) {
-				*(va_arg (ap, gpointer *)) = lua_touserdata (L, -1);
-			}
-			else {
-				*(va_arg (ap, gpointer *)) = NULL;
-				failed = TRUE;
-			}
-			lua_pop (L, 1);
-
-			if (failed && required) {
-				g_set_error (err, lua_error_quark (), 2, "required parameter "
-						"%.*s is missing", (gint)keylen, key);
-				va_end (ap);
-
-				return FALSE;
-			}
-
-			/* Reset read params */
-			state = read_semicolon;
-			failed = FALSE;
-			required = FALSE;
-			keylen = 0;
-			key = NULL;
 			p ++;
 			break;
 
