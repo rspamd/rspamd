@@ -582,6 +582,7 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 
 		/* Attach fd to the message */
 		if (rdata->fd != -1) {
+			memset (fdspace, 0, sizeof (fdspace));
 			msg.msg_control = fdspace;
 			msg.msg_controllen = sizeof (fdspace);
 			cmsg = CMSG_FIRSTHDR (&msg);
