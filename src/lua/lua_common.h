@@ -72,6 +72,13 @@ struct rspamd_lua_url {
 	struct rspamd_url *url;
 };
 
+struct rspamd_lua_regexp {
+	rspamd_regexp_t *re;
+	gchar *re_pattern;
+	gsize match_limit;
+	gint re_flags;
+};
+
 
 /* Common utility functions */
 

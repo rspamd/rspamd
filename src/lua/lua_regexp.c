@@ -73,13 +73,6 @@ static const struct luaL_reg regexplib_f[] = {
 
 rspamd_mempool_t *regexp_static_pool = NULL;
 
-struct rspamd_lua_regexp {
-	rspamd_regexp_t *re;
-	gchar *re_pattern;
-	gsize match_limit;
-	gint re_flags;
-};
-
 static struct rspamd_lua_regexp *
 lua_check_regexp (lua_State * L)
 {
