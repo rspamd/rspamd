@@ -734,6 +734,7 @@ fuzzy_peer_rep (struct rspamd_worker *worker,
 	GList *cur;
 	gint listen_socket;
 	struct event *accept_event;
+	gdouble next_check;
 
 	ctx->peer_fd = rep_fd;
 
@@ -764,6 +765,14 @@ fuzzy_peer_rep (struct rspamd_worker *worker,
 		event_base_set (ctx->ev_base, &ctx->peer_ev);
 		event_add (&ctx->peer_ev, NULL);
 		ctx->updates_pending = g_queue_new ();
+
+		/* Timer event */
+		evtimer_set (&tev, sync_callback, worker);
+		event_base_set (ctx->ev_base, &tev);
+		/* Plan event with jitter */
+		next_check = rspamd_time_jitter (ctx->sync_timeout, 0);
+		double_to_tv (next_check, &tmv);
+		evtimer_add (&tev, &tmv);
 	}
 }
 
@@ -775,7 +784,6 @@ start_fuzzy (struct rspamd_worker *worker)
 {
 	struct rspamd_fuzzy_storage_ctx *ctx = worker->ctx;
 	GError *err = NULL;
-	gdouble next_check;
 	struct rspamd_srv_command srv_cmd;
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
@@ -802,13 +810,6 @@ start_fuzzy (struct rspamd_worker *worker)
 
 	if (worker->index == 0) {
 		rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
-		/* Timer event */
-		evtimer_set (&tev, sync_callback, worker);
-		event_base_set (ctx->ev_base, &tev);
-		/* Plan event with jitter */
-		next_check = rspamd_time_jitter (ctx->sync_timeout, 0);
-		double_to_tv (next_check, &tmv);
-		evtimer_add (&tev, &tmv);
 	}
 
 	/* Register custom reload command for the control socket */
@@ -831,6 +832,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	rspamd_map_watch (worker->srv->cfg, ctx->ev_base);
 
 	/* Get peer pipe */
+	memset (&srv_cmd, 0, sizeof (srv_cmd));
 	srv_cmd.type = RSPAMD_SRV_SOCKETPAIR;
 	srv_cmd.id = ottery_rand_uint64 ();
 	srv_cmd.cmd.spair.af = SOCK_DGRAM;
