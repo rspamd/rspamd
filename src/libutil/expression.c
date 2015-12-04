@@ -600,11 +600,15 @@ rspamd_parse_expression (const gchar *line, gsize len,
 				else {
 					/* Try to parse atom */
 					atom = subr->parse (p, end - p, pool, subr_data, err);
-					if (atom == NULL) {
+					if (atom == NULL || atom->len == 0) {
 						/* We couldn't parse the atom, so go out */
+						g_set_error (err, rspamd_expr_quark (),
+								500,
+								"Cannot parse atom: callback function failed"
+								" to parse '%.*s'", (int)(end - p), p);
 						goto err;
 					}
-					g_assert (atom->len != 0);
+
 					p = p + atom->len;
 
 					/* Push to output */
