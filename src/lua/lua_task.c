@@ -428,20 +428,29 @@ LUA_FUNCTION_DEF (task, learn);
 LUA_FUNCTION_DEF (task, set_settings);
 
 /***
- * @method task:cache_get(str)
- * Return cached value for the specified string. Returns value less than 0 if str is not in the cache
- * @param {string} str key to get from the cache
- * @return {number} value of key or value less than 0 if a key has not been found
+ * @method task:process_re(params)
+ * Processes the specified regexp and returns number of captures (cached or new)
+ * Params is the table with the follwoing fields (mandatory fields are marked with `*`):
+ * - `re`* : regular expression object
+ * - `type`*: type of regular expression:
+ *   + `mime`: mime regexp
+ *   + `header`: header regexp
+ *   + `rawheader`: raw header expression
+ *   + `body`: raw body regexp
+ *   + `url`: url regexp
+ * - `header`: for header and rawheader regexp means the name of header
+ * - `strong`: case sensitive match for headers
+ * - `multiple`: allow multiple matches
+ * @return {number} number of regexp occurences in the task (limited by 255 so far)
  */
-LUA_FUNCTION_DEF (task, cache_get);
+LUA_FUNCTION_DEF (task, process_regexp);
 
-/***
- * @method task:cache_set(str, value)
- * Write new or rewrite existing value of the cached key 'str'
- * @param {string} str key to set in the cache
- * @return {number} previous value of the key or value less than zero
+/*
+ * Deprecated functions!
  */
 LUA_FUNCTION_DEF (task, cache_set);
+
+LUA_FUNCTION_DEF (task, cache_get);
 
 /***
  * @method task:get_size()
@@ -530,6 +539,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, set_settings),
 	LUA_INTERFACE_DEF (task, cache_get),
 	LUA_INTERFACE_DEF (task, cache_set),
+	LUA_INTERFACE_DEF (task, process_regexp),
 	LUA_INTERFACE_DEF (task, get_size),
 	LUA_INTERFACE_DEF (task, set_flag),
 	LUA_INTERFACE_DEF (task, get_flags),
@@ -1833,23 +1843,11 @@ lua_task_get_size (lua_State *L)
 }
 
 /**
-* - `no_log`: do
-not log
-task summary
-* - `no_stat`: do
-not include
-task into
-scanned stats
-* - `pass_all`:
-check all
-filters for task
-* - `extended_urls`:
-output extended
-info about
-urls
-* - `skip`:
-skip task
-processing
+* - `no_log`: do not log task summary
+* - `no_stat`: do not include task into scanned stats
+* - `pass_all`: check all filters for task
+* - `extended_urls`: output extended info about urls
+* - `skip`: skip task processing
 */
 
 #define LUA_TASK_FLAG(flag, set) do { \
@@ -2000,6 +1998,73 @@ lua_task_cache_set (lua_State *L)
 
 	msg_err_task ("this function is deprecated and will return nothing");
 	lua_pushnumber (L, 0);
+
+	return 1;
+}
+
+static gint
+lua_task_process_regexp (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	struct rspamd_lua_regexp *re = NULL;
+	gboolean strong = FALSE, multiple = FALSE;
+	const gchar *type_str = NULL, *header_str = NULL;
+	gsize header_len = 0;
+	GError *err = NULL;
+	gint ret = 0;
+	enum rspamd_re_type type = RSPAMD_RE_BODY;
+
+	/*
+	 * - `re`* : regular expression object
+ 	 * - `type`*: type of regular expression:
+	 *   + `mime`: mime regexp
+	 *   + `header`: header regexp
+	 *   + `rawheader`: raw header expression
+	 *   + `body`: raw body regexp
+	 *   + `url`: url regexp
+	 * - `header`: for header and rawheader regexp means the name of header
+	 * - `strong`: case sensitive match for headers
+	 * - `multiple`: allow multiple matches
+	 */
+	if (task != NULL) {
+		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
+					"re=*U{regexp};type=*S;header=V;strong=B;multiple=B",
+					&re, &type_str, &header_len, &header_str,
+					&strong, &multiple)) {
+			msg_err_task ("cannot get parameters list: %e", err);
+
+			if (err) {
+				g_error_free (err);
+			}
+		}
+
+		if (strcmp (type_str, "header") == 0) {
+			type = RSPAMD_RE_HEADER;
+		}
+		else if (strcmp (type_str, "rawheader") == 0) {
+			type = RSPAMD_RE_RAWHEADER;
+		}
+		else if (strcmp (type_str, "mime") == 0) {
+			type = RSPAMD_RE_MIME;
+		}
+		else if (strcmp (type_str, "body") == 0) {
+			type = RSPAMD_RE_BODY;
+		}
+		else if (strcmp (type_str, "url") == 0) {
+			type = RSPAMD_RE_URL;
+		}
+
+		if ((type == RSPAMD_RE_HEADER || type == RSPAMD_RE_RAWHEADER)
+				&& header_str == NULL) {
+			msg_err_task ("header argument is mandatory for header/rawheader regexps");
+		}
+		else {
+			ret = rspamd_re_cache_process (task, task->re_rt, re->re, type,
+					(gpointer)header_str, header_len, strong, multiple);
+		}
+	}
+
+	lua_pushnumber (L, ret);
 
 	return 1;
 }
