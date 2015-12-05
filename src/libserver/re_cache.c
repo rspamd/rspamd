@@ -318,6 +318,8 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 						break;
 					}
 				}
+
+				cur = g_list_next (cur);
 			}
 		}
 		break;
