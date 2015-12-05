@@ -365,6 +365,22 @@ LUA_FUNCTION_DEF (config, newindex);
  */
 LUA_FUNCTION_DEF (config, register_regexp);
 
+/***
+ * @method rspamd_config:replace_regexp(params)
+ * Replaces regexp with a new one
+ * Params is the table with the follwoing fields (mandatory fields are marked with `*`):
+ * - `old_re`* : old regular expression object
+ * - `new_re`* : old regular expression object
+ * - `type`*: type of regular expression:
+ *   + `mime`: mime regexp
+ *   + `header`: header regexp
+ *   + `rawheader`: raw header expression
+ *   + `body`: raw body regexp
+ *   + `url`: url regexp
+ * - `header`: for header and rawheader regexp means the name of header
+ */
+LUA_FUNCTION_DEF (config, replace_regexp);
+
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
 	LUA_INTERFACE_DEF (config, get_mempool),
@@ -390,6 +406,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_key),
 	LUA_INTERFACE_DEF (config, add_condition),
 	LUA_INTERFACE_DEF (config, register_regexp),
+	LUA_INTERFACE_DEF (config, replace_regexp),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
 	{NULL, NULL}
@@ -1602,6 +1619,58 @@ lua_config_register_regexp (lua_State *L)
 			else {
 				rspamd_re_cache_add (cfg->re_cache, re->re, type,
 						(gpointer) header_str, header_len);
+			}
+		}
+	}
+
+	return 0;
+}
+
+static gint
+lua_config_replace_regexp (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	struct rspamd_lua_regexp *old_re = NULL, *new_re = NULL;
+	const gchar *type_str = NULL, *header_str = NULL;
+	gsize header_len = 0;
+	GError *err = NULL;
+	enum rspamd_re_type type = RSPAMD_RE_BODY;
+
+	if (cfg != NULL) {
+		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
+				"*old_re=U{regexp};*new_re=U{regexp};*type=S;header=V",
+				&old_re, &new_re, &type_str, &header_len, &header_str)) {
+			msg_err_config ("cannot get parameters list: %e", err);
+
+			if (err) {
+				g_error_free (err);
+			}
+		}
+		else {
+			if (strcmp (type_str, "header") == 0) {
+				type = RSPAMD_RE_HEADER;
+			}
+			else if (strcmp (type_str, "rawheader") == 0) {
+				type = RSPAMD_RE_RAWHEADER;
+			}
+			else if (strcmp (type_str, "mime") == 0) {
+				type = RSPAMD_RE_MIME;
+			}
+			else if (strcmp (type_str, "body") == 0) {
+				type = RSPAMD_RE_BODY;
+			}
+			else if (strcmp (type_str, "url") == 0) {
+				type = RSPAMD_RE_URL;
+			}
+
+			if ((type == RSPAMD_RE_HEADER || type == RSPAMD_RE_RAWHEADER)
+					&& header_str == NULL) {
+				msg_err_config (
+						"header argument is mandatory for header/rawheader regexps");
+			}
+			else {
+				rspamd_re_cache_replace (cfg->re_cache, old_re->re,
+						type, (gpointer) header_str, header_len, new_re->re);
 			}
 		}
 	}
