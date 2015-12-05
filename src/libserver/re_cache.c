@@ -76,7 +76,6 @@ rspamd_re_cache_destroy (struct rspamd_re_cache *cache)
 	GHashTableIter it;
 	gpointer k, v;
 	struct rspamd_re_class *re_class;
-	guint i;
 
 	g_assert (cache != NULL);
 	g_hash_table_iter_init (&it, cache->re_classes);
@@ -140,7 +139,7 @@ rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
 	 */
 	rspamd_regexp_set_cache_id (re, cache->nre ++);
 	nre = rspamd_regexp_ref (re);
-	g_hash_table_insert (re_class->re, re, re);
+	g_hash_table_insert (re_class->re, nre, nre);
 }
 
 void
@@ -169,7 +168,10 @@ rspamd_re_cache_replace (struct rspamd_re_cache *cache,
 		src = g_hash_table_lookup (re_class->re, what);
 
 		if (src) {
-			g_hash_table_replace (re_class->re, what, with);
+			/*
+			 * On calling of this function, we actually unref old re
+			 */
+			g_hash_table_insert (re_class->re, what, rspamd_regexp_ref (with));
 		}
 	}
 }
@@ -182,7 +184,6 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache)
 	struct rspamd_re_class *re_class;
 	rspamd_cryptobox_hash_state_t st;
 	rspamd_regexp_t *re;
-	guint i;
 	guchar hash_out[rspamd_cryptobox_HASHBYTES];
 
 	g_assert (cache != NULL);
@@ -285,7 +286,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		/* Get list of specified headers */
 		headerlist = rspamd_message_get_header (task,
 				re_class->type_data,
-				FALSE);
+				is_strong);
 
 		if (headerlist) {
 			cur = headerlist;
@@ -451,6 +452,9 @@ rspamd_re_cache_process (struct rspamd_task *task,
 					rspamd_regexp_get_pattern (re));
 			return 0;
 		}
+
+		return rspamd_re_cache_exec_re (task, rt, re, re_class, re_id,
+				is_strong, is_multiple);
 	}
 
 	return 0;
