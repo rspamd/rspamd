@@ -138,6 +138,7 @@ rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
 	 * We set re id based on the global position in the cache
 	 */
 	rspamd_regexp_set_cache_id (re, cache->nre ++);
+	rspamd_regexp_set_class (re, re_class);
 	nre = rspamd_regexp_ref (re);
 	g_hash_table_insert (re_class->re, nre, nre);
 }
@@ -145,12 +146,9 @@ rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
 void
 rspamd_re_cache_replace (struct rspamd_re_cache *cache,
 		rspamd_regexp_t *what,
-		enum rspamd_re_type type,
-		gpointer type_data,
-		gsize datalen,
 		rspamd_regexp_t *with)
 {
-	guint64 class_id, re_id;
+	guint64 re_id;
 	struct rspamd_re_class *re_class;
 	rspamd_regexp_t *src;
 
@@ -158,8 +156,7 @@ rspamd_re_cache_replace (struct rspamd_re_cache *cache,
 	g_assert (what != NULL);
 	g_assert (with != NULL);
 
-	class_id = rspamd_re_cache_class_id (type, type_data, datalen);
-	re_class = g_hash_table_lookup (cache->re_classes, &class_id);
+	re_class = rspamd_regexp_get_class (what);
 
 	if (re_class != NULL) {
 		re_id = rspamd_regexp_get_cache_id (what);
@@ -168,8 +165,12 @@ rspamd_re_cache_replace (struct rspamd_re_cache *cache,
 		src = g_hash_table_lookup (re_class->re, what);
 
 		if (src) {
+			rspamd_regexp_set_cache_id (what, RSPAMD_INVALID_ID);
+			rspamd_regexp_set_class (what, NULL);
+			rspamd_regexp_set_cache_id (with, re_id);
+			rspamd_regexp_set_class (with, re_class);
 			/*
-			 * On calling of this function, we actually unref old re
+			 * On calling of this function, we actually unref old re (what)
 			 */
 			g_hash_table_insert (re_class->re, what, rspamd_regexp_ref (with));
 		}

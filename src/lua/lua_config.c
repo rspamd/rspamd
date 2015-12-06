@@ -369,15 +369,8 @@ LUA_FUNCTION_DEF (config, register_regexp);
  * @method rspamd_config:replace_regexp(params)
  * Replaces regexp with a new one
  * Params is the table with the follwoing fields (mandatory fields are marked with `*`):
- * - `old_re`* : old regular expression object
- * - `new_re`* : old regular expression object
- * - `type`*: type of regular expression:
- *   + `mime`: mime regexp
- *   + `header`: header regexp
- *   + `rawheader`: raw header expression
- *   + `body`: raw body regexp
- *   + `url`: url regexp
- * - `header`: for header and rawheader regexp means the name of header
+ * - `old_re`* : old regular expression object (must be in the cache)
+ * - `new_re`* : old regular expression object (must not be in the cache)
  */
 LUA_FUNCTION_DEF (config, replace_regexp);
 
@@ -1631,15 +1624,12 @@ lua_config_replace_regexp (lua_State *L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	struct rspamd_lua_regexp *old_re = NULL, *new_re = NULL;
-	const gchar *type_str = NULL, *header_str = NULL;
-	gsize header_len = 0;
 	GError *err = NULL;
-	enum rspamd_re_type type = RSPAMD_RE_BODY;
 
 	if (cfg != NULL) {
 		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
-				"*old_re=U{regexp};*new_re=U{regexp};*type=S;header=V",
-				&old_re, &new_re, &type_str, &header_len, &header_str)) {
+				"*old_re=U{regexp};*new_re=U{regexp}",
+				&old_re, &new_re)) {
 			msg_err_config ("cannot get parameters list: %e", err);
 
 			if (err) {
@@ -1647,31 +1637,7 @@ lua_config_replace_regexp (lua_State *L)
 			}
 		}
 		else {
-			if (strcmp (type_str, "header") == 0) {
-				type = RSPAMD_RE_HEADER;
-			}
-			else if (strcmp (type_str, "rawheader") == 0) {
-				type = RSPAMD_RE_RAWHEADER;
-			}
-			else if (strcmp (type_str, "mime") == 0) {
-				type = RSPAMD_RE_MIME;
-			}
-			else if (strcmp (type_str, "body") == 0) {
-				type = RSPAMD_RE_BODY;
-			}
-			else if (strcmp (type_str, "url") == 0) {
-				type = RSPAMD_RE_URL;
-			}
-
-			if ((type == RSPAMD_RE_HEADER || type == RSPAMD_RE_RAWHEADER)
-					&& header_str == NULL) {
-				msg_err_config (
-						"header argument is mandatory for header/rawheader regexps");
-			}
-			else {
-				rspamd_re_cache_replace (cfg->re_cache, old_re->re,
-						type, (gpointer) header_str, header_len, new_re->re);
-			}
+			rspamd_re_cache_replace (cfg->re_cache, old_re->re, new_re->re);
 		}
 	}
 

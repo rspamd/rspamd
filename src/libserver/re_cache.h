@@ -59,16 +59,10 @@ void rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
  * Replace regexp in the cache with another regexp
  * @param cache cache object
  * @param what re to replace
- * @param type type of object
- * @param type_data associated data with the type (e.g. header name)
- * @param datalen associated data length
  * @param with regexp object to replace the origin
  */
 void rspamd_re_cache_replace (struct rspamd_re_cache *cache,
 		rspamd_regexp_t *what,
-		enum rspamd_re_type type,
-		gpointer type_data,
-		gsize datalen,
 		rspamd_regexp_t *with);
 
 /**
