@@ -881,14 +881,17 @@ _.each(function(r)
   if rule['re_expr'] and rule['re'] then
     local res,nexpr = apply_replacements(rule['re_expr'])
     if res then
-      local nre = rspamd_regexp.create_cached(nexpr)
+      local nre = rspamd_regexp.create(nexpr)
       if not nre then
         rspamd_logger.errx(rspamd_config, 'cannot apply replacement for rule %1', r)
         rule['re'] = nil
       else
         rspamd_logger.debugx(rspamd_config, 'replace %1 -> %2', r, nexpr)
+        rspamd_config:replace_regexp({
+          old_re = rule['re'],
+          new_re = nre
+        })
         rule['re'] = nre
-        -- XXX: add removal from the cache logic
         rule['re_expr'] = nexpr
         nre:set_limit(match_limit)
       end
