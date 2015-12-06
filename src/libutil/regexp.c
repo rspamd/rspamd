@@ -51,6 +51,7 @@ struct rspamd_regexp_s {
 	regexp_id_t id;
 	ref_entry_t ref;
 	gpointer ud;
+	gpointer re_class;
 	guint64 cache_id;
 	gint flags;
 	gint ncaptures;
@@ -746,4 +747,25 @@ rspamd_regexp_get_id (rspamd_regexp_t *re)
 	g_assert (re != NULL);
 
 	return re->id;
+}
+
+gpointer
+rspamd_regexp_get_class (rspamd_regexp_t *re)
+{
+	g_assert (re != NULL);
+
+	return re->re_class;
+}
+
+gpointer
+rspamd_regexp_set_class (rspamd_regexp_t *re, gpointer re_class)
+{
+	gpointer old_class;
+
+	g_assert (re != NULL);
+
+	old_class = re->re_class;
+	re->re_class = re_class;
+
+	return old_class;
 }

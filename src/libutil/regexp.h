@@ -133,6 +133,17 @@ guint64 rspamd_regexp_get_cache_id (rspamd_regexp_t *re);
 guint64 rspamd_regexp_set_cache_id (rspamd_regexp_t *re, guint64 id);
 
 /**
+ * Get regexp class for the re object
+ */
+gpointer rspamd_regexp_get_class (rspamd_regexp_t *re);
+
+/**
+ * Set regexp class for the re object
+ * @return old re class value
+ */
+gpointer rspamd_regexp_set_class (rspamd_regexp_t *re, gpointer re_class);
+
+/**
  * Create new regexp cache
  * @return
  */
