@@ -1296,34 +1296,28 @@ rspamd_url_shift (struct rspamd_url *uri, gsize nlen,
 	case UF_SCHEMA:
 		if (uri->userlen > 0) {
 			uri->user -= shift;
-			uri->userlen -= shift;
 		}
 		if (uri->hostlen > 0) {
 			uri->host -= shift;
-			uri->hostlen -= shift;
 		}
 		/* Go forward */
 	case UF_HOST:
 		if (uri->datalen > 0) {
 			uri->data -= shift;
-			uri->datalen -= shift;
 		}
 		/* Go forward */
 	case UF_PATH:
 		if (uri->querylen > 0) {
 			uri->query -= shift;
-			uri->querylen -= shift;
 		}
 		/* Go forward */
 	case UF_QUERY:
 		if (uri->fragmentlen > 0) {
 			uri->fragment -= shift;
-			uri->fragmentlen -= shift;
 		}
 		/* Go forward */
 	case UF_FRAGMENT:
 	default:
-		uri->urllen -= shift;
 		break;
 	}
 }
