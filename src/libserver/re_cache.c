@@ -424,7 +424,7 @@ rspamd_re_cache_process (struct rspamd_task *task,
 		gboolean is_strong,
 		gboolean is_multiple)
 {
-	guint64 class_id, re_id;
+	guint64 re_id;
 	struct rspamd_re_class *re_class;
 	struct rspamd_re_cache *cache;
 
@@ -447,8 +447,7 @@ rspamd_re_cache_process (struct rspamd_task *task,
 	}
 	else {
 		/* Slow path */
-		class_id = rspamd_re_cache_class_id (type, type_data, datalen);
-		re_class = g_hash_table_lookup (cache->re_classes, &class_id);
+		re_class = rspamd_regexp_get_class (re);
 
 		if (re_class == NULL) {
 			msg_err_task ("cannot find re class for regexp '%s'",
