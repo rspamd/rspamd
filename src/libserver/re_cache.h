@@ -126,4 +126,11 @@ const gchar * rspamd_re_cache_type_to_string (enum rspamd_re_type type);
  */
 enum rspamd_re_type rspamd_re_cache_type_from_string (const char *str);
 
+/**
+ * Compile expressions to the hyperscan tree and store in the `cache_dir`
+ */
+gboolean rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
+		const char *cache_dir,
+		GError **err);
+
 #endif

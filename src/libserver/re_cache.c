@@ -32,6 +32,7 @@
 #include "libutil/util.h"
 #ifdef WITH_HYPERSCAN
 #include "hs.h"
+#include "unix-std.h"
 #endif
 
 struct rspamd_re_class {
@@ -62,6 +63,12 @@ struct rspamd_re_runtime {
 	guchar *results;
 	struct rspamd_re_cache *cache;
 };
+
+static GQuark
+rspamd_re_cache_quark (void)
+{
+	return g_quark_from_static_string ("re_cache");
+}
 
 static guint64
 rspamd_re_cache_class_id (enum rspamd_re_type type,
@@ -246,6 +253,8 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache)
 	if (cache->plt.cpu_features & HS_CPU_FEATURES_AVX2) {
 		features = rspamd_fstring_append (features, "AVX2", 4);
 	}
+
+	hs_set_allocator (g_malloc, g_free);
 
 	msg_info ("loaded hyperscan engine witch cpu tune '%s' and features '%V'",
 			platform, features);
@@ -620,4 +629,158 @@ rspamd_re_cache_type_from_string (const char *str)
 	}
 
 	return ret;
+}
+
+gboolean
+rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
+		const char *cache_dir,
+		GError **err)
+{
+	g_assert (cache != NULL);
+	g_assert (cache_dir != NULL);
+
+#ifndef WITH_HYPERSCAN
+	g_set_error (err, rspamd_re_cache_quark (), EINVAL, "hyperscan is disabled");
+	return FALSE;
+#else
+	GHashTableIter it, cit;
+	gpointer k, v;
+	struct rspamd_re_class *re_class;
+	gchar path[PATH_MAX];
+	hs_database_t *test_db;
+	gint fd, i, n, *hs_ids = NULL;
+	rspamd_regexp_t *re;
+	hs_compile_error_t *hs_errors;
+	guint *hs_flags = NULL;
+	const gchar **hs_pats = NULL;
+	gchar *hs_serialized;
+	gsize serialized_len;
+
+	g_hash_table_iter_init (&it, cache->re_classes);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		re_class = v;
+		rspamd_snprintf (path, sizeof (path), "%s%c%s.hs", cache_dir,
+				G_DIR_SEPARATOR, re_class->hash);
+		fd = open (path, O_CREAT|O_TRUNC|O_EXCL|O_WRONLY, 00600);
+
+		if (fd == -1) {
+			g_set_error (err, rspamd_re_cache_quark (), errno, "cannot open file "
+					"%s: %s", path, strerror (errno));
+			return FALSE;
+		}
+
+		g_hash_table_iter_init (&cit, re_class->re);
+		n = g_hash_table_size (re_class->re);
+		hs_flags = g_malloc0 (sizeof (*hs_flags) * n);
+		hs_ids = g_malloc (sizeof (*hs_ids) * n);
+		hs_pats = g_malloc (sizeof (*hs_pats) * n);
+		i = 0;
+
+		while (g_hash_table_iter_next (&cit, &k, &v)) {
+			re = v;
+
+			if (hs_compile (rspamd_regexp_get_pattern (re),
+					HS_FLAG_ALLOWEMPTY,
+					HS_MODE_BLOCK,
+					&cache->plt,
+					&test_db,
+					&hs_errors) != HS_SUCCESS) {
+				msg_info ("cannot compile %s to hyperscan, try prefilter match",
+						rspamd_regexp_get_pattern (re));
+				hs_free_compile_error (hs_errors);
+
+				if (hs_compile (rspamd_regexp_get_pattern (re),
+						HS_FLAG_ALLOWEMPTY | HS_FLAG_PREFILTER,
+						HS_MODE_BLOCK,
+						&cache->plt,
+						&test_db,
+						&hs_errors) != HS_SUCCESS) {
+					msg_info (
+							"cannot compile %s to hyperscan even using prefilter",
+							rspamd_regexp_get_pattern (re));
+					hs_free_compile_error (hs_errors);
+				}
+				else {
+					hs_free_database (test_db);
+					hs_flags[i] = HS_FLAG_ALLOWEMPTY | HS_FLAG_PREFILTER;
+					hs_ids[i] = rspamd_regexp_get_cache_id (re);
+					hs_pats[i] = rspamd_regexp_get_pattern (re);
+					i ++;
+				}
+			}
+			else {
+				hs_flags[i] = HS_FLAG_ALLOWEMPTY;
+				hs_ids[i] = rspamd_regexp_get_cache_id (re);
+				hs_pats[i] = rspamd_regexp_get_pattern (re);
+				i ++;
+				hs_free_database (test_db);
+			}
+		}
+		/* Adjust real re number */
+		n = i;
+
+		if (n > 0) {
+			/* Create the hs tree */
+			if (hs_compile_multi (hs_pats,
+					hs_flags,
+					hs_ids,
+					n,
+					HS_MODE_BLOCK,
+					&cache->plt,
+					&test_db,
+					&hs_errors) != HS_SUCCESS) {
+
+				g_set_error (err, rspamd_re_cache_quark (), EINVAL,
+						"cannot create tree of regexp when processing '%s': %s",
+						hs_pats[hs_errors->expression], hs_errors->message);
+				g_free (hs_flags);
+				g_free (hs_ids);
+				g_free (hs_pats);
+				close (fd);
+				hs_free_compile_error (hs_errors);
+
+				return FALSE;
+			}
+
+			g_free (hs_flags);
+			g_free (hs_ids);
+			g_free (hs_pats);
+
+			if (hs_serialize_database (test_db, &hs_serialized,
+					&serialized_len) != HS_SUCCESS) {
+				g_set_error (err,
+						rspamd_re_cache_quark (),
+						errno,
+						"cannot serialize tree of regexp for %s",
+						re_class->hash);
+
+				close (fd);
+				hs_free_database (test_db);
+
+				return FALSE;
+			}
+
+			hs_free_database (test_db);
+
+			if (write (fd, hs_serialized, serialized_len) != (gssize)serialized_len) {
+				g_set_error (err,
+						rspamd_re_cache_quark (),
+						errno,
+						"cannot serialize tree of regexp to %s: %s",
+						path, strerror (errno));
+				close (fd);
+				g_free (hs_serialized);
+
+				return FALSE;
+			}
+
+			g_free (hs_serialized);
+		}
+
+		close (fd);
+	}
+
+	return TRUE;
+#endif
 }
