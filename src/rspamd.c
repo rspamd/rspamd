@@ -432,21 +432,51 @@ make_listen_key (struct rspamd_worker_bind_conf *cf)
 }
 
 static void
+spawn_worker_type (struct rspamd_main *rspamd_main, struct event_base *ev_base,
+		struct rspamd_worker_conf *cf)
+{
+	gint i;
+
+	if (cf->worker->unique) {
+		if (cf->count > 1) {
+			msg_warn_main (
+					"cannot spawn more than 1 %s worker, so spawn one",
+					cf->worker->name);
+		}
+		rspamd_fork_worker (rspamd_main, cf, 0, ev_base);
+	}
+	else if (cf->worker->threaded) {
+		rspamd_fork_worker (rspamd_main, cf, 0, ev_base);
+	}
+	else {
+		for (i = 0; i < cf->count; i++) {
+			rspamd_fork_worker (rspamd_main, cf, i, ev_base);
+		}
+	}
+}
+
+static void
 spawn_workers (struct rspamd_main *rspamd_main, struct event_base *ev_base)
 {
 	GList *cur, *ls;
 	struct rspamd_worker_conf *cf;
-	gint i;
 	gpointer p;
 	guintptr key;
 	struct rspamd_worker_bind_conf *bcf;
-	gboolean listen_ok = FALSE;
+	gboolean listen_ok = FALSE, seen_hs_helper = FALSE;
+	GQuark qtype;
+
+	qtype = g_quark_try_string ("hs_helper");
 
 	cur = rspamd_main->cfg->workers;
 
 	while (cur) {
 		cf = cur->data;
 		listen_ok = FALSE;
+
+		if (cf->type == qtype) {
+			seen_hs_helper = TRUE;
+		}
 
 		if (cf->worker == NULL) {
 			msg_err_main ("type of worker is unspecified, skip spawning");
@@ -486,35 +516,54 @@ spawn_workers (struct rspamd_main *rspamd_main, struct event_base *ev_base)
 						cf->listen_socks = g_list_concat (cf->listen_socks, ls);
 					}
 				}
-			}
-
-			if (listen_ok) {
-				if (cf->worker->unique) {
-					if (cf->count > 1) {
-						msg_warn_main ("cannot spawn more than 1 %s worker, so spawn one",
-								cf->worker->name);
-					}
-					rspamd_fork_worker (rspamd_main, cf, 0, ev_base);
-				}
-				else if (cf->worker->threaded) {
-					rspamd_fork_worker (rspamd_main, cf, 0, ev_base);
+				if (listen_ok) {
+					spawn_worker_type (rspamd_main, ev_base, cf);
 				}
 				else {
-					for (i = 0; i < cf->count; i++) {
-						rspamd_fork_worker (rspamd_main, cf, i, ev_base);
-					}
+					msg_err_main ("cannot create listen socket for %s at %s",
+							g_quark_to_string (cf->type), cf->bind_conf->name);
+
+					exit (EXIT_FAILURE);
 				}
 			}
 			else {
-				msg_err_main ("cannot create listen socket for %s at %s",
-						g_quark_to_string (cf->type), cf->bind_conf->name);
-
-				exit (EXIT_FAILURE);
+				spawn_worker_type (rspamd_main, ev_base, cf);
 			}
 		}
 
 		cur = g_list_next (cur);
 	}
+
+#ifdef WITH_HYPERSCAN
+	if (!seen_hs_helper) {
+		/* We also need to spawn hyperscan helper if needed */
+		cf = rspamd_mempool_alloc0 (rspamd_main->cfg->cfg_pool,
+				sizeof (struct rspamd_worker_conf));
+		cf->params = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+		cf->active_workers = g_queue_new ();
+		rspamd_mempool_add_destructor (rspamd_main->cfg->cfg_pool,
+				(rspamd_mempool_destruct_t) g_hash_table_destroy,
+				cf->params);
+		rspamd_mempool_add_destructor (rspamd_main->cfg->cfg_pool,
+				(rspamd_mempool_destruct_t) g_queue_free,
+				cf->active_workers);
+		cf->count = 1;
+		cf->worker = rspamd_get_worker_by_type (rspamd_main->cfg, qtype);
+
+		if (cf->worker == NULL) {
+			msg_err_main ("unknown worker type: hs_helper");
+			return;
+		}
+
+		cf->type = qtype;
+
+		if (cf->worker->worker_init_func) {
+			cf->ctx = cf->worker->worker_init_func (rspamd_main->cfg);
+		}
+
+		spawn_worker_type (rspamd_main, ev_base, cf);
+	}
+#endif
 }
 
 static void
