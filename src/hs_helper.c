@@ -42,7 +42,7 @@ worker_t hs_helper_worker = {
 		init_hs_helper,             /* Init function */
 		start_hs_helper,            /* Start function */
 		FALSE,                      /* No socket */
-		FALSE,                      /* Unique */
+		TRUE,                       /* Unique */
 		FALSE,                      /* Non threaded */
 		TRUE,                       /* Killable */
 		SOCK_STREAM                 /* TCP socket */
@@ -69,7 +69,7 @@ init_hs_helper (struct rspamd_config *cfg)
 	ctx->cfg = cfg;
 	ctx->hs_dir = RSPAMD_DBDIR "/";
 
-	rspamd_rcl_register_worker_option (cfg, type, "cachedir",
+	rspamd_rcl_register_worker_option (cfg, type, "cache_dir",
 			rspamd_rcl_parse_struct_string, ctx,
 			G_STRUCT_OFFSET (struct hs_helper_ctx, hs_dir), 0);
 
@@ -85,6 +85,7 @@ rspamd_hs_helper_cleanup_dir (struct hs_helper_ctx *ctx)
 	struct stat st;
 	glob_t globbuf;
 	guint len, i;
+	gint rc;
 	gchar *pattern;
 	gboolean ret = TRUE;
 
@@ -96,11 +97,11 @@ rspamd_hs_helper_cleanup_dir (struct hs_helper_ctx *ctx)
 	}
 
 	globbuf.gl_offs = 0;
-	len = strlen (ctx->hs_dir) + sizeof ("*.hs");
+	len = strlen (ctx->hs_dir) + 1 + sizeof ("*.hs");
 	pattern = g_malloc (len);
-	rspamd_snprintf (pattern, len, "%s%s", ctx->hs_dir, "*.hs");
+	rspamd_snprintf (pattern, len, "%s%c%s", ctx->hs_dir, G_DIR_SEPARATOR, "*.hs");
 
-	if (glob (pattern, GLOB_DOOFFS, NULL, &globbuf) == 0) {
+	if ((rc = glob (pattern, GLOB_DOOFFS, NULL, &globbuf)) == 0) {
 		for (i = 0; i < globbuf.gl_pathc; i++) {
 			if (unlink (globbuf.gl_pathv[i]) == -1) {
 				msg_err ("cannot unlink %s: %s", globbuf.gl_pathv[i],
@@ -109,7 +110,7 @@ rspamd_hs_helper_cleanup_dir (struct hs_helper_ctx *ctx)
 			}
 		}
 	}
-	else {
+	else if (rc != GLOB_NOMATCH) {
 		msg_err ("glob %s failed: %s", pattern, strerror (errno));
 		ret = FALSE;
 	}
