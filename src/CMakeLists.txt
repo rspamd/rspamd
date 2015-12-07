@@ -104,6 +104,7 @@ ADD_LIBRARY(rspamd-server STATIC ${RSPAMD_UTIL} ${RSPAMD_LUA} ${RSPAMD_SERVER}
 		${CMAKE_CURRENT_BINARY_DIR}/modules.c ${PLUGINSSRC})
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-http-parser)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-cdb)
+TARGET_LINK_LIBRARIES(rspamd-server rspamd-lpeg)
 
 IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
 	ADD_DEPENDENCIES(rspamd-server rspamd-clang)
