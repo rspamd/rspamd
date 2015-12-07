@@ -47,6 +47,7 @@ OPTION(INSTALL_WEBUI       "Install web interface [default: ON]"                
 OPTION(WANT_SYSTEMD_UNITS  "Install systemd unit files on Linux [default: OFF]" OFF)
 OPTION(ENABLE_SNOWBALL     "Enable snowball stemmer [default: ON]"              ON)
 OPTION(ENABLE_CLANG_PLUGIN "Enable clang static analysing plugin [default: OFF]" OFF)
+OPTION(ENABLE_HYPERSCAN    "Enable hyperscan for fast regexp processing [default: OFF]" OFF)
 
 # Build optimized code for following CPU (default i386)
 #SET(CPU_TUNE               "i686")
@@ -620,6 +621,13 @@ ProcessPackage(OPENSSL LIBRARY crypto INCLUDE err.h INCLUDE_SUFFIXES include/ope
 	ROOT ${OPENSSL_ROOT_DIR} MODULES openssl)
 ProcessPackage(MAGIC LIBRARY magic INCLUDE magic.h INCLUDE_SUFFIXES include/libmagic
 	ROOT ${LIBMAGIC_ROOT_DIR} MODULES magic)
+
+IF(ENABLE_HYPERSCAN MATCHES "ON")
+	ProcessPackage(HYPERSCAN LIBRARY hs INCLUDE hs.h INCLUDE_SUFFIXES
+			include/hyperscan include/hs
+			ROOT ${HYPERSCAN_ROOT_DIR} MODULES hs)
+	SET(WITH_HYPERSCAN 1)
+ENDIF()
 
 #Check for openssl (required for dkim)
 IF(WITH_OPENSSL)
