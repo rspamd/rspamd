@@ -44,7 +44,8 @@ local known_plugins = {
   'Mail::SpamAssassin::Plugin::ReplaceTags',
   'Mail::SpamAssassin::Plugin::RelayEval',
   'Mail::SpamAssassin::Plugin::MIMEEval',
-  'Mail::SpamAssassin::Plugin::BodyEval'
+  'Mail::SpamAssassin::Plugin::BodyEval',
+  'Mail::SpamAssassin::Plugin::MIMEHeader',
 }
 
 -- Internal variables
@@ -534,7 +535,7 @@ local function process_sa_conf(f)
           return w ~= "" end,
       _.iter(split(l)))))
 
-    if words[1] == "header" then
+    if words[1] == "header" or words[1] == 'mimeheader' then
       -- header SYMBOL Header ~= /regexp/
       if valid_rule then
         insert_cur_rule()
@@ -565,6 +566,11 @@ local function process_sa_conf(f)
             cur_rule['re_expr'], cur_rule['symbol'])
         else
           handle_header_def(words[3], cur_rule)
+        end
+
+        if words[1] == 'mimeheader' then
+          cur_rule['ordinary'] = false
+          cur_rule['mime'] = true
         end
 
         if cur_rule['re'] and cur_rule['symbol'] and
@@ -961,7 +967,25 @@ _.each(function(k, r)
         local headers = {}
         local hname = h['header']
 
-          local hdr = task:get_header_full(hname, h['strong'])
+          local hdr
+          if h['mime'] then
+            local parts = task:get_parts()
+            for i,p in ipairs(parts) do
+              local m_hdr = p:get_header_full(hname, h['strong'])
+
+              if m_hdr then
+                if not hdr then
+                  hdr = {}
+                end
+                for k,mh in ipairs(m_hdr) do
+                  table.insert(hdr, mh)
+                end
+              end
+            end
+          else
+            hdr = task:get_header_full(hname, h['strong'])
+          end
+
           if hdr then
             for n, rh in ipairs(hdr) do
               -- Subject for optimization
