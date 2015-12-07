@@ -26,7 +26,6 @@
  * Rspamd fuzzy storage server
  */
 
-#include <libserver/rspamd_control.h>
 #include "config.h"
 #include "util.h"
 #include "rspamd.h"

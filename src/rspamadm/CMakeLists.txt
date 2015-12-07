@@ -7,7 +7,9 @@ SET(RSPAMADMSRC rspamadm.c commands.c pw.c keypair.c configtest.c
         ${CMAKE_SOURCE_DIR}/src/smtp_proxy.c
         ${CMAKE_SOURCE_DIR}/src/worker.c
         ${CMAKE_SOURCE_DIR}/src/http_proxy.c fuzzy_merge.c configdump.c control.c)
-
+IF (ENABLE_HYPERSCAN MATCHES "ON")
+    LIST(APPEND RSPAMADMSRC "${CMAKE_SOURCE_DIR}/src/hs_helper.c")
+ENDIF()
 ADD_EXECUTABLE(rspamadm ${RSPAMADMSRC})
 TARGET_LINK_LIBRARIES(rspamadm rspamd-server)
 TARGET_LINK_LIBRARIES(rspamadm ${RSPAMD_REQUIRED_LIBRARIES})
@@ -20,6 +22,7 @@ TARGET_LINK_LIBRARIES(rspamadm rspamd-actrie)
 IF (NOT DEBIAN_BUILD)
     SET_TARGET_PROPERTIES(rspamadm PROPERTIES VERSION ${RSPAMD_VERSION})
 ENDIF (NOT DEBIAN_BUILD)
+
 IF (ENABLE_HYPERSCAN MATCHES "ON")
     TARGET_LINK_LIBRARIES(rspamadm hs)
     SET_TARGET_PROPERTIES(rspamadm PROPERTIES LINKER_LANGUAGE CXX)

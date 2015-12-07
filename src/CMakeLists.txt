@@ -94,6 +94,10 @@ SET(PLUGINSSRC	plugins/surbl.c
 
 SET(MODULES_LIST surbl regexp chartable fuzzy_check spf dkim)
 SET(WORKERS_LIST normal controller smtp_proxy fuzzy lua http_proxy)
+IF (ENABLE_HYPERSCAN MATCHES "ON")
+	LIST(APPEND WORKERS_LIST "hs_helper")
+	LIST(APPEND RSPAMDSRC "hs_helper.c")
+ENDIF()
 
 AddModules(MODULES_LIST WORKERS_LIST)
 LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)

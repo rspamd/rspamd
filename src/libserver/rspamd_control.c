@@ -87,6 +87,13 @@ static const struct rspamd_control_cmd_match {
 				},
 				.type = RSPAMD_CONTROL_RERESOLVE
 		},
+		{
+				.name = {
+						.begin = "/recompile",
+						.len = sizeof ("/recompile") - 1
+				},
+				.type = RSPAMD_CONTROL_RECOMPILE
+		},
 };
 
 void
@@ -193,9 +200,14 @@ rspamd_control_write_reply (struct rspamd_control_session *session)
 			total_conns += elt->reply.reply.stat.conns;
 
 			break;
+
 		case RSPAMD_CONTROL_RELOAD:
 			ucl_object_insert_key (cur, ucl_object_fromint (
 					elt->reply.reply.reload.status), "status", 0, false);
+			break;
+		case RSPAMD_CONTROL_RECOMPILE:
+			ucl_object_insert_key (cur, ucl_object_fromint (
+					elt->reply.reply.recompile.status), "status", 0, false);
 			break;
 		case RSPAMD_CONTROL_RERESOLVE:
 			ucl_object_insert_key (cur, ucl_object_fromint (
@@ -390,6 +402,7 @@ rspamd_control_default_cmd_handler (gint fd,
 		rep.reply.stat.uptime = rspamd_get_calendar_ticks () - cd->worker->start_time;
 		break;
 	case RSPAMD_CONTROL_RELOAD:
+	case RSPAMD_CONTROL_RECOMPILE:
 		break;
 	case RSPAMD_CONTROL_RERESOLVE:
 		if (cd->worker->srv->cfg) {
