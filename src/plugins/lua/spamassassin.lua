@@ -97,29 +97,43 @@ local function handle_header_def(hline, cur_rule)
   local hdrs = split(hline, '[^|]+')
   local hdr_params = {}
   local cur_param = {}
+  -- Check if an re is an ordinary re
+  local ordinary = true
+
   for i,h in ipairs(hdrs) do
     if h == 'ALL' or h == 'ALL:raw' then
+      ordinary = false
       cur_rule['type'] = 'function'
       -- Pack closure
       local re = cur_rule['re']
       local not_f = cur_rule['not']
       local sym = cur_rule['symbol']
+      -- Rule to match all headers
+      rspamd_config:register_regexp({
+        re = re,
+        type = 'allheader'
+      })
       cur_rule['function'] = function(task)
-        local hdr = task:get_raw_headers()
-        if hdr then
-          local match = re:match(hdr)
-          if (match and not not_f) or
-            (not match and not_f) then
-            return 1
-          end
+        if not re then
+          rspamd_logger.errx(task, 're is missing for rule %s', h)
+          return 0
         end
-        return 0
+
+        return task:process_regexp({
+          re = re,
+          type = 'allheader'
+        })
       end
     else
       local args = split(h, '[^:]+')
       cur_param['strong'] = false
       cur_param['raw'] = false
       cur_param['header'] = args[1]
+
+      if args[2] then
+        -- We have some ops that are required for the header, so it's not ordinary
+        ordinary = false
+      end
 
       _.each(function(func)
           if func == 'addr' then
@@ -176,17 +190,20 @@ local function handle_header_def(hline, cur_rule)
         -- Some header rules require splitting to check of multiple headers
         if cur_param['header'] == 'MESSAGEID' then
           -- Special case for spamassassin
+          ordinary = false
           split_hdr_param(cur_param, {
             'Message-ID',
             'X-Message-ID',
             'Resent-Message-ID'})
         elseif cur_param['header'] == 'ToCc' then
+          ordinary = false
           split_hdr_param(cur_param, { 'To', 'Cc', 'Bcc' })
         else
           table.insert(hdr_params, cur_param)
         end
     end
 
+    cur_rule['ordinary'] = ordinary
     cur_rule['header'] = hdr_params
   end
 end
@@ -553,7 +570,7 @@ local function process_sa_conf(f)
         if cur_rule['re'] and cur_rule['symbol'] and
           (cur_rule['header'] or cur_rule['function']) then
           valid_rule = true
-          if cur_rule['header'] then
+          if cur_rule['header'] and cur_rule['ordinary'] then
             for i,h in ipairs(cur_rule['header']) do
               if type(h) == 'string' then
                 rspamd_config:register_regexp({
@@ -910,6 +927,36 @@ _.each(function(k, r)
     local f = function(task)
       local raw = false
       local check = {}
+      -- Cached path for ordinary expressions
+      if r['ordinary'] then
+        local h = r['header'][1]
+        local t = 'header'
+
+        if h['raw'] then
+          t = 'rawheader'
+        end
+
+        if not r['re'] then
+          rspamd_logger.errx(task, 're is missing for rule %s (%s header)', k,
+              h['header'])
+          return 0
+        end
+
+        local ret = task:process_regexp({
+          re = r['re'],
+          type = t,
+          strong = h['strong'],
+          header = h['header'],
+          raw = h['raw'],
+        })
+
+        if h['not'] then
+          return not ret
+        end
+        return ret
+      end
+
+      -- Slow path
       _.each(function(h)
         local headers = {}
         local hname = h['header']
@@ -998,6 +1045,11 @@ _.each(function(k, r)
 -- Parts rules
 _.each(function(k, r)
     local f = function(task)
+      if not r['re'] then
+        rspamd_logger.errx(task, 're is missing for rule %s', k)
+        return 0
+      end
+
       return task:process_regexp({
         re = r['re'],
         type = 'mime',
@@ -1021,6 +1073,11 @@ _.each(function(k, r)
 -- Raw body rules
 _.each(function(k, r)
     local f = function(task)
+      if not r['re'] then
+        rspamd_logger.errx(task, 're is missing for rule %s', k)
+        return 0
+      end
+
       return task:process_regexp({
         re = r['re'],
         type = 'body',
@@ -1044,6 +1101,11 @@ _.each(function(k, r)
 -- URL rules
 _.each(function(k, r)
     local f = function(task)
+      if not r['re'] then
+        rspamd_logger.errx(task, 're is missing for rule %s', k)
+        return 0
+      end
+
       return task:process_regexp({
         re = r['re'],
         type = 'url',

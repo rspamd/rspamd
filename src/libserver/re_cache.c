@@ -570,6 +570,9 @@ rspamd_re_cache_type_from_string (const char *str)
 		else if (strcmp (str, "url") == 0) {
 			ret = RSPAMD_RE_URL;
 		}
+		else if (strcmp (str, "allheader") == 0) {
+			ret = RSPAMD_RE_ALLHEADER;
+		}
 	}
 
 	return ret;
