@@ -631,7 +631,7 @@ rspamd_re_cache_type_from_string (const char *str)
 	return ret;
 }
 
-gboolean
+gint
 rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 		const char *cache_dir,
 		GError **err)
@@ -641,7 +641,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 
 #ifndef WITH_HYPERSCAN
 	g_set_error (err, rspamd_re_cache_quark (), EINVAL, "hyperscan is disabled");
-	return FALSE;
+	return -1;
 #else
 	GHashTableIter it, cit;
 	gpointer k, v;
@@ -654,7 +654,8 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 	guint *hs_flags = NULL;
 	const gchar **hs_pats = NULL;
 	gchar *hs_serialized;
-	gsize serialized_len;
+	gsize serialized_len, total = 0;
+	struct iovec iov[3];
 
 	g_hash_table_iter_init (&it, cache->re_classes);
 
@@ -667,7 +668,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 		if (fd == -1) {
 			g_set_error (err, rspamd_re_cache_quark (), errno, "cannot open file "
 					"%s: %s", path, strerror (errno));
-			return FALSE;
+			return -1;
 		}
 
 		g_hash_table_iter_init (&cit, re_class->re);
@@ -740,11 +741,10 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 				close (fd);
 				hs_free_compile_error (hs_errors);
 
-				return FALSE;
+				return -1;
 			}
 
 			g_free (hs_flags);
-			g_free (hs_ids);
 			g_free (hs_pats);
 
 			if (hs_serialize_database (test_db, &hs_serialized,
@@ -756,31 +756,45 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 						re_class->hash);
 
 				close (fd);
+				g_free (hs_ids);
 				hs_free_database (test_db);
 
-				return FALSE;
+				return -1;
 			}
 
 			hs_free_database (test_db);
 
-			if (write (fd, hs_serialized, serialized_len) != (gssize)serialized_len) {
+			/* Write N, then all ID's and then the compiled structure */
+			iov[0].iov_base = &n;
+			iov[0].iov_len = sizeof (n);
+			iov[1].iov_base = hs_ids;
+			iov[1].iov_len = sizeof (*hs_ids) * n;
+			iov[2].iov_base = hs_serialized;
+			iov[2].iov_len = serialized_len;
+
+			if (writev (fd, iov, 3) !=
+					(gssize)serialized_len + sizeof (n) + sizeof (*hs_ids) * n) {
 				g_set_error (err,
 						rspamd_re_cache_quark (),
 						errno,
 						"cannot serialize tree of regexp to %s: %s",
 						path, strerror (errno));
 				close (fd);
+				g_free (hs_ids);
 				g_free (hs_serialized);
 
-				return FALSE;
+				return -1;
 			}
 
+			total += n;
+
 			g_free (hs_serialized);
+			g_free (hs_ids);
 		}
 
 		close (fd);
 	}
 
-	return TRUE;
+	return total;
 #endif
 }

@@ -127,6 +127,7 @@ start_hs_helper (struct rspamd_worker *worker)
 	struct hs_helper_ctx *ctx = worker->ctx;
 	GError *err = NULL;
 	struct rspamd_srv_command srv_cmd;
+	gint ncompiled;
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"hs_helper",
@@ -136,15 +137,18 @@ start_hs_helper (struct rspamd_worker *worker)
 		msg_warn ("cannot cleanup cache dir '%s'", ctx->hs_dir);
 	}
 
-	if (!rspamd_re_cache_compile_hyperscan (ctx->cfg->re_cache,
+	if ((ncompiled = rspamd_re_cache_compile_hyperscan (ctx->cfg->re_cache,
 			ctx->hs_dir,
-			&err)) {
+			&err)) == -1) {
 		msg_err ("failed to compile re cache: %e", err);
 		g_error_free (err);
 
 		/* Tell main not to respawn process */
 		exit (EXIT_SUCCESS);
 	}
+
+	msg_info ("compiled %d regular expressions to the hyperscan tree",
+			ncompiled);
 
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();
