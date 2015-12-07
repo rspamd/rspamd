@@ -415,6 +415,10 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		debug_task ("checking rawbody regexp: %s -> %d",
 				rspamd_regexp_get_pattern (re), ret);
 		break;
+	case RSPAMD_RE_MAX:
+		msg_err_task ("regexp of class invalid has been called: %s",
+				rspamd_regexp_get_pattern (re));
+		break;
 	}
 
 	setbit (rt->checked, re_id);
@@ -526,7 +530,7 @@ rspamd_re_cache_type_to_string (enum rspamd_re_type type)
 		ret = "raw header";
 		break;
 	case RSPAMD_RE_ALLHEADER:
-		ret = "raw header";
+		ret = "all headers";
 		break;
 	case RSPAMD_RE_MIME:
 		ret = "part";
@@ -537,6 +541,35 @@ rspamd_re_cache_type_to_string (enum rspamd_re_type type)
 	case RSPAMD_RE_URL:
 		ret = "url";
 		break;
+	case RSPAMD_RE_MAX:
+		ret = "invalid class";
+		break;
+	}
+
+	return ret;
+}
+
+enum rspamd_re_type
+rspamd_re_cache_type_from_string (const char *str)
+{
+	enum rspamd_re_type ret = RSPAMD_RE_MAX;
+
+	if (str != NULL) {
+		if (strcmp (str, "header") == 0) {
+			ret = RSPAMD_RE_HEADER;
+		}
+		else if (strcmp (str, "rawheader") == 0) {
+			ret = RSPAMD_RE_RAWHEADER;
+		}
+		else if (strcmp (str, "mime") == 0) {
+			ret = RSPAMD_RE_MIME;
+		}
+		else if (strcmp (str, "body") == 0) {
+			ret = RSPAMD_RE_BODY;
+		}
+		else if (strcmp (str, "url") == 0) {
+			ret = RSPAMD_RE_URL;
+		}
 	}
 
 	return ret;

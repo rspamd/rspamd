@@ -1588,21 +1588,7 @@ lua_config_register_regexp (lua_State *L)
 			}
 		}
 		else {
-			if (strcmp (type_str, "header") == 0) {
-				type = RSPAMD_RE_HEADER;
-			}
-			else if (strcmp (type_str, "rawheader") == 0) {
-				type = RSPAMD_RE_RAWHEADER;
-			}
-			else if (strcmp (type_str, "mime") == 0) {
-				type = RSPAMD_RE_MIME;
-			}
-			else if (strcmp (type_str, "body") == 0) {
-				type = RSPAMD_RE_BODY;
-			}
-			else if (strcmp (type_str, "url") == 0) {
-				type = RSPAMD_RE_URL;
-			}
+			type = rspamd_re_cache_type_from_string (type_str);
 
 			if ((type == RSPAMD_RE_HEADER || type == RSPAMD_RE_RAWHEADER)
 					&& header_str == NULL) {

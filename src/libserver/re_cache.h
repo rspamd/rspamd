@@ -37,7 +37,8 @@ enum rspamd_re_type {
 	RSPAMD_RE_ALLHEADER,
 	RSPAMD_RE_MIME,
 	RSPAMD_RE_URL,
-	RSPAMD_RE_BODY
+	RSPAMD_RE_BODY,
+	RSPAMD_RE_MAX
 };
 
 /**
@@ -119,5 +120,10 @@ guint rspamd_re_cache_set_limit (struct rspamd_re_cache *cache, guint limit);
  * Convert re type to a human readable string (constant one)
  */
 const gchar * rspamd_re_cache_type_to_string (enum rspamd_re_type type);
+
+/**
+ * Convert re type string to the type enum
+ */
+enum rspamd_re_type rspamd_re_cache_type_from_string (const char *str);
 
 #endif
