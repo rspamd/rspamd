@@ -49,6 +49,10 @@ OPTION(ENABLE_SNOWBALL     "Enable snowball stemmer [default: ON]"              
 OPTION(ENABLE_CLANG_PLUGIN "Enable clang static analysing plugin [default: OFF]" OFF)
 OPTION(ENABLE_HYPERSCAN    "Enable hyperscan for fast regexp processing [default: OFF]" OFF)
 
+
+IF (ENABLE_HYPERSCAN MATCHES "ON")
+	ENABLE_LANGUAGE(CXX)
+ENDIF()
 # Build optimized code for following CPU (default i386)
 #SET(CPU_TUNE               "i686")
 
@@ -891,6 +895,7 @@ TRY_RUN(_CAN_RUN _CAN_COMPILE
 	CMAKE_FLAGS CMAKE_C_FLAGS="-pthread")
 IF(_CAN_RUN EQUAL 1)
 	SET(HAVE_PTHREAD_PROCESS_SHARED 1 CACHE INTERNAL "")
+	SET(RSPAMD_REQUIRED_LIBRARIES "${RSPAMD_REQUIRED_LIBRARIES} -lpthread")
 ENDIF(_CAN_RUN EQUAL 1)
 IF(HAVE_PTHREAD_PROCESS_SHARED)
 	MESSAGE(STATUS "pthread_mutexattr_setpshared is supported")

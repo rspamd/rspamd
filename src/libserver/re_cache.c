@@ -30,6 +30,9 @@
 #include "libserver/url.h"
 #include "libserver/task.h"
 #include "libutil/util.h"
+#ifdef WITH_HYPERSCAN
+#include "hs.h"
+#endif
 
 struct rspamd_re_class {
 	guint64 id;
@@ -38,6 +41,10 @@ struct rspamd_re_class {
 	gsize type_len;
 	GHashTable *re;
 	gchar hash[rspamd_cryptobox_HASHBYTES * 2 + 1];
+#ifdef WITH_HYPERSCAN
+	hs_database_t *hs_db;
+
+#endif
 };
 
 struct rspamd_re_cache {
@@ -45,6 +52,9 @@ struct rspamd_re_cache {
 	ref_entry_t ref;
 	guint nre;
 	guint max_re_data;
+#ifdef WITH_HYPERSCAN
+	hs_platform_info_t plt;
+#endif
 };
 
 struct rspamd_re_runtime {
@@ -208,6 +218,40 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache)
 		rspamd_snprintf (re_class->hash, sizeof (re_class->hash), "%*xs",
 				(gint)rspamd_cryptobox_HASHBYTES, hash_out);
 	}
+
+#ifdef WITH_HYPERSCAN
+	const gchar *platform = "generic";
+	rspamd_fstring_t *features = rspamd_fstring_new ();
+
+	g_assert (hs_populate_platform (&cache->plt) == HS_SUCCESS);
+
+	/* Now decode what we do have */
+	switch (cache->plt.tune) {
+	case HS_TUNE_FAMILY_HSW:
+		platform = "haswell";
+		break;
+	case HS_TUNE_FAMILY_SNB:
+		platform = "sandy";
+		break;
+	case HS_TUNE_FAMILY_BDW:
+		platform = "broadwell";
+		break;
+	case HS_TUNE_FAMILY_IVB:
+		platform = "ivy";
+		break;
+	default:
+		break;
+	}
+
+	if (cache->plt.cpu_features & HS_CPU_FEATURES_AVX2) {
+		features = rspamd_fstring_append (features, "AVX2", 4);
+	}
+
+	msg_info ("loaded hyperscan engine witch cpu tune '%s' and features '%V'",
+			platform, features);
+
+	rspamd_fstring_free (features);
+#endif
 }
 
 struct rspamd_re_runtime *
