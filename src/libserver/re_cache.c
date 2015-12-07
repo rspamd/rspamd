@@ -324,6 +324,15 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 			}
 		}
 		break;
+	case RSPAMD_RE_ALLHEADER:
+		raw = TRUE;
+		in = task->raw_headers_content.begin;
+		len = task->raw_headers_content.len;
+		ret = rspamd_re_cache_process_pcre (rt->cache, re, in,
+				len, raw, is_multiple);
+		debug_task ("checking allheader regexp: %s -> %d",
+				rspamd_regexp_get_pattern (re), ret);
+		break;
 	case RSPAMD_RE_MIME:
 		/* Iterate throught text parts */
 		for (i = 0; i < task->text_parts->len; i++) {
@@ -514,6 +523,9 @@ rspamd_re_cache_type_to_string (enum rspamd_re_type type)
 		ret = "header";
 		break;
 	case RSPAMD_RE_RAWHEADER:
+		ret = "raw header";
+		break;
+	case RSPAMD_RE_ALLHEADER:
 		ret = "raw header";
 		break;
 	case RSPAMD_RE_MIME:

@@ -34,6 +34,7 @@ struct rspamd_task;
 enum rspamd_re_type {
 	RSPAMD_RE_HEADER,
 	RSPAMD_RE_RAWHEADER,
+	RSPAMD_RE_ALLHEADER,
 	RSPAMD_RE_MIME,
 	RSPAMD_RE_URL,
 	RSPAMD_RE_BODY
