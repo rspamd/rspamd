@@ -35,6 +35,23 @@
 #include "unix-std.h"
 #endif
 
+#define msg_err_re_cache(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        "re_cache", cache->hash, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_re_cache(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+        "re_cache", cache->hash, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_re_cache(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        "re_cache", cache->hash, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_re_cache(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        "re_cache", cache->hash, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
 struct rspamd_re_class {
 	guint64 id;
 	enum rspamd_re_type type;
@@ -53,6 +70,7 @@ struct rspamd_re_cache {
 	ref_entry_t ref;
 	guint nre;
 	guint max_re_data;
+	gchar hash[rspamd_cryptobox_HASHBYTES * 2 + 1];
 #ifdef WITH_HYPERSCAN
 	hs_platform_info_t plt;
 #endif
@@ -200,18 +218,21 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache)
 	GHashTableIter it, cit;
 	gpointer k, v;
 	struct rspamd_re_class *re_class;
-	rspamd_cryptobox_hash_state_t st;
+	rspamd_cryptobox_hash_state_t st, st_global;
 	rspamd_regexp_t *re;
 	guchar hash_out[rspamd_cryptobox_HASHBYTES];
 
 	g_assert (cache != NULL);
 
 	g_hash_table_iter_init (&it, cache->re_classes);
+	rspamd_cryptobox_hash_init (&st_global, NULL, 0);
 
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		re_class = v;
 		rspamd_cryptobox_hash_init (&st, NULL, 0);
 		rspamd_cryptobox_hash_update (&st, (gpointer)&re_class->id,
+				sizeof (re_class->id));
+		rspamd_cryptobox_hash_update (&st_global, (gpointer) &re_class->id,
 				sizeof (re_class->id));
 		g_hash_table_iter_init (&cit, re_class->re);
 
@@ -219,12 +240,18 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache)
 			re = v;
 			rspamd_cryptobox_hash_update (&st, rspamd_regexp_get_id (re),
 					rspamd_cryptobox_HASHBYTES);
+			rspamd_cryptobox_hash_update (&st_global, rspamd_regexp_get_id (re),
+					rspamd_cryptobox_HASHBYTES);
 		}
 
 		rspamd_cryptobox_hash_final (&st, hash_out);
 		rspamd_snprintf (re_class->hash, sizeof (re_class->hash), "%*xs",
 				(gint)rspamd_cryptobox_HASHBYTES, hash_out);
 	}
+
+	rspamd_cryptobox_hash_final (&st, hash_out);
+	rspamd_snprintf (cache->hash, sizeof (cache->hash), "%*xs",
+			(gint) rspamd_cryptobox_HASHBYTES, hash_out);
 
 #ifdef WITH_HYPERSCAN
 	const gchar *platform = "generic";
@@ -256,7 +283,7 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache)
 
 	hs_set_allocator (g_malloc, g_free);
 
-	msg_info ("loaded hyperscan engine witch cpu tune '%s' and features '%V'",
+	msg_info_re_cache ("loaded hyperscan engine witch cpu tune '%s' and features '%V'",
 			platform, features);
 
 	rspamd_fstring_free (features);
@@ -687,7 +714,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 					&cache->plt,
 					&test_db,
 					&hs_errors) != HS_SUCCESS) {
-				msg_info ("cannot compile %s to hyperscan, try prefilter match",
+				msg_info_re_cache ("cannot compile %s to hyperscan, try prefilter match",
 						rspamd_regexp_get_pattern (re));
 				hs_free_compile_error (hs_errors);
 
@@ -697,7 +724,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 						&cache->plt,
 						&test_db,
 						&hs_errors) != HS_SUCCESS) {
-					msg_info (
+					msg_info_re_cache (
 							"cannot compile %s to hyperscan even using prefilter",
 							rspamd_regexp_get_pattern (re));
 					hs_free_compile_error (hs_errors);
@@ -773,7 +800,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 			iov[2].iov_len = serialized_len;
 
 			if (writev (fd, iov, 3) !=
-					(gssize)serialized_len + sizeof (n) + sizeof (*hs_ids) * n) {
+					(gssize)(serialized_len + sizeof (n) + sizeof (*hs_ids) * n)) {
 				g_set_error (err,
 						rspamd_re_cache_quark (),
 						errno,
