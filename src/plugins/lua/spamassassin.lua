@@ -376,8 +376,23 @@ local function maybe_parse_sa_function(line)
   local substitutions = {
     {'^exists:',
       function(task) -- filter
-        if task:get_header(arg) then
-          return 1
+        local hdrs_check = {}
+        if arg == 'MESSAGEID' then
+          hdrs_check = {
+            'Message-ID',
+            'X-Message-ID',
+            'Resent-Message-ID'
+          }
+        elseif arg == 'ToCc' then
+          hdrs_check = { 'To', 'Cc', 'Bcc' }
+        else
+          hdrs_check = {arg}
+        end
+
+        for i,h in ipairs(hdrs_check) do
+          if task:get_header(h) then
+            return 1
+          end
         end
         return 0
       end,
