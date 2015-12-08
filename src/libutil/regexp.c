@@ -594,6 +594,14 @@ rspamd_regexp_hash (gconstpointer a)
 	return res;
 }
 
+gboolean
+rspamd_regexp_cmp (gconstpointer a, gconstpointer b)
+{
+	const guchar *ia = a, *ib = b;
+
+	return memcmp (ia, ib, sizeof (regexp_id_t));
+}
+
 struct rspamd_regexp_cache*
 rspamd_regexp_cache_new (void)
 {

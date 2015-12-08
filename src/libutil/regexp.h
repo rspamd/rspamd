@@ -214,6 +214,11 @@ guint32 rspamd_regexp_hash (gconstpointer a);
 gboolean rspamd_regexp_equal (gconstpointer a, gconstpointer b);
 
 /**
+ * Acts like memcmp but for regexp
+ */
+gint rspamd_regexp_cmp (gconstpointer a, gconstpointer b);
+
+/**
  * Initialize superglobal regexp cache and library
  */
 void rspamd_regexp_library_init (void);
