@@ -73,7 +73,7 @@ struct rspamd_re_class {
 	rspamd_cryptobox_hash_state_t *st;
 #ifdef WITH_HYPERSCAN
 	hs_database_t *hs_db;
-
+	hs_scratch_t *hs_scratch;
 #endif
 };
 
@@ -1082,5 +1082,110 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 	msg_warn_re_cache ("unknown hyperscan cache file %s", path);
 
 	return FALSE;
+#endif
+}
+
+
+gboolean
+rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
+		const char *cache_dir)
+{
+	g_assert (cache != NULL);
+	g_assert (cache_dir != NULL);
+
+#ifndef WITH_HYPERSCAN
+	return FALSE;
+#else
+	gchar path[PATH_MAX];
+	gint fd, i, n, *hs_ids = NULL;
+	GHashTableIter it;
+	gpointer k, v;
+	guint8 *map, *p, *end;
+	struct rspamd_re_class *re_class;
+	struct rspamd_re_cache_elt *elt;
+	struct stat st;
+
+	g_hash_table_iter_init (&it, cache->re_classes);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		re_class = v;
+		rspamd_snprintf (path, sizeof (path), "%s%c%s.hs", cache_dir,
+				G_DIR_SEPARATOR, re_class->hash);
+
+		if (rspamd_re_cache_is_valid_hyperscan_file (cache, path)) {
+			msg_info_re_cache ("skip already valid file for re class '%s'",
+					re_class->hash);
+
+			fd = open (path, O_RDONLY);
+
+			/* Read number of regexps */
+			g_assert (fd != -1);
+			fstat (fd, &st);
+
+			map = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+
+			if (map == MAP_FAILED) {
+				msg_err_re_cache ("cannot mmap %s: %s", path, strerror (errno));
+				close (fd);
+				return FALSE;
+			}
+
+			close (fd);
+			end = map + st.st_size;
+			p = map + RSPAMD_HS_MAGIC_LEN + sizeof (cache->plt);
+			n = *(gint *)p;
+
+			if (n <= 0 || n * sizeof (gint) + /* IDs */
+							sizeof (guint64) + /* crc */
+							RSPAMD_HS_MAGIC_LEN + /* header */
+							sizeof (cache->plt) > (gsize)st.st_size) {
+				/* Some wrong amount of regexps */
+				msg_err_re_cache ("bad number of expressions in %s: %d",
+						path, n);
+				munmap (map, st.st_size);
+				return FALSE;
+			}
+
+			p += sizeof (n);
+			hs_ids = g_malloc (n * sizeof (*hs_ids));
+			memcpy (hs_ids, p, n * sizeof (*hs_ids));
+
+			/* Skip crc */
+			p += n * sizeof (*hs_ids) + sizeof (guint64);
+
+			if (hs_deserialize_database (p, end - p, &re_class->hs_db)
+					!= HS_SUCCESS) {
+				msg_err_re_cache ("bad hs database in %s", path);
+				munmap (map, st.st_size);
+				g_free (hs_ids);
+
+				return FALSE;
+			}
+
+			munmap (map, st.st_size);
+			re_class->hs_scratch = NULL;
+			g_assert (hs_alloc_scratch (re_class->hs_db,
+					&re_class->hs_scratch) == HS_SUCCESS);
+
+			/*
+			 * Now find hyperscan elts that are successfully compiled and
+			 * specify that they should be matched using hyperscan
+			 */
+			for (i = 0; i < n; i ++) {
+				g_assert ((gint)cache->re->len < hs_ids[i] && hs_ids[i] >= 0);
+				elt = g_ptr_array_index (cache->re, hs_ids[i]);
+				elt->match_type = RSPAMD_RE_CACHE_HYPERSCAN;
+			}
+
+			g_free (hs_ids);
+		}
+		else {
+			msg_err_re_cache ("invalid hyperscan hash file '%s'",
+					path);
+			return FALSE;
+		}
+	}
+
+	return TRUE;
 #endif
 }
