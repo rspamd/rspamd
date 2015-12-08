@@ -65,8 +65,20 @@ struct rspamd_re_class {
 #endif
 };
 
+enum rspamd_re_cache_elt_match_type {
+	RSPAMD_RE_CACHE_PCRE = 0,
+	RSPAMD_RE_CACHE_HYPERSCAN,
+	RSPAMD_RE_CACHE_HYPERSCAN_PRE
+};
+
+struct rspamd_re_cache_elt {
+	rspamd_regexp_t *re;
+	enum rspamd_re_cache_elt_match_type match_type;
+};
+
 struct rspamd_re_cache {
 	GHashTable *re_classes;
+	GPtrArray *re;
 	ref_entry_t ref;
 	guint nre;
 	guint max_re_data;
@@ -123,7 +135,17 @@ rspamd_re_cache_destroy (struct rspamd_re_cache *cache)
 	}
 
 	g_hash_table_unref (cache->re_classes);
+	g_ptr_array_free (cache->re, TRUE);
 	g_slice_free1 (sizeof (*cache), cache);
+}
+
+static void
+rspamd_re_cache_elt_dtor (gpointer e)
+{
+	struct rspamd_re_cache_elt *elt = e;
+
+	rspamd_regexp_unref (elt->re);
+	g_slice_free1 (sizeof (*elt), elt);
 }
 
 struct rspamd_re_cache *
@@ -134,6 +156,7 @@ rspamd_re_cache_new (void)
 	cache = g_slice_alloc (sizeof (*cache));
 	cache->re_classes = g_hash_table_new (g_int64_hash, g_int64_equal);
 	cache->nre = 0;
+	cache->re = g_ptr_array_new_full (256, rspamd_re_cache_elt_dtor);
 	REF_INIT_RETAIN (cache, rspamd_re_cache_destroy);
 
 	return cache;
@@ -146,6 +169,7 @@ rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
 	guint64 class_id;
 	struct rspamd_re_class *re_class;
 	rspamd_regexp_t *nre;
+	struct rspamd_re_cache_elt *elt;
 
 	g_assert (cache != NULL);
 	g_assert (re != NULL);
@@ -172,9 +196,14 @@ rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
 	/*
 	 * We set re id based on the global position in the cache
 	 */
-	rspamd_regexp_set_cache_id (re, cache->nre ++);
-	rspamd_regexp_set_class (re, re_class);
+	elt = g_slice_alloc0 (sizeof (*elt));
+	/* One ref for re_class */
 	nre = rspamd_regexp_ref (re);
+	rspamd_regexp_set_cache_id (re, cache->nre ++);
+	/* One ref for cache */
+	elt->re = rspamd_regexp_ref (re);
+	g_ptr_array_add (cache->re, elt);
+	rspamd_regexp_set_class (re, re_class);
 	g_hash_table_insert (re_class->re, nre, nre);
 }
 
@@ -186,6 +215,7 @@ rspamd_re_cache_replace (struct rspamd_re_cache *cache,
 	guint64 re_id;
 	struct rspamd_re_class *re_class;
 	rspamd_regexp_t *src;
+	struct rspamd_re_cache_elt *elt;
 
 	g_assert (cache != NULL);
 	g_assert (what != NULL);
@@ -198,6 +228,7 @@ rspamd_re_cache_replace (struct rspamd_re_cache *cache,
 
 		g_assert (re_id != RSPAMD_INVALID_ID);
 		src = g_hash_table_lookup (re_class->re, what);
+		elt = g_ptr_array_index (cache->re, re_id);
 
 		if (src) {
 			rspamd_regexp_set_cache_id (what, RSPAMD_INVALID_ID);
@@ -208,6 +239,12 @@ rspamd_re_cache_replace (struct rspamd_re_cache *cache,
 			 * On calling of this function, we actually unref old re (what)
 			 */
 			g_hash_table_insert (re_class->re, what, rspamd_regexp_ref (with));
+		}
+
+		if (elt) {
+			rspamd_regexp_unref (elt->re);
+			elt->re = rspamd_regexp_ref (with);
+			/* XXX: do not touch match type here */
 		}
 	}
 }
