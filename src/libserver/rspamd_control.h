@@ -36,11 +36,13 @@ enum rspamd_control_type {
 	RSPAMD_CONTROL_RELOAD,
 	RSPAMD_CONTROL_RERESOLVE,
 	RSPAMD_CONTROL_RECOMPILE,
+	RSPAMD_CONTROL_HYPERSCAN_LOADED,
 	RSPAMD_CONTROL_MAX
 };
 
 enum rspamd_srv_type {
 	RSPAMD_SRV_SOCKETPAIR = 0,
+	RSPAMD_SRV_HYPERSCAN_LOADED,
 };
 
 struct rspamd_control_command {
@@ -58,6 +60,9 @@ struct rspamd_control_command {
 		struct {
 			guint unused;
 		} recompile;
+		struct {
+			gpointer cache_dir;
+		} hs_loaded;
 	} cmd;
 };
 
@@ -80,6 +85,9 @@ struct rspamd_control_reply {
 		struct {
 			guint status;
 		} recompile;
+		struct {
+			guint status;
+		} hs_loaded;
 	} reply;
 };
 
@@ -93,6 +101,9 @@ struct rspamd_srv_command {
 			gchar pair_id[PAIR_ID_LEN];
 			guint pair_num;
 		} spair;
+		struct {
+			gpointer cache_dir;
+		} hs_loaded;
 	} cmd;
 };
 
@@ -103,6 +114,9 @@ struct rspamd_srv_reply {
 		struct {
 			gint code;
 		} spair;
+		struct {
+			gint unused;
+		} hs_loaded;
 	} reply;
 };
 

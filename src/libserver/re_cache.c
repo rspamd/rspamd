@@ -1105,7 +1105,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 	return FALSE;
 #else
 	gchar path[PATH_MAX];
-	gint fd, i, n, *hs_ids = NULL;
+	gint fd, i, n, *hs_ids = NULL, total = 0;
 	GHashTableIter it;
 	gpointer k, v;
 	guint8 *map, *p, *end;
@@ -1154,6 +1154,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 				return FALSE;
 			}
 
+			total += n;
 			p += sizeof (n);
 			hs_ids = g_malloc (n * sizeof (*hs_ids));
 			memcpy (hs_ids, p, n * sizeof (*hs_ids));
@@ -1193,6 +1194,8 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 			return FALSE;
 		}
 	}
+
+	msg_info_re_cache ("hyperscan database of %d regexps has been loaded", total);
 
 	return TRUE;
 #endif
