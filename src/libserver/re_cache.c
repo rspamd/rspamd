@@ -33,6 +33,12 @@
 #ifdef WITH_HYPERSCAN
 #include "hs.h"
 #include "unix-std.h"
+#include <signal.h>
+
+#ifdef HAVE_SYS_WAIT_H
+#include <sys/wait.h>
+#endif
+
 #endif
 
 #define msg_err_re_cache(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
@@ -729,6 +735,76 @@ rspamd_re_cache_type_from_string (const char *str)
 	return ret;
 }
 
+#ifdef WITH_HYPERSCAN
+static gboolean
+rspamd_re_cache_is_finite (struct rspamd_re_cache *cache,
+		rspamd_regexp_t *re)
+{
+	pid_t cld;
+	gint status;
+	struct timespec ts;
+	hs_compile_error_t *hs_errors;
+	hs_database_t *test_db;
+	const double wait_time = 0.1;
+	const gint max_tries = 10;
+	gint tries = 0, rc;
+
+	/* We need to restore SIGCHLD processing */
+	signal (SIGCHLD, SIG_DFL);
+	cld = fork ();
+	g_assert (cld != -1);
+
+	if (cld == 0) {
+		/* Try to compile pattern */
+		if (hs_compile (rspamd_regexp_get_pattern (re),
+				HS_FLAG_ALLOWEMPTY | HS_FLAG_PREFILTER,
+				HS_MODE_BLOCK,
+				&cache->plt,
+				&test_db,
+				&hs_errors) != HS_SUCCESS) {
+			exit (EXIT_FAILURE);
+		}
+
+		exit (EXIT_SUCCESS);
+	}
+	else {
+		double_to_ts (wait_time, &ts);
+
+		while ((rc = waitpid (cld, &status, WNOHANG)) == 0 && tries ++ < max_tries) {
+			(void)nanosleep (&ts, NULL);
+		}
+
+		/* Child has been terminated */
+		if (rc > 0) {
+			/* Forget about SIGCHLD after this point */
+			signal (SIGCHLD, SIG_IGN);
+
+			if (WIFEXITED (status) && WEXITSTATUS (status) == EXIT_SUCCESS) {
+				return TRUE;
+			}
+			else {
+				msg_info_re_cache (
+						"cannot approximate %s to hyperscan",
+						rspamd_regexp_get_pattern (re));
+
+				return FALSE;
+			}
+		}
+		else {
+			/* We consider that as timeout */
+			kill (cld, SIGKILL);
+			g_assert (waitpid (cld, &status, 0) != -1);
+			msg_info_re_cache (
+					"cannot approximate %s to hyperscan: timeout waiting",
+					rspamd_regexp_get_pattern (re));
+			signal (SIGCHLD, SIG_IGN);
+		}
+	}
+
+	return FALSE;
+}
+#endif
+
 gint
 rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 		const char *cache_dir,
@@ -806,23 +882,14 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 						rspamd_regexp_get_pattern (re));
 				hs_free_compile_error (hs_errors);
 
-				if (hs_compile (rspamd_regexp_get_pattern (re),
-						HS_FLAG_ALLOWEMPTY | HS_FLAG_PREFILTER,
-						HS_MODE_BLOCK,
-						&cache->plt,
-						&test_db,
-						&hs_errors) != HS_SUCCESS) {
-					msg_info_re_cache (
-							"cannot compile %s to hyperscan even using prefilter",
-							rspamd_regexp_get_pattern (re));
-					hs_free_compile_error (hs_errors);
-				}
-				else {
-					hs_free_database (test_db);
-					hs_flags[i] = HS_FLAG_ALLOWEMPTY | HS_FLAG_PREFILTER;
+				/* The approximation operation might take a significant
+				 * amount of time, so we need to check if it's finite
+				 */
+				if (rspamd_re_cache_is_finite (cache, re)) {
+						hs_flags[i] = HS_FLAG_ALLOWEMPTY | HS_FLAG_PREFILTER;
 					hs_ids[i] = rspamd_regexp_get_cache_id (re);
 					hs_pats[i] = rspamd_regexp_get_pattern (re);
-					i ++;
+					i++;
 				}
 			}
 			else {
