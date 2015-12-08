@@ -54,7 +54,7 @@
 
 #ifdef WITH_HYPERSCAN
 #define RSPAMD_HS_MAGIC_LEN (sizeof (rspamd_hs_magic))
-static const guchar rspamd_hs_magic[] = {'r', 's', 'h', 's', 'r', 'e', '1'};
+static const guchar rspamd_hs_magic[] = {'r', 's', 'h', 's', 'r', 'e', '1', '0'};
 #endif
 
 struct rspamd_re_class {
@@ -755,7 +755,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 	const gchar **hs_pats = NULL;
 	gchar *hs_serialized;
 	gsize serialized_len, total = 0;
-	struct iovec iov[5];
+	struct iovec iov[6];
 
 	g_hash_table_iter_init (&it, cache->re_classes);
 
@@ -772,7 +772,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 
 			/* Read number of regexps */
 			g_assert (fd != -1);
-			lseek (fd, SEEK_SET, RSPAMD_HS_MAGIC_LEN);
+			lseek (fd, RSPAMD_HS_MAGIC_LEN + sizeof (cache->plt), SEEK_SET);
 			read (fd, &n, sizeof (n));
 			total += n;
 			close (fd);
@@ -880,18 +880,27 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 
 			hs_free_database (test_db);
 
-			/* Write N, then all ID's and then the compiled structure */
+			/*
+			 * Magic - 8 bytes
+			 * Platform - sizeof (platform)
+			 * n - number of regexps
+			 * n * <regexp ids>
+			 * crc - 8 bytes checksum
+			 * <hyperscan blob>
+			 */
+			crc = XXH64 (hs_serialized, serialized_len, 0xdeadbabe);
 			iov[0].iov_base = (void *)rspamd_hs_magic;
 			iov[0].iov_len = RSPAMD_HS_MAGIC_LEN;
-			iov[1].iov_base = &n;
-			iov[1].iov_len = sizeof (n);
-			crc = XXH64 (hs_serialized, serialized_len, 0xdeadbabe);
-			iov[2].iov_base = &crc;
-			iov[2].iov_len = sizeof (crc);
+			iov[1].iov_base = &cache->plt;
+			iov[1].iov_len = sizeof (cache->plt);
+			iov[2].iov_base = &n;
+			iov[2].iov_len = sizeof (n);
 			iov[3].iov_base = hs_ids;
 			iov[3].iov_len = sizeof (*hs_ids) * n;
-			iov[4].iov_base = hs_serialized;
-			iov[4].iov_len = serialized_len;
+			iov[4].iov_base = &crc;
+			iov[4].iov_len = sizeof (crc);
+			iov[5].iov_base = hs_serialized;
+			iov[5].iov_len = serialized_len;
 
 			if (writev (fd, iov, G_N_ELEMENTS (iov)) == -1) {
 				g_set_error (err,
@@ -936,6 +945,7 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 	struct rspamd_re_class *re_class;
 	gsize len;
 	const gchar *hash_pos;
+	hs_platform_info_t test_plt;
 
 	len = strlen (path);
 
@@ -970,16 +980,34 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 				return FALSE;
 			}
 
-			close (fd);
-
 			if (memcmp (magicbuf, rspamd_hs_magic, sizeof (magicbuf)) != 0) {
 				msg_err_re_cache ("cannot open hyperscan cache file %s: "
 						"bad magic ('%*xs', '%*xs' expected)",
 						path, (int) RSPAMD_HS_MAGIC_LEN, magicbuf,
 						(int) RSPAMD_HS_MAGIC_LEN, rspamd_hs_magic);
 
+				close (fd);
 				return FALSE;
 			}
+
+			if (read (fd, &test_plt, sizeof (test_plt)) != sizeof (test_plt)) {
+				msg_err_re_cache ("cannot read hyperscan cache file %s: %s",
+						path, strerror (errno));
+				close (fd);
+				return FALSE;
+			}
+
+			if (memcmp (&test_plt, &cache->plt, sizeof (test_plt)) != 0) {
+				msg_err_re_cache ("cannot open hyperscan cache file %s: "
+						"compiled for a different platform",
+						path);
+
+				close (fd);
+				return FALSE;
+			}
+
+			/* XXX: add crc check */
+			close (fd);
 
 			return TRUE;
 		}
