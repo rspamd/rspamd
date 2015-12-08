@@ -52,6 +52,11 @@
         G_STRFUNC, \
         __VA_ARGS__)
 
+#ifdef WITH_HYPERSCAN
+#define RSPAMD_HS_MAGIC_LEN (sizeof (rspamd_hs_magic))
+static const guchar rspamd_hs_magic[] = {'r', 's', 'h', 's', 'r', 'e', '1'};
+#endif
+
 struct rspamd_re_class {
 	guint64 id;
 	enum rspamd_re_type type;
@@ -860,5 +865,69 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 	}
 
 	return total;
+#endif
+}
+
+gboolean
+rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
+		const char *path)
+{
+	g_assert (cache != NULL);
+	g_assert (path != NULL);
+
+#ifndef WITH_HYPERSCAN
+	return FALSE;
+#else
+	gint fd;
+	guchar magicbuf[RSPAMD_HS_MAGIC_LEN];
+	GHashTableIter it;
+	gpointer k, v;
+	struct rspamd_re_class *re_class;
+	gsize len;
+	const gchar *hash_pos;
+
+	len = strlen (path);
+
+	if (len < sizeof (rspamd_cryptobox_HASHBYTES * 2 + 3)) {
+		return FALSE;
+	}
+
+	if (memcmp (path + len - 3, ".hs", 3) != 0) {
+		return FALSE;
+	}
+
+	hash_pos = path + len - 3 - rspamd_cryptobox_HASHBYTES * 2;
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		re_class = v;
+
+		if (memcmp (hash_pos, re_class->hash, sizeof (re_class->hash)) == 0) {
+			/* Open file and check magic */
+			fd = open (path, O_RDONLY);
+
+			if (fd == -1) {
+				msg_err_re_cache ("cannot open hyperscan cache file %s: %s",
+						path, strerror (errno));
+				return FALSE;
+			}
+
+			if (read (fd, magicbuf, sizeof (magicbuf)) != sizeof (magicbuf)) {
+				msg_err_re_cache ("cannot read hyperscan cache file %s: %s",
+						path, strerror (errno));
+				close (fd);
+				return FALSE;
+			}
+
+			if (memcmp (magicbuf, rspamd_hs_magic, sizeof (magicbuf)) != 0) {
+				msg_err_re_cache ("cannot open hyperscan cache file %s: "
+						"bad magic ('%*xs', '%*xs' expected)",
+						path, strerror (errno),
+						(int) RSPAMD_HS_MAGIC_LEN, magicbuf,
+						(int) RSPAMD_HS_MAGIC_LEN, rspamd_hs_magic);
+
+				return FALSE;
+			}
+		}
+	}
 #endif
 }
