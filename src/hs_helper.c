@@ -32,6 +32,8 @@
 
 #ifdef HAVE_GLOB_H
 #include <glob.h>
+#include <libserver/rspamd_control.h>
+
 #endif
 
 static gpointer init_hs_helper (struct rspamd_config *cfg);
@@ -52,7 +54,7 @@ worker_t hs_helper_worker = {
  * Worker's context
  */
 struct hs_helper_ctx {
-	const gchar *hs_dir;
+	gchar *hs_dir;
 	struct rspamd_config *cfg;
 	struct event_base *ev_base;
 };
@@ -124,17 +126,12 @@ rspamd_hs_helper_cleanup_dir (struct hs_helper_ctx *ctx)
 	return ret;
 }
 
-static void
-start_hs_helper (struct rspamd_worker *worker)
+static gboolean
+rspamd_rs_compile (struct hs_helper_ctx *ctx, struct rspamd_worker *worker)
 {
-	struct hs_helper_ctx *ctx = worker->ctx;
 	GError *err = NULL;
-	struct rspamd_srv_command srv_cmd;
+	static struct rspamd_srv_command srv_cmd;
 	gint ncompiled;
-
-	ctx->ev_base = rspamd_prepare_worker (worker,
-			"hs_helper",
-			NULL);
 
 	if (!rspamd_hs_helper_cleanup_dir (ctx)) {
 		msg_warn ("cannot cleanup cache dir '%s'", ctx->hs_dir);
@@ -146,12 +143,59 @@ start_hs_helper (struct rspamd_worker *worker)
 		msg_err ("failed to compile re cache: %e", err);
 		g_error_free (err);
 
-		/* Tell main not to respawn process */
-		exit (EXIT_SUCCESS);
+		return FALSE;
 	}
 
 	msg_info ("compiled %d regular expressions to the hyperscan tree",
 			ncompiled);
+
+	srv_cmd.type = RSPAMD_SRV_HYPERSCAN_LOADED;
+	srv_cmd.cmd.hs_loaded.cache_dir = ctx->hs_dir;
+
+	rspamd_srv_send_command (worker, ctx->ev_base, &srv_cmd, NULL, NULL);
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_hs_helper_reload (struct rspamd_main *rspamd_main,
+		struct rspamd_worker *worker, gint fd,
+		struct rspamd_control_command *cmd,
+		gpointer ud)
+{
+	struct rspamd_control_reply rep;
+	struct hs_helper_ctx *ctx = ud;
+
+	msg_info ("recompiling hyperscan expressions after receiving reload command");
+	memset (&rep, 0, sizeof (rep));
+	rep.type = RSPAMD_CONTROL_RECOMPILE;
+
+	rep.reply.recompile.status = rspamd_rs_compile (ctx, worker);
+
+	if (write (fd, &rep, sizeof (rep)) != sizeof (rep)) {
+		msg_err ("cannot write reply to the control socket: %s",
+				strerror (errno));
+	}
+
+	return TRUE;
+}
+
+static void
+start_hs_helper (struct rspamd_worker *worker)
+{
+	struct hs_helper_ctx *ctx = worker->ctx;
+
+	ctx->ev_base = rspamd_prepare_worker (worker,
+			"hs_helper",
+			NULL);
+
+	if (!rspamd_rs_compile (ctx, worker)) {
+		/* Tell main not to respawn more workers */
+		exit (EXIT_SUCCESS);
+	}
+
+	rspamd_control_worker_add_cmd_handler (worker, RSPAMD_CONTROL_RECOMPILE,
+			rspamd_hs_helper_reload, ctx);
 
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();
