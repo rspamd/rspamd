@@ -64,6 +64,7 @@ struct rspamd_re_class {
 	gsize type_len;
 	GHashTable *re;
 	gchar hash[rspamd_cryptobox_HASHBYTES + 1];
+	rspamd_cryptobox_hash_state_t *st;
 #ifdef WITH_HYPERSCAN
 	hs_database_t *hs_db;
 
@@ -256,44 +257,71 @@ rspamd_re_cache_replace (struct rspamd_re_cache *cache,
 	}
 }
 
+static gint
+rspamd_re_cache_sort_func (gconstpointer a, gconstpointer b)
+{
+	struct rspamd_re_cache_elt * const *re1 = a, * const *re2 = b;
+
+	return rspamd_regexp_cmp (rspamd_regexp_get_id ((*re1)->re),
+			rspamd_regexp_get_id ((*re2)->re));
+}
+
 void
 rspamd_re_cache_init (struct rspamd_re_cache *cache)
 {
-	GHashTableIter it, cit;
+	guint i;
+	GHashTableIter it;
 	gpointer k, v;
 	struct rspamd_re_class *re_class;
-	rspamd_cryptobox_hash_state_t st, st_global;
+	rspamd_cryptobox_hash_state_t st_global;
 	rspamd_regexp_t *re;
+	struct rspamd_re_cache_elt *elt;
 	guchar hash_out[rspamd_cryptobox_HASHBYTES];
 
 	g_assert (cache != NULL);
 
-	g_hash_table_iter_init (&it, cache->re_classes);
 	rspamd_cryptobox_hash_init (&st_global, NULL, 0);
+	/* Resort all regexps */
+	g_ptr_array_sort (cache->re, rspamd_re_cache_sort_func);
 
-	while (g_hash_table_iter_next (&it, &k, &v)) {
-		re_class = v;
-		rspamd_cryptobox_hash_init (&st, NULL, 0);
-		rspamd_cryptobox_hash_update (&st, (gpointer)&re_class->id,
+	for (i = 0; i < cache->re->len; i ++) {
+		elt = g_ptr_array_index (cache->re, i);
+		re = elt->re;
+		rspamd_regexp_set_cache_id (re, i);
+		re_class = rspamd_regexp_get_class (re);
+
+		if (re_class->st == NULL) {
+			re_class->st = g_slice_alloc (sizeof (*re_class->st));
+			rspamd_cryptobox_hash_init (re_class->st, NULL, 0);
+		}
+
+		/* Update hashes */
+		rspamd_cryptobox_hash_update (re_class->st, (gpointer) &re_class->id,
 				sizeof (re_class->id));
 		rspamd_cryptobox_hash_update (&st_global, (gpointer) &re_class->id,
 				sizeof (re_class->id));
-		g_hash_table_iter_init (&cit, re_class->re);
-
-		while (g_hash_table_iter_next (&cit, &k, &v)) {
-			re = v;
-			rspamd_cryptobox_hash_update (&st, rspamd_regexp_get_id (re),
-					rspamd_cryptobox_HASHBYTES);
-			rspamd_cryptobox_hash_update (&st_global, rspamd_regexp_get_id (re),
-					rspamd_cryptobox_HASHBYTES);
-		}
-
-		rspamd_cryptobox_hash_final (&st, hash_out);
-		rspamd_snprintf (re_class->hash, sizeof (re_class->hash), "%*xs",
-				(gint)rspamd_cryptobox_HASHBYTES, hash_out);
+		rspamd_cryptobox_hash_update (re_class->st, rspamd_regexp_get_id (re),
+				rspamd_cryptobox_HASHBYTES);
+		rspamd_cryptobox_hash_update (&st_global, rspamd_regexp_get_id (re),
+				rspamd_cryptobox_HASHBYTES);
 	}
 
-	rspamd_cryptobox_hash_final (&st, hash_out);
+	/* Now finalize all classes */
+	g_hash_table_iter_init (&it, cache->re_classes);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		re_class = v;
+
+		if (re_class->st) {
+			rspamd_cryptobox_hash_final (re_class->st, hash_out);
+			rspamd_snprintf (re_class->hash, sizeof (re_class->hash), "%*xs",
+					(gint) rspamd_cryptobox_HASHBYTES, hash_out);
+			g_slice_free1 (sizeof (*re_class->st), re_class->st);
+			re_class->st = NULL;
+		}
+	}
+
+	rspamd_cryptobox_hash_final (&st_global, hash_out);
 	rspamd_snprintf (cache->hash, sizeof (cache->hash), "%*xs",
 			(gint) rspamd_cryptobox_HASHBYTES, hash_out);
 
@@ -720,13 +748,14 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 	gchar path[PATH_MAX];
 	hs_database_t *test_db;
 	gint fd, i, n, *hs_ids = NULL;
+	guint64 crc;
 	rspamd_regexp_t *re;
 	hs_compile_error_t *hs_errors;
 	guint *hs_flags = NULL;
 	const gchar **hs_pats = NULL;
 	gchar *hs_serialized;
 	gsize serialized_len, total = 0;
-	struct iovec iov[3];
+	struct iovec iov[5];
 
 	g_hash_table_iter_init (&it, cache->re_classes);
 
@@ -746,6 +775,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 			lseek (fd, SEEK_SET, RSPAMD_HS_MAGIC_LEN);
 			read (fd, &n, sizeof (n));
 			total += n;
+			close (fd);
 			continue;
 		}
 
@@ -851,15 +881,19 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 			hs_free_database (test_db);
 
 			/* Write N, then all ID's and then the compiled structure */
-			iov[0].iov_base = &n;
-			iov[0].iov_len = sizeof (n);
-			iov[1].iov_base = hs_ids;
-			iov[1].iov_len = sizeof (*hs_ids) * n;
-			iov[2].iov_base = hs_serialized;
-			iov[2].iov_len = serialized_len;
+			iov[0].iov_base = (void *)rspamd_hs_magic;
+			iov[0].iov_len = RSPAMD_HS_MAGIC_LEN;
+			iov[1].iov_base = &n;
+			iov[1].iov_len = sizeof (n);
+			crc = XXH64 (hs_serialized, serialized_len, 0xdeadbabe);
+			iov[2].iov_base = &crc;
+			iov[2].iov_len = sizeof (crc);
+			iov[3].iov_base = hs_ids;
+			iov[3].iov_len = sizeof (*hs_ids) * n;
+			iov[4].iov_base = hs_serialized;
+			iov[4].iov_len = serialized_len;
 
-			if (writev (fd, iov, 3) !=
-					(gssize)(serialized_len + sizeof (n) + sizeof (*hs_ids) * n)) {
+			if (writev (fd, iov, G_N_ELEMENTS (iov)) == -1) {
 				g_set_error (err,
 						rspamd_re_cache_quark (),
 						errno,
@@ -913,13 +947,13 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 		return FALSE;
 	}
 
-	hash_pos = path + len - 3 - rspamd_cryptobox_HASHBYTES;
+	hash_pos = path + len - 3 - (sizeof (re_class->hash) - 1);
 	g_hash_table_iter_init (&it, cache->re_classes);
 
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		re_class = v;
 
-		if (memcmp (hash_pos, re_class->hash, sizeof (re_class->hash)) == 0) {
+		if (memcmp (hash_pos, re_class->hash, sizeof (re_class->hash) - 1) == 0) {
 			/* Open file and check magic */
 			fd = open (path, O_RDONLY);
 
@@ -941,8 +975,7 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 			if (memcmp (magicbuf, rspamd_hs_magic, sizeof (magicbuf)) != 0) {
 				msg_err_re_cache ("cannot open hyperscan cache file %s: "
 						"bad magic ('%*xs', '%*xs' expected)",
-						path, strerror (errno),
-						(int) RSPAMD_HS_MAGIC_LEN, magicbuf,
+						path, (int) RSPAMD_HS_MAGIC_LEN, magicbuf,
 						(int) RSPAMD_HS_MAGIC_LEN, rspamd_hs_magic);
 
 				return FALSE;
