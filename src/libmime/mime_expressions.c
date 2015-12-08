@@ -239,7 +239,7 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 	}
 	else {
 		result->header = rspamd_mempool_strdup (pool, line);
-		result->type = RSPAMD_RE_HEADER;
+		result->type = RSPAMD_RE_MAX;
 		line = start;
 	}
 	/* Find begin of regexp */
@@ -327,6 +327,11 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 			p = NULL;
 			break;
 		}
+	}
+
+	if (result->type >= RSPAMD_RE_MAX) {
+		msg_err_pool ("could not read regexp: %s, unknown type", src);
+		return NULL;
 	}
 
 	result->regexp_text = rspamd_mempool_strdup (pool, start);
