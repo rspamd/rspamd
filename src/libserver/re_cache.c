@@ -1121,7 +1121,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 				G_DIR_SEPARATOR, re_class->hash);
 
 		if (rspamd_re_cache_is_valid_hyperscan_file (cache, path)) {
-			msg_info_re_cache ("skip already valid file for re class '%s'",
+			msg_debug_re_cache ("load hyperscan database from '%s'",
 					re_class->hash);
 
 			fd = open (path, O_RDONLY);
@@ -1181,7 +1181,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 			 * specify that they should be matched using hyperscan
 			 */
 			for (i = 0; i < n; i ++) {
-				g_assert ((gint)cache->re->len < hs_ids[i] && hs_ids[i] >= 0);
+				g_assert ((gint)cache->re->len > hs_ids[i] && hs_ids[i] >= 0);
 				elt = g_ptr_array_index (cache->re, hs_ids[i]);
 				elt->match_type = RSPAMD_RE_CACHE_HYPERSCAN;
 			}

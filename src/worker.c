@@ -26,6 +26,7 @@
  * Rspamd worker implementation
  */
 
+#include <libserver/rspamd_control.h>
 #include "config.h"
 #include "libutil/util.h"
 #include "libutil/map.h"
@@ -39,6 +40,7 @@
 #include "keypairs_cache.h"
 #include "libstat/stat_api.h"
 #include "libserver/worker_util.h"
+#include "libserver/rspamd_control.h"
 
 #include "lua/lua_common.h"
 
@@ -280,6 +282,31 @@ accept_socket (gint fd, short what, void *arg)
 		ctx->ev_base);
 }
 
+#ifdef WITH_HYPERSCAN
+static gboolean
+rspamd_worker_hyperscan_ready (struct rspamd_main *rspamd_main,
+		struct rspamd_worker *worker, gint fd,
+		struct rspamd_control_command *cmd,
+		gpointer ud)
+{
+	struct rspamd_control_reply rep;
+
+	msg_info ("loading hyperscan expressions after receiving compilation notice");
+	memset (&rep, 0, sizeof (rep));
+	rep.type = RSPAMD_CONTROL_HYPERSCAN_LOADED;
+
+	rep.reply.hs_loaded.status = rspamd_re_cache_load_hyperscan (
+			worker->srv->cfg->re_cache, cmd->cmd.hs_loaded.cache_dir);
+
+	if (write (fd, &rep, sizeof (rep)) != sizeof (rep)) {
+		msg_err ("cannot write reply to the control socket: %s",
+				strerror (errno));
+	}
+
+	return TRUE;
+}
+#endif
+
 gpointer
 init_worker (struct rspamd_config *cfg)
 {
@@ -358,6 +385,11 @@ start_worker (struct rspamd_worker *worker)
 	/* XXX: stupid default */
 	ctx->keys_cache = rspamd_keypair_cache_new (256);
 	rspamd_stat_init (worker->srv->cfg);
+
+#ifdef WITH_HYPERSCAN
+	rspamd_control_worker_add_cmd_handler (worker, RSPAMD_CONTROL_HYPERSCAN_LOADED,
+			rspamd_worker_hyperscan_ready, ctx);
+#endif
 
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();
