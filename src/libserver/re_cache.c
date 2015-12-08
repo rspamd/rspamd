@@ -63,7 +63,7 @@ struct rspamd_re_class {
 	gpointer type_data;
 	gsize type_len;
 	GHashTable *re;
-	gchar hash[rspamd_cryptobox_HASHBYTES * 2 + 1];
+	gchar hash[rspamd_cryptobox_HASHBYTES + 1];
 #ifdef WITH_HYPERSCAN
 	hs_database_t *hs_db;
 
@@ -87,7 +87,7 @@ struct rspamd_re_cache {
 	ref_entry_t ref;
 	guint nre;
 	guint max_re_data;
-	gchar hash[rspamd_cryptobox_HASHBYTES * 2 + 1];
+	gchar hash[rspamd_cryptobox_HASHBYTES + 1];
 #ifdef WITH_HYPERSCAN
 	hs_platform_info_t plt;
 #endif
@@ -112,7 +112,7 @@ rspamd_re_cache_class_id (enum rspamd_re_type type,
 {
 	XXH64_state_t st;
 
-	XXH64_reset (&st, rspamd_hash_seed ());
+	XXH64_reset (&st, 0xdeadbabe);
 	XXH64_update (&st, &type, sizeof (type));
 
 	if (datalen > 0) {
@@ -209,7 +209,7 @@ rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
 	elt->re = rspamd_regexp_ref (re);
 	g_ptr_array_add (cache->re, elt);
 	rspamd_regexp_set_class (re, re_class);
-	g_hash_table_insert (re_class->re, nre, nre);
+	g_hash_table_insert (re_class->re, rspamd_regexp_get_id (nre), nre);
 }
 
 void
@@ -243,7 +243,9 @@ rspamd_re_cache_replace (struct rspamd_re_cache *cache,
 			/*
 			 * On calling of this function, we actually unref old re (what)
 			 */
-			g_hash_table_insert (re_class->re, what, rspamd_regexp_ref (with));
+			g_hash_table_insert (re_class->re,
+					rspamd_regexp_get_id (what),
+					rspamd_regexp_ref (with));
 		}
 
 		if (elt) {
@@ -732,6 +734,21 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 		re_class = v;
 		rspamd_snprintf (path, sizeof (path), "%s%c%s.hs", cache_dir,
 				G_DIR_SEPARATOR, re_class->hash);
+
+		if (rspamd_re_cache_is_valid_hyperscan_file (cache, path)) {
+			msg_info_re_cache ("skip already valid file for re class '%s'",
+					re_class->hash);
+
+			fd = open (path, O_RDONLY, 00600);
+
+			/* Read number of regexps */
+			g_assert (fd != -1);
+			lseek (fd, SEEK_SET, RSPAMD_HS_MAGIC_LEN);
+			read (fd, &n, sizeof (n));
+			total += n;
+			continue;
+		}
+
 		fd = open (path, O_CREAT|O_TRUNC|O_EXCL|O_WRONLY, 00600);
 
 		if (fd == -1) {
@@ -888,7 +905,7 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 
 	len = strlen (path);
 
-	if (len < sizeof (rspamd_cryptobox_HASHBYTES * 2 + 3)) {
+	if (len < sizeof (rspamd_cryptobox_HASHBYTES + 3)) {
 		return FALSE;
 	}
 
@@ -896,7 +913,8 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 		return FALSE;
 	}
 
-	hash_pos = path + len - 3 - rspamd_cryptobox_HASHBYTES * 2;
+	hash_pos = path + len - 3 - rspamd_cryptobox_HASHBYTES;
+	g_hash_table_iter_init (&it, cache->re_classes);
 
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		re_class = v;
@@ -918,6 +936,8 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 				return FALSE;
 			}
 
+			close (fd);
+
 			if (memcmp (magicbuf, rspamd_hs_magic, sizeof (magicbuf)) != 0) {
 				msg_err_re_cache ("cannot open hyperscan cache file %s: "
 						"bad magic ('%*xs', '%*xs' expected)",
@@ -927,7 +947,13 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 
 				return FALSE;
 			}
+
+			return TRUE;
 		}
 	}
+
+	msg_warn_re_cache ("unknown hyperscan cache file %s", path);
+
+	return FALSE;
 #endif
 }
