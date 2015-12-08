@@ -233,27 +233,25 @@ rspamd_re_cache_replace (struct rspamd_re_cache *cache,
 		re_id = rspamd_regexp_get_cache_id (what);
 
 		g_assert (re_id != RSPAMD_INVALID_ID);
-		src = g_hash_table_lookup (re_class->re, what);
+		src = g_hash_table_lookup (re_class->re, rspamd_regexp_get_id (what));
 		elt = g_ptr_array_index (cache->re, re_id);
+		g_assert (elt != NULL);
+		g_assert (src != NULL);
 
-		if (src) {
-			rspamd_regexp_set_cache_id (what, RSPAMD_INVALID_ID);
-			rspamd_regexp_set_class (what, NULL);
-			rspamd_regexp_set_cache_id (with, re_id);
-			rspamd_regexp_set_class (with, re_class);
-			/*
-			 * On calling of this function, we actually unref old re (what)
-			 */
-			g_hash_table_insert (re_class->re,
-					rspamd_regexp_get_id (what),
-					rspamd_regexp_ref (with));
-		}
+		rspamd_regexp_set_cache_id (what, RSPAMD_INVALID_ID);
+		rspamd_regexp_set_class (what, NULL);
+		rspamd_regexp_set_cache_id (with, re_id);
+		rspamd_regexp_set_class (with, re_class);
+		/*
+		 * On calling of this function, we actually unref old re (what)
+		 */
+		g_hash_table_insert (re_class->re,
+				rspamd_regexp_get_id (what),
+				rspamd_regexp_ref (with));
 
-		if (elt) {
-			rspamd_regexp_unref (elt->re);
-			elt->re = rspamd_regexp_ref (with);
-			/* XXX: do not touch match type here */
-		}
+		rspamd_regexp_unref (elt->re);
+		elt->re = rspamd_regexp_ref (with);
+		/* XXX: do not touch match type here */
 	}
 }
 
@@ -287,8 +285,9 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache)
 	for (i = 0; i < cache->re->len; i ++) {
 		elt = g_ptr_array_index (cache->re, i);
 		re = elt->re;
-		rspamd_regexp_set_cache_id (re, i);
 		re_class = rspamd_regexp_get_class (re);
+		g_assert (re_class != NULL);
+		rspamd_regexp_set_cache_id (re, i);
 
 		if (re_class->st == NULL) {
 			re_class->st = g_slice_alloc (sizeof (*re_class->st));
