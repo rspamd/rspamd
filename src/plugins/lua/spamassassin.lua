@@ -451,6 +451,7 @@ local function process_tflags(rule, flags)
     else
       rule['re']:set_max_hits(1)
     end
+  end
 end
 
 local function process_replace(words, tbl)
