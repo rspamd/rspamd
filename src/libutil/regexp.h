@@ -122,6 +122,16 @@ guint rspamd_regexp_get_pcre_flags (rspamd_regexp_t *re);
 guint rspamd_regexp_get_flags (rspamd_regexp_t *re);
 
 /**
+ * Set regexp maximum hits
+ */
+guint rspamd_regexp_get_maxhits (rspamd_regexp_t *re);
+
+/**
+ * Get regexp maximum hits
+ */
+guint rspamd_regexp_set_maxhits (rspamd_regexp_t *re, guint new_maxhits);
+
+/**
  * Returns number of backreferences in a regexp
  */
 gint rspamd_regexp_get_nbackrefs (rspamd_regexp_t *re);

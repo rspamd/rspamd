@@ -53,6 +53,7 @@ struct rspamd_regexp_s {
 	gpointer ud;
 	gpointer re_class;
 	guint64 cache_id;
+	guint max_hits;
 	gint flags;
 	gint pcre_flags;
 	gint ncaptures;
@@ -250,6 +251,7 @@ fin:
 	res->pattern = real_pattern;
 	res->cache_id = RSPAMD_INVALID_ID;
 	res->pcre_flags = regexp_flags;
+	res->max_hits = 0;
 
 	if (rspamd_flags & RSPAMD_REGEXP_FLAG_RAW) {
 		res->raw_re = r;
@@ -521,6 +523,26 @@ rspamd_regexp_get_ncaptures (rspamd_regexp_t *re)
 	g_assert (re != NULL);
 
 	return re->ncaptures;
+}
+
+guint
+rspamd_regexp_get_maxhits (rspamd_regexp_t *re)
+{
+	g_assert (re != NULL);
+
+	return re->max_hits;
+}
+
+guint
+rspamd_regexp_set_maxhits (rspamd_regexp_t *re, guint new_maxhits)
+{
+	guint old_hits;
+
+	g_assert (re != NULL);
+	old_hits = re->max_hits;
+	re->max_hits = new_maxhits;
+
+	return old_hits;
 }
 
 guint64
