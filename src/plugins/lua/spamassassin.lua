@@ -442,6 +442,15 @@ local function process_tflags(rule, flags)
       rule['nice'] = true
     end
   end, _.drop_n(1, flags))
+
+  if rule['re'] then
+    if rule['maxhits'] then
+      rule['re']:set_max_hits(rule['maxhits'])
+    elseif rule['multiple'] then
+      rule['re']:set_max_hits(0)
+    else
+      rule['re']:set_max_hits(1)
+    end
 end
 
 local function process_replace(words, tbl)
@@ -580,6 +589,7 @@ local function process_sa_conf(f)
           rspamd_logger.warnx(rspamd_config, "Cannot parse regexp '%1' for %2",
             cur_rule['re_expr'], cur_rule['symbol'])
         else
+          cur_rule['re']:set_max_hits(1)
           handle_header_def(words[3], cur_rule)
         end
 
@@ -591,6 +601,7 @@ local function process_sa_conf(f)
         if cur_rule['re'] and cur_rule['symbol'] and
           (cur_rule['header'] or cur_rule['function']) then
           valid_rule = true
+          cur_rule['re']:set_max_hits(1)
           if cur_rule['header'] and cur_rule['ordinary'] then
             for i,h in ipairs(cur_rule['header']) do
               if type(h) == 'string' then
@@ -615,6 +626,7 @@ local function process_sa_conf(f)
               end
             end
             cur_rule['re']:set_limit(match_limit)
+            cur_rule['re']:set_max_hits(1)
           end
         end
       else
@@ -652,6 +664,7 @@ local function process_sa_conf(f)
           })
           valid_rule = true
           cur_rule['re']:set_limit(match_limit)
+          cur_rule['re']:set_max_hits(1)
         end
       else
         -- might be function
@@ -688,6 +701,7 @@ local function process_sa_conf(f)
             type = 'body',
           })
           cur_rule['re']:set_limit(match_limit)
+          cur_rule['re']:set_max_hits(1)
         end
       else
         -- might be function
@@ -719,6 +733,7 @@ local function process_sa_conf(f)
           type = 'url',
         })
         cur_rule['re']:set_limit(match_limit)
+        cur_rule['re']:set_max_hits(1)
       end
     elseif words[1] == "meta" then
       -- meta SYMBOL expression
@@ -924,6 +939,7 @@ _.each(function(r)
         rspamd_logger.errx(rspamd_config, 'cannot apply replacement for rule %1', r)
         rule['re'] = nil
       else
+        local old_max_hits = rule['re']:set_limit(0)
         rspamd_logger.debugx(rspamd_config, 'replace %1 -> %2', r, nexpr)
         rspamd_config:replace_regexp({
           old_re = rule['re'],
@@ -932,6 +948,7 @@ _.each(function(r)
         rule['re'] = nre
         rule['re_expr'] = nexpr
         nre:set_limit(match_limit)
+        nre:set_max_hits(old_max_hits)
       end
     end
   end
@@ -1092,7 +1109,6 @@ _.each(function(k, r)
       return task:process_regexp({
         re = r['re'],
         type = 'mime',
-        multiple = r['multiple']
       })
     end
     if r['score'] then
@@ -1120,7 +1136,6 @@ _.each(function(k, r)
       return task:process_regexp({
         re = r['re'],
         type = 'body',
-        multiple = r['multiple']
       })
     end
     if r['score'] then
@@ -1148,7 +1163,6 @@ _.each(function(k, r)
       return task:process_regexp({
         re = r['re'],
         type = 'url',
-        multiple = r['multiple']
       })
     end
     if r['score'] then
