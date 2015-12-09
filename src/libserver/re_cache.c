@@ -287,7 +287,7 @@ rspamd_re_cache_sort_func (gconstpointer a, gconstpointer b)
 void
 rspamd_re_cache_init (struct rspamd_re_cache *cache)
 {
-	guint i;
+	guint i, fl;
 	GHashTableIter it;
 	gpointer k, v;
 	struct rspamd_re_class *re_class;
@@ -323,6 +323,16 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache)
 				rspamd_cryptobox_HASHBYTES);
 		rspamd_cryptobox_hash_update (&st_global, rspamd_regexp_get_id (re),
 				rspamd_cryptobox_HASHBYTES);
+		fl = rspamd_regexp_get_pcre_flags (re);
+		rspamd_cryptobox_hash_update (re_class->st, (const guchar *)&fl,
+				sizeof (fl));
+		rspamd_cryptobox_hash_update (&st_global, (const guchar *) &fl,
+				sizeof (fl));
+		fl = rspamd_regexp_get_flags (re);
+		rspamd_cryptobox_hash_update (re_class->st, (const guchar *) &fl,
+				sizeof (fl));
+		rspamd_cryptobox_hash_update (&st_global, (const guchar *) &fl,
+				sizeof (fl));
 	}
 
 	/* Now finalize all classes */
