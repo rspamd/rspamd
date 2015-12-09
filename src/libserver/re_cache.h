@@ -86,7 +86,6 @@ struct rspamd_re_runtime* rspamd_re_cache_runtime_new (struct rspamd_re_cache *c
  * @param type_data associated data with the type (e.g. header name)
  * @param datalen associated data length
  * @param is_strong use case sensitive match when looking for headers
- * @param is_multiple return multiple possible occurrences of the specified re
  */
 gint rspamd_re_cache_process (struct rspamd_task *task,
 		struct rspamd_re_runtime *rt,
@@ -94,8 +93,7 @@ gint rspamd_re_cache_process (struct rspamd_task *task,
 		enum rspamd_re_type type,
 		gpointer type_data,
 		gsize datalen,
-		gboolean is_strong,
-		gboolean is_multiple);
+		gboolean is_strong);
 
 /**
  * Destroy runtime data

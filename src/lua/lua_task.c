@@ -440,7 +440,6 @@ LUA_FUNCTION_DEF (task, set_settings);
  *   + `url`: url regexp
  * - `header`: for header and rawheader regexp means the name of header
  * - `strong`: case sensitive match for headers
- * - `multiple`: allow multiple matches
  * @return {number} number of regexp occurences in the task (limited by 255 so far)
  */
 LUA_FUNCTION_DEF (task, process_regexp);
@@ -2007,7 +2006,7 @@ lua_task_process_regexp (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_lua_regexp *re = NULL;
-	gboolean strong = FALSE, multiple = FALSE;
+	gboolean strong = FALSE;
 	const gchar *type_str = NULL, *header_str = NULL;
 	gsize header_len = 0;
 	GError *err = NULL;
@@ -2024,13 +2023,12 @@ lua_task_process_regexp (lua_State *L)
 	 *   + `url`: url regexp
 	 * - `header`: for header and rawheader regexp means the name of header
 	 * - `strong`: case sensitive match for headers
-	 * - `multiple`: allow multiple matches
 	 */
 	if (task != NULL) {
 		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
-					"*re=U{regexp};*type=S;header=V;strong=B;multiple=B",
+					"*re=U{regexp};*type=S;header=V;strong=B",
 					&re, &type_str, &header_len, &header_str,
-					&strong, &multiple)) {
+					&strong)) {
 			msg_err_task ("cannot get parameters list: %e", err);
 
 			if (err) {
@@ -2047,7 +2045,7 @@ lua_task_process_regexp (lua_State *L)
 			}
 			else {
 				ret = rspamd_re_cache_process (task, task->re_rt, re->re, type,
-						(gpointer) header_str, header_len, strong, multiple);
+						(gpointer) header_str, header_len, strong);
 			}
 		}
 	}

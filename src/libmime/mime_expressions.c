@@ -342,6 +342,13 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 	result->regexp = rspamd_regexp_new (dbegin, re_flags->str,
 			&err);
 
+	if (result->is_multiple) {
+		rspamd_regexp_set_maxhits (result->regexp, 0);
+	}
+	else {
+		rspamd_regexp_set_maxhits (result->regexp, 1);
+	}
+
 	g_string_free (re_flags, TRUE);
 
 	if (result->regexp == NULL || err != NULL) {
@@ -687,8 +694,7 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 				re->type,
 				re->header,
 				strlen (re->header),
-				re->is_strong,
-				re->is_multiple);
+				re->is_strong);
 	}
 	else {
 		ret = rspamd_re_cache_process (task,
@@ -697,8 +703,7 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 				re->type,
 				NULL,
 				0,
-				re->is_strong,
-				re->is_multiple);
+				re->is_strong);
 	}
 
 	if (re->is_test) {

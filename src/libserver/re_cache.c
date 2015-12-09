@@ -399,10 +399,11 @@ rspamd_re_cache_runtime_new (struct rspamd_re_cache *cache)
 static guint
 rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 		rspamd_regexp_t *re, const guchar *in, gsize len,
-		gboolean is_raw, gboolean is_multiple)
+		gboolean is_raw)
 {
 	guint r = 0;
 	const gchar *start = NULL, *end = NULL;
+	guint max_hits = rspamd_regexp_get_maxhits (re);
 
 	if (len == 0) {
 		len = strlen (in);
@@ -421,7 +422,7 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 			NULL)) {
 		r++;
 
-		if (!is_multiple || r >= 0xFF) {
+		if (max_hits > 0 && r > max_hits) {
 			break;
 		}
 	}
@@ -446,29 +447,32 @@ rspamd_re_cache_hyperscan_cb (unsigned int id,
 	struct rspamd_re_hyperscan_cbdata *cbdata = ud;
 	struct rspamd_re_runtime *rt;
 	struct rspamd_re_cache_elt *pcre_elt;
-	guint ret;
+	guint ret, maxhits;
 
 	rt = cbdata->rt;
 
+	pcre_elt = g_ptr_array_index (rt->cache->re, id);
 
 	if (flags & HS_FLAG_PREFILTER) {
 		if (!isset (rt->checked, id)) {
 			/* We need to match the corresponding pcre first */
-			pcre_elt = g_ptr_array_index (rt->cache->re, id);
 			ret = rspamd_re_cache_process_pcre (rt,
 					pcre_elt->re,
 					cbdata->in + from,
 					to - from,
-					FALSE,
-					TRUE);
+					FALSE);
 
 			setbit (rt->checked, id);
 			rt->results[id] = ret;
 		}
 	}
 	else {
+		maxhits = rspamd_regexp_get_maxhits (pcre_elt->re);
 		setbit (rt->checked, id);
-		rt->results[id] ++;
+
+		if (maxhits == 0 || rt->results[id] < maxhits) {
+			rt->results[id]++;
+		}
 	}
 
 	return 0;
@@ -479,7 +483,7 @@ static guint
 rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 		rspamd_regexp_t *re,
 		const guchar *in, gsize len,
-		gboolean is_raw, gboolean is_multiple)
+		gboolean is_raw)
 {
 	struct rspamd_re_cache_elt *elt;
 	struct rspamd_re_class *re_class;
@@ -491,14 +495,14 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 	re_class = rspamd_regexp_get_class (re);
 
 #ifndef WITH_HYPERSCAN
-	ret = rspamd_re_cache_process_pcre (rt, re, in, len, is_raw, is_multiple);
+	ret = rspamd_re_cache_process_pcre (rt, re, in, len, is_raw);
 	setbit (rt->checked, re_id);
 	rt->results[re_id] = ret;
 #else
 	struct rspamd_re_hyperscan_cbdata cbdata;
 
 	if (elt->match_type == RSPAMD_RE_CACHE_PCRE) {
-		ret = rspamd_re_cache_process_pcre (rt, re, in, len, is_raw, is_multiple);
+		ret = rspamd_re_cache_process_pcre (rt, re, in, len, is_raw);
 		setbit (rt->checked, re_id);
 		rt->results[re_id] = ret;
 	}
@@ -560,8 +564,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		struct rspamd_re_runtime *rt,
 		rspamd_regexp_t *re,
 		struct rspamd_re_class *re_class,
-		gboolean is_strong,
-		gboolean is_multiple)
+		gboolean is_strong)
 {
 	guint ret = 0, i;
 	GList *cur, *headerlist;
@@ -604,7 +607,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				/* Match re */
 				if (in) {
 					ret += rspamd_re_cache_process_regexp_data (rt, re, in,
-							strlen (in), raw, is_multiple);
+							strlen (in), raw);
 					debug_task ("checking header %s regexp: %s -> %d",
 							re_class->type_data,
 							rspamd_regexp_get_pattern (re), ret);
@@ -619,7 +622,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		in = task->raw_headers_content.begin;
 		len = task->raw_headers_content.len;
 		ret = rspamd_re_cache_process_regexp_data (rt, re, in,
-				len, raw, is_multiple);
+				len, raw);
 		debug_task ("checking allheader regexp: %s -> %d",
 				rspamd_regexp_get_pattern (re), ret);
 		break;
@@ -649,7 +652,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 
 			if (len > 0) {
 				ret += rspamd_re_cache_process_regexp_data (rt, re, in,
-						len, raw, is_multiple);
+						len, raw);
 				debug_task ("checking mime regexp: %s -> %d",
 						rspamd_regexp_get_pattern (re), ret);
 			}
@@ -665,7 +668,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 			raw = FALSE;
 
 			ret += rspamd_re_cache_process_regexp_data (rt, re, in,
-					len, raw, is_multiple);
+					len, raw);
 		}
 
 		g_hash_table_iter_init (&it, task->emails);
@@ -677,7 +680,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 			raw = FALSE;
 
 			ret += rspamd_re_cache_process_regexp_data (rt, re, in,
-					len, raw, is_multiple);
+					len, raw);
 		}
 
 		debug_task ("checking url regexp: %s -> %d",
@@ -689,7 +692,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		len = task->msg.len;
 
 		ret = rspamd_re_cache_process_regexp_data (rt, re, in,
-				len, raw, is_multiple);
+				len, raw);
 		debug_task ("checking rawbody regexp: %s -> %d",
 				rspamd_regexp_get_pattern (re), ret);
 		break;
@@ -711,8 +714,7 @@ rspamd_re_cache_process (struct rspamd_task *task,
 		enum rspamd_re_type type,
 		gpointer type_data,
 		gsize datalen,
-		gboolean is_strong,
-		gboolean is_multiple)
+		gboolean is_strong)
 {
 	guint64 re_id;
 	struct rspamd_re_class *re_class;
@@ -733,12 +735,7 @@ rspamd_re_cache_process (struct rspamd_task *task,
 
 	if (isset (rt->checked, re_id)) {
 		/* Fast path */
-		if (is_multiple) {
-			return rt->results[re_id];
-		}
-		else {
-			return rt->results[re_id] ? 1 : 0;
-		}
+		return rt->results[re_id];
 	}
 	else {
 		/* Slow path */
@@ -751,7 +748,7 @@ rspamd_re_cache_process (struct rspamd_task *task,
 		}
 
 		return rspamd_re_cache_exec_re (task, rt, re, re_class,
-				is_strong, is_multiple);
+				is_strong);
 	}
 
 	return 0;
@@ -999,11 +996,18 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 
 			hs_flags[i] = 0;
 			pcre_flags = rspamd_regexp_get_pcre_flags (re);
+
 			if (pcre_flags & PCRE_UTF8) {
 				hs_flags[i] |= HS_FLAG_UTF8;
 			}
 			if (pcre_flags & PCRE_CASELESS) {
 				hs_flags[i] |= HS_FLAG_CASELESS;
+			}
+			if (pcre_flags & PCRE_MULTILINE) {
+				hs_flags[i] |= HS_FLAG_MULTILINE;
+			}
+			if (rspamd_regexp_get_maxhits (re) == 1) {
+				hs_flags[i] |= HS_FLAG_SINGLEMATCH;
 			}
 
 			if (hs_compile (rspamd_regexp_get_pattern (re),
