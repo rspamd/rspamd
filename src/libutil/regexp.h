@@ -113,6 +113,15 @@ gpointer rspamd_regexp_get_id (rspamd_regexp_t *re);
 const char* rspamd_regexp_get_pattern (rspamd_regexp_t *re);
 
 /**
+ * Get PCRE flags for the regexp
+ */
+guint rspamd_regexp_get_pcre_flags (rspamd_regexp_t *re);
+/**
+ * Get rspamd flags for the regexp
+ */
+guint rspamd_regexp_get_flags (rspamd_regexp_t *re);
+
+/**
  * Returns number of backreferences in a regexp
  */
 gint rspamd_regexp_get_nbackrefs (rspamd_regexp_t *re);
