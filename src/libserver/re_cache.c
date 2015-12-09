@@ -333,6 +333,11 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache)
 				sizeof (fl));
 		rspamd_cryptobox_hash_update (&st_global, (const guchar *) &fl,
 				sizeof (fl));
+		fl = rspamd_regexp_get_maxhits (re);
+		rspamd_cryptobox_hash_update (re_class->st, (const guchar *) &fl,
+				sizeof (fl));
+		rspamd_cryptobox_hash_update (&st_global, (const guchar *) &fl,
+				sizeof (fl));
 	}
 
 	/* Now finalize all classes */
@@ -472,7 +477,6 @@ rspamd_re_cache_hyperscan_cb (unsigned int id,
 				cbdata->in + from,
 				to - from,
 				FALSE);
-		msg_info ("pcre: %s", rspamd_regexp_get_pattern (pcre_elt->re));
 	}
 
 	setbit (rt->checked, id);
@@ -580,9 +584,13 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 	gboolean raw = FALSE;
 	struct mime_text_part *part;
 	struct rspamd_url *url;
-
+	struct rspamd_re_cache *cache = rt->cache;
 	gpointer k, v;
 	gsize len;
+
+	msg_debug_re_cache ("get to the slow path for re type: %s: %s",
+			rspamd_re_cache_type_to_string (re_class->type),
+			rspamd_regexp_get_pattern (re));
 
 	switch (re_class->type) {
 	case RSPAMD_RE_HEADER:
