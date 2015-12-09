@@ -34,6 +34,7 @@
 #include "hs.h"
 #include "unix-std.h"
 #include <signal.h>
+#include <pcre.h>
 
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>
@@ -862,7 +863,7 @@ rspamd_re_cache_type_from_string (const char *str)
 #ifdef WITH_HYPERSCAN
 static gboolean
 rspamd_re_cache_is_finite (struct rspamd_re_cache *cache,
-		rspamd_regexp_t *re)
+		rspamd_regexp_t *re, gint flags)
 {
 	pid_t cld;
 	gint status;
@@ -881,7 +882,7 @@ rspamd_re_cache_is_finite (struct rspamd_re_cache *cache,
 	if (cld == 0) {
 		/* Try to compile pattern */
 		if (hs_compile (rspamd_regexp_get_pattern (re),
-				HS_FLAG_ALLOWEMPTY | HS_FLAG_PREFILTER,
+				flags | HS_FLAG_PREFILTER,
 				HS_MODE_BLOCK,
 				&cache->plt,
 				&test_db,
@@ -946,7 +947,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 	struct rspamd_re_class *re_class;
 	gchar path[PATH_MAX];
 	hs_database_t *test_db;
-	gint fd, i, n, *hs_ids = NULL;
+	gint fd, i, n, *hs_ids = NULL, pcre_flags;
 	guint64 crc;
 	rspamd_regexp_t *re;
 	hs_compile_error_t *hs_errors;
@@ -996,8 +997,17 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 		while (g_hash_table_iter_next (&cit, &k, &v)) {
 			re = v;
 
+			hs_flags[i] = 0;
+			pcre_flags = rspamd_regexp_get_pcre_flags (re);
+			if (pcre_flags & PCRE_UTF8) {
+				hs_flags[i] |= HS_FLAG_UTF8;
+			}
+			if (pcre_flags & PCRE_CASELESS) {
+				hs_flags[i] |= HS_FLAG_CASELESS;
+			}
+
 			if (hs_compile (rspamd_regexp_get_pattern (re),
-					HS_FLAG_ALLOWEMPTY,
+					hs_flags[i],
 					HS_MODE_BLOCK,
 					&cache->plt,
 					&test_db,
@@ -1009,15 +1019,14 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 				/* The approximation operation might take a significant
 				 * amount of time, so we need to check if it's finite
 				 */
-				if (rspamd_re_cache_is_finite (cache, re)) {
-						hs_flags[i] = HS_FLAG_ALLOWEMPTY | HS_FLAG_PREFILTER;
+				if (rspamd_re_cache_is_finite (cache, re, hs_flags[i])) {
+					hs_flags[i] |= HS_FLAG_PREFILTER;
 					hs_ids[i] = rspamd_regexp_get_cache_id (re);
 					hs_pats[i] = rspamd_regexp_get_pattern (re);
 					i++;
 				}
 			}
 			else {
-				hs_flags[i] = HS_FLAG_ALLOWEMPTY;
 				hs_ids[i] = rspamd_regexp_get_cache_id (re);
 				hs_pats[i] = rspamd_regexp_get_pattern (re);
 				i ++;
