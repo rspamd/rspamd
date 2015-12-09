@@ -971,7 +971,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 		rspamd_snprintf (path, sizeof (path), "%s%c%s.hs", cache_dir,
 				G_DIR_SEPARATOR, re_class->hash);
 
-		if (rspamd_re_cache_is_valid_hyperscan_file (cache, path)) {
+		if (rspamd_re_cache_is_valid_hyperscan_file (cache, path, TRUE)) {
 			msg_info_re_cache ("skip already valid file for re class '%s'",
 					re_class->hash);
 
@@ -983,6 +983,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 			read (fd, &n, sizeof (n));
 			total += n;
 			close (fd);
+
 			continue;
 		}
 
@@ -1143,7 +1144,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 
 gboolean
 rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
-		const char *path)
+		const char *path, gboolean silent)
 {
 	g_assert (cache != NULL);
 	g_assert (path != NULL);
@@ -1181,8 +1182,10 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 			fd = open (path, O_RDONLY);
 
 			if (fd == -1) {
-				msg_err_re_cache ("cannot open hyperscan cache file %s: %s",
-						path, strerror (errno));
+				if (!silent) {
+					msg_err_re_cache ("cannot open hyperscan cache file %s: %s",
+							path, strerror (errno));
+				}
 				return FALSE;
 			}
 
@@ -1226,7 +1229,9 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 		}
 	}
 
-	msg_warn_re_cache ("unknown hyperscan cache file %s", path);
+	if (!silent) {
+		msg_warn_re_cache ("unknown hyperscan cache file %s", path);
+	}
 
 	return FALSE;
 #endif
@@ -1259,7 +1264,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 		rspamd_snprintf (path, sizeof (path), "%s%c%s.hs", cache_dir,
 				G_DIR_SEPARATOR, re_class->hash);
 
-		if (rspamd_re_cache_is_valid_hyperscan_file (cache, path)) {
+		if (rspamd_re_cache_is_valid_hyperscan_file (cache, path, FALSE)) {
 			msg_debug_re_cache ("load hyperscan database from '%s'",
 					re_class->hash);
 

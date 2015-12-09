@@ -106,7 +106,7 @@ rspamd_hs_helper_cleanup_dir (struct hs_helper_ctx *ctx)
 	if ((rc = glob (pattern, GLOB_DOOFFS, NULL, &globbuf)) == 0) {
 		for (i = 0; i < globbuf.gl_pathc; i++) {
 			if (!rspamd_re_cache_is_valid_hyperscan_file (ctx->cfg->re_cache,
-						globbuf.gl_pathv[i])) {
+						globbuf.gl_pathv[i], TRUE)) {
 				if (unlink (globbuf.gl_pathv[i]) == -1) {
 					msg_err ("cannot unlink %s: %s", globbuf.gl_pathv[i],
 							strerror (errno));
