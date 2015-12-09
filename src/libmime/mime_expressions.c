@@ -274,6 +274,7 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 	/* Parse flags */
 	p = end + 1;
 	re_flags = g_string_sized_new (32);
+
 	while (p != NULL) {
 		switch (*p) {
 		case 'i':
@@ -342,13 +343,6 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 	result->regexp = rspamd_regexp_new (dbegin, re_flags->str,
 			&err);
 
-	if (result->is_multiple) {
-		rspamd_regexp_set_maxhits (result->regexp, 0);
-	}
-	else {
-		rspamd_regexp_set_maxhits (result->regexp, 1);
-	}
-
 	g_string_free (re_flags, TRUE);
 
 	if (result->regexp == NULL || err != NULL) {
@@ -356,6 +350,15 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 				err ? err->message : "unknown error",
 						src);
 		return NULL;
+	}
+
+	if (result->regexp) {
+		if (result->is_multiple) {
+			rspamd_regexp_set_maxhits (result->regexp, 0);
+		}
+		else {
+			rspamd_regexp_set_maxhits (result->regexp, 1);
+		}
 	}
 
 	rspamd_mempool_add_destructor (pool,
