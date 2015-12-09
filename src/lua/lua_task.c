@@ -436,6 +436,7 @@ LUA_FUNCTION_DEF (task, set_settings);
  *   + `mime`: mime regexp
  *   + `header`: header regexp
  *   + `rawheader`: raw header expression
+ *   + `rawmime`: raw mime regexp
  *   + `body`: raw body regexp
  *   + `url`: url regexp
  * - `header`: for header and rawheader regexp means the name of header
@@ -2017,6 +2018,7 @@ lua_task_process_regexp (lua_State *L)
 	 * - `re`* : regular expression object
  	 * - `type`*: type of regular expression:
 	 *   + `mime`: mime regexp
+	 *   + `rawmime`: raw mime regexp
 	 *   + `header`: header regexp
 	 *   + `rawheader`: raw header expression
 	 *   + `body`: raw body regexp

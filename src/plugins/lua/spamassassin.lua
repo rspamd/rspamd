@@ -659,9 +659,10 @@ local function process_sa_conf(f)
         cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
         cur_rule['raw'] = true
         if cur_rule['re'] then
+
           rspamd_config:register_regexp({
             re = cur_rule['re'],
-            type = 'mime',
+            type = 'rawmime',
           })
           valid_rule = true
           cur_rule['re']:set_limit(match_limit)
@@ -1107,9 +1108,12 @@ _.each(function(k, r)
         return 0
       end
 
+      local t = 'mime'
+      if r['raw'] then t = 'rawmime' end
+
       return task:process_regexp({
         re = r['re'],
-        type = 'mime',
+        type = t,
       })
     end
     if r['score'] then

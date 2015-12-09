@@ -303,6 +303,10 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 			result->type = RSPAMD_RE_MIME;
 			p++;
 			break;
+		case 'Q':
+			result->type = RSPAMD_RE_RAWMIME;
+			p++;
+			break;
 		case 'U':
 			result->type = RSPAMD_RE_URL;
 			p++;
@@ -743,6 +747,7 @@ rspamd_mime_expr_priority (rspamd_expression_atom_t *atom)
 			ret = 90;
 			break;
 		case RSPAMD_RE_MIME:
+		case RSPAMD_RE_RAWMIME:
 			ret = 10;
 			break;
 		default:

@@ -357,6 +357,7 @@ LUA_FUNCTION_DEF (config, newindex);
  * - `re`* : regular expression object
  * - `type`*: type of regular expression:
  *   + `mime`: mime regexp
+ *   + `rawmime`: raw mime regexp
  *   + `header`: header regexp
  *   + `rawheader`: raw header expression
  *   + `body`: raw body regexp
@@ -1571,6 +1572,7 @@ lua_config_register_regexp (lua_State *L)
 	 * - `re`* : regular expression object
  	 * - `type`*: type of regular expression:
 	 *   + `mime`: mime regexp
+	 *   + `rawmime`: raw mime regexp
 	 *   + `header`: header regexp
 	 *   + `rawheader`: raw header expression
 	 *   + `body`: raw body regexp

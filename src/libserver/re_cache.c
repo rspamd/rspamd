@@ -633,6 +633,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				rspamd_regexp_get_pattern (re), ret);
 		break;
 	case RSPAMD_RE_MIME:
+	case RSPAMD_RE_RAWMIME:
 		/* Iterate throught text parts */
 		for (i = 0; i < task->text_parts->len; i++) {
 			part = g_ptr_array_index (task->text_parts, i);
@@ -647,9 +648,10 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				raw = TRUE;
 			}
 			/* Select data for regexp */
-			if (raw) {
+			if (re_class->type == RSPAMD_RE_RAWMIME) {
 				in = part->orig->data;
 				len = part->orig->len;
+				raw = TRUE;
 			}
 			else {
 				in = part->content->data;
@@ -820,6 +822,9 @@ rspamd_re_cache_type_to_string (enum rspamd_re_type type)
 	case RSPAMD_RE_MIME:
 		ret = "part";
 		break;
+	case RSPAMD_RE_RAWMIME:
+		ret = "raw part";
+		break;
 	case RSPAMD_RE_BODY:
 		ret = "rawbody";
 		break;
@@ -848,6 +853,9 @@ rspamd_re_cache_type_from_string (const char *str)
 		}
 		else if (strcmp (str, "mime") == 0) {
 			ret = RSPAMD_RE_MIME;
+		}
+		else if (strcmp (str, "rawmime") == 0) {
+			ret = RSPAMD_RE_RAWMIME;
 		}
 		else if (strcmp (str, "body") == 0) {
 			ret = RSPAMD_RE_BODY;
