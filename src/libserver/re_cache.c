@@ -61,7 +61,7 @@
 
 #ifdef WITH_HYPERSCAN
 #define RSPAMD_HS_MAGIC_LEN (sizeof (rspamd_hs_magic))
-static const guchar rspamd_hs_magic[] = {'r', 's', 'h', 's', 'r', 'e', '1', '0'};
+static const guchar rspamd_hs_magic[] = {'r', 's', 'h', 's', 'r', 'e', '1', '1'};
 #endif
 
 struct rspamd_re_class {
@@ -462,27 +462,23 @@ rspamd_re_cache_hyperscan_cb (unsigned int id,
 	rt = cbdata->rt;
 
 	pcre_elt = g_ptr_array_index (rt->cache->re, id);
+	maxhits = rspamd_regexp_get_maxhits (pcre_elt->re);
+	ret = 1;
 
-	if (flags & HS_FLAG_PREFILTER) {
-		if (!isset (rt->checked, id)) {
-			/* We need to match the corresponding pcre first */
-			ret = rspamd_re_cache_process_pcre (rt,
-					pcre_elt->re,
-					cbdata->in + from,
-					to - from,
-					FALSE);
-
-			setbit (rt->checked, id);
-			rt->results[id] = ret;
-		}
+	if (pcre_elt->match_type == RSPAMD_RE_CACHE_HYPERSCAN_PRE) {
+		/* We need to match the corresponding pcre first */
+		ret = rspamd_re_cache_process_pcre (rt,
+				pcre_elt->re,
+				cbdata->in + from,
+				to - from,
+				FALSE);
+		msg_info ("pcre: %s", rspamd_regexp_get_pattern (pcre_elt->re));
 	}
-	else {
-		maxhits = rspamd_regexp_get_maxhits (pcre_elt->re);
-		setbit (rt->checked, id);
 
-		if (maxhits == 0 || rt->results[id] < maxhits) {
-			rt->results[id]++;
-		}
+	setbit (rt->checked, id);
+
+	if (maxhits == 0 || rt->results[id] < maxhits) {
+		rt->results[id] += ret;
 	}
 
 	return 0;
@@ -962,7 +958,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 	const gchar **hs_pats = NULL;
 	gchar *hs_serialized;
 	gsize serialized_len, total = 0;
-	struct iovec iov[6];
+	struct iovec iov[7];
 
 	g_hash_table_iter_init (&it, cache->re_classes);
 
@@ -1074,7 +1070,6 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 				return -1;
 			}
 
-			g_free (hs_flags);
 			g_free (hs_pats);
 
 			if (hs_serialize_database (test_db, &hs_serialized,
@@ -1087,6 +1082,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 
 				close (fd);
 				g_free (hs_ids);
+				g_free (hs_flags);
 				hs_free_database (test_db);
 
 				return -1;
@@ -1099,6 +1095,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 			 * Platform - sizeof (platform)
 			 * n - number of regexps
 			 * n * <regexp ids>
+			 * n * <regexp flags>
 			 * crc - 8 bytes checksum
 			 * <hyperscan blob>
 			 */
@@ -1111,10 +1108,12 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 			iov[2].iov_len = sizeof (n);
 			iov[3].iov_base = hs_ids;
 			iov[3].iov_len = sizeof (*hs_ids) * n;
-			iov[4].iov_base = &crc;
-			iov[4].iov_len = sizeof (crc);
-			iov[5].iov_base = hs_serialized;
-			iov[5].iov_len = serialized_len;
+			iov[4].iov_base = hs_flags;
+			iov[4].iov_len = sizeof (*hs_flags) * n;
+			iov[5].iov_base = &crc;
+			iov[5].iov_len = sizeof (crc);
+			iov[6].iov_base = hs_serialized;
+			iov[6].iov_len = serialized_len;
 
 			if (writev (fd, iov, G_N_ELEMENTS (iov)) == -1) {
 				g_set_error (err,
@@ -1124,6 +1123,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 						path, strerror (errno));
 				close (fd);
 				g_free (hs_ids);
+				g_free (hs_flags);
 				g_free (hs_serialized);
 
 				return -1;
@@ -1133,6 +1133,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 
 			g_free (hs_serialized);
 			g_free (hs_ids);
+			g_free (hs_flags);
 		}
 
 		close (fd);
@@ -1249,7 +1250,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 	return FALSE;
 #else
 	gchar path[PATH_MAX];
-	gint fd, i, n, *hs_ids = NULL, total = 0;
+	gint fd, i, n, *hs_ids = NULL, *hs_flags = NULL, total = 0;
 	GHashTableIter it;
 	gpointer k, v;
 	guint8 *map, *p, *end;
@@ -1287,7 +1288,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 			p = map + RSPAMD_HS_MAGIC_LEN + sizeof (cache->plt);
 			n = *(gint *)p;
 
-			if (n <= 0 || n * sizeof (gint) + /* IDs */
+			if (n <= 0 || 2 * n * sizeof (gint) + /* IDs + flags */
 							sizeof (guint64) + /* crc */
 							RSPAMD_HS_MAGIC_LEN + /* header */
 							sizeof (cache->plt) > (gsize)st.st_size) {
@@ -1302,6 +1303,9 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 			p += sizeof (n);
 			hs_ids = g_malloc (n * sizeof (*hs_ids));
 			memcpy (hs_ids, p, n * sizeof (*hs_ids));
+			p += n * sizeof (*hs_ids);
+			hs_flags = g_malloc (n * sizeof (*hs_flags));
+			memcpy (hs_flags, p, n * sizeof (*hs_flags));
 
 			/* Skip crc */
 			p += n * sizeof (*hs_ids) + sizeof (guint64);
@@ -1311,6 +1315,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 				msg_err_re_cache ("bad hs database in %s", path);
 				munmap (map, st.st_size);
 				g_free (hs_ids);
+				g_free (hs_flags);
 
 				return FALSE;
 			}
@@ -1327,10 +1332,17 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 			for (i = 0; i < n; i ++) {
 				g_assert ((gint)cache->re->len > hs_ids[i] && hs_ids[i] >= 0);
 				elt = g_ptr_array_index (cache->re, hs_ids[i]);
-				elt->match_type = RSPAMD_RE_CACHE_HYPERSCAN;
+
+				if (hs_flags[i] & HS_FLAG_PREFILTER) {
+					elt->match_type = RSPAMD_RE_CACHE_HYPERSCAN_PRE;
+				}
+				else {
+					elt->match_type = RSPAMD_RE_CACHE_HYPERSCAN;
+				}
 			}
 
 			re_class->hs_ids = hs_ids;
+			g_free (hs_flags);
 			re_class->nhs = n;
 		}
 		else {

@@ -940,7 +940,7 @@ _.each(function(r)
         rspamd_logger.errx(rspamd_config, 'cannot apply replacement for rule %1', r)
         rule['re'] = nil
       else
-        local old_max_hits = rule['re']:set_limit(0)
+        local old_max_hits = rule['re']:get_max_hits()
         rspamd_logger.debugx(rspamd_config, 'replace %1 -> %2', r, nexpr)
         rspamd_config:replace_regexp({
           old_re = rule['re'],

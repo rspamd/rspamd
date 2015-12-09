@@ -43,6 +43,7 @@ LUA_FUNCTION_DEF (regexp, get_cached);
 LUA_FUNCTION_DEF (regexp, get_pattern);
 LUA_FUNCTION_DEF (regexp, set_limit);
 LUA_FUNCTION_DEF (regexp, set_max_hits);
+LUA_FUNCTION_DEF (regexp, get_max_hits);
 LUA_FUNCTION_DEF (regexp, search);
 LUA_FUNCTION_DEF (regexp, match);
 LUA_FUNCTION_DEF (regexp, matchn);
@@ -54,6 +55,7 @@ static const struct luaL_reg regexplib_m[] = {
 	LUA_INTERFACE_DEF (regexp, get_pattern),
 	LUA_INTERFACE_DEF (regexp, set_limit),
 	LUA_INTERFACE_DEF (regexp, set_max_hits),
+	LUA_INTERFACE_DEF (regexp, get_max_hits),
 	LUA_INTERFACE_DEF (regexp, match),
 	LUA_INTERFACE_DEF (regexp, matchn),
 	LUA_INTERFACE_DEF (regexp, search),
@@ -271,7 +273,8 @@ lua_regexp_set_limit (lua_State *L)
 /***
  * @method re:set_max_hits(lim)
  * Set maximum number of hits returned by a regexp
- * @param {number} lim limit in bytes
+ * @param {number} lim limit in hits count
+ * @return {number} old number of max hits
  */
 static int
 lua_regexp_set_max_hits (lua_State *L)
@@ -286,6 +289,26 @@ lua_regexp_set_max_hits (lua_State *L)
 	}
 	else {
 		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+/***
+ * @method re:get_max_hits(lim)
+ * Get maximum number of hits returned by a regexp
+ * @return {number} number of max hits
+ */
+static int
+lua_regexp_get_max_hits (lua_State *L)
+{
+	struct rspamd_lua_regexp *re = lua_check_regexp (L);
+
+	if (re && re->re && !IS_DESTROYED (re)) {
+		lua_pushnumber (L, rspamd_regexp_get_maxhits (re->re));
+	}
+	else {
+		lua_pushnumber (L, 1);
 	}
 
 	return 1;
