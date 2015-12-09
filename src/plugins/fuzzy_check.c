@@ -1548,6 +1548,7 @@ register_fuzzy_client_call (struct rspamd_task *task,
 				rspamd_upstream_name (selected),
 				errno,
 				strerror (errno));
+			rspamd_upstream_fail (selected);
 		}
 		else {
 			/* Create session for a socket */
