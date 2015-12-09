@@ -449,8 +449,9 @@ rspamd_re_cache_hyperscan_cb (unsigned int id,
 
 	rt = cbdata->rt;
 
-	if (!isset (rt->checked, id)) {
-		if (flags & HS_FLAG_PREFILTER) {
+
+	if (flags & HS_FLAG_PREFILTER) {
+		if (!isset (rt->checked, id)) {
 			/* We need to match the corresponding pcre first */
 			pcre_elt = g_ptr_array_index (rt->cache->re, id);
 			ret = rspamd_re_cache_process_pcre (rt,
@@ -459,13 +460,14 @@ rspamd_re_cache_hyperscan_cb (unsigned int id,
 					to - from,
 					FALSE,
 					TRUE);
-		}
-		else {
-			ret = 1;
-		}
 
+			setbit (rt->checked, id);
+			rt->results[id] = ret;
+		}
+	}
+	else {
 		setbit (rt->checked, id);
-		rt->results[id] += ret;
+		rt->results[id] ++;
 	}
 
 	return 0;
