@@ -28,6 +28,10 @@
 #include "config.h"
 
 #define RSPAMD_INVALID_ID ((guint64)-1LL)
+#define RSPAMD_REGEXP_FLAG_RAW (1 << 1)
+#define RSPAMD_REGEXP_FLAG_NOOPT (1 << 2)
+#define RSPAMD_REGEXP_FLAG_FULL_MATCH (1 << 3)
+#define RSPAMD_REGEXP_FLAG_PCRE_ONLY (1 << 4)
 
 typedef struct rspamd_regexp_s rspamd_regexp_t;
 struct rspamd_regexp_cache;
@@ -120,6 +124,11 @@ guint rspamd_regexp_get_pcre_flags (rspamd_regexp_t *re);
  * Get rspamd flags for the regexp
  */
 guint rspamd_regexp_get_flags (rspamd_regexp_t *re);
+
+/**
+ * Set rspamd flags for the regexp
+ */
+guint rspamd_regexp_set_flags (rspamd_regexp_t *re, guint new_flags);
 
 /**
  * Set regexp maximum hits

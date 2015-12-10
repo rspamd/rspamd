@@ -33,10 +33,6 @@
 
 typedef guchar regexp_id_t[rspamd_cryptobox_HASHBYTES];
 
-#define RSPAMD_REGEXP_FLAG_RAW (1 << 1)
-#define RSPAMD_REGEXP_FLAG_NOOPT (1 << 2)
-#define RSPAMD_REGEXP_FLAG_FULL_MATCH (1 << 3)
-
 struct rspamd_regexp_s {
 	gdouble exec_time;
 	gchar *pattern;
@@ -491,6 +487,18 @@ rspamd_regexp_get_pattern (rspamd_regexp_t *re)
 	g_assert (re != NULL);
 
 	return re->pattern;
+}
+
+guint
+rspamd_regexp_set_flags (rspamd_regexp_t *re, guint new_flags)
+{
+	guint old_flags;
+
+	g_assert (re != NULL);
+	old_flags = re->flags;
+	re->flags = new_flags;
+
+	return old_flags;
 }
 
 guint

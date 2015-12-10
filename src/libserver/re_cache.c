@@ -992,7 +992,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 	struct rspamd_re_class *re_class;
 	gchar path[PATH_MAX];
 	hs_database_t *test_db;
-	gint fd, i, n, *hs_ids = NULL, pcre_flags;
+	gint fd, i, n, *hs_ids = NULL, pcre_flags, re_flags;
 	guint64 crc;
 	rspamd_regexp_t *re;
 	hs_compile_error_t *hs_errors;
@@ -1045,6 +1045,12 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 
 			hs_flags[i] = 0;
 			pcre_flags = rspamd_regexp_get_pcre_flags (re);
+			re_flags = rspamd_regexp_get_flags (re);
+
+			if (re_flags & RSPAMD_REGEXP_FLAG_PCRE_ONLY) {
+				/* Do not try to compile bad regexp */
+				continue;
+			}
 
 			if (pcre_flags & PCRE_UTF8) {
 				hs_flags[i] |= HS_FLAG_UTF8;
@@ -1054,6 +1060,9 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 			}
 			if (pcre_flags & PCRE_MULTILINE) {
 				hs_flags[i] |= HS_FLAG_MULTILINE;
+			}
+			if (pcre_flags & PCRE_DOTALL) {
+				hs_flags[i] |= HS_FLAG_DOTALL;
 			}
 			if (rspamd_regexp_get_maxhits (re) == 1) {
 				hs_flags[i] |= HS_FLAG_SINGLEMATCH;
