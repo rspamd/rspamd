@@ -502,6 +502,14 @@ rspamc_symbol_output (FILE *out, const ucl_object_t *obj)
 	rspamd_fprintf (out, "\n");
 }
 
+static gint
+rspamc_symbols_sort_func (gconstpointer a, gconstpointer b)
+{
+	ucl_object_t * const *ua = a, * const *ub = b;
+
+	return strcmp (ucl_object_key (*ua), ucl_object_key (*ub));
+}
+
 static void
 rspamc_metric_output (FILE *out, const ucl_object_t *obj)
 {
@@ -509,7 +517,10 @@ rspamc_metric_output (FILE *out, const ucl_object_t *obj)
 	const ucl_object_t *cur;
 	gdouble score = 0, required_score = 0;
 	gint got_scores = 0;
+	GPtrArray *sym_ptr;
+	guint i;
 
+	sym_ptr = g_ptr_array_new ();
 	rspamd_fprintf (out, "[Metric: %s]\n", ucl_object_key (obj));
 
 	while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
@@ -530,7 +541,7 @@ rspamc_metric_output (FILE *out, const ucl_object_t *obj)
 			rspamd_fprintf (out, "Action: %s\n", ucl_object_tostring (cur));
 		}
 		else if (cur->type == UCL_OBJECT) {
-			rspamc_symbol_output (out, cur);
+			g_ptr_array_add (sym_ptr, (void *)cur);
 		}
 		if (got_scores == 2) {
 			rspamd_fprintf (out,
@@ -540,6 +551,15 @@ rspamc_metric_output (FILE *out, const ucl_object_t *obj)
 			got_scores = 0;
 		}
 	}
+
+	g_ptr_array_sort (sym_ptr, rspamc_symbols_sort_func);
+
+	for (i = 0; i < sym_ptr->len; i ++) {
+		cur = (const ucl_object_t *)g_ptr_array_index (sym_ptr, i);
+		rspamc_symbol_output (out, cur);
+	}
+
+	g_ptr_array_free (sym_ptr, TRUE);
 }
 
 static void
