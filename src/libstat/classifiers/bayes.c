@@ -169,6 +169,28 @@ bayes_classify_callback (gpointer key, gpointer value, gpointer data)
 	return FALSE;
 }
 
+/*
+ * A(x - 0.5)^4 + B(x - 0.5)^3 + C(x - 0.5)^2 + D(x - 0.5)
+ * A = 32,
+ * B = -6
+ * C = -7
+ * D = 3
+ * y = 32(x - 0.5)^4 - 6(x - 0.5)^3 - 7(x - 0.5)^2 + 3(x - 0.5)
+ */
+static gdouble
+bayes_normalize_prob (gdouble x)
+{
+	const gdouble a = 32, b = -6, c = -7, d = 3;
+	gdouble xx, x2, x3, x4;
+
+	xx = x - 0.5;
+	x2 = xx * xx;
+	x3 = x2 * xx;
+	x4 = x3 * xx;
+
+	return a*x4 + b*x3 + c*x2 + d*xx;
+}
+
 struct classifier_ctx *
 bayes_init (rspamd_mempool_t *pool, struct rspamd_classifier_config *cfg)
 {
@@ -269,6 +291,8 @@ bayes_classify (struct classifier_ctx * ctx,
 				}
 
 				rspamd_snprintf (sumbuf, 32, "%.2f%%", final_prob * 100.);
+				final_prob = bayes_normalize_prob (final_prob);
+
 				cur = g_list_prepend (NULL, sumbuf);
 				rspamd_task_insert_result (task,
 						selected_st->st->symbol,
