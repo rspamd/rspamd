@@ -482,8 +482,14 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 
 			case 'V':
 				v = va_arg (args, rspamd_fstring_t *);
+				slen = v->len;
+
+				if (G_UNLIKELY (width != 0)) {
+					slen = MIN (v->len, width);
+				}
+
 				if (v) {
-					RSPAMD_PRINTF_APPEND (v->str, v->len);
+					RSPAMD_PRINTF_APPEND (v->str, slen);
 				}
 				else {
 					RSPAMD_PRINTF_APPEND ("(NULL)", 6);
@@ -493,8 +499,14 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 
 			case 'T':
 				tok = va_arg (args, rspamd_ftok_t *);
+				slen = tok->len;
+
+				if (G_UNLIKELY (width != 0)) {
+					slen = MIN (tok->len, width);
+				}
+
 				if (tok) {
-					RSPAMD_PRINTF_APPEND (tok->begin, tok->len);
+					RSPAMD_PRINTF_APPEND (tok->begin, slen);
 				}
 				else {
 					RSPAMD_PRINTF_APPEND ("(NULL)", 6);
@@ -503,8 +515,13 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 
 			case 'v':
 				gs = va_arg (args, GString *);
+				slen = gs->len;
+
+				if (G_UNLIKELY (width != 0)) {
+					slen = MIN (gs->len, width);
+				}
 				if (gs) {
-					RSPAMD_PRINTF_APPEND (gs->str, gs->len);
+					RSPAMD_PRINTF_APPEND (gs->str, slen);
 				}
 				else {
 					RSPAMD_PRINTF_APPEND ("(NULL)", 6);
@@ -540,6 +557,10 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 				if (slen == -1) {
 					/* NULL terminated string */
 					slen = strlen (p);
+				}
+
+				if (G_UNLIKELY (width != 0)) {
+					slen = MIN (slen, width);
 				}
 
 				if (G_LIKELY(hex == 0)) {
