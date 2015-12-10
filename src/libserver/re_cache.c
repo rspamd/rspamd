@@ -1173,7 +1173,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 
 			msg_info_re_cache ("compiled class %s(%*s) to cache %s, %d regexps",
 					rspamd_re_cache_type_to_string (re_class->type),
-					re_class->type_len,
+					(gint)re_class->type_len,
 					re_class->type_data,
 					re_class->hash, n);
 
