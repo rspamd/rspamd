@@ -428,6 +428,7 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 	guint r = 0;
 	const gchar *start = NULL, *end = NULL;
 	guint max_hits = rspamd_regexp_get_maxhits (re);
+	guint64 id = rspamd_regexp_get_cache_id (re);
 
 	if (len == 0) {
 		len = strlen (in);
@@ -437,26 +438,33 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 		len = rt->cache->max_re_data;
 	}
 
-	while (rspamd_regexp_search (re,
-			in,
-			len,
-			&start,
-			&end,
-			is_raw,
-			NULL)) {
-		r++;
+	r = rt->results[id];
 
-		if (max_hits > 0 && r > max_hits) {
-			break;
+	if (max_hits == 0 || r < max_hits) {
+		while (rspamd_regexp_search (re,
+				in,
+				len,
+				&start,
+				&end,
+				is_raw,
+				NULL)) {
+			r++;
+
+			if (max_hits > 0 && r >= max_hits) {
+				break;
+			}
+		}
+
+		rt->stat.regexp_checked++;
+		rt->stat.bytes_scanned_pcre += len;
+		rt->stat.bytes_scanned += len;
+
+		if (r > 0) {
+			rt->stat.regexp_matched += r;
 		}
 	}
-
-	rt->stat.regexp_checked ++;
-	rt->stat.bytes_scanned_pcre += len;
-	rt->stat.bytes_scanned += len;
-
-	if (r > 0) {
-		rt->stat.regexp_matched += r;
+	else {
+		r = 0;
 	}
 
 	return r;
