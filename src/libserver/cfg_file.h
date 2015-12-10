@@ -247,6 +247,7 @@ struct rspamd_config {
 	gboolean log_color;                             /**< output colors for console output                   */
 	gboolean log_extended;                          /**< log extended information							*/
 	gboolean log_systemd;                           /**< special case for systemd logger					*/
+	gboolean log_re_cache;                          /**< show statistics about regexps						*/
 
 	gboolean mlock_statfile_pool;                   /**< use mlock (2) for locking statfiles				*/
 

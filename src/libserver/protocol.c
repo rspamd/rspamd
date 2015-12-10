@@ -991,6 +991,7 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 {
 	struct metric_result *metric_res;
 	GHashTableIter hiter;
+	const struct rspamd_re_cache_stat *restat;
 	gpointer h, v;
 	ucl_object_t *top = NULL;
 	gdouble required_score;
@@ -1011,6 +1012,18 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	}
 
 	rspamd_task_write_log (task);
+
+	if (task->cfg->log_re_cache) {
+		restat = rspamd_re_cache_get_stat (task->re_rt);
+		g_assert (restat != NULL);
+		msg_info_task (
+				"regexp statistics: %ud pcre regexps scanned, %ud regexps matched,"
+						" %HL bytes scanned using pcre, %HL bytes scanned total",
+				restat->regexp_checked,
+				restat->regexp_matched,
+				restat->bytes_scanned_pcre,
+				restat->bytes_scanned);
+	}
 
 	msg->body = rspamd_fstring_sized_new (1000);
 

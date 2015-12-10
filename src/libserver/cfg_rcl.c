@@ -1258,6 +1258,11 @@ rspamd_rcl_config_init (void)
 			G_STRUCT_OFFSET (struct rspamd_config, log_urls),
 			0);
 	rspamd_rcl_add_default_handler (sub,
+			"log_re_cache",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, log_re_cache),
+			0);
+	rspamd_rcl_add_default_handler (sub,
 			"debug_ip",
 			rspamd_rcl_parse_struct_string,
 			G_STRUCT_OFFSET (struct rspamd_config, debug_ip_map),
