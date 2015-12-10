@@ -1465,6 +1465,11 @@ rspamd_rcl_config_init (void)
 			rspamd_rcl_parse_struct_integer,
 			G_STRUCT_OFFSET (struct rspamd_config, history_rows),
 			RSPAMD_CL_FLAG_UINT);
+	rspamd_rcl_add_default_handler (sub,
+			"disable_hyperscan",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, disable_hyperscan),
+			0);
 
 	/* New DNS configuration */
 	ssub = rspamd_rcl_add_section (&sub->subsections, "dns", NULL, NULL,

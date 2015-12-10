@@ -671,7 +671,7 @@ rspamd_config_post_load (struct rspamd_config *cfg, gboolean validate_cache)
 	rspamd_symbols_cache_init (cfg->cache);
 
 	/* Init re cache */
-	rspamd_re_cache_init (cfg->re_cache);
+	rspamd_re_cache_init (cfg->re_cache, cfg);
 
 	/* Validate cache */
 	if (validate_cache) {

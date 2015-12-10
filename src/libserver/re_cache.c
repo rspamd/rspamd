@@ -29,6 +29,7 @@
 #include "ref.h"
 #include "libserver/url.h"
 #include "libserver/task.h"
+#include "libserver/cfg_file.h"
 #include "libutil/util.h"
 #ifdef WITH_HYPERSCAN
 #include "hs.h"
@@ -99,6 +100,7 @@ struct rspamd_re_cache {
 	guint max_re_data;
 	gchar hash[rspamd_cryptobox_HASHBYTES + 1];
 #ifdef WITH_HYPERSCAN
+	gboolean disable_hyperscan;
 	hs_platform_info_t plt;
 #endif
 };
@@ -286,7 +288,7 @@ rspamd_re_cache_sort_func (gconstpointer a, gconstpointer b)
 }
 
 void
-rspamd_re_cache_init (struct rspamd_re_cache *cache)
+rspamd_re_cache_init (struct rspamd_re_cache *cache, struct rspamd_config *cfg)
 {
 	guint i, fl;
 	GHashTableIter it;
@@ -363,6 +365,8 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache)
 #ifdef WITH_HYPERSCAN
 	const gchar *platform = "generic";
 	rspamd_fstring_t *features = rspamd_fstring_new ();
+
+	cache->disable_hyperscan = cfg->disable_hyperscan;
 
 	g_assert (hs_populate_platform (&cache->plt) == HS_SUCCESS);
 
@@ -541,7 +545,7 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 #else
 	struct rspamd_re_hyperscan_cbdata cbdata;
 
-	if (elt->match_type == RSPAMD_RE_CACHE_PCRE) {
+	if (rt->cache->disable_hyperscan || elt->match_type == RSPAMD_RE_CACHE_PCRE) {
 		ret = rspamd_re_cache_process_pcre (rt, re, in, len, is_raw);
 		setbit (rt->checked, re_id);
 		rt->results[re_id] = ret;
@@ -751,7 +755,9 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		break;
 	}
 
-	rspamd_re_cache_finish_class (rt, re_class);
+	if (!rt->cache->disable_hyperscan) {
+		rspamd_re_cache_finish_class (rt, re_class);
+	}
 
 	return ret;
 }

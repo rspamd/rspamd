@@ -30,6 +30,7 @@
 struct rspamd_re_cache;
 struct rspamd_re_runtime;
 struct rspamd_task;
+struct rspamd_config;
 
 enum rspamd_re_type {
 	RSPAMD_RE_HEADER,
@@ -78,7 +79,8 @@ void rspamd_re_cache_replace (struct rspamd_re_cache *cache,
 /**
  * Initialize and optimize re cache structure
  */
-void rspamd_re_cache_init (struct rspamd_re_cache *cache);
+void rspamd_re_cache_init (struct rspamd_re_cache *cache,
+		struct rspamd_config *cfg);
 
 /**
  * Get runtime data for a cache
