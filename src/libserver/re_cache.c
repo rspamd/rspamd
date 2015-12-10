@@ -755,9 +755,11 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		break;
 	}
 
+#if WITH_HYPERSCAN
 	if (!rt->cache->disable_hyperscan) {
 		rspamd_re_cache_finish_class (rt, re_class);
 	}
+#endif
 
 	return ret;
 }
