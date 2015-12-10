@@ -107,6 +107,7 @@ struct rspamd_re_runtime {
 	guchar *checked;
 	guchar *results;
 	struct rspamd_re_cache *cache;
+	struct rspamd_re_cache_stat stat;
 };
 
 static GQuark
@@ -411,6 +412,14 @@ rspamd_re_cache_runtime_new (struct rspamd_re_cache *cache)
 	return rt;
 }
 
+const struct rspamd_re_cache_stat *
+rspamd_re_cache_get_stat (struct rspamd_re_runtime *rt)
+{
+	g_assert (rt != NULL);
+
+	return &rt->stat;
+}
+
 static guint
 rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 		rspamd_regexp_t *re, const guchar *in, gsize len,
@@ -440,6 +449,14 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 		if (max_hits > 0 && r > max_hits) {
 			break;
 		}
+	}
+
+	rt->stat.regexp_checked ++;
+	rt->stat.bytes_scanned_pcre += len;
+	rt->stat.bytes_scanned += len;
+
+	if (r > 0) {
+		rt->stat.regexp_matched ++;
 	}
 
 	return r;
@@ -477,6 +494,9 @@ rspamd_re_cache_hyperscan_cb (unsigned int id,
 				cbdata->in + from,
 				to - from,
 				FALSE);
+	}
+	else {
+		rt->stat.regexp_matched++;
 	}
 
 	setbit (rt->checked, id);
@@ -532,6 +552,7 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 		cbdata.in = in;
 		cbdata.re = re;
 		cbdata.rt = rt;
+		rt->stat.bytes_scanned += len;
 
 		if ((hs_scan (re_class->hs_db, in, len, 0, re_class->hs_scratch,
 				rspamd_re_cache_hyperscan_cb, &cbdata)) != HS_SUCCESS) {

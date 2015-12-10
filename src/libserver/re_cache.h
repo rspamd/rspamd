@@ -42,6 +42,13 @@ enum rspamd_re_type {
 	RSPAMD_RE_MAX
 };
 
+struct rspamd_re_cache_stat {
+	guint64 bytes_scanned;
+	guint64 bytes_scanned_pcre;
+	guint regexp_checked;
+	guint regexp_matched;
+};
+
 /**
  * Initialize re_cache persistent structure
  */
@@ -77,6 +84,12 @@ void rspamd_re_cache_init (struct rspamd_re_cache *cache);
  * Get runtime data for a cache
  */
 struct rspamd_re_runtime* rspamd_re_cache_runtime_new (struct rspamd_re_cache *cache);
+
+/**
+ * Get runtime statistics
+ */
+const struct rspamd_re_cache_stat *
+		rspamd_re_cache_get_stat (struct rspamd_re_runtime *rt);
 
 /**
  * Process regexp runtime and return the result for a specific regexp
