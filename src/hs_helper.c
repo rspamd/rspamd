@@ -50,11 +50,14 @@ worker_t hs_helper_worker = {
 		SOCK_STREAM                 /* TCP socket */
 };
 
+const static gdouble default_max_time = 1.0;
+
 /*
  * Worker's context
  */
 struct hs_helper_ctx {
 	gchar *hs_dir;
+	gdouble max_time;
 	struct rspamd_config *cfg;
 	struct event_base *ev_base;
 };
@@ -70,10 +73,15 @@ init_hs_helper (struct rspamd_config *cfg)
 
 	ctx->cfg = cfg;
 	ctx->hs_dir = RSPAMD_DBDIR "/";
+	ctx->max_time = default_max_time;
 
 	rspamd_rcl_register_worker_option (cfg, type, "cache_dir",
 			rspamd_rcl_parse_struct_string, ctx,
 			G_STRUCT_OFFSET (struct hs_helper_ctx, hs_dir), 0);
+	rspamd_rcl_register_worker_option (cfg, type, "max_time",
+			rspamd_rcl_parse_struct_time, ctx,
+			G_STRUCT_OFFSET (struct hs_helper_ctx, max_time),
+			RSPAMD_CL_FLAG_TIME_FLOAT);
 
 	return ctx;
 }
@@ -138,7 +146,7 @@ rspamd_rs_compile (struct hs_helper_ctx *ctx, struct rspamd_worker *worker)
 	}
 
 	if ((ncompiled = rspamd_re_cache_compile_hyperscan (ctx->cfg->re_cache,
-			ctx->hs_dir,
+			ctx->hs_dir, ctx->max_time,
 			&err)) == -1) {
 		msg_err ("failed to compile re cache: %e", err);
 		g_error_free (err);

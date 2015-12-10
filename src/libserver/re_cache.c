@@ -882,17 +882,18 @@ rspamd_re_cache_type_from_string (const char *str)
 #ifdef WITH_HYPERSCAN
 static gboolean
 rspamd_re_cache_is_finite (struct rspamd_re_cache *cache,
-		rspamd_regexp_t *re, gint flags)
+		rspamd_regexp_t *re, gint flags, gdouble max_time)
 {
 	pid_t cld;
 	gint status;
 	struct timespec ts;
 	hs_compile_error_t *hs_errors;
 	hs_database_t *test_db;
-	const double wait_time = 0.1;
+	gdouble wait_time;
 	const gint max_tries = 10;
 	gint tries = 0, rc;
 
+	wait_time = max_time / max_tries;
 	/* We need to restore SIGCHLD processing */
 	signal (SIGCHLD, SIG_DFL);
 	cld = fork ();
@@ -951,7 +952,7 @@ rspamd_re_cache_is_finite (struct rspamd_re_cache *cache,
 
 gint
 rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
-		const char *cache_dir,
+		const char *cache_dir, gdouble max_time,
 		GError **err)
 {
 	g_assert (cache != NULL);
@@ -1039,14 +1040,14 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 					&cache->plt,
 					&test_db,
 					&hs_errors) != HS_SUCCESS) {
-				msg_info_re_cache ("cannot compile %s to hyperscan, try prefilter match",
+				msg_debug_re_cache ("cannot compile %s to hyperscan, try prefilter match",
 						rspamd_regexp_get_pattern (re));
 				hs_free_compile_error (hs_errors);
 
 				/* The approximation operation might take a significant
 				 * amount of time, so we need to check if it's finite
 				 */
-				if (rspamd_re_cache_is_finite (cache, re, hs_flags[i])) {
+				if (rspamd_re_cache_is_finite (cache, re, hs_flags[i], max_time)) {
 					hs_flags[i] |= HS_FLAG_PREFILTER;
 					hs_ids[i] = rspamd_regexp_get_cache_id (re);
 					hs_pats[i] = rspamd_regexp_get_pattern (re);
