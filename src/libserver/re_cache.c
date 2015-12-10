@@ -1024,8 +1024,6 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 				G_DIR_SEPARATOR, re_class->hash);
 
 		if (rspamd_re_cache_is_valid_hyperscan_file (cache, path, TRUE)) {
-			msg_info_re_cache ("skip already valid file for re class '%s'",
-					re_class->hash);
 
 			fd = open (path, O_RDONLY, 00600);
 
@@ -1035,6 +1033,14 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 			read (fd, &n, sizeof (n));
 			total += n;
 			close (fd);
+
+			msg_info_re_cache (
+					"skip already valid class %s(%*s) to cache %6s, %d regexps",
+					rspamd_re_cache_type_to_string (re_class->type),
+					(gint) re_class->type_len,
+					re_class->type_data,
+					re_class->hash,
+					n);
 
 			continue;
 		}
@@ -1195,7 +1201,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 				return -1;
 			}
 
-			msg_info_re_cache ("compiled class %s(%*s) to cache %s, %d regexps",
+			msg_info_re_cache ("compiled class %s(%*s) to cache %6s, %d regexps",
 					rspamd_re_cache_type_to_string (re_class->type),
 					(gint)re_class->type_len,
 					re_class->type_data,
