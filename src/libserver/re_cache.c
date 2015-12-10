@@ -1043,7 +1043,6 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 		while (g_hash_table_iter_next (&cit, &k, &v)) {
 			re = v;
 
-			hs_flags[i] = 0;
 			pcre_flags = rspamd_regexp_get_pcre_flags (re);
 			re_flags = rspamd_regexp_get_flags (re);
 
@@ -1051,6 +1050,8 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 				/* Do not try to compile bad regexp */
 				continue;
 			}
+
+			hs_flags[i] = 0;
 
 			if (pcre_flags & PCRE_UTF8) {
 				hs_flags[i] |= HS_FLAG_UTF8;

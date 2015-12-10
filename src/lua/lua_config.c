@@ -363,6 +363,7 @@ LUA_FUNCTION_DEF (config, newindex);
  *   + `body`: raw body regexp
  *   + `url`: url regexp
  * - `header`: for header and rawheader regexp means the name of header
+ * - `pcre_only`: flag regexp as pcre only regexp
  */
 LUA_FUNCTION_DEF (config, register_regexp);
 
@@ -1567,6 +1568,8 @@ lua_config_register_regexp (lua_State *L)
 	gsize header_len = 0;
 	GError *err = NULL;
 	enum rspamd_re_type type = RSPAMD_RE_BODY;
+	gboolean pcre_only = FALSE;
+	guint old_flags;
 
 	/*
 	 * - `re`* : regular expression object
@@ -1578,11 +1581,12 @@ lua_config_register_regexp (lua_State *L)
 	 *   + `body`: raw body regexp
 	 *   + `url`: url regexp
 	 * - `header`: for header and rawheader regexp means the name of header
+	 * - `pcre_only`: allow merely pcre for this regexp
 	 */
 	if (cfg != NULL) {
 		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
-				"*re=U{regexp};*type=S;header=V",
-				&re, &type_str, &header_len, &header_str)) {
+				"*re=U{regexp};*type=S;header=V;pcre_only=B",
+				&re, &type_str, &header_len, &header_str, &pcre_only)) {
 			msg_err_config ("cannot get parameters list: %e", err);
 
 			if (err) {
@@ -1598,6 +1602,12 @@ lua_config_register_regexp (lua_State *L)
 						"header argument is mandatory for header/rawheader regexps");
 			}
 			else {
+				if (pcre_only) {
+					old_flags = rspamd_regexp_get_flags (re->re);
+					old_flags |= RSPAMD_REGEXP_FLAG_PCRE_ONLY;
+					rspamd_regexp_set_flags (re->re, old_flags);
+				}
+
 				rspamd_re_cache_add (cfg->re_cache, re->re, type,
 						(gpointer) header_str, header_len);
 			}
