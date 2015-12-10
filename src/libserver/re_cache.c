@@ -467,9 +467,6 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 			rt->stat.regexp_matched += r;
 		}
 	}
-	else {
-		r = 0;
-	}
 
 	return r;
 }
@@ -613,7 +610,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		struct rspamd_re_class *re_class,
 		gboolean is_strong)
 {
-	guint ret = 0, i;
+	guint ret = 0, i, re_id;
 	GList *cur, *headerlist;
 	GHashTableIter it;
 	struct raw_header *rh;
@@ -628,6 +625,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 	msg_debug_re_cache ("get to the slow path for re type: %s: %s",
 			rspamd_re_cache_type_to_string (re_class->type),
 			rspamd_regexp_get_pattern (re));
+	re_id = rspamd_regexp_get_cache_id (re);
 
 	switch (re_class->type) {
 	case RSPAMD_RE_HEADER:
@@ -657,7 +655,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 
 				/* Match re */
 				if (in) {
-					ret += rspamd_re_cache_process_regexp_data (rt, re, in,
+					ret = rspamd_re_cache_process_regexp_data (rt, re, in,
 							strlen (in), raw);
 					debug_task ("checking header %s regexp: %s -> %d",
 							re_class->type_data,
@@ -704,7 +702,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 			}
 
 			if (len > 0) {
-				ret += rspamd_re_cache_process_regexp_data (rt, re, in,
+				ret = rspamd_re_cache_process_regexp_data (rt, re, in,
 						len, raw);
 				debug_task ("checking mime regexp: %s -> %d",
 						rspamd_regexp_get_pattern (re), ret);
@@ -720,7 +718,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 			len = url->urllen;
 			raw = FALSE;
 
-			ret += rspamd_re_cache_process_regexp_data (rt, re, in,
+			ret = rspamd_re_cache_process_regexp_data (rt, re, in,
 					len, raw);
 		}
 
@@ -732,7 +730,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 			len = url->urllen;
 			raw = FALSE;
 
-			ret += rspamd_re_cache_process_regexp_data (rt, re, in,
+			ret = rspamd_re_cache_process_regexp_data (rt, re, in,
 					len, raw);
 		}
 
@@ -761,7 +759,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 	}
 #endif
 
-	return ret;
+	return rt->results[re_id];
 }
 
 gint
