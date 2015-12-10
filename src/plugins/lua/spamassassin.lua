@@ -651,7 +651,6 @@ local function process_sa_conf(f)
       end
 
       cur_rule['symbol'] = words[2]
-
       if words[3] and (string.sub(words[3], 1, 1) == '/'
           or string.sub(words[3], 1, 1) == 'm') then
         cur_rule['type'] = 'part'
@@ -787,6 +786,8 @@ if type(section) == "table" then
           f = io.open(elt, "r")
           if f then
             process_sa_conf(f)
+          else
+            rspamd_logger.errx(rspamd_config, "cannot open %s", elt)
           end
         end
       else
@@ -794,6 +795,8 @@ if type(section) == "table" then
         f = io.open(fn, "r")
         if f then
           process_sa_conf(f)
+        else
+          rspamd_logger.errx(rspamd_config, "cannot open %s", fn)
         end
       end
     end
