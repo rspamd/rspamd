@@ -403,7 +403,7 @@ rspamd_re_cache_runtime_new (struct rspamd_re_cache *cache)
 	struct rspamd_re_runtime *rt;
 	g_assert (cache != NULL);
 
-	rt = g_slice_alloc (sizeof (*rt));
+	rt = g_slice_alloc0 (sizeof (*rt));
 	rt->cache = cache;
 	REF_RETAIN (cache);
 	rt->checked = g_slice_alloc0 (NBYTES (cache->nre));
@@ -456,7 +456,7 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 	rt->stat.bytes_scanned += len;
 
 	if (r > 0) {
-		rt->stat.regexp_matched ++;
+		rt->stat.regexp_matched += r;
 	}
 
 	return r;
@@ -466,6 +466,7 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 struct rspamd_re_hyperscan_cbdata {
 	struct rspamd_re_runtime *rt;
 	const guchar *in;
+	gsize len;
 	rspamd_regexp_t *re;
 };
 
@@ -482,27 +483,28 @@ rspamd_re_cache_hyperscan_cb (unsigned int id,
 	guint ret, maxhits;
 
 	rt = cbdata->rt;
-
 	pcre_elt = g_ptr_array_index (rt->cache->re, id);
 	maxhits = rspamd_regexp_get_maxhits (pcre_elt->re);
-	ret = 1;
 
-	if (pcre_elt->match_type == RSPAMD_RE_CACHE_HYPERSCAN_PRE) {
-		/* We need to match the corresponding pcre first */
-		ret = rspamd_re_cache_process_pcre (rt,
-				pcre_elt->re,
-				cbdata->in + from,
-				to - from,
-				FALSE);
+	if (pcre_elt->match_type == RSPAMD_RE_CACHE_HYPERSCAN) {
+		ret = 1;
+		setbit (rt->checked, id);
+
+		if (maxhits == 0 || rt->results[id] < maxhits) {
+			rt->results[id] += ret;
+			rt->stat.regexp_matched++;
+		}
 	}
 	else {
-		rt->stat.regexp_matched++;
-	}
-
-	setbit (rt->checked, id);
-
-	if (maxhits == 0 || rt->results[id] < maxhits) {
-		rt->results[id] += ret;
+		if (!isset (rt->checked, id)) {
+			ret = rspamd_re_cache_process_pcre (rt,
+					pcre_elt->re,
+					cbdata->in,
+					cbdata->len,
+					FALSE);
+			rt->results[id] = ret;
+			setbit (rt->checked, id);
+		}
 	}
 
 	return 0;
@@ -552,6 +554,7 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 		cbdata.in = in;
 		cbdata.re = re;
 		cbdata.rt = rt;
+		cbdata.len = len;
 		rt->stat.bytes_scanned += len;
 
 		if ((hs_scan (re_class->hs_db, in, len, 0, re_class->hs_scratch,
@@ -580,6 +583,7 @@ rspamd_re_cache_finish_class (struct rspamd_re_runtime *rt,
 		re_id = re_class->hs_ids[i];
 
 		if (!isset (rt->checked, re_id)) {
+			g_assert (rt->results[re_id] == 0);
 			rt->results[re_id] = 0;
 			setbit (rt->checked, re_id);
 		}
@@ -1166,6 +1170,12 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 
 				return -1;
 			}
+
+			msg_info_re_cache ("compiled class %s(%*s) to cache %s, %d regexps",
+					rspamd_re_cache_type_to_string (re_class->type),
+					re_class->type_len,
+					re_class->type_data,
+					re_class->hash, n);
 
 			total += n;
 
