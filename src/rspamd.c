@@ -45,6 +45,10 @@
 #include <grp.h>
 #endif
 
+#ifdef HAVE_NFTW
+#include <ftw.h>
+#endif
+
 #include <signal.h>
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>
@@ -610,6 +614,96 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 	return TRUE;
 }
 
+struct core_check_cbdata {
+	struct rspamd_config *cfg;
+	gsize total_count;
+	gsize total_size;
+};
+
+#ifdef HAVE_NFTW
+
+static struct core_check_cbdata cores_cbdata;
+
+static gint
+rspamd_check_core_cb (const gchar *path, const struct stat *st,
+		gint flag, struct FTW *ft)
+{
+	if (S_ISREG (st->st_mode)) {
+		cores_cbdata.total_count ++;
+		cores_cbdata.total_size += st->st_size;
+	}
+
+	return 0;
+}
+
+#endif
+
+static void
+rspamd_check_core_limits (struct rspamd_main *rspamd_main)
+{
+#ifdef HAVE_NFTW
+	struct rspamd_config *cfg = rspamd_main->cfg;
+
+	cores_cbdata.cfg = cfg;
+	cores_cbdata.total_count = 0;
+	cores_cbdata.total_size = 0;
+
+	if (cfg->cores_dir && (cfg->max_cores_count || cfg->max_cores_size)) {
+		if (nftw (cfg->cores_dir, rspamd_check_core_cb, 20, FTW_MOUNT|FTW_PHYS)
+					== -1) {
+			msg_err_main ("nftw failed for path %s: %s", cfg->cores_dir,
+					strerror (errno));
+		}
+		else {
+			if (!rspamd_main->cores_throttling) {
+				if (cfg->max_cores_size &&
+						cores_cbdata.total_size > cfg->max_cores_size) {
+					msg_warn_main (
+							"enable cores throttling as size of cores in"
+									" %s is %Hz, limit is %Hz",
+							cfg->cores_dir,
+							cores_cbdata.total_size,
+							cfg->max_cores_size);
+					rspamd_main->cores_throttling = TRUE;
+				}
+				if (cfg->max_cores_count &&
+						cores_cbdata.total_count > cfg->max_cores_count) {
+					msg_warn_main (
+							"enable cores throttling as count of cores in"
+									" %s is %z, limit is %z",
+							cfg->cores_dir,
+							cores_cbdata.total_count,
+							cfg->max_cores_count);
+					rspamd_main->cores_throttling = TRUE;
+				}
+			}
+			else {
+				if (cfg->max_cores_size &&
+						cores_cbdata.total_size < cfg->max_cores_size) {
+					msg_info_main (
+							"disable cores throttling as size of cores in"
+									" %s is now %Hz, limit is %Hz",
+							cfg->cores_dir,
+							cores_cbdata.total_size,
+							cfg->max_cores_size);
+					rspamd_main->cores_throttling = FALSE;
+				}
+				if (cfg->max_cores_count &&
+						cores_cbdata.total_count < cfg->max_cores_count) {
+					msg_info_main (
+							"disable cores throttling as count of cores in"
+									" %s is %z, limit is %z",
+							cfg->cores_dir,
+							cores_cbdata.total_count,
+							cfg->max_cores_count);
+					rspamd_main->cores_throttling = FALSE;
+				}
+			}
+		}
+	}
+#endif
+}
+
 static void
 reopen_log_handler (gpointer key, gpointer value, gpointer unused)
 {
@@ -721,6 +815,7 @@ rspamd_hup_handler (gint signo, short what, gpointer arg)
 	g_hash_table_foreach (rspamd_main->workers, kill_old_workers, NULL);
 	rspamd_map_remove_all (rspamd_main->cfg);
 	reread_config (rspamd_main);
+	rspamd_check_core_limits (rspamd_main);
 	spawn_workers (rspamd_main, rspamd_main->ev_base);
 }
 
@@ -785,6 +880,7 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 						WEXITSTATUS (res));
 			}
 			/* Fork another worker in replace of dead one */
+			rspamd_check_core_limits (rspamd_main);
 			rspamd_fork_delayed (cur->cf, cur->index, rspamd_main);
 		}
 
@@ -1116,6 +1212,7 @@ main (gint argc, gchar **argv, gchar **env)
 	event_base_set (ev_base, &usr1_ev);
 	event_add (&usr1_ev, NULL);
 
+	rspamd_check_core_limits (rspamd_main);
 	spawn_workers (rspamd_main, ev_base);
 
 	if (control_fd != -1) {

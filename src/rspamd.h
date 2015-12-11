@@ -172,6 +172,7 @@ struct rspamd_main {
 	uid_t workers_uid;                                          /**< worker's uid running to                        */
 	gid_t workers_gid;                                          /**< worker's gid running to						*/
 	gboolean is_privilleged;                                    /**< true if run in privilleged mode                */
+	gboolean cores_throttling;                                  /**< turn off cores when limits are exceeded		*/
 	struct roll_history *history;                               /**< rolling history								*/
 	struct event_base *ev_base;
 };

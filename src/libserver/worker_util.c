@@ -423,14 +423,26 @@ rspamd_worker_set_limits (struct rspamd_main *rspamd_main,
 		}
 	}
 
-	if (cf->rlimit_maxcore != 0) {
-		rlmt.rlim_cur = (rlim_t) cf->rlimit_maxcore;
-		rlmt.rlim_max = (rlim_t) cf->rlimit_maxcore;
+	if (rspamd_main->cores_throttling) {
+		msg_info_main ("disable core files for the new worker, as limits are reached");
+		rlmt.rlim_cur = 0;
+		rlmt.rlim_max = 0;
 
 		if (setrlimit (RLIMIT_CORE, &rlmt) == -1) {
-			msg_warn_main ("cannot set max core rlimit: %d, %s",
-					cf->rlimit_maxcore,
+			msg_warn_main ("cannot disable core: %s",
 					strerror (errno));
+		}
+	}
+	else {
+		if (cf->rlimit_maxcore != 0) {
+			rlmt.rlim_cur = (rlim_t) cf->rlimit_maxcore;
+			rlmt.rlim_max = (rlim_t) cf->rlimit_maxcore;
+
+			if (setrlimit (RLIMIT_CORE, &rlmt) == -1) {
+				msg_warn_main ("cannot set max core rlimit: %d, %s",
+						cf->rlimit_maxcore,
+						strerror (errno));
+			}
 		}
 	}
 }
