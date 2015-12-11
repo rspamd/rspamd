@@ -50,6 +50,10 @@ symbol).
 * `classify_headers`: list of headers that are processed by statistics
 * `history_rows`: number of rows in the recent history roll table
 * `explicit_modules`: always load modules from the list even if they have no according configuration section in the file
+* `disable_hyperscan`: disable hyperscan optimizations (if enabled by compilation time)
+* `cores_dir`: directory where rspamd is intended to drop core files
+* `max_cores_size`: maximum total size of core files that are placed in `cores_dir`
+* `max_cores_count`: maximum number of files in `cores_dir`
 
 ## DNS options
 

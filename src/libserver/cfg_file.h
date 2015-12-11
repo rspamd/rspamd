@@ -234,6 +234,9 @@ struct rspamd_config {
 	gboolean disable_hyperscan;                     /**< disable hyperscan usage							*/
 
 	gsize max_diff;                                 /**< maximum diff size for text parts					*/
+	gsize max_cores_size;                           /**< maximum size occupied by rspamd core files			*/
+	gsize max_cores_count;                          /**< maximum number of core files						*/
+	gchar *cores_dir;                               /**< directory for core files							*/
 
 	enum rspamd_log_type log_type;                  /**< log type											*/
 	gint log_facility;                              /**< log facility in case of syslog						*/
