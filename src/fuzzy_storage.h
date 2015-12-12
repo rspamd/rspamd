@@ -37,7 +37,7 @@ RSPAMD_PACKED(rspamd_fuzzy_reply) {
 
 RSPAMD_PACKED(rspamd_fuzzy_encrypted_req_hdr) {
 	guchar magic[4];
-	guchar reserved[8];
+	guchar key_id[8];
 	guchar pubkey[32];
 	guchar nonce[rspamd_cryptobox_MAX_NONCEBYTES];
 	guchar mac[rspamd_cryptobox_MAX_MACBYTES];
