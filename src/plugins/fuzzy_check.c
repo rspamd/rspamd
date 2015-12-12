@@ -643,6 +643,32 @@ fuzzy_preprocess_words (struct mime_text_part *part, rspamd_mempool_t *pool)
 	return part->normalized_words;
 }
 
+static void
+fuzzy_encrypt_cmd (struct fuzzy_rule *rule,
+		struct rspamd_fuzzy_encrypted_req_hdr *hdr,
+		guchar *data, gsize datalen)
+{
+	struct rspamd_http_keypair *lk, *rk;
+
+	g_assert (hdr != NULL);
+	g_assert (data != NULL);
+	g_assert (rule != NULL);
+
+	lk = rule->local_key;
+	rk = rule->peer_key;
+	/* Encrypt data */
+	memcpy (hdr->magic,
+			fuzzy_encrypted_magic,
+			sizeof (hdr->magic));
+	ottery_rand_bytes (hdr->nonce, sizeof (hdr->nonce));
+	memcpy (hdr->pubkey, lk->pk, sizeof (hdr->pubkey));
+	memcpy (hdr->key_id, rk->pk, sizeof (hdr->key_id));
+	rspamd_keypair_cache_process (fuzzy_module_ctx->keypairs_cache,
+			lk, rk);
+	rspamd_cryptobox_encrypt_nm_inplace (data, datalen,
+			hdr->nonce, rk->nm, hdr->mac);
+}
+
 static struct fuzzy_cmd_io *
 fuzzy_cmd_from_task_meta (struct fuzzy_rule *rule,
 		int c,
@@ -655,7 +681,7 @@ fuzzy_cmd_from_task_meta (struct fuzzy_rule *rule,
 	struct rspamd_fuzzy_encrypted_cmd *enccmd;
 	struct fuzzy_cmd_io *io;
 	rspamd_cryptobox_hash_state_t st;
-	struct rspamd_http_keypair *lk, *rk;
+
 	GHashTableIter it;
 	gpointer k, v;
 	struct rspamd_url *u;
@@ -665,8 +691,6 @@ fuzzy_cmd_from_task_meta (struct fuzzy_rule *rule,
 	if (rule->peer_key) {
 		enccmd = rspamd_mempool_alloc0 (pool, sizeof (*enccmd));
 		cmd = &enccmd->cmd;
-		lk = rule->local_key;
-		rk = rule->peer_key;
 	}
 	else {
 		cmd = rspamd_mempool_alloc0 (pool, sizeof (*cmd));
@@ -719,17 +743,7 @@ fuzzy_cmd_from_task_meta (struct fuzzy_rule *rule,
 	io->tag = cmd->tag;
 
 	if (rule->peer_key) {
-		g_assert (enccmd != NULL);
-		/* Encrypt data */
-		memcpy (enccmd->hdr.magic,
-				fuzzy_encrypted_magic,
-				sizeof (enccmd->hdr.magic));
-		ottery_rand_bytes (enccmd->hdr.nonce, sizeof (enccmd->hdr.nonce));
-		memcpy (enccmd->hdr.pubkey, lk->pk, sizeof (enccmd->hdr.pubkey));
-		rspamd_keypair_cache_process (fuzzy_module_ctx->keypairs_cache,
-				lk, rk);
-		rspamd_cryptobox_encrypt_nm_inplace ((guchar *) cmd, sizeof (*cmd),
-				enccmd->hdr.nonce, rk->nm, enccmd->hdr.mac);
+		fuzzy_encrypt_cmd (rule, &enccmd->hdr, (guchar *)cmd, sizeof (*cmd));
 		io->io.iov_base = enccmd;
 		io->io.iov_len = sizeof (*enccmd);
 	}
@@ -760,13 +774,10 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 	rspamd_ftok_t *word;
 	GArray *words;
 	struct fuzzy_cmd_io *io;
-	struct rspamd_http_keypair *lk, *rk;
 
 	if (rule->peer_key) {
 		encshcmd = rspamd_mempool_alloc0 (pool, sizeof (*encshcmd));
 		shcmd = &encshcmd->cmd;
-		lk = rule->local_key;
-		rk = rule->peer_key;
 	}
 	else {
 		shcmd = rspamd_mempool_alloc0 (pool, sizeof (*shcmd));
@@ -808,17 +819,8 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 	io->flags = 0;
 
 	if (rule->peer_key) {
-		g_assert (encshcmd != NULL);
 		/* Encrypt data */
-		memcpy (encshcmd->hdr.magic,
-				fuzzy_encrypted_magic,
-				sizeof (encshcmd->hdr.magic));
-		ottery_rand_bytes (encshcmd->hdr.nonce, sizeof (encshcmd->hdr.nonce));
-		memcpy (encshcmd->hdr.pubkey, lk->pk, sizeof (encshcmd->hdr.pubkey));
-		rspamd_keypair_cache_process (fuzzy_module_ctx->keypairs_cache,
-				lk, rk);
-		rspamd_cryptobox_encrypt_nm_inplace ((guchar *)shcmd, sizeof (*shcmd),
-				encshcmd->hdr.nonce, rk->nm, encshcmd->hdr.mac);
+		fuzzy_encrypt_cmd (rule, &encshcmd->hdr, (guchar *) shcmd, sizeof (*shcmd));
 		io->io.iov_base = encshcmd;
 		io->io.iov_len = sizeof (*encshcmd);
 	}
@@ -843,13 +845,10 @@ fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 	struct rspamd_fuzzy_encrypted_cmd *enccmd;
 	struct fuzzy_cmd_io *io;
 	rspamd_cryptobox_hash_state_t st;
-	struct rspamd_http_keypair *lk, *rk;
 
 	if (rule->peer_key) {
 		enccmd = rspamd_mempool_alloc0 (pool, sizeof (*enccmd));
 		cmd = &enccmd->cmd;
-		lk = rule->local_key;
-		rk = rule->peer_key;
 	}
 	else {
 		cmd = rspamd_mempool_alloc0 (pool, sizeof (*cmd));
@@ -873,17 +872,7 @@ fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 	io->tag = cmd->tag;
 
 	if (rule->peer_key) {
-		g_assert (enccmd != NULL);
-		/* Encrypt data */
-		memcpy (enccmd->hdr.magic,
-				fuzzy_encrypted_magic,
-				sizeof (enccmd->hdr.magic));
-		ottery_rand_bytes (enccmd->hdr.nonce, sizeof (enccmd->hdr.nonce));
-		memcpy (enccmd->hdr.pubkey, lk->pk, sizeof (enccmd->hdr.pubkey));
-		rspamd_keypair_cache_process (fuzzy_module_ctx->keypairs_cache,
-				lk, rk);
-		rspamd_cryptobox_encrypt_nm_inplace ((guchar *)cmd, sizeof (*cmd),
-				enccmd->hdr.nonce, rk->nm, enccmd->hdr.mac);
+		fuzzy_encrypt_cmd (rule, &enccmd->hdr, (guchar *) cmd, sizeof (*cmd));
 		io->io.iov_base = enccmd;
 		io->io.iov_len = sizeof (*enccmd);
 	}
