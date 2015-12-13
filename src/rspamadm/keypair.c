@@ -27,11 +27,13 @@
 #include "cryptobox.h"
 #include "printf.h"
 #include "http.h"
+#include "ucl.h"
 #include "keypair_private.h"
 
 static gboolean hex_encode = FALSE;
 static gboolean raw = FALSE;
 static gboolean openssl = FALSE;
+static gboolean ucl = FALSE;
 
 static void rspamadm_keypair (gint argc, gchar **argv);
 static const char *rspamadm_keypair_help (gboolean full_help);
@@ -50,6 +52,8 @@ static GOptionEntry entries[] = {
 				"Print just keys, no description", NULL},
 		{"openssl", 's', 0, G_OPTION_ARG_NONE, &openssl,
 				"Generate openssl nistp256 keypair not curve25519 one", NULL},
+		{"ucl", 'u', 0, G_OPTION_ARG_NONE, &ucl,
+				"Generate ucl config", NULL},
 		{NULL,       0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -65,6 +69,7 @@ rspamadm_keypair_help (gboolean full_help)
 				"-x: encode with hex instead of base32\n"
 				"-r: print raw base32/hex\n"
 				"-s: generate openssl nistp256 keypair\n"
+				"-u: generate ucl config for keypair\n"
 				"--help: shows available options and commands";
 	}
 	else {
@@ -82,6 +87,8 @@ rspamadm_keypair (gint argc, gchar **argv)
 	gpointer keypair;
 	GString *keypair_out;
 	gint how;
+	ucl_object_t *ucl_out, *elt;
+	struct ucl_emitter_functions *ucl_emit_subr;
 
 	context = g_option_context_new (
 			"keypair - create encryption keys");
@@ -123,9 +130,37 @@ rspamadm_keypair (gint argc, gchar **argv)
 		how |= RSPAMD_KEYPAIR_HUMAN|RSPAMD_KEYPAIR_ID;
 	}
 
-	keypair_out = rspamd_http_connection_print_key (keypair, how);
-	rspamd_printf ("%v", keypair_out);
+	if (ucl) {
+		ucl_out = ucl_object_typed_new (UCL_OBJECT);
+		elt = ucl_object_typed_new (UCL_OBJECT);
+		ucl_object_insert_key (ucl_out, elt, "keypair", 0, false);
+
+		/* pubkey part */
+		keypair_out = rspamd_http_connection_print_key (keypair,
+				RSPAMD_KEYPAIR_PUBKEY|RSPAMD_KEYPAIR_BASE32);
+		ucl_object_insert_key (elt,
+				ucl_object_fromlstring (keypair_out->str, keypair_out->len),
+				"pubkey", 0, false);
+		g_string_free (keypair_out, TRUE);
+
+		/* privkey part */
+		keypair_out = rspamd_http_connection_print_key (keypair,
+				RSPAMD_KEYPAIR_PRIVKEY | RSPAMD_KEYPAIR_BASE32);
+		ucl_object_insert_key (elt,
+				ucl_object_fromlstring (keypair_out->str, keypair_out->len),
+				"privkey", 0, false);
+
+		ucl_emit_subr = ucl_object_emit_file_funcs (stdout);
+		ucl_object_emit_full (ucl_out, UCL_EMIT_CONFIG, ucl_emit_subr);
+		ucl_object_emit_funcs_free (ucl_emit_subr);
+		ucl_object_unref (ucl_out);
+	}
+	else {
+		keypair_out = rspamd_http_connection_print_key (keypair, how);
+		rspamd_printf ("%v", keypair_out);
+	}
 
 	rspamd_http_connection_key_unref (keypair);
 	rspamd_explicit_memzero (keypair_out->str, keypair_out->len);
+	g_string_free (keypair_out, TRUE);
 }
