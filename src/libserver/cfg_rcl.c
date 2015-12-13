@@ -2527,12 +2527,12 @@ rspamd_rcl_parse_struct_mime_addr (rspamd_mempool_t *pool,
 
 void
 rspamd_rcl_register_worker_option (struct rspamd_config *cfg,
-	gint type,
-	const gchar *name,
-	rspamd_rcl_default_handler_t handler,
-	gpointer target,
-	gsize offset,
-	gint flags)
+		gint type,
+		const gchar *name,
+		rspamd_rcl_default_handler_t handler,
+		gpointer target,
+		glong offset,
+		gint flags)
 {
 	struct rspamd_worker_param_parser *nhandler;
 	struct rspamd_worker_cfg_parser *nparser;
