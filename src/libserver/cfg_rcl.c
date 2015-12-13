@@ -529,7 +529,7 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		const gchar *key, gpointer ud,
 		struct rspamd_rcl_section *section, GError **err)
 {
-	const ucl_object_t *val, *cur;
+	const ucl_object_t *val, *cur, *cur_obj;
 	ucl_object_t *robj;
 	ucl_object_iter_t it = NULL;
 	const gchar *worker_type, *worker_bind;
@@ -605,10 +605,21 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		it = NULL;
 		while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
 			HASH_FIND_STR (wparser->parsers, ucl_object_key (cur), whandler);
+
 			if (whandler != NULL) {
-				if (!whandler->handler (cfg->cfg_pool, cur, &whandler->parser,
-						section, err)) {
-					return FALSE;
+
+				LL_FOREACH (cur, cur_obj) {
+					if (!whandler->handler (cfg->cfg_pool,
+							cur_obj,
+							&whandler->parser,
+							section,
+							err)) {
+						return FALSE;
+					}
+
+					if (!whandler->parser.flags & RSPAMD_CL_FLAG_MULTIPLE) {
+						break;
+					}
 				}
 			}
 		}
@@ -1951,7 +1962,7 @@ rspamd_rcl_section_parse_defaults (struct rspamd_rcl_section *section,
 	rspamd_mempool_t *pool, const ucl_object_t *obj, gpointer ptr,
 	GError **err)
 {
-	const ucl_object_t *found;
+	const ucl_object_t *found, *cur_obj;
 	struct rspamd_rcl_default_handler_data *cur, *tmp;
 
 	if (obj->type != UCL_OBJECT) {
@@ -1967,8 +1978,15 @@ rspamd_rcl_section_parse_defaults (struct rspamd_rcl_section *section,
 		found = ucl_object_find_key (obj, cur->key);
 		if (found != NULL) {
 			cur->pd.user_struct = ptr;
-			if (!cur->handler (pool, found, &cur->pd, section, err)) {
-				return FALSE;
+
+			LL_FOREACH (found, cur_obj) {
+				if (!cur->handler (pool, cur_obj, &cur->pd, section, err)) {
+					return FALSE;
+				}
+
+				if (!cur->pd.flags & RSPAMD_CL_FLAG_MULTIPLE) {
+					break;
+				}
 			}
 		}
 	}

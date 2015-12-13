@@ -52,7 +52,8 @@ enum rspamd_rcl_flag {
 	RSPAMD_CL_FLAG_INT_SIZE = 0x1 << 9,
 	RSPAMD_CL_FLAG_STRING_PATH = 0x1 << 10,
 	RSPAMD_CL_FLAG_BOOLEAN_INVERSE = 0x1 << 11,
-	RSPAMD_CL_FLAG_STRING_LIST_HASH = 0x1 << 12
+	RSPAMD_CL_FLAG_STRING_LIST_HASH = 0x1 << 12,
+	RSPAMD_CL_FLAG_MULTIPLE = 0x1 << 13
 };
 
 struct rspamd_rcl_struct_parser {

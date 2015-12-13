@@ -780,7 +780,7 @@ init_fuzzy (struct rspamd_config *cfg)
 
 	rspamd_rcl_register_worker_option (cfg, type, "keypair",
 			fuzzy_parse_keypair, ctx,
-			0, 0);
+			0, RSPAMD_CL_FLAG_MULTIPLE);
 
 	rspamd_rcl_register_worker_option (cfg, type, "keypair_cache_size",
 			rspamd_rcl_parse_struct_integer, ctx,
