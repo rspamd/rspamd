@@ -39,6 +39,7 @@
 #include "keypairs_cache.h"
 #include "keypair_private.h"
 #include "ref.h"
+#include "xxhash.h"
 
 /* This number is used as expire time in seconds for cache items  (2 days) */
 #define DEFAULT_EXPIRE 172800L
@@ -80,7 +81,8 @@ struct rspamd_fuzzy_storage_ctx {
 	gint peer_fd;
 	struct event peer_ev;
 	/* Local keypair */
-	gpointer key;
+	gpointer default_key;
+	GHashTable *keys;
 	gboolean encrypted_only;
 	struct rspamd_keypair_cache *keypair_cache;
 	struct rspamd_fuzzy_backend *backend;
@@ -400,9 +402,9 @@ rspamd_fuzzy_decrypt_command (struct fuzzy_session *s)
 	struct rspamd_fuzzy_encrypted_req_hdr *hdr;
 	guchar *payload;
 	gsize payload_len;
-	struct rspamd_http_keypair rk;
+	struct rspamd_http_keypair rk, *lk;
 
-	if (s->ctx->key == NULL) {
+	if (s->ctx->default_key == NULL) {
 		msg_warn ("received encrypted request when encryption is not enabled");
 		return FALSE;
 	}
@@ -424,9 +426,17 @@ rspamd_fuzzy_decrypt_command (struct fuzzy_session *s)
 		return FALSE;
 	}
 
+	/* Try to find the desired key */
+	lk = g_hash_table_lookup (s->ctx->keys, hdr->key_id);
+
+	if (lk == NULL) {
+		/* Unknown key, assume default one */
+		lk = s->ctx->default_key;
+	}
+
 	/* Now process keypair */
 	memcpy (rk.pk, hdr->pubkey, sizeof (rk.pk));
-	rspamd_keypair_cache_process (s->ctx->keypair_cache, s->ctx->key, &rk);
+	rspamd_keypair_cache_process (s->ctx->keypair_cache, lk, &rk);
 
 	/* Now decrypt request */
 	if (!rspamd_cryptobox_decrypt_nm_inplace (payload, payload_len, hdr->nonce,
@@ -657,6 +667,71 @@ rspamd_fuzzy_storage_reload (struct rspamd_main *rspamd_main,
 	return TRUE;
 }
 
+static gboolean
+fuzzy_parse_keypair (rspamd_mempool_t *pool,
+		const ucl_object_t *obj,
+		gpointer ud,
+		struct rspamd_rcl_section *section,
+		GError **err)
+{
+	struct rspamd_rcl_struct_parser *pd = ud;
+	struct rspamd_fuzzy_storage_ctx *ctx;
+	struct rspamd_http_keypair *kp;
+	const ucl_object_t *cur;
+	ucl_object_iter_t it = NULL;
+	gboolean ret;
+
+	ctx = pd->user_struct;
+	pd->offset = G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, default_key);
+
+	/*
+	 * Single key
+	 */
+	if (ucl_object_type (obj) == UCL_STRING || ucl_object_type (obj)
+			== UCL_OBJECT) {
+		ret = rspamd_rcl_parse_struct_keypair (pool, obj, pd, section, err);
+
+		if (!ret) {
+			return ret;
+		}
+
+		/* Insert key to the hash table */
+		kp = ctx->default_key;
+
+		if (kp == NULL) {
+			return FALSE;
+		}
+
+		g_hash_table_insert (ctx->keys, kp->pk, kp);
+		msg_info_pool ("loaded keypair %8xs", kp->pk);
+	}
+	else if (ucl_object_type (obj) == UCL_ARRAY) {
+		while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
+			if (!fuzzy_parse_keypair (pool, cur, pd, section, err)) {
+				return FALSE;
+			}
+		}
+	}
+
+	return TRUE;
+}
+
+static guint
+fuzzy_kp_hash (gconstpointer p)
+{
+	const guchar *pk = p;
+
+	return XXH64 (pk, RSPAMD_FUZZY_KEYLEN, 0xdeadbabe);
+}
+
+static gboolean
+fuzzy_kp_equal (gconstpointer a, gconstpointer b)
+{
+	const guchar *pa = a, *pb = b;
+
+	return (memcmp (pa, pb, RSPAMD_FUZZY_KEYLEN) == 0);
+}
+
 gpointer
 init_fuzzy (struct rspamd_config *cfg)
 {
@@ -670,6 +745,8 @@ init_fuzzy (struct rspamd_config *cfg)
 	ctx->sync_timeout = DEFAULT_SYNC_TIMEOUT;
 	ctx->expire = DEFAULT_EXPIRE;
 	ctx->keypair_cache_size = DEFAULT_KEYPAIR_CACHE_SIZE;
+	ctx->keys = g_hash_table_new_full (fuzzy_kp_hash, fuzzy_kp_equal,
+			NULL, rspamd_http_connection_key_unref);
 
 	rspamd_rcl_register_worker_option (cfg, type, "hashfile",
 			rspamd_rcl_parse_struct_string, ctx,
@@ -702,8 +779,8 @@ init_fuzzy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, update_map), 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "keypair",
-			rspamd_rcl_parse_struct_keypair, ctx,
-			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, key), 0);
+			fuzzy_parse_keypair, ctx,
+			0, 0);
 
 	rspamd_rcl_register_worker_option (cfg, type, "keypair_cache_size",
 			rspamd_rcl_parse_struct_integer, ctx,
@@ -816,7 +893,7 @@ start_fuzzy (struct rspamd_worker *worker)
 
 	server_stat->fuzzy_hashes = rspamd_fuzzy_backend_count (ctx->backend);
 
-	if (ctx->key && ctx->keypair_cache_size > 0) {
+	if (ctx->default_key && ctx->keypair_cache_size > 0) {
 		/* Create keypairs cache */
 		ctx->keypair_cache = rspamd_keypair_cache_new (ctx->keypair_cache_size);
 	}
@@ -876,9 +953,8 @@ start_fuzzy (struct rspamd_worker *worker)
 	if (ctx->keypair_cache) {
 		rspamd_keypair_cache_destroy (ctx->keypair_cache);
 	}
-	if (ctx->key) {
-		rspamd_http_connection_key_unref (ctx->key);
-	}
+
+	g_hash_table_unref (ctx->keys);
 
 	exit (EXIT_SUCCESS);
 }

@@ -7,6 +7,7 @@
 #include "cryptobox.h"
 
 #define RSPAMD_FUZZY_VERSION 3
+#define RSPAMD_FUZZY_KEYLEN 8
 
 /* Commands for fuzzy storage */
 #define FUZZY_CHECK 0
@@ -37,7 +38,7 @@ RSPAMD_PACKED(rspamd_fuzzy_reply) {
 
 RSPAMD_PACKED(rspamd_fuzzy_encrypted_req_hdr) {
 	guchar magic[4];
-	guchar key_id[8];
+	guchar key_id[RSPAMD_FUZZY_KEYLEN];
 	guchar pubkey[32];
 	guchar nonce[rspamd_cryptobox_MAX_NONCEBYTES];
 	guchar mac[rspamd_cryptobox_MAX_MACBYTES];
