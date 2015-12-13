@@ -81,6 +81,7 @@ struct rspamd_fuzzy_storage_ctx {
 	struct event peer_ev;
 	/* Local keypair */
 	gpointer key;
+	gboolean encrypted_only;
 	struct rspamd_keypair_cache *keypair_cache;
 	struct rspamd_fuzzy_backend *backend;
 	GQueue *updates_pending;
@@ -283,6 +284,13 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		break;
 	}
 
+	if (session->ctx->encrypted_only && !encrypted) {
+		/* Do not accept unencrypted commands */
+		result.value = 403;
+		result.prob = 0.0;
+		goto reply;
+	}
+
 	if (cmd->cmd == FUZZY_CHECK) {
 		result = rspamd_fuzzy_backend_check (session->ctx->backend, cmd,
 				session->ctx->expire);
@@ -332,6 +340,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		}
 	}
 
+reply:
 	result.tag = cmd->tag;
 	memcpy (&session->reply.rep, &result, sizeof (result));
 
@@ -701,6 +710,11 @@ init_fuzzy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx,
 					keypair_cache_size),
 			RSPAMD_CL_FLAG_UINT);
+
+	rspamd_rcl_register_worker_option (cfg, type, "encrypted_only",
+			rspamd_rcl_parse_struct_boolean, ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, encrypted_only), 0);
+
 
 	return ctx;
 }
