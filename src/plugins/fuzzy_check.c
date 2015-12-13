@@ -1084,31 +1084,49 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 					symbol = map->symbol;
 				}
 
-				if (rep->prob > 0.5) {
-					nval = fuzzy_normalize (rep->value, session->rule->max_score);
-					nval *= rep->prob;
-					msg_info_task (
-							"<%s>, found fuzzy hash with weight: %.2f, in list: %s:%d%s",
-							session->task->message_id,
-							nval,
-							symbol,
-							rep->flag,
-							map == NULL ? "(unknown)" : "");
-					if (map != NULL || !session->rule->skip_unknown) {
-						rspamd_snprintf (buf,
-								sizeof (buf),
-								"%d: %.2f / %.2f",
-								rep->flag,
-								rep->prob,
-								nval);
-						rspamd_task_insert_result_single (session->task,
-								symbol,
+				if (rep->value == 0) {
+					if (rep->prob > 0.5) {
+						nval = fuzzy_normalize (rep->value,
+								session->rule->max_score);
+						nval *= rep->prob;
+						msg_info_task (
+								"found fuzzy hash with weight: "
+								"%.2f, in list: %s:%d%s",
 								nval,
-								g_list_prepend (NULL,
-									rspamd_mempool_strdup (
-										session->task->task_pool, buf)));
+								symbol,
+								rep->flag,
+								map == NULL ? "(unknown)" : "");
+						if (map != NULL || !session->rule->skip_unknown) {
+							rspamd_snprintf (buf,
+									sizeof (buf),
+									"%d: %.2f / %.2f",
+									rep->flag,
+									rep->prob,
+									nval);
+							rspamd_task_insert_result_single (session->task,
+									symbol,
+									nval,
+									g_list_prepend (NULL,
+											rspamd_mempool_strdup (
+													session->task->task_pool,
+													buf)));
+						}
 					}
 				}
+				else if (rep->value == 403) {
+					msg_info_task (
+							"fuzzy check error for %s(%d): forbidden",
+							symbol,
+							rep->flag);
+				}
+				else {
+					msg_info_task (
+							"fuzzy check error for %s(%d): unknown error (%d)",
+							symbol,
+							rep->flag,
+							rep->value);
+				}
+
 				ret = return_finished;
 			}
 		}
