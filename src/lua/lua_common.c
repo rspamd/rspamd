@@ -210,7 +210,7 @@ rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg)
 }
 
 lua_State *
-rspamd_lua_init (struct rspamd_config *cfg)
+rspamd_lua_init ()
 {
 	lua_State *L;
 
@@ -262,7 +262,7 @@ rspamd_init_lua_locked (struct rspamd_config *cfg)
 	struct lua_locked_state *new;
 
 	new = g_slice_alloc (sizeof (struct lua_locked_state));
-	new->L = rspamd_lua_init (cfg);
+	new->L = rspamd_lua_init ();
 	new->m = rspamd_mutex_new ();
 
 	return new;

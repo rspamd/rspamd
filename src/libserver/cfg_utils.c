@@ -195,7 +195,7 @@ rspamd_config_new (void)
 	cfg->min_word_len = DEFAULT_MIN_WORD;
 	cfg->max_word_len = DEFAULT_MAX_WORD;
 
-	cfg->lua_state = rspamd_lua_init (cfg);
+	cfg->lua_state = rspamd_lua_init ();
 	cfg->cache = rspamd_symbols_cache_new (cfg);
 	cfg->ups_ctx = rspamd_upstreams_library_init ();
 	cfg->re_cache = rspamd_re_cache_new ();

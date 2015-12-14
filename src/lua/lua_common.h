@@ -126,7 +126,7 @@ gpointer rspamd_lua_check_class (lua_State *L, gint index, const gchar *name);
 /**
  * Initialize lua and bindings
  */
-lua_State * rspamd_lua_init (struct rspamd_config *cfg);
+lua_State *rspamd_lua_init (void);
 
 /**
  * Load and initialize lua plugins
