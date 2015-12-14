@@ -40,6 +40,7 @@
 #include "keypair_private.h"
 #include "ref.h"
 #include "xxhash.h"
+#include "libutil/hash.h"
 
 /* This number is used as expire time in seconds for cache items  (2 days) */
 #define DEFAULT_EXPIRE 172800L
@@ -83,6 +84,7 @@ struct rspamd_fuzzy_storage_ctx {
 	/* Local keypair */
 	gpointer default_key;
 	GHashTable *keys;
+	GHashTable *keys_stats;
 	gboolean encrypted_only;
 	struct rspamd_keypair_cache *keypair_cache;
 	struct rspamd_fuzzy_backend *backend;
@@ -116,6 +118,7 @@ struct fuzzy_session {
 	guint64 time;
 	struct event io;
 	ref_entry_t ref;
+	struct fuzzy_key_stat *key_stat;
 	guchar nm[rspamd_cryptobox_MAX_NMBYTES];
 };
 
@@ -131,6 +134,15 @@ struct fuzzy_peer_request {
 	struct fuzzy_peer_cmd cmd;
 };
 
+struct fuzzy_key_stat {
+	guint64 checked;
+	guint64 matched;
+	guint64 added;
+	guint64 deleted;
+	guint64 errors;
+	rspamd_lru_hash_t *last_ips;
+};
+
 static void rspamd_fuzzy_write_reply (struct fuzzy_session *session);
 
 static gboolean
@@ -143,6 +155,18 @@ rspamd_fuzzy_check_client (struct fuzzy_session *session)
 		}
 	}
 	return TRUE;
+}
+
+static void
+fuzzy_key_stat_dtor (gpointer p)
+{
+	struct fuzzy_key_stat *st = p;
+
+	if (st->last_ips) {
+		rspamd_lru_hash_destroy (st->last_ips);
+	}
+
+	g_slice_free1 (sizeof (*st), st);
 }
 
 static void
@@ -256,6 +280,70 @@ fuzzy_peer_send_io (gint fd, gshort what, gpointer d)
 }
 
 static void
+rspamd_fuzzy_update_stats (enum rspamd_fuzzy_epoch epoch, gboolean matched,
+		struct fuzzy_key_stat *key_stat, struct fuzzy_key_stat *ip_stat,
+		guint cmd, guint reply)
+{
+#ifndef HAVE_ATOMIC_BUILTINS
+	server_stat->fuzzy_hashes_checked[epoch] ++;
+
+	if (matched) {
+		server_stat->fuzzy_hashes_found[epoch] ++;
+	}
+#else
+	__atomic_add_fetch (&server_stat->fuzzy_hashes_checked[epoch],
+			1, __ATOMIC_RELEASE);
+
+	if (matched) {
+		__atomic_add_fetch (&server_stat->fuzzy_hashes_found[epoch],
+				1, __ATOMIC_RELEASE);
+	}
+#endif
+
+	if (key_stat) {
+		if (reply != 0) {
+			key_stat->errors ++;
+		}
+		else {
+			if (cmd == FUZZY_CHECK) {
+				key_stat->checked++;
+
+				if (matched) {
+					key_stat->matched ++;
+				}
+			}
+			else if (cmd == FUZZY_WRITE) {
+				key_stat->added++;
+			}
+			else if (cmd == FUZZY_DEL) {
+				key_stat->deleted++;
+			}
+		}
+	}
+
+	if (ip_stat) {
+		if (reply != 0) {
+			ip_stat->errors++;
+		}
+		else {
+			if (cmd == FUZZY_CHECK) {
+				ip_stat->checked++;
+
+				if (matched) {
+					ip_stat->matched++;
+				}
+			}
+			else if (cmd == FUZZY_WRITE) {
+				ip_stat->added++;
+			}
+			else if (cmd == FUZZY_DEL) {
+				ip_stat->deleted++;
+			}
+		}
+	}
+}
+
+static void
 rspamd_fuzzy_process_command (struct fuzzy_session *session)
 {
 	gboolean encrypted = FALSE;
@@ -263,6 +351,8 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 	struct rspamd_fuzzy_reply result;
 	struct fuzzy_peer_cmd *up_cmd;
 	struct fuzzy_peer_request *up_req;
+	struct fuzzy_key_stat *ip_stat = NULL;
+	rspamd_inet_addr_t *naddr;
 	gsize up_len;
 
 	switch (session->cmd_type) {
@@ -293,25 +383,21 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		goto reply;
 	}
 
+	if (session->key_stat) {
+		ip_stat = rspamd_lru_hash_lookup (session->key_stat->last_ips,
+				session->addr, -1);
+
+		if (ip_stat == NULL) {
+			naddr = rspamd_inet_address_copy (session->addr);
+			ip_stat = g_slice_alloc0 (sizeof (*ip_stat));
+			rspamd_lru_hash_insert (session->key_stat->last_ips,
+					naddr, ip_stat, -1, 0);
+		}
+	}
+
 	if (cmd->cmd == FUZZY_CHECK) {
 		result = rspamd_fuzzy_backend_check (session->ctx->backend, cmd,
 				session->ctx->expire);
-		/* XXX: actually, these updates are not atomic, but we don't care */
-#ifndef HAVE_ATOMIC_BUILTINS
-		server_stat->fuzzy_hashes_checked[session->epoch] ++;
-
-		if (result.prob > 0.5) {
-			server_stat->fuzzy_hashes_found[session->epoch] ++;
-		}
-#else
-		__atomic_add_fetch (&server_stat->fuzzy_hashes_checked[session->epoch],
-				1, __ATOMIC_RELEASE);
-
-		if (result.prob > 0.5) {
-			__atomic_add_fetch (&server_stat->fuzzy_hashes_found[session->epoch],
-					1, __ATOMIC_RELEASE);
-		}
-#endif
 	}
 	else {
 		result.flag = cmd->flag;
@@ -345,6 +431,9 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 reply:
 	result.tag = cmd->tag;
 	memcpy (&session->reply.rep, &result, sizeof (result));
+
+	rspamd_fuzzy_update_stats (session->epoch, result.prob > 0.5,
+			session->key_stat, ip_stat, cmd->cmd, result.value);
 
 	if (encrypted) {
 		/* We need also to encrypt reply */
@@ -428,6 +517,7 @@ rspamd_fuzzy_decrypt_command (struct fuzzy_session *s)
 
 	/* Try to find the desired key */
 	lk = g_hash_table_lookup (s->ctx->keys, hdr->key_id);
+	s->key_stat = g_hash_table_lookup (s->ctx->keys_stats, hdr->key_id);
 
 	if (lk == NULL) {
 		/* Unknown key, assume default one */
@@ -677,6 +767,7 @@ fuzzy_parse_keypair (rspamd_mempool_t *pool,
 	struct rspamd_rcl_struct_parser *pd = ud;
 	struct rspamd_fuzzy_storage_ctx *ctx;
 	struct rspamd_http_keypair *kp;
+	struct fuzzy_key_stat *keystat;
 	const ucl_object_t *cur;
 	ucl_object_iter_t it = NULL;
 	gboolean ret;
@@ -703,6 +794,11 @@ fuzzy_parse_keypair (rspamd_mempool_t *pool,
 		}
 
 		g_hash_table_insert (ctx->keys, kp->pk, kp);
+		keystat = g_slice_alloc0 (sizeof (*keystat));
+		/* Hash of ip -> fuzzy_key_stat */
+		keystat->last_ips = rspamd_lru_hash_new_full (0, 1024,
+				(GDestroyNotify)rspamd_inet_address_destroy, fuzzy_key_stat_dtor,
+				rspamd_inet_address_hash, rspamd_inet_address_equal);
 		msg_info_pool ("loaded keypair %8xs", kp->pk);
 	}
 	else if (ucl_object_type (obj) == UCL_ARRAY) {
@@ -747,6 +843,8 @@ init_fuzzy (struct rspamd_config *cfg)
 	ctx->keypair_cache_size = DEFAULT_KEYPAIR_CACHE_SIZE;
 	ctx->keys = g_hash_table_new_full (fuzzy_kp_hash, fuzzy_kp_equal,
 			NULL, rspamd_http_connection_key_unref);
+	ctx->keys_stats = g_hash_table_new_full (fuzzy_kp_hash, fuzzy_kp_equal,
+			NULL, fuzzy_key_stat_dtor);
 
 	rspamd_rcl_register_worker_option (cfg, type, "hashfile",
 			rspamd_rcl_parse_struct_string, ctx,
