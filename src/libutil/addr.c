@@ -1289,7 +1289,7 @@ rspamd_inet_address_hash (gconstpointer a)
 	XXH64_update (&st, &addr->af, sizeof (addr->af));
 
 
-	if (addr->u.un) {
+	if (addr->af == AF_UNIX && addr->u.un) {
 		XXH64_update (&st, addr->u.un, sizeof (*addr->u.un));
 	}
 	else {
