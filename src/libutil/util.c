@@ -1980,7 +1980,7 @@ rspamd_init_libs (void)
 #endif
 	ctx->libmagic = magic_open (MAGIC_MIME|MAGIC_NO_CHECK_COMPRESS|
 			MAGIC_NO_CHECK_ELF|MAGIC_NO_CHECK_TAR);
-	magic_compile (ctx->libmagic, NULL);
+	magic_load (ctx->libmagic, NULL);
 	REF_INIT_RETAIN (ctx, rspamd_deinit_libs);
 
 	return ctx;
