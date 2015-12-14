@@ -25,6 +25,7 @@
 #include "addr.h"
 #include "util.h"
 #include "logger.h"
+#include "xxhash.h"
 
 #include "unix-std.h"
 /* pwd and grp */
@@ -1275,4 +1276,33 @@ rspamd_inet_address_get_af (const rspamd_inet_addr_t *addr)
 	g_assert (addr != NULL);
 
 	return addr->af;
+}
+
+
+guint
+rspamd_inet_address_hash (gconstpointer a)
+{
+	const rspamd_inet_addr_t *addr = a;
+	XXH64_state_t st;
+
+	XXH64_reset (&st, rspamd_hash_seed ());
+	XXH64_update (&st, &addr->af, sizeof (addr->af));
+
+
+	if (addr->u.un) {
+		XXH64_update (&st, addr->u.un, sizeof (*addr->u.un));
+	}
+	else {
+		XXH64_update (&st, &addr->u.in.addr, addr->slen);
+	}
+
+	return XXH64_digest (&st);
+}
+
+gboolean
+rspamd_inet_address_equal (gconstpointer a, gconstpointer b)
+{
+	const rspamd_inet_addr_t *a1 = a, *a2 = b;
+
+	return rspamd_inet_address_compare (a1, a2) == 0;
 }

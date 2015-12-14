@@ -249,4 +249,15 @@ gint rspamd_inet_address_compare_ptr (gconstpointer a1,
  */
 rspamd_inet_addr_t *rspamd_inet_address_copy (const rspamd_inet_addr_t *addr);
 
+/**
+ * Returns hash for inet address
+ */
+guint rspamd_inet_address_hash (gconstpointer a);
+
+
+/**
+ * Returns true if two address are equal
+ */
+gboolean rspamd_inet_address_equal (gconstpointer a, gconstpointer b);
+
 #endif /* ADDR_H_ */
