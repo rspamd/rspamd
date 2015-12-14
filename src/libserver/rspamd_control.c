@@ -95,6 +95,13 @@ static const struct rspamd_control_cmd_match {
 				},
 				.type = RSPAMD_CONTROL_RECOMPILE
 		},
+		{
+				.name = {
+						.begin = "/fuzzystat",
+						.len = sizeof ("/fuzzystat") - 1
+				},
+				.type = RSPAMD_CONTROL_FUZZY_STAT
+		},
 };
 
 void
@@ -171,6 +178,7 @@ rspamd_control_write_reply (struct rspamd_control_session *session)
 	struct rspamd_control_reply_elt *elt;
 	gchar tmpbuf[64];
 	gdouble total_utime = 0, total_systime = 0;
+	struct ucl_parser *parser;
 	guint total_conns = 0;
 
 	rep = ucl_object_typed_new (UCL_OBJECT);
@@ -214,8 +222,33 @@ rspamd_control_write_reply (struct rspamd_control_session *session)
 			ucl_object_insert_key (cur, ucl_object_fromint (
 					elt->reply.reply.reresolve.status), "status", 0, false);
 			break;
+		case RSPAMD_CONTROL_FUZZY_STAT:
+			if (elt->attached_fd != -1) {
+				/* We have some data to parse */
+				parser = ucl_parser_new (0);
+				ucl_object_insert_key (cur, ucl_object_fromint (
+						elt->reply.reply.fuzzy_stat.status), "status", 0, false);
+
+				if (ucl_parser_add_fd (parser, elt->attached_fd)) {
+					ucl_object_insert_key (cur, ucl_parser_get_object (parser),
+							"data", 0, false);
+					ucl_parser_free (parser);
+				}
+				else {
+					ucl_object_insert_key (cur, ucl_object_fromstring (
+							ucl_parser_get_error (parser)), "error", 0, false);
+
+					ucl_parser_free (parser);
+				}
+			}
+			break;
 		default:
 			break;
+		}
+
+		if (elt->attached_fd != -1) {
+			close (elt->attached_fd);
+			elt->attached_fd = -1;
 		}
 
 		ucl_object_insert_key (workers, cur, tmpbuf, 0, true);
@@ -444,6 +477,7 @@ rspamd_control_default_cmd_handler (gint fd,
 	case RSPAMD_CONTROL_RELOAD:
 	case RSPAMD_CONTROL_RECOMPILE:
 	case RSPAMD_CONTROL_HYPERSCAN_LOADED:
+	case RSPAMD_CONTROL_FUZZY_STAT:
 		break;
 	case RSPAMD_CONTROL_RERESOLVE:
 		if (cd->worker->srv->cfg) {

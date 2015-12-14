@@ -37,6 +37,7 @@ enum rspamd_control_type {
 	RSPAMD_CONTROL_RERESOLVE,
 	RSPAMD_CONTROL_RECOMPILE,
 	RSPAMD_CONTROL_HYPERSCAN_LOADED,
+	RSPAMD_CONTROL_FUZZY_STAT,
 	RSPAMD_CONTROL_MAX
 };
 
@@ -63,6 +64,9 @@ struct rspamd_control_command {
 		struct {
 			gpointer cache_dir;
 		} hs_loaded;
+		struct {
+			guint unused;
+		} fuzzy_stat;
 	} cmd;
 };
 
@@ -88,6 +92,9 @@ struct rspamd_control_reply {
 		struct {
 			guint status;
 		} hs_loaded;
+		struct {
+			guint status;
+		} fuzzy_stat;
 	} reply;
 };
 
