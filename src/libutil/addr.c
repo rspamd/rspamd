@@ -1293,7 +1293,15 @@ rspamd_inet_address_hash (gconstpointer a)
 		XXH64_update (&st, addr->u.un, sizeof (*addr->u.un));
 	}
 	else {
-		XXH64_update (&st, &addr->u.in.addr, addr->slen);
+		/* We ignore port part here */
+		if (addr->af == AF_INET) {
+			XXH64_update (&st, &addr->u.in.addr.s4.sin_addr,
+					sizeof (addr->u.in.addr.s4.sin_addr));
+		}
+		else {
+			XXH64_update (&st, &addr->u.in.addr.s6.sin6_addr,
+					sizeof (addr->u.in.addr.s6.sin6_addr));
+		}
 	}
 
 	return XXH64_digest (&st);
