@@ -90,6 +90,7 @@ static void
 rspamd_control_error_handler (struct rspamd_http_connection *conn, GError *err)
 {
 	rspamd_fprintf (stderr, "Cannot make HTTP request: %e\n", err);
+	rspamd_http_connection_unref (conn);
 }
 
 static gint
@@ -174,6 +175,13 @@ rspamadm_control (gint argc, gchar **argv)
 	}
 	else if (g_ascii_strcasecmp (cmd, "reresolve") == 0) {
 		path = "/reresolve";
+	}
+	else if (g_ascii_strcasecmp (cmd, "recompile") == 0) {
+		path = "/recompile";
+	}
+	else if (g_ascii_strcasecmp (cmd, "fuzzystat") == 0 ||
+			g_ascii_strcasecmp (cmd, "fuzzy_stat") == 0) {
+		path = "/fuzzystat";
 	}
 	else {
 		rspamd_fprintf (stderr, "unknown command: %s\n", cmd);
