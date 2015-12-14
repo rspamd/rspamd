@@ -791,6 +791,7 @@ rspamd_fuzzy_storage_stat (struct rspamd_main *rspamd_main,
 	GHashTable *ip_hash;
 	struct fuzzy_key_stat *key_stat;
 	struct rspamd_http_keypair *kp;
+	rspamd_lru_element_t *lru_elt;
 	ucl_object_t *obj, *elt, *ip_elt, *ip_cur;
 	struct ucl_emitter_functions *emit_subr;
 	guchar fdspace[CMSG_SPACE(sizeof (int))];
@@ -836,7 +837,8 @@ rspamd_fuzzy_storage_stat (struct rspamd_main *rspamd_main,
 						ip_elt = ucl_object_typed_new (UCL_OBJECT);
 
 						while (g_hash_table_iter_next (&ip_it, &k, &v)) {
-							ip_cur = rspamd_fuzzy_storage_stat_key (v);
+							lru_elt = v;
+							ip_cur = rspamd_fuzzy_storage_stat_key (lru_elt->data);
 							ucl_object_insert_key (ip_elt, ip_cur,
 									rspamd_inet_address_to_string (k), 0, true);
 						}

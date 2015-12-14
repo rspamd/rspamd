@@ -30,16 +30,6 @@
  * LRU hashing
  */
 
-typedef struct rspamd_lru_element_s {
-	gpointer data;
-	gpointer key;
-	time_t store_time;
-	guint ttl;
-	rspamd_lru_hash_t *hash;
-	GList *link;
-
-} rspamd_lru_element_t;
-
 struct rspamd_lru_hash_s {
 	gint maxsize;
 	gint maxage;
