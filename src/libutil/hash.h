@@ -71,6 +71,17 @@ void rspamd_lru_hash_insert (rspamd_lru_hash_t *hash,
 
 void rspamd_lru_hash_destroy (rspamd_lru_hash_t *hash);
 
+/**
+ * Get hash table for this lru hash
+ */
+GHashTable *rspamd_lru_hash_get_htable (rspamd_lru_hash_t *hash);
+
+
+/**
+ * Get expire queue for this lru hash
+ */
+GQueue *rspamd_lru_hash_get_queue (rspamd_lru_hash_t *hash);
+
 #endif
 
 /*
