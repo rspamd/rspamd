@@ -26,6 +26,8 @@
 #include "rspamadm.h"
 #include "rspamd.h"
 #include "ottery.h"
+#include "lua/lua_common.h"
+#include "lua_ucl.h"
 #include "unix-std.h"
 
 #ifdef HAVE_LIBUTIL_H
@@ -187,6 +189,65 @@ rspamadm_parse_ucl_var (const gchar *option_name,
 				"Bad variable format: %s", value);
 		return FALSE;
 	}
+
+	return TRUE;
+}
+
+gboolean
+rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
+		const ucl_object_t *res, const gchar *script)
+{
+	lua_State *L = pL;
+	gint err_idx, cb_idx, i;
+	GString *tb;
+
+	g_assert (script != NULL);
+	g_assert (res != NULL);
+	g_assert (L != NULL);
+
+	if (luaL_dostring (L, script) != 0) {
+		msg_err ("cannot execute lua script: %s",
+				lua_tostring (L, -1));
+		return FALSE;
+	}
+	else {
+		if (lua_type (L, -1) == LUA_TFUNCTION) {
+			cb_idx = luaL_ref (L, LUA_REGISTRYINDEX);
+		}
+		else {
+			msg_err ("lua script must return "
+					"function and not %s",
+					lua_typename (L,
+							lua_type (L, -1)));
+			return FALSE;
+		}
+	}
+
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
+
+	/* Push argv */
+	lua_newtable (L);
+
+	for (i = 0; i < argc; i ++) {
+		lua_pushstring (L, argv[i]);
+		lua_rawseti (L, -2, i + 1);
+	}
+
+	/* Push results */
+	ucl_object_push_lua (L, res, TRUE);
+
+	if (lua_pcall (L, 1, 0, err_idx) != 0) {
+		tb = lua_touserdata (L, -1);
+		msg_err ("call to user extraction script failed: %v", tb);
+		g_string_free (tb, TRUE);
+		lua_pop (L, 1);
+
+		return FALSE;
+	}
+
+	/* error function */
+	lua_pop (L, 1);
 
 	return TRUE;
 }
