@@ -607,8 +607,10 @@ static void
 rspamd_control_hs_io_handler (gint fd, short what, gpointer ud)
 {
 	struct rspamd_control_reply_elt *elt = ud;
+	struct rspamd_control_reply rep;
 
 	/* At this point we just ignore replies from the workers */
+	(void)read (fd, &rep, sizeof (rep));
 	event_del (&elt->io_ev);
 	g_slice_free1 (sizeof (*elt), elt);
 }
