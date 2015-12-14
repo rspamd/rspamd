@@ -757,6 +757,134 @@ rspamd_fuzzy_storage_reload (struct rspamd_main *rspamd_main,
 	return TRUE;
 }
 
+static ucl_object_t *
+rspamd_fuzzy_storage_stat_key (struct fuzzy_key_stat *key_stat)
+{
+	ucl_object_t *res;
+
+	res = ucl_object_typed_new (UCL_OBJECT);
+
+	ucl_object_insert_key (res, ucl_object_fromint (key_stat->checked),
+			"checked", 0, false);
+	ucl_object_insert_key (res, ucl_object_fromint (key_stat->matched),
+			"matched", 0, false);
+	ucl_object_insert_key (res, ucl_object_fromint (key_stat->added),
+			"added", 0, false);
+	ucl_object_insert_key (res, ucl_object_fromint (key_stat->deleted),
+			"deleted", 0, false);
+	ucl_object_insert_key (res, ucl_object_fromint (key_stat->errors),
+			"errors", 0, false);
+
+	return res;
+}
+
+static gboolean
+rspamd_fuzzy_storage_stat (struct rspamd_main *rspamd_main,
+		struct rspamd_worker *worker, gint fd,
+		struct rspamd_control_command *cmd,
+		gpointer ud)
+{
+	struct rspamd_fuzzy_storage_ctx *ctx = ud;
+	struct rspamd_control_reply rep;
+	GHashTableIter it, ip_it;
+	GHashTable *ip_hash;
+	struct fuzzy_key_stat *key_stat;
+	struct rspamd_http_keypair *kp;
+	ucl_object_t *obj, *elt, *ip_elt, *ip_cur;
+	struct ucl_emitter_functions *emit_subr;
+	guchar fdspace[CMSG_SPACE(sizeof (int))];
+	struct iovec iov;
+	struct msghdr msg;
+	struct cmsghdr *cmsg;
+	gpointer k, v;
+	gint outfd = -1;
+	gchar tmppath[PATH_MAX], keyname[17];
+
+	memset (&rep, 0, sizeof (rep));
+	rep.type = RSPAMD_CONTROL_RELOAD;
+
+	rspamd_snprintf (tmppath, sizeof (tmppath), "%s%c%s-XXXXXXXXXX",
+			rspamd_main->cfg->temp_dir, G_DIR_SEPARATOR, "fuzzy-stat");
+
+	if ((outfd = mkstemp (tmppath)) == -1) {
+		rep.reply.fuzzy_stat.status = errno;
+		msg_info_main ("cannot make temporary stat file for fuzzy stat: %s",
+			strerror (errno));
+	}
+	else {
+		rep.reply.fuzzy_stat.status = 0;
+
+		/* Iterate over all keys */
+		obj = ucl_object_typed_new (UCL_OBJECT);
+		g_hash_table_iter_init (&it, ctx->keys);
+
+		while (g_hash_table_iter_next (&it, &k, &v)) {
+			kp = v;
+			key_stat = g_hash_table_lookup (ctx->keys_stats, kp->pk);
+
+			if (key_stat) {
+				rspamd_snprintf (keyname, sizeof (keyname), "%8xs", k);
+
+				elt = rspamd_fuzzy_storage_stat_key (key_stat);
+
+				if (key_stat->last_ips) {
+					ip_hash = rspamd_lru_hash_get_htable (key_stat->last_ips);
+
+					if (ip_hash) {
+						g_hash_table_iter_init (&ip_it, ip_hash);
+						ip_elt = ucl_object_typed_new (UCL_OBJECT);
+
+						while (g_hash_table_iter_next (&ip_it, &k, &v)) {
+							ip_cur = rspamd_fuzzy_storage_stat_key (v);
+							ucl_object_insert_key (ip_elt, ip_cur,
+									rspamd_inet_address_to_string (k), 0, true);
+						}
+
+						ucl_object_insert_key (elt, ip_elt, "ips", 0, false);
+					}
+				}
+
+				ucl_object_insert_key (obj, elt, keyname, 0, true);
+			}
+		}
+
+		emit_subr = ucl_object_emit_fd_funcs (outfd);
+		ucl_object_emit_full (obj, UCL_EMIT_JSON_COMPACT, emit_subr);
+		ucl_object_emit_funcs_free (emit_subr);
+		ucl_object_unref (obj);
+	}
+
+	/* Now we can send outfd and status message */
+	memset (&msg, 0, sizeof (msg));
+
+	/* Attach fd to the message */
+	if (outfd != -1) {
+		memset (fdspace, 0, sizeof (fdspace));
+		msg.msg_control = fdspace;
+		msg.msg_controllen = sizeof (fdspace);
+		cmsg = CMSG_FIRSTHDR (&msg);
+		cmsg->cmsg_level = SOL_SOCKET;
+		cmsg->cmsg_type = SCM_RIGHTS;
+		cmsg->cmsg_len = CMSG_LEN (sizeof (int));
+		memcpy (CMSG_DATA (cmsg), &outfd, sizeof (int));
+	}
+
+	iov.iov_base = &rep;
+	iov.iov_len = sizeof (rep);
+	msg.msg_iov = &iov;
+	msg.msg_iovlen = 1;
+
+	if (sendmsg (fd, &msg, 0) == -1) {
+		msg_err_main ("cannot send fuzzy stat: %s", strerror (errno));
+	}
+
+	if (outfd != -1) {
+		close (outfd);
+	}
+
+	return TRUE;
+}
+
 static gboolean
 fuzzy_parse_keypair (rspamd_mempool_t *pool,
 		const ucl_object_t *obj,
@@ -1000,9 +1128,11 @@ start_fuzzy (struct rspamd_worker *worker)
 		rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
 	}
 
-	/* Register custom reload command for the control socket */
+	/* Register custom reload and stat commands for the control socket */
 	rspamd_control_worker_add_cmd_handler (worker, RSPAMD_CONTROL_RELOAD,
 			rspamd_fuzzy_storage_reload, ctx);
+	rspamd_control_worker_add_cmd_handler (worker, RSPAMD_CONTROL_FUZZY_STAT,
+			rspamd_fuzzy_storage_stat, ctx);
 	/* Create radix tree */
 	if (ctx->update_map != NULL) {
 		if (!rspamd_map_add (worker->srv->cfg, ctx->update_map,
