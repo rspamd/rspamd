@@ -49,6 +49,7 @@
 #include "cryptobox.h"
 #include "ottery.h"
 #include "keypair_private.h"
+#include "lua/lua_common.h"
 #include "unix-std.h"
 #include <math.h>
 
@@ -85,6 +86,7 @@ struct fuzzy_rule {
 	double max_score;
 	gboolean read_only;
 	gboolean skip_unknown;
+	gint learn_condition_cb;
 };
 
 struct fuzzy_ctx {
@@ -352,7 +354,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 	const ucl_object_t *value, *cur;
 	struct fuzzy_rule *rule;
 	ucl_object_iter_t it = NULL;
-	const char *k = NULL;
+	const char *k = NULL, *lua_script;
 
 	if (obj->type != UCL_OBJECT) {
 		msg_err_config ("invalid rule definition");
@@ -361,6 +363,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 
 	rule = fuzzy_rule_new (fuzzy_module_ctx->default_symbol,
 			fuzzy_module_ctx->fuzzy_pool);
+	rule->learn_condition_cb = -1;
 
 	if ((value = ucl_object_find_key (obj, "mime_types")) != NULL) {
 		it = NULL;
@@ -433,6 +436,31 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 		}
 
 		rule->local_key = rspamd_http_connection_gen_key ();
+	}
+
+	if ((value = ucl_object_find_key (obj, "learn_condition")) != NULL) {
+		lua_script = ucl_object_tostring (value);
+
+		if (lua_script) {
+			if (luaL_dostring (cfg->lua_state, lua_script) != 0) {
+				msg_err_config ("cannot execute lua script for users "
+						"extraction: %s", lua_tostring (cfg->lua_state, -1));
+			}
+			else {
+				if (lua_type (cfg->lua_state, -1) == LUA_TFUNCTION) {
+					rule->learn_condition_cb = luaL_ref (cfg->lua_state,
+							LUA_REGISTRYINDEX);
+					msg_info_config ("loaded learn condition script for fuzzy rule:"
+							" %s", rule->symbol);
+				}
+				else {
+					msg_err_config ("lua script must return "
+							"function(task) and not %s",
+							lua_typename (cfg->lua_state,
+									lua_type (cfg->lua_state, -1)));
+				}
+			}
+		}
 	}
 
 	if ((value = ucl_object_find_key (obj, "fuzzy_key")) != NULL) {
@@ -1682,12 +1710,14 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 {
 	struct fuzzy_rule *rule;
 	struct rspamd_controller_session *session = conn_ent->ud;
-	struct rspamd_task *task;
-	gboolean processed = FALSE, res = TRUE;
+	struct rspamd_task *task, **ptask;
+	gboolean processed = FALSE, res = TRUE, skip;
 	GList *cur;
 	GError **err;
 	GPtrArray *commands;
-	gint r, *saved, rules = 0;
+	GString *tb;
+	lua_State *L;
+	gint r, *saved, rules = 0, err_idx;
 
 	/* Prepare task */
 	task = rspamd_task_new (session->wrk, session->cfg);
@@ -1725,9 +1755,44 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 		/* Check for flag */
 		if (g_hash_table_lookup (rule->mappings,
 			GINT_TO_POINTER (flag)) == NULL) {
+			msg_info_task ("skip rule %s as it has no flag %d defined"
+					" false", rule->symbol, flag);
 			cur = g_list_next (cur);
 			continue;
 		}
+
+		/* Check learn condition */
+		if (rule->learn_condition_cb != -1) {
+			skip = FALSE;
+			L = session->cfg->lua_state;
+			lua_pushcfunction (L, &rspamd_lua_traceback);
+			err_idx = lua_gettop (L);
+
+			lua_rawgeti (L, LUA_REGISTRYINDEX, rule->learn_condition_cb);
+			ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
+			*ptask = task;
+			rspamd_lua_setclass (L, "rspamd{task}", -1);
+
+			if (lua_pcall (L, 1, 1, err_idx) != 0) {
+				tb = lua_touserdata (L, -1);
+				msg_err_task ("call to user extraction script failed: %v", tb);
+				g_string_free (tb, TRUE);
+			}
+			else {
+				skip = !(lua_toboolean (L, -1));
+			}
+
+			/* Result + error function */
+			lua_pop (L, 2);
+
+			if (skip) {
+				msg_info_task ("skip rule %s as its condition callback returned"
+						" false", rule->symbol);
+				cur = g_list_next (cur);
+				continue;
+			}
+		}
+
 		rules ++;
 
 		res = 0;
