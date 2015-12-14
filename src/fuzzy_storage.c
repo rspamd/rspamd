@@ -41,6 +41,7 @@
 #include "ref.h"
 #include "xxhash.h"
 #include "libutil/hash.h"
+#include "unix-std.h"
 
 /* This number is used as expire time in seconds for cache items  (2 days) */
 #define DEFAULT_EXPIRE 172800L
@@ -852,6 +853,10 @@ rspamd_fuzzy_storage_stat (struct rspamd_main *rspamd_main,
 		ucl_object_emit_full (obj, UCL_EMIT_JSON_COMPACT, emit_subr);
 		ucl_object_emit_funcs_free (emit_subr);
 		ucl_object_unref (obj);
+		/* Rewind output file */
+		close (outfd);
+		outfd = open (tmppath, O_RDONLY);
+		unlink (tmppath);
 	}
 
 	/* Now we can send outfd and status message */
@@ -927,6 +932,7 @@ fuzzy_parse_keypair (rspamd_mempool_t *pool,
 		keystat->last_ips = rspamd_lru_hash_new_full (0, 1024,
 				(GDestroyNotify)rspamd_inet_address_destroy, fuzzy_key_stat_dtor,
 				rspamd_inet_address_hash, rspamd_inet_address_equal);
+		g_hash_table_insert (ctx->keys_stats, kp->pk, keystat);
 		msg_info_pool ("loaded keypair %8xs", kp->pk);
 	}
 	else if (ucl_object_type (obj) == UCL_ARRAY) {
@@ -1183,6 +1189,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	}
 
 	g_hash_table_unref (ctx->keys);
+	g_hash_table_unref (ctx->keys_stats);
 
 	exit (EXIT_SUCCESS);
 }

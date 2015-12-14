@@ -185,6 +185,12 @@ rspamd_control_write_reply (struct rspamd_control_session *session)
 	workers = ucl_object_typed_new (UCL_OBJECT);
 
 	DL_FOREACH (session->replies, elt) {
+		/* Skip incompatible worker for fuzzy_stat */
+		if (session->cmd.type == RSPAMD_CONTROL_FUZZY_STAT &&
+				elt->wrk->type != g_quark_from_static_string ("fuzzy")) {
+			continue;
+		}
+
 		rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "%P", elt->wrk->pid);
 		cur = ucl_object_typed_new (UCL_OBJECT);
 
@@ -226,8 +232,12 @@ rspamd_control_write_reply (struct rspamd_control_session *session)
 			if (elt->attached_fd != -1) {
 				/* We have some data to parse */
 				parser = ucl_parser_new (0);
-				ucl_object_insert_key (cur, ucl_object_fromint (
-						elt->reply.reply.fuzzy_stat.status), "status", 0, false);
+				ucl_object_insert_key (cur,
+						ucl_object_fromint (
+								elt->reply.reply.fuzzy_stat.status),
+						"status",
+						0,
+						false);
 
 				if (ucl_parser_add_fd (parser, elt->attached_fd)) {
 					ucl_object_insert_key (cur, ucl_parser_get_object (parser),
@@ -235,11 +245,25 @@ rspamd_control_write_reply (struct rspamd_control_session *session)
 					ucl_parser_free (parser);
 				}
 				else {
+
 					ucl_object_insert_key (cur, ucl_object_fromstring (
 							ucl_parser_get_error (parser)), "error", 0, false);
 
 					ucl_parser_free (parser);
 				}
+			}
+			else {
+				ucl_object_insert_key (cur,
+						ucl_object_fromstring ("missing file"),
+						"error",
+						0,
+						false);
+				ucl_object_insert_key (cur,
+						ucl_object_fromint (
+								elt->reply.reply.fuzzy_stat.status),
+						"status",
+						0,
+						false);
 			}
 			break;
 		default:
