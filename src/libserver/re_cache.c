@@ -529,11 +529,18 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 	struct rspamd_re_cache_elt *elt;
 	struct rspamd_re_class *re_class;
 	guint64 re_id;
-	guint ret;
+	guint ret = 0;
 
 	re_id = rspamd_regexp_get_cache_id (re);
 	elt = g_ptr_array_index (rt->cache->re, re_id);
 	re_class = rspamd_regexp_get_class (re);
+
+	if (len == 0 || in == NULL) {
+		/* We assume this as absence of the specified data */
+		setbit (rt->checked, re_id);
+		rt->results[re_id] = ret;
+		return ret;
+	}
 
 #ifndef WITH_HYPERSCAN
 	ret = rspamd_re_cache_process_pcre (rt, re, in, len, is_raw);
@@ -548,10 +555,6 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 		rt->results[re_id] = ret;
 	}
 	else {
-		if (len == 0) {
-			len = strlen (in);
-		}
-
 		if (rt->cache->max_re_data > 0 && len > rt->cache->max_re_data) {
 			len = rt->cache->max_re_data;
 		}
