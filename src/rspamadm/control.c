@@ -38,7 +38,6 @@ static gchar *control_path = RSPAMD_DBDIR "/rspamd.sock";
 gboolean json = FALSE;
 gboolean compact = FALSE;
 gdouble timeout = 1.0;
-gboolean fuzzy_stat_cmd = FALSE;
 
 static void rspamadm_control (gint argc, gchar **argv);
 static const char *rspamadm_control_help (gboolean full_help);
@@ -48,6 +47,13 @@ struct rspamadm_command control_command = {
 		.flags = 0,
 		.help = rspamadm_control_help,
 		.run = rspamadm_control
+};
+
+struct rspamadm_control_cbdata {
+	lua_State *L;
+	const gchar *path;
+	gint argc;
+	gchar **argv;
 };
 
 static GOptionEntry entries[] = {
@@ -103,6 +109,7 @@ rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 	struct ucl_parser *parser;
 	ucl_object_t *obj;
 	rspamd_fstring_t *out;
+	struct rspamadm_control_cbdata *cbdata = conn->ud;
 
 	parser = ucl_parser_new (0);
 
@@ -122,8 +129,11 @@ rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 			rspamd_ucl_emit_fstring (obj, UCL_EMIT_JSON_COMPACT, &out);
 		}
 		else {
-			if (fuzzy_stat_cmd) {
-				rspamadm_execute_lua_ucl_subr (conn->ud, 0, NULL, obj,
+			if (strcmp (cbdata->path, "/fuzzystat") == 0) {
+				rspamadm_execute_lua_ucl_subr (cbdata->L,
+						cbdata->argc,
+						cbdata->argv,
+						obj,
 						rspamadm_script_fuzzy_stat);
 
 				rspamd_fstring_free (out);
@@ -157,6 +167,7 @@ rspamadm_control (gint argc, gchar **argv)
 	struct rspamd_http_message *msg;
 	rspamd_inet_addr_t *addr;
 	struct timeval tv;
+	static struct rspamadm_control_cbdata cbdata;
 	lua_State *L;
 	gint sock;
 
@@ -198,7 +209,6 @@ rspamadm_control (gint argc, gchar **argv)
 	else if (g_ascii_strcasecmp (cmd, "fuzzystat") == 0 ||
 			g_ascii_strcasecmp (cmd, "fuzzy_stat") == 0) {
 		path = "/fuzzystat";
-		fuzzy_stat_cmd = TRUE;
 	}
 	else {
 		rspamd_fprintf (stderr, "unknown command: %s\n", cmd);
@@ -228,7 +238,12 @@ rspamadm_control (gint argc, gchar **argv)
 	msg->url = rspamd_fstring_new_init (path, strlen (path));
 	double_to_tv (timeout, &tv);
 
-	rspamd_http_connection_write_message (conn, msg, NULL, NULL, L, sock,
+	cbdata.L = L;
+	cbdata.argc = argc;
+	cbdata.argv = argv;
+	cbdata.path = path;
+
+	rspamd_http_connection_write_message (conn, msg, NULL, NULL, &cbdata, sock,
 			&tv, ev_base);
 
 	event_base_loop (ev_base, 0);
