@@ -708,8 +708,9 @@ rspamd_fuzzy_backend_finish_update (struct rspamd_fuzzy_backend *backend)
 			msg_info_fuzzy_backend ("total number of frames in the wal file: "
 					"%d, checkpointed: %d", wal_frames, wal_checkpointed);
 		}
-	}
 #endif
+	}
+
 	return TRUE;
 }
 
