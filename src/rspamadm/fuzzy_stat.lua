@@ -31,12 +31,7 @@ local function add_data(target, src)
         target[k] = v
       end
     else
-      if target['ips'] then
-        add_data(target['ips'], v)
-      else
-        target['ips'] = {}
-        add_data(target['ips'], v)
-      end
+      target[k] = v
     end
   end
 end
