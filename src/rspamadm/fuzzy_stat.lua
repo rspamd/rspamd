@@ -31,7 +31,12 @@ local function add_data(target, src)
         target[k] = v
       end
     else
-      target[k] = v
+      if not target['ips'] then target['ips'] = {} end
+      -- Iterate over IPs
+      for ip,st in pairs(v) do
+        if not target['ips'][ip] then target['ips'][ip] = {} end
+        add_data(target['ips'][ip], st)
+      end
     end
   end
 end
