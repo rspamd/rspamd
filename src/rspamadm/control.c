@@ -31,11 +31,14 @@
 #include "unix-std.h"
 #include <event.h>
 #include "libutil/util.h"
+#include "lua/lua_common.h"
+#include "fuzzy_stat.lua.h"
 
 static gchar *control_path = RSPAMD_DBDIR "/rspamd.sock";
 gboolean json = FALSE;
 gboolean compact = FALSE;
 gdouble timeout = 1.0;
+gboolean fuzzy_stat_cmd = FALSE;
 
 static void rspamadm_control (gint argc, gchar **argv);
 static const char *rspamadm_control_help (gboolean full_help);
@@ -119,7 +122,18 @@ rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 			rspamd_ucl_emit_fstring (obj, UCL_EMIT_JSON_COMPACT, &out);
 		}
 		else {
-			rspamd_ucl_emit_fstring (obj, UCL_EMIT_CONFIG, &out);
+			if (fuzzy_stat_cmd) {
+				rspamadm_execute_lua_ucl_subr (conn->ud, 0, NULL, obj,
+						rspamadm_script_fuzzy_stat);
+
+				rspamd_fstring_free (out);
+				ucl_object_unref (obj);
+				ucl_parser_free (parser);
+				return 0;
+			}
+			else {
+				rspamd_ucl_emit_fstring (obj, UCL_EMIT_CONFIG, &out);
+			}
 		}
 
 		rspamd_fprintf (stdout, "%V", out);
@@ -143,6 +157,7 @@ rspamadm_control (gint argc, gchar **argv)
 	struct rspamd_http_message *msg;
 	rspamd_inet_addr_t *addr;
 	struct timeval tv;
+	lua_State *L;
 	gint sock;
 
 	context = g_option_context_new (
@@ -182,6 +197,7 @@ rspamadm_control (gint argc, gchar **argv)
 	else if (g_ascii_strcasecmp (cmd, "fuzzystat") == 0 ||
 			g_ascii_strcasecmp (cmd, "fuzzy_stat") == 0) {
 		path = "/fuzzystat";
+		fuzzy_stat_cmd = TRUE;
 	}
 	else {
 		rspamd_fprintf (stderr, "unknown command: %s\n", cmd);
@@ -202,6 +218,8 @@ rspamadm_control (gint argc, gchar **argv)
 		exit (1);
 	}
 
+	L = rspamd_lua_init ();
+
 	conn = rspamd_http_connection_new (NULL, rspamd_control_error_handler,
 			rspamd_control_finish_handler, RSPAMD_HTTP_CLIENT_SIMPLE,
 			RSPAMD_HTTP_CLIENT, NULL);
@@ -209,12 +227,13 @@ rspamadm_control (gint argc, gchar **argv)
 	msg->url = rspamd_fstring_new_init (path, strlen (path));
 	double_to_tv (timeout, &tv);
 
-	rspamd_http_connection_write_message (conn, msg, NULL, NULL, NULL, sock,
+	rspamd_http_connection_write_message (conn, msg, NULL, NULL, L, sock,
 			&tv, ev_base);
 
 	event_base_loop (ev_base, 0);
 
 	rspamd_http_connection_unref (conn);
 	rspamd_inet_address_destroy (addr);
+	lua_close (L);
 	close (sock);
 }
