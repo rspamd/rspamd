@@ -40,6 +40,44 @@ local function add_data(target, src)
   end
 end
 
+local function print_stat(st, tabs)
+  if st['checked'] then
+    print(string.format('%sChecked: %8d', tabs, tonumber(st['checked'])))
+  end
+  if st['matched'] then
+    print(string.format('%sMatched: %8d', tabs, tonumber(st['matched'])))
+  end
+  if st['errors'] then
+    print(string.format('%sErrors: %9d', tabs, tonumber(st['errors'])))
+  end
+  if st['added'] then
+    print(string.format('%sAdded: %10d', tabs, tonumber(st['added'])))
+  end
+  if st['deleted'] then
+    print(string.format('%sAdded: %10d', tabs, tonumber(st['deleted'])))
+  end
+end
+
+-- Sort by checked
+local function sort_ips(tbl)
+  local res = {}
+  for k,v in pairs(tbl) do
+    table.insert(res, {ip = k, data = v})
+  end
+
+  table.sort(res, function(a, b)
+    local n1 = 0
+    if a['data']['checked'] then n1 = a['data']['checked'] end
+
+    local n2 = 0
+    if b['data']['checked'] then n2 = b['data']['checked'] end
+
+    return n1 > n2
+  end)
+
+  return res
+end
+
 return function(args, res)
   local res_keys = {}
   local res_ips = {}
@@ -70,6 +108,34 @@ return function(args, res)
     end
   end
 
+  print('Keys statistics:')
+  for k,st in pairs(res_keys) do
+    print(string.format('Key id: %s', k))
+    print_stat(st, '\t')
 
+    if st['ips'] then
+      print('')
+      print('\tIPs stat:')
+      local sorted_ips = sort_ips(st['ips'])
+
+      for i,v in ipairs(sorted_ips) do
+        print(string.format('\t%s', v['ip']))
+        print_stat(v['data'], '\t\t')
+        print('')
+      end
+    end
+
+    print('')
+  end
+
+  print('')
+  print('IPs statistics:')
+
+  local sorted_ips = sort_ips(res_ips)
+  for i, v in ipairs(sorted_ips) do
+    print(string.format('%s', v['ip']))
+    print_stat(v['data'], '\t')
+    print('')
+  end
 end
 
