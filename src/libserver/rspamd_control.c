@@ -355,7 +355,7 @@ rspamd_control_error_handler (struct rspamd_http_connection *conn, GError *err)
 static struct rspamd_control_reply_elt *
 rspamd_control_broadcast_cmd (struct rspamd_main *rspamd_main,
 		struct rspamd_control_command *cmd,
-		void (*handler) (evutil_socket_t, short, void *), gpointer ud)
+		void (*handler) (int, short, void *), gpointer ud)
 {
 	GHashTableIter it;
 	struct rspamd_worker *wrk;
