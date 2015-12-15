@@ -939,6 +939,10 @@ process_dns_results (struct rspamd_task *task,
 
 		bit = g_hash_table_lookup (suffix->ips, &addr);
 		if (bit != NULL) {
+			msg_info_task ("<%s> domain [%s] is in surbl %s(%xd)",
+					task->message_id,
+					url, suffix->suffix,
+					bit->bit);
 			rspamd_task_insert_result (task, bit->symbol, 1,
 				g_list_prepend (NULL,
 				rspamd_mempool_strdup (task->task_pool, url)));
@@ -952,6 +956,10 @@ process_dns_results (struct rspamd_task *task,
 				(gint)addr,
 				(gint)ntohl (bit->bit),
 				(gint)bit->bit & (gint)ntohl (addr));
+			msg_info_task ("<%s> domain [%s] is in surbl %s(%xd)",
+					task->message_id,
+					url, suffix->suffix,
+					bit->bit);
 			if (((gint)bit->bit & (gint)ntohl (addr)) != 0) {
 				rspamd_task_insert_result (task, bit->symbol, 1,
 					g_list_prepend (NULL,
@@ -960,6 +968,9 @@ process_dns_results (struct rspamd_task *task,
 		}
 	}
 	else {
+		msg_info_task ("<%s> domain [%s] is in surbl %s",
+				task->message_id,
+				url, suffix->suffix);
 		rspamd_task_insert_result (task, suffix->symbol, 1,
 			g_list_prepend (NULL,
 			rspamd_mempool_strdup (task->task_pool, url)));
@@ -976,7 +987,7 @@ surbl_dns_callback (struct rdns_reply *reply, gpointer arg)
 	task = param->task;
 	/* If we have result from DNS server, this url exists in SURBL, so increase score */
 	if (reply->code == RDNS_RC_NOERROR && reply->entries) {
-		msg_info_task ("<%s> domain [%s] is in surbl %s",
+		msg_debug_task ("<%s> domain [%s] is in surbl %s",
 				param->task->message_id,
 			param->host_resolve, param->suffix->suffix);
 		elt = reply->entries;
