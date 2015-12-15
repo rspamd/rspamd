@@ -1112,33 +1112,37 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 					symbol = map->symbol;
 				}
 
-				if (rep->value == 0) {
-					if (rep->prob > 0.5) {
-						nval = fuzzy_normalize (rep->value,
-								session->rule->max_score);
-						nval *= rep->prob;
-						msg_info_task (
-								"found fuzzy hash with weight: "
-								"%.2f, in list: %s:%d%s",
-								nval,
-								symbol,
+
+				/*
+				 * Hash is assumed to be found if probability is more than 0.5
+				 * In that case `value` means number of matches
+				 * Otherwise `value` means error code
+				 */
+				if (rep->prob > 0.5) {
+					nval = fuzzy_normalize (rep->value,
+							session->rule->max_score);
+					nval *= rep->prob;
+					msg_info_task (
+							"found fuzzy hash with weight: "
+									"%.2f, in list: %s:%d%s",
+							nval,
+							symbol,
+							rep->flag,
+							map == NULL ? "(unknown)" : "");
+					if (map != NULL || !session->rule->skip_unknown) {
+						rspamd_snprintf (buf,
+								sizeof (buf),
+								"%d: %.2f / %.2f",
 								rep->flag,
-								map == NULL ? "(unknown)" : "");
-						if (map != NULL || !session->rule->skip_unknown) {
-							rspamd_snprintf (buf,
-									sizeof (buf),
-									"%d: %.2f / %.2f",
-									rep->flag,
-									rep->prob,
-									nval);
-							rspamd_task_insert_result_single (session->task,
-									symbol,
-									nval,
-									g_list_prepend (NULL,
-											rspamd_mempool_strdup (
-													session->task->task_pool,
-													buf)));
-						}
+								rep->prob,
+								nval);
+						rspamd_task_insert_result_single (session->task,
+								symbol,
+								nval,
+								g_list_prepend (NULL,
+										rspamd_mempool_strdup (
+												session->task->task_pool,
+												buf)));
 					}
 				}
 				else if (rep->value == 403) {

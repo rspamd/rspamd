@@ -544,24 +544,38 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 		if (sel_id != -1) {
 			/* We have some id selected here */
 			rep.prob = (float)max_cnt / (float)RSPAMD_SHINGLE_SIZE;
-			msg_debug_fuzzy_backend ("found fuzzy hash with probability %.2f", rep.prob);
-			rc = rspamd_fuzzy_backend_run_stmt (backend, FALSE,
-					RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID, sel_id);
-			if (rc == SQLITE_OK) {
-				digest = sqlite3_column_text (
-						prepared_stmts[RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID].stmt, 0);
-				timestamp = sqlite3_column_int64 (
-						prepared_stmts[RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID].stmt, 2);
-				if (time (NULL) - timestamp > expire) {
-					/* Expire element */
-					msg_debug_fuzzy_backend ("requested hash has been expired");
+
+			if (rep.prob > 0.5) {
+				msg_debug_fuzzy_backend (
+						"found fuzzy hash with probability %.2f",
+						rep.prob);
+				rc = rspamd_fuzzy_backend_run_stmt (backend, FALSE,
+						RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID, sel_id);
+				if (rc == SQLITE_OK) {
+					digest = sqlite3_column_text (
+							prepared_stmts[RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID].stmt,
+							0);
+					timestamp = sqlite3_column_int64 (
+							prepared_stmts[RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID].stmt,
+							2);
+					if (time (NULL) - timestamp > expire) {
+						/* Expire element */
+						msg_debug_fuzzy_backend (
+								"requested hash has been expired");
+					}
+					else {
+						rep.value = sqlite3_column_int64 (
+								prepared_stmts[RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID].stmt,
+								1);
+						rep.flag = sqlite3_column_int (
+								prepared_stmts[RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID].stmt,
+								3);
+					}
 				}
-				else {
-					rep.value = sqlite3_column_int64 (
-							prepared_stmts[RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID].stmt, 1);
-					rep.flag = sqlite3_column_int (
-							prepared_stmts[RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID].stmt, 3);
-				}
+			}
+			else {
+				/* Otherwise we assume that as error */
+				rep.value = 0;
 			}
 
 			rspamd_fuzzy_backend_cleanup_stmt (backend,

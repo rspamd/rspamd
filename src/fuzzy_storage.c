@@ -322,7 +322,7 @@ rspamd_fuzzy_update_stats (enum rspamd_fuzzy_epoch epoch, gboolean matched,
 #endif
 
 	if (key_stat) {
-		if (reply != 0) {
+		if (!matched && reply != 0) {
 			key_stat->errors ++;
 		}
 		else {
@@ -343,7 +343,7 @@ rspamd_fuzzy_update_stats (enum rspamd_fuzzy_epoch epoch, gboolean matched,
 	}
 
 	if (ip_stat) {
-		if (reply != 0) {
+		if (!matched && reply != 0) {
 			ip_stat->errors++;
 		}
 		else {
