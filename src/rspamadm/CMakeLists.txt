@@ -1,4 +1,11 @@
-SET(RSPAMADMSRC rspamadm.c commands.c pw.c keypair.c configtest.c
+SET(RSPAMADMSRC rspamadm.c
+        commands.c
+        pw.c
+        keypair.c
+        configtest.c
+        fuzzy_merge.c
+        configdump.c
+        control.c
         ${CMAKE_BINARY_DIR}/src/workers.c
         ${CMAKE_BINARY_DIR}/src/modules.c
         ${CMAKE_SOURCE_DIR}/src/controller.c
@@ -6,11 +13,18 @@ SET(RSPAMADMSRC rspamadm.c commands.c pw.c keypair.c configtest.c
         ${CMAKE_SOURCE_DIR}/src/lua_worker.c
         ${CMAKE_SOURCE_DIR}/src/smtp_proxy.c
         ${CMAKE_SOURCE_DIR}/src/worker.c
-        ${CMAKE_SOURCE_DIR}/src/http_proxy.c fuzzy_merge.c configdump.c control.c)
+        ${CMAKE_SOURCE_DIR}/src/http_proxy.c)
+SET(RSPAMADMLUASRC ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_stat.lua)
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
+ADD_CUSTOM_TARGET(rspamadm_lua_preprocess
+        ${CMAKE_COMMAND} -DRSPAMADMLUASRC=${RSPAMADMLUASRC}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/lua_preprocess.cmake
+        SOURCES ${RSPAMADMLUASRC})
 IF (ENABLE_HYPERSCAN MATCHES "ON")
     LIST(APPEND RSPAMADMSRC "${CMAKE_SOURCE_DIR}/src/hs_helper.c")
 ENDIF()
 ADD_EXECUTABLE(rspamadm ${RSPAMADMSRC})
+ADD_DEPENDENCIES(rspamadm rspamadm_lua_preprocess)
 TARGET_LINK_LIBRARIES(rspamadm rspamd-server)
 TARGET_LINK_LIBRARIES(rspamadm ${RSPAMD_REQUIRED_LIBRARIES})
 
