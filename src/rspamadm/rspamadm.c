@@ -226,6 +226,9 @@ rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
 	lua_pushcfunction (L, &rspamd_lua_traceback);
 	err_idx = lua_gettop (L);
 
+	/* Push function */
+	lua_rawgeti (L, LUA_REGISTRYINDEX, cb_idx);
+
 	/* Push argv */
 	lua_newtable (L);
 
@@ -237,9 +240,9 @@ rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
 	/* Push results */
 	ucl_object_push_lua (L, res, TRUE);
 
-	if (lua_pcall (L, 1, 0, err_idx) != 0) {
+	if (lua_pcall (L, 2, 0, err_idx) != 0) {
 		tb = lua_touserdata (L, -1);
-		msg_err ("call to user extraction script failed: %v", tb);
+		msg_err ("call to adm lua script failed: %v", tb);
 		g_string_free (tb, TRUE);
 		lua_pop (L, 1);
 
@@ -248,6 +251,8 @@ rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
 
 	/* error function */
 	lua_pop (L, 1);
+
+	luaL_unref (L, LUA_REGISTRYINDEX, cb_idx);
 
 	return TRUE;
 }
