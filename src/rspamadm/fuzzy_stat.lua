@@ -20,6 +20,7 @@
 --  }
 -- }
 --}
+--.USE "getopt"
 
 local function add_data(target, src)
   for k,v in pairs(src) do

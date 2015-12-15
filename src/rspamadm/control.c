@@ -168,6 +168,7 @@ rspamadm_control (gint argc, gchar **argv)
 					"\n  Release id: "
 					RID);
 	g_option_context_add_main_entries (context, entries, NULL);
+	g_option_context_set_ignore_unknown_options (context, TRUE);
 
 	if (!g_option_context_parse (context, &argc, &argv, &error)) {
 		rspamd_fprintf (stderr, "option parsing failed: %s\n", error->message);
