@@ -1212,6 +1212,10 @@ rspamd_string_find_eoh (GString *input)
 				state = got_linebreak_lf;
 				p++;
 			}
+			else {
+				p++;
+				state = skip_char;
+			}
 			break;
 		case got_linebreak_lf:
 			g_assert (c != NULL);
