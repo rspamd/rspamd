@@ -1089,7 +1089,8 @@ fuzzy_peer_rep (struct rspamd_worker *worker,
 	ctx->peer_fd = rep_fd;
 
 	if (rep_fd == -1) {
-		msg_warn ("cannot receive peer fd from the main process");
+		msg_err ("cannot receive peer fd from the main process");
+		exit (EXIT_FAILURE);
 	}
 
 	/* Start listening */

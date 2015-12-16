@@ -543,10 +543,14 @@ rspamd_control_default_worker_handler (gint fd, short what, gpointer ud)
 
 	r = read (fd, &cmd, sizeof (cmd));
 
-	if (r != sizeof (cmd)) {
+	if (r == -1) {
 		msg_err ("cannot read request from the control socket: %s",
 				strerror (errno));
 	}
+	else if (r < (gint)sizeof (cmd)) {
+		msg_err ("short read of control command: %d of %d", (gint)r,
+				(gint)sizeof (cmd));
+ 	}
 	else if ((gint)cmd.type >= 0 && cmd.type < RSPAMD_CONTROL_MAX) {
 
 		if (cd->handlers[cmd.type].handler) {
@@ -556,6 +560,9 @@ rspamd_control_default_worker_handler (gint fd, short what, gpointer ud)
 		else {
 			rspamd_control_default_cmd_handler (fd, cd, &cmd);
 		}
+	}
+	else {
+		msg_err ("unknown command: %d", (gint)cmd.type);
 	}
 }
 
