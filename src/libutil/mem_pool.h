@@ -19,6 +19,8 @@
 
 struct f_str_s;
 
+#define MEMPOOL_TAG_LEN 20
+#define MEMPOOL_UID_LEN 20
 #define MEM_ALIGNMENT   16    /* Better for SSE */
 #define align_ptr(p, a)                                                   \
     (guint8 *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
@@ -85,8 +87,8 @@ struct _pool_destructors {
  * Tag to use for logging purposes
  */
 struct rspamd_mempool_tag {
-	gchar tagname[20];                      /**< readable name							*/
-	gchar uid[20];                          /**< unique id								*/
+	gchar tagname[MEMPOOL_TAG_LEN];         /**< readable name							*/
+	gchar uid[MEMPOOL_UID_LEN];             /**< unique id								*/
 };
 
 /**
