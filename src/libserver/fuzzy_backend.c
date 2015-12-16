@@ -32,6 +32,7 @@
 struct rspamd_fuzzy_backend {
 	sqlite3 *db;
 	char *path;
+	gchar id[MEMPOOL_UID_LEN];
 	gsize count;
 	gsize expired;
 	rspamd_mempool_t *pool;
@@ -388,6 +389,10 @@ static struct rspamd_fuzzy_backend *
 rspamd_fuzzy_backend_open_db (const gchar *path, GError **err)
 {
 	struct rspamd_fuzzy_backend *bk;
+	rspamd_cryptobox_hash_state_t st;
+	guchar hash_out[rspamd_cryptobox_HASHBYTES];
+
+	g_assert (path != NULL);
 
 	bk = g_slice_alloc (sizeof (*bk));
 	bk->path = g_strdup (path);
@@ -407,6 +412,13 @@ rspamd_fuzzy_backend_open_db (const gchar *path, GError **err)
 
 		return NULL;
 	}
+
+	/* Set id for the backend */
+	rspamd_cryptobox_hash_init (&st, NULL, 0);
+	rspamd_cryptobox_hash_update (&st, path, strlen (path));
+	rspamd_cryptobox_hash_final (&st, hash_out);
+	rspamd_snprintf (bk->id, sizeof (bk->id), "%xs", hash_out);
+	memcpy (bk->pool->tag.uid, bk->id, sizeof (bk->pool->tag.uid));
 
 	return bk;
 }
@@ -937,4 +949,10 @@ gsize
 rspamd_fuzzy_backend_expired (struct rspamd_fuzzy_backend *backend)
 {
 	return backend != NULL ? backend->expired : 0;
+}
+
+const gchar *
+rspamd_fuzzy_backend_id (struct rspamd_fuzzy_backend *backend)
+{
+	return backend != NULL ? backend->id : 0;
 }
