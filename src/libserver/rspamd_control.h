@@ -26,6 +26,7 @@
 #define RSPAMD_RSPAMD_CONTROL_H
 
 #include "config.h"
+#include "mem_pool.h"
 #include <event.h>
 
 struct rspamd_main;
@@ -94,6 +95,7 @@ struct rspamd_control_reply {
 		} hs_loaded;
 		struct {
 			guint status;
+			gchar storage_id[MEMPOOL_UID_LEN];
 		} fuzzy_stat;
 	} reply;
 };

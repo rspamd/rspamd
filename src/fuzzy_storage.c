@@ -26,6 +26,7 @@
  * Rspamd fuzzy storage server
  */
 
+#include <libserver/rspamd_control.h>
 #include "config.h"
 #include "util.h"
 #include "rspamd.h"
@@ -855,6 +856,10 @@ rspamd_fuzzy_storage_stat (struct rspamd_main *rspamd_main,
 	}
 	else {
 		rep.reply.fuzzy_stat.status = 0;
+
+		memcpy (rep.reply.fuzzy_stat.storage_id,
+				rspamd_fuzzy_backend_id (ctx->backend),
+				sizeof (rep.reply.fuzzy_stat.storage_id));
 
 		/* Iterate over all keys */
 		obj = ucl_object_typed_new (UCL_OBJECT);

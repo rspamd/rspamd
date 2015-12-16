@@ -251,6 +251,14 @@ rspamd_control_write_reply (struct rspamd_control_session *session)
 
 					ucl_parser_free (parser);
 				}
+
+				ucl_object_insert_key (cur,
+						ucl_object_fromlstring (
+								elt->reply.reply.fuzzy_stat.storage_id,
+								MEMPOOL_UID_LEN - 1),
+						"id",
+						0,
+						false);
 			}
 			else {
 				ucl_object_insert_key (cur,
