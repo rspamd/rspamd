@@ -2568,7 +2568,7 @@ rspamd_worker_param_key_hash (gconstpointer p)
 static gboolean
 rspamd_worker_param_key_equal (gconstpointer p1, gconstpointer p2)
 {
-	struct rspamd_worker_param_key *k1 = p1, *k2 = p2;
+	const struct rspamd_worker_param_key *k1 = p1, *k2 = p2;
 
 	if (k1->ptr == k2->ptr) {
 		return strcmp (k1->name, k2->name) == 0;
