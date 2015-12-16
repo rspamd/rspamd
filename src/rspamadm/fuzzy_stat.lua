@@ -1,3 +1,6 @@
+local util = require "rspamd_util"
+local opts = {}
+
 local function add_data(target, src)
   for k,v in pairs(src) do
     if k ~= 'ips' then
@@ -17,21 +20,29 @@ local function add_data(target, src)
   end
 end
 
+local function print_num(num)
+  if opts['n'] or opts['number'] then
+    return tostring(num)
+  else
+    return util.humanize_number(num)
+  end
+end
+
 local function print_stat(st, tabs)
   if st['checked'] then
-    print(string.format('%sChecked: %8d', tabs, tonumber(st['checked'])))
+    print(string.format('%sChecked: %s', tabs, print_num(st['checked'])))
   end
   if st['matched'] then
-    print(string.format('%sMatched: %8d', tabs, tonumber(st['matched'])))
+    print(string.format('%sMatched: %s', tabs, print_num(st['matched'])))
   end
   if st['errors'] then
-    print(string.format('%sErrors: %9d', tabs, tonumber(st['errors'])))
+    print(string.format('%sErrors: %s', tabs, print_num(st['errors'])))
   end
   if st['added'] then
-    print(string.format('%sAdded: %10d', tabs, tonumber(st['added'])))
+    print(string.format('%sAdded: %s', tabs, print_num(st['added'])))
   end
   if st['deleted'] then
-    print(string.format('%sDeleted: %8d', tabs, tonumber(st['deleted'])))
+    print(string.format('%sDeleted: %s', tabs, print_num(st['deleted'])))
   end
 end
 
@@ -102,11 +113,28 @@ local function add_result(dst, src)
 end
 
 local function print_result(r)
+  local function num_to_epoch(num)
+    if num == 1 then
+      return 'v0.6'
+    elseif num == 2 then
+      return 'v0.8'
+    elseif num == 3 then
+      return 'v0.9'
+    elseif num == 4 then
+      return 'v1.0+'
+    end
+    return '???'
+  end
   if type(r) == 'table' then
-    return table.concat(r, ', ')
+    local res = {}
+    for i,num in ipairs(r) do
+      res[i] = string.format('(%s: %s)', num_to_epoch(i), print_num(num))
+    end
+
+    return table.concat(res, ', ')
   end
 
-  return tostring(r)
+  return print_num(r)
 end
 
 --.USE "getopt"
@@ -115,7 +143,7 @@ return function(args, res)
   local res_ips = {}
   local res_databases = {}
   local wrk = res['workers']
-  local opts = getopt(args, '')
+  opts = getopt(args, '')
 
   if wrk then
     for i,pr in pairs(wrk) do
@@ -135,7 +163,7 @@ return function(args, res)
           -- General stats
           for k,v in pairs(pr['data']) do
             if k ~= 'keys' then
-              res_db[k] = add_result(res_databases[k], v)
+              res_db[k] = add_result(res_db[k], v)
             end
           end
 

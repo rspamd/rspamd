@@ -325,6 +325,7 @@ rspamd_fuzzy_update_stats (struct rspamd_fuzzy_storage_ctx *ctx,
 		guint cmd, guint reply)
 {
 	ctx->stat.fuzzy_hashes_checked[epoch] ++;
+
 	if (matched) {
 		ctx->stat.fuzzy_hashes_found[epoch]++;
 	}
