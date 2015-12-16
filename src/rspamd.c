@@ -885,6 +885,9 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 		}
 
 		event_del (&cur->srv_ev);
+		/* We also need to clean descriptors left */
+		close (cur->control_pipe[0]);
+		close (cur->srv_pipe[0]);
 		g_free (cur);
 	}
 	else {
