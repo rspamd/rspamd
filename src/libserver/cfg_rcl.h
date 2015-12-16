@@ -319,7 +319,7 @@ gboolean rspamd_rcl_parse_struct_mime_addr (rspamd_mempool_t *pool,
  * @param offset offset inside a structure
  */
 void rspamd_rcl_register_worker_option (struct rspamd_config *cfg,
-		gint type,
+		GQuark type,
 		const gchar *name,
 		rspamd_rcl_default_handler_t handler,
 		gpointer target,

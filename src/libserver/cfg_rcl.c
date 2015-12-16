@@ -63,19 +63,24 @@ struct rspamd_rcl_section {
 	gpointer fin_ud;
 };
 
+struct rspamd_worker_param_key {
+	const gchar *name;
+	gpointer ptr;
+};
+
 struct rspamd_worker_param_parser {
 	rspamd_rcl_default_handler_t handler;           /**< handler function									*/
 	struct rspamd_rcl_struct_parser parser;         /**< parser attributes									*/
-	const gchar *name;                              /**< parameter's name									*/
-	UT_hash_handle hh;                              /**< hash by name										*/
+
+	struct rspamd_worker_param_key key;
 };
 
 struct rspamd_worker_cfg_parser {
-	struct rspamd_worker_param_parser *parsers;     /**< parsers hash										*/
+	GHashTable *parsers;                            /**< parsers hash										*/
 	gint type;                                      /**< workers quark										*/
-	gboolean (*def_obj_parser)(ucl_object_t *obj, gpointer ud);   /**< default object parser								*/
+	gboolean (*def_obj_parser)(ucl_object_t *obj, gpointer ud);   /**<
+ 														 default object parser								*/
 	gpointer def_ud;
-	UT_hash_handle hh;                              /**< hash by type										*/
 };
 
 static gboolean rspamd_rcl_process_section (struct rspamd_rcl_section *sec,
@@ -538,6 +543,7 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	struct rspamd_worker_conf *wrk;
 	struct rspamd_worker_cfg_parser *wparser;
 	struct rspamd_worker_param_parser *whandler;
+	struct rspamd_worker_param_key srch;
 
 	g_assert (key != NULL);
 	worker_type = key;
@@ -600,11 +606,14 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	}
 
 	/* Parse other attributes */
-	HASH_FIND_INT (cfg->wrk_parsers, (gint *)&qtype, wparser);
+	wparser = g_hash_table_lookup (cfg->wrk_parsers, &qtype);
+
 	if (wparser != NULL && obj->type == UCL_OBJECT) {
 		it = NULL;
 		while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
-			HASH_FIND_STR (wparser->parsers, ucl_object_key (cur), whandler);
+			srch.name = ucl_object_key (cur);
+			srch.ptr = wrk->ctx; /* XXX: is it valid? */
+			whandler = g_hash_table_lookup (wparser->parsers, &srch);
 
 			if (whandler != NULL) {
 
@@ -2543,9 +2552,34 @@ rspamd_rcl_parse_struct_mime_addr (rspamd_mempool_t *pool,
 	return TRUE;
 }
 
+static guint
+rspamd_worker_param_key_hash (gconstpointer p)
+{
+	const struct rspamd_worker_param_key *k = p;
+	XXH64_state_t st;
+
+	XXH64_reset (&st, rspamd_hash_seed ());
+	XXH64_update (&st, k->name, strlen (k->name));
+	XXH64_update (&st, &k->ptr, sizeof (gpointer));
+
+	return XXH64_digest (&st);
+}
+
+static gboolean
+rspamd_worker_param_key_equal (gconstpointer p1, gconstpointer p2)
+{
+	struct rspamd_worker_param_key *k1 = p1, *k2 = p2;
+
+	if (k1->ptr == k2->ptr) {
+		return strcmp (k1->name, k2->name) == 0;
+	}
+
+	return FALSE;
+}
+
 void
 rspamd_rcl_register_worker_option (struct rspamd_config *cfg,
-		gint type,
+		GQuark type,
 		const gchar *name,
 		rspamd_rcl_default_handler_t handler,
 		gpointer target,
@@ -2554,19 +2588,21 @@ rspamd_rcl_register_worker_option (struct rspamd_config *cfg,
 {
 	struct rspamd_worker_param_parser *nhandler;
 	struct rspamd_worker_cfg_parser *nparser;
+	struct rspamd_worker_param_key srch;
 
-	HASH_FIND_INT (cfg->wrk_parsers, &type, nparser);
+	nparser = g_hash_table_lookup (cfg->wrk_parsers, &type);
 
 	if (nparser == NULL) {
-		/* Allocate new parser for this worker */
-		nparser =
-			rspamd_mempool_alloc0 (cfg->cfg_pool,
-				sizeof (struct rspamd_worker_cfg_parser));
-		nparser->type = type;
-		HASH_ADD_INT (cfg->wrk_parsers, type, nparser);
+		rspamd_rcl_register_worker_parser (cfg, type, NULL, NULL);
+		nparser = g_hash_table_lookup (cfg->wrk_parsers, &type);
+
+		g_assert (nparser != NULL);
 	}
 
-	HASH_FIND_STR (nparser->parsers, name, nhandler);
+	srch.name = name;
+	srch.ptr = target;
+
+	nhandler = g_hash_table_lookup (nparser->parsers, &srch);
 	if (nhandler != NULL) {
 		msg_warn_config (
 			"handler for parameter %s is already registered for worker type %s",
@@ -2578,12 +2614,14 @@ rspamd_rcl_register_worker_option (struct rspamd_config *cfg,
 	nhandler =
 		rspamd_mempool_alloc0 (cfg->cfg_pool,
 			sizeof (struct rspamd_worker_param_parser));
-	nhandler->name = name;
+	nhandler->key.name = name;
+	nhandler->key.ptr = target;
 	nhandler->parser.flags = flags;
 	nhandler->parser.offset = offset;
 	nhandler->parser.user_struct = target;
 	nhandler->handler = handler;
-	HASH_ADD_KEYPTR (hh, nparser->parsers, name, strlen (name), nhandler);
+
+	g_hash_table_insert (nparser->parsers, &nhandler->key, nhandler);
 }
 
 
@@ -2592,14 +2630,21 @@ rspamd_rcl_register_worker_parser (struct rspamd_config *cfg, gint type,
 	gboolean (*func)(ucl_object_t *, gpointer), gpointer ud)
 {
 	struct rspamd_worker_cfg_parser *nparser;
-	HASH_FIND_INT (cfg->wrk_parsers, &type, nparser);
+
+	nparser = g_hash_table_lookup (cfg->wrk_parsers, &type);
+
 	if (nparser == NULL) {
 		/* Allocate new parser for this worker */
 		nparser =
 			rspamd_mempool_alloc0 (cfg->cfg_pool,
 				sizeof (struct rspamd_worker_cfg_parser));
 		nparser->type = type;
-		HASH_ADD_INT (cfg->wrk_parsers, type, nparser);
+		nparser->parsers = g_hash_table_new (rspamd_worker_param_key_hash,
+				rspamd_worker_param_key_equal);
+		rspamd_mempool_add_destructor (cfg->cfg_pool,
+				(rspamd_mempool_destruct_t)g_hash_table_unref, nparser->parsers);
+
+		g_hash_table_insert (cfg->wrk_parsers, &nparser->type, nparser);
 	}
 
 	nparser->def_obj_parser = func;

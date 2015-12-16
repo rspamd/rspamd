@@ -268,24 +268,24 @@ struct rspamd_config {
 
 	GList *filters;                                 /**< linked list of all filters							*/
 	GList *workers;                                 /**< linked list of all workers params					*/
-	struct rspamd_worker_cfg_parser *wrk_parsers;   /**< hash for worker config parsers, indexed by worker quarks */
-	ucl_object_t *rcl_obj;                  /**< rcl object											*/
-	GHashTable * metrics;                            /**< hash of metrics indexed by metric name				*/
-	GList * metrics_list;                            /**< linked list of metrics								*/
-	GHashTable * metrics_symbols;                    /**< hash table of metrics indexed by symbol			*/
-	GHashTable * c_modules;                          /**< hash of c modules indexed by module name			*/
-	GHashTable * composite_symbols;                  /**< hash of composite symbols indexed by its name		*/
+	GHashTable *wrk_parsers;                        /**< hash for worker config parsers, indexed by worker quarks */
+	ucl_object_t *rcl_obj;                          /**< rcl object											*/
+	GHashTable * metrics;                           /**< hash of metrics indexed by metric name				*/
+	GList * metrics_list;                           /**< linked list of metrics								*/
+	GHashTable * metrics_symbols;                   /**< hash table of metrics indexed by symbol			*/
+	GHashTable * c_modules;                         /**< hash of c modules indexed by module name			*/
+	GHashTable * composite_symbols;                 /**< hash of composite symbols indexed by its name		*/
 	GList *classifiers;                             /**< list of all classifiers defined                    */
 	GList *statfiles;                               /**< list of all statfiles in config file order         */
 	GHashTable *classifiers_symbols;                /**< hashtable indexed by symbol name of classifiers    */
-	GHashTable * cfg_params;                         /**< all cfg params indexed by its name in this structure */
+	GHashTable * cfg_params;                        /**< all cfg params indexed by its name in this structure */
 	GList *pre_filters;                             /**< list of pre-processing lua filters					*/
 	GList *post_filters;                            /**< list of post-processing lua filters				*/
 	gchar *dynamic_conf;                            /**< path to dynamic configuration						*/
-	ucl_object_t *current_dynamic_conf;              /**< currently loaded dynamic configuration				*/
-	GHashTable * domain_settings;                    /**< settings per-domains                               */
-	GHashTable * user_settings;                      /**< settings per-user                                  */
-	gchar * domain_settings_str;                     /**< string representation of settings					*/
+	ucl_object_t *current_dynamic_conf;             /**< currently loaded dynamic configuration				*/
+	GHashTable * domain_settings;                   /**< settings per-domains                               */
+	GHashTable * user_settings;                     /**< settings per-user                                  */
+	gchar * domain_settings_str;                    /**< string representation of settings					*/
 	gchar * user_settings_str;
 	gint clock_res;                                 /**< resolution of clock used							*/
 
@@ -305,7 +305,7 @@ struct rspamd_config {
 
 	gchar * history_file;                           /**< file to save rolling history						*/
 
-	gchar * tld_file;								/**< file to load effective tld list from				*/
+	gchar * tld_file;                               /**< file to load effective tld list from				*/
 
 	gdouble dns_timeout;                            /**< timeout in milliseconds for waiting for dns reply	*/
 	guint32 dns_retransmits;                        /**< maximum retransmits count							*/

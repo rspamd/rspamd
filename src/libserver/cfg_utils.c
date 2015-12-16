@@ -174,6 +174,7 @@ rspamd_config_new (void)
 	cfg->metrics_symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->debug_modules = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->explicit_modules = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+	cfg->wrk_parsers = g_hash_table_new (g_int_hash, g_int_equal);
 
 	cfg->map_timeout = DEFAULT_MAP_TIMEOUT;
 
@@ -221,6 +222,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 	g_hash_table_unref (cfg->classifiers_symbols);
 	g_hash_table_unref (cfg->debug_modules);
 	g_hash_table_unref (cfg->explicit_modules);
+	g_hash_table_unref (cfg->wrk_parsers);
 
 	if (cfg->checksum) {
 		g_free (cfg->checksum);
