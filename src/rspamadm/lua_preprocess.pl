@@ -15,6 +15,9 @@ sub quote_file {
             quote_file($inc, $out);
         }
         else {
+            s/^\s*//; # remove unnecessary spaces at the beginning
+            next if /^--/; # skip comments
+            next if /^\s*$/; # skip empty lines
             s/(.)/'$1',/g; # split as 'c',
             s/\'\\\'/\'\\\\'/g; # escape backslashes
             s/\'\'\'/\'\\\'\'/g; # escape single quotes
