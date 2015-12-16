@@ -819,6 +819,110 @@ rspamd_fuzzy_storage_stat_key (struct fuzzy_key_stat *key_stat)
 	return res;
 }
 
+static ucl_object_t *
+rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat)
+{
+	GHashTableIter it, ip_it;
+	GHashTable *ip_hash;
+	struct fuzzy_key_stat *key_stat;
+	struct fuzzy_key *key;
+	struct rspamd_http_keypair *kp;
+	rspamd_lru_element_t *lru_elt;
+	ucl_object_t *obj, *keys_obj, *elt, *ip_elt, *ip_cur;
+	gpointer k, v;
+	gint i;
+	gchar keyname[17];
+
+	obj = ucl_object_typed_new (UCL_OBJECT);
+
+	keys_obj = ucl_object_typed_new (UCL_OBJECT);
+	g_hash_table_iter_init (&it, ctx->keys);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		key = v;
+		kp = key->key;
+		key_stat = key->stat;
+
+		if (key_stat) {
+			rspamd_snprintf (keyname, sizeof (keyname), "%8xs", k);
+
+			elt = rspamd_fuzzy_storage_stat_key (key_stat);
+
+			if (key_stat->last_ips && ip_stat) {
+				ip_hash = rspamd_lru_hash_get_htable (key_stat->last_ips);
+
+				if (ip_hash) {
+					g_hash_table_iter_init (&ip_it, ip_hash);
+					ip_elt = ucl_object_typed_new (UCL_OBJECT);
+
+					while (g_hash_table_iter_next (&ip_it, &k, &v)) {
+						lru_elt = v;
+						ip_cur = rspamd_fuzzy_storage_stat_key (lru_elt->data);
+						ucl_object_insert_key (ip_elt, ip_cur,
+								rspamd_inet_address_to_string (k), 0, true);
+					}
+
+					ucl_object_insert_key (elt, ip_elt, "ips", 0, false);
+				}
+			}
+
+			ucl_object_insert_key (keys_obj, elt, keyname, 0, true);
+		}
+	}
+
+	ucl_object_insert_key (obj, keys_obj, "keys", 0, false);
+
+	/* Now generic stats */
+	ucl_object_insert_key (obj,
+			ucl_object_fromint (ctx->stat.fuzzy_hashes),
+			"fuzzy_stored",
+			0,
+			false);
+	ucl_object_insert_key (obj,
+			ucl_object_fromint (ctx->stat.fuzzy_hashes_expired),
+			"fuzzy_expired",
+			0,
+			false);
+	ucl_object_insert_key (obj,
+			ucl_object_fromint (ctx->stat.invalid_requests),
+			"invalid_requests",
+			0,
+			false);
+
+	/* Checked by epoch */
+	elt = ucl_object_typed_new (UCL_ARRAY);
+
+	for (i = RSPAMD_FUZZY_EPOCH6; i < RSPAMD_FUZZY_EPOCH_MAX; i++) {
+		ucl_array_append (elt,
+				ucl_object_fromint (ctx->stat.fuzzy_hashes_checked[i]));
+	}
+
+	ucl_object_insert_key (obj, elt, "fuzzy_checked", 0, false);
+
+	/* Shingles by epoch */
+	elt = ucl_object_typed_new (UCL_ARRAY);
+
+	for (i = RSPAMD_FUZZY_EPOCH6; i < RSPAMD_FUZZY_EPOCH_MAX; i++) {
+		ucl_array_append (elt,
+				ucl_object_fromint (ctx->stat.fuzzy_shingles_checked[i]));
+	}
+
+	ucl_object_insert_key (obj, elt, "fuzzy_shingles", 0, false);
+
+	/* Matched by epoch */
+	elt = ucl_object_typed_new (UCL_ARRAY);
+
+	for (i = RSPAMD_FUZZY_EPOCH6; i < RSPAMD_FUZZY_EPOCH_MAX; i++) {
+		ucl_array_append (elt,
+				ucl_object_fromint (ctx->stat.fuzzy_hashes_found[i]));
+	}
+
+	ucl_object_insert_key (obj, elt, "fuzzy_found", 0, false);
+
+
+	return obj;
+}
+
 static gboolean
 rspamd_fuzzy_storage_stat (struct rspamd_main *rspamd_main,
 		struct rspamd_worker *worker, gint fd,
@@ -827,21 +931,15 @@ rspamd_fuzzy_storage_stat (struct rspamd_main *rspamd_main,
 {
 	struct rspamd_fuzzy_storage_ctx *ctx = ud;
 	struct rspamd_control_reply rep;
-	GHashTableIter it, ip_it;
-	GHashTable *ip_hash;
-	struct fuzzy_key_stat *key_stat;
-	struct fuzzy_key *key;
-	struct rspamd_http_keypair *kp;
-	rspamd_lru_element_t *lru_elt;
-	ucl_object_t *obj, *elt, *ip_elt, *ip_cur;
+	ucl_object_t *obj;
 	struct ucl_emitter_functions *emit_subr;
 	guchar fdspace[CMSG_SPACE(sizeof (int))];
 	struct iovec iov;
 	struct msghdr msg;
 	struct cmsghdr *cmsg;
-	gpointer k, v;
+
 	gint outfd = -1;
-	gchar tmppath[PATH_MAX], keyname[17];
+	gchar tmppath[PATH_MAX];
 
 	memset (&rep, 0, sizeof (rep));
 	rep.type = RSPAMD_CONTROL_RELOAD;
@@ -861,42 +959,7 @@ rspamd_fuzzy_storage_stat (struct rspamd_main *rspamd_main,
 				rspamd_fuzzy_backend_id (ctx->backend),
 				sizeof (rep.reply.fuzzy_stat.storage_id));
 
-		/* Iterate over all keys */
-		obj = ucl_object_typed_new (UCL_OBJECT);
-		g_hash_table_iter_init (&it, ctx->keys);
-
-		while (g_hash_table_iter_next (&it, &k, &v)) {
-			key = v;
-			kp = key->key;
-			key_stat = key->stat;
-
-			if (key_stat) {
-				rspamd_snprintf (keyname, sizeof (keyname), "%8xs", k);
-
-				elt = rspamd_fuzzy_storage_stat_key (key_stat);
-
-				if (key_stat->last_ips) {
-					ip_hash = rspamd_lru_hash_get_htable (key_stat->last_ips);
-
-					if (ip_hash) {
-						g_hash_table_iter_init (&ip_it, ip_hash);
-						ip_elt = ucl_object_typed_new (UCL_OBJECT);
-
-						while (g_hash_table_iter_next (&ip_it, &k, &v)) {
-							lru_elt = v;
-							ip_cur = rspamd_fuzzy_storage_stat_key (lru_elt->data);
-							ucl_object_insert_key (ip_elt, ip_cur,
-									rspamd_inet_address_to_string (k), 0, true);
-						}
-
-						ucl_object_insert_key (elt, ip_elt, "ips", 0, false);
-					}
-				}
-
-				ucl_object_insert_key (obj, elt, keyname, 0, true);
-			}
-		}
-
+		obj = rspamd_fuzzy_stat_to_ucl (ctx, TRUE);
 		emit_subr = ucl_object_emit_fd_funcs (outfd);
 		ucl_object_emit_full (obj, UCL_EMIT_JSON_COMPACT, emit_subr);
 		ucl_object_emit_funcs_free (emit_subr);
