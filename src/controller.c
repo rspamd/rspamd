@@ -1871,37 +1871,12 @@ rspamd_controller_handle_stat_common (
 	ucl_object_insert_key (top,
 		ucl_object_fromint (
 			mem_st.oversized_chunks), "chunks_oversized", 0, false);
-	ucl_object_insert_key (top,
-		ucl_object_fromint (stat->fuzzy_hashes), "fuzzy_stored", 0, false);
-	ucl_object_insert_key (top,
-		ucl_object_fromint (
-			stat->fuzzy_hashes_expired), "fuzzy_expired", 0, false);
-
-	/* Fuzzy epoch statistics */
-	sub = ucl_object_typed_new (UCL_ARRAY);
-
-	for (i = RSPAMD_FUZZY_EPOCH6; i < RSPAMD_FUZZY_EPOCH_MAX; i ++) {
-		ucl_array_append (sub, ucl_object_fromint (stat->fuzzy_hashes_checked[i]));
-	}
-
-	ucl_object_insert_key (top, sub, "fuzzy_checked", 0, false);
-	sub = ucl_object_typed_new (UCL_ARRAY);
-
-	for (i = RSPAMD_FUZZY_EPOCH6; i < RSPAMD_FUZZY_EPOCH_MAX; i ++) {
-		ucl_array_append (sub, ucl_object_fromint (stat->fuzzy_hashes_found[i]));
-	}
-
-	ucl_object_insert_key (top, sub, "fuzzy_found", 0, false);
 
 	if (do_reset) {
 		session->ctx->srv->stat->messages_scanned = 0;
 		session->ctx->srv->stat->messages_learned = 0;
 		session->ctx->srv->stat->connections_count = 0;
 		session->ctx->srv->stat->control_connections_count = 0;
-		memset (stat->fuzzy_hashes_checked, 0,
-				sizeof (stat->fuzzy_hashes_checked));
-		memset (stat->fuzzy_hashes_found, 0,
-				sizeof (stat->fuzzy_hashes_found));
 		rspamd_mempool_stat_reset ();
 	}
 
@@ -2192,42 +2167,6 @@ rspamd_controller_load_saved_stats (struct rspamd_controller_worker_ctx *ctx)
 		stat_copy.control_connections_count = ucl_object_toint (elt);
 	}
 
-	elt = ucl_object_find_key (obj, "fuzzy_stored");
-
-	if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
-		stat_copy.fuzzy_hashes = ucl_object_toint (elt);
-	}
-
-	elt = ucl_object_find_key (obj, "fuzzy_expired");
-
-	if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
-		stat_copy.fuzzy_hashes_expired = ucl_object_toint (elt);
-	}
-
-	elt = ucl_object_find_key (obj, "fuzzy_checked");
-
-	if (elt && ucl_object_type (elt) == UCL_ARRAY) {
-		for (i = 0; i < RSPAMD_FUZZY_EPOCH_MAX; i++) {
-			subelt = ucl_array_find_index (elt, i);
-
-			if (subelt && ucl_object_type (subelt) == UCL_INT) {
-				stat_copy.fuzzy_hashes_checked[i] = ucl_object_toint (subelt);
-			}
-		}
-	}
-
-	elt = ucl_object_find_key (obj, "fuzzy_found");
-
-	if (elt && ucl_object_type (elt) == UCL_ARRAY) {
-		for (i = 0; i < RSPAMD_FUZZY_EPOCH_MAX; i++) {
-			subelt = ucl_array_find_index (elt, i);
-
-			if (subelt && ucl_object_type (subelt) == UCL_INT) {
-				stat_copy.fuzzy_hashes_found[i] = ucl_object_toint (subelt);
-			}
-		}
-	}
-
 	ucl_object_unref (obj);
 	memcpy (stat, &stat_copy, sizeof (stat_copy));
 }
@@ -2281,27 +2220,6 @@ rspamd_controller_store_saved_stats (struct rspamd_controller_worker_ctx *ctx)
 			ucl_object_fromint (stat->control_connections_count),
 			"control_connections", 0, false);
 
-	ucl_object_insert_key (top,
-			ucl_object_fromint (stat->fuzzy_hashes), "fuzzy_stored", 0, false);
-	ucl_object_insert_key (top,
-			ucl_object_fromint (
-					stat->fuzzy_hashes_expired), "fuzzy_expired", 0, false);
-
-	/* Fuzzy epoch statistics */
-	sub = ucl_object_typed_new (UCL_ARRAY);
-
-	for (i = RSPAMD_FUZZY_EPOCH6; i < RSPAMD_FUZZY_EPOCH_MAX; i ++) {
-		ucl_array_append (sub, ucl_object_fromint (stat->fuzzy_hashes_checked[i]));
-	}
-
-	ucl_object_insert_key (top, sub, "fuzzy_checked", 0, false);
-	sub = ucl_object_typed_new (UCL_ARRAY);
-
-	for (i = RSPAMD_FUZZY_EPOCH6; i < RSPAMD_FUZZY_EPOCH_MAX; i ++) {
-		ucl_array_append (sub, ucl_object_fromint (stat->fuzzy_hashes_found[i]));
-	}
-
-	ucl_object_insert_key (top, sub, "fuzzy_found", 0, false);
 
 	ucl_object_emit_full (top, UCL_EMIT_JSON_COMPACT,
 			ucl_object_emit_fd_funcs (fd));
