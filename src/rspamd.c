@@ -649,7 +649,7 @@ rspamd_check_core_limits (struct rspamd_main *rspamd_main)
 	cores_cbdata.total_size = 0;
 
 	if (cfg->cores_dir && (cfg->max_cores_count || cfg->max_cores_size)) {
-		if (nftw (cfg->cores_dir, rspamd_check_core_cb, 20, FTW_MOUNT|FTW_PHYS)
+		if (nftw (cfg->cores_dir, rspamd_check_core_cb, 1, FTW_MOUNT|FTW_PHYS)
 					== -1) {
 			msg_err_main ("nftw failed for path %s: %s", cfg->cores_dir,
 					strerror (errno));
