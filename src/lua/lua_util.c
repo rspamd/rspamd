@@ -133,6 +133,15 @@ LUA_FUNCTION_DEF (util, fold_header);
  */
 LUA_FUNCTION_DEF (util, is_uppercase);
 
+/**
+ * @function util.humanize_number(num)
+ * Returns humanized representation of given number (like 1k instead of 1000)
+ *
+ * @param {number} num number to humanize
+ * @return {string} humanized representation of a number
+ */
+LUA_FUNCTION_DEF (util, humanize_number);
+
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
 	LUA_INTERFACE_DEF (util, load_rspamd_config),
@@ -147,6 +156,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, parse_addr),
 	LUA_INTERFACE_DEF (util, fold_header),
 	LUA_INTERFACE_DEF (util, is_uppercase),
+	LUA_INTERFACE_DEF (util, humanize_number),
 	{NULL, NULL}
 };
 
@@ -674,6 +684,19 @@ lua_util_is_uppercase (lua_State *L)
 	else {
 		lua_pushboolean (L, FALSE);
 	}
+
+	return 1;
+}
+
+static gint
+lua_util_humanize_number (lua_State *L)
+{
+	gdouble number = luaL_checknumber (L, 1);
+	gchar numbuf[32];
+
+
+	rspamd_snprintf (numbuf, sizeof (numbuf), "%hL", (gint64)number);
+	lua_pushstring (L, numbuf);
 
 	return 1;
 }
