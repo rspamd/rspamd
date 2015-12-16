@@ -31,7 +31,7 @@ local function print_stat(st, tabs)
     print(string.format('%sAdded: %10d', tabs, tonumber(st['added'])))
   end
   if st['deleted'] then
-    print(string.format('%sAdded: %10d', tabs, tonumber(st['deleted'])))
+    print(string.format('%sDeleted: %8d', tabs, tonumber(st['deleted'])))
   end
 end
 
