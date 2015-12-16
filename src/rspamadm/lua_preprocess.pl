@@ -15,9 +15,10 @@ sub quote_file {
             quote_file($inc, $out);
         }
         else {
-            s/\"/\\"/g;
-            s/^(.*)$/"$1\\n"/;
-            print $out $_;
+            s/(.)/'$1',/g; # split as 'c',
+            s/\'\\\'/\'\\\\'/g; # escape backslashes
+            s/\'\'\'/\'\\\'\'/g; # escape single quotes
+            print $out "$_'\\n',";
         }
     }
 }
@@ -35,12 +36,12 @@ foreach my $file (@files) {
 #ifndef ${definename}_GUARD_H
 #define ${definename}_GUARD_H
 
-static const char ${varname}\[\] = ""
+static const char ${varname}\[\] = {
 EOD
         quote_file($in, $out);
 
         print $out <<EOD;
-"";
+'\\0'};
 #endif
 EOD
     }
