@@ -1151,13 +1151,14 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 							symbol,
 							rep->flag);
 				}
-				else {
+				else if (rep->value != 0) {
 					msg_info_task (
 							"fuzzy check error for %s(%d): unknown error (%d)",
 							symbol,
 							rep->flag,
 							rep->value);
 				}
+				/* Not found */
 
 				ret = return_finished;
 			}
