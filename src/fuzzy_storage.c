@@ -845,7 +845,7 @@ rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat
 		key_stat = key->stat;
 
 		if (key_stat) {
-			rspamd_snprintf (keyname, sizeof (keyname), "%8xs", k);
+			rspamd_snprintf (keyname, sizeof (keyname), "%8bs", k);
 
 			elt = rspamd_fuzzy_storage_stat_key (key_stat);
 
