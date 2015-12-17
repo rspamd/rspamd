@@ -53,11 +53,11 @@ local function check_query_settings(task)
     local res,err = parser:parse_string(tostring(query_set))
     if res then
       task:set_settings(parser:get_object())
-      
+
       return true
     end
   end
-  
+
   local query_maxscore = task:get_request_header('maxscore')
   if query_maxscore then
     -- We have score limits redefined by request
@@ -76,13 +76,13 @@ local function check_query_settings(task)
         local ss = tonumber(tostring(query_softscore))
         nset['default']['actions']['add header'] = ss
       end
-      
+
       task:set_settings(nset)
-      
+
       return true
     end
   end
-  
+
   return false
 end
 
@@ -208,12 +208,12 @@ local function check_settings(task)
 
     return nil
   end
-  
+
   -- Check if we have override as query argument
   if check_query_settings(task) then
     return
   end
-  
+
   -- Do not waste resources
   if not settings_initialized then
     return
@@ -241,8 +241,8 @@ local function check_settings(task)
   -- Match rules according their order
   for pri = max_pri,1,-1 do
     if settings[pri] then
-      for name, rule in pairs(settings[pri]) do
-        local rule = check_specific_setting(name, rule, ip, from, rcpt, user)
+      for name, r in pairs(settings[pri]) do
+        local rule = check_specific_setting(name, r, ip, from, rcpt, user)
         if rule then
           rspamd_logger.infox(task, "<%1> apply settings according to rule %2",
             task:get_message_id(), name)
@@ -288,7 +288,7 @@ local function process_settings_table(tbl)
 
   -- Check the setting element internal data
   local process_setting_elt = function(name, elt)
-  
+
     -- Process IP address
     local function process_ip(ip)
       local out = {}
@@ -373,7 +373,7 @@ local function process_settings_table(tbl)
       if type(elt) == 'string' then
         return {out}
       end
-      
+
       return out
     end
 
@@ -407,6 +407,7 @@ local function process_settings_table(tbl)
     end
 
     -- Now we must process actions
+    if elt['symbols'] then out['symbols'] = elt['symbols'] end
     if elt['apply'] then
       -- Just insert all metric results to the action key
       out['apply'] = elt['apply']
@@ -416,7 +417,7 @@ local function process_settings_table(tbl)
       rspamd_logger.errx(rspamd_config, "no actions in settings: " .. name)
       return nil
     end
-    
+
     return out
   end
 
@@ -450,7 +451,7 @@ local function process_settings_table(tbl)
 
   settings_initialized = true
   rspamd_logger.infox(rspamd_config, 'loaded %1 elements of settings', nrules)
-  
+
   return true
 end
 
