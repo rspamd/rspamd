@@ -15,6 +15,7 @@ statistics module.
 This document contains the basic documentation for rspamd spam filtering system. It is divided into the following
 parts:
 
+- [Tutorials](tutorials/) a collection of tutorial like documents for rspamd
 - [Architecture](architecture/) presents the architecture of rspamd and how spam filtering is performed
 - [Rspamd configuration](configuration/) describes principles of rspamd configuration
 - [Modules](modules/) chapter lists rspamd modules and defines their configuration attributes
