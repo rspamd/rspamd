@@ -25,6 +25,7 @@
 
 #include "printf.h"
 #include "fstring.h"
+#include "str_util.h"
 #include <math.h>
 
 /**
@@ -366,7 +367,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 	glong written = 0, wr, slen;
 	gint64 i64;
 	guint64 ui64;
-	guint width, sign, hex, humanize, bytes, frac_width, i;
+	guint width, sign, hex, humanize, bytes, frac_width, i, b32;
 	rspamd_fstring_t *v;
 	rspamd_ftok_t *tok;
 	GString *gs;
@@ -398,6 +399,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 			width = 0;
 			sign = 1;
 			hex = 0;
+			b32 = 0;
 			bytes = 0;
 			humanize = 0;
 			frac_width = 0;
@@ -428,6 +430,11 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 
 				case 'x':
 					hex = 1;
+					sign = 0;
+					fmt++;
+					continue;
+				case 'b':
+					b32 = 1;
 					sign = 0;
 					fmt++;
 					continue;
@@ -566,23 +573,35 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 					slen = MIN (slen, width);
 				}
 
-				if (G_LIKELY(hex == 0)) {
-					RSPAMD_PRINTF_APPEND (p, slen);
+				if (G_UNLIKELY (b32)) {
+					gchar *b32buf;
+
+					b32buf = rspamd_encode_base32 (p, slen);
+
+					if (b32buf) {
+						RSPAMD_PRINTF_APPEND_BUF (b32buf, strlen (b32buf));
+						g_free (b32buf);
+					}
 				}
-				else {
+				else if (G_UNLIKELY (hex)) {
 					gchar hexbuf[2];
+
 					while (slen) {
 						hexbuf[0] = hex == 2 ? _HEX[*p & 0xf] : _hex[*p & 0xf];
 						hexbuf[1] = hex == 2 ? _HEX[(*p >> 8) & 0xf] :
-								_hex[(*p >> 8) & 0xf];
+									_hex[(*p >> 8) & 0xf];
 						RSPAMD_PRINTF_APPEND_BUF (hexbuf, 2);
-						p ++;
-						slen --;
+						p++;
+						slen--;
 					}
-					fmt ++;
+					fmt++;
 					buf_start = fmt;
 
 				}
+				else {
+					RSPAMD_PRINTF_APPEND (p, slen);
+				}
+
 
 				continue;
 
