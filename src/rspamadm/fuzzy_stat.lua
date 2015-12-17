@@ -81,7 +81,7 @@ local function sort_ips(tbl, opts)
   return res
 end
 
-local function add_result(dst, src)
+local function add_result(dst, src, k)
   if type(src) == 'table' then
     if type(dst) == 'number' then
       -- Convert dst to table
@@ -91,7 +91,7 @@ local function add_result(dst, src)
     end
 
     for i,v in ipairs(src) do
-      if dst[i] then
+      if dst[i] and k ~= 'fuzzy_stored' then
         dst[i] = dst[i] + v
       else
         dst[i] = v
@@ -99,9 +99,13 @@ local function add_result(dst, src)
     end
   else
     if type(dst) == 'table' then
-      dst[1] = dst[1] + src
+      if k ~= 'fuzzy_stored' then
+        dst[1] = dst[1] + src
+      else
+        dst[1] = src
+      end
     else
-      if dst then
+      if dst and k ~= 'fuzzy_stored' then
         dst = dst + src
       else
         dst = src
@@ -163,7 +167,7 @@ return function(args, res)
           -- General stats
           for k,v in pairs(pr['data']) do
             if k ~= 'keys' then
-              res_db[k] = add_result(res_db[k], v)
+              res_db[k] = add_result(res_db[k], v, k)
             end
           end
 
