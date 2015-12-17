@@ -1143,6 +1143,8 @@ rspamc_client_execute_cmd (struct rspamc_command *cmd, ucl_object_t *result,
 
 		rspamd_fprintf (stderr, "Cannot execute %s: %e", execute, exec_err);
 		g_error_free (exec_err);
+
+		exit (EXIT_FAILURE);
 	}
 	else {
 		children = g_list_prepend (children, GSIZE_TO_POINTER (cld));
@@ -1361,7 +1363,7 @@ rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
-	gint i, start_argc, cur_req = 0, res;
+	gint i, start_argc, cur_req = 0, res, ret;
 	GQueue *kwattrs;
 	GList *cur;
 	GPid cld;
@@ -1480,6 +1482,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Wait for children processes */
 	cur = g_list_first (children);
+	ret = 0;
 
 	while (cur) {
 		cld = GPOINTER_TO_SIZE (cur->data);
@@ -1487,6 +1490,18 @@ main (gint argc, gchar **argv, gchar **env)
 		if (waitpid (cld, &res, 0) == -1) {
 			fprintf (stderr, "Cannot wait for %d: %s", (gint)cld,
 					strerror (errno));
+
+			ret = errno;
+		}
+
+		if (ret == 0) {
+			/* Check return code */
+			if (WIFSIGNALED (res)) {
+				ret = WTERMSIG (res);
+			}
+			else if (WIFEXITED (res)) {
+				ret = WEXITSTATUS (res);
+			}
 		}
 
 		cur = g_list_next (cur);
@@ -1496,5 +1511,5 @@ main (gint argc, gchar **argv, gchar **env)
 		g_list_free (children);
 	}
 
-	return 0;
+	return ret;
 }
