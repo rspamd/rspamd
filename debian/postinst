@@ -16,7 +16,7 @@ case "$1" in
                --gecos "rspamd spam filtering system" \
                --force-badname \
                $SERVER_USER
-
+       mkdir -p $SERVER_HOME $SERVER_LOG || true
        chown $SERVER_USER: $SERVER_HOME $SERVER_LOG
     ;;
 
