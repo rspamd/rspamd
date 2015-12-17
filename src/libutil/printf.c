@@ -579,7 +579,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 					b32buf = rspamd_encode_base32 (p, slen);
 
 					if (b32buf) {
-						RSPAMD_PRINTF_APPEND_BUF (b32buf, strlen (b32buf));
+						RSPAMD_PRINTF_APPEND (b32buf, strlen (b32buf));
 						g_free (b32buf);
 					}
 				}
