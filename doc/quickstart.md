@@ -282,3 +282,28 @@ Though Rspamd is free to use for any purpose many of the RBLs used in the defaul
 [UCEProtect](http://www.uceprotect.net/en/index.php?m=6&s=11) - If you're sending 100k queries or more per day you should use the (free) Rsync service.
 
 These are configured in `modules.conf` in the `rbl{}` and `surbl{}` sections. Detailed documentation for the RBL module is available [here](https://rspamd.com/doc/modules/rbl.html).
+
+## Using Rspamd
+
+### Using rspamc
+
+`rspamc` implements a feature-complete client for Rspamd. For detailed documentation refer to `man rspamc`.
+
+Common use-cases for `rspamc` include:
+
+* Scanning messages stored on disk
+* Training bayesian classifier
+* Administering fuzzy storage
+* Acting as a local delivery agent
+
+### Using the WebUI
+
+Rspamd has a built-in WebUI supporting setting metric actions & scores; training bayes & scanning messages- for more information see the [webui documentation](https://rspamd.com/webui).
+
+### MTA integration
+
+Usually you will want to integrate rspamd with your MTA- see the [integration guide](https://rspamd.com/doc/integration.html) for details.
+
+### Custom integration
+
+Rspamd speaks plain HTTP and can be easily integrated with your own apps- refer to the [protocol description](https://rspamd.com/doc/architecture/protocol.html) for details.
