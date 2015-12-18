@@ -5,6 +5,8 @@ After=nss-lookup.target
 [Service]
 ExecStart=/usr/bin/rspamd -c /etc/rspamd/rspamd.conf -f
 User=_rspamd
+RuntimeDirectory=rspamd
+RuntimeDirectoryMode=0755
 
 [Install]
 WantedBy=multi-user.target
