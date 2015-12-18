@@ -301,13 +301,8 @@ preprocess_init_stat_token (gpointer k, gpointer v, gpointer d)
 		if (cl_runtime->clcf->min_tokens > 0 &&
 				(guint32)g_tree_nnodes (cbdata->tok->tokens) < cl_runtime->clcf->min_tokens) {
 			/* Skip this classifier */
-			msg_debug_task ("<%s> contains less tokens than required for %s classifier: "
-					"%ud < %ud", cbdata->task->message_id, cl_runtime->clcf->name,
-					g_tree_nnodes (cbdata->tok->tokens),
-					cl_runtime->clcf->min_tokens);
 			cur = g_list_next (cur);
 			cl_runtime->skipped = TRUE;
-
 			continue;
 		}
 
@@ -748,6 +743,16 @@ rspamd_stat_learn (struct rspamd_task *task,
 					st_run->backend_runtime,
 					cl_run->backend->ctx);
 			curst = g_list_next (curst);
+		}
+
+		if (cl_run->skipped) {
+			msg_info_task (
+					"<%s> contains less tokens than required for %s classifier: "
+							"%ud < %ud",
+					task->message_id,
+					cl_run->clcf->name,
+					g_tree_nnodes (cl_run->tok->tokens),
+					cl_run->clcf->min_tokens);
 		}
 
 		if (cl_run->cl && !cl_run->skipped) {
