@@ -122,7 +122,8 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.args = "",
 		.stmt = NULL,
 		.result = SQLITE_DONE,
-		.ret = ""
+		.flags = 0,
+		.ret = "",
 	},
 	[RSPAMD_STAT_BACKEND_TRANSACTION_START_DEF] = {
 		.idx = RSPAMD_STAT_BACKEND_TRANSACTION_START_DEF,
@@ -130,6 +131,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.args = "",
 		.stmt = NULL,
 		.result = SQLITE_DONE,
+		.flags = 0,
 		.ret = ""
 	},
 	[RSPAMD_STAT_BACKEND_TRANSACTION_START_EXCL] = {
@@ -138,6 +140,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.args = "",
 		.stmt = NULL,
 		.result = SQLITE_DONE,
+		.flags = 0,
 		.ret = ""
 	},
 	[RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT] = {
@@ -146,6 +149,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.args = "",
 		.stmt = NULL,
 		.result = SQLITE_DONE,
+		.flags = 0,
 		.ret = ""
 	},
 	[RSPAMD_STAT_BACKEND_TRANSACTION_ROLLBACK] = {
@@ -154,6 +158,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.args = "",
 		.stmt = NULL,
 		.result = SQLITE_DONE,
+		.flags = 0,
 		.ret = ""
 	},
 	[RSPAMD_STAT_BACKEND_GET_TOKEN] = {
@@ -166,6 +171,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.stmt = NULL,
 		.args = "III",
 		.result = SQLITE_ROW,
+		.flags = 0,
 		.ret = "I"
 	},
 	[RSPAMD_STAT_BACKEND_SET_TOKEN] = {
@@ -175,6 +181,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.stmt = NULL,
 		.args = "IIII",
 		.result = SQLITE_DONE,
+		.flags = 0,
 		.ret = ""
 	},
 	[RSPAMD_STAT_BACKEND_INC_LEARNS] = {
@@ -184,6 +191,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.stmt = NULL,
 		.args = "II",
 		.result = SQLITE_DONE,
+		.flags = 0,
 		.ret = ""
 	},
 	[RSPAMD_STAT_BACKEND_DEC_LEARNS] = {
@@ -193,6 +201,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.stmt = NULL,
 		.args = "II",
 		.result = SQLITE_DONE,
+		.flags = 0,
 		.ret = ""
 	},
 	[RSPAMD_STAT_BACKEND_GET_LEARNS] = {
@@ -201,6 +210,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.stmt = NULL,
 		.args = "",
 		.result = SQLITE_ROW,
+		.flags = 0,
 		.ret = "I"
 	},
 	[RSPAMD_STAT_BACKEND_GET_LANGUAGE] = {
@@ -209,6 +219,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.stmt = NULL,
 		.args = "T",
 		.result = SQLITE_ROW,
+		.flags = 0,
 		.ret = "I"
 	},
 	[RSPAMD_STAT_BACKEND_GET_USER] = {
@@ -217,6 +228,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.stmt = NULL,
 		.args = "T",
 		.result = SQLITE_ROW,
+		.flags = 0,
 		.ret = "I"
 	},
 	[RSPAMD_STAT_BACKEND_INSERT_USER] = {
@@ -225,6 +237,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.stmt = NULL,
 		.args = "T",
 		.result = SQLITE_DONE,
+		.flags = 0,
 		.ret = "L"
 	},
 	[RSPAMD_STAT_BACKEND_INSERT_LANGUAGE] = {
@@ -233,6 +246,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.stmt = NULL,
 		.args = "T",
 		.result = SQLITE_DONE,
+		.flags = 0,
 		.ret = "L"
 	},
 	[RSPAMD_STAT_BACKEND_SAVE_TOKENIZER] = {
@@ -241,6 +255,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.stmt = NULL,
 		.args = "B",
 		.result = SQLITE_DONE,
+		.flags = 0,
 		.ret = ""
 	},
 	[RSPAMD_STAT_BACKEND_LOAD_TOKENIZER] = {
@@ -249,6 +264,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.stmt = NULL,
 		.args = "",
 		.result = SQLITE_ROW,
+		.flags = 0,
 		.ret = "B"
 	},
 	[RSPAMD_STAT_BACKEND_NTOKENS] = {
@@ -257,6 +273,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.stmt = NULL,
 		.args = "",
 		.result = SQLITE_ROW,
+		.flags = 0,
 		.ret = "I"
 	},
 	[RSPAMD_STAT_BACKEND_NLANGUAGES] = {
@@ -265,6 +282,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.stmt = NULL,
 		.args = "",
 		.result = SQLITE_ROW,
+		.flags = 0,
 		.ret = "I"
 	},
 	[RSPAMD_STAT_BACKEND_NUSERS] = {
@@ -273,6 +291,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.stmt = NULL,
 		.args = "",
 		.result = SQLITE_ROW,
+		.flags = 0,
 		.ret = "I"
 	}
 };

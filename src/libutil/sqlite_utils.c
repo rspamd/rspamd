@@ -172,6 +172,7 @@ rspamd_sqlite3_run_prstmt (rspamd_mempool_t *pool, sqlite3 *db, GArray *stmts,
 		}
 
 		if (!(nst->flags & RSPAMD_SQLITE3_STMT_MULTIPLE)) {
+			sqlite3_clear_bindings (stmt);
 			sqlite3_reset (stmt);
 		}
 
@@ -183,6 +184,7 @@ rspamd_sqlite3_run_prstmt (rspamd_mempool_t *pool, sqlite3 *db, GArray *stmts,
 	}
 
 	if (!(nst->flags & RSPAMD_SQLITE3_STMT_MULTIPLE)) {
+		sqlite3_clear_bindings (stmt);
 		sqlite3_reset (stmt);
 	}
 
