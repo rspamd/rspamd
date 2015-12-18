@@ -4,6 +4,7 @@
 #cmakedefine BUILD_STATIC        1
 #cmakedefine CURL_FOUND          1
 #cmakedefine DEBUG_MODE          1
+#cmakedefine GIT_VERSION         1
 #cmakedefine GLIB_COMPAT         1
 #cmakedefine GLIB_HASH_COMPAT		 1
 #cmakedefine GLIB_RE_COMPAT		 1
@@ -179,8 +180,15 @@
 #define RSPAMD_WWWDIR "${WWWDIR}"
 #define RSPAMD_PREFIX "${CMAKE_INSTALL_PREFIX}"
 
-#define RVERSION          "${RSPAMD_VERSION}"
-#define RID               "${RSPAMD_ID}"
+
+#ifdef GIT_VERSION
+# define RVERSION         "${RSPAMD_VERSION}"
+# define RID              "${RSPAMD_ID}"
+#else
+# define RVERSION          "${RSPAMD_VERSION}"
+# define RID "release"
+#endif
+
 #define RSPAMD_MASTER_SITE_URL "${RSPAMD_MASTER_SITE_URL}"
 
 #define MODULES_NUM        ${RSPAMD_MODULES_NUM}
