@@ -166,8 +166,20 @@ return function(args, res)
 
           -- General stats
           for k,v in pairs(pr['data']) do
-            if k ~= 'keys' then
+            if k ~= 'keys' and k ~= 'errors_ips' then
               res_db[k] = add_result(res_db[k], v, k)
+            elseif k == 'errors_ips' then
+              -- Errors ips
+              if not res_db['errors_ips'] then
+                res_db['errors_ips'] = {}
+              end
+              for ip,nerrors in pairs(v) do
+                if not errors_ips[ip] then
+                  res_db['errors_ips'][ip] = nerrors
+                else
+                  res_db['errors_ips'][ip] = nerrors + res_db['errors_ips'][ip]
+                end
+              end
             end
           end
 
@@ -206,7 +218,7 @@ return function(args, res)
     print(string.format('Statistics for storage %s', db))
 
     for k,v in pairs(st) do
-      if k ~= 'keys' then
+      if k ~= 'keys' and k ~= 'errors_ips' then
         print(string.format('%s: %s', k, print_result(v)))
       end
     end
@@ -234,7 +246,14 @@ return function(args, res)
         print('')
       end
     end
-
+    if st['errors_ips'] and not opts['no-ips'] and not opts['short'] then
+      print('')
+      print('Errors IPs statistics:')
+      local sorted_ips = sort_ips(st['errors_ips'], opts)
+      for i, v in ipairs(sorted_ips) do
+        print(string.format('%s: %s', v['ip'], print_result(v['data'])))
+      end
+    end
   end
 
   if not opts['no-ips'] and not opts['short'] then
