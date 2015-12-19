@@ -112,6 +112,7 @@ struct rspamd_fuzzy_storage_ctx {
 	GHashTable *keys;
 	gboolean encrypted_only;
 	struct rspamd_keypair_cache *keypair_cache;
+	rspamd_lru_hash_t *errors_ips;
 	struct rspamd_fuzzy_backend *backend;
 	GQueue *updates_pending;
 };
@@ -677,6 +678,7 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 	rspamd_inet_addr_t *addr;
 	gssize r;
 	guint8 buf[512];
+	guint64 *nerrors;
 
 	/* Got some data */
 	if (what == EV_READ) {
@@ -721,6 +723,20 @@ accept_fuzzy_socket (gint fd, short what, void *arg)
 				/* Discard input */
 				session->ctx->stat.invalid_requests ++;
 				msg_debug ("invalid fuzzy command of size %z received", r);
+
+				nerrors = rspamd_lru_hash_lookup (session->ctx->errors_ips,
+						addr, -1);
+
+				if (nerrors == NULL) {
+					nerrors = g_malloc (sizeof (*nerrors));
+					*nerrors = 1;
+					rspamd_lru_hash_insert (session->ctx->errors_ips,
+							rspamd_inet_address_copy (addr),
+							nerrors, -1, -1);
+				}
+				else {
+					*nerrors = *nerrors + 1;
+				}
 			}
 
 			REF_RELEASE (session);
@@ -889,6 +905,29 @@ rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat
 			"invalid_requests",
 			0,
 			false);
+
+	if (ctx->errors_ips && ip_stat) {
+		ip_hash = rspamd_lru_hash_get_htable (ctx->errors_ips);
+
+		if (ip_hash) {
+			g_hash_table_iter_init (&ip_it, ip_hash);
+			ip_elt = ucl_object_typed_new (UCL_OBJECT);
+
+			while (g_hash_table_iter_next (&ip_it, &k, &v)) {
+				lru_elt = v;
+
+				ucl_object_insert_key (ip_elt,
+						ucl_object_fromint (*(guint64 *)lru_elt->data),
+						rspamd_inet_address_to_string (k), 0, true);
+			}
+
+			ucl_object_insert_key (obj,
+					ip_elt,
+					"errors_ips",
+					0,
+					false);
+		}
+	}
 
 	/* Checked by epoch */
 	elt = ucl_object_typed_new (UCL_ARRAY);
@@ -1093,6 +1132,9 @@ init_fuzzy (struct rspamd_config *cfg)
 	ctx->keypair_cache_size = DEFAULT_KEYPAIR_CACHE_SIZE;
 	ctx->keys = g_hash_table_new_full (fuzzy_kp_hash, fuzzy_kp_equal,
 			NULL, fuzzy_key_dtor);
+	ctx->errors_ips = rspamd_lru_hash_new_full (0, 1024,
+			(GDestroyNotify) rspamd_inet_address_destroy, g_free,
+			rspamd_inet_address_hash, rspamd_inet_address_equal);
 
 	rspamd_rcl_register_worker_option (cfg, type, "hashfile",
 			rspamd_rcl_parse_struct_string, ctx,
@@ -1301,6 +1343,8 @@ start_fuzzy (struct rspamd_worker *worker)
 	if (ctx->keypair_cache) {
 		rspamd_keypair_cache_destroy (ctx->keypair_cache);
 	}
+
+	rspamd_lru_hash_destroy (ctx->errors_ips);
 
 	g_hash_table_unref (ctx->keys);
 
