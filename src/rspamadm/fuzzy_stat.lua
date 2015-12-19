@@ -174,7 +174,7 @@ return function(args, res)
                 res_db['errors_ips'] = {}
               end
               for ip,nerrors in pairs(v) do
-                if not errors_ips[ip] then
+                if not res_db['errors_ips'][ip] then
                   res_db['errors_ips'][ip] = nerrors
                 else
                   res_db['errors_ips'][ip] = nerrors + res_db['errors_ips'][ip]
