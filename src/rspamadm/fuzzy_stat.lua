@@ -249,9 +249,11 @@ return function(args, res)
     if st['errors_ips'] and not opts['no-ips'] and not opts['short'] then
       print('')
       print('Errors IPs statistics:')
-      local sorted_ips = sort_ips(st['errors_ips'], opts)
-      for i, v in ipairs(sorted_ips) do
-        print(string.format('%s: %s', v['ip'], print_result(v['data'])))
+      table.sort(st['errors_ips'], function(a, b)
+        return a > b
+      end)
+      for i, v in pairs(st['errors_ips']) do
+        print(string.format('%s: %s', i, print_result(v)))
       end
     end
   end
