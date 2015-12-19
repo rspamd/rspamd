@@ -255,6 +255,7 @@ return function(args, res)
       for i, v in pairs(st['errors_ips']) do
         print(string.format('%s: %s', i, print_result(v)))
       end
+      print('')
     end
   end
 
