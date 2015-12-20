@@ -55,8 +55,16 @@ OPTION(ENABLE_CLANG_PLUGIN "Enable clang static analysing plugin [default: OFF]"
 OPTION(ENABLE_HYPERSCAN    "Enable hyperscan for fast regexp processing [default: OFF]" OFF)
 
 
-IF (ENABLE_HYPERSCAN MATCHES "ON")
-	ENABLE_LANGUAGE(CXX)
+INCLUDE(FindArch.cmake)
+TARGET_ARCHITECTURE(ARCH)
+
+IF ("${ARCH}" STREQUAL "x86_64")
+	IF (ENABLE_HYPERSCAN MATCHES "ON")
+		ENABLE_LANGUAGE(CXX)
+	ENDIF()
+ELSE()
+	MESSAGE(STATUS "Hyperscan support is possible only for x86_64 architecture")
+	SET(ENABLE_HYPERSCAN "OFF")
 ENDIF()
 # Build optimized code for following CPU (default i386)
 #SET(CPU_TUNE               "i686")
