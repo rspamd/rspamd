@@ -13,7 +13,7 @@ written in `lua` language, where you specify both custom logic and generic regul
 Since rspamd is shipped with internal rules it is a good idea to store your custom rules and configuration in some separate file
 to avoid clash with the pre-built rules that might change from version to version. There are some possibilities for these purposes:
 
-- Local rules in lua should be stored in the file named `${CONFDIR}/rspamd.local.lua` where `${CONFDIR}` is the directory where your configuration files are placed (e.g. `/etc/rspamd` or `/usr/local/etc/rspamd` for some systems)
+- Local rules in lua should be stored in the file named `${CONFDIR}/lua/rspamd.local.lua` where `${CONFDIR}` is the directory where your configuration files are placed (e.g. `/etc/rspamd` or `/usr/local/etc/rspamd` for some systems)
 - Local configuration that **adds** options to rspamd should be placed in `${CONFDIR}/rspamd.conf.local`
 - Local configuration that **overrides** the default settings should be placed in `${CONFDIR}/rspamd.conf.override`
 
@@ -101,7 +101,7 @@ section "name" {
 }
 ~~~
 
-The conjunction of `override` and `local` configs should allow to resolve complicated issues without having like Turing complete language to distinguish cases.
+The conjunction of `override` and `local` configs should allow to resolve complicated issues without having a Turing complete language to distinguish cases.
 
 ## Writing rules
 
@@ -194,11 +194,11 @@ reconf['SYMBOL'] = {
 ## Lua rules
 
 Lua rules are more powerful than regexp ones but they are not optimized so heavily and can cause performance issues if written incorrectly. All lua rules
-accepts a special parameter called `task` which represents a message scanned.
+accept a special parameter called `task` which represents a message scanned.
 
 ### Return values
 
-Each lua rule can return 0 or false that means that rule has not matched or true of the symbol should be inserted.
+Each lua rule can return 0 or false meaning that the rule has not matched or true if the symbol should be inserted.
 In fact, you can return any positive or negative number which would be multiplied by rule's score, e.g. if rule score is 
 `1.2`, then when your function returns `1` then symbol will have score `1.2`, and when your function returns `2.0` then the symbol will have score `2.4`.
 
@@ -222,7 +222,7 @@ rspamd_config.SYMBOL = {
 
 ### Useful task manipulations
 
-There are number of methods in [task](../lua/task.md) objects. For example, you can get any parts in a message:
+There are a number of methods in [task](../lua/task.md) objects. For example, you can get any parts in a message:
 
 ~~~lua
 rspamd_config.HTML_MESSAGE = {
@@ -364,7 +364,7 @@ end
 
 ## Difference between `config` and `rspamd_config`
 
-It might be confusing that there are two variables with the common mean. That comes from
+It might be confusing that there are two variables with a common meaning. That comes from
 the history of rspamd and was used previously for a purpose. However, currently `rspamd_config` represents
 the object that can do many things:
 
@@ -414,7 +414,7 @@ It might be unclear, but there is a strict order of configuration options applic
 
 1. `rspamd.conf` and `rspamd.conf.local` are processed
 2. `rspamd.conf.override` is processed and it **overrides** anything parsed on the previous step
-3. **Lua** rules are loaded and they can override everything from the previous steps, with the important exception of rules scores, that are **NOT** overrided if the according symbol is also defined in some `metric` section
+3. **Lua** rules are loaded and they can override everything from the previous steps, with the important exception of rules scores, that are **NOT** overriden if the according symbol is also defined in some `metric` section
 4. **Dynamic** configuration defined by webui (normally) is loaded and it can override rules scores or action scores from the previous steps
 
 ## Rules check order
