@@ -262,6 +262,12 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 		elt = g_ptr_array_index (rec->resolved, 0);
 	}
 
+	if (rec->ttl < target->ttl) {
+		msg_debug_spf ("reducing ttl from %d to %d after subrecord processing %s",
+				target->ttl, rec->ttl, rec->sender_domain);
+		target->ttl = rec->ttl;
+	}
+
 	if (elt->redirected) {
 		g_assert (elt->elts->len > 0);
 
@@ -389,7 +395,7 @@ spf_check_ptr_host (struct spf_dns_cb *cb, const char *name)
 	}
 
 	/* Now compare from end to start */
-	for (; ;) {
+	for (;;) {
 		if (g_ascii_tolower (*dend) != g_ascii_tolower (*nend)) {
 			msg_debug_spf ("ptr records mismatch: %s and %s", dend, nend);
 			return FALSE;
@@ -475,8 +481,14 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 	addr = cb->addr;
 
 	if (reply->code == RDNS_RC_NOERROR) {
-		/* Add all logic for all DNS states here */
 		LL_FOREACH (reply->entries, elt_data) {
+			/* Adjust ttl if a resolved record has lower ttl than spf record itself */
+			if ((guint)elt_data->ttl < rec->ttl) {
+				msg_debug_spf ("reducing ttl from %d to %d after DNS resolving",
+						rec->ttl, elt_data->ttl);
+				rec->ttl = elt_data->ttl;
+			}
+
 			switch (cb->cur_action) {
 				case SPF_RESOLVE_MX:
 					if (elt_data->type == RDNS_REQUEST_MX) {
@@ -882,6 +894,7 @@ parse_spf_all (struct spf_record *rec, struct spf_addr *addr)
 	/* Here we set all masks to 0 */
 	addr->m.idx = 0;
 	addr->flags |= RSPAMD_SPF_FLAG_ANY;
+	msg_debug_spf ("parsed all elt");
 
 	return TRUE;
 }
@@ -931,6 +944,7 @@ parse_spf_ip4 (struct spf_record *rec, struct spf_addr *addr)
 	}
 
 	addr->flags |= RSPAMD_SPF_FLAG_IPV4;
+	msg_debug_spf ("parsed ipv4 record %s/%d", ipbuf, addr->m.dual.mask_v4);
 
 	return TRUE;
 }
@@ -980,6 +994,7 @@ parse_spf_ip6 (struct spf_record *rec, struct spf_addr *addr)
 	}
 
 	addr->flags |= RSPAMD_SPF_FLAG_IPV6;
+	msg_debug_spf ("parsed ipv6 record %s/%d", ipbuf, addr->m.dual.mask_v6);
 
 	return TRUE;
 }
