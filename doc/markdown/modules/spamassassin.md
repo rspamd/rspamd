@@ -15,6 +15,8 @@ spamassassin {
 	ruleset = "/path/to/file";
 	# Limit search size to 100 kilobytes for all regular expressions
 	match_limit = 100k;
+	# Those regexp atoms will not be passed through hyperscan:
+	pcre_only = ["RULE1", "__RULE2"];
 }
 ~~~
 
@@ -42,9 +44,13 @@ Currently, rspamd supports the following functions:
 * some header functions, such as `exists`
 * some eval functions
 * some plugins:
-    - Mail::SpamAssassin::Plugin::FreeMail
-    - Mail::SpamAssassin::Plugin::HeaderEval
-    - Mail::SpamAssassin::Plugin::ReplaceTags
+    + 'Mail::SpamAssassin::Plugin::FreeMail',
+    + 'Mail::SpamAssassin::Plugin::HeaderEval',
+    + 'Mail::SpamAssassin::Plugin::ReplaceTags',
+    + 'Mail::SpamAssassin::Plugin::RelayEval',
+    + 'Mail::SpamAssassin::Plugin::MIMEEval',
+    + 'Mail::SpamAssassin::Plugin::BodyEval',
+    + 'Mail::SpamAssassin::Plugin::MIMEHeader'
 
 Rspamd does **not** support network plugins, HTML plugins and some other plugins.
 This is planned for the next releases of rspamd.
@@ -57,7 +63,8 @@ of inefficient regular expressions that scan large text bodies. However, the opt
 performed by rspamd can significantly reduce the amount of work required to process
 SA rules. Moreover, if your PCRE library is built with JIT support, rspamd can benefit
 from this by a significant grade. On start, rspamd tells if it can use JIT compilation and
-warns if it cannot.
+warns if it cannot. Some regular expressions might also benefit from `hyperscan` support
+that is available on x86_64 platforms starting from rspamd 1.1.
 
 Spamassassin plugin is written in lua with many functional elements. Hence, to speed
 it up you might want to build rspamd with [luajit](http://luajit.org) that performs
