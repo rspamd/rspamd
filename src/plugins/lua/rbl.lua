@@ -36,6 +36,7 @@ local private_ips = nil
 local rspamd_logger = require 'rspamd_logger'
 local rspamd_ip = require 'rspamd_ip'
 local rspamd_url = require 'rspamd_url'
+local rspamd_util = require 'rspamd_util'
 
 local symbols = {
   dkim_allow_symbol = 'R_DKIM_ALLOW',
@@ -163,8 +164,8 @@ local function rbl_cb (task)
 	    end
 	  end
 	  task:get_resolver():resolve_a({task = task,
-	    name = havegot['helo'] .. '.' .. rbl['rbl'], 
-	    callback = rbl_dns_cb, 
+	    name = havegot['helo'] .. '.' .. rbl['rbl'],
+	    callback = rbl_dns_cb,
 	    option = k})
 	end)()
       end
@@ -185,17 +186,12 @@ local function rbl_cb (task)
           end
           for _, d in ipairs(havegot['dkim']) do
             if rbl['dkim_domainonly'] then
-              local url_from = rspamd_url.create(task:get_mempool(), d)
-              if url_from then
-                d = url_from:get_tld()
-              else
-                return
-              end
+              d = rspamd_util.get_tld(d)
             end
-            
+
             task:get_resolver():resolve_a({task = task,
-              name = d .. '.' .. rbl['rbl'], 
-              callback = rbl_dns_cb, 
+              name = d .. '.' .. rbl['rbl'],
+              callback = rbl_dns_cb,
               option = k})
           end
         end)()
@@ -224,7 +220,7 @@ local function rbl_cb (task)
                 if validate_dns(localpart) and validate_dns(domainpart) then
                   table.insert(cleanList, localpart .. '.' .. domainpart)
                 end
-              end 
+              end
             end
             havegot['emails'] = cleanList
             if not next(havegot['emails']) then
@@ -235,15 +231,15 @@ local function rbl_cb (task)
           if rbl['emails'] == 'domain_only' then
             for domain, _ in pairs(havegot['emails']) do
               task:get_resolver():resolve_a({task = task,
-                name = domain .. '.' .. rbl['rbl'], 
-                callback = rbl_dns_cb, 
+                name = domain .. '.' .. rbl['rbl'],
+                callback = rbl_dns_cb,
                 option = k})
             end
           else
             for _, email in pairs(havegot['emails']) do
               task:get_resolver():resolve_a({task = task,
-                name = email .. '.' .. rbl['rbl'], 
-                callback = rbl_dns_cb, 
+                name = email .. '.' .. rbl['rbl'],
+                callback = rbl_dns_cb,
                 option = k})
             end
           end
@@ -264,7 +260,7 @@ local function rbl_cb (task)
 	  end
 	  task:get_resolver():resolve_a({task = task,
 	    name = havegot['rdns'] .. '.' .. rbl['rbl'],
-	    callback = rbl_dns_cb, 
+	    callback = rbl_dns_cb,
 	    option = k})
 	end)()
       end
@@ -284,8 +280,8 @@ local function rbl_cb (task)
 	  if (havegot['from']:get_version() == 6 and rbl['ipv6']) or
 	    (havegot['from']:get_version() == 4 and rbl['ipv4']) then
 	    task:get_resolver():resolve_a({task = task,
-	      name = ip_to_rbl(havegot['from'], rbl['rbl']), 
-	      callback = rbl_dns_cb, 
+	      name = ip_to_rbl(havegot['from'], rbl['rbl']),
+	      callback = rbl_dns_cb,
 	      option = k})
 	  end
 	end)()
@@ -311,8 +307,8 @@ local function rbl_cb (task)
                 not rbl['exclude_private_ips']) and ((rbl['exclude_local_ips'] and
                 not is_excluded_ip(rh['real_ip'])) or not rbl['exclude_local_ips']) then
                   task:get_resolver():resolve_a({task = task,
-                    name = ip_to_rbl(rh['real_ip'], rbl['rbl']), 
-                    callback = rbl_dns_cb, 
+                    name = ip_to_rbl(rh['real_ip'], rbl['rbl']),
+                    callback = rbl_dns_cb,
                     option = k})
               end
 	    end

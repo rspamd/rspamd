@@ -32,6 +32,7 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_redis = require "rspamd_redis"
 local rspamd_url = require "rspamd_url"
 local upstream_list = require "rspamd_upstream_list"
+local rspamd_util = require "rspamd_util"
 
 --local dumper = require 'pl.pretty'.dump
 
@@ -67,12 +68,7 @@ local function dmarc_callback(task)
   local dmarc_domain
 
   if from and from[1] and from[1]['domain'] and not from[2] then
-    local url_from = rspamd_url.create(task:get_mempool(), from[1]['domain'])
-    if url_from then
-      dmarc_domain = url_from:get_tld()
-    else
-      return
-    end
+    dmarc_domain = rspamd_util.get_tld(from[1]['domain'])
   else
     return
   end
