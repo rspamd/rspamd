@@ -4,6 +4,7 @@
 
 #include "config.h"
 #include "mem_pool.h"
+#include "fstring.h"
 
 struct rspamd_task;
 struct mime_text_part;
@@ -123,5 +124,13 @@ struct rspamd_url *
 rspamd_url_get_next (rspamd_mempool_t *pool,
 		const gchar *start, gchar const **pos, gint *statep);
 
+/**
+ * Find TLD for a specified host string
+ * @param in input host
+ * @param inlen length of input
+ * @param out output rspamd_ftok_t with tld position
+ * @return TRUE if tld has been found
+ */
+gboolean rspamd_url_find_tld (const gchar *in, gsize inlen, rspamd_ftok_t *out);
 
 #endif

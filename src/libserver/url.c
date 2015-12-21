@@ -1502,6 +1502,87 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	return URI_ERRNO_OK;
 }
 
+struct tld_trie_cbdata {
+	const gchar *begin;
+	gsize len;
+	rspamd_ftok_t *out;
+};
+
+static gint
+rspamd_tld_trie_find_callback (int strnum, int textpos, void *context)
+{
+	struct url_matcher *matcher;
+	const gchar *start, *pos, *p;
+	struct tld_trie_cbdata *cbdata = context;
+	ac_trie_pat_t *pat;
+	gint ndots = 1;
+
+	matcher = &g_array_index (url_scanner->matchers, struct url_matcher,
+			strnum);
+	pat = &g_array_index (url_scanner->patterns, ac_trie_pat_t, strnum);
+
+	if (matcher->flags & URL_FLAG_STAR_MATCH) {
+		/* Skip one more tld component */
+		ndots = 2;
+	}
+
+	pos = cbdata->begin + textpos - pat->len;
+	p = pos - 1;
+	start = cbdata->begin;
+
+	if (*pos != '.' || textpos != (gint)cbdata->len) {
+		/* Something weird has been found */
+		if (textpos == (gint)cbdata->len - 1) {
+			pos = cbdata->begin + textpos;
+		}
+		else {
+			/* Search more */
+			return 0;
+		}
+	}
+
+	/* Now we need to find top level domain */
+	pos = start;
+
+	while (p >= start && ndots > 0) {
+		if (*p == '.') {
+			ndots--;
+			pos = p + 1;
+		}
+
+		p--;
+	}
+
+	if (ndots == 0 || p == start - 1) {
+		cbdata->out->begin = pos;
+		cbdata->out->len = cbdata->begin + cbdata->len - pos;
+	}
+
+	return 1;
+}
+
+gboolean
+rspamd_url_find_tld (const gchar *in, gsize inlen, rspamd_ftok_t *out)
+{
+	struct tld_trie_cbdata cbdata;
+	gint state = 0;
+
+	g_assert (in != NULL);
+	g_assert (out != NULL);
+	g_assert (url_scanner != NULL);
+
+	cbdata.begin = in;
+	cbdata.len = inlen;
+	cbdata.out = out;
+
+	if (acism_lookup (url_scanner->search_trie, in, inlen,
+			rspamd_tld_trie_find_callback, &cbdata, &state, true) == 0) {
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
 static const gchar url_braces[] = {
 		'(', ')',
 		'{', '}',
