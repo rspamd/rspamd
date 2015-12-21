@@ -27,6 +27,7 @@
 #include "html.h"
 #include "cfg_rcl.h"
 #include "tokenizers/tokenizers.h"
+#include "libserver/url.h"
 #include <math.h>
 
 /***
@@ -142,6 +143,15 @@ LUA_FUNCTION_DEF (util, is_uppercase);
  */
 LUA_FUNCTION_DEF (util, humanize_number);
 
+/**
+ * @function util.get_tld(host)
+ * Returns tld for the specified host
+ *
+ * @param {string} host hostname
+ * @return {string} tld part of hostname or the full hostname
+ */
+LUA_FUNCTION_DEF (util, get_tld);
+
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
 	LUA_INTERFACE_DEF (util, load_rspamd_config),
@@ -157,6 +167,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, fold_header),
 	LUA_INTERFACE_DEF (util, is_uppercase),
 	LUA_INTERFACE_DEF (util, humanize_number),
+	LUA_INTERFACE_DEF (util, get_tld),
 	{NULL, NULL}
 };
 
@@ -697,6 +708,30 @@ lua_util_humanize_number (lua_State *L)
 
 	rspamd_snprintf (numbuf, sizeof (numbuf), "%hL", (gint64)number);
 	lua_pushstring (L, numbuf);
+
+	return 1;
+}
+
+static gint
+lua_util_get_tld (lua_State *L)
+{
+	const gchar *host;
+	gsize hostlen;
+	rspamd_ftok_t tld;
+
+	host = luaL_checklstring (L, 1, &hostlen);
+
+	if (host) {
+		if (!rspamd_url_find_tld (host, hostlen, &tld)) {
+			lua_pushlstring (L, host, hostlen);
+		}
+		else {
+			lua_pushlstring (L, tld.begin, tld.len);
+		}
+	}
+	else {
+		lua_pushnil (L);
+	}
 
 	return 1;
 }
