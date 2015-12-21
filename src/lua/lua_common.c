@@ -247,6 +247,7 @@ rspamd_lua_init ()
 	luaopen_util (L);
 	luaopen_tcp (L);
 	luaopen_html (L);
+	luaopen_fann (L);
 
 	rspamd_lua_add_preload (L, "ucl", luaopen_ucl);
 
@@ -943,4 +944,22 @@ rspamd_lua_traceback (lua_State *L)
 	lua_pushlightuserdata (L, tb);
 
 	return 1;
+}
+
+guint
+rspamd_lua_table_size (lua_State *L, gint tbl_pos)
+{
+	guint tbl_size = 0;
+
+	if (!lua_istable (L, tbl_pos)) {
+		return 0;
+	}
+
+#if LUA_VERSION_NUM >= 502
+	tbl_size = lua_rawlen (L, tbl_pos);
+#else
+	tbl_size = lua_objlen (L, tbl_pos);
+#endif
+
+	return tbl_size;
 }

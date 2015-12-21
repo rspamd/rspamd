@@ -90,7 +90,7 @@ SET(PLUGINSSRC	plugins/surbl.c
 				plugins/fuzzy_check.c
 				plugins/spf.c
 				plugins/dkim_check.c
-				libserver/rspamd_control.c)
+				libserver/rspamd_control.c lua/lua_fann.c)
 
 SET(MODULES_LIST surbl regexp chartable fuzzy_check spf dkim)
 SET(WORKERS_LIST normal controller smtp_proxy fuzzy lua http_proxy)

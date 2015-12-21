@@ -222,6 +222,7 @@ void luaopen_text (lua_State *L);
 void luaopen_util (lua_State * L);
 void luaopen_tcp (lua_State * L);
 void luaopen_html (lua_State * L);
+void luaopen_fann (lua_State *L);
 
 gint rspamd_lua_call_filter (const gchar *function, struct rspamd_task *task);
 gint rspamd_lua_call_chain_filter (const gchar *function,
@@ -289,5 +290,10 @@ gboolean rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 
 
 gint rspamd_lua_traceback (lua_State *L);
+
+/**
+ * Returns size of table at position `tbl_pos`
+ */
+guint rspamd_lua_table_size (lua_State *L, gint tbl_pos);
 #endif /* WITH_LUA */
 #endif /* RSPAMD_LUA_H */
