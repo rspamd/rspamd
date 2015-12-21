@@ -1,3 +1,16 @@
+1.0.11:
+	* Fix spf redirects
+	* Fix domains when parsing mx/ptr/a records in includes/redirects
+	* Fix unfolded base64 encoding
+	* Fix GError use-after-free
+	* Do not rewrite the original url when using redirector
+	* Fix parsing of fragment in urls
+	* Fix processing of HTML tags
+	* Improve empty image rule
+	* Avoid long double type
+	* Fix tokens weights in OSB algorithm
+	* Improve debugging for bayes
+
 1.0.10:
 	* Fix settings application (#416)
 	* Fix another issue with fixed strings
