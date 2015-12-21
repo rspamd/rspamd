@@ -1654,7 +1654,7 @@ static void
 spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 {
 	struct spf_record *rec = arg;
-	struct rdns_reply_entry *elt;
+	struct rdns_reply_entry *elt, *selected = NULL;
 	struct spf_resolved_element *resolved;
 
 	rec->requests_inflight--;
@@ -1666,10 +1666,27 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 			rec->ttl = reply->entries->ttl;
 		}
 
+		/*
+		 * We prefer spf version 1 as other records are mostly likely garbadge
+		 * or incorrect records (e.g. spf2 records)
+		 */
 		LL_FOREACH (reply->entries, elt) {
-			if (start_spf_parse (rec, resolved, elt->content.txt.data)) {
+			if (strncmp (elt->content.txt.data, "v=spf1", sizeof ("v=spf1") - 1)
+						== 0) {
+				selected = elt;
 				break;
 			}
+		}
+
+		if (!selected) {
+			LL_FOREACH (reply->entries, elt) {
+				if (start_spf_parse (rec, resolved, elt->content.txt.data)) {
+					break;
+				}
+			}
+		}
+		else {
+			start_spf_parse (rec, resolved, elt->content.txt.data);
 		}
 	}
 
