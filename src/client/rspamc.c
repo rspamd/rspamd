@@ -53,7 +53,7 @@ static gchar **http_headers = NULL;
 static gint weight = 0;
 static gint flag = 0;
 static gint max_requests = 8;
-static gdouble timeout = 5.0;
+static gdouble timeout = 10.0;
 static gboolean pass_all;
 static gboolean tty = FALSE;
 static gboolean verbose = FALSE;
