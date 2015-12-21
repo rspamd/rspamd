@@ -53,7 +53,7 @@ OPTION(WANT_SYSTEMD_UNITS  "Install systemd unit files on Linux [default: OFF]" 
 OPTION(ENABLE_SNOWBALL     "Enable snowball stemmer [default: ON]"              ON)
 OPTION(ENABLE_CLANG_PLUGIN "Enable clang static analysing plugin [default: OFF]" OFF)
 OPTION(ENABLE_HYPERSCAN    "Enable hyperscan for fast regexp processing [default: OFF]" OFF)
-
+OPTION(ENABLE_FANN         "Enable fann for neural network plugin [default: OFF]" OFF)
 
 INCLUDE(FindArch.cmake)
 TARGET_ARCHITECTURE(ARCH)
@@ -644,6 +644,12 @@ IF(ENABLE_HYPERSCAN MATCHES "ON")
 			ROOT ${HYPERSCAN_ROOT_DIR} MODULES hs)
 	SET(WITH_HYPERSCAN 1)
 ENDIF()
+IF (ENABLE_FANN MATCHES "ON")
+	ProcessPackage(FANN LIBRARY fann INCLUDE fann.h INCLUDE_SUFFIXES
+			include/fann
+			ROOT ${FANN_ROOT_DIR} MODULES fann)
+	SET(WITH_FANN 1)
+ENDIF ()
 
 #Check for openssl (required for dkim)
 IF(WITH_OPENSSL)
