@@ -896,6 +896,7 @@ rspamd_sqlite3_finalize_learn (struct rspamd_task *task, gpointer runtime,
 {
 	struct rspamd_stat_sqlite3_rt *rt = runtime;
 	struct rspamd_stat_sqlite3_db *bk;
+	gint rc, wal_frames, wal_checkpointed, mode;
 
 	g_assert (rt != NULL);
 	bk = rt->db;
@@ -906,7 +907,24 @@ rspamd_sqlite3_finalize_learn (struct rspamd_task *task, gpointer runtime,
 		bk->in_transaction = FALSE;
 	}
 
-	return;
+#ifdef SQLITE_OPEN_WAL
+#ifdef SQLITE_CHECKPOINT_TRUNCATE
+	mode = SQLITE_CHECKPOINT_TRUNCATE;
+#elif defined(SQLITE_CHECKPOINT_RESTART)
+	mode = SQLITE_CHECKPOINT_RESTART;
+#elif defined(SQLITE_CHECKPOINT_FULL)
+	mode = SQLITE_CHECKPOINT_FULL;
+#endif
+	/* Perform wal checkpoint (might be long) */
+	if (sqlite3_wal_checkpoint_v2 (bk->sqlite,
+			NULL,
+			mode,
+			&wal_frames,
+			&wal_checkpointed) != SQLITE_OK) {
+		msg_warn_task ("cannot commit checkpoint: %s",
+				sqlite3_errmsg (bk->sqlite));
+	}
+#endif
 }
 
 gulong
