@@ -738,7 +738,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 
 				continue;
 
-			case 'b':
+			case 'B':
 				bv = (gboolean) va_arg (args, double);
 				RSPAMD_PRINTF_APPEND (bv ? "true" : "false", bv ? 4 : 5);
 

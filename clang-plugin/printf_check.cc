@@ -190,7 +190,7 @@ namespace rspamd {
 			case 'D':
 				return llvm::make_unique<PrintfArgChecker> (int32_arg_handler,
 						this->pcontext, this->ci);
-			case 'b':
+			case 'B':
 				return llvm::make_unique<PrintfArgChecker> (gboolean_arg_handler,
 						this->pcontext, this->ci);
 			case 'T':
@@ -372,7 +372,7 @@ namespace rspamd {
 
 			format_specs = {
 					's', 'd', 'l', 'L', 'v', 'V', 'f', 'F', 'g', 'G',
-					'T', 'z', 'D', 'c', 'p', 'P', 'e', 'b'
+					'T', 'z', 'D', 'c', 'p', 'P', 'e', 'B'
 			};
 		};
 
