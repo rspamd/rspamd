@@ -221,31 +221,9 @@ fi
 %config(noreplace) %{rspamd_confdir}/surbl-whitelist.inc
 %config(noreplace) %{rspamd_confdir}/spf_dkim_whitelist.inc
 %config(noreplace) %{rspamd_confdir}/dmarc_whitelist.inc
-%{rspamd_pluginsdir}/lua/forged_recipients.lua
-%{rspamd_pluginsdir}/lua/maillist.lua
-%{rspamd_pluginsdir}/lua/multimap.lua
-%{rspamd_pluginsdir}/lua/once_received.lua
-%{rspamd_pluginsdir}/lua/rbl.lua
-%{rspamd_pluginsdir}/lua/ratelimit.lua
-%{rspamd_pluginsdir}/lua/phishing.lua
-%{rspamd_pluginsdir}/lua/trie.lua
-%{rspamd_pluginsdir}/lua/emails.lua
-%{rspamd_pluginsdir}/lua/ip_score.lua
-%{rspamd_pluginsdir}/lua/settings.lua
-%{rspamd_pluginsdir}/lua/fun.lua
-%{rspamd_pluginsdir}/lua/hfilter.lua
-%{rspamd_pluginsdir}/lua/spamassassin.lua
-%{rspamd_pluginsdir}/lua/dmarc.lua
-%{rspamd_pluginsdir}/lua/whitelist.lua
-%{rspamd_rulesdir}/regexp/drugs.lua
-%{rspamd_rulesdir}/regexp/fraud.lua
-%{rspamd_rulesdir}/regexp/headers.lua
-%{rspamd_rulesdir}/regexp/lotto.lua
-%{rspamd_rulesdir}/rspamd.lua
-%{rspamd_rulesdir}/html.lua
-%{rspamd_rulesdir}/misc.lua
-%{rspamd_rulesdir}/rspamd.classifiers.lua
-%{rspamd_rulesdir}/http_headers.lua
+%{rspamd_pluginsdir}/lua/*.lua
+%{rspamd_rulesdir}/regexp/*.lua
+%{rspamd_rulesdir}/*.lua
 %{rspamd_wwwdir}/*
 %{_libdir}/rspamd/*
 %{_datadir}/rspamd/effective_tld_names.dat
