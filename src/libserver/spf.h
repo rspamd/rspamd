@@ -30,11 +30,12 @@ typedef enum spf_action_e {
 
 #define RSPAMD_SPF_FLAG_IPV6 (1 << 0)
 #define RSPAMD_SPF_FLAG_IPV4 (1 << 1)
-#define RSPAMD_SPF_FLAG_ANY (1 << 2)
-#define RSPAMD_SPF_FLAG_PARSED (1 << 3)
-#define RSPAMD_SPF_FLAG_VALID (1 << 4)
-#define RSPAMD_SPF_FLAG_REFRENCE (1 << 5)
-#define RSPAMD_SPF_FLAG_REDIRECT (1 << 6)
+#define RSPAMD_SPF_FLAG_PROCESSED (1 << 2)
+#define RSPAMD_SPF_FLAG_ANY (1 << 3)
+#define RSPAMD_SPF_FLAG_PARSED (1 << 4)
+#define RSPAMD_SPF_FLAG_VALID (1 << 5)
+#define RSPAMD_SPF_FLAG_REFRENCE (1 << 6)
+#define RSPAMD_SPF_FLAG_REDIRECT (1 << 7)
 
 struct spf_addr {
 	guchar addr6[sizeof (struct in6_addr)];
@@ -49,6 +50,7 @@ struct spf_addr {
 	guint flags;
 	spf_mech_t mech;
 	gchar *spf_string;
+	struct spf_addr *prev, *next;
 };
 
 struct spf_resolved {

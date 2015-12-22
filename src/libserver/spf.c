@@ -177,6 +177,8 @@ rspamd_spf_new_addr (struct spf_record *rec,
 	}
 
 	g_ptr_array_add (resolved->elts, naddr);
+	naddr->prev = naddr;
+	naddr->next = NULL;
 
 	return naddr;
 }
@@ -184,11 +186,13 @@ rspamd_spf_new_addr (struct spf_record *rec,
 static void
 rspamd_spf_free_addr (gpointer a)
 {
-	struct spf_addr *addr = a;
+	struct spf_addr *addr = a, *tmp, *cur;
 
 	if (addr) {
 		g_free (addr->spf_string);
-		g_slice_free1 (sizeof (*addr), addr);
+		DL_FOREACH_SAFE (addr, cur, tmp) {
+			g_slice_free1 (sizeof (*cur), cur);
+		}
 	}
 }
 
@@ -250,7 +254,7 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 		struct spf_addr *addr, struct spf_record *rec, gboolean top)
 {
 	struct spf_resolved_element *elt, *relt;
-	struct spf_addr *cur = NULL, taddr;
+	struct spf_addr *cur = NULL, taddr, *cur_addr;
 	guint i;
 
 	if (addr) {
@@ -314,10 +318,11 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 				continue;
 			}
 
-			memcpy (&taddr, cur, sizeof (taddr));
-			/* Steal element */
-			cur->spf_string = NULL;
-			g_array_append_val (target->elts, taddr);
+			DL_FOREACH (cur, cur_addr) {
+				memcpy (&taddr, cur_addr, sizeof (taddr));
+				taddr.spf_string = g_strdup (cur_addr->spf_string);
+				g_array_append_val (target->elts, taddr);
+			}
 		}
 	}
 }
@@ -420,20 +425,52 @@ spf_check_ptr_host (struct spf_dns_cb *cb, const char *name)
 
 static void
 spf_record_process_addr (struct spf_record *rec, struct spf_addr *addr, struct
-		rdns_reply_entry
-		*reply)
+		rdns_reply_entry *reply)
 {
-	if (reply->type == RDNS_REQUEST_AAAA) {
-		memcpy (addr->addr6, &reply->content.aaa.addr, sizeof (addr->addr6));
-		addr->flags |= RSPAMD_SPF_FLAG_IPV6;
-	}
-	else if (reply->type == RDNS_REQUEST_A) {
-		memcpy (addr->addr4, &reply->content.a.addr, sizeof (addr->addr4));
-		addr->flags |= RSPAMD_SPF_FLAG_IPV4;
+	struct spf_addr *naddr;
+
+	if (!addr->flags & RSPAMD_SPF_FLAG_PROCESSED) {
+		/* That's the first address */
+		if (reply->type == RDNS_REQUEST_AAAA) {
+			memcpy (addr->addr6,
+					&reply->content.aaa.addr,
+					sizeof (addr->addr6));
+			addr->flags |= RSPAMD_SPF_FLAG_IPV6;
+		}
+		else if (reply->type == RDNS_REQUEST_A) {
+			memcpy (addr->addr4, &reply->content.a.addr, sizeof (addr->addr4));
+			addr->flags |= RSPAMD_SPF_FLAG_IPV4;
+		}
+		else {
+			msg_err_spf (
+					"internal error, bad DNS reply is treated as address: %s",
+					rdns_strtype (reply->type));
+		}
 	}
 	else {
-		msg_err_spf ("internal error, bad DNS reply is treated as address: %s",
-				rdns_strtype (reply->type));
+		/* We need to create a new address */
+		naddr = g_slice_alloc0 (sizeof (*naddr));
+		memcpy (naddr, addr, sizeof (*naddr));
+		naddr->next = NULL;
+		naddr->prev = NULL;
+
+		if (reply->type == RDNS_REQUEST_AAAA) {
+			memcpy (naddr->addr6,
+					&reply->content.aaa.addr,
+					sizeof (addr->addr6));
+			naddr->flags |= RSPAMD_SPF_FLAG_IPV6;
+		}
+		else if (reply->type == RDNS_REQUEST_A) {
+			memcpy (naddr->addr4, &reply->content.a.addr, sizeof (addr->addr4));
+			naddr->flags |= RSPAMD_SPF_FLAG_IPV4;
+		}
+		else {
+			msg_err_spf (
+					"internal error, bad DNS reply is treated as address: %s",
+					rdns_strtype (reply->type));
+		}
+
+		DL_APPEND (addr, naddr);
 	}
 }
 
