@@ -762,6 +762,8 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 	}
 #endif
 
+	setbit (rt->checked, re_id);
+
 	return rt->results[re_id];
 }
 

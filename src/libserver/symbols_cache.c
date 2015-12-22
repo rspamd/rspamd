@@ -1067,6 +1067,7 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 			rspamd_session_watch_start (task->s, rspamd_symbols_cache_watcher_cb,
 					item);
 
+			msg_debug_task ("execute %s, %d", item->symbol, item->id);
 			item->func (task, item->user_data);
 
 			t2 = rspamd_get_ticks ();

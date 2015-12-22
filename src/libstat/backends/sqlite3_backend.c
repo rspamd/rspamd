@@ -896,7 +896,7 @@ rspamd_sqlite3_finalize_learn (struct rspamd_task *task, gpointer runtime,
 {
 	struct rspamd_stat_sqlite3_rt *rt = runtime;
 	struct rspamd_stat_sqlite3_db *bk;
-	gint rc, wal_frames, wal_checkpointed, mode;
+	gint wal_frames, wal_checkpointed, mode;
 
 	g_assert (rt != NULL);
 	bk = rt->db;
