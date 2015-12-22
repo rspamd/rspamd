@@ -1218,11 +1218,14 @@ local function post_process()
       -- Meta function callback
       local meta_cb = function(task)
         local res = 0
-        if expression then
-          res = expression:process(task)
-        end
-        if res > 0 then
-          task:insert_result(k, res)
+        -- XXX: need to memoize result for better performance
+        if not task:get_symbol(k) then
+          if expression then
+            res = expression:process(task)
+          end
+          if res > 0 then
+            task:insert_result(k, res)
+          end
         end
 
         return res
