@@ -289,16 +289,30 @@ lua_fann_test (lua_State *L)
 	return 0;
 #else
 	struct fann *f = rspamd_lua_check_fann (L, 1);
-	guint ninputs, noutputs, i;
+	guint ninputs, noutputs, i, tbl_idx = 2;
 	float *cur_input, *cur_output;
 
 	if (f != NULL) {
 		/* First check sanity, call for table.getn for that */
-		ninputs = rspamd_lua_table_size (L, 2);
+		if (lua_isnumber (L, 2)) {
+			ninputs = lua_tonumber (L, 2);
+			tbl_idx = 3;
+		}
+		else {
+			ninputs = rspamd_lua_table_size (L, 2);
+
+			if (ninputs == 0) {
+				msg_err ("empty inputs number");
+				lua_pushnil (L);
+
+				return 1;
+			}
+		}
+
 		cur_input = g_malloc (ninputs * sizeof (gint));
 
 		for (i = 0; i < ninputs; i++) {
-			lua_rawgeti (L, 2, i + 1);
+			lua_rawgeti (L, tbl_idx, i + 1);
 			cur_input[i] = lua_tonumber (L, -1);
 			lua_pop (L, 1);
 		}
