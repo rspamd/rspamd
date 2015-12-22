@@ -52,8 +52,10 @@ local function fann_scores_filter(task)
 
   local out = fann:test(nsymbols, fann_input)
   local result = rspamd_util.tanh(2 * (out[1] - 0.5))
+  local symscore = string.format('%.3f', out[1])
+  rspamd_logger.infox(task, 'fann score: %s', symscore)
 
-  task:insert_result(fann_symbol, result, string.format('%.3f', out[1]))
+  task:insert_result(fann_symbol, result, symscore)
 end
 
 if not rspamd_fann.is_enabled() then
