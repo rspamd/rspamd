@@ -636,7 +636,7 @@ set:
 					mime_atom->d.re->type == RSPAMD_RE_RAWHEADER) {
 				rspamd_re_cache_add (cfg->re_cache, mime_atom->d.re->regexp,
 						mime_atom->d.re->type, mime_atom->d.re->header,
-						strlen (mime_atom->d.re->header));
+						strlen (mime_atom->d.re->header) + 1);
 			}
 			else {
 				rspamd_re_cache_add (cfg->re_cache, mime_atom->d.re->regexp,
