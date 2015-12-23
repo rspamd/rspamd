@@ -1585,8 +1585,8 @@ lua_config_register_regexp (lua_State *L)
 	 */
 	if (cfg != NULL) {
 		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
-				"*re=U{regexp};*type=S;header=V;pcre_only=B",
-				&re, &type_str, &header_len, &header_str, &pcre_only)) {
+				"*re=U{regexp};*type=S;header=S;pcre_only=B",
+				&re, &type_str, &header_str, &pcre_only)) {
 			msg_err_config ("cannot get parameters list: %e", err);
 
 			if (err) {
@@ -1608,8 +1608,13 @@ lua_config_register_regexp (lua_State *L)
 					rspamd_regexp_set_flags (re->re, old_flags);
 				}
 
+				if (header_str != NULL) {
+					/* Include the last \0 */
+					header_len = strlen (header_str) + 1;
+				}
+
 				rspamd_re_cache_add (cfg->re_cache, re->re, type,
-						(gpointer) header_str, header_len + 1);
+						(gpointer) header_str, header_len);
 			}
 		}
 	}
