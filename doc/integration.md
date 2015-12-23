@@ -132,6 +132,7 @@ acl_check_spam:
   # discard high-scoring mail
   deny  condition = ${if eq{$spam_action}{reject}}
         message = Message discarded as high-probability spam
+  accept
 {% endhighlight %}
 
 ## Using rspamd with sendmail MTA
