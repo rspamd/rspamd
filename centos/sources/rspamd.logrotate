@@ -6,6 +6,6 @@
     compress
     sharedscripts
     postrotate
-        [ ! -f /var/run/rspamd.pid ] || kill -USR1 `cat /var/run/rspamd.pid`
+        [ ! -f /var/run/rspamd/rspamd.pid ] || kill -USR1 `cat /var/run/rspamd/rspamd.pid`
     endscript
 }
