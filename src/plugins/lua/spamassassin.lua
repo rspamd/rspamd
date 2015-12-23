@@ -261,10 +261,13 @@ local function gen_eval_rule(arg)
           local h = task:get_header(arg)
           if h then
             local hdr_freemail = freemail_search(h)
+
             if hdr_freemail > 0 and re then
-              r = rspamd_regexp.create_cached(re)
+              local r = rspamd_regexp.create_cached(re)
               if r then
-                r:match(h)
+                if r:match(h) then
+                  return 1
+                end
               else
                 rspamd_logger.infox(rspamd_config, 'cannot create regexp %1', re)
                 return 0
@@ -768,7 +771,7 @@ local function process_sa_conf(f)
       scores[words[2]] = parse_score(words)
     elseif words[1] == 'freemail_domains' then
       _.each(function(dom)
-        table.insert(freemail_domains, '@' .. dom)
+          table.insert(freemail_domains, '@' .. dom)
         end, _.drop_n(1, words))
     elseif words[1] == 'tflags' then
       process_tflags(cur_rule, words)
@@ -813,12 +816,6 @@ local function add_sole_meta(sym, rule)
     description = rule['description']
   }
   rules[sym] = r
-end
-
-if freemail_domains then
-  freemail_trie = rspamd_trie.create(freemail_domains)
-  rspamd_logger.infox(rspamd_config, 'loaded %1 freemail domains definitions',
-    #freemail_domains)
 end
 
 local function sa_regexp_match(data, re, raw, rule)
@@ -1273,6 +1270,11 @@ local function post_process()
     end,
       rules))
 
+  if freemail_domains then
+    freemail_trie = rspamd_trie.create(freemail_domains)
+    rspamd_logger.infox(rspamd_config, 'loaded %1 freemail domains definitions',
+      #freemail_domains)
+  end
 end
 
 local has_rules = false
