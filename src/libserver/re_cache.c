@@ -343,6 +343,10 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache, struct rspamd_config *cfg)
 				sizeof (fl));
 	}
 
+	rspamd_cryptobox_hash_final (&st_global, hash_out);
+	rspamd_snprintf (cache->hash, sizeof (cache->hash), "%*xs",
+			(gint) rspamd_cryptobox_HASHBYTES, hash_out);
+
 	/* Now finalize all classes */
 	g_hash_table_iter_init (&it, cache->re_classes);
 
@@ -350,6 +354,14 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache, struct rspamd_config *cfg)
 		re_class = v;
 
 		if (re_class->st) {
+			/*
+			 * We finally update all classes with the number of expressions
+			 * in the cache to ensure that if even a single re has been changed
+			 * we won't be broken due to id mismatch
+			 */
+			rspamd_cryptobox_hash_update (re_class->st,
+					(gpointer)&cache->re->len,
+					sizeof (cache->re->len));
 			rspamd_cryptobox_hash_final (re_class->st, hash_out);
 			rspamd_snprintf (re_class->hash, sizeof (re_class->hash), "%*xs",
 					(gint) rspamd_cryptobox_HASHBYTES, hash_out);
@@ -357,10 +369,6 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache, struct rspamd_config *cfg)
 			re_class->st = NULL;
 		}
 	}
-
-	rspamd_cryptobox_hash_final (&st_global, hash_out);
-	rspamd_snprintf (cache->hash, sizeof (cache->hash), "%*xs",
-			(gint) rspamd_cryptobox_HASHBYTES, hash_out);
 
 #ifdef WITH_HYPERSCAN
 	const gchar *platform = "generic";
