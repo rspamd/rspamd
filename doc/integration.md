@@ -120,19 +120,19 @@ acl_check_spam:
   accept hosts = +relay_from_hosts
 
   # do not scan messages from submission port
-  accept condition = ${if eq{587}{$interface_port}}
+  accept condition = ${if eq{$interface_port}{587}}
 
   # skip scanning for authenticated users
   accept authenticated = *
 
   # add spam-score and spam-report header when told by rspamd
   warn  spam       = nobody:true
-        condition  = ${if eq{add header}{$spam_action}}
+        condition  = ${if eq{$spam_action}{add header}}
         add_header = X-Spam-Score: $spam_score ($spam_bar)
         add_header = X-Spam-Report: $spam_report
 
   deny  message    = Message discarded as high-probability spam
-        condition  = ${if eq{reject}{$spam_action}}
+        condition  = ${if eq{$spam_action}{reject}}
 
   accept
 {% endhighlight %}
