@@ -1109,7 +1109,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 					&cache->plt,
 					&test_db,
 					&hs_errors) != HS_SUCCESS) {
-				msg_debug_re_cache ("cannot compile %s to hyperscan, try prefilter match",
+				msg_info_re_cache ("cannot compile %s to hyperscan, try prefilter match",
 						rspamd_regexp_get_pattern (re));
 				hs_free_compile_error (hs_errors);
 
