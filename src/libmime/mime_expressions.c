@@ -634,9 +634,20 @@ set:
 			/* Register new item in the cache */
 			if (mime_atom->d.re->type == RSPAMD_RE_HEADER ||
 					mime_atom->d.re->type == RSPAMD_RE_RAWHEADER) {
-				rspamd_re_cache_add (cfg->re_cache, mime_atom->d.re->regexp,
-						mime_atom->d.re->type, mime_atom->d.re->header,
-						strlen (mime_atom->d.re->header) + 1);
+				if (mime_atom->d.re->header != NULL) {
+					rspamd_re_cache_add (cfg->re_cache, mime_atom->d.re->regexp,
+							mime_atom->d.re->type, mime_atom->d.re->header,
+							strlen (mime_atom->d.re->header) + 1);
+				}
+				else {
+					/* We have header regexp, but no header name is detected */
+					g_set_error (err,
+							rspamd_mime_expr_quark (),
+							200,
+							"no header name in /H regexp: '%s'",
+							mime_atom->str);
+					goto err;
+				}
 			}
 			else {
 				rspamd_re_cache_add (cfg->re_cache, mime_atom->d.re->regexp,
