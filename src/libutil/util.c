@@ -1387,14 +1387,12 @@ rspamd_url_hash (gconstpointer u)
 	const struct rspamd_url *url = u;
 	XXH64_state_t st;
 
-	XXH64_reset (&st, 0xdeadbabe);
+	XXH64_reset (&st, rspamd_hash_seed ());
 
-	if (url->hostlen > 0) {
-		XXH64_update (&st, url->host, url->hostlen);
+	if (url->urllen > 0) {
+		XXH64_update (&st, url->string, url->urllen);
 	}
-	if (url->userlen > 0) {
-		XXH64_update (&st, url->user, url->userlen);
-	}
+
 	XXH64_update (&st, &url->flags, sizeof (url->flags));
 
 	return XXH64_digest (&st);
@@ -1433,11 +1431,11 @@ rspamd_urls_cmp (gconstpointer a, gconstpointer b)
 	const struct rspamd_url *u1 = a, *u2 = b;
 	int r;
 
-	if (u1->hostlen != u2->hostlen || u1->hostlen == 0) {
+	if (u1->urllen != u2->urllen) {
 		return FALSE;
 	}
 	else {
-		r = g_ascii_strncasecmp (u1->host, u2->host, u1->hostlen);
+		r = memcmp (u1->string, u2->string, u1->urllen);
 		if (r == 0 && u1->flags != u2->flags) {
 			/* Always insert phished urls to the tree */
 			return FALSE;
