@@ -1039,13 +1039,22 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 			total += n;
 			close (fd);
 
-			msg_info_re_cache (
-					"skip already valid class %s(%*s) to cache %6s, %d regexps",
-					rspamd_re_cache_type_to_string (re_class->type),
-					(gint) re_class->type_len - 1,
-					re_class->type_data,
-					re_class->hash,
-					n);
+			if (re_class->type_len > 0) {
+				msg_info_re_cache (
+						"skip already valid class %s(%*s) to cache %6s, %d regexps",
+						rspamd_re_cache_type_to_string (re_class->type),
+						(gint) re_class->type_len - 1,
+						re_class->type_data,
+						re_class->hash,
+						n);
+			}
+			else {
+				msg_info_re_cache (
+						"skip already valid class %s to cache %6s, %d regexps",
+						rspamd_re_cache_type_to_string (re_class->type),
+						re_class->hash,
+						n);
+			}
 
 			continue;
 		}
@@ -1206,11 +1215,22 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 				return -1;
 			}
 
-			msg_info_re_cache ("compiled class %s(%*s) to cache %6s, %d regexps",
-					rspamd_re_cache_type_to_string (re_class->type),
-					(gint)re_class->type_len - 1,
-					re_class->type_data,
-					re_class->hash, n);
+			if (re_class->type_len > 0) {
+				msg_info_re_cache (
+						"compiled class %s(%*s) to cache %6s, %d regexps",
+						rspamd_re_cache_type_to_string (re_class->type),
+						(gint) re_class->type_len - 1,
+						re_class->type_data,
+						re_class->hash,
+						n);
+			}
+			else {
+				msg_info_re_cache (
+						"compiled class %s to cache %6s, %d regexps",
+						rspamd_re_cache_type_to_string (re_class->type),
+						re_class->hash,
+						n);
+			}
 
 			total += n;
 
