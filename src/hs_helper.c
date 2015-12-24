@@ -90,7 +90,7 @@ init_hs_helper (struct rspamd_config *cfg)
  * Clean
  */
 static gboolean
-rspamd_hs_helper_cleanup_dir (struct hs_helper_ctx *ctx)
+rspamd_hs_helper_cleanup_dir (struct hs_helper_ctx *ctx, gboolean forced)
 {
 	struct stat st;
 	glob_t globbuf;
@@ -113,7 +113,8 @@ rspamd_hs_helper_cleanup_dir (struct hs_helper_ctx *ctx)
 
 	if ((rc = glob (pattern, GLOB_DOOFFS, NULL, &globbuf)) == 0) {
 		for (i = 0; i < globbuf.gl_pathc; i++) {
-			if (!rspamd_re_cache_is_valid_hyperscan_file (ctx->cfg->re_cache,
+			if (forced ||
+					!rspamd_re_cache_is_valid_hyperscan_file (ctx->cfg->re_cache,
 						globbuf.gl_pathv[i], TRUE)) {
 				if (unlink (globbuf.gl_pathv[i]) == -1) {
 					msg_err ("cannot unlink %s: %s", globbuf.gl_pathv[i],
@@ -135,13 +136,14 @@ rspamd_hs_helper_cleanup_dir (struct hs_helper_ctx *ctx)
 }
 
 static gboolean
-rspamd_rs_compile (struct hs_helper_ctx *ctx, struct rspamd_worker *worker)
+rspamd_rs_compile (struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
+		gboolean forced)
 {
 	GError *err = NULL;
 	static struct rspamd_srv_command srv_cmd;
 	gint ncompiled;
 
-	if (!rspamd_hs_helper_cleanup_dir (ctx)) {
+	if (!rspamd_hs_helper_cleanup_dir (ctx, forced)) {
 		msg_warn ("cannot cleanup cache dir '%s'", ctx->hs_dir);
 	}
 
@@ -177,13 +179,15 @@ rspamd_hs_helper_reload (struct rspamd_main *rspamd_main,
 	msg_info ("recompiling hyperscan expressions after receiving reload command");
 	memset (&rep, 0, sizeof (rep));
 	rep.type = RSPAMD_CONTROL_RECOMPILE;
+	rep.reply.recompile.status = 0;
 
-	rep.reply.recompile.status = rspamd_rs_compile (ctx, worker);
-
+	/* We write reply before actual recompilation as it takes a lot of time */
 	if (write (fd, &rep, sizeof (rep)) != sizeof (rep)) {
 		msg_err ("cannot write reply to the control socket: %s",
 				strerror (errno));
 	}
+
+	rspamd_rs_compile (ctx, worker, TRUE);
 
 	return TRUE;
 }
@@ -197,7 +201,7 @@ start_hs_helper (struct rspamd_worker *worker)
 			"hs_helper",
 			NULL);
 
-	if (!rspamd_rs_compile (ctx, worker)) {
+	if (!rspamd_rs_compile (ctx, worker, FALSE)) {
 		/* Tell main not to respawn more workers */
 		exit (EXIT_SUCCESS);
 	}
