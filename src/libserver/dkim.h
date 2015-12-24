@@ -28,6 +28,7 @@
 #include "config.h"
 #include "event.h"
 #include "dns.h"
+#include "ref.h"
 #ifdef HAVE_OPENSSL
 #include <openssl/rsa.h>
 #include <openssl/engine.h>
@@ -162,8 +163,8 @@ typedef struct rspamd_dkim_key_s {
 	BIO *key_bio;
 	EVP_PKEY *key_evp;
 #endif
-}
-rspamd_dkim_key_t;
+	ref_entry_t ref;
+} rspamd_dkim_key_t;
 
 struct rspamd_task;
 

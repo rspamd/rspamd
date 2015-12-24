@@ -840,6 +840,7 @@ rspamd_dkim_make_key (rspamd_dkim_context_t *ctx, const gchar *keydata,
 		msg_err_dkim ("DKIM key is too short to be valid");
 		return NULL;
 	}
+
 	key = g_slice_alloc0 (sizeof (rspamd_dkim_key_t));
 	key->keydata = g_slice_alloc (keylen + 1);
 	rspamd_strlcpy (key->keydata, keydata, keylen + 1);
@@ -855,6 +856,8 @@ rspamd_dkim_make_key (rspamd_dkim_context_t *ctx, const gchar *keydata,
 #else
 	g_base64_decode_inplace (key->keydata, &key->decoded_len);
 #endif
+	REF_INIT_RETAIN (key, rspamd_dkim_key_free);
+
 #ifdef HAVE_OPENSSL
 	key->key_bio = BIO_new_mem_buf (key->keydata, key->decoded_len);
 	if (key->key_bio == NULL) {
@@ -862,7 +865,8 @@ rspamd_dkim_make_key (rspamd_dkim_context_t *ctx, const gchar *keydata,
 			DKIM_ERROR,
 			DKIM_SIGERROR_KEYFAIL,
 			"cannot make ssl bio from key");
-		rspamd_dkim_key_free (key);
+		REF_RELEASE (key);
+
 		return NULL;
 	}
 
@@ -872,7 +876,8 @@ rspamd_dkim_make_key (rspamd_dkim_context_t *ctx, const gchar *keydata,
 			DKIM_ERROR,
 			DKIM_SIGERROR_KEYFAIL,
 			"cannot extract pubkey from bio");
-		rspamd_dkim_key_free (key);
+		REF_RELEASE (key);
+
 		return NULL;
 	}
 
@@ -882,10 +887,10 @@ rspamd_dkim_make_key (rspamd_dkim_context_t *ctx, const gchar *keydata,
 			DKIM_ERROR,
 			DKIM_SIGERROR_KEYFAIL,
 			"cannot extract rsa key from evp key");
-		rspamd_dkim_key_free (key);
+		REF_RELEASE (key);
+
 		return NULL;
 	}
-
 #endif
 
 	return key;
@@ -899,11 +904,11 @@ void
 rspamd_dkim_key_free (rspamd_dkim_key_t *key)
 {
 #ifdef HAVE_OPENSSL
-	if (key->key_rsa) {
-		RSA_free (key->key_rsa);
-	}
 	if (key->key_evp) {
 		EVP_PKEY_free (key->key_evp);
+	}
+	if (key->key_rsa) {
+		RSA_free (key->key_rsa);
 	}
 	if (key->key_bio) {
 		BIO_free (key->key_bio);
@@ -914,8 +919,8 @@ rspamd_dkim_key_free (rspamd_dkim_key_t *key)
 }
 
 static rspamd_dkim_key_t *
-rspamd_dkim_parse_key (rspamd_dkim_context_t *ctx, const gchar *txt, gsize
-*keylen, GError **err)
+rspamd_dkim_parse_key (rspamd_dkim_context_t *ctx, const gchar *txt,
+		gsize *keylen, GError **err)
 {
 	const gchar *c, *p, *end;
 	gint state = 0;
@@ -943,6 +948,11 @@ rspamd_dkim_parse_key (rspamd_dkim_context_t *ctx, const gchar *txt, gsize
 			/* State when we got p= and looking for some public key */
 			if ((*p == ';' || p == end) && p > c) {
 				len = p - c;
+
+				if (keylen) {
+					*keylen = len;
+				}
+
 				return rspamd_dkim_make_key (ctx, c, len, err);
 			}
 			else {

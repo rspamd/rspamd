@@ -95,6 +95,14 @@ module_t dkim_module = {
 	NULL
 };
 
+static void
+dkim_module_key_dtor (gpointer k)
+{
+	rspamd_dkim_key_t *key = k;
+
+	REF_RELEASE (key);
+}
+
 gint
 dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
@@ -250,8 +258,8 @@ dkim_module_config (struct rspamd_config *cfg)
 		dkim_module_ctx->dkim_hash = rspamd_lru_hash_new (
 				cache_size,
 				cache_expire,
-				g_free,
-				(GDestroyNotify)rspamd_dkim_key_free);
+				g_free, /* Keys are just C-strings */
+				dkim_module_key_dtor);
 
 		msg_info_config ("init internal dkim module");
 #ifndef HAVE_OPENSSL
@@ -407,11 +415,19 @@ dkim_module_key_handler (rspamd_dkim_key_t *key,
 	struct dkim_check_result *res = ud;
 
 	if (key != NULL) {
-		/* Add new key to the lru cache */
+		/*
+		 * We actually receive key with refcount = 1, so we just assume that
+		 * lru hash owns this object now
+		 */
 		rspamd_lru_hash_insert (dkim_module_ctx->dkim_hash,
 			g_strdup (ctx->dns_key),
 			key, res->task->tv.tv_sec, key->ttl);
+		/* Another ref belongs to the check context */
 		res->key = key;
+		REF_RETAIN (res->key);
+		/* Release key when task is processed */
+		rspamd_mempool_add_destructor (res->task->task_pool,
+				dkim_module_key_dtor, res->key);
 	}
 	else {
 		/* Insert tempfail symbol */
@@ -511,6 +527,10 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 					if (key != NULL) {
 						debug_task ("found key for %s in cache", ctx->dns_key);
 						cur->key = key;
+						REF_RETAIN (cur->key);
+						/* Release key when task is processed */
+						rspamd_mempool_add_destructor (task->task_pool,
+								dkim_module_key_dtor, cur->key);
 					}
 					else {
 						debug_task ("request key for %s from DNS", ctx->dns_key);
