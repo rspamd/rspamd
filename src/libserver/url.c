@@ -24,7 +24,6 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <http_parser.h>
 #include "config.h"
 #include "url.h"
 #include "util.h"
@@ -33,6 +32,7 @@
 #include "message.h"
 #include "http.h"
 #include "acism.h"
+#include "http_parser.h"
 
 typedef struct url_match_s {
 	const gchar *m_begin;
@@ -431,6 +431,32 @@ rspamd_url_init (const gchar *tld_file)
     }                                                                        \
 } while (0)
 
+static gboolean
+is_url_start (gchar c)
+{
+	if (c == '(' ||
+			c == '{' ||
+			c == '<' ||
+			c == '\'') {
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+static gboolean
+is_url_end (gchar c)
+{
+	if (c == ')' ||
+			c == '}' ||
+			c == '>' ||
+			c == '\'') {
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 static gint
 rspamd_mailto_parse (struct http_parser_url *u, const gchar *str, gsize len,
 		gchar const **end, gboolean strict)
@@ -790,7 +816,10 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 					p++;
 				}
 				else {
-					if (*p != '.' && *p != '-' && *p != '_' && *p != '%') {
+					if (is_url_end (t)) {
+						goto set;
+					}
+					else if (*p != '.' && *p != '-' && *p != '_' && *p != '%') {
 						uc = g_utf8_get_char_validated (p, last - p);
 
 						if (uc == (gunichar) -1) {
@@ -868,6 +897,9 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 					c = p + 1;
 					st = parse_part;
 				}
+				else if (is_url_end (t)) {
+					goto set;
+				}
 				else if (!g_ascii_isdigit (t)) {
 					if (strict || !g_ascii_isspace (t)) {
 						goto out;
@@ -896,6 +928,9 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 					c = p + 1;
 					st = parse_query;
 				}
+				else if (is_url_end (t)) {
+					goto set;
+				}
 				else if (is_lwsp (t)) {
 					if (strict) {
 						if (g_ascii_isspace (t)) {
@@ -917,6 +952,9 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 					c = p + 1;
 					st = parse_part;
 				}
+				else if (is_url_end (t)) {
+					goto set;
+				}
 				else if (is_lwsp (t)) {
 					if (strict) {
 						if (g_ascii_isspace (t)) {
@@ -931,7 +969,10 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				p++;
 				break;
 			case parse_part:
-				if (is_lwsp (t)) {
+				if (is_url_end (t)) {
+					goto set;
+				}
+				else if (is_lwsp (t)) {
 					if (strict) {
 						if (g_ascii_isspace (t)) {
 							goto set;
@@ -1592,18 +1633,6 @@ static const gchar url_braces[] = {
 		'\'', '\''
 };
 
-static gboolean
-is_url_start (gchar c)
-{
-	if (c == '(' ||
-		c == '{' ||
-		c == '<' ||
-		c == '\'') {
-		return TRUE;
-	}
-
-	return FALSE;
-}
 
 static gboolean
 url_file_start (struct url_callback_data *cb,
