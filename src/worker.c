@@ -129,7 +129,9 @@ rspamd_task_timeout (gint fd, short what, gpointer ud)
 	if (!(task->processed_stages & RSPAMD_TASK_STAGE_FILTERS)) {
 		msg_info_task ("processing of task timed out, forced processing");
 		task->processed_stages |= RSPAMD_TASK_STAGE_FILTERS;
+		rspamd_session_cleanup (task->s);
 		rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL);
+		rspamd_session_pending (task->s);
 	}
 }
 

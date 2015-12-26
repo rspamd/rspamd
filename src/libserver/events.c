@@ -227,15 +227,26 @@ rspamd_session_destroy (struct rspamd_async_session *session)
 	}
 
 	session->flags |= RSPAMD_SESSION_FLAG_DESTROYING;
-	g_hash_table_foreach_remove (session->events,
-		rspamd_session_destroy_callback,
-		session);
+	rspamd_session_cleanup (session);
 
 	if (session->cleanup != NULL) {
 		session->cleanup (session->user_data);
 	}
 
 	return TRUE;
+}
+
+void
+rspamd_session_cleanup (struct rspamd_async_session *session)
+{
+	if (session == NULL) {
+		msg_info_session ("session is NULL");
+		return;
+	}
+
+	g_hash_table_foreach_remove (session->events,
+			rspamd_session_destroy_callback,
+			session);
 }
 
 gboolean

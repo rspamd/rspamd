@@ -76,6 +76,11 @@ void rspamd_session_remove_event (struct rspamd_async_session *session,
 gboolean rspamd_session_destroy (struct rspamd_async_session *session);
 
 /**
+ * Try to remove all events pending
+ */
+void rspamd_session_cleanup (struct rspamd_async_session *session);
+
+/**
  * Check session for events pending and call fin callback if no events are pending
  * @param session session object
  * @return TRUE if session has pending events
