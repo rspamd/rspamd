@@ -365,10 +365,6 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 		}
 	}
 
-	rspamd_mempool_add_destructor (pool,
-		(rspamd_mempool_destruct_t) rspamd_regexp_unref,
-		(void *)result->regexp);
-
 	rspamd_regexp_set_ud (result->regexp, result);
 
 	rspamd_regexp_cache_insert (NULL, line, NULL, result->regexp);
@@ -502,6 +498,7 @@ rspamd_mime_expr_parse (const gchar *line, gsize len,
 	struct rspamd_mime_atom *mime_atom = NULL;
 	const gchar *p, *end;
 	struct rspamd_config *cfg = ud;
+	rspamd_regexp_t *own_re;
 	gchar t;
 	gint type = MIME_ATOM_REGEXP, obraces = 0, ebraces = 0;
 	enum {
@@ -635,9 +632,14 @@ set:
 			if (mime_atom->d.re->type == RSPAMD_RE_HEADER ||
 					mime_atom->d.re->type == RSPAMD_RE_RAWHEADER) {
 				if (mime_atom->d.re->header != NULL) {
-					rspamd_re_cache_add (cfg->re_cache, mime_atom->d.re->regexp,
-							mime_atom->d.re->type, mime_atom->d.re->header,
+					own_re = mime_atom->d.re->regexp;
+					mime_atom->d.re->regexp = rspamd_re_cache_add (cfg->re_cache,
+							mime_atom->d.re->regexp,
+							mime_atom->d.re->type,
+							mime_atom->d.re->header,
 							strlen (mime_atom->d.re->header) + 1);
+					/* Pass ownership to the cache */
+					rspamd_regexp_unref (own_re);
 				}
 				else {
 					/* We have header regexp, but no header name is detected */
@@ -650,8 +652,14 @@ set:
 				}
 			}
 			else {
-				rspamd_re_cache_add (cfg->re_cache, mime_atom->d.re->regexp,
-						mime_atom->d.re->type, NULL, 0);
+				own_re = mime_atom->d.re->regexp;
+				mime_atom->d.re->regexp = rspamd_re_cache_add (cfg->re_cache,
+						mime_atom->d.re->regexp,
+						mime_atom->d.re->type,
+						NULL,
+						0);
+				/* Pass ownership to the cache */
+				rspamd_regexp_unref (own_re);
 			}
 		}
 	}
