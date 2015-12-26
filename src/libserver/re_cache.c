@@ -316,7 +316,6 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache, struct rspamd_config *cfg)
 		re_class = rspamd_regexp_get_class (re);
 		g_assert (re_class != NULL);
 		rspamd_regexp_set_cache_id (re, i);
-		msg_info_re_cache ("HUI: %d -> %s", i, rspamd_regexp_get_pattern (re));
 
 		if (re_class->st == NULL) {
 			re_class->st = g_slice_alloc (sizeof (*re_class->st));
@@ -1143,7 +1142,6 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 			else {
 				hs_ids[i] = rspamd_regexp_get_cache_id (re);
 				hs_pats[i] = rspamd_regexp_get_pattern (re);
-				msg_info_re_cache("HUI: %d -> %s", hs_ids[i], hs_pats[i]);
 				i ++;
 				hs_free_database (test_db);
 			}

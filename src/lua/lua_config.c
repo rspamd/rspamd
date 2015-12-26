@@ -1564,6 +1564,7 @@ lua_config_register_regexp (lua_State *L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	struct rspamd_lua_regexp *re = NULL;
+	rspamd_regexp_t *cache_re;
 	const gchar *type_str = NULL, *header_str = NULL;
 	gsize header_len = 0;
 	GError *err = NULL;
@@ -1613,8 +1614,25 @@ lua_config_register_regexp (lua_State *L)
 					header_len = strlen (header_str) + 1;
 				}
 
-				rspamd_re_cache_add (cfg->re_cache, re->re, type,
+				cache_re = rspamd_re_cache_add (cfg->re_cache, re->re, type,
 						(gpointer) header_str, header_len);
+
+				/*
+				 * XXX: here are dragons!
+				 * Actually, lua regexp contains internal rspamd_regexp_t
+				 * and it owns it.
+				 * However, after this operation we have some OTHER regexp,
+				 * which we really would like to use.
+				 * So we do the following:
+				 * 1) Remove old re and unref it
+				 * 2) Replace the internal re with cached one
+				 * 3) Increase its refcount to share ownership between cache and
+				 *   lua object
+				 */
+				if (cache_re != re->re) {
+					rspamd_regexp_unref (re->re);
+					re->re = rspamd_regexp_ref (cache_re);
+				}
 			}
 		}
 	}
