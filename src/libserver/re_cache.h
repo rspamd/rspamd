@@ -63,7 +63,8 @@ struct rspamd_re_cache *rspamd_re_cache_new (void);
  * @param type_data associated data with the type (e.g. header name)
  * @param datalen associated data length
  */
-void rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
+rspamd_regexp_t *
+		rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
 		enum rspamd_re_type type, gpointer type_data, gsize datalen);
 
 /**

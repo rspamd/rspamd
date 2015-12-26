@@ -191,7 +191,7 @@ rspamd_re_cache_new (void)
 	return cache;
 }
 
-void
+rspamd_regexp_t *
 rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
 		enum rspamd_re_type type, gpointer type_data, gsize datalen)
 {
@@ -222,18 +222,23 @@ rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
 		g_hash_table_insert (cache->re_classes, &re_class->id, re_class);
 	}
 
-	/*
-	 * We set re id based on the global position in the cache
-	 */
-	elt = g_slice_alloc0 (sizeof (*elt));
-	/* One ref for re_class */
-	nre = rspamd_regexp_ref (re);
-	rspamd_regexp_set_cache_id (re, cache->nre ++);
-	/* One ref for cache */
-	elt->re = rspamd_regexp_ref (re);
-	g_ptr_array_add (cache->re, elt);
-	rspamd_regexp_set_class (re, re_class);
-	g_hash_table_insert (re_class->re, rspamd_regexp_get_id (nre), nre);
+	if ((nre = g_hash_table_lookup (re_class->re, rspamd_regexp_get_id (re)))
+			== NULL) {
+		/*
+		 * We set re id based on the global position in the cache
+		 */
+		elt = g_slice_alloc0 (sizeof (*elt));
+		/* One ref for re_class */
+		nre = rspamd_regexp_ref (re);
+		rspamd_regexp_set_cache_id (re, cache->nre++);
+		/* One ref for cache */
+		elt->re = rspamd_regexp_ref (re);
+		g_ptr_array_add (cache->re, elt);
+		rspamd_regexp_set_class (re, re_class);
+		g_hash_table_insert (re_class->re, rspamd_regexp_get_id (nre), nre);
+	}
+
+	return nre;
 }
 
 void
@@ -311,6 +316,7 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache, struct rspamd_config *cfg)
 		re_class = rspamd_regexp_get_class (re);
 		g_assert (re_class != NULL);
 		rspamd_regexp_set_cache_id (re, i);
+		msg_info_re_cache ("HUI: %d -> %s", i, rspamd_regexp_get_pattern (re));
 
 		if (re_class->st == NULL) {
 			re_class->st = g_slice_alloc (sizeof (*re_class->st));
@@ -1090,6 +1096,9 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 
 			if (re_flags & RSPAMD_REGEXP_FLAG_PCRE_ONLY) {
 				/* Do not try to compile bad regexp */
+				msg_info_re_cache (
+						"do not try compile %s to hyperscan as it is PCRE only",
+						rspamd_regexp_get_pattern (re));
 				continue;
 			}
 
@@ -1134,6 +1143,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 			else {
 				hs_ids[i] = rspamd_regexp_get_cache_id (re);
 				hs_pats[i] = rspamd_regexp_get_pattern (re);
+				msg_info_re_cache("HUI: %d -> %s", hs_ids[i], hs_pats[i]);
 				i ++;
 				hs_free_database (test_db);
 			}
