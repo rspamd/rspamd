@@ -1,5 +1,5 @@
 ---
-layout: default
+layout: downloads
 title: Downloads
 ---
 
@@ -121,7 +121,7 @@ Rspamd requires several 3-rd party software to build and run:
 * [cmake](http://www.cmake.org/) - build system used to configure rspamd
 * [sqlite3](http://sqlite.org) - embedded database used to store some data by rspamd
 * [hiredis](https://github.com/redis/hiredis) - client library for [redis](http://redis.io) key-value storage
-* libmagic - common library for detecting file types
+* [libmagic](http://www.darwinsys.com/file/) - common library for detecting file types
 
 You can either install them from sources or (recommended) install using package manager of your system.
 
