@@ -61,6 +61,7 @@ struct rspamd_rcl_section {
 	struct rspamd_rcl_default_handler_data *default_parser; /**< generic parsing fields */
 	rspamd_rcl_section_fin_t fin; /** called at the end of section parsing */
 	gpointer fin_ud;
+	ucl_object_t *doc_ref;       /**< reference to the section's documentation */
 };
 
 struct rspamd_worker_param_key {
@@ -1214,6 +1215,7 @@ rspamd_rcl_add_section (struct rspamd_rcl_section **top,
 	enum ucl_type type, gboolean required, gboolean strict_type)
 {
 	struct rspamd_rcl_section *new;
+	ucl_object_t *parent_doc;
 
 	new = g_slice_alloc0 (sizeof (struct rspamd_rcl_section));
 	new->name = name;
@@ -1221,6 +1223,43 @@ rspamd_rcl_add_section (struct rspamd_rcl_section **top,
 	new->handler = handler;
 	new->type = type;
 	new->strict_type = strict_type;
+
+	if (*top == NULL) {
+		parent_doc = NULL;
+		new->doc_ref = NULL;
+	}
+	else {
+		parent_doc = (*top)->doc_ref;
+		new->doc_ref = new->doc_ref = rspamd_rcl_add_doc_obj (parent_doc,
+				NULL,
+				name,
+				type,
+				NULL,
+				0);
+	}
+
+	HASH_ADD_KEYPTR (hh, *top, new->name, strlen (new->name), new);
+	return new;
+}
+
+struct rspamd_rcl_section *
+rspamd_rcl_add_section_doc (struct rspamd_rcl_section **top,
+		const gchar *name, const gchar *key_attr, rspamd_rcl_handler_t handler,
+		enum ucl_type type, gboolean required, gboolean strict_type,
+		ucl_object_t *doc_target,
+		const gchar *doc_string)
+{
+	struct rspamd_rcl_section *new;
+
+	new = g_slice_alloc0 (sizeof (struct rspamd_rcl_section));
+	new->name = name;
+	new->key_attr = key_attr;
+	new->handler = handler;
+	new->type = type;
+	new->strict_type = strict_type;
+
+	new->doc_ref = rspamd_rcl_add_doc_obj (doc_target, doc_string,
+			name, type, NULL, 0);
 
 	HASH_ADD_KEYPTR (hh, *top, new->name, strlen (new->name), new);
 	return new;
@@ -1241,6 +1280,11 @@ rspamd_rcl_add_default_handler (struct rspamd_rcl_section *section,
 	new->handler = handler;
 	new->pd.offset = offset;
 	new->pd.flags = flags;
+
+	if (section->doc_ref != NULL) {
+		rspamd_rcl_add_doc_obj (section->doc_ref, doc_string, name, UCL_NULL,
+				handler, flags);
+	}
 
 	HASH_ADD_KEYPTR (hh, section->default_parser, new->key, strlen (
 			new->key), new);
@@ -2803,4 +2847,42 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	}
 
 	return TRUE;
+}
+
+ucl_object_t *
+rspamd_rcl_add_doc_obj (ucl_object_t *doc_target,
+		const char *doc_string,
+		const char *doc_name,
+		ucl_type_t type,
+		rspamd_rcl_default_handler_t handler,
+		gint flags)
+{
+	ucl_object_t *doc_obj;
+
+	if (doc_target == NULL || doc_name == NULL) {
+		return NULL;
+	}
+
+	doc_obj = ucl_object_typed_new (UCL_OBJECT);
+
+	/* Insert doc string itself */
+	if (doc_string) {
+		ucl_object_insert_key (doc_obj, ucl_object_fromstring (doc_string),
+				"data", 0, false);
+	}
+	else {
+		ucl_object_insert_key (doc_obj, ucl_object_fromstring ("undocumented"),
+				"data", 0, false);
+	}
+
+	if (type != UCL_NULL) {
+		ucl_object_insert_key (doc_obj,
+				ucl_object_fromstring (ucl_object_type_to_string (type)),
+				"type", 0, false);
+	}
+
+	/* TODO: add type from handler */
+	ucl_object_insert_key (doc_target, doc_obj, doc_name, 0, true);
+
+	return doc_obj;
 }

@@ -200,6 +200,7 @@ rspamd_config_new (void)
 	cfg->cache = rspamd_symbols_cache_new (cfg);
 	cfg->ups_ctx = rspamd_upstreams_library_init ();
 	cfg->re_cache = rspamd_re_cache_new ();
+	cfg->doc_strings = ucl_object_typed_new (UCL_OBJECT);
 
 	REF_INIT_RETAIN (cfg, rspamd_config_free);
 
@@ -210,7 +211,8 @@ void
 rspamd_config_free (struct rspamd_config *cfg)
 {
 	rspamd_map_remove_all (cfg);
-	ucl_obj_unref (cfg->rcl_obj);
+	ucl_object_unref (cfg->rcl_obj);
+	ucl_object_unref (cfg->doc_strings);
 	g_hash_table_remove_all (cfg->metrics);
 	g_hash_table_unref (cfg->metrics);
 	g_hash_table_unref (cfg->c_modules);

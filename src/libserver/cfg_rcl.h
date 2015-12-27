@@ -118,11 +118,20 @@ struct rspamd_rcl_default_handler_data *rspamd_rcl_add_default_handler (
  * @param strict_type turn on strict check for types for this section
  * @return newly created structure
  */
-struct rspamd_rcl_section * rspamd_rcl_add_section (
-	struct rspamd_rcl_section **top,
-	const gchar *name, const gchar *key_attr,
-	rspamd_rcl_handler_t handler,
-	enum ucl_type type, gboolean required, gboolean strict_type);
+struct rspamd_rcl_section *rspamd_rcl_add_section (
+		struct rspamd_rcl_section **top,
+		const gchar *name, const gchar *key_attr,
+		rspamd_rcl_handler_t handler,
+		enum ucl_type type, gboolean required, gboolean strict_type);
+
+struct rspamd_rcl_section *rspamd_rcl_add_section_doc (
+		struct rspamd_rcl_section **top,
+		const gchar *name, const gchar *key_attr,
+		rspamd_rcl_handler_t handler,
+		enum ucl_type type, gboolean required,
+		gboolean strict_type,
+		ucl_object_t *doc_target,
+		const gchar *doc_string);
 
 /**
  * Init common sections known to rspamd
@@ -337,4 +346,16 @@ void rspamd_rcl_register_worker_option (struct rspamd_config *cfg,
  */
 void rspamd_rcl_register_worker_parser (struct rspamd_config *cfg, gint type,
 	gboolean (*func)(ucl_object_t *, gpointer), gpointer ud);
+
+/**
+ * Adds new documentation object to the configuration
+ * @param doc_target target object where to insert documentation (top object is used if this is NULL)
+ * @param doc_object documentation object to insert
+ */
+ucl_object_t* rspamd_rcl_add_doc_obj (ucl_object_t *doc_target,
+		const char *doc_string,
+		const char *doc_name,
+		ucl_type_t type,
+		rspamd_rcl_default_handler_t handler,
+		gint flags);
 #endif /* CFG_RCL_H_ */
