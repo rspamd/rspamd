@@ -84,7 +84,7 @@ For experimental branch replace `apt-stable` with just `apt`:
 
 ### Other Linux distributions
 
-For other distributions you could also check [our project on the openSUSE build service](https://software.opensuse.org/download.html?project=home%3Acebka&package=rspamd). Gentoo users can also use the corresponding `portages` for both rspamd and rmilter.
+For other distributions you could also check [our project on the openSUSE build service](https://software.opensuse.org/download.html?project=home%3Acebka&package=rspamd). Ebuilds for Gentoo Linux users are available in the main Gentoo Portage repository.
 
 ### Debian `official` repos
 
