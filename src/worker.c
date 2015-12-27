@@ -26,9 +26,6 @@
  * Rspamd worker implementation
  */
 
-#include <libserver/rspamd_control.h>
-#include <tclDecls.h>
-#include <curses.h>
 #include "config.h"
 #include "libutil/util.h"
 #include "libutil/map.h"

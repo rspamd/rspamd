@@ -22,8 +22,6 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <glib-unix.h>
-#include <itcl2TclOO.h>
 #include "config.h"
 #include "rspamd.h"
 #include "util.h"

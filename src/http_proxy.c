@@ -22,8 +22,6 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <tclDecls.h>
-#include <curses.h>
 #include "config.h"
 #include "libutil/util.h"
 #include "libutil/map.h"

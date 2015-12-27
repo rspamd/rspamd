@@ -39,10 +39,6 @@
 
 #ifdef HAVE_GLOB_H
 #include <glob.h>
-#include <cursesp.h>
-#include <itclInt.h>
-#include <cursesf.h>
-
 #endif
 
 struct rspamd_rcl_default_handler_data {

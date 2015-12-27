@@ -34,8 +34,6 @@
 #include "libutil/rrd.h"
 #include "unix-std.h"
 #include <math.h>
-#include <tclDecls.h>
-#include <curses.h>
 
 /* 60 seconds for worker's IO */
 #define DEFAULT_WORKER_IO_TIMEOUT 60000

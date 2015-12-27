@@ -22,7 +22,6 @@
  */
 
 
-#include <tclDecls.h>
 #include "config.h"
 #include "util.h"
 #include "rspamd.h"
