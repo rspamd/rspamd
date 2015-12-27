@@ -437,7 +437,7 @@ ucl_copy_value_trash (const ucl_object_t *obj)
 		}
 		deconst->flags |= UCL_OBJECT_ALLOCATED_VALUE;
 	}
-	
+
 	return obj->trash_stack[UCL_TRASH_VALUE];
 }
 
@@ -628,7 +628,7 @@ ucl_curl_write_callback (void* contents, size_t size, size_t nmemb, void* ud)
  * @param buflen target length
  * @return
  */
-static bool
+bool
 ucl_fetch_url (const unsigned char *url, unsigned char **buf, size_t *buflen,
 		UT_string **err, bool must_exist)
 {
@@ -690,8 +690,8 @@ ucl_fetch_url (const unsigned char *url, unsigned char **buf, size_t *buflen,
 		return false;
 	}
 	curl_easy_setopt (curl, CURLOPT_WRITEFUNCTION, ucl_curl_write_callback);
-	cbdata.buf = *buf;
-	cbdata.buflen = *buflen;
+	cbdata.buf = NULL;
+	cbdata.buflen = 0;
 	curl_easy_setopt (curl, CURLOPT_WRITEDATA, &cbdata);
 
 	if ((r = curl_easy_perform (curl)) != CURLE_OK) {
@@ -723,7 +723,7 @@ ucl_fetch_url (const unsigned char *url, unsigned char **buf, size_t *buflen,
  * @param buflen target length
  * @return
  */
-static bool
+bool
 ucl_fetch_file (const unsigned char *filename, unsigned char **buf, size_t *buflen,
 		UT_string **err, bool must_exist)
 {
@@ -739,7 +739,7 @@ ucl_fetch_file (const unsigned char *filename, unsigned char **buf, size_t *bufl
 	}
 	if (st.st_size == 0) {
 		/* Do not map empty files */
-		*buf = "";
+		*buf = NULL;
 		*buflen = 0;
 	}
 	else {
@@ -848,7 +848,7 @@ ucl_include_url (const unsigned char *data, size_t len,
 	snprintf (urlbuf, sizeof (urlbuf), "%.*s", (int)len, data);
 
 	if (!ucl_fetch_url (urlbuf, &buf, &buflen, &parser->err, params->must_exist)) {
-		return (!params->must_exist || false);
+		return !params->must_exist;
 	}
 
 	if (params->check_signature) {
@@ -1232,7 +1232,7 @@ ucl_include_file (const unsigned char *data, size_t len,
 	   treat allow_glob/need_glob as a NOOP and just return */
 	return ucl_include_file_single (data, len, parser, params);
 #endif
-	
+
 	return true;
 }
 
@@ -1252,7 +1252,7 @@ ucl_include_common (const unsigned char *data, size_t len,
 		bool default_try,
 		bool default_sign)
 {
-	bool allow_url, search;
+	bool allow_url = false, search = false;
 	const char *duplicate;
 	const ucl_object_t *param;
 	ucl_object_iter_t it = NULL, ip = NULL;
@@ -1270,8 +1270,6 @@ ucl_include_common (const unsigned char *data, size_t len,
 	params.parse_type = UCL_PARSE_UCL;
 	params.strat = UCL_DUPLICATE_APPEND;
 	params.must_exist = !default_try;
-
-	search = false;
 
 	/* Process arguments */
 	if (args != NULL && args->type == UCL_OBJECT) {
@@ -3254,4 +3252,74 @@ ucl_object_set_priority (ucl_object_t *obj,
 				PRIOBITS)) - 1);
 		obj->flags = priority;
 	}
+}
+
+bool
+ucl_object_string_to_type (const char *input, ucl_type_t *res)
+{
+	if (strcasecmp (input, "object") == 0) {
+		*res = UCL_OBJECT;
+	}
+	else if (strcasecmp (input, "array") == 0) {
+		*res = UCL_ARRAY;
+	}
+	else if (strcasecmp (input, "integer") == 0) {
+		*res = UCL_INT;
+	}
+	else if (strcasecmp (input, "number") == 0) {
+		*res = UCL_FLOAT;
+	}
+	else if (strcasecmp (input, "string") == 0) {
+		*res = UCL_STRING;
+	}
+	else if (strcasecmp (input, "boolean") == 0) {
+		*res = UCL_BOOLEAN;
+	}
+	else if (strcasecmp (input, "null") == 0) {
+		*res = UCL_NULL;
+	}
+	else if (strcasecmp (input, "userdata") == 0) {
+		*res = UCL_USERDATA;
+	}
+	else {
+		return false;
+	}
+
+	return true;
+}
+
+const char *
+ucl_object_type_to_string (ucl_type_t type)
+{
+	const char *res = "unknown";
+
+	switch (type) {
+	case UCL_OBJECT:
+		res = "object";
+		break;
+	case UCL_ARRAY:
+		res = "array";
+		break;
+	case UCL_INT:
+		res = "integer";
+		break;
+	case UCL_FLOAT:
+	case UCL_TIME:
+		res = "number";
+		break;
+	case UCL_STRING:
+		res = "string";
+		break;
+	case UCL_BOOLEAN:
+		res = "boolean";
+		break;
+	case UCL_USERDATA:
+		res = "userdata";
+		break;
+	case UCL_NULL:
+		res = "null";
+		break;
+	}
+
+	return res;
 }
