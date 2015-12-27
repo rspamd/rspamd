@@ -34,6 +34,8 @@
 #include "libutil/rrd.h"
 #include "unix-std.h"
 #include <math.h>
+#include <tclDecls.h>
+#include <curses.h>
 
 /* 60 seconds for worker's IO */
 #define DEFAULT_WORKER_IO_TIMEOUT 60000
@@ -2263,47 +2265,99 @@ init_controller_worker (struct rspamd_config *cfg)
 
 	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;
 
-	rspamd_rcl_register_worker_option (cfg, type, "password",
-		rspamd_rcl_parse_struct_string, ctx,
-		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, password), 0);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"password",
+			rspamd_rcl_parse_struct_string,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, password),
+			0,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "enable_password",
-		rspamd_rcl_parse_struct_string, ctx,
-		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, enable_password), 0);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"enable_password",
+			rspamd_rcl_parse_struct_string,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
+					enable_password),
+			0,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "ssl",
-		rspamd_rcl_parse_struct_boolean, ctx,
-		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, use_ssl), 0);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"ssl",
+			rspamd_rcl_parse_struct_boolean,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, use_ssl),
+			0,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "ssl_cert",
-		rspamd_rcl_parse_struct_string, ctx,
-		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, ssl_cert), 0);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"ssl_cert",
+			rspamd_rcl_parse_struct_string,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, ssl_cert),
+			0,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "ssl_key",
-		rspamd_rcl_parse_struct_string, ctx,
-		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, ssl_key), 0);
-	rspamd_rcl_register_worker_option (cfg, type, "timeout",
-		rspamd_rcl_parse_struct_time, ctx,
-		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
-		timeout), RSPAMD_CL_FLAG_TIME_INTEGER);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"ssl_key",
+			rspamd_rcl_parse_struct_string,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, ssl_key),
+			0,
+			NULL);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"timeout",
+			rspamd_rcl_parse_struct_time,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
+					timeout),
+			RSPAMD_CL_FLAG_TIME_INTEGER,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "secure_ip",
-		rspamd_rcl_parse_struct_string_list, ctx,
-		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, secure_ip), 0);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"secure_ip",
+			rspamd_rcl_parse_struct_string_list,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, secure_ip),
+			0,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "static_dir",
-		rspamd_rcl_parse_struct_string, ctx,
-		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
-		static_files_dir), 0);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"static_dir",
+			rspamd_rcl_parse_struct_string,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
+					static_files_dir),
+			0,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "keypair",
-		rspamd_rcl_parse_struct_keypair, ctx,
-		G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
-		key), 0);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"keypair",
+			rspamd_rcl_parse_struct_keypair,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
+					key),
+			0,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "stats_path",
-			rspamd_rcl_parse_struct_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, saved_stats_path), 0);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"stats_path",
+			rspamd_rcl_parse_struct_string,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
+					saved_stats_path),
+			0,
+			NULL);
 
 	return ctx;
 }

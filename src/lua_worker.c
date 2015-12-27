@@ -22,6 +22,7 @@
  */
 
 
+#include <tclDecls.h>
 #include "config.h"
 #include "util.h"
 #include "rspamd.h"
@@ -325,9 +326,14 @@ init_lua_worker (struct rspamd_config *cfg)
 			(GDestroyNotify)g_list_free);
 
 
-	rspamd_rcl_register_worker_option (cfg, type, "file",
-		rspamd_rcl_parse_struct_string, ctx,
-		G_STRUCT_OFFSET (struct rspamd_lua_worker_ctx, file), 0);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"file",
+			rspamd_rcl_parse_struct_string,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_lua_worker_ctx, file),
+			0,
+			NULL);
 
 	rspamd_rcl_register_worker_parser (cfg, type, rspamd_lua_worker_parser,
 		ctx);

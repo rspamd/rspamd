@@ -22,6 +22,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <tclDecls.h>
+#include <curses.h>
 #include "config.h"
 #include "libutil/util.h"
 #include "libutil/map.h"
@@ -203,20 +205,41 @@ init_http_proxy (struct rspamd_config *cfg)
 	ctx->rotate_tm = DEFAULT_ROTATION_TIME;
 	ctx->cfg = cfg;
 
-	rspamd_rcl_register_worker_option (cfg, type, "timeout",
-		rspamd_rcl_parse_struct_time, ctx,
-		G_STRUCT_OFFSET (struct http_proxy_ctx,
-		timeout), RSPAMD_CL_FLAG_TIME_FLOAT);
-	rspamd_rcl_register_worker_option (cfg, type, "rotate",
-		rspamd_rcl_parse_struct_time, ctx,
-		G_STRUCT_OFFSET (struct http_proxy_ctx,
-		rotate_tm), RSPAMD_CL_FLAG_TIME_FLOAT);
-	rspamd_rcl_register_worker_option (cfg, type, "keypair",
-		rspamd_rcl_parse_struct_keypair, ctx,
-		G_STRUCT_OFFSET (struct http_proxy_ctx,
-		key), 0);
-	rspamd_rcl_register_worker_option (cfg, type, "upstream",
-		http_proxy_parse_upstream, ctx, 0, 0);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"timeout",
+			rspamd_rcl_parse_struct_time,
+			ctx,
+			G_STRUCT_OFFSET (struct http_proxy_ctx,
+					timeout),
+			RSPAMD_CL_FLAG_TIME_FLOAT,
+			NULL);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"rotate",
+			rspamd_rcl_parse_struct_time,
+			ctx,
+			G_STRUCT_OFFSET (struct http_proxy_ctx,
+					rotate_tm),
+			RSPAMD_CL_FLAG_TIME_FLOAT,
+			NULL);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"keypair",
+			rspamd_rcl_parse_struct_keypair,
+			ctx,
+			G_STRUCT_OFFSET (struct http_proxy_ctx,
+					key),
+			0,
+			NULL);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"upstream",
+			http_proxy_parse_upstream,
+			ctx,
+			0,
+			0,
+			NULL);
 
 	return ctx;
 }

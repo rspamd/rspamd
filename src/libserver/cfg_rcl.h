@@ -99,12 +99,13 @@ typedef void (*rspamd_rcl_section_fin_t)(rspamd_mempool_t *pool, gpointer ud);
  * @param flags flags for the parser
  * @return newly created structure
  */
-struct rspamd_rcl_default_handler_data * rspamd_rcl_add_default_handler (
+struct rspamd_rcl_default_handler_data *rspamd_rcl_add_default_handler (
 		struct rspamd_rcl_section *section,
 		const gchar *name,
 		rspamd_rcl_default_handler_t handler,
 		goffset offset,
-		gint flags);
+		gint flags,
+		const gchar *doc_string);
 
 /**
  * Add new section to the configuration
@@ -324,7 +325,8 @@ void rspamd_rcl_register_worker_option (struct rspamd_config *cfg,
 		rspamd_rcl_default_handler_t handler,
 		gpointer target,
 		glong offset,
-		gint flags);
+		gint flags,
+		const gchar *doc_string);
 
 /**
  * Register a default parser for a worker

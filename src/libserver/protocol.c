@@ -22,6 +22,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <glib-unix.h>
+#include <itcl2TclOO.h>
 #include "config.h"
 #include "rspamd.h"
 #include "util.h"
@@ -527,37 +529,44 @@ rspamd_protocol_control_parser_init (void)
 				"ip",
 				rspamd_rcl_parse_struct_addr,
 				G_STRUCT_OFFSET (struct rspamd_task, from_addr),
-				0);
+				0,
+				NULL);
 		rspamd_rcl_add_default_handler (sub,
 				"from",
 				rspamd_rcl_parse_struct_mime_addr,
 				G_STRUCT_OFFSET (struct rspamd_task, from_envelope),
-				0);
+				0,
+				NULL);
 		rspamd_rcl_add_default_handler (sub,
 				"rcpt",
 				rspamd_rcl_parse_struct_mime_addr,
 				G_STRUCT_OFFSET (struct rspamd_task, rcpt_envelope),
-				0);
+				0,
+				NULL);
 		rspamd_rcl_add_default_handler (sub,
 				"helo",
 				rspamd_rcl_parse_struct_string,
 				G_STRUCT_OFFSET (struct rspamd_task, helo),
-				0);
+				0,
+				NULL);
 		rspamd_rcl_add_default_handler (sub,
 				"user",
 				rspamd_rcl_parse_struct_string,
 				G_STRUCT_OFFSET (struct rspamd_task, user),
-				0);
+				0,
+				NULL);
 		rspamd_rcl_add_default_handler (sub,
 				"pass_all",
 				rspamd_protocol_parse_task_flags,
 				G_STRUCT_OFFSET (struct rspamd_task, flags),
-				0);
+				0,
+				NULL);
 		rspamd_rcl_add_default_handler (sub,
 				"json",
 				rspamd_protocol_parse_task_flags,
 				G_STRUCT_OFFSET (struct rspamd_task, flags),
-				0);
+				0,
+				NULL);
 	}
 }
 

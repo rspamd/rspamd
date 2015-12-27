@@ -1136,49 +1136,98 @@ init_fuzzy (struct rspamd_config *cfg)
 			(GDestroyNotify) rspamd_inet_address_destroy, g_free,
 			rspamd_inet_address_hash, rspamd_inet_address_equal);
 
-	rspamd_rcl_register_worker_option (cfg, type, "hashfile",
-			rspamd_rcl_parse_struct_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"hashfile",
+			rspamd_rcl_parse_struct_string,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile),
+			0,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "hash_file",
-			rspamd_rcl_parse_struct_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"hash_file",
+			rspamd_rcl_parse_struct_string,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile),
+			0,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "file",
-			rspamd_rcl_parse_struct_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"file",
+			rspamd_rcl_parse_struct_string,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile),
+			0,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "database",
-			rspamd_rcl_parse_struct_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile), 0);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"database",
+			rspamd_rcl_parse_struct_string,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile),
+			0,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "sync",
-			rspamd_rcl_parse_struct_time, ctx,
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"sync",
+			rspamd_rcl_parse_struct_time,
+			ctx,
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx,
-					sync_timeout), RSPAMD_CL_FLAG_TIME_FLOAT);
+						sync_timeout),
+			RSPAMD_CL_FLAG_TIME_FLOAT,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "expire",
-			rspamd_rcl_parse_struct_time, ctx,
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"expire",
+			rspamd_rcl_parse_struct_time,
+			ctx,
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx,
-					expire), RSPAMD_CL_FLAG_TIME_FLOAT);
+						expire),
+			RSPAMD_CL_FLAG_TIME_FLOAT,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "allow_update",
-			rspamd_rcl_parse_struct_string, ctx,
-			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, update_map), 0);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"allow_update",
+			rspamd_rcl_parse_struct_string,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, update_map),
+			0,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "keypair",
-			fuzzy_parse_keypair, ctx,
-			0, RSPAMD_CL_FLAG_MULTIPLE);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"keypair",
+			fuzzy_parse_keypair,
+			ctx,
+			0,
+			RSPAMD_CL_FLAG_MULTIPLE,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "keypair_cache_size",
-			rspamd_rcl_parse_struct_integer, ctx,
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"keypair_cache_size",
+			rspamd_rcl_parse_struct_integer,
+			ctx,
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx,
-					keypair_cache_size),
-			RSPAMD_CL_FLAG_UINT);
+						keypair_cache_size),
+			RSPAMD_CL_FLAG_UINT,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "encrypted_only",
-			rspamd_rcl_parse_struct_boolean, ctx,
-			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, encrypted_only), 0);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"encrypted_only",
+			rspamd_rcl_parse_struct_boolean,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, encrypted_only),
+			0,
+			NULL);
 
 
 	return ctx;

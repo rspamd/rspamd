@@ -27,6 +27,8 @@
  */
 
 #include <libserver/rspamd_control.h>
+#include <tclDecls.h>
+#include <curses.h>
 #include "config.h"
 #include "libutil/util.h"
 #include "libutil/map.h"
@@ -324,41 +326,81 @@ init_worker (struct rspamd_config *cfg)
 	ctx->cfg = cfg;
 	ctx->task_timeout = DEFAULT_TASK_TIMEOUT;
 
-	rspamd_rcl_register_worker_option (cfg, type, "mime",
-			rspamd_rcl_parse_struct_boolean, ctx,
-			G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_mime), 0);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"mime",
+			rspamd_rcl_parse_struct_boolean,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_mime),
+			0,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "http",
-			rspamd_rcl_parse_struct_boolean, ctx,
-			G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_http), 0);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"http",
+			rspamd_rcl_parse_struct_boolean,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_http),
+			0,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "json",
-			rspamd_rcl_parse_struct_boolean, ctx,
-			G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_json), 0);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"json",
+			rspamd_rcl_parse_struct_boolean,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_json),
+			0,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "allow_learn",
-			rspamd_rcl_parse_struct_boolean, ctx,
-			G_STRUCT_OFFSET (struct rspamd_worker_ctx, allow_learn), 0);
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"allow_learn",
+			rspamd_rcl_parse_struct_boolean,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_worker_ctx, allow_learn),
+			0,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "timeout",
-			rspamd_rcl_parse_struct_time, ctx,
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"timeout",
+			rspamd_rcl_parse_struct_time,
+			ctx,
 			G_STRUCT_OFFSET (struct rspamd_worker_ctx,
-					timeout), RSPAMD_CL_FLAG_TIME_INTEGER);
+						timeout),
+			RSPAMD_CL_FLAG_TIME_INTEGER,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "task_timeout",
-			rspamd_rcl_parse_struct_time, ctx,
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"task_timeout",
+			rspamd_rcl_parse_struct_time,
+			ctx,
 			G_STRUCT_OFFSET (struct rspamd_worker_ctx,
-					task_timeout), RSPAMD_CL_FLAG_TIME_FLOAT);
+						task_timeout),
+			RSPAMD_CL_FLAG_TIME_FLOAT,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "max_tasks",
-			rspamd_rcl_parse_struct_integer, ctx,
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"max_tasks",
+			rspamd_rcl_parse_struct_integer,
+			ctx,
 			G_STRUCT_OFFSET (struct rspamd_worker_ctx,
-					max_tasks), RSPAMD_CL_FLAG_INT_32);
+						max_tasks),
+			RSPAMD_CL_FLAG_INT_32,
+			NULL);
 
-	rspamd_rcl_register_worker_option (cfg, type, "keypair",
-			rspamd_rcl_parse_struct_keypair, ctx,
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"keypair",
+			rspamd_rcl_parse_struct_keypair,
+			ctx,
 			G_STRUCT_OFFSET (struct rspamd_worker_ctx,
-					key), 0);
+						key),
+			0,
+			NULL);
 
 	return ctx;
 }
