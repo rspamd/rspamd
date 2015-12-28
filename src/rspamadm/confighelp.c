@@ -75,7 +75,7 @@ rspamadm_confighelp_help (gboolean full_help)
 }
 
 static void
-rspamadm_confighelp_show (const ucl_object_t *obj)
+rspamadm_confighelp_show (const char *key, const ucl_object_t *obj)
 {
 	rspamd_fstring_t *out;
 
@@ -89,10 +89,18 @@ rspamadm_confighelp_show (const ucl_object_t *obj)
 	}
 	else {
 		/* TODO: add lua helper for output */
+		if (key) {
+			rspamd_fprintf (stdout, "Showing help for %s:\n", key);
+		}
+		else {
+			rspamd_fprintf (stdout, "Showing help for all options:\n");
+		}
+
 		rspamd_ucl_emit_fstring (obj, UCL_EMIT_CONFIG, &out);
 	}
 
 	rspamd_fprintf (stdout, "%V", out);
+	rspamd_fprintf (stdout, "\n");
 
 	rspamd_fstring_free (out);
 }
@@ -129,14 +137,18 @@ rspamadm_confighelp (gint argc, gchar **argv)
 
 	if (argc > 1) {
 		while (argc > 1) {
-			doc_obj = ucl_lookup_path (cfg->doc_strings, argv[i]);
+			if (argv[i][0] != '-') {
+				doc_obj = ucl_lookup_path (cfg->doc_strings, argv[i]);
 
-			if (doc_obj != NULL) {
-				rspamadm_confighelp_show (doc_obj);
-			}
-			else {
-				rspamd_fprintf (stderr, "Cannot find help for %s\n", argv[i]);
-				ret = EXIT_FAILURE;
+				if (doc_obj != NULL) {
+					rspamadm_confighelp_show (argv[i], doc_obj);
+				}
+				else {
+					rspamd_fprintf (stderr,
+							"Cannot find help for %s\n",
+							argv[i]);
+					ret = EXIT_FAILURE;
+				}
 			}
 
 			i++;
@@ -145,7 +157,7 @@ rspamadm_confighelp (gint argc, gchar **argv)
 	}
 	else {
 		/* Show all documentation strings */
-		rspamadm_confighelp_show (cfg->doc_strings);
+		rspamadm_confighelp_show (NULL, cfg->doc_strings);
 	}
 
 	exit (ret);

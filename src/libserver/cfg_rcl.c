@@ -1305,12 +1305,14 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 	/**
 	 * Logging section
 	 */
-	sub = rspamd_rcl_add_section (&new,
+	sub = rspamd_rcl_add_section_doc (&new,
 			"logging", NULL,
 			rspamd_rcl_logging_handler,
 			UCL_OBJECT,
 			FALSE,
-			TRUE);
+			TRUE,
+			cfg->doc_strings,
+			"Configure rspamd logging");
 	/* Default handlers */
 	rspamd_rcl_add_default_handler (sub,
 			"log_buffer",
@@ -1381,12 +1383,14 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 	/**
 	 * Options section
 	 */
-	sub = rspamd_rcl_add_section (&new,
+	sub = rspamd_rcl_add_section_doc (&new,
 			"options", NULL,
 			rspamd_rcl_options_handler,
 			UCL_OBJECT,
 			FALSE,
-			TRUE);
+			TRUE,
+			cfg->doc_strings,
+			"Global rspamd options");
 	rspamd_rcl_add_default_handler (sub,
 			"cache_file",
 			rspamd_rcl_parse_struct_string,
@@ -1601,8 +1605,10 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			NULL);
 
 	/* New DNS configuration */
-	ssub = rspamd_rcl_add_section (&sub->subsections, "dns", NULL, NULL,
-			UCL_OBJECT, FALSE, TRUE);
+	ssub = rspamd_rcl_add_section_doc (&sub->subsections, "dns", NULL, NULL,
+			UCL_OBJECT, FALSE, TRUE,
+			cfg->doc_strings,
+			"Options for DNS resolver");
 	rspamd_rcl_add_default_handler (ssub,
 			"nameserver",
 			rspamd_rcl_parse_struct_string_list,
@@ -1642,8 +1648,10 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 
 
 	/* New upstreams configuration */
-	ssub = rspamd_rcl_add_section (&sub->subsections, "upstream", NULL, NULL,
-			UCL_OBJECT, FALSE, TRUE);
+	ssub = rspamd_rcl_add_section_doc (&sub->subsections, "upstream", NULL, NULL,
+			UCL_OBJECT, FALSE, TRUE,
+			cfg->doc_strings,
+			"Upstreams configuration parameters");
 	rspamd_rcl_add_default_handler (ssub,
 			"max_errors",
 			rspamd_rcl_parse_struct_integer,
@@ -1666,12 +1674,14 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 	/**
 	 * Metric section
 	 */
-	sub = rspamd_rcl_add_section (&new,
+	sub = rspamd_rcl_add_section_doc (&new,
 			"metric", "name",
 			rspamd_rcl_metric_handler,
 			UCL_OBJECT,
 			FALSE,
-			TRUE);
+			TRUE,
+			cfg->doc_strings,
+			"Metrics configuration");
 	sub->default_key = DEFAULT_METRIC;
 	rspamd_rcl_add_default_handler (sub,
 			"unknown_weight",
@@ -1693,12 +1703,14 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			NULL);
 
 	/* Ungrouped symbols */
-	ssub = rspamd_rcl_add_section (&sub->subsections,
+	ssub = rspamd_rcl_add_section_doc (&sub->subsections,
 			"symbol", "name",
 			rspamd_rcl_symbol_handler,
 			UCL_OBJECT,
 			TRUE,
-			TRUE);
+			TRUE,
+			sub->doc_ref,
+			"Symbols settings");
 	rspamd_rcl_add_default_handler (ssub,
 			"description",
 			rspamd_rcl_parse_struct_string,
@@ -1719,20 +1731,24 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			NULL);
 
 	/* Actions part */
-	ssub = rspamd_rcl_add_section (&sub->subsections,
+	ssub = rspamd_rcl_add_section_doc (&sub->subsections,
 			"actions", NULL,
 			rspamd_rcl_actions_handler,
 			UCL_OBJECT,
 			TRUE,
-			TRUE);
+			TRUE,
+			sub->doc_ref,
+			"Actions settings");
 
 	/* Group part */
-	ssub = rspamd_rcl_add_section (&sub->subsections,
+	ssub = rspamd_rcl_add_section_doc (&sub->subsections,
 			"group", "name",
 			rspamd_rcl_group_handler,
 			UCL_OBJECT,
 			TRUE,
-			TRUE);
+			TRUE,
+			sub->doc_ref,
+			"Symbol groups settings");
 	rspamd_rcl_add_default_handler (ssub,
 			"disabled",
 			rspamd_rcl_parse_struct_boolean,
@@ -1753,12 +1769,14 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			NULL);
 
 	/* Grouped symbols */
-	sssub = rspamd_rcl_add_section (&ssub->subsections,
+	sssub = rspamd_rcl_add_section_doc (&ssub->subsections,
 			"symbol", "name",
 			rspamd_rcl_symbol_handler,
 			UCL_OBJECT,
 			TRUE,
-			TRUE);
+			TRUE,
+			ssub->doc_ref,
+			"Symbols settings");
 	rspamd_rcl_add_default_handler (sssub,
 			"description",
 			rspamd_rcl_parse_struct_string,
@@ -1781,12 +1799,14 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 	/**
 	 * Worker section
 	 */
-	sub = rspamd_rcl_add_section (&new,
+	sub = rspamd_rcl_add_section_doc (&new,
 			"worker", "type",
 			rspamd_rcl_worker_handler,
 			UCL_OBJECT,
 			FALSE,
-			TRUE);
+			TRUE,
+			cfg->doc_strings,
+			"Workers common options");
 	rspamd_rcl_add_default_handler (sub,
 			"count",
 			rspamd_rcl_parse_struct_integer,
@@ -1809,22 +1829,26 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 	/**
 	 * Modules handler
 	 */
-	sub = rspamd_rcl_add_section (&new,
+	sub = rspamd_rcl_add_section_doc (&new,
 			"modules", NULL,
 			rspamd_rcl_modules_handler,
 			UCL_OBJECT,
 			FALSE,
-			FALSE);
+			FALSE,
+			cfg->doc_strings,
+			"Lua plugins to load");
 
 	/**
 	 * Classifiers handler
 	 */
-	sub = rspamd_rcl_add_section (&new,
+	sub = rspamd_rcl_add_section_doc (&new,
 			"classifier", "type",
 			rspamd_rcl_classifier_handler,
 			UCL_OBJECT,
 			FALSE,
-			TRUE);
+			TRUE,
+			cfg->doc_strings,
+			"CLassifier options");
 	/* Default classifier is 'bayes' for now */
 	sub->default_key = "bayes";
 
@@ -1856,12 +1880,14 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 	/*
 	 * Statfile defaults
 	 */
-	ssub = rspamd_rcl_add_section (&sub->subsections,
+	ssub = rspamd_rcl_add_section_doc (&sub->subsections,
 			"statfile", "symbol",
 			rspamd_rcl_statfile_handler,
 			UCL_OBJECT,
 			TRUE,
-			TRUE);
+			TRUE,
+			sub->doc_ref,
+			"Statfiles options");
 	rspamd_rcl_add_default_handler (ssub,
 			"label",
 			rspamd_rcl_parse_struct_string,
@@ -1878,22 +1904,26 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 	/**
 	 * Composites handler
 	 */
-	sub = rspamd_rcl_add_section (&new,
+	sub = rspamd_rcl_add_section_doc (&new,
 			"composite", "name",
 			rspamd_rcl_composite_handler,
 			UCL_OBJECT,
 			FALSE,
-			TRUE);
+			TRUE,
+			cfg->doc_strings,
+			"Rspamd composite symbols");
 
 	/**
 	 * Lua handler
 	 */
-	sub = rspamd_rcl_add_section (&new,
+	sub = rspamd_rcl_add_section_doc (&new,
 			"lua", NULL,
 			rspamd_rcl_lua_handler,
 			UCL_STRING,
 			FALSE,
-			TRUE);
+			TRUE,
+			cfg->doc_strings,
+			"Lua files to load");
 
 	return new;
 }
