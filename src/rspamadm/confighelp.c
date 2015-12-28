@@ -29,7 +29,6 @@
 #include "rspamd.h"
 #include "lua/lua_common.h"
 
-static gchar *config = NULL;
 static gboolean json = FALSE;
 static gboolean compact = FALSE;
 extern struct rspamd_main *rspamd_main;
