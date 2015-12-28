@@ -111,7 +111,7 @@ rspamadm_configtest (gint argc, gchar **argv)
 	const guint64 *log_cnt;
 
 	context = g_option_context_new (
-			"keypair - create encryption keys");
+			"configtest - perform configuration file test");
 	g_option_context_set_summary (context,
 			"Summary:\n  Rspamd administration utility version "
 					RVERSION
