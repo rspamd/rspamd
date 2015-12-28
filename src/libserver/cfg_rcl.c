@@ -2849,6 +2849,128 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	return TRUE;
 }
 
+static void
+rspamd_rcl_doc_obj_from_handler (ucl_object_t *doc_obj,
+		rspamd_rcl_default_handler_t handler,
+		gint flags)
+{
+	gboolean has_example = FALSE, has_type = FALSE;
+	const gchar *type = NULL;
+
+	if (ucl_object_find_key (doc_obj, "example") != NULL) {
+		has_example = TRUE;
+	}
+
+	if (ucl_object_find_key (doc_obj, "type") != NULL) {
+		has_type = TRUE;
+	}
+
+	if (handler == rspamd_rcl_parse_struct_string) {
+		if (!has_type) {
+			ucl_object_insert_key (doc_obj, ucl_object_fromstring ("string"),
+					"type", 0, false);
+		}
+	}
+	else if (handler == rspamd_rcl_parse_struct_integer) {
+		type = "int";
+
+		if (flags & RSPAMD_CL_FLAG_INT_16) {
+			type = "int16";
+		}
+		else if (flags & RSPAMD_CL_FLAG_INT_32) {
+			type = "int32";
+		}
+		else if (flags & RSPAMD_CL_FLAG_INT_64) {
+			type = "int64";
+		}
+		else if (flags & RSPAMD_CL_FLAG_INT_SIZE) {
+			type = "size";
+		}
+		else if (flags & RSPAMD_CL_FLAG_UINT) {
+			type = "uint";
+		}
+
+		if (!has_type) {
+			ucl_object_insert_key (doc_obj, ucl_object_fromstring (type),
+					"type", 0, false);
+		}
+	}
+	else if (handler == rspamd_rcl_parse_struct_double) {
+		if (!has_type) {
+			ucl_object_insert_key (doc_obj, ucl_object_fromstring ("double"),
+					"type", 0, false);
+		}
+	}
+	else if (handler == rspamd_rcl_parse_struct_time) {
+		type = "time";
+
+		if (!has_type) {
+			ucl_object_insert_key (doc_obj, ucl_object_fromstring (type),
+					"type", 0, false);
+		}
+	}
+	else if (handler == rspamd_rcl_parse_struct_string_list) {
+		if (!has_type) {
+			ucl_object_insert_key (doc_obj, ucl_object_fromstring ("string list"),
+					"type", 0, false);
+		}
+		if (!has_example) {
+			ucl_object_insert_key (doc_obj,
+					ucl_object_fromstring ("param = \"str1, str2, str3\" OR "
+							"param = [\"str1\", \"str2\", \"str3\"]"),
+					"example",
+					0,
+					false);
+		}
+	}
+	else if (handler == rspamd_rcl_parse_struct_boolean) {
+		if (!has_type) {
+			ucl_object_insert_key (doc_obj,
+					ucl_object_fromstring ("bool"),
+					"type",
+					0,
+					false);
+		}
+	}
+	else if (handler == rspamd_rcl_parse_struct_keypair) {
+		if (!has_type) {
+			ucl_object_insert_key (doc_obj,
+					ucl_object_fromstring ("keypair"),
+					"type",
+					0,
+					false);
+		}
+		if (!has_example) {
+			ucl_object_insert_key (doc_obj,
+					ucl_object_fromstring ("keypair {\n"
+							"  pubkey = <base32_string>;\n"
+							"  privkey = <base32_string>;\n"
+							"}"),
+					"example",
+					0,
+					false);
+		}
+	}
+	else if (handler == rspamd_rcl_parse_struct_addr) {
+		if (!has_type) {
+			ucl_object_insert_key (doc_obj,
+					ucl_object_fromstring ("socket address"),
+					"type",
+					0,
+					false);
+		}
+	}
+	else if (handler == rspamd_rcl_parse_struct_mime_addr) {
+		if (!has_type) {
+			ucl_object_insert_key (doc_obj,
+					ucl_object_fromstring ("email address"),
+					"type",
+					0,
+					false);
+		}
+	}
+}
+
 ucl_object_t *
 rspamd_rcl_add_doc_obj (ucl_object_t *doc_target,
 		const char *doc_string,
@@ -2881,7 +3003,7 @@ rspamd_rcl_add_doc_obj (ucl_object_t *doc_target,
 				"type", 0, false);
 	}
 
-	/* TODO: add type from handler */
+	rspamd_rcl_doc_obj_from_handler (doc_obj, handler, flags);
 	ucl_object_insert_key (doc_target, doc_obj, doc_name, 0, true);
 
 	return doc_obj;
