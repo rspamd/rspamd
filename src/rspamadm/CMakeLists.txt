@@ -6,6 +6,7 @@ SET(RSPAMADMSRC rspamadm.c
         fuzzy_merge.c
         configdump.c
         control.c
+        confighelp.c
         ${CMAKE_BINARY_DIR}/src/workers.c
         ${CMAKE_BINARY_DIR}/src/modules.c
         ${CMAKE_SOURCE_DIR}/src/controller.c

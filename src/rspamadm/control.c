@@ -35,9 +35,9 @@
 #include "fuzzy_stat.lua.h"
 
 static gchar *control_path = RSPAMD_DBDIR "/rspamd.sock";
-gboolean json = FALSE;
-gboolean compact = FALSE;
-gdouble timeout = 1.0;
+static gboolean json = FALSE;
+static gboolean compact = FALSE;
+static gdouble timeout = 1.0;
 
 static void rspamadm_control (gint argc, gchar **argv);
 static const char *rspamadm_control_help (gboolean full_help);
