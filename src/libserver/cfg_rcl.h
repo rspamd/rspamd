@@ -137,7 +137,7 @@ struct rspamd_rcl_section *rspamd_rcl_add_section_doc (
  * Init common sections known to rspamd
  * @return top section
  */
-struct rspamd_rcl_section * rspamd_rcl_config_init (void);
+struct rspamd_rcl_section * rspamd_rcl_config_init (struct rspamd_config *cfg);
 
 /**
  * Get a section specified by path, it understand paths separated by '/' character

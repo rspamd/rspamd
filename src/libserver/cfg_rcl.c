@@ -1292,7 +1292,7 @@ rspamd_rcl_add_default_handler (struct rspamd_rcl_section *section,
 }
 
 struct rspamd_rcl_section *
-rspamd_rcl_config_init (void)
+rspamd_rcl_config_init (struct rspamd_config *cfg)
 {
 	struct rspamd_rcl_section *new = NULL, *sub, *ssub, *sssub;
 
@@ -2828,7 +2828,7 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	cfg->rcl_obj = ucl_parser_get_object (parser);
 	ucl_parser_free (parser);
 
-	top = rspamd_rcl_config_init ();
+	top = rspamd_rcl_config_init (cfg);
 	rspamd_rcl_set_lua_globals (cfg, cfg->lua_state, vars);
 	err = NULL;
 
