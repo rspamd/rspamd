@@ -63,7 +63,7 @@ void rspamd_stat_close (void);
  * @return TRUE if task has been classified
  */
 rspamd_stat_result_t rspamd_stat_classify (struct rspamd_task *task,
-		lua_State *L, GError **err);
+		lua_State *L, guint stage, GError **err);
 
 
 /**

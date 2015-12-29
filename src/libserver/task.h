@@ -60,11 +60,13 @@ enum rspamd_task_stage {
 	RSPAMD_TASK_STAGE_READ_MESSAGE = (1 << 2),
 	RSPAMD_TASK_STAGE_PRE_FILTERS = (1 << 3),
 	RSPAMD_TASK_STAGE_FILTERS = (1 << 4),
-	RSPAMD_TASK_STAGE_CLASSIFIERS = (1 << 5),
-	RSPAMD_TASK_STAGE_COMPOSITES = (1 << 6),
-	RSPAMD_TASK_STAGE_POST_FILTERS = (1 << 7),
-	RSPAMD_TASK_STAGE_DONE = (1 << 8),
-	RSPAMD_TASK_STAGE_REPLIED = (1 << 9)
+	RSPAMD_TASK_STAGE_CLASSIFIERS_PRE = (1 << 5),
+	RSPAMD_TASK_STAGE_CLASSIFIERS = (1 << 6),
+	RSPAMD_TASK_STAGE_CLASSIFIERS_POST = (1 << 7),
+	RSPAMD_TASK_STAGE_COMPOSITES = (1 << 8),
+	RSPAMD_TASK_STAGE_POST_FILTERS = (1 << 9),
+	RSPAMD_TASK_STAGE_DONE = (1 << 10),
+	RSPAMD_TASK_STAGE_REPLIED = (1 << 11)
 };
 
 #define RSPAMD_TASK_PROCESS_ALL (RSPAMD_TASK_STAGE_CONNECT | \
@@ -72,7 +74,9 @@ enum rspamd_task_stage {
 		RSPAMD_TASK_STAGE_READ_MESSAGE | \
 		RSPAMD_TASK_STAGE_PRE_FILTERS | \
 		RSPAMD_TASK_STAGE_FILTERS | \
+		RSPAMD_TASK_STAGE_CLASSIFIERS_PRE | \
 		RSPAMD_TASK_STAGE_CLASSIFIERS | \
+		RSPAMD_TASK_STAGE_CLASSIFIERS_POST | \
 		RSPAMD_TASK_STAGE_COMPOSITES | \
 		RSPAMD_TASK_STAGE_POST_FILTERS | \
 		RSPAMD_TASK_STAGE_DONE)
@@ -154,6 +158,7 @@ struct rspamd_task {
 
 	GList *messages;								/**< list of messages that would be reported		*/
 	struct rspamd_re_runtime *re_rt;				/**< regexp runtime									*/
+	GList *cl_runtimes;								/**< classifiers runtime							*/
 	struct rspamd_config *cfg;						/**< pointer to config object						*/
 	GError *err;
 	rspamd_mempool_t *task_pool;					/**< memory pool for task							*/
