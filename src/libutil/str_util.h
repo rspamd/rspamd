@@ -189,6 +189,17 @@ GString *rspamd_header_value_fold (const gchar *name,
 goffset rspamd_substring_search (const gchar *in, gsize inlen,
 	const gchar *srch, gsize srchlen);
 
+/**
+ * Search for a substring `srch` in the text `in` using Karp-Rabin algorithm in caseless matter (ASCII only)
+ * @param in input
+ * @param inlen input len
+ * @param srch search string
+ * @param srchlen length of the search string
+ * @return position of the first substring match or (-1) if not found
+ */
+goffset rspamd_substring_search_caseless (const gchar *in, gsize inlen,
+		const gchar *srch, gsize srchlen);
+
 
 /**
  * Search for end-of-headers mark in the input string. Returns position just after

@@ -1119,6 +1119,46 @@ rspamd_substring_search (const gchar *in, gsize inlen,
 }
 
 goffset
+rspamd_substring_search_caseless (const gchar *in, gsize inlen,
+		const gchar *srch, gsize srchlen)
+{
+	gint d, hash_srch, hash_in;
+	gsize i, j;
+	gchar c1, c2;
+
+	if (inlen < srchlen) {
+		return -1;
+	}
+
+	/* Preprocessing */
+	for (d = i = 1; i < srchlen; ++i) {
+		/* computes d = 2^(m-1) with the left-shift operator */
+		d = (d << 1);
+	}
+
+	for (hash_in = hash_srch = i = 0; i < srchlen; ++i) {
+		hash_srch = ((hash_srch << 1) + g_ascii_tolower (srch[i]));
+		hash_in = ((hash_in << 1) + g_ascii_tolower (in[i]));
+	}
+
+	/* Searching */
+	j = 0;
+	while (j <= inlen - srchlen) {
+
+		if (hash_srch == hash_in && g_ascii_strncasecmp (srch, in + j, srchlen) == 0) {
+			return (goffset) j;
+		}
+
+		c1 = g_ascii_tolower (in[j]);
+		c2 = g_ascii_tolower (in[j + srchlen]);
+		hash_in = RKHASH (c1, c2, hash_in);
+		++j;
+	}
+
+	return -1;
+}
+
+goffset
 rspamd_string_find_eoh (GString *input)
 {
 	const gchar *p, *c = NULL, *end;
