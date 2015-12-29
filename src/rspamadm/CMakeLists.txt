@@ -15,7 +15,9 @@ SET(RSPAMADMSRC rspamadm.c
         ${CMAKE_SOURCE_DIR}/src/smtp_proxy.c
         ${CMAKE_SOURCE_DIR}/src/worker.c
         ${CMAKE_SOURCE_DIR}/src/http_proxy.c)
-SET(RSPAMADMLUASRC ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_stat.lua)
+SET(RSPAMADMLUASRC
+        ${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_stat.lua
+        ${CMAKE_CURRENT_SOURCE_DIR}/confighelp.lua)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
 ADD_CUSTOM_TARGET(rspamadm_lua_preprocess
         ${PERL_EXECUTABLE}

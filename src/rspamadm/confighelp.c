@@ -29,6 +29,7 @@
 #include "cfg_rcl.h"
 #include "rspamd.h"
 #include "lua/lua_common.h"
+#include "confighelp.lua.h"
 
 static gboolean json = FALSE;
 static gboolean compact = FALSE;
@@ -81,7 +82,8 @@ rspamadm_confighelp_help (gboolean full_help)
 }
 
 static void
-rspamadm_confighelp_show (const char *key, const ucl_object_t *obj)
+rspamadm_confighelp_show (struct rspamd_config *cfg, gint argc, gchar **argv,
+		const char *key, const ucl_object_t *obj)
 {
 	rspamd_fstring_t *out;
 
@@ -103,7 +105,14 @@ rspamadm_confighelp_show (const char *key, const ucl_object_t *obj)
 			rspamd_fprintf (stdout, "Showing help for all options:\n");
 		}
 
-		rspamd_ucl_emit_fstring (obj, UCL_EMIT_CONFIG, &out);
+		rspamadm_execute_lua_ucl_subr (cfg->lua_state,
+				argc,
+				argv,
+				obj,
+				rspamadm_script_confighelp);
+
+		rspamd_fstring_free (out);
+		return;
 	}
 
 	rspamd_fprintf (stdout, "%V", out);
@@ -245,7 +254,7 @@ rspamadm_confighelp (gint argc, gchar **argv)
 				}
 
 				if (doc_obj != NULL) {
-					rspamadm_confighelp_show (argv[i], doc_obj);
+					rspamadm_confighelp_show (cfg, argc, argv, argv[i], doc_obj);
 
 					if (keyword) {
 						ucl_object_unref ((ucl_object_t *)doc_obj);
@@ -265,7 +274,7 @@ rspamadm_confighelp (gint argc, gchar **argv)
 	}
 	else {
 		/* Show all documentation strings */
-		rspamadm_confighelp_show (NULL, cfg->doc_strings);
+		rspamadm_confighelp_show (cfg, argc, argv, NULL, cfg->doc_strings);
 	}
 
 	rspamd_config_free (cfg);
