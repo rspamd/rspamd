@@ -112,6 +112,9 @@ rspamadm_confighelp (gint argc, gchar **argv)
 	const ucl_object_t *doc_obj;
 	GOptionContext *context;
 	GError *error = NULL;
+	module_t *mod, **pmod;
+	worker_t **pworker;
+	struct module_ctx *mod_ctx;
 	gint i = 1, ret = 0;
 
 	context = g_option_context_new (
@@ -131,8 +134,27 @@ rspamadm_confighelp (gint argc, gchar **argv)
 	}
 
 	cfg = rspamd_config_new ();
+	cfg->compiled_modules = modules;
+	cfg->compiled_workers = workers;
 
 	top = rspamd_rcl_config_init (cfg);
+
+	/* Init modules to get documentation strings */
+	for (pmod = cfg->compiled_modules; pmod != NULL && *pmod != NULL; pmod++) {
+		mod = *pmod;
+		mod_ctx = g_slice_alloc0 (sizeof (struct module_ctx));
+
+		if (mod->module_init_func (cfg, &mod_ctx) == 0) {
+			g_hash_table_insert (cfg->c_modules,
+					(gpointer) mod->name,
+					mod_ctx);
+			mod_ctx->mod = mod;
+		}
+	}
+	/* Also init all workers */
+	for (pworker = cfg->compiled_workers; *pworker != NULL; pworker ++) {
+		(*pworker)->worker_init_func (cfg);
+	}
 
 	if (argc > 1) {
 		while (argc > 1) {
@@ -158,6 +180,8 @@ rspamadm_confighelp (gint argc, gchar **argv)
 		/* Show all documentation strings */
 		rspamadm_confighelp_show (NULL, cfg->doc_strings);
 	}
+
+	rspamd_config_free (cfg);
 
 	exit (ret);
 }
