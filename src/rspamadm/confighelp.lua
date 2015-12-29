@@ -7,9 +7,19 @@ local known_attrs = {
 }
 
 --.USE "getopt"
+--.USE "ansicolors"
+
+
+local function maybe_print_color(key)
+  if opts['color'] then
+    return ansicolors.white .. key .. ansicolors.reset
+  else
+    return key
+  end
+end
 
 local function print_help(key, value, tabs)
-  print(string.format('%sOption: %s', tabs, key))
+  print(string.format('%sConfiguration element: %s', tabs, maybe_print_color(key)))
 
   if not opts['short'] then
     if value['data'] then
@@ -23,7 +33,6 @@ local function print_help(key, value, tabs)
       print(string.format('%s\tExample: %s', tabs, value['example']))
     end
   end
-  print('')
 
   for k, v in pairs(value) do
     if not known_attrs[k] then
@@ -37,6 +46,7 @@ return function(args, res)
   opts = getopt(args, '')
 
   for k,v in pairs(res) do
-    print_help(k, v, '');
+    print_help(k, v, '')
+    print('')
   end
 end
