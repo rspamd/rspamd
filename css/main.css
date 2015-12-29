@@ -33,6 +33,22 @@ body {
     top: 20px;
     width: auto;
     position: fixed;
-	margin-top: 50px;
+	  margin-top: 50px;
   }
 }
+.tab-content {
+    border-left: 1px solid #ddd;
+    border-right: 1px solid #ddd;
+    border-bottom: 1px solid #ddd;
+    padding: 20px;
+    margin-bottom: 50px;
+    /*background-color: #CBF6FF;*/
+}
+.nav-tabs {
+    margin-top: 50px;
+}
+/*
+.nav-tabs > li.active > a{
+    background-color: #CBF6FF;
+}
+*/

@@ -16,28 +16,38 @@ You can download the most recent stable version as source tarball from the follo
 The best way to install rspamd is to use the pre-built packages for your operating system. We have prepared packages for many platforms. You have two choices when using packages:
 
 1. Use **stable** branch of packages: those packages are the official rspamd releases which are recommended for production usage.
-2. Use **experimental** branch of packages: these packages are less stable and they are generated frequently from the current development branch. Experimental packages usually have more features but might be *sometimes* broken in some points (nevertheless, bugs are usually quickly fixed after detection). 
+2. Use **experimental** branch of packages: these packages are less stable and they are generated frequently from the current development branch. Experimental packages usually have more features but might be *sometimes* broken in some points (nevertheless, bugs are usually quickly fixed after detection).
 
 Rspamd requires **POSIX** environment to run, so it won't likely run on Windows. However, it should work on the vast majority of unix systems, including Linux, BSD (FreeBSD, NetBSD, OpenBSD), OSX and Solaris.
 
 ## Rspamd packages
 
-### Arch, CentOS, Debian, Fedora, openSUSE, SLE, Ubuntu
+Rspamd project provides packages for many operating systems.
 
-Rspamd project provides packages for some rpm and deb based repositories:
+<!-- Tab navigation -->
+<div class="col-xs-12">
+    <ul class="nav nav-tabs nav-justified" role="tablist">
+        <li role="presentation" class="active">
+            <a href="#system1" aria-controls="system1" role="tab" data-toggle="tab"><img src="img/redhat.png" width="20">&nbsp;&nbsp;Fedora/CentOS</a>
+        </li>
+        <li role="presentation">
+            <a href="#system2" aria-controls="system2" role="tab" data-toggle="tab"><img src="img/Ubuntu.png" width="20">&nbsp;&nbsp;Debian/Ubuntu</a>
+        </li>
+        <li role="presentation">
+            <a href="#system3" aria-controls="system3" role="tab" data-toggle="tab"><img src="img/freebsd.png" width="20">&nbsp;&nbsp;Other systems</a>
+        </li>
+    </ul>
+    <!-- Tab - pane content -->
+    <div class="tab-content">
+        <div role="tabpanel" class="tab-pane fade in active" id="system1">
+            <h3>CentOS, Fedora</h3>
+<div markdown="1">
+Supported distributions:
 
-- Debian wheezy (amd64, i386)
-- Debian jessie (amd64, i386)
-- Ubuntu precise (amd64, i386)
-- Ubuntu trusty (amd64, i386)
-- Ubuntu vivid (amd64, i386)
-- Ubuntu wily (amd64, i386)
 - CentOS 6 (amd64), need EPEL
 - CentOS 7 (amd64), need EPEL
 - Fedora 21 (amd64)
 - Fedora 22 (amd64)
-
-#### Installation for rpm based distributions:
 
 Please mention that `CentOS` rpm packages **requires** [EPEL](https://fedoraproject.org/wiki/EPEL) to be installed in your system as many dependencies are missing from the base CentOS repositories. You can learn how to install EPEL from their site: <https://fedoraproject.org/wiki/EPEL>.
 `Fedora` packages do not require EPEL or any other third-party repository.
@@ -57,34 +67,78 @@ For experimental branch packages, download `rpm-experimental` repofile as follow
     rpm --import http://rspamd.com/rpm/gpg.key
     yum update
     yum install rspamd
+</div>
 
-#### Installation for deb based distributions:
+        </div>
+        <div role="tabpanel" class="tab-pane fade" id="system2">
+            <h3>Debian and Ubuntu Linux</h3>
+<div markdown="1">
 
+Rspamd supports the following .deb based distributives:
 
+- Debian wheezy (amd64, i386)
+- Debian jessie (amd64, i386)
+- Ubuntu precise (amd64, i386)
+- Ubuntu trusty (amd64, i386)
+- Ubuntu vivid (amd64, i386)
+- Ubuntu wily (amd64, i386)
+
+To install the rspamd apt repository, please use the following commands:
 
     apt-get install -y lsb-release # optional
     CODENAME=`lsb_release -c -s`
     wget -O- http://rspamd.com/apt-stable/gpg.key | apt-key add -
-	echo "deb http://rspamd.com/apt-stable/ $CODENAME main" > /etc/apt/sources.list.d/rspamd.list
-	echo "deb-src http://rspamd.com/apt-stable/ $CODENAME main" >> /etc/apt/sources.list.d/rspamd.list
+    echo "deb http://rspamd.com/apt-stable/ $CODENAME main" > /etc/apt/sources.list.d/rspamd.list
+    echo "deb-src http://rspamd.com/apt-stable/ $CODENAME main" >> /etc/apt/sources.list.d/rspamd.list
     apt-get update
     apt-get install rspamd
 
-To learn your codename, you could try command `lsb_release -s -c` from the package called `lsb-release`.
+To obtain your distributive's codename, you could use the command `lsb_release -s -c` from the package called `lsb-release`.
 
 For experimental branch replace `apt-stable` with just `apt`:
 
     apt-get install -y lsb-release # optional
     CODENAME=`lsb_release -c -s`
     wget -O- http://rspamd.com/apt/gpg.key | apt-key add -
-	echo "deb http://rspamd.com/apt/ $CODENAME main" > /etc/apt/sources.list.d/rspamd.list
-	echo "deb-src http://rspamd.com/apt/ $CODENAME main" >> /etc/apt/sources.list.d/rspamd.list
+    echo "deb http://rspamd.com/apt/ $CODENAME main" > /etc/apt/sources.list.d/rspamd.list
+    echo "deb-src http://rspamd.com/apt/ $CODENAME main" >> /etc/apt/sources.list.d/rspamd.list
     apt-get update
     apt-get install rspamd
 
+</div>
+        </div>
+        <div role="tabpanel" class="tab-pane fade" id="system3">
+            <h3>Gentoo Linux</h3>
+<div markdown="1">
+Rspamd is also supported on the following platforms:
+
+- Gentoo Linux
+- Arch Linux
+- Scientific Linux
+- Suse Linux Enterprise
+- OpenSUSE Linux
+- FreeBSD
+- NetBSD
+- OSX (using MacPorts)
+
+### Gentoo Linux
+Ebuilds for Gentoo Linux users are available in the main Gentoo Portage repository.
+
 ### Other Linux distributions
 
-For other distributions you could also check [our project on the openSUSE build service](https://software.opensuse.org/download.html?project=home%3Acebka&package=rspamd). Ebuilds for Gentoo Linux users are available in the main Gentoo Portage repository.
+For other distributions you could also check [our project on the openSUSE build service](https://software.opensuse.org/download.html?project=home%3Acebka&package=rspamd).
+
+### BSD and OSX
+
+FreeBSD users can install Rspamd from [ports](http://www.freshports.org/mail/rspamd/).
+
+Users of NetBSD (and other systems with pkgsrc) can use [pkgsrc](http://pkgsrc.se/mail/rspamd).
+
+OSX users can install from [MacPorts](https://trac.macports.org/browser/trunk/dports/mail/rspamd/Portfile).
+</div>
+        </div>
+    </div>
+</div>
 
 ### Debian `official` repos
 
@@ -92,17 +146,9 @@ Rspamd is also available in Debian's [testing](https://packages.debian.org/sourc
 
 Please **DO NOT** use those packages, as they are no longer supported.
 
-### Other operating systems
-
-FreeBSD users can install Rspamd from [ports](http://www.freshports.org/mail/rspamd/).
-
-Users of NetBSD (and other systems with pkgsrc) can use [pkgsrc](http://pkgsrc.se/mail/rspamd).
-
-OSX users can install from [MacPorts](https://trac.macports.org/browser/trunk/dports/mail/rspamd/Portfile).
-
 ## Build rspamd from the sources
 
-You can also build rspamd from the source code. To do that grab the source from [github](https://github.com/vstakhov/rspamd) using `git`:
+If there are no packages for your system or you want custom build options you can also build rspamd from the source code. To do that grab the source from [github](https://github.com/vstakhov/rspamd) using `git`:
 
 	git clone --recursive https://github.com/vstakhov/rspamd.git
 
