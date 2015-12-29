@@ -1088,6 +1088,10 @@ rspamd_substring_search (const gchar *in, gsize inlen,
 	gint d, hash_srch, hash_in;
 	gsize i, j;
 
+	if (inlen < srchlen) {
+		return -1;
+	}
+
 	/* Preprocessing */
 	for (d = i = 1; i < srchlen; ++i) {
 		/* computes d = 2^(m-1) with the left-shift operator */

@@ -22,6 +22,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <ucl.h>
 #include "config.h"
 #include "rspamadm.h"
 #include "cfg_file.h"
@@ -31,6 +32,7 @@
 
 static gboolean json = FALSE;
 static gboolean compact = FALSE;
+static gboolean keyword = FALSE;
 extern struct rspamd_main *rspamd_main;
 /* Defined in modules.c */
 extern module_t *modules[];
@@ -52,6 +54,8 @@ static GOptionEntry entries[] = {
 				"Output json",      NULL},
 		{"compact", 'c', 0, G_OPTION_ARG_NONE, &compact,
 				"Output compacted", NULL},
+		{"keyword", 'k', 0, G_OPTION_ARG_NONE, &keyword,
+				"Search by keyword", NULL},
 		{NULL,     0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -64,6 +68,9 @@ rspamadm_confighelp_help (gboolean full_help)
 		help_str = "Shows help for the specified configuration options\n\n"
 				"Usage: rspamadm confighelp [option[, option...]]\n"
 				"Where options are:\n\n"
+				"-c: output compacted JSON\n"
+				"-j: output pretty formatted JSON\n"
+				"-k: search by keyword in doc string\n"
 				"--help: shows available options and commands";
 	}
 	else {
@@ -102,6 +109,72 @@ rspamadm_confighelp_show (const char *key, const ucl_object_t *obj)
 	rspamd_fprintf (stdout, "\n");
 
 	rspamd_fstring_free (out);
+}
+
+static void
+rspamadm_confighelp_search_word_step (const ucl_object_t *obj,
+		ucl_object_t *res,
+		const gchar *str,
+		gsize len,
+		GString *path)
+{
+	ucl_object_iter_t it = NULL;
+	const ucl_object_t *cur, *elt;
+	const gchar *dot_pos;
+
+	while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
+		if (cur->keylen > 0) {
+			rspamd_printf_gstring (path, ".%*s", (int) cur->keylen, cur->key);
+
+			if (rspamd_substring_search (cur->key, cur->keylen, str, len) !=
+					-1) {
+				ucl_object_insert_key (res, ucl_object_ref (cur),
+						path->str, path->len, true);
+				goto fin;
+			}
+		}
+
+		if (ucl_object_type (cur) == UCL_OBJECT) {
+			elt = ucl_object_find_key (cur, "data");
+
+			if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
+				if (rspamd_substring_search (elt->value.sv,
+						elt->len,
+						str,
+						len) != -1) {
+					ucl_object_insert_key (res, ucl_object_ref (cur),
+							path->str, path->len, true);
+					goto fin;
+				}
+			}
+
+			rspamadm_confighelp_search_word_step (cur, res, str, len, path);
+		}
+
+		fin:
+		/* Remove the last component of the path */
+		dot_pos = strrchr (path->str, '.');
+
+		if (dot_pos) {
+			g_string_erase (path, dot_pos - path->str,
+					path->len - (dot_pos - path->str));
+		}
+	}
+}
+
+static ucl_object_t *
+rspamadm_confighelp_search_word (const ucl_object_t *obj, const gchar *str)
+{
+	gsize len = strlen (str);
+	GString *path = g_string_new ("");
+	ucl_object_t *res;
+
+
+	res = ucl_object_typed_new (UCL_OBJECT);
+
+	rspamadm_confighelp_search_word_step (obj, res, str, len, path);
+
+	return res;
 }
 
 static void
@@ -159,10 +232,21 @@ rspamadm_confighelp (gint argc, gchar **argv)
 	if (argc > 1) {
 		while (argc > 1) {
 			if (argv[i][0] != '-') {
-				doc_obj = ucl_lookup_path (cfg->doc_strings, argv[i]);
+
+				if (keyword) {
+					doc_obj = rspamadm_confighelp_search_word (cfg->doc_strings,
+							argv[i]);
+				}
+				else {
+					doc_obj = ucl_lookup_path (cfg->doc_strings, argv[i]);
+				}
 
 				if (doc_obj != NULL) {
 					rspamadm_confighelp_show (argv[i], doc_obj);
+
+					if (keyword) {
+						ucl_object_unref ((ucl_object_t *)doc_obj);
+					}
 				}
 				else {
 					rspamd_fprintf (stderr,
