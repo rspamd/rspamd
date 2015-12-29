@@ -96,7 +96,8 @@ rspamadm_confighelp_show (const char *key, const ucl_object_t *obj)
 	else {
 		/* TODO: add lua helper for output */
 		if (key) {
-			rspamd_fprintf (stdout, "Showing help for %s:\n", key);
+			rspamd_fprintf (stdout, "Showing help for %s%s:\n",
+					keyword ? "keyword " : "", key);
 		}
 		else {
 			rspamd_fprintf (stdout, "Showing help for all options:\n");
