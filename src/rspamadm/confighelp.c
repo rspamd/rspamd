@@ -72,6 +72,9 @@ rspamadm_confighelp_help (gboolean full_help)
 				"-c: output compacted JSON\n"
 				"-j: output pretty formatted JSON\n"
 				"-k: search by keyword in doc string\n"
+				"--color: show colored output\n"
+				"--short: show only option names\n"
+				"--no-examples: do not show examples (impied by --short)\n"
 				"--help: shows available options and commands";
 	}
 	else {
@@ -194,13 +197,14 @@ rspamadm_confighelp (gint argc, gchar **argv)
 {
 	struct rspamd_rcl_section *top;
 	struct rspamd_config *cfg;
-	const ucl_object_t *doc_obj;
+	ucl_object_t *doc_obj;
+	const ucl_object_t *elt;
 	GOptionContext *context;
 	GError *error = NULL;
 	module_t *mod, **pmod;
 	worker_t **pworker;
 	struct module_ctx *mod_ctx;
-	gint i = 1, ret = 0;
+	gint i = 1, ret = 0, processed_args = 0;
 
 	context = g_option_context_new (
 			"confighelp - displays help for the configuration options");
@@ -249,7 +253,7 @@ rspamadm_confighelp (gint argc, gchar **argv)
 	}
 
 	if (argc > 1) {
-		while (argc > 1) {
+		for (i = 1; i < argc; i ++) {
 			if (argv[i][0] != '-') {
 
 				if (keyword) {
@@ -257,15 +261,18 @@ rspamadm_confighelp (gint argc, gchar **argv)
 							argv[i]);
 				}
 				else {
-					doc_obj = ucl_lookup_path (cfg->doc_strings, argv[i]);
+					doc_obj = ucl_object_typed_new (UCL_OBJECT);
+					elt = ucl_lookup_path (cfg->doc_strings, argv[i]);
+
+					if (elt) {
+						ucl_object_insert_key (doc_obj, ucl_object_ref (elt),
+								argv[i], 0, false);
+					}
 				}
 
 				if (doc_obj != NULL) {
 					rspamadm_confighelp_show (cfg, argc, argv, argv[i], doc_obj);
-
-					if (keyword) {
-						ucl_object_unref ((ucl_object_t *)doc_obj);
-					}
+					ucl_object_unref (doc_obj);
 				}
 				else {
 					rspamd_fprintf (stderr,
@@ -273,13 +280,12 @@ rspamadm_confighelp (gint argc, gchar **argv)
 							argv[i]);
 					ret = EXIT_FAILURE;
 				}
+				processed_args ++;
 			}
-
-			i++;
-			argc--;
 		}
 	}
-	else {
+
+	if (processed_args == 0) {
 		/* Show all documentation strings */
 		rspamadm_confighelp_show (cfg, argc, argv, NULL, cfg->doc_strings);
 	}
