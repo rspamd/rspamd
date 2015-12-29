@@ -218,6 +218,13 @@ rspamadm_confighelp (gint argc, gchar **argv)
 		exit (1);
 	}
 
+	pworker = &workers[0];
+	while (*pworker) {
+		/* Init string quarks */
+		(void) g_quark_from_static_string ((*pworker)->name);
+		pworker++;
+	}
+
 	cfg = rspamd_config_new ();
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;

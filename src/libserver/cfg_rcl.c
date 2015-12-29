@@ -2747,6 +2747,8 @@ rspamd_rcl_register_worker_option (struct rspamd_config *cfg,
 	struct rspamd_worker_param_parser *nhandler;
 	struct rspamd_worker_cfg_parser *nparser;
 	struct rspamd_worker_param_key srch;
+	const ucl_object_t *doc_workers, *doc_target;
+	ucl_object_t *doc_obj;
 
 	nparser = g_hash_table_lookup (cfg->wrk_parsers, &type);
 
@@ -2780,6 +2782,26 @@ rspamd_rcl_register_worker_option (struct rspamd_config *cfg,
 	nhandler->handler = handler;
 
 	g_hash_table_insert (nparser->parsers, &nhandler->key, nhandler);
+
+	doc_workers = ucl_object_find_key (cfg->doc_strings, "workers");
+
+	if (doc_workers == NULL) {
+		doc_obj = ucl_object_typed_new (UCL_OBJECT);
+		ucl_object_insert_key (cfg->doc_strings, doc_obj, "workers", 0, false);
+		doc_workers = doc_obj;
+	}
+
+	doc_target = ucl_object_find_key (doc_workers, g_quark_to_string (type));
+
+	if (doc_target == NULL) {
+		doc_obj = ucl_object_typed_new (UCL_OBJECT);
+		ucl_object_insert_key ((ucl_object_t *)doc_workers, doc_obj,
+				g_quark_to_string (type), 0, true);
+		doc_target = doc_obj;
+	}
+
+	rspamd_rcl_add_doc_obj ((ucl_object_t *)doc_target, doc_string, name, UCL_NULL,
+			handler, flags);
 }
 
 
