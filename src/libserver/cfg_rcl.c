@@ -2949,8 +2949,8 @@ rspamd_rcl_doc_obj_from_handler (ucl_object_t *doc_obj,
 		}
 		if (!has_example) {
 			ucl_object_insert_key (doc_obj,
-					ucl_object_fromstring ("param = \"str1, str2, str3\" OR "
-							"param = [\"str1\", \"str2\", \"str3\"]"),
+					ucl_object_fromstring_common ("param = \"str1, str2, str3\" OR "
+							"param = [\"str1\", \"str2\", \"str3\"]", 0, 0),
 					"example",
 					0,
 					false);
