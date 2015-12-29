@@ -2997,9 +2997,9 @@ rspamd_rcl_doc_obj_from_handler (ucl_object_t *doc_obj,
 		}
 		if (!has_example) {
 			ucl_object_insert_key (doc_obj,
-					ucl_object_fromstring ("keypair {\n"
-							"  pubkey = <base32_string>;\n"
-							"  privkey = <base32_string>;\n"
+					ucl_object_fromstring ("keypair { "
+							"pubkey = <base32_string>;"
+							" privkey = <base32_string>; "
 							"}"),
 					"example",
 					0,
