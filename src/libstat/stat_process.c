@@ -546,7 +546,6 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, guint stage,
 	struct rspamd_stat_ctx *st_ctx;
 	struct rspamd_statfile_runtime *st_run;
 	struct rspamd_classifier_runtime *cl_run;
-	struct classifier_ctx *cl_ctx;
 	GList *cl_runtimes;
 	GList *cur, *curst;
 	gboolean ret = RSPAMD_STAT_PROCESS_OK;
@@ -564,43 +563,38 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, guint stage,
 			}
 
 			task->cl_runtimes = cl_runtimes;
-		}
+			cur = cl_runtimes;
 
+			/* Finalize backend so it can load tokens delayed if needed */
+			while (cur) {
+				cl_run = (struct rspamd_classifier_runtime *) cur->data;
+				curst = cl_run->st_runtime;
+
+				while (curst) {
+					st_run = curst->data;
+					cl_run->backend->finalize_process (task,
+							st_run->backend_runtime,
+							cl_run->backend->ctx);
+					curst = g_list_next (curst);
+				}
+			}
+		}
+	}
+	else if (stage == RSPAMD_TASK_STAGE_CLASSIFIERS) {
 		cur = cl_runtimes;
 
+		/* The first stage of classification */
 		while (cur) {
 			cl_run = (struct rspamd_classifier_runtime *) cur->data;
 			cl_run->stage = RSPAMD_STAT_STAGE_PRE;
 
 			if (cl_run->cl) {
-				cl_ctx = cl_run->cl->init_func (task->task_pool, cl_run->clcf);
+				cl_run->clctx = cl_run->cl->init_func (task->task_pool,
+						cl_run->clcf);
 
-				if (cl_ctx != NULL) {
-					cl_run->cl->classify_func (cl_ctx, cl_run->tok->tokens,
+				if (cl_run->clctx != NULL) {
+					cl_run->cl->classify_func (cl_run->clctx, cl_run->tok->tokens,
 							cl_run, task);
-				}
-			}
-
-			cur = g_list_next (cur);
-		}
-	}
-	else if (stage == RSPAMD_TASK_STAGE_CLASSIFIERS) {
-		cur = cl_runtimes;
-		while (cur) {
-			cl_run = (struct rspamd_classifier_runtime *) cur->data;
-			cl_run->stage = RSPAMD_STAT_STAGE_POST;
-
-			if (cl_run->skipped) {
-				cur = g_list_next (cur);
-				continue;
-			}
-
-			if (cl_run->cl) {
-				if (cl_ctx != NULL) {
-					if (cl_run->cl->classify_func (cl_ctx, cl_run->tok->tokens,
-							cl_run, task)) {
-						ret = RSPAMD_STAT_PROCESS_OK;
-					}
 				}
 			}
 
@@ -609,6 +603,7 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, guint stage,
 	}
 	else if (stage == RSPAMD_TASK_STAGE_CLASSIFIERS_POST) {
 		cur = cl_runtimes;
+		/* The second stage of classification */
 		while (cur) {
 			cl_run = (struct rspamd_classifier_runtime *) cur->data;
 			cl_run->stage = RSPAMD_STAT_STAGE_POST;
@@ -618,14 +613,22 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, guint stage,
 				continue;
 			}
 
-			curst = cl_run->st_runtime;
+			cl_run = (struct rspamd_classifier_runtime *) cur->data;
+			cl_run->stage = RSPAMD_STAT_STAGE_POST;
 
-			while (curst) {
-				st_run = curst->data;
-				cl_run->backend->finalize_process (task,
-						st_run->backend_runtime,
-						cl_run->backend->ctx);
-				curst = g_list_next (curst);
+			if (cl_run->skipped) {
+				cur = g_list_next (cur);
+				continue;
+			}
+
+			if (cl_run->cl) {
+				if (cl_run->clctx != NULL) {
+					if (cl_run->cl->classify_func (cl_run->clctx,
+							cl_run->tok->tokens,
+							cl_run, task)) {
+						ret = RSPAMD_STAT_PROCESS_OK;
+					}
+				}
 			}
 
 			cur = g_list_next (cur);

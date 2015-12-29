@@ -53,6 +53,7 @@ struct rspamd_statfile_runtime {
 
 struct rspamd_classifier_runtime {
 	struct rspamd_classifier_config *clcf;
+	struct classifier_ctx *clctx;
 	struct rspamd_stat_classifier *cl;
 	struct rspamd_stat_backend *backend;
 	struct rspamd_tokenizer_runtime *tok;
