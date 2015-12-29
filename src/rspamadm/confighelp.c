@@ -127,8 +127,10 @@ rspamadm_confighelp_search_word_step (const ucl_object_t *obj,
 		if (cur->keylen > 0) {
 			rspamd_printf_gstring (path, ".%*s", (int) cur->keylen, cur->key);
 
-			if (rspamd_substring_search (cur->key, cur->keylen, str, len) !=
-					-1) {
+			if (rspamd_substring_search_caseless (cur->key,
+					cur->keylen,
+					str,
+					len) != -1) {
 				ucl_object_insert_key (res, ucl_object_ref (cur),
 						path->str, path->len, true);
 				goto fin;
@@ -139,7 +141,7 @@ rspamadm_confighelp_search_word_step (const ucl_object_t *obj,
 			elt = ucl_object_find_key (cur, "data");
 
 			if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
-				if (rspamd_substring_search (elt->value.sv,
+				if (rspamd_substring_search_caseless (elt->value.sv,
 						elt->len,
 						str,
 						len) != -1) {
