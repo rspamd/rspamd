@@ -211,7 +211,7 @@ init_http_proxy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct http_proxy_ctx,
 					timeout),
 			RSPAMD_CL_FLAG_TIME_FLOAT,
-			NULL);
+			"IO timeout");
 	rspamd_rcl_register_worker_option (cfg,
 			type,
 			"rotate",
@@ -220,7 +220,8 @@ init_http_proxy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct http_proxy_ctx,
 					rotate_tm),
 			RSPAMD_CL_FLAG_TIME_FLOAT,
-			NULL);
+			"Rotation keys time, default: "
+			G_STRINGIFY (DEFAULT_ROTATION_TIME) " seconds");
 	rspamd_rcl_register_worker_option (cfg,
 			type,
 			"keypair",
@@ -229,7 +230,7 @@ init_http_proxy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct http_proxy_ctx,
 					key),
 			0,
-			NULL);
+			"Server's keypair");
 	rspamd_rcl_register_worker_option (cfg,
 			type,
 			"upstream",
@@ -237,7 +238,7 @@ init_http_proxy (struct rspamd_config *cfg)
 			ctx,
 			0,
 			0,
-			NULL);
+			"List of upstreams");
 
 	return ctx;
 }

@@ -991,7 +991,7 @@ init_smtp_proxy (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct smtp_proxy_ctx, upstreams_str),
 			0,
-			NULL);
+			"List of upstream SMTP servers");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -1001,7 +1001,7 @@ init_smtp_proxy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct smtp_proxy_ctx,
 					smtp_timeout_raw),
 			RSPAMD_CL_FLAG_TIME_UINT_32,
-			NULL);
+			"IO timeout");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -1011,7 +1011,7 @@ init_smtp_proxy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct smtp_proxy_ctx,
 					smtp_delay),
 			RSPAMD_CL_FLAG_TIME_UINT_32,
-			NULL);
+			"SMTP greeting delay");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -1021,7 +1021,7 @@ init_smtp_proxy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct smtp_proxy_ctx,
 					delay_jitter),
 			RSPAMD_CL_FLAG_TIME_UINT_32,
-			NULL);
+			"Jitter atribute for SMTP delay");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -1030,7 +1030,7 @@ init_smtp_proxy (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct smtp_proxy_ctx, use_xclient),
 			0,
-			NULL);
+			"Use XCLIENT protocol for upstream communication");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -1039,7 +1039,7 @@ init_smtp_proxy (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct smtp_proxy_ctx, instant_reject),
 			0,
-			NULL);
+			"Reject invalid pipelining");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -1049,7 +1049,7 @@ init_smtp_proxy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct smtp_proxy_ctx,
 					proxy_buf_len),
 			RSPAMD_CL_FLAG_INT_32,
-			NULL);
+			"Adjust SMTP buffer size");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -1058,7 +1058,7 @@ init_smtp_proxy (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct smtp_proxy_ctx, rbls),
 			0,
-			NULL);
+			"Use the following DNS lists as IP blacklists");
 
 	return ctx;
 }

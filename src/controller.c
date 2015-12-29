@@ -2270,7 +2270,7 @@ init_controller_worker (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, password),
 			0,
-			NULL);
+			"Password for read-only commands");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -2280,7 +2280,7 @@ init_controller_worker (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
 					enable_password),
 			0,
-			NULL);
+			"Password for read and write commands");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -2289,7 +2289,7 @@ init_controller_worker (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, use_ssl),
 			0,
-			NULL);
+			"Unimplemented");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -2298,7 +2298,7 @@ init_controller_worker (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, ssl_cert),
 			0,
-			NULL);
+			"Unimplemented");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -2307,7 +2307,7 @@ init_controller_worker (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, ssl_key),
 			0,
-			NULL);
+			"Unimplemented");
 	rspamd_rcl_register_worker_option (cfg,
 			type,
 			"timeout",
@@ -2316,7 +2316,7 @@ init_controller_worker (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
 					timeout),
 			RSPAMD_CL_FLAG_TIME_INTEGER,
-			NULL);
+			"Protocol timeout");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -2325,7 +2325,7 @@ init_controller_worker (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, secure_ip),
 			0,
-			NULL);
+			"List of IP addresses that are allowed for password-less access");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -2335,7 +2335,7 @@ init_controller_worker (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
 					static_files_dir),
 			0,
-			NULL);
+			"Directory for static files served by controller's HTTP server");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -2345,7 +2345,7 @@ init_controller_worker (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
 					key),
 			0,
-			NULL);
+			"Encryption keypair");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -2355,7 +2355,7 @@ init_controller_worker (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
 					saved_stats_path),
 			0,
-			NULL);
+			"Directory where controller saves server's statistics between restarts");
 
 	return ctx;
 }

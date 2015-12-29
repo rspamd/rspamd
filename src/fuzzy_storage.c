@@ -1143,7 +1143,7 @@ init_fuzzy (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile),
 			0,
-			NULL);
+			"Path to fuzzy database");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -1152,7 +1152,7 @@ init_fuzzy (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile),
 			0,
-			NULL);
+			"Path to fuzzy database (alias for hashfile)");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -1161,7 +1161,7 @@ init_fuzzy (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile),
 			0,
-			NULL);
+			"Path to fuzzy database (alias for hashfile)");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -1170,7 +1170,7 @@ init_fuzzy (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile),
 			0,
-			NULL);
+			"Path to fuzzy database (alias for hashfile)");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -1180,7 +1180,8 @@ init_fuzzy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx,
 						sync_timeout),
 			RSPAMD_CL_FLAG_TIME_FLOAT,
-			NULL);
+			"Time to perform database sync, default: "
+			G_STRINGIFY (DEFAULT_SYNC_TIMEOUT) " seconds");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -1190,7 +1191,8 @@ init_fuzzy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx,
 						expire),
 			RSPAMD_CL_FLAG_TIME_FLOAT,
-			NULL);
+			"Default expire time for hashes, default: "
+			G_STRINGIFY (DEFAULT_EXPIRE) " seconds");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -1199,7 +1201,7 @@ init_fuzzy (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, update_map),
 			0,
-			NULL);
+			"Allow modifications from the following IP addresses");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -1208,7 +1210,7 @@ init_fuzzy (struct rspamd_config *cfg)
 			ctx,
 			0,
 			RSPAMD_CL_FLAG_MULTIPLE,
-			NULL);
+			"Encryption keypair (can be repeated for different keys)");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -1218,7 +1220,8 @@ init_fuzzy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx,
 						keypair_cache_size),
 			RSPAMD_CL_FLAG_UINT,
-			NULL);
+			"Size of keypairs cache, default: "
+					G_STRINGIFY (DEFAULT_KEYPAIR_CACHE_SIZE));
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -1227,7 +1230,7 @@ init_fuzzy (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, encrypted_only),
 			0,
-			NULL);
+			"Allow encrypted requests only (and forbid all unknown keys or plaintext requests)");
 
 
 	return ctx;

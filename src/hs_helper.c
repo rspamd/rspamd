@@ -82,7 +82,7 @@ init_hs_helper (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct hs_helper_ctx, hs_dir),
 			0,
-			NULL);
+			"Directory where to save hyperscan compiled expressions");
 	rspamd_rcl_register_worker_option (cfg,
 			type,
 			"max_time",
@@ -90,7 +90,7 @@ init_hs_helper (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct hs_helper_ctx, max_time),
 			RSPAMD_CL_FLAG_TIME_FLOAT,
-			NULL);
+			"Maximum time to wait for compilation of a single expression");
 
 	return ctx;
 }

@@ -332,7 +332,7 @@ init_lua_worker (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_lua_worker_ctx, file),
 			0,
-			NULL);
+			"Run the following lua script when accepting a connection");
 
 	rspamd_rcl_register_worker_parser (cfg, type, rspamd_lua_worker_parser,
 		ctx);

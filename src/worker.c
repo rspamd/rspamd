@@ -330,7 +330,7 @@ init_worker (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_mime),
 			0,
-			NULL);
+			"Set to `false` if this worker is intended to work with non-MIME messages");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -339,7 +339,7 @@ init_worker (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_http),
 			0,
-			NULL);
+			"Deprecated: always true now");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -348,7 +348,7 @@ init_worker (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_json),
 			0,
-			NULL);
+			"Deprecated: always true now");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -357,7 +357,7 @@ init_worker (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_worker_ctx, allow_learn),
 			0,
-			NULL);
+			"Deprecated: disabled and forgotten");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -367,7 +367,7 @@ init_worker (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_worker_ctx,
 						timeout),
 			RSPAMD_CL_FLAG_TIME_INTEGER,
-			NULL);
+			"Protocol IO timeout");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -377,7 +377,9 @@ init_worker (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_worker_ctx,
 						task_timeout),
 			RSPAMD_CL_FLAG_TIME_FLOAT,
-			NULL);
+			"Maximum task processing time, default: "
+					G_STRINGIFY(DEFAULT_TASK_TIMEOUT)
+					" seconds");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -387,7 +389,7 @@ init_worker (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_worker_ctx,
 						max_tasks),
 			RSPAMD_CL_FLAG_INT_32,
-			NULL);
+			"Maximum count of parallel tasks processed by a single worker process");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -397,7 +399,7 @@ init_worker (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_worker_ctx,
 						key),
 			0,
-			NULL);
+			"Encryption keypair");
 
 	return ctx;
 }
