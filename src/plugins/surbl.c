@@ -807,6 +807,20 @@ format_surbl_request (rspamd_mempool_t * pool,
 	url->surbl = result;
 	url->surbllen = r;
 
+	if (!forced &&
+			g_hash_table_lookup (surbl_module_ctx->whitelist, result) != NULL) {
+		msg_debug_pool ("url %s is whitelisted", result);
+		g_set_error (err, SURBL_ERROR,
+				WHITELIST_ERROR,
+				"URL is whitelisted: %s",
+				result);
+		return NULL;
+	}
+
+	if (append_suffix) {
+		rspamd_snprintf (result + r, len - r, ".%s", suffix->suffix);
+	}
+
 	if (tree != NULL) {
 		if (g_hash_table_lookup (tree, result) != NULL) {
 			msg_debug_pool ("url %s is already registered", result);
@@ -819,21 +833,6 @@ format_surbl_request (rspamd_mempool_t * pool,
 		else {
 			g_hash_table_insert (tree, result, url);
 		}
-	}
-
-	if (!forced &&
-		g_hash_table_lookup (surbl_module_ctx->whitelist, result) != NULL) {
-		msg_debug_pool ("url %s is whitelisted", result);
-		g_set_error (err, SURBL_ERROR,
-			WHITELIST_ERROR,
-			"URL is whitelisted: %s",
-			result);
-		return NULL;
-	}
-
-
-	if (append_suffix) {
-		rspamd_snprintf (result + r, len - r, ".%s", suffix->suffix);
 	}
 
 	msg_debug_pool ("request: %s, dots: %d, level: %d, orig: %*s",
@@ -887,7 +886,8 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 			param->suffix = suffix;
 			param->host_resolve =
 					rspamd_mempool_strdup (task->task_pool, surbl_req);
-			debug_task ("send surbl dns ip request %s", surbl_req);
+			debug_task ("send surbl dns ip request %s to %s", surbl_req,
+					suffix->suffix);
 
 			if (make_dns_request_task (task,
 					surbl_dns_ip_callback,
@@ -1032,6 +1032,11 @@ surbl_dns_ip_callback (struct rdns_reply *reply, gpointer arg)
 						ip_addr >> 16 & 0xff,
 						ip_addr >> 8 & 0xff,
 						ip_addr & 0xff, param->suffix->suffix);
+				msg_debug_task (
+						"<%s> domain [%s] send %v request to surbl",
+						param->task->message_id,
+						param->host_resolve,
+						to_resolve);
 
 				if (make_dns_request_task (task,
 						surbl_dns_callback,
@@ -1283,7 +1288,7 @@ surbl_test_url (struct rspamd_task *task, void *user_data)
 
 	param.task = task;
 	param.suffix = suffix;
-	param.tree = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+	param.tree = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	rspamd_mempool_add_destructor (task->task_pool,
 		(rspamd_mempool_destruct_t)g_hash_table_unref,
 		param.tree);
