@@ -29,6 +29,7 @@
 #include "tokenizers/tokenizers.h"
 #include "libserver/url.h"
 #include <math.h>
+#include <glob.h>
 
 /***
  * @module rspamd_util
@@ -152,6 +153,15 @@ LUA_FUNCTION_DEF (util, humanize_number);
  */
 LUA_FUNCTION_DEF (util, get_tld);
 
+/**
+ * @function util.glob(pattern)
+ * Returns results for the glob match for the specified pattern
+ *
+ * @param {string} pattern glob pattern to match ('?' and '*' are supported)
+ * @return {table/string} list of matched files
+ */
+LUA_FUNCTION_DEF (util, glob);
+
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
 	LUA_INTERFACE_DEF (util, load_rspamd_config),
@@ -168,6 +178,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, is_uppercase),
 	LUA_INTERFACE_DEF (util, humanize_number),
 	LUA_INTERFACE_DEF (util, get_tld),
+	LUA_INTERFACE_DEF (util, glob),
 	{NULL, NULL}
 };
 
@@ -732,6 +743,38 @@ lua_util_get_tld (lua_State *L)
 	else {
 		lua_pushnil (L);
 	}
+
+	return 1;
+}
+
+
+static gint
+lua_util_glob (lua_State *L)
+{
+	const gchar *pattern;
+	glob_t gl;
+	gint top, i, flags;
+
+	top = lua_gettop (L);
+	memset (&gl, 0, sizeof (gl));
+	flags = GLOB_NOSORT;
+
+	for (i = 1; i <= top; i ++, flags |= GLOB_APPEND) {
+		pattern = luaL_checkstring (L, i);
+
+		if (pattern) {
+			glob (pattern, flags, NULL, &gl);
+		}
+	}
+
+	lua_newtable (L);
+	/* Push results */
+	for (i = 0; i < (gint)gl.gl_pathc; i ++) {
+		lua_pushstring (L, gl.gl_pathv[i]);
+		lua_rawseti (L, -2, i + 1);
+	}
+
+	globfree (&gl);
 
 	return 1;
 }
