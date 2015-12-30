@@ -577,6 +577,8 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, guint stage,
 							cl_run->backend->ctx);
 					curst = g_list_next (curst);
 				}
+
+				cur = g_list_next (cur);
 			}
 		}
 	}
