@@ -101,7 +101,7 @@ against a set of multiple patterns. Or it uses radix bit trie for storing IP add
 Besides of the `C` core rspamd provides the extensive [LUA](http://lua.org) API to access almost all the features available directly from `C`. LUA is an extremely easy
 to learn programming language, though it is powerful enough to implement complex mail filters. In fact, rspamd has a significant amout of code written completely in lua, such as
 DNS blacklists checks, or user's settings, or different maps implementation. You can also write your own filters and rules in LUA adopting rspamd functionality to your needs.
-Furthermore, LUA programs are very fast and their performance is rather [close](http://attractivechaos.github.io/plb/) to pure `C`. However, you should mention that for the most
+Furthermore, LUA programs are very fast and their performance is rather [close](http://attractivechaos.github.io/plb/) to pure `C`. However, you should note that for the most
 of performance critical tasks you usually use the rspamd core functionality than LUA code. Anyway, you can also use `LuaJIT` with rspamd if your goal is maximum performance.
 From the LUA API you can do the following tasks:
 
