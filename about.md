@@ -98,14 +98,14 @@ against a set of multiple patterns. Or it uses radix bit trie for storing IP add
 
 ## Extensions {#extensions}
 
-Besides of the `C` core rspamd provides the extensive [LUA](http://lua.org) API to access almost all the features available directly from `C`. LUA is an extremely easy
-to learn programming language, though it is powerful enough to implement complex mail filters. In fact, rspamd has a significant amout of code written completely in lua, such as
-DNS blacklists checks, or user's settings, or different maps implementation. You can also write your own filters and rules in LUA adopting rspamd functionality to your needs.
-Furthermore, LUA programs are very fast and their performance is rather [close](http://attractivechaos.github.io/plb/) to pure `C`. However, you should note that for the most
-of performance critical tasks you usually use the rspamd core functionality than LUA code. Anyway, you can also use `LuaJIT` with rspamd if your goal is maximum performance.
-From the LUA API you can do the following tasks:
+Besides of the `C` core rspamd provides the extensive [Lua](http://lua.org) API to access almost all the features available directly from `C`. Lua is an extremely easy
+to learn programming language, though it is powerful enough to implement complex mail filters. In fact, rspamd has a significant amout of code written completely in Lua, such as
+DNS blacklists checks, or user's settings, or different maps implementation. You can also write your own filters and rules in Lua adopting rspamd functionality to your needs.
+Furthermore, Lua programs are very fast and their performance is rather [close](http://attractivechaos.github.io/plb/) to pure `C`. However, you should note that for the most
+of performance critical tasks you usually use the rspamd core functionality than Lua code. Anyway, you can also use `LuaJIT` with rspamd if your goal is maximum performance.
+From the Lua API you can do the following tasks:
 
-* **Reading the configuration parameters** - lua code has the full access to the parsed configuration knobs and you can easily modify your plugins behaviour by means of the main
+* **Reading the configuration parameters** - Lua code has the full access to the parsed configuration knobs and you can easily modify your plugins behaviour by means of the main
 rspamd configuration
 
 * **Registering custom filters** - it is more than simple to add your own filters to rspamd: just add new index to the global variable `rspamd_config`:
@@ -122,17 +122,17 @@ end
 * **Pre- and post- filters** - you can register callbacks that are called before or after messages processing to make results more precise or to make some early decision,
 for example, to implement a rate limit.
 
-* **Registering functions for rspamd** - you can write your own functions in lua to extend rspamd internal expression functions.
+* **Registering functions for rspamd** - you can write your own functions in Lua to extend rspamd internal expression functions.
 
-* **Managing statistics** - lua scripts can define a set of statistical files to be scanned or learned for a specific message allowing to create more complex
-statistical systems, e.g. based on an input language. Moreover, you can even learn rspamd statistic from lua scripts.
+* **Managing statistics** - Lua scripts can define a set of statistical files to be scanned or learned for a specific message allowing to create more complex
+statistical systems, e.g. based on an input language. Moreover, you can even learn rspamd statistic from Lua scripts.
 
-* **Standalone lua applications** - you can even write your own worker based on rspamd core and performing some asynchronous logic in lua. Of course, you can use the
+* **Standalone Lua applications** - you can even write your own worker based on rspamd core and performing some asynchronous logic in Lua. Of course, you can use the
 all features from rspamd core, including such features as non-blocking IO, HTTP client and server, non-blocking redis client, asynchronous DNS, UCL configuration and so on
 and so forth.
 
-* **API documentation** - rspamd lua API has an [extensive documentation](https://rspamd.com/doc/lua) where you can find examples, references and the guide about how to extend
-rspamd with LUA.
+* **API documentation** - rspamd Lua API has an [extensive documentation](https://rspamd.com/doc/lua) where you can find examples, references and the guide about how to extend
+rspamd with Lua.
 
 ## References
 
