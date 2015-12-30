@@ -108,17 +108,18 @@ For experimental branch replace `apt-stable` with just `apt`:
 </div>
         </div>
         <div role="tabpanel" class="tab-pane fade" id="system3">
-            <h3>Gentoo Linux</h3>
+            <h3>Other systems</h3>
 <div markdown="1">
 Rspamd is also supported on the following platforms:
 
 - Gentoo Linux
 - Arch Linux
 - Scientific Linux
-- Suse Linux Enterprise
+- SUSE Linux Enterprise
 - OpenSUSE Linux
 - FreeBSD
 - NetBSD
+- OpenBSD
 - OSX (using MacPorts)
 
 ### Gentoo Linux
@@ -134,6 +135,8 @@ FreeBSD users can install Rspamd from [ports](http://www.freshports.org/mail/rsp
 
 Users of NetBSD (and other systems with pkgsrc) can use [pkgsrc](http://pkgsrc.se/mail/rspamd).
 
+OpenBSD users can use [ports](http://openports.se/mail/rspamd).
+
 OSX users can install from [MacPorts](https://trac.macports.org/browser/trunk/dports/mail/rspamd/Portfile).
 </div>
         </div>
@@ -142,7 +145,7 @@ OSX users can install from [MacPorts](https://trac.macports.org/browser/trunk/dp
 
 ### Debian `official` repos
 
-Rspamd is also available in Debian's [testing](https://packages.debian.org/source/testing/rspamd) and [unstable](https://packages.debian.org/source/unstable/rspamd) distributions and the universe repository in [some versions](http://packages.ubuntu.com/search?keywords=rspamd&searchon=names&suite=all&section=all) of Ubuntu. However, we are looking for an active maintainer for rspamd in these 'official' repos, as now rspamd is terribly outdated there.
+Rspamd is also available in some versions of Debian and Ubuntu. However, we are looking for an active maintainer for rspamd in these 'official' repos, as now rspamd is terribly outdated there.
 
 Please **DO NOT** use those packages, as they are no longer supported.
 
