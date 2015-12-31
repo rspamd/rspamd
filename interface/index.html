@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Rspamd Web Interface</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="description" content="">
+	<meta name="author" content="">
+	<link href="//cdnjs.cloudflare.com/ajax/libs/file-uploader/3.7.0/fineuploader.min.css" rel="stylesheet">
+	<link href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css" rel="stylesheet">
+	<link rel="stylesheet" type="text/css" href="./css/datatables.min.css"/>
+	<link href="./css/rspamd.css" rel="stylesheet">
+</head>
+
+<body>
+
+<nav class="navbar navbar-default" id="navBar">
+	<div class="container-fluid">
+		<div class="navbar-header">
+			<a class="navbar-brand" href="."><b>Rspamd</b></a>
+		</div>
+		<ul class="nav pull-right navbar-nav" style="display:none">
+			<li><a href="#" data-toggle="tab" id="refresh">Refresh</a></li>
+			<li class="spinner"><a href="#" data-toggle="tab" id="disconnect">Disconnect</a></li>
+		</ul>
+		<ul class="nav navbar-nav nav-pills" role="tablist">
+			<li role="presentation" class="active"><a id="status_nav" aria-controls="status" role="tab" href="#status" data-toggle="tab">Status</a></li>
+			<li role="presentation"><a id="configuration_nav" aria-controls="configuration" role="tab" href="#configuration" data-toggle="tab">Configuration</a></li>
+			<li role="presentation"><a id="learning_nav" aria-controls="learning" role="tab" href="#learning" data-toggle="tab">Learning</a></li>
+			<li role="presentation"><a id="scan_nav"aria-controls="scan" role="tab"  href="#scan" data-toggle="tab">Scan</a></li>
+			<li role="presentation"><a id="history_nav" aria-controls="history" role="tab" href="#history" data-toggle="tab">History</a></li>
+		</ul>
+	</div>
+</nav>
+
+<div id="mainUI" style="display:none">
+
+	<div class="container-fluid">
+
+		<div class="tab-content">
+			<div class="tab-pane active" id="status">
+				<div class="row">
+					<div class="col-md-12">
+						<div class="widget-box widget-plain">
+							<ul id="statWidgets" class="stat-boxes" style="display:none">
+							</ul>
+						</div>
+					</div>
+				</div>
+
+				<div class="widget-box">
+					<div class="widget-title">
+						<span class="icon"><i class="glyphicon glyphicon-signal"></i></span>
+						<h5>Statistics</h5>
+					</div>
+					<div class="widget-content chart-content">
+						<div class="row row-chart">
+							<div class="chart" id="chart">
+								<span class="notice">Loading..</span>
+								<noscript>Please enable Javascript</noscript>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="tab-pane" id="configuration">
+				<div class="widget-box">
+					<div class="widget-title">
+						<span class="icon"><i class="glyphicon glyphicon-tasks"></i></span><h5>Actions</h5>
+					</div>
+					<div class="widget-content actions-content" id="actionsBody">
+					</div>
+				</div>
+				<div class="widget-box">
+					<div class="widget-title">
+						<span class="icon"><i class="glyphicon glyphicon-filter"></i></span><h5>Rules</h5>
+					</div>
+					<div class="widget-content">
+						<button role="button" class="btn btn-primary"
+								data-toggle="modal"
+								data-source="#symbolsForm"
+								data-target="#modalDialog"
+								data-title="Symbols">Edit Rules</button>
+					</div>
+				</div>
+				<div class="widget-box">
+					<div class="widget-title">
+						<span class="icon"><i class="glyphicon glyphicon-list"></i></span><h5>Lists</h5>
+					</div>
+					<div class="widget-content nopadding">
+						<table class="table table-condensed table-hover" id="listMaps">
+						</table>
+					</div>
+				</div>
+			</div>
+
+			<div class="tab-pane" id="learning">
+				<div class="widget-box">
+					<div class="widget-title">
+						<span class="icon"><i class="glyphicon glyphicon-file"></i></span>
+						<h5>Learn RSPAMD</h5>
+					</div>
+					<div class="widget-content">
+						<div class="row">
+							<form class="col-md-6 upload-form" id="uploadSpamForm">
+								<h5>Upload SPAM examples:</h5>
+								<button id="uploadSpamTrigger" class="btn pull-right btn-upload-trigger"><i class="glyphicon glyphicon-upload"></i> Upload files</button>
+								<div id="uploadSpamFiles"></div>
+							</form>
+							<form class="col-md-6 upload-form" id="uploadHamForm">
+								<h5>Upload HAM examples:</h5>
+								<button id="uploadHamTrigger" class="btn pull-right btn-upload-trigger"><i class="glyphicon glyphicon-upload"></i> Upload files</button>
+								<div id="uploadHamFiles"></div>
+							</form>
+						</div>
+					</div>
+					<div class="widget-content">
+						<div class="row">
+							<form class="col-md-6">
+								<h5>Insert raw SPAM source:</h5>
+								<textarea class="col-md-5 upload-textarea" id="spamTextSource" value=""></textarea>
+								<p><button class="btn btn-default pull-right" data-upload="spam"><i class="glyphicon glyphicon-upload"></i> Upload text</button></p>
+							</form>
+							<form class="col-md-6">
+								<h5>Insert raw HAM source:</h5>
+								<textarea class="col-md-5 upload-textarea" id="hamTextSource" value=""></textarea>
+								<p><button class="btn btn-default pull-right" data-upload="ham"><i class="glyphicon glyphicon-upload"></i> Upload text</button></p>
+							</form>
+						</div>
+						<div class="row">
+								<form class="col-md-6 upload-form" id="uploadFuzzyForm">
+									<h5>Upload Fuzzy examples:</h5>
+									<div class="row">
+										<label class="pull-left">
+											Flag
+										</label>
+										<div class="pull-right col-md-10">
+											<input id="fuzzyFlagUpload" class="slider" type="slider" value="0"/>
+										</div>
+									</div>
+									<div class="row">
+										<label class="pull-left">
+											Weight
+										</label>
+										<div class="pull-right col-md-10">
+											<input id="fuzzyWeightUpload" class="slider" type="slider" value="0"/>
+										</div>
+									</div>
+									<button id="uploadFuzzyTrigger" class="btn pull-right btn-upload-trigger"><i class="glyphicon glyphicon-upload"></i> Upload files</button>
+									<div id="uploadFuzzyFiles"></div>
+								</form>
+						</div>
+						<div class="row">
+							<form class="col-md-6">
+								<h5>Insert raw Fuzzy storage:</h5>
+								<textarea class="col-md-5 upload-textarea" id="fuzzyTextSource" value=""></textarea>
+							<div class="row">
+								<label class="pull-left">
+										Flag
+								</label>
+									<div class="pull-right col-md-10">
+										<input id="fuzzyFlagText" class="slider" type="slider" value="0"/>
+									</div>
+							</div>
+							<div class="row">
+								<label class="pull-left">
+										Weight
+								</label>
+									<div class="pull-right col-md-10">
+										<input id="fuzzyWeightText" class="slider" type="slider" value="0"/>
+									</div>
+							</div>
+								<p><button class="btn btn-default pull-right" data-upload="fuzzy"><i class="glyphicon glyphicon-upload"></i> Upload text</button></p>
+							</form>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="tab-pane" id="scan">
+				<div class="widget-box">
+					<div class="widget-title">
+						<span class="icon"><i class="glyphicon glyphicon-info-sign"></i></span>
+						<h5>Online scan suspected message</h5>
+					</div>
+					<div class="widget-content">
+						<h5>Paste and scan suspicious message</h5>
+						<div class="row">
+							<form class="col-md-12 nomargin" id="scanForm">
+								<textarea class="col-md-12 scan-textarea" id="scanTextSource"></textarea>
+								<p><button class="btn btn-default btn-primary" data-upload="scan">Scan message</button>
+									<button class="btn btn-default pull-right" id="scanClean">Clean form</button></p>
+							</form>
+						</div>
+						<div id="scanResult" style="display:none">
+							<h4>Scan results:</h4>
+							<div class="well nomargin nopadding">
+								<table class="table table-log table-hover" id="scanOutput">
+									<thead>
+										<th class="col4" title="Action">Action</th>
+										<th class="col5" title="Score / Req.&nbsp;score">Score / Req.&nbsp;score</th>
+										<th class="col6" title="Symbols">Symbols</th>
+									</thead>
+								</table>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="tab-pane" id="history">
+
+				<div class="widget-box">
+					<div class="widget-title">
+						<div class="buttons pull-right">
+							<button class="btn btn-danger btn-sm" id="resetHistory">
+								<i class="glyphicon glyphicon-remove-circle"></i> Reset
+							</button>
+							<button class="btn btn-info btn-sm" id="updateHistory">
+								<i class="glyphicon glyphicon-refresh"></i> Update
+							</button>
+						</div>
+						<span class="icon"><i class="glyphicon glyphicon-eye-open"></i></span>
+						<h5>History</h5>
+					</div>
+					<div class="widget-content nopadding">
+						<table class="table table-log table-hover" id="historyLog">
+							<thead>
+								<th class="col1" title="Time">Time</th>
+								<th class="col2" title="ID">ID</th>
+								<th class="col3" title="IP">IP</th>
+								<th class="col4" title="Action">Action</th>
+								<th class="col5" title="Score / Req.&nbsp;score">Score / Req.&nbsp;score</th>
+								<th class="col6" title="Symbols">Symbols</th>
+								<th class="col7" title="Size">Size</th>
+								<th class="col8" title="Scan Time (s)"><div class="cell-overflow">Scan Time (s)</div></th>
+								<th class="col9" title="User">User</th>
+							</thead>
+						</table>
+					</div>
+				</div>
+
+			</div>
+
+
+		</div>
+	</div>
+
+</div>
+
+<!-- Common modal -->
+<div id="modalDialog" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="modalLabel">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+				<h3 id="modalTitle"></h3>
+			</div>
+			<div class="modal-body" id="modalBody">
+				<div class="progress progress-striped active">
+					<div class="bar" style="width:100%;"></div>
+				</div>
+			</div>
+			<div class="modal-footer">
+				<button class="btn btn-default" data-dismiss="modal" aria-hidden="true" id="modalClose">Close</button>
+				<button class="btn btn-primary" id="modalSave">Save changes</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<!-- login modal -->
+<div id="connectDialog" class="modal" tabindex="-1" role="dialog" aria-labelledby="RSPAMD Connect">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h3>RSPAMD Connect</h3>
+			</div>
+			<div class="modal-body" id="connectBody">
+				<form id="connectForm">
+					<!--
+                    <div class="form-group">
+                        <label class="control-label" for="connectHost">Hostname</label>
+                        <div class="controls">
+                            <input class=col-md-2" type="text" id="connectHost" placeholder="Hostname" tabindex="1">
+                        </div>
+                    </div>
+                    -->
+					<div class="form-group">
+						<label class="col-sm-2 control-label" for="connectPassword">Password:</label>
+						<div class="col-sm-10">
+							<input class="form-control"
+								   type="password"
+								   id="connectPassword"
+								   placeholder="Password"
+								   tabindex="1" />
+						</div>
+					</div>
+					<div class="form-group">
+						<button type="submit" id="connectButton" class="btn btn-primary" tabindex="1">Connect</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div id="backDrop" class="modal-backdrop fade in" style="display:none"></div>
+<script src="//code.jquery.com/jquery-2.1.4.min.js"></script>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/file-uploader/3.7.0/fineuploader.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.min.js"></script>
+<script src="./js/d3pie.min.js"></script>
+<script src="./js/rspamd.js"></script>
+<script type="text/javascript" src="./js/datatables.min.js"></script>
+
+</body>
+</html>

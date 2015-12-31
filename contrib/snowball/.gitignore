@@ -1,0 +1,5 @@
+*.o
+/libstemmer
+/snowball
+/src_c
+/stemwords
