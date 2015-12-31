@@ -331,6 +331,7 @@ int GetAndTransferMessage (int fd, char *sFile)
     char answ [4];
     int	 iStatus;
     int	 Len, ccnt;
+    int	 test;
 
     iStatus = GetFiles ((char *)sFile, fd);
 
@@ -344,10 +345,11 @@ int GetAndTransferMessage (int fd, char *sFile)
     for (ccnt = 0; ccnt <= MAX_FAILS_C; ccnt ++)
     {
 #ifdef RSPAM_UNIXSOCKET
-        if (connect (sock, (struct sockaddr *) &ssun, sizeof (struct sockaddr_un)) < 0)
+        test = connect (sock, (struct sockaddr *) &ssun, sizeof (struct sockaddr_un)) < 0;
 #else
-        if (connect (sock, (struct sockaddr *) &ssin, sizeof (struct sockaddr_in)) < 0)
+        test = connect (sock, (struct sockaddr *) &ssin, sizeof (struct sockaddr_in)) < 0;
 #endif
+        if (test)
         {
             if (ccnt < MAX_FAILS_C)
                 usleep (1000);
