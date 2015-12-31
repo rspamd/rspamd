@@ -25,6 +25,10 @@ override_dh_auto_configure:
 override_dh_makeshlibs:
 	dh_makeshlibs -Xrspamd-actrie
 
+override_dh_strip:
+	dh_strip --dbg-package=rspamd-debuginfo
+
+
 override_dh_auto_clean:
 	dh_auto_clean
 	rm -f src/modules.c
