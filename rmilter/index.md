@@ -389,7 +389,7 @@ Then setup rmilter to mirror some traffic:
 beanstalk {
   copy_server = localhost:11300;
   send_beanstalk_copy = yes;
-  # Please mention that copy probability is floating point number from 0.0 to 1.0
+  # Please note that copy probability is floating point number from 0.0 to 1.0
   copy_probability = 0.1;
 }
 ~~~

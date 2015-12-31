@@ -109,7 +109,7 @@ Starting from Exim 4.86, you can use rspamd directly just like spamassassin:
 Here is an example of exim configuration:
 
 {% highlight make %}
-# Please mention the variant parameter
+# Please note the variant parameter
 spamd_address = 127.0.0.1 11333 variant=rspamd
 
 acl_smtp_data = acl_check_spam
@@ -179,4 +179,4 @@ In this mode, `rspamc` cannot reject or greylist messages, but it appends the fo
 - `X-Spam-Action`: the desired action for a message (e.g. `no action`, `add header` or `reject`)
 - `X-Spam-Result`: contains base64 encoded `JSON` reply from rspamd if `--json` option was given to `rspamc`
 
-Please mention, that despite of the fact that this method can be used with any MTA (or even without MTA), it has more overhead than other methods and it cannot apply certain actions, namely, greylisting (however, that could also be implemented using external tools).
+Please note, that despite of the fact that this method can be used with any MTA (or even without MTA), it has more overhead than other methods and it cannot apply certain actions, namely, greylisting (however, that could also be implemented using external tools).
