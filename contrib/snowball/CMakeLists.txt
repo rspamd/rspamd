@@ -1,10 +1,3 @@
-PROJECT(snowball C)
-
-cmake_minimum_required(VERSION 2.8)
-
-INCLUDE(CheckCCompilerFlag)
-INCLUDE(FindPerl)
-
 # End of configuration
 SET(LIBSTEM_ALGORITHMS danish dutch english finnish french german hungarian
 	italian norwegian porter portuguese romanian
