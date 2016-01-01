@@ -16,6 +16,7 @@ override_dh_auto_configure:
 		-DINCLUDEDIR=/usr/include \
 		-DSYSTEMDDIR=/lib/systemd/system \
 		-DNO_SHARED=ON \
+		-DCMAKE_BUILD_TYPE=ReleaseWithDebInfo \
 		-DDEBIAN_BUILD=1 \
 		-DINSTALL_EXAMPLES=ON \
 		-DFORCE_GMIME24=ON \
@@ -26,8 +27,7 @@ override_dh_makeshlibs:
 	dh_makeshlibs -Xrspamd-actrie
 
 override_dh_strip:
-	dh_strip --dbg-package=rspamd-debuginfo
-
+	dh_strip --dbg-package=rspamd-dbg
 
 override_dh_auto_clean:
 	dh_auto_clean
