@@ -2,6 +2,8 @@
 %:
 	dh $@ --with systemd
 
+.PHONY: override_dh_strip
+
 export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 
 override_dh_auto_configure:
@@ -28,6 +30,9 @@ override_dh_makeshlibs:
 
 override_dh_strip:
 	dh_strip --dbg-package=rspamd-dbg
+
+override_dh_auto_install:
+	dh_auto_install --destdir=debian/rspamd
 
 override_dh_auto_clean:
 	dh_auto_clean
