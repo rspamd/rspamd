@@ -125,10 +125,10 @@ local function check_settings(task)
   local function check_ip_setting(rule, ip)
     if rule[2] ~= 0 then
       local nip = ip:apply_mask(rule[2])
-      if nip and nip == rule[1] then
+      if nip and nip:to_string() == rule[1]:to_string() then
         return true
       end
-    elseif ip == rule[1] then
+    elseif ip:to_string() == rule[1]:to_string() then
       return true
     end
 
