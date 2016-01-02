@@ -112,6 +112,43 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 
 	*ctx = (struct module_ctx *)dkim_module_ctx;
 
+	rspamd_rcl_add_doc_by_path (cfg, NULL,
+			"DKIM check plugin",
+			"dkim", UCL_OBJECT, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "dkim",
+			"Map of IP addresses that should be excluded from DKIM checks",
+			"whitelist", UCL_STRING, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "dkim",
+			"Symbol that is added if DKIM check is successful",
+			"symbol_allow", UCL_STRING, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "dkim",
+			"Symbol that is added if DKIM check is unsuccessful",
+			"symbol_reject", UCL_STRING, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "dkim",
+			"Symbol that is added if DKIM check can't be completed (e.g. DNS failure)",
+			"symbol_tempfail", UCL_STRING, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "dkim",
+			"Size of DKIM keys cache",
+			"dkim_cache_size", UCL_INT, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "dkim",
+			"Allow this time difference when checking DKIM signature time validity",
+			"time_jitter", UCL_TIME, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "dkim",
+			"Domains to check DKIM for (check all domains if this option is empty)",
+			"domains", UCL_STRING, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "dkim",
+			"Map of domains that are treated as 'trusted' meaning that DKIM policy failure has more significant score",
+			"trusted_domains", UCL_STRING, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "dkim",
+			"Multiply dkim score by this factor for trusted domains",
+			"strict_multiplier", UCL_FLOAT, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "dkim",
+			"Check DKIM policies merely for `trusted_domains`",
+			"trusted_only", UCL_BOOLEAN, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "dkim",
+			"Do not check messages with multiple DKIM signatures",
+			"skip_multi", UCL_BOOLEAN, NULL, 0);
+
 	return 0;
 }
 
