@@ -733,11 +733,23 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 				sym = (struct symbol *) v;
 
 				if (first) {
-					rspamd_printf_fstring (&symbuf, "%s", sym->name);
+					if (lf->flags & RSPAMD_LOG_FLAG_SYMBOLS_SCORES) {
+						rspamd_printf_fstring (&symbuf, "%s(%.2f)", sym->name,
+								sym->score);
+					}
+					else {
+						rspamd_printf_fstring (&symbuf, "%s", sym->name);
+					}
 					first = FALSE;
 				}
 				else {
-					rspamd_printf_fstring (&symbuf, ",%s", sym->name);
+					if (lf->flags & RSPAMD_LOG_FLAG_SYMBOLS_SCORES) {
+						rspamd_printf_fstring (&symbuf, ",%s(%.2f)", sym->name,
+								sym->score);
+					}
+					else {
+						rspamd_printf_fstring (&symbuf, ",%s", sym->name);
+					}
 				}
 			}
 
