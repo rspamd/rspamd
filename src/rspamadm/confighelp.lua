@@ -65,12 +65,14 @@ local function print_help(key, value, tabs)
     if value['data'] then
       print(string.format('%s\tDescription: %s', tabs, value['data']))
     end
-    if value['type'] then
-      print(string.format('%s\tType: %s', tabs, value['type']))
-    end
-
     if not opts['no-examples'] and value['example'] then
       print(string.format('%s\tExample: %s', tabs, value['example']))
+    end
+    if value['type'] then
+      print(string.format('%s\tType: %s', tabs, value['type']))
+      if value['type'] == 'object' then
+        print('')
+      end
     end
   end
 
