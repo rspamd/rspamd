@@ -358,4 +358,16 @@ ucl_object_t* rspamd_rcl_add_doc_obj (ucl_object_t *doc_target,
 		ucl_type_t type,
 		rspamd_rcl_default_handler_t handler,
 		gint flags);
+
+/**
+ * Adds new documentation option specified by path `doc_path` that should be
+ * splitted by dots
+ */
+ucl_object_t *rspamd_rcl_add_doc_by_path (struct rspamd_config *cfg,
+		const gchar *doc_path,
+		const char *doc_string,
+		const char *doc_name,
+		ucl_type_t type,
+		rspamd_rcl_default_handler_t handler,
+		gint flags);
 #endif /* CFG_RCL_H_ */
