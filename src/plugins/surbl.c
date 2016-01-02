@@ -292,6 +292,50 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 
 	*ctx = (struct module_ctx *)surbl_module_ctx;
 
+	rspamd_rcl_add_doc_by_path (cfg, "surbl",
+			"List of redirector servers",
+			"redirector", UCL_STRING, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "surbl",
+			"Map of domains that should be checked with redirector",
+			"redirector_hosts_map", UCL_STRING, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "surbl",
+			"Connect timeout for redirector",
+			"redirector_connect_timeout", UCL_TIME, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "surbl",
+			"Read timeout for redirector",
+			"redirector_read_timeout", UCL_TIME, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "surbl",
+			"Maximum number of URLs to process per message",
+			"max_urls", UCL_INT, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "surbl",
+			"Rules for TLD composition",
+			"exceptions", UCL_STRING, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "surbl",
+			"Map of whitelisted domains",
+			"whitelist", UCL_STRING, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "surbl",
+			"URL blacklist rule",
+			"rule", UCL_OBJECT, NULL, 0);
+	/* Rules doc strings */
+	rspamd_rcl_add_doc_by_path (cfg, "surbl.rule",
+			"Name of DNS black list (e.g. `multi.surbl.com`)",
+			"suffix", UCL_STRING, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "surbl.rule",
+			"Symbol to insert (if no bits or suffixes are defined)",
+			"symbol", UCL_STRING, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "surbl.rule",
+			"Do not try to check URLs with IP address instead of hostname",
+			"no_ip", UCL_BOOLEAN, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "surbl.rule",
+			"Resolve URL host and then check against the specified suffix with reversed IP octets",
+			"resolve_ip", UCL_BOOLEAN, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "surbl.rule",
+			"Parse IP bits in DNS reply, the content is 'symbol = <bit>'",
+			"bits", UCL_OBJECT, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "surbl.rule",
+			"Parse IP addresses in DNS reply, the content is 'symbol = address'",
+			"ips", UCL_OBJECT, NULL, 0);
+
 	return 0;
 }
 
@@ -489,7 +533,7 @@ surbl_module_config (struct rspamd_config *cfg)
 			}
 
 			cur = ucl_obj_get_key (cur_rule, "no_ip");
-			if (cur != NULL && cur->type == UCL_STRING) {
+			if (cur != NULL && cur->type == UCL_BOOLEAN) {
 				if (ucl_object_toboolean (cur)) {
 					new_suffix->options |= SURBL_OPTION_NOIP;
 				}
