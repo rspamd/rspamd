@@ -643,7 +643,7 @@ surbl_module_config (struct rspamd_config *cfg)
 				}
 			}
 
-			if (!has_subsymbols) {
+			if (new_suffix->symbol) {
 				/* Register just a symbol itself */
 				rspamd_symbols_cache_add_symbol (cfg->cache,
 						new_suffix->symbol,
@@ -980,6 +980,7 @@ process_dns_results (struct rspamd_task *task,
 	guint32 addr)
 {
 	guint i;
+	gboolean got_result = FALSE;
 	struct surbl_bit_item *bit;
 
 	if (suffix->ips && g_hash_table_size (suffix->ips) > 0) {
@@ -993,6 +994,7 @@ process_dns_results (struct rspamd_task *task,
 			rspamd_task_insert_result (task, bit->symbol, 1,
 				g_list_prepend (NULL,
 				rspamd_mempool_strdup (task->task_pool, url)));
+			got_result = TRUE;
 		}
 	}
 	else if (suffix->bits != NULL && suffix->bits->len > 0) {
@@ -1008,13 +1010,14 @@ process_dns_results (struct rspamd_task *task,
 					url, suffix->suffix,
 					bit->bit);
 			if (((gint)bit->bit & (gint)ntohl (addr)) != 0) {
+				got_result = TRUE;
 				rspamd_task_insert_result (task, bit->symbol, 1,
 					g_list_prepend (NULL,
 					rspamd_mempool_strdup (task->task_pool, url)));
 			}
 		}
 	}
-	else {
+	else if (!got_result) {
 		msg_info_task ("<%s> domain [%s] is in surbl %s",
 				task->message_id,
 				url, suffix->suffix);
