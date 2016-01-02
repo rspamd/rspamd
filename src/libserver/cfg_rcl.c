@@ -3077,33 +3077,44 @@ rspamd_rcl_add_doc_by_path (struct rspamd_config *cfg,
 	ucl_object_t *obj;
 	gchar **path_components, **comp;
 
-	found = ucl_lookup_path (cfg->doc_strings, doc_path);
-
-	if (found != NULL) {
-		return rspamd_rcl_add_doc_obj ((ucl_object_t *)found,
+	if (doc_path == NULL) {
+		/* Assume top object */
+		return rspamd_rcl_add_doc_obj (cfg->doc_strings,
 				doc_string, doc_name, type, handler, flags);
 	}
+	else {
+		found = ucl_lookup_path (cfg->doc_strings, doc_path);
 
-	/* Otherwise we need to insert all components of the path */
-	path_components = g_strsplit_set (doc_path, ".", -1);
-	cur = cfg->doc_strings;
-
-	for (comp = path_components; *comp != NULL; comp ++) {
-		if (ucl_object_type (cur) != UCL_OBJECT) {
-			msg_err_config ("Bad path while lookup for '%s' at %s",
-					doc_path, *comp);
-			return NULL;
+		if (found != NULL) {
+			return rspamd_rcl_add_doc_obj ((ucl_object_t *) found,
+					doc_string, doc_name, type, handler, flags);
 		}
 
-		found = ucl_object_find_key (cur, *comp);
+		/* Otherwise we need to insert all components of the path */
+		path_components = g_strsplit_set (doc_path, ".", -1);
+		cur = cfg->doc_strings;
 
-		if (found == NULL) {
-			obj = ucl_object_typed_new (UCL_OBJECT);
-			ucl_object_insert_key ((ucl_object_t *)cur, obj, *comp, 0, true);
-			cur = obj;
-		}
-		else {
-			cur = found;
+		for (comp = path_components; *comp != NULL; comp++) {
+			if (ucl_object_type (cur) != UCL_OBJECT) {
+				msg_err_config ("Bad path while lookup for '%s' at %s",
+						doc_path, *comp);
+				return NULL;
+			}
+
+			found = ucl_object_find_key (cur, *comp);
+
+			if (found == NULL) {
+				obj = ucl_object_typed_new (UCL_OBJECT);
+				ucl_object_insert_key ((ucl_object_t *) cur,
+						obj,
+						*comp,
+						0,
+						true);
+				cur = obj;
+			}
+			else {
+				cur = found;
+			}
 		}
 	}
 

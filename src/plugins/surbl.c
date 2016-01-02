@@ -292,6 +292,9 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 
 	*ctx = (struct module_ctx *)surbl_module_ctx;
 
+	rspamd_rcl_add_doc_by_path (cfg, NULL,
+			"URL blacklist plugin",
+			"surbl", UCL_OBJECT, NULL, 0);
 	rspamd_rcl_add_doc_by_path (cfg, "surbl",
 			"List of redirector servers",
 			"redirector", UCL_STRING, NULL, 0);
