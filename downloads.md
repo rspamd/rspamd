@@ -110,6 +110,12 @@ For experimental branch replace `apt-stable` with just `apt`:
     apt-get update
     apt-get install rspamd
 
+### Debian `official` repos
+
+Rspamd is also available in some versions of Debian and Ubuntu. However, we are looking for an active maintainer for rspamd in these 'official' repos, as now rspamd is terribly outdated there. 
+
+Please **DO NOT** use those packages, as they are no longer supported.
+
 </div>
         </div>
         <div role="tabpanel" class="tab-pane fade" id="system3">
@@ -202,13 +208,6 @@ Alternatively, you can create a distribution package and use it for build your o
         </div>
     </div>
 </div>
-
-### Debian `official` repos
-
-Rspamd is also available in some versions of Debian and Ubuntu. However, we are looking for an active maintainer for rspamd in these 'official' repos, as now rspamd is terribly outdated there.
-
-Please **DO NOT** use those packages, as they are no longer supported.
-
 
 ## Further reading
 
