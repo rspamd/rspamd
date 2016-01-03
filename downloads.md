@@ -28,19 +28,19 @@ Rspamd project provides packages for many operating systems.
 <div class="col-xs-12">
     <ul class="nav nav-tabs nav-justified" role="tablist">
         <li role="presentation" class="active">
-            <a href="#system1" aria-controls="system1" role="tab" data-toggle="tab"><img src="img/redhat.png" width="20"><span class="hidden-sm">Fedora/CentOS</span></a>
+            <a href="#system1" aria-controls="system1" role="tab" data-toggle="tab"><img src="img/redhat.png" width="20"><span class="myHidden-sm">&nbsp;Fedora/CentOS</span></a>
         </li>
         <li role="presentation">
-            <a href="#system2" aria-controls="system2" role="tab" data-toggle="tab"><img src="img/Ubuntu.png" width="20"><span class="hidden-sm">Debian/Ubuntu</span></a>
+            <a href="#system2" aria-controls="system2" role="tab" data-toggle="tab"><img src="img/Ubuntu.png" width="20"><span class="myHidden-sm">&nbsp;Debian/Ubuntu</span></a>
         </li>
         <li role="presentation">
-            <a href="#system3" aria-controls="system3" role="tab" data-toggle="tab"><img src="img/linux.png" width="20"><span class="hidden-sm">Other&nbsp;Linux</span></a>
+            <a href="#system3" aria-controls="system3" role="tab" data-toggle="tab"><img src="img/linux.png" width="20"><span class="myHidden-sm">&nbsp;Other&nbsp;Linux</span></a>
         </li>
         <li role="presentation">
-            <a href="#system4" aria-controls="system4" role="tab" data-toggle="tab"><img src="img/freebsd.png" width="20"><span class="hidden-sm">BSD</span></a>
+            <a href="#system4" aria-controls="system4" role="tab" data-toggle="tab"><img src="img/freebsd.png" width="20"><span class="myHidden-sm">&nbsp;BSD</span></a>
         </li>
         <li role="presentation">
-            <a href="#system5" aria-controls="system5" role="tab" data-toggle="tab"><img src="img/octocat.png" width="20"><span class="hidden-sm">Build&nbsp;rspamd</span></a>
+            <a href="#system5" aria-controls="system5" role="tab" data-toggle="tab"><img src="img/octocat.png" width="20"><span class="myHidden-sm">&nbsp;Build&nbsp;rspamd</span></a>
         </li>
     </ul>
     <!-- Tab - pane content -->
