@@ -54,6 +54,7 @@ symbol).
 * `cores_dir`: directory where rspamd is intended to drop core files
 * `max_cores_size`: maximum total size of core files that are placed in `cores_dir`
 * `max_cores_count`: maximum number of files in `cores_dir`
+* `local_addrs` or `local_networks`: map or list of ip networks used as local, so certain checks are skipped for them (e.g. SPF checks)
 
 ## DNS options
 

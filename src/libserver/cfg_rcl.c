@@ -1604,6 +1604,18 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_config, max_cores_count),
 			RSPAMD_CL_FLAG_INT_SIZE,
 			"Limit of files count in `cores_dir`");
+	rspamd_rcl_add_default_handler (sub,
+			"local_addrs",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_config, local_addrs),
+			0,
+			"Use the specified addresses as local ones");
+	rspamd_rcl_add_default_handler (sub,
+			"local_networks",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_config, local_addrs),
+			0,
+			"Use the specified addresses as local ones (alias for `local_addrs`)");
 
 	/* New DNS configuration */
 	ssub = rspamd_rcl_add_section_doc (&sub->subsections, "dns", NULL, NULL,
