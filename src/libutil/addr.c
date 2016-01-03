@@ -1345,7 +1345,8 @@ rspamd_inet_address_is_local (const rspamd_inet_addr_t *addr)
 	}
 	else {
 		if (addr->af == AF_INET) {
-			if (addr->u.in.addr.s4.sin_addr.s_addr == INADDR_LOOPBACK) {
+			if ((ntohl (addr->u.in.addr.s4.sin_addr.s_addr) & 0xff000000)
+					== 0x7f000000) {
 				return TRUE;
 			}
 		}
