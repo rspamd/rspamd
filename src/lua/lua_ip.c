@@ -164,6 +164,12 @@ LUA_FUNCTION_DEF (ip, copy);
  * @return {number} port number or nil
  */
 LUA_FUNCTION_DEF (ip, get_port);
+/***
+ * @method ip:is_local()
+ * Returns true if address is local one
+ * @return {boolean} `true` if address is local
+ */
+LUA_FUNCTION_DEF (ip, is_local);
 
 static const struct luaL_reg iplib_m[] = {
 	LUA_INTERFACE_DEF (ip, to_string),
@@ -176,6 +182,7 @@ static const struct luaL_reg iplib_m[] = {
 	LUA_INTERFACE_DEF (ip, is_valid),
 	LUA_INTERFACE_DEF (ip, apply_mask),
 	LUA_INTERFACE_DEF (ip, copy),
+	LUA_INTERFACE_DEF (ip, is_local),
 	{"__tostring", lua_ip_to_string},
 	{"__eq", lua_ip_equal},
 	{"__gc", lua_ip_destroy},
@@ -489,6 +496,21 @@ lua_ip_copy (lua_State *L)
 	return 1;
 }
 
+static gint
+lua_ip_is_local (lua_State *L)
+{
+	struct rspamd_lua_ip *ip = lua_check_ip (L, 1);
+
+	if (ip && ip->addr) {
+		lua_pushboolean (L, rspamd_inet_address_is_local (ip->addr));
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
 void
 rspamd_lua_ip_push (lua_State *L, rspamd_inet_addr_t *addr)
 {
@@ -543,5 +565,5 @@ luaopen_ip (lua_State * L)
 	luaL_register (L, NULL,		   iplib_m);
 	rspamd_lua_add_preload (L, "rspamd_ip", lua_load_ip);
 
-	lua_pop (L, 1);                      /* remove metatable from stack */
+	lua_pop (L, 1);
 }
