@@ -1314,3 +1314,46 @@ rspamd_inet_address_equal (gconstpointer a, gconstpointer b)
 
 	return rspamd_inet_address_compare (a1, a2) == 0;
 }
+
+#ifndef IN6_IS_ADDR_LOOPBACK
+#define	IN6_IS_ADDR_LOOPBACK(a)		\
+	((*(const __uint32_t *)(const void *)(&(a)->s6_addr[0]) == 0) && \
+	(*(const __uint32_t *)(const void *)(&(a)->s6_addr[4]) == 0) && \
+	(*(const __uint32_t *)(const void *)(&(a)->s6_addr[8]) == 0) && \
+	(*(const __uint32_t *)(const void *)(&(a)->s6_addr[12]) == ntohl(1)))
+#endif
+#ifndef IN6_IS_ADDR_LINKLOCAL
+#define IN6_IS_ADDR_LINKLOCAL(a)	\
+	(((a)->s6_addr[0] == 0xfe) && (((a)->s6_addr[1] & 0xc0) == 0x80))
+#endif
+#ifndef IN6_IS_ADDR_SITELOCAL
+#define IN6_IS_ADDR_SITELOCAL(a)	\
+	(((a)->s6_addr[0] == 0xfe) && (((a)->s6_addr[1] & 0xc0) == 0xc0))
+#endif
+
+gboolean
+rspamd_inet_address_is_local (const rspamd_inet_addr_t *addr)
+{
+	g_assert (addr != NULL);
+
+	if (addr->af == AF_UNIX) {
+		/* Always true for unix sockets */
+		return TRUE;
+	}
+	else {
+		if (addr->af == AF_INET) {
+			if (addr->u.in.addr.s4.sin_addr.s_addr == INADDR_LOOPBACK) {
+				return TRUE;
+			}
+		}
+		else if (addr->af == AF_INET6) {
+			if (IN6_IS_ADDR_LOOPBACK (&addr->u.in.addr.s6.sin6_addr) ||
+						IN6_IS_ADDR_LINKLOCAL (&addr->u.in.addr.s6.sin6_addr) ||
+						IN6_IS_ADDR_SITELOCAL (&addr->u.in.addr.s6.sin6_addr)) {
+				return TRUE;
+			}
+		}
+	}
+
+	return FALSE;
+}

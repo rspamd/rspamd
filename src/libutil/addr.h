@@ -260,4 +260,9 @@ guint rspamd_inet_address_hash (gconstpointer a);
  */
 gboolean rspamd_inet_address_equal (gconstpointer a, gconstpointer b);
 
+/**
+ * Returns TRUE if an address belongs to some local address
+ */
+gboolean rspamd_inet_address_is_local (const rspamd_inet_addr_t *addr);
+
 #endif /* ADDR_H_ */
