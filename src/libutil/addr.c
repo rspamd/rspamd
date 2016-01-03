@@ -1334,7 +1334,9 @@ rspamd_inet_address_equal (gconstpointer a, gconstpointer b)
 gboolean
 rspamd_inet_address_is_local (const rspamd_inet_addr_t *addr)
 {
-	g_assert (addr != NULL);
+	if (addr == NULL) {
+		return FALSE;
+	}
 
 	if (addr->af == AF_UNIX) {
 		/* Always true for unix sockets */
