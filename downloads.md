@@ -34,7 +34,7 @@ Rspamd project provides packages for many operating systems.
             <a href="#system2" aria-controls="system2" role="tab" data-toggle="tab"><img src="img/Ubuntu.png" width="20">&nbsp;&nbsp;Debian/Ubuntu</a>
         </li>
         <li role="presentation">
-            <a href="#system3" aria-controls="system3" role="tab" data-toggle="tab"><img src="img/freebsd.png" width="20">&nbsp;&nbsp;Other systems</a>
+            <a href="#system3" aria-controls="system3" role="tab" data-toggle="tab"><img src="img/freebsd.png" width="20">&nbsp;&nbsp;Other&nbsp;systems</a>
         </li>
     </ul>
     <!-- Tab - pane content -->

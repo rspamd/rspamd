@@ -42,13 +42,25 @@ body {
     border-bottom: 1px solid #ddd;
     padding: 20px;
     margin-bottom: 50px;
-    /*background-color: #CBF6FF;*/
+    background-color: #F0F0F0;
 }
 .nav-tabs {
     margin-top: 50px;
+    font-size: 70%;
 }
-/*
+.nav-tabs > li > a:hover{
+    /* not active tab hover */
+    background-color: #E8E8E8 !important;
+}
+.nav-tabs > li.active,
 .nav-tabs > li.active > a{
-    background-color: #CBF6FF;
+    /* active and default active tab */
+    background-color: #F0F0F0 !important;
+    border-bottom: 0px;
 }
-*/
+@media (min-width: 480px) {
+    /* change fonts size inside navigation tabs */
+    .nav-tabs {
+        font-size: 100%;
+    }
+}
