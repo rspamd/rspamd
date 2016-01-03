@@ -31,7 +31,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 local rbls = {}
 local local_exclusions = nil
-local private_ips = nil
 
 local rspamd_logger = require 'rspamd_logger'
 local rspamd_ip = require 'rspamd_ip'
@@ -58,13 +57,6 @@ local function validate_dns(lstr)
     end
   end
   return true
-end
-
-local function is_private_ip(rip)
-  if private_ips and private_ips:get_key(rip) then
-    return true
-  end
-  return false
 end
 
 local function is_excluded_ip(rip)
@@ -145,7 +137,7 @@ local function rbl_cb (task)
         end
         if havegot['from'] and not notgot['from'] and ((rbl['exclude_local'] and
           is_excluded_ip(havegot['from'])) or (rbl['exclude_private_ips'] and
-          is_private_ip(havegot['from']))) then
+          havegot['from']:is_local())) then
           return
         end
       end
@@ -303,7 +295,7 @@ local function rbl_cb (task)
 	    if rh['real_ip'] and rh['real_ip']:is_valid() then
               if ((rh['real_ip']:get_version() == 6 and rbl['ipv6']) or
                 (rh['real_ip']:get_version() == 4 and rbl['ipv4'])) and
-                ((rbl['exclude_private_ips'] and not is_private_ip(rh['real_ip'])) or
+                ((rbl['exclude_private_ips'] and not rh['real_ip']:is_local()) or
                 not rbl['exclude_private_ips']) and ((rbl['exclude_local_ips'] and
                 not is_excluded_ip(rh['real_ip'])) or not rbl['exclude_local_ips']) then
                   task:get_resolver():resolve_a({task = task,
@@ -336,7 +328,6 @@ if type(rspamd_config.get_api_version) ~= 'nil' then
     rspamd_config:register_module_option('rbl', 'default_exclude_private_ips', 'string')
     rspamd_config:register_module_option('rbl', 'local_exclude_ip_map', 'string')
     rspamd_config:register_module_option('rbl', 'default_exclude_local', 'string')
-    rspamd_config:register_module_option('rbl', 'private_ips', 'string')
     rspamd_config:register_module_option('rbl', 'default_emails', 'string')
     rspamd_config:register_module_option('rbl', 'default_is_whitelist', 'string')
     rspamd_config:register_module_option('rbl', 'default_ignore_whitelists', 'string')
@@ -377,9 +368,6 @@ end
 
 if(opts['local_exclude_ip_map'] ~= nil) then
   local_exclusions = rspamd_config:add_radix_map(opts['local_exclude_ip_map'])
-end
-if(opts['private_ips'] ~= nil) then
-  private_ips = rspamd_config:radix_from_config('rbl', 'private_ips')
 end
 
 local white_symbols = {}
