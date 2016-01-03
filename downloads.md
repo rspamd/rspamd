@@ -12,35 +12,23 @@ title: Downloads
   allowtransparency="true" frameborder="0" scrolling="0" width="170" height="30"></iframe></p>
 
 # Installing rspamd
-
-The best way to install rspamd is to use the pre-built packages for your operating system. We have prepared packages for many platforms. You have two choices when using packages:
-
-1. Use **stable** branch of packages: those packages are the official rspamd releases which are recommended for production usage.
-2. Use **experimental** branch of packages: these packages are less stable and they are generated frequently from the current development branch. Experimental packages usually have more features but might be *sometimes* broken in some points (nevertheless, bugs are usually quickly fixed after detection).
-
-Rspamd requires **POSIX** environment to run, so it won't likely run on Windows. However, it should work on the vast majority of unix systems, including Linux, BSD (FreeBSD, NetBSD, OpenBSD), OSX and Solaris.
-
-## Rspamd packages
-
-Rspamd project provides packages for many operating systems.
-
 <!-- Tab navigation -->
 <div class="col-xs-12">
     <ul class="nav nav-tabs nav-justified" role="tablist">
         <li role="presentation" class="active">
-            <a href="#system1" aria-controls="system1" role="tab" data-toggle="tab"><img src="img/redhat.png" width="20"><span class="hidden-sm">Fedora/CentOS</span></a>
+            <a href="#system1" aria-controls="system1" role="tab" data-toggle="tab"><img src="img/redhat.png" width="20"><span class="myHidden-sm">&nbsp;Fedora/CentOS</span></a>
         </li>
         <li role="presentation">
-            <a href="#system2" aria-controls="system2" role="tab" data-toggle="tab"><img src="img/Ubuntu.png" width="20"><span class="hidden-sm">Debian/Ubuntu</span></a>
+            <a href="#system2" aria-controls="system2" role="tab" data-toggle="tab"><img src="img/Ubuntu.png" width="20"><span class="myHidden-sm">&nbsp;Debian/Ubuntu</span></a>
         </li>
         <li role="presentation">
-            <a href="#system3" aria-controls="system3" role="tab" data-toggle="tab"><img src="img/linux.png" width="20"><span class="hidden-sm">Other&nbsp;Linux</span></a>
+            <a href="#system3" aria-controls="system3" role="tab" data-toggle="tab"><img src="img/linux.png" width="20"><span class="myHidden-sm">&nbsp;Other&nbsp;Linux</span></a>
         </li>
         <li role="presentation">
-            <a href="#system4" aria-controls="system4" role="tab" data-toggle="tab"><img src="img/freebsd.png" width="20"><span class="hidden-sm">BSD</span></a>
+            <a href="#system4" aria-controls="system4" role="tab" data-toggle="tab"><img src="img/freebsd.png" width="20"><span class="myHidden-sm">&nbsp;BSD</span></a>
         </li>
         <li role="presentation">
-            <a href="#system5" aria-controls="system5" role="tab" data-toggle="tab"><img src="img/octocat.png" width="20"><span class="hidden-sm">Build&nbsp;rspamd</span></a>
+            <a href="#system5" aria-controls="system5" role="tab" data-toggle="tab"><img src="img/octocat.png" width="20"><span class="myHidden-sm">&nbsp;Build&nbsp;rspamd</span></a>
         </li>
     </ul>
     <!-- Tab - pane content -->
@@ -58,7 +46,7 @@ Supported distributions:
 Please note that `CentOS` rpm packages **requires** [EPEL](https://fedoraproject.org/wiki/EPEL) to be installed in your system as many dependencies are missing from the base CentOS repositories. You can learn how to install EPEL from their site: <https://fedoraproject.org/wiki/EPEL>.
 `Fedora` packages do not require EPEL or any other third-party repository.
 
-To install rspamd repo, please download the corresponding repository file and the signing key (both repo and all packages are signed with my GPG key). You could use the following commands to install rspamd RPM repository:
+To install rspamd repo, please download the corresponding repository file and the signing key (both repo and all packages are signed with my GPG key). You could use the following commands to install rspamd <a class="undecor" href="#stableSys1">stable<sup>1</sup></a> RPM repository:
 
     wget -O /etc/yum.repos.d/rspamd.repo http://rspamd.com/rpm-stable/${YOUR_DISTRO}/rspamd.repo
     rpm --import http://rspamd.com/rpm-stable/gpg.key
@@ -67,13 +55,17 @@ To install rspamd repo, please download the corresponding repository file and th
 
 Where `${YOUR_DISTRO}` is the short name of your os (e.g. `centos-7` or `fedora-22`).
 
-For experimental branch packages, download `rpm-experimental` repofile as following:
+For <a class="undecor" href="#experimentalSys1">experimental<sup>2</sup></a> branch packages, download `rpm-experimental` repofile as following:
 
     wget -O /etc/yum.repos.d/rspamd-experimental.repo http://rspamd.com/rpm/${YOUR_DISTRO}/rspamd-experimental.repo
     rpm --import http://rspamd.com/rpm/gpg.key
     yum update
-    yum install rspamd
+    yum install rspamd    
+
 </div>
+<hr>
+<p class="myFootnote" id="stableSys1">1. Use STABLE branch of packages: those packages are the official rspamd releases which are recommended for production usage.</p>
+<p class="myFootnote" id="experimentalSys1">2. Use EXPERIMENTAL branch of packages: these packages are less stable and they are generated frequently from the current development branch. Experimental packages usually have more features but might be SOMETIMES broken in some points (nevertheless, bugs are usually quickly fixed after detection).</p>
         </div>
         <div role="tabpanel" class="tab-pane fade" id="system2">
             <h3>Debian and Ubuntu Linux</h3>
@@ -81,14 +73,14 @@ For experimental branch packages, download `rpm-experimental` repofile as follow
 
 Rspamd supports the following .deb based distributives:
 
-- Debian wheezy (amd64, i386)
-- Debian jessie (amd64, i386)
-- Ubuntu precise (amd64, i386)
-- Ubuntu trusty (amd64, i386)
-- Ubuntu vivid (amd64, i386)
-- Ubuntu wily (amd64, i386)
+- **Debian wheezy** (amd64, i386)
+- **Debian jessie** (amd64, i386)
+- **Ubuntu precise** (amd64, i386)
+- **Ubuntu trusty** (amd64, i386)
+- **Ubuntu vivid** (amd64, i386)
+- **Ubuntu wily** (amd64, i386)
 
-To install the rspamd apt repository, please use the following commands:
+To install the rspamd <a class="undecor" href="#stableSys2">stable<sup>1</sup></a> apt repository, please use the following commands:
 
     apt-get install -y lsb-release # optional
     CODENAME=`lsb_release -c -s`
@@ -100,7 +92,7 @@ To install the rspamd apt repository, please use the following commands:
 
 To obtain your distributive's codename, you could use the command `lsb_release -s -c` from the package called `lsb-release`.
 
-For experimental branch replace `apt-stable` with just `apt`:
+For <a class="undecor" href="#experimentalSys2">experimental<sup>2</sup></a> branch replace `apt-stable` with just `apt`:
 
     apt-get install -y lsb-release # optional
     CODENAME=`lsb_release -c -s`
@@ -111,17 +103,20 @@ For experimental branch replace `apt-stable` with just `apt`:
     apt-get install rspamd
 
 </div>
+<hr>
+<p class="myFootnote" id="stableSys2">1. Use STABLE branch of packages: those packages are the official rspamd releases which are recommended for production usage.</p>
+<p class="myFootnote" id="experimentalSys2">2. Use EXPERIMENTAL branch of packages: these packages are less stable and they are generated frequently from the current development branch. Experimental packages usually have more features but might be SOMETIMES broken in some points (nevertheless, bugs are usually quickly fixed after detection).</p>
         </div>
         <div role="tabpanel" class="tab-pane fade" id="system3">
             <h3>Other Linux</h3>
 <div markdown="1">
 Rspamd is also supported on the following Linux distributions:
 
-- Gentoo Linux
-- Arch Linux
-- Scientific Linux
-- SUSE Linux Enterprise
-- OpenSUSE Linux
+- **Gentoo Linux**
+- **Arch Linux**
+- **Scientific Linux**
+- **SUSE Linux Enterprise**
+- **OpenSUSE Linux**
 
 ### Gentoo Linux
 Ebuilds for Gentoo Linux users are available in the main Gentoo Portage repository.
@@ -137,10 +132,10 @@ For other distributions you could also check [our project on the openSUSE build 
 <div markdown="1">
 Rspamd has been ported to the following BSD like operating systems:
 
-- FreeBSD
-- NetBSD
-- OpenBSD
-- OSX (using MacPorts)
+- **FreeBSD**
+- **NetBSD**
+- **OpenBSD**
+- **OSX** (using MacPorts)
 
 FreeBSD users can install Rspamd from [ports](http://www.freshports.org/mail/rspamd/).
 

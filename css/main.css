@@ -46,7 +46,6 @@ body {
 }
 .nav-tabs {
     margin-top: 50px;
-    font-size: 70%;
 }
 .nav-tabs > li > a:hover{
     /* not active tab hover */
@@ -58,9 +57,29 @@ body {
     background-color: #F0F0F0 !important;
     border-bottom: 0px;
 }
-@media (min-width: 600px) {
-    /* change fonts size inside navigation tabs */
-    .nav-tabs {
-        font-size: 100%;
+@media (max-width: 600px){
+    /* hide tabs text for small device */
+    .myHidden-sm{
+      display: none;
     }
+}
+pre{
+  /* code aria */
+  background-color: #333333;
+  color: #eeeeee;
+}
+a.undecor {
+  text-decoration: none;
+}
+.myFootnote{
+  font-size: smaller;
+}
+hr {
+    display: block;
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    margin-left: auto;
+    margin-right: auto;
+    border-style: inset;
+    border-width: 1px;
 }
