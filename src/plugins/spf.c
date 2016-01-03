@@ -353,25 +353,31 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 	struct spf_resolved *l;
 
 	if (radix_find_compressed_addr (spf_module_ctx->whitelist_ip,
-			task->from_addr) == RADIX_NO_VALUE) {
-		domain = get_spf_domain (task);
-		if (domain) {
-			if ((l =
-				rspamd_lru_hash_lookup (spf_module_ctx->spf_hash, domain,
-				task->tv.tv_sec)) != NULL) {
-				spf_record_ref (l);
-				spf_check_list (l, task);
-				spf_record_unref (l);
+			task->from_addr) != RADIX_NO_VALUE) {
+		return;
+	}
+
+	if (task->user != NULL) {
+		return;
+	}
+
+	domain = get_spf_domain (task);
+	if (domain) {
+		if ((l =
+			rspamd_lru_hash_lookup (spf_module_ctx->spf_hash, domain,
+			task->tv.tv_sec)) != NULL) {
+			spf_record_ref (l);
+			spf_check_list (l, task);
+			spf_record_unref (l);
+		}
+		else {
+			if (!resolve_spf (task, spf_plugin_callback)) {
+				msg_info_task ("cannot make spf request for [%s]",
+						task->message_id);
 			}
 			else {
-				if (!resolve_spf (task, spf_plugin_callback)) {
-					msg_info_task ("cannot make spf request for [%s]",
-							task->message_id);
-				}
-				else {
-					rspamd_session_add_event (task->s, spf_plugin_fin, NULL,
-							spf_plugin_quark ());
-				}
+				rspamd_session_add_event (task->s, spf_plugin_fin, NULL,
+						spf_plugin_quark ());
 			}
 		}
 	}
