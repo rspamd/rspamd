@@ -46,6 +46,9 @@
  */
 typedef struct rspamd_inet_addr_s rspamd_inet_addr_t;
 
+void **rspamd_inet_library_init (void);
+void rspamd_inet_library_destroy (void);
+
 /**
  * Create new inet address structure based on the address familiy and opaque init pointer
  * @param af

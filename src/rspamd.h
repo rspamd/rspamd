@@ -191,6 +191,7 @@ struct controller_session {
 
 struct rspamd_external_libs_ctx {
 	magic_t libmagic;
+	void **local_addrs;
 	ref_entry_t ref;
 };
 

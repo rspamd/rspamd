@@ -26,7 +26,7 @@
 #include "util.h"
 #include "logger.h"
 #include "xxhash.h"
-
+#include "radix.h"
 #include "unix-std.h"
 /* pwd and grp */
 #ifdef HAVE_PWD_H
@@ -37,6 +37,7 @@
 #include <grp.h>
 #endif
 
+static radix_compressed_t *local_addrs;
 
 enum {
 	RSPAMD_IPV6_UNDEFINED = 0,
@@ -1355,7 +1356,27 @@ rspamd_inet_address_is_local (const rspamd_inet_addr_t *addr)
 				return TRUE;
 			}
 		}
+
+		if (local_addrs) {
+			if (radix_find_compressed_addr (local_addrs, addr) != RADIX_NO_VALUE) {
+				return TRUE;
+			}
+		}
 	}
 
 	return FALSE;
+}
+
+void **
+rspamd_inet_library_init (void)
+{
+	return (void **)&local_addrs;
+}
+
+void
+rspamd_inet_library_destroy (void)
+{
+	if (local_addrs != NULL) {
+		radix_destroy_compressed (local_addrs);
+	}
 }

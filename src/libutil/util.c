@@ -32,6 +32,7 @@
 #include "xxhash.h"
 #include "ottery.h"
 #include "cryptobox.h"
+#include "libutil/map.h"
 
 #ifdef HAVE_OPENSSL
 #include <openssl/rand.h>
@@ -1979,9 +1980,27 @@ rspamd_init_libs (void)
 	ctx->libmagic = magic_open (MAGIC_MIME|MAGIC_NO_CHECK_COMPRESS|
 			MAGIC_NO_CHECK_ELF|MAGIC_NO_CHECK_TAR);
 	magic_load (ctx->libmagic, NULL);
+	ctx->local_addrs = rspamd_inet_library_init ();
 	REF_INIT_RETAIN (ctx, rspamd_deinit_libs);
 
 	return ctx;
+}
+
+void
+rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
+		struct rspamd_config *cfg)
+{
+	g_assert (ctx != NULL);
+	g_assert (cfg != NULL);
+
+	if (cfg->local_addrs) {
+		if (!rspamd_map_add (cfg, cfg->local_addrs,
+				"Local addresses", rspamd_radix_read, rspamd_radix_fin,
+				(void **) ctx->local_addrs)) {
+			radix_add_generic_iplist (cfg->local_addrs,
+					(radix_compressed_t **)ctx->local_addrs);
+		}
+	}
 }
 
 void
@@ -2000,6 +2019,7 @@ rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
 		EVP_cleanup ();
 		ERR_free_strings ();
 #endif
+		rspamd_inet_library_destroy ();
 	}
 }
 
