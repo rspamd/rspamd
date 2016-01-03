@@ -5,9 +5,9 @@ title: Downloads
 
 # Downloading rspamd
 
-You can download the most recent stable version as source tarball from the following resource:
-
-<p><a class="btn btn-primary btn-lg" href="/downloads/rspamd-1.0.11.tar.xz">Download rspamd-1.0.11</a></p>
+<!-- download button with tooltip -->
+<p><a class="btn btn-primary btn-lg" href="/downloads/rspamd-1.0.11.tar.xz" data-toggle="tooltip" data-placement="right" title="Download the most recent stable version as source tarball">Download rspamd-1.0.11</a></p>
+<!-- github button -->
 <p><iframe src="//rspamd.com/github-btn.html?user=vstakhov&repo=rspamd&type=watch&count=true&size=large"
   allowtransparency="true" frameborder="0" scrolling="0" width="170" height="30"></iframe></p>
 
@@ -28,13 +28,19 @@ Rspamd project provides packages for many operating systems.
 <div class="col-xs-12">
     <ul class="nav nav-tabs nav-justified" role="tablist">
         <li role="presentation" class="active">
-            <a href="#system1" aria-controls="system1" role="tab" data-toggle="tab"><img src="img/redhat.png" width="20">&nbsp;&nbsp;Fedora/CentOS</a>
+            <a href="#system1" aria-controls="system1" role="tab" data-toggle="tab"><img src="img/redhat.png" width="20"><span class="hidden-sm">Fedora/CentOS</span></a>
         </li>
         <li role="presentation">
-            <a href="#system2" aria-controls="system2" role="tab" data-toggle="tab"><img src="img/Ubuntu.png" width="20">&nbsp;&nbsp;Debian/Ubuntu</a>
+            <a href="#system2" aria-controls="system2" role="tab" data-toggle="tab"><img src="img/Ubuntu.png" width="20"><span class="hidden-sm">Debian/Ubuntu</span></a>
         </li>
         <li role="presentation">
-            <a href="#system3" aria-controls="system3" role="tab" data-toggle="tab"><img src="img/freebsd.png" width="20">&nbsp;&nbsp;Other systems</a>
+            <a href="#system3" aria-controls="system3" role="tab" data-toggle="tab"><img src="img/linux.png" width="20"><span class="hidden-sm">Other&nbsp;Linux</span></a>
+        </li>
+        <li role="presentation">
+            <a href="#system4" aria-controls="system4" role="tab" data-toggle="tab"><img src="img/freebsd.png" width="20"><span class="hidden-sm">BSD</span></a>
+        </li>
+        <li role="presentation">
+            <a href="#system5" aria-controls="system5" role="tab" data-toggle="tab"><img src="img/octocat.png" width="20"><span class="hidden-sm">Build&nbsp;rspamd</span></a>
         </li>
     </ul>
     <!-- Tab - pane content -->
@@ -44,10 +50,10 @@ Rspamd project provides packages for many operating systems.
 <div markdown="1">
 Supported distributions:
 
-- CentOS 6 (amd64), need EPEL
-- CentOS 7 (amd64), need EPEL
-- Fedora 21 (amd64)
-- Fedora 22 (amd64)
+- **CentOS 6** (amd64), need EPEL
+- **CentOS 7** (amd64), need EPEL
+- **Fedora 21** (amd64)
+- **Fedora 22** (amd64)
 
 Please note that `CentOS` rpm packages **requires** [EPEL](https://fedoraproject.org/wiki/EPEL) to be installed in your system as many dependencies are missing from the base CentOS repositories. You can learn how to install EPEL from their site: <https://fedoraproject.org/wiki/EPEL>.
 `Fedora` packages do not require EPEL or any other third-party repository.
@@ -68,7 +74,6 @@ For experimental branch packages, download `rpm-experimental` repofile as follow
     yum update
     yum install rspamd
 </div>
-
         </div>
         <div role="tabpanel" class="tab-pane fade" id="system2">
             <h3>Debian and Ubuntu Linux</h3>
@@ -108,19 +113,15 @@ For experimental branch replace `apt-stable` with just `apt`:
 </div>
         </div>
         <div role="tabpanel" class="tab-pane fade" id="system3">
-            <h3>Other systems</h3>
+            <h3>Other Linux</h3>
 <div markdown="1">
-Rspamd is also supported on the following platforms:
+Rspamd is also supported on the following Linux distributions:
 
 - Gentoo Linux
 - Arch Linux
 - Scientific Linux
 - SUSE Linux Enterprise
 - OpenSUSE Linux
-- FreeBSD
-- NetBSD
-- OpenBSD
-- OSX (using MacPorts)
 
 ### Gentoo Linux
 Ebuilds for Gentoo Linux users are available in the main Gentoo Portage repository.
@@ -129,7 +130,17 @@ Ebuilds for Gentoo Linux users are available in the main Gentoo Portage reposito
 
 For other distributions you could also check [our project on the openSUSE build service](https://software.opensuse.org/download.html?project=home%3Acebka&package=rspamd).
 
-### BSD and OSX
+</div>
+        </div>
+        <div role="tabpanel" class="tab-pane fade" id="system4">
+            <h3>BSD systems</h3>
+<div markdown="1">
+Rspamd has been ported to the following BSD like operating systems:
+
+- FreeBSD
+- NetBSD
+- OpenBSD
+- OSX (using MacPorts)
 
 FreeBSD users can install Rspamd from [ports](http://www.freshports.org/mail/rspamd/).
 
@@ -140,16 +151,9 @@ OpenBSD users can use [ports](http://openports.se/mail/rspamd).
 OSX users can install from [MacPorts](https://trac.macports.org/browser/trunk/dports/mail/rspamd/Portfile).
 </div>
         </div>
-    </div>
-</div>
-
-### Debian `official` repos
-
-Rspamd is also available in some versions of Debian and Ubuntu. However, we are looking for an active maintainer for rspamd in these 'official' repos, as now rspamd is terribly outdated there.
-
-Please **DO NOT** use those packages, as they are no longer supported.
-
-## Build rspamd from the sources
+        <div role="tabpanel" class="tab-pane fade" id="system5">
+            <h3>Build rspamd from the sources</h3>
+<div markdown="1">
 
 If there are no packages for your system or you want custom build options you can also build rspamd from the source code. To do that grab the source from [github](https://github.com/vstakhov/rspamd) using `git`:
 
@@ -194,6 +198,17 @@ Alternatively, you can create a distribution package and use it for build your o
 	$ tar xvf rspamd-<rspamd_version>.tar.xz
 	$ cd rspamd-<rspamd_version>
 	$ debuild
+</div>
+        </div>
+    </div>
+</div>
+
+### Debian `official` repos
+
+Rspamd is also available in some versions of Debian and Ubuntu. However, we are looking for an active maintainer for rspamd in these 'official' repos, as now rspamd is terribly outdated there.
+
+Please **DO NOT** use those packages, as they are no longer supported.
+
 
 ## Further reading
 
