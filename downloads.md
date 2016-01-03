@@ -102,6 +102,12 @@ For <a class="undecor" href="#experimentalSys2">experimental<sup>2</sup></a> bra
     apt-get update
     apt-get install rspamd
 
+### Debian `official` repos
+
+Rspamd is also available in some versions of Debian and Ubuntu. However, we are looking for an active maintainer for rspamd in these 'official' repos, as now rspamd is terribly outdated there. 
+
+Please **DO NOT** use those packages, as they are no longer supported.
+
 </div>
 <hr>
 <p class="myFootnote" id="stableSys2">1. Use STABLE branch of packages: those packages are the official rspamd releases which are recommended for production usage.</p>
@@ -197,13 +203,6 @@ Alternatively, you can create a distribution package and use it for build your o
         </div>
     </div>
 </div>
-
-### Debian `official` repos
-
-Rspamd is also available in some versions of Debian and Ubuntu. However, we are looking for an active maintainer for rspamd in these 'official' repos, as now rspamd is terribly outdated there.
-
-Please **DO NOT** use those packages, as they are no longer supported.
-
 
 ## Further reading
 
