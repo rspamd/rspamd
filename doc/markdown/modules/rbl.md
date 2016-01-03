@@ -67,7 +67,7 @@ If set to true, do not use this RBL if the message sender is authenticated.
 
 - default_exclude_private_ips (true)
 
-If true & private_ips is set appropriately, do not use the RBL if the sending host address is in the private IP list & do not check received headers baring these addresses.
+If true, do not use the RBL if the sending host address is in `local_addrs` & do not check received headers baring these addresses.
 
 - default_exclude_local (true)
 
@@ -86,10 +86,6 @@ Other parameters which can be set here are:
 - local_exclude_ip_map
 
 Can be set to a URL of a list of IPv4/IPv6 addresses & subnets not to be considered as local exclusions by exclude_local checks.
-
-- private_ips
-
-Should be set to a space/comma/semicolon-delimited list of addresses & subnets to be considered private by exclude_private_ips checks.
 
 RBL-specific subsection is structured as follows:
 
