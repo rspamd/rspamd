@@ -63,3 +63,8 @@ body {
       display: none;
     }
 }
+pre{
+  /* code aria */
+  background-color: #333333;
+  color: #eeeeee;
+}

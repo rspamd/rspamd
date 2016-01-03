@@ -81,12 +81,12 @@ For experimental branch packages, download `rpm-experimental` repofile as follow
 
 Rspamd supports the following .deb based distributives:
 
-- Debian wheezy (amd64, i386)
-- Debian jessie (amd64, i386)
-- Ubuntu precise (amd64, i386)
-- Ubuntu trusty (amd64, i386)
-- Ubuntu vivid (amd64, i386)
-- Ubuntu wily (amd64, i386)
+- **Debian wheezy** (amd64, i386)
+- **Debian jessie** (amd64, i386)
+- **Ubuntu precise** (amd64, i386)
+- **Ubuntu trusty** (amd64, i386)
+- **Ubuntu vivid** (amd64, i386)
+- **Ubuntu wily** (amd64, i386)
 
 To install the rspamd apt repository, please use the following commands:
 
@@ -117,11 +117,11 @@ For experimental branch replace `apt-stable` with just `apt`:
 <div markdown="1">
 Rspamd is also supported on the following Linux distributions:
 
-- Gentoo Linux
-- Arch Linux
-- Scientific Linux
-- SUSE Linux Enterprise
-- OpenSUSE Linux
+- **Gentoo Linux**
+- **Arch Linux**
+- **Scientific Linux**
+- **SUSE Linux Enterprise**
+- **OpenSUSE Linux**
 
 ### Gentoo Linux
 Ebuilds for Gentoo Linux users are available in the main Gentoo Portage repository.
@@ -137,10 +137,10 @@ For other distributions you could also check [our project on the openSUSE build 
 <div markdown="1">
 Rspamd has been ported to the following BSD like operating systems:
 
-- FreeBSD
-- NetBSD
-- OpenBSD
-- OSX (using MacPorts)
+- **FreeBSD**
+- **NetBSD**
+- **OpenBSD**
+- **OSX** (using MacPorts)
 
 FreeBSD users can install Rspamd from [ports](http://www.freshports.org/mail/rspamd/).
 
