@@ -2,7 +2,7 @@
 	<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 	<script type="text/javascript"
 	   src="//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
-	
+
 	<script>
 		// Fix for offsets in links
 		$(document).ready(
@@ -10,6 +10,8 @@
 			var offset = 50;
 
 			$('body').scrollspy({ target: '#navbar-spy', offset: offset + 10 });
+
+			$('[data-toggle="tooltip"]').tooltip();// tooltips for buttons
 
 			$('.nav-stacked li a').click(function(event) {
 				if ($(this).attr('href')[0] == '#') {
