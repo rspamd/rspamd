@@ -70,10 +70,10 @@ struct radix_tree_compressed {
 
 static gboolean
 radix_compare_compressed (struct radix_compressed_node *node,
-		guint8 *key, guint keylen, guint cur_level)
+		const guint8 *key, guint keylen, guint cur_level)
 {
-	guint8 *nk;
-	guint8 *k;
+	const guint8 *nk;
+	const guint8 *k;
 	guint8 bit;
 	guint shift, rbits, skip;
 
@@ -118,13 +118,13 @@ radix_compare_compressed (struct radix_compressed_node *node,
 }
 
 uintptr_t
-radix_find_compressed (radix_compressed_t * tree, guint8 *key, gsize keylen)
+radix_find_compressed (radix_compressed_t * tree, const guint8 *key, gsize keylen)
 {
 	struct radix_compressed_node *node;
 	guint32 bit;
 	gsize kremain = keylen / sizeof (guint32);
 	uintptr_t value;
-	guint32 *k = (guint32 *)key;
+	const guint32 *k = (guint32 *)key;
 	guint32 kv = ntohl (*k);
 	guint cur_level = 0;
 
@@ -594,9 +594,10 @@ radix_destroy_compressed (radix_compressed_t *tree)
 }
 
 uintptr_t
-radix_find_compressed_addr (radix_compressed_t *tree, rspamd_inet_addr_t *addr)
+radix_find_compressed_addr (radix_compressed_t *tree,
+		const rspamd_inet_addr_t *addr)
 {
-	guchar *key;
+	const guchar *key;
 	guint klen = 0;
 
 	if (addr == NULL) {

@@ -56,7 +56,7 @@ radix_insert_compressed (radix_compressed_t * tree,
  * @param keylen length of a key
  * @return opaque pointer or `RADIX_NO_VALUE` if no value has been found
  */
-uintptr_t radix_find_compressed (radix_compressed_t * tree, guint8 *key,
+uintptr_t radix_find_compressed (radix_compressed_t * tree, const guint8 *key,
 		gsize keylen);
 
 /**
@@ -66,7 +66,7 @@ uintptr_t radix_find_compressed (radix_compressed_t * tree, guint8 *key,
  * @return
  */
 uintptr_t radix_find_compressed_addr (radix_compressed_t *tree,
-		rspamd_inet_addr_t *addr);
+		const rspamd_inet_addr_t *addr);
 
 /**
  * Destroy the complete radix trie
