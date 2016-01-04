@@ -102,6 +102,18 @@ regexp_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 
 	*ctx = (struct module_ctx *)regexp_module_ctx;
 
+	rspamd_rcl_add_doc_by_path (cfg, NULL,
+			"Regular expressions rules plugin",
+			"regexp", UCL_OBJECT, NULL, 0);
+
+	rspamd_rcl_add_doc_by_path (cfg,
+			"regexp",
+			"Maximum size of data chunk scanned with any regexp (further data is truncated)",
+			"max_size",
+			UCL_INT,
+			NULL,
+			0);
+
 	return 0;
 }
 
