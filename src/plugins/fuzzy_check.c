@@ -525,15 +525,23 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 
 	*ctx = (struct module_ctx *)fuzzy_module_ctx;
 
-	rspamd_rcl_add_doc_by_path (cfg, NULL,
+	rspamd_rcl_add_doc_by_path (cfg,
+			NULL,
 			"Fuzzy check plugin",
-			"fuzzy_check", UCL_OBJECT, NULL, 0);
+			"fuzzy_check",
+			UCL_OBJECT,
+			NULL,
+			0,
+			NULL,
+			0);
 
 	rspamd_rcl_add_doc_by_path (cfg,
 			"fuzzy_check",
 			"Default symbol",
 			"symbol",
 			UCL_STRING,
+			NULL,
+			0,
 			NULL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
@@ -542,12 +550,16 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			"min_length",
 			UCL_INT,
 			NULL,
+			0,
+			NULL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"fuzzy_check",
 			"Minimum number of *bytes* to check a non-text part",
 			"min_bytes",
 			UCL_INT,
+			NULL,
+			0,
 			NULL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
@@ -556,12 +568,16 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			"min_height",
 			UCL_INT,
 			NULL,
+			0,
+			NULL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"fuzzy_check",
 			"Minimum width in pixels for embedded images to check using fuzzy storage",
 			"min_width",
 			UCL_INT,
+			NULL,
+			0,
 			NULL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
@@ -570,6 +586,8 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			"timeout",
 			UCL_TIME,
 			NULL,
+			0,
+			NULL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"fuzzy_check",
@@ -577,12 +595,16 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			"retransmits",
 			UCL_INT,
 			NULL,
+			0,
+			NULL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"fuzzy_check",
 			"Whitelisted IPs map",
 			"whitelist",
 			UCL_STRING,
+			NULL,
+			0,
 			NULL,
 			0);
 	/* Rules doc strings */
@@ -592,12 +614,16 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			"rule",
 			UCL_OBJECT,
 			NULL,
+			0,
+			NULL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"fuzzy_check.rule",
 			"Headers that are used to make a separate hash",
 			"headers",
 			UCL_ARRAY,
+			NULL,
+			0,
 			NULL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
@@ -606,12 +632,16 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			"mime_types",
 			UCL_ARRAY,
 			NULL,
+			0,
+			NULL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"fuzzy_check.rule",
 			"Maximum value for fuzzy hash when weight of symbol is exactly 1.0 (if value is higher then score is still 1.0)",
 			"max_score",
 			UCL_INT,
+			NULL,
+			0,
 			NULL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
@@ -620,12 +650,16 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			"servers",
 			UCL_STRING,
 			NULL,
+			0,
+			NULL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"fuzzy_check.rule",
 			"If true then never try to learn this fuzzy storage",
 			"read_only",
 			UCL_BOOLEAN,
+			NULL,
+			0,
 			NULL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
@@ -634,12 +668,16 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			"skip_unknown",
 			UCL_BOOLEAN,
 			NULL,
+			0,
+			NULL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"fuzzy_check.rule",
 			"Default symbol for rule (if no flags defined or matched)",
 			"symbol",
 			UCL_STRING,
+			NULL,
+			0,
 			NULL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
@@ -648,12 +686,16 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			"encryption_key",
 			UCL_STRING,
 			NULL,
+			0,
+			NULL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"fuzzy_check.rule",
 			"Base32 value for the hashing key (for private storages)",
 			"fuzzy_key",
 			UCL_STRING,
+			NULL,
+			0,
 			NULL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
@@ -662,13 +704,17 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			"fuzzy_shingles_key",
 			UCL_STRING,
 			NULL,
+			0,
+			NULL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"fuzzy_check.rule",
 			"Lua script that returns boolean function to check if this task "
-					"should be considered when learning fuzzy storage",
+						"should be considered when learning fuzzy storage",
 			"learn_condition",
 			UCL_STRING,
+			NULL,
+			0,
 			NULL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
@@ -676,6 +722,8 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			"Map of SYMBOL -> data for flags configuration",
 			"fuzzy_map",
 			UCL_OBJECT,
+			NULL,
+			0,
 			NULL,
 			0);
 	/* Fuzzy map doc strings */
@@ -685,12 +733,16 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			"max_score",
 			UCL_INT,
 			NULL,
+			0,
+			NULL,
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"fuzzy_check.rule.fuzzy_map",
 			"Flag number",
 			"flag",
 			UCL_INT,
+			NULL,
+			0,
 			NULL,
 			0);
 

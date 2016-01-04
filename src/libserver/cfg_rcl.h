@@ -352,12 +352,14 @@ void rspamd_rcl_register_worker_parser (struct rspamd_config *cfg, gint type,
  * @param doc_target target object where to insert documentation (top object is used if this is NULL)
  * @param doc_object documentation object to insert
  */
-ucl_object_t* rspamd_rcl_add_doc_obj (ucl_object_t *doc_target,
+ucl_object_t *rspamd_rcl_add_doc_obj (ucl_object_t *doc_target,
 		const char *doc_string,
 		const char *doc_name,
 		ucl_type_t type,
 		rspamd_rcl_default_handler_t handler,
-		gint flags);
+		gint flags,
+		const char *default_value,
+		gboolean required);
 
 /**
  * Adds new documentation option specified by path `doc_path` that should be
@@ -369,5 +371,7 @@ ucl_object_t *rspamd_rcl_add_doc_by_path (struct rspamd_config *cfg,
 		const char *doc_name,
 		ucl_type_t type,
 		rspamd_rcl_default_handler_t handler,
-		gint flags);
+		gint flags,
+		const char *default_value,
+		gboolean required);
 #endif /* CFG_RCL_H_ */

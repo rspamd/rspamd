@@ -1235,6 +1235,8 @@ rspamd_rcl_add_section (struct rspamd_rcl_section **top,
 				name,
 				type,
 				NULL,
+				0,
+				NULL,
 				0);
 	}
 
@@ -1258,8 +1260,14 @@ rspamd_rcl_add_section_doc (struct rspamd_rcl_section **top,
 	new->type = type;
 	new->strict_type = strict_type;
 
-	new->doc_ref = rspamd_rcl_add_doc_obj (doc_target, doc_string,
-			name, type, NULL, 0);
+	new->doc_ref = rspamd_rcl_add_doc_obj (doc_target,
+			doc_string,
+			name,
+			type,
+			NULL,
+			0,
+			NULL,
+			0);
 
 	HASH_ADD_KEYPTR (hh, *top, new->name, strlen (new->name), new);
 	return new;
@@ -1282,8 +1290,14 @@ rspamd_rcl_add_default_handler (struct rspamd_rcl_section *section,
 	new->pd.flags = flags;
 
 	if (section->doc_ref != NULL) {
-		rspamd_rcl_add_doc_obj (section->doc_ref, doc_string, name, UCL_NULL,
-				handler, flags);
+		rspamd_rcl_add_doc_obj (section->doc_ref,
+				doc_string,
+				name,
+				UCL_NULL,
+				handler,
+				flags,
+				NULL,
+				0);
 	}
 
 	HASH_ADD_KEYPTR (hh, section->default_parser, new->key, strlen (
@@ -2812,8 +2826,14 @@ rspamd_rcl_register_worker_option (struct rspamd_config *cfg,
 		doc_target = doc_obj;
 	}
 
-	rspamd_rcl_add_doc_obj ((ucl_object_t *)doc_target, doc_string, name, UCL_NULL,
-			handler, flags);
+	rspamd_rcl_add_doc_obj ((ucl_object_t *) doc_target,
+			doc_string,
+			name,
+			UCL_NULL,
+			handler,
+			flags,
+			NULL,
+			0);
 }
 
 
@@ -3044,7 +3064,9 @@ rspamd_rcl_add_doc_obj (ucl_object_t *doc_target,
 		const char *doc_name,
 		ucl_type_t type,
 		rspamd_rcl_default_handler_t handler,
-		gint flags)
+		gint flags,
+		const char *default_value,
+		gboolean required)
 {
 	ucl_object_t *doc_obj;
 
@@ -3056,7 +3078,8 @@ rspamd_rcl_add_doc_obj (ucl_object_t *doc_target,
 
 	/* Insert doc string itself */
 	if (doc_string) {
-		ucl_object_insert_key (doc_obj, ucl_object_fromstring (doc_string),
+		ucl_object_insert_key (doc_obj,
+				ucl_object_fromstring_common (doc_string, 0, 0),
 				"data", 0, false);
 	}
 	else {
@@ -3071,6 +3094,17 @@ rspamd_rcl_add_doc_obj (ucl_object_t *doc_target,
 	}
 
 	rspamd_rcl_doc_obj_from_handler (doc_obj, handler, flags);
+
+	ucl_object_insert_key (doc_obj,
+			ucl_object_frombool (required),
+			"required", 0, false);
+
+	if (default_value) {
+		ucl_object_insert_key (doc_obj,
+				ucl_object_fromstring_common (default_value, 0, 0),
+				"default", 0, false);
+	}
+
 	ucl_object_insert_key (doc_target, doc_obj, doc_name, 0, true);
 
 	return doc_obj;
@@ -3083,7 +3117,9 @@ rspamd_rcl_add_doc_by_path (struct rspamd_config *cfg,
 		const char *doc_name,
 		ucl_type_t type,
 		rspamd_rcl_default_handler_t handler,
-		gint flags)
+		gint flags,
+		const char *default_value,
+		gboolean required)
 {
 	const ucl_object_t *found, *cur;
 	ucl_object_t *obj;
@@ -3092,14 +3128,26 @@ rspamd_rcl_add_doc_by_path (struct rspamd_config *cfg,
 	if (doc_path == NULL) {
 		/* Assume top object */
 		return rspamd_rcl_add_doc_obj (cfg->doc_strings,
-				doc_string, doc_name, type, handler, flags);
+				doc_string,
+				doc_name,
+				type,
+				handler,
+				flags,
+				default_value,
+				required);
 	}
 	else {
 		found = ucl_lookup_path (cfg->doc_strings, doc_path);
 
 		if (found != NULL) {
 			return rspamd_rcl_add_doc_obj ((ucl_object_t *) found,
-					doc_string, doc_name, type, handler, flags);
+					doc_string,
+					doc_name,
+					type,
+					handler,
+					flags,
+					default_value,
+					required);
 		}
 
 		/* Otherwise we need to insert all components of the path */
@@ -3131,5 +3179,11 @@ rspamd_rcl_add_doc_by_path (struct rspamd_config *cfg,
 	}
 
 	return rspamd_rcl_add_doc_obj ((ucl_object_t *) cur,
-			doc_string, doc_name, type, handler, flags);
+			doc_string,
+			doc_name,
+			type,
+			handler,
+			flags,
+			default_value,
+			required);
 }
