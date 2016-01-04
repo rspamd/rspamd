@@ -3,7 +3,9 @@ local opts = {}
 local known_attrs = {
   data = 1,
   example = 1,
-  type = 1
+  type = 1,
+  required = 1,
+  default = 1,
 }
 
 --.USE "getopt"
@@ -73,6 +75,18 @@ local function print_help(key, value, tabs)
       if value['type'] == 'object' then
         print('')
       end
+    end
+    if type(value['required']) == 'boolean' then
+      if value['required'] then
+        print(string.format('%s\tRequired: %s', tabs,
+          maybe_print_color(tostring(value['required']))))
+      else
+        print(string.format('%s\tRequired: %s', tabs,
+          tostring(value['required'])))
+      end
+    end
+    if value['default'] then
+      print(string.format('%s\tDefault: %s', tabs, value['default']))
     end
   end
 
