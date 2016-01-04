@@ -672,7 +672,7 @@ local function process_sa_conf(f)
           or string.sub(words[3], 1, 1) == 'm') then
         cur_rule['type'] = 'part'
         cur_rule['re_expr'] = words_to_re(words, 2)
-        cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
+        cur_rule['re'] = rspamd_regexp.create(cur_rule['re_expr'])
         cur_rule['raw'] = true
         if cur_rule['re'] then
 
@@ -711,7 +711,7 @@ local function process_sa_conf(f)
           or string.sub(words[3], 1, 1) == 'm') then
         cur_rule['type'] = 'message'
         cur_rule['re_expr'] = words_to_re(words, 2)
-        cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
+        cur_rule['re'] = rspamd_regexp.create(cur_rule['re_expr'])
         cur_rule['raw'] = true
         if cur_rule['re'] then
           valid_rule = true
@@ -745,7 +745,7 @@ local function process_sa_conf(f)
       cur_rule['type'] = 'uri'
       cur_rule['symbol'] = words[2]
       cur_rule['re_expr'] = words_to_re(words, 2)
-      cur_rule['re'] = rspamd_regexp.create_cached(cur_rule['re_expr'])
+      cur_rule['re'] = rspamd_regexp.create(cur_rule['re_expr'])
       if cur_rule['re'] and cur_rule['symbol'] then
         valid_rule = true
         rspamd_config:register_regexp({
@@ -965,7 +965,7 @@ local function post_process()
         local nre = rspamd_regexp.create(nexpr)
         if not nre then
           rspamd_logger.errx(rspamd_config, 'cannot apply replacement for rule %1', r)
-          rule['re'] = nil
+          --rule['re'] = nil
         else
           local old_max_hits = rule['re']:get_max_hits()
           rspamd_logger.debugx(rspamd_config, 'replace %1 -> %2', r, nexpr)
