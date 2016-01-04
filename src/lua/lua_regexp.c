@@ -711,7 +711,6 @@ lua_regexp_gc (lua_State *L)
 	struct rspamd_lua_regexp *to_del = lua_check_regexp (L);
 
 	if (to_del) {
-		msg_warn ("del: %p", to_del->re);
 		if (!IS_DESTROYED (to_del)) {
 			rspamd_regexp_unref (to_del->re);
 		}

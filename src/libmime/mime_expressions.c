@@ -189,22 +189,18 @@ rspamd_mime_expr_quark (void)
  * Rspamd regexp utility functions
  */
 static struct rspamd_regexp_atom *
-rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
+rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
+		struct rspamd_config *cfg)
 {
 	const gchar *begin, *end, *p, *src, *start;
 	gchar *dbegin, *dend;
 	struct rspamd_regexp_atom *result;
-	rspamd_regexp_t *re;
 	GError *err = NULL;
 	GString *re_flags;
 
 	if (line == NULL) {
 		msg_err_pool ("cannot parse NULL line");
 		return NULL;
-	}
-
-	if ((re = rspamd_regexp_cache_query (NULL, line, NULL)) != NULL) {
-		return ((struct rspamd_regexp_atom *)rspamd_regexp_get_ud (re));
 	}
 
 	src = line;
@@ -356,18 +352,14 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line)
 		return NULL;
 	}
 
-	if (result->regexp) {
-		if (result->is_multiple) {
-			rspamd_regexp_set_maxhits (result->regexp, 0);
-		}
-		else {
-			rspamd_regexp_set_maxhits (result->regexp, 1);
-		}
+	if (result->is_multiple) {
+		rspamd_regexp_set_maxhits (result->regexp, 0);
+	}
+	else {
+		rspamd_regexp_set_maxhits (result->regexp, 1);
 	}
 
 	rspamd_regexp_set_ud (result->regexp, result);
-
-	rspamd_regexp_cache_insert (NULL, line, NULL, result->regexp);
 
 	*dend = '/';
 
@@ -621,7 +613,7 @@ set:
 
 	if (type == MIME_ATOM_REGEXP) {
 		mime_atom->d.re = rspamd_mime_expr_parse_regexp_atom (pool,
-				mime_atom->str);
+				mime_atom->str, cfg);
 		if (mime_atom->d.re == NULL) {
 			g_set_error (err, rspamd_mime_expr_quark(), 200, "cannot parse regexp '%s'",
 					mime_atom->str);
@@ -631,6 +623,7 @@ set:
 			/* Register new item in the cache */
 			if (mime_atom->d.re->type == RSPAMD_RE_HEADER ||
 					mime_atom->d.re->type == RSPAMD_RE_RAWHEADER) {
+
 				if (mime_atom->d.re->header != NULL) {
 					own_re = mime_atom->d.re->regexp;
 					mime_atom->d.re->regexp = rspamd_re_cache_add (cfg->re_cache,
