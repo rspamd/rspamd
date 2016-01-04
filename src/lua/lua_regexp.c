@@ -86,6 +86,37 @@ lua_check_regexp (lua_State * L)
 	return ud ? *((struct rspamd_lua_regexp **)ud) : NULL;
 }
 
+static gchar *
+rspamd_lua_get_module_name (lua_State *L)
+{
+	lua_Debug d;
+	gchar *p;
+	gchar func_buf[128];
+
+	if (lua_getstack (L, 1, &d) == 1) {
+		(void) lua_getinfo (L, "Sl", &d);
+		if ((p = strrchr (d.short_src, '/')) == NULL) {
+			p = d.short_src;
+		}
+		else {
+			p++;
+		}
+
+		if (strlen (p) > 20) {
+			rspamd_snprintf (func_buf, sizeof (func_buf), "%10s...]:%d", p,
+					d.currentline);
+		}
+		else {
+			rspamd_snprintf (func_buf, sizeof (func_buf), "%s:%d", p,
+					d.currentline);
+		}
+
+		return g_strdup (func_buf);
+	}
+
+	return NULL;
+}
+
 /***
  * @function rspamd_regexp.create(pattern[, flags])
  * Creates new rspamd_regexp
@@ -121,6 +152,8 @@ lua_regexp_create (lua_State *L)
 	else {
 		new = g_slice_alloc0 (sizeof (struct rspamd_lua_regexp));
 		new->re = re;
+		new->re_pattern = g_strdup (string);
+		new->module = rspamd_lua_get_module_name (L);
 		pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
 		rspamd_lua_setclass (L, "rspamd{regexp}", -1);
 		*pnew = new;
@@ -154,6 +187,8 @@ lua_regexp_get_cached (lua_State *L)
 	if (re) {
 		new = g_slice_alloc0 (sizeof (struct rspamd_lua_regexp));
 		new->re = rspamd_regexp_ref (re);
+		new->re_pattern = g_strdup (string);
+		new->module = rspamd_lua_get_module_name (L);
 		pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
 		rspamd_lua_setclass (L, "rspamd{regexp}", -1);
 		*pnew = new;
@@ -198,6 +233,8 @@ lua_regexp_create_cached (lua_State *L)
 	if (re) {
 		new = g_slice_alloc0 (sizeof (struct rspamd_lua_regexp));
 		new->re = rspamd_regexp_ref (re);
+		new->re_pattern = g_strdup (string);
+		new->module = rspamd_lua_get_module_name (L);
 		pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
 
 		rspamd_lua_setclass (L, "rspamd{regexp}", -1);
@@ -215,6 +252,8 @@ lua_regexp_create_cached (lua_State *L)
 		else {
 			new = g_slice_alloc0 (sizeof (struct rspamd_lua_regexp));
 			new->re = rspamd_regexp_ref (re);
+			new->re_pattern = g_strdup (string);
+			new->module = rspamd_lua_get_module_name (L);
 			pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
 			rspamd_lua_setclass (L, "rspamd{regexp}", -1);
 			*pnew = new;
@@ -672,10 +711,13 @@ lua_regexp_gc (lua_State *L)
 	struct rspamd_lua_regexp *to_del = lua_check_regexp (L);
 
 	if (to_del) {
+		msg_warn ("del: %p", to_del->re);
 		if (!IS_DESTROYED (to_del)) {
 			rspamd_regexp_unref (to_del->re);
 		}
 
+		g_free (to_del->re_pattern);
+		g_free (to_del->module);
 		g_slice_free1 (sizeof (*to_del), to_del);
 	}
 
