@@ -985,7 +985,7 @@ rspamd_re_cache_is_finite (struct rspamd_re_cache *cache,
 				return TRUE;
 			}
 			else {
-				msg_info_re_cache (
+				msg_err_re_cache (
 						"cannot approximate %s to hyperscan",
 						rspamd_regexp_get_pattern (re));
 
@@ -996,7 +996,7 @@ rspamd_re_cache_is_finite (struct rspamd_re_cache *cache,
 			/* We consider that as timeout */
 			kill (cld, SIGKILL);
 			g_assert (waitpid (cld, &status, 0) != -1);
-			msg_info_re_cache (
+			msg_err_re_cache (
 					"cannot approximate %s to hyperscan: timeout waiting",
 					rspamd_regexp_get_pattern (re));
 			signal (SIGCHLD, SIG_IGN);

@@ -32,8 +32,6 @@
 
 #ifdef HAVE_GLOB_H
 #include <glob.h>
-#include <libserver/rspamd_control.h>
-
 #endif
 
 static gpointer init_hs_helper (struct rspamd_config *cfg);
@@ -86,6 +84,14 @@ init_hs_helper (struct rspamd_config *cfg)
 	rspamd_rcl_register_worker_option (cfg,
 			type,
 			"max_time",
+			rspamd_rcl_parse_struct_time,
+			ctx,
+			G_STRUCT_OFFSET (struct hs_helper_ctx, max_time),
+			RSPAMD_CL_FLAG_TIME_FLOAT,
+			"Maximum time to wait for compilation of a single expression");
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"timeout",
 			rspamd_rcl_parse_struct_time,
 			ctx,
 			G_STRUCT_OFFSET (struct hs_helper_ctx, max_time),
