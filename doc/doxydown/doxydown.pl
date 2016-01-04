@@ -100,7 +100,7 @@ EOD
         }
     }
     else {
-        print "\tnothing\n";
+        print "No parameters\n";
     }
     print "\n**Returns:**\n\n";
     if ( $f->{'return'} && $f->{'return'}->{'description'} ) {
@@ -113,7 +113,7 @@ EOD
         }
     }
     else {
-        print "\tnothing\n";
+        print "No return\n";
     }
     if ( $f->{'example'} ) {
         print <<EOD;
