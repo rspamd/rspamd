@@ -443,8 +443,8 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 
 		if (lua_script) {
 			if (luaL_dostring (cfg->lua_state, lua_script) != 0) {
-				msg_err_config ("cannot execute lua script for users "
-						"extraction: %s", lua_tostring (cfg->lua_state, -1));
+				msg_err_config ("cannot execute lua script for fuzzy "
+						"learn condition: %s", lua_tostring (cfg->lua_state, -1));
 			}
 			else {
 				if (lua_type (cfg->lua_state, -1) == LUA_TFUNCTION) {
@@ -524,6 +524,175 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 	fuzzy_module_ctx->keypairs_cache = rspamd_keypair_cache_new (32);
 
 	*ctx = (struct module_ctx *)fuzzy_module_ctx;
+
+	rspamd_rcl_add_doc_by_path (cfg, NULL,
+			"Fuzzy check plugin",
+			"fuzzy_check", UCL_OBJECT, NULL, 0);
+
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check",
+			"Default symbol",
+			"symbol",
+			UCL_STRING,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check",
+			"Minimum number of *words* to check a text part",
+			"min_length",
+			UCL_INT,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check",
+			"Minimum number of *bytes* to check a non-text part",
+			"min_bytes",
+			UCL_INT,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check",
+			"Minimum height in pixels for embedded images to check using fuzzy storage",
+			"min_height",
+			UCL_INT,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check",
+			"Minimum width in pixels for embedded images to check using fuzzy storage",
+			"min_width",
+			UCL_INT,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check",
+			"Timeout for waiting reply from a fuzzy server",
+			"timeout",
+			UCL_TIME,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check",
+			"Maximum number of retransmits for a single request",
+			"retransmits",
+			UCL_INT,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check",
+			"Whitelisted IPs map",
+			"whitelist",
+			UCL_STRING,
+			NULL,
+			0);
+	/* Rules doc strings */
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check",
+			"Fuzzy check rule",
+			"rule",
+			UCL_OBJECT,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check.rule",
+			"Headers that are used to make a separate hash",
+			"headers",
+			UCL_ARRAY,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check.rule",
+			"Set of mime types (in form type/subtype, or type/*, or *) to check with fuzzy",
+			"mime_types",
+			UCL_ARRAY,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check.rule",
+			"Maximum value for fuzzy hash when weight of symbol is exactly 1.0 (if value is higher then score is still 1.0)",
+			"max_score",
+			UCL_INT,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check.rule",
+			"List of servers to check (or learn)",
+			"servers",
+			UCL_STRING,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check.rule",
+			"If true then never try to learn this fuzzy storage",
+			"read_only",
+			UCL_BOOLEAN,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check.rule",
+			"If true then ignore unknown flags and not add the default fuzzy symbol",
+			"skip_unknown",
+			UCL_BOOLEAN,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check.rule",
+			"Default symbol for rule (if no flags defined or matched)",
+			"symbol",
+			UCL_STRING,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check.rule",
+			"Base32 value for the protocol encryption public key",
+			"encryption_key",
+			UCL_STRING,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check.rule",
+			"Base32 value for the hashing key (for private storages)",
+			"fuzzy_key",
+			UCL_STRING,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check.rule",
+			"Base32 value for the shingles hashing key (for private storages)",
+			"fuzzy_shingles_key",
+			UCL_STRING,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check.rule",
+			"Lua script that returns boolean function to check if this task "
+					"should be considered when learning fuzzy storage",
+			"learn_condition",
+			UCL_STRING,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check.rule",
+			"Map of SYMBOL -> data for flags configuration",
+			"fuzzy_map",
+			UCL_OBJECT,
+			NULL,
+			0);
+	/* Fuzzy map doc strings */
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check.rule.fuzzy_map",
+			"Maximum score for this flag",
+			"max_score",
+			UCL_INT,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check.rule.fuzzy_map",
+			"Flag number",
+			"flag",
+			UCL_INT,
+			NULL,
+			0);
 
 	return 0;
 }
