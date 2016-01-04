@@ -109,6 +109,10 @@ local checks_hello_bareip = {
   '^[0-9a-f]+:' --bareip ipv6
 }
 
+-- Table of compiled regexps indexed by pattern
+local compiled_regexp = {
+}
+
 local config = {
   ['helo_enabled'] = false,
   ['hostname_enabled'] = false,
@@ -119,8 +123,14 @@ local config = {
 }
 
 local function check_regexp(str, regexp_text)
-  local re = rspamd_regexp.create_cached(regexp_text, 'i')
-  if re:match(str) then return true end
+  if not compiled_regexp[regexp_text] then
+    compiled_regexp[regexp_text] = rspamd_regexp.create(regexp_text, 'i')
+  end
+
+  if compiled_regexp[regexp_text] then
+    return compiled_regexp[regexp_text]:match(str)
+  end
+
   return false
 end
 
@@ -162,7 +172,7 @@ end
 -- eq_host: host for comparing or empty string
 local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
   local failed_address = 0
-  
+
   local function check_host_cb_mx(resolver, to_resolve, results, err)
     task:inc_dns_req()
     if not results then
