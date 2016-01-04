@@ -97,6 +97,40 @@ spf_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 
 	*ctx = (struct module_ctx *)spf_module_ctx;
 
+	rspamd_rcl_add_doc_by_path (cfg, NULL,
+			"SPF check plugin",
+			"spf", UCL_OBJECT, NULL, 0);
+
+	rspamd_rcl_add_doc_by_path (cfg, "spf",
+			"Map of IP addresses that should be excluded from SPF checks (in addition to `local_networks`)",
+			"whitelist", UCL_STRING, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "spf",
+			"Symbol that is added if SPF check is successful",
+			"symbol_allow", UCL_STRING, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "spf",
+			"Symbol that is added if SPF policy is set to 'deny'",
+			"symbol_fail", UCL_STRING, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"spf",
+			"Symbol that is added if SPF policy is set to 'undefined'",
+			"symbol_softfail",
+			UCL_STRING,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"spf",
+			"Symbol that is added if SPF policy is set to 'neutral'",
+			"symbol_neutral",
+			UCL_STRING,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg, "spf",
+			"Size of SPF parsed records cache",
+			"spf_cache_size", UCL_INT, NULL, 0);
+	rspamd_rcl_add_doc_by_path (cfg, "spf",
+			"Maximum lifetime for the elements in the SPF cache",
+			"spf_cache_expire", UCL_TIME, NULL, 0);
+
 	return 0;
 }
 
