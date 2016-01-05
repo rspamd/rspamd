@@ -133,6 +133,7 @@ rspamd_stat_init (struct rspamd_config *cfg)
 
 		cl = g_slice_alloc0 (sizeof (*cl));
 		cl->cfg = clf;
+		cl->ctx = stat_ctx;
 		cl->statfiles_ids = g_array_new (FALSE, FALSE, sizeof (gint));
 
 		/* Init classifier cache */

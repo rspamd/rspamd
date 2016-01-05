@@ -30,11 +30,6 @@
 #include "backends/backends.h"
 #include "learn_cache/learn_cache.h"
 
-enum stat_process_stage {
-	RSPAMD_STAT_STAGE_PRE = 0,
-	RSPAMD_STAT_STAGE_POST
-};
-
 struct rspamd_statfile_runtime {
 	struct rspamd_statfile_config *st;
 	gpointer backend_runtime;
@@ -42,29 +37,14 @@ struct rspamd_statfile_runtime {
 	guint64 total_hits;
 };
 
-struct rspamd_classifier_runtime {
-	struct rspamd_classifier_config *clcf;
-	struct classifier_ctx *clctx;
-	struct rspamd_stat_classifier *cl;
-	struct rspamd_stat_backend *backend;
-	struct rspamd_tokenizer_runtime *tok;
-	double ham_prob;
-	double spam_prob;
-	enum stat_process_stage stage;
-	guint64 total_spam;
-	guint64 total_ham;
-	guint64 processed_tokens;
-	GList *st_runtime;
-	guint start_pos;
-	guint end_pos;
-	gboolean skipped;
-};
-
 /* Common classifier structure */
 struct rspamd_classifier {
+	struct rspamd_stat_ctx *ctx;
 	struct rspamd_stat_cache *cache;
 	gpointer cachecf;
 	GArray *statfiles_ids;
+	gulong spam_learns;
+	gulong ham_learns;
 	struct rspamd_classifier_config *cfg;
 };
 

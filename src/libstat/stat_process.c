@@ -37,6 +37,7 @@
 
 static const gint similarity_treshold = 80;
 
+#if 0
 struct preprocess_cb_data {
 	struct rspamd_task *task;
 	GList *classifier_runtimes;
@@ -910,3 +911,4 @@ rspamd_stat_result_t rspamd_stat_statistics (struct rspamd_task *task,
 
 	return RSPAMD_STAT_PROCESS_OK;
 }
+#endif

@@ -12,34 +12,31 @@ struct rspamd_task;
 struct rspamd_classifier;
 
 struct token_node_s;
-struct rspamd_classifier_runtime;
 
 struct rspamd_stat_classifier {
 	char *name;
 	void (*init_func)(rspamd_mempool_t *pool,
-		struct rspamd_classifier *cl);
+			struct rspamd_classifier *cl);
 	gboolean (*classify_func)(struct rspamd_classifier * ctx,
-		GTree *input, struct rspamd_classifier_runtime *rt,
-		struct rspamd_task *task);
+			GPtrArray *tokens,
+			struct rspamd_task *task);
 	gboolean (*learn_spam_func)(struct rspamd_classifier * ctx,
-		GTree *input, struct rspamd_classifier_runtime *rt,
-		struct rspamd_task *task, gboolean is_spam,
-		GError **err);
+			GPtrArray *input,
+			struct rspamd_task *task, gboolean is_spam,
+			GError **err);
 };
 
 /* Bayes algorithm */
 void bayes_init (rspamd_mempool_t *pool,
-	struct rspamd_classifier *);
-gboolean bayes_classify (struct rspamd_classifier * ctx,
-	GTree *input,
-	struct rspamd_classifier_runtime *rt,
-	struct rspamd_task *task);
-gboolean bayes_learn_spam (struct rspamd_classifier * ctx,
-	GTree *input,
-	struct rspamd_classifier_runtime *rt,
-	struct rspamd_task *task,
-	gboolean is_spam,
-	GError **err);
+		struct rspamd_classifier *);
+gboolean bayes_classify (struct rspamd_classifier *ctx,
+		GPtrArray *tokens,
+		struct rspamd_task *task);
+gboolean bayes_learn_spam (struct rspamd_classifier *ctx,
+		GPtrArray *tokens,
+		struct rspamd_task *task,
+		gboolean is_spam,
+		GError **err);
 
 #endif
 /*
