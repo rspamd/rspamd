@@ -844,45 +844,48 @@ rspamd_mmaped_file_runtime (struct rspamd_task *task,
 }
 
 gboolean
-rspamd_mmaped_file_process_token (struct rspamd_task *task, rspamd_token_t *tok,
-		struct rspamd_token_result *res,
+rspamd_mmaped_file_process_tokens (struct rspamd_task *task, GPtrArray *tokens,
+		gint id,
 		gpointer p)
 {
 	rspamd_mmaped_file_t *mf = p;
 	guint32 h1, h2;
+	rspamd_token_t *tok;
+	guint i;
 
-	g_assert (res != NULL);
+	g_assert (tokens != NULL);
 	g_assert (p != NULL);
-	g_assert (tok != NULL);
-	g_assert (tok->datalen >= sizeof (guint32) * 2);
 
-	memcpy (&h1, tok->data, sizeof (h1));
-	memcpy (&h2, tok->data + sizeof (h1), sizeof (h2));
-	res->value = rspamd_mmaped_file_get_block (ctx, mf, h1, h2);
-
-	if (res->value > 0.0) {
-		return TRUE;
+	for (i = 0; i < tokens->len; i++) {
+		tok = g_ptr_array_index (tokens, i);
+		memcpy (&h1, tok->data, sizeof (h1));
+		memcpy (&h2, tok->data + sizeof (h1), sizeof (h2));
+		tok->values[id] = rspamd_mmaped_file_get_block (mf, h1, h2);
 	}
 
-	return FALSE;
+	return TRUE;
 }
 
 gboolean
-rspamd_mmaped_file_learn_token (struct rspamd_task *task, rspamd_token_t *tok,
-		struct rspamd_token_result *res,
+rspamd_mmaped_file_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
+		gint id,
 		gpointer p)
 {
 	rspamd_mmaped_file_t *mf = p;
 	guint32 h1, h2;
+	rspamd_token_t *tok;
+	guint i;
 
-	g_assert (res != NULL);
+	g_assert (tokens != NULL);
 	g_assert (p != NULL);
-	g_assert (tok != NULL);
-	g_assert (tok->datalen >= sizeof (guint32) * 2);
 
-	memcpy (&h1, tok->data, sizeof (h1));
-	memcpy (&h2, tok->data + sizeof (h1), sizeof (h2));
-	rspamd_mmaped_file_set_block (task->task_pool, ctx, mf, h1, h2, res->value);
+	for (i = 0; i < tokens->len; i++) {
+		tok = g_ptr_array_index (tokens, i);
+		memcpy (&h1, tok->data, sizeof (h1));
+		memcpy (&h2, tok->data + sizeof (h1), sizeof (h2));
+		rspamd_mmaped_file_set_block (task->task_pool, mf, h1, h2,
+				tok->values[id]);
+	}
 
 	return TRUE;
 }

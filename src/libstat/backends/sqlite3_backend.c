@@ -691,64 +691,64 @@ rspamd_sqlite3_runtime (struct rspamd_task *task,
 }
 
 gboolean
-rspamd_sqlite3_process_token (struct rspamd_task *task, struct token_node_s *tok,
-		struct rspamd_token_result *res, gpointer p)
+rspamd_sqlite3_process_tokens (struct rspamd_task *task,
+		GPtrArray *tokens,
+		gint id, gpointer p)
 {
 	struct rspamd_stat_sqlite3_db *bk;
 	struct rspamd_stat_sqlite3_rt *rt = p;
 	gint64 iv = 0, idx;
+	guint i;
+	rspamd_token_t *tok;
 
-	g_assert (res != NULL);
 	g_assert (p != NULL);
-	g_assert (tok != NULL);
-	g_assert (tok->datalen >= sizeof (guint32) * 2);
+	g_assert (tokens != NULL);
 
 	bk = rt->db;
 
-	if (bk == NULL) {
-		/* Statfile is does not exist, so all values are zero */
-		res->value = 0.0;
-		return FALSE;
-	}
+	for (i = 0; i < tokens->len; i ++) {
+		tok = g_ptr_array_index (tokens, i);
 
-	if (!bk->in_transaction) {
-		rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
-				RSPAMD_STAT_BACKEND_TRANSACTION_START_DEF);
-		bk->in_transaction = TRUE;
-	}
+		if (bk == NULL) {
+			/* Statfile is does not exist, so all values are zero */
+			tok->values[id] = 0.0;
+			continue;
+		}
 
-	if (rt->user_id == -1) {
-		if (bk->enable_users) {
-			rt->user_id = rspamd_sqlite3_get_user (bk, task, FALSE);
+		if (!bk->in_transaction) {
+			rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
+					RSPAMD_STAT_BACKEND_TRANSACTION_START_DEF);
+			bk->in_transaction = TRUE;
+		}
+
+		if (rt->user_id == -1) {
+			if (bk->enable_users) {
+				rt->user_id = rspamd_sqlite3_get_user (bk, task, FALSE);
+			}
+			else {
+				rt->user_id = 0;
+			}
+		}
+
+		if (rt->lang_id == -1) {
+			if (bk->enable_languages) {
+				rt->lang_id = rspamd_sqlite3_get_language (bk, task, FALSE);
+			}
+			else {
+				rt->lang_id = 0;
+			}
+		}
+
+		memcpy (&idx, tok->data, sizeof (idx));
+
+		if (rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
+				RSPAMD_STAT_BACKEND_GET_TOKEN,
+				idx, rt->user_id, rt->lang_id, &iv) == SQLITE_OK) {
+			tok->values[id] = iv;
 		}
 		else {
-			rt->user_id = 0;
+			tok->values[id] = 0.0;
 		}
-	}
-
-	if (rt->lang_id == -1) {
-		if (bk->enable_languages) {
-			rt->lang_id = rspamd_sqlite3_get_language (bk, task, FALSE);
-		}
-		else {
-			rt->lang_id = 0;
-		}
-	}
-
-	memcpy (&idx, tok->data, sizeof (idx));
-
-	if (rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
-			RSPAMD_STAT_BACKEND_GET_TOKEN,
-			idx, rt->user_id, rt->lang_id, &iv) == SQLITE_OK) {
-		res->value = iv;
-
-		if (iv == 0) {
-			return FALSE;
-		}
-	}
-	else {
-		res->value = 0.0;
-		return FALSE;
 	}
 
 
@@ -778,56 +778,63 @@ rspamd_sqlite3_finalize_process (struct rspamd_task *task, gpointer runtime,
 }
 
 gboolean
-rspamd_sqlite3_learn_token (struct rspamd_task *task, struct token_node_s *tok,
-		struct rspamd_token_result *res, gpointer p)
+rspamd_sqlite3_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
+		gint id, gpointer p)
 {
 	struct rspamd_stat_sqlite3_db *bk;
 	struct rspamd_stat_sqlite3_rt *rt = p;
 	gint64 iv = 0, idx;
+	guint i;
+	rspamd_token_t *tok;
 
-	g_assert (res != NULL);
+	g_assert (tokens != NULL);
 	g_assert (p != NULL);
-	g_assert (tok != NULL);
-	g_assert (tok->datalen >= sizeof (guint32) * 2);
 
 	bk = rt->db;
 
-	if (bk == NULL) {
-		/* Statfile is does not exist, so all values are zero */
-		return FALSE;
-	}
-
-	if (!bk->in_transaction) {
-		rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
-				RSPAMD_STAT_BACKEND_TRANSACTION_START_IM);
-		bk->in_transaction = TRUE;
-	}
-
-	if (rt->user_id == -1) {
-		if (bk->enable_users) {
-			rt->user_id = rspamd_sqlite3_get_user (bk, task, TRUE);
+	for (i = 0; i < tokens->len; i++) {
+		tok = g_ptr_array_index (tokens, i);
+		if (bk == NULL) {
+			/* Statfile is does not exist, so all values are zero */
+			return FALSE;
 		}
-		else {
-			rt->user_id = 0;
-		}
-	}
 
-	if (rt->lang_id == -1) {
-		if (bk->enable_languages) {
-			rt->lang_id = rspamd_sqlite3_get_language (bk, task, TRUE);
+		if (!bk->in_transaction) {
+			rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
+					RSPAMD_STAT_BACKEND_TRANSACTION_START_IM);
+			bk->in_transaction = TRUE;
 		}
-		else {
-			rt->lang_id = 0;
+
+		if (rt->user_id == -1) {
+			if (bk->enable_users) {
+				rt->user_id = rspamd_sqlite3_get_user (bk, task, TRUE);
+			}
+			else {
+				rt->user_id = 0;
+			}
 		}
-	}
 
-	iv = res->value;
-	memcpy (&idx, tok->data, sizeof (idx));
+		if (rt->lang_id == -1) {
+			if (bk->enable_languages) {
+				rt->lang_id = rspamd_sqlite3_get_language (bk, task, TRUE);
+			}
+			else {
+				rt->lang_id = 0;
+			}
+		}
 
-	if (rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
-			RSPAMD_STAT_BACKEND_SET_TOKEN,
-			idx, rt->user_id, rt->lang_id, iv) != SQLITE_OK) {
-		return FALSE;
+		iv = tok->values[id];
+		memcpy (&idx, tok->data, sizeof (idx));
+
+		if (rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
+				RSPAMD_STAT_BACKEND_SET_TOKEN,
+				idx, rt->user_id, rt->lang_id, iv) != SQLITE_OK) {
+			rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
+					RSPAMD_STAT_BACKEND_TRANSACTION_ROLLBACK);
+			bk->in_transaction = FALSE;
+
+			return FALSE;
+		}
 	}
 
 	return TRUE;
