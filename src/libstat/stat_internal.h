@@ -95,17 +95,18 @@ typedef struct token_node_s {
 
 struct rspamd_stat_ctx {
 	/* Subroutines for all objects */
-	struct rspamd_stat_classifier *classifiers;
+	struct rspamd_stat_classifier *classifiers_subrs;
 	guint classifiers_count;
-	struct rspamd_stat_tokenizer *tokenizers;
+	struct rspamd_stat_tokenizer *tokenizers_subrs;
 	guint tokenizers_count;
-	struct rspamd_stat_backend *backends;
+	struct rspamd_stat_backend *backends_subrs;
 	guint backends_count;
-	struct rspamd_stat_cache *caches;
+	struct rspamd_stat_cache *caches_subrs;
 	guint caches_count;
 
 	/* Runtime configuration */
-	GPtrArray *statfiles; /* struct statfile */
+	GPtrArray *statfiles; /* struct rspamd_statfile */
+	GPtrArray *classifiers; /* struct rspamd_classifier */
 	struct rspamd_config *cfg;
 	/* Global tokenizer */
 	struct rspamd_stat_tokenizer *tokenizer;
@@ -122,6 +123,7 @@ struct rspamd_stat_ctx * rspamd_stat_get_ctx (void);
 struct rspamd_stat_classifier * rspamd_stat_get_classifier (const gchar *name);
 struct rspamd_stat_backend * rspamd_stat_get_backend (const gchar *name);
 struct rspamd_stat_tokenizer * rspamd_stat_get_tokenizer (const gchar *name);
+struct rspamd_stat_cache * rspamd_stat_get_cache (const gchar *name);
 
 static GQuark rspamd_stat_quark (void)
 {

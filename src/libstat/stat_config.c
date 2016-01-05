@@ -98,20 +98,25 @@ rspamd_stat_init (struct rspamd_config *cfg)
 	struct rspamd_statfile_config *stf;
 	struct rspamd_stat_backend *bk;
 	struct rspamd_statfile *st;
+	struct rspamd_classifier *cl;
+	const ucl_object_t *cache_obj = NULL, *cache_name_obj;
+	const gchar *cache_name = NULL;
 
 	if (stat_ctx == NULL) {
 		stat_ctx = g_slice_alloc0 (sizeof (*stat_ctx));
 	}
 
-	stat_ctx->backends = stat_backends;
+	stat_ctx->backends_subrs = stat_backends;
 	stat_ctx->backends_count = G_N_ELEMENTS (stat_backends);
-	stat_ctx->classifiers = stat_classifiers;
+	stat_ctx->classifiers_subrs = stat_classifiers;
 	stat_ctx->classifiers_count = G_N_ELEMENTS (stat_classifiers);
-	stat_ctx->tokenizers = stat_tokenizers;
+	stat_ctx->tokenizers_subrs = stat_tokenizers;
 	stat_ctx->tokenizers_count = G_N_ELEMENTS (stat_tokenizers);
-	stat_ctx->caches = stat_caches;
+	stat_ctx->caches_subrs = stat_caches;
 	stat_ctx->caches_count = G_N_ELEMENTS (stat_caches);
 	stat_ctx->cfg = cfg;
+	stat_ctx->statfiles = g_ptr_array_new ();
+	stat_ctx->classifiers = g_ptr_array_new ();
 	REF_RETAIN (stat_ctx->cfg);
 
 	/* Create statfiles from the classifiers */
@@ -133,16 +138,37 @@ rspamd_stat_init (struct rspamd_config *cfg)
 					clf->tokenizer, NULL);
 		}
 
+		cl = g_slice_alloc0 (sizeof (*cl));
+		cl->cfg = clf;
+		cl->statfiles_ids = g_array_new (FALSE, FALSE, sizeof (gint));
+
+		/* Init classifier cache */
+		if (clf->opts) {
+			cache_obj = ucl_object_find_key (clf->opts, "cache");
+
+			if (cache_obj) {
+				cache_name_obj = ucl_object_find_key (cache_obj, "name");
+			}
+
+			if (cache_name_obj) {
+				cache_name = ucl_object_tostring (cache_name_obj);
+			}
+		}
+
+		cl->cache = rspamd_stat_get_cache (cache_name);
+		g_assert (cl->cache != NULL);
+		cl->cachecf = cl->cache->init (stat_ctx, cfg, cache_obj);
+
 		curst = clf->statfiles;
 
 		while (curst) {
 			stf = curst->data;
 			st = g_slice_alloc0 (sizeof (*st));
-			st->clcf = clf;
+			st->classifier = cl;
 			st->stcf = stf;
-			st->tkcf = stat_ctx->tkcf;
-			st->bkcf = stat_ctx->backends[i].init (stat_ctx, cfg, st);
-			msg_debug_config ("added backend %s", stat_ctx->backends[i].name);
+			st->bkcf = stat_ctx->backends_subrs[i].init (stat_ctx, cfg, st);
+			msg_debug_config ("added backend %s",
+					stat_ctx->backends_subrs[i].name);
 
 			if (st->bkcf == NULL) {
 				msg_err_config ("cannot init backend %s for statfile %s",
@@ -151,19 +177,17 @@ rspamd_stat_init (struct rspamd_config *cfg)
 				g_slice_free1 (sizeof (*st), st);
 			}
 			else {
+				st->id = stat_ctx->statfiles->len;
 				g_ptr_array_add (stat_ctx->statfiles, st);
+				g_array_append_val (cl->statfiles_ids, st->id);
 			}
 
 			curst = curst->next;
 		}
 
-		cur = cur->next;
-	}
+		g_ptr_array_add (stat_ctx->classifiers, cl);
 
-	/* Init caches */
-	for (i = 0; i < stat_ctx->caches_count; i ++) {
-		stat_ctx->caches[i].ctx = stat_ctx->caches[i].init (stat_ctx, cfg);
-		msg_debug_config ("added cache %s", stat_ctx->caches[i].name);
+		cur = cur->next;
 	}
 }
 
@@ -176,9 +200,9 @@ rspamd_stat_close (void)
 	g_assert (stat_ctx != NULL);
 
 	for (i = 0; i < stat_ctx->backends_count; i ++) {
-		if (stat_ctx->backends[i].close != NULL) {
-			stat_ctx->backends[i].close (stat_ctx->backends[i].ctx);
-			msg_debug_config ("closed backend %s", stat_ctx->backends[i].name);
+		if (stat_ctx->backends_subrs[i].close != NULL) {
+			stat_ctx->backends_subrs[i].close (stat_ctx->backends_subrs[i].ctx);
+			msg_debug_config ("closed backend %s", stat_ctx->backends_subrs[i].name);
 		}
 	}
 
@@ -197,8 +221,8 @@ rspamd_stat_get_classifier (const gchar *name)
 	guint i;
 
 	for (i = 0; i < stat_ctx->classifiers_count; i ++) {
-		if (strcmp (name, stat_ctx->classifiers[i].name) == 0) {
-			return &stat_ctx->classifiers[i];
+		if (strcmp (name, stat_ctx->classifiers_subrs[i].name) == 0) {
+			return &stat_ctx->classifiers_subrs[i];
 		}
 	}
 
@@ -215,8 +239,8 @@ rspamd_stat_get_backend (const gchar *name)
 	}
 
 	for (i = 0; i < stat_ctx->backends_count; i ++) {
-		if (strcmp (name, stat_ctx->backends[i].name) == 0) {
-			return &stat_ctx->backends[i];
+		if (strcmp (name, stat_ctx->backends_subrs[i].name) == 0) {
+			return &stat_ctx->backends_subrs[i];
 		}
 	}
 
@@ -233,8 +257,26 @@ rspamd_stat_get_tokenizer (const gchar *name)
 	}
 
 	for (i = 0; i < stat_ctx->tokenizers_count; i ++) {
-		if (strcmp (name, stat_ctx->tokenizers[i].name) == 0) {
-			return &stat_ctx->tokenizers[i];
+		if (strcmp (name, stat_ctx->tokenizers_subrs[i].name) == 0) {
+			return &stat_ctx->tokenizers_subrs[i];
+		}
+	}
+
+	return NULL;
+}
+
+struct rspamd_stat_cache *
+rspamd_stat_get_cache (const gchar *name)
+{
+	guint i;
+
+	if (name == NULL || name[0] == '\0') {
+		name = RSPAMD_DEFAULT_CACHE;
+	}
+
+	for (i = 0; i < stat_ctx->caches_count; i++) {
+		if (strcmp (name, stat_ctx->caches_subrs[i].name) == 0) {
+			return &stat_ctx->caches_subrs[i];
 		}
 	}
 

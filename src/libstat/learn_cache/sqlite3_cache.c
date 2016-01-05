@@ -121,71 +121,51 @@ struct rspamd_stat_sqlite3_ctx {
 
 gpointer
 rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
-		struct rspamd_config *cfg)
+		struct rspamd_config *cfg,
+		const ucl_object_t *cf)
 {
 	struct rspamd_stat_sqlite3_ctx *new = NULL;
-	struct rspamd_classifier_config *clf;
-	const ucl_object_t *obj, *elt;
-	GList *cur;
+	const ucl_object_t *elt;
 	gchar dbpath[PATH_MAX];
+	const gchar *path;
 	sqlite3 *sqlite;
-	gboolean has_sqlite_cache = FALSE;
 	GError *err = NULL;
 
-	rspamd_snprintf (dbpath, sizeof (dbpath), SQLITE_CACHE_PATH);
-	cur = cfg->classifiers;
 
-	while (cur) {
-		clf = cur->data;
+	if (cf) {
+		elt = ucl_object_find_key (cf, "path");
 
-		obj = ucl_object_find_key (clf->opts, "cache");
-
-		/* Sqlite3 cache is the default learn cache method */
-		if (obj == NULL) {
-			has_sqlite_cache = TRUE;
-			break;
-		}
-		else if (ucl_object_type (obj) == UCL_OBJECT) {
-			elt = ucl_object_find_key (obj, "name");
-
-			if (ucl_object_type (elt) == UCL_STRING &&
-				g_ascii_strcasecmp (ucl_object_tostring (elt), "sqlite3") == 0) {
-
-				has_sqlite_cache = TRUE;
-				elt = ucl_object_find_key (obj, "path");
-				if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
-					rspamd_snprintf (dbpath, sizeof (dbpath), "%s",
-							ucl_object_tostring (elt));
-				}
-			}
-		}
-
-		cur = g_list_next (cur);
-	}
-
-	if (has_sqlite_cache) {
-		sqlite = rspamd_sqlite3_open_or_create (cfg->cfg_pool,
-				dbpath, create_tables_sql, &err);
-
-		if (sqlite == NULL) {
-			msg_err_config ("cannot open sqlite3 cache: %e", err);
-			g_error_free (err);
-			err = NULL;
+		if (elt != NULL) {
+			path = ucl_object_tostring (elt);
 		}
 		else {
-			new = g_slice_alloc (sizeof (*new));
-			new->db = sqlite;
-			new->prstmt = rspamd_sqlite3_init_prstmt (sqlite, prepared_stmts,
-					RSPAMD_STAT_CACHE_MAX, &err);
+			path = SQLITE_CACHE_PATH;
+		}
+	}
 
-			if (new->prstmt == NULL) {
-				msg_err_config ("cannot open sqlite3 cache: %e", err);
-				g_error_free (err);
-				err = NULL;
-				sqlite3_close (sqlite);
-				g_slice_free1 (sizeof (*new), new);
-				new = NULL;
-			}
+	rspamd_snprintf (dbpath, sizeof (dbpath), "%s", path);
+
+	sqlite = rspamd_sqlite3_open_or_create (cfg->cfg_pool,
+			dbpath, create_tables_sql, &err);
+
+	if (sqlite == NULL) {
+		msg_err ("cannot open sqlite3 cache: %e", err);
+		g_error_free (err);
+		err = NULL;
+	}
+	else {
+		new = g_slice_alloc (sizeof (*new));
+		new->db = sqlite;
+		new->prstmt = rspamd_sqlite3_init_prstmt (sqlite, prepared_stmts,
+				RSPAMD_STAT_CACHE_MAX, &err);
+
+		if (new->prstmt == NULL) {
+			msg_err ("cannot open sqlite3 cache: %e", err);
+			g_error_free (err);
+			err = NULL;
+			sqlite3_close (sqlite);
+			g_slice_free1 (sizeof (*new), new);
+			new = NULL;
 		}
 	}
 
