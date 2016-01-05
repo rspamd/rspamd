@@ -127,7 +127,7 @@ rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
 	struct rspamd_stat_sqlite3_ctx *new = NULL;
 	const ucl_object_t *elt;
 	gchar dbpath[PATH_MAX];
-	const gchar *path;
+	const gchar *path = SQLITE_CACHE_PATH;
 	sqlite3 *sqlite;
 	GError *err = NULL;
 
@@ -137,9 +137,6 @@ rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
 
 		if (elt != NULL) {
 			path = ucl_object_tostring (elt);
-		}
-		else {
-			path = SQLITE_CACHE_PATH;
 		}
 	}
 
