@@ -57,9 +57,9 @@ static struct rspamd_stat_tokenizer stat_tokenizers[] = {
 		.name = #nam, \
 		.init = rspamd_##eltn##_init, \
 		.runtime = rspamd_##eltn##_runtime, \
-		.process_token = rspamd_##eltn##_process_token, \
+		.process_tokens = rspamd_##eltn##_process_tokens, \
 		.finalize_process = rspamd_##eltn##_finalize_process, \
-		.learn_token = rspamd_##eltn##_learn_token, \
+		.learn_tokens = rspamd_##eltn##_learn_tokens, \
 		.finalize_learn = rspamd_##eltn##_finalize_learn, \
 		.total_learns = rspamd_##eltn##_total_learns, \
 		.inc_learns = rspamd_##eltn##_inc_learns, \
@@ -86,7 +86,6 @@ static struct rspamd_stat_cache stat_caches[] = {
 void
 rspamd_stat_init (struct rspamd_config *cfg)
 {
-	guint i;
 	GList *cur, *curst;
 	struct rspamd_classifier_config *clf;
 	struct rspamd_statfile_config *stf;
@@ -126,7 +125,7 @@ rspamd_stat_init (struct rspamd_config *cfg)
 		 * We NO LONGER support multiple tokenizers per rspamd instance
 		 */
 		if (stat_ctx->tkcf == NULL) {
-			stat_ctx->tokenizer = rspamd_stat_get_tokenizer (clf->tokenizer);
+			stat_ctx->tokenizer = rspamd_stat_get_tokenizer (clf->tokenizer->name);
 			g_assert (stat_ctx->tokenizer != NULL);
 			stat_ctx->tkcf = stat_ctx->tokenizer->get_config (cfg->cfg_pool,
 					clf->tokenizer, NULL);
@@ -160,9 +159,10 @@ rspamd_stat_init (struct rspamd_config *cfg)
 			st = g_slice_alloc0 (sizeof (*st));
 			st->classifier = cl;
 			st->stcf = stf;
-			st->bkcf = stat_ctx->backends_subrs[i].init (stat_ctx, cfg, st);
-			msg_debug_config ("added backend %s",
-					stat_ctx->backends_subrs[i].name);
+			st->backend = bk;
+			st->bkcf = bk->init (stat_ctx, cfg, st);
+			msg_debug_config ("added backend %s for symbol %s",
+					bk->name, stf->symbol);
 
 			if (st->bkcf == NULL) {
 				msg_err_config ("cannot init backend %s for statfile %s",

@@ -81,7 +81,7 @@ typedef struct token_node_s {
 	guchar data[RSPAMD_MAX_TOKEN_LEN];
 	guint window_idx;
 	guint datalen;
-	gdouble values[0];
+	gdouble values[];
 } rspamd_token_t;
 
 struct rspamd_stat_ctx {

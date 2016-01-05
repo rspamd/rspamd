@@ -36,8 +36,7 @@ struct rspamd_statfile_config;
 struct rspamd_config;
 struct rspamd_stat_ctx;
 struct rspamd_token_result;
-struct rspamd_statfile_runtime;
-struct token_node_s;
+struct rspamd_statfile;
 struct rspamd_task;
 
 struct rspamd_stat_backend {
