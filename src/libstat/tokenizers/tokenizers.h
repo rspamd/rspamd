@@ -10,23 +10,19 @@
 #define RSPAMD_DEFAULT_TOKENIZER "osb"
 
 struct rspamd_tokenizer_runtime;
+struct rspamd_stat_ctx;
 
 /* Common tokenizer structure */
 struct rspamd_stat_tokenizer {
 	gchar *name;
 	gpointer (*get_config) (rspamd_mempool_t *pool,
 			struct rspamd_tokenizer_config *cf, gsize *len);
-	gboolean (*compatible_config) (struct rspamd_tokenizer_runtime *rt,
-			gpointer ptr, gsize len);
-	gboolean (*load_config) (rspamd_mempool_t *pool,
-			struct rspamd_tokenizer_runtime *rt,
-			gpointer ptr, gsize len);
-	gboolean (*is_compat) (struct rspamd_tokenizer_runtime *rt);
-	gint (*tokenize_func)(struct rspamd_tokenizer_runtime *rt,
+	gint (*tokenize_func)(struct rspamd_stat_ctx *ctx,
 			rspamd_mempool_t *pool,
 			GArray *words,
 			gboolean is_utf,
-			const gchar *prefix);
+			const gchar *prefix,
+			GPtrArray *result);
 };
 
 /* Compare two token nodes */
@@ -39,27 +35,16 @@ GArray * rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 		guint64 *hash);
 
 /* OSB tokenize function */
-gint rspamd_tokenizer_osb (struct rspamd_tokenizer_runtime *rt,
-	rspamd_mempool_t *pool,
-	GArray *input,
-	gboolean is_utf,
-	const gchar *prefix);
+gint rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
+		rspamd_mempool_t *pool,
+		GArray *words,
+		gboolean is_utf,
+		const gchar *prefix,
+		GPtrArray *result);
 
 gpointer rspamd_tokenizer_osb_get_config (rspamd_mempool_t *pool,
 		struct rspamd_tokenizer_config *cf,
 		gsize *len);
-
-gboolean
-rspamd_tokenizer_osb_compatible_config (struct rspamd_tokenizer_runtime *rt,
-			gpointer ptr, gsize len);
-
-gboolean
-rspamd_tokenizer_osb_load_config (rspamd_mempool_t *pool,
-		struct rspamd_tokenizer_runtime *rt,
-		gpointer ptr, gsize len);
-
-gboolean
-rspamd_tokenizer_osb_is_compat (struct rspamd_tokenizer_runtime *rt);
 
 #endif
 /*

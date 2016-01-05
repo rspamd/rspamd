@@ -36,7 +36,8 @@ struct rspamd_config;
 
 struct rspamd_stat_cache {
 	const char *name;
-	gpointer (*init)(struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg);
+	gpointer (*init)(struct rspamd_stat_ctx *ctx,
+			struct rspamd_config *cfg, const ucl_object_t *cf);
 	gint (*process)(struct rspamd_task *task,
 			gboolean is_spam,
 			gpointer ctx);
@@ -45,7 +46,8 @@ struct rspamd_stat_cache {
 };
 
 gpointer rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
-		struct rspamd_config *cfg);
+		struct rspamd_config *cfg,
+		const ucl_object_t *cf);
 gint rspamd_stat_cache_sqlite3_process (
 		struct rspamd_task *task,
 		gboolean is_spam, gpointer c);

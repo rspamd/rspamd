@@ -36,10 +36,11 @@
 #define SQLITE3_DEFAULT "default"
 
 struct rspamd_stat_sqlite3_db {
-	struct rspamd_stat_sqlite3_ctx *ctx;
 	sqlite3 *sqlite;
 	gchar *fname;
 	GArray *prstmt;
+	lua_State *L;
+	rspamd_mempool_t *pool;
 	gboolean in_transaction;
 	gboolean enable_users;
 	gboolean enable_languages;
@@ -47,14 +48,7 @@ struct rspamd_stat_sqlite3_db {
 	gint cbref_language;
 };
 
-struct rspamd_stat_sqlite3_ctx {
-	GHashTable *files;
-	rspamd_mempool_t *pool;
-	lua_State *L;
-};
-
 struct rspamd_stat_sqlite3_rt {
-	struct rspamd_stat_sqlite3_ctx *ctx;
 	struct rspamd_task *task;
 	struct rspamd_stat_sqlite3_db *db;
 	struct rspamd_statfile_config *cf;
@@ -311,7 +305,7 @@ rspamd_sqlite3_get_user (struct rspamd_stat_sqlite3_db *db,
 	const gchar *user = NULL;
 	const InternetAddress *ia;
 	struct rspamd_task **ptask;
-	lua_State *L = db->ctx->L;
+	lua_State *L = db->L;
 	GString *tb;
 
 	if (db->cbref_user == -1) {
@@ -391,7 +385,7 @@ rspamd_sqlite3_get_language (struct rspamd_stat_sqlite3_db *db,
 	const gchar *language = NULL;
 	struct mime_text_part *tp;
 	struct rspamd_task **ptask;
-	lua_State *L = db->ctx->L;
+	lua_State *L = db->L;
 	GString *tb;
 
 	if (db->cbref_language == -1) {
@@ -471,6 +465,7 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 
 	bk = g_slice_alloc0 (sizeof (*bk));
 	bk->sqlite = rspamd_sqlite3_open_or_create (pool, path, create_tables_sql, err);
+	bk->pool = pool;
 
 	if (bk->sqlite == NULL) {
 		g_slice_free1 (sizeof (*bk), bk);
@@ -545,194 +540,146 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 
 gpointer
 rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
-		struct rspamd_config *cfg)
+		struct rspamd_config *cfg,
+		struct rspamd_statfile *st)
 {
-	struct rspamd_stat_sqlite3_ctx *new;
-	struct rspamd_classifier_config *clf;
-	struct rspamd_statfile_config *stf;
-	GList *cur, *curst;
+	struct rspamd_classifier_config *clf = st->classifier->cfg;
+	struct rspamd_statfile_config *stf = st->stcf;
 	const ucl_object_t *filenameo, *lang_enabled, *users_enabled;
 	const gchar *filename, *lua_script;
 	struct rspamd_stat_sqlite3_db *bk;
 	GError *err = NULL;
 
-	new = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*new));
-	new->files = g_hash_table_new (g_direct_hash, g_direct_equal);
-	new->pool = cfg->cfg_pool;
-	new->L = cfg->lua_state;
-
-	/* Iterate over all classifiers and load matching statfiles */
-	cur = cfg->classifiers;
-
-	while (cur) {
-		clf = cur->data;
-		if (clf->backend && strcmp (clf->backend, SQLITE3_BACKEND_TYPE) == 0) {
-			curst = clf->statfiles;
-
-			while (curst) {
-				stf = curst->data;
-				/*
-				 * Check configuration sanity
-				 */
-				filenameo = ucl_object_find_key (stf->opts, "filename");
-				if (filenameo == NULL || ucl_object_type (filenameo) != UCL_STRING) {
-					filenameo = ucl_object_find_key (stf->opts, "path");
-					if (filenameo == NULL || ucl_object_type (filenameo) != UCL_STRING) {
-						msg_err_config ("statfile %s has no filename defined", stf->symbol);
-						curst = curst->next;
-						continue;
-					}
-				}
-
-				filename = ucl_object_tostring (filenameo);
-
-				if ((bk = rspamd_sqlite3_opendb (cfg->cfg_pool, stf, filename,
-						stf->opts, TRUE, &err)) == NULL) {
-					msg_err_config ("cannot open sqlite3 db: %e", err);
-				}
-
-				if (bk != NULL) {
-					bk->ctx = new;
-					g_hash_table_insert (new->files, stf, bk);
-				}
-				else {
-					g_error_free (err);
-					err = NULL;
-					curst = curst->next;
-					continue;
-				}
-
-				users_enabled = ucl_object_find_any_key (clf->opts, "per_user",
-						"users_enabled", NULL);
-				if (users_enabled != NULL) {
-					if (ucl_object_type (users_enabled) == UCL_BOOLEAN) {
-						bk->enable_users = ucl_object_toboolean (users_enabled);
-						bk->cbref_user = -1;
-					}
-					else if (ucl_object_type (users_enabled) == UCL_STRING) {
-						lua_script = ucl_object_tostring (users_enabled);
-
-						if (luaL_dostring (new->L, lua_script) != 0) {
-							msg_err_config ("cannot execute lua script for users "
-									"extraction: %s", lua_tostring (new->L, -1));
-						}
-						else {
-							if (lua_type (new->L, -1) == LUA_TFUNCTION) {
-								bk->enable_users = TRUE;
-								bk->cbref_user = luaL_ref (new->L,
-										LUA_REGISTRYINDEX);
-							}
-							else {
-								msg_err_config ("lua script must return "
-										"function(task) and not %s",
-										lua_typename (new->L, lua_type (new->L, -1)));
-							}
-						}
-					}
-				}
-				else {
-					bk->enable_users = FALSE;
-				}
-
-				lang_enabled = ucl_object_find_any_key (clf->opts,
-						"per_language", "languages_enabled", NULL);
-				if (lang_enabled != NULL) {
-					if (ucl_object_type (lang_enabled) == UCL_BOOLEAN) {
-						bk->enable_languages = ucl_object_toboolean (lang_enabled);
-						bk->cbref_language = -1;
-					}
-					else if (ucl_object_type (lang_enabled) == UCL_STRING) {
-						lua_script = ucl_object_tostring (lang_enabled);
-
-						if (luaL_dostring (new->L, lua_script) != 0) {
-							msg_err_config (
-									"cannot execute lua script for languages "
-											"extraction: %s",
-									lua_tostring (new->L, -1));
-						}
-						else {
-							if (lua_type (new->L, -1) == LUA_TFUNCTION) {
-								bk->enable_languages = TRUE;
-								bk->cbref_language = luaL_ref (new->L,
-										LUA_REGISTRYINDEX);
-							}
-							else {
-								msg_err_config ("lua script must return "
-										"function(task) and not %s",
-										lua_typename (new->L,
-												lua_type (new->L, -1)));
-							}
-						}
-					}
-				}
-				else {
-					bk->enable_languages = FALSE;
-				}
-
-				if (bk->enable_languages) {
-					msg_info_config ("enable per language statistics for %s",
-							stf->symbol);
-				}
-
-				if (bk->enable_users) {
-					msg_info_config ("enable per users statistics for %s",
-							stf->symbol);
-				}
-
-				ctx->statfiles ++;
-
-				curst = curst->next;
-			}
+	filenameo = ucl_object_find_key (stf->opts, "filename");
+	if (filenameo == NULL || ucl_object_type (filenameo) != UCL_STRING) {
+		filenameo = ucl_object_find_key (stf->opts, "path");
+		if (filenameo == NULL || ucl_object_type (filenameo) != UCL_STRING) {
+			msg_err_config ("statfile %s has no filename defined", stf->symbol);
+			return NULL;
 		}
-
-		cur = g_list_next (cur);
 	}
 
-	return (gpointer)new;
+	filename = ucl_object_tostring (filenameo);
+
+	if ((bk = rspamd_sqlite3_opendb (cfg->cfg_pool, stf, filename,
+			stf->opts, TRUE, &err)) == NULL) {
+		msg_err_config ("cannot open sqlite3 db: %e", err);
+		g_error_free (err);
+		return NULL;
+	}
+
+	bk->L = cfg->lua_state;
+
+	users_enabled = ucl_object_find_any_key (clf->opts, "per_user",
+			"users_enabled", NULL);
+	if (users_enabled != NULL) {
+		if (ucl_object_type (users_enabled) == UCL_BOOLEAN) {
+			bk->enable_users = ucl_object_toboolean (users_enabled);
+			bk->cbref_user = -1;
+		}
+		else if (ucl_object_type (users_enabled) == UCL_STRING) {
+			lua_script = ucl_object_tostring (users_enabled);
+
+			if (luaL_dostring (cfg->lua_state, lua_script) != 0) {
+				msg_err_config ("cannot execute lua script for users "
+						"extraction: %s", lua_tostring (cfg->lua_state, -1));
+			}
+			else {
+				if (lua_type (cfg->lua_state, -1) == LUA_TFUNCTION) {
+					bk->enable_users = TRUE;
+					bk->cbref_user = luaL_ref (cfg->lua_state,
+							LUA_REGISTRYINDEX);
+				}
+				else {
+					msg_err_config ("lua script must return "
+							"function(task) and not %s",
+							lua_typename (cfg->lua_state, lua_type (
+									cfg->lua_state, -1)));
+				}
+			}
+		}
+	}
+	else {
+		bk->enable_users = FALSE;
+	}
+
+	lang_enabled = ucl_object_find_any_key (clf->opts,
+			"per_language", "languages_enabled", NULL);
+
+	if (lang_enabled != NULL) {
+		if (ucl_object_type (lang_enabled) == UCL_BOOLEAN) {
+			bk->enable_languages = ucl_object_toboolean (lang_enabled);
+			bk->cbref_language = -1;
+		}
+		else if (ucl_object_type (lang_enabled) == UCL_STRING) {
+			lua_script = ucl_object_tostring (lang_enabled);
+
+			if (luaL_dostring (cfg->lua_state, lua_script) != 0) {
+				msg_err_config (
+						"cannot execute lua script for languages "
+								"extraction: %s",
+						lua_tostring (cfg->lua_state, -1));
+			}
+			else {
+				if (lua_type (cfg->lua_state, -1) == LUA_TFUNCTION) {
+					bk->enable_languages = TRUE;
+					bk->cbref_language = luaL_ref (cfg->lua_state,
+							LUA_REGISTRYINDEX);
+				}
+				else {
+					msg_err_config ("lua script must return "
+							"function(task) and not %s",
+							lua_typename (cfg->lua_state,
+									lua_type (cfg->lua_state, -1)));
+				}
+			}
+		}
+	}
+	else {
+		bk->enable_languages = FALSE;
+	}
+
+	if (bk->enable_languages) {
+		msg_info_config ("enable per language statistics for %s",
+				stf->symbol);
+	}
+
+	if (bk->enable_users) {
+		msg_info_config ("enable per users statistics for %s",
+				stf->symbol);
+	}
+
+
+	return (gpointer) bk;
 }
 
 void
 rspamd_sqlite3_close (gpointer p)
 {
-	struct rspamd_stat_sqlite3_ctx *ctx = p;
-	struct rspamd_stat_sqlite3_db *bk;
-	GHashTableIter it;
-	gpointer k, v;
+	struct rspamd_stat_sqlite3_db *bk = p;
 
-	g_hash_table_iter_init (&it, ctx->files);
-
-	while (g_hash_table_iter_next (&it, &k, &v)) {
-		bk = v;
-
-		if (bk->sqlite) {
-			if (bk->in_transaction) {
-				rspamd_sqlite3_run_prstmt (ctx->pool, bk->sqlite, bk->prstmt,
-						RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
-			}
-
-			rspamd_sqlite3_close_prstmt (bk->sqlite, bk->prstmt);
-			sqlite3_close (bk->sqlite);
-			g_free (bk->fname);
-			g_slice_free1 (sizeof (*bk), bk);
+	if (bk->sqlite) {
+		if (bk->in_transaction) {
+			rspamd_sqlite3_run_prstmt (bk->pool, bk->sqlite, bk->prstmt,
+					RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
 		}
-	}
 
-	g_hash_table_destroy (ctx->files);
+		rspamd_sqlite3_close_prstmt (bk->sqlite, bk->prstmt);
+		sqlite3_close (bk->sqlite);
+		g_free (bk->fname);
+		g_slice_free1 (sizeof (*bk), bk);
+	}
 }
 
 gpointer
 rspamd_sqlite3_runtime (struct rspamd_task *task,
 		struct rspamd_statfile_config *stcf, gboolean learn, gpointer p)
 {
-	struct rspamd_stat_sqlite3_ctx *ctx = p;
 	struct rspamd_stat_sqlite3_rt *rt = NULL;
-	struct rspamd_stat_sqlite3_db *bk;
-
-	bk = g_hash_table_lookup (ctx->files, stcf);
+	struct rspamd_stat_sqlite3_db *bk = p;
 
 	if (bk) {
 		rt = rspamd_mempool_alloc (task->task_pool, sizeof (*rt));
-		rt->ctx = ctx;
 		rt->db = bk;
 		rt->task = task;
 		rt->user_id = -1;
@@ -744,66 +691,64 @@ rspamd_sqlite3_runtime (struct rspamd_task *task,
 }
 
 gboolean
-rspamd_sqlite3_process_token (struct rspamd_task *task, struct token_node_s *tok,
-		struct rspamd_token_result *res, gpointer p)
+rspamd_sqlite3_process_tokens (struct rspamd_task *task,
+		GPtrArray *tokens,
+		gint id, gpointer p)
 {
 	struct rspamd_stat_sqlite3_db *bk;
-	struct rspamd_stat_sqlite3_rt *rt;
+	struct rspamd_stat_sqlite3_rt *rt = p;
 	gint64 iv = 0, idx;
+	guint i;
+	rspamd_token_t *tok;
 
-	g_assert (res != NULL);
 	g_assert (p != NULL);
-	g_assert (res->st_runtime != NULL);
-	g_assert (tok != NULL);
-	g_assert (tok->datalen >= sizeof (guint32) * 2);
+	g_assert (tokens != NULL);
 
-	rt = res->st_runtime->backend_runtime;
 	bk = rt->db;
 
-	if (bk == NULL) {
-		/* Statfile is does not exist, so all values are zero */
-		res->value = 0.0;
-		return FALSE;
-	}
+	for (i = 0; i < tokens->len; i ++) {
+		tok = g_ptr_array_index (tokens, i);
 
-	if (!bk->in_transaction) {
-		rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
-				RSPAMD_STAT_BACKEND_TRANSACTION_START_DEF);
-		bk->in_transaction = TRUE;
-	}
+		if (bk == NULL) {
+			/* Statfile is does not exist, so all values are zero */
+			tok->values[id] = 0.0;
+			continue;
+		}
 
-	if (rt->user_id == -1) {
-		if (bk->enable_users) {
-			rt->user_id = rspamd_sqlite3_get_user (bk, task, FALSE);
+		if (!bk->in_transaction) {
+			rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
+					RSPAMD_STAT_BACKEND_TRANSACTION_START_DEF);
+			bk->in_transaction = TRUE;
+		}
+
+		if (rt->user_id == -1) {
+			if (bk->enable_users) {
+				rt->user_id = rspamd_sqlite3_get_user (bk, task, FALSE);
+			}
+			else {
+				rt->user_id = 0;
+			}
+		}
+
+		if (rt->lang_id == -1) {
+			if (bk->enable_languages) {
+				rt->lang_id = rspamd_sqlite3_get_language (bk, task, FALSE);
+			}
+			else {
+				rt->lang_id = 0;
+			}
+		}
+
+		memcpy (&idx, tok->data, sizeof (idx));
+
+		if (rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
+				RSPAMD_STAT_BACKEND_GET_TOKEN,
+				idx, rt->user_id, rt->lang_id, &iv) == SQLITE_OK) {
+			tok->values[id] = iv;
 		}
 		else {
-			rt->user_id = 0;
+			tok->values[id] = 0.0;
 		}
-	}
-
-	if (rt->lang_id == -1) {
-		if (bk->enable_languages) {
-			rt->lang_id = rspamd_sqlite3_get_language (bk, task, FALSE);
-		}
-		else {
-			rt->lang_id = 0;
-		}
-	}
-
-	memcpy (&idx, tok->data, sizeof (idx));
-
-	if (rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
-			RSPAMD_STAT_BACKEND_GET_TOKEN,
-			idx, rt->user_id, rt->lang_id, &iv) == SQLITE_OK) {
-		res->value = iv;
-
-		if (iv == 0) {
-			return FALSE;
-		}
-	}
-	else {
-		res->value = 0.0;
-		return FALSE;
 	}
 
 
@@ -833,58 +778,63 @@ rspamd_sqlite3_finalize_process (struct rspamd_task *task, gpointer runtime,
 }
 
 gboolean
-rspamd_sqlite3_learn_token (struct rspamd_task *task, struct token_node_s *tok,
-		struct rspamd_token_result *res, gpointer p)
+rspamd_sqlite3_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
+		gint id, gpointer p)
 {
 	struct rspamd_stat_sqlite3_db *bk;
-	struct rspamd_stat_sqlite3_rt *rt;
+	struct rspamd_stat_sqlite3_rt *rt = p;
 	gint64 iv = 0, idx;
+	guint i;
+	rspamd_token_t *tok;
 
-	g_assert (res != NULL);
+	g_assert (tokens != NULL);
 	g_assert (p != NULL);
-	g_assert (res->st_runtime != NULL);
-	g_assert (tok != NULL);
-	g_assert (tok->datalen >= sizeof (guint32) * 2);
 
-	rt = res->st_runtime->backend_runtime;
 	bk = rt->db;
 
-	if (bk == NULL) {
-		/* Statfile is does not exist, so all values are zero */
-		return FALSE;
-	}
-
-	if (!bk->in_transaction) {
-		rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
-				RSPAMD_STAT_BACKEND_TRANSACTION_START_IM);
-		bk->in_transaction = TRUE;
-	}
-
-	if (rt->user_id == -1) {
-		if (bk->enable_users) {
-			rt->user_id = rspamd_sqlite3_get_user (bk, task, TRUE);
+	for (i = 0; i < tokens->len; i++) {
+		tok = g_ptr_array_index (tokens, i);
+		if (bk == NULL) {
+			/* Statfile is does not exist, so all values are zero */
+			return FALSE;
 		}
-		else {
-			rt->user_id = 0;
-		}
-	}
 
-	if (rt->lang_id == -1) {
-		if (bk->enable_languages) {
-			rt->lang_id = rspamd_sqlite3_get_language (bk, task, TRUE);
+		if (!bk->in_transaction) {
+			rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
+					RSPAMD_STAT_BACKEND_TRANSACTION_START_IM);
+			bk->in_transaction = TRUE;
 		}
-		else {
-			rt->lang_id = 0;
+
+		if (rt->user_id == -1) {
+			if (bk->enable_users) {
+				rt->user_id = rspamd_sqlite3_get_user (bk, task, TRUE);
+			}
+			else {
+				rt->user_id = 0;
+			}
 		}
-	}
 
-	iv = res->value;
-	memcpy (&idx, tok->data, sizeof (idx));
+		if (rt->lang_id == -1) {
+			if (bk->enable_languages) {
+				rt->lang_id = rspamd_sqlite3_get_language (bk, task, TRUE);
+			}
+			else {
+				rt->lang_id = 0;
+			}
+		}
 
-	if (rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
-			RSPAMD_STAT_BACKEND_SET_TOKEN,
-			idx, rt->user_id, rt->lang_id, iv) != SQLITE_OK) {
-		return FALSE;
+		iv = tok->values[id];
+		memcpy (&idx, tok->data, sizeof (idx));
+
+		if (rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
+				RSPAMD_STAT_BACKEND_SET_TOKEN,
+				idx, rt->user_id, rt->lang_id, iv) != SQLITE_OK) {
+			rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
+					RSPAMD_STAT_BACKEND_TRANSACTION_ROLLBACK);
+			bk->in_transaction = FALSE;
+
+			return FALSE;
+		}
 	}
 
 	return TRUE;
@@ -1024,7 +974,7 @@ rspamd_sqlite3_get_stat (gpointer runtime,
 
 	g_assert (rt != NULL);
 	bk = rt->db;
-	pool = rt->ctx->pool;
+	pool = bk->pool;
 
 	(void)stat (bk->fname, &st);
 	rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
@@ -1072,7 +1022,7 @@ rspamd_sqlite3_load_tokenizer_config (gpointer runtime,
 	g_assert (rt != NULL);
 	bk = rt->db;
 
-	g_assert (rspamd_sqlite3_run_prstmt (rt->ctx->pool, bk->sqlite, bk->prstmt,
+	g_assert (rspamd_sqlite3_run_prstmt (rt->db->pool, bk->sqlite, bk->prstmt,
 				RSPAMD_STAT_BACKEND_LOAD_TOKENIZER, &sz, &tk_conf) == SQLITE_OK);
 	g_assert (sz > 0);
 	/*

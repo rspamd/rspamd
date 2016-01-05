@@ -36,21 +36,23 @@ struct rspamd_statfile_config;
 struct rspamd_config;
 struct rspamd_stat_ctx;
 struct rspamd_token_result;
-struct rspamd_statfile_runtime;
-struct token_node_s;
+struct rspamd_statfile;
 struct rspamd_task;
 
 struct rspamd_stat_backend {
 	const char *name;
-	gpointer (*init)(struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg);
+	gpointer (*init)(struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg,
+			struct rspamd_statfile *st);
 	gpointer (*runtime)(struct rspamd_task *task,
 			struct rspamd_statfile_config *stcf, gboolean learn, gpointer ctx);
-	gboolean (*process_token)(struct rspamd_task *task, struct token_node_s *tok,
-			struct rspamd_token_result *res, gpointer ctx);
+	gboolean (*process_tokens)(struct rspamd_task *task, GPtrArray *tokens,
+			gint id,
+			gpointer ctx);
 	void (*finalize_process)(struct rspamd_task *task,
 			gpointer runtime, gpointer ctx);
-	gboolean (*learn_token)(struct rspamd_task *task, struct token_node_s *tok,
-			struct rspamd_token_result *res, gpointer ctx);
+	gboolean (*learn_tokens)(struct rspamd_task *task, GPtrArray *tokens,
+			gint id,
+			gpointer ctx);
 	gulong (*total_learns)(struct rspamd_task *task,
 			gpointer runtime, gpointer ctx);
 	void (*finalize_learn)(struct rspamd_task *task,
@@ -67,20 +69,19 @@ struct rspamd_stat_backend {
 };
 
 #define RSPAMD_STAT_BACKEND_DEF(name) \
-		gpointer rspamd_##name##_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg); \
+		gpointer rspamd_##name##_init (struct rspamd_stat_ctx *ctx, \
+			struct rspamd_config *cfg, struct rspamd_statfile *st); \
 		gpointer rspamd_##name##_runtime (struct rspamd_task *task, \
 				struct rspamd_statfile_config *stcf, \
 				gboolean learn, gpointer ctx); \
-		gboolean rspamd_##name##_process_token (struct rspamd_task *task, \
-				struct token_node_s *tok, \
-				struct rspamd_token_result *res, \
+		gboolean rspamd_##name##_process_tokens (struct rspamd_task *task, \
+                GPtrArray *tokens, gint id, \
 				gpointer ctx); \
 		void rspamd_##name##_finalize_process (struct rspamd_task *task, \
 				gpointer runtime, \
 				gpointer ctx); \
-		gboolean rspamd_##name##_learn_token (struct rspamd_task *task, \
-				struct token_node_s *tok, \
-				struct rspamd_token_result *res, \
+		gboolean rspamd_##name##_learn_tokens (struct rspamd_task *task, \
+                GPtrArray *tokens, gint id, \
 				gpointer ctx); \
 		void rspamd_##name##_finalize_learn (struct rspamd_task *task, \
 				gpointer runtime, \
@@ -104,7 +105,6 @@ struct rspamd_stat_backend {
 		void rspamd_##name##_close (gpointer ctx)
 
 RSPAMD_STAT_BACKEND_DEF(mmaped_file);
-RSPAMD_STAT_BACKEND_DEF(redis);
 RSPAMD_STAT_BACKEND_DEF(sqlite3);
 
 #endif /* BACKENDS_H_ */

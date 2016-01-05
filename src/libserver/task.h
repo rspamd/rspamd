@@ -149,8 +149,7 @@ struct rspamd_task {
 	GHashTable *raw_headers;						/**< list of raw headers							*/
 	GHashTable *results;							/**< hash table of metric_result indexed by
 													 *    metric's name									*/
-	GHashTable *tokens;								/**< hash table of tokens indexed by tokenizer
-													 *    pointer										*/
+	GPtrArray *tokens;								/**< statistics tokens */
 	InternetAddressList *rcpt_mime;					/**< list of all recipients							*/
 	InternetAddressList *rcpt_envelope;				/**< list of all recipients							*/
 	InternetAddressList *from_mime;
@@ -158,7 +157,7 @@ struct rspamd_task {
 
 	GList *messages;								/**< list of messages that would be reported		*/
 	struct rspamd_re_runtime *re_rt;				/**< regexp runtime									*/
-	GList *cl_runtimes;								/**< classifiers runtime							*/
+	GPtrArray *stat_runtimes;						/**< backend runtime							*/
 	struct rspamd_config *cfg;						/**< pointer to config object						*/
 	GError *err;
 	rspamd_mempool_t *task_pool;					/**< memory pool for task							*/

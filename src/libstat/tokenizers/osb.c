@@ -189,6 +189,7 @@ rspamd_tokenizer_osb_get_config (rspamd_mempool_t *pool,
 	return osb_cf;
 }
 
+#if 0
 gboolean
 rspamd_tokenizer_osb_compatible_config (struct rspamd_tokenizer_runtime *rt,
 			gpointer ptr, gsize len)
@@ -222,131 +223,6 @@ rspamd_tokenizer_osb_compatible_config (struct rspamd_tokenizer_runtime *rt,
 
 	return ret;
 }
-
-gint
-rspamd_tokenizer_osb (struct rspamd_tokenizer_runtime *rt,
-	rspamd_mempool_t * pool,
-	GArray * input,
-	gboolean is_utf,
-	const gchar *prefix)
-{
-	rspamd_token_t *new = NULL;
-	rspamd_ftok_t *token;
-	struct rspamd_osb_tokenizer_config *osb_cf;
-	guint64 *hashpipe, cur, seed;
-	guint32 h1, h2;
-	guint processed = 0, i, w, window_size;
-	GTree *tree = rt->tokens;
-
-	g_assert (tree != NULL);
-
-	if (input == NULL) {
-		return FALSE;
-	}
-
-	osb_cf = rt->config;
-	window_size = osb_cf->window_size;
-
-	if (prefix) {
-		seed = XXH64 (prefix, strlen (prefix), osb_cf->seed);
-	}
-	else {
-		seed = osb_cf->seed;
-	}
-
-	hashpipe = g_alloca (window_size * sizeof (hashpipe[0]));
-	memset (hashpipe, 0xfe, window_size * sizeof (hashpipe[0]));
-
-	for (w = 0; w < input->len; w ++) {
-		token = &g_array_index (input, rspamd_ftok_t, w);
-
-		if (osb_cf->ht == RSPAMD_OSB_HASH_COMPAT) {
-			cur = rspamd_fstrhash_lc (token, is_utf);
-		}
-		else {
-			/* We know that the words are normalized */
-			if (osb_cf->ht == RSPAMD_OSB_HASH_XXHASH) {
-				cur = XXH64 (token->begin, token->len, osb_cf->seed);
-			}
-			else {
-				rspamd_cryptobox_siphash ((guchar *)&cur, token->begin,
-						token->len, osb_cf->sk);
-
-				if (prefix) {
-					cur ^= seed;
-				}
-			}
-		}
-
-		if (processed < window_size) {
-			/* Just fill a hashpipe */
-			hashpipe[window_size - ++processed] = cur;
-		}
-		else {
-			/* Shift hashpipe */
-			for (i = window_size - 1; i > 0; i--) {
-				hashpipe[i] = hashpipe[i - 1];
-			}
-			hashpipe[0] = cur;
-			processed++;
-
-			for (i = 1; i < window_size; i++) {
-				new = rspamd_mempool_alloc0 (pool, sizeof (rspamd_token_t));
-				new->datalen = sizeof (gint64);
-
-				if (osb_cf->ht == RSPAMD_OSB_HASH_COMPAT) {
-					h1 = ((guint32)hashpipe[0]) * primes[0] +
-							((guint32)hashpipe[i]) * primes[i << 1];
-					h2 = ((guint32)hashpipe[0]) * primes[1] +
-							((guint32)hashpipe[i]) * primes[(i << 1) - 1];
-
-					memcpy(new->data, &h1, sizeof (h1));
-					memcpy(new->data + sizeof (h1), &h2, sizeof (h2));
-				}
-				else {
-					cur = hashpipe[0] * primes[0] + hashpipe[i] * primes[i << 1];
-					memcpy (new->data, &cur, sizeof (cur));
-				}
-
-				new->window_idx = i + 1;
-
-				if (g_tree_lookup (tree, new) == NULL) {
-					g_tree_insert (tree, new, new);
-				}
-			}
-		}
-	}
-
-	if (processed <= window_size) {
-		memmove (hashpipe, hashpipe + (window_size - processed + 1), processed);
-		for (i = 1; i < processed; i++) {
-			new = rspamd_mempool_alloc0 (pool, sizeof (rspamd_token_t));
-			new->datalen = sizeof (gint64);
-
-			if (osb_cf->ht == RSPAMD_OSB_HASH_COMPAT) {
-				h1 = ((guint32)hashpipe[0]) * primes[0] +
-						((guint32)hashpipe[i]) * primes[i << 1];
-				h2 = ((guint32)hashpipe[0]) * primes[1] +
-						((guint32)hashpipe[i]) * primes[(i << 1) - 1];
-				memcpy(new->data, &h1, sizeof (h1));
-				memcpy(new->data + sizeof (h1), &h2, sizeof (h2));
-			}
-			else {
-				cur = hashpipe[0] * primes[0] + hashpipe[i] * primes[i << 1];
-				memcpy (new->data, &cur, sizeof (cur));
-			}
-
-			new->window_idx = i + 1;
-
-			if (g_tree_lookup (tree, new) == NULL) {
-				g_tree_insert (tree, new, new);
-			}
-		}
-	}
-
-	return TRUE;
-}
-
 
 gboolean
 rspamd_tokenizer_osb_load_config (rspamd_mempool_t *pool,
@@ -384,4 +260,113 @@ rspamd_tokenizer_osb_is_compat (struct rspamd_tokenizer_runtime *rt)
 	struct rspamd_osb_tokenizer_config *osb_cf = rt->config;
 
 	return (osb_cf->ht == RSPAMD_OSB_HASH_COMPAT);
+}
+#endif
+
+
+
+gint
+rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
+		rspamd_mempool_t *pool,
+		GArray *words,
+		gboolean is_utf,
+		const gchar *prefix,
+		GPtrArray *result)
+{
+	rspamd_token_t *new_tok = NULL;
+	rspamd_ftok_t *token;
+	struct rspamd_osb_tokenizer_config *osb_cf;
+	guint64 *hashpipe, cur, seed;
+	guint32 h1, h2;
+	gsize token_size;
+	guint processed = 0, i, w, window_size;
+
+	if (words == NULL) {
+		return FALSE;
+	}
+
+	osb_cf = ctx->tkcf;
+	window_size = osb_cf->window_size;
+
+	if (prefix) {
+		seed = XXH64 (prefix, strlen (prefix), osb_cf->seed);
+	}
+	else {
+		seed = osb_cf->seed;
+	}
+
+	hashpipe = g_alloca (window_size * sizeof (hashpipe[0]));
+	memset (hashpipe, 0xfe, window_size * sizeof (hashpipe[0]));
+	token_size = sizeof (rspamd_token_t) + sizeof (gdouble) * ctx->statfiles->len;
+	g_assert (token_size > 0);
+
+	for (w = 0; w < words->len; w ++) {
+		token = &g_array_index (words, rspamd_ftok_t, w);
+
+		if (osb_cf->ht == RSPAMD_OSB_HASH_COMPAT) {
+			cur = rspamd_fstrhash_lc (token, is_utf);
+		}
+		else {
+			/* We know that the words are normalized */
+			if (osb_cf->ht == RSPAMD_OSB_HASH_XXHASH) {
+				cur = XXH64 (token->begin, token->len, osb_cf->seed);
+			}
+			else {
+				rspamd_cryptobox_siphash ((guchar *)&cur, token->begin,
+						token->len, osb_cf->sk);
+
+				if (prefix) {
+					cur ^= seed;
+				}
+			}
+		}
+
+#define ADD_TOKEN do {\
+    new_tok = rspamd_mempool_alloc0 (pool, token_size); \
+    new_tok->datalen = sizeof (gint64); \
+    if (osb_cf->ht == RSPAMD_OSB_HASH_COMPAT) { \
+        h1 = ((guint32)hashpipe[0]) * primes[0] + \
+            ((guint32)hashpipe[i]) * primes[i << 1]; \
+        h2 = ((guint32)hashpipe[0]) * primes[1] + \
+            ((guint32)hashpipe[i]) * primes[(i << 1) - 1]; \
+        memcpy(new_tok->data, &h1, sizeof (h1)); \
+        memcpy(new_tok->data + sizeof (h1), &h2, sizeof (h2)); \
+    } \
+    else { \
+        cur = hashpipe[0] * primes[0] + hashpipe[i] * primes[i << 1]; \
+        memcpy (new_tok->data, &cur, sizeof (cur)); \
+    } \
+    new_tok->window_idx = i + 1; \
+    g_ptr_array_add (result, new_tok); \
+  } while(0)
+
+		if (processed < window_size) {
+			/* Just fill a hashpipe */
+			hashpipe[window_size - ++processed] = cur;
+		}
+		else {
+			/* Shift hashpipe */
+			for (i = window_size - 1; i > 0; i--) {
+				hashpipe[i] = hashpipe[i - 1];
+			}
+			hashpipe[0] = cur;
+			processed++;
+
+			for (i = 1; i < window_size; i++) {
+				ADD_TOKEN;
+			}
+		}
+	}
+
+	if (processed <= window_size) {
+		memmove (hashpipe, hashpipe + (window_size - processed + 1), processed);
+
+		for (i = 1; i < processed; i++) {
+			ADD_TOKEN;
+		}
+	}
+
+#undef ADD_TOKEN
+
+	return TRUE;
 }
