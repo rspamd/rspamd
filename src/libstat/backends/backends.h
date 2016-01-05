@@ -42,7 +42,8 @@ struct rspamd_task;
 
 struct rspamd_stat_backend {
 	const char *name;
-	gpointer (*init)(struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg);
+	gpointer (*init)(struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg,
+			struct rspamd_statfile *st);
 	gpointer (*runtime)(struct rspamd_task *task,
 			struct rspamd_statfile_config *stcf, gboolean learn, gpointer ctx);
 	gboolean (*process_token)(struct rspamd_task *task, struct token_node_s *tok,
@@ -67,7 +68,8 @@ struct rspamd_stat_backend {
 };
 
 #define RSPAMD_STAT_BACKEND_DEF(name) \
-		gpointer rspamd_##name##_init (struct rspamd_stat_ctx *ctx, struct rspamd_config *cfg); \
+		gpointer rspamd_##name##_init (struct rspamd_stat_ctx *ctx, \
+			struct rspamd_config *cfg, struct rspamd_statfile *st); \
 		gpointer rspamd_##name##_runtime (struct rspamd_task *task, \
 				struct rspamd_statfile_config *stcf, \
 				gboolean learn, gpointer ctx); \

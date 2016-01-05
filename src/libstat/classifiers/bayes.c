@@ -191,21 +191,13 @@ bayes_normalize_prob (gdouble x)
 	return a*x4 + b*x3 + c*x2 + d*xx;
 }
 
-struct classifier_ctx *
-bayes_init (rspamd_mempool_t *pool, struct rspamd_classifier_config *cfg)
+void
+bayes_init (rspamd_mempool_t *pool, struct rspamd_classifier *cl)
 {
-	struct classifier_ctx *ctx =
-		rspamd_mempool_alloc (pool, sizeof (struct classifier_ctx));
-
-	ctx->pool = pool;
-	ctx->cfg = cfg;
-	ctx->debug = FALSE;
-
-	return ctx;
 }
 
 gboolean
-bayes_classify (struct classifier_ctx * ctx,
+bayes_classify (struct rspamd_classifier * ctx,
 	GTree *input,
 	struct rspamd_classifier_runtime *rt,
 	struct rspamd_task *task)
@@ -357,7 +349,7 @@ bayes_learn_ham_callback (gpointer key, gpointer value, gpointer data)
 }
 
 gboolean
-bayes_learn_spam (struct classifier_ctx * ctx,
+bayes_learn_spam (struct rspamd_classifier * ctx,
 	GTree *input,
 	struct rspamd_classifier_runtime *rt,
 	struct rspamd_task *task,

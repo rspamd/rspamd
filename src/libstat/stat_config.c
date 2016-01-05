@@ -93,6 +93,11 @@ void
 rspamd_stat_init (struct rspamd_config *cfg)
 {
 	guint i;
+	GList *cur, *curst;
+	struct rspamd_classifier_config *clf;
+	struct rspamd_statfile_config *stf;
+	struct rspamd_stat_backend *bk;
+	struct rspamd_statfile *st;
 
 	if (stat_ctx == NULL) {
 		stat_ctx = g_slice_alloc0 (sizeof (*stat_ctx));
@@ -107,11 +112,52 @@ rspamd_stat_init (struct rspamd_config *cfg)
 	stat_ctx->caches = stat_caches;
 	stat_ctx->caches_count = G_N_ELEMENTS (stat_caches);
 	stat_ctx->cfg = cfg;
+	REF_RETAIN (stat_ctx->cfg);
 
-	/* Init backends */
-	for (i = 0; i < stat_ctx->backends_count; i ++) {
-		stat_ctx->backends[i].ctx = stat_ctx->backends[i].init (stat_ctx, cfg);
-		msg_debug_config ("added backend %s", stat_ctx->backends[i].name);
+	/* Create statfiles from the classifiers */
+	cur = cfg->classifiers;
+
+	while (cur) {
+		clf = cur->data;
+		bk = rspamd_stat_get_backend (clf->backend);
+		g_assert (bk != NULL);
+
+		/* XXX:
+		 * Here we get the first classifier tokenizer config as the only one
+		 * We NO LONGER support multiple tokenizers per rspamd instance
+		 */
+		if (stat_ctx->tkcf == NULL) {
+			stat_ctx->tokenizer = rspamd_stat_get_tokenizer (clf->tokenizer);
+			g_assert (stat_ctx->tokenizer != NULL);
+			stat_ctx->tkcf = stat_ctx->tokenizer->get_config (cfg->cfg_pool,
+					clf->tokenizer, NULL);
+		}
+
+		curst = clf->statfiles;
+
+		while (curst) {
+			stf = curst->data;
+			st = g_slice_alloc0 (sizeof (*st));
+			st->clcf = clf;
+			st->stcf = stf;
+			st->tkcf = stat_ctx->tkcf;
+			st->bkcf = stat_ctx->backends[i].init (stat_ctx, cfg, st);
+			msg_debug_config ("added backend %s", stat_ctx->backends[i].name);
+
+			if (st->bkcf == NULL) {
+				msg_err_config ("cannot init backend %s for statfile %s",
+						clf->backend, stf->symbol);
+
+				g_slice_free1 (sizeof (*st), st);
+			}
+			else {
+				g_ptr_array_add (stat_ctx->statfiles, st);
+			}
+
+			curst = curst->next;
+		}
+
+		cur = cur->next;
 	}
 
 	/* Init caches */
@@ -135,6 +181,8 @@ rspamd_stat_close (void)
 			msg_debug_config ("closed backend %s", stat_ctx->backends[i].name);
 		}
 	}
+
+	REF_RELEASE (stat_ctx->cfg);
 }
 
 struct rspamd_stat_ctx *
