@@ -104,7 +104,7 @@ For <a class="undecor" href="#experimentalSys2">experimental<sup>2</sup></a> bra
 
 ### Debian `official` repos
 
-Rspamd is also available in some versions of Debian and Ubuntu. However, we are looking for an active maintainer for rspamd in these 'official' repos, as now rspamd is terribly outdated there. 
+Rspamd is also available in some versions of Debian and Ubuntu. However, we are looking for an active maintainer for rspamd in these 'official' repos, as now rspamd is terribly outdated there.
 
 Please **DO NOT** use those packages, as they are no longer supported.
 
