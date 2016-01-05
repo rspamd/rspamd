@@ -35,15 +35,6 @@ enum stat_process_stage {
 	RSPAMD_STAT_STAGE_POST
 };
 
-struct rspamd_tokenizer_runtime {
-	GTree *tokens;
-	const gchar *name;
-	struct rspamd_stat_tokenizer *tokenizer;
-	struct rspamd_tokenizer_config *tkcf;
-	gpointer config;
-	gsize conf_len;
-};
-
 struct rspamd_statfile_runtime {
 	struct rspamd_statfile_config *st;
 	gpointer backend_runtime;
@@ -90,7 +81,7 @@ typedef struct token_node_s {
 	guchar data[RSPAMD_MAX_TOKEN_LEN];
 	guint window_idx;
 	guint datalen;
-	gdouble values[1];
+	gdouble values[0];
 } rspamd_token_t;
 
 struct rspamd_stat_ctx {

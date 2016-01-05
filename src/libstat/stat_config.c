@@ -44,18 +44,12 @@ static struct rspamd_stat_tokenizer stat_tokenizers[] = {
 	{
 		.name = "osb-text",
 		.get_config = rspamd_tokenizer_osb_get_config,
-		.compatible_config = rspamd_tokenizer_osb_compatible_config,
 		.tokenize_func = rspamd_tokenizer_osb,
-		.load_config = rspamd_tokenizer_osb_load_config,
-		.is_compat = rspamd_tokenizer_osb_is_compat
 	},
 	{
 		.name = "osb",
 		.get_config = rspamd_tokenizer_osb_get_config,
-		.compatible_config = rspamd_tokenizer_osb_compatible_config,
 		.tokenize_func = rspamd_tokenizer_osb,
-		.load_config = rspamd_tokenizer_osb_load_config,
-		.is_compat = rspamd_tokenizer_osb_is_compat
 	},
 };
 
