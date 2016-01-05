@@ -4,6 +4,7 @@
 #include "config.h"
 #include "mem_pool.h"
 
+#define RSPAMD_DEFAULT_CLASSIFIER "bayes"
 /* Consider this value as 0 */
 #define ALPHA 0.0001
 

@@ -135,7 +135,7 @@ rspamd_stat_init (struct rspamd_config *cfg)
 		cl->cfg = clf;
 		cl->ctx = stat_ctx;
 		cl->statfiles_ids = g_array_new (FALSE, FALSE, sizeof (gint));
-		cl->subrs = rspamd_stat_get_classifier (clf->name);
+		cl->subrs = rspamd_stat_get_classifier (clf->classifier);
 		g_assert (cl->subrs != NULL);
 		cl->subrs->init_func (cfg->cfg_pool, cl);
 
@@ -197,12 +197,7 @@ rspamd_stat_close (void)
 
 	g_assert (stat_ctx != NULL);
 
-	for (i = 0; i < stat_ctx->backends_count; i ++) {
-		if (stat_ctx->backends_subrs[i].close != NULL) {
-			stat_ctx->backends_subrs[i].close (stat_ctx->backends_subrs[i].ctx);
-			msg_debug_config ("closed backend %s", stat_ctx->backends_subrs[i].name);
-		}
-	}
+	/* TODO: add cleanup routine */
 
 	REF_RELEASE (stat_ctx->cfg);
 }
@@ -217,6 +212,10 @@ struct rspamd_stat_classifier *
 rspamd_stat_get_classifier (const gchar *name)
 {
 	guint i;
+
+	if (name == NULL || name[0] == '\0') {
+		name = RSPAMD_DEFAULT_CLASSIFIER;
+	}
 
 	for (i = 0; i < stat_ctx->classifiers_count; i ++) {
 		if (strcmp (name, stat_ctx->classifiers_subrs[i].name) == 0) {
