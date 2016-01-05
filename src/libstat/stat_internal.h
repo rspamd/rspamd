@@ -46,6 +46,7 @@ struct rspamd_classifier {
 	gulong spam_learns;
 	gulong ham_learns;
 	struct rspamd_classifier_config *cfg;
+	struct rspamd_stat_classifier *subrs;
 };
 
 struct rspamd_statfile {

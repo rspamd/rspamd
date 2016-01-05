@@ -135,6 +135,9 @@ rspamd_stat_init (struct rspamd_config *cfg)
 		cl->cfg = clf;
 		cl->ctx = stat_ctx;
 		cl->statfiles_ids = g_array_new (FALSE, FALSE, sizeof (gint));
+		cl->subrs = rspamd_stat_get_classifier (clf->name);
+		g_assert (cl->subrs != NULL);
+		cl->subrs->init_func (cfg->cfg_pool, cl);
 
 		/* Init classifier cache */
 		if (clf->opts) {
