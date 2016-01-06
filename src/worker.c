@@ -427,7 +427,7 @@ start_worker (struct rspamd_worker *worker)
 
 	/* XXX: stupid default */
 	ctx->keys_cache = rspamd_keypair_cache_new (256);
-	rspamd_stat_init (worker->srv->cfg);
+	rspamd_stat_init (worker->srv->cfg, ctx->ev_base);
 
 #ifdef WITH_HYPERSCAN
 	rspamd_control_worker_add_cmd_handler (worker, RSPAMD_CONTROL_HYPERSCAN_LOADED,

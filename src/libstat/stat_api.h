@@ -26,6 +26,7 @@
 #include "config.h"
 #include "task.h"
 #include <lua.h>
+#include <event.h>
 
 /**
  * @file stat_api.h
@@ -48,7 +49,7 @@ typedef enum rspamd_stat_result_e {
  * Initialise statistics modules
  * @param cfg
  */
-void rspamd_stat_init (struct rspamd_config *cfg);
+void rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base);
 
 /**
  * Finalize statistics

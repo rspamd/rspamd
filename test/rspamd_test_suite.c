@@ -28,9 +28,9 @@ main (int argc, char **argv)
 	g_test_init (&argc, &argv, NULL);
 
 	cfg->libs_ctx = rspamd_init_libs ();
-	rspamd_stat_init (cfg);
 
 	base = event_init ();
+	rspamd_stat_init (cfg, base);
 
 	if (g_test_verbose ()) {
 		cfg->log_level = G_LOG_LEVEL_DEBUG;

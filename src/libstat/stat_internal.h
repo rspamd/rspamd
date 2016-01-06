@@ -83,6 +83,8 @@ struct rspamd_stat_ctx {
 	/* Global tokenizer */
 	struct rspamd_stat_tokenizer *tokenizer;
 	gpointer tkcf;
+
+	struct event_base *ev_base;
 };
 
 typedef enum rspamd_learn_cache_result {

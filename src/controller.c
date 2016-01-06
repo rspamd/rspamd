@@ -2561,7 +2561,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	/* Maps events */
 	rspamd_map_watch (worker->srv->cfg, ctx->ev_base);
 	rspamd_symbols_cache_start_refresh (worker->srv->cfg->cache, ctx->ev_base);
-	rspamd_stat_init (worker->srv->cfg);
+	rspamd_stat_init (worker->srv->cfg, ctx->ev_base);
 
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();

@@ -84,7 +84,7 @@ static struct rspamd_stat_cache stat_caches[] = {
 };
 
 void
-rspamd_stat_init (struct rspamd_config *cfg)
+rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 {
 	GList *cur, *curst;
 	struct rspamd_classifier_config *clf;
@@ -110,6 +110,7 @@ rspamd_stat_init (struct rspamd_config *cfg)
 	stat_ctx->cfg = cfg;
 	stat_ctx->statfiles = g_ptr_array_new ();
 	stat_ctx->classifiers = g_ptr_array_new ();
+	stat_ctx->ev_base = ev_base;
 	REF_RETAIN (stat_ctx->cfg);
 
 	/* Create statfiles from the classifiers */
@@ -193,7 +194,6 @@ void
 rspamd_stat_close (void)
 {
 	guint i;
-	struct rspamd_config *cfg = stat_ctx->cfg;
 
 	g_assert (stat_ctx != NULL);
 
