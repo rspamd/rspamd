@@ -26,6 +26,7 @@
 #include "rspamd.h"
 #include "stat_internal.h"
 #include "libmime/message.h"
+#include "libmime/filter.h"
 #include "libmime/images.h"
 #include "libserver/html.h"
 #include "lua/lua_common.h"
@@ -636,6 +637,73 @@ rspamd_stat_learn (struct rspamd_task *task,
 	else if (stage == RSPAMD_TASK_STAGE_LEARN_POST) {
 		if (!rspamd_stat_backends_post_learn (st_ctx, task, classifier, spam)) {
 			return RSPAMD_STAT_PROCESS_ERROR;
+		}
+	}
+
+	return ret;
+}
+
+gboolean
+rspamd_stat_check_autolearn (struct rspamd_task *task)
+{
+	struct rspamd_stat_ctx *st_ctx;
+	struct rspamd_classifier *cl;
+	const ucl_object_t *obj;
+	struct metric_result *mres;
+	guint i;
+	gboolean ret = FALSE;
+
+	g_assert (RSPAMD_TASK_IS_CLASSIFIED (task));
+	st_ctx = rspamd_stat_get_ctx ();
+	g_assert (st_ctx != NULL);
+
+	for (i = 0; i < st_ctx->classifiers->len; i ++) {
+		cl = g_ptr_array_index (st_ctx->classifiers, i);
+
+		if (cl->cfg->opts) {
+			obj = ucl_object_find_key (cl->cfg->opts, "autolearn");
+
+			/* TODO: support range and lua for this option */
+			if (ucl_object_type (obj) == UCL_BOOLEAN) {
+				if (ucl_object_toboolean (obj)) {
+					/*
+					 * Default learning algorithm:
+					 *
+					 * - We learn spam if action is ACTION_REJECT
+					 * - We learn ham if score is less than zero
+					 */
+					mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+
+					if (mres) {
+						mres->action = rspamd_check_action_metric (task,
+								mres->score,
+								&mres->required_score,
+								mres->metric);
+
+						if (mres->action == METRIC_ACTION_REJECT) {
+							task->flags |= RSPAMD_TASK_FLAG_LEARN_SPAM;
+							msg_info_task ("<%s>: autolearn spam for classifier "
+									"'%s' as message's "
+									"action is reject, score: %.2f",
+									task->message_id, cl->cfg->name,
+									mres->score);
+							ret = TRUE;
+							break;
+						}
+						else if (mres->score < 0) {
+							task->flags |= RSPAMD_TASK_FLAG_LEARN_HAM;
+							msg_info_task ("<%s>: autolearn ham for classifier "
+									"'%s' as message's "
+									"score is negative: %.2f",
+									task->message_id, cl->cfg->name,
+									mres->score);
+
+							ret = TRUE;
+							break;
+						}
+					}
+				}
+			}
 		}
 	}
 
