@@ -1163,25 +1163,55 @@ rspamd_controller_learn_fin_task (void *ud)
 	struct rspamd_task *task = ud;
 	struct rspamd_controller_session *session;
 	struct rspamd_http_connection_entry *conn_ent;
-	GError *err = NULL;
 
 	conn_ent = task->fin_arg;
 	session = conn_ent->ud;
 
-	if (rspamd_learn_task_spam (task, session->is_spam, session->classifier, &err) ==
-			RSPAMD_STAT_PROCESS_ERROR) {
-		msg_info_session ("cannot learn <%s>: %e", task->message_id, err);
-		rspamd_controller_send_error (conn_ent, err->code, err->message);
+	if (task->err != NULL) {
+		msg_info_session ("cannot learn <%s>: %e", task->message_id, task->err);
+		rspamd_controller_send_error (conn_ent, task->err->code,
+				task->err->message);
 
 		return TRUE;
 	}
 
-	/* Successful learn */
-	msg_info_session ("<%s> learned message as %s: %s",
-		rspamd_inet_address_to_string (session->from_addr),
-		session->is_spam ? "spam" : "ham",
-		task->message_id);
-	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
+	if (RSPAMD_TASK_IS_PROCESSED (task)) {
+		/* Successful learn */
+		msg_info_session ("<%s> learned message as %s: %s",
+				rspamd_inet_address_to_string (session->from_addr),
+				session->is_spam ? "spam" : "ham",
+						task->message_id);
+		rspamd_controller_send_string (conn_ent, "{\"success\":true}");
+		return TRUE;
+	}
+
+	if (!rspamd_task_process (task, RSPAMD_TASK_PROCESS_LEARN)) {
+		msg_info_session ("cannot learn <%s>: %e", task->message_id, task->err);
+
+		if (task->err) {
+			rspamd_controller_send_error (conn_ent, task->err->code,
+					task->err->message);
+		}
+		else {
+			rspamd_controller_send_error (conn_ent, 500,
+								"Internal error");
+		}
+	}
+
+	if (RSPAMD_TASK_IS_PROCESSED (task)) {
+		msg_info_session ("<%s> learned message as %s: %s",
+				rspamd_inet_address_to_string (session->from_addr),
+				session->is_spam ? "spam" : "ham",
+						task->message_id);
+		rspamd_controller_send_string (conn_ent, "{\"success\":true}");
+		return TRUE;
+	}
+
+	/* One more iteration */
+	return FALSE;
+
+
+
 
 	return TRUE;
 }
@@ -1283,6 +1313,8 @@ rspamd_controller_handle_learn_common (
 		rspamd_controller_send_error (conn_ent, task->err->code, task->err->message);
 		return 0;
 	}
+
+	rspamd_learn_task_spam (task, is_spam, session->classifier, NULL);
 
 	if (!rspamd_task_process (task, RSPAMD_TASK_PROCESS_LEARN)) {
 		msg_warn_session ("<%s> message cannot be processed", task->message_id);

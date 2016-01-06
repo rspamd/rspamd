@@ -92,6 +92,9 @@ enum rspamd_task_stage {
 		RSPAMD_TASK_STAGE_CLASSIFIERS_PRE | \
 		RSPAMD_TASK_STAGE_CLASSIFIERS | \
 		RSPAMD_TASK_STAGE_CLASSIFIERS_POST | \
+		RSPAMD_TASK_STAGE_LEARN_PRE | \
+		RSPAMD_TASK_STAGE_LEARN | \
+		RSPAMD_TASK_STAGE_LEARN_POST | \
 		RSPAMD_TASK_STAGE_DONE)
 
 #define RSPAMD_TASK_FLAG_MIME (1 << 0)
@@ -110,6 +113,8 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_FLAG_NO_STAT (1 << 13)
 #define RSPAMD_TASK_FLAG_UNLEARN (1 << 14)
 #define RSPAMD_TASK_FLAG_ALREADY_LEARNED (1 << 15)
+#define RSPAMD_TASK_FLAG_LEARN_SPAM (1 << 16)
+#define RSPAMD_TASK_FLAG_LEARN_HAM (1 << 17)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_JSON(task) (((task)->flags & RSPAMD_TASK_FLAG_JSON))
@@ -192,6 +197,8 @@ struct rspamd_task {
 	} pre_result;									/**< Result of pre-filters							*/
 
 	ucl_object_t *settings;							/**< Settings applied to task						*/
+
+	const gchar *classifier;						/**< Classifier to learn (if needed)				*/
 };
 
 /**

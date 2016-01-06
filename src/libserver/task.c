@@ -457,6 +457,21 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		rspamd_lua_call_post_filters (task);
 		break;
 
+	case RSPAMD_TASK_STAGE_LEARN:
+	case RSPAMD_TASK_STAGE_LEARN_PRE:
+	case RSPAMD_TASK_STAGE_LEARN_POST:
+		if (task->flags & (RSPAMD_TASK_FLAG_LEARN_SPAM|RSPAMD_TASK_FLAG_LEARN_HAM)) {
+			if (!rspamd_stat_learn (task,
+					task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM,
+					task->cfg->lua_state, task->classifier,
+					st, &stat_error)) {
+				msg_err_task ("learn error: %e", stat_error);
+				task->err = stat_error;
+				task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
+			}
+		}
+		break;
+
 	case RSPAMD_TASK_STAGE_DONE:
 		task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
 		break;
@@ -610,7 +625,16 @@ rspamd_learn_task_spam (struct rspamd_task *task,
 	const gchar *classifier,
 	GError **err)
 {
-	return FALSE;
+	if (is_spam) {
+		task->flags |= RSPAMD_TASK_FLAG_LEARN_SPAM;
+	}
+	else {
+		task->flags |= RSPAMD_TASK_FLAG_LEARN_HAM;
+	}
+
+	task->classifier = classifier;
+
+	return TRUE;
 }
 
 static gboolean
