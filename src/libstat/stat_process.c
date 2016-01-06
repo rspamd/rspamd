@@ -648,10 +648,51 @@ rspamd_stat_learn (struct rspamd_task *task,
  * @param total_learns the total number of learns is stored here
  * @return array of statistical information
  */
-rspamd_stat_result_t rspamd_stat_statistics (struct rspamd_task *task,
+rspamd_stat_result_t
+rspamd_stat_statistics (struct rspamd_task *task,
 		struct rspamd_config *cfg,
 		guint64 *total_learns,
-		ucl_object_t **res)
+		ucl_object_t **target)
 {
-	return RSPAMD_STAT_PROCESS_ERROR;
+	struct rspamd_stat_ctx *st_ctx;
+	struct rspamd_classifier *cl;
+	struct rspamd_statfile *st;
+	gpointer backend_runtime;
+	ucl_object_t *res = NULL, *elt;
+	guint64 learns = 0;
+	guint i, j;
+	gint id;
+
+	st_ctx = rspamd_stat_get_ctx ();
+	g_assert (st_ctx != NULL);
+
+	res = ucl_object_typed_new (UCL_ARRAY);
+
+	for (i = 0; i < st_ctx->classifiers->len; i ++) {
+		cl = g_ptr_array_index (st_ctx->classifiers, i);
+
+		for (j = 0; j < cl->statfiles_ids->len; j ++) {
+			id = g_array_index (cl->statfiles_ids, gint, j);
+			st = g_ptr_array_index (st_ctx->statfiles, id);
+			backend_runtime = st->backend->runtime (task, st->stcf, FALSE,
+					st->bkcf);
+			learns += st->backend->total_learns (task, backend_runtime,
+					st->bkcf);
+			elt = st->backend->get_stat (backend_runtime, st->bkcf);
+
+			if (elt != NULL) {
+				ucl_array_append (res, elt);
+			}
+		}
+	}
+
+	if (total_learns != NULL) {
+		*total_learns = learns;
+	}
+
+	if (target) {
+		*target = res;
+	}
+
+	return RSPAMD_STAT_PROCESS_OK;
 }
