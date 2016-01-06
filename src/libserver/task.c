@@ -466,8 +466,11 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 					task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM,
 					task->cfg->lua_state, task->classifier,
 					st, &stat_error)) {
+
+				if (!(task->flags & RSPAMD_TASK_FLAG_LEARN_AUTO)) {
+					task->err = stat_error;
+				}
 				msg_err_task ("learn error: %e", stat_error);
-				task->err = stat_error;
 				task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
 			}
 		}
