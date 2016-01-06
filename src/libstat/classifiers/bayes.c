@@ -303,6 +303,7 @@ bayes_learn_spam (struct rspamd_classifier * ctx,
 		GPtrArray *tokens,
 		struct rspamd_task *task,
 		gboolean is_spam,
+		gboolean unlearn,
 		GError **err)
 {
 	guint i, j;
@@ -325,7 +326,7 @@ bayes_learn_spam (struct rspamd_classifier * ctx,
 				if (st->stcf->is_spam) {
 					tok->values[id]++;
 				}
-				else if (tok->values[id] > 0) {
+				else if (tok->values[id] > 0 && unlearn) {
 					/* Unlearning */
 					tok->values[id]--;
 				}
@@ -334,7 +335,7 @@ bayes_learn_spam (struct rspamd_classifier * ctx,
 				if (!st->stcf->is_spam) {
 					tok->values[id]++;
 				}
-				else if (tok->values[id] > 0) {
+				else if (tok->values[id] > 0 && unlearn) {
 					/* Unlearning */
 					tok->values[id]--;
 				}

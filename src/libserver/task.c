@@ -610,11 +610,7 @@ rspamd_learn_task_spam (struct rspamd_task *task,
 	const gchar *classifier,
 	GError **err)
 {
-	return rspamd_stat_learn (task,
-			is_spam,
-			task->cfg->lua_state,
-			classifier,
-			err);
+	return FALSE;
 }
 
 static gboolean
@@ -999,7 +995,8 @@ rspamd_task_write_log (struct rspamd_task *task)
 
 	g_assert (task != NULL);
 
-	if (task->cfg->log_format == NULL || task->flags & RSPAMD_TASK_FLAG_NO_LOG) {
+	if (task->cfg->log_format == NULL ||
+			(task->flags & RSPAMD_TASK_FLAG_NO_LOG)) {
 		return;
 	}
 

@@ -77,6 +77,7 @@ rspamd_stat_result_t rspamd_stat_classify (struct rspamd_task *task,
  */
 rspamd_stat_result_t rspamd_stat_learn (struct rspamd_task *task,
 		gboolean spam, lua_State *L, const gchar *classifier,
+		guint stage,
 		GError **err);
 
 /**

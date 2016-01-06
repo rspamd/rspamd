@@ -23,7 +23,9 @@ struct rspamd_stat_classifier {
 			struct rspamd_task *task);
 	gboolean (*learn_spam_func)(struct rspamd_classifier * ctx,
 			GPtrArray *input,
-			struct rspamd_task *task, gboolean is_spam,
+			struct rspamd_task *task,
+			gboolean is_spam,
+			gboolean unlearn,
 			GError **err);
 };
 
@@ -37,6 +39,7 @@ gboolean bayes_learn_spam (struct rspamd_classifier *ctx,
 		GPtrArray *tokens,
 		struct rspamd_task *task,
 		gboolean is_spam,
+		gboolean unlearn,
 		GError **err);
 
 #endif
