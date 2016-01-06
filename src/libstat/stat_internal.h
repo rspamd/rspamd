@@ -65,6 +65,13 @@ typedef struct token_node_s {
 	gdouble values[];
 } rspamd_token_t;
 
+struct rspamd_stat_async_elt {
+	void (*handler)(struct rspamd_stat_async_elt *elt, gpointer ud);
+	void (*cleanup)(struct rspamd_stat_async_elt *elt, gpointer ud);
+	struct event ev;
+	gpointer ud;
+};
+
 struct rspamd_stat_ctx {
 	/* Subroutines for all objects */
 	struct rspamd_stat_classifier *classifiers_subrs;
@@ -79,6 +86,7 @@ struct rspamd_stat_ctx {
 	/* Runtime configuration */
 	GPtrArray *statfiles; /* struct rspamd_statfile */
 	GPtrArray *classifiers; /* struct rspamd_classifier */
+	GQueue *async_elts; /* struct rspamd_stat_async_elt */
 	struct rspamd_config *cfg;
 	/* Global tokenizer */
 	struct rspamd_stat_tokenizer *tokenizer;

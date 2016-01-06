@@ -110,6 +110,7 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 	stat_ctx->cfg = cfg;
 	stat_ctx->statfiles = g_ptr_array_new ();
 	stat_ctx->classifiers = g_ptr_array_new ();
+	stat_ctx->async_elts = g_queue_new ();
 	stat_ctx->ev_base = ev_base;
 	REF_RETAIN (stat_ctx->cfg);
 
@@ -197,6 +198,8 @@ rspamd_stat_close (void)
 	struct rspamd_classifier *cl;
 	struct rspamd_statfile *st;
 	struct rspamd_stat_ctx *st_ctx;
+	struct rspamd_stat_async_elt *aelt;
+	GList *cur;
 	guint i, j;
 	gint id;
 
@@ -218,6 +221,19 @@ rspamd_stat_close (void)
 		g_slice_free1 (sizeof (*cl), cl);
 	}
 
+	cur = st_ctx->async_elts->head;
+
+	while (cur) {
+		aelt = cur->data;
+
+		if (aelt->cleanup) {
+			aelt->cleanup (aelt, aelt->ud);
+		}
+
+		cur = g_list_next (cur);
+	}
+
+	g_queue_free (stat_ctx->async_elts);
 	g_ptr_array_free (st_ctx->statfiles, TRUE);
 	g_ptr_array_free (st_ctx->classifiers, TRUE);
 	REF_RELEASE (stat_ctx->cfg);
