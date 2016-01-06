@@ -193,13 +193,37 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 void
 rspamd_stat_close (void)
 {
-	guint i;
+	struct rspamd_classifier *cl;
+	struct rspamd_statfile *st;
+	struct rspamd_stat_ctx *st_ctx;
+	guint i, j;
+	gint id;
 
-	g_assert (stat_ctx != NULL);
+	st_ctx = rspamd_stat_get_ctx ();
+	g_assert (st_ctx != NULL);
 
-	/* TODO: add cleanup routine */
+	for (i = 0; i < st_ctx->classifiers->len; i ++) {
+		cl = g_ptr_array_index (st_ctx->classifiers, i);
 
+		for (j = 0; j < cl->statfiles_ids->len; j ++) {
+			id = g_array_index (cl->statfiles_ids, gint, j);
+			st = g_ptr_array_index (st_ctx->statfiles, id);
+			st->backend->close (st->bkcf);
+
+			g_slice_free1 (sizeof (*st), st);
+		}
+
+		g_array_free (cl->statfiles_ids, TRUE);
+		g_slice_free1 (sizeof (*cl), cl);
+	}
+
+	g_ptr_array_free (st_ctx->statfiles, TRUE);
+	g_ptr_array_free (st_ctx->classifiers, TRUE);
 	REF_RELEASE (stat_ctx->cfg);
+	g_slice_free1 (sizeof (*st_ctx), st_ctx);
+
+	/* Set global var to NULL */
+	stat_ctx = NULL;
 }
 
 struct rspamd_stat_ctx *
