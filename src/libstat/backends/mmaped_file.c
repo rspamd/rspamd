@@ -816,7 +816,10 @@ rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx,
 
 	size = ucl_object_toint (sizeo);
 	mf = rspamd_mmaped_file_open (cfg->cfg_pool, filename, size, stf);
-	mf->pool = cfg->cfg_pool;
+
+	if (mf != NULL) {
+		mf->pool = cfg->cfg_pool;
+	}
 
 	return (gpointer)mf;
 }
