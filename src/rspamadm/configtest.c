@@ -186,4 +186,6 @@ rspamadm_configtest (gint argc, gchar **argv)
 	if (!ret) {
 		exit (EXIT_FAILURE);
 	}
+
+	exit (EXIT_SUCCESS);
 }
