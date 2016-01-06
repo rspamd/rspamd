@@ -520,7 +520,7 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 			}
 
 			if (!task->flags & RSPAMD_TASK_FLAG_UNLEARN) {
-				if (spam != st->stcf->is_spam) {
+				if (!!spam != !!st->stcf->is_spam) {
 					/* If we are not unlearning, then do not touch another class */
 					continue;
 				}
@@ -575,7 +575,7 @@ rspamd_stat_backends_post_learn (struct rspamd_stat_ctx *st_ctx,
 			}
 
 			if (!task->flags & RSPAMD_TASK_FLAG_UNLEARN) {
-				if (spam != st->stcf->is_spam) {
+				if (!!spam != !!st->stcf->is_spam) {
 					/* If we are not unlearning, then do not touch another class */
 					continue;
 				}
@@ -583,7 +583,7 @@ rspamd_stat_backends_post_learn (struct rspamd_stat_ctx *st_ctx,
 				st->backend->inc_learns (task, bk_run, st_ctx);
 			}
 			else {
-				if (spam == st->stcf->is_spam) {
+				if (!!spam == !!st->stcf->is_spam) {
 					st->backend->inc_learns (task, bk_run, st_ctx);
 				}
 				else {
@@ -643,6 +643,37 @@ rspamd_stat_learn (struct rspamd_task *task,
 	return ret;
 }
 
+static gboolean
+rspamd_stat_has_classifier_symbols (struct rspamd_task *task,
+		struct metric_result *mres,
+		struct rspamd_classifier *cl)
+{
+	guint i;
+	gint id;
+	struct rspamd_statfile *st;
+	struct rspamd_stat_ctx *st_ctx;
+	gboolean is_spam;
+
+	st_ctx = rspamd_stat_get_ctx ();
+	is_spam = !!(task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM);
+
+	for (i = 0; i < cl->statfiles_ids->len; i ++) {
+		id = g_array_index (cl->statfiles_ids, gint, i);
+		st = g_ptr_array_index (st_ctx->statfiles, id);
+
+		if (g_hash_table_lookup (mres->symbols, st->stcf->symbol)) {
+			if (is_spam == !!st->stcf->is_spam) {
+				msg_debug_task ("do not autolearn %s as symbol %s is already "
+						"added", st->stcf->symbol);
+
+				return TRUE;
+			}
+		}
+	}
+
+	return FALSE;
+}
+
 gboolean
 rspamd_stat_check_autolearn (struct rspamd_task *task)
 {
@@ -682,23 +713,38 @@ rspamd_stat_check_autolearn (struct rspamd_task *task)
 
 						if (mres->action == METRIC_ACTION_REJECT) {
 							task->flags |= RSPAMD_TASK_FLAG_LEARN_SPAM;
-							msg_info_task ("<%s>: autolearn spam for classifier "
-									"'%s' as message's "
-									"action is reject, score: %.2f",
-									task->message_id, cl->cfg->name,
-									mres->score);
+
 							ret = TRUE;
-							break;
 						}
 						else if (mres->score < 0) {
 							task->flags |= RSPAMD_TASK_FLAG_LEARN_HAM;
-							msg_info_task ("<%s>: autolearn ham for classifier "
-									"'%s' as message's "
-									"score is negative: %.2f",
-									task->message_id, cl->cfg->name,
-									mres->score);
-
 							ret = TRUE;
+						}
+
+						/* Do not autolearn if we have this symbol already */
+						if (ret &&
+								rspamd_stat_has_classifier_symbols (task, mres, cl)) {
+							ret = FALSE;
+							task->flags &= ~(RSPAMD_TASK_FLAG_LEARN_HAM |
+									RSPAMD_TASK_FLAG_LEARN_SPAM);
+						}
+						else {
+							if (task->flags & RSPAMD_TASK_FLAG_LEARN_HAM) {
+								msg_info_task ("<%s>: autolearn ham for classifier "
+										"'%s' as message's "
+										"score is negative: %.2f",
+										task->message_id, cl->cfg->name,
+										mres->score);
+							}
+							else {
+								msg_info_task ("<%s>: autolearn spam for classifier "
+										"'%s' as message's "
+										"action is reject, score: %.2f",
+										task->message_id, cl->cfg->name,
+										mres->score);
+							}
+
+							task->classifier = cl->cfg->name;
 							break;
 						}
 					}
