@@ -2503,6 +2503,8 @@ rspamd_rcl_insert_string_list_item (gpointer *target, rspamd_mempool_t *pool,
 	if (is_hash) {
 		if (d.hv == NULL) {
 			d.hv = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+			rspamd_mempool_add_destructor (pool,
+					(rspamd_mempool_destruct_t)g_hash_table_unref, d.hv);
 		}
 
 		val = rspamd_mempool_strdup (pool, src);
@@ -2586,7 +2588,8 @@ rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 
 	/* Add a destructor */
 
-	if (!is_hash) {
+	if (!is_hash && *target != NULL) {
+		*target = g_list_reverse (*target);
 		rspamd_mempool_add_destructor (pool,
 				(rspamd_mempool_destruct_t) g_list_free,
 				*target);
