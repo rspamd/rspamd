@@ -25,6 +25,13 @@ struct f_str_s;
 #define align_ptr(p, a)                                                   \
     (guint8 *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
 
+enum rspamd_mempool_chain_type {
+	RSPAMD_MEMPOOL_NORMAL = 0,
+	RSPAMD_MEMPOOL_TMP,
+	RSPAMD_MEMPOOL_SHARED,
+	RSPAMD_MEMPOOL_MAX
+};
+
 /**
  * Destructor type definition
  */
@@ -57,18 +64,7 @@ typedef pthread_rwlock_t rspamd_mempool_rwlock_t;
 struct _pool_chain {
 	guint8 *begin;                  /**< begin of pool chain block              */
 	guint8 *pos;                    /**< current start of free space in block   */
-	gsize len;      /**< length of block                        */
-	struct _pool_chain *next;       /**< chain link                             */
-};
-
-/**
- * Shared pool page
- */
-struct _pool_chain_shared {
-	guint8 *begin;
-	guint8 *pos;
-	gsize len;
-	struct _pool_chain_shared *next;
+	gsize len;                      /**< length of block                        */
 	rspamd_mempool_mutex_t *lock;
 };
 
@@ -76,11 +72,10 @@ struct _pool_chain_shared {
  * Destructors list item structure
  */
 struct _pool_destructors {
-	rspamd_mempool_destruct_t func;             /**< pointer to destructor					*/
+	rspamd_mempool_destruct_t func;         /**< pointer to destructor					*/
 	void *data;                             /**< data to free							*/
 	const gchar *function;                  /**< function from which this destructor was added */
 	const gchar *loc;                       /**< line number                            */
-	struct _pool_destructors *prev;         /**< chain link								*/
 };
 
 /**
@@ -96,10 +91,8 @@ struct rspamd_mempool_tag {
  */
 struct rspamd_mutex_s;
 typedef struct memory_pool_s {
-	struct _pool_chain *cur_pool;           /**< currently used page					*/
-	struct _pool_chain *cur_pool_tmp;       /**< currently used temporary page			*/
-	struct _pool_chain_shared *shared_pool; /**< shared chain							*/
-	struct _pool_destructors *destructors;  /**< destructors chain						*/
+	GPtrArray *pools[RSPAMD_MEMPOOL_MAX];
+	GArray *destructors;
 	GHashTable *variables;                  /**< private memory pool variables			*/
 	gsize elt_len;							/**< size of an element						*/
 	struct rspamd_mempool_tag tag;          /**< memory pool tag						*/
@@ -201,21 +194,6 @@ void * rspamd_mempool_alloc_shared (rspamd_mempool_t * pool, gsize size);
 void * rspamd_mempool_alloc0_shared (rspamd_mempool_t *pool, gsize size);
 gchar * rspamd_mempool_strdup_shared (rspamd_mempool_t * pool,
 	const gchar *src);
-
-/**
- * Lock chunk of shared memory in which pointer is placed
- * @param pool memory pool object
- * @param pointer pointer of shared memory object that is to be locked (the whole page that contains that object is locked)
- */
-void rspamd_mempool_lock_shared (rspamd_mempool_t *pool, void *pointer);
-
-/**
- * Unlock chunk of shared memory in which pointer is placed
- * @param pool memory pool object
- * @param pointer pointer of shared memory object that is to be unlocked (the whole page that contains that object is locked)
- */
-void rspamd_mempool_unlock_shared (rspamd_mempool_t *pool, void *pointer);
-
 /**
  * Add destructor callback to pool
  * @param pool memory pool object
