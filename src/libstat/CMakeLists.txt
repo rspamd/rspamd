@@ -11,7 +11,7 @@ SET(BACKENDSSRC 	${CMAKE_CURRENT_SOURCE_DIR}/backends/mmaped_file.c
 					${CMAKE_CURRENT_SOURCE_DIR}/backends/sqlite3_backend.c)
 IF(ENABLE_HIREDIS MATCHES "ON")
 	SET(BACKENDSSRC 	${BACKENDSSRC}
-					${CMAKE_CURRENT_SOURCE_DIR}/backends/redis.c)
+					${CMAKE_CURRENT_SOURCE_DIR}/backends/redis_backend.c)
 ENDIF(ENABLE_HIREDIS MATCHES "ON")
 SET(CACHESSRC 	${CMAKE_CURRENT_SOURCE_DIR}/learn_cache/sqlite3_cache.c)
 
