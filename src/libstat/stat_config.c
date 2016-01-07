@@ -71,7 +71,8 @@ static struct rspamd_stat_tokenizer stat_tokenizers[] = {
 
 static struct rspamd_stat_backend stat_backends[] = {
 		RSPAMD_STAT_BACKEND_ELT(mmap, mmaped_file),
-		RSPAMD_STAT_BACKEND_ELT(sqlite3, sqlite3)
+		RSPAMD_STAT_BACKEND_ELT(sqlite3, sqlite3),
+		RSPAMD_STAT_BACKEND_ELT(redis, redis)
 };
 
 static struct rspamd_stat_cache stat_caches[] = {

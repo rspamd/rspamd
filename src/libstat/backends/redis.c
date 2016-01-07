@@ -313,6 +313,9 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 			}
 
 			rt->connected = TRUE;
+
+			msg_debug_task ("connected to redis server, tokens learned for %s: %d",
+					rt->redis_object_expanded, rt->learned);
 		}
 		else {
 			msg_err_task ("error getting reply from redis server %s: %s",
@@ -337,7 +340,7 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 	struct rspamd_statfile_config *stf = st->stcf;
 	const ucl_object_t *elt;
 
-	backend = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*backend));
+	backend = g_slice_alloc0 (sizeof (*backend));
 
 	elt = ucl_object_find_key (stf->opts, "read_servers");
 	if (elt == NULL) {
@@ -403,7 +406,7 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 
 gpointer
 rspamd_redis_runtime (struct rspamd_task *task,
-		struct rspamd_statfile_config *stcf, \
+		struct rspamd_statfile_config *stcf,
 		gboolean learn, gpointer c)
 {
 	struct redis_stat_ctx *ctx = REDIS_CTX (c);
@@ -463,4 +466,108 @@ rspamd_redis_runtime (struct rspamd_task *task,
 			rt->redis_object_expanded, "learned");
 
 	return rt;
+}
+
+void
+rspamd_redis_close (gpointer p)
+{
+	struct redis_stat_ctx *ctx = REDIS_CTX (p);
+
+	if (ctx->read_servers) {
+		rspamd_upstreams_destroy (ctx->read_servers);
+	}
+
+	if (ctx->write_servers) {
+		rspamd_upstreams_destroy (ctx->write_servers);
+	}
+
+	g_slice_free1 (sizeof (*ctx), ctx);
+}
+
+gboolean
+rspamd_redis_process_tokens (struct rspamd_task *task,
+		GPtrArray *tokens,
+		gint id, gpointer p)
+{
+	struct redis_stat_runtime *rt = REDIS_RUNTIME (p);
+
+	return FALSE;
+}
+
+void
+rspamd_redis_finalize_process (struct rspamd_task *task, gpointer runtime,
+		gpointer ctx)
+{
+	struct redis_stat_runtime *rt = REDIS_RUNTIME (runtime);
+}
+
+gboolean
+rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
+		gint id, gpointer p)
+{
+	struct redis_stat_runtime *rt = REDIS_RUNTIME (p);
+
+	return FALSE;
+}
+
+
+void
+rspamd_redis_finalize_learn (struct rspamd_task *task, gpointer runtime,
+		gpointer ctx)
+{
+	struct redis_stat_runtime *rt = REDIS_RUNTIME (runtime);
+}
+
+gulong
+rspamd_redis_total_learns (struct rspamd_task *task, gpointer runtime,
+		gpointer ctx)
+{
+	struct redis_stat_runtime *rt = REDIS_RUNTIME (runtime);
+
+	return 0;
+}
+
+gulong
+rspamd_redis_inc_learns (struct rspamd_task *task, gpointer runtime,
+		gpointer ctx)
+{
+	struct redis_stat_runtime *rt = REDIS_RUNTIME (runtime);
+
+	return 0;
+}
+
+gulong
+rspamd_redis_dec_learns (struct rspamd_task *task, gpointer runtime,
+		gpointer ctx)
+{
+	struct redis_stat_runtime *rt = REDIS_RUNTIME (runtime);
+
+	return 0;
+}
+
+gulong
+rspamd_redis_learns (struct rspamd_task *task, gpointer runtime,
+		gpointer ctx)
+{
+	struct redis_stat_runtime *rt = REDIS_RUNTIME (runtime);
+
+	return 0;
+}
+
+ucl_object_t *
+rspamd_redis_get_stat (gpointer runtime,
+		gpointer ctx)
+{
+	struct redis_stat_runtime *rt = REDIS_RUNTIME (runtime);
+
+	return NULL;
+}
+
+gpointer
+rspamd_redis_load_tokenizer_config (gpointer runtime,
+		gsize *len)
+{
+	struct redis_stat_runtime *rt = REDIS_RUNTIME (runtime);
+
+	return NULL;
 }
