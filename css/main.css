@@ -21,9 +21,9 @@ body {
   /* Let the jumbotron breathe */
   .jumbotron {
     margin-top: 20px;
-	background:url(/img/rspamd_head_alt.png);
-	background-size: 100% auto;
-	background-repeat: no-repeat;
+  	background:url(/img/rspamd_head_alt.png);
+  	background-size: 100% auto;
+  	background-repeat: no-repeat;
   }
   /* Remove padding from wrapping element since we kick in the grid classes here */
   .body-content {
@@ -71,10 +71,8 @@ pre{
 a.undecor {
   text-decoration: none;
 }
-.myFootnote{
-  font-size: smaller;
-}
 hr {
+    /* simple hr */
     display: block;
     margin-top: 0.5em;
     margin-bottom: 0.5em;
@@ -82,4 +80,9 @@ hr {
     margin-right: auto;
     border-style: inset;
     border-width: 1px;
+}
+.row-footer{
+  background-color: #E8E8E8;
+  padding: 10px 0px 30px 0px;
+  margin-top: 10px;
 }
