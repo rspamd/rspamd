@@ -679,10 +679,11 @@ rspamd_stat_check_autolearn (struct rspamd_task *task)
 {
 	struct rspamd_stat_ctx *st_ctx;
 	struct rspamd_classifier *cl;
-	const ucl_object_t *obj;
+	const ucl_object_t *obj, *elt1, *elt2;
 	struct metric_result *mres;
 	guint i;
 	gboolean ret = FALSE;
+	gdouble ham_score, spam_score;
 
 	g_assert (RSPAMD_TASK_IS_CLASSIFIED (task));
 	st_ctx = rspamd_stat_get_ctx ();
@@ -724,6 +725,45 @@ rspamd_stat_check_autolearn (struct rspamd_task *task)
 					}
 				}
 			}
+			else if (ucl_object_type (obj) == UCL_ARRAY && obj->len == 2) {
+				/*
+				 * We have an array of 2 elements, treat it as a
+				 * ham_score, spam_score
+				 */
+				elt1 = ucl_array_find_index (obj, 0);
+				elt2 = ucl_array_find_index (obj, 1);
+
+				if ((ucl_object_type (elt1) == UCL_FLOAT ||
+						ucl_object_type (elt1) == UCL_INT) &&
+					(ucl_object_type (elt2) == UCL_FLOAT ||
+						ucl_object_type (elt1) == UCL_INT)) {
+					ham_score = ucl_object_todouble (elt1);
+					spam_score = ucl_object_todouble (elt2);
+
+					if (ham_score > spam_score) {
+						gdouble t;
+
+						t = ham_score;
+						ham_score = spam_score;
+						spam_score = t;
+					}
+
+					mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+
+					if (mres) {
+						if (mres->score >= spam_score) {
+							task->flags |= RSPAMD_TASK_FLAG_LEARN_SPAM;
+
+							ret = TRUE;
+						}
+						else if (mres->score <= ham_score) {
+							task->flags |= RSPAMD_TASK_FLAG_LEARN_HAM;
+							ret = TRUE;
+						}
+					}
+				}
+			}
+
 			if (ret) {
 				/* Do not autolearn if we have this symbol already */
 				if (rspamd_stat_has_classifier_symbols (task, mres, cl)) {
