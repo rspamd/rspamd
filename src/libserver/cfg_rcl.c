@@ -2531,11 +2531,15 @@ rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 	const ucl_object_t *cur;
 	const gsize num_str_len = 32;
 	ucl_object_iter_t iter = NULL;
-	gboolean is_hash;
+	gboolean is_hash, need_destructor = TRUE;
 
 
 	is_hash = pd->flags & RSPAMD_CL_FLAG_STRING_LIST_HASH;
 	target = (gpointer *)(((gchar *)pd->user_struct) + pd->offset);
+
+	if (!is_hash && *target != NULL) {
+		need_destructor = FALSE;
+	}
 
 	iter = ucl_object_iterate_new (obj);
 
@@ -2586,13 +2590,14 @@ rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 		return FALSE;
 	}
 
-	/* Add a destructor */
-
 	if (!is_hash && *target != NULL) {
 		*target = g_list_reverse (*target);
-		rspamd_mempool_add_destructor (pool,
-				(rspamd_mempool_destruct_t) g_list_free,
-				*target);
+
+		if (need_destructor) {
+			rspamd_mempool_add_destructor (pool,
+					(rspamd_mempool_destruct_t) g_list_free,
+					*target);
+		}
 	}
 
 	return TRUE;
