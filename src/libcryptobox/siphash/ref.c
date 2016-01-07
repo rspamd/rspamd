@@ -31,14 +31,6 @@
 
 #define ROTL(x,b) (uint64_t)( ((x) << (b)) | ( (x) >> (64 - (b))) )
 
-#define U32TO8_LE(p, v)                                         \
-  (p)[0] = (uint8_t)((v)      ); (p)[1] = (uint8_t)((v) >>  8); \
-  (p)[2] = (uint8_t)((v) >> 16); (p)[3] = (uint8_t)((v) >> 24);
-
-#define U64TO8_LE(p, v)                        \
-  U32TO8_LE((p),     (uint32_t)((v)      ));   \
-  U32TO8_LE((p) + 4, (uint32_t)((v) >> 32));
-
 #if BYTE_ORDER != LITTLE_ENDIAN
 #define U8TO64_LE(p) \
 	(((uint64_t)((p)[0]) <<  0) | \

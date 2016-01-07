@@ -32,20 +32,6 @@ rspamd_mem_pool_test_func ()
 	g_assert (strncmp (tmp, TEST_BUF, sizeof (TEST_BUF)) == 0);
 	g_assert (strncmp (tmp2, TEST2_BUF, sizeof (TEST2_BUF)) == 0);
 	g_assert (strncmp (tmp3, TEST_BUF, sizeof (TEST_BUF)) == 0);
-	rspamd_mempool_lock_shared (pool, tmp3);
-	if ((pid = fork ()) == 0) {
-		rspamd_mempool_lock_shared (pool, tmp3);
-		g_assert (*tmp3 == 's');
-		*tmp3 = 't';
-		rspamd_mempool_unlock_shared (pool, tmp3);
-		exit (EXIT_SUCCESS);
-	}
-	else {
-		*tmp3 = 's';
-		rspamd_mempool_unlock_shared (pool, tmp3);
-	}
-	wait (&ret);
-	g_assert (*tmp3 == 't');
 	
 	rspamd_mempool_delete (pool);
 	rspamd_mempool_stat (&st);

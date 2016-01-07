@@ -1990,15 +1990,16 @@ void
 rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 		struct rspamd_config *cfg)
 {
-	g_assert (ctx != NULL);
 	g_assert (cfg != NULL);
 
-	if (cfg->local_addrs) {
-		if (!rspamd_map_add (cfg, cfg->local_addrs,
-				"Local addresses", rspamd_radix_read, rspamd_radix_fin,
-				(void **) ctx->local_addrs)) {
-			radix_add_generic_iplist (cfg->local_addrs,
-					(radix_compressed_t **)ctx->local_addrs);
+	if (ctx != NULL) {
+		if (cfg->local_addrs) {
+			if (!rspamd_map_add (cfg, cfg->local_addrs,
+					"Local addresses", rspamd_radix_read, rspamd_radix_fin,
+					(void **) ctx->local_addrs)) {
+				radix_add_generic_iplist (cfg->local_addrs,
+						(radix_compressed_t **)ctx->local_addrs);
+			}
 		}
 	}
 }
