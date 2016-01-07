@@ -690,6 +690,7 @@ rspamd_stat_check_autolearn (struct rspamd_task *task)
 
 	for (i = 0; i < st_ctx->classifiers->len; i ++) {
 		cl = g_ptr_array_index (st_ctx->classifiers, i);
+		ret = FALSE;
 
 		if (cl->cfg->opts) {
 			obj = ucl_object_find_key (cl->cfg->opts, "autolearn");
@@ -720,34 +721,34 @@ rspamd_stat_check_autolearn (struct rspamd_task *task)
 							task->flags |= RSPAMD_TASK_FLAG_LEARN_HAM;
 							ret = TRUE;
 						}
-
-						/* Do not autolearn if we have this symbol already */
-						if (ret &&
-								rspamd_stat_has_classifier_symbols (task, mres, cl)) {
-							ret = FALSE;
-							task->flags &= ~(RSPAMD_TASK_FLAG_LEARN_HAM |
-									RSPAMD_TASK_FLAG_LEARN_SPAM);
-						}
-						else {
-							if (task->flags & RSPAMD_TASK_FLAG_LEARN_HAM) {
-								msg_info_task ("<%s>: autolearn ham for classifier "
-										"'%s' as message's "
-										"score is negative: %.2f",
-										task->message_id, cl->cfg->name,
-										mres->score);
-							}
-							else {
-								msg_info_task ("<%s>: autolearn spam for classifier "
-										"'%s' as message's "
-										"action is reject, score: %.2f",
-										task->message_id, cl->cfg->name,
-										mres->score);
-							}
-
-							task->classifier = cl->cfg->name;
-							break;
-						}
 					}
+				}
+			}
+			if (ret) {
+				/* Do not autolearn if we have this symbol already */
+				if (rspamd_stat_has_classifier_symbols (task, mres, cl)) {
+					ret = FALSE;
+					task->flags &= ~(RSPAMD_TASK_FLAG_LEARN_HAM |
+							RSPAMD_TASK_FLAG_LEARN_SPAM);
+				}
+				else {
+					if (task->flags & RSPAMD_TASK_FLAG_LEARN_HAM) {
+						msg_info_task ("<%s>: autolearn ham for classifier "
+								"'%s' as message's "
+								"score is negative: %.2f",
+								task->message_id, cl->cfg->name,
+								mres->score);
+					}
+					else {
+						msg_info_task ("<%s>: autolearn spam for classifier "
+								"'%s' as message's "
+								"action is reject, score: %.2f",
+								task->message_id, cl->cfg->name,
+								mres->score);
+					}
+
+					task->classifier = cl->cfg->name;
+					break;
 				}
 			}
 		}
