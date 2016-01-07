@@ -57,7 +57,7 @@ struct rspamd_statfile {
 	gpointer bkcf;
 };
 
-#define RSPAMD_MAX_TOKEN_LEN 16
+#define RSPAMD_MAX_TOKEN_LEN 8
 typedef struct token_node_s {
 	guchar data[RSPAMD_MAX_TOKEN_LEN];
 	guint window_idx;

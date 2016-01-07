@@ -362,6 +362,8 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, guint stage,
 		rspamd_stat_classifiers_process (st_ctx, task);
 	}
 
+	task->processed_stages |= stage;
+
 	return ret;
 }
 
@@ -639,6 +641,8 @@ rspamd_stat_learn (struct rspamd_task *task,
 			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 	}
+
+	task->processed_stages |= stage;
 
 	return ret;
 }
