@@ -29,7 +29,7 @@
 #ifdef WITH_HIREDIS
 #include "hiredis/hiredis.h"
 #include "hiredis/adapters/libevent.h"
-#endif
+
 
 #define REDIS_CTX(p) (struct redis_stat_ctx *)(p)
 #define REDIS_RUNTIME(p) (struct redis_stat_runtime *)(p)
@@ -704,3 +704,6 @@ rspamd_redis_load_tokenizer_config (gpointer runtime,
 
 	return NULL;
 }
+
+
+#endif
