@@ -127,6 +127,9 @@ struct rspamd_tokenizer_config {
 	const gchar *name;								/**< name of tokenizer									*/
 };
 
+
+/* Classifier has all integer values (e.g. bayes) */
+#define RSPAMD_FLAG_CLASSIFIER_INTEGER (1 << 0)
 /**
  * Classifier config definition
  */
@@ -143,6 +146,7 @@ struct rspamd_classifier_config {
 	gchar *name;									/**< unique name of classifier							*/
 	guint32 min_tokens;								/**< minimal number of tokens to process classifier 	*/
 	guint32 max_tokens;								/**< maximum number of tokens							*/
+	guint flags;
 };
 
 struct rspamd_worker_bind_conf {

@@ -58,6 +58,7 @@ struct redis_stat_runtime {
 	struct upstream *selected;
 	struct event timeout_event;
 	GArray *results;
+	struct rspamd_statfile_config *stcf;
 	gchar *redis_object_expanded;
 	redisAsyncContext *redis;
 	guint64 learned;
@@ -278,7 +279,8 @@ rspamd_redis_expand_object (const gchar *pattern,
 
 static rspamd_fstring_t *
 rspamd_redis_tokens_to_query (struct rspamd_task *task, GPtrArray *tokens,
-		const gchar *arg0, const gchar *arg1, gboolean learn, gint idx)
+		const gchar *arg0, const gchar *arg1, gboolean learn, gint idx,
+		gboolean intvals)
 {
 	rspamd_fstring_t *out;
 	rspamd_token_t *tok;
@@ -319,7 +321,8 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task, GPtrArray *tokens,
 					larg1, arg1);
 
 			l0 = rspamd_snprintf (n0, sizeof (n0), "%uL", num);
-			if (tok->values[idx] == (guint64)tok->values[idx]) {
+
+			if (intvals) {
 				l1 = rspamd_snprintf (n1, sizeof (n1), "%uL",
 						(guint64)tok->values[idx]);
 			}
@@ -454,6 +457,7 @@ rspamd_redis_processed (redisAsyncContext *c, gpointer r, gpointer priv)
 	rspamd_token_t *tok;
 	guint i, processed = 0, found = 0;
 	gulong val;
+	gdouble float_val;
 
 	task = rt->task;
 
@@ -465,15 +469,24 @@ rspamd_redis_processed (redisAsyncContext *c, gpointer r, gpointer priv)
 					for (i = 0; i < reply->elements; i ++) {
 						elt = reply->element[i];
 
-						if (elt->type == REDIS_REPLY_INTEGER) {
+						if (G_LIKELY (elt->type == REDIS_REPLY_INTEGER)) {
 							tok = g_ptr_array_index (task->tokens, i);
 							tok->values[rt->id] = elt->integer;
 							found ++;
 						}
 						else if (elt->type == REDIS_REPLY_STRING) {
 							tok = g_ptr_array_index (task->tokens, i);
-							rspamd_strtoul (elt->str, elt->len, &val);
-							tok->values[rt->id] = val;
+
+							if (rt->stcf->clcf->flags &
+									RSPAMD_FLAG_CLASSIFIER_INTEGER) {
+								rspamd_strtoul (elt->str, elt->len, &val);
+								tok->values[rt->id] = val;
+							}
+							else {
+								float_val = strtod (elt->str, NULL);
+								tok->values[rt->id] = float_val;
+							}
+
 							found ++;
 						}
 						else {
@@ -643,6 +656,7 @@ rspamd_redis_runtime (struct rspamd_task *task,
 	rt->selected = up;
 	rt->task = task;
 	rt->ctx = ctx;
+	rt->stcf = stcf;
 	rt->conn_state = RSPAMD_REDIS_DISCONNECTED;
 
 	addr = rspamd_upstream_addr (up);
@@ -700,7 +714,8 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 
 	rt->id = id;
 	query = rspamd_redis_tokens_to_query (task, tokens,
-			"HMGET", rt->redis_object_expanded, FALSE, -1);
+			"HMGET", rt->redis_object_expanded, FALSE, -1,
+			rt->stcf->clcf->flags & RSPAMD_FLAG_CLASSIFIER_INTEGER);
 	g_assert (query != NULL);
 
 	ret = redisAsyncFormattedCommand (rt->redis, rspamd_redis_processed, rt,
@@ -745,6 +760,7 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 	rspamd_inet_addr_t *addr;
 	struct timeval tv;
 	rspamd_fstring_t *query;
+	const gchar *redis_cmd;
 	gint ret;
 
 	if (rt->conn_state != RSPAMD_REDIS_DISCONNECTED) {
@@ -779,9 +795,17 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 	double_to_tv (rt->ctx->timeout, &tv);
 	event_add (&rt->timeout_event, &tv);
 
+	if (rt->stcf->clcf->flags & RSPAMD_FLAG_CLASSIFIER_INTEGER) {
+		redis_cmd = "HINCRBY";
+	}
+	else {
+		redis_cmd = "HINCRBYFLOAT";
+	}
+
 	rt->id = id;
 	query = rspamd_redis_tokens_to_query (task, tokens,
-			"HINCRBYFLOAT", rt->redis_object_expanded, TRUE, id);
+			redis_cmd, rt->redis_object_expanded, TRUE, id,
+			rt->stcf->clcf->flags & RSPAMD_FLAG_CLASSIFIER_INTEGER);
 	g_assert (query != NULL);
 
 	ret = redisAsyncFormattedCommand (rt->redis, rspamd_redis_learned, rt,
