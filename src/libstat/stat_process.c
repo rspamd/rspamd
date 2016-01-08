@@ -540,7 +540,7 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 				if (!!spam == !!st->stcf->is_spam) {
 					st->backend->inc_learns (task, bk_run, st_ctx);
 				}
-				else {
+				else if (task->flags & RSPAMD_TASK_FLAG_UNLEARN) {
 					st->backend->dec_learns (task, bk_run, st_ctx);
 				}
 			}
