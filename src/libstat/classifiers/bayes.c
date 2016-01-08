@@ -311,9 +311,12 @@ bayes_learn_spam (struct rspamd_classifier * ctx,
 	gint id;
 	struct rspamd_statfile *st;
 	rspamd_token_t *tok;
+	gboolean incrementing;
 
 	g_assert (ctx != NULL);
 	g_assert (tokens != NULL);
+
+	incrementing = ctx->cfg->flags & RSPAMD_FLAG_CLASSIFIER_INCREMENTING_BACKEND;
 
 	for (i = 0; i < tokens->len; i++) {
 		tok = g_ptr_array_index (tokens, i);
@@ -323,23 +326,25 @@ bayes_learn_spam (struct rspamd_classifier * ctx,
 			st = g_ptr_array_index (ctx->ctx->statfiles, id);
 			g_assert (st != NULL);
 
-			if (is_spam) {
-				if (st->stcf->is_spam) {
+			if (!!st->stcf->is_spam == !!is_spam) {
+				if (incrementing) {
+					tok->values[id] = 1;
+				}
+				else {
 					tok->values[id]++;
 				}
-				else if (tok->values[id] > 0 && unlearn) {
-					/* Unlearning */
+			}
+			else if (tok->values[id] > 0 && unlearn) {
+				/* Unlearning */
+				if (incrementing) {
+					tok->values[id] = -1;
+				}
+				else {
 					tok->values[id]--;
 				}
 			}
-			else {
-				if (!st->stcf->is_spam) {
-					tok->values[id]++;
-				}
-				else if (tok->values[id] > 0 && unlearn) {
-					/* Unlearning */
-					tok->values[id]--;
-				}
+			else if (incrementing) {
+				tok->values[id] = 0;
 			}
 		}
 	}

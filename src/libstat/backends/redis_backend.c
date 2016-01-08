@@ -609,6 +609,7 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 		backend->timeout = REDIS_DEFAULT_TIMEOUT;
 	}
 
+	stf->clcf->flags |= RSPAMD_FLAG_CLASSIFIER_INCREMENTING_BACKEND;
 
 	return (gpointer)backend;
 }

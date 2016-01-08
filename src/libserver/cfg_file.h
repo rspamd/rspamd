@@ -130,6 +130,12 @@ struct rspamd_tokenizer_config {
 
 /* Classifier has all integer values (e.g. bayes) */
 #define RSPAMD_FLAG_CLASSIFIER_INTEGER (1 << 0)
+/*
+ * Set if backend for a classifier is intended to increment and not set values
+ * (e.g. redis)
+ */
+#define RSPAMD_FLAG_CLASSIFIER_INCREMENTING_BACKEND (1 << 1)
+
 /**
  * Classifier config definition
  */
