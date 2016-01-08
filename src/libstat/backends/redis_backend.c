@@ -323,12 +323,12 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task, GPtrArray *tokens,
 			l0 = rspamd_snprintf (n0, sizeof (n0), "%uL", num);
 
 			if (intvals) {
-				l1 = rspamd_snprintf (n1, sizeof (n1), "%uL",
-						(guint64)tok->values[idx]);
+				l1 = rspamd_snprintf (n1, sizeof (n1), "%L",
+						(gint64)tok->values[idx]);
 			}
 			else {
 				l1 = rspamd_snprintf (n1, sizeof (n1), "%f",
-						(guint64)tok->values[idx]);
+						tok->values[idx]);
 			}
 
 			rspamd_printf_fstring (&out, ""
