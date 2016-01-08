@@ -434,6 +434,7 @@ rspamd_redis_processed (redisAsyncContext *c, gpointer r, gpointer priv)
 	struct rspamd_task *task;
 	rspamd_token_t *tok;
 	guint i, processed = 0, found = 0;
+	gulong val;
 
 	task = rt->task;
 
@@ -448,6 +449,12 @@ rspamd_redis_processed (redisAsyncContext *c, gpointer r, gpointer priv)
 						if (elt->type == REDIS_REPLY_INTEGER) {
 							tok = g_ptr_array_index (task->tokens, i);
 							tok->values[rt->id] = elt->integer;
+							found ++;
+						}
+						else if (elt->type == REDIS_REPLY_STRING) {
+							tok = g_ptr_array_index (task->tokens, i);
+							rspamd_strtoul (elt->str, elt->len, &val);
+							tok->values[rt->id] = val;
 							found ++;
 						}
 						else {
