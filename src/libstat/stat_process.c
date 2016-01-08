@@ -536,6 +536,14 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 
 				res = FALSE;
 			}
+			else {
+				if (!!spam == !!st->stcf->is_spam) {
+					st->backend->inc_learns (task, bk_run, st_ctx);
+				}
+				else {
+					st->backend->dec_learns (task, bk_run, st_ctx);
+				}
+			}
 		}
 	}
 
@@ -574,23 +582,6 @@ rspamd_stat_backends_post_learn (struct rspamd_stat_ctx *st_ctx,
 			if (bk_run == NULL) {
 				/* XXX: must be error */
 				continue;
-			}
-
-			if (!task->flags & RSPAMD_TASK_FLAG_UNLEARN) {
-				if (!!spam != !!st->stcf->is_spam) {
-					/* If we are not unlearning, then do not touch another class */
-					continue;
-				}
-
-				st->backend->inc_learns (task, bk_run, st_ctx);
-			}
-			else {
-				if (!!spam == !!st->stcf->is_spam) {
-					st->backend->inc_learns (task, bk_run, st_ctx);
-				}
-				else {
-					st->backend->dec_learns (task, bk_run, st_ctx);
-				}
 			}
 
 			st->backend->finalize_learn (task, bk_run, st_ctx);
