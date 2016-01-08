@@ -82,6 +82,9 @@ hr {
     border-width: 1px;
 }
 .row-footer{
+  position: relative;
+  bottom: 0;
+  left: 0;
   background-color: #E8E8E8;
   padding: 10px 0px 30px 0px;
   margin-top: 10px;
