@@ -659,7 +659,7 @@ rspamd_stat_has_classifier_symbols (struct rspamd_task *task,
 		if (g_hash_table_lookup (mres->symbols, st->stcf->symbol)) {
 			if (is_spam == !!st->stcf->is_spam) {
 				msg_debug_task ("do not autolearn %s as symbol %s is already "
-						"added", st->stcf->symbol);
+						"added", is_spam ? "spam" : "ham", st->stcf->symbol);
 
 				return TRUE;
 			}
