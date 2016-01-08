@@ -521,7 +521,7 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 				continue;
 			}
 
-			if (!task->flags & RSPAMD_TASK_FLAG_UNLEARN) {
+			if (!(task->flags & RSPAMD_TASK_FLAG_UNLEARN)) {
 				if (!!spam != !!st->stcf->is_spam) {
 					/* If we are not unlearning, then do not touch another class */
 					continue;
