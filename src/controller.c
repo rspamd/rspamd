@@ -1216,11 +1216,6 @@ rspamd_controller_learn_fin_task (void *ud)
 
 	/* One more iteration */
 	return FALSE;
-
-
-
-
-	return TRUE;
 }
 
 static void
