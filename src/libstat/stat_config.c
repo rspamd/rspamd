@@ -372,8 +372,12 @@ rspamd_stat_ctx_register_async (rspamd_stat_async_handler handler,
 
 	event_set (&elt->timer_ev, -1, EV_TIMEOUT, rspamd_async_elt_on_timer, elt);
 	event_base_set (st_ctx->ev_base, &elt->timer_ev);
-	jittered_time = rspamd_time_jitter (elt->timeout, 0);
-	double_to_tv (jittered_time, &elt->tv);
+	/*
+	 * First we set timeval to zero as we want cb to be executed as
+	 * fast as possible
+	 */
+	elt->tv.tv_sec = 0;
+	elt->tv.tv_usec = 0;
 	event_add (&elt->timer_ev, &elt->tv);
 
 	g_queue_push_tail (st_ctx->async_elts, elt);

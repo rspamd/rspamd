@@ -392,8 +392,11 @@ rspamd_redis_async_cbdata_cleanup (struct rspamd_redis_stat_cbdata *cbdata)
 			cbdata->elt->async->enabled = TRUE;
 
 			/* Replace ucl object */
-			if (cbdata->elt->stat && cbdata->cur) {
-				ucl_object_unref (cbdata->elt->stat);
+			if (cbdata->cur) {
+				if (cbdata->elt->stat) {
+					ucl_object_unref (cbdata->elt->stat);
+				}
+
 				cbdata->elt->stat = cbdata->cur;
 				cbdata->cur = NULL;
 			}
@@ -414,7 +417,7 @@ rspamd_redis_stat_learns (redisAsyncContext *c, gpointer r, gpointer priv)
 	struct rspamd_redis_stat_cbdata *cbdata = priv;
 	redisReply *reply = r;
 	ucl_object_t *obj;
-	gulong num;
+	gulong num = 0;
 
 	cbdata->inflight --;
 
@@ -424,6 +427,41 @@ rspamd_redis_stat_learns (redisAsyncContext *c, gpointer r, gpointer priv)
 		}
 		else if (reply->type == REDIS_REPLY_STRING) {
 			rspamd_strtoul (reply->str, reply->len, &num);
+		}
+
+		obj = (ucl_object_t *)ucl_object_find_key (cbdata->cur, "revision");
+		if (obj) {
+			obj->value.iv += num;
+		}
+	}
+
+	if (cbdata->inflight == 0) {
+		rspamd_redis_async_cbdata_cleanup (cbdata);
+	}
+}
+
+/* Called when we get number of elements for a specific key */
+static void
+rspamd_redis_stat_key (redisAsyncContext *c, gpointer r, gpointer priv)
+{
+	struct rspamd_redis_stat_cbdata *cbdata = priv;
+	redisReply *reply = r;
+	ucl_object_t *obj;
+	glong num = 0;
+
+	cbdata->inflight --;
+
+	if (c->err == 0 && r != NULL) {
+		if (G_LIKELY (reply->type == REDIS_REPLY_INTEGER)) {
+			num = reply->integer;
+		}
+		else if (reply->type == REDIS_REPLY_STRING) {
+			rspamd_strtol (reply->str, reply->len, &num);
+		}
+
+		if (num < 0) {
+			msg_err ("bad learns count: %L", (gint64)num);
+			num = 0;
 		}
 
 		obj = (ucl_object_t *)ucl_object_find_key (cbdata->cur, "used");
@@ -441,36 +479,6 @@ rspamd_redis_stat_learns (redisAsyncContext *c, gpointer r, gpointer priv)
 			/* Size of key + size of int64_t */
 			obj->value.iv += num * (sizeof (G_STRINGIFY (G_MAXINT64)) +
 					sizeof (guint64) + sizeof (gpointer));
-		}
-	}
-
-	if (cbdata->inflight == 0) {
-		rspamd_redis_async_cbdata_cleanup (cbdata);
-	}
-}
-
-/* Called when we get number of elements for a specific key */
-static void
-rspamd_redis_stat_key (redisAsyncContext *c, gpointer r, gpointer priv)
-{
-	struct rspamd_redis_stat_cbdata *cbdata = priv;
-	redisReply *reply = r;
-	ucl_object_t *obj;
-	gulong num;
-
-	cbdata->inflight --;
-
-	if (c->err == 0 && r != NULL) {
-		if (G_LIKELY (reply->type == REDIS_REPLY_INTEGER)) {
-			num = reply->integer;
-		}
-		else if (reply->type == REDIS_REPLY_STRING) {
-			rspamd_strtoul (reply->str, reply->len, &num);
-		}
-
-		obj = (ucl_object_t *)ucl_object_find_key (cbdata->cur, "revision");
-		if (obj) {
-			obj->value.iv += num;
 		}
 	}
 
@@ -559,12 +567,14 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 static void
 rspamd_redis_async_stat_cb (struct rspamd_stat_async_elt *elt, gpointer d)
 {
-	struct redis_stat_ctx *ctx = REDIS_CTX (d);
+	struct redis_stat_ctx *ctx;
 	struct rspamd_redis_stat_elt *redis_elt = elt->ud;
 	struct rspamd_redis_stat_cbdata *cbdata;
 	rspamd_inet_addr_t *addr;
 
 	g_assert (redis_elt != NULL);
+
+	ctx = redis_elt->ctx;
 
 	if (redis_elt->cbdata) {
 		/* We have some other process pending */
@@ -657,7 +667,7 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 	struct redis_stat_runtime *rt = REDIS_RUNTIME (priv);
 	redisReply *reply = r;
 	struct rspamd_task *task;
-	gulong val;
+	glong val = 0;
 
 	task = rt->task;
 
@@ -667,8 +677,7 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 				rt->learned = reply->integer;
 			}
 			else if (reply->type == REDIS_REPLY_STRING) {
-				rspamd_strtoul (reply->str, reply->len, &val);
-				rt->learned = val;
+				rspamd_strtol (reply->str, reply->len, &val);
 			}
 			else {
 				if (reply->type != REDIS_REPLY_NIL) {
@@ -676,8 +685,16 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 						rt->stcf->symbol, reply->type);
 				}
 
-				rt->learned = 0;
+				val = 0;
 			}
+
+			if (val < 0) {
+				msg_warn_task ("invalid number of learns for %s: %L",
+						rt->stcf->symbol, val);
+				val = 0;
+			}
+
+			rt->learned = val;
 
 			rt->conn_state = RSPAMD_REDIS_CONNECTED;
 
