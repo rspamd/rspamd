@@ -829,7 +829,7 @@ rspamc_stat_statfile (const ucl_object_t *obj, GString *out)
 	else {
 		rspamd_printf_gstring (out, "Statfile: %s type: %s; ", symbol, type);
 	}
-	rspamd_printf_gstring (out, "length: %HL; free blocks: %HL; total blocks: %HL; "
+	rspamd_printf_gstring (out, "length: %hL; free blocks: %hL; total blocks: %hL; "
 			"free: %.2f%%; learned: %L; users: %L; languages: %L\n",
 			size,
 			blocks - used_blocks, blocks,
