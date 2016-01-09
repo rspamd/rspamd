@@ -107,7 +107,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_CACHE_MAX] =
 	{
 		.idx = RSPAMD_STAT_CACHE_UPDATE_LEARN,
 		.sql = "UPDATE learns SET flag=?1 WHERE digest=?2;",
-		.args = "VI",
+		.args = "IV",
 		.stmt = NULL,
 		.result = SQLITE_DONE,
 		.ret = ""
@@ -184,19 +184,22 @@ rspamd_stat_cache_sqlite3_check (rspamd_mempool_t *pool,
 	rspamd_sqlite3_run_prstmt (pool, ctx->db, ctx->prstmt,
 			RSPAMD_STAT_CACHE_TRANSACTION_COMMIT);
 
+
 	if (rc == SQLITE_OK) {
 		/* We have some existing record in the table */
-		if ((flag && is_spam) || (!flag && !is_spam)) {
+		if (!!flag == !!is_spam) {
 			/* Already learned */
+
 			ret = RSPAMD_LEARN_INGORE;
 		}
 		else {
 			/* Need to relearn */
-			flag = is_spam ? 1 : 0;
+			flag = !!is_spam ? 1 : 0;
+
 			rspamd_sqlite3_run_prstmt (pool, ctx->db, ctx->prstmt,
 					RSPAMD_STAT_CACHE_TRANSACTION_START_IM);
-			rspamd_sqlite3_run_prstmt (pool, ctx->db, ctx->prstmt,
-					RSPAMD_STAT_CACHE_UPDATE_LEARN, (gint64)len, h, flag);
+			rc = rspamd_sqlite3_run_prstmt (pool, ctx->db, ctx->prstmt,
+					RSPAMD_STAT_CACHE_UPDATE_LEARN, flag, (gint64)len, h);
 			rspamd_sqlite3_run_prstmt (pool, ctx->db, ctx->prstmt,
 					RSPAMD_STAT_CACHE_TRANSACTION_COMMIT);
 
@@ -205,7 +208,7 @@ rspamd_stat_cache_sqlite3_check (rspamd_mempool_t *pool,
 	}
 	else {
 		/* Insert result new id */
-		flag = is_spam ? 1 : 0;
+		flag = !!is_spam ? 1 : 0;
 		rspamd_sqlite3_run_prstmt (pool, ctx->db, ctx->prstmt,
 				RSPAMD_STAT_CACHE_TRANSACTION_START_IM);
 		rspamd_sqlite3_run_prstmt (pool, ctx->db, ctx->prstmt,
