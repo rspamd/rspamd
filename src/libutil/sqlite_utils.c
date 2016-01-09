@@ -248,7 +248,8 @@ rspamd_sqlite3_wait (rspamd_mempool_t *pool, const gchar *lock)
 	return TRUE;
 }
 
-
+#define RSPAMD_SQLITE_MMAP_LIMIT 268435456
+#define RSPAMD_SQLITE_CACHE_SIZE 262144
 
 sqlite3 *
 rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
@@ -267,10 +268,12 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 
 			foreign_keys[] = 		"PRAGMA foreign_keys=\"ON\";",
 
-			enable_mmap[] = 		"PRAGMA mmap_size=268435456;",
+			enable_mmap[] = 		"PRAGMA mmap_size="
+									G_STRINGIFY(RSPAMD_SQLITE_MMAP_LIMIT) ";",
 
 			other_pragmas[] = 		"PRAGMA read_uncommitted=\"ON\";"
-									"PRAGMA cache_size=262144";
+									"PRAGMA cache_size="
+									G_STRINGIFY(RSPAMD_SQLITE_CACHE_SIZE) ";";
 	gboolean create = FALSE, has_lock = FALSE;
 
 	flags = SQLITE_OPEN_READWRITE;
