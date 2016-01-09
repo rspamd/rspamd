@@ -843,10 +843,6 @@ rspamd_stat_check_autolearn (struct rspamd_task *task)
 		}
 	}
 
-	if (ret) {
-		task->flags |= RSPAMD_TASK_FLAG_LEARN_AUTO;
-	}
-
 	return ret;
 }
 

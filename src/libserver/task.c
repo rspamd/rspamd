@@ -455,7 +455,9 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 
 	case RSPAMD_TASK_STAGE_POST_FILTERS:
 		rspamd_lua_call_post_filters (task);
-		rspamd_stat_check_autolearn (task);
+		if (task->flags & RSPAMD_TASK_FLAG_LEARN_AUTO) {
+			rspamd_stat_check_autolearn (task);
+		}
 		break;
 
 	case RSPAMD_TASK_STAGE_LEARN:

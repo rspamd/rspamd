@@ -255,6 +255,8 @@ accept_socket (gint fd, short what, void *arg)
 
 	worker->srv->stat->connections_count++;
 	task->resolver = ctx->resolver;
+	/* TODO: allow to disable autolearn in protocol */
+	task->flags |= RSPAMD_TASK_FLAG_LEARN_AUTO;
 
 	task->http_conn = rspamd_http_connection_new (
 		rspamd_worker_body_handler,

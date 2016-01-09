@@ -1199,11 +1199,18 @@ rspamd_controller_learn_fin_task (void *ud)
 	}
 
 	if (RSPAMD_TASK_IS_PROCESSED (task)) {
-		msg_info_session ("<%s> learned message as %s: %s",
-				rspamd_inet_address_to_string (session->from_addr),
-				session->is_spam ? "spam" : "ham",
-						task->message_id);
-		rspamd_controller_send_string (conn_ent, "{\"success\":true}");
+		if (task->err) {
+			rspamd_controller_send_error (conn_ent, task->err->code,
+					task->err->message);
+		}
+		else {
+			msg_info_session ("<%s> learned message as %s: %s",
+					rspamd_inet_address_to_string (session->from_addr),
+					session->is_spam ? "spam" : "ham",
+							task->message_id);
+			rspamd_controller_send_string (conn_ent, "{\"success\":true}");
+		}
+
 		return TRUE;
 	}
 
