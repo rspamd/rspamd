@@ -228,11 +228,7 @@ rspamd_stat_close (void)
 
 	while (cur) {
 		aelt = cur->data;
-
-		if (aelt->cleanup) {
-			aelt->cleanup (aelt, aelt->ud);
-		}
-
+		REF_RELEASE (aelt);
 		cur = g_list_next (cur);
 	}
 
@@ -322,4 +318,65 @@ rspamd_stat_get_cache (const gchar *name)
 	}
 
 	return NULL;
+}
+
+static void
+rspamd_async_elt_dtor (struct rspamd_stat_async_elt *elt)
+{
+	if (elt->cleanup) {
+		elt->cleanup (elt, elt->ud);
+	}
+
+	event_del (&elt->timer_ev);
+	g_slice_free1 (sizeof (*elt), elt);
+}
+
+static void
+rspamd_async_elt_on_timer (gint fd, short what, gpointer d)
+{
+	struct rspamd_stat_async_elt *elt = d;
+	gdouble jittered_time;
+
+	event_del (&elt->timer_ev);
+
+	if (elt->enabled) {
+		elt->handler (elt, elt->ud);
+	}
+
+	jittered_time = rspamd_time_jitter (elt->timeout, 0);
+	double_to_tv (jittered_time, &elt->tv);
+	event_add (&elt->timer_ev, &elt->tv);
+}
+
+struct rspamd_stat_async_elt*
+rspamd_stat_ctx_register_async (rspamd_stat_async_handler handler,
+		rspamd_stat_async_cleanup cleanup,
+		gpointer d,
+		gdouble timeout)
+{
+	struct rspamd_stat_async_elt *elt;
+	struct rspamd_stat_ctx *st_ctx;
+	gdouble jittered_time;
+
+	st_ctx = rspamd_stat_get_ctx ();
+	g_assert (st_ctx != NULL);
+
+	elt = g_slice_alloc (sizeof (*elt));
+	REF_INIT_RETAIN (elt, rspamd_async_elt_dtor);
+	elt->handler = handler;
+	elt->cleanup = cleanup;
+	elt->ud = d;
+	elt->timeout = timeout;
+	/* Enabled by default */
+	elt->enabled = TRUE;
+
+	event_set (&elt->timer_ev, -1, EV_TIMEOUT, rspamd_async_elt_on_timer, elt);
+	event_base_set (st_ctx->ev_base, &elt->timer_ev);
+	jittered_time = rspamd_time_jitter (elt->timeout, 0);
+	double_to_tv (jittered_time, &elt->tv);
+	event_add (&elt->timer_ev, &elt->tv);
+
+	g_queue_push_tail (st_ctx->async_elts, elt);
+
+	return elt;
 }

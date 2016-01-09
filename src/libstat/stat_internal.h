@@ -25,6 +25,7 @@
 
 #include "config.h"
 #include "task.h"
+#include "ref.h"
 #include "classifiers/classifiers.h"
 #include "tokenizers/tokenizers.h"
 #include "backends/backends.h"
@@ -65,11 +66,22 @@ typedef struct token_node_s {
 	gdouble values[];
 } rspamd_token_t;
 
+struct rspamd_stat_async_elt;
+
+typedef void (*rspamd_stat_async_handler)(struct rspamd_stat_async_elt *elt,
+		gpointer ud);
+typedef void (*rspamd_stat_async_cleanup)(struct rspamd_stat_async_elt *elt,
+		gpointer ud);
+
 struct rspamd_stat_async_elt {
-	void (*handler)(struct rspamd_stat_async_elt *elt, gpointer ud);
-	void (*cleanup)(struct rspamd_stat_async_elt *elt, gpointer ud);
-	struct event ev;
+	rspamd_stat_async_handler handler;
+	rspamd_stat_async_cleanup cleanup;
+	struct event timer_ev;
+	struct timeval tv;
+	gdouble timeout;
+	gboolean enabled;
 	gpointer ud;
+	ref_entry_t ref;
 };
 
 struct rspamd_stat_ctx {
@@ -106,6 +118,9 @@ struct rspamd_stat_classifier * rspamd_stat_get_classifier (const gchar *name);
 struct rspamd_stat_backend * rspamd_stat_get_backend (const gchar *name);
 struct rspamd_stat_tokenizer * rspamd_stat_get_tokenizer (const gchar *name);
 struct rspamd_stat_cache * rspamd_stat_get_cache (const gchar *name);
+struct rspamd_stat_async_elt* rspamd_stat_ctx_register_async (
+		rspamd_stat_async_handler handler, rspamd_stat_async_cleanup cleanup,
+		gpointer d, gdouble timeout);
 
 static GQuark rspamd_stat_quark (void)
 {
