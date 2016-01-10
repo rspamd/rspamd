@@ -182,11 +182,14 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 			msg_debug_config ("added backend %s for symbol %s",
 					bk->name, stf->symbol);
 
-			st->cache = rspamd_stat_get_cache (cache_name);
-			g_assert (st->cache != NULL);
-			st->cachecf = st->cache->init (stat_ctx, cfg, st, cache_obj);
-			msg_debug_config ("added cache %s for symbol %s",
-					st->cache->name, stf->symbol);
+			/* XXX: bad hack to pass statfiles configuration to cache */
+			if (cl->cache == NULL) {
+				cl->cache = rspamd_stat_get_cache (cache_name);
+				g_assert (cl->cache != NULL);
+				cl->cachecf = cl->cache->init (stat_ctx, cfg, st, cache_obj);
+				msg_debug_config ("added cache %s for symbol %s",
+						cl->cache->name, stf->symbol);
+			}
 
 			if (st->bkcf == NULL) {
 				msg_err_config ("cannot init backend %s for statfile %s",

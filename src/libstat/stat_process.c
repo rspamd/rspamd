@@ -376,6 +376,7 @@ rspamd_stat_cache_check (struct rspamd_stat_ctx *st_ctx,
 {
 	rspamd_learn_t learn_res = RSPAMD_LEARN_OK;
 	struct rspamd_classifier *cl;
+	gpointer rt;
 	guint i;
 
 	/* Check whether we have learned that file */
@@ -389,8 +390,9 @@ rspamd_stat_cache_check (struct rspamd_stat_ctx *st_ctx,
 		}
 
 		if (cl->cache && cl->cachecf) {
-			learn_res = cl->cache->process (task, spam,
-					cl->cachecf);
+			rt = cl->cache->runtime (task, cl->cachecf);
+			learn_res = cl->cache->check (task, spam,
+					cl->cachecf, rt);
 		}
 
 		if (learn_res == RSPAMD_LEARN_INGORE) {
@@ -558,7 +560,7 @@ rspamd_stat_backends_post_learn (struct rspamd_stat_ctx *st_ctx,
 {
 	struct rspamd_classifier *cl;
 	struct rspamd_statfile *st;
-	gpointer bk_run;
+	gpointer bk_run, cache_run;
 	guint i, j;
 	gint id;
 	gboolean res = TRUE;
@@ -570,6 +572,11 @@ rspamd_stat_backends_post_learn (struct rspamd_stat_ctx *st_ctx,
 		if (classifier != NULL && (cl->cfg->name == NULL ||
 				g_ascii_strcasecmp (classifier, cl->cfg->name) != 0)) {
 			continue;
+		}
+
+		if (cl->cache) {
+			cache_run = cl->cache->runtime (task, cl->cachecf);
+			cl->cache->learn (task, spam, cache_run, cl->cachecf);
 		}
 
 		for (j = 0; j < cl->statfiles_ids->len; j ++) {

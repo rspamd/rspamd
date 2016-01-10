@@ -179,7 +179,9 @@ rspamd_stat_cache_sqlite3_runtime (struct rspamd_task *task,
 
 gint
 rspamd_stat_cache_sqlite3_check (struct rspamd_task *task,
-		gboolean is_spam, gpointer c)
+		gboolean is_spam,
+		gpointer runtime,
+		gpointer c)
 {
 	struct rspamd_stat_sqlite3_ctx *ctx = (struct rspamd_stat_sqlite3_ctx *)c;
 	struct mime_text_part *part;
@@ -240,7 +242,9 @@ rspamd_stat_cache_sqlite3_check (struct rspamd_task *task,
 
 gint
 rspamd_stat_cache_sqlite3_learn (struct rspamd_task *task,
-		gboolean is_spam, gpointer c)
+		gboolean is_spam,
+		gpointer runtime,
+		gpointer c)
 {
 	struct rspamd_stat_sqlite3_ctx *ctx = (struct rspamd_stat_sqlite3_ctx *)c;
 	gboolean unlearn = !!(task->flags & RSPAMD_TASK_FLAG_UNLEARN);
