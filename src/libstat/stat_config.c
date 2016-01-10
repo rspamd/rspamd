@@ -165,9 +165,10 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 			}
 		}
 
-		cl->cache = rspamd_stat_get_cache (cache_name);
-		g_assert (cl->cache != NULL);
-		cl->cachecf = cl->cache->init (stat_ctx, cfg, cache_obj);
+		if (cache_name == NULL) {
+			/* We assume that learn cache is the same as backend */
+			cache_name = clf->backend;
+		}
 
 		curst = clf->statfiles;
 
@@ -180,6 +181,12 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 			st->bkcf = bk->init (stat_ctx, cfg, st);
 			msg_debug_config ("added backend %s for symbol %s",
 					bk->name, stf->symbol);
+
+			st->cache = rspamd_stat_get_cache (cache_name);
+			g_assert (st->cache != NULL);
+			st->cachecf = st->cache->init (stat_ctx, cfg, st, cache_obj);
+			msg_debug_config ("added cache %s for symbol %s",
+					st->cache->name, stf->symbol);
 
 			if (st->bkcf == NULL) {
 				msg_err_config ("cannot init backend %s for statfile %s",
@@ -363,7 +370,6 @@ rspamd_stat_ctx_register_async (rspamd_stat_async_handler handler,
 {
 	struct rspamd_stat_async_elt *elt;
 	struct rspamd_stat_ctx *st_ctx;
-	gdouble jittered_time;
 
 	st_ctx = rspamd_stat_get_ctx ();
 	g_assert (st_ctx != NULL);
