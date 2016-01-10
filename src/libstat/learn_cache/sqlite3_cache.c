@@ -120,8 +120,9 @@ struct rspamd_stat_sqlite3_ctx {
 };
 
 gpointer
-rspamd_stat_cache_sqlite3_init(struct rspamd_stat_ctx *ctx,
+rspamd_stat_cache_sqlite3_init (struct rspamd_stat_ctx *ctx,
 		struct rspamd_config *cfg,
+		struct rspamd_statfile *st,
 		const ucl_object_t *cf)
 {
 	struct rspamd_stat_sqlite3_ctx *new = NULL;

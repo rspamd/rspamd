@@ -77,13 +77,20 @@ static struct rspamd_stat_backend stat_backends[] = {
 #endif
 };
 
-static struct rspamd_stat_cache stat_caches[] = {
-	{
-		.name = RSPAMD_DEFAULT_CACHE,
-		.init = rspamd_stat_cache_sqlite3_init,
-		.process = rspamd_stat_cache_sqlite3_process,
-		.close = rspamd_stat_cache_sqlite3_close
+#define RSPAMD_STAT_CACHE_ELT(nam, eltn) { \
+		.name = #nam, \
+		.init = rspamd_stat_cache_##eltn##_init, \
+		.runtime = rspamd_stat_cache_##eltn##_runtime, \
+		.check = rspamd_stat_cache_##eltn##_check, \
+		.learn = rspamd_stat_cache_##eltn##_learn, \
+		.close = rspamd_stat_cache_##eltn##_close \
 	}
+
+static struct rspamd_stat_cache stat_caches[] = {
+		RSPAMD_STAT_CACHE_ELT(sqlite3, sqlite3),
+#ifdef WITH_HIREDIS
+		RSPAMD_STAT_CACHE_ELT(redis, redis),
+#endif
 };
 
 void
