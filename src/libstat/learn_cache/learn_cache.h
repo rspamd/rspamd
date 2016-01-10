@@ -62,11 +62,11 @@ struct rspamd_stat_cache {
 				const ucl_object_t *cf); \
 		gpointer rspamd_stat_cache_##name##_runtime (struct rspamd_task *task, \
 				gpointer ctx); \
-		gboolean rspamd_stat_cache_##name##_check (struct rspamd_task *task, \
+		gint rspamd_stat_cache_##name##_check (struct rspamd_task *task, \
 				gboolean is_spam, \
 				gpointer runtime, \
 				gpointer ctx); \
-		gboolean rspamd_stat_cache_##name##_learn (struct rspamd_task *task, \
+		gint rspamd_stat_cache_##name##_learn (struct rspamd_task *task, \
 				gboolean is_spam, \
 				gpointer runtime, \
 				gpointer ctx); \
