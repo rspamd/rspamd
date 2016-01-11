@@ -37,6 +37,7 @@
 #include <stdarg.h> /* for va_list */
 #include <sys/time.h> /* for struct timeval */
 #include <stdint.h> /* uintXX_t, etc */
+#include <string.h> /* strerror_r, etc */
 #include "sds.h" /* for sds */
 
 #define HIREDIS_MAJOR 0
@@ -98,7 +99,7 @@
          * then GNU strerror_r returned an internal static buffer and we       \
          * need to copy the result into our private buffer. */                 \
         if (err_str != (buf)) {                                                \
-            buf[(len)] = '\0';                                                 \
+            buf[(len)-1] = '\0';                                                 \
             strncat((buf), err_str, ((len) - 1));                              \
         }                                                                      \
     } while (0)

@@ -66,11 +66,13 @@ static void redisContextCloseFd(redisContext *c) {
 
 static void __redisSetErrorFromErrno(redisContext *c, int type, const char *prefix) {
     char buf[128] = { 0 };
+    char *p;
     size_t len = 0;
 
     if (prefix != NULL)
         len = snprintf(buf,sizeof(buf),"%s: ",prefix);
-    __redis_strerror_r(errno, (char *)(buf + len), sizeof(buf) - len);
+    p = buf + len;
+    __redis_strerror_r(errno, p, sizeof(buf) - len);
     __redisSetError(c,type,buf);
 }
 
