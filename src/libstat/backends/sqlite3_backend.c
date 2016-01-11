@@ -335,7 +335,8 @@ rspamd_sqlite3_get_user (struct rspamd_stat_sqlite3_db *db,
 
 
 	if (user != NULL) {
-		rspamd_mempool_set_variable (task->task_pool, "stat_user", user, NULL);
+		rspamd_mempool_set_variable (task->task_pool, "stat_user",
+				(gpointer)user, NULL);
 
 		rc = rspamd_sqlite3_run_prstmt (task->task_pool, db->sqlite, db->prstmt,
 				RSPAMD_STAT_BACKEND_GET_USER, user, &id);

@@ -158,7 +158,8 @@ rspamd_redis_expand_object (const gchar *pattern,
 		}
 
 		if (rcpt) {
-			rspamd_mempool_set_variable (task->task_pool, "stat_user", rcpt, NULL);
+			rspamd_mempool_set_variable (task->task_pool, "stat_user",
+					(gpointer)rcpt, NULL);
 		}
 	}
 
@@ -739,7 +740,7 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 
 			rt->conn_state = RSPAMD_REDIS_CONNECTED;
 
-			msg_debug_task ("connected to redis server, tokens learned for %s: %d",
+			msg_debug_task ("connected to redis server, tokens learned for %s: %uL",
 					rt->redis_object_expanded, rt->learned);
 			rspamd_upstream_ok (rt->selected);
 			rspamd_session_remove_event (task->s, rspamd_redis_fin, rt);
@@ -1196,7 +1197,7 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 				"learns\r\n"
 				"$1\r\n"
 				"1\r\n",
-				strlen (rt->redis_object_expanded),
+				(gint)strlen (rt->redis_object_expanded),
 				rt->redis_object_expanded);
 	}
 	else {
@@ -1210,7 +1211,7 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 				"learns\r\n"
 				"$2\r\n"
 				"-1\r\n",
-				strlen (rt->redis_object_expanded),
+				(gint)strlen (rt->redis_object_expanded),
 				rt->redis_object_expanded);
 	}
 
