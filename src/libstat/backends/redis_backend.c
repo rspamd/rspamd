@@ -25,6 +25,7 @@
 #include "rspamd.h"
 #include "stat_internal.h"
 #include "upstream.h"
+#include "lua/lua_common.h"
 
 #ifdef WITH_HIREDIS
 #include "hiredis/hiredis.h"
@@ -36,6 +37,7 @@
 #define REDIS_BACKEND_TYPE "redis"
 #define REDIS_DEFAULT_PORT 6379
 #define REDIS_DEFAULT_OBJECT "%s%l"
+#define REDIS_DEFAULT_USERS_OBJECT "%s%l%r"
 #define REDIS_DEFAULT_TIMEOUT 0.5
 #define REDIS_STAT_TIMEOUT 30
 
@@ -46,6 +48,8 @@ struct redis_stat_ctx {
 	struct rspamd_stat_async_elt *stat_elt;
 	const gchar *redis_object;
 	gdouble timeout;
+	gboolean enable_users;
+	gint cbref_user;
 };
 
 enum rspamd_redis_connection_state {
@@ -102,7 +106,7 @@ rspamd_redis_stat_quark (void)
  */
 gsize
 rspamd_redis_expand_object (const gchar *pattern,
-		struct rspamd_statfile_config *stcf,
+		struct redis_stat_ctx *ctx,
 		struct rspamd_task *task,
 		gchar **target)
 {
@@ -114,8 +118,43 @@ rspamd_redis_expand_object (const gchar *pattern,
 		percent_char,
 		mod_char
 	} state = just_char;
+	struct rspamd_statfile_config *stcf;
+	lua_State *L;
+	struct rspamd_task **ptask;
+	GString *tb;
+	const gchar *rcpt = NULL;
+	gint err_idx;
 
-	g_assert (stcf != NULL);
+
+	g_assert (ctx != NULL);
+	stcf = ctx->stcf;
+	L = task->cfg->lua_state;
+
+	if (ctx->cbref_user == -1) {
+		rcpt = rspamd_task_get_principal_recipient (task);
+	}
+	else {
+		/* Execute lua function to get userdata */
+		lua_pushcfunction (L, &rspamd_lua_traceback);
+		err_idx = lua_gettop (L);
+
+		lua_rawgeti (L, LUA_REGISTRYINDEX, ctx->cbref_user);
+		ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
+		*ptask = task;
+		rspamd_lua_setclass (L, "rspamd{task}", -1);
+
+		if (lua_pcall (L, 1, 1, err_idx) != 0) {
+			tb = lua_touserdata (L, -1);
+			msg_err_task ("call to user extraction script failed: %v", tb);
+			g_string_free (tb, TRUE);
+		}
+		else {
+			rcpt = rspamd_mempool_strdup (task->task_pool, lua_tostring (L, -1));
+		}
+
+		/* Result + error function */
+		lua_pop (L, 2);
+	}
 
 	/* Length calculation */
 	while (*p) {
@@ -150,7 +189,13 @@ rspamd_redis_expand_object (const gchar *pattern,
 				}
 				break;
 			case 'r':
-				elt = rspamd_task_get_principal_recipient (task);
+
+				if (rcpt == NULL) {
+					elt = rspamd_task_get_principal_recipient (task);
+				}
+				else {
+					elt = rcpt;
+				}
 
 				if (elt) {
 					tlen += strlen (elt);
@@ -236,7 +281,12 @@ rspamd_redis_expand_object (const gchar *pattern,
 				}
 				break;
 			case 'r':
-				elt = rspamd_task_get_principal_recipient (task);
+				if (rcpt == NULL) {
+					elt = rspamd_task_get_principal_recipient (task);
+				}
+				else {
+					elt = rcpt;
+				}
 
 				if (elt) {
 					d += rspamd_strlcpy (d, elt, end - d);
@@ -805,7 +855,8 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 	struct redis_stat_ctx *backend;
 	struct rspamd_statfile_config *stf = st->stcf;
 	struct rspamd_redis_stat_elt *st_elt;
-	const ucl_object_t *elt;
+	const ucl_object_t *elt, *users_enabled;
+	const gchar *lua_script;
 
 	backend = g_slice_alloc0 (sizeof (*backend));
 
@@ -847,16 +898,53 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 
 	elt = ucl_object_find_key (stf->opts, "prefix");
 	if (elt == NULL || ucl_object_type (elt) != UCL_STRING) {
+		/* Default non-users statistics */
 		backend->redis_object = REDIS_DEFAULT_OBJECT;
+
+		/*
+		 * Make redis backend compatible with sqlite3 backend in users settings
+		 */
+		users_enabled = ucl_object_find_any_key (stf->clcf->opts, "per_user",
+				"users_enabled", NULL);
+
+		if (users_enabled != NULL) {
+			if (ucl_object_type (users_enabled) == UCL_BOOLEAN) {
+				backend->enable_users = ucl_object_toboolean (users_enabled);
+				backend->cbref_user = -1;
+
+				if (backend->enable_users) {
+					backend->redis_object = REDIS_DEFAULT_USERS_OBJECT;
+				}
+			}
+			else if (ucl_object_type (users_enabled) == UCL_STRING) {
+				lua_script = ucl_object_tostring (users_enabled);
+
+				if (luaL_dostring (cfg->lua_state, lua_script) != 0) {
+					msg_err_config ("cannot execute lua script for users "
+							"extraction: %s", lua_tostring (cfg->lua_state, -1));
+				}
+				else {
+					if (lua_type (cfg->lua_state, -1) == LUA_TFUNCTION) {
+						backend->enable_users = TRUE;
+						backend->cbref_user = luaL_ref (cfg->lua_state,
+								LUA_REGISTRYINDEX);
+					}
+					else {
+						msg_err_config ("lua script must return "
+								"function(task) and not %s",
+								lua_typename (cfg->lua_state, lua_type (
+										cfg->lua_state, -1)));
+					}
+				}
+			}
+		}
+		else {
+			backend->enable_users = FALSE;
+		}
 	}
 	else {
 		/* XXX: sanity check */
 		backend->redis_object = ucl_object_tostring (elt);
-		if (rspamd_redis_expand_object (backend->redis_object, stf,
-				NULL, NULL) == 0) {
-			msg_err ("statfile %s cannot write servers configuration",
-					stf->symbol);
-		}
 	}
 
 	elt = ucl_object_find_key (stf->opts, "timeout");
@@ -921,7 +1009,7 @@ rspamd_redis_runtime (struct rspamd_task *task,
 	}
 
 	rt = rspamd_mempool_alloc0 (task->task_pool, sizeof (*rt));
-	rspamd_redis_expand_object (ctx->redis_object, stcf, task,
+	rspamd_redis_expand_object (ctx->redis_object, ctx, task,
 			&rt->redis_object_expanded);
 	rt->selected = up;
 	rt->task = task;
