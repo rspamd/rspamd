@@ -1,10 +1,8 @@
 MACRO(_AddModulesForced MLIST)
 # Generate unique string for this build
-	STRING(RANDOM LENGTH 8 _MODULES_ID)
-	SET(MODULES_ID ${_MODULES_ID} CACHE INTERNAL "Modules ID" FORCE)
 	SET(MODULES_C "${CMAKE_CURRENT_BINARY_DIR}/modules.c")
 	FILE(WRITE "${MODULES_C}"
-		"/* ${MODULES_ID} */\n#include \"rspamd.h\"\n")
+		"#include \"rspamd.h\"\n")
 
 	# Handle even old cmake
 	LIST(LENGTH ${MLIST} MLIST_COUNT)
