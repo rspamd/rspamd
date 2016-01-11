@@ -306,8 +306,7 @@ rspamd_stat_cache_redis_runtime (struct rspamd_task *task,
 gint
 rspamd_stat_cache_redis_check (struct rspamd_task *task,
 		gboolean is_spam,
-		gpointer runtime,
-		gpointer c)
+		gpointer runtime)
 {
 	struct rspamd_redis_cache_runtime *rt = runtime;
 	struct timeval tv;
@@ -333,8 +332,7 @@ rspamd_stat_cache_redis_check (struct rspamd_task *task,
 gint
 rspamd_stat_cache_redis_learn (struct rspamd_task *task,
 		gboolean is_spam,
-		gpointer runtime,
-		gpointer c)
+		gpointer runtime)
 {
 	struct rspamd_redis_cache_runtime *rt = runtime;
 	struct timeval tv;

@@ -174,16 +174,15 @@ rspamd_stat_cache_sqlite3_runtime (struct rspamd_task *task,
 				gpointer ctx, gboolean learn)
 {
 	/* No need of runtime for this type of classifier */
-	return NULL;
+	return ctx;
 }
 
 gint
 rspamd_stat_cache_sqlite3_check (struct rspamd_task *task,
 		gboolean is_spam,
-		gpointer runtime,
-		gpointer c)
+		gpointer runtime)
 {
-	struct rspamd_stat_sqlite3_ctx *ctx = (struct rspamd_stat_sqlite3_ctx *)c;
+	struct rspamd_stat_sqlite3_ctx *ctx = runtime;
 	struct mime_text_part *part;
 	rspamd_cryptobox_hash_state_t st;
 	rspamd_ftok_t *word;
@@ -243,10 +242,9 @@ rspamd_stat_cache_sqlite3_check (struct rspamd_task *task,
 gint
 rspamd_stat_cache_sqlite3_learn (struct rspamd_task *task,
 		gboolean is_spam,
-		gpointer runtime,
-		gpointer c)
+		gpointer runtime)
 {
-	struct rspamd_stat_sqlite3_ctx *ctx = (struct rspamd_stat_sqlite3_ctx *)c;
+	struct rspamd_stat_sqlite3_ctx *ctx = runtime;
 	gboolean unlearn = !!(task->flags & RSPAMD_TASK_FLAG_UNLEARN);
 	guchar *h;
 	gint64 flag;
