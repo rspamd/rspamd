@@ -171,7 +171,7 @@ rspamd_stat_cache_sqlite3_init (struct rspamd_stat_ctx *ctx,
 
 gpointer
 rspamd_stat_cache_sqlite3_runtime (struct rspamd_task *task,
-				gpointer ctx)
+				gpointer ctx, gboolean learn)
 {
 	/* No need of runtime for this type of classifier */
 	return NULL;

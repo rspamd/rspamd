@@ -390,7 +390,7 @@ rspamd_stat_cache_check (struct rspamd_stat_ctx *st_ctx,
 		}
 
 		if (cl->cache && cl->cachecf) {
-			rt = cl->cache->runtime (task, cl->cachecf);
+			rt = cl->cache->runtime (task, cl->cachecf, FALSE);
 			learn_res = cl->cache->check (task, spam,
 					cl->cachecf, rt);
 		}
@@ -575,7 +575,7 @@ rspamd_stat_backends_post_learn (struct rspamd_stat_ctx *st_ctx,
 		}
 
 		if (cl->cache) {
-			cache_run = cl->cache->runtime (task, cl->cachecf);
+			cache_run = cl->cache->runtime (task, cl->cachecf, TRUE);
 			cl->cache->learn (task, spam, cache_run, cl->cachecf);
 		}
 
