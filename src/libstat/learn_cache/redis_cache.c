@@ -347,7 +347,7 @@ rspamd_stat_cache_redis_learn (struct rspamd_task *task,
 
 	if (redisAsyncCommand (rt->redis, rspamd_stat_cache_redis_set, rt,
 			"HSET %s %s %d",
-			rt->ctx->redis_object, h) == REDIS_OK) {
+			rt->ctx->redis_object, h, flag) == REDIS_OK) {
 		rspamd_session_add_event (task->s, rspamd_redis_cache_fin, rt,
 				rspamd_stat_cache_redis_quark ());
 		event_add (&rt->timeout_event, &tv);
