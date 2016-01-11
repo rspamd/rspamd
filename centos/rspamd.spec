@@ -39,7 +39,7 @@ BuildRequires:  sqlite-devel
 Requires(pre):  shadow-utils
 %endif
 %if 0%{?fedora_version} >= 22 || 0%{?suse_version} >= 1320
-BuildRequires:  luajit-devel,hiredis-devel
+BuildRequires:  luajit-devel
 %else
 BuildRequires:  lua-devel
 %endif
@@ -85,11 +85,10 @@ lua.
 %endif
 %if 0%{?fedora_version} >= 22 || 0%{?suse_version} >= 1320
 		-DENABLE_LUAJIT=ON \
-		-DENABLE_HIREDIS=ON \
 %else
 		-DENABLE_LUAJIT=OFF \
-		-DENABLE_HIREDIS=OFF \
 %endif
+		-DENABLE_HIREDIS=ON \
         -DLOGDIR=%{_localstatedir}/log/rspamd \
         -DEXAMPLESDIR=%{_datadir}/examples/rspamd \
         -DPLUGINSDIR=%{_datadir}/rspamd \
