@@ -133,7 +133,7 @@ rspamd_stat_cache_sqlite3_init (struct rspamd_stat_ctx *ctx,
 	GError *err = NULL;
 
 	if (cf) {
-		elt = ucl_object_find_key (cf, "path");
+		elt = ucl_object_find_any_key (cf, "path", "file", NULL);
 
 		if (elt != NULL) {
 			path = ucl_object_tostring (elt);
@@ -252,9 +252,10 @@ rspamd_stat_cache_sqlite3_learn (struct rspamd_task *task,
 	h = rspamd_mempool_get_variable (task->task_pool, "words_hash");
 	g_assert (h != NULL);
 
+	flag = !!is_spam ? 1 : 0;
+
 	if (!unlearn) {
 		/* Insert result new id */
-		flag = !!is_spam ? 1 : 0;
 		rspamd_sqlite3_run_prstmt (task->task_pool, ctx->db, ctx->prstmt,
 				RSPAMD_STAT_CACHE_TRANSACTION_START_IM);
 		rspamd_sqlite3_run_prstmt (task->task_pool, ctx->db, ctx->prstmt,
@@ -267,7 +268,8 @@ rspamd_stat_cache_sqlite3_learn (struct rspamd_task *task,
 		rspamd_sqlite3_run_prstmt (task->task_pool, ctx->db, ctx->prstmt,
 				RSPAMD_STAT_CACHE_TRANSACTION_START_IM);
 		rspamd_sqlite3_run_prstmt (task->task_pool, ctx->db, ctx->prstmt,
-				RSPAMD_STAT_CACHE_UPDATE_LEARN, task->task_pool,
+				RSPAMD_STAT_CACHE_UPDATE_LEARN,
+				flag,
 				(gint64)rspamd_cryptobox_HASHBYTES, h);
 		rspamd_sqlite3_run_prstmt (task->task_pool, ctx->db, ctx->prstmt,
 				RSPAMD_STAT_CACHE_TRANSACTION_COMMIT);

@@ -157,7 +157,8 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 			cache_name_obj = NULL;
 
 			if (cache_obj) {
-				cache_name_obj = ucl_object_find_key (cache_obj, "name");
+				cache_name_obj = ucl_object_find_any_key (cache_obj,
+						"name", "type", NULL);
 			}
 
 			if (cache_name_obj) {
