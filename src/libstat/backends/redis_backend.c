@@ -130,31 +130,39 @@ rspamd_redis_expand_object (const gchar *pattern,
 	stcf = ctx->stcf;
 	L = task->cfg->lua_state;
 
-	if (ctx->cbref_user == -1) {
-		rcpt = rspamd_task_get_principal_recipient (task);
-	}
-	else {
-		/* Execute lua function to get userdata */
-		lua_pushcfunction (L, &rspamd_lua_traceback);
-		err_idx = lua_gettop (L);
-
-		lua_rawgeti (L, LUA_REGISTRYINDEX, ctx->cbref_user);
-		ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
-		*ptask = task;
-		rspamd_lua_setclass (L, "rspamd{task}", -1);
-
-		if (lua_pcall (L, 1, 1, err_idx) != 0) {
-			tb = lua_touserdata (L, -1);
-			msg_err_task ("call to user extraction script failed: %v", tb);
-			g_string_free (tb, TRUE);
+	if (ctx->enable_users) {
+		if (ctx->cbref_user == -1) {
+			rcpt = rspamd_task_get_principal_recipient (task);
 		}
 		else {
-			rcpt = rspamd_mempool_strdup (task->task_pool, lua_tostring (L, -1));
+			/* Execute lua function to get userdata */
+			lua_pushcfunction (L, &rspamd_lua_traceback);
+			err_idx = lua_gettop (L);
+
+			lua_rawgeti (L, LUA_REGISTRYINDEX, ctx->cbref_user);
+			ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
+			*ptask = task;
+			rspamd_lua_setclass (L, "rspamd{task}", -1);
+
+			if (lua_pcall (L, 1, 1, err_idx) != 0) {
+				tb = lua_touserdata (L, -1);
+				msg_err_task ("call to user extraction script failed: %v", tb);
+				g_string_free (tb, TRUE);
+			}
+			else {
+				rcpt = rspamd_mempool_strdup (task->task_pool, lua_tostring (L, -1));
+			}
+
+			/* Result + error function */
+			lua_pop (L, 2);
 		}
 
-		/* Result + error function */
-		lua_pop (L, 2);
+		if (rcpt) {
+			rspamd_mempool_set_variable (task->task_pool, "stat_user", rcpt, NULL);
+		}
 	}
+
+
 
 	/* Length calculation */
 	while (*p) {

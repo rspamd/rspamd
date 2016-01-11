@@ -160,8 +160,15 @@ rspamd_stat_cache_redis_generate_id (struct rspamd_task *task)
 	guint i;
 	guchar out[rspamd_cryptobox_HASHBYTES];
 	gchar *b32out;
+	gchar *user = NULL;
 
 	rspamd_cryptobox_hash_init (&st, NULL, 0);
+
+	user = rspamd_mempool_get_variable (task->task_pool, "stat_user");
+	/* Use dedicated hash space for per users cache */
+	if (user != NULL) {
+		rspamd_cryptobox_hash_update (&st, user, strlen (user));
+	}
 
 	for (i = 0; i < task->tokens->len; i ++) {
 		tok = g_ptr_array_index (task->tokens, i);

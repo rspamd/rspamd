@@ -187,6 +187,7 @@ rspamd_stat_cache_sqlite3_check (struct rspamd_task *task,
 	rspamd_cryptobox_hash_state_t st;
 	rspamd_ftok_t *word;
 	guchar *out;
+	gchar *user = NULL;
 	guint i, j;
 	gint rc;
 	gint64 flag;
@@ -195,6 +196,12 @@ rspamd_stat_cache_sqlite3_check (struct rspamd_task *task,
 		out = rspamd_mempool_alloc (task->task_pool, rspamd_cryptobox_HASHBYTES);
 
 		rspamd_cryptobox_hash_init (&st, NULL, 0);
+
+		user = rspamd_mempool_get_variable (task->task_pool, "stat_user");
+		/* Use dedicated hash space for per users cache */
+		if (user != NULL) {
+			rspamd_cryptobox_hash_update (&st, user, strlen (user));
+		}
 
 		for (i = 0; i < task->text_parts->len; i ++) {
 			part = g_ptr_array_index (task->text_parts, i);
