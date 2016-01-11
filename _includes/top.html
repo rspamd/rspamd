@@ -40,56 +40,63 @@
   </head>
 
   <body style="padding-top: 50px" data-offset="50">
-
-	<div class="navbar navbar-fixed-top">
-      <div class="container">
-        <a href="/" class="navbar-brand">Rspamd</a>
-		<button class="navbar-toggle" type="button" data-toggle="collapse" data-target="#navbar-main">
-          <span class="icon-bar"></span>
-          <span class="icon-bar"></span>
-          <span class="icon-bar"></span>
-        </button>
-		<div id="navbar-main" class="nav-collapse collapse">
-        <ul class="nav navbar-nav">
-  			<li>
-        		<a href="/about.html">About</a>
-       		</li>
-  			<li>
-        		<a href="/downloads.html">Downloads</a>
-        	</li>
-				<li class="dropdown">
-					<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Documentation <span class="caret"></span></a>
-					<ul class="dropdown-menu">
-						<li><a  href="/doc/index.html">Documentation index</a></li>
-						<li role="separator" class="divider"></li>
-						<li><a  href="/doc/quickstart.html">Quick start</a></li>
-						<li><a  href="/doc/tutorials/">Tutorials</a></li>
-						<!--<li><a  href="/doc/features.html">Rspamd features</a></li>-->
-						<li><a  href="/doc/integration.html">Integration to MTA</a></li>
-						<li><a  href="/doc/migration.html">Migration between releases</a></li>
-						<li role="separator" class="divider"></li>
-						<li><a  href="/doc/architecture/">Architecture</a></li>
-						<li><a  href="/doc/configuration/">Configuration guide</a></li>
-						<li><a  href="/doc/modules/">Rspamd modules</a></li>
-						<li><a  href="/doc/workers/">Rspamd workers</a></li>
-						<li><a  href="/doc/lua/">Lua API guide</a></li>
-					</ul>
-        	</li>
-			<li>
-				<a href="/contribution.html">Contribution</a>
-			</li>
-  			<li>
-        		<a href="/blog/">News</a>
-        	</li>
-  			<li>
-        		<a href="/support.html">Support</a>
-        	</li>
-			</ul>
-			<ul class="nav navbar-nav pull-right">
-            <li><a href="/rmilter/">Rmilter</a></li>
-            <li><a href="/webui/">WebUI</a></li>
-            <li><a href="https://github.com/vstakhov/rspamd" target="_blank">Fork me on github</a></li>
-        </ul>
-	  	</div>
-      </div>
-	</div>
+  <!-- Navigation -->
+  <nav class="navbar navbar-default navbar-fixed-top" role="navigation">
+          <div class="container">
+              <div class="navbar-header">
+                  <!--toggle button for xs-size-->
+                  <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+                      <span class="sr-only">Toggle navigation</span>
+                      <span class="icon-bar"></span>
+                      <span class="icon-bar"></span>
+                      <span class="icon-bar"></span>
+                  </button>
+                  <a class="navbar-brand" href="/"><!--img src="img/logo.png" height=30 width=41-->RSPAMD</a>
+              </div>
+              <div id="navbar" class="navbar-collapse collapse">
+                  <ul class="nav navbar-nav">
+                      <li>
+                          <a href="/about.html">About</a>
+                      </li>
+                      <li>
+                          <a href="/downloads.html">Downloads</a>
+                      </li>
+                      <li class="dropdown">
+                          <a href="#" class="dropdown-toggle" data-toggle="dropdown"
+                           role="button" aria-haspopup="true" aria-expanded="false">Documentation
+                           <span class="caret"></span></a>
+                          <ul class="dropdown-menu">
+                              <li><a  href="/doc/index.html">Documentation index</a></li>
+                              <li role="separator" class="divider"></li>
+                              <li><a  href="/doc/quickstart.html">Quick start</a></li>
+                              <li><a  href="/doc/tutorials/">Tutorials</a></li>
+                              <!--<li><a  href="/doc/features.html">Rspamd features</a></li>-->
+                              <li><a  href="/doc/integration.html">Integration to MTA</a></li>
+                              <li><a  href="/doc/migration.html">Migration between releases</a></li>
+                              <li role="separator" class="divider"></li>
+                              <li><a  href="/doc/architecture/">Architecture</a></li>
+                              <li><a  href="/doc/configuration/">Configuration guide</a></li>
+                              <li><a  href="/doc/modules/">Rspamd modules</a></li>
+                              <li><a  href="/doc/workers/">Rspamd workers</a></li>
+                              <li><a  href="/doc/lua/">Lua API guide</a></li>
+                          </ul>
+                      </li>
+                      <li>
+                          <a href="/contribution.html">Contribution</a>
+                      </li>
+                      <li>
+                          <a href="/blog/">News</a>
+                      </li>
+                      <li>
+                          <a href="/support.html">Support</a>
+                      </li>
+                  </ul>
+                  <!-- Login link -->
+                  <ul class="nav navbar-nav navbar-right">
+                      <li><a href="/rmilter/">Rmilter</a></li>
+                      <li><a href="/webui/">WebUI</a></li>
+                      <li><a href="https://github.com/vstakhov/rspamd" target="_blank">Fork me on github</a></li>
+                  </ul>
+              </div>
+          </div>
+      </nav>
