@@ -28,8 +28,8 @@
 #include "lua/lua_common.h"
 
 #ifdef WITH_HIREDIS
-#include "hiredis/hiredis.h"
-#include "hiredis/adapters/libevent.h"
+#include "hiredis.h"
+#include "adapters/libevent.h"
 
 
 #define REDIS_CTX(p) (struct redis_stat_ctx *)(p)

@@ -29,8 +29,8 @@
 #include "stat_internal.h"
 #include "cryptobox.h"
 #include "ucl.h"
-#include "hiredis/hiredis.h"
-#include "hiredis/adapters/libevent.h"
+#include "hiredis.h"
+#include "adapters/libevent.h"
 
 #define REDIS_DEFAULT_TIMEOUT 0.5
 #define REDIS_STAT_TIMEOUT 30
