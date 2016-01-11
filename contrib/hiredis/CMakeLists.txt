@@ -1,0 +1,15 @@
+SET(HIREDISSRC	async.c
+				dict.c
+				hiredis.c
+				net.c
+				read.c
+				sds.c)
+
+SET(HIREDIS_CFLAGS "")
+IF("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
+	SET(HIREDIS_CFLAGS "${HIREDIS_CFLAGS} -O3")
+ENDIF()
+
+ADD_LIBRARY(rspamd-hiredis STATIC "${HIREDISSRC}")
+
+SET_TARGET_PROPERTIES(rspamd-hiredis PROPERTIES COMPILE_FLAGS "${HIREDIS_CFLAGS}")
