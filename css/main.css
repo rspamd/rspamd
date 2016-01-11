@@ -15,7 +15,6 @@ body {
   position: static;
   margin-top: 50px;
 }
-
 /* Responsive: Portrait tablets and up */
 @media screen and (min-width: 1024px) {
   /* Let the jumbotron breathe */
@@ -24,6 +23,8 @@ body {
   	background:url(/img/rspamd_head_alt.png);
   	background-size: 100% auto;
   	background-repeat: no-repeat;
+    /*height: 300px;
+    background-size: cover;*/
   }
   /* Remove padding from wrapping element since we kick in the grid classes here */
   .body-content {
@@ -55,7 +56,7 @@ body {
 .nav-tabs > li.active > a{
     /* active and default active tab */
     background-color: #F0F0F0 !important;
-    border-bottom: 0px;
+    border-bottom: 0px !important;
 }
 @media (max-width: 600px){
     /* hide tabs text for small device */
