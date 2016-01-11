@@ -552,6 +552,40 @@ rspamd_task_get_sender (struct rspamd_task *task)
 #endif
 }
 
+const gchar *
+rspamd_task_get_principal_recipient (struct rspamd_task *task)
+{
+	InternetAddress *iaelt = NULL;
+
+	if (task->deliver_to) {
+		return task->deliver_to;
+	}
+
+#ifdef GMIME24
+	InternetAddressMailbox *imb;
+
+	if (task->rcpt_envelope != NULL) {
+		iaelt = internet_address_list_get_address (task->rcpt_envelope, 0);
+	}
+	else if (task->rcpt_mime != NULL) {
+		iaelt = internet_address_list_get_address (task->rcpt_mime, 0);
+	}
+	imb = INTERNET_ADDRESS_IS_MAILBOX(iaelt) ?
+			INTERNET_ADDRESS_MAILBOX (iaelt) : NULL;
+
+	return (imb ? internet_address_mailbox_get_addr (imb) : NULL);
+#else
+	if (task->rcpt_envelope != NULL) {
+		iaelt = internet_address_list_get_address (task->rcpt_envelope);
+	}
+	else if (task->rcpt_mime != NULL) {
+		iaelt = internet_address_list_get_address (task->rcpt_mime);
+	}
+
+	return (iaelt != NULL ? internet_address_get_addr (iaelt) : NULL);
+#endif
+}
+
 gboolean
 rspamd_task_add_recipient (struct rspamd_task *task, const gchar *rcpt)
 {

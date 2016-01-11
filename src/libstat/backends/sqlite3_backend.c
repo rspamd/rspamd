@@ -303,33 +303,12 @@ rspamd_sqlite3_get_user (struct rspamd_stat_sqlite3_db *db,
 	gint64 id = 0; /* Default user is 0 */
 	gint rc, err_idx;
 	const gchar *user = NULL;
-	const InternetAddress *ia;
 	struct rspamd_task **ptask;
 	lua_State *L = db->L;
 	GString *tb;
 
 	if (db->cbref_user == -1) {
-		if (task->deliver_to != NULL) {
-			/* Use deliver-to value if presented */
-			user = task->deliver_to;
-		}
-		if (task->user != NULL) {
-			/* Use user value if presented */
-			user = task->user;
-		}
-		else if (task->rcpt_envelope != NULL) {
-			/* Check envelope recipients */
-			if (internet_address_list_length (task->rcpt_envelope) == 1) {
-				/* XXX: we support now merely single recipient statistics */
-				ia = internet_address_list_get_address (task->rcpt_envelope, 0);
-
-				if (ia != NULL) {
-					user = internet_address_mailbox_get_addr (
-							INTERNET_ADDRESS_MAILBOX (ia));
-				}
-			}
-		}
-		/* XXX: We ignore now mime recipients as they could be easily forged */
+		user = rspamd_task_get_principal_recipient (task);
 	}
 	else {
 		/* Execute lua function to get userdata */

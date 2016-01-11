@@ -108,9 +108,6 @@ rspamd_redis_expand_object (const gchar *pattern,
 {
 	gsize tlen = 0;
 	const gchar *p = pattern, *elt;
-	InternetAddressList *ia;
-	InternetAddress *iaelt;
-	InternetAddressMailbox *imb;
 	gchar *d, *end;
 	enum  {
 		just_char,
@@ -153,17 +150,10 @@ rspamd_redis_expand_object (const gchar *pattern,
 				}
 				break;
 			case 'r':
-				ia = GET_TASK_ELT (task, rcpt_envelope);
-				if (ia != NULL) {
-					iaelt = internet_address_list_get_address (ia, 0);
-					imb = INTERNET_ADDRESS_IS_MAILBOX (iaelt) ?
-								INTERNET_ADDRESS_MAILBOX (iaelt) : NULL;
+				elt = rspamd_task_get_principal_recipient (task);
 
-					elt = (imb ? internet_address_mailbox_get_addr (imb) : NULL);
-
-					if (elt) {
-						tlen += strlen (elt);
-					}
+				if (elt) {
+					tlen += strlen (elt);
 				}
 				break;
 			case 'l':
@@ -246,17 +236,10 @@ rspamd_redis_expand_object (const gchar *pattern,
 				}
 				break;
 			case 'r':
-				ia = GET_TASK_ELT (task, rcpt_envelope);
-				if (ia != NULL) {
-					iaelt = internet_address_list_get_address (ia, 0);
-					imb = INTERNET_ADDRESS_IS_MAILBOX (iaelt) ?
-							INTERNET_ADDRESS_MAILBOX (iaelt) : NULL;
+				elt = rspamd_task_get_principal_recipient (task);
 
-					elt = (imb ? internet_address_mailbox_get_addr (imb) : NULL);
-
-					if (elt) {
-						d += rspamd_strlcpy (d, elt, end - d);
-					}
+				if (elt) {
+					d += rspamd_strlcpy (d, elt, end - d);
 				}
 				break;
 			case 'l':

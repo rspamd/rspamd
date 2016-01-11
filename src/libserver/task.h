@@ -249,6 +249,16 @@ gboolean rspamd_task_process (struct rspamd_task *task, guint stages);
 const gchar *rspamd_task_get_sender (struct rspamd_task *task);
 
 /**
+ * Return addresses in the following precendence:
+ * - deliver to
+ * - the first smtp recipient
+ * - the first mime recipient
+ * @param task
+ * @return
+ */
+const gchar *rspamd_task_get_principal_recipient (struct rspamd_task *task);
+
+/**
  * Add a recipient for a task
  * @param task task object
  * @param rcpt string representation of recipient address
