@@ -674,7 +674,7 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 	if (c->err == 0) {
 		if (r != NULL) {
 			if (G_LIKELY (reply->type == REDIS_REPLY_INTEGER)) {
-				rt->learned = reply->integer;
+				val = reply->integer;
 			}
 			else if (reply->type == REDIS_REPLY_STRING) {
 				rspamd_strtol (reply->str, reply->len, &val);
