@@ -16,7 +16,7 @@ before_script:
 script: 
   - mkdir _build
   - cd _build
-  - cmake .. -DCMAKE_INSTALL_PREFIX=../_install -DCMAKE_C_COMPILER=$CC -DENABLE_HIREDIS=OFF
+  - cmake .. -DCMAKE_INSTALL_PREFIX=../_install -DCMAKE_C_COMPILER=$CC -DENABLE_HIREDIS=ON
   - cmake --build . --target install
 
 compiler:
