@@ -1292,22 +1292,30 @@ if type(section) == "table" then
     else
       if type(fn) == 'table' then
         for k, elt in ipairs(fn) do
-          f = io.open(elt, "r")
-          if f then
-            process_sa_conf(f)
-            has_rules = true
-          else
-            rspamd_logger.errx(rspamd_config, "cannot open %s", elt)
+          local files = util.glob(elt)
+
+          for i,matched in ipairs(files) do
+            f = io.open(matched, "r")
+            if f then
+              process_sa_conf(f)
+              has_rules = true
+            else
+              rspamd_logger.errx(rspamd_config, "cannot open %s", matched)
+            end
           end
         end
       else
         -- assume string
-        f = io.open(fn, "r")
-        if f then
-          process_sa_conf(f)
-          has_rules = true
-        else
-          rspamd_logger.errx(rspamd_config, "cannot open %s", fn)
+        local files = util.glob(fn)
+
+        for i,matched in ipairs(files) do
+          f = io.open(matched, "r")
+          if f then
+            process_sa_conf(f)
+            has_rules = true
+          else
+            rspamd_logger.errx(rspamd_config, "cannot open %s", matched)
+          end
         end
       end
     end
