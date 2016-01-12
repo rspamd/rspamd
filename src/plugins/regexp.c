@@ -310,9 +310,11 @@ regexp_module_reconfig (struct rspamd_config *cfg)
 	return regexp_module_config (cfg);
 }
 
-static gboolean rspamd_lua_call_expression_func(
-		struct ucl_lua_funcdata *lua_data, struct rspamd_task *task,
-		GArray *args, gint *res)
+static gboolean
+rspamd_lua_call_expression_func (struct ucl_lua_funcdata *lua_data,
+		struct rspamd_task *task,
+		GArray *args, gint *res,
+		const gchar *symbol)
 {
 	lua_State *L = lua_data->L;
 	struct rspamd_task **ptask;
@@ -338,7 +340,8 @@ static gboolean rspamd_lua_call_expression_func(
 					lua_pushboolean (L, (gboolean) GPOINTER_TO_SIZE(arg->data));
 					break;
 				default:
-					msg_err_task ("cannot pass custom params to lua function");
+					msg_err_task ("%s: cannot pass custom params to lua function",
+							symbol);
 					return FALSE;
 				}
 			}
@@ -347,7 +350,8 @@ static gboolean rspamd_lua_call_expression_func(
 	}
 
 	if (lua_pcall (L, nargs + 1, 1, 0) != 0) {
-		msg_info_task ("call to lua function failed: %s", lua_tostring (L, -1));
+		msg_info_task ("%s: call to lua function failed: %s", symbol,
+				lua_tostring (L, -1));
 		return FALSE;
 	}
 	pop++;
@@ -359,7 +363,8 @@ static gboolean rspamd_lua_call_expression_func(
 		*res = lua_toboolean (L, -1);
 	}
 	else {
-		msg_info_task ("lua function must return a boolean");
+		msg_info_task ("%s: lua function must return a boolean", symbol);
+		*res = FALSE;
 	}
 
 	lua_pop (L, pop);
@@ -379,7 +384,7 @@ process_regexp_item (struct rspamd_task *task, void *user_data)
 		/* Just call function */
 		res = FALSE;
 		if (!rspamd_lua_call_expression_func (item->lua_function, task, NULL,
-				&res)) {
+				&res, item->symbol)) {
 			msg_err_task ("error occurred when checking symbol %s",
 					item->symbol);
 		}
