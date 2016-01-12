@@ -2,7 +2,8 @@
 
 This module performs scanning of URL's found in messages against a list of known
 DNS lists. It can add different symbols depending on the DNS replies from a 
-specific DNS URL list.
+specific DNS URL list. It is also possible to resolve domains of URLs and then
+check the IP addresses against the normal `RBL` style list.
 
 ## Module configuration
 
@@ -51,7 +52,7 @@ surbl {
         suffix = "dbl.spamhaus.org";
         symbol = "DBL";
         # Do not check numeric URL's
-        options = "noip";
+        noip = true;
     }
     rule {
         suffix = "uribl.spameatingmonkey.net";
@@ -59,7 +60,7 @@ surbl {
         bits {
             SEM_URIBL = 2;
         }
-        options = "noip";
+        noip = true;
     }
     rule {
         suffix = "fresh15.spameatingmonkey.net";
@@ -67,7 +68,7 @@ surbl {
         bits {
             SEM_URIBL_FRESH15 = 2;
         }
-        options = "noip";
+        noip = true;
     }
 }
 ~~~
@@ -132,3 +133,28 @@ Some other lists use direct encoding of lists by some specific addresses. In thi
 case you should define results decoding principle in `ips` section not `bits` since
 bitwise rules are not applicable to these lists. In `ips` section you explicitly
 match the ip returned by a list and its meaning.
+
+## IP lists
+
+From rspamd 1.1 it is also possible to do two step checks:
+
+1. Resolve IP addresses of each URL
+2. Check each IP resolved against SURBL list
+
+In general this procedure could be represented as following:
+
+* Check `A` or `AAAA` records for `example.com`
+* For each ip address resolve it using reverse octets composition: so if IP address of `example.com` is `1.2.3.4`, then checks would be for `4.3.2.1.uribl.tld`
+
+For example, [SBL list](https://www.spamhaus.org/sbl/) of `spamhaus` project provides such functions using `ZEN` multi list. This is included in rspamd default configuration:
+
+~~~nginx
+    rule {
+        suffix = "zen.spamhaus.org";
+        symbol = "ZEN_URIBL";
+        resolve_ip = true;
+        ips {
+            URIBL_SBL = "127.0.0.2";
+        }
+    }
+~~~
