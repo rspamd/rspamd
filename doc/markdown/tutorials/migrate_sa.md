@@ -24,8 +24,8 @@ You could also move from these projects to Rspamd. However, you should bear in m
 
 There are a couple of things you need to know before transition:
 
-1. Rspamd does not support Spamassassin statistics so you'd need to **train** your filter from the scratch with spam and ham samples (or install the [pre-built statistics](???)). Rspamd uses different statistical engine called [OSB-Bayes](???) which is intended to be more precise than SA 'naive' bayes classifier
-2. Rspamd uses `Lua` for plugins and rules, so basic knowledge of this language is more than useful for playing with rspamd, however, Lua is very simple and can be learnt [very quickly](???)
+1. Rspamd does not support Spamassassin statistics so you'd need to **train** your filter from the scratch with spam and ham samples (or install the [pre-built statistics](https://rspamd.com/rspamd_statistics/)). Rspamd uses different statistical engine called [OSB-Bayes](http://osbf-lua.luaforge.net/papers/trec2006_osbf_lua.pdf) which is intended to be more precise than SA 'naive' bayes classifier
+2. Rspamd uses `Lua` for plugins and rules, so basic knowledge of this language is more than useful for playing with rspamd, however, Lua is very simple and can be learnt [very quickly](http://lua-users.org/wiki/LuaTutorial)
 3. Rspamd uses `HTTP` protocol for communicating with MTA or milter, so SA native milters might fail to communicate with rspamd. There is some limited support of SpamAssassin protocol, thought some commands are not supported, in particular those which require copying of data batween scanner and milter. What's more important is that `Length`-less messages are not supported by Rspamd as they completely break HTTP semantics, so it won't be supported ever. For achieving the same functionality, a dedicated scanner could use, e.g. HTTP `chunked` encoding.
 4. Rspamd is **NOT** intended to work with blocking libraries or services, hence, something like `mysql` or `postgresql` won't likely be supported as well
 5. Rspamd is developping quickly, therefore you should be aware that there might be still some incompatible changes between major versions - they are usually listed in the [migration](../migration.md) section of the site.
@@ -44,3 +44,28 @@ spamassassin {
 	sa_local = "/etc/spamassassin/local.cf";
 }
 ~~~
+
+On the other hand, if you don't have many custom rules and use primarily the default ruleset then you shouldn't use this plugin: many rules of SA are already implemented in rspamd natively so you won't get any benefit from including such rules from SA.
+
+## Integration
+
+If you have your SA up and running it is usually possible to switch the system to rspamd using the existing tools.
+However, please check the [integration document](https://rspamd.com/doc/integration.html) for furhter details.
+
+## Statistics
+
+Rspamd statistics is not compatible with SA as it uses more advanced statistics algorithms described in the following [article](http://osbf-lua.luaforge.net/papers/trec2006_osbf_lua.pdf). Statistics setup might be tricky, therefore, there are a couple of examples in [the statistics description](../configuration/statistics.md). However, please bear in mind that you need to **relearn** your statistics with messages. This can be done, for example, by using `rspamc` command assuming that you have your messages as a separate files (e.g. `Maildir` format) placed in directories `spam` and `ham`:
+
+	rspamc learn_spam spam/
+	rspamd learn_ham ham/
+
+You need rspamd up and running for using of this commands.
+
+### Learning using mail interface
+
+You can also setup rspamc to learn via passing messages to a certain email address. I'd recommend to use `/etc/aliases` for these purposes and `mail-redirect` command (e.g. provided by [Mail Redirect addon](https://addons.mozilla.org/en-GB/thunderbird/addon/mailredirect/) for `thunderbird` MUA). The desired aliases could be the following:
+
+	learn-spam123: "| rspamc learn_spam"
+	learn-ham123: "| rspamc learn_ham"
+
+You'd need some less predictable aliases to avoid sending messages to such addresses by some adversary or just by a mistake to prevent statistics pollution.
