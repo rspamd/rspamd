@@ -168,6 +168,7 @@ Please note that `--recursive` option is essential for building rspamd, since th
 
 Rspamd requires several 3-rd party software to build and run:
 
+* [openssl](https://www.openssl.org/) - cryptography and SSL/TLS Toolkit
 * [libevent](http://libevent.org/) - asynchronous event library
 * [glib2](http://library.gnome.org/devel/glib/) - common purposes library
 * [gmime2](http://spruce.sourceforge.net/gmime/) - mime parser
