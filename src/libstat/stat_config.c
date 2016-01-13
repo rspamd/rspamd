@@ -130,7 +130,13 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 	while (cur) {
 		clf = cur->data;
 		bk = rspamd_stat_get_backend (clf->backend);
-		g_assert (bk != NULL);
+
+		if (bk == NULL) {
+			msg_err_config ("cannot get backend of type %s, so disable classifier"
+					" completely", clf->backend, clf->name);
+			cur = g_list_next (cur);
+			continue;
+		}
 
 		/* XXX:
 		 * Here we get the first classifier tokenizer config as the only one
