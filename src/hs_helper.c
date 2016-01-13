@@ -174,6 +174,12 @@ rspamd_rs_compile (struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 	msg_info ("compiled %d regular expressions to the hyperscan tree",
 			ncompiled);
 
+	/*
+	 * Do not send notification unless all other workers are started
+	 * XXX: now we just sleep for 5 seconds to ensure that
+	 */
+	sleep (5);
+
 	srv_cmd.type = RSPAMD_SRV_HYPERSCAN_LOADED;
 	srv_cmd.cmd.hs_loaded.cache_dir = ctx->hs_dir;
 
