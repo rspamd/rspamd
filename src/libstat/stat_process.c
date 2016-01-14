@@ -347,6 +347,10 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, guint stage,
 	st_ctx = rspamd_stat_get_ctx ();
 	g_assert (st_ctx != NULL);
 
+	if (st_ctx->classifiers->len == 0) {
+		task->processed_stages |= stage;
+		return ret;
+	}
 
 	if (stage == RSPAMD_TASK_STAGE_CLASSIFIERS_PRE) {
 		/* Preprocess tokens */
@@ -603,6 +607,7 @@ rspamd_stat_learn (struct rspamd_task *task,
 		GError **err)
 {
 	struct rspamd_stat_ctx *st_ctx;
+	rspamd_stat_result_t ret = RSPAMD_STAT_PROCESS_OK;
 
 	/*
 	 * We assume now that a task has been already classified before
@@ -610,10 +615,13 @@ rspamd_stat_learn (struct rspamd_task *task,
 	 */
 	g_assert (RSPAMD_TASK_IS_CLASSIFIED (task));
 
-	rspamd_stat_result_t ret = RSPAMD_STAT_PROCESS_OK;
-
 	st_ctx = rspamd_stat_get_ctx ();
 	g_assert (st_ctx != NULL);
+
+	if (st_ctx->classifiers->len == 0) {
+		task->processed_stages |= stage;
+		return ret;
+	}
 
 	if (stage == RSPAMD_TASK_STAGE_LEARN_PRE) {
 		/* Process classifiers */
