@@ -286,7 +286,11 @@ bayes_classify (struct rspamd_classifier * ctx,
 			final_prob = 1.0 - final_prob;
 		}
 
-		rspamd_snprintf (sumbuf, 32, "%.2f%%", final_prob * 100.);
+		/*
+		 * Bayes p is from 0.5 to 1.0, but confidence is from 0 to 1, so
+		 * we need to rescale it to display correctly
+		 */
+		rspamd_snprintf (sumbuf, 32, "%.2f%%", (final_prob - 0.5) * 200.);
 		final_prob = bayes_normalize_prob (final_prob);
 		g_assert (st != NULL);
 		cur = g_list_prepend (NULL, sumbuf);
