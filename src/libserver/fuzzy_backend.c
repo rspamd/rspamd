@@ -76,6 +76,7 @@ static const char *create_tables_sql =
 		"CREATE INDEX IF NOT EXISTS dgst_id ON shingles(digest_id);"
 		"CREATE UNIQUE INDEX IF NOT EXISTS s ON shingles(value, number);"
 		"COMMIT;";
+#if 0
 static const char *create_index_sql =
 		"BEGIN;"
 		"CREATE UNIQUE INDEX IF NOT EXISTS d ON digests(digest);"
@@ -83,6 +84,7 @@ static const char *create_index_sql =
 		"CREATE INDEX IF NOT EXISTS dgst_id ON shingles(digest_id);"
 		"CREATE UNIQUE INDEX IF NOT EXISTS s ON shingles(value, number);"
 		"COMMIT;";
+#endif
 enum rspamd_fuzzy_statement_idx {
 	RSPAMD_FUZZY_BACKEND_TRANSACTION_START = 0,
 	RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT,
@@ -668,7 +670,7 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 				for (i = 0; i < RSPAMD_SHINGLE_SIZE; i++) {
 					rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
 							RSPAMD_FUZZY_BACKEND_INSERT_SHINGLE,
-							shcmd->sgl.hashes[i], i, id);
+							shcmd->sgl.hashes[i], (gint64)i, id);
 					msg_debug_fuzzy_backend ("add shingle %d -> %L: %L",
 							i,
 							shcmd->sgl.hashes[i],
