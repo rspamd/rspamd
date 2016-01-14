@@ -296,7 +296,7 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
 
 	if (pool) {
 		POOL_MTX_LOCK ();
-		if (always_malloc) {
+		if (always_malloc && pool_type != RSPAMD_MEMPOOL_SHARED) {
 			void *ptr;
 
 			ptr = g_malloc (size);
