@@ -158,8 +158,7 @@ rdns_format_dns_name (struct rdns_resolver *resolver, const char *in,
 				}
 				else {
 					rdns_info ("no buffer remain for punycoding query");
-					free (*out);
-					return false;
+					goto err;
 				}
 
 				free (uclabel);
@@ -183,7 +182,7 @@ rdns_format_dns_name (struct rdns_resolver *resolver, const char *in,
 				}
 				if (remain < label_len + 1) {
 					rdns_info ("no buffer remain for punycoding query");
-					return false;
+					goto err;
 				}
 				if (label_len == 0) {
 					/* Two dots in order, skip this */
@@ -208,7 +207,7 @@ rdns_format_dns_name (struct rdns_resolver *resolver, const char *in,
 				}
 				if (remain < label_len + 1) {
 					rdns_info ("no buffer remain for punycoding query");
-					return false;
+					goto err;
 				}
 				memcpy (o, p, label_len);
 				o += label_len;
@@ -220,7 +219,7 @@ rdns_format_dns_name (struct rdns_resolver *resolver, const char *in,
 		}
 		if (remain == 0) {
 			rdns_info ("no buffer remain for punycoding query");
-			return false;
+			goto err;
 		}
 	}
 	*o = '\0';
@@ -228,6 +227,11 @@ rdns_format_dns_name (struct rdns_resolver *resolver, const char *in,
 	*outlen = o - *out;
 
 	return true;
+
+	err:
+	free (*out);
+	*out = NULL;
+	return false;
 }
 
 bool

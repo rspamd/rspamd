@@ -700,6 +700,7 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 				break;
 			case RSPAMD_SRV_HYPERSCAN_LOADED:
 				/* Broadcast command to all workers */
+				memset (&wcmd, 0, sizeof (wcmd));
 				wcmd.type = RSPAMD_CONTROL_HYPERSCAN_LOADED;
 				/*
 				 * We assume that cache dir is shared at the same address for all
