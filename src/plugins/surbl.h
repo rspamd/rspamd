@@ -14,6 +14,7 @@
 #define DEFAULT_SURBL_SUFFIX "multi.surbl.org"
 #define SURBL_OPTION_NOIP (1 << 0)
 #define SURBL_OPTION_RESOLVEIP (1 << 1)
+#define SURBL_OPTION_CHECKIMAGES (1 << 2)
 #define MAX_LEVELS 10
 
 struct surbl_ctx {

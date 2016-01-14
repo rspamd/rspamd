@@ -112,4 +112,16 @@ GByteArray* rspamd_html_process_part_full (rspamd_mempool_t *pool,
  */
 gboolean rspamd_html_tag_seen (struct html_content *hc, const gchar *tagname);
 
+/**
+ * Extract URL from HTML tag component and sets component elements if needed
+ * @param pool
+ * @param start
+ * @param len
+ * @param comp
+ * @return
+ */
+struct rspamd_url * rspamd_html_process_url (rspamd_mempool_t *pool,
+		const gchar *start, guint len,
+		struct html_tag_component *comp);
+
 #endif

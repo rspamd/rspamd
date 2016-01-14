@@ -46,6 +46,8 @@ surbl {
     }
     rule {
         suffix = "uribl.rambler.ru";
+        # Also check images
+        images = true;
         symbol = "RAMBLER_URIBL";
     }
     rule {
@@ -76,6 +78,28 @@ surbl {
 In general, the configuration of `surbl` module is definition of DNS lists. Each
 list must have suffix that defines the list itself and optionally for some lists
 it is possible to specify either `bit` or `ips` sections.
+
+Since some URL lists do not accept `IP` addresses, it is also possible to disable sending of URLs with IP address in the host to such lists. That could be done by specifying `noip = true` option:
+
+~~~nginx
+    rule {
+        suffix = "dbl.spamhaus.org";
+        symbol = "DBL";
+        # Do not check numeric URL's
+        noip = true;
+    }
+~~~
+
+It is also possible to check HTML images URLs using URL blacklists. Just specify `images = true` for such list and you are done:
+
+~~~nginx
+    rule {
+        suffix = "uribl.rambler.ru";
+        # Also check images
+        images = true;
+        symbol = "RAMBLER_URIBL";
+    }
+~~~
 
 ## Principles of operation
 

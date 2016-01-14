@@ -48,6 +48,7 @@
 #include "rspamd.h"
 #include "surbl.h"
 #include "utlist.h"
+#include "libserver/html.h"
 #include "unix-std.h"
 
 static struct surbl_ctx *surbl_module_ctx = NULL;
@@ -412,6 +413,15 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			0);
 	rspamd_rcl_add_doc_by_path (cfg,
 			"surbl.rule",
+			"Check images URLs with this URL list",
+			"images",
+			UCL_BOOLEAN,
+			NULL,
+			0,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"surbl.rule",
 			"Parse IP bits in DNS reply, the content is 'symbol = <bit>'",
 			"bits",
 			UCL_OBJECT,
@@ -631,10 +641,18 @@ surbl_module_config (struct rspamd_config *cfg)
 					new_suffix->options |= SURBL_OPTION_NOIP;
 				}
 			}
+
 			cur = ucl_obj_get_key (cur_rule, "resolve_ip");
 			if (cur != NULL && cur->type == UCL_BOOLEAN) {
 				if (ucl_object_toboolean (cur)) {
 					new_suffix->options |= SURBL_OPTION_RESOLVEIP;
+				}
+			}
+
+			cur = ucl_obj_get_key (cur_rule, "images");
+			if (cur != NULL && cur->type == UCL_BOOLEAN) {
+				if (ucl_object_toboolean (cur)) {
+					new_suffix->options |= SURBL_OPTION_CHECKIMAGES;
 				}
 			}
 
@@ -1425,6 +1443,10 @@ surbl_test_url (struct rspamd_task *task, void *user_data)
 {
 	struct redirector_param param;
 	struct suffix_item *suffix = user_data;
+	guint i, j;
+	struct mime_text_part *part;
+	struct html_image *img;
+	struct rspamd_url *url;
 
 	param.task = task;
 	param.suffix = suffix;
@@ -1433,4 +1455,29 @@ surbl_test_url (struct rspamd_task *task, void *user_data)
 		(rspamd_mempool_destruct_t)g_hash_table_unref,
 		param.tree);
 	g_hash_table_foreach (task->urls, surbl_tree_url_callback, &param);
+
+	/* We also need to check and process img URLs */
+	if (suffix->options & SURBL_OPTION_CHECKIMAGES) {
+		for (i = 0; i < task->text_parts->len; i ++) {
+			part = g_ptr_array_index (task->text_parts, i);
+
+			if (part->html && part->html->images) {
+				for (j = 0; j < part->html->images->len; j ++) {
+					img = g_ptr_array_index (part->html->images, j);
+
+					if ((img->flags & RSPAMD_HTML_FLAG_IMAGE_EXTERNAL)
+							&& img->src) {
+						url = rspamd_html_process_url (task->task_pool,
+								img->src, strlen (img->src), NULL);
+
+						if (url) {
+							surbl_tree_url_callback (url, url, &param);
+							msg_debug_task ("checked image url %s over %s",
+									img->src, suffix->suffix);
+						}
+					}
+				}
+			}
+		}
+	}
 }

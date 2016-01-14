@@ -1278,17 +1278,77 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 	*statep = state;
 }
 
-static struct rspamd_url *
-rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag)
+struct rspamd_url *
+rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
+		struct html_tag_component *comp)
 {
-	struct html_tag_component *comp;
 	struct rspamd_url *url;
-	GList *cur;
-	const guchar *p;
 	gchar *decoded;
 	gint rc;
 	gsize decoded_len;
 	gboolean has_spaces = FALSE;
+	const gchar *p;
+
+	p = start;
+
+	/* Strip spaces from the url */
+	/* Head spaces */
+	while (g_ascii_isspace (*p) && p < start + len) {
+		p ++;
+		start ++;
+		len --;
+		has_spaces = TRUE;
+	}
+
+	if (comp) {
+		comp->start = p;
+		comp->len = len;
+	}
+
+	/* Trailing spaces */
+	p = start + len - 1;
+
+	while (g_ascii_isspace (*p) && p >= start) {
+		p --;
+		len --;
+
+		if (comp) {
+			comp->len --;
+		}
+		has_spaces = TRUE;
+	}
+
+	/* Also we need to perform url decode */
+	decoded = rspamd_mempool_alloc (pool, len + 1);
+	rspamd_strlcpy (decoded, start, len + 1);
+	decoded_len = rspamd_decode_url (decoded, start, len);
+
+	if (comp) {
+		comp->start = decoded;
+		comp->len = decoded_len;
+	}
+
+	url = rspamd_mempool_alloc (pool, sizeof (*url));
+	rc = rspamd_url_parse (url, decoded, decoded_len, pool);
+
+	if (rc == URI_ERRNO_OK) {
+
+		/* Spaces in href usually mean an attempt to obfuscate URL */
+		if (has_spaces) {
+			url->flags |= RSPAMD_URL_FLAG_OBSCURED;
+		}
+
+		return url;
+	}
+
+	return NULL;
+}
+
+static struct rspamd_url *
+rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag)
+{
+	struct html_tag_component *comp;
+	GList *cur;
 
 	cur = tag->params->head;
 
@@ -1296,42 +1356,7 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag)
 		comp = cur->data;
 
 		if (comp->type == RSPAMD_HTML_COMPONENT_HREF && comp->len > 0) {
-			/* Strip spaces from the url component */
-			p = comp->start;
-
-			while (g_ascii_isspace (*p) && p < comp->start + comp->len) {
-				p ++;
-				has_spaces = TRUE;
-			}
-
-			comp->start = p;
-			comp->len -= p - comp->start;
-
-			p = comp->start + comp->len - 1;
-
-			while (g_ascii_isspace (*p) && p >= comp->start) {
-				p --;
-				comp->len --;
-				has_spaces = TRUE;
-			}
-
-			/* Also we need to perform url decode */
-			decoded = rspamd_mempool_alloc (pool, comp->len + 1);
-			rspamd_strlcpy (decoded, comp->start, comp->len + 1);
-			decoded_len = rspamd_decode_url (decoded, comp->start, comp->len);
-
-			url = rspamd_mempool_alloc (pool, sizeof (*url));
-			rc = rspamd_url_parse (url, decoded, decoded_len, pool);
-
-			if (rc == URI_ERRNO_OK) {
-
-				/* Spaces in href usually mean an attempt to obfusicate URL */
-				if (has_spaces) {
-					url->flags |= RSPAMD_URL_FLAG_OBSCURED;
-				}
-
-				return url;
-			}
+			return rspamd_html_process_url (pool, comp->start, comp->len, comp);
 		}
 
 		cur = g_list_next (cur);
@@ -1971,7 +1996,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 					save_space = FALSE;
 				}
 
-				if (cur_tag->id == Tag_A) {
+				if (cur_tag->id == Tag_A || cur_tag->id == Tag_IFRAME) {
 					if (!(cur_tag->flags & (FL_CLOSED|FL_CLOSING))) {
 						url = rspamd_html_process_url_tag (pool, cur_tag);
 
@@ -2007,7 +2032,8 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 							href_offset = dest->len;
 						}
 					}
-					else if (cur_tag->flags & FL_CLOSING) {
+					else if (cur_tag->id == Tag_A &&
+							(cur_tag->flags & FL_CLOSING)) {
 						/* Insert exception */
 						if (url != NULL && (gint)dest->len > href_offset) {
 							rspamd_html_url_is_phished (pool, url,
@@ -2028,7 +2054,8 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 						url = NULL;
 					}
 				}
-				else if (cur_tag->id == Tag_IMG && !(cur_tag->flags & FL_CLOSING)) {
+
+				if (cur_tag->id == Tag_IMG && !(cur_tag->flags & FL_CLOSING)) {
 					rspamd_html_process_img_tag (pool, cur_tag, hc);
 				}
 				else if (!(cur_tag->flags & FL_CLOSING) &&
