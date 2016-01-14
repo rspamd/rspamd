@@ -259,13 +259,11 @@ rspamd_mempool_new (gsize size, const gchar *tag)
 		env_checked = TRUE;
 	}
 
-	new = g_slice_alloc (sizeof (rspamd_mempool_t));
-	memset (new->pools, 0, sizeof (gpointer) * RSPAMD_MEMPOOL_MAX);
+	new = g_slice_alloc0 (sizeof (rspamd_mempool_t));
 	new->destructors = g_array_sized_new (FALSE, FALSE,
 			sizeof (struct _pool_destructors), 32);
 	rspamd_mempool_create_pool_type (new, RSPAMD_MEMPOOL_NORMAL);
 	/* Set it upon first call of set variable */
-	new->variables = NULL;
 	new->elt_len = size;
 
 	if (tag) {
@@ -303,7 +301,12 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
 
 			ptr = g_malloc (size);
 			POOL_MTX_UNLOCK ();
-			rspamd_mempool_add_destructor (pool, g_free, ptr);
+
+			if (pool->trash_stack == NULL) {
+				pool->trash_stack = g_ptr_array_sized_new (128);
+			}
+
+			g_ptr_array_add (pool->trash_stack, ptr);
 
 			return ptr;
 		}
@@ -510,6 +513,7 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 {
 	struct _pool_chain *cur;
 	struct _pool_destructors *destructor;
+	gpointer ptr;
 	guint i, j;
 
 	POOL_MTX_LOCK ();
@@ -545,6 +549,15 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 
 	if (pool->variables) {
 		g_hash_table_destroy (pool->variables);
+	}
+
+	if (pool->trash_stack) {
+		for (i = 0; i < pool->trash_stack->len; i++) {
+			ptr = g_ptr_array_index (pool->trash_stack, i);
+			g_free (ptr);
+		}
+
+		g_ptr_array_free (pool->trash_stack, TRUE);
 	}
 
 	g_atomic_int_inc (&mem_pool_stat->pools_freed);
@@ -758,6 +771,7 @@ rspamd_mempool_get_mutex (rspamd_mempool_t * pool)
 		pthread_mutex_init (res, &mattr);
 		rspamd_mempool_add_destructor (pool,
 				(rspamd_mempool_destruct_t)pthread_mutex_destroy, res);
+		pthread_mutexattr_destroy (&mattr);
 
 		return res;
 	}
@@ -791,6 +805,7 @@ rspamd_mempool_get_rwlock (rspamd_mempool_t * pool)
 		pthread_rwlock_init (res, &mattr);
 		rspamd_mempool_add_destructor (pool,
 				(rspamd_mempool_destruct_t)pthread_rwlock_destroy, res);
+		pthread_rwlockattr_destroy (&mattr);
 
 		return res;
 	}

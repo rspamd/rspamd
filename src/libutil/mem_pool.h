@@ -93,6 +93,7 @@ struct rspamd_mutex_s;
 typedef struct memory_pool_s {
 	GPtrArray *pools[RSPAMD_MEMPOOL_MAX];
 	GArray *destructors;
+	GPtrArray *trash_stack;
 	GHashTable *variables;                  /**< private memory pool variables			*/
 	gsize elt_len;							/**< size of an element						*/
 	struct rspamd_mempool_tag tag;          /**< memory pool tag						*/
