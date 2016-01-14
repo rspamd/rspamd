@@ -49,14 +49,18 @@ worker_t hs_helper_worker = {
 };
 
 const static gdouble default_max_time = 1.0;
+const static gdouble default_recompile_time = 60.0;
 
 /*
  * Worker's context
  */
 struct hs_helper_ctx {
 	gchar *hs_dir;
+	gboolean loaded;
 	gdouble max_time;
+	gdouble recompile_time;
 	struct rspamd_config *cfg;
+	struct event recompile_timer;
 	struct event_base *ev_base;
 };
 
@@ -72,6 +76,7 @@ init_hs_helper (struct rspamd_config *cfg)
 	ctx->cfg = cfg;
 	ctx->hs_dir = RSPAMD_DBDIR "/";
 	ctx->max_time = default_max_time;
+	ctx->recompile_time = default_recompile_time;
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -89,6 +94,14 @@ init_hs_helper (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct hs_helper_ctx, max_time),
 			RSPAMD_CL_FLAG_TIME_FLOAT,
 			"Maximum time to wait for compilation of a single expression");
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"recompile",
+			rspamd_rcl_parse_struct_time,
+			ctx,
+			G_STRUCT_OFFSET (struct hs_helper_ctx, recompile_time),
+			RSPAMD_CL_FLAG_TIME_FLOAT,
+			"Time between recompilation checks");
 	rspamd_rcl_register_worker_option (cfg,
 			type,
 			"timeout",
@@ -178,7 +191,10 @@ rspamd_rs_compile (struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 	 * Do not send notification unless all other workers are started
 	 * XXX: now we just sleep for 5 seconds to ensure that
 	 */
-	sleep (5);
+	if (!ctx->loaded) {
+		sleep (5);
+		ctx->loaded = TRUE;
+	}
 
 	srv_cmd.type = RSPAMD_SRV_HYPERSCAN_LOADED;
 	srv_cmd.cmd.hs_loaded.cache_dir = ctx->hs_dir;
@@ -214,9 +230,27 @@ rspamd_hs_helper_reload (struct rspamd_main *rspamd_main,
 }
 
 static void
+rspamd_hs_helper_timer (gint fd, short what, gpointer ud)
+{
+	struct rspamd_worker *worker = ud;
+	struct hs_helper_ctx *ctx;
+	struct timeval tv;
+	double tim;
+
+	ctx = worker->ctx;
+	tim = rspamd_time_jitter (ctx->recompile_time, 0);
+	double_to_tv (tim, &tv);
+	event_del (&ctx->recompile_timer);
+	rspamd_rs_compile (ctx, worker, FALSE);
+	event_add (&ctx->recompile_timer, &tv);
+}
+
+static void
 start_hs_helper (struct rspamd_worker *worker)
 {
 	struct hs_helper_ctx *ctx = worker->ctx;
+	struct timeval tv;
+	double tim;
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"hs_helper",
@@ -230,6 +264,12 @@ start_hs_helper (struct rspamd_worker *worker)
 	rspamd_control_worker_add_cmd_handler (worker, RSPAMD_CONTROL_RECOMPILE,
 			rspamd_hs_helper_reload, ctx);
 
+	event_set (&ctx->recompile_timer, -1, EV_TIMEOUT, rspamd_hs_helper_timer,
+			worker);
+	event_base_set (ctx->ev_base, &ctx->recompile_timer);
+	tim = rspamd_time_jitter (ctx->recompile_time, 0);
+	double_to_tv (tim, &tv);
+	event_add (&ctx->recompile_timer, &tv);
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();
 
