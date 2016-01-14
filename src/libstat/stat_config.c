@@ -133,7 +133,7 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 
 		if (bk == NULL) {
 			msg_err_config ("cannot get backend of type %s, so disable classifier"
-					" completely", clf->backend, clf->name);
+					" %s completely", clf->backend, clf->name);
 			cur = g_list_next (cur);
 			continue;
 		}
