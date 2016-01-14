@@ -548,16 +548,25 @@ rspamd_control_default_worker_handler (gint fd, short what, gpointer ud)
 
 	gssize r;
 
-
 	r = read (fd, &cmd, sizeof (cmd));
 
 	if (r == -1) {
 		msg_err ("cannot read request from the control socket: %s",
 				strerror (errno));
+
+		if (errno != EAGAIN && errno != EINTR) {
+			event_del (&cd->io_ev);
+			close (fd);
+		}
 	}
 	else if (r < (gint)sizeof (cmd)) {
 		msg_err ("short read of control command: %d of %d", (gint)r,
 				(gint)sizeof (cmd));
+
+		if (r == 0) {
+			event_del (&cd->io_ev);
+			close (fd);
+		}
  	}
 	else if ((gint)cmd.type >= 0 && cmd.type < RSPAMD_CONTROL_MAX) {
 
