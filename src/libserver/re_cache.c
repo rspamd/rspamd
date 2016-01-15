@@ -1440,7 +1440,22 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 			}
 
 			munmap (map, st.st_size);
+
+			if (re_class->hs_scratch != NULL) {
+				hs_free_scratch (re_class->hs_scratch);
+			}
+
+			if (re_class->hs_db != NULL) {
+				hs_free_database (re_class->hs_db);
+			}
+
+			if (re_class->hs_ids) {
+				g_free (re_class->hs_ids);
+			}
+
+			re_class->hs_ids = NULL;
 			re_class->hs_scratch = NULL;
+			re_class->hs_db = NULL;
 			g_assert (hs_alloc_scratch (re_class->hs_db,
 					&re_class->hs_scratch) == HS_SUCCESS);
 
