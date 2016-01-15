@@ -295,7 +295,7 @@ rspamd_rcl_group_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	}
 
 	if (!rspamd_rcl_section_parse_defaults (section, pool, obj,
-			metric, err)) {
+			gr, err)) {
 		return FALSE;
 	}
 
