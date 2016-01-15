@@ -1090,6 +1090,7 @@ process_dns_results (struct rspamd_task *task,
 	guint i;
 	gboolean got_result = FALSE;
 	struct surbl_bit_item *bit;
+	struct in_addr ina;
 
 	if (suffix->ips && g_hash_table_size (suffix->ips) > 0) {
 
@@ -1113,12 +1114,13 @@ process_dns_results (struct rspamd_task *task,
 				(gint)addr,
 				(gint)ntohl (bit->bit),
 				(gint)bit->bit & (gint)ntohl (addr));
-			msg_info_task ("<%s> domain [%s] is in surbl %s(%xd)",
-					task->message_id,
-					url, suffix->suffix,
-					bit->bit);
+
 			if (((gint)bit->bit & (gint)ntohl (addr)) != 0) {
 				got_result = TRUE;
+				msg_info_task ("<%s> domain [%s] is in surbl %s(%xd)",
+						task->message_id,
+						url, suffix->suffix,
+						bit->bit);
 				rspamd_task_insert_result (task, bit->symbol, 1,
 					g_list_prepend (NULL,
 					rspamd_mempool_strdup (task->task_pool, url)));
@@ -1126,12 +1128,21 @@ process_dns_results (struct rspamd_task *task,
 		}
 	}
 	if (!got_result) {
-		msg_info_task ("<%s> domain [%s] is in surbl %s",
-				task->message_id,
-				url, suffix->suffix);
-		rspamd_task_insert_result (task, suffix->symbol, 1,
-			g_list_prepend (NULL,
-			rspamd_mempool_strdup (task->task_pool, url)));
+		if (!(suffix->bits || suffix->bits->len == 0) && suffix->ips == NULL) {
+			msg_info_task ("<%s> domain [%s] is in surbl %s",
+					task->message_id,
+					url, suffix->suffix);
+			rspamd_task_insert_result (task, suffix->symbol, 1,
+					g_list_prepend (NULL,
+							rspamd_mempool_strdup (task->task_pool, url)));
+		}
+		else {
+			ina.s_addr = addr;
+			msg_info_task ("<%s> domain [%s] is in surbl %s but at unknown result: %s",
+					task->message_id,
+					url, suffix->suffix,
+					inet_ntoa (ina));
+		}
 	}
 }
 
