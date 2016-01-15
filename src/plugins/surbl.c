@@ -1128,7 +1128,8 @@ process_dns_results (struct rspamd_task *task,
 		}
 	}
 	if (!got_result) {
-		if (!(suffix->bits || suffix->bits->len == 0) && suffix->ips == NULL) {
+		if ((suffix->bits == NULL || suffix->bits->len == 0) &&
+				suffix->ips == NULL) {
 			msg_info_task ("<%s> domain [%s] is in surbl %s",
 					task->message_id,
 					url, suffix->suffix);
