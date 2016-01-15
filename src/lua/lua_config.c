@@ -1135,7 +1135,7 @@ lua_config_register_virtual_symbol (lua_State * L)
 
 		if (name) {
 			ret = rspamd_symbols_cache_add_symbol (cfg->cache, name,
-					0, NULL, NULL,
+					weight > 0 ? 0 : -1, NULL, NULL,
 					SYMBOL_TYPE_VIRTUAL, parent);
 		}
 	}
