@@ -1429,18 +1429,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 			/* Skip crc */
 			p += n * sizeof (*hs_ids) + sizeof (guint64);
 
-			if (hs_deserialize_database (p, end - p, &re_class->hs_db)
-					!= HS_SUCCESS) {
-				msg_err_re_cache ("bad hs database in %s", path);
-				munmap (map, st.st_size);
-				g_free (hs_ids);
-				g_free (hs_flags);
-
-				return FALSE;
-			}
-
-			munmap (map, st.st_size);
-
+			/* Cleanup */
 			if (re_class->hs_scratch != NULL) {
 				hs_free_scratch (re_class->hs_scratch);
 			}
@@ -1456,6 +1445,19 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 			re_class->hs_ids = NULL;
 			re_class->hs_scratch = NULL;
 			re_class->hs_db = NULL;
+
+			if (hs_deserialize_database (p, end - p, &re_class->hs_db)
+					!= HS_SUCCESS) {
+				msg_err_re_cache ("bad hs database in %s", path);
+				munmap (map, st.st_size);
+				g_free (hs_ids);
+				g_free (hs_flags);
+
+				return FALSE;
+			}
+
+			munmap (map, st.st_size);
+
 			g_assert (hs_alloc_scratch (re_class->hs_db,
 					&re_class->hs_scratch) == HS_SUCCESS);
 
