@@ -299,7 +299,11 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 	for (i = 0; i < elt->elts->len; i++) {
 		cur = g_ptr_array_index (elt->elts, i);
 
-		if (!(cur->flags & RSPAMD_SPF_FLAG_PARSED)) {
+		if (cur->flags & RSPAMD_SPF_FLAG_TEMPFAIL) {
+			target->failed = TRUE;
+			continue;
+		}
+		else if (!(cur->flags & RSPAMD_SPF_FLAG_PARSED)) {
 			/* Ignore unparsed addrs */
 			continue;
 		}
@@ -337,7 +341,7 @@ rspamd_spf_record_flatten (struct spf_record *rec)
 
 	g_assert (rec != NULL);
 
-	res = g_slice_alloc (sizeof (*res));
+	res = g_slice_alloc0 (sizeof (*res));
 	res->elts = g_array_sized_new (FALSE, FALSE, sizeof (struct spf_addr),
 			rec->resolved->len);
 	res->domain = g_strdup (rec->sender_domain);
@@ -672,6 +676,16 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				spf_record_addr_set (addr, FALSE);
 				break;
 		}
+	}
+	else {
+		cb->addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
+		msg_info_spf (
+				"<%s>: spf error for domain %s: cannot resolve DNS record for"
+				" %s: %s",
+				task->message_id,
+				cb->rec->sender_domain,
+				cb->resolved->cur_domain,
+				rdns_strerror (reply->code));
 	}
 
 	rspamd_spf_maybe_return (cb->rec);

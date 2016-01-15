@@ -386,11 +386,17 @@ spf_check_list (struct spf_resolved *rec, struct rspamd_task *task)
 	guint i;
 	struct spf_addr *addr;
 
-	for (i = 0; i < rec->elts->len; i ++) {
-		addr = &g_array_index (rec->elts, struct spf_addr, i);
-		if (spf_check_element (addr, task)) {
-			break;
+	if (!rec->failed) {
+		for (i = 0; i < rec->elts->len; i ++) {
+			addr = &g_array_index (rec->elts, struct spf_addr, i);
+			if (spf_check_element (addr, task)) {
+				break;
+			}
 		}
+	}
+	else {
+		msg_info_task ("<%s>: ignore spf results due to DNS failure",
+						task->message_id);
 	}
 }
 
