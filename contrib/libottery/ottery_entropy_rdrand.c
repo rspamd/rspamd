@@ -19,6 +19,7 @@
     defined(_M_IX86) || \
     defined(__INTEL_COMPILER)
 
+extern int ottery_valgrind_;
 /** Helper: invoke the RDRAND instruction to get 4 random bytes in the output
  * value. Return 0 on success, and an error on failure. */
 static int
@@ -39,7 +40,7 @@ ottery_get_entropy_rdrand(const struct ottery_entropy_config *cfg,
   uint32_t *up = (uint32_t *) out;
   (void) cfg;
   (void) state;
-  if (! (ottery_get_cpu_capabilities_() & OTTERY_CPUCAP_RAND))
+  if (! (ottery_get_cpu_capabilities_() & OTTERY_CPUCAP_RAND) || ottery_valgrind_)
     return OTTERY_ERR_INIT_STRONG_RNG;
   while (outlen >= 4) {
     if ((err = rdrand(up)))

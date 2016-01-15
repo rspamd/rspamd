@@ -20,6 +20,7 @@
 
 /** Flag: true iff ottery_global_state_ is initialized. */
 static int ottery_global_state_initialized_ = 0;
+int ottery_valgrind_ = 0;
 /** A global state to use for the ottery_* functions that don't take a
  * state. */
 static struct ottery_state ottery_global_state_;
@@ -41,6 +42,9 @@ ottery_init(const struct ottery_config *cfg)
   int n = ottery_st_init(&ottery_global_state_, cfg);
   if (n == 0)
 	ottery_global_state_initialized_ = 1;
+  if (getenv("VALGRIND")) {
+	  ottery_valgrind_ = 1;
+  }
   return n;
 }
 
