@@ -393,7 +393,7 @@ struct rspamd_external_libs_ctx;
 /**
  * Initialize rspamd libraries
  */
-struct rspamd_external_libs_ctx* rspamd_init_libs ();
+struct rspamd_external_libs_ctx* rspamd_init_libs (void);
 
 /**
  * Configure libraries
