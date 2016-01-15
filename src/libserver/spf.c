@@ -504,16 +504,48 @@ spf_record_addr_set (struct spf_addr *addr, gboolean allow_any)
 	addr->flags |= RSPAMD_SPF_FLAG_IPV6;
 }
 
+static gboolean
+spf_process_txt_record (struct spf_record *rec, struct spf_resolved_element *resolved,
+		struct rdns_reply *reply)
+{
+	struct rdns_reply_entry *elt, *selected = NULL;
+	gboolean ret = FALSE;
+
+	/*
+	 * We prefer spf version 1 as other records are mostly likely garbadge
+	 * or incorrect records (e.g. spf2 records)
+	 */
+	LL_FOREACH (reply->entries, elt) {
+		if (strncmp (elt->content.txt.data, "v=spf1", sizeof ("v=spf1") - 1)
+				== 0) {
+			selected = elt;
+			break;
+		}
+	}
+
+	if (!selected) {
+		LL_FOREACH (reply->entries, elt) {
+			if (start_spf_parse (rec, resolved, elt->content.txt.data)) {
+				ret = TRUE;
+				break;
+			}
+		}
+	}
+	else {
+		ret = start_spf_parse (rec, resolved, selected->content.txt.data);
+	}
+
+	return ret;
+}
+
 static void
 spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 {
 	struct spf_dns_cb *cb = arg;
-	gchar *begin;
 	struct rdns_reply_entry *elt_data;
 	struct rspamd_task *task;
 	struct spf_addr *addr;
 	struct spf_record *rec;
-	gboolean ret;
 
 	rec = cb->rec;
 	task = rec->task;
@@ -585,10 +617,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 					break;
 				case SPF_RESOLVE_REDIRECT:
 					if (elt_data->type == RDNS_REQUEST_TXT) {
-						begin = elt_data->content.txt.data;
-						ret = start_spf_parse (rec, cb->resolved, begin);
-
-						if (ret) {
+						if (spf_process_txt_record (rec, cb->resolved, reply)) {
 							cb->addr->flags |= RSPAMD_SPF_FLAG_PARSED;
 						}
 						else {
@@ -598,10 +627,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 					break;
 				case SPF_RESOLVE_INCLUDE:
 					if (elt_data->type == RDNS_REQUEST_TXT) {
-						begin = elt_data->content.txt.data;
-						ret = start_spf_parse (rec, cb->resolved, begin);
-
-						if (ret) {
+						if (spf_process_txt_record (rec, cb->resolved, reply)) {
 							cb->addr->flags |= RSPAMD_SPF_FLAG_PARSED;
 						}
 						else {
@@ -1671,7 +1697,7 @@ start_spf_parse (struct spf_record *rec, struct spf_resolved_element *resolved,
 	}
 	else {
 		msg_debug_spf (
-				"<%s>: spf error for domain %s: bad spf record version: %*s",
+				"<%s>: spf error for domain %s: bad spf record start: %*s",
 				rec->task->message_id,
 				rec->sender_domain,
 				(gint)sizeof (SPF_VER1_STR) - 1,
@@ -1705,7 +1731,6 @@ static void
 spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 {
 	struct spf_record *rec = arg;
-	struct rdns_reply_entry *elt, *selected = NULL;
 	struct spf_resolved_element *resolved;
 
 	rec->requests_inflight--;
@@ -1717,28 +1742,7 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 			rec->ttl = reply->entries->ttl;
 		}
 
-		/*
-		 * We prefer spf version 1 as other records are mostly likely garbadge
-		 * or incorrect records (e.g. spf2 records)
-		 */
-		LL_FOREACH (reply->entries, elt) {
-			if (strncmp (elt->content.txt.data, "v=spf1", sizeof ("v=spf1") - 1)
-						== 0) {
-				selected = elt;
-				break;
-			}
-		}
-
-		if (!selected) {
-			LL_FOREACH (reply->entries, elt) {
-				if (start_spf_parse (rec, resolved, elt->content.txt.data)) {
-					break;
-				}
-			}
-		}
-		else {
-			start_spf_parse (rec, resolved, elt->content.txt.data);
-		}
+		spf_process_txt_record (rec, resolved, reply);
 	}
 
 	rspamd_spf_maybe_return (rec);
