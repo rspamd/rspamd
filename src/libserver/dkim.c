@@ -308,7 +308,7 @@ rspamd_dkim_parse_hdrlist (rspamd_dkim_context_t * ctx,
 
 	p = param;
 	while (p <= end) {
-		if ((*p == ':' || p == end)) {
+		if ((p == end || *p == ':')) {
 			count++;
 		}
 		p++;
@@ -324,7 +324,7 @@ rspamd_dkim_parse_hdrlist (rspamd_dkim_context_t * ctx,
 	c = param;
 	p = param;
 	while (p <= end) {
-		if ((*p == ':' || p == end) && p - c > 0) {
+		if ((p == end || *p == ':') && p - c > 0) {
 			if ((new =
 				rspamd_dkim_find_header (ctx->hlist, c, p - c)) != NULL) {
 				new->count++;
