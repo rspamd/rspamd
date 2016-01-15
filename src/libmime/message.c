@@ -1192,6 +1192,13 @@ process_text_part (struct rspamd_task *task,
 			text_part->flags |= RSPAMD_MIME_PART_FLAG_EMPTY;
 		}
 
+		/* Handle offsets of this part */
+		if (text_part->urls_offset != NULL) {
+			text_part->urls_offset = g_list_reverse (text_part->urls_offset);
+			rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t) g_list_free, text_part->urls_offset);
+		}
+
 		rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) free_byte_array_callback,
 			text_part->content);
