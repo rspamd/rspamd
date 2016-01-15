@@ -804,7 +804,6 @@ rspamd_srv_request_handler (gint fd, short what, gpointer ud)
 	struct rspamd_srv_request_data *rd = ud;
 	struct msghdr msg;
 	struct iovec iov;
-	struct cmsghdr *cmsg;
 	guchar fdspace[CMSG_SPACE(sizeof (int))];
 	gssize r;
 	gint rfd = -1;
@@ -846,8 +845,6 @@ rspamd_srv_request_handler (gint fd, short what, gpointer ud)
 		}
 
 		if (msg.msg_controllen >= CMSG_SPACE(sizeof (int))) {
-			cmsg = CMSG_FIRSTHDR (&msg);
-
 			rfd = *(int *) CMSG_DATA(CMSG_FIRSTHDR (&msg));
 		}
 

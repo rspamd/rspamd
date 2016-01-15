@@ -627,7 +627,7 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 						return FALSE;
 					}
 
-					if (!whandler->parser.flags & RSPAMD_CL_FLAG_MULTIPLE) {
+					if (!(whandler->parser.flags & RSPAMD_CL_FLAG_MULTIPLE)) {
 						break;
 					}
 				}
@@ -1230,7 +1230,7 @@ rspamd_rcl_add_section (struct rspamd_rcl_section **top,
 	}
 	else {
 		parent_doc = (*top)->doc_ref;
-		new->doc_ref = new->doc_ref = rspamd_rcl_add_doc_obj (parent_doc,
+		new->doc_ref = rspamd_rcl_add_doc_obj (parent_doc,
 				NULL,
 				name,
 				type,
@@ -2176,7 +2176,7 @@ rspamd_rcl_section_parse_defaults (struct rspamd_rcl_section *section,
 					return FALSE;
 				}
 
-				if (!cur->pd.flags & RSPAMD_CL_FLAG_MULTIPLE) {
+				if (!(cur->pd.flags & RSPAMD_CL_FLAG_MULTIPLE)) {
 					break;
 				}
 			}

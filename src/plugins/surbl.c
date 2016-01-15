@@ -491,7 +491,6 @@ surbl_module_config (struct rspamd_config *cfg)
 	const gchar *redir_val, *ip_val;
 	guint32 bit;
 	gint cb_id, nrules = 0;
-	gboolean has_subsymbols;
 
 	if (!rspamd_config_is_module_enabled (cfg, "surbl")) {
 		return TRUE;
@@ -672,7 +671,6 @@ surbl_module_config (struct rspamd_config *cfg)
 					-1);
 			nrules++;
 			new_suffix->callback_id = cb_id;
-			has_subsymbols = FALSE;
 
 			cur = ucl_obj_get_key (cur_rule, "bits");
 			if (cur != NULL && cur->type == UCL_OBJECT) {
@@ -701,7 +699,6 @@ surbl_module_config (struct rspamd_config *cfg)
 						msg_debug_config ("add new bit suffix: %d with symbol: %s",
 							(gint)new_bit->bit, new_bit->symbol);
 						g_array_append_val (new_suffix->bits, *new_bit);
-						has_subsymbols = TRUE;
 					}
 				}
 			}
@@ -746,7 +743,6 @@ surbl_module_config (struct rspamd_config *cfg)
 								(gint)new_bit->bit, new_bit->symbol);
 						g_hash_table_insert (new_suffix->ips, &new_bit->bit,
 								new_bit);
-						has_subsymbols = TRUE;
 					}
 				}
 			}

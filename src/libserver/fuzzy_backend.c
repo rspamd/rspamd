@@ -280,7 +280,7 @@ rspamd_fuzzy_backend_run_stmt (struct rspamd_fuzzy_backend *backend,
 	}
 
 	stmt = prepared_stmts[idx].stmt;
-	g_assert (prepared_stmts[idx].idx == idx);
+	g_assert ((int)prepared_stmts[idx].idx == idx);
 
 	if (stmt == NULL) {
 		if ((retcode = sqlite3_prepare_v2 (backend->db, prepared_stmts[idx].sql, -1,
@@ -472,7 +472,6 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 	gint64 timestamp;
 	gint64 shingle_values[RSPAMD_SHINGLE_SIZE], i, sel_id, cur_id,
 		cur_cnt, max_cnt;
-	const char *digest;
 
 	if (backend == NULL) {
 		return rep;
@@ -566,9 +565,6 @@ rspamd_fuzzy_backend_check (struct rspamd_fuzzy_backend *backend,
 				rc = rspamd_fuzzy_backend_run_stmt (backend, FALSE,
 						RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID, sel_id);
 				if (rc == SQLITE_OK) {
-					digest = sqlite3_column_text (
-							prepared_stmts[RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID].stmt,
-							0);
 					timestamp = sqlite3_column_int64 (
 							prepared_stmts[RSPAMD_FUZZY_BACKEND_GET_DIGEST_BY_ID].stmt,
 							2);

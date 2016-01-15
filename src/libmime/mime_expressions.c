@@ -1560,7 +1560,7 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 	GMimeContentType *ct;
 	gint r;
 	guint i;
-	gboolean recursive = FALSE, result = FALSE;
+	gboolean recursive = FALSE;
 	struct mime_part *cur_part;
 
 	if (args == NULL || args->len < 2) {
@@ -1600,14 +1600,15 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 
 		if ((param_data =
 				g_mime_content_type_get_parameter ((GMimeContentType *)ct,
-						param_name)) == NULL) {
-			result = FALSE;
-		}
-		else {
+						param_name)) != NULL) {
 			if (arg_pattern->type == EXPRESSION_ARGUMENT_REGEXP) {
 				re = arg_pattern->data;
 				r = rspamd_regexp_search (re, param_data, 0,
 							NULL, NULL, FALSE, NULL);
+
+				if (r) {
+					return TRUE;
+				}
 			}
 			else {
 				/* Just do strcasecmp */
@@ -1745,6 +1746,10 @@ rspamd_content_type_check (struct rspamd_task *task,
 			re = arg_pattern->data;
 			r = rspamd_regexp_search (re, param_data, 0,
 					NULL, NULL, FALSE, NULL);
+
+			if (r) {
+				return TRUE;
+			}
 		}
 		else {
 			/* Just do strcasecmp */

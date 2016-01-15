@@ -568,6 +568,7 @@ spawn_workers (struct rspamd_main *rspamd_main, struct event_base *ev_base)
 		spawn_worker_type (rspamd_main, ev_base, cf);
 	}
 #endif
+	(void)seen_hs_helper; /* Silence warning */
 }
 
 static void

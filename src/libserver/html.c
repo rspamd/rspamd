@@ -1661,7 +1661,7 @@ GByteArray*
 rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 		GByteArray *in, GList **exceptions, GHashTable *urls,  GHashTable *emails)
 {
-	const guchar *p, *c, *end, *tag_start = NULL, *savep = NULL;
+	const guchar *p, *c, *end, *savep = NULL;
 	guchar t;
 	gboolean closing = FALSE, need_decode = FALSE, save_space = FALSE,
 			balanced, url_text;
@@ -1735,7 +1735,6 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 			switch (t) {
 			case '<':
 				p ++;
-				tag_start = p;
 				closing = FALSE;
 				break;
 			case '!':
@@ -1750,14 +1749,12 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 			case '/':
 				closing = TRUE;
 				p ++;
-				tag_start = p;
 				break;
 			case '>':
 				/* Empty tag */
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
 				state = tag_end;
 				p ++;
-				tag_start = NULL;
 				break;
 			default:
 				state = tag_content;
@@ -1786,7 +1783,6 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 				break;
 			default:
 				state = sgml_content;
-				tag_start = p;
 				break;
 			}
 
@@ -1959,7 +1955,6 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 			break;
 
 		case tag_end:
-			tag_start = NULL;
 			substate = 0;
 			savep = NULL;
 

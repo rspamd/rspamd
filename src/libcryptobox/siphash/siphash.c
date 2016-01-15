@@ -27,7 +27,7 @@
 #include "platform_config.h"
 
 extern unsigned long cpu_config;
-static const int test_iters = 1000;
+static const size_t test_iters = 1000;
 
 typedef struct siphash_impl_t
 {

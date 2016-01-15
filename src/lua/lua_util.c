@@ -436,7 +436,7 @@ lua_util_tokenize_text (lua_State *L)
 	struct process_exception *ex;
 	GArray *res;
 	rspamd_ftok_t *w;
-	gboolean compat = FALSE, check_sig = FALSE;
+	gboolean compat = FALSE;
 
 	if (lua_type (L, 1) == LUA_TSTRING) {
 		in = luaL_checklstring (L, 1, &len);
@@ -483,10 +483,6 @@ lua_util_tokenize_text (lua_State *L)
 
 	if (lua_gettop (L) > 2 && lua_type (L, 3) == LUA_TBOOLEAN) {
 		compat = lua_toboolean (L, 3);
-	}
-
-	if (lua_gettop (L) > 3 && lua_type (L, 4) == LUA_TBOOLEAN) {
-		check_sig = lua_toboolean (L, 4);
 	}
 
 	if (exceptions) {

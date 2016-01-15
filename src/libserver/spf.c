@@ -429,7 +429,7 @@ spf_record_process_addr (struct spf_record *rec, struct spf_addr *addr, struct
 {
 	struct spf_addr *naddr;
 
-	if (!addr->flags & RSPAMD_SPF_FLAG_PROCESSED) {
+	if (!(addr->flags & RSPAMD_SPF_FLAG_PROCESSED)) {
 		/* That's the first address */
 		if (reply->type == RDNS_REQUEST_AAAA) {
 			memcpy (addr->addr6,

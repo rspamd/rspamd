@@ -864,7 +864,6 @@ rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat
 	GHashTable *ip_hash;
 	struct fuzzy_key_stat *key_stat;
 	struct fuzzy_key *key;
-	struct rspamd_http_keypair *kp;
 	rspamd_lru_element_t *lru_elt;
 	ucl_object_t *obj, *keys_obj, *elt, *ip_elt, *ip_cur;
 	gpointer k, v;
@@ -878,7 +877,6 @@ rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat
 
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		key = v;
-		kp = key->key;
 		key_stat = key->stat;
 
 		if (key_stat) {

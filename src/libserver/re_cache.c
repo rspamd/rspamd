@@ -539,14 +539,11 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 		const guchar *in, gsize len,
 		gboolean is_raw)
 {
-	struct rspamd_re_cache_elt *elt;
-	struct rspamd_re_class *re_class;
+
 	guint64 re_id;
 	guint ret = 0;
 
 	re_id = rspamd_regexp_get_cache_id (re);
-	elt = g_ptr_array_index (rt->cache->re, re_id);
-	re_class = rspamd_regexp_get_class (re);
 
 	if (len == 0 || in == NULL) {
 		/* We assume this as absence of the specified data */
@@ -560,7 +557,12 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 	setbit (rt->checked, re_id);
 	rt->results[re_id] = ret;
 #else
+	struct rspamd_re_cache_elt *elt;
+	struct rspamd_re_class *re_class;
 	struct rspamd_re_hyperscan_cbdata cbdata;
+
+	elt = g_ptr_array_index (rt->cache->re, re_id);
+	re_class = rspamd_regexp_get_class (re);
 
 	if (rt->cache->disable_hyperscan || elt->match_type == RSPAMD_RE_CACHE_PCRE) {
 		ret = rspamd_re_cache_process_pcre (rt, re, in, len, is_raw);

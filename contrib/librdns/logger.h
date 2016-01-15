@@ -34,9 +34,9 @@ void rdns_logger_helper (struct rdns_resolver *resolver,
 		enum rdns_log_level level,
 		const char *function, const char *format, ...);
 
-#define rdns_err(...) do { rdns_logger_helper (resolver, RDNS_LOG_ERROR, __FUNCTION__, __VA_ARGS__); } while (0)
-#define rdns_warn(...) do { rdns_logger_helper (resolver, RDNS_LOG_WARNING, __FUNCTION__, __VA_ARGS__); } while (0)
-#define rdns_info(...) do { rdns_logger_helper (resolver, RDNS_LOG_INFO, __FUNCTION__, __VA_ARGS__); } while (0)
-#define rdns_debug(...) do { rdns_logger_helper (resolver, RDNS_LOG_DEBUG, __FUNCTION__, __VA_ARGS__); } while (0)
+#define rdns_err(...) do { rdns_logger_helper (resolver, RDNS_LOG_ERROR, __func__, __VA_ARGS__); } while (0)
+#define rdns_warn(...) do { rdns_logger_helper (resolver, RDNS_LOG_WARNING, __func__, __VA_ARGS__); } while (0)
+#define rdns_info(...) do { rdns_logger_helper (resolver, RDNS_LOG_INFO, __func__, __VA_ARGS__); } while (0)
+#define rdns_debug(...) do { rdns_logger_helper (resolver, RDNS_LOG_DEBUG, __func__, __VA_ARGS__); } while (0)
 
 #endif /* LOGGER_H_ */

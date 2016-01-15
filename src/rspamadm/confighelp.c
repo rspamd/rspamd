@@ -195,7 +195,6 @@ rspamadm_confighelp_search_word (const ucl_object_t *obj, const gchar *str)
 static void
 rspamadm_confighelp (gint argc, gchar **argv)
 {
-	struct rspamd_rcl_section *top;
 	struct rspamd_config *cfg;
 	ucl_object_t *doc_obj;
 	const ucl_object_t *elt;
@@ -233,7 +232,7 @@ rspamadm_confighelp (gint argc, gchar **argv)
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;
 
-	top = rspamd_rcl_config_init (cfg);
+	rspamd_rcl_config_init (cfg);
 
 	/* Init modules to get documentation strings */
 	for (pmod = cfg->compiled_modules; pmod != NULL && *pmod != NULL; pmod++) {
