@@ -780,16 +780,14 @@ rspamd_redis_processed (redisAsyncContext *c, gpointer r, gpointer priv)
 
 				if (reply->elements == task->tokens->len) {
 					for (i = 0; i < reply->elements; i ++) {
+						tok = g_ptr_array_index (task->tokens, i);
 						elt = reply->element[i];
 
 						if (G_LIKELY (elt->type == REDIS_REPLY_INTEGER)) {
-							tok = g_ptr_array_index (task->tokens, i);
 							tok->values[rt->id] = elt->integer;
 							found ++;
 						}
 						else if (elt->type == REDIS_REPLY_STRING) {
-							tok = g_ptr_array_index (task->tokens, i);
-
 							if (rt->stcf->clcf->flags &
 									RSPAMD_FLAG_CLASSIFIER_INTEGER) {
 								rspamd_strtoul (elt->str, elt->len, &val);
