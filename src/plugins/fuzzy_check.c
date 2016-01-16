@@ -1297,16 +1297,7 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 
 	task = session->task;
 
-	if (what == EV_WRITE) {
-		if (!fuzzy_cmd_vector_to_wire (fd, session->commands)) {
-			ret = return_error;
-		}
-		else {
-			session->state = 1;
-			ret = return_want_more;
-		}
-	}
-	else if (session->state == 1) {
+	if ((what & EV_READ) || session->state == 1) {
 		/* Try to read reply */
 		if ((r = read (fd, buf, sizeof (buf) - 1)) == -1) {
 			if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
@@ -1385,6 +1376,15 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 			}
 		}
 	}
+	else if (what & EV_WRITE) {
+		if (!fuzzy_cmd_vector_to_wire (fd, session->commands)) {
+			ret = return_error;
+		}
+		else {
+			session->state = 1;
+			ret = return_want_more;
+		}
+	}
 	else {
 		/* Should not happen */
 		g_assert (0);
@@ -1452,7 +1452,7 @@ fuzzy_check_timer_callback (gint fd, short what, void *arg)
 	else {
 		/* Plan write event */
 		event_del (&session->ev);
-		event_set (&session->ev, fd, EV_WRITE,
+		event_set (&session->ev, fd, EV_WRITE|EV_READ,
 				fuzzy_check_io_callback, session);
 		event_add (&session->ev, NULL);
 
@@ -1484,18 +1484,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 
 	task = session->task;
 
-	if (what == EV_WRITE) {
-		/* Send commands to storage */
-		if (!fuzzy_cmd_vector_to_wire (fd, session->commands)) {
-			if (*(session->err) == NULL) {
-				g_set_error (session->err,
-					g_quark_from_static_string ("fuzzy check"),
-					errno, "write socket error: %s", strerror (errno));
-			}
-			ret = return_error;
-		}
-	}
-	else if (what == EV_READ) {
+	if (what & EV_READ) {
 		if ((r = read (fd, buf, sizeof (buf) - 1)) == -1) {
 			if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
 				event_add (&session->ev, NULL);
@@ -1569,6 +1558,17 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 			}
 		}
 	}
+	else if (what & EV_WRITE) {
+			/* Send commands to storage */
+			if (!fuzzy_cmd_vector_to_wire (fd, session->commands)) {
+				if (*(session->err) == NULL) {
+					g_set_error (session->err,
+						g_quark_from_static_string ("fuzzy check"),
+						errno, "write socket error: %s", strerror (errno));
+				}
+				ret = return_error;
+			}
+		}
 	else {
 		g_assert (0);
 	}
@@ -1663,7 +1663,7 @@ fuzzy_controller_timer_callback (gint fd, short what, void *arg)
 	else {
 		/* Plan write event */
 		event_del (&session->ev);
-		event_set (&session->ev, fd, EV_WRITE,
+		event_set (&session->ev, fd, EV_WRITE|EV_READ,
 				fuzzy_controller_io_callback, session);
 		event_add (&session->ev, NULL);
 
