@@ -862,35 +862,46 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 	struct redis_stat_ctx *backend;
 	struct rspamd_statfile_config *stf = st->stcf;
 	struct rspamd_redis_stat_elt *st_elt;
-	const ucl_object_t *elt, *users_enabled;
+	const ucl_object_t *elt, *relt = NULL, *users_enabled;
 	const gchar *lua_script;
 
 	backend = g_slice_alloc0 (sizeof (*backend));
 
-	elt = ucl_object_find_key (stf->opts, "read_servers");
+	elt = ucl_object_find_any_key (stf->opts, "read_servers", "servers", NULL);
 	if (elt == NULL) {
-		elt = ucl_object_find_key (stf->opts, "servers");
-	}
-	if (elt == NULL) {
-		msg_err ("statfile %s has no redis servers", stf->symbol);
 
+		if (st->classifier->cfg->opts) {
+			elt = ucl_object_find_any_key (st->classifier->cfg->opts,
+					"read_servers", "servers", NULL);
+		}
+
+		if (elt == NULL) {
+			msg_err ("statfile %s has no redis servers", stf->symbol);
+
+			return NULL;
+		}
+	}
+
+	relt = elt;
+	backend->read_servers = rspamd_upstreams_create (cfg->ups_ctx);
+	if (!rspamd_upstreams_from_ucl (backend->read_servers, elt,
+			REDIS_DEFAULT_PORT, NULL)) {
+		msg_err ("statfile %s cannot read servers configuration",
+				stf->symbol);
 		return NULL;
 	}
-	else {
-		backend->read_servers = rspamd_upstreams_create (cfg->ups_ctx);
-		if (!rspamd_upstreams_from_ucl (backend->read_servers, elt,
+
+	elt = ucl_object_find_key (stf->opts, "write_servers");
+	if (elt == NULL) {
+		/* Use read servers as write ones */
+		g_assert (relt != NULL);
+		backend->write_servers = rspamd_upstreams_create (cfg->ups_ctx);
+		if (!rspamd_upstreams_from_ucl (backend->read_servers, relt,
 				REDIS_DEFAULT_PORT, NULL)) {
 			msg_err ("statfile %s cannot read servers configuration",
 					stf->symbol);
 			return NULL;
 		}
-	}
-
-	elt = ucl_object_find_key (stf->opts, "write_servers");
-	if (elt == NULL) {
-		msg_err ("statfile %s has no write redis servers, "
-				"so learning is impossible", stf->symbol);
-		backend->write_servers = NULL;
 	}
 	else {
 		backend->write_servers = rspamd_upstreams_create (cfg->ups_ctx);
