@@ -886,7 +886,7 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 	backend->read_servers = rspamd_upstreams_create (cfg->ups_ctx);
 	if (!rspamd_upstreams_from_ucl (backend->read_servers, elt,
 			REDIS_DEFAULT_PORT, NULL)) {
-		msg_err ("statfile %s cannot read servers configuration",
+		msg_err ("statfile %s cannot get read servers configuration",
 				stf->symbol);
 		return NULL;
 	}
@@ -896,9 +896,9 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 		/* Use read servers as write ones */
 		g_assert (relt != NULL);
 		backend->write_servers = rspamd_upstreams_create (cfg->ups_ctx);
-		if (!rspamd_upstreams_from_ucl (backend->read_servers, relt,
+		if (!rspamd_upstreams_from_ucl (backend->write_servers, relt,
 				REDIS_DEFAULT_PORT, NULL)) {
-			msg_err ("statfile %s cannot read servers configuration",
+			msg_err ("statfile %s cannot get write servers configuration",
 					stf->symbol);
 			return NULL;
 		}
@@ -907,7 +907,7 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 		backend->write_servers = rspamd_upstreams_create (cfg->ups_ctx);
 		if (!rspamd_upstreams_from_ucl (backend->write_servers, elt,
 				REDIS_DEFAULT_PORT, NULL)) {
-			msg_err ("statfile %s cannot write servers configuration",
+			msg_err ("statfile %s cannot get write servers configuration",
 					stf->symbol);
 			rspamd_upstreams_destroy (backend->write_servers);
 			backend->write_servers = NULL;

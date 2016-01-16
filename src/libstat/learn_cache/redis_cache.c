@@ -223,9 +223,9 @@ rspamd_stat_cache_redis_init (struct rspamd_stat_ctx *ctx,
 		/* Use read servers as write ones */
 		g_assert (relt != NULL);
 		cache_ctx->write_servers = rspamd_upstreams_create (cfg->ups_ctx);
-		if (!rspamd_upstreams_from_ucl (cache_ctx->read_servers, relt,
+		if (!rspamd_upstreams_from_ucl (cache_ctx->write_servers, relt,
 				REDIS_DEFAULT_PORT, NULL)) {
-			msg_err ("statfile %s cannot get read servers configuration for the cache",
+			msg_err ("statfile %s cannot get write servers configuration for the cache",
 					stf->symbol);
 			return NULL;
 		}
