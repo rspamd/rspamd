@@ -284,7 +284,7 @@ if not opts or type(opts) ~= 'table' then
 end
 
 if not opts['servers'] then
-  rspamd_logger.errx(rspamd_config, 'no servers are specified for dmarc stats')
+  rspamd_logger.infox(rspamd_config, 'no servers are specified for dmarc stats')
 else
   upstreams = upstream_list.create(rspamd_config, opts['servers'], default_port)
   if not upstreams then

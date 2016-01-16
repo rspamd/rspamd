@@ -346,7 +346,7 @@ local configure_ip_score_module = function()
     if options['servers'] and options['servers'] ~= '' then
       upstreams = upstream_list.create(rspamd_config, options['servers'], default_port)
       if not upstreams then
-        rspamd_logger.errx(rspamd_config, 'no servers are specified')
+        rspamd_logger.infox(rspamd_config, 'no servers are specified')
       end
     end
     if options['whitelist'] then
