@@ -464,16 +464,19 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 	case RSPAMD_TASK_STAGE_LEARN_PRE:
 	case RSPAMD_TASK_STAGE_LEARN_POST:
 		if (task->flags & (RSPAMD_TASK_FLAG_LEARN_SPAM|RSPAMD_TASK_FLAG_LEARN_HAM)) {
-			if (!rspamd_stat_learn (task,
-					task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM,
-					task->cfg->lua_state, task->classifier,
-					st, &stat_error)) {
+			if (task->err == NULL) {
+				if (!rspamd_stat_learn (task,
+						task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM,
+						task->cfg->lua_state, task->classifier,
+						st, &stat_error)) {
 
-				if (!(task->flags & RSPAMD_TASK_FLAG_LEARN_AUTO)) {
-					task->err = stat_error;
+					if (!(task->flags & RSPAMD_TASK_FLAG_LEARN_AUTO)) {
+						task->err = stat_error;
+					}
+
+					msg_err_task ("learn error: %e", stat_error);
+					task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
 				}
-				msg_err_task ("learn error: %e", stat_error);
-				task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
 			}
 		}
 		break;
