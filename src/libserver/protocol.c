@@ -1118,6 +1118,8 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 		ucl_object_unref (top);
 	}
 	else {
+		msg->status = rspamd_fstring_new_init ("OK", 2);
+
 		switch (task->cmd) {
 		case CMD_REPORT_IFSPAM:
 		case CMD_REPORT:
