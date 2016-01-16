@@ -190,40 +190,51 @@ rspamd_stat_cache_redis_init (struct rspamd_stat_ctx *ctx,
 {
 	struct rspamd_redis_cache_ctx *cache_ctx;
 	struct rspamd_statfile_config *stf = st->stcf;
-	const ucl_object_t *elt;
+	const ucl_object_t *elt, *relt;
 
 	cache_ctx = g_slice_alloc0 (sizeof (*cache_ctx));
 
-	elt = ucl_object_find_key (stf->opts, "read_servers");
+	elt = ucl_object_find_any_key (stf->opts, "read_servers", "servers", NULL);
 	if (elt == NULL) {
-		elt = ucl_object_find_key (stf->opts, "servers");
-	}
-	if (elt == NULL) {
-		msg_err ("statfile %s has no redis servers", stf->symbol);
 
-		return NULL;
-	}
-	else {
-		cache_ctx->read_servers = rspamd_upstreams_create (cfg->ups_ctx);
-		if (!rspamd_upstreams_from_ucl (cache_ctx->read_servers, elt,
-				REDIS_DEFAULT_PORT, NULL)) {
-			msg_err ("statfile %s cannot read servers configuration",
-					stf->symbol);
+		if (st->classifier->cfg->opts) {
+			elt = ucl_object_find_any_key (st->classifier->cfg->opts,
+					"read_servers", "servers", NULL);
+		}
+
+		if (elt == NULL) {
+			msg_err ("statfile %s has no redis servers needed by cache", stf->symbol);
+
 			return NULL;
 		}
 	}
 
+	relt = elt;
+	cache_ctx->read_servers = rspamd_upstreams_create (cfg->ups_ctx);
+	if (!rspamd_upstreams_from_ucl (cache_ctx->read_servers, elt,
+			REDIS_DEFAULT_PORT, NULL)) {
+		msg_err ("statfile %s cannot get read servers configuration for the cache",
+				stf->symbol);
+		return NULL;
+	}
+
 	elt = ucl_object_find_key (stf->opts, "write_servers");
 	if (elt == NULL) {
-		msg_err ("statfile %s has no write redis servers, "
-				"so learning is impossible", stf->symbol);
-		cache_ctx->write_servers = NULL;
+		/* Use read servers as write ones */
+		g_assert (relt != NULL);
+		cache_ctx->write_servers = rspamd_upstreams_create (cfg->ups_ctx);
+		if (!rspamd_upstreams_from_ucl (cache_ctx->read_servers, relt,
+				REDIS_DEFAULT_PORT, NULL)) {
+			msg_err ("statfile %s cannot get read servers configuration for the cache",
+					stf->symbol);
+			return NULL;
+		}
 	}
 	else {
 		cache_ctx->write_servers = rspamd_upstreams_create (cfg->ups_ctx);
 		if (!rspamd_upstreams_from_ucl (cache_ctx->write_servers, elt,
 				REDIS_DEFAULT_PORT, NULL)) {
-			msg_err ("statfile %s cannot write servers configuration",
+			msg_err ("statfile %s cannot get write servers configuration for the cache",
 					stf->symbol);
 			rspamd_upstreams_destroy (cache_ctx->write_servers);
 			cache_ctx->write_servers = NULL;
