@@ -647,7 +647,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 			}
 		}
 	}
-	else if (reply->code == RDNS_RC_NXDOMAIN) {
+	else if (reply->code == RDNS_RC_NXDOMAIN || reply->code == RDNS_RC_NOREC) {
 		switch (cb->cur_action) {
 			case SPF_RESOLVE_MX:
 				if (rdns_request_has_type (reply->request, RDNS_REQUEST_MX)) {
