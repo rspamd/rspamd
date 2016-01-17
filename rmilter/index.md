@@ -12,10 +12,9 @@ Rmilter can also do other useful stuff:
 
 -   Clamav scanning (via unix or tcp socket).
 -   Rspamd scanning
--   Spf checking (via libspf2) - deprecated
--   Greylisting with memcached upstream
--   Ratelimit with memcached upstream
--   Auto-whitelisting (internal and via memcached upstream)
+-   Greylisting with redis upstream
+-   Ratelimit with redis upstream
+-   Auto-whitelisting (internal and via redis upstream)
 -   Replies check (whitelisting replies to sent messages)
 -   Passing messages and/or their headers to beanstalk servers
 
@@ -33,9 +32,9 @@ Value may be:
 -   String (may not contain spaces)
 -   Quoted string (if string may contain spaces)
 -   Numeric value
--   Flag (`y`, `Yes` or `n`, `No`)
--   IPv4 or network (eg. `127.0.0.1`, `192.168.1.0/24`)
--   Socket argument (eg. `host:port` or `/path/to/socket`)
+-   Flag (`yes`/`no` or `true`/`false`)
+-   IP or network (eg. `127.0.0.1`, `192.168.1.0/24`, `[::1]/128`)
+-   Socket argument (eg. `host:port` or `/path/to/socket` or `fd:3` for systemd socket)
 -   Regexp (eg. `/Match\*/`)
 -   List (eg. `value1, value2, value3`)
 -   Recipients list (`user, user@domain, @domain`)
@@ -47,7 +46,7 @@ definition looks like:
      section_name {
              section_directive;
              ...
-     };
+     }
 
 ## Common sections
 
@@ -148,17 +147,17 @@ Specifies rspamd or spamassassin spam scanners.
 
 Back to [top](#).
 
-## Memcached section
+## Redis section
 
-Defines memcached servers for grey/whitelisting and ratelimits.
+Defines redis servers for grey/whitelisting and ratelimits.
 
-- `servers_grey`: memcached servers for greylisting in format: `host[:port][, host[:port]]`. It is possible to make memcached mirroring (for two servers only), its syntax is `{server1,server2}`
+- `servers_grey`: redis servers for greylisting in format: `host[:port][, host[:port]]`.
 	+ Default: `empty`
-- `servers_white`: memcached servers for whitelisting in format similar to that is used in *servers_grey*
+- `servers_white`: redis servers for whitelisting in format similar to that is used in *servers_grey*
 	+ Default: `empty`
-- `servers_limits`: memcached servers used for limits storing, can not be mirrored
+- `servers_limits`: redis servers used for limits storing, can not be mirrored
 	+ Default: `empty`
-- `connect_timeout`: timeout in miliseconds for connecting to memcached
+- `connect_timeout`: timeout in miliseconds for connecting to redis
 	+ Default: `1s`
 - `error_time`: time in seconds during which we are counting errors
 	+ Default: `10`
@@ -166,8 +165,6 @@ Defines memcached servers for grey/whitelisting and ratelimits.
 	+ Default: `300`
 - `maxerrors`: maximum number of errors that can occur during error_time to make rmilter thinking that this upstream is dead
 	+ Default: `10`
-- `protocol`: protocol that is using for connecting to memcached (tcp or udp)
-	+ Default: `tcp`
 
 Back to [top](#).
 
@@ -197,8 +194,6 @@ Defines [beanstalk](http://kr.github.com/beanstalkd/) servers for copying messag
 	+ Default: `no`
 - `send_beanstalk_spam`: defines whether we should send copy of spam messages to beanstalk server (from spam_server option)
 	+ Default: `no`
-- `protocol`: protocol that is using for connecting to beanstalk (tcp or udp)
-	+ Default: `tcp`
 
 Back to [top](#).
 
@@ -289,7 +284,7 @@ Back to [top](#).
 
 Back to [top](#).
 
-## Keys used in memcached
+## Keys used in redis
 
 -   *rcpt* - bucket for rcpt filter
 -   *rcpt:ip* - bucket for rcpt_ip filter
@@ -345,14 +340,14 @@ Back to [top](#).
 ### Setup whitelisting of reply messages
 
 It is possible to store `Message-ID` headers for authenticated users and whitelist replies to that messages by using of rmilter. To enable this
-feature, please ensure that you have `memcached` server running and add the following lines to memcached section:
+feature, please ensure that you have `redis` server running and add the following lines to redis section:
 
-    memcached {
+    redis {
       ...
-      # servers_id - memcached servers used for message id storing, can not be mirrored
+      # servers_id - redis servers used for message id storing, can not be mirrored
       servers_id = localhost;
 
-      # id_prefix - prefix for extracting message ids from memcached
+      # id_prefix - prefix for extracting message ids from redis
       # Default: empty (no prefix is prepended to key)
       id_prefix = "message_id.";
     }
