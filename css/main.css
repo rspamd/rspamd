@@ -17,15 +17,6 @@ body {
 }
 /* Responsive: Portrait tablets and up */
 @media screen and (min-width: 1024px) {
-  /* Let the jumbotron breathe */
-  .jumbotron {
-    margin-top: 20px;
-  	background:url(/img/rspamd_head_alt.png);
-  	background-size: 100% auto;
-  	background-repeat: no-repeat;
-    /*height: 300px;
-    background-size: cover;*/
-  }
   /* Remove padding from wrapping element since we kick in the grid classes here */
   .body-content {
     padding: 0;
@@ -107,7 +98,18 @@ hr {
       align-content:space-between;
   }
 }
-@media (min-width: 762px) and (max-width: 985px){
+.jumbotron {
+  background:url(/img/rspamd_head_alt.png);
+  background-size: cover;
+}
+@media (min-width: 768px) and (max-width: 992px){
     /* when navbar is thick */
     .jumbotron {margin-top: 70px;}
+}
+@media (min-width: 992px){
+  /* usual screen */
+  .jumbotron {
+    margin-top: 20px;
+
+  }
 }
