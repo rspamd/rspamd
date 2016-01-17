@@ -651,7 +651,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 		switch (cb->cur_action) {
 			case SPF_RESOLVE_MX:
 				if (rdns_request_has_type (reply->request, RDNS_REQUEST_MX)) {
-					msg_info_spf (
+					msg_debug_spf (
 							"<%s>: spf error for domain %s: cannot find MX record for %s",
 							task->message_id,
 							cb->rec->sender_domain,
@@ -659,7 +659,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 					spf_record_addr_set (addr, FALSE);
 				}
 				else {
-					msg_info_spf (
+					msg_debug_spf (
 							"<%s>: spf error for domain %s: cannot resolve MX record for %s",
 							task->message_id,
 							cb->rec->sender_domain,
