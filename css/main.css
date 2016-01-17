@@ -107,3 +107,7 @@ hr {
       align-content:space-between;
   }
 }
+@media (min-width: 762px) and (max-width: 985px){
+    /* when navbar is thick */
+    .jumbotron {margin-top: 70px;}
+}
