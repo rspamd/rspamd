@@ -681,7 +681,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				spf_record_addr_set (addr, FALSE);
 				break;
 			case SPF_RESOLVE_REDIRECT:
-				msg_info_spf (
+				msg_debug_spf (
 						"<%s>: spf error for domain %s: cannot resolve TXT record for %s",
 						task->message_id,
 						cb->rec->sender_domain,
@@ -689,7 +689,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
 				break;
 			case SPF_RESOLVE_INCLUDE:
-				msg_info_spf (
+				msg_debug_spf (
 						"<%s>: spf error for domain %s: cannot resolve TXT record for %s",
 						task->message_id,
 						cb->rec->sender_domain,
