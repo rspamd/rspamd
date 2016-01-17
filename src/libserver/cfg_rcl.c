@@ -567,12 +567,8 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 	}
 	else {
-		g_set_error (err,
-				CFG_RCL_ERROR,
-				EINVAL,
-				"unknown worker type: %s",
-				worker_type);
-		return FALSE;
+		msg_err_config ("unknown worker type: %s", worker_type);
+		return TRUE;
 	}
 
 	val = ucl_object_find_key (obj, "bind_socket");
