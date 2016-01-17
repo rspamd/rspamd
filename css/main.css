@@ -17,15 +17,6 @@ body {
 }
 /* Responsive: Portrait tablets and up */
 @media screen and (min-width: 1024px) {
-  /* Let the jumbotron breathe */
-  .jumbotron {
-    margin-top: 20px;
-  	background:url(/img/rspamd_head_alt.png);
-  	background-size: 100% auto;
-  	background-repeat: no-repeat;
-    /*height: 300px;
-    background-size: cover;*/
-  }
   /* Remove padding from wrapping element since we kick in the grid classes here */
   .body-content {
     padding: 0;
@@ -38,32 +29,26 @@ body {
   }
 }
 .tab-content {
-    border-left: 1px solid #ddd;
-    border-right: 1px solid #ddd;
     border-bottom: 1px solid #ddd;
     padding: 20px;
     margin-bottom: 50px;
-    background-color: #F0F0F0;
 }
 .nav-tabs {
     margin-top: 50px;
 }
-.nav-tabs > li > a:hover{
-    /* not active tab hover */
+/*.nav-tabs > li > a:hover{
     background-color: #E8E8E8 !important;
 }
 .nav-tabs > li.active,
 .nav-tabs > li.active > a{
-    /* active and default active tab */
     background-color: #F0F0F0 !important;
     border-bottom: 0px !important;
 }
 @media (max-width: 600px){
-    /* hide tabs text for small device */
     .myHidden-sm{
       display: none;
     }
-}
+}*/
 pre{
   /* code aria */
   background-color: #333333;
@@ -79,8 +64,7 @@ hr {
     margin-bottom: 0.5em;
     margin-left: auto;
     margin-right: auto;
-    border-style: inset;
-    border-width: 1px;
+    border-top: 1px solid #ddd;
 }
 .row-footer{
     position: relative;
@@ -105,5 +89,20 @@ hr {
       align-items:stretch;
       flex-wrap: wrap;
       align-content:space-between;
+  }
+}
+.jumbotron {
+  background:url(/img/rspamd_head_alt.png);
+  background-size: cover;
+}
+@media (min-width: 768px) and (max-width: 992px){
+    /* when navbar is thick */
+    .jumbotron {margin-top: 70px;}
+}
+@media (min-width: 992px){
+  /* usual screen */
+  .jumbotron {
+    margin-top: 20px;
+
   }
 }
