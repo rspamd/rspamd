@@ -1,3 +1,121 @@
+1.1.0:
+	* Incompatible change: sqlite3 and per_user behaviour:
+		Now both redis and sqlite3 follows the common principles for per-user
+		statistics:
+		1) If per-user statistics is enabled check per-user tokens ONLY
+		2) If per-user statistics is not enabled then check common tokens ONLY
+		If you need old behaviour, then you'd need to use separate classifier
+		for per-user statistics.
+	* Implement redis statistics backend and cache
+	* Implement autolearning for statistics
+	* Reworked statistics architecture from scratch
+	* Add hyperscan (https://github.com/01org/hyperscan) engine for regular
+	  expressions:
+		- add lazy loader for hyperscan databases
+		- rework regexp cache to have joint pcre/hyperscan scanning
+		- implement hyperscan pre-filter support
+		- add compilation guards for bad expressions
+		- implement `rspamadm control recompile` command
+		- implement hyperscan cache monitoring
+		- slides: <https://highsecure.ru/rspamd-hyperscan.pdf>
+	* Implement flexible task logging
+	* Rework fuzzy worker:
+		- it is now possible to run multiple fuzzy workers;
+		- implement lazy writing as sqlite3 is bad at concurrent writing;
+		- add retries for simple sql commands in fuzzy backend;
+		- use fine-grained transactions for fuzzy;
+		- implement new multi-pubkeys mode;
+		- allow encrypted only storages;
+		- rework statistics for fuzzy;
+		- add `rspamadm control fuzzystat` command for extended statistics;
+		- implement human readable output for the previous command;
+		- add condition script for learning fuzzy storage;
+	* Various fixes to SPF:
+		- fix `redirect` records;
+		- fix domains when parsing mx/ptr/a records in includes/redirects;
+		- fix issues with multiple addresses in SPF records;
+		- ignore SPF results in case of DNS failure;
+		- adjust TTL of records when resolving subelements of SPF records;
+		- always select `v=spf1` line if it is available
+		- do not cache records with DNS failure in subrequests;
+		- ignore records with temporary fails during subrequests resolving;
+		- fix `RDNS_RC_NOREC` support;
+	* Add clang plugin for static analysis:
+		- implement static checks for `rspamd_printf` format strings;
+	* Add 'allow_raw_input' option for non-mime messages
+	* Recognize types using libmagic
+	* Fix parsing of IPv6 received headers
+	* Add new interface of communication between workers in rspamd
+	* Add support for named socketpairs
+	* Don't write URLs by default as it is too verbose
+	* Set status for HTTP replies
+	* Try load `rspamd.conf.override`
+	* Implement words decaying for text parts to limit many checks
+	* Improve support of SA rules and plugins:
+		- add check_for_shifted_date and check_for_missing_to_header eval rules;
+		- add 'check_relays_unparseable' support;
+		- add `check_for_mime('mime_attachement')` function;
+		- use new re_cache interface for all SA rules;
+		- add support for `Mail::SpamAssassin::Plugin::MIMEHeader`;
+		- add support of 'special' SA headers to `exists` function;
+		- fix issue when SA metas contain other metas;
+		- fix freemail rules;
+	* Many fixes to the URL parser
+	* Match any newline character in regexps
+	* Fix resolving of upstreams and detection of poor IPv6 configurations
+	* Parse upstreams selection algorithm from the configuration line
+	* Add `reresolve` command to the control interface
+	* Generate fuzzy hashes from task metadata (URLs and headers)
+	* Add method to check if IP is local and `local_addrs` option
+	* Implement forced timeout for delayed filters
+	* Disable fast path of pcre-jit as it seems to be broken
+	* Bayes fixes:
+		- new normalizer function;
+		- really use weights of tokens from the OSB algorithm;
+		- restore multiple classifiers support;
+	* Rules changes:
+		- add `R_SUSPICIOUS_URL` rule that detects obfuscated URL's;
+		- improve empty image rule;
+		- rework `FORGED_RECIPIENTS` rule;
+		- reduce weight of `SUSPICIOUS_RECIPS`;
+		- fix `*_NORESOLVE_MX` symbols in hfilter;
+		- add `SUBJ_ALL_CAPS` rule with support of UTF8
+		- add spamhaus SBL to uribl
+		- fix `SUSPICIOUS_RECIPS` and `SORTED_RECIPS` rules
+		- remove `R_TO_SEEMS_AUTO` as it generates a lot of FP;
+		- add new Message-ID regexp for Thunderbird (by @moisseev);
+	* Plugins changes:
+		- allow ratelimit plugin to set symbol instead of pre-result
+		- support IP DNS black lists for URIBL (e.g spamhaus SBL);
+		- drop deprecated SURBL bits (by @fatalbanana)
+		- rename `JP_SURBL_MULTI` to `ABUSE_SURBL` (by @fatalbanana)
+		- add `SURBL_BLOCKED` (by @fatalbanana)
+		- add `CR_SURBL`
+		- SURBL: allow fallthrough to default symbol (by @fatalbanana)
+		- Settings: fix IP match (by @fatalbanana)
+		- SURBL: add missing symbols to metric (by @fatalbanana)
+		- allow processing images urls for SURBL
+		- unconditionally disable SPF for authenticated users and local networks
+	* Rework ratelimit plugin
+		- switch to `rates` instead of old and stupid strings to setup;
+		- check if a bucket is zero and disable the corresponding limits'
+		- turn off all buckets by default;
+		- check either `rcpt` or `user` buckets, not all together'
+		- document new `rates` and `symbol` options;
+		- inform user about what buckets are used in the configuration;
+	* Add neural network **experimental** plugin
+	* Add a sample script to learn neural network from rspamd logs
+	* Add documentation strings support to rspamd:
+		- add strings for the main configuration options;
+		- document workers options;
+		- add internal plugin options;
+		- create `rspamadm confighelp` routine;
+		- implement human readable output for the previous command;
+		- add subtree search support;
+		- add keyword search support;
+	* Documentation improvements, tutorials section, statistics description
+	* Many other minor and major bugfixes not noted here
+
 1.0.11:
 	* Fix spf redirects
 	* Fix domains when parsing mx/ptr/a records in includes/redirects
