@@ -23,6 +23,10 @@ We suppose that postfix is set using your OS packaging system (e.g. `apt-get ins
 
 main.cf
 
+<a class="btn btn-info btn-block btn-code" data-toggle="collapse" data-target="#main_cf">main.cf...
+<i class="fa fa-caret-square-o-down"></i></a>
+<div id="main_cf" class="collapse">
+<div markdown="1">
 	# SSL setup (we assume the same certs for IMAP and SMTP here)
 	smtpd_tls_cert_file = /etc/dovecot/dovecot.pem
 	smtpd_tls_key_file = /etc/dovecot/private/dovecot.pem
@@ -101,6 +105,8 @@ main.cf
 	milter_default_action = accept
 	milter_protocol = 6
 	milter_mail_macros = i {mail_addr} {client_addr} {client_name} {auth_authen}
+  </div>
+</div>
 
 Then you'd need dovecot installed. For APT based systems you might want to install the following packages:
 
@@ -161,11 +167,11 @@ Rspamd will be started on-demand, so to simulate this you could run:
 ### Ubuntu, Debian Wheezy
 
 To enable run on startup:
-	
+
 	update-rc.d rspamd defaults
 
 To start once:
-	
+
 	/etc/init.d/rspamd start
 
 ### CentOS 6
@@ -221,7 +227,7 @@ Then you can copy this string and store it in the configuration file. Rspamd use
 
 ### Pre-built statistics
 
-Rspamd is shipped with [pre-built statistics](https://rspamd.com/rspamd_statistics/). Since version 1.0 release, we would recommend to bootstrap your `BAYES` statistics using sqlite3. To load the pre-built statistics, please ensure, that your 
+Rspamd is shipped with [pre-built statistics](https://rspamd.com/rspamd_statistics/). Since version 1.0 release, we would recommend to bootstrap your `BAYES` statistics using sqlite3. To load the pre-built statistics, please ensure, that your
 `${CONFDIR}/statistics.conf` contains the following setting:
 
 
@@ -255,7 +261,7 @@ Then you can download two files using the following commands:
 
 For some systems, namely old centos (6 or 7) the shipped sqlite version won't be able to use pre-shipped statfiles. For that purposes, there are also the raw sql dumps for statfiles which could
 be used in the following way:
-	
+
 	wget http://rspamd.com/rspamd_statistics/bayes.spam.sql.xz
 	wget http://rspamd.com/rspamd_statistics/bayes.ham.sql.xz
 	xz -cd bayes.spam.sql.xz | sqlite3 /var/lib/rspamd/bayes.spam.sqlite
