@@ -21,12 +21,7 @@ First of all, you need a working MTA (Mail Trabnsfer Agent) that is able to serv
 
 We suppose that postfix is set using your OS packaging system (e.g. `apt-get install postfix`). Here is the desired configuration for Postfix:
 
-main.cf
-
-<a class="btn btn-info btn-block btn-code" data-toggle="collapse" data-target="#main_cf">main.cf...
-<i class="fa fa-caret-square-o-down"></i></a>
-<div id="main_cf" class="collapse">
-<pre><code>
+<a class="btn btn-info btn-block btn-code" data-toggle="collapse" data-target="#main_cf">main.cf...<i class="fa fa-caret-square-o-down"></i></a><div id="main_cf" class="collapse"><pre><code>
 	# SSL setup (we assume the same certs for IMAP and SMTP here)
 	smtpd_tls_cert_file = /etc/dovecot/dovecot.pem
 	smtpd_tls_key_file = /etc/dovecot/private/dovecot.pem
@@ -105,8 +100,7 @@ main.cf
 	milter_default_action = accept
 	milter_protocol = 6
 	milter_mail_macros = i {mail_addr} {client_addr} {client_name} {auth_authen}
-</code></pre>
-</div>
+</code></pre></div>
 
 Then you'd need dovecot installed. For APT based systems you might want to install the following packages:
 
