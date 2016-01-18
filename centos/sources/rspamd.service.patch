@@ -1,5 +1,5 @@
---- rspamd.service.orig	2015-10-14 19:31:57.147935738 +0200
-+++ rspamd.service	2015-10-14 20:36:07.848964984 +0200
+--- rspamd.service.orig	2016-01-18 19:32:58.660425266 +0200
++++ rspamd.service	2016-01-18 19:33:33.288446835 +0200
 @@ -3,8 +3,7 @@
  After=nss-lookup.target
  
@@ -7,6 +7,6 @@
 -ExecStart=/usr/bin/rspamd -c /etc/rspamd/rspamd.conf -f
 -User=_rspamd
 +ExecStart=/usr/bin/rspamd -c /etc/rspamd/rspamd.conf -f -u _rspamd -g _rspamd
+ RuntimeDirectory=rspamd
+ RuntimeDirectoryMode=0755
  
- [Install]
- WantedBy=multi-user.target
