@@ -120,8 +120,9 @@ rspamd_mempool_chain_new (gsize size, enum rspamd_mempool_chain_type pool_type)
 		g_atomic_int_add (&mem_pool_stat->bytes_allocated, size);
 	}
 	else {
-		chain = g_slice_alloc (sizeof (struct _pool_chain));
-		chain->begin = g_slice_alloc (size);
+		map = g_slice_alloc (sizeof (struct _pool_chain) + size);
+		chain = map;
+		chain->begin = ((guint8 *) chain) + sizeof (struct _pool_chain);
 		g_atomic_int_add (&mem_pool_stat->bytes_allocated, size);
 		g_atomic_int_inc (&mem_pool_stat->chunks_allocated);
 	}
@@ -515,6 +516,7 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 	struct _pool_destructors *destructor;
 	gpointer ptr;
 	guint i, j;
+	gsize len;
 
 	POOL_MTX_LOCK ();
 
@@ -533,13 +535,17 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 		if (pool->pools[i]) {
 			for (j = 0; j < pool->pools[i]->len; j++) {
 				cur = g_ptr_array_index (pool->pools[i], j);
+				g_atomic_int_add (&mem_pool_stat->bytes_allocated,
+						-((gint)cur->len));
+				g_atomic_int_add (&mem_pool_stat->chunks_allocated, -1);
+
+				len = cur->len + sizeof (struct _pool_chain);
 
 				if (i == RSPAMD_MEMPOOL_SHARED) {
-					munmap ((void *)cur, cur->len +
-								sizeof (struct _pool_chain));
+					munmap ((void *)cur, len);
 				}
 				else {
-					g_slice_free1 (sizeof (*cur), cur);
+					g_slice_free1 (len, cur);
 				}
 			}
 
@@ -570,13 +576,19 @@ rspamd_mempool_cleanup_tmp (rspamd_mempool_t * pool)
 {
 	struct _pool_chain *cur;
 	guint i;
+	gsize len;
 
 	POOL_MTX_LOCK ();
 
 	if (pool->pools[RSPAMD_MEMPOOL_TMP]) {
 		for (i = 0; i < pool->pools[RSPAMD_MEMPOOL_TMP]->len; i++) {
 			cur = g_ptr_array_index (pool->pools[RSPAMD_MEMPOOL_TMP], i);
-			g_slice_free1 (sizeof (*cur), cur);
+			g_atomic_int_add (&mem_pool_stat->bytes_allocated,
+					-((gint)cur->len));
+			g_atomic_int_add (&mem_pool_stat->chunks_allocated, -1);
+			len = cur->len + sizeof (struct _pool_chain);
+
+			g_slice_free1 (len, cur);
 		}
 
 		g_ptr_array_free (pool->pools[RSPAMD_MEMPOOL_TMP], TRUE);
