@@ -21,86 +21,88 @@ First of all, you need a working MTA (Mail Trabnsfer Agent) that is able to serv
 
 We suppose that postfix is set using your OS packaging system (e.g. `apt-get install postfix`). Here is the desired configuration for Postfix:
 
+<div>
 <a class="btn btn-info btn-block btn-code" data-toggle="collapse" data-target="#main_cf">main.cf...<i class="fa fa-caret-square-o-down"></i></a><div id="main_cf" class="collapse"><pre><code>
-	# SSL setup (we assume the same certs for IMAP and SMTP here)
-	smtpd_tls_cert_file = /etc/dovecot/dovecot.pem
-	smtpd_tls_key_file = /etc/dovecot/private/dovecot.pem
-	smtpd_use_tls = yes
-	smtpd_tls_session_cache_database = btree:${data_directory}/smtpd_scache
-	smtp_tls_session_cache_database = btree:${data_directory}/smtp_scache
-	#smtp_tls_security_level = dane # Works only with the recent postfix
-	#smtp_dns_support_level = dnssec
-	smtpd_tls_ciphers = high
-	smtpd_tls_mandatory_protocols = !SSLv2, !SSLv3
-	smtp_tls_mandatory_ciphers = high
-	smtp_tls_mandatory_exclude_ciphers = RC4, MD5, DES
-	smtp_tls_exclude_ciphers = aNULL, RC4, MD5, DES, 3DES
+# SSL setup (we assume the same certs for IMAP and SMTP here)
+smtpd_tls_cert_file = /etc/dovecot/dovecot.pem
+smtpd_tls_key_file = /etc/dovecot/private/dovecot.pem
+smtpd_use_tls = yes
+smtpd_tls_session_cache_database = btree:${data_directory}/smtpd_scache
+smtp_tls_session_cache_database = btree:${data_directory}/smtp_scache
+#smtp_tls_security_level = dane # Works only with the recent postfix
+#smtp_dns_support_level = dnssec
+smtpd_tls_ciphers = high
+smtpd_tls_mandatory_protocols = !SSLv2, !SSLv3
+smtp_tls_mandatory_ciphers = high
+smtp_tls_mandatory_exclude_ciphers = RC4, MD5, DES
+smtp_tls_exclude_ciphers = aNULL, RC4, MD5, DES, 3DES
 
-	# Change this for your domain
-	myhostname = mail.example.com
-	alias_maps = hash:/etc/aliases
-	alias_database = hash:/etc/aliases
-	virtual_alias_maps = hash:/etc/postfix/virtual
-	myorigin = /etc/mailname
-	mydestination = example.com, localhost, localhost.localdomain, localhost
-	relayhost =
-	mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128 10.0.0.0/8
-	mailbox_size_limit = 0
-	recipient_delimiter = +
-	inet_interfaces = all
-	home_mailbox = Maildir/
-	smtpd_sasl_auth_enable = yes
-	smtpd_sasl_type = dovecot
-	smtpd_sasl_path = private/dovecot-auth
-	smtpd_sasl_authenticated_header = yes
-	smtpd_sasl_security_options = noanonymous
-	smtpd_sasl_local_domain = $myhostname
-	broken_sasl_auth_clients = yes
-	smtpd_sender_restrictions = reject_unknown_sender_domain
-	mailbox_command = /usr/lib/dovecot/deliver -c /etc/dovecot/dovecot.conf -m "${EXTENSION}"
-	smtpd_tls_received_header = yes
-	smtpd_tls_auth_only = yes
-	tls_random_source = dev:/dev/urandom
-	message_size_limit = 52428800
+# Change this for your domain
+myhostname = mail.example.com
+alias_maps = hash:/etc/aliases
+alias_database = hash:/etc/aliases
+virtual_alias_maps = hash:/etc/postfix/virtual
+myorigin = /etc/mailname
+mydestination = example.com, localhost, localhost.localdomain, localhost
+relayhost =
+mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128 10.0.0.0/8
+mailbox_size_limit = 0
+recipient_delimiter = +
+inet_interfaces = all
+home_mailbox = Maildir/
+smtpd_sasl_auth_enable = yes
+smtpd_sasl_type = dovecot
+smtpd_sasl_path = private/dovecot-auth
+smtpd_sasl_authenticated_header = yes
+smtpd_sasl_security_options = noanonymous
+smtpd_sasl_local_domain = $myhostname
+broken_sasl_auth_clients = yes
+smtpd_sender_restrictions = reject_unknown_sender_domain
+mailbox_command = /usr/lib/dovecot/deliver -c /etc/dovecot/dovecot.conf -m "${EXTENSION}"
+smtpd_tls_received_header = yes
+smtpd_tls_auth_only = yes
+tls_random_source = dev:/dev/urandom
+message_size_limit = 52428800
 
-	# Setup basic SMTP attrs
-	smtpd_soft_error_limit = 2
-	smtpd_error_sleep_time = ${stress?0}${stress:10s}
-	smtpd_hard_error_limit = ${stress?3}${stress:20}
+# Setup basic SMTP attrs
+smtpd_soft_error_limit = 2
+smtpd_error_sleep_time = ${stress?0}${stress:10s}
+smtpd_hard_error_limit = ${stress?3}${stress:20}
 
-	smtpd_recipient_limit = 100
+smtpd_recipient_limit = 100
 
-	smtpd_timeout = ${stress?30}${stress:300}
+smtpd_timeout = ${stress?30}${stress:300}
 
-	smtpd_delay_reject = no
+smtpd_delay_reject = no
 
-	smtpd_helo_required = yes
-	strict_rfc821_envelopes = yes
+smtpd_helo_required = yes
+strict_rfc821_envelopes = yes
 
-	# Greeting delay of 7 seconds
-	smtpd_client_restrictions =
-	        check_client_access hash:/etc/postfix/access,
-	        permit_mynetworks,
-	        sleep 7,
-	        reject_unauth_pipelining,
+# Greeting delay of 7 seconds
+smtpd_client_restrictions =
+        check_client_access hash:/etc/postfix/access,
+        permit_mynetworks,
+        sleep 7,
+        reject_unauth_pipelining,
 
-	smtpd_recipient_restrictions = reject_unknown_sender_domain, reject_unknown_recipient_domain, reject_unauth_pipelining, permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination
-	smtpd_data_restrictions =
-	        permit_sasl_authenticated,
-	        permit_mynetworks,
-	        reject_unauth_pipelining,
+smtpd_recipient_restrictions = reject_unknown_sender_domain, reject_unknown_recipient_domain, reject_unauth_pipelining, permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination
+smtpd_data_restrictions =
+        permit_sasl_authenticated,
+        permit_mynetworks,
+        reject_unauth_pipelining,
 
-	smtpd_end_of_data_restrictions =
-	        permit_sasl_authenticated,
-	        permit_mynetworks,
-	smtpd_relay_restrictions = check_recipient_access hash:/etc/postfix/access, reject_non_fqdn_sender, reject_unknown_sender_domain, permit_sasl_authenticated, permit_mynetworks, reject_unauth_destination, reject_non_fqdn_helo_hostname, reject_invalid_helo_hostname,
+smtpd_end_of_data_restrictions =
+        permit_sasl_authenticated,
+        permit_mynetworks,
+smtpd_relay_restrictions = check_recipient_access hash:/etc/postfix/access, reject_non_fqdn_sender, reject_unknown_sender_domain, permit_sasl_authenticated, permit_mynetworks, reject_unauth_destination, reject_non_fqdn_helo_hostname, reject_invalid_helo_hostname,
 
-	# rmilter setup
-	smtpd_milters = inet:localhost:9900
-	milter_default_action = accept
-	milter_protocol = 6
-	milter_mail_macros = i {mail_addr} {client_addr} {client_name} {auth_authen}
+# rmilter setup
+smtpd_milters = inet:localhost:9900
+milter_default_action = accept
+milter_protocol = 6
+milter_mail_macros = i {mail_addr} {client_addr} {client_name} {auth_authen}
 </code></pre></div>
+</div>
 
 Then you'd need dovecot installed. For APT based systems you might want to install the following packages:
 
