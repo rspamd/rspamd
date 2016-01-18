@@ -36,19 +36,6 @@ body {
 .nav-tabs {
     margin-top: 50px;
 }
-/*.nav-tabs > li > a:hover{
-    background-color: #E8E8E8 !important;
-}
-.nav-tabs > li.active,
-.nav-tabs > li.active > a{
-    background-color: #F0F0F0 !important;
-    border-bottom: 0px !important;
-}
-@media (max-width: 600px){
-    .myHidden-sm{
-      display: none;
-    }
-}*/
 pre{
   /* code aria */
   background-color: #333333;
@@ -105,4 +92,11 @@ hr {
     margin-top: 20px;
 
   }
+}
+.btn-code{
+  background-color: #333333 !important;
+  color: #eeeeee;
+  border: none;
+  font-family: monospace;
+  text-decoration: none;
 }
