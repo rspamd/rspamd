@@ -264,6 +264,8 @@ provided by opendkim library.
     +   `key` - path to private key
     +   `domain` - domain to be used for signing (this matches with SMTP FROM data). If domain is `*` then rmilter tries to search key in the `key` path as `keypath/domain.selector.key` for any domain.
     +   `selector` - dkim DNS selector (e.g. for selector *dkim* and domain *example.com* DNS TXT record should be for `dkim._domainkey.example.com`).
+- `sign_networks` - specify internal network to perform signing as well
+	+ Default: `empty`
 
 Back to [top](#).
 
