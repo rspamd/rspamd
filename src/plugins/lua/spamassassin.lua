@@ -419,7 +419,7 @@ local function maybe_parse_sa_function(line)
         end
 
         if not func then
-          rspamd_logger.errx(rspamd_config, 'cannot find appropriate eval rule for function %1',
+          rspamd_logger.errx(task, 'cannot find appropriate eval rule for function %1',
             arg)
         else
           return func(task)
