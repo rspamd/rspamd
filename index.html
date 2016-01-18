@@ -7,7 +7,9 @@ title: Rspamd spam filtering system
 	<div class="col-xs-12 col-sm-4 myMainPageText">
 			<div>
 					<h2>Performance</h2>
-					<p>Rspamd is designed to work as fast as possible. Rspamd can <strong>save</strong> your computational resources by applying clever techniques, such as event based processing model, <a href="https://highsecure.ru/ast-rspamd.pdf">abstract syntax tree</a> constructions, carefull algorithms selection and number of global and local optimizations, such as using of <a href="https://github.com/01org/hyperscan">hyperscan</a> for <a href="https://highsecure.ru/rspamd-hyperscan.pdf">optimizing regular expressions</a>. Rspamd core is written completely in C programming language and the most critical parts are written in dedicated assembly for the target hardware platforms.
+					<p>Rspamd is designed to work as fast as possible.</p>
+					<p>Rspamd can <strong>save</strong> your computational resources by applying clever techniques, such as event based processing model, <a href="https://highsecure.ru/ast-rspamd.pdf">abstract syntax tree</a> constructions, carefull algorithms selection and number of global and local optimizations, such as using of <a href="https://github.com/01org/hyperscan">hyperscan</a> for <a href="https://highsecure.ru/rspamd-hyperscan.pdf">optimizing regular expressions</a>.</p>
+					<p>Rspamd core is written completely in C programming language and the most critical parts are written in dedicated assembly for the target hardware platforms.
 					</p>
 		 </div>
 		 <a class="btn btn-primary" href="about.html#performance">View details &raquo;</a>
@@ -15,17 +17,20 @@ title: Rspamd spam filtering system
 	<div class="col-xs-12 col-sm-4 myMainPageText">
 		  <div>
 					<h2>Features</h2>
-					<p>Rspamd ships with the wide selection of filters to process messages, such as <a href="/doc/modules/regexp.html">regular expressions</a>, <a href="/doc/modules/rbl.html">DNS black lists</a>, <a href="/doc/modules/surbl.html">URL black lists</a>,
-				     <a href="/doc/modules/multimap.html">dynamic IP/hosts/DNS lists</a>, <a href="/doc/modules/spf.html,">SPF</a>, <a href="/doc/modules/dkim.html,">DKIM</a> and <a href="/doc/modules/dmarc.html,">DMARC</a> modules. For advanced filtering rspamd provides improved statistics module (based on
+					<p>Rspamd ships with the wide selection of filters to process messages, such as <a href="/doc/modules/regexp.html">regular expressions</a>, DNS black and white <a href="/doc/modules/rbl.html">lists</a>, <a href="/doc/modules/surbl.html">URL</a> black lists, <a href="/doc/modules/multimap.html">dynamic</a> IP/hosts or DNS lists, <a href="/doc/modules/spf.html">SPF</a> module, <a href="/doc/modules/dkim.html">DKIM</a> plugin and <a href="/doc/modules/dmarc.html">DMARC</a> policy check support.</p>
+				    <p>For advanced filtering rspamd provides improved statistics module (based on
 					   <a href="http://osbf-lua.luaforge.net/papers/osbf-eddc.pdf">OSB-Bayes algorithm</a>) and <a href="/doc/modules/fuzzy_check.html">fuzzy hashes</a> database that is generated based on
-				     <a href="http://en.wikipedia.org/wiki/Honeypot_%28computing%29">honeypots</a> traffic. Rspamd also keeps partial compatibility with <a href="http://spamassassin.apache.org">spamassassin</a> rules via <a href="/doc/modules/spamassassin.html">the translation module</a></p>
+				     <a href="http://en.wikipedia.org/wiki/Honeypot_%28computing%29">honeypots</a> traffic.</p>
+				     <p>Rspamd also keeps partial compatibility with <a href="http://spamassassin.apache.org">spamassassin</a> rules via <a href="/doc/modules/spamassassin.html">the translation module</a></p>
 			</div>
 		  <a class="btn btn-primary" href="about.html#features">View details &raquo;</a>
 	</div>
 	<div class="col-xs-12 col-sm-4 myMainPageText">
 			<div>
 					<h2>Easy to manage</h2>
-					<p>Rspamd is easy to <a href="/doc/integration.html">integrate</a> into the existing e-mail infrastructure and it shipped with the powerful tools to simplify management. For example, the complementary tool <a href="/rmilter">rmilter</a> utility provides <a href="http://www.postfix.org">postfix</a> integration as well as many other features, such as greylisting, ratelimits or <a href="http://www.clamav.org">clamav</a> checks. Rspamd is also integrated with the powerful <a href="/webui/">web interface</a>  that simplifies the most common operations and displays statistics. Moreover, it is possible to <a href="/doc/tutorials/writing_rules.html">write own rules</a> for rspamd using the marvellous and simple <a href="http://www.lua.org">LUA</a> language.</p>
+					<p>Rspamd is easy to <a href="/doc/integration.html">integrate</a> into the existing e-mail infrastructure and it shipped with the powerful tools to simplify management. For example, the complementary tool <a href="/rmilter">rmilter</a> utility provides <a href="http://www.postfix.org">postfix</a> integration as well as many other features, such as greylisting, ratelimits or <a href="http://www.clamav.org">clamav</a> checks.</p> 
+					<p>Rspamd is also integrated with the powerful <a href="/webui/">web interface</a>  that simplifies the most common operations and displays statistics.</p>
+					<p>Moreover, it is possible to <a href="/doc/tutorials/writing_rules.html">write own rules</a> for rspamd using the marvellous and simple <a href="http://www.lua.org">LUA</a> language.</p>
       </div>
 			<a class="btn btn-primary" href="about.html#extensions">View details &raquo;</a>
 	</div>
