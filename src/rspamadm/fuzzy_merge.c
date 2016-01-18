@@ -210,9 +210,11 @@ static guint
 rspamadm_op_hash (gconstpointer p)
 {
 	const struct fuzzy_merge_op *op = p;
+	guint res;
 
 	/* Uniformly distributed */
-	return *(guint *)op->digest;
+	memcpy (&res, op->digest, sizeof (res));
+	return res;
 }
 
 static gboolean
