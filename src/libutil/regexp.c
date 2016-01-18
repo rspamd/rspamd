@@ -33,6 +33,8 @@
 
 typedef guchar regexp_id_t[rspamd_cryptobox_HASHBYTES];
 
+#define DISABLE_JIT_FAST 1
+
 struct rspamd_regexp_s {
 	gdouble exec_time;
 	gchar *pattern;
@@ -362,7 +364,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 {
 	pcre *r;
 	pcre_extra *ext;
-#if defined(HAVE_PCRE_JIT) && defined(HAVE_PCRE_JIT_FAST)
+#if defined(HAVE_PCRE_JIT) && defined(HAVE_PCRE_JIT_FAST) && !defined(DISABLE_JIT_FAST)
 	pcre_jit_stack *st = NULL;
 #endif
 	const gchar *mt;
@@ -398,16 +400,20 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 	if ((re->flags & RSPAMD_REGEXP_FLAG_RAW) || raw) {
 		r = re->raw_re;
 		ext = re->raw_extra;
-#if defined(HAVE_PCRE_JIT) && defined(HAVE_PCRE_JIT_FAST)
+#if defined(HAVE_PCRE_JIT) && defined(HAVE_PCRE_JIT_FAST) && !defined(DISABLE_JIT_FAST)
 		st = re->raw_jstack;
 #endif
 	}
 	else {
 		r = re->re;
 		ext = re->extra;
-#if defined(HAVE_PCRE_JIT) && defined(HAVE_PCRE_JIT_FAST)
+#if defined(HAVE_PCRE_JIT) && defined(HAVE_PCRE_JIT_FAST) && !defined(DISABLE_JIT_FAST)
 		if (g_utf8_validate (mt, remain, NULL)) {
 			st = re->jstack;
+		}
+		else {
+			msg_err ("bad utf8 input for JIT re");
+			return FALSE;
 		}
 #endif
 	}
@@ -418,7 +424,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 
 	if (!(re->flags & RSPAMD_REGEXP_FLAG_NOOPT)) {
 #ifdef HAVE_PCRE_JIT
-# ifdef HAVE_PCRE_JIT_FAST
+# if defined(HAVE_PCRE_JIT_FAST) && !defined(DISABLE_JIT_FAST)
 		/* XXX: flags seems to be broken with jit fast path */
 		g_assert (remain > 0);
 		g_assert (mt != NULL);
