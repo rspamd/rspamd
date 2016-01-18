@@ -96,10 +96,12 @@ allows to scale even more on the modern multi-core systems.
 * **Clever choice of data structures** - rspamd tries to use the optimal data structure for each task, for example, it uses very efficient suffix tries for fast matching of a text
 against a set of multiple patterns. Or it uses radix bit trie for storing IP addresses information that provides O(1) access time complexity.
 
+You can also check the user's report regarding rspamd performance at [haraka github](https://github.com/haraka/Haraka/pull/964#issuecomment-100694945).
+
 ## Extensions {#extensions}
 
-Besides of the `C` core rspamd provides the extensive [Lua](http://lua.org) API to access almost all the features available directly from `C`. Lua is an extremely easy
-to learn programming language, though it is powerful enough to implement complex mail filters. In fact, rspamd has a significant amout of code written completely in Lua, such as
+Besides of the `C` core, rspamd provides the [Lua](http://lua.org) API to access almost all the features available directly from `C`. Lua is an extremely easy
+to [learn](http://lua-users.org/wiki/TutorialDirectory) programming language, though it is powerful enough to implement complex mail filters. In fact, rspamd has a significant amout of code written completely in Lua, such as
 DNS blacklists checks, or user's settings, or different maps implementation. You can also write your own filters and rules in Lua adopting rspamd functionality to your needs.
 Furthermore, Lua programs are very fast and their performance is rather [close](http://attractivechaos.github.io/plb/) to pure `C`. However, you should note that for the most
 of performance critical tasks you usually use the rspamd core functionality than Lua code. Anyway, you can also use `LuaJIT` with rspamd if your goal is maximum performance.
@@ -131,10 +133,5 @@ statistical systems, e.g. based on an input language. Moreover, you can even lea
 all features from rspamd core, including such features as non-blocking IO, HTTP client and server, non-blocking redis client, asynchronous DNS, UCL configuration and so on
 and so forth.
 
-* **API documentation** - rspamd Lua API has an [extensive documentation](https://rspamd.com/doc/lua) where you can find examples, references and the guide about how to extend
+* **API documentation** - rspamd Lua API has an [detailed documentation](https://rspamd.com/doc/lua) where you can find examples, references and the guide about how to extend
 rspamd with Lua.
-
-## References
-
-* Home site: <https://rspamd.com>
-* Development: <https://github.com/vstakhov/rspamd>
