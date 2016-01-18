@@ -14,7 +14,53 @@ title: Rspamd Blog
   </div>
 {% endfor %}
 
-<!-- Pagination links -->
+<!-- Ubuntu Pagination links -->
+<ul id="post-pagination" class="pagination pagination-sm">
+  {% if paginator.previous_page %}
+    <li class="previous">
+      {% if paginator.previous_page == 1 %}
+        <a href="/blog/">&laquo;</a>
+      {% else %}
+        <a href="{{ paginator.previous_page_path }}">&laquo;</a>
+      {% endif %}
+    </li>
+  {% else %}
+    <li class="previous disabled">
+      <span>&laquo;</span>
+    </li>
+  {% endif %}
+
+    <li class="page">
+      {% if paginator.page == 1 %}
+        <span class="current-page">1</span>
+      {% else %}
+        <a href="/blog/">1</a>
+      {% endif %}
+    </li>
+
+    {% for count in (2..paginator.total_pages) %}
+      <li class="page">
+        {% if count == paginator.page %}
+          <span class="current-page">{{ count }}</span>
+        {% else %}
+          <a href="/blog/page{{ count }}">{{ count }}</a>
+        {% endif %}
+      </li>
+    {% endfor %}
+
+  {% if paginator.next_page %}
+    <li class="next">
+      <a href="{{ paginator.next_page_path }}">&raquo;</a>
+    </li>
+  {% else %}
+    <li class="next disabled">
+      <span>&raquo;</span>
+    </li>
+  {% endif %}
+
+</ul>
+
+<!-- Pagination links
 <div id="post-pagination" class="pagination">
   {% if paginator.previous_page %}
     <p class="previous">
@@ -60,4 +106,4 @@ title: Rspamd Blog
     </p>
   {% endif %}
 
-</div>
+</div> -->
