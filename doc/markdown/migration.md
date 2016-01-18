@@ -4,6 +4,56 @@ This document describes incompatible changes introduced in the recent rspamd
 versions. Here you can find information about how to overcome this incompatibilities
 and update your rules and configuration according to these changes.
 
+## Migrating from rspamd 1.0 to rspamd 1.1
+
+This notice affects merely users with per-user statistics enabled. There is an incompatible change in sqlite3 and per_user behaviour:
+
+Now both redis and sqlite3 follows the common principles for per-user statistics:
+
+* If per-user statistics is enabled check per-user tokens **ONLY**
+* If per-user statistics is not enabled then check common tokens **ONLY**
+
+If you need old behaviour, then you'd need to use separate classifier
+for per-user statistics, for example:
+
+~~~nginx
+    classifier {
+        tokenizer {
+            name = "osb";
+        }
+        name = "bayes_user";
+        min_tokens = 11;
+        backend = "sqlite3";
+        per_language = true;
+        per_user = true;
+        statfile {
+            path = "/tmp/bayes.spam.sqlite";
+            symbol = "BAYES_SPAM_USER";
+        }
+        statfile {
+            path = "/tmp/bayes.ham.sqlite";
+            symbol = "BAYES_HAM_USER";
+        }
+    }
+    classifier {
+        tokenizer {
+            name = "osb";
+        }
+        name = "bayes";
+        min_tokens = 11;
+        backend = "sqlite3";
+        per_language = true;
+        statfile {
+            path = "/tmp/bayes.spam.sqlite";
+            symbol = "BAYES_SPAM";
+        }
+        statfile {
+            path = "/tmp/bayes.ham.sqlite";
+            symbol = "BAYES_HAM";
+        }
+    }
+~~~
+
 ## Migrating from rspamd 0.9 to rspamd 1.0
 
 In rspamd 1.0, the default settings for statistics tokenization has been changed to `modern`, meaning
