@@ -176,7 +176,7 @@ rspamd_rs_compile (struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 	}
 
 	if ((ncompiled = rspamd_re_cache_compile_hyperscan (ctx->cfg->re_cache,
-			ctx->hs_dir, ctx->max_time,
+			ctx->hs_dir, ctx->max_time, !forced,
 			&err)) == -1) {
 		msg_err ("failed to compile re cache: %e", err);
 		g_error_free (err);
@@ -184,8 +184,11 @@ rspamd_rs_compile (struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 		return FALSE;
 	}
 
-	msg_info ("compiled %d regular expressions to the hyperscan tree",
-			ncompiled);
+	if (ncompiled > 0) {
+		msg_info ("compiled %d regular expressions to the hyperscan tree",
+				ncompiled);
+		forced = TRUE;
+	}
 
 	/*
 	 * Do not send notification unless all other workers are started
@@ -198,6 +201,7 @@ rspamd_rs_compile (struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 
 	srv_cmd.type = RSPAMD_SRV_HYPERSCAN_LOADED;
 	srv_cmd.cmd.hs_loaded.cache_dir = ctx->hs_dir;
+	srv_cmd.cmd.hs_loaded.forced = forced;
 
 	rspamd_srv_send_command (worker, ctx->ev_base, &srv_cmd, NULL, NULL);
 

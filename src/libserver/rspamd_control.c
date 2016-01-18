@@ -716,9 +716,9 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 				 * workers
 				 */
 				wcmd.cmd.hs_loaded.cache_dir = cmd.cmd.hs_loaded.cache_dir;
+				wcmd.cmd.hs_loaded.forced = cmd.cmd.hs_loaded.forced;
 				rspamd_control_broadcast_cmd (srv, &wcmd,
 						rspamd_control_hs_io_handler, NULL);
-				rdata->rep.reply.hs_loaded.unused = 0;
 				break;
 			default:
 				msg_err ("unknown command type: %d", cmd.type);

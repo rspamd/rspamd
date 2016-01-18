@@ -64,6 +64,7 @@ struct rspamd_control_command {
 		} recompile;
 		struct {
 			gpointer cache_dir;
+			gboolean forced;
 		} hs_loaded;
 		struct {
 			guint unused;
@@ -112,6 +113,7 @@ struct rspamd_srv_command {
 		} spair;
 		struct {
 			gpointer cache_dir;
+			gboolean forced;
 		} hs_loaded;
 	} cmd;
 };
@@ -124,7 +126,7 @@ struct rspamd_srv_reply {
 			gint code;
 		} spair;
 		struct {
-			gint unused;
+			gint forced;
 		} hs_loaded;
 	} reply;
 };

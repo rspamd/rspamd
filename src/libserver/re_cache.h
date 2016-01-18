@@ -84,6 +84,13 @@ void rspamd_re_cache_init (struct rspamd_re_cache *cache,
 		struct rspamd_config *cfg);
 
 /**
+ * Returns true when hyperscan is loaded
+ * @param cache
+ * @return
+ */
+gboolean rspamd_re_cache_is_hs_loaded (struct rspamd_re_cache *cache);
+
+/**
  * Get runtime data for a cache
  */
 struct rspamd_re_runtime* rspamd_re_cache_runtime_new (struct rspamd_re_cache *cache);
@@ -145,7 +152,7 @@ enum rspamd_re_type rspamd_re_cache_type_from_string (const char *str);
  * Compile expressions to the hyperscan tree and store in the `cache_dir`
  */
 gint rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
-		const char *cache_dir, gdouble max_time,
+		const char *cache_dir, gdouble max_time, gboolean silent,
 		GError **err);
 
 

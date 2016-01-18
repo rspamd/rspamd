@@ -100,6 +100,7 @@ struct rspamd_re_cache {
 	guint max_re_data;
 	gchar hash[rspamd_cryptobox_HASHBYTES + 1];
 #ifdef WITH_HYPERSCAN
+	gboolean hyperscan_loaded;
 	gboolean disable_hyperscan;
 	hs_platform_info_t plt;
 #endif
@@ -186,9 +187,24 @@ rspamd_re_cache_new (void)
 	cache->re_classes = g_hash_table_new (g_int64_hash, g_int64_equal);
 	cache->nre = 0;
 	cache->re = g_ptr_array_new_full (256, rspamd_re_cache_elt_dtor);
+#ifdef WITH_HYPERSCAN
+	cache->hyperscan_loaded = FALSE;
+#endif
 	REF_INIT_RETAIN (cache, rspamd_re_cache_destroy);
 
 	return cache;
+}
+
+gboolean
+rspamd_re_cache_is_hs_loaded (struct rspamd_re_cache *cache)
+{
+	g_assert (cache != NULL);
+
+#ifdef WITH_HYPERSCAN
+	return cache->hyperscan_loaded;
+#else
+	return FALSE;
+#endif
 }
 
 rspamd_regexp_t *
@@ -1011,7 +1027,7 @@ rspamd_re_cache_is_finite (struct rspamd_re_cache *cache,
 
 gint
 rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
-		const char *cache_dir, gdouble max_time,
+		const char *cache_dir, gdouble max_time, gboolean silent,
 		GError **err)
 {
 	g_assert (cache != NULL);
@@ -1051,24 +1067,27 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 			g_assert (fd != -1);
 			lseek (fd, RSPAMD_HS_MAGIC_LEN + sizeof (cache->plt), SEEK_SET);
 			read (fd, &n, sizeof (n));
-			total += n;
 			close (fd);
 
 			if (re_class->type_len > 0) {
-				msg_info_re_cache (
-						"skip already valid class %s(%*s) to cache %6s, %d regexps",
-						rspamd_re_cache_type_to_string (re_class->type),
-						(gint) re_class->type_len - 1,
-						re_class->type_data,
-						re_class->hash,
-						n);
+				if (!silent) {
+					msg_info_re_cache (
+							"skip already valid class %s(%*s) to cache %6s, %d regexps",
+							rspamd_re_cache_type_to_string (re_class->type),
+							(gint) re_class->type_len - 1,
+							re_class->type_data,
+							re_class->hash,
+							n);
+				}
 			}
 			else {
-				msg_info_re_cache (
-						"skip already valid class %s to cache %6s, %d regexps",
-						rspamd_re_cache_type_to_string (re_class->type),
-						re_class->hash,
-						n);
+				if (!silent) {
+					msg_info_re_cache (
+							"skip already valid class %s to cache %6s, %d regexps",
+							rspamd_re_cache_type_to_string (re_class->type),
+							re_class->hash,
+							n);
+				}
 			}
 
 			continue;
@@ -1491,6 +1510,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 	}
 
 	msg_info_re_cache ("hyperscan database of %d regexps has been loaded", total);
+	cache->hyperscan_loaded = TRUE;
 
 	return TRUE;
 #endif
