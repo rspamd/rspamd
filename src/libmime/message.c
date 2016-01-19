@@ -1357,7 +1357,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 		mime_part->raw_headers = g_hash_table_new (rspamd_strcase_hash,
 				rspamd_strcase_equal);
 		rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t) g_hash_table_destroy,
+				(rspamd_mempool_destruct_t) g_hash_table_unref,
 				mime_part->raw_headers);
 		if (hdrs != NULL) {
 			process_raw_headers (task, mime_part->raw_headers,
@@ -1423,7 +1423,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 				mime_part->raw_headers = g_hash_table_new (rspamd_strcase_hash,
 						rspamd_strcase_equal);
 				rspamd_mempool_add_destructor (task->task_pool,
-					(rspamd_mempool_destruct_t) g_hash_table_destroy,
+					(rspamd_mempool_destruct_t) g_hash_table_unref,
 					mime_part->raw_headers);
 				if (hdrs != NULL) {
 					process_raw_headers (task, mime_part->raw_headers,

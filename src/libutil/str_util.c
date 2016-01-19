@@ -1267,6 +1267,10 @@ rspamd_string_find_eoh (GString *input)
 		}
 	}
 
+	if (state == got_linebreak_lf) {
+		return c - input->str;
+	}
+
 	return -1;
 }
 
