@@ -112,6 +112,8 @@ Configuration of dovecot is a bit out of the scope for this guide but you can al
 
 To setup TLS for your mail system, we'd recommend to use [letsencrypt](https://letsencrypt.org) certificates as they are free to use and convenient for managing. To get such a certificate for your domain you need allow letsencrypt authority to check your domain. Unfortunately, the most common case is to have `HTTP` port opened for your domain. For example, if you need to get certificate for your MTA named `mail.example.com` then you need that to control port 80 on the host assoctiated with this name.
 
+
+## TLS Setup
 TODO: add letsencrypt setup description
 
 ## Caching setup

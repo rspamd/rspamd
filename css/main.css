@@ -43,6 +43,7 @@ pre{
 }
 a.undecor {
   text-decoration: none;
+  color: black;
 }
 hr {
     /* simple hr */
