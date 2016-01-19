@@ -703,8 +703,9 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				break;
 		}
 	}
-	else if (cb->cur_action == SPF_RESOLVE_INCLUDE ||
-			cb->cur_action == SPF_RESOLVE_REDIRECT) {
+	else if ((cb->cur_action == SPF_RESOLVE_INCLUDE ||
+			cb->cur_action == SPF_RESOLVE_REDIRECT) ||
+			reply->code == RDNS_RC_TIMEOUT) {
 		cb->addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
 		msg_info_spf (
 				"<%s>: spf error for domain %s: cannot resolve DNS record for"
