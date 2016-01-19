@@ -246,7 +246,7 @@ http {
 
     gzip  on;
 
- 	server {
+    server {
         listen 443 ssl;
         add_header Strict-Transport-Security "max-age=31536000; includeSubdomains";
         add_header X-Content-Type-Options nosniff;
@@ -338,7 +338,7 @@ These are configured in `modules.conf` in the `rbl{}` and `surbl{}` sections. De
 
 ## Using Rspamd
 
-### Using rspamc
+### Using rspamc console routine
 
 `rspamc` implements a feature-complete client for Rspamd. For detailed documentation refer to `man rspamc`.
 
@@ -346,31 +346,76 @@ Common use-cases for `rspamc` include:
 
 * Scanning messages stored on disk:
 	
-	rspamc < file.eml
-	rspamc file.eml
-	rspamc directory1/ directory2/*.eml
+    rspamc < file.eml
+    rspamc file.eml
+    rspamc directory1/ directory2/*.eml
 
 * Training bayesian classifier
 
-	rspamc learn_spam < file.eml
-	rspamc learn_ham file.eml
-	rspamc -c "bayes2" learn_spam directory1/ directory2/*.eml
+    rspamc learn_spam < file.eml
+    rspamc learn_ham file.eml
+    rspamc -c "bayes2" learn_spam directory1/ directory2/*.eml
 
 * Administering fuzzy storage
 	
-	rspamc -f 1 -w 1 fuzzy_add file.eml
-	rspamc -f 2 fuzzy_del file2.eml
+    rspamc -f 1 -w 1 fuzzy_add file.eml
+    rspamc -f 2 fuzzy_del file2.eml
 
 * Acting as a local delivery agent (read in the [integration document](/doc/integration.html))
+
+### Using rspamadm command
+
+Rspamadm is the new command that is intended to manage rspamd directly. It comes with the embedded help that could be displayed by typing
+
+    % rspamadm help
+    Rspamadm 1.1.0
+    Usage: rspamadm [global_options] command [command_options]
+
+    Available commands:
+       pw                 Manage rspamd passwords
+       keypair            Create encryption key pairs
+       configtest         Perform configuration file test
+       fuzzy_merge        Merge fuzzy databases
+       configdump         Perform configuration file dump
+       control            Manage rspamd main control interface
+       confighelp         Shows help for configuration options
+
+For example, it is possible to get help for a specific configuration option by typing something like
+
+    rspamadm confighelp -k fuzzy
+
+### Using mail system utilities
+
+It is also useful to have a simple `Sieve` script to place all messages marked as spam to the `Junk` folder. Here is an example of such a script (~/.dovecot.sieve):
+
+```
+require ["fileinto"];
+
+if header :is "X-Spam" "Yes" {
+        fileinto "Junk";
+}
+```
+
+You can also setup rspamc to learn via passing messages to a certain email address. I'd recommend to use `/etc/aliases` for these purposes and `mail-redirect` command (e.g. provided by [Mail Redirect addon](https://addons.mozilla.org/en-GB/thunderbird/addon/mailredirect/) for `thunderbird` MUA). The desired aliases could be the following:
+
+	learn-spam123: "| rspamc learn_spam"
+	learn-ham123: "| rspamc learn_ham"
+
+You'd need some less predictable aliases to avoid sending messages to such addresses by some adversary or just by a mistake to prevent statistics pollution.
+
+There is also an addon for Thunderbird MUA written by Alexander Moisseev to visualise rspamd stats. You can download it form its [homepage](https://addons.mozilla.org/en-GB/thunderbird/addon/rspamd-spamness/). You'd need to add extended spam headers by rmilter to make the whole setup working which could be done by adding the following line to `rmilter.conf`:
+
+~~~nginx
+spamd {
+...
+        extended_spam_headers = yes;
+}
+~~~
+
+Here is the sample look of this addon:
+
+<img class="img-responsive" src="/img/thunderbird_rspamd.png">
 
 ### Using the WebUI
 
 Rspamd has a built-in WebUI supporting setting metric actions & scores; training bayes & scanning messages- for more information see the [webui documentation](https://rspamd.com/webui).
-
-### MTA integration
-
-Usually you will want to integrate rspamd with your MTA- see the [integration guide](https://rspamd.com/doc/integration.html) for details.
-
-### Custom integration
-
-Rspamd speaks plain HTTP and can be easily integrated with your own apps- refer to the [protocol description](https://rspamd.com/doc/architecture/protocol.html) for details.
