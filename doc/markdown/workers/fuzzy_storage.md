@@ -105,8 +105,8 @@ Fuzzy storage accepts the following extra options:
 
 - `database` - path to the sqlite storage
 - `expire` - time value for hashes expiration
-- `allow_map` - string, array of strings or a map of IP addresses that are allowed
-to perform changes to fuzzy storage
+- `allow_update` - string, array of strings or a map of IP addresses that are allowed
+to perform changes to fuzzy storage (you should also set `read_only = no` in your fuzzy_check plugin).
 
 Here is an example configuration of fuzzy storage:
 
