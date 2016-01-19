@@ -284,6 +284,7 @@ http {
 </code>
 </pre>
 </div>
+</div>
 
 You need also to remove `localhost` from the `secure_ip` setting of the controller worker to enable password access for rspamd webui. Alternatively, you could setup HTTP authentication in nginx itself.
 
@@ -311,7 +312,7 @@ From version 1.1, it is also possible to specify redis as a backend for statisti
     }
 ~~~
 
-For other possibilities please read the full [documentation](/doc/statistic.html)
+For other possibilities please read the full [documentation](/doc/statistic.html).
 
 ### Configuring RBLs
 
