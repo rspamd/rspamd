@@ -405,11 +405,11 @@ if opts then
   end
 
   if not opts['servers'] then
-    rspamd_logger.errx(rspamd_config, 'no servers are specified')
+    rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
   else
     upstreams = upstream_list.create(rspamd_config, opts['servers'], default_port)
     if not upstreams then
-      rspamd_logger.errx(rspamd_config, 'no servers are specified')
+      rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
     else
       if not ratelimit_symbol then
         rspamd_config:register_pre_filter(rate_test)
