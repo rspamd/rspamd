@@ -450,6 +450,8 @@ spf_record_process_addr (struct spf_record *rec, struct spf_addr *addr, struct
 					"internal error, bad DNS reply is treated as address: %s",
 					rdns_strtype (reply->type));
 		}
+
+		addr->flags |= RSPAMD_SPF_FLAG_PROCESSED;
 	}
 	else {
 		/* We need to create a new address */
@@ -482,26 +484,24 @@ static void
 spf_record_addr_set (struct spf_addr *addr, gboolean allow_any)
 {
 	guchar fill;
-	guint maskv4, maskv6;
 
-	if (allow_any) {
-		fill = 0;
-		maskv4 = 0;
-		maskv6 = 0;
+	if (!(addr->flags & RSPAMD_SPF_FLAG_PROCESSED)) {
+		if (allow_any) {
+			fill = 0;
+			addr->m.dual.mask_v4 = 0;
+			addr->m.dual.mask_v6 = 0;
+		}
+		else {
+			fill = 0xff;
+		}
+
+		memset (addr->addr4, fill, sizeof (addr->addr4));
+		memset (addr->addr6, fill, sizeof (addr->addr6));
+
+
+		addr->flags |= RSPAMD_SPF_FLAG_IPV4;
+		addr->flags |= RSPAMD_SPF_FLAG_IPV6;
 	}
-	else {
-		fill = 0xff;
-		maskv4 = 32;
-		maskv6 = 128;
-	}
-
-	memset (addr->addr4, fill, sizeof (addr->addr4));
-	memset (addr->addr6, fill, sizeof (addr->addr6));
-	addr->m.dual.mask_v4 = maskv4;
-	addr->m.dual.mask_v6 = maskv6;
-
-	addr->flags |= RSPAMD_SPF_FLAG_IPV4;
-	addr->flags |= RSPAMD_SPF_FLAG_IPV6;
 }
 
 static gboolean
@@ -638,8 +638,8 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				case SPF_RESOLVE_EXP:
 					break;
 				case SPF_RESOLVE_EXISTS:
-					if (elt_data->type == RDNS_REQUEST_A || elt_data->type ==
-															RDNS_REQUEST_AAAA) {
+					if (elt_data->type == RDNS_REQUEST_A ||
+						elt_data->type == RDNS_REQUEST_AAAA) {
 						/* If specified address resolves, we can accept connection from every IP */
 						spf_record_addr_set (addr, TRUE);
 					}
