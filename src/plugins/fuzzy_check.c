@@ -1775,11 +1775,13 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 	}
 
 	/* Process metadata */
+#if 0
 	io = fuzzy_cmd_from_task_meta (rule, c, flag, value,
 			task->task_pool, task);
 	if (io) {
 		g_ptr_array_add (res, io);
 	}
+#endif
 
 	if (res->len == 0) {
 		g_ptr_array_free (res, FALSE);
