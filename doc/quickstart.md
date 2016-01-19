@@ -114,7 +114,8 @@ To setup TLS for your mail system, we'd recommend to use [letsencrypt](https://l
 
 
 ## TLS Setup
-TODO: add letsencrypt setup description
+
+In this guide, we assume that all services have the same certificate which might not be desired if you need more level of security. However, for the most of purposes it is enough. First of all, install `letsencrypt` tool and obtain certificate for your domain. There is a good [guide](https://www.digitalocean.com/community/tutorials/how-to-secure-nginx-with-let-s-encrypt-on-ubuntu-14-04) that describes the overall procedure for nginx web server. Since we suggest using nginx to proxy webui requests, then you might use the following guide for your setup. You might also want to use the same certificate and private key in postfix and dovecot (as described above).
 
 ## Caching setup
 
@@ -138,7 +139,7 @@ Now, when you are done with postfix/dovecot/redis initial setup, it might be a g
 
 To install rmilter, please follow the instructions on the [downloads page](/downloads.html) but install `rmilter` package instead of rspamd. With the default configuration, rmilter will use redis and rspamd on the local machine. You might want to change the bind settings as the default settings assume using of the unix sockets which might not work in some circumstances. To use TCP sockets for rmilter, you might want to change your `/etc/rmilter.conf` altering `bind_socket` option according to your postfix setup:
 
-	bind_socket = inet@9900:127.0.0.1
+	bind_socket = inet:9900@127.0.0.1
 
 For advanced setup, please check the [rmilter documentation](/rmilter/). Rmilter starts as daemon (e.g. by typing `service rmilter start`) and writes output to the system log. If you have systemd-less system, then you can check rmilter logs in the `/var/log/mail.log` file. For systemd, please check your OS documentation about reading logs as the exact command might differ from system to system.
 
@@ -153,10 +154,6 @@ Download process is described in the [downloads page](/downloads.html) where you
 To enable run on startup:
 
 	systemctl enable rspamd.socket
-
-To start once:
-
-	systemctl start rspamd.socket
 
 Rspamd will be started on-demand, so to simulate this you could run:
 
@@ -223,53 +220,98 @@ Moreover, you can store encrypted password for better security. To generate such
 
 Then you can copy this string and store it in the configuration file. Rspamd uses [PBKDF2](http://en.wikipedia.org/wiki/PBKDF2) algorithm that makes it very hard to brute-force this password even if it has been compromised.
 
-### Pre-built statistics
+### Setting up webui
 
-Rspamd is shipped with [pre-built statistics](https://rspamd.com/rspamd_statistics/). Since version 1.0 release, we would recommend to bootstrap your `BAYES` statistics using sqlite3. To load the pre-built statistics, please ensure, that your
-`${CONFDIR}/statistics.conf` contains the following setting:
+Webui is managed by a controller worker but you might want to proxy its requests using nginx, for example, for adding `TLS` support. Here is a minimal setup required for nginx to do that:
 
+<div>
+<a class="btn btn-info btn-block btn-code" data-toggle="collapse" data-target="#nginx_cf">nginx.conf...<i class="fa fa-caret-square-o-down"></i></a><div id="nginx_cf" class="collapse"><pre><code>
+worker_processes  2;
+user www-data www-data;
 
-	classifier {
-		type = "bayes";
-		tokenizer {
-			name = "osb";
-		}
-		cache {
-			path = "${DBDIR}/learn_cache.sqlite";
-		}
-		min_tokens = 11;
-		backend = "sqlite3";
-		languages_enabled = true;
-		statfile {
-			symbol = "BAYES_HAM";
-			path = "${DBDIR}/bayes.ham.sqlite";
-			spam = false;
-		}
-		statfile {
-			symbol = "BAYES_SPAM";
-			path = "${DBDIR}/bayes.spam.sqlite";
-			spam = true;
-		}
+pid        /var/run/nginx.pid;
+
+events {
+        worker_connections 8192;
+        use epoll;
+}
+
+http {
+    include       mime.types;
+    default_type  text/plain;
+
+    sendfile  on;
+    tcp_nopush   on;
+    tcp_nodelay on;
+
+    gzip  on;
+
+ 	server {
+        listen 443 ssl;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubdomains";
+        add_header X-Content-Type-Options nosniff;
+        add_header X-Frame-Options SAMEORIGIN;
+        add_header X-XSS-Protection "1; mode=block";
+
+        include ssl.conf;
+        ssl_certificate /etc/ssl/certs/letsencrypt.pem;
+        ssl_trusted_certificate /etc/ssl/certs/letsencrypt.pem;
+        ssl_certificate_key /etc/ssl/private/letsencrypt.key;
+
+        server_name example.com;
+
+        location / {
+                proxy_pass  https://127.0.0.1:11334;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header Host $http_host;
+        }
+        ssl on;
+		ssl_protocols TLSv1.2 TLSv1.1 TLSv1;
+
+		ssl_ciphers "EECDH+ECDSA+AESGCM:EECDH+aRSA+AESGCM:EECDH+ECDSA+SHA256:EECDH+aRSA+SHA256:EECDH+ECDSA+SHA384:EECDH+ECDSA+SHA256:EECDH+aRSA+SHA384:EDH+aRSA+AESGCM:EDH+aRSA+SHA256:EDH+aRSA:EECDH:!aNULL:!eNULL:!MEDIUM:!LOW:!3DES:!MD5:!EXP:!PSK:!SRP:!DSS:!RC4:!SEED";
+		ssl_prefer_server_ciphers on;
+		ssl_session_cache builtin;
+		ssl_session_timeout 1m;
+		ssl_stapling on;
+		ssl_stapling_verify on;
+		server_tokens off;
+		# Do not forget to generate custom dhparam using 
+		# openssl dhparam -out /etc/nginx/ssl/dhparam.pem 2048
+		ssl_dhparam /etc/nginx/dhparam.pem;
+		ssl_ecdh_curve prime256v1;
 	}
+}
+</code>
+</pre>
+</div>
 
-Then you can download two files using the following commands:
+You need also to remove `localhost` from the `secure_ip` setting of the controller worker to enable password access for rspamd webui. Alternatively, you could setup HTTP authentication in nginx itself.
 
-	wget -O /var/lib/rspamd/bayes.spam.sqlite http://rspamd.com/rspamd_statistics/bayes.spam.sqlite
-	wget -O /var/lib/rspamd/bayes.ham.sqlite http://rspamd.com/rspamd_statistics/bayes.ham.sqlite
+## Setup redis statistics
 
-For some systems, namely old centos (6 or 7) the shipped sqlite version won't be able to use pre-shipped statfiles. For that purposes, there are also the raw sql dumps for statfiles which could
-be used in the following way:
+From version 1.1, it is also possible to specify redis as a backend for statistics and cache of learned messages. Redis is recommended for clustered configurations as it allows simultaneous learn and checks and, besides, is very fast. To setup redis, you could use `redis` backend for a classifier (cache is set to the same servers accordingly).
 
-	wget http://rspamd.com/rspamd_statistics/bayes.spam.sql.xz
-	wget http://rspamd.com/rspamd_statistics/bayes.ham.sql.xz
-	xz -cd bayes.spam.sql.xz | sqlite3 /var/lib/rspamd/bayes.spam.sqlite
-	xz -cd bayes.ham.sql.xz | sqlite3 /var/lib/rspamd/bayes.ham.sqlite
+~~~nginx
+    classifier {
+        tokenizer {
+            name = "osb";
+        }
+        name = "bayes";
+        min_tokens = 11;
+        backend = "redis";
+        servers = "127.0.0.1";
 
-Don't forget to change ownership to allow rspamd user (usually `_rspamd`) to learn further messages into these statistics:
+        statfile {
+            symbol = "BAYES_SPAM";
+        }
+        statfile {
+            symbol = "BAYES_HAM";
+        }
+        autolearn = true;
+    }
+~~~
 
-	chown _rspamd:_rspamd /var/lib/rspamd/bayes.*.sqlite
-
-Afterwards, you would have pre-learned statistics for several languages.
+For other possibilities please read the full [documentation](/doc/statistic.html)
 
 ### Configuring RBLs
 
@@ -301,10 +343,24 @@ These are configured in `modules.conf` in the `rbl{}` and `surbl{}` sections. De
 
 Common use-cases for `rspamc` include:
 
-* Scanning messages stored on disk
+* Scanning messages stored on disk:
+	
+	rspamc < file.eml
+	rspamc file.eml
+	rspamc directory1/ directory2/*.eml
+
 * Training bayesian classifier
+
+	rspamc learn_spam < file.eml
+	rspamc learn_ham file.eml
+	rspamc -c "bayes2" learn_spam directory1/ directory2/*.eml
+
 * Administering fuzzy storage
-* Acting as a local delivery agent
+	
+	rspamc -f 1 -w 1 fuzzy_add file.eml
+	rspamc -f 2 fuzzy_del file2.eml
+
+* Acting as a local delivery agent (read in the [integration document](/doc/integration.html))
 
 ### Using the WebUI
 
