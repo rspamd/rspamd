@@ -132,7 +132,7 @@ rdns_format_dns_name (struct rdns_resolver *resolver, const char *in,
 
 	p = in;
 	olen = inlen + 1 + sizeof ("xn--") * labels;
-	*out = malloc (olen);
+	*out = malloc (olen + 1);
 
 	if (*out == NULL) {
 		return false;
@@ -222,6 +222,7 @@ rdns_format_dns_name (struct rdns_resolver *resolver, const char *in,
 			goto err;
 		}
 	}
+
 	*o = '\0';
 
 	*outlen = o - *out;
