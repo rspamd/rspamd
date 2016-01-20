@@ -286,7 +286,7 @@ http {
 </div>
 </div>
 
-You need also to remove `localhost` from the `secure_ip` setting of the controller worker to enable password access for rspamd webui. Alternatively, you could setup HTTP authentication in nginx itself.
+Alternatively, you could setup HTTP authentication in nginx itself.
 
 ## Setup redis statistics
 
