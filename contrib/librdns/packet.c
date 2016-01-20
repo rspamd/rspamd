@@ -131,7 +131,7 @@ rdns_format_dns_name (struct rdns_resolver *resolver, const char *in,
 	/* We need to encode */
 	p = in;
 	/* We allocate 4 times more memory as we cannot guarantee encoding bounds */
-	olen = inlen * sizeof (guint32) + 1 + sizeof ("xn--") * labels;
+	olen = inlen * sizeof (int32_t) + 1 + sizeof ("xn--") * labels;
 	*out = malloc (olen + 1);
 
 	if (*out == NULL) {
