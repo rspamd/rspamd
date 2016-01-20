@@ -286,6 +286,21 @@ http {
 </div>
 </div>
 
+You might also use subdirs, as suggested by [@julienmalik](https://github.com/julienmalik):
+
+div>
+<a class="btn btn-info btn-block btn-code" data-toggle="collapse" data-target="#nginx_cf1">nginx.conf...<i class="fa fa-caret-square-o-down"></i></a><div id="nginx_cf1" class="collapse"><pre><code>
+location /rspamd/ {
+    proxy_pass       http://localhost:11334/;
+
+    proxy_set_header Host      $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+}
+</code>
+</pre>
+</div>
+</div>
+
 Alternatively, you could setup HTTP authentication in nginx itself.
 
 ## Setup redis statistics
