@@ -335,6 +335,62 @@ rspamd_check_encrypted_password (struct rspamd_controller_worker_ctx *ctx,
 	return ret;
 }
 
+/**
+ * Checks for X-Forwarded-For header and update client's address if needed
+ *
+ * This function is intended to be called for a trusted client to ensure that
+ * a request is not proxied through it
+ * @return 0 if no forwarded found, 1 if forwarded found and it is yet trusted
+ * and -1 if forwarded is denied
+ */
+static gint
+rspamd_controller_check_forwarded (struct rspamd_controller_session *session,
+		struct rspamd_http_message *msg,
+		struct rspamd_controller_worker_ctx *ctx)
+{
+	const rspamd_ftok_t *hdr;
+	const gchar *comma;
+	const char *hdr_name = "X-Forwarded-For";
+	char ip_buf[INET6_ADDRSTRLEN + 1];
+	rspamd_inet_addr_t *addr = NULL;
+	gint ret = 0;
+
+	hdr = rspamd_http_message_find_header (msg, hdr_name);
+
+	if (hdr) {
+		/*
+		 * We need to parse and update the header
+		 * X-Forwarded-For: client, proxy1, proxy2
+		 */
+		comma = memchr (hdr->begin, ',', hdr->len);
+		if (comma != NULL) {
+			if (rspamd_parse_inet_address (&addr, hdr->begin,
+					comma - hdr->begin)) {
+				/* We have addr now, so check if it is still trusted */
+				if (ctx->secure_map &&
+						radix_find_compressed_addr (ctx->secure_map,
+								addr) != RADIX_NO_VALUE) {
+					/* rspamd_inet_address_to_string is not reentrant */
+					rspamd_strlcpy (ip_buf, rspamd_inet_address_to_string (addr),
+							sizeof (ip_buf));
+					msg_info_session ("allow unauthorized proxied connection "
+							"from a trusted IP %s via %s",
+							ip_buf,
+							rspamd_inet_address_to_string (session->from_addr));
+					ret = 1;
+				}
+				else {
+					ret = -1;
+				}
+
+				rspamd_inet_address_destroy (addr);
+			}
+		}
+	}
+
+	return ret;
+}
+
 /* Check for password if it is required by configuration */
 static gboolean rspamd_controller_check_password(
 		struct rspamd_http_connection_entry *entry,
@@ -352,15 +408,29 @@ static gboolean rspamd_controller_check_password(
 
 	/* Access list logic */
 	if (rspamd_inet_address_get_af (session->from_addr) == AF_UNIX) {
-		msg_info_session ("allow unauthorized connection from a unix socket");
-		return TRUE;
+		ret = rspamd_controller_check_forwarded (session, msg, ctx);
+
+		if (ret == 1) {
+			return TRUE;
+		}
+		else if (ret == 0) {
+			/* No forwarded found */
+			msg_info_session ("allow unauthorized connection from a unix socket");
+		}
 	}
 	else if (ctx->secure_map
 			&& radix_find_compressed_addr (ctx->secure_map, session->from_addr)
 					!= RADIX_NO_VALUE) {
-		msg_info_session ("allow unauthorized connection from a trusted IP %s",
-				rspamd_inet_address_to_string (session->from_addr));
-		return TRUE;
+		ret = rspamd_controller_check_forwarded (session, msg, ctx);
+
+		if (ret == 1) {
+			return TRUE;
+		}
+		else if (ret == 0) {
+			/* No forwarded found */
+			msg_info_session ("allow unauthorized connection from a trusted IP %s",
+							rspamd_inet_address_to_string (session->from_addr));
+		}
 	}
 
 	/* Password logic */
