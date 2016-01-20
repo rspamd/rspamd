@@ -183,9 +183,8 @@ rspamd_stat_cache_sqlite3_check (struct rspamd_task *task,
 		gpointer runtime)
 {
 	struct rspamd_stat_sqlite3_ctx *ctx = runtime;
-	struct mime_text_part *part;
 	rspamd_cryptobox_hash_state_t st;
-	rspamd_ftok_t *word;
+	rspamd_token_t *tok;
 	guchar *out;
 	gchar *user = NULL;
 	guint i, j;
@@ -203,15 +202,9 @@ rspamd_stat_cache_sqlite3_check (struct rspamd_task *task,
 			rspamd_cryptobox_hash_update (&st, user, strlen (user));
 		}
 
-		for (i = 0; i < task->text_parts->len; i ++) {
-			part = g_ptr_array_index (task->text_parts, i);
-
-			if (part->normalized_words != NULL) {
-				for (j = 0; j < part->normalized_words->len; j ++) {
-					word = &g_array_index (part->normalized_words, rspamd_ftok_t, j);
-					rspamd_cryptobox_hash_update (&st, word->begin, word->len);
-				}
-			}
+		for (i = 0; i < task->tokens->len; i ++) {
+			tok = g_ptr_array_index (task->tokens, i);
+			rspamd_cryptobox_hash_update (&st, tok->data, tok->datalen);
 		}
 
 		rspamd_cryptobox_hash_final (&st, out);
