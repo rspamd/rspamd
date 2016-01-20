@@ -416,6 +416,7 @@ static gboolean rspamd_controller_check_password(
 		else if (ret == 0) {
 			/* No forwarded found */
 			msg_info_session ("allow unauthorized connection from a unix socket");
+			return TRUE;
 		}
 	}
 	else if (ctx->secure_map
@@ -430,6 +431,7 @@ static gboolean rspamd_controller_check_password(
 			/* No forwarded found */
 			msg_info_session ("allow unauthorized connection from a trusted IP %s",
 							rspamd_inet_address_to_string (session->from_addr));
+			return TRUE;
 		}
 	}
 
