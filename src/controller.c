@@ -350,7 +350,7 @@ rspamd_controller_check_forwarded (struct rspamd_controller_session *session,
 {
 	const rspamd_ftok_t *hdr;
 	const gchar *comma;
-	const char *hdr_name = "X-Forwarded-For";
+	const char *hdr_name = "X-Forwarded-For", *alt_hdr_name = "X-Real-IP";
 	char ip_buf[INET6_ADDRSTRLEN + 1];
 	rspamd_inet_addr_t *addr = NULL;
 	gint ret = 0;
@@ -366,6 +366,33 @@ rspamd_controller_check_forwarded (struct rspamd_controller_session *session,
 		if (comma != NULL) {
 			if (rspamd_parse_inet_address (&addr, hdr->begin,
 					comma - hdr->begin)) {
+				/* We have addr now, so check if it is still trusted */
+				if (ctx->secure_map &&
+						radix_find_compressed_addr (ctx->secure_map,
+								addr) != RADIX_NO_VALUE) {
+					/* rspamd_inet_address_to_string is not reentrant */
+					rspamd_strlcpy (ip_buf, rspamd_inet_address_to_string (addr),
+							sizeof (ip_buf));
+					msg_info_session ("allow unauthorized proxied connection "
+							"from a trusted IP %s via %s",
+							ip_buf,
+							rspamd_inet_address_to_string (session->from_addr));
+					ret = 1;
+				}
+				else {
+					ret = -1;
+				}
+
+				rspamd_inet_address_destroy (addr);
+			}
+		}
+	}
+	else {
+		/* Try also X-Real-IP */
+		hdr = rspamd_http_message_find_header (msg, alt_hdr_name);
+
+		if (hdr) {
+			if (rspamd_parse_inet_address (&addr, hdr->begin, hdr->len)) {
 				/* We have addr now, so check if it is still trusted */
 				if (ctx->secure_map &&
 						radix_find_compressed_addr (ctx->secure_map,

@@ -187,7 +187,7 @@ rspamd_stat_cache_sqlite3_check (struct rspamd_task *task,
 	rspamd_token_t *tok;
 	guchar *out;
 	gchar *user = NULL;
-	guint i, j;
+	guint i;
 	gint rc;
 	gint64 flag;
 
