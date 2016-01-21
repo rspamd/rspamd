@@ -431,3 +431,37 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 
 	return sqlite;
 }
+
+gboolean
+rspamd_sqlite3_sync (sqlite3 *db, gint *wal_frames, gint *wal_checkpoints)
+{
+	gint wf = 0, wc = 0, mode;
+
+#ifdef SQLITE_OPEN_WAL
+#ifdef SQLITE_CHECKPOINT_TRUNCATE
+	mode = SQLITE_CHECKPOINT_TRUNCATE;
+#elif defined(SQLITE_CHECKPOINT_RESTART)
+	mode = SQLITE_CHECKPOINT_RESTART;
+#elif defined(SQLITE_CHECKPOINT_FULL)
+	mode = SQLITE_CHECKPOINT_FULL;
+#endif
+	/* Perform wal checkpoint (might be long) */
+	if (sqlite3_wal_checkpoint_v2 (db,
+			NULL,
+			mode,
+			&wf,
+			&wc) != SQLITE_OK) {
+		return FALSE;
+
+	}
+#endif
+
+	if (wal_frames) {
+		*wal_frames = wf;
+	}
+	if (wal_checkpoints) {
+		*wal_checkpoints = wc;
+	}
+
+	return TRUE;
+}

@@ -81,4 +81,11 @@ void rspamd_sqlite3_close_prstmt (sqlite3 *db, GArray *stmts);
 sqlite3 * rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 		gchar *create_sql, GError **err);
 
+
+/**
+ * Sync sqlite3 db ensuring that all wal things are done
+ * @param db
+ */
+gboolean rspamd_sqlite3_sync (sqlite3 *db, gint *wal_frames, gint *wal_checkpoints);
+
 #endif /* SRC_LIBUTIL_SQLITE_UTILS_H_ */
