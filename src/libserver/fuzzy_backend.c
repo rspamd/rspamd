@@ -698,7 +698,7 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 gboolean
 rspamd_fuzzy_backend_finish_update (struct rspamd_fuzzy_backend *backend)
 {
-	gint rc, wal_frames, wal_checkpointed, mode;
+	gint rc, wal_frames, wal_checkpointed;
 
 	rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
 			RSPAMD_FUZZY_BACKEND_TRANSACTION_COMMIT);
@@ -711,28 +711,14 @@ rspamd_fuzzy_backend_finish_update (struct rspamd_fuzzy_backend *backend)
 		return FALSE;
 	}
 	else {
-#ifdef SQLITE_OPEN_WAL
-#ifdef SQLITE_CHECKPOINT_TRUNCATE
-		mode = SQLITE_CHECKPOINT_TRUNCATE;
-#elif defined(SQLITE_CHECKPOINT_RESTART)
-		mode = SQLITE_CHECKPOINT_RESTART;
-#elif defined(SQLITE_CHECKPOINT_FULL)
-		mode = SQLITE_CHECKPOINT_FULL;
-#endif
-		/* Perform wal checkpoint (might be long) */
-		if (sqlite3_wal_checkpoint_v2 (backend->db,
-				NULL,
-				mode,
-				&wal_frames,
-				&wal_checkpointed) != SQLITE_OK) {
+		if (!rspamd_sqlite3_sync (backend->db, &wal_frames, &wal_checkpointed)) {
 			msg_warn_fuzzy_backend ("cannot commit checkpoint: %s",
 					sqlite3_errmsg (backend->db));
 		}
-		else {
+		else if (wal_checkpointed > 0) {
 			msg_info_fuzzy_backend ("total number of frames in the wal file: "
 					"%d, checkpointed: %d", wal_frames, wal_checkpointed);
 		}
-#endif
 	}
 
 	return TRUE;
