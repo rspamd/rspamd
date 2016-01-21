@@ -484,7 +484,7 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 					task->message_id,
 					cl->cfg->name,
 					task->tokens->len,
-					cl->cfg->max_tokens);
+					cl->cfg->min_tokens);
 		}
 	}
 
