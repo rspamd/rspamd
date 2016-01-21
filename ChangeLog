@@ -1,3 +1,18 @@
+1.1.1:
+	* Fix duplicated XBL symbol
+	* Reduce log severity for ratelimit missing servers
+	* Fix XBL composite to avoid duplicate symbols
+	* Reduce weight of URL_ONLY rule due to FP rate
+	* Disable fuzzy hashes from the metadata for now
+	* Fix processing of empty messages (#486)
+	* Always treat DNS timeouts as temporary fail for SPF
+	* Fix issue with SPF double IP stack (#483)
+	* Use X-Forwarded-For when checking secure_ip (#488)
+	* Fix hash calculation for sqlite stats
+	* Fix memory corruption on punycode
+	* Fix strings allocation in punycode
+	* Fix error message (#491)
+
 1.1.0:
 	* Incompatible change: sqlite3 and per_user behaviour:
 		Now both redis and sqlite3 follows the common principles for per-user
