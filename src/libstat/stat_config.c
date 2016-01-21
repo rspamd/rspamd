@@ -244,6 +244,7 @@ rspamd_stat_close (void)
 			g_slice_free1 (sizeof (*st), st);
 		}
 
+		cl->cache->close (cl->cachecf);
 		g_array_free (cl->statfiles_ids, TRUE);
 		g_slice_free1 (sizeof (*cl), cl);
 	}
