@@ -275,6 +275,8 @@ rspamd_stat_cache_sqlite3_learn (struct rspamd_task *task,
 				RSPAMD_STAT_CACHE_TRANSACTION_COMMIT);
 	}
 
+	rspamd_sqlite3_sync (ctx->db, NULL, NULL);
+
 	return RSPAMD_LEARN_OK;
 }
 
