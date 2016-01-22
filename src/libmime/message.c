@@ -598,6 +598,8 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 			break;
 		case 100:
 			/* Fail state, skip line */
+			task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
+
 			if (*p == '\r') {
 				if (*(p + 1) == '\n') {
 					p++;
