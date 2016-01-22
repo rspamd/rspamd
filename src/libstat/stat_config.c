@@ -196,8 +196,16 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 				cl->cache = rspamd_stat_get_cache (cache_name);
 				g_assert (cl->cache != NULL);
 				cl->cachecf = cl->cache->init (stat_ctx, cfg, st, cache_obj);
-				msg_debug_config ("added cache %s for symbol %s",
-						cl->cache->name, stf->symbol);
+
+				if (cl->cachecf == NULL) {
+					msg_err_config ("error adding cache %s for symbol %s",
+							cl->cache->name, stf->symbol);
+					cl->cache = NULL;
+				}
+				else {
+					msg_debug_config ("added cache %s for symbol %s",
+							cl->cache->name, stf->symbol);
+				}
 			}
 
 			if (st->bkcf == NULL) {
@@ -246,7 +254,10 @@ rspamd_stat_close (void)
 			g_slice_free1 (sizeof (*st), st);
 		}
 
-		cl->cache->close (cl->cachecf);
+		if (cl->cache && cl->cachecf) {
+			cl->cache->close (cl->cachecf);
+		}
+
 		g_array_free (cl->statfiles_ids, TRUE);
 		g_slice_free1 (sizeof (*cl), cl);
 	}
