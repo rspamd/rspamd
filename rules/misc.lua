@@ -146,3 +146,42 @@ rspamd_config.BROKEN_HEADERS = {
   group = 'headers',
   description = 'Headers structure is likely broken'
 }
+
+rspamd_config.HEADER_RCONFIRM_MISMATCH = {
+  callback = function (task)
+    local header_from  = task:get_header('From')
+    local header_cread = task:get_header('X-Confirm-Reading-To')
+
+    if header_from and header_cread then
+      if not string.find(header_from, header_cread) then
+        return true
+      end
+    end
+
+    return false
+  end,
+
+  score = 2.0,
+  group = 'headers',
+  description = 'Read confirmation address is different to from address'
+}
+
+rspamd_config.HEADER_FORGED_MDN = {
+  callback = function (task)
+    local header_mdn = task:get_header('Disposition-Notification-To')
+    local header_rp  = task:get_header('Return-Path')
+
+    if header_mdn and not header_rp  then return true end
+    if header_rp  and not header_mdn then return true end
+
+    if header_mdn ~= header_rp then
+      return true
+    end
+
+    return false
+  end,
+
+  score = 2.0,
+  group = 'headers',
+  description = 'Read confirmation address is different to return path'
+}
