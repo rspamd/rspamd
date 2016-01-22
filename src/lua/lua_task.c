@@ -286,7 +286,7 @@ LUA_FUNCTION_DEF (task, inc_dns_req);
  * - `addr` - address part of the address
  * - `user` - user part (if present) of the address, e.g. `blah`
  * - `domain` - domain part (if present), e.g. `foo.com`
- * @param {integer} type if specified has the following meaning: `0` means try SMTP recipients and fallback to MIME if failed, `1` means checking merely SMTP recipients and `2` means MIME recipients only
+ * @param {integer|string} type if specified has the following meaning: `0` or `any` means try SMTP recipients and fallback to MIME if failed, `1` or `smtp` means checking merely SMTP recipients and `2` or `mime` means MIME recipients only
  * @return {list of addresses} list of recipients or `nil`
  */
 LUA_FUNCTION_DEF (task, get_recipients);
@@ -298,7 +298,7 @@ LUA_FUNCTION_DEF (task, get_recipients);
  * - `addr` - address part of the address
  * - `user` - user part (if present) of the address, e.g. `blah`
  * - `domain` - domain part (if present), e.g. `foo.com`
- * @param {integer} type if specified has the following meaning: `0` means try SMTP sender and fallback to MIME if failed, `1` means checking merely SMTP sender and `2` means MIME `From:` only
+ * @param {integer|string} type if specified has the following meaning: `0` or `any` means try SMTP sender and fallback to MIME if failed, `1` or `smtp` means checking merely SMTP sender and `2` or `mime` means MIME `From:` only
  * @return {list of addresses} list of recipients or `nil`
  */
 LUA_FUNCTION_DEF (task, get_from);
@@ -1329,6 +1329,39 @@ lua_push_internet_address_list (lua_State *L, InternetAddressList *addrs)
 #endif
 }
 
+/*
+ * Convert element at the specified position to the type
+ * for get_from/get_recipients
+ */
+static gint
+lua_task_str_to_get_type (lua_State *L, gint pos)
+{
+	const gchar *type = NULL;
+
+	/* Get what value */
+
+	if (lua_type (L, pos) == LUA_TNUMBER) {
+		return lua_tonumber (L, pos);
+	}
+	else if (lua_type (L, pos) == LUA_TSTRING) {
+		type = lua_tostring (L, pos);
+
+		if (type) {
+			if (strcmp (type, "mime") == 0) {
+				return 2;
+			}
+			else if (strcmp (type, "any") == 0) {
+				return 0;
+			}
+			else if (strcmp (type, "smtp") == 0 || strcmp (type, "envelope") == 0) {
+				return 1;
+			}
+		}
+	}
+
+	return 0;
+}
+
 static gint
 lua_task_get_recipients (lua_State *L)
 {
@@ -1339,7 +1372,7 @@ lua_task_get_recipients (lua_State *L)
 	if (task) {
 		if (lua_gettop (L) == 2) {
 			/* Get what value */
-			what = lua_tonumber (L, 2);
+			what = lua_task_str_to_get_type (L, 2);
 		}
 
 		switch (what) {
@@ -1386,7 +1419,7 @@ lua_task_get_from (lua_State *L)
 	if (task) {
 		if (lua_gettop (L) == 2) {
 			/* Get what value */
-			what = lua_tonumber (L, 2);
+			what = lua_task_str_to_get_type (L, 2);
 		}
 
 		switch (what) {
