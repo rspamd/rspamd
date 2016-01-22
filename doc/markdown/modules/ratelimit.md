@@ -4,6 +4,38 @@ Ratelimit plugin is designed to limit messages coming from certain senders, to
 certain recipients from certain IP addresses combining these parameters into
 a separate limits.
 
+All limits are stored in [redis](http://redis.io) server (or servers cluster) to enable
+shared cache between different scanners.
+
+## Module configuration
+
+In the default configuration, there are no cache servers specified, hence, the module won't work unless you add this option to the configuration.
+
+`Ratelimit` module supports the following configuration options:
+
+- `servers` - list of servers where ratelimit data is stored
+- `whitelisted_rcpts` - comma separated list of whitelisted recipients. By default
+the value of this option is 'postmaster, mailer-daemon'
+- `whitelisted_ip` - a map of ip addresses or networks whitelisted
+- `max_rcpts` - do not apply ratelimit if it contains more than this value of recipients (5 by default). This
+option allows to avoid too many work for setting buckets if there are a lot of recipients in a message).
+- `rates` - a table of allowed rates in form:
+
+    type = [burst,leak];
+
+Where `type` is one of:
+
+- `to`
+- `to_ip`
+- `to_ip_from`
+- `bounce_to`
+- `bounce_to_ip`
+
+`burst` is a capacity of a bucket and `leak` is a rate in messages per second.
+Both these attributes are floating point values.
+
+- `symbol` - if this option is specified, then `ratelimit` plugin just adds the corresponding symbol instead of setting pre-result, the value is scaled as $$ 2 * tanh(\frac{bucket}{threshold * 2}) $$, where `tanh` is the hyperbolic tanhent function
+
 ## Principles of work
 
 The basic principle of ratelimiting in rspamd is called `leaked bucket`. It could
@@ -60,31 +92,3 @@ local settings = {
   user = {0, 0.01666666667}
 }
 ~~~
-
-All limits are stored in [redis](http://redis.io) server (or servers cluster).
-
-## Module configuration
-
-`Ratelimit` module can be configured to setup the following:
-
-- `whitelisted_rcpts` - comma separated list of whitelisted recipients. By default
-the value of this option is 'postmaster, mailer-daemon'
-- `whitelisted_ip` - a map of ip addresses or networks whitelisted
-- `max_rcpts` - do not apply ratelimit if it contains more than this value of recipients (5 by default). This
-option allows to avoid too many work for setting buckets if there are a lot of recipients in a message).
-- `rates` - a table of allowed rates in form:
-
-    type = [burst,leak];
-
-Where `type` is one of:
-
-- `to`
-- `to_ip`
-- `to_ip_from`
-- `bounce_to`
-- `bounce_to_ip`
-
-`burst` is a capacity of a bucket and `leak` is a rate in messages per second.
-Both these attributes are floating point values.
-
-- `symbol` - if this option is specified, then `ratelimit` plugin just adds the corresponding symbol instead of setting pre-result, the value is scaled as $$ 2 * tanh(\frac{bucket}{threshold * 2}) $$, where `tanh` is the hyperbolic tanhent function
