@@ -424,7 +424,7 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 	end = p + len;
 	c = p;
 
-	while (p <= end) {
+	while (p < end) {
 		/* FSM for processing headers */
 		switch (state) {
 		case 0:
@@ -457,6 +457,7 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 			}
 			else if (g_ascii_isspace (*p)) {
 				/* Not header but some garbage */
+				task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
 				state = 100;
 				next_state = 0;
 			}
@@ -598,7 +599,6 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 			break;
 		case 100:
 			/* Fail state, skip line */
-			task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
 
 			if (*p == '\r') {
 				if (*(p + 1) == '\n') {
