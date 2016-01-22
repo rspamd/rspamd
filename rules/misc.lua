@@ -149,7 +149,7 @@ rspamd_config.BROKEN_HEADERS = {
 
 rspamd_config.HEADER_RCONFIRM_MISMATCH = {
   callback = function (task)
-    local header_from  = task:get_header('From')
+    local header_from  = task:get_from('mime')[1]
     local header_cread = task:get_header('X-Confirm-Reading-To')
 
     if header_from and header_cread then
@@ -169,7 +169,7 @@ rspamd_config.HEADER_RCONFIRM_MISMATCH = {
 rspamd_config.HEADER_FORGED_MDN = {
   callback = function (task)
     local header_mdn = task:get_header('Disposition-Notification-To')
-    local header_rp  = task:get_header('Return-Path')
+    local header_rp  = task:get_from('smtp')[1]
 
     if header_mdn and not header_rp  then return true end
     if header_rp  and not header_mdn then return true end
