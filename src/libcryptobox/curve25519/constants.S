@@ -11,6 +11,8 @@ SECTION_RODATA
 .globl m26
 .globl subc0
 .globl subc2
+.globl v9_0
+.globl v9_9
 
 .globl REDMASK51
 
@@ -20,6 +22,8 @@ v0_0: .quad 0, 0
 v1_0: .quad 1, 0
 v2_1: .quad 2, 1
 v19_19: .quad 19, 19
+v9_0: .quad 9, 0
+v9_9: .quad 9, 9
 v38_1: .quad 38, 1
 v38_38: .quad 38, 38
 v121666_121666: .quad 121666, 121666

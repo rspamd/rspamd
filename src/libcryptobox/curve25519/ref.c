@@ -7,6 +7,7 @@ Derived from public domain code by D. J. Bernstein.
 */
 
 #include "config.h"
+#include "curve25519.h"
 
 static void add (unsigned int out[32],
 		const unsigned int a[32],
@@ -332,3 +333,9 @@ int scalarmult_ref (unsigned char *q,
 	return 0;
 }
 
+int
+scalarmult_base_ref (unsigned char *q,
+		const unsigned char *n)
+{
+	return scalarmult_ref (q, n, curve25519_basepoint);
+}

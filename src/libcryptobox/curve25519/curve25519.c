@@ -36,13 +36,16 @@ typedef struct curve25519_impl_s {
 	void (*scalarmult) (guint8 *mypublic,
 			const guint8 *secret,
 			const guint8 *basepoint);
+	void (*scalarmult_base) (guint8 *mypublic,
+				const guint8 *secret);
 } curve25519_impl_t;
 
 #define CURVE25519_DECLARE(ext) \
-    void scalarmult_##ext(guint8 *mypublic, const guint8 *secret, const guint8 *basepoint)
+    void scalarmult_##ext(guint8 *mypublic, const guint8 *secret, const guint8 *basepoint); \
+    void scalarmult_base_##ext(guint8 *mypublic, const guint8 *secret)
 
 #define CURVE25519_IMPL(cpuflags, desc, ext) \
-    {(cpuflags), desc, scalarmult_##ext}
+    {(cpuflags), desc, scalarmult_##ext, scalarmult_base_##ext}
 
 #if defined(__LP64__)
 #if defined(HAVE_AVX)
@@ -142,3 +145,10 @@ curve25519 (guchar *mypublic,
 	return 0;
 }
 
+int
+curve25519_base (guchar *mypublic, const guchar *secret)
+{
+	curve25519_opt->scalarmult_base (mypublic, secret);
+
+	return 0;
+}

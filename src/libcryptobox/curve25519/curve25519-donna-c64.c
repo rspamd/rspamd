@@ -24,6 +24,7 @@
 
 #include <string.h>
 #include <stdint.h>
+#include "curve25519.h"
 
 typedef uint8_t u8;
 typedef uint64_t limb;
@@ -494,4 +495,11 @@ int scalarmult_donna (u8 *mypublic, const u8 *secret, const u8 *basepoint)
 	fcontract (mypublic, z);
 
 	return 0;
+}
+
+int
+scalarmult_base_donna (u8 *mypublic, const u8 *secret)
+{
+	return scalarmult_donna (mypublic, secret,
+			curve25519_basepoint);
 }

@@ -255,7 +255,7 @@ rspamd_cryptobox_keypair (rspamd_pk_t pk, rspamd_sk_t sk)
 		sk[31] &= 127;
 		sk[31] |= 64;
 
-		curve25519 (pk, sk, curve25519_basepoint);
+		curve25519_base (pk, sk);
 	}
 	else {
 #ifndef HAVE_USABLE_OPENSSL
