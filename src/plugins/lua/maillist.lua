@@ -212,7 +212,11 @@ local function check_ml_googlegroup(task)
   local header = task:get_header('X-Google-Loop')
 
   if not header then
-    return false
+    header = task:get_header('X-Google-Group-Id')
+    
+    if not header then
+      return false
+    end
   end
 
   return check_rfc2919(task)
