@@ -158,6 +158,8 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 		cl->subrs->init_func (cfg->cfg_pool, cl);
 
 		/* Init classifier cache */
+		cache_name = NULL;
+
 		if (clf->opts) {
 			cache_obj = ucl_object_find_key (clf->opts, "cache");
 			cache_name_obj = NULL;
