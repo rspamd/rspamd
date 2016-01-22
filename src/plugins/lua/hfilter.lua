@@ -32,6 +32,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 --local dumper = require 'pl.pretty'.dump
 local rspamd_regexp = require "rspamd_regexp"
+local rspamd_logger = require "rspamd_logger"
 local rspamc_local_helo = "rspamc.local"
 local checks_hellohost = {
   ['[.-]gprs[.-]'] = 5, ['gprs[.-][0-9]'] = 5, ['[0-9][.-]?gprs'] = 5,
@@ -172,6 +173,7 @@ end
 -- eq_host: host for comparing or empty string
 local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
   local failed_address = 0
+  local resolved_address = {}
 
   local function check_host_cb_mx(resolver, to_resolve, results, err)
     task:inc_dns_req()
@@ -214,18 +216,21 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
     if not results then
       failed_address = failed_address + 1
     else
-      if eq_ip ~= '' then
-        for _,result in pairs(results) do
-          if result:to_string() == eq_ip then
-            return true
-          end
-        end
-        task:insert_result('HFILTER_' .. symbol_suffix .. '_IP_A', 1.0)
+      for _,result in pairs(results) do
+        table.insert(resolved_address, result:to_string())
       end
     end
 
     if failed_address >= 2 then
       -- No A or AAAA records
+      if eq_ip and eq_ip ~= '' then
+        for _,result in pairs(resolved_address) do
+          if result == eq_ip then
+            return true
+          end
+        end
+        task:insert_result('HFILTER_' .. symbol_suffix .. '_IP_A', 1.0)
+      end
       task:get_resolver():resolve_mx({
         task = task,
         name = host,
@@ -368,7 +373,7 @@ local function hfilter(task)
           end
           --FQDN check HELO
           if ip and helo and weight_helo == 0 then
-            check_host(task, helo, 'HELO', ip, hostname)
+            check_host(task, helo, 'HELO', ip)
           end
         end
       end
@@ -447,7 +452,7 @@ local function hfilter(task)
     if message_id then
       local mid_split = split(message_id, '@', 0)
       if table.maxn(mid_split) == 2 and not string.find(mid_split[2], 'local') then
-        check_host(task, mid_split[2], 'MID', '', '')
+        check_host(task, mid_split[2], 'MID')
       end
     end
   end
