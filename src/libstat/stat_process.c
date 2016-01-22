@@ -598,6 +598,8 @@ rspamd_stat_backends_post_learn (struct rspamd_stat_ctx *st_ctx,
 		}
 	}
 
+	g_atomic_int_add (&task->worker->srv->stat->messages_learned, 1);
+
 	return res;
 }
 
