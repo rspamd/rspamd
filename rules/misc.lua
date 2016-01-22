@@ -133,3 +133,16 @@ rspamd_config.SUBJ_ALL_CAPS = {
   group = 'headers',
   description = 'All capital letters in subject'
 }
+
+rspamd_config.BROKEN_HEADERS = {
+  callback = function(task)
+    if task:has_flag('broken_headers') then
+      return true
+    end
+    
+    return false
+  end,
+  score = 1.0,
+  group = 'headers',
+  description = 'Headers structure is likely broken'
+}
