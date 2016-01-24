@@ -896,7 +896,7 @@ rspamd_check_port_priority (const char *line, guint default_port,
 			real_priority = strtoul (err_str + 1, &err_str_prio, 10);
 
 			if (err_str_prio && *err_str_prio != '\0') {
-				msg_err_pool (
+				msg_err_pool_check (
 						"cannot parse priority: %s, at symbol %c, error: %s",
 						line,
 						*err_str_prio,
@@ -906,7 +906,7 @@ rspamd_check_port_priority (const char *line, guint default_port,
 			}
 		}
 		else if (err_str && *err_str != '\0') {
-			msg_err_pool (
+			msg_err_pool_check (
 					"cannot parse port: %s, at symbol %c, error: %s",
 					line,
 					*err_str,
@@ -982,7 +982,7 @@ rspamd_resolve_addrs (const char *begin, size_t len, GPtrArray **addrs,
 		freeaddrinfo (res);
 	}
 	else {
-		msg_err_pool ("address resolution for %s failed: %s",
+		msg_err_pool_check ("address resolution for %s failed: %s",
 				addr_cpy,
 				gai_strerror (r));
 		g_free (addr_cpy);
@@ -1028,7 +1028,7 @@ rspamd_parse_host_port_priority (const gchar *str,
 		p = strchr (str, ']');
 
 		if (p == NULL) {
-			msg_err ("cannot parse address definition %s: %s",
+			msg_err_pool_check ("cannot parse address definition %s: %s",
 					str,
 					strerror (EINVAL));
 
@@ -1058,7 +1058,7 @@ rspamd_parse_host_port_priority (const gchar *str,
 		}
 
 		if (!rspamd_parse_inet_address (&cur_addr, str, 0)) {
-			msg_err_pool ("cannot parse unix socket definition %s: %s",
+			msg_err_pool_check ("cannot parse unix socket definition %s: %s",
 					str,
 					strerror (errno));
 

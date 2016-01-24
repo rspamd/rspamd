@@ -174,6 +174,23 @@ const guint64* rspamd_log_counters (rspamd_logger_t *logger);
         task->task_pool->tag.tagname, task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
+/* Check for NULL pointer first */
+#define msg_err_task_check(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        task ? task->task_pool->tag.tagname : NULL, task ? task->task_pool->tag.uid : NULL, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_task_check(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+        task ? task->task_pool->tag.tagname : NULL, task ? task->task_pool->tag.uid : NULL, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_task_check(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        task ? task->task_pool->tag.tagname : NULL, task ? task->task_pool->tag.uid : NULL, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_task_check(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+        task ? task->task_pool->tag.tagname : NULL, task ? task->task_pool->tag.uid : NULL, \
+        G_STRFUNC, \
+        __VA_ARGS__)
 
 /* Use the following macros if you have `pool` in the function */
 #define msg_err_pool(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
@@ -190,6 +207,23 @@ const guint64* rspamd_log_counters (rspamd_logger_t *logger);
         __VA_ARGS__)
 #define msg_debug_pool(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
         pool->tag.tagname, pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+/* Check for NULL pointer first */
+#define msg_err_pool_check(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
+        pool ? pool->tag.tagname : NULL, pool ? pool->tag.uid : NULL, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_warn_pool_check(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
+		pool ? pool->tag.tagname : NULL, pool ? pool->tag.uid : NULL, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_info_pool_check(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+		pool ? pool->tag.tagname : NULL, pool ? pool->tag.uid : NULL, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_pool_check(...)  rspamd_default_log_function (G_LOG_LEVEL_DEBUG, \
+		pool ? pool->tag.tagname : NULL, pool ? pool->tag.uid : NULL, \
         G_STRFUNC, \
         __VA_ARGS__)
 #endif
