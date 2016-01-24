@@ -1103,7 +1103,7 @@ rspamd_parse_host_port_priority (const gchar *str,
 			name = str;
 			namelen = p - str;
 
-			if (!rspamd_check_port_priority (p + 1, default_port, priority, portbuf,
+			if (!rspamd_check_port_priority (p, default_port, priority, portbuf,
 					sizeof (portbuf), pool)) {
 				return FALSE;
 			}
