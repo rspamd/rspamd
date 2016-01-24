@@ -76,10 +76,10 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 
 	cnf->cnt = 1024;
 
-	if (strcmp (str, "systemd") == 0) {
+	if (g_ascii_strncasecmp (str, "systemd:", sizeof ("systemd:") - 1) == 0) {
 		/* The actual socket will be passed by systemd environment */
 		cnf->is_systemd = TRUE;
-		cnf->cnt = strtoul (str, &err, 10);
+		cnf->cnt = strtoul (str + sizeof ("systemd:") - 1, &err, 10);
 		cnf->addrs = NULL;
 
 		if (err == NULL || *err == '\0') {

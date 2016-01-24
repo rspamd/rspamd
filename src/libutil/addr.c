@@ -933,14 +933,18 @@ rspamd_resolve_addrs (const char *begin, size_t len, GPtrArray **addrs,
 	struct addrinfo hints, *res, *cur;
 	rspamd_inet_addr_t *cur_addr = NULL;
 	gint r, addr_cnt;
-	gchar *addr_cpy;
+	gchar *addr_cpy = NULL;
 
 	rspamd_ip_check_ipv6 ();
 	memset (&hints, 0, sizeof (hints));
 	hints.ai_socktype = SOCK_STREAM; /* Type of the socket */
 	hints.ai_flags = AI_NUMERICSERV|flags;
-	addr_cpy = g_malloc (len + 1);
-	rspamd_strlcpy (addr_cpy, begin, len + 1);
+
+	if (len > 0) {
+		addr_cpy = g_malloc (len + 1);
+		rspamd_strlcpy (addr_cpy, begin, len + 1);
+	}
+	/* Otherwise it will be NULL */
 
 	if (ipv6_status == RSPAMD_IPV6_SUPPORTED) {
 		hints.ai_family = AF_UNSPEC;
@@ -981,13 +985,17 @@ rspamd_resolve_addrs (const char *begin, size_t len, GPtrArray **addrs,
 
 		freeaddrinfo (res);
 	}
-	else {
+	else if (addr_cpy) {
 		msg_err_pool_check ("address resolution for %s failed: %s",
 				addr_cpy,
 				gai_strerror (r));
 		g_free (addr_cpy);
 
 		return FALSE;
+	}
+	else {
+		/* Should never ever happen */
+		g_assert (0);
 	}
 
 	return TRUE;
@@ -997,12 +1005,13 @@ gboolean
 rspamd_parse_host_port_priority (const gchar *str,
 	GPtrArray **addrs,
 	guint *priority,
-	gchar **name,
+	gchar **name_ptr,
 	guint default_port,
 	rspamd_mempool_t *pool)
 {
 	gchar portbuf[8];
-	const gchar *p;
+	const gchar *p, *name = NULL;
+	gsize namelen;
 	rspamd_inet_addr_t *cur_addr = NULL;
 
 	/*
@@ -1019,9 +1028,12 @@ rspamd_parse_host_port_priority (const gchar *str,
 			return FALSE;
 		}
 
-		if (!rspamd_resolve_addrs (str, 1, addrs, portbuf, AI_PASSIVE, pool)) {
+		if (!rspamd_resolve_addrs (str, 0, addrs, portbuf, AI_PASSIVE, pool)) {
 			return FALSE;
 		}
+
+		name = "*";
+		namelen = 1;
 	}
 	else if (str[0] == '[') {
 		/* This is braced IPv6 address */
@@ -1035,12 +1047,15 @@ rspamd_parse_host_port_priority (const gchar *str,
 			return FALSE;
 		}
 
+		name = p + 1;
+		namelen = p - str - 1;
+
 		if (!rspamd_check_port_priority (p + 1, default_port, priority, portbuf,
 				sizeof (portbuf), pool)) {
 			return FALSE;
 		}
 
-		if (!rspamd_resolve_addrs (str + 1, p - str, addrs,
+		if (!rspamd_resolve_addrs (name, namelen, addrs,
 				portbuf, 0, pool)) {
 			return FALSE;
 		}
@@ -1066,31 +1081,49 @@ rspamd_parse_host_port_priority (const gchar *str,
 		}
 
 		g_ptr_array_add (*addrs, cur_addr);
+		name = str;
+		namelen = strlen (str);
 	}
 	else {
 		p = strchr (str, ':');
 
 		if (p == NULL) {
 			/* Just address or IP */
+			name = str;
+			namelen = strlen (str);
 			rspamd_check_port_priority ("", default_port, priority, portbuf,
 					sizeof (portbuf), pool);
 
-			if (!rspamd_resolve_addrs (str, strlen (str), addrs,
+			if (!rspamd_resolve_addrs (name, namelen, addrs,
 					portbuf, 0, pool)) {
 				return FALSE;
 			}
 		}
 		else {
+			name = str;
+			namelen = p - str;
+
 			if (!rspamd_check_port_priority (p + 1, default_port, priority, portbuf,
 					sizeof (portbuf), pool)) {
 				return FALSE;
 			}
 
-			if (!rspamd_resolve_addrs (str + 1, p - str, addrs,
+			if (!rspamd_resolve_addrs (str, p - str, addrs,
 					portbuf, 0, pool)) {
 				return FALSE;
 			}
 		}
+	}
+
+	if (name_ptr != NULL) {
+		if (pool) {
+			*name_ptr = rspamd_mempool_alloc (pool, namelen + 1);
+		}
+		else {
+			*name_ptr = g_malloc (namelen + 1);
+		}
+
+		rspamd_strlcpy (*name_ptr, name, namelen + 1);
 	}
 
 	return TRUE;

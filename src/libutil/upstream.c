@@ -527,7 +527,7 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups,
 		const gchar *str, guint16 def_port, void *data)
 {
 	struct upstream *up;
-	GPtrArray *addrs;
+	GPtrArray *addrs = NULL;
 	guint i;
 	rspamd_inet_addr_t *addr;
 
