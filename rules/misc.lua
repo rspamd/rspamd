@@ -185,3 +185,36 @@ rspamd_config.HEADER_FORGED_MDN = {
   group = 'headers',
   description = 'Read confirmation address is different to return path'
 }
+
+local headers_unique = {
+  'Content-Type',
+  'Content-Transfer-Encoding',
+  'Date',
+  'Message-ID'
+}
+
+rspamd_config.MULTIPLE_UNIQUE_HEADERS = {
+  callback = function (task)
+    local res = 0
+    local res_tbl = {}
+    
+    for i,hdr in ipairs(headers_unique) do
+      local h = task:get_header_full(hdr)
+      
+      if h and #h > 1 then
+        res = res + 1
+        table.insert(res_tbl, hdr)
+      end
+    end
+    
+    if res > 0 then
+      return true,res,table.concat(res_tbl, ',')
+    end
+    
+    return false
+  end,
+
+  score = 5.0,
+  group = 'headers',
+  description = 'Repeated unique headers'
+}
