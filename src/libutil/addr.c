@@ -879,34 +879,68 @@ rspamd_inet_address_sendto (gint fd, const void *buf, gsize len, gint fl,
 	return r;
 }
 
-gboolean
-rspamd_parse_host_port_priority_strv (gchar **tokens,
-	GPtrArray **addrs,
-	guint *priority,
-	gchar **name,
-	guint default_port,
-	rspamd_mempool_t *pool)
+static gboolean
+rspamd_check_port_priority (const char *line, guint default_port,
+		guint *priority, gchar *out,
+		gsize outlen, rspamd_mempool_t *pool)
 {
-	gchar *err_str, portbuf[8];
-	const gchar *cur_tok, *cur_port;
+	guint real_port = default_port, real_priority = 0;
+	gchar *err_str, *err_str_prio;
+
+	if (line && line[0] == ':') {
+		errno = 0;
+		real_port = strtoul (line + 1, &err_str, 10);
+
+		if (err_str && *err_str == ':') {
+			/* We have priority */
+			real_priority = strtoul (err_str + 1, &err_str_prio, 10);
+
+			if (err_str_prio && *err_str_prio != '\0') {
+				msg_err_pool (
+						"cannot parse priority: %s, at symbol %c, error: %s",
+						line,
+						*err_str_prio,
+						strerror (errno));
+
+				return FALSE;
+			}
+		}
+		else if (err_str && *err_str != '\0') {
+			msg_err_pool (
+					"cannot parse port: %s, at symbol %c, error: %s",
+					line,
+					*err_str,
+					strerror (errno));
+
+			return FALSE;
+		}
+	}
+
+	if (priority) {
+		*priority = real_priority;
+	}
+
+	rspamd_snprintf (out, outlen, "%ud", real_port);
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_resolve_addrs (const char *begin, size_t len, GPtrArray **addrs,
+		const gchar *portbuf, gint flags,
+		rspamd_mempool_t *pool)
+{
 	struct addrinfo hints, *res, *cur;
-	rspamd_inet_addr_t *cur_addr;
-	guint addr_cnt;
-	guint port_parsed, priority_parsed, saved_errno = errno;
-	gint r;
+	rspamd_inet_addr_t *cur_addr = NULL;
+	gint r, addr_cnt;
+	gchar *addr_cpy;
 
 	rspamd_ip_check_ipv6 ();
-	/* Now try to parse host and write address to ina */
 	memset (&hints, 0, sizeof (hints));
 	hints.ai_socktype = SOCK_STREAM; /* Type of the socket */
-	hints.ai_flags = AI_NUMERICSERV;
-
-	cur_tok = tokens[0];
-
-	if (strcmp (cur_tok, "*") == 0) {
-		hints.ai_flags |= AI_PASSIVE;
-		cur_tok = NULL;
-	}
+	hints.ai_flags = AI_NUMERICSERV|flags;
+	addr_cpy = g_malloc (len + 1);
+	rspamd_strlcpy (addr_cpy, begin, len + 1);
 
 	if (ipv6_status == RSPAMD_IPV6_SUPPORTED) {
 		hints.ai_family = AF_UNSPEC;
@@ -915,166 +949,152 @@ rspamd_parse_host_port_priority_strv (gchar **tokens,
 		hints.ai_family = AF_INET;
 	}
 
-	if (tokens[1] != NULL) {
-		/* Port part */
-		rspamd_strlcpy (portbuf, tokens[1], sizeof (portbuf));
-		cur_port = portbuf;
-		errno = 0;
-		port_parsed = strtoul (tokens[1], &err_str, 10);
-		if (*err_str != '\0' || errno != 0) {
-			msg_warn ("cannot parse port: %s, at symbol %c, error: %s",
-					tokens[1],
-					*err_str,
-					strerror (errno));
-			hints.ai_flags ^= AI_NUMERICSERV;
+	if ((r = getaddrinfo (addr_cpy, portbuf, &hints, &res)) == 0) {
+		/* Now copy up to max_addrs of addresses */
+		addr_cnt = 0;
+		cur = res;
+		while (cur) {
+			cur = cur->ai_next;
+			addr_cnt ++;
 		}
-		else if (port_parsed > G_MAXUINT16) {
-			errno = ERANGE;
-			msg_warn ("cannot parse port: %s, error: %s",
-					tokens[1],
-					strerror (errno));
-			hints.ai_flags ^= AI_NUMERICSERV;
-		}
-		if (priority != NULL) {
-			const gchar *tok;
 
-			tok = tokens[2];
-			if (tok != NULL) {
-				/* Priority part */
-				errno = 0;
-				priority_parsed = strtoul (tok, &err_str, 10);
-				if (*err_str != '\0' || errno != 0) {
-					msg_warn (
-						"cannot parse priority: %s, at symbol %c, error: %s",
-						tok,
-						*err_str,
-						strerror (errno));
-				}
-				else {
-					*priority = priority_parsed;
-				}
-			}
-		}
-	}
-	else if (default_port != 0) {
-		rspamd_snprintf (portbuf, sizeof (portbuf), "%ud", default_port);
-		cur_port = portbuf;
-	}
-	else {
-		cur_port = NULL;
-	}
-
-	if (*tokens[0] != '/') {
-		if ((r = getaddrinfo (cur_tok, cur_port, &hints, &res)) == 0) {
-			/* Now copy up to max_addrs of addresses */
-			addr_cnt = 0;
-			cur = res;
-			while (cur) {
-				cur = cur->ai_next;
-				addr_cnt ++;
-			}
-
+		if (*addrs == NULL) {
 			*addrs = g_ptr_array_new_full (addr_cnt,
-						(GDestroyNotify)rspamd_inet_address_destroy);
+					(GDestroyNotify)rspamd_inet_address_destroy);
 
 			if (pool != NULL) {
 				rspamd_mempool_add_destructor (pool,
 						rspamd_ptr_array_free_hard, *addrs);
 			}
+		}
 
-			cur = res;
-			while (cur) {
-				cur_addr = rspamd_inet_address_from_sa (cur->ai_addr,
-						cur->ai_addrlen);
+		cur = res;
+		while (cur) {
+			cur_addr = rspamd_inet_address_from_sa (cur->ai_addr,
+					cur->ai_addrlen);
 
-				if (cur_addr != NULL) {
-					g_ptr_array_add (*addrs, cur_addr);
-				}
-				cur = cur->ai_next;
+			if (cur_addr != NULL) {
+				g_ptr_array_add (*addrs, cur_addr);
 			}
+			cur = cur->ai_next;
+		}
 
-			freeaddrinfo (res);
-		}
-		else {
-			msg_err ("address resolution for %s failed: %s",
-					tokens[0],
-					gai_strerror (r));
-			goto err;
-		}
+		freeaddrinfo (res);
 	}
 	else {
-		/* Special case of unix socket, as getaddrinfo cannot deal with them */
-		*addrs = g_ptr_array_new_full (1,
-				(GDestroyNotify)rspamd_inet_address_destroy);
+		msg_err_pool ("address resolution for %s failed: %s",
+				addr_cpy,
+				gai_strerror (r));
+		g_free (addr_cpy);
 
-		if (pool != NULL) {
-			rspamd_mempool_add_destructor (pool,
-					rspamd_ptr_array_free_hard, *addrs);
-		}
-
-		if (!rspamd_parse_inet_address (&cur_addr, tokens[0], 0)) {
-			msg_err ("cannot parse unix socket definition %s: %s",
-					tokens[0],
-					strerror (errno));
-			goto err;
-		}
-
-		g_ptr_array_add (*addrs, cur_addr);
+		return FALSE;
 	}
 
-	/* Restore errno */
-	if (name != NULL) {
-		if (pool == NULL) {
-			*name = g_strdup (tokens[0]);
-		}
-		else {
-			*name = rspamd_mempool_strdup (pool, tokens[0]);
-		}
-	}
-	errno = saved_errno;
 	return TRUE;
-
-err:
-	errno = saved_errno;
-	return FALSE;
 }
 
 gboolean
-rspamd_parse_host_port_priority (
-	const gchar *str,
+rspamd_parse_host_port_priority (const gchar *str,
 	GPtrArray **addrs,
 	guint *priority,
 	gchar **name,
 	guint default_port,
 	rspamd_mempool_t *pool)
 {
-	gchar **tokens;
-	gboolean ret;
+	gchar portbuf[8];
+	const gchar *p;
+	rspamd_inet_addr_t *cur_addr = NULL;
 
-	tokens = g_strsplit_set (str, ":", 0);
-	if (!tokens || !tokens[0]) {
-		return FALSE;
+	/*
+	 * In this function, we can have several possibilities:
+	 * 1) Unix socket: check for '.' or '/' at the begin of string
+	 * 2) \[ipv6\]: check for '[' at the beginning
+	 * 3) '*': means listening on any address
+	 * 4) ip|host[:port[:priority]]
+	 */
+
+	if (str[0] == '*') {
+		if (!rspamd_check_port_priority (str + 1, default_port, priority,
+				portbuf, sizeof (portbuf), pool)) {
+			return FALSE;
+		}
+
+		if (!rspamd_resolve_addrs (str, 1, addrs, portbuf, AI_PASSIVE, pool)) {
+			return FALSE;
+		}
+	}
+	else if (str[0] == '[') {
+		/* This is braced IPv6 address */
+		p = strchr (str, ']');
+
+		if (p == NULL) {
+			msg_err ("cannot parse address definition %s: %s",
+					str,
+					strerror (EINVAL));
+
+			return FALSE;
+		}
+
+		if (!rspamd_check_port_priority (p + 1, default_port, priority, portbuf,
+				sizeof (portbuf), pool)) {
+			return FALSE;
+		}
+
+		if (!rspamd_resolve_addrs (str + 1, p - str, addrs,
+				portbuf, 0, pool)) {
+			return FALSE;
+		}
+	}
+	else if (str[0] == '/' || str[0] == '.') {
+		/* Special case of unix socket, as getaddrinfo cannot deal with them */
+		if (*addrs == NULL) {
+			*addrs = g_ptr_array_new_full (1,
+					(GDestroyNotify)rspamd_inet_address_destroy);
+
+			if (pool != NULL) {
+				rspamd_mempool_add_destructor (pool,
+						rspamd_ptr_array_free_hard, *addrs);
+			}
+		}
+
+		if (!rspamd_parse_inet_address (&cur_addr, str, 0)) {
+			msg_err_pool ("cannot parse unix socket definition %s: %s",
+					str,
+					strerror (errno));
+
+			return FALSE;
+		}
+
+		g_ptr_array_add (*addrs, cur_addr);
+	}
+	else {
+		p = strchr (str, ':');
+
+		if (p == NULL) {
+			/* Just address or IP */
+			rspamd_check_port_priority ("", default_port, priority, portbuf,
+					sizeof (portbuf), pool);
+
+			if (!rspamd_resolve_addrs (str, strlen (str), addrs,
+					portbuf, 0, pool)) {
+				return FALSE;
+			}
+		}
+		else {
+			if (!rspamd_check_port_priority (p + 1, default_port, priority, portbuf,
+					sizeof (portbuf), pool)) {
+				return FALSE;
+			}
+
+			if (!rspamd_resolve_addrs (str + 1, p - str, addrs,
+					portbuf, 0, pool)) {
+				return FALSE;
+			}
+		}
 	}
 
-	ret = rspamd_parse_host_port_priority_strv (tokens, addrs,
-			priority, name, default_port, pool);
-
-	g_strfreev (tokens);
-
-	return ret;
+	return TRUE;
 }
-
-gboolean
-rspamd_parse_host_port (const gchar *str,
-	GPtrArray **addrs,
-	gchar **name,
-	guint default_port,
-	rspamd_mempool_t *pool)
-{
-	return rspamd_parse_host_port_priority (str, addrs, NULL,
-			name, default_port, pool);
-}
-
 
 guchar*
 rspamd_inet_address_get_radix_key (const rspamd_inet_addr_t *addr, guint *klen)

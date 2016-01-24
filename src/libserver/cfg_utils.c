@@ -63,47 +63,10 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 	const gchar *str)
 {
 	struct rspamd_worker_bind_conf *cnf;
-	gchar **tokens, *err;
+	gchar *err;
 	gboolean ret = TRUE;
 
 	if (str == NULL) {
-		return FALSE;
-	}
-
-	if (str[0] == '[') {
-		/* This is an ipv6 address */
-		gsize len, ntok;
-		const gchar *start, *ip_pos;
-
-		start = str + 1;
-
-		len = strcspn (start, "]");
-		if (start[len] != ']') {
-			return FALSE;
-		}
-
-		ip_pos = start;
-		start += len + 1;
-		ntok = 1;
-
-		if (*start == ':') {
-			ntok = 2;
-			start ++;
-		}
-
-		tokens = g_malloc_n (ntok + 1, sizeof (gchar *));
-		tokens[ntok] = NULL;
-		tokens[0] = g_malloc (len + 1);
-		rspamd_strlcpy (tokens[0], ip_pos, len + 1);
-
-		if (ntok > 1) {
-			tokens[1] = g_strdup (start);
-		}
-	}
-	else {
-		tokens = g_strsplit_set (str, ":", 0);
-	}
-	if (!tokens || !tokens[0]) {
 		return FALSE;
 	}
 
@@ -112,10 +75,11 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 			sizeof (struct rspamd_worker_bind_conf));
 
 	cnf->cnt = 1024;
-	if (strcmp (tokens[0], "systemd") == 0) {
+
+	if (strcmp (str, "systemd") == 0) {
 		/* The actual socket will be passed by systemd environment */
 		cnf->is_systemd = TRUE;
-		cnf->cnt = strtoul (tokens[1], &err, 10);
+		cnf->cnt = strtoul (str, &err, 10);
 		cnf->addrs = NULL;
 
 		if (err == NULL || *err == '\0') {
@@ -128,7 +92,7 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 		}
 	}
 	else {
-		if (!rspamd_parse_host_port_priority_strv (tokens, &cnf->addrs,
+		if (!rspamd_parse_host_port_priority (str, &cnf->addrs,
 				NULL, &cnf->name, DEFAULT_BIND_PORT, cfg->cfg_pool)) {
 			msg_err_config ("cannot parse bind line: %s", str);
 			ret = FALSE;
@@ -138,8 +102,6 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 			LL_PREPEND (cf->bind_conf, cnf);
 		}
 	}
-
-	g_strfreev (tokens);
 
 	return ret;
 }

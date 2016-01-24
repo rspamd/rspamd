@@ -189,10 +189,6 @@ gboolean rspamd_ip_is_valid (const rspamd_inet_addr_t *addr);
  */
 gint rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t **addr);
 
-gboolean rspamd_parse_host_port_priority_strv (gchar **tokens,
-	GPtrArray **addrs, guint *priority,
-	gchar **name, guint default_port, rspamd_mempool_t *pool);
-
 /**
  * Parse host[:port[:priority]] line
  * @param ina host address
@@ -204,16 +200,6 @@ gboolean rspamd_parse_host_port_priority (const gchar *str,
 		GPtrArray **addrs,
 		guint *priority, gchar **name, guint default_port,
 		rspamd_mempool_t *pool);
-
-/**
- * Parse host:port line
- * @param ina host address
- * @param port port
- * @return TRUE if string was parsed
- */
-gboolean rspamd_parse_host_port (const gchar *str,
-		GPtrArray **addrs,
-	gchar **name, guint default_port, rspamd_mempool_t *pool);
 
 /**
  * Destroy the specified IP address
