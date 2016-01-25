@@ -99,16 +99,22 @@ lua_sqlite3_open (lua_State *L)
 {
 	const gchar *path = luaL_checkstring (L, 1);
 	sqlite3 *db, **pdb;
+	GError *err = NULL;
 
 	if (path == NULL) {
 		lua_pushnil (L);
 		return 1;
 	}
 
-	db = rspamd_sqlite3_open_or_create (NULL, path, NULL, NULL);
+	db = rspamd_sqlite3_open_or_create (NULL, path, NULL, &err);
 
 	if (db == NULL) {
+		if (err) {
+			msg_err ("cannot open db: %e", err);
+			g_error_free (err);
+		}
 		lua_pushnil (L);
+
 		return 1;
 	}
 

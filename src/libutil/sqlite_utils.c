@@ -298,7 +298,7 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 
 	rspamd_snprintf (lock_path, sizeof (lock_path), "%s.lock", path);
 
-	if (access (path, R_OK) == -1 && create_sql != NULL) {
+	if (access (path, R_OK) == -1) {
 		flags |= SQLITE_OPEN_CREATE;
 		create = TRUE;
 	}
