@@ -30,6 +30,7 @@ extern struct rspamadm_command fuzzy_merge_command;
 extern struct rspamadm_command configdump_command;
 extern struct rspamadm_command control_command;
 extern struct rspamadm_command confighelp_command;
+extern struct rspamadm_command statconvert_command;
 
 const struct rspamadm_command *commands[] = {
 	&help_command,
@@ -40,6 +41,7 @@ const struct rspamadm_command *commands[] = {
 	&configdump_command,
 	&control_command,
 	&confighelp_command,
+	&statconvert_command,
 	NULL
 };
 

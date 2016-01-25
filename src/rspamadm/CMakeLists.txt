@@ -7,6 +7,7 @@ SET(RSPAMADMSRC rspamadm.c
         configdump.c
         control.c
         confighelp.c
+        stat_convert.c
         ${CMAKE_BINARY_DIR}/src/workers.c
         ${CMAKE_BINARY_DIR}/src/modules.c
         ${CMAKE_SOURCE_DIR}/src/controller.c
