@@ -59,6 +59,8 @@ static const struct luaL_reg sqlitelib_f[] = {
 
 static const struct luaL_reg sqlitelib_m[] = {
 	LUA_INTERFACE_DEF (sqlite3, sql),
+	{"query", lua_sqlite3_sql},
+	{"exec", lua_sqlite3_sql},
 	LUA_INTERFACE_DEF (sqlite3, rows),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__gc", lua_sqlite3_close},

@@ -243,7 +243,7 @@ rspamd_sqlite3_wait (rspamd_mempool_t *pool, const gchar *lock)
 	}
 
 	rspamd_file_unlock (fd, FALSE);
-
+	unlink (lock);
 	close (fd);
 
 	return TRUE;
@@ -346,7 +346,7 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 		return NULL;
 	}
 
-	if (create) {
+	if (create && has_lock) {
 		if (sqlite3_exec (sqlite, sqlite_wal, NULL, NULL, NULL) != SQLITE_OK) {
 			msg_warn_pool_check ("WAL mode is not supported (%s), locking issues might occur",
 					sqlite3_errmsg (sqlite));
@@ -357,20 +357,21 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 					sqlite3_errmsg (sqlite));
 		}
 
-		if (sqlite3_exec (sqlite, create_sql, NULL, NULL, NULL) != SQLITE_OK) {
-			g_set_error (err, rspamd_sqlite3_quark (),
-					-1, "cannot execute create sql `%s`: %s",
-					create_sql, sqlite3_errmsg (sqlite));
-			sqlite3_close (sqlite);
-			rspamd_file_unlock (lock_fd, FALSE);
-			unlink (lock_path);
-			close (lock_fd);
+		if (create_sql) {
+			if (sqlite3_exec (sqlite, create_sql, NULL, NULL, NULL) != SQLITE_OK) {
+				g_set_error (err, rspamd_sqlite3_quark (),
+						-1, "cannot execute create sql `%s`: %s",
+						create_sql, sqlite3_errmsg (sqlite));
+				sqlite3_close (sqlite);
+				rspamd_file_unlock (lock_fd, FALSE);
+				unlink (lock_path);
+				close (lock_fd);
 
-			return NULL;
+				return NULL;
+			}
 		}
 
 		sqlite3_close (sqlite);
-
 
 		/* Reopen in normal mode */
 		msg_debug_pool_check ("reopening %s in normal mode", path);
