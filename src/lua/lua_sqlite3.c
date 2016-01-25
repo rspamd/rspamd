@@ -136,7 +136,7 @@ lua_sqlite3_bind_statements (lua_State *L, gint start, gint end,
 	gsize slen;
 	gdouble n;
 
-	g_assert (start < end && start > 0 && end > 0);
+	g_assert (start <= end && start > 0 && end > 0);
 
 	for (i = start; i <= end; i ++) {
 		type = lua_type (L, i);
@@ -194,7 +194,7 @@ lua_sqlite3_sql (lua_State *L)
 
 			if (top > 2) {
 				/* Push additional arguments to sqlite3 */
-				lua_sqlite3_bind_statements (L, 2, top, stmt);
+				lua_sqlite3_bind_statements (L, 3, top, stmt);
 			}
 
 			rc = sqlite3_step (stmt);
@@ -305,7 +305,7 @@ lua_sqlite3_rows (lua_State *L)
 
 			if (top > 2) {
 				/* Push additional arguments to sqlite3 */
-				lua_sqlite3_bind_statements (L, 2, top, stmt);
+				lua_sqlite3_bind_statements (L, 3, top, stmt);
 			}
 
 			/* Create C closure */
