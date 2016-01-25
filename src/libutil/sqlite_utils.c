@@ -227,7 +227,7 @@ rspamd_sqlite3_wait (rspamd_mempool_t *pool, const gchar *lock)
 			return TRUE;
 		}
 
-		msg_err_pool ("cannot open lock file %s: %s", lock, strerror (errno));
+		msg_err_pool_check ("cannot open lock file %s: %s", lock, strerror (errno));
 
 		return FALSE;
 	}
@@ -235,7 +235,8 @@ rspamd_sqlite3_wait (rspamd_mempool_t *pool, const gchar *lock)
 	while (!rspamd_file_lock (fd, TRUE)) {
 		if (nanosleep (&sleep_ts, NULL) == -1 && errno != EINTR) {
 			close (fd);
-			msg_err_pool ("cannot sleep open lock file %s: %s", lock, strerror (errno));
+			msg_err_pool_check ("cannot sleep open lock file %s: %s", lock,
+					strerror (errno));
 
 			return FALSE;
 		}
@@ -307,7 +308,7 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 	lock_fd = open (lock_path, O_WRONLY|O_CREAT|O_EXCL, 00600);
 
 	if (lock_fd == -1 && (errno == EEXIST || errno == EBUSY)) {
-		msg_debug_pool ("checking %s to wait for db being initialized", lock_path);
+		msg_debug_pool_check ("checking %s to wait for db being initialized", lock_path);
 
 		if (!rspamd_sqlite3_wait (pool, lock_path)) {
 			g_set_error (err, rspamd_sqlite3_quark (),
@@ -322,7 +323,7 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 		has_lock = FALSE;
 	}
 	else {
-		msg_debug_pool ("locking %s to block other processes", lock_path);
+		msg_debug_pool_check ("locking %s to block other processes", lock_path);
 
 		g_assert (rspamd_file_lock (lock_fd, FALSE));
 		has_lock = TRUE;
@@ -347,12 +348,12 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 
 	if (create) {
 		if (sqlite3_exec (sqlite, sqlite_wal, NULL, NULL, NULL) != SQLITE_OK) {
-			msg_warn_pool ("WAL mode is not supported (%s), locking issues might occur",
+			msg_warn_pool_check ("WAL mode is not supported (%s), locking issues might occur",
 					sqlite3_errmsg (sqlite));
 		}
 
 		if (sqlite3_exec (sqlite, exclusive_lock_sql, NULL, NULL, NULL) != SQLITE_OK) {
-			msg_warn_pool ("cannot exclusively lock database to create schema: %s",
+			msg_warn_pool_check ("cannot exclusively lock database to create schema: %s",
 					sqlite3_errmsg (sqlite));
 		}
 
@@ -372,7 +373,7 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 
 
 		/* Reopen in normal mode */
-		msg_debug_pool ("reopening %s in normal mode", path);
+		msg_debug_pool_check ("reopening %s in normal mode", path);
 		flags &= ~SQLITE_OPEN_CREATE;
 
 		if ((rc = sqlite3_open_v2 (path, &sqlite,
@@ -394,36 +395,36 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 	}
 
 	if (sqlite3_exec (sqlite, sqlite_wal, NULL, NULL, NULL) != SQLITE_OK) {
-		msg_warn_pool ("WAL mode is not supported (%s), locking issues might occur",
+		msg_warn_pool_check ("WAL mode is not supported (%s), locking issues might occur",
 				sqlite3_errmsg (sqlite));
 	}
 
 	if (sqlite3_exec (sqlite, fsync_sql, NULL, NULL, NULL) != SQLITE_OK) {
-		msg_warn_pool ("cannot set synchronous: %s",
+		msg_warn_pool_check ("cannot set synchronous: %s",
 				sqlite3_errmsg (sqlite));
 	}
 
 	if ((rc = sqlite3_exec (sqlite, foreign_keys, NULL, NULL, NULL)) !=
 			SQLITE_OK) {
-		msg_warn_pool ("cannot enable foreign keys: %s",
+		msg_warn_pool_check ("cannot enable foreign keys: %s",
 				sqlite3_errmsg (sqlite));
 	}
 
 #if defined(__LP64__) || defined(_LP64)
 	if ((rc = sqlite3_exec (sqlite, enable_mmap, NULL, NULL, NULL)) != SQLITE_OK) {
-		msg_warn_pool ("cannot enable mmap: %s",
+		msg_warn_pool_check ("cannot enable mmap: %s",
 				sqlite3_errmsg (sqlite));
 	}
 #endif
 
 	if ((rc = sqlite3_exec (sqlite, other_pragmas, NULL, NULL, NULL)) !=
 			SQLITE_OK) {
-		msg_warn_pool ("cannot execute tuning pragmas: %s",
+		msg_warn_pool_check ("cannot execute tuning pragmas: %s",
 				sqlite3_errmsg (sqlite));
 	}
 
 	if (has_lock) {
-		msg_debug_pool ("removing lock from %s", lock_path);
+		msg_debug_pool_check ("removing lock from %s", lock_path);
 		rspamd_file_unlock (lock_fd, FALSE);
 		unlink (lock_path);
 		close (lock_fd);
