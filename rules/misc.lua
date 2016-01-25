@@ -185,7 +185,7 @@ rspamd_config.HEADER_FORGED_MDN = {
     end
 
     if header_mdn and not header_rp  then return true end
-    if header_rp  and not header_mdn then return true end
+    if header_rp  and not header_mdn then return false end
 
     if header_mdn['addr'] ~= header_rp['addr'] then
       return true
