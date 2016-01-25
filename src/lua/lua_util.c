@@ -162,6 +162,20 @@ LUA_FUNCTION_DEF (util, get_tld);
  */
 LUA_FUNCTION_DEF (util, glob);
 
+/**
+ * @function util.parse_mail_address(str)
+ * Parses email address and returns a table of tables in the following format:
+ *
+ * - `name` - name of internet address in UTF8, e.g. for `Vsevolod Stakhov <blah@foo.com>` it returns `Vsevolod Stakhov`
+ * - `addr` - address part of the address
+ * - `user` - user part (if present) of the address, e.g. `blah`
+ * - `domain` - domain part (if present), e.g. `foo.com`
+ *
+ * @param {string} str input string
+ * @return {table/tables} parsed list of mail addresses
+ */
+LUA_FUNCTION_DEF (util, parse_mail_address);
+
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
 	LUA_INTERFACE_DEF (util, load_rspamd_config),
@@ -179,6 +193,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, humanize_number),
 	LUA_INTERFACE_DEF (util, get_tld),
 	LUA_INTERFACE_DEF (util, glob),
+	LUA_INTERFACE_DEF (util, parse_mail_address),
 	{NULL, NULL}
 };
 
@@ -771,6 +786,35 @@ lua_util_glob (lua_State *L)
 	}
 
 	globfree (&gl);
+
+	return 1;
+}
+
+static gint
+lua_util_parse_mail_address (lua_State *L)
+{
+	InternetAddressList *ia;
+	const gchar *str = luaL_checkstring (L, 1);
+	gboolean ret = FALSE;
+
+	if (str) {
+		ia = internet_address_list_parse_string (str);
+
+		if (ia != NULL) {
+			ret = TRUE;
+
+			lua_push_internet_address_list (L, ia);
+#ifdef GMIME24
+		g_object_unref (ia);
+#else
+		internet_address_list_destroy (ia);
+#endif
+		}
+	}
+
+	if (!ret) {
+		lua_pushnil (L);
+	}
 
 	return 1;
 }
