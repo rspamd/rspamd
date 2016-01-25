@@ -259,7 +259,7 @@ lua_redis_parse_args (lua_State *L, gint idx, const gchar *cmd,
 
 	if (idx != 0 && lua_type (L, idx) == LUA_TTABLE) {
 		/* Get all arguments */
-		lua_pushvalue (L, 5);
+		lua_pushvalue (L, idx);
 		lua_pushnil (L);
 		top = 0;
 
@@ -376,7 +376,9 @@ lua_redis_make_request (lua_State *L)
 			ud->L = L;
 			ud->cbref = cbref;
 			lua_pushstring (L, "args");
+			lua_gettable (L, -2);
 			lua_redis_parse_args (L, -1, cmd, &ud->args, &ud->nargs);
+			lua_pop (L, 1);
 			ret = TRUE;
 		}
 		else {
@@ -480,7 +482,8 @@ static int
 lua_redis_make_request_sync (lua_State *L)
 {
 	struct rspamd_lua_ip *addr = NULL;
-	const gchar *cmd = NULL;
+	rspamd_inet_addr_t *ip = NULL;
+	const gchar *cmd = NULL, *host;
 	struct timeval tv;
 	gboolean ret = FALSE;
 	gdouble timeout = REDIS_DEFAULT_TIMEOUT;
@@ -501,22 +504,44 @@ lua_redis_make_request_sync (lua_State *L)
 		if (lua_type (L, -1) == LUA_TUSERDATA) {
 			addr = lua_check_ip (L, -1);
 		}
+		else if (lua_type (L, -1) == LUA_TSTRING) {
+			host = lua_tostring (L, -1);
+			if (rspamd_parse_inet_address (&ip, host, strlen (host))) {
+				addr = g_alloca (sizeof (*addr));
+				addr->addr = ip;
+
+				if (rspamd_inet_address_get_port (ip) == 0) {
+					rspamd_inet_address_set_port (ip, 6379);
+				}
+			}
+		}
 		lua_pop (L, 1);
 
 		lua_pushstring (L, "timeout");
 		lua_gettable (L, -2);
-		timeout = lua_tonumber (L, -1);
+		if (lua_type (L, -1) == LUA_TNUMBER) {
+			timeout = lua_tonumber (L, -1);
+		}
 		lua_pop (L, 1);
 
 		lua_pushstring (L, "args");
+		lua_gettable (L, -2);
 		lua_redis_parse_args (L, -1, cmd, &args, &nargs);
-		ret = TRUE;
+		lua_pop (L, 1);
+
+		if (addr && cmd) {
+			ret = TRUE;
+		}
 	}
 
 	if (ret) {
-		msec_to_tv (timeout, &tv);
+		double_to_tv (timeout, &tv);
 		ctx = redisConnectWithTimeout (rspamd_inet_address_to_string (addr->addr),
 				rspamd_inet_address_get_port (addr->addr), tv);
+
+		if (ip) {
+			rspamd_inet_address_destroy (ip);
+		}
 
 		if (ctx == NULL || ctx->err) {
 			redisFree (ctx);
@@ -532,8 +557,14 @@ lua_redis_make_request_sync (lua_State *L)
 					NULL);
 
 		if (r != NULL) {
-			lua_pushboolean (L, TRUE);
-			lua_redis_push_reply (L, r);
+			if (r->type != REDIS_REPLY_ERROR) {
+				lua_pushboolean (L, TRUE);
+				lua_redis_push_reply (L, r);
+			}
+			else {
+				lua_pushboolean (L, FALSE);
+				lua_pushstring (L, r->str);
+			}
 			freeReplyObject (r);
 			redisFree (ctx);
 
@@ -545,6 +576,13 @@ lua_redis_make_request_sync (lua_State *L)
 			lua_redis_free_args (args, nargs);
 			lua_pushboolean (L, FALSE);
 		}
+	}
+	else {
+		if (ip) {
+			rspamd_inet_address_destroy (ip);
+		}
+		msg_err ("bad arguments for redis request");
+		lua_pushboolean (L, FALSE);
 	}
 
 	return 1;
