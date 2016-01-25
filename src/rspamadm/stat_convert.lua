@@ -31,7 +31,9 @@ return function (args, res)
   local db = sqlite3.open(res['source_db'])
   local tokens = {}
   local num = 0
-  local lim = 100 -- Update each 100 tokens
+  local total = 0
+  local nusers = 0
+  local lim = 1000 -- Update each 1000 tokens
   local users_map = {}
   local learns = {}
 
@@ -43,8 +45,13 @@ return function (args, res)
   db:sql('BEGIN;')
   -- Fill users mapping
   for row in db:rows('SELECT * FROM users;') do
-    users_map[row.id] = row.name
+    if row.id == '0' then
+      users_map[row.id] = ''
+    else
+      users_map[row.id] = row.name
+    end
     learns[row.id] = row.learned
+    nusers = nusers + 1
   end
   -- Fill tokens, sending data to redis each `lim` records
   for row in db:rows('SELECT token,value,user FROM tokens;') do
@@ -56,6 +63,7 @@ return function (args, res)
     table.insert(tokens, {row.token, row.value, user})
     
     num = num + 1
+    total = total + 1
     if num > lim then
       if not send_redis(res['redis_host'], res['symbol'], tokens, users_map) then
         print('Cannot send tokens to the redis server')
@@ -66,5 +74,25 @@ return function (args, res)
       tokens = {}
     end
   end
+  if #tokens > 0 and 
+    not send_redis(res['redis_host'], res['symbol'], tokens, users_map) then
+    
+    print('Cannot send tokens to the redis server')
+    return
+  end
+  -- Now update all users
+  _.each(function(id, learned)
+    local user = users_map[id]
+    if not redis.make_request_sync({
+        host = server,
+        cmd = 'HSET',
+        args = {symbol .. user, 'learns', learned}
+      }) then
+      print('Cannot update learns for user: ' .. user)
+    end
+  end, learns)
   db:sql('COMMIT;')
+  
+  print(string.format('Migrated %d tokens for %d users for symbol %s',
+    total, nusers, res['symbol']))
 end
