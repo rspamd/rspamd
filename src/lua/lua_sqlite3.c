@@ -218,9 +218,11 @@ lua_sqlite3_sql (lua_State *L)
 static void
 lua_sqlite3_push_row (lua_State *L, sqlite3_stmt *stmt)
 {
-	gint nresults, i, type;
 	const gchar *str;
 	gsize slen;
+	gint64 num;
+	gchar numbuf[32];
+	gint nresults, i, type;
 
 	nresults = sqlite3_column_count (stmt);
 	lua_createtable (L, 0, nresults);
@@ -231,7 +233,12 @@ lua_sqlite3_push_row (lua_State *L, sqlite3_stmt *stmt)
 
 		switch (type) {
 		case SQLITE_INTEGER:
-			lua_pushnumber (L, sqlite3_column_int64 (stmt, i));
+			/* XXX: we represent int64 as strings, as we can nothing else to do
+			 * about it portably
+			 */
+			num = sqlite3_column_int64 (stmt, i);
+			rspamd_snprintf (numbuf, sizeof (numbuf), "%L", num);
+			lua_pushstring (L, numbuf);
 			break;
 		case SQLITE_FLOAT:
 			lua_pushnumber (L, sqlite3_column_double (stmt, i));
