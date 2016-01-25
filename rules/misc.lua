@@ -150,10 +150,16 @@ rspamd_config.BROKEN_HEADERS = {
 rspamd_config.HEADER_RCONFIRM_MISMATCH = {
   callback = function (task)
     local header_from  = task:get_from('mime')[1]
-    local header_cread = task:get_header('X-Confirm-Reading-To')
+    local cread = task:get_header('X-Confirm-Reading-To')
+
+    local header_cread = nil
+    if cread then
+      local headers_cread = util.parse_mail_address(cread)
+      if headers_cread then header_cread = headers_cread[1] end
+    end
 
     if header_from and header_cread then
-      if not string.find(header_from, header_cread) then
+      if not string.find(header_from['addr'], header_cread['addr']) then
         return true
       end
     end
@@ -168,13 +174,20 @@ rspamd_config.HEADER_RCONFIRM_MISMATCH = {
 
 rspamd_config.HEADER_FORGED_MDN = {
   callback = function (task)
-    local header_mdn = task:get_header('Disposition-Notification-To')
+    local mdn = task:get_header('Disposition-Notification-To')
     local header_rp  = task:get_from('smtp')[1]
+
+    -- Parse mail addr
+    local header_mdn = nil
+    if mdn then
+      local headers_mdn = util.parse_mail_address(mdn)
+      if headers_mdn then header_mdn = headers_mdn[1] end
+    end
 
     if header_mdn and not header_rp  then return true end
     if header_rp  and not header_mdn then return true end
 
-    if header_mdn ~= header_rp then
+    if header_mdn['addr'] ~= header_rp['addr'] then
       return true
     end
 
