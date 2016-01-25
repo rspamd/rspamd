@@ -343,7 +343,7 @@ static gint
 lua_load_sqlite3 (lua_State * L)
 {
 	lua_newtable (L);
-	luaL_register (L, NULL, sqlitelib_m);
+	luaL_register (L, NULL, sqlitelib_f);
 
 	return 1;
 }
@@ -364,7 +364,7 @@ luaopen_sqlite3 (lua_State * L)
 	lua_pushstring (L, "rspamd{sqlite3}");
 	lua_rawset (L, -3);
 
-	luaL_register (L, NULL, sqlitelib_f);
+	luaL_register (L, NULL, sqlitelib_m);
 	lua_pop (L, 1);
 
 	luaL_newmetatable (L, "rspamd{sqlite3_stmt}");
