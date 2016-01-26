@@ -178,8 +178,8 @@ rspamd_sqlite3_run_prstmt (rspamd_mempool_t *pool, sqlite3 *db, GArray *stmts,
 
 		return SQLITE_OK;
 	}
-	else if (retcode != SQLITE_DONE) {
-		msg_debug_pool ("failed to execute query %s: %d, %s", nst->sql,
+	else if (retcode != SQLITE_DONE && retcode != SQLITE_OK && retcode != SQLITE_ROW) {
+		msg_warn_pool ("failed to execute query %s: %d, %s", nst->sql,
 				retcode, sqlite3_errmsg (db));
 	}
 
