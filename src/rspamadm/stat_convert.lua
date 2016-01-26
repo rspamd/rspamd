@@ -4,26 +4,25 @@ local _ = require "fun"
 
 local function send_redis(server, symbol, tokens)
   local ret = true
-  local args = {}
-  
+  local conn = redis.connect_sync({
+    host = server,
+  })
+
+  if not conn then
+    print('Cannot connect to ' .. server)
+    return false
+  end
+
   _.each(function(t)
-    if not args[t[3]] then
-      args[t[3]] = {symbol .. t[3]}
-    end
-    table.insert(args[t[3]], t[1])
-    table.insert(args[t[3]], t[2])
-  end, tokens)
-  
-  _.each(function(k, argv)
-    if not redis.make_request_sync({
-        host = server,
-        cmd = 'HMSET',
-        args = argv
-      }) then
+    if not conn:add_cmd('HINCRBY', {symbol .. t[3], t[1], t[2]}) then
       ret = false
     end
-  end, args)
+  end, tokens)
   
+  if ret then
+    ret = conn:exec()
+  end
+
   return ret
 end
 
