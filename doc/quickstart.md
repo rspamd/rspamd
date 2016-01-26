@@ -133,6 +133,10 @@ Rspamd uses redis as well:
 
 Installation of redis is quite straightforward: install it using packages, start it with the default settings (it should listen on local interface using port 6379) and you are done. You might also want to limit memory used by redis at some sane value.
 
+Note that for the moment by default stable releases of redis listen for connections from all the network interfaces. It's dangerous and in most cases should be limited to loopback interfaces with configuration directive:
+
+	bind 127.0.0.1 ::1
+
 ## Rmilter setup
 
 Now, when you are done with postfix/dovecot/redis initial setup, it might be a good idea to setup rmilter. Rmilter is used to link postfix (or sendmail) with rspamd. It can alter messages, change topic, reject spam, perform greylisting, check rate limits and even sign messages for authorized users/networks with DKIM signatures.
