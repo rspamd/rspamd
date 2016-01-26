@@ -1038,6 +1038,7 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 	struct rspamd_task **ptask;
 	lua_State *L;
 	gboolean check = TRUE;
+	const gdouble slow_diff_limit = 1e5;
 
 	if (item->type & (SYMBOL_TYPE_NORMAL|SYMBOL_TYPE_CALLBACK)) {
 
@@ -1078,6 +1079,11 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 
 			if (total_diff) {
 				*total_diff += diff;
+			}
+
+			if (diff > slow_diff_limit) {
+				msg_info_task ("slow rule: %s: %d ms", item->symbol,
+						(gint)(diff / 1000.));
 			}
 
 			rspamd_set_counter (item, diff);
