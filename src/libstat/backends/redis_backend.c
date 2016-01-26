@@ -746,9 +746,7 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 			rspamd_session_remove_event (task->s, rspamd_redis_fin, rt);
 		}
 		else {
-			msg_err_task ("error getting reply from redis server %s: %s",
-					rspamd_upstream_name (rt->selected), c->errstr);
-			rspamd_upstream_fail (rt->selected);
+			/* This could be caused by removing redis context forcefully */
 			rspamd_session_remove_event (task->s, rspamd_redis_fin, rt);
 		}
 	}
@@ -817,9 +815,6 @@ rspamd_redis_processed (redisAsyncContext *c, gpointer r, gpointer priv)
 			rspamd_session_remove_event (task->s, rspamd_redis_fin, rt);
 		}
 		else {
-			msg_err_task ("error getting reply from redis server %s: %s",
-					rspamd_upstream_name (rt->selected), c->errstr);
-			rspamd_upstream_fail (rt->selected);
 			rspamd_session_remove_event (task->s, rspamd_redis_fin, rt);
 		}
 	}
