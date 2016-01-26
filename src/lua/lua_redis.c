@@ -180,10 +180,11 @@ lua_redis_fin (void *arg)
  */
 static void
 lua_redis_push_error (const gchar *err,
-	struct lua_redis_userdata *ud,
+	struct lua_redis_ctx *ctx,
 	gboolean connected)
 {
 	struct rspamd_task **ptask;
+	struct lua_redis_userdata *ud = &ctx->d.async;
 
 	/* Push error */
 	lua_rawgeti (ud->L, LUA_REGISTRYINDEX, ud->cbref);
@@ -200,7 +201,7 @@ lua_redis_push_error (const gchar *err,
 	}
 
 	if (connected) {
-		rspamd_session_remove_event (ud->task->s, lua_redis_fin, ud);
+		rspamd_session_remove_event (ud->task->s, lua_redis_fin, ctx);
 	}
 }
 
@@ -240,9 +241,10 @@ lua_redis_push_reply (lua_State *L, const redisReply *r)
  * @param ud
  */
 static void
-lua_redis_push_data (const redisReply *r, struct lua_redis_userdata *ud)
+lua_redis_push_data (const redisReply *r, struct lua_redis_ctx *ctx)
 {
 	struct rspamd_task **ptask;
+	struct lua_redis_userdata *ud = &ctx->d.async;
 
 	/* Push error */
 	lua_rawgeti (ud->L, LUA_REGISTRYINDEX, ud->cbref);
@@ -259,7 +261,7 @@ lua_redis_push_data (const redisReply *r, struct lua_redis_userdata *ud)
 		msg_info ("call to callback failed: %s", lua_tostring (ud->L, -1));
 	}
 
-	rspamd_session_remove_event (ud->task->s, lua_redis_fin, ud);
+	rspamd_session_remove_event (ud->task->s, lua_redis_fin, ctx);
 }
 
 /**
@@ -288,24 +290,25 @@ lua_redis_callback (redisAsyncContext *c, gpointer r, gpointer priv)
 	if (c->err == 0) {
 		if (r != NULL) {
 			if (reply->type != REDIS_REPLY_ERROR) {
-				lua_redis_push_data (reply, ud);
+				lua_redis_push_data (reply, ctx);
 			}
 			else {
-				lua_redis_push_error (reply->str, ud, TRUE);
+				lua_redis_push_error (reply->str, ctx, TRUE);
 			}
 		}
 		else {
-			lua_redis_push_error ("received no data from server", ud, TRUE);
+			lua_redis_push_error ("received no data from server", ctx, TRUE);
 		}
 	}
 	else {
 		if (c->err == REDIS_ERR_IO) {
-			lua_redis_push_error (strerror (errno), ud, TRUE);
+			lua_redis_push_error (strerror (errno), ctx, TRUE);
 		}
 		else {
-			lua_redis_push_error (c->errstr, ud, TRUE);
+			lua_redis_push_error (c->errstr, ctx, TRUE);
 		}
 	}
+
 	REF_RELEASE (ctx);
 }
 
@@ -318,7 +321,7 @@ lua_redis_timeout (int fd, short what, gpointer u)
 	REF_RETAIN (ctx);
 	ud = &ctx->d.async;
 	msg_info ("timeout while querying redis server");
-	lua_redis_push_error ("timeout while connecting the server", ud, TRUE);
+	lua_redis_push_error ("timeout while connecting the server", ctx, TRUE);
 	REF_RELEASE (ctx);
 }
 
@@ -528,6 +531,11 @@ lua_redis_make_request (lua_State *L)
 		redisAsyncSetConnectCallback (ud->ctx, lua_redis_connect_cb);
 
 		if (ud->ctx == NULL || ud->ctx->err) {
+			if (ud->ctx) {
+				redisAsyncFree (ud->ctx);
+				ud->ctx = NULL;
+			}
+
 			REF_RELEASE (ctx);
 			lua_pushboolean (L, FALSE);
 
@@ -545,7 +553,7 @@ lua_redis_make_request (lua_State *L)
 		if (ret == REDIS_OK) {
 			rspamd_session_add_event (ud->task->s,
 					lua_redis_fin,
-					ud,
+					ctx,
 					g_quark_from_static_string ("lua redis"));
 
 			double_to_tv (timeout, &tv);
@@ -555,6 +563,8 @@ lua_redis_make_request (lua_State *L)
 		}
 		else {
 			msg_info ("call to redis failed: %s", ud->ctx->errstr);
+			redisAsyncFree (ud->ctx);
+			ud->ctx = NULL;
 			REF_RELEASE (ctx);
 		}
 	}
