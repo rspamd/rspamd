@@ -922,6 +922,28 @@ call_finish_handler:
 	}
 }
 
+static gssize
+rspamd_http_try_read (gint fd,
+		struct rspamd_http_connection *conn,
+		struct rspamd_http_connection_private *priv,
+		struct _rspamd_http_privbuf *pbuf)
+{
+	gssize r;
+	rspamd_fstring_t *buf;
+
+	buf = priv->buf->data;
+	r = read (fd, buf->str, buf->allocated);
+
+	if (r <= 0) {
+		return r;
+	}
+	else {
+		buf->len = r;
+	}
+
+	return r;
+}
+
 static void
 rspamd_http_event_handler (int fd, short what, gpointer ud)
 {
@@ -939,19 +961,22 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 	buf = priv->buf->data;
 
 	if (what == EV_READ) {
-		r = read (fd, buf->str, buf->allocated);
-		if (r == -1) {
-			err = g_error_new (HTTP_ERROR,
-					errno,
-					"IO read error: %s",
-					strerror (errno));
-			conn->error_handler (conn, err);
-			g_error_free (err);
+		r = rspamd_http_try_read (fd, conn, priv, pbuf);
 
-			REF_RELEASE (pbuf);
-			rspamd_http_connection_unref (conn);
+		if (r > 0) {
+			if (http_parser_execute (&priv->parser, &priv->parser_cb,
+					buf->str, r) != (size_t)r || priv->parser.http_errno != 0) {
+				err = g_error_new (HTTP_ERROR, priv->parser.http_errno,
+						"HTTP parser error: %s",
+						http_errno_description (priv->parser.http_errno));
+				conn->error_handler (conn, err);
+				g_error_free (err);
 
-			return;
+				REF_RELEASE (pbuf);
+				rspamd_http_connection_unref (conn);
+
+				return;
+			}
 		}
 		else if (r == 0) {
 			if (!conn->finished) {
@@ -969,8 +994,24 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 			return;
 		}
 		else {
-			buf->len = r;
+			err = g_error_new (HTTP_ERROR,
+					errno,
+					"IO read error: %s",
+					strerror (errno));
+			conn->error_handler (conn, err);
+			g_error_free (err);
 
+			REF_RELEASE (pbuf);
+			rspamd_http_connection_unref (conn);
+
+			return;
+		}
+	}
+	else if (what == EV_TIMEOUT) {
+		/* Let's try to read from the socket first */
+		r = rspamd_http_try_read (fd, conn, priv, pbuf);
+
+		if (r > 0) {
 			if (http_parser_execute (&priv->parser, &priv->parser_cb,
 					buf->str, r) != (size_t)r || priv->parser.http_errno != 0) {
 				err = g_error_new (HTTP_ERROR, priv->parser.http_errno,
@@ -985,17 +1026,30 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 				return;
 			}
 		}
-	}
-	else if (what == EV_TIMEOUT) {
-		err = g_error_new (HTTP_ERROR, ETIMEDOUT,
-				"IO timeout");
-		conn->error_handler (conn, err);
-		g_error_free (err);
+		else if (r == 0) {
+			if (!conn->finished) {
+				err = g_error_new (HTTP_ERROR, ETIMEDOUT,
+						"IO timeout");
+				conn->error_handler (conn, err);
+				g_error_free (err);
 
-		REF_RELEASE (pbuf);
-		rspamd_http_connection_unref (conn);
+			}
+			REF_RELEASE (pbuf);
+			rspamd_http_connection_unref (conn);
 
-		return;
+			return;
+		}
+		else {
+			err = g_error_new (HTTP_ERROR, ETIMEDOUT,
+					"IO timeout");
+			conn->error_handler (conn, err);
+			g_error_free (err);
+
+			REF_RELEASE (pbuf);
+			rspamd_http_connection_unref (conn);
+
+			return;
+		}
 	}
 	else if (what == EV_WRITE) {
 		rspamd_http_write_helper (conn);
