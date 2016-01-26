@@ -61,6 +61,7 @@ LUA_FUNCTION_DEF (redis, connect);
 LUA_FUNCTION_DEF (redis, connect_sync);
 LUA_FUNCTION_DEF (redis, add_cmd);
 LUA_FUNCTION_DEF (redis, exec);
+LUA_FUNCTION_DEF (redis, gc);
 
 static const struct luaL_reg redislib_f[] = {
 	LUA_INTERFACE_DEF (redis, make_request),
@@ -73,6 +74,7 @@ static const struct luaL_reg redislib_f[] = {
 static const struct luaL_reg redislib_m[] = {
 	LUA_INTERFACE_DEF (redis, add_cmd),
 	LUA_INTERFACE_DEF (redis, exec),
+	{"__gc", lua_redis_gc},
 	{"__tostring", rspamd_lua_class_tostring},
 };
 
@@ -100,6 +102,7 @@ struct lua_redis_ctx {
 		struct lua_redis_userdata async;
 		redisContext *sync;
 	} d;
+	guint cmds_pending;
 	ref_entry_t ref;
 };
 
@@ -148,6 +151,18 @@ lua_redis_dtor (struct lua_redis_ctx *ctx)
 	}
 
 	g_slice_free1 (sizeof (*ctx), ctx);
+}
+
+static gint
+lua_redis_gc (lua_State *L)
+{
+	struct lua_redis_ctx *ctx = lua_check_redis (L, 1);
+
+	if (ctx) {
+		REF_RELEASE (ctx);
+	}
+
+	return 0;
 }
 
 static void
@@ -682,7 +697,6 @@ lua_redis_connect (lua_State *L)
 	struct rspamd_lua_ip *addr = NULL;
 	rspamd_inet_addr_t *ip = NULL;
 	const gchar *host;
-	struct timeval tv;
 	struct lua_redis_ctx *ctx = NULL, **pctx;
 	struct lua_redis_userdata *ud;
 	struct rspamd_task *task = NULL;
@@ -770,6 +784,13 @@ lua_redis_connect (lua_State *L)
 	return 1;
 }
 
+/***
+ * @function rspamd_redis.connect_sync({params})
+ * Make blocking request to redis server, params is a table of key=value arguments in any order
+ * @param {ip|string} host server address
+ * @param {number} timeout timeout in seconds for request (1.0 by default)
+ * @return {redis} redis object if a request has been successful
+ */
 static int
 lua_redis_connect_sync (lua_State *L)
 {
@@ -780,7 +801,6 @@ lua_redis_connect_sync (lua_State *L)
 	gboolean ret = FALSE;
 	gdouble timeout = REDIS_DEFAULT_TIMEOUT;
 	struct lua_redis_ctx *ctx, **pctx;
-	redisReply *r;
 
 	if (lua_istable (L, 1)) {
 		lua_pushstring (L, "host");
@@ -849,23 +869,114 @@ lua_redis_connect_sync (lua_State *L)
 	return 1;
 }
 
+/***
+ * @method rspamd_redis:add_cmd(cmd, {args})
+ * Append new cmd to redis pipeline
+ * @param {string} cmd command to be sent to redis
+ * @param {table} args array of strings used as redis arguments
+ * @return {boolean} `true` if a request has been successful
+ */
 static int
 lua_redis_add_cmd (lua_State *L)
 {
-	msg_warn ("rspamd is compiled with no redis support");
+	struct lua_redis_ctx *ctx = lua_check_redis (L, 1);
+	const gchar *cmd = NULL;
+	gint args_pos = 2;
+	gchar **args = NULL;
+	guint nargs = 0;
 
-	lua_pushboolean (L, FALSE);
+	if (ctx) {
+		if (lua_type (L, 2) == LUA_TSTRING) {
+			cmd = lua_tostring (L, 2);
+			args_pos = 3;
+		}
+
+		if (ctx->async) {
+			lua_pushstring (L, "Async redis pipelining is not implemented");
+			lua_error (L);
+			return 0;
+		}
+		else {
+			if (ctx->d.sync) {
+				lua_redis_parse_args (L, args_pos, cmd, &args, &nargs);
+
+				if (nargs > 0) {
+					redisAppendCommandArgv (ctx->d.sync, nargs,
+							(const char **)args, NULL);
+					ctx->cmds_pending ++;
+					lua_redis_free_args (args, nargs);
+				}
+				else {
+					lua_pushstring (L, "cannot append commands when not connected");
+					lua_error (L);
+					return 0;
+				}
+
+			}
+			else {
+				lua_pushstring (L, "cannot append commands when not connected");
+				lua_error (L);
+				return 0;
+			}
+		}
+	}
+
+	lua_pushboolean (L, 1);
 
 	return 1;
 }
+
+/***
+ * @method rspamd_redis:exec()
+ * Executes pending commands (suitable for blocking IO only for now)
+ * @return {table} pairs in format [bool, result] for each request pending
+ */
 static int
 lua_redis_exec (lua_State *L)
 {
-	msg_warn ("rspamd is compiled with no redis support");
+	struct lua_redis_ctx *ctx = lua_check_redis (L, 1);
+	redisReply *r;
+	gint ret;
+	guint i, nret = 0;
 
-	lua_pushboolean (L, FALSE);
+	if (ctx->async) {
+		lua_pushstring (L, "Async redis pipelining is not implemented");
+		lua_error (L);
+		return 0;
+	}
+	else {
+		if (!ctx->d.sync) {
+			lua_pushstring (L, "cannot exec commands when not connected");
+			lua_error (L);
+			return 0;
+		}
+		else {
+			for (i = 0; i < ctx->cmds_pending; i ++) {
+				ret = redisGetReply (ctx->d.sync, (void **)&r);
 
-	return 1;
+				if (ret == REDIS_OK) {
+					if (r->type != REDIS_REPLY_ERROR) {
+						lua_pushboolean (L, TRUE);
+						lua_redis_push_reply (L, r);
+					}
+					else {
+						lua_pushboolean (L, FALSE);
+						lua_pushstring (L, r->str);
+					}
+					freeReplyObject (r);
+				}
+				else {
+					msg_info ("call to redis failed: %s", ctx->d.sync->errstr);
+					lua_pushboolean (L, FALSE);
+					lua_pushstring (L, ctx->d.sync->errstr);
+				}
+
+				nret += 2;
+			}
+		}
+	}
+
+	return nret;
 }
 #else
 static int
@@ -921,6 +1032,11 @@ lua_redis_exec (lua_State *L)
 	lua_pushboolean (L, FALSE);
 
 	return 1;
+}
+static int
+lua_redis_gc (lua_State *L)
+{
+	return 0;
 }
 #endif
 
