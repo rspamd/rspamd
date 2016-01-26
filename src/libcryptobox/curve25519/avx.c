@@ -34,6 +34,7 @@ typedef struct {
 typedef guint64 fe[10];
 
 extern void ladder_avx (fe *var, const guchar *p);
+extern void ladder_base_avx (fe *var, const guchar *p);
 extern void fe51_mul_avx (fe51 *a, const fe51 *b, const fe51 *c);
 extern void fe51_pack_avx (guchar *out, const fe51 *var);
 extern void fe51_nsquare_avx (fe51 *a, const fe51 *b, gint n);

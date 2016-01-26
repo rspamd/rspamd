@@ -148,7 +148,8 @@ struct cache_savepoint {
 static gboolean rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 		struct symbols_cache *cache,
 		struct cache_item *item,
-		struct cache_savepoint *checkpoint);
+		struct cache_savepoint *checkpoint,
+		gdouble *total_diff);
 static gboolean rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 		struct symbols_cache *cache,
 		struct cache_item *item,
@@ -1015,7 +1016,8 @@ rspamd_symbols_cache_watcher_cb (gpointer sessiond, gpointer ud)
 					break;
 				}
 
-				rspamd_symbols_cache_check_symbol (task, cache, it, checkpoint);
+				rspamd_symbols_cache_check_symbol (task, cache, it, checkpoint,
+						NULL);
 			}
 		}
 	}
@@ -1027,7 +1029,8 @@ static gboolean
 rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 		struct symbols_cache *cache,
 		struct cache_item *item,
-		struct cache_savepoint *checkpoint)
+		struct cache_savepoint *checkpoint,
+		gdouble *total_diff)
 {
 	guint pending_before, pending_after;
 	double t1, t2;
@@ -1071,7 +1074,12 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 			item->func (task, item->user_data);
 
 			t2 = rspamd_get_ticks ();
-			diff = (t2 - t1) * 1000000.;
+			diff = (t2 - t1) * 1e6;
+
+			if (total_diff) {
+				*total_diff += diff;
+			}
+
 			rspamd_set_counter (item, diff);
 			rspamd_session_watch_stop (task->s);
 			pending_after = rspamd_session_events_pending (task->s);
@@ -1133,7 +1141,8 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 					}
 					else if (!rspamd_symbols_cache_check_symbol (task, cache,
 							dep->item,
-							checkpoint)) {
+							checkpoint,
+							NULL)) {
 						/* Now started, but has events pending */
 						ret = FALSE;
 						msg_debug_task ("started check of %d symbol as dep for "
@@ -1169,6 +1178,9 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	struct cache_item *item = NULL;
 	struct cache_savepoint *checkpoint;
 	gint i;
+	gdouble total_microseconds = 0;
+	const gdouble max_microseconds = 3e5;
+	guint start_events_pending;
 
 	g_assert (cache != NULL);
 
@@ -1199,6 +1211,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	}
 
 	msg_debug_task ("symbols processing stage at pass: %d", checkpoint->pass);
+	start_events_pending = rspamd_session_events_pending (task->s);
 
 	if (checkpoint->pass == 0) {
 
@@ -1227,7 +1240,19 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 					continue;
 				}
 
-				rspamd_symbols_cache_check_symbol (task, cache, item, checkpoint);
+				rspamd_symbols_cache_check_symbol (task, cache, item,
+						checkpoint, &total_microseconds);
+			}
+
+			if (total_microseconds > max_microseconds) {
+				/* Maybe we should stop and check pending events? */
+				if (rspamd_session_events_pending (task->s) >
+						start_events_pending) {
+					msg_debug_task ("trying to check async events after spending "
+							"%d microseconds processing symbols",
+							(gint)total_microseconds);
+					return TRUE;
+				}
 			}
 		}
 
@@ -1243,7 +1268,19 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 					break;
 				}
 
-				rspamd_symbols_cache_check_symbol (task, cache, item, checkpoint);
+				rspamd_symbols_cache_check_symbol (task, cache, item,
+						checkpoint, &total_microseconds);
+			}
+
+			if (total_microseconds > max_microseconds) {
+				/* Maybe we should stop and check pending events? */
+				if (rspamd_session_events_pending (task->s) >
+						start_events_pending) {
+					msg_debug_task ("trying to check async events after spending "
+							"%d microseconds processing symbols",
+							(gint)total_microseconds);
+					return TRUE;
+				}
 			}
 		}
 	}
