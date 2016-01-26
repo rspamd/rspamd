@@ -91,6 +91,7 @@ enum rspamd_fuzzy_statement_idx {
 	RSPAMD_FUZZY_BACKEND_TRANSACTION_ROLLBACK,
 	RSPAMD_FUZZY_BACKEND_INSERT,
 	RSPAMD_FUZZY_BACKEND_UPDATE,
+	RSPAMD_FUZZY_BACKEND_UPDATE_FLAG,
 	RSPAMD_FUZZY_BACKEND_INSERT_SHINGLE,
 	RSPAMD_FUZZY_BACKEND_CHECK,
 	RSPAMD_FUZZY_BACKEND_CHECK_SHINGLE,
@@ -144,6 +145,14 @@ static struct rspamd_fuzzy_stmts {
 		.sql = "UPDATE digests SET value = value + ?1 WHERE "
 				"digest==?2;",
 		.args = "ID",
+		.stmt = NULL,
+		.result = SQLITE_DONE
+	},
+	{
+		.idx = RSPAMD_FUZZY_BACKEND_UPDATE_FLAG,
+		.sql = "UPDATE digests SET value = ?1, flag = ?2 WHERE "
+				"digest==?3;",
+		.args = "IID",
 		.stmt = NULL,
 		.result = SQLITE_DONE
 	},
@@ -626,31 +635,54 @@ rspamd_fuzzy_backend_add (struct rspamd_fuzzy_backend *backend,
 		const struct rspamd_fuzzy_cmd *cmd)
 {
 	int rc, i;
-	gint64 id;
+	gint64 id, flag;
 	const struct rspamd_fuzzy_shingle_cmd *shcmd;
 
 	if (backend == NULL) {
 		return FALSE;
 	}
 
-	rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
+	rc = rspamd_fuzzy_backend_run_stmt (backend, FALSE,
 			RSPAMD_FUZZY_BACKEND_CHECK,
 			cmd->digest);
 
 	if (rc == SQLITE_OK) {
-		/* We need to increase weight */
-		rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
-				RSPAMD_FUZZY_BACKEND_UPDATE,
-				(gint64) cmd->value,
-				cmd->digest);
-		if (rc != SQLITE_OK) {
-			msg_warn_fuzzy_backend ("cannot update hash to %d -> "
-					"%*xs: %s", (gint) cmd->flag,
-					(gint) sizeof (cmd->digest), cmd->digest,
-					sqlite3_errmsg (backend->db));
+		/* Check flag */
+		flag = sqlite3_column_int64 (
+				prepared_stmts[RSPAMD_FUZZY_BACKEND_CHECK].stmt,
+				2);
+		rspamd_fuzzy_backend_cleanup_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK);
+
+		if (flag == cmd->flag) {
+			/* We need to increase weight */
+			rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
+					RSPAMD_FUZZY_BACKEND_UPDATE,
+					(gint64) cmd->value,
+					cmd->digest);
+			if (rc != SQLITE_OK) {
+				msg_warn_fuzzy_backend ("cannot update hash to %d -> "
+						"%*xs: %s", (gint) cmd->flag,
+						(gint) sizeof (cmd->digest), cmd->digest,
+						sqlite3_errmsg (backend->db));
+			}
+		}
+		else {
+			/* We need to relearn actually */
+			rc = rspamd_fuzzy_backend_run_stmt (backend, TRUE,
+					RSPAMD_FUZZY_BACKEND_UPDATE_FLAG,
+					(gint64) cmd->value,
+					(gint64) cmd->flag,
+					cmd->digest);
+			if (rc != SQLITE_OK) {
+				msg_warn_fuzzy_backend ("cannot update hash to %d -> "
+						"%*xs: %s", (gint) cmd->flag,
+						(gint) sizeof (cmd->digest), cmd->digest,
+						sqlite3_errmsg (backend->db));
+			}
 		}
 	}
 	else {
+		rspamd_fuzzy_backend_cleanup_stmt (backend, RSPAMD_FUZZY_BACKEND_CHECK);
 		rc = rspamd_fuzzy_backend_run_stmt (backend, FALSE,
 				RSPAMD_FUZZY_BACKEND_INSERT,
 				(gint) cmd->flag,
