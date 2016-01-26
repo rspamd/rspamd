@@ -571,27 +571,27 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 						cbdata->inflight += 2;
 					}
 				}
-
-				/* Set up the required keys */
-				ucl_object_insert_key (cbdata->cur,
-						ucl_object_typed_new (UCL_INT), "revision", 0, false);
-				ucl_object_insert_key (cbdata->cur,
-						ucl_object_typed_new (UCL_INT), "used", 0, false);
-				ucl_object_insert_key (cbdata->cur,
-						ucl_object_typed_new (UCL_INT), "total", 0, false);
-				ucl_object_insert_key (cbdata->cur,
-						ucl_object_typed_new (UCL_INT), "size", 0, false);
-				ucl_object_insert_key (cbdata->cur,
-						ucl_object_fromstring (cbdata->elt->ctx->stcf->symbol),
-						"symbol", 0, false);
-				ucl_object_insert_key (cbdata->cur, ucl_object_fromstring ("redis"),
-						"type", 0, false);
-				ucl_object_insert_key (cbdata->cur, ucl_object_fromint (0),
-						"languages", 0, false);
-				ucl_object_insert_key (cbdata->cur, ucl_object_fromint (processed),
-						"users", 0, false);
 			}
 		}
+
+		/* Set up the required keys */
+		ucl_object_insert_key (cbdata->cur,
+				ucl_object_typed_new (UCL_INT), "revision", 0, false);
+		ucl_object_insert_key (cbdata->cur,
+				ucl_object_typed_new (UCL_INT), "used", 0, false);
+		ucl_object_insert_key (cbdata->cur,
+				ucl_object_typed_new (UCL_INT), "total", 0, false);
+		ucl_object_insert_key (cbdata->cur,
+				ucl_object_typed_new (UCL_INT), "size", 0, false);
+		ucl_object_insert_key (cbdata->cur,
+				ucl_object_fromstring (cbdata->elt->ctx->stcf->symbol),
+				"symbol", 0, false);
+		ucl_object_insert_key (cbdata->cur, ucl_object_fromstring ("redis"),
+				"type", 0, false);
+		ucl_object_insert_key (cbdata->cur, ucl_object_fromint (0),
+				"languages", 0, false);
+		ucl_object_insert_key (cbdata->cur, ucl_object_fromint (processed),
+				"users", 0, false);
 
 		rspamd_upstream_ok (cbdata->selected);
 	}

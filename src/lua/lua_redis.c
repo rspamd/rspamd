@@ -316,10 +316,8 @@ static void
 lua_redis_timeout (int fd, short what, gpointer u)
 {
 	struct lua_redis_ctx *ctx = u;
-	struct lua_redis_userdata *ud;
 
 	REF_RETAIN (ctx);
-	ud = &ctx->d.async;
 	msg_info ("timeout while querying redis server");
 	lua_redis_push_error ("timeout while connecting the server", ctx, TRUE);
 	REF_RELEASE (ctx);
@@ -711,7 +709,6 @@ lua_redis_connect (lua_State *L)
 	struct lua_redis_userdata *ud;
 	struct rspamd_task *task = NULL;
 	gboolean ret = FALSE;
-	gdouble timeout = REDIS_DEFAULT_TIMEOUT;
 
 	if (lua_istable (L, 1)) {
 		/* Table version */
@@ -748,13 +745,6 @@ lua_redis_connect (lua_State *L)
 			}
 		}
 
-		lua_pop (L, 1);
-
-		lua_pushstring (L, "timeout");
-		if (lua_type (L, -1) == LUA_TNUMBER) {
-			lua_gettable (L, -2);
-		}
-		timeout = lua_tonumber (L, -1);
 		lua_pop (L, 1);
 
 		if (task != NULL && addr != NULL) {
