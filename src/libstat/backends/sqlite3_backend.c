@@ -887,7 +887,7 @@ rspamd_sqlite3_inc_learns (struct rspamd_task *task, gpointer runtime,
 	bk = rt->db;
 	rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_INC_LEARNS,
-			rt->user_id, rt->lang_id);
+			rt->lang_id, rt->user_id);
 
 	if (bk->in_transaction) {
 		rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
@@ -913,7 +913,7 @@ rspamd_sqlite3_dec_learns (struct rspamd_task *task, gpointer runtime,
 	bk = rt->db;
 	rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_DEC_LEARNS,
-			rt->user_id, rt->lang_id);
+			rt->lang_id, rt->user_id);
 
 	if (bk->in_transaction) {
 		rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
