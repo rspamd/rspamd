@@ -1311,6 +1311,13 @@ rspamd_redis_get_stat (gpointer runtime,
 	if (rt->ctx->stat_elt) {
 		st = rt->ctx->stat_elt->ud;
 
+		if (rt->redis) {
+			event_del (&rt->timeout_event);
+			redisAsyncFree (rt->redis);
+
+			rt->conn_state = RSPAMD_REDIS_DISCONNECTED;
+		}
+
 		if (st->stat) {
 			return ucl_object_ref (st->stat);
 		}
