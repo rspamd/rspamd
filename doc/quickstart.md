@@ -403,13 +403,13 @@ For example, it is possible to get help for a specific configuration option by t
 
 It is also useful to have a simple `Sieve` script to place all messages marked as spam to the `Junk` folder. Here is an example of such a script (~/.dovecot.sieve):
 
-```
+~~~nginx
 require ["fileinto"];
 
 if header :is "X-Spam" "Yes" {
         fileinto "Junk";
 }
-```
+~~~
 
 You can also setup rspamc to learn via passing messages to a certain email address. I'd recommend to use `/etc/aliases` for these purposes and `mail-redirect` command (e.g. provided by [Mail Redirect addon](https://addons.mozilla.org/en-GB/thunderbird/addon/mailredirect/) for `thunderbird` MUA). The desired aliases could be the following:
 
