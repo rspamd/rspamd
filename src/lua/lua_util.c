@@ -70,6 +70,22 @@ LUA_FUNCTION_DEF (util, encode_base64);
  * @return {rspamd_text} decoded data chunk
  */
 LUA_FUNCTION_DEF (util, decode_base64);
+
+/***
+ * @function util.encode_base32(input)
+ * Encodes data in base32 breaking lines if needed
+ * @param {text or string} input input data
+ * @return {rspamd_text} encoded data chunk
+ */
+LUA_FUNCTION_DEF (util, encode_base32);
+/***
+ * @function util.decode_base32(input)
+ * Decodes data from base32 ignoring whitespace characters
+ * @param {text or string} input data to decode
+ * @return {rspamd_text} decoded data chunk
+ */
+LUA_FUNCTION_DEF (util, decode_base32);
+
 /***
  * @function util.tokenize_text(input[, exceptions])
  * Create tokens from a text using optional exceptions list
@@ -183,6 +199,8 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, process_message),
 	LUA_INTERFACE_DEF (util, encode_base64),
 	LUA_INTERFACE_DEF (util, decode_base64),
+	LUA_INTERFACE_DEF (util, encode_base32),
+	LUA_INTERFACE_DEF (util, decode_base32),
 	LUA_INTERFACE_DEF (util, tokenize_text),
 	LUA_INTERFACE_DEF (util, tanh),
 	LUA_INTERFACE_DEF (util, parse_html),
@@ -433,6 +451,82 @@ lua_util_decode_base64 (lua_State *L)
 			t->len = outlen;
 			t->own = TRUE;
 		}
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_util_encode_base32 (lua_State *L)
+{
+	struct rspamd_lua_text *t;
+	const gchar *s = NULL;
+	gchar *out;
+	gsize inlen, outlen;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		s = luaL_checklstring (L, 1, &inlen);
+	}
+	else if (lua_type (L, 1) == LUA_TUSERDATA) {
+		t = lua_check_text (L, 1);
+
+		if (t != NULL) {
+			s = t->start;
+			inlen = t->len;
+		}
+	}
+
+	if (s == NULL) {
+		lua_pushnil (L);
+	}
+	else {
+		out = rspamd_encode_base32 (s, inlen);
+
+		if (out != NULL) {
+			t = lua_newuserdata (L, sizeof (*t));
+			outlen = strlen (out);
+			rspamd_lua_setclass (L, "rspamd{text}", -1);
+			t->start = out;
+			t->len = outlen;
+			/* Need destruction */
+			t->own = TRUE;
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+
+	return 1;
+}
+
+static gint
+lua_util_decode_base32 (lua_State *L)
+{
+	struct rspamd_lua_text *t;
+	const gchar *s = NULL;
+	gsize inlen, outlen;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		s = luaL_checklstring (L, 1, &inlen);
+	}
+	else if (lua_type (L, 1) == LUA_TUSERDATA) {
+		t = lua_check_text (L, 1);
+
+		if (t != NULL) {
+			s = t->start;
+			inlen = t->len;
+		}
+	}
+
+	if (s != NULL) {
+			t = lua_newuserdata (L, sizeof (*t));
+			rspamd_lua_setclass (L, "rspamd{text}", -1);
+			t->start = rspamd_decode_base32 (s, inlen, &outlen);
+			t->len = outlen;
+			t->own = TRUE;
 	}
 	else {
 		lua_pushnil (L);
