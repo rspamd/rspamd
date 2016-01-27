@@ -190,8 +190,8 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 	},
 	[RSPAMD_STAT_BACKEND_DEC_LEARNS] = {
 		.idx = RSPAMD_STAT_BACKEND_DEC_LEARNS,
-		.sql = "UPDATE languages SET learns=learns - 1 WHERE id=?1;"
-				"UPDATE users SET learns=learns - 1 WHERE id=?2;",
+		.sql = "UPDATE languages SET learns=MAX(0, learns - 1) WHERE id=?1;"
+				"UPDATE users SET learns=MAX(0, learns - 1) WHERE id=?2;",
 		.stmt = NULL,
 		.args = "II",
 		.result = SQLITE_DONE,
@@ -200,7 +200,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 	},
 	[RSPAMD_STAT_BACKEND_GET_LEARNS] = {
 		.idx = RSPAMD_STAT_BACKEND_GET_LEARNS,
-		.sql = "SELECT sum(learns) FROM languages;",
+		.sql = "SELECT SUM(MAX(0, learns)) FROM languages;",
 		.stmt = NULL,
 		.args = "",
 		.result = SQLITE_ROW,
