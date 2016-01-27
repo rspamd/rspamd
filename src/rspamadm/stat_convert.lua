@@ -1,5 +1,6 @@
 local sqlite3 = require "rspamd_sqlite3"
 local redis = require "rspamd_redis"
+local util = require "rspamd_util"
 local _ = require "fun"
 
 local function send_redis(server, symbol, tokens)
@@ -18,10 +19,50 @@ local function send_redis(server, symbol, tokens)
       ret = false
     end
   end, tokens)
-  
+
   if ret then
     ret = conn:exec()
   end
+
+  return ret
+end
+
+local function convert_learned(cache, target)
+  local converted = 0
+  local db = sqlite3.open(cache)
+  local ret = true
+
+  if not db then
+    print('Cannot open cache database: ' .. cache)
+    return false
+  end
+
+  db:sql('BEGIN;')
+  for row in db:rows('SELECT * FROM learns;') do
+    local is_spam
+    local digest = tostring(util.encode_base32(row.digest))
+
+    if row.flag == '0' then
+      is_spam = '-1'
+    else
+      is_spam = '1'
+    end
+
+    if not redis.make_request_sync({
+      host = target,
+      cmd = 'HSET',
+      args = {'learned_ids', digest, is_spam}
+    }) then
+      print('Cannot add hash: ' .. digest)
+      ret = false
+    else
+      converted = converted + 1
+    end
+  end
+  db:sql('COMMIT;')
+
+  print(string.format('Converted %d cached items from sqlite3 learned cache to redis',
+    converted))
 
   return ret
 end
@@ -35,6 +76,13 @@ return function (args, res)
   local lim = 1000 -- Update each 1000 tokens
   local users_map = {}
   local learns = {}
+
+  if res['cache_db'] then
+    if not convert_learned(res['cache_db'], res['redis_host']) then
+      print('Cannot convert learned cache to redis')
+      return
+    end
+  end
 
   if not db then
     print('Cannot open source db: ' .. res['source_db'])
@@ -58,9 +106,9 @@ return function (args, res)
     if row.user ~= 0 and users_map[row.user] then
       user = users_map[row.user]
     end
-    
+
     table.insert(tokens, {row.token, row.value, user})
-    
+
     num = num + 1
     total = total + 1
     if num > lim then
@@ -68,14 +116,14 @@ return function (args, res)
         print('Cannot send tokens to the redis server')
         return
       end
-      
+
       num = 0
       tokens = {}
     end
   end
-  if #tokens > 0 and 
+  if #tokens > 0 and
     not send_redis(res['redis_host'], res['symbol'], tokens, users_map) then
-    
+
     print('Cannot send tokens to the redis server')
     return
   end
@@ -91,7 +139,7 @@ return function (args, res)
     end
   end, learns)
   db:sql('COMMIT;')
-  
+
   print(string.format('Migrated %d tokens for %d users for symbol %s',
     total, nusers, res['symbol']))
 end
