@@ -279,6 +279,14 @@ LUA_FUNCTION_DEF (task, get_resolver);
 LUA_FUNCTION_DEF (task, inc_dns_req);
 
 /***
+ * @method task:has_recipients([type])
+ * Return true if there are SMTP or MIME recipients for a task.
+ * @param {integer|string} type if specified has the following meaning: `0` or `any` means try SMTP recipients and fallback to MIME if failed, `1` or `smtp` means checking merely SMTP recipients and `2` or `mime` means MIME recipients only
+ * @return {bool} `true` if there are recipients of the following type
+ */
+LUA_FUNCTION_DEF (task, has_recipients);
+
+/***
  * @method task:get_recipients([type])
  * Return SMTP or MIME recipients for a task. This function returns list of internet addresses each one is a table with the following structure:
  *
@@ -290,6 +298,15 @@ LUA_FUNCTION_DEF (task, inc_dns_req);
  * @return {list of addresses} list of recipients or `nil`
  */
 LUA_FUNCTION_DEF (task, get_recipients);
+
+/***
+ * @method task:has_from([type])
+ * Return true if there is SMTP or MIME sender for a task.
+ * @param {integer|string} type if specified has the following meaning: `0` or `any` means try SMTP recipients and fallback to MIME if failed, `1` or `smtp` means checking merely SMTP recipients and `2` or `mime` means MIME recipients only
+ * @return {bool} `true` if there is sender of the following type
+ */
+LUA_FUNCTION_DEF (task, has_from);
+
 /***
  * @method task:get_from([type])
  * Return SMTP or MIME sender for a task. This function returns list of internet addresses each one is a table with the following structure:
@@ -541,7 +558,9 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_queue_id),
 	LUA_INTERFACE_DEF (task, get_resolver),
 	LUA_INTERFACE_DEF (task, inc_dns_req),
+	LUA_INTERFACE_DEF (task, has_recipients),
 	LUA_INTERFACE_DEF (task, get_recipients),
+	LUA_INTERFACE_DEF (task, has_from),
 	LUA_INTERFACE_DEF (task, get_from),
 	LUA_INTERFACE_DEF (task, get_user),
 	LUA_INTERFACE_DEF (task, set_user),
@@ -1326,6 +1345,91 @@ lua_task_get_recipients (lua_State *L)
 	else {
 		lua_pushnil (L);
 	}
+
+	return 1;
+}
+
+#define CHECK_ADDR(addr) do { \
+	if (addr == NULL) { \
+		ret = 0; \
+	} \
+	else { \
+		ret = internet_address_list_length (addr) > 0 ? 1 : 0; \
+	} \
+} while (0)
+
+static gint
+lua_task_has_from (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	gint what = 0;
+	gboolean ret = FALSE;
+
+	if (task) {
+		if (lua_gettop (L) == 2) {
+			/* Get what value */
+			what = lua_task_str_to_get_type (L, 2);
+		}
+
+		switch (what) {
+		case 1:
+			/* Here we check merely envelope rcpt */
+			CHECK_ADDR (task->from_envelope);
+			break;
+		case 2:
+			/* Here we check merely mime rcpt */
+			CHECK_ADDR (task->from_mime);
+			break;
+		case 0:
+		default:
+			CHECK_ADDR (task->from_envelope);
+
+			if (!ret) {
+				CHECK_ADDR (task->from_mime);
+			}
+			break;
+		}
+	}
+
+	lua_pushboolean (L, ret);
+
+	return 1;
+}
+
+static gint
+lua_task_has_recipients (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	gint what = 0;
+	gboolean ret = FALSE;
+
+	if (task) {
+		if (lua_gettop (L) == 2) {
+			/* Get what value */
+			what = lua_task_str_to_get_type (L, 2);
+		}
+
+		switch (what) {
+		case 1:
+			/* Here we check merely envelope rcpt */
+			CHECK_ADDR (task->rcpt_envelope);
+			break;
+		case 2:
+			/* Here we check merely mime rcpt */
+			CHECK_ADDR (task->rcpt_mime);
+			break;
+		case 0:
+		default:
+			CHECK_ADDR (task->rcpt_envelope);
+
+			if (!ret) {
+				CHECK_ADDR (task->rcpt_mime);
+			}
+			break;
+		}
+	}
+
+	lua_pushboolean (L, ret);
 
 	return 1;
 }
