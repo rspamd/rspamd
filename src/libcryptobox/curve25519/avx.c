@@ -59,7 +59,8 @@ static guint64 load_4 (const unsigned char *in)
 	return result;
 }
 
-void fe_frombytes (fe h, const unsigned char *s)
+static void
+fe_frombytes (fe h, const unsigned char *s)
 {
 	guint64 h0 = load_4 (s);
 	guint64 h1 = load_3 (s + 4) << 6;
