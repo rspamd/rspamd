@@ -139,7 +139,7 @@ rspamd_config.BROKEN_HEADERS = {
     if task:has_flag('broken_headers') then
       return true
     end
-    
+
     return false
   end,
   score = 1.0,
@@ -149,8 +149,12 @@ rspamd_config.BROKEN_HEADERS = {
 
 rspamd_config.HEADER_RCONFIRM_MISMATCH = {
   callback = function (task)
-    local header_from  = task:get_from('mime')[1]
+    local header_from = nil
     local cread = task:get_header('X-Confirm-Reading-To')
+
+    if task:has_from('mime') then
+      header_from  = task:get_from('mime')[1]
+    end
 
     local header_cread = nil
     if cread then
@@ -175,7 +179,11 @@ rspamd_config.HEADER_RCONFIRM_MISMATCH = {
 rspamd_config.HEADER_FORGED_MDN = {
   callback = function (task)
     local mdn = task:get_header('Disposition-Notification-To')
-    local header_rp  = task:get_from('smtp')[1]
+    local header_rp = nil
+
+    if task:has_from('smtp') then
+      header_rp = task:get_from('smtp')[1]
+    end
 
     -- Parse mail addr
     local header_mdn = nil
@@ -210,20 +218,20 @@ rspamd_config.MULTIPLE_UNIQUE_HEADERS = {
   callback = function (task)
     local res = 0
     local res_tbl = {}
-    
+
     for i,hdr in ipairs(headers_unique) do
       local h = task:get_header_full(hdr)
-      
+
       if h and #h > 1 then
         res = res + 1
         table.insert(res_tbl, hdr)
       end
     end
-    
+
     if res > 0 then
       return true,res,table.concat(res_tbl, ',')
     end
-    
+
     return false
   end,
 
