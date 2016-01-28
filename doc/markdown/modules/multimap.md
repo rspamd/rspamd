@@ -44,7 +44,7 @@ Type attribute means what is matched with this map. The following types are supp
 DNS maps has historic support.
 
 Maps can also have a special URL format in style:
-	
+
 	map = "cdb:///path/to/file.cdb";
 
 which is treated as CDB map by rspamd.
@@ -54,7 +54,18 @@ Here is an example configuration of multimap module:
 ~~~nginx
 multimap {
 	test { type = "ip"; map = "/tmp/ip.map"; symbol = "TESTMAP"; }
-	spamhaus { type = "dnsbl"; map = "pbl.spamhaus.org"; symbol = "R_IP_PBL"; 
+	spamhaus { type = "dnsbl"; map = "pbl.spamhaus.org"; symbol = "R_IP_PBL";
 		description = "PBL dns block list"; } # Better use RBL module instead
 }
 ~~~
+
+### Map filters
+
+It is also possible to apply a filtering expression before checking value against some map. This is mainly useful
+for `header` rules. Filters are specified with `filter` option. Rspamd supports the following filters so far:
+
+* `email` or `email:addr` - parse header value and extract email address from it (`Somebody <user@example.com>` -> `user@example.com`)
+* `email:user` - parse header value as email address and extract user name from it (`Somebody <user@example.com>` -> `user`)
+*  `email:domain` - parse header value as email address and extract user name from it (`Somebody <user@example.com>` -> `example.com`)
+*  `email:name` - parse header value as email address and extract displayed name from it (`Somebody <user@example.com>` -> `Somebody`)
+* `regexp:/re/` - extracts generic information using the specified regular expression
