@@ -36,6 +36,7 @@
 #include "blake2/blake2.h"
 #include "siphash/siphash.h"
 #include "ottery.h"
+#include "printf.h"
 
 #ifdef HAVE_CPUID_H
 #include <cpuid.h>
@@ -182,17 +183,22 @@ rspamd_cryptobox_test_instr (gint instr)
 	return ok == 1;
 }
 
-void
+struct rspamd_cryptobox_library_ctx*
 rspamd_cryptobox_init (void)
 {
 	gint cpu[4], nid;
+	gulong bit;
+	static struct rspamd_cryptobox_library_ctx *ctx;
+	GString *buf;
 
 	if (cryptobox_loaded) {
 		/* Ignore reload attempts */
-		return;
+		return ctx;
 	}
 
 	cryptobox_loaded = TRUE;
+	ctx = g_malloc0 (sizeof (*ctx));
+
 	rspamd_cryptobox_cpuid (cpu, 0);
 	nid = cpu[0];
 	rspamd_cryptobox_cpuid (cpu, 1);
@@ -238,12 +244,48 @@ rspamd_cryptobox_init (void)
 		}
 	}
 
+	buf = g_string_new ("");
 
-	chacha_load ();
-	poly1305_load ();
-	siphash_load ();
-	curve25519_load ();
-	blake2b_load ();
+	for (bit = 0x1; bit != 0; bit <<= 1) {
+		if (cpu_config & bit) {
+			switch (bit) {
+			case CPUID_SSE2:
+				rspamd_printf_gstring (buf, "sse2, ");
+				break;
+			case CPUID_SSE3:
+				rspamd_printf_gstring (buf, "sse3, ");
+				break;
+			case CPUID_SSSE3:
+				rspamd_printf_gstring (buf, "ssse3, ");
+				break;
+			case CPUID_SSE41:
+				rspamd_printf_gstring (buf, "sse4.1, ");
+				break;
+			case CPUID_AVX:
+				rspamd_printf_gstring (buf, "avx, ");
+				break;
+			case CPUID_AVX2:
+				rspamd_printf_gstring (buf, "avx2, ");
+				break;
+			}
+		}
+	}
+
+	if (buf->len > 2) {
+		/* Trim last chars */
+		g_string_erase (buf, buf->len - 2, 2);
+	}
+
+	ctx->cpu_extensions = buf->str;
+	g_string_free (buf, FALSE);
+
+	ctx->chacha20_impl = chacha_load ();
+	ctx->poly1305_impl = poly1305_load ();
+	ctx->siphash_impl = siphash_load ();
+	ctx->curve25519_impl = curve25519_load ();
+	ctx->blake2_impl = blake2b_load ();
+
+	return ctx;
 }
 
 void

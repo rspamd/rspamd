@@ -119,7 +119,7 @@ curve25519_test_impl (const curve25519_impl_t *impl)
 	return TRUE;
 }
 
-void
+const char*
 curve25519_load (void)
 {
 	guint i;
@@ -132,7 +132,10 @@ curve25519_load (void)
 			}
 		}
 	}
+
 	g_assert (curve25519_test_impl (curve25519_opt));
+
+	return curve25519_opt->desc;
 }
 
 int

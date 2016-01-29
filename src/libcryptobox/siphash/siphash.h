@@ -29,7 +29,7 @@
 extern "C"
 {
 #endif
-void siphash_load (void);
+const char* siphash_load (void);
 void siphash24 (unsigned char *out,
 		const unsigned char *in,
 		unsigned long long inlen,

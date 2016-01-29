@@ -61,7 +61,7 @@ static const siphash_impl_t siphash_list[] = {
 
 static const siphash_impl_t *siphash_opt = &siphash_list[0];
 
-void
+const char *
 siphash_load(void)
 {
 	guint i;
@@ -74,6 +74,8 @@ siphash_load(void)
 			}
 		}
 	}
+
+	return siphash_opt->desc;
 }
 
 void siphash24 (unsigned char *out, const unsigned char *in,

@@ -47,10 +47,19 @@ typedef guchar rspamd_nm_t[rspamd_cryptobox_MAX_NMBYTES];
 typedef guchar rspamd_nonce_t[rspamd_cryptobox_MAX_NONCEBYTES];
 typedef guchar rspamd_sipkey_t[rspamd_cryptobox_SIPKEYBYTES];
 
+struct rspamd_cryptobox_library_ctx {
+	gchar *cpu_extensions;
+	const gchar *curve25519_impl;
+	const gchar *chacha20_impl;
+	const gchar *poly1305_impl;
+	const gchar *siphash_impl;
+	const gchar *blake2_impl;
+};
+
 /**
  * Init cryptobox library
  */
-void rspamd_cryptobox_init (void);
+struct rspamd_cryptobox_library_ctx* rspamd_cryptobox_init (void);
 
 /**
  * Generate new keypair

@@ -28,7 +28,7 @@ void poly1305_auth(unsigned char *mac, const unsigned char *in, size_t inlen,
 		const poly1305_key *key);
 int poly1305_verify(const unsigned char mac1[16], const unsigned char mac2[16]);
 
-void poly1305_load(void);
+const char* poly1305_load(void);
 
 #if defined(__cplusplus)
 }

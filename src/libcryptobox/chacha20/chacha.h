@@ -74,6 +74,6 @@ void xchacha (const chacha_key *key, const chacha_iv24 *iv,
 		const unsigned char *in, unsigned char *out, size_t inlen,
 		size_t rounds);
 
-void chacha_load (void);
+const char* chacha_load (void);
 
 #endif /* CHACHA_H_ */

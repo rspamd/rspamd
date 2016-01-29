@@ -65,7 +65,7 @@ void blake2b_keyed (unsigned char *hash,
 		const unsigned char *key,
 		size_t keylen);
 
-void blake2b_load (void);
+const char* blake2b_load (void);
 
 #if defined(__cplusplus)
 }

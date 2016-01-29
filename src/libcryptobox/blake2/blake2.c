@@ -278,7 +278,7 @@ blake2b_keyed (unsigned char *hash,
 	blake2b_final (&S, hash);
 }
 
-void
+const char*
 blake2b_load (void)
 {
 	guint i;
@@ -291,4 +291,6 @@ blake2b_load (void)
 			}
 		}
 	}
+
+	return blake2b_opt->desc;
 }

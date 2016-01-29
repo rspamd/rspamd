@@ -101,7 +101,8 @@ static int poly1305_is_aligned(const void *p)
 	return ((size_t) p & (sizeof(size_t) - 1)) == 0;
 }
 
-void poly1305_load(void)
+const char*
+poly1305_load(void)
 {
 	guint i;
 
@@ -113,6 +114,8 @@ void poly1305_load(void)
 			}
 		}
 	}
+
+	return poly1305_opt->desc;
 }
 
 /* processes inlen bytes (full blocks only), handling input alignment */
