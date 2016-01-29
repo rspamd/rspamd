@@ -40,6 +40,14 @@ struct rspamd_cryptobox_segment {
 #define rspamd_cryptobox_HASHKEYBYTES 64
 #define rspamd_cryptobox_HASHSTATEBYTES 256
 
+#define CPUID_AVX2 0x1
+#define CPUID_AVX 0x2
+#define CPUID_SSE2 0x4
+#define CPUID_SSE3 0x8
+#define CPUID_SSSE3 0x10
+#define CPUID_SSE41 0x20
+#define CPUID_RDRAND 0x40
+
 typedef guchar rspamd_pk_t[rspamd_cryptobox_MAX_PKBYTES];
 typedef guchar rspamd_sk_t[rspamd_cryptobox_MAX_SKBYTES];
 typedef guchar rspamd_sig_t[rspamd_cryptobox_MAX_MACBYTES];
@@ -54,6 +62,7 @@ struct rspamd_cryptobox_library_ctx {
 	const gchar *poly1305_impl;
 	const gchar *siphash_impl;
 	const gchar *blake2_impl;
+	unsigned long cpu_config;
 };
 
 /**

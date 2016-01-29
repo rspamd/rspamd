@@ -130,6 +130,7 @@ static gboolean
 rspamd_cryptobox_test_instr (gint instr)
 {
 	void (*old_handler) (int);
+	guint32 rd;
 
 #if defined(__GNUC__)
 	ok = 1;
@@ -172,6 +173,14 @@ rspamd_cryptobox_test_instr (gint instr)
 		__asm__ volatile ("vpaddq %ymm0, %ymm0, %ymm0");\
 		break;
 #endif
+	case CPUID_RDRAND:
+		/* Use byte code here for compatibility */
+		__asm__ volatile (".byte 0x0f,0xc7,0xf0; setc %1"
+			: "=a" (rd), "=qm" (ok)
+			:
+			: "edx"
+		);
+		break;
 	default:
 		break;
 	}
@@ -231,6 +240,11 @@ rspamd_cryptobox_init (void)
 					cpu_config |= CPUID_SSE41;
 				}
 			}
+			if ((cpu[2] & ((gint)1 << 30))) {
+				if (rspamd_cryptobox_test_instr (CPUID_RDRAND)) {
+					cpu_config |= CPUID_RDRAND;
+				}
+			}
 
 			if (nid > 7) {
 				rspamd_cryptobox_cpuid (cpu, 7);
@@ -267,6 +281,9 @@ rspamd_cryptobox_init (void)
 			case CPUID_AVX2:
 				rspamd_printf_gstring (buf, "avx2, ");
 				break;
+			case CPUID_RDRAND:
+				rspamd_printf_gstring (buf, "rdrand, ");
+				break;
 			}
 		}
 	}
@@ -278,6 +295,7 @@ rspamd_cryptobox_init (void)
 
 	ctx->cpu_extensions = buf->str;
 	g_string_free (buf, FALSE);
+	ctx->cpu_config = cpu_config;
 
 	ctx->chacha20_impl = chacha_load ();
 	ctx->poly1305_impl = poly1305_load ();

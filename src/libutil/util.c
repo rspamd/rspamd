@@ -1940,7 +1940,7 @@ rspamd_init_libs (void)
 	struct rspamd_external_libs_ctx *ctx;
 
 	ctx = g_slice_alloc0 (sizeof (*ctx));
-	rspamd_cryptobox_init ();
+	ctx->crypto_ctx = rspamd_cryptobox_init ();
 	ottery_init (NULL);
 
 #ifdef HAVE_LOCALE_H

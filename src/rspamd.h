@@ -127,6 +127,7 @@ struct rspamd_classifier_config;
 struct mime_part;
 struct rspamd_dns_resolver;
 struct rspamd_task;
+struct rspamd_cryptobox_library_ctx;
 
 /**
  * Server statistics
@@ -192,6 +193,7 @@ struct controller_session {
 struct rspamd_external_libs_ctx {
 	magic_t libmagic;
 	void **local_addrs;
+	struct rspamd_cryptobox_library_ctx *crypto_ctx;
 	ref_entry_t ref;
 };
 
