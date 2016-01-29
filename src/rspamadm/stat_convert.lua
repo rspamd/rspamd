@@ -1,7 +1,6 @@
 local sqlite3 = require "rspamd_sqlite3"
 local redis = require "rspamd_redis"
 local util = require "rspamd_util"
-local _ = require "fun"
 
 local function send_redis(server, symbol, tokens)
   local ret = true
@@ -14,11 +13,11 @@ local function send_redis(server, symbol, tokens)
     return false
   end
 
-  _.each(function(t)
+  for _,t in ipairs(tokens) do
     if not conn:add_cmd('HINCRBY', {symbol .. t[3], t[1], t[2]}) then
       ret = false
     end
-  end, tokens)
+  end
 
   if ret then
     ret = conn:exec()
@@ -128,7 +127,7 @@ return function (args, res)
     return
   end
   -- Now update all users
-  _.each(function(id, learned)
+  for id,learned in pairs(learns) do
     local user = users_map[id]
     if not redis.make_request_sync({
         host = server,
@@ -137,7 +136,7 @@ return function (args, res)
       }) then
       print('Cannot update learns for user: ' .. user)
     end
-  end, learns)
+  end
   db:sql('COMMIT;')
 
   print(string.format('Migrated %d tokens for %d users for symbol %s',
