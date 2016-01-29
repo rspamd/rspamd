@@ -1124,6 +1124,15 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->cfg->cfg_name = rspamd_mempool_strdup (
 			rspamd_main->cfg->cfg_pool,
 			rspamd_main->cfg->cfg_name);
+	msg_info_main ("cpu features: %s",
+			rspamd_main->cfg->libs_ctx->crypto_ctx->cpu_extensions);
+	msg_info_main ("cryptobox configuration: curve25519(%s), "
+			"chacha20(%s), poly1305(%s), siphash(%s), blake2(%s)",
+			rspamd_main->cfg->libs_ctx->crypto_ctx->curve25519_impl,
+			rspamd_main->cfg->libs_ctx->crypto_ctx->chacha20_impl,
+			rspamd_main->cfg->libs_ctx->crypto_ctx->poly1305_impl,
+			rspamd_main->cfg->libs_ctx->crypto_ctx->siphash_impl,
+			rspamd_main->cfg->libs_ctx->crypto_ctx->blake2_impl);
 
 	/* Daemonize */
 	if (!no_fork && daemon (0, 0) == -1) {
