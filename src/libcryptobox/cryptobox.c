@@ -104,10 +104,9 @@ rspamd_explicit_memzero(void * const pnt, const gsize len)
 static void
 rspamd_cryptobox_cpuid (gint cpu[4], gint info)
 {
-	guint32 eax, ecx, ebx, edx;
+	guint32 eax, ecx = 0, ebx = 0, edx = 0;
 
 	eax = info;
-	ecx = 0;
 #if defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
 # if defined( __i386__ ) && defined ( __PIC__ )
 
@@ -205,6 +204,7 @@ struct rspamd_cryptobox_library_ctx*
 rspamd_cryptobox_init (void)
 {
 	gint cpu[4], nid;
+	const guint32 osxsave_mask = (1 << 27);
 	const guint32 fma_movbe_osxsave_mask = ((1 << 12) | (1 << 22) | (1 << 27));
 	const guint32 avx2_bmi12_mask = (1 << 5) | (1 << 3) | (1 << 8);
 	gulong bit;
@@ -251,14 +251,15 @@ rspamd_cryptobox_init (void)
 		}
 
 		/* OSXSAVE */
-		if ((cpu[2] & fma_movbe_osxsave_mask) == fma_movbe_osxsave_mask) {
+		if ((cpu[2] & osxsave_mask) == osxsave_mask) {
 			if ((cpu[2] & ((guint32)1 << 28))) {
 				if (rspamd_cryptobox_test_instr (CPUID_AVX)) {
 					cpu_config |= CPUID_AVX;
 				}
 			}
 
-			if (nid >= 7) {
+			if (nid >= 7 &&
+					(cpu[2] & fma_movbe_osxsave_mask) == fma_movbe_osxsave_mask) {
 				rspamd_cryptobox_cpuid (cpu, 7);
 
 				if ((cpu[1] & avx2_bmi12_mask) == avx2_bmi12_mask) {
@@ -950,7 +951,7 @@ gboolean
 rspamd_cryptobox_decrypt_nm_inplace (guchar *data, gsize len,
 		const rspamd_nonce_t nonce, const rspamd_nm_t nm, const rspamd_sig_t sig)
 {
-	gsize r;
+	gsize r = 0;
 	gboolean ret = TRUE;
 	void *enc_ctx, *auth_ctx;
 
