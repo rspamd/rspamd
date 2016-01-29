@@ -39,7 +39,7 @@ rspamd_shingles_generate (GArray *input,
 	rspamd_sipkey_t keys[RSPAMD_SHINGLE_SIZE];
 	guchar shabuf[rspamd_cryptobox_HASHBYTES], *out_key;
 	const guchar *cur_key;
-	GString *row;
+	rspamd_fstring_t *row;
 	rspamd_ftok_t *word;
 	rspamd_cryptobox_hash_state_t bs;
 	guint64 val;
@@ -53,7 +53,7 @@ rspamd_shingles_generate (GArray *input,
 	}
 
 	rspamd_cryptobox_hash_init (&bs, NULL, 0);
-	row = g_string_sized_new (256);
+	row = rspamd_fstring_sized_new (256);
 	cur_key = key;
 	out_key = (guchar *)&keys[0];
 
@@ -83,7 +83,7 @@ rspamd_shingles_generate (GArray *input,
 		if (i - beg >= SHINGLES_WINDOW || i == (gint)input->len) {
 			for (j = beg; j < i; j ++) {
 				word = &g_array_index (input, rspamd_ftok_t, j);
-				g_string_append_len (row, word->begin, word->len);
+				row = rspamd_fstring_append (row, word->begin, word->len);
 			}
 			beg++;
 
@@ -93,7 +93,8 @@ rspamd_shingles_generate (GArray *input,
 						keys[j]);
 				g_array_append_val (hashes[j], val);
 			}
-			g_string_assign (row, "");
+
+			row = rspamd_fstring_assign (row, "", 0);
 		}
 	}
 
@@ -104,7 +105,7 @@ rspamd_shingles_generate (GArray *input,
 		g_array_free (hashes[i], TRUE);
 	}
 
-	g_string_free (row, TRUE);
+	rspamd_fstring_free (row);
 
 	return res;
 }
