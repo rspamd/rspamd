@@ -242,6 +242,7 @@ blake2b_final (blake2b_state *S, unsigned char *hash)
 			state->leftover,
 			BLAKE2B_STRIDE_NONE);
 	blake2b_store_hash (state, hash);
+	rspamd_explicit_memzero (state, sizeof (*state));
 }
 
 /* one-shot hash inlen bytes from in */
