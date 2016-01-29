@@ -114,6 +114,7 @@ void ge_sub(ge_p1p1 *,const ge_p3 *,const ge_cached *);
 void ge_scalarmult_base(ge_p3 *,const unsigned char *);
 void ge_double_scalarmult_vartime(ge_p2 *,const unsigned char *,const ge_p3 *,const unsigned char *);
 void ge_scalarmult_vartime(ge_p3 *,const unsigned char *,const ge_p3 *);
+int verify_32(const unsigned char *x, const unsigned char *y);
 
 /*
 The set of scalars is \Z/l
