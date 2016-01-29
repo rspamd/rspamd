@@ -178,7 +178,6 @@ read_cmd_line (gint *argc, gchar ***argv, struct rspamd_config *cfg)
 		r = fork ();
 		if (r == 0) {
 			/* Spawning new main process */
-			ottery_init (NULL);
 			cfg->cfg_name = cfg_names[i];
 			(void)setsid ();
 		}

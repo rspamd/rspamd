@@ -486,7 +486,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		event_base_free (rspamd_main->ev_base);
 		/* Lock statfile pool if possible XXX */
 		/* Init PRNG after fork */
-		rc = ottery_init (NULL);
+		rc = ottery_init (rspamd_main->cfg->libs_ctx->ottery_cfg);
 		if (rc != OTTERY_ERR_NONE) {
 			msg_err_main ("cannot initialize PRNG: %d", rc);
 			g_assert (0);
