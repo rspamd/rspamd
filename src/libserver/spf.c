@@ -883,6 +883,12 @@ parse_spf_a (struct spf_record *rec,
 	if (make_dns_request_task (task,
 			spf_record_dns_callback, (void *) cb, RDNS_REQUEST_A, host)) {
 		rec->requests_inflight++;
+
+		if (make_dns_request_task (task,
+				spf_record_dns_callback, (void *) cb, RDNS_REQUEST_AAAA, host)) {
+			rec->requests_inflight++;
+		}
+
 		return TRUE;
 	}
 
