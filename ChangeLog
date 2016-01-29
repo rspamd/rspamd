@@ -1,3 +1,51 @@
+1.1.2:
+	* Fix stat_cache closing
+	* Add checkpoints to sqlite3 learn cache
+	* Do not recompile lua generated headers all the time
+	* Increase number of messages learned
+	* Fix issues with dual stack and hfilter
+	* Disable MID checks for hfilter by default
+	* Fix cache definitions in multiple classifier and no type
+	* Don't crash if learn cache failed to initialize
+	* Fix googlegroups support in maillist plugin
+	* Rework flags LUA API:
+		- Allow to check for a specific flag
+		- Add `learn_spam`, `learn_ham` and `broken_headers` flags
+		- Unify internal functions
+	* Add `BROKEN_HEADERS` rule
+	* Add support for forged confirmation headers (by @AdUser)
+	* Allow `any`, `mime` and `smtp` for get_from/get_recipients
+	* Add mime types checking plugin
+	* Add rule to detect spammers attempts to cheat mime parsing
+	* Rework parsing of IP addresses in configuration (better IPv6 support)
+	* Add `util.parse_mail_address` function to LUA API
+	* Add lua sqlite3 module
+	* Implement synchronous redis call
+	* Ratelimit: avoid possible indexing of nil value (Fixes #498) (by @fatalbanana)
+	* Add stat_convert command to convert stats tokens from sqlite3 to redis
+	* Implement redis advanced lua api with pipelining
+	* Fix memory leak on redis stat (#500)
+	* Fix user/language learn count in sqlite statistics (#496) (by @fatalbanana)
+	* Fix build with custom pcre
+	* Fix fuzzy relearning (#498)
+	* Improve planning of asynchronous tasks
+	* Show slow rules in log
+	* Add warning for slow regexps
+	* Add base32 decode/encode routines to lua util
+	* Allow converting of learn cache from sqlite to redis
+	* Add methods to check if a messages has from/rcpts
+	* Improve and fix multimap plugin:
+		- Restore 'header' maps
+		- Add filters for headers
+		- Add 'email:addr', 'email:user', 'email:domain' and 'email:name' filters
+		- Add generic regexp filters
+	* Disable reload command in rc scripts
+	* Improve runtime CPU dispatcher for libcryptobox
+	* Add preliminary support of digital signatures via ed25519
+	* Add detection for RDRAND support
+	* Print configuration of crypto on start
+	* A in SPF presumes AAAA lookup as well
+
 1.1.1:
 	* Fix duplicated XBL symbol
 	* Reduce log severity for ratelimit missing servers
