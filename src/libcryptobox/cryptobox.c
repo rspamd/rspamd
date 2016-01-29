@@ -104,15 +104,24 @@ rspamd_explicit_memzero(void * const pnt, const gsize len)
 static void
 rspamd_cryptobox_cpuid (gint cpu[4], gint info)
 {
+	guint32 eax, ecx, ebx, edx;
+
+	eax = info;
+	ecx = 0;
 #if defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
-# if defined(HAVE_GET_CPUID)
-	__get_cpuid (info, &cpu[0], &cpu[1], &cpu[2], &cpu[3]);
+# if defined( __i386__ ) && defined ( __PIC__ )
+
+	/* in case of PIC under 32-bit EBX cannot be clobbered */
+
+	__asm__ volatile ("movl %%ebx, %%edi \n\t cpuid \n\t xchgl %%ebx, %%edi" : "=D" (ebx),
+			"+a" (eax), "+c" (ecx), "=d" (edx));
 # else
-	__asm ("cpuid" : "=a"(cpu[0]), "=b" (cpu[1]), "=c"(cpu[2]), "=d"(cpu[3])
-			: "0"(info));
+	__asm__ volatile ("cpuid" : "+b" (ebx), "+a" (eax), "+c" (ecx), "=d" (edx));
 # endif
+
+	cpu[0] = eax; cpu[1] = ebx; cpu[2] = ecx; cpu[3] = edx;
 #else
-	memset (cpu, 0, sizeof (cpu));
+	memset (cpu, 0, sizeof (gint) * 4);
 #endif
 }
 
@@ -196,6 +205,8 @@ struct rspamd_cryptobox_library_ctx*
 rspamd_cryptobox_init (void)
 {
 	gint cpu[4], nid;
+	const guint32 fma_movbe_osxsave_mask = ((1 << 12) | (1 << 22) | (1 << 27));
+	const guint32 avx2_bmi12_mask = (1 << 5) | (1 << 3) | (1 << 8);
 	gulong bit;
 	static struct rspamd_cryptobox_library_ctx *ctx;
 	GString *buf;
@@ -213,43 +224,44 @@ rspamd_cryptobox_init (void)
 	rspamd_cryptobox_cpuid (cpu, 1);
 
 	if (nid > 1) {
-		/* Check OSXSAVE bit first of all */
-		if ((cpu[2] & ((gint)1 << 9))) {
-			if ((cpu[3] & ((gint)1 << 26))) {
-				if (rspamd_cryptobox_test_instr (CPUID_SSE2)) {
-					cpu_config |= CPUID_SSE2;
-				}
+		if ((cpu[3] & ((guint32)1 << 26))) {
+			if (rspamd_cryptobox_test_instr (CPUID_SSE2)) {
+				cpu_config |= CPUID_SSE2;
 			}
-			if ((cpu[2] & ((gint)1 << 28))) {
+		}
+		if ((cpu[2] & ((guint32)1 << 0))) {
+			if (rspamd_cryptobox_test_instr (CPUID_SSE3)) {
+				cpu_config |= CPUID_SSE3;
+			}
+		}
+		if ((cpu[2] & ((guint32)1 << 9))) {
+			if (rspamd_cryptobox_test_instr (CPUID_SSSE3)) {
+				cpu_config |= CPUID_SSSE3;
+			}
+		}
+		if ((cpu[2] & ((guint32)1 << 19))) {
+			if (rspamd_cryptobox_test_instr (CPUID_SSE41)) {
+				cpu_config |= CPUID_SSE41;
+			}
+		}
+		if ((cpu[2] & ((guint32)1 << 30))) {
+			if (rspamd_cryptobox_test_instr (CPUID_RDRAND)) {
+				cpu_config |= CPUID_RDRAND;
+			}
+		}
+
+		/* OSXSAVE */
+		if ((cpu[2] & fma_movbe_osxsave_mask) == fma_movbe_osxsave_mask) {
+			if ((cpu[2] & ((guint32)1 << 28))) {
 				if (rspamd_cryptobox_test_instr (CPUID_AVX)) {
 					cpu_config |= CPUID_AVX;
 				}
 			}
-			if ((cpu[2] & ((gint)1 << 0))) {
-				if (rspamd_cryptobox_test_instr (CPUID_SSE3)) {
-					cpu_config |= CPUID_SSE3;
-				}
-			}
-			if ((cpu[2] & ((gint)1 << 9))) {
-				if (rspamd_cryptobox_test_instr (CPUID_SSSE3)) {
-					cpu_config |= CPUID_SSSE3;
-				}
-			}
-			if ((cpu[2] & ((gint)1 << 19))) {
-				if (rspamd_cryptobox_test_instr (CPUID_SSE41)) {
-					cpu_config |= CPUID_SSE41;
-				}
-			}
-			if ((cpu[2] & ((gint)1 << 30))) {
-				if (rspamd_cryptobox_test_instr (CPUID_RDRAND)) {
-					cpu_config |= CPUID_RDRAND;
-				}
-			}
 
-			if (nid > 7) {
+			if (nid >= 7) {
 				rspamd_cryptobox_cpuid (cpu, 7);
 
-				if ((cpu[1] & ((gint) 1 << 5))) {
+				if ((cpu[1] & avx2_bmi12_mask) == avx2_bmi12_mask) {
 					if (rspamd_cryptobox_test_instr (CPUID_AVX2)) {
 						cpu_config |= CPUID_AVX2;
 					}
