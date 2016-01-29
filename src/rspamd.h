@@ -194,6 +194,7 @@ struct rspamd_external_libs_ctx {
 	magic_t libmagic;
 	void **local_addrs;
 	struct rspamd_cryptobox_library_ctx *crypto_ctx;
+	struct ottery_config *ottery_cfg;
 	ref_entry_t ref;
 };
 

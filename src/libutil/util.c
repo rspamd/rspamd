@@ -1938,10 +1938,21 @@ rspamd_init_libs (void)
 {
 	struct rlimit rlim;
 	struct rspamd_external_libs_ctx *ctx;
+	struct ottery_config *ottery_cfg;
 
 	ctx = g_slice_alloc0 (sizeof (*ctx));
 	ctx->crypto_ctx = rspamd_cryptobox_init ();
-	ottery_init (NULL);
+	ottery_cfg = g_malloc0 (ottery_get_sizeof_config ());
+	ottery_config_init (ottery_cfg);
+	ctx->ottery_cfg = ottery_cfg;
+
+	/* Check if we have rdrand */
+	if ((ctx->crypto_ctx->cpu_config & CPUID_RDRAND) == 0) {
+		ottery_config_disable_entropy_sources (ottery_cfg,
+				OTTERY_ENTROPY_SRC_RDRAND);
+	}
+
+	ottery_init (ottery_cfg);
 
 #ifdef HAVE_LOCALE_H
 	if (getenv ("LANG") == NULL) {
@@ -2012,8 +2023,8 @@ rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
 			magic_close (ctx->libmagic);
 		}
 
+		g_free (ctx->ottery_cfg);
 		g_slice_free1 (sizeof (*ctx), ctx);
-
 		g_mime_shutdown ();
 
 #ifdef HAVE_OPENSSL
