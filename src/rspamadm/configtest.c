@@ -81,6 +81,7 @@ static void
 config_logger (rspamd_mempool_t *pool, gpointer ud)
 {
 	struct rspamd_main *rm = ud;
+	GQuark configtest_quark = g_quark_from_static_string ("configtest");
 
 	rm->cfg->log_type = RSPAMD_LOG_CONSOLE;
 
@@ -91,7 +92,7 @@ config_logger (rspamd_mempool_t *pool, gpointer ud)
 		rm->cfg->log_level = G_LOG_LEVEL_WARNING;
 	}
 
-	rspamd_set_logger (rm->cfg, g_quark_try_string ("main"), rm);
+	rspamd_set_logger (rm->cfg, configtest_quark, rm);
 	if (rspamd_log_open_priv (rm->logger, rm->workers_uid, rm->workers_gid) ==
 			-1) {
 		fprintf (stderr, "Fatal error, cannot open logfile, exiting\n");
