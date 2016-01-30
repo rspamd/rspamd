@@ -865,7 +865,7 @@ rspamd_rrd_update_cdp (struct rspamd_rrd_file *file,
 	struct rrd_rra_def *rra;
 	rrd_value_t *scratch;
 	enum rrd_cf_type cf;
-	gdouble last_cdp, cur_cdp;
+	gdouble last_cdp = INFINITY, cur_cdp = INFINITY;
 	gulong pdp_in_cdp;
 
 	rra = &file->rra_def[rra_index];
@@ -927,6 +927,7 @@ rspamd_rrd_update_cdp (struct rspamd_rrd_file *file,
 					case RRD_CF_LAST:
 					default:
 						scratch[CDP_primary_val].dv = pdp_temp[i];
+						last_cdp = INFINITY;
 						break;
 					}
 				}

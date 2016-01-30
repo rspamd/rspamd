@@ -246,7 +246,7 @@ static void
 read_map_file (struct rspamd_map *map, struct file_map_data *data)
 {
 	struct map_cb_data cbdata;
-	gchar buf[BUFSIZ], *remain;
+	gchar buf[BUFSIZ], *remain = NULL;
 	ssize_t r;
 	gint fd, rlen, tlen;
 	rspamd_mempool_t *pool = map->pool;

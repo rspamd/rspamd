@@ -55,12 +55,21 @@ static gboolean rspamadm_parse_ucl_var (const gchar *option_name,
 		const gchar *value, gpointer data,
 		GError **error);
 
+static union {
+	gboolean (*func)(const gchar *option_name,
+					const gchar *value, gpointer data,
+					GError **error);
+	const gpointer ptr;
+} rspamadm_parse_ucl_var_un = {
+	.func = &rspamadm_parse_ucl_var
+};
+
 static GOptionEntry entries[] = {
 	{"verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose,
 			"Enable verbose logging", NULL},
 	{"list-commands", 'l', 0, G_OPTION_ARG_NONE, &list_commands,
 			"List available commands", NULL},
-	{"var", 0, 0, G_OPTION_ARG_CALLBACK, (gpointer)rspamadm_parse_ucl_var,
+	{"var", 0, 0, G_OPTION_ARG_CALLBACK, &rspamadm_parse_ucl_var_un,
 			"Redefine UCL variable", NULL},
 	{"help", 'h', 0, G_OPTION_ARG_NONE, &show_help,
 			"Show help", NULL},

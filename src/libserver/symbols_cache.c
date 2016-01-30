@@ -1389,10 +1389,15 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 	}
 	/* Sync virtual symbols */
 	for (i = 0; i < cache->items_by_id->len; i ++) {
+		item = g_ptr_array_index (cache->items_by_id, i);
+
 		if (item->parent != -1) {
 			parent = g_ptr_array_index (cache->items_by_id, item->parent);
-			item->avg_time = parent->avg_time;
-			item->avg_counter = parent->avg_counter;
+
+			if (parent) {
+				item->avg_time = parent->avg_time;
+				item->avg_counter = parent->avg_counter;
+			}
 		}
 	}
 

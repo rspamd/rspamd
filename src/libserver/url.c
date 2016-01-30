@@ -1119,7 +1119,7 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 	struct in_addr in4;
 	struct in6_addr in6;
 	gboolean ret = FALSE, check_num = TRUE;
-	guint32 n, dots, t, i, shift, nshift;
+	guint32 n, dots, t = 0, i = 0, shift, nshift;
 
 	p = uri->host;
 	end = p + uri->hostlen;

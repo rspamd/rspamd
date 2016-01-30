@@ -919,11 +919,11 @@ rspamd_header_value_fold (const gchar *name,
 	const gchar *p, *c;
 	gboolean first_token = TRUE;
 	enum {
-		fold_before,
+		fold_before = 0,
 		fold_after
-	} fold_type;
+	} fold_type = fold_before;
 	enum {
-		read_token,
+		read_token = 0,
 		read_quoted,
 		after_quote,
 		fold_token,

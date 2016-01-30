@@ -32,7 +32,7 @@
 #include "rspamd_control.h"
 
 #ifdef WITH_GPERF_TOOLS
-#include <google/profiler.h>
+#include <gperftools/profiler.h>
 #endif
 /* sys/resource.h */
 #ifdef HAVE_SYS_RESOURCE_H
@@ -44,6 +44,9 @@
 #endif
 #ifdef HAVE_GRP_H
 #include <grp.h>
+#endif
+#ifdef HAVE_LIBUTIL_H
+#include <libutil.h>
 #endif
 
 /**

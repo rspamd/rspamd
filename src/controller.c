@@ -247,7 +247,7 @@ rspamd_check_encrypted_password (struct rspamd_controller_worker_ctx *ctx,
 {
 	const gchar *salt, *hash;
 	gchar *salt_decoded, *key_decoded;
-	gsize salt_len, key_len;
+	gsize salt_len = 0, key_len = 0;
 	gboolean ret = TRUE;
 	guchar *local_key;
 	rspamd_ftok_t *cache;

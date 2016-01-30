@@ -48,8 +48,8 @@ worker_t hs_helper_worker = {
 		SOCK_STREAM                 /* TCP socket */
 };
 
-const static gdouble default_max_time = 1.0;
-const static gdouble default_recompile_time = 60.0;
+static const gdouble default_max_time = 1.0;
+static const gdouble default_recompile_time = 60.0;
 
 /*
  * Worker's context

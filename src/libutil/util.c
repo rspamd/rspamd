@@ -57,7 +57,7 @@
 #include <mach/mach_time.h>
 #endif
 #ifdef WITH_GPERF_TOOLS
-#include <google/profiler.h>
+#include <gperftools/profiler.h>
 #endif
 /* poll */
 #ifdef HAVE_POLL_H

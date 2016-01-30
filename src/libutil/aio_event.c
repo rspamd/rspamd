@@ -338,12 +338,12 @@ rspamd_aio_read (gint fd,
 	rspamd_aio_cb cb,
 	gpointer ud)
 {
-	struct io_cbdata *cbdata;
 	gint r = -1;
 
 	if (ctx->has_aio) {
 #ifdef LINUX
 		struct iocb *iocb[1];
+		struct io_cbdata *cbdata;
 
 		cbdata = g_slice_alloc (sizeof (struct io_cbdata));
 		cbdata->cb = cb;
@@ -382,6 +382,7 @@ rspamd_aio_read (gint fd,
 	}
 	else {
 		/* Blocking variant */
+		goto blocking;
 blocking:
 #ifdef _LARGEFILE64_SOURCE
 		r = lseek64 (fd, offset, SEEK_SET);
@@ -414,12 +415,12 @@ rspamd_aio_write (gint fd,
 	rspamd_aio_cb cb,
 	gpointer ud)
 {
-	struct io_cbdata *cbdata;
 	gint r = -1;
 
 	if (ctx->has_aio) {
 #ifdef LINUX
 		struct iocb *iocb[1];
+		struct io_cbdata *cbdata;
 
 		cbdata = g_slice_alloc (sizeof (struct io_cbdata));
 		cbdata->cb = cb;
@@ -462,6 +463,7 @@ rspamd_aio_write (gint fd,
 	}
 	else {
 		/* Blocking variant */
+		goto blocking;
 blocking:
 #ifdef _LARGEFILE64_SOURCE
 		r = lseek64 (fd, offset, SEEK_SET);

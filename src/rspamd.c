@@ -57,9 +57,8 @@
 #include <libutil.h>
 #endif
 #ifdef WITH_GPERF_TOOLS
-#include <google/profiler.h>
+#include <gperftools/profiler.h>
 #endif
-
 #ifdef HAVE_STROPS_H
 #include <stropts.h>
 #endif

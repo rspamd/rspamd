@@ -393,14 +393,14 @@ static void
 rspamd_fuzzy_process_command (struct fuzzy_session *session)
 {
 	gboolean encrypted = FALSE, is_shingle = FALSE;
-	struct rspamd_fuzzy_cmd *cmd;
+	struct rspamd_fuzzy_cmd *cmd = NULL;
 	struct rspamd_fuzzy_reply result;
 	struct fuzzy_peer_cmd *up_cmd;
 	struct fuzzy_peer_request *up_req;
 	struct fuzzy_key_stat *ip_stat = NULL;
 	rspamd_inet_addr_t *naddr;
 	gpointer ptr;
-	gsize up_len;
+	gsize up_len = 0;
 
 	switch (session->cmd_type) {
 	case CMD_NORMAL:
@@ -423,6 +423,12 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		encrypted = TRUE;
 		is_shingle = TRUE;
 		break;
+	}
+
+	if (G_UNLIKELY (cmd == NULL || up_len == 0)) {
+		result.value = 500;
+		result.prob = 0.0;
+		goto reply;
 	}
 
 	if (session->ctx->encrypted_only && !encrypted) {

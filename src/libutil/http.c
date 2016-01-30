@@ -173,10 +173,8 @@ rspamd_http_parse_date (const gchar *header, gsize len)
 		end = header + strlen (header);
 	}
 
-#if (NGX_SUPPRESS_WARN)
 	day = 32;
 	year = 2038;
-#endif
 
 	for (p = header; p < end; p++) {
 		if (*p == ',') {
@@ -1348,8 +1346,8 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	struct rspamd_http_header *hdr;
 	struct tm t, *ptm;
 	gchar datebuf[64], repbuf[512], *pbody;
-	gint i, hdrcount, meth_len, preludelen = 0;
-	gsize bodylen, enclen;
+	gint i, hdrcount, meth_len = 0, preludelen = 0;
+	gsize bodylen, enclen = 0;
 	rspamd_fstring_t *buf;
 	gboolean encrypted = FALSE;
 	gchar *b32_key, *b32_id;
@@ -1542,7 +1540,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 						enclen);
 			}
 			else {
-				rspamd_printf_fstring (&buf, "HTTP/1.1 %d %V\r\n"
+				meth_len = rspamd_printf_fstring (&buf, "HTTP/1.1 %d %V\r\n"
 						"Connection: close\r\n"
 						"Server: %s\r\n"
 						"Date: %s\r\n"

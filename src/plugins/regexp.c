@@ -128,7 +128,7 @@ regexp_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 gint
 regexp_module_config (struct rspamd_config *cfg)
 {
-	struct regexp_module_item *cur_item;
+	struct regexp_module_item *cur_item = NULL;
 	const ucl_object_t *sec, *value, *elt;
 	ucl_object_iter_t it = NULL;
 	gint res = TRUE, id, nre = 0, nlua = 0;

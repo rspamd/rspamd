@@ -1417,7 +1417,7 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx,
 	gint state = 0, hlen;
 	gboolean found = FALSE;
 	GArray *to_sign;
-	struct rspamd_dkim_sign_chunk chunk, *elt;
+	struct rspamd_dkim_sign_chunk chunk, *elt = NULL;
 	gint i;
 
 	/* This process is very similar to raw headers processing */
@@ -1523,7 +1523,7 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx,
 				}
 			}
 
-			if (elt->append_crlf) {
+			if (elt && elt->append_crlf) {
 				rspamd_dkim_signature_update (ctx, elt->begin, elt->len + 1);
 			}
 			else {

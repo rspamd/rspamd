@@ -40,7 +40,7 @@ lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 {
 	GList *metric_list;
 	gchar *symbol;
-	const gchar *desc;
+	const gchar *desc = NULL;
 	struct metric *metric;
 	gdouble *score;
 	struct rspamd_symbol_def *s;
@@ -74,7 +74,6 @@ lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 				lua_gettable (L, -2);
 				if (lua_isstring (L, -1)) {
 					desc = lua_tostring (L, -1);
-					s->description = rspamd_mempool_strdup (cfg->cfg_pool, desc);
 				}
 				lua_pop (L, 1);
 			}
@@ -101,6 +100,10 @@ lua_process_metric (lua_State *L, const gchar *name, struct rspamd_config *cfg)
 				s->name = symbol;
 				s->weight_ptr = score;
 				g_hash_table_insert (metric->symbols, symbol, s);
+			}
+
+			if (desc) {
+				s->description = rspamd_mempool_strdup (cfg->cfg_pool, desc);
 			}
 
 			if ((metric_list =

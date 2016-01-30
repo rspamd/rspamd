@@ -990,7 +990,7 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 	const gchar *action = "no action";
 	gchar scorebuf[32];
 	GString *symbuf, *folded_symbuf, *added_headers;
-	gint act;
+	gint act = 0;
 	goffset headers_pos;
 	gdouble score = 0.0, required_score = 0.0;
 	gboolean is_spam = FALSE;

@@ -1091,7 +1091,7 @@ fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 		gsize datalen)
 {
 	struct rspamd_fuzzy_cmd *cmd;
-	struct rspamd_fuzzy_encrypted_cmd *enccmd;
+	struct rspamd_fuzzy_encrypted_cmd *enccmd = NULL;
 	struct fuzzy_cmd_io *io;
 	rspamd_cryptobox_hash_state_t st;
 
@@ -1121,6 +1121,7 @@ fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 	io->tag = cmd->tag;
 
 	if (rule->peer_key) {
+		g_assert (enccmd != NULL);
 		fuzzy_encrypt_cmd (rule, &enccmd->hdr, (guchar *) cmd, sizeof (*cmd));
 		io->io.iov_base = enccmd;
 		io->io.iov_len = sizeof (*enccmd);
