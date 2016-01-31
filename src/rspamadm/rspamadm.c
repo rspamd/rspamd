@@ -207,7 +207,7 @@ rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
 		const ucl_object_t *res, const gchar *script)
 {
 	lua_State *L = pL;
-	gint err_idx, cb_idx, i;
+	gint err_idx, cb_idx, i, ret;
 	GString *tb;
 
 	g_assert (script != NULL);
@@ -249,10 +249,14 @@ rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
 	/* Push results */
 	ucl_object_push_lua (L, res, TRUE);
 
-	if (lua_pcall (L, 2, 0, err_idx) != 0) {
+	if ((ret = lua_pcall (L, 2, 0, err_idx)) != 0) {
 		tb = lua_touserdata (L, -1);
-		msg_err ("call to adm lua script failed: %v", tb);
-		g_string_free (tb, TRUE);
+		msg_err ("call to adm lua script failed (%d): %v", ret, tb);
+
+		if (tb) {
+			g_string_free (tb, TRUE);
+		}
+
 		lua_pop (L, 1);
 
 		return FALSE;
