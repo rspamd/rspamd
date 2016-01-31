@@ -80,6 +80,8 @@ Defines global options.
 	+ Default: `no`
 - `whitelist`: global recipients whitelist
 	+ Default: `no`
+- `our_networks`: treat mail from these networks as mail from authenticated users (see also `strict_auth`)
+	+ Default: `empty`
 
 Back to [top](#).
 
@@ -104,7 +106,9 @@ Specifies clamav antivirus scanners.
 	+ Default: `300`
 - `maxerrors`: maximum number of errors that can occur during error_time to make rmilter thinking that this upstream is dead
 	+ Default: `10`
-
+- `whitelist`: list of ips or nets that should be not checked with spamd
+	+ Default: `empty`
+	
 Back to [top](#).
 
 ## Spamd section
