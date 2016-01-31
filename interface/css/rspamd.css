@@ -633,3 +633,23 @@ td.maps-cell {
   -moz-border-radius: 0px;
   border-radius: 0px;
 }
+
+/* Some spacing tweaks */
+#learning p > button {
+    margin-top: 10px;
+    }
+#learning div.widget-content:last-child > div.row {
+    padding: 0 0 15px 15px;
+    }
+#learning form div.row {
+    padding-left: 15px;
+    }
+#scanForm button {
+    margin-top: 10px;
+    }
+#historyLog_wrapper div.row:first-child > div {
+    padding: 5px 20px 0 20px;
+    }
+#historyLog_wrapper div.row:last-child > div {
+    padding: 5px 20px 0 20px;
+    }
