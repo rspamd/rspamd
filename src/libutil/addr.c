@@ -597,7 +597,9 @@ rspamd_parse_inet_address (rspamd_inet_addr_t **target,
 
 		if ((end = memchr (src, ':', srclen)) != NULL) {
 			/* This is either port number and ipv4 addr or ipv6 addr */
-			if (ipv6_status == RSPAMD_IPV6_SUPPORTED &&
+			/* Search for another semicolon */
+			if (memchr (end + 1, ':', srclen - (end - src + 1)) &&
+					ipv6_status == RSPAMD_IPV6_SUPPORTED &&
 					rspamd_parse_inet_address_ip6 (src, srclen, &su.s6.sin6_addr)) {
 				addr = rspamd_inet_addr_create (AF_INET6);
 				memcpy (&addr->u.in.addr.s6.sin6_addr, &su.s6.sin6_addr,
