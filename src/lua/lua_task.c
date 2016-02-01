@@ -332,6 +332,11 @@ LUA_FUNCTION_DEF (task, set_user);
  * @return {rspamd_ip} ip address object
  */
 LUA_FUNCTION_DEF (task, get_from_ip);
+/***
+ * @method task:set_from_ip(str)
+ * Set tasks's IP address based on the passed string
+ * @param {string} str string representation of ip
+ */
 LUA_FUNCTION_DEF (task, set_from_ip);
 LUA_FUNCTION_DEF (task, get_from_ip_num);
 /***
@@ -1528,8 +1533,30 @@ lua_task_get_from_ip (lua_State *L)
 static gint
 lua_task_set_from_ip (lua_State *L)
 {
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *ip_str = luaL_checkstring (L, 2);
+	rspamd_inet_addr_t *addr = NULL;
 
-	msg_err ("this function is deprecated and should no longer be used");
+	if (!task || !ip_str) {
+		lua_pushstring (L, "invalid parameters");
+		lua_error (L);
+	}
+	else {
+		if (!rspamd_parse_inet_address (&addr,
+				ip_str,
+				0)) {
+			msg_warn_task ("cannot get IP from received header: '%s'",
+					ip_str);
+		}
+		else {
+			if (task->from_addr) {
+				rspamd_inet_address_destroy (task->from_addr);
+			}
+
+			task->from_addr = addr;
+		}
+	}
+
 	return 0;
 }
 
