@@ -750,7 +750,7 @@ ucl_msgpack_get_parser_from_type (unsigned char t)
 		shift = CHAR_BIT - parsers[i].prefixlen;
 		mask = parsers[i].prefix >> shift;
 
-		if (mask == (t >> shift)) {
+		if (mask == (((unsigned int)t) >> shift)) {
 			return &parsers[i];
 		}
 	}
@@ -969,8 +969,8 @@ ucl_msgpack_consume (struct ucl_parser *parser)
 		finish_array_value,
 		error_state
 	} state = read_type, next_state = error_state;
-	struct ucl_msgpack_parser *obj_parser;
-	uint64_t len;
+	struct ucl_msgpack_parser *obj_parser = NULL;
+	uint64_t len = 0;
 	ssize_t ret, remain, keylen = 0;
 #ifdef MSGPACK_DEBUG_PARSER
 	uint64_t i;
