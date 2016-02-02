@@ -1280,7 +1280,7 @@ rspamd_encode_hex (const guchar *in, gsize inlen)
 	gchar *out, *o;
 	const guchar *p;
 	gsize outlen = inlen * 2 + 1;
-	static const gchar hexdigests[16] = "0123456789ABCDEF";
+	static const gchar hexdigests[16] = "0123456789abcdef";
 
 	if (in == NULL) {
 		return NULL;
@@ -1291,8 +1291,8 @@ rspamd_encode_hex (const guchar *in, gsize inlen)
 	p = in;
 
 	while (inlen > 0) {
-		*o++ = hexdigests[((*p >> 4) & 0xFF)];
-		*o++ = hexdigests[((*p++) & 0xFF)];
+		*o++ = hexdigests[((*p >> 4) & 0xF)];
+		*o++ = hexdigests[((*p++) & 0xF)];
 		inlen --;
 	}
 
