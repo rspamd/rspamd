@@ -167,6 +167,12 @@ rspamadm_keypair (gint argc, gchar **argv)
 			ucl_object_insert_key (elt,
 					ucl_object_fromstring (encoding),
 					"encoding", 0, false);
+			ucl_object_insert_key (elt,
+					ucl_object_fromstring (openssl ? "nistp256" : "curve25519"),
+					"algorithm", 0, false);
+			ucl_object_insert_key (elt,
+					ucl_object_fromstring ("kex"),
+					"type", 0, false);
 
 			ucl_emit_subr = ucl_object_emit_file_funcs (stdout);
 			ucl_object_emit_full (ucl_out, UCL_EMIT_CONFIG, ucl_emit_subr);
@@ -235,6 +241,13 @@ rspamadm_keypair (gint argc, gchar **argv)
 			ucl_object_insert_key (elt,
 					ucl_object_fromstring (encoding),
 					"encoding", 0, false);
+
+			ucl_object_insert_key (elt,
+					ucl_object_fromstring (openssl ? "nistp256" : "curve25519"),
+					"algorithm", 0, false);
+			ucl_object_insert_key (elt,
+					ucl_object_fromstring ("sign"),
+					"type", 0, false);
 
 			ucl_emit_subr = ucl_object_emit_file_funcs (stdout);
 			ucl_object_emit_full (ucl_out, UCL_EMIT_CONFIG, ucl_emit_subr);
