@@ -95,7 +95,9 @@ rspamadm_keypair (gint argc, gchar **argv)
 	ucl_object_t *ucl_out, *elt;
 	struct ucl_emitter_functions *ucl_emit_subr;
 	guchar *sig_sk, *sig_pk;
-	gchar *sig_sk_encoded, *sig_pk_encoded;
+	gchar *sig_sk_encoded, *sig_pk_encoded, *pk_id_encoded;
+	guchar kh[rspamd_cryptobox_HASHBYTES];
+	const gchar *encoding;
 
 	context = g_option_context_new (
 			"keypair - create encryption keys");
@@ -125,17 +127,15 @@ rspamadm_keypair (gint argc, gchar **argv)
 			exit (EXIT_FAILURE);
 		}
 
-		how = RSPAMD_KEYPAIR_PUBKEY | RSPAMD_KEYPAIR_PRIVKEY;
+		how = 0;
 
 		if (hex_encode) {
 			how |= RSPAMD_KEYPAIR_HEX;
+			encoding = "hex";
 		}
 		else {
 			how |= RSPAMD_KEYPAIR_BASE32;
-		}
-
-		if (!raw) {
-			how |= RSPAMD_KEYPAIR_HUMAN|RSPAMD_KEYPAIR_ID;
+			encoding = "base32";
 		}
 
 		if (ucl) {
@@ -145,7 +145,7 @@ rspamadm_keypair (gint argc, gchar **argv)
 
 			/* pubkey part */
 			keypair_out = rspamd_http_connection_print_key (keypair,
-					RSPAMD_KEYPAIR_PUBKEY|RSPAMD_KEYPAIR_BASE32);
+					RSPAMD_KEYPAIR_PUBKEY|how);
 			ucl_object_insert_key (elt,
 					ucl_object_fromlstring (keypair_out->str, keypair_out->len),
 					"pubkey", 0, false);
@@ -153,10 +153,20 @@ rspamadm_keypair (gint argc, gchar **argv)
 
 			/* privkey part */
 			keypair_out = rspamd_http_connection_print_key (keypair,
-					RSPAMD_KEYPAIR_PRIVKEY | RSPAMD_KEYPAIR_BASE32);
+					RSPAMD_KEYPAIR_PRIVKEY|how);
 			ucl_object_insert_key (elt,
 					ucl_object_fromlstring (keypair_out->str, keypair_out->len),
 					"privkey", 0, false);
+			g_string_free (keypair_out, TRUE);
+
+			keypair_out = rspamd_http_connection_print_key (keypair,
+					RSPAMD_KEYPAIR_ID|how);
+			ucl_object_insert_key (elt,
+					ucl_object_fromlstring (keypair_out->str, keypair_out->len),
+					"id", 0, false);
+			ucl_object_insert_key (elt,
+					ucl_object_fromstring (encoding),
+					"encoding", 0, false);
 
 			ucl_emit_subr = ucl_object_emit_file_funcs (stdout);
 			ucl_object_emit_full (ucl_out, UCL_EMIT_CONFIG, ucl_emit_subr);
@@ -164,6 +174,12 @@ rspamadm_keypair (gint argc, gchar **argv)
 			ucl_object_unref (ucl_out);
 		}
 		else {
+			how |= RSPAMD_KEYPAIR_PUBKEY | RSPAMD_KEYPAIR_PRIVKEY;
+
+			if (!raw) {
+				how |= RSPAMD_KEYPAIR_HUMAN|RSPAMD_KEYPAIR_ID;
+			}
+
 			keypair_out = rspamd_http_connection_print_key (keypair, how);
 			rspamd_printf ("%v", keypair_out);
 		}
@@ -177,18 +193,24 @@ rspamadm_keypair (gint argc, gchar **argv)
 		sig_pk = g_malloc (rspamd_cryptobox_pk_sig_bytes ());
 
 		rspamd_cryptobox_keypair_sig (sig_pk, sig_sk);
+		rspamd_cryptobox_hash (kh, sig_pk, rspamd_cryptobox_pk_sig_bytes (),
+							NULL, 0);
 
 		if (hex_encode) {
+			encoding = "hex";
 			sig_pk_encoded = rspamd_encode_hex (sig_pk,
 					rspamd_cryptobox_pk_sig_bytes ());
 			sig_sk_encoded = rspamd_encode_hex (sig_sk,
 					rspamd_cryptobox_sk_sig_bytes ());
+			pk_id_encoded = rspamd_encode_hex (kh, sizeof (kh));
 		}
 		else {
+			encoding = "base32";
 			sig_pk_encoded = rspamd_encode_base32 (sig_pk,
 					rspamd_cryptobox_pk_sig_bytes ());
 			sig_sk_encoded = rspamd_encode_base32 (sig_sk,
 					rspamd_cryptobox_sk_sig_bytes ());
+			pk_id_encoded = rspamd_encode_base32 (kh, sizeof (kh));
 		}
 
 		if (ucl) {
@@ -206,14 +228,24 @@ rspamadm_keypair (gint argc, gchar **argv)
 					ucl_object_fromstring (sig_sk_encoded),
 					"privkey", 0, false);
 
+			ucl_object_insert_key (elt,
+					ucl_object_fromstring (pk_id_encoded),
+					"id", 0, false);
+
+			ucl_object_insert_key (elt,
+					ucl_object_fromstring (encoding),
+					"encoding", 0, false);
+
 			ucl_emit_subr = ucl_object_emit_file_funcs (stdout);
 			ucl_object_emit_full (ucl_out, UCL_EMIT_CONFIG, ucl_emit_subr);
 			ucl_object_emit_funcs_free (ucl_emit_subr);
 			ucl_object_unref (ucl_out);
 		}
 		else {
-			rspamd_printf ("Pubkey: %s\nPrivkey: %s\n", sig_pk_encoded,
-					sig_sk_encoded);
+			rspamd_printf ("Public key: %s\nPrivate key: %s\nKey ID: %s\n",
+					sig_pk_encoded,
+					sig_sk_encoded,
+					pk_id_encoded);
 		}
 
 		rspamd_explicit_memzero (sig_sk, rspamd_cryptobox_sk_sig_bytes ());
@@ -223,5 +255,6 @@ rspamadm_keypair (gint argc, gchar **argv)
 		g_free (sig_sk);
 		g_free (sig_pk_encoded);
 		g_free (sig_sk_encoded);
+		g_free (pk_id_encoded);
 	}
 }
