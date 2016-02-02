@@ -590,7 +590,7 @@ rspamd_cryptobox_encrypt_final (void *enc_ctx, guchar *out, gsize remain)
 }
 
 static gboolean
-rspamd_cryptobox_auth_final (void *auth_ctx, rspamd_sig_t sig)
+rspamd_cryptobox_auth_final (void *auth_ctx, rspamd_mac_t sig)
 {
 	if (G_LIKELY (!use_openssl)) {
 		poly1305_finish (auth_ctx, sig);
@@ -604,7 +604,7 @@ rspamd_cryptobox_auth_final (void *auth_ctx, rspamd_sig_t sig)
 		EVP_CIPHER_CTX *s = auth_ctx;
 
 		g_assert (EVP_CIPHER_CTX_ctrl (s, EVP_CTRL_GCM_GET_TAG,
-				sizeof (rspamd_sig_t), sig) == 1);
+				sizeof (rspamd_mac_t), sig) == 1);
 
 		return TRUE;
 #endif
@@ -757,10 +757,10 @@ rspamd_cryptobox_decrypt_final (void *enc_ctx, guchar *out, gsize remain)
 }
 
 static gboolean
-rspamd_cryptobox_auth_verify_final (void *auth_ctx, const rspamd_sig_t sig)
+rspamd_cryptobox_auth_verify_final (void *auth_ctx, const rspamd_mac_t sig)
 {
 	if (G_LIKELY (!use_openssl)) {
-		rspamd_sig_t mac;
+		rspamd_mac_t mac;
 
 		poly1305_finish (auth_ctx, mac);
 
@@ -808,7 +808,7 @@ rspamd_cryptobox_cleanup (void *enc_ctx, void *auth_ctx)
 void rspamd_cryptobox_encrypt_nm_inplace (guchar *data, gsize len,
 		const rspamd_nonce_t nonce,
 		const rspamd_nm_t nm,
-		rspamd_sig_t sig)
+		rspamd_mac_t sig)
 {
 	gsize r;
 	void *enc_ctx, *auth_ctx;
@@ -848,7 +848,7 @@ void
 rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segments,
 		gsize cnt,
 		const rspamd_nonce_t nonce,
-		const rspamd_nm_t nm, rspamd_sig_t sig)
+		const rspamd_nm_t nm, rspamd_mac_t sig)
 {
 	struct rspamd_cryptobox_segment *cur = segments, *start_seg = segments;
 	guchar outbuf[CHACHA_BLOCKBYTES * 16];
@@ -949,7 +949,7 @@ rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segments,
 
 gboolean
 rspamd_cryptobox_decrypt_nm_inplace (guchar *data, gsize len,
-		const rspamd_nonce_t nonce, const rspamd_nm_t nm, const rspamd_sig_t sig)
+		const rspamd_nonce_t nonce, const rspamd_nm_t nm, const rspamd_mac_t sig)
 {
 	gsize r = 0;
 	gboolean ret = TRUE;
@@ -979,7 +979,7 @@ rspamd_cryptobox_decrypt_nm_inplace (guchar *data, gsize len,
 gboolean
 rspamd_cryptobox_decrypt_inplace (guchar *data, gsize len,
 		const rspamd_nonce_t nonce,
-		const rspamd_pk_t pk, const rspamd_sk_t sk, const rspamd_sig_t sig)
+		const rspamd_pk_t pk, const rspamd_sk_t sk, const rspamd_mac_t sig)
 {
 	guchar nm[rspamd_cryptobox_MAX_NMBYTES];
 	gboolean ret;
@@ -995,7 +995,7 @@ rspamd_cryptobox_decrypt_inplace (guchar *data, gsize len,
 void
 rspamd_cryptobox_encrypt_inplace (guchar *data, gsize len,
 		const rspamd_nonce_t nonce,
-		const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_sig_t sig)
+		const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_mac_t sig)
 {
 	guchar nm[rspamd_cryptobox_MAX_NMBYTES];
 
@@ -1008,7 +1008,7 @@ void
 rspamd_cryptobox_encryptv_inplace (struct rspamd_cryptobox_segment *segments,
 		gsize cnt,
 		const rspamd_nonce_t nonce,
-		const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_sig_t sig)
+		const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_mac_t sig)
 {
 	guchar nm[rspamd_cryptobox_MAX_NMBYTES];
 

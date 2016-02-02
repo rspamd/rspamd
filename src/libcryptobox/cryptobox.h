@@ -39,6 +39,9 @@ struct rspamd_cryptobox_segment {
 #define rspamd_cryptobox_HASHBYTES 64
 #define rspamd_cryptobox_HASHKEYBYTES 64
 #define rspamd_cryptobox_HASHSTATEBYTES 256
+#define rspamd_cryptobox_MAX_SIGSKBYTES 64
+#define rspamd_cryptobox_MAX_SIGPKBYTES 32
+#define rspamd_cryptobox_MAX_SIGBYTES 64
 
 #define CPUID_AVX2 0x1
 #define CPUID_AVX 0x2
@@ -50,7 +53,7 @@ struct rspamd_cryptobox_segment {
 
 typedef guchar rspamd_pk_t[rspamd_cryptobox_MAX_PKBYTES];
 typedef guchar rspamd_sk_t[rspamd_cryptobox_MAX_SKBYTES];
-typedef guchar rspamd_sig_t[rspamd_cryptobox_MAX_MACBYTES];
+typedef guchar rspamd_mac_t[rspamd_cryptobox_MAX_MACBYTES];
 typedef guchar rspamd_nm_t[rspamd_cryptobox_MAX_NMBYTES];
 typedef guchar rspamd_nonce_t[rspamd_cryptobox_MAX_NONCEBYTES];
 typedef guchar rspamd_sipkey_t[rspamd_cryptobox_SIPKEYBYTES];
@@ -86,7 +89,7 @@ void rspamd_cryptobox_keypair (rspamd_pk_t pk, rspamd_sk_t sk);
  */
 void rspamd_cryptobox_encrypt_inplace (guchar *data, gsize len,
 		const rspamd_nonce_t nonce,
-		const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_sig_t sig);
+		const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_mac_t sig);
 
 /**
  * Encrypt segments of data inplace adding signature to sig afterwards
@@ -99,7 +102,7 @@ void rspamd_cryptobox_encrypt_inplace (guchar *data, gsize len,
 void rspamd_cryptobox_encryptv_inplace (struct rspamd_cryptobox_segment *segments,
 		gsize cnt,
 		const rspamd_nonce_t nonce,
-		const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_sig_t sig);
+		const rspamd_pk_t pk, const rspamd_sk_t sk, rspamd_mac_t sig);
 
 
 /**
@@ -113,7 +116,7 @@ void rspamd_cryptobox_encryptv_inplace (struct rspamd_cryptobox_segment *segment
  */
 gboolean rspamd_cryptobox_decrypt_inplace (guchar *data, gsize len,
 		const rspamd_nonce_t nonce,
-		const rspamd_pk_t pk, const rspamd_sk_t sk, const rspamd_sig_t sig);
+		const rspamd_pk_t pk, const rspamd_sk_t sk, const rspamd_mac_t sig);
 
 /**
  * Encrypt segments of data inplace adding signature to sig afterwards
@@ -125,7 +128,7 @@ gboolean rspamd_cryptobox_decrypt_inplace (guchar *data, gsize len,
  */
 void rspamd_cryptobox_encrypt_nm_inplace (guchar *data, gsize len,
 		const rspamd_nonce_t nonce,
-		const rspamd_nm_t nm, rspamd_sig_t sig);
+		const rspamd_nm_t nm, rspamd_mac_t sig);
 
 /**
  * Encrypt segments of data inplace adding signature to sig afterwards
@@ -138,7 +141,7 @@ void rspamd_cryptobox_encrypt_nm_inplace (guchar *data, gsize len,
 void rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segments,
 		gsize cnt,
 		const rspamd_nonce_t nonce,
-		const rspamd_nm_t nm, rspamd_sig_t sig);
+		const rspamd_nm_t nm, rspamd_mac_t sig);
 
 
 /**
@@ -152,7 +155,7 @@ void rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segm
  */
 gboolean rspamd_cryptobox_decrypt_nm_inplace (guchar *data, gsize len,
 		 const rspamd_nonce_t nonce,
-		 const rspamd_nm_t nm, const rspamd_sig_t sig);
+		 const rspamd_nm_t nm, const rspamd_mac_t sig);
 
 /**
  * Generate shared secret from local sk and remote pk

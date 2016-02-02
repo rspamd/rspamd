@@ -56,7 +56,7 @@ create_mapping (int mapping_len, guchar **beg, guchar **end)
 
 static void
 check_result (const rspamd_nm_t key, const rspamd_nonce_t nonce,
-		const rspamd_sig_t mac, guchar *begin, guchar *end)
+		const rspamd_mac_t mac, guchar *begin, guchar *end)
 {
 	guint64 *t = (guint64 *)begin;
 
@@ -168,7 +168,7 @@ rspamd_cryptobox_test_func (void)
 	guchar *begin, *end;
 	rspamd_nm_t key;
 	rspamd_nonce_t nonce;
-	rspamd_sig_t mac;
+	rspamd_mac_t mac;
 	struct rspamd_cryptobox_segment *seg;
 	double t1, t2;
 	gint i, cnt, ms;
