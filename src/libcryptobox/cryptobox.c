@@ -1223,6 +1223,17 @@ rspamd_cryptobox_sk_sig_bytes (void)
 }
 
 guint
+rspamd_cryptobox_signature_bytes (void)
+{
+	if (G_UNLIKELY (!use_openssl)) {
+		return 64;
+	}
+	else {
+		return 64;
+	}
+}
+
+guint
 rspamd_cryptobox_nm_bytes (void)
 {
 	return 32;

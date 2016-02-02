@@ -28,6 +28,7 @@
 
 #include "config.h"
 #include "ucl.h"
+#include "fstring.h"
 
 /**
  * Compare two memory regions of size `l` using case insensitive matching
