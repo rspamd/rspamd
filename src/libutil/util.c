@@ -2096,3 +2096,34 @@ event_get_base (struct event *ev)
 	return ev->ev_base;
 }
 #endif
+
+int
+rspamd_file_xopen (const char *fname, int oflags, guint mode)
+{
+	struct stat sb;
+	int fd;
+	char *rp, rp_buf[PATH_MAX];
+
+	rp = realpath (fname, rp_buf);
+
+	if (rp == NULL) {
+		return -1;
+	}
+
+#ifdef HAVE_ONOFOLLOW
+	fd = open (fname, oflags | O_NOFOLLOW, mode);
+#else
+	fd = open (fname, oflags, mode);
+#endif
+
+	if (fd == -1) {
+		return (-1);
+	}
+
+	if (fstat (fd, &sb) == -1 || !S_ISREG (sb.st_mode)) {
+		close (fd);
+		return (-1);
+	}
+
+	return (fd);
+}

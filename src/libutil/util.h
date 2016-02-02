@@ -432,4 +432,13 @@ struct event_base * event_get_base (struct event *ev);
     event_set((ev), (x), EV_SIGNAL|EV_PERSIST, (cb), (arg))
 #endif
 
+/**
+ * Open file without following symlinks or special stuff
+ * @param fname filename
+ * @param oflags open flags
+ * @param mode mode to open
+ * @return fd or -1 in case of error
+ */
+int rspamd_file_xopen (const char *fname, int oflags, guint mode);
+
 #endif

@@ -876,6 +876,7 @@ CHECK_SYMBOL_EXISTS(PCRE_CONFIG_JIT "pcre.h" HAVE_PCRE_JIT)
 CHECK_SYMBOL_EXISTS(SOCK_SEQPACKET "sys/types.h;sys/socket.h" HAVE_SOCK_SEQPACKET)
 CHECK_SYMBOL_EXISTS(I_SETSIG "sys/types.h;sys/ioctl.h" HAVE_SETSIG)
 CHECK_SYMBOL_EXISTS(O_ASYNC "sys/types.h;sys/fcntl.h" HAVE_OASYNC)
+CHECK_SYMBOL_EXISTS(O_NOFOLLOW "sys/types.h;sys/fcntl.h" HAVE_ONOFOLLOW)
 
 # Some PCRE implementations are lacking of pcre_jit_exec fast path
 SET(_PCRE_FAST_TEST "
