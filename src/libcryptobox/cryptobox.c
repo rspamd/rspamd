@@ -1279,10 +1279,10 @@ guint
 rspamd_cryptobox_sk_sig_bytes (void)
 {
 	if (G_UNLIKELY (!use_openssl)) {
-		return 32;
+		return 64;
 	}
 	else {
-		return 64;
+		return 32;
 	}
 }
 

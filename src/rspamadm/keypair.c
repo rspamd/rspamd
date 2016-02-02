@@ -29,11 +29,13 @@
 #include "http.h"
 #include "ucl.h"
 #include "keypair_private.h"
+#include "libutil/str_util.h"
 
 static gboolean hex_encode = FALSE;
 static gboolean raw = FALSE;
 static gboolean openssl = FALSE;
 static gboolean ucl = FALSE;
+static gboolean sign = FALSE;
 
 static void rspamadm_keypair (gint argc, gchar **argv);
 static const char *rspamadm_keypair_help (gboolean full_help);
@@ -50,8 +52,10 @@ static GOptionEntry entries[] = {
 				"Use hex encoding",                         NULL},
 		{"raw", 'r', 0, G_OPTION_ARG_NONE, &raw,
 				"Print just keys, no description", NULL},
-		{"openssl", 's', 0, G_OPTION_ARG_NONE, &openssl,
+		{"openssl", 'o', 0, G_OPTION_ARG_NONE, &openssl,
 				"Generate openssl nistp256 keypair not curve25519 one", NULL},
+		{"sign", 's', 0, G_OPTION_ARG_NONE, &sign,
+				"Generate keypair for digital signing", NULL},
 		{"ucl", 'u', 0, G_OPTION_ARG_NONE, &ucl,
 				"Generate ucl config", NULL},
 		{NULL,       0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
@@ -68,7 +72,8 @@ rspamadm_keypair_help (gboolean full_help)
 				"Where options are:\n\n"
 				"-x: encode with hex instead of base32\n"
 				"-r: print raw base32/hex\n"
-				"-s: generate openssl nistp256 keypair\n"
+				"-o: generate openssl nistp256 keypair\n"
+				"-s: generate keypair suitable for signatures\n"
 				"-u: generate ucl config for keypair\n"
 				"--help: shows available options and commands";
 	}
@@ -89,6 +94,8 @@ rspamadm_keypair (gint argc, gchar **argv)
 	gint how;
 	ucl_object_t *ucl_out, *elt;
 	struct ucl_emitter_functions *ucl_emit_subr;
+	guchar *sig_sk, *sig_pk;
+	gchar *sig_sk_encoded, *sig_pk_encoded;
 
 	context = g_option_context_new (
 			"keypair - create encryption keys");
@@ -112,55 +119,109 @@ rspamadm_keypair (gint argc, gchar **argv)
 		}
 	}
 
-	keypair = rspamd_http_connection_gen_key ();
-	if (keypair == NULL) {
-		exit (EXIT_FAILURE);
-	}
+	if (!sign) {
+		keypair = rspamd_http_connection_gen_key ();
+		if (keypair == NULL) {
+			exit (EXIT_FAILURE);
+		}
 
-	how = RSPAMD_KEYPAIR_PUBKEY | RSPAMD_KEYPAIR_PRIVKEY;
+		how = RSPAMD_KEYPAIR_PUBKEY | RSPAMD_KEYPAIR_PRIVKEY;
 
-	if (hex_encode) {
-		how |= RSPAMD_KEYPAIR_HEX;
-	}
-	else {
-		how |= RSPAMD_KEYPAIR_BASE32;
-	}
+		if (hex_encode) {
+			how |= RSPAMD_KEYPAIR_HEX;
+		}
+		else {
+			how |= RSPAMD_KEYPAIR_BASE32;
+		}
 
-	if (!raw) {
-		how |= RSPAMD_KEYPAIR_HUMAN|RSPAMD_KEYPAIR_ID;
-	}
+		if (!raw) {
+			how |= RSPAMD_KEYPAIR_HUMAN|RSPAMD_KEYPAIR_ID;
+		}
 
-	if (ucl) {
-		ucl_out = ucl_object_typed_new (UCL_OBJECT);
-		elt = ucl_object_typed_new (UCL_OBJECT);
-		ucl_object_insert_key (ucl_out, elt, "keypair", 0, false);
+		if (ucl) {
+			ucl_out = ucl_object_typed_new (UCL_OBJECT);
+			elt = ucl_object_typed_new (UCL_OBJECT);
+			ucl_object_insert_key (ucl_out, elt, "keypair", 0, false);
 
-		/* pubkey part */
-		keypair_out = rspamd_http_connection_print_key (keypair,
-				RSPAMD_KEYPAIR_PUBKEY|RSPAMD_KEYPAIR_BASE32);
-		ucl_object_insert_key (elt,
-				ucl_object_fromlstring (keypair_out->str, keypair_out->len),
-				"pubkey", 0, false);
+			/* pubkey part */
+			keypair_out = rspamd_http_connection_print_key (keypair,
+					RSPAMD_KEYPAIR_PUBKEY|RSPAMD_KEYPAIR_BASE32);
+			ucl_object_insert_key (elt,
+					ucl_object_fromlstring (keypair_out->str, keypair_out->len),
+					"pubkey", 0, false);
+			g_string_free (keypair_out, TRUE);
+
+			/* privkey part */
+			keypair_out = rspamd_http_connection_print_key (keypair,
+					RSPAMD_KEYPAIR_PRIVKEY | RSPAMD_KEYPAIR_BASE32);
+			ucl_object_insert_key (elt,
+					ucl_object_fromlstring (keypair_out->str, keypair_out->len),
+					"privkey", 0, false);
+
+			ucl_emit_subr = ucl_object_emit_file_funcs (stdout);
+			ucl_object_emit_full (ucl_out, UCL_EMIT_CONFIG, ucl_emit_subr);
+			ucl_object_emit_funcs_free (ucl_emit_subr);
+			ucl_object_unref (ucl_out);
+		}
+		else {
+			keypair_out = rspamd_http_connection_print_key (keypair, how);
+			rspamd_printf ("%v", keypair_out);
+		}
+
+		rspamd_http_connection_key_unref (keypair);
+		rspamd_explicit_memzero (keypair_out->str, keypair_out->len);
 		g_string_free (keypair_out, TRUE);
-
-		/* privkey part */
-		keypair_out = rspamd_http_connection_print_key (keypair,
-				RSPAMD_KEYPAIR_PRIVKEY | RSPAMD_KEYPAIR_BASE32);
-		ucl_object_insert_key (elt,
-				ucl_object_fromlstring (keypair_out->str, keypair_out->len),
-				"privkey", 0, false);
-
-		ucl_emit_subr = ucl_object_emit_file_funcs (stdout);
-		ucl_object_emit_full (ucl_out, UCL_EMIT_CONFIG, ucl_emit_subr);
-		ucl_object_emit_funcs_free (ucl_emit_subr);
-		ucl_object_unref (ucl_out);
 	}
 	else {
-		keypair_out = rspamd_http_connection_print_key (keypair, how);
-		rspamd_printf ("%v", keypair_out);
-	}
+		sig_sk = g_malloc (rspamd_cryptobox_sk_sig_bytes ());
+		sig_pk = g_malloc (rspamd_cryptobox_pk_sig_bytes ());
 
-	rspamd_http_connection_key_unref (keypair);
-	rspamd_explicit_memzero (keypair_out->str, keypair_out->len);
-	g_string_free (keypair_out, TRUE);
+		rspamd_cryptobox_keypair_sig (sig_pk, sig_sk);
+
+		if (hex_encode) {
+			sig_pk_encoded = rspamd_encode_hex (sig_pk,
+					rspamd_cryptobox_pk_sig_bytes ());
+			sig_sk_encoded = rspamd_encode_hex (sig_sk,
+					rspamd_cryptobox_sk_sig_bytes ());
+		}
+		else {
+			sig_pk_encoded = rspamd_encode_base32 (sig_pk,
+					rspamd_cryptobox_pk_sig_bytes ());
+			sig_sk_encoded = rspamd_encode_base32 (sig_sk,
+					rspamd_cryptobox_sk_sig_bytes ());
+		}
+
+		if (ucl) {
+			ucl_out = ucl_object_typed_new (UCL_OBJECT);
+			elt = ucl_object_typed_new (UCL_OBJECT);
+			ucl_object_insert_key (ucl_out, elt, "keypair", 0, false);
+
+			/* pubkey part */
+			ucl_object_insert_key (elt,
+					ucl_object_fromstring (sig_pk_encoded),
+					"pubkey", 0, false);
+
+			/* privkey part */
+			ucl_object_insert_key (elt,
+					ucl_object_fromstring (sig_sk_encoded),
+					"privkey", 0, false);
+
+			ucl_emit_subr = ucl_object_emit_file_funcs (stdout);
+			ucl_object_emit_full (ucl_out, UCL_EMIT_CONFIG, ucl_emit_subr);
+			ucl_object_emit_funcs_free (ucl_emit_subr);
+			ucl_object_unref (ucl_out);
+		}
+		else {
+			rspamd_printf ("Pubkey: %s\nPrivkey: %s\n", sig_pk_encoded,
+					sig_sk_encoded);
+		}
+
+		rspamd_explicit_memzero (sig_sk, rspamd_cryptobox_sk_sig_bytes ());
+		rspamd_explicit_memzero (sig_sk_encoded, strlen (sig_sk_encoded));
+
+		g_free (sig_pk);
+		g_free (sig_sk);
+		g_free (sig_pk_encoded);
+		g_free (sig_sk_encoded);
+	}
 }
