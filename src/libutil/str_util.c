@@ -1274,6 +1274,77 @@ rspamd_string_find_eoh (GString *input)
 	return -1;
 }
 
+gchar *
+rspamd_encode_hex (const guchar *in, gsize inlen)
+{
+	gchar *out, *o;
+	const guchar *p;
+	gsize outlen = inlen * 2 + 1;
+	static const gchar hexdigests[16] = "0123456789ABCDEF";
+
+	if (in == NULL) {
+		return NULL;
+	}
+
+	out = g_malloc (outlen);
+	o = out;
+	p = in;
+
+	while (inlen > 0) {
+		*o++ = hexdigests[((*p >> 4) & 0xFF)];
+		*o++ = hexdigests[((*p++) & 0xFF)];
+		inlen --;
+	}
+
+	*o = '\0';
+
+	return out;
+}
+
+
+guchar*
+rspamd_decode_hex (const gchar *in, gsize inlen)
+{
+	guchar *out, *o, ret;
+	const gchar *p;
+	gchar c;
+	gsize outlen = (inlen / 2 + inlen % 2) + 1;
+
+	if (in == NULL) {
+		return NULL;
+	}
+
+	out = g_malloc (outlen);
+	o = out;
+	p = in;
+
+	/* We ignore trailing chars if we have not even input */
+	inlen = inlen - inlen % 2;
+
+	while (inlen > 0) {
+		c = *p++;
+
+		if      (c >= '0' && c <= '9') ret = c - '0';
+		else if (c >= 'A' && c <= 'F') ret = c - 'A' + 10;
+		else if (c >= 'a' && c <= 'f') ret = c - 'a' + 10;
+
+		c = *p++;
+		ret *= 16;
+
+		if      (c >= '0' && c <= '9') ret += c - '0';
+		else if (c >= 'A' && c <= 'F') ret += c - 'A' + 10;
+		else if (c >= 'a' && c <= 'f') ret += c - 'a' + 10;
+
+		*o++ = ret;
+
+		inlen -= 2;
+	}
+
+	*o = '\0';
+
+	return out;
+}
+
 /*
  * GString ucl emitting functions
  */

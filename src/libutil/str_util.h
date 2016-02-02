@@ -125,6 +125,22 @@ gchar * rspamd_encode_base32 (const guchar *in, gsize inlen);
 guchar* rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen);
 
 /**
+ * Encode string using hex encoding
+ * @param in input
+ * @param inlen input length
+ * @return freshly allocated base32 encoding of a specified string
+ */
+gchar * rspamd_encode_hex (const guchar *in, gsize inlen);
+
+/**
+ * Decode string using hex encoding
+ * @param in input
+ * @param inlen input length
+ * @return freshly allocated base32 decoded value or NULL if input is invalid
+ */
+guchar* rspamd_decode_hex (const gchar *in, gsize inlen);
+
+/**
  * Encode string using base64 encoding
  * @param in input
  * @param inlen input length
