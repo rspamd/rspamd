@@ -33,6 +33,7 @@
 #include "chacha20/chacha.h"
 #include "poly1305/poly1305.h"
 #include "curve25519/curve25519.h"
+#include "ed25519/ed25519.h"
 #include "blake2/blake2.h"
 #include "siphash/siphash.h"
 #include "ottery.h"
@@ -53,7 +54,7 @@
 #include <openssl/evp.h>
 #include <openssl/ec.h>
 #include <openssl/ecdh.h>
-
+#include <openssl/ecdsa.h>
 #define CRYPTOBOX_CURVE_NID NID_X9_62_prime256v1
 #endif
 
@@ -315,6 +316,7 @@ rspamd_cryptobox_init (void)
 	ctx->siphash_impl = siphash_load ();
 	ctx->curve25519_impl = curve25519_load ();
 	ctx->blake2_impl = blake2b_load ();
+	ctx->ed25519_impl = ed25519_load ();
 
 	return ctx;
 }
@@ -329,6 +331,45 @@ rspamd_cryptobox_keypair (rspamd_pk_t pk, rspamd_sk_t sk)
 		sk[31] |= 64;
 
 		curve25519_base (pk, sk);
+	}
+	else {
+#ifndef HAVE_USABLE_OPENSSL
+		g_assert (0);
+#else
+		EC_KEY *ec_sec;
+		const BIGNUM *bn_sec;
+		BIGNUM *bn_pub;
+		const EC_POINT *ec_pub;
+		gint len;
+
+		ec_sec = EC_KEY_new_by_curve_name (CRYPTOBOX_CURVE_NID);
+		g_assert (ec_sec != NULL);
+		g_assert (EC_KEY_generate_key (ec_sec) != 0);
+
+		bn_sec = EC_KEY_get0_private_key (ec_sec);
+		g_assert (bn_sec != NULL);
+		ec_pub = EC_KEY_get0_public_key (ec_sec);
+		g_assert (ec_pub != NULL);
+		bn_pub = EC_POINT_point2bn (EC_KEY_get0_group (ec_sec),
+				ec_pub, POINT_CONVERSION_UNCOMPRESSED, NULL, NULL);
+
+		len = BN_num_bytes (bn_sec);
+		g_assert (len <= (gint)sizeof (rspamd_sk_t));
+		BN_bn2bin (bn_sec, sk);
+		len = BN_num_bytes (bn_pub);
+		g_assert (len <= (gint)rspamd_cryptobox_pk_bytes ());
+		BN_bn2bin (bn_pub, pk);
+		BN_free (bn_pub);
+		EC_KEY_free (ec_sec);
+#endif
+	}
+}
+
+void
+rspamd_cryptobox_keypair_sig (rspamd_sig_pk_t pk, rspamd_sig_sk_t sk)
+{
+	if (G_LIKELY (!use_openssl)) {
+		ed25519_keypair (pk, sk);
 	}
 	else {
 #ifndef HAVE_USABLE_OPENSSL
@@ -413,6 +454,43 @@ rspamd_cryptobox_nm (rspamd_nm_t nm, const rspamd_pk_t pk, const rspamd_sk_t sk)
 		BN_free (bn_pub);
 #endif
 	}
+}
+
+void
+rspamd_cryptobox_sign (guchar *sig, gsize *siglen_p,
+		const guchar *m, gsize mlen,
+		const rspamd_sk_t sk)
+{
+	if (G_LIKELY (!use_openssl)) {
+		ed25519_sign (sig, siglen_p, m, mlen, sk);
+	}
+	else {
+#ifndef HAVE_USABLE_OPENSSL
+		g_assert (0);
+#else
+#endif
+	}
+}
+
+bool
+rspamd_cryptobox_verify (const guchar *sig,
+		const guchar *m,
+		gsize mlen,
+		const rspamd_pk_t pk)
+{
+	bool ret = false;
+
+	if (G_LIKELY (!use_openssl)) {
+		ret = ed25519_verify (sig, m, mlen, pk);
+	}
+	else {
+#ifndef HAVE_USABLE_OPENSSL
+		g_assert (0);
+#else
+#endif
+	}
+
+	return ret;
 }
 
 static gsize
@@ -1105,6 +1183,17 @@ rspamd_cryptobox_pk_bytes (void)
 }
 
 guint
+rspamd_cryptobox_pk_sig_bytes (void)
+{
+	if (G_UNLIKELY (!use_openssl)) {
+		return 32;
+	}
+	else {
+		return 65;
+	}
+}
+
+guint
 rspamd_cryptobox_nonce_bytes (void)
 {
 	if (G_UNLIKELY (!use_openssl)) {
@@ -1120,6 +1209,17 @@ guint
 rspamd_cryptobox_sk_bytes (void)
 {
 	return 32;
+}
+
+guint
+rspamd_cryptobox_sk_sig_bytes (void)
+{
+	if (G_UNLIKELY (!use_openssl)) {
+		return 32;
+	}
+	else {
+		return 64;
+	}
 }
 
 guint

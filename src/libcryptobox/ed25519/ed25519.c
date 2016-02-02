@@ -34,23 +34,23 @@ typedef struct ed25519_impl_s {
 	const char *desc;
 
 	void (*keypair) (unsigned char *pk, unsigned char *sk);
-	void (*sign) (unsigned char *sig, unsigned long long *siglen_p,
-			const unsigned char *m, unsigned long long mlen,
+	void (*sign) (unsigned char *sig, size_t *siglen_p,
+			const unsigned char *m, size_t mlen,
 			const unsigned char *sk);
 	bool (*verify) (const unsigned char *sig,
 			const unsigned char *m,
-			unsigned long long mlen,
+			size_t mlen,
 			const unsigned char *pk);
 } ed25519_impl_t;
 
 #define ED25519_DECLARE(ext) \
     void ed_keypair_##ext(unsigned char *pk, unsigned char *sk); \
-    void ed_sign_##ext(unsigned char *sig, unsigned long long *siglen_p, \
-        const unsigned char *m, unsigned long long mlen, \
+    void ed_sign_##ext(unsigned char *sig, size_t *siglen_p, \
+        const unsigned char *m, size_t mlen, \
         const unsigned char *sk); \
     bool ed_verify_##ext(const unsigned char *sig, \
         const unsigned char *m, \
-        unsigned long long mlen, \
+		size_t mlen, \
         const unsigned char *pk)
 
 #define ED25519_IMPL(cpuflags, desc, ext) \
@@ -90,8 +90,8 @@ ed25519_keypair (unsigned char *pk, unsigned char *sk)
 }
 
 void
-ed25519_sign (unsigned char *sig, unsigned long long *siglen_p,
-		const unsigned char *m, unsigned long long mlen,
+ed25519_sign (unsigned char *sig, size_t *siglen_p,
+		const unsigned char *m, size_t mlen,
 		const unsigned char *sk)
 {
 	ed25519_opt->sign (sig, siglen_p, m, mlen, sk);
@@ -100,7 +100,7 @@ ed25519_sign (unsigned char *sig, unsigned long long *siglen_p,
 bool
 ed25519_verify (const unsigned char *sig,
 		const unsigned char *m,
-		unsigned long long mlen,
+		size_t mlen,
 		const unsigned char *pk)
 {
 	return ed25519_opt->verify (sig, m, mlen, pk);

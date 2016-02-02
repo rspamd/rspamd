@@ -59,7 +59,7 @@ ed_keypair_ref (unsigned char *pk, unsigned char *sk)
 
 int
 ed_verify_ref(const unsigned char *sig, const unsigned char *m,
-		unsigned long long mlen, const unsigned char *pk)
+		size_t mlen, const unsigned char *pk)
 {
 	EVP_MD_CTX sha_ctx;
 	unsigned char h[64];
@@ -96,8 +96,8 @@ ed_verify_ref(const unsigned char *sig, const unsigned char *m,
 }
 
 void
-ed_sign_ref(unsigned char *sig, unsigned long long *siglen_p,
-		const unsigned char *m, unsigned long long mlen,
+ed_sign_ref(unsigned char *sig, size_t *siglen_p,
+		const unsigned char *m, size_t mlen,
 		const unsigned char *sk)
 {
 	EVP_MD_CTX sha_ctx;

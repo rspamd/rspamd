@@ -27,15 +27,16 @@
 
 #include "config.h"
 #include <stdbool.h>
+#include <stddef.h>
 
 const char* ed25519_load (void);
 void ed25519_keypair (unsigned char *pk, unsigned char *sk);
-void ed25519_sign (unsigned char *sig, unsigned long long *siglen_p,
-		const unsigned char *m, unsigned long long mlen,
+void ed25519_sign (unsigned char *sig, size_t *siglen_p,
+		const unsigned char *m, size_t mlen,
 		const unsigned char *sk);
 bool ed25519_verify (const unsigned char *sig,
 		const unsigned char *m,
-		unsigned long long mlen,
+		size_t mlen,
 		const unsigned char *pk);
 
 #endif /* SRC_LIBCRYPTOBOX_ED25519_ED25519_H_ */

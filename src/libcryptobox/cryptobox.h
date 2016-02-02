@@ -57,10 +57,14 @@ typedef guchar rspamd_mac_t[rspamd_cryptobox_MAX_MACBYTES];
 typedef guchar rspamd_nm_t[rspamd_cryptobox_MAX_NMBYTES];
 typedef guchar rspamd_nonce_t[rspamd_cryptobox_MAX_NONCEBYTES];
 typedef guchar rspamd_sipkey_t[rspamd_cryptobox_SIPKEYBYTES];
+typedef guchar rspamd_signature_t[rspamd_cryptobox_MAX_SIGBYTES];
+typedef guchar rspamd_sig_pk_t[rspamd_cryptobox_MAX_SIGPKBYTES];
+typedef guchar rspamd_sig_sk_t[rspamd_cryptobox_MAX_SIGSKBYTES];
 
 struct rspamd_cryptobox_library_ctx {
 	gchar *cpu_extensions;
 	const gchar *curve25519_impl;
+	const gchar *ed25519_impl;
 	const gchar *chacha20_impl;
 	const gchar *poly1305_impl;
 	const gchar *siphash_impl;
@@ -79,6 +83,13 @@ struct rspamd_cryptobox_library_ctx* rspamd_cryptobox_init (void);
  * @param sk secret key buffer
  */
 void rspamd_cryptobox_keypair (rspamd_pk_t pk, rspamd_sk_t sk);
+
+/**
+ * Generate new keypair for signing
+ * @param pk public key buffer
+ * @param sk secret key buffer
+ */
+void rspamd_cryptobox_keypair_sig (rspamd_sig_pk_t pk, rspamd_sig_sk_t sk);
 
 /**
  * Encrypt data inplace adding signature to sig afterwards
@@ -166,6 +177,32 @@ gboolean rspamd_cryptobox_decrypt_nm_inplace (guchar *data, gsize len,
 void rspamd_cryptobox_nm (rspamd_nm_t nm, const rspamd_pk_t pk, const rspamd_sk_t sk);
 
 /**
+ * Create digital signature for the specified message and place result in `sig`
+ * @param sig signature target
+ * @param siglen_p pointer to signature length (might be NULL)
+ * @param m input message
+ * @param mlen input length
+ * @param sk secret key
+ */
+void rspamd_cryptobox_sign (guchar *sig, gsize *siglen_p,
+		const guchar *m, gsize mlen,
+		const rspamd_sk_t sk);
+
+/**
+ * Verifies digital signature for the specified message using the specified
+ * pubkey
+ * @param sig signature source
+ * @param m input message
+ * @param mlen message lenght
+ * @param pk public key for verification
+ * @return true if signature is valid, false otherwise
+ */
+bool rspamd_cryptobox_verify (const guchar *sig,
+		const guchar *m,
+		gsize mlen,
+		const rspamd_pk_t pk);
+
+/**
  * Securely clear the buffer specified
  * @param buf buffer to zero
  * @param buflen length of buffer
@@ -210,6 +247,11 @@ gboolean rspamd_cryptobox_openssl_mode (gboolean enable);
 guint rspamd_cryptobox_pk_bytes (void);
 
 /**
+ * Real size of rspamd cryptobox signing public key
+ */
+guint rspamd_cryptobox_pk_sig_bytes (void);
+
+/**
  * Real size of crypto nonce
  */
 guint rspamd_cryptobox_nonce_bytes (void);
@@ -220,6 +262,11 @@ guint rspamd_cryptobox_nonce_bytes (void);
 guint rspamd_cryptobox_sk_bytes (void);
 
 /**
+ * Real size of rspamd cryptobox signing secret key
+ */
+guint rspamd_cryptobox_sk_sig_bytes (void);
+
+/**
  * Real size of rspamd cryptobox shared key
  */
 guint rspamd_cryptobox_nm_bytes (void);
@@ -228,6 +275,11 @@ guint rspamd_cryptobox_nm_bytes (void);
  * Real size of rspamd cryptobox MAC signature
  */
 guint rspamd_cryptobox_mac_bytes (void);
+
+/**
+ * Real size of rspamd cryptobox digital signature
+ */
+guint rspamd_cryptobox_signature_bytes (void);
 
 /* Hash IUF interface */
 typedef struct RSPAMD_ALIGNED(32) rspamd_cryptobox_hash_state_s  {
