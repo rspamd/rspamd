@@ -55,6 +55,7 @@
 #include <openssl/ec.h>
 #include <openssl/ecdh.h>
 #include <openssl/ecdsa.h>
+#include <openssl/rand.h>
 #define CRYPTOBOX_CURVE_NID NID_X9_62_prime256v1
 #endif
 
@@ -317,6 +318,13 @@ rspamd_cryptobox_init (void)
 	ctx->curve25519_impl = curve25519_load ();
 	ctx->blake2_impl = blake2b_load ();
 	ctx->ed25519_impl = ed25519_load ();
+#ifdef HAVE_USABLE_OPENSSL
+	ERR_load_ECDSA_strings ();
+	ERR_load_EC_strings ();
+	ERR_load_RAND_strings ();
+	ERR_load_EVP_strings ();
+	ERR_load_ECDH_strings ();
+#endif
 
 	return ctx;
 }
@@ -468,6 +476,35 @@ rspamd_cryptobox_sign (guchar *sig, gsize *siglen_p,
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert (0);
 #else
+		EC_KEY *lk;
+		BIGNUM *bn_sec, *kinv = NULL, *rp = NULL;
+		EVP_MD_CTX sha_ctx;
+		unsigned char h[64];
+		guint diglen = rspamd_cryptobox_signature_bytes ();
+
+		/* Prehash */
+		g_assert (EVP_DigestInit (&sha_ctx, EVP_sha512()) == 1);
+		EVP_DigestUpdate (&sha_ctx, m, mlen);
+		EVP_DigestFinal (&sha_ctx, h, NULL);
+
+		/* Key setup */
+		lk = EC_KEY_new_by_curve_name (CRYPTOBOX_CURVE_NID);
+		g_assert (lk != NULL);
+		bn_sec = BN_bin2bn (sk, sizeof (rspamd_sk_t), NULL);
+		g_assert (bn_sec != NULL);
+		g_assert (EC_KEY_set_private_key (lk, bn_sec) == 1);
+
+		/* ECDSA */
+		g_assert (ECDSA_sign_setup (lk, NULL, &kinv, &rp) == 1);
+		g_assert (ECDSA_sign_ex (0, h, sizeof (h), sig,
+				&diglen, kinv, rp, lk) == 1);
+		g_assert (diglen <= sizeof (rspamd_signature_t));
+
+		EC_KEY_free (lk);
+		BN_free (bn_sec);
+		BN_free (kinv);
+		BN_free (rp);
+
 #endif
 	}
 }
@@ -487,6 +524,33 @@ rspamd_cryptobox_verify (const guchar *sig,
 #ifndef HAVE_USABLE_OPENSSL
 		g_assert (0);
 #else
+		EC_KEY *lk;
+		EC_POINT *ec_pub;
+		BIGNUM *bn_pub;
+		EVP_MD_CTX sha_ctx;
+		unsigned char h[64];
+
+		/* Prehash */
+		g_assert (EVP_DigestInit (&sha_ctx, EVP_sha512()) == 1);
+		EVP_DigestUpdate (&sha_ctx, m, mlen);
+		EVP_DigestFinal (&sha_ctx, h, NULL);
+
+		/* Key setup */
+		lk = EC_KEY_new_by_curve_name (CRYPTOBOX_CURVE_NID);
+		g_assert (lk != NULL);
+		bn_pub = BN_bin2bn (pk, rspamd_cryptobox_pk_bytes (), NULL);
+		g_assert (bn_pub != NULL);
+		ec_pub = EC_POINT_bn2point (EC_KEY_get0_group (lk), bn_pub, NULL, NULL);
+		g_assert (ec_pub != NULL);
+		g_assert (EC_KEY_set_public_key (lk, ec_pub) == 1);
+
+		/* ECDSA */
+		ret = ECDSA_verify (0, h, sizeof (h), sig,
+				rspamd_cryptobox_signature_bytes (), lk) == 1;
+
+		EC_KEY_free (lk);
+		BN_free (bn_pub);
+		EC_POINT_free (ec_pub);
 #endif
 	}
 
@@ -1225,11 +1289,23 @@ rspamd_cryptobox_sk_sig_bytes (void)
 guint
 rspamd_cryptobox_signature_bytes (void)
 {
+	static guint ssl_keylen;
+
 	if (G_UNLIKELY (!use_openssl)) {
 		return 64;
 	}
 	else {
-		return 64;
+#ifndef HAVE_USABLE_OPENSSL
+		g_assert (0);
+#else
+		if (ssl_keylen == 0) {
+			EC_KEY *lk;
+			lk = EC_KEY_new_by_curve_name (CRYPTOBOX_CURVE_NID);
+			ssl_keylen = ECDSA_size (lk);
+			EC_KEY_free (lk);
+		}
+#endif
+		return ssl_keylen;
 	}
 }
 
