@@ -2102,13 +2102,6 @@ rspamd_file_xopen (const char *fname, int oflags, guint mode)
 {
 	struct stat sb;
 	int fd;
-	char *rp, rp_buf[PATH_MAX];
-
-	rp = realpath (fname, rp_buf);
-
-	if (rp == NULL) {
-		return -1;
-	}
 
 #ifdef HAVE_ONOFOLLOW
 	fd = open (fname, oflags | O_NOFOLLOW, mode);
