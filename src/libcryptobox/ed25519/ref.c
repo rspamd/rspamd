@@ -28,8 +28,12 @@ ed_seed_keypair_ref (unsigned char *pk, unsigned char *sk,
 		const unsigned char *seed)
 {
 	ge_p3 A;
+	EVP_MD_CTX sha_ctx;
 
-	memmove (sk, seed, 32);
+	g_assert (EVP_DigestInit (&sha_ctx, EVP_sha512()) == 1);
+	EVP_DigestUpdate (&sha_ctx, seed, 32);
+	EVP_DigestFinal (&sha_ctx, sk, NULL);
+
 	sk[0] &= 248;
 	sk[31] &= 63;
 	sk[31] |= 64;
@@ -46,11 +50,10 @@ ed_seed_keypair_ref (unsigned char *pk, unsigned char *sk,
 int
 ed_keypair_ref (unsigned char *pk, unsigned char *sk)
 {
-	unsigned char seed[rspamd_cryptobox_HASHBYTES];
+	unsigned char seed[32];
 	int ret;
 
 	ottery_rand_bytes (seed, sizeof (seed));
-	rspamd_cryptobox_hash (seed, seed, sizeof (seed), NULL, 0);
 	ret = ed_seed_keypair_ref (pk, sk, seed);
 	rspamd_explicit_memzero (seed, sizeof (seed));
 
