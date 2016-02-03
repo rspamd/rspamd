@@ -8,6 +8,7 @@ SET(RSPAMADMSRC rspamadm.c
         control.c
         confighelp.c
         stat_convert.c
+        signtool.c
         ${CMAKE_BINARY_DIR}/src/workers.c
         ${CMAKE_BINARY_DIR}/src/modules.c
         ${CMAKE_SOURCE_DIR}/src/controller.c
