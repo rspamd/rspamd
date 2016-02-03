@@ -421,6 +421,7 @@ rspamd_config_parse_log_format (struct rspamd_config *cfg)
 		parse_var_name,
 		parse_var_content,
 	} state = parse_str;
+	gint braces = 0;
 
 	g_assert (cfg != NULL);
 	c = cfg->log_format_str;
@@ -478,6 +479,7 @@ rspamd_config_parse_log_format (struct rspamd_config *cfg)
 				p ++;
 				c = p;
 				state = parse_var_content;
+				braces = 1;
 			}
 			else if (*p != '_' && *p != '-' && !g_ascii_isalnum (*p)) {
 				/* Variable with no content */
@@ -496,7 +498,7 @@ rspamd_config_parse_log_format (struct rspamd_config *cfg)
 			}
 			break;
 		case parse_var_content:
-			if (*p == '}') {
+			if (*p == '}' && --braces == 0) {
 				var_content.begin = c;
 				var_content.len = p - c;
 				p ++;
@@ -507,6 +509,10 @@ rspamd_config_parse_log_format (struct rspamd_config *cfg)
 				}
 
 				state = parse_str;
+			}
+			else if (*p == '{') {
+				braces ++;
+				p ++;
 			}
 			else {
 				p++;
