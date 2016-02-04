@@ -42,6 +42,7 @@ Supported distributions:
 - **CentOS 7** (amd64), need EPEL
 - **Fedora 21** (amd64)
 - **Fedora 22** (amd64)
+- **Fedora 23** (amd64)
 
 Please note that `CentOS` rpm packages **requires** [EPEL](https://fedoraproject.org/wiki/EPEL) to be installed in your system as many dependencies are missing from the base CentOS repositories. You can learn how to install EPEL from their site: <https://fedoraproject.org/wiki/EPEL>.
 `Fedora` packages do not require EPEL or any other third-party repository.
@@ -75,6 +76,7 @@ Rspamd supports the following .deb based distributives:
 
 - **Debian wheezy** (amd64, i386)
 - **Debian jessie** (amd64, i386)
+- **Debian sid** (amd64, i386)
 - **Ubuntu precise** (amd64, i386)
 - **Ubuntu trusty** (amd64, i386)
 - **Ubuntu vivid** (amd64, i386)
@@ -88,7 +90,7 @@ To install the rspamd <a class="undecor" href="#stableSys2">stable<sup>1</sup></
     echo "deb http://rspamd.com/apt-stable/ $CODENAME main" > /etc/apt/sources.list.d/rspamd.list
     echo "deb-src http://rspamd.com/apt-stable/ $CODENAME main" >> /etc/apt/sources.list.d/rspamd.list
     apt-get update
-    apt-get install rspamd
+    apt-get --no-install-recommends install rspamd
 
 To obtain your distributive's codename, you could use the command `lsb_release -s -c` from the package called `lsb-release`.
 
@@ -100,7 +102,7 @@ For <a class="undecor" href="#experimentalSys2">experimental<sup>2</sup></a> bra
     echo "deb http://rspamd.com/apt/ $CODENAME main" > /etc/apt/sources.list.d/rspamd.list
     echo "deb-src http://rspamd.com/apt/ $CODENAME main" >> /etc/apt/sources.list.d/rspamd.list
     apt-get update
-    apt-get install rspamd
+    apt-get --no-install-recommends install rspamd
 
 ### Debian `official` repos
 
@@ -143,7 +145,7 @@ Rspamd has been ported to the following BSD like operating systems:
 - **OpenBSD**
 - **OSX** (using MacPorts)
 
-FreeBSD users can install Rspamd from [ports](http://www.freshports.org/mail/rspamd/).
+FreeBSD users can install Rspamd from [ports](http://www.freshports.org/mail/rspamd/) or use the experimental line of packages by [rspamd-devel](http://www.freshports.org/mail/rspamd-devel/) port.
 
 Users of NetBSD (and other systems with pkgsrc) can use [pkgsrc](http://pkgsrc.se/mail/rspamd).
 
