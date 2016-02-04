@@ -28,7 +28,7 @@ local function ip_to_rbl(ip, rbl)
   return table.concat(ip:inversed_str_octets(), ".") .. '.' .. rbl
 end
 
-local function check_multimap(task)
+local function multimap_callback(task, pre_filter)
   -- Applies specific filter for input
   local function apply_filter(filter, input, rule)
     if filter == 'email:addr' or filter == 'email' then
@@ -101,6 +101,10 @@ local function check_multimap(task)
 
     if ret then
       task:insert_result(r['symbol'], 1)
+
+      if pre_filter then
+        task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'])
+      end
     end
 
     return ret
@@ -147,7 +151,9 @@ local function check_multimap(task)
   local ip = task:get_from_ip()
   if ip:is_valid() then
     _.each(function(r) match_rule(r, ip) end,
-      _.filter(function(r) return r['type'] == 'ip' end, rules))
+      _.filter(function(r)
+        return pre_filter == r['prefilter'] and r['type'] == 'ip'
+      end, rules))
   end
 
   -- Header rules
@@ -155,7 +161,9 @@ local function check_multimap(task)
     local hv = task:get_header_full(r['header'])
     match_list(r, hv, {'decoded'})
   end,
-  _.filter(function(r) return r['type'] == 'header' end, rules))
+  _.filter(function(r)
+    return pre_filter == r['prefilter'] and r['type'] == 'header'
+  end, rules))
 
   -- Rcpt rules
   if task:has_recipients() then
@@ -163,7 +171,9 @@ local function check_multimap(task)
     _.each(function(r)
       match_addr(r, rcpts)
     end,
-    _.filter(function(r) return r['type'] == 'rcpt' end, rules))
+    _.filter(function(r)
+      return pre_filter == r['prefilter'] and r['type'] == 'rcpt'
+    end, rules))
   end
 
   -- From rules
@@ -173,7 +183,9 @@ local function check_multimap(task)
       _.each(function(r)
         match_addr(r, from)
       end,
-      _.filter(function(r) return r['type'] == 'from' end, rules))
+      _.filter(function(r)
+        return pre_filter == r['prefilter'] and r['type'] == 'from'
+      end, rules))
     end
   end
 
@@ -183,6 +195,10 @@ local function check_multimap(task)
         local cb = function (resolver, to_resolve, results, err, rbl)
           if results then
             task:insert_result(r['symbol'], 1, r['map'])
+
+            if pre_filter then
+              task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'])
+            end
           end
         end
 
@@ -191,11 +207,22 @@ local function check_multimap(task)
           callback = cb,
           })
       end,
-    _.filter(function(r) return r['type'] == 'dnsbl' end, rules))
+    _.filter(function(r)
+      return pre_filter == r['prefilter'] and r['type'] == 'dnsbl'
+    end, rules))
   end
 end
 
+local function multimap_filter_callback(task)
+  multimap_callback(task, false)
+end
+
+local function multimap_prefilter_callback(task)
+  multimap_callback(task, true)
+end
+
 local function add_multimap_rule(key, newrule)
+  local ret = false
   if not newrule['map'] then
     rspamd_logger.errx(rspamd_config, 'incomplete rule, missing map')
     return nil
@@ -221,7 +248,7 @@ local function add_multimap_rule(key, newrule)
       newrule['radix'] = rspamd_config:add_radix_map (newrule['map'],
         newrule['description'])
       if newrule['radix'] then
-        return newrule
+        ret = true
       else
         rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
             newrule['map'])
@@ -229,15 +256,26 @@ local function add_multimap_rule(key, newrule)
     elseif newrule['type'] == 'header' or newrule['type'] == 'rcpt' or newrule['type'] == 'from' then
       newrule['hash'] = rspamd_config:add_hash_map (newrule['map'], newrule['description'])
       if newrule['hash'] then
-        return newrule
+        ret = true
       else
         rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
           newrule['map'])
       end
     elseif newrule['type'] == 'dnsbl' then
-      return newrule
+      ret = true
     end
   end
+
+  if newrule['action'] then
+    newrule['prefilter'] = true
+  else
+    newrule['prefilter'] = false
+  end
+
+  if ret then
+    return newrule
+  end
+
   return nil
 end
 
@@ -257,11 +295,15 @@ if opts and type(opts) == 'table' then
     end
   end
   -- add fake symbol to check all maps inside a single callback
-  if type(rspamd_config.get_api_version) ~= 'nil' then
+  if _.any(function(r) return not r['prefilter'] end, rules) then
     local id = rspamd_config:register_callback_symbol_priority(1.0, -1,
-      check_multimap)
+      multimap_filter_callback)
     for i,rule in ipairs(rules) do
       rspamd_config:register_virtual_symbol(rule['symbol'], 1.0, id)
     end
+  end
+
+  if _.any(function(r) return r['prefilter'] end, rules) then
+    rspamd_config:register_pre_filter(multimap_prefilter_callback)
   end
 end
