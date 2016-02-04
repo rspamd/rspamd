@@ -101,6 +101,7 @@ LUA_FUNCTION_DEF (task, insert_result);
  * - `add header`: add spam header
  * - `rewrite subject`: rewrite subject to spam subject
  * - `greylist`: greylist message
+ * - `accept` or `no action`: whitelist message
  * @param {rspamd_action or string} action a numeric or string action value
  * @param {string} description optional descripton
 @example
@@ -812,16 +813,16 @@ lua_task_set_pre_result (lua_State * L)
 		else if (lua_type (L, 2) == LUA_TSTRING) {
 			rspamd_action_from_str (lua_tostring (L, 2), &action);
 		}
-		if (action < (gint)task->pre_result.action &&
-				action < METRIC_ACTION_MAX &&
-				action >= METRIC_ACTION_REJECT) {
+		if (action < METRIC_ACTION_MAX && action >= METRIC_ACTION_REJECT) {
 			/* We also need to set the default metric to that result */
 			mres = rspamd_create_metric_result (task, DEFAULT_METRIC);
 			if (mres != NULL) {
 				mres->score = mres->metric->actions[action].score;
 				mres->action = action;
 			}
+
 			task->pre_result.action = action;
+
 			if (lua_gettop (L) >= 3) {
 				action_str = rspamd_mempool_strdup (task->task_pool,
 						luaL_checkstring (L, 3));
@@ -834,6 +835,12 @@ lua_task_set_pre_result (lua_State * L)
 			msg_info_task ("<%s>: set pre-result to %s: '%s'",
 						task->message_id, rspamd_action_to_str (action),
 						task->pre_result.str);
+
+			/* Don't classify or filter message if pre-filter sets results */
+			task->processed_stages |= (RSPAMD_TASK_STAGE_FILTERS |
+					RSPAMD_TASK_STAGE_CLASSIFIERS |
+					RSPAMD_TASK_STAGE_CLASSIFIERS_PRE |
+					RSPAMD_TASK_STAGE_CLASSIFIERS_POST);
 		}
 	}
 	return 0;

@@ -323,6 +323,10 @@ rspamd_action_from_str (const gchar *data, gint *result)
 			sizeof ("soft reject") - 1) == 0) {
 		*result = METRIC_ACTION_NOACTION;
 	}
+	else if (g_ascii_strncasecmp (data, "accept",
+			sizeof ("accept") - 1) == 0) {
+		*result = METRIC_ACTION_NOACTION;
+	}
 	else {
 		return FALSE;
 	}
