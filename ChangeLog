@@ -1,3 +1,19 @@
+1.1.3:
+	* Fix DSN rules when SMTP from is unavailable
+	* Fix statconvert routine to avoid lua module usage
+	* Set a sane quark for configtest to avoid NULL to be printed in logs
+	* Support c11 if available
+	* Fix parsing of ip:port strings
+	* Add more diagnostic for lua subr errors
+	* Fix task:set_from_ip lua method
+	* Add basic routines for digital signatures
+	* Add tool for digital signatures
+	* Add plain open file API method for atomic open
+	* Fix parsing nested braces inside logger vars
+	* Pre filters now actually skip processing
+	* Add pre-filter mode for multimap
+	* Switch to apache 2 license
+
 1.1.2:
 	* Fix stat_cache closing
 	* Add checkpoints to sqlite3 learn cache
