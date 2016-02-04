@@ -27,6 +27,9 @@ map types in this module:
 
 Multimap has different message attributes to be checked via maps.
 
+
+Multimap can also be used for pre-filtering of message: so if map matches then no further checks will be performed. This feature is particularly useful for whitelisting, blacklisting and allows to save scan resources. To enable this mode just add `action` option to the map configuration (see below).
+
 ## Configuration
 
 The module itself contains a set of rules in form:
@@ -51,6 +54,17 @@ which is treated as CDB map by rspamd.
 
 Here is an example configuration of multimap module:
 
+To enable pre-filter support, you should specify `action` parameter which can take the
+following values:
+
+* `accept` - accept a message (no action)
+* `add header` or `add_header` - adds a header to message
+* `rewrite subject` or `rewrite_subject` - change subject
+* `greylist` - greylist message
+* `reject` - drop message
+
+No filters will be processed for a message if such a map matches.
+
 ~~~nginx
 multimap {
 	test { type = "ip"; map = "/tmp/ip.map"; symbol = "TESTMAP"; }
@@ -58,6 +72,8 @@ multimap {
 		description = "PBL dns block list"; } # Better use RBL module instead
 }
 ~~~
+
+To enable pre-filter mode
 
 ### Map filters
 
@@ -69,3 +85,23 @@ for `header` rules. Filters are specified with `filter` option. Rspamd supports 
 *  `email:domain` - parse header value as email address and extract user name from it (`Somebody <user@example.com>` -> `example.com`)
 *  `email:name` - parse header value as email address and extract displayed name from it (`Somebody <user@example.com>` -> `Somebody`)
 * `regexp:/re/` - extracts generic information using the specified regular expression
+
+
+Here are some examples of pre-filter configurations:
+
+~~~nginx
+sender_from_whitelist_user {
+            type = "from";
+            filter = "email:user";
+            map = "file:///tmp/from.map";
+            symbol = "SENDER_FROM_WHITELIST_USER";
+            action = "accept"; # Prefilter mode
+}
+sender_from_regexp {
+            type = "header";
+            header = "from";
+            filter = "regexp:/.*@/";
+            map = "file:///tmp/from_re.map";
+            symbol = "SENDER_FROM_REGEXP";
+}
+~~~
