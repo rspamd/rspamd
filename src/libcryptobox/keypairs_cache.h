@@ -37,7 +37,7 @@ struct rspamd_keypair_cache * rspamd_keypair_cache_new (guint max_items);
  */
 void rspamd_keypair_cache_process (struct rspamd_keypair_cache *c,
 		struct rspamd_cryptobox_keypair *lk,
-		struct rspamd_cryptobox_keypair_public *rk);
+		struct rspamd_cryptobox_pubkey *rk);
 
 /**
  * Destroy old keypair cache

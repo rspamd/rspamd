@@ -35,7 +35,7 @@ struct rspamd_cryptobox_keypair;
 /**
  * Opaque structure for public only keypair
  */
-struct rspamd_cryptobox_keypair_public;
+struct rspamd_cryptobox_pubkey;
 
 /**
  * Creates new full keypair

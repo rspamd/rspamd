@@ -72,7 +72,7 @@ rspamd_keypair_cache_new (guint max_items)
 void
 rspamd_keypair_cache_process (struct rspamd_keypair_cache *c,
 		struct rspamd_cryptobox_keypair *lk,
-		struct rspamd_cryptobox_keypair_public *rk)
+		struct rspamd_cryptobox_pubkey *rk)
 {
 	struct rspamd_keypair_elt search, *new;
 
@@ -103,16 +103,16 @@ rspamd_keypair_cache_process (struct rspamd_keypair_cache *c,
 				rspamd_cryptobox_HASHBYTES);
 
 		if (rk->alg == RSPAMD_CRYPTOBOX_MODE_25519) {
-			struct rspamd_cryptobox_keypair_public_25519 *rk_25519 =
-					RSPAMD_CRYPTOBOX_KEYPAIR_PUBLIC_25519(rk);
+			struct rspamd_cryptobox_pubkey_25519 *rk_25519 =
+					RSPAMD_CRYPTOBOX_PUBKEY_25519(rk);
 			struct rspamd_cryptobox_keypair_25519 *sk_25519 =
 					RSPAMD_CRYPTOBOX_KEYPAIR_25519(lk);
 
 			rspamd_cryptobox_nm (new->nm->nm, rk_25519->pk, sk_25519->sk, rk->alg);
 		}
 		else {
-			struct rspamd_cryptobox_keypair_public_nist *rk_nist =
-					RSPAMD_CRYPTOBOX_KEYPAIR_PUBLIC_NIST(rk);
+			struct rspamd_cryptobox_pubkey_nist *rk_nist =
+					RSPAMD_CRYPTOBOX_PUBKEY_NIST(rk);
 			struct rspamd_cryptobox_keypair_nist *sk_nist =
 					RSPAMD_CRYPTOBOX_KEYPAIR_NIST(lk);
 
