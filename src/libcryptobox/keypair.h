@@ -70,9 +70,62 @@ struct rspamd_cryptobox_pubkey* rspamd_pubkey_ref (
 		struct rspamd_cryptobox_pubkey *kp);
 
 /**
+ * Load pubkey from base32 string
+ * @param b32 input string
+ * @param type type of key (signing or kex)
+ * @param alg algorithm of the key (nist or curve25519)
+ * @return new pubkey or NULL in case of error
+ */
+struct rspamd_cryptobox_pubkey* rspamd_pubkey_from_base32 (const gchar *b32,
+		gsize len,
+		enum rspamd_cryptobox_keypair_type type,
+		enum rspamd_cryptobox_mode alg);
+
+/**
+ * Load pubkey from hex string
+ * @param hex input string
+ * @param type type of key (signing or kex)
+ * @param alg algorithm of the key (nist or curve25519)
+ * @return new pubkey or NULL in case of error
+ */
+struct rspamd_cryptobox_pubkey* rspamd_pubkey_from_hex (const gchar *hex,
+		gsize len,
+		enum rspamd_cryptobox_keypair_type type,
+		enum rspamd_cryptobox_mode alg);
+
+
+/**
  * Decrease refcount for the specific pubkey (or destroy when refcount == 0)
  * @param kp
  */
 void rspamd_pubkey_unref (struct rspamd_cryptobox_pubkey *kp);
+
+/**
+ * Get type of keypair
+ */
+enum rspamd_cryptobox_keypair_type rspamd_keypair_type (
+		struct rspamd_cryptobox_keypair *kp);
+/**
+ * Get type of pubkey
+ */
+enum rspamd_cryptobox_keypair_type rspamd_pubkey_type (
+		struct rspamd_cryptobox_pubkey *p);
+
+/**
+ * Get algorithm of keypair
+ */
+enum rspamd_cryptobox_mode rspamd_keypair_alg (struct rspamd_cryptobox_keypair *kp);
+/**
+ * Get algorithm of pubkey
+ */
+enum rspamd_cryptobox_mode rspamd_pubkey_alg (struct rspamd_cryptobox_pubkey *p);
+
+/**
+ * Get cached NM for this specific pubkey
+ * @param p
+ * @return
+ */
+const guchar * rspamd_pubkey_get_nm (struct rspamd_cryptobox_pubkey *p);
+
 
 #endif /* SRC_LIBCRYPTOBOX_KEYPAIR_H_ */

@@ -15,8 +15,9 @@
  */
 
 #include "config.h"
-#include "keypair.h"
-#include "keypair_private.h"
+#include "libcryptobox/keypair.h"
+#include "libcryptobox/keypair_private.h"
+#include "libutil/str_util.h"
 
 /**
  * Returns specific private key for different keypair types
@@ -83,6 +84,37 @@ rspamd_cryptobox_keypair_pk (struct rspamd_cryptobox_keypair *kp,
 	return NULL;
 }
 
+static void *
+rspamd_cryptobox_pubkey_pk (struct rspamd_cryptobox_pubkey *kp,
+		guint *len)
+{
+	g_assert (kp != NULL);
+
+	if (kp->alg == RSPAMD_CRYPTOBOX_MODE_25519) {
+		if (kp->type == RSPAMD_KEYPAIR_KEX) {
+			*len = 32;
+			return RSPAMD_CRYPTOBOX_PUBKEY_25519(kp)->pk;
+		}
+		else {
+			*len = 32;
+			return RSPAMD_CRYPTOBOX_PUBKEY_SIG_25519(kp)->pk;
+		}
+	}
+	else {
+		if (kp->type == RSPAMD_KEYPAIR_KEX) {
+			*len = 65;
+			return RSPAMD_CRYPTOBOX_PUBKEY_NIST(kp)->pk;
+		}
+		else {
+			*len = 65;
+			return RSPAMD_CRYPTOBOX_PUBKEY_SIG_NIST(kp)->pk;
+		}
+	}
+
+	/* Not reached */
+	return NULL;
+}
+
 static struct rspamd_cryptobox_keypair *
 rspamd_cryptobox_keypair_alloc (enum rspamd_cryptobox_keypair_type type,
 		enum rspamd_cryptobox_mode alg)
@@ -115,6 +147,40 @@ rspamd_cryptobox_keypair_alloc (enum rspamd_cryptobox_keypair_type type,
 
 	return kp;
 }
+
+static struct rspamd_cryptobox_pubkey *
+rspamd_cryptobox_pubkey_alloc (enum rspamd_cryptobox_keypair_type type,
+		enum rspamd_cryptobox_mode alg)
+{
+	struct rspamd_cryptobox_pubkey *kp;
+	guint size = 0;
+
+	if (alg == RSPAMD_CRYPTOBOX_MODE_25519) {
+		if (type == RSPAMD_KEYPAIR_KEX) {
+			size = sizeof (struct rspamd_cryptobox_pubkey_25519);
+		}
+		else {
+			size = sizeof (struct rspamd_cryptobox_pubkey_sig_25519);
+		}
+	}
+	else {
+		if (type == RSPAMD_KEYPAIR_KEX) {
+			size = sizeof (struct rspamd_cryptobox_pubkey_nist);
+		}
+		else {
+			size = sizeof (struct rspamd_cryptobox_pubkey_sig_nist);
+		}
+	}
+
+	g_assert (size >= sizeof (*kp));
+
+	if (posix_memalign ((void **)&kp, 32, size) != 0) {
+		abort ();
+	}
+
+	return kp;
+}
+
 
 void
 rspamd_cryptobox_nm_dtor (struct rspamd_cryptobox_nm *nm)
@@ -203,4 +269,139 @@ void
 rspamd_pubkey_unref (struct rspamd_cryptobox_pubkey *kp)
 {
 	REF_RELEASE (kp);
+}
+
+enum rspamd_cryptobox_keypair_type
+rspamd_keypair_type (struct rspamd_cryptobox_keypair *kp)
+{
+	g_assert (kp != NULL);
+
+	return kp->type;
+}
+
+enum rspamd_cryptobox_keypair_type
+rspamd_pubkey_type (struct rspamd_cryptobox_pubkey *p)
+{
+	g_assert (p != NULL);
+
+	return p->type;
+}
+
+
+enum rspamd_cryptobox_mode
+rspamd_keypair_alg (struct rspamd_cryptobox_keypair *kp)
+{
+	g_assert (kp != NULL);
+
+	return kp->alg;
+}
+
+enum rspamd_cryptobox_mode
+rspamd_pubkey_alg (struct rspamd_cryptobox_pubkey *p)
+{
+	g_assert (p != NULL);
+
+	return p->alg;
+}
+
+struct rspamd_cryptobox_pubkey*
+rspamd_pubkey_from_base32 (const gchar *b32,
+		gsize len,
+		enum rspamd_cryptobox_keypair_type type,
+		enum rspamd_cryptobox_mode alg)
+{
+	guchar *decoded;
+	gsize dlen, expected_len;
+	guint pklen;
+	struct rspamd_cryptobox_pubkey *pk;
+	guchar *pk_data;
+
+	g_assert (b32 != NULL);
+
+	if (len == 0) {
+		len = strlen (b32);
+	}
+
+	decoded = rspamd_decode_base32 (b32, len, &dlen);
+
+	if (decoded == NULL) {
+		return NULL;
+	}
+
+	expected_len = (type == RSPAMD_KEYPAIR_KEX) ?
+			rspamd_cryptobox_pk_bytes (alg) : rspamd_cryptobox_pk_sig_bytes (alg);
+
+	if (dlen != expected_len) {
+		g_free (decoded);
+		return NULL;
+	}
+
+	pk = rspamd_cryptobox_pubkey_alloc (type, alg);
+	pk_data = rspamd_cryptobox_pubkey_pk (pk, &pklen);
+
+	memcpy (decoded, pk_data, pklen);
+	g_free (decoded);
+	rspamd_cryptobox_hash (pk->id, pk_data, pklen, NULL, 0);
+	pk->alg = alg;
+	pk->type = type;
+
+	return pk;
+}
+
+struct rspamd_cryptobox_pubkey*
+rspamd_pubkey_from_hex (const gchar *hex,
+		gsize len,
+		enum rspamd_cryptobox_keypair_type type,
+		enum rspamd_cryptobox_mode alg)
+{
+	guchar *decoded;
+	gsize dlen, expected_len;
+	guint pklen;
+	struct rspamd_cryptobox_pubkey *pk;
+	guchar *pk_data;
+
+	g_assert (hex != NULL);
+
+	if (len == 0) {
+		len = strlen (hex);
+	}
+
+	dlen = len / 2;
+
+	decoded = rspamd_decode_hex (hex, len);
+
+	if (decoded == NULL) {
+		return NULL;
+	}
+
+	expected_len = (type == RSPAMD_KEYPAIR_KEX) ?
+			rspamd_cryptobox_pk_bytes (alg) : rspamd_cryptobox_pk_sig_bytes (alg);
+
+	if (dlen != expected_len) {
+		g_free (decoded);
+		return NULL;
+	}
+
+	pk = rspamd_cryptobox_pubkey_alloc (type, alg);
+	pk_data = rspamd_cryptobox_pubkey_pk (pk, &pklen);
+
+	memcpy (decoded, pk_data, pklen);
+	g_free (decoded);
+	rspamd_cryptobox_hash (pk->id, pk_data, pklen, NULL, 0);
+	pk->alg = alg;
+	pk->type = type;
+
+	return pk;
+}
+
+const guchar *
+rspamd_pubkey_get_nm (struct rspamd_cryptobox_pubkey *p)
+{
+	g_assert (p != NULL);
+
+	if (p->nm) {
+		return p->nm->nm;
+	}
+
+	return NULL;
 }
