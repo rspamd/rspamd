@@ -451,6 +451,21 @@ rspamd_pubkey_get_id (struct rspamd_cryptobox_pubkey *pk)
 	return pk->id;
 }
 
+const guchar *
+rspamd_pubkey_get_pk (struct rspamd_cryptobox_pubkey *pk,
+		guint *len)
+{
+	guchar *ret = NULL;
+	guint rlen;
+
+	ret = rspamd_cryptobox_pubkey_pk (pk, &rlen);
+
+	if (len) {
+		*len = rlen;
+	}
+
+	return ret;
+}
 
 static void
 rspamd_keypair_print_component (guchar *data, gsize datalen,
@@ -512,4 +527,33 @@ rspamd_keypair_print (struct rspamd_cryptobox_keypair *kp, guint how)
 	}
 
 	return res;
+}
+
+const guchar *
+rspamd_keypair_component (struct rspamd_cryptobox_keypair *kp,
+		guint ncomp, guint *len)
+{
+	guint rlen = 0;
+	const guchar *ret = NULL;
+
+	g_assert (kp != NULL);
+
+	switch (ncomp) {
+	case RSPAMD_KEYPAIR_COMPONENT_ID:
+		rlen = sizeof (kp->id);
+		ret = kp->id;
+		break;
+	case RSPAMD_KEYPAIR_COMPONENT_PK:
+		ret = rspamd_cryptobox_keypair_pk (kp, &rlen);
+		break;
+	case RSPAMD_KEYPAIR_COMPONENT_SK:
+		ret = rspamd_cryptobox_keypair_sk (kp, &rlen);
+		break;
+	}
+
+	if (len) {
+		*len = rlen;
+	}
+
+	return ret;
 }

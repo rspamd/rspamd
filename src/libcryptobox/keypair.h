@@ -148,6 +148,14 @@ const guchar * rspamd_keypair_get_id (struct rspamd_cryptobox_keypair *kp);
  */
 const guchar * rspamd_pubkey_get_id (struct rspamd_cryptobox_pubkey *pk);
 
+/**
+ * Get raw public key from pubkey opaque structure
+ * @param pk
+ * @param len
+ * @return
+ */
+const guchar * rspamd_pubkey_get_pk (struct rspamd_cryptobox_pubkey *pk,
+		guint *len);
 
 /** Print pubkey */
 #define RSPAMD_KEYPAIR_PUBKEY 0x1
@@ -170,5 +178,21 @@ const guchar * rspamd_pubkey_get_id (struct rspamd_cryptobox_pubkey *pk);
  */
 GString *rspamd_keypair_print (struct rspamd_cryptobox_keypair *kp,
 		guint how);
+
+/** Get keypair pubkey ID */
+#define RSPAMD_KEYPAIR_COMPONENT_ID 0
+/** Get keypair public key */
+#define RSPAMD_KEYPAIR_COMPONENT_PK 1
+/** Get keypair private key */
+#define RSPAMD_KEYPAIR_COMPONENT_SK 2
+/**
+ * Get specific component of a keypair
+ * @param kp keypair
+ * @param ncomp component number
+ * @param len length of input
+ * @return raw content of the component
+ */
+const guchar * rspamd_keypair_component (struct rspamd_cryptobox_keypair *kp,
+		guint ncomp, guint *len);
 
 #endif /* SRC_LIBCRYPTOBOX_KEYPAIR_H_ */
