@@ -772,7 +772,7 @@ rspamd_rcl_lua_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 						lua_src,
 						tb->str);
 				g_string_free (tb, TRUE);
-				lua_pop (L, 1);
+				lua_pop (L, 2);
 
 				if (chdir (cur_dir) == -1) {
 					msg_err_config ("cannot chdir to %s: %s", cur_dir,

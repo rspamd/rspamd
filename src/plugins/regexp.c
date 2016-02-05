@@ -343,8 +343,11 @@ rspamd_lua_call_expression_func (struct ucl_lua_funcdata *lua_data,
 	if (lua_pcall (L, nargs + 1, 1, 0) != 0) {
 		msg_info_task ("%s: call to lua function failed: %s", symbol,
 				lua_tostring (L, -1));
+		lua_pop (L, 1);
+
 		return FALSE;
 	}
+
 	pop++;
 
 	if (lua_type (L, -1) == LUA_TNUMBER) {

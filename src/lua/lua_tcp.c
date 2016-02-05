@@ -127,6 +127,7 @@ lua_tcp_push_error (struct lua_tcp_cbdata *cbd, const char *err)
 
 	if (lua_pcall (cbd->L, 1, 0, 0) != 0) {
 		msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));
+		lua_pop (cbd->L, 1);
 	}
 }
 
@@ -147,6 +148,7 @@ lua_tcp_push_data (struct lua_tcp_cbdata *cbd, const gchar *str, gsize len)
 
 	if (lua_pcall (cbd->L, 2, 0, 0) != 0) {
 		msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));
+		lua_pop (cbd->L, 1);
 	}
 }
 

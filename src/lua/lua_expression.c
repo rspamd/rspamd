@@ -135,6 +135,8 @@ lua_atom_parse (const gchar *line, gsize len,
 
 	if (lua_pcall (e->L, 1, 1, 0) != 0) {
 		msg_info ("callback call failed: %s", lua_tostring (e->L, -1));
+		lua_pop (e->L, 1);
+		return NULL;
 	}
 
 	if (lua_type (e->L, -1) != LUA_TSTRING) {
@@ -158,7 +160,7 @@ static gint
 lua_atom_process (gpointer input, rspamd_expression_atom_t *atom)
 {
 	struct lua_expression *e = (struct lua_expression *)atom->data;
-	gint ret;
+	gint ret = 0;
 
 	lua_rawgeti (e->L, LUA_REGISTRYINDEX, e->process_idx);
 	lua_pushlstring (e->L, atom->str, atom->len);
@@ -166,10 +168,12 @@ lua_atom_process (gpointer input, rspamd_expression_atom_t *atom)
 
 	if (lua_pcall (e->L, 2, 1, 0) != 0) {
 		msg_info ("callback call failed: %s", lua_tostring (e->L, -1));
+		lua_pop (e->L, 1);
 	}
-
-	ret = lua_tonumber (e->L, -1);
-	lua_pop (e->L, 1);
+	else {
+		ret = lua_tonumber (e->L, -1);
+		lua_pop (e->L, 1);
+	}
 
 	return ret;
 }

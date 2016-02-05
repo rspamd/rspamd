@@ -248,7 +248,7 @@ rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
 			g_string_free (tb, TRUE);
 		}
 
-		lua_pop (L, 1);
+		lua_pop (L, 2);
 
 		return FALSE;
 	}

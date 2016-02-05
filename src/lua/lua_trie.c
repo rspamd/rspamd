@@ -156,6 +156,7 @@ lua_trie_callback (int strnum, int textpos, void *context)
 	if (lua_pcall (L, 2, 1, 0) != 0) {
 		msg_info ("call to trie callback has failed: %s",
 			lua_tostring (L, -1));
+		lua_pop (L, 1);
 
 		return 1;
 	}

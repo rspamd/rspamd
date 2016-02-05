@@ -200,6 +200,7 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 
 	if (lua_pcall (cd->L, 5, 0, 0) != 0) {
 		msg_info ("call to dns callback failed: %s", lua_tostring (cd->L, -1));
+		lua_pop (cd->L, 1);
 	}
 
 	/* Unref function */

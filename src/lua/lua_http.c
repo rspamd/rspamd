@@ -132,6 +132,7 @@ lua_http_push_error (struct lua_http_cbdata *cbd, const char *err)
 
 	if (lua_pcall (cbd->L, 1, 0, 0) != 0) {
 		msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));
+		lua_pop (cbd->L, 1);
 	}
 }
 
@@ -167,6 +168,7 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 	}
 	if (lua_pcall (cbd->L, 4, 0, 0) != 0) {
 		msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));
+		lua_pop (cbd->L, 1);
 	}
 
 	lua_http_maybe_free (cbd);

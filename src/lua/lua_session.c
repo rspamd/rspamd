@@ -89,9 +89,13 @@ lua_session_finalizer (gpointer ud)
 	if (lua_pcall (cbdata->L, 0, 1, 0) != 0) {
 		msg_info ("call to session finalizer failed: %s",
 			lua_tostring (cbdata->L, -1));
+		lua_pop (cbdata->L, 1);
 	}
-	res = lua_toboolean (cbdata->L, -1);
-	lua_pop (cbdata->L, 1);
+	else {
+		res = lua_toboolean (cbdata->L, -1);
+		lua_pop (cbdata->L, 1);
+	}
+
 	luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_fin);
 
 
@@ -110,6 +114,7 @@ lua_session_restore (gpointer ud)
 		if (lua_pcall (cbdata->L, 0, 0, 0) != 0) {
 			msg_info ("call to session restorer failed: %s",
 				lua_tostring (cbdata->L, -1));
+			lua_pop (cbdata->L, 1);
 		}
 		luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_restore);
 	}
@@ -127,6 +132,7 @@ lua_session_cleanup (gpointer ud)
 		if (lua_pcall (cbdata->L, 0, 0, 0) != 0) {
 			msg_info ("call to session cleanup failed: %s",
 				lua_tostring (cbdata->L, -1));
+			lua_pop (cbdata->L, 1);
 		}
 		luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_cleanup);
 	}
@@ -224,6 +230,7 @@ lua_event_fin (gpointer ud)
 		if (lua_pcall (cbdata->L, 0, 0, 0) != 0) {
 			msg_info ("call to event finalizer failed: %s",
 				lua_tostring (cbdata->L, -1));
+			lua_pop (cbdata->L, 1);
 		}
 		luaL_unref (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref);
 	}
