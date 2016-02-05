@@ -127,5 +127,6 @@ struct RSPAMD_ALIGNED(32) rspamd_cryptobox_pubkey_sig_25519 {
 
 void rspamd_cryptobox_nm_dtor (struct rspamd_cryptobox_nm *nm);
 void rspamd_cryptobox_keypair_dtor (struct rspamd_cryptobox_keypair *kp);
+void rspamd_cryptobox_pubkey_dtor (struct rspamd_cryptobox_pubkey *p);
 
 #endif /* KEYPAIR_PRIVATE_H_ */

@@ -95,7 +95,11 @@ rspamd_keypair_cache_process (struct rspamd_keypair_cache *c,
 
 	if (new == NULL) {
 		new = g_slice_alloc0 (sizeof (*new));
-		new->nm = g_slice_alloc (sizeof (*new->nm));
+
+		if (posix_memalign ((void **)&new->nm, 32, sizeof (*new->nm)) != 0) {
+			abort ();
+		}
+
 		REF_INIT_RETAIN (new->nm, rspamd_cryptobox_nm_dtor);
 
 		memcpy (new->pair, rk->id, rspamd_cryptobox_HASHBYTES);

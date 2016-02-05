@@ -61,4 +61,18 @@ struct rspamd_cryptobox_keypair* rspamd_keypair_ref (
  */
 void rspamd_keypair_unref (struct rspamd_cryptobox_keypair *kp);
 
+/**
+ * Increase refcount for the specific pubkey
+ * @param kp
+ * @return
+ */
+struct rspamd_cryptobox_pubkey* rspamd_pubkey_ref (
+		struct rspamd_cryptobox_pubkey *kp);
+
+/**
+ * Decrease refcount for the specific pubkey (or destroy when refcount == 0)
+ * @param kp
+ */
+void rspamd_pubkey_unref (struct rspamd_cryptobox_pubkey *kp);
+
 #endif /* SRC_LIBCRYPTOBOX_KEYPAIR_H_ */
