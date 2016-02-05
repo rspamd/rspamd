@@ -78,7 +78,7 @@ rspamd_config.R_EMPTY_IMAGE = {
         local hc = p:get_html() -- we get HTML context
         local len = p:get_length() -- and part's length
 
-        if len < 50 then -- if we have a part that has less than 50 bytes of text
+        if hc and len < 50 then -- if we have a part that has less than 50 bytes of text
           local images = hc:get_images() -- then we check for HTML images
 
           if images then -- if there are images
