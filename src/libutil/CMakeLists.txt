@@ -7,7 +7,6 @@ SET(LIBRSPAMDUTILSRC
 								${CMAKE_CURRENT_SOURCE_DIR}/fstring.c
 								${CMAKE_CURRENT_SOURCE_DIR}/hash.c
 								${CMAKE_CURRENT_SOURCE_DIR}/http.c
-								${CMAKE_CURRENT_SOURCE_DIR}/keypairs_cache.c
 								${CMAKE_CURRENT_SOURCE_DIR}/logger.c
 								${CMAKE_CURRENT_SOURCE_DIR}/map.c
 								${CMAKE_CURRENT_SOURCE_DIR}/mem_pool.c
