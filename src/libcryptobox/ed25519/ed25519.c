@@ -269,7 +269,8 @@ ed25519_test (const ed25519_impl_t *impl)
 
 		impl->sign (sig, NULL, msg, strlen (test_vectors[i].message) / 2, joint_sk);
 
-		if (memcmp (sig, expected, rspamd_cryptobox_signature_bytes ()) != 0) {
+		if (memcmp (sig, expected,
+				rspamd_cryptobox_signature_bytes (RSPAMD_CRYPTOBOX_MODE_25519)) != 0) {
 			return false;
 		}
 
