@@ -29,7 +29,7 @@ local function check_html_image(task, min, max)
       local len = p:get_length()
 
 
-      if len >= min and len < max then
+      if hc and len >= min and len < max then
         local images = hc:get_images()
         if images then
           for _,i in ipairs(images) do
