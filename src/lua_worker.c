@@ -286,6 +286,7 @@ lua_accept_socket (gint fd, short what, void *arg)
 
 	if (lua_pcall (L, 4, 0, 0) != 0) {
 		msg_info ("call to worker accept failed: %s", lua_tostring (L, -1));
+		lua_pop (L, 1);
 	}
 
 	rspamd_inet_address_destroy (addr);
@@ -402,6 +403,7 @@ start_lua_worker (struct rspamd_worker *worker)
 		if (lua_pcall (L, 1, 0, 0) != 0) {
 			msg_info ("call to worker finalizer failed: %s", lua_tostring (L,
 				-1));
+			lua_pop (L, 1);
 		}
 		/* Free resources */
 		luaL_unref (L, LUA_REGISTRYINDEX, ctx->cbref_fin);

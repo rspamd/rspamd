@@ -636,6 +636,7 @@ rspamd_lua_call_post_filters (struct rspamd_task *task)
 				cd->cb_is_ref ? "local function" :
 				cd->callback.name,
 				lua_tostring (cd->L, -1));
+			lua_pop (cd->L, 1);
 		}
 		cur = g_list_next (cur);
 	}
@@ -704,6 +705,7 @@ rspamd_lua_call_pre_filters (struct rspamd_task *task)
 				cd->cb_is_ref ? "local function" :
 				cd->callback.name,
 				lua_tostring (cd->L, -1));
+			lua_pop (cd->L, 1);
 		}
 		cur = g_list_next (cur);
 	}
@@ -965,8 +967,9 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 					}
 					rspamd_task_insert_result (task, cd->symbol, flag, opts);
 				}
+
+				lua_pop (L, nresults);
 			}
-			lua_pop (L, nresults);
 		}
 	}
 
@@ -1718,6 +1721,7 @@ lua_map_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 		if (lua_pcall (cbdata->L, 1, 0, 0) != 0) {
 			msg_info_pool ("call to %s failed: %s", "local function",
 				lua_tostring (cbdata->L, -1));
+			lua_pop (cbdata->L, 1);
 		}
 	}
 }

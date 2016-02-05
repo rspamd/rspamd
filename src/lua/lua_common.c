@@ -344,7 +344,7 @@ rspamd_init_lua_filters (struct rspamd_config *cfg)
 gint
 rspamd_lua_call_filter (const gchar *function, struct rspamd_task *task)
 {
-	gint result;
+	gint result = 0;
 	struct rspamd_task **ptask;
 	lua_State *L = task->cfg->lua_state;
 
@@ -361,7 +361,10 @@ rspamd_lua_call_filter (const gchar *function, struct rspamd_task *task)
 	if (!lua_isnumber (L, -1)) {
 		msg_info_task ("function %s must return a number", function);
 	}
-	result = lua_tonumber (L, -1);
+	else {
+		result = lua_tonumber (L, -1);
+	}
+
 	lua_pop (L, 1);             /* pop returned value */
 
 	return result;

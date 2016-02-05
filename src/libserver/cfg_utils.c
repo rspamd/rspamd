@@ -379,6 +379,8 @@ rspamd_config_process_var (struct rspamd_config *cfg, const rspamd_ftok_t *var,
 		if (lua_pcall (cfg->lua_state, 0, 1, 0) != 0) {
 			msg_err_config ("error executing lua code: '%T': %s", content,
 					lua_tostring (cfg->lua_state, -1));
+			lua_pop (cfg->lua_state, 1);
+
 			return FALSE;
 		}
 

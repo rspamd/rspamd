@@ -190,6 +190,7 @@ lua_redis_push_error (const gchar *err,
 	lua_pushnil (ud->L);
 	if (lua_pcall (ud->L, 3, 0, 0) != 0) {
 		msg_info ("call to callback failed: %s", lua_tostring (ud->L, -1));
+		lua_pop (ud->L, 1);
 	}
 
 	if (connected) {
@@ -251,6 +252,7 @@ lua_redis_push_data (const redisReply *r, struct lua_redis_ctx *ctx)
 
 	if (lua_pcall (ud->L, 3, 0, 0) != 0) {
 		msg_info ("call to callback failed: %s", lua_tostring (ud->L, -1));
+		lua_pop (ud->L, 1);
 	}
 
 	rspamd_session_remove_event (ud->task->s, lua_redis_fin, ctx);

@@ -90,6 +90,7 @@ call_classifier_pre_callback (struct rspamd_classifier_config *ccf,
 	if (lua_pcall (L, 4, 1, 0) != 0) {
 		msg_warn_task ("error running pre classifier callback %s",
 			lua_tostring (L, -1));
+		lua_pop (L, 1);
 	}
 	else {
 		if (lua_istable (L, -1)) {
@@ -102,6 +103,7 @@ call_classifier_pre_callback (struct rspamd_classifier_config *ccf,
 				lua_pop (L, 1);
 			}
 		}
+		lua_pop (L, 1);
 	}
 
 	return res;
@@ -186,6 +188,7 @@ rspamd_lua_call_cls_post_callbacks (struct rspamd_classifier_config *ccf,
 		if (lua_pcall (L, 3, 1, 0) != 0) {
 			msg_warn_task ("error running function %s: %s", cd->name,
 				lua_tostring (L, -1));
+			lua_pop (L, 1);
 		}
 		else {
 			if (lua_isnumber (L, 1)) {

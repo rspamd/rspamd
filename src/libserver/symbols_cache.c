@@ -1048,6 +1048,7 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 			if (lua_pcall (L, 1, 1, 0) != 0) {
 				msg_info_task ("call to condition for %s failed: %s",
 						item->symbol, lua_tostring (L, -1));
+				lua_pop (L, 1);
 			}
 			else {
 				check = lua_toboolean (L, -1);

@@ -836,6 +836,7 @@ rspamd_mime_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 				mime_atom->d.lua_function,
 				mime_atom->str,
 				lua_tostring (L, -1));
+			lua_pop (L, 1);
 		}
 		else {
 			if (lua_type (L, -1) == LUA_TBOOLEAN) {

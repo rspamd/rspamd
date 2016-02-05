@@ -1076,6 +1076,7 @@ rspamd_task_write_log (struct rspamd_task *task)
 			if (lua_pcall (L, 1, 1, 0) != 0) {
 				msg_err_task ("call to log function failed: %s",
 						lua_tostring (L, -1));
+				lua_pop (L, 1);
 			}
 			else {
 				lua_str = lua_tolstring (L, -1, &lua_str_len);

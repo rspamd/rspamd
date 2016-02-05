@@ -90,6 +90,7 @@ lua_io_read_cb (rspamd_ftok_t * in, void *arg)
 	if (lua_pcall (cbdata->L, 2, 1, 0) != 0) {
 		msg_info ("call to session finalizer failed: %s",
 			lua_tostring (cbdata->L, -1));
+		lua_pop (cbdata->L, 1);
 	}
 
 	res = lua_toboolean (cbdata->L, -1);
@@ -118,6 +119,7 @@ lua_io_write_cb (void *arg)
 		if (lua_pcall (cbdata->L, 1, 1, 0) != 0) {
 			msg_info ("call to session finalizer failed: %s",
 				lua_tostring (cbdata->L, -1));
+			lua_pop (cbdata->L, 1);
 		}
 
 		res = lua_toboolean (cbdata->L, -1);
@@ -144,6 +146,7 @@ lua_io_err_cb (GError * err, void *arg)
 	if (lua_pcall (cbdata->L, 2, 0, 0) != 0) {
 		msg_info ("call to session finalizer failed: %s",
 			lua_tostring (cbdata->L, -1));
+		lua_pop (cbdata->L, 1);
 	}
 
 	/* Unref callbacks */

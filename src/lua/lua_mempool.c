@@ -163,6 +163,7 @@ lua_mempool_destructor_func (gpointer p)
 	lua_rawgeti (ud->L, LUA_REGISTRYINDEX, ud->cbref);
 	if (lua_pcall (ud->L, 0, 0, 0) != 0) {
 		msg_info ("call to destructor failed: %s", lua_tostring (ud->L, -1));
+		lua_pop (ud->L, 1);
 	}
 	luaL_unref (ud->L, LUA_REGISTRYINDEX, ud->cbref);
 }
