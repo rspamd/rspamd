@@ -82,7 +82,7 @@ static gboolean
 lua_session_finalizer (gpointer ud)
 {
 	struct lua_session_udata *cbdata = ud;
-	gboolean res;
+	gboolean res = FALSE;
 
 	/* Call finalizer function */
 	lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->cbref_fin);
