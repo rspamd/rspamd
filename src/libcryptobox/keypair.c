@@ -18,6 +18,7 @@
 #include "libcryptobox/keypair.h"
 #include "libcryptobox/keypair_private.h"
 #include "libutil/str_util.h"
+#include "libutil/printf.h"
 
 /**
  * Returns specific private key for different keypair types
@@ -244,7 +245,7 @@ rspamd_keypair_new (enum rspamd_cryptobox_keypair_type type,
 
 
 struct rspamd_cryptobox_keypair*
-rspamd_keypair_ref (struct rspamd_cryptobox_keypair *kp)
+rspamd__keypair_ref (struct rspamd_cryptobox_keypair *kp)
 {
 	REF_RETAIN (kp);
 	return kp;
@@ -404,4 +405,111 @@ rspamd_pubkey_get_nm (struct rspamd_cryptobox_pubkey *p)
 	}
 
 	return NULL;
+}
+
+const guchar *
+rspamd_pubkey_calculate_nm (struct rspamd_cryptobox_pubkey *p,
+		struct rspamd_cryptobox_keypair *kp)
+{
+	g_assert (kp->alg == p->alg);
+	g_assert (kp->type == p->type);
+	g_assert (p->type == RSPAMD_KEYPAIR_KEX);
+
+	if (kp->alg == RSPAMD_CRYPTOBOX_MODE_25519) {
+		struct rspamd_cryptobox_pubkey_25519 *rk_25519 =
+				RSPAMD_CRYPTOBOX_PUBKEY_25519(p);
+		struct rspamd_cryptobox_keypair_25519 *sk_25519 =
+				RSPAMD_CRYPTOBOX_KEYPAIR_25519(kp);
+
+		rspamd_cryptobox_nm (p->nm->nm, rk_25519->pk, sk_25519->sk, p->alg);
+	}
+	else {
+		struct rspamd_cryptobox_pubkey_nist *rk_nist =
+				RSPAMD_CRYPTOBOX_PUBKEY_NIST(p);
+		struct rspamd_cryptobox_keypair_nist *sk_nist =
+				RSPAMD_CRYPTOBOX_KEYPAIR_NIST(kp);
+
+		rspamd_cryptobox_nm (p->nm->nm, rk_nist->pk, sk_nist->sk, p->alg);
+	}
+
+	return p->nm->nm;
+}
+
+const guchar *
+rspamd_keypair_get_id (struct rspamd_cryptobox_keypair *kp)
+{
+	g_assert (kp != NULL);
+
+	return kp->id;
+}
+
+const guchar *
+rspamd_pubkey_get_id (struct rspamd_cryptobox_pubkey *pk)
+{
+	g_assert (pk != NULL);
+
+	return pk->id;
+}
+
+
+static void
+rspamd_keypair_print_component (guchar *data, gsize datalen,
+		GString *res, guint how, const gchar *description)
+{
+	gint olen, b32_len;
+
+	if (how & RSPAMD_KEYPAIR_HUMAN) {
+		g_string_append_printf (res, "%s: ", description);
+	}
+
+	if (how & RSPAMD_KEYPAIR_BASE32) {
+		b32_len = (datalen * 8 / 5) + 2;
+		g_string_set_size (res, res->len + b32_len);
+		olen = rspamd_encode_base32_buf (data, datalen, res->str + res->len,
+				res->len + b32_len - 1);
+
+		if (olen > 0) {
+			res->len += olen;
+			res->str[res->len] = '\0';
+		}
+	}
+	else if (how & RSPAMD_KEYPAIR_HEX) {
+		rspamd_printf_gstring (res, "%*xs", (gint)datalen, data);
+	}
+	else {
+		g_string_append_len (res, data, datalen);
+	}
+
+	if (how & RSPAMD_KEYPAIR_HUMAN) {
+		g_string_append_c (res, '\n');
+	}
+}
+
+GString *
+rspamd_keypair_print (struct rspamd_cryptobox_keypair *kp, guint how)
+{
+	GString *res;
+	guint len;
+	gpointer p;
+
+	g_assert (kp != NULL);
+
+	res = g_string_sized_new (64);
+
+	if ((how & RSPAMD_KEYPAIR_PUBKEY)) {
+		p = rspamd_cryptobox_keypair_pk (kp, &len);
+		rspamd_keypair_print_component (p, len, res, how, "Public key");
+	}
+	if ((how & RSPAMD_KEYPAIR_PRIVKEY)) {
+		p = rspamd_cryptobox_keypair_sk (kp, &len);
+		rspamd_keypair_print_component (p, len, res, how, "Private key");
+	}
+	if ((how & RSPAMD_KEYPAIR_ID_SHORT)) {
+		rspamd_keypair_print_component (kp->id, 5, res, how, "Short key ID");
+	}
+	if ((how & RSPAMD_KEYPAIR_ID)) {
+		rspamd_keypair_print_component (kp->id, sizeof (kp->id), res, how, "Key ID");
+	}
+
+	return res;
 }

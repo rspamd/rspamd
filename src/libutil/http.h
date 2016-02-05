@@ -25,6 +25,7 @@
 
 #include "config.h"
 #include "http_parser.h"
+#include "keypair.h"
 #include "keypairs_cache.h"
 #include "fstring.h"
 
@@ -59,7 +60,7 @@ struct rspamd_http_message {
 	struct rspamd_http_header *headers;
 	rspamd_fstring_t *body;
 	rspamd_ftok_t body_buf;
-	gpointer peer_key;
+	struct rspamd_cryptobox_pubkey *peer_key;
 	enum http_parser_type type;
 	time_t date;
 	gint code;
@@ -135,7 +136,7 @@ struct rspamd_http_connection_router {
 	struct event_base *ev_base;
 	struct rspamd_keypair_cache *cache;
 	gchar *default_fs_path;
-	gpointer key;
+	struct rspamd_cryptobox_keypair *key;
 	rspamd_http_router_error_handler_t error_handler;
 	rspamd_http_router_finish_handler_t finish_handler;
 };
@@ -154,19 +155,6 @@ struct rspamd_http_connection * rspamd_http_connection_new (
 	enum rspamd_http_connection_type type,
 	struct rspamd_keypair_cache *cache);
 
-/**
- * Load the encryption keypair
- * @param key base32 encoded privkey and pubkey (in that order)
- * @param keylen length of base32 string
- * @return opaque pointer pr NULL in case of error
- */
-gpointer rspamd_http_connection_make_key (gchar *key, gsize keylen);
-
-/**
- * Generate the encryption keypair
- * @return opaque pointer pr NULL in case of error
- */
-gpointer rspamd_http_connection_gen_key (void);
 
 /**
  * Set key pointed by an opaque pointer
@@ -174,7 +162,7 @@ gpointer rspamd_http_connection_gen_key (void);
  * @param key opaque key structure
  */
 void rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
-		gpointer key);
+		struct rspamd_cryptobox_keypair *key);
 
 /**
  * Returns TRUE if a connection is encrypted
@@ -182,39 +170,6 @@ void rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
  * @return
  */
 gboolean rspamd_http_connection_is_encrypted (struct rspamd_http_connection *conn);
-
-/** Print pubkey */
-#define RSPAMD_KEYPAIR_PUBKEY 0x1
-/** Print secret key */
-#define RSPAMD_KEYPAIR_PRIVKEY 0x2
-/** Print key id */
-#define RSPAMD_KEYPAIR_ID 0x4
-/** Encode output with base 32 */
-#define RSPAMD_KEYPAIR_BASE32 0x8
-/** Human readable output */
-#define RSPAMD_KEYPAIR_HUMAN 0x10
-#define RSPAMD_KEYPAIR_HEX 0x20
-/**
- * Print keypair encoding it if needed
- * @param key key to print
- * @param how flags that specifies printing behaviour
- * @return newly allocated string with keypair
- */
-GString *rspamd_http_connection_print_key (gpointer key, guint how);
-
-/**
- * Release key pointed by an opaque pointer
- * @param key opaque key structure
- */
-void rspamd_http_connection_key_unref (gpointer key);
-
-/**
- * Increase refcount for a key pointed by an opaque pointer
- * @param key opaque key structure
- */
-gpointer rspamd_http_connection_key_ref (gpointer key);
-
-gpointer rspamd_http_connection_make_peer_key (const gchar *key);
 
 /**
  * Handle a request using socket fd and user data ud
@@ -368,7 +323,7 @@ struct rspamd_http_connection_router * rspamd_http_router_new (
  * @param key opaque key structure
  */
 void rspamd_http_router_set_key (struct rspamd_http_connection_router *router,
-		gpointer key);
+		struct rspamd_cryptobox_keypair *key);
 
 /**
  * Add new path to the router

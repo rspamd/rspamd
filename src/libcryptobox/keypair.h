@@ -127,5 +127,48 @@ enum rspamd_cryptobox_mode rspamd_pubkey_alg (struct rspamd_cryptobox_pubkey *p)
  */
 const guchar * rspamd_pubkey_get_nm (struct rspamd_cryptobox_pubkey *p);
 
+/**
+ * Calculate and store nm value for the specified local key (performs ECDH)
+ * @param p
+ * @return
+ */
+const guchar * rspamd_pubkey_calculate_nm (struct rspamd_cryptobox_pubkey *p,
+		struct rspamd_cryptobox_keypair *kp);
+
+/**
+ * Get raw public key id for a specified keypair (rspamd_cryptobox_HASHBYTES)
+ * @param kp
+ * @return
+ */
+const guchar * rspamd_keypair_get_id (struct rspamd_cryptobox_keypair *kp);
+/**
+ * Get raw public key id for a specified key (rspamd_cryptobox_HASHBYTES)
+ * @param kp
+ * @return
+ */
+const guchar * rspamd_pubkey_get_id (struct rspamd_cryptobox_pubkey *pk);
+
+
+/** Print pubkey */
+#define RSPAMD_KEYPAIR_PUBKEY 0x1
+/** Print secret key */
+#define RSPAMD_KEYPAIR_PRIVKEY 0x2
+/** Print key id */
+#define RSPAMD_KEYPAIR_ID 0x4
+/** Print short key id */
+#define RSPAMD_KEYPAIR_ID_SHORT 0x8
+/** Encode output with base 32 */
+#define RSPAMD_KEYPAIR_BASE32 0x10
+/** Human readable output */
+#define RSPAMD_KEYPAIR_HUMAN 0x20
+#define RSPAMD_KEYPAIR_HEX 0x40
+/**
+ * Print keypair encoding it if needed
+ * @param key key to print
+ * @param how flags that specifies printing behaviour
+ * @return newly allocated string with keypair
+ */
+GString *rspamd_keypair_print (struct rspamd_cryptobox_keypair *kp,
+		guint how);
 
 #endif /* SRC_LIBCRYPTOBOX_KEYPAIR_H_ */
