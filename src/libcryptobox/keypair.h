@@ -29,14 +29,6 @@ enum rspamd_cryptobox_keypair_type {
 };
 
 /**
- * Algorithm used for keypair
- */
-enum rspamd_cryptobox_keypair_algorithm {
-	RSPAMD_KEYPAIR_NIST = 0,
-	RSPAMD_KEYPAIR_25519
-};
-
-/**
  * Opaque structure for the full (public + private) keypair
  */
 struct rspamd_cryptobox_keypair;
@@ -53,7 +45,7 @@ struct rspamd_cryptobox_keypair_public;
  */
 struct rspamd_cryptobox_keypair* rspamd_keypair_new (
 		enum rspamd_cryptobox_keypair_type type,
-		enum rspamd_cryptobox_keypair_algorithm alg);
+		enum rspamd_cryptobox_mode alg);
 
 /**
  * Increase refcount for the specific keypair

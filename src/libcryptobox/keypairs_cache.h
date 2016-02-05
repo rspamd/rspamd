@@ -17,6 +17,7 @@
 #define KEYPAIRS_CACHE_H_
 
 #include "config.h"
+#include "keypair.h"
 
 struct rspamd_keypair_cache;
 
@@ -35,7 +36,8 @@ struct rspamd_keypair_cache * rspamd_keypair_cache_new (guint max_items);
  * @param rk remote key
  */
 void rspamd_keypair_cache_process (struct rspamd_keypair_cache *c,
-		gpointer lk, gpointer rk);
+		struct rspamd_cryptobox_keypair *lk,
+		struct rspamd_cryptobox_keypair_public *rk);
 
 /**
  * Destroy old keypair cache

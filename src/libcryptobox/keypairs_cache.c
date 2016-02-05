@@ -21,8 +21,8 @@
 #include "xxhash.h"
 
 struct rspamd_keypair_elt {
-	guchar nm[rspamd_cryptobox_MAX_NMBYTES];
-	guchar pair[rspamd_cryptobox_MAX_PKBYTES + rspamd_cryptobox_MAX_SKBYTES];
+	struct rspamd_cryptobox_nm *nm;
+	guchar pair[rspamd_cryptobox_HASHBYTES * 2];
 };
 
 struct rspamd_keypair_cache {
@@ -34,7 +34,7 @@ rspamd_keypair_destroy (gpointer ptr)
 {
 	struct rspamd_keypair_elt *elt = (struct rspamd_keypair_elt *)ptr;
 
-	rspamd_explicit_memzero (elt, sizeof (*elt));
+	REF_RELEASE (elt->nm);
 	g_slice_free1 (sizeof (*elt), elt);
 }
 
@@ -71,37 +71,61 @@ rspamd_keypair_cache_new (guint max_items)
 
 void
 rspamd_keypair_cache_process (struct rspamd_keypair_cache *c,
-		gpointer lk, gpointer rk)
+		struct rspamd_cryptobox_keypair *lk,
+		struct rspamd_cryptobox_keypair_public *rk)
 {
-	struct rspamd_http_keypair *kp_local = (struct rspamd_http_keypair *)lk,
-			*kp_remote = (struct rspamd_http_keypair *)rk;
 	struct rspamd_keypair_elt search, *new;
 
-	g_assert (kp_local != NULL);
-	g_assert (kp_remote != NULL);
+	g_assert (lk != NULL);
+	g_assert (rk != NULL);
+	g_assert (rk->alg == lk->alg);
+	g_assert (rk->type == lk->type);
+	g_assert (rk->type == RSPAMD_KEYPAIR_KEX);
 
 	memset (&search, 0, sizeof (search));
-	memcpy (search.pair, kp_remote->pk, rspamd_cryptobox_pk_bytes (RSPAMD_CRYPTOBOX_MODE_25519));
-	memcpy (&search.pair[rspamd_cryptobox_MAX_PKBYTES], kp_local->sk,
-			rspamd_cryptobox_sk_bytes (RSPAMD_CRYPTOBOX_MODE_25519));
+	memcpy (search.pair, rk->id, rspamd_cryptobox_HASHBYTES);
+	memcpy (&search.pair[rspamd_cryptobox_HASHBYTES], lk->id,
+			rspamd_cryptobox_HASHBYTES);
 	new = rspamd_lru_hash_lookup (c->hash, &search, time (NULL));
+
+	if (rk->nm) {
+		REF_RELEASE (rk->nm);
+		rk->nm = NULL;
+	}
 
 	if (new == NULL) {
 		new = g_slice_alloc0 (sizeof (*new));
-		memcpy (new->pair, kp_remote->pk, rspamd_cryptobox_pk_bytes (RSPAMD_CRYPTOBOX_MODE_25519));
-		memcpy (&new->pair[rspamd_cryptobox_MAX_PKBYTES], kp_local->sk,
-				rspamd_cryptobox_sk_bytes (RSPAMD_CRYPTOBOX_MODE_25519));
-		rspamd_cryptobox_nm (new->nm, kp_remote->pk, kp_local->sk, RSPAMD_CRYPTOBOX_MODE_25519);
+		new->nm = g_slice_alloc (sizeof (*new->nm));
+		REF_INIT_RETAIN (new->nm, rspamd_cryptobox_nm_dtor);
+
+		memcpy (new->pair, rk->id, rspamd_cryptobox_HASHBYTES);
+		memcpy (&new->pair[rspamd_cryptobox_HASHBYTES], lk->id,
+				rspamd_cryptobox_HASHBYTES);
+
+		if (rk->alg == RSPAMD_CRYPTOBOX_MODE_25519) {
+			struct rspamd_cryptobox_keypair_public_25519 *rk_25519 =
+					RSPAMD_CRYPTOBOX_KEYPAIR_PUBLIC_25519(rk);
+			struct rspamd_cryptobox_keypair_25519 *sk_25519 =
+					RSPAMD_CRYPTOBOX_KEYPAIR_25519(lk);
+
+			rspamd_cryptobox_nm (new->nm->nm, rk_25519->pk, sk_25519->sk, rk->alg);
+		}
+		else {
+			struct rspamd_cryptobox_keypair_public_nist *rk_nist =
+					RSPAMD_CRYPTOBOX_KEYPAIR_PUBLIC_NIST(rk);
+			struct rspamd_cryptobox_keypair_nist *sk_nist =
+					RSPAMD_CRYPTOBOX_KEYPAIR_NIST(lk);
+
+			rspamd_cryptobox_nm (new->nm->nm, rk_nist->pk, sk_nist->sk, rk->alg);
+		}
+
 		rspamd_lru_hash_insert (c->hash, new, new, time (NULL), -1);
 	}
 
 	g_assert (new != NULL);
 
-	memcpy (kp_remote->nm, new->nm, rspamd_cryptobox_nm_bytes (RSPAMD_CRYPTOBOX_MODE_25519));
-	kp_remote->has_nm = TRUE;
-#if 0
-	memcpy (kp_local->nm, new->nm, rspamd_cryptobox_NMBYTES);
-#endif
+	rk->nm = new->nm;
+	REF_RETAIN (rk->nm);
 }
 
 void

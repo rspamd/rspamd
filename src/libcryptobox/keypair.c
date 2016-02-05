@@ -17,3 +17,10 @@
 #include "config.h"
 #include "keypair.h"
 #include "keypair_private.h"
+
+void
+rspamd_cryptobox_nm_dtor (struct rspamd_cryptobox_nm *nm)
+{
+	rspamd_explicit_memzero (nm->nm, sizeof (nm->nm));
+	g_slice_free1 (sizeof (*nm), nm);
+}
