@@ -629,7 +629,8 @@ rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen)
 {
 	guchar *res;
 
-	gsize olen = 0, i, allocated_len = inlen * 5 / 8 + 2;
+	gsize allocated_len = inlen * 5 / 8 + 2;
+	gint olen;
 
 	res = g_malloc (allocated_len);
 
@@ -1334,10 +1335,9 @@ rspamd_encode_hex_buf (const guchar *in, gsize inlen, gchar *out,
 	const guchar *p;
 	static const gchar hexdigests[16] = "0123456789abcdef";
 
-	end = out + end;
+	end = out + outlen;
 	o = out;
 	p = in;
-
 
 	while (inlen > 0 && o < end - 1) {
 		*o++ = hexdigests[((*p >> 4) & 0xF)];
@@ -1379,7 +1379,7 @@ rspamd_encode_hex (const guchar *in, gsize inlen)
 }
 
 gint
-rspamd_decode_hex_buf (const gchar *in, gsize inlen, gsize inlen,
+rspamd_decode_hex_buf (const gchar *in, gsize inlen,
 		guchar *out, gsize outlen)
 {
 	guchar *o, *end, ret;
