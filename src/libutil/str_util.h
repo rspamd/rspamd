@@ -132,6 +132,50 @@ gchar * rspamd_encode_hex (const guchar *in, gsize inlen);
 guchar* rspamd_decode_hex (const gchar *in, gsize inlen);
 
 /**
+ * Encode string using base32 encoding
+ * @param in input
+ * @param inlen input length
+ * @param out output buf
+ * @param outlen output buf len
+ * @return encoded len if `outlen` is enough to encode `inlen`
+ */
+gint rspamd_encode_base32_buf (const guchar *in, gsize inlen, gchar *out,
+		gsize outlen);
+
+/**
+ * Decode string using base32 encoding
+ * @param in input
+ * @param inlen input length
+ * @param out output buf (may overlap with `in`)
+ * @param outlen output buf len
+ * @return decoded len if in is valid base32 and `outlen` is enough to encode `inlen`
+ */
+gint rspamd_decode_base32_buf (const gchar *in, gsize inlen,
+		guchar *out, gsize outlen);
+
+/**
+ * Encode string using hex encoding
+ * @param in input
+ * @param inlen input length
+ * @param out output buf
+ * @param outlen output buf len
+ * @return encoded len if `outlen` is enough to encode `inlen`
+ */
+gint rspamd_encode_hex_buf (const guchar *in, gsize inlen, gchar *out,
+		gsize outlen);
+
+/**
+ * Decode string using hex encoding
+ * @param in input
+ * @param inlen input length
+ * @param out output buf (may overlap with `in`)
+ * @param outlen output buf len
+ * @return decoded len if in is valid hex and `outlen` is enough to encode `inlen`
+ */
+gint rspamd_decode_hex_buf (const gchar *in, gsize inlen,
+		guchar *out, gsize outlen);
+
+/**
  * Encode string using base64 encoding
  * @param in input
  * @param inlen input length

@@ -463,49 +463,51 @@ rspamd_str_pool_copy (gconstpointer data, gpointer ud)
  * http://philzimmermann.com/docs/human-oriented-base-32-encoding.txt
  */
 
-gchar *
-rspamd_encode_base32 (const guchar *in, gsize inlen)
+gint
+rspamd_encode_base32_buf (const guchar *in, gsize inlen, gchar *out,
+		gsize outlen)
 {
-	gint remain = -1, x;
-	gsize i, r;
-	gsize allocated_len = inlen * 8 / 5 + 2;
-	gchar *out;
 	static const char b32[]="ybndrfg8ejkmcpqxot1uwisza345h769";
+	gchar *o, *end;
+	gsize i, r;
+	gint remain = -1, x;
 
-	out = g_malloc (allocated_len);
-	for (i = 0, r = 0; i < inlen; i++) {
+	end = out + outlen;
+	o = out;
+
+	for (i = 0, r = 0; i < inlen && o < end - 1; i++) {
 		switch (i % 5) {
 		case 0:
 			/* 8 bits of input and 3 to remain */
 			x = in[i];
 			remain = in[i] >> 5;
-			out[r++] = b32[x & 0x1F];
+			*o++ = b32[x & 0x1F];
 			break;
 		case 1:
 			/* 11 bits of input, 1 to remain */
 			x = remain | in[i] << 3;
-			out[r++] = b32[x & 0x1F];
-			out[r++] = b32[x >> 5 & 0x1F];
+			*o++ = b32[x & 0x1F];
+			*o++ = b32[x >> 5 & 0x1F];
 			remain = x >> 10;
 			break;
 		case 2:
 			/* 9 bits of input, 4 to remain */
 			x = remain | in[i] << 1;
-			out[r++] = b32[x & 0x1F];
+			*o++ = b32[x & 0x1F];
 			remain = x >> 5;
 			break;
 		case 3:
 			/* 12 bits of input, 2 to remain */
 			x = remain | in[i] << 4;
-			out[r++] = b32[x & 0x1F];
-			out[r++] = b32[x >> 5 & 0x1F];
+			*o++ = b32[x & 0x1F];
+			*o++ = b32[x >> 5 & 0x1F];
 			remain = x >> 10 & 0x3;
 			break;
 		case 4:
 			/* 10 bits of output, nothing to remain */
 			x = remain | in[i] << 2;
-			out[r++] = b32[x & 0x1F];
-			out[r++] = b32[x >> 5 & 0x1F];
+			*o++ = b32[x & 0x1F];
+			*o++ = b32[x >> 5 & 0x1F];
 			remain = -1;
 			break;
 		default:
@@ -514,14 +516,36 @@ rspamd_encode_base32 (const guchar *in, gsize inlen)
 		}
 
 	}
-	if (remain >= 0) {
-		out[r++] = b32[remain];
+	if (remain >= 0 && o < end) {
+		*o++ = b32[remain];
 	}
 
-	out[r] = 0;
-	g_assert (r < allocated_len);
+	if (o <= end) {
+		return (o - out);
+	}
 
-	return out;
+	return -1;
+}
+
+gchar *
+rspamd_encode_base32 (const guchar *in, gsize inlen)
+{
+	gsize allocated_len = inlen * 8 / 5 + 2;
+	gchar *out;
+	gint outlen;
+
+	out = g_malloc (allocated_len);
+	outlen = rspamd_encode_base32_buf (in, inlen, out, allocated_len - 1);
+
+	if (outlen >= 0) {
+		out[outlen] = 0;
+
+		return out;
+	}
+
+	g_free (out);
+
+	return NULL;
 }
 
 static const guchar b32_dec[] = {
@@ -559,46 +583,84 @@ static const guchar b32_dec[] = {
 	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
 };
 
-guchar*
-rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen)
+gint
+rspamd_decode_base32_buf (const gchar *in, gsize inlen,
+		guchar *out, gsize outlen)
 {
-	guchar *res, decoded;
+	guchar *o, *end, decoded;
 	guchar c;
 	guint acc = 0U;
 	guint processed_bits = 0;
-	gsize olen = 0, i, allocated_len = inlen * 5 / 8 + 2;
+	gsize i;
 
-	res = g_malloc (allocated_len);
+	end = out + outlen;
+	o = out;
 
 	for (i = 0; i < inlen; i ++) {
 		c = (guchar)in[i];
 
 		if (processed_bits >= 8) {
 			processed_bits -= 8;
-			res[olen++] = acc & 0xFF;
+			*o++ = acc & 0xFF;
 			acc >>= 8;
 		}
 
 		decoded = b32_dec[c];
-		if (decoded == 0xff) {
-			g_free (res);
-			return NULL;
+		if (decoded == 0xff || o >= end) {
+			return -1;
 		}
 
 		acc = (decoded << processed_bits) | acc;
 		processed_bits += 5;
 	}
 
-	if (processed_bits > 0) {
-		res[olen++] = (acc & 0xFF);
+	if (processed_bits > 0 && o < end) {
+		*o++ = (acc & 0xFF);
+	}
+	else if (o > end) {
+		return -1;
 	}
 
-	g_assert (olen <= allocated_len);
+	return (o - out);
+}
 
-	*outlen = olen;
+guchar*
+rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen)
+{
+	guchar *res;
+
+	gsize olen = 0, i, allocated_len = inlen * 5 / 8 + 2;
+
+	res = g_malloc (allocated_len);
+
+	olen = rspamd_decode_base32_buf (in, inlen, res, allocated_len - 1);
+
+	if (olen >= 0) {
+		res[olen] = '\0';
+	}
+	else {
+		g_free (res);
+
+		return NULL;
+	}
+
+	if (outlen) {
+		*outlen = olen;
+	}
 
 	return res;
 }
+
+
+
+/**
+ * Decode string using base32 encoding
+ * @param in input
+ * @param inlen input length
+ * @param out output buf (may overlap with `in`)
+ * @param outlen output buf len
+ * @return TRUE if in is valid base32 and `outlen` is enough to encode `inlen`
+ */
 
 
 static gchar *
@@ -1264,54 +1326,74 @@ rspamd_string_find_eoh (GString *input)
 	return -1;
 }
 
-gchar *
-rspamd_encode_hex (const guchar *in, gsize inlen)
+gint
+rspamd_encode_hex_buf (const guchar *in, gsize inlen, gchar *out,
+		gsize outlen)
 {
-	gchar *out, *o;
+	gchar *o, *end;
 	const guchar *p;
-	gsize outlen = inlen * 2 + 1;
 	static const gchar hexdigests[16] = "0123456789abcdef";
 
-	if (in == NULL) {
-		return NULL;
-	}
-
-	out = g_malloc (outlen);
+	end = out + end;
 	o = out;
 	p = in;
 
-	while (inlen > 0) {
+
+	while (inlen > 0 && o < end - 1) {
 		*o++ = hexdigests[((*p >> 4) & 0xF)];
 		*o++ = hexdigests[((*p++) & 0xF)];
 		inlen --;
 	}
 
-	*o = '\0';
+	if (o <= end) {
+		return (o - end);
+	}
 
-	return out;
+	return -1;
 }
 
-
-guchar*
-rspamd_decode_hex (const gchar *in, gsize inlen)
+gchar *
+rspamd_encode_hex (const guchar *in, gsize inlen)
 {
-	guchar *out, *o, ret;
-	const gchar *p;
-	gchar c;
-	gsize outlen = (inlen / 2 + inlen % 2) + 1;
+	gchar *out;
+	gsize outlen = inlen * 2 + 1;
+	gint olen;
 
 	if (in == NULL) {
 		return NULL;
 	}
 
 	out = g_malloc (outlen);
+	olen = rspamd_encode_hex_buf (in, inlen, out, outlen - 1);
+
+	if (olen >= 0) {
+		out[olen] = '\0';
+	}
+	else {
+		g_free (out);
+
+		return NULL;
+	}
+
+	return out;
+}
+
+gint
+rspamd_decode_hex_buf (const gchar *in, gsize inlen, gsize inlen,
+		guchar *out, gsize outlen)
+{
+	guchar *o, *end, ret;
+	const gchar *p;
+	gchar c;
+
+	end = out + outlen;
 	o = out;
 	p = in;
 
 	/* We ignore trailing chars if we have not even input */
 	inlen = inlen - inlen % 2;
 
-	while (inlen > 0) {
+	while (inlen > 1 && o < end) {
 		c = *p++;
 
 		if      (c >= '0' && c <= '9') ret = c - '0';
@@ -1330,10 +1412,39 @@ rspamd_decode_hex (const gchar *in, gsize inlen)
 		inlen -= 2;
 	}
 
-	*o = '\0';
+	if (o <= end) {
+		return (o - end);
+	}
 
-	return out;
+	return -1;
 }
+
+guchar*
+rspamd_decode_hex (const gchar *in, gsize inlen)
+{
+	guchar *out;
+	gsize outlen = (inlen / 2 + inlen % 2) + 1;
+	gint olen;
+
+	if (in == NULL) {
+		return NULL;
+	}
+
+	out = g_malloc (outlen);
+
+	olen = rspamd_decode_hex_buf (in, inlen, out, outlen - 1);
+
+	if (olen >= 0) {
+		out[olen] = '\0';
+
+		return out;
+	}
+
+	g_free (out);
+
+	return NULL;
+}
+
 
 /*
  * GString ucl emitting functions
