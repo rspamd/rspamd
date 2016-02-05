@@ -39,7 +39,7 @@
 #include "utlist.h"
 #include "cryptobox.h"
 #include "ottery.h"
-#include "keypair_private.h"
+#include "keypair.h"
 #include "lua/lua_common.h"
 #include "unix-std.h"
 #include <math.h>
@@ -72,8 +72,8 @@ struct fuzzy_rule {
 	GList *fuzzy_headers;
 	GString *hash_key;
 	GString *shingles_key;
-	gpointer local_key;
-	gpointer peer_key;
+	struct rspamd_cryptobox_keypair *local_key;
+	struct rspamd_cryptobox_pubkey *peer_key;
 	double max_score;
 	gboolean read_only;
 	gboolean skip_unknown;
@@ -179,8 +179,11 @@ parse_flags (struct fuzzy_rule *rule,
 					sizeof (struct fuzzy_mapping));
 			map->symbol = sym;
 			elt = ucl_object_find_key (val, "flag");
-			if (elt != NULL && ucl_obj_toint_safe (elt, &map->fuzzy_flag)) {
+
+			if (elt != NULL) {
+				map->fuzzy_flag = ucl_obj_toint (elt);
 				elt = ucl_object_find_key (val, "max_score");
+
 				if (elt != NULL) {
 					map->weight = ucl_obj_todouble (elt);
 				}
@@ -332,10 +335,11 @@ fuzzy_free_rule (gpointer r)
 	g_string_free (rule->shingles_key, TRUE);
 
 	if (rule->local_key) {
-		rspamd_http_connection_key_unref (rule->local_key);
+		rspamd_keypair_unref (rule->local_key);
 	}
+
 	if (rule->peer_key) {
-		rspamd_http_connection_key_unref (rule->peer_key);
+		rspamd_pubkey_unref (rule->peer_key);
 	}
 }
 
@@ -419,14 +423,17 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 	if ((value = ucl_object_find_key (obj, "encryption_key")) != NULL) {
 		/* Create key from user's input */
 		k = ucl_object_tostring (value);
+
 		if (k == NULL || (rule->peer_key =
-					rspamd_http_connection_make_peer_key (k)) == NULL) {
+				rspamd_pubkey_from_base32 (k, 0, RSPAMD_KEYPAIR_KEX,
+						RSPAMD_CRYPTOBOX_MODE_25519)) == NULL) {
 			msg_err_config ("bad encryption key value: %s",
 					k);
 			return -1;
 		}
 
-		rule->local_key = rspamd_http_connection_gen_key ();
+		rule->local_key = rspamd_keypair_new (RSPAMD_KEYPAIR_KEX,
+				RSPAMD_CRYPTOBOX_MODE_25519);
 	}
 
 	if ((value = ucl_object_find_key (obj, "learn_condition")) != NULL) {
@@ -888,25 +895,28 @@ fuzzy_encrypt_cmd (struct fuzzy_rule *rule,
 		struct rspamd_fuzzy_encrypted_req_hdr *hdr,
 		guchar *data, gsize datalen)
 {
-	struct rspamd_http_keypair *lk, *rk;
+	const guchar *pk;
+	guint pklen;
 
 	g_assert (hdr != NULL);
 	g_assert (data != NULL);
 	g_assert (rule != NULL);
 
-	lk = rule->local_key;
-	rk = rule->peer_key;
 	/* Encrypt data */
 	memcpy (hdr->magic,
 			fuzzy_encrypted_magic,
 			sizeof (hdr->magic));
 	ottery_rand_bytes (hdr->nonce, sizeof (hdr->nonce));
-	memcpy (hdr->pubkey, lk->pk, sizeof (hdr->pubkey));
-	memcpy (hdr->key_id, rk->pk, sizeof (hdr->key_id));
+	pk = rspamd_keypair_component (rule->local_key,
+			RSPAMD_KEYPAIR_COMPONENT_PK, &pklen);
+	memcpy (hdr->pubkey, pk, MIN (pklen, sizeof (hdr->pubkey)));
+	pk = rspamd_pubkey_get_pk (rule->peer_key, &pklen);
+	memcpy (hdr->key_id, pk, MIN (sizeof (hdr->key_id), pklen));
 	rspamd_keypair_cache_process (fuzzy_module_ctx->keypairs_cache,
-			lk, rk);
+			rule->local_key, rule->peer_key);
 	rspamd_cryptobox_encrypt_nm_inplace (data, datalen,
-			hdr->nonce, rk->nm, hdr->mac);
+			hdr->nonce, rspamd_pubkey_get_nm (rule->peer_key), hdr->mac,
+			rspamd_pubkey_alg (rule->peer_key));
 }
 
 static struct fuzzy_cmd_io *
@@ -1201,7 +1211,6 @@ fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
 	struct fuzzy_cmd_io *io;
 	const struct rspamd_fuzzy_reply *rep;
 	struct rspamd_fuzzy_encrypted_reply encrep;
-	struct rspamd_http_keypair *lk, *rk;
 	gboolean found = FALSE;
 
 	if (rule->peer_key) {
@@ -1219,17 +1228,17 @@ fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
 		memcpy (&encrep, p, sizeof (encrep));
 		*pos += required_size;
 		*r -= required_size;
-		lk = rule->local_key;
-		rk = rule->peer_key;
+
 		/* Try to decrypt reply */
 		rspamd_keypair_cache_process (fuzzy_module_ctx->keypairs_cache,
-				lk, rk);
+				rule->local_key, rule->peer_key);
 
 		if (!rspamd_cryptobox_decrypt_nm_inplace ((guchar *)&encrep.rep,
 				sizeof (encrep.rep),
 				encrep.hdr.nonce,
-				rk->nm,
-				encrep.hdr.mac)) {
+				rspamd_pubkey_get_nm (rule->peer_key),
+				encrep.hdr.mac,
+				rspamd_pubkey_alg (rule->peer_key))) {
 			msg_info ("cannot decrypt reply");
 			return NULL;
 		}
