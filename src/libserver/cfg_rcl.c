@@ -729,6 +729,8 @@ rspamd_rcl_lua_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 			ucl_object_tostring (obj));
 	gchar *cur_dir, *lua_dir, *lua_file, *tmp1, *tmp2;
 	lua_State *L = cfg->lua_state;
+	GString *tb;
+	gint err_idx;
 
 	tmp1 = g_strdup (lua_src);
 	tmp2 = g_strdup (lua_src);
@@ -738,6 +740,10 @@ rspamd_rcl_lua_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	if (lua_dir && lua_file) {
 		cur_dir = g_malloc (PATH_MAX);
 		if (getcwd (cur_dir, PATH_MAX) != NULL && chdir (lua_dir) != -1) {
+			/* Push traceback function */
+			lua_pushcfunction (L, &rspamd_lua_traceback);
+			err_idx = lua_gettop (L);
+
 			/* Load file */
 			if (luaL_loadfile (L, lua_file) != 0) {
 				g_set_error (err,
@@ -755,23 +761,32 @@ rspamd_rcl_lua_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 				g_free (tmp2);
 				return FALSE;
 			}
+
 			/* Now do it */
-			if (lua_pcall (L, 0, LUA_MULTRET, 0) != 0) {
+			if (lua_pcall (L, 0, 0, err_idx) != 0) {
+				tb = lua_touserdata (L, -1);
 				g_set_error (err,
-					CFG_RCL_ERROR,
-					EINVAL,
-					"cannot init lua file %s: %s",
-					lua_src,
-					lua_tostring (L, -1));
+						CFG_RCL_ERROR,
+						EINVAL,
+						"cannot init lua file %s: %s",
+						lua_src,
+						tb->str);
+				g_string_free (tb, TRUE);
+				lua_pop (L, 1);
+
 				if (chdir (cur_dir) == -1) {
 					msg_err_config ("cannot chdir to %s: %s", cur_dir,
 						strerror (errno));
 				}
+
 				g_free (cur_dir);
 				g_free (tmp1);
 				g_free (tmp2);
+
 				return FALSE;
 			}
+
+			lua_pop (L, 1);
 		}
 		else {
 			g_set_error (err, CFG_RCL_ERROR, ENOENT, "cannot chdir to %s: %s",
