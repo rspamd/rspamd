@@ -348,6 +348,11 @@ rspamadm_signtool (gint argc, gchar **argv)
 
 		kp = rspamd_keypair_from_ucl (top);
 
+		if (kp == NULL || rspamd_keypair_type (kp) != RSPAMD_KEYPAIR_SIGN) {
+			rspamd_fprintf (stderr, "invalid or unsuitable for signing key\n");
+			exit (EXIT_FAILURE);
+		}
+
 		for (i = 1; i < argc; i++) {
 			/* XXX: support cmd line signature */
 			if (!rspamadm_sign_file (argv[i], rspamd_keypair_component (
