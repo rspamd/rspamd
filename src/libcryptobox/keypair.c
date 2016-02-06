@@ -338,13 +338,13 @@ rspamd_pubkey_from_base32 (const gchar *b32,
 	}
 
 	pk = rspamd_cryptobox_pubkey_alloc (type, alg);
+	pk->alg = alg;
+	pk->type = type;
 	pk_data = rspamd_cryptobox_pubkey_pk (pk, &pklen);
 
 	memcpy (pk_data, decoded, pklen);
 	g_free (decoded);
 	rspamd_cryptobox_hash (pk->id, pk_data, pklen, NULL, 0);
-	pk->alg = alg;
-	pk->type = type;
 
 	return pk;
 }
@@ -384,13 +384,13 @@ rspamd_pubkey_from_hex (const gchar *hex,
 	}
 
 	pk = rspamd_cryptobox_pubkey_alloc (type, alg);
+	pk->alg = alg;
+	pk->type = type;
 	pk_data = rspamd_cryptobox_pubkey_pk (pk, &pklen);
 
 	memcpy (pk_data, decoded, pklen);
 	g_free (decoded);
 	rspamd_cryptobox_hash (pk->id, pk_data, pklen, NULL, 0);
-	pk->alg = alg;
-	pk->type = type;
 
 	return pk;
 }
@@ -416,12 +416,12 @@ rspamd_pubkey_from_bin (const guchar *raw,
 	}
 
 	pk = rspamd_cryptobox_pubkey_alloc (type, alg);
+	pk->alg = alg;
+	pk->type = type;
 	pk_data = rspamd_cryptobox_pubkey_pk (pk, &pklen);
 
 	memcpy (pk_data, raw, pklen);
 	rspamd_cryptobox_hash (pk->id, pk_data, pklen, NULL, 0);
-	pk->alg = alg;
-	pk->type = type;
 
 	return pk;
 }
