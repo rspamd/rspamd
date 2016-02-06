@@ -2411,7 +2411,8 @@ rspamd_rcl_parse_struct_keypair (rspamd_mempool_t *pool,
 	struct rspamd_cryptobox_keypair **target, *kp;
 
 
-	target = (gpointer *)(((gchar *)pd->user_struct) + pd->offset);
+	target = (struct rspamd_cryptobox_keypair **)(((gchar *)pd->user_struct) +
+			pd->offset);
 	if (obj->type == UCL_OBJECT) {
 		kp = rspamd_keypair_from_ucl (obj);
 

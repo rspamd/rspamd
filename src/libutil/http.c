@@ -84,7 +84,6 @@ static const rspamd_ftok_t date_header = {
 		.len = 4
 };
 
-#define RSPAMD_HTTP_KEY_ID_LEN 5
 
 #define HTTP_ERROR http_error_quark ()
 GQuark
@@ -416,7 +415,7 @@ rspamd_http_parse_key (rspamd_ftok_t *data, struct rspamd_http_connection *conn,
 			decoded_id = rspamd_decode_base32 (data->begin, eq_pos - data->begin,
 					&id_len);
 
-			if (decoded_id != NULL && id_len >= RSPAMD_HTTP_KEY_ID_LEN) {
+			if (decoded_id != NULL && id_len >= RSPAMD_KEYPAIR_SHORT_ID_LEN) {
 				pk = rspamd_pubkey_from_base32 (eq_pos + 1,
 						data->begin + data->len - eq_pos - 1,
 						RSPAMD_KEYPAIR_KEX,
@@ -424,7 +423,7 @@ rspamd_http_parse_key (rspamd_ftok_t *data, struct rspamd_http_connection *conn,
 				if (pk != NULL) {
 					if (memcmp (rspamd_keypair_get_id (priv->local_key),
 							decoded_id,
-							RSPAMD_HTTP_KEY_ID_LEN) == 0) {
+							RSPAMD_KEYPAIR_SHORT_ID_LEN) == 0) {
 						priv->msg->peer_key = pk;
 
 						if (conn->cache && priv->msg->peer_key) {
@@ -1336,8 +1335,7 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 	gsize bodylen, enclen = 0;
 	rspamd_fstring_t *buf;
 	gboolean encrypted = FALSE;
-	guchar nonce[rspamd_cryptobox_MAX_NONCEBYTES], mac[rspamd_cryptobox_MAX_MACBYTES],
-		id[rspamd_cryptobox_HASHBYTES];
+	guchar nonce[rspamd_cryptobox_MAX_NONCEBYTES], mac[rspamd_cryptobox_MAX_MACBYTES];
 	guchar *np = NULL, *mp = NULL, *meth_pos = NULL;
 	struct rspamd_cryptobox_pubkey *peer_key = NULL;
 	enum rspamd_cryptobox_mode mode;
@@ -1623,15 +1621,14 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 		if (encrypted) {
 			GString *b32_key, *b32_id;
 
-			memcpy (id, rspamd_pubkey_get_id (peer_key), sizeof (id));
 			b32_key = rspamd_keypair_print (priv->local_key,
 					RSPAMD_KEYPAIR_PUBKEY|RSPAMD_KEYPAIR_BASE32);
-			b32_id = rspamd_keypair_print (priv->local_key,
+			b32_id = rspamd_pubkey_print (peer_key,
 					RSPAMD_KEYPAIR_ID_SHORT|RSPAMD_KEYPAIR_BASE32);
 			/* XXX: add some fuzz here */
-			rspamd_printf_fstring (&buf, "Key: %s=%s\r\n", b32_id, b32_key);
-			g_free (b32_key);
-			g_free (b32_id);
+			rspamd_printf_fstring (&buf, "Key: %v=%v\r\n", b32_id, b32_key);
+			g_string_free (b32_key, TRUE);
+			g_string_free (b32_id, TRUE);
 		}
 	}
 
