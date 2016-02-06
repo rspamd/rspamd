@@ -192,6 +192,7 @@ fi
 %config(noreplace) %{rspamd_confdir}/%{name}.sysvinit.conf
 %config(noreplace) %{rspamd_confdir}/composites.conf
 %config(noreplace) %{rspamd_confdir}/metrics.conf
+%config(noreplace) %{rspamd_confdir}/mime_types.inc
 %config(noreplace) %{rspamd_confdir}/modules.conf
 %config(noreplace) %{rspamd_confdir}/statistic.conf
 %config(noreplace) %{rspamd_confdir}/common.conf
