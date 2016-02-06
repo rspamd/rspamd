@@ -134,7 +134,7 @@ rspamadm_keypair (gint argc, gchar **argv)
 		}
 
 		out = rspamd_keypair_print (kp, how);
-		rspamd_printf ("%v", kp);
+		rspamd_printf ("%v", out);
 		g_string_free (out, TRUE);
 	}
 

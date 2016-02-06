@@ -1346,7 +1346,7 @@ rspamd_encode_hex_buf (const guchar *in, gsize inlen, gchar *out,
 	}
 
 	if (o <= end) {
-		return (o - end);
+		return (o - out);
 	}
 
 	return -1;
@@ -1413,7 +1413,7 @@ rspamd_decode_hex_buf (const gchar *in, gsize inlen,
 	}
 
 	if (o <= end) {
-		return (o - end);
+		return (o - out);
 	}
 
 	return -1;

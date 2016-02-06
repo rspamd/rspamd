@@ -223,6 +223,8 @@ rspamd_keypair_new (enum rspamd_cryptobox_keypair_type type,
 	guint size;
 
 	kp = rspamd_cryptobox_keypair_alloc (type, alg);
+	kp->alg = alg;
+	kp->type = type;
 
 	sk = rspamd_cryptobox_keypair_sk (kp, &size);
 	pk = rspamd_cryptobox_keypair_pk (kp, &size);
@@ -235,12 +237,10 @@ rspamd_keypair_new (enum rspamd_cryptobox_keypair_type type,
 	}
 
 	rspamd_cryptobox_hash (kp->id, pk, size, NULL, 0);
-	kp->alg = alg;
-	kp->type = type;
 
 	REF_INIT_RETAIN (kp, rspamd_cryptobox_keypair_dtor);
 
-	return pk;
+	return kp;
 }
 
 
@@ -506,12 +506,13 @@ rspamd_keypair_print_component (guchar *data, gsize datalen,
 	gint olen, b32_len;
 
 	if (how & RSPAMD_KEYPAIR_HUMAN) {
-		g_string_append_printf (res, "%s: ", description);
+		rspamd_printf_gstring (res, "%s: ", description);
 	}
 
 	if (how & RSPAMD_KEYPAIR_BASE32) {
 		b32_len = (datalen * 8 / 5) + 2;
 		g_string_set_size (res, res->len + b32_len);
+		res->len -= b32_len;
 		olen = rspamd_encode_base32_buf (data, datalen, res->str + res->len,
 				res->len + b32_len - 1);
 
@@ -541,7 +542,7 @@ rspamd_keypair_print (struct rspamd_cryptobox_keypair *kp, guint how)
 
 	g_assert (kp != NULL);
 
-	res = g_string_sized_new (64);
+	res = g_string_sized_new (63);
 
 	if ((how & RSPAMD_KEYPAIR_PUBKEY)) {
 		p = rspamd_cryptobox_keypair_pk (kp, &len);
@@ -745,6 +746,7 @@ rspamd_keypair_to_ucl (struct rspamd_cryptobox_keypair *kp,
 	ucl_object_insert_key (elt,
 			ucl_object_fromlstring (keypair_out->str, keypair_out->len),
 			"id", 0, false);
+	g_string_free (keypair_out, TRUE);
 
 	ucl_object_insert_key (elt,
 			ucl_object_fromstring (encoding),
