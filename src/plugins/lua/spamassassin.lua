@@ -1206,13 +1206,16 @@ local function post_process()
       local meta_cb = function(task)
         local res = 0
         -- XXX: need to memoize result for better performance
-        if not task:get_symbol(k) then
+        local sym = task:get_symbol(k)
+        if not sym then
           if expression then
             res = expression:process(task)
           end
           if res > 0 then
             task:insert_result(k, res)
           end
+        else
+          res = 1
         end
 
         return res
