@@ -395,6 +395,38 @@ rspamd_pubkey_from_hex (const gchar *hex,
 	return pk;
 }
 
+struct rspamd_cryptobox_pubkey*
+rspamd_pubkey_from_bin (const guchar *raw,
+		gsize len,
+		enum rspamd_cryptobox_keypair_type type,
+		enum rspamd_cryptobox_mode alg)
+{
+	gsize expected_len;
+	guint pklen;
+	struct rspamd_cryptobox_pubkey *pk;
+	guchar *pk_data;
+
+	g_assert (raw != NULL && len > 0);
+
+	expected_len = (type == RSPAMD_KEYPAIR_KEX) ?
+			rspamd_cryptobox_pk_bytes (alg) : rspamd_cryptobox_pk_sig_bytes (alg);
+
+	if (len != expected_len) {
+		return NULL;
+	}
+
+	pk = rspamd_cryptobox_pubkey_alloc (type, alg);
+	pk_data = rspamd_cryptobox_pubkey_pk (pk, &pklen);
+
+	memcpy (raw, pk_data, pklen);
+	rspamd_cryptobox_hash (pk->id, pk_data, pklen, NULL, 0);
+	pk->alg = alg;
+	pk->type = type;
+
+	return pk;
+}
+
+
 const guchar *
 rspamd_pubkey_get_nm (struct rspamd_cryptobox_pubkey *p)
 {
@@ -556,4 +588,174 @@ rspamd_keypair_component (struct rspamd_cryptobox_keypair *kp,
 	}
 
 	return ret;
+}
+
+struct rspamd_cryptobox_keypair *
+rspamd_keypair_from_ucl (const ucl_object_t *obj)
+{
+	const ucl_object_t *privkey, *pubkey, *elt;
+	const gchar *str;
+	enum rspamd_cryptobox_keypair_type type = RSPAMD_KEYPAIR_KEX;
+	enum rspamd_cryptobox_mode mode = RSPAMD_CRYPTOBOX_MODE_25519;
+	gboolean is_hex = FALSE;
+	struct rspamd_cryptobox_keypair *kp;
+	guint len;
+	gsize ucl_len;
+	gint dec_len;
+	gpointer target;
+
+	if (ucl_object_type (obj) != UCL_OBJECT) {
+		return NULL;
+	}
+
+	pubkey = ucl_object_find_any_key (obj, "pubkey", "public", "public_key",
+			NULL);
+	if (pubkey == NULL || ucl_object_type (pubkey) != UCL_STRING) {
+		return NULL;
+	}
+
+	privkey = ucl_object_find_any_key (obj, "privkey", "private", "private_key",
+			"secret", "secret_key", NULL);
+	if (privkey == NULL || ucl_object_type (privkey) != UCL_STRING) {
+		return NULL;
+	}
+
+	/* Optional fields */
+	elt = ucl_object_find_key (obj, "type");
+	if (elt && ucl_object_type (elt) == UCL_STRING) {
+		str = ucl_object_tostring (elt);
+
+		if (g_ascii_strcasecmp (str, "kex") == 0) {
+			type = RSPAMD_KEYPAIR_KEX;
+		}
+		else if (g_ascii_strcasecmp (str, "sign") == 0) {
+			type = RSPAMD_KEYPAIR_SIGN;
+		}
+		/* TODO: handle errors */
+	}
+
+	elt = ucl_object_find_key (obj, "algorithm");
+	if (elt && ucl_object_type (elt) == UCL_STRING) {
+		str = ucl_object_tostring (elt);
+
+		if (g_ascii_strcasecmp (str, "curve25519") == 0) {
+			mode = RSPAMD_CRYPTOBOX_MODE_25519;
+		}
+		else if (g_ascii_strcasecmp (str, "nistp256") == 0) {
+			mode = RSPAMD_CRYPTOBOX_MODE_NIST;
+		}
+		/* TODO: handle errors */
+	}
+
+	elt = ucl_object_find_key (obj, "encoding");
+	if (elt && ucl_object_type (elt) == UCL_STRING) {
+		str = ucl_object_tostring (elt);
+
+		if (g_ascii_strcasecmp (str, "hex") == 0) {
+			is_hex = TRUE;
+		}
+		/* TODO: handle errors */
+	}
+
+	kp = rspamd_keypair_new (type, mode);
+	g_assert (kp != NULL);
+
+	target = rspamd_cryptobox_keypair_pk (kp, &len);
+	str = ucl_object_tolstring (pubkey, &ucl_len);
+
+	if (is_hex) {
+		dec_len = rspamd_decode_hex_buf (str, ucl_len, target, len);
+	}
+	else {
+		dec_len = rspamd_decode_base32_buf (str, ucl_len, target, len);
+	}
+
+	if (dec_len != (gint)len) {
+		rspamd_keypair_unref (kp);
+
+		return NULL;
+	}
+
+	target = rspamd_cryptobox_keypair_sk (kp, &len);
+	str = ucl_object_tolstring (privkey, &ucl_len);
+
+	if (is_hex) {
+		dec_len = rspamd_decode_hex_buf (str, ucl_len, target, len);
+	}
+	else {
+		dec_len = rspamd_decode_base32_buf (str, ucl_len, target, len);
+	}
+
+	if (dec_len != (gint)len) {
+		rspamd_keypair_unref (kp);
+
+		return NULL;
+	}
+
+	return kp;
+}
+
+ucl_object_t *
+rspamd_keypair_to_ucl (struct rspamd_cryptobox_keypair *kp,
+		gboolean is_hex)
+{
+	ucl_object_t *ucl_out, *elt;
+	gint how = 0;
+	GString *keypair_out;
+	const gchar *encoding;
+
+	g_assert (kp != NULL);
+
+	if (is_hex) {
+		how |= RSPAMD_KEYPAIR_HEX;
+		encoding = "hex";
+	}
+	else {
+		how |= RSPAMD_KEYPAIR_BASE32;
+		encoding = "base32";
+	}
+
+	ucl_out = ucl_object_typed_new (UCL_OBJECT);
+	elt = ucl_object_typed_new (UCL_OBJECT);
+	ucl_object_insert_key (ucl_out, elt, "keypair", 0, false);
+
+	/* pubkey part */
+	keypair_out = rspamd_keypair_print (kp,
+			RSPAMD_KEYPAIR_PUBKEY|how);
+	ucl_object_insert_key (elt,
+			ucl_object_fromlstring (keypair_out->str, keypair_out->len),
+			"pubkey", 0, false);
+	g_string_free (keypair_out, TRUE);
+
+	/* privkey part */
+	keypair_out = rspamd_keypair_print (kp,
+			RSPAMD_KEYPAIR_PRIVKEY|how);
+	ucl_object_insert_key (elt,
+			ucl_object_fromlstring (keypair_out->str, keypair_out->len),
+			"privkey", 0, false);
+	g_string_free (keypair_out, TRUE);
+
+	keypair_out = rspamd_keypair_print (kp,
+			RSPAMD_KEYPAIR_ID|how);
+	ucl_object_insert_key (elt,
+			ucl_object_fromlstring (keypair_out->str, keypair_out->len),
+			"id", 0, false);
+
+	ucl_object_insert_key (elt,
+			ucl_object_fromstring (encoding),
+			"encoding", 0, false);
+
+	ucl_object_insert_key (elt,
+			ucl_object_fromstring (
+					kp->alg == RSPAMD_CRYPTOBOX_MODE_NIST ?
+							"nistp256" : "curve25519"),
+					"algorithm", 0, false);
+
+	ucl_object_insert_key (elt,
+			ucl_object_fromstring (
+					kp->type == RSPAMD_KEYPAIR_KEX ?
+							"kex" : "sign"),
+					"type", 0, false);
+
+	return ucl_out;
 }

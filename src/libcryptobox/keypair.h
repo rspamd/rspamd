@@ -93,6 +93,18 @@ struct rspamd_cryptobox_pubkey* rspamd_pubkey_from_hex (const gchar *hex,
 		enum rspamd_cryptobox_keypair_type type,
 		enum rspamd_cryptobox_mode alg);
 
+/**
+ * Load pubkey from raw chunk string
+ * @param hex input data
+ * @param type type of key (signing or kex)
+ * @param alg algorithm of the key (nist or curve25519)
+ * @return new pubkey or NULL in case of error
+ */
+struct rspamd_cryptobox_pubkey* rspamd_pubkey_from_bin (const guchar *raw,
+		gsize len,
+		enum rspamd_cryptobox_keypair_type type,
+		enum rspamd_cryptobox_mode alg);
+
 
 /**
  * Decrease refcount for the specific pubkey (or destroy when refcount == 0)
@@ -194,5 +206,20 @@ GString *rspamd_keypair_print (struct rspamd_cryptobox_keypair *kp,
  */
 const guchar * rspamd_keypair_component (struct rspamd_cryptobox_keypair *kp,
 		guint ncomp, guint *len);
+
+/**
+ * Create a new keypair from ucl object
+ * @param obj object to load
+ * @return new structure or NULL if an object is invalid
+ */
+struct rspamd_cryptobox_keypair * rspamd_keypair_from_ucl (const ucl_object_t *obj);
+
+/**
+ * Converts keypair to ucl object
+ * @param kp
+ * @return
+ */
+ucl_object_t * rspamd_keypair_to_ucl (struct rspamd_cryptobox_keypair *kp,
+		gboolean is_hex);
 
 #endif /* SRC_LIBCRYPTOBOX_KEYPAIR_H_ */
