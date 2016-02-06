@@ -32,8 +32,8 @@ struct rspamd_client_request;
 struct rspamd_client_connection {
 	gint fd;
 	GString *server_name;
-	gpointer key;
-	gpointer keypair;
+	struct rspamd_cryptobox_pubkey *key;
+	struct rspamd_cryptobox_keypair *keypair;
 	struct event_base *ev_base;
 	struct timeval timeout;
 	struct rspamd_http_connection *http_conn;
@@ -176,9 +176,12 @@ rspamd_client_init (struct event_base *ev_base, const gchar *name,
 	double_to_tv (timeout, &conn->timeout);
 
 	if (key) {
-		conn->key = rspamd_http_connection_make_peer_key (key);
+		conn->key = rspamd_pubkey_from_base32 (key, 0, RSPAMD_KEYPAIR_KEX,
+				RSPAMD_CRYPTOBOX_MODE_25519);
+
 		if (conn->key) {
-			conn->keypair = rspamd_http_connection_gen_key ();
+			conn->keypair = rspamd_keypair_new (RSPAMD_KEYPAIR_KEX,
+					RSPAMD_CRYPTOBOX_MODE_25519);
 			rspamd_http_connection_set_key (conn->http_conn, conn->keypair);
 		}
 		else {
@@ -210,7 +213,7 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 
 	req->msg = rspamd_http_new_message (HTTP_REQUEST);
 	if (conn->key) {
-		req->msg->peer_key = rspamd_http_connection_key_ref (conn->key);
+		req->msg->peer_key = rspamd_pubkey_ref (conn->key);
 	}
 
 	if (in != NULL) {
@@ -278,10 +281,10 @@ rspamd_client_destroy (struct rspamd_client_connection *conn)
 		}
 		close (conn->fd);
 		if (conn->key) {
-			rspamd_http_connection_key_unref (conn->key);
+			rspamd_pubkey_unref (conn->key);
 		}
 		if (conn->keypair) {
-			rspamd_http_connection_key_unref (conn->keypair);
+			rspamd_keypair_unref (conn->keypair);
 		}
 		g_string_free (conn->server_name, TRUE);
 		g_slice_free1 (sizeof (struct rspamd_client_connection), conn);
