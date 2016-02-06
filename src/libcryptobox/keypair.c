@@ -146,6 +146,8 @@ rspamd_cryptobox_keypair_alloc (enum rspamd_cryptobox_keypair_type type,
 		abort ();
 	}
 
+	memset (kp, 0, size);
+
 	return kp;
 }
 
@@ -153,7 +155,7 @@ static struct rspamd_cryptobox_pubkey *
 rspamd_cryptobox_pubkey_alloc (enum rspamd_cryptobox_keypair_type type,
 		enum rspamd_cryptobox_mode alg)
 {
-	struct rspamd_cryptobox_pubkey *kp;
+	struct rspamd_cryptobox_pubkey *pk;
 	guint size = 0;
 
 	if (alg == RSPAMD_CRYPTOBOX_MODE_25519) {
@@ -173,13 +175,15 @@ rspamd_cryptobox_pubkey_alloc (enum rspamd_cryptobox_keypair_type type,
 		}
 	}
 
-	g_assert (size >= sizeof (*kp));
+	g_assert (size >= sizeof (*pk));
 
-	if (posix_memalign ((void **)&kp, 32, size) != 0) {
+	if (posix_memalign ((void **)&pk, 32, size) != 0) {
 		abort ();
 	}
 
-	return kp;
+	memset (pk, 0, size);
+
+	return pk;
 }
 
 
@@ -553,10 +557,38 @@ rspamd_keypair_print (struct rspamd_cryptobox_keypair *kp, guint how)
 		rspamd_keypair_print_component (p, len, res, how, "Private key");
 	}
 	if ((how & RSPAMD_KEYPAIR_ID_SHORT)) {
-		rspamd_keypair_print_component (kp->id, 5, res, how, "Short key ID");
+		rspamd_keypair_print_component (kp->id, RSPAMD_KEYPAIR_SHORT_ID_LEN,
+				res, how, "Short key ID");
 	}
 	if ((how & RSPAMD_KEYPAIR_ID)) {
 		rspamd_keypair_print_component (kp->id, sizeof (kp->id), res, how, "Key ID");
+	}
+
+	return res;
+}
+
+GString *
+rspamd_pubkey_print (struct rspamd_cryptobox_pubkey *pk, guint how)
+{
+	GString *res;
+	guint len;
+	gpointer p;
+
+	g_assert (pk != NULL);
+
+	res = g_string_sized_new (63);
+
+	if ((how & RSPAMD_KEYPAIR_PUBKEY)) {
+		p = rspamd_cryptobox_pubkey_pk (pk, &len);
+		rspamd_keypair_print_component (p, len, res, how, "Public key");
+	}
+	if ((how & RSPAMD_KEYPAIR_ID_SHORT)) {
+		rspamd_keypair_print_component (pk->id, RSPAMD_KEYPAIR_SHORT_ID_LEN,
+				res, how, "Short key ID");
+	}
+	if ((how & RSPAMD_KEYPAIR_ID)) {
+		rspamd_keypair_print_component (pk->id, sizeof (pk->id), res, how,
+				"Key ID");
 	}
 
 	return res;

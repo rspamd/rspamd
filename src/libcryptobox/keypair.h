@@ -169,6 +169,8 @@ const guchar * rspamd_pubkey_get_id (struct rspamd_cryptobox_pubkey *pk);
 const guchar * rspamd_pubkey_get_pk (struct rspamd_cryptobox_pubkey *pk,
 		guint *len);
 
+/** Short ID characters count */
+#define RSPAMD_KEYPAIR_SHORT_ID_LEN 5
 /** Print pubkey */
 #define RSPAMD_KEYPAIR_PUBKEY 0x1
 /** Print secret key */
@@ -189,6 +191,15 @@ const guchar * rspamd_pubkey_get_pk (struct rspamd_cryptobox_pubkey *pk,
  * @return newly allocated string with keypair
  */
 GString *rspamd_keypair_print (struct rspamd_cryptobox_keypair *kp,
+		guint how);
+
+/**
+ * Print pubkey encoding it if needed
+ * @param key key to print
+ * @param how flags that specifies printing behaviour
+ * @return newly allocated string with keypair
+ */
+GString *rspamd_pubkey_print (struct rspamd_cryptobox_pubkey *pk,
 		guint how);
 
 /** Get keypair pubkey ID */
