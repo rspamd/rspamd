@@ -608,6 +608,11 @@ rspamd_keypair_from_ucl (const ucl_object_t *obj)
 		return NULL;
 	}
 
+	elt = ucl_object_find_key (obj, "keypair");
+	if (elt != NULL) {
+		obj = elt;
+	}
+
 	pubkey = ucl_object_find_any_key (obj, "pubkey", "public", "public_key",
 			NULL);
 	if (pubkey == NULL || ucl_object_type (pubkey) != UCL_STRING) {

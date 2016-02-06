@@ -19,7 +19,7 @@
 #include "cryptobox.h"
 #include "printf.h"
 #include "ucl.h"
-#include "keypair_private.h"
+#include "libcryptobox/keypair.h"
 #include "libutil/str_util.h"
 #include "libutil/util.h"
 #include "unix-std.h"
@@ -31,6 +31,7 @@ static gchar *suffix = NULL;
 static gchar *pubkey_file = NULL;
 static gchar *pubkey = NULL;
 static gchar *keypair_file = NULL;
+enum rspamd_cryptobox_mode mode = RSPAMD_CRYPTOBOX_MODE_25519;
 
 static void rspamadm_signtool (gint argc, gchar **argv);
 static const char *rspamadm_signtool_help (gboolean full_help);
@@ -127,10 +128,11 @@ rspamadm_sign_file (const gchar *fname, const guchar *sk)
 		exit (errno);
 	}
 
-	g_assert (rspamd_cryptobox_MAX_SIGBYTES >= rspamd_cryptobox_signature_bytes ());
+	g_assert (rspamd_cryptobox_MAX_SIGBYTES >=
+			rspamd_cryptobox_signature_bytes (mode));
 
-	rspamd_cryptobox_sign (sig, NULL, map, st.st_size, sk);
-	write (fd_sig, sig, rspamd_cryptobox_signature_bytes ());
+	rspamd_cryptobox_sign (sig, NULL, map, st.st_size, sk, mode);
+	write (fd_sig, sig, rspamd_cryptobox_signature_bytes (mode));
 	close (fd_sig);
 	munmap (map, st.st_size);
 
@@ -151,7 +153,8 @@ rspamadm_verify_file (const gchar *fname, const guchar *pk)
 	struct stat st, st_sig;
 	bool ret;
 
-	g_assert (rspamd_cryptobox_MAX_SIGBYTES >= rspamd_cryptobox_signature_bytes ());
+	g_assert (rspamd_cryptobox_MAX_SIGBYTES >=
+			rspamd_cryptobox_signature_bytes (mode));
 
 	if (suffix == NULL) {
 		suffix = ".sig";
@@ -189,7 +192,7 @@ rspamadm_verify_file (const gchar *fname, const guchar *pk)
 
 	g_assert (fstat (fd_sig, &st_sig) != -1);
 
-	if (st_sig.st_size != rspamd_cryptobox_signature_bytes ()) {
+	if (st_sig.st_size != rspamd_cryptobox_signature_bytes (mode)) {
 		close (fd_sig);
 		rspamd_fprintf (stderr, "invalid signature size %s: %ud\n", fname,
 				(guint)st_sig.st_size);
@@ -207,7 +210,7 @@ rspamadm_verify_file (const gchar *fname, const guchar *pk)
 		exit (errno);
 	}
 
-	ret = rspamd_cryptobox_verify (map_sig, map, st.st_size, pk);
+	ret = rspamd_cryptobox_verify (map_sig, map, st.st_size, pk, mode);
 	munmap (map, st.st_size);
 	munmap (map_sig, st_sig.st_size);
 
@@ -231,9 +234,9 @@ rspamadm_signtool (gint argc, gchar **argv)
 	GError *error = NULL;
 	struct ucl_parser *parser;
 	ucl_object_t *top;
-	const ucl_object_t *elt;
-	guchar *pk, *sk;
-	gsize fsize, flen, klen;
+	struct rspamd_cryptobox_pubkey *pk;
+	struct rspamd_cryptobox_keypair *kp;
+	gsize fsize, flen;
 	gint i;
 
 	context = g_option_context_new (
@@ -252,10 +255,7 @@ rspamadm_signtool (gint argc, gchar **argv)
 	}
 
 	if (openssl) {
-		if (!rspamd_cryptobox_openssl_mode (TRUE)) {
-			rspamd_fprintf (stderr, "cannot enable openssl mode (incompatible openssl)\n");
-			exit (1);
-		}
+		mode = RSPAMD_CRYPTOBOX_MODE_NIST;
 	}
 
 	if (verify && (!pubkey && !pubkey_file)) {
@@ -300,29 +300,32 @@ rspamadm_signtool (gint argc, gchar **argv)
 				flen --;
 			}
 
-			pk = rspamd_decode_base32 (map, flen, &klen);
+			pk = rspamd_pubkey_from_base32 (map, flen,
+					RSPAMD_KEYPAIR_SIGN, mode);
 
-			if (klen != rspamd_cryptobox_pk_sig_bytes () || pk == NULL) {
-				rspamd_fprintf (stderr, "bad size %s: %ud, %ud expected\n", klen,
-						 rspamd_cryptobox_pk_sig_bytes ());
+			if (pk == NULL) {
+				rspamd_fprintf (stderr, "bad size %s: %ud, %ud expected\n", flen,
+						 rspamd_cryptobox_pk_sig_bytes (mode));
 				exit (errno);
 			}
 
 			munmap (map, fsize);
 		}
 		else {
-			pk = rspamd_decode_base32 (pubkey, strlen (pubkey), &klen);
+			pk = rspamd_pubkey_from_base32 (pubkey, strlen (pubkey),
+								RSPAMD_KEYPAIR_SIGN, mode);
 
-			if (klen != rspamd_cryptobox_pk_sig_bytes () || pk == NULL) {
-				rspamd_fprintf (stderr, "bad size %s: %ud, %ud expected\n", klen,
-						rspamd_cryptobox_pk_sig_bytes ());
+			if (pk == NULL) {
+				rspamd_fprintf (stderr, "bad size %s: %ud, %ud expected\n",
+						strlen (pubkey),
+						rspamd_cryptobox_pk_sig_bytes (mode));
 				exit (errno);
 			}
 		}
 
 		for (i = 1; i < argc; i++) {
 			/* XXX: support cmd line signature */
-			if (!rspamadm_verify_file (argv[i], pk)) {
+			if (!rspamadm_verify_file (argv[i], rspamd_pubkey_get_pk (pk, NULL))) {
 				exit (EXIT_FAILURE);
 			}
 		}
@@ -343,44 +346,17 @@ rspamadm_signtool (gint argc, gchar **argv)
 
 		ucl_parser_free (parser);
 
-		/* XXX: add generic routine to parse all keypair types */
-		elt = ucl_object_find_key (top, "keypair");
-
-		/* XXX: add secure cleanup */
-		if (elt == NULL || ucl_object_type (elt) != UCL_OBJECT) {
-			rspamd_fprintf (stderr, "cannot load keypair: absent keypair\n");
-			ucl_object_unref (top);
-			exit (EINVAL);
-		}
-
-		elt = ucl_object_find_key (elt, "privkey");
-
-		if (elt == NULL || ucl_object_type (elt) != UCL_STRING) {
-			rspamd_fprintf (stderr, "cannot load keypair: absent privkey\n");
-			ucl_object_unref (top);
-			exit (EINVAL);
-		}
-
-		sk = rspamd_decode_base32 (ucl_object_tostring (elt),
-				elt->len, &klen);
-		ucl_object_unref (top);
-
-		if (klen != rspamd_cryptobox_sk_sig_bytes () || sk == NULL) {
-			rspamd_fprintf (stderr, "bad size %s: %ud, %ud expected\n",
-					ucl_object_tostring (elt),klen,
-					rspamd_cryptobox_sk_sig_bytes ());
-			exit (errno);
-		}
+		kp = rspamd_keypair_from_ucl (top);
 
 		for (i = 1; i < argc; i++) {
 			/* XXX: support cmd line signature */
-			if (!rspamadm_sign_file (argv[i], sk)) {
-				rspamd_explicit_memzero (sk, klen);
+			if (!rspamadm_sign_file (argv[i], rspamd_keypair_component (
+					kp, RSPAMD_KEYPAIR_COMPONENT_SK, NULL))) {
+				rspamd_keypair_unref (kp);
 				exit (EXIT_FAILURE);
 			}
 		}
 
-		rspamd_explicit_memzero (sk, klen);
-		g_free (sk);
+		rspamd_keypair_unref (kp);
 	}
 }
