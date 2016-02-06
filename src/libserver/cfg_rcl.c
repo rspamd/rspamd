@@ -2408,57 +2408,26 @@ rspamd_rcl_parse_struct_keypair (rspamd_mempool_t *pool,
 	GError **err)
 {
 	struct rspamd_rcl_struct_parser *pd = ud;
-	gpointer *target;
-	gpointer key;
-	const gchar *val, *sem = NULL, *pk = NULL, *sk = NULL;
-	gchar keybuf[256];
-	const ucl_object_t *elt;
+	struct rspamd_cryptobox_keypair **target, *kp;
+
 
 	target = (gpointer *)(((gchar *)pd->user_struct) + pd->offset);
-	if (obj->type == UCL_STRING) {
-		/* Pk and Sk are just linked all together */
-		val = ucl_object_tostring (obj);
-		if ((sem = strchr (val, ':')) != NULL) {
-			sk = val;
-			pk = sem + 1;
+	if (obj->type == UCL_OBJECT) {
+		kp = rspamd_keypair_from_ucl (obj);
+
+		if (kp != NULL) {
+			*target = kp;
 		}
 		else {
-			/* Try to parse the key as is */
-			key = rspamd_http_connection_make_key ((gchar *)val, strlen (val));
-			if (key != NULL) {
-				*target = key;
-				return TRUE;
-			}
 			g_set_error (err,
 					CFG_RCL_ERROR,
 					EINVAL,
-					"invalid string with keypair content for %s",
+					"cannot load the keypair specified: %s",
 					ucl_object_key (obj));
 			return FALSE;
 		}
 	}
-	else if (obj->type == UCL_OBJECT) {
-		elt = ucl_object_find_key (obj, "pubkey");
-		if (elt == NULL || !ucl_object_tostring_safe (elt, &pk)) {
-			g_set_error (err,
-					CFG_RCL_ERROR,
-					EINVAL,
-					"no sane pubkey found in the keypair: %s",
-					ucl_object_key (obj));
-			return FALSE;
-		}
-		elt = ucl_object_find_key (obj, "privkey");
-		if (elt == NULL || !ucl_object_tostring_safe (elt, &sk)) {
-			g_set_error (err,
-					CFG_RCL_ERROR,
-					EINVAL,
-					"no sane privkey found in the keypair: %s",
-					ucl_object_key (obj));
-			return FALSE;
-		}
-	}
-
-	if (sk == NULL || pk == NULL) {
+	else {
 		g_set_error (err,
 				CFG_RCL_ERROR,
 				EINVAL,
@@ -2467,27 +2436,7 @@ rspamd_rcl_parse_struct_keypair (rspamd_mempool_t *pool,
 		return FALSE;
 	}
 
-	if (!sem) {
-		rspamd_snprintf (keybuf, sizeof (keybuf), "%s%s", sk, pk);
-	}
-	else {
-		rspamd_snprintf (keybuf, sizeof (keybuf), "%*s%s", (gint)(sem - sk),
-				sk, pk);
-	}
-
-	key = rspamd_http_connection_make_key (keybuf, strlen (keybuf));
-	if (key != NULL) {
-		/* XXX: clean buffer after usage */
-		*target = key;
-		return TRUE;
-	}
-
-	g_set_error (err,
-			CFG_RCL_ERROR,
-			EINVAL,
-			"cannot load the keypair specified: %s",
-			ucl_object_key (obj));
-	return FALSE;
+	return TRUE;
 }
 
 static void

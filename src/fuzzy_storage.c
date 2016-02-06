@@ -27,9 +27,9 @@
 #include "ottery.h"
 #include "libserver/worker_util.h"
 #include "libserver/rspamd_control.h"
-#include "cryptobox.h"
-#include "keypairs_cache.h"
-#include "keypair_private.h"
+#include "libcryptobox/cryptobox.h"
+#include "libcryptobox/keypairs_cache.h"
+#include "libcryptobox/keypair.h"
 #include "ref.h"
 #include "xxhash.h"
 #include "libutil/hash.h"
@@ -98,8 +98,8 @@ struct rspamd_fuzzy_storage_ctx {
 	gint peer_fd;
 	struct event peer_ev;
 	/* Local keypair */
-	gpointer default_keypair; /* Bad clash, need for parse keypair */
-	gpointer default_key;
+	struct rspamd_cryptobox_keypair *default_keypair; /* Bad clash, need for parse keypair */
+	struct fuzzy_key *default_key;
 	GHashTable *keys;
 	gboolean encrypted_only;
 	struct rspamd_keypair_cache *keypair_cache;
@@ -153,7 +153,7 @@ struct fuzzy_peer_request {
 };
 
 struct fuzzy_key {
-	struct rspamd_http_keypair *key;
+	struct rspamd_cryptobox_keypair *key;
 	struct fuzzy_key_stat *stat;
 };
 
@@ -192,7 +192,7 @@ fuzzy_key_dtor (gpointer p)
 		fuzzy_key_stat_dtor (key->stat);
 	}
 	if (key->key) {
-		rspamd_http_connection_key_unref (key->key);
+		rspamd_keypair_unref (key->key);
 	}
 
 	g_slice_free1 (sizeof (*key), key);
@@ -502,7 +502,8 @@ reply:
 				sizeof (session->reply.rep),
 				session->reply.hdr.nonce,
 				session->nm,
-				session->reply.hdr.mac);
+				session->reply.hdr.mac,
+				RSPAMD_CRYPTOBOX_MODE_25519);
 	}
 
 	rspamd_fuzzy_write_reply (session);
@@ -550,7 +551,7 @@ rspamd_fuzzy_decrypt_command (struct fuzzy_session *s)
 	struct rspamd_fuzzy_encrypted_req_hdr *hdr;
 	guchar *payload;
 	gsize payload_len;
-	struct rspamd_http_keypair rk;
+	struct rspamd_cryptobox_pubkey *rk;
 	struct fuzzy_key *key;
 
 	if (s->ctx->default_key == NULL) {
@@ -586,19 +587,28 @@ rspamd_fuzzy_decrypt_command (struct fuzzy_session *s)
 	s->key_stat = key->stat;
 
 	/* Now process keypair */
-	memcpy (rk.pk, hdr->pubkey, sizeof (rk.pk));
-	rspamd_keypair_cache_process (s->ctx->keypair_cache, key->key, &rk);
+	rk = rspamd_pubkey_from_bin (hdr->pubkey, sizeof (hdr->pubkey),
+			RSPAMD_KEYPAIR_KEX, RSPAMD_CRYPTOBOX_MODE_25519);
 
-	/* Now decrypt request */
-	if (!rspamd_cryptobox_decrypt_nm_inplace (payload, payload_len, hdr->nonce,
-				rk.nm, hdr->mac)) {
-		msg_debug ("decryption failed");
-		rspamd_explicit_memzero (rk.nm, sizeof (rk.nm));
+	if (rk == NULL) {
+		msg_err ("bad key");
 		return FALSE;
 	}
 
-	memcpy (s->nm, rk.nm, sizeof (s->nm));
-	rspamd_explicit_memzero (rk.nm, sizeof (rk.nm));
+	rspamd_keypair_cache_process (s->ctx->keypair_cache, key->key, rk);
+
+	/* Now decrypt request */
+	if (!rspamd_cryptobox_decrypt_nm_inplace (payload, payload_len, hdr->nonce,
+			rspamd_pubkey_get_nm (rk),
+			hdr->mac, RSPAMD_CRYPTOBOX_MODE_25519)) {
+		msg_debug ("decryption failed");
+		rspamd_pubkey_unref (rk);
+
+		return FALSE;
+	}
+
+	memcpy (s->nm, rspamd_pubkey_get_nm (rk), sizeof (s->nm));
+	rspamd_pubkey_unref (rk);
 
 	return TRUE;
 }
@@ -1066,10 +1076,11 @@ fuzzy_parse_keypair (rspamd_mempool_t *pool,
 {
 	struct rspamd_rcl_struct_parser *pd = ud;
 	struct rspamd_fuzzy_storage_ctx *ctx;
-	struct rspamd_http_keypair *kp;
+	struct rspamd_cryptobox_keypair *kp;
 	struct fuzzy_key_stat *keystat;
 	struct fuzzy_key *key;
 	const ucl_object_t *cur;
+	const guchar *pk;
 	ucl_object_iter_t it = NULL;
 	gboolean ret;
 
@@ -1094,6 +1105,11 @@ fuzzy_parse_keypair (rspamd_mempool_t *pool,
 			return FALSE;
 		}
 
+		if (rspamd_keypair_alg (kp) != RSPAMD_CRYPTOBOX_MODE_25519 ||
+				rspamd_keypair_type (kp) != RSPAMD_KEYPAIR_KEX) {
+			return FALSE;
+		}
+
 		key = g_slice_alloc (sizeof (*key));
 		key->key = kp;
 		keystat = g_slice_alloc0 (sizeof (*keystat));
@@ -1102,9 +1118,11 @@ fuzzy_parse_keypair (rspamd_mempool_t *pool,
 				(GDestroyNotify)rspamd_inet_address_destroy, fuzzy_key_stat_dtor,
 				rspamd_inet_address_hash, rspamd_inet_address_equal);
 		key->stat = keystat;
-		g_hash_table_insert (ctx->keys, kp->pk, key);
+		pk = rspamd_keypair_component (kp, RSPAMD_KEYPAIR_COMPONENT_PK,
+				NULL);
+		g_hash_table_insert (ctx->keys, (gpointer)pk, key);
 		ctx->default_key = key;
-		msg_info_pool ("loaded keypair %8xs", kp->pk);
+		msg_info_pool ("loaded keypair %8xs", pk);
 	}
 	else if (ucl_object_type (obj) == UCL_ARRAY) {
 		while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {

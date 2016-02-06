@@ -48,7 +48,7 @@ worker_t http_proxy_worker = {
 struct rspamd_http_upstream {
 	gchar *name;
 	struct upstream_list *u;
-	gpointer key;
+	struct rspamd_cryptobox_pubkey *key;
 };
 
 struct http_proxy_ctx {
@@ -60,7 +60,7 @@ struct http_proxy_ctx {
 	/* Events base */
 	struct event_base *ev_base;
 	/* Encryption key for clients */
-	gpointer key;
+	struct rspamd_cryptobox_keypair *key;
 	/* Keys cache */
 	struct rspamd_keypair_cache *keys_cache;
 	/* Upstreams to use */
@@ -68,7 +68,7 @@ struct http_proxy_ctx {
 	/* Default upstream */
 	struct rspamd_http_upstream *default_upstream;
 	/* Local rotating keypair for upstreams */
-	gpointer local_key;
+	struct rspamd_cryptobox_keypair *local_key;
 	struct event rotate_ev;
 	gdouble rotate_tm;
 };
@@ -76,8 +76,8 @@ struct http_proxy_ctx {
 struct http_proxy_session {
 	struct http_proxy_ctx *ctx;
 	struct event_base *ev_base;
-	gpointer local_key;
-	gpointer remote_key;
+	struct rspamd_cryptobox_keypair *local_key;
+	struct rspamd_cryptobox_pubkey *remote_key;
 	struct upstream *up;
 	gint client_sock;
 	gint backend_sock;
@@ -128,7 +128,8 @@ http_proxy_parse_upstream (rspamd_mempool_t *pool,
 
 	elt = ucl_object_find_key (obj, "key");
 	if (elt != NULL) {
-		up->key = rspamd_http_connection_make_peer_key (ucl_object_tostring (elt));
+		up->key = rspamd_pubkey_from_base32 (ucl_object_tostring (elt), 0,
+				RSPAMD_KEYPAIR_KEX, RSPAMD_CRYPTOBOX_MODE_25519);
 
 		if (up->key == NULL) {
 			g_set_error (err, http_proxy_quark (), 100,
@@ -171,7 +172,7 @@ err:
 		rspamd_upstreams_destroy (up->u);
 
 		if (up->key) {
-			rspamd_http_connection_key_unref (up->key);
+			rspamd_pubkey_unref (up->key);
 		}
 
 		g_slice_free1 (sizeof (*up), up);
@@ -366,7 +367,7 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 
 			rspamd_http_connection_set_key (session->backend_conn,
 					session->ctx->local_key);
-			msg->peer_key = rspamd_http_connection_key_ref (backend->key);
+			msg->peer_key = rspamd_pubkey_ref (backend->key);
 			session->replied = TRUE;
 
 			rspamd_http_connection_write_message (session->backend_conn,
@@ -452,8 +453,9 @@ proxy_rotate_key (gint fd, short what, void *arg)
 	event_add (&ctx->rotate_ev, &rot_tv);
 
 	kp = ctx->local_key;
-	ctx->local_key = rspamd_http_connection_gen_key ();
-	rspamd_http_connection_key_unref (kp);
+	ctx->local_key = rspamd_keypair_new (RSPAMD_KEYPAIR_KEX,
+			RSPAMD_CRYPTOBOX_MODE_25519);
+	rspamd_keypair_unref (kp);
 }
 
 void
@@ -478,7 +480,8 @@ start_http_proxy (struct rspamd_worker *worker)
 
 	/* XXX: stupid default */
 	ctx->keys_cache = rspamd_keypair_cache_new (256);
-	ctx->local_key = rspamd_http_connection_gen_key ();
+	ctx->local_key = rspamd_keypair_new (RSPAMD_KEYPAIR_KEX,
+			RSPAMD_CRYPTOBOX_MODE_25519);
 
 	double_to_tv (ctx->rotate_tm, &rot_tv);
 	rot_tv.tv_sec += ottery_rand_range (rot_tv.tv_sec);
@@ -493,7 +496,7 @@ start_http_proxy (struct rspamd_worker *worker)
 	rspamd_log_close (worker->srv->logger);
 
 	if (ctx->key) {
-		rspamd_http_connection_key_unref (ctx->key);
+		rspamd_keypair_unref (ctx->key);
 	}
 
 	rspamd_keypair_cache_destroy (ctx->keys_cache);

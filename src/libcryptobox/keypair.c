@@ -245,7 +245,7 @@ rspamd_keypair_new (enum rspamd_cryptobox_keypair_type type,
 
 
 struct rspamd_cryptobox_keypair*
-rspamd__keypair_ref (struct rspamd_cryptobox_keypair *kp)
+rspamd_keypair_ref (struct rspamd_cryptobox_keypair *kp)
 {
 	REF_RETAIN (kp);
 	return kp;
@@ -340,7 +340,7 @@ rspamd_pubkey_from_base32 (const gchar *b32,
 	pk = rspamd_cryptobox_pubkey_alloc (type, alg);
 	pk_data = rspamd_cryptobox_pubkey_pk (pk, &pklen);
 
-	memcpy (decoded, pk_data, pklen);
+	memcpy (pk_data, decoded, pklen);
 	g_free (decoded);
 	rspamd_cryptobox_hash (pk->id, pk_data, pklen, NULL, 0);
 	pk->alg = alg;
@@ -386,7 +386,7 @@ rspamd_pubkey_from_hex (const gchar *hex,
 	pk = rspamd_cryptobox_pubkey_alloc (type, alg);
 	pk_data = rspamd_cryptobox_pubkey_pk (pk, &pklen);
 
-	memcpy (decoded, pk_data, pklen);
+	memcpy (pk_data, decoded, pklen);
 	g_free (decoded);
 	rspamd_cryptobox_hash (pk->id, pk_data, pklen, NULL, 0);
 	pk->alg = alg;
@@ -418,7 +418,7 @@ rspamd_pubkey_from_bin (const guchar *raw,
 	pk = rspamd_cryptobox_pubkey_alloc (type, alg);
 	pk_data = rspamd_cryptobox_pubkey_pk (pk, &pklen);
 
-	memcpy (raw, pk_data, pklen);
+	memcpy (pk_data, raw, pklen);
 	rspamd_cryptobox_hash (pk->id, pk_data, pklen, NULL, 0);
 	pk->alg = alg;
 	pk->type = type;

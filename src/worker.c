@@ -93,7 +93,7 @@ struct rspamd_worker_ctx {
 	/* Events base */
 	struct event_base *ev_base;
 	/* Encryption key */
-	gpointer key;
+	struct rspamd_cryptobox_keypair *key;
 	/* Keys cache */
 	struct rspamd_keypair_cache *keys_cache;
 	/* Configuration */
@@ -441,7 +441,7 @@ start_worker (struct rspamd_worker *worker)
 	rspamd_log_close (worker->srv->logger);
 
 	if (ctx->key) {
-		rspamd_http_connection_key_unref (ctx->key);
+		rspamd_keypair_unref (ctx->key);
 	}
 
 	rspamd_keypair_cache_destroy (ctx->keys_cache);
