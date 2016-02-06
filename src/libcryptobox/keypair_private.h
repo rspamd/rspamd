@@ -65,7 +65,7 @@ struct RSPAMD_ALIGNED(32) rspamd_cryptobox_keypair_25519 {
 struct RSPAMD_ALIGNED(32) rspamd_cryptobox_keypair_sig_nist {
 	struct rspamd_cryptobox_keypair parent;
 	guchar RSPAMD_ALIGNED(32) sk[32];
-	guchar RSPAMD_ALIGNED(32) pk[32];
+	guchar RSPAMD_ALIGNED(32) pk[65];
 };
 
 /*
