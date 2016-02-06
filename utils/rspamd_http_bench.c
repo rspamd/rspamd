@@ -131,7 +131,9 @@ rspamd_client_finish (struct rspamd_http_connection *conn,
 static void
 rspamd_http_client_func (struct event_base *ev_base, struct lat_elt *latency,
 		guint32 *wconns,
-		gpointer peer_key, gpointer client_key, struct rspamd_keypair_cache *c)
+		struct rspamd_cryptobox_pubkey *peer_key,
+		struct rspamd_cryptobox_keypair* client_key,
+		struct rspamd_keypair_cache *c)
 {
 	struct rspamd_http_message *msg;
 	struct rspamd_http_connection *conn;
@@ -154,7 +156,7 @@ rspamd_http_client_func (struct event_base *ev_base, struct lat_elt *latency,
 	if (peer_key != NULL) {
 		g_assert (client_key != NULL);
 		rspamd_http_connection_set_key (conn, client_key);
-		msg->peer_key = rspamd_http_connection_key_ref (peer_key);
+		msg->peer_key = rspamd_pubkey_ref (peer_key);
 	}
 
 	cb = g_malloc (sizeof (*cb));
@@ -174,13 +176,15 @@ rspamd_worker_func (struct lat_elt *plat, guint32 *wconns)
 	struct event_base *ev_base;
 	struct itimerval itv;
 	struct rspamd_keypair_cache *c = NULL;
-	gpointer client_key = NULL;
-	gpointer peer_key = NULL;
+	struct rspamd_cryptobox_keypair *client_key = NULL;
+	struct rspamd_cryptobox_pubkey *peer_key = NULL;
 
 	if (server_key) {
-		peer_key = rspamd_http_connection_make_peer_key (server_key);
+		peer_key = rspamd_pubkey_from_base32 (server_key, 0, RSPAMD_KEYPAIR_KEX,
+				openssl_mode ? RSPAMD_CRYPTOBOX_MODE_NIST : RSPAMD_CRYPTOBOX_MODE_25519);
 		g_assert (peer_key != NULL);
-		client_key = rspamd_http_connection_gen_key ();
+		client_key = rspamd_keypair_new (RSPAMD_KEYPAIR_KEX,
+				openssl_mode ? RSPAMD_CRYPTOBOX_MODE_NIST : RSPAMD_CRYPTOBOX_MODE_25519);
 
 		if (cache_size > 0) {
 			c = rspamd_keypair_cache_new (cache_size);
@@ -327,10 +331,6 @@ main (int argc, char **argv)
 		rspamd_fprintf (stderr, "option parsing failed: %s\n", error->message);
 		g_error_free (error);
 		exit (1);
-	}
-
-	if (openssl_mode) {
-		g_assert (rspamd_cryptobox_openssl_mode (TRUE));
 	}
 
 	rspamd_parse_inet_address (&addr, host, 0);

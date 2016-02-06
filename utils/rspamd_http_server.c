@@ -19,6 +19,7 @@
 #include "http.h"
 #include "ottery.h"
 #include "cryptobox.h"
+#include "keypair.h"
 #include "unix-std.h"
 #include <math.h>
 
@@ -33,7 +34,7 @@ static gboolean openssl_mode = FALSE;
 static GHashTable *maps = NULL;
 static gchar *key = NULL;
 static struct rspamd_keypair_cache *c;
-static gpointer server_key;
+static struct rspamd_cryptobox_keypair *server_key;
 static struct timeval io_tv = {
 		.tv_sec = 20,
 		.tv_usec = 0
@@ -260,23 +261,15 @@ main (int argc, gchar **argv)
 
 	maps = g_hash_table_new (g_int_hash, g_int_equal);
 
-	if (openssl_mode) {
-		g_assert (rspamd_cryptobox_openssl_mode (TRUE));
-	}
-
 	if (key == NULL) {
-		server_key = rspamd_http_connection_gen_key ();
-		b32_key = rspamd_http_connection_print_key (server_key,
+		server_key = rspamd_keypair_new (RSPAMD_KEYPAIR_KEX,
+				openssl_mode ? RSPAMD_CRYPTOBOX_MODE_NIST : RSPAMD_CRYPTOBOX_MODE_25519);
+		b32_key = rspamd_keypair_print (server_key,
 				RSPAMD_KEYPAIR_PUBKEY | RSPAMD_KEYPAIR_BASE32);
 		rspamd_printf ("key: %v\n", b32_key);
 	}
 	else {
-		server_key = rspamd_http_connection_make_key (key, strlen (key));
-
-		if (server_key == NULL) {
-			rspamd_fprintf (stderr, "cannot load key %s\n", key);
-			exit (EXIT_FAILURE);
-		}
+		/* TODO: add key loading */
 	}
 
 	if (cache_size > 0) {
