@@ -342,6 +342,7 @@ rspamd_pubkey_from_base32 (const gchar *b32,
 	}
 
 	pk = rspamd_cryptobox_pubkey_alloc (type, alg);
+	REF_INIT_RETAIN (pk, rspamd_cryptobox_pubkey_dtor);
 	pk->alg = alg;
 	pk->type = type;
 	pk_data = rspamd_cryptobox_pubkey_pk (pk, &pklen);
@@ -388,6 +389,7 @@ rspamd_pubkey_from_hex (const gchar *hex,
 	}
 
 	pk = rspamd_cryptobox_pubkey_alloc (type, alg);
+	REF_INIT_RETAIN (pk, rspamd_cryptobox_pubkey_dtor);
 	pk->alg = alg;
 	pk->type = type;
 	pk_data = rspamd_cryptobox_pubkey_pk (pk, &pklen);
@@ -420,6 +422,7 @@ rspamd_pubkey_from_bin (const guchar *raw,
 	}
 
 	pk = rspamd_cryptobox_pubkey_alloc (type, alg);
+	REF_INIT_RETAIN (pk, rspamd_cryptobox_pubkey_dtor);
 	pk->alg = alg;
 	pk->type = type;
 	pk_data = rspamd_cryptobox_pubkey_pk (pk, &pklen);
@@ -698,6 +701,7 @@ rspamd_keypair_from_ucl (const ucl_object_t *obj)
 	kp = rspamd_cryptobox_keypair_alloc (type, mode);
 	kp->type = type;
 	kp->alg = mode;
+	REF_INIT_RETAIN (kp, rspamd_cryptobox_keypair_dtor);
 	g_assert (kp != NULL);
 
 	target = rspamd_cryptobox_keypair_sk (kp, &len);
@@ -733,8 +737,6 @@ rspamd_keypair_from_ucl (const ucl_object_t *obj)
 	}
 
 	rspamd_cryptobox_hash (kp->id, target, len, NULL, 0);
-
-	REF_INIT_RETAIN (kp, rspamd_cryptobox_keypair_dtor);
 
 	return kp;
 }

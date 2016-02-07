@@ -307,6 +307,8 @@ rspamd_roll_history_load (struct roll_history *history, const gchar *filename)
 		}
 	}
 
+	ucl_object_unref (top);
+
 	history->cur_row = n;
 
 	return TRUE;

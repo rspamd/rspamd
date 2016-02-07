@@ -154,6 +154,7 @@ struct fuzzy_peer_request {
 
 struct fuzzy_key {
 	struct rspamd_cryptobox_keypair *key;
+	struct rspamd_cryptobox_pubkey *pk;
 	struct fuzzy_key_stat *stat;
 };
 
@@ -601,7 +602,7 @@ rspamd_fuzzy_decrypt_command (struct fuzzy_session *s)
 	if (!rspamd_cryptobox_decrypt_nm_inplace (payload, payload_len, hdr->nonce,
 			rspamd_pubkey_get_nm (rk),
 			hdr->mac, RSPAMD_CRYPTOBOX_MODE_25519)) {
-		msg_debug ("decryption failed");
+		msg_err ("decryption failed");
 		rspamd_pubkey_unref (rk);
 
 		return FALSE;
@@ -1122,7 +1123,7 @@ fuzzy_parse_keypair (rspamd_mempool_t *pool,
 				NULL);
 		g_hash_table_insert (ctx->keys, (gpointer)pk, key);
 		ctx->default_key = key;
-		msg_info_pool ("loaded keypair %8xs", pk);
+		msg_info_pool ("loaded keypair %*xs", 8, pk);
 	}
 	else if (ucl_object_type (obj) == UCL_ARRAY) {
 		while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
@@ -1138,9 +1139,7 @@ fuzzy_parse_keypair (rspamd_mempool_t *pool,
 static guint
 fuzzy_kp_hash (gconstpointer p)
 {
-	const guchar *pk = p;
-
-	return XXH64 (pk, RSPAMD_FUZZY_KEYLEN, 0xdeadbabe);
+	return *(guint *)p;
 }
 
 static gboolean

@@ -502,6 +502,7 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 	efunc = ucl_object_emit_file_funcs (f);
 	ret = ucl_object_emit_full (top, UCL_EMIT_JSON_COMPACT, efunc);
 	ucl_object_emit_funcs_free (efunc);
+	ucl_object_unref (top);
 	fclose (f);
 
 	return ret;
@@ -765,7 +766,7 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 				g_hash_table_insert (m->symbols, item->symbol, s);
 				mlist = g_hash_table_lookup (cache->cfg->metrics_symbols,
 						item->symbol);
-				mlist = g_list_prepend (mlist, m);
+				mlist = g_list_append (mlist, m);
 				g_hash_table_insert (cache->cfg->metrics_symbols,
 						item->symbol, mlist);
 
