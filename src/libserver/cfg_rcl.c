@@ -790,7 +790,7 @@ rspamd_rcl_lua_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 		else {
 			g_set_error (err, CFG_RCL_ERROR, ENOENT, "cannot chdir to %s: %s",
-				lua_src, strerror (errno));
+					lua_dir, strerror (errno));
 			if (chdir (cur_dir) == -1) {
 				msg_err_config ("cannot chdir to %s: %s", cur_dir, strerror (errno));
 			}
