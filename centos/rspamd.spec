@@ -22,8 +22,8 @@ License:        BSD2c
 %endif
 URL:            https://rspamd.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
-BuildRequires:  glib2-devel,libevent-devel,openssl-devel,pcre-devel,perl
-BuildRequires:  cmake,gmime,file-devel
+BuildRequires:  glib2-devel,libevent-devel,openssl-devel,pcre-devel
+BuildRequires:  cmake,gmime,file-devel,perl-Digest-MD5
 %if 0%{?suse_version} || 0%{?el7} || 0%{?fedora}
 BuildRequires:  systemd
 Requires(pre):  systemd
@@ -192,6 +192,7 @@ fi
 %config(noreplace) %{rspamd_confdir}/%{name}.sysvinit.conf
 %config(noreplace) %{rspamd_confdir}/composites.conf
 %config(noreplace) %{rspamd_confdir}/metrics.conf
+%config(noreplace) %{rspamd_confdir}/mime_types.inc
 %config(noreplace) %{rspamd_confdir}/modules.conf
 %config(noreplace) %{rspamd_confdir}/statistic.conf
 %config(noreplace) %{rspamd_confdir}/common.conf

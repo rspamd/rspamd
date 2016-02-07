@@ -24,7 +24,6 @@ local local_exclusions = nil
 
 local rspamd_logger = require 'rspamd_logger'
 local rspamd_ip = require 'rspamd_ip'
-local rspamd_url = require 'rspamd_url'
 local rspamd_util = require 'rspamd_util'
 
 local symbols = {

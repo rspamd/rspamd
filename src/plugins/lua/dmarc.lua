@@ -20,7 +20,6 @@ limitations under the License.
 local rspamd_regexp = require "rspamd_regexp"
 local rspamd_logger = require "rspamd_logger"
 local rspamd_redis = require "rspamd_redis"
-local rspamd_url = require "rspamd_url"
 local upstream_list = require "rspamd_upstream_list"
 local rspamd_util = require "rspamd_util"
 
