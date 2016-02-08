@@ -940,7 +940,7 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 
 		if (nresults >= 1) {
 			/* Function returned boolean, so maybe we need to insert result? */
-			gint res;
+			gint res = 0;
 			GList *opts = NULL;
 			gint i;
 			gdouble flag = 1.0;

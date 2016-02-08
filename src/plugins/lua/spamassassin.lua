@@ -1212,6 +1212,7 @@ local function post_process()
             res = expression:process(task)
           end
           if res > 0 then
+            -- Symbol should be one shot to make it working properly
             task:insert_result(k, res)
           end
         else
@@ -1226,7 +1227,10 @@ local function post_process()
         rspamd_logger.errx(rspamd_config, 'Cannot parse expression ' .. r['meta'])
       else
         if r['score'] then
-          rspamd_config:set_metric_symbol(k, r['score'], r['description'])
+          rspamd_config:set_metric_symbol({
+            name = k, score = r['score'],
+            description = r['description'],
+            one_shot = true })
         end
         rspamd_config:register_symbol(k, calculate_score(k, r), meta_cb)
         r['expression'] = expression
