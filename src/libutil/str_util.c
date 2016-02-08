@@ -1511,9 +1511,10 @@ rspamd_gstring_append_double (double val, void *ud)
 }
 
 void
-rspamd_ucl_emit_gstring (const ucl_object_t *obj,
+rspamd_ucl_emit_gstring_comments (const ucl_object_t *obj,
 		enum ucl_emitter emit_type,
-		GString *target)
+		GString *target,
+		const ucl_object_t *comments)
 {
 	struct ucl_emitter_functions func = {
 			.ucl_emitter_append_character = rspamd_gstring_append_character,
@@ -1523,7 +1524,7 @@ rspamd_ucl_emit_gstring (const ucl_object_t *obj,
 	};
 
 	func.ud = target;
-	ucl_object_emit_full (obj, emit_type, &func);
+	ucl_object_emit_full (obj, emit_type, &func, comments);
 }
 
 /*
@@ -1579,9 +1580,10 @@ rspamd_fstring_emit_append_double (double val, void *ud)
 }
 
 void
-rspamd_ucl_emit_fstring (const ucl_object_t *obj,
+rspamd_ucl_emit_fstring_comments (const ucl_object_t *obj,
 		enum ucl_emitter emit_type,
-		rspamd_fstring_t **buf)
+		rspamd_fstring_t **buf,
+		const ucl_object_t *comments)
 {
 	struct ucl_emitter_functions func = {
 			.ucl_emitter_append_character = rspamd_fstring_emit_append_character,
@@ -1591,5 +1593,5 @@ rspamd_ucl_emit_fstring (const ucl_object_t *obj,
 	};
 
 	func.ud = buf;
-	ucl_object_emit_full (obj, emit_type, &func);
+	ucl_object_emit_full (obj, emit_type, &func, comments);
 }

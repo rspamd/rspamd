@@ -500,7 +500,7 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 	g_assert (f != NULL);
 
 	efunc = ucl_object_emit_file_funcs (f);
-	ret = ucl_object_emit_full (top, UCL_EMIT_JSON_COMPACT, efunc);
+	ret = ucl_object_emit_full (top, UCL_EMIT_JSON_COMPACT, efunc, NULL);
 	ucl_object_emit_funcs_free (efunc);
 	ucl_object_unref (top);
 	fclose (f);

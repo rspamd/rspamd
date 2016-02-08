@@ -290,7 +290,7 @@ dump_dynamic_config (struct rspamd_config *cfg)
 	}
 
 	if (!ucl_object_emit_full (cfg->current_dynamic_conf, UCL_EMIT_JSON,
-			ucl_object_emit_fd_funcs (fd))) {
+			ucl_object_emit_fd_funcs (fd), NULL)) {
 		msg_err ("cannot emit ucl object: %s", strerror (errno));
 		close (fd);
 		return FALSE;

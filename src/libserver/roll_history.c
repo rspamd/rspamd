@@ -372,7 +372,7 @@ rspamd_roll_history_save (struct roll_history *history, const gchar *filename)
 	}
 
 	emitter_func = ucl_object_emit_fd_funcs (fd);
-	ucl_object_emit_full (obj, UCL_EMIT_JSON_COMPACT, emitter_func);
+	ucl_object_emit_full (obj, UCL_EMIT_JSON_COMPACT, emitter_func, NULL);
 	ucl_object_emit_funcs_free (emitter_func);
 	ucl_object_unref (obj);
 

@@ -1028,7 +1028,7 @@ rspamd_fuzzy_storage_stat (struct rspamd_main *rspamd_main,
 
 		obj = rspamd_fuzzy_stat_to_ucl (ctx, TRUE);
 		emit_subr = ucl_object_emit_fd_funcs (outfd);
-		ucl_object_emit_full (obj, UCL_EMIT_JSON_COMPACT, emit_subr);
+		ucl_object_emit_full (obj, UCL_EMIT_JSON_COMPACT, emit_subr, NULL);
 		ucl_object_emit_funcs_free (emit_subr);
 		ucl_object_unref (obj);
 		/* Rewind output file */

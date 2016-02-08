@@ -260,24 +260,33 @@ goffset rspamd_substring_search_caseless (const gchar *in, gsize inlen,
  */
 goffset rspamd_string_find_eoh (GString *input);
 
+
+#define rspamd_ucl_emit_gstring(o, t, target) \
+	rspamd_ucl_emit_gstring_comments((o), (t), (target), NULL)
 /**
  * Emit UCL object to gstring
  * @param obj object to emit
  * @param emit_type emitter type
+ * @param comments optional comments object
  * @param target target string
  */
-void rspamd_ucl_emit_gstring (const ucl_object_t *obj,
+void rspamd_ucl_emit_gstring_comments (const ucl_object_t *obj,
 		enum ucl_emitter emit_type,
-		GString *target);
+		GString *target,
+		const ucl_object_t *comments);
 
+#define rspamd_ucl_emit_fstring(o, t, target) \
+	rspamd_ucl_emit_fstring_comments((o), (t), (target), NULL)
 /**
  * Emit UCL object to fstring
  * @param obj object to emit
  * @param emit_type emitter type
+ *  * @param comments optional comments object
  * @param target target string
  */
-void rspamd_ucl_emit_fstring (const ucl_object_t *obj,
+void rspamd_ucl_emit_fstring_comments (const ucl_object_t *obj,
 		enum ucl_emitter emit_type,
-		rspamd_fstring_t **target);
+		rspamd_fstring_t **target,
+		const ucl_object_t *comments);
 
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */

@@ -122,7 +122,7 @@ rspamadm_keypair (gint argc, gchar **argv)
 	if (ucl) {
 		ucl_out = rspamd_keypair_to_ucl (kp, hex_encode);
 		ucl_emit_subr = ucl_object_emit_file_funcs (stdout);
-		ucl_object_emit_full (ucl_out, UCL_EMIT_CONFIG, ucl_emit_subr);
+		ucl_object_emit_full (ucl_out, UCL_EMIT_CONFIG, ucl_emit_subr, NULL);
 		ucl_object_emit_funcs_free (ucl_emit_subr);
 		ucl_object_unref (ucl_out);
 	}
