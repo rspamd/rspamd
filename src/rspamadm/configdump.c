@@ -20,6 +20,7 @@
 #include "utlist.h"
 #include "rspamd.h"
 #include "lua/lua_common.h"
+#include "utlist.h"
 
 static gboolean json = FALSE;
 static gboolean compact = FALSE;
@@ -95,57 +96,67 @@ rspamadm_add_doc_elt (const ucl_object_t *obj, const ucl_object_t *doc_obj,
 		ucl_object_t *comment_obj)
 {
 	rspamd_fstring_t *comment = rspamd_fstring_new ();
-	const ucl_object_t *elt, *cur;
-	ucl_object_t *nobj;
+	const ucl_object_t *elt;
+	ucl_object_t *nobj, *cur_comment;
 
 	if (doc_obj != NULL) {
 		/* Create doc comment */
-		rspamd_printf_fstring (&comment, "/*\n");
+		nobj = ucl_object_fromstring_common ("/*", 0, 0);
+	}
+	else {
+		return;
 	}
 
+	/* We create comments as a list of parts */
 	elt = ucl_object_find_key (doc_obj, "data");
 	if (elt) {
-		rspamd_printf_fstring (&comment, "* %s\n", ucl_object_tostring (elt));
+		rspamd_printf_fstring (&comment, " * %s", ucl_object_tostring (elt));
+		cur_comment = ucl_object_fromstring_common (comment->str, comment->len, 0);
+		rspamd_fstring_erase (comment, 0, comment->len);
+		DL_APPEND (nobj, cur_comment);
 	}
 
 	elt = ucl_object_find_key (doc_obj, "type");
 	if (elt) {
-		rspamd_printf_fstring (&comment, "* Type: %s\n", ucl_object_tostring (elt));
+		rspamd_printf_fstring (&comment, " * Type: %s", ucl_object_tostring (elt));
+		cur_comment = ucl_object_fromstring_common (comment->str, comment->len, 0);
+		rspamd_fstring_erase (comment, 0, comment->len);
+		DL_APPEND (nobj, cur_comment);
 	}
 
 	elt = ucl_object_find_key (doc_obj, "required");
 	if (elt) {
-		rspamd_printf_fstring (&comment, "* Required %b\n",
+		rspamd_printf_fstring (&comment, " * Required: %B",
 				ucl_object_toboolean (elt));
+		cur_comment = ucl_object_fromstring_common (comment->str, comment->len, 0);
+		rspamd_fstring_erase (comment, 0, comment->len);
+		DL_APPEND (nobj, cur_comment);
 	}
 
-	rspamd_printf_fstring (&comment, " */\n");
-
-	nobj = ucl_object_fromlstring (comment->str, comment->len);
+	cur_comment = ucl_object_fromstring (" */");
+	DL_APPEND (nobj, cur_comment);
 	rspamd_fstring_free (comment);
 
-	LL_FOREACH (obj, cur) {
-		ucl_object_insert_key (comment_obj, nobj, (const char *)&cur,
-				sizeof (void *), true);
-	}
+	ucl_object_insert_key (comment_obj, ucl_object_ref (nobj),
+			(const char *)&obj,
+			sizeof (void *), true);
+
+	ucl_object_unref (nobj);
 }
 
 static void
 rspamadm_gen_comments (const ucl_object_t *obj, const ucl_object_t *doc_obj,
 		ucl_object_t *comments)
 {
-	const ucl_object_t *cur_obj, *cur_doc;
+	const ucl_object_t *cur_obj, *cur_doc, *cur_elt;
 	ucl_object_iter_t it = NULL;
-	ucl_object_t *cur_elt;
 
-	if (obj == NULL || doc_obj == NULL || obj->keylen == 0) {
+	if (obj == NULL || doc_obj == NULL) {
 		return;
 	}
 
-	cur_doc = ucl_object_find_keyl (doc_obj, obj->key, obj->keylen);
-
-	if (cur_doc != NULL) {
-		rspamadm_add_doc_elt (obj, cur_doc, comments);
+	if (obj->keylen > 0) {
+		rspamadm_add_doc_elt (obj, doc_obj, comments);
 	}
 
 	if (ucl_object_type (obj) == UCL_OBJECT) {
@@ -154,17 +165,12 @@ rspamadm_gen_comments (const ucl_object_t *obj, const ucl_object_t *doc_obj,
 					cur_obj->keylen);
 
 			if (cur_doc != NULL) {
-				cur_elt = (ucl_object_t *)ucl_object_find_keyl (comments,
-						(const char *)&cur_obj,
-						sizeof (void *));
-				if (cur_elt == NULL) {
-					cur_elt = ucl_object_typed_new (UCL_OBJECT);
+				LL_FOREACH (cur_obj, cur_elt) {
+					if (ucl_object_find_keyl (comments, (const char *)&cur_elt,
+							sizeof (void *)) == NULL) {
+						rspamadm_gen_comments (cur_elt, cur_doc, comments);
+					}
 				}
-
-				ucl_object_insert_key (comments, cur_elt, (const char *)&cur_obj,
-								sizeof (void *), true);
-
-				rspamadm_gen_comments (cur_obj, cur_doc, cur_elt);
 			}
 		}
 	}
