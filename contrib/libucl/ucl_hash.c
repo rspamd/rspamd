@@ -247,7 +247,7 @@ ucl_hash_create (bool ignore_case)
 	return new;
 }
 
-void ucl_hash_destroy (ucl_hash_t* hashlin, ucl_hash_free_func *func)
+void ucl_hash_destroy (ucl_hash_t* hashlin, ucl_hash_free_func func)
 {
 	const ucl_object_t *cur, *tmp;
 

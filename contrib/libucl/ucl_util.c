@@ -236,7 +236,7 @@ ucl_object_free_internal (ucl_object_t *obj, bool allow_rec, ucl_object_dtor dto
 		}
 		else if (obj->type == UCL_OBJECT) {
 			if (obj->value.ov != NULL) {
-				ucl_hash_destroy (obj->value.ov, (ucl_hash_free_func *)dtor);
+				ucl_hash_destroy (obj->value.ov, (ucl_hash_free_func)dtor);
 			}
 			obj->value.ov = NULL;
 		}
@@ -502,6 +502,10 @@ ucl_parser_free (struct ucl_parser *parser)
 
 	if (parser->cur_file) {
 		free (parser->cur_file);
+	}
+
+	if (parser->comments) {
+		ucl_object_unref (parser->comments);
 	}
 
 	UCL_FREE (sizeof (struct ucl_parser), parser);
@@ -1037,6 +1041,16 @@ ucl_include_file_single (const unsigned char *data, size_t len,
 		else if (old_obj == NULL) {
 			/* Create an object with key: prefix */
 			nest_obj = ucl_object_new_full (UCL_OBJECT, params->priority);
+
+			if (nest_obj == NULL) {
+				ucl_create_err (&parser->err, "cannot allocate memory for an object");
+				if (buflen > 0) {
+					ucl_munmap (buf, buflen);
+				}
+
+				return false;
+			}
+
 			nest_obj->key = params->prefix;
 			nest_obj->keylen = strlen (params->prefix);
 			ucl_copy_key_trash(nest_obj);
@@ -1052,6 +1066,14 @@ ucl_include_file_single (const unsigned char *data, size_t len,
 			if (ucl_object_type(old_obj) == UCL_ARRAY) {
 				/* Append to the existing array */
 				nest_obj = ucl_object_new_full (UCL_OBJECT, params->priority);
+				if (nest_obj == NULL) {
+					ucl_create_err (&parser->err, "cannot allocate memory for an object");
+					if (buflen > 0) {
+						ucl_munmap (buf, buflen);
+					}
+
+					return false;
+				}
 				nest_obj->prev = nest_obj;
 				nest_obj->next = NULL;
 
@@ -1060,6 +1082,14 @@ ucl_include_file_single (const unsigned char *data, size_t len,
 			else {
 				/* Convert the object to an array */
 				new_obj = ucl_object_typed_new (UCL_ARRAY);
+				if (new_obj == NULL) {
+					ucl_create_err (&parser->err, "cannot allocate memory for an object");
+					if (buflen > 0) {
+						ucl_munmap (buf, buflen);
+					}
+
+					return false;
+				}
 				new_obj->key = old_obj->key;
 				new_obj->keylen = old_obj->keylen;
 				new_obj->flags |= UCL_OBJECT_MULTIVALUE;
@@ -1067,6 +1097,14 @@ ucl_include_file_single (const unsigned char *data, size_t len,
 				new_obj->next = NULL;
 
 				nest_obj = ucl_object_new_full (UCL_OBJECT, params->priority);
+				if (nest_obj == NULL) {
+					ucl_create_err (&parser->err, "cannot allocate memory for an object");
+					if (buflen > 0) {
+						ucl_munmap (buf, buflen);
+					}
+
+					return false;
+				}
 				nest_obj->prev = nest_obj;
 				nest_obj->next = NULL;
 
@@ -1085,6 +1123,10 @@ ucl_include_file_single (const unsigned char *data, size_t len,
 				ucl_create_err (&parser->err,
 						"Conflicting type for key: %s",
 						params->prefix);
+				if (buflen > 0) {
+					ucl_munmap (buf, buflen);
+				}
+
 				return false;
 			}
 		}
@@ -1097,7 +1139,11 @@ ucl_include_file_single (const unsigned char *data, size_t len,
 			if (st == NULL) {
 				ucl_create_err (&parser->err, "cannot allocate memory for an object");
 				ucl_object_unref (nest_obj);
-				return NULL;
+				if (buflen > 0) {
+					ucl_munmap (buf, buflen);
+				}
+
+				return false;
 			}
 			st->obj = nest_obj;
 			st->level = parser->stack->level;
@@ -1579,6 +1625,10 @@ ucl_load_handler (const unsigned char *data, size_t len,
 		old_obj = __DECONST (ucl_object_t *, ucl_hash_search (container, prefix, strlen (prefix)));
 		if (old_obj != NULL) {
 			ucl_create_err (&parser->err, "Key %s already exists", prefix);
+			if (buflen > 0) {
+				ucl_munmap (buf, buflen);
+			}
+
 			return false;
 		}
 
@@ -1610,6 +1660,7 @@ ucl_load_handler (const unsigned char *data, size_t len,
 					parser->flags & UCL_PARSER_KEY_LOWERCASE);
 			parser->stack->obj->value.ov = container;
 		}
+
 		return true;
 	}
 
@@ -3322,4 +3373,26 @@ ucl_object_type_to_string (ucl_type_t type)
 	}
 
 	return res;
+}
+
+const ucl_object_t *
+ucl_parser_get_comments (struct ucl_parser *parser)
+{
+	if (parser && parser->comments) {
+		return parser->comments;
+	}
+
+	return NULL;
+}
+
+const ucl_object_t *
+ucl_comments_find (const ucl_object_t *comments,
+		const ucl_object_t *srch)
+{
+	if (comments && srch) {
+		return ucl_object_find_keyl (comments, (const char *)&srch,
+				sizeof (void *));
+	}
+
+	return NULL;
 }

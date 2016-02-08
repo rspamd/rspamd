@@ -147,11 +147,13 @@ typedef enum ucl_emitter {
  * UCL still has to perform copying implicitly.
  */
 typedef enum ucl_parser_flags {
-	UCL_PARSER_DEFAULT = 0x0,       /**< No special flags */
-	UCL_PARSER_KEY_LOWERCASE = 0x1, /**< Convert all keys to lower case */
-	UCL_PARSER_ZEROCOPY = 0x2, /**< Parse input in zero-copy mode if possible */
-	UCL_PARSER_NO_TIME = 0x4, /**< Do not parse time and treat time values as strings */
-	UCL_PARSER_NO_IMPLICIT_ARRAYS = 0x8 /** Create explicit arrays instead of implicit ones */
+	UCL_PARSER_DEFAULT = 0,       /**< No special flags */
+	UCL_PARSER_KEY_LOWERCASE = (1 << 0), /**< Convert all keys to lower case */
+	UCL_PARSER_ZEROCOPY = (1 << 1), /**< Parse input in zero-copy mode if possible */
+	UCL_PARSER_NO_TIME = (1 << 2), /**< Do not parse time and treat time values as strings */
+	UCL_PARSER_NO_IMPLICIT_ARRAYS = (1 << 3), /** Create explicit arrays instead of implicit ones */
+	UCL_PARSER_SAVE_COMMENTS = (1 << 4), /** Save comments in the parser context */
+	UCL_PARSER_DISABLE_MACRO = (1 << 5) /** Treat macros as comments */
 } ucl_parser_flags_t;
 
 /**
@@ -159,17 +161,17 @@ typedef enum ucl_parser_flags {
  */
 typedef enum ucl_string_flags {
 	UCL_STRING_RAW = 0x0,     /**< Treat string as is */
-	UCL_STRING_ESCAPE = 0x1,  /**< Perform JSON escape */
-	UCL_STRING_TRIM = 0x2,    /**< Trim leading and trailing whitespaces */
-	UCL_STRING_PARSE_BOOLEAN = 0x4,    /**< Parse passed string and detect boolean */
-	UCL_STRING_PARSE_INT = 0x8,    /**< Parse passed string and detect integer number */
-	UCL_STRING_PARSE_DOUBLE = 0x10,    /**< Parse passed string and detect integer or float number */
-	UCL_STRING_PARSE_TIME = 0x20, /**< Parse time strings */
+	UCL_STRING_ESCAPE = (1 << 0),  /**< Perform JSON escape */
+	UCL_STRING_TRIM = (1 << 1),    /**< Trim leading and trailing whitespaces */
+	UCL_STRING_PARSE_BOOLEAN = (1 << 2),    /**< Parse passed string and detect boolean */
+	UCL_STRING_PARSE_INT = (1 << 3),    /**< Parse passed string and detect integer number */
+	UCL_STRING_PARSE_DOUBLE = (1 << 4),    /**< Parse passed string and detect integer or float number */
+	UCL_STRING_PARSE_TIME = (1 << 5), /**< Parse time strings */
 	UCL_STRING_PARSE_NUMBER =  UCL_STRING_PARSE_INT|UCL_STRING_PARSE_DOUBLE|UCL_STRING_PARSE_TIME,  /**<
 									Parse passed string and detect number */
 	UCL_STRING_PARSE =  UCL_STRING_PARSE_BOOLEAN|UCL_STRING_PARSE_NUMBER,   /**<
 									Parse passed string (and detect booleans and numbers) */
-	UCL_STRING_PARSE_BYTES = 0x40  /**< Treat numbers as bytes */
+	UCL_STRING_PARSE_BYTES = (1 << 6)  /**< Treat numbers as bytes */
 } ucl_string_flags_t;
 
 /**
@@ -1091,6 +1093,23 @@ UCL_EXTERN void ucl_parser_clear_error(struct ucl_parser *parser);
 UCL_EXTERN void ucl_parser_free (struct ucl_parser *parser);
 
 /**
+ * Get constant opaque pointer to comments structure for this parser. Increase
+ * refcount to prevent this object to be destroyed on parser's destruction
+ * @param parser parser structure
+ * @return ucl comments pointer or NULL
+ */
+UCL_EXTERN const ucl_object_t * ucl_parser_get_comments (struct ucl_parser *parser);
+
+/**
+ * Utility function to find a comment object for the specified object in the input
+ * @param comments comments object
+ * @param srch search object
+ * @return string comment enclosed in ucl_object_t
+ */
+UCL_EXTERN const ucl_object_t * ucl_comments_find (const ucl_object_t *comments,
+		const ucl_object_t *srch);
+
+/**
  * Add new public key to parser for signatures check
  * @param parser parser object
  * @param key PEM representation of a key
@@ -1171,8 +1190,8 @@ struct ucl_emitter_context {
 	unsigned int indent;
 	/** Top level object */
 	const ucl_object_t *top;
-	/** The rest of context */
-	unsigned char data[1];
+	/** Optional comments */
+	const ucl_object_t *comments;
 };
 
 /**
@@ -1202,11 +1221,13 @@ UCL_EXTERN unsigned char *ucl_object_emit_len (const ucl_object_t *obj,
  * @param emit_type if type is #UCL_EMIT_JSON then emit json, if type is
  * #UCL_EMIT_CONFIG then emit config like object
  * @param emitter a set of emitter functions
+ * @param comments optional comments for the parser
  * @return dump of an object (must be freed after using) or NULL in case of error
  */
 UCL_EXTERN bool ucl_object_emit_full (const ucl_object_t *obj,
 		enum ucl_emitter emit_type,
-		struct ucl_emitter_functions *emitter);
+		struct ucl_emitter_functions *emitter,
+		const ucl_object_t *comments);
 
 /**
  * Start streamlined UCL object emitter
