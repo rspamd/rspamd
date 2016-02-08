@@ -33,7 +33,7 @@ local function fann_scores_filter(task)
   local fann_input = {}
 
   for sym,idx in pairs(symbols) do
-    if task:get_symbol(sym) then
+    if task:has_symbol(sym) then
       fann_input[idx + 1] = 1
     else
       fann_input[idx + 1] = 0

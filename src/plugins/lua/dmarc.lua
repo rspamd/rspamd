@@ -196,7 +196,7 @@ local function dmarc_callback(task)
     -- Check dkim and spf symbols
     local spf_ok = false
     local dkim_ok = false
-    if task:get_symbol(symbols['spf_allow_symbol']) then
+    if task:has_symbol(symbols['spf_allow_symbol']) then
       efrom = task:get_from(1)
       if efrom and efrom[1] and efrom[1]['domain'] then
         if efrom[1]['domain'] == from[1]['domain'] then

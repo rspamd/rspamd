@@ -54,7 +54,7 @@ local function whitelist_cb(symbol, rule, task)
     if found then
       if rule['valid_spf'] then
         -- Check for spf symbol
-        if not task:get_symbol(options['spf_allow_symbol']) then
+        if not task:has_symbol(options['spf_allow_symbol']) then
           found = false
           rspamd_logger.debugx(task, "domain %s has been found in whitelist %s" ..
             " but it doesn't have valid SPF record", domain, symbol)
@@ -85,7 +85,7 @@ local function whitelist_cb(symbol, rule, task)
         end
       end
       if rule['valid_dmarc'] then
-        if not task:get_symbol(options['dmarc_allow_symbol']) then
+        if not task:has_symbol(options['dmarc_allow_symbol']) then
           found = false
           rspamd_logger.debugx(task, "domain %s has been found in whitelist %s" ..
               " but it doesn't have valid DMARC", domain, symbol)

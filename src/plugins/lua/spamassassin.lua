@@ -909,7 +909,7 @@ local function process_atom(atom, task)
     return res
   elseif external_deps[atom] then
     local res = 0
-    if task:get_symbol(atom) then
+    if task:has_symbol(atom) then
       res = 1
     end
     rspamd_logger.debugx(task, 'external atom: %1, result: %2', atom, res)
@@ -1206,7 +1206,7 @@ local function post_process()
       local meta_cb = function(task)
         local res = 0
         -- XXX: need to memoize result for better performance
-        local sym = task:get_symbol(k)
+        local sym = task:has_symbol(k)
         if not sym then
           if expression then
             res = expression:process(task)
