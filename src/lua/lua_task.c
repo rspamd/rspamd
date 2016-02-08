@@ -373,6 +373,13 @@ LUA_FUNCTION_DEF (task, get_images);
  */
 LUA_FUNCTION_DEF (task, get_symbol);
 /***
+ * @method task:has_symbol(name)
+ * Fast path to check if a specified symbol is in the task's results
+ * @param {string} name symbol's name
+ * @return {boolean} `true` if symbol has been found
+ */
+LUA_FUNCTION_DEF (task, has_symbol);
+/***
  * @method task:get_date(type[, gmt])
  * Returns timestamp for a connection or for a MIME message. This function can be called with a
  * single table arguments with the following fields:
@@ -570,6 +577,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, set_hostname),
 	LUA_INTERFACE_DEF (task, get_images),
 	LUA_INTERFACE_DEF (task, get_symbol),
+	LUA_INTERFACE_DEF (task, has_symbol),
 	LUA_INTERFACE_DEF (task, get_date),
 	LUA_INTERFACE_DEF (task, get_message_id),
 	LUA_INTERFACE_DEF (task, get_timeval),
@@ -1782,6 +1790,29 @@ lua_task_get_symbol (lua_State *L)
 	if (!found) {
 		lua_pushnil (L);
 	}
+	return 1;
+}
+
+static gint
+lua_task_has_symbol (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *symbol;
+	struct metric_result *mres;
+	gboolean found = FALSE;
+
+	symbol = luaL_checkstring (L, 2);
+
+	if (task && symbol) {
+		mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+
+		if (mres) {
+			found = g_hash_table_lookup (mres->symbols, symbol) != NULL;
+		}
+	}
+
+	lua_pushboolean (L, found);
+
 	return 1;
 }
 
