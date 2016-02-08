@@ -940,36 +940,44 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 
 		if (nresults >= 1) {
 			/* Function returned boolean, so maybe we need to insert result? */
-			gboolean res;
+			gint res;
 			GList *opts = NULL;
 			gint i;
 			gdouble flag = 1.0;
 
 			if (lua_type (cd->L, level + 1) == LUA_TBOOLEAN) {
 				res = lua_toboolean (L, level + 1);
-				if (res) {
-					gint first_opt = 2;
+			}
+			else {
+				res = lua_tonumber (L, level + 1);
+			}
 
-					if (lua_type (L, level + 2) == LUA_TNUMBER) {
-						flag = lua_tonumber (L, level + 2);
-						/* Shift opt index */
-						first_opt = 3;
-					}
+			if (res) {
+				gint first_opt = 2;
 
-					for (i = lua_gettop (L); i >= level + first_opt; i--) {
-						if (lua_type (L, i) == LUA_TSTRING) {
-							const char *opt = lua_tostring (L, i);
-
-							opts = g_list_prepend (opts,
-									rspamd_mempool_strdup (task->task_pool,
-											opt));
-						}
-					}
-					rspamd_task_insert_result (task, cd->symbol, flag, opts);
+				if (lua_type (L, level + 2) == LUA_TNUMBER) {
+					flag = lua_tonumber (L, level + 2);
+					/* Shift opt index */
+					first_opt = 3;
+				}
+				else {
+					flag = res;
 				}
 
-				lua_pop (L, nresults);
+				for (i = lua_gettop (L); i >= level + first_opt; i--) {
+					if (lua_type (L, i) == LUA_TSTRING) {
+						const char *opt = lua_tostring (L, i);
+
+						opts = g_list_prepend (opts,
+								rspamd_mempool_strdup (task->task_pool,
+										opt));
+					}
+				}
+
+				rspamd_task_insert_result (task, cd->symbol, flag, opts);
 			}
+
+			lua_pop (L, nresults);
 		}
 	}
 
