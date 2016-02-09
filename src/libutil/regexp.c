@@ -154,7 +154,7 @@ static void
 rspamd_regexp_post_process (rspamd_regexp_t *r)
 {
 #if defined(WITH_PCRE2)
-	gint jsz;
+	gsize jsz;
 	/* Create match context */
 
 	r->mcontext = pcre2_match_context_create (NULL);
@@ -626,6 +626,101 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 
 	return FALSE;
 }
+#else
+/* PCRE 2 version */
+gboolean
+rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
+		const gchar **start, const gchar **end, gboolean raw,
+		GArray *captures)
+{
+	pcre2_match_data *match_data;
+	pcre2_match_context *mcontext;
+	PCRE_T *r;
+	const gchar *mt;
+	gsize remain = 0, *ovec;
+	gint rc, match_flags, novec, i;
+	gboolean ret = FALSE;
+
+	g_assert (re != NULL);
+	g_assert (text != NULL);
+
+	if (len == 0) {
+		len = strlen (text);
+	}
+
+	if (end != NULL && *end != NULL) {
+		/* Incremental search */
+		mt = (*end);
+
+		if ((gint)len > (mt - text)) {
+			remain = len - (mt - text);
+		}
+	}
+	else {
+		mt = text;
+		remain = len;
+	}
+
+	if (remain == 0) {
+		return FALSE;
+	}
+
+	match_flags = PCRE_FLAG(NEWLINE_ANYCRLF);
+
+	if (raw) {
+		r = re->raw_re;
+		mcontext = re->raw_mcontext;
+	}
+	else {
+		r = re->re;
+		mcontext = re->mcontext;
+	}
+
+	match_data = pcre2_match_data_create (re->ncaptures + 1, NULL);
+
+	rc = pcre2_match (r,  mt, remain, 0, match_flags, match_data,
+					mcontext);
+
+	if (rc >= 0) {
+		novec = pcre2_get_ovector_count (match_data);
+		ovec = pcre2_get_ovector_pointer (match_data);
+
+		if (start) {
+			*start = mt + ovec[0];
+		}
+		if (end) {
+			*end = mt + ovec[1];
+		}
+
+		if (captures != NULL && novec > 1) {
+			struct rspamd_re_capture *elt;
+
+			g_assert (g_array_get_element_size (captures) ==
+					sizeof (struct rspamd_re_capture));
+			g_array_set_size (captures, novec);
+
+			for (i = 0; i < novec; i ++) {
+				elt = &g_array_index (captures, struct rspamd_re_capture, i);
+				elt->p = mt + ovec[i * 2];
+				elt->len = (mt + ovec[i * 2 + 1]) - elt->p;
+
+			}
+		}
+
+		ret = TRUE;
+
+		if (re->flags & RSPAMD_REGEXP_FLAG_FULL_MATCH) {
+			/* We also ensure that the match is full */
+			if (ovec[0] != 0 || (guint)ovec[1] < len) {
+				ret = FALSE;
+			}
+		}
+	}
+
+	pcre2_match_data_free (match_data);
+
+	return ret;
+}
 #endif
 
 const char*
@@ -910,7 +1005,7 @@ rspamd_regexp_library_init (void)
 		global_re_cache = rspamd_regexp_cache_new ();
 #ifdef HAVE_PCRE_JIT
 		gint jit, rc;
-		const gchar *str;
+		gchar *str;
 
 #ifndef WITH_PCRE2
 		rc = pcre_config (PCRE_CONFIG_JIT, &jit);
@@ -927,8 +1022,17 @@ rspamd_regexp_library_init (void)
 			msg_info ("pcre is compiled with JIT for unknown target");
 #endif
 #else
-			pcre2_config (PCRE2_CONFIG_JITTARGET, &str);
-			msg_info ("pcre2 is compiled with JIT for %s", str);
+			rc = pcre2_config (PCRE2_CONFIG_JITTARGET, NULL);
+
+			if (rc > 0) {
+				str = g_alloca (rc);
+				pcre2_config (PCRE2_CONFIG_JITTARGET, str);
+				msg_info ("pcre2 is compiled with JIT for %s", str);
+			}
+			else {
+				msg_info ("pcre2 is compiled with JIT for unknown");
+			}
+
 #endif /* WITH_PCRE2 */
 
 			can_jit = TRUE;
