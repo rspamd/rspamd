@@ -18,6 +18,15 @@
 
 #include "config.h"
 
+#ifndef WITH_PCRE2
+#define PCRE_FLAG(x) G_PASTE(PCRE_, x)
+#else
+#ifndef PCRE2_CODE_UNIT_WIDTH
+#define PCRE2_CODE_UNIT_WIDTH 8
+#endif
+#define PCRE_FLAG(x) G_PASTE(PCRE2_, x)
+#endif
+
 #define RSPAMD_INVALID_ID ((guint64)-1LL)
 #define RSPAMD_REGEXP_FLAG_RAW (1 << 1)
 #define RSPAMD_REGEXP_FLAG_NOOPT (1 << 2)

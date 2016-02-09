@@ -19,7 +19,30 @@
 #include "ref.h"
 #include "util.h"
 #include "rspamd.h"
+
+#ifndef WITH_PCRE2
+/* Normal pcre path */
 #include <pcre.h>
+#define PCRE_T pcre
+#define PCRE_EXTRA_T pcre_extra
+#define PCRE_JIT_T pcre_jit_stack
+#define PCRE_FREE pcre_free
+#define PCRE_JIT_STACK_FREE pcre_jit_stack_free
+#define PCRE_FLAG(x) G_PASTE(PCRE_, x)
+#else
+/* PCRE 2 path */
+#ifndef PCRE2_CODE_UNIT_WIDTH
+#define PCRE2_CODE_UNIT_WIDTH 8
+#endif
+
+#include <pcre2.h>
+#define PCRE_T pcre2_code
+#define PCRE_JIT_T pcre2_jit_stack
+#define PCRE_FREE pcre2_code_free
+#define PCRE_JIT_STACK_FREE pcre2_jit_stack_free
+
+#define PCRE_FLAG(x) G_PASTE(PCRE2_, x)
+#endif
 
 typedef guchar regexp_id_t[rspamd_cryptobox_HASHBYTES];
 
@@ -28,14 +51,19 @@ typedef guchar regexp_id_t[rspamd_cryptobox_HASHBYTES];
 struct rspamd_regexp_s {
 	gdouble exec_time;
 	gchar *pattern;
-	pcre *re;
-	pcre_extra *extra;
-#ifdef HAVE_PCRE_JIT
-	pcre_jit_stack *jstack;
-	pcre_jit_stack *raw_jstack;
+	PCRE_T *re;
+	PCRE_T *raw_re;
+#ifndef WITH_PCRE2
+	PCRE_EXTRA_T *extra;
+	PCRE_EXTRA_T *raw_extra;
+#else
+	pcre2_match_context *mcontext;
+	pcre2_match_context *raw_mcontext;
 #endif
-	pcre *raw_re;
-	pcre_extra *raw_extra;
+#ifdef HAVE_PCRE_JIT
+	PCRE_JIT_T *jstack;
+	PCRE_JIT_T *raw_jstack;
+#endif
 	regexp_id_t id;
 	ref_entry_t ref;
 	gpointer ud;
@@ -82,30 +110,38 @@ rspamd_regexp_dtor (rspamd_regexp_t *re)
 {
 	if (re) {
 		if (re->raw_re && re->raw_re != re->re) {
-			pcre_free (re->raw_re);
-#ifdef HAVE_PCRE_JIT
+#ifndef WITH_PCRE2
 			if (re->raw_extra) {
 				pcre_free_study (re->raw_extra);
 			}
-			if (re->raw_jstack) {
-				pcre_jit_stack_free (re->raw_jstack);
-			}
 #else
-			pcre_free (re->raw_extra);
+			if (re->mcontext) {
+				pcre2_match_context_free (re->mcontext);
+			}
 #endif
+#ifdef HAVE_PCRE_JIT
+			if (re->raw_jstack) {
+				PCRE_JIT_STACK_FREE (re->raw_jstack);
+			}
+#endif
+			PCRE_FREE (re->raw_re);
 		}
 		if (re->re) {
-			pcre_free (re->re);
-#ifdef HAVE_PCRE_JIT
+#ifndef WITH_PCRE2
 			if (re->extra) {
 				pcre_free_study (re->extra);
 			}
-			if (re->jstack) {
-				pcre_jit_stack_free (re->jstack);
-			}
 #else
-			pcre_free (re->extra);
+			if (re->raw_mcontext) {
+				pcre2_match_context_free (re->raw_mcontext);
+			}
 #endif
+#ifdef HAVE_PCRE_JIT
+			if (re->jstack) {
+				PCRE_JIT_STACK_FREE (re->jstack);
+			}
+#endif
+			PCRE_FREE (re->re);
 		}
 
 		if (re->pattern) {
@@ -114,15 +150,160 @@ rspamd_regexp_dtor (rspamd_regexp_t *re)
 	}
 }
 
+static void
+rspamd_regexp_post_process (rspamd_regexp_t *r)
+{
+#if defined(WITH_PCRE2)
+	gint jsz;
+	/* Create match context */
+
+	r->mcontext = pcre2_match_context_create (NULL);
+
+	if (r->re != r->raw_re) {
+		r->raw_mcontext = pcre2_match_context_create (NULL);
+	}
+	else {
+		r->raw_mcontext = r->mcontext;
+	}
+
+#ifdef HAVE_PCRE_JIT
+	if (pcre2_jit_compile (r->re, PCRE2_JIT_COMPLETE) < 0) {
+		msg_debug ("jit compilation of %s is not supported", r->pattern);
+	}
+
+	if (pcre2_pattern_info (r->re, PCRE2_INFO_JITSIZE, &jsz) >= 0 && jsz > 0) {
+		r->jstack = pcre2_jit_stack_create (32 * 1024, 512 * 1024, NULL);
+	}
+	else {
+		msg_debug ("jit compilation of %s is not supported", r->pattern);
+	}
+
+	if (r->jstack) {
+		pcre2_jit_stack_assign (r->mcontext, NULL, r->jstack);
+	}
+
+	if (r->re != r->raw_re) {
+		if (pcre2_jit_compile (r->raw_re, PCRE2_JIT_COMPLETE) < 0) {
+			msg_debug ("jit compilation of %s is not supported", r->pattern);
+		}
+
+		if (pcre2_pattern_info (r->raw_re, PCRE2_INFO_JITSIZE, &jsz) >= 0 && jsz > 0) {
+			r->raw_jstack = pcre2_jit_stack_create (32 * 1024, 512 * 1024, NULL);
+		}
+		else {
+			msg_debug ("jit compilation of raw %s is not supported", r->pattern);
+		}
+
+		if (r->raw_jstack) {
+			pcre2_jit_stack_assign (r->raw_mcontext, NULL, r->raw_jstack);
+		}
+	}
+	else {
+		r->raw_jstack = r->jstack;
+	}
+#endif
+
+#else
+	const gchar *err_str;
+	gboolean try_jit = TRUE, try_jit_raw = TRUE;
+	gint study_flags = 0;
+
+#if defined(HAVE_PCRE_JIT)
+	study_flags |= PCRE_STUDY_JIT_COMPILE;
+#endif
+
+	/* Pcre 1 needs study */
+	if (r->re) {
+		r->extra = pcre_study (r->re, study_flags, &err_str);
+	}
+	else {
+		msg_warn ("cannot optimize regexp pattern: '%s': %s",
+				r->pattern, err_str);
+		try_jit = FALSE;
+	}
+
+	if (r->raw_re && r->raw_re != r->re) {
+		r->raw_extra = pcre_study (r->re, study_flags, &err_str);
+	}
+	else if (r->raw_re == r->re) {
+		r->raw_extra = r->extra;
+	}
+
+	if (r->raw_extra == NULL) {
+
+		msg_warn ("cannot optimize raw regexp pattern: '%s': %s",
+				r->pattern, err_str);
+		try_raw_jit = FALSE;
+	}
+	/* JIT path */
+	if (try_jit) {
+#ifdef HAVE_PCRE_JIT
+		gint jit, n;
+
+		if (can_jit) {
+			jit = 0;
+			n = pcre_fullinfo (r->re, r->extra,
+					PCRE_INFO_JIT, &jit);
+
+			if (n != 0 || jit != 1) {
+				msg_debug ("jit compilation of %s is not supported", r->pattern);
+				r->jstack = NULL;
+			}
+			else {
+				r->jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
+				pcre_assign_jit_stack (r->extra, NULL, r->jstack);
+			}
+		}
+#endif
+	}
+	else {
+		msg_warn ("cannot optimize regexp pattern: '%s': %s",
+				r->pattern, err_str);
+	}
+
+	if (try_jit_raw) {
+#ifdef HAVE_PCRE_JIT
+		gint jit, n;
+
+		if (can_jit) {
+
+			if (r->raw_re == r->re) {
+				r->raw_jstack = r->jstack;
+			}
+			else {
+				jit = 0;
+				n = pcre_fullinfo (r->raw_re, r->raw_extra,
+						PCRE_INFO_JIT, &jit);
+
+				if (n != 0 || jit != 1) {
+					msg_debug ("jit compilation of %s is not supported", r->pattern);
+					r->raw_jstack = NULL;
+				}
+				else {
+					r->raw_jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
+					pcre_assign_jit_stack (r->raw_extra, NULL, r->raw_jstack);
+				}
+			}
+		}
+#endif
+	}
+#endif /* WITH_PCRE2 */
+}
+
 rspamd_regexp_t*
 rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 		GError **err)
 {
 	const gchar *start = pattern, *end, *flags_str = NULL, *err_str;
 	rspamd_regexp_t *res;
-	pcre *r;
+	PCRE_T *r;
 	gchar sep = 0, *real_pattern;
-	gint regexp_flags = 0, rspamd_flags = 0, err_off, study_flags = 0, ncaptures;
+#ifndef WITH_PCRE2
+	gint err_off;
+#else
+	gsize err_off;
+#endif
+	gint regexp_flags = 0, rspamd_flags = 0, err_code, ncaptures;
 	gboolean strict_flags = FALSE;
 
 	rspamd_regexp_library_init ();
@@ -172,27 +353,35 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 
 	rspamd_flags |= RSPAMD_REGEXP_FLAG_RAW;
 
-	regexp_flags |= PCRE_NEWLINE_ANYCRLF;
-	regexp_flags &= ~PCRE_UTF8;
+	regexp_flags |= PCRE_FLAG(NEWLINE_ANYCRLF);
+#ifndef WITH_PCRE2
+	regexp_flags &= ~PCRE_FLAG(UTF8);
+#else
+	regexp_flags &= ~PCRE_FLAG(UTF);
+#endif
 
 	if (flags_str != NULL) {
 		while (*flags_str) {
 			switch (*flags_str) {
 			case 'i':
-				regexp_flags |= PCRE_CASELESS;
+				regexp_flags |= PCRE_FLAG(CASELESS);
 				break;
 			case 'm':
-				regexp_flags |= PCRE_MULTILINE;
+				regexp_flags |= PCRE_FLAG(MULTILINE);
 				break;
 			case 's':
-				regexp_flags |= PCRE_DOTALL;
+				regexp_flags |= PCRE_FLAG(DOTALL);
 				break;
 			case 'x':
-				regexp_flags |= PCRE_EXTENDED;
+				regexp_flags |= PCRE_FLAG(EXTENDED);
 				break;
 			case 'u':
 				rspamd_flags &= ~RSPAMD_REGEXP_FLAG_RAW;
-				regexp_flags |= PCRE_UTF8;
+#ifndef WITH_PCRE2
+				regexp_flags |= PCRE_FLAG(UTF8);
+#else
+				regexp_flags |= PCRE_FLAG(UTF);
+#endif
 				break;
 			case 'O':
 				/* We optimize all regexps by default */
@@ -200,7 +389,11 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 				break;
 			case 'r':
 				rspamd_flags |= RSPAMD_REGEXP_FLAG_RAW;
-				regexp_flags &= ~PCRE_UTF8;
+#ifndef WITH_PCRE2
+				regexp_flags &= ~PCRE_FLAG(UTF8);
+#else
+				regexp_flags &= ~PCRE_FLAG(UTF);
+#endif
 				break;
 			default:
 				if (strict_flags) {
@@ -221,12 +414,21 @@ fin:
 	real_pattern = g_malloc (end - start + 1);
 	rspamd_strlcpy (real_pattern, start, end - start + 1);
 
-	r = pcre_compile (real_pattern, regexp_flags, &err_str, &err_off, NULL);
+#ifndef WITH_PCRE2
+	r = pcre_compile (pattern, regexp_flags,
+			&err_str, &err_off, NULL);
+	(void)err_code;
+#else
+	r = pcre2_compile (pattern, PCRE2_ZERO_TERMINATED,
+			regexp_flags,
+			&err_code, &err_off, NULL);
+	(void)err_str;
+#endif
 
 	if (r == NULL) {
 		g_set_error (err, rspamd_regexp_quark(), EINVAL,
-			"invalid regexp pattern: '%s': %s at position %d",
-			pattern, err_str, err_off);
+			"invalid regexp pattern: '%s': at position %d",
+			pattern, (gint)err_off);
 		g_free (real_pattern);
 
 		return NULL;
@@ -246,92 +448,26 @@ fin:
 	}
 	else {
 		res->re = r;
-		res->raw_re = pcre_compile (pattern, regexp_flags & ~PCRE_UTF8,
-				&err_str, &err_off, NULL);
-
+#ifndef WITH_PCRE2
+		res->raw_re = pcre_compile (pattern, regexp_flags & ~PCRE_FLAG(UTF8),
+						&err_str, &err_off, NULL);
+		(void)err_code;
+#else
+		res->raw_re = pcre2_compile (pattern, PCRE2_ZERO_TERMINATED,
+					regexp_flags & ~PCRE_FLAG(UTF),
+					&err_code, &err_off, NULL);
+		(void)err_str;
+#endif
 		if (res->raw_re == NULL) {
-			msg_warn ("invalid raw regexp pattern: '%s': %s at position %d",
-					pattern, err_str, err_off);
+			msg_warn ("invalid raw regexp pattern: '%s': at position %d",
+					pattern, (gint)err_off);
 		}
 	}
 
-#ifdef HAVE_PCRE_JIT
-	study_flags |= PCRE_STUDY_JIT_COMPILE;
-#endif
-
-	if (!(rspamd_flags & RSPAMD_REGEXP_FLAG_NOOPT)) {
-		/* Optimize regexp */
-		if (res->re) {
-			res->extra = pcre_study (res->re, study_flags, &err_str);
-			if (res->extra != NULL) {
-#ifdef HAVE_PCRE_JIT
-				gint jit, n;
-
-				if (can_jit) {
-					jit = 0;
-					n = pcre_fullinfo (res->re, res->extra,
-							PCRE_INFO_JIT, &jit);
-
-					if (n != 0 || jit != 1) {
-						msg_debug ("jit compilation of %s is not supported", pattern);
-						res->jstack = NULL;
-					}
-					else {
-						res->jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
-						pcre_assign_jit_stack (res->extra, NULL, res->jstack);
-					}
-				}
-#endif
-			}
-			else {
-				msg_warn ("cannot optimize regexp pattern: '%s': %s",
-						pattern, err_str);
-			}
-		}
-
-		if (res->raw_re) {
-			if (res->raw_re != res->re) {
-				res->raw_extra = pcre_study (res->raw_re, study_flags, &err_str);
-				if (res->raw_extra != NULL) {
-#ifdef HAVE_PCRE_JIT
-					gint jit, n;
-
-					if (can_jit) {
-						jit = 0;
-						n = pcre_fullinfo (res->raw_re, res->raw_extra,
-								PCRE_INFO_JIT, &jit);
-
-						if (n != 0 || jit != 1) {
-							msg_debug ("jit compilation of %s is not supported",
-									pattern);
-							res->raw_jstack = NULL;
-						}
-						else {
-							res->raw_jstack = pcre_jit_stack_alloc (32 * 1024,
-									512 * 1024);
-							pcre_assign_jit_stack (res->raw_extra, NULL,
-									res->raw_jstack);
-						}
-					}
-#endif
-				}
-				else {
-					msg_warn ("cannot optimize raw regexp pattern: '%s': %s",
-							pattern, err_str);
-				}
-			}
-			else {
-#ifdef HAVE_PCRE_JIT
-				/* Just alias pointers */
-				res->raw_extra = res->extra;
-				res->raw_jstack = res->jstack;
-#endif
-			}
-		}
-	}
-
+	rspamd_regexp_post_process (res);
 	rspamd_regexp_generate_id (pattern, flags, res->id);
 
+#ifndef WITH_PCRE2
 	/* Check number of captures */
 	if (pcre_fullinfo (res->raw_re, res->extra, PCRE_INFO_CAPTURECOUNT,
 			&ncaptures) == 0) {
@@ -343,10 +479,24 @@ fin:
 			&ncaptures) == 0) {
 		res->nbackref = ncaptures;
 	}
+#else
+	/* Check number of captures */
+	if (pcre2_pattern_info (res->raw_re, PCRE2_INFO_CAPTURECOUNT,
+			&ncaptures) == 0) {
+		res->ncaptures = ncaptures;
+	}
+
+	/* Check number of backrefs */
+	if (pcre2_pattern_info (res->raw_re, PCRE2_INFO_BACKREFMAX,
+			&ncaptures) == 0) {
+		res->nbackref = ncaptures;
+	}
+#endif
 
 	return res;
 }
 
+#ifndef WITH_PCRE2
 gboolean
 rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 		const gchar **start, const gchar **end, gboolean raw,
@@ -476,6 +626,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 
 	return FALSE;
 }
+#endif
 
 const char*
 rspamd_regexp_get_pattern (rspamd_regexp_t *re)
@@ -761,25 +912,33 @@ rspamd_regexp_library_init (void)
 		gint jit, rc;
 		const gchar *str;
 
-
+#ifndef WITH_PCRE2
 		rc = pcre_config (PCRE_CONFIG_JIT, &jit);
+#else
+		rc = pcre2_config (PCRE2_CONFIG_JIT, &jit);
+#endif
 
 		if (rc == 0 && jit == 1) {
+#ifndef WITH_PCRE2
 #ifdef PCRE_CONFIG_JITTARGET
 			pcre_config (PCRE_CONFIG_JITTARGET, &str);
 			msg_info ("pcre is compiled with JIT for %s", str);
 #else
 			msg_info ("pcre is compiled with JIT for unknown target");
 #endif
+#else
+			pcre2_config (PCRE2_CONFIG_JITTARGET, &str);
+			msg_info ("pcre2 is compiled with JIT for %s", str);
+#endif /* WITH_PCRE2 */
 
 			can_jit = TRUE;
 		}
 		else {
-			msg_info ("pcre is compiled without JIT support, so many optimisations"
+			msg_info ("pcre is compiled without JIT support, so many optimizations"
 					" are impossible");
 		}
 #else
-		msg_info ("pcre is too old and has no JIT support, so many optimisations"
+		msg_info ("pcre is too old and has no JIT support, so many optimizations"
 				" are impossible");
 #endif
 	}

@@ -22,11 +22,17 @@
 #include "libserver/task.h"
 #include "libserver/cfg_file.h"
 #include "libutil/util.h"
+#include "libutil/regexp.h"
 #ifdef WITH_HYPERSCAN
 #include "hs.h"
 #include "unix-std.h"
 #include <signal.h>
+
+#ifndef WITH_PCRE2
 #include <pcre.h>
+#else
+#include <pcre2.h>
+#endif
 
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>
@@ -1129,17 +1135,22 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 			}
 
 			hs_flags[i] = 0;
-
-			if (pcre_flags & PCRE_UTF8) {
+#ifndef WITH_PCRE2
+			if (pcre_flags & PCRE_FLAG(UTF8)) {
 				hs_flags[i] |= HS_FLAG_UTF8;
 			}
-			if (pcre_flags & PCRE_CASELESS) {
+#else
+			if (pcre_flags & PCRE_FLAG(UTF)) {
+				hs_flags[i] |= HS_FLAG_UTF8;
+			}
+#endif
+			if (pcre_flags & PCRE_FLAG(CASELESS)) {
 				hs_flags[i] |= HS_FLAG_CASELESS;
 			}
-			if (pcre_flags & PCRE_MULTILINE) {
+			if (pcre_flags & PCRE_FLAG(MULTILINE)) {
 				hs_flags[i] |= HS_FLAG_MULTILINE;
 			}
-			if (pcre_flags & PCRE_DOTALL) {
+			if (pcre_flags & PCRE_FLAG(DOTALL)) {
 				hs_flags[i] |= HS_FLAG_DOTALL;
 			}
 			if (rspamd_regexp_get_maxhits (re) == 1) {
