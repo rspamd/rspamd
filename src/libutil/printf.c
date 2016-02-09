@@ -603,8 +603,8 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 
 					while (slen) {
 						hexbuf[0] = hex == 2 ? _HEX[*p & 0xf] : _hex[*p & 0xf];
-						hexbuf[1] = hex == 2 ? _HEX[(*p >> 8) & 0xf] :
-									_hex[(*p >> 8) & 0xf];
+						hexbuf[1] = hex == 2 ? _HEX[(*p >> 4) & 0xf] :
+									_hex[(*p >> 4) & 0xf];
 						RSPAMD_PRINTF_APPEND_BUF (hexbuf, 2);
 						p++;
 						slen--;
