@@ -408,10 +408,14 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 
 	if ((value = ucl_object_find_key (obj, "servers")) != NULL) {
 		rule->servers = rspamd_upstreams_create (cfg->ups_ctx);
+
 		rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
 				(rspamd_mempool_destruct_t)rspamd_upstreams_destroy,
 				rule->servers);
-		rspamd_upstreams_from_ucl (rule->servers, value, DEFAULT_PORT, NULL);
+		if (!rspamd_upstreams_from_ucl (rule->servers, value, DEFAULT_PORT, NULL)) {
+			msg_err_config ("cannot read servers definition");
+			return -1;
+		}
 	}
 	if ((value = ucl_object_find_key (obj, "fuzzy_map")) != NULL) {
 		it = NULL;
@@ -1650,7 +1654,7 @@ fuzzy_controller_timer_callback (gint fd, short what, void *arg)
 
 		if (*session->saved > 0 ) {
 			(*session->saved)--;
-			if (*session->saved == 0 && session->task != NULL) {
+			if (*session->saved == 0) {
 				rspamd_task_free (session->task);
 				session->task = NULL;
 			}
@@ -2031,7 +2035,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 					saved, err);
 		}
 
-		if (res) {
+		if (res > 0) {
 			processed = TRUE;
 		}
 		else if (res == -1) {

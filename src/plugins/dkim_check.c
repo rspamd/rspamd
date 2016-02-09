@@ -500,7 +500,7 @@ dkim_module_check (struct dkim_check_result *res)
 		}
 	}
 
-	if (all_done && res != NULL) {
+	if (all_done) {
 		rspamd_session_watcher_pop (res->task->s, res->w);
 	}
 }

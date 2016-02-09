@@ -173,18 +173,25 @@ rspamd_inet_socket_create (gint type, struct addrinfo *addr, gboolean is_server,
 		}
 
 		if (is_server) {
-			setsockopt (fd,
-				SOL_SOCKET,
-				SO_REUSEADDR,
-				(const void *)&on,
-				sizeof (gint));
+			if (setsockopt (fd,
+					SOL_SOCKET,
+					SO_REUSEADDR,
+					(const void *)&on,
+					sizeof (gint)) == -1) {
+				msg_warn ("setsockopt failed: %d, '%s'", errno,
+						strerror (errno));
+			}
 #ifdef HAVE_IPV6_V6ONLY
 			if (cur->ai_family == AF_INET6) {
-				setsockopt (fd,
-					IPPROTO_IPV6,
-					IPV6_V6ONLY,
-					(const void *)&on,
-					sizeof (gint));
+				if (setsockopt (fd,
+						IPPROTO_IPV6,
+						IPV6_V6ONLY,
+						(const void *)&on,
+						sizeof (gint)) == -1) {
+
+					msg_warn ("setsockopt failed: %d, '%s'", errno,
+							strerror (errno));
+				}
 			}
 #endif
 			r = bind (fd, cur->ai_addr, cur->ai_addrlen);
@@ -218,10 +225,12 @@ rspamd_inet_socket_create (gint type, struct addrinfo *addr, gboolean is_server,
 		else {
 			/* Still need to check SO_ERROR on socket */
 			optlen = sizeof (s_error);
-			getsockopt (fd, SOL_SOCKET, SO_ERROR, (void *)&s_error, &optlen);
-			if (s_error) {
-				errno = s_error;
-				goto out;
+
+			if (getsockopt (fd, SOL_SOCKET, SO_ERROR, (void *)&s_error, &optlen) != -1) {
+				if (s_error) {
+					errno = s_error;
+					goto out;
+				}
 			}
 		}
 		if (list == NULL) {
@@ -314,8 +323,12 @@ rspamd_socket_unix (const gchar *path,
 		goto out;
 	}
 	if (is_server) {
-		setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on,
-			sizeof (gint));
+		if (setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&on,
+			sizeof (gint)) == -1) {
+			msg_warn ("setsockopt failed: %d, '%s'", errno,
+					strerror (errno));
+		}
+
 		r = bind (fd, (struct sockaddr *)addr, SUN_LEN (addr));
 	}
 	else {
@@ -348,10 +361,12 @@ rspamd_socket_unix (const gchar *path,
 	else {
 		/* Still need to check SO_ERROR on socket */
 		optlen = sizeof (s_error);
-		getsockopt (fd, SOL_SOCKET, SO_ERROR, (void *)&s_error, &optlen);
-		if (s_error) {
-			errno = s_error;
-			goto out;
+
+		if (getsockopt (fd, SOL_SOCKET, SO_ERROR, (void *)&s_error, &optlen) != -1) {
+			if (s_error) {
+				errno = s_error;
+				goto out;
+			}
 		}
 	}
 
@@ -496,6 +511,7 @@ rspamd_sockets_list (const gchar *credits, guint16 port,
 			}
 			if (fd != -1) {
 				result = g_list_prepend (result, GINT_TO_POINTER (fd));
+				fd = -1;
 			}
 			else {
 				goto err;
@@ -1747,12 +1763,20 @@ restart:
 
 	/* Turn echo off */
 	if (tcgetattr (input, &oterm) != 0) {
+		close (input);
 		errno = ENOTTY;
 		return 0;
 	}
+
 	memcpy (&term, &oterm, sizeof(term));
 	term.c_lflag &= ~(ECHO | ECHONL);
-	(void)tcsetattr (input, TCSAFLUSH, &term);
+
+	if (tcsetattr (input, TCSAFLUSH, &term) == -1) {
+		errno = ENOTTY;
+		close (input);
+		return 0;
+	}
+
 	(void)write (output, "Enter passphrase: ", sizeof ("Enter passphrase: ") -
 		1);
 
@@ -1816,7 +1840,7 @@ restart:
 		}
 	}
 
-	return p - buf;
+	return (p - buf);
 #endif
 }
 
@@ -1942,7 +1966,7 @@ rspamd_init_libs (void)
 				OTTERY_ENTROPY_SRC_RDRAND);
 	}
 
-	ottery_init (ottery_cfg);
+	g_assert (ottery_init (ottery_cfg) == 0);
 
 #ifdef HAVE_LOCALE_H
 	if (getenv ("LANG") == NULL) {

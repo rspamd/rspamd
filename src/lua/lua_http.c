@@ -419,10 +419,6 @@ lua_http_request (lua_State *L)
 		msg_err ("http request has bad params");
 		lua_pushboolean (L, FALSE);
 
-		if (mime_type) {
-			g_free (mime_type);
-		}
-
 		return 1;
 	}
 
@@ -434,6 +430,7 @@ lua_http_request (lua_State *L)
 	cbd->mime_type = mime_type;
 	msec_to_tv (timeout, &cbd->tv);
 	cbd->fd = -1;
+
 	if (session) {
 		cbd->session = session;
 		rspamd_session_add_event (session,

@@ -546,10 +546,13 @@ surbl_module_config (struct rspamd_config *cfg)
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "surbl",
 		"redirector_hosts_map")) != NULL) {
-		rspamd_map_add (cfg, ucl_obj_tostring (
-				value),
+		if (!rspamd_map_add (cfg, ucl_obj_tostring (value),
 			"SURBL redirectors list", read_redirectors_list, fin_redirectors_list,
-			(void **)&surbl_module_ctx->redirector_map_data);
+			(void **)&surbl_module_ctx->redirector_map_data)) {
+
+			msg_warn_config ("bad redirectors map definition: %s",
+					ucl_obj_tostring (value));
+		}
 	}
 
 	if ((value =

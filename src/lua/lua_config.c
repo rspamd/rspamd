@@ -732,6 +732,7 @@ lua_config_register_pre_filter (lua_State *L)
 			cd->callback.ref = luaL_ref (L, LUA_REGISTRYINDEX);
 			cd->cb_is_ref = TRUE;
 		}
+
 		cd->L = L;
 		cfg->pre_filters = g_list_prepend (cfg->pre_filters, cd);
 		rspamd_mempool_add_destructor (cfg->cfg_pool,
@@ -753,6 +754,7 @@ lua_config_add_radix_map (lua_State *L)
 		description = lua_tostring (L, 3);
 		r = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (radix_compressed_t *));
 		*r = radix_create_compressed ();
+
 		if (!rspamd_map_add (cfg, map_line, description, rspamd_radix_read,
 			rspamd_radix_fin, (void **)r)) {
 			msg_warn_config ("invalid radix map %s", map_line);
@@ -760,7 +762,8 @@ lua_config_add_radix_map (lua_State *L)
 			lua_pushnil (L);
 			return 1;
 		}
-		ud = lua_newuserdata (L, sizeof (radix_compressed_t *));
+
+		ud = lua_newuserdata (L, sizeof (radix_compressed_t **));
 		*ud = r;
 		rspamd_lua_setclass (L, "rspamd{radix}", -1);
 
@@ -794,7 +797,7 @@ lua_config_radix_from_config (lua_State *L)
 			r = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (radix_compressed_t *));
 			*r = radix_create_compressed ();
 			radix_add_generic_iplist (ucl_obj_tostring (obj), r);
-			ud = lua_newuserdata (L, sizeof (radix_compressed_t *));
+			ud = lua_newuserdata (L, sizeof (radix_compressed_t **));
 			*ud = r;
 			rspamd_lua_setclass (L, "rspamd{radix}", -1);
 			return 1;
@@ -823,6 +826,7 @@ lua_config_add_hash_map (lua_State *L)
 		description = lua_tostring (L, 3);
 		r = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (GHashTable *));
 		*r = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+
 		if (!rspamd_map_add (cfg, map_line, description, rspamd_hosts_read, rspamd_hosts_fin,
 			(void **)r)) {
 			msg_warn ("invalid hash map %s", map_line);
@@ -830,10 +834,11 @@ lua_config_add_hash_map (lua_State *L)
 			lua_pushnil (L);
 			return 1;
 		}
+
 		rspamd_mempool_add_destructor (cfg->cfg_pool,
 			(rspamd_mempool_destruct_t)g_hash_table_destroy,
 			*r);
-		ud = lua_newuserdata (L, sizeof (GHashTable *));
+		ud = lua_newuserdata (L, sizeof (GHashTable **));
 		*ud = r;
 		rspamd_lua_setclass (L, "rspamd{hash_table}", -1);
 
@@ -857,6 +862,7 @@ lua_config_add_kv_map (lua_State *L)
 		description = lua_tostring (L, 3);
 		r = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (GHashTable *));
 		*r = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+
 		if (!rspamd_map_add (cfg, map_line, description, rspamd_kv_list_read, rspamd_kv_list_fin,
 			(void **)r)) {
 			msg_warn_config ("invalid hash map %s", map_line);
@@ -864,10 +870,11 @@ lua_config_add_kv_map (lua_State *L)
 			lua_pushnil (L);
 			return 1;
 		}
+
 		rspamd_mempool_add_destructor (cfg->cfg_pool,
 			(rspamd_mempool_destruct_t)g_hash_table_destroy,
 			*r);
-		ud = lua_newuserdata (L, sizeof (GHashTable *));
+		ud = lua_newuserdata (L, sizeof (GHashTable **));
 		*ud = r;
 		rspamd_lua_setclass (L, "rspamd{hash_table}", -1);
 
@@ -1062,7 +1069,12 @@ lua_config_register_symbols (lua_State *L)
 	gdouble weight = 1.0;
 
 	if (lua_gettop (L) < 3) {
-		msg_err_config ("not enough arguments to register a function");
+		if (cfg) {
+			msg_err_config ("not enough arguments to register a function");
+		}
+
+		lua_error (L);
+
 		return 0;
 	}
 	if (cfg) {
@@ -1230,6 +1242,11 @@ lua_config_register_dependency (lua_State * L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *name = NULL, *from = NULL;
 	gint id;
+
+	if (cfg == NULL) {
+		lua_error (L);
+		return 0;
+	}
 
 	if (lua_type (L, 2) == LUA_TNUMBER) {
 		id = luaL_checknumber (L, 2);

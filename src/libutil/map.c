@@ -802,7 +802,7 @@ rspamd_parse_abstract_list (rspamd_mempool_t * pool,
 				c = p;
 				data->state = 1;
 			}
-			else if (*p == '\r' || *p == '\n') {
+			else if ((*p == '\r' || *p == '\n') && p > c) {
 				/* Got EOL marker, save stored string */
 				s = strip_map_elt (pool, c, p - c);
 

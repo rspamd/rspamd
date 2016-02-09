@@ -681,9 +681,14 @@ lua_task_get_cfg (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_config **pcfg;
 
-	pcfg = lua_newuserdata (L, sizeof (gpointer));
-	rspamd_lua_setclass (L, "rspamd{config}", -1);
-	*pcfg = task->cfg;
+	if (task) {
+		pcfg = lua_newuserdata (L, sizeof (gpointer));
+		rspamd_lua_setclass (L, "rspamd{config}", -1);
+		*pcfg = task->cfg;
+	}
+	else {
+		lua_error (L);
+	}
 
 	return 1;
 }
@@ -694,8 +699,14 @@ lua_task_set_cfg (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 	void *ud = luaL_checkudata (L, 2, "rspamd{config}");
 
-	luaL_argcheck (L, ud != NULL, 1, "'config' expected");
-	task->cfg = ud ? *((struct rspamd_config **)ud) : NULL;
+	if (task) {
+		luaL_argcheck (L, ud != NULL, 1, "'config' expected");
+		task->cfg = ud ? *((struct rspamd_config **)ud) : NULL;
+	}
+	else {
+		lua_error (L);
+	}
+
 	return 0;
 }
 
@@ -1020,7 +1031,7 @@ lua_task_set_request_header (lua_State *L)
 
 	s = luaL_checklstring (L, 2, &len);
 
-	if (s) {
+	if (s && task) {
 		if (lua_type (L, 3) == LUA_TSTRING) {
 			v = luaL_checklstring (L, 2, &vlen);
 		}
@@ -2136,6 +2147,11 @@ lua_task_learn (lua_State *L)
 	GError *err = NULL;
 	int ret = 1;
 
+	if (task == NULL) {
+		lua_error (L);
+		return 0;
+	}
+
 	is_spam = lua_toboolean(L, 2);
 	if (lua_gettop (L) > 2) {
 		clname = luaL_checkstring (L, 3);
@@ -2162,7 +2178,7 @@ lua_task_set_settings (lua_State *L)
 	ucl_object_t *settings;
 
 	settings = ucl_object_lua_import (L, 2);
-	if (settings != NULL) {
+	if (settings != NULL && task != NULL) {
 		task->settings = settings;
 	}
 
@@ -2174,7 +2190,10 @@ lua_task_cache_get (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 
-	msg_err_task ("this function is deprecated and will return nothing");
+	if (task) {
+		msg_err_task ("this function is deprecated and will return nothing");
+	}
+
 	lua_pushnumber (L, -1);
 
 	return 1;
@@ -2185,7 +2204,10 @@ lua_task_cache_set (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 
-	msg_err_task ("this function is deprecated and will return nothing");
+	if (task) {
+		msg_err_task ("this function is deprecated and will return nothing");
+	}
+
 	lua_pushnumber (L, 0);
 
 	return 1;

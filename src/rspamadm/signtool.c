@@ -132,7 +132,7 @@ rspamadm_sign_file (const gchar *fname, const guchar *sk)
 			rspamd_cryptobox_signature_bytes (mode));
 
 	rspamd_cryptobox_sign (sig, NULL, map, st.st_size, sk, mode);
-	write (fd_sig, sig, rspamd_cryptobox_signature_bytes (mode));
+	g_assert (write (fd_sig, sig, rspamd_cryptobox_signature_bytes (mode)) != -1);
 	close (fd_sig);
 	munmap (map, st.st_size);
 

@@ -358,7 +358,10 @@ lua_ip_from_string (lua_State *L)
 	ip_str = luaL_checkstring (L, 1);
 	if (ip_str) {
 		ip = lua_ip_new (L, NULL);
-		rspamd_parse_inet_address (&ip->addr, ip_str, 0);
+
+		if (!rspamd_parse_inet_address (&ip->addr, ip_str, 0)) {
+			msg_warn ("cannot parse ip: %s", ip_str);
+		}
 	}
 	else {
 		lua_pushnil (L);
@@ -525,11 +528,17 @@ rspamd_lua_ip_push_fromstring (lua_State *L, const gchar *ip_str)
 	}
 	else {
 		ip = g_slice_alloc0 (sizeof (struct rspamd_lua_ip));
-		rspamd_parse_inet_address (&ip->addr, ip_str, 0);
 
-		pip = lua_newuserdata (L, sizeof (struct rspamd_lua_ip *));
-		rspamd_lua_setclass (L, "rspamd{ip}", -1);
-		*pip = ip;
+		if (rspamd_parse_inet_address (&ip->addr, ip_str, 0)) {
+
+			pip = lua_newuserdata (L, sizeof (struct rspamd_lua_ip *));
+			rspamd_lua_setclass (L, "rspamd{ip}", -1);
+			*pip = ip;
+		}
+		else {
+			g_slice_free1 (sizeof (*ip), ip);
+			lua_pushnil (L);
+		}
 	}
 }
 

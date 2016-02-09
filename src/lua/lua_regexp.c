@@ -610,6 +610,12 @@ lua_regexp_split (lua_State *L)
 		}
 		else if (lua_type (L, 2) == LUA_TUSERDATA) {
 			t = lua_check_text (L, 2);
+
+			if (t == NULL) {
+				lua_error (L);
+				return 0;
+			}
+
 			data = t->start;
 			len = t->len;
 			is_text = TRUE;

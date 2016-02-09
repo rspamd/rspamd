@@ -445,48 +445,57 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 	}
 	else if (lua_type (L, 1) == LUA_TUSERDATA) {
 		fmt_pos = 2;
-		lua_getmetatable (L, 1);
-		lua_pushstring (L, "__index");
-		lua_gettable (L, -2);
 
-		lua_pushstring (L, "class");
-		lua_gettable (L, -2);
+		if (lua_getmetatable (L, 1) != 0) {
+			lua_pushstring (L, "__index");
+			lua_gettable (L, -2);
 
-		clsname = lua_tostring (L, -1);
+			lua_pushstring (L, "class");
+			lua_gettable (L, -2);
 
-		if (strcmp (clsname, "rspamd{task}") == 0) {
-			struct rspamd_task *task = lua_check_task (L, 1);
+			clsname = lua_tostring (L, -1);
 
-			if (task) {
-				uid = task->task_pool->tag.uid;
+			if (strcmp (clsname, "rspamd{task}") == 0) {
+				struct rspamd_task *task = lua_check_task (L, 1);
+
+				if (task) {
+					uid = task->task_pool->tag.uid;
+				}
 			}
-		}
-		else if (strcmp (clsname, "rspamd{mempool}") == 0) {
-			rspamd_mempool_t  *pool;
+			else if (strcmp (clsname, "rspamd{mempool}") == 0) {
+				rspamd_mempool_t  *pool;
 
-			pool = rspamd_lua_check_mempool (L, 1);
+				pool = rspamd_lua_check_mempool (L, 1);
 
-			if (pool) {
-				uid = pool->tag.uid;
+				if (pool) {
+					uid = pool->tag.uid;
+				}
 			}
-		}
-		else if (strcmp (clsname, "rspamd{config}") == 0) {
-			struct rspamd_config *cfg;
+			else if (strcmp (clsname, "rspamd{config}") == 0) {
+				struct rspamd_config *cfg;
 
-			cfg = lua_check_config (L, 1);
+				cfg = lua_check_config (L, 1);
 
-			if (cfg) {
-				uid = cfg->checksum;
+				if (cfg) {
+					uid = cfg->checksum;
+				}
 			}
-		}
 
-		/* Metatable, __index, classname */
-		lua_pop (L, 3);
+			/* Metatable, __index, classname */
+			lua_pop (L, 3);
+		}
+		else {
+			lua_error (L);
+
+			return 0;
+		}
 	}
 	else {
 		/* Bad argument type */
 		msg_err ("bad format string type: %s", lua_typename (L, lua_type (L,
 				1)));
+		lua_error (L);
+
 		return 0;
 	}
 

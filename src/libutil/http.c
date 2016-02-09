@@ -723,6 +723,7 @@ rspamd_http_decrypt_message (struct rspamd_http_connection *conn,
 
 	msg->body_buf.len = 0;
 
+	memset (&decrypted_parser, 0, sizeof (decrypted_parser));
 	http_parser_init (&decrypted_parser,
 			conn->type == RSPAMD_HTTP_SERVER ? HTTP_REQUEST : HTTP_RESPONSE);
 

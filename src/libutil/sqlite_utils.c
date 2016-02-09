@@ -337,6 +337,13 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 				path, rc);
 #endif
 
+		if (has_lock && lock_fd != -1) {
+			msg_debug_pool_check ("removing lock from %s", lock_path);
+			rspamd_file_unlock (lock_fd, FALSE);
+			unlink (lock_path);
+			close (lock_fd);
+		}
+
 		return NULL;
 	}
 
@@ -418,7 +425,7 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 				sqlite3_errmsg (sqlite));
 	}
 
-	if (has_lock) {
+	if (has_lock && lock_fd != -1) {
 		msg_debug_pool_check ("removing lock from %s", lock_path);
 		rspamd_file_unlock (lock_fd, FALSE);
 		unlink (lock_path);

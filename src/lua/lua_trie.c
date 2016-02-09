@@ -176,6 +176,7 @@ lua_trie_search_str (lua_State *L, ac_trie_t *trie, const gchar *str, gsize len,
 {
 	struct lua_trie_cbdata cb;
 	gboolean icase = FALSE;
+	gint ret;
 
 	if (lua_gettop (L) == 4) {
 		icase = lua_toboolean (L, 4);
@@ -183,10 +184,13 @@ lua_trie_search_str (lua_State *L, ac_trie_t *trie, const gchar *str, gsize len,
 
 	cb.L = L;
 	cb.found = FALSE;
-	acism_lookup (trie, str, len,
-			lua_trie_callback, &cb, statep, icase);
 
-	return cb.found;
+	if ((ret = acism_lookup (trie, str, len,
+			lua_trie_callback, &cb, statep, icase)) == 0) {
+		return cb.found;
+	}
+
+	return ret;
 }
 
 /***

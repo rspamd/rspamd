@@ -290,6 +290,7 @@ lua_accept_socket (gint fd, short what, void *arg)
 	}
 
 	rspamd_inet_address_destroy (addr);
+	close (nfd);
 }
 
 static gboolean

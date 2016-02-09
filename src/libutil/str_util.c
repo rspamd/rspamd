@@ -1382,7 +1382,7 @@ gint
 rspamd_decode_hex_buf (const gchar *in, gsize inlen,
 		guchar *out, gsize outlen)
 {
-	guchar *o, *end, ret;
+	guchar *o, *end, ret = 0;
 	const gchar *p;
 	gchar c;
 

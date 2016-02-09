@@ -176,7 +176,7 @@ lua_upstream_list_create (lua_State *L)
 	guint default_port = 0;
 
 	def = luaL_checkstring (L, 2);
-	if (def) {
+	if (def && cfg) {
 		if (lua_gettop (L) >= 3) {
 			default_port = luaL_checknumber (L, 3);
 		}
@@ -192,6 +192,9 @@ lua_upstream_list_create (lua_State *L)
 			rspamd_upstreams_destroy (new);
 			lua_pushnil (L);
 		}
+	}
+	else {
+		lua_error (L);
 	}
 
 	return 1;

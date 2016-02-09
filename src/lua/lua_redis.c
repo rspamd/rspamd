@@ -520,7 +520,6 @@ lua_redis_make_request (lua_State *L)
 		ud->terminated = 0;
 		ud->ctx = redisAsyncConnect (rspamd_inet_address_to_string (addr->addr),
 				rspamd_inet_address_get_port (addr->addr));
-		redisAsyncSetConnectCallback (ud->ctx, lua_redis_connect_cb);
 
 		if (ud->ctx == NULL || ud->ctx->err) {
 			if (ud->ctx) {
@@ -534,6 +533,7 @@ lua_redis_make_request (lua_State *L)
 			return 1;
 		}
 
+		redisAsyncSetConnectCallback (ud->ctx, lua_redis_connect_cb);
 		redisLibeventAttach (ud->ctx, ud->task->ev_base);
 		ret = redisAsyncCommandArgv (ud->ctx,
 					lua_redis_callback,
@@ -757,7 +757,6 @@ lua_redis_connect (lua_State *L)
 		ud->terminated = 0;
 		ud->ctx = redisAsyncConnect (rspamd_inet_address_to_string (addr->addr),
 				rspamd_inet_address_get_port (addr->addr));
-		redisAsyncSetConnectCallback (ud->ctx, lua_redis_connect_cb);
 
 		if (ud->ctx == NULL || ud->ctx->err) {
 			REF_RELEASE (ctx);
@@ -766,6 +765,7 @@ lua_redis_connect (lua_State *L)
 			return 1;
 		}
 
+		redisAsyncSetConnectCallback (ud->ctx, lua_redis_connect_cb);
 		redisLibeventAttach (ud->ctx, ud->task->ev_base);
 		pctx = lua_newuserdata (L, sizeof (ctx));
 		*pctx = ctx;
