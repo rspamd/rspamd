@@ -155,6 +155,7 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 {
 #if defined(WITH_PCRE2)
 	gsize jsz;
+	guint jit_flags = PCRE2_JIT_COMPLETE;
 	/* Create match context */
 
 	r->mcontext = pcre2_match_context_create (NULL);
@@ -167,7 +168,10 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 	}
 
 #ifdef HAVE_PCRE_JIT
-	if (pcre2_jit_compile (r->re, PCRE2_JIT_COMPLETE) < 0) {
+	if (!(r->flags & RSPAMD_REGEXP_FLAG_RAW)) {
+		jit_flags |= PCRE_FLAG(UTF);
+	}
+	if (pcre2_jit_compile (r->re, jit_flags) < 0) {
 		msg_debug ("jit compilation of %s is not supported", r->pattern);
 	}
 
@@ -183,7 +187,9 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 	}
 
 	if (r->re != r->raw_re) {
-		if (pcre2_jit_compile (r->raw_re, PCRE2_JIT_COMPLETE) < 0) {
+		jit_flags &= ~PCRE_FLAG(UTF);
+
+		if (pcre2_jit_compile (r->raw_re, jit_flags) < 0) {
 			msg_debug ("jit compilation of %s is not supported", r->pattern);
 		}
 
@@ -204,8 +210,8 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 #endif
 
 #else
-	const gchar *err_str;
-	gboolean try_jit = TRUE, try_jit_raw = TRUE;
+	const gchar *err_str = "unknown";
+	gboolean try_jit = TRUE, try_raw_jit = TRUE;
 	gint study_flags = 0;
 
 #if defined(HAVE_PCRE_JIT)
@@ -261,7 +267,7 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 				r->pattern, err_str);
 	}
 
-	if (try_jit_raw) {
+	if (try_raw_jit) {
 #ifdef HAVE_PCRE_JIT
 		gint jit, n;
 
@@ -442,12 +448,12 @@ fin:
 	res->cache_id = RSPAMD_INVALID_ID;
 	res->pcre_flags = regexp_flags;
 	res->max_hits = 0;
+	res->re = r;
 
 	if (rspamd_flags & RSPAMD_REGEXP_FLAG_RAW) {
 		res->raw_re = r;
 	}
 	else {
-		res->re = r;
 #ifndef WITH_PCRE2
 		res->raw_re = pcre_compile (pattern, regexp_flags & ~PCRE_FLAG(UTF8),
 						&err_str, &err_off, NULL);
@@ -667,19 +673,25 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 
 	match_flags = PCRE_FLAG(NEWLINE_ANYCRLF);
 
-	if (raw) {
+	if (raw || re->re == re->raw_re) {
 		r = re->raw_re;
 		mcontext = re->raw_mcontext;
 	}
 	else {
 		r = re->re;
 		mcontext = re->mcontext;
+		match_flags |= PCRE_FLAG(UTF);
 	}
 
 	match_data = pcre2_match_data_create (re->ncaptures + 1, NULL);
 
+#ifdef HAVE_PCRE_JIT
+	rc = pcre2_jit_match (r,  mt, remain, 0, match_flags, match_data,
+			mcontext);
+#else
 	rc = pcre2_match (r,  mt, remain, 0, match_flags, match_data,
 					mcontext);
+#endif
 
 	if (rc >= 0) {
 		novec = pcre2_get_ovector_count (match_data);
