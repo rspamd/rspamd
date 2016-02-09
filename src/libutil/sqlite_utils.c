@@ -131,7 +131,6 @@ rspamd_sqlite3_run_prstmt (rspamd_mempool_t *pool, sqlite3 *db, GArray *stmts,
 		}
 	}
 
-	va_end (ap);
 	retcode = sqlite3_step (stmt);
 
 	if (retcode == nst->result) {
@@ -167,6 +166,8 @@ rspamd_sqlite3_run_prstmt (rspamd_mempool_t *pool, sqlite3 *db, GArray *stmts,
 			sqlite3_reset (stmt);
 		}
 
+		va_end (ap);
+
 		return SQLITE_OK;
 	}
 	else if (retcode != SQLITE_DONE && retcode != SQLITE_OK && retcode != SQLITE_ROW) {
@@ -178,6 +179,8 @@ rspamd_sqlite3_run_prstmt (rspamd_mempool_t *pool, sqlite3 *db, GArray *stmts,
 		sqlite3_clear_bindings (stmt);
 		sqlite3_reset (stmt);
 	}
+
+	va_end (ap);
 
 	return retcode;
 }
