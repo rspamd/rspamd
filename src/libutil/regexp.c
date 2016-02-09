@@ -115,9 +115,11 @@ rspamd_regexp_dtor (rspamd_regexp_t *re)
 	if (re) {
 		if (re->raw_re && re->raw_re != re->re) {
 #ifndef WITH_PCRE2
+#ifdef HAVE_PCRE_JIT
 			if (re->raw_extra) {
 				pcre_free_study (re->raw_extra);
 			}
+#endif
 #else
 			if (re->mcontext) {
 				pcre2_match_context_free (re->mcontext);
@@ -132,9 +134,11 @@ rspamd_regexp_dtor (rspamd_regexp_t *re)
 		}
 		if (re->re) {
 #ifndef WITH_PCRE2
+#ifdef HAVE_PCRE_JIT
 			if (re->extra) {
 				pcre_free_study (re->extra);
 			}
+#endif
 #else
 			if (re->raw_mcontext) {
 				pcre2_match_context_free (re->raw_mcontext);
@@ -427,7 +431,7 @@ fin:
 
 #ifndef WITH_PCRE2
 	r = pcre_compile (real_pattern, regexp_flags,
-			&err_str, &err_off, NULL);
+			(const char **)&err_str, &err_off, NULL);
 	(void)err_code;
 #else
 	r = pcre2_compile (real_pattern, PCRE2_ZERO_TERMINATED,
@@ -466,7 +470,7 @@ fin:
 	else {
 #ifndef WITH_PCRE2
 		res->raw_re = pcre_compile (real_pattern, regexp_flags & ~PCRE_FLAG(UTF8),
-						&err_str, &err_off, NULL);
+				(const char **)&err_str, &err_off, NULL);
 		(void)err_code;
 #else
 		res->raw_re = pcre2_compile (real_pattern, PCRE2_ZERO_TERMINATED,
