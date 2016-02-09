@@ -83,6 +83,10 @@ struct rspamd_regexp_cache {
 static struct rspamd_regexp_cache *global_re_cache = NULL;
 static gboolean can_jit = FALSE;
 
+#ifdef WITH_PCRE2
+static pcre2_compile_context *pcre2_ctx = NULL;
+#endif
+
 static GQuark
 rspamd_regexp_quark (void)
 {
@@ -172,14 +176,14 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 		jit_flags |= PCRE_FLAG(UTF);
 	}
 	if (pcre2_jit_compile (r->re, jit_flags) < 0) {
-		msg_debug ("jit compilation of %s is not supported", r->pattern);
+		msg_err ("jit compilation of %s is not supported", r->pattern);
 	}
 
 	if (pcre2_pattern_info (r->re, PCRE2_INFO_JITSIZE, &jsz) >= 0 && jsz > 0) {
 		r->jstack = pcre2_jit_stack_create (32 * 1024, 512 * 1024, NULL);
 	}
 	else {
-		msg_debug ("jit compilation of %s is not supported", r->pattern);
+		msg_err ("jit compilation of %s is not supported", r->pattern);
 	}
 
 	if (r->jstack) {
@@ -300,7 +304,8 @@ rspamd_regexp_t*
 rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 		GError **err)
 {
-	const gchar *start = pattern, *end, *flags_str = NULL, *err_str;
+	const gchar *start = pattern, *end, *flags_str = NULL;
+	gchar *err_str;
 	rspamd_regexp_t *res;
 	PCRE_T *r;
 	gchar sep = 0, *real_pattern;
@@ -359,9 +364,9 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 
 	rspamd_flags |= RSPAMD_REGEXP_FLAG_RAW;
 
-	regexp_flags |= PCRE_FLAG(NEWLINE_ANYCRLF);
 #ifndef WITH_PCRE2
 	regexp_flags &= ~PCRE_FLAG(UTF8);
+	regexp_flags |= PCRE_FLAG(NEWLINE_ANYCRLF);
 #else
 	regexp_flags &= ~PCRE_FLAG(UTF);
 #endif
@@ -421,20 +426,25 @@ fin:
 	rspamd_strlcpy (real_pattern, start, end - start + 1);
 
 #ifndef WITH_PCRE2
-	r = pcre_compile (pattern, regexp_flags,
+	r = pcre_compile (real_pattern, regexp_flags,
 			&err_str, &err_off, NULL);
 	(void)err_code;
 #else
-	r = pcre2_compile (pattern, PCRE2_ZERO_TERMINATED,
+	r = pcre2_compile (real_pattern, PCRE2_ZERO_TERMINATED,
 			regexp_flags,
-			&err_code, &err_off, NULL);
-	(void)err_str;
+			&err_code, &err_off, pcre2_ctx);
+
+	if (r == NULL) {
+		err_str = g_alloca (1024);
+		memset (err_str, 0, 1024);
+		pcre2_get_error_message (err_code, err_str, 1024);
+	}
 #endif
 
 	if (r == NULL) {
 		g_set_error (err, rspamd_regexp_quark(), EINVAL,
-			"invalid regexp pattern: '%s': at position %d",
-			pattern, (gint)err_off);
+			"regexp parsing error: '%s' at position %d",
+			err_str, (gint)err_off);
 		g_free (real_pattern);
 
 		return NULL;
@@ -455,18 +465,22 @@ fin:
 	}
 	else {
 #ifndef WITH_PCRE2
-		res->raw_re = pcre_compile (pattern, regexp_flags & ~PCRE_FLAG(UTF8),
+		res->raw_re = pcre_compile (real_pattern, regexp_flags & ~PCRE_FLAG(UTF8),
 						&err_str, &err_off, NULL);
 		(void)err_code;
 #else
-		res->raw_re = pcre2_compile (pattern, PCRE2_ZERO_TERMINATED,
+		res->raw_re = pcre2_compile (real_pattern, PCRE2_ZERO_TERMINATED,
 					regexp_flags & ~PCRE_FLAG(UTF),
-					&err_code, &err_off, NULL);
-		(void)err_str;
+					&err_code, &err_off, pcre2_ctx);
+		if (r == NULL) {
+			err_str = g_alloca (1024);
+			memset (err_str, 0, 1024);
+			pcre2_get_error_message (err_code, err_str, 1024);
+		}
 #endif
 		if (res->raw_re == NULL) {
-			msg_warn ("invalid raw regexp pattern: '%s': at position %d",
-					pattern, (gint)err_off);
+			msg_warn ("raw regexp parsing error: '%s': '%s' at position %d",
+					err_str, (gint)err_off);
 		}
 	}
 
@@ -671,7 +685,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 		return FALSE;
 	}
 
-	match_flags = PCRE_FLAG(NEWLINE_ANYCRLF);
+	match_flags = 0;
 
 	if (raw || re->re == re->raw_re) {
 		r = re->raw_re;
@@ -681,6 +695,11 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 		r = re->re;
 		mcontext = re->mcontext;
 		match_flags |= PCRE_FLAG(UTF);
+
+		if (!g_utf8_validate (mt, remain, NULL)) {
+			msg_err ("bad utf8 input for JIT re");
+			return FALSE;
+		}
 	}
 
 	match_data = pcre2_match_data_create (re->ncaptures + 1, NULL);
@@ -1019,6 +1038,10 @@ rspamd_regexp_library_init (void)
 		gint jit, rc;
 		gchar *str;
 
+#ifdef WITH_PCRE2
+		pcre2_ctx = pcre2_compile_context_create (NULL);
+		pcre2_set_newline (pcre2_ctx, PCRE_FLAG(NEWLINE_ANY));
+#endif
 #ifndef WITH_PCRE2
 		rc = pcre_config (PCRE_CONFIG_JIT, &jit);
 #else
@@ -1065,6 +1088,9 @@ rspamd_regexp_library_finalize (void)
 {
 	if (global_re_cache != NULL) {
 		rspamd_regexp_cache_destroy (global_re_cache);
+#ifdef WITH_PCRE2
+		pcre2_compile_context_free (pcre2_ctx);
+#endif
 	}
 }
 
