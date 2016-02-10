@@ -760,8 +760,10 @@ parse_spf_domain_mask (struct spf_record *rec, struct spf_addr *addr,
 					/* Empty domain, technically an error */
 					state = parse_slash;
 				}
-				c = p;
-				state = parse_domain;
+				else {
+					c = p;
+					state = parse_domain;
+				}
 				break;
 			case parse_domain:
 				if (t == '/') {

@@ -127,7 +127,7 @@ rspamd_session_add_event (struct rspamd_async_session *session,
 	struct rspamd_async_event *new;
 
 	if (session == NULL) {
-		msg_info_session ("session is NULL");
+		msg_err ("session is NULL");
 		return;
 	}
 
@@ -161,7 +161,7 @@ rspamd_session_remove_event (struct rspamd_async_session *session,
 	struct rspamd_async_event search_ev, *found_ev;
 
 	if (session == NULL) {
-		msg_info_session ("session is NULL");
+		msg_err ("session is NULL");
 		return;
 	}
 
@@ -213,7 +213,7 @@ gboolean
 rspamd_session_destroy (struct rspamd_async_session *session)
 {
 	if (session == NULL) {
-		msg_info_session ("session is NULL");
+		msg_err ("session is NULL");
 		return FALSE;
 	}
 
@@ -231,7 +231,7 @@ void
 rspamd_session_cleanup (struct rspamd_async_session *session)
 {
 	if (session == NULL) {
-		msg_info_session ("session is NULL");
+		msg_err ("session is NULL");
 		return;
 	}
 

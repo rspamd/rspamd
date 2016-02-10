@@ -1588,10 +1588,7 @@ rspamd_tld_trie_find_callback (int strnum, int textpos, void *context)
 
 	if (*pos != '.' || textpos != (gint)cbdata->len) {
 		/* Something weird has been found */
-		if (textpos == (gint)cbdata->len - 1) {
-			pos = cbdata->begin + textpos;
-		}
-		else {
+		if (textpos != (gint)cbdata->len - 1) {
 			/* Search more */
 			return 0;
 		}

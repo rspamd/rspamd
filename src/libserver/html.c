@@ -1070,9 +1070,8 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 					tag->id = found->id;
 					tag->flags = found->flags;
 				}
+				state = spaces_after_name;
 			}
-
-			state = spaces_after_name;
 		}
 		break;
 

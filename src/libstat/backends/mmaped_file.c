@@ -346,12 +346,14 @@ rspamd_mmaped_file_check (rspamd_mempool_t *pool, rspamd_mmaped_file_t * file)
 	}
 
 	f = (struct stat_file *)file->map;
-	c = f->header.magic;
+	c = &f->header.magic[0];
 	/* Check magic and version */
 	if (*c++ != 'r' || *c++ != 's' || *c++ != 'd') {
 		msg_info_pool ("file %s is invalid stat file", file->filename);
 		return -1;
 	}
+
+	c = &f->header.version[0];
 	/* Now check version and convert old version to new one (that can be used for sync */
 	if (*c == 1 && *(c + 1) == 0) {
 		return -1;
@@ -414,6 +416,7 @@ rspamd_mmaped_file_reindex (rspamd_mempool_t *pool,
 		lock_fd = open (lock, O_RDONLY, 00600);
 		if (lock_fd != -1) {
 			if (!rspamd_file_lock (lock_fd, FALSE)) {
+				close (lock_fd);
 				g_free (lock);
 
 				return rspamd_mmaped_file_open (pool, filename, size, stcf);
@@ -608,8 +611,19 @@ rspamd_mmaped_file_open (rspamd_mempool_t *pool,
 	/* Try to lock pages in RAM */
 
 	/* Acquire lock for this operation */
-	rspamd_file_lock (new_file->fd, FALSE);
+	if (!rspamd_file_lock (new_file->fd, FALSE)) {
+		close (new_file->fd);
+		munmap (new_file->map, st.st_size);
+		msg_info_pool ("cannot lock file %s, error %d, %s",
+				filename,
+				errno,
+				strerror (errno));
+		g_slice_free1 (sizeof (*new_file), new_file);
+		return NULL;
+	}
+
 	if (rspamd_mmaped_file_check (pool, new_file) == -1) {
+		close (new_file->fd);
 		rspamd_file_unlock (new_file->fd, FALSE);
 		munmap (new_file->map, st.st_size);
 		g_slice_free1 (sizeof (*new_file), new_file);

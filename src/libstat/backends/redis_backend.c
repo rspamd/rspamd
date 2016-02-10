@@ -111,22 +111,24 @@ rspamd_redis_expand_object (const gchar *pattern,
 		mod_char
 	} state = just_char;
 	struct rspamd_statfile_config *stcf;
-	lua_State *L;
+	lua_State *L = NULL;
 	struct rspamd_task **ptask;
 	GString *tb;
 	const gchar *rcpt = NULL;
 	gint err_idx;
 
-
 	g_assert (ctx != NULL);
 	stcf = ctx->stcf;
-	L = task->cfg->lua_state;
+
+	if (task) {
+		L = task->cfg->lua_state;
+	}
 
 	if (ctx->enable_users) {
 		if (ctx->cbref_user == -1) {
 			rcpt = rspamd_task_get_principal_recipient (task);
 		}
-		else {
+		else if (L) {
 			/* Execute lua function to get userdata */
 			lua_pushcfunction (L, &rspamd_lua_traceback);
 			err_idx = lua_gettop (L);
@@ -357,7 +359,7 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task, GPtrArray *tokens,
 				"%s\r\n"
 				"$%d\r\n"
 				"%s\r\n",
-				learn ? (tokens->len * 2 + 2) : (tokens->len + 2),
+				(tokens->len + 2),
 				larg0, arg0,
 				larg1, arg1);
 	}

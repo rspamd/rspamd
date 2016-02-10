@@ -746,9 +746,10 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 
 	/* Check whether this item is skipped */
 	skipped = !ghost;
+	g_assert (cache->cfg != NULL);
+
 	if ((item->type &
 			(SYMBOL_TYPE_NORMAL|SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_COMPOSITE|SYMBOL_TYPE_CLASSIFIER))
-			&& cache->cfg
 			&& g_hash_table_lookup (cache->cfg->metrics_symbols, item->symbol) == NULL) {
 		cur = g_list_first (cache->cfg->metrics_list);
 		while (cur) {
@@ -849,7 +850,7 @@ rspamd_symbols_cache_validate (struct symbols_cache *cache,
 	gboolean ignore_symbol = FALSE, ret = TRUE;
 
 	if (cache == NULL) {
-		msg_err_cache ("empty cache is invalid");
+		msg_err ("empty cache is invalid");
 		return FALSE;
 	}
 
