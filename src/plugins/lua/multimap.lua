@@ -73,16 +73,8 @@ local function multimap_callback(task, pre_filter)
     return input
   end
 
-
-  -- Match a single value for against a single rule
-  local function match_rule(r, value)
-    local ret = false
-
-    if r['filter'] then
-      value = apply_filter(r['filter'], value, r)
-    end
-
-    if not value then
+  local function match_element(r, value)
+   if not value then
       return false
     end
 
@@ -98,6 +90,19 @@ local function multimap_callback(task, pre_filter)
     elseif r['hash'] then
       ret = r['hash']:get_key(value)
     end
+
+    return ret
+  end
+
+  -- Match a single value for against a single rule
+  local function match_rule(r, value)
+    local ret = false
+
+    if r['filter'] then
+      value = apply_filter(r['filter'], value, r)
+    end
+
+    ret = match_element(r, value)
 
     if ret then
       task:insert_result(r['symbol'], 1)
@@ -147,6 +152,43 @@ local function multimap_callback(task, pre_filter)
     return ret
   end
 
+  local function apply_url_filter(filter, url, r)
+    if filter == 'tld' then
+      return url:get_tld()
+    elseif filter == 'full' then
+      return url:get_text()
+    elseif filter == 'is_phished' then
+      if url:is_phished() then
+        return url:get_host()
+      else
+        return nil
+      end
+    end
+
+    return url:get_host()
+  end
+
+  local function match_url(r, url)
+    local value
+    local ret = false
+
+    if r['filter'] then
+      value = apply_url_filter(r['filter'], url, r)
+    else
+      value = url:get_host()
+    end
+
+    ret = match_element(r, value)
+
+    if ret then
+      task:insert_result(r['symbol'], 1)
+
+      if pre_filter then
+        task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'])
+      end
+    end
+  end
+
   -- IP rules
   local ip = task:get_from_ip()
   if ip:is_valid() then
@@ -185,6 +227,18 @@ local function multimap_callback(task, pre_filter)
       end,
       _.filter(function(r)
         return pre_filter == r['prefilter'] and r['type'] == 'from'
+      end, rules))
+    end
+  end
+  -- URL rules
+  if task:has_urls() then
+    local urls = task:get_urls()
+    for i,url in ipairs(urls) do
+      _.each(function(r)
+        match_url(r, url)
+      end,
+      _.filter(function(r)
+        return pre_filter == r['prefilter'] and r['type'] == 'url'
       end, rules))
     end
   end
@@ -253,7 +307,10 @@ local function add_multimap_rule(key, newrule)
         rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
             newrule['map'])
       end
-    elseif newrule['type'] == 'header' or newrule['type'] == 'rcpt' or newrule['type'] == 'from' then
+    elseif newrule['type'] == 'header'
+        or newrule['type'] == 'rcpt'
+        or newrule['type'] == 'from'
+        or newrule['type'] == 'url' then
       newrule['hash'] = rspamd_config:add_hash_map (newrule['map'], newrule['description'])
       if newrule['hash'] then
         ret = true
