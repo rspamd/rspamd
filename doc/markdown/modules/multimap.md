@@ -43,14 +43,13 @@ Type attribute means what is matched with this map. The following types are supp
 * `rcpt` - matches any of envelope rcpt or header `To` if envelope info is missing
 * `header` - matches any header specified (must have `header = "Header-Name"` configuration attribute)
 * `dnsbl` - matches source IP against some DNS blacklist (consider using [RBL](rbl.md) module for this)
+* `url` - matches URLs in messages against maps
 
-DNS maps has historic support.
+DNS maps are legacy and are not encouraged to use in new projects (use [rbl](rbl.md) for that).
 
-Maps can also have a special URL format in style:
+Maps can also be specified as [CDB](http://www.corpit.ru/mjt/tinycdb.html) databases which might be useful for large maps:
 
 	map = "cdb:///path/to/file.cdb";
-
-which is treated as CDB map by rspamd.
 
 Here is an example configuration of multimap module:
 
@@ -86,6 +85,11 @@ for `header` rules. Filters are specified with `filter` option. Rspamd supports 
 *  `email:name` - parse header value as email address and extract displayed name from it (`Somebody <user@example.com>` -> `Somebody`)
 * `regexp:/re/` - extracts generic information using the specified regular expression
 
+URL maps allows another set of filters (by default, url maps are matched using hostname part):
+
+* `tld` - matches TLD (top level domain) part of urls
+* `full` - matches the complete URL not the hostname
+* `is_phished` - matches hostname but if and only if the URL is phished (e.g. pretended to be from another domain)
 
 Here are some examples of pre-filter configurations:
 
@@ -103,5 +107,11 @@ sender_from_regexp {
             filter = "regexp:/.*@/";
             map = "file:///tmp/from_re.map";
             symbol = "SENDER_FROM_REGEXP";
+}
+url_map {
+            type = "url";
+            filter = "tld";
+            map = "file:///tmp/url.map";
+            symbol = "URL_MAP";
 }
 ~~~
