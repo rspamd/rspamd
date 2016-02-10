@@ -587,7 +587,7 @@ rspamd_fuzzy_decrypt_command (struct fuzzy_session *s)
 	s->key_stat = key->stat;
 
 	/* Now process keypair */
-	memcpy (rk.pk, hdr->pubkey, sizeof (rk.pk));
+	memcpy (rk.pk, hdr->pubkey, MIN(sizeof (hdr->pubkey), sizeof (rk.pk)));
 	rspamd_keypair_cache_process (s->ctx->keypair_cache, key->key, &rk);
 
 	/* Now decrypt request */
