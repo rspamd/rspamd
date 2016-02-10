@@ -1369,11 +1369,15 @@ rspamd_has_fake_html (struct rspamd_task * task, GArray * args, void *unused)
 	guint i;
 	gboolean res = FALSE;
 
-	for (i = 0; i < task->text_parts->len && res; i ++) {
+	for (i = 0; i < task->text_parts->len; i ++) {
 		p = g_ptr_array_index (task->text_parts, i);
 
 		if (!IS_PART_EMPTY (p) && IS_PART_HTML (p) && p->html->html_tags == NULL) {
 			res = TRUE;
+		}
+
+		if (res) {
+			break;
 		}
 	}
 
