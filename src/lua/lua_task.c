@@ -114,8 +114,9 @@ end
  */
 LUA_FUNCTION_DEF (task, set_pre_result);
 /***
- * @method task:get_urls()
+ * @method task:get_urls([need_emails])
  * Get all URLs found in a message.
+ * @param {boolean} need_emails if `true` then reutrn also email urls
  * @return {table rspamd_url} list of all urls found
 @example
 local function phishing_cb(task)
@@ -132,6 +133,13 @@ local function phishing_cb(task)
 end
  */
 LUA_FUNCTION_DEF (task, get_urls);
+/***
+ * @method task:has_urls([need_emails])
+ * Returns 'true' if a task has urls listed
+ * @param {boolean} need_emails if `true` then reutrn also email urls
+ * @return {boolean} true if a task has urls (urls or emails if `need_emails` is true)
+ */
+LUA_FUNCTION_DEF (task, has_urls);
 /***
  * @method task:get_content()
  * Get raw content for the specified task
@@ -546,6 +554,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_ev_base),
 	LUA_INTERFACE_DEF (task, insert_result),
 	LUA_INTERFACE_DEF (task, set_pre_result),
+	LUA_INTERFACE_DEF (task, has_urls),
 	LUA_INTERFACE_DEF (task, get_urls),
 	LUA_INTERFACE_DEF (task, get_content),
 	LUA_INTERFACE_DEF (task, get_emails),
@@ -887,16 +896,51 @@ lua_task_get_urls (lua_State * L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct lua_tree_cb_data cb;
+	gboolean need_emails = FALSE;
 
 	if (task) {
+		if (lua_gettop (L) >= 2) {
+			need_emails = lua_toboolean (L, 2);
+		}
+
 		lua_newtable (L);
 		cb.i = 1;
 		cb.L = L;
 		g_hash_table_foreach (task->urls, lua_tree_url_callback, &cb);
+
+		if (need_emails) {
+			g_hash_table_foreach (task->emails, lua_tree_url_callback, &cb);
+		}
+
 		return 1;
 	}
 
 	lua_pushnil (L);
+	return 1;
+}
+
+static gint
+lua_task_has_urls (lua_State * L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	gboolean need_emails = FALSE, ret = FALSE;
+
+	if (task) {
+		if (lua_gettop (L) >= 2) {
+			need_emails = lua_toboolean (L, 2);
+		}
+
+		if (g_hash_table_size (task->urls) > 0) {
+			ret = TRUE;
+		}
+
+		if (need_emails && g_hash_table_size (task->emails) > 0) {
+			ret = TRUE;
+		}
+	}
+
+	lua_pushboolean (L, ret);
+
 	return 1;
 }
 
