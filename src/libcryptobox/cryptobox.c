@@ -1105,7 +1105,7 @@ rspamd_cryptobox_encryptv_nm_inplace (struct rspamd_cryptobox_segment *segments,
 
 	rspamd_cryptobox_flush_outbuf (start_seg, outbuf, sizeof (outbuf) - remain,
 			seg_offset);
-	rspamd_cryptobox_cleanup (auth_ctx, enc_ctx, mode);
+	rspamd_cryptobox_cleanup (enc_ctx, auth_ctx, mode);
 }
 
 gboolean
