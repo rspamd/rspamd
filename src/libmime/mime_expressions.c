@@ -678,10 +678,8 @@ set:
 	return a;
 
 err:
-	if (mime_atom != NULL) {
-		g_free (mime_atom->str);
-		g_slice_free1 (sizeof (*mime_atom), mime_atom);
-	}
+	g_free (mime_atom->str);
+	g_slice_free1 (sizeof (*mime_atom), mime_atom);
 
 	return NULL;
 }
@@ -1348,11 +1346,15 @@ rspamd_has_html_tag (struct rspamd_task * task, GArray * args, void *unused)
 		return FALSE;
 	}
 
-	for (i = 0; i < task->text_parts->len && res; i ++) {
+	for (i = 0; i < task->text_parts->len; i ++) {
 		p = g_ptr_array_index (task->text_parts, i);
 
 		if (!IS_PART_EMPTY (p) && IS_PART_HTML (p) && p->html) {
 			res = rspamd_html_tag_seen (p->html, arg->data);
+		}
+
+		if (res) {
+			break;
 		}
 	}
 
@@ -1849,6 +1851,8 @@ common_has_content_part (struct rspamd_task * task,
 			if (r && param_subtype) {
 				r = compare_len (part, min_len, max_len) &&
 						compare_subtype (task, ct, param_subtype);
+
+				return r;
 			}
 		}
 		else {
