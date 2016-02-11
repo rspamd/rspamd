@@ -19,7 +19,7 @@
 #include "ottery.h"
 #include "btrie.h"
 
-const gsize max_elts = 50 * 1024;
+const gsize max_elts = 500 * 1024;
 const gint lookup_cycles = 1 * 1024;
 
 const uint masks[] = {
@@ -215,15 +215,16 @@ rspamd_radix_test_func (void)
 		guint8 addr6[16];
 		guint32 mask6;
 	} *addrs;
-	gsize nelts, i;
+	gsize nelts, i, check;
 	gint lc;
 	gboolean all_good = TRUE;
 	gdouble ts1, ts2;
 	double diff;
 
 	/* Test suite for the compressed trie */
-	rspamd_radix_test_vec ();
+
 	rspamd_btrie_test_vec ();
+	rspamd_radix_test_vec ();
 
 	nelts = max_elts;
 	/* First of all we generate many elements and push them to the array */
@@ -243,7 +244,7 @@ rspamd_radix_test_func (void)
 	ts1 = rspamd_get_ticks ();
 	for (i = 0; i < nelts; i ++) {
 		btrie_add_prefix (btrie, addrs[i].addr6,
-				addrs[i].mask6, GSIZE_TO_POINTER (i));
+				addrs[i].mask6, GSIZE_TO_POINTER (i + 1));
 	}
 	ts2 = rspamd_get_ticks ();
 	diff = (ts2 - ts1) * 1000.0;
@@ -251,10 +252,20 @@ rspamd_radix_test_func (void)
 	msg_info ("Added %z elements in %.6f ms", nelts, diff);
 
 	ts1 = rspamd_get_ticks ();
-	for (lc = 0; lc < lookup_cycles; lc ++) {
-		for (i = 0; i < nelts; i ++) {
-			if (btrie_lookup (btrie, addrs[i].addr6, sizeof (addrs[i].addr6))
+	for (lc = 0; lc < lookup_cycles && all_good; lc ++) {
+		for (i = 0; i < nelts / 10; i ++) {
+			check = ottery_rand_range (nelts - 1);
+
+			if (btrie_lookup (btrie, addrs[check].addr6, sizeof (addrs[check].addr6))
 					== NULL) {
+				char ipbuf[INET6_ADDRSTRLEN + 1];
+
+				all_good = FALSE;
+
+				inet_ntop(AF_INET6, addrs[check].addr6, ipbuf, sizeof(ipbuf));
+				msg_info("BAD btrie: {\"%s\", NULL, \"%ud\", 0, 0, 0, 0},",
+						ipbuf,
+						addrs[check].mask6);
 				all_good = FALSE;
 			}
 		}
@@ -267,21 +278,33 @@ rspamd_radix_test_func (void)
 
 	msg_info ("new radix performance (%z elts)", nelts);
 	ts1 = rspamd_get_ticks ();
+
 	for (i = 0; i < nelts; i ++) {
 		radix_insert_compressed (comp_tree, addrs[i].addr6, sizeof (addrs[i].addr6),
-				128 - addrs[i].mask6, i);
+				128 - addrs[i].mask6, i + 1);
 	}
+
 	ts2 = rspamd_get_ticks ();
 	diff = (ts2 - ts1) * 1000.0;
 
 	msg_info ("Added %z elements in %.6f ms", nelts, diff);
 
 	ts1 = rspamd_get_ticks ();
-	for (lc = 0; lc < lookup_cycles; lc ++) {
-		for (i = 0; i < nelts; i ++) {
-			if (radix_find_compressed (comp_tree, addrs[i].addr6, sizeof (addrs[i].addr6))
+	for (lc = 0; lc < lookup_cycles && all_good; lc ++) {
+		for (i = 0; i < nelts / 10; i ++) {
+			check = ottery_rand_range (nelts - 1);
+
+			if (radix_find_compressed (comp_tree, addrs[check].addr6,
+					sizeof (addrs[check].addr6))
 					== RADIX_NO_VALUE) {
+				char ipbuf[INET6_ADDRSTRLEN + 1];
+
 				all_good = FALSE;
+
+				inet_ntop(AF_INET6, addrs[check].addr6, ipbuf, sizeof(ipbuf));
+				msg_info("BAD: {\"%s\", NULL, \"%ud\", 0, 0, 0, 0},",
+						ipbuf,
+						addrs[check].mask6);
 			}
 		}
 	}
