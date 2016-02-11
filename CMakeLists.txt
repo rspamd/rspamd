@@ -471,6 +471,7 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/src"
 		"${CMAKE_SOURCE_DIR}/contrib/snowball/include"
 		"${CMAKE_SOURCE_DIR}/contrib/librdns"
 		"${CMAKE_SOURCE_DIR}/contrib/aho-corasick"
+		"${CMAKE_SOURCE_DIR}/contrib/lc-btrie"
 		"${CMAKE_BINARY_DIR}/src" #Stored in the binary dir
 		"${CMAKE_BINARY_DIR}/src/libcryptobox")
 
@@ -1064,6 +1065,7 @@ ENDIF(GLIB_COMPAT)
 ADD_SUBDIRECTORY(contrib/xxhash)
 ADD_SUBDIRECTORY(contrib/cdb)
 ADD_SUBDIRECTORY(contrib/http-parser)
+ADD_SUBDIRECTORY(contrib/lc-btrie)
 ADD_SUBDIRECTORY(contrib/libottery)
 IF(ENABLE_SNOWBALL MATCHES "ON")
 	ADD_SUBDIRECTORY(contrib/snowball)
