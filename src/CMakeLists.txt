@@ -107,6 +107,7 @@ ADD_LIBRARY(rspamd-server STATIC ${RSPAMD_CRYPTOBOX} ${RSPAMD_UTIL} ${RSPAMD_LUA
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-http-parser)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-cdb)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-lpeg)
+TARGET_LINK_LIBRARIES(rspamd-server lcbtrie)
 
 IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
 	ADD_DEPENDENCIES(rspamd-server rspamd-clang)
