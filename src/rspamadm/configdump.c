@@ -104,6 +104,7 @@ rspamadm_add_doc_elt (const ucl_object_t *obj, const ucl_object_t *doc_obj,
 		nobj = ucl_object_fromstring_common ("/*", 0, 0);
 	}
 	else {
+		rspamd_fstring_free (comment);
 		return;
 	}
 

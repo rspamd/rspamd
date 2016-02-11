@@ -240,7 +240,7 @@ rspamd_redis_expand_object (const gchar *pattern,
 		}
 	}
 
-	if (target == NULL) {
+	if (target == NULL || task == NULL) {
 		return tlen;
 	}
 

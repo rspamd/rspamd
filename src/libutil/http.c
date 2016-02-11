@@ -431,6 +431,9 @@ rspamd_http_parse_key (rspamd_ftok_t *data, struct rspamd_http_connection *conn,
 									priv->local_key, priv->msg->peer_key);
 						}
 					}
+					else {
+						rspamd_pubkey_unref (pk);
+					}
 				}
 			}
 

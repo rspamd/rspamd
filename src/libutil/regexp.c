@@ -476,7 +476,7 @@ fin:
 		res->raw_re = pcre2_compile (real_pattern, PCRE2_ZERO_TERMINATED,
 					regexp_flags & ~PCRE_FLAG(UTF),
 					&err_code, &err_off, pcre2_ctx);
-		if (r == NULL) {
+		if (res->raw_re == NULL) {
 			err_str = g_alloca (1024);
 			memset (err_str, 0, 1024);
 			pcre2_get_error_message (err_code, err_str, 1024);
