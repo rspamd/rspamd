@@ -21,6 +21,7 @@
 
 const gsize max_elts = 500 * 1024;
 const gint lookup_cycles = 1 * 1024;
+const gint lookup_divisor = 10;
 
 const uint masks[] = {
 		8,
@@ -249,11 +250,11 @@ rspamd_radix_test_func (void)
 	ts2 = rspamd_get_ticks ();
 	diff = (ts2 - ts1) * 1000.0;
 
-	msg_info ("Added %z elements in %.6f ms", nelts, diff);
+	msg_info ("Added %hz elements in %.6f ms", nelts, diff);
 
 	ts1 = rspamd_get_ticks ();
 	for (lc = 0; lc < lookup_cycles && all_good; lc ++) {
-		for (i = 0; i < nelts / 10; i ++) {
+		for (i = 0; i < nelts / lookup_divisor; i ++) {
 			check = ottery_rand_range (nelts - 1);
 
 			if (btrie_lookup (btrie, addrs[check].addr6, sizeof (addrs[check].addr6))
@@ -274,7 +275,8 @@ rspamd_radix_test_func (void)
 	ts2 = rspamd_get_ticks ();
 	diff = (ts2 - ts1) * 1000.0;
 
-	msg_info ("Checked %z elements in %.6f ms", nelts * lookup_cycles, diff);
+	msg_info ("Checked %hz elements in %.6f ms",
+			nelts * lookup_cycles / lookup_divisor, diff);
 
 	msg_info ("new radix performance (%z elts)", nelts);
 	ts1 = rspamd_get_ticks ();
@@ -287,11 +289,11 @@ rspamd_radix_test_func (void)
 	ts2 = rspamd_get_ticks ();
 	diff = (ts2 - ts1) * 1000.0;
 
-	msg_info ("Added %z elements in %.6f ms", nelts, diff);
+	msg_info ("Added %hz elements in %.6f ms", nelts, diff);
 
 	ts1 = rspamd_get_ticks ();
 	for (lc = 0; lc < lookup_cycles && all_good; lc ++) {
-		for (i = 0; i < nelts / 10; i ++) {
+		for (i = 0; i < nelts / lookup_divisor; i ++) {
 			check = ottery_rand_range (nelts - 1);
 
 			if (radix_find_compressed (comp_tree, addrs[check].addr6,
@@ -325,7 +327,8 @@ rspamd_radix_test_func (void)
 	ts2 = rspamd_get_ticks ();
 	diff = (ts2 - ts1) * 1000.0;
 
-	msg_info ("Checked %z elements in %.6f ms", nelts * lookup_cycles, diff);
+	msg_info ("Checked %hz elements in %.6f ms",
+			nelts * lookup_cycles / lookup_divisor, diff);
 	radix_destroy_compressed (comp_tree);
 
 	g_free (addrs);
