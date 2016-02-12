@@ -90,6 +90,9 @@ URL maps allows another set of filters (by default, url maps are matched using h
 * `tld` - matches TLD (top level domain) part of urls
 * `full` - matches the complete URL not the hostname
 * `is_phished` - matches hostname but if and only if the URL is phished (e.g. pretended to be from another domain)
+* `regexp:/re/` - extracts generic information using the specified regular expression from the hostname
+* `tld:regexp:/re/` - extracts generic information using the specified regular expression from the TLD part
+* `full:regexp:/re/` - extracts generic information using the specified regular expression from the full URL text
 
 Here are some examples of pre-filter configurations:
 
@@ -113,5 +116,11 @@ url_map {
             filter = "tld";
             map = "file:///tmp/url.map";
             symbol = "URL_MAP";
+}
+url_tld_re {
+            type = "url";
+            filter = "tld:regexp:/\.[^.]+$/"; # Extracts the last component of URL
+            map = "file:///tmp/url.map";
+            symbol = "URL_MAP_RE";
 }
 ~~~
