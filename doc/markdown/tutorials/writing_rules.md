@@ -58,7 +58,7 @@ Resulting config:
 
 ~~~nginx
 var1 = "value1";
-var2 = "value2";
+var1 = "value2";
 
 section "name" {
 	var2 = "value2";
@@ -93,7 +93,7 @@ section "name" {
 Resulting config:
 
 ~~~nginx
-var1 = "value1";
+var1 = "value2";
 
 # Note that var2 is removed completely
 section "name" {
