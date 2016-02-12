@@ -73,7 +73,8 @@ module_t surbl_module = {
 	surbl_module_init,
 	surbl_module_config,
 	surbl_module_reconfig,
-	NULL
+	NULL,
+	RSPAMD_MODULE_VER
 };
 
 static void

@@ -151,7 +151,8 @@ module_t fuzzy_check_module = {
 	fuzzy_check_module_init,
 	fuzzy_check_module_config,
 	fuzzy_check_module_reconfig,
-	fuzzy_attach_controller
+	fuzzy_attach_controller,
+	RSPAMD_MODULE_VER
 };
 
 static void

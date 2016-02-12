@@ -56,7 +56,8 @@ worker_t fuzzy_worker = {
 	FALSE,                      /* Unique */
 	FALSE,                      /* Threaded */
 	FALSE,                      /* Non killable */
-	SOCK_DGRAM                  /* UDP socket */
+	SOCK_DGRAM,                 /* UDP socket */
+	RSPAMD_WORKER_VER           /* Version info */
 };
 
 /* For evtimer */

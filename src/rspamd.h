@@ -96,6 +96,40 @@ struct module_ctx {
 	gboolean enabled;											/**< true if module is enabled in configuration		*/
 };
 
+#ifndef WITH_HYPERSCAN
+#define RSPAMD_FEATURE_HYPERSCAN "0"
+#else
+#define RSPAMD_FEATURE_HYPERSCAN "1"
+#endif
+#ifndef WITH_PCRE2
+#define RSPAMD_FEATURE_PCRE2 "0"
+#else
+#define RSPAMD_FEATURE_PCRE2 "1"
+#endif
+#ifndef WITH_FANN
+#define RSPAMD_FEATURE_FANN "0"
+#else
+#define RSPAMD_FEATURE_FANN "1"
+#endif
+#ifndef WITH_SNOWBALL
+#define RSPAMD_FEATURE_SNOWBALL "0"
+#else
+#define RSPAMD_FEATURE_SNOWBALL "1"
+#endif
+
+#define RSPAMD_FEATURES \
+		RSPAMD_FEATURE_HYPERSCAN RSPAMD_FEATURE_PCRE2 \
+		RSPAMD_FEATURE_FANN RSPAMD_FEATURE_SNOWBALL
+
+#define RSPAMD_MODULE_VER \
+		0x1, /* Module version */ \
+		RSPAMD_VERSION_NUM, /* Rspamd version */ \
+		RSPAMD_FEATURES /* Compilation features */ \
+
+#define RSPAMD_WORKER_VER \
+		0x1, /* Worker version */ \
+		RSPAMD_VERSION_NUM, /* Rspamd version */ \
+		RSPAMD_FEATURES /* Compilation features */ \
 /**
  * Module
  */
@@ -106,6 +140,9 @@ typedef struct module_s {
 	int (*module_reconfig_func)(struct rspamd_config *cfg);
 	int (*module_attach_controller_func)(struct module_ctx *ctx,
 		GHashTable *custom_commands);
+	guint module_version;
+	guint64 rspamd_version;
+	const gchar *rspamd_features;
 } module_t;
 
 typedef struct worker_s {
@@ -117,6 +154,9 @@ typedef struct worker_s {
 	gboolean threaded;
 	gboolean killable;
 	gint listen_type;
+	guint module_version;
+	guint64 rspamd_version;
+	const gchar *rspamd_features;
 } worker_t;
 
 struct pidfh;

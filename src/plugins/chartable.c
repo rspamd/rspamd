@@ -39,7 +39,8 @@ module_t chartable_module = {
 	chartable_module_init,
 	chartable_module_config,
 	chartable_module_reconfig,
-	NULL
+	NULL,
+	RSPAMD_MODULE_VER
 };
 
 struct chartable_ctx {

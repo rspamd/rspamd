@@ -50,7 +50,8 @@ worker_t normal_worker = {
 	FALSE,                      /* Non unique */
 	FALSE,                      /* Non threaded */
 	TRUE,                       /* Killable */
-	SOCK_STREAM                 /* TCP socket */
+	SOCK_STREAM,                /* TCP socket */
+	RSPAMD_WORKER_VER           /* Version info */
 };
 
 #define msg_err_ctx(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \

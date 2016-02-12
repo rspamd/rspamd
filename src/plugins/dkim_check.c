@@ -83,7 +83,8 @@ module_t dkim_module = {
 	dkim_module_init,
 	dkim_module_config,
 	dkim_module_reconfig,
-	NULL
+	NULL,
+	RSPAMD_MODULE_VER
 };
 
 static void

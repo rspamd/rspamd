@@ -46,7 +46,8 @@ worker_t lua_worker = {
 	FALSE,                  /* Non unique */
 	FALSE,                  /* Non threaded */
 	TRUE,                   /* Killable */
-	SOCK_STREAM             /* TCP socket */
+	SOCK_STREAM,            /* TCP socket */
+	RSPAMD_WORKER_VER       /* Version info */
 };
 
 /*

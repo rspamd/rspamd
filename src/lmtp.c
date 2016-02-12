@@ -37,7 +37,8 @@ worker_t lmtp_worker = {
 	TRUE,                       /* Has socket */
 	FALSE,                      /* Non unique */
 	FALSE,                      /* Non threaded */
-	TRUE                        /* Killable */
+	TRUE,                       /* Killable */
+	RSPAMD_WORKER_VER           /* Version info */
 };
 
 #ifndef HAVE_SA_SIGINFO

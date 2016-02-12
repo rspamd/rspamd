@@ -47,7 +47,8 @@ worker_t smtp_proxy_worker = {
 	FALSE,                      /* Non unique */
 	FALSE,                      /* Non threaded */
 	TRUE,                       /* Killable */
-	SOCK_STREAM                 /* TCP socket */
+	SOCK_STREAM,                /* TCP socket */
+	RSPAMD_WORKER_VER           /* Version info */
 };
 
 struct smtp_proxy_ctx {
