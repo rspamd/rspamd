@@ -163,6 +163,60 @@ local function multimap_callback(task, pre_filter)
       else
         return nil
       end
+    elseif string.find(filter, 'tld:regexp:') then
+      if not r['regexp'] then
+        local type,pat = string.match(filter, '(regexp:)(.+)')
+        if type and pat then
+          r['regexp'] = regexp.create(pat)
+        end
+      end
+
+      if not r['regexp'] then
+        rspamd_logger.errx(task, 'bad search filter: %s', filter)
+      else
+        local results = r['regexp']:search(url:get_tld())
+        if results then
+          return results[1]
+        else
+          return nil
+        end
+      end
+    elseif string.find(filter, 'full:regexp:') then
+      if not r['regexp'] then
+        local type,pat = string.match(filter, '(regexp:)(.+)')
+        if type and pat then
+          r['regexp'] = regexp.create(pat)
+        end
+      end
+
+      if not r['regexp'] then
+        rspamd_logger.errx(task, 'bad search filter: %s', filter)
+      else
+        local results = r['regexp']:search(url:get_text())
+        if results then
+          return results[1]
+        else
+          return nil
+        end
+      end
+    elseif string.find(filter, 'regexp:') then
+      if not r['regexp'] then
+        local type,pat = string.match(filter, '(regexp:)(.+)')
+        if type and pat then
+          r['regexp'] = regexp.create(pat)
+        end
+      end
+
+      if not r['regexp'] then
+        rspamd_logger.errx(task, 'bad search filter: %s', filter)
+      else
+        local results = r['regexp']:search(url:get_host())
+        if results then
+          return results[1]
+        else
+          return nil
+        end
+      end
     end
 
     return url:get_host()
