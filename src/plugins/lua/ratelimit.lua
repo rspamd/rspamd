@@ -248,7 +248,7 @@ local function rate_test_set(task, func)
   end
   -- Get user (authuser)
   local auser = task:get_user()
-  if auser and settings['user'] > 0 then
+  if auser and settings['user'][1] > 0 then
     table.insert(args, {settings['user'], make_rate_key (auser, '<auth>', nil)})
   end
 
