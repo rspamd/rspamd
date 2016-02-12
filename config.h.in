@@ -258,7 +258,7 @@
 #include <errno.h>
 
 #include <glib.h>
-
+#include <gmodule.h>
 
 #ifdef GLIB_RE_COMPAT
 #include "gregex.h"
