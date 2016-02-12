@@ -154,7 +154,7 @@ rspamd_config.MY_LUA_SYMBOL = {
 	callback = function(task)
 		-- Do something
 		return true
-	end
+	end,
 	score = -1.5,
 	description = 'another cool rule',
 	group = 'my symbols'
