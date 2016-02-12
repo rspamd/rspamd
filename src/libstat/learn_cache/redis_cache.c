@@ -270,6 +270,10 @@ rspamd_stat_cache_redis_runtime (struct rspamd_task *task,
 		return NULL;
 	}
 
+	if (task->tokens == NULL || task->tokens->len == 0) {
+		return NULL;
+	}
+
 	if (learn) {
 		up = rspamd_upstream_get (ctx->write_servers,
 				RSPAMD_UPSTREAM_MASTER_SLAVE,
@@ -322,7 +326,10 @@ rspamd_stat_cache_redis_check (struct rspamd_task *task,
 	gchar *h;
 
 	h = rspamd_mempool_get_variable (task->task_pool, "words_hash");
-	g_assert (h != NULL);
+
+	if (h == NULL) {
+		return RSPAMD_LEARN_INGORE;
+	}
 
 	double_to_tv (rt->ctx->timeout, &tv);
 
