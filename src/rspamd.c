@@ -459,6 +459,7 @@ spawn_workers (struct rspamd_main *rspamd_main, struct event_base *ev_base)
 	gboolean listen_ok = FALSE, seen_hs_helper = FALSE;
 	GQuark qtype;
 
+	/* Special hack for hs_helper if it's not defined in a config */
 	qtype = g_quark_try_string ("hs_helper");
 
 	cur = rspamd_main->cfg->workers;

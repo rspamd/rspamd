@@ -52,7 +52,8 @@ module_t regexp_module = {
 	regexp_module_init,
 	regexp_module_config,
 	regexp_module_reconfig,
-	NULL
+	NULL,
+	RSPAMD_MODULE_VER
 };
 
 /* Process regexp expression */

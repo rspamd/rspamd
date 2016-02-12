@@ -49,14 +49,31 @@
 worker_t *
 rspamd_get_worker_by_type (struct rspamd_config *cfg, GQuark type)
 {
-	worker_t **cur;
+	worker_t **pwrk, *wrk;
+	GList *cur;
 
-	cur = cfg->compiled_workers;
-	while (cur && *cur) {
-		if (g_quark_from_string ((*cur)->name) == type) {
-			return *cur;
+	pwrk = cfg->compiled_workers;
+	while (pwrk && *pwrk) {
+		if (rspamd_check_worker (cfg, *pwrk)) {
+			if (g_quark_from_string ((*pwrk)->name) == type) {
+				return *pwrk;
+			}
 		}
-		cur++;
+
+		pwrk++;
+	}
+
+	cur = g_list_first (cfg->dynamic_workers);
+	while (cur) {
+		wrk = cur->data;
+
+		if (rspamd_check_worker (cfg, wrk)) {
+			if (g_quark_from_string (wrk->name) == type) {
+				return wrk;
+			}
+		}
+
+		cur = g_list_next (cur);
 	}
 
 	return NULL;

@@ -117,17 +117,20 @@ struct module_ctx {
 #define RSPAMD_FEATURE_SNOWBALL "1"
 #endif
 
+#define RSPAMD_CUR_MODULE_VERSION 0x1
+#define RSPAMD_CUR_WORKER_VERSION 0x1
+
 #define RSPAMD_FEATURES \
 		RSPAMD_FEATURE_HYPERSCAN RSPAMD_FEATURE_PCRE2 \
 		RSPAMD_FEATURE_FANN RSPAMD_FEATURE_SNOWBALL
 
 #define RSPAMD_MODULE_VER \
-		0x1, /* Module version */ \
+		RSPAMD_CUR_MODULE_VERSION, /* Module version */ \
 		RSPAMD_VERSION_NUM, /* Rspamd version */ \
 		RSPAMD_FEATURES /* Compilation features */ \
 
 #define RSPAMD_WORKER_VER \
-		0x1, /* Worker version */ \
+		RSPAMD_CUR_WORKER_VERSION, /* Worker version */ \
 		RSPAMD_VERSION_NUM, /* Rspamd version */ \
 		RSPAMD_FEATURES /* Compilation features */ \
 /**
@@ -154,10 +157,26 @@ typedef struct worker_s {
 	gboolean threaded;
 	gboolean killable;
 	gint listen_type;
-	guint module_version;
+	guint worker_version;
 	guint64 rspamd_version;
 	const gchar *rspamd_features;
 } worker_t;
+
+/**
+ * Check if loaded worker is compatible with rspamd
+ * @param cfg
+ * @param wrk
+ * @return
+ */
+gboolean rspamd_check_worker (struct rspamd_config *cfg, worker_t *wrk);
+
+/**
+ * Check if loaded module is compatible with rspamd
+ * @param cfg
+ * @param wrk
+ * @return
+ */
+gboolean rspamd_check_module (struct rspamd_config *cfg, module_t *wrk);
 
 struct pidfh;
 struct rspamd_config;

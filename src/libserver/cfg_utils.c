@@ -1130,6 +1130,64 @@ rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 }
 
 gboolean
+rspamd_check_module (struct rspamd_config *cfg, module_t *mod)
+{
+	gboolean ret = TRUE;
+
+	if (mod != NULL) {
+		if (mod->module_version != RSPAMD_CUR_MODULE_VERSION) {
+			msg_err_config ("module %s has incorrect version %xd (%xd expected)",
+					mod->name, mod->module_version, RSPAMD_CUR_MODULE_VERSION);
+			ret = FALSE;
+		}
+		if (ret && mod->rspamd_version != RSPAMD_VERSION_NUM) {
+			msg_err_config ("module %s has incorrect rspamd version %xd (%xd expected)",
+					mod->name, mod->rspamd_version, RSPAMD_VERSION_NUM);
+			ret = FALSE;
+		}
+		if (ret && strcmp (mod->rspamd_features, RSPAMD_FEATURES) != 0) {
+			msg_err_config ("module %s has incorrect rspamd features '%s' ('%s' expected)",
+					mod->name, mod->rspamd_features, RSPAMD_FEATURES);
+			ret = FALSE;
+		}
+	}
+	else {
+		ret = FALSE;
+	}
+
+	return ret;
+}
+
+gboolean
+rspamd_check_worker (struct rspamd_config *cfg, worker_t *wrk)
+{
+	gboolean ret = TRUE;
+
+	if (wrk != NULL) {
+		if (wrk->worker_version != RSPAMD_CUR_WORKER_VERSION) {
+			msg_err_config ("worker %s has incorrect version %xd (%xd expected)",
+					wrk->name, wrk->worker_version, RSPAMD_CUR_WORKER_VERSION);
+			ret = FALSE;
+		}
+		if (ret && wrk->rspamd_version != RSPAMD_VERSION_NUM) {
+			msg_err_config ("worker %s has incorrect rspamd version %xd (%xd expected)",
+					wrk->name, wrk->rspamd_version, RSPAMD_VERSION_NUM);
+			ret = FALSE;
+		}
+		if (ret && strcmp (wrk->rspamd_features, RSPAMD_FEATURES) != 0) {
+			msg_err_config ("worker %s has incorrect rspamd features '%s' ('%s' expected)",
+					wrk->name, wrk->rspamd_features, RSPAMD_FEATURES);
+			ret = FALSE;
+		}
+	}
+	else {
+		ret = FALSE;
+	}
+
+	return ret;
+}
+
+gboolean
 rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 {
 	GList *cur;
@@ -1140,17 +1198,40 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 	if (!reconfig) {
 		for (pmod = cfg->compiled_modules; pmod != NULL && *pmod != NULL; pmod ++) {
 			mod = *pmod;
-			mod_ctx = g_slice_alloc0 (sizeof (struct module_ctx));
 
-			if (mod->module_init_func (cfg, &mod_ctx) == 0) {
-				g_hash_table_insert (cfg->c_modules,
-						(gpointer) mod->name,
-						mod_ctx);
-				mod_ctx->mod = mod;
+			if (rspamd_check_module (cfg, mod)) {
+				mod_ctx = g_slice_alloc0 (sizeof (struct module_ctx));
+
+				if (mod->module_init_func (cfg, &mod_ctx) == 0) {
+					g_hash_table_insert (cfg->c_modules,
+							(gpointer) mod->name,
+							mod_ctx);
+					mod_ctx->mod = mod;
+				}
 			}
+		}
+
+		cur = g_list_first (cfg->dynamic_modules);
+
+		while (cur) {
+			mod = cur->data;
+
+			if (rspamd_check_module (cfg, mod)) {
+				mod_ctx = g_slice_alloc0 (sizeof (struct module_ctx));
+
+				if (mod->module_init_func (cfg, &mod_ctx) == 0) {
+					g_hash_table_insert (cfg->c_modules,
+							(gpointer) mod->name,
+							mod_ctx);
+					mod_ctx->mod = mod;
+				}
+			}
+
+			cur = g_list_next (cur);
 		}
 	}
 
+	/* Now check what's enabled */
 	cur = g_list_first (cfg->filters);
 
 	while (cur) {

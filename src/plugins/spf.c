@@ -64,7 +64,8 @@ module_t spf_module = {
 	spf_module_init,
 	spf_module_config,
 	spf_module_reconfig,
-	NULL
+	NULL,
+	RSPAMD_MODULE_VER
 };
 
 static GQuark
