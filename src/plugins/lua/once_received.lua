@@ -21,32 +21,36 @@ local symbol = 'ONCE_RECEIVED'
 local symbol_strict = nil
 local bad_hosts = {}
 local good_hosts = {}
+local whitelist = nil
 local rspamd_logger = require "rspamd_logger"
 
 local function check_quantity_received (task)
   local function recv_dns_cb(resolver, to_resolve, results, err)
     task:inc_dns_req()
+
     if not results then
-      task:insert_result(symbol_strict, 1)
+      local res = true
+      if res then
+        task:insert_result(symbol, 1)
+        task:insert_result(symbol_strict, 1)
+      end
     else
       rspamd_logger.infox(task, 'SMTP resolver failed to resolve: %1 is %2',
         to_resolve, results[1])
-      local i = true
-      for _,h in ipairs(bad_hosts) do
-        if string.find(results[1], h) then
-          -- Check for good hostname
-          if good_hosts then
-            for _,gh in ipairs(good_hosts) do
-              if string.find(results[1], gh) then
-                i = false
-                break
-              end
-            end
-          end
-          if i then
-            task:insert_result(symbol_strict, 1, h)
+      if good_hosts then
+        for _,gh in ipairs(good_hosts) do
+          if string.find(results[1], gh) then
             return
           end
+        end
+      end
+
+      task:insert_result(symbol, 1)
+      for _,h in ipairs(bad_hosts) do
+        if string.find(results[1], h) then
+
+          task:insert_result(symbol_strict, 1, h)
+          return
         end
       end
     end
@@ -55,50 +59,66 @@ local function check_quantity_received (task)
   if task:get_user() ~= nil then
     return
   end
+
+  if whitelist then
+    local addr = task:get_from_ip()
+
+    if addr and whitelist:get_key(addr) then
+      rspamd_logger.infox(task, 'whitelisted mail from %s',
+        addr:to_string())
+      return
+    end
+  end
+
   local recvh = task:get_received_headers()
-  if table.maxn(recvh) <= 1 then
-    task:insert_result(symbol, 1)
-    -- Strict checks
-    if symbol_strict then
-      local r = recvh[1]
-            if not r then
-                return
-            end
-      -- Unresolved host
-      if not r['real_hostname'] or string.lower(r['real_hostname']) == 'unknown' or 
-        string.match(r['real_hostname'], '^%d+%.%d+%.%d+%.%d+$') then
-        
-        if r['real_ip'] and r['real_ip']:is_valid() then
-          -- Try to resolve it again
-          task:get_resolver():resolve_ptr({task = task,
-            name = r['real_ip']:to_string(), 
-            callback = recv_dns_cb
-          })
-        else
-          task:insert_result(symbol_strict, 1)
+  if recvh and #recvh <= 1 then
+    local ret = true
+    local r = recvh[1]
+
+    if not r then
+      return
+    end
+
+    local hn = string.lower(r['real_hostname'])
+    -- Check for good hostname
+    if hn and good_hosts then
+      for _,gh in ipairs(good_hosts) do
+        if string.find(hn, gh) then
+          ret = false
+          break
         end
-        return
       end
+    end
 
-      local i = true
-      local hn = string.lower(r['real_hostname'])
+    if ret then
+      -- Strict checks
+      if symbol_strict then
+        -- Unresolved host
+        if not r['real_hostname'] or string.lower(r['real_hostname']) == 'unknown' or
+          string.match(r['real_hostname'], '^%d+%.%d+%.%d+%.%d+$') then
 
-      for _,h in ipairs(bad_hosts) do
-        if string.find(hn, h) then
-          -- Check for good hostname
-          if good_hosts then
-            for _,gh in ipairs(good_hosts) do
-              if string.find(hn, gh) then
-                i = false
-                break
-              end
-            end
+          if r['real_ip'] and r['real_ip']:is_valid() then
+            -- Try to resolve it again
+            task:get_resolver():resolve_ptr({task = task,
+              name = r['real_ip']:to_string(),
+              callback = recv_dns_cb
+            })
+          else
+            task:insert_result(symbol_strict, 1)
           end
-          if i then
+          return
+        end
+
+        task:insert_result(symbol, 1)
+
+        for _,h in ipairs(bad_hosts) do
+          if string.find(hn, h) then
             task:insert_result(symbol_strict, 1, h)
             return
           end
         end
+      else
+        task:insert_result(symbol, 1)
       end
     end
   end
@@ -138,6 +158,8 @@ if opts then
         else
           good_hosts = v
         end
+      elseif n == 'whitelist' then
+        whitelist = rspamd_config:add_radix_map (v, 'once received whitelist')
       end
     end
   end
