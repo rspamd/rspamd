@@ -67,17 +67,26 @@ radix_insert_compressed (radix_compressed_t * tree,
 {
 	guint keybits = keylen * NBBY;
 	uintptr_t old;
+	int ret;
 
 	g_assert (tree != NULL);
 	g_assert (keybits >= masklen);
 
 	msg_debug_radix ("want insert value %p with mask %z, key: %*xs",
-			(gpointer)value, masklen, (int)keybits, key);
+			(gpointer)value, keybits - masklen, (int)keylen, key);
 
 	old = radix_find_compressed (tree, key, keylen);
 
-	btrie_add_prefix (tree->tree, key, keybits - masklen,
+	ret = btrie_add_prefix (tree->tree, key, keybits - masklen,
 			(gconstpointer)value);
+
+	if (ret != BTRIE_OKAY) {
+		msg_err_radix ("cannot insert %p with mask %z, key: %*xs, duplicate value",
+				(gpointer)value, keybits - masklen, (int)keylen, key);
+	}
+	else {
+		tree->size ++;
+	}
 
 	return old;
 }
