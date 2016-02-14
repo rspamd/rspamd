@@ -288,10 +288,12 @@ UCL_EXTERN ucl_object_t* ucl_object_new_full (ucl_type_t type, unsigned priority
 /**
  * Create new object with userdata dtor
  * @param dtor destructor function
+ * @param emitter emitter for userdata
+ * @param ptr opaque pointer
  * @return new object
  */
 UCL_EXTERN ucl_object_t* ucl_object_new_userdata (ucl_userdata_dtor dtor,
-		ucl_userdata_emitter emitter) UCL_WARN_UNUSED_RESULT;
+		ucl_userdata_emitter emitter, void *ptr) UCL_WARN_UNUSED_RESULT;
 
 /**
  * Perform deep copy of an object copying everything
@@ -750,6 +752,19 @@ UCL_EXTERN void ucl_object_unref (ucl_object_t *obj);
  */
 UCL_EXTERN int ucl_object_compare (const ucl_object_t *o1,
 		const ucl_object_t *o2);
+
+/**
+ * Compare objects `o1` and `o2` useful for sorting
+ * @param o1 the first object
+ * @param o2 the second object
+ * @return values >0, 0 and <0 if `o1` is more than, equal and less than `o2`.
+ * The order of comparison:
+ * 1) Type of objects
+ * 2) Size of objects
+ * 3) Content of objects
+ */
+UCL_EXTERN int ucl_object_compare_qsort (const ucl_object_t **o1,
+		const ucl_object_t **o2);
 
 /**
  * Sort UCL array using `cmp` compare function

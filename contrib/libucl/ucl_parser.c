@@ -2198,7 +2198,7 @@ ucl_state_machine (struct ucl_parser *parser)
 			while (p < chunk->end && ucl_test_character (*p, UCL_CHARACTER_WHITESPACE_UNSAFE)) {
 				ucl_chunk_skipc (chunk, p);
 			}
-			if (*p == '}') {
+			if (p == chunk->end || *p == '}') {
 				/* We have the end of an object */
 				parser->state = UCL_STATE_AFTER_VALUE;
 				continue;

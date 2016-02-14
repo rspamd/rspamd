@@ -27,6 +27,7 @@
 #include "ucl_chartable.h"
 #include "kvec.h"
 #include <stdarg.h>
+#include <stdio.h> /* for asprintf */
 
 #ifndef _WIN32
 #include <glob.h>
@@ -306,6 +307,9 @@ ucl_unescape_json_string (char *str, size_t len)
 			case 'u':
 				/* Unicode escape */
 				uval = 0;
+				h ++; /* u character */
+				len --;
+
 				if (len > 3) {
 					for (i = 0; i < 4; i++) {
 						uval <<= 4;
@@ -322,8 +326,7 @@ ucl_unescape_json_string (char *str, size_t len)
 							break;
 						}
 					}
-					h += 3;
-					len -= 3;
+
 					/* Encode */
 					if(uval < 0x80) {
 						t[0] = (char)uval;
@@ -340,6 +343,8 @@ ucl_unescape_json_string (char *str, size_t len)
 						t[2] = 0x80 + ((uval & 0x003F));
 						t += 3;
 					}
+#if 0
+					/* It's not actually supported now */
 					else if(uval <= 0x10FFFF) {
 						t[0] = 0xF0 + ((uval & 0x1C0000) >> 18);
 						t[1] = 0x80 + ((uval & 0x03F000) >> 12);
@@ -347,9 +352,19 @@ ucl_unescape_json_string (char *str, size_t len)
 						t[3] = 0x80 + ((uval & 0x00003F));
 						t += 4;
 					}
+#endif
 					else {
 						*t++ = '?';
 					}
+
+					/* Consume 4 characters of source */
+					h += 4;
+					len -= 4;
+
+					if (len > 0) {
+						len --; /* for '\' character */
+					}
+					continue;
 				}
 				else {
 					*t++ = 'u';
@@ -1550,7 +1565,7 @@ ucl_load_handler (const unsigned char *data, size_t len,
 	size_t buflen;
 	unsigned priority;
 	int64_t iv;
-	ucl_hash_t *container = NULL;
+	ucl_object_t *container = NULL;
 	enum ucl_string_flags flags;
 
 	/* Default values */
@@ -1610,19 +1625,32 @@ ucl_load_handler (const unsigned char *data, size_t len,
 		}
 	}
 
-	if (prefix == NULL || strlen(prefix) == 0) {
+	if (prefix == NULL || strlen (prefix) == 0) {
 		ucl_create_err (&parser->err, "No Key specified in load macro");
 		return false;
 	}
 
 	if (len > 0) {
 		asprintf (&load_file, "%.*s", (int)len, data);
-		if (!ucl_fetch_file (load_file, &buf, &buflen, &parser->err, !try_load)) {
+
+		if (!load_file) {
+			ucl_create_err (&parser->err, "cannot allocate memory for suffix");
+
+			return false;
+		}
+
+		if (!ucl_fetch_file (load_file, &buf, &buflen, &parser->err,
+				!try_load)) {
+			free (load_file);
+
 			return (try_load || false);
 		}
 
-		container = parser->stack->obj->value.ov;
-		old_obj = __DECONST (ucl_object_t *, ucl_hash_search (container, prefix, strlen (prefix)));
+		free (load_file);
+		container = parser->stack->obj;
+		old_obj = __DECONST (ucl_object_t *, ucl_object_find_key (container,
+				prefix));
+
 		if (old_obj != NULL) {
 			ucl_create_err (&parser->err, "Key %s already exists", prefix);
 			if (buflen > 0) {
@@ -1642,7 +1670,7 @@ ucl_load_handler (const unsigned char *data, size_t len,
 		else if (strcasecmp (target, "int") == 0) {
 			asprintf(&tmp, "%.*s", (int)buflen, buf);
 			iv = strtoll(tmp, NULL, 10);
-			obj = ucl_object_fromint(iv);
+			obj = ucl_object_fromint (iv);
 		}
 
 		if (buflen > 0) {
@@ -1652,13 +1680,11 @@ ucl_load_handler (const unsigned char *data, size_t len,
 		if (obj != NULL) {
 			obj->key = prefix;
 			obj->keylen = strlen (prefix);
-			ucl_copy_key_trash(obj);
+			ucl_copy_key_trash (obj);
 			obj->prev = obj;
 			obj->next = NULL;
 			ucl_object_set_priority (obj, priority);
-			container = ucl_hash_insert_object (container, obj,
-					parser->flags & UCL_PARSER_KEY_LOWERCASE);
-			parser->stack->obj->value.ov = container;
+			ucl_object_insert_key (container, obj, obj->key, obj->keylen, false);
 		}
 
 		return true;
@@ -2576,7 +2602,7 @@ ucl_object_new_full (ucl_type_t type, unsigned priority)
 		}
 	}
 	else {
-		new = ucl_object_new_userdata (NULL, NULL);
+		new = ucl_object_new_userdata (NULL, NULL, NULL);
 		ucl_object_set_priority (new, priority);
 	}
 
@@ -2584,7 +2610,9 @@ ucl_object_new_full (ucl_type_t type, unsigned priority)
 }
 
 ucl_object_t*
-ucl_object_new_userdata (ucl_userdata_dtor dtor, ucl_userdata_emitter emitter)
+ucl_object_new_userdata (ucl_userdata_dtor dtor,
+		ucl_userdata_emitter emitter,
+		void *ptr)
 {
 	struct ucl_object_userdata *new;
 	size_t nsize = sizeof (*new);
@@ -2598,6 +2626,7 @@ ucl_object_new_userdata (ucl_userdata_dtor dtor, ucl_userdata_emitter emitter)
 		new->obj.prev = (ucl_object_t *)new;
 		new->dtor = dtor;
 		new->emitter = emitter;
+		new->obj.value.ud = ptr;
 	}
 
 	return (ucl_object_t *)new;
@@ -3264,6 +3293,13 @@ ucl_object_compare (const ucl_object_t *o1, const ucl_object_t *o2)
 	}
 
 	return ret;
+}
+
+int
+ucl_object_compare_qsort (const ucl_object_t **o1,
+		const ucl_object_t **o2)
+{
+	return ucl_object_compare (*o1, *o2);
 }
 
 void
