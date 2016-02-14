@@ -532,7 +532,8 @@ dkim_module_key_handler (rspamd_dkim_key_t *key,
 	}
 	else {
 		/* Insert tempfail symbol */
-		msg_info ("cannot get key for domain %s", ctx->dns_key);
+		msg_info ("cannot get key for domain %s: %e", ctx->dns_key, err);
+
 		if (err != NULL) {
 			res->res = DKIM_TRYAGAIN;
 		}
