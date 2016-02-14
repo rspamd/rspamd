@@ -96,6 +96,13 @@ gboolean radix_add_generic_iplist (const gchar *ip_list,
 gsize radix_get_size (radix_compressed_t *tree);
 
 /**
+ * Return string that describes this radix tree (memory, nodes, compression etc)
+ * @param tree
+ * @return constant string
+ */
+const gchar * radix_get_info (radix_compressed_t *tree);
+
+/**
  * Returns memory pool associated with the radix tree
  */
 rspamd_mempool_t* radix_get_pool (radix_compressed_t *tree);

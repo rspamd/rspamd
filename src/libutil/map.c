@@ -957,7 +957,7 @@ rspamd_radix_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 		radix_destroy_compressed (data->prev_data);
 	}
 	if (data->cur_data) {
-		msg_info_pool ("read radix trie of %z elements", radix_get_size
-				(data->cur_data));
+		msg_info_pool ("read radix trie of %z elements: %s",
+				radix_get_size (data->cur_data), radix_get_info (data->cur_data));
 	}
 }

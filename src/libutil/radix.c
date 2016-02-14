@@ -242,3 +242,13 @@ radix_get_pool (radix_compressed_t *tree)
 
 	return NULL;
 }
+
+const gchar *
+radix_get_info (radix_compressed_t *tree)
+{
+	if (tree == NULL) {
+		return NULL;
+	}
+
+	return btrie_stats (tree->tree);
+}
