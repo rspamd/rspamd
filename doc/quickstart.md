@@ -201,10 +201,12 @@ Rspamd's normal worker will by default listen on all interfaces on port 11333. I
 
 This is configured in `rspamd.conf` or `rspamd.sysvinit.conf` on Debian Wheezy & Ubuntu. The config to be modified is shown below (`*` should be replaced with whatever address you would prefer to listen on).
 
-    worker {
-        bind_socket = "*:11333";
-        .include "$CONFDIR/worker-normal.inc"
-    }
+{% highlight nginx %}
+worker {
+    bind_socket = "*:11333";
+    .include "$CONFDIR/worker-normal.inc"
+}
+{% endhighlight %}
 
 If you plan to leave this as is you may wish to use a firewall to restrict access to your own machines.
 
@@ -232,6 +234,7 @@ Webui is managed by a controller worker but you might want to proxy its requests
 
 <div>
 <a class="btn btn-info btn-block btn-code" data-toggle="collapse" data-target="#nginx_cf">nginx.conf...<i class="fa fa-caret-square-o-down"></i></a><div id="nginx_cf" class="collapse"><pre><code>
+{% highlight nginx %}
 worker_processes  2;
 user www-data www-data;
 
@@ -287,6 +290,7 @@ http {
 		ssl_ecdh_curve prime256v1;
 	}
 }
+{% endhighlight %}
 </code>
 </pre>
 </div>
@@ -296,12 +300,14 @@ You might also use subdirs, as suggested by [@julienmalik](https://github.com/ju
 
 <div>
 <a class="btn btn-info btn-block btn-code" data-toggle="collapse" data-target="#nginx_cf1">nginx.conf...<i class="fa fa-caret-square-o-down"></i></a><div id="nginx_cf1" class="collapse"><pre><code>
+{% highlight nginx %}
 location /rspamd/ {
     proxy_pass       http://localhost:11334/;
 
     proxy_set_header Host      $host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 }
+{% endhighlight %}
 </code>
 </pre>
 </div>
@@ -313,25 +319,25 @@ Alternatively, you could setup HTTP authentication in nginx itself.
 
 From version 1.1, it is also possible to specify redis as a backend for statistics and cache of learned messages. Redis is recommended for clustered configurations as it allows simultaneous learn and checks and, besides, is very fast. To setup redis, you could use `redis` backend for a classifier (cache is set to the same servers accordingly).
 
-~~~nginx
-    classifier {
-        tokenizer {
-            name = "osb";
-        }
-        name = "bayes";
-        min_tokens = 11;
-        backend = "redis";
-        servers = "127.0.0.1";
-
-        statfile {
-            symbol = "BAYES_SPAM";
-        }
-        statfile {
-            symbol = "BAYES_HAM";
-        }
-        autolearn = true;
+{% highlight nginx %}
+classifier {
+    tokenizer {
+        name = "osb";
     }
-~~~
+    name = "bayes";
+    min_tokens = 11;
+    backend = "redis";
+    servers = "127.0.0.1";
+
+    statfile {
+        symbol = "BAYES_SPAM";
+    }
+    statfile {
+        symbol = "BAYES_HAM";
+    }
+    autolearn = true;
+}
+{% endhighlight %}
 
 For other possibilities please read the full [documentation](/doc/statistic.html).
 
@@ -353,7 +359,7 @@ SA `spam` is almost equal to rspamd `add header` action in the default setup. Wi
 
 Scores and action settings are defined in the `metric` section. To override for existing or add scores for new symbols, you can use `rspamd.conf.local` file. Here is an example of altering the `reject` action, changing the existing symbol and adding new symbol:
 
-~~~nginx
+{% highlight nginx %}
 metric "default" {
     actions {
         reject = 900; # Set higher reject score
@@ -368,13 +374,13 @@ metric "default" {
         description = "My new symbol";
     }
 }
-~~~
+{% endhighlight %}
 
 Please mention, that this addition/rewriting logic is working for `metric` section only so far. For other sections you should use `rspamd.conf.override` file and redefine those sections completely.
 
 Another note, the legacy syntax that you could observe in some default configuration files:
 
-~~~nginx
+{% highlight nginx %}
 metric {
     name = "default";
     
@@ -383,17 +389,17 @@ metric {
         score = 1.0;
     }
 }
-~~~
+{% endhighlight %}
 
 is equal to the modern syntax:
 
-~~~nginx
+{% highlight nginx %}
 metric "default" {
     symbol "EXAMPLE" {
         score = 1.0;
     }
 }
-~~~
+{% endhighlight %}
 
 ## Configuring maps
 
@@ -487,13 +493,13 @@ For example, it is possible to get help for a specific configuration option by t
 
 It is also useful to have a simple `Sieve` script to place all messages marked as spam to the `Junk` folder. Here is an example of such a script (~/.dovecot.sieve):
 
-~~~nginx
+{% highlight nginx %}
 require ["fileinto"];
 
 if header :is "X-Spam" "Yes" {
         fileinto "Junk";
 }
-~~~
+{% endhighlight %}
 
 You can also setup rspamc to learn via passing messages to a certain email address. I'd recommend to use `/etc/aliases` for these purposes and `mail-redirect` command (e.g. provided by [Mail Redirect addon](https://addons.mozilla.org/en-GB/thunderbird/addon/mailredirect/) for `thunderbird` MUA). The desired aliases could be the following:
 
