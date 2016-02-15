@@ -543,6 +543,29 @@ rspamd_map_check_proto (struct rspamd_config *cfg,
 }
 
 gboolean
+rspamd_map_is_map (const gchar *map_line)
+{
+	gboolean ret = FALSE;
+
+	g_assert (map_line != NULL);
+
+	if (map_line[0] == '/') {
+		ret = TRUE;
+	}
+	else if (g_ascii_strncasecmp (map_line, "sign+", sizeof ("sign+") - 1) == 0) {
+		ret = TRUE;
+	}
+	else if (g_ascii_strncasecmp (map_line, "file://", sizeof ("file://") - 1) == 0) {
+		ret = TRUE;
+	}
+	else if (g_ascii_strncasecmp (map_line, "http://", sizeof ("file://") - 1) == 0) {
+		ret = TRUE;
+	}
+
+	return ret;
+}
+
+gboolean
 rspamd_map_add (struct rspamd_config *cfg,
 	const gchar *map_line,
 	const gchar *description,

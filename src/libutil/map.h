@@ -38,6 +38,13 @@ struct map_cb_data {
 };
 
 /**
+ * Returns TRUE if line looks like a map definition
+ * @param map_line
+ * @return
+ */
+gboolean rspamd_map_is_map (const gchar *map_line);
+
+/**
  * Add map from line
  */
 gboolean rspamd_map_add (struct rspamd_config *cfg,
