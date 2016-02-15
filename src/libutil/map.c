@@ -26,12 +26,6 @@
 
 static const gchar *hash_fill = "1";
 
-/* Value in seconds after whitch we would try to do stat on list file */
-
-/* HTTP timeouts */
-#define HTTP_CONNECT_TIMEOUT 2
-#define HTTP_READ_TIMEOUT 10
-
 /**
  * Helper for HTTP connection establishment
  */
@@ -197,6 +191,91 @@ http_map_read (struct rspamd_http_connection *conn,
 	return 0;
 }
 
+static gboolean
+rspamd_map_check_file_sig (const char *fname,
+		struct rspamd_map *map, const guchar *input,
+		gsize inlen)
+{
+	gchar fpath[PATH_MAX];
+	rspamd_mempool_t *pool = map->pool;
+	guchar *data;
+	struct rspamd_cryptobox_pubkey *pk = NULL;
+	GString *b32_key;
+	gsize len = 0;
+
+	if (map->trusted_pubkey == NULL) {
+		/* Try to load and check pubkey */
+		rspamd_snprintf (fpath, sizeof (fpath), "%s.pub", fname);
+
+		data = rspamd_file_xmap (fpath, PROT_READ, &len);
+
+		if (data == NULL) {
+			msg_err_pool ("can't open pubkey %s: %s", fpath, strerror (errno));
+			return FALSE;
+		}
+
+		pk = rspamd_pubkey_from_base32 (data, len, RSPAMD_KEYPAIR_SIGN,
+				RSPAMD_CRYPTOBOX_MODE_25519);
+		munmap (data, len);
+
+		if (pk == NULL) {
+			msg_err_pool ("can't load pubkey %s", fpath);
+			return FALSE;
+		}
+
+		/* We just check pk against the trusted db of keys */
+		b32_key = rspamd_pubkey_print (pk,
+				RSPAMD_KEYPAIR_BASE32|RSPAMD_KEYPAIR_PUBKEY);
+		g_assert (b32_key != NULL);
+
+		if (g_hash_table_lookup (map->cfg->trusted_keys, b32_key->str) == NULL) {
+			msg_err_pool ("pubkey loaded from %s is untrusted: %v", fpath,
+					b32_key);
+			g_string_free (b32_key, TRUE);
+			rspamd_pubkey_unref (pk);
+
+			return FALSE;
+		}
+
+		g_string_free (b32_key, TRUE);
+	}
+	else {
+		pk = rspamd_pubkey_ref (map->trusted_pubkey);
+	}
+
+	/* Now load signature */
+	rspamd_snprintf (fpath, sizeof (fpath), "%s.sig", fname);
+	data = rspamd_file_xmap (fpath, PROT_READ, &len);
+
+	if (data == NULL) {
+		msg_err_pool ("can't open signature %s: %s", fpath, strerror (errno));
+		rspamd_pubkey_unref (pk);
+		return FALSE;
+	}
+
+	if (len != rspamd_cryptobox_signature_bytes (RSPAMD_CRYPTOBOX_MODE_25519)) {
+		msg_err_pool ("can't open signature %s: invalid signature", fpath);
+		rspamd_pubkey_unref (pk);
+		munmap (data, len);
+
+		return FALSE;
+	}
+
+	if (!rspamd_cryptobox_verify (data, input, inlen,
+			rspamd_pubkey_get_pk (pk, NULL), RSPAMD_CRYPTOBOX_MODE_25519)) {
+		msg_err_pool ("can't verify signature %s: incorrect signature", fpath);
+		rspamd_pubkey_unref (pk);
+		munmap (data, len);
+
+		return FALSE;
+	}
+
+	rspamd_pubkey_unref (pk);
+	munmap (data, len);
+
+	return TRUE;
+}
+
 /**
  * Callback for reading data from file
  */
@@ -204,9 +283,8 @@ static void
 read_map_file (struct rspamd_map *map, struct file_map_data *data)
 {
 	struct map_cb_data cbdata;
-	gchar buf[BUFSIZ], *remain = NULL;
-	ssize_t r;
-	gint fd, rlen, tlen;
+	guchar *bytes;
+	gsize len;
 	rspamd_mempool_t *pool = map->pool;
 
 	if (map->read_callback == NULL || map->fin_callback == NULL) {
@@ -214,9 +292,10 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 		return;
 	}
 
-	if ((fd = open (data->filename, O_RDONLY)) == -1) {
-		msg_warn_pool ("cannot open file '%s': %s", data->filename,
-			strerror (errno));
+	bytes = rspamd_file_xmap (data->filename, PROT_READ, &len);
+
+	if (bytes == NULL) {
+		msg_err_pool ("can't open map %s: %s", data->filename, strerror (errno));
 		return;
 	}
 
@@ -225,38 +304,22 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 	cbdata.cur_data = NULL;
 	cbdata.map = map;
 
-	rlen = 0;
-	tlen = 0;
-	while ((r = read (fd, buf + rlen, sizeof (buf) - rlen - 2)) > 0) {
-		r += rlen;
-		tlen += r;
-		buf[r] = '\0';
-		remain = map->read_callback (map->pool, buf, r, &cbdata);
+	if (map->is_signed) {
+		if (!rspamd_map_check_file_sig (data->filename, map, bytes, len)) {
+			munmap (bytes, len);
 
-		if (remain != NULL) {
-			/* copy remaining buffer to start of buffer */
-			rlen = r - (remain - buf);
-			memmove (buf, remain, rlen);
-		}
-		else {
-			rlen = 0;
+			return;
 		}
 	}
 
-	if (remain != NULL && remain > buf) {
-		g_assert (rlen <= (gint)sizeof (buf) - 2);
-		buf[rlen++] = '\n';
-		buf[rlen] = '\0';
-		tlen += rlen;
-		map->read_callback (map->pool, buf, rlen, &cbdata);
-	}
+	map->read_callback (map->pool, bytes, len, &cbdata);
 
-	close (fd);
-
-	if (tlen > 0) {
+	if (len > 0) {
 		map->fin_callback (map->pool, &cbdata);
 		*map->user_data = cbdata.cur_data;
 	}
+
+	munmap (bytes, len);
 }
 
 static void
@@ -356,7 +419,7 @@ http_callback (gint fd, short what, void *ud)
 		cbd->cbdata.prev_data = *cbd->map->user_data;
 		cbd->cbdata.cur_data = NULL;
 		cbd->cbdata.map = cbd->map;
-		cbd->tv.tv_sec = HTTP_CONNECT_TIMEOUT;
+		cbd->tv.tv_sec = 5;
 		cbd->tv.tv_usec = 0;
 		cbd->fd = sock;
 		data->conn->ud = cbd;
@@ -450,6 +513,8 @@ rspamd_map_check_proto (struct rspamd_config *cfg,
 		}
 	}
 
+	map->protocol = MAP_PROTO_FILE;
+
 	if (g_ascii_strncasecmp (pos, "http://",
 			sizeof ("http://") - 1) == 0) {
 		map->protocol = MAP_PROTO_HTTP;
@@ -459,18 +524,17 @@ rspamd_map_check_proto (struct rspamd_config *cfg,
 	}
 	else if (g_ascii_strncasecmp (pos, "file://", sizeof ("file://") -
 			1) == 0) {
-		map->protocol = MAP_PROTO_FILE;
 		pos += sizeof ("file://") - 1;
 		/* Exclude file:// */
 		map->uri = rspamd_mempool_strdup (cfg->cfg_pool, pos);
 	}
 	else if (*pos == '/') {
 		/* Trivial file case */
-		map->protocol = MAP_PROTO_FILE;
 		map->uri = rspamd_mempool_strdup (cfg->cfg_pool, pos);
 	}
 	else {
 		msg_err_config ("invalid map fetching protocol: %s", map_line);
+
 		return NULL;
 	}
 
@@ -487,7 +551,6 @@ rspamd_map_add (struct rspamd_config *cfg,
 	void **user_data)
 {
 	struct rspamd_map *new_map;
-	enum fetch_proto proto;
 	const gchar *def, *p, *hostend;
 	struct file_map_data *fdata;
 	struct http_map_data *hdata;
@@ -525,7 +588,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 	}
 
 	/* Now check for each proto separately */
-	if (proto == MAP_PROTO_FILE) {
+	if (new_map->protocol == MAP_PROTO_FILE) {
 		fdata =
 			rspamd_mempool_alloc0 (cfg->map_pool,
 				sizeof (struct file_map_data));
@@ -548,7 +611,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 		fdata->filename = rspamd_mempool_strdup (cfg->map_pool, def);
 		new_map->map_data = fdata;
 	}
-	else if (proto == MAP_PROTO_HTTP) {
+	else if (new_map->protocol == MAP_PROTO_HTTP) {
 		hdata =
 			rspamd_mempool_alloc0 (cfg->map_pool,
 				sizeof (struct http_map_data));

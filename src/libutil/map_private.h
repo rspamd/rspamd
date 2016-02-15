@@ -74,9 +74,7 @@ struct http_callback_data {
 	struct rspamd_map *map;
 	struct http_map_data *data;
 	struct map_cb_data cbdata;
-
 	GString *remain_buf;
-
 	gint fd;
 };
 
