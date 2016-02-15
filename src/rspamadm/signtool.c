@@ -30,6 +30,7 @@ static gboolean quiet = FALSE;
 static gchar *suffix = NULL;
 static gchar *pubkey_file = NULL;
 static gchar *pubkey = NULL;
+static gchar *pubout = NULL;
 static gchar *keypair_file = NULL;
 enum rspamd_cryptobox_mode mode = RSPAMD_CRYPTOBOX_MODE_25519;
 
@@ -52,6 +53,8 @@ static GOptionEntry entries[] = {
 				"Save signatures in file<suffix> files", NULL},
 		{"pubkey", 'p', 0, G_OPTION_ARG_STRING, &pubkey,
 				"Base32 encoded pubkey to verify", NULL},
+		{"pubout", '\0', 0, G_OPTION_ARG_FILENAME, &pubout,
+				"Output public key to the specified file", NULL},
 		{"pubfile", 'P', 0, G_OPTION_ARG_FILENAME, &pubkey_file,
 				"Load base32 encoded pubkey to verify from the file", NULL},
 		{"keypair", 'k', 0, G_OPTION_ARG_STRING, &keypair_file,
@@ -87,12 +90,14 @@ rspamadm_signtool_help (gboolean full_help)
 }
 
 static bool
-rspamadm_sign_file (const gchar *fname, const guchar *sk)
+rspamadm_sign_file (const gchar *fname, struct rspamd_cryptobox_keypair *kp)
 {
 	gint fd_sig, fd_input;
 	guchar sig[rspamd_cryptobox_MAX_SIGBYTES], *map;
 	gchar sigpath[PATH_MAX];
+	FILE *pub_fp;
 	struct stat st;
+	const guchar *sk;
 
 	if (suffix == NULL) {
 		suffix = ".sig";
@@ -131,6 +136,7 @@ rspamadm_sign_file (const gchar *fname, const guchar *sk)
 	g_assert (rspamd_cryptobox_MAX_SIGBYTES >=
 			rspamd_cryptobox_signature_bytes (mode));
 
+	sk = rspamd_keypair_component (kp, RSPAMD_KEYPAIR_COMPONENT_SK, NULL);
 	rspamd_cryptobox_sign (sig, NULL, map, st.st_size, sk, mode);
 	g_assert (write (fd_sig, sig, rspamd_cryptobox_signature_bytes (mode)) != -1);
 	close (fd_sig);
@@ -139,6 +145,31 @@ rspamadm_sign_file (const gchar *fname, const guchar *sk)
 	if (!quiet) {
 		rspamd_fprintf (stdout, "signed %s; stored hash in %s\n",
 				fname, sigpath);
+	}
+
+	if (pubout) {
+		GString *b32_pk;
+
+		pub_fp = fopen (pubout, "w");
+
+		if (pub_fp == NULL) {
+			rspamd_fprintf (stderr, "cannot write pubkey to %s: %s",
+					pubout, strerror (errno));
+		}
+		else {
+			b32_pk = rspamd_keypair_print (kp,
+					RSPAMD_KEYPAIR_PUBKEY|RSPAMD_KEYPAIR_BASE32);
+
+			if (b32_pk) {
+				rspamd_fprintf (pub_fp, "%v", b32_pk);
+			}
+
+			fclose (pub_fp);
+		}
+		if (!quiet) {
+			rspamd_fprintf (stdout, "stored pubkey in %s\n",
+					pubout);
+		}
 	}
 
 	return true;
@@ -355,8 +386,7 @@ rspamadm_signtool (gint argc, gchar **argv)
 
 		for (i = 1; i < argc; i++) {
 			/* XXX: support cmd line signature */
-			if (!rspamadm_sign_file (argv[i], rspamd_keypair_component (
-					kp, RSPAMD_KEYPAIR_COMPONENT_SK, NULL))) {
+			if (!rspamadm_sign_file (argv[i], kp)) {
 				rspamd_keypair_unref (kp);
 				exit (EXIT_FAILURE);
 			}
