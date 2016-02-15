@@ -751,14 +751,14 @@ load_rspamd_config (struct rspamd_main *rspamd_main,
 static gint
 perform_lua_tests (struct rspamd_config *cfg)
 {
-	rspamd_fprintf (stderr, "use rspamadm lua for this operation\n");
+	rspamd_fprintf (stderr, "no longer supported\n");
 	return EXIT_FAILURE;
 }
 
 static gint
 perform_configs_sign (void)
 {
-	rspamd_fprintf (stderr, "use rspamadm sign for this operation\n");
+	rspamd_fprintf (stderr, "use rspamadm signtool for this operation\n");
 	return EXIT_FAILURE;
 }
 
