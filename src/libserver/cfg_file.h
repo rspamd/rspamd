@@ -350,6 +350,8 @@ struct rspamd_config {
 
 	struct rspamd_re_cache *re_cache;				/**< static regexp cache								*/
 
+	GHashTable *trusted_keys;						/**< list of trusted public keys						*/
+
 	ref_entry_t ref;								/**< reference counter									*/
 };
 
