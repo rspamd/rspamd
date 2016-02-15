@@ -441,4 +441,14 @@ struct event_base * event_get_base (struct event *ev);
  */
 int rspamd_file_xopen (const char *fname, int oflags, guint mode);
 
+/**
+ * Map file without following symlinks or special stuff
+ * @param fname filename
+ * @param mode mode to open
+ * @param size target size (must NOT be NULL)
+ * @return pointer to memory (should be freed using munmap) or NULL in case of error
+ */
+gpointer rspamd_file_xmap (const char *fname, guint mode,
+		gsize *size);
+
 #endif

@@ -2117,20 +2117,61 @@ rspamd_file_xopen (const char *fname, int oflags, guint mode)
 	struct stat sb;
 	int fd;
 
+	if (lstat (fname, &sb) == -1) {
+
+		if (errno != ENOENT) {
+			return (-1);
+		}
+	}
+	else if (!S_ISREG (sb.st_mode)) {
+		return -1;
+	}
+
 #ifdef HAVE_ONOFOLLOW
 	fd = open (fname, oflags | O_NOFOLLOW, mode);
 #else
 	fd = open (fname, oflags, mode);
 #endif
 
+	return (fd);
+}
+
+gpointer
+rspamd_file_xmap (const char *fname, guint mode,
+		gsize *size)
+{
+	gint fd;
+	struct stat sb;
+	gpointer map;
+
+	g_assert (fname != NULL);
+	g_assert (size != NULL);
+
+	if (mode & PROT_WRITE) {
+		fd = rspamd_file_xopen (fname, O_RDWR, 0);
+	}
+	else {
+		fd = rspamd_file_xopen (fname, O_RDONLY, 0);
+	}
+
 	if (fd == -1) {
-		return (-1);
+		return NULL;
 	}
 
 	if (fstat (fd, &sb) == -1 || !S_ISREG (sb.st_mode)) {
 		close (fd);
-		return (-1);
+
+		return NULL;
 	}
 
-	return (fd);
+	map = mmap (NULL, sb.st_size, mode, MAP_SHARED, fd, 0);
+	close (fd);
+
+	if (map == MAP_FAILED) {
+		return NULL;
+	}
+
+	*size = sb.st_size;
+
+	return map;
 }
