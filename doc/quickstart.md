@@ -15,6 +15,8 @@ This guide describes the main procedures to get and start working with rspamd. F
 - webui setup with nginx proxy and letsencrypt certificates;
 - dovecot with sieve plugin to sort mail and learn by moving messages to `Junk` folder
 
+For those who are planning migration from their SpamAssassin setups, it might be useful to check this [document](/doc/tutorials/migrate_sa.html)
+
 ## Preparation steps
 
 First of all, you need a working MTA (Mail Trabnsfer Agent) that is able to serve SMTP protocol for your domain. In this guide, we discuss setup of [Postfix MTA](http://www.postfix.org/). However, rspamd can work with other MTA software - you could find details in the [itegration document](/integration.html).
@@ -333,7 +335,85 @@ From version 1.1, it is also possible to specify redis as a backend for statisti
 
 For other possibilities please read the full [documentation](/doc/statistic.html).
 
-### Configuring RBLs
+## Adjusting scores and actions
+
+Unlike SA where there are only `spam` and `ham` results, Rspamd supports 4 levels of messages called `actions`:
+
++ `no action` - ham message
++ `greylist` - turn on adaptive greylisting (which is also used on higher levels)
++ `add header` - adds Spam header (meaning soft-spam action)
++ `rewrite subject` - rewrite subject to `*** SPAM *** original subject`
++ `reject` - ultimately reject message
+
+Each action can have its own score limit which could also be modified by users settings. Rspamd assumes the following order of actions scores: `no action` <= `greylist` <= `add header` <= `rewrite subject` <= `reject`.
+
+Actions are **NOT** performed by rspamd itself - they are just recommendations for MTA agent, for example, rmilter that performs the necessary actions, such as adding headers or rejecting mail.
+
+SA `spam` is almost equal to rspamd `add header` action in the default setup. With this action, users will be able to observe messages in their `Junk` folder which is usually a desired behaviour.
+
+Scores and action settings are defined in the `metric` section. To override for existing or add scores for new symbols, you can use `rspamd.conf.local` file. Here is an example of altering the `reject` action, changing the existing symbol and adding new symbol:
+
+~~~nginx
+metric "default" {
+    actions {
+        reject = 900; # Set higher reject score
+    }
+    
+    symbol "MAILLIST" {
+        score = -4.1; # Rewrite score
+    }
+    
+    symbol "MY_SYMBOL" {
+        score = 2.1;
+        description = "My new symbol";
+    }
+}
+~~~
+
+Please mention, that this addition/rewriting logic is working for `metric` section only so far. For other sections you should use `rspamd.conf.override` file and redefine those sections completely.
+
+Another note, the legacy syntax that you could observe in some default configuration files:
+
+~~~nginx
+metric {
+    name = "default";
+    
+    symbol {
+        name = "EXAMPLE";
+        score = 1.0;
+    }
+}
+~~~
+
+is equal to the modern syntax:
+
+~~~nginx
+metric "default" {
+    symbol "EXAMPLE" {
+        score = 1.0;
+    }
+}
+~~~
+
+## Configuring maps
+
+Another feature supported in Rspamd is maps support. Maps are lists of some values, for example, domain names or ip/networks listed in some external file or by HTTP that are periodically monitored by Rspamd and reloaded in case of updates. This technique is useful for writing your own rules, whitelisting/blacklistin some networks and so on. The important difference of maps is that no rspamd restart is required when those lists are changed. Maps are defined as `URI` strings:
+
+* `http://example.com/file.map` - HTTP map (server should respect `If-Modified-Since` header to avoid unnecessary updates)
+* `file:///path/to/map` - file map
+* `/path/to/map` - alternative syntax for file map
+
+Within maps you can use whitespaces or comments. For example, here is an example of ip/network map:
+    
+    # Example map
+    127.0.0.1 # localhost
+
+    10.0.0.0/8
+    fe80::/64
+
+There is a special module called `multimap` that allows you to define your own maps without writing lua rules. You can check the module's [documentation](/modules/multimap.html) and create your configuration in `rspamd.conf.override`.
+
+## Configuring RBLs
 
 Though Rspamd is free to use for any purpose many of the RBLs used in the default configuration aren't & care should be taken to see that your use cases are not infringing. Notes about specific RBLs follow below (please follow the links for details):
 
