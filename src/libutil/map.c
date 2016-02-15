@@ -270,6 +270,12 @@ rspamd_map_check_file_sig (const char *fname,
 		return FALSE;
 	}
 
+	b32_key = rspamd_pubkey_print (pk,
+					RSPAMD_KEYPAIR_BASE32|RSPAMD_KEYPAIR_PUBKEY);
+	msg_info_pool ("verified signature in file %s using trusted key %v",
+			fpath, b32_key);
+	g_string_free (b32_key, TRUE);
+
 	rspamd_pubkey_unref (pk);
 	munmap (data, len);
 

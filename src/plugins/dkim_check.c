@@ -220,6 +220,7 @@ gint
 dkim_module_config (struct rspamd_config *cfg)
 {
 	const ucl_object_t *value;
+	const gchar *str;
 	gint res = TRUE, cb_id;
 	guint cache_size, cache_expire;
 	gboolean got_trusted = FALSE;
@@ -277,11 +278,16 @@ dkim_module_config (struct rspamd_config *cfg)
 	}
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim", "whitelist")) != NULL) {
-		if (!rspamd_map_add (cfg, ucl_obj_tostring (value),
-			"DKIM whitelist", rspamd_radix_read, rspamd_radix_fin,
-			(void **)&dkim_module_ctx->whitelist_ip)) {
-			radix_add_generic_iplist (ucl_obj_tostring (value),
-				&dkim_module_ctx->whitelist_ip);
+		str = ucl_obj_tostring (value);
+		if (!rspamd_map_is_map (str)) {
+			radix_add_generic_iplist (str,
+					&dkim_module_ctx->whitelist_ip);
+		}
+		else {
+			rspamd_map_add (cfg, str,
+					"DKIM whitelist", rspamd_radix_read, rspamd_radix_fin,
+					(void **)&dkim_module_ctx->whitelist_ip);
+
 		}
 	}
 	if ((value =

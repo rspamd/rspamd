@@ -574,7 +574,7 @@ surbl_module_config (struct rspamd_config *cfg)
 		}
 	}
 	if ((value =
-		rspamd_config_get_module_opt (cfg, "surbl", "whitelist")) != NULL) {
+			rspamd_config_get_module_opt (cfg, "surbl", "whitelist")) != NULL) {
 		if (rspamd_map_add (cfg, ucl_obj_tostring (value),
 			"SURBL whitelist", rspamd_hosts_read, rspamd_hosts_fin,
 			(void **)&surbl_module_ctx->whitelist)) {

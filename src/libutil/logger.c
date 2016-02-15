@@ -351,13 +351,18 @@ rspamd_set_logger (struct rspamd_config *cfg,
 		if (rspamd->logger->debug_ip) {
 			radix_destroy_compressed (rspamd->logger->debug_ip);
 		}
+
 		rspamd->logger->debug_ip = radix_create_compressed ();
-		if (!rspamd_map_add (rspamd->cfg, rspamd->cfg->debug_ip_map,
+
+		if (!rspamd_map_is_map (rspamd->cfg->debug_ip_map)) {
+			radix_add_generic_iplist (rspamd->cfg->debug_ip_map,
+								&rspamd->logger->debug_ip);
+		}
+		else {
+			rspamd_map_add (rspamd->cfg, rspamd->cfg->debug_ip_map,
 				"IP addresses for which debug logs are enabled",
 				rspamd_radix_read, rspamd_radix_fin,
-				(void **) &rspamd->logger->debug_ip)) {
-			radix_add_generic_iplist (rspamd->cfg->debug_ip_map,
-					&rspamd->logger->debug_ip);
+				(void **) &rspamd->logger->debug_ip);
 		}
 	}
 	else if (rspamd->logger->debug_ip) {

@@ -2519,15 +2519,18 @@ start_controller_worker (struct rspamd_worker *worker)
 			secure_ip = cur->data;
 
 			/* Try map syntax */
-			if (!rspamd_map_add (worker->srv->cfg, secure_ip,
-					"Allow webui access from the specified IP",
-					rspamd_radix_read, rspamd_radix_fin, (void **)&ctx->secure_map)) {
-				/* Fallback to the plain IP */
+			if (!rspamd_map_is_map (secure_ip)) {
 				if (!radix_add_generic_iplist (secure_ip,
 						&ctx->secure_map)) {
 					msg_warn_ctx ("cannot load or parse ip list from '%s'",
 							secure_ip);
 				}
+			}
+			else {
+				rspamd_map_add (worker->srv->cfg, secure_ip,
+					"Allow webui access from the specified IP",
+					rspamd_radix_read, rspamd_radix_fin,
+					(void **)&ctx->secure_map);
 			}
 			cur = g_list_next (cur);
 		}
