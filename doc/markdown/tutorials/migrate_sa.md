@@ -29,6 +29,18 @@ There are a couple of things you need to know before transition:
 3. Rspamd uses `HTTP` protocol for communicating with MTA or milter, so SA native milters might fail to communicate with rspamd. There is some limited support of SpamAssassin protocol, thought some commands are not supported, in particular those which require copying of data batween scanner and milter. What's more important is that `Length`-less messages are not supported by Rspamd as they completely break HTTP semantics, so it won't be supported ever. For achieving the same functionality, a dedicated scanner could use, e.g. HTTP `chunked` encoding.
 4. Rspamd is **NOT** intended to work with blocking libraries or services, hence, something like `mysql` or `postgresql` won't likely be supported as well
 5. Rspamd is developping quickly, therefore you should be aware that there might be still some incompatible changes between major versions - they are usually listed in the [migration](../migration.md) section of the site.
+6. Unlike SA where there are only `spam` and `ham` results, Rspamd supports 4 levels of messages called `actions`:
+	+ `no action` - ham message
+	+ `greylist` - turn on adaptive greylisting (which is also used on higher levels)
+	+ `add header` - adds Spam header (meaning soft-spam action)
+	+ `rewrite subject` - rewrite subject to `*** SPAM *** original subject`
+	+ `reject` - ultimately reject message
+
+Each action can have its own score limit which could also be modified by users settings. Rspamd assumes the following order of actions scores: `no action` <= `greylist` <= `add header` <= `rewrite subject` <= `reject`.
+
+Actions are **NOT** performed by rspamd itself - they are just recommendations for MTA agent, for example, rmilter that performs the necessary actions, such as adding headers or rejecting mail.
+
+SA `spam` is almost equal to rspamd `add header` action in the default setup. With this action, users will be able to observe messages in their `Junk` folder which is usually a desired behaviour.
 
 ## The first steps in Rspamd
 
