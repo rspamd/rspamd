@@ -21,6 +21,7 @@
 #include "filter.h"
 #include "lua/lua_common.h"
 #include "map.h"
+#include "map_private.h"
 #include "dynamic_cfg.h"
 #include "utlist.h"
 #include "stat_api.h"

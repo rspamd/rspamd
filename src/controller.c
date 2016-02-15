@@ -17,6 +17,7 @@
 #include "libserver/dynamic_cfg.h"
 #include "libutil/rrd.h"
 #include "libutil/map.h"
+#include "libutil/map_private.h"
 #include "libstat/stat_api.h"
 #include "rspamd.h"
 #include "libserver/worker_util.h"

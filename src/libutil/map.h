@@ -12,11 +12,6 @@
  * It monitor files and HTTP locations for modifications and reload them if they are
  * modified.
  */
-
-enum fetch_proto {
-	MAP_PROTO_FILE,
-	MAP_PROTO_HTTP,
-};
 struct map_cb_data;
 
 /**
@@ -30,24 +25,7 @@ typedef void (*map_fin_cb_t)(rspamd_mempool_t *pool, struct map_cb_data *data);
  * Common map object
  */
 struct rspamd_config;
-struct rspamd_map {
-	rspamd_mempool_t *pool;
-	struct rspamd_config *cfg;
-	enum fetch_proto protocol;
-	map_cb_t read_callback;
-	map_fin_cb_t fin_callback;
-	void **user_data;
-	struct event ev;
-	struct timeval tv;
-	struct event_base *ev_base;
-	void *map_data;
-	gchar *uri;
-	gchar *description;
-	guint32 id;
-	guint32 checksum;
-	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
-	gint *locked;
-};
+struct rspamd_map;
 
 /**
  * Callback data for async load
@@ -59,11 +37,6 @@ struct map_cb_data {
 	void *cur_data;
 };
 
-
-/**
- * Check map protocol
- */
-gboolean rspamd_map_check_proto (const gchar *map_line, gint *res, const gchar **pos);
 /**
  * Add map from line
  */

@@ -18,46 +18,13 @@
  */
 #include "config.h"
 #include "map.h"
+#include "map_private.h"
 #include "http.h"
 #include "rspamd.h"
 #include "cryptobox.h"
 #include "unix-std.h"
 
 static const gchar *hash_fill = "1";
-
-/**
- * Data specific to file maps
- */
-struct file_map_data {
-	const gchar *filename;
-	struct stat st;
-};
-
-/**
- * Data specific to HTTP maps
- */
-struct http_map_data {
-	struct addrinfo *addr;
-	guint16 port;
-	gchar *path;
-	gchar *host;
-	time_t last_checked;
-	gboolean request_sent;
-	struct rspamd_http_connection *conn;
-};
-
-
-struct http_callback_data {
-	struct event_base *ev_base;
-	struct timeval tv;
-	struct rspamd_map *map;
-	struct http_map_data *data;
-	struct map_cb_data cbdata;
-
-	GString *remain_buf;
-
-	gint fd;
-};
 
 /* Value in seconds after whitch we would try to do stat on list file */
 
@@ -441,33 +408,74 @@ rspamd_map_remove_all (struct rspamd_config *cfg)
 	}
 }
 
-gboolean
-rspamd_map_check_proto (const gchar *map_line, gint *res, const gchar **pos)
+static const gchar *
+rspamd_map_check_proto (struct rspamd_config *cfg,
+		const gchar *map_line, struct rspamd_map *map)
 {
-	g_assert (res != NULL);
+	const gchar *pos = map_line, *end;
+
+	g_assert (map != NULL);
 	g_assert (pos != NULL);
 
-	if (g_ascii_strncasecmp (map_line, "http://",
-			sizeof ("http://") - 1) == 0) {
-		*res = MAP_PROTO_HTTP;
-		*pos = map_line + sizeof ("http://") - 1;
-	}
-	else if (g_ascii_strncasecmp (map_line, "file://", sizeof ("file://") -
-			1) == 0) {
-		*res = MAP_PROTO_FILE;
-		*pos = map_line + sizeof ("file://") - 1;
-	}
-	else if (*map_line == '/') {
-		/* Trivial file case */
-		*res = MAP_PROTO_FILE;
-		*pos = map_line;
-	}
-	else {
-		msg_debug ("invalid map fetching protocol: %s", map_line);
-		return FALSE;
+	end = pos + strlen (pos);
+
+	if (g_ascii_strncasecmp (pos, "sign+", sizeof ("sign+") - 1) == 0) {
+		map->is_signed = TRUE;
+		pos += sizeof ("sign+") - 1;
 	}
 
-	return TRUE;
+	if (g_ascii_strncasecmp (pos, "key=", sizeof ("key=") - 1) == 0) {
+		pos += sizeof ("key=") - 1;
+
+		if (end - pos > 64) {
+			map->trusted_pubkey = rspamd_pubkey_from_hex (pos, 64,
+					RSPAMD_KEYPAIR_SIGN, RSPAMD_CRYPTOBOX_MODE_25519);
+
+			if (map->trusted_pubkey == NULL) {
+				msg_err_config ("cannot read pubkey from map: %s",
+						map_line);
+				return NULL;
+			}
+		}
+		else {
+			msg_err_config ("cannot read pubkey from map: %s",
+					map_line);
+			return NULL;
+		}
+
+		pos += 64;
+
+		if (*pos == '+' || *pos == ':') {
+			pos ++;
+		}
+	}
+
+	if (g_ascii_strncasecmp (pos, "http://",
+			sizeof ("http://") - 1) == 0) {
+		map->protocol = MAP_PROTO_HTTP;
+		/* Include http:// */
+		map->uri = rspamd_mempool_strdup (cfg->cfg_pool, pos);
+		pos += sizeof ("http://") - 1;
+	}
+	else if (g_ascii_strncasecmp (pos, "file://", sizeof ("file://") -
+			1) == 0) {
+		map->protocol = MAP_PROTO_FILE;
+		pos += sizeof ("file://") - 1;
+		/* Exclude file:// */
+		map->uri = rspamd_mempool_strdup (cfg->cfg_pool, pos);
+	}
+	else if (*pos == '/') {
+		/* Trivial file case */
+		map->protocol = MAP_PROTO_FILE;
+		map->uri = rspamd_mempool_strdup (cfg->cfg_pool, pos);
+	}
+	else {
+		msg_err_config ("invalid map fetching protocol: %s", map_line);
+		return NULL;
+	}
+
+
+	return pos;
 }
 
 gboolean
@@ -488,11 +496,6 @@ rspamd_map_add (struct rspamd_config *cfg,
 	struct addrinfo hints, *res;
 	rspamd_mempool_t *pool;
 
-	/* First of all detect protocol line */
-	if (!rspamd_map_check_proto (map_line, (int *)&proto, &def)) {
-		return FALSE;
-	}
-	/* Constant pool */
 	if (cfg->map_pool == NULL) {
 		cfg->map_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
 				"map");
@@ -501,22 +504,21 @@ rspamd_map_add (struct rspamd_config *cfg,
 	}
 
 	new_map = rspamd_mempool_alloc0 (cfg->map_pool, sizeof (struct rspamd_map));
+
+	/* First of all detect protocol line */
+	if (rspamd_map_check_proto (cfg, map_line, new_map) == NULL) {
+		return FALSE;
+	}
+
 	new_map->read_callback = read_callback;
 	new_map->fin_callback = fin_callback;
 	new_map->user_data = user_data;
-	new_map->protocol = proto;
 	new_map->cfg = cfg;
 	new_map->id = g_random_int ();
 	new_map->locked =
 		rspamd_mempool_alloc0_shared (cfg->cfg_pool, sizeof (gint));
+	def = new_map->uri;
 
-	if (proto == MAP_PROTO_FILE) {
-		new_map->uri = rspamd_mempool_strdup (cfg->cfg_pool, def);
-		def = new_map->uri;
-	}
-	else {
-		new_map->uri = rspamd_mempool_strdup (cfg->cfg_pool, map_line);
-	}
 	if (description != NULL) {
 		new_map->description =
 			rspamd_mempool_strdup (cfg->cfg_pool, description);
