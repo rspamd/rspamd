@@ -29,7 +29,7 @@ typedef struct ed25519_impl_s {
 	void (*sign) (unsigned char *sig, size_t *siglen_p,
 			const unsigned char *m, size_t mlen,
 			const unsigned char *sk);
-	bool (*verify) (const unsigned char *sig,
+	int (*verify) (const unsigned char *sig,
 			const unsigned char *m,
 			size_t mlen,
 			const unsigned char *pk);
@@ -40,7 +40,7 @@ typedef struct ed25519_impl_s {
     void ed_sign_##ext(unsigned char *sig, size_t *siglen_p, \
         const unsigned char *m, size_t mlen, \
         const unsigned char *sk); \
-    bool ed_verify_##ext(const unsigned char *sig, \
+    int ed_verify_##ext(const unsigned char *sig, \
         const unsigned char *m, \
 		size_t mlen, \
         const unsigned char *pk)
@@ -98,7 +98,9 @@ ed25519_verify (const unsigned char *sig,
 		size_t mlen,
 		const unsigned char *pk)
 {
-	return (ed25519_opt->verify (sig, m, mlen, pk) == 0);
+	int ret = ed25519_opt->verify (sig, m, mlen, pk);
+
+	return (ret == 0 ? true : false);
 }
 
 struct ed25519_test_vector {
