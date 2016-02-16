@@ -107,6 +107,7 @@ struct rspamd_fuzzy_storage_ctx {
 	rspamd_lru_hash_t *errors_ips;
 	struct rspamd_fuzzy_backend *backend;
 	GQueue *updates_pending;
+	struct rspamd_dns_resolver *resolver;
 };
 
 enum fuzzy_cmd_type {
@@ -1401,7 +1402,10 @@ start_fuzzy (struct rspamd_worker *worker)
 	}
 
 	/* Maps events */
-	rspamd_map_watch (worker->srv->cfg, ctx->ev_base);
+	ctx->resolver = dns_resolver_init (worker->srv->logger,
+				ctx->ev_base,
+				worker->srv->cfg);
+	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver);
 
 	/* Get peer pipe */
 	memset (&srv_cmd, 0, sizeof (srv_cmd));

@@ -617,8 +617,8 @@ http_callback (gint fd, short what, void *ud)
 /* Start watching event for all maps */
 void
 rspamd_map_watch (struct rspamd_config *cfg,
-		struct rspamd_dns_resolver *resolver,
-		struct event_base *ev_base)
+		struct event_base *ev_base,
+		struct rspamd_dns_resolver *resolver)
 {
 	GList *cur = cfg->maps;
 	struct rspamd_map *map;

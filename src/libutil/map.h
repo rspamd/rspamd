@@ -59,8 +59,8 @@ gboolean rspamd_map_add (struct rspamd_config *cfg,
  * Start watching of maps by adding events to libevent event loop
  */
 void rspamd_map_watch (struct rspamd_config *cfg,
-		struct rspamd_dns_resolver *resolver,
-		struct event_base *ev_base);
+		struct event_base *ev_base,
+		struct rspamd_dns_resolver *resolver);
 
 /**
  * Remove all maps watched (remove events)

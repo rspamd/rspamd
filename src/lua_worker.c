@@ -390,7 +390,7 @@ start_lua_worker (struct rspamd_worker *worker)
 	}
 
 	/* Maps events */
-	rspamd_map_watch (worker->srv->cfg, ctx->ev_base);
+	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver);
 
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();
