@@ -27,6 +27,7 @@ enum fetch_proto {
 };
 struct rspamd_map {
 	rspamd_mempool_t *pool;
+	struct rspamd_dns_resolver *r;
 	gboolean is_signed;
 	struct rspamd_cryptobox_pubkey *trusted_pubkey;
 	struct rspamd_config *cfg;
@@ -64,17 +65,27 @@ struct http_map_data {
 	gchar *host;
 	time_t last_checked;
 	gboolean request_sent;
-	struct rspamd_http_connection *conn;
 };
 
 
 struct http_callback_data {
 	struct event_base *ev_base;
+	struct rspamd_http_connection *conn;
+	rspamd_inet_addr_t *addr;
 	struct timeval tv;
 	struct rspamd_map *map;
 	struct http_map_data *data;
 	struct map_cb_data cbdata;
 	GString *remain_buf;
+	enum {
+		map_resolve_host2 = 0, /* 2 requests sent */
+		map_resolve_host1, /* 1 requests sent */
+		map_load_file,
+		map_load_pubkey,
+		map_load_signature
+	} stage;
+	gint out_fd;
+	gchar *tmpfile;
 	gint fd;
 };
 

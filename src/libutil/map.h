@@ -6,6 +6,7 @@
 
 #include "mem_pool.h"
 #include "radix.h"
+#include "dns.h"
 
 /**
  * Maps API is designed to load lists data from different dynamic sources.
@@ -57,7 +58,9 @@ gboolean rspamd_map_add (struct rspamd_config *cfg,
 /**
  * Start watching of maps by adding events to libevent event loop
  */
-void rspamd_map_watch (struct rspamd_config *cfg, struct event_base *ev_base);
+void rspamd_map_watch (struct rspamd_config *cfg,
+		struct rspamd_dns_resolver *resolver,
+		struct event_base *ev_base);
 
 /**
  * Remove all maps watched (remove events)
