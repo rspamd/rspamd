@@ -356,7 +356,12 @@ local has_msmail_pri = 'header_exists(X-MSMail-Priority)'
 local has_mimeole = 'header_exists(X-MimeOLE)'
 local has_squirrelmail_in_mailer = 'X-Mailer=/SquirrelMail\\b/H'
 local has_ips_php_in_mailer = 'X-Mailer=/^IPS PHP Mailer/'
-reconf['MISSING_MIMEOLE'] = string.format('(%s) & !(%s) & !(%s) & !(%s) & !(%s) & !(%s)', has_msmail_pri, has_mimeole, has_squirrelmail_in_mailer, xm_mso12, xm_cgpmapi, has_ips_php_in_mailer)
+local has_office12145_in_mailer = 'X-Mailer=/^Microsoft (?:Office )?Outlook 1[245]\\.0/'
+reconf['MISSING_MIMEOLE'] = string.format('(%s) & !(%s) & !(%s) & !(%s) & !(%s) & !(%s) & !(%s)',
+  has_msmail_pri, has_mimeole,
+  has_squirrelmail_in_mailer, xm_mso12,
+  xm_cgpmapi, has_ips_php_in_mailer,
+  has_office12145_in_mailer)
 
 -- Header delimiters
 local yandex_from = 'From=/\\@(yandex\\.ru|yandex\\.net|ya\\.ru)/iX'
