@@ -626,6 +626,7 @@ static entity entities_defs[] = {
 };
 
 static entity entities_defs_num[ (G_N_ELEMENTS (entities_defs)) ];
+static struct html_tag_def tag_defs_num[ (G_N_ELEMENTS (tag_defs)) ];
 
 static gint
 tag_cmp (const void *m1, const void *m2)
@@ -642,6 +643,24 @@ tag_cmp (const void *m1, const void *m2)
 	}
 
 	return l1 - l2;
+}
+
+static gint
+tag_cmp_id (const void *m1, const void *m2)
+{
+	const struct html_tag_def *p1 = m1;
+	const struct html_tag_def *p2 = m2;
+
+	return p1->id - p2->id;
+}
+
+static gint
+tag_find_id (const void *skey, const void *elt)
+{
+	const struct html_tag *tag = skey;
+	const struct html_tag_def *d = elt;
+
+	return tag->id - d->id;
 }
 
 static gint
@@ -728,6 +747,23 @@ rspamd_html_tag_seen (struct html_content *hc, const gchar *tagname)
 	}
 
 	return FALSE;
+}
+
+const gchar*
+rspamd_html_tag_by_id (gint id)
+{
+	struct html_tag tag;
+	struct html_tag_def *found;
+
+	/* Should work as IDs monotonically increase */
+	found = bsearch (&tag, tag_defs_num, G_N_ELEMENTS (tag_defs_num),
+				sizeof (tag_defs_num[0]), tag_find_id);
+
+	if (found) {
+		return found->name;
+	}
+
+	return NULL;
 }
 
 /* Decode HTML entitles in text */
@@ -1697,6 +1733,9 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 	if (!tags_sorted) {
 		qsort (tag_defs, G_N_ELEMENTS (
 				tag_defs), sizeof (struct html_tag_def), tag_cmp);
+		memcpy (tag_defs_num, tag_defs, sizeof (tag_defs));
+		qsort (tag_defs_num, G_N_ELEMENTS (tag_defs_num),
+				sizeof (struct html_tag_def), tag_cmp_id);
 		tags_sorted = 1;
 	}
 	if (!entities_sorted) {

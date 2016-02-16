@@ -115,6 +115,13 @@ GByteArray* rspamd_html_process_part_full (rspamd_mempool_t *pool,
 gboolean rspamd_html_tag_seen (struct html_content *hc, const gchar *tagname);
 
 /**
+ * Returns name for the specified tag id
+ * @param id
+ * @return
+ */
+const gchar* rspamd_html_tag_by_id (gint id);
+
+/**
  * Extract URL from HTML tag component and sets component elements if needed
  * @param pool
  * @param start
