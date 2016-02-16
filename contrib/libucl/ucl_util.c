@@ -1334,7 +1334,7 @@ ucl_include_common (const unsigned char *data, size_t len,
 
 	/* Process arguments */
 	if (args != NULL && args->type == UCL_OBJECT) {
-		while ((param = ucl_iterate_object (args, &it, true)) != NULL) {
+		while ((param = ucl_object_iterate (args, &it, true)) != NULL) {
 			if (param->type == UCL_BOOLEAN) {
 				if (strncmp (param->key, "try", param->keylen) == 0) {
 					params.must_exist = !ucl_object_toboolean (param);
@@ -1509,7 +1509,7 @@ ucl_priority_handler (const unsigned char *data, size_t len,
 
 	/* Process arguments */
 	if (args != NULL && args->type == UCL_OBJECT) {
-		while ((param = ucl_iterate_object (args, &it, true)) != NULL) {
+		while ((param = ucl_object_iterate (args, &it, true)) != NULL) {
 			if (param->type == UCL_INT) {
 				if (strncmp (param->key, "priority", param->keylen) == 0) {
 					priority = ucl_object_toint (param);
@@ -1588,7 +1588,7 @@ ucl_load_handler (const unsigned char *data, size_t len,
 
 	/* Process arguments */
 	if (args != NULL && args->type == UCL_OBJECT) {
-		while ((param = ucl_iterate_object (args, &it, true)) != NULL) {
+		while ((param = ucl_object_iterate (args, &it, true)) != NULL) {
 			if (param->type == UCL_BOOLEAN) {
 				if (strncmp (param->key, "try", param->keylen) == 0) {
 					try_load = ucl_object_toboolean (param);
@@ -1648,7 +1648,7 @@ ucl_load_handler (const unsigned char *data, size_t len,
 
 		free (load_file);
 		container = parser->stack->obj;
-		old_obj = __DECONST (ucl_object_t *, ucl_object_find_key (container,
+		old_obj = __DECONST (ucl_object_t *, ucl_object_lookup (container,
 				prefix));
 
 		if (old_obj != NULL) {
@@ -1704,7 +1704,7 @@ ucl_inherit_handler (const unsigned char *data, size_t len,
 	bool replace = false;
 	struct ucl_parser *parser = ud;
 
-	parent = ucl_object_find_keyl (ctx, data, len);
+	parent = ucl_object_lookup_len (ctx, data, len);
 
 	/* Some sanity checks */
 	if (parent == NULL || ucl_object_type (parent) != UCL_OBJECT) {
@@ -1721,13 +1721,13 @@ ucl_inherit_handler (const unsigned char *data, size_t len,
 
 	target = parser->stack->obj;
 
-	if (args && (cur = ucl_object_find_key (args, "replace")) != NULL) {
+	if (args && (cur = ucl_object_lookup (args, "replace")) != NULL) {
 		replace = ucl_object_toboolean (cur);
 	}
 
-	while ((cur = ucl_iterate_object (parent, &it, true))) {
+	while ((cur = ucl_object_iterate (parent, &it, true))) {
 		/* We do not replace existing keys */
-		if (!replace && ucl_object_find_keyl (target, cur->key, cur->keylen)) {
+		if (!replace && ucl_object_lookup_len (target, cur->key, cur->keylen)) {
 			continue;
 		}
 
@@ -2172,7 +2172,7 @@ ucl_object_insert_key_common (ucl_object_t *top, ucl_object_t *elt,
 			}
 			else if (found->type == UCL_OBJECT && elt->type == UCL_OBJECT) {
 				/* Mix two hashes */
-				while ((cur = ucl_iterate_object (elt, &it, true)) != NULL) {
+				while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
 					tmp = ucl_object_ref (cur);
 					ucl_object_insert_key_common (found, tmp, cur->key,
 							cur->keylen, copy_key, false, false);
@@ -2201,7 +2201,7 @@ ucl_object_delete_keyl (ucl_object_t *top, const char *key, size_t keylen)
 		return false;
 	}
 
-	found = __DECONST (ucl_object_t *, ucl_object_find_keyl (top, key, keylen));
+	found = __DECONST (ucl_object_t *, ucl_object_lookup_len (top, key, keylen));
 
 	if (found == NULL) {
 		return false;
@@ -2228,7 +2228,7 @@ ucl_object_pop_keyl (ucl_object_t *top, const char *key, size_t keylen)
 	if (top == NULL || key == NULL) {
 		return false;
 	}
-	found = ucl_object_find_keyl (top, key, keylen);
+	found = ucl_object_lookup_len (top, key, keylen);
 
 	if (found == NULL) {
 		return NULL;
@@ -2301,7 +2301,7 @@ ucl_object_merge (ucl_object_t *top, ucl_object_t *elt, bool copy)
 }
 
 const ucl_object_t *
-ucl_object_find_keyl (const ucl_object_t *obj, const char *key, size_t klen)
+ucl_object_lookup_len (const ucl_object_t *obj, const char *key, size_t klen)
 {
 	const ucl_object_t *ret;
 	ucl_object_t srch;
@@ -2318,17 +2318,17 @@ ucl_object_find_keyl (const ucl_object_t *obj, const char *key, size_t klen)
 }
 
 const ucl_object_t *
-ucl_object_find_key (const ucl_object_t *obj, const char *key)
+ucl_object_lookup (const ucl_object_t *obj, const char *key)
 {
 	if (key == NULL) {
 		return NULL;
 	}
 
-	return ucl_object_find_keyl (obj, key, strlen (key));
+	return ucl_object_lookup_len (obj, key, strlen (key));
 }
 
 const ucl_object_t*
-ucl_object_find_any_key (const ucl_object_t *obj,
+ucl_object_lookup_any (const ucl_object_t *obj,
 		const char *key, ...)
 {
 	va_list ap;
@@ -2339,7 +2339,7 @@ ucl_object_find_any_key (const ucl_object_t *obj,
 		return NULL;
 	}
 
-	ret = ucl_object_find_keyl (obj, key, strlen (key));
+	ret = ucl_object_lookup_len (obj, key, strlen (key));
 
 	if (ret == NULL) {
 		va_start (ap, key);
@@ -2351,7 +2351,7 @@ ucl_object_find_any_key (const ucl_object_t *obj,
 				break;
 			}
 			else {
-				ret = ucl_object_find_keyl (obj, nk, strlen (nk));
+				ret = ucl_object_lookup_len (obj, nk, strlen (nk));
 			}
 		}
 
@@ -2362,7 +2362,7 @@ ucl_object_find_any_key (const ucl_object_t *obj,
 }
 
 const ucl_object_t*
-ucl_iterate_object (const ucl_object_t *obj, ucl_object_iter_t *iter, bool expand_values)
+ucl_object_iterate (const ucl_object_t *obj, ucl_object_iter_t *iter, bool expand_values)
 {
 	const ucl_object_t *elt = NULL;
 
@@ -2469,7 +2469,7 @@ ucl_object_iterate_safe (ucl_object_iter_t it, bool expand_values)
 	}
 
 	if (rit->impl_it->type == UCL_OBJECT || rit->impl_it->type == UCL_ARRAY) {
-		ret = ucl_iterate_object (rit->impl_it, &rit->expl_it, true);
+		ret = ucl_object_iterate (rit->impl_it, &rit->expl_it, true);
 
 		if (ret == NULL) {
 			/* Need to switch to another implicit object in chain */
@@ -2504,13 +2504,13 @@ ucl_object_iterate_free (ucl_object_iter_t it)
 }
 
 const ucl_object_t *
-ucl_lookup_path (const ucl_object_t *top, const char *path_in) {
-	return ucl_lookup_path_char (top, path_in, '.');
+ucl_object_lookup_path (const ucl_object_t *top, const char *path_in) {
+	return ucl_object_lookup_path_char (top, path_in, '.');
 }
 
 
 const ucl_object_t *
-ucl_lookup_path_char (const ucl_object_t *top, const char *path_in, const char sep) {
+ucl_object_lookup_path_char (const ucl_object_t *top, const char *path_in, const char sep) {
 	const ucl_object_t *o = NULL, *found;
 	const char *p, *c;
 	char *err_str;
@@ -2543,7 +2543,7 @@ ucl_lookup_path_char (const ucl_object_t *top, const char *path_in, const char s
 					o = ucl_array_find_index (top, index);
 					break;
 				default:
-					o = ucl_object_find_keyl (top, c, p - c);
+					o = ucl_object_lookup_len (top, c, p - c);
 					break;
 				}
 				if (o == NULL) {
@@ -3165,7 +3165,7 @@ ucl_object_copy_internal (const ucl_object_t *other, bool allow_array)
 			/* reset old value */
 			memset (&new->value, 0, sizeof (new->value));
 
-			while ((cur = ucl_iterate_object (other, &it, true)) != NULL) {
+			while ((cur = ucl_object_iterate (other, &it, true)) != NULL) {
 				if (other->type == UCL_ARRAY) {
 					ucl_array_append (new, ucl_object_copy_internal (cur, false));
 				}
@@ -3271,8 +3271,8 @@ ucl_object_compare (const ucl_object_t *o1, const ucl_object_t *o2)
 		break;
 	case UCL_OBJECT:
 		if (o1->len == o2->len && o1->len > 0) {
-			while ((it1 = ucl_iterate_object (o1, &iter, true)) != NULL) {
-				it2 = ucl_object_find_key (o2, ucl_object_key (it1));
+			while ((it1 = ucl_object_iterate (o1, &iter, true)) != NULL) {
+				it2 = ucl_object_lookup (o2, ucl_object_key (it1));
 				if (it2 == NULL) {
 					ret = 1;
 					break;
@@ -3426,7 +3426,7 @@ ucl_comments_find (const ucl_object_t *comments,
 		const ucl_object_t *srch)
 {
 	if (comments && srch) {
-		return ucl_object_find_keyl (comments, (const char *)&srch,
+		return ucl_object_lookup_len (comments, (const char *)&srch,
 				sizeof (void *));
 	}
 

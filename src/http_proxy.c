@@ -116,7 +116,7 @@ http_proxy_parse_upstream (rspamd_mempool_t *pool,
 		return FALSE;
 	}
 
-	elt = ucl_object_find_key (obj, "name");
+	elt = ucl_object_lookup (obj, "name");
 	if (elt == NULL) {
 		g_set_error (err, http_proxy_quark (), 100,
 				"upstream option must have some name definition");
@@ -127,7 +127,7 @@ http_proxy_parse_upstream (rspamd_mempool_t *pool,
 	up = g_slice_alloc0 (sizeof (*up));
 	up->name = g_strdup (ucl_object_tostring (elt));
 
-	elt = ucl_object_find_key (obj, "key");
+	elt = ucl_object_lookup (obj, "key");
 	if (elt != NULL) {
 		up->key = rspamd_pubkey_from_base32 (ucl_object_tostring (elt), 0,
 				RSPAMD_KEYPAIR_KEX, RSPAMD_CRYPTOBOX_MODE_25519);
@@ -140,7 +140,7 @@ http_proxy_parse_upstream (rspamd_mempool_t *pool,
 		}
 	}
 
-	elt = ucl_object_find_key (obj, "hosts");
+	elt = ucl_object_lookup (obj, "hosts");
 
 	if (elt == NULL) {
 		g_set_error (err, http_proxy_quark (), 100,
@@ -157,7 +157,7 @@ http_proxy_parse_upstream (rspamd_mempool_t *pool,
 		goto err;
 	}
 
-	elt = ucl_object_find_key (obj, "default");
+	elt = ucl_object_lookup (obj, "default");
 	if (elt && ucl_object_toboolean (elt)) {
 		ctx->default_upstream = up;
 	}

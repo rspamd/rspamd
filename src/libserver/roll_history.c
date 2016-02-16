@@ -239,65 +239,65 @@ rspamd_roll_history_load (struct roll_history *history, const gchar *filename)
 			row = &history->rows[i];
 			memset (row, 0, sizeof (*row));
 
-			elt = ucl_object_find_key (cur, "time");
+			elt = ucl_object_lookup (cur, "time");
 
 			if (elt && ucl_object_type (elt) == UCL_FLOAT) {
 				double_to_tv (ucl_object_todouble (elt), &row->tv);
 			}
 
-			elt = ucl_object_find_key (cur, "id");
+			elt = ucl_object_lookup (cur, "id");
 
 			if (elt && ucl_object_type (elt) == UCL_STRING) {
 				rspamd_strlcpy (row->message_id, ucl_object_tostring (elt),
 						sizeof (row->message_id));
 			}
 
-			elt = ucl_object_find_key (cur, "symbols");
+			elt = ucl_object_lookup (cur, "symbols");
 
 			if (elt && ucl_object_type (elt) == UCL_STRING) {
 				rspamd_strlcpy (row->symbols, ucl_object_tostring (elt),
 						sizeof (row->symbols));
 			}
 
-			elt = ucl_object_find_key (cur, "user");
+			elt = ucl_object_lookup (cur, "user");
 
 			if (elt && ucl_object_type (elt) == UCL_STRING) {
 				rspamd_strlcpy (row->user, ucl_object_tostring (elt),
 						sizeof (row->user));
 			}
 
-			elt = ucl_object_find_key (cur, "from");
+			elt = ucl_object_lookup (cur, "from");
 
 			if (elt && ucl_object_type (elt) == UCL_STRING) {
 				rspamd_strlcpy (row->from_addr, ucl_object_tostring (elt),
 						sizeof (row->from_addr));
 			}
 
-			elt = ucl_object_find_key (cur, "len");
+			elt = ucl_object_lookup (cur, "len");
 
 			if (elt && ucl_object_type (elt) == UCL_INT) {
 				row->len = ucl_object_toint (elt);
 			}
 
-			elt = ucl_object_find_key (cur, "scan_time");
+			elt = ucl_object_lookup (cur, "scan_time");
 
 			if (elt && ucl_object_type (elt) == UCL_FLOAT) {
 				row->scan_time = ucl_object_todouble (elt);
 			}
 
-			elt = ucl_object_find_key (cur, "score");
+			elt = ucl_object_lookup (cur, "score");
 
 			if (elt && ucl_object_type (elt) == UCL_FLOAT) {
 				row->score = ucl_object_todouble (elt);
 			}
 
-			elt = ucl_object_find_key (cur, "required_score");
+			elt = ucl_object_lookup (cur, "required_score");
 
 			if (elt && ucl_object_type (elt) == UCL_FLOAT) {
 				row->required_score = ucl_object_todouble (elt);
 			}
 
-			elt = ucl_object_find_key (cur, "action");
+			elt = ucl_object_lookup (cur, "action");
 
 			if (elt && ucl_object_type (elt) == UCL_INT) {
 				row->action = ucl_object_toint (elt);

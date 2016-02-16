@@ -78,7 +78,7 @@ ucl_schema_test_pattern (const ucl_object_t *obj, const char *pattern)
 	ucl_object_iter_t iter = NULL;
 
 	if (regcomp (&reg, pattern, REG_EXTENDED | REG_NOSUB) == 0) {
-		while ((elt = ucl_iterate_object (obj, &iter, true)) != NULL) {
+		while ((elt = ucl_object_iterate (obj, &iter, true)) != NULL) {
 			if (regexec (&reg, ucl_object_key (elt), 0, NULL, 0) == 0) {
 				res = elt;
 				break;
@@ -103,14 +103,14 @@ ucl_schema_validate_dependencies (const ucl_object_t *deps,
 	ucl_object_iter_t iter = NULL, piter;
 	bool ret = true;
 
-	while (ret && (cur = ucl_iterate_object (deps, &iter, true)) != NULL) {
-		elt = ucl_object_find_key (obj, ucl_object_key (cur));
+	while (ret && (cur = ucl_object_iterate (deps, &iter, true)) != NULL) {
+		elt = ucl_object_lookup (obj, ucl_object_key (cur));
 		if (elt != NULL) {
 			/* Need to check dependencies */
 			if (cur->type == UCL_ARRAY) {
 				piter = NULL;
-				while (ret && (cur_dep = ucl_iterate_object (cur, &piter, true)) != NULL) {
-					if (ucl_object_find_key (obj, ucl_object_tostring (cur_dep)) == NULL) {
+				while (ret && (cur_dep = ucl_object_iterate (cur, &piter, true)) != NULL) {
+					if (ucl_object_lookup (obj, ucl_object_tostring (cur_dep)) == NULL) {
 						ucl_schema_create_error (err, UCL_SCHEMA_MISSING_DEPENDENCY, elt,
 								"dependency %s is missing for key %s",
 								ucl_object_tostring (cur_dep), ucl_object_key (cur));
@@ -143,12 +143,12 @@ ucl_schema_validate_object (const ucl_object_t *schema,
 	bool ret = true, allow_additional = true;
 	int64_t minmax;
 
-	while (ret && (elt = ucl_iterate_object (schema, &iter, true)) != NULL) {
+	while (ret && (elt = ucl_object_iterate (schema, &iter, true)) != NULL) {
 		if (elt->type == UCL_OBJECT &&
 				strcmp (ucl_object_key (elt), "properties") == 0) {
 			piter = NULL;
-			while (ret && (prop = ucl_iterate_object (elt, &piter, true)) != NULL) {
-				found = ucl_object_find_key (obj, ucl_object_key (prop));
+			while (ret && (prop = ucl_object_iterate (elt, &piter, true)) != NULL) {
+				found = ucl_object_lookup (obj, ucl_object_key (prop));
 				if (found) {
 					ret = ucl_schema_validate (prop, found, true, err, root,
 							ext_ref);
@@ -206,7 +206,7 @@ ucl_schema_validate_object (const ucl_object_t *schema,
 		}
 		else if (strcmp (ucl_object_key (elt), "patternProperties") == 0) {
 			piter = NULL;
-			while (ret && (prop = ucl_iterate_object (elt, &piter, true)) != NULL) {
+			while (ret && (prop = ucl_object_iterate (elt, &piter, true)) != NULL) {
 				found = ucl_schema_test_pattern (obj, ucl_object_key (prop));
 				if (found) {
 					ret = ucl_schema_validate (prop, found, true, err, root,
@@ -226,14 +226,14 @@ ucl_schema_validate_object (const ucl_object_t *schema,
 		if (!allow_additional || additional_schema != NULL) {
 			/* Check if we have exactly the same properties in schema and object */
 			iter = NULL;
-			prop = ucl_object_find_key (schema, "properties");
-			while ((elt = ucl_iterate_object (obj, &iter, true)) != NULL) {
-				found = ucl_object_find_key (prop, ucl_object_key (elt));
+			prop = ucl_object_lookup (schema, "properties");
+			while ((elt = ucl_object_iterate (obj, &iter, true)) != NULL) {
+				found = ucl_object_lookup (prop, ucl_object_key (elt));
 				if (found == NULL) {
 					/* Try patternProperties */
 					piter = NULL;
-					pat = ucl_object_find_key (schema, "patternProperties");
-					while ((pelt = ucl_iterate_object (pat, &piter, true)) != NULL) {
+					pat = ucl_object_lookup (schema, "patternProperties");
+					while ((pelt = ucl_object_iterate (pat, &piter, true)) != NULL) {
 						found = ucl_schema_test_pattern (obj, ucl_object_key (pelt));
 						if (found != NULL) {
 							break;
@@ -261,8 +261,8 @@ ucl_schema_validate_object (const ucl_object_t *schema,
 		/* Required properties */
 		if (required != NULL) {
 			iter = NULL;
-			while ((elt = ucl_iterate_object (required, &iter, true)) != NULL) {
-				if (ucl_object_find_key (obj, ucl_object_tostring (elt)) == NULL) {
+			while ((elt = ucl_object_iterate (required, &iter, true)) != NULL) {
+				if (ucl_object_lookup (obj, ucl_object_tostring (elt)) == NULL) {
 					ucl_schema_create_error (err, UCL_SCHEMA_MISSING_PROPERTY, obj,
 							"object has missing property %s",
 							ucl_object_tostring (elt));
@@ -287,7 +287,7 @@ ucl_schema_validate_number (const ucl_object_t *schema,
 	double constraint, val;
 	const double alpha = 1e-16;
 
-	while (ret && (elt = ucl_iterate_object (schema, &iter, true)) != NULL) {
+	while (ret && (elt = ucl_object_iterate (schema, &iter, true)) != NULL) {
 		if ((elt->type == UCL_FLOAT || elt->type == UCL_INT) &&
 				strcmp (ucl_object_key (elt), "multipleOf") == 0) {
 			constraint = ucl_object_todouble (elt);
@@ -309,7 +309,7 @@ ucl_schema_validate_number (const ucl_object_t *schema,
 		else if ((elt->type == UCL_FLOAT || elt->type == UCL_INT) &&
 			strcmp (ucl_object_key (elt), "maximum") == 0) {
 			constraint = ucl_object_todouble (elt);
-			test = ucl_object_find_key (schema, "exclusiveMaximum");
+			test = ucl_object_lookup (schema, "exclusiveMaximum");
 			if (test && test->type == UCL_BOOLEAN) {
 				exclusive = ucl_object_toboolean (test);
 			}
@@ -325,7 +325,7 @@ ucl_schema_validate_number (const ucl_object_t *schema,
 		else if ((elt->type == UCL_FLOAT || elt->type == UCL_INT) &&
 				strcmp (ucl_object_key (elt), "minimum") == 0) {
 			constraint = ucl_object_todouble (elt);
-			test = ucl_object_find_key (schema, "exclusiveMinimum");
+			test = ucl_object_lookup (schema, "exclusiveMinimum");
 			if (test && test->type == UCL_BOOLEAN) {
 				exclusive = ucl_object_toboolean (test);
 			}
@@ -355,7 +355,7 @@ ucl_schema_validate_string (const ucl_object_t *schema,
 	regex_t re;
 #endif
 
-	while (ret && (elt = ucl_iterate_object (schema, &iter, true)) != NULL) {
+	while (ret && (elt = ucl_object_iterate (schema, &iter, true)) != NULL) {
 		if (elt->type == UCL_INT &&
 			strcmp (ucl_object_key (elt), "maxLength") == 0) {
 			constraint = ucl_object_toint (elt);
@@ -429,7 +429,7 @@ ucl_schema_array_is_unique (const ucl_object_t *obj, struct ucl_schema_error *er
 	struct ucl_compare_node *node, test, *nodes = NULL, *tmp;
 	bool ret = true;
 
-	while ((elt = ucl_iterate_object (obj, &iter, true)) != NULL) {
+	while ((elt = ucl_object_iterate (obj, &iter, true)) != NULL) {
 		test.obj = elt;
 		node = TREE_FIND (&tree, ucl_compare_node, link, &test);
 		if (node != NULL) {
@@ -470,11 +470,11 @@ ucl_schema_validate_array (const ucl_object_t *schema,
 	int64_t minmax;
 	unsigned int idx = 0;
 
-	while (ret && (elt = ucl_iterate_object (schema, &iter, true)) != NULL) {
+	while (ret && (elt = ucl_object_iterate (schema, &iter, true)) != NULL) {
 		if (strcmp (ucl_object_key (elt), "items") == 0) {
 			if (elt->type == UCL_ARRAY) {
 				found = ucl_array_head (obj);
-				while (ret && (it = ucl_iterate_object (elt, &piter, true)) != NULL) {
+				while (ret && (it = ucl_object_iterate (elt, &piter, true)) != NULL) {
 					if (found) {
 						ret = ucl_schema_validate (it, found, false, err,
 								root, ext_ref);
@@ -488,7 +488,7 @@ ucl_schema_validate_array (const ucl_object_t *schema,
 			}
 			else if (elt->type == UCL_OBJECT) {
 				/* Validate all items using the specified schema */
-				while (ret && (it = ucl_iterate_object (obj, &piter, true)) != NULL) {
+				while (ret && (it = ucl_object_iterate (obj, &piter, true)) != NULL) {
 					ret = ucl_schema_validate (elt, it, false, err, root,
 							ext_ref);
 				}
@@ -594,7 +594,7 @@ ucl_schema_type_is_allowed (const ucl_object_t *type, const ucl_object_t *obj,
 
 	if (type->type == UCL_ARRAY) {
 		/* One of allowed types */
-		while ((elt = ucl_iterate_object (type, &iter, true)) != NULL) {
+		while ((elt = ucl_object_iterate (type, &iter, true)) != NULL) {
 			if (ucl_schema_type_is_allowed (elt, obj, err)) {
 				return true;
 			}
@@ -642,7 +642,7 @@ ucl_schema_validate_enum (const ucl_object_t *en, const ucl_object_t *obj,
 	const ucl_object_t *elt;
 	bool ret = false;
 
-	while ((elt = ucl_iterate_object (en, &iter, true)) != NULL) {
+	while ((elt = ucl_object_iterate (en, &iter, true)) != NULL) {
 		if (ucl_object_compare (elt, obj) == 0) {
 			ret = true;
 			break;
@@ -672,7 +672,7 @@ ucl_schema_resolve_ref_component (const ucl_object_t *cur,
 
 	if (cur->type == UCL_OBJECT) {
 		/* Find a key inside an object */
-		res = ucl_object_find_keyl (cur, refc, len);
+		res = ucl_object_lookup_len (cur, refc, len);
 		if (res == NULL) {
 			ucl_schema_create_error (err, UCL_SCHEMA_INVALID_SCHEMA, cur,
 					"reference %s is invalid, missing path component", refc);
@@ -748,7 +748,7 @@ ucl_schema_resolve_ref (const ucl_object_t *root, const char *ref,
 			p = ref;
 		}
 
-		ext_obj = ucl_object_find_key (ext_ref, p);
+		ext_obj = ucl_object_lookup (ext_ref, p);
 
 		if (ext_obj == NULL) {
 			if (ucl_strnstr (p, "://", strlen (p)) != NULL) {
@@ -863,7 +863,7 @@ ucl_schema_validate_values (const ucl_object_t *schema, const ucl_object_t *obj,
 	const ucl_object_t *elt, *cur;
 	int64_t constraint, i;
 
-	elt = ucl_object_find_key (schema, "maxValues");
+	elt = ucl_object_lookup (schema, "maxValues");
 	if (elt != NULL && elt->type == UCL_INT) {
 		constraint = ucl_object_toint (elt);
 		cur = obj;
@@ -879,7 +879,7 @@ ucl_schema_validate_values (const ucl_object_t *schema, const ucl_object_t *obj,
 			cur = cur->next;
 		}
 	}
-	elt = ucl_object_find_key (schema, "minValues");
+	elt = ucl_object_lookup (schema, "minValues");
 	if (elt != NULL && elt->type == UCL_INT) {
 		constraint = ucl_object_toint (elt);
 		cur = obj;
@@ -935,17 +935,17 @@ ucl_schema_validate (const ucl_object_t *schema,
 		return true;
 	}
 
-	elt = ucl_object_find_key (schema, "enum");
+	elt = ucl_object_lookup (schema, "enum");
 	if (elt != NULL && elt->type == UCL_ARRAY) {
 		if (!ucl_schema_validate_enum (elt, obj, err)) {
 			return false;
 		}
 	}
 
-	elt = ucl_object_find_key (schema, "allOf");
+	elt = ucl_object_lookup (schema, "allOf");
 	if (elt != NULL && elt->type == UCL_ARRAY) {
 		iter = NULL;
-		while ((cur = ucl_iterate_object (elt, &iter, true)) != NULL) {
+		while ((cur = ucl_object_iterate (elt, &iter, true)) != NULL) {
 			ret = ucl_schema_validate (cur, obj, true, err, root, external_refs);
 			if (!ret) {
 				return false;
@@ -953,10 +953,10 @@ ucl_schema_validate (const ucl_object_t *schema,
 		}
 	}
 
-	elt = ucl_object_find_key (schema, "anyOf");
+	elt = ucl_object_lookup (schema, "anyOf");
 	if (elt != NULL && elt->type == UCL_ARRAY) {
 		iter = NULL;
-		while ((cur = ucl_iterate_object (elt, &iter, true)) != NULL) {
+		while ((cur = ucl_object_iterate (elt, &iter, true)) != NULL) {
 			ret = ucl_schema_validate (cur, obj, true, err, root, external_refs);
 			if (ret) {
 				break;
@@ -971,11 +971,11 @@ ucl_schema_validate (const ucl_object_t *schema,
 		}
 	}
 
-	elt = ucl_object_find_key (schema, "oneOf");
+	elt = ucl_object_lookup (schema, "oneOf");
 	if (elt != NULL && elt->type == UCL_ARRAY) {
 		iter = NULL;
 		ret = false;
-		while ((cur = ucl_iterate_object (elt, &iter, true)) != NULL) {
+		while ((cur = ucl_object_iterate (elt, &iter, true)) != NULL) {
 			if (!ret) {
 				ret = ucl_schema_validate (cur, obj, true, err, root, external_refs);
 			}
@@ -989,7 +989,7 @@ ucl_schema_validate (const ucl_object_t *schema,
 		}
 	}
 
-	elt = ucl_object_find_key (schema, "not");
+	elt = ucl_object_lookup (schema, "not");
 	if (elt != NULL && elt->type == UCL_OBJECT) {
 		if (ucl_schema_validate (elt, obj, true, err, root, external_refs)) {
 			return false;
@@ -1000,7 +1000,7 @@ ucl_schema_validate (const ucl_object_t *schema,
 		}
 	}
 
-	elt = ucl_object_find_key (schema, "$ref");
+	elt = ucl_object_lookup (schema, "$ref");
 	if (elt != NULL) {
 		ref_root = root;
 		cur = ucl_schema_resolve_ref (root, ucl_object_tostring (elt),
@@ -1015,7 +1015,7 @@ ucl_schema_validate (const ucl_object_t *schema,
 		}
 	}
 
-	elt = ucl_object_find_key (schema, "type");
+	elt = ucl_object_lookup (schema, "type");
 	if (!ucl_schema_type_is_allowed (elt, obj, err)) {
 		return false;
 	}

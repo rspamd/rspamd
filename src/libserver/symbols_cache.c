@@ -391,7 +391,7 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 			 * metric
 			 */
 #if 0
-			elt = ucl_object_find_key (cur, "weight");
+			elt = ucl_object_lookup (cur, "weight");
 
 			if (elt) {
 				w = ucl_object_todouble (elt);
@@ -400,17 +400,17 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 				}
 			}
 #endif
-			elt = ucl_object_find_key (cur, "time");
+			elt = ucl_object_lookup (cur, "time");
 			if (elt) {
 				item->avg_time = ucl_object_todouble (elt);
 			}
 
-			elt = ucl_object_find_key (cur, "count");
+			elt = ucl_object_lookup (cur, "count");
 			if (elt) {
 				item->avg_counter = ucl_object_toint (elt);
 			}
 
-			elt = ucl_object_find_key (cur, "frequency");
+			elt = ucl_object_lookup (cur, "frequency");
 			if (elt) {
 				item->frequency = ucl_object_toint (elt);
 			}
@@ -914,11 +914,11 @@ check_metric_settings (struct rspamd_task *task, struct metric *metric,
 		return FALSE;
 	}
 
-	mobj = ucl_object_find_key (task->settings, metric->name);
+	mobj = ucl_object_lookup (task->settings, metric->name);
 	if (mobj != NULL) {
-		act = ucl_object_find_key (mobj, "actions");
+		act = ucl_object_lookup (mobj, "actions");
 		if (act != NULL) {
-			reject = ucl_object_find_key (act,
+			reject = ucl_object_lookup (act,
 					rspamd_action_to_str (METRIC_ACTION_REJECT));
 			if (reject != NULL && ucl_object_todouble_safe (reject, &val)) {
 				*score = val;
@@ -1198,7 +1198,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		if (task->settings) {
 			const ucl_object_t *wl;
 
-			wl = ucl_object_find_key (task->settings, "whitelist");
+			wl = ucl_object_lookup (task->settings, "whitelist");
 			if (wl != NULL) {
 				msg_info_task ("<%s> is whitelisted", task->message_id);
 				task->flags |= RSPAMD_TASK_FLAG_SKIP;

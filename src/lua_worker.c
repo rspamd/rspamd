@@ -192,7 +192,7 @@ lua_worker_get_option (lua_State *L)
 			lua_pushnil (L);
 		}
 		else {
-			val = ucl_object_find_key (ctx->opts, name);
+			val = ucl_object_lookup (ctx->opts, name);
 			if (val == NULL) {
 				lua_pushnil (L);
 			}

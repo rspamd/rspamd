@@ -129,7 +129,7 @@ regexp_module_config (struct rspamd_config *cfg)
 		return TRUE;
 	}
 
-	sec = ucl_object_find_key (cfg->rcl_obj, "regexp");
+	sec = ucl_object_lookup (cfg->rcl_obj, "regexp");
 	if (sec == NULL) {
 		msg_err_config ("regexp module enabled, but no rules are defined");
 		return TRUE;
@@ -137,7 +137,7 @@ regexp_module_config (struct rspamd_config *cfg)
 
 	regexp_module_ctx->max_size = 0;
 
-	while ((value = ucl_iterate_object (sec, &it, true)) != NULL) {
+	while ((value = ucl_object_iterate (sec, &it, true)) != NULL) {
 		if (g_ascii_strncasecmp (ucl_object_key (value), "max_size",
 			sizeof ("max_size") - 1) == 0) {
 			regexp_module_ctx->max_size = ucl_obj_toint (value);
@@ -187,12 +187,12 @@ regexp_module_config (struct rspamd_config *cfg)
 			gboolean one_shot = FALSE, is_lua = FALSE, valid_expression = TRUE;
 
 			/* We have some lua table, extract its arguments */
-			elt = ucl_object_find_key (value, "callback");
+			elt = ucl_object_lookup (value, "callback");
 
 			if (elt == NULL || elt->type != UCL_USERDATA) {
 
 				/* Try plain regexp expression */
-				elt = ucl_object_find_any_key (value, "regexp", "re", NULL);
+				elt = ucl_object_lookup_any (value, "regexp", "re", NULL);
 
 				if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
 					cur_item = rspamd_mempool_alloc0 (regexp_module_ctx->regexp_pool,
@@ -232,7 +232,7 @@ regexp_module_config (struct rspamd_config *cfg)
 						cur_item,
 						SYMBOL_TYPE_NORMAL, -1);
 
-				elt = ucl_object_find_key (value, "condition");
+				elt = ucl_object_lookup (value, "condition");
 
 				if (elt != NULL && ucl_object_type (elt) == UCL_USERDATA) {
 					struct ucl_lua_funcdata *conddata;
@@ -242,31 +242,31 @@ regexp_module_config (struct rspamd_config *cfg)
 							conddata->L, conddata->idx);
 				}
 
-				elt = ucl_object_find_key (value, "metric");
+				elt = ucl_object_lookup (value, "metric");
 
 				if (elt) {
 					metric = ucl_object_tostring (elt);
 				}
 
-				elt = ucl_object_find_key (value, "description");
+				elt = ucl_object_lookup (value, "description");
 
 				if (elt) {
 					description = ucl_object_tostring (elt);
 				}
 
-				elt = ucl_object_find_key (value, "group");
+				elt = ucl_object_lookup (value, "group");
 
 				if (elt) {
 					group = ucl_object_tostring (elt);
 				}
 
-				elt = ucl_object_find_key (value, "score");
+				elt = ucl_object_lookup (value, "score");
 
 				if (elt) {
 					score = ucl_object_todouble (elt);
 				}
 
-				elt = ucl_object_find_key (value, "one_shot");
+				elt = ucl_object_lookup (value, "one_shot");
 
 				if (elt) {
 					one_shot = ucl_object_toboolean (elt);

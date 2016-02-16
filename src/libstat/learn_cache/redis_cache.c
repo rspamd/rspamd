@@ -185,11 +185,11 @@ rspamd_stat_cache_redis_init (struct rspamd_stat_ctx *ctx,
 
 	cache_ctx = g_slice_alloc0 (sizeof (*cache_ctx));
 
-	elt = ucl_object_find_any_key (stf->opts, "read_servers", "servers", NULL);
+	elt = ucl_object_lookup_any (stf->opts, "read_servers", "servers", NULL);
 	if (elt == NULL) {
 
 		if (st->classifier->cfg->opts) {
-			elt = ucl_object_find_any_key (st->classifier->cfg->opts,
+			elt = ucl_object_lookup_any (st->classifier->cfg->opts,
 					"read_servers", "servers", NULL);
 		}
 
@@ -209,7 +209,7 @@ rspamd_stat_cache_redis_init (struct rspamd_stat_ctx *ctx,
 		return NULL;
 	}
 
-	elt = ucl_object_find_key (stf->opts, "write_servers");
+	elt = ucl_object_lookup (stf->opts, "write_servers");
 	if (elt == NULL) {
 		/* Use read servers as write ones */
 		g_assert (relt != NULL);
@@ -232,7 +232,7 @@ rspamd_stat_cache_redis_init (struct rspamd_stat_ctx *ctx,
 		}
 	}
 
-	elt = ucl_object_find_key (stf->opts, "key");
+	elt = ucl_object_lookup (stf->opts, "key");
 	if (elt == NULL || ucl_object_type (elt) != UCL_STRING) {
 		cache_ctx->redis_object = DEFAULT_REDIS_KEY;
 	}
@@ -240,7 +240,7 @@ rspamd_stat_cache_redis_init (struct rspamd_stat_ctx *ctx,
 		cache_ctx->redis_object = ucl_object_tostring (elt);
 	}
 
-	elt = ucl_object_find_key (stf->opts, "timeout");
+	elt = ucl_object_lookup (stf->opts, "timeout");
 	if (elt) {
 		cache_ctx->timeout = ucl_object_todouble (elt);
 	}

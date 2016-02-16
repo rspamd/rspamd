@@ -150,14 +150,14 @@ ucl_object_lua_push_object (lua_State *L, const ucl_object_t *obj,
 	}
 
 	/* Optimize allocation by preallocation of table */
-	while (ucl_iterate_object (obj, &it, true) != NULL) {
+	while (ucl_object_iterate (obj, &it, true) != NULL) {
 		nelt ++;
 	}
 
 	lua_createtable (L, 0, nelt);
 	it = NULL;
 
-	while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
+	while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
 		ucl_object_lua_push_element (L, ucl_object_key (cur), cur);
 	}
 
@@ -860,7 +860,7 @@ lua_ucl_object_validate (lua_State *L)
 		}
 
 		if (path) {
-			schema_elt = ucl_lookup_path_char (schema, path, '/');
+			schema_elt = ucl_object_lookup_path_char (schema, path, '/');
 		}
 		else {
 			/* Use the top object */

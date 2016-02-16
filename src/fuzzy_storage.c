@@ -1128,7 +1128,7 @@ fuzzy_parse_keypair (rspamd_mempool_t *pool,
 		msg_info_pool ("loaded keypair %*xs", 8, pk);
 	}
 	else if (ucl_object_type (obj) == UCL_ARRAY) {
-		while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
+		while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
 			if (!fuzzy_parse_keypair (pool, cur, pd, section, err)) {
 				return FALSE;
 			}

@@ -799,10 +799,10 @@ rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx,
 	const gchar *filename;
 	gsize size;
 
-	filenameo = ucl_object_find_key (stf->opts, "filename");
+	filenameo = ucl_object_lookup (stf->opts, "filename");
 
 	if (filenameo == NULL || ucl_object_type (filenameo) != UCL_STRING) {
-		filenameo = ucl_object_find_key (stf->opts, "path");
+		filenameo = ucl_object_lookup (stf->opts, "path");
 
 		if (filenameo == NULL || ucl_object_type (filenameo) != UCL_STRING) {
 			msg_err_config ("statfile %s has no filename defined", stf->symbol);
@@ -812,7 +812,7 @@ rspamd_mmaped_file_init (struct rspamd_stat_ctx *ctx,
 
 	filename = ucl_object_tostring (filenameo);
 
-	sizeo = ucl_object_find_key (stf->opts, "size");
+	sizeo = ucl_object_lookup (stf->opts, "size");
 
 	if (sizeo == NULL || ucl_object_type (sizeo) != UCL_INT) {
 		msg_err_config ("statfile %s has no size defined", stf->symbol);

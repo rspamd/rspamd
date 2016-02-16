@@ -109,7 +109,7 @@ rspamadm_add_doc_elt (const ucl_object_t *obj, const ucl_object_t *doc_obj,
 	}
 
 	/* We create comments as a list of parts */
-	elt = ucl_object_find_key (doc_obj, "data");
+	elt = ucl_object_lookup (doc_obj, "data");
 	if (elt) {
 		rspamd_printf_fstring (&comment, " * %s", ucl_object_tostring (elt));
 		cur_comment = ucl_object_fromstring_common (comment->str, comment->len, 0);
@@ -117,7 +117,7 @@ rspamadm_add_doc_elt (const ucl_object_t *obj, const ucl_object_t *doc_obj,
 		DL_APPEND (nobj, cur_comment);
 	}
 
-	elt = ucl_object_find_key (doc_obj, "type");
+	elt = ucl_object_lookup (doc_obj, "type");
 	if (elt) {
 		rspamd_printf_fstring (&comment, " * Type: %s", ucl_object_tostring (elt));
 		cur_comment = ucl_object_fromstring_common (comment->str, comment->len, 0);
@@ -125,7 +125,7 @@ rspamadm_add_doc_elt (const ucl_object_t *obj, const ucl_object_t *doc_obj,
 		DL_APPEND (nobj, cur_comment);
 	}
 
-	elt = ucl_object_find_key (doc_obj, "required");
+	elt = ucl_object_lookup (doc_obj, "required");
 	if (elt) {
 		rspamd_printf_fstring (&comment, " * Required: %B",
 				ucl_object_toboolean (elt));
@@ -161,13 +161,13 @@ rspamadm_gen_comments (const ucl_object_t *obj, const ucl_object_t *doc_obj,
 	}
 
 	if (ucl_object_type (obj) == UCL_OBJECT) {
-		while ((cur_obj = ucl_iterate_object (obj, &it, true))) {
-			cur_doc = ucl_object_find_keyl (doc_obj, cur_obj->key,
+		while ((cur_obj = ucl_object_iterate (obj, &it, true))) {
+			cur_doc = ucl_object_lookup_len (doc_obj, cur_obj->key,
 					cur_obj->keylen);
 
 			if (cur_doc != NULL) {
 				LL_FOREACH (cur_obj, cur_elt) {
-					if (ucl_object_find_keyl (comments, (const char *)&cur_elt,
+					if (ucl_object_lookup_len (comments, (const char *)&cur_elt,
 							sizeof (void *)) == NULL) {
 						rspamadm_gen_comments (cur_elt, cur_doc, comments);
 					}
@@ -281,8 +281,8 @@ rspamadm_configdump (gint argc, gchar **argv)
 		}
 		else {
 			for (i = 1; i < argc; i ++) {
-				obj = ucl_lookup_path (cfg->rcl_obj, argv[i]);
-				doc_obj = ucl_lookup_path (cfg->doc_strings, argv[i]);
+				obj = ucl_object_lookup_path (cfg->rcl_obj, argv[i]);
+				doc_obj = ucl_object_lookup_path (cfg->doc_strings, argv[i]);
 
 				if (!obj) {
 					rspamd_printf ("Section %s NOT FOUND\n", argv[i]);

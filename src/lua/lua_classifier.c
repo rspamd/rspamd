@@ -364,7 +364,7 @@ lua_statfile_get_param (lua_State *L)
 	param = luaL_checkstring (L, 2);
 
 	if (st != NULL && param != NULL) {
-		value = ucl_object_find_key (st->opts, param);
+		value = ucl_object_lookup (st->opts, param);
 		if (value != NULL) {
 			lua_pushstring (L, ucl_object_tostring_forced (value));
 			return 1;

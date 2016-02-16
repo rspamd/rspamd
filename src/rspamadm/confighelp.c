@@ -126,7 +126,7 @@ rspamadm_confighelp_search_word_step (const ucl_object_t *obj,
 	const ucl_object_t *cur, *elt;
 	const gchar *dot_pos;
 
-	while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
+	while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
 		if (cur->keylen > 0) {
 			rspamd_printf_gstring (path, ".%*s", (int) cur->keylen, cur->key);
 
@@ -141,7 +141,7 @@ rspamadm_confighelp_search_word_step (const ucl_object_t *obj,
 		}
 
 		if (ucl_object_type (cur) == UCL_OBJECT) {
-			elt = ucl_object_find_key (cur, "data");
+			elt = ucl_object_lookup (cur, "data");
 
 			if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
 				if (rspamd_substring_search_caseless (elt->value.sv,
@@ -252,7 +252,7 @@ rspamadm_confighelp (gint argc, gchar **argv)
 				}
 				else {
 					doc_obj = ucl_object_typed_new (UCL_OBJECT);
-					elt = ucl_lookup_path (cfg->doc_strings, argv[i]);
+					elt = ucl_object_lookup_path (cfg->doc_strings, argv[i]);
 
 					if (elt) {
 						ucl_object_insert_key (doc_obj, ucl_object_ref (elt),

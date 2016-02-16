@@ -900,7 +900,7 @@ lua_config_get_key (lua_State *L)
 
 	name = luaL_checklstring(L, 2, &namelen);
 	if (name && cfg) {
-		val = ucl_object_find_keyl(cfg->rcl_obj, name, namelen);
+		val = ucl_object_lookup_len(cfg->rcl_obj, name, namelen);
 		if (val != NULL) {
 			ucl_object_push_lua (L, val, val->type != UCL_ARRAY);
 		}

@@ -125,7 +125,7 @@ rspamd_stat_cache_sqlite3_init (struct rspamd_stat_ctx *ctx,
 	GError *err = NULL;
 
 	if (cf) {
-		elt = ucl_object_find_any_key (cf, "path", "file", NULL);
+		elt = ucl_object_lookup_any (cf, "path", "file", NULL);
 
 		if (elt != NULL) {
 			path = ucl_object_tostring (elt);

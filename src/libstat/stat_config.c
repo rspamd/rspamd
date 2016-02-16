@@ -152,11 +152,11 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 		cache_name = NULL;
 
 		if (clf->opts) {
-			cache_obj = ucl_object_find_key (clf->opts, "cache");
+			cache_obj = ucl_object_lookup (clf->opts, "cache");
 			cache_name_obj = NULL;
 
 			if (cache_obj) {
-				cache_name_obj = ucl_object_find_any_key (cache_obj,
+				cache_name_obj = ucl_object_lookup_any (cache_obj,
 						"name", "type", NULL);
 			}
 

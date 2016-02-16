@@ -465,7 +465,7 @@ rspamd_redis_stat_learns (redisAsyncContext *c, gpointer r, gpointer priv)
 			rspamd_strtoul (reply->str, reply->len, &num);
 		}
 
-		obj = (ucl_object_t *)ucl_object_find_key (cbdata->cur, "revision");
+		obj = (ucl_object_t *)ucl_object_lookup (cbdata->cur, "revision");
 		if (obj) {
 			obj->value.iv += num;
 		}
@@ -500,17 +500,17 @@ rspamd_redis_stat_key (redisAsyncContext *c, gpointer r, gpointer priv)
 			num = 0;
 		}
 
-		obj = (ucl_object_t *)ucl_object_find_key (cbdata->cur, "used");
+		obj = (ucl_object_t *)ucl_object_lookup (cbdata->cur, "used");
 		if (obj) {
 			obj->value.iv += num;
 		}
 
-		obj = (ucl_object_t *)ucl_object_find_key (cbdata->cur, "total");
+		obj = (ucl_object_t *)ucl_object_lookup (cbdata->cur, "total");
 		if (obj) {
 			obj->value.iv += num;
 		}
 
-		obj = (ucl_object_t *)ucl_object_find_key (cbdata->cur, "size");
+		obj = (ucl_object_t *)ucl_object_lookup (cbdata->cur, "size");
 		if (obj) {
 			/* Size of key + size of int64_t */
 			obj->value.iv += num * (sizeof (G_STRINGIFY (G_MAXINT64)) +
@@ -856,11 +856,11 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 
 	backend = g_slice_alloc0 (sizeof (*backend));
 
-	elt = ucl_object_find_any_key (stf->opts, "read_servers", "servers", NULL);
+	elt = ucl_object_lookup_any (stf->opts, "read_servers", "servers", NULL);
 	if (elt == NULL) {
 
 		if (st->classifier->cfg->opts) {
-			elt = ucl_object_find_any_key (st->classifier->cfg->opts,
+			elt = ucl_object_lookup_any (st->classifier->cfg->opts,
 					"read_servers", "servers", NULL);
 		}
 
@@ -880,7 +880,7 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 		return NULL;
 	}
 
-	elt = ucl_object_find_key (stf->opts, "write_servers");
+	elt = ucl_object_lookup (stf->opts, "write_servers");
 	if (elt == NULL) {
 		/* Use read servers as write ones */
 		g_assert (relt != NULL);
@@ -903,7 +903,7 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 		}
 	}
 
-	elt = ucl_object_find_key (stf->opts, "prefix");
+	elt = ucl_object_lookup (stf->opts, "prefix");
 	if (elt == NULL || ucl_object_type (elt) != UCL_STRING) {
 		/* Default non-users statistics */
 		backend->redis_object = REDIS_DEFAULT_OBJECT;
@@ -911,7 +911,7 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 		/*
 		 * Make redis backend compatible with sqlite3 backend in users settings
 		 */
-		users_enabled = ucl_object_find_any_key (stf->clcf->opts, "per_user",
+		users_enabled = ucl_object_lookup_any (stf->clcf->opts, "per_user",
 				"users_enabled", NULL);
 
 		if (users_enabled != NULL) {
@@ -954,7 +954,7 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 		backend->redis_object = ucl_object_tostring (elt);
 	}
 
-	elt = ucl_object_find_key (stf->opts, "timeout");
+	elt = ucl_object_lookup (stf->opts, "timeout");
 	if (elt) {
 		backend->timeout = ucl_object_todouble (elt);
 	}

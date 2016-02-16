@@ -173,9 +173,9 @@ rspamd_lua_set_path (lua_State *L, struct rspamd_config *cfg)
 		return;
 	}
 
-	opts = ucl_object_find_key (cfg->rcl_obj, "options");
+	opts = ucl_object_lookup (cfg->rcl_obj, "options");
 	if (opts != NULL) {
-		opts = ucl_object_find_key (opts, "lua_path");
+		opts = ucl_object_lookup (opts, "lua_path");
 		if (opts != NULL && ucl_object_type (opts) == UCL_STRING) {
 			additional_path = ucl_object_tostring (opts);
 		}

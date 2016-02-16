@@ -661,8 +661,9 @@ UCL_EXTERN const char* ucl_object_tolstring (const ucl_object_t *obj, size_t *tl
  * @param key key to search
  * @return object matching the specified key or NULL if key was not found
  */
-UCL_EXTERN const ucl_object_t* ucl_object_find_key (const ucl_object_t *obj,
+UCL_EXTERN const ucl_object_t* ucl_object_lookup (const ucl_object_t *obj,
 		const char *key);
+#define ucl_object_find_key ucl_object_lookup
 
 /**
  * Return object identified by a key in the specified object, if the first key is
@@ -674,8 +675,9 @@ UCL_EXTERN const ucl_object_t* ucl_object_find_key (const ucl_object_t *obj,
  * @param ... list of alternative keys to search (NULL terminated)
  * @return object matching the specified key or NULL if key was not found
  */
-UCL_EXTERN const ucl_object_t* ucl_object_find_any_key (const ucl_object_t *obj,
+UCL_EXTERN const ucl_object_t* ucl_object_lookup_any (const ucl_object_t *obj,
 		const char *key, ...);
+#define ucl_object_find_any_key ucl_object_lookup_any
 
 /**
  * Return object identified by a fixed size key in the specified object
@@ -684,8 +686,9 @@ UCL_EXTERN const ucl_object_t* ucl_object_find_any_key (const ucl_object_t *obj,
  * @param klen length of a key
  * @return object matching the specified key or NULL if key was not found
  */
-UCL_EXTERN const ucl_object_t* ucl_object_find_keyl (const ucl_object_t *obj,
+UCL_EXTERN const ucl_object_t* ucl_object_lookup_len (const ucl_object_t *obj,
 		const char *key, size_t klen);
+#define ucl_object_find_keyl ucl_object_lookup_len
 
 /**
  * Return object identified by dot notation string
@@ -693,8 +696,9 @@ UCL_EXTERN const ucl_object_t* ucl_object_find_keyl (const ucl_object_t *obj,
  * @param path dot.notation.path to the path to lookup. May use numeric .index on arrays
  * @return object matched the specified path or NULL if path is not found
  */
-UCL_EXTERN const ucl_object_t *ucl_lookup_path (const ucl_object_t *obj,
+UCL_EXTERN const ucl_object_t *ucl_object_lookup_path (const ucl_object_t *obj,
 		const char *path);
+#define ucl_lookup_path ucl_object_lookup_path
 
 /**
  * Return object identified by object notation string using arbitrary delimiter
@@ -703,8 +707,9 @@ UCL_EXTERN const ucl_object_t *ucl_lookup_path (const ucl_object_t *obj,
  * @param sep the sepatorator to use in place of . (incase keys have . in them)
  * @return object matched the specified path or NULL if path is not found
  */
-UCL_EXTERN const ucl_object_t *ucl_lookup_path_char (const ucl_object_t *obj,
+UCL_EXTERN const ucl_object_t *ucl_object_lookup_path_char (const ucl_object_t *obj,
 		const char *path, char sep);
+#define ucl_lookup_path_char ucl_object_lookup_path_char
 
 /**
  * Returns a key of an object as a NULL terminated string
@@ -802,8 +807,9 @@ typedef void* ucl_object_iter_t;
  * while ((cur = ucl_iterate_object (obj, &it)) != NULL) ...
  * @return the next object or NULL
  */
-UCL_EXTERN const ucl_object_t* ucl_iterate_object (const ucl_object_t *obj,
+UCL_EXTERN const ucl_object_t* ucl_object_iterate (const ucl_object_t *obj,
 		ucl_object_iter_t *iter, bool expand_values);
+#define ucl_iterate_object ucl_object_iterate
 
 /**
  * Create new safe iterator for the specified object
@@ -1072,34 +1078,34 @@ UCL_EXTERN ucl_object_t* ucl_parser_get_object (struct ucl_parser *parser);
  * @param parser parser object
  * @return error description
  */
-UCL_EXTERN const char *ucl_parser_get_error(struct ucl_parser *parser);
+UCL_EXTERN const char *ucl_parser_get_error (struct ucl_parser *parser);
 
 /**
  * Get the code of the last error
  * @param parser parser object
  * @return error code
  */
-UCL_EXTERN int ucl_parser_get_error_code(struct ucl_parser *parser);
+UCL_EXTERN int ucl_parser_get_error_code (struct ucl_parser *parser);
 
 /**
  * Get the current column number within parser
  * @param parser parser object
  * @return current column number
  */
-UCL_EXTERN unsigned ucl_parser_get_column(struct ucl_parser *parser);
+UCL_EXTERN unsigned ucl_parser_get_column (struct ucl_parser *parser);
 
 /**
  * Get the current line number within parser
  * @param parser parser object
  * @return current line number
  */
-UCL_EXTERN unsigned ucl_parser_get_linenum(struct ucl_parser *parser);
+UCL_EXTERN unsigned ucl_parser_get_linenum (struct ucl_parser *parser);
 
 /**
  * Clear the error in the parser
  * @param parser parser object
  */
-UCL_EXTERN void ucl_parser_clear_error(struct ucl_parser *parser);
+UCL_EXTERN void ucl_parser_clear_error (struct ucl_parser *parser);
 
 /**
  * Free ucl parser object
@@ -1132,7 +1138,8 @@ UCL_EXTERN const ucl_object_t * ucl_comments_find (const ucl_object_t *comments,
  * @param err if *err is NULL it is set to parser error
  * @return true if a key has been successfully added
  */
-UCL_EXTERN bool ucl_pubkey_add (struct ucl_parser *parser, const unsigned char *key, size_t len);
+UCL_EXTERN bool ucl_parser_pubkey_add (struct ucl_parser *parser,
+		const unsigned char *key, size_t len);
 
 /**
  * Set FILENAME and CURDIR variables in parser

@@ -523,9 +523,9 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 	struct rspamd_stat_sqlite3_db *bk;
 	GError *err = NULL;
 
-	filenameo = ucl_object_find_key (stf->opts, "filename");
+	filenameo = ucl_object_lookup (stf->opts, "filename");
 	if (filenameo == NULL || ucl_object_type (filenameo) != UCL_STRING) {
-		filenameo = ucl_object_find_key (stf->opts, "path");
+		filenameo = ucl_object_lookup (stf->opts, "path");
 		if (filenameo == NULL || ucl_object_type (filenameo) != UCL_STRING) {
 			msg_err_config ("statfile %s has no filename defined", stf->symbol);
 			return NULL;
@@ -543,7 +543,7 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 
 	bk->L = cfg->lua_state;
 
-	users_enabled = ucl_object_find_any_key (clf->opts, "per_user",
+	users_enabled = ucl_object_lookup_any (clf->opts, "per_user",
 			"users_enabled", NULL);
 	if (users_enabled != NULL) {
 		if (ucl_object_type (users_enabled) == UCL_BOOLEAN) {
@@ -576,7 +576,7 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 		bk->enable_users = FALSE;
 	}
 
-	lang_enabled = ucl_object_find_any_key (clf->opts,
+	lang_enabled = ucl_object_lookup_any (clf->opts,
 			"per_language", "languages_enabled", NULL);
 
 	if (lang_enabled != NULL) {

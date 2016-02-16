@@ -470,16 +470,16 @@ rspamc_symbol_output (FILE *out, const ucl_object_t *obj)
 	gboolean first = TRUE;
 
 	rspamd_fprintf (out, "Symbol: %s ", ucl_object_key (obj));
-	val = ucl_object_find_key (obj, "score");
+	val = ucl_object_lookup (obj, "score");
 
 	if (val != NULL) {
 		rspamd_fprintf (out, "(%.2f)", ucl_object_todouble (val));
 	}
-	val = ucl_object_find_key (obj, "options");
+	val = ucl_object_lookup (obj, "options");
 	if (val != NULL && val->type == UCL_ARRAY) {
 		rspamd_fprintf (out, "[");
 
-		while ((cur = ucl_iterate_object (val, &it, TRUE)) != NULL) {
+		while ((cur = ucl_object_iterate (val, &it, TRUE)) != NULL) {
 			if (first) {
 				rspamd_fprintf (out, "%s", ucl_object_tostring (cur));
 				first = FALSE;
@@ -514,7 +514,7 @@ rspamc_metric_output (FILE *out, const ucl_object_t *obj)
 	sym_ptr = g_ptr_array_new ();
 	rspamd_fprintf (out, "[Metric: %s]\n", ucl_object_key (obj));
 
-	while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
+	while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
 		if (g_ascii_strcasecmp (ucl_object_key (cur), "is_spam") == 0) {
 			rspamd_fprintf (out, "Spam: %s\n", ucl_object_toboolean (cur) ?
 				"true" : "false");
@@ -560,7 +560,7 @@ rspamc_symbols_output (FILE *out, ucl_object_t *obj)
 	const ucl_object_t *cur, *cmesg;
 	gchar *emitted;
 
-	while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
+	while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
 		if (g_ascii_strcasecmp (ucl_object_key (cur), "message-id") == 0) {
 			rspamd_fprintf (out, "Message-ID: %s\n", ucl_object_tostring (
 					cur));
@@ -591,7 +591,7 @@ rspamc_symbols_output (FILE *out, ucl_object_t *obj)
 		else if (g_ascii_strcasecmp (ucl_object_key (cur), "messages") == 0) {
 			if (cur->type == UCL_ARRAY) {
 				mit = NULL;
-				while ((cmesg = ucl_iterate_object (cur, &mit, true)) != NULL) {
+				while ((cmesg = ucl_object_iterate (cur, &mit, true)) != NULL) {
 					rspamd_fprintf (out, "Message: %s\n",
 							ucl_object_tostring (cmesg));
 				}
@@ -610,13 +610,13 @@ rspamc_uptime_output (FILE *out, ucl_object_t *obj)
 	const ucl_object_t *elt;
 	int64_t seconds, days, hours, minutes;
 
-	elt = ucl_object_find_key (obj, "version");
+	elt = ucl_object_lookup (obj, "version");
 	if (elt != NULL) {
 		rspamd_fprintf (out, "Rspamd version: %s\n", ucl_object_tostring (
 				elt));
 	}
 
-	elt = ucl_object_find_key (obj, "uptime");
+	elt = ucl_object_lookup (obj, "uptime");
 	if (elt != NULL) {
 		rspamd_printf ("Uptime: ");
 		seconds = ucl_object_toint (elt);
@@ -661,8 +661,8 @@ rspamc_counters_sort (const ucl_object_t **o1, const ucl_object_t **o2)
 			}
 
 			if (g_ascii_strcasecmp (args[0], "name") == 0) {
-				elt1 = ucl_object_find_key (*o1, "symbol");
-				elt2 = ucl_object_find_key (*o2, "symbol");
+				elt1 = ucl_object_lookup (*o1, "symbol");
+				elt2 = ucl_object_lookup (*o2, "symbol");
 
 				if (elt1 && elt2) {
 					c = strcmp (ucl_object_tostring (elt1),
@@ -673,8 +673,8 @@ rspamc_counters_sort (const ucl_object_t **o1, const ucl_object_t **o2)
 				}
 			}
 			else if (g_ascii_strcasecmp (args[0], "weight") == 0) {
-				elt1 = ucl_object_find_key (*o1, "weight");
-				elt2 = ucl_object_find_key (*o2, "weight");
+				elt1 = ucl_object_lookup (*o1, "weight");
+				elt2 = ucl_object_lookup (*o2, "weight");
 
 				if (elt1 && elt2) {
 					order1 = ucl_object_todouble (elt1) * 1000.0;
@@ -682,8 +682,8 @@ rspamc_counters_sort (const ucl_object_t **o1, const ucl_object_t **o2)
 				}
 			}
 			else if (g_ascii_strcasecmp (args[0], "frequency") == 0) {
-				elt1 = ucl_object_find_key (*o1, "frequency");
-				elt2 = ucl_object_find_key (*o2, "frequency");
+				elt1 = ucl_object_lookup (*o1, "frequency");
+				elt2 = ucl_object_lookup (*o2, "frequency");
 
 				if (elt1 && elt2) {
 					order1 = ucl_object_toint (elt1);
@@ -691,8 +691,8 @@ rspamc_counters_sort (const ucl_object_t **o1, const ucl_object_t **o2)
 				}
 			}
 			else if (g_ascii_strcasecmp (args[0], "time") == 0) {
-				elt1 = ucl_object_find_key (*o1, "time");
-				elt2 = ucl_object_find_key (*o2, "time");
+				elt1 = ucl_object_lookup (*o1, "time");
+				elt2 = ucl_object_lookup (*o2, "time");
 
 				if (elt1 && elt2) {
 					order1 = ucl_object_todouble (elt1) * 1000000;
@@ -726,8 +726,8 @@ rspamc_counters_output (FILE *out, ucl_object_t *obj)
 	}
 
 	/* Find maximum width of symbol's name */
-	while ((cur = ucl_iterate_object (obj, &iter, true)) != NULL) {
-		sym = ucl_object_find_key (cur, "symbol");
+	while ((cur = ucl_object_iterate (obj, &iter, true)) != NULL) {
+		sym = ucl_object_lookup (cur, "symbol");
 		if (sym != NULL) {
 			l = sym->len;
 			if (l > max_len) {
@@ -755,12 +755,12 @@ rspamc_counters_output (FILE *out, ucl_object_t *obj)
 
 	iter = NULL;
 	i = 0;
-	while ((cur = ucl_iterate_object (obj, &iter, true)) != NULL) {
+	while ((cur = ucl_object_iterate (obj, &iter, true)) != NULL) {
 		printf (" %s \n", dash_buf);
-		sym = ucl_object_find_key (cur, "symbol");
-		weight = ucl_object_find_key (cur, "weight");
-		freq = ucl_object_find_key (cur, "frequency");
-		tim = ucl_object_find_key (cur, "time");
+		sym = ucl_object_lookup (cur, "symbol");
+		weight = ucl_object_lookup (cur, "weight");
+		freq = ucl_object_lookup (cur, "frequency");
+		tim = ucl_object_lookup (cur, "time");
 		if (sym && weight && freq && tim) {
 			printf (fmt_buf, i,
 				ucl_object_tostring (sym),
@@ -776,12 +776,12 @@ rspamc_counters_output (FILE *out, ucl_object_t *obj)
 static void
 rspamc_stat_actions (ucl_object_t *obj, GString *out, gint64 scanned)
 {
-	const ucl_object_t *actions = ucl_object_find_key (obj, "actions"), *cur;
+	const ucl_object_t *actions = ucl_object_lookup (obj, "actions"), *cur;
 	ucl_object_iter_t iter = NULL;
 	gint64 spam, ham;
 
 	if (actions && ucl_object_type (actions) == UCL_OBJECT) {
-		while ((cur = ucl_iterate_object (actions, &iter, true)) != NULL) {
+		while ((cur = ucl_object_iterate (actions, &iter, true)) != NULL) {
 			gint64 cnt = ucl_object_toint (cur);
 			rspamd_printf_gstring (out, "Messages with action %s: %L"
 				", %.2f%%\n", ucl_object_key (cur), cnt,
@@ -789,8 +789,8 @@ rspamc_stat_actions (ucl_object_t *obj, GString *out, gint64 scanned)
 		}
 	}
 
-	spam = ucl_object_toint (ucl_object_find_key (obj, "spam_count"));
-	ham = ucl_object_toint (ucl_object_find_key (obj, "ham_count"));
+	spam = ucl_object_toint (ucl_object_lookup (obj, "spam_count"));
+	ham = ucl_object_toint (ucl_object_lookup (obj, "ham_count"));
 	rspamd_printf_gstring (out, "Messages treated as spam: %L, %.2f%%\n", spam,
 		((gdouble)spam / (gdouble)scanned) * 100.);
 	rspamd_printf_gstring (out, "Messages treated as ham: %L, %.2f%%\n", ham,
@@ -803,15 +803,15 @@ rspamc_stat_statfile (const ucl_object_t *obj, GString *out)
 	gint64 version, size, blocks, used_blocks, nlanguages, nusers;
 	const gchar *label, *symbol, *type;
 
-	version = ucl_object_toint (ucl_object_find_key (obj, "revision"));
-	size = ucl_object_toint (ucl_object_find_key (obj, "size"));
-	blocks = ucl_object_toint (ucl_object_find_key (obj, "total"));
-	used_blocks = ucl_object_toint (ucl_object_find_key (obj, "used"));
-	label = ucl_object_tostring (ucl_object_find_key (obj, "label"));
-	symbol = ucl_object_tostring (ucl_object_find_key (obj, "symbol"));
-	type = ucl_object_tostring (ucl_object_find_key (obj, "type"));
-	nlanguages = ucl_object_toint (ucl_object_find_key (obj, "languages"));
-	nusers = ucl_object_toint (ucl_object_find_key (obj, "users"));
+	version = ucl_object_toint (ucl_object_lookup (obj, "revision"));
+	size = ucl_object_toint (ucl_object_lookup (obj, "size"));
+	blocks = ucl_object_toint (ucl_object_lookup (obj, "total"));
+	used_blocks = ucl_object_toint (ucl_object_lookup (obj, "used"));
+	label = ucl_object_tostring (ucl_object_lookup (obj, "label"));
+	symbol = ucl_object_tostring (ucl_object_lookup (obj, "symbol"));
+	type = ucl_object_tostring (ucl_object_lookup (obj, "type"));
+	nlanguages = ucl_object_toint (ucl_object_lookup (obj, "languages"));
+	nusers = ucl_object_toint (ucl_object_lookup (obj, "users"));
 
 	if (label) {
 		rspamd_printf_gstring (out, "Statfile: %s <%s> type: %s; ", symbol,
@@ -839,7 +839,7 @@ rspamc_stat_output (FILE *out, ucl_object_t *obj)
 
 	out_str = g_string_sized_new (BUFSIZ);
 
-	scanned = ucl_object_toint (ucl_object_find_key (obj, "scanned"));
+	scanned = ucl_object_toint (ucl_object_lookup (obj, "scanned"));
 	rspamd_printf_gstring (out_str, "Messages scanned: %L\n",
 		scanned);
 
@@ -848,66 +848,66 @@ rspamc_stat_output (FILE *out, ucl_object_t *obj)
 	}
 
 	rspamd_printf_gstring (out_str, "Messages learned: %L\n",
-		ucl_object_toint (ucl_object_find_key (obj, "learned")));
+		ucl_object_toint (ucl_object_lookup (obj, "learned")));
 	rspamd_printf_gstring (out_str, "Connections count: %L\n",
-		ucl_object_toint (ucl_object_find_key (obj, "connections")));
+		ucl_object_toint (ucl_object_lookup (obj, "connections")));
 	rspamd_printf_gstring (out_str, "Control connections count: %L\n",
-		ucl_object_toint (ucl_object_find_key (obj, "control_connections")));
+		ucl_object_toint (ucl_object_lookup (obj, "control_connections")));
 	/* Pools */
 	rspamd_printf_gstring (out_str, "Pools allocated: %L\n",
-		ucl_object_toint (ucl_object_find_key (obj, "pools_allocated")));
+		ucl_object_toint (ucl_object_lookup (obj, "pools_allocated")));
 	rspamd_printf_gstring (out_str, "Pools freed: %L\n",
-		ucl_object_toint (ucl_object_find_key (obj, "pools_freed")));
+		ucl_object_toint (ucl_object_lookup (obj, "pools_freed")));
 	rspamd_printf_gstring (out_str, "Bytes allocated: %HL\n",
-		ucl_object_toint (ucl_object_find_key (obj, "bytes_allocated")));
+		ucl_object_toint (ucl_object_lookup (obj, "bytes_allocated")));
 	rspamd_printf_gstring (out_str, "Memory chunks allocated: %L\n",
-		ucl_object_toint (ucl_object_find_key (obj, "chunks_allocated")));
+		ucl_object_toint (ucl_object_lookup (obj, "chunks_allocated")));
 	rspamd_printf_gstring (out_str, "Shared chunks allocated: %L\n",
-		ucl_object_toint (ucl_object_find_key (obj, "shared_chunks_allocated")));
+		ucl_object_toint (ucl_object_lookup (obj, "shared_chunks_allocated")));
 	rspamd_printf_gstring (out_str, "Chunks freed: %L\n",
-		ucl_object_toint (ucl_object_find_key (obj, "chunks_freed")));
+		ucl_object_toint (ucl_object_lookup (obj, "chunks_freed")));
 	rspamd_printf_gstring (out_str, "Oversized chunks: %L\n",
-		ucl_object_toint (ucl_object_find_key (obj, "chunks_oversized")));
+		ucl_object_toint (ucl_object_lookup (obj, "chunks_oversized")));
 	/* Fuzzy */
 	rspamd_printf_gstring (out_str, "Fuzzy hashes stored: %L\n",
-		ucl_object_toint (ucl_object_find_key (obj, "fuzzy_stored")));
+		ucl_object_toint (ucl_object_lookup (obj, "fuzzy_stored")));
 	rspamd_printf_gstring (out_str, "Fuzzy hashes expired: %L\n",
-		ucl_object_toint (ucl_object_find_key (obj, "fuzzy_expired")));
+		ucl_object_toint (ucl_object_lookup (obj, "fuzzy_expired")));
 
-	st = ucl_object_find_key (obj, "fuzzy_checked");
+	st = ucl_object_lookup (obj, "fuzzy_checked");
 	if (st != NULL && ucl_object_type (st) == UCL_ARRAY) {
 		rspamd_printf_gstring (out_str, "Fuzzy hashes checked: ");
 		iter = NULL;
 
-		while ((cur = ucl_iterate_object (st, &iter, true)) != NULL) {
+		while ((cur = ucl_object_iterate (st, &iter, true)) != NULL) {
 			rspamd_printf_gstring (out_str, "%hL ", ucl_object_toint (cur));
 		}
 
 		rspamd_printf_gstring (out_str, "\n");
 	}
 
-	st = ucl_object_find_key (obj, "fuzzy_found");
+	st = ucl_object_lookup (obj, "fuzzy_found");
 	if (st != NULL && ucl_object_type (st) == UCL_ARRAY) {
 		rspamd_printf_gstring (out_str, "Fuzzy hashes found: ");
 		iter = NULL;
 
-		while ((cur = ucl_iterate_object (st, &iter, true)) != NULL) {
+		while ((cur = ucl_object_iterate (st, &iter, true)) != NULL) {
 			rspamd_printf_gstring (out_str, "%hL ", ucl_object_toint (cur));
 		}
 
 		rspamd_printf_gstring (out_str, "\n");
 	}
 
-	st = ucl_object_find_key (obj, "statfiles");
+	st = ucl_object_lookup (obj, "statfiles");
 	if (st != NULL && ucl_object_type (st) == UCL_ARRAY) {
 		iter = NULL;
 
-		while ((cur = ucl_iterate_object (st, &iter, true)) != NULL) {
+		while ((cur = ucl_object_iterate (st, &iter, true)) != NULL) {
 			rspamc_stat_statfile (cur, out_str);
 		}
 	}
 	rspamd_printf_gstring (out_str, "Total learns: %L\n",
-			ucl_object_toint (ucl_object_find_key (obj, "total_learns")));
+			ucl_object_toint (ucl_object_lookup (obj, "total_learns")));
 
 	rspamd_fprintf (out, "%v", out_str);
 }
@@ -997,21 +997,21 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 	added_headers = g_string_sized_new (127);
 
 	if (result) {
-		metric = ucl_object_find_key (result, "default");
+		metric = ucl_object_lookup (result, "default");
 
 		if (metric != NULL) {
-			res = ucl_object_find_key (metric, "action");
+			res = ucl_object_lookup (metric, "action");
 
 			if (res) {
 				action = ucl_object_tostring (res);
 			}
 
-			res = ucl_object_find_key (metric, "score");
+			res = ucl_object_lookup (metric, "score");
 			if (res) {
 				score = ucl_object_todouble (res);
 			}
 
-			res = ucl_object_find_key (metric, "required_score");
+			res = ucl_object_lookup (metric, "required_score");
 			if (res) {
 				required_score = ucl_object_todouble (res);
 			}
@@ -1050,7 +1050,7 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 		/* Short description of all symbols */
 		symbuf = g_string_sized_new (64);
 
-		while ((cur = ucl_iterate_object (metric, &it, true)) != NULL) {
+		while ((cur = ucl_object_iterate (metric, &it, true)) != NULL) {
 
 			if (ucl_object_type (cur) == UCL_OBJECT) {
 				rspamd_printf_gstring (symbuf, "%s,", ucl_object_key (cur));

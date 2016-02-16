@@ -1144,7 +1144,7 @@ rspamd_ucl_fin_cb (rspamd_mempool_t * pool, struct map_cb_data *data)
 			ucl_parser_free (parser);
 			it = NULL;
 
-			while ((cur = ucl_iterate_object (obj, &it, true))) {
+			while ((cur = ucl_object_iterate (obj, &it, true))) {
 				ucl_object_replace_key (cbdata->cfg->rcl_obj, (ucl_object_t *)cur,
 						cur->key, cur->keylen, false);
 			}
@@ -1427,7 +1427,7 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 		}
 	}
 
-	conf = ucl_object_find_key (cfg->rcl_obj, module_name);
+	conf = ucl_object_lookup (cfg->rcl_obj, module_name);
 
 	if (conf == NULL) {
 		msg_info_config ("%s module %s is enabled but has not been configured",
@@ -1439,7 +1439,7 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 		}
 	}
 	else {
-		enabled = ucl_object_find_key (conf, "enabled");
+		enabled = ucl_object_lookup (conf, "enabled");
 
 		if (enabled && ucl_object_type (enabled) == UCL_BOOLEAN) {
 			if (!ucl_object_toboolean (enabled)) {

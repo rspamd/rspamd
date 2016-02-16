@@ -40,13 +40,13 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 	struct metric_action *cur_action;
 	struct rspamd_symbol_def *s;
 
-	while ((cur_elt = ucl_iterate_object (top, &it, true))) {
+	while ((cur_elt = ucl_object_iterate (top, &it, true))) {
 		if (ucl_object_type (cur_elt) != UCL_OBJECT) {
 			msg_err ("loaded json array element is not an object");
 			continue;
 		}
 
-		cur_nm = ucl_object_find_key (cur_elt, "metric");
+		cur_nm = ucl_object_lookup (cur_elt, "metric");
 		if (!cur_nm || ucl_object_type (cur_nm) != UCL_STRING) {
 			msg_err (
 					"loaded json metric object element has no 'metric' attribute");
@@ -59,18 +59,18 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 			continue;
 		}
 
-		cur_nm = ucl_object_find_key (cur_elt, "symbols");
+		cur_nm = ucl_object_lookup (cur_elt, "symbols");
 		/* Parse symbols */
 		if (cur_nm && ucl_object_type (cur_nm) == UCL_ARRAY) {
 			ucl_object_iter_t nit = NULL;
 
-			while ((it_val = ucl_iterate_object (cur_nm, &nit, true))) {
-				if (ucl_object_find_key (it_val, "name") &&
-						ucl_object_find_key (it_val, "value")) {
+			while ((it_val = ucl_object_iterate (cur_nm, &nit, true))) {
+				if (ucl_object_lookup (it_val, "name") &&
+						ucl_object_lookup (it_val, "value")) {
 					const ucl_object_t *n =
-							ucl_object_find_key (it_val, "name");
+							ucl_object_lookup (it_val, "name");
 					const ucl_object_t *v =
-							ucl_object_find_key (it_val, "value");
+							ucl_object_lookup (it_val, "value");
 
 					if((s = g_hash_table_lookup (real_metric->symbols,
 							ucl_object_tostring (n))) != NULL) {
@@ -90,25 +90,25 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 			ucl_object_insert_key ((ucl_object_t *)cur_elt, arr, "symbols",
 					sizeof ("symbols") - 1, false);
 		}
-		cur_nm = ucl_object_find_key (cur_elt, "actions");
+		cur_nm = ucl_object_lookup (cur_elt, "actions");
 		/* Parse actions */
 		if (cur_nm && ucl_object_type (cur_nm) == UCL_ARRAY) {
 			ucl_object_iter_t nit = NULL;
 
-			while ((it_val = ucl_iterate_object (cur_nm, &nit, true))) {
-				if (ucl_object_find_key (it_val, "name") &&
-						ucl_object_find_key (it_val, "value")) {
+			while ((it_val = ucl_object_iterate (cur_nm, &nit, true))) {
+				if (ucl_object_lookup (it_val, "name") &&
+						ucl_object_lookup (it_val, "value")) {
 					if (!rspamd_action_from_str (ucl_object_tostring (
-							ucl_object_find_key (it_val, "name")), &test_act)) {
+							ucl_object_lookup (it_val, "name")), &test_act)) {
 						msg_err ("unknown action: %s",
-								ucl_object_tostring (ucl_object_find_key (it_val,
+								ucl_object_tostring (ucl_object_lookup (it_val,
 										"name")));
 						continue;
 					}
 					cur_action = &real_metric->actions[test_act];
 					cur_action->action = test_act;
 					cur_action->score =
-							ucl_object_todouble (ucl_object_find_key (it_val,
+							ucl_object_todouble (ucl_object_lookup (it_val,
 									"value"));
 				}
 				else {
@@ -340,12 +340,12 @@ dynamic_metric_find_elt (const ucl_object_t *arr, const gchar *name)
 	ucl_object_iter_t it = NULL;
 	const ucl_object_t *cur, *n;
 
-	while ((cur = ucl_iterate_object (arr, &it, true)) != NULL) {
+	while ((cur = ucl_object_iterate (arr, &it, true)) != NULL) {
 		if (cur->type == UCL_OBJECT) {
-			n = ucl_object_find_key (cur, "name");
+			n = ucl_object_lookup (cur, "name");
 			if (n && n->type == UCL_STRING &&
 				strcmp (name, ucl_object_tostring (n)) == 0) {
-				return (ucl_object_t *)ucl_object_find_key (cur, "value");
+				return (ucl_object_t *)ucl_object_lookup (cur, "value");
 			}
 		}
 	}
@@ -359,9 +359,9 @@ dynamic_metric_find_metric (const ucl_object_t *arr, const gchar *metric)
 	ucl_object_iter_t it = NULL;
 	const ucl_object_t *cur, *n;
 
-	while ((cur = ucl_iterate_object (arr, &it, true)) != NULL) {
+	while ((cur = ucl_object_iterate (arr, &it, true)) != NULL) {
 		if (cur->type == UCL_OBJECT) {
-			n = ucl_object_find_key (cur, "metric");
+			n = ucl_object_lookup (cur, "metric");
 			if (n && n->type == UCL_STRING &&
 				strcmp (metric, ucl_object_tostring (n)) == 0) {
 				return (ucl_object_t *)cur;
@@ -415,7 +415,7 @@ add_dynamic_symbol (struct rspamd_config *cfg,
 		metric = new_dynamic_metric (metric_name, cfg->current_dynamic_conf);
 	}
 
-	syms = (ucl_object_t *)ucl_object_find_key (metric, "symbols");
+	syms = (ucl_object_t *)ucl_object_lookup (metric, "symbols");
 	if (syms != NULL) {
 		ucl_object_t *sym;
 
@@ -462,7 +462,7 @@ add_dynamic_action (struct rspamd_config *cfg,
 		metric = new_dynamic_metric (metric_name, cfg->current_dynamic_conf);
 	}
 
-	acts = (ucl_object_t *)ucl_object_find_key (metric, "actions");
+	acts = (ucl_object_t *)ucl_object_lookup (metric, "actions");
 	if (acts != NULL) {
 		ucl_object_t *act;
 

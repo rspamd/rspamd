@@ -101,11 +101,11 @@ insert_metric_result (struct rspamd_task *task,
 	}
 
 	if (task->settings) {
-		mobj = ucl_object_find_key (task->settings, metric->name);
+		mobj = ucl_object_lookup (task->settings, metric->name);
 		if (mobj) {
 			gdouble corr;
 
-			sobj = ucl_object_find_key (mobj, symbol);
+			sobj = ucl_object_lookup (mobj, symbol);
 			if (sobj != NULL && ucl_object_todouble_safe (sobj, &corr)) {
 				msg_debug ("settings: changed weight of symbol %s from %.2f to %.2f",
 						symbol, w, corr);
@@ -349,10 +349,10 @@ get_specific_action_score (struct rspamd_task *task,
 	double score;
 
 	if (metric) {
-		act = ucl_object_find_key (metric, "actions");
+		act = ucl_object_lookup (metric, "actions");
 		if (act) {
 			act_name = rspamd_action_to_str (action->action);
-			sact = ucl_object_find_key (act, act_name);
+			sact = ucl_object_lookup (act, act_name);
 			if (sact != NULL && ucl_object_todouble_safe (sact, &score)) {
 				msg_debug_task ("found override score %.2f for action %s in settings",
 						score, act_name);
@@ -374,7 +374,7 @@ rspamd_check_action_metric (struct rspamd_task *task,
 	int i;
 
 	if (task->settings) {
-		ms = ucl_object_find_key (task->settings, metric->name);
+		ms = ucl_object_lookup (task->settings, metric->name);
 	}
 
 	for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {

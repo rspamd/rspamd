@@ -1592,7 +1592,7 @@ rspamd_controller_handle_saveactions (
 	}
 
 	for (i = 0; i < 3; i++) {
-		cur = ucl_iterate_object (obj, &it, TRUE);
+		cur = ucl_object_iterate (obj, &it, TRUE);
 		if (cur == NULL) {
 			break;
 		}
@@ -1705,15 +1705,15 @@ rspamd_controller_handle_savesymbols (
 		return 0;
 	}
 
-	while ((cur = ucl_iterate_object (obj, &iter, true))) {
+	while ((cur = ucl_object_iterate (obj, &iter, true))) {
 		if (cur->type != UCL_OBJECT) {
 			msg_err_session ("json array data error");
 			rspamd_controller_send_error (conn_ent, 400, "Cannot parse input");
 			ucl_object_unref (obj);
 			return 0;
 		}
-		jname = ucl_object_find_key (cur, "name");
-		jvalue = ucl_object_find_key (cur, "value");
+		jname = ucl_object_lookup (cur, "name");
+		jvalue = ucl_object_lookup (cur, "value");
 		val = ucl_object_todouble (jvalue);
 		sym =
 			g_hash_table_lookup (metric->symbols, ucl_object_tostring (jname));
@@ -2257,23 +2257,23 @@ rspamd_controller_load_saved_stats (struct rspamd_controller_worker_ctx *ctx)
 	stat = ctx->srv->stat;
 	memcpy (&stat_copy, stat, sizeof (stat_copy));
 
-	elt = ucl_object_find_key (obj, "scanned");
+	elt = ucl_object_lookup (obj, "scanned");
 
 	if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
 		stat_copy.messages_scanned = ucl_object_toint (elt);
 	}
 
-	elt = ucl_object_find_key (obj, "learned");
+	elt = ucl_object_lookup (obj, "learned");
 
 	if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
 		stat_copy.messages_learned = ucl_object_toint (elt);
 	}
 
-	elt = ucl_object_find_key (obj, "actions");
+	elt = ucl_object_lookup (obj, "actions");
 
 	if (elt != NULL) {
 		for (i = METRIC_ACTION_REJECT; i <= METRIC_ACTION_NOACTION; i++) {
-			subelt = ucl_object_find_key (elt, rspamd_action_to_str (i));
+			subelt = ucl_object_lookup (elt, rspamd_action_to_str (i));
 
 			if (subelt && ucl_object_type (subelt) == UCL_INT) {
 				stat_copy.actions_stat[i] = ucl_object_toint (subelt);
@@ -2281,13 +2281,13 @@ rspamd_controller_load_saved_stats (struct rspamd_controller_worker_ctx *ctx)
 		}
 	}
 
-	elt = ucl_object_find_key (obj, "connections_count");
+	elt = ucl_object_lookup (obj, "connections_count");
 
 	if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
 		stat_copy.connections_count = ucl_object_toint (elt);
 	}
 
-	elt = ucl_object_find_key (obj, "control_connections_count");
+	elt = ucl_object_lookup (obj, "control_connections_count");
 
 	if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
 		stat_copy.control_connections_count = ucl_object_toint (elt);

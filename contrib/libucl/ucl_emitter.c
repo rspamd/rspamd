@@ -268,7 +268,7 @@ ucl_emitter_common_start_array (struct ucl_emitter_context *ctx,
 
 	if (obj->type == UCL_ARRAY) {
 		/* explicit array */
-		while ((cur = ucl_iterate_object (obj, &iter, true)) != NULL) {
+		while ((cur = ucl_object_iterate (obj, &iter, true)) != NULL) {
 			ucl_emitter_common_elt (ctx, cur, first, false, compact);
 			first = false;
 		}
@@ -381,7 +381,7 @@ ucl_emitter_common_elt (struct ucl_emitter_context *ctx,
 	ucl_add_tabs (func, ctx->indent, compact);
 
 	if (ctx->comments && ctx->id == UCL_EMIT_CONFIG) {
-		comment = ucl_object_find_keyl (ctx->comments, (const char *)&obj,
+		comment = ucl_object_lookup_len (ctx->comments, (const char *)&obj,
 				sizeof (void *));
 
 		if (comment) {
@@ -551,7 +551,7 @@ ucl_emit_msgpack_elt (struct ucl_emitter_context *ctx,
 		ucl_emit_msgpack_start_obj (ctx, obj, print_key);
 		it = NULL;
 
-		while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
+		while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
 			LL_FOREACH (cur, celt) {
 				ucl_emit_msgpack_elt (ctx, celt, false, true);
 				/* XXX:
@@ -570,7 +570,7 @@ ucl_emit_msgpack_elt (struct ucl_emitter_context *ctx,
 		ucl_emit_msgpack_start_array (ctx, obj, print_key);
 		it = NULL;
 
-		while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
+		while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
 			ucl_emit_msgpack_elt (ctx, cur, false, false);
 		}
 

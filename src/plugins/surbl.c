@@ -671,7 +671,7 @@ surbl_module_config (struct rspamd_config *cfg)
 			if (cur != NULL && cur->type == UCL_OBJECT) {
 				it = NULL;
 				while ((cur_bit =
-					ucl_iterate_object (cur, &it, true)) != NULL) {
+					ucl_object_iterate (cur, &it, true)) != NULL) {
 					if (ucl_object_key (cur_bit) != NULL && cur_bit->type ==
 						UCL_INT) {
 						gchar *p;
@@ -708,7 +708,7 @@ surbl_module_config (struct rspamd_config *cfg)
 						new_suffix->ips);
 
 				while ((cur_bit =
-						ucl_iterate_object (cur, &it, true)) != NULL) {
+						ucl_object_iterate (cur, &it, true)) != NULL) {
 					if (ucl_object_key (cur_bit) != NULL) {
 						gchar *p;
 

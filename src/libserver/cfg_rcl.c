@@ -92,11 +92,11 @@ rspamd_rcl_logging_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	const gchar *facility, *log_type, *log_level;
 	struct rspamd_config *cfg = ud;
 
-	val = ucl_object_find_key (obj, "type");
+	val = ucl_object_lookup (obj, "type");
 	if (val != NULL && ucl_object_tostring_safe (val, &log_type)) {
 		if (g_ascii_strcasecmp (log_type, "file") == 0) {
 			/* Need to get filename */
-			val = ucl_object_find_key (obj, "filename");
+			val = ucl_object_lookup (obj, "filename");
 			if (val == NULL || val->type != UCL_STRING) {
 				g_set_error (err,
 					CFG_RCL_ERROR,
@@ -113,7 +113,7 @@ rspamd_rcl_logging_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 #ifdef HAVE_SYSLOG_H
 			cfg->log_facility = LOG_DAEMON;
 			cfg->log_type = RSPAMD_LOG_SYSLOG;
-			val = ucl_object_find_key (obj, "facility");
+			val = ucl_object_lookup (obj, "facility");
 			if (val != NULL && ucl_object_tostring_safe (val, &facility)) {
 				if (g_ascii_strcasecmp (facility, "LOG_AUTH") == 0 ||
 					g_ascii_strcasecmp (facility, "auth") == 0 ) {
@@ -198,7 +198,7 @@ rspamd_rcl_logging_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	}
 
 	/* Handle log level */
-	val = ucl_object_find_key (obj, "level");
+	val = ucl_object_lookup (obj, "level");
 	if (val != NULL && ucl_object_tostring_safe (val, &log_level)) {
 		if (g_ascii_strcasecmp (log_level, "error") == 0) {
 			cfg->log_level = G_LOG_LEVEL_ERROR | G_LOG_LEVEL_CRITICAL;
@@ -237,7 +237,7 @@ rspamd_rcl_options_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 	HASH_FIND_STR (section->subsections, "dns", dns_section);
 
-	dns = ucl_object_find_key (obj, "dns");
+	dns = ucl_object_lookup (obj, "dns");
 	if (dns_section != NULL && dns != NULL) {
 		if (!rspamd_rcl_section_parse_defaults (dns_section, cfg->cfg_pool, dns,
 				cfg, err)) {
@@ -247,7 +247,7 @@ rspamd_rcl_options_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 	HASH_FIND_STR (section->subsections, "upstream", upstream_section);
 
-	upstream = ucl_object_find_key (obj, "upstream");
+	upstream = ucl_object_lookup (obj, "upstream");
 	if (upstream_section != NULL && upstream != NULL) {
 		if (!rspamd_rcl_section_parse_defaults (upstream_section, cfg->cfg_pool,
 			upstream, cfg, err)) {
@@ -294,7 +294,7 @@ rspamd_rcl_group_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	sd->gr = gr;
 
 	/* Handle symbols */
-	val = ucl_object_find_key (obj, "symbol");
+	val = ucl_object_lookup (obj, "symbol");
 	if (val != NULL && ucl_object_type (val) == UCL_OBJECT) {
 		HASH_FIND_STR (section->subsections, "symbol", subsection);
 		g_assert (subsection != NULL);
@@ -358,13 +358,13 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		msg_warn_config ("redefining symbol '%s' in metric '%s'", key, metric->name);
 	}
 
-	if ((elt = ucl_object_find_key (obj, "one_shot")) != NULL) {
+	if ((elt = ucl_object_lookup (obj, "one_shot")) != NULL) {
 		if (ucl_object_toboolean (elt)) {
 			sym_def->flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
 		}
 	}
 
-	if ((elt = ucl_object_find_key (obj, "ignore")) != NULL) {
+	if ((elt = ucl_object_lookup (obj, "ignore")) != NULL) {
 		if (ucl_object_toboolean (elt)) {
 			sym_def->flags |= RSPAMD_SYMBOL_FLAG_IGNORE;
 		}
@@ -375,7 +375,7 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		return FALSE;
 	}
 
-	if (ucl_object_find_any_key (obj, "score", "weight", NULL) != NULL) {
+	if (ucl_object_lookup_any (obj, "score", "weight", NULL) != NULL) {
 		*sym_def->weight_ptr = sym_def->score;
 	}
 
@@ -394,7 +394,7 @@ rspamd_rcl_actions_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	const ucl_object_t *cur;
 	ucl_object_iter_t it = NULL;
 
-	while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
+	while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
 		if (!rspamd_action_from_str (ucl_object_key (cur), &action_value) ||
 				!ucl_object_todouble_safe (cur, &action_score)) {
 			g_set_error (err,
@@ -444,7 +444,7 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	}
 
 	/* Handle actions */
-	val = ucl_object_find_key (obj, "actions");
+	val = ucl_object_lookup (obj, "actions");
 	if (val != NULL) {
 		if (val->type != UCL_OBJECT) {
 			g_set_error (err, CFG_RCL_ERROR, EINVAL,
@@ -463,7 +463,7 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	/* No more legacy mode */
 
 	/* Handle grouped symbols */
-	val = ucl_object_find_key (obj, "group");
+	val = ucl_object_lookup (obj, "group");
 	if (val != NULL && ucl_object_type (val) == UCL_OBJECT) {
 		HASH_FIND_STR (section->subsections, "group", subsection);
 		g_assert (subsection != NULL);
@@ -480,7 +480,7 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	}
 
 	/* Handle symbols */
-	val = ucl_object_find_key (obj, "symbol");
+	val = ucl_object_lookup (obj, "symbol");
 	if (val != NULL && ucl_object_type (val) == UCL_OBJECT) {
 		HASH_FIND_STR (section->subsections, "symbol", subsection);
 		g_assert (subsection != NULL);
@@ -497,12 +497,12 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	}
 
 	/* Handle ignored symbols */
-	val = ucl_object_find_key (obj, "ignore");
+	val = ucl_object_lookup (obj, "ignore");
 	if (val != NULL && ucl_object_type (val) == UCL_ARRAY) {
 		LL_FOREACH (val, cur) {
 			it = NULL;
 
-			while ((elt = ucl_iterate_object (cur, &it, true)) != NULL) {
+			while ((elt = ucl_object_iterate (cur, &it, true)) != NULL) {
 				if (ucl_object_type (elt) == UCL_STRING) {
 					sym_def = g_hash_table_lookup (metric->symbols,
 							ucl_object_tostring (elt));
@@ -543,7 +543,7 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	g_assert (key != NULL);
 	worker_type = key;
 
-	val = ucl_object_find_any_key (obj, "module", "load", NULL);
+	val = ucl_object_lookup_any (obj, "module", "load", NULL);
 
 	if (val != NULL && ucl_object_tostring_safe (val, &lib_path)) {
 
@@ -608,7 +608,7 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		return TRUE;
 	}
 
-	val = ucl_object_find_any_key (obj, "bind_socket", "listen", "bind", NULL);
+	val = ucl_object_lookup_any (obj, "bind_socket", "listen", "bind", NULL);
 	/* This name is more logical */
 	if (val != NULL) {
 		it = ucl_object_iterate_new (val);
@@ -641,7 +641,7 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 	if (wparser != NULL && obj->type == UCL_OBJECT) {
 		it = NULL;
-		while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
+		while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
 			srch.name = ucl_object_key (cur);
 			srch.ptr = wrk->ctx; /* XXX: is it valid? */
 			whandler = g_hash_table_lookup (wparser->parsers, &srch);
@@ -952,7 +952,7 @@ rspamd_rcl_modules_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	const gchar *data;
 
 	if (obj->type == UCL_OBJECT) {
-		val = ucl_object_find_key (obj, "path");
+		val = ucl_object_lookup (obj, "path");
 
 		LL_FOREACH (val, cur)
 		{
@@ -1032,7 +1032,7 @@ rspamd_rcl_statfile_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		st->opts = (ucl_object_t *)obj;
 		st->clcf = ccf;
 
-		val = ucl_object_find_key (obj, "spam");
+		val = ucl_object_lookup (obj, "spam");
 		if (val == NULL) {
 			msg_info_config (
 				"statfile %s has no explicit 'spam' setting, trying to guess by symbol",
@@ -1100,7 +1100,7 @@ rspamd_rcl_classifier_handler (rspamd_mempool_t *pool,
 			ccf->name = ccf->classifier;
 		}
 
-		while ((val = ucl_iterate_object (obj, &it, true)) != NULL && res) {
+		while ((val = ucl_object_iterate (obj, &it, true)) != NULL && res) {
 			st_key = ucl_object_key (val);
 			if (st_key != NULL) {
 				if (g_ascii_strcasecmp (st_key, "statfile") == 0) {
@@ -1122,13 +1122,13 @@ rspamd_rcl_classifier_handler (rspamd_mempool_t *pool,
 						tkcf->name = ucl_object_tostring (val);
 					}
 					else if (ucl_object_type (val) == UCL_OBJECT) {
-						cur = ucl_object_find_key (val, "name");
+						cur = ucl_object_lookup (val, "name");
 						if (cur != NULL) {
 							tkcf->name = ucl_object_tostring (cur);
 							tkcf->opts = val;
 						}
 						else {
-							cur = ucl_object_find_key (val, "type");
+							cur = ucl_object_lookup (val, "type");
 							if (cur != NULL) {
 								tkcf->name = ucl_object_tostring (cur);
 								tkcf->opts = val;
@@ -1183,7 +1183,7 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 		new = FALSE;
 	}
 
-	val = ucl_object_find_key (obj, "expression");
+	val = ucl_object_lookup (obj, "expression");
 	if (val == NULL || !ucl_object_tostring_safe (val, &composite_expression)) {
 		g_set_error (err,
 			CFG_RCL_ERROR,
@@ -1219,11 +1219,11 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 			NULL, NULL, SYMBOL_TYPE_COMPOSITE, -1);
 	}
 
-	val = ucl_object_find_key (obj, "score");
+	val = ucl_object_lookup (obj, "score");
 	if (val != NULL && ucl_object_todouble_safe (val, &score)) {
 		/* Also set score in the metric */
 
-		val = ucl_object_find_key (obj, "group");
+		val = ucl_object_lookup (obj, "group");
 		if (val != NULL) {
 			group = ucl_object_tostring (val);
 		}
@@ -1231,7 +1231,7 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 			group = "composite";
 		}
 
-		val = ucl_object_find_key (obj, "metric");
+		val = ucl_object_lookup (obj, "metric");
 		if (val != NULL) {
 			metric = ucl_object_tostring (val);
 		}
@@ -1239,7 +1239,7 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 			metric = DEFAULT_METRIC;
 		}
 
-		val = ucl_object_find_key (obj, "description");
+		val = ucl_object_lookup (obj, "description");
 		if (val != NULL) {
 			description = ucl_object_tostring (val);
 		}
@@ -2057,7 +2057,7 @@ rspamd_rcl_process_section (struct rspamd_rcl_section *sec,
 	it = NULL;
 
 	if (sec->key_attr != NULL) {
-		while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
+		while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
 			if (ucl_object_type (cur) != UCL_OBJECT) {
 				is_nested = FALSE;
 				break;
@@ -2072,7 +2072,7 @@ rspamd_rcl_process_section (struct rspamd_rcl_section *sec,
 		/* Just reiterate on all subobjects */
 		it = NULL;
 
-		while ((cur = ucl_iterate_object (obj, &it, true)) != NULL) {
+		while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
 			if (!sec->handler (pool, cur, ucl_object_key (cur), ptr, sec, err)) {
 				return FALSE;
 			}
@@ -2083,7 +2083,7 @@ rspamd_rcl_process_section (struct rspamd_rcl_section *sec,
 	else {
 		if (sec->key_attr != NULL) {
 			/* First of all search for required attribute and use it as a key */
-			cur = ucl_object_find_key (obj, sec->key_attr);
+			cur = ucl_object_lookup (obj, sec->key_attr);
 
 			if (cur == NULL) {
 				if (sec->default_key == NULL) {
@@ -2156,7 +2156,7 @@ rspamd_rcl_parse (struct rspamd_rcl_section *top,
 			}
 		}
 		else {
-			found = ucl_object_find_key (obj, cur->name);
+			found = ucl_object_lookup (obj, cur->name);
 			if (found == NULL) {
 				if (cur->required) {
 					g_set_error (err, CFG_RCL_ERROR, ENOENT,
@@ -2217,7 +2217,7 @@ rspamd_rcl_section_parse_defaults (struct rspamd_rcl_section *section,
 
 	HASH_ITER (hh, section->default_parser, cur, tmp)
 	{
-		found = ucl_object_find_key (obj, cur->key);
+		found = ucl_object_lookup (obj, cur->key);
 		if (found != NULL) {
 			cur->pd.user_struct = ptr;
 
@@ -2817,7 +2817,7 @@ rspamd_rcl_register_worker_option (struct rspamd_config *cfg,
 
 	g_hash_table_insert (nparser->parsers, &nhandler->key, nhandler);
 
-	doc_workers = ucl_object_find_key (cfg->doc_strings, "workers");
+	doc_workers = ucl_object_lookup (cfg->doc_strings, "workers");
 
 	if (doc_workers == NULL) {
 		doc_obj = ucl_object_typed_new (UCL_OBJECT);
@@ -2825,7 +2825,7 @@ rspamd_rcl_register_worker_option (struct rspamd_config *cfg,
 		doc_workers = doc_obj;
 	}
 
-	doc_target = ucl_object_find_key (doc_workers, g_quark_to_string (type));
+	doc_target = ucl_object_lookup (doc_workers, g_quark_to_string (type));
 
 	if (doc_target == NULL) {
 		doc_obj = ucl_object_typed_new (UCL_OBJECT);
@@ -2952,11 +2952,11 @@ rspamd_rcl_doc_obj_from_handler (ucl_object_t *doc_obj,
 	gboolean has_example = FALSE, has_type = FALSE;
 	const gchar *type = NULL;
 
-	if (ucl_object_find_key (doc_obj, "example") != NULL) {
+	if (ucl_object_lookup (doc_obj, "example") != NULL) {
 		has_example = TRUE;
 	}
 
-	if (ucl_object_find_key (doc_obj, "type") != NULL) {
+	if (ucl_object_lookup (doc_obj, "type") != NULL) {
 		has_type = TRUE;
 	}
 
@@ -3145,7 +3145,7 @@ rspamd_rcl_add_doc_by_path (struct rspamd_config *cfg,
 				required);
 	}
 	else {
-		found = ucl_lookup_path (cfg->doc_strings, doc_path);
+		found = ucl_object_lookup_path (cfg->doc_strings, doc_path);
 
 		if (found != NULL) {
 			return rspamd_rcl_add_doc_obj ((ucl_object_t *) found,
@@ -3169,7 +3169,7 @@ rspamd_rcl_add_doc_by_path (struct rspamd_config *cfg,
 				return NULL;
 			}
 
-			found = ucl_object_find_key (cur, *comp);
+			found = ucl_object_lookup (cur, *comp);
 
 			if (found == NULL) {
 				obj = ucl_object_typed_new (UCL_OBJECT);

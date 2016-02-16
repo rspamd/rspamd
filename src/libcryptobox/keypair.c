@@ -644,25 +644,25 @@ rspamd_keypair_from_ucl (const ucl_object_t *obj)
 		return NULL;
 	}
 
-	elt = ucl_object_find_key (obj, "keypair");
+	elt = ucl_object_lookup (obj, "keypair");
 	if (elt != NULL) {
 		obj = elt;
 	}
 
-	pubkey = ucl_object_find_any_key (obj, "pubkey", "public", "public_key",
+	pubkey = ucl_object_lookup_any (obj, "pubkey", "public", "public_key",
 			NULL);
 	if (pubkey == NULL || ucl_object_type (pubkey) != UCL_STRING) {
 		return NULL;
 	}
 
-	privkey = ucl_object_find_any_key (obj, "privkey", "private", "private_key",
+	privkey = ucl_object_lookup_any (obj, "privkey", "private", "private_key",
 			"secret", "secret_key", NULL);
 	if (privkey == NULL || ucl_object_type (privkey) != UCL_STRING) {
 		return NULL;
 	}
 
 	/* Optional fields */
-	elt = ucl_object_find_key (obj, "type");
+	elt = ucl_object_lookup (obj, "type");
 	if (elt && ucl_object_type (elt) == UCL_STRING) {
 		str = ucl_object_tostring (elt);
 
@@ -675,7 +675,7 @@ rspamd_keypair_from_ucl (const ucl_object_t *obj)
 		/* TODO: handle errors */
 	}
 
-	elt = ucl_object_find_key (obj, "algorithm");
+	elt = ucl_object_lookup (obj, "algorithm");
 	if (elt && ucl_object_type (elt) == UCL_STRING) {
 		str = ucl_object_tostring (elt);
 
@@ -688,7 +688,7 @@ rspamd_keypair_from_ucl (const ucl_object_t *obj)
 		/* TODO: handle errors */
 	}
 
-	elt = ucl_object_find_key (obj, "encoding");
+	elt = ucl_object_lookup (obj, "encoding");
 	if (elt && ucl_object_type (elt) == UCL_STRING) {
 		str = ucl_object_tostring (elt);
 

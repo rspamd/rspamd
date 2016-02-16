@@ -170,7 +170,7 @@ parse_flags (struct fuzzy_rule *rule,
 			"string mappings are deprecated and no longer supported, use new style configuration");
 	}
 	else if (val->type == UCL_OBJECT) {
-		elt = ucl_object_find_key (val, "symbol");
+		elt = ucl_object_lookup (val, "symbol");
 		if (elt == NULL || !ucl_object_tostring_safe (elt, &sym)) {
 			sym = ucl_object_key (val);
 		}
@@ -179,11 +179,11 @@ parse_flags (struct fuzzy_rule *rule,
 				rspamd_mempool_alloc (fuzzy_module_ctx->fuzzy_pool,
 					sizeof (struct fuzzy_mapping));
 			map->symbol = sym;
-			elt = ucl_object_find_key (val, "flag");
+			elt = ucl_object_lookup (val, "flag");
 
 			if (elt != NULL) {
 				map->fuzzy_flag = ucl_obj_toint (elt);
-				elt = ucl_object_find_key (val, "max_score");
+				elt = ucl_object_lookup (val, "max_score");
 
 				if (elt != NULL) {
 					map->weight = ucl_obj_todouble (elt);
@@ -361,9 +361,9 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 			fuzzy_module_ctx->fuzzy_pool);
 	rule->learn_condition_cb = -1;
 
-	if ((value = ucl_object_find_key (obj, "mime_types")) != NULL) {
+	if ((value = ucl_object_lookup (obj, "mime_types")) != NULL) {
 		it = NULL;
-		while ((cur = ucl_iterate_object (value, &it, value->type == UCL_ARRAY))
+		while ((cur = ucl_object_iterate (value, &it, value->type == UCL_ARRAY))
 				!= NULL) {
 			rule->mime_types = g_list_concat (rule->mime_types,
 					parse_mime_types (ucl_obj_tostring (cur)));
@@ -375,9 +375,9 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 			(rspamd_mempool_destruct_t)g_list_free, rule->mime_types);
 	}
 
-	if ((value = ucl_object_find_key (obj, "headers")) != NULL) {
+	if ((value = ucl_object_lookup (obj, "headers")) != NULL) {
 		it = NULL;
-		while ((cur = ucl_iterate_object (value, &it, value->type == UCL_ARRAY))
+		while ((cur = ucl_object_iterate (value, &it, value->type == UCL_ARRAY))
 				!= NULL) {
 			rule->fuzzy_headers = g_list_concat (rule->fuzzy_headers,
 					parse_fuzzy_headers (ucl_obj_tostring (cur)));
@@ -394,20 +394,20 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 	}
 
 
-	if ((value = ucl_object_find_key (obj, "max_score")) != NULL) {
+	if ((value = ucl_object_lookup (obj, "max_score")) != NULL) {
 		rule->max_score = ucl_obj_todouble (value);
 	}
-	if ((value = ucl_object_find_key (obj,  "symbol")) != NULL) {
+	if ((value = ucl_object_lookup (obj,  "symbol")) != NULL) {
 		rule->symbol = ucl_obj_tostring (value);
 	}
-	if ((value = ucl_object_find_key (obj, "read_only")) != NULL) {
+	if ((value = ucl_object_lookup (obj, "read_only")) != NULL) {
 		rule->read_only = ucl_obj_toboolean (value);
 	}
-	if ((value = ucl_object_find_key (obj, "skip_unknown")) != NULL) {
+	if ((value = ucl_object_lookup (obj, "skip_unknown")) != NULL) {
 		rule->skip_unknown = ucl_obj_toboolean (value);
 	}
 
-	if ((value = ucl_object_find_key (obj, "servers")) != NULL) {
+	if ((value = ucl_object_lookup (obj, "servers")) != NULL) {
 		rule->servers = rspamd_upstreams_create (cfg->ups_ctx);
 
 		rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
@@ -418,14 +418,14 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 			return -1;
 		}
 	}
-	if ((value = ucl_object_find_key (obj, "fuzzy_map")) != NULL) {
+	if ((value = ucl_object_lookup (obj, "fuzzy_map")) != NULL) {
 		it = NULL;
-		while ((cur = ucl_iterate_object (value, &it, true)) != NULL) {
+		while ((cur = ucl_object_iterate (value, &it, true)) != NULL) {
 			parse_flags (rule, cfg, cur, cb_id);
 		}
 	}
 
-	if ((value = ucl_object_find_key (obj, "encryption_key")) != NULL) {
+	if ((value = ucl_object_lookup (obj, "encryption_key")) != NULL) {
 		/* Create key from user's input */
 		k = ucl_object_tostring (value);
 
@@ -441,7 +441,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 				RSPAMD_CRYPTOBOX_MODE_25519);
 	}
 
-	if ((value = ucl_object_find_key (obj, "learn_condition")) != NULL) {
+	if ((value = ucl_object_lookup (obj, "learn_condition")) != NULL) {
 		lua_script = ucl_object_tostring (value);
 
 		if (lua_script) {
@@ -466,7 +466,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 		}
 	}
 
-	if ((value = ucl_object_find_key (obj, "fuzzy_key")) != NULL) {
+	if ((value = ucl_object_lookup (obj, "fuzzy_key")) != NULL) {
 		/* Create key from user's input */
 		k = ucl_object_tostring (value);
 	}
@@ -481,7 +481,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj, gint cb_id
 	rspamd_cryptobox_hash (rule->hash_key->str, k, strlen (k), NULL, 0);
 	rule->hash_key->len = rspamd_cryptobox_HASHKEYBYTES;
 
-	if ((value = ucl_object_find_key (obj, "fuzzy_shingles_key")) != NULL) {
+	if ((value = ucl_object_lookup (obj, "fuzzy_shingles_key")) != NULL) {
 		k = ucl_object_tostring (value);
 	}
 	if (k == NULL) {

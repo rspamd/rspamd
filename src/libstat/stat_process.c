@@ -702,7 +702,7 @@ rspamd_stat_check_autolearn (struct rspamd_task *task)
 		ret = FALSE;
 
 		if (cl->cfg->opts) {
-			obj = ucl_object_find_key (cl->cfg->opts, "autolearn");
+			obj = ucl_object_lookup (cl->cfg->opts, "autolearn");
 
 			if (ucl_object_type (obj) == UCL_BOOLEAN) {
 				if (ucl_object_toboolean (obj)) {

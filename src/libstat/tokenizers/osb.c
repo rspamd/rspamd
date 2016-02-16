@@ -97,12 +97,12 @@ rspamd_tokenizer_osb_config_from_ucl (rspamd_mempool_t * pool,
 	def = rspamd_tokenizer_osb_default_config ();
 	memcpy (cf, def, sizeof (*cf));
 
-	elt = ucl_object_find_key (obj, "hash");
+	elt = ucl_object_lookup (obj, "hash");
 	if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
 		if (g_ascii_strncasecmp (ucl_object_tostring (elt), "xxh", 3)
 				== 0) {
 			cf->ht = RSPAMD_OSB_HASH_XXHASH;
-			elt = ucl_object_find_key (obj, "seed");
+			elt = ucl_object_lookup (obj, "seed");
 			if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
 				cf->seed = ucl_object_toint (elt);
 			}
@@ -110,7 +110,7 @@ rspamd_tokenizer_osb_config_from_ucl (rspamd_mempool_t * pool,
 		else if (g_ascii_strncasecmp (ucl_object_tostring (elt), "sip", 3)
 				== 0) {
 			cf->ht = RSPAMD_OSB_HASH_SIPHASH;
-			elt = ucl_object_find_key (obj, "key");
+			elt = ucl_object_lookup (obj, "key");
 
 			if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
 				key = rspamd_decode_base32 (ucl_object_tostring (elt),
@@ -131,13 +131,13 @@ rspamd_tokenizer_osb_config_from_ucl (rspamd_mempool_t * pool,
 		}
 	}
 	else {
-		elt = ucl_object_find_key (obj, "compat");
+		elt = ucl_object_lookup (obj, "compat");
 		if (elt != NULL && ucl_object_toboolean (elt)) {
 			cf->ht = RSPAMD_OSB_HASH_COMPAT;
 		}
 	}
 
-	elt = ucl_object_find_key (obj, "window");
+	elt = ucl_object_lookup (obj, "window");
 	if (elt != NULL && ucl_object_type (elt) == UCL_INT) {
 		cf->window_size = ucl_object_toint (elt);
 		if (cf->window_size > DEFAULT_FEATURE_WINDOW_SIZE * 4) {

@@ -643,7 +643,7 @@ rspamd_upstreams_from_ucl (struct upstream_list *ups,
 	ucl_object_iter_t it = NULL;
 
 	if (ucl_object_type (in) == UCL_ARRAY) {
-		while ((cur = ucl_iterate_object (in, &it, true)) != NULL) {
+		while ((cur = ucl_object_iterate (in, &it, true)) != NULL) {
 			if (rspamd_upstreams_from_ucl (ups, cur, def_port, data)) {
 				ret = TRUE;
 			}
