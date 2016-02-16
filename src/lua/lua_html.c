@@ -16,6 +16,7 @@
 #include "lua_common.h"
 #include "message.h"
 #include "html.h"
+#include "html_tags.h"
 #include "images.h"
 
 /***
@@ -103,12 +104,47 @@ static const struct luaL_reg htmllib_m[] = {
 	{NULL, NULL}
 };
 
+/***
+ * @method html_tag:get_type()
+ * Returns string representation of HTML type for a tag
+ * @return {string} type of tag
+ */
+LUA_FUNCTION_DEF (html_tag, get_type);
+/***
+ * @method html_tag:get_extra()
+ * Returns extra data associated with the tag
+ * @return {url|image|nil} extra data associated with the tag
+ */
+LUA_FUNCTION_DEF (html_tag, get_extra);
+/***
+ * @method html_tag:get_parent()
+ * Returns parent node for a specified tag
+ * @return {html_tag} parent object for a specified tag
+ */
+LUA_FUNCTION_DEF (html_tag, get_parent);
+
+static const struct luaL_reg taglib_m[] = {
+	LUA_INTERFACE_DEF (html_tag, get_type),
+	LUA_INTERFACE_DEF (html_tag, get_extra),
+	LUA_INTERFACE_DEF (html_tag, get_parent),
+	{"__tostring", rspamd_lua_class_tostring},
+	{NULL, NULL}
+};
+
 static struct html_content *
 lua_check_html (lua_State * L, gint pos)
 {
 	void *ud = luaL_checkudata (L, pos, "rspamd{html}");
 	luaL_argcheck (L, ud != NULL, pos, "'html' expected");
 	return ud ? *((struct html_content **)ud) : NULL;
+}
+
+static struct html_tag *
+lua_check_html_tag (lua_State * L, gint pos)
+{
+	void *ud = luaL_checkudata (L, pos, "rspamd{html_tag}");
+	luaL_argcheck (L, ud != NULL, pos, "'html_tag' expected");
+	return ud ? *((struct html_tag **)ud) : NULL;
 }
 
 static gint
@@ -170,11 +206,44 @@ lua_html_has_property (lua_State *L)
 	return 1;
 }
 
+static void
+lua_html_push_image (lua_State *L, struct html_image *img)
+{
+	struct html_tag **ptag;
+
+	lua_newtable (L);
+
+	if (img->src) {
+		lua_pushstring (L, "src");
+		lua_pushstring (L, img->src);
+		lua_settable (L, -3);
+	}
+
+	if (img->tag) {
+		lua_pushstring (L, "tag");
+		ptag = lua_newuserdata (L, sizeof (gpointer));
+		*ptag = img->tag;
+		rspamd_lua_setclass (L, "rspamd{html_tag}", -1);
+		lua_settable (L, -3);
+	}
+
+	lua_pushstring (L, "height");
+	lua_pushnumber (L, img->height);
+	lua_settable (L, -3);
+	lua_pushstring (L, "width");
+	lua_pushnumber (L, img->width);
+	lua_settable (L, -3);
+	lua_pushstring (L, "embedded");
+	lua_pushboolean (L, img->flags & RSPAMD_HTML_FLAG_IMAGE_EMBEDDED);
+	lua_settable (L, -3);
+}
+
 static gint
 lua_html_get_images (lua_State *L)
 {
 	struct html_content *hc = lua_check_html (L, 1);
 	struct html_image *img;
+
 	guint i;
 
 	if (hc != NULL) {
@@ -183,25 +252,7 @@ lua_html_get_images (lua_State *L)
 		if (hc->images) {
 			for (i = 0; i < hc->images->len; i ++) {
 				img = g_ptr_array_index (hc->images, i);
-
-				lua_newtable (L);
-
-				if (img->src) {
-					lua_pushstring (L, "src");
-					lua_pushstring (L, img->src);
-					lua_settable (L, -3);
-				}
-
-				lua_pushstring (L, "height");
-				lua_pushnumber (L, img->height);
-				lua_settable (L, -3);
-				lua_pushstring (L, "width");
-				lua_pushnumber (L, img->width);
-				lua_settable (L, -3);
-				lua_pushstring (L, "embedded");
-				lua_pushboolean (L, img->flags & RSPAMD_HTML_FLAG_IMAGE_EMBEDDED);
-				lua_settable (L, -3);
-
+				lua_html_push_image (L, img);
 				lua_rawseti (L, -2, i + 1);
 			}
 		}
@@ -279,9 +330,91 @@ lua_html_get_blocks (lua_State *L)
 	return 1;
 }
 
+static gint
+lua_html_tag_get_type (lua_State *L)
+{
+	struct html_tag *tag = lua_check_html_tag (L, 1);
+	const gchar *tagname;
+
+	if (tag != NULL) {
+		tagname = rspamd_html_tag_by_id (tag->id);
+
+		if (tagname) {
+			lua_pushstring (L, tagname);
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		lua_error (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_html_tag_get_parent (lua_State *L)
+{
+	struct html_tag *tag = lua_check_html_tag (L, 1), **ptag;
+	GNode *node;
+
+	if (tag != NULL) {
+		node = tag->parent;
+
+		if (node && node->data) {
+			ptag = lua_newuserdata (L, sizeof (gpointer));
+			*ptag = node->data;
+			rspamd_lua_setclass (L, "rspamd{html_tag}", -1);
+		}
+	}
+	else {
+		lua_error (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_html_tag_get_extra (lua_State *L)
+{
+	struct html_tag *tag = lua_check_html_tag (L, 1);
+	struct html_image *img;
+	struct rspamd_url **purl;
+
+	if (tag) {
+		if (tag->extra) {
+			if (tag->id == Tag_A || tag->id == Tag_IFRAME) {
+				/* For A that's URL */
+				purl = lua_newuserdata (L, sizeof (gpointer));
+				*purl = tag->extra;
+				rspamd_lua_setclass (L, "rspamd{url}", -1);
+			}
+			else if (tag->id == Tag_IMG) {
+				img = tag->extra;
+				lua_html_push_image (L, img);
+			}
+			else {
+				/* Unknown extra ? */
+				lua_pushnil (L);
+			}
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		lua_error (L);
+	}
+
+	return 1;
+}
+
 void
 luaopen_html (lua_State * L)
 {
 	rspamd_lua_new_class (L, "rspamd{html}", htmllib_m);
+	lua_pop (L, 1);
+	rspamd_lua_new_class (L, "rspamd{html_tag}", taglib_m);
 	lua_pop (L, 1);
 }
