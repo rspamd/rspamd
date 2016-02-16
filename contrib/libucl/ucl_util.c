@@ -2769,14 +2769,16 @@ ucl_array_merge (ucl_object_t *top, ucl_object_t *elt, bool copy)
 	UCL_ARRAY_GET (v1, top);
 	UCL_ARRAY_GET (v2, cp);
 
-	kv_concat (ucl_object_t *, *v1, *v2);
+	if (v1 && v2) {
+		kv_concat (ucl_object_t *, *v1, *v2);
 
-	for (i = v2->n; i < v1->n; i ++) {
-		obj = &kv_A (*v1, i);
-		if (*obj == NULL) {
-			continue;
+		for (i = v2->n; i < v1->n; i ++) {
+			obj = &kv_A (*v1, i);
+			if (*obj == NULL) {
+				continue;
+			}
+			top->len ++;
 		}
-		top->len ++;
 	}
 
 	return true;

@@ -1575,6 +1575,10 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 			}
 
 			obj = ucl_parser_get_container (parser);
+			if (!obj) {
+				return false;
+			}
+
 			str_len = chunk->pos - c - 2;
 			obj->type = UCL_STRING;
 			if ((str_len = ucl_copy_or_store_ptr (parser, c + 1,
