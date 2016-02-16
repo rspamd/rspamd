@@ -1339,6 +1339,7 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag)
 {
 	struct html_tag_component *comp;
 	GList *cur;
+	struct rspamd_url *url;
 
 	cur = tag->params->head;
 
@@ -1346,7 +1347,13 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag)
 		comp = cur->data;
 
 		if (comp->type == RSPAMD_HTML_COMPONENT_HREF && comp->len > 0) {
-			return rspamd_html_process_url (pool, comp->start, comp->len, comp);
+			url = rspamd_html_process_url (pool, comp->start, comp->len, comp);
+
+			if (url && tag->extra == NULL) {
+				tag->extra = url;
+			}
+
+			return url;
 		}
 
 		cur = g_list_next (cur);
@@ -1404,6 +1411,7 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 
 	cur = tag->params->head;
 	img = rspamd_mempool_alloc0 (pool, sizeof (*img));
+	img->tag = tag;
 
 	while (cur) {
 		comp = cur->data;
@@ -1443,6 +1451,7 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 	}
 
 	g_ptr_array_add (hc->images, img);
+	tag->extra = img;
 }
 
 /* Keep sorted by name */
@@ -1645,6 +1654,7 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 	}
 
 	g_ptr_array_add (hc->blocks, bl);
+	tag->extra = bl;
 }
 
 GByteArray*

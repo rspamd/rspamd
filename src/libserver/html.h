@@ -36,8 +36,8 @@ enum html_component_type {
 
 struct html_tag_component {
 	enum html_component_type type;
-	const guchar *start;
 	guint len;
+	const guchar *start;
 };
 
 struct html_image {
@@ -45,6 +45,7 @@ struct html_image {
 	guint width;
 	guint flags;
 	gchar *src;
+	struct html_tag *tag;
 };
 
 struct html_color {
@@ -78,9 +79,10 @@ struct html_block {
 
 struct html_tag {
 	gint id;
+	gint flags;
 	struct html_tag_component name;
 	GQueue *params;
-	gint flags;
+	gpointer extra; /** Additional data associated with tag (e.g. image) */
 };
 
 /* Forwarded declaration */
