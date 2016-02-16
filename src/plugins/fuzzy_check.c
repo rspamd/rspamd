@@ -2045,11 +2045,8 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 					saved, err);
 		}
 
-		if (res > 0) {
+		if (res) {
 			processed = TRUE;
-		}
-		else if (res == -1) {
-			break;
 		}
 
 		cur = g_list_next (cur);

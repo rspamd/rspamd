@@ -444,12 +444,12 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		}
 	}
 
+	result.flag = cmd->flag;
 	if (cmd->cmd == FUZZY_CHECK) {
 		result = rspamd_fuzzy_backend_check (session->ctx->backend, cmd,
 				session->ctx->expire);
 	}
 	else {
-		result.flag = cmd->flag;
 		if (rspamd_fuzzy_check_client (session)) {
 
 			if (session->worker->index == 0 || session->ctx->peer_fd == -1) {
@@ -487,7 +487,6 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 
 reply:
 	result.tag = cmd->tag;
-	result.flag = cmd->flag;
 	memcpy (&session->reply.rep, &result, sizeof (result));
 
 	rspamd_fuzzy_update_stats (session->ctx,
