@@ -31,7 +31,7 @@ struct html_tag_def {
 
 static struct html_tag_def tag_defs[] = {
 	/* W3C defined elements */
-	{Tag_A, "a", (CM_INLINE)},
+	{Tag_A, "a", (0)},
 	{Tag_ABBR, "abbr", (CM_INLINE)},
 	{Tag_ACRONYM, "acronym", (CM_INLINE)},
 	{Tag_ADDRESS, "address", (CM_BLOCK)},
@@ -75,7 +75,7 @@ static struct html_tag_def tag_defs[] = {
 	{Tag_HR, "hr", (CM_BLOCK | CM_EMPTY)},
 	{Tag_HTML, "html", (CM_HTML | CM_OPT | CM_OMITST | CM_UNIQUE)},
 	{Tag_I, "i", (CM_INLINE)},
-	{Tag_IFRAME, "iframe", (CM_INLINE)},
+	{Tag_IFRAME, "iframe", (0)},
 	{Tag_IMG, "img", (CM_INLINE | CM_IMG | CM_EMPTY)},
 	{Tag_INPUT, "input", (CM_INLINE | CM_IMG | CM_EMPTY)},
 	{Tag_INS, "ins", (CM_INLINE | CM_BLOCK | CM_MIXED)},
@@ -567,6 +567,7 @@ rspamd_html_tag_by_id (gint id)
 	struct html_tag tag;
 	struct html_tag_def *found;
 
+	tag.id = id;
 	/* Should work as IDs monotonically increase */
 	found = bsearch (&tag, tag_defs_num, G_N_ELEMENTS (tag_defs_num),
 				sizeof (tag_defs_num[0]), tag_find_id);

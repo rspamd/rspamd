@@ -33,8 +33,14 @@ local function check_html_image(task, min, max)
         local images = hc:get_images()
         if images then
           for _,i in ipairs(images) do
-            if i['embedded'] then
-              return true
+            local tag = i['tag']
+            if tag then
+              local parent = tag:get_parent()
+              if parent then
+                if parent:get_type() == 'a' then
+                  return true
+                end
+              end
             end
           end
         end
@@ -83,8 +89,16 @@ rspamd_config.R_EMPTY_IMAGE = {
 
           if images then -- if there are images
             for _,i in ipairs(images) do -- then iterate over images in the part
-              if i['embedded'] and i['height'] + i['width'] >= 400 then -- if we have a large image
-                return true -- add symbol
+              if i['height'] + i['width'] >= 400 then -- if we have a large image
+                local tag = i['tag']
+                if tag then
+                  local parent = tag:get_parent()
+                  if parent then
+                    if parent:get_type() == 'a' then
+                      return true
+                    end
+                  end
+                end
               end
             end
           end
@@ -112,13 +126,19 @@ rspamd_config.R_SUSPICIOUS_IMAGES = {
 
         if img then
           for _, i in ipairs(img) do
-            if i['embedded'] then
-              local dim = i['width'] + i['height']
+            local dim = i['width'] + i['height']
+            local tag = i['tag']
 
-              -- do not trigger on small and large images
-              if dim > 100 and dim < 3000 then
-                -- We assume that a single picture 100x200 contains approx 3 words of text
-                pic_words = pic_words + dim / 100
+            if tag then
+              local parent = tag:get_parent()
+              if parent then
+                if parent:get_type() == 'a' then
+                  -- do not trigger on small and large images
+                  if dim > 100 and dim < 3000 then
+                    -- We assume that a single picture 100x200 contains approx 3 words of text
+                    pic_words = pic_words + dim / 100
+                  end
+                end
               end
             end
           end
