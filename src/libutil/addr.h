@@ -17,6 +17,7 @@
 #define ADDR_H_
 
 #include "config.h"
+#include "rdns.h"
 
 #ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
@@ -58,6 +59,14 @@ rspamd_inet_addr_t * rspamd_inet_address_new (int af, const void *init);
  */
 rspamd_inet_addr_t * rspamd_inet_address_from_sa (const struct sockaddr *sa,
 		socklen_t slen);
+
+/**
+ * Create new inet address from rdns reply
+ * @param rep reply element
+ * @return new ipv4 or ipv6 addr (port is NOT set)
+ */
+rspamd_inet_addr_t * rspamd_inet_address_from_rnds (
+		const struct rdns_reply_entry *rep);
 
 /**
  * Parse string with ipv6 address of length `len` to `target` which should be

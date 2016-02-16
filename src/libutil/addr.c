@@ -1214,6 +1214,27 @@ rspamd_inet_address_from_sa (const struct sockaddr *sa, socklen_t slen)
 	return addr;
 }
 
+rspamd_inet_addr_t *
+rspamd_inet_address_from_rnds (const struct rdns_reply_entry *rep)
+{
+	rspamd_inet_addr_t *addr = NULL;
+
+	g_assert (rep != NULL);
+
+	if (rep->type == RDNS_REQUEST_A) {
+		addr = rspamd_inet_addr_create (AF_INET);
+		memcpy (&addr->u.in.addr.s4.sin_addr, &rep->content.a.addr,
+				sizeof (struct in_addr));
+	}
+	else if (rep->type == RDNS_REQUEST_AAAA) {
+		addr = rspamd_inet_addr_create (AF_INET6);
+		memcpy (&addr->u.in.addr.s6.sin6_addr, &rep->content.aaa.addr,
+						sizeof (struct in6_addr));
+	}
+
+	return addr;
+}
+
 void
 rspamd_inet_address_apply_mask (rspamd_inet_addr_t *addr, guint mask)
 {
