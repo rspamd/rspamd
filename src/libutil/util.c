@@ -1153,12 +1153,6 @@ resolve_stat_filename (rspamd_mempool_t * pool,
 			s += rcptlen;
 			continue;
 		}
-		else if (*c == '%' && *(c + 1) == 'r') {
-			c += 2;
-			memcpy (s, from, fromlen);
-			s += fromlen;
-			continue;
-		}
 		*s++ = *c;
 	}
 

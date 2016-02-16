@@ -476,6 +476,7 @@ rspamd_ast_priority_cmp (GNode *a, GNode *b)
 	struct rspamd_expression_elt *ea = a->data, *eb = b->data;
 	gdouble w1, w2;
 
+
 	/* Special logic for atoms */
 	if (ea->type == ELT_ATOM && eb->type == ELT_ATOM &&
 			ea->priority == eb->priority) {
@@ -495,8 +496,18 @@ rspamd_ast_priority_cmp (GNode *a, GNode *b)
 static gboolean
 rspamd_ast_resort_traverse (GNode *node, gpointer unused)
 {
+	GNode *children, *last;
+
 	if (node->children) {
+
+		children = node->children;
+		last = g_node_last_sibling (children);
+		/* Needed for utlist compatibility */
+		children->prev = last;
 		DL_SORT (node->children, rspamd_ast_priority_cmp);
+		/* Restore GLIB compatibility */
+		children = node->children;
+		children->prev = NULL;
 	}
 
 	return FALSE;

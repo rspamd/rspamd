@@ -85,6 +85,10 @@ lua_cdb_get_name (lua_State *L)
 {
 	struct cdb *cdb = lua_check_cdb (L);
 
+	if (!cdb) {
+		lua_error (L);
+		return 1;
+	}
 	lua_pushstring (L, cdb->filename);
 	return 1;
 }
@@ -98,6 +102,10 @@ lua_cdb_lookup (lua_State *L)
 	gsize vlen;
 	gint64 vpos;
 
+	if (!cdb) {
+		lua_error (L);
+		return 1;
+	}
 	/*
 	 * XXX: this code is placed here because event_loop is called inside workers, so start
 	 * monitoring on first check, not on creation

@@ -727,7 +727,7 @@ rspamd_upstream_get_round_robin (struct upstream_list *ups, gboolean use_cur)
 		}
 	}
 
-	if (use_cur) {
+	if (use_cur && selected) {
 		if (selected->cur_weight > 0) {
 			selected->cur_weight--;
 		}
@@ -735,6 +735,7 @@ rspamd_upstream_get_round_robin (struct upstream_list *ups, gboolean use_cur)
 			selected->cur_weight = selected->weight;
 		}
 	}
+
 	rspamd_mutex_unlock (ups->lock);
 
 	return selected;

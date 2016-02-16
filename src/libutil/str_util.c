@@ -469,13 +469,13 @@ rspamd_encode_base32_buf (const guchar *in, gsize inlen, gchar *out,
 {
 	static const char b32[]="ybndrfg8ejkmcpqxot1uwisza345h769";
 	gchar *o, *end;
-	gsize i, r;
+	gsize i;
 	gint remain = -1, x;
 
 	end = out + outlen;
 	o = out;
 
-	for (i = 0, r = 0; i < inlen && o < end - 1; i++) {
+	for (i = 0; i < inlen && o < end - 1; i++) {
 		switch (i % 5) {
 		case 0:
 			/* 8 bits of input and 3 to remain */

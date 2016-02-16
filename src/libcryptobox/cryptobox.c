@@ -676,7 +676,7 @@ rspamd_cryptobox_encrypt_update (void *enc_ctx, const guchar *in, gsize inlen,
 		EVP_CIPHER_CTX *s = enc_ctx;
 		gint r;
 
-		r = outlen ? *outlen : inlen;
+		r = inlen;
 		g_assert (EVP_EncryptUpdate (s, out, &r, in, inlen) == 1);
 
 		if (outlen) {

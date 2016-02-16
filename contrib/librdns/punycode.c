@@ -33,7 +33,13 @@
  */
 
 #include "dns_private.h"
-
+static const unsigned base = 36;
+static const unsigned t_min = 1;
+static const unsigned t_max = 26;
+static const unsigned skew = 38;
+static const unsigned damp = 700;
+static const unsigned initial_n = 128;
+static const unsigned initial_bias = 72;
 /* Punycode utility */
 static unsigned int
 digit (unsigned n)

@@ -933,6 +933,12 @@ lua_redis_exec (lua_State *L)
 	gint ret;
 	guint i, nret = 0;
 
+	if (ctx == NULL) {
+		lua_error (L);
+
+		return 1;
+	}
+
 	if (ctx->async) {
 		lua_pushstring (L, "Async redis pipelining is not implemented");
 		lua_error (L);

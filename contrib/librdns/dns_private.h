@@ -30,14 +30,6 @@
 #include "upstream.h"
 #include "ref.h"
 
-static const unsigned base = 36;
-static const unsigned t_min = 1;
-static const unsigned t_max = 26;
-static const unsigned skew = 38;
-static const unsigned damp = 700;
-static const unsigned initial_n = 128;
-static const unsigned initial_bias = 72;
-
 static const int dns_port = 53;
 static const int default_io_cnt = 8;
 

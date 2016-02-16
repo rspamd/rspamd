@@ -1518,7 +1518,7 @@ rspamd_dkim_canonize_header_simple (rspamd_dkim_context_t *ctx,
 			if (elt && elt->append_crlf) {
 				rspamd_dkim_signature_update (ctx, elt->begin, elt->len + 1);
 			}
-			else {
+			else if (elt) {
 				rspamd_dkim_signature_update (ctx, elt->begin, elt->len);
 			}
 		}
