@@ -39,132 +39,79 @@ write_http_request (struct http_callback_data *cbd)
 
 	msg = rspamd_http_new_message (HTTP_REQUEST);
 
-	msg->url = rspamd_fstring_new_init (cbd->data->path, strlen (cbd->data->path));
-	if (cbd->data->last_checked != 0) {
-		tm = gmtime (&cbd->data->last_checked);
-		strftime (datebuf, sizeof (datebuf), "%a, %d %b %Y %H:%M:%S %Z", tm);
+	if (cbd->stage == map_load_file) {
+		msg->url = rspamd_fstring_new_init (cbd->data->path, strlen (cbd->data->path));
 
-		rspamd_http_message_add_header (msg, "If-Modified-Since", datebuf);
+		if (cbd->data->last_checked != 0 && cbd->stage == map_load_file) {
+			tm = gmtime (&cbd->data->last_checked);
+			strftime (datebuf, sizeof (datebuf), "%a, %d %b %Y %H:%M:%S %Z", tm);
+
+			rspamd_http_message_add_header (msg, "If-Modified-Since", datebuf);
+		}
+	}
+	else if (cbd->stage == map_load_pubkey) {
+		msg->url = rspamd_fstring_new_init (cbd->data->path, strlen (cbd->data->path));
+		msg->url = rspamd_fstring_append (msg->url, ".pub", 4);
+	}
+	else if (cbd->stage == map_load_signature) {
+		msg->url = rspamd_fstring_new_init (cbd->data->path, strlen (cbd->data->path));
+		msg->url = rspamd_fstring_append (msg->url, ".sig", 4);
 	}
 
 	rspamd_http_connection_write_message (cbd->conn, msg, cbd->data->host,
 		NULL, cbd, cbd->fd, &cbd->tv, cbd->ev_base);
 }
 
-/**
- * Callback for destroying HTTP callback data
- */
-static void
-free_http_cbdata (struct http_callback_data *cbd)
+static gboolean
+rspamd_map_check_sig_pk (const char *fname,
+		struct rspamd_map *map,
+		const guchar *input,
+		gsize inlen,
+		struct rspamd_cryptobox_pubkey *pk)
 {
-	if (cbd->remain_buf) {
-		g_string_free (cbd->remain_buf, TRUE);
+	gchar fpath[PATH_MAX];
+	rspamd_mempool_t *pool = map->pool;
+	guchar *data;
+	GString *b32_key;
+	gsize len = 0;
+
+	/* Now load signature */
+	rspamd_snprintf (fpath, sizeof (fpath), "%s.sig", fname);
+	data = rspamd_file_xmap (fpath, PROT_READ, &len);
+
+	if (data == NULL) {
+		msg_err_pool ("can't open signature %s: %s", fpath, strerror (errno));
+		rspamd_pubkey_unref (pk);
+		return FALSE;
 	}
 
-	rspamd_http_connection_free (cbd->conn);
-	close (cbd->fd);
-	g_slice_free1 (sizeof (struct http_callback_data), cbd);
-}
+	if (len != rspamd_cryptobox_signature_bytes (RSPAMD_CRYPTOBOX_MODE_25519)) {
+		msg_err_pool ("can't open signature %s: invalid signature", fpath);
+		rspamd_pubkey_unref (pk);
+		munmap (data, len);
 
-/*
- * HTTP callbacks
- */
-static void
-http_map_error (struct rspamd_http_connection *conn,
-	GError *err)
-{
-	struct http_callback_data *cbd = conn->ud;
-	rspamd_mempool_t *pool;
-
-	pool = cbd->map->pool;
-
-	msg_err_pool ("connection with http server terminated incorrectly: %s",
-			err->message);
-	free_http_cbdata (cbd);
-}
-
-static int
-http_map_finish (struct rspamd_http_connection *conn,
-		struct rspamd_http_message *msg)
-{
-	struct http_callback_data *cbd = conn->ud;
-	struct rspamd_map *map;
-	rspamd_mempool_t *pool;
-
-	map = cbd->map;
-	pool = cbd->map->pool;
-
-	if (msg->code == 200) {
-		if (cbd->remain_buf != NULL) {
-			/* Append \n to avoid issues */
-			g_string_append_c (cbd->remain_buf, '\n');
-			map->read_callback (map->pool, cbd->remain_buf->str,
-					cbd->remain_buf->len, &cbd->cbdata);
-		}
-
-		map->fin_callback (map->pool, &cbd->cbdata);
-		*map->user_data = cbd->cbdata.cur_data;
-		cbd->data->last_checked = msg->date;
-		msg_info_pool ("read map data from %s", cbd->data->host);
-	}
-	else if (msg->code == 304) {
-		msg_debug_pool ("data is not modified for server %s",
-				cbd->data->host);
-		cbd->data->last_checked = msg->date;
-	}
-	else {
-		msg_info_pool ("cannot load map %s from %s: HTTP error %d",
-				map->uri, cbd->data->host, msg->code);
+		return FALSE;
 	}
 
-	free_http_cbdata (cbd);
+	if (!rspamd_cryptobox_verify (data, input, inlen,
+			rspamd_pubkey_get_pk (pk, NULL), RSPAMD_CRYPTOBOX_MODE_25519)) {
+		msg_err_pool ("can't verify signature %s: incorrect signature", fpath);
+		rspamd_pubkey_unref (pk);
+		munmap (data, len);
 
-	return 0;
-}
-
-static int
-http_map_read (struct rspamd_http_connection *conn,
-	struct rspamd_http_message *msg,
-	const gchar *chunk,
-	gsize len)
-{
-	struct http_callback_data *cbd = conn->ud;
-	gchar *pos;
-	struct rspamd_map *map;
-
-	if (msg->code != 200 || len == 0) {
-		/* Ignore not full replies */
-		return 0;
+		return FALSE;
 	}
 
-	map = cbd->map;
-	if (cbd->remain_buf != NULL) {
-		/* We need to concatenate incoming buf with the remaining buf */
-		g_string_append_len (cbd->remain_buf, chunk, len);
+	b32_key = rspamd_pubkey_print (pk,
+			RSPAMD_KEYPAIR_BASE32|RSPAMD_KEYPAIR_PUBKEY);
+	msg_info_pool ("verified signature in file %s using trusted key %v",
+			fpath, b32_key);
+	g_string_free (b32_key, TRUE);
 
-		pos = map->read_callback (map->pool, cbd->remain_buf->str,
-				cbd->remain_buf->len, &cbd->cbdata);
+	rspamd_pubkey_unref (pk);
+	munmap (data, len);
 
-		/* All read */
-		if (pos == NULL) {
-			g_string_free (cbd->remain_buf, TRUE);
-			cbd->remain_buf = NULL;
-		}
-		else {
-			/* Need to erase data processed */
-			g_string_erase (cbd->remain_buf, 0, pos - cbd->remain_buf->str);
-		}
-	}
-	else {
-		pos = map->read_callback (map->pool, (gchar *)chunk, len, &cbd->cbdata);
-
-		if (pos != NULL) {
-			/* Store data in remain buf */
-			cbd->remain_buf = g_string_new_len (pos, len - (pos - chunk));
-		}
-	}
-
-	return 0;
+	return TRUE;
 }
 
 static gboolean
@@ -219,43 +166,251 @@ rspamd_map_check_file_sig (const char *fname,
 		pk = rspamd_pubkey_ref (map->trusted_pubkey);
 	}
 
-	/* Now load signature */
-	rspamd_snprintf (fpath, sizeof (fpath), "%s.sig", fname);
-	data = rspamd_file_xmap (fpath, PROT_READ, &len);
+	return rspamd_map_check_sig_pk (fname, map, input, inlen, pk);
+}
 
-	if (data == NULL) {
-		msg_err_pool ("can't open signature %s: %s", fpath, strerror (errno));
-		rspamd_pubkey_unref (pk);
-		return FALSE;
+/**
+ * Callback for destroying HTTP callback data
+ */
+static void
+free_http_cbdata (struct http_callback_data *cbd)
+{
+	char fpath[PATH_MAX];
+	struct stat st;
+
+	if (cbd->out_fd != -1) {
+		close (cbd->out_fd);
 	}
 
-	if (len != rspamd_cryptobox_signature_bytes (RSPAMD_CRYPTOBOX_MODE_25519)) {
-		msg_err_pool ("can't open signature %s: invalid signature", fpath);
-		rspamd_pubkey_unref (pk);
-		munmap (data, len);
-
-		return FALSE;
+	rspamd_snprintf (fpath, sizeof (fpath), "%s", cbd->tmpfile);
+	if (stat (fpath, &st) != -1 && S_ISREG (st.st_mode)) {
+		(void)unlink (fpath);
 	}
 
-	if (!rspamd_cryptobox_verify (data, input, inlen,
-			rspamd_pubkey_get_pk (pk, NULL), RSPAMD_CRYPTOBOX_MODE_25519)) {
-		msg_err_pool ("can't verify signature %s: incorrect signature", fpath);
-		rspamd_pubkey_unref (pk);
-		munmap (data, len);
-
-		return FALSE;
+	rspamd_snprintf (fpath, sizeof (fpath), "%s.pub", cbd->tmpfile);
+	if (stat (fpath, &st) != -1 && S_ISREG (st.st_mode)) {
+		(void)unlink (fpath);
 	}
 
-	b32_key = rspamd_pubkey_print (pk,
-					RSPAMD_KEYPAIR_BASE32|RSPAMD_KEYPAIR_PUBKEY);
-	msg_info_pool ("verified signature in file %s using trusted key %v",
-			fpath, b32_key);
-	g_string_free (b32_key, TRUE);
+	rspamd_snprintf (fpath, sizeof (fpath), "%s.sig", cbd->tmpfile);
+	if (stat (fpath, &st) != -1 && S_ISREG (st.st_mode)) {
+		(void)unlink (fpath);
+	}
 
-	rspamd_pubkey_unref (pk);
-	munmap (data, len);
+	if (cbd->pk) {
+		rspamd_pubkey_unref (cbd->pk);
+	}
 
-	return TRUE;
+	rspamd_http_connection_free (cbd->conn);
+	if (cbd->fd != -1) {
+		close (cbd->fd);
+	}
+
+	g_slice_free1 (sizeof (struct http_callback_data), cbd);
+}
+
+/*
+ * HTTP callbacks
+ */
+static void
+http_map_error (struct rspamd_http_connection *conn,
+	GError *err)
+{
+	struct http_callback_data *cbd = conn->ud;
+	rspamd_mempool_t *pool;
+
+	pool = cbd->map->pool;
+
+	msg_err_pool ("connection with http server terminated incorrectly: %s",
+			err->message);
+	free_http_cbdata (cbd);
+}
+
+static int
+http_map_finish (struct rspamd_http_connection *conn,
+		struct rspamd_http_message *msg)
+{
+	struct http_callback_data *cbd = conn->ud;
+	struct rspamd_map *map;
+	rspamd_mempool_t *pool;
+	char fpath[PATH_MAX];
+	guchar *aux_data, *in = NULL;
+	gsize inlen = 0;
+	struct stat st;
+
+	map = cbd->map;
+	pool = cbd->map->pool;
+
+	if (msg->code == 200) {
+
+		if (cbd->stage == map_load_file) {
+			/* Maybe we need to check signature ? */
+			if (map->is_signed) {
+				close (cbd->out_fd);
+
+				if (map->trusted_pubkey) {
+					/* No need to load key */
+					cbd->stage = map_load_signature;
+					cbd->pk = rspamd_pubkey_ref (map->trusted_pubkey);
+					rspamd_snprintf (fpath, sizeof (fpath), "%s.sig");
+				}
+				else {
+					rspamd_snprintf (fpath, sizeof (fpath), "%s.pub");
+					cbd->stage = map_load_pubkey;
+				}
+
+				cbd->out_fd = rspamd_file_xopen (fpath, O_RDWR|O_CREAT, 00644);
+
+				if (cbd->out_fd == -1) {
+					msg_err_pool ("cannot open pubkey file %s for writing: %s",
+							fpath, strerror (errno));
+					free_http_cbdata (cbd);
+
+					return 0;
+				}
+
+				rspamd_http_connection_reset (cbd->conn);
+				write_http_request (cbd);
+
+				return 0;
+			}
+			else {
+				/* Unsinged version - just open file */
+				in = rspamd_file_xmap (cbd->tmpfile, PROT_READ, &inlen);
+
+				if (in == NULL) {
+					msg_err_pool ("cannot read tempfile %s: %s", cbd->tmpfile,
+							strerror (errno));
+					free_http_cbdata (cbd);
+
+					return 0;
+				}
+			}
+		}
+		else if (cbd->stage == map_load_pubkey) {
+			/* We now can load pubkey */
+			(void)lseek (cbd->out_fd, 0, SEEK_SET);
+
+			if (fstat (cbd->out_fd, &st) == -1) {
+				msg_err_pool ("cannot stat pubkey file %s: %s",
+						fpath, strerror (errno));
+				free_http_cbdata (cbd);
+
+				return 0;
+			}
+
+			aux_data = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED,
+					cbd->out_fd, 0);
+			close (cbd->out_fd);
+			cbd->out_fd = -1;
+
+			if (aux_data == MAP_FAILED) {
+				msg_err_pool ("cannot map pubkey file %s: %s",
+						fpath, strerror (errno));
+				free_http_cbdata (cbd);
+
+				return 0;
+			}
+
+			cbd->pk = rspamd_pubkey_from_base32 (aux_data, st.st_size,
+					RSPAMD_KEYPAIR_SIGN, RSPAMD_CRYPTOBOX_MODE_25519);
+			munmap (aux_data, st.st_size);
+
+			if (cbd->pk == NULL) {
+				msg_err_pool ("cannot load pubkey file %s: bad pubkey",
+						fpath);
+				free_http_cbdata (cbd);
+
+				return 0;
+			}
+
+			rspamd_snprintf (fpath, sizeof (fpath), "%s.sig");
+			cbd->out_fd = rspamd_file_xopen (fpath, O_RDWR|O_CREAT, 00644);
+
+			if (cbd->out_fd == -1) {
+				msg_err_pool ("cannot open signature file %s for writing: %s",
+						fpath, strerror (errno));
+				free_http_cbdata (cbd);
+
+				return 0;
+			}
+
+			cbd->stage = map_load_signature;
+			rspamd_http_connection_reset (cbd->conn);
+			write_http_request (cbd);
+
+			return 0;
+		}
+		else if (cbd->stage == map_load_signature) {
+			/* We can now check signature */
+			close (cbd->out_fd);
+			cbd->out_fd = -1;
+
+			in = rspamd_file_xmap (cbd->tmpfile, PROT_READ, &inlen);
+
+			if (in == NULL) {
+				msg_err_pool ("cannot read tempfile %s: %s", cbd->tmpfile,
+						strerror (errno));
+				free_http_cbdata (cbd);
+
+				return 0;
+			}
+
+			if (!rspamd_map_check_sig_pk (cbd->tmpfile, map, in, inlen, cbd->pk)) {
+				free_http_cbdata (cbd);
+
+				return 0;
+			}
+		}
+
+		g_assert (in != NULL);
+
+		map->read_callback (map->pool, in, inlen, &cbd->cbdata);
+		map->fin_callback (map->pool, &cbd->cbdata);
+
+		*map->user_data = cbd->cbdata.cur_data;
+		cbd->data->last_checked = msg->date;
+		msg_info_pool ("read map data from %s", cbd->data->host);
+	}
+	else if (msg->code == 304 && cbd->stage == map_load_file) {
+		msg_debug_pool ("data is not modified for server %s",
+				cbd->data->host);
+		cbd->data->last_checked = msg->date;
+	}
+	else {
+		msg_info_pool ("cannot load map %s from %s: HTTP error %d",
+				map->uri, cbd->data->host, msg->code);
+	}
+
+	free_http_cbdata (cbd);
+
+	return 0;
+}
+
+static int
+http_map_read (struct rspamd_http_connection *conn,
+	struct rspamd_http_message *msg,
+	const gchar *chunk,
+	gsize len)
+{
+	struct http_callback_data *cbd = conn->ud;
+	rspamd_mempool_t *pool;
+
+	if (msg->code != 200 || len == 0) {
+		/* Ignore not full replies */
+		return 0;
+	}
+
+	pool = cbd->map->pool;
+
+	if (write (cbd->out_fd, chunk, len) == -1) {
+		msg_err_pool ("cannot write to %s: %s", cbd->tmpfile, strerror (errno));
+		free_http_cbdata (cbd);
+
+		return -1;
+	}
+
+	return 0;
 }
 
 /**
@@ -441,7 +596,7 @@ http_callback (gint fd, short what, void *ud)
 	cbd->ev_base = map->ev_base;
 	cbd->map = map;
 	cbd->data = data;
-	cbd->remain_buf = NULL;
+	cbd->fd = -1;
 	cbd->cbdata.state = 0;
 	cbd->cbdata.prev_data = *cbd->map->user_data;
 	cbd->cbdata.cur_data = NULL;

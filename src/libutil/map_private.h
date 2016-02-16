@@ -76,7 +76,8 @@ struct http_callback_data {
 	struct rspamd_map *map;
 	struct http_map_data *data;
 	struct map_cb_data cbdata;
-	GString *remain_buf;
+	struct rspamd_cryptobox_pubkey *pk;
+
 	enum {
 		map_resolve_host2 = 0, /* 2 requests sent */
 		map_resolve_host1, /* 1 requests sent */
