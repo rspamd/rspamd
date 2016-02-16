@@ -484,7 +484,6 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 
 reply:
 	result.tag = cmd->tag;
-	result.flag = cmd->flag;
 	memcpy (&session->reply.rep, &result, sizeof (result));
 
 	rspamd_fuzzy_update_stats (session->ctx,
