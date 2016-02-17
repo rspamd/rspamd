@@ -25,6 +25,7 @@
 static gboolean json = FALSE;
 static gboolean compact = FALSE;
 static gboolean show_help = FALSE;
+static gboolean show_comments = FALSE;
 static gchar *config = NULL;
 extern struct rspamd_main *rspamd_main;
 /* Defined in modules.c */
@@ -50,6 +51,8 @@ static GOptionEntry entries[] = {
 				"Config file to test",     NULL},
 		{"show-help", 'h', 0, G_OPTION_ARG_NONE, &show_help,
 				"Show help as comments for each option", NULL },
+		{"show-comments", 's', 0, G_OPTION_ARG_NONE, &show_comments,
+				"Show saved comments from the configuration file", NULL },
 		{NULL,  0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -98,6 +101,12 @@ rspamadm_add_doc_elt (const ucl_object_t *obj, const ucl_object_t *doc_obj,
 	rspamd_fstring_t *comment = rspamd_fstring_new ();
 	const ucl_object_t *elt;
 	ucl_object_t *nobj, *cur_comment;
+
+	if (ucl_object_lookup_len (comment_obj, (const char *)&obj,
+			sizeof (void *))) {
+		/* Do not rewrite the existing comment */
+		return;
+	}
 
 	if (doc_obj != NULL) {
 		/* Create doc comment */
@@ -178,7 +187,8 @@ rspamadm_gen_comments (const ucl_object_t *obj, const ucl_object_t *doc_obj,
 }
 
 static void
-rspamadm_dump_section_obj (const ucl_object_t *obj, const ucl_object_t *doc_obj)
+rspamadm_dump_section_obj (struct rspamd_config *cfg,
+		const ucl_object_t *obj, const ucl_object_t *doc_obj)
 {
 	rspamd_fstring_t *output;
 	ucl_object_t *comments = NULL;
@@ -186,8 +196,17 @@ rspamadm_dump_section_obj (const ucl_object_t *obj, const ucl_object_t *doc_obj)
 	output = rspamd_fstring_new ();
 
 	if (show_help) {
-		comments = ucl_object_typed_new (UCL_OBJECT);
+		if (show_comments) {
+			comments = cfg->config_comments;
+		}
+		else {
+			comments = ucl_object_typed_new (UCL_OBJECT);
+		}
+
 		rspamadm_gen_comments (obj, doc_obj, comments);
+	}
+	else if (show_comments) {
+		comments = cfg->config_comments;
 	}
 
 	if (json) {
@@ -277,7 +296,7 @@ rspamadm_configdump (gint argc, gchar **argv)
 	if (ret) {
 		/* Output configuration */
 		if (argc == 1) {
-			rspamadm_dump_section_obj (cfg->rcl_obj, cfg->doc_strings);
+			rspamadm_dump_section_obj (cfg, cfg->rcl_obj, cfg->doc_strings);
 		}
 		else {
 			for (i = 1; i < argc; i ++) {
@@ -292,7 +311,7 @@ rspamadm_configdump (gint argc, gchar **argv)
 						if (!json && !compact) {
 							rspamd_printf ("*** Section %s ***\n",  argv[i]);
 						}
-						rspamadm_dump_section_obj (cur, doc_obj);
+						rspamadm_dump_section_obj (cfg, cur, doc_obj);
 
 						if (!json && !compact) {
 							rspamd_printf ("*** End of section %s ***\n",  argv[i]);
