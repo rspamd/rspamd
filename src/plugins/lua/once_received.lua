@@ -79,13 +79,15 @@ local function check_quantity_received (task)
       return
     end
 
-    local hn = string.lower(r['real_hostname'])
-    -- Check for good hostname
-    if hn and good_hosts then
-      for _,gh in ipairs(good_hosts) do
-        if string.find(hn, gh) then
-          ret = false
-          break
+    if r['real_hostname'] then
+      local hn = string.lower(r['real_hostname'])
+      -- Check for good hostname
+      if hn and good_hosts then
+        for _,gh in ipairs(good_hosts) do
+          if string.find(hn, gh) then
+            ret = false
+            break
+          end
         end
       end
     end
