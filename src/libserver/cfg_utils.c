@@ -171,6 +171,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 
 	rspamd_map_remove_all (cfg);
 	ucl_object_unref (cfg->rcl_obj);
+	ucl_object_unref (cfg->config_comments);
 	ucl_object_unref (cfg->doc_strings);
 	g_hash_table_remove_all (cfg->metrics);
 	g_hash_table_unref (cfg->metrics);

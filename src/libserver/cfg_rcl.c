@@ -2908,7 +2908,7 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	rspamd_strlcpy (cfg->cfg_pool->tag.uid, cfg->checksum,
 			MIN (sizeof (cfg->cfg_pool->tag.uid), strlen (cfg->checksum)));
 
-	parser = ucl_parser_new (0);
+	parser = ucl_parser_new (UCL_PARSER_SAVE_COMMENTS);
 	rspamd_ucl_add_conf_variables (parser, vars);
 	rspamd_ucl_add_conf_macros (parser, cfg);
 
@@ -2921,6 +2921,7 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 
 	munmap (data, st.st_size);
 	cfg->rcl_obj = ucl_parser_get_object (parser);
+	cfg->config_comments = ucl_object_ref (ucl_parser_get_comments (parser));
 	ucl_parser_free (parser);
 
 	top = rspamd_rcl_config_init (cfg);

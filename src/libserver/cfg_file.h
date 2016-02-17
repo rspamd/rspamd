@@ -282,6 +282,7 @@ struct rspamd_config {
 	GList *workers;                                 /**< linked list of all workers params					*/
 	GHashTable *wrk_parsers;                        /**< hash for worker config parsers, indexed by worker quarks */
 	ucl_object_t *rcl_obj;                          /**< rcl object											*/
+	ucl_object_t *config_comments;                  /**< comments saved from the config						*/
 	ucl_object_t *doc_strings;                      /**< documentation strings for config options			*/
 	GHashTable * metrics;                           /**< hash of metrics indexed by metric name				*/
 	GList * metrics_list;                           /**< linked list of metrics								*/
