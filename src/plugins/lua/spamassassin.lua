@@ -981,6 +981,7 @@ local function post_process()
   -- Header rules
   _.each(function(k, r)
     local f = function(task)
+
       local raw = false
       local check = {}
       -- Cached path for ordinary expressions
@@ -1006,9 +1007,14 @@ local function post_process()
           raw = h['raw'],
         })
 
-        if h['not'] then
-          return not ret
+        if r['not'] then
+          if ret ~= 0 then
+            ret = 0
+          else
+            ret = 1
+          end
         end
+
         return ret
       end
 
@@ -1070,14 +1076,16 @@ local function post_process()
         return 0
       end
 
+      local ret = 0
       for i, c in ipairs(check) do
         local match = sa_regexp_match(c, r['re'], raw, r)
         if (match and not r['not']) or (not match and r['not']) then
-          return match
+          ret = 1
         end
+
       end
 
-      return 0
+      return ret
     end
     if r['score'] then
       local real_score = r['score'] * calculate_score(k, r)
