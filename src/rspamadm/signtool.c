@@ -32,6 +32,8 @@ static gchar *pubkey_file = NULL;
 static gchar *pubkey = NULL;
 static gchar *pubout = NULL;
 static gchar *keypair_file = NULL;
+static gchar *editor = NULL;
+static gboolean edit = FALSE;
 enum rspamd_cryptobox_mode mode = RSPAMD_CRYPTOBOX_MODE_25519;
 
 static void rspamadm_signtool (gint argc, gchar **argv);
@@ -61,6 +63,10 @@ static GOptionEntry entries[] = {
 				"UCL with keypair to load for signing", NULL},
 		{"quiet", 'q', 0, G_OPTION_ARG_NONE, &quiet,
 				"Be quiet", NULL},
+		{"edit", 'e', 0, G_OPTION_ARG_NONE, &edit,
+				"Run editor and sign the edited file", NULL},
+		{"editor", '\0', 0, G_OPTION_ARG_STRING, &editor,
+				"Use the specified editor instead of $EDITOR environment var", NULL},
 		{NULL,       0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -80,13 +86,149 @@ rspamadm_signtool_help (gboolean full_help)
 				"-k: load signing keypair from ucl file\n"
 				"-S: append suffix for signatures and store them in files\n"
 				"-q: be quiet\n"
+				"-e: opens file for editing and sign the result\n"
+				"--editor: use the specified editor instead of $EDITOR environment var\n"
 				"--help: shows available options and commands";
 	}
 	else {
-		help_str = "Create encryption key pairs";
+		help_str = "Sign and verify files tool";
 	}
 
 	return help_str;
+}
+
+static gint
+rspamadm_edit_file (const gchar *fname)
+{
+	gchar tmppath[PATH_MAX], run_cmdline[PATH_MAX];
+	guchar *map;
+	gsize len = 0;
+	gint fd_out, retcode, child_argc;
+	GPid child_pid;
+	gchar *tmpdir, **child_argv = NULL;
+	GError *err = NULL;
+
+	if (editor == NULL) {
+		editor = getenv ("EDITOR");
+	}
+
+	if (editor == NULL) {
+		rspamd_fprintf (stderr, "cannot find editor: specify $EDITOR "
+				"environment variable or pass --editor argument\n");
+		exit (EXIT_FAILURE);
+	}
+
+	tmpdir = getenv ("TMPDIR");
+	if (tmpdir == NULL) {
+		tmpdir = "/tmp";
+	}
+
+	map = rspamd_file_xmap (fname, PROT_READ, &len);
+
+	if (map == NULL) {
+		rspamd_fprintf (stderr, "cannot open %s: %s\n", fname,
+				strerror (errno));
+		exit (errno);
+	}
+
+	rspamd_snprintf (tmppath, sizeof (tmppath),
+			"%s/rspamd_sign-XXXXXXXXXX", tmpdir);
+	fd_out = mkstemp (tmppath);
+
+	if (fd_out == -1) {
+		rspamd_fprintf (stderr, "cannot open tempfile %s: %s\n", tmppath,
+				strerror (errno));
+		exit (errno);
+	}
+
+	if (write (fd_out, map, len) == -1) {
+		rspamd_fprintf (stderr, "cannot write to tempfile %s: %s\n", tmppath,
+				strerror (errno));
+		unlink (tmppath);
+		munmap (map, len);
+		close (fd_out);
+		exit (errno);
+	}
+
+	munmap (map, len);
+	fsync (fd_out);
+	close (fd_out);
+
+	/* Now we spawn editor with the filename as argument */
+	rspamd_snprintf (run_cmdline, sizeof (run_cmdline), "%s %s", editor, tmppath);
+	if (!g_shell_parse_argv (run_cmdline, &child_argc,
+			&child_argv, &err)) {
+		rspamd_fprintf (stderr, "cannot exec %s: %e\n", editor,
+				err);
+		unlink (tmppath);
+		exit (errno);
+	}
+
+	if (!g_spawn_async (NULL, child_argv, NULL,
+			G_SPAWN_CHILD_INHERITS_STDIN|G_SPAWN_SEARCH_PATH|G_SPAWN_DO_NOT_REAP_CHILD,
+			NULL, NULL, &child_pid, &err)) {
+		rspamd_fprintf (stderr, "cannot exec %s: %e\n", editor,
+						err);
+		unlink (tmppath);
+		exit (errno);
+	}
+
+	g_strfreev (child_argv);
+
+	for (;;) {
+		if (waitpid ((pid_t)child_pid, &retcode, 0) != -1) {
+			break;
+		}
+
+		if (errno != EINTR) {
+			rspamd_fprintf (stderr, "failed to wait for %s: %s\n", editor,
+					strerror (errno));
+			unlink (tmppath);
+			exit (errno);
+		}
+	}
+
+	if (!g_spawn_check_exit_status (retcode, &err)) {
+		unlink (tmppath);
+		rspamd_fprintf (stderr, "%s returned error code: %d - %e\n", editor,
+				retcode, err);
+		exit (retcode);
+	}
+
+	map = rspamd_file_xmap (tmppath, PROT_READ, &len);
+
+	if (map == NULL) {
+		rspamd_fprintf (stderr, "cannot map %s: %s\n", tmppath,
+				strerror (errno));
+		unlink (tmppath);
+		close (fd_out);
+		exit (errno);
+	}
+
+	rspamd_snprintf (run_cmdline, sizeof (run_cmdline), "%s.new", fname);
+	fd_out = rspamd_file_xopen (run_cmdline, O_RDWR|O_CREAT|O_TRUNC,
+			00600);
+
+	if (fd_out == -1) {
+		rspamd_fprintf (stderr, "cannot open new file %s: %s\n", run_cmdline,
+				strerror (errno));
+		unlink (tmppath);
+		exit (errno);
+	}
+
+	if (write (fd_out, map, len) == -1) {
+		rspamd_fprintf (stderr, "cannot write new file %s: %s\n", run_cmdline,
+				strerror (errno));
+		unlink (tmppath);
+		unlink (run_cmdline);
+		close (fd_out);
+		exit (errno);
+	}
+
+	unlink (tmppath);
+	(void)lseek (fd_out, 0, SEEK_SET);
+
+	return fd_out;
 }
 
 static bool
@@ -103,7 +245,13 @@ rspamadm_sign_file (const gchar *fname, struct rspamd_cryptobox_keypair *kp)
 		suffix = ".sig";
 	}
 
-	fd_input = rspamd_file_xopen (fname, O_RDONLY, 0);
+	if (edit) {
+		/* We need to open editor and then sign the temporary file */
+		fd_input = rspamadm_edit_file (fname);
+	}
+	else {
+		fd_input = rspamd_file_xopen (fname, O_RDONLY, 0);
+	}
 
 	if (fd_input == -1) {
 		rspamd_fprintf (stderr, "cannot open %s: %s\n", fname,
@@ -138,6 +286,21 @@ rspamadm_sign_file (const gchar *fname, struct rspamd_cryptobox_keypair *kp)
 
 	sk = rspamd_keypair_component (kp, RSPAMD_KEYPAIR_COMPONENT_SK, NULL);
 	rspamd_cryptobox_sign (sig, NULL, map, st.st_size, sk, mode);
+
+	if (edit) {
+		/* We also need to rename .new file */
+		rspamd_snprintf (sigpath, sizeof (sigpath), "%s.new", fname);
+
+		if (rename (sigpath, fname) == -1) {
+			rspamd_fprintf (stderr, "cannot rename %s to %s: %s\n", sigpath, fname,
+					strerror (errno));
+			exit (errno);
+		}
+
+		unlink (sigpath);
+	}
+
+	rspamd_snprintf (sigpath, sizeof (sigpath), "%s%s", fname, suffix);
 	g_assert (write (fd_sig, sig, rspamd_cryptobox_signature_bytes (mode)) != -1);
 	close (fd_sig);
 	munmap (map, st.st_size);
