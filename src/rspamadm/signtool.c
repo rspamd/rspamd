@@ -23,6 +23,9 @@
 #include "libutil/str_util.h"
 #include "libutil/util.h"
 #include "unix-std.h"
+#ifdef HAVE_SYS_WAIT_H
+#include <sys/wait.h>
+#endif
 
 static gboolean openssl = FALSE;
 static gboolean verify = FALSE;
@@ -188,12 +191,21 @@ rspamadm_edit_file (const gchar *fname)
 		}
 	}
 
+#if GLIB_MAJOR_VERSION >= 2 && GLIB_MINOR_VERSION >= 34
 	if (!g_spawn_check_exit_status (retcode, &err)) {
 		unlink (tmppath);
 		rspamd_fprintf (stderr, "%s returned error code: %d - %e\n", editor,
 				retcode, err);
 		exit (retcode);
 	}
+#else
+	if (retcode != 0) {
+		unlink (tmppath);
+		rspamd_fprintf (stderr, "%s returned error code: %d\n", editor,
+				retcode);
+		exit (retcode);
+	}
+#endif
 
 	map = rspamd_file_xmap (tmppath, PROT_READ, &len);
 
