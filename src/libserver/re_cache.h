@@ -152,7 +152,7 @@ gint rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
  * Returns TRUE if the specified file is valid hyperscan cache
  */
 gboolean rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
-		const char *path, gboolean silent);
+		const char *path, gboolean silent, gboolean try_load);
 
 /**
  * Loads all hyperscan regexps precompiled

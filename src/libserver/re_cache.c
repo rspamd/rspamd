@@ -1071,7 +1071,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 		rspamd_snprintf (path, sizeof (path), "%s%c%s.hs", cache_dir,
 				G_DIR_SEPARATOR, re_class->hash);
 
-		if (rspamd_re_cache_is_valid_hyperscan_file (cache, path, TRUE)) {
+		if (rspamd_re_cache_is_valid_hyperscan_file (cache, path, TRUE, TRUE)) {
 
 			fd = open (path, O_RDONLY, 00600);
 
@@ -1302,7 +1302,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 
 gboolean
 rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
-		const char *path, gboolean silent)
+		const char *path, gboolean silent, gboolean try_load)
 {
 	g_assert (cache != NULL);
 	g_assert (path != NULL);
@@ -1310,7 +1310,7 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 #ifndef WITH_HYPERSCAN
 	return FALSE;
 #else
-	gint fd;
+	gint fd, n, ret;
 	guchar magicbuf[RSPAMD_HS_MAGIC_LEN];
 	GHashTableIter it;
 	gpointer k, v;
@@ -1318,6 +1318,8 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 	gsize len;
 	const gchar *hash_pos;
 	hs_platform_info_t test_plt;
+	hs_database_t *test_db = NULL;
+	guchar *map, *p, *end;
 
 	len = strlen (path);
 
@@ -1380,8 +1382,48 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 				return FALSE;
 			}
 
-			/* XXX: add crc check */
 			close (fd);
+
+			if (try_load) {
+				map = rspamd_file_xmap (path, PROT_READ, &len);
+
+				if (map == NULL) {
+					msg_err_re_cache ("cannot mmap hyperscan cache file %s: "
+							"%s",
+							path, strerror (errno));
+					return FALSE;
+				}
+
+				p = map + RSPAMD_HS_MAGIC_LEN + sizeof (test_plt);
+				end = map + len;
+				n = *(gint *)p;
+				p += sizeof (gint);
+
+				if (n <= 0 || 2 * n * sizeof (gint) + /* IDs + flags */
+						sizeof (guint64) + /* crc */
+						RSPAMD_HS_MAGIC_LEN + /* header */
+						sizeof (cache->plt) > len) {
+					/* Some wrong amount of regexps */
+					msg_err_re_cache ("bad number of expressions in %s: %d",
+							path, n);
+					munmap (map, len);
+					return FALSE;
+				}
+
+				p += n * sizeof (gint) * 2 + sizeof (guint64);
+
+				if ((ret = hs_deserialize_database (p, end - p, &test_db))
+						!= HS_SUCCESS) {
+					msg_err_re_cache ("bad hs database in %s: %d", path, ret);
+					munmap (map, len);
+
+					return FALSE;
+				}
+
+				hs_free_database (test_db);
+				munmap (map, len);
+			}
+			/* XXX: add crc check */
 
 			return TRUE;
 		}
@@ -1407,7 +1449,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 	return FALSE;
 #else
 	gchar path[PATH_MAX];
-	gint fd, i, n, *hs_ids = NULL, *hs_flags = NULL, total = 0;
+	gint fd, i, n, *hs_ids = NULL, *hs_flags = NULL, total = 0, ret;
 	GHashTableIter it;
 	gpointer k, v;
 	guint8 *map, *p, *end;
@@ -1422,7 +1464,7 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 		rspamd_snprintf (path, sizeof (path), "%s%c%s.hs", cache_dir,
 				G_DIR_SEPARATOR, re_class->hash);
 
-		if (rspamd_re_cache_is_valid_hyperscan_file (cache, path, FALSE)) {
+		if (rspamd_re_cache_is_valid_hyperscan_file (cache, path, FALSE, FALSE)) {
 			msg_debug_re_cache ("load hyperscan database from '%s'",
 					re_class->hash);
 
@@ -1484,9 +1526,9 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 			re_class->hs_scratch = NULL;
 			re_class->hs_db = NULL;
 
-			if (hs_deserialize_database (p, end - p, &re_class->hs_db)
+			if ((ret = hs_deserialize_database (p, end - p, &re_class->hs_db))
 					!= HS_SUCCESS) {
-				msg_err_re_cache ("bad hs database in %s", path);
+				msg_err_re_cache ("bad hs database in %s: %d", path, ret);
 				munmap (map, st.st_size);
 				g_free (hs_ids);
 				g_free (hs_flags);
