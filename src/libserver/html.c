@@ -88,7 +88,7 @@ static struct html_tag_def tag_defs[] = {
 	{Tag_LISTING, "listing", (CM_BLOCK | CM_OBSOLETE)},
 	{Tag_MAP, "map", (CM_INLINE)},
 	{Tag_MENU, "menu", (CM_BLOCK | CM_OBSOLETE)},
-	{Tag_META, "meta", (CM_HEAD | CM_EMPTY)},
+	{Tag_META, "meta", (CM_HEAD | CM_INLINE | CM_EMPTY)},
 	{Tag_NOFRAMES, "noframes", (CM_BLOCK | CM_FRAMES)},
 	{Tag_NOSCRIPT, "noscript", (CM_BLOCK | CM_INLINE | CM_MIXED)},
 	{Tag_OBJECT, "object",
