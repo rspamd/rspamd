@@ -184,7 +184,7 @@ reconf['SYMBOL'] = {
 	re = string.format('(%s) && !(%s)', re1, re2), -- use string.format to create expression
 	score = 1.2,
 	description = 'some description',
-	
+
 	condition = function(task) -- run this rule only if some condition is satisfied
 		return true
 	end,
@@ -199,7 +199,7 @@ accept a special parameter called `task` which represents a message scanned.
 ### Return values
 
 Each lua rule can return 0 or false meaning that the rule has not matched or true if the symbol should be inserted.
-In fact, you can return any positive or negative number which would be multiplied by rule's score, e.g. if rule score is 
+In fact, you can return any positive or negative number which would be multiplied by rule's score, e.g. if rule score is
 `1.2`, then when your function returns `1` then symbol will have score `1.2`, and when your function returns `2.0` then the symbol will have score `2.4`.
 
 ### Rules conditions
@@ -213,7 +213,7 @@ rspamd_config.SYMBOL = {
 	end,
 	score = 1.2,
 	description = 'some description',
-	
+
 	condition = function(task) -- run this rule only if some condition is satisfied
 		return true
 	end,
@@ -228,7 +228,7 @@ There are a number of methods in [task](../lua/task.md) objects. For example, yo
 rspamd_config.HTML_MESSAGE = {
   callback = function(task)
     local parts = task:get_text_parts()
-    
+
     if parts then
       for i,p in ipairs(parts) do
         if p:is_html() then
@@ -236,7 +236,7 @@ rspamd_config.HTML_MESSAGE = {
         end
       end
     end
-  
+
     return 0
   end,
   score = -0.1,
@@ -321,7 +321,50 @@ rspamd_config.SUBJ_ALL_CAPS = {
 }
 ~~~
 
-## Asynchronous actions
+## Rspamd symbols
+
+Rspamd rules are represented as three major categories:
+
+1. Pre-filters - run before other rules
+2. Filters - run normally
+3. Post-filters - run after all checks
+
+The most common type of rules is generic filters. Each filter is basically a callback that is
+executed by rspamd at some time and optional symbol name associated with this callback. In general, there
+are three possibilities to register symbols:
+
+* register callback and associated symbol
+* register just a plain callback
+* register symbol with no own callback (*virtual* symbol)
+
+The last option is useful when you have a single callback but with different results possible, for example
+`SYMBOL_ALLOW` and `SYMBOL_DENY` which have the opposite meaning. Filters are registered with three methods:
+
+* `rspamd_config:register_symbol('SYMBOL', nominal_weight, callback)` - registers normal symbol
+* `rspamd_config:register_callback_symbol(nominal_weight, callback)` - registers callback only symbol
+* `rspamd_config:register_virtual_symbol('SYMBOL', nominal_weight, id)` - registers normal symbol
+
+`nominal_weight` is used to define priority and the initial score multiplier. It should be usually `1.0` for normal symbols and `-1.0` for symbols with negative scores that should be executed before other symbols. Here is an example of registering one callback and a couple of virtual symbols used in [dmarc](../modules/dmarc.md) module:
+
+~~~lua
+local id = rspamd_config:register_callback_symbol('DMARC_CALLBACK', 1.0,
+  dmarc_callback)
+rspamd_config:register_virtual_symbol('DMARC_POLICY_ALLOW', -1, id)
+rspamd_config:register_virtual_symbol('DMARC_POLICY_REJECT', 1, id)
+rspamd_config:register_virtual_symbol('DMARC_POLICY_QUARANTINE', 1, id)
+rspamd_config:register_virtual_symbol('DMARC_POLICY_SOFTFAIL', 1, id)
+rspamd_config:register_dependency(id, symbols['spf_allow_symbol'])
+rspamd_config:register_dependency(id, symbols['dkim_allow_symbol'])
+~~~
+
+Numeric `id` is returned by registration functions with callbacks (`register_symbol` or `register_callback_symbol`) and can be used to link symbols:
+
+* add virtual symbols associated with this callback;
+* correctly display average time for symbols without callbacks;
+* properly sort symbols;
+* register dependencies on virtual symbols (in fact, the true dependency is created based on the parent symbol but it is sometimes convenient to use virtual symbols for simplicity)
+
+### Asynchronous actions
 
 For asynchronous actions, such as redis access or DNS checks it is recommended to use
 dedicated callbacks, called symbol handlers. The difference to generic lua rules is that
@@ -333,7 +376,7 @@ rspamd_config:register_symbol('SOME_SYMBOL', 1.0,
 	function(task)
 		local to_resolve = 'google.com'
 		local logger = require "rspamd_logger"
-		
+
 		local dns_cb = function(resolver, to_resolve, results, err)
 			if results then
 				logger.infox(task, '<%1> host: [%2] resolved for symbol: %3',
@@ -342,8 +385,8 @@ rspamd_config:register_symbol('SOME_SYMBOL', 1.0,
 			end
 		end
 		task:get_resolver():resolve_a({
-			task=task, 
-			name = to_resolve, 
+			task=task,
+			name = to_resolve,
 			callback = dns_cb})
 	end)
 ~~~
