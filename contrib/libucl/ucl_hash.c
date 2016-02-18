@@ -117,7 +117,7 @@ static inline int
 ucl_hash_equal (const ucl_object_t *k1, const ucl_object_t *k2)
 {
 	if (k1->keylen == k2->keylen) {
-		return strncmp (k1->key, k2->key, k1->keylen) == 0;
+		return memcmp (k1->key, k2->key, k1->keylen) == 0;
 	}
 
 	return 0;
@@ -216,7 +216,7 @@ static inline int
 ucl_hash_caseless_equal (const ucl_object_t *k1, const ucl_object_t *k2)
 {
 	if (k1->keylen == k2->keylen) {
-		return strncasecmp (k1->key, k2->key, k1->keylen) == 0;
+		return memcmp (k1->key, k2->key, k1->keylen) == 0;
 	}
 
 	return 0;
