@@ -1079,10 +1079,9 @@ local function post_process()
       local ret = 0
       for i, c in ipairs(check) do
         local match = sa_regexp_match(c, r['re'], raw, r)
-        if (match and not r['not']) or (not match and r['not']) then
+        if (match > 0 and not r['not']) or (match == 0 and r['not']) then
           ret = 1
         end
-
       end
 
       return ret
