@@ -822,7 +822,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 					&mres->required_score, m);
 
 	action = mres->action;
-	is_spam = (action == METRIC_ACTION_REJECT);
+	is_spam = (action < METRIC_ACTION_GREYLIST);
 
 	obj = ucl_object_typed_new (UCL_OBJECT);
 	ucl_object_insert_key (obj,	  ucl_object_frombool (is_spam),
