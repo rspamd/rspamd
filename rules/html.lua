@@ -97,7 +97,7 @@ rspamd_config.R_EMPTY_IMAGE = {
                 if tag then
                   local parent = tag:get_parent()
                   if parent then
-                    if parent:get_type() == 'a' then
+                    if parent:get_type() ~= 'a' then
                       return true
                     end
                   end
