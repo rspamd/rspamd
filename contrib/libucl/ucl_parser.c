@@ -259,7 +259,7 @@ ucl_lex_time_multiplier (const unsigned char c) {
 			{'h', 60 * 60},
 			{'d', 60 * 60 * 24},
 			{'w', 60 * 60 * 24 * 7},
-			{'y', 60 * 60 * 24 * 7 * 365}
+			{'y', 60 * 60 * 24 * 365}
 	};
 	int i;
 
