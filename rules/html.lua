@@ -38,7 +38,10 @@ local function check_html_image(task, min, max)
               local parent = tag:get_parent()
               if parent then
                 if parent:get_type() == 'a' then
-                  return true
+                  -- do not trigger on small and unknown size images
+                  if i['height'] + i['width'] >= 210 then
+                    return true
+                  end
                 end
               end
             end
@@ -94,7 +97,7 @@ rspamd_config.R_EMPTY_IMAGE = {
                 if tag then
                   local parent = tag:get_parent()
                   if parent then
-                    if parent:get_type() == 'a' then
+                    if parent:get_type() ~= 'a' then
                       return true
                     end
                   end
