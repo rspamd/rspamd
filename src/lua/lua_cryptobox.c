@@ -325,6 +325,12 @@ lua_cryptobox_keypair_load (lua_State *L)
 	return 1;
 }
 
+/***
+ * function keypair.create(ucl_data)
+ * Loads public key from UCL data
+ * @param {string} ucl_data ucl to load
+ * @return {cryptobox_keypair} new keypair
+ */
 static gint
 lua_cryptobox_keypair_create (lua_State *L)
 {
@@ -381,6 +387,12 @@ lua_cryptobox_keypair_gc (lua_State *L)
 	return 0;
 }
 
+/***
+ * function signature.load(file)
+ * Loads signature from raw file
+ * @param {string} file filename to load
+ * @return {cryptobox_signature} new signature
+ */
 static gint
 lua_cryptobox_signature_load (lua_State *L)
 {
@@ -423,6 +435,12 @@ lua_cryptobox_signature_load (lua_State *L)
 	return 1;
 }
 
+/***
+ * method signature:save(file)
+ * Stores signature in raw file
+ * @param {string} file filename to use
+ * @return {boolean} true if signature has been saved
+ */
 static gint
 lua_cryptobox_signature_save (lua_State *L)
 {
@@ -523,7 +541,6 @@ lua_cryptobox_verify_memory (lua_State *L)
 
 	pk = lua_check_cryptobox_pubkey (L, 1);
 	signature = lua_check_cryptobox_sign (L, 2);
-	/* XXX: check signature length */
 	data = luaL_checklstring (L, 3, &len);
 
 	if (pk != NULL && signature != NULL && data != NULL) {
@@ -538,7 +555,7 @@ lua_cryptobox_verify_memory (lua_State *L)
 		}
 	}
 	else {
-		lua_pushnil (L);
+		luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -557,7 +574,39 @@ lua_cryptobox_verify_memory (lua_State *L)
 static gint
 lua_cryptobox_verify_file (lua_State *L)
 {
-	return 0;
+	const gchar *fname;
+	struct rspamd_cryptobox_pubkey *pk;
+	rspamd_fstring_t *signature;
+	guchar *map = NULL;
+	gsize len;
+	gint ret;
+
+	pk = lua_check_cryptobox_pubkey (L, 1);
+	signature = lua_check_cryptobox_sign (L, 2);
+	fname = luaL_checkstring (L, 3);
+
+	map = rspamd_file_xmap (fname, PROT_READ, &len);
+
+	if (map != NULL && pk != NULL && signature != NULL) {
+		ret = rspamd_cryptobox_verify (signature->str, map, len,
+				rspamd_pubkey_get_pk (pk, NULL), RSPAMD_CRYPTOBOX_MODE_25519);
+
+		if (ret) {
+			lua_pushboolean (L, 1);
+		}
+		else {
+			lua_pushboolean (L, 0);
+		}
+	}
+	else {
+		lua_error (L);
+	}
+
+	if (map != NULL) {
+		munmap (map, len);
+	}
+
+	return 1;
 }
 
 /**
