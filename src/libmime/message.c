@@ -1555,13 +1555,13 @@ rspamd_message_parse (struct rspamd_task *task)
 	struct raw_header *rh;
 	struct mime_text_part *p1, *p2;
 	struct mime_foreach_data md;
-	struct received_header *recv;
+	struct received_header *recv, *trecv;
 	gchar *url_str;
 	const gchar *url_end, *p, *end;
 	struct rspamd_url *subject_url;
 	gsize len;
 	goffset hdr_pos;
-	gint rc, state = 0, diff, *pdiff;
+	gint rc, state = 0, diff, *pdiff, i;
 	guint tw, dw;
 
 	tmp = rspamd_mempool_alloc (task->task_pool, sizeof (GByteArray));
@@ -1675,14 +1675,59 @@ rspamd_message_parse (struct rspamd_task *task)
 	/* Parse received headers */
 	first =
 			rspamd_message_get_header (task, "Received", FALSE);
-	cur = first;
-	while (cur) {
+
+	for (cur = first, i = 0; cur != NULL; cur = g_list_next (cur), i ++) {
 		recv =
 				rspamd_mempool_alloc0 (task->task_pool,
 						sizeof (struct received_header));
 		parse_recv_header (task->task_pool, cur->data, recv);
+
+		/*
+		 * For the first header we must ensure that
+		 * received is consistent with the IP that we obtain through
+		 * client.
+		 */
+		if (i == 0) {
+			gboolean need_recv_correction = FALSE;
+
+			if (recv->real_ip == NULL) {
+				need_recv_correction = TRUE;
+			}
+			else if (!(task->flags & RSPAMD_TASK_FLAG_NO_IP) && task->from_addr) {
+				rspamd_inet_addr_t *raddr = NULL;
+
+				if (!rspamd_parse_inet_address (&raddr, recv->real_ip, 0)) {
+					need_recv_correction = TRUE;
+				}
+				else {
+					if (rspamd_inet_address_compare (raddr, task->from_addr) != 0) {
+						need_recv_correction = TRUE;
+					}
+
+					rspamd_inet_address_destroy (raddr);
+				}
+
+			}
+
+			if (need_recv_correction && !(task->flags & RSPAMD_TASK_FLAG_NO_IP)
+					&& task->from_addr) {
+				msg_debug_task ("the first received seems to be"
+						" not ours, replace it with fake one");
+
+				trecv = rspamd_mempool_alloc0 (task->task_pool,
+								sizeof (struct received_header));
+				trecv->real_ip = rspamd_mempool_strdup (task->task_pool,
+						rspamd_inet_address_to_string (task->from_addr));
+				trecv->from_ip = trecv->real_ip;
+
+				if (task->hostname) {
+					trecv->real_hostname = task->hostname;
+					trecv->from_hostname = trecv->real_hostname;
+				}
+			}
+		}
+
 		g_ptr_array_add (task->received, recv);
-		cur = g_list_next (cur);
 	}
 
 	/* Extract data from received header if we were not given IP */
