@@ -38,6 +38,42 @@ local known_plugins = {
   'Mail::SpamAssassin::Plugin::MIMEHeader',
 }
 
+-- Table that replaces SA symbol with rspamd equialent
+-- Used for dependency resolution
+local symbols_replacements = {
+  -- SPF replacements
+  USER_IN_SPF_WHITELIST = 'WHITELIST_SPF',
+  USER_IN_DEF_SPF_WL = 'WHITELIST_SPF',
+  SPF_PASS = 'R_SPF_ALLOW',
+  SPF_FAIL = 'R_SPF_FAIL',
+  SPF_SOFTFAIL = 'R_SPF_SOFTFAIL',
+  SPF_HELO_PASS = 'R_SPF_ALLOW',
+  SPF_HELLO_FAIL = 'R_SPF_FAIL',
+  SPF_HELLO_SOFTFAIL = 'R_SPF_SOFTFAIL',
+  -- DKIM replacements
+  USER_IN_DKIM_WHITELIST = 'WHITELIST_DKIM',
+  USER_IN_DEF_DKIM_WL = 'WHITELIST_DKIM',
+  DKIM_VALID = 'R_DKIM_ALLOW',
+  -- SURBL replacements
+  URIBL_SBL_A = 'URIBL_SBL',
+  URIBL_DBL_SPAM = 'DBL_SPAM',
+  URIBL_DBL_PHISH = 'DBL_PHISH',
+  URIBL_DBL_MALWARE = 'DBL_MALWARE',
+  URIBL_DBL_BOTNETCC = 'DBL_BOTNET',
+  URIBL_DBL_ABUSE_SPAM = 'DBL_ABUSE',
+  URIBL_DBL_ABUSE_REDIR = 'DBL_ABUSE_REDIR',
+  URIBL_DBL_ABUSE_MALW = 'DBL_ABUSE_MALWARE',
+  URIBL_DBL_ABUSE_BOTCC = 'DBL_ABUSE_BOTNET',
+  URIBL_WS_SURBL = 'WS_SURBL_MULTI',
+  URIBL_PH_SURBL = 'PH_SURBL_MULTI',
+  URIBL_MW_SURBL = 'MW_SURBL_MULTI',
+  URIBL_CR_SURBL = 'CRACKED_SURBL',
+  URIBL_ABUSE_SURBL = 'ABUSE_SURBL',
+  -- Misc rules
+  BODY_URI_ONLY = 'R_EMPTY_IMAGE',
+
+}
+
 -- Internal variables
 local rules = {}
 local atoms = {}
@@ -898,6 +934,7 @@ end
 
 local function process_atom(atom, task)
   local atom_cb = atoms[atom]
+
   if atom_cb then
     local res = atom_cb(task)
 
@@ -907,16 +944,28 @@ local function process_atom(atom, task)
       rspamd_logger.debugx(task, 'atom: %1, result: %2', atom, res)
     end
     return res
-  elseif external_deps[atom] then
-    local res = 0
-    if task:has_symbol(atom) then
-      res = 1
-    end
-    rspamd_logger.debugx(task, 'external atom: %1, result: %2', atom, res)
-
-    return res
   else
-    rspamd_logger.debugx(task, 'Cannot find atom ' .. atom)
+    local ext_dep = external_deps[atom]
+    if ext_dep then
+      local res = 0
+
+      if type(ext_dep) == 'number' then
+        if task:has_symbol(atom) then
+          res = 1
+        end
+      elseif type(ext_dep) == 'string' then
+        -- Apply replacement
+        if task:has_symbol(ext_dep) then
+          res = 1
+        end
+      end
+
+      rspamd_logger.debugx(task, 'external atom: %1, result: %2', atom, res)
+
+      return res
+    else
+      rspamd_logger.debugx(task, 'Cannot find atom ' .. atom)
+    end
   end
   return 0
 end
@@ -1258,12 +1307,27 @@ local function post_process()
 
         for i,a in ipairs(expr_atoms) do
           if not atoms[a] then
-            rspamd_logger.debugx('atom %1 is foreign for SA plugin, register dependency for %2 on %3',
-                a, k, a);
-            rspamd_config:register_dependency(k, a)
+
+            local rspamd_symbol = symbols_replacements[a]
+
+            if rspamd_symbol then
+              rspamd_logger.debugx('atom %1 is foreign for SA plugin, register' ..
+                'dependency for %2 on %3',
+                 a, k, rspamd_symbol);
+              rspamd_config:register_dependency(k, rspamd_symbol)
+            else
+              rspamd_logger.debugx('atom %1 is foreign for SA plugin, register' ..
+                'dependency for %2 on %3',
+                 a, k, a);
+              rspamd_config:register_dependency(k, a)
+            end
 
             if not external_deps[a] then
-              external_deps[a] = 1
+              if rspamd_symbol then
+                external_deps[a] = rspamd_symbol
+              else
+                external_deps[a] = 1
+              end
             end
           end
         end
