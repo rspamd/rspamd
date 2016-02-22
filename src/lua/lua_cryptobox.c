@@ -50,6 +50,12 @@ LUA_FUNCTION_DEF (cryptobox_signature, create);
 LUA_FUNCTION_DEF (cryptobox_signature, load);
 LUA_FUNCTION_DEF (cryptobox_signature, save);
 LUA_FUNCTION_DEF (cryptobox_signature, gc);
+LUA_FUNCTION_DEF (cryptobox_hash, create);
+LUA_FUNCTION_DEF (cryptobox_hash, create_keyed);
+LUA_FUNCTION_DEF (cryptobox_hash, update);
+LUA_FUNCTION_DEF (cryptobox_hash, hex);
+LUA_FUNCTION_DEF (cryptobox_hash, bin);
+LUA_FUNCTION_DEF (cryptobox_hash, gc);
 LUA_FUNCTION_DEF (cryptobox,			 verify_memory);
 LUA_FUNCTION_DEF (cryptobox,			 verify_file);
 LUA_FUNCTION_DEF (cryptobox,			 sign_file);
@@ -100,6 +106,22 @@ static const struct luaL_reg cryptoboxsignlib_m[] = {
 	{NULL, NULL}
 };
 
+static const struct luaL_reg cryptoboxhashlib_f[] = {
+	LUA_INTERFACE_DEF (cryptobox_hash, create),
+	LUA_INTERFACE_DEF (cryptobox_hash, create_keyed),
+	{NULL, NULL}
+};
+
+static const struct luaL_reg cryptoboxhashlib_m[] = {
+	LUA_INTERFACE_DEF (cryptobox_hash, update),
+	LUA_INTERFACE_DEF (cryptobox_hash, hex),
+	LUA_INTERFACE_DEF (cryptobox_hash, bin),
+	{"__tostring", rspamd_lua_class_tostring},
+	{"__gc", lua_cryptobox_hash_gc},
+	{NULL, NULL}
+};
+
+
 static struct rspamd_cryptobox_pubkey *
 lua_check_cryptobox_pubkey (lua_State * L, int pos)
 {
@@ -125,6 +147,15 @@ lua_check_cryptobox_sign (lua_State * L, int pos)
 
 	luaL_argcheck (L, ud != NULL, 1, "'cryptobox_signature' expected");
 	return ud ? *((rspamd_fstring_t **)ud) : NULL;
+}
+
+static rspamd_cryptobox_hash_state_t *
+lua_check_cryptobox_hash (lua_State * L, int pos)
+{
+	void *ud = luaL_checkudata (L, pos, "rspamd{cryptobox_hash}");
+
+	luaL_argcheck (L, ud != NULL, 1, "'cryptobox_hash' expected");
+	return ud ? *((rspamd_cryptobox_hash_state_t **)ud) : NULL;
 }
 
 /***
@@ -552,6 +583,138 @@ lua_cryptobox_signature_gc (lua_State *L)
 }
 
 /***
+ * function rspamd_cryptobox_hash.create()
+ * Creates new hash context
+ * @param {string} data raw signature data
+ * @return {cryptobox_hash} hash object
+ */
+static gint
+lua_cryptobox_hash_create (lua_State *L)
+{
+	rspamd_cryptobox_hash_state_t *h, **ph;
+
+	h = g_slice_alloc (sizeof (*h));
+	rspamd_cryptobox_hash_init (h, NULL, 0);
+	ph = lua_newuserdata (L, sizeof (void *));
+	*ph = h;
+	rspamd_lua_setclass (L, "rspamd{cryptobox_hash}", -1);
+
+	return 1;
+}
+
+/***
+ * function rspamd_cryptobox_hash.create_keyed(key)
+ * Creates new hash context with specified key
+ * @param {string} key key
+ * @return {cryptobox_hash} hash object
+ */
+static gint
+lua_cryptobox_hash_create_keyed (lua_State *L)
+{
+	rspamd_cryptobox_hash_state_t *h, **ph;
+	const gchar *key;
+	gsize keylen;
+
+	key = luaL_checklstring (L, 1, &keylen);
+
+	if (key != NULL) {
+		h = g_slice_alloc (sizeof (*h));
+		rspamd_cryptobox_hash_init (h, key, keylen);
+		ph = lua_newuserdata (L, sizeof (void *));
+		*ph = h;
+		rspamd_lua_setclass (L, "rspamd{cryptobox_hash}", -1);
+	}
+	else {
+		luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/***
+ * method cryptobox_hash:update(data)
+ * Updates hash with the specified data (hash should not be finalized using `hex` or `bin` methods)
+ * @param {string} data data to hash
+ */
+static gint
+lua_cryptobox_hash_update (lua_State *L)
+{
+	rspamd_cryptobox_hash_state_t *h = lua_check_cryptobox_hash (L, 1);
+	const gchar *data;
+	gsize len;
+
+	data = luaL_checklstring (L, 2, &len);
+
+	if (h && data) {
+		rspamd_cryptobox_hash_update (h, data, len);
+	}
+	else {
+		luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
+}
+
+/***
+ * method cryptobox_hash:hex()
+ * Finalizes hash and return it as hex string
+ * @return {string} hex value of hash
+ */
+static gint
+lua_cryptobox_hash_hex (lua_State *L)
+{
+	rspamd_cryptobox_hash_state_t *h = lua_check_cryptobox_hash (L, 1);
+	guchar out[rspamd_cryptobox_HASHBYTES],
+		out_hex[rspamd_cryptobox_HASHBYTES * 2 + 1];
+
+	if (h) {
+		memset (out_hex, 0, sizeof (out_hex));
+		rspamd_cryptobox_hash_final (h, out);
+		rspamd_encode_hex_buf (out, sizeof (out), out_hex, sizeof (out_hex));
+
+		lua_pushstring (L, out_hex);
+	}
+	else {
+		luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/***
+ * method cryptobox_hash:bin()
+ * Finalizes hash and return it as raw string
+ * @return {string} raw value of hash
+ */
+static gint
+lua_cryptobox_hash_bin (lua_State *L)
+{
+	rspamd_cryptobox_hash_state_t *h = lua_check_cryptobox_hash (L, 1);
+	guchar out[rspamd_cryptobox_HASHBYTES];
+
+	if (h) {
+		rspamd_cryptobox_hash_final (h, out);
+		lua_pushlstring (L, out, sizeof (out));
+	}
+	else {
+		luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_cryptobox_hash_gc (lua_State *L)
+{
+	rspamd_cryptobox_hash_state_t *h = lua_check_cryptobox_hash (L, 1);
+
+	rspamd_explicit_memzero (h, sizeof (*h));
+	g_slice_free1 (sizeof (*h), h);
+
+	return 0;
+}
+
+/***
  * function rspamd_cryptobox.verify_memory(pk, sig, data)
  * Check memory using specified cryptobox key and signature
  * @param {pubkey} pk public key to verify
@@ -748,6 +911,15 @@ lua_load_signature (lua_State * L)
 }
 
 static gint
+lua_load_hash (lua_State * L)
+{
+	lua_newtable (L);
+	luaL_register (L, NULL, cryptoboxhashlib_f);
+
+	return 1;
+}
+
+static gint
 lua_load_cryptobox (lua_State * L)
 {
 	lua_newtable (L);
@@ -784,6 +956,7 @@ luaopen_cryptobox (lua_State * L)
 	rspamd_lua_add_preload (L, "rspamd_cryptobox_keypair", lua_load_keypair);
 
 	luaL_newmetatable (L, "rspamd{cryptobox_signature}");
+
 	lua_pushstring (L, "__index");
 	lua_pushvalue (L, -2);
 	lua_settable (L, -3);
@@ -794,6 +967,19 @@ luaopen_cryptobox (lua_State * L)
 
 	luaL_register (L, NULL, cryptoboxsignlib_m);
 	rspamd_lua_add_preload (L, "rspamd_cryptobox_signature", lua_load_signature);
+
+	luaL_newmetatable (L, "rspamd{cryptobox_hash}");
+
+	lua_pushstring (L, "__index");
+	lua_pushvalue (L, -2);
+	lua_settable (L, -3);
+
+	lua_pushstring (L, "class");
+	lua_pushstring (L, "rspamd{cryptobox_hash}");
+	lua_rawset (L, -3);
+
+	luaL_register (L, NULL, cryptoboxhashlib_m);
+	rspamd_lua_add_preload (L, "rspamd_cryptobox_signature", lua_load_hash);
 
 	rspamd_lua_add_preload (L, "rspamd_cryptobox", lua_load_cryptobox);
 

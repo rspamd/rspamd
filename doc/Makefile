@@ -16,7 +16,7 @@ rspamadm.1: rspamadm.1.md
 
 lua-doc: lua_regexp lua_ip lua_config lua_task lua_ucl lua_http lua_trie \
 	lua_dns lua_redis lua_upstream lua_expression lua_mimepart lua_logger lua_url \
-	lua_tcp lua_mempool lua_html lua_util lua_fann lua_sqlite3
+	lua_tcp lua_mempool lua_html lua_util lua_fann lua_sqlite3 lua_cryptobox
 
 lua_regexp: ../src/lua/lua_regexp.c
 	$(LUADOC) < ../src/lua/lua_regexp.c > markdown/lua/regexp.md
@@ -58,3 +58,5 @@ lua_fann: ../src/lua/lua_fann.c
 	$(LUADOC) < ../src/lua/lua_fann.c > markdown/lua/fann.md
 lua_sqlite3: ../src/lua/lua_sqlite3.c
 	$(LUADOC) < ../src/lua/lua_sqlite3.c > markdown/lua/sqlite3.md
+lua_cryptobox: ../src/lua/lua_cryptobox.c
+	$(LUADOC) < ../src/lua/lua_cryptobox.c > markdown/lua/cryptobox.md
