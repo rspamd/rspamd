@@ -1,3 +1,28 @@
+1.1.4:
+	* Print traceback on lua errors in lua config
+	* Fix leaks in lua error paths
+	* Improve 'R_EMPTY_IMAGE' rule
+	* Fix metas memoization in SA plugin
+	* Properly set `flag` in fuzzy replies
+	* Fix arguments order
+	* Fix issue with out-of-boundary reading
+	* Fix issues found by coverity
+	* Same result checking error found by coverity
+	* Fix varargs processing (found by coverity)
+	* Fix error in printing hex
+	* Reduce weights for some hfilter patterns
+	* Add aliases for task:get_from_ip:
+		- task:get_addr
+		- task:get_from_addr
+		- task:get_ip
+	*  Rework once_received module
+		- Fix priority for `good_hosts`
+		- If a good host has been found do not add once_received symbols
+		- Fix priorities for strict once_received
+		- Add ability to whitelist IP addresses
+	* Fix `MISSING_MIMEOLE` rule for modern OE
+	* Treat meta tags as embedded tags (#501)
+
 1.1.3:
 	* Fix DSN rules when SMTP from is unavailable
 	* Fix statconvert routine to avoid lua module usage
