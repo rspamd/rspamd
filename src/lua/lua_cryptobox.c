@@ -150,7 +150,7 @@ lua_check_cryptobox_hash (lua_State * L, int pos)
 }
 
 /***
- * function rspamd_cryptobox_pubkey.load(file[, type[, alg]])
+ * @function rspamd_cryptobox_pubkey.load(file[, type[, alg]])
  * Loads public key from base32 encoded file
  * @param {string} file filename to load
  * @param {string} type optional 'sign' or 'kex' for signing and encryption
@@ -225,7 +225,7 @@ lua_cryptobox_pubkey_load (lua_State *L)
 
 
 /***
- * function rspamd_cryptobox_pubkey.create(data[, type[, alg]])
+ * @function rspamd_cryptobox_pubkey.create(data[, type[, alg]])
  * Loads public key from base32 encoded file
  * @param {base32 string} base32 string with the key
  * @param {string} type optional 'sign' or 'kex' for signing and encryption
@@ -299,7 +299,7 @@ lua_cryptobox_pubkey_gc (lua_State *L)
 }
 
 /***
- * function rspamd_cryptobox_keypair.load(file)
+ * @function rspamd_cryptobox_keypair.load(file)
  * Loads public key from UCL file
  * @param {string} file filename to load
  * @return {cryptobox_keypair} new keypair
@@ -350,7 +350,7 @@ lua_cryptobox_keypair_load (lua_State *L)
 }
 
 /***
- * function rspamd_cryptobox_keypair.create(ucl_data)
+ * @function rspamd_cryptobox_keypair.create(ucl_data)
  * Loads public key from UCL data
  * @param {string} ucl_data ucl to load
  * @return {cryptobox_keypair} new keypair
@@ -412,7 +412,7 @@ lua_cryptobox_keypair_gc (lua_State *L)
 }
 
 /***
- * function rspamd_cryptobox_signature.load(file)
+ * @function rspamd_cryptobox_signature.load(file)
  * Loads signature from raw file
  * @param {string} file filename to load
  * @return {cryptobox_signature} new signature
@@ -471,7 +471,7 @@ lua_cryptobox_signature_load (lua_State *L)
 }
 
 /***
- * method rspamd_cryptobox_signature:save(file)
+ * @method rspamd_cryptobox_signature:save(file)
  * Stores signature in raw file
  * @param {string} file filename to use
  * @return {boolean} true if signature has been saved
@@ -534,7 +534,7 @@ lua_cryptobox_signature_save (lua_State *L)
 }
 
 /***
- * function rspamd_cryptobox_signature.create(data)
+ * @function rspamd_cryptobox_signature.create(data)
  * Creates signature object from raw data
  * @param {data} raw signature data
  * @return {cryptobox_signature} signature object
@@ -574,7 +574,7 @@ lua_cryptobox_signature_gc (lua_State *L)
 }
 
 /***
- * function rspamd_cryptobox_hash.create()
+ * @function rspamd_cryptobox_hash.create()
  * Creates new hash context
  * @param {string} data raw signature data
  * @return {cryptobox_hash} hash object
@@ -594,7 +594,7 @@ lua_cryptobox_hash_create (lua_State *L)
 }
 
 /***
- * function rspamd_cryptobox_hash.create_keyed(key)
+ * @function rspamd_cryptobox_hash.create_keyed(key)
  * Creates new hash context with specified key
  * @param {string} key key
  * @return {cryptobox_hash} hash object
@@ -623,7 +623,7 @@ lua_cryptobox_hash_create_keyed (lua_State *L)
 }
 
 /***
- * method cryptobox_hash:update(data)
+ * @method cryptobox_hash:update(data)
  * Updates hash with the specified data (hash should not be finalized using `hex` or `bin` methods)
  * @param {string} data data to hash
  */
@@ -647,7 +647,7 @@ lua_cryptobox_hash_update (lua_State *L)
 }
 
 /***
- * method cryptobox_hash:hex()
+ * @method cryptobox_hash:hex()
  * Finalizes hash and return it as hex string
  * @return {string} hex value of hash
  */
@@ -673,7 +673,7 @@ lua_cryptobox_hash_hex (lua_State *L)
 }
 
 /***
- * method cryptobox_hash:bin()
+ * @method cryptobox_hash:bin()
  * Finalizes hash and return it as raw string
  * @return {string} raw value of hash
  */
@@ -706,7 +706,7 @@ lua_cryptobox_hash_gc (lua_State *L)
 }
 
 /***
- * function rspamd_cryptobox.verify_memory(pk, sig, data)
+ * @function rspamd_cryptobox.verify_memory(pk, sig, data)
  * Check memory using specified cryptobox key and signature
  * @param {pubkey} pk public key to verify
  * @param {sig} signature to check
@@ -745,7 +745,7 @@ lua_cryptobox_verify_memory (lua_State *L)
 }
 
 /***
- * function rspamd_cryptobox.verify_file(pk, sig, file)
+ * @function rspamd_cryptobox.verify_file(pk, sig, file)
  * Check file using specified cryptobox key and signature
  * @param {pubkey} pk public key to verify
  * @param {sig} signature to check
@@ -791,7 +791,7 @@ lua_cryptobox_verify_file (lua_State *L)
 }
 
 /***
- * function rspamd_cryptobox.sign_memory(kp, data)
+ * @function rspamd_cryptobox.sign_memory(kp, data)
  * Sign data using specified keypair
  * @param {keypair} kp keypair to sign
  * @param {string} data
@@ -828,7 +828,7 @@ lua_cryptobox_sign_memory (lua_State *L)
 }
 
 /***
- * function rspamd_cryptobox.sign_file(kp, file)
+ * @function rspamd_cryptobox.sign_file(kp, file)
  * Sign file using specified keypair
  * @param {keypair} kp keypair to sign
  * @param {string} filename
