@@ -20,6 +20,12 @@
 #include "libutil/str_util.h"
 #include "libutil/printf.h"
 
+static GQuark
+rspamd_keypair_quark (void)
+{
+	return g_quark_from_static_string ("rspamd-cryptobox-keypair");
+}
+
 /**
  * Returns specific private key for different keypair types
  */
@@ -805,4 +811,72 @@ rspamd_keypair_to_ucl (struct rspamd_cryptobox_keypair *kp,
 					"type", 0, false);
 
 	return ucl_out;
+}
+
+gboolean
+rspamd_keypair_sign (struct rspamd_cryptobox_keypair *kp,
+		const void *data, gsize len, guchar **sig, gsize *outlen,
+		GError **err)
+{
+	gsize siglen;
+	guint sklen;
+
+	g_assert (kp != NULL);
+	g_assert (data != NULL);
+	g_assert (sig != NULL);
+
+	if (kp->type != RSPAMD_KEYPAIR_SIGN) {
+		g_set_error (err, rspamd_keypair_quark (), EINVAL,
+				"invalid keypair: expected signature pair");
+
+		return FALSE;
+	}
+
+	siglen = rspamd_cryptobox_signature_bytes (kp->alg);
+	*sig = g_malloc (siglen);
+	rspamd_cryptobox_sign (*sig, &siglen, data, len,
+			rspamd_cryptobox_keypair_sk (kp, &sklen), kp->alg);
+
+	if (outlen != NULL) {
+		*outlen = siglen;
+	}
+
+	return TRUE;
+}
+
+gboolean
+rspamd_keypair_verify (struct rspamd_cryptobox_pubkey *pk,
+		const void *data, gsize len, guchar *sig, gsize siglen,
+		GError **err)
+{
+	guint pklen;
+
+	g_assert (pk != NULL);
+	g_assert (data != NULL);
+	g_assert (sig != NULL);
+
+	if (pk->type != RSPAMD_KEYPAIR_SIGN) {
+		g_set_error (err, rspamd_keypair_quark (), EINVAL,
+				"invalid keypair: expected signature pair");
+
+		return FALSE;
+	}
+
+	if (siglen != rspamd_cryptobox_signature_bytes (pk->alg)) {
+		g_set_error (err, rspamd_keypair_quark (), E2BIG,
+				"invalid signature length: %d; expected %d",
+				(int)siglen, (int) rspamd_cryptobox_signature_bytes (pk->alg));
+
+		return FALSE;
+	}
+
+	if (!rspamd_cryptobox_verify (sig, data, len,
+			rspamd_cryptobox_pubkey_pk (pk, &pklen), pk->alg)) {
+		g_set_error (err, rspamd_keypair_quark (), EPERM,
+				"signature verification failed");
+
+		return FALSE;
+	}
+
+	return TRUE;
 }
