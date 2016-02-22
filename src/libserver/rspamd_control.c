@@ -93,6 +93,13 @@ static const struct rspamd_control_cmd_match {
 				},
 				.type = RSPAMD_CONTROL_FUZZY_STAT
 		},
+		{
+				.name = {
+						.begin = "/fuzzysync",
+						.len = sizeof ("/fuzzysync") - 1
+				},
+				.type = RSPAMD_CONTROL_FUZZY_SYNC
+		},
 };
 
 void
@@ -177,7 +184,8 @@ rspamd_control_write_reply (struct rspamd_control_session *session)
 
 	DL_FOREACH (session->replies, elt) {
 		/* Skip incompatible worker for fuzzy_stat */
-		if (session->cmd.type == RSPAMD_CONTROL_FUZZY_STAT &&
+		if ((session->cmd.type == RSPAMD_CONTROL_FUZZY_STAT ||
+			session->cmd.type == RSPAMD_CONTROL_FUZZY_SYNC) &&
 				elt->wrk->type != g_quark_from_static_string ("fuzzy")) {
 			continue;
 		}
@@ -264,6 +272,10 @@ rspamd_control_write_reply (struct rspamd_control_session *session)
 						0,
 						false);
 			}
+			break;
+		case RSPAMD_CONTROL_FUZZY_SYNC:
+			ucl_object_insert_key (cur, ucl_object_fromint (
+					elt->reply.reply.fuzzy_sync.status), "status", 0, false);
 			break;
 		default:
 			break;
@@ -501,6 +513,7 @@ rspamd_control_default_cmd_handler (gint fd,
 	case RSPAMD_CONTROL_RECOMPILE:
 	case RSPAMD_CONTROL_HYPERSCAN_LOADED:
 	case RSPAMD_CONTROL_FUZZY_STAT:
+	case RSPAMD_CONTROL_FUZZY_SYNC:
 		break;
 	case RSPAMD_CONTROL_RERESOLVE:
 		if (cd->worker->srv->cfg) {

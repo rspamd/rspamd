@@ -808,6 +808,45 @@ sync_callback (gint fd, short what, void *arg)
 }
 
 static gboolean
+rspamd_fuzzy_storage_sync (struct rspamd_main *rspamd_main,
+		struct rspamd_worker *worker, gint fd,
+		struct rspamd_control_command *cmd,
+		gpointer ud)
+{
+	struct rspamd_fuzzy_storage_ctx *ctx = ud;
+	gdouble next_check;
+	guint64 old_expired, new_expired;
+	struct rspamd_control_reply rep;
+
+	if (ctx->backend) {
+		rspamd_fuzzy_process_updates_queue (ctx);
+		/* Call backend sync */
+		old_expired = rspamd_fuzzy_backend_expired (ctx->backend);
+		rspamd_fuzzy_backend_sync (ctx->backend, ctx->expire, TRUE);
+		new_expired = rspamd_fuzzy_backend_expired (ctx->backend);
+
+		if (old_expired < new_expired) {
+			ctx->stat.fuzzy_hashes_expired += new_expired - old_expired;
+		}
+	}
+
+	rep.reply.fuzzy_sync.status = 0;
+
+	/* Handle next timer event */
+	event_del (&tev);
+	next_check = rspamd_time_jitter (ctx->sync_timeout, 0);
+	double_to_tv (next_check, &tmv);
+	evtimer_add (&tev, &tmv);
+
+	if (write (fd, &rep, sizeof (rep)) != sizeof (rep)) {
+		msg_err ("cannot write reply to the control socket: %s",
+				strerror (errno));
+	}
+
+	return TRUE;
+}
+
+static gboolean
 rspamd_fuzzy_storage_reload (struct rspamd_main *rspamd_main,
 		struct rspamd_worker *worker, gint fd,
 		struct rspamd_control_command *cmd,
@@ -1382,6 +1421,8 @@ start_fuzzy (struct rspamd_worker *worker)
 			rspamd_fuzzy_storage_reload, ctx);
 	rspamd_control_worker_add_cmd_handler (worker, RSPAMD_CONTROL_FUZZY_STAT,
 			rspamd_fuzzy_storage_stat, ctx);
+	rspamd_control_worker_add_cmd_handler (worker, RSPAMD_CONTROL_FUZZY_SYNC,
+				rspamd_fuzzy_storage_sync, ctx);
 	/* Create radix tree */
 	if (ctx->update_map != NULL) {
 		if (!rspamd_map_is_map (ctx->update_map)) {

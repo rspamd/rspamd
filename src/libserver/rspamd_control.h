@@ -30,6 +30,7 @@ enum rspamd_control_type {
 	RSPAMD_CONTROL_RECOMPILE,
 	RSPAMD_CONTROL_HYPERSCAN_LOADED,
 	RSPAMD_CONTROL_FUZZY_STAT,
+	RSPAMD_CONTROL_FUZZY_SYNC,
 	RSPAMD_CONTROL_MAX
 };
 
@@ -60,6 +61,9 @@ struct rspamd_control_command {
 		struct {
 			guint unused;
 		} fuzzy_stat;
+		struct {
+			guint unused;
+		} fuzzy_sync;
 	} cmd;
 };
 
@@ -89,6 +93,9 @@ struct rspamd_control_reply {
 			guint status;
 			gchar storage_id[MEMPOOL_UID_LEN];
 		} fuzzy_stat;
+		struct {
+			guint status;
+		} fuzzy_sync;
 	} reply;
 };
 

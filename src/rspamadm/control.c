@@ -201,6 +201,10 @@ rspamadm_control (gint argc, gchar **argv)
 			g_ascii_strcasecmp (cmd, "fuzzy_stat") == 0) {
 		path = "/fuzzystat";
 	}
+	else if (g_ascii_strcasecmp (cmd, "fuzzysync") == 0 ||
+			g_ascii_strcasecmp (cmd, "fuzzy_sync") == 0) {
+		path = "/fuzzysync";
+	}
 	else {
 		rspamd_fprintf (stderr, "unknown command: %s\n", cmd);
 		exit (1);
