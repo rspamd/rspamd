@@ -321,23 +321,31 @@ rspamd_control_wrk_io (gint fd, short what, gpointer ud)
 	session = elt->ud;
 	elt->attached_fd = -1;
 
-	iov.iov_base = &elt->reply;
-	iov.iov_len = sizeof (elt->reply);
-	memset (&msg, 0, sizeof (msg));
-	msg.msg_control = fdspace;
-	msg.msg_controllen = sizeof (fdspace);
-	msg.msg_iov = &iov;
-	msg.msg_iovlen = 1;
+	if (what == EV_READ) {
+		iov.iov_base = &elt->reply;
+		iov.iov_len = sizeof (elt->reply);
+		memset (&msg, 0, sizeof (msg));
+		msg.msg_control = fdspace;
+		msg.msg_controllen = sizeof (fdspace);
+		msg.msg_iov = &iov;
+		msg.msg_iovlen = 1;
 
-	r = recvmsg (fd, &msg, 0);
-	if (r == -1) {
-		msg_err ("cannot read request from the worker %P (%s): %s",
-				elt->wrk->pid, g_quark_to_string (elt->wrk->type), strerror (errno));
-	}
-	else if (r >= (gssize)sizeof (elt->reply)) {
-		if (msg.msg_controllen >= CMSG_SPACE(sizeof (int))) {
-			elt->attached_fd = *(int *) CMSG_DATA(CMSG_FIRSTHDR (&msg));
+		r = recvmsg (fd, &msg, 0);
+		if (r == -1) {
+			msg_err ("cannot read reply from the worker %P (%s): %s",
+					elt->wrk->pid, g_quark_to_string (elt->wrk->type),
+					strerror (errno));
 		}
+		else if (r >= (gssize)sizeof (elt->reply)) {
+			if (msg.msg_controllen >= CMSG_SPACE(sizeof (int))) {
+				elt->attached_fd = *(int *) CMSG_DATA(CMSG_FIRSTHDR (&msg));
+			}
+		}
+	}
+	else {
+		/* Timeout waiting */
+		msg_warn ("timeout waiting reply from %P (%s)",
+				elt->wrk->pid, g_quark_to_string (elt->wrk->type));
 	}
 
 	session->replies_remain --;
