@@ -128,7 +128,7 @@ lua_check_cryptobox_sign (lua_State * L, int pos)
 }
 
 /***
- * function pubkey.load(file[, type[, alg]])
+ * function rspamd_cryptobox_pubkey.load(file[, type[, alg]])
  * Loads public key from base32 encoded file
  * @param {string} file filename to load
  * @param {string} type optional 'sign' or 'kex' for signing and encryption
@@ -195,14 +195,15 @@ lua_cryptobox_pubkey_load (lua_State *L)
 		}
 	}
 	else {
-		lua_error (L);
+		luaL_error (L, "bad input arguments");
 	}
+
 	return 1;
 }
 
 
 /***
- * function pubkey.create(data[, type[, alg]])
+ * function rspamd_cryptobox_pubkey.create(data[, type[, alg]])
  * Loads public key from base32 encoded file
  * @param {base32 string} base32 string with the key
  * @param {string} type optional 'sign' or 'kex' for signing and encryption
@@ -257,8 +258,9 @@ lua_cryptobox_pubkey_create (lua_State *L)
 
 	}
 	else {
-		lua_pushnil (L);
+		luaL_error (L, "bad input arguments");
 	}
+
 	return 1;
 }
 
@@ -275,7 +277,7 @@ lua_cryptobox_pubkey_gc (lua_State *L)
 }
 
 /***
- * function keypair.load(file)
+ * function rspamd_cryptobox_keypair.load(file)
  * Loads public key from UCL file
  * @param {string} file filename to load
  * @return {cryptobox_keypair} new keypair
@@ -319,14 +321,14 @@ lua_cryptobox_keypair_load (lua_State *L)
 		}
 	}
 	else {
-		lua_error (L);
+		luaL_error (L, "bad input arguments");
 	}
 
 	return 1;
 }
 
 /***
- * function keypair.create(ucl_data)
+ * function rspamd_cryptobox_keypair.create(ucl_data)
  * Loads public key from UCL data
  * @param {string} ucl_data ucl to load
  * @return {cryptobox_keypair} new keypair
@@ -369,7 +371,7 @@ lua_cryptobox_keypair_create (lua_State *L)
 		}
 	}
 	else {
-		lua_error (L);
+		luaL_error (L, "bad input arguments");
 	}
 
 	return 1;
@@ -388,7 +390,7 @@ lua_cryptobox_keypair_gc (lua_State *L)
 }
 
 /***
- * function signature.load(file)
+ * function rspamd_cryptobox_signature.load(file)
  * Loads signature from raw file
  * @param {string} file filename to load
  * @return {cryptobox_signature} new signature
@@ -420,23 +422,34 @@ lua_cryptobox_signature_load (lua_State *L)
 				lua_pushnil (L);
 			}
 			else {
-				sig = rspamd_fstring_new_init (data, st.st_size);
-				psig = lua_newuserdata (L, sizeof (rspamd_fstring_t *));
-				rspamd_lua_setclass (L, "rspamd{cryptobox_signature}", -1);
-				*psig = sig;
+				if (st.st_size == rspamd_cryptobox_signature_bytes (
+						RSPAMD_CRYPTOBOX_MODE_25519)) {
+					sig = rspamd_fstring_new_init (data, st.st_size);
+					psig = lua_newuserdata (L, sizeof (rspamd_fstring_t *));
+					rspamd_lua_setclass (L, "rspamd{cryptobox_signature}", -1);
+					*psig = sig;
+				}
+				else {
+					msg_err ("size of %s missmatches: %d while %d is expected",
+							filename, (int)st.st_size,
+							rspamd_cryptobox_signature_bytes (RSPAMD_CRYPTOBOX_MODE_25519));
+					lua_pushnil (L);
+				}
+
 				munmap (data, st.st_size);
 			}
 			close (fd);
 		}
 	}
 	else {
-		lua_pushnil (L);
+		luaL_error (L, "bad input arguments");
 	}
+
 	return 1;
 }
 
 /***
- * method signature:save(file)
+ * method rspamd_cryptobox_signature:save(file)
  * Stores signature in raw file
  * @param {string} file filename to use
  * @return {boolean} true if signature has been saved
@@ -451,6 +464,12 @@ lua_cryptobox_signature_save (lua_State *L)
 
 	sig = lua_check_cryptobox_sign (L, 1);
 	filename = luaL_checkstring (L, 2);
+
+	if (!sig || !filename) {
+		luaL_error (L, "bad input arguments");
+		return 1;
+	}
+
 	if (lua_gettop (L) > 2) {
 		forced = lua_toboolean (L, 3);
 	}
@@ -492,6 +511,12 @@ lua_cryptobox_signature_save (lua_State *L)
 	return 1;
 }
 
+/***
+ * function rspamd_cryptobox_signature.create(data)
+ * Creates signature object from raw data
+ * @param {data} raw signature data
+ * @return {cryptobox_signature} signature object
+ */
 static gint
 lua_cryptobox_signature_create (lua_State *L)
 {
@@ -500,11 +525,17 @@ lua_cryptobox_signature_create (lua_State *L)
 	gsize dlen;
 
 	data = luaL_checklstring (L, 1, &dlen);
+
 	if (data != NULL) {
-		sig = rspamd_fstring_new_init (data, dlen);
-		psig = lua_newuserdata (L, sizeof (rspamd_fstring_t *));
-		rspamd_lua_setclass (L, "rspamd{cryptobox_signature}", -1);
-		*psig = sig;
+		if (dlen == rspamd_cryptobox_signature_bytes (RSPAMD_CRYPTOBOX_MODE_25519)) {
+			sig = rspamd_fstring_new_init (data, dlen);
+			psig = lua_newuserdata (L, sizeof (rspamd_fstring_t *));
+			rspamd_lua_setclass (L, "rspamd{cryptobox_signature}", -1);
+			*psig = sig;
+		}
+	}
+	else {
+		luaL_error (L, "bad input arguments");
 	}
 
 	return 1;
@@ -520,15 +551,13 @@ lua_cryptobox_signature_gc (lua_State *L)
 	return 0;
 }
 
-/**
+/***
+ * function rspamd_cryptobox.verify_memory(pk, sig, data)
  * Check memory using specified cryptobox key and signature
- *
- * arguments:
- * (cryptobox_pubkey, cryptobox_signature, string)
- *
- * returns:
- * true - if string match cryptobox signature
- * false - otherwise
+ * @param {pubkey} pk public key to verify
+ * @param {sig} signature to check
+ * @param {string} data data to check signature against
+ * @return {boolean} `true` - if string matches cryptobox signature
  */
 static gint
 lua_cryptobox_verify_memory (lua_State *L)
@@ -561,15 +590,13 @@ lua_cryptobox_verify_memory (lua_State *L)
 	return 1;
 }
 
-/**
- * Check memory using specified cryptobox key and signature
- *
- * arguments:
- * (cryptobox_pubkey, cryptobox_signature, string)
- *
- * returns:
- * true - if string match cryptobox signature
- * false - otherwise
+/***
+ * function rspamd_cryptobox.verify_file(pk, sig, file)
+ * Check file using specified cryptobox key and signature
+ * @param {pubkey} pk public key to verify
+ * @param {sig} signature to check
+ * @param {string} file to load data from
+ * @return {boolean} `true` - if string matches cryptobox signature
  */
 static gint
 lua_cryptobox_verify_file (lua_State *L)
@@ -599,7 +626,7 @@ lua_cryptobox_verify_file (lua_State *L)
 		}
 	}
 	else {
-		lua_error (L);
+		luaL_error (L, "invalid arguments");
 	}
 
 	if (map != NULL) {
@@ -609,36 +636,88 @@ lua_cryptobox_verify_file (lua_State *L)
 	return 1;
 }
 
-/**
- * Sign memory using specified cryptobox key and signature
- *
- * arguments:
- * (cryptobox_keypair, string)
- *
- * returns:
- * rspamd_signature object
- * nil - otherwise
+/***
+ * function rspamd_cryptobox.sign_memory(kp, data)
+ * Sign data using specified keypair
+ * @param {keypair} kp keypair to sign
+ * @param {string} data
+ * @return {cryptobox_signature} signature object
  */
 static gint
 lua_cryptobox_sign_memory (lua_State *L)
 {
-	return 0;
+	struct rspamd_cryptobox_keypair *kp;
+	const gchar *data;
+	gsize len = 0;
+	rspamd_fstring_t *sig, **psig;
+
+	kp = lua_check_cryptobox_keypair (L, 1);
+	data = luaL_checklstring (L, 2, &len);
+
+	if (!kp || !data) {
+		luaL_error (L, "invalid arguments");
+
+		return 1;
+	}
+
+	sig = rspamd_fstring_sized_new (rspamd_cryptobox_signature_bytes (
+			rspamd_keypair_alg (kp)));
+	rspamd_cryptobox_sign (sig->str, &sig->len, data,
+			len, rspamd_keypair_component (kp, RSPAMD_KEYPAIR_COMPONENT_SK,
+					NULL), rspamd_keypair_alg (kp));
+
+	psig = lua_newuserdata (L, sizeof (void *));
+	*psig = sig;
+	rspamd_lua_setclass (L, "rspamd{cryptobox_signature}", -1);
+
+	return 1;
 }
 
-/**
- * Sign file using specified cryptobox key and signature
- *
- * arguments:
- * (cryptobox_keypair, cryptobox_signature, string)
- *
- * returns:
- * true - if string match cryptobox signature
- * false - otherwise
+/***
+ * function rspamd_cryptobox.sign_file(kp, file)
+ * Sign file using specified keypair
+ * @param {keypair} kp keypair to sign
+ * @param {string} filename
+ * @return {cryptobox_signature} signature object
  */
 static gint
 lua_cryptobox_sign_file (lua_State *L)
 {
-	return 0;
+	struct rspamd_cryptobox_keypair *kp;
+	const gchar *filename;
+	gchar *data;
+	gsize len = 0;
+	rspamd_fstring_t *sig, **psig;
+
+	kp = lua_check_cryptobox_keypair (L, 1);
+	filename = luaL_checkstring (L, 2);
+
+	if (!kp || !filename) {
+		luaL_error (L, "invalid arguments");
+
+		return 1;
+	}
+
+	data = rspamd_file_xmap (filename, PROT_READ, &len);
+
+	if (data == NULL) {
+		msg_err ("cannot mmap file %s: %s", filename, strerror (errno));
+		lua_pushnil (L);
+	}
+	else {
+		sig = rspamd_fstring_sized_new (rspamd_cryptobox_signature_bytes (
+				rspamd_keypair_alg (kp)));
+		rspamd_cryptobox_sign (sig->str, &sig->len, data,
+				len, rspamd_keypair_component (kp, RSPAMD_KEYPAIR_COMPONENT_SK,
+						NULL), rspamd_keypair_alg (kp));
+
+		psig = lua_newuserdata (L, sizeof (void *));
+		*psig = sig;
+		rspamd_lua_setclass (L, "rspamd{cryptobox_signature}", -1);
+		munmap (data, len);
+	}
+
+	return 1;
 }
 
 static gint
