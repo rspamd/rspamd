@@ -366,7 +366,9 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 				sqlite3_close (sqlite);
 				rspamd_file_unlock (lock_fd, FALSE);
 				unlink (lock_path);
-				close (lock_fd);
+				if (lock_fd != -1) {
+					close (lock_fd);
+				}
 
 				return NULL;
 			}
@@ -391,7 +393,11 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 	#endif
 			rspamd_file_unlock (lock_fd, FALSE);
 			unlink (lock_path);
-			close (lock_fd);
+
+			if (lock_fd != -1) {
+				close (lock_fd);
+			}
+
 			return NULL;
 		}
 	}

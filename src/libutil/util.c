@@ -163,6 +163,7 @@ rspamd_inet_socket_create (gint type, struct addrinfo *addr, gboolean is_server,
 {
 	gint fd = -1, r, optlen, on = 1, s_error;
 	struct addrinfo *cur;
+	gpointer ptr;
 
 	cur = addr;
 	while (cur) {
@@ -238,7 +239,8 @@ rspamd_inet_socket_create (gint type, struct addrinfo *addr, gboolean is_server,
 			break;
 		}
 		else if (fd != -1) {
-			*list = g_list_prepend (*list, GINT_TO_POINTER (fd));
+			ptr = GINT_TO_POINTER (fd);
+			*list = g_list_prepend (*list, ptr);
 			cur = cur->ai_next;
 			continue;
 		}
@@ -249,6 +251,7 @@ out:
 		fd = -1;
 		cur = cur->ai_next;
 	}
+
 	return (fd);
 }
 
@@ -475,6 +478,7 @@ rspamd_sockets_list (const gchar *credits, guint16 port,
 	gint r, fd = -1, serrno;
 	gchar portbuf[8], **strv, **cur;
 	GList *result = NULL, *rcur;
+	gpointer ptr;
 
 	strv = g_strsplit_set (credits, ",", -1);
 	if (strv == NULL) {
@@ -510,7 +514,8 @@ rspamd_sockets_list (const gchar *credits, guint16 port,
 				}
 			}
 			if (fd != -1) {
-				result = g_list_prepend (result, GINT_TO_POINTER (fd));
+				ptr = GINT_TO_POINTER (fd);
+				result = g_list_prepend (result, ptr);
 				fd = -1;
 			}
 			else {
@@ -564,12 +569,16 @@ err:
 	serrno = errno;
 	rcur = result;
 	while (rcur != NULL) {
-		fd = GPOINTER_TO_INT (rcur->data);
+		ptr = rcur->data;
+		fd = GPOINTER_TO_INT (ptr);
+
 		if (fd != -1) {
 			close (fd);
 		}
+
 		rcur = g_list_next (rcur);
 	}
+
 	if (result != NULL) {
 		g_list_free (result);
 	}

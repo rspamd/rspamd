@@ -141,10 +141,10 @@ rspamd_http_client_func (struct event_base *ev_base, struct lat_elt *latency,
 	struct client_cbdata *cb;
 	gint fd, flags;
 
-	g_assert (
-			(fd = rspamd_inet_address_connect (addr, SOCK_STREAM, TRUE)) != -1);
+	fd = rspamd_inet_address_connect (addr, SOCK_STREAM, TRUE);
+	g_assert (fd != -1);
 	flags = 1;
-	setsockopt (fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof (flags));
+	(void)setsockopt (fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof (flags));
 	conn = rspamd_http_connection_new (rspamd_client_body, rspamd_client_err,
 			rspamd_client_finish, RSPAMD_HTTP_CLIENT_SIMPLE,
 			RSPAMD_HTTP_CLIENT, c);

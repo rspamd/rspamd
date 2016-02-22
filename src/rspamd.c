@@ -336,13 +336,15 @@ create_listen_socket (GPtrArray *addrs, guint cnt, gint listen_type)
 	GList *result = NULL;
 	gint fd;
 	guint i;
+	gpointer p;
 
 	g_ptr_array_sort (addrs, rspamd_inet_address_compare_ptr);
 	for (i = 0; i < cnt; i ++) {
 		fd = rspamd_inet_address_listen (g_ptr_array_index (addrs, i),
 				listen_type, TRUE);
 		if (fd != -1) {
-			result = g_list_prepend (result, GINT_TO_POINTER (fd));
+			p = GINT_TO_POINTER (fd);
+			result = g_list_prepend (result, p);
 		}
 	}
 

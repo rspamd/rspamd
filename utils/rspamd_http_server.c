@@ -191,8 +191,8 @@ rspamd_http_start_servers (pid_t *sfd, rspamd_inet_addr_t *addr)
 	guint i;
 	gint fd;
 
-	g_assert (
-			(fd = rspamd_inet_address_listen (addr, SOCK_STREAM, TRUE)) != -1);
+	fd = rspamd_inet_address_listen (addr, SOCK_STREAM, TRUE);
+	g_assert (fd != -1);
 
 	for (i = 0; i < nworkers; i++) {
 		sfd[i] = fork ();

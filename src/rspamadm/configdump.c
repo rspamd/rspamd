@@ -104,6 +104,7 @@ rspamadm_add_doc_elt (const ucl_object_t *obj, const ucl_object_t *doc_obj,
 
 	if (ucl_object_lookup_len (comment_obj, (const char *)&obj,
 			sizeof (void *))) {
+		rspamd_fstring_free (comment);
 		/* Do not rewrite the existing comment */
 		return;
 	}

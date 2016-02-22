@@ -1225,7 +1225,7 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 							t = GUINT32_TO_BE (t);
 							break;
 						case 3:
-							t = (GUINT32_TO_BE (t & 0xFFFFFFU) >> 8);
+							t = (GUINT32_TO_BE (t & 0xFFFFFFU)) >> 8;
 							break;
 						case 2:
 							t = GUINT16_TO_BE (t & 0xFFFFU);

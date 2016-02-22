@@ -642,7 +642,6 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 	struct smtp_proxy_session *session = arg;
 	gint res = 0;
 	struct rdns_reply_entry *elt;
-	GList *cur;
 
 	switch (session->state)
 	{
@@ -703,7 +702,6 @@ smtp_dns_cb (struct rdns_reply *reply, void *arg)
 					session->resolved = TRUE;
 					break;
 				}
-				cur = g_list_next (cur);
 			}
 
 			if (res == 0) {

@@ -136,7 +136,9 @@ rspamadm_edit_file (const gchar *fname)
 
 	rspamd_snprintf (tmppath, sizeof (tmppath),
 			"%s/rspamd_sign-XXXXXXXXXX", tmpdir);
+	mode_t cur_umask = umask (S_IRWXO|S_IRWXG);
 	fd_out = mkstemp (tmppath);
+	(void)umask (cur_umask);
 
 	if (fd_out == -1) {
 		rspamd_fprintf (stderr, "cannot open tempfile %s: %s\n", tmppath,
@@ -213,7 +215,6 @@ rspamadm_edit_file (const gchar *fname)
 		rspamd_fprintf (stderr, "cannot map %s: %s\n", tmppath,
 				strerror (errno));
 		unlink (tmppath);
-		close (fd_out);
 		exit (errno);
 	}
 
@@ -225,6 +226,7 @@ rspamadm_edit_file (const gchar *fname)
 		rspamd_fprintf (stderr, "cannot open new file %s: %s\n", run_cmdline,
 				strerror (errno));
 		unlink (tmppath);
+		munmap (map, len);
 		exit (errno);
 	}
 
@@ -234,11 +236,13 @@ rspamadm_edit_file (const gchar *fname)
 		unlink (tmppath);
 		unlink (run_cmdline);
 		close (fd_out);
+		munmap (map, len);
 		exit (errno);
 	}
 
 	unlink (tmppath);
 	(void)lseek (fd_out, 0, SEEK_SET);
+	munmap (map, len);
 
 	return fd_out;
 }
