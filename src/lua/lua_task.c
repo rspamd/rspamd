@@ -1599,9 +1599,13 @@ lua_task_get_user (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 
-	if (task && task->user != NULL) {
-		lua_pushstring (L, task->user);
-		return 1;
+	if (task) {
+		if (task->user != NULL) {
+			lua_pushstring (L, task->user);
+		}
+		else {
+			lua_pushnil (L);
+		}
 	}
 	else {
 		luaL_error (L, "invalid arguments");
