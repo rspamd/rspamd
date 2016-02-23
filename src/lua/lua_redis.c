@@ -130,7 +130,14 @@ lua_redis_dtor (struct lua_redis_ctx *ctx)
 
 		if (ud->ctx) {
 			ud->terminated = 1;
+			/*
+			 * On calling of redisFree, hiredis calls for callbacks pending
+			 * Hence, to avoid double free, we ensure that the object must
+			 * still be alive here!
+			 */
+			ctx->ref.refcount = 100500;
 			redisAsyncFree (ud->ctx);
+			ctx->ref.refcount = 0;
 			lua_redis_free_args (ud->args, ud->nargs);
 			event_del (&ud->timeout);
 			luaL_unref (ud->L, LUA_REGISTRYINDEX, ud->cbref);
