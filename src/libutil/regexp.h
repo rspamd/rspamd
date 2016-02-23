@@ -32,6 +32,7 @@
 #define RSPAMD_REGEXP_FLAG_NOOPT (1 << 2)
 #define RSPAMD_REGEXP_FLAG_FULL_MATCH (1 << 3)
 #define RSPAMD_REGEXP_FLAG_PCRE_ONLY (1 << 4)
+#define RSPAMD_REGEXP_FLAG_DISABLE_JIT (1 << 5)
 
 typedef struct rspamd_regexp_s rspamd_regexp_t;
 struct rspamd_regexp_cache;

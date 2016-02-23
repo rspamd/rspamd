@@ -181,6 +181,7 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 	}
 	if (pcre2_jit_compile (r->re, jit_flags) < 0) {
 		msg_err ("jit compilation of %s is not supported", r->pattern);
+		r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
 	}
 
 	if (pcre2_pattern_info (r->re, PCRE2_INFO_JITSIZE, &jsz) >= 0 && jsz > 0) {
@@ -188,9 +189,10 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 	}
 	else {
 		msg_err ("jit compilation of %s is not supported", r->pattern);
+		r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
 	}
 
-	if (r->jstack) {
+	if (r->jstack && !(r->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT)) {
 		pcre2_jit_stack_assign (r->mcontext, NULL, r->jstack);
 	}
 
@@ -199,16 +201,18 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 
 		if (pcre2_jit_compile (r->raw_re, jit_flags) < 0) {
 			msg_debug ("jit compilation of %s is not supported", r->pattern);
+			r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
 		}
 
 		if (pcre2_pattern_info (r->raw_re, PCRE2_INFO_JITSIZE, &jsz) >= 0 && jsz > 0) {
 			r->raw_jstack = pcre2_jit_stack_create (32 * 1024, 512 * 1024, NULL);
+			r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
 		}
 		else {
 			msg_debug ("jit compilation of raw %s is not supported", r->pattern);
 		}
 
-		if (r->raw_jstack) {
+		if (r->raw_jstack && !(r->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT)) {
 			pcre2_jit_stack_assign (r->raw_mcontext, NULL, r->raw_jstack);
 		}
 	}
@@ -234,6 +238,7 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 		msg_warn ("cannot optimize regexp pattern: '%s': %s",
 				r->pattern, err_str);
 		try_jit = FALSE;
+		r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
 	}
 
 	if (r->raw_re && r->raw_re != r->re) {
@@ -262,6 +267,7 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 			if (n != 0 || jit != 1) {
 				msg_debug ("jit compilation of %s is not supported", r->pattern);
 				r->jstack = NULL;
+				r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
 			}
 			else {
 				r->jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
@@ -273,6 +279,7 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 	else {
 		msg_warn ("cannot optimize regexp pattern: '%s': %s",
 				r->pattern, err_str);
+		r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
 	}
 
 	if (try_raw_jit) {
@@ -292,6 +299,7 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 				if (n != 0 || jit != 1) {
 					msg_debug ("jit compilation of %s is not supported", r->pattern);
 					r->raw_jstack = NULL;
+					r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
 				}
 				else {
 					r->raw_jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
@@ -593,7 +601,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 		g_assert (remain > 0);
 		g_assert (mt != NULL);
 
-		if (st != NULL) {
+		if (st != NULL && !(re->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT)) {
 			rc = pcre_jit_exec (r, ext, mt, remain, 0, 0, ovec,
 					ncaptures, st);
 		}
@@ -700,17 +708,24 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 		mcontext = re->mcontext;
 		match_flags |= PCRE_FLAG(UTF);
 
-		if (!g_utf8_validate (mt, remain, NULL)) {
-			msg_err ("bad utf8 input for JIT re");
-			return FALSE;
-		}
 	}
 
 	match_data = pcre2_match_data_create (re->ncaptures + 1, NULL);
 
 #ifdef HAVE_PCRE_JIT
-	rc = pcre2_jit_match (r,  mt, remain, 0, match_flags, match_data,
-			mcontext);
+	if (!(re->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT)) {
+		if (!g_utf8_validate (mt, remain, NULL)) {
+			msg_err ("bad utf8 input for JIT re");
+			return FALSE;
+		}
+
+		rc = pcre2_jit_match (r,  mt, remain, 0, match_flags, match_data,
+				mcontext);
+	}
+	else {
+		rc = pcre2_match (r,  mt, remain, 0, match_flags, match_data,
+				mcontext);
+	}
 #else
 	rc = pcre2_match (r,  mt, remain, 0, match_flags, match_data,
 					mcontext);
