@@ -1937,6 +1937,8 @@ lua_task_has_symbol (lua_State *L)
 		if (mres) {
 			found = g_hash_table_lookup (mres->symbols, symbol) != NULL;
 		}
+
+		lua_pushboolean (L, found);
 	}
 	else {
 		luaL_error (L, "invalid arguments");
