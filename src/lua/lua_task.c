@@ -672,16 +672,21 @@ lua_task_process_message (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 
-	if (task != NULL && task->msg.len > 0) {
-		if (rspamd_message_parse (task) == 0) {
-			lua_pushboolean (L, TRUE);
+	if (task != NULL) {
+		if (task->msg.len > 0) {
+			if (rspamd_message_parse (task) == 0) {
+				lua_pushboolean (L, TRUE);
+			}
+			else {
+				lua_pushboolean (L, FALSE);
+			}
 		}
 		else {
-			lua_pushboolean (L, FALSE);
+			lua_pushnil (L);
 		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -699,7 +704,7 @@ lua_task_get_cfg (lua_State *L)
 		*pcfg = task->cfg;
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -716,7 +721,7 @@ lua_task_set_cfg (lua_State *L)
 		task->cfg = ud ? *((struct rspamd_config **)ud) : NULL;
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 0;
@@ -740,13 +745,18 @@ lua_task_get_message (lua_State * L)
 	GMimeMessage **pmsg;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
-	if (task != NULL && task->message != NULL) {
-		pmsg = lua_newuserdata (L, sizeof (GMimeMessage *));
-		rspamd_lua_setclass (L, "rspamd{message}", -1);
-		*pmsg = task->message;
+	if (task != NULL) {
+		if (task->message != NULL) {
+			pmsg = lua_newuserdata (L, sizeof (GMimeMessage *));
+			rspamd_lua_setclass (L, "rspamd{message}", -1);
+			*pmsg = task->message;
+		}
+		else {
+			lua_pushnil (L);
+		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 	return 1;
 }
@@ -763,8 +773,9 @@ lua_task_get_mempool (lua_State * L)
 		*ppool = task->task_pool;
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
+
 	return 1;
 }
 
@@ -780,7 +791,7 @@ lua_task_get_session (lua_State * L)
 		*psession = task->s;
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 	return 1;
 }
@@ -797,7 +808,7 @@ lua_task_get_ev_base (lua_State * L)
 		*pbase = task->ev_base;
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 	return 1;
 }
@@ -827,7 +838,7 @@ lua_task_insert_result (lua_State * L)
 		rspamd_task_insert_result (task, symbol_name, flag, params);
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 0;
@@ -848,6 +859,7 @@ lua_task_set_pre_result (lua_State * L)
 		else if (lua_type (L, 2) == LUA_TSTRING) {
 			rspamd_action_from_str (lua_tostring (L, 2), &action);
 		}
+
 		if (action < METRIC_ACTION_MAX && action >= METRIC_ACTION_REJECT) {
 			/* We also need to set the default metric to that result */
 			mres = rspamd_create_metric_result (task, DEFAULT_METRIC);
@@ -877,9 +889,12 @@ lua_task_set_pre_result (lua_State * L)
 					RSPAMD_TASK_STAGE_CLASSIFIERS_PRE |
 					RSPAMD_TASK_STAGE_CLASSIFIERS_POST);
 		}
+		else {
+			return luaL_error (L, "invalid arguments");
+		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 0;
@@ -922,11 +937,9 @@ lua_task_get_urls (lua_State * L)
 		if (need_emails) {
 			g_hash_table_foreach (task->emails, lua_tree_url_callback, &cb);
 		}
-
-		return 1;
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -952,7 +965,7 @@ lua_task_has_urls (lua_State * L)
 		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	lua_pushboolean (L, ret);
@@ -972,11 +985,9 @@ lua_task_get_content (lua_State * L)
 		t->len = task->msg.len;
 		t->start = task->msg.begin;
 		t->own = FALSE;
-
-		return 1;
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -993,10 +1004,9 @@ lua_task_get_emails (lua_State * L)
 		cb.i = 1;
 		cb.L = L;
 		g_hash_table_foreach (task->emails, lua_tree_url_callback, &cb);
-		return 1;
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -1020,11 +1030,9 @@ lua_task_get_text_parts (lua_State * L)
 			/* Make it array */
 			lua_rawseti (L, -2, i + 1);
 		}
-
-		return 1;
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -1048,10 +1056,9 @@ lua_task_get_parts (lua_State * L)
 			/* Make it array */
 			lua_rawseti (L, -2, i + 1);
 		}
-		return 1;
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -1083,12 +1090,14 @@ lua_task_get_request_header (lua_State *L)
 
 			return 1;
 		}
+		else {
+			lua_pushnil (L);
+		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushnil (L);
 	return 1;
 }
 
@@ -1141,7 +1150,7 @@ lua_task_set_request_header (lua_State *L)
 
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 
@@ -1212,12 +1221,14 @@ rspamd_lua_push_header (lua_State * L,
 			else {
 				val = rh->value;
 			}
+
 			if (val) {
 				lua_pushstring (L, val);
 			}
 			else {
 				lua_pushnil (L);
 			}
+
 			return 1;
 		}
 	}
@@ -1238,13 +1249,13 @@ lua_task_get_header_common (lua_State *L, gboolean full, gboolean raw)
 		if (lua_gettop (L) == 3) {
 			strong = lua_toboolean (L, 3);
 		}
-		return rspamd_lua_push_header (L, task->raw_headers, name, strong, full, raw);
+
+		return rspamd_lua_push_header (L, task->raw_headers, name,
+				strong, full, raw);
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
-
-	return 1;
 }
 
 static gint
@@ -1279,7 +1290,7 @@ lua_task_get_raw_headers (lua_State *L)
 		t->own = FALSE;
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 
@@ -1321,7 +1332,7 @@ lua_task_get_received_headers (lua_State * L)
 		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -1332,12 +1343,16 @@ lua_task_get_queue_id (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 
-	if (task && task->queue_id != NULL && strcmp (task->queue_id, "undef") != 0) {
-		lua_pushstring (L, task->queue_id);
-		return 1;
+	if (task) {
+		if (task->queue_id != NULL && strcmp (task->queue_id, "undef") != 0) {
+			lua_pushstring (L, task->queue_id);
+		}
+		else {
+			lua_pushnil (L);
+		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -1355,7 +1370,7 @@ lua_task_get_resolver (lua_State *L)
 		*presolver = task->resolver;
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -1370,7 +1385,7 @@ lua_task_inc_dns_req (lua_State *L)
 		task->dns_requests++;
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 0;
@@ -1450,7 +1465,7 @@ lua_task_get_recipients (lua_State *L)
 		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -1498,7 +1513,7 @@ lua_task_has_from (lua_State *L)
 		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	lua_pushboolean (L, ret);
@@ -1539,7 +1554,7 @@ lua_task_has_recipients (lua_State *L)
 		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	lua_pushboolean (L, ret);
@@ -1588,7 +1603,7 @@ lua_task_get_from (lua_State *L)
 		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -1608,7 +1623,7 @@ lua_task_get_user (lua_State *L)
 		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -1627,7 +1642,7 @@ lua_task_set_user (lua_State *L)
 		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 0;
@@ -1642,7 +1657,7 @@ lua_task_get_from_ip (lua_State *L)
 		rspamd_lua_ip_push (L, task->from_addr);
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -1657,7 +1672,7 @@ lua_task_set_from_ip (lua_State *L)
 
 	if (!task || !ip_str) {
 		lua_pushstring (L, "invalid parameters");
-		lua_error (L);
+		return lua_error (L);
 	}
 	else {
 		if (!rspamd_parse_inet_address (&addr,
@@ -1695,7 +1710,7 @@ lua_task_get_client_ip (lua_State *L)
 		rspamd_lua_ip_push (L, task->client_addr);
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -1711,9 +1726,12 @@ lua_task_get_helo (lua_State *L)
 			lua_pushstring (L, (gchar *)task->helo);
 			return 1;
 		}
+		else {
+			lua_pushnil (L);
+		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -1732,7 +1750,7 @@ lua_task_set_helo (lua_State *L)
 		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 0;
@@ -1760,11 +1778,13 @@ lua_task_get_hostname (lua_State *L)
 			else {
 				lua_pushstring (L, task->hostname);
 			}
-			return 1;
+		}
+		else {
+			lua_pushnil (L);
 		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -1784,7 +1804,7 @@ lua_task_set_hostname (lua_State *L)
 		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 0;
@@ -1800,20 +1820,19 @@ lua_task_get_images (lua_State *L)
 
 	if (task) {
 		cur = task->images;
-		if (cur != NULL) {
-			lua_newtable (L);
-			while (cur) {
-				pimg = lua_newuserdata (L, sizeof (struct rspamd_image *));
-				rspamd_lua_setclass (L, "rspamd{image}", -1);
-				*pimg = cur->data;
-				lua_rawseti (L, -2, i++);
-				cur = g_list_next (cur);
-			}
-			return 1;
+
+		lua_newtable (L);
+
+		while (cur) {
+			pimg = lua_newuserdata (L, sizeof (struct rspamd_image *));
+			rspamd_lua_setclass (L, "rspamd{image}", -1);
+			*pimg = cur->data;
+			lua_rawseti (L, -2, i++);
+			cur = g_list_next (cur);
 		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -1912,12 +1931,13 @@ lua_task_get_symbol (lua_State *L)
 		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	if (!found) {
 		lua_pushnil (L);
 	}
+
 	return 1;
 }
 
@@ -1941,7 +1961,7 @@ lua_task_has_symbol (lua_State *L)
 		lua_pushboolean (L, found);
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -2041,6 +2061,7 @@ lua_task_get_date (lua_State *L)
 				tim = 0.0;
 			}
 		}
+
 		if (type == DATE_CONNECT || type == DATE_MESSAGE) {
 			lua_pushnumber (L, tim);
 		}
@@ -2055,7 +2076,7 @@ lua_task_get_date (lua_State *L)
 		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -2066,11 +2087,16 @@ lua_task_get_message_id (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 
-	if (task != NULL && task->message_id != NULL) {
-		lua_pushstring (L, task->message_id);
+	if (task != NULL) {
+		if (task->message_id != NULL) {
+			lua_pushstring (L, task->message_id);
+		}
+		else {
+			lua_pushnil (L);
+		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -2091,7 +2117,7 @@ lua_task_get_timeval (lua_State *L)
 		lua_settable (L, -3);
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -2106,7 +2132,7 @@ lua_task_get_size (lua_State *L)
 		lua_pushnumber (L, task->msg.len);
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -2168,6 +2194,9 @@ lua_task_set_flag (lua_State *L)
 			msg_warn_task ("unknown flag requested: %s", flag);
 		}
 	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
 
 	return 0;
 }
@@ -2192,9 +2221,13 @@ lua_task_has_flag (lua_State *L)
 
 		if (!found) {
 			msg_warn_task ("unknown flag requested: %s", flag);
-			lua_pushboolean (L, 0);
 		}
 	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_pushboolean (L, found);
 
 	return 1;
 }
@@ -2206,9 +2239,9 @@ lua_task_get_flags (lua_State *L)
 	gint idx = 1;
 	guint flags, bit, i;
 
-	lua_newtable (L);
-
 	if (task) {
+		lua_newtable (L);
+
 		flags = task->flags;
 
 		for (i = 0; i < sizeof (task->flags) * NBBY; i ++) {
@@ -2254,6 +2287,9 @@ lua_task_get_flags (lua_State *L)
 			}
 		}
 	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
 
 	return 1;
 }
@@ -2268,8 +2304,7 @@ lua_task_learn (lua_State *L)
 	int ret = 1;
 
 	if (task == NULL) {
-		lua_error (L);
-		return 0;
+		return luaL_error (L, "invalid arguments");
 	}
 
 	is_spam = lua_toboolean(L, 2);
@@ -2300,6 +2335,9 @@ lua_task_set_settings (lua_State *L)
 	settings = ucl_object_lua_import (L, 2);
 	if (settings != NULL && task != NULL) {
 		task->settings = settings;
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 0;
@@ -2383,7 +2421,7 @@ lua_task_process_regexp (lua_State *L)
 		}
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	lua_pushnumber (L, ret);
@@ -2416,13 +2454,12 @@ lua_task_get_metric_score (lua_State *L)
 		else {
 			lua_pushnil (L);
 		}
-		return 1;
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
-	return 0;
+	return 1;
 }
 
 static gint
@@ -2435,6 +2472,10 @@ lua_task_get_metric_action (lua_State *L)
 
 	metric_name = luaL_checkstring (L, 2);
 
+	if (metric_name == NULL) {
+		metric_name = DEFAULT_METRIC;
+	}
+
 	if (task && metric_name) {
 		if ((metric_res =
 			g_hash_table_lookup (task->results, metric_name)) != NULL) {
@@ -2446,13 +2487,12 @@ lua_task_get_metric_action (lua_State *L)
 		else {
 			lua_pushnil (L);
 		}
-		return 1;
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
-	return 0;
+	return 1;
 }
 
 /* Image functions */
@@ -2465,7 +2505,7 @@ lua_image_get_width (lua_State *L)
 		lua_pushnumber (L, img->width);
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -2480,7 +2520,7 @@ lua_image_get_height (lua_State *L)
 		lua_pushnumber (L, img->height);
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -2495,7 +2535,7 @@ lua_image_get_type (lua_State *L)
 		lua_pushstring (L, rspamd_image_type_str (img->type));
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -2510,7 +2550,7 @@ lua_image_get_size (lua_State *L)
 		lua_pushinteger (L, img->data->len);
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -2525,7 +2565,7 @@ lua_image_get_filename (lua_State *L)
 		lua_pushstring (L, img->filename);
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -2542,7 +2582,7 @@ lua_text_len (lua_State *L)
 		l = t->len;
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	lua_pushnumber (L, l);
@@ -2559,7 +2599,7 @@ lua_text_str (lua_State *L)
 		lua_pushlstring (L, t->start, t->len);
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -2574,7 +2614,7 @@ lua_text_ptr (lua_State *L)
 		lua_pushlightuserdata (L, (gpointer)t->start);
 	}
 	else {
-		luaL_error (L, "invalid arguments");
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
