@@ -601,7 +601,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 		g_assert (remain > 0);
 		g_assert (mt != NULL);
 
-		if (st != NULL && !(re->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT)) {
+		if (st != NULL && !(re->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT) && can_jit) {
 			rc = pcre_jit_exec (r, ext, mt, remain, 0, 0, ovec,
 					ncaptures, st);
 		}
@@ -713,7 +713,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 	match_data = pcre2_match_data_create (re->ncaptures + 1, NULL);
 
 #ifdef HAVE_PCRE_JIT
-	if (!(re->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT)) {
+	if (!(re->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT) && can_jit) {
 		if (!g_utf8_validate (mt, remain, NULL)) {
 			msg_err ("bad utf8 input for JIT re");
 			return FALSE;
@@ -1089,7 +1089,13 @@ rspamd_regexp_library_init (void)
 
 #endif /* WITH_PCRE2 */
 
-			can_jit = TRUE;
+			if (getenv ("VALGRIND") == NULL) {
+				can_jit = TRUE;
+			}
+			else {
+				msg_info ("disabling PCRE jit as it does not play well with valgrind");
+				can_jit = FALSE;
+			}
 		}
 		else {
 			msg_info ("pcre is compiled without JIT support, so many optimizations"
