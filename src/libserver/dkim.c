@@ -496,6 +496,14 @@ rspamd_create_dkim_context (const gchar *sig,
 	}                                state, next_state;
 
 
+	if (sig == NULL) {
+		g_set_error (err,
+				DKIM_ERROR,
+				DKIM_SIGERROR_EMPTY_B,
+				"empty signature");
+		return NULL;
+	}
+
 	ctx = rspamd_mempool_alloc0 (pool, sizeof (rspamd_dkim_context_t));
 	ctx->pool = pool;
 	ctx->header_canon_type = DKIM_CANON_DEFAULT;

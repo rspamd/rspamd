@@ -577,6 +577,13 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 			while (hlist != NULL) {
 				rh = (struct raw_header *)hlist->data;
 
+				if (rh->decoded == NULL || rh->decoded[0] == '\0') {
+					msg_info_task ("<%s> cannot load empty DKIM context",
+								task->message_id);
+					hlist = g_list_next (hlist);
+					continue;
+				}
+
 				if (res == NULL) {
 					res = rspamd_mempool_alloc0 (task->task_pool, sizeof (*res));
 					res->prev = res;
@@ -599,8 +606,8 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 						&err);
 				if (ctx == NULL) {
 					if (err != NULL) {
-						msg_info_task ("<%s> cannot parse DKIM context: %s",
-								task->message_id, err->message);
+						msg_info_task ("<%s> cannot parse DKIM context: %e",
+								task->message_id, err);
 						g_error_free (err);
 						err = NULL;
 					}
