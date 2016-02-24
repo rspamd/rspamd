@@ -1282,15 +1282,17 @@ lua_config_set_metric_symbol (lua_State * L)
 	struct metric *metric;
 	gboolean one_shot = FALSE;
 	GError *err = NULL;
+	gdouble priority = 0.0;
+	guint flags = 0;
 
 	if (cfg) {
 
 		if (lua_type (L, 2) == LUA_TTABLE) {
 			if (!rspamd_lua_parse_table_arguments (L, 2, &err,
 					"*name=S;score=N;description=S;"
-					"group=S;one_shot=B;metric=S",
+					"group=S;one_shot=B;metric=S;priority=N",
 					&name, &weight, &description,
-					&group, &one_shot, &metric_name)) {
+					&group, &one_shot, &metric_name, &priority)) {
 				msg_err_config ("bad arguments: %e", err);
 				g_error_free (err);
 
@@ -1320,13 +1322,16 @@ lua_config_set_metric_symbol (lua_State * L)
 		}
 
 		metric = g_hash_table_lookup (cfg->metrics, metric_name);
+		if (one_shot) {
+			flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
+		}
 
 		if (metric == NULL) {
 			msg_err_config ("metric named %s is not defined", metric_name);
 		}
 		else if (name != NULL && weight != 0) {
 			rspamd_config_add_metric_symbol (cfg, metric_name, name,
-					weight, description, group, one_shot, FALSE);
+					weight, description, group, flags, (guint)priority);
 		}
 	}
 
@@ -1410,7 +1415,7 @@ lua_config_newindex (lua_State *L)
 			gint type = SYMBOL_TYPE_NORMAL, priority = 0, idx;
 			gdouble weight = 1.0, score;
 			const char *type_str, *group = NULL, *description = NULL;
-			gboolean one_shot = FALSE;
+			guint flags = 0;
 
 			/*
 			 * Table can have the following attributes:
@@ -1533,16 +1538,18 @@ lua_config_newindex (lua_State *L)
 					lua_gettable (L, -2);
 
 					if (lua_type (L, -1) == LUA_TBOOLEAN) {
-						one_shot = lua_toboolean (L, -1);
+						if (lua_toboolean (L, -1)) {
+							flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
+						}
 					}
 					lua_pop (L, 1);
 
 					/*
-					 * Do not override the existing symbols, since we are
-					 * having default values here
+					 * Do not override the existing symbols (using zero priority),
+					 * since we are defining default values here
 					 */
 					rspamd_config_add_metric_symbol (cfg, NULL, name, score,
-							description, group, one_shot, FALSE);
+							description, group, flags, 0);
 				}
 				else {
 					lua_pop (L, 1);
@@ -1552,6 +1559,9 @@ lua_config_newindex (lua_State *L)
 			/* Remove table from stack */
 			lua_pop (L, 1);
 		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 0;

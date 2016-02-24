@@ -316,67 +316,52 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		struct rspamd_rcl_section *section, GError **err)
 {
 	struct rspamd_rcl_symbol_data *sd = ud;
-	struct rspamd_symbol_def *sym_def;
 	struct metric *metric;
 	struct rspamd_config *cfg;
 	const ucl_object_t *elt;
-	GList *metric_list;
+	const gchar *description = NULL;
+	gdouble score = 0.0;
+	guint priority = 1, flags = 0;
 
 	g_assert (key != NULL);
 	metric = sd->metric;
 	g_assert (metric != NULL);
 	cfg = sd->cfg;
 
-	sym_def = g_hash_table_lookup (metric->symbols, key);
-
-	if (sym_def == NULL) {
-		sym_def = rspamd_mempool_alloc0 (pool, sizeof (*sym_def));
-		sym_def->name = rspamd_mempool_strdup (pool, key);
-		sym_def->gr = sd->gr;
-		sym_def->weight_ptr = rspamd_mempool_alloc (pool, sizeof (gdouble));
-
-		g_hash_table_insert (metric->symbols, sym_def->name, sym_def);
-
-		if (sd->gr) {
-			g_hash_table_insert (sd->gr->symbols, sym_def->name, sym_def);
-		}
-		if ((metric_list =
-				g_hash_table_lookup (cfg->metrics_symbols, sym_def->name)) == NULL) {
-			metric_list = g_list_prepend (NULL, metric);
-			rspamd_mempool_add_destructor (cfg->cfg_pool,
-					(rspamd_mempool_destruct_t)g_list_free,
-					metric_list);
-			g_hash_table_insert (cfg->metrics_symbols, sym_def->name, metric_list);
-		}
-		else {
-			if (!g_list_find (metric_list, metric)) {
-				metric_list = g_list_append (metric_list, metric);
-			}
-		}
-	}
-	else {
-		msg_warn_config ("redefining symbol '%s' in metric '%s'", key, metric->name);
-	}
-
 	if ((elt = ucl_object_lookup (obj, "one_shot")) != NULL) {
 		if (ucl_object_toboolean (elt)) {
-			sym_def->flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
+			flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
 		}
 	}
 
 	if ((elt = ucl_object_lookup (obj, "ignore")) != NULL) {
 		if (ucl_object_toboolean (elt)) {
-			sym_def->flags |= RSPAMD_SYMBOL_FLAG_IGNORE;
+			flags |= RSPAMD_SYMBOL_FLAG_IGNORE;
 		}
 	}
 
-	if (!rspamd_rcl_section_parse_defaults (section, pool, obj,
-			sym_def, err)) {
-		return FALSE;
+	elt = ucl_object_lookup_any (obj, "score", "weight", NULL);
+	if (elt) {
+		score = ucl_object_todouble (elt);
 	}
 
-	if (ucl_object_lookup_any (obj, "score", "weight", NULL) != NULL) {
-		*sym_def->weight_ptr = sym_def->score;
+	elt = ucl_object_lookup (obj, "priority");
+	if (elt) {
+		priority = ucl_object_toint (elt);
+	}
+
+	elt = ucl_object_lookup (obj, "description");
+	if (elt) {
+		description = ucl_object_tostring (elt);
+	}
+
+	if (sd->gr) {
+		rspamd_config_add_metric_symbol (cfg, metric->name, key, score,
+				description, sd->gr->name, flags, priority);
+	}
+	else {
+		rspamd_config_add_metric_symbol (cfg, metric->name, key, score,
+				description, NULL, flags, priority);
 	}
 
 	return TRUE;
@@ -1790,24 +1775,6 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			TRUE,
 			sub->doc_ref,
 			"Symbols settings");
-	rspamd_rcl_add_default_handler (ssub,
-			"description",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_symbol_def, description),
-			0,
-			"Symbol's description");
-	rspamd_rcl_add_default_handler (ssub,
-			"score",
-			rspamd_rcl_parse_struct_double,
-			G_STRUCT_OFFSET (struct rspamd_symbol_def, score),
-			0,
-			"Symbol's score");
-	rspamd_rcl_add_default_handler (ssub,
-			"weight",
-			rspamd_rcl_parse_struct_double,
-			G_STRUCT_OFFSET (struct rspamd_symbol_def, score),
-			0,
-			"Symbol's score");
 
 	/* Actions part */
 	ssub = rspamd_rcl_add_section_doc (&sub->subsections,
@@ -1856,24 +1823,6 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			TRUE,
 			ssub->doc_ref,
 			"Symbols settings");
-	rspamd_rcl_add_default_handler (sssub,
-			"description",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_symbol_def, description),
-			0,
-			"Description of a symbol");
-	rspamd_rcl_add_default_handler (sssub,
-			"score",
-			rspamd_rcl_parse_struct_double,
-			G_STRUCT_OFFSET (struct rspamd_symbol_def, score),
-			0,
-			"Symbol's score");
-	rspamd_rcl_add_default_handler (sssub,
-			"weight",
-			rspamd_rcl_parse_struct_double,
-			G_STRUCT_OFFSET (struct rspamd_symbol_def, score),
-			0,
-			"Symbol's score");
 
 	/**
 	 * Worker section

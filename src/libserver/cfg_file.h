@@ -101,6 +101,7 @@ struct rspamd_symbol_def {
 	gchar *description;
 	gdouble *weight_ptr;
 	gdouble score;
+	guint priority;
 	struct rspamd_symbols_group *gr;
 	GList *groups;
 	guint flags;
@@ -494,6 +495,7 @@ gboolean rspamd_init_filters (struct rspamd_config *cfg, bool reconfig);
 
 /**
  * Add new symbol to the metric
+ * @param cfg
  * @param metric metric's name (or NULL for the default metric)
  * @param symbol symbol's name
  * @param score symbol's score
@@ -501,12 +503,14 @@ gboolean rspamd_init_filters (struct rspamd_config *cfg, bool reconfig);
  * @param group optional group name
  * @param one_shot TRUE if symbol can add its score once
  * @param rewrite_existing TRUE if we need to rewrite the existing symbol
+ * @param priority use the following priority for a symbol
  * @return TRUE if symbol has been inserted or FALSE if `rewrite_existing` is not enabled and symbol already exists
  */
 gboolean rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 		const gchar *metric,
 		const gchar *symbol, gdouble score, const gchar *description,
-		const gchar *group, gboolean one_shot, gboolean rewrite_existing);
+		const gchar *group, guint flags,
+		guint priority);
 
 /**
  * Checks if a specified C or lua module is enabled or disabled in the config.

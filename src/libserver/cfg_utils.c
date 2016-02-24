@@ -1298,38 +1298,16 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 	return rspamd_init_lua_filters (cfg);
 }
 
-gboolean
-rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
-		const gchar *metric_name, const gchar *symbol,
+static void
+rspamd_config_new_metric_symbol (struct rspamd_config *cfg,
+		struct metric *metric, const gchar *symbol,
 		gdouble score, const gchar *description, const gchar *group,
-		gboolean one_shot, gboolean rewrite_existing)
+		guint flags, guint priority)
 {
 	struct rspamd_symbols_group *sym_group;
 	struct rspamd_symbol_def *sym_def;
 	GList *metric_list;
-	struct metric *metric;
 	gdouble *score_ptr;
-
-	g_assert (cfg != NULL);
-	g_assert (symbol != NULL);
-
-	if (metric_name == NULL) {
-		metric_name = DEFAULT_METRIC;
-	}
-
-	metric = g_hash_table_lookup (cfg->metrics, metric_name);
-
-	if (metric == NULL) {
-		msg_err_config ("metric %s has not been found", metric_name);
-		return FALSE;
-	}
-
-	if (g_hash_table_lookup (cfg->metrics_symbols, symbol) != NULL &&
-			!rewrite_existing) {
-		msg_debug_config ("symbol %s has been already registered, do not override",
-				symbol);
-		return FALSE;
-	}
 
 	sym_def =
 		rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_symbol_def));
@@ -1339,10 +1317,8 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 	sym_def->score = score;
 	sym_def->weight_ptr = score_ptr;
 	sym_def->name = rspamd_mempool_strdup (cfg->cfg_pool, symbol);
-
-	if (one_shot) {
-		sym_def->flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
-	}
+	sym_def->priority = priority;
+	sym_def->flags = flags;
 
 	if (description) {
 		sym_def->description = rspamd_mempool_strdup (cfg->cfg_pool, description);
@@ -1354,11 +1330,11 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 	g_hash_table_insert (metric->symbols, sym_def->name, sym_def);
 
 	if ((metric_list =
-		g_hash_table_lookup (cfg->metrics_symbols, sym_def->name)) == NULL) {
+			g_hash_table_lookup (cfg->metrics_symbols, sym_def->name)) == NULL) {
 		metric_list = g_list_prepend (NULL, metric);
 		rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)g_list_free,
-			metric_list);
+				(rspamd_mempool_destruct_t)g_list_free,
+				metric_list);
 		g_hash_table_insert (cfg->metrics_symbols, sym_def->name, metric_list);
 	}
 	else {
@@ -1381,6 +1357,77 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 
 	sym_def->gr = sym_group;
 	g_hash_table_insert (sym_group->symbols, sym_def->name, sym_def);
+}
+
+
+gboolean
+rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
+		const gchar *metric_name, const gchar *symbol,
+		gdouble score, const gchar *description, const gchar *group,
+		guint flags, guint priority)
+{
+	struct rspamd_symbol_def *sym_def;
+	struct metric *metric;
+
+	g_assert (cfg != NULL);
+	g_assert (symbol != NULL);
+
+	if (metric_name == NULL) {
+		metric_name = DEFAULT_METRIC;
+	}
+
+	metric = g_hash_table_lookup (cfg->metrics, metric_name);
+
+	if (metric == NULL) {
+		msg_err_config ("metric %s has not been found", metric_name);
+		return FALSE;
+	}
+
+	sym_def = g_hash_table_lookup (cfg->metrics_symbols, symbol);
+
+	if (sym_def != NULL) {
+		if (sym_def->priority >= priority) {
+			msg_info_config ("symbol %s has been already registered with"
+					"priority %ud, do not override (new priority: %ud)",
+					symbol,
+					sym_def->priority,
+					priority);
+			/* But we can still add description */
+			if (!sym_def->description && description) {
+				sym_def->description = rspamd_mempool_strdup (cfg->cfg_pool,
+						description);
+			}
+
+			return FALSE;
+		}
+		else {
+			msg_info_config ("symbol %s has been already registered with"
+					"priority %ud, override it with new priority: %ud, "
+					"old score: %.2f, new score: %.2f",
+					symbol,
+					sym_def->priority,
+					priority,
+					sym_def->score,
+					score);
+
+			*sym_def->weight_ptr = score;
+			sym_def->score = score;
+
+			sym_def->flags = flags;
+
+			if (description) {
+				sym_def->description = rspamd_mempool_strdup (cfg->cfg_pool,
+						description);
+			}
+
+			sym_def->priority = priority;
+
+			return TRUE;
+		}
+	}
+
+	rspamd_config_new_metric_symbol (cfg, metric, symbol, score, description,
+			group, flags, priority);
 
 	return TRUE;
 }

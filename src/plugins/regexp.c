@@ -184,7 +184,8 @@ regexp_module_config (struct rspamd_config *cfg)
 			const gchar *description = NULL, *group = NULL,
 					*metric = DEFAULT_METRIC;
 			gdouble score = 0.0;
-			gboolean one_shot = FALSE, is_lua = FALSE, valid_expression = TRUE;
+			guint flags = 0, priority = 0;
+			gboolean is_lua = FALSE, valid_expression = TRUE;
 
 			/* We have some lua table, extract its arguments */
 			elt = ucl_object_lookup (value, "callback");
@@ -269,11 +270,19 @@ regexp_module_config (struct rspamd_config *cfg)
 				elt = ucl_object_lookup (value, "one_shot");
 
 				if (elt) {
-					one_shot = ucl_object_toboolean (elt);
+					if (ucl_object_toboolean (elt)) {
+						flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
+					}
+				}
+
+				elt = ucl_object_lookup (value, "priority");
+
+				if (elt) {
+					priority = ucl_object_toint (elt);
 				}
 
 				rspamd_config_add_metric_symbol (cfg, metric, cur_item->symbol,
-						score, description, group, one_shot, FALSE);
+						score, description, group, flags, priority);
 			}
 		}
 		else {
