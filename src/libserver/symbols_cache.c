@@ -1282,6 +1282,8 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 					event_base_set (task->ev_base, ev);
 					msec_to_tv (50, &tv);
 					event_add (ev, &tv);
+					rspamd_mempool_add_destructor (task->task_pool,
+							(rspamd_mempool_destruct_t)event_del, ev);
 				}
 
 				msg_info_task ("trying to check async events after spending "
