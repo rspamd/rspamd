@@ -714,7 +714,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 
 #ifdef HAVE_PCRE_JIT
 	if (!(re->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT) && can_jit) {
-		if (!g_utf8_validate (mt, remain, NULL)) {
+		if (re->re != re->raw_re && !g_utf8_validate (mt, remain, NULL)) {
 			msg_err ("bad utf8 input for JIT re");
 			return FALSE;
 		}
