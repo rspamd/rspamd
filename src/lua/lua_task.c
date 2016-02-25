@@ -2221,13 +2221,12 @@ lua_task_has_flag (lua_State *L)
 
 		if (!found) {
 			msg_warn_task ("unknown flag requested: %s", flag);
+			lua_pushboolean (L, 0);
 		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
 	}
-
-	lua_pushboolean (L, found);
 
 	return 1;
 }
