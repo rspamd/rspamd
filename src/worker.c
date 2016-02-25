@@ -126,6 +126,40 @@ rspamd_task_timeout (gint fd, short what, gpointer ud)
 	}
 }
 
+static void
+rspamd_worker_guard_handler (gint fd, short what, void *data)
+{
+	struct rspamd_task *task = data;
+	gchar fake_buf[1024];
+	gssize r;
+
+	r = read (fd, fake_buf, sizeof (fake_buf));
+
+	if (r > 0) {
+		msg_warn_task ("received extra data after task is loaded, ignoring");
+	}
+	else {
+		if (r == 0) {
+			/*
+			 * Poor man approach, that might break things in case of
+			 * shutdown (SHUT_WR) but sockets are so bad that there's no
+			 * reliable way to distinguish between shutdown(SHUT_WR) and
+			 * close.
+			 */
+			msg_err_task ("the peer has closed connection unexpectedly");
+			rspamd_session_destroy (task->s);
+		}
+		else if (errno != EAGAIN) {
+			msg_err_task ("the peer has closed connection unexpectedly: %s",
+					strerror (errno));
+			rspamd_session_destroy (task->s);
+		}
+		else {
+			return;
+		}
+	}
+}
+
 static gint
 rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 	struct rspamd_http_message *msg,
@@ -134,6 +168,7 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 	struct rspamd_task *task = (struct rspamd_task *) conn->ud;
 	struct rspamd_worker_ctx *ctx;
 	struct timeval task_tv;
+	struct event *guard_ev;
 
 	ctx = task->worker->ctx;
 
@@ -161,6 +196,15 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 		double_to_tv (ctx->task_timeout, &task_tv);
 		event_add (&task->timeout_ev, &task_tv);
 	}
+
+	/* Set socket guard */
+	guard_ev = rspamd_mempool_alloc (task->task_pool, sizeof (*guard_ev));
+	event_set (guard_ev, task->sock, EV_READ|EV_PERSIST,
+			rspamd_worker_guard_handler, task);
+	event_base_set (task->ev_base, guard_ev);
+	event_add (guard_ev, NULL);
+	rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t)event_del, guard_ev);
 
 	rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL);
 
