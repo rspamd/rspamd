@@ -146,7 +146,13 @@ static gboolean rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 		struct cache_item *item,
 		struct cache_savepoint *checkpoint);
 
-gint
+static GQuark
+rspamd_symbols_cache_quark (void)
+{
+	return g_quark_from_static_string ("symbols-cache");
+}
+
+static gint
 cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 {
 	const struct cache_item *i1 = *(struct cache_item **)p1,
@@ -1171,6 +1177,23 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 	return ret;
 }
 
+static void
+rspamd_symbols_cache_continuation (void *data)
+{
+	struct rspamd_task *task = data;
+
+	rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL);
+}
+
+static void
+rspamd_symbols_cache_tm (gint fd, short what, void *data)
+{
+	struct rspamd_task *task = data;
+
+	rspamd_session_remove_event (task->s, rspamd_symbols_cache_continuation,
+			data);
+}
+
 gboolean
 rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	struct symbols_cache *cache)
@@ -1181,6 +1204,8 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	gdouble total_microseconds = 0;
 	const gdouble max_microseconds = 3e5;
 	guint start_events_pending;
+	struct event *ev;
+	struct timeval tv;
 
 	g_assert (cache != NULL);
 
@@ -1246,13 +1271,24 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 
 			if (total_microseconds > max_microseconds) {
 				/* Maybe we should stop and check pending events? */
-				if (rspamd_session_events_pending (task->s) >
+				if (rspamd_session_events_pending (task->s) ==
 						start_events_pending) {
-					msg_debug_task ("trying to check async events after spending "
-							"%d microseconds processing symbols",
-							(gint)total_microseconds);
-					return TRUE;
+					/* Add some timeout event to avoid too long waiting */
+					rspamd_session_add_event (task->s,
+							rspamd_symbols_cache_continuation, task,
+							rspamd_symbols_cache_quark ());
+					ev = rspamd_mempool_alloc (task->task_pool, sizeof (*ev));
+					event_set (ev, -1, EV_TIMEOUT, rspamd_symbols_cache_tm, task);
+					event_base_set (task->ev_base, ev);
+					msec_to_tv (50, &tv);
+					event_add (ev, &tv);
 				}
+
+				msg_info_task ("trying to check async events after spending "
+						"%d microseconds processing symbols",
+						(gint)total_microseconds);
+
+				return TRUE;
 			}
 		}
 
