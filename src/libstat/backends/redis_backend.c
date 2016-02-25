@@ -1194,6 +1194,8 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 	double_to_tv (rt->ctx->timeout, &tv);
 	event_add (&rt->timeout_event, &tv);
 
+	rspamd_redis_maybe_auth (rt->ctx, rt->redis);
+
 	if (rt->stcf->clcf->flags & RSPAMD_FLAG_CLASSIFIER_INTEGER) {
 		redis_cmd = "HINCRBY";
 	}

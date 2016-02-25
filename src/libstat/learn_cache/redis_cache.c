@@ -195,7 +195,7 @@ rspamd_stat_cache_redis_init (struct rspamd_stat_ctx *ctx,
 {
 	struct rspamd_redis_cache_ctx *cache_ctx;
 	struct rspamd_statfile_config *stf = st->stcf;
-	const ucl_object_t *elt, *relt;
+	const ucl_object_t *elt, *relt, *telt;
 
 	cache_ctx = g_slice_alloc0 (sizeof (*cache_ctx));
 
@@ -213,36 +213,36 @@ rspamd_stat_cache_redis_init (struct rspamd_stat_ctx *ctx,
 			return NULL;
 		}
 
-		elt = ucl_object_lookup (st->classifier->cfg->opts, "password");
-		if (elt) {
-			cache_ctx->password = ucl_object_tostring (elt);
+		telt = ucl_object_lookup (st->classifier->cfg->opts, "password");
+		if (telt) {
+			cache_ctx->password = ucl_object_tostring (telt);
 		}
 		else {
 			cache_ctx->password = NULL;
 		}
 
-		elt = ucl_object_lookup_any (st->classifier->cfg->opts,
+		telt = ucl_object_lookup_any (st->classifier->cfg->opts,
 				"db", "database", NULL);
-		if (elt) {
-			cache_ctx->dbname = ucl_object_tostring (elt);
+		if (telt) {
+			cache_ctx->dbname = ucl_object_tostring (telt);
 		}
 		else {
 			cache_ctx->dbname = NULL;
 		}
 	}
 	else {
-		elt = ucl_object_lookup (stf->opts, "password");
-		if (elt) {
-			cache_ctx->password = ucl_object_tostring (elt);
+		telt = ucl_object_lookup (stf->opts, "password");
+		if (telt) {
+			cache_ctx->password = ucl_object_tostring (telt);
 		}
 		else {
 			cache_ctx->password = NULL;
 		}
 
-		elt = ucl_object_lookup_any (stf->opts,
+		telt = ucl_object_lookup_any (stf->opts,
 				"db", "database", NULL);
-		if (elt) {
-			cache_ctx->dbname = ucl_object_tostring (elt);
+		if (telt) {
+			cache_ctx->dbname = ucl_object_tostring (telt);
 		}
 		else {
 			cache_ctx->dbname = NULL;
