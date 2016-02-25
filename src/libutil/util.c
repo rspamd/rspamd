@@ -1998,6 +1998,7 @@ rspamd_init_libs (void)
 	/* Set stack size for pcre */
 	getrlimit (RLIMIT_STACK, &rlim);
 	rlim.rlim_cur = 100 * 1024 * 1024;
+	rlim.rlim_max = rlim.rlim_cur;
 	setrlimit (RLIMIT_STACK, &rlim);
 
 #ifdef GMIME_ENABLE_RFC2047_WORKAROUNDS

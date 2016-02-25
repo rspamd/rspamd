@@ -472,6 +472,8 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 {
 	struct rspamd_worker *wrk;
 	gint rc;
+	struct rlimit rlim;
+
 	/* Starting worker process */
 	wrk = (struct rspamd_worker *) g_malloc0 (sizeof (struct rspamd_worker));
 
@@ -514,6 +516,12 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		rspamd_worker_drop_priv (rspamd_main);
 		/* Set limits */
 		rspamd_worker_set_limits (rspamd_main, cf);
+		/* Re-set stack limit */
+		getrlimit (RLIMIT_STACK, &rlim);
+		rlim.rlim_cur = 100 * 1024 * 1024;
+		rlim.rlim_max = rlim.rlim_cur;
+		setrlimit (RLIMIT_STACK, &rlim);
+
 		setproctitle ("%s process", cf->worker->name);
 		rspamd_pidfile_close (rspamd_main->pfh);
 		/* Do silent log reopen to avoid collisions */
