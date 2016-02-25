@@ -32,6 +32,8 @@ struct rspamd_redis_cache_ctx {
 	struct rspamd_statfile_config *stcf;
 	struct upstream_list *read_servers;
 	struct upstream_list *write_servers;
+	const gchar *password;
+	const gchar *dbname;
 	const gchar *redis_object;
 	gdouble timeout;
 };
@@ -48,6 +50,18 @@ static GQuark
 rspamd_stat_cache_redis_quark (void)
 {
 	return g_quark_from_static_string ("redis-statistics");
+}
+
+static void
+rspamd_redis_cache_maybe_auth (struct rspamd_redis_cache_ctx *ctx,
+		redisAsyncContext *redis)
+{
+	if (ctx->password) {
+		redisAsyncCommand (redis, NULL, NULL, "AUTH %s", ctx->password);
+	}
+	if (ctx->dbname) {
+		redisAsyncCommand (redis, NULL, NULL, "SELECT %s", ctx->dbname);
+	}
 }
 
 /* Called on connection termination */
@@ -198,6 +212,41 @@ rspamd_stat_cache_redis_init (struct rspamd_stat_ctx *ctx,
 
 			return NULL;
 		}
+
+		elt = ucl_object_lookup (st->classifier->cfg->opts, "password");
+		if (elt) {
+			cache_ctx->password = ucl_object_tostring (elt);
+		}
+		else {
+			cache_ctx->password = NULL;
+		}
+
+		elt = ucl_object_lookup_any (st->classifier->cfg->opts,
+				"db", "database", NULL);
+		if (elt) {
+			cache_ctx->dbname = ucl_object_tostring (elt);
+		}
+		else {
+			cache_ctx->dbname = NULL;
+		}
+	}
+	else {
+		elt = ucl_object_lookup (stf->opts, "password");
+		if (elt) {
+			cache_ctx->password = ucl_object_tostring (elt);
+		}
+		else {
+			cache_ctx->password = NULL;
+		}
+
+		elt = ucl_object_lookup_any (stf->opts,
+				"db", "database", NULL);
+		if (elt) {
+			cache_ctx->dbname = ucl_object_tostring (elt);
+		}
+		else {
+			cache_ctx->dbname = NULL;
+		}
 	}
 
 	relt = elt;
@@ -308,6 +357,7 @@ rspamd_stat_cache_redis_runtime (struct rspamd_task *task,
 	/* Now check stats */
 	event_set (&rt->timeout_event, -1, EV_TIMEOUT, rspamd_redis_cache_timeout, rt);
 	event_base_set (task->ev_base, &rt->timeout_event);
+	rspamd_redis_cache_maybe_auth (ctx, rt->redis);
 
 	if (!learn) {
 		rspamd_stat_cache_redis_generate_id (task);

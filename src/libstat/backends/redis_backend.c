@@ -39,6 +39,8 @@ struct redis_stat_ctx {
 	struct upstream_list *write_servers;
 	struct rspamd_stat_async_elt *stat_elt;
 	const gchar *redis_object;
+	const gchar *password;
+	const gchar *dbname;
 	gdouble timeout;
 	gboolean enable_users;
 	gint cbref_user;
@@ -333,6 +335,17 @@ rspamd_redis_expand_object (const gchar *pattern,
 	}
 
 	return tlen;
+}
+
+static void
+rspamd_redis_maybe_auth (struct redis_stat_ctx *ctx, redisAsyncContext *redis)
+{
+	if (ctx->password) {
+		redisAsyncCommand (redis, NULL, NULL, "AUTH %s", ctx->password);
+	}
+	if (ctx->dbname) {
+		redisAsyncCommand (redis, NULL, NULL, "SELECT %s", ctx->dbname);
+	}
 }
 
 static rspamd_fstring_t *
@@ -643,6 +656,7 @@ rspamd_redis_async_stat_cb (struct rspamd_stat_async_elt *elt, gpointer d)
 
 	/* XXX: deal with timeouts maybe */
 	/* Get keys in redis that match our symbol */
+	rspamd_redis_maybe_auth (ctx, cbdata->redis);
 	redisAsyncCommand (cbdata->redis, rspamd_redis_stat_keys, cbdata,
 			"KEYS %s*",
 			ctx->stcf->symbol);
@@ -962,6 +976,22 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 		backend->timeout = REDIS_DEFAULT_TIMEOUT;
 	}
 
+	elt = ucl_object_lookup (stf->opts, "password");
+	if (elt) {
+		backend->password = ucl_object_tostring (elt);
+	}
+	else {
+		backend->password = NULL;
+	}
+
+	elt = ucl_object_lookup_any (stf->opts, "db", "database", NULL);
+	if (elt) {
+		backend->dbname = ucl_object_tostring (elt);
+	}
+	else {
+		backend->dbname = NULL;
+	}
+
 	stf->clcf->flags |= RSPAMD_FLAG_CLASSIFIER_INCREMENTING_BACKEND;
 	backend->stcf = stf;
 
@@ -1040,6 +1070,7 @@ rspamd_redis_runtime (struct rspamd_task *task,
 	double_to_tv (ctx->timeout, &tv);
 	event_add (&rt->timeout_event, &tv);
 
+	rspamd_redis_maybe_auth (ctx, rt->redis);
 	redisAsyncCommand (rt->redis, rspamd_redis_connected, rt, "HGET %s %s",
 			rt->redis_object_expanded, "learns");
 
