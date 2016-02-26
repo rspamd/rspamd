@@ -86,7 +86,7 @@ To install the rspamd <a class="undecor" href="#stableSys2">stable<sup>1</sup></
 
     apt-get install -y lsb-release # optional
     CODENAME=`lsb_release -c -s`
-    wget -O- http://rspamd.com/apt-stable/gpg.key | apt-key add -
+    wget -O- https://rspamd.com/apt-stable/gpg.key | apt-key add -
     echo "deb http://rspamd.com/apt-stable/ $CODENAME main" > /etc/apt/sources.list.d/rspamd.list
     echo "deb-src http://rspamd.com/apt-stable/ $CODENAME main" >> /etc/apt/sources.list.d/rspamd.list
     apt-get update
@@ -98,7 +98,7 @@ For <a class="undecor" href="#experimentalSys2">experimental<sup>2</sup></a> bra
 
     apt-get install -y lsb-release # optional
     CODENAME=`lsb_release -c -s`
-    wget -O- http://rspamd.com/apt/gpg.key | apt-key add -
+    wget -O- https://rspamd.com/apt/gpg.key | apt-key add -
     echo "deb http://rspamd.com/apt/ $CODENAME main" > /etc/apt/sources.list.d/rspamd.list
     echo "deb-src http://rspamd.com/apt/ $CODENAME main" >> /etc/apt/sources.list.d/rspamd.list
     apt-get update
