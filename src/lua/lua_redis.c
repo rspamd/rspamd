@@ -383,6 +383,8 @@ lua_redis_connect_cb (const struct redisAsyncContext *c, int status)
 #endif
 }
 
+
+
 /***
  * @function rspamd_redis.make_request({params})
  * Make request to redis server, params is a table of key=value arguments in any order
@@ -403,6 +405,7 @@ lua_redis_make_request (lua_State *L)
 	struct rspamd_lua_ip *addr = NULL;
 	struct rspamd_task *task = NULL;
 	const gchar *cmd = NULL, *host;
+	const gchar *password = NULL, *dbname = NULL;
 	gint top, cbref = -1;
 	struct timeval tv;
 	gboolean ret = FALSE;
@@ -466,6 +469,21 @@ lua_redis_make_request (lua_State *L)
 			timeout = lua_tonumber (L, -1);
 		}
 		lua_pop (L, 1);
+
+		lua_pushstring (L, "password");
+		lua_gettable (L, -2);
+		if (lua_type (L, -1) == LUA_TSTRING) {
+			password = lua_tostring (L, -1);
+		}
+		lua_pop (L, 1);
+
+		lua_pushstring (L, "dbname");
+		lua_gettable (L, -2);
+		if (lua_type (L, -1) == LUA_TSTRING) {
+			dbname = lua_tostring (L, -1);
+		}
+		lua_pop (L, 1);
+
 
 		if (task != NULL && addr != NULL && cbref != -1 && cmd != NULL) {
 			ctx = g_slice_alloc0 (sizeof (struct lua_redis_ctx));
@@ -542,6 +560,14 @@ lua_redis_make_request (lua_State *L)
 
 		redisAsyncSetConnectCallback (ud->ctx, lua_redis_connect_cb);
 		redisLibeventAttach (ud->ctx, ud->task->ev_base);
+
+		if (password) {
+			redisAsyncCommand (ud->ctx, NULL, NULL, "AUTH %s", password);
+		}
+		if (dbname) {
+			redisAsyncCommand (ud->ctx, NULL, NULL, "SELECT %s", dbname);
+		}
+
 		ret = redisAsyncCommandArgv (ud->ctx,
 					lua_redis_callback,
 					ctx,
