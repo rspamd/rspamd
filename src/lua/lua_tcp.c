@@ -177,6 +177,7 @@ lua_tcp_write_helper (struct lua_tcp_cbdata *cbd)
 	/* We know that niov is small enough for that */
 	cur_iov = alloca (niov * sizeof (struct iovec));
 	memcpy (cur_iov, cbd->iov, niov * sizeof (struct iovec));
+
 	for (i = 0; i < cbd->iovlen && remain > 0; i++) {
 		/* Find out the first iov required */
 		start = &cur_iov[i];
@@ -368,6 +369,12 @@ lua_tcp_arg_toiovec (lua_State *L, gint pos, rspamd_mempool_t *pool,
 		if (t) {
 			vec->iov_base = (void *)t->start;
 			vec->iov_len = t->len;
+
+			if (t->own) {
+				/* Steal ownership */
+				t->own = FALSE;
+				rspamd_mempool_add_destructor (pool, g_free, (void *)t->start);
+			}
 		}
 		else {
 			return FALSE;
