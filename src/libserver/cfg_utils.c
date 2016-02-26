@@ -1386,7 +1386,7 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 	sym_def = g_hash_table_lookup (metric->symbols, symbol);
 
 	if (sym_def != NULL) {
-		if (sym_def->priority >= priority) {
+		if (sym_def->priority > priority) {
 			msg_info_config ("symbol %s has been already registered with"
 					"priority %ud, do not override (new priority: %ud)",
 					symbol,
