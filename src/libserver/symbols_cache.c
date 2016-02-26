@@ -121,6 +121,7 @@ struct delayed_cache_condition {
 struct cache_savepoint {
 	guchar *processed_bits;
 	guint pass;
+	guint version;
 	struct metric_result *rs;
 	gdouble lim;
 	GPtrArray *waitq;
@@ -1215,6 +1216,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		checkpoint->processed_bits = rspamd_mempool_alloc0 (task->task_pool,
 				NBYTES (cache->used_items) * 2);
 		checkpoint->waitq = g_ptr_array_new ();
+		checkpoint->version = cache->used_items;
 		rspamd_mempool_add_destructor (task->task_pool,
 				rspamd_ptr_array_free_hard, checkpoint->waitq);
 		task->checkpoint = checkpoint;
@@ -1245,7 +1247,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		 * If we figure out symbol that has no dependencies satisfied, then
 		 * we just save it for another pass
 		 */
-		for (i = 0; i < (gint)cache->used_items; i ++) {
+		for (i = 0; i < (gint)checkpoint->version; i ++) {
 			if (rspamd_symbols_cache_metric_limit (task, checkpoint)) {
 				msg_info_task ("<%s> has already scored more than %.2f, so do "
 								"not "
