@@ -349,6 +349,9 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	if (elt) {
 		priority = ucl_object_toint (elt);
 	}
+	else {
+		priority = ucl_object_get_priority (obj);
+	}
 
 	elt = ucl_object_lookup (obj, "description");
 	if (elt) {
