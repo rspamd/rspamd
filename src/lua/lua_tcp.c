@@ -120,10 +120,14 @@ lua_tcp_maybe_free (struct lua_tcp_cbdata *cbd)
 }
 
 static void
-lua_tcp_push_error (struct lua_tcp_cbdata *cbd, const char *err)
+lua_tcp_push_error (struct lua_tcp_cbdata *cbd, const char *err, ...)
 {
+	va_list ap;
+
+	va_start (ap, err);
 	lua_rawgeti (cbd->L, LUA_REGISTRYINDEX, cbd->cbref);
-	lua_pushstring (cbd->L, err);
+	lua_pushvfstring (cbd->L, err, ap);
+	va_end (ap);
 
 	if (lua_pcall (cbd->L, 1, 0, 0) != 0) {
 		msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));
@@ -198,7 +202,8 @@ lua_tcp_write_helper (struct lua_tcp_cbdata *cbd)
 	r = sendmsg (cbd->fd, &msg, flags);
 
 	if (r == -1) {
-		lua_tcp_push_error (cbd, "IO write error");
+		lua_tcp_push_error (cbd, "IO write error while trying to write %d "
+				"bytes: %s", (gint)remain, strerror (errno));
 		lua_tcp_maybe_free (cbd);
 		return;
 	}
@@ -250,7 +255,9 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 			 */
 			if (cbd->partial) {
 				if (r < 0) {
-					lua_tcp_push_error (cbd, strerror (errno));
+					lua_tcp_push_error (cbd, "IO read error while trying to read %d "
+									"bytes: %s", (gint)sizeof (inbuf),
+									strerror (errno));
 				}
 			}
 			else {
@@ -258,7 +265,9 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 					lua_tcp_push_data (cbd, cbd->in->str, cbd->in->len);
 				}
 				else {
-					lua_tcp_push_error (cbd, "IO read error");
+					lua_tcp_push_error (cbd, "IO read error while trying to write %d "
+							"bytes: %s", (gint)sizeof (inbuf),
+							strerror (errno));
 				}
 			}
 
@@ -321,7 +330,8 @@ lua_tcp_dns_handler (struct rdns_reply *reply, gpointer ud)
 	struct lua_tcp_cbdata *cbd = (struct lua_tcp_cbdata *)ud;
 
 	if (reply->code != RDNS_RC_NOERROR) {
-		lua_tcp_push_error (cbd, "unable to resolve host");
+		lua_tcp_push_error (cbd, "unable to resolve host: %s",
+				reply->requested_name);
 		lua_tcp_maybe_free (cbd);
 	}
 	else {
@@ -337,7 +347,8 @@ lua_tcp_dns_handler (struct rdns_reply *reply, gpointer ud)
 		rspamd_inet_address_set_port (cbd->addr, cbd->port);
 
 		if (!lua_tcp_make_connection (cbd)) {
-			lua_tcp_push_error (cbd, "unable to make connection to the host");
+			lua_tcp_push_error (cbd, "unable to make connection to the host %s",
+					reply->requested_name);
 			lua_tcp_maybe_free (cbd);
 		}
 	}
@@ -607,14 +618,14 @@ lua_tcp_request (lua_State *L)
 		if (task == NULL) {
 			if (!make_dns_request (resolver, session, NULL, lua_tcp_dns_handler, cbd,
 					RDNS_REQUEST_A, host)) {
-				lua_tcp_push_error (cbd, "cannot resolve host");
+				lua_tcp_push_error (cbd, "cannot resolve host: %s", host);
 				lua_tcp_maybe_free (cbd);
 			}
 		}
 		else {
 			if (!make_dns_request_task (task, lua_tcp_dns_handler, cbd,
 					RDNS_REQUEST_A, host)) {
-				lua_tcp_push_error (cbd, "cannot resolve host");
+				lua_tcp_push_error (cbd, "cannot resolve host: %s", host);
 				lua_tcp_maybe_free (cbd);
 			}
 		}
