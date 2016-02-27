@@ -1675,6 +1675,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_config, enable_shutdown_workaround),
 			0,
 			"Enable workaround for legacy clients");
+	rspamd_rcl_add_default_handler (sub,
+			"ignore_received",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, ignore_received),
+			0,
+			"Ignore data from the first received header");
 	/* New DNS configuration */
 	ssub = rspamd_rcl_add_section_doc (&sub->subsections, "dns", NULL, NULL,
 			UCL_OBJECT, FALSE, TRUE,
