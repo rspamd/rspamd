@@ -26,12 +26,16 @@ local whitelist = nil
 local rspamd_logger = require "rspamd_logger"
 
 local function check_quantity_received (task)
+  local recvh = task:get_received_headers()
+
   local function recv_dns_cb(resolver, to_resolve, results, err)
     task:inc_dns_req()
 
     if not results then
-      task:insert_result(symbol, 1)
-      task:insert_result(symbol_strict, 1)
+      if recvh and #recvh <= 1 then
+        task:insert_result(symbol, 1)
+        task:insert_result(symbol_strict, 1)
+      end
       task:insert_result(symbol_rdns, 1)
     else
       rspamd_logger.infox(task, 'SMTP resolver failed to resolve: %1 is %2',
@@ -70,10 +74,10 @@ local function check_quantity_received (task)
   end
 
   local task_ip = task:get_ip()
+  local hn = task:get_hostname()
 
   -- Here we don't care about received
-  if not task:get_hostname() and task_ip then
-
+  if (not hn or hn == 'unknown') and task_ip then
     task:get_resolver():resolve_ptr({task = task,
       name = task_ip:to_string(),
       callback = recv_dns_cb
