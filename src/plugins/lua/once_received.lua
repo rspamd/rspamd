@@ -17,6 +17,7 @@ limitations under the License.
 -- 0 or 1 received: = spam
 
 local symbol = 'ONCE_RECEIVED'
+local symbol_rdns = 'RDNS_NONE'
 -- Symbol for strict checks
 local symbol_strict = nil
 local bad_hosts = {}
@@ -29,11 +30,9 @@ local function check_quantity_received (task)
     task:inc_dns_req()
 
     if not results then
-      local res = true
-      if res then
-        task:insert_result(symbol, 1)
-        task:insert_result(symbol_strict, 1)
-      end
+      task:insert_result(symbol, 1)
+      task:insert_result(symbol_strict, 1)
+      task:insert_result(symbol_rdns, 1)
     else
       rspamd_logger.infox(task, 'SMTP resolver failed to resolve: %1 is %2',
         to_resolve, results[1])
@@ -75,6 +74,18 @@ local function check_quantity_received (task)
     local ret = true
     local r = recvh[1]
 
+    local task_ip = task:get_ip()
+
+    -- Here we don't care about received
+    if not task:get_hostname() and task_ip then
+      rspamd_logger.infox(task, 'hui')
+      task:get_resolver():resolve_ptr({task = task,
+        name = task_ip:to_string(),
+        callback = recv_dns_cb
+      })
+      return
+    end
+
     if not r then
       return
     end
@@ -97,21 +108,6 @@ local function check_quantity_received (task)
       -- Strict checks
       if symbol_strict then
         -- Unresolved host
-        if not r['real_hostname'] or string.lower(r['real_hostname']) == 'unknown' or
-          string.match(r['real_hostname'], '^%d+%.%d+%.%d+%.%d+$') then
-
-          if r['real_ip'] and r['real_ip']:is_valid() then
-            -- Try to resolve it again
-            task:get_resolver():resolve_ptr({task = task,
-              name = r['real_ip']:to_string(),
-              callback = recv_dns_cb
-            })
-          else
-            task:insert_result(symbol_strict, 1)
-          end
-          return
-        end
-
         task:insert_result(symbol, 1)
 
         for _,h in ipairs(bad_hosts) do
@@ -148,7 +144,8 @@ if opts then
     for n,v in pairs(opts) do
       if n == 'symbol_strict' then
         symbol_strict = v
-        rspamd_config:register_virtual_symbol(symbol_strict, 1.0, id)
+      elseif n == 'symbol_rdns' then
+        symbol_rdns = v
       elseif n == 'bad_host' then
         if type(v) == 'string' then
           bad_hosts[1] = v
@@ -165,5 +162,7 @@ if opts then
         whitelist = rspamd_config:add_radix_map (v, 'once received whitelist')
       end
     end
+    rspamd_config:register_virtual_symbol(symbol_rdns, 1.0, id)
+    rspamd_config:register_virtual_symbol(symbol_strict, 1.0, id)
   end
 end
