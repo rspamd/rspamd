@@ -146,8 +146,17 @@ rspamd_worker_guard_handler (gint fd, short what, void *data)
 			 * reliable way to distinguish between shutdown(SHUT_WR) and
 			 * close.
 			 */
-			msg_err_task ("the peer has closed connection unexpectedly");
-			rspamd_session_destroy (task->s);
+			if (task->cfg->enable_shutdown_workaround) {
+				msg_info_task ("workaround for shutdown enabled, please update "
+						"your client, this support might be removed in future");
+				shutdown (fd, SHUT_RD);
+				event_del (task->guard_ev);
+				task->guard_ev = NULL;
+			}
+			else {
+				msg_err_task ("the peer has closed connection unexpectedly");
+				rspamd_session_destroy (task->s);
+			}
 		}
 		else if (errno != EAGAIN) {
 			msg_err_task ("the peer has closed connection unexpectedly: %s",
@@ -203,8 +212,7 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 			rspamd_worker_guard_handler, task);
 	event_base_set (task->ev_base, guard_ev);
 	event_add (guard_ev, NULL);
-	rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t)event_del, guard_ev);
+	task->guard_ev = guard_ev;
 
 	rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL);
 

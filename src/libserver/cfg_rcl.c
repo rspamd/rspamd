@@ -1669,6 +1669,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_config, trusted_keys),
 			RSPAMD_CL_FLAG_STRING_LIST_HASH,
 			"List of trusted public keys used for signatures in base32 encoding");
+	rspamd_rcl_add_default_handler (sub,
+			"enable_shutdown_workaround",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, enable_shutdown_workaround),
+			0,
+			"Enable workaround for legacy clients");
 	/* New DNS configuration */
 	ssub = rspamd_rcl_add_section_doc (&sub->subsections, "dns", NULL, NULL,
 			UCL_OBJECT, FALSE, TRUE,

@@ -156,6 +156,10 @@ rspamd_config_new (void)
 	cfg->ups_ctx = rspamd_upstreams_library_init ();
 	cfg->re_cache = rspamd_re_cache_new ();
 	cfg->doc_strings = ucl_object_typed_new (UCL_OBJECT);
+	/*
+	 * Unless exim is fixed
+	 */
+	cfg->enable_shutdown_workaround = TRUE;
 
 	REF_INIT_RETAIN (cfg, rspamd_config_free);
 

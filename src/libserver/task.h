@@ -183,6 +183,7 @@ struct rspamd_task {
 	struct rspamd_dns_resolver *resolver;			/**< DNS resolver									*/
 	struct event_base *ev_base;						/**< Event base										*/
 	struct event timeout_ev;						/**< Global task timeout							*/
+	struct event *guard_ev;							/**< Event for input sanity guard 					*/
 
 	gpointer checkpoint;							/**< Opaque checkpoint data							*/
 

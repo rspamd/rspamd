@@ -215,6 +215,10 @@ rspamd_task_free (struct rspamd_task *task)
 			event_del (&task->timeout_ev);
 		}
 
+		if (task->guard_ev) {
+			event_del (task->guard_ev);
+		}
+
 		rspamd_re_cache_runtime_destroy (task->re_rt);
 		REF_RELEASE (task->cfg);
 
