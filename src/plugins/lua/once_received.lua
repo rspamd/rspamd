@@ -69,22 +69,22 @@ local function check_quantity_received (task)
     end
   end
 
+  local task_ip = task:get_ip()
+
+  -- Here we don't care about received
+  if not task:get_hostname() and task_ip then
+
+    task:get_resolver():resolve_ptr({task = task,
+      name = task_ip:to_string(),
+      callback = recv_dns_cb
+    })
+    return
+  end
+
   local recvh = task:get_received_headers()
   if recvh and #recvh <= 1 then
     local ret = true
     local r = recvh[1]
-
-    local task_ip = task:get_ip()
-
-    -- Here we don't care about received
-    if not task:get_hostname() and task_ip then
-      rspamd_logger.infox(task, 'hui')
-      task:get_resolver():resolve_ptr({task = task,
-        name = task_ip:to_string(),
-        callback = recv_dns_cb
-      })
-      return
-    end
 
     if not r then
       return
