@@ -370,17 +370,26 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	return TRUE;
 }
 
+struct metric_actions_cbdata {
+	struct rspamd_config *cfg;
+	struct metric *metric;
+};
+
 static gboolean
 rspamd_rcl_actions_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		const gchar *key, gpointer ud,
 		struct rspamd_rcl_section *section, GError **err)
 {
 	gdouble action_score;
-	struct metric_action *action;
-	struct metric *metric = ud;
+	struct metric_actions_cbdata *cbdata = ud;
 	gint action_value;
 	const ucl_object_t *cur;
 	ucl_object_iter_t it = NULL;
+	struct metric *metric;
+	struct rspamd_config *cfg;
+
+	metric = cbdata->metric;
+	cfg = cbdata->cfg;
 
 	while ((cur = ucl_object_iterate (obj, &it, true)) != NULL) {
 		if (!rspamd_action_from_str (ucl_object_key (cur), &action_value) ||
@@ -393,9 +402,9 @@ rspamd_rcl_actions_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 			return FALSE;
 		}
 		else {
-			action = &metric->actions[action_value];
-			action->action = action_value;
-			action->score = action_score;
+			rspamd_config_set_action_score (cfg, metric->name,
+					ucl_object_key (cur), action_score,
+					ucl_object_get_priority (cur));
 		}
 	}
 
@@ -414,6 +423,7 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	struct rspamd_rcl_section *subsection;
 	struct rspamd_rcl_symbol_data sd;
 	struct rspamd_symbol_def *sym_def;
+	struct metric_actions_cbdata acts_cbdata;
 
 	g_assert (key != NULL);
 
@@ -442,7 +452,10 @@ rspamd_rcl_metric_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 		HASH_FIND_STR (section->subsections, "actions", subsection);
 		g_assert (subsection != NULL);
-		if (!rspamd_rcl_process_section (subsection, metric, val,
+		acts_cbdata.cfg = cfg;
+		acts_cbdata.metric = metric;
+
+		if (!rspamd_rcl_process_section (subsection, &acts_cbdata, val,
 				cfg->cfg_pool, err)) {
 			return FALSE;
 		}

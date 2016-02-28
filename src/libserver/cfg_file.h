@@ -221,6 +221,37 @@ struct rspamd_log_format {
 	struct rspamd_log_format *prev, *next;
 };
 
+enum rspamd_metric_action {
+	METRIC_ACTION_REJECT = 0,
+	METRIC_ACTION_SOFT_REJECT,
+	METRIC_ACTION_REWRITE_SUBJECT,
+	METRIC_ACTION_ADD_HEADER,
+	METRIC_ACTION_GREYLIST,
+	METRIC_ACTION_NOACTION,
+	METRIC_ACTION_MAX
+};
+
+struct metric_action {
+	enum rspamd_metric_action action;
+	gdouble score;
+	guint priority;
+};
+
+/**
+ * Common definition of metric
+ */
+struct metric {
+	const gchar *name;                              /**< name of metric									*/
+	gchar *func_name;                               /**< name of consolidation function					*/
+	gboolean accept_unknown_symbols;                /**< if true unknown symbols are registered here	*/
+	gdouble unknown_weight;                         /**< weight of unknown symbols						*/
+	gdouble grow_factor;                            /**< grow factor for metric							*/
+	GHashTable *symbols;                            /**< weights of symbols in metric					*/
+	gchar *subject;                                 /**< subject rewrite string							*/
+	GHashTable * groups; 		                    /**< groups of symbols								*/
+	struct metric_action actions[METRIC_ACTION_MAX]; /**< all actions of the metric						*/
+};
+
 /**
  * Structure that stores all config data
  */
@@ -506,12 +537,27 @@ gboolean rspamd_init_filters (struct rspamd_config *cfg, bool reconfig);
  * @param one_shot TRUE if symbol can add its score once
  * @param rewrite_existing TRUE if we need to rewrite the existing symbol
  * @param priority use the following priority for a symbol
- * @return TRUE if symbol has been inserted or FALSE if `rewrite_existing` is not enabled and symbol already exists
+ * @return TRUE if symbol has been inserted or FALSE if symbol already exists with higher priority
  */
 gboolean rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 		const gchar *metric,
 		const gchar *symbol, gdouble score, const gchar *description,
 		const gchar *group, guint flags,
+		guint priority);
+
+/**
+ * Sets action score for a specified metric with the specified priority
+ * @param cfg config file
+ * @param metric metric name (or NULL for default metric)
+ * @param action_name symbolic name of action
+ * @param score score limit
+ * @param priority priority for action
+ * @return TRUE if symbol has been inserted or FALSE if action already exists with higher priority
+ */
+gboolean rspamd_config_set_action_score (struct rspamd_config *cfg,
+		const gchar *metric,
+		const gchar *action_name,
+		gdouble score,
 		guint priority);
 
 /**

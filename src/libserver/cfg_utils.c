@@ -1516,3 +1516,62 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 
 	return TRUE;
 }
+
+gboolean
+rspamd_config_set_action_score (struct rspamd_config *cfg,
+		const gchar *metric_name,
+		const gchar *action_name,
+		gdouble score,
+		guint priority)
+{
+	struct metric_action *act;
+	struct metric *metric;
+	gint act_num;
+
+	g_assert (cfg != NULL);
+	g_assert (action_name != NULL);
+
+	if (metric_name == NULL) {
+		metric_name = DEFAULT_METRIC;
+	}
+
+	metric = g_hash_table_lookup (cfg->metrics, metric_name);
+
+	if (metric == NULL) {
+		msg_err_config ("metric %s has not been found", metric_name);
+		return FALSE;
+	}
+
+	if (!rspamd_action_from_str (action_name, &act_num)) {
+		msg_err_config ("invalid action name", action_name);
+		return FALSE;
+	}
+
+	g_assert (act_num > 0 && act_num < METRIC_ACTION_MAX);
+
+	act = &metric->actions[act_num];
+
+	if (act->priority > priority) {
+		msg_info_config ("action %s has been already registered with"
+				"priority %ud, do not override (new priority: %ud)",
+				action_name,
+				act->priority,
+				priority);
+		return FALSE;
+	}
+	else {
+		msg_info_config ("action %s has been already registered with"
+				"priority %ud, override it with new priority: %ud, "
+				"old score: %.2f, new score: %.2f",
+				action_name,
+				act->priority,
+				priority,
+				act->score,
+				score);
+
+		act->score = score;
+		act->priority = priority;
+	}
+
+	return TRUE;
+}

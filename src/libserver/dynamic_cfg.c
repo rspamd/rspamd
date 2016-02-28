@@ -37,8 +37,9 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 	const ucl_object_t *cur_elt, *cur_nm, *it_val;
 	ucl_object_iter_t it = NULL;
 	struct metric *real_metric;
-	struct metric_action *cur_action;
+	const gchar *name;
 	gdouble nscore;
+	static const guint priority = 3;
 
 	while ((cur_elt = ucl_object_iterate (top, &it, true))) {
 		if (ucl_object_type (cur_elt) != UCL_OBJECT) {
@@ -79,7 +80,7 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 					 */
 					rspamd_config_add_metric_symbol (cfg, real_metric->name,
 							ucl_object_tostring (n), nscore, NULL, NULL,
-							0, 3);
+							0, priority);
 				}
 				else {
 					msg_info (
@@ -102,18 +103,18 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 			while ((it_val = ucl_object_iterate (cur_nm, &nit, true))) {
 				if (ucl_object_lookup (it_val, "name") &&
 						ucl_object_lookup (it_val, "value")) {
-					if (!rspamd_action_from_str (ucl_object_tostring (
-							ucl_object_lookup (it_val, "name")), &test_act)) {
+					name = ucl_object_tostring (ucl_object_lookup (it_val, "name"));
+
+					if (!name || !rspamd_action_from_str (name, &test_act)) {
 						msg_err ("unknown action: %s",
 								ucl_object_tostring (ucl_object_lookup (it_val,
 										"name")));
 						continue;
 					}
-					cur_action = &real_metric->actions[test_act];
-					cur_action->action = test_act;
-					cur_action->score =
-							ucl_object_todouble (ucl_object_lookup (it_val,
-									"value"));
+					nscore = ucl_object_todouble (ucl_object_lookup (it_val,
+							"value"));
+					rspamd_config_set_action_score (cfg, real_metric->name,
+							name, nscore, priority);
 				}
 				else {
 					msg_info (

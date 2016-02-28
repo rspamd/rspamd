@@ -24,26 +24,6 @@ struct symbol {
 	struct rspamd_symbol_def *def;					/**< symbol configuration					*/
 };
 
-struct metric_action {
-	enum rspamd_metric_action action;
-	gdouble score;
-};
-
-/**
- * Common definition of metric
- */
-struct metric {
-	const gchar *name;                              /**< name of metric									*/
-	gchar *func_name;                               /**< name of consolidation function					*/
-	gboolean accept_unknown_symbols;                /**< if true unknown symbols are registered here	*/
-	gdouble unknown_weight;                         /**< weight of unknown symbols						*/
-	gdouble grow_factor;                            /**< grow factor for metric							*/
-	GHashTable *symbols;                            /**< weights of symbols in metric					*/
-	gchar *subject;                                 /**< subject rewrite string							*/
-	GHashTable * groups; 		                    /**< groups of symbols								*/
-	struct metric_action actions[METRIC_ACTION_MAX]; /**< all actions of the metric						*/
-};
-
 /**
  * Result of metric processing
  */
