@@ -38,7 +38,7 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 	ucl_object_iter_t it = NULL;
 	struct metric *real_metric;
 	struct metric_action *cur_action;
-	struct rspamd_symbol_def *s;
+	gdouble nscore;
 
 	while ((cur_elt = ucl_object_iterate (top, &it, true))) {
 		if (ucl_object_type (cur_elt) != UCL_OBJECT) {
@@ -72,10 +72,14 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 					const ucl_object_t *v =
 							ucl_object_lookup (it_val, "value");
 
-					if((s = g_hash_table_lookup (real_metric->symbols,
-							ucl_object_tostring (n))) != NULL) {
-						*s->weight_ptr = ucl_object_todouble (v);
-					}
+					nscore = ucl_object_todouble (v);
+
+					/*
+					 * We use priority = 3 here
+					 */
+					rspamd_config_add_metric_symbol (cfg, real_metric->name,
+							ucl_object_tostring (n), nscore, NULL, NULL,
+							0, 3);
 				}
 				else {
 					msg_info (
