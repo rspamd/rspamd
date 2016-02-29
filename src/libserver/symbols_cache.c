@@ -200,8 +200,11 @@ cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 
 	if (i1->deps->len != 0 || i2->deps->len != 0) {
 		/* TODO: handle complex dependencies */
-		w1 = -(i1->deps->len);
-		w2 = -(i2->deps->len);
+		w1 = 1.0 / (i1->deps->len);
+		w2 = 1.0 / (i2->deps->len);
+		msg_debug_cache ("deps length: %s -> %.2f, %s -> %.2f",
+				i1->symbol, w1 * 1000.0,
+				i2->symbol, w2 * 1000.0);
 	}
 	else if (i1->priority == i2->priority) {
 		f1 = (double)i1->frequency / (double)cache->total_freq;
@@ -212,14 +215,16 @@ cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 		t2 = i2->avg_time;
 		w1 = SCORE_FUN (weight1, f1, t1);
 		w2 = SCORE_FUN (weight2, f2, t2);
-		msg_debug_cache ("%s -> %.2f, %s -> %.2f", i1->symbol, w1 * 1000.0,
+		msg_debug_cache ("%s -> %.2f, %s -> %.2f",
+				i1->symbol, w1 * 1000.0,
 				i2->symbol, w2 * 1000.0);
 	}
 	else {
 		/* Strict sorting */
 		w1 = abs (i1->priority);
 		w2 = abs (i2->priority);
-		msg_debug_cache ("priority: %s -> %.2f, %s -> %.2f", i1->symbol, w1 * 1000.0,
+		msg_debug_cache ("priority: %s -> %.2f, %s -> %.2f",
+				i1->symbol, w1 * 1000.0,
 				i2->symbol, w2 * 1000.0);
 	}
 
