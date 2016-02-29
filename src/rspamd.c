@@ -1258,7 +1258,6 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Wait for workers termination */
 	g_hash_table_foreach_remove (rspamd_main->workers, wait_for_workers, NULL);
-	g_hash_table_unref (rspamd_main->spairs);
 
 	event_set (&term_ev, -1, EV_TIMEOUT|EV_PERSIST,
 			rspamd_final_term_handler, rspamd_main);
@@ -1277,6 +1276,7 @@ main (gint argc, gchar **argv, gchar **env)
 	msg_info_main ("terminating...");
 	rspamd_log_close (rspamd_main->logger);
 	REF_RELEASE (rspamd_main->cfg);
+	g_hash_table_unref (rspamd_main->spairs);
 	g_free (rspamd_main);
 	event_base_free (ev_base);
 
