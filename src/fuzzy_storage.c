@@ -210,7 +210,9 @@ rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx)
 	gpointer ptr;
 	guint nupdates = 0;
 
-	if (rspamd_fuzzy_backend_prepare_update (ctx->backend)) {
+	if (ctx->updates_pending &&
+			g_queue_get_length (ctx->updates_pending) > 0 &&
+			rspamd_fuzzy_backend_prepare_update (ctx->backend)) {
 		cur = ctx->updates_pending->head;
 		while (cur) {
 			io_cmd = cur->data;
@@ -254,7 +256,8 @@ rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx)
 					g_queue_get_length (ctx->updates_pending));
 		}
 	}
-	else {
+	else if (ctx->updates_pending &&
+			g_queue_get_length (ctx->updates_pending) > 0) {
 		msg_err ("cannot start transaction in fuzzy backend, "
 				"%ud updates are still pending",
 				g_queue_get_length (ctx->updates_pending));
