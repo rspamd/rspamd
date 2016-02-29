@@ -148,6 +148,14 @@ rspamd_cryptobox_test_instr (gint instr)
 	case CPUID_SSE2:
 		__asm__ volatile ("pmuludq %xmm0, %xmm0");
 		break;
+	case CPUID_RDRAND:
+		/* Use byte code here for compatibility */
+		__asm__ volatile (".byte 0x0f,0xc7,0xf0; setc %1"
+			: "=a" (rd), "=qm" (ok)
+			:
+			: "edx"
+		);
+		break;
 #endif
 #ifdef HAVE_SSE3
 	case CPUID_SSE3:
@@ -174,15 +182,8 @@ rspamd_cryptobox_test_instr (gint instr)
 		__asm__ volatile ("vpaddq %ymm0, %ymm0, %ymm0");\
 		break;
 #endif
-	case CPUID_RDRAND:
-		/* Use byte code here for compatibility */
-		__asm__ volatile (".byte 0x0f,0xc7,0xf0; setc %1"
-			: "=a" (rd), "=qm" (ok)
-			:
-			: "edx"
-		);
-		break;
 	default:
+		return FALSE;
 		break;
 	}
 
