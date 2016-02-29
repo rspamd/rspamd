@@ -62,9 +62,9 @@ struct symbols_cache {
 	GList *delayed_deps;
 	GList *delayed_conditions;
 	rspamd_mempool_t *static_pool;
-	gdouble max_weight;
+	gdouble total_weight;
 	guint used_items;
-	guint64 total_freq;
+	gdouble total_freq;
 	struct rspamd_config *cfg;
 	rspamd_mempool_mutex_t *mtx;
 	gdouble reload_time;
@@ -137,8 +137,8 @@ struct cache_savepoint {
 #define CACHE_RELOAD_TIME 60.0
 /* weight, frequency, time */
 #define TIME_ALPHA (1.0)
-#define WEIGHT_ALPHA (0.001)
-#define FREQ_ALPHA (0.001)
+#define WEIGHT_ALPHA (0.1)
+#define FREQ_ALPHA (0.01)
 #define SCORE_FUN(w, f, t) (((w) > 0 ? (w) : WEIGHT_ALPHA) \
 		* ((f) > 0 ? (f) : FREQ_ALPHA) \
 		/ (t > TIME_ALPHA ? t : TIME_ALPHA))
@@ -196,21 +196,30 @@ cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 	struct symbols_cache *cache = ud;
 	double w1, w2;
 	double weight1, weight2;
-	double f1 = 0, f2 = 0, t1, t2;
+	double f1 = 0, f2 = 0, t1, t2, avg_freq, avg_weight;
 
 	if (i1->deps->len != 0 || i2->deps->len != 0) {
 		/* TODO: handle complex dependencies */
-		w1 = 1.0 / (i1->deps->len);
-		w2 = 1.0 / (i2->deps->len);
+		w1 = 1.0;
+		w2 = 1.0;
+
+		if (i1->deps->len != 0) {
+			w1 = 1.0 / (i1->deps->len);
+		}
+		if (i2->deps->len != 0) {
+			w2 = 1.0 / (i2->deps->len);
+		}
 		msg_debug_cache ("deps length: %s -> %.2f, %s -> %.2f",
 				i1->symbol, w1 * 1000.0,
 				i2->symbol, w2 * 1000.0);
 	}
 	else if (i1->priority == i2->priority) {
-		f1 = (double)i1->frequency / (double)cache->total_freq;
-		f2 = (double)i2->frequency / (double)cache->total_freq;
-		weight1 = fabs (i1->weight) / cache->max_weight;
-		weight2 = fabs (i2->weight) / cache->max_weight;
+		avg_freq = (cache->total_freq / cache->used_items);
+		avg_weight = (cache->total_weight / cache->used_items);
+		f1 = (double)i1->frequency / avg_freq;
+		f2 = (double)i2->frequency / avg_freq;
+		weight1 = fabs (i1->weight) / avg_weight;
+		weight2 = fabs (i2->weight) / avg_weight;
 		t1 = i1->avg_time;
 		t2 = i2->avg_time;
 		w1 = SCORE_FUN (weight1, f1, t1);
@@ -501,10 +510,7 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 				parent->avg_counter = item->avg_counter;
 			}
 
-			if (fabs (item->weight) > cache->max_weight) {
-				cache->max_weight = fabs (item->weight);
-			}
-
+			cache->total_weight += fabs (item->weight);
 			cache->total_freq += item->frequency;
 		}
 	}
@@ -772,7 +778,7 @@ rspamd_symbols_cache_new (struct rspamd_config *cfg)
 	cache->mtx = rspamd_mempool_get_mutex (cache->static_pool);
 	cache->reload_time = CACHE_RELOAD_TIME;
 	cache->total_freq = 1;
-	cache->max_weight = 1.0;
+	cache->total_weight = 1.0;
 	cache->cfg = cfg;
 
 	return cache;
@@ -883,9 +889,7 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 		}
 	}
 
-	if (fabs (item->weight) > cache->max_weight) {
-		cache->max_weight = fabs (item->weight);
-	}
+	cache->total_weight += fabs (item->weight);
 }
 
 static void
