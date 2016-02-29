@@ -84,6 +84,7 @@ struct rspamd_redis_stat_cbdata {
 	GPtrArray *cur_keys;
 	struct upstream *selected;
 	guint inflight;
+	gboolean wanna_die;
 };
 
 #define GET_TASK_ELT(task, elt) (task == NULL ? NULL : (task)->elt)
@@ -425,7 +426,9 @@ rspamd_redis_async_cbdata_cleanup (struct rspamd_redis_stat_cbdata *cbdata)
 	guint i;
 	gchar *k;
 
-	if (cbdata) {
+	if (cbdata && !cbdata->wanna_die) {
+		/* Avoid double frees */
+		cbdata->wanna_die = TRUE;
 		redisAsyncFree (cbdata->redis);
 
 		for (i = 0; i < cbdata->cur_keys->len; i ++) {
@@ -468,6 +471,10 @@ rspamd_redis_stat_learns (redisAsyncContext *c, gpointer r, gpointer priv)
 	ucl_object_t *obj;
 	gulong num = 0;
 
+	if (cbdata->wanna_die) {
+		return;
+	}
+
 	cbdata->inflight --;
 
 	if (c->err == 0 && r != NULL) {
@@ -497,6 +504,10 @@ rspamd_redis_stat_key (redisAsyncContext *c, gpointer r, gpointer priv)
 	redisReply *reply = r;
 	ucl_object_t *obj;
 	glong num = 0;
+
+	if (cbdata->wanna_die) {
+		return;
+	}
 
 	cbdata->inflight --;
 
@@ -544,6 +555,11 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 	redisReply *reply = r, *elt;
 	gchar **pk, *k;
 	guint i, processed = 0;
+
+
+	if (cbdata->wanna_die) {
+		return;
+	}
 
 	cbdata->inflight --;
 
