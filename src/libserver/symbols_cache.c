@@ -1278,8 +1278,6 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	gdouble total_microseconds = 0;
 	const gdouble max_microseconds = 3e5;
 	guint start_events_pending;
-	struct event *ev;
-	struct timeval tv;
 
 	g_assert (cache != NULL);
 
@@ -1352,9 +1350,12 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 
 			if (total_microseconds > max_microseconds) {
 				/* Maybe we should stop and check pending events? */
-				if (rspamd_session_events_pending (task->s) ==
-						start_events_pending) {
+				if (rspamd_session_events_pending (task->s) > start_events_pending) {
 					/* Add some timeout event to avoid too long waiting */
+#if 0
+					struct event *ev;
+					struct timeval tv;
+
 					rspamd_session_add_event (task->s,
 							rspamd_symbols_cache_continuation, task,
 							rspamd_symbols_cache_quark ());
@@ -1365,13 +1366,13 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 					event_add (ev, &tv);
 					rspamd_mempool_add_destructor (task->task_pool,
 							(rspamd_mempool_destruct_t)event_del, ev);
+#endif
+					msg_info_task ("trying to check async events after spending "
+							"%d microseconds processing symbols",
+							(gint)total_microseconds);
+
+					return TRUE;
 				}
-
-				msg_info_task ("trying to check async events after spending "
-						"%d microseconds processing symbols",
-						(gint)total_microseconds);
-
-				return TRUE;
 			}
 		}
 
