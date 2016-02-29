@@ -1547,7 +1547,7 @@ rspamd_config_set_action_score (struct rspamd_config *cfg,
 		return FALSE;
 	}
 
-	g_assert (act_num > 0 && act_num < METRIC_ACTION_MAX);
+	g_assert (act_num >= METRIC_ACTION_REJECT && act_num < METRIC_ACTION_MAX);
 
 	act = &metric->actions[act_num];
 
