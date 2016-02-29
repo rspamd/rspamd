@@ -821,6 +821,9 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 	struct rspamd_worker *cur;
 	pid_t wrk;
 
+	/* Turn off locking for logger */
+	rspamd_log_nolock (rspamd_main->logger);
+
 	msg_debug_main ("catch SIGCHLD signal, finding terminated worker");
 	/* Remove dead child form children list */
 	wrk = waitpid (0, &res, 0);
@@ -891,6 +894,8 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 			}
 		}
 	}
+
+	rspamd_log_lock (rspamd_main->logger);
 }
 
 static void

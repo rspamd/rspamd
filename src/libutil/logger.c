@@ -48,6 +48,7 @@ struct rspamd_logger_s {
 	gboolean enabled;
 	gboolean is_debug;
 	gboolean throttling;
+	gboolean no_lock;
 	time_t throttling_time;
 	sig_atomic_t do_reopen_log;
 	enum rspamd_log_type type;
@@ -68,6 +69,18 @@ struct rspamd_logger_s {
 static const gchar lf_chr = '\n';
 
 static rspamd_logger_t *default_logger = NULL;
+
+#define RSPAMD_LOGGER_LOCK(l) do {				\
+	if ((l) != NULL && !(l)->no_lock) {			\
+		rspamd_mempool_lock_mutex ((l)->mtx);	\
+	}											\
+} while (0)
+
+#define RSPAMD_LOGGER_UNLOCK(l) do {			\
+	if ((l) != NULL && !(l)->no_lock) {			\
+		rspamd_mempool_unlock_mutex ((l)->mtx);	\
+	}											\
+} while (0)
 
 
 static void
@@ -456,14 +469,14 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
 	else {
 		if (rspamd_logger_need_log (rspamd_log, log_level, module)) {
 			rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
-			rspamd_mempool_lock_mutex (rspamd_log->mtx);
+			RSPAMD_LOGGER_LOCK (rspamd_log);
 			rspamd_log->log_func (NULL, module, id,
 					function,
 					log_level,
 					logbuf,
 					FALSE,
 					rspamd_log);
-			rspamd_mempool_unlock_mutex (rspamd_log->mtx);
+			RSPAMD_LOGGER_UNLOCK (rspamd_log);
 		}
 
 		switch (log_level) {
@@ -918,7 +931,8 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
 				return;
 			}
 		}
-		rspamd_mempool_lock_mutex (rspamd_log->mtx);
+
+		RSPAMD_LOGGER_LOCK (rspamd_log);
 		va_start (vp, fmt);
 		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
 		*end = '\0';
@@ -929,7 +943,7 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
 				logbuf,
 				TRUE,
 				rspamd_log);
-		rspamd_mempool_unlock_mutex (rspamd_log->mtx);
+		RSPAMD_LOGGER_UNLOCK (rspamd_log);
 	}
 }
 
@@ -946,14 +960,14 @@ rspamd_glib_log_function (const gchar *log_domain,
 
 	if (rspamd_log->enabled &&
 			rspamd_logger_need_log (rspamd_log, log_level, NULL)) {
-		rspamd_mempool_lock_mutex (rspamd_log->mtx);
+		RSPAMD_LOGGER_LOCK (rspamd_log);
 		rspamd_log->log_func (log_domain, "glib", NULL,
 				NULL,
 				log_level,
 				message,
 				FALSE,
 				rspamd_log);
-		rspamd_mempool_unlock_mutex (rspamd_log->mtx);
+		RSPAMD_LOGGER_UNLOCK (rspamd_log);
 	}
 }
 
@@ -991,4 +1005,20 @@ rspamd_log_counters (rspamd_logger_t *logger)
 	}
 
 	return NULL;
+}
+
+void
+rspamd_log_nolock (rspamd_logger_t *logger)
+{
+	if (logger) {
+		logger->no_lock = TRUE;
+	}
+}
+
+void
+rspamd_log_lock (rspamd_logger_t *logger)
+{
+	if (logger) {
+		logger->no_lock = FALSE;
+	}
 }
