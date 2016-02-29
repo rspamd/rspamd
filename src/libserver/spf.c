@@ -300,11 +300,13 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 		}
 		else if (cur->flags & RSPAMD_SPF_FLAG_REFRENCE) {
 			/* Process reference */
-			rspamd_spf_process_reference (target, cur, rec, FALSE);
-
 			if (cur->flags & RSPAMD_SPF_FLAG_REDIRECT) {
 				/* Stop on redirected domain */
+				rspamd_spf_process_reference (target, cur, rec, TRUE);
 				break;
+			}
+			else {
+				rspamd_spf_process_reference (target, cur, rec, FALSE);
 			}
 		}
 		else {
