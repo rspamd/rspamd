@@ -270,8 +270,9 @@ rspamd_symbols_cache_resort (struct symbols_cache *cache)
 
 	if (cache->items_by_order) {
 		REF_RELEASE (cache->items_by_order);
-		cache->items_by_order = ord;
 	}
+
+	cache->items_by_order = ord;
 }
 
 /* Sort items in logical order */
