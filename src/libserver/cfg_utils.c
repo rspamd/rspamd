@@ -943,6 +943,10 @@ rspamd_include_map_handler (const guchar *data, gsize len,
 #define RSPAMD_WWWDIR_MACRO "WWWDIR"
 #define RSPAMD_PREFIX_MACRO "PREFIX"
 #define RSPAMD_VERSION_MACRO "VERSION"
+#define RSPAMD_VERSION_MAJOR_MACRO "VERSION_MAJOR"
+#define RSPAMD_VERSION_MINOR_MACRO "VERSION_MINOR"
+#define RSPAMD_VERSION_PATCH_MACRO "VERSION_PATCH"
+#define RSPAMD_BRANCH_VERSION_MACRO "BRANCH_VERSION"
 
 void
 rspamd_ucl_add_conf_variables (struct ucl_parser *parser, GHashTable *vars)
@@ -970,6 +974,14 @@ rspamd_ucl_add_conf_variables (struct ucl_parser *parser, GHashTable *vars)
 	ucl_parser_register_variable (parser,  RSPAMD_PREFIX_MACRO,
 			RSPAMD_PREFIX);
 	ucl_parser_register_variable (parser, RSPAMD_VERSION_MACRO, RVERSION);
+	ucl_parser_register_variable (parser, RSPAMD_VERSION_MAJOR_MACRO,
+			RSPAMD_VERSION_MAJOR);
+	ucl_parser_register_variable (parser, RSPAMD_VERSION_MINOR_MACRO,
+			RSPAMD_VERSION_MINOR);
+	ucl_parser_register_variable (parser, RSPAMD_VERSION_PATCH_MACRO,
+			RSPAMD_VERSION_PATCH);
+	ucl_parser_register_variable (parser, RSPAMD_BRANCH_VERSION_MACRO,
+			RSPAMD_VERSION_BRANCH);
 
 	if (vars != NULL) {
 		g_hash_table_iter_init (&it, vars);
