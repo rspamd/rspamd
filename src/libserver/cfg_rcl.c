@@ -692,6 +692,145 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 #define RSPAMD_PREFIX_INDEX "PREFIX"
 #define RSPAMD_VERSION_INDEX "VERSION"
 
+static gint
+rspamd_rcl_cmp_components (const gchar *comp1, const gchar *comp2)
+{
+	guint v1, v2;
+
+	v1 = strtoul (comp1, NULL, 10);
+	v2 = strtoul (comp2, NULL, 10);
+
+	return v1 - v2;
+}
+
+static int
+rspamd_rcl_lua_version_cmp (lua_State *L)
+{
+	const gchar *ver;
+	gchar **components;
+	gint ret = 0;
+
+	if (lua_type (L, 2) == LUA_TSTRING) {
+		ver = lua_tostring (L, 2);
+
+		components = g_strsplit_set (ver, ".-_", -1);
+
+		if (!components) {
+			return luaL_error (L, "invalid arguments to 'cmp': %s", ver);
+		}
+
+		if (components[0]) {
+			ret = rspamd_rcl_cmp_components (components[0], RSPAMD_VERSION_MAJOR);
+		}
+
+		if (ret) {
+			goto set;
+		}
+
+		if (components[1]) {
+			ret = rspamd_rcl_cmp_components (components[1], RSPAMD_VERSION_MAJOR);
+		}
+
+		if (ret) {
+			goto set;
+		}
+
+		if (components[2]) {
+			ret = rspamd_rcl_cmp_components (components[2], RSPAMD_VERSION_PATCH);
+		}
+
+		/*
+		 * XXX: we don't compare git releases assuming that it is meaningless
+		 */
+	}
+	else {
+		return luaL_error (L, "invalid arguments to 'cmp'");
+	}
+
+set:
+	g_strfreev (components);
+	lua_pushnumber (L, ret);
+
+	return 1;
+}
+
+static int
+rspamd_rcl_lua_version_numeric (lua_State *L)
+{
+	static gint64 version_num = RSPAMD_VERSION_NUM;
+	const gchar *type;
+
+	if (lua_gettop (L) >= 2 && lua_type (L, 1) == LUA_TSTRING) {
+		type = lua_tostring (L, 1);
+		if (g_ascii_strcasecmp (type, "short") == 0) {
+			version_num = RSPAMD_VERSION_MAJOR_NUM * 1000 +
+					RSPAMD_VERSION_MINOR_NUM * 100 + RSPAMD_VERSION_PATCH_NUM * 10;
+		}
+		else if (g_ascii_strcasecmp (type, "main") == 0) {
+			version_num = RSPAMD_VERSION_MAJOR_NUM * 1000 +
+						RSPAMD_VERSION_MINOR_NUM * 100;
+		}
+		else if (g_ascii_strcasecmp (type, "major") == 0) {
+			version_num = RSPAMD_VERSION_MAJOR_NUM;
+		}
+		else if (g_ascii_strcasecmp (type, "minor") == 0) {
+			version_num = RSPAMD_VERSION_MINOR_NUM;
+		}
+		else if (g_ascii_strcasecmp (type, "patch") == 0) {
+			version_num = RSPAMD_VERSION_PATCH_NUM;
+		}
+	}
+
+	lua_pushnumber (L, version_num);
+
+	return 1;
+}
+
+static int
+rspamd_rcl_lua_version (lua_State *L)
+{
+	const gchar *result = NULL, *type;
+
+	if (lua_gettop (L) == 0) {
+		result = RVERSION;
+	}
+	else if (lua_gettop (L) >= 1 && lua_type (L, 1) == LUA_TSTRING) {
+		/* We got something like string */
+		type = lua_tostring (L, 1);
+
+		if (g_ascii_strcasecmp (type, "short") == 0) {
+			result = RSPAMD_VERSION_MAJOR
+					"." RSPAMD_VERSION_MINOR
+					"." RSPAMD_VERSION_PATCH;
+		}
+		else if (g_ascii_strcasecmp (type, "main") == 0) {
+			result = RSPAMD_VERSION_MAJOR "." RSPAMD_VERSION_MINOR;
+		}
+		else if (g_ascii_strcasecmp (type, "major") == 0) {
+			result = RSPAMD_VERSION_MAJOR;
+		}
+		else if (g_ascii_strcasecmp (type, "minor") == 0) {
+			result = RSPAMD_VERSION_MINOR;
+		}
+		else if (g_ascii_strcasecmp (type, "patch") == 0) {
+			result = RSPAMD_VERSION_PATCH;
+		}
+		else if (g_ascii_strcasecmp (type, "id") == 0) {
+			result = RID;
+		}
+		else if (g_ascii_strcasecmp (type, "num") == 0) {
+			return rspamd_rcl_lua_version_numeric (L);
+		}
+		else if (g_ascii_strcasecmp (type, "cmp") == 0) {
+			return rspamd_rcl_lua_version_cmp (L);
+		}
+	}
+
+	lua_pushstring (L, result);
+
+	return 1;
+}
+
 static void
 rspamd_rcl_set_lua_globals (struct rspamd_config *cfg, lua_State *L,
 		GHashTable *vars)
@@ -724,6 +863,12 @@ rspamd_rcl_set_lua_globals (struct rspamd_config *cfg, lua_State *L,
 	if (lua_isnil (L, -1)) {
 		lua_newtable (L);
 		lua_setglobal (L, "classifiers");
+	}
+
+	lua_getglobal (L, "rspamd_version");
+	if (lua_isnil (L, -1)) {
+		lua_pushcfunction (L, rspamd_rcl_lua_version);
+		lua_setglobal (L, "rspamd_version");
 	}
 
 	pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
