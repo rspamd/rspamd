@@ -1403,7 +1403,7 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 
 	if (sym_def != NULL) {
 		if (sym_def->priority > priority) {
-			msg_info_config ("symbol %s has been already registered with"
+			msg_info_config ("symbol %s has been already registered with "
 					"priority %ud, do not override (new priority: %ud)",
 					symbol,
 					sym_def->priority,
@@ -1417,7 +1417,7 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 			return FALSE;
 		}
 		else {
-			msg_info_config ("symbol %s has been already registered with"
+			msg_info_config ("symbol %s has been already registered with "
 					"priority %ud, override it with new priority: %ud, "
 					"old score: %.2f, new score: %.2f",
 					symbol,
