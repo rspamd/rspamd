@@ -1184,7 +1184,12 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 		while (p <= end && check_num) {
 			if (shift < 32 &&
 				((*p == '.' && dots < 3) || (p == end && dots <= 3))) {
-				g_assert (p - c + 1 < (gint) sizeof (buf));
+				if (p - c + 1 >= (gint) sizeof (buf)) {
+					msg_err_pool ("invalid numeric url %*.s...: too long",
+							INET6_ADDRSTRLEN, c);
+					return FALSE;
+				}
+
 				rspamd_strlcpy (buf, c, p - c + 1);
 				c = p + 1;
 
