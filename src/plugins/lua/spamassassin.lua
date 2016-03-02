@@ -86,6 +86,7 @@ local rules = {}
 local atoms = {}
 local metas = {}
 local scores = {}
+local scores_added = {}
 local external_deps = {}
 local freemail_domains = {}
 local pcre_only_regexps = {}
@@ -800,7 +801,7 @@ local function process_sa_conf(f)
       if cur_rule['meta'] and cur_rule['symbol'] then valid_rule = true end
     elseif words[1] == "describe" and valid_rule then
       cur_rule['description'] = words_to_re(words, 2)
-    elseif words[1] == "score" and valid_rule then
+    elseif words[1] == "score" then
       scores[words[2]] = parse_score(words)
     elseif words[1] == 'freemail_domains' then
       _.each(function(dom)
@@ -1151,10 +1152,10 @@ local function post_process()
     --rspamd_config:register_symbol(k, calculate_score(k), f)
     atoms[k] = f
   end,
-    _.filter(function(k, r)
+  _.filter(function(k, r)
       return r['type'] == 'header' and r['header']
-    end,
-      rules))
+  end,
+  rules))
 
   -- Custom function rules
   _.each(function(k, r)
@@ -1293,7 +1294,9 @@ local function post_process()
           rspamd_config:set_metric_symbol({
             name = k, score = r['score'],
             description = r['description'],
+            priority = 1,
             one_shot = true })
+          scores_added[k] = 1
         end
         rspamd_config:register_symbol(k, calculate_score(k, r), meta_cb)
         r['expression'] = expression
@@ -1343,8 +1346,16 @@ local function post_process()
     _.filter(function(k, r)
       return r['type'] == 'meta'
     end,
-      rules))
+    rules))
 
+  -- Set missing symbols
+  _.each(function(key, score)
+    if not scores_added[key] then
+      rspamd_config:set_metric_symbol({
+            name = key, score = score,
+            priority = 1})
+    end
+  end, scores)
   if freemail_domains then
     freemail_trie = rspamd_trie.create(freemail_domains)
     rspamd_logger.infox(rspamd_config, 'loaded %1 freemail domains definitions',
