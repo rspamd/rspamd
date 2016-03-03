@@ -114,6 +114,7 @@ local function check_quantity_received (task)
         -- Unresolved host
         task:insert_result(symbol, 1)
 
+        if not hn then return end
         for _,h in ipairs(bad_hosts) do
           if string.find(hn, h) then
             task:insert_result(symbol_strict, 1, h)
