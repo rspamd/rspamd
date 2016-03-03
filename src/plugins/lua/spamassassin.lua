@@ -1353,7 +1353,7 @@ local function post_process()
     if not scores_added[key] then
       rspamd_config:set_metric_symbol({
             name = key, score = score,
-            priority = 1})
+            priority = 1, flags = 'ignore'})
     end
   end, scores)
   if freemail_domains then
