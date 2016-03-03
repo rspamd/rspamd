@@ -65,6 +65,7 @@ struct lua_tcp_cbdata {
 	struct iovec *iov;
 	GString *in;
 	gchar *stop_pattern;
+	struct rspamd_async_watcher *w;
 	struct event ev;
 	gint fd;
 	gint cbref;
@@ -113,6 +114,7 @@ lua_tcp_maybe_free (struct lua_tcp_cbdata *cbd)
 {
 	if (cbd->session) {
 		rspamd_session_remove_event (cbd->session, lua_tcp_fin, cbd);
+		rspamd_session_watcher_pop (cbd->session, cbd->w);
 	}
 	else {
 		lua_tcp_fin (cbd);
@@ -609,6 +611,8 @@ lua_tcp_request (lua_State *L)
 				(event_finalizer_t)lua_tcp_fin,
 				cbd,
 				g_quark_from_static_string ("lua tcp"));
+		cbd->w = rspamd_session_get_watcher (session);
+		rspamd_session_watcher_push (session);
 	}
 
 	if (rspamd_parse_inet_address (&cbd->addr, host, 0)) {
