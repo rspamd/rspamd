@@ -214,14 +214,32 @@ rspamd_config:register_dependency('SYMBOL_FROM', 'SYMBOL_TO')
 LUA_FUNCTION_DEF (config, register_dependency);
 
 /**
- * @method rspamd_config:set_metric_symbol(name, weight, [description], [metric])
- * Set the value of a specified symbol in a metric
- * @param {string} name name of symbol
- * @param {number} weight the weight multiplier
- * @param {string} description symbolic description
- * @param {string} metric metric name (default metric is used if this value is absent)
+ * @method rspamd_config:set_metric_symbol({table})
+ * Set the value of a specified symbol in a metric. This function accepts table with the following elements:
+ *
+ * - `name`: name of symbol (string)
+ * - `score`: score for symbol (number)
+ * - `metric`: name of metric (string, optional)
+ * - `description`: description of symbol (string, optional)
+ * - `group`: name of group for symbol (string, optional)
+ * - `one_shot`: turn off multiple hits for a symbol (boolean, optional)
+ * - `flags`: comma separated string of flags:
+ *    + `ignore`: do not strictly check validity of symbol and corresponding rule
+ *    + `one_shot`: turn off multiple hits for a symbol
+ * - `priority`: priority of symbol's definition
  */
 LUA_FUNCTION_DEF (config, set_metric_symbol);
+
+/**
+ * @method rspamd_config:set_metric_action({table})
+ * Set the score of a specified action in a metric. This function accepts table with the following elements:
+ *
+ * - `action`: name of action (string)
+ * - `score`: score for action (number)
+ * - `metric`: name of metric (string, optional)
+ * - `priority`: priority of symbol's definition
+ */
+LUA_FUNCTION_DEF (config, set_metric_action);
 
 /**
  * @method rspamd_config:add_composite(name, expression)
@@ -383,6 +401,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_callback_symbol_priority),
 	LUA_INTERFACE_DEF (config, register_dependency),
 	LUA_INTERFACE_DEF (config, set_metric_symbol),
+	LUA_INTERFACE_DEF (config, set_metric_action),
 	LUA_INTERFACE_DEF (config, add_composite),
 	LUA_INTERFACE_DEF (config, register_module_option),
 	LUA_INTERFACE_DEF (config, register_pre_filter),
@@ -1343,9 +1362,62 @@ lua_config_set_metric_symbol (lua_State * L)
 					weight, description, group, flags, (guint)priority);
 		}
 	}
+	else {
+		return luaL_error (L, "invalid arguments, rspamd_config expected");
+	}
 
 	return 0;
 }
+
+static gint
+lua_config_set_metric_action (lua_State * L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *metric_name = DEFAULT_METRIC, *name = NULL, *flags_str = NULL;
+	double weight;
+	struct metric *metric;
+	GError *err = NULL;
+	gdouble priority = 0.0;
+
+	if (cfg) {
+
+		if (lua_type (L, 2) == LUA_TTABLE) {
+			if (!rspamd_lua_parse_table_arguments (L, 2, &err,
+					"*action=S;score=N;"
+					"metric=S;priority=N",
+					&name, &weight,
+					&metric_name, &priority, &flags_str)) {
+				msg_err_config ("bad arguments: %e", err);
+				g_error_free (err);
+
+				return 0;
+			}
+		}
+		else {
+			return luaL_error (L, "invalid arguments, table expected");
+		}
+
+		if (metric_name == NULL) {
+			metric_name = DEFAULT_METRIC;
+		}
+
+		metric = g_hash_table_lookup (cfg->metrics, metric_name);
+
+		if (metric == NULL) {
+			msg_err_config ("metric named %s is not defined", metric_name);
+		}
+		else if (name != NULL && weight != 0) {
+			rspamd_config_set_action_score (cfg, metric_name, name,
+					weight, (guint)priority);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments, rspamd_config expected");
+	}
+
+	return 0;
+}
+
 
 static gint
 lua_config_add_composite (lua_State * L)
