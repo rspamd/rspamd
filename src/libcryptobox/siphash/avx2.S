@@ -103,7 +103,12 @@ LBB0_5:                                 ## %for.end
 	movq	%rbx, %rdx
 	subq	%rax, %rdx
 	leaq	-16(%rbp), %rdi
-	callq	_memcpy
+	movq	%rdx, %rcx
+	shrq	$2, %rcx
+	rep;	movsl
+	movq	%rdx, %rcx
+	andq	$3, %rcx
+	rep;	movsb
 	movb	%bl, -9(%rbp)
 	vmovq	-16(%rbp), %xmm4        ## xmm4 = mem[0],zero
 	vpslldq	$8, %xmm4, %xmm0        ## xmm0 = zero,zero,zero,zero,zero,zero,zero,zero,xmm4[0,1,2,3,4,5,6,7]
