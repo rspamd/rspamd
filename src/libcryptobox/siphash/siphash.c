@@ -17,9 +17,10 @@
 #include "cryptobox.h"
 #include "siphash.h"
 #include "platform_config.h"
+#include <stdbool.h>
 
 extern unsigned long cpu_config;
-static const size_t test_iters = 1000;
+static const size_t test_iters = 100000;
 
 typedef struct siphash_impl_t
 {
@@ -42,10 +43,17 @@ SIPHASH_DECLARE(ref)
 SIPHASH_DECLARE(sse41)
 #define SIPHASH_SSE41 SIPHASH_IMPL(CPUID_SSE41, "sse41", sse41)
 #endif
+#if defined(HAVE_AVX2) && defined(__x86_64__)
+SIPHASH_DECLARE(avx2)
+#define SIPHASH_AVX2 SIPHASH_IMPL(CPUID_AVX2, "avx2", avx2)
+#endif
 
 /* list implemenations from most optimized to least, with generic as the last entry */
 static const siphash_impl_t siphash_list[] = {
 		SIPHASH_GENERIC,
+#if defined(SIPHASH_AVX2)
+		SIPHASH_AVX2,
+#endif
 #if defined(SIPHASH_SSE41)
 		SIPHASH_SSE41,
 #endif
