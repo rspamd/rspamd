@@ -1277,7 +1277,7 @@ lua_config_set_metric_symbol (lua_State * L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *metric_name = DEFAULT_METRIC, *description = NULL,
-			*group = NULL, *name = NULL;
+			*group = NULL, *name = NULL, *flags_str = NULL;
 	double weight;
 	struct metric *metric;
 	gboolean one_shot = FALSE;
@@ -1290,9 +1290,9 @@ lua_config_set_metric_symbol (lua_State * L)
 		if (lua_type (L, 2) == LUA_TTABLE) {
 			if (!rspamd_lua_parse_table_arguments (L, 2, &err,
 					"*name=S;score=N;description=S;"
-					"group=S;one_shot=B;metric=S;priority=N",
+					"group=S;one_shot=B;metric=S;priority=N;flags=S",
 					&name, &weight, &description,
-					&group, &one_shot, &metric_name, &priority)) {
+					&group, &one_shot, &metric_name, &priority, &flags_str)) {
 				msg_err_config ("bad arguments: %e", err);
 				g_error_free (err);
 
@@ -1324,6 +1324,15 @@ lua_config_set_metric_symbol (lua_State * L)
 		metric = g_hash_table_lookup (cfg->metrics, metric_name);
 		if (one_shot) {
 			flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
+		}
+
+		if (flags_str) {
+			if (strstr (flags_str, "one_shot") != NULL) {
+				flags |= RSPAMD_SYMBOL_FLAG_ONESHOT;
+			}
+			else if (strstr (flags_str, "ignore") != NULL) {
+				flags |= RSPAMD_SYMBOL_FLAG_IGNORE;
+			}
 		}
 
 		if (metric == NULL) {
