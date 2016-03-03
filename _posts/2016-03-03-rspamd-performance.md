@@ -10,12 +10,12 @@ Then I've added all rules from SA using [spamassassin](https://rspamd.com/doc/mo
 This set is quite large and it includes about 3k of custom regexp rules. Rspamd runs **without** hyperscan and pcre2, so it performs literally the same job as SA does.
 And here are results for about 100k messages being scanned:
 
-Total False Positives: 517
-Total False Negatives: 348
-Total messages: 101349
+	Total False Positives: 517
+	Total False Negatives: 348
+	Total messages: 101349
 
-Total SA time: 423942 seconds, total rspamd time: 33149 seconds
-Average SA time: 4182ms/msg, average rspamd time: 327ms/msg seconds
+	Total SA time: 423942 seconds, total rspamd time: 33149 seconds
+	Average SA time: 4182ms/msg, average rspamd time: 327ms/msg seconds
 
 So the difference in checks is less than 1% and in many cases rspamd does better job than SA because, for example, multiple hits of URIBL rules, phishing detection and some other
 differences. And it's still 13 times faster than SA. Moreover, it eats less memory and can process more messages in parallel. In other experiments, rspamd was able to process
