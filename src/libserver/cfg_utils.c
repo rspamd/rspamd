@@ -827,8 +827,9 @@ rspamd_config_new_metric (struct rspamd_config *cfg, struct metric *c,
 		c->groups = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 
 		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
-			c->actions[i].score = -1.0;
+			c->actions[i].score = NAN;
 			c->actions[i].action = i;
+			c->actions[i].priority = 0;
 		}
 
 		c->subject = SPAM_SUBJECT;
@@ -1563,26 +1564,32 @@ rspamd_config_set_action_score (struct rspamd_config *cfg,
 
 	act = &metric->actions[act_num];
 
-	if (act->priority > priority) {
-		msg_info_config ("action %s has been already registered with"
-				"priority %ud, do not override (new priority: %ud)",
-				action_name,
-				act->priority,
-				priority);
-		return FALSE;
-	}
-	else {
-		msg_info_config ("action %s has been already registered with"
-				"priority %ud, override it with new priority: %ud, "
-				"old score: %.2f, new score: %.2f",
-				action_name,
-				act->priority,
-				priority,
-				act->score,
-				score);
-
+	if (isnan (act->score)) {
 		act->score = score;
 		act->priority = priority;
+	}
+	else {
+		if (act->priority > priority) {
+			msg_info_config ("action %s has been already registered with "
+					"priority %ud, do not override (new priority: %ud)",
+					action_name,
+					act->priority,
+					priority);
+			return FALSE;
+		}
+		else {
+			msg_info_config ("action %s has been already registered with "
+					"priority %ud, override it with new priority: %ud, "
+					"old score: %.2f, new score: %.2f",
+					action_name,
+					act->priority,
+					priority,
+					act->score,
+					score);
+
+			act->score = score;
+			act->priority = priority;
+		}
 	}
 
 	return TRUE;
