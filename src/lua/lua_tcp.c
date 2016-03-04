@@ -113,8 +113,8 @@ static void
 lua_tcp_maybe_free (struct lua_tcp_cbdata *cbd)
 {
 	if (cbd->session) {
-		rspamd_session_remove_event (cbd->session, lua_tcp_fin, cbd);
 		rspamd_session_watcher_pop (cbd->session, cbd->w);
+		rspamd_session_remove_event (cbd->session, lua_tcp_fin, cbd);
 	}
 	else {
 		lua_tcp_fin (cbd);
