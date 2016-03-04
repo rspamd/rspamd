@@ -36,6 +36,7 @@ local known_plugins = {
   'Mail::SpamAssassin::Plugin::MIMEEval',
   'Mail::SpamAssassin::Plugin::BodyEval',
   'Mail::SpamAssassin::Plugin::MIMEHeader',
+  'Mail::SpamAssassin::Plugin::WLBLEval',
 }
 
 -- Table that replaces SA symbol with rspamd equialent
@@ -102,6 +103,17 @@ local replace = {
 local internal_regexp = {
   date_shift = rspamd_regexp.create("^\\(\\s*'((?:-?\\d+)|(?:undef))'\\s*,\\s*'((?:-?\\d+)|(?:undef))'\\s*\\)$")
 }
+
+-- Mail::SpamAssassin::Plugin::WLBLEval plugin
+local sa_lists = {
+  from_blacklist = {},
+  from_whitelist = {},
+  from_def_whitelist = {},
+  to_blacklist = {},
+  to_whitelist = {},
+  elts = 0,
+}
+
 local func_cache = {}
 local section = rspamd_config:get_all_opt("spamassassin")
 
@@ -396,7 +408,76 @@ local function gen_eval_rule(arg)
 
         return 0
       end
-    }
+    },
+    {
+      'check_from_in_blacklist',
+      function(task, remain)
+        local from = task:get_from()
+        if from and from[1] and from[1]['addr'] then
+          if sa_lists['from_blacklist'][from[1]['addr']] then
+            return 1
+          end
+        end
+
+        return 0
+      end
+    },
+    {
+      'check_from_in_whitelist',
+      function(task, remain)
+        local from = task:get_from()
+        if from and from[1] and from[1]['addr'] then
+          if sa_lists['from_whitelist'][from[1]['addr']] then
+            return 1
+          end
+        end
+
+        return 0
+      end
+    },
+    {
+      'check_from_in_default_whitelist',
+      function(task, remain)
+        local from = task:get_from()
+        if from and from[1] and from[1]['addr'] then
+          if sa_lists['from_def_whitelist'][from[1]['addr']] then
+            return 1
+          end
+        end
+
+        return 0
+      end
+    },
+    {
+      'check_to_in_blacklist',
+      function(task, remain)
+        local rcpt = task:get_recipients()
+        if rcpt then
+          for i,r in ipairs(rcpt) do
+            if sa_lists['from_blacklist'][r['addr']] then
+              return 1
+            end
+          end
+        end
+
+        return 0
+      end
+    },
+    {
+      'check_to_in_whitelist',
+      function(task, remain)
+        local rcpt = task:get_recipients()
+        if rcpt then
+          for i,r in ipairs(rcpt) do
+            if sa_lists['from_whitelist'][r['addr']] then
+              return 1
+            end
+          end
+        end
+
+        return 0
+      end
+    },
   }
 
   for k,f in ipairs(eval_funcs) do
@@ -807,6 +888,18 @@ local function process_sa_conf(f)
       _.each(function(dom)
           table.insert(freemail_domains, '@' .. dom)
         end, _.drop_n(1, words))
+    elseif words[1] == 'blacklist_from' then
+      sa_lists['from_blacklist'][words[2]] = 1
+      sa_lists['elts'] = sa_lists['elts'] + 1
+    elseif words[1] == 'whitelist_from' then
+      sa_lists['from_whitelist'][words[2]] = 1
+      sa_lists['elts'] = sa_lists['elts'] + 1
+    elseif words[1] == 'whitelist_to' then
+      sa_lists['to_whitelist'][words[2]] = 1
+      sa_lists['elts'] = sa_lists['elts'] + 1
+    elseif words[1] == 'blacklist_to' then
+      sa_lists['to_blacklist'][words[2]] = 1
+      sa_lists['elts'] = sa_lists['elts'] + 1
     elseif words[1] == 'tflags' then
       process_tflags(cur_rule, words)
     elseif words[1] == 'replace_tag' then
@@ -1356,11 +1449,15 @@ local function post_process()
             priority = 1, flags = 'ignore'})
     end
   end, scores)
+
+  -- Logging output
   if freemail_domains then
     freemail_trie = rspamd_trie.create(freemail_domains)
     rspamd_logger.infox(rspamd_config, 'loaded %1 freemail domains definitions',
       #freemail_domains)
   end
+  rspamd_logger.infox(rspamd_config, 'loaded %1 blacklist/whitelist elements',
+      sa_lists['elts'])
 end
 
 local has_rules = false
