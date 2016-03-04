@@ -1034,6 +1034,10 @@ rspamd_register_symbol_fromlua (lua_State *L,
 	cd->L = L;
 	cd->symbol = rspamd_mempool_strdup (cfg->cfg_pool, name);
 
+	if (priority == 0 && weight < 0) {
+		priority = 1;
+	}
+
 	ret = rspamd_symbols_cache_add_symbol (cfg->cache,
 			name,
 			priority,
