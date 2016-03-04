@@ -1030,7 +1030,7 @@ rspamd_symbols_cache_metric_limit (struct rspamd_task *task,
 					ms = metric->actions[METRIC_ACTION_REJECT].score;
 				}
 
-				if (cp->lim < ms) {
+				if (!isnan (ms) && cp->lim < ms) {
 					cp->rs = res;
 					cp->lim = ms;
 				}

@@ -383,9 +383,10 @@ rspamd_check_action_metric (struct rspamd_task *task,
 		action = &metric->actions[i];
 		sc = get_specific_action_score (task, ms, action);
 
-		if (sc < 0) {
+		if (isnan (sc)) {
 			continue;
 		}
+
 		if (score >= sc && sc > max_score) {
 			selected_action = action;
 			max_score = sc;
