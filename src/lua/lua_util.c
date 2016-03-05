@@ -143,7 +143,7 @@ LUA_FUNCTION_DEF (util, fold_header);
  */
 LUA_FUNCTION_DEF (util, is_uppercase);
 
-/**
+/***
  * @function util.humanize_number(num)
  * Returns humanized representation of given number (like 1k instead of 1000)
  *
@@ -152,7 +152,7 @@ LUA_FUNCTION_DEF (util, is_uppercase);
  */
 LUA_FUNCTION_DEF (util, humanize_number);
 
-/**
+/***
  * @function util.get_tld(host)
  * Returns tld for the specified host
  *
@@ -161,7 +161,7 @@ LUA_FUNCTION_DEF (util, humanize_number);
  */
 LUA_FUNCTION_DEF (util, get_tld);
 
-/**
+/***
  * @function util.glob(pattern)
  * Returns results for the glob match for the specified pattern
  *
@@ -170,7 +170,7 @@ LUA_FUNCTION_DEF (util, get_tld);
  */
 LUA_FUNCTION_DEF (util, glob);
 
-/**
+/***
  * @function util.parse_mail_address(str)
  * Parses email address and returns a table of tables in the following format:
  *
@@ -183,6 +183,15 @@ LUA_FUNCTION_DEF (util, glob);
  * @return {table/tables} parsed list of mail addresses
  */
 LUA_FUNCTION_DEF (util, parse_mail_address);
+
+/***
+ * @function util.strlen_utf8(str)
+ * Returns length of string encoded in utf-8 in characters.
+ * If invalid characters are found, then this function returns number of bytes.
+ * @param {string} str utf8 encoded string
+ * @return {number} number of characters in string
+ */
+LUA_FUNCTION_DEF (util, strlen_utf8);
 
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
@@ -204,6 +213,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, get_tld),
 	LUA_INTERFACE_DEF (util, glob),
 	LUA_INTERFACE_DEF (util, parse_mail_address),
+	LUA_INTERFACE_DEF (util, strlen_utf8),
 	{NULL, NULL}
 };
 
@@ -900,6 +910,32 @@ lua_util_parse_mail_address (lua_State *L)
 
 	if (!ret) {
 		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static gint
+lua_util_strlen_utf8 (lua_State *L)
+{
+	const gchar *str, *end;
+	gsize len;
+
+	str = lua_tolstring (L, 1, &len);
+
+	if (str) {
+		if (g_utf8_validate (str, len, &end)) {
+			len = g_utf8_strlen (str, len);
+		}
+		else if (end != NULL && end > str) {
+			len = (g_utf8_strlen (str, end - str)) /* UTF part */
+					+ (len - (end - str)) /* raw part */;
+		}
+
+		lua_pushnumber (L, len);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
