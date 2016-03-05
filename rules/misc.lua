@@ -127,7 +127,7 @@ rspamd_config.SUBJ_ALL_CAPS = {
 rspamd_config.LONG_SUBJ = {
   callback = function(task)
     local sbj = task:get_header('Subject')
-    if sbj and string.len(sbj) > 200 then
+    if sbj and util.strlen_utf8(sbj) > 150 then
       return true
     end
     return false
