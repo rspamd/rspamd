@@ -970,7 +970,7 @@ luaopen_cryptobox (lua_State * L)
 	lua_rawset (L, -3);
 
 	luaL_register (L, NULL, cryptoboxhashlib_m);
-	rspamd_lua_add_preload (L, "rspamd_cryptobox_signature", lua_load_hash);
+	rspamd_lua_add_preload (L, "rspamd_cryptobox_hash", lua_load_hash);
 
 	rspamd_lua_add_preload (L, "rspamd_cryptobox", lua_load_cryptobox);
 
