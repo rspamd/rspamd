@@ -124,6 +124,20 @@ rspamd_config.SUBJ_ALL_CAPS = {
   description = 'All capital letters in subject'
 }
 
+rspamd_config.LONG_SUBJ = {
+  callback = function(task)
+    local sbj = task:get_header('Subject')
+    if sbj and string.len(sbj) > 200 then
+      return true
+    end
+    return false
+  end,
+
+  score = 3.0,
+  group = 'headers',
+  description = 'Subject is too long'
+}
+
 rspamd_config.BROKEN_HEADERS = {
   callback = function(task)
     if task:has_flag('broken_headers') then
