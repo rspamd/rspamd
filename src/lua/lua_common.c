@@ -211,8 +211,7 @@ rspamd_lua_init ()
 	luaopen_logger (L);
 	luaopen_mempool (L);
 	luaopen_config (L);
-	luaopen_radix (L);
-	luaopen_hash_table (L);
+	luaopen_map (L);
 	luaopen_trie (L);
 	luaopen_task (L);
 	luaopen_textpart (L);
