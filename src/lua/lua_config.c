@@ -767,6 +767,7 @@ lua_config_add_radix_map (lua_State *L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *map_line, *description;
 	struct rspamd_lua_map *map, **pmap;
+	struct rspamd_map *m;
 
 	if (cfg) {
 		map_line = luaL_checkstring (L, 2);
@@ -775,16 +776,17 @@ lua_config_add_radix_map (lua_State *L)
 		map->data.radix = radix_create_compressed ();
 		map->type = RSPAMD_LUA_MAP_RADIX;
 
-		if (!rspamd_map_add (cfg, map_line, description,
+		if ((m = rspamd_map_add (cfg, map_line, description,
 				rspamd_radix_read,
 				rspamd_radix_fin,
-				(void **)&map->data.radix)) {
+				(void **)&map->data.radix)) == NULL) {
 			msg_warn_config ("invalid radix map %s", map_line);
 			radix_destroy_compressed (map->data.radix);
 			lua_pushnil (L);
 			return 1;
 		}
 
+		map->map = m;
 		pmap = lua_newuserdata (L, sizeof (void *));
 		*pmap = map;
 		rspamd_lua_setclass (L, "rspamd{map}", -1);
@@ -843,6 +845,7 @@ lua_config_add_hash_map (lua_State *L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *map_line, *description;
 	struct rspamd_lua_map *map, **pmap;
+	struct rspamd_map *m;
 
 	if (cfg) {
 		map_line = luaL_checkstring (L, 2);
@@ -852,16 +855,17 @@ lua_config_add_hash_map (lua_State *L)
 				rspamd_strcase_equal);
 		map->type = RSPAMD_LUA_MAP_SET;
 
-		if (!rspamd_map_add (cfg, map_line, description,
+		if ((m = rspamd_map_add (cfg, map_line, description,
 				rspamd_hosts_read,
 				rspamd_hosts_fin,
-				(void **)&map->data.hash)) {
+				(void **)&map->data.hash)) == NULL) {
 			msg_warn_config ("invalid set map %s", map_line);
 			g_hash_table_destroy (map->data.hash);
 			lua_pushnil (L);
 			return 1;
 		}
 
+		map->map = m;
 		pmap = lua_newuserdata (L, sizeof (void *));
 		*pmap = map;
 		rspamd_lua_setclass (L, "rspamd{map}", -1);
@@ -880,6 +884,7 @@ lua_config_add_kv_map (lua_State *L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *map_line, *description;
 	struct rspamd_lua_map *map, **pmap;
+	struct rspamd_map *m;
 
 	if (cfg) {
 		map_line = luaL_checkstring (L, 2);
@@ -889,16 +894,17 @@ lua_config_add_kv_map (lua_State *L)
 				rspamd_strcase_equal);
 		map->type = RSPAMD_LUA_MAP_HASH;
 
-		if (!rspamd_map_add (cfg, map_line, description,
+		if ((m = rspamd_map_add (cfg, map_line, description,
 				rspamd_kv_list_read,
 				rspamd_kv_list_fin,
-				(void **)&map->data.hash)) {
+				(void **)&map->data.hash)) == NULL) {
 			msg_warn_config ("invalid hash map %s", map_line);
 			g_hash_table_destroy (map->data.hash);
 			lua_pushnil (L);
 			return 1;
 		}
 
+		map->map = m;
 		pmap = lua_newuserdata (L, sizeof (void *));
 		*pmap = map;
 		rspamd_lua_setclass (L, "rspamd{map}", -1);
@@ -1864,6 +1870,7 @@ lua_config_add_map (lua_State *L)
 	const gchar *map_line, *description;
 	struct lua_map_callback_data *cbdata, **pcbdata;
 	struct rspamd_lua_map *map;
+	struct rspamd_map *m;
 	int cbidx;
 
 	if (cfg) {
@@ -1892,12 +1899,14 @@ lua_config_add_map (lua_State *L)
 			pcbdata = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (cbdata));
 			*pcbdata = cbdata;
 
-			if (!rspamd_map_add (cfg, map_line, description, lua_map_read, lua_map_fin,
-				(void **)pcbdata)) {
+			if ((m = rspamd_map_add (cfg, map_line, description,
+					lua_map_read, lua_map_fin,
+					(void **)pcbdata)) == NULL) {
 				msg_warn_config ("invalid hash map %s", map_line);
 				lua_pushboolean (L, false);
 			}
 			else {
+				map->map = m;
 				lua_pushboolean (L, true);
 			}
 		}

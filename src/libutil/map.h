@@ -48,7 +48,7 @@ gboolean rspamd_map_is_map (const gchar *map_line);
 /**
  * Add map from line
  */
-gboolean rspamd_map_add (struct rspamd_config *cfg,
+struct rspamd_map* rspamd_map_add (struct rspamd_config *cfg,
 	const gchar *map_line,
 	const gchar *description,
 	map_cb_t read_callback,

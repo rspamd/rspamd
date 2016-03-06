@@ -756,7 +756,7 @@ rspamd_map_is_map (const gchar *map_line)
 	return ret;
 }
 
-gboolean
+struct rspamd_map *
 rspamd_map_add (struct rspamd_config *cfg,
 	const gchar *map_line,
 	const gchar *description,
@@ -784,7 +784,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 
 	/* First of all detect protocol line */
 	if (rspamd_map_check_proto (cfg, map_line, new_map) == NULL) {
-		return FALSE;
+		return NULL;
 	}
 
 	new_map->read_callback = read_callback;
@@ -810,7 +810,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 			if (errno != ENOENT) {
 				msg_err_config ("cannot open file '%s': %s", def, strerror
 						(errno));
-				return FALSE;
+				return NULL;
 
 			}
 			msg_info_config (
@@ -834,12 +834,12 @@ rspamd_map_add (struct rspamd_config *cfg,
 		if (http_parser_parse_url (new_map->uri, strlen (new_map->uri), TRUE,
 				&up) != 0) {
 			msg_err_config ("cannot parse HTTP url: %s", new_map->uri);
-			return FALSE;
+			return NULL;
 		}
 		else {
 			if (!(up.field_set & 1 << UF_HOST)) {
 				msg_err_config ("cannot parse HTTP url: %s: no host", new_map->uri);
-				return FALSE;
+				return NULL;
 			}
 
 			tok.begin = new_map->uri + up.field_data[UF_HOST].off;
@@ -876,7 +876,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 
 	cfg->maps = g_list_prepend (cfg->maps, new_map);
 
-	return TRUE;
+	return new_map;
 }
 
 static gchar*
