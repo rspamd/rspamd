@@ -43,6 +43,8 @@ luaL_register (lua_State *L, const gchar *name, const struct luaL_reg *methods)
 /* Interface definitions */
 #define LUA_FUNCTION_DEF(class, name) static gint lua_ ## class ## _ ## name ( \
 		lua_State * L)
+#define LUA_PUBLIC_FUNCTION_DEF(class, name) gint lua_ ## class ## _ ## name ( \
+		lua_State * L)
 #define LUA_INTERFACE_DEF(class, name) { # name, lua_ ## class ## _ ## name }
 
 extern const luaL_reg null_reg[];
@@ -79,7 +81,6 @@ struct rspamd_lua_regexp {
 	gsize match_limit;
 	gint re_flags;
 };
-
 
 /* Common utility functions */
 
