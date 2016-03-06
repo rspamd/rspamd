@@ -22,7 +22,7 @@ And the following URLs are considered as phished:
 
 ## Configuration of phishing module
 
-Here is an example of full module configuraition.
+Here is an example of full module configuration.
 
 ~~~nginx
 phishing {
