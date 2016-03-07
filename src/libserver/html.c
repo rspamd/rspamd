@@ -761,7 +761,13 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 
 			if (parent && (parent->flags & FL_IGNORE)) {
 				/* Propagate ignore flag */
+				/*
+				 * XXX: disable propagation for now as we are missing some spam
+				 * URLs
+				 */
+#if 0
 				tag->flags |= FL_IGNORE;
+#endif
 			}
 
 			g_node_append (*cur_level, nnode);
@@ -770,7 +776,7 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 				*cur_level = nnode;
 			}
 
-			if (tag->flags & (CM_HEAD|CM_UNKNOWN|FL_BROKEN|FL_IGNORE)) {
+			if (tag->flags & (CM_HEAD|CM_UNKNOWN|FL_IGNORE)) {
 				tag->flags |= FL_IGNORE;
 
 				return FALSE;
@@ -782,7 +788,7 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 		/* Inline tag */
 		parent = (*cur_level)->data;
 
-		if (parent && (parent->flags & (CM_HEAD|CM_UNKNOWN|FL_BROKEN|FL_IGNORE))) {
+		if (parent && (parent->flags & (CM_HEAD|CM_UNKNOWN|FL_IGNORE))) {
 			tag->flags |= FL_IGNORE;
 
 			return FALSE;
