@@ -47,9 +47,21 @@ LUA_FUNCTION_DEF (map, get_key);
  */
 LUA_FUNCTION_DEF (map, is_signed);
 
+/***
+ * @method map:get_proto()
+ * Returns protocol of map as string:
+ *
+ * - `http`: for HTTP map
+ * - `file`: for file map
+ * - `embedded`: for manually created maps
+ * @return {string} string representation of the map protocol
+ */
+LUA_FUNCTION_DEF (map, get_proto);
+
 static const struct luaL_reg maplib_m[] = {
 	LUA_INTERFACE_DEF (map, get_key),
 	LUA_INTERFACE_DEF (map, is_signed),
+	LUA_INTERFACE_DEF (map, get_proto),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -468,6 +480,36 @@ lua_map_is_signed (lua_State *L)
 	lua_pushboolean (L, ret);
 	return 1;
 }
+
+static int
+lua_map_get_proto (lua_State *L)
+{
+	struct rspamd_lua_map *map = lua_check_map (L);
+	const gchar *ret = "undefined";
+
+	if (map != NULL) {
+		if (map->map == NULL) {
+			ret = "embedded";
+		}
+		else {
+			switch (map->map->protocol) {
+			case MAP_PROTO_FILE:
+				ret = "file";
+				break;
+			case MAP_PROTO_HTTP:
+				ret = "http";
+				break;
+			}
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_pushstring (L, ret);
+	return 1;
+}
+
 
 void
 luaopen_map (lua_State * L)
