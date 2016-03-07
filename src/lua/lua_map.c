@@ -58,10 +58,26 @@ LUA_FUNCTION_DEF (map, is_signed);
  */
 LUA_FUNCTION_DEF (map, get_proto);
 
+/***
+ * @method map:get_sign_key()
+ * Returns pubkey used for signing as base32 string or nil
+ * @return {string} base32 encoded string or nil
+ */
+LUA_FUNCTION_DEF (map, get_sign_key);
+
+/***
+ * @method map:set_sign_key(key)
+ * Set trusted key for signatures for this map
+ * @param {string} key base32 encoded string or nil
+ */
+LUA_FUNCTION_DEF (map, set_sign_key);
+
 static const struct luaL_reg maplib_m[] = {
 	LUA_INTERFACE_DEF (map, get_key),
 	LUA_INTERFACE_DEF (map, is_signed),
 	LUA_INTERFACE_DEF (map, get_proto),
+	LUA_INTERFACE_DEF (map, get_sign_key),
+	LUA_INTERFACE_DEF (map, set_sign_key),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -510,6 +526,69 @@ lua_map_get_proto (lua_State *L)
 	return 1;
 }
 
+static int
+lua_map_get_sign_key (lua_State *L)
+{
+	struct rspamd_lua_map *map = lua_check_map (L);
+	GString *ret = NULL;
+
+	if (map != NULL) {
+		if (map->map && map->map->trusted_pubkey) {
+			ret = rspamd_pubkey_print (map->map->trusted_pubkey,
+					RSPAMD_KEYPAIR_PUBKEY|RSPAMD_KEYPAIR_BASE32);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (ret) {
+		lua_pushlstring (L, ret->str, ret->len);
+		g_string_free (ret, TRUE);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static int
+lua_map_set_sign_key (lua_State *L)
+{
+	struct rspamd_lua_map *map = lua_check_map (L);
+	const gchar *pk_str;
+	struct rspamd_cryptobox_pubkey *pk;
+	gsize len;
+
+	pk_str = lua_tolstring (L, 2, &len);
+
+	if (map && pk_str) {
+
+		if (!map->map) {
+			return luaL_error (L, "cannot set key for embedded maps");
+		}
+
+		pk = rspamd_pubkey_from_base32 (pk_str, len, RSPAMD_KEYPAIR_SIGN,
+				RSPAMD_CRYPTOBOX_MODE_25519);
+
+		if (!pk) {
+			return luaL_error (L, "invalid pubkey string");
+		}
+
+		if (map->map->trusted_pubkey) {
+			/* Unref old pk */
+			rspamd_pubkey_unref (map->map->trusted_pubkey);
+		}
+
+		map->map->trusted_pubkey = pk;
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
+}
 
 void
 luaopen_map (lua_State * L)
