@@ -199,12 +199,12 @@ local function dmarc_callback(task)
     if task:has_symbol(symbols['spf_allow_symbol']) then
       efrom = task:get_from(1)
       if efrom and efrom[1] and efrom[1]['domain'] then
-        if efrom[1]['domain'] == from[1]['domain'] then
+        if rspamd_util.strequal_caseless(efrom[1]['domain'], from[1]['domain']) then
           spf_ok = true
         elseif not strict_spf then
-          if string.sub(efrom[1]['domain'],
-            -string.len('.' .. lookup_domain))
-          == '.' .. lookup_domain then
+          if rspamd_util.strequal_caseless(
+              string.sub(efrom[1]['domain'], -string.len('.' .. lookup_domain)),
+              '.' .. lookup_domain) then
             spf_ok = true
           end
         end
@@ -213,12 +213,12 @@ local function dmarc_callback(task)
     local das = task:get_symbol(symbols['dkim_allow_symbol'])
     if das and das[1] and das[1]['options'] then
       for i,dkim_domain in ipairs(das[1]['options']) do
-        if from[1]['domain'] == dkim_domain then
+        if rspamd_util.strequal_caseless(from[1]['domain'], dkim_domain) then
           dkim_ok = true
         elseif not strict_dkim then
-          if string.sub(dkim_domain,
-            -string.len('.' .. lookup_domain))
-              == '.' .. lookup_domain then
+          if rspamd_util.strequal_caseless(
+              string.sub(dkim_domain, -string.len('.' .. lookup_domain)),
+              '.' .. lookup_domain) then
             dkim_ok = true
           end
         end
