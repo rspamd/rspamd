@@ -26,11 +26,30 @@
  * @module rspamd_map
  */
 
-/* Radix tree */
+/***
+ * @method map:get_key(in)
+ * Variable method for different types of maps:
+ *
+ * - For hash maps it returns boolean and accepts string
+ * - For kv maps it returns string (or nil) and accepts string
+ * - For radix maps it returns boolean and accepts IP address (as object, string or number)
+ *
+ * @param {vary} in input to check
+ * @return {bool|string} if a value is found then this function returns string or `True` if not - then it returns `nil` or `False`
+ */
 LUA_FUNCTION_DEF (map, get_key);
+
+
+/***
+ * @method map:is_signed()
+ * Returns `True` if a map is signed
+ * @return {bool} signed value
+ */
+LUA_FUNCTION_DEF (map, is_signed);
 
 static const struct luaL_reg maplib_m[] = {
 	LUA_INTERFACE_DEF (map, get_key),
+	LUA_INTERFACE_DEF (map, is_signed),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -418,6 +437,27 @@ lua_map_get_key (lua_State * L)
 					lua_pushstring (L, value);
 					return 1;
 				}
+			}
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_pushboolean (L, ret);
+	return 1;
+}
+
+static int
+lua_map_is_signed (lua_State *L)
+{
+	struct rspamd_lua_map *map = lua_check_map (L);
+	gboolean ret = FALSE;
+
+	if (map != NULL) {
+		if (map->map) {
+			if (map->map->is_signed) {
+				ret = TRUE;
 			}
 		}
 	}
