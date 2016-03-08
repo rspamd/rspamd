@@ -23,6 +23,7 @@ local updates_priority = 2
 local rspamd_config = rspamd_config
 local hash = require "rspamd_cryptobox_hash"
 local rspamd_version = rspamd_version
+local maps = {}
 
 local function process_symbols(obj)
   each(function(sym, score)
@@ -33,19 +34,25 @@ local function process_symbols(obj)
     })
   end, obj)
 end
+
 local function process_actions(obj)
   each(function(act, score)
     rspamd_config:set_metric_action({
-      name = act,
+      action = act,
       score = score,
       priority = updates_priority
     })
   end, obj)
 end
 
-local function process_actions(obj)
+local function process_rules(obj)
   each(function(key, code)
-    dostring(code)
+    local f = loadstring(code)
+    if f then
+      f()
+    else
+      rspamd_logger(rspamd_config, 'cannot load rules for %s', key)
+    end
   end, obj)
 end
 
@@ -70,47 +77,68 @@ local function check_version(obj)
   return ret
 end
 
-local function process_updates(data)
-  local ucl = require "ucl"
-  local parser = ucl.parser()
-  local res,err = parser:parse_string(data)
+local function gen_callback(map)
 
-  if not res then
-    rspamd_logger.warnx(rspamd_config, 'cannot parse updates map: ' .. err)
-  else
-    local h = hash.create()
-    h:update(data)
-    local obj = parser:get_object()
+  return function(data)
+    local ucl = require "ucl"
+    local parser = ucl.parser()
+    local res,err = parser:parse_string(data)
 
-    if check_version(obj) then
-      if obj['symbols'] then
-        process_symbols(obj['symbols'])
-      end
-      if obj['actions'] then
-        process_actions(obj['actions'])
-      end
-      if obj['rules'] then
-        process_rules(obj['rules'])
-      end
+    if not res then
+      rspamd_logger.warnx(rspamd_config, 'cannot parse updates map: ' .. err)
+    else
+      local h = hash.create()
+      h:update(data)
+      local obj = parser:get_object()
 
-      rspamd_logger.infox(rspamd_config, 'loaded new rules with hash "%s"',
-        h:hex())
+      if check_version(obj) then
+        if obj['symbols'] then
+          process_symbols(obj['symbols'])
+        end
+        if obj['actions'] then
+          process_actions(obj['actions'])
+        end
+        if obj['rules'] then
+          process_rules(obj['rules'])
+        end
+
+        rspamd_logger.infox(rspamd_config, 'loaded new rules with hash "%s"',
+          h:hex())
+      end
     end
-  end
 
-  return res
+    return res
+  end
 end
 
 -- Configuration part
 local section = rspamd_config:get_all_opt("rspamd_update")
 if section then
+  local trusted_key
   each(function(k, elt)
     if k == 'priority' then
       updates_priority = tonumber(elt)
+    elseif k == 'key' then
+      trusted_key = elt
     else
-      if not rspamd_config:add_map(elt, "rspamd updates map", process_updates) then
-        rspamd_logger.errx(rspamd_config, 'cannot load settings from %1', elt)
+      local map = rspamd_config:add_map(elt, "rspamd updates map", nil)
+      if not map then
+        rspamd_logger.errx(rspamd_config, 'cannot load updates from %1', elt)
+      else
+        map:set_callback(gen_callback(map))
+        maps['elt'] = map
       end
     end
   end, section)
+
+  each(function(k, map)
+    -- Check sanity for maps
+    if map:get_proto() == 'http' and not map:get_sign_key() then
+      if trusted_key then
+        map:set_sign_key(trusted_key)
+      else
+        rspamd_logger.warnx(rspamd_config, 'Map %s is loaded by HTTP and it is not signed', k)
+      end
+    end
+  end, maps)
 end

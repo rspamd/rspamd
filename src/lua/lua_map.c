@@ -443,8 +443,8 @@ lua_map_get_key (lua_State * L)
 				ud = luaL_checkudata (L, 2, "rspamd{ip}");
 				if (ud != NULL) {
 					addr = *((struct rspamd_lua_ip **)ud);
+
 					if (addr->addr == NULL) {
-						msg_err ("rspamd{ip} is not valid");
 						addr = NULL;
 					}
 				}
