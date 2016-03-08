@@ -728,7 +728,7 @@ rspamd_rcl_lua_version_cmp (lua_State *L)
 		}
 
 		if (components[1]) {
-			ret = rspamd_rcl_cmp_components (components[1], RSPAMD_VERSION_MAJOR);
+			ret = rspamd_rcl_cmp_components (components[1], RSPAMD_VERSION_MINOR);
 		}
 
 		if (ret) {

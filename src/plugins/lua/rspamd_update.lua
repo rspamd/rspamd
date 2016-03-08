@@ -60,14 +60,14 @@ local function check_version(obj)
   local ret = true
 
   if obj['min_version'] then
-    if rspamd_version('cmp', obj['min_version']) < 0 then
+    if rspamd_version('cmp', obj['min_version']) > 0 then
       ret = false
       rspamd_logger.errx(rspamd_config, 'updates require at least %s version of rspamd',
         obj['min_version'])
     end
   end
   if obj['max_version'] then
-    if rspamd_version('cmp', obj['max_version']) > 0 then
+    if rspamd_version('cmp', obj['max_version']) < 0 then
       ret = false
       rspamd_logger.errx(rspamd_config, 'updates require maximum %s version of rspamd',
         obj['max_version'])
