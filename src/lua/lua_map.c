@@ -347,7 +347,7 @@ lua_map_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 		*pmap = cbdata->lua_map;
 		rspamd_lua_setclass (cbdata->L, "rspamd{map}", -1);
 
-		if (lua_pcall (cbdata->L, -1, 0, 0) != 0) {
+		if (lua_pcall (cbdata->L, 2, 0, 0) != 0) {
 			msg_info_pool ("call to %s failed: %s", "local function",
 				lua_tostring (cbdata->L, -1));
 			lua_pop (cbdata->L, 1);
@@ -361,7 +361,7 @@ lua_config_add_map (lua_State *L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *map_line, *description;
 	struct lua_map_callback_data *cbdata;
-	struct rspamd_lua_map *map;
+	struct rspamd_lua_map *map, **pmap;
 	struct rspamd_map *m;
 	int cbidx;
 
@@ -403,11 +403,13 @@ lua_config_add_map (lua_State *L)
 				lua_map_read, lua_map_fin,
 				(void **)&map->data.cbdata)) == NULL) {
 			msg_warn_config ("invalid map %s", map_line);
-			lua_pushboolean (L, false);
+			lua_pushnil (L);
 		}
 		else {
 			map->map = m;
-			lua_pushboolean (L, true);
+			pmap = lua_newuserdata (L, sizeof (void *));
+			*pmap = map;
+			rspamd_lua_setclass (L, "rspamd{map}", -1);
 		}
 	}
 	else {
