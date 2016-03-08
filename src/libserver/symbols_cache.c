@@ -1282,6 +1282,17 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	g_assert (cache != NULL);
 
 	if (task->checkpoint == NULL) {
+
+		if (cache->items_by_id->len != cache->items_by_order->d->len) {
+			/*
+			 * Cache has been modified, need to resort it
+			 */
+			msg_info_cache ("symbols cache has been modified since last check:"
+					" old items: %ud, new items: %ud",
+					cache->items_by_order->d->len, cache->items_by_id->len);
+			rspamd_symbols_cache_resort (cache);
+		}
+
 		checkpoint = rspamd_mempool_alloc0 (task->task_pool, sizeof (*checkpoint));
 		/* Bit 0: check started, Bit 1: check finished */
 		checkpoint->processed_bits = rspamd_mempool_alloc0 (task->task_pool,
