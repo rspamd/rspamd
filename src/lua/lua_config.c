@@ -834,7 +834,8 @@ rspamd_register_symbol_fromlua (lua_State *L,
 		gdouble weight,
 		gint priority,
 		enum rspamd_symbol_type type,
-		gint parent)
+		gint parent,
+		gboolean optional)
 {
 	struct lua_callback_data *cd;
 	gint ret = -1;
@@ -848,6 +849,19 @@ rspamd_register_symbol_fromlua (lua_State *L,
 
 	if (priority == 0 && weight < 0) {
 		priority = 1;
+	}
+
+	if ((ret = rspamd_symbols_cache_find_symbol (cfg->cache, name)) != -1) {
+		if (optional) {
+			msg_debug_config ("duplicate symbol: %s, skip registering", name);
+
+			return ret;
+		}
+		else {
+			msg_err_config ("duplicate symbol: %s, skip registering", name);
+
+			return -1;
+		}
 	}
 
 	ret = rspamd_symbols_cache_add_symbol (cfg->cache,
@@ -890,7 +904,8 @@ lua_config_register_symbol (lua_State * L)
 					weight,
 					0,
 					SYMBOL_TYPE_NORMAL,
-					-1);
+					-1,
+					FALSE);
 		}
 	}
 
@@ -940,7 +955,9 @@ lua_config_register_symbols (lua_State *L)
 				weight,
 				0,
 				SYMBOL_TYPE_CALLBACK,
-				-1);
+				-1,
+				FALSE);
+
 		for (i = top; i <= lua_gettop (L); i++) {
 			if (lua_type (L, i) == LUA_TTABLE) {
 				lua_pushvalue (L, i);
@@ -1027,7 +1044,8 @@ lua_config_register_callback_symbol (lua_State * L)
 				weight,
 				0,
 				SYMBOL_TYPE_CALLBACK,
-				-1);
+				-1,
+				FALSE);
 	}
 
 	lua_pushnumber (L, ret);
@@ -1067,7 +1085,8 @@ lua_config_register_callback_symbol_priority (lua_State * L)
 				weight,
 				priority,
 				SYMBOL_TYPE_CALLBACK,
-				-1);
+				-1,
+				FALSE);
 	}
 
 	lua_pushnumber (L, ret);
@@ -1292,6 +1311,7 @@ lua_config_newindex (lua_State *L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *name;
 	gint id;
+	gboolean optional = FALSE;
 
 	name = luaL_checkstring (L, 2);
 
@@ -1306,7 +1326,8 @@ lua_config_newindex (lua_State *L)
 					1.0,
 					0,
 					SYMBOL_TYPE_NORMAL,
-					-1);
+					-1,
+					FALSE);
 		}
 		else if (lua_type (L, 3) == LUA_TTABLE) {
 			gint type = SYMBOL_TYPE_NORMAL, priority = 0, idx;
@@ -1355,6 +1376,14 @@ lua_config_newindex (lua_State *L)
 			}
 			lua_pop (L, 1);
 
+			lua_pushstring (L, "optional");
+			lua_gettable (L, -2);
+
+			if (lua_type (L, -1) == LUA_TBOOLEAN) {
+				optional = lua_toboolean (L, -1);
+			}
+			lua_pop (L, 1);
+
 			lua_pushstring (L, "type");
 			lua_gettable (L, -2);
 
@@ -1383,7 +1412,8 @@ lua_config_newindex (lua_State *L)
 					weight,
 					priority,
 					type,
-					-1);
+					-1,
+					optional);
 
 			if (id != -1) {
 				/* Check for condition */

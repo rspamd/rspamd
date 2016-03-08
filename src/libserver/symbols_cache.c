@@ -684,7 +684,8 @@ rspamd_symbols_cache_add_condition (struct symbols_cache *cache, gint id,
 	return TRUE;
 }
 
-gboolean rspamd_symbols_cache_add_condition_delayed (struct symbols_cache *cache,
+gboolean
+rspamd_symbols_cache_add_condition_delayed (struct symbols_cache *cache,
 		const gchar *sym, lua_State *L, gint cbref)
 {
 	gint id;
