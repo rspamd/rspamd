@@ -283,7 +283,7 @@ end
 local function gen_eval_rule(arg)
   local eval_funcs = {
     {'check_freemail_from', function(task, remain)
-        local from = task:get_from()
+        local from = task:get_from('mime')
         if from then
           return freemail_search(from[1]['addr'])
         end
@@ -330,7 +330,7 @@ local function gen_eval_rule(arg)
     {
       'check_for_missing_to_header',
       function (task, remain)
-        if not task:get_from(1) then
+        if not task:get_recipients('mime') then
           return 1
         end
 
@@ -412,7 +412,7 @@ local function gen_eval_rule(arg)
     {
       'check_from_in_blacklist',
       function(task, remain)
-        local from = task:get_from()
+        local from = task:get_from('mime')
         if from and from[1] and from[1]['addr'] then
           if sa_lists['from_blacklist'][from[1]['addr']] then
             return 1
@@ -425,7 +425,7 @@ local function gen_eval_rule(arg)
     {
       'check_from_in_whitelist',
       function(task, remain)
-        local from = task:get_from()
+        local from = task:get_from('mime')
         if from and from[1] and from[1]['addr'] then
           if sa_lists['from_whitelist'][from[1]['addr']] then
             return 1
@@ -438,7 +438,7 @@ local function gen_eval_rule(arg)
     {
       'check_from_in_default_whitelist',
       function(task, remain)
-        local from = task:get_from()
+        local from = task:get_from('mime')
         if from and from[1] and from[1]['addr'] then
           if sa_lists['from_def_whitelist'][from[1]['addr']] then
             return 1
@@ -451,7 +451,7 @@ local function gen_eval_rule(arg)
     {
       'check_to_in_blacklist',
       function(task, remain)
-        local rcpt = task:get_recipients()
+        local rcpt = task:get_recipients('mime')
         if rcpt then
           for i,r in ipairs(rcpt) do
             if sa_lists['from_blacklist'][r['addr']] then
@@ -466,7 +466,7 @@ local function gen_eval_rule(arg)
     {
       'check_to_in_whitelist',
       function(task, remain)
-        local rcpt = task:get_recipients()
+        local rcpt = task:get_recipients('mime')
         if rcpt then
           for i,r in ipairs(rcpt) do
             if sa_lists['from_whitelist'][r['addr']] then
