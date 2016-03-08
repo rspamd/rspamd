@@ -760,14 +760,7 @@ rspamd_html_process_tag (rspamd_mempool_t *pool, struct html_content *hc,
 			parent = (*cur_level)->data;
 
 			if (parent && (parent->flags & FL_IGNORE)) {
-				/* Propagate ignore flag */
-				/*
-				 * XXX: disable propagation for now as we are missing some spam
-				 * URLs
-				 */
-#if 0
 				tag->flags |= FL_IGNORE;
-#endif
 			}
 
 			g_node_append (*cur_level, nnode);
