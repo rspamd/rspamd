@@ -72,12 +72,20 @@ LUA_FUNCTION_DEF (map, get_sign_key);
  */
 LUA_FUNCTION_DEF (map, set_sign_key);
 
+/***
+ * @method map:set_callback(cb)
+ * Set callback for a specified callback map.
+ * @param {function} cb map callback function
+ */
+LUA_FUNCTION_DEF (map, set_callback);
+
 static const struct luaL_reg maplib_m[] = {
 	LUA_INTERFACE_DEF (map, get_key),
 	LUA_INTERFACE_DEF (map, is_signed),
 	LUA_INTERFACE_DEF (map, get_proto),
 	LUA_INTERFACE_DEF (map, get_sign_key),
 	LUA_INTERFACE_DEF (map, set_sign_key),
+	LUA_INTERFACE_DEF (map, set_callback),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -91,6 +99,14 @@ enum rspamd_lua_map_type {
 
 struct rspamd_map;
 struct radix_tree_compressed;
+struct rspamd_lua_map;
+
+struct lua_map_callback_data {
+	lua_State *L;
+	gint ref;
+	GString *data;
+	struct rspamd_lua_map *lua_map;
+};
 
 struct rspamd_lua_map {
 	struct rspamd_map *map;
@@ -99,16 +115,11 @@ struct rspamd_lua_map {
 	union {
 		struct radix_tree_compressed *radix;
 		GHashTable *hash;
-		gint cbref;
+		struct lua_map_callback_data *cbdata;
 	} data;
 };
 
-struct lua_map_callback_data {
-	lua_State *L;
-	gint ref;
-	GString *data;
-	struct rspamd_lua_map *lua_map;
-};
+
 
 static struct rspamd_lua_map  *
 lua_check_map (lua_State * L)
@@ -326,7 +337,10 @@ lua_map_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 		return;
 	}
 
-	if (cbdata->data != NULL && cbdata->data->len != 0) {
+	if (cbdata->ref == -1) {
+		msg_err_pool ("map has no callback set");
+	}
+	else if (cbdata->data != NULL && cbdata->data->len != 0) {
 		lua_rawgeti (cbdata->L, LUA_REGISTRYINDEX, cbdata->ref);
 		lua_pushlstring (cbdata->L, cbdata->data->str, cbdata->data->len);
 		pmap = lua_newuserdata (cbdata->L, sizeof (void *));
@@ -346,7 +360,7 @@ lua_config_add_map (lua_State *L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *map_line, *description;
-	struct lua_map_callback_data *cbdata, **pcbdata;
+	struct lua_map_callback_data *cbdata;
 	struct rspamd_lua_map *map;
 	struct rspamd_map *m;
 	int cbidx;
@@ -363,34 +377,37 @@ lua_config_add_map (lua_State *L)
 			cbidx = 3;
 		}
 
+		map = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (*map));
+		map->type = RSPAMD_LUA_MAP_CALLBACK;
+		map->data.cbdata = rspamd_mempool_alloc (cfg->cfg_pool,
+				sizeof (*map->data.cbdata));
+		cbdata = map->data.cbdata;
+		cbdata->L = L;
+		cbdata->data = NULL;
+		cbdata->lua_map = map;
+
 		if (lua_type (L, cbidx) == LUA_TFUNCTION) {
-			cbdata = g_slice_alloc (sizeof (*cbdata));
-			cbdata->L = L;
-			cbdata->data = NULL;
 			lua_pushvalue (L, cbidx);
 			/* Get a reference */
 			cbdata->ref = luaL_ref (L, LUA_REGISTRYINDEX);
-			map = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (*map));
-			map->type = RSPAMD_LUA_MAP_CALLBACK;
-			map->data.cbref = cbdata->ref;
-			cbdata->lua_map = map;
-			pcbdata = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (cbdata));
-			*pcbdata = cbdata;
-
-			if ((m = rspamd_map_add (cfg, map_line, description,
-					lua_map_read, lua_map_fin,
-					(void **)pcbdata)) == NULL) {
-				msg_warn_config ("invalid hash map %s", map_line);
-				lua_pushboolean (L, false);
-			}
-			else {
-				map->map = m;
-				lua_pushboolean (L, true);
-			}
 		}
 		else {
-			msg_warn_config ("invalid callback argument for map %s", map_line);
+			/*
+			 * Now we can create maps with delayed callbacks, to allow better
+			 * closures generation
+			 */
+			cbdata->ref = -1;
+		}
+
+		if ((m = rspamd_map_add (cfg, map_line, description,
+				lua_map_read, lua_map_fin,
+				(void **)&map->data.cbdata)) == NULL) {
+			msg_warn_config ("invalid map %s", map_line);
 			lua_pushboolean (L, false);
+		}
+		else {
+			map->map = m;
+			lua_pushboolean (L, true);
 		}
 	}
 	else {
@@ -586,6 +603,26 @@ lua_map_set_sign_key (lua_State *L)
 	else {
 		return luaL_error (L, "invalid arguments");
 	}
+
+	return 0;
+}
+
+static int
+lua_map_set_callback (lua_State *L)
+{
+	struct rspamd_lua_map *map = lua_check_map (L);
+
+	if (!map || map->type != RSPAMD_LUA_MAP_CALLBACK || map->data.cbdata == NULL) {
+		return luaL_error (L, "invalid map");
+	}
+
+	if (lua_type (L, 2) != LUA_TFUNCTION) {
+		return luaL_error (L, "invalid callback");
+	}
+
+	lua_pushvalue (L, 2);
+	/* Get a reference */
+	map->data.cbdata->ref = luaL_ref (L, LUA_REGISTRYINDEX);
 
 	return 0;
 }
