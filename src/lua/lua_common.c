@@ -239,6 +239,7 @@ rspamd_lua_init ()
 	luaopen_html (L);
 	luaopen_fann (L);
 	luaopen_sqlite3 (L);
+	luaopen_cryptobox (L);
 
 	rspamd_lua_add_preload (L, "ucl", luaopen_ucl);
 

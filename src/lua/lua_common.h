@@ -225,6 +225,7 @@ void luaopen_tcp (lua_State * L);
 void luaopen_html (lua_State * L);
 void luaopen_fann (lua_State *L);
 void luaopen_sqlite3 (lua_State *L);
+void luaopen_cryptobox (lua_State *L);
 
 gint rspamd_lua_call_filter (const gchar *function, struct rspamd_task *task);
 gint rspamd_lua_call_chain_filter (const gchar *function,
