@@ -300,7 +300,7 @@ lua_fann_test (lua_State *L)
 			}
 		}
 
-		cur_input = g_malloc (ninputs * sizeof (gint));
+		cur_input = g_slice_alloc (ninputs * sizeof (gint));
 
 		for (i = 0; i < ninputs; i++) {
 			lua_rawgeti (L, tbl_idx, i + 1);
@@ -316,6 +316,8 @@ lua_fann_test (lua_State *L)
 			lua_pushnumber (L, cur_output[i]);
 			lua_rawseti (L, -2, i + 1);
 		}
+
+		g_slice_free1 (ninputs * sizeof (gint), cur_input);
 	}
 	else {
 		lua_pushnil (L);
