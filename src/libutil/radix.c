@@ -184,6 +184,9 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 		}
 		else {
 			msg_warn_radix ("invalid IP address: %s", token);
+
+			cur ++;
+			continue;
 		}
 
 		if (af == AF_INET) {
