@@ -1911,7 +1911,7 @@ url_email_end (struct url_callback_data *cb,
 			p --;
 		}
 
-		if (g_ascii_isalnum (*p)) {
+		if (p < cb->end && g_ascii_isalnum (*p)) {
 			p ++;
 		}
 
