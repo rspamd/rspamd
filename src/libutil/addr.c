@@ -602,7 +602,7 @@ rspamd_parse_inet_address (rspamd_inet_addr_t **target,
 				/* Not ipv6, so try ip:port */
 				iplen = end - src;
 
-				if (iplen > sizeof (ipbuf)) {
+				if (iplen > sizeof (ipbuf) || iplen <= 1) {
 					return FALSE;
 				}
 				else {
