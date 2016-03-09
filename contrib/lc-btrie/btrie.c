@@ -492,7 +492,7 @@ alloc_nodes(struct btrie *btrie, unsigned nchildren, unsigned ndata)
 		}
 
 		/* failed to find free hunk, allocate a fresh one */
-		hunk = rspamd_mempool_alloc (btrie->mp, n_nodes * sizeof(node_t));
+		hunk = rspamd_mempool_alloc0 (btrie->mp, n_nodes * sizeof(node_t));
 		if (hunk == NULL)
 			longjmp (btrie->exception, BTRIE_ALLOC_FAILED);
 		btrie->alloc_total += n_nodes * sizeof(node_t);
