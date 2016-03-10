@@ -831,7 +831,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 				sizeof (struct http_map_data));
 
 		memset (&up, 0, sizeof (up));
-		if (http_parser_parse_url (new_map->uri, strlen (new_map->uri), TRUE,
+		if (http_parser_parse_url (new_map->uri, strlen (new_map->uri), FALSE,
 				&up) != 0) {
 			msg_err_config ("cannot parse HTTP url: %s", new_map->uri);
 			return NULL;
