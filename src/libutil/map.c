@@ -259,6 +259,13 @@ http_map_finish (struct rspamd_http_connection *conn,
 	if (msg->code == 200) {
 
 		if (cbd->stage == map_load_file) {
+			if (msg->last_modified) {
+				cbd->data->last_checked = msg->last_modified;
+			}
+			else {
+				cbd->data->last_checked = msg->date;
+			}
+
 			/* Maybe we need to check signature ? */
 			if (map->is_signed) {
 				close (cbd->out_fd);
@@ -386,7 +393,6 @@ http_map_finish (struct rspamd_http_connection *conn,
 		map->fin_callback (map->pool, &cbd->cbdata);
 
 		*map->user_data = cbd->cbdata.cur_data;
-		cbd->data->last_checked = msg->date;
 		msg_info_pool ("read map data from %s", cbd->data->host);
 	}
 	else if (msg->code == 304 && cbd->stage == map_load_file) {
