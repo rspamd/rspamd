@@ -191,9 +191,38 @@ Though Rspamd's default config aims to be useful for most purposes you may wish 
 
 There are some different approaches you could take to this which suffer similar drawbacks:
 
-1) Is to modify the stock config files in `/etc/rspamd` directly. Your package manager will not replace the modified config files on upgrade- and may prompt you to merge changes or install these files with an added extension depending on your platform.
+1. Is to modify the stock config files in `/etc/rspamd` directly. Your package manager will not replace the modified config files on upgrade- and may prompt you to merge changes or install these files with an added extension depending on your platform.
 
-2) Is to instead create an `rspamd.conf.local` and/or `rspamd.conf.local.override` in the `/etc/rspamd` directory. What distinguishes these files is the way in which they alter config- `rspamd.conf.local` adds or _merges_ config elements (and is useful for example for setting custom metrics) while `rspamd.conf.local.override` adds or _replaces_ config elements (and is useful for example for configuring workers or RBLs).
+2. Is to instead create an `rspamd.conf.local` and/or `rspamd.conf.local.override` in the `/etc/rspamd` directory. What distinguishes these files is the way in which they alter config- `rspamd.conf.local` adds or _merges_ config elements (and is useful for example for setting custom metrics) while `rspamd.conf.local.override` adds or _replaces_ config elements (and is useful for example for configuring workers or RBLs).
+
+3. For each individual configuration file shipped with rspamd, there are two special includes (this is available from **rspamd 1.2**):
+
+    .include(try=true,priority=1) "$CONFDIR/local.d/config.conf"
+    .include(try=true,priority=1) "$CONFDIR/override.d/config.conf"
+
+Therefore, you can either extend (using local.d) or ultimately override (using override.d) any settings in rspamd configuration.
+
+For example, let's override some default symbols shipped with rspamd. To do that we can create and edit `etc/rspamd/local.d/metrics.conf`:
+
+    symbol "BLAH" {
+        score = 20.0;
+    }
+
+We can also use override file, for example, let's redefine actions and set more restrictive `reject` score. For these purposes, we create `etc/rspamd/override.d/metrics.conf` with the following content:
+
+    actions {
+      reject = 150;
+      add_header = 6;
+      greylist = 4;
+    }
+
+You need to set the complete objects to redefine the existing ones. For example, you **cannot** write something like
+
+    actions {
+      reject = 150;
+    }
+
+as this will set all other actions undefined.
 
 ### Setting listening interface
 
