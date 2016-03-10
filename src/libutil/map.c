@@ -34,7 +34,6 @@ static void
 write_http_request (struct http_callback_data *cbd)
 {
 	gchar datebuf[128];
-	struct tm *tm;
 	struct rspamd_http_message *msg;
 	rspamd_mempool_t *pool;
 
@@ -53,9 +52,8 @@ write_http_request (struct http_callback_data *cbd)
 			msg->url = rspamd_fstring_new_init (cbd->data->path, strlen (cbd->data->path));
 
 			if (cbd->data->last_checked != 0 && cbd->stage == map_load_file) {
-				tm = gmtime (&cbd->data->last_checked);
-				strftime (datebuf, sizeof (datebuf), "%a, %d %b %Y %H:%M:%S %Z", tm);
-
+				rspamd_http_date_format (datebuf, sizeof (datebuf),
+						cbd->data->last_checked);
 				rspamd_http_message_add_header (msg, "If-Modified-Since", datebuf);
 			}
 		}
@@ -398,7 +396,13 @@ http_map_finish (struct rspamd_http_connection *conn,
 	else if (msg->code == 304 && cbd->stage == map_load_file) {
 		msg_debug_pool ("data is not modified for server %s",
 				cbd->data->host);
-		cbd->data->last_checked = msg->date;
+
+		if (msg->last_modified) {
+			cbd->data->last_checked = msg->last_modified;
+		}
+		else {
+			cbd->data->last_checked = msg->date;
+		}
 	}
 	else {
 		msg_info_pool ("cannot load map %s from %s: HTTP error %d",
