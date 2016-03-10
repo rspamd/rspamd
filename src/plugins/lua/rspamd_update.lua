@@ -25,22 +25,22 @@ local hash = require "rspamd_cryptobox_hash"
 local rspamd_version = rspamd_version
 local maps = {}
 
-local function process_symbols(obj)
+local function process_symbols(obj, priority)
   each(function(sym, score)
     rspamd_config:set_metric_symbol({
       name = sym,
       score = score,
-      priority = updates_priority
+      priority = priority
     })
   end, obj)
 end
 
-local function process_actions(obj)
+local function process_actions(obj, priority)
   each(function(act, score)
     rspamd_config:set_metric_action({
       action = act,
       score = score,
-      priority = updates_priority
+      priority = priority
     })
   end, obj)
 end
@@ -58,6 +58,10 @@ end
 
 local function check_version(obj)
   local ret = true
+
+  if not obj then
+    return false
+  end
 
   if obj['min_version'] then
     if rspamd_version('cmp', obj['min_version']) > 0 then
@@ -92,6 +96,13 @@ local function gen_callback(map)
       local obj = parser:get_object()
 
       if check_version(obj) then
+
+        local priority = updates_priority
+
+        if obj['priority'] then
+          priority = obj['priority']
+        end
+
         if obj['symbols'] then
           process_symbols(obj['symbols'])
         end
