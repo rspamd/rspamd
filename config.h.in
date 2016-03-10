@@ -174,6 +174,7 @@
 #define uthash_free(ptr,sz) g_slice_free1(sz, ptr)
 
 #define RSPAMD_CONFDIR "${CONFDIR}"
+#define RSPAMD_LOCAL_CONFDIR "${LOCAL_CONFDIR}"
 #define RSPAMD_RUNDIR "${RUNDIR}"
 #define RSPAMD_LOGDIR "${LOGDIR}"
 #define RSPAMD_DBDIR "${DBDIR}"

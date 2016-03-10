@@ -83,6 +83,7 @@ ENDIF()
 
 # Now CMAKE_INSTALL_PREFIX is a base prefix for everything
 # CONFDIR - for configuration
+# LOCAL_CONFDIR - for local configuration
 # MANDIR - for manual pages
 # RUNDIR - for runtime files
 # DBDIR - for static files
@@ -92,6 +93,10 @@ ENDIF()
 IF(NOT CONFDIR)
 	SET(CONFDIR "${CMAKE_INSTALL_PREFIX}/etc/rspamd")
 ENDIF(NOT CONFDIR)
+
+IF(NOT LOCAL_CONFDIR)
+	SET(LOCAL_CONFDIR "${CONFDIR}")
+ENDIF(NOT LOCAL_CONFDIR)
 
 IF(NOT MANDIR)
 	SET(MANDIR "${CMAKE_INSTALL_PREFIX}/share/man")

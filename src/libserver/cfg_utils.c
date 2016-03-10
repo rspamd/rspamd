@@ -927,6 +927,7 @@ rspamd_include_map_handler (const guchar *data, gsize len,
 /*
  * Variables:
  * $CONFDIR - configuration directory
+ * $LOCAL_CONFDIR - local configuration directory
  * $RUNDIR - local states directory
  * $DBDIR - databases dir
  * $LOGDIR - logs dir
@@ -936,6 +937,7 @@ rspamd_include_map_handler (const guchar *data, gsize len,
  */
 
 #define RSPAMD_CONFDIR_MACRO "CONFDIR"
+#define RSPAMD_LOCAL_CONFDIR_MACRO "LOCAL_CONFDIR"
 #define RSPAMD_RUNDIR_MACRO "RUNDIR"
 #define RSPAMD_DBDIR_MACRO "DBDIR"
 #define RSPAMD_LOGDIR_MACRO "LOGDIR"
@@ -958,6 +960,9 @@ rspamd_ucl_add_conf_variables (struct ucl_parser *parser, GHashTable *vars)
 	ucl_parser_register_variable (parser,
 			RSPAMD_CONFDIR_MACRO,
 			RSPAMD_CONFDIR);
+	ucl_parser_register_variable (parser,
+			RSPAMD_LOCAL_CONFDIR_MACRO,
+			RSPAMD_LOCAL_CONFDIR);
 	ucl_parser_register_variable (parser, RSPAMD_RUNDIR_MACRO,
 			RSPAMD_RUNDIR);
 	ucl_parser_register_variable (parser,  RSPAMD_DBDIR_MACRO,
