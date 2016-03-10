@@ -83,7 +83,10 @@ static const rspamd_ftok_t date_header = {
 		.begin = "Date",
 		.len = 4
 };
-
+static const rspamd_ftok_t last_modified_header = {
+		.begin = "Last-Modified",
+		.len = 13
+};
 
 #define HTTP_ERROR http_error_quark ()
 GQuark
@@ -453,6 +456,11 @@ rspamd_http_check_special_header (struct rspamd_http_connection *conn,
 	}
 	else if (rspamd_ftok_casecmp (priv->header->name, &key_header) == 0) {
 		rspamd_http_parse_key (priv->header->value, conn, priv);
+	}
+	else if (rspamd_ftok_casecmp (priv->header->name, &last_modified_header) == 0) {
+		priv->msg->last_modified = rspamd_http_parse_date (
+				priv->header->value->begin,
+				priv->header->value->len);
 	}
 }
 
@@ -2442,4 +2450,18 @@ rspamd_http_message_parse_query (struct rspamd_http_message *msg)
 	}
 
 	return res;
+}
+
+
+glong
+rspamd_http_date_format (gchar *buf, gsize len, time_t time)
+{
+	struct tm tms;
+
+	tms = *gmtime (&time);
+
+	return rspamd_snprintf (buf, len, "%s, %02d %s %4d %02d:%02d:%02d GMT",
+			http_week[tms.tm_wday], tms.tm_mday,
+			http_month[tms.tm_mon], tms.tm_year + 1900,
+			tms.tm_hour, tms.tm_min, tms.tm_sec);
 }

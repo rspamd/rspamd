@@ -55,14 +55,15 @@ struct rspamd_http_header {
 struct rspamd_http_message {
 	rspamd_fstring_t *url;
 	rspamd_fstring_t *host;
-	unsigned port;
 	rspamd_fstring_t *status;
 	struct rspamd_http_header *headers;
 	rspamd_fstring_t *body;
 	rspamd_ftok_t body_buf;
 	struct rspamd_cryptobox_pubkey *peer_key;
-	enum http_parser_type type;
 	time_t date;
+	time_t last_modified;
+	unsigned port;
+	enum http_parser_type type;
 	gint code;
 	enum http_method method;
 	gint flags;
@@ -356,5 +357,14 @@ void rspamd_http_router_free (struct rspamd_http_connection_router *router);
  * (table must be freed by a caller)
  */
 GHashTable* rspamd_http_message_parse_query (struct rspamd_http_message *msg);
+
+/**
+ * Prints HTTP date from `time` to `buf` using standard HTTP date format
+ * @param buf date buffer
+ * @param len length of buffer
+ * @param time time in unix seconds
+ * @return number of bytes written
+ */
+glong rspamd_http_date_format (gchar *buf, gsize len, time_t time);
 
 #endif /* HTTP_H_ */
