@@ -101,6 +101,35 @@ section "name" {
 }
 ~~~
 
+For each individual configuration file shipped with rspamd, there are two special includes:
+
+    .include(try=true,priority=1) "$CONFDIR/local.d/config.conf"
+    .include(try=true,priority=1) "$CONFDIR/override.d/config.conf"
+
+Therefore, you can either extend (using local.d) or ultimately override (using override.d) any settings in rspamd configuration.
+
+For example, let's override some default symbols shipped with rspamd. To do that we can create and edit `etc/rspamd/local.d/metrics.conf`:
+
+    symbol "BLAH" {
+        score = 20.0;
+    }
+
+We can also use override file, for example, let's redefine actions and set more restrictive `reject` score. For these purposes, we create `etc/rspamd/override.d/metrics.conf` with the following content:
+
+    actions {
+      reject = 150;
+      add_header = 6;
+      greylist = 4;
+    }
+
+You need to set the complete objects to redefine the existing ones. For example, you **cannot** write something like
+
+    actions {
+      reject = 150;
+    }
+
+as this will set all other actions undefined.
+
 The conjunction of `override` and `local` configs should allow to resolve complicated issues without having a Turing complete language to distinguish cases.
 
 ## Writing rules
