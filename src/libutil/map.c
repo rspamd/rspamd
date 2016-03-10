@@ -26,7 +26,7 @@
 #include "http_parser.h"
 
 static const gchar *hash_fill = "1";
-
+static void free_http_cbdata (struct http_callback_data *cbd);
 /**
  * Write HTTP request
  */
@@ -36,30 +36,45 @@ write_http_request (struct http_callback_data *cbd)
 	gchar datebuf[128];
 	struct tm *tm;
 	struct rspamd_http_message *msg;
+	rspamd_mempool_t *pool;
 
-	msg = rspamd_http_new_message (HTTP_REQUEST);
+	pool = cbd->map->pool;
 
-	if (cbd->stage == map_load_file) {
-		msg->url = rspamd_fstring_new_init (cbd->data->path, strlen (cbd->data->path));
+	if (cbd->fd != -1) {
+		close (cbd->fd);
+	}
 
-		if (cbd->data->last_checked != 0 && cbd->stage == map_load_file) {
-			tm = gmtime (&cbd->data->last_checked);
-			strftime (datebuf, sizeof (datebuf), "%a, %d %b %Y %H:%M:%S %Z", tm);
+	cbd->fd = rspamd_inet_address_connect (cbd->addr, SOCK_STREAM, TRUE);
 
-			rspamd_http_message_add_header (msg, "If-Modified-Since", datebuf);
+	if (cbd->fd != -1) {
+		msg = rspamd_http_new_message (HTTP_REQUEST);
+
+		if (cbd->stage == map_load_file) {
+			msg->url = rspamd_fstring_new_init (cbd->data->path, strlen (cbd->data->path));
+
+			if (cbd->data->last_checked != 0 && cbd->stage == map_load_file) {
+				tm = gmtime (&cbd->data->last_checked);
+				strftime (datebuf, sizeof (datebuf), "%a, %d %b %Y %H:%M:%S %Z", tm);
+
+				rspamd_http_message_add_header (msg, "If-Modified-Since", datebuf);
+			}
 		}
-	}
-	else if (cbd->stage == map_load_pubkey) {
-		msg->url = rspamd_fstring_new_init (cbd->data->path, strlen (cbd->data->path));
-		msg->url = rspamd_fstring_append (msg->url, ".pub", 4);
-	}
-	else if (cbd->stage == map_load_signature) {
-		msg->url = rspamd_fstring_new_init (cbd->data->path, strlen (cbd->data->path));
-		msg->url = rspamd_fstring_append (msg->url, ".sig", 4);
-	}
+		else if (cbd->stage == map_load_pubkey) {
+			msg->url = rspamd_fstring_new_init (cbd->data->path, strlen (cbd->data->path));
+			msg->url = rspamd_fstring_append (msg->url, ".pub", 4);
+		}
+		else if (cbd->stage == map_load_signature) {
+			msg->url = rspamd_fstring_new_init (cbd->data->path, strlen (cbd->data->path));
+			msg->url = rspamd_fstring_append (msg->url, ".sig", 4);
+		}
 
-	rspamd_http_connection_write_message (cbd->conn, msg, cbd->data->host,
-		NULL, cbd, cbd->fd, &cbd->tv, cbd->ev_base);
+		rspamd_http_connection_write_message (cbd->conn, msg, cbd->data->host,
+				NULL, cbd, cbd->fd, &cbd->tv, cbd->ev_base);
+	}
+	else {
+		msg_err_pool ("cannot connect to %s: %s", cbd->data->host,
+				strerror (errno));
+	}
 }
 
 static gboolean
@@ -81,13 +96,11 @@ rspamd_map_check_sig_pk (const char *fname,
 
 	if (data == NULL) {
 		msg_err_pool ("can't open signature %s: %s", fpath, strerror (errno));
-		rspamd_pubkey_unref (pk);
 		return FALSE;
 	}
 
 	if (len != rspamd_cryptobox_signature_bytes (RSPAMD_CRYPTOBOX_MODE_25519)) {
 		msg_err_pool ("can't open signature %s: invalid signature", fpath);
-		rspamd_pubkey_unref (pk);
 		munmap (data, len);
 
 		return FALSE;
@@ -96,7 +109,6 @@ rspamd_map_check_sig_pk (const char *fname,
 	if (!rspamd_cryptobox_verify (data, input, inlen,
 			rspamd_pubkey_get_pk (pk, NULL), RSPAMD_CRYPTOBOX_MODE_25519)) {
 		msg_err_pool ("can't verify signature %s: incorrect signature", fpath);
-		rspamd_pubkey_unref (pk);
 		munmap (data, len);
 
 		return FALSE;
@@ -108,7 +120,6 @@ rspamd_map_check_sig_pk (const char *fname,
 			fpath, b32_key);
 	g_string_free (b32_key, TRUE);
 
-	rspamd_pubkey_unref (pk);
 	munmap (data, len);
 
 	return TRUE;
@@ -124,6 +135,7 @@ rspamd_map_check_file_sig (const char *fname,
 	guchar *data;
 	struct rspamd_cryptobox_pubkey *pk = NULL;
 	GString *b32_key;
+	gboolean ret;
 	gsize len = 0;
 
 	if (map->trusted_pubkey == NULL) {
@@ -166,7 +178,10 @@ rspamd_map_check_file_sig (const char *fname,
 		pk = rspamd_pubkey_ref (map->trusted_pubkey);
 	}
 
-	return rspamd_map_check_sig_pk (fname, map, input, inlen, pk);
+	ret = rspamd_map_check_sig_pk (fname, map, input, inlen, pk);
+	rspamd_pubkey_unref (pk);
+
+	return ret;
 }
 
 /**
@@ -252,10 +267,12 @@ http_map_finish (struct rspamd_http_connection *conn,
 					/* No need to load key */
 					cbd->stage = map_load_signature;
 					cbd->pk = rspamd_pubkey_ref (map->trusted_pubkey);
-					rspamd_snprintf (fpath, sizeof (fpath), "%s.sig");
+					rspamd_snprintf (fpath, sizeof (fpath), "%s.sig",
+							cbd->tmpfile);
 				}
 				else {
-					rspamd_snprintf (fpath, sizeof (fpath), "%s.pub");
+					rspamd_snprintf (fpath, sizeof (fpath), "%s.pub",
+							cbd->tmpfile);
 					cbd->stage = map_load_pubkey;
 				}
 
@@ -324,7 +341,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 				return 0;
 			}
 
-			rspamd_snprintf (fpath, sizeof (fpath), "%s.sig");
+			rspamd_snprintf (fpath, sizeof (fpath), "%s.sig", cbd->tmpfile);
 			cbd->out_fd = rspamd_file_xopen (fpath, O_RDWR|O_CREAT, 00644);
 
 			if (cbd->out_fd == -1) {
@@ -536,6 +553,7 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 		if (cbd->addr != NULL) {
 			rspamd_inet_address_set_port (cbd->addr, cbd->data->port);
 			/* Try to open a socket */
+
 			cbd->fd = rspamd_inet_address_connect (cbd->addr, SOCK_STREAM, TRUE);
 
 			if (cbd->fd != -1) {
@@ -580,7 +598,7 @@ http_callback (gint fd, short what, void *ud)
 
 	jitter_timeout_event (map, FALSE, FALSE);
 	/* Plan event */
-	cbd = g_slice_alloc (sizeof (struct http_callback_data));
+	cbd = g_slice_alloc0 (sizeof (struct http_callback_data));
 
 	rspamd_snprintf (tmpbuf, sizeof (tmpbuf),
 			"%s" G_DIR_SEPARATOR_S "rspamd_map%d-XXXXXX",
@@ -608,10 +626,10 @@ http_callback (gint fd, short what, void *ud)
 	/* Send both A and AAAA requests */
 	rdns_make_request_full (map->r->r, rspamd_map_dns_callback, cbd,
 			map->cfg->dns_timeout, map->cfg->dns_retransmits, 1,
-			RDNS_REQUEST_A, data->host);
+			data->host, RDNS_REQUEST_A);
 	rdns_make_request_full (map->r->r, rspamd_map_dns_callback, cbd,
 			map->cfg->dns_timeout, map->cfg->dns_retransmits, 1,
-			RDNS_REQUEST_AAAA, data->host);
+			data->host, RDNS_REQUEST_AAAA);
 }
 
 /* Start watching event for all maps */
@@ -860,6 +878,8 @@ rspamd_map_add (struct rspamd_config *cfg,
 				hdata->path = rspamd_mempool_ftokdup (cfg->map_pool, &tok);
 			}
 		}
+
+		new_map->map_data = hdata;
 
 	}
 
