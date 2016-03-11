@@ -276,6 +276,12 @@ LUA_FUNCTION_DEF (task, get_resolver);
  * Increment number of DNS requests for the task. Is used just for logging purposes.
  */
 LUA_FUNCTION_DEF (task, inc_dns_req);
+/***
+ * @method task:get_dns_req()
+ * Get number of dns requests being sent in the task
+ * @return {number} number of DNS requests
+ */
+LUA_FUNCTION_DEF (task, get_dns_req);
 
 /***
  * @method task:has_recipients([type])
@@ -570,6 +576,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_queue_id),
 	LUA_INTERFACE_DEF (task, get_resolver),
 	LUA_INTERFACE_DEF (task, inc_dns_req),
+	LUA_INTERFACE_DEF (task, get_dns_req),
 	LUA_INTERFACE_DEF (task, has_recipients),
 	LUA_INTERFACE_DEF (task, get_recipients),
 	LUA_INTERFACE_DEF (task, has_from),
@@ -1389,6 +1396,21 @@ lua_task_inc_dns_req (lua_State *L)
 	}
 
 	return 0;
+}
+
+static gint
+lua_task_get_dns_req (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+
+	if (task != NULL) {
+		lua_pushnumber (L, task->dns_requests);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 /*
