@@ -830,6 +830,9 @@ rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
 		else if (len == 6 && g_ascii_strncasecmp (begin, "height", len) == 0) {
 			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_HEIGHT);
 		}
+		else if (g_ascii_strncasecmp (begin, "style", len) == 0) {
+			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_STYLE);
+		}
 	}
 	else if (tag->flags & FL_BLOCK) {
 		if (len == 5){
@@ -1256,8 +1259,10 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 	struct html_tag_component *comp;
 	struct html_image *img;
 	rspamd_ftok_t fstr;
+	const guchar *p;
 	GList *cur;
 	gulong val;
+	gboolean seen_width = FALSE, seen_height = FALSE;
 
 	cur = tag->params->head;
 	img = rspamd_mempool_alloc0 (pool, sizeof (*img));
@@ -1283,12 +1288,57 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 		else if (comp->type == RSPAMD_HTML_COMPONENT_HEIGHT) {
 			rspamd_strtoul (comp->start, comp->len, &val);
 			img->height = val;
+			seen_height = TRUE;
 		}
 		else if (comp->type == RSPAMD_HTML_COMPONENT_WIDTH) {
 			rspamd_strtoul (comp->start, comp->len, &val);
 			img->width = val;
+			seen_width = TRUE;
 		}
+		else if (comp->type == RSPAMD_HTML_COMPONENT_STYLE) {
+			/* Try to search for height= or width= in style tag */
+			if (!seen_height) {
+				p = rspamd_strncasestr (comp->start, "height", comp->len);
 
+				if (p != NULL) {
+					p += sizeof ("height") - 1;
+
+					while (p < comp->start + comp->len) {
+						if (g_ascii_isdigit (*p)) {
+							rspamd_strtoul (p, comp->len - (p - comp->start), &val);
+							img->height = val;
+							break;
+						}
+						else if (!g_ascii_isspace (*p) && *p != '=' && *p != ':') {
+							/* Fallback */
+							break;
+						}
+						p ++;
+					}
+				}
+			}
+
+			if (!seen_width) {
+				p = rspamd_strncasestr (comp->start, "width", comp->len);
+
+				if (p != NULL) {
+					p += sizeof ("width") - 1;
+
+					while (p < comp->start + comp->len) {
+						if (g_ascii_isdigit (*p)) {
+							rspamd_strtoul (p, comp->len - (p - comp->start), &val);
+							img->width = val;
+							break;
+						}
+						else if (!g_ascii_isspace (*p) && *p != '=' && *p != ':') {
+							/* Fallback */
+							break;
+						}
+						p ++;
+					}
+				}
+			}
+		}
 
 		cur = g_list_next (cur);
 	}
