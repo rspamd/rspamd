@@ -435,6 +435,8 @@ rspamd_strtoul (const gchar *s, gsize len, gulong *value)
 			}
 		}
 		else {
+			*value = v;
+
 			return FALSE;
 		}
 		p++;
