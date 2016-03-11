@@ -46,7 +46,7 @@
 
 typedef guchar regexp_id_t[rspamd_cryptobox_HASHBYTES];
 
-#define DISABLE_JIT_FAST
+#undef DISABLE_JIT_FAST
 
 struct rspamd_regexp_s {
 	gdouble exec_time;
