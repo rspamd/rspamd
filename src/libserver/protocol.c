@@ -1019,9 +1019,12 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 		g_assert (restat != NULL);
 		msg_info_task (
 				"regexp statistics: %ud pcre regexps scanned, %ud regexps matched,"
-						" %HL bytes scanned using pcre, %HL bytes scanned total",
+				" %ud regexps total, %ud regexps cached,"
+				" %HL bytes scanned using pcre, %HL bytes scanned total",
 				restat->regexp_checked,
 				restat->regexp_matched,
+				restat->regexp_total,
+				restat->regexp_fast_cached,
 				restat->bytes_scanned_pcre,
 				restat->bytes_scanned);
 	}

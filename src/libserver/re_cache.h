@@ -40,6 +40,8 @@ struct rspamd_re_cache_stat {
 	guint64 bytes_scanned_pcre;
 	guint regexp_checked;
 	guint regexp_matched;
+	guint regexp_total;
+	guint regexp_fast_cached;
 };
 
 /**

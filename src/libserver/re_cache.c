@@ -438,6 +438,7 @@ rspamd_re_cache_runtime_new (struct rspamd_re_cache *cache)
 	REF_RETAIN (cache);
 	rt->checked = g_slice_alloc0 (NBYTES (cache->nre));
 	rt->results = g_slice_alloc0 (cache->nre);
+	rt->stat.regexp_total = cache->nre;
 
 	return rt;
 }
@@ -838,6 +839,7 @@ rspamd_re_cache_process (struct rspamd_task *task,
 
 	if (isset (rt->checked, re_id)) {
 		/* Fast path */
+		rt->stat.regexp_fast_cached ++;
 		return rt->results[re_id];
 	}
 	else {
