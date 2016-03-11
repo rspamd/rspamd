@@ -1281,15 +1281,14 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 			}
 		}
 		else if (comp->type == RSPAMD_HTML_COMPONENT_HEIGHT) {
-			if (rspamd_strtoul (comp->start, comp->len, &val)) {
-				img->height = val;
-			}
+			rspamd_strtoul (comp->start, comp->len, &val);
+			img->height = val;
 		}
 		else if (comp->type == RSPAMD_HTML_COMPONENT_WIDTH) {
-			if (rspamd_strtoul (comp->start, comp->len, &val)) {
-				img->width = val;
-			}
+			rspamd_strtoul (comp->start, comp->len, &val);
+			img->width = val;
 		}
+
 
 		cur = g_list_next (cur);
 	}
