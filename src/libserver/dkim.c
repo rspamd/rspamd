@@ -1042,7 +1042,7 @@ rspamd_get_dkim_key (rspamd_dkim_context_t *ctx,
 	cbdata->handler = handler;
 	cbdata->ud = ud;
 
-	return make_dns_request_task (task,
+	return make_dns_request_task_forced (task,
 			   rspamd_dkim_dns_cb,
 			   cbdata,
 			   RDNS_REQUEST_TXT,

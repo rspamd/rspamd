@@ -63,4 +63,10 @@ gboolean make_dns_request_task (struct rspamd_task *task,
 	enum rdns_request_type type,
 	const char *name);
 
+gboolean make_dns_request_task_forced (struct rspamd_task *task,
+	dns_callback_type cb,
+	gpointer ud,
+	enum rdns_request_type type,
+	const char *name);
+
 #endif
