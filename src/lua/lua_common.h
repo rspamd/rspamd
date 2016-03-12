@@ -82,6 +82,28 @@ struct rspamd_lua_regexp {
 	gint re_flags;
 };
 
+struct rspamd_map;
+struct lua_map_callback_data;
+struct radix_tree_compressed;
+
+enum rspamd_lua_map_type {
+	RSPAMD_LUA_MAP_RADIX = 0,
+	RSPAMD_LUA_MAP_SET,
+	RSPAMD_LUA_MAP_HASH,
+	RSPAMD_LUA_MAP_CALLBACK
+};
+
+struct rspamd_lua_map {
+	struct rspamd_map *map;
+	enum rspamd_lua_map_type type;
+
+	union {
+		struct radix_tree_compressed *radix;
+		GHashTable *hash;
+		struct lua_map_callback_data *cbdata;
+	} data;
+};
+
 /* Common utility functions */
 
 /**
@@ -175,6 +197,8 @@ gint rspamd_lua_push_header (lua_State * L,
  * Check for task at the specified position
  */
 struct rspamd_task *lua_check_task (lua_State * L, gint pos);
+
+struct rspamd_lua_map *lua_check_map (lua_State * L, gint pos);
 
 /**
  * Push ip address from a string (nil is pushed if a string cannot be converted)

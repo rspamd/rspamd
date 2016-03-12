@@ -98,17 +98,6 @@ static const struct luaL_reg maplib_m[] = {
 	{NULL, NULL}
 };
 
-enum rspamd_lua_map_type {
-	RSPAMD_LUA_MAP_RADIX = 0,
-	RSPAMD_LUA_MAP_SET,
-	RSPAMD_LUA_MAP_HASH,
-	RSPAMD_LUA_MAP_CALLBACK
-};
-
-struct rspamd_map;
-struct radix_tree_compressed;
-struct rspamd_lua_map;
-
 struct lua_map_callback_data {
 	lua_State *L;
 	gint ref;
@@ -116,24 +105,11 @@ struct lua_map_callback_data {
 	struct rspamd_lua_map *lua_map;
 };
 
-struct rspamd_lua_map {
-	struct rspamd_map *map;
-	enum rspamd_lua_map_type type;
-
-	union {
-		struct radix_tree_compressed *radix;
-		GHashTable *hash;
-		struct lua_map_callback_data *cbdata;
-	} data;
-};
-
-
-
-static struct rspamd_lua_map  *
-lua_check_map (lua_State * L)
+struct rspamd_lua_map  *
+lua_check_map (lua_State * L, gint pos)
 {
-	void *ud = luaL_checkudata (L, 1, "rspamd{map}");
-	luaL_argcheck (L, ud != NULL, 1, "'map' expected");
+	void *ud = luaL_checkudata (L, pos, "rspamd{map}");
+	luaL_argcheck (L, ud != NULL, pos, "'map' expected");
 	return ud ? *((struct rspamd_lua_map **)ud) : NULL;
 }
 
@@ -431,7 +407,7 @@ lua_config_add_map (lua_State *L)
 static gint
 lua_map_get_key (lua_State * L)
 {
-	struct rspamd_lua_map *map = lua_check_map (L);
+	struct rspamd_lua_map *map = lua_check_map (L, 1);
 	radix_compressed_t *radix;
 	struct rspamd_lua_ip *addr = NULL;
 	const gchar *key, *value = NULL;
@@ -506,7 +482,7 @@ lua_map_get_key (lua_State * L)
 static int
 lua_map_is_signed (lua_State *L)
 {
-	struct rspamd_lua_map *map = lua_check_map (L);
+	struct rspamd_lua_map *map = lua_check_map (L, 1);
 	gboolean ret = FALSE;
 
 	if (map != NULL) {
@@ -527,7 +503,7 @@ lua_map_is_signed (lua_State *L)
 static int
 lua_map_get_proto (lua_State *L)
 {
-	struct rspamd_lua_map *map = lua_check_map (L);
+	struct rspamd_lua_map *map = lua_check_map (L, 1);
 	const gchar *ret = "undefined";
 
 	if (map != NULL) {
@@ -556,7 +532,7 @@ lua_map_get_proto (lua_State *L)
 static int
 lua_map_get_sign_key (lua_State *L)
 {
-	struct rspamd_lua_map *map = lua_check_map (L);
+	struct rspamd_lua_map *map = lua_check_map (L, 1);
 	GString *ret = NULL;
 
 	if (map != NULL) {
@@ -583,7 +559,7 @@ lua_map_get_sign_key (lua_State *L)
 static int
 lua_map_set_sign_key (lua_State *L)
 {
-	struct rspamd_lua_map *map = lua_check_map (L);
+	struct rspamd_lua_map *map = lua_check_map (L, 1);
 	const gchar *pk_str;
 	struct rspamd_cryptobox_pubkey *pk;
 	gsize len;
@@ -620,7 +596,7 @@ lua_map_set_sign_key (lua_State *L)
 static int
 lua_map_set_callback (lua_State *L)
 {
-	struct rspamd_lua_map *map = lua_check_map (L);
+	struct rspamd_lua_map *map = lua_check_map (L, 1);
 
 	if (!map || map->type != RSPAMD_LUA_MAP_CALLBACK || map->data.cbdata == NULL) {
 		return luaL_error (L, "invalid map");
@@ -640,7 +616,7 @@ lua_map_set_callback (lua_State *L)
 static int
 lua_map_get_uri (lua_State *L)
 {
-	struct rspamd_lua_map *map = lua_check_map (L);
+	struct rspamd_lua_map *map = lua_check_map (L, 1);
 	const gchar *ret = "undefined";
 
 	if (map != NULL) {

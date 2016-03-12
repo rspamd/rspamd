@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 #include "lua_common.h"
+#include "libutil/map.h"
+#include "libutil/map_private.h"
 
 /***
  * @module rspamd_logger
@@ -480,6 +482,21 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 					uid = cfg->checksum;
 				}
 			}
+			else if (strcmp (clsname, "rspamd{map}") == 0) {
+				struct rspamd_lua_map *map;
+
+				map = lua_check_map (L, 1);
+
+				if (map) {
+					if (map->map) {
+						uid = map->map->pool->tag.uid;
+					}
+					else {
+						uid = "embedded";
+					}
+				}
+			}
+
 
 			/* Metatable, __index, classname */
 			lua_pop (L, 3);
