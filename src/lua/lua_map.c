@@ -79,6 +79,13 @@ LUA_FUNCTION_DEF (map, set_sign_key);
  */
 LUA_FUNCTION_DEF (map, set_callback);
 
+/***
+ * @method map:get_uri()
+ * Get uri for a specified map
+ * @return {string} map's URI
+ */
+LUA_FUNCTION_DEF (map, get_uri);
+
 static const struct luaL_reg maplib_m[] = {
 	LUA_INTERFACE_DEF (map, get_key),
 	LUA_INTERFACE_DEF (map, is_signed),
@@ -86,6 +93,7 @@ static const struct luaL_reg maplib_m[] = {
 	LUA_INTERFACE_DEF (map, get_sign_key),
 	LUA_INTERFACE_DEF (map, set_sign_key),
 	LUA_INTERFACE_DEF (map, set_callback),
+	LUA_INTERFACE_DEF (map, get_uri),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -627,6 +635,28 @@ lua_map_set_callback (lua_State *L)
 	map->data.cbdata->ref = luaL_ref (L, LUA_REGISTRYINDEX);
 
 	return 0;
+}
+
+static int
+lua_map_get_uri (lua_State *L)
+{
+	struct rspamd_lua_map *map = lua_check_map (L);
+	const gchar *ret = "undefined";
+
+	if (map != NULL) {
+		if (map->map == NULL) {
+			ret = "embedded";
+		}
+		else {
+			ret = map->map->uri;
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_pushstring (L, ret);
+	return 1;
 }
 
 void
