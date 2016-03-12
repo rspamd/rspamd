@@ -214,7 +214,10 @@ free_http_cbdata (struct http_callback_data *cbd)
 		rspamd_pubkey_unref (cbd->pk);
 	}
 
-	rspamd_http_connection_free (cbd->conn);
+	if (cbd->conn) {
+		rspamd_http_connection_free (cbd->conn);
+	}
+
 	if (cbd->fd != -1) {
 		close (cbd->fd);
 	}
@@ -616,6 +619,7 @@ http_callback (gint fd, short what, void *ud)
 	cbd->out_fd = mkstemp (tmpbuf);
 
 	if (cbd->out_fd == -1) {
+		g_slice_free1 (sizeof (*cbd), cbd);
 		msg_err_pool ("cannot create tempfile: %s", strerror (errno));
 		return;
 	}
@@ -634,12 +638,18 @@ http_callback (gint fd, short what, void *ud)
 
 	msg_debug_pool ("reading map data from %s", data->host);
 	/* Send both A and AAAA requests */
-	rdns_make_request_full (map->r->r, rspamd_map_dns_callback, cbd,
-			map->cfg->dns_timeout, map->cfg->dns_retransmits, 1,
-			data->host, RDNS_REQUEST_A);
-	rdns_make_request_full (map->r->r, rspamd_map_dns_callback, cbd,
-			map->cfg->dns_timeout, map->cfg->dns_retransmits, 1,
-			data->host, RDNS_REQUEST_AAAA);
+	if (map->r->r) {
+		rdns_make_request_full (map->r->r, rspamd_map_dns_callback, cbd,
+				map->cfg->dns_timeout, map->cfg->dns_retransmits, 1,
+				data->host, RDNS_REQUEST_A);
+		rdns_make_request_full (map->r->r, rspamd_map_dns_callback, cbd,
+				map->cfg->dns_timeout, map->cfg->dns_retransmits, 1,
+				data->host, RDNS_REQUEST_AAAA);
+	}
+	else {
+		msg_warn_pool ("cannot load map: DNS resolver is not initialized");
+		free_http_cbdata (cbd);
+	}
 }
 
 /* Start watching event for all maps */
