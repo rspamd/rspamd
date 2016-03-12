@@ -446,7 +446,7 @@ http_map_read (struct rspamd_http_connection *conn,
 /**
  * Callback for reading data from file
  */
-static void
+static gboolean
 read_map_file (struct rspamd_map *map, struct file_map_data *data)
 {
 	struct map_cb_data cbdata;
@@ -456,14 +456,20 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 
 	if (map->read_callback == NULL || map->fin_callback == NULL) {
 		msg_err_pool ("bad callback for reading map file");
-		return;
+		return FALSE;
+	}
+
+	if (access (data->filename, R_OK) == -1) {
+		/* File does not exist, skipping */
+		msg_err_pool ("map file is unavailable for reading");
+		return FALSE;
 	}
 
 	bytes = rspamd_file_xmap (data->filename, PROT_READ, &len);
 
 	if (bytes == NULL) {
 		msg_err_pool ("can't open map %s: %s", data->filename, strerror (errno));
-		return;
+		return FALSE;
 	}
 
 	cbdata.state = 0;
@@ -475,7 +481,7 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 		if (!rspamd_map_check_file_sig (data->filename, map, bytes, len)) {
 			munmap (bytes, len);
 
-			return;
+			return FALSE;
 		}
 	}
 
@@ -487,17 +493,34 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 	}
 
 	munmap (bytes, len);
+
+	return TRUE;
 }
 
 static void
-jitter_timeout_event (struct rspamd_map *map, gboolean locked, gboolean initial)
+jitter_timeout_event (struct rspamd_map *map,
+		gboolean locked, gboolean initial, gboolean errored)
 {
+	const gdouble error_mult = 20.0, lock_mult = 4.0;
 	gdouble jittered_sec;
-	gdouble timeout = initial ? 1.0 : map->cfg->map_timeout;
+	gdouble timeout;
+
+	if (initial) {
+		timeout = 0.0;
+	}
+	else if (errored) {
+		timeout = map->cfg->map_timeout * error_mult;
+	}
+	else if (locked) {
+		timeout = map->cfg->map_timeout * lock_mult;
+	}
+	else {
+		timeout = map->cfg->map_timeout;
+	}
 
 	/* Plan event again with jitter */
 	evtimer_del (&map->ev);
-	jittered_sec = rspamd_time_jitter (locked ? timeout * 4 : timeout, 0);
+	jittered_sec = rspamd_time_jitter (timeout, 0);
 	double_to_tv (jittered_sec, &map->tv);
 
 	evtimer_add (&map->ev, &map->tv);
@@ -519,25 +542,32 @@ file_callback (gint fd, short what, void *ud)
 	if (g_atomic_int_get (map->locked)) {
 		msg_info_pool (
 			"don't try to reread map as it is locked by other process, will reread it later");
-		jitter_timeout_event (map, TRUE, FALSE);
+		jitter_timeout_event (map, TRUE, FALSE, FALSE);
 		return;
 	}
 
 	g_atomic_int_inc (map->locked);
-	jitter_timeout_event (map, FALSE, FALSE);
-	if (stat (data->filename,
-		&st) != -1 &&
+
+	if (stat (data->filename, &st) != -1 &&
 		(st.st_mtime > data->st.st_mtime || data->st.st_mtime == -1)) {
 		/* File was modified since last check */
 		memcpy (&data->st, &st, sizeof (struct stat));
 	}
 	else {
 		g_atomic_int_set (map->locked, 0);
+		jitter_timeout_event (map, FALSE, FALSE, FALSE);
 		return;
 	}
 
 	msg_info_pool ("rereading map file %s", data->filename);
-	read_map_file (map, data);
+
+	if (!read_map_file (map, data)) {
+		jitter_timeout_event (map, FALSE, FALSE, TRUE);
+	}
+	else {
+		jitter_timeout_event (map, FALSE, FALSE, FALSE);
+	}
+
 	g_atomic_int_set (map->locked, 0);
 }
 
@@ -609,7 +639,6 @@ http_callback (gint fd, short what, void *ud)
 	data = map->map_data;
 	pool = map->pool;
 
-	jitter_timeout_event (map, FALSE, FALSE);
 	/* Plan event */
 	cbd = g_slice_alloc0 (sizeof (struct http_callback_data));
 
@@ -621,6 +650,8 @@ http_callback (gint fd, short what, void *ud)
 	if (cbd->out_fd == -1) {
 		g_slice_free1 (sizeof (*cbd), cbd);
 		msg_err_pool ("cannot create tempfile: %s", strerror (errno));
+		jitter_timeout_event (map, FALSE, FALSE, TRUE);
+
 		return;
 	}
 
@@ -645,10 +676,12 @@ http_callback (gint fd, short what, void *ud)
 		rdns_make_request_full (map->r->r, rspamd_map_dns_callback, cbd,
 				map->cfg->dns_timeout, map->cfg->dns_retransmits, 1,
 				data->host, RDNS_REQUEST_AAAA);
+		jitter_timeout_event (map, FALSE, FALSE, FALSE);
 	}
 	else {
 		msg_warn_pool ("cannot load map: DNS resolver is not initialized");
 		free_http_cbdata (cbd);
+		jitter_timeout_event (map, FALSE, FALSE, TRUE);
 	}
 }
 
@@ -678,11 +711,11 @@ rspamd_map_watch (struct rspamd_config *cfg,
 				read_map_file (map, map->map_data);
 			}
 			/* Plan event with jitter */
-			jitter_timeout_event (map, FALSE, TRUE);
+			jitter_timeout_event (map, FALSE, TRUE, FALSE);
 		}
 		else if (map->protocol == MAP_PROTO_HTTP) {
 			evtimer_set (&map->ev, http_callback, map);
-			jitter_timeout_event (map, FALSE, TRUE);
+			jitter_timeout_event (map, FALSE, TRUE, FALSE);
 		}
 
 		cur = g_list_next (cur);
