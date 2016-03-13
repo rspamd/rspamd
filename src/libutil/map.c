@@ -539,14 +539,12 @@ file_callback (gint fd, short what, void *ud)
 
 	pool = map->pool;
 
-	if (g_atomic_int_get (map->locked)) {
+	if (!g_atomic_int_compare_and_exchange (map->locked, 0, 1)) {
 		msg_info_pool (
 			"don't try to reread map as it is locked by other process, will reread it later");
 		jitter_timeout_event (map, TRUE, FALSE, FALSE);
 		return;
 	}
-
-	g_atomic_int_inc (map->locked);
 
 	if (stat (data->filename, &st) != -1 &&
 		(st.st_mtime > data->st.st_mtime || data->st.st_mtime == -1)) {
