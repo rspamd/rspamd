@@ -173,6 +173,7 @@ lua_config_radix_from_config (lua_State *L)
 			map->data.radix = radix_create_compressed ();
 			map->type = RSPAMD_LUA_MAP_RADIX;
 			map->data.radix = radix_create_compressed ();
+			map->flags |= RSPAMD_LUA_MAP_FLAG_EMBEDDED;
 			radix_add_generic_iplist (ucl_obj_tostring (obj), &map->data.radix);
 			pmap = lua_newuserdata (L, sizeof (void *));
 			*pmap = map;
@@ -507,7 +508,7 @@ lua_map_get_proto (lua_State *L)
 	const gchar *ret = "undefined";
 
 	if (map != NULL) {
-		if (map->map == NULL) {
+		if ((map->flags & RSPAMD_LUA_MAP_FLAG_EMBEDDED) || map->map == NULL) {
 			ret = "embedded";
 		}
 		else {
@@ -536,6 +537,11 @@ lua_map_get_sign_key (lua_State *L)
 	GString *ret = NULL;
 
 	if (map != NULL) {
+		if (map->flags & RSPAMD_LUA_MAP_FLAG_EMBEDDED) {
+			lua_pushnil (L);
+
+			return 1;
+		}
 		if (map->map && map->map->trusted_pubkey) {
 			ret = rspamd_pubkey_print (map->map->trusted_pubkey,
 					RSPAMD_KEYPAIR_PUBKEY|RSPAMD_KEYPAIR_BASE32);
@@ -568,7 +574,7 @@ lua_map_set_sign_key (lua_State *L)
 
 	if (map && pk_str) {
 
-		if (!map->map) {
+		if ((map->flags & RSPAMD_LUA_MAP_FLAG_EMBEDDED) || !map->map) {
 			return luaL_error (L, "cannot set key for embedded maps");
 		}
 
@@ -620,7 +626,7 @@ lua_map_get_uri (lua_State *L)
 	const gchar *ret = "undefined";
 
 	if (map != NULL) {
-		if (map->map == NULL) {
+		if ((map->flags & RSPAMD_LUA_MAP_FLAG_EMBEDDED) || map->map == NULL) {
 			ret = "embedded";
 		}
 		else {
