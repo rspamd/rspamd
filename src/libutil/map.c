@@ -952,43 +952,16 @@ rspamd_map_add (struct rspamd_config *cfg,
 	return new_map;
 }
 
-static gchar*
-strip_map_elt (rspamd_mempool_t *pool, const gchar *start,
-		size_t len)
-{
-	gchar *res = NULL;
-	const gchar *c = start, *p = start + len - 1;
-
-	/* Strip starting spaces */
-	while (g_ascii_isspace (*c)) {
-		c ++;
-	}
-
-	/* Strip ending spaces */
-	while (g_ascii_isspace (*p) && p >= c) {
-		p --;
-	}
-
-	/* One symbol up */
-	p ++;
-
-	if (p - c > 0) {
-		res = rspamd_mempool_alloc (pool, p - c + 1);
-		rspamd_strlcpy (res, c, p - c + 1);
-	}
-
-	return res;
-}
-
 /**
  * FSM for parsing lists
  */
 gchar *
-abstract_parse_kv_list (rspamd_mempool_t * pool,
+rspamd_parse_kv_list (rspamd_mempool_t * pool,
 	gchar * chunk,
 	gint len,
 	struct map_cb_data *data,
-	insert_func func)
+	insert_func func,
+	const gchar *default_value)
 {
 	gchar *c, *p, *key = NULL, *value = NULL, *end;
 
@@ -1010,6 +983,12 @@ abstract_parse_kv_list (rspamd_mempool_t * pool,
 					func (data->cur_data, key, value);
 					msg_debug_pool ("insert kv pair: %s -> %s", key, value);
 				}
+				else if (key == NULL && p - c > 0) {
+					func (data->cur_data, key, default_value);
+					msg_debug_pool ("insert key only pair: %s -> %s",
+							key, default_value);
+				}
+
 				data->state = 99;
 			}
 			else if (*p == '\r' || *p == '\n') {
@@ -1027,10 +1006,10 @@ abstract_parse_kv_list (rspamd_mempool_t * pool,
 					key = rspamd_mempool_alloc (pool, p - c + 1);
 					memcpy (key, c, p - c);
 					key[p - c] = '\0';
-					value = rspamd_mempool_alloc (pool, 1);
-					*value = '\0';
-					func (data->cur_data, key, value);
-					msg_debug_pool ("insert kv pair: %s -> %s", key, value);
+					key = g_strstrip (key);
+					func (data->cur_data, key, default_value);
+					msg_debug_pool ("insert key only pair: %s -> %s",
+							key, default_value);
 				}
 				data->state = 100;
 				key = NULL;
@@ -1040,6 +1019,7 @@ abstract_parse_kv_list (rspamd_mempool_t * pool,
 					key = rspamd_mempool_alloc (pool, p - c + 1);
 					memcpy (key, c, p - c);
 					key[p - c] = '\0';
+					key = g_strstrip (key);
 					data->state = 2;
 				}
 				else {
@@ -1092,93 +1072,6 @@ abstract_parse_kv_list (rspamd_mempool_t * pool,
 	return c;
 }
 
-gchar *
-rspamd_parse_abstract_list (rspamd_mempool_t * pool,
-	gchar * chunk,
-	gint len,
-	struct map_cb_data *data,
-	insert_func func)
-{
-	gchar *p, *c, *end, *s;
-
-	p = chunk;
-	c = p;
-	end = p + len;
-
-	while (p < end) {
-		switch (data->state) {
-		/* READ_SYMBOL */
-		case 0:
-			if (*p == '#') {
-				/* Got comment */
-				if (p > c) {
-					/* Save previous string in lines like: "127.0.0.1 #localhost" */
-					s = strip_map_elt (pool, c, p - c);
-
-					if (s) {
-						func (data->cur_data, s, hash_fill);
-						msg_debug_pool ("insert element (before comment): %s", s);
-					}
-				}
-				c = p;
-				data->state = 1;
-			}
-			else if ((*p == '\r' || *p == '\n') && p > c) {
-				/* Got EOL marker, save stored string */
-				s = strip_map_elt (pool, c, p - c);
-
-				if (s) {
-					func (data->cur_data, s, hash_fill);
-					msg_debug_pool ("insert element (before EOL): %s", s);
-				}
-				/* Skip EOL symbols */
-				while ((*p == '\r' || *p == '\n') && p < end) {
-					p++;
-				}
-
-				if (p == end) {
-					p ++;
-					c = NULL;
-				}
-				else {
-					c = p;
-				}
-			}
-			else {
-				p++;
-			}
-			break;
-		/* SKIP_COMMENT */
-		case 1:
-			/* Skip comment till end of line */
-			if (*p == '\r' || *p == '\n') {
-				while ((*p == '\r' || *p == '\n') && p < end) {
-					p++;
-				}
-
-				if (p == end) {
-					p ++;
-					c = NULL;
-				}
-				else {
-					c = p;
-				}
-				data->state = 0;
-			}
-			else {
-				p++;
-			}
-			break;
-		}
-	}
-
-	if (c >= end) {
-		c = NULL;
-	}
-
-	return c;
-}
-
 /**
  * Radix tree helper function
  */
@@ -1187,7 +1080,7 @@ radix_tree_insert_helper (gpointer st, gconstpointer key, gpointer value)
 {
 	radix_compressed_t *tree = (radix_compressed_t *)st;
 
-	rspamd_radix_add_iplist ((gchar *)key, " ,;", tree);
+	rspamd_radix_add_iplist ((gchar *)key, " ,;", tree, value);
 }
 
 /* Helpers */
@@ -1201,11 +1094,12 @@ rspamd_hosts_read (rspamd_mempool_t * pool,
 		data->cur_data = g_hash_table_new (rspamd_strcase_hash,
 				rspamd_strcase_equal);
 	}
-	return rspamd_parse_abstract_list (pool,
+	return rspamd_parse_kv_list (pool,
 			   chunk,
 			   len,
 			   data,
-			   (insert_func) g_hash_table_insert);
+			   (insert_func) g_hash_table_insert,
+			   hash_fill);
 }
 
 void
@@ -1230,11 +1124,12 @@ rspamd_kv_list_read (rspamd_mempool_t * pool,
 		data->cur_data = g_hash_table_new (rspamd_strcase_hash,
 				rspamd_strcase_equal);
 	}
-	return abstract_parse_kv_list (pool,
+	return rspamd_parse_kv_list (pool,
 			   chunk,
 			   len,
 			   data,
-			   (insert_func) g_hash_table_insert);
+			   (insert_func) g_hash_table_insert,
+			   "");
 }
 
 void
@@ -1264,11 +1159,12 @@ rspamd_radix_read (rspamd_mempool_t * pool,
 		memcpy (rpool->tag.uid, pool->tag.uid, sizeof (rpool->tag.uid));
 		data->cur_data = tree;
 	}
-	return rspamd_parse_abstract_list (pool,
+	return rspamd_parse_kv_list (pool,
 			   chunk,
 			   len,
 			   data,
-			   (insert_func) radix_tree_insert_helper);
+			   (insert_func) radix_tree_insert_helper,
+			   hash_fill);
 }
 
 void

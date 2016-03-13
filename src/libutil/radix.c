@@ -140,7 +140,7 @@ radix_find_compressed_addr (radix_compressed_t *tree,
 
 gint
 rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
-		radix_compressed_t *tree)
+		radix_compressed_t *tree, gconstpointer value)
 {
 	gchar *token, *ipnet, *err_str, **strv, **cur;
 	struct in_addr ina;
@@ -194,7 +194,7 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 				k = 32;
 			}
 			radix_insert_compressed (tree, (guint8 *)&ina, sizeof (ina),
-					32 - k, 1);
+					32 - k, (uintptr_t)value);
 			res ++;
 		}
 		else if (af == AF_INET6){
@@ -202,7 +202,7 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 				k = 128;
 			}
 			radix_insert_compressed (tree, (guint8 *)&ina6, sizeof (ina6),
-					128 - k, 1);
+					128 - k, (uintptr_t)value);
 			res ++;
 		}
 		cur++;
@@ -220,7 +220,8 @@ radix_add_generic_iplist (const gchar *ip_list, radix_compressed_t **tree)
 		*tree = radix_create_compressed ();
 	}
 
-	return (rspamd_radix_add_iplist (ip_list, ",; ", *tree) > 0);
+	return (rspamd_radix_add_iplist (ip_list, ",; ", *tree,
+			GINT_TO_POINTER (1)) > 0);
 }
 
 

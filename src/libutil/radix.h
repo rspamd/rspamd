@@ -79,7 +79,7 @@ radix_compressed_t *radix_create_compressed (void);
  * @return number of elements inserted
  */
 gint rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
-		radix_compressed_t *tree);
+		radix_compressed_t *tree, gconstpointer value);
 
 /**
  * Generic version of @see rspamd_radix_add_iplist. This function creates tree

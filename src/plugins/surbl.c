@@ -120,11 +120,12 @@ read_exceptions_list (rspamd_mempool_t * pool,
 		data->cur_data = rspamd_mempool_alloc0 (pool,
 				sizeof (GHashTable *) * MAX_LEVELS);
 	}
-	return rspamd_parse_abstract_list (pool,
+	return rspamd_parse_kv_list (pool,
 			   chunk,
 			   len,
 			   data,
-			   (insert_func) exception_insert);
+			   (insert_func) exception_insert,
+			   "");
 }
 
 static void
@@ -223,11 +224,12 @@ read_redirectors_list (rspamd_mempool_t * pool,
 		data->cur_data = cbdata;
 	}
 
-	return rspamd_parse_abstract_list (pool,
+	return rspamd_parse_kv_list (pool,
 			   chunk,
 			   len,
 			   data,
-			   (insert_func) redirector_insert);
+			   (insert_func) redirector_insert,
+			   "");
 }
 
 void

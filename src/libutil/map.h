@@ -104,10 +104,11 @@ void rspamd_kv_list_fin (rspamd_mempool_t *pool, struct map_cb_data *data);
 /**
  * FSM for lists parsing (support comments, blank lines and partial replies)
  */
-gchar * rspamd_parse_abstract_list (rspamd_mempool_t * pool,
+gchar * rspamd_parse_kv_list (rspamd_mempool_t * pool,
 	gchar * chunk,
 	gint len,
 	struct map_cb_data *data,
-	insert_func func);
+	insert_func func,
+	const gchar *default_value);
 
 #endif
