@@ -66,7 +66,7 @@ rspamd_fstring_new_init (const gchar *init, gsize len)
 rspamd_fstring_t *
 rspamd_fstring_assign (rspamd_fstring_t *str, const gchar *init, gsize len)
 {
-	gsize avail = str->allocated;
+	gsize avail = fstravail (str);
 
 	if (avail < len) {
 		str = rspamd_fstring_grow (str, len);
@@ -93,7 +93,7 @@ rspamd_fstring_grow (rspamd_fstring_t *str, gsize needed_len)
 	gsize newlen;
 	gpointer nptr;
 
-	newlen = str->len + needed_len;
+	newlen = str->allocated;
 
 	/*
 	 * Stop exponential grow at some point, since it might be slow for the
@@ -104,6 +104,20 @@ rspamd_fstring_grow (rspamd_fstring_t *str, gsize needed_len)
 	}
 	else {
 		newlen += max_grow;
+	}
+
+	/*
+	 * Check for overflow
+	 */
+	if (newlen <= str->len + needed_len) {
+		newlen = str->len + needed_len;
+
+		if (newlen < max_grow) {
+			newlen *= 2;
+		}
+		else {
+			newlen += max_grow;
+		}
 	}
 
 	nptr = realloc (str, newlen + sizeof (*str));
