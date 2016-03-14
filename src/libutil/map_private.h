@@ -20,6 +20,7 @@
 #include "mem_pool.h"
 #include "keypair.h"
 #include "unix-std.h"
+#include "ref.h"
 
 enum fetch_proto {
 	MAP_PROTO_FILE,
@@ -77,6 +78,7 @@ struct http_callback_data {
 	struct http_map_data *data;
 	struct map_cb_data cbdata;
 	struct rspamd_cryptobox_pubkey *pk;
+	gchar *tmpfile;
 
 	enum {
 		map_resolve_host2 = 0, /* 2 requests sent */
@@ -86,8 +88,9 @@ struct http_callback_data {
 		map_load_signature
 	} stage;
 	gint out_fd;
-	gchar *tmpfile;
 	gint fd;
+
+	ref_entry_t ref;
 };
 
 #endif /* SRC_LIBUTIL_MAP_PRIVATE_H_ */

@@ -68,10 +68,12 @@ write_http_request (struct http_callback_data *cbd)
 
 		rspamd_http_connection_write_message (cbd->conn, msg, cbd->data->host,
 				NULL, cbd, cbd->fd, &cbd->tv, cbd->ev_base);
+		REF_RETAIN (cbd);
 	}
 	else {
 		msg_err_pool ("cannot connect to %s: %s", cbd->data->host,
 				strerror (errno));
+		REF_RELEASE (cbd);
 	}
 }
 
@@ -240,7 +242,7 @@ http_map_error (struct rspamd_http_connection *conn,
 
 	msg_err_pool ("connection with http server terminated incorrectly: %s",
 			err->message);
-	free_http_cbdata (cbd);
+	REF_RELEASE (cbd);
 }
 
 static int
@@ -290,15 +292,13 @@ http_map_finish (struct rspamd_http_connection *conn,
 				if (cbd->out_fd == -1) {
 					msg_err_pool ("cannot open pubkey file %s for writing: %s",
 							fpath, strerror (errno));
-					free_http_cbdata (cbd);
-
-					return 0;
+					goto end;
 				}
 
 				rspamd_http_connection_reset (cbd->conn);
 				write_http_request (cbd);
 
-				return 0;
+				goto end;
 			}
 			else {
 				/* Unsinged version - just open file */
@@ -307,9 +307,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 				if (in == NULL) {
 					msg_err_pool ("cannot read tempfile %s: %s", cbd->tmpfile,
 							strerror (errno));
-					free_http_cbdata (cbd);
-
-					return 0;
+					goto end;
 				}
 			}
 		}
@@ -320,9 +318,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 			if (fstat (cbd->out_fd, &st) == -1) {
 				msg_err_pool ("cannot stat pubkey file %s: %s",
 						fpath, strerror (errno));
-				free_http_cbdata (cbd);
-
-				return 0;
+				goto end;
 			}
 
 			aux_data = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED,
@@ -333,9 +329,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 			if (aux_data == MAP_FAILED) {
 				msg_err_pool ("cannot map pubkey file %s: %s",
 						fpath, strerror (errno));
-				free_http_cbdata (cbd);
-
-				return 0;
+				goto end;
 			}
 
 			cbd->pk = rspamd_pubkey_from_base32 (aux_data, st.st_size,
@@ -345,9 +339,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 			if (cbd->pk == NULL) {
 				msg_err_pool ("cannot load pubkey file %s: bad pubkey",
 						fpath);
-				free_http_cbdata (cbd);
-
-				return 0;
+				goto end;
 			}
 
 			rspamd_snprintf (fpath, sizeof (fpath), "%s.sig", cbd->tmpfile);
@@ -356,16 +348,14 @@ http_map_finish (struct rspamd_http_connection *conn,
 			if (cbd->out_fd == -1) {
 				msg_err_pool ("cannot open signature file %s for writing: %s",
 						fpath, strerror (errno));
-				free_http_cbdata (cbd);
-
-				return 0;
+				goto end;
 			}
 
 			cbd->stage = map_load_signature;
 			rspamd_http_connection_reset (cbd->conn);
 			write_http_request (cbd);
 
-			return 0;
+			goto end;
 		}
 		else if (cbd->stage == map_load_signature) {
 			/* We can now check signature */
@@ -377,15 +367,11 @@ http_map_finish (struct rspamd_http_connection *conn,
 			if (in == NULL) {
 				msg_err_pool ("cannot read tempfile %s: %s", cbd->tmpfile,
 						strerror (errno));
-				free_http_cbdata (cbd);
-
-				return 0;
+				goto end;
 			}
 
 			if (!rspamd_map_check_sig_pk (cbd->tmpfile, map, in, inlen, cbd->pk)) {
-				free_http_cbdata (cbd);
-
-				return 0;
+				goto end;
 			}
 		}
 
@@ -413,7 +399,8 @@ http_map_finish (struct rspamd_http_connection *conn,
 				map->uri, cbd->data->host, msg->code);
 	}
 
-	free_http_cbdata (cbd);
+end:
+	REF_RELEASE (cbd);
 
 	return 0;
 }
@@ -436,7 +423,7 @@ http_map_read (struct rspamd_http_connection *conn,
 
 	if (write (cbd->out_fd, chunk, len) == -1) {
 		msg_err_pool ("cannot write to %s: %s", cbd->tmpfile, strerror (errno));
-		free_http_cbdata (cbd);
+		REF_RELEASE (cbd);
 
 		return -1;
 	}
@@ -618,9 +605,10 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 		else {
 			/* We could not resolve host, so cowardly fail here */
 			msg_err_pool ("cannot resolve %s", cbd->data->host);
-			free_http_cbdata (cbd);
 		}
 	}
+
+	REF_RELEASE (cbd);
 }
 
 /**
@@ -665,23 +653,30 @@ http_callback (gint fd, short what, void *ud)
 	cbd->cbdata.map = cbd->map;
 	cbd->stage = map_resolve_host2;
 	double_to_tv (map->cfg->map_timeout, &cbd->tv);
+	REF_INIT_RETAIN (cbd, free_http_cbdata);
 
 	msg_debug_pool ("reading map data from %s", data->host);
 	/* Send both A and AAAA requests */
 	if (map->r->r) {
-		rdns_make_request_full (map->r->r, rspamd_map_dns_callback, cbd,
+		if (rdns_make_request_full (map->r->r, rspamd_map_dns_callback, cbd,
 				map->cfg->dns_timeout, map->cfg->dns_retransmits, 1,
-				data->host, RDNS_REQUEST_A);
-		rdns_make_request_full (map->r->r, rspamd_map_dns_callback, cbd,
+				data->host, RDNS_REQUEST_A)) {
+			REF_RETAIN (cbd);
+		}
+		if (rdns_make_request_full (map->r->r, rspamd_map_dns_callback, cbd,
 				map->cfg->dns_timeout, map->cfg->dns_retransmits, 1,
-				data->host, RDNS_REQUEST_AAAA);
+				data->host, RDNS_REQUEST_AAAA)) {
+			REF_RETAIN (cbd);
+		}
 		jitter_timeout_event (map, FALSE, FALSE, FALSE);
 	}
 	else {
 		msg_warn_pool ("cannot load map: DNS resolver is not initialized");
-		free_http_cbdata (cbd);
 		jitter_timeout_event (map, FALSE, FALSE, TRUE);
 	}
+
+	/* We don't need own ref as it is now refcounted by DNS requests */
+	REF_RELEASE (cbd);
 }
 
 /* Start watching event for all maps */
