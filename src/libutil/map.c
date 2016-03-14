@@ -989,8 +989,10 @@ rspamd_parse_kv_list (rspamd_mempool_t * pool,
 		map_read_key_quoted,
 		map_read_key_slashed,
 		map_skip_spaces_after_key,
+		map_backslash_quoted,
+		map_backslash_slashed,
+		map_read_key_after_slash,
 		map_read_value,
-		map_read_value_quoted,
 		map_read_comment_start,
 		map_skip_comment,
 		map_read_eol,
@@ -1009,13 +1011,107 @@ rspamd_parse_kv_list (rspamd_mempool_t * pool,
 				p ++;
 			}
 			else {
-				c = p;
-				data->state = map_read_key;
+				if (*p == '"') {
+					p++;
+					c = p;
+					data->state = map_read_key_quoted;
+				}
+				else if (*p == '/') {
+					/* Note that c is on '/' here as '/' is a part of key */
+					c = p;
+					p++;
+					data->state = map_read_key_slashed;
+				}
+				else {
+					c = p;
+					data->state = map_read_key;
+				}
 			}
 			break;
 		case map_read_key:
 			/* read key */
 			/* Check here comments, eol and end of buffer */
+			if (*p == '#') {
+				if (p - c > 0) {
+					/* Store a single key */
+					MAP_STORE_KEY;
+					func (data->cur_data, key, default_value);
+					msg_debug_pool ("insert key only pair: %s -> %s",
+							key, default_value);
+				}
+
+				key = NULL;
+				data->state = map_read_comment_start;
+			}
+			else if (*p == '\r' || *p == '\n') {
+				if (p - c > 0) {
+					/* Store a single key */
+					MAP_STORE_KEY;
+					func (data->cur_data, key, default_value);
+					msg_debug_pool ("insert key only pair: %s -> %s",
+							key, default_value);
+				}
+
+				data->state = map_read_eol;
+				key = NULL;
+			}
+			else if (g_ascii_isspace (*p)) {
+				if (p - c > 0) {
+					MAP_STORE_KEY;
+					data->state = map_skip_spaces_after_key;
+				}
+				else {
+					/* Should not happen */
+					g_assert_not_reached ();
+				}
+			}
+			else {
+				p++;
+			}
+			break;
+		case map_read_key_quoted:
+			if (*p == '\\') {
+				data->state = map_backslash_quoted;
+				p ++;
+			}
+			else if (*p == '"') {
+				/* Allow empty keys in this case */
+				if (p - c >= 0) {
+					MAP_STORE_KEY;
+					data->state = map_skip_spaces_after_key;
+				}
+				else {
+					g_assert_not_reached ();
+				}
+				p ++;
+			}
+			else {
+				p ++;
+			}
+			break;
+		case map_read_key_slashed:
+			if (*p == '\\') {
+				data->state = map_backslash_slashed;
+				p ++;
+			}
+			else if (*p == '/') {
+				/* Allow empty keys in this case */
+				if (p - c >= 0) {
+					data->state = map_read_key_after_slash;
+				}
+				else {
+					g_assert_not_reached ();
+				}
+			}
+			else {
+				p ++;
+			}
+			break;
+		case map_read_key_after_slash:
+			/*
+			 * This state is equal to reading of key but '/' is not
+			 * treated specially
+			 */
 			if (*p == '#') {
 				if (p - c > 0) {
 					/* Store a single key */
@@ -1052,8 +1148,16 @@ rspamd_parse_kv_list (rspamd_mempool_t * pool,
 				}
 			}
 			else {
-				p++;
+				p ++;
 			}
+			break;
+		case map_backslash_quoted:
+			p ++;
+			data->state = map_read_key_quoted;
+			break;
+		case map_backslash_slashed:
+			p ++;
+			data->state = map_read_key_slashed;
 			break;
 		case map_skip_spaces_after_key:
 			if (g_ascii_isspace (*p)) {
