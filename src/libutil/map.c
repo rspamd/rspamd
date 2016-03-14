@@ -215,7 +215,8 @@ free_http_cbdata (struct http_callback_data *cbd)
 	}
 
 	if (cbd->conn) {
-		rspamd_http_connection_free (cbd->conn);
+		rspamd_http_connection_unref (cbd->conn);
+		cbd->conn = NULL;
 	}
 
 	if (cbd->fd != -1) {
