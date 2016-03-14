@@ -19,7 +19,7 @@ struct map_cb_data;
  * Callback types
  */
 typedef gchar * (*map_cb_t)(rspamd_mempool_t *pool, gchar *chunk, gint len,
-	struct map_cb_data *data);
+	struct map_cb_data *data, gboolean final);
 typedef void (*map_fin_cb_t)(rspamd_mempool_t *pool, struct map_cb_data *data);
 
 /**
@@ -80,7 +80,8 @@ typedef void (*insert_func) (gpointer st, gconstpointer key,
 gchar * rspamd_radix_read (rspamd_mempool_t *pool,
 	gchar *chunk,
 	gint len,
-	struct map_cb_data *data);
+	struct map_cb_data *data,
+	gboolean final);
 void rspamd_radix_fin (rspamd_mempool_t *pool, struct map_cb_data *data);
 
 /**
@@ -89,7 +90,8 @@ void rspamd_radix_fin (rspamd_mempool_t *pool, struct map_cb_data *data);
 gchar * rspamd_hosts_read (rspamd_mempool_t *pool,
 	gchar *chunk,
 	gint len,
-	struct map_cb_data *data);
+	struct map_cb_data *data,
+	gboolean final);
 void rspamd_hosts_fin (rspamd_mempool_t *pool, struct map_cb_data *data);
 
 /**
@@ -98,7 +100,8 @@ void rspamd_hosts_fin (rspamd_mempool_t *pool, struct map_cb_data *data);
 gchar * rspamd_kv_list_read (rspamd_mempool_t *pool,
 	gchar *chunk,
 	gint len,
-	struct map_cb_data *data);
+	struct map_cb_data *data,
+	gboolean final);
 void rspamd_kv_list_fin (rspamd_mempool_t *pool, struct map_cb_data *data);
 
 /**
@@ -109,6 +112,7 @@ gchar * rspamd_parse_kv_list (rspamd_mempool_t * pool,
 	gint len,
 	struct map_cb_data *data,
 	insert_func func,
-	const gchar *default_value);
+	const gchar *default_value,
+	gboolean final);
 
 #endif

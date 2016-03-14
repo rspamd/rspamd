@@ -272,7 +272,8 @@ lua_config_add_kv_map (lua_State *L)
 
 static gchar *
 lua_map_read (rspamd_mempool_t *pool, gchar *chunk, gint len,
-	struct map_cb_data *data)
+	struct map_cb_data *data,
+	gboolean final)
 {
 	struct lua_map_callback_data *cbdata, *old;
 

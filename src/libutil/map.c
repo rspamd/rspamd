@@ -377,7 +377,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 
 		g_assert (in != NULL);
 
-		map->read_callback (map->pool, in, inlen, &cbd->cbdata);
+		map->read_callback (map->pool, in, inlen, &cbd->cbdata, TRUE);
 		map->fin_callback (map->pool, &cbd->cbdata);
 
 		*map->user_data = cbd->cbdata.cur_data;
@@ -473,9 +473,8 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data)
 		}
 	}
 
-	map->read_callback (map->pool, bytes, len, &cbdata);
-
 	if (len > 0) {
+		map->read_callback (map->pool, bytes, len, &cbdata, TRUE);
 		map->fin_callback (map->pool, &cbdata);
 		*map->user_data = cbdata.cur_data;
 	}
@@ -949,14 +948,40 @@ rspamd_map_add (struct rspamd_config *cfg,
 /**
  * FSM for parsing lists
  */
+
+#define MAP_STORE_KEY do { \
+	key = rspamd_mempool_alloc (pool, p - c + 1); \
+	rspamd_strlcpy (key, c, p - c + 1); \
+} while (0)
+
+#define MAP_STORE_VALUE do { \
+	value = rspamd_mempool_alloc (pool, p - c + 1); \
+	rspamd_strlcpy (value, c, p - c + 1); \
+	value = g_strstrip (value); \
+} while (0)
+
 gchar *
 rspamd_parse_kv_list (rspamd_mempool_t * pool,
 	gchar * chunk,
 	gint len,
 	struct map_cb_data *data,
 	insert_func func,
-	const gchar *default_value)
+	const gchar *default_value,
+	gboolean final)
 {
+	enum {
+		map_skip_spaces_before_key = 0,
+		map_read_key,
+		map_read_key_quoted,
+		map_read_key_slashed,
+		map_skip_spaces_after_key,
+		map_read_value,
+		map_read_value_quoted,
+		map_read_comment_start,
+		map_skip_comment,
+		map_read_eol,
+	};
+
 	gchar *c, *p, *key = NULL, *value = NULL, *end;
 
 	p = chunk;
@@ -965,99 +990,174 @@ rspamd_parse_kv_list (rspamd_mempool_t * pool,
 
 	while (p < end) {
 		switch (data->state) {
-		case 0:
+		case map_skip_spaces_before_key:
+			if (g_ascii_isspace (*p)) {
+				p ++;
+			}
+			else {
+				c = p;
+				data->state = map_read_key;
+			}
+			break;
+		case map_read_key:
 			/* read key */
 			/* Check here comments, eol and end of buffer */
 			if (*p == '#') {
-				if (key != NULL && p - c  >= 0) {
-					value = rspamd_mempool_alloc (pool, p - c + 1);
-					memcpy (value, c, p - c);
-					value[p - c] = '\0';
-					value = g_strstrip (value);
-					func (data->cur_data, key, value);
-					msg_debug_pool ("insert kv pair: %s -> %s", key, value);
-				}
-				else if (key == NULL && p - c > 0) {
+				if (p - c > 0) {
+					/* Store a single key */
+					MAP_STORE_KEY;
 					func (data->cur_data, key, default_value);
 					msg_debug_pool ("insert key only pair: %s -> %s",
 							key, default_value);
+					key = NULL;
 				}
 
-				data->state = 99;
+				data->state = map_read_comment_start;
 			}
 			else if (*p == '\r' || *p == '\n') {
-				if (key != NULL && p - c >= 0) {
-					value = rspamd_mempool_alloc (pool, p - c + 1);
-					memcpy (value, c, p - c);
-					value[p - c] = '\0';
-
-					value = g_strstrip (value);
-					func (data->cur_data, key, value);
-					msg_debug_pool ("insert kv pair: %s -> %s", key, value);
-				}
-				else if (key == NULL && p - c > 0) {
-					/* Key only line */
-					key = rspamd_mempool_alloc (pool, p - c + 1);
-					memcpy (key, c, p - c);
-					key[p - c] = '\0';
-					key = g_strstrip (key);
+				if (p - c > 0) {
+					/* Store a single key */
+					MAP_STORE_KEY;
 					func (data->cur_data, key, default_value);
 					msg_debug_pool ("insert key only pair: %s -> %s",
 							key, default_value);
+					key = NULL;
 				}
-				data->state = 100;
+
+				data->state = map_read_eol;
 				key = NULL;
 			}
 			else if (g_ascii_isspace (*p)) {
 				if (p - c > 0) {
-					key = rspamd_mempool_alloc (pool, p - c + 1);
-					memcpy (key, c, p - c);
-					key[p - c] = '\0';
-					key = g_strstrip (key);
-					data->state = 2;
+					MAP_STORE_KEY;
+					data->state = map_skip_spaces_after_key;
 				}
 				else {
+					/* Should not happen */
+					g_assert_not_reached ();
+				}
+			}
+			else {
+				p++;
+			}
+			break;
+		case map_skip_spaces_after_key:
+			if (g_ascii_isspace (*p)) {
+				p ++;
+			}
+			else {
+				c = p;
+				data->state = map_read_value;
+			}
+			break;
+		case map_read_value:
+			g_assert (key != NULL);
+			if (*p == '#') {
+				if (p - c > 0) {
+					/* Store a single key */
+					MAP_STORE_VALUE;
+					func (data->cur_data, key, value);
+					msg_debug_pool ("insert key value pair: %s -> %s",
+							key, value);
+					key = NULL;
+					value = NULL;
+				}
+				else {
+					func (data->cur_data, key, default_value);
+					msg_debug_pool ("insert key only pair: %s -> %s",
+							key, default_value);
 					key = NULL;
 				}
+
+				data->state = map_read_comment_start;
 			}
-			else {
-				p++;
-			}
-			break;
-		case 2:
-			/* Skip spaces before value */
-			if (!g_ascii_isspace (*p)) {
-				c = p;
-				data->state = 0;
-			}
-			else {
-				p++;
-			}
-			break;
-		case 99:
-			/* SKIP_COMMENT */
-			/* Skip comment till end of line */
-			if (*p == '\r' || *p == '\n') {
-				while ((*p == '\r' || *p == '\n') && p < end) {
-					p++;
+			else if (*p == '\r' || *p == '\n') {
+				if (p - c > 0) {
+					/* Store a single key */
+					MAP_STORE_VALUE;
+					func (data->cur_data, key, value);
+					msg_debug_pool ("insert key value pair: %s -> %s",
+							key, value);
+					key = NULL;
+					value = NULL;
 				}
-				c = p;
+				else {
+					func (data->cur_data, key, default_value);
+					msg_debug_pool ("insert key only pair: %s -> %s",
+							key, default_value);
+					key = NULL;
+				}
+
+				data->state = map_read_eol;
 				key = NULL;
-				data->state = 0;
 			}
 			else {
-				p++;
+				p ++;
 			}
 			break;
-		case 100:
+		case map_read_comment_start:
+			if (*p == '#') {
+				data->state = map_skip_comment;
+				p ++;
+				key = NULL;
+				value = NULL;
+			}
+			else {
+				g_assert_not_reached ();
+			}
+			break;
+		case map_skip_comment:
+			if (*p == '\r' || *p == '\n') {
+				data->state = map_read_eol;
+			}
+			else {
+				p ++;
+			}
+			break;
+		case map_read_eol:
 			/* Skip \r\n and whitespaces */
-			if (*p == '\r' || *p == '\n' || g_ascii_isspace (*p)) {
+			if (*p == '\r' || *p == '\n') {
 				p++;
 			}
 			else {
-				c = p;
+				data->state = map_skip_spaces_before_key;
+			}
+			break;
+		default:
+			g_assert_not_reached ();
+			break;
+		}
+	}
+
+	if (final) {
+		/* Examine the state */
+		switch (data->state) {
+		case map_read_key:
+			if (p - c > 0) {
+				/* Store a single key */
+				MAP_STORE_KEY;
+				func (data->cur_data, key, default_value);
+				msg_debug_pool ("insert key only pair: %s -> %s",
+						key, default_value);
 				key = NULL;
-				data->state = 0;
+			}
+			break;
+		case map_read_value:
+			g_assert (key != NULL);
+			if (p - c > 0) {
+				/* Store a single key */
+				MAP_STORE_VALUE;
+				func (data->cur_data, key, value);
+				msg_debug_pool ("insert key value pair: %s -> %s",
+						key, value);
+				key = NULL;
+				value = NULL;
+			}
+			else {
+				func (data->cur_data, key, default_value);
+				msg_debug_pool ("insert key only pair: %s -> %s",
+						key, default_value);
+				key = NULL;
 			}
 			break;
 		}
@@ -1082,7 +1182,8 @@ gchar *
 rspamd_hosts_read (rspamd_mempool_t * pool,
 	gchar * chunk,
 	gint len,
-	struct map_cb_data *data)
+	struct map_cb_data *data,
+	gboolean final)
 {
 	if (data->cur_data == NULL) {
 		data->cur_data = g_hash_table_new (rspamd_strcase_hash,
@@ -1093,7 +1194,8 @@ rspamd_hosts_read (rspamd_mempool_t * pool,
 			   len,
 			   data,
 			   (insert_func) g_hash_table_insert,
-			   hash_fill);
+			   hash_fill,
+			   final);
 }
 
 void
@@ -1112,7 +1214,8 @@ gchar *
 rspamd_kv_list_read (rspamd_mempool_t * pool,
 	gchar * chunk,
 	gint len,
-	struct map_cb_data *data)
+	struct map_cb_data *data,
+	gboolean final)
 {
 	if (data->cur_data == NULL) {
 		data->cur_data = g_hash_table_new (rspamd_strcase_hash,
@@ -1123,7 +1226,8 @@ rspamd_kv_list_read (rspamd_mempool_t * pool,
 			   len,
 			   data,
 			   (insert_func) g_hash_table_insert,
-			   "");
+			   "",
+			   final);
 }
 
 void
@@ -1142,7 +1246,8 @@ gchar *
 rspamd_radix_read (rspamd_mempool_t * pool,
 	gchar * chunk,
 	gint len,
-	struct map_cb_data *data)
+	struct map_cb_data *data,
+	gboolean final)
 {
 	radix_compressed_t *tree;
 	rspamd_mempool_t *rpool;
@@ -1158,7 +1263,8 @@ rspamd_radix_read (rspamd_mempool_t * pool,
 			   len,
 			   data,
 			   (insert_func) radix_tree_insert_helper,
-			   hash_fill);
+			   hash_fill,
+			   final);
 }
 
 void

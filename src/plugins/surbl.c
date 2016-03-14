@@ -114,7 +114,8 @@ static gchar *
 read_exceptions_list (rspamd_mempool_t * pool,
 	gchar * chunk,
 	gint len,
-	struct map_cb_data *data)
+	struct map_cb_data *data,
+	gboolean final)
 {
 	if (data->cur_data == NULL) {
 		data->cur_data = rspamd_mempool_alloc0 (pool,
@@ -125,7 +126,8 @@ read_exceptions_list (rspamd_mempool_t * pool,
 			   len,
 			   data,
 			   (insert_func) exception_insert,
-			   "");
+			   "",
+			   final);
 }
 
 static void
@@ -208,7 +210,8 @@ static gchar *
 read_redirectors_list (rspamd_mempool_t * pool,
 	gchar * chunk,
 	gint len,
-	struct map_cb_data *data)
+	struct map_cb_data *data,
+	gboolean final)
 {
 	struct rspamd_redirector_map_cb *cbdata;
 
@@ -229,7 +232,8 @@ read_redirectors_list (rspamd_mempool_t * pool,
 			   len,
 			   data,
 			   (insert_func) redirector_insert,
-			   "");
+			   "",
+			   final);
 }
 
 void
