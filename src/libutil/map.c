@@ -65,6 +65,9 @@ write_http_request (struct http_callback_data *cbd)
 			msg->url = rspamd_fstring_new_init (cbd->data->path, strlen (cbd->data->path));
 			msg->url = rspamd_fstring_append (msg->url, ".sig", 4);
 		}
+		else {
+			g_assert_not_reached ();
+		}
 
 		rspamd_http_connection_write_message (cbd->conn, msg, cbd->data->host,
 				NULL, cbd, cbd->fd, &cbd->tv, cbd->ev_base);
@@ -73,7 +76,6 @@ write_http_request (struct http_callback_data *cbd)
 	else {
 		msg_err_pool ("cannot connect to %s: %s", cbd->data->host,
 				strerror (errno));
-		REF_RELEASE (cbd);
 	}
 }
 
@@ -223,6 +225,10 @@ free_http_cbdata (struct http_callback_data *cbd)
 
 	if (cbd->fd != -1) {
 		close (cbd->fd);
+	}
+
+	if (cbd->addr) {
+		rspamd_inet_address_destroy (cbd->addr);
 	}
 
 	g_slice_free1 (sizeof (struct http_callback_data), cbd);
@@ -563,11 +569,6 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 	struct http_callback_data *cbd = arg;
 	rspamd_mempool_t *pool;
 
-	if (cbd->stage >= map_load_file) {
-		/* No need in further corrections */
-		return;
-	}
-
 	pool = cbd->map->pool;
 
 	if (reply->code == RDNS_RC_NOERROR) {
@@ -575,28 +576,32 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 		 * We just get the first address hoping that a resolver performs
 		 * round-robin rotation well
 		 */
-		cbd->addr = rspamd_inet_address_from_rnds (reply->entries);
+		if (cbd->addr == NULL) {
+			cbd->addr = rspamd_inet_address_from_rnds (reply->entries);
 
+			if (cbd->addr != NULL) {
+				rspamd_inet_address_set_port (cbd->addr, cbd->data->port);
+				/* Try to open a socket */
+				cbd->fd = rspamd_inet_address_connect (cbd->addr, SOCK_STREAM,
+						TRUE);
 
-		if (cbd->addr != NULL) {
-			rspamd_inet_address_set_port (cbd->addr, cbd->data->port);
-			/* Try to open a socket */
+				if (cbd->fd != -1) {
+					cbd->stage = map_load_file;
+					cbd->conn = rspamd_http_connection_new (http_map_read,
+							http_map_error, http_map_finish,
+							RSPAMD_HTTP_BODY_PARTIAL|RSPAMD_HTTP_CLIENT_SIMPLE,
+							RSPAMD_HTTP_CLIENT, NULL);
 
-			cbd->fd = rspamd_inet_address_connect (cbd->addr, SOCK_STREAM, TRUE);
-
-			if (cbd->fd != -1) {
-				cbd->stage = map_load_file;
-				cbd->conn = rspamd_http_connection_new (http_map_read,
-						http_map_error, http_map_finish,
-						RSPAMD_HTTP_BODY_PARTIAL|RSPAMD_HTTP_CLIENT_SIMPLE,
-						RSPAMD_HTTP_CLIENT, NULL);
-
-				write_http_request (cbd);
+					write_http_request (cbd);
+				}
+				else {
+					rspamd_inet_address_destroy (cbd->addr);
+					cbd->addr = NULL;
+				}
 			}
 		}
 	}
-
-	if (cbd->stage < map_load_file) {
+	else if (cbd->stage < map_load_file) {
 		if (cbd->stage == map_resolve_host2) {
 			/* We have still one request pending */
 			cbd->stage = map_resolve_host1;
