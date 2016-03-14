@@ -231,6 +231,7 @@ free_http_cbdata (struct http_callback_data *cbd)
 		rspamd_inet_address_destroy (cbd->addr);
 	}
 
+	g_atomic_int_set (cbd->map->locked, 0);
 	g_slice_free1 (sizeof (struct http_callback_data), cbd);
 }
 
@@ -494,7 +495,7 @@ static void
 jitter_timeout_event (struct rspamd_map *map,
 		gboolean locked, gboolean initial, gboolean errored)
 {
-	const gdouble error_mult = 20.0, lock_mult = 4.0;
+	const gdouble error_mult = 20.0, lock_mult = 0.5;
 	gdouble jittered_sec;
 	gdouble timeout;
 
@@ -630,6 +631,13 @@ http_callback (gint fd, short what, void *ud)
 	data = map->map_data;
 	pool = map->pool;
 
+	if (!g_atomic_int_compare_and_exchange (map->locked, 0, 1)) {
+		msg_info_pool (
+				"don't try to reread map as it is locked by other process, will reread it later");
+		jitter_timeout_event (map, TRUE, FALSE, FALSE);
+		return;
+	}
+
 	/* Plan event */
 	cbd = g_slice_alloc0 (sizeof (struct http_callback_data));
 
@@ -642,6 +650,7 @@ http_callback (gint fd, short what, void *ud)
 		g_slice_free1 (sizeof (*cbd), cbd);
 		msg_err_pool ("cannot create tempfile: %s", strerror (errno));
 		jitter_timeout_event (map, FALSE, FALSE, TRUE);
+		g_atomic_int_set (map->locked, 0);
 
 		return;
 	}
