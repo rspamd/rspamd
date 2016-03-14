@@ -101,7 +101,7 @@ static const struct luaL_reg maplib_m[] = {
 struct lua_map_callback_data {
 	lua_State *L;
 	gint ref;
-	GString *data;
+	rspamd_fstring_t *data;
 	struct rspamd_lua_map *lua_map;
 };
 
@@ -277,22 +277,23 @@ lua_map_read (rspamd_mempool_t *pool, gchar *chunk, gint len,
 	struct lua_map_callback_data *cbdata, *old;
 
 	if (data->cur_data == NULL) {
-		cbdata = g_slice_alloc0 (sizeof (*cbdata));
 		old = (struct lua_map_callback_data *)data->prev_data;
+		cbdata = old;
 		cbdata->L = old->L;
 		cbdata->ref = old->ref;
 		cbdata->lua_map = old->lua_map;
 		data->cur_data = cbdata;
+		data->prev_data = NULL;
 	}
 	else {
 		cbdata = (struct lua_map_callback_data *)data->cur_data;
 	}
 
 	if (cbdata->data == NULL) {
-		cbdata->data = g_string_new_len (chunk, len);
+		cbdata->data = rspamd_fstring_new_init (chunk, len);
 	}
 	else {
-		g_string_append_len (cbdata->data, chunk, len);
+		cbdata->data = rspamd_fstring_append (cbdata->data, chunk, len);
 	}
 
 	return NULL;
@@ -301,16 +302,10 @@ lua_map_read (rspamd_mempool_t *pool, gchar *chunk, gint len,
 static void
 lua_map_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
-	struct lua_map_callback_data *cbdata, *old;
+	struct lua_map_callback_data *cbdata;
 	struct rspamd_lua_map **pmap;
 
 	if (data->prev_data) {
-		/* Cleanup old data */
-		old = (struct lua_map_callback_data *)data->prev_data;
-		if (old->data) {
-			g_string_free (old->data, TRUE);
-		}
-		g_slice_free1 (sizeof (*old), old);
 		data->prev_data = NULL;
 	}
 
@@ -338,6 +333,8 @@ lua_map_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 			lua_pop (cbdata->L, 1);
 		}
 	}
+
+	cbdata->data = rspamd_fstring_assign (cbdata->data, "", 0);
 }
 
 gint
@@ -362,9 +359,9 @@ lua_config_add_map (lua_State *L)
 			cbidx = 3;
 		}
 
-		map = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (*map));
+		map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
 		map->type = RSPAMD_LUA_MAP_CALLBACK;
-		map->data.cbdata = rspamd_mempool_alloc (cfg->cfg_pool,
+		map->data.cbdata = rspamd_mempool_alloc0 (cfg->cfg_pool,
 				sizeof (*map->data.cbdata));
 		cbdata = map->data.cbdata;
 		cbdata->L = L;

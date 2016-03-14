@@ -939,7 +939,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 	rspamd_cryptobox_hash (cksum, new_map->uri, strlen (new_map->uri), NULL, 0);
 	cksum_encoded = rspamd_encode_base32 (cksum, sizeof (cksum));
 	new_map->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "map");
-	memcpy (new_map->pool->tag.uid, cksum_encoded,
+	rspamd_strlcpy (new_map->pool->tag.uid, cksum_encoded,
 			sizeof (new_map->pool->tag.uid));
 	g_free (cksum_encoded);
 	pool = new_map->pool;
