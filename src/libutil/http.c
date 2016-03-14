@@ -1810,7 +1810,7 @@ rspamd_http_message_from_url (const gchar *url)
 	}
 
 	msg->host = rspamd_fstring_new_init (host, pu.field_data[UF_HOST].len);
-	msg->url = rspamd_fstring_new_init (path, pathlen);
+	msg->url = rspamd_fstring_append (msg->url, path, pathlen);
 
 	return msg;
 }
