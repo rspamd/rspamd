@@ -13,6 +13,11 @@ TARGET_LINK_LIBRARIES(rspamd-http-bench rspamd-server)
 TARGET_LINK_LIBRARIES(rspamd-http-bench rspamd-http-parser)
 TARGET_LINK_LIBRARIES(rspamd-http-bench ${RSPAMD_REQUIRED_LIBRARIES})
 
+IF (ENABLE_HYPERSCAN MATCHES "ON")
+	SET_TARGET_PROPERTIES(rspamd-http-bench PROPERTIES LINKER_LANGUAGE CXX)
+	SET_TARGET_PROPERTIES(rspamd-http-server PROPERTIES LINKER_LANGUAGE CXX)
+ENDIF()
+
 # Redirector
 IF (ENABLE_REDIRECTOR MATCHES "ON")
     CONFIGURE_FILE(redirector.pl.in redirector.pl @ONLY)

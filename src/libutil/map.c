@@ -24,6 +24,16 @@
 #include "cryptobox.h"
 #include "unix-std.h"
 #include "http_parser.h"
+#include "libutil/regexp.h"
+
+#ifdef WITH_HYPERSCAN
+#include "hs.h"
+#endif
+#ifndef WITH_PCRE2
+#include <pcre.h>
+#else
+#include <pcre2.h>
+#endif
 
 static const gchar *hash_fill = "1";
 static void free_http_cbdata_common (struct http_callback_data *cbd);
@@ -1431,5 +1441,208 @@ rspamd_radix_fin (rspamd_mempool_t * pool, struct map_cb_data *data)
 	if (data->cur_data) {
 		msg_info_pool ("read radix trie of %z elements: %s",
 				radix_get_size (data->cur_data), radix_get_info (data->cur_data));
+	}
+}
+
+struct rspamd_regexp_map {
+	struct rspamd_map *map;
+	GPtrArray *regexps;
+	GPtrArray *values;
+#ifdef WITH_HYPERSCAN
+	hs_database_t *hs_db;
+	hs_scratch_t *hs_scratch;
+	const gchar **patterns;
+	gint *flags;
+	gint *ids;
+#endif
+};
+
+static struct rspamd_regexp_map *
+rspamd_regexp_map_create (struct rspamd_map *map)
+{
+	struct rspamd_regexp_map *re_map;
+
+	re_map = g_slice_alloc0 (sizeof (*re_map));
+	re_map->values = g_ptr_array_new ();
+	re_map->regexps = g_ptr_array_new ();
+	re_map->map = map;
+
+	return re_map;
+}
+
+
+static void
+rspamd_regexp_map_destroy (struct rspamd_regexp_map *re_map)
+{
+	rspamd_regexp_t *re;
+	guint i;
+
+	for (i = 0; i < re_map->regexps->len; i ++) {
+		re = g_ptr_array_index (re_map->regexps, i);
+		rspamd_regexp_unref (re);
+	}
+
+	g_ptr_array_free (re_map->regexps, TRUE);
+	g_ptr_array_free (re_map->values, TRUE);
+
+#ifdef WITH_HYPERSCAN
+	if (re_map->hs_scratch) {
+		hs_free_scratch (re_map->hs_scratch);
+	}
+	if (re_map->hs_db) {
+		hs_free_database (re_map->hs_db);
+	}
+	if (re_map->patterns) {
+		g_free (re_map->patterns);
+	}
+	if (re_map->flags) {
+		g_free (re_map->flags);
+	}
+	if (re_map->ids) {
+		g_free (re_map->ids);
+	}
+#endif
+
+	g_slice_free1 (sizeof (*re_map), re_map);
+}
+
+static void
+rspamd_re_map_insert_helper (gpointer st, gpointer key, gpointer value)
+{
+	struct rspamd_regexp_map *re_map = st;
+	rspamd_regexp_t *re;
+	GError *err = NULL;
+	rspamd_mempool_t *pool;
+
+	pool = re_map->map->pool;
+	re = rspamd_regexp_new (key, NULL, &err);
+
+	if (re == NULL) {
+		msg_err_pool ("cannot parse regexp %s: %e", key, err);
+
+		if (err) {
+			g_error_free (err);
+		}
+
+		return;
+	}
+
+	g_ptr_array_add (re_map->regexps, re);
+	g_ptr_array_add (re_map->values, value);
+}
+
+static void
+rspamd_re_map_finalize (struct rspamd_regexp_map *re_map)
+{
+#ifdef WITH_HYPERSCAN
+	guint i;
+	hs_platform_info_t plt;
+	hs_compile_error_t *err;
+	rspamd_mempool_t *pool;
+	rspamd_regexp_t *re;
+	gint pcre_flags;
+
+	pool = re_map->map->pool;
+
+	if (hs_populate_platform (&plt) != HS_SUCCESS) {
+		msg_err_pool ("cannot populate hyperscan platform");
+		return;
+	}
+
+	re_map->patterns = g_new (const gchar *, re_map->regexps->len);
+	re_map->flags = g_new (gint, re_map->regexps->len);
+
+	for (i = 0; i < re_map->regexps->len; i ++) {
+		re = g_ptr_array_index (re_map->regexps, i);
+		re_map->patterns[i] = rspamd_regexp_get_pattern (re);
+		re_map->flags[i] = 0;
+		pcre_flags = rspamd_regexp_get_pcre_flags (re);
+
+#ifndef WITH_PCRE2
+		if (pcre_flags & PCRE_FLAG(UTF8)) {
+			re_map->flags[i] |= HS_FLAG_UTF8;
+		}
+#else
+		if (pcre_flags & PCRE_FLAG(UTF)) {
+			re_map->flags[i] |= HS_FLAG_UTF8;
+		}
+#endif
+		if (pcre_flags & PCRE_FLAG(CASELESS)) {
+			re_map->flags[i] |= HS_FLAG_CASELESS;
+		}
+		if (pcre_flags & PCRE_FLAG(MULTILINE)) {
+			re_map->flags[i] |= HS_FLAG_MULTILINE;
+		}
+		if (pcre_flags & PCRE_FLAG(DOTALL)) {
+			re_map->flags[i] |= HS_FLAG_DOTALL;
+		}
+		if (rspamd_regexp_get_maxhits (re) == 1) {
+			re_map->flags[i] |= HS_FLAG_SINGLEMATCH;
+		}
+
+		re_map->ids[i] = i;
+	}
+
+	if (hs_compile_multi (re_map->patterns,
+			re_map->flags,
+			re_map->ids,
+			re_map->regexps->len,
+			HS_MODE_BLOCK,
+			&plt,
+			&re_map->hs_db,
+			&err) != HS_SUCCESS) {
+
+		msg_err_pool ("cannot create tree of regexp when processing '%s': %s",
+				re_map->patterns[err->expression], err->message);
+		re_map->hs_db = NULL;
+		hs_free_compile_error (err);
+
+		return;
+	}
+
+	if (hs_alloc_scratch (re_map->hs_db, &re_map->hs_scratch) != HS_SUCCESS) {
+		msg_err_pool ("cannot allocate scratch space for hyperscan");
+		hs_free_database (re_map->hs_db);
+		re_map->hs_db = NULL;
+	}
+#endif
+}
+
+gchar *
+rspamd_regexp_list_read (rspamd_mempool_t *pool,
+	gchar *chunk,
+	gint len,
+	struct map_cb_data *data,
+	gboolean final)
+{
+	struct rspamd_regexp_map *re_map;
+
+	if (data->cur_data == NULL) {
+		re_map = rspamd_regexp_map_create (data->map);
+		data->cur_data = re_map;
+	}
+
+	return rspamd_parse_kv_list (pool,
+			chunk,
+			len,
+			data,
+			(insert_func) rspamd_re_map_insert_helper,
+			hash_fill,
+			final);
+}
+
+void
+rspamd_regexp_list_fin (rspamd_mempool_t *pool, struct map_cb_data *data)
+{
+	struct rspamd_regexp_map *re_map;
+
+	if (data->prev_data) {
+		rspamd_regexp_map_destroy (data->prev_data);
+	}
+	if (data->cur_data) {
+		re_map = data->cur_data;
+		rspamd_re_map_finalize (re_map);
+		msg_info_pool ("read regexp list of %ud elements",
+				re_map->regexps->len);
 	}
 }

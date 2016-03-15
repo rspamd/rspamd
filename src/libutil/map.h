@@ -105,9 +105,22 @@ gchar * rspamd_kv_list_read (rspamd_mempool_t *pool,
 void rspamd_kv_list_fin (rspamd_mempool_t *pool, struct map_cb_data *data);
 
 /**
+ * Regexp list is a list of regular expressions
+ */
+struct rspamd_regexp_map;
+
+gchar * rspamd_regexp_list_read (rspamd_mempool_t *pool,
+	gchar *chunk,
+	gint len,
+	struct map_cb_data *data,
+	gboolean final);
+void rspamd_regexp_list_fin (rspamd_mempool_t *pool, struct map_cb_data *data);
+
+/**
  * FSM for lists parsing (support comments, blank lines and partial replies)
  */
-gchar * rspamd_parse_kv_list (rspamd_mempool_t * pool,
+gchar *
+rspamd_parse_kv_list (rspamd_mempool_t * pool,
 	gchar * chunk,
 	gint len,
 	struct map_cb_data *data,
