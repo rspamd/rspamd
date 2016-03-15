@@ -53,7 +53,7 @@ struct upstream {
 
 	struct upstream_inet_addr_entry *new_addrs;
 	rspamd_mutex_t *lock;
-
+	gpointer data;
 	ref_entry_t ref;
 };
 
@@ -64,6 +64,7 @@ struct upstream_list {
 	rspamd_mutex_t *lock;
 	guint64 hash_seed;
 	guint cur_elt;
+	enum rspamd_upstream_flag flags;
 	enum rspamd_upstream_rotation rot_alg;
 };
 
@@ -332,7 +333,8 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
 	g_ptr_array_remove_index (ls->alive, up->active_idx);
 	up->active_idx = -1;
 
-	if (up->ctx->res != NULL && up->ctx->configured) {
+	if (up->ctx->res != NULL && up->ctx->configured &&
+			!(ls->flags & RSPAMD_UPSTREAM_FLAG_NORESOLVE)) {
 		/* Resolve name of the upstream one more time */
 		if (up->name[0] != '/') {
 
@@ -438,7 +440,7 @@ rspamd_upstreams_create (struct upstream_ctx *ctx)
 {
 	struct upstream_list *ls;
 
-	ls = g_slice_alloc (sizeof (*ls));
+	ls = g_slice_alloc0 (sizeof (*ls));
 	ls->hash_seed = SEED_CONSTANT;
 	ls->ups = g_ptr_array_new ();
 	ls->alive = g_ptr_array_new ();
@@ -554,6 +556,13 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups,
 	rspamd_upstream_set_active (ups, up);
 
 	return TRUE;
+}
+
+void
+rspamd_upstreams_set_flags (struct upstream_list *ups,
+		enum rspamd_upstream_flag flags)
+{
+	ups->flags = flags;
 }
 
 gboolean
@@ -834,7 +843,8 @@ rspamd_upstream_reresolve (struct upstream_ctx *ctx)
 		up = cur->data;
 		REF_RETAIN (up);
 
-		if (up->name[0] != '/' && ctx->res != NULL) {
+		if (up->name[0] != '/' && ctx->res != NULL &&
+				!(up->ls->flags & RSPAMD_UPSTREAM_FLAG_NORESOLVE)) {
 			if (rdns_make_request_full (ctx->res,
 					rspamd_upstream_dns_cb,
 					up,
@@ -863,4 +873,19 @@ rspamd_upstream_reresolve (struct upstream_ctx *ctx)
 		REF_RELEASE (up);
 		cur = g_list_next (cur);
 	}
+}
+
+gpointer
+rspamd_upstream_set_data (struct upstream *up, gpointer data)
+{
+	gpointer prev_data = up->data;
+	up->data = data;
+
+	return prev_data;
+}
+
+gpointer
+rspamd_upstream_get_data (struct upstream *up)
+{
+	return up->data;
 }

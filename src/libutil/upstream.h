@@ -15,6 +15,9 @@ enum rspamd_upstream_rotation {
 	RSPAMD_UPSTREAM_UNDEF
 };
 
+enum rspamd_upstream_flag {
+	RSPAMD_UPSTREAM_FLAG_NORESOLVE = (1 << 0),
+};
 
 struct rspamd_config;
 /* Opaque upstream structures */
@@ -64,6 +67,15 @@ void rspamd_upstream_ok (struct upstream *up);
  * @return
  */
 struct upstream_list* rspamd_upstreams_create (struct upstream_ctx *ctx);
+
+/**
+ * Sets specific flag to the upstream list
+ * @param ups
+ * @param flags
+ */
+void rspamd_upstreams_set_flags (struct upstream_list *ups,
+		enum rspamd_upstream_flag flags);
+
 /**
  * Destroy list of upstreams
  * @param ups
@@ -139,6 +151,21 @@ gboolean rspamd_upstream_add_addr (struct upstream *up,
  * @return
  */
 const gchar* rspamd_upstream_name (struct upstream *up);
+
+/**
+ * Sets opaque user data associated with this upstream
+ * @param up
+ * @param data
+ * @return old data
+ */
+gpointer rspamd_upstream_set_data (struct upstream *up, gpointer data);
+
+/**
+ * Gets opaque user data associated with this upstream
+ * @param up
+ * @return
+ */
+gpointer rspamd_upstream_get_data (struct upstream *up);
 
 /**
  * Get new upstream from the list
