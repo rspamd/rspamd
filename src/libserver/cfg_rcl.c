@@ -2726,6 +2726,24 @@ rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 }
 
 gboolean
+rspamd_rcl_parse_struct_ucl (rspamd_mempool_t *pool,
+	const ucl_object_t *obj,
+	gpointer ud,
+	struct rspamd_rcl_section *section,
+	GError **err)
+{
+	struct rspamd_rcl_struct_parser *pd = ud;
+	const ucl_object_t **target;
+
+	target = (const ucl_object_t **)(((gchar *)pd->user_struct) + pd->offset);
+
+	*target = obj;
+
+	return TRUE;
+}
+
+
+gboolean
 rspamd_rcl_parse_struct_boolean (rspamd_mempool_t *pool,
 	const ucl_object_t *obj,
 	gpointer ud,

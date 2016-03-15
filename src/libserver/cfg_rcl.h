@@ -308,6 +308,21 @@ gboolean rspamd_rcl_parse_struct_mime_addr (rspamd_mempool_t *pool,
 	GError **err);
 
 /**
+ * Parse a raw ucl object
+ * @param cfg config pointer
+ * @param obj object to parse
+ * @param ud struct_parser structure (flags mean the exact structure used)
+ * @param section the current section
+ * @param err error pointer
+ * @return TRUE if a value has been successfully parsed
+ */
+gboolean rspamd_rcl_parse_struct_ucl (rspamd_mempool_t *pool,
+	const ucl_object_t *obj,
+	gpointer ud,
+	struct rspamd_rcl_section *section,
+	GError **err);
+
+/**
  * Utility functions
  */
 
