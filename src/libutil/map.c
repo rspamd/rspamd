@@ -26,6 +26,8 @@
 #include "http_parser.h"
 
 static const gchar *hash_fill = "1";
+static void free_http_cbdata_common (struct http_callback_data *cbd);
+static void free_http_cbdata_dtor (gpointer p);
 static void free_http_cbdata (struct http_callback_data *cbd);
 /**
  * Write HTTP request
@@ -190,7 +192,7 @@ rspamd_map_check_file_sig (const char *fname,
  * Callback for destroying HTTP callback data
  */
 static void
-free_http_cbdata (struct http_callback_data *cbd)
+free_http_cbdata_common (struct http_callback_data *cbd)
 {
 	char fpath[PATH_MAX];
 	struct stat st;
@@ -233,6 +235,26 @@ free_http_cbdata (struct http_callback_data *cbd)
 
 	g_atomic_int_set (cbd->map->locked, 0);
 	g_slice_free1 (sizeof (struct http_callback_data), cbd);
+}
+
+static void
+free_http_cbdata (struct http_callback_data *cbd)
+{
+	cbd->map->dtor = NULL;
+	cbd->map->dtor_data = NULL;
+
+	free_http_cbdata_common (cbd);
+}
+
+static void
+free_http_cbdata_dtor (gpointer p)
+{
+	struct http_callback_data *cbd = p;
+	rspamd_mempool_t *pool;
+
+	pool = cbd->map->pool;
+	msg_warn_pool ("connection with http server is terminated: worker is stopping");
+	free_http_cbdata_common (cbd);
 }
 
 /*
@@ -681,7 +703,10 @@ http_callback (gint fd, short what, void *ud)
 				data->host, RDNS_REQUEST_AAAA)) {
 			REF_RETAIN (cbd);
 		}
+
 		jitter_timeout_event (map, FALSE, FALSE, FALSE);
+		map->dtor = free_http_cbdata_dtor;
+		map->dtor_data = cbd;
 	}
 	else {
 		msg_warn_pool ("cannot load map: DNS resolver is not initialized");
@@ -732,8 +757,20 @@ rspamd_map_watch (struct rspamd_config *cfg,
 void
 rspamd_map_remove_all (struct rspamd_config *cfg)
 {
+	struct rspamd_map *map;
+	GList *cur;
+
+	for (cur = cfg->maps; cur != NULL; cur = g_list_next (cur)) {
+		map = cur->data;
+
+		if (map->dtor) {
+			map->dtor (map->dtor_data);
+		}
+	}
+
 	g_list_free (cfg->maps);
 	cfg->maps = NULL;
+
 	if (cfg->map_pool != NULL) {
 		rspamd_mempool_delete (cfg->map_pool);
 		cfg->map_pool = NULL;

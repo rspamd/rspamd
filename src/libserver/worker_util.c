@@ -22,6 +22,8 @@
 #include "utlist.h"
 #include "ottery.h"
 #include "rspamd_control.h"
+#include "libutil/map.h"
+#include "libutil/map_private.h"
 
 #ifdef WITH_GPERF_TOOLS
 #include <gperftools/profiler.h>
@@ -295,6 +297,7 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 	GHashTableIter it;
 	struct rspamd_worker_signal_handler *sigh;
 	gpointer k, v;
+	struct rspamd_map *map;
 
 	/* Remove all events */
 	cur = worker->accept_events;
@@ -310,6 +313,7 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 	}
 
 	g_hash_table_iter_init (&it, worker->signal_events);
+
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		sigh = (struct rspamd_worker_signal_handler *)v;
 		g_hash_table_iter_steal (&it);
@@ -318,7 +322,17 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 		}
 		g_free (sigh);
 	}
+
 	g_hash_table_unref (worker->signal_events);
+
+	/* Cleanup maps */
+	for (cur = worker->srv->cfg->maps; cur != NULL; cur = g_list_next (cur)) {
+		map = cur->data;
+
+		if (map->dtor) {
+			map->dtor (map->dtor_data);
+		}
+	}
 }
 
 void

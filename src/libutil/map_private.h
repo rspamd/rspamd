@@ -22,6 +22,8 @@
 #include "unix-std.h"
 #include "ref.h"
 
+typedef void (*rspamd_map_dtor) (gpointer p);
+
 enum fetch_proto {
 	MAP_PROTO_FILE,
 	MAP_PROTO_HTTP,
@@ -46,6 +48,8 @@ struct rspamd_map {
 	guint32 checksum;
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
 	gint *locked;
+	rspamd_map_dtor dtor;
+	gpointer dtor_data;
 };
 
 /**
