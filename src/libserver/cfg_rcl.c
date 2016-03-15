@@ -1607,7 +1607,7 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 	/* Old DNS configuration */
 	rspamd_rcl_add_default_handler (sub,
 			"dns_nameserver",
-			rspamd_rcl_parse_struct_string_list,
+			rspamd_rcl_parse_struct_ucl,
 			G_STRUCT_OFFSET (struct rspamd_config, nameservers),
 			0,
 			"Legacy option for DNS servers used");
@@ -1846,13 +1846,13 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			"Options for DNS resolver");
 	rspamd_rcl_add_default_handler (ssub,
 			"nameserver",
-			rspamd_rcl_parse_struct_string_list,
+			rspamd_rcl_parse_struct_ucl,
 			G_STRUCT_OFFSET (struct rspamd_config, nameservers),
 			0,
 			"List of DNS servers");
 	rspamd_rcl_add_default_handler (ssub,
 			"server",
-			rspamd_rcl_parse_struct_string_list,
+			rspamd_rcl_parse_struct_ucl,
 			G_STRUCT_OFFSET (struct rspamd_config, nameservers),
 			0,
 			"List of DNS servers");
