@@ -133,6 +133,25 @@ rspamd_worker_guard_handler (gint fd, short what, void *data)
 	gchar fake_buf[1024];
 	gssize r;
 
+#ifdef EV_CLOSED
+	if (what == EV_CLOSED) {
+		if (!(task->flags & RSPAMD_TASK_FLAG_JSON) &&
+				task->cfg->enable_shutdown_workaround) {
+			msg_info_task ("workaround for shutdown enabled, please update "
+					"your client, this support might be removed in future");
+			shutdown (fd, SHUT_RD);
+			event_del (task->guard_ev);
+			task->guard_ev = NULL;
+		}
+		else {
+			msg_err_task ("the peer has closed connection unexpectedly");
+			rspamd_session_destroy (task->s);
+		}
+
+		return;
+	}
+#endif
+
 	r = read (fd, fake_buf, sizeof (fake_buf));
 
 	if (r > 0) {
@@ -209,8 +228,13 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 
 	/* Set socket guard */
 	guard_ev = rspamd_mempool_alloc (task->task_pool, sizeof (*guard_ev));
+#ifdef EV_CLOSED
+	event_set (guard_ev, task->sock, EV_READ|EV_PERSIST|EV_CLOSED,
+				rspamd_worker_guard_handler, task);
+#else
 	event_set (guard_ev, task->sock, EV_READ|EV_PERSIST,
 			rspamd_worker_guard_handler, task);
+#endif
 	event_base_set (task->ev_base, guard_ev);
 	event_add (guard_ev, NULL);
 	task->guard_ev = guard_ev;
