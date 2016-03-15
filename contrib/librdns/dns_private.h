@@ -51,6 +51,7 @@ struct rdns_server {
 	unsigned int io_cnt;
 
 	struct rdns_io_channel **io_channels;
+	void *ups_elt;
 	upstream_entry_t up;
 };
 
@@ -112,7 +113,7 @@ struct rdns_resolver {
 	struct rdns_io_channel *io_channels; /**< hash of io chains indexed by socket        */
 	struct rdns_async_context *async; /** async callbacks */
 	void *periodic; /** periodic event for resolver */
-
+	struct rdns_upstream_context *ups;
 	struct rdns_plugin *curve_plugin;
 
 	rdns_log_function logger;

@@ -87,13 +87,13 @@ rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 			 * should take care about events processing
 			 */
 			return 0;
-		} 
+		}
 		else {
 			rdns_debug ("send failed: %s for server %s", strerror (errno), serv->name);
 			return -1;
 		}
 	}
-	
+
 	if (new_req) {
 		/* Add request to hash table */
 		HASH_ADD_INT (req->io->requests, id, req);
@@ -131,7 +131,7 @@ rdns_find_dns_request (uint8_t *in, struct rdns_io_channel *ioc)
 	struct rdns_request *req;
 	int id;
 	struct rdns_resolver *resolver = ioc->resolver;
-	
+
 	id = header->qid;
 	HASH_FIND_INT (ioc->requests, &id, req);
 	if (req == NULL) {
@@ -170,7 +170,7 @@ rdns_parse_reply (uint8_t *in, int r, struct rdns_request *req,
 		return false;
 	}
 
-	/* 
+	/*
 	 * Now we have request and query data is now at the end of header, so compare
 	 * request QR section and reply QR section
 	 */
@@ -221,7 +221,7 @@ rdns_parse_reply (uint8_t *in, int r, struct rdns_request *req,
 			}
 		}
 	}
-	
+
 	if (!found && type != RDNS_REQUEST_ANY) {
 		/* We have not found the requested RR type */
 		rep->code = RDNS_RC_NOREC;
@@ -251,7 +251,7 @@ rdns_process_read (int fd, void *arg)
 	uint8_t in[UDP_PACKET_SIZE];
 
 	resolver = ioc->resolver;
-	
+
 	/* First read packet from socket */
 	if (resolver->curve_plugin == NULL) {
 		r = read (fd, in, sizeof (in));
@@ -271,6 +271,12 @@ rdns_process_read (int fd, void *arg)
 	if (req != NULL) {
 		if (rdns_parse_reply (in, r, req, &rep)) {
 			UPSTREAM_OK (req->io->srv);
+
+			if (req->resolver->ups && req->io->srv->ups_elt) {
+				req->resolver->ups->ok (req->io->srv->ups_elt,
+						req->resolver->ups->data);
+			}
+
 			req->state = RDNS_REQUEST_REPLIED;
 			rdns_request_unschedule (req);
 			req->func (rep, req->arg);
@@ -297,7 +303,14 @@ rdns_process_timer (void *arg)
 	resolver = req->resolver;
 
 	if (req->retransmits == 0) {
-		UPSTREAM_FAIL (req->io->srv, time (NULL));
+		if (req->resolver->ups && req->io->srv->ups_elt) {
+			req->resolver->ups->fail (req->io->srv->ups_elt,
+					req->resolver->ups->data);
+		}
+		else {
+			UPSTREAM_FAIL (req->io->srv, time (NULL));
+		}
+
 		rep = rdns_make_reply (req, RDNS_RC_TIMEOUT);
 		req->state = RDNS_REQUEST_REPLIED;
 		rdns_request_unschedule (req);
@@ -307,13 +320,29 @@ rdns_process_timer (void *arg)
 		return;
 	}
 
-	if (!req->io->active) {
+	if (!req->io->active || req->retransmits == 1) {
 		/* Do not reschedule IO requests on inactive sockets */
 		rdns_debug ("reschedule request with id: %d", (int)req->id);
 		rdns_request_unschedule (req);
 		REF_RELEASE (req->io);
 
-		UPSTREAM_SELECT_ROUND_ROBIN (resolver->servers, serv);
+		if (resolver->ups) {
+			struct rdns_upstream_elt *elt;
+
+			elt = resolver->ups->select_retransmit (req->requested_names[0].name,
+					req->requested_names[0].len, resolver->ups->data);
+
+			if (elt) {
+				serv = elt->server;
+				serv->ups_elt = elt;
+			}
+			else {
+				UPSTREAM_SELECT_ROUND_ROBIN (resolver->servers, serv);
+			}
+		}
+		else {
+			UPSTREAM_SELECT_ROUND_ROBIN (resolver->servers, serv);
+		}
 
 		if (serv == NULL) {
 			rdns_warn ("cannot find suitable server for request");
@@ -340,7 +369,14 @@ rdns_process_timer (void *arg)
 		req->state = RDNS_REQUEST_REGISTERED;
 	}
 	else if (r == -1) {
-		UPSTREAM_FAIL (req->io->srv, time (NULL));
+		if (req->resolver->ups && req->io->srv->ups_elt) {
+			req->resolver->ups->fail (req->io->srv->ups_elt,
+					req->resolver->ups->data);
+		}
+		else {
+			UPSTREAM_FAIL (req->io->srv, time (NULL));
+		}
+
 		rep = rdns_make_reply (req, RDNS_RC_NETERR);
 		req->state = RDNS_REQUEST_REPLIED;
 		rdns_request_unschedule (req);
@@ -426,7 +462,14 @@ rdns_process_retransmit (int fd, void *arg)
 		req->state = RDNS_REQUEST_REGISTERED;
 	}
 	else if (r == -1) {
-		UPSTREAM_FAIL (req->io->srv, time (NULL));
+		if (req->resolver->ups && req->io->srv->ups_elt) {
+			req->resolver->ups->fail (req->io->srv->ups_elt,
+					req->resolver->ups->data);
+		}
+		else {
+			UPSTREAM_FAIL (req->io->srv, time (NULL));
+		}
+
 		rep = rdns_make_reply (req, RDNS_RC_NETERR);
 		req->state = RDNS_REQUEST_REPLIED;
 		req->func (rep, req->arg);
@@ -487,7 +530,7 @@ rdns_make_request_full (
 	req->curve_plugin_data = NULL;
 #endif
 	REF_INIT_RETAIN (req, rdns_request_free);
-	
+
 	/* Calculate packet's total length based on records count */
 	va_start (args, queries);
 	for (i = 0; i < queries * 2; i += 2) {
@@ -554,18 +597,34 @@ rdns_make_request_full (
 	req->state = RDNS_REQUEST_NEW;
 	req->async = resolver->async;
 
-	UPSTREAM_SELECT_ROUND_ROBIN (resolver->servers, serv);
+	if (resolver->ups) {
+		struct rdns_upstream_elt *elt;
+
+		elt = resolver->ups->select (req->requested_names[0].name,
+				req->requested_names[0].len, resolver->ups->data);
+
+		if (elt) {
+			serv = elt->server;
+			serv->ups_elt = elt;
+		}
+		else {
+			UPSTREAM_SELECT_ROUND_ROBIN (resolver->servers, serv);
+		}
+	}
+	else {
+		UPSTREAM_SELECT_ROUND_ROBIN (resolver->servers, serv);
+	}
 
 	if (serv == NULL) {
 		rdns_warn ("cannot find suitable server for request");
 		REF_RELEASE (req);
 		return NULL;
 	}
-	
+
 	/* Select random IO channel */
 	req->io = serv->io_channels[ottery_rand_uint32 () % serv->io_cnt];
 	req->io->uses ++;
-	
+
 	/* Now send request to server */
 	r = rdns_send_request (req, req->io->sock, true);
 
@@ -590,7 +649,7 @@ rdns_resolver_init (struct rdns_resolver *resolver)
 	if (!resolver->async_binded) {
 		return false;
 	}
-	
+
 	if (resolver->servers == NULL) {
 		return false;
 	}
@@ -644,7 +703,7 @@ rdns_resolver_register_plugin (struct rdns_resolver *resolver,
 	}
 }
 
-bool
+void *
 rdns_resolver_add_server (struct rdns_resolver *resolver,
 		const char *name, unsigned int port,
 		int priority, unsigned int io_cnt)
@@ -658,24 +717,24 @@ rdns_resolver_add_server (struct rdns_resolver *resolver,
 	if (inet_pton (AF_INET, name, &addr) == 0 &&
 		inet_pton (AF_INET6, name, &addr) == 0) {
 		/* Invalid IP */
-		return false;
+		return NULL;
 	}
 
 	if (io_cnt == 0) {
-		return false;
+		return NULL;
 	}
 	if (port == 0 || port > UINT16_MAX) {
-		return false;
+		return NULL;
 	}
 
 	serv = calloc (1, sizeof (struct rdns_server));
 	if (serv == NULL) {
-		return false;
+		return NULL;
 	}
 	serv->name = strdup (name);
 	if (serv->name == NULL) {
 		free (serv);
-		return false;
+		return NULL;
 	}
 
 	serv->io_cnt = io_cnt;
@@ -683,7 +742,7 @@ rdns_resolver_add_server (struct rdns_resolver *resolver,
 
 	UPSTREAM_ADD (resolver->servers, serv, priority);
 
-	return true;
+	return serv;
 }
 
 void
@@ -699,6 +758,15 @@ rdns_resolver_set_log_level (struct rdns_resolver *resolver,
 		enum rdns_log_level level)
 {
 	resolver->log_level = level;
+}
+
+void
+rdns_resolver_set_upstream_lib (struct rdns_resolver *resolver,
+		struct rdns_upstream_context *ups_ctx,
+		void *ups_data)
+{
+	resolver->ups = ups_ctx;
+	resolver->ups->data = ups_data;
 }
 
 

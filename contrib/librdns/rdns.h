@@ -126,7 +126,7 @@ enum dns_rcode {
 	RDNS_RC_NETERR = 12,
 	RDNS_RC_NOREC = 13
 };
-	
+
 struct rdns_reply {
 	struct rdns_request *request;
 	struct rdns_resolver *resolver;
@@ -152,11 +152,26 @@ struct rdns_async_context {
 	void (*cleanup)(void *priv_data);
 };
 
+struct rdns_upstream_elt {
+	void *server;
+	void *lib_data;
+};
+
+struct rdns_upstream_context {
+	void *data;
+	struct rdns_upstream_elt* (*select)(const char *name,
+			size_t len, void *ups_data);
+	struct rdns_upstream_elt* (*select_retransmit)(const char *name,
+			size_t len, void *ups_data);
+	void (*ok)(struct rdns_upstream_elt *elt, void *ups_data);
+	void (*fail)(struct rdns_upstream_elt *elt, void *ups_data);
+};
+
 /**
  * Type of rdns plugin
  */
 enum rdns_plugin_type {
-	RDNS_PLUGIN_CURVE = 0//!< use the specified plugin instead of send/recv functions
+	RDNS_PLUGIN_CURVE = 0
 };
 
 typedef ssize_t (*rdns_network_send_callback) (struct rdns_request *req, void *plugin_data);
@@ -226,9 +241,9 @@ void rdns_resolver_async_bind (struct rdns_resolver *resolver,
  * @param name name of DNS server (should be ipv4 or ipv6 address)
  * @param priority priority (can be 0 for fair round-robin)
  * @param io_cnt a number of sockets that are simultaneously opened to this server
- * @return true if a server has been added to resolver
+ * @return opaque pointer that could be used to select upstream
  */
-bool rdns_resolver_add_server (struct rdns_resolver *resolver,
+void* rdns_resolver_add_server (struct rdns_resolver *resolver,
 		const char *name, unsigned int port,
 		int priority, unsigned int io_cnt);
 
@@ -259,6 +274,15 @@ void rdns_resolver_set_logger (struct rdns_resolver *resolver,
 void rdns_resolver_set_log_level (struct rdns_resolver *resolver,
 		enum rdns_log_level level);
 
+/**
+ * Set upstream library for selecting DNS upstreams
+ * @param resolver resolver object
+ * @param ups_ctx upstream functions
+ * @param ups_data opaque data
+ */
+void rdns_resolver_set_upstream_lib (struct rdns_resolver *resolver,
+		struct rdns_upstream_context *ups_ctx,
+		void *ups_data);
 
 /**
  * Set maximum number of dns requests to be sent to a socket to be refreshed
