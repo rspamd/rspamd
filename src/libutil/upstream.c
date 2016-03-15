@@ -786,10 +786,10 @@ rspamd_upstream_get_hashed (struct upstream_list *ups, const guint8 *key, guint 
 	return g_ptr_array_index (ups->alive, idx);
 }
 
-struct upstream*
-rspamd_upstream_get (struct upstream_list *ups,
+static struct upstream*
+rspamd_upstream_get_common (struct upstream_list *ups,
 		enum rspamd_upstream_rotation default_type,
-		const guchar *key, gsize keylen)
+		const guchar *key, gsize keylen, gboolean forced)
 {
 	enum rspamd_upstream_rotation type;
 
@@ -800,7 +800,12 @@ rspamd_upstream_get (struct upstream_list *ups,
 	}
 	rspamd_mutex_unlock (ups->lock);
 
-	type = ups->rot_alg != RSPAMD_UPSTREAM_UNDEF ? ups->rot_alg : default_type;
+	if (!forced) {
+		type = ups->rot_alg != RSPAMD_UPSTREAM_UNDEF ? ups->rot_alg : default_type;
+	}
+	else {
+		type = default_type != RSPAMD_UPSTREAM_UNDEF ? default_type : ups->rot_alg;
+	}
 
 	if (type == RSPAMD_UPSTREAM_HASHED && (keylen == 0 || key == NULL)) {
 		/* Cannot use hashed rotation when no key is specified, switch to random */
@@ -828,6 +833,22 @@ rspamd_upstream_get (struct upstream_list *ups,
 
 	/* Silent stupid compilers */
 	return NULL;
+}
+
+struct upstream*
+rspamd_upstream_get (struct upstream_list *ups,
+		enum rspamd_upstream_rotation default_type,
+		const guchar *key, gsize keylen)
+{
+	return rspamd_upstream_get_common (ups, default_type, key, keylen, FALSE);
+}
+
+struct upstream*
+rspamd_upstream_get_forced (struct upstream_list *ups,
+		enum rspamd_upstream_rotation forced_type,
+		const guchar *key, gsize keylen)
+{
+	return rspamd_upstream_get_common (ups, forced_type, key, keylen, TRUE);
 }
 
 void
