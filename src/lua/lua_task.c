@@ -1843,14 +1843,20 @@ lua_task_get_images (lua_State *L)
 	if (task) {
 		cur = task->images;
 
-		lua_newtable (L);
+		if (cur) {
+			lua_newtable (L);
 
-		while (cur) {
-			pimg = lua_newuserdata (L, sizeof (struct rspamd_image *));
-			rspamd_lua_setclass (L, "rspamd{image}", -1);
-			*pimg = cur->data;
-			lua_rawseti (L, -2, i++);
-			cur = g_list_next (cur);
+			while (cur) {
+				pimg = lua_newuserdata (L, sizeof (struct rspamd_image *));
+				rspamd_lua_setclass (L, "rspamd{image}", -1);
+				*pimg = cur->data;
+				lua_rawseti (L, -2, i++);
+				cur = g_list_next (cur);
+			}
+		}
+		else {
+			/* Return nil if there are no images to preserve compatibility */
+			lua_pushnil (L);
 		}
 	}
 	else {

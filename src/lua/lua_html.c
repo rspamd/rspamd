@@ -249,12 +249,15 @@ lua_html_get_images (lua_State *L)
 	if (hc != NULL) {
 		lua_newtable (L);
 
-		if (hc->images) {
+		if (hc->images && hc->images->len > 0) {
 			for (i = 0; i < hc->images->len; i ++) {
 				img = g_ptr_array_index (hc->images, i);
 				lua_html_push_image (L, img);
 				lua_rawseti (L, -2, i + 1);
 			}
+		}
+		else {
+			lua_pushnil (L);
 		}
 	}
 	else {
@@ -275,7 +278,7 @@ lua_html_get_blocks (lua_State *L)
 	if (hc != NULL) {
 		lua_newtable (L);
 
-		if (hc->blocks) {
+		if (hc->blocks && hc->blocks->len > 0) {
 			for (i = 0; i < hc->blocks->len; i ++) {
 				bl = g_ptr_array_index (hc->blocks, i);
 
@@ -321,6 +324,9 @@ lua_html_get_blocks (lua_State *L)
 
 				lua_rawseti (L, -2, i + 1);
 			}
+		}
+		else {
+			lua_pushnil (L);
 		}
 	}
 	else {
