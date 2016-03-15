@@ -22,10 +22,15 @@
 #include "events.h"
 #include "logger.h"
 #include "rdns.h"
+#include "upstream.h"
+
+struct rspamd_config;
 
 struct rspamd_dns_resolver {
 	struct rdns_resolver *r;
 	struct event_base *ev_base;
+	struct upstream_list *ups;
+	struct rspamd_config *cfg;
 	gdouble request_timeout;
 	guint max_retransmits;
 };

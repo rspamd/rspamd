@@ -21,6 +21,24 @@
 #include "uthash.h"
 #include "rdns_event.h"
 
+static struct rdns_upstream_elt* rspamd_dns_select_upstream (const char *name,
+		size_t len, void *ups_data);
+static struct rdns_upstream_elt* rspamd_dns_select_upstream_retransmit (
+		const char *name,
+		size_t len, void *ups_data);
+static void rspamd_dns_upstream_ok (struct rdns_upstream_elt *elt,
+		void *ups_data);
+static void rspamd_dns_upstream_fail (struct rdns_upstream_elt *elt,
+		void *ups_data);
+
+static struct rdns_upstream_context rspamd_ups_ctx = {
+		.select = rspamd_dns_select_upstream,
+		.select_retransmit = rspamd_dns_select_upstream_retransmit,
+		.ok = rspamd_dns_upstream_ok,
+		.fail = rspamd_dns_upstream_fail,
+		.data = NULL
+};
+
 struct rspamd_dns_request_ud {
 	struct rspamd_async_session *session;
 	dns_callback_type cb;
@@ -176,78 +194,147 @@ static void rspamd_rnds_log_bridge (
 			function, format, args);
 }
 
+static void
+rspamd_dns_server_init (struct upstream *up, gpointer ud)
+{
+	struct rspamd_dns_resolver *r = ud;
+	rspamd_inet_addr_t *addr;
+	void *serv;
+	struct rdns_upstream_elt *elt;
+
+	addr = rspamd_upstream_addr (up);
+
+	if (r->cfg) {
+		serv = rdns_resolver_add_server (r->r, rspamd_inet_address_to_string (addr),
+				rspamd_inet_address_get_port (addr), 0, r->cfg->dns_io_per_server);
+	}
+	else {
+		serv = rdns_resolver_add_server (r->r, rspamd_inet_address_to_string (addr),
+				rspamd_inet_address_get_port (addr), 0, 8);
+	}
+
+	elt = g_slice_alloc0 (sizeof (*elt));
+	elt->server = serv;
+	elt->lib_data = up;
+
+	rspamd_upstream_set_data (up, elt);
+}
+
 struct rspamd_dns_resolver *
 dns_resolver_init (rspamd_logger_t *logger,
 	struct event_base *ev_base,
 	struct rspamd_config *cfg)
 {
-	GList *cur;
-	struct rspamd_dns_resolver *new;
-	gchar *begin, *p, *err;
-	gint priority;
+	struct rspamd_dns_resolver *dns_resolver;
 
-	new = g_slice_alloc0 (sizeof (struct rspamd_dns_resolver));
-	new->ev_base = ev_base;
+	dns_resolver = g_slice_alloc0 (sizeof (struct rspamd_dns_resolver));
+	dns_resolver->ev_base = ev_base;
 	if (cfg != NULL) {
-		new->request_timeout = cfg->dns_timeout;
-		new->max_retransmits = cfg->dns_retransmits;
+		dns_resolver->request_timeout = cfg->dns_timeout;
+		dns_resolver->max_retransmits = cfg->dns_retransmits;
 	}
 	else {
-		new->request_timeout = 1;
-		new->max_retransmits = 2;
+		dns_resolver->request_timeout = 1;
+		dns_resolver->max_retransmits = 2;
 	}
 
-	new->r = rdns_resolver_new ();
-	rdns_bind_libevent (new->r, new->ev_base);
+	dns_resolver->r = rdns_resolver_new ();
+	rdns_bind_libevent (dns_resolver->r, dns_resolver->ev_base);
 
 	if (cfg != NULL) {
-		rdns_resolver_set_log_level (new->r, cfg->log_level);
+		rdns_resolver_set_log_level (dns_resolver->r, cfg->log_level);
+		dns_resolver->cfg = cfg;
 	}
 
-	rdns_resolver_set_logger (new->r, rspamd_rnds_log_bridge, logger);
+	rdns_resolver_set_logger (dns_resolver->r, rspamd_rnds_log_bridge, logger);
 
 	if (cfg == NULL || cfg->nameservers == NULL) {
 		/* Parse resolv.conf */
-		if (!rdns_resolver_parse_resolv_conf (new->r, "/etc/resolv.conf")) {
+		if (!rdns_resolver_parse_resolv_conf (dns_resolver->r, "/etc/resolv.conf")) {
 			msg_err_config (
 				"cannot parse resolv.conf and no nameservers defined, so no ways to resolve addresses");
-			rdns_resolver_release (new->r);
-			new->r = NULL;
+			rdns_resolver_release (dns_resolver->r);
+			dns_resolver->r = NULL;
 
-			return new;
+			return dns_resolver;
 		}
 	}
 	else {
-		cur = cfg->nameservers;
-		while (cur) {
-			begin = cur->data;
-			p = strchr (begin, ':');
-			if (p != NULL) {
-				*p = '\0';
-				p++;
-				priority = strtoul (p, &err, 10);
-				if (err != NULL && *err != '\0') {
-					msg_info_config (
-						"bad character '%xc', must be 'm' or 's' or a numeric priority",
-						*err);
-				}
-			}
-			else {
-				priority = 0;
-			}
-			if (!rdns_resolver_add_server (new->r, begin, 53, priority,
-				cfg->dns_io_per_server)) {
-				msg_warn_config ("cannot parse ip address of nameserver: %s", begin);
-				cur = g_list_next (cur);
-				continue;
-			}
+		dns_resolver->ups = rspamd_upstreams_create (cfg->ups_ctx);
 
-			cur = g_list_next (cur);
+		if (!rspamd_upstreams_from_ucl (dns_resolver->ups, cfg->nameservers,
+				53, dns_resolver)) {
+			msg_err_config ("cannot parse DNS nameservers definitions");
+			rdns_resolver_release (dns_resolver->r);
+			dns_resolver->r = NULL;
+
+			return dns_resolver;
 		}
 
+		rspamd_upstreams_foreach (dns_resolver->ups, rspamd_dns_server_init,
+				dns_resolver);
+		rspamd_upstreams_set_flags (dns_resolver->ups, RSPAMD_UPSTREAM_FLAG_NORESOLVE);
+		rdns_resolver_set_upstream_lib (dns_resolver->r, &rspamd_ups_ctx,
+				dns_resolver->ups);
 	}
 
-	rdns_resolver_init (new->r);
+	rdns_resolver_init (dns_resolver->r);
 
-	return new;
+	return dns_resolver;
+}
+
+
+static struct rdns_upstream_elt*
+rspamd_dns_select_upstream (const char *name,
+		size_t len, void *ups_data)
+{
+	struct upstream_list *ups = ups_data;
+	struct upstream *up;
+
+	up = rspamd_upstream_get (ups, RSPAMD_UPSTREAM_ROUND_ROBIN, name, len);
+
+	if (up) {
+		msg_debug ("select %s", rspamd_upstream_name (up));
+
+		return rspamd_upstream_get_data (up);
+	}
+
+	return NULL;
+}
+
+static struct rdns_upstream_elt*
+rspamd_dns_select_upstream_retransmit (
+		const char *name,
+		size_t len, void *ups_data)
+{
+	struct upstream_list *ups = ups_data;
+	struct upstream *up;
+
+	up = rspamd_upstream_get_forced (ups, RSPAMD_UPSTREAM_RANDOM, name, len);
+
+	if (up) {
+		msg_debug ("select forced %s", rspamd_upstream_name (up));
+
+		return rspamd_upstream_get_data (up);
+	}
+
+	return NULL;
+}
+
+static void
+rspamd_dns_upstream_ok (struct rdns_upstream_elt *elt,
+		void *ups_data)
+{
+	struct upstream *up = elt->lib_data;
+
+	rspamd_upstream_ok (up);
+}
+
+static void
+rspamd_dns_upstream_fail (struct rdns_upstream_elt *elt,
+		void *ups_data)
+{
+	struct upstream *up = elt->lib_data;
+
+	rspamd_upstream_fail (up);
 }
