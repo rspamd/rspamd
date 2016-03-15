@@ -44,7 +44,8 @@ struct rspamd_ucl_map_cbdata {
 static gchar * rspamd_ucl_read_cb (rspamd_mempool_t * pool,
 	gchar * chunk,
 	gint len,
-	struct map_cb_data *data);
+	struct map_cb_data *data,
+	gboolean final);
 static void rspamd_ucl_fin_cb (rspamd_mempool_t * pool,
 	struct map_cb_data *data);
 
@@ -1110,7 +1111,8 @@ static gchar *
 rspamd_ucl_read_cb (rspamd_mempool_t * pool,
 	gchar * chunk,
 	gint len,
-	struct map_cb_data *data)
+	struct map_cb_data *data,
+	gboolean final)
 {
 	struct rspamd_ucl_map_cbdata *cbdata = data->cur_data, *prev;
 
