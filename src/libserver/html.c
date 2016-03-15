@@ -1297,7 +1297,7 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 		}
 		else if (comp->type == RSPAMD_HTML_COMPONENT_STYLE) {
 			/* Try to search for height= or width= in style tag */
-			if (!seen_height) {
+			if (!seen_height && comp->len > 0) {
 				p = rspamd_strncasestr (comp->start, "height", comp->len);
 
 				if (p != NULL) {
@@ -1318,7 +1318,7 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 				}
 			}
 
-			if (!seen_width) {
+			if (!seen_width && comp->len > 0) {
 				p = rspamd_strncasestr (comp->start, "width", comp->len);
 
 				if (p != NULL) {
