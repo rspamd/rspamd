@@ -541,6 +541,14 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups,
 		g_ptr_array_free (addrs, TRUE);
 	}
 
+	if (up->weight == 0 && ups->rot_alg == RSPAMD_UPSTREAM_MASTER_SLAVE) {
+		/* Special heuristic for master-slave rotation */
+		if (ups->ups->len == 0) {
+			/* Prioritize the first */
+			up->weight = 1;
+		}
+	}
+
 	g_ptr_array_add (ups->ups, up);
 	up->ud = data;
 	up->cur_weight = up->weight;
