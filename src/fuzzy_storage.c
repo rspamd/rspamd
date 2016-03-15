@@ -1349,6 +1349,9 @@ fuzzy_peer_rep (struct rspamd_worker *worker,
 		msg_err ("cannot receive peer fd from the main process");
 		exit (EXIT_FAILURE);
 	}
+	else {
+		rspamd_socket_nonblocking (rep_fd);
+	}
 
 	/* Start listening */
 	cur = worker->cf->listen_socks;
