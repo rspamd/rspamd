@@ -1323,7 +1323,13 @@ rspamd_fuzzy_peer_io (gint fd, gshort what, gpointer d)
 	r = read (fd, &cmd, sizeof (cmd));
 
 	if (r != sizeof (cmd)) {
-		msg_err ("cannot read command from peers: %s", strerror (errno));
+		if (errno == EINTR) {
+			rspamd_fuzzy_peer_io (fd, what, d);
+			return;
+		}
+		if (errno != EAGAIN) {
+			msg_err ("cannot read command from peers: %s", strerror (errno));
+		}
 	}
 	else {
 		pcmd = g_slice_alloc (sizeof (*pcmd));
