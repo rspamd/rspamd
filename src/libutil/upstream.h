@@ -130,6 +130,19 @@ gboolean rspamd_upstreams_parse_line (struct upstream_list *ups,
 gboolean rspamd_upstreams_from_ucl (struct upstream_list *ups,
 		const ucl_object_t *in, guint16 def_port, void *data);
 
+
+typedef void (*rspamd_upstream_traverse_func) (struct upstream *up,
+		void *ud);
+
+/**
+ * Traverse upstreams list calling the function specified
+ * @param ups
+ * @param cb
+ * @param ud
+ */
+void rspamd_upstreams_foreach (struct upstream_list *ups,
+		rspamd_upstream_traverse_func cb, void *ud);
+
 /**
  * Returns the current IP address of the upstream
  * @param up

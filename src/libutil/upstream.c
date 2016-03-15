@@ -889,3 +889,18 @@ rspamd_upstream_get_data (struct upstream *up)
 {
 	return up->data;
 }
+
+
+void
+rspamd_upstreams_foreach (struct upstream_list *ups,
+		rspamd_upstream_traverse_func cb, void *ud)
+{
+	struct upstream *up;
+	guint i;
+
+	for (i = 0; i < ups->ups->len; i ++) {
+		up = g_ptr_array_index (ups->ups, i);
+
+		cb (up, ud);
+	}
+}
