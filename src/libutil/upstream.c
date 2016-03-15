@@ -651,17 +651,16 @@ rspamd_upstreams_from_ucl (struct upstream_list *ups,
 	const ucl_object_t *cur;
 	ucl_object_iter_t it = NULL;
 
-	if (ucl_object_type (in) == UCL_ARRAY) {
-		while ((cur = ucl_object_iterate (in, &it, true)) != NULL) {
-			if (rspamd_upstreams_from_ucl (ups, cur, def_port, data)) {
-				ret = TRUE;
-			}
+	it = ucl_object_iterate_new (in);
+
+	while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
+		if (ucl_object_type (cur) == UCL_STRING) {
+			ret = rspamd_upstreams_parse_line (ups, ucl_object_tostring (cur),
+					def_port, data);
 		}
 	}
-	else if (ucl_object_type (in) == UCL_STRING) {
-		ret = rspamd_upstreams_parse_line (ups, ucl_object_tostring (in),
-				def_port, data);
-	}
+
+	ucl_object_iterate_free (it);
 
 	return ret;
 }
