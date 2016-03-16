@@ -128,4 +128,15 @@ rspamd_parse_kv_list (rspamd_mempool_t * pool,
 	const gchar *default_value,
 	gboolean final);
 
+/**
+ * Find a single (any) matching regexp for the specified text or NULL if
+ * no matches found
+ * @param map
+ * @param in
+ * @param len
+ * @return
+ */
+gpointer rspamd_match_regexp_map (struct rspamd_regexp_map *map,
+		const gchar *in, gsize len);
+
 #endif

@@ -1646,3 +1646,58 @@ rspamd_regexp_list_fin (rspamd_mempool_t *pool, struct map_cb_data *data)
 				re_map->regexps->len);
 	}
 }
+
+static int
+rspamd_match_hs_single_handler (unsigned int id, unsigned long long from,
+		unsigned long long to,
+		unsigned int flags, void *context)
+{
+	guint *i = context;
+	/* Always return non-zero as we need a single match here */
+
+	*i = id;
+
+	return 1;
+}
+
+gpointer
+rspamd_match_regexp_map (struct rspamd_regexp_map *map,
+		const gchar *in, gsize len)
+{
+	guint i;
+	rspamd_regexp_t *re;
+	gint res = 0;
+	gpointer ret = NULL;
+
+	g_assert (in != NULL && len > 0);
+
+	if (map == NULL) {
+		return NULL;
+	}
+
+#ifdef WITH_HYPERSCAN
+	if (map->hs_db && map->hs_scratch) {
+		res = hs_scan (map->hs_db, in, len, 0, map->hs_scratch,
+				rspamd_match_hs_single_handler, (void *)&i);
+
+		if (res == HS_SCAN_TERMINATED) {
+			res = 1;
+			ret = g_ptr_array_index (map->values, i);
+		}
+	}
+#endif
+
+	if (!res) {
+		/* PCRE version */
+		for (i = 0; i < map->regexps->len; i ++) {
+			re = g_ptr_array_index (map->regexps, i);
+
+			if (rspamd_regexp_search (re, in, len, NULL, NULL, FALSE, NULL)) {
+				ret = g_ptr_array_index (map->values, i);
+				break;
+			}
+		}
+	}
+
+	return ret;
+}
