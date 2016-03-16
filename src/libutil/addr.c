@@ -564,14 +564,14 @@ rspamd_parse_inet_address (rspamd_inet_addr_t **target,
 
 		iplen = end - src - 1;
 
-		if (iplen == 0 || iplen > sizeof (ipbuf)) {
+		if (iplen == 0 || iplen >= sizeof (ipbuf)) {
 			return FALSE;
 		}
 
-		rspamd_strlcpy (ipbuf, src + 1, iplen);
+		rspamd_strlcpy (ipbuf, src + 1, iplen + 1);
 
 		if (ipv6_status == RSPAMD_IPV6_SUPPORTED &&
-				rspamd_parse_inet_address_ip6 (ipbuf, iplen - 1,
+				rspamd_parse_inet_address_ip6 (ipbuf, iplen,
 						&su.s6.sin6_addr)) {
 			addr = rspamd_inet_addr_create (AF_INET6);
 			memcpy (&addr->u.in.addr.s6.sin6_addr, &su.s6.sin6_addr,
@@ -581,7 +581,7 @@ rspamd_parse_inet_address (rspamd_inet_addr_t **target,
 
 		if (ret && end[1] == ':') {
 			/* Port part */
-			rspamd_strtoul (end + 1, srclen - iplen - 1, &portnum);
+			rspamd_strtoul (end + 1, srclen - iplen - 3, &portnum);
 			rspamd_inet_address_set_port (addr, portnum);
 		}
 	}
@@ -602,14 +602,14 @@ rspamd_parse_inet_address (rspamd_inet_addr_t **target,
 				/* Not ipv6, so try ip:port */
 				iplen = end - src;
 
-				if (iplen > sizeof (ipbuf) || iplen <= 1) {
+				if (iplen >= sizeof (ipbuf) || iplen <= 1) {
 					return FALSE;
 				}
 				else {
-					rspamd_strlcpy (ipbuf, src, iplen);
+					rspamd_strlcpy (ipbuf, src, iplen + 1);
 				}
 
-				if (rspamd_parse_inet_address_ip4 (ipbuf, iplen - 1,
+				if (rspamd_parse_inet_address_ip4 (ipbuf, iplen,
 						&su.s4.sin_addr)) {
 					addr = rspamd_inet_addr_create (AF_INET);
 					memcpy (&addr->u.in.addr.s4.sin_addr, &su.s4.sin_addr,
