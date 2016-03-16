@@ -689,6 +689,34 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 				lua_pop (L, 1);
 				break;
 
+			case 'F':
+				if (lua_type (L, -1) == LUA_TFUNCTION) {
+					*(va_arg (ap, gint *)) = luaL_ref (L, LUA_REGISTRYINDEX);
+				}
+				else if (lua_type (L, -1) == LUA_TNIL) {
+					failed = TRUE;
+					*(va_arg (ap,  gint *)) = -1;
+					lua_pop (L, 1);
+				}
+				else {
+					g_set_error (err,
+							lua_error_quark (),
+							1,
+							"bad type for key:"
+									" %.*s: '%s', '%s' is expected",
+							(gint) keylen,
+							key,
+							lua_typename (L, lua_type (L, -1)),
+							"function");
+					va_end (ap);
+					lua_pop (L, 1);
+
+					return FALSE;
+				}
+
+				/* luaL_ref pops argument from the stack */
+				break;
+
 			case 'B':
 				if (lua_type (L, -1) == LUA_TBOOLEAN) {
 					*(va_arg (ap, gboolean *)) = lua_toboolean (L, -1);
