@@ -187,6 +187,89 @@ rspamd_stat_cache_redis_generate_id (struct rspamd_task *task)
 	rspamd_mempool_set_variable (task->task_pool, "words_hash", b32out, g_free);
 }
 
+static gboolean
+rspamd_redis_cache_try_ucl (struct rspamd_redis_cache_ctx *cache_ctx,
+		const ucl_object_t *obj,
+		struct rspamd_config *cfg,
+		const gchar *symbol)
+{
+	const ucl_object_t *elt, *relt;
+
+	elt = ucl_object_lookup_any (obj, "read_servers", "servers", NULL);
+
+	if (elt == NULL) {
+		return FALSE;
+	}
+
+	cache_ctx->read_servers = rspamd_upstreams_create (cfg->ups_ctx);
+	if (!rspamd_upstreams_from_ucl (cache_ctx->read_servers, elt,
+			REDIS_DEFAULT_PORT, NULL)) {
+		msg_err ("statfile %s cannot get read servers configuration",
+				symbol);
+		return FALSE;
+	}
+
+	relt = elt;
+
+	elt = ucl_object_lookup (obj, "write_servers");
+	if (elt == NULL) {
+		/* Use read servers as write ones */
+		g_assert (relt != NULL);
+		cache_ctx->write_servers = rspamd_upstreams_create (cfg->ups_ctx);
+		if (!rspamd_upstreams_from_ucl (cache_ctx->write_servers, relt,
+				REDIS_DEFAULT_PORT, NULL)) {
+			msg_err ("statfile %s cannot get write servers configuration",
+					symbol);
+			return FALSE;
+		}
+	}
+	else {
+		cache_ctx->write_servers = rspamd_upstreams_create (cfg->ups_ctx);
+		if (!rspamd_upstreams_from_ucl (cache_ctx->write_servers, elt,
+				REDIS_DEFAULT_PORT, NULL)) {
+			msg_err ("statfile %s cannot get write servers configuration",
+					symbol);
+			rspamd_upstreams_destroy (cache_ctx->write_servers);
+			cache_ctx->write_servers = NULL;
+		}
+	}
+
+
+	elt = ucl_object_lookup (obj, "timeout");
+	if (elt) {
+		cache_ctx->timeout = ucl_object_todouble (elt);
+	}
+	else {
+		cache_ctx->timeout = REDIS_DEFAULT_TIMEOUT;
+	}
+
+	elt = ucl_object_lookup (obj, "password");
+	if (elt) {
+		cache_ctx->password = ucl_object_tostring (elt);
+	}
+	else {
+		cache_ctx->password = NULL;
+	}
+
+	elt = ucl_object_lookup_any (obj, "db", "database", "dbname", NULL);
+	if (elt) {
+		cache_ctx->dbname = ucl_object_tostring (elt);
+	}
+	else {
+		cache_ctx->dbname = NULL;
+	}
+
+	elt = ucl_object_lookup_any (obj, "cache_key", "key", NULL);
+	if (elt == NULL || ucl_object_type (elt) != UCL_STRING) {
+		cache_ctx->redis_object = DEFAULT_REDIS_KEY;
+	}
+	else {
+		cache_ctx->redis_object = ucl_object_tostring (elt);
+	}
+
+	return TRUE;
+}
+
 gpointer
 rspamd_stat_cache_redis_init (struct rspamd_stat_ctx *ctx,
 		struct rspamd_config *cfg,
@@ -195,106 +278,32 @@ rspamd_stat_cache_redis_init (struct rspamd_stat_ctx *ctx,
 {
 	struct rspamd_redis_cache_ctx *cache_ctx;
 	struct rspamd_statfile_config *stf = st->stcf;
-	const ucl_object_t *elt, *relt, *telt;
+	const ucl_object_t *obj;
+	gboolean ret = FALSE;
 
 	cache_ctx = g_slice_alloc0 (sizeof (*cache_ctx));
 
-	elt = ucl_object_lookup_any (stf->opts, "read_servers", "servers", NULL);
-	if (elt == NULL) {
-
-		if (st->classifier->cfg->opts) {
-			elt = ucl_object_lookup_any (st->classifier->cfg->opts,
-					"read_servers", "servers", NULL);
-		}
-
-		if (elt == NULL) {
-			msg_err ("statfile %s has no redis servers needed by cache", stf->symbol);
-
-			return NULL;
-		}
-
-		telt = ucl_object_lookup (st->classifier->cfg->opts, "password");
-		if (telt) {
-			cache_ctx->password = ucl_object_tostring (telt);
-		}
-		else {
-			cache_ctx->password = NULL;
-		}
-
-		telt = ucl_object_lookup_any (st->classifier->cfg->opts,
-				"db", "database", NULL);
-		if (telt) {
-			cache_ctx->dbname = ucl_object_tostring (telt);
-		}
-		else {
-			cache_ctx->dbname = NULL;
-		}
-	}
-	else {
-		telt = ucl_object_lookup (stf->opts, "password");
-		if (telt) {
-			cache_ctx->password = ucl_object_tostring (telt);
-		}
-		else {
-			cache_ctx->password = NULL;
-		}
-
-		telt = ucl_object_lookup_any (stf->opts,
-				"db", "database", NULL);
-		if (telt) {
-			cache_ctx->dbname = ucl_object_tostring (telt);
-		}
-		else {
-			cache_ctx->dbname = NULL;
-		}
+	/* First search in backend configuration */
+	obj = ucl_object_lookup (st->classifier->cfg->opts, "backend");
+	if (obj != NULL && ucl_object_type (obj) == UCL_OBJECT) {
+		ret = rspamd_redis_cache_try_ucl (cache_ctx, obj, cfg, stf->symbol);
 	}
 
-	relt = elt;
-	cache_ctx->read_servers = rspamd_upstreams_create (cfg->ups_ctx);
-	if (!rspamd_upstreams_from_ucl (cache_ctx->read_servers, elt,
-			REDIS_DEFAULT_PORT, NULL)) {
-		msg_err ("statfile %s cannot get read servers configuration for the cache",
+	/* Now try statfiles config */
+	if (!ret) {
+		ret = rspamd_redis_cache_try_ucl (cache_ctx, stf->opts, cfg, stf->symbol);
+	}
+
+	/* Now try classifier config */
+	if (!ret) {
+		ret = rspamd_redis_cache_try_ucl (cache_ctx, st->classifier->cfg->opts, cfg,
 				stf->symbol);
+	}
+
+	if (!ret) {
+		msg_err_config ("cannot init redis cache for %s", stf->symbol);
+		g_slice_free1 (sizeof (*cache_ctx), cache_ctx);
 		return NULL;
-	}
-
-	elt = ucl_object_lookup (stf->opts, "write_servers");
-	if (elt == NULL) {
-		/* Use read servers as write ones */
-		g_assert (relt != NULL);
-		cache_ctx->write_servers = rspamd_upstreams_create (cfg->ups_ctx);
-		if (!rspamd_upstreams_from_ucl (cache_ctx->write_servers, relt,
-				REDIS_DEFAULT_PORT, NULL)) {
-			msg_err ("statfile %s cannot get write servers configuration for the cache",
-					stf->symbol);
-			return NULL;
-		}
-	}
-	else {
-		cache_ctx->write_servers = rspamd_upstreams_create (cfg->ups_ctx);
-		if (!rspamd_upstreams_from_ucl (cache_ctx->write_servers, elt,
-				REDIS_DEFAULT_PORT, NULL)) {
-			msg_err ("statfile %s cannot get write servers configuration for the cache",
-					stf->symbol);
-			rspamd_upstreams_destroy (cache_ctx->write_servers);
-			cache_ctx->write_servers = NULL;
-		}
-	}
-
-	elt = ucl_object_lookup (stf->opts, "key");
-	if (elt == NULL || ucl_object_type (elt) != UCL_STRING) {
-		cache_ctx->redis_object = DEFAULT_REDIS_KEY;
-	}
-	else {
-		cache_ctx->redis_object = ucl_object_tostring (elt);
-	}
-
-	elt = ucl_object_lookup (stf->opts, "timeout");
-	if (elt) {
-		cache_ctx->timeout = ucl_object_todouble (elt);
-	}
-	else {
-		cache_ctx->timeout = REDIS_DEFAULT_TIMEOUT;
 	}
 
 	cache_ctx->stcf = stf;

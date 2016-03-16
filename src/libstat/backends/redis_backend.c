@@ -874,43 +874,32 @@ rspamd_redis_learned (redisAsyncContext *c, gpointer r, gpointer priv)
 	rt->conn_state = RSPAMD_REDIS_DISCONNECTED;
 }
 
-gpointer
-rspamd_redis_init (struct rspamd_stat_ctx *ctx,
-		struct rspamd_config *cfg, struct rspamd_statfile *st)
+static gboolean
+rspamd_redis_try_ucl (struct redis_stat_ctx *backend,
+		const ucl_object_t *obj,
+		struct rspamd_config *cfg,
+		const gchar *symbol)
 {
-	struct redis_stat_ctx *backend;
-	struct rspamd_statfile_config *stf = st->stcf;
-	struct rspamd_redis_stat_elt *st_elt;
-	const ucl_object_t *elt, *relt = NULL, *users_enabled;
+	const ucl_object_t *elt, *relt, *users_enabled;
 	const gchar *lua_script;
 
-	backend = g_slice_alloc0 (sizeof (*backend));
+	elt = ucl_object_lookup_any (obj, "read_servers", "servers", NULL);
 
-	elt = ucl_object_lookup_any (stf->opts, "read_servers", "servers", NULL);
 	if (elt == NULL) {
-
-		if (st->classifier->cfg->opts) {
-			elt = ucl_object_lookup_any (st->classifier->cfg->opts,
-					"read_servers", "servers", NULL);
-		}
-
-		if (elt == NULL) {
-			msg_err ("statfile %s has no redis servers", stf->symbol);
-
-			return NULL;
-		}
+		return FALSE;
 	}
 
-	relt = elt;
 	backend->read_servers = rspamd_upstreams_create (cfg->ups_ctx);
 	if (!rspamd_upstreams_from_ucl (backend->read_servers, elt,
 			REDIS_DEFAULT_PORT, NULL)) {
 		msg_err ("statfile %s cannot get read servers configuration",
-				stf->symbol);
-		return NULL;
+				symbol);
+		return FALSE;
 	}
 
-	elt = ucl_object_lookup (stf->opts, "write_servers");
+	relt = elt;
+
+	elt = ucl_object_lookup (obj, "write_servers");
 	if (elt == NULL) {
 		/* Use read servers as write ones */
 		g_assert (relt != NULL);
@@ -918,8 +907,8 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 		if (!rspamd_upstreams_from_ucl (backend->write_servers, relt,
 				REDIS_DEFAULT_PORT, NULL)) {
 			msg_err ("statfile %s cannot get write servers configuration",
-					stf->symbol);
-			return NULL;
+					symbol);
+			return FALSE;
 		}
 	}
 	else {
@@ -927,13 +916,13 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 		if (!rspamd_upstreams_from_ucl (backend->write_servers, elt,
 				REDIS_DEFAULT_PORT, NULL)) {
 			msg_err ("statfile %s cannot get write servers configuration",
-					stf->symbol);
+					symbol);
 			rspamd_upstreams_destroy (backend->write_servers);
 			backend->write_servers = NULL;
 		}
 	}
 
-	elt = ucl_object_lookup (stf->opts, "prefix");
+	elt = ucl_object_lookup (obj, "prefix");
 	if (elt == NULL || ucl_object_type (elt) != UCL_STRING) {
 		/* Default non-users statistics */
 		backend->redis_object = REDIS_DEFAULT_OBJECT;
@@ -941,7 +930,7 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 		/*
 		 * Make redis backend compatible with sqlite3 backend in users settings
 		 */
-		users_enabled = ucl_object_lookup_any (stf->clcf->opts, "per_user",
+		users_enabled = ucl_object_lookup_any (obj, "per_user",
 				"users_enabled", NULL);
 
 		if (users_enabled != NULL) {
@@ -984,7 +973,7 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 		backend->redis_object = ucl_object_tostring (elt);
 	}
 
-	elt = ucl_object_lookup (stf->opts, "timeout");
+	elt = ucl_object_lookup (obj, "timeout");
 	if (elt) {
 		backend->timeout = ucl_object_todouble (elt);
 	}
@@ -992,7 +981,7 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 		backend->timeout = REDIS_DEFAULT_TIMEOUT;
 	}
 
-	elt = ucl_object_lookup (stf->opts, "password");
+	elt = ucl_object_lookup (obj, "password");
 	if (elt) {
 		backend->password = ucl_object_tostring (elt);
 	}
@@ -1000,12 +989,50 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 		backend->password = NULL;
 	}
 
-	elt = ucl_object_lookup_any (stf->opts, "db", "database", NULL);
+	elt = ucl_object_lookup_any (obj, "db", "database", "dbname", NULL);
 	if (elt) {
 		backend->dbname = ucl_object_tostring (elt);
 	}
 	else {
 		backend->dbname = NULL;
+	}
+
+	return TRUE;
+}
+
+gpointer
+rspamd_redis_init (struct rspamd_stat_ctx *ctx,
+		struct rspamd_config *cfg, struct rspamd_statfile *st)
+{
+	struct redis_stat_ctx *backend;
+	struct rspamd_statfile_config *stf = st->stcf;
+	struct rspamd_redis_stat_elt *st_elt;
+	const ucl_object_t *obj;
+	gboolean ret = FALSE;
+
+	backend = g_slice_alloc0 (sizeof (*backend));
+
+	/* First search in backend configuration */
+	obj = ucl_object_lookup (st->classifier->cfg->opts, "backend");
+	if (obj != NULL && ucl_object_type (obj) == UCL_OBJECT) {
+		ret = rspamd_redis_try_ucl (backend, obj, cfg, stf->symbol);
+	}
+
+	/* Now try statfiles config */
+	if (!ret) {
+		ret = rspamd_redis_try_ucl (backend, stf->opts, cfg, stf->symbol);
+	}
+
+	/* Now try classifier config */
+	if (!ret) {
+		ret = rspamd_redis_try_ucl (backend, st->classifier->cfg->opts, cfg,
+				stf->symbol);
+	}
+
+	if (!ret) {
+		msg_err_config ("cannot init redis backend for %s", stf->symbol);
+		g_slice_free1 (sizeof (*backend), backend);
+		return NULL;
 	}
 
 	stf->clcf->flags |= RSPAMD_FLAG_CLASSIFIER_INCREMENTING_BACKEND;
