@@ -172,12 +172,12 @@ From version 1.1, it is also possible to specify redis as a backend for statisti
 
 
         statfile {
-            servers = "127.0.0.1";
+            read_servers = "127.0.0.1";
             write_servers = "127.0.0.1";
             symbol = "BAYES_SPAM";
         }
         statfile {
-            servers = "127.0.0.1";
+            read_servers = "127.0.0.1";
             write_servers = "127.0.0.1";
             symbol = "BAYES_HAM";
         }
