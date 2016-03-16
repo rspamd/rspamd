@@ -22,6 +22,8 @@ static gchar *source_db = NULL;
 static gchar *redis_host = NULL;
 static gchar *symbol = NULL;
 static gchar *cache_db = NULL;
+static gchar *redis_db = NULL;
+static gchar *redis_password = NULL;
 
 static void rspamadm_statconvert (gint argc, gchar **argv);
 static const char *rspamadm_statconvert_help (gboolean full_help);
@@ -42,6 +44,10 @@ static GOptionEntry entries[] = {
 				"Output redis ip (in format ip:port)", NULL},
 		{"symbol", 's', 0, G_OPTION_ARG_STRING, &symbol,
 				"Symbol in redis (e.g. BAYES_SPAM)", NULL},
+		{"dbname", 'D', 0, G_OPTION_ARG_STRING, &redis_db,
+				"Database in redis (should be numeric)", NULL},
+		{"password", 'p', 0, G_OPTION_ARG_STRING, &redis_password,
+				"Password to connect to redis", NULL},
 		{NULL,     0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -58,7 +64,9 @@ rspamadm_statconvert_help (gboolean full_help)
 				"-d: input sqlite\n"
 				"-h: output redis ip (in format ip:port)\n"
 				"-s: symbol in redis (e.g. BAYES_SPAM)\n"
-				"-c: also convert data from the learn cache\n";
+				"-c: also convert data from the learn cache\n"
+				"-D: output redis database\n"
+				"-p: redis password\n";
 	}
 	else {
 		help_str = "Convert statistics from sqlite3 to redis";
@@ -117,6 +125,16 @@ rspamadm_statconvert (gint argc, gchar **argv)
 	if (cache_db != NULL) {
 		ucl_object_insert_key (obj, ucl_object_fromstring (cache_db),
 				"cache_db", 0, false);
+	}
+
+	if (redis_password) {
+		ucl_object_insert_key (obj, ucl_object_fromstring (redis_password),
+				"redis_password", 0, false);
+	}
+
+	if (redis_db) {
+		ucl_object_insert_key (obj, ucl_object_fromstring (redis_db),
+				"redis_db", 0, false);
 	}
 
 	rspamadm_execute_lua_ucl_subr (L,
