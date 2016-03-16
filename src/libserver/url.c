@@ -323,7 +323,12 @@ rspamd_url_strerror (enum uri_errno err)
 			return "Invalid symbols encoded";
 		case URI_ERRNO_INVALID_PORT:
 			return "Port number is bad";
+		case URI_ERRNO_TLD_MISSING:
+			return "TLD part is not detected";
+		case URI_ERRNO_HOST_MISSING:
+			return "Host part is missing";
 	}
+
 	return NULL;
 }
 
@@ -1501,7 +1506,7 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 	uri->port = u.port;
 
 	if (!uri->hostlen) {
-		return URI_ERRNO_BAD_FORMAT;
+		return URI_ERRNO_HOST_MISSING;
 	}
 
 	/* Now decode url symbols */
@@ -1552,7 +1557,7 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 			rspamd_tld_trie_callback, uri, &state, true) == 0) {
 		/* Ignore URL's without TLD if it is not a numeric URL */
 		if (!rspamd_url_is_ip (uri, pool)) {
-			return URI_ERRNO_BAD_FORMAT;
+			return URI_ERRNO_TLD_MISSING;
 		}
 	}
 

@@ -49,7 +49,9 @@ enum uri_errno {
 	URI_ERRNO_INVALID_PROTOCOL, /* No protocol was found */
 	URI_ERRNO_INVALID_PORT,     /* Port number is bad */
 	URI_ERRNO_BAD_ENCODING, /* Bad characters encoding */
-	URI_ERRNO_BAD_FORMAT
+	URI_ERRNO_BAD_FORMAT,
+	URI_ERRNO_TLD_MISSING,
+	URI_ERRNO_HOST_MISSING
 };
 
 enum rspamd_url_protocol {
