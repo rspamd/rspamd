@@ -351,7 +351,9 @@ lua_redis_parse_args (lua_State *L, gint idx, const gchar *cmd,
 		top = 1;
 
 		while (lua_next (L, -2) != 0) {
-			args[top++] = g_strdup (lua_tostring (L, -1));
+			if (lua_isstring (L, -1)) {
+				args[top++] = g_strdup (lua_tostring (L, -1));
+			}
 			lua_pop (L, 1);
 		}
 
@@ -874,10 +876,18 @@ lua_redis_connect_sync (lua_State *L)
 		}
 
 		if (ctx->d.sync == NULL || ctx->d.sync->err) {
-			REF_RELEASE (ctx);
 			lua_pushboolean (L, FALSE);
 
-			return 1;
+			if (ctx->d.sync) {
+				lua_pushstring (L, ctx->d.sync->errstr);
+			}
+			else {
+				lua_pushstring (L, "unknown error");
+			}
+
+			REF_RELEASE (ctx);
+
+			return 2;
 		}
 
 		pctx = lua_newuserdata (L, sizeof (ctx));
@@ -889,8 +899,10 @@ lua_redis_connect_sync (lua_State *L)
 		if (ip) {
 			rspamd_inet_address_destroy (ip);
 		}
-		msg_err ("bad arguments for redis request");
+
 		lua_pushboolean (L, FALSE);
+		lua_pushstring (L, "bad arguments for redis request");
+		return 2;
 	}
 
 	return 1;
