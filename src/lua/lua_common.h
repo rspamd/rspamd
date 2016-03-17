@@ -302,7 +302,7 @@ struct rspamd_config * lua_check_config (lua_State * L, gint pos);
 
 /**
  * Extract an arguments from lua table according to format string. Supported arguments are:
- * key=[*]S|I|N|B|V|U{a-z};[key=...]
+ * [*]key=S|I|N|B|V|U{a-z};[key=...]
  * - S - const char *
  * - I - gint64_t
  * - N - double
@@ -311,7 +311,7 @@ struct rspamd_config * lua_check_config (lua_State * L, gint pos);
  * - U{classname} - userdata of the following class (stored in gpointer)
  * - F - function
  *
- * If any of format string is prefixed with `*` then it is treated as required argument
+ * If any of keys is prefixed with `*` then it is treated as required argument
  * @param L lua state
  * @param pos at which pos start extraction
  * @param err error pointer
