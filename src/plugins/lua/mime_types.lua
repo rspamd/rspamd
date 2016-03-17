@@ -16,38 +16,63 @@ limitations under the License.
 
 -- This plugin implements mime types checks for mail messages
 local rspamd_logger = require "rspamd_logger"
+local rspamd_regexp = require "rspamd_regexp"
 
 local settings = {
   file = '',
   symbol_unknown = 'MIME_UNKNOWN',
   symbol_bad = 'MIME_BAD',
   symbol_good = 'MIME_GOOD',
+  symbol_attachment = 'MIME_BAD_ATTACHMENT',
+  regexp = false,
+  extension_map = { -- extension -> mime_type
+    html = 'text/html',
+    txt = 'text/plain',
+    pdf = 'application/pdf'
+  },
 }
 
 local map = nil
 
 local function check_mime_type(task)
   local parts = task:get_parts()
-  
+
   if parts then
     for _,p in ipairs(parts) do
       local type,subtype = p:get_type()
-      
+
       if not type then
         task:insert_result(settings['symbol_unknown'], 1.0, 'missing content type')
       else
+        -- Check for attachment
+        local filename = p:get_filename()
         local ct = string.format('%s/%s', type, subtype)
-        local v = map:get_key(ct)
-        if v then
-          local n = tonumber(v)
-          
-          if n > 0 then
-            task:insert_result(settings['symbol_bad'], n, ct)
-          elseif n < 0 then
-            task:insert_result(settings['symbol_good'], -n, ct)
+
+        if filename then
+          local ext = string.match(filename, '%.([^.]+)$')
+
+          if ext then
+            if settings['extension_map'] then
+              if ct ~= settings['extension_map'] then
+                task:insert_result(settings['symbol_attachment'], 1.0, ext)
+              end
+            end
           end
-        else
-          task:insert_result(settings['symbol_unknown'], 1.0, ct)
+        end
+
+        if map then
+          local v = map:get_key(ct)
+          if v then
+            local n = tonumber(v)
+
+            if n > 0 then
+              task:insert_result(settings['symbol_bad'], n, ct)
+            elseif n < 0 then
+              task:insert_result(settings['symbol_good'], -n, ct)
+            end
+          else
+            task:insert_result(settings['symbol_unknown'], 1.0, ct)
+          end
         end
       end
     end
@@ -59,7 +84,7 @@ if opts then
   for k,v in pairs(opts) do
     settings[k] = v
   end
-  
+
   if settings['file'] and #settings['file'] > 0 then
     map = rspamd_config:add_kv_map (settings['file'], 
       'mime types map')
@@ -72,5 +97,10 @@ if opts then
       rspamd_logger.warnx(rspamd_config, 'Cannot add mime_types: map doesn\'t exists: %1',
         settings['file'])
     end
+    local id = rspamd_config:register_callback_symbol(1.0, check_mime_type)
+    rspamd_config:register_virtual_symbol(settings['symbol_unknown'], 1.0, id)
+    rspamd_config:register_virtual_symbol(settings['symbol_bad'], 1.0, id)
+    rspamd_config:register_virtual_symbol(settings['symbol_good'], 1.0, id)
+    rspamd_config:register_virtual_symbol(settings['symbol_attachment'], 1.0, id)
   end
 end
