@@ -86,16 +86,19 @@ if opts then
   end
 
   if settings['file'] and #settings['file'] > 0 then
-    map = rspamd_config:add_kv_map (settings['file'], 
-      'mime types map')
-    if map then
-      local id = rspamd_config:register_callback_symbol(1.0, check_mime_type)
-      rspamd_config:register_virtual_symbol(settings['symbol_unknown'], 1.0, id)
-      rspamd_config:register_virtual_symbol(settings['symbol_bad'], 1.0, id)
-      rspamd_config:register_virtual_symbol(settings['symbol_good'], 1.0, id)
+
+    if settings['regexp'] then
+      map = rspamd_config:add_map ({
+        url = settings['file'],
+        type = 'regexp',
+        description = 'mime types map'
+      })
     else
-      rspamd_logger.warnx(rspamd_config, 'Cannot add mime_types: map doesn\'t exists: %1',
-        settings['file'])
+      map = rspamd_config:add_map ({
+        url = settings['file'],
+        type = 'map',
+        description = 'mime types map'
+      })
     end
     local id = rspamd_config:register_callback_symbol(1.0, check_mime_type)
     rspamd_config:register_virtual_symbol(settings['symbol_unknown'], 1.0, id)
