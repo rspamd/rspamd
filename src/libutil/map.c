@@ -1551,6 +1551,7 @@ rspamd_re_map_finalize (struct rspamd_regexp_map *re_map)
 
 	re_map->patterns = g_new (const gchar *, re_map->regexps->len);
 	re_map->flags = g_new (gint, re_map->regexps->len);
+	re_map->ids = g_new (gint, re_map->regexps->len);
 
 	for (i = 0; i < re_map->regexps->len; i ++) {
 		re = g_ptr_array_index (re_map->regexps, i);
