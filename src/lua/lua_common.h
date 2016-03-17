@@ -90,6 +90,7 @@ enum rspamd_lua_map_type {
 	RSPAMD_LUA_MAP_RADIX = 0,
 	RSPAMD_LUA_MAP_SET,
 	RSPAMD_LUA_MAP_HASH,
+	RSPAMD_LUA_MAP_REGEXP,
 	RSPAMD_LUA_MAP_CALLBACK
 };
 
@@ -104,6 +105,7 @@ struct rspamd_lua_map {
 		struct radix_tree_compressed *radix;
 		GHashTable *hash;
 		struct lua_map_callback_data *cbdata;
+		struct rspamd_regexp_map *re_map;
 	} data;
 };
 

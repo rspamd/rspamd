@@ -65,7 +65,7 @@ LUA_FUNCTION_DEF (config, get_mempool);
  * Creates new dynamic map of IP/mask addresses.
  * @param {string} mapline URL for a map
  * @param {string} description optional map description
- * @return {radix} radix tree object
+ * @return {map} radix tree object
  * @example
 local ip_map = rspamd_config:add_radix_map ('file:///path/to/file', 'my radix map')
 ...
@@ -80,10 +80,10 @@ end
 
 /***
  * @method rspamd_config:radix_from_config(mname, optname)
- * Creates new static map of IP/mask addresses from config.
+ * Creates new embedded map of IP/mask addresses from config.
  * @param {string} mname name of module
  * @param {string} optname option to get
- * @return {radix} radix tree object
+ * @return {map} radix tree object
  * @example
 local ip_map = rspamd_config:radix_from_config ('mymodule', 'ips')
 ...
@@ -100,7 +100,7 @@ end
  * Creates new dynamic map string objects.
  * @param {string} mapline URL for a map
  * @param {string} description optional map description
- * @return {hash} hash set object
+ * @return {map} hash set object
  * @example
 local hash_map = rspamd_config:add_hash_map ('file:///path/to/file', 'my hash map')
 ...
@@ -117,7 +117,7 @@ end
  * Creates new dynamic map of key/values associations.
  * @param {string} mapline URL for a map
  * @param {string} description optional map description
- * @return {hash} hash table object
+ * @return {map} hash table object
  * @example
 local kv_map = rspamd_config:add_kv_map ('file:///path/to/file', 'my kv map')
 ...
@@ -133,12 +133,20 @@ local function foo(task)
 end
  */
 /***
- * @method rspamd_config:add_map(mapline[, description], callback)
- * Creates new dynamic map with free-form callback
- * @param {string} mapline URL for a map
- * @param {string} description optional map description
- * @param {function} callback function to be called on map load and/or update
- * @return {bool} `true` if map has been added
+ * @method rspamd_config:add_map({args})
+ * Creates new dynamic map according to the attributes passed.
+ *
+ * - `type`: type of map to be created, can be one of the following set:
+ *   + `set`: set of strings
+ *   + `radix`: map of IP addresses to strings
+ *   + `map`: map of strings to strings
+ *   + `regexp`: map of regexps to strings
+ *   + `callback`: map processed by lua callback
+ * - `url`: url to load map from
+ * - `description`: map's description
+ * - `callback`: lua callback for the map
+ *
+ * @return {map} `true` if map has been added
  * @example
 
 local str = ''
