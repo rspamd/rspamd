@@ -439,8 +439,8 @@ lua_config_add_map (lua_State *L)
 			}
 			else if (strcmp (type, "regexp") == 0) {
 				map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
-				map->data.radix = radix_create_compressed ();
-				map->type = RSPAMD_LUA_MAP_RADIX;
+				map->data.re_map = NULL;
+				map->type = RSPAMD_LUA_MAP_REGEXP;
 
 				if ((m = rspamd_map_add (cfg, map_line, description,
 						rspamd_regexp_list_read,
