@@ -566,7 +566,7 @@ file_callback (gint fd, short what, void *ud)
 	pool = map->pool;
 
 	if (!g_atomic_int_compare_and_exchange (map->locked, 0, 1)) {
-		msg_info_pool (
+		msg_debug_pool (
 			"don't try to reread map as it is locked by other process, will reread it later");
 		jitter_timeout_event (map, TRUE, FALSE, FALSE);
 		return;
@@ -664,7 +664,7 @@ http_callback (gint fd, short what, void *ud)
 	pool = map->pool;
 
 	if (!g_atomic_int_compare_and_exchange (map->locked, 0, 1)) {
-		msg_info_pool (
+		msg_debug_pool (
 				"don't try to reread map as it is locked by other process, will reread it later");
 		jitter_timeout_event (map, TRUE, FALSE, FALSE);
 		return;
@@ -1556,7 +1556,7 @@ rspamd_re_map_finalize (struct rspamd_regexp_map *re_map)
 	for (i = 0; i < re_map->regexps->len; i ++) {
 		re = g_ptr_array_index (re_map->regexps, i);
 		re_map->patterns[i] = rspamd_regexp_get_pattern (re);
-		re_map->flags[i] = 0;
+		re_map->flags[i] = HS_FLAG_SINGLEMATCH;
 		pcre_flags = rspamd_regexp_get_pcre_flags (re);
 
 #ifndef WITH_PCRE2
