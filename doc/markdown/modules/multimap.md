@@ -44,6 +44,7 @@ Type attribute means what is matched with this map. The following types are supp
 * `header` - matches any header specified (must have `header = "Header-Name"` configuration attribute)
 * `dnsbl` - matches source IP against some DNS blacklist (consider using [RBL](rbl.md) module for this)
 * `url` - matches URLs in messages against maps
+* `filename` - matches attachment filename against map
 
 DNS maps are legacy and are not encouraged to use in new projects (use [rbl](rbl.md) for that).
 
@@ -72,7 +73,12 @@ multimap {
 }
 ~~~
 
-To enable pre-filter mode
+All maps but `ip` and `dnsbl` support `regexp` mode. In this mode, all keys in maps are treated as regular expressions, for example:
+
+	/example\d+\.com/i
+	/other\d+\.com/i test
+
+For performance considerations, use only expressions supported by [hyperscan](http://01org.github.io/hyperscan/dev-reference/compilation.html#pattern-support) as this engine provides blazing performance at no additional cost. Currently, there is no way to distinguish what particular regexp was matched in case if multiple regexp were matched.
 
 ### Map filters
 
@@ -93,6 +99,11 @@ URL maps allows another set of filters (by default, url maps are matched using h
 * `regexp:/re/` - extracts generic information using the specified regular expression from the hostname
 * `tld:regexp:/re/` - extracts generic information using the specified regular expression from the TLD part
 * `full:regexp:/re/` - extracts generic information using the specified regular expression from the full URL text
+
+Filename maps support this filters set:
+
+* `extension` - matches file extension
+* `regexp:/re/` - extract data from filename according to some regular expression
 
 Here are some examples of pre-filter configurations:
 
