@@ -53,17 +53,17 @@ local function multimap_callback(task, pre_filter)
       end
     else
       -- regexp case
-      if not rule['regexp'] then
+      if not rule['re_filter'] then
         local type,pat = string.match(filter, '(regexp:)(.+)')
         if type and pat then
-          rule['regexp'] = regexp.create(pat)
+          rule['re_filter'] = regexp.create(pat)
         end
       end
 
-      if not rule['regexp'] then
+      if not rule['re_filter'] then
         rspamd_logger.errx(task, 'bad search filter: %s', filter)
       else
-        local results = rule['regexp']:search(input)
+        local results = rule['re_filter']:search(input)
         if results then
           return results[1]
         end
@@ -164,17 +164,17 @@ local function multimap_callback(task, pre_filter)
         return nil
       end
     elseif string.find(filter, 'tld:regexp:') then
-      if not r['regexp'] then
+      if not r['re_filter'] then
         local type,pat = string.match(filter, '(regexp:)(.+)')
         if type and pat then
-          r['regexp'] = regexp.create(pat)
+          r['re_filter'] = regexp.create(pat)
         end
       end
 
-      if not r['regexp'] then
+      if not r['re_filter'] then
         rspamd_logger.errx(task, 'bad search filter: %s', filter)
       else
-        local results = r['regexp']:search(url:get_tld())
+        local results = r['re_filter']:search(url:get_tld())
         if results then
           return results[1]
         else
@@ -182,17 +182,17 @@ local function multimap_callback(task, pre_filter)
         end
       end
     elseif string.find(filter, 'full:regexp:') then
-      if not r['regexp'] then
+      if not r['re_filter'] then
         local type,pat = string.match(filter, '(regexp:)(.+)')
         if type and pat then
-          r['regexp'] = regexp.create(pat)
+          r['re_filter'] = regexp.create(pat)
         end
       end
 
-      if not r['regexp'] then
+      if not r['re_filter'] then
         rspamd_logger.errx(task, 'bad search filter: %s', filter)
       else
-        local results = r['regexp']:search(url:get_text())
+        local results = r['re_filter']:search(url:get_text())
         if results then
           return results[1]
         else
@@ -200,17 +200,17 @@ local function multimap_callback(task, pre_filter)
         end
       end
     elseif string.find(filter, 'regexp:') then
-      if not r['regexp'] then
+      if not r['re_filter'] then
         local type,pat = string.match(filter, '(regexp:)(.+)')
         if type and pat then
-          r['regexp'] = regexp.create(pat)
+          r['re_filter'] = regexp.create(pat)
         end
       end
 
-      if not r['regexp'] then
+      if not r['re_filter'] then
         rspamd_logger.errx(task, 'bad search filter: %s', filter)
       else
-        local results = r['regexp']:search(url:get_host())
+        local results = r['re_filter']:search(url:get_host())
         if results then
           return results[1]
         else
@@ -353,8 +353,11 @@ local function add_multimap_rule(key, newrule)
     end
   else
     if newrule['type'] == 'ip' then
-      newrule['radix'] = rspamd_config:add_radix_map (newrule['map'],
-        newrule['description'])
+        newrule['radix'] = rspamd_config:add_map ({
+          url = newrule['map'],
+          description = newrule['description'],
+          type = 'radix'
+        })
       if newrule['radix'] then
         ret = true
       else
@@ -365,7 +368,19 @@ local function add_multimap_rule(key, newrule)
         or newrule['type'] == 'rcpt'
         or newrule['type'] == 'from'
         or newrule['type'] == 'url' then
-      newrule['hash'] = rspamd_config:add_hash_map (newrule['map'], newrule['description'])
+      if newrule['regexp'] then
+        newrule['hash'] = rspamd_config:add_map ({
+          url = newrule['map'],
+          description = newrule['description'],
+          type = 'regexp'
+        })
+      else
+        newrule['hash'] = rspamd_config:add_map ({
+          url = newrule['map'],
+          description = newrule['description'],
+          type = 'set'
+        })
+      end
       if newrule['hash'] then
         ret = true
       else
