@@ -27,21 +27,6 @@
 #define MIN_RESORT_EVALS 50
 #define MAX_RESORT_EVALS 150
 
-enum rspamd_expression_op {
-	OP_INVALID = 0,
-	OP_PLUS, /* || or + */
-	OP_MULT, /* && or * */
-	OP_OR, /* || or | */
-	OP_AND, /* && or & */
-	OP_NOT, /* ! */
-	OP_LT, /* < */
-	OP_GT, /* > */
-	OP_LE, /* <= */
-	OP_GE, /* >= */
-	OP_OBRACE, /* ( */
-	OP_CBRACE /* ) */
-};
-
 enum rspamd_expression_elt_type {
 	ELT_OP = 0,
 	ELT_ATOM,
@@ -372,11 +357,18 @@ rspamd_ast_add_node (GPtrArray *operands, struct rspamd_expression_elt *op,
 		/* Unary operator */
 		res = g_node_new (op);
 		a1 = rspamd_expr_stack_elt_pop (operands);
-		g_node_append (res, a1);
+
 		if (a1 == NULL) {
 			g_set_error (err, rspamd_expr_quark(), EINVAL, "no operand to "
 					"unary '%s' operation", rspamd_expr_op_to_str (op->p.op));
 			return FALSE;
+		}
+
+		g_node_append (res, a1);
+		test_elt = a1->data;
+
+		if (test_elt->type == ELT_ATOM) {
+			test_elt->p.atom->parent = res;
 		}
 	}
 	else {
@@ -404,6 +396,7 @@ rspamd_ast_add_node (GPtrArray *operands, struct rspamd_expression_elt *op,
 			rspamd_expr_stack_elt_push (operands, a1);
 			return TRUE;
 		}
+
 		/* Now test a2 */
 		test = a2;
 		test_elt = test->data;
@@ -419,6 +412,16 @@ rspamd_ast_add_node (GPtrArray *operands, struct rspamd_expression_elt *op,
 		res = g_node_new (op);
 		g_node_append (res, a1);
 		g_node_append (res, a2);
+
+		test_elt = a1->data;
+		if (test_elt->type == ELT_ATOM) {
+			test_elt->p.atom->parent = res;
+		}
+
+		test_elt = a2->data;
+		if (test_elt->type == ELT_ATOM) {
+			test_elt->p.atom->parent = res;
+		}
 	}
 
 	/* Push back resulting node to the stack */
@@ -1138,4 +1141,20 @@ rspamd_expression_atom_foreach (struct rspamd_expression *expr,
 	data.cbdata = cbdata;
 	g_node_traverse (expr->ast, G_POST_ORDER, G_TRAVERSE_ALL, -1,
 			rspamd_ast_atom_traverse, &data);
+}
+
+gboolean
+rspamd_expression_node_is_op (GNode *node, enum rspamd_expression_op op)
+{
+	struct rspamd_expression_elt *elt;
+
+	g_assert (node != NULL);
+
+	elt = node->data;
+
+	if (elt->type == ELT_OP && elt->p.op == op) {
+		return TRUE;
+	}
+
+	return FALSE;
 }

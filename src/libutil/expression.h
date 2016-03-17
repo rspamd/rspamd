@@ -24,19 +24,36 @@
 
 #define RSPAMD_EXPRESSION_FLAG_NOOPT (1 << 0)
 
+enum rspamd_expression_op {
+	OP_INVALID = 0,
+	OP_PLUS, /* || or + */
+	OP_MULT, /* && or * */
+	OP_OR, /* || or | */
+	OP_AND, /* && or & */
+	OP_NOT, /* ! */
+	OP_LT, /* < */
+	OP_GT, /* > */
+	OP_LE, /* <= */
+	OP_GE, /* >= */
+	OP_OBRACE, /* ( */
+	OP_CBRACE /* ) */
+};
+
 typedef struct rspamd_expression_atom_s {
+	/* Parent node */
+	GNode *parent;
 	/* Opaque userdata */
 	gpointer data;
 	/* String representation of atom */
 	const gchar *str;
 	/* Length of the string representation of atom */
 	gsize len;
-	/* Relative priority */
-	gint priority;
 	/* Average execution time (in ticks) */
 	gdouble avg_ticks;
 	/* Amount of positive triggers */
 	guint hits;
+	/* Relative priority */
+	gint priority;
 } rspamd_expression_atom_t;
 
 struct rspamd_atom_subr {
@@ -100,5 +117,13 @@ typedef void (*rspamd_expression_atom_foreach_cb) (const rspamd_ftok_t *atom,
  */
 void rspamd_expression_atom_foreach (struct rspamd_expression *expr,
 		rspamd_expression_atom_foreach_cb cb, gpointer cbdata);
+
+/**
+ * Checks if a specified node in AST is the specified operation
+ * @param node AST node packed in GNode container
+ * @param op operation to check
+ * @return TRUE if node is operation node and is exactly the specified option
+ */
+gboolean rspamd_expression_node_is_op (GNode *node, enum rspamd_expression_op op);
 
 #endif /* SRC_LIBUTIL_EXPRESSION_H_ */
