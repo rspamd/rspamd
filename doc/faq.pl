@@ -34,7 +34,7 @@ sub start_question {
 	my $anchor = lc $question;
 	chomp $anchor;
 	$anchor =~ s/\s/-/g;
-	$anchor =~ tr/.,`'"//d;
+	$anchor =~ tr/.,`'"_//d;
 
 	my %ht = (
 		data => '',
