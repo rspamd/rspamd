@@ -2455,6 +2455,15 @@ init_controller_worker (struct rspamd_config *cfg)
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
+			"trusted_ips",
+			rspamd_rcl_parse_struct_string_list,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx, secure_ip),
+			0,
+			"List of IP addresses that are allowed for password-less access");
+
+	rspamd_rcl_register_worker_option (cfg,
+			type,
 			"static_dir",
 			rspamd_rcl_parse_struct_string,
 			ctx,
