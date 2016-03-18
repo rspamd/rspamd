@@ -1,5 +1,4 @@
 name: Rspamd - rapid spam filtering system.
-markdown: kramdown
 gems: [jekyll-paginate]
 highlighter: rouge
 paginate: 3
@@ -8,5 +7,8 @@ description: Rspamd home.
 url: http://rspamd.com
 keep_files: ["CentOS/6/os/x86_64/"]
 future: true
+markdown: kramdown
+
 kramdown:
   input: GFM
+  syntax_highlighter: rouge
