@@ -230,7 +230,7 @@ Rspamd's normal worker will by default listen on all interfaces on port 11333. I
 
 This is configured in `rspamd.conf` or `rspamd.sysvinit.conf` on Debian Wheezy & Ubuntu. The config to be modified is shown below (`*` should be replaced with whatever address you would prefer to listen on).
 
-{% highlight nginx %}
+{% highlight ucl %}
 worker {
     bind_socket = "*:11333";
     .include "$CONFDIR/worker-normal.inc"
@@ -313,7 +313,7 @@ http {
 		ssl_stapling on;
 		ssl_stapling_verify on;
 		server_tokens off;
-		# Do not forget to generate custom dhparam using 
+		# Do not forget to generate custom dhparam using
 		# openssl dhparam -out /etc/nginx/ssl/dhparam.pem 2048
 		ssl_dhparam /etc/nginx/dhparam.pem;
 		ssl_ecdh_curve prime256v1;
@@ -348,7 +348,7 @@ Alternatively, you could setup HTTP authentication in nginx itself.
 
 From version 1.1, it is also possible to specify redis as a backend for statistics and cache of learned messages. Redis is recommended for clustered configurations as it allows simultaneous learn and checks and, besides, is very fast. To setup redis, you could use `redis` backend for a classifier (cache is set to the same servers accordingly).
 
-{% highlight nginx %}
+{% highlight ucl %}
 classifier {
     tokenizer {
         name = "osb";
@@ -388,16 +388,16 @@ SA `spam` is almost equal to rspamd `add header` action in the default setup. Wi
 
 Scores and action settings are defined in the `metric` section. To override for existing or add scores for new symbols, you can use `rspamd.conf.local` file. Here is an example of altering the `reject` action, changing the existing symbol and adding new symbol:
 
-{% highlight nginx %}
+{% highlight ucl %}
 metric "default" {
     actions {
         reject = 900; # Set higher reject score
     }
-    
+
     symbol "MAILLIST" {
         score = -4.1; # Rewrite score
     }
-    
+
     symbol "MY_SYMBOL" {
         score = 2.1;
         description = "My new symbol";
@@ -409,10 +409,10 @@ Please mention, that this addition/rewriting logic is working for `metric` secti
 
 Another note, the legacy syntax that you could observe in some default configuration files:
 
-{% highlight nginx %}
+{% highlight ucl %}
 metric {
     name = "default";
-    
+
     symbol {
         name = "EXAMPLE";
         score = 1.0;
@@ -422,7 +422,7 @@ metric {
 
 is equal to the modern syntax:
 
-{% highlight nginx %}
+{% highlight ucl %}
 metric "default" {
     symbol "EXAMPLE" {
         score = 1.0;
@@ -439,7 +439,7 @@ Another feature supported in Rspamd is maps support. Maps are lists of some valu
 * `/path/to/map` - alternative syntax for file map
 
 Within maps you can use whitespaces or comments. For example, here is an example of ip/network map:
-    
+
     # Example map
     127.0.0.1 # localhost
 
@@ -479,7 +479,7 @@ These are configured in `modules.conf` in the `rbl{}` and `surbl{}` sections. De
 Common use-cases for `rspamc` include:
 
 * Scanning messages stored on disk:
-	
+
     rspamc < file.eml
     rspamc file.eml
     rspamc directory1/ directory2/*.eml
@@ -491,7 +491,7 @@ Common use-cases for `rspamc` include:
     rspamc -c "bayes2" learn_spam directory1/ directory2/*.eml
 
 * Administering fuzzy storage
-	
+
     rspamc -f 1 -w 1 fuzzy_add file.eml
     rspamc -f 2 fuzzy_del file2.eml
 
@@ -539,12 +539,12 @@ You'd need some less predictable aliases to avoid sending messages to such addre
 
 There is also an addon for Thunderbird MUA written by Alexander Moisseev to visualise rspamd stats. You can download it form its [homepage](https://addons.mozilla.org/en-GB/thunderbird/addon/rspamd-spamness/). You'd need to add extended spam headers by rmilter to make the whole setup working which could be done by adding the following line to `rmilter.conf`:
 
-~~~nginx
+{% highlight ucl %}
 spamd {
 ...
         extended_spam_headers = yes;
 }
-~~~
+{% endhighlight %}
 
 Here is the sample look of this addon:
 

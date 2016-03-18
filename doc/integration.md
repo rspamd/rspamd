@@ -37,7 +37,7 @@ Here is an example of configuration for rspamd:
 spamd {
         # use rspamd action for greylisting
         spamd_greylist = yes;
-        
+
         # use rspamd action for messages
         spamd_soft_fail = yes;
 
@@ -79,7 +79,7 @@ spamd {
         # Default: empty
         whitelist =
                 10.0.0.0/8;
-        
+
 }
 {% endhighlight %}
 
