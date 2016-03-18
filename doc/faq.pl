@@ -16,7 +16,7 @@ sub start_section {
 	my $anchor = lc $section;
 	chomp $anchor;
 	$anchor =~ s/\s/-/g;
-	$anchor =~ tr/.,`'"//d;
+	$anchor =~ tr/.,`'"_//d;
 
 	my %ht = (
 		questions => [],
