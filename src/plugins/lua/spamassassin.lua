@@ -284,8 +284,8 @@ local function gen_eval_rule(arg)
   local eval_funcs = {
     {'check_freemail_from', function(task, remain)
         local from = task:get_from('mime')
-        if from then
-          return freemail_search(from[1]['addr'])
+        if from and from[1] then
+          return freemail_search(string.lower(from[1]['addr']))
         end
         return 0
       end},
@@ -306,7 +306,7 @@ local function gen_eval_rule(arg)
         if arg then
           local h = task:get_header(arg)
           if h then
-            local hdr_freemail = freemail_search(h)
+            local hdr_freemail = freemail_search(string.lower(h))
 
             if hdr_freemail > 0 and re then
               local r = rspamd_regexp.create_cached(re)
@@ -414,7 +414,7 @@ local function gen_eval_rule(arg)
       function(task, remain)
         local from = task:get_from('mime')
         if from and from[1] and from[1]['addr'] then
-          if sa_lists['from_blacklist'][from[1]['addr']] then
+          if sa_lists['from_blacklist'][string.lower(from[1]['addr'])] then
             return 1
           end
         end
@@ -427,7 +427,7 @@ local function gen_eval_rule(arg)
       function(task, remain)
         local from = task:get_from('mime')
         if from and from[1] and from[1]['addr'] then
-          if sa_lists['from_whitelist'][from[1]['addr']] then
+          if sa_lists['from_whitelist'][string.lower(from[1]['addr'])] then
             return 1
           end
         end
@@ -440,7 +440,7 @@ local function gen_eval_rule(arg)
       function(task, remain)
         local from = task:get_from('mime')
         if from and from[1] and from[1]['addr'] then
-          if sa_lists['from_def_whitelist'][from[1]['addr']] then
+          if sa_lists['from_def_whitelist'][string.lower(from[1]['addr'])] then
             return 1
           end
         end
@@ -454,7 +454,7 @@ local function gen_eval_rule(arg)
         local rcpt = task:get_recipients('mime')
         if rcpt then
           for i,r in ipairs(rcpt) do
-            if sa_lists['from_blacklist'][r['addr']] then
+            if sa_lists['from_blacklist'][string.lower(r['addr'])] then
               return 1
             end
           end
@@ -469,7 +469,7 @@ local function gen_eval_rule(arg)
         local rcpt = task:get_recipients('mime')
         if rcpt then
           for i,r in ipairs(rcpt) do
-            if sa_lists['from_whitelist'][r['addr']] then
+            if sa_lists['from_whitelist'][string.lower(r['addr'])] then
               return 1
             end
           end
