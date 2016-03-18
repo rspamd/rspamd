@@ -72,6 +72,21 @@ while (<>) {
 			start_section $1;
 		}
 		else {
+			if (/^```(\w+)/) {
+				$cur_question->{'data'} .= "{% highlight $1 %}\n";
+				$state = 3;
+			}
+			else {
+				$cur_question->{'data'} .= $_;
+			}
+		}
+	}
+	elsif ($state == 3) {
+		if (/^```\s*$/) {
+			$state = 2;
+			$cur_question->{'data'} .= "{% endhighlight %}\n";
+		}
+		else {
 			$cur_question->{'data'} .= $_;
 		}
 	}
