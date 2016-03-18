@@ -8,3 +8,5 @@ description: Rspamd home.
 url: http://rspamd.com
 keep_files: ["CentOS/6/os/x86_64/"]
 future: true
+kramdown:
+  input: GFM
