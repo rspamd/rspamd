@@ -281,7 +281,53 @@ or add it as `key` definition to the map string:
 map = "sign+key=<map_string>http://example.com/map"
 ```
 
+### What are one-shot rules
+
+In rspamd, each rule can be triggered multiple times. For example, if a message has 10 URLs and 8 of them are in some URL blacklist (based on their unique tld), then rspamd would add URIBL rule 8 times for this message. Sometimes, that's not a desired behaviour - in that case just add `one_shot = true` to the symbol's definition in metric and that symbol won't be added more than one time.
+
+### What is the use of symbol groups
+
+Symbol groups are intended to group somehow similar rules. The most useful feature is that group names could be used in composite expressions as `gr:<group_name>` and it is possible to set joint limit of score for a specific group:
+
+```ucl
+group "test" {
+  symbol "test1" {
+    score = 10;
+  }
+  symbol "test2" {
+    score = 20;
+  }
+
+  max_score = 15;
+}
+```
+
+In this case, if `test1` and `test2` both matches their joint score won't be more than `15`.
+
+### Why some symbols are missing in the metric configuration
+
+It is now possible to set up rules completely from lua. That allows to set all necessary attributes without touching of configuration files. However, it is still possible to override this default scores in any configuration file. Here is an example of such a rule:
+
+~~~lua
+rspamd_config.LONG_SUBJ = {
+  callback = function(task)
+    local sbj = task:get_header('Subject')
+    if sbj and util.strlen_utf8(sbj) > 200 then
+      return true
+    end
+    return false
+  end,
+
+  score = 3.0,
+  group = 'headers',
+  description = 'Subject is too long'
+}
+~~~
+
+You can use the same approach when your own writing rules in `rspamd.local.lua`.
+
 ## Administration questions
+
 ### How to read rspamd logs
 Rspamd logs are augmented meaning that each log line normally includes `tag` which could help to figure out log lines that are related to, for example, a specific task:
 
@@ -319,9 +365,28 @@ $lua{
 EOD
 ```
 
-As you can see, you can use both embedded log variables and Lua code to customize log ouptut. More information is available in the [logger documentation](https://rspamd.com/doc/configuration/logging.html)
+As you can see, you can use both embedded log variables and Lua code to customize log output. More information is available in the [logger documentation](https://rspamd.com/doc/configuration/logging.html)
+
+### What backend should I select for statistics
+
+Currently, I'd recommend `redis` for statistics backend. You can convert the existing statistics in sqlite by using `rspamadm statconvert` routine:
+
+```
+rspamadm statconvert -d bayes.spam.sqlite -h 127.0.0.1:6379  -s BAYES_SPAM
+```
+
+The only limitation of redis plugin is that it doesn't support per language statistics, however, this feature is not needed in the vast majority of use cases. Per user statistic in redis works in a different way than one in sqlite. Please read the [corresponding documentation](https://rspamd.com/doc/configuration/statistic.html) for further details.
+
+
+### What redis keys are used by rspamd
+
+Statistics module uses <SYMBOL><username> as keys. Statistical tokens live within hash table with the corresponding name. `ratelimit` module uses a key for each value stored in redis: <https://rspamd.com/doc/modules/ratelimit.html>
+DMARC module also uses multiple keys to store cumulative reports: a separate key for each domain.
+
+In conclusion, it is recommended to set a limit for dynamic rspamd data stored in redis: ratelimits, ip reputation, dmarc reports. You could use a separate redis instance for for statistical tokens and set different limits (to fit all tokens) or separated database (by specifying `dbname` when setting up redis backend).  
 
 ## Plugins questions
+
 ### How to whitelist messages
 You have multiple options here. First of all, if you need to define whitelist based on `SPF`, `DKIM` or `DMARC` policies, then you should look at [whitelist module](https://rspamd.com/doc/modules/whitelist.html). Otherwise, there is [multimap module](https://rspamd.com/doc/modules/multimap.html) that implements different types of checks to add symbols according to lists match or to set pre-action allowing to inevitably reject or permit certain messages. For example, to blacklist all files from the following list in attachments:
 
@@ -343,6 +408,8 @@ filename_blacklist {
   action = "reject";
 }
 ```
+
+Another option is to disable spam filtering for some senders or recipients based on [user settings](https://rspamd.com/doc/settings.html). You might set `want_spam = yes` in settings' action and rspamd would skip messages that satisfy a particular settings rule's conditions.
 
 ### What are filters, pre-filters and post-filters
 Rspamd allows different types of filters depending on time of execution.
@@ -456,3 +523,7 @@ rspamd_logger.infox("%s %1 %2 %s", "abc", 1, {true, 1})
 It is also possible to use other objects, such as rspamd task or rspamd config to augment logger output with task or config logging tag.
 
 Moreover, there is function `rspamd_logger.slog` that allows you to replace lua standard function `string.format` when you need to print complex objects, such as tables.
+
+### Should I use `local` for my variables
+
+The answer is yes: always use `local` variables unless it is completely inevitable. Many global variables can cause significant performance degradation for all lua scripts.
