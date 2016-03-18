@@ -317,4 +317,52 @@ Pre-filters can skip all other steps. Rules can define dependencies on other rul
 
 ## WebUI questions
 
+### What are `enable_password` and `password` for WebUI
+
+Rspamd can limit functions available to WebUI by 3 ways:
+
+1. Allow read-only commands when `password` is specified
+2. Allow all commands when `enable_password` is specified
+3. Allow all commands when IP matches `secure_ip` list in the controller configuration
+
+When `password` is specified but `enable_password` is missing then `password` is used for **both** read and write commands.
+
+### How to store passwords securely
+
+Rspamd can encrypt passwords stored using [PBKDF2](https://en.wikipedia.org/wiki/PBKDF2). To use this feature you can use `rspamadm pw` command as following:
+
+    rspamadm pw
+    Enter passphrase:
+    $1$jhicbyeuiktgikkks7in6mecr5bycmok$boniuegw5zfc77pfbqf14bjdxmzd3yajnngwdekzwhjk1daqjixb
+
+Then you can use the resulting string (that has a format `$<algorithm_id>$<salt>$<encrypted_data>`) as `password` or `enable_password`.
+Please mention, that this command will generate **different** encrypted strings even for the same passwords. That is the intended behaviour.
+
+### How to use WebUI behind proxy server
+
+Here is an example for nginx:
+
+~~~nginxlocation /rspamd/ {
+  proxy_pass       http://localhost:11334/;
+
+  proxy_set_header Host      $host;
+  proxy_set_header X-Real-IP $remote_addr;
+}
+~~~
+
+When a connection comes from an IP listed in `secure_ip` or from a unix socket then rspamd checks for 2 headers: `X-Forwarded-For` and `X-Real-IP`. If any of those headers is found then rspamd treats a connection as if it comes from the IP specified in that header. For example, `X-Real-IP: 8.8.8.8` will trigger checks against `secure_ip` for `8.8.8.8`. That helps to organize `secure_ip` when connections are forwarded to rspamd.
+
+### Where WebUI stores results
+
+WebUI sends `AJAX` requests for rspamd and rspamd can store data in so called `dynamic_conf` file. By default, it is defined in `options.inc` as following:
+
+    dynamic_conf = "$DBDIR/rspamd_dynamic";
+
+Rspamd loads symbols and actions settings from this file with priority 5 which allows you to redefine those settings in override configuration.
+
+
+### Why cannot I edit some maps with WebUI
+
+They might have insufficient permissions or be absent in the filesystem. Rspamd also ignores all `HTTP` maps. Signed maps are not yet supported as well.
+
 ## LUA questions
