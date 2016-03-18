@@ -1,7 +1,7 @@
 name: Rspamd - rapid spam filtering system.
 markdown: kramdown
 gems: [jekyll-paginate]
-highlighter: pygments
+highlighter: rouge
 paginate: 3
 paginate_path: "blog/page:num"
 description: Rspamd home.
