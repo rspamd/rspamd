@@ -342,7 +342,8 @@ Please mention, that this command will generate **different** encrypted strings 
 
 Here is an example for nginx:
 
-~~~nginxlocation /rspamd/ {
+~~~nginx
+location /rspamd/ {
   proxy_pass       http://localhost:11334/;
 
   proxy_set_header Host      $host;
