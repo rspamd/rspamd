@@ -52,8 +52,8 @@ local function check_mime_type(task)
           local ext = string.match(filename, '%.([^.]+)$')
 
           if ext then
-            if settings['extension_map'] then
-              if ct ~= settings['extension_map'] then
+            if settings['extension_map'][ext] then
+              if ct ~= settings['extension_map'][ext] then
                 task:insert_result(settings['symbol_attachment'], 1.0, ext)
               end
             end
