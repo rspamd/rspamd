@@ -89,7 +89,11 @@ rspamadm confighelp options.dns_max_requests
 rspamadm confighelp workers.normal.task_timeout
 ```
 
-and more general:     rspamadm confighelp -k timeout
+and more general:
+
+```
+rspamadm confighelp -k timeout
+```
 
 ### What is the difference between `rspamc` and `rspamadm`
 Rspamadm is administration tool that works with **local** rspamd daemon via unix socket and performs some management tasks. You could get help for this tool and all subtools by typing:
@@ -108,8 +112,11 @@ rspamc -f 1 -w 10 fuzzy_add message.eml # Add message to fuzzy storage
 ```
 
 ## Configuration questions
+
 ### What are rspamd actions
+
 Unlike SpamAssassin, rspamd **suggests** the desired action for a specific message scanned:
+
 - `reject`: ultimately reject message
 - `rewrite subject`: set spam subject
 - `add header`: add spam header
@@ -123,6 +130,7 @@ Rspamd metrics is the concept of splitting results into different combinations. 
 
 ### What are local and override config files
 Historically, rspamd provided configuration files that were desired for editing by hands. However, with the project development it has come clear that this idea does not fit very well: rspamd configuration influences the overall filtering quality, performance and other important metrics. Unfortunately, with the hand edited configuration files it is very hard to maintain these metrics up-to-date. Hence, I have decided to add two possibilities:
+
 1. Override configurations
 2. Local configurations
 
@@ -158,6 +166,7 @@ and add this to the `rspamd.conf.local` (but not override).
 
 ### What are local.d and override.d then
 From `rspamd 1.2`, the default configuration also provides 2 more ways to extend or redefine each configuration file shipped with rspamd. Within section definition, it includes 2 files with different priorities:
+
 - `etc/rspamd/local.d/<conf_file>` - included with priority `1` that allows to redefine and extend the default rules but `dynamic updates` or things redefined via `webui` will have higher priority and can redefine the values included
 - `etc/rspamd/override.d/<conf_file>` - included with priority `10` that allows to redefine all other things that could change configuration in rspamd
 
@@ -207,7 +216,9 @@ This looks complicated but it allows smoother updates and simplifies automatic m
 Maps are files that contain lists of keys or key-value pairs that could be dynamically reloaded by rspamd when changed. The important difference to configuration elements is that maps reloading is done on flight without expensive restart procedure. Another important thing about maps is that rspamd can monitor both file and HTTP maps for changes (modification time for files and HTTP `If-Modified-Since` header for HTTP maps). Rspamd supports `HTTP` and `file` maps so far.
 
 ### What can be in the maps
+
 Maps can have the following objects:
+
 - spaces and one line comments started by `#` symbols
 - keys
 - optional values separated by space character
@@ -413,11 +424,13 @@ Another option is to disable spam filtering for some senders or recipients based
 
 ### What are filters, pre-filters and post-filters
 Rspamd allows different types of filters depending on time of execution.
+
 - `pre-filters` are executed before everything else and they can set so called `pre-result` that ultimately classifies message setting the desired action. Filters and post-filters are not executed in this cases
 - `filters` are generic rspamd rules that are planned by rules scheduler
 - `post-filters` are guaranteed to be executed after all filters are finished that allows to execute actions that depends on result of scan
 
 The overall execution order in rspamd is the following:
+
 1. pre-filters
 2. filters
 3. classifiers
@@ -428,8 +441,11 @@ The overall execution order in rspamd is the following:
 Pre-filters can skip all other steps. Rules can define dependencies on other rules. It is not possible neither to define dependencies on other categories of rules but normal filters nor to define dependencies inter-categories dependencies, such as pre-filters on normal filters for example.
 
 ## WebUI questions
+
 ### What are `enable_password` and `password` for WebUI
+
 Rspamd can limit functions available to WebUI by 3 ways:
+
 1. Allow read-only commands when `password` is specified
 2. Allow all commands when `enable_password` is specified
 3. Allow all commands when IP matches `secure_ip` list in the controller configuration
@@ -462,6 +478,7 @@ location /rspamd/ {
 When a connection comes from an IP listed in `secure_ip` or from a unix socket then rspamd checks for 2 headers: `X-Forwarded-For` and `X-Real-IP`. If any of those headers is found then rspamd treats a connection as if it comes from the IP specified in that header. For example, `X-Real-IP: 8.8.8.8` will trigger checks against `secure_ip` for `8.8.8.8`. That helps to organize `secure_ip` when connections are forwarded to rspamd.
 
 ### Where WebUI stores results
+
 WebUI sends `AJAX` requests for rspamd and rspamd can store data in so called `dynamic_conf` file. By default, it is defined in `options.inc` as following:
 
 ```
@@ -471,13 +488,17 @@ dynamic_conf = "$DBDIR/rspamd_dynamic";
 Rspamd loads symbols and actions settings from this file with priority 5 which allows you to redefine those settings in override configuration.
 
 ### Why cannot I edit some maps with WebUI
+
 They might have insufficient permissions or be absent in the filesystem. Rspamd also ignores all `HTTP` maps. Signed maps are not yet supported as well.
 
 ## LUA questions
+
 ### What is the difference between plugins and rules
+
 Rules are intended to do simple checks and return either `true` when rule matches or `false` when rule does not match. Rules normally cannot execute any asynchronous requests nor insert multiple symbols. In theory, you can do this but registering plugins by `rspamd_config:register_symbol` functions is the recommended way for such a task. Plugins are expected to insert results by themselves using `task:insert_result` method.
 
 ### What is table form of a function call
+
 The difference between table and sequential forms is simple:
 
 ```lua
@@ -491,6 +512,7 @@ func({
 ```
 
 Historically, all Lua methods used the sequential call type. However, it has changed so far: many functions converted to allow table form invocation. The advantages of table form are clear:
+
 - you don't need to remember the exact **order** of arguments;
 - you can see not only a value but a `name = value` pair which helps in debugging;
 - it is easier to **extend** methods with new features and to keep backward compatibility;
@@ -507,6 +529,7 @@ local rspamd_regexp = require 'rspamd_regexp'
 ```
 
 Rspamd also ships some additional lua modules which you can use in your rules:
+
 - [Lua functional](https://github.com/rtsisyk/luafun)
 - [Lua LPEG](http://www.inf.puc-rio.br/~roberto/lpeg/)
 
