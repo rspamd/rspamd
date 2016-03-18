@@ -55,7 +55,7 @@ You should add this line just after the heading comment.
 ### But now I have too many core files, how to limit their amount
 Rspamd can stop dumping cores upon reaching specific limit. To enable this functionality you can add the following lines to the `etc/rspamd/local.d/options.inc`:
 
-```nginx
+```ucl
 cores_dir = "/coreland/";
 max_cores_size = 1G;
 ```
@@ -128,7 +128,7 @@ Historically, rspamd provided configuration files that were desired for editing 
 
 Override configuration (`etc/rspamd.conf.override`) is used to ultimately redefine the default values in rspamd. In this file, you redefine the **whole sections** of the default configuration. For example, if you have some module `example` defined in the default configuration as following:
 
-```nginx
+```ucl
 example {
   option1 = "value";
   option2 = true;
@@ -137,7 +137,7 @@ example {
 
 and then you decided to override `option2` and tried to add the following content to the `etc/rspamd.conf.override` file:
 
-```nginx
+```ucl
 example {
   option2 = false;
 }
@@ -145,7 +145,7 @@ example {
 
 However, this might work unexpectedly: overrided config would have `example` section with a single key `option2` whilst `option1` will be missed. The global local file, namely, `rspamd.conf.local` has the same limitation: you can add your own configuration there but you should **NOT** redefine anything from the default configuration there or that things will be just ignored. The only exception from this rule is _metric_ section. So you could use something like:
 
-```nginx
+```ucl
 metric "default" {
   symbol "MY_SYMBOL" {
     score = 10.0;
@@ -163,7 +163,7 @@ From `rspamd 1.2`, the default configuration also provides 2 more ways to extend
 
 Another important difference from the global override and local rules is that these files are included within section. Here is an example of utilizing of local.d for `modules.d/example.conf` configuration file:
 
-```nginx
+```ucl
 example {
   # Webui include
   .include(try=true,priority=5) "${DBDIR}/dynamic/example.conf"
@@ -178,21 +178,21 @@ example {
 
 in `local.d/example.conf`:
 
-```nginx
+```ucl
 option2 = false;
 option3 = 1.0;
 ```
 
 in  `override.d/example.conf`:
 
-```nginx
+```ucl
 option3 = 2.0;
 option4 = ["something"];
 ```
 
 and the target configuration (that you could see using `rspamadm configdump example`):
 
-```nginx
+```ucl
 example {
   option1 = "value"; # From default settings
   option2 = false; # From local.d
@@ -246,7 +246,7 @@ IP maps:
 ### How to sign maps
 From rspamd 1.2 each map can have digital signature using `EdDSA` algorithm. To sign a map you can use `rspamadm signtool` and to generate signing keypair - `rspamadm kaypair -s -u`:
 
-```nginx
+```ucl
 keypair {
    pubkey = "zo4sejrs9e5idqjp8rn6r3ow3x38o8hi5pyngnz6ktdzgmamy48y";
    privkey = "pwq38sby3yi68xyeeuup788z6suqk3fugrbrxieri637bypqejnqbipt1ec9tsm8h14qerhj1bju91xyxamz5yrcrq7in8qpsozywxy";
@@ -296,7 +296,7 @@ Rspamd logs are augmented meaning that each log line normally includes `tag` whi
 ### Can I customize log output for logger
 Yes, there is `log_format` option in `logging.inc`. Here is a useful configuration snippet that allows to add more information comparing to the default rspamd logger output:
 
-```
+```ucl
 log_format =<<EOD
 id: <$mid>, $if_qid{ qid: <$>,} ip: [$ip], $if_user{ user: $,} smtp_from: <$smtp_from>, mime_from: <$mime_from>, smtp_rcpts: <$smtp_rcpts>, mime_rcpts: <$mime_rcpts>,
 (default: $is_spam ($action): [$scores] [$symbols_scores]),
@@ -334,7 +334,7 @@ lnk
 
 you could define the following multimap rule in `local.d/multimap.conf`:
 
-```nginx
+```ucl
 filename_blacklist {
   type = "filename";
   filter = "extension";
