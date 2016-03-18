@@ -439,6 +439,47 @@ add_dynamic_symbol (struct rspamd_config *cfg,
 	return TRUE;
 }
 
+gboolean
+remove_dynamic_symbol (struct rspamd_config *cfg,
+	const gchar *metric_name,
+	const gchar *symbol)
+{
+	ucl_object_t *metric, *syms;
+	gboolean ret = FALSE;
+
+	if (cfg->dynamic_conf == NULL) {
+		msg_info ("dynamic conf is disabled");
+		return FALSE;
+	}
+
+	metric = dynamic_metric_find_metric (cfg->current_dynamic_conf,
+			metric_name);
+	if (metric == NULL) {
+		return FALSE;
+	}
+
+	syms = (ucl_object_t *)ucl_object_lookup (metric, "symbols");
+	if (syms != NULL) {
+		ucl_object_t *sym;
+
+		sym = dynamic_metric_find_elt (syms, symbol);
+
+		if (sym) {
+			ret = ucl_array_delete ((ucl_object_t *)syms, sym) != NULL;
+
+			if (ret) {
+				ucl_object_unref (sym);
+			}
+		}
+	}
+
+	if (ret) {
+		apply_dynamic_conf (cfg->current_dynamic_conf, cfg);
+	}
+
+	return TRUE;
+}
+
 
 /**
  * Add action for specified metric
@@ -484,4 +525,46 @@ add_dynamic_action (struct rspamd_config *cfg,
 	apply_dynamic_conf (cfg->current_dynamic_conf, cfg);
 
 	return TRUE;
+}
+
+gboolean
+remove_dynamic_action (struct rspamd_config *cfg,
+	const gchar *metric_name,
+	guint action)
+{
+	ucl_object_t *metric, *acts;
+	const gchar *action_name = rspamd_action_to_str (action);
+	gboolean ret = FALSE;
+
+	if (cfg->dynamic_conf == NULL) {
+		msg_info ("dynamic conf is disabled");
+		return FALSE;
+	}
+
+	metric = dynamic_metric_find_metric (cfg->current_dynamic_conf,
+			metric_name);
+	if (metric == NULL) {
+		return FALSE;
+	}
+
+	acts = (ucl_object_t *)ucl_object_lookup (metric, "actions");
+
+	if (acts != NULL) {
+		ucl_object_t *act;
+
+		act = dynamic_metric_find_elt (acts, action_name);
+
+		if (act) {
+			ret = ucl_array_delete (acts, act) != NULL;
+		}
+		if (ret) {
+			ucl_object_unref (act);
+		}
+	}
+
+	if (ret) {
+		apply_dynamic_conf (cfg->current_dynamic_conf, cfg);
+	}
+
+	return ret;
 }

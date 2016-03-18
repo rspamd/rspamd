@@ -45,6 +45,9 @@ gboolean add_dynamic_symbol (struct rspamd_config *cfg,
 	const gchar *symbol,
 	gdouble value);
 
+gboolean remove_dynamic_symbol (struct rspamd_config *cfg,
+	const gchar *metric,
+	const gchar *symbol);
 
 /**
  * Add action for specified metric
@@ -59,5 +62,11 @@ gboolean add_dynamic_action (struct rspamd_config *cfg,
 	guint action,
 	gdouble value);
 
+/**
+ * Removes dynamic action
+ */
+gboolean remove_dynamic_action (struct rspamd_config *cfg,
+		const gchar *metric,
+		guint action);
 
 #endif /* DYNAMIC_CFG_H_ */

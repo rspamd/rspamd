@@ -1612,6 +1612,11 @@ rspamd_controller_handle_saveactions (
 			add_dynamic_action (ctx->cfg, DEFAULT_METRIC, act, score);
 			added ++;
 		}
+		else {
+			if (remove_dynamic_action (ctx->cfg, DEFAULT_METRIC, act)) {
+				added ++;
+			}
+		}
 	}
 
 	if (dump_dynamic_config (ctx->cfg)) {
@@ -1728,6 +1733,12 @@ rspamd_controller_handle_savesymbols (
 				return 0;
 			}
 			added ++;
+		}
+		else if (sym) {
+			if (remove_dynamic_symbol (ctx->cfg, DEFAULT_METRIC,
+					ucl_object_tostring (jname))) {
+				added ++;
+			}
 		}
 	}
 
