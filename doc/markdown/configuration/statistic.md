@@ -29,7 +29,7 @@ Statistical tokens are stored in statfiles which, in turn, are mapped to specifi
 Starting from rspamd 1.0, we propose to use `sqlite3` as backed and `osb` as tokenizer. That also enables additional features, such as tokens normalization and
 metainformation in statistics. The following configuration demonstrates the recommended statistics configuration:
 
-~~~nginx
+~~~ucl
 classifier {
     type = "bayes";
     tokenizer {
@@ -66,7 +66,7 @@ looks to the default language and default user's statistics allowing to have the
 It is also possible to create custom lua scripts to use customized user or language for a specific task. Here is an example
 of such a script for extracting domain names from recipients organizing thus per-domain statistics:
 
-~~~nginx
+~~~ucl
     classifier {
         tokenizer {
             name = "osb";
@@ -113,7 +113,7 @@ It is different from 1.0 version where the second approach was used for both cas
 
 Rspamd allows to learn and to check multiple classifiers for a single messages. This might be useful, for example, if you have common and per user statistics. It is even possible to use the same statfiles for these purposes. Classifiers **might** have the same symbols (thought it is not recommended) and they should have a **unique** `name` attribute that is used for learning. Here is an example of such a configuration:
 
-~~~nginx
+~~~ucl
     classifier {
         tokenizer {
             name = "osb";
@@ -161,7 +161,7 @@ To learn specific classifier, you can use `-c` option for `rspamc` (or `Classifi
 
 From version 1.1, it is also possible to specify redis as a backend for statistics and cache of learned messages. Redis is recommended for clustered configurations as it allows simultaneous learn and checks and, besides, is very fast. To setup redis, you could use `redis` backend for a classifier (cache is set to the same servers accordingly).
 
-~~~nginx
+~~~ucl
     classifier {
         tokenizer {
             name = "osb";
@@ -169,16 +169,15 @@ From version 1.1, it is also possible to specify redis as a backend for statisti
         name = "bayes";
         min_tokens = 11;
         backend = "redis";
-
+        servers = "localhost:6379";
+        #write_servers = "localhost:6379"; # If needed another servers for learning
+        #password = "xxx"; # Optional password
+        #database = "2"; # Optional database id
 
         statfile {
-            servers = "127.0.0.1";
-            write_servers = "127.0.0.1";
             symbol = "BAYES_SPAM";
         }
         statfile {
-            servers = "127.0.0.1";
-            write_servers = "127.0.0.1";
             symbol = "BAYES_HAM";
         }
         per_user = true;
@@ -186,7 +185,7 @@ From version 1.1, it is also possible to specify redis as a backend for statisti
 ~~~
 
 `per_languages` is not supported by redis - it just stores everything in the same place. `write_servers` are used in the
-`master-slave` rotation by default and used for learning, whilst `read_servers` are selected randomly each time:
+`master-slave` rotation by default and used for learning, whilst `servers` are selected randomly each time:
 
 	write_servers = "master.example.com:6379:10, slave.example.com:6379:1"
 	write_servers = "master.example.com:6379, slave.example.com:6379"
