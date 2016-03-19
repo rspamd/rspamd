@@ -33,7 +33,6 @@
 			$('body').scrollspy({ target: '#navbar-spy', offset: offset + 10 });
 
 			$('[data-toggle="tooltip"]').tooltip();// tooltips for buttons
-
 			$('.nav-stacked li a').click(function(event) {
 				if ($(this).attr('href')[0] == '#') {
 					event.preventDefault();
@@ -42,6 +41,14 @@
 					scrollBy(0, -offset);
 				}
 			});
+      $('.body-content a').click(function(event) {
+        if ($(this).attr('href')[0] == '#') {
+          event.preventDefault();
+          window.location.hash = $(this).attr('href')
+          $($(this).attr('href'))[0].scrollIntoView();
+          scrollBy(0, -offset);
+        }
+      });
 		}
 		);
 	</script>
