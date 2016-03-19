@@ -384,13 +384,13 @@ systemd_get_socket (struct rspamd_main *rspamd_main, gint number)
 			result = g_list_prepend (result, GINT_TO_POINTER (sock));
 		}
 		else if (num_passed <= number) {
-			msg_warn_main ("systemd LISTEN_FDS does not contain the expected fd: %d",
+			msg_err_main ("systemd LISTEN_FDS does not contain the expected fd: %d",
 					num_passed);
 			errno = EOVERFLOW;
 		}
 	}
 	else {
-		msg_warn_main ("cannot get systemd variable 'LISTEN_FDS'");
+		msg_err_main ("cannot get systemd variable 'LISTEN_FDS'");
 		errno = ENOENT;
 	}
 
@@ -484,6 +484,7 @@ spawn_workers (struct rspamd_main *rspamd_main, struct event_base *ev_base)
 					if ((p =
 						g_hash_table_lookup (listen_sockets,
 						GINT_TO_POINTER (key))) == NULL) {
+
 						if (!bcf->is_systemd) {
 							/* Create listen socket */
 							ls = create_listen_socket (bcf->addrs, bcf->cnt,
@@ -492,8 +493,10 @@ spawn_workers (struct rspamd_main *rspamd_main, struct event_base *ev_base)
 						else {
 							ls = systemd_get_socket (rspamd_main, bcf->cnt);
 						}
+
 						if (ls == NULL) {
-							msg_err_main ("cannot listen on socket %s: %s",
+							msg_err_main ("cannot listen on %s socket %s: %s",
+								bcf->is_systemd ? "systemd" : "normal",
 								bcf->name,
 								strerror (errno));
 						}
