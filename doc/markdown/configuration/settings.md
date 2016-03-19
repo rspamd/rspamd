@@ -9,13 +9,13 @@ and updated automatically if a corresponding file or URL has changed since last 
 
 To load settings as dynamic map, you can set 'settings' to a map string:
 
-~~~nginx
+~~~ucl
 settings = "http://host/url"
 ~~~
 
 If you don't want dynamic updates then you can set settings to an object:
 
-~~~nginx
+~~~ucl
 settings {
 	setting1 = {
 	...
@@ -30,7 +30,7 @@ settings {
 
 The settings file itself should contain a single section called "settings":
 
-~~~nginx
+~~~ucl
 settings {
 	some_users {
 		priority = high;

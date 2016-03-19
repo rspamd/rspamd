@@ -32,7 +32,7 @@ For example, you can write the same configuration in the following ways:
 
 * in nginx like:
 
-~~~nginx
+~~~ucl
 param = value;
 section {
     param = value;
@@ -43,7 +43,7 @@ section {
     string = "something";
     subsection {
         host = {
-            host = "hostname"; 
+            host = "hostname";
             port = 900;
         }
         host = {
@@ -96,7 +96,7 @@ is equal to:
 
 * There is no requirement of quotes for strings and keys, moreover, `:` may be replaced `=` or even be skipped for objects:
 
-~~~nginx
+~~~ucl
 key = value;
 section {
     key = value;
@@ -146,7 +146,7 @@ is converted to:
 
 UCL accepts named keys and organize them into objects hierarchy internally. Here is an example of this process:
 
-~~~nginx
+~~~ucl
 section "blah" {
 	key = value;
 }
@@ -157,7 +157,7 @@ section foo {
 
 is converted to the following object:
 
-~~~nginx
+~~~ucl
 section {
 	blah {
 		key = value;
@@ -167,10 +167,10 @@ section {
 	}
 }
 ~~~
-    
+
 Plain definitions may be more complex and contain more than a single level of nested objects:
-   
-~~~nginx
+
+~~~ucl
 section "blah" "foo" {
 	key = value;
 }
@@ -178,7 +178,7 @@ section "blah" "foo" {
 
 is presented as:
 
-~~~nginx    
+~~~ucl
 section {
 	blah {
 		foo {
@@ -204,14 +204,14 @@ section {
 
 UCL supports different style of comments:
 
-* single line: `#` 
+* single line: `#`
 * multiline: `/* ... */`
 
 Multiline comments may be nested:
 
 ~~~c
 # Sample single line comment
-/* 
+/*
  some comment
  /* nested comment */
  end of comment
@@ -222,7 +222,7 @@ Multiline comments may be nested:
 
 UCL supports external macros both multiline and single line ones:
 
-~~~nginx
+~~~ucl
 .macro "sometext";
 .macro {
     Some long text
@@ -234,7 +234,7 @@ Moreover, each macro can accept an optional list of arguments in braces. These
 arguments themselves are the UCL object that is parsed and passed to a macro as
 options:
 
-~~~nginx
+~~~ucl
 .macro(param=value) "something";
 .macro(param={key=value}) "something";
 .macro(.include "params.conf") "something";
@@ -246,7 +246,7 @@ param = [value1, value2]) "something";
 UCL also provide a convenient `include` macro to load content from another files
 to the current UCL object. This macro accepts either path to file:
 
-~~~nginx
+~~~ucl
 .include "/full/path.conf"
 .include "./relative/path.conf"
 .include "${CURDIR}/path.conf"
@@ -329,10 +329,10 @@ Here are some rules for this syntax:
 
 
     key <<EOD
-    
+
     some
     text
-    
+
     EOD
 
 
@@ -358,7 +358,7 @@ parsing and emitting and compared it with UCL. Here are results:
 
     jansson: parsed json in 1.3899 seconds
     jansson: emitted object in 0.2609 seconds
-    
+
     ucl: parsed input in 0.6649 seconds
     ucl: emitted config in 0.2423 seconds
     ucl: emitted json in 0.2329 seconds

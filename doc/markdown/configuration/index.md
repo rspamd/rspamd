@@ -25,7 +25,7 @@ parts.
 The basic rspamd configuration is stored in $CONFDIR/rspamd.conf. By default, this
 file looks like this one:
 
-~~~nginx
+~~~ucl
 lua = "$CONFDIR/lua/rspamd.lua"
 
 .include "$CONFDIR/options.conf"
@@ -53,7 +53,7 @@ section that describes composite symbols. Statistical filters are defined in
 and internal modules) in [modules](../modules/index.md) section while modules itself are
 loaded from the following portion of configuration:
 
-~~~nginx
+~~~ucl
 modules {
 	path = "$PLUGINSDIR/lua/"
 }

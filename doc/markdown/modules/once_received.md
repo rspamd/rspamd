@@ -8,7 +8,7 @@ The configuration of this module is pretty straightforward: specify `symbol` for
 
 ## Example
 
-~~~nginx
+~~~ucl
 once_received {
     good_host = "^mail";
     bad_host = "static";

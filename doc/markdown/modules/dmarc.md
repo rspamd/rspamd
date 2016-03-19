@@ -20,7 +20,7 @@ Please mention, that rspamd itself cannot send reports, it merely stores suffici
 
 DMARC configuration is very simple:
 
-~~~nginx
+~~~ucl
 dmarc {
     servers = "localhost:6390";
     key_prefix = "dmarc_"; # Keys would have format of dmarc_domain.com

@@ -65,7 +65,7 @@ following values:
 
 No filters will be processed for a message if such a map matches.
 
-~~~nginx
+~~~ucl
 multimap {
 	test { type = "ip"; map = "/tmp/ip.map"; symbol = "TESTMAP"; }
 	spamhaus { type = "dnsbl"; map = "pbl.spamhaus.org"; symbol = "R_IP_PBL";
@@ -107,31 +107,38 @@ Filename maps support this filters set:
 
 Here are some examples of pre-filter configurations:
 
-~~~nginx
+~~~ucl
 sender_from_whitelist_user {
-            type = "from";
-            filter = "email:user";
-            map = "file:///tmp/from.map";
-            symbol = "SENDER_FROM_WHITELIST_USER";
-            action = "accept"; # Prefilter mode
+  type = "from";
+  filter = "email:user";
+  map = "file:///tmp/from.map";
+  symbol = "SENDER_FROM_WHITELIST_USER";
+  action = "accept"; # Prefilter mode
 }
 sender_from_regexp {
-            type = "header";
-            header = "from";
-            filter = "regexp:/.*@/";
-            map = "file:///tmp/from_re.map";
-            symbol = "SENDER_FROM_REGEXP";
+  type = "header";
+  header = "from";
+  filter = "regexp:/.*@/";
+  map = "file:///tmp/from_re.map";
+  symbol = "SENDER_FROM_REGEXP";
 }
 url_map {
-            type = "url";
-            filter = "tld";
-            map = "file:///tmp/url.map";
-            symbol = "URL_MAP";
+  type = "url";
+  filter = "tld";
+  map = "file:///tmp/url.map";
+  symbol = "URL_MAP";
 }
 url_tld_re {
-            type = "url";
-            filter = "tld:regexp:/\.[^.]+$/"; # Extracts the last component of URL
-            map = "file:///tmp/url.map";
-            symbol = "URL_MAP_RE";
+  type = "url";
+  filter = "tld:regexp:/\.[^.]+$/"; # Extracts the last component of URL
+  map = "file:///tmp/url.map";
+  symbol = "URL_MAP_RE";
+}
+filename_blacklist {
+  type = "filename";
+  filter = "extension";
+  map = "/${LOCAL_CONFDIR}/filename.map";
+  symbol = "FILENAME_BLACKLISTED";
+  action = "reject";
 }
 ~~~

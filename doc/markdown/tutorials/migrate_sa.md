@@ -50,7 +50,7 @@ To install rspamd, I'd recommend using of the [official packages](https://rspamd
 
 For those who has a lot of custom rules, there is good news: rspamd supports a certain set of SpamAssassin rules via special [plugin](../modules/spamassassin.md) that allows **direct** loading of SA rules into rspamd. You just need to specify all your configuration files in the plugin configuration:
 
-~~~nginx
+~~~ucl
 spamassassin {
 	sa_main = "/etc/spamassassin/conf.d/*";
 	sa_local = "/etc/spamassassin/local.cf";

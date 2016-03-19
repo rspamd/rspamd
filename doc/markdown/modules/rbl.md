@@ -4,7 +4,7 @@ The RBL module provides support for checking the IPv4/IPv6 source address of a m
 
 Configuration is structured as follows:
 
-~~~nginx
+~~~ucl
 rbl {
   # default settings defined here
   rbls {
@@ -89,7 +89,7 @@ Can be set to a URL of a list of IPv4/IPv6 addresses & subnets not to be conside
 
 RBL-specific subsection is structured as follows:
 
-~~~nginx
+~~~ucl
 # Descriptive name of RBL or symbol if symbol is not defined.
 an_rbl {
         # Explicitly defined symbol

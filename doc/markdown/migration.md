@@ -16,7 +16,7 @@ Now both redis and sqlite3 follows the common principles for per-user statistics
 If you need old behaviour, then you'd need to use separate classifier
 for per-user statistics, for example:
 
-~~~nginx
+~~~ucl
     classifier {
         tokenizer {
             name = "osb";
@@ -61,7 +61,7 @@ that now tokens are generated from the normalized words and there are various im
 statistics model used in pre 1.0 versions. Therefore, to use all these advantages you should either **relearn**
 your statistics or continue using your old statistics **without** new features by adding `compat` parameter:
 
-~~~nginx
+~~~ucl
 classifier {
 ...
     tokenizer {
@@ -73,7 +73,7 @@ classifier {
 
 The recommended way to create statistics now is `sqlite3` backend (which is incompatible with old mmap backend however):
 
-~~~nginx
+~~~ucl
 classifier {
     type = "bayes";
     tokenizer {
@@ -116,7 +116,7 @@ specified then `password` is used for both commands.
 Here is an example of the full configuration of rspamd controller worker to
 serve webui:
 
-~~~nginx
+~~~ucl
 worker {
 	type = "controller";
 	bind_socket = "localhost:11334";

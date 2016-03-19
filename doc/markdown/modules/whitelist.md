@@ -43,7 +43,7 @@ or if using map:
 
 ## Configuration example
 
-~~~nginx
+~~~ucl
 whitelist {
     rules {
         WHITELIST_SPF = {

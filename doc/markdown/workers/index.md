@@ -33,7 +33,7 @@ listens on an UDP port and does not save any state information.
 All workers shares a set of common options. Here is a typical example of a normal
 worker configuration that uses merely common worker options:
 
-~~~nginx
+~~~ucl
 worker {
     type = "normal";
     bind_socket = "*:11333";
@@ -49,7 +49,7 @@ Here are options available to all workers:
 `bind_socket` is the mostly common used option. It defines the address where worker should accept
 connections. Rspamd allows both names and IP addresses for this option:
 
-~~~nginx
+~~~ucl
 bind_socket = "localhost:11333";
 bind_socket = "127.0.0.1:11333";
 bind_socket = "[::1]:11333"; # note that you need to enclose ipv6 in '[]'
@@ -57,7 +57,7 @@ bind_socket = "[::1]:11333"; # note that you need to enclose ipv6 in '[]'
 
 Also universal listening addresses are defined:
 
-~~~nginx
+~~~ucl
 bind_socket = "*:11333"; # any ipv4 and ipv6 address
 bind_socket = "*v4:11333"; # any ipv4 address
 bind_socket = "*v6:11333"; # any ipv6 address
@@ -65,13 +65,13 @@ bind_socket = "*v6:11333"; # any ipv6 address
 
 Moreover, you can specify systemd sockets if rspamd is invoked by systemd:
 
-~~~nginx
+~~~ucl
 bind_socket = "systemd:1"; # the first socket passed by systemd throught environment
 ~~~
 
 For unix sockets, it is also possible to specify owner and mode using this syntax:
 
-~~~nginx
+~~~ucl
 bind_socket = "/tmp/rspamd.sock mode=0666 owner=user";
 ~~~
 

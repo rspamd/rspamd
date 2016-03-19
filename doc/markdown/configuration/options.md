@@ -5,7 +5,7 @@
 Options section defines the basic rspamd behaviour and are global for all types of workers.
 The default options are depicted in the following example configuration snippet:
 
-~~~nginx
+~~~ucl
 filters = "chartable,dkim,spf,surbl,regexp,fuzzy_check";
 raw_mode = false;
 one_shot = false;
@@ -62,7 +62,7 @@ These options live in a separate subsection named `dns` and specify the behaviou
 
 * `nameserver`: list (or array) of DNS servers to be used (if this option is missed, then `/etc/resolv.conf` is parsed instead). It is also possible to specify weights of DNS servers to balance the payload, e.g.
 
-~~~nginx
+~~~ucl
 options {
 	dns {
 		# 9/10 on 127.0.0.1 and 1/10 to 8.8.8.8

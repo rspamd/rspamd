@@ -17,7 +17,7 @@ To generate a keypair for the scanner you could use:
 
 After that keypair should appear as following:
 
-~~~nginx
+~~~ucl
 keypair {
     pubkey = "tm8zjw3ougwj1qjpyweugqhuyg4576ctg6p7mbrhma6ytjewp4ry";
     privkey = "ykkrfqbyk34i1ewdmn81ttcco1eaxoqgih38duib1e7b89h9xn3y";

@@ -14,7 +14,7 @@ a specific sort of license.
 Nonetheless, they can be used by personal services or low volume requests free
 of charge.
 
-~~~nginx
+~~~ucl
 surbl {
     # List of domains that are not checked by surbl
     whitelist = "file://$CONFDIR/surbl-whitelist.inc";
@@ -81,7 +81,7 @@ it is possible to specify either `bit` or `ips` sections.
 
 Since some URL lists do not accept `IP` addresses, it is also possible to disable sending of URLs with IP address in the host to such lists. That could be done by specifying `noip = true` option:
 
-~~~nginx
+~~~ucl
     rule {
         suffix = "dbl.spamhaus.org";
         symbol = "DBL";
@@ -92,7 +92,7 @@ Since some URL lists do not accept `IP` addresses, it is also possible to disabl
 
 It is also possible to check HTML images URLs using URL blacklists. Just specify `images = true` for such list and you are done:
 
-~~~nginx
+~~~ucl
     rule {
         suffix = "uribl.rambler.ru";
         # Also check images
@@ -172,7 +172,7 @@ In general this procedure could be represented as following:
 
 For example, [SBL list](https://www.spamhaus.org/sbl/) of `spamhaus` project provides such functions using `ZEN` multi list. This is included in rspamd default configuration:
 
-~~~nginx
+~~~ucl
     rule {
         suffix = "zen.spamhaus.org";
         symbol = "ZEN_URIBL";

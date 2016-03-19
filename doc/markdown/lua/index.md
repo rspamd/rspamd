@@ -6,7 +6,7 @@ Rspamd lua api is a core part of rspamd functionality. Lua is used for writing r
 
 Many lua rules are shipped with rspamd. They can be included to rspamd by using tag **lua** in rspamd.conf:
 
-~~~nginx
+~~~ucl
 lua = "$CONFDIR/lua/rspamd.lua"
 ~~~
 

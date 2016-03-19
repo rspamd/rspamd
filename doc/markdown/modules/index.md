@@ -14,7 +14,7 @@ to the main rspamd code. C modules are defined in the `options` section of rspam
 configuration. If no `filters` attribute is defined then all modules are disabled.
 The default configuration enables all modules explicitly:
 
-~~~nginx
+~~~ucl
 filters = "chartable,dkim,spf,surbl,regexp,fuzzy_check";
 ~~~
 
@@ -37,7 +37,7 @@ reconfiguration. Should you want to write a lua module consult with the
 [Lua API documentation](../lua/). To define path to lua modules there is a special section
 named `modules` in rspamd:
 
-~~~nginx
+~~~ucl
 modules {
   path = "/path/to/dir/";
   path = "/path/to/module.lua";

@@ -37,7 +37,7 @@ configuration defines merely the `default` metric.
 Each metric is defined by a `metric` object in rspamd configuration. This object has one
 mandatory attribute - `name` which defines the name of this metric:
 
-~~~nginx
+~~~ucl
 metric {
    # Define default metric
    name = "default";
@@ -72,7 +72,7 @@ The content of this section is separated to the two main parts: symbols and acti
 Actions section is an object of all actions defined by this metric. If some actions are skipped,
 they won't be ever suggested by rspamd. Actions section looks as following:
 
-~~~nginx
+~~~ucl
 metric {
 ...
 	actions {
@@ -96,7 +96,7 @@ Symbols are defined by an object with the following properties:
 
 So far, the symbol definition looks like this one:
 
-~~~nginx
+~~~ucl
 symbol { 
     name = "RWL_SPAMHAUS_WL_IND"; 
     weight = -0.7; 
@@ -114,7 +114,7 @@ Symbols can be grouped to specify their common functionality. For example, one m
 which could be useful, for instance if some specific group should not unconditionally send a message
 to `spam` class. Here is an example of such a functionality:
 
-~~~nginx
+~~~ucl
 metric {
 	name = default; # This is mandatory option
 	

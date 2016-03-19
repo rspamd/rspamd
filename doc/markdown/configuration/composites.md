@@ -9,7 +9,7 @@ in a joint expression.
 
 For example, you can define a composite that is added when two of symbols are found:
 
-~~~nginx
+~~~ucl
 composite {
 	name = "TEST_COMPOSITE";
 	expression = "SYMBOL1 and SYMBOL2";
@@ -31,7 +31,7 @@ You can use the following operations in a composite expression:
 You also can use braces to define priorities. Otherwise operators are evaluated from left to right.
 For example:
 
-~~~nginx
+~~~ucl
 composite {
     name = "TEST";
     expression = "SYMBOL1 and SYMBOL2 and ( not SYMBOL3 | not SYMBOL4 | not SYMBOL5 )";
@@ -39,7 +39,7 @@ composite {
 ~~~
 
 Composite rule can include other composites in the body. There is no restriction of definition order:
-~~~nginx
+~~~ucl
 composite {
     name = "TEST1";
     expression = "SYMBOL1 AND TEST2";
@@ -66,7 +66,7 @@ For example, you have symbol `A` and `B` with weights `W_a` and `W_b` and a comp
 It is also possible to include the whole group of symbols to a composite rule. This
 efficiently means **any** symbol of the specified group:
 
-~~~nginx
+~~~ucl
 composite {
     name = "TEST2";
     expression = "SYMBOL2 && !g:mua";

@@ -10,7 +10,7 @@ of spamassassin rules natively within rspamd. The configuration of this plugin
 is very simple: just glue all your SA rules into a single file and feed it to
 spamassassin module:
 
-~~~nginx
+~~~ucl
 spamassassin {
 	ruleset = "/path/to/file";
 	# Limit search size to 100 kilobytes for all regular expressions

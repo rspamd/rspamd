@@ -24,7 +24,7 @@ And the following URLs are considered as phished:
 
 Here is an example of full module configuration.
 
-~~~nginx
+~~~ucl
 phishing {
 	symbol = "R_PHISHING"; # Default symbol
 	

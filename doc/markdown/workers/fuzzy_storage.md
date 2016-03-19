@@ -110,7 +110,7 @@ to perform changes to fuzzy storage (you should also set `read_only = no` in you
 
 Here is an example configuration of fuzzy storage:
 
-~~~nginx
+~~~ucl
 worker {
    type = "fuzzy";
    bind_socket = "*:11335";

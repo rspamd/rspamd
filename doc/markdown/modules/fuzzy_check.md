@@ -37,7 +37,7 @@ Fuzzy rules are defined as a set of `rule` definitions. Each `rule` must have se
 list to check or learn and a set of flags and optional parameters. Here is an example of
 rule's settings:
 
-~~~nginx
+~~~ucl
 fuzzy_check {
 	rule {
 		# List of servers, can be an array or multi-value item
@@ -75,7 +75,7 @@ Each rule can have several maps defined by a `flag` value. For example, a single
 fuzzy storage can contain both good and bad hashes that should have different symbols
 and thus different weights. Maps are defined inside fuzzy rules as following:
 
-~~~nginx
+~~~ucl
 fuzzy_check {
 	rule {
 	...
@@ -108,7 +108,7 @@ if the weight of hash is `100` and `max_score` will be `99`, then the rule will 
 added with the weight of `1`. If `max_score` is `200`, then the rule will be added with the
 weight likely `0.2` (the real function is hyperbolic tangent). In the following configuration:
 
-~~~nginx
+~~~ucl
 metric {
 	name = "default";
 	...

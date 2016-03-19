@@ -24,7 +24,7 @@ lifetimes is accordingly limited by the matching DNS record time to live.
 
 You can manually specify the size of this cache by configuring SPF module:
 
-~~~nginx
+~~~ucl
 spf {
 	spf_cache_size = 1k; # cache up to 1000 of the most recent SPF records
 }

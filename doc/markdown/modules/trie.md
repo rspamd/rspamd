@@ -10,7 +10,7 @@ This module provides a convenient interface to the search trie structure.
 
 Here is an example of trie configuration:
 
-~~~nginx
+~~~ucl
 trie {
 	# Each subsection defines a single rule with associated symbol
 	SYMBOL1 {

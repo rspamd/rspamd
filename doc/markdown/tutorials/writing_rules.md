@@ -36,7 +36,7 @@ For the configuration rules you can take a look at the following examples:
 
 rspamd.conf:
 
-~~~nginx
+~~~ucl
 var1 = "value1";
 
 section "name" {
@@ -46,7 +46,7 @@ section "name" {
 
 rspamd.conf.local:
 
-~~~nginx
+~~~ucl
 var1 = "value2";
 
 section "name" {
@@ -56,7 +56,7 @@ section "name" {
 
 Resulting config:
 
-~~~nginx
+~~~ucl
 var1 = "value1";
 var1 = "value2";
 
@@ -72,7 +72,7 @@ Override example:
 
 rspamd.conf:
 
-~~~nginx
+~~~ucl
 var1 = "value1";
 
 section "name" {
@@ -82,7 +82,7 @@ section "name" {
 
 rspamd.conf.override:
 
-~~~nginx
+~~~ucl
 var1 = "value2";
 
 section "name" {
@@ -92,7 +92,7 @@ section "name" {
 
 Resulting config:
 
-~~~nginx
+~~~ucl
 var1 = "value2";
 
 # Note that var2 is removed completely
@@ -158,7 +158,7 @@ For built-in rules scores are placed in the file called `${CONFDIR}/metrics.conf
 
 1. Define scores in `rspamd.conf.local` as following:
 
-~~~nginx
+~~~ucl
 metric "default" {
 	symbol "MY_SYMBOL" {
 		description = "my cool rule";
