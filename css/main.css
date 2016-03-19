@@ -100,3 +100,7 @@ hr {
   font-family: monospace;
   text-decoration: none;
 }
+code {
+  background-color: rgba(0,0,0,0.04) !important;
+  color: inherit;
+}
