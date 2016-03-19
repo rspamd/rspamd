@@ -111,6 +111,47 @@ rspamc learn_spam message.eml # Learn message
 rspamc -f 1 -w 10 fuzzy_add message.eml # Add message to fuzzy storage
 ```
 
+### How rspamd support different characters sets
+
+By default, rspamd converts all messages to `UTF-8`. This includes text parts (both `text/plain` and `text/html`), headers and MIME elements (boundaries, filenames). If there is no information of how to convert something to `UTF-8`, for example when there is no `charset` attribute in the `Content-Type` or if there are some broken `UTF-8` characters then rspamd treats this text as raw for safety considerations. The difference between raw and `UTF-8` texts is that for `UTF-8` texts it is possible to use unicode regular expressions by specifying `/U` flag. For raw texts, rspamd uses raw complementary expression which could lack some features.
+
+It is always safe to assume that everything will be in `utf-8`, even in the case of raw messages - you would just miss some particular features. There is also module called [chartable](https://rspamd.com/doc/modules/chartable.html) that checks for different unicode (or `ASCII` - non `ASCII` characters in raw mode) symbols and trying to guess if there is some obscuring attempt to mix characters sets.
+
+### Can I relearn messages for fuzzy storage or for statistics
+
+In case if you need to move some hash from one list (e.g. blacklist) to another one (e.g. whitelist), you need to call `rspamc fuzzy_del` command for the first list (lists are identified by number) followed by `rspamc fuzzy_add` command:
+
+```
+rspamc -f 1 fuzzy_del message.eml
+rspamc -f 2 -w <weight> fuzzy_add message.eml
+```
+
+If you need just to increase the score, then just call `fuzzy_add` with the score change. It is not possible to decrease score however.
+
+Statistics is a bit different. Rspamd keeps hashes of tokens learned in a special storage called `learn_cache`. If rspamd finds that this particular tokens combination has been already learned it performs the following:
+
+* if the class of tokens was the same (e.g. spam and spam) then rspamd just refuses to learn these tokens one more time
+* otherwise, rspamd performs so called `relearning`:
+    + scores in the current class are decreased for this tokens set;
+    + scores in the opposite class are increased for this tokens set;
+    + the class of tokens in the learn cache is updated accordingly.
+
+All these actions are performed automatically if `learn_cache` is enabled. It is highly recommended to use this logic since multiple learnings are quite bad for statistical module.
+
+
+### Why some symbols have different scores for different messages
+
+Rspamd support so called `dynamic` symbols. The closest analogue in SA are multiple symbols that checks for some certain value (e.g. bayes probability). In rspamd it works in a more smoother way: the metric score is multiplied by some value (that is usually in range `[0..1]`) and added to the scan result. For example, bayes classifier adds score based on probability:
+
+* if probability is close to `50%` then score is very close to 0;
+* if probability goes higher `[50% .. 75%]` then score slowly grows;
+* when the probability is closer to `90%` the symbol's score is close to 0.95 and on `100%` it is exactly 1.0;
+* this logic is reversed for HAM probability (from `50%` to `0%` spam probability)
+
+This allows to provide better fit between some rule's results and the desired score. Indeed, we should intuitively add higher scores for high probabilities and fairly low scores for lower probabilities.
+
+Many rspamd rules, such as `PHISHING` or fuzzy checks use this dynamic logic of scoring.
+
 ## Configuration questions
 
 ### What are rspamd actions
