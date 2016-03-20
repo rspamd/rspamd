@@ -276,7 +276,7 @@ Then you can copy this string and store it in the configuration file. Rspamd use
 Webui is managed by a controller worker but you might want to proxy its requests using nginx, for example, to add `TLS` support. Here is a minimal setup required for nginx to do that:
 
 <div>
-<a class="btn btn-info btn-block btn-code" data-toggle="collapse" data-target="#nginx_cf">nginx.conf<i class="fa fa-caret-square-o-down fa-pull-right"></i></a><div id="nginx_cf" class="collapse collapse-block"><pre><code>
+<a class="btn btn-info btn-block btn-code" data-toggle="collapse" data-target="#nginx_cf"><i class="fa fa-caret-square-o-down fa-pull-right"></i>nginx.conf</a><div id="nginx_cf" class="collapse collapse-block"><pre><code>
 {% highlight nginx %}
 worker_processes  2;
 user www-data www-data;
@@ -342,7 +342,7 @@ http {
 You might also use subdirs, as suggested by [@julienmalik](https://github.com/julienmalik):
 
 <div>
-<a class="btn btn-info btn-block btn-code" data-toggle="collapse" data-target="#nginx_cf1">nginx.conf<i class="fa fa-caret-square-o-down fa-pull-right"></i></a><div id="nginx_cf1" class="collapse collapse-block"><pre><code>
+<a class="btn btn-info btn-block btn-code" data-toggle="collapse" data-target="#nginx_cf1"><i class="fa fa-caret-square-o-down fa-pull-right"></i>nginx.conf</a><div id="nginx_cf1" class="collapse collapse-block"><pre><code>
 {% highlight nginx %}
 location /rspamd/ {
     proxy_pass       http://localhost:11334/;
