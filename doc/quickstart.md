@@ -23,8 +23,13 @@ First of all, you need a working MTA (Mail Trabnsfer Agent) that is able to serv
 
 We suppose that postfix is set using your OS packaging system (e.g. `apt-get install postfix`). Here is the desired configuration for Postfix:
 
-<div>
-<a class="btn btn-info btn-block btn-code" data-toggle="collapse" data-target="#main_cf">main.cf...<i class="fa fa-caret-square-o-down"></i></a><div id="main_cf" class="collapse"><pre><code>
+<div><!-- Do not change the DOM structure -->
+    <a class="btn btn-info btn-block btn-code" data-toggle="collapse" data-target="#main_cf">
+        <i class="fa fa-caret-square-o-down fa-pull-right"></i>
+        main.cf
+    </a>
+<div id="main_cf" class="collapse collapse-block">
+<pre><code>
 # SSL setup (we assume the same certs for IMAP and SMTP here)
 smtpd_tls_cert_file = /etc/dovecot/dovecot.pem
 smtpd_tls_key_file = /etc/dovecot/private/dovecot.pem
@@ -103,8 +108,8 @@ smtpd_milters = inet:localhost:9900
 milter_default_action = accept
 milter_protocol = 6
 milter_mail_macros = i {mail_addr} {client_addr} {client_name} {auth_authen}
-</code></pre></div>
-</div>
+</code></pre>
+</div></div>
 
 Then you'd need dovecot installed. For APT based systems you might want to install the following packages:
 
@@ -262,7 +267,7 @@ Then you can copy this string and store it in the configuration file. Rspamd use
 Webui is managed by a controller worker but you might want to proxy its requests using nginx, for example, for adding `TLS` support. Here is a minimal setup required for nginx to do that:
 
 <div>
-<a class="btn btn-info btn-block btn-code" data-toggle="collapse" data-target="#nginx_cf">nginx.conf...<i class="fa fa-caret-square-o-down"></i></a><div id="nginx_cf" class="collapse"><pre><code>
+<a class="btn btn-info btn-block btn-code" data-toggle="collapse" data-target="#nginx_cf">nginx.conf<i class="fa fa-caret-square-o-down fa-pull-right"></i></a><div id="nginx_cf" class="collapse collapse-block"><pre><code>
 {% highlight nginx %}
 worker_processes  2;
 user www-data www-data;
@@ -328,7 +333,7 @@ http {
 You might also use subdirs, as suggested by [@julienmalik](https://github.com/julienmalik):
 
 <div>
-<a class="btn btn-info btn-block btn-code" data-toggle="collapse" data-target="#nginx_cf1">nginx.conf...<i class="fa fa-caret-square-o-down"></i></a><div id="nginx_cf1" class="collapse"><pre><code>
+<a class="btn btn-info btn-block btn-code" data-toggle="collapse" data-target="#nginx_cf1">nginx.conf<i class="fa fa-caret-square-o-down fa-pull-right"></i></a><div id="nginx_cf1" class="collapse collapse-block"><pre><code>
 {% highlight nginx %}
 location /rspamd/ {
     proxy_pass       http://localhost:11334/;
