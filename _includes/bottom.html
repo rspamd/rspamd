@@ -34,21 +34,23 @@
 
 			$('[data-toggle="tooltip"]').tooltip();// tooltips for buttons
 			$('.nav-stacked li a').click(function(event) {
-				if ($(this).attr('href')[0] == '#') {
+        var href = $(this).attr('href');
+				if (href && href != "#top" && href[0] == '#') {
 					event.preventDefault();
 					window.location.hash = $(this).attr('href')
-					$($(this).attr('href'))[0].scrollIntoView();
+					$(href)[0].scrollIntoView();
 					scrollBy(0, -offset);
 				}
 			});
       $('.body-content a').click(function(event) {
-        if ($(this).attr('href')[0] == '#') {
-          event.preventDefault();
-          window.location.hash = $(this).attr('href')
-          $($(this).attr('href'))[0].scrollIntoView();
-          scrollBy(0, -offset);
-        }
-      });
+        var href = $(this).attr('href');
+				if (href && href != "#top" && href[0] == '#') {
+					event.preventDefault();
+					window.location.hash = $(this).attr('href')
+					$(href)[0].scrollIntoView();
+					scrollBy(0, -offset);
+				}
+			});
       //change icon inside collapse btn
       $(".collapse-block").on("hide.bs.collapse", function(){
           $(this).prev().children(":first").replaceWith('<i class="fa fa-caret-square-o-down fa-pull-right"></i>');
