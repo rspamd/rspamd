@@ -49,6 +49,13 @@
           scrollBy(0, -offset);
         }
       });
+      //change icon inside collapse btn
+      $(".collapse-block").on("hide.bs.collapse", function(){
+          $(this).prev().children(":first").replaceWith('<i class="fa fa-caret-square-o-down fa-pull-right"></i>');
+        });
+      $(".collapse-block").on("show.bs.collapse", function(){
+        $(this).prev().children(":first").replaceWith('<i class="fa fa-caret-square-o-up fa-pull-right"></i>');
+      });
 		}
 		);
 	</script>
