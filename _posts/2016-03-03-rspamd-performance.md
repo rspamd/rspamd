@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  "Rspamd is still fast"
+title:  "Rspamd vs Spamassassin performance comparison"
 categories: misc
 ---
 
