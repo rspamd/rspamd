@@ -1,5 +1,5 @@
---- rspamd.service.orig	2016-01-18 19:32:58.660425266 +0200
-+++ rspamd.service	2016-01-18 19:33:33.288446835 +0200
+--- rspamd.service.orig	2016-03-21 17:21:25.316909188 +0200
++++ rspamd.service	2016-03-21 17:21:45.377034896 +0200
 @@ -3,8 +3,7 @@
  After=nss-lookup.target
  
@@ -9,4 +9,4 @@
 +ExecStart=/usr/bin/rspamd -c /etc/rspamd/rspamd.conf -f -u _rspamd -g _rspamd
  RuntimeDirectory=rspamd
  RuntimeDirectoryMode=0755
- 
+ Restart=always
