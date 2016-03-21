@@ -330,7 +330,7 @@ trusted_keys = ["<public key string>"];
 or add it as `key` definition to the map string:
 
 ```
-map = "sign+key=<map_string>http://example.com/map"
+map = "sign+key=<key_string>+http://example.com/map"
 ```
 
 ### What are one-shot rules

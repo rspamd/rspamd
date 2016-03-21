@@ -79,8 +79,8 @@ Rspamd supports the following .deb based distributives:
 - **Debian sid** (amd64, i386)
 - **Ubuntu precise** (amd64, i386)
 - **Ubuntu trusty** (amd64, i386)
-- **Ubuntu vivid** (amd64, i386)
 - **Ubuntu wily** (amd64, i386)
+- **Ubuntu xenial** (amd64, i386)
 
 To install the rspamd <a class="undecor" href="#stableSys2">stable<sup>1</sup></a> apt repository, please use the following commands:
 
@@ -209,7 +209,7 @@ Alternatively, you can create a distribution package and use it for build your o
 
 ## Further reading
 
-Please check the [quickstart guide](/doc/quickstart.html) that describes the subsequent steps to keep rspamd up and running.
+Please check the [quickstart guide](/doc/quickstart.html) that describes the subsequent steps to keep rspamd up and running. The most frequently asked questions are listed in the [FAQ](/doc/faq.html).
 
 ## Reporting bugs and other issues
 
