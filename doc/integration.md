@@ -18,7 +18,7 @@ Also this document describes rspamd LDA proxy mode that can be used for any MTA.
 
 For using rspamd in postfix it is recommended to use milter, namely `rmilter`. The interactions between postfix and rspamd are depicted in the following image:
 
-![postfix scheme](../img/rspamd_postfix.png "Rspamd and postfix interaction")
+<img class="img-responsive" src="/img/rspamd-schemes.007.png">
 
 Rmilter can be downloaded from github: <http://github.com/vstakhov/rmilter>.
 
