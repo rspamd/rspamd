@@ -72,6 +72,13 @@ struct http_map_data {
 	gboolean request_sent;
 };
 
+enum rspamd_map_http_stage {
+	map_resolve_host2 = 0, /* 2 requests sent */
+	map_resolve_host1, /* 1 requests sent */
+	map_load_file,
+	map_load_pubkey,
+	map_load_signature
+};
 
 struct http_callback_data {
 	struct event_base *ev_base;
@@ -84,13 +91,7 @@ struct http_callback_data {
 	struct rspamd_cryptobox_pubkey *pk;
 	gchar *tmpfile;
 
-	enum {
-		map_resolve_host2 = 0, /* 2 requests sent */
-		map_resolve_host1, /* 1 requests sent */
-		map_load_file,
-		map_load_pubkey,
-		map_load_signature
-	} stage;
+	enum rspamd_map_http_stage stage;
 	gint out_fd;
 	gint fd;
 

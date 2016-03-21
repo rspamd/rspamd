@@ -791,7 +791,7 @@ static const gchar *
 rspamd_map_check_proto (struct rspamd_config *cfg,
 		const gchar *map_line, struct rspamd_map *map)
 {
-	const gchar *pos = map_line, *end;
+	const gchar *pos = map_line, *end, *end_key;
 
 	g_assert (map != NULL);
 	g_assert (pos != NULL);
@@ -805,8 +805,21 @@ rspamd_map_check_proto (struct rspamd_config *cfg,
 
 	if (g_ascii_strncasecmp (pos, "key=", sizeof ("key=") - 1) == 0) {
 		pos += sizeof ("key=") - 1;
+		end_key = memchr (pos, '+', end - pos);
 
-		if (end - pos > 64) {
+		if (end_key != NULL) {
+			map->trusted_pubkey = rspamd_pubkey_from_base32 (pos, end_key - pos,
+					RSPAMD_KEYPAIR_SIGN, RSPAMD_CRYPTOBOX_MODE_25519);
+
+			if (map->trusted_pubkey == NULL) {
+				msg_err_config ("cannot read pubkey from map: %s",
+						map_line);
+				return NULL;
+			}
+			pos = end_key + 1;
+		}
+		else if (end - pos > 64) {
+			/* Try hex encoding */
 			map->trusted_pubkey = rspamd_pubkey_from_hex (pos, 64,
 					RSPAMD_KEYPAIR_SIGN, RSPAMD_CRYPTOBOX_MODE_25519);
 
@@ -815,14 +828,13 @@ rspamd_map_check_proto (struct rspamd_config *cfg,
 						map_line);
 				return NULL;
 			}
+			pos += 64;
 		}
 		else {
 			msg_err_config ("cannot read pubkey from map: %s",
 					map_line);
 			return NULL;
 		}
-
-		pos += 64;
 
 		if (*pos == '+' || *pos == ':') {
 			pos ++;
