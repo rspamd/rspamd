@@ -42,7 +42,7 @@ trusted_keys = ["<public key string>"];
 
 or add it as `key` definition to the map string:
 
-~~ucl
+~~~ucl
 map = "sign+key=<key_string>+http://example.com/map"
 ~~~
 
