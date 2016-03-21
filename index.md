@@ -27,10 +27,24 @@ title: Rspamd spam filtering system
 	<div class="col-xs-12 col-sm-4 myMainPageText">
 			<div>
 					<h2>Easy to manage</h2>
-					<p>&bull;&nbsp;<a href="/rmilter">Rmilter</a> is a powerful tool that provides <a class="undecor" href="http://www.postfix.org">postfix</a> <a class="undecor" href="/doc/integration.html">integration</a> as well as many other features, such as greylisting, ratelimits and <a class="undecor" href="http://www.clamav.org">clamav</a> checks.</p> 
+					<p>&bull;&nbsp;<a href="/rmilter">Rmilter</a> is a powerful tool that provides <a class="undecor" href="http://www.postfix.org">postfix</a> <a class="undecor" href="/doc/integration.html">integration</a> as well as many other features, such as greylisting, ratelimits and <a class="undecor" href="http://www.clamav.org">clamav</a> checks.</p>
 					<p>&bull;&nbsp;There is also a nice <a href="/webui/">web interface</a> shipped in the rspamd distribution that simplifies the most common operations and displays statistics.</p>
 					<p>&bull;&nbsp;Moreover, it is possible to <a class="undecor" href="/doc/tutorials/writing_rules.html">write your own rules and plugins</a> for rspamd using the marvelous and simple <a class="undecor" href="http://www.lua.org">Lua</a> language.</p>
       </div>
 			<a class="btn btn-primary" href="about.html#extensions">View details &raquo;</a>
 	</div>
 </div>
+
+{% for post in site.posts limit:3 %}
+<div class="row">
+	<div class="well col-xs-12">
+  <h2><a href="{{ post.url }}">{{ post.title }}</a></h2>
+  <p class="author">
+    <span class="date"><small>{{ post.date }}</small></span>
+  </p>
+<div class="short-news content" markdown="1">
+{{ post.content }}
+</div>
+</div>
+</div>
+{% endfor %}

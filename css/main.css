@@ -104,3 +104,9 @@ code {
   background-color: rgba(0,0,0,0.04) !important;
   color: inherit;
 }
+div.short-news {height: 200px;	overflow-y: hidden;}
+short-news p {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
