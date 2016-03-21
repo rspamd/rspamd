@@ -63,3 +63,7 @@ and performs some additional checks for such messages.
 - [ratelimit](ratelimit.md) - implements leaked bucket algorithm for ratelimiting and
 uses `redis` to store data.
 - [trie](trie.md) - uses suffix trie for extra-fast patterns lookup in messages.
+- [mime_types](mime_types.md) - applies some rules about mime types met in messages
+- [rspamd_update](rspamd_update.md) - load dynamic rules and other rspamd updates
+- [spamassassin](spamassassin.md) - load spamassassin rules
+- [dmarc](dmarc.md) - performs DMARC policy checks
