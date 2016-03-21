@@ -11,7 +11,7 @@ For your own updates that are loaded from the filesystem or from some trusted ne
 
 To sign a map you can use `rspamadm signtool` and to generate signing keypair - `rspamadm kaypair -s -u`:
 
-~~ucl
+~~~ucl
 keypair {
    pubkey = "zo4sejrs9e5idqjp8rn6r3ow3x38o8hi5pyngnz6ktdzgmamy48y";
    privkey = "pwq38sby3yi68xyeeuup788z6suqk3fugrbrxieri637bypqejnqbipt1ec9tsm8h14qerhj1bju91xyxamz5yrcrq7in8qpsozywxy";
