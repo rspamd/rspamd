@@ -8,7 +8,7 @@ This document includes some questions and practical examples that are frequently
 
 ## General questions
 ### Where get help about rspamd
-The most convenient place for asking questions about rspamd is IRC channel _#rspamd_ in [http://freenode.net](http://freenode.net). But you can also check the [support page](https://rspamd.com/support.html)
+The most convenient place for asking questions about rspamd is IRC channel _#rspamd_ in [http://freenode.net](http://freenode.net). For more information you can also check the [support page](https://rspamd.com/support.html)
 
 ### How to figure out why rspamd process crashed
 Like other programs written in `C` language, the best way to debug these problems is to obtain `core` dump. Unfortunately, there is no universal solution suitable for all platforms, however, for FreeBSD and Linux you could do the following.
@@ -52,7 +52,7 @@ ulimit -c unlimited
 
 You should add this line just after the heading comment.
 
-### But now I have too many core files, how to limit their amount
+### Well, now I have too many core files, how to limit their amount
 Rspamd can stop dumping cores upon reaching specific limit. To enable this functionality you can add the following lines to the `etc/rspamd/local.d/options.inc`:
 
 ```ucl
@@ -377,6 +377,16 @@ rspamd_config.LONG_SUBJ = {
 ~~~
 
 You can use the same approach when your own writing rules in `rspamd.local.lua`.
+
+### How can I disable some rspamd rules safely
+
+The best way to do it is to add so called `condition` for the specific symbol. This could be done, for example, in `rspamd.local.lua`:
+
+~~~lua
+rspamd_config:add_condition('SOME_SYMBOL', function(task) return false end)
+~~~
+
+You can add more complex conditions but this one is the easiest in terms of rules management and upgradeability.
 
 ## Administration questions
 
