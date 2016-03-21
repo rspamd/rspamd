@@ -1,3 +1,83 @@
+1.2.0:
+	* New dynamic updates plugin
+	* Regular expressions map support
+	* Faster radix trie algorithm
+	* Faster siphash for AVX2 supporing CPUs (used in fuzzy hashes)
+	* PCRE2 support
+	* Allow quoted and slashed keys in map
+	* Add proper support of DNS resolvers balancing (#552)
+	* Rework includes and configuration system for better local changes support
+	* New keypairs framework for signing and encryption
+	* Added support for dynamic modules and workers
+	* Allow to dump configuration with help comments
+	* Rework once_received module
+		- Fix priority for `good_hosts`
+		- If a good host has been found do not add once_received symbols
+		- Fix priorities for strict once_received
+		- Add ability to whitelist IP addresses
+	* Implement support of signed maps for HTTP and file maps
+	* Add command to sync fuzzy storage (#533)
+	* Rework system of symbols and actions registration
+		It is possible now to use priorities when adding symbols to metrics and
+		override scores for symbols with lower priority with the scores with
+		high priority.
+	* Add auth support and db selection for redis stats
+	* Improve composite rules application
+	* Add ignore_received option
+	* Fix critical issue with inconsistent resorting
+	* Fix `all` in spf redirects
+	* Add punycoded versions for IDN domains (#554)
+	* Improve sorting order for symbols cache
+	* Add lockless logging for processes management
+	* Allow to specify flags for metric symbols
+	* Load images height and width from style attribute (#538)
+	* Override DNS requests limits for SPF and DKIM
+	* Fix resetting symbols to their default values in WebUI
+	* Improve configuration agility for redis stats
+	* Allow to set db and password for redis in stat_convert
+	* Import the latest libucl
+	* LUA API changes:
+		- Add rspamd_version function to LUA API
+		- Add lua_cryptobox module
+		- Add lua_map module
+		- Add task:set_metric_action lua API method
+		- Fix race condition in lua_tcp module
+		- Fix a lot of issues in lua_redis module
+		- Rework and abstract lua maps API
+		- Add util.strlen_utf8 lua function
+		- Add lua functions for caseless comparison
+		- Allow optional symbols registration
+		- Add config:add_map table form method, add regexp maps
+		- Add task:has_urls method
+		- Add task:has_flag method
+		- Add html tags methods to lua_html
+		- Add task:get_dns_req
+	* Plugins changes:
+		- Add support for WLBLEval SA plugin
+		- Use caseless comparison in SA and DMARC plugins
+		- Allow SA plugin to set scores for rspamd symbols
+		- Add regexp maps support to multimap
+		- Allow filenames match in multimap
+		- Add more filters for the existing map types
+		- Fix html images rules to reduce FP rates
+	* New rules:
+		- LONG_SUBJ - too long subject
+		- MIME_BAD_ATTACHMENT - bad attachement type
+		- RDNS_NONE - no reverse DNS record for sender's IP
+		- Fix MISSING_MIMEOLE rule for modern OE
+	* Many other bugfixes, memory leaks plugs thanks to:
+		- Coverity scan
+		- New gcc-6 warnings
+		- valgrind manual iterations
+	* Documentation improvements:
+		- FAQ list: https://rspamd.com/doc/faq.html
+		- Reworked quick start guide
+		- Added documentation for all active modules
+	* Other changes:
+		- Dropped Ubuntu Vivid support
+		- Added Ubuntu Xenial support
+		- Rework build system for rspamd and rmilter
+
 1.1.4:
 	* Print traceback on lua errors in lua config
 	* Fix leaks in lua error paths
@@ -903,7 +983,7 @@
     * Fix roll history IP storage
     * Rework ipv4/ipv6 handling in parsing addresses:
 		- turn off support of IPV6_V6ONLY socket option;
-		- create ipv6 socket prior to ipv4 one to handle systems with v6/v4 
+		- create ipv6 socket prior to ipv4 one to handle systems with v6/v4
 		sockets enabled (Linux)
     * Remove CBL as it's wholly included in Spamhaus XBL (by @fatalbanana)
     * Remove nszones.com fake RBL (by @citrin)
@@ -1061,7 +1141,7 @@
 	 - fixed modules that use DNS.
 	* Lua modules once_received and emails reworked for new resolver API and UCL.
 	* Debian package was polished.
-	* Fixed a bug in fuzzy_check module that prevents correct processing messages 
+	* Fixed a bug in fuzzy_check module that prevents correct processing messages
 	  without valid parts.
 
 0.6.2:
@@ -1097,7 +1177,7 @@
 	* Simplify build system and unify configuration for all platforms.
 	* Improved URL detector (reduced false positive rate).
 	* Lua 5.2 is now the default and fully supported version.
-	* Tons of bugfixes and minor improvements.	
+	* Tons of bugfixes and minor improvements.
 
 0.5.6:
 	* Fix bug with counters incrementing in rolling history
