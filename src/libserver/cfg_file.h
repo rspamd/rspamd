@@ -210,7 +210,8 @@ enum rspamd_log_format_flags {
 	RSPAMD_LOG_FLAG_OPTIONAL = (1 << 0),
 	RSPAMD_LOG_FLAG_MIME_ALTERNATIVE = (1 << 1),
 	RSPAMD_LOG_FLAG_CONDITION = (1 << 2),
-	RSPAMD_LOG_FLAG_SYMBOLS_SCORES = (1 << 3)
+	RSPAMD_LOG_FLAG_SYMBOLS_SCORES = (1 << 3),
+	RSPAMD_LOG_FLAG_SYMBOLS_PARAMS = (1 << 4)
 };
 
 struct rspamd_log_format {

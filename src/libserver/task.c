@@ -832,24 +832,29 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 				sym = (struct symbol *) v;
 
 				if (first) {
-					if (lf->flags & RSPAMD_LOG_FLAG_SYMBOLS_SCORES) {
-						rspamd_printf_fstring (&symbuf, "%s(%.2f)", sym->name,
-								sym->score);
-					}
-					else {
-						rspamd_printf_fstring (&symbuf, "%s", sym->name);
-					}
-					first = FALSE;
+					rspamd_printf_fstring (&symbuf, "%s", sym->name);
 				}
 				else {
-					if (lf->flags & RSPAMD_LOG_FLAG_SYMBOLS_SCORES) {
-						rspamd_printf_fstring (&symbuf, ",%s(%.2f)", sym->name,
-								sym->score);
-					}
-					else {
-						rspamd_printf_fstring (&symbuf, ",%s", sym->name);
-					}
+					rspamd_printf_fstring (&symbuf, ",%s", sym->name);
 				}
+
+				if (lf->flags & RSPAMD_LOG_FLAG_SYMBOLS_SCORES) {
+					rspamd_printf_fstring (&symbuf, "(%.2f)", sym->score);
+				}
+
+				if (lf->flags & RSPAMD_LOG_FLAG_SYMBOLS_PARAMS) {
+					GList *cur;
+
+					rspamd_printf_fstring (&symbuf, "{");
+
+					for (cur = sym->options; cur != NULL; cur = g_list_next (cur)) {
+						rspamd_printf_fstring (&symbuf, "%s;", cur->data);
+					}
+
+					rspamd_printf_fstring (&symbuf, "}");
+				}
+
+				first = FALSE;
 			}
 
 			rspamd_mempool_add_destructor (task->task_pool,

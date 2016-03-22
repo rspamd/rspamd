@@ -346,6 +346,14 @@ rspamd_config_process_var (struct rspamd_config *cfg, const rspamd_ftok_t *var,
 		type = RSPAMD_LOG_SYMBOLS;
 		flags |= RSPAMD_LOG_FLAG_SYMBOLS_SCORES;
 	}
+	else if (rspamd_ftok_cstr_equal (&tok, "symbols_params", TRUE)) {
+		type = RSPAMD_LOG_SYMBOLS;
+		flags |= RSPAMD_LOG_FLAG_SYMBOLS_PARAMS;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "symbols_scores_params", TRUE)) {
+		type = RSPAMD_LOG_SYMBOLS;
+		flags |= RSPAMD_LOG_FLAG_SYMBOLS_PARAMS|RSPAMD_LOG_FLAG_SYMBOLS_SCORES;
+	}
 	else if (rspamd_ftok_cstr_equal (&tok, "ip", TRUE)) {
 		type = RSPAMD_LOG_IP;
 	}
