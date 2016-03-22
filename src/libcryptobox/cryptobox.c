@@ -945,7 +945,7 @@ static void
 rspamd_cryptobox_cleanup (void *enc_ctx, void *auth_ctx,
 		enum rspamd_cryptobox_mode mode)
 {
-	if (G_LIKELY (RSPAMD_CRYPTOBOX_MODE_25519)) {
+	if (G_LIKELY (mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
 		rspamd_explicit_memzero (auth_ctx, sizeof (poly1305_state));
 	}
 	else {
