@@ -1377,7 +1377,7 @@ multipart/example 2
 multipart/form-data 2
 multipart/header-set 2
 multipart/related -1
-multipart/report 2
+multipart/report 0
 multipart/signed -2
 multipart/voice-message 2
 multipart/x-mixed-replace 2
