@@ -39,21 +39,36 @@ local function check_mime_type(task)
 
   if parts then
     for _,p in ipairs(parts) do
-      local type,subtype = p:get_type()
+      local mtype,subtype = p:get_type()
 
-      if not type then
+      if not mtype then
         task:insert_result(settings['symbol_unknown'], 1.0, 'missing content type')
       else
         -- Check for attachment
         local filename = p:get_filename()
-        local ct = string.format('%s/%s', type, subtype)
+        local ct = string.format('%s/%s', mtype, subtype)
 
         if filename then
           local ext = string.match(filename, '%.([^.]+)$')
 
           if ext then
-            if settings['extension_map'][ext] then
-              if ct ~= settings['extension_map'][ext] then
+            local mt = settings['extension_map'][ext]
+            if mt then
+              local found = nil
+              if (type(mt) == "table") then
+                for _,v in pairs(mt) do
+                  if ct == v then
+                    found = true
+                    break
+                  end
+                end
+              else
+                if ct == mt then
+                  found = true
+                end
+              end
+
+              if not found  then
                 task:insert_result(settings['symbol_attachment'], 1.0, ext)
               end
             end
