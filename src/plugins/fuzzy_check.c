@@ -53,6 +53,8 @@
 #define DEFAULT_RETRANSMITS 3
 #define DEFAULT_PORT 11335
 
+static const gint rspamd_fuzzy_hash_len = 5;
+
 struct fuzzy_mapping {
 	guint64 fuzzy_flag;
 	const gchar *symbol;
@@ -130,6 +132,7 @@ struct fuzzy_learn_session {
 struct fuzzy_cmd_io {
 	guint32 tag;
 	guint32 flags;
+	struct rspamd_fuzzy_cmd *cmd;
 	struct iovec io;
 };
 
@@ -1005,6 +1008,7 @@ fuzzy_cmd_from_task_meta (struct fuzzy_rule *rule,
 	io = rspamd_mempool_alloc (pool, sizeof (*io));
 	io->flags = 0;
 	io->tag = cmd->tag;
+	io->cmd = cmd;
 
 	if (rule->peer_key) {
 		fuzzy_encrypt_cmd (rule, &enccmd->hdr, (guchar *)cmd, sizeof (*cmd));
@@ -1081,6 +1085,7 @@ fuzzy_cmd_from_text_part (struct fuzzy_rule *rule,
 	io = rspamd_mempool_alloc (pool, sizeof (*io));
 	io->tag = shcmd->basic.tag;
 	io->flags = 0;
+	io->cmd = &shcmd->basic;
 
 	if (rule->peer_key) {
 		/* Encrypt data */
@@ -1134,6 +1139,7 @@ fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 	io = rspamd_mempool_alloc (pool, sizeof (*io));
 	io->flags = 0;
 	io->tag = cmd->tag;
+	io->cmd = cmd;
 
 	if (rule->peer_key) {
 		g_assert (enccmd != NULL);
@@ -1217,7 +1223,7 @@ fuzzy_cmd_vector_to_wire (gint fd, GPtrArray *v)
  */
 static const struct rspamd_fuzzy_reply *
 fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
-		struct fuzzy_rule *rule)
+		struct fuzzy_rule *rule, struct rspamd_fuzzy_cmd **pcmd)
 {
 	guchar *p = *pos;
 	gint remain = *r;
@@ -1277,6 +1283,10 @@ fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
 			if (!(io->flags & FUZZY_CMD_FLAG_REPLIED)) {
 				io->flags |= FUZZY_CMD_FLAG_REPLIED;
 
+				if (pcmd) {
+					*pcmd = io->cmd;
+				}
+
 				return rep;
 			}
 			found = TRUE;
@@ -1301,6 +1311,7 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 	guchar buf[2048], *p;
 	const gchar *symbol;
 	struct fuzzy_cmd_io *io;
+	struct rspamd_fuzzy_cmd *cmd = NULL;
 	guint i;
 	gint r;
 	double nval;
@@ -1325,7 +1336,7 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 			ret = return_want_more;
 
 			while ((rep = fuzzy_process_reply (&p, &r,
-					session->commands, session->rule)) != NULL) {
+					session->commands, session->rule, &cmd)) != NULL) {
 				/* Get mapping by flag */
 				if ((map =
 						g_hash_table_lookup (session->rule->mappings,
@@ -1350,8 +1361,9 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 							session->rule->max_score);
 					nval *= rep->prob;
 					msg_info_task (
-							"found fuzzy hash with weight: "
+							"found fuzzy hash %*xs with weight: "
 									"%.2f, in list: %s:%d%s",
+							rspamd_fuzzy_hash_len, cmd->digest,
 							nval,
 							symbol,
 							rep->flag,
@@ -1359,8 +1371,9 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 					if (map != NULL || !session->rule->skip_unknown) {
 						rspamd_snprintf (buf,
 								sizeof (buf),
-								"%d: %.2f / %.2f",
+								"%d:%*xs:%.2f",
 								rep->flag,
+								rspamd_fuzzy_hash_len, cmd->digest,
 								rep->prob,
 								nval);
 						rspamd_task_insert_result_single (session->task,
@@ -1488,6 +1501,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 	struct rspamd_task *task;
 	guchar buf[2048], *p;
 	struct fuzzy_cmd_io *io;
+	struct rspamd_fuzzy_cmd *cmd = NULL;
 	const gchar *symbol;
 	gint r;
 	enum {
@@ -1520,7 +1534,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 			ret = return_want_more;
 
 			while ((rep = fuzzy_process_reply (&p, &r,
-					session->commands, session->rule)) != NULL) {
+					session->commands, session->rule, &cmd)) != NULL) {
 				if ((map =
 						g_hash_table_lookup (session->rule->mappings,
 								GINT_TO_POINTER (rep->flag))) == NULL) {
@@ -1534,18 +1548,19 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 				}
 
 				if (rep->prob > 0.5) {
-					msg_info_task ("processed fuzzy hash <%d>, list: %s:%d for "
+					msg_info_task ("processed fuzzy hash %*xs, list: %s:%d for "
 									"message <%s>",
-							rep->tag,
+							rspamd_fuzzy_hash_len, cmd->digest,
 							symbol,
 							rep->flag,
 							session->task->message_id);
 				}
 				else {
 					msg_info_task ("cannot process fuzzy hash for message "
-							"<%s>, "
+							"<%s>, %*xs, "
 							"list %s:%d, error: %d",
 							session->task->message_id,
+							rspamd_fuzzy_hash_len, cmd->digest,
 							symbol,
 							rep->flag,
 							rep->value);
