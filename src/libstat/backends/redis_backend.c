@@ -828,9 +828,24 @@ rspamd_redis_processed (redisAsyncContext *c, gpointer r, gpointer priv)
 
 						processed ++;
 					}
+
+					if (rt->stcf->is_spam) {
+						task->flags |= RSPAMD_TASK_FLAG_HAS_SPAM_TOKENS;
+					}
+					else {
+						task->flags |= RSPAMD_TASK_FLAG_HAS_HAM_TOKENS;
+					}
+				}
+				else {
+					msg_err_task ("got invalid length of reply vector from redis: "
+							"%d, expected: %d",
+							(gint)reply->elements,
+							(gint)task->tokens->len);
 				}
 			}
 			else {
+				msg_err_task ("got invalid reply from redis: %d",
+						reply->type);
 			}
 
 			msg_debug_task ("received tokens for %s: %d processed, %d found",

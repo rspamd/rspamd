@@ -100,6 +100,8 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_FLAG_LEARN_HAM (1 << 17)
 #define RSPAMD_TASK_FLAG_LEARN_AUTO (1 << 18)
 #define RSPAMD_TASK_FLAG_BROKEN_HEADERS (1 << 19)
+#define RSPAMD_TASK_FLAG_HAS_SPAM_TOKENS (1 << 20)
+#define RSPAMD_TASK_FLAG_HAS_HAM_TOKENS (1 << 21)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_JSON(task) (((task)->flags & RSPAMD_TASK_FLAG_JSON))

@@ -321,6 +321,24 @@ rspamd_stat_classifiers_process (struct rspamd_stat_ctx *st_ctx,
 	guint i;
 	struct rspamd_classifier *cl;
 
+	if (st_ctx->classifiers->len == 0) {
+		return;
+	}
+
+	/*
+	 * Do not classify a message if some class is missing
+	 */
+	if (!(task->flags & RSPAMD_TASK_FLAG_HAS_SPAM_TOKENS)) {
+		msg_warn_task ("skip statistics as SPAM class is missing");
+
+		return;
+	}
+	if (!(task->flags & RSPAMD_TASK_FLAG_HAS_HAM_TOKENS)) {
+		msg_warn_task ("skip statistics as HAM class is missing");
+
+		return;
+	}
+
 	for (i = 0; i < st_ctx->classifiers->len; i++) {
 		cl = g_ptr_array_index (st_ctx->classifiers, i);
 		g_assert (cl != NULL);

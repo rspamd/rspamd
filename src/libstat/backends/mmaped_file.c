@@ -871,6 +871,13 @@ rspamd_mmaped_file_process_tokens (struct rspamd_task *task, GPtrArray *tokens,
 		tok->values[id] = rspamd_mmaped_file_get_block (mf, h1, h2);
 	}
 
+	if (mf->cf->is_spam) {
+		task->flags |= RSPAMD_TASK_FLAG_HAS_SPAM_TOKENS;
+	}
+	else {
+		task->flags |= RSPAMD_TASK_FLAG_HAS_HAM_TOKENS;
+	}
+
 	return TRUE;
 }
 

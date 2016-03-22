@@ -723,6 +723,13 @@ rspamd_sqlite3_process_tokens (struct rspamd_task *task,
 		else {
 			tok->values[id] = 0.0;
 		}
+
+		if (rt->cf->is_spam) {
+			task->flags |= RSPAMD_TASK_FLAG_HAS_SPAM_TOKENS;
+		}
+		else {
+			task->flags |= RSPAMD_TASK_FLAG_HAS_HAM_TOKENS;
+		}
 	}
 
 
