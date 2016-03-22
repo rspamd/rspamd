@@ -428,6 +428,7 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 	struct rspamd_stat_tokenizer *tokenizer;
 	gpointer tk_conf;
 	gsize sz = 0;
+	gint64 sz64 = 0;
 	gchar *tok_conf_encoded;
 	gint ret, ntries = 0;
 	const gint max_tries = 100;
@@ -476,8 +477,8 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 	}
 
 	if (rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
-			RSPAMD_STAT_BACKEND_LOAD_TOKENIZER, &sz, &tk_conf) != SQLITE_OK ||
-			sz == 0) {
+			RSPAMD_STAT_BACKEND_LOAD_TOKENIZER, &sz64, &tk_conf) != SQLITE_OK ||
+			sz64 == 0) {
 
 		msg_info_pool ("absent tokenizer conf in %s, creating a new one",
 				bk->fname);
@@ -1009,7 +1010,7 @@ rspamd_sqlite3_load_tokenizer_config (gpointer runtime,
 	}
 	else {
 		/* Need to decode */
-		copied_conf = rspamd_decode_base32 (tk_conf, sz, &sz);
+		copied_conf = rspamd_decode_base32 (tk_conf, sz, len);
 		g_free (tk_conf);
 		rspamd_mempool_add_destructor (rt->task->task_pool, g_free, copied_conf);
 	}

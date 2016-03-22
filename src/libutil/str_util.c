@@ -632,7 +632,7 @@ rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen)
 	guchar *res;
 
 	gsize allocated_len = inlen * 5 / 8 + 2;
-	gint olen;
+	gssize olen;
 
 	res = g_malloc (allocated_len);
 
