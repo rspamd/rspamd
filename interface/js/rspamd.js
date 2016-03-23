@@ -191,13 +191,15 @@
                     saveMaps(data);
                     getMapById();
                     $.each(data, function (i, item) {
+                        var caption;
+                        var label;
                         if ((item.editable == false)) {
-                            var caption = 'View';
-                            var label = '<span class="label label-default">Read</span>';
+                            caption = 'View';
+                            label = '<span class="label label-default">Read</span>';
                         }
                         else {
-                            var caption = 'Edit';
-                            var label = '<span class="label label-default">Read</span>&nbsp;<span class="label label-success">Write</span>';
+                            caption = 'Edit';
+                            label = '<span class="label label-default">Read</span>&nbsp;<span class="label label-success">Write</span>';
                         }
                         items.push('<tr>' +
                             '<td class="col-md-2 maps-cell">' + label + '</td>' +
@@ -206,8 +208,11 @@
                             'data-source="#' + item.map + '" ' +
                             'data-editable="' + item.editable + '" ' +
                             'data-target="#modalDialog" ' +
-                            'data-title="' + item.description +
-                            '" data-toggle="modal">' + item.description + '</span>' +
+                            'data-title="' + item.uri +
+                            '" data-toggle="modal">' + item.uri + '</span>' +
+                            '</td>' +
+                            '<td>' +
+                            item.description +
                             '</td>' +
                             '</tr>');
                     });

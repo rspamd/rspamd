@@ -1444,7 +1444,6 @@ rspamd_config_add_metric_symbol (struct rspamd_config *cfg,
 
 			*sym_def->weight_ptr = score;
 			sym_def->score = score;
-
 			sym_def->flags = flags;
 
 			if (description) {

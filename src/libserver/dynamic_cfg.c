@@ -477,7 +477,7 @@ remove_dynamic_symbol (struct rspamd_config *cfg,
 		apply_dynamic_conf (cfg->current_dynamic_conf, cfg);
 	}
 
-	return TRUE;
+	return ret;
 }
 
 

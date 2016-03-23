@@ -794,13 +794,15 @@ rspamd_controller_handle_maps (struct rspamd_http_connection_entry *conn_ent,
 
 		obj = ucl_object_typed_new (UCL_OBJECT);
 		ucl_object_insert_key (obj,	   ucl_object_fromint (map->id),
-			"map", 0, false);
+				"map", 0, false);
 		if (map->description) {
 			ucl_object_insert_key (obj, ucl_object_fromstring (map->description),
 					"description", 0, false);
 		}
+		ucl_object_insert_key (obj, ucl_object_fromstring (map->uri),
+				"uri", 0, false);
 		ucl_object_insert_key (obj,	  ucl_object_frombool (editable),
-			"editable", 0, false);
+				"editable", 0, false);
 		ucl_array_append (top, obj);
 
 		cur = g_list_next (cur);
