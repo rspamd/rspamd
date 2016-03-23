@@ -554,10 +554,16 @@
                 },
                 success: function (data) {
                     $('#modalBody').empty();
+                    data.sort(function(a, b) {
+                        return a.group.localeCompare(b.group);
+                    });
                     $.each(data, function (i, group) {
                         items.push('	<div class="row row-bordered" data-slider="hover">' +
                             '<h4>' + group.group + '</h4>' +
                             '</div>');
+                        group.rules.sort(function(a, b) {
+                            return a.symbol.localeCompare(b.symbol);
+                        });
                         $.each(group.rules, function (i, item) {
                             var max = 20;
                             var min = -20;
