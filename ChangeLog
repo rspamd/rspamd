@@ -1,3 +1,15 @@
+1.2.1:
+	* Add list support to `mime types` module configuration (by @moisseev)
+	* Allow symbols params to be printed in logs
+	* Fix `MIME_BAD_ATTACHMENT` false positives for MDN/DSN
+	* Fix crashes on arm32
+	* Do not classify message if some class is missing
+	* Fix cryptobox cleanup
+	* Remove multipart/report from bad mime types (#569)
+	* Improve logging for fuzzy hashes
+	* Show map URLs in webui
+	* Sort symbols in webui
+
 1.2.0:
 	* New dynamic updates plugin
 	* Regular expressions map support
