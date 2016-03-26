@@ -1481,6 +1481,7 @@ rspamd_message_from_data (struct rspamd_task *task, GByteArray *data,
 	GMimeContentType *ct = NULL;
 	const char *mb = NULL;
 	gchar *mid;
+	rspamd_ftok_t srch, *tok;
 
 	g_assert (data != NULL);
 
@@ -1491,7 +1492,20 @@ rspamd_message_from_data (struct rspamd_task *task, GByteArray *data,
 				rspamd_task_get_sender (task));
 	}
 
-	if (task->cfg->libs_ctx) {
+	srch.begin = "Content-Type";
+	srch.len = sizeof ("Content-Type") - 1;
+	tok = g_hash_table_lookup (task->request_headers, &srch);
+
+	if (tok) {
+		/* We have Content-Type defined */
+		gchar *ct_cpy = g_malloc (tok->len + 1);
+
+		rspamd_strlcpy (ct_cpy, tok->begin, tok->len + 1);
+		ct = g_mime_content_type_new_from_string (ct_cpy);
+		g_free (ct_cpy);
+	}
+	else if (task->cfg->libs_ctx) {
+		/* Try to predict it by content (slow) */
 		mb = magic_buffer (task->cfg->libs_ctx->libmagic,
 				data->data,
 				data->len);
