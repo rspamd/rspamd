@@ -91,7 +91,6 @@
 #define NO_LOG_HEADER "Log"
 #define MLEN_HEADER "Message-Length"
 
-static GList *custom_commands = NULL;
 
 static GQuark
 rspamd_protocol_quark (void)
@@ -137,10 +136,8 @@ static gboolean
 rspamd_protocol_handle_url (struct rspamd_task *task,
 	struct rspamd_http_message *msg)
 {
-	GList *cur;
 	GHashTable *query_args;
 	GHashTableIter it;
-	struct custom_command *cmd;
 	struct http_parser_url u;
 	const gchar *p;
 	gsize pathlen;
@@ -225,21 +222,7 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 		}
 		break;
 	default:
-		cur = custom_commands;
-		while (cur) {
-			cmd = cur->data;
-			if (g_ascii_strncasecmp (p, cmd->name, pathlen) == 0) {
-				task->cmd = CMD_OTHER;
-				task->custom_cmd = cmd;
-				break;
-			}
-			cur = g_list_next (cur);
-		}
-
-		if (cur == NULL) {
-			goto err;
-		}
-		break;
+		goto err;
 	}
 
 	if (u.field_set & (1 << UF_QUERY)) {
@@ -1138,16 +1121,4 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 		ctype, task, task->sock, &task->tv, task->ev_base);
 
 	task->processed_stages |= RSPAMD_TASK_STAGE_REPLIED;
-}
-
-void
-register_protocol_command (const gchar *name, protocol_reply_func func)
-{
-	struct custom_command *cmd;
-
-	cmd = g_malloc (sizeof (struct custom_command));
-	cmd->name = name;
-	cmd->func = func;
-
-	custom_commands = g_list_prepend (custom_commands, cmd);
 }

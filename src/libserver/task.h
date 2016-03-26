@@ -109,19 +109,11 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_IS_PROCESSED(task) (((task)->processed_stages & RSPAMD_TASK_STAGE_DONE))
 #define RSPAMD_TASK_IS_CLASSIFIED(task) (((task)->processed_stages & RSPAMD_TASK_STAGE_CLASSIFIERS))
 
-typedef gint (*protocol_reply_func)(struct rspamd_task *task);
-
-struct custom_command {
-	const gchar *name;
-	protocol_reply_func func;
-};
-
 /**
  * Worker task structure
  */
 struct rspamd_task {
 	struct rspamd_worker *worker;					/**< pointer to worker object						*/
-	struct custom_command *custom_cmd;				/**< custom command if any							*/
 	guint processed_stages;							/**< bits of stages that are processed				*/
 	enum rspamd_command cmd;						/**< command										*/
 	gint sock;										/**< socket descriptor								*/

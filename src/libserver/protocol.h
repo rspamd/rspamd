@@ -71,11 +71,4 @@ ucl_object_t * rspamd_protocol_write_ucl (struct rspamd_task *task);
 void rspamd_protocol_write_reply (struct rspamd_task *task);
 
 
-/**
- * Register custom fucntion to extend protocol
- * @param name symbolic name of custom function
- * @param func callback function for writing reply
- */
-void register_protocol_command (const gchar *name, protocol_reply_func func);
-
 #endif
