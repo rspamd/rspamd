@@ -491,6 +491,10 @@ The overall execution order in rspamd is the following:
 
 Pre-filters can skip all other steps. Rules can define dependencies on other rules. It is not possible neither to define dependencies on other categories of rules but normal filters nor to define dependencies inter-categories dependencies, such as pre-filters on normal filters for example.
 
+### What is the meaning of `URIBL_BLOCKED` symbol
+
+This symbol means that you have exceed the amount of DNS queries allowed for non-commercial usage by SURBL terms. If you use some public DNS server, e.g. goolgle public DNS, then try switching to your local DNS resolver (or setup one, for example, [unbound](https://www.unbound.net/)). Otherwise, you should consider buying [commercial subscription](http://www.surbl.org/df) or you won't be able to use this service. `URIBL_BLOCKED` itself has zero weight and is used just to inform you about this problem.
+
 ## WebUI questions
 
 ### What are `enable_password` and `password` for WebUI
