@@ -152,6 +152,10 @@ This allows to provide better fit between some rule's results and the desired sc
 
 Many rspamd rules, such as `PHISHING` or fuzzy checks use this dynamic logic of scoring.
 
+### Can I check message on rspamd without rspamc
+
+Yes: `curl --data-binary @- http://localhost:11333 < file.eml`.
+
 ## Configuration questions
 
 ### What are rspamd actions
@@ -508,6 +512,7 @@ Rspamd can limit functions available to WebUI by 3 ways:
 When `password` is specified but `enable_password` is missing then `password` is used for **both** read and write commands.
 
 ### How to store passwords securely
+
 Rspamd can encrypt passwords stored using [PBKDF2](https://en.wikipedia.org/wiki/PBKDF2). To use this feature you can use `rspamadm pw` command as following:
 
 ```
@@ -519,6 +524,7 @@ $1$jhicbyeuiktgikkks7in6mecr5bycmok$boniuegw5zfc77pfbqf14bjdxmzd3yajnngwdekzwhjk
 Then you can use the resulting string (that has a format `$<algorithm_id>$<salt>$<encrypted_data>`) as `password` or `enable_password`. Please mention, that this command will generate **different** encrypted strings even for the same passwords. That is the intended behaviour.
 
 ### How to use WebUI behind proxy server
+
 Here is an example for nginx:
 
 ```nginx
