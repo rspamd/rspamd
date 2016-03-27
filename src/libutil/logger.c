@@ -50,7 +50,6 @@ struct rspamd_logger_s {
 	gboolean throttling;
 	gboolean no_lock;
 	time_t throttling_time;
-	sig_atomic_t do_reopen_log;
 	enum rspamd_log_type type;
 	pid_t pid;
 	guint32 repeats;
@@ -61,6 +60,7 @@ struct rspamd_logger_s {
 	gchar *saved_function;
 	gchar *saved_module;
 	gchar *saved_id;
+	guint saved_loglevel;
 	rspamd_mempool_t *pool;
 	rspamd_mempool_mutex_t *mtx;
 	guint64 log_cnt[4];
@@ -239,7 +239,7 @@ rspamd_log_close_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 								rspamd_log->saved_module,
 								rspamd_log->saved_id,
 								rspamd_log->saved_function,
-								rspamd_log->cfg->log_level,
+								rspamd_log->saved_loglevel,
 								rspamd_log->saved_message,
 								TRUE,
 								rspamd_log);
@@ -256,7 +256,7 @@ rspamd_log_close_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 					/* It is safe to use temporary buffer here as it is not static */
 					file_log_function (NULL, NULL, NULL,
 							G_STRFUNC,
-							rspamd_log->cfg->log_level,
+							rspamd_log->saved_loglevel,
 							tmpbuf,
 							TRUE,
 							rspamd_log);
@@ -692,13 +692,18 @@ file_log_function (const gchar *log_domain,
 			if (rspamd_log->saved_message == NULL) {
 				rspamd_log->saved_message = g_strdup (message);
 				rspamd_log->saved_function = g_strdup (function);
+
 				if (module) {
 					rspamd_log->saved_module = g_strdup (module);
 				}
+
 				if (id) {
 					rspamd_log->saved_id = g_strdup (id);
 				}
+
+				rspamd_log->saved_loglevel = log_level;
 			}
+
 			return;
 		}
 		else if (rspamd_log->repeats > REPEATS_MAX) {
@@ -713,7 +718,7 @@ file_log_function (const gchar *log_domain,
 						rspamd_log->saved_module,
 						rspamd_log->saved_id,
 						rspamd_log->saved_function,
-						log_level,
+						rspamd_log->saved_loglevel,
 						rspamd_log->saved_message,
 						forced,
 						arg);
@@ -758,7 +763,7 @@ file_log_function (const gchar *log_domain,
 						rspamd_log->saved_module,
 						rspamd_log->saved_id,
 						rspamd_log->saved_function,
-						log_level,
+						rspamd_log->saved_loglevel,
 						rspamd_log->saved_message,
 						forced,
 						arg);
