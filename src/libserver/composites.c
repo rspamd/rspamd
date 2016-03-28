@@ -29,12 +29,18 @@ struct composites_data {
 	guint8 *checked;
 };
 
+enum rspamd_composite_action {
+	RSPAMD_COMPOSITE_UNTOUCH = 0,
+	RSPAMD_COMPOSITE_REMOVE_SYMBOL = (1 << 0),
+	RSPAMD_COMPOSITE_REMOVE_WEIGHT = (1 << 1),
+	RSPAMD_COMPOSITE_REMOVE_FORCED = (1 << 2)
+};
+
 struct symbol_remove_data {
 	struct symbol *ms;
 	struct rspamd_composite *comp;
 	GNode *parent;
-	gboolean remove_weight;
-	gboolean remove_symbol;
+	guint action;
 	struct symbol_remove_data *prev, *next;
 };
 
@@ -130,7 +136,8 @@ static gint
 rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 {
 	struct composites_data *cd = (struct composites_data *)input;
-	const gchar *sym = atom->data;
+	const gchar *beg = atom->data, *sym = NULL;
+	gchar t;
 	struct symbol_remove_data *rd, *nrd;
 	struct symbol *ms;
 	struct rspamd_symbols_group *gr;
@@ -139,7 +146,6 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 	GHashTableIter it;
 	gpointer k, v;
 	gint rc = 0;
-	gchar t = '\0';
 
 	if (isset (cd->checked, cd->composite->id * 2)) {
 		/* We have already checked this composite, so just return its value */
@@ -147,8 +153,10 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 		return rc;
 	}
 
-	if (*sym == '~' || *sym == '-') {
-		t = *sym ++;
+	sym = beg;
+
+	while (*sym != '\0' && !g_ascii_isalnum (*sym)) {
+		sym ++;
 	}
 
 	if (strncmp (sym, "g:", 2) == 0) {
@@ -185,17 +193,27 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 		nrd = rspamd_mempool_alloc (cd->task->task_pool, sizeof (*nrd));
 		nrd->ms = ms;
 
-		if (G_UNLIKELY (t == '~')) {
-			nrd->remove_weight = FALSE;
-			nrd->remove_symbol = TRUE;
-		}
-		else if (G_UNLIKELY (t == '-')) {
-			nrd->remove_symbol = FALSE;
-			nrd->remove_weight = FALSE;
-		}
-		else {
-			nrd->remove_symbol = TRUE;
-			nrd->remove_weight = TRUE;
+		/* By default remove symbols */
+		nrd->action = (RSPAMD_COMPOSITE_REMOVE_SYMBOL|RSPAMD_COMPOSITE_REMOVE_WEIGHT);
+
+		for (;;) {
+			t = *beg;
+
+			if (t == '~') {
+				nrd->action &= ~RSPAMD_COMPOSITE_REMOVE_WEIGHT;
+			}
+			else if (t == '-') {
+				nrd->action &= ~(RSPAMD_COMPOSITE_REMOVE_WEIGHT|
+						RSPAMD_COMPOSITE_REMOVE_SYMBOL);
+			}
+			else if (t == '|') {
+				nrd->action |= RSPAMD_COMPOSITE_REMOVE_FORCED;
+			}
+			else {
+				break;
+			}
+
+			beg ++;
 		}
 
 		nrd->comp = cd->composite;
@@ -262,7 +280,8 @@ composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 	struct composites_data *cd = data;
 	struct symbol_remove_data *rd = value, *cur;
 	gboolean skip = FALSE, has_valid_op = FALSE,
-			want_remove_score = TRUE, want_remove_symbol = TRUE;
+			want_remove_score = TRUE, want_remove_symbol = TRUE,
+			want_forced = TRUE;
 	GNode *par;
 
 	DL_FOREACH (rd, cur) {
@@ -298,20 +317,24 @@ composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 		 * - if no composites would like to save score then we remove score
 		 * - if no composites would like to save symbol then we remove symbol
 		 */
-		if (!cur->remove_symbol) {
+		if (!(cur->action & RSPAMD_COMPOSITE_REMOVE_SYMBOL)) {
 			want_remove_symbol = FALSE;
 		}
 
-		if (!cur->remove_weight) {
+		if (!(cur->action & RSPAMD_COMPOSITE_REMOVE_WEIGHT)) {
 			want_remove_score = FALSE;
+		}
+
+		if (cur->action & RSPAMD_COMPOSITE_REMOVE_FORCED) {
+			want_forced = TRUE;
 		}
 	}
 
 	if (has_valid_op) {
-		if (want_remove_symbol) {
+		if (want_remove_symbol || want_forced) {
 			g_hash_table_remove (cd->metric_res->symbols, key);
 		}
-		if (want_remove_score) {
+		if (want_remove_score || want_forced) {
 			cd->metric_res->score -= rd->ms->score;
 		}
 	}
