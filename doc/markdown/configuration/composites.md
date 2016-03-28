@@ -53,13 +53,67 @@ composite {
 Composites should not be recursive and it is normally detected by rspamd.
 
 ## Composite weights rules
+
 Composites can leave the symbols in a metric or leave their weights. That could be used to create
 non-captive composites.
 For example, you have symbol `A` and `B` with weights `W_a` and `W_b` and a composite `C` with weight `W_c`.
 
 * If `C` is `A & B` then if rule `A` and rule `B` matched then these symbols are *removed* and their weights are removed as well, leading to a single symbol `C` with weight `W_c`.
 * If `C` is `-A & B`, then rule `A` is preserved, but the symbol `C` is inserted. The weight of `A` is preserved as well, so the total weight of `-A & B` will be `W_a + W_c`.
-* If `C` is `~A & B`, then rule `A` is *removed* but its weight is *preserved*, leading to a single symbol `C` with weight `W_a + W_c`
+* If `C` is `~A & B`, then rule `A` is *removed* but its weight is *preserved*,
+  leading to a single symbol `C` with weight `W_a + W_c`
+
+When you have multiple composites which include the same symbol and some
+composites want to remove symbol and other want to preserve it then a symbol is
+preserved by default. Here are some more examples:
+
+~~~ucl
+composite "COMP1" {
+    expression = "BLAH || !DATE_IN_PAST";
+}
+composite "COMP2" {
+    expression = "!BLAH || DATE_IN_PAST";
+}
+composite "COMP3" {
+    expression = "!BLAH || -DATE_IN_PAST";
+}
+~~~
+
+Both `BLAH` and `DATE_IN_PAST` exist in the message's check results. However,
+`COMP3` wants to preserve `DATE_IN_PAST` so it will be saved in the output.
+
+If we rewrite the previous example but replace `-` to `~` then `DATE_IN_PAST`
+will be removed (however, its weight won't be removed):
+
+~~~ucl
+composite "COMP1" {
+    expression = "BLAH || !DATE_IN_PAST";
+}
+composite "COMP2" {
+    expression = "!BLAH || DATE_IN_PAST";
+}
+composite "COMP3" {
+    expression = "!BLAH || ~DATE_IN_PAST";
+}
+~~~
+
+When we want to remove symbol despite of other composites combinations it is
+also possible to add prefix '^' to this symbol:
+
+~~~ucl
+composite "COMP1" {
+    expression = "BLAH || !DATE_IN_PAST";
+}
+composite "COMP2" {
+    expression = "!BLAH || ^DATE_IN_PAST";
+}
+composite "COMP3" {
+    expression = "!BLAH || -DATE_IN_PAST";
+}
+~~~
+
+In this example `COMP3` wants to save `DATE_IN_PAST` once again, however `COMP2`
+overrides this and removes `DATE_IN_PAST`.
 
 ## Composites with symbol groups
 
