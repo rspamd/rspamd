@@ -206,7 +206,7 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 				nrd->action &= ~(RSPAMD_COMPOSITE_REMOVE_WEIGHT|
 						RSPAMD_COMPOSITE_REMOVE_SYMBOL);
 			}
-			else if (t == '|') {
+			else if (t == '^') {
 				nrd->action |= RSPAMD_COMPOSITE_REMOVE_FORCED;
 			}
 			else {
