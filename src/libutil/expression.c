@@ -920,7 +920,7 @@ rspamd_ast_do_op (struct rspamd_expression_elt *elt, gint val, gint acc, gint li
 
 static gint
 rspamd_ast_process_node (struct rspamd_expression *expr, gint flags, GNode *node,
-		gpointer data)
+		gpointer data, GPtrArray *track)
 {
 	struct rspamd_expression_elt *elt, *celt, *parelt = NULL;
 	GNode *cld;
@@ -949,6 +949,10 @@ rspamd_ast_process_node (struct rspamd_expression *expr, gint flags, GNode *node
 
 			if (elt->value) {
 				elt->p.atom->hits ++;
+
+				if (track) {
+					g_ptr_array_add (track, elt->p.atom);
+				}
 			}
 
 			if (calc_ticks) {
@@ -989,7 +993,7 @@ rspamd_ast_process_node (struct rspamd_expression *expr, gint flags, GNode *node
 				continue;
 			}
 
-			val = rspamd_ast_process_node (expr, flags, cld, data);
+			val = rspamd_ast_process_node (expr, flags, cld, data, track);
 
 			if (acc == G_MININT) {
 				acc = val;
@@ -1021,8 +1025,8 @@ rspamd_ast_cleanup_traverse (GNode *n, gpointer d)
 }
 
 gint
-rspamd_process_expression (struct rspamd_expression *expr, gint flags,
-		gpointer data)
+rspamd_process_expression_track (struct rspamd_expression *expr, gint flags,
+		gpointer data, GPtrArray *track)
 {
 	gint ret = 0;
 
@@ -1030,7 +1034,7 @@ rspamd_process_expression (struct rspamd_expression *expr, gint flags,
 	/* Ensure that stack is empty at this point */
 	g_assert (expr->expression_stack->len == 0);
 
-	ret = rspamd_ast_process_node (expr, flags, expr->ast, data);
+	ret = rspamd_ast_process_node (expr, flags, expr->ast, data, track);
 
 	/* Cleanup */
 	g_node_traverse (expr->ast, G_IN_ORDER, G_TRAVERSE_ALL, -1,
@@ -1052,6 +1056,13 @@ rspamd_process_expression (struct rspamd_expression *expr, gint flags,
 	}
 
 	return ret;
+}
+
+gint
+rspamd_process_expression (struct rspamd_expression *expr, gint flags,
+		gpointer data)
+{
+	return rspamd_process_expression_track (expr, flags, data, NULL);
 }
 
 static gboolean

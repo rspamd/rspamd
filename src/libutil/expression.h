@@ -96,6 +96,17 @@ gint rspamd_process_expression (struct rspamd_expression *expr, gint flags,
 		gpointer data);
 
 /**
+ * Process the expression and return its value using atom 'process' functions with the specified data pointer.
+ * This function also accepts `track` argument where it writes matched atoms (those whose value is more than 0)
+ * @param expr expression to process
+ * @param data opaque data pointer for all the atoms
+ * @param track pointer array to atoms tracking
+ * @return the value of expression
+ */
+gint rspamd_process_expression_track (struct rspamd_expression *expr, gint flags,
+		gpointer data, GPtrArray *track);
+
+/**
  * Shows string representation of an expression
  * @param expr expression to show
  * @return freshly allocated string with expression
