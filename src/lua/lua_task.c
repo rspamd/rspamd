@@ -21,6 +21,7 @@
 #include "util.h"
 #include "images.h"
 #include "cfg_file.h"
+#include "utlist.h"
 
 /***
  * @module rspamd_task
@@ -1173,7 +1174,7 @@ rspamd_lua_push_header (lua_State * L,
 		gboolean raw)
 {
 
-	struct raw_header *rh;
+	struct raw_header *rh, *cur;
 	gint i = 1;
 	const gchar *val;
 
@@ -1185,8 +1186,15 @@ rspamd_lua_push_header (lua_State * L,
 	}
 
 	if (full) {
-		lua_newtable (L);
+		i = 0;
+		LL_FOREACH (rh, cur) {
+			i ++;
+		}
+
+		lua_createtable (L, i, 0);
 	}
+
+	i = 1;
 
 	while (rh) {
 		if (rh->name == NULL) {
@@ -1202,7 +1210,7 @@ rspamd_lua_push_header (lua_State * L,
 		}
 		if (full) {
 			/* Create new associated table for a header */
-			lua_newtable (L);
+			lua_createtable (L, 0, 6);
 			rspamd_lua_table_set (L, "name",	 rh->name);
 			if (rh->value) {
 				rspamd_lua_table_set (L, "value", rh->value);
