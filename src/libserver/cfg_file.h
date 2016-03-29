@@ -277,6 +277,7 @@ struct rspamd_config {
 	gboolean check_all_filters;                     /**< check all filters									*/
 	gboolean allow_raw_input;                       /**< scan messages with invalid mime					*/
 	gboolean disable_hyperscan;                     /**< disable hyperscan usage							*/
+	gboolean vectorized_hyperscan;                  /**< use vectorized hyperscan matching					*/
 	gboolean enable_shutdown_workaround;            /**< enable workaround for legacy SA clients (exim)		*/
 	gboolean ignore_received;                       /**< Ignore data from the first received header			*/
 

@@ -1792,6 +1792,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			0,
 			"Disable hyperscan optimizations for regular expressions");
 	rspamd_rcl_add_default_handler (sub,
+			"vectorized_hyperscan",
+			rspamd_rcl_parse_struct_boolean,
+			G_STRUCT_OFFSET (struct rspamd_config, vectorized_hyperscan),
+			0,
+			"Use hyperscan in vectorized mode (experimental)");
+	rspamd_rcl_add_default_handler (sub,
 			"cores_dir",
 			rspamd_rcl_parse_struct_string,
 			G_STRUCT_OFFSET (struct rspamd_config, cores_dir),
