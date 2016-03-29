@@ -975,33 +975,6 @@ rspamd_symbols_cache_validate (struct symbols_cache *cache,
 	return ret;
 }
 
-static gboolean
-check_metric_settings (struct rspamd_task *task, struct metric *metric,
-	double *score)
-{
-	const ucl_object_t *mobj, *reject, *act;
-	double val;
-
-	if (task->settings == NULL) {
-		return FALSE;
-	}
-
-	mobj = ucl_object_lookup (task->settings, metric->name);
-	if (mobj != NULL) {
-		act = ucl_object_lookup (mobj, "actions");
-		if (act != NULL) {
-			reject = ucl_object_lookup (act,
-					rspamd_action_to_str (METRIC_ACTION_REJECT));
-			if (reject != NULL && ucl_object_todouble_safe (reject, &val)) {
-				*score = val;
-				return TRUE;
-			}
-		}
-	}
-
-	return FALSE;
-}
-
 /* Return true if metric has score that is more than spam score for it */
 static gboolean
 rspamd_symbols_cache_metric_limit (struct rspamd_task *task,
@@ -1027,9 +1000,8 @@ rspamd_symbols_cache_metric_limit (struct rspamd_task *task,
 			res = g_hash_table_lookup (task->results, metric->name);
 
 			if (res) {
-				if (!check_metric_settings (task, metric, &ms)) {
-					ms = metric->actions[METRIC_ACTION_REJECT].score;
-				}
+
+				ms = res->actions_limits[METRIC_ACTION_REJECT];
 
 				if (!isnan (ms) && cp->lim < ms) {
 					cp->rs = res;
