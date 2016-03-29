@@ -59,7 +59,8 @@
 
 #ifdef WITH_HYPERSCAN
 #define RSPAMD_HS_MAGIC_LEN (sizeof (rspamd_hs_magic))
-static const guchar rspamd_hs_magic[] = {'r', 's', 'h', 's', 'r', 'e', '1', '1'};
+static const guchar rspamd_hs_magic[] = {'r', 's', 'h', 's', 'r', 'e', '1', '1'},
+		rspamd_hs_magic_vector[] = {'r', 's', 'h', 's', 'r', 'v', '1', '1'};
 #endif
 
 struct rspamd_re_class {
@@ -99,6 +100,7 @@ struct rspamd_re_cache {
 #ifdef WITH_HYPERSCAN
 	gboolean hyperscan_loaded;
 	gboolean disable_hyperscan;
+	gboolean vectorized_hyperscan;
 	hs_platform_info_t plt;
 #endif
 };
@@ -393,6 +395,7 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache, struct rspamd_config *cfg)
 	rspamd_fstring_t *features = rspamd_fstring_new ();
 
 	cache->disable_hyperscan = cfg->disable_hyperscan;
+	cache->vectorized_hyperscan = cfg->vectorized_hyperscan;
 
 	g_assert (hs_populate_platform (&cache->plt) == HS_SUCCESS);
 
@@ -513,8 +516,9 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 #ifdef WITH_HYPERSCAN
 struct rspamd_re_hyperscan_cbdata {
 	struct rspamd_re_runtime *rt;
-	const guchar *in;
-	gsize len;
+	const guchar **ins;
+	const guint *lens;
+	guint count;
 	rspamd_regexp_t *re;
 	rspamd_mempool_t *pool;
 };
@@ -529,7 +533,7 @@ rspamd_re_cache_hyperscan_cb (unsigned int id,
 	struct rspamd_re_hyperscan_cbdata *cbdata = ud;
 	struct rspamd_re_runtime *rt;
 	struct rspamd_re_cache_elt *pcre_elt;
-	guint ret, maxhits;
+	guint ret, maxhits, i, processed;
 
 	rt = cbdata->rt;
 	pcre_elt = g_ptr_array_index (rt->cache->re, id);
@@ -546,14 +550,25 @@ rspamd_re_cache_hyperscan_cb (unsigned int id,
 	}
 	else {
 		if (!isset (rt->checked, id)) {
-			ret = rspamd_re_cache_process_pcre (rt,
-					pcre_elt->re,
-					cbdata->pool,
-					cbdata->in,
-					cbdata->len,
-					FALSE);
-			rt->results[id] = ret;
-			setbit (rt->checked, id);
+
+			processed = 0;
+
+			for (i = 0; i < cbdata->count; i ++) {
+				ret = rspamd_re_cache_process_pcre (rt,
+						pcre_elt->re,
+						cbdata->pool,
+						cbdata->ins[i],
+						cbdata->lens[i],
+						FALSE);
+				rt->results[id] = ret;
+				setbit (rt->checked, id);
+
+				processed += cbdata->lens[i];
+
+				if (processed >= to) {
+					break;
+				}
+			}
 		}
 	}
 
@@ -564,16 +579,18 @@ rspamd_re_cache_hyperscan_cb (unsigned int id,
 static guint
 rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 		rspamd_regexp_t *re, rspamd_mempool_t *pool,
-		const guchar *in, gsize len,
+		const guchar **in, guint *lens,
+		guint count,
 		gboolean is_raw)
 {
 
 	guint64 re_id;
 	guint ret = 0;
+	guint i;
 
 	re_id = rspamd_regexp_get_cache_id (re);
 
-	if (len == 0 || in == NULL) {
+	if (count == 0 || in == NULL) {
 		/* We assume this as absence of the specified data */
 		setbit (rt->checked, re_id);
 		rt->results[re_id] = ret;
@@ -581,7 +598,14 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 	}
 
 #ifndef WITH_HYPERSCAN
-	ret = rspamd_re_cache_process_pcre (rt, re, pool, in, len, is_raw);
+	for (i = 0; i < count; i++) {
+		ret = rspamd_re_cache_process_pcre (rt,
+				re,
+				pool,
+				in[i],
+				lens[i],
+				is_raw);
+	}
 	setbit (rt->checked, re_id);
 	rt->results[re_id] = ret;
 #else
@@ -593,32 +617,65 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 	re_class = rspamd_regexp_get_class (re);
 
 	if (rt->cache->disable_hyperscan || elt->match_type == RSPAMD_RE_CACHE_PCRE) {
-		ret = rspamd_re_cache_process_pcre (rt, re, pool, in, len, is_raw);
+		for (i = 0; i < count; i++) {
+			ret = rspamd_re_cache_process_pcre (rt,
+					re,
+					pool,
+					in[i],
+					lens[i],
+					is_raw);
+		}
+
 		setbit (rt->checked, re_id);
 		rt->results[re_id] = ret;
 	}
 	else {
-		if (rt->cache->max_re_data > 0 && len > rt->cache->max_re_data) {
-			len = rt->cache->max_re_data;
+		for (i = 0; i < count; i ++) {
+			if (rt->cache->max_re_data > 0 && lens[i] > rt->cache->max_re_data) {
+				lens[i] = rt->cache->max_re_data;
+			}
+			rt->stat.bytes_scanned += lens[i];
 		}
 
 		g_assert (re_class->hs_scratch != NULL);
 		g_assert (re_class->hs_db != NULL);
 
 		/* Go through hyperscan API */
-		cbdata.in = in;
-		cbdata.re = re;
-		cbdata.rt = rt;
-		cbdata.len = len;
-		cbdata.pool = pool;
-		rt->stat.bytes_scanned += len;
+		if (!rt->cache->vectorized_hyperscan) {
+			for (i = 0; i < count; i++) {
+				cbdata.ins = &in[i];
+				cbdata.re = re;
+				cbdata.rt = rt;
+				cbdata.lens = &lens[i];
+				cbdata.count = 1;
+				cbdata.pool = pool;
 
-		if ((hs_scan (re_class->hs_db, in, len, 0, re_class->hs_scratch,
-				rspamd_re_cache_hyperscan_cb, &cbdata)) != HS_SUCCESS) {
-			ret = 0;
+				if ((hs_scan (re_class->hs_db, in[i], lens[i], 0,
+						re_class->hs_scratch,
+						rspamd_re_cache_hyperscan_cb, &cbdata)) != HS_SUCCESS) {
+					ret = 0;
+				}
+				else {
+					ret = rt->results[re_id];
+				}
+			}
 		}
 		else {
-			ret = rt->results[re_id];
+			cbdata.ins = in;
+			cbdata.re = re;
+			cbdata.rt = rt;
+			cbdata.lens = lens;
+			cbdata.count = 1;
+			cbdata.pool = pool;
+
+			if ((hs_scan_vector (re_class->hs_db, (const char **)in, lens, count, 0,
+					re_class->hs_scratch,
+					rspamd_re_cache_hyperscan_cb, &cbdata)) != HS_SUCCESS) {
+				ret = 0;
+			}
+			else {
+				ret = rt->results[re_id];
+			}
 		}
 	}
 #endif
@@ -658,16 +715,18 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		gboolean is_strong)
 {
 	guint ret = 0, i, re_id;
-	GList *cur, *headerlist;
+	GPtrArray *headerlist;
 	GHashTableIter it;
 	struct raw_header *rh;
-	const gchar *in;
+	const gchar *in, *end;
+	const guchar **scvec;
+	guint *lenvec;
 	gboolean raw = FALSE;
 	struct mime_text_part *part;
 	struct rspamd_url *url;
 	struct rspamd_re_cache *cache = rt->cache;
 	gpointer k, v;
-	gsize len;
+	guint len, cnt;
 
 	msg_debug_re_cache ("get to the slow path for re type: %s: %s",
 			rspamd_re_cache_type_to_string (re_class->type),
@@ -678,39 +737,43 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 	case RSPAMD_RE_HEADER:
 	case RSPAMD_RE_RAWHEADER:
 		/* Get list of specified headers */
-		headerlist = rspamd_message_get_header (task,
+		headerlist = rspamd_message_get_header_array (task,
 				re_class->type_data,
 				is_strong);
 
 		if (headerlist) {
-			cur = headerlist;
+			scvec = g_malloc (sizeof (*scvec) * headerlist->len);
+			lenvec = g_malloc (sizeof (*lenvec) * headerlist->len);
 
-			while (cur) {
-				rh = cur->data;
+			for (i = 0; i < headerlist->len; i ++) {
+				rh = g_ptr_array_index (headerlist, i);
+
 				if (re_class->type == RSPAMD_RE_RAWHEADER) {
 					in = rh->value;
 					raw = TRUE;
+					lenvec[i] = strlen (rh->value);
 				}
 				else {
 					in = rh->decoded;
 					/* Validate input */
-					if (!in || !g_utf8_validate (in, -1, NULL)) {
-						cur = g_list_next (cur);
+					if (!in || !g_utf8_validate (in, -1, &end)) {
+						lenvec[i] = 0;
+						scvec[i] = (guchar *)"";
 						continue;
 					}
+					lenvec[i] = end - in;
 				}
 
-				/* Match re */
-				if (in) {
-					ret = rspamd_re_cache_process_regexp_data (rt, re,
-							task->task_pool, in, strlen (in), raw);
-					debug_task ("checking header %s regexp: %s -> %d",
-							re_class->type_data,
-							rspamd_regexp_get_pattern (re), ret);
-				}
-
-				cur = g_list_next (cur);
+				scvec[i] = (guchar *)in;
 			}
+
+			ret = rspamd_re_cache_process_regexp_data (rt, re,
+					task->task_pool, scvec, lenvec, headerlist->len, raw);
+			debug_task ("checking header %s regexp: %s -> %d",
+					re_class->type_data,
+					rspamd_regexp_get_pattern (re), ret);
+			g_free (scvec);
+			g_free (lenvec);
 		}
 		break;
 	case RSPAMD_RE_ALLHEADER:
@@ -718,79 +781,102 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		in = task->raw_headers_content.begin;
 		len = task->raw_headers_content.len;
 		ret = rspamd_re_cache_process_regexp_data (rt, re,
-				task->task_pool, in, len, raw);
+				task->task_pool, (const guchar **)&in, &len, 1, raw);
 		debug_task ("checking allheader regexp: %s -> %d",
 				rspamd_regexp_get_pattern (re), ret);
 		break;
 	case RSPAMD_RE_MIME:
 	case RSPAMD_RE_RAWMIME:
-		/* Iterate throught text parts */
-		for (i = 0; i < task->text_parts->len; i++) {
-			part = g_ptr_array_index (task->text_parts, i);
+		/* Iterate through text parts */
+		if (task->text_parts->len > 0) {
+			scvec = g_malloc (sizeof (*scvec) * task->text_parts->len);
+			lenvec = g_malloc (sizeof (*lenvec) * task->text_parts->len);
 
-			/* Skip empty parts */
-			if (IS_PART_EMPTY (part)) {
-				continue;
+			for (i = 0; i < task->text_parts->len; i++) {
+				part = g_ptr_array_index (task->text_parts, i);
+
+				/* Skip empty parts */
+				if (IS_PART_EMPTY (part)) {
+					lenvec[i] = 0;
+					scvec[i] = (guchar *) "";
+					continue;
+				}
+
+				/* Check raw flags */
+				if (!IS_PART_UTF (part)) {
+					raw = TRUE;
+				}
+				/* Select data for regexp */
+				if (re_class->type == RSPAMD_RE_RAWMIME) {
+					in = part->orig->data;
+					len = part->orig->len;
+					raw = TRUE;
+				}
+				else {
+					in = part->content->data;
+					len = part->content->len;
+				}
+
+				scvec[i] = (guchar *) in;
+				lenvec[i] = len;
 			}
 
-			/* Check raw flags */
-			if (!IS_PART_UTF (part)) {
-				raw = TRUE;
-			}
-			/* Select data for regexp */
-			if (re_class->type == RSPAMD_RE_RAWMIME) {
-				in = part->orig->data;
-				len = part->orig->len;
-				raw = TRUE;
-			}
-			else {
-				in = part->content->data;
-				len = part->content->len;
-			}
-
-			if (len > 0) {
-				ret = rspamd_re_cache_process_regexp_data (rt, re,
-						task->task_pool, in, len, raw);
-				debug_task ("checking mime regexp: %s -> %d",
-						rspamd_regexp_get_pattern (re), ret);
-			}
+			ret = rspamd_re_cache_process_regexp_data (rt, re,
+					task->task_pool, scvec, lenvec, task->text_parts->len, raw);
+			debug_task ("checking mime regexp: %s -> %d",
+					rspamd_regexp_get_pattern (re), ret);
+			g_free (scvec);
+			g_free (lenvec);
 		}
 		break;
 	case RSPAMD_RE_URL:
-		g_hash_table_iter_init (&it, task->urls);
+		cnt = g_hash_table_size (task->urls) + g_hash_table_size (task->emails);
 
-		while (g_hash_table_iter_next (&it, &k, &v)) {
-			url = v;
-			in = url->string;
-			len = url->urllen;
-			raw = FALSE;
+		if (cnt > 0) {
+			scvec = g_malloc (sizeof (*scvec) * cnt);
+			lenvec = g_malloc (sizeof (*lenvec) * cnt);
+			g_hash_table_iter_init (&it, task->urls);
+			i = 0;
+
+			while (g_hash_table_iter_next (&it, &k, &v)) {
+				url = v;
+				in = url->string;
+				len = url->urllen;
+				raw = FALSE;
+
+				scvec[i] = (guchar *)in;
+				lenvec[i++] = len;
+			}
+
+			g_hash_table_iter_init (&it, task->emails);
+
+			while (g_hash_table_iter_next (&it, &k, &v)) {
+				url = v;
+				in = url->string;
+				len = url->urllen;
+				raw = FALSE;
+
+				scvec[i] = (guchar *) in;
+				lenvec[i++] = len;
+			}
+
+			g_assert (i == cnt);
 
 			ret = rspamd_re_cache_process_regexp_data (rt, re,
-					task->task_pool, in, len, raw);
+					task->task_pool, scvec, lenvec, i, raw);
+			debug_task ("checking url regexp: %s -> %d",
+					rspamd_regexp_get_pattern (re), ret);
+			g_free (scvec);
+			g_free (lenvec);
 		}
-
-		g_hash_table_iter_init (&it, task->emails);
-
-		while (g_hash_table_iter_next (&it, &k, &v)) {
-			url = v;
-			in = url->string;
-			len = url->urllen;
-			raw = FALSE;
-
-			ret = rspamd_re_cache_process_regexp_data (rt, re,
-					task->task_pool, in, len, raw);
-		}
-
-		debug_task ("checking url regexp: %s -> %d",
-				rspamd_regexp_get_pattern (re), ret);
 		break;
 	case RSPAMD_RE_BODY:
 		raw = TRUE;
 		in = task->msg.begin;
 		len = task->msg.len;
 
-		ret = rspamd_re_cache_process_regexp_data (rt, re, task->task_pool, in,
-				len, raw);
+		ret = rspamd_re_cache_process_regexp_data (rt, re, task->task_pool,
+				(const guchar **)&in, &len, 1, raw);
 		debug_task ("checking rawbody regexp: %s -> %d",
 				rspamd_regexp_get_pattern (re), ret);
 		break;
@@ -992,7 +1078,7 @@ rspamd_re_cache_is_finite (struct rspamd_re_cache *cache,
 		/* Try to compile pattern */
 		if (hs_compile (rspamd_regexp_get_pattern (re),
 				flags | HS_FLAG_PREFILTER,
-				HS_MODE_BLOCK,
+				cache->vectorized_hyperscan ? HS_MODE_VECTORED : HS_MODE_BLOCK,
 				&cache->plt,
 				&test_db,
 				&hs_errors) != HS_SUCCESS) {
@@ -1161,7 +1247,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 
 			if (hs_compile (rspamd_regexp_get_pattern (re),
 					hs_flags[i],
-					HS_MODE_BLOCK,
+					cache->vectorized_hyperscan ? HS_MODE_VECTORED : HS_MODE_BLOCK,
 					&cache->plt,
 					&test_db,
 					&hs_errors) != HS_SUCCESS) {
@@ -1195,7 +1281,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 					hs_flags,
 					hs_ids,
 					n,
-					HS_MODE_BLOCK,
+					cache->vectorized_hyperscan ? HS_MODE_VECTORED : HS_MODE_BLOCK,
 					&cache->plt,
 					&test_db,
 					&hs_errors) != HS_SUCCESS) {
@@ -1242,7 +1328,13 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 			 * <hyperscan blob>
 			 */
 			crc = XXH64 (hs_serialized, serialized_len, 0xdeadbabe);
-			iov[0].iov_base = (void *)rspamd_hs_magic;
+
+			if (cache->vectorized_hyperscan) {
+				iov[0].iov_base = (void *) rspamd_hs_magic_vector;
+			}
+			else {
+				iov[0].iov_base = (void *) rspamd_hs_magic;
+			}
 			iov[0].iov_len = RSPAMD_HS_MAGIC_LEN;
 			iov[1].iov_base = &cache->plt;
 			iov[1].iov_len = sizeof (cache->plt);
@@ -1314,6 +1406,7 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 #else
 	gint fd, n, ret;
 	guchar magicbuf[RSPAMD_HS_MAGIC_LEN];
+	const guchar *mb;
 	GHashTableIter it;
 	gpointer k, v;
 	struct rspamd_re_class *re_class;
@@ -1358,11 +1451,18 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 				return FALSE;
 			}
 
-			if (memcmp (magicbuf, rspamd_hs_magic, sizeof (magicbuf)) != 0) {
+			if (cache->vectorized_hyperscan) {
+				mb = rspamd_hs_magic_vector;
+			}
+			else {
+				mb = rspamd_hs_magic;
+			}
+
+			if (memcmp (magicbuf, mb, sizeof (magicbuf)) != 0) {
 				msg_err_re_cache ("cannot open hyperscan cache file %s: "
 						"bad magic ('%*xs', '%*xs' expected)",
 						path, (int) RSPAMD_HS_MAGIC_LEN, magicbuf,
-						(int) RSPAMD_HS_MAGIC_LEN, rspamd_hs_magic);
+						(int) RSPAMD_HS_MAGIC_LEN, mb);
 
 				close (fd);
 				return FALSE;
