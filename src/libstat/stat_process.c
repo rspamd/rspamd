@@ -733,10 +733,7 @@ rspamd_stat_check_autolearn (struct rspamd_task *task)
 					mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
 
 					if (mres) {
-						mres->action = rspamd_check_action_metric (task,
-								mres->score,
-								&mres->actions_limits[METRIC_ACTION_REJECT],
-								mres->metric);
+						mres->action = rspamd_check_action_metric (task, mres);
 
 						if (mres->action == METRIC_ACTION_REJECT) {
 							task->flags |= RSPAMD_TASK_FLAG_LEARN_SPAM;

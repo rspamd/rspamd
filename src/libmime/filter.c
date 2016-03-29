@@ -344,61 +344,26 @@ rspamd_action_to_str (enum rspamd_metric_action action)
 	return "unknown action";
 }
 
-static double
-get_specific_action_score (struct rspamd_task *task,
-		const ucl_object_t *metric,
-		struct metric_action *action)
-{
-	const ucl_object_t *act, *sact;
-	const gchar *act_name;
-	double score;
-
-	if (metric) {
-		act = ucl_object_lookup (metric, "actions");
-		if (act) {
-			act_name = rspamd_action_to_str (action->action);
-			sact = ucl_object_lookup (act, act_name);
-			if (sact != NULL && ucl_object_todouble_safe (sact, &score)) {
-				msg_debug_task ("found override score %.2f for action %s in settings",
-						score, act_name);
-				return score;
-			}
-		}
-	}
-
-	return action->score;
-}
-
-gint
-rspamd_check_action_metric (struct rspamd_task *task,
-		double score, double *rscore, struct metric *metric)
+enum rspamd_metric_action
+rspamd_check_action_metric (struct rspamd_task *task, struct metric_result *mres)
 {
 	struct metric_action *action, *selected_action = NULL;
 	double max_score = 0;
-	const ucl_object_t *ms = NULL;
 	int i;
-
-	if (task->settings) {
-		ms = ucl_object_lookup (task->settings, metric->name);
-	}
 
 	for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
 		double sc;
 
-		action = &metric->actions[i];
-		sc = get_specific_action_score (task, ms, action);
+		action = &mres->metric->actions[i];
+		sc = mres->actions_limits[i];
 
 		if (isnan (sc)) {
 			continue;
 		}
 
-		if (score >= sc && sc > max_score) {
+		if (mres->score >= sc && sc > max_score) {
 			selected_action = action;
 			max_score = sc;
-		}
-
-		if (rscore != NULL && i == METRIC_ACTION_REJECT) {
-			*rscore = sc;
 		}
 	}
 

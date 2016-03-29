@@ -2358,10 +2358,39 @@ lua_task_set_settings (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	ucl_object_t *settings;
+	const ucl_object_t *act, *elt, *metric_elt;
+	struct metric_result *mres;
+	guint i;
 
 	settings = ucl_object_lua_import (L, 2);
+
 	if (settings != NULL && task != NULL) {
 		task->settings = settings;
+
+		metric_elt = ucl_object_lookup (settings, DEFAULT_METRIC);
+
+		if (metric_elt) {
+			act = ucl_object_lookup (metric_elt, "actions");
+
+			if (act) {
+				/* Adjust desired actions */
+				mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+
+				if (mres == NULL) {
+					mres = rspamd_create_metric_result (task, DEFAULT_METRIC);
+				}
+
+				for (i = 0; i < METRIC_ACTION_MAX; i++) {
+					elt = ucl_object_lookup (act, rspamd_action_to_str (i));
+
+					if (elt) {
+						mres->actions_limits[i] = ucl_object_todouble (elt);
+						msg_debug_task ("adjusted action %s to %.2f",
+								ucl_object_key (elt), mres->actions_limits[i]);
+					}
+				}
+			}
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -2506,9 +2535,7 @@ lua_task_get_metric_action (lua_State *L)
 	if (task && metric_name) {
 		if ((metric_res =
 			g_hash_table_lookup (task->results, metric_name)) != NULL) {
-			action = rspamd_check_action_metric (task, metric_res->score,
-					NULL,
-					metric_res->metric);
+			action = rspamd_check_action_metric (task, metric_res);
 			lua_pushstring (L, rspamd_action_to_str (action));
 		}
 		else {

@@ -97,9 +97,7 @@ const gchar * rspamd_action_to_str (enum rspamd_metric_action action);
 /*
  * Get action for specific metric
  */
-gint rspamd_check_action_metric (struct rspamd_task *task,
-	double score,
-	double *rscore,
-	struct metric *metric);
+enum rspamd_metric_action rspamd_check_action_metric (struct rspamd_task *task,
+	struct metric_result *mres);
 
 #endif
