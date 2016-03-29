@@ -617,6 +617,8 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 							cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
 						}
 					}
+
+					goto end;
 					break;
 				case SPF_RESOLVE_INCLUDE:
 					if (elt_data->type == RDNS_REQUEST_TXT) {
@@ -627,6 +629,8 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 							cb->addr->flags &= ~RSPAMD_SPF_FLAG_PARSED;
 						}
 					}
+					goto end;
+
 					break;
 				case SPF_RESOLVE_EXP:
 					break;
@@ -709,6 +713,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				rdns_strerror (reply->code));
 	}
 
+end:
 	rspamd_spf_maybe_return (cb->rec);
 }
 
