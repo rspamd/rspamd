@@ -821,7 +821,7 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 			break;
 		case RSPAMD_LOG_SCORES:
 			res.len = rspamd_snprintf (scorebuf, sizeof (scorebuf), "%.2f/%.2f",
-					mres->score, mres->required_score);
+					mres->score, mres->actions_limits[METRIC_ACTION_REJECT]);
 			res.begin = scorebuf;
 			break;
 		case RSPAMD_LOG_SYMBOLS:

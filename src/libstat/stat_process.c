@@ -735,7 +735,7 @@ rspamd_stat_check_autolearn (struct rspamd_task *task)
 					if (mres) {
 						mres->action = rspamd_check_action_metric (task,
 								mres->score,
-								&mres->required_score,
+								&mres->actions_limits[METRIC_ACTION_REJECT],
 								mres->metric);
 
 						if (mres->action == METRIC_ACTION_REJECT) {

@@ -802,7 +802,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 
 	m = mres->metric;
 	mres->action = rspamd_check_action_metric (task, mres->score,
-					&mres->required_score, m);
+					&mres->actions_limits[METRIC_ACTION_REJECT], m);
 
 	action = mres->action;
 	is_spam = (action < METRIC_ACTION_GREYLIST);
@@ -814,7 +814,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 		"is_skipped", 0, false);
 	ucl_object_insert_key (obj, ucl_object_fromdouble (mres->score),
 		"score", 0, false);
-	ucl_object_insert_key (obj, ucl_object_fromdouble (mres->required_score),
+	ucl_object_insert_key (obj, ucl_object_fromdouble (mres->actions_limits[METRIC_ACTION_REJECT]),
 		"required_score", 0, false);
 	ucl_object_insert_key (obj,
 		ucl_object_fromstring (rspamd_action_to_str (action)),

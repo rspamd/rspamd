@@ -29,6 +29,7 @@ rspamd_create_metric_result (struct rspamd_task *task, const gchar *name)
 {
 	struct metric_result *metric_res;
 	struct metric *metric;
+	guint i;
 
 	metric_res = g_hash_table_lookup (task->results, name);
 
@@ -53,12 +54,16 @@ rspamd_create_metric_result (struct rspamd_task *task, const gchar *name)
 	rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) g_hash_table_unref,
 			metric_res->sym_groups);
-	metric_res->checked = FALSE;
 	metric_res->metric = metric;
 	metric_res->grow_factor = 0;
 	metric_res->score = 0;
 	g_hash_table_insert (task->results, (gpointer) metric->name,
 			metric_res);
+
+	for (i = 0; i < METRIC_ACTION_MAX; i++) {
+		metric_res->actions_limits[i] = metric->actions[i].score;
+	}
+
 	metric_res->action = METRIC_ACTION_MAX;
 
 	return metric_res;
