@@ -25,6 +25,7 @@ local settings = {
   [2] = {},
   [3] = {}
 }
+local settings_ids = {}
 local settings_initialized = false
 local max_pri = 0
 local rspamd_logger = require "rspamd_logger"
@@ -68,6 +69,16 @@ local function check_query_settings(task)
       end
 
       task:set_settings(nset)
+
+      return true
+    end
+  end
+
+  local settings_id = task:get_request_header('settings-id')
+  if settings_id and settings_initialized then
+    local elt = settings_ids[settings_id]
+    if elt and elt['apply'] then
+      task:set_settings(elt['apply'])
 
       return true
     end
@@ -398,6 +409,11 @@ local function process_settings_table(tbl)
 
     -- Now we must process actions
     if elt['symbols'] then out['symbols'] = elt['symbols'] end
+    if elt['id'] then
+      out['id'] = elt['id']
+      settings[elt['id']] = out
+    end
+
     if elt['apply'] then
       -- Just insert all metric results to the action key
       out['apply'] = elt['apply']
@@ -424,6 +440,7 @@ local function process_settings_table(tbl)
   -- clear all settings
   max_pri = 0
   local nrules = 0
+  settings_ids = {}
   for k,v in pairs(settings) do settings[k]={} end
   -- fill new settings by priority
   for_each(function(k, v)
