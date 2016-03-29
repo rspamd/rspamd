@@ -1241,6 +1241,42 @@ rspamd_symbols_cache_tm (gint fd, short what, void *data)
 			data);
 }
 
+static struct cache_savepoint *
+rspamd_symbols_cache_make_checkpoint (struct rspamd_task *task,
+		struct symbols_cache *cache)
+{
+	struct cache_savepoint *checkpoint;
+
+	if (cache->items_by_id->len != cache->items_by_order->d->len) {
+		/*
+		 * Cache has been modified, need to resort it
+		 */
+		msg_info_cache ("symbols cache has been modified since last check:"
+				" old items: %ud, new items: %ud",
+				cache->items_by_order->d->len, cache->items_by_id->len);
+		rspamd_symbols_cache_resort (cache);
+	}
+
+	checkpoint = rspamd_mempool_alloc0 (task->task_pool, sizeof (*checkpoint));
+	/* Bit 0: check started, Bit 1: check finished */
+	checkpoint->processed_bits = rspamd_mempool_alloc0 (task->task_pool,
+			NBYTES (cache->used_items) * 2);
+	checkpoint->waitq = g_ptr_array_new ();
+	g_assert (cache->items_by_order != NULL);
+	checkpoint->version = cache->items_by_order->d->len;
+	checkpoint->order = cache->items_by_order;
+	REF_RETAIN (checkpoint->order);
+	rspamd_mempool_add_destructor (task->task_pool,
+			rspamd_symbols_cache_order_unref, checkpoint->order);
+	rspamd_mempool_add_destructor (task->task_pool,
+			rspamd_ptr_array_free_hard, checkpoint->waitq);
+	task->checkpoint = checkpoint;
+
+	rspamd_create_metric_result (task, DEFAULT_METRIC);
+
+	return checkpoint;
+}
+
 gboolean
 rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	struct symbols_cache *cache)
@@ -1255,46 +1291,22 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	g_assert (cache != NULL);
 
 	if (task->checkpoint == NULL) {
-
-		if (cache->items_by_id->len != cache->items_by_order->d->len) {
-			/*
-			 * Cache has been modified, need to resort it
-			 */
-			msg_info_cache ("symbols cache has been modified since last check:"
-					" old items: %ud, new items: %ud",
-					cache->items_by_order->d->len, cache->items_by_id->len);
-			rspamd_symbols_cache_resort (cache);
-		}
-
-		checkpoint = rspamd_mempool_alloc0 (task->task_pool, sizeof (*checkpoint));
-		/* Bit 0: check started, Bit 1: check finished */
-		checkpoint->processed_bits = rspamd_mempool_alloc0 (task->task_pool,
-				NBYTES (cache->used_items) * 2);
-		checkpoint->waitq = g_ptr_array_new ();
-		g_assert (cache->items_by_order != NULL);
-		checkpoint->version = cache->items_by_order->d->len;
-		checkpoint->order = cache->items_by_order;
-		REF_RETAIN (checkpoint->order);
-		rspamd_mempool_add_destructor (task->task_pool,
-				rspamd_symbols_cache_order_unref, checkpoint->order);
-		rspamd_mempool_add_destructor (task->task_pool,
-				rspamd_ptr_array_free_hard, checkpoint->waitq);
+		checkpoint = rspamd_symbols_cache_make_checkpoint (task, cache);
 		task->checkpoint = checkpoint;
-
-		rspamd_create_metric_result (task, DEFAULT_METRIC);
-		if (task->settings) {
-			const ucl_object_t *wl;
-
-			wl = ucl_object_lookup (task->settings, "whitelist");
-			if (wl != NULL) {
-				msg_info_task ("<%s> is whitelisted", task->message_id);
-				task->flags |= RSPAMD_TASK_FLAG_SKIP;
-				return TRUE;
-			}
-		}
 	}
 	else {
 		checkpoint = task->checkpoint;
+	}
+
+	if (task->settings) {
+		const ucl_object_t *wl;
+
+		wl = ucl_object_lookup (task->settings, "whitelist");
+		if (wl != NULL) {
+			msg_info_task ("<%s> is whitelisted", task->message_id);
+			task->flags |= RSPAMD_TASK_FLAG_SKIP;
+			return TRUE;
+		}
 	}
 
 	msg_debug_task ("symbols processing stage at pass: %d", checkpoint->pass);
@@ -1604,4 +1616,34 @@ rspamd_symbols_cache_find_symbol (struct symbols_cache *cache, const gchar *name
 	}
 
 	return -1;
+}
+
+void
+rspamd_symbols_cache_disable_symbol (struct rspamd_task *task,
+		struct symbols_cache *cache, const gchar *symbol)
+{
+	struct cache_savepoint *checkpoint;
+	struct cache_item *item;
+
+	if (task->checkpoint == NULL) {
+		checkpoint = rspamd_symbols_cache_make_checkpoint (task, cache);
+		task->checkpoint = checkpoint;
+	}
+	else {
+		checkpoint = task->checkpoint;
+	}
+
+	item = g_hash_table_lookup (cache->items_by_symbol, symbol);
+
+	if (item != NULL) {
+		/* Set executed and finished flags */
+
+		setbit (checkpoint->processed_bits, item->id * 2);
+		setbit (checkpoint->processed_bits, item->id * 2 + 1);
+
+		msg_debug_task ("disable execution of %s", symbol);
+	}
+	else {
+		msg_info_task ("cannot disable %s: not found", symbol);
+	}
 }

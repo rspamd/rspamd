@@ -168,4 +168,10 @@ void rspamd_symbols_cache_add_dependency (struct symbols_cache *cache,
 void rspamd_symbols_cache_add_delayed_dependency (struct symbols_cache *cache,
 		const gchar *from, const gchar *to);
 
+/**
+ * Disable some symbols from execution in the cache
+ */
+void rspamd_symbols_cache_disable_symbol (struct rspamd_task *task,
+		struct symbols_cache *cache, const gchar *symbol);
+
 #endif
