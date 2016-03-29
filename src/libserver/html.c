@@ -1131,6 +1131,7 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 	gsize decoded_len;
 	gboolean has_spaces = FALSE;
 	const gchar *p;
+	gchar *t, *h;
 
 	p = start;
 
@@ -1165,6 +1166,21 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 	decoded = rspamd_mempool_alloc (pool, len + 1);
 	rspamd_strlcpy (decoded, start, len + 1);
 	decoded_len = rspamd_decode_url (decoded, start, len);
+
+	/* We also need to remove all internal newlines */
+	t = decoded;
+	h = t;
+
+	while (*h) {
+		if (*h == '\r' || *h == '\n') {
+			h ++;
+			decoded_len --;
+		}
+		else {
+			*t++ = *h++;
+		}
+	}
+	*t = *h;
 
 	if (comp) {
 		comp->start = decoded;
