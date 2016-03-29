@@ -1962,3 +1962,31 @@ rspamd_message_get_header (struct rspamd_task *task,
 
 	return gret;
 }
+
+GPtrArray *
+rspamd_message_get_header_array (struct rspamd_task *task,
+		const gchar *field,
+		gboolean strong)
+{
+	GPtrArray *ret;
+	struct raw_header *rh, *cur;
+	guint nelems = 0;
+
+	rh = g_hash_table_lookup (task->raw_headers, field);
+
+	if (rh == NULL) {
+		return NULL;
+	}
+
+	LL_FOREACH (rh, cur) {
+		nelems ++;
+	}
+
+	ret = g_ptr_array_sized_new (nelems);
+
+	LL_FOREACH (rh, cur) {
+		g_ptr_array_add (ret, cur);
+	}
+
+	return ret;
+}
