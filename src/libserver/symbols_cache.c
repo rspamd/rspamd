@@ -1277,6 +1277,62 @@ rspamd_symbols_cache_make_checkpoint (struct rspamd_task *task,
 	return checkpoint;
 }
 
+static gboolean
+rspamd_symbols_cache_process_settings (struct rspamd_task *task,
+		struct symbols_cache *cache)
+{
+	const ucl_object_t *wl, *cur, *disabled;
+	struct metric *def;
+	struct rspamd_symbols_group *gr;
+	GHashTableIter gr_it;
+	ucl_object_iter_t it = NULL;
+	gpointer k, v;
+
+	wl = ucl_object_lookup (task->settings, "whitelist");
+
+	if (wl != NULL) {
+		msg_info_task ("<%s> is whitelisted", task->message_id);
+		task->flags |= RSPAMD_TASK_FLAG_SKIP;
+		return TRUE;
+	}
+
+	disabled = ucl_object_lookup (task->settings, "symbols_disabled");
+
+	if (disabled) {
+		it = NULL;
+
+		while ((cur = ucl_iterate_object (disabled, &it, true)) != NULL) {
+			rspamd_symbols_cache_disable_symbol (task, cache,
+					ucl_object_tostring (cur));
+		}
+	}
+
+	/* Disable groups of symbols */
+	disabled = ucl_object_lookup (task->settings, "groups_disabled");
+	def = g_hash_table_lookup (task->cfg->metrics, DEFAULT_METRIC);
+
+	if (def && disabled) {
+		it = NULL;
+
+		while ((cur = ucl_iterate_object (disabled, &it, true)) != NULL) {
+			if (ucl_object_type (cur) == UCL_STRING) {
+				gr = g_hash_table_lookup (def->groups,
+						ucl_object_tostring (cur));
+
+				if (gr) {
+					g_hash_table_iter_init (&gr_it, gr->symbols);
+
+					while (g_hash_table_iter_next (&gr_it, &k, &v)) {
+						rspamd_symbols_cache_disable_symbol (task, cache, k);
+					}
+				}
+			}
+		}
+	}
+
+	return FALSE;
+}
+
 gboolean
 rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	struct symbols_cache *cache)
@@ -1299,12 +1355,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	}
 
 	if (task->settings) {
-		const ucl_object_t *wl;
-
-		wl = ucl_object_lookup (task->settings, "whitelist");
-		if (wl != NULL) {
-			msg_info_task ("<%s> is whitelisted", task->message_id);
-			task->flags |= RSPAMD_TASK_FLAG_SKIP;
+		if (rspamd_symbols_cache_process_settings (task, cache)) {
 			return TRUE;
 		}
 	}
