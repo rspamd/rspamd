@@ -455,7 +455,7 @@ rspamd_socket (const gchar *credits, guint16 port,
 			msg_err ("address resolution for %s failed: %s",
 				credits,
 				gai_strerror (r));
-			return FALSE;
+			return -1;
 		}
 	}
 }
