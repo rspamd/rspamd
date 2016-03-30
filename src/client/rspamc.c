@@ -1313,6 +1313,10 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 				&err);
 		}
 	}
+	else {
+		rspamd_fprintf (stderr, "cannot connect to %s\n", connect_str);
+		exit (EXIT_FAILURE);
+	}
 
 	g_free (hostbuf);
 }
