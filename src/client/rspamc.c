@@ -1251,31 +1251,47 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 	FILE *in, const gchar *name, GQueue *attrs)
 {
 	struct rspamd_client_connection *conn;
-	gchar **connectv;
+	gchar *hostbuf = NULL, *p;
 	guint16 port;
 	GError *err = NULL;
 	struct rspamc_callback_data *cbdata;
 
-	connectv = g_strsplit_set (connect_str, ":", -1);
+	if (connect_str[0] == '[') {
+		p = strrchr (connect_str, ']');
 
-	if (connectv == NULL || connectv[0] == NULL) {
-		fprintf (stderr, "bad connect string: %s\n", connect_str);
-		exit (EXIT_FAILURE);
-	}
-
-	if (connectv[1] != NULL) {
-		port = strtoul (connectv[1], NULL, 10);
-	}
-	else if (*connectv[0] != '/') {
-		port = cmd->is_controller ? DEFAULT_CONTROL_PORT : DEFAULT_PORT;
+		if (p != NULL) {
+			hostbuf = g_malloc (p - connect_str);
+			rspamd_strlcpy (hostbuf, connect_str + 1, p - connect_str);
+			p ++;
+		}
+		else {
+			p = connect_str;
+		}
 	}
 	else {
-		/* Unix socket */
-		port = 0;
+		p = connect_str;
 	}
 
-	conn = rspamd_client_init (ev_base, connectv[0], port, timeout, key);
-	g_strfreev (connectv);
+	p = strrchr (p, ':');
+
+	if (p != NULL) {
+		port = strtoul (p + 1, NULL, 10);
+	}
+	else {
+		port = cmd->is_controller ? DEFAULT_CONTROL_PORT : DEFAULT_PORT;
+	}
+
+	if (!hostbuf) {
+		if (p != NULL) {
+			hostbuf = g_malloc (p - connect_str + 1);
+			rspamd_strlcpy (hostbuf, connect_str, p - connect_str + 1);
+		}
+		else {
+			hostbuf = g_strdup (connect_str);
+		}
+	}
+
+	conn = rspamd_client_init (ev_base, hostbuf, port, timeout, key);
 
 	if (conn != NULL) {
 		cbdata = g_slice_alloc (sizeof (struct rspamc_callback_data));
@@ -1297,6 +1313,8 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 				&err);
 		}
 	}
+
+	g_free (hostbuf);
 }
 
 static void
