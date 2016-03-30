@@ -164,7 +164,16 @@ Download process is described in the [downloads page](/downloads.html) where you
 
 To enable run on startup:
 
-	systemctl enable rspamd.socket
+```
+systemctl enable rspamd.socket
+systemctl start rspamd.socket
+```
+
+For rmilter, you might also want to do the same:
+```
+systemctl enable rmilter.socket
+systemctl start rmilter.socket
+```
 
 Rspamd will be started on-demand, so to simulate this you could run:
 

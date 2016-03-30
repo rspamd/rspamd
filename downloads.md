@@ -104,6 +104,8 @@ For <a class="undecor" href="#experimentalSys2">experimental<sup>2</sup></a> bra
     apt-get update
     apt-get --no-install-recommends install rspamd
 
+Check [quick start](/doc/quickstart.html#rspamd-installation) for further steps.
+
 ### Debian `official` repos
 
 Rspamd is also available in some versions of Debian and Ubuntu. However, we are looking for an active maintainer for rspamd in these 'official' repos, as now rspamd is terribly outdated there.

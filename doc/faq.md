@@ -10,6 +10,26 @@ This document includes some questions and practical examples that are frequently
 ### Where get help about rspamd
 The most convenient place for asking questions about rspamd is IRC channel _#rspamd_ in [http://freenode.net](http://freenode.net). For more information you can also check the [support page](https://rspamd.com/support.html)
 
+### I have systemd and rspamd won't start
+
+You need to do the following:
+
+```
+systemctl enable rspamd.socket
+systemctl start rspamd.socket
+```
+
+That should enable sockets activation for rspamd:
+
+```
+systemctl status rspamd.socket
+● rspamd.socket - rapid spam filtering system
+   Loaded: loaded (/lib/systemd/system/rspamd.socket; enabled)
+   Active: active (running) since Wed 2016-03-30 11:39:37 EDT; 5min ago
+   Listen: [::]:11333 (Stream)
+           [::1]:11334 (Stream)
+```
+
 ### How to figure out why rspamd process crashed
 Like other programs written in `C` language, the best way to debug these problems is to obtain `core` dump. Unfortunately, there is no universal solution suitable for all platforms, however, for FreeBSD and Linux you could do the following.
 
