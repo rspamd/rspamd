@@ -844,10 +844,26 @@ lua_task_insert_result (lua_State * L)
 		top = lua_gettop (L);
 		/* Get additional options */
 		for (i = 4; i <= top; i++) {
-			param = luaL_checkstring (L, i);
-			params =
-				g_list_prepend (params,
-					rspamd_mempool_strdup (task->task_pool, param));
+			if (lua_type (L, i) == LUA_TSTRING) {
+				param = luaL_checkstring (L, i);
+				params =
+						g_list_prepend (params,
+								rspamd_mempool_strdup (task->task_pool, param));
+			}
+			else if (lua_type (L, i) == LUA_TTABLE) {
+				lua_pushvalue (L, i);
+				lua_pushnil (L);
+
+				while (lua_next (L, -2)) {
+					param = lua_tostring (L, -1);
+					params = g_list_prepend (params,
+									rspamd_mempool_strdup (task->task_pool,
+											param));
+					lua_pop (L, 1);
+				}
+
+				lua_pop (L, 1);
+			}
 		}
 
 		rspamd_task_insert_result (task, symbol_name, flag, params);
