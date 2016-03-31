@@ -109,6 +109,7 @@ rspamadm_edit_file (const gchar *fname)
 	gint fd_out, retcode, child_argc;
 	GPid child_pid;
 	gchar *tmpdir, **child_argv = NULL;
+	struct stat st;
 	GError *err = NULL;
 
 	if (editor == NULL) {
@@ -126,12 +127,30 @@ rspamadm_edit_file (const gchar *fname)
 		tmpdir = "/tmp";
 	}
 
-	map = rspamd_file_xmap (fname, PROT_READ, &len);
+	if (stat (fname, &st) == -1 || st.st_size == 0) {
+		/* The source does not exist, but that shouldn't be a problem */
+		len = 0;
+		map = NULL;
 
-	if (map == NULL) {
-		rspamd_fprintf (stderr, "cannot open %s: %s\n", fname,
-				strerror (errno));
-		exit (errno);
+		/* Try to touch source anyway */
+		fd_out = rspamd_file_xopen (fname, O_WRONLY|O_CREAT|O_EXCL, 00644);
+
+		if (fd_out == -1) {
+			rspamd_fprintf (stderr, "cannot open %s: %s\n", fname,
+					strerror (errno));
+			exit (errno);
+		}
+
+		close (fd_out);
+	}
+	else {
+		map = rspamd_file_xmap (fname, PROT_READ, &len);
+
+		if (map == NULL) {
+			rspamd_fprintf (stderr, "cannot open %s: %s\n", fname,
+					strerror (errno));
+			exit (errno);
+		}
 	}
 
 	rspamd_snprintf (tmppath, sizeof (tmppath),
@@ -146,7 +165,7 @@ rspamadm_edit_file (const gchar *fname)
 		exit (errno);
 	}
 
-	if (write (fd_out, map, len) == -1) {
+	if (len > 0 && write (fd_out, map, len) == -1) {
 		rspamd_fprintf (stderr, "cannot write to tempfile %s: %s\n", tmppath,
 				strerror (errno));
 		unlink (tmppath);
@@ -155,7 +174,10 @@ rspamadm_edit_file (const gchar *fname)
 		exit (errno);
 	}
 
-	munmap (map, len);
+	if (len > 0) {
+		munmap (map, len);
+	}
+
 	fsync (fd_out);
 	close (fd_out);
 
