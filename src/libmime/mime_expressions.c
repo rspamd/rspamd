@@ -670,7 +670,7 @@ set:
 		}
 	}
 
-	a = rspamd_mempool_alloc (pool, sizeof (*a));
+	a = rspamd_mempool_alloc0 (pool, sizeof (*a));
 	a->len = p - line;
 	a->priority = 0;
 	a->data = mime_atom;
