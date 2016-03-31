@@ -55,6 +55,7 @@ typedef struct url_match_s {
 	const gchar *pattern;
 	const gchar *prefix;
 	gboolean add_prefix;
+	gchar st;
 } url_match_t;
 
 #define URL_FLAG_NOHTML (1 << 0)
@@ -1665,6 +1666,14 @@ url_file_start (struct url_callback_data *cb,
 		url_match_t *match)
 {
 	match->m_begin = pos;
+
+	if (pos > cb->begin - 1) {
+		match->st = *(pos - 1);
+	}
+	else {
+		match->st = '\0';
+	}
+
 	return TRUE;
 }
 
@@ -1712,12 +1721,12 @@ url_tld_start (struct url_callback_data *cb,
 
 	/* Try to find the start of the url by finding any non-urlsafe character or whitespace/punctuation */
 	while (p >= cb->begin) {
-		if ((!is_domain (*p) && *p != '.' &&
-			 *p != '/') || g_ascii_isspace (*p)) {
-
+		if (!is_domain (*p) || g_ascii_isspace (*p) || is_url_start (*p)) {
 			if (!is_url_start (*p) && !g_ascii_isspace (*p)) {
 				return FALSE;
 			}
+
+			match->st = *p;
 
 			p++;
 
@@ -1730,7 +1739,9 @@ url_tld_start (struct url_callback_data *cb,
 			return TRUE;
 		}
 		else if (p == cb->begin && p != pos) {
+			match->st = '\0';
 			match->m_begin = p;
+
 			return TRUE;
 		}
 		else if (*p == '.') {
@@ -1747,6 +1758,7 @@ url_tld_start (struct url_callback_data *cb,
 			/* Urls cannot contain '/' in their body */
 			return FALSE;
 		}
+
 		p--;
 	}
 
@@ -1766,7 +1778,7 @@ url_tld_end (struct url_callback_data *cb,
 		match->m_len = p - match->m_begin;
 		return TRUE;
 	}
-	else if (*p == '/' || *p == ':') {
+	else if (*p == '/' || *p == ':' || is_url_end (*p)) {
 		/* Parse arguments, ports by normal way by url default function */
 		p = match->m_begin;
 		/* Check common prefix */
@@ -1813,6 +1825,13 @@ url_web_start (struct url_callback_data *cb,
 		return FALSE;
 	}
 
+	if (pos > cb->begin) {
+		match->st = *(pos - 1);
+	}
+	else {
+		match->st = '\0';
+	}
+
 	match->m_begin = pos;
 
 	return TRUE;
@@ -1827,6 +1846,13 @@ url_web_end (struct url_callback_data *cb,
 
 	if (rspamd_web_parse (NULL, pos, cb->end - pos, &last, FALSE) != 0) {
 		return FALSE;
+	}
+
+	if (last < cb->end && *last == '>') {
+		/* We need to ensure that url also starts with '>' */
+		if (match->st != '<') {
+			return FALSE;
+		}
 	}
 
 	match->m_len = (last - pos);
@@ -1853,6 +1879,13 @@ url_email_start (struct url_callback_data *cb,
 			cb->last_at = NULL;
 			return FALSE;
 		}
+	}
+
+	if (pos > cb->begin - 1) {
+		match->st = *(pos - 1);
+	}
+	else {
+		match->st = '\0';
 	}
 
 	return TRUE;
@@ -2063,13 +2096,13 @@ rspamd_url_trie_callback (int strnum, int textpos, void *context)
 		pos = &cb->begin[textpos];
 		if (pos < cb->end) {
 			if (!g_ascii_isspace (*pos) && *pos != '/' && *pos != '?' &&
-				*pos != ':') {
+				*pos != ':' && !is_url_end (*pos)) {
 				if (*pos == '.') {
 					/* We allow . at the end of the domain however */
 					pos++;
 					if (pos < cb->end) {
 						if (!g_ascii_isspace (*pos) && *pos != '/' &&
-							*pos != '?' && *pos != ':') {
+							*pos != '?' && *pos != ':' && !is_url_end (*pos)) {
 							return 0;
 						}
 					}
