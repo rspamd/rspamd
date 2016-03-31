@@ -68,6 +68,14 @@ LUA_FUNCTION_DEF (expr, to_string);
 LUA_FUNCTION_DEF (expr, process);
 
 /***
+ * @method rspamd_expression:process_traced(input)
+ * Executes the expression and pass input to process atom callbacks. This function also saves the full trace
+ * @param {any} input input data for processing callbacks
+ * @return {number, table of matched atoms} result of the expression evaluation
+ */
+LUA_FUNCTION_DEF (expr, process_traced);
+
+/***
  * @method rspamd_expression:atoms()
  * Extract all atoms from the expression as table of strings
  * @return {table/strings} list of all atoms in the expression
@@ -78,6 +86,7 @@ static const struct luaL_reg exprlib_m[] = {
 	LUA_INTERFACE_DEF (expr, to_string),
 	LUA_INTERFACE_DEF (expr, atoms),
 	LUA_INTERFACE_DEF (expr, process),
+	LUA_INTERFACE_DEF (expr, process_traced),
 	{"__tostring", lua_expr_to_string},
 	{NULL, NULL}
 };
@@ -194,6 +203,40 @@ lua_expr_process (lua_State *L)
 	lua_pushnumber (L, res);
 
 	return 1;
+}
+
+static gint
+lua_expr_process_traced (lua_State *L)
+{
+	struct lua_expression *e = rspamd_lua_expression (L, 1);
+	rspamd_expression_atom_t *atom;
+	gint res;
+	guint i;
+	gint flags = 0;
+	GPtrArray *trace;
+
+	if (lua_gettop (L) >= 3) {
+		flags = lua_tonumber (L, 3);
+	}
+
+	trace = g_ptr_array_sized_new (32);
+	res = rspamd_process_expression_track (e->expr, flags, GINT_TO_POINTER (2),
+			trace);
+
+	lua_pushnumber (L, res);
+
+	lua_createtable (L, trace->len, 0);
+
+	for (i = 0; i < trace->len; i ++) {
+		atom = g_ptr_array_index (trace, i);
+
+		lua_pushlstring (L, atom->str, atom->len);
+		lua_rawseti (L, -2, i + 1);
+	}
+
+	g_ptr_array_free (trace, TRUE);
+
+	return 2;
 }
 
 static gint
