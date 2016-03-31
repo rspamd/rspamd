@@ -145,6 +145,23 @@ rspamd_expr_stack_pop (struct rspamd_expression *expr)
 	return rspamd_expr_stack_elt_pop (expr->expression_stack);
 }
 
+static gpointer
+rspamd_expr_stack_peek (struct rspamd_expression *expr)
+{
+	gpointer e;
+	gint idx;
+	GPtrArray *stack = expr->expression_stack;
+
+	if (stack->len == 0) {
+		return NULL;
+	}
+
+	idx = stack->len - 1;
+	e = g_ptr_array_index (stack, idx);
+
+	return e;
+}
+
 /*
  * Return operation priority
  */
@@ -386,6 +403,7 @@ rspamd_ast_add_node (GPtrArray *operands, struct rspamd_expression_elt *op,
 					"'%s' operation", rspamd_expr_op_to_str (op->p.op));
 			return FALSE;
 		}
+
 		/* First try with a1 */
 		test = a1;
 		test_elt = test->data;
@@ -479,6 +497,12 @@ rspamd_ast_priority_cmp (GNode *a, GNode *b)
 	struct rspamd_expression_elt *ea = a->data, *eb = b->data;
 	gdouble w1, w2;
 
+	if (ea->type == ELT_LIMIT) {
+		return -1;
+	}
+	else if (eb->type == ELT_LIMIT) {
+		return 1;
+	}
 
 	/* Special logic for atoms */
 	if (ea->type == ELT_ATOM && eb->type == ELT_ATOM &&
@@ -598,12 +622,27 @@ rspamd_parse_expression (const gchar *line, gsize len,
 					g_ascii_strncasecmp (p, "or ", sizeof ("or ") - 1) == 0) {
 					state = PARSE_OP;
 				}
-				else if (rspamd_regexp_search (num_re, p, end - p, NULL, NULL,
-						FALSE, NULL)) {
-					c = p;
-					state = PARSE_LIM;
-				}
 				else {
+					/*
+					 * If we have any comparison operator in the stack, then try
+					 * to parse limit
+					 */
+					op = GPOINTER_TO_INT (rspamd_expr_stack_peek (e));
+
+					if (op >= OP_LT && op <= OP_GE) {
+						if (rspamd_regexp_search (num_re,
+								p,
+								end - p,
+								NULL,
+								NULL,
+								FALSE,
+								NULL)) {
+							c = p;
+							state = PARSE_LIM;
+							continue;
+						}
+					}
+
 					/* Try to parse atom */
 					atom = subr->parse (p, end - p, pool, subr_data, err);
 					if (atom == NULL || atom->len == 0) {
@@ -620,6 +659,10 @@ rspamd_parse_expression (const gchar *line, gsize len,
 						goto err;
 					}
 
+					if (atom->str == NULL) {
+						atom->str = p;
+					}
+
 					p = p + atom->len;
 
 					/* Push to output */
@@ -628,6 +671,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 					g_array_append_val (e->expressions, elt);
 					rspamd_expr_stack_elt_push (operand_stack,
 							g_node_new (rspamd_expr_dup_elt (pool, &elt)));
+
 				}
 			}
 			break;
@@ -1075,7 +1119,8 @@ rspamd_ast_string_traverse (GNode *n, gpointer d)
 	const char *op_str = NULL;
 
 	if (elt->type == ELT_ATOM) {
-		g_string_append_len (res, elt->p.atom->str, elt->p.atom->len);
+		rspamd_printf_gstring (res, "(%*s)",
+				(int)elt->p.atom->len, elt->p.atom->str);
 	}
 	else if (elt->type == ELT_LIMIT) {
 		rspamd_printf_gstring (res, "%d", elt->p.lim.val);
