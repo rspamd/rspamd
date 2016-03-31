@@ -1362,15 +1362,16 @@ local function post_process()
       -- Meta function callback
       local meta_cb = function(task)
         local res = 0
+        local trace = {}
         -- XXX: need to memoize result for better performance
         local sym = task:has_symbol(k)
         if not sym then
           if expression then
-            res = expression:process(task)
+            res,trace = expression:process_traced(task)
           end
           if res > 0 then
             -- Symbol should be one shot to make it working properly
-            task:insert_result(k, res)
+            task:insert_result(k, res, trace)
           end
         else
           res = 1
