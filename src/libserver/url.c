@@ -1106,6 +1106,9 @@ rspamd_tld_trie_callback (int strnum, int textpos, void *context)
 				/* This is dot at the end of domain */
 				url->hostlen--;
 			}
+			else {
+				return 0;
+			}
 		}
 		else {
 			return 0;
