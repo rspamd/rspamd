@@ -432,68 +432,6 @@ reconf['FORGED_GENERIC_RECEIVED3'] =	'Received=/^\\s*(.+\\n)*by \\d{1,3}\\.\\d{1
 
 reconf['FORGED_GENERIC_RECEIVED4'] =	'Received=/^\\s*(.+\\n)*from localhost by \\S+;\\s+\\w{3}, \\d+ \\w{3} 20\\d\\d \\d\\d\\:\\d\\d\\:\\d\\d [+-]\\d\\d\\d0[\\s\\r\\n]*$/X'
 
-rspamd_config.FORGED_GENERIC_RECEIVED5 = function (task)
-	local regexp_text = '^\\s*from \\[(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\\].*\\n(.+\\n)*\\s*from \\1 by \\S+;\\s+\\w{3}, \\d+ \\w{3} 20\\d\\d \\d\\d\\:\\d\\d\\:\\d\\d [+-]\\d\\d\\d0$'
-	local re = rspamd_regexp.create_cached(regexp_text, 'i')
-	local headers_recv = task:get_header_full('Received')
-	if headers_recv then
-		for _,header_r in ipairs(headers_recv) do
-			if re:match(header_r['value']) then
-				return true
-			end
-		end
-	end
-    return false
-end
+reconf['FORGED_GENERIC_RECEIVED5'] = 'Received=\\s*from \\[(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\\].*\\n(.+\\n)*\\s*from \\1 by \\S+;\\s+\\w{3}, \\d+ \\w{3} 20\\d\\d \\d\\d\\:\\d\\d\\:\\d\\d [+-]\\d\\d\\d0$/X'
 
 reconf['INVALID_POSTFIX_RECEIVED'] =	'Received=/ \\(Postfix\\) with ESMTP id [A-Z\\d]+([\\s\\r\\n]+for <\\S+?>)?;[\\s\\r\\n]*[A-Z][a-z]{2}, \\d{1,2} [A-Z][a-z]{2} \\d\\d\\d\\d \\d\\d:\\d\\d:\\d\\d [\\+\\-]\\d\\d\\d\\d$/X'
-
-rspamd_config.INVALID_EXIM_RECEIVED = function (task)
-	local checked = 0
-	local headers_to = task:get_header_full('To')
-	if headers_to then
-		local headers_recv = task:get_header_full('Received')
-		local regexp_text = '^[^\\n]*?<?\\S+?\\@(\\S+)>?\\|.*from \\d+\\.\\d+\\.\\d+\\.\\d+ \\(HELO \\S+\\)[\\s\\r\\n]*by \\1 with esmtp \\(\\S*?[\\?\\@\\(\\)\\s\\.\\+\\*\'\'\\/\\\\,]\\S*\\)[\\s\\r\\n]+id \\S*?[\\)\\(<>\\/\\\\,\\-:=]'
-		local re = rspamd_regexp.create_cached(regexp_text, 's')
-		if headers_recv then
-			for _,header_to in ipairs(headers_to) do
-				for _,header_r in ipairs(headers_recv) do
-					if re:match(header_to['value'].."|"..header_r['value']) then
-        		        return true
-        			end
-				end
-				checked = checked + 1
-				if checked > 5 then
-					-- Stop on 5 rcpt
-					return false
-				end
-			end
-		end
-	end
-	return false
-end
-
-rspamd_config.INVALID_EXIM_RECEIVED2 = function (task)
-	local checked = 0
-	local headers_to = task:get_header_full('To')
-	if headers_to then
-		local headers_recv = task:get_header_full('Received')
-		local regexp_text = '^[^\\n]*?<?\\S+?\\@(\\S+)>?\\|.*from \\d+\\.\\d+\\.\\d+\\.\\d+ \\(HELO \\S+\\)[\\s\\r\\n]*by \\1 with esmtp \\([A-Z]{9,12} [A-Z]{5,6}\\)[\\s\\r\\n]+id [a-zA-Z\\d]{6}-[a-zA-Z\\d]{6}-[a-zA-Z\\d]{2}[\\s\\r\\n]+'
-		local re = rspamd_regexp.create_cached(regexp_text, 's')
-		if headers_recv then
-			for _,header_to in ipairs(headers_to) do
-				for _,header_r in ipairs(headers_recv) do
-					if re:match(header_to['value'].."|"..header_r['value']) then
-        		        return true
-        			end
-				end
-				checked = checked + 1
-				if checked > 5 then
-					-- Stop on 5 rcpt
-					return false
-				end
-			end
-		end
-	end
-	return false
-end
