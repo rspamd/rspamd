@@ -289,4 +289,12 @@ void rspamd_ucl_emit_fstring_comments (const ucl_object_t *obj,
 		rspamd_fstring_t **target,
 		const ucl_object_t *comments);
 
+guint rspamd_url_hash (gconstpointer u);
+
+/* Compare two emails for building emails hash */
+gboolean rspamd_emails_cmp (gconstpointer a, gconstpointer b);
+
+/* Compare two urls for building emails hash */
+gboolean rspamd_urls_cmp (gconstpointer a, gconstpointer b);
+
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */

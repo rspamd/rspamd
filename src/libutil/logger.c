@@ -82,6 +82,11 @@ static rspamd_logger_t *default_logger = NULL;
 	}											\
 } while (0)
 
+#if defined(__LP64__) || defined(_LP64)
+#define XXH_ONESHOT XXH64
+#else
+#define XXH_ONESHOT XXH32
+#endif
 
 static void
 		syslog_log_function (const gchar *log_domain, const gchar *module,
@@ -101,7 +106,7 @@ static void
 static inline guint64
 rspamd_log_calculate_cksum (const gchar *message, size_t mlen)
 {
-	return XXH64 (message, mlen, rspamd_hash_seed ());
+	return XXH_ONESHOT (message, mlen, rspamd_hash_seed ());
 }
 
 /*

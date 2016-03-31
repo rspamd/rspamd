@@ -204,14 +204,6 @@ void g_queue_free_full (GQueue *queue, GDestroyNotify free_func);
 #define ts_to_usec(ts) ((ts)->tv_sec * 1000000LLU +							\
 	(ts)->tv_nsec / 1000LLU)
 
-guint rspamd_url_hash (gconstpointer u);
-
-/* Compare two emails for building emails hash */
-gboolean rspamd_emails_cmp (gconstpointer a, gconstpointer b);
-
-/* Compare two urls for building emails hash */
-gboolean rspamd_urls_cmp (gconstpointer a, gconstpointer b);
-
 /**
  * Try to allocate a file on filesystem (using fallocate or posix_fallocate)
  * @param fd descriptor

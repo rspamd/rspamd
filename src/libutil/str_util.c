@@ -16,6 +16,7 @@
 #include "config.h"
 #include "util.h"
 #include "xxhash.h"
+#include "url.h"
 #include <math.h>
 
 static const guchar lc_map[256] = {
@@ -181,6 +182,20 @@ rspamd_strcase_equal (gconstpointer v, gconstpointer v2)
 	return FALSE;
 }
 
+#if defined(__LP64__) || defined(_LP64)
+#define XXH_STATE XXH64_state_t
+#define XXH_RESET XXH64_reset
+#define XXH_UPDATE XXH64_update
+#define XXH_DIGEST XXH64_digest
+#define XXH_ONESHOT XXH64
+#else
+#define XXH_STATE XXH32_state_t
+#define XXH_RESET XXH32_reset
+#define XXH_UPDATE XXH32_update
+#define XXH_DIGEST XXH32_digest
+#define XXH_ONESHOT XXH32
+#endif
+
 static guint
 rspamd_icase_hash (const gchar *in, gsize len)
 {
@@ -193,10 +208,10 @@ rspamd_icase_hash (const gchar *in, gsize len)
 		} c;
 		guint32 pp;
 	} u;
-	XXH64_state_t st;
+	XXH_STATE st;
 
 	fp = len - leftover;
-	XXH64_reset (&st, rspamd_hash_seed ());
+	XXH_RESET (&st, rspamd_hash_seed ());
 
 	for (i = 0; i != fp; i += 4) {
 		u.c.c1 = s[i], u.c.c2 = s[i + 1], u.c.c3 = s[i + 2], u.c.c4 = s[i + 3];
@@ -204,7 +219,7 @@ rspamd_icase_hash (const gchar *in, gsize len)
 		u.c.c2 = lc_map[u.c.c2];
 		u.c.c3 = lc_map[u.c.c3];
 		u.c.c4 = lc_map[u.c.c4];
-		XXH64_update (&st, &u.pp, sizeof (u));
+		XXH_UPDATE (&st, &u.pp, sizeof (u));
 	}
 
 	u.pp = 0;
@@ -215,11 +230,11 @@ rspamd_icase_hash (const gchar *in, gsize len)
 		u.c.c2 = lc_map[(guchar)s[i++]];
 	case 1:
 		u.c.c1 = lc_map[(guchar)s[i]];
-		XXH64_update (&st, &u.pp, leftover);
+		XXH_UPDATE (&st, &u.pp, leftover);
 		break;
 	}
 
-	return XXH64_digest (&st);
+	return XXH_DIGEST (&st);
 }
 
 guint
@@ -240,7 +255,7 @@ rspamd_str_hash (gconstpointer key)
 
 	len = strlen ((const gchar *)key);
 
-	return XXH64 (key, len, rspamd_hash_seed ());
+	return XXH_ONESHOT (key, len, rspamd_hash_seed ());
 }
 
 gboolean
@@ -1596,4 +1611,69 @@ rspamd_ucl_emit_fstring_comments (const ucl_object_t *obj,
 
 	func.ud = buf;
 	ucl_object_emit_full (obj, emit_type, &func, comments);
+}
+
+guint
+rspamd_url_hash (gconstpointer u)
+{
+	const struct rspamd_url *url = u;
+	XXH_STATE st;
+
+	XXH_RESET (&st, rspamd_hash_seed ());
+
+	if (url->urllen > 0) {
+		XXH_UPDATE (&st, url->string, url->urllen);
+	}
+
+	XXH_UPDATE (&st, &url->flags, sizeof (url->flags));
+
+	return XXH_DIGEST (&st);
+}
+
+/* Compare two emails for building emails tree */
+gboolean
+rspamd_emails_cmp (gconstpointer a, gconstpointer b)
+{
+	const struct rspamd_url *u1 = a, *u2 = b;
+	gint r;
+
+	if (u1->hostlen != u2->hostlen || u1->hostlen == 0) {
+		return FALSE;
+	}
+	else {
+		if ((r = rspamd_lc_cmp (u1->host, u2->host, u1->hostlen)) == 0) {
+			if (u1->userlen != u2->userlen || u1->userlen == 0) {
+				return FALSE;
+			}
+			else {
+				return rspamd_lc_cmp (u1->user, u2->user, u1->userlen) ==
+						0;
+			}
+		}
+		else {
+			return r == 0;
+		}
+	}
+
+	return FALSE;
+}
+
+gboolean
+rspamd_urls_cmp (gconstpointer a, gconstpointer b)
+{
+	const struct rspamd_url *u1 = a, *u2 = b;
+	int r;
+
+	if (u1->urllen != u2->urllen) {
+		return FALSE;
+	}
+	else {
+		r = memcmp (u1->string, u2->string, u1->urllen);
+		if (r == 0 && u1->flags != u2->flags) {
+			/* Always insert phished urls to the tree */
+			return FALSE;
+		}
+	}
+
+	return r == 0;
 }
