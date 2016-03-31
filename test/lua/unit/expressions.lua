@@ -25,23 +25,24 @@ context("Rspamd expressions", function()
     local pool = rspamd_mempool.create()
 
     local cases = {
-       {'A & B | !C', 'C ! A B & |'},
-       {'A & (B | !C)', 'A B C ! | &'},
+       {'A & B | !C', '(C) ! (A) (B) & |'},
+       {'A & (B | !C)', '(A) (B) (C) ! | &'},
        {'A & B &', nil},
        -- Unbalanced braces
        {'(((A))', nil},
        -- Balanced braces
-       {'(((A)))', 'A'},
+       {'(((A)))', '(A)'},
        -- Plus and comparision operators
-       {'A + B + C + D > 2', '2 A B C D +(4) >'},
+       {'A + B + C + D > 2', '2 (A) (B) (C) (D) +(4) >'},
        -- Plus and logic operators
-       {'((A + B + C + D) > 2) & D', 'D 2 A B C D +(4) > &'},
+       {'((A + B + C + D) > 2) & D', '(D) 2 (A) (B) (C) (D) +(4) > &'},
        -- Associativity
-       {'A | B | C & D & E', 'A B C D E &(3) |(3)'},
+       {'A | B | C & D & E', '(A) (B) (C) (D) (E) &(3) |(3)'},
        -- More associativity
-       {'1 | 0 & 0 | 0', '1 0 0 & 0 |(3)'},
+       {'1 | 0 & 0 | 0', '(1) (0) (0) (0) & |(3)'},
+       {'(A) & (B) & ((C) | (D) | (E) | (F))', '(A) (B) (C) (D) (E) (F) |(4) &(3)' },
        -- Extra space
-       {'A & B | ! C', 'C ! A B & |'},
+       {'A & B | ! C', '(C) ! (A) (B) & |'},
     }
     for _,c in ipairs(cases) do
       local expr,err = rspamd_expression.create(c[1],
@@ -76,6 +77,11 @@ context("Rspamd expressions", function()
       D = false,
       E = true,
       F = false,
+      G = false,
+      H = false,
+      I = false,
+      J = false,
+      K = false,
     }
     local cases = {
        {'A & B | !C', 0},
@@ -87,6 +93,7 @@ context("Rspamd expressions", function()
        {'F && ((A + B + C + D) > 1)', 0},
        {'(E) && ((B + B + B + B) >= 1)', 0},
        {'!!C', 1},
+       {'(B) & (D) & ((G) | (H) | (I) | (A))', 0}
     }
     for _,c in ipairs(cases) do
       local expr,err = rspamd_expression.create(c[1],
