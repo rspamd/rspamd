@@ -28,74 +28,102 @@ local options = {
 }
 
 local function whitelist_cb(symbol, rule, task)
-  local from = task:get_from(1)
-  if from and from[1] and from[1]['domain'] then
-    local domain = from[1]['domain']
-    domain = rspamd_util.get_tld(domain)
-    local found = false
+
+  local domains = {}
+
+  local function find_domain(dom)
     local mult = 1.0
 
     if rule['map'] then
-      local val = rule['map']:get_key(domain)
+      local val = rule['map']:get_key(dom)
       if val then
-        found = true
-
         if #val > 0 then
           mult = tonumber(val)
         end
+
+        table.insert(domains, dom)
+        return true,mult
       end
     else
-      mult = rule['domains'][domain]
+      mult = rule['domains'][dom]
       if mult then
-        found = true
+        table.insert(domains, dom)
+        return true, mult
       end
     end
 
-    if found then
-      if rule['valid_spf'] then
-        -- Check for spf symbol
-        if not task:has_symbol(options['spf_allow_symbol']) then
-          found = false
-          rspamd_logger.debugx(task, "domain %s has been found in whitelist %s" ..
-            " but it doesn't have valid SPF record", domain, symbol)
+    return false,0.0
+  end
+
+  local from = task:get_from(1)
+  local found = false
+  local mult = 1.0
+
+  if rule['valid_spf'] then
+    if not task:has_symbol(options['spf_allow_symbol']) then
+      -- Not whitelisted
+      return
+    end
+
+    -- Now we can check from domain or helo
+    local from = task:get_from(1)
+
+    if from and from[1] and from[1]['domain'] then
+      local tld = rspamd_util.get_tld(from[1]['domain'])
+
+      if tld then
+        found,mult = find_domain(tld)
+      end
+    else
+      local helo = task:get_helo()
+
+      if helo then
+        local tld = rspamd_util.get_tld(helo)
+
+        if tld then
+          found, mult = find_domain(tld)
         end
       end
-      if rule['valid_dkim'] then
-        local sym = task:get_symbol(options['dkim_allow_symbol'])
-        if not sym then
-          found = false
-          rspamd_logger.debugx(task, "domain %s has been found in whitelist %s" ..
-              " but it doesn't have valid DKIM", domain, symbol)
-        else
-          -- Check dkim signatures as they might be for different domains
-          found = false
-          local dkim_opts = sym[1]['options']
+    end
+  end
 
-          if dkim_opts then
-            for i,d in ipairs(dkim_opts) do
-              if d == domain then
-                found = true
-              end
-            end
+  if rule['valid_dkim'] then
+    local sym = task:get_symbol(options['dkim_allow_symbol'])
+    if not sym then
+      return
+    end
+
+    local dkim_opts = sym[1]['options']
+    if dkim_opts then
+      each(function(i, val)
+        if not found then
+          local tld = rspamd_util.get_tld(val)
+
+          if tld then
+            found, mult = find_domain(tld)
           end
-          if not found then
-            rspamd_logger.debugx(task, "domain %s has been found in whitelist %s" ..
-                " but it doesn't have matching DKIM signature", domain, symbol)
-          end
         end
-      end
-      if rule['valid_dmarc'] then
-        if not task:has_symbol(options['dmarc_allow_symbol']) then
-          found = false
-          rspamd_logger.debugx(task, "domain %s has been found in whitelist %s" ..
-              " but it doesn't have valid DMARC", domain, symbol)
-        end
-      end
+      end, dkim_opts)
     end
+  end
 
-    if found then
-      task:insert_result(symbol, mult, domain)
+  if rule['valid_dmarc'] then
+    if not task:has_symbol(options['dmarc_allow_symbol']) then
+      return
     end
+    local from = task:get_from(2)
+
+    if from and from[1] and from[1]['domain'] then
+      local tld = rspamd_util.get_tld(from[1]['domain'])
+
+      if tld then
+        found, mult = find_domain(tld)
+      end
+    end
+  end
+
+  if found then
+    task:insert_result(symbol, mult, domains)
   end
 
 end
