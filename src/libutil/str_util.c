@@ -307,27 +307,44 @@ rspamd_gstring_icase_hash (gconstpointer key)
 	return rspamd_icase_hash (f->str, f->len);
 }
 
+#define MEM_ALIGN (sizeof(gsize)-1)
+#define ONES ((size_t)-1/UCHAR_MAX)
+#define HIGHS (ONES * (UCHAR_MAX/2+1))
+#define HASZERO(x) ((x)-ONES & ~(x) & HIGHS)
+
 gsize
 rspamd_strlcpy (gchar *dst, const gchar *src, gsize siz)
 {
 	gchar *d = dst;
 	const gchar *s = src;
 	gsize n = siz;
+	gsize *wd;
+	const gsize *ws;
 
 	/* Copy as many bytes as will fit */
 	if (n != 0) {
-		while (--n != 0) {
-			if ((*d++ = *s++) == '\0') {
-				break;
+		if (((uintptr_t) s & MEM_ALIGN) == ((uintptr_t) d & MEM_ALIGN)) {
+			for (; ((uintptr_t) s & MEM_ALIGN) && n && (*d = *s); n--, s++, d++);
+			if (n && *s) {
+				wd = (void *) d;
+				ws = (const void *) s;
+				for (; n >= sizeof (gsize) && !HASZERO(*ws);
+					   n -= sizeof (gsize), ws++, wd++)
+					*wd = *ws;
+				d = (void *) wd;
+				s = (const void *) ws;
 			}
 		}
+
+		for (; n && (*d = *s); n--, s++, d++);
+
+		*d = 0;
+	}
+	else {
+		return 0;
 	}
 
-	if (n == 0 && siz != 0) {
-		*d = '\0';
-	}
-
-	return (s - src - 1);    /* count does not include NUL */
+	return (d - dst);
 }
 
 gsize
