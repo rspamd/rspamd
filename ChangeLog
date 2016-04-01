@@ -1,3 +1,26 @@
+1.2.2:
+	* Use HTTP Content-Type on non mime input if possible
+	* Save log level when compressing log messages
+	* Further rework of composite rules (add '^' prefix)
+	* Add tracking for rspamd expressions
+	* Store actions limits in metric result
+	* Fix parsing of include/redirect with many records in SPF
+	* Add method to disable symbols execution in the cache
+	* Allow to disable checks from settings
+	* Allow to select settings by id in HTTP query
+	* Find URLs with '\r' and '\n' inside href attribute
+	* Implement vectored mode for hyperscan (experimental)
+	* Improve client connection errors diagnostics
+	* Allow to edit new files with signtool
+	* Improve hashes performance on 32 bit platforms
+	* Fix sorting of limits
+	* Remove slow and unused rules `INVALID_EXIM_RECEIVED*`
+	* Add expression:process_traced lua method
+	* Allow tables in task:insert_result
+	* Save trace for SA metas
+	* Do not parse broken TLD parts in URLs
+	* Investigate many border cases in URLs parser
+
 1.2.1:
 	* Add list support to `mime types` module configuration (by @moisseev)
 	* Allow symbols params to be printed in logs
