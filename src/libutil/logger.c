@@ -739,7 +739,7 @@ file_log_function (const gchar *log_domain,
 			}
 			file_log_function (log_domain, "logger", NULL,
 					G_STRFUNC,
-					log_level,
+					rspamd_log->saved_loglevel,
 					tmpbuf,
 					forced,
 					arg);
