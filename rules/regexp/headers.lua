@@ -432,6 +432,6 @@ reconf['FORGED_GENERIC_RECEIVED3'] =	'Received=/^\\s*(.+\\n)*by \\d{1,3}\\.\\d{1
 
 reconf['FORGED_GENERIC_RECEIVED4'] =	'Received=/^\\s*(.+\\n)*from localhost by \\S+;\\s+\\w{3}, \\d+ \\w{3} 20\\d\\d \\d\\d\\:\\d\\d\\:\\d\\d [+-]\\d\\d\\d0[\\s\\r\\n]*$/X'
 
-reconf['FORGED_GENERIC_RECEIVED5'] = 'Received=\\s*from \\[(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\\].*\\n(.+\\n)*\\s*from \\1 by \\S+;\\s+\\w{3}, \\d+ \\w{3} 20\\d\\d \\d\\d\\:\\d\\d\\:\\d\\d [+-]\\d\\d\\d0$/X'
+reconf['FORGED_GENERIC_RECEIVED5'] = 'Received=/\\s*from \\[(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\\].*\\n(.+\\n)*\\s*from \\1 by \\S+;\\s+\\w{3}, \\d+ \\w{3} 20\\d\\d \\d\\d\\:\\d\\d\\:\\d\\d [+-]\\d\\d\\d0$/X'
 
 reconf['INVALID_POSTFIX_RECEIVED'] =	'Received=/ \\(Postfix\\) with ESMTP id [A-Z\\d]+([\\s\\r\\n]+for <\\S+?>)?;[\\s\\r\\n]*[A-Z][a-z]{2}, \\d{1,2} [A-Z][a-z]{2} \\d\\d\\d\\d \\d\\d:\\d\\d:\\d\\d [\\+\\-]\\d\\d\\d\\d$/X'
