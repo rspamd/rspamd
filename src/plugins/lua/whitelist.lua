@@ -95,7 +95,7 @@ local function whitelist_cb(symbol, rule, task)
 
     local dkim_opts = sym[1]['options']
     if dkim_opts then
-      each(function(i, val)
+      each(function(val)
         if not found then
           local tld = rspamd_util.get_tld(val)
 
