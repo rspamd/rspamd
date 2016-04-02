@@ -50,6 +50,7 @@ static gboolean tty = FALSE;
 static gboolean verbose = FALSE;
 static gboolean print_commands = FALSE;
 static gboolean json = FALSE;
+static gboolean compact = FALSE;
 static gboolean headers = FALSE;
 static gboolean raw = FALSE;
 static gboolean extended_urls = FALSE;
@@ -103,6 +104,7 @@ static GOptionEntry entries[] =
 	{ "commands", 0, 0, G_OPTION_ARG_NONE, &print_commands,
 	  "List available commands", NULL },
 	{ "json", 'j', 0, G_OPTION_ARG_NONE, &json, "Output json reply", NULL },
+	{ "compact", '\0', 0, G_OPTION_ARG_NONE, &compact, "Output compact json reply", NULL},
 	{ "headers", 0, 0, G_OPTION_ARG_NONE, &headers, "Output HTTP headers",
 	  NULL },
 	{ "raw", 0, 0, G_OPTION_ARG_NONE, &raw, "Output raw reply from rspamd",
@@ -308,7 +310,7 @@ read_cmd_line (gint *argc, gchar ***argv)
 		exit (EXIT_FAILURE);
 	}
 
-	if (json) {
+	if (json || compact) {
 		raw = TRUE;
 	}
 	/* Argc and argv are shifted after this function */
@@ -570,7 +572,7 @@ rspamc_symbols_output (FILE *out, ucl_object_t *obj)
 				ucl_object_tostring (cur));
 		}
 		else if (g_ascii_strcasecmp (ucl_object_key (cur), "urls") == 0) {
-			if (!extended_urls) {
+			if (!extended_urls || compact) {
 				emitted = ucl_object_emit (cur, UCL_EMIT_JSON_COMPACT);
 			}
 			else {
@@ -1069,13 +1071,15 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 		g_string_free (folded_symbuf, TRUE);
 		g_string_free (symbuf, TRUE);
 
-		if (json || raw) {
+		if (json || raw || compact) {
 			/* We also append json data as a specific header */
 			if (json) {
-				json_header = ucl_object_emit (result, UCL_EMIT_JSON);
+				json_header = ucl_object_emit (result,
+						compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_JSON);
 			}
 			else {
-				json_header = ucl_object_emit (result, UCL_EMIT_CONFIG);
+				json_header = ucl_object_emit (result,
+						compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_CONFIG);
 			}
 
 			json_header_encoded = rspamd_encode_base64_fold (json_header,
@@ -1147,10 +1151,12 @@ rspamc_client_execute_cmd (struct rspamc_command *cmd, ucl_object_t *result,
 		else if (result) {
 			if (raw || cmd->command_output_func == NULL) {
 				if (json) {
-					ucl_out = ucl_object_emit (result, UCL_EMIT_JSON);
+					ucl_out = ucl_object_emit (result,
+							compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_JSON);
 				}
 				else {
-					ucl_out = ucl_object_emit (result, UCL_EMIT_CONFIG);
+					ucl_out = ucl_object_emit (result,
+							compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_CONFIG);
 				}
 				rspamd_fprintf (out, "%s", ucl_out);
 				free (ucl_out);
@@ -1213,10 +1219,12 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 				}
 				if (raw || cmd->command_output_func == NULL) {
 					if (json) {
-						ucl_out = ucl_object_emit (result, UCL_EMIT_JSON);
+						ucl_out = ucl_object_emit (result,
+								compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_JSON);
 					}
 					else {
-						ucl_out = ucl_object_emit (result, UCL_EMIT_CONFIG);
+						ucl_out = ucl_object_emit (result,
+								compact ? UCL_EMIT_JSON_COMPACT : UCL_EMIT_CONFIG);
 					}
 					rspamd_fprintf (out, "%s", ucl_out);
 					free (ucl_out);
