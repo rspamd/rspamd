@@ -73,6 +73,7 @@ struct lua_tcp_cbdata {
 	guint pos;
 	guint total;
 	gboolean partial;
+	gboolean do_shutdown;
 	guint16 port;
 };
 
@@ -232,8 +233,18 @@ call_finish_handler:
 				cbd->in);
 	}
 
+	if (cbd->do_shutdown) {
+		/* Half close the connection */
+		shutdown (cbd->fd, SHUT_WR);
+	}
+
 	event_del (&cbd->ev);
-	event_set (&cbd->ev, cbd->fd, EV_READ | EV_PERSIST, lua_tcp_handler, cbd);
+#ifdef EV_CLOSED
+	event_set (&cbd->ev, cbd->fd, EV_READ|EV_PERSIST|EV_CLOSED,
+				lua_tcp_handler, cbd);
+#else
+	event_set (&cbd->ev, cbd->fd, EV_READ|EV_PERSIST, lua_tcp_handler, cbd);
+#endif
 	event_base_set (cbd->ev_base, &cbd->ev);
 	event_add (&cbd->ev, &cbd->tv);
 }
@@ -300,6 +311,12 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 	else if (what == EV_WRITE) {
 		lua_tcp_write_helper (cbd);
 	}
+#ifdef EV_CLOSED
+	else if (what == EV_CLOSED) {
+		lua_tcp_push_error (cbd, "Remote peer has closed the connection");
+		lua_tcp_maybe_free (cbd);
+	}
+#endif
 	else {
 		lua_tcp_push_error (cbd, "IO timeout");
 		lua_tcp_maybe_free (cbd);
@@ -432,7 +449,7 @@ lua_tcp_request (lua_State *L)
 	struct iovec *iov = NULL;
 	guint niov = 0, total_out;
 	gdouble timeout = default_tcp_timeout;
-	gboolean partial = FALSE;
+	gboolean partial = FALSE, do_shutdown = FALSE;
 
 	if (lua_type (L, 1) == LUA_TTABLE) {
 		lua_pushstring (L, "host");
@@ -529,6 +546,13 @@ lua_tcp_request (lua_State *L)
 		}
 		lua_pop (L, 1);
 
+		lua_pushstring (L, "shutdown");
+		lua_gettable (L, -2);
+		if (lua_type (L, -1) == LUA_TBOOLEAN) {
+			do_shutdown = lua_toboolean (L, -1);
+		}
+		lua_pop (L, 1);
+
 		if (pool == NULL) {
 			lua_pop (L, 1);
 			msg_err ("tcp request has no memory pool associated");
@@ -598,6 +622,7 @@ lua_tcp_request (lua_State *L)
 	cbd->fd = -1;
 	cbd->pool = pool;
 	cbd->partial = partial;
+	cbd->do_shutdown = do_shutdown;
 	cbd->iov = iov;
 	cbd->iovlen = niov;
 	cbd->total = total_out;
