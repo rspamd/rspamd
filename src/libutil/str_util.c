@@ -322,7 +322,7 @@ rspamd_strlcpy (gchar *dst, const gchar *src, gsize siz)
 	const gsize *ws;
 
 	/* Copy as many bytes as will fit */
-	if (n != 0) {
+	if (n-- != 0) {
 		if (((uintptr_t) s & MEM_ALIGN) == ((uintptr_t) d & MEM_ALIGN)) {
 			for (; ((uintptr_t) s & MEM_ALIGN) && n && (*d = *s); n--, s++, d++);
 			if (n && *s) {
