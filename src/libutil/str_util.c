@@ -307,10 +307,17 @@ rspamd_gstring_icase_hash (gconstpointer key)
 	return rspamd_icase_hash (f->str, f->len);
 }
 
+/* https://graphics.stanford.edu/~seander/bithacks.html#ZeroInWord */
 #define MEM_ALIGN (sizeof(gsize)-1)
-#define ONES ((size_t)-1/UCHAR_MAX)
-#define HIGHS (ONES * (UCHAR_MAX/2+1))
-#define HASZERO(x) ((x)-ONES & ~(x) & HIGHS)
+#if defined(__LP64__) || defined(_LP64)
+#define WORD_TYPE guint64
+#define ZEROMASK  0x7F7F7F7F7F7F7F7FLLU
+#else
+#define WORD_TYPE guint32
+#define ZEROMASK  0x7F7F7F7FU
+#endif
+
+#define HASZERO(x) ~(((((x) & ZEROMASK) + ZEROMASK) | (x)) | ZEROMASK)
 
 gsize
 rspamd_strlcpy (gchar *dst, const gchar *src, gsize siz)
@@ -318,24 +325,31 @@ rspamd_strlcpy (gchar *dst, const gchar *src, gsize siz)
 	gchar *d = dst;
 	const gchar *s = src;
 	gsize n = siz;
-	gsize *wd;
-	const gsize *ws;
+	WORD_TYPE *wd;
+	const WORD_TYPE *ws;
 
 	/* Copy as many bytes as will fit */
 	if (n-- != 0) {
 		if (((uintptr_t) s & MEM_ALIGN) == ((uintptr_t) d & MEM_ALIGN)) {
+			/* Init copy byte by byte */
 			for (; ((uintptr_t) s & MEM_ALIGN) && n && (*d = *s); n--, s++, d++);
 			if (n && *s) {
 				wd = (void *) d;
 				ws = (const void *) s;
-				for (; n >= sizeof (gsize) && !HASZERO(*ws);
-					   n -= sizeof (gsize), ws++, wd++)
+				/*
+				 * Copy by 32 or 64 bits (causes valgrind warnings)
+				 */
+				for (; n >= sizeof (WORD_TYPE) && !HASZERO(*ws);
+					   n -= sizeof (WORD_TYPE), ws++, wd++) {
 					*wd = *ws;
+				}
+
 				d = (void *) wd;
 				s = (const void *) ws;
 			}
 		}
 
+		/* Copy the rest */
 		for (; n && (*d = *s); n--, s++, d++);
 
 		*d = 0;
