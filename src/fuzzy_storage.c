@@ -1471,7 +1471,8 @@ start_fuzzy (struct rspamd_worker *worker)
 	memset (srv_cmd.cmd.spair.pair_id, 0, sizeof (srv_cmd.cmd.spair.pair_id));
 	memcpy (srv_cmd.cmd.spair.pair_id, "fuzzy", sizeof ("fuzzy"));
 
-	rspamd_srv_send_command (worker, ctx->ev_base, &srv_cmd, fuzzy_peer_rep, ctx);
+	rspamd_srv_send_command (worker, ctx->ev_base, &srv_cmd, -1,
+			fuzzy_peer_rep, ctx);
 
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();

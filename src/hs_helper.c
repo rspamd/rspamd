@@ -195,7 +195,7 @@ rspamd_rs_compile (struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 	srv_cmd.cmd.hs_loaded.cache_dir = ctx->hs_dir;
 	srv_cmd.cmd.hs_loaded.forced = forced;
 
-	rspamd_srv_send_command (worker, ctx->ev_base, &srv_cmd, NULL, NULL);
+	rspamd_srv_send_command (worker, ctx->ev_base, &srv_cmd, -1, NULL, NULL);
 
 	return TRUE;
 }

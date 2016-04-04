@@ -690,8 +690,15 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 	if (what == EV_READ) {
 		worker = ud;
 		srv = worker->srv;
+		iov.iov_base = &cmd;
+		iov.iov_len = sizeof (cmd);
+		memset (&msg, 0, sizeof (msg));
+		msg.msg_control = fdspace;
+		msg.msg_controllen = sizeof (fdspace);
+		msg.msg_iov = &iov;
+		msg.msg_iovlen = 1;
 
-		r = read (fd, &cmd, sizeof (cmd));
+		r = recvmsg (fd, &msg, 0);
 
 		if (r == -1) {
 			msg_err ("cannot read from worker's srv pipe: %s",
@@ -824,6 +831,7 @@ rspamd_srv_start_watching (struct rspamd_worker *worker,
 struct rspamd_srv_request_data {
 	struct rspamd_worker *worker;
 	struct rspamd_srv_command cmd;
+	gint attached_fd;
 	struct rspamd_srv_reply rep;
 	rspamd_srv_reply_handler handler;
 	struct event io_ev;
@@ -837,12 +845,32 @@ rspamd_srv_request_handler (gint fd, short what, gpointer ud)
 	struct msghdr msg;
 	struct iovec iov;
 	guchar fdspace[CMSG_SPACE(sizeof (int))];
+	struct cmsghdr *cmsg;
 	gssize r;
 	gint rfd = -1;
 
 	if (what == EV_WRITE) {
 		/* Send request to server */
-		r = write (fd, &rd->cmd, sizeof (rd->cmd));
+		memset (&msg, 0, sizeof (msg));
+
+		/* Attach fd to the message */
+		if (rd->attached_fd != -1) {
+			memset (fdspace, 0, sizeof (fdspace));
+			msg.msg_control = fdspace;
+			msg.msg_controllen = sizeof (fdspace);
+			cmsg = CMSG_FIRSTHDR (&msg);
+			cmsg->cmsg_level = SOL_SOCKET;
+			cmsg->cmsg_type = SCM_RIGHTS;
+			cmsg->cmsg_len = CMSG_LEN (sizeof (int));
+			memcpy (CMSG_DATA (cmsg), &rd->attached_fd, sizeof (int));
+		}
+
+		iov.iov_base = &rd->cmd;
+		iov.iov_len = sizeof (rd->cmd);
+		msg.msg_iov = &iov;
+		msg.msg_iovlen = 1;
+
+		r = sendmsg (fd, &msg, 0);
 
 		if (r == -1) {
 			msg_err ("cannot write to server pipe: %s", strerror (errno));
@@ -898,7 +926,9 @@ void
 rspamd_srv_send_command (struct rspamd_worker *worker,
 		struct event_base *ev_base,
 		struct rspamd_srv_command *cmd,
-		rspamd_srv_reply_handler handler, gpointer ud)
+		gint attached_fd,
+		rspamd_srv_reply_handler handler,
+		gpointer ud)
 {
 	struct rspamd_srv_request_data *rd;
 
@@ -912,6 +942,7 @@ rspamd_srv_send_command (struct rspamd_worker *worker,
 	rd->worker = worker;
 	rd->rep.id = cmd->id;
 	rd->rep.type = cmd->type;
+	rd->attached_fd = attached_fd;
 
 	event_set (&rd->io_ev, worker->srv_pipe[1], EV_WRITE,
 			rspamd_srv_request_handler, rd);

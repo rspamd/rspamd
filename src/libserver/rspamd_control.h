@@ -177,5 +177,7 @@ void rspamd_srv_start_watching (struct rspamd_worker *worker,
 void rspamd_srv_send_command (struct rspamd_worker *worker,
 		struct event_base *ev_base,
 		struct rspamd_srv_command *cmd,
-		rspamd_srv_reply_handler handler, gpointer ud);
+		gint attached_fd,
+		rspamd_srv_reply_handler handler,
+		gpointer ud);
 #endif
