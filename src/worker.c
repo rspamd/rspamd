@@ -17,6 +17,7 @@
  * Rspamd worker implementation
  */
 
+#include <libserver/rspamd_control.h>
 #include "config.h"
 #include "libutil/util.h"
 #include "libutil/map.h"
@@ -31,6 +32,7 @@
 #include "libstat/stat_api.h"
 #include "libserver/worker_util.h"
 #include "libserver/rspamd_control.h"
+#include "utlist.h"
 
 #include "lua/lua_common.h"
 
@@ -105,6 +107,8 @@ struct rspamd_worker_ctx {
 	struct rspamd_keypair_cache *keys_cache;
 	/* Configuration */
 	struct rspamd_config *cfg;
+	/* Log pipe */
+	struct rspamd_worker_log_pipe *log_pipes;
 };
 
 /*
@@ -392,6 +396,39 @@ rspamd_worker_hyperscan_ready (struct rspamd_main *rspamd_main,
 }
 #endif
 
+static gboolean
+rspamd_worker_log_pipe_handler (struct rspamd_main *rspamd_main,
+		struct rspamd_worker *worker, gint fd,
+		gint attached_fd,
+		struct rspamd_control_command *cmd,
+		gpointer ud)
+{
+	struct rspamd_worker_ctx *ctx = ud;
+	struct rspamd_worker_log_pipe *lp;
+	struct rspamd_control_reply rep;
+
+	memset (&rep, 0, sizeof (rep));
+	rep.type = RSPAMD_CONTROL_LOG_PIPE;
+
+	if (attached_fd != -1) {
+		lp = g_slice_alloc0 (sizeof (*lp));
+		lp->fd = attached_fd;
+		lp->type = cmd->cmd.log_pipe.type;
+
+		DL_APPEND (ctx->log_pipes, lp);
+	}
+	else {
+		rep.reply.log_pipe.status = ENOENT;
+	}
+
+	if (write (fd, &rep, sizeof (rep)) != sizeof (rep)) {
+		msg_err ("cannot write reply to the control socket: %s",
+				strerror (errno));
+	}
+
+	return TRUE;
+}
+
 gpointer
 init_worker (struct rspamd_config *cfg)
 {
@@ -495,6 +532,7 @@ void
 start_worker (struct rspamd_worker *worker)
 {
 	struct rspamd_worker_ctx *ctx = worker->ctx;
+	struct rspamd_worker_log_pipe *lp, *ltmp;
 
 	ctx->ev_base = rspamd_prepare_worker (worker, "normal", accept_socket);
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
@@ -513,10 +551,16 @@ start_worker (struct rspamd_worker *worker)
 	rspamd_stat_init (worker->srv->cfg, ctx->ev_base);
 
 #ifdef WITH_HYPERSCAN
-	rspamd_control_worker_add_cmd_handler (worker, RSPAMD_CONTROL_HYPERSCAN_LOADED,
-			rspamd_worker_hyperscan_ready, ctx);
+	rspamd_control_worker_add_cmd_handler (worker,
+			RSPAMD_CONTROL_HYPERSCAN_LOADED,
+			rspamd_worker_hyperscan_ready,
+			ctx);
 #endif
 
+	rspamd_control_worker_add_cmd_handler (worker,
+			RSPAMD_CONTROL_LOG_PIPE,
+			rspamd_worker_log_pipe_handler,
+			ctx);
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();
 
@@ -529,6 +573,11 @@ start_worker (struct rspamd_worker *worker)
 	}
 
 	rspamd_keypair_cache_destroy (ctx->keys_cache);
+
+	DL_FOREACH_SAFE (ctx->log_pipes, lp, ltmp) {
+		close (lp->fd);
+		g_slice_free1 (sizeof (*lp), lp);
+	}
 
 	exit (EXIT_SUCCESS);
 }

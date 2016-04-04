@@ -29,6 +29,7 @@ enum rspamd_control_type {
 	RSPAMD_CONTROL_RERESOLVE,
 	RSPAMD_CONTROL_RECOMPILE,
 	RSPAMD_CONTROL_HYPERSCAN_LOADED,
+	RSPAMD_CONTROL_LOG_PIPE,
 	RSPAMD_CONTROL_FUZZY_STAT,
 	RSPAMD_CONTROL_FUZZY_SYNC,
 	RSPAMD_CONTROL_MAX
@@ -37,6 +38,11 @@ enum rspamd_control_type {
 enum rspamd_srv_type {
 	RSPAMD_SRV_SOCKETPAIR = 0,
 	RSPAMD_SRV_HYPERSCAN_LOADED,
+	RSPAMD_SRV_LOG_PIPE,
+};
+
+enum rspamd_log_pipe_type {
+	RSPAMD_LOG_PIPE_SYMBOLS = 0,
 };
 
 struct rspamd_control_command {
@@ -58,6 +64,9 @@ struct rspamd_control_command {
 			gpointer cache_dir;
 			gboolean forced;
 		} hs_loaded;
+		struct {
+			enum rspamd_log_pipe_type type;
+		} log_pipe;
 		struct {
 			guint unused;
 		} fuzzy_stat;
@@ -91,6 +100,9 @@ struct rspamd_control_reply {
 		} hs_loaded;
 		struct {
 			guint status;
+		} log_pipe;
+		struct {
+			guint status;
 			gchar storage_id[MEMPOOL_UID_LEN];
 		} fuzzy_stat;
 		struct {
@@ -113,6 +125,9 @@ struct rspamd_srv_command {
 			gpointer cache_dir;
 			gboolean forced;
 		} hs_loaded;
+		struct {
+			enum rspamd_log_pipe_type type;
+		} log_pipe;
 	} cmd;
 };
 

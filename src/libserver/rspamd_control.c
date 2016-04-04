@@ -577,6 +577,10 @@ rspamd_control_default_cmd_handler (gint fd,
 		msg_err ("cannot write reply to the control socket: %s",
 				strerror (errno));
 	}
+
+	if (attached_fd != -1) {
+		close (attached_fd);
+	}
 }
 
 static void
@@ -698,6 +702,18 @@ rspamd_control_hs_io_handler (gint fd, short what, gpointer ud)
 }
 
 static void
+rspamd_control_log_pipe_io_handler (gint fd, short what, gpointer ud)
+{
+	struct rspamd_control_reply_elt *elt = ud;
+	struct rspamd_control_reply rep;
+
+	/* At this point we just ignore replies from the workers */
+	(void) read (fd, &rep, sizeof (rep));
+	event_del (&elt->io_ev);
+	g_slice_free1 (sizeof (*elt), elt);
+}
+
+static void
 rspamd_srv_handler (gint fd, short what, gpointer ud)
 {
 	struct rspamd_worker *worker;
@@ -708,7 +724,7 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 	struct cmsghdr *cmsg;
 	struct iovec iov;
 	guchar fdspace[CMSG_SPACE(sizeof (int))];
-	gint *spair;
+	gint *spair, rfd = -1;
 	gchar *nid;
 	struct rspamd_control_command wcmd;
 	gssize r;
@@ -747,6 +763,9 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 			rdata->rep.id = cmd.id;
 			rdata->rep.type = cmd.type;
 			rdata->fd = -1;
+			if (msg.msg_controllen >= CMSG_SPACE(sizeof (int))) {
+				rfd = *(int *) CMSG_DATA(CMSG_FIRSTHDR (&msg));
+			}
 
 			switch (cmd.type) {
 			case RSPAMD_SRV_SOCKETPAIR:
@@ -782,12 +801,22 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 				 */
 				wcmd.cmd.hs_loaded.cache_dir = cmd.cmd.hs_loaded.cache_dir;
 				wcmd.cmd.hs_loaded.forced = cmd.cmd.hs_loaded.forced;
-				rspamd_control_broadcast_cmd (srv, &wcmd, -1,
+				rspamd_control_broadcast_cmd (srv, &wcmd, rfd,
 						rspamd_control_hs_io_handler, NULL);
 				break;
+			case RSPAMD_SRV_LOG_PIPE:
+				memset (&wcmd, 0, sizeof (wcmd));
+				wcmd.cmd.log_pipe.type = cmd.cmd.log_pipe.type;
+				rspamd_control_broadcast_cmd (srv, &wcmd, rfd,
+						rspamd_control_log_pipe_io_handler, NULL);
 			default:
 				msg_err ("unknown command type: %d", cmd.type);
 				break;
+			}
+
+			if (rfd != -1) {
+				/* Close our copy to avoid descriptors leak */
+				close (rfd);
 			}
 
 			/* Now plan write event and send data back */
