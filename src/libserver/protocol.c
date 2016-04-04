@@ -1052,11 +1052,75 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	}
 }
 
+static void
+rspamd_protocol_write_log_pipe (struct rspamd_worker_ctx *ctx,
+		struct rspamd_task *task)
+{
+	struct rspamd_worker_log_pipe *lp;
+	struct rspamd_protocol_log_message_sum *ls;
+	struct metric_result *mres;
+	GHashTableIter it;
+	gpointer k, v;
+	gint id, i;
+	gsize sz;
+
+	LL_FOREACH (ctx->log_pipes, lp) {
+		if (lp->fd != -1) {
+			switch (lp->type) {
+			case RSPAMD_LOG_PIPE_SYMBOLS:
+				mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+
+				if (mres) {
+					sz = sizeof (*ls) + sizeof (guint32) *
+							g_hash_table_size (mres->symbols);
+					ls = g_slice_alloc (sz);
+					ls->nresults = g_hash_table_size (mres->symbols);
+
+					g_hash_table_iter_init (&it, mres->symbols);
+					i = 0;
+
+					while (g_hash_table_iter_next (&it, &k, &v)) {
+						id = rspamd_symbols_cache_find_symbol (task->cfg->cache,
+								k);
+
+						if (id >= 0) {
+							ls->results[i] = id;
+						}
+						else {
+							ls->results[i] = -1;
+						}
+
+						i ++;
+					}
+				}
+				else {
+					sz = sizeof (*ls);
+					ls = g_slice_alloc (sz);
+					ls->nresults = 0;
+				}
+
+				/* We don't really care about return value here */
+				if (write (lp->fd, ls, sz) == -1) {
+					msg_info_task ("cannot write to log pipe: %s",
+							strerror (errno));
+				}
+
+				g_slice_free1 (sz, ls);
+				break;
+			default:
+				msg_err_task ("unknown log format %d", lp->type);
+				break;
+			}
+		}
+	}
+}
+
 void
 rspamd_protocol_write_reply (struct rspamd_task *task)
 {
 	struct rspamd_http_message *msg;
 	const gchar *ctype = "application/json";
+	struct rspamd_abstract_worker_ctx *actx;
 
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 
@@ -1103,6 +1167,14 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 		case CMD_PROCESS:
 		case CMD_SKIP:
 			rspamd_protocol_http_reply (msg, task);
+
+			if (task->worker && task->worker->ctx) {
+				actx = task->worker->ctx;
+
+				if (actx->magic == rspamd_worker_magic) {
+					rspamd_protocol_write_log_pipe (task->worker->ctx, task);
+				}
+			}
 			break;
 		case CMD_PING:
 			msg->body = rspamd_fstring_new_init ("pong" CRLF, 6);
