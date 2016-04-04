@@ -432,7 +432,7 @@ spawn_worker_type (struct rspamd_main *rspamd_main, struct event_base *ev_base,
 {
 	gint i;
 
-	if (!(cf->worker->flags & RSPAMD_WORKER_UNIQUE)) {
+	if (cf->worker->flags & RSPAMD_WORKER_UNIQUE) {
 		if (cf->count > 1) {
 			msg_warn_main (
 					"cannot spawn more than 1 %s worker, so spawn one",
@@ -458,26 +458,26 @@ spawn_workers (struct rspamd_main *rspamd_main, struct event_base *ev_base)
 	gpointer p;
 	guintptr key;
 	struct rspamd_worker_bind_conf *bcf;
-	gboolean listen_ok = FALSE, seen_hs_helper = FALSE;
-	GQuark qtype;
+	gboolean listen_ok = FALSE;
+	GPtrArray *seen_mandatory_workers;
+	worker_t **cw, *wrk;
+	guint i;
 
 	/* Special hack for hs_helper if it's not defined in a config */
-	qtype = g_quark_try_string ("hs_helper");
-
+	seen_mandatory_workers = g_ptr_array_new ();
 	cur = rspamd_main->cfg->workers;
 
 	while (cur) {
 		cf = cur->data;
 		listen_ok = FALSE;
 
-		if (cf->type == qtype) {
-			seen_hs_helper = TRUE;
-		}
-
 		if (cf->worker == NULL) {
 			msg_err_main ("type of worker is unspecified, skip spawning");
 		}
 		else {
+			if (cf->worker->flags & RSPAMD_WORKER_ALWAYS_START) {
+				g_ptr_array_add (seen_mandatory_workers, cf->worker);
+			}
 			if (cf->worker->flags & RSPAMD_WORKER_HAS_SOCKET) {
 				LL_FOREACH (cf->bind_conf, bcf) {
 					key = make_listen_key (bcf);
@@ -533,37 +533,43 @@ spawn_workers (struct rspamd_main *rspamd_main, struct event_base *ev_base)
 		cur = g_list_next (cur);
 	}
 
-#ifdef WITH_HYPERSCAN
-	if (!seen_hs_helper) {
-		/* We also need to spawn hyperscan helper if needed */
-		cf = rspamd_mempool_alloc0 (rspamd_main->cfg->cfg_pool,
-				sizeof (struct rspamd_worker_conf));
-		cf->params = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
-		cf->active_workers = g_queue_new ();
-		rspamd_mempool_add_destructor (rspamd_main->cfg->cfg_pool,
-				(rspamd_mempool_destruct_t) g_hash_table_destroy,
-				cf->params);
-		rspamd_mempool_add_destructor (rspamd_main->cfg->cfg_pool,
-				(rspamd_mempool_destruct_t) g_queue_free,
-				cf->active_workers);
-		cf->count = 1;
-		cf->worker = rspamd_get_worker_by_type (rspamd_main->cfg, qtype);
+	for (cw = workers; *cw != NULL; cw ++) {
+		gboolean seen = FALSE;
 
-		if (cf->worker == NULL) {
-			msg_err_main ("unknown worker type: hs_helper");
-			return;
+		wrk = *cw;
+
+		if (wrk->flags & RSPAMD_WORKER_ALWAYS_START) {
+			for (i = 0; i < seen_mandatory_workers->len; i ++) {
+				if (wrk == g_ptr_array_index (seen_mandatory_workers, i)) {
+					seen = TRUE;
+					break;
+				}
+			}
+
+			if (!seen) {
+				cf = rspamd_mempool_alloc0 (rspamd_main->cfg->cfg_pool,
+						sizeof (struct rspamd_worker_conf));
+				cf->params = g_hash_table_new (rspamd_str_hash,
+						rspamd_str_equal);
+				cf->active_workers = g_queue_new ();
+				rspamd_mempool_add_destructor (rspamd_main->cfg->cfg_pool,
+						(rspamd_mempool_destruct_t) g_hash_table_destroy,
+						cf->params);
+				rspamd_mempool_add_destructor (rspamd_main->cfg->cfg_pool,
+						(rspamd_mempool_destruct_t) g_queue_free,
+						cf->active_workers);
+				cf->count = 1;
+				cf->worker = wrk;
+				cf->type = g_quark_from_static_string (wrk->name);
+
+				if (cf->worker->worker_init_func) {
+					cf->ctx = cf->worker->worker_init_func (rspamd_main->cfg);
+				}
+
+				spawn_worker_type (rspamd_main, ev_base, cf);
+			}
 		}
-
-		cf->type = qtype;
-
-		if (cf->worker->worker_init_func) {
-			cf->ctx = cf->worker->worker_init_func (rspamd_main->cfg);
-		}
-
-		spawn_worker_type (rspamd_main, ev_base, cf);
 	}
-#endif
-	(void)seen_hs_helper; /* Silence warning */
 }
 
 static void
