@@ -994,6 +994,7 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->cfg = rspamd_config_new ();
 	rspamd_main->spairs = g_hash_table_new_full (rspamd_spair_hash,
 			rspamd_spair_equal, g_free, rspamd_spair_close);
+	rspamd_main->start_mtx = rspamd_mempool_get_mutex (rspamd_main->server_pool);
 
 #ifndef HAVE_SETPROCTITLE
 	init_title (argc, argv, env);
@@ -1232,7 +1233,9 @@ main (gint argc, gchar **argv, gchar **env)
 	event_add (&usr1_ev, NULL);
 
 	rspamd_check_core_limits (rspamd_main);
+	rspamd_mempool_lock_mutex (rspamd_main->start_mtx);
 	spawn_workers (rspamd_main, ev_base);
+	rspamd_mempool_unlock_mutex (rspamd_main->start_mtx);
 
 	if (control_fd != -1) {
 		msg_info_main ("listening for control commands on %s",
@@ -1291,6 +1294,7 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_log_close (rspamd_main->logger);
 	REF_RELEASE (rspamd_main->cfg);
 	g_hash_table_unref (rspamd_main->spairs);
+	rspamd_mempool_delete (rspamd_main->server_pool);
 	g_free (rspamd_main);
 	event_base_free (ev_base);
 

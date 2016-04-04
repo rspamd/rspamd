@@ -235,6 +235,7 @@ struct rspamd_main {
 	struct rspamd_stat *stat;                                   /**< pointer to statistics							*/
 
 	rspamd_mempool_t *server_pool;                              /**< server's memory pool							*/
+	rspamd_mempool_mutex_t *start_mtx;                          /**< server is starting up							*/
 	GHashTable *workers;                                        /**< workers pool indexed by pid                    */
 	GHashTable *spairs;                                         /**< socket pairs requested by workers				*/
 	rspamd_logger_t *logger;
