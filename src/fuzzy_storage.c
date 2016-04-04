@@ -813,6 +813,7 @@ sync_callback (gint fd, short what, void *arg)
 static gboolean
 rspamd_fuzzy_storage_sync (struct rspamd_main *rspamd_main,
 		struct rspamd_worker *worker, gint fd,
+		gint attached_fd,
 		struct rspamd_control_command *cmd,
 		gpointer ud)
 {
@@ -852,6 +853,7 @@ rspamd_fuzzy_storage_sync (struct rspamd_main *rspamd_main,
 static gboolean
 rspamd_fuzzy_storage_reload (struct rspamd_main *rspamd_main,
 		struct rspamd_worker *worker, gint fd,
+		gint attached_fd,
 		struct rspamd_control_command *cmd,
 		gpointer ud)
 {
@@ -1037,6 +1039,7 @@ rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat
 static gboolean
 rspamd_fuzzy_storage_stat (struct rspamd_main *rspamd_main,
 		struct rspamd_worker *worker, gint fd,
+		gint attached_fd,
 		struct rspamd_control_command *cmd,
 		gpointer ud)
 {

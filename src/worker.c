@@ -71,6 +71,12 @@ worker_t normal_worker = {
         G_STRFUNC, \
         __VA_ARGS__)
 
+struct rspamd_worker_log_pipe {
+	gint fd;
+	enum rspamd_log_pipe_type type;
+	struct rspamd_worker_log_pipe *prev, *next;
+};
+
 /*
  * Worker's context
  */
@@ -358,6 +364,7 @@ accept_socket (gint fd, short what, void *arg)
 static gboolean
 rspamd_worker_hyperscan_ready (struct rspamd_main *rspamd_main,
 		struct rspamd_worker *worker, gint fd,
+		gint attached_fd,
 		struct rspamd_control_command *cmd,
 		gpointer ud)
 {

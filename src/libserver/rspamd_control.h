@@ -126,11 +126,16 @@ struct rspamd_srv_reply {
 		struct {
 			gint forced;
 		} hs_loaded;
+		struct {
+			enum rspamd_log_pipe_type type;
+		} log_pipe;
 	} reply;
 };
 
 typedef gboolean (*rspamd_worker_control_handler) (struct rspamd_main *rspamd_main,
-		struct rspamd_worker *worker, gint fd,
+		struct rspamd_worker *worker,
+		gint fd,
+		gint attached_fd,
 		struct rspamd_control_command *cmd,
 		gpointer ud);
 

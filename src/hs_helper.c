@@ -203,6 +203,7 @@ rspamd_rs_compile (struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 static gboolean
 rspamd_hs_helper_reload (struct rspamd_main *rspamd_main,
 		struct rspamd_worker *worker, gint fd,
+		gint attached_fd,
 		struct rspamd_control_command *cmd,
 		gpointer ud)
 {

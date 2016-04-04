@@ -491,6 +491,7 @@ struct rspamd_worker_control_data {
 
 static void
 rspamd_control_default_cmd_handler (gint fd,
+		gint attached_fd,
 		struct rspamd_worker_control_data *cd,
 		struct rspamd_control_command *cmd)
 {
@@ -557,10 +558,21 @@ rspamd_control_default_worker_handler (gint fd, short what, gpointer ud)
 {
 	struct rspamd_worker_control_data *cd = ud;
 	struct rspamd_control_command cmd;
-
+	struct msghdr msg;
+	struct iovec iov;
+	guchar fdspace[CMSG_SPACE(sizeof (int))];
+	gint rfd = -1;
 	gssize r;
 
-	r = read (fd, &cmd, sizeof (cmd));
+	iov.iov_base = &cmd;
+	iov.iov_len = sizeof (cmd);
+	memset (&msg, 0, sizeof (msg));
+	msg.msg_control = fdspace;
+	msg.msg_controllen = sizeof (fdspace);
+	msg.msg_iov = &iov;
+	msg.msg_iovlen = 1;
+
+	r = recvmsg (fd, &msg, 0);
 
 	if (r == -1) {
 		msg_err ("cannot read request from the control socket: %s",
@@ -582,12 +594,20 @@ rspamd_control_default_worker_handler (gint fd, short what, gpointer ud)
  	}
 	else if ((gint)cmd.type >= 0 && cmd.type < RSPAMD_CONTROL_MAX) {
 
+		if (msg.msg_controllen >= CMSG_SPACE(sizeof (int))) {
+			rfd = *(int *) CMSG_DATA(CMSG_FIRSTHDR (&msg));
+		}
+
 		if (cd->handlers[cmd.type].handler) {
-			cd->handlers[cmd.type].handler (cd->worker->srv, cd->worker,
-					fd, &cmd, cd->handlers[cmd.type].ud);
+			cd->handlers[cmd.type].handler (cd->worker->srv,
+					cd->worker,
+					fd,
+					rfd,
+					&cmd,
+					cd->handlers[cmd.type].ud);
 		}
 		else {
-			rspamd_control_default_cmd_handler (fd, cd, &cmd);
+			rspamd_control_default_cmd_handler (fd, rfd, cd, &cmd);
 		}
 	}
 	else {
