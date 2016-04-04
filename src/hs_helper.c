@@ -39,11 +39,13 @@ worker_t hs_helper_worker = {
 
 static const gdouble default_max_time = 1.0;
 static const gdouble default_recompile_time = 60.0;
+static const guint64 rspamd_hs_helper_magic = 0x22d310157a2288a0ULL;
 
 /*
  * Worker's context
  */
 struct hs_helper_ctx {
+	guint64 magic;
 	gchar *hs_dir;
 	gboolean loaded;
 	gdouble max_time;
@@ -62,6 +64,7 @@ init_hs_helper (struct rspamd_config *cfg)
 	type = g_quark_try_string ("hs_helper");
 	ctx = g_malloc0 (sizeof (*ctx));
 
+	ctx->magic = rspamd_hs_helper_magic;
 	ctx->cfg = cfg;
 	ctx->hs_dir = RSPAMD_DBDIR "/";
 	ctx->max_time = default_max_time;

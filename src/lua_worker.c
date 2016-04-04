@@ -47,10 +47,12 @@ worker_t lua_worker = {
 	RSPAMD_WORKER_VER       /* Version info */
 };
 
+static const guint64 rspamd_lua_ctx_magic = 0x8055e2652aacf96eULL;
 /*
  * Worker's context
  */
 struct rspamd_lua_worker_ctx {
+	guint64 magic;
 	/* DNS resolver */
 	struct rspamd_dns_resolver *resolver;
 	/* Events base */
@@ -310,6 +312,7 @@ init_lua_worker (struct rspamd_config *cfg)
 	type = g_quark_try_string ("lua");
 
 	ctx = g_malloc0 (sizeof (struct rspamd_lua_worker_ctx));
+	ctx->magic = rspamd_lua_ctx_magic;
 	ctx->params = g_hash_table_new_full (rspamd_str_hash,
 			rspamd_str_equal,
 			g_free,

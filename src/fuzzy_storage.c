@@ -84,7 +84,10 @@ struct fuzzy_key_stat {
 	rspamd_lru_hash_t *last_ips;
 };
 
+static const guint64 rspamd_fuzzy_storage_magic = 0x291a3253eb1b3ea5ULL;
+
 struct rspamd_fuzzy_storage_ctx {
+	guint64 magic;
 	struct fuzzy_global_stat stat;
 	char *hashfile;
 	gdouble expire;
@@ -1204,6 +1207,7 @@ init_fuzzy (struct rspamd_config *cfg)
 
 	ctx = g_malloc0 (sizeof (struct rspamd_fuzzy_storage_ctx));
 
+	ctx->magic = rspamd_fuzzy_storage_magic;
 	ctx->sync_timeout = DEFAULT_SYNC_TIMEOUT;
 	ctx->expire = DEFAULT_EXPIRE;
 	ctx->keypair_cache_size = DEFAULT_KEYPAIR_CACHE_SIZE;

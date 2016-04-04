@@ -48,7 +48,10 @@ worker_t smtp_proxy_worker = {
 	RSPAMD_WORKER_VER           /* Version info */
 };
 
+static guint64 rspamd_smtp_proxy_magic = 0xf3d849189c85f12dULL;
+
 struct smtp_proxy_ctx {
+	guint64 magic;
 	struct upstream_list *upstreams;
 	gchar *upstreams_str;
 
@@ -965,6 +968,7 @@ init_smtp_proxy (struct rspamd_config *cfg)
 	type = g_quark_try_string ("smtp_proxy");
 
 	ctx = g_malloc0 (sizeof (struct smtp_worker_ctx));
+	ctx->magic = rspamd_smtp_proxy_magic;
 	ctx->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 
 	/* Set default values */

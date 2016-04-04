@@ -99,6 +99,8 @@ const struct timeval rrd_update_time = {
 		.tv_usec = 0
 };
 
+const guint64 rspamd_controller_ctx_magic = 0xf72697805e6941faULL;
+
 gpointer init_controller_worker (struct rspamd_config *cfg);
 void start_controller_worker (struct rspamd_worker *worker);
 
@@ -114,6 +116,7 @@ worker_t controller_worker = {
  * Worker's context
  */
 struct rspamd_controller_worker_ctx {
+	guint64 magic;
 	guint32 timeout;
 	struct timeval io_tv;
 	/* DNS resolver */
@@ -2397,6 +2400,7 @@ init_controller_worker (struct rspamd_config *cfg)
 
 	ctx = g_malloc0 (sizeof (struct rspamd_controller_worker_ctx));
 
+	ctx->magic = rspamd_controller_ctx_magic;
 	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;
 
 	rspamd_rcl_register_worker_option (cfg,

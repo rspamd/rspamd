@@ -62,6 +62,11 @@ struct rspamd_worker {
 	gpointer control_data;          /**< used by control protocol to handle commands	*/
 };
 
+struct rspamd_abstract_worker_ctx {
+	guint64 magic;
+	char data[];
+};
+
 struct rspamd_worker_signal_handler;
 
 struct rspamd_worker_signal_cb {

@@ -32,6 +32,7 @@
 #include "libstat/stat_api.h"
 #include "libserver/worker_util.h"
 #include "libserver/rspamd_control.h"
+#include "worker_private.h"
 #include "utlist.h"
 
 #include "lua/lua_common.h"
@@ -69,44 +70,6 @@ worker_t normal_worker = {
         "controller", ctx->cfg->cfg_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
-
-struct rspamd_worker_log_pipe {
-	gint fd;
-	enum rspamd_log_pipe_type type;
-	struct rspamd_worker_log_pipe *prev, *next;
-};
-
-/*
- * Worker's context
- */
-struct rspamd_worker_ctx {
-	guint32 timeout;
-	struct timeval io_tv;
-	/* Detect whether this worker is mime worker    */
-	gboolean is_mime;
-	/* HTTP worker									*/
-	gboolean is_http;
-	/* JSON output                                  */
-	gboolean is_json;
-	/* Allow learning throught worker				*/
-	gboolean allow_learn;
-	/* DNS resolver */
-	struct rspamd_dns_resolver *resolver;
-	/* Limit of tasks */
-	guint32 max_tasks;
-	/* Maximum time for task processing */
-	gdouble task_timeout;
-	/* Events base */
-	struct event_base *ev_base;
-	/* Encryption key */
-	struct rspamd_cryptobox_keypair *key;
-	/* Keys cache */
-	struct rspamd_keypair_cache *keys_cache;
-	/* Configuration */
-	struct rspamd_config *cfg;
-	/* Log pipe */
-	struct rspamd_worker_log_pipe *log_pipes;
-};
 
 /*
  * Reduce number of tasks proceeded
@@ -436,6 +399,7 @@ init_worker (struct rspamd_config *cfg)
 
 	ctx = g_malloc0 (sizeof (struct rspamd_worker_ctx));
 
+	ctx->magic = rspamd_worker_magic;
 	ctx->is_mime = TRUE;
 	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;
 	ctx->cfg = cfg;

@@ -49,7 +49,10 @@ struct rspamd_http_upstream {
 	struct rspamd_cryptobox_pubkey *key;
 };
 
+static const guint64 rspamd_http_proxy_magic = 0xcdeb4fd1fc351980ULL;
+
 struct http_proxy_ctx {
+	guint64 magic;
 	gdouble timeout;
 	struct timeval io_tv;
 	struct rspamd_config *cfg;
@@ -188,6 +191,7 @@ init_http_proxy (struct rspamd_config *cfg)
 	type = g_quark_try_string ("http_proxy");
 
 	ctx = g_malloc0 (sizeof (struct http_proxy_ctx));
+	ctx->magic = rspamd_http_proxy_magic;
 	ctx->timeout = 5.0;
 	ctx->upstreams = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	ctx->rotate_tm = DEFAULT_ROTATION_TIME;

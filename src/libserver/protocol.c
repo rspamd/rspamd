@@ -21,6 +21,7 @@
 #include "message.h"
 #include "utlist.h"
 #include "http.h"
+#include "worker_private.h"
 
 /* Max line size */
 #define OUTBUFSIZ BUFSIZ
