@@ -724,6 +724,7 @@ rspamd_redis_timeout (gint fd, short what, gpointer d)
 	rspamd_upstream_fail (rt->selected);
 	rt->conn_state = RSPAMD_REDIS_TIMEDOUT;
 	redisAsyncFree (rt->redis);
+	rt->redis = NULL;
 }
 
 /* Called when we have connected to the redis server and got stats */
@@ -1202,6 +1203,7 @@ rspamd_redis_finalize_process (struct rspamd_task *task, gpointer runtime,
 	if (rt->conn_state == RSPAMD_REDIS_CONNECTED) {
 		event_del (&rt->timeout_event);
 		redisAsyncFree (rt->redis);
+		rt->redis = NULL;
 
 		rt->conn_state = RSPAMD_REDIS_DISCONNECTED;
 	}
@@ -1338,6 +1340,7 @@ rspamd_redis_finalize_learn (struct rspamd_task *task, gpointer runtime,
 	if (rt->conn_state == RSPAMD_REDIS_CONNECTED) {
 		event_del (&rt->timeout_event);
 		redisAsyncFree (rt->redis);
+		rt->redis = NULL;
 
 		rt->conn_state = RSPAMD_REDIS_DISCONNECTED;
 	}
@@ -1394,6 +1397,7 @@ rspamd_redis_get_stat (gpointer runtime,
 		if (rt->redis) {
 			event_del (&rt->timeout_event);
 			redisAsyncFree (rt->redis);
+			rt->redis = NULL;
 
 			rt->conn_state = RSPAMD_REDIS_DISCONNECTED;
 		}
