@@ -374,20 +374,46 @@ rspamd_control_error_handler (struct rspamd_http_connection *conn, GError *err)
 static struct rspamd_control_reply_elt *
 rspamd_control_broadcast_cmd (struct rspamd_main *rspamd_main,
 		struct rspamd_control_command *cmd,
+		gint attached_fd,
 		void (*handler) (int, short, void *), gpointer ud)
 {
 	GHashTableIter it;
 	struct rspamd_worker *wrk;
 	struct rspamd_control_reply_elt *rep_elt, *res = NULL;
 	gpointer k, v;
+	struct msghdr msg;
+	struct cmsghdr *cmsg;
+	struct iovec iov;
+	guchar fdspace[CMSG_SPACE(sizeof (int))];
+	gssize r;
 
 	g_hash_table_iter_init (&it, rspamd_main->workers);
 
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		wrk = v;
 
-		if (write (wrk->control_pipe[0], cmd,
-				sizeof (*cmd)) == sizeof (*cmd)) {
+		memset (&msg, 0, sizeof (msg));
+
+		/* Attach fd to the message */
+		if (attached_fd != -1) {
+			memset (fdspace, 0, sizeof (fdspace));
+			msg.msg_control = fdspace;
+			msg.msg_controllen = sizeof (fdspace);
+			cmsg = CMSG_FIRSTHDR (&msg);
+			cmsg->cmsg_level = SOL_SOCKET;
+			cmsg->cmsg_type = SCM_RIGHTS;
+			cmsg->cmsg_len = CMSG_LEN (sizeof (int));
+			memcpy (CMSG_DATA (cmsg), &attached_fd, sizeof (int));
+		}
+
+		iov.iov_base = cmd;
+		iov.iov_len = sizeof (*cmd);
+		msg.msg_iov = &iov;
+		msg.msg_iovlen = 1;
+
+		r = sendmsg (wrk->control_pipe[0], &msg, 0);
+
+		if (r == sizeof (*cmd)) {
 
 			rep_elt = g_slice_alloc0 (sizeof (*rep_elt));
 			rep_elt->wrk = wrk;
@@ -447,7 +473,7 @@ rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 		else {
 			/* Send command to all workers */
 			session->replies = rspamd_control_broadcast_cmd (
-					session->rspamd_main, &session->cmd,
+					session->rspamd_main, &session->cmd, -1,
 					rspamd_control_wrk_io, session);
 
 			DL_FOREACH (session->replies, cur) {
@@ -756,7 +782,7 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 				 */
 				wcmd.cmd.hs_loaded.cache_dir = cmd.cmd.hs_loaded.cache_dir;
 				wcmd.cmd.hs_loaded.forced = cmd.cmd.hs_loaded.forced;
-				rspamd_control_broadcast_cmd (srv, &wcmd,
+				rspamd_control_broadcast_cmd (srv, &wcmd, -1,
 						rspamd_control_hs_io_handler, NULL);
 				break;
 			default:
