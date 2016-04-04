@@ -106,10 +106,7 @@ worker_t controller_worker = {
 	"controller",                   /* Name */
 	init_controller_worker,         /* Init function */
 	start_controller_worker,        /* Start function */
-	TRUE,                   /* Has socket */
-	TRUE,                   /* Non unique */
-	FALSE,                  /* Non threaded */
-	TRUE,                   /* Killable */
+	RSPAMD_WORKER_HAS_SOCKET | RSPAMD_WORKER_KILLABLE,
 	SOCK_STREAM,            /* TCP socket */
 	RSPAMD_WORKER_VER       /* Version info */
 };

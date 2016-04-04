@@ -42,10 +42,7 @@ worker_t lua_worker = {
 	"lua",                  /* Name */
 	init_lua_worker,        /* Init function */
 	start_lua_worker,       /* Start function */
-	TRUE,                   /* Has socket */
-	FALSE,                  /* Non unique */
-	FALSE,                  /* Non threaded */
-	TRUE,                   /* Killable */
+	RSPAMD_WORKER_HAS_SOCKET | RSPAMD_WORKER_KILLABLE,
 	SOCK_STREAM,            /* TCP socket */
 	RSPAMD_WORKER_VER       /* Version info */
 };

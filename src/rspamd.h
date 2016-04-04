@@ -118,7 +118,7 @@ struct module_ctx {
 #endif
 
 #define RSPAMD_CUR_MODULE_VERSION 0x1
-#define RSPAMD_CUR_WORKER_VERSION 0x1
+#define RSPAMD_CUR_WORKER_VERSION 0x2
 
 #define RSPAMD_FEATURES \
 		RSPAMD_FEATURE_HYPERSCAN RSPAMD_FEATURE_PCRE2 \
@@ -148,14 +148,19 @@ typedef struct module_s {
 	const gchar *rspamd_features;
 } module_t;
 
+enum rspamd_worker_flags {
+	RSPAMD_WORKER_HAS_SOCKET = (1 << 0),
+	RSPAMD_WORKER_UNIQUE = (1 << 1),
+	RSPAMD_WORKER_THREADED = (1 << 2),
+	RSPAMD_WORKER_KILLABLE = (1 << 3),
+	RSPAMD_WORKER_ALWAYS_START = (1 << 4),
+};
+
 typedef struct worker_s {
 	const gchar *name;
 	gpointer (*worker_init_func)(struct rspamd_config *cfg);
 	void (*worker_start_func)(struct rspamd_worker *worker);
-	gboolean has_socket;
-	gboolean unique;
-	gboolean threaded;
-	gboolean killable;
+	enum rspamd_worker_flags flags;
 	gint listen_type;
 	guint worker_version;
 	guint64 rspamd_version;

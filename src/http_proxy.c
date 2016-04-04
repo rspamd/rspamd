@@ -38,10 +38,7 @@ worker_t http_proxy_worker = {
 	"http_proxy",               /* Name */
 	init_http_proxy,            /* Init function */
 	start_http_proxy,           /* Start function */
-	TRUE,                       /* Has socket */
-	FALSE,                      /* Non unique */
-	FALSE,                      /* Non threaded */
-	TRUE,                       /* Killable */
+	RSPAMD_WORKER_HAS_SOCKET | RSPAMD_WORKER_KILLABLE,
 	SOCK_STREAM,                /* TCP socket */
 	RSPAMD_WORKER_VER
 };

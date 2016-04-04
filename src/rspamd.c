@@ -432,7 +432,7 @@ spawn_worker_type (struct rspamd_main *rspamd_main, struct event_base *ev_base,
 {
 	gint i;
 
-	if (cf->worker->unique) {
+	if (!(cf->worker->flags & RSPAMD_WORKER_UNIQUE)) {
 		if (cf->count > 1) {
 			msg_warn_main (
 					"cannot spawn more than 1 %s worker, so spawn one",
@@ -440,7 +440,7 @@ spawn_worker_type (struct rspamd_main *rspamd_main, struct event_base *ev_base,
 		}
 		rspamd_fork_worker (rspamd_main, cf, 0, ev_base);
 	}
-	else if (cf->worker->threaded) {
+	else if (cf->worker->flags & RSPAMD_WORKER_THREADED) {
 		rspamd_fork_worker (rspamd_main, cf, 0, ev_base);
 	}
 	else {
@@ -478,7 +478,7 @@ spawn_workers (struct rspamd_main *rspamd_main, struct event_base *ev_base)
 			msg_err_main ("type of worker is unspecified, skip spawning");
 		}
 		else {
-			if (cf->worker->has_socket) {
+			if (cf->worker->flags & RSPAMD_WORKER_HAS_SOCKET) {
 				LL_FOREACH (cf->bind_conf, bcf) {
 					key = make_listen_key (bcf);
 					if ((p =
@@ -588,7 +588,7 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 
 	if (waitpid (w->pid, &res, WNOHANG) <= 0) {
 		if (term_attempts == 0) {
-			if (w->cf->worker->killable) {
+			if (w->cf->worker->flags & RSPAMD_WORKER_KILLABLE) {
 				msg_info_main ("terminate worker %P with SIGKILL", w->pid);
 				kill (w->pid, SIGKILL);
 			}

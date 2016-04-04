@@ -49,15 +49,12 @@ gpointer init_fuzzy (struct rspamd_config *cfg);
 void start_fuzzy (struct rspamd_worker *worker);
 
 worker_t fuzzy_worker = {
-	"fuzzy",                    /* Name */
-	init_fuzzy,                 /* Init function */
-	start_fuzzy,                /* Start function */
-	TRUE,                       /* No socket */
-	FALSE,                      /* Unique */
-	FALSE,                      /* Threaded */
-	FALSE,                      /* Non killable */
-	SOCK_DGRAM,                 /* UDP socket */
-	RSPAMD_WORKER_VER           /* Version info */
+		"fuzzy",                    /* Name */
+		init_fuzzy,                 /* Init function */
+		start_fuzzy,                /* Start function */
+		RSPAMD_WORKER_HAS_SOCKET,
+		SOCK_DGRAM,                 /* UDP socket */
+		RSPAMD_WORKER_VER           /* Version info */
 };
 
 /* For evtimer */

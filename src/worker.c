@@ -45,15 +45,12 @@ gpointer init_worker (struct rspamd_config *cfg);
 void start_worker (struct rspamd_worker *worker);
 
 worker_t normal_worker = {
-	"normal",                   /* Name */
-	init_worker,                /* Init function */
-	start_worker,               /* Start function */
-	TRUE,                       /* Has socket */
-	FALSE,                      /* Non unique */
-	FALSE,                      /* Non threaded */
-	TRUE,                       /* Killable */
-	SOCK_STREAM,                /* TCP socket */
-	RSPAMD_WORKER_VER           /* Version info */
+		"normal",                   /* Name */
+		init_worker,                /* Init function */
+		start_worker,               /* Start function */
+		RSPAMD_WORKER_HAS_SOCKET|RSPAMD_WORKER_KILLABLE,
+		SOCK_STREAM,                /* TCP socket */
+		RSPAMD_WORKER_VER           /* Version info */
 };
 
 #define msg_err_ctx(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
