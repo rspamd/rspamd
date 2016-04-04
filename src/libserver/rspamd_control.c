@@ -809,6 +809,7 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 				wcmd.cmd.log_pipe.type = cmd.cmd.log_pipe.type;
 				rspamd_control_broadcast_cmd (srv, &wcmd, rfd,
 						rspamd_control_log_pipe_io_handler, NULL);
+				break;
 			default:
 				msg_err ("unknown command type: %d", cmd.type);
 				break;

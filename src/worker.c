@@ -376,9 +376,11 @@ rspamd_worker_log_pipe_handler (struct rspamd_main *rspamd_main,
 		lp->type = cmd->cmd.log_pipe.type;
 
 		DL_APPEND (ctx->log_pipes, lp);
+		msg_info ("added new log pipe");
 	}
 	else {
 		rep.reply.log_pipe.status = ENOENT;
+		msg_err ("cannot attach log pipe: invalid fd");
 	}
 
 	if (write (fd, &rep, sizeof (rep)) != sizeof (rep)) {
