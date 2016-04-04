@@ -93,11 +93,13 @@ rspamd_log_helper_read (gint fd, short what, gpointer ud)
 			out = g_string_sized_new (31);
 
 			for (i = 0; i < n; i ++) {
-				rspamd_printf_gstring (out, "%s%d", i == 0 ? "" : ", ",
-						sm->results[i]);
+
+				rspamd_printf_gstring (out, "%s%s", i == 0 ? "" : ", ",
+						rspamd_symbols_cache_symbol_by_id (ctx->cfg->cache,
+								sm->results[i]));
 			}
 
-			msg_info ("got log line: %V", out);
+			msg_info ("got log line: %v", out);
 			g_string_free (out, TRUE);
 			g_free (sm);
 		}
@@ -115,6 +117,7 @@ rspamd_log_helper_reply_handler (struct rspamd_worker *worker,
 	struct log_helper_ctx *ctx = ud;
 
 	close (ctx->pair[1]);
+	msg_info ("start waiting for log events");
 	event_set (&ctx->log_ev, ctx->pair[0], EV_READ | EV_PERSIST,
 			rspamd_log_helper_read, ctx);
 	event_base_set (ctx->ev_base, &ctx->log_ev);

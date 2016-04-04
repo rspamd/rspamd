@@ -549,6 +549,7 @@ rspamd_control_default_cmd_handler (gint fd,
 	case RSPAMD_CONTROL_HYPERSCAN_LOADED:
 	case RSPAMD_CONTROL_FUZZY_STAT:
 	case RSPAMD_CONTROL_FUZZY_SYNC:
+	case RSPAMD_CONTROL_LOG_PIPE:
 		break;
 	case RSPAMD_CONTROL_RERESOLVE:
 		if (cd->worker->srv->cfg) {
@@ -806,6 +807,7 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 				break;
 			case RSPAMD_SRV_LOG_PIPE:
 				memset (&wcmd, 0, sizeof (wcmd));
+				wcmd.type = RSPAMD_CONTROL_LOG_PIPE;
 				wcmd.cmd.log_pipe.type = cmd.cmd.log_pipe.type;
 				rspamd_control_broadcast_cmd (srv, &wcmd, rfd,
 						rspamd_control_log_pipe_io_handler, NULL);
