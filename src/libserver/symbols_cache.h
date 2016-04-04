@@ -105,7 +105,17 @@ gboolean rspamd_symbols_cache_add_condition_delayed (struct symbols_cache *cache
  * @param name
  * @return id of symbol or (-1) if a symbol has not been found
  */
-gint rspamd_symbols_cache_find_symbol (struct symbols_cache *cache, const gchar *name);
+gint rspamd_symbols_cache_find_symbol (struct symbols_cache *cache,
+		const gchar *name);
+
+/**
+ * Find symbol in cache by its id
+ * @param cache
+ * @param id
+ * @return symbol's name or NULL
+ */
+const gchar * rspamd_symbols_cache_symbol_by_id (struct symbols_cache *cache,
+		gint id);
 
 /**
  * Call function for cached symbol using saved callback

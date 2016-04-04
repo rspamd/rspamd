@@ -42,6 +42,9 @@
 
 static const guchar rspamd_symbols_cache_magic[8] = {'r', 's', 'c', 1, 0, 0, 0, 0 };
 
+static gint rspamd_symbols_cache_find_symbol_parent (struct symbols_cache *cache,
+		const gchar *name);
+
 struct rspamd_symbols_cache_header {
 	guchar magic[8];
 	guint nitems;
@@ -307,7 +310,7 @@ rspamd_symbols_cache_post_init (struct symbols_cache *cache)
 	while (cur) {
 		ddep = cur->data;
 
-		id = rspamd_symbols_cache_find_symbol (cache, ddep->from);
+		id = rspamd_symbols_cache_find_symbol_parent (cache, ddep->from);
 		if (id != -1) {
 			it = g_ptr_array_index (cache->items_by_id, id);
 		}
@@ -330,7 +333,7 @@ rspamd_symbols_cache_post_init (struct symbols_cache *cache)
 	while (cur) {
 		dcond = cur->data;
 
-		id = rspamd_symbols_cache_find_symbol (cache, dcond->sym);
+		id = rspamd_symbols_cache_find_symbol_parent (cache, dcond->sym);
 		if (id != -1) {
 			it = g_ptr_array_index (cache->items_by_id, id);
 		}
@@ -694,7 +697,7 @@ rspamd_symbols_cache_add_condition_delayed (struct symbols_cache *cache,
 	g_assert (cache != NULL);
 	g_assert (sym != NULL);
 
-	id = rspamd_symbols_cache_find_symbol (cache, sym);
+	id = rspamd_symbols_cache_find_symbol_parent (cache, sym);
 
 	if (id != -1) {
 		/* We already know id, so just register a direct condition */
@@ -1658,6 +1661,27 @@ rspamd_symbols_cache_find_symbol (struct symbols_cache *cache, const gchar *name
 	item = g_hash_table_lookup (cache->items_by_symbol, name);
 
 	if (item != NULL) {
+		return item->id;
+	}
+
+	return -1;
+}
+
+static gint
+rspamd_symbols_cache_find_symbol_parent (struct symbols_cache *cache,
+		const gchar *name)
+{
+	struct cache_item *item;
+
+	g_assert (cache != NULL);
+
+	if (name == NULL) {
+		return -1;
+	}
+
+	item = g_hash_table_lookup (cache->items_by_symbol, name);
+
+	if (item != NULL) {
 
 		while (item != NULL && item->parent != -1) {
 			item = g_ptr_array_index (cache->items_by_id, item->parent);
@@ -1667,6 +1691,23 @@ rspamd_symbols_cache_find_symbol (struct symbols_cache *cache, const gchar *name
 	}
 
 	return -1;
+}
+
+const gchar *
+rspamd_symbols_cache_symbol_by_id (struct symbols_cache *cache,
+		gint id)
+{
+	struct cache_item *item;
+
+	g_assert (cache != NULL);
+
+	if (id < 0 || id >= (gint)cache->items_by_id->len) {
+		return NULL;
+	}
+
+	item = g_ptr_array_index (cache->items_by_id, id);
+
+	return item->symbol;
 }
 
 void
