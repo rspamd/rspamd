@@ -63,9 +63,9 @@ end
 -- List-Help: <mailto:
 -- List-Post: <mailto:
 -- List-Subscribe: .*<mailto:.*=subscribe>
--- List-Id: 
+-- List-Id:
 -- List-Unsubscribe: .*<mailto:.*=unsubscribe>
--- List-Archive: 
+-- List-Archive:
 -- X-Mailman-Version: \d
 local function check_ml_mailman(task)
   -- Mailing-List
@@ -241,6 +241,15 @@ local function check_ml_cgp(task)
   return check_rfc2919(task)
 end
 
+local function check_ml_generic(task)
+  local header = task:get_header('Precedence')
+  if not header or (header ~= 'list' and header ~= 'bulk') then
+    return false
+  end
+
+  return check_rfc2919(task)
+end
+
 local function check_maillist(task)
   if check_ml_ezmlm(task) then
     task:insert_result(symbol, 1, 'ezmlm')
@@ -254,6 +263,8 @@ local function check_maillist(task)
     task:insert_result(symbol, 1, 'majordomo')
   elseif check_ml_cgp(task) then
     task:insert_result(symbol, 1, 'cgp')
+  elseif check_ml_generic(task) then
+    task:insert_result(symbol, 0.5, 'generic')
   end
 end
 -- Registration
@@ -265,7 +276,7 @@ end
 -- Configuration
 local opts =  rspamd_config:get_all_opt('maillist')if opts then
   if opts['symbol'] then
-    symbol = opts['symbol'] 
+    symbol = opts['symbol']
     rspamd_config:register_symbol(symbol, 1.0, check_maillist)
   end
 end
