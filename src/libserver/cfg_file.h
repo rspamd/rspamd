@@ -259,6 +259,11 @@ struct metric {
 	struct metric_action actions[METRIC_ACTION_MAX]; /**< all actions of the metric						*/
 };
 
+struct rspamd_config_post_load_script {
+	gint cbref;
+	struct rspamd_config_post_load_script *prev, *next;
+};
+
 /**
  * Structure that stores all config data
  */
@@ -394,6 +399,8 @@ struct rspamd_config {
 	struct rspamd_re_cache *re_cache;				/**< static regexp cache								*/
 
 	GHashTable *trusted_keys;						/**< list of trusted public keys						*/
+
+	struct rspamd_config_post_load_script *on_load;	/**< list of scripts executed on config load			*/
 
 	ref_entry_t ref;								/**< reference counter									*/
 };

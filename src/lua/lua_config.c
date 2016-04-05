@@ -393,8 +393,16 @@ LUA_FUNCTION_DEF (config, replace_regexp);
  * of script function depends on worker type
  * @param {string} worker_type worker type (e.g. "normal")
  * @param {function} script script for a worker
+ * @return {boolean} `true` if a script has been registered
  */
 LUA_FUNCTION_DEF (config, register_worker_script);
+
+/***
+ * @method rspamd_config:add_on_load(function(cfg) ... end)
+ * Registers the following script to be executed when configuration is completely loaded
+ * @param {function} script function to be executed
+ */
+LUA_FUNCTION_DEF (config, add_on_load);
 
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
@@ -424,6 +432,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_regexp),
 	LUA_INTERFACE_DEF (config, replace_regexp),
 	LUA_INTERFACE_DEF (config, register_worker_script),
+	LUA_INTERFACE_DEF (config, add_on_load),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
 	{NULL, NULL}
@@ -1673,6 +1682,24 @@ lua_config_register_worker_script (lua_State *L)
 	lua_pushboolean (L, found);
 
 	return 1;
+}
+
+static gint
+lua_config_add_on_load (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	struct rspamd_config_post_load_script *sc;
+
+	if (cfg == NULL || lua_type (L, 2) != LUA_TFUNCTION) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	sc = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*sc));
+	lua_pushvalue (L, 2);
+	sc->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+	DL_APPEND (cfg->on_load, sc);
+
+	return 0;
 }
 
 void

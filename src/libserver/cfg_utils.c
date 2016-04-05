@@ -616,6 +616,8 @@ rspamd_config_post_load (struct rspamd_config *cfg, gboolean validate_cache)
 	struct timespec ts;
 #endif
 	struct metric *def_metric;
+	struct rspamd_config_post_load_script *sc;
+	struct rspamd_config **pcfg;
 
 #ifdef HAVE_CLOCK_GETTIME
 #ifdef HAVE_CLOCK_PROCESS_CPUTIME_ID
@@ -687,6 +689,22 @@ rspamd_config_post_load (struct rspamd_config *cfg, gboolean validate_cache)
 
 	/* Config other libraries */
 	rspamd_config_libs (cfg->libs_ctx, cfg);
+
+	/* Execute post load scripts */
+	LL_FOREACH (cfg->on_load, sc) {
+		lua_rawgeti (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
+		pcfg = lua_newuserdata (cfg->lua_state, sizeof (*pcfg));
+		*pcfg = cfg;
+		rspamd_lua_setclass (cfg->lua_state, "rspamd{config}", -1);
+
+		if (lua_pcall (cfg->lua_state, 1, 0, 0) != 0) {
+			msg_err_config ("error executing post load code: %s",
+					lua_tostring (cfg->lua_state, -1));
+			lua_pop (cfg->lua_state, 1);
+
+			return FALSE;
+		}
+	}
 
 	/* Validate cache */
 	if (validate_cache) {
