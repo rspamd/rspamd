@@ -404,6 +404,13 @@ LUA_FUNCTION_DEF (config, register_worker_script);
  */
 LUA_FUNCTION_DEF (config, add_on_load);
 
+/***
+ * @method rspamd_config:get_symbols_count()
+ * Returns number of symbols registered in rspamd configuration
+ * @return {number} number of symbols registered in the configuration
+ */
+LUA_FUNCTION_DEF (config, get_symbols_count);
+
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
 	LUA_INTERFACE_DEF (config, get_mempool),
@@ -433,6 +440,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, replace_regexp),
 	LUA_INTERFACE_DEF (config, register_worker_script),
 	LUA_INTERFACE_DEF (config, add_on_load),
+	LUA_INTERFACE_DEF (config, get_symbols_count),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
 	{NULL, NULL}
@@ -1700,6 +1708,24 @@ lua_config_add_on_load (lua_State *L)
 	DL_APPEND (cfg->on_load, sc);
 
 	return 0;
+}
+
+static gint
+lua_config_get_symbols_count (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	guint res = 0;
+
+	if (cfg != NULL) {
+		res = rspamd_symbols_cache_symbols_count (cfg->cache);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_pushnumber (L, res);
+
+	return 1;
 }
 
 void

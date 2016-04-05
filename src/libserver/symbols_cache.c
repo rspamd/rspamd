@@ -1710,6 +1710,14 @@ rspamd_symbols_cache_symbol_by_id (struct symbols_cache *cache,
 	return item->symbol;
 }
 
+guint
+rspamd_symbols_cache_symbols_count (struct symbols_cache *cache)
+{
+	g_assert (cache != NULL);
+
+	return cache->items_by_id->len;
+}
+
 void
 rspamd_symbols_cache_disable_symbol (struct rspamd_task *task,
 		struct symbols_cache *cache, const gchar *symbol)

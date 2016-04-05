@@ -118,6 +118,13 @@ const gchar * rspamd_symbols_cache_symbol_by_id (struct symbols_cache *cache,
 		gint id);
 
 /**
+ * Returns number of symbols registered in symbols cache
+ * @param cache
+ * @return number of symbols in the cache
+ */
+guint rspamd_symbols_cache_symbols_count (struct symbols_cache *cache);
+
+/**
  * Call function for cached symbol using saved callback
  * @param task task object
  * @param cache symbols cache
