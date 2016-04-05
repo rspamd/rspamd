@@ -20,6 +20,7 @@
 #include "cfg_rcl.h"
 #include "tokenizers/tokenizers.h"
 #include "libserver/url.h"
+#include "unix-std.h"
 #include <math.h>
 #include <glob.h>
 
@@ -230,6 +231,27 @@ LUA_FUNCTION_DEF (util, strequal_caseless);
  */
 LUA_FUNCTION_DEF (util, get_ticks);
 
+/***
+ * @function util.stat(fname)
+ * Performs stat(2) on a specified filepath and returns table of values
+ *
+ * - `size`: size of file in bytes
+ * - `type`: type of filepath: `regular`, `directory`, `special`
+ * - `mtime`: modification time as unix time
+ *
+ * @return {string,table} string is returned when error is occurred
+ * @example
+ *
+ * local err,st = util.stat('/etc/password')
+ *
+ * if err then
+ *   -- handle error
+ * else
+ *   print(st['size'])
+ * end
+ */
+LUA_FUNCTION_DEF (util, stat);
+
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
 	LUA_INTERFACE_DEF (util, load_rspamd_config),
@@ -255,6 +277,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, strcasecmp_ascii),
 	LUA_INTERFACE_DEF (util, strequal_caseless),
 	LUA_INTERFACE_DEF (util, get_ticks),
+	LUA_INTERFACE_DEF (util, stat),
 	{NULL, NULL}
 };
 
@@ -1072,6 +1095,51 @@ lua_util_get_ticks (lua_State *L)
 	lua_pushnumber (L, ticks);
 
 	return 1;
+}
+
+static gint
+lua_util_stat (lua_State *L)
+{
+	const gchar *fpath;
+	struct stat st;
+
+	fpath = luaL_checkstring (L, 1);
+
+	if (fpath) {
+		if (stat (fpath, &st) == -1) {
+			lua_pushstring (L, strerror (errno));
+			lua_pushnil (L);
+		}
+		else {
+			lua_pushnil (L);
+			lua_createtable (L, 0, 3);
+
+			lua_pushstring (L, "size");
+			lua_pushnumber (L, st.st_size);
+			lua_settable (L, -3);
+
+			lua_pushstring (L, "mtime");
+			lua_pushnumber (L, st.st_mtime);
+			lua_settable (L, -3);
+
+			lua_pushstring (L, "type");
+			if (S_ISREG (st.st_mode)) {
+				lua_pushstring (L, "regular");
+			}
+			else if (S_ISDIR (st.st_mode)) {
+				lua_pushstring (L, "directory");
+			}
+			else {
+				lua_pushstring (L, "special");
+			}
+			lua_settable (L, -3);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 2;
 }
 
 static gint
