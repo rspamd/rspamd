@@ -387,6 +387,15 @@ LUA_FUNCTION_DEF (config, register_regexp);
  */
 LUA_FUNCTION_DEF (config, replace_regexp);
 
+/***
+ * @method rspamd_config:register_worker_script(worker_type, script)
+ * Registers the following script for workers of a specified type. The exact type
+ * of script function depends on worker type
+ * @param {string} worker_type worker type (e.g. "normal")
+ * @param {function} script script for a worker
+ */
+LUA_FUNCTION_DEF (config, register_worker_script);
+
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
 	LUA_INTERFACE_DEF (config, get_mempool),
@@ -414,6 +423,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, add_condition),
 	LUA_INTERFACE_DEF (config, register_regexp),
 	LUA_INTERFACE_DEF (config, replace_regexp),
+	LUA_INTERFACE_DEF (config, register_worker_script),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
 	{NULL, NULL}
@@ -1630,6 +1640,39 @@ lua_config_replace_regexp (lua_State *L)
 	}
 
 	return 0;
+}
+
+static gint
+lua_config_register_worker_script (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *worker_type = luaL_checkstring (L, 2), *wtype;
+	struct rspamd_worker_conf *cf;
+	GList *cur;
+	struct rspamd_worker_lua_script *sc;
+	gboolean found = FALSE;
+
+	if (cfg == NULL || worker_type == NULL || lua_type (L, 3) != LUA_TFUNCTION) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	for (cur = g_list_first (cfg->workers); cur != NULL; cur = g_list_next (cur)) {
+		cf = cur->data;
+
+		wtype = g_quark_to_string (cf->type);
+
+		if (g_ascii_strcasecmp (wtype, worker_type) == 0) {
+			sc = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*sc));
+			lua_pushvalue (L, 3);
+			sc->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+			DL_APPEND (cf->scripts, sc);
+			found = TRUE;
+		}
+	}
+
+	lua_pushboolean (L, found);
+
+	return 1;
 }
 
 void

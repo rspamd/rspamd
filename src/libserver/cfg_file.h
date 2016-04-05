@@ -164,6 +164,11 @@ struct rspamd_worker_bind_conf {
 	struct rspamd_worker_bind_conf *next;
 };
 
+struct rspamd_worker_lua_script {
+	gint cbref;
+	struct rspamd_worker_lua_script *prev, *next;
+};
+
 /**
  * Config params for rspamd worker
  */
@@ -179,7 +184,8 @@ struct rspamd_worker_conf {
 	GQueue *active_workers;                         /**< linked list of spawned workers						*/
 	gboolean has_socket;                            /**< whether we should make listening socket in main process */
 	gpointer *ctx;                                  /**< worker's context									*/
-	ucl_object_t *options;                  /**< other worker's options								*/
+	ucl_object_t *options;                          /**< other worker's options								*/
+	struct rspamd_worker_lua_script *scripts;       /**< registered lua scripts								*/
 };
 
 enum rspamd_log_format_type {
