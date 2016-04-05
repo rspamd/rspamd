@@ -168,16 +168,12 @@ end
 
 -- RFC 2369 headers
 local function check_rfc2369(task)
-  local header = task:get_header('List-Id')
-  if not header then
-    return false
-  end
   header = task:get_header('List-Unsubscribe')
-  if not header or not string.find(header, '^^<.+>$') then
+  if not header or not string.find(header, '<.+>') then
     return false
   end
-  header = task:get_header('List-Subscribe')
-  if not header or not string.find(header, '^^<.+>$') then
+  header = task:get_header('List-Post')
+  if not header or not string.find(header, '<.+>') then
     return false
   end
 
@@ -187,7 +183,7 @@ end
 -- RFC 2919 headers
 local function check_rfc2919(task)
   local header = task:get_header('List-Id')
-  if not header or not string.find(header, '^<.+>$') then
+  if not header or not string.find(header, '<.+>') then
     return false
   end
 
@@ -203,7 +199,7 @@ local function check_ml_googlegroup(task)
 
   if not header then
     header = task:get_header('X-Google-Group-Id')
-    
+
     if not header then
       return false
     end
