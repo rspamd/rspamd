@@ -393,6 +393,14 @@ LUA_FUNCTION_DEF (task, get_symbol);
  * @return {table|strings} table of strings with symbols names
  */
 LUA_FUNCTION_DEF (task, get_symbols);
+
+/***
+ * @method task:get_symbols_numeric()
+ * Returns array of all symbols matched for this task
+ * @return {table|number} table of numbers with symbols ids
+ */
+LUA_FUNCTION_DEF (task, get_symbols_numeric);
+
 /***
  * @method task:has_symbol(name)
  * Fast path to check if a specified symbol is in the task's results
@@ -604,6 +612,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_images),
 	LUA_INTERFACE_DEF (task, get_symbol),
 	LUA_INTERFACE_DEF (task, get_symbols),
+	LUA_INTERFACE_DEF (task, get_symbols_numeric),
 	LUA_INTERFACE_DEF (task, has_symbol),
 	LUA_INTERFACE_DEF (task, get_date),
 	LUA_INTERFACE_DEF (task, get_message_id),
@@ -2045,6 +2054,40 @@ lua_task_get_symbols (lua_State *L)
 			while (g_hash_table_iter_next (&it, &k, &v)) {
 				lua_pushstring (L, k);
 				lua_rawseti (L, -2, i ++);
+			}
+		}
+		else {
+			lua_createtable (L, 0, 0);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_get_symbols_numeric (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	struct metric_result *mres;
+	gint i = 1, id;
+	GHashTableIter it;
+	gpointer k, v;
+
+	if (task) {
+		mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
+
+		if (mres) {
+			lua_createtable (L, g_hash_table_size (mres->symbols), 0);
+			g_hash_table_iter_init (&it, mres->symbols);
+
+			while (g_hash_table_iter_next (&it, &k, &v)) {
+				id = rspamd_symbols_cache_find_symbol (task->cfg->cache,
+						k);
+				lua_pushnumber (L, id);
+				lua_rawseti (L, -2, i++);
 			}
 		}
 		else {
