@@ -223,6 +223,13 @@ LUA_FUNCTION_DEF (util, strcasecmp_ascii);
  */
 LUA_FUNCTION_DEF (util, strequal_caseless);
 
+/***
+ * @function util.get_ticks()
+ * Returns current number of ticks as floating point number
+ * @return {number} number of current clock ticks (monotonically increasing)
+ */
+LUA_FUNCTION_DEF (util, get_ticks);
+
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
 	LUA_INTERFACE_DEF (util, load_rspamd_config),
@@ -247,6 +254,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, strcasecmp_utf8),
 	LUA_INTERFACE_DEF (util, strcasecmp_ascii),
 	LUA_INTERFACE_DEF (util, strequal_caseless),
+	LUA_INTERFACE_DEF (util, get_ticks),
 	{NULL, NULL}
 };
 
@@ -1052,6 +1060,17 @@ lua_util_strequal_caseless (lua_State *L)
 	}
 
 	lua_pushboolean (L, (ret == 0));
+	return 1;
+}
+
+static gint
+lua_util_get_ticks (lua_State *L)
+{
+	gdouble ticks;
+
+	ticks = rspamd_get_ticks ();
+	lua_pushnumber (L, ticks);
+
 	return 1;
 }
 
