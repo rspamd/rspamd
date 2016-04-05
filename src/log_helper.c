@@ -21,7 +21,9 @@
 #include "libserver/worker_util.h"
 #include "libserver/rspamd_control.h"
 #include "libutil/addr.h"
+#include "lua/lua_common.h"
 #include "unix-std.h"
+#include "utlist.h"
 
 #ifdef HAVE_GLOB_H
 #include <glob.h>
@@ -49,6 +51,8 @@ struct log_helper_ctx {
 	struct rspamd_config *cfg;
 	struct event_base *ev_base;
 	struct event log_ev;
+	struct rspamd_worker_lua_script *scripts;
+	lua_State *L;
 	gint pair[2];
 };
 
@@ -75,7 +79,8 @@ rspamd_log_helper_read (gint fd, short what, gpointer ud)
 	gssize r;
 	guint32 n, i;
 	struct rspamd_protocol_log_message_sum *sm;
-	GString *out;
+	struct rspamd_worker_lua_script *sc;
+	struct rspamd_config **pcfg;
 
 	r = read (fd, buf, sizeof (buf));
 
@@ -90,17 +95,27 @@ rspamd_log_helper_read (gint fd, short what, gpointer ud)
 		else {
 			sm = g_malloc (r);
 			memcpy (sm, buf, r);
-			out = g_string_sized_new (31);
 
-			for (i = 0; i < n; i ++) {
+			DL_FOREACH (ctx->scripts, sc) {
+				lua_rawgeti (ctx->L, LUA_REGISTRYINDEX, sc->cbref);
 
-				rspamd_printf_gstring (out, "%s%s", i == 0 ? "" : ", ",
-						rspamd_symbols_cache_symbol_by_id (ctx->cfg->cache,
-								sm->results[i]));
+				lua_createtable (ctx->L, n, 0);
+				for (i = 0; i < n; i ++) {
+					lua_pushnumber (ctx->L, sm->results[i]);
+					lua_rawseti (ctx->L, -2, (i + 1));
+				}
+
+				pcfg = lua_newuserdata (ctx->L, sizeof (*pcfg));
+				*pcfg = ctx->cfg;
+				rspamd_lua_setclass (ctx->L, "rspamd{config}", -1);
+
+				if (lua_pcall (ctx->L, 2, 0, 0) != 0) {
+					msg_err ("error executing log handler code: %s",
+							lua_tostring (ctx->L, -1));
+					lua_pop (ctx->L, 1);
+				}
 			}
 
-			msg_info ("got log line: %v", out);
-			g_string_free (out, TRUE);
 			g_free (sm);
 		}
 	}
@@ -134,6 +149,9 @@ start_log_helper (struct rspamd_worker *worker)
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"log_helper",
 			NULL);
+	ctx->cfg = worker->srv->cfg;
+	ctx->scripts = worker->cf->scripts;
+	ctx->L = ctx->cfg->lua_state;
 
 #ifdef HAVE_SOCK_SEQPACKET
 	r = socketpair (AF_LOCAL, SOCK_SEQPACKET, 0, ctx->pair);
@@ -146,6 +164,7 @@ start_log_helper (struct rspamd_worker *worker)
 
 	srv_cmd.type = RSPAMD_SRV_LOG_PIPE;
 	srv_cmd.cmd.log_pipe.type = RSPAMD_LOG_PIPE_SYMBOLS;
+
 
 	/* Wait for startup being completed */
 	rspamd_mempool_lock_mutex (worker->srv->start_mtx);
