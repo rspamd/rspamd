@@ -18,9 +18,15 @@
 #define RSPAMD_LENGTH_ERROR RSPAMD_BASE_ERROR + 4
 #define RSPAMD_STATFILE_ERROR RSPAMD_BASE_ERROR + 5
 
+struct rspamd_protocol_log_symbol_result {
+	guint32 id;
+	gdouble score;
+};
 struct rspamd_protocol_log_message_sum {
 	guint32 nresults;
-	guint32 results[];
+	gdouble score;
+	gdouble required_score;
+	struct rspamd_protocol_log_symbol_result results[];
 };
 
 struct metric;

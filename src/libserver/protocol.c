@@ -1061,6 +1061,7 @@ rspamd_protocol_write_log_pipe (struct rspamd_worker_ctx *ctx,
 	struct metric_result *mres;
 	GHashTableIter it;
 	gpointer k, v;
+	struct symbol *sym;
 	gint id, i;
 	gsize sz;
 
@@ -1071,9 +1072,12 @@ rspamd_protocol_write_log_pipe (struct rspamd_worker_ctx *ctx,
 				mres = g_hash_table_lookup (task->results, DEFAULT_METRIC);
 
 				if (mres) {
-					sz = sizeof (*ls) + sizeof (guint32) *
+					sz = sizeof (*ls) +
+							sizeof (struct rspamd_protocol_log_symbol_result) *
 							g_hash_table_size (mres->symbols);
 					ls = g_slice_alloc (sz);
+					ls->score = mres->score;
+					ls->required_score = mres->actions_limits[METRIC_ACTION_REJECT];
 					ls->nresults = g_hash_table_size (mres->symbols);
 
 					g_hash_table_iter_init (&it, mres->symbols);
@@ -1082,12 +1086,15 @@ rspamd_protocol_write_log_pipe (struct rspamd_worker_ctx *ctx,
 					while (g_hash_table_iter_next (&it, &k, &v)) {
 						id = rspamd_symbols_cache_find_symbol (task->cfg->cache,
 								k);
+						sym = v;
 
 						if (id >= 0) {
-							ls->results[i] = id;
+							ls->results[i].id = id;
+							ls->results[i].score = sym->score;
 						}
 						else {
-							ls->results[i] = -1;
+							ls->results[i].id = -1;
+							ls->results[i].score = 0.0;
 						}
 
 						i ++;
@@ -1095,7 +1102,7 @@ rspamd_protocol_write_log_pipe (struct rspamd_worker_ctx *ctx,
 				}
 				else {
 					sz = sizeof (*ls);
-					ls = g_slice_alloc (sz);
+					ls = g_slice_alloc0 (sz);
 					ls->nresults = 0;
 				}
 

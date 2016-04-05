@@ -87,10 +87,11 @@ rspamd_log_helper_read (gint fd, short what, gpointer ud)
 	if (r >= (gssize)sizeof (struct rspamd_protocol_log_message_sum)) {
 		memcpy (&n, buf, sizeof (n));
 
-		if (n != (r - sizeof (guint32)) / sizeof (guint32)) {
+		if (n != (r - sizeof (*sm)) / sizeof (struct rspamd_protocol_log_symbol_result)) {
 			msg_warn ("cannot read data from log pipe: bad length: %d elements "
 					"announced but %d available", n,
-					(r - sizeof (guint32)) / sizeof (guint32));
+					(r - sizeof (*sm)) /
+					sizeof (struct rspamd_protocol_log_symbol_result));
 		}
 		else {
 			sm = g_malloc (r);
@@ -98,10 +99,17 @@ rspamd_log_helper_read (gint fd, short what, gpointer ud)
 
 			DL_FOREACH (ctx->scripts, sc) {
 				lua_rawgeti (ctx->L, LUA_REGISTRYINDEX, sc->cbref);
+				lua_pushnumber (ctx->L, sm->score);
+				lua_pushnumber (ctx->L, sm->required_score);
 
 				lua_createtable (ctx->L, n, 0);
 				for (i = 0; i < n; i ++) {
-					lua_pushnumber (ctx->L, sm->results[i]);
+					lua_createtable (ctx->L, 2, 0);
+					lua_pushnumber (ctx->L, sm->results[i].id);
+					lua_rawseti (ctx->L, -2, 1);
+					lua_pushnumber (ctx->L, sm->results[i].score);
+					lua_rawseti (ctx->L, -2, 2);
+
 					lua_rawseti (ctx->L, -2, (i + 1));
 				}
 
@@ -109,7 +117,7 @@ rspamd_log_helper_read (gint fd, short what, gpointer ud)
 				*pcfg = ctx->cfg;
 				rspamd_lua_setclass (ctx->L, "rspamd{config}", -1);
 
-				if (lua_pcall (ctx->L, 2, 0, 0) != 0) {
+				if (lua_pcall (ctx->L, 4, 0, 0) != 0) {
 					msg_err ("error executing log handler code: %s",
 							lua_tostring (ctx->L, -1));
 					lua_pop (ctx->L, 1);
