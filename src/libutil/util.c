@@ -1790,7 +1790,15 @@ rspamd_get_ticks (void)
 
 #ifdef HAVE_CLOCK_GETTIME
 	struct timespec ts;
-	clock_gettime (CLOCK_MONOTONIC, &ts);
+	gint clk_id = CLOCK_MONOTONIC;
+
+#ifdef CLOCK_MONOTONIC_FAST
+	clk_id = CLOCK_MONOTONIC_FAST;
+#endif
+#ifdef CLOCK_MONOTONIC_COARSE
+	clk_id = CLOCK_MONOTONIC_COARSE;
+#endif
+	clock_gettime (clk_id, &ts);
 
 	res = (double)ts.tv_sec + ts.tv_nsec / 1000000000.;
 #elif defined(__APPLE__)
