@@ -97,6 +97,8 @@ local function check_fann()
     local mtime = st['mtime']
 
     if mtime > fann_mtime then
+      rspamd_logger.infox(rspamd_config, 'have more fresh version of fann ' ..
+        'file: %s -> %s, need to reload %s', fann_mtime, mtime, fann_file)
       fann_mtime = mtime
       fann = nil
     end
