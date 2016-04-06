@@ -281,7 +281,7 @@ composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 	struct symbol_remove_data *rd = value, *cur;
 	gboolean skip = FALSE, has_valid_op = FALSE,
 			want_remove_score = TRUE, want_remove_symbol = TRUE,
-			want_forced = TRUE;
+			want_forced = FALSE;
 	GNode *par;
 
 	DL_FOREACH (rd, cur) {
