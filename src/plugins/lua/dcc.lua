@@ -1,5 +1,6 @@
 --[[
 Copyright (c) 2016, Steve Freegard <steve.freegard@fsl.com>
+Copyright (c) 2016, Vsevolod Stakhov
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,18 +17,18 @@ limitations under the License.
 
 -- Check messages for 'bulkiness' using DCC
 
-local symbol = "DCC_CHECK"
 local symbol_bulk = "DCC_BULK"
 local opts = rspamd_config:get_all_opt('dcc')
 local logger = require "rspamd_logger"
 local tcp = require "rspamd_tcp"
+require "fun" ()
 
 local function check_dcc (task)
     -- Connection
     local client = '0.0.0.0'
-    local client_ip = task:get_from_ip():to_string()
-    if client_ip then
-        client = client_ip
+    local client_ip = task:get_from_ip()
+    if client_ip and client_ip:is_valid() then
+        client = client_ip:to_string()
     end
     local client_host = task:get_hostname()
     if client_host and client_host ~= 'unknown' then
@@ -38,7 +39,7 @@ local function check_dcc (task)
     local helo = task:get_helo() or ''
 
     -- Envelope From
-    local ef = task:get_from(1)
+    local ef = task:get_from()
     local envfrom = 'test@example.com'
     if ef and ef[1] then
         envfrom = ef[1]['addr']
@@ -46,9 +47,11 @@ local function check_dcc (task)
 
     -- Envelope To
     local envrcpt = 'test@example.com'
-    local rcpts = task:get_recipients(1);
+    local rcpts = task:get_recipients();
     if rcpts then
-      local r = table.concat(totable(map(function(rcpt) return rcpt['addr'] end, rcpts)), '\n')
+      local r = table.concat(totable(map(function(rcpt)
+        return rcpt['addr'] end,
+        rcpts)), '\n')
       if r then
           envrcpt = r
       end
@@ -57,33 +60,36 @@ local function check_dcc (task)
     -- Callback function to receive async result from DCC
     local function cb(err, data)
         if (err) then
-            logger.errx('DCC error: %1', err)
-            return 0
+            logger.warnx(task, 'DCC error: %1', err)
+            return
         end
         -- Parse the response
         local _,_,result,disposition,header = tostring(data):find("(.-)\n(.-)\n(.-)\n")
-        logger.infox('DCC result=%1 disposition=%2 header="%3"', result, disposition, header)
-        local _,_,info = header:find("; (.-)$")
-        if (result == 'A') then
-            -- Accept
-        elseif (result == 'G') then
-            -- Greylist
-        elseif (result == 'R') then
-            -- Reject
-            task:insert_result('DCC_BULK', 1.0, info)
-        elseif (result == 'S') then
-            -- Accept for some recipients only
-        elseif (result == 'T') then
-            -- Temporary failure
-            logger.errx('DCC returned a temporary failure result')
-        else
-            -- Unknown result
-            logger.errx('DCC result error: %1', result);
+        logger.debugx(task, 'DCC result=%1 disposition=%2 header="%3"',
+          result, disposition, header)
+
+        if header then
+          local _,_,info = header:find("; (.-)$")
+          if (result == 'A') then
+              -- Accept
+          elseif (result == 'G') then
+              -- Greylist
+          elseif (result == 'R') then
+              -- Reject
+              task:insert_result(symbol_bulk, 1.0, info)
+          elseif (result == 'S') then
+              -- Accept for some recipients only
+          elseif (result == 'T') then
+              -- Temporary failure
+              logger.warnx(task, 'DCC returned a temporary failure result')
+          else
+              -- Unknown result
+              logger.warnx(task, 'DCC result error: %1', result);
+          end
         end
-        return 0
     end
 
-    -- Build the DCC query 
+    -- Build the DCC query
     -- https://www.dcc-servers.net/dcc/dcc-tree/dccifd.html#Protocol
     local data = {
         "header\n",
@@ -95,7 +101,7 @@ local function check_dcc (task)
         task:get_content()
     }
 
-    logger.infox('sending to dcc: client=%1 helo="%2" envfrom="%3" envrcpt="%4"',
+    logger.debugx(task, 'sending to dcc: client=%1 helo="%2" envfrom="%3" envrcpt="%4"',
                  client, helo, envfrom, envrcpt)
 
     tcp.request({
@@ -110,8 +116,14 @@ end
 
 -- Configuration
 if opts and opts['host'] then
-    local id = rspamd_config:register_symbol(symbol, 1.0, check_dcc)
-    rspamd_config:register_virtual_symbol(symbol_bulk, 1.0, id)
+    rspamd_config:register_symbol(symbol_bulk, 1.0, check_dcc)
+    rspamd_config:set_metric_symbol({
+      group = 'dcc',
+      score = 2.0,
+      description = 'Detected as bulk mail by DCC',
+      one_shot = true,
+      name = symbol_bulk
+    })
 else
     logger.infox('DCC module not configured');
 end
