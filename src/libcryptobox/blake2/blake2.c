@@ -57,7 +57,7 @@ BLAKE2B_DECLARE(avx)
 
 #if defined(CMAKE_ARCH_x86_64) || defined(CMAKE_ARCH_i386)
 BLAKE2B_DECLARE(x86)
-#define BLAKE2B_X86 BLAKE2B_IMPL(0, "x86", x86)
+#define BLAKE2B_X86 BLAKE2B_IMPL(CPUID_SSE2, "x86", x86)
 #endif
 
 /* the "always runs" version */
