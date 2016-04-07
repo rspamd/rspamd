@@ -1747,3 +1747,45 @@ rspamd_symbols_cache_disable_symbol (struct rspamd_task *task,
 		msg_info_task ("cannot disable %s: not found", symbol);
 	}
 }
+
+struct rspamd_abstract_callback_data* rspamd_symbols_cache_get_cbdata (
+		struct symbols_cache *cache, const gchar *symbol)
+{
+	gint id;
+	struct cache_item *item;
+
+	g_assert (cache != NULL);
+	g_assert (symbol != NULL);
+
+	id = rspamd_symbols_cache_find_symbol_parent (cache, symbol);
+
+	if (id < 0) {
+		return NULL;
+	}
+
+	item = g_ptr_array_index (cache->items_by_id, id);
+
+	return item->user_data;
+}
+
+gboolean
+rspamd_symbols_cache_set_cbdata (struct symbols_cache *cache,
+		const gchar *symbol, struct rspamd_abstract_callback_data *cbdata)
+{
+	gint id;
+	struct cache_item *item;
+
+	g_assert (cache != NULL);
+	g_assert (symbol != NULL);
+
+	id = rspamd_symbols_cache_find_symbol_parent (cache, symbol);
+
+	if (id < 0) {
+		return FALSE;
+	}
+
+	item = g_ptr_array_index (cache->items_by_id, id);
+	item->user_data = cbdata;
+
+	return TRUE;
+}

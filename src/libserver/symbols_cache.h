@@ -199,4 +199,24 @@ void rspamd_symbols_cache_add_delayed_dependency (struct symbols_cache *cache,
 void rspamd_symbols_cache_disable_symbol (struct rspamd_task *task,
 		struct symbols_cache *cache, const gchar *symbol);
 
+
+/**
+ * Get abstract callback data for a symbol (or its parent symbol)
+ * @param cache cache object
+ * @param symbol symbol name
+ * @return abstract callback data or NULL if symbol is absent or has no data attached
+ */
+struct rspamd_abstract_callback_data* rspamd_symbols_cache_get_cbdata (
+		struct symbols_cache *cache, const gchar *symbol);
+
+/**
+ * Sets new callback data for a symbol in cache
+ * @param cache
+ * @param symbol
+ * @param cbdata
+ * @return
+ */
+gboolean rspamd_symbols_cache_set_cbdata (struct symbols_cache *cache,
+		const gchar *symbol, struct rspamd_abstract_callback_data *cbdata);
+
 #endif
