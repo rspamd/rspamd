@@ -1281,6 +1281,13 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 					task->task_pool);
 
 			if (r == URI_ERRNO_OK) {
+				if (!g_hash_table_lookup (task->urls, redirected_url)) {
+					g_hash_table_insert (task->urls, redirected_url,
+							redirected_url);
+					redirected_url->phished_url = param->url;
+					redirected_url->flags |= RSPAMD_URL_FLAG_REDIRECTED;
+				}
+
 				make_surbl_requests (redirected_url,
 						param->task,
 						param->suffix,

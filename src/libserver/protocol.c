@@ -595,6 +595,39 @@ struct tree_cb_data {
 	struct rspamd_task *task;
 };
 
+static ucl_object_t *
+rspamd_protocol_extended_url (struct rspamd_url *url)
+{
+	ucl_object_t *obj, *elt;
+
+	obj = ucl_object_typed_new (UCL_OBJECT);
+
+	elt = ucl_object_fromlstring (url->string, url->urllen);
+	ucl_object_insert_key (obj, elt, "url", 0, false);
+
+	if (url->surbllen > 0) {
+		elt = ucl_object_fromlstring (url->surbl, url->surbllen);
+		ucl_object_insert_key (obj, elt, "surbl", 0, false);
+	}
+	if (url->hostlen > 0) {
+		elt = ucl_object_fromlstring (url->host, url->hostlen);
+		ucl_object_insert_key (obj, elt, "host", 0, false);
+	}
+
+	elt = ucl_object_frombool (url->flags & RSPAMD_URL_FLAG_PHISHED);
+	ucl_object_insert_key (obj, elt, "phished", 0, false);
+
+	elt = ucl_object_frombool (url->flags & RSPAMD_URL_FLAG_REDIRECTED);
+	ucl_object_insert_key (obj, elt, "redirected", 0, false);
+
+	if (url->phished_url) {
+		elt = rspamd_protocol_extended_url (url->phished_url);
+		ucl_object_insert_key (obj, elt, "orig_url", 0, false);
+	}
+
+	return obj;
+}
+
 /*
  * Callback for writing urls
  */
@@ -603,7 +636,7 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 {
 	struct tree_cb_data *cb = ud;
 	struct rspamd_url *url = value;
-	ucl_object_t *obj, *elt;
+	ucl_object_t *obj;
 	struct rspamd_task *task = cb->task;
 	const gchar *user_field = "unknown";
 	gboolean has_user = FALSE;
@@ -612,22 +645,7 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 		obj = ucl_object_fromlstring (url->string, url->urllen);
 	}
 	else {
-		obj = ucl_object_typed_new (UCL_OBJECT);
-
-		elt = ucl_object_fromlstring (url->string, url->urllen);
-		ucl_object_insert_key (obj, elt, "url", 0, false);
-
-		if (url->surbllen > 0) {
-			elt = ucl_object_fromlstring (url->surbl, url->surbllen);
-			ucl_object_insert_key (obj, elt, "surbl", 0, false);
-		}
-		if (url->hostlen > 0) {
-			elt = ucl_object_fromlstring (url->host, url->hostlen);
-			ucl_object_insert_key (obj, elt, "host", 0, false);
-		}
-
-		elt = ucl_object_frombool (url->flags & RSPAMD_URL_FLAG_PHISHED);
-		ucl_object_insert_key (obj, elt, "phished", 0, false);
+		obj = rspamd_protocol_extended_url (url);
 	}
 
 	ucl_array_append (cb->top, obj);

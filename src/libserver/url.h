@@ -13,6 +13,7 @@ enum rspamd_url_flags {
 	RSPAMD_URL_FLAG_PHISHED = 1 << 0,
 	RSPAMD_URL_FLAG_NUMERIC = 1 << 1,
 	RSPAMD_URL_FLAG_OBSCURED = 1 << 2,
+	RSPAMD_URL_FLAG_REDIRECTED = 1 << 3,
 };
 
 struct rspamd_url {
