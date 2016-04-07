@@ -25,7 +25,10 @@
 #include "libutil/map.h"
 #include "lua/lua_common.h"
 
+static const guint64 rspamd_regexp_cb_magic = 0xca9d9649fc3e2659ULL;
+
 struct regexp_module_item {
+	guint64 magic;
 	struct rspamd_expression *expr;
 	const gchar *symbol;
 	struct ucl_lua_funcdata *lua_function;
@@ -151,6 +154,8 @@ regexp_module_config (struct rspamd_config *cfg)
 			cur_item = rspamd_mempool_alloc0 (regexp_module_ctx->regexp_pool,
 					sizeof (struct regexp_module_item));
 			cur_item->symbol = ucl_object_key (value);
+			cur_item->magic = rspamd_regexp_cb_magic;
+
 			if (!read_regexp_expression (regexp_module_ctx->regexp_pool,
 				cur_item, ucl_object_key (value),
 				ucl_obj_tostring (value), cfg)) {
@@ -170,8 +175,10 @@ regexp_module_config (struct rspamd_config *cfg)
 			/* Just a lua function */
 			cur_item = rspamd_mempool_alloc0 (regexp_module_ctx->regexp_pool,
 					sizeof (struct regexp_module_item));
+			cur_item->magic = rspamd_regexp_cb_magic;
 			cur_item->symbol = ucl_object_key (value);
 			cur_item->lua_function = ucl_object_toclosure (value);
+
 			rspamd_symbols_cache_add_symbol (cfg->cache,
 				cur_item->symbol,
 				0,
@@ -199,6 +206,8 @@ regexp_module_config (struct rspamd_config *cfg)
 					cur_item = rspamd_mempool_alloc0 (regexp_module_ctx->regexp_pool,
 							sizeof (struct regexp_module_item));
 					cur_item->symbol = ucl_object_key (value);
+					cur_item->magic = rspamd_regexp_cb_magic;
+
 					if (!read_regexp_expression (regexp_module_ctx->regexp_pool,
 							cur_item, ucl_object_key (value),
 							ucl_obj_tostring (elt), cfg)) {
@@ -221,6 +230,7 @@ regexp_module_config (struct rspamd_config *cfg)
 				cur_item = rspamd_mempool_alloc0 (
 						regexp_module_ctx->regexp_pool,
 						sizeof (struct regexp_module_item));
+				cur_item->magic = rspamd_regexp_cb_magic;
 				cur_item->symbol = ucl_object_key (value);
 				cur_item->lua_function = ucl_object_toclosure (value);
 			}

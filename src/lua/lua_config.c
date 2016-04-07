@@ -446,6 +446,8 @@ static const struct luaL_reg configlib_m[] = {
 	{NULL, NULL}
 };
 
+static const guint64 rspamd_lua_callback_magic = 0x32c118af1e3263c7ULL;
+
 struct rspamd_config *
 lua_check_config (lua_State * L, gint pos)
 {
@@ -588,13 +590,15 @@ lua_config_get_classifier (lua_State * L)
 }
 
 struct lua_callback_data {
+	guint64 magic;
+	lua_State *L;
+	gchar *symbol;
+
 	union {
 		gchar *name;
 		gint ref;
 	} callback;
 	gboolean cb_is_ref;
-	lua_State *L;
-	gchar *symbol;
 };
 
 /*
@@ -666,6 +670,8 @@ lua_config_register_post_filter (lua_State *L)
 		cd =
 			rspamd_mempool_alloc (cfg->cfg_pool,
 				sizeof (struct lua_callback_data));
+		cd->magic = rspamd_lua_callback_magic;
+
 		if (lua_type (L, 2) == LUA_TSTRING) {
 			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool,
 					luaL_checkstring (L, 2));
@@ -677,6 +683,7 @@ lua_config_register_post_filter (lua_State *L)
 			cd->callback.ref = luaL_ref (L, LUA_REGISTRYINDEX);
 			cd->cb_is_ref = TRUE;
 		}
+
 		cd->L = L;
 		cfg->post_filters = g_list_prepend (cfg->post_filters, cd);
 		rspamd_mempool_add_destructor (cfg->cfg_pool,
@@ -735,6 +742,8 @@ lua_config_register_pre_filter (lua_State *L)
 		cd =
 			rspamd_mempool_alloc (cfg->cfg_pool,
 				sizeof (struct lua_callback_data));
+		cd->magic = rspamd_lua_callback_magic;
+
 		if (lua_type (L, 2) == LUA_TSTRING) {
 			cd->callback.name = rspamd_mempool_strdup (cfg->cfg_pool,
 					luaL_checkstring (L, 2));
@@ -877,6 +886,7 @@ rspamd_register_symbol_fromlua (lua_State *L,
 
 	cd = rspamd_mempool_alloc0 (cfg->cfg_pool,
 			sizeof (struct lua_callback_data));
+	cd->magic = rspamd_lua_callback_magic;
 	cd->cb_is_ref = TRUE;
 	cd->callback.ref = ref;
 	cd->L = L;

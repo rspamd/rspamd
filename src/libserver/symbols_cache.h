@@ -39,6 +39,14 @@ enum rspamd_symbol_type {
 };
 
 /**
+ * Abstract structure for saving callback data for symbols
+ */
+struct rspamd_abstract_callback_data {
+	guint64 magic;
+	char data[];
+};
+
+/**
  * Creates new cache structure
  * @return
  */

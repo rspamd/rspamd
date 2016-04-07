@@ -41,6 +41,7 @@ struct surbl_ctx {
 };
 
 struct suffix_item {
+	guint64 magic;
 	const gchar *suffix;
 	const gchar *symbol;
 	guint32 options;

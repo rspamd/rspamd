@@ -43,6 +43,7 @@
 #include "unix-std.h"
 
 static struct surbl_ctx *surbl_module_ctx = NULL;
+static const guint64 rspamd_surbl_cb_magic = 0xe09b8536f80de0d1ULL;
 
 static void surbl_test_url (struct rspamd_task *task, void *user_data);
 static void surbl_dns_callback (struct rdns_reply *reply, gpointer arg);
@@ -57,6 +58,7 @@ static void process_dns_results (struct rspamd_task *task,
 #define WHITELIST_ERROR 0
 #define CONVERSION_ERROR 1
 #define DUPLICATE_ERROR 1
+
 GQuark
 surbl_error_quark (void)
 {
@@ -600,8 +602,10 @@ surbl_module_config (struct rspamd_config *cfg)
 						"definition");
 				continue;
 			}
+
 			new_suffix = rspamd_mempool_alloc0 (surbl_module_ctx->surbl_pool,
 					sizeof (struct suffix_item));
+			new_suffix->magic = rspamd_surbl_cb_magic;
 			new_suffix->suffix = rspamd_mempool_strdup (
 				surbl_module_ctx->surbl_pool,
 				ucl_obj_tostring (cur));
