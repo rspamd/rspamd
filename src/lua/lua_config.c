@@ -411,6 +411,13 @@ LUA_FUNCTION_DEF (config, add_on_load);
  */
 LUA_FUNCTION_DEF (config, get_symbols_count);
 
+/***
+ * @method rspamd_config:get_symbol_callback(name)
+ * Returns callback function for the specified symbol if it is a lua registered callback
+ * @return {function} callback function or nil
+ */
+LUA_FUNCTION_DEF (config, get_symbol_callback);
+
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
 	LUA_INTERFACE_DEF (config, get_mempool),
@@ -441,6 +448,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_worker_script),
 	LUA_INTERFACE_DEF (config, add_on_load),
 	LUA_INTERFACE_DEF (config, get_symbols_count),
+	LUA_INTERFACE_DEF (config, get_symbol_callback),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
 	{NULL, NULL}
@@ -1734,6 +1742,38 @@ lua_config_get_symbols_count (lua_State *L)
 	}
 
 	lua_pushnumber (L, res);
+
+	return 1;
+}
+
+static gint
+lua_config_get_symbol_callback (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *sym = luaL_checkstring (L, 2);
+	struct rspamd_abstract_callback_data *abs_cbdata;
+	struct lua_callback_data *cbd;
+
+	if (cfg != NULL && sym != NULL) {
+		abs_cbdata = rspamd_symbols_cache_get_cbdata (cfg->cache, sym);
+
+		if (abs_cbdata == NULL || abs_cbdata->magic != rspamd_lua_callback_magic) {
+			lua_pushnil (L);
+		}
+		else {
+			cbd = (struct lua_callback_data *)abs_cbdata;
+
+			if (cbd->cb_is_ref) {
+				lua_rawgeti (L, LUA_REGISTRYINDEX, cbd->callback.ref);
+			}
+			else {
+				lua_getglobal (L, cbd->callback.name);
+			}
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
 
 	return 1;
 }
