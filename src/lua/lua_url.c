@@ -49,6 +49,7 @@ LUA_FUNCTION_DEF (url, get_text);
 LUA_FUNCTION_DEF (url, get_tld);
 LUA_FUNCTION_DEF (url, to_table);
 LUA_FUNCTION_DEF (url, is_phished);
+LUA_FUNCTION_DEF (url, is_redirected);
 LUA_FUNCTION_DEF (url, is_obscured);
 LUA_FUNCTION_DEF (url, get_phished);
 LUA_FUNCTION_DEF (url, create);
@@ -66,8 +67,10 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF (url, get_tld),
 	LUA_INTERFACE_DEF (url, to_table),
 	LUA_INTERFACE_DEF (url, is_phished),
+	LUA_INTERFACE_DEF (url, is_redirected),
 	LUA_INTERFACE_DEF (url, is_obscured),
 	LUA_INTERFACE_DEF (url, get_phished),
+	{"get_redirected", lua_url_get_phished},
 	{"__tostring", lua_url_get_text},
 	{NULL, NULL}
 };
@@ -265,6 +268,26 @@ lua_url_is_phished (lua_State *L)
 }
 
 /***
+ * @method url:is_redirected()
+ * Check whether URL was redirected
+ * @return {boolean} `true` if URL is redirected
+ */
+static gint
+lua_url_is_redirected (lua_State *L)
+{
+	struct rspamd_lua_url *url = lua_check_url (L, 1);
+
+	if (url != NULL) {
+		lua_pushboolean (L, url->url->flags & RSPAMD_URL_FLAG_REDIRECTED);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+/***
  * @method url:is_obscured()
  * Check whether URL is treated as obscured or obfusicated (e.g. numbers in IP address or other hacks)
  * @return {boolean} `true` if URL is obscured
@@ -295,13 +318,15 @@ lua_url_get_phished (lua_State *L)
 	struct rspamd_lua_url *purl, *url = lua_check_url (L, 1);
 
 	if (url) {
-		if ((url->url->flags & RSPAMD_URL_FLAG_PHISHED)
-				&& url->url->phished_url != NULL) {
-			purl = lua_newuserdata (L, sizeof (struct rspamd_lua_url));
-			rspamd_lua_setclass (L, "rspamd{url}", -1);
-			purl->url = url->url->phished_url;
+		if (url->url->phished_url != NULL) {
+			if (url->url->flags &
+					(RSPAMD_URL_FLAG_PHISHED|RSPAMD_URL_FLAG_REDIRECTED)) {
+				purl = lua_newuserdata (L, sizeof (struct rspamd_lua_url));
+				rspamd_lua_setclass (L, "rspamd{url}", -1);
+				purl->url = url->url->phished_url;
 
-			return 1;
+				return 1;
+			}
 		}
 	}
 
