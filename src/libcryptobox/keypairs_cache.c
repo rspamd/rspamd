@@ -63,7 +63,7 @@ rspamd_keypair_cache_new (guint max_items)
 	g_assert (max_items > 0);
 
 	c = g_slice_alloc (sizeof (*c));
-	c->hash = rspamd_lru_hash_new_full (max_items, -1, NULL,
+	c->hash = rspamd_lru_hash_new_full (max_items, NULL,
 			rspamd_keypair_destroy, rspamd_keypair_hash, rspamd_keypair_equal);
 
 	return c;

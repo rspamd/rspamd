@@ -153,15 +153,6 @@ spf_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			0,
 			NULL,
 			0);
-	rspamd_rcl_add_doc_by_path (cfg,
-			"spf",
-			"Maximum lifetime for the elements in the SPF cache",
-			"spf_cache_expire",
-			UCL_TIME,
-			NULL,
-			0,
-			NULL,
-			0);
 
 	return 0;
 }
@@ -172,7 +163,7 @@ spf_module_config (struct rspamd_config *cfg)
 {
 	const ucl_object_t *value;
 	gint res = TRUE, cb_id;
-	guint cache_size, cache_expire;
+	guint cache_size;
 	const gchar *str;
 
 	if (!rspamd_config_is_module_enabled (cfg, "spf")) {
@@ -216,14 +207,7 @@ spf_module_config (struct rspamd_config *cfg)
 	else {
 		cache_size = DEFAULT_CACHE_SIZE;
 	}
-	if ((value =
-		rspamd_config_get_module_opt (cfg, "spf",
-		"spf_cache_expire")) != NULL) {
-		cache_expire = ucl_obj_toint (value);
-	}
-	else {
-		cache_expire = DEFAULT_CACHE_MAXAGE;
-	}
+
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "spf", "whitelist")) != NULL) {
 
@@ -265,7 +249,6 @@ spf_module_config (struct rspamd_config *cfg)
 
 	spf_module_ctx->spf_hash = rspamd_lru_hash_new (
 			cache_size,
-			cache_expire,
 			NULL,
 			(GDestroyNotify)spf_record_unref);
 

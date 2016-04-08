@@ -222,7 +222,7 @@ dkim_module_config (struct rspamd_config *cfg)
 	const ucl_object_t *value;
 	const gchar *str;
 	gint res = TRUE, cb_id;
-	guint cache_size, cache_expire;
+	guint cache_size;
 	gboolean got_trusted = FALSE;
 
 	if (!rspamd_config_is_module_enabled (cfg, "dkim")) {
@@ -261,14 +261,7 @@ dkim_module_config (struct rspamd_config *cfg)
 	else {
 		cache_size = DEFAULT_CACHE_SIZE;
 	}
-	if ((value =
-		rspamd_config_get_module_opt (cfg, "dkim",
-		"dkim_cache_expire")) != NULL) {
-		cache_expire = ucl_obj_todouble (value);
-	}
-	else {
-		cache_expire = DEFAULT_CACHE_MAXAGE;
-	}
+
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim", "time_jitter")) != NULL) {
 		dkim_module_ctx->time_jitter = ucl_obj_todouble (value);
@@ -364,7 +357,6 @@ dkim_module_config (struct rspamd_config *cfg)
 
 		dkim_module_ctx->dkim_hash = rspamd_lru_hash_new (
 				cache_size,
-				cache_expire,
 				g_free, /* Keys are just C-strings */
 				dkim_module_key_dtor);
 

@@ -1162,7 +1162,7 @@ fuzzy_parse_keypair (rspamd_mempool_t *pool,
 		key->key = kp;
 		keystat = g_slice_alloc0 (sizeof (*keystat));
 		/* Hash of ip -> fuzzy_key_stat */
-		keystat->last_ips = rspamd_lru_hash_new_full (0, 1024,
+		keystat->last_ips = rspamd_lru_hash_new_full (1024,
 				(GDestroyNotify)rspamd_inet_address_destroy, fuzzy_key_stat_dtor,
 				rspamd_inet_address_hash, rspamd_inet_address_equal);
 		key->stat = keystat;
@@ -1213,7 +1213,7 @@ init_fuzzy (struct rspamd_config *cfg)
 	ctx->keypair_cache_size = DEFAULT_KEYPAIR_CACHE_SIZE;
 	ctx->keys = g_hash_table_new_full (fuzzy_kp_hash, fuzzy_kp_equal,
 			NULL, fuzzy_key_dtor);
-	ctx->errors_ips = rspamd_lru_hash_new_full (0, 1024,
+	ctx->errors_ips = rspamd_lru_hash_new_full (1024,
 			(GDestroyNotify) rspamd_inet_address_destroy, g_free,
 			rspamd_inet_address_hash, rspamd_inet_address_equal);
 

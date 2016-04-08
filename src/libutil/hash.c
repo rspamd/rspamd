@@ -26,9 +26,8 @@ struct rspamd_lru_hash_s {
 	gint maxage;
 	GDestroyNotify value_destroy;
 	GDestroyNotify key_destroy;
-
+	struct rspamd_min_heap *heap;
 	GHashTable *tbl;
-	GQueue *exp; /* Elements are inserted to the tail and removed from the front */
 };
 
 static void
@@ -42,9 +41,6 @@ rspamd_lru_destroy_node (gpointer value)
 		}
 		if (elt->hash && elt->hash->value_destroy) {
 			elt->hash->value_destroy (elt->data);
-		}
-		if (elt->hash && elt->link) {
-			g_queue_delete_link (elt->hash->exp, elt->link);
 		}
 
 		g_slice_free1 (sizeof (*elt), elt);
@@ -63,8 +59,8 @@ rspamd_lru_create_node (rspamd_lru_hash_t *hash,
 	node = g_slice_alloc (sizeof (rspamd_lru_element_t));
 	node->data = value;
 	node->key = key;
-	node->store_time = now;
 	node->ttl = ttl;
+	node->helt.pri = now;
 	node->hash = hash;
 
 	return node;
@@ -73,7 +69,6 @@ rspamd_lru_create_node (rspamd_lru_hash_t *hash,
 rspamd_lru_hash_t *
 rspamd_lru_hash_new_full (
 	gint maxsize,
-	gint maxage,
 	GDestroyNotify key_destroy,
 	GDestroyNotify value_destroy,
 	GHashFunc hf,
@@ -83,8 +78,7 @@ rspamd_lru_hash_new_full (
 
 	new = g_slice_alloc (sizeof (rspamd_lru_hash_t));
 	new->tbl = g_hash_table_new_full (hf, cmpf, NULL, rspamd_lru_destroy_node);
-	new->exp = g_queue_new ();
-	new->maxage = maxage;
+	new->heap = rspamd_min_heap_create (maxsize);
 	new->maxsize = maxsize;
 	new->value_destroy = value_destroy;
 	new->key_destroy = key_destroy;
@@ -95,11 +89,10 @@ rspamd_lru_hash_new_full (
 rspamd_lru_hash_t *
 rspamd_lru_hash_new (
 	gint maxsize,
-	gint maxage,
 	GDestroyNotify key_destroy,
 	GDestroyNotify value_destroy)
 {
-	return rspamd_lru_hash_new_full (maxsize, maxage,
+	return rspamd_lru_hash_new_full (maxsize,
 			key_destroy, value_destroy,
 			rspamd_strcase_hash, rspamd_strcase_equal);
 }
@@ -108,44 +101,18 @@ gpointer
 rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash, gconstpointer key, time_t now)
 {
 	rspamd_lru_element_t *res;
-	GList *cur, *tmp;
 
 	res = g_hash_table_lookup (hash->tbl, key);
 	if (res != NULL) {
 		if (res->ttl != 0) {
-			if (now - res->store_time > res->ttl) {
+			if (((guint)now) - res->helt.pri > res->ttl) {
+				rspamd_min_heap_remove_elt (hash->heap, &res->helt);
 				g_hash_table_remove (hash->tbl, key);
 				return NULL;
 			}
 		}
-		if (hash->maxage > 0) {
-			if (now - res->store_time > hash->maxage) {
-				/* Expire elements from queue head */
-				cur = hash->exp->head;
-				while (cur) {
-					tmp = cur->next;
-					res = (rspamd_lru_element_t *)cur->data;
 
-					if (now - res->store_time > hash->maxage) {
-						/* That would also remove element from the queue */
-						g_hash_table_remove (hash->tbl, res->key);
-					}
-					else {
-						break;
-					}
-
-					cur = tmp;
-				}
-
-				return NULL;
-			}
-		}
-		else {
-			res->store_time = now;
-			/* Reinsert element to the tail */
-			g_queue_unlink (hash->exp, res->link);
-			g_queue_push_tail_link (hash->exp, res->link);
-		}
+		rspamd_min_heap_update_elt (hash->heap, &res->helt, now);
 
 		return res->data;
 	}
@@ -158,8 +125,6 @@ rspamd_lru_hash_insert (rspamd_lru_hash_t *hash, gpointer key, gpointer value,
 	time_t now, guint ttl)
 {
 	rspamd_lru_element_t *res;
-	gint removed = 0;
-	GList *cur, *tmp;
 
 	res = g_hash_table_lookup (hash->tbl, key);
 	if (res != NULL) {
@@ -168,44 +133,21 @@ rspamd_lru_hash_insert (rspamd_lru_hash_t *hash, gpointer key, gpointer value,
 	else {
 		if (hash->maxsize > 0 &&
 			(gint)g_hash_table_size (hash->tbl) >= hash->maxsize) {
-			/* Expire some elements */
-			if (hash->maxage > 0) {
-				cur = hash->exp->head;
-				while (cur) {
-					tmp = cur->next;
-					res = (rspamd_lru_element_t *)cur->data;
-
-					if (now - res->store_time > hash->maxage) {
-						/* That would also remove element from the queue */
-						g_hash_table_remove (hash->tbl, res->key);
-						removed ++;
-					}
-					else {
-						break;
-					}
-
-					cur = tmp;
-				}
-			}
-			if (removed == 0) {
-				/* Just unlink the element at the head */
-				res = (rspamd_lru_element_t *)hash->exp->head->data;
-				g_hash_table_remove (hash->tbl, res->key);
-			}
+			res = (rspamd_lru_element_t *)rspamd_min_heap_pop (hash->heap);
+			g_hash_table_remove (hash->tbl, res->key);
 		}
 	}
 
 	res = rspamd_lru_create_node (hash, key, value, now, ttl);
 	g_hash_table_insert (hash->tbl, key, res);
-	g_queue_push_tail (hash->exp, res);
-	res->link = hash->exp->tail;
+	rspamd_min_heap_push (hash->heap, &res->helt);
 }
 
 void
 rspamd_lru_hash_destroy (rspamd_lru_hash_t *hash)
 {
+	rspamd_min_heap_destroy (hash->heap);
 	g_hash_table_unref (hash->tbl);
-	g_queue_free (hash->exp);
 	g_slice_free1 (sizeof (rspamd_lru_hash_t), hash);
 }
 
@@ -215,13 +157,3 @@ rspamd_lru_hash_get_htable (rspamd_lru_hash_t *hash)
 {
 	return hash->tbl;
 }
-
-GQueue *
-rspamd_lru_hash_get_queue (rspamd_lru_hash_t *hash)
-{
-	return hash->exp;
-}
-
-/*
- * vi:ts=4
- */

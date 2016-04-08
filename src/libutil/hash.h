@@ -8,18 +8,17 @@
 #define RSPAMD_HASH_H
 
 #include "config.h"
+#include "heap.h"
 
 struct rspamd_lru_hash_s;
 typedef struct rspamd_lru_hash_s rspamd_lru_hash_t;
 
 typedef struct rspamd_lru_element_s {
+	struct rspamd_min_heap_elt helt;
+	guint ttl;
 	gpointer data;
 	gpointer key;
-	time_t store_time;
-	guint ttl;
 	rspamd_lru_hash_t *hash;
-	GList *link;
-
 } rspamd_lru_element_t;
 
 
@@ -33,7 +32,6 @@ typedef struct rspamd_lru_element_s {
  */
 rspamd_lru_hash_t * rspamd_lru_hash_new (
 	gint maxsize,
-	gint maxage,
 	GDestroyNotify key_destroy,
 	GDestroyNotify value_destroy);
 
@@ -48,7 +46,6 @@ rspamd_lru_hash_t * rspamd_lru_hash_new (
  */
 rspamd_lru_hash_t * rspamd_lru_hash_new_full (
 	gint maxsize,
-	gint maxage,
 	GDestroyNotify key_destroy,
 	GDestroyNotify value_destroy,
 	GHashFunc hfunc,
@@ -86,13 +83,6 @@ void rspamd_lru_hash_destroy (rspamd_lru_hash_t *hash);
  * Get hash table for this lru hash (use rspamd_lru_element_t as data)
  */
 GHashTable *rspamd_lru_hash_get_htable (rspamd_lru_hash_t *hash);
-
-
-/**
- * Get expire queue for this lru hash (use rspamd_lru_element_t as data)
- */
-GQueue *rspamd_lru_hash_get_queue (rspamd_lru_hash_t *hash);
-
 #endif
 
 /*
