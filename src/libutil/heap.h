@@ -62,6 +62,15 @@ struct rspamd_min_heap_elt* rspamd_min_heap_pop (struct rspamd_min_heap *heap);
 void rspamd_min_heap_update_elt (struct rspamd_min_heap *heap,
 		struct rspamd_min_heap_elt *elt, guint npri);
 
+
+/**
+ * Removes element from the heap
+ * @param heap
+ * @param elt
+ */
+void rspamd_min_heap_remove_elt (struct rspamd_min_heap *heap,
+		struct rspamd_min_heap_elt *elt);
+
 /**
  * Destroys heap (elements are not destroyed themselves)
  * @param heap

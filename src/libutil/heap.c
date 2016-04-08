@@ -138,7 +138,6 @@ rspamd_min_heap_update_elt (struct rspamd_min_heap *heap,
 	g_assert (heap != NULL);
 	g_assert (elt->idx > 0 && elt->idx <= heap->ar->len);
 
-
 	oldpri = elt->pri;
 	elt->pri = npri;
 
@@ -150,6 +149,26 @@ rspamd_min_heap_update_elt (struct rspamd_min_heap *heap,
 		/* We might need to swim */
 		rspamd_min_heap_swim (heap, elt);
 	}
+}
+
+void
+rspamd_min_heap_remove_elt (struct rspamd_min_heap *heap,
+		struct rspamd_min_heap_elt *elt)
+{
+	struct rspamd_min_heap_elt *first;
+
+	g_assert (heap != NULL);
+	g_assert (elt->idx > 0 && elt->idx <= heap->ar->len);
+
+	first = g_ptr_array_index (heap->ar, 0);
+
+	if (elt != first) {
+		elt->pri = first->pri - 1;
+		rspamd_min_heap_swim (heap, elt);
+	}
+
+	/* Now the desired element is on the top of queue */
+	(void)rspamd_min_heap_pop (heap);
 }
 
 void
