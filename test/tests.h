@@ -1,8 +1,8 @@
 #ifndef RSPAMD_TESTS_H
 #define RSPAMD_TESTS_H
 
-/* 
- * Here are described test functions for rspamd test suite 
+/*
+ * Here are described test functions for rspamd test suite
  */
 
 /* URL parser test */
@@ -38,5 +38,7 @@ void rspamd_http_test_func (void);
 void rspamd_lua_test_func (void);
 
 void rspamd_cryptobox_test_func (void);
+
+void rspamd_heap_test_func (void);
 
 #endif
