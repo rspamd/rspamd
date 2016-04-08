@@ -22,9 +22,9 @@ struct rspamd_min_heap {
 };
 
 #define heap_swap(h,e1,e2) do { \
-	gpointer telt = (h)->ar->pdata[(e1)->idx]; \
-	(h)->ar->pdata[(e1)->idx] = (h)->ar->pdata[(e2)->idx]; \
-	(h)->ar->pdata[(e2)->idx] = telt; \
+	gpointer telt = (h)->ar->pdata[(e1)->idx - 1]; \
+	(h)->ar->pdata[(e1)->idx - 1] = (h)->ar->pdata[(e2)->idx - 1]; \
+	(h)->ar->pdata[(e2)->idx - 1] = telt; \
 	guint tidx = (e1)->idx; \
 	(e1)->idx = (e2)->idx; \
 	(e2)->idx = tidx; \
@@ -41,8 +41,8 @@ rspamd_min_heap_swim (struct rspamd_min_heap *heap,
 {
 	struct rspamd_min_heap_elt *parent;
 
-	while (elt->idx > 0) {
-		parent = g_ptr_array_index (heap->ar, elt->idx / 2);
+	while (elt->idx > 1) {
+		parent = g_ptr_array_index (heap->ar, elt->idx / 2 - 1);
 
 		if (parent->pri > elt->pri) {
 			heap_swap (heap, elt, parent);
@@ -62,9 +62,9 @@ rspamd_min_heap_sink (struct rspamd_min_heap *heap,
 {
 	struct rspamd_min_heap_elt *c1, *c2, *m;
 
-	while (elt->idx < heap->ar->len - 1) {
-		c1 = g_ptr_array_index (heap->ar, elt->idx * 2);
-		c2 = g_ptr_array_index (heap->ar, elt->idx * 2 + 1);
+	while (elt->idx * 2 < heap->ar->len) {
+		c1 = g_ptr_array_index (heap->ar, elt->idx * 2 - 1);
+		c2 = g_ptr_array_index (heap->ar, elt->idx * 2);
 		m = min_elt (c1, c2);
 
 		if (elt->pri > m->pri) {
@@ -72,6 +72,13 @@ rspamd_min_heap_sink (struct rspamd_min_heap *heap,
 		}
 		else {
 			break;
+		}
+	}
+
+	if (elt->idx * 2 - 1 < heap->ar->len) {
+		m = g_ptr_array_index (heap->ar, elt->idx * 2 - 1);
+		if (elt->pri > m->pri) {
+			heap_swap (heap, elt, m);
 		}
 	}
 }
@@ -95,7 +102,7 @@ rspamd_min_heap_push (struct rspamd_min_heap *heap,
 	g_assert (elt != NULL);
 
 	/* Add to the end */
-	elt->idx = heap->ar->len;
+	elt->idx = heap->ar->len + 1;
 	g_ptr_array_add (heap->ar, elt);
 	/* Now swim it up */
 	rspamd_min_heap_swim (heap, elt);
@@ -129,7 +136,7 @@ rspamd_min_heap_update_elt (struct rspamd_min_heap *heap,
 	guint oldpri;
 
 	g_assert (heap != NULL);
-	g_assert (elt->idx >= 0 && elt->idx < heap->ar->len);
+	g_assert (elt->idx > 0 && elt->idx <= heap->ar->len);
 
 
 	oldpri = elt->pri;
