@@ -21,14 +21,13 @@ struct rspamd_min_heap {
 	GPtrArray *ar;
 };
 
-#define XORSWAP_DISTINCT(a, b)	((a)^=(b),(b)^=(a),(a)^=(b))
 #define heap_swap(h,e1,e2) do { \
-	guintptr a1 = (guintptr)(h)->ar->pdata[(e2)->idx]; \
-	guintptr a2 = (guintptr)(h)->ar->pdata[(e1)->idx]; \
-	XORSWAP_DISTINCT((e1)->idx, (e2)->idx); \
-	XORSWAP_DISTINCT (a1, a2); \
-	(h)->ar->pdata[(e2)->idx] = (gpointer)a1; \
-	(h)->ar->pdata[(e1)->idx] = (gpointer)a2; \
+	gpointer telt = (h)->ar->pdata[(e1)->idx]; \
+	(h)->ar->pdata[(e1)->idx] = (h)->ar->pdata[(e2)->idx]; \
+	(h)->ar->pdata[(e2)->idx] = telt; \
+	guint tidx = (e1)->idx; \
+	(e1)->idx = (e2)->idx; \
+	(e2)->idx = tidx; \
 } while (0)
 
 #define min_elt(e1, e2) ((e1)->pri <= (e2)->pri ? (e1) : (e2))
