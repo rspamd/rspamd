@@ -47,7 +47,8 @@ Rspamd support the following components within expressions:
 
 In rspamd, regular expressions could match different parts of messages:
 
-* Headers (should be `Header-Name=/regexp/flags`)
+* Headers (should be `Header-Name=/regexp/flags`), mime headers
+* Full headers string
 * Textual mime parts
 * Raw messages
 * URLs
@@ -55,9 +56,13 @@ In rspamd, regular expressions could match different parts of messages:
 The match type is defined by special flags after the last `/` symbol:
 
 * `H` - header regexp
+* `X` - undecoded header regexp (e.g. without quoted-printable decoding)
+* `B` - MIME header regexp (applied for headers in MIME parts only)
+* `R` - full headers content (applied for all headers undecoded and for the message only - **not** including MIME headers)
 * `M` - raw message regexp
 * `P` - part regexp
 * `U` - URL regexp
+
 
 We strongly discourage from using of raw message regexps as they are expensive and
 should be replaced by [trie](trie.md) rules if possible.
@@ -66,8 +71,9 @@ Each regexp also supports the following flags:
 
 * `i` - ignore case
 * `u` - use utf8 regexp
-* `m` - multiline regexp
-* `x` - extended regexp
+* `m` - multiline regexp - treat string as multiple lines. That is, change "^" and "$" from matching the start of the string's first line and the end of its last line to matching the start and end of each line within the string
+* `x` - extended regexp - this flag tells the regular expression parser to ignore most whitespace that is neither backslashed nor within a bracketed character class. You can use this to break up your regular expression into (slightly) more readable parts. Also, the # character is treated as a metacharacter introducing a comment that runs up to the pattern's closing delimiter, or to the end of the current line if the pattern extends onto the next line.
+* `s` - dotall regexp - treat string as single line. That is, change `.` to match any character whatsoever, even a newline, which normally it would not match. Used together, as `/ms`, they let the `.` match any character whatsoever, while still allowing `^` and `$` to match, respectively, just after and just before newlines within the string.
 * `O` - do not optimize regexp (rspamd optimizes regexps by default)
 
 ### Internal functions
