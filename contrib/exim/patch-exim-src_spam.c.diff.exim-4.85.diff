@@ -1,64 +1,332 @@
-2,4c2,4
-< --- a/src/expand.c	2015-02-11 14:32:38.787982270 +0200
-< +++ b/src/expand.c	2015-02-11 14:32:53.467982467 +0200
-< @@ -641,6 +641,7 @@
----
-> --- a/src/expand.c	2015-01-06 01:40:11.000000000 +0200
-> +++ b/src/expand.c	2015-02-11 15:01:19.287978945 +0200
-> @@ -652,6 +652,7 @@
-13,15c13,15
-< --- a/src/globals.c	2015-02-11 14:32:38.815982283 +0200
-< +++ b/src/globals.c	2015-02-11 14:32:53.467982467 +0200
-< @@ -1257,6 +1257,7 @@
----
-> --- a/src/globals.c	2015-01-06 01:40:11.000000000 +0200
-> +++ b/src/globals.c	2015-02-11 15:01:19.287978945 +0200
-> @@ -1276,6 +1276,7 @@
-24,26c24,26
-< --- a/src/globals.h	2015-02-11 14:32:38.835982265 +0200
-< +++ b/src/globals.h	2015-02-11 14:32:53.467982467 +0200
-< @@ -803,6 +803,7 @@
----
-> --- a/src/globals.h	2015-01-06 01:40:11.000000000 +0200
-> +++ b/src/globals.h	2015-02-11 15:01:19.287978945 +0200
-> @@ -819,6 +819,7 @@
-35,36c35,36
-< --- a/src/spam.c	2015-02-11 14:32:38.803982272 +0200
-< +++ b/src/spam.c	2015-02-11 14:34:39.287981868 +0200
----
-> --- a/src/spam.c	2015-01-06 01:40:11.000000000 +0200
-> +++ b/src/spam.c	2015-02-11 15:17:20.867976302 +0200
-70,71c70,72
-< -      if( sscanf(CS address, "%s %u", this_spamd->tcp_addr, &(this_spamd->tcp_port)) != 2 ) {
-< +      if( sscanf(CS address, "%23s %hu", this_spamd->tcp_addr, &(this_spamd->tcp_port)) != 2 ) {
----
-> -      if (sscanf(CS address, "%23s %u", this_spamd->tcp_addr, &(this_spamd->tcp_port)) != 2)
-> +      if (sscanf(CS address, "%23s %hu", this_spamd->tcp_addr, &(this_spamd->tcp_port)) != 2)
->          {
-74,75c75
-<          continue;
-< @@ -173,6 +183,7 @@
----
-> @@ -174,6 +184,7 @@
-83c83
-< @@ -209,12 +220,28 @@
----
-> @@ -210,12 +221,28 @@
-114c114
-< @@ -230,22 +257,50 @@
----
-> @@ -231,22 +258,50 @@
-175c175
-< @@ -348,60 +403,93 @@
----
-> @@ -349,60 +404,93 @@
-298c298
-< @@ -417,12 +505,12 @@
----
-> @@ -418,12 +506,12 @@
-316,317c316,317
-< --- a/src/spam.h	2015-02-11 14:32:38.775982314 +0200
-< +++ b/src/spam.h	2015-02-11 14:32:53.467982467 +0200
----
-> --- a/src/spam.h	2015-01-06 01:40:11.000000000 +0200
-> +++ b/src/spam.h	2015-02-11 15:01:19.291978935 +0200
+diff -ru exim-4.85.orig/src/expand.c exim-4.85/src/expand.c
+--- exim-4.85.orig/src/expand.c	2016-04-09 13:47:01.707691638 +0200
++++ exim-4.85/src/expand.c	2016-04-09 13:47:29.771697969 +0200
+@@ -652,6 +652,7 @@
+   { "sn8",                 vtype_filter_int,  &filter_sn[8] },
+   { "sn9",                 vtype_filter_int,  &filter_sn[9] },
+ #ifdef WITH_CONTENT_SCAN
++  { "spam_action",         vtype_stringptr,   &spam_action },
+   { "spam_bar",            vtype_stringptr,   &spam_bar },
+   { "spam_report",         vtype_stringptr,   &spam_report },
+   { "spam_score",          vtype_stringptr,   &spam_score },
+Only in exim-4.85/src: expand.c.orig
+diff -ru exim-4.85.orig/src/globals.c exim-4.85/src/globals.c
+--- exim-4.85.orig/src/globals.c	2016-04-09 13:47:01.695691635 +0200
++++ exim-4.85/src/globals.c	2016-04-09 13:47:29.771697969 +0200
+@@ -1276,6 +1276,7 @@
+ uschar *spamd_address          = US"127.0.0.1 783";
+ uschar *spam_bar               = NULL;
+ uschar *spam_report            = NULL;
++uschar *spam_action            = NULL;
+ uschar *spam_score             = NULL;
+ uschar *spam_score_int         = NULL;
+ #endif
+Only in exim-4.85/src: globals.c.orig
+diff -ru exim-4.85.orig/src/globals.h exim-4.85/src/globals.h
+--- exim-4.85.orig/src/globals.h	2016-04-09 13:47:01.695691635 +0200
++++ exim-4.85/src/globals.h	2016-04-09 13:47:29.771697969 +0200
+@@ -819,6 +819,7 @@
+ extern uschar *spamd_address;          /* address for the spamassassin daemon */
+ extern uschar *spam_bar;               /* the spam "bar" (textual representation of spam_score) */
+ extern uschar *spam_report;            /* the spamd report (multiline) */
++extern uschar *spam_action;            /* the spamd action */
+ extern uschar *spam_score;             /* the spam score (float) */
+ extern uschar *spam_score_int;         /* spam_score * 10 (int) */
+ #endif
+Only in exim-4.85/src: globals.h.orig
+diff -ru exim-4.85.orig/src/spam.c exim-4.85/src/spam.c
+--- exim-4.85.orig/src/spam.c	2016-04-09 13:47:01.711691638 +0200
++++ exim-4.85/src/spam.c	2016-04-09 13:52:12.611762892 +0200
+@@ -14,6 +14,7 @@
+ uschar spam_score_buffer[16];
+ uschar spam_score_int_buffer[16];
+ uschar spam_bar_buffer[128];
++uschar spam_action_buffer[32];
+ uschar spam_report_buffer[32600];
+ uschar prev_user_name[128] = "";
+ int spam_ok = 0;
+@@ -32,9 +33,11 @@
+   int spamd_sock = -1;
+   uschar spamd_buffer[32600];
+   int i, j, offset, result;
++  BOOL is_rspamd;
+   uschar spamd_version[8];
++  uschar spamd_short_result[8];
+   uschar spamd_score_char;
+-  double spamd_threshold, spamd_score;
++  double spamd_threshold, spamd_score, spamd_reject_score;
+   int spamd_report_offset;
+   uschar *p,*q;
+   int override = 0;
+@@ -128,8 +131,15 @@
+       spamd_address_container *this_spamd =
+         (spamd_address_container *)store_get(sizeof(spamd_address_container));
+ 
++      /* Check for spamd variant */
++      if( Ustrstr(address, "variant=rspamd") != NULL ) {
++        this_spamd->is_rspamd = TRUE;
++      }
++      else {
++        this_spamd->is_rspamd = FALSE;
++      }
+       /* grok spamd address and port */
+-      if (sscanf(CS address, "%23s %u", this_spamd->tcp_addr, &(this_spamd->tcp_port)) != 2)
++      if (sscanf(CS address, "%23s %hu", this_spamd->tcp_addr, &(this_spamd->tcp_port)) != 2)
+         {
+         log_write(0, LOG_MAIN,
+           "spam acl condition: warning - invalid spamd address: '%s'", address);
+@@ -174,6 +184,7 @@
+                       spamd_address_vector[current_server]->tcp_port,
+                       5 ) > -1) {
+         /* connection OK */
++        is_rspamd = spamd_address_vector[current_server]->is_rspamd;
+         break;
+       };
+ 
+@@ -210,12 +221,28 @@
+     }
+ 
+     server.sun_family = AF_UNIX;
+-    Ustrcpy(server.sun_path, spamd_address_work);
++    p = Ustrstr(spamd_address_work, "variant=rspamd");
++    if( p != NULL ) {
++      is_rspamd = TRUE;
++      /* strip spaces */
++      p --;
++      while (p > spamd_address_work && isspace (*p)) {
++        p --;
++      }
++      Ustrncpy(server.sun_path, spamd_address_work, p - spamd_address_work + 1);
++      /* zero terminate */
++      server.sun_path[p - spamd_address_work + 1] = 0;
++    }
++    else {
++      is_rspamd = FALSE;  
++      Ustrcpy(server.sun_path, spamd_address_work);
++    }
++
+ 
+     if (connect(spamd_sock, (struct sockaddr *) &server, sizeof(struct sockaddr_un)) < 0) {
+       log_write(0, LOG_MAIN|LOG_PANIC,
+                 "malware acl condition: spamd: unable to connect to UNIX socket %s (%s)",
+-                spamd_address_work, strerror(errno) );
++                server.sun_path, strerror(errno) );
+       (void)fclose(mbox_file);
+       (void)close(spamd_sock);
+       return DEFER;
+@@ -231,22 +258,50 @@
+     return DEFER;
+   }
+ 
++  (void)fcntl(spamd_sock, F_SETFL, O_NONBLOCK);
+   /* now we are connected to spamd on spamd_sock */
+-  (void)string_format(spamd_buffer,
+-           sizeof(spamd_buffer),
+-           "REPORT SPAMC/1.2\r\nUser: %s\r\nContent-length: %ld\r\n\r\n",
+-           user_name,
+-           mbox_size);
+-
+-  /* send our request */
+-  if (send(spamd_sock, spamd_buffer, Ustrlen(spamd_buffer), 0) < 0) {
++  if (is_rspamd) { 
++    /* rspamd variant */
++    const char *helo;
++    const char *fcrdns;
++    const char *authid;
++    uschar *req_str;
++    
++    req_str = string_sprintf("CHECK RSPAMC/1.3\r\nContent-length: %lu\r\n"
++      "Queue-Id: %s\r\nFrom: <%s>\r\nRecipient-Number: %d\r\n", mbox_size,
++      message_id, sender_address, recipients_count);
++    for (i = 0; i < recipients_count; i ++)
++      req_str = string_sprintf("%sRcpt: <%s>\r\n", req_str, recipients_list[i].address);
++    if ((helo = expand_string(US"$sender_helo_name")) != NULL && *helo != '\0')
++      req_str = string_sprintf("%sHelo: %s\r\n", req_str, helo);
++    if ((fcrdns = expand_string(US"$sender_host_name")) != NULL && *fcrdns != '\0')
++      req_str = string_sprintf("%sHostname: %s\r\n", req_str, fcrdns);
++    if (sender_host_address != NULL)
++      req_str = string_sprintf("%sIP: %s\r\n", req_str, sender_host_address);
++    if ((authid = expand_string(US"$authenticated_id")) != NULL && *authid != '\0')
++      req_str = string_sprintf("%sUser: %s\r\n", req_str, authid);
++    req_str = string_sprintf("%s\r\n", req_str);
++    wrote = send(spamd_sock, req_str, Ustrlen(req_str), 0); 
++  }
++  else {
++    /* spamassassin variant */
++    (void)string_format(spamd_buffer,
++            sizeof(spamd_buffer),
++            "REPORT SPAMC/1.2\r\nUser: %s\r\nContent-length: %ld\r\n\r\n",
++            user_name,
++            mbox_size);
++    /* send our request */
++    wrote = send(spamd_sock, spamd_buffer, Ustrlen(spamd_buffer), 0);
++  }
++  if(wrote == -1)
++  {
+     (void)close(spamd_sock);
+     log_write(0, LOG_MAIN|LOG_PANIC,
+-         "spam acl condition: spamd send failed: %s", strerror(errno));
++      "spam acl condition: spamd send failed: %s", strerror(errno));
+     (void)fclose(mbox_file);
+     (void)close(spamd_sock);
+     return DEFER;
+-  };
++  }
+ 
+   /* now send the file */
+   /* spamd sometimes accepts conections but doesn't read data off
+@@ -349,60 +404,93 @@
+   /* reading done */
+   (void)close(spamd_sock);
+ 
+-  /* dig in the spamd output and put the report in a multiline header, if requested */
+-  if( sscanf(CS spamd_buffer,"SPAMD/%7s 0 EX_OK\r\nContent-length: %*u\r\n\r\n%lf/%lf\r\n%n",
+-             spamd_version,&spamd_score,&spamd_threshold,&spamd_report_offset) != 3 ) {
+-
+-    /* try to fall back to pre-2.50 spamd output */
+-    if( sscanf(CS spamd_buffer,"SPAMD/%7s 0 EX_OK\r\nSpam: %*s ; %lf / %lf\r\n\r\n%n",
+-               spamd_version,&spamd_score,&spamd_threshold,&spamd_report_offset) != 3 ) {
++  if (!is_rspamd) {
++    /* dig in the spamd output and put the report in a multiline header, if requested */
++    if( sscanf(CS spamd_buffer,"SPAMD/%7s 0 EX_OK\r\nContent-length: %*u\r\n\r\n%lf/%lf\r\n%n",
++                spamd_version,&spamd_score,&spamd_threshold,&spamd_report_offset) != 3 ) {
++
++        /* try to fall back to pre-2.50 spamd output */
++        if( sscanf(CS spamd_buffer,"SPAMD/%7s 0 EX_OK\r\nSpam: %*s ; %lf / %lf\r\n\r\n%n",
++                spamd_version,&spamd_score,&spamd_threshold,&spamd_report_offset) != 3 ) {
++        log_write(0, LOG_MAIN|LOG_PANIC,
++            "spam acl condition: cannot parse spamd output");
++        return DEFER;
++        };
++    };
++
++    if( spamd_score >= spamd_threshold ) {
++      Ustrcpy(spam_action_buffer, "reject");
++    }
++    else {
++      Ustrcpy(spam_action_buffer, "no action");
++    }
++  }
++  else {
++    /* rspamd variant of reply */
++    int r;
++    if( (r = sscanf(CS spamd_buffer,"RSPAMD/%7s 0 EX_OK\r\nMetric: default; %7s %lf / %lf / %lf\r\n%n",
++        spamd_version,spamd_short_result,&spamd_score,&spamd_threshold,&spamd_reject_score,&spamd_report_offset)) != 5 ) {
+       log_write(0, LOG_MAIN|LOG_PANIC,
+-         "spam acl condition: cannot parse spamd output");
++            "spam acl condition: cannot parse spamd output: %d", r);
+       return DEFER;
+     };
+-  };
++    /* now parse action */
++    p = &spamd_buffer[spamd_report_offset];
++
++    if( Ustrncmp(p, "Action: ", sizeof("Action: ") - 1) == 0 ) {
++      p += sizeof("Action: ") - 1;
++      q = &spam_action_buffer[0];
++      while (*p && *p != '\r' && (q - spam_action_buffer) < sizeof(spam_action_buffer) - 1) {
++        *q++ = *p++;
++      }
++      *q = '\0';
++    }
++  }
+ 
+   /* Create report. Since this is a multiline string,
+   we must hack it into shape first */
+   p = &spamd_buffer[spamd_report_offset];
+   q = spam_report_buffer;
+   while (*p != '\0') {
+-    /* skip \r */
+-    if (*p == '\r') {
+-      p++;
+-      continue;
+-    };
+-    *q = *p;
+-    q++;
+-    if (*p == '\n') {
+-      /* add an extra space after the newline to ensure
+-      that it is treated as a header continuation line */
+-      *q = ' ';
+-      q++;
+-    };
+-    p++;
++	  /* skip \r */
++	  if (*p == '\r') {
++	  p++;
++	  continue;
++	  };
++	  *q = *p;
++	  q++;
++	  if (*p == '\n') {
++	  /* add an extra space after the newline to ensure
++	  that it is treated as a header continuation line */
++	  *q = ' ';
++	  q++;
++	  };
++	  p++;
+   };
+   /* NULL-terminate */
+   *q = '\0';
+   q--;
+   /* cut off trailing leftovers */
+   while (*q <= ' ') {
+-    *q = '\0';
+-    q--;
++	  *q = '\0';
++	  q--;
+   };
++
++  /* common spamd actions */
+   spam_report = spam_report_buffer;
++  spam_action = spam_action_buffer;
+ 
+   /* create spam bar */
+   spamd_score_char = spamd_score > 0 ? '+' : '-';
+   j = abs((int)(spamd_score));
+   i = 0;
+   if( j != 0 ) {
+-    while((i < j) && (i <= MAX_SPAM_BAR_CHARS))
+-       spam_bar_buffer[i++] = spamd_score_char;
++      while((i < j) && (i <= MAX_SPAM_BAR_CHARS))
++      spam_bar_buffer[i++] = spamd_score_char;
+   }
+   else{
+-    spam_bar_buffer[0] = '/';
+-    i = 1;
++      spam_bar_buffer[0] = '/';
++      i = 1;
+   }
+   spam_bar_buffer[i] = '\0';
+   spam_bar = spam_bar_buffer;
+@@ -418,12 +506,12 @@
+ 
+   /* compare threshold against score */
+   if (spamd_score >= spamd_threshold) {
+-    /* spam as determined by user's threshold */
+-    spam_rc = OK;
++      /* spam as determined by user's threshold */
++      spam_rc = OK;
+   }
+   else {
+-    /* not spam */
+-    spam_rc = FAIL;
++      /* not spam */
++      spam_rc = FAIL;
+   };
+ 
+   /* remember expanded spamd_address if needed */
+Only in exim-4.85/src: spam.c.orig
+Only in exim-4.85/src: .spam.c.rej.swp
+diff -ru exim-4.85.orig/src/spam.h exim-4.85/src/spam.h
+--- exim-4.85.orig/src/spam.h	2016-04-09 13:47:01.715691640 +0200
++++ exim-4.85/src/spam.h	2016-04-09 13:47:29.775697969 +0200
+@@ -22,7 +22,8 @@
+ 
+ typedef struct spamd_address_container {
+   uschar tcp_addr[24];
+-  unsigned int tcp_port;
++  unsigned short int tcp_port;
++  int is_rspamd:1;
+ } spamd_address_container;
+ 
+ #endif
