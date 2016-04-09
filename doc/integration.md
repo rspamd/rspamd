@@ -106,6 +106,18 @@ Starting from Exim 4.86, you can use rspamd directly just like spamassassin:
 
 ![exim scheme](../img/rspamd_exim.png "Rspamd and exim interaction")
 
+For versions 4.70 through 4.84, a patch can be applied to enable integration.
+From Exim source directory run `patch -p1 < ../rspamd/contrib/exim/patch-exim-src_spam.c.diff`.
+
+For version 4.85, run the following from `contrib/exim` in rspamd source directory:
+`patch patch-exim-src_spam.c.diff < patch-exim-src_spam.c.diff.exim-4.85.diff`
+And then follow steps above to apply the patch.
+
+For versions 4.86 and 4.87 it is recommended to apply a patch to disable half-closed sockets:
+`patch -p1 < ../rspamd/contrib/exim/shutdown.patch`
+
+Alternatively you can set `enable_shutdown_workaround = true` in `$LOCAL_CONFDIR/local.d/options.inc`
+
 Here is an example of exim configuration:
 
 {% highlight make %}
