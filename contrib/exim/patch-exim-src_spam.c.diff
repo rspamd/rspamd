@@ -1,7 +1,7 @@
-diff -ru a/src/expand.c b/src/expand.c
---- a/src/expand.c	2015-02-11 14:32:38.787982270 +0200
-+++ b/src/expand.c	2015-02-11 14:32:53.467982467 +0200
-@@ -641,6 +641,7 @@
+diff -ru exim-4.70.orig/src/expand.c exim-4.70/src/expand.c
+--- exim-4.70.orig/src/expand.c	2016-04-09 13:42:00.227625074 +0200
++++ exim-4.70/src/expand.c	2016-04-09 13:42:37.183633096 +0200
+@@ -578,6 +578,7 @@
    { "sn8",                 vtype_filter_int,  &filter_sn[8] },
    { "sn9",                 vtype_filter_int,  &filter_sn[9] },
  #ifdef WITH_CONTENT_SCAN
@@ -9,10 +9,10 @@ diff -ru a/src/expand.c b/src/expand.c
    { "spam_bar",            vtype_stringptr,   &spam_bar },
    { "spam_report",         vtype_stringptr,   &spam_report },
    { "spam_score",          vtype_stringptr,   &spam_score },
-diff -ru a/src/globals.c b/src/globals.c
---- a/src/globals.c	2015-02-11 14:32:38.815982283 +0200
-+++ b/src/globals.c	2015-02-11 14:32:53.467982467 +0200
-@@ -1257,6 +1257,7 @@
+diff -ru exim-4.70.orig/src/globals.c exim-4.70/src/globals.c
+--- exim-4.70.orig/src/globals.c	2016-04-09 13:42:00.219625073 +0200
++++ exim-4.70/src/globals.c	2016-04-09 13:42:37.187633096 +0200
+@@ -1136,6 +1136,7 @@
  uschar *spamd_address          = US"127.0.0.1 783";
  uschar *spam_bar               = NULL;
  uschar *spam_report            = NULL;
@@ -20,10 +20,10 @@ diff -ru a/src/globals.c b/src/globals.c
  uschar *spam_score             = NULL;
  uschar *spam_score_int         = NULL;
  #endif
-diff -ru a/src/globals.h b/src/globals.h
---- a/src/globals.h	2015-02-11 14:32:38.835982265 +0200
-+++ b/src/globals.h	2015-02-11 14:32:53.467982467 +0200
-@@ -803,6 +803,7 @@
+diff -ru exim-4.70.orig/src/globals.h exim-4.70/src/globals.h
+--- exim-4.70.orig/src/globals.h	2016-04-09 13:42:00.219625073 +0200
++++ exim-4.70/src/globals.h	2016-04-09 13:42:37.187633096 +0200
+@@ -703,6 +703,7 @@
  extern uschar *spamd_address;          /* address for the spamassassin daemon */
  extern uschar *spam_bar;               /* the spam "bar" (textual representation of spam_score) */
  extern uschar *spam_report;            /* the spamd report (multiline) */
@@ -31,10 +31,10 @@ diff -ru a/src/globals.h b/src/globals.h
  extern uschar *spam_score;             /* the spam score (float) */
  extern uschar *spam_score_int;         /* spam_score * 10 (int) */
  #endif
-diff -ru a/src/spam.c b/src/spam.c
---- a/src/spam.c	2015-02-11 14:32:38.803982272 +0200
-+++ b/src/spam.c	2015-02-11 14:34:39.287981868 +0200
-@@ -14,6 +14,7 @@
+diff -ru exim-4.70.orig/src/spam.c exim-4.70/src/spam.c
+--- exim-4.70.orig/src/spam.c	2016-04-09 13:42:00.231625075 +0200
++++ exim-4.70/src/spam.c	2016-04-09 13:43:43.927647677 +0200
+@@ -16,6 +16,7 @@
  uschar spam_score_buffer[16];
  uschar spam_score_int_buffer[16];
  uschar spam_bar_buffer[128];
@@ -42,8 +42,8 @@ diff -ru a/src/spam.c b/src/spam.c
  uschar spam_report_buffer[32600];
  uschar prev_user_name[128] = "";
  int spam_ok = 0;
-@@ -32,9 +33,11 @@
-   int spamd_sock = -1;
+@@ -31,9 +32,11 @@
+   int spamd_sock;
    uschar spamd_buffer[32600];
    int i, j, offset, result;
 +  BOOL is_rspamd;
@@ -55,7 +55,7 @@ diff -ru a/src/spam.c b/src/spam.c
    int spamd_report_offset;
    uschar *p,*q;
    int override = 0;
-@@ -128,8 +131,15 @@
+@@ -122,8 +125,15 @@
        spamd_address_container *this_spamd =
          (spamd_address_container *)store_get(sizeof(spamd_address_container));
  
@@ -72,7 +72,7 @@ diff -ru a/src/spam.c b/src/spam.c
          log_write(0, LOG_MAIN,
            "spam acl condition: warning - invalid spamd address: '%s'", address);
          continue;
-@@ -173,6 +183,7 @@
+@@ -165,6 +175,7 @@
                        spamd_address_vector[current_server]->tcp_port,
                        5 ) > -1) {
          /* connection OK */
@@ -80,7 +80,7 @@ diff -ru a/src/spam.c b/src/spam.c
          break;
        };
  
-@@ -209,12 +220,28 @@
+@@ -197,12 +208,28 @@
      }
  
      server.sun_family = AF_UNIX;
@@ -111,8 +111,8 @@ diff -ru a/src/spam.c b/src/spam.c
        (void)fclose(mbox_file);
        (void)close(spamd_sock);
        return DEFER;
-@@ -230,22 +257,50 @@
-     return DEFER;
+@@ -210,22 +237,50 @@
+ 
    }
  
 +  (void)fcntl(spamd_sock, F_SETFL, O_NONBLOCK);
@@ -172,7 +172,18 @@ diff -ru a/src/spam.c b/src/spam.c
  
    /* now send the file */
    /* spamd sometimes accepts conections but doesn't read data off
-@@ -348,60 +403,93 @@
+@@ -304,7 +359,9 @@
+   (void)fclose(mbox_file);
+ 
+   /* we're done sending, close socket for writing */
+-  shutdown(spamd_sock,SHUT_WR);
++  if (!is_rspamd) {
++    shutdown(spamd_sock,SHUT_WR);
++  }
+ 
+   /* read spamd response using what's left of the timeout.
+    */
+@@ -328,60 +385,93 @@
    /* reading done */
    (void)close(spamd_sock);
  
@@ -295,7 +306,7 @@ diff -ru a/src/spam.c b/src/spam.c
    }
    spam_bar_buffer[i] = '\0';
    spam_bar = spam_bar_buffer;
-@@ -417,12 +505,12 @@
+@@ -397,12 +487,12 @@
  
    /* compare threshold against score */
    if (spamd_score >= spamd_threshold) {
@@ -311,11 +322,11 @@ diff -ru a/src/spam.c b/src/spam.c
 +      spam_rc = FAIL;
    };
  
-   /* remember expanded spamd_address if needed */
-diff -ru a/src/spam.h b/src/spam.h
---- a/src/spam.h	2015-02-11 14:32:38.775982314 +0200
-+++ b/src/spam.h	2015-02-11 14:32:53.467982467 +0200
-@@ -22,7 +22,8 @@
+   /* remember user name and "been here" for it unless spamd_socket was expanded */
+diff -ru exim-4.70.orig/src/spam.h exim-4.70/src/spam.h
+--- exim-4.70.orig/src/spam.h	2016-04-09 13:42:00.235625076 +0200
++++ exim-4.70/src/spam.h	2016-04-09 13:42:37.187633096 +0200
+@@ -24,7 +24,8 @@
  
  typedef struct spamd_address_container {
    uschar tcp_addr[24];
