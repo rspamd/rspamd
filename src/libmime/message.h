@@ -91,4 +91,8 @@ GPtrArray *rspamd_message_get_header_array (struct rspamd_task *task,
 		const gchar *field,
 		gboolean strong);
 
+GPtrArray *rspamd_message_get_mime_header_array (struct rspamd_task *task,
+		const gchar *field,
+		gboolean strong);
+
 #endif

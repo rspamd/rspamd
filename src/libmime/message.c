@@ -1985,7 +1985,56 @@ rspamd_message_get_header_array (struct rspamd_task *task,
 	ret = g_ptr_array_sized_new (nelems);
 
 	LL_FOREACH (rh, cur) {
+		if (strong) {
+			if (strcmp (rh->name, field) != 0) {
+				continue;
+			}
+		}
+
 		g_ptr_array_add (ret, cur);
+	}
+
+	return ret;
+}
+
+GPtrArray *
+rspamd_message_get_mime_header_array (struct rspamd_task *task,
+		const gchar *field,
+		gboolean strong)
+{
+	GPtrArray *ret;
+	struct raw_header *rh, *cur;
+	guint nelems = 0, i;
+	struct mime_part *mp;
+
+	for (i = 0; i < task->parts->len; i ++) {
+		mp = g_ptr_array_index (task->parts, i);
+		rh = g_hash_table_lookup (mp->raw_headers, field);
+
+		if (rh == NULL) {
+			continue;
+		}
+
+		LL_FOREACH (rh, cur) {
+			nelems ++;
+		}
+	}
+
+	ret = g_ptr_array_sized_new (nelems);
+
+	for (i = 0; i < task->parts->len; i ++) {
+		mp = g_ptr_array_index (task->parts, i);
+		rh = g_hash_table_lookup (mp->raw_headers, field);
+
+		LL_FOREACH (rh, cur) {
+			if (strong) {
+				if (strcmp (rh->name, field) != 0) {
+					continue;
+				}
+			}
+
+			g_ptr_array_add (ret, cur);
+		}
 	}
 
 	return ret;
