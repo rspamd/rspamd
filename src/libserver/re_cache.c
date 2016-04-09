@@ -785,6 +785,46 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		debug_task ("checking allheader regexp: %s -> %d",
 				rspamd_regexp_get_pattern (re), ret);
 		break;
+	case RSPAMD_RE_MIMEHEADER:
+		headerlist = rspamd_message_get_mime_header_array (task,
+				re_class->type_data,
+				is_strong);
+
+		if (headerlist) {
+			scvec = g_malloc (sizeof (*scvec) * headerlist->len);
+			lenvec = g_malloc (sizeof (*lenvec) * headerlist->len);
+
+			for (i = 0; i < headerlist->len; i ++) {
+				rh = g_ptr_array_index (headerlist, i);
+
+				if (re_class->type == RSPAMD_RE_RAWHEADER) {
+					in = rh->value;
+					raw = TRUE;
+					lenvec[i] = strlen (rh->value);
+				}
+				else {
+					in = rh->decoded;
+					/* Validate input */
+					if (!in || !g_utf8_validate (in, -1, &end)) {
+						lenvec[i] = 0;
+						scvec[i] = (guchar *)"";
+						continue;
+					}
+					lenvec[i] = end - in;
+				}
+
+				scvec[i] = (guchar *)in;
+			}
+
+			ret = rspamd_re_cache_process_regexp_data (rt, re,
+					task->task_pool, scvec, lenvec, headerlist->len, raw);
+			debug_task ("checking mime header %s regexp: %s -> %d",
+					re_class->type_data,
+					rspamd_regexp_get_pattern (re), ret);
+			g_free (scvec);
+			g_free (lenvec);
+		}
+		break;
 	case RSPAMD_RE_MIME:
 	case RSPAMD_RE_RAWMIME:
 		/* Iterate through text parts */
@@ -999,6 +1039,9 @@ rspamd_re_cache_type_to_string (enum rspamd_re_type type)
 	case RSPAMD_RE_RAWHEADER:
 		ret = "raw header";
 		break;
+	case RSPAMD_RE_MIMEHEADER:
+		ret = "mime header";
+		break;
 	case RSPAMD_RE_ALLHEADER:
 		ret = "all headers";
 		break;
@@ -1048,6 +1091,9 @@ rspamd_re_cache_type_from_string (const char *str)
 		}
 		else if (strcmp (str, "allheader") == 0) {
 			ret = RSPAMD_RE_ALLHEADER;
+		}
+		else if (strcmp (str, "mimeheader") == 0) {
+			ret = RSPAMD_RE_MIMEHEADER;
 		}
 	}
 
