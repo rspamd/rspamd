@@ -282,6 +282,14 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 			result->type = RSPAMD_RE_HEADER;
 			p++;
 			break;
+		case 'R':
+			result->type = RSPAMD_RE_RAWHEADER;
+			p++;
+			break;
+		case 'B':
+			result->type = RSPAMD_RE_MIMEHEADER;
+			p++;
+			break;
 		case 'M':
 			result->type = RSPAMD_RE_BODY;
 			p++;
@@ -302,6 +310,7 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 			result->type = RSPAMD_RE_RAWHEADER;
 			p++;
 			break;
+		/* Other flags */
 		case 'T':
 			result->is_test = TRUE;
 			p++;
@@ -325,6 +334,15 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 		msg_err_pool ("could not read regexp: %s, unknown type", src);
 		return NULL;
 	}
+
+	if ((result->type == RSPAMD_RE_HEADER ||
+			result->type == RSPAMD_RE_RAWHEADER ||
+			result->type == RSPAMD_RE_MIMEHEADER) &&
+			result->header == NULL) {
+		msg_err_pool ("header regexp: '%s' has no header part", src);
+		return NULL;
+	}
+
 
 	result->regexp_text = rspamd_mempool_strdup (pool, start);
 	dbegin = result->regexp_text + (begin - start);
