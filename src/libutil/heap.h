@@ -77,4 +77,13 @@ void rspamd_min_heap_remove_elt (struct rspamd_min_heap *heap,
  */
 void rspamd_min_heap_destroy (struct rspamd_min_heap *heap);
 
+/**
+ * Returns element from the heap with the specified index
+ * @param heap
+ * @param idx
+ * @return
+ */
+struct rspamd_min_heap_elt* rspamd_min_heap_index (struct rspamd_min_heap *heap,
+		guint idx);
+
 #endif /* SRC_LIBUTIL_HEAP_H_ */
