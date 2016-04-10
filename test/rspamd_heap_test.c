@@ -19,6 +19,9 @@
 #include "heap.h"
 #include "ottery.h"
 
+static const niter = 100500;
+static const nrem = 100;
+
 static inline
 struct rspamd_min_heap_elt *
 new_elt (guint pri)
@@ -54,14 +57,19 @@ rspamd_heap_test_func (void)
 	rspamd_min_heap_destroy (heap);
 	heap = rspamd_min_heap_create (128);
 
-	for (i = 0; i < 100500; i ++) {
+	for (i = 0; i < niter; i ++) {
 		elt = new_elt (ottery_rand_uint32 () % G_MAXINT32 + 1);
 		rspamd_min_heap_push (heap, elt);
 	}
 
+	for (i = 0; i < nrem; i ++) {
+		elt = rspamd_min_heap_index (heap, ottery_rand_uint32 () % niter);
+		rspamd_min_heap_remove_elt (heap, elt);
+	}
+
 	prev = 0;
 
-	for (i = 0; i < 100500; i ++) {
+	for (i = 0; i < niter - nrem; i ++) {
 		elt = rspamd_min_heap_pop (heap);
 
 		if (prev != 0) {
