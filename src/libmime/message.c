@@ -1362,6 +1362,7 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 		mime_part->parent = md->parent;
 		mime_part->filename = NULL;
 		mime_part->mime = part;
+		mime_part->boundary = g_mime_multipart_get_boundary (GMIME_MULTIPART (part));
 
 		debug_task ("found part with content-type: %s/%s",
 				type->type,

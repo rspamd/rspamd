@@ -22,6 +22,7 @@ struct mime_part {
 	gchar *raw_headers_str;
 	gchar *checksum;
 	const gchar *filename;
+	const gchar *boundary;
 };
 
 #define RSPAMD_MIME_PART_FLAG_UTF (1 << 0)
