@@ -338,9 +338,11 @@ extern uint64_t ottery_rand_uint64(void);
 /* Disable slab allocator if jemalloc is already in the system */
 #if defined(WITH_JEMALLOC) || defined(__FreeBSD__) || \
 	(defined(__NetBSD__) && __NetBSD_Version__ >= 500000000)
+#if 0
 	#define g_slice_alloc(sz) g_malloc(sz)
 	#define g_slice_alloc0(sz) g_malloc0(sz)
 	#define g_slice_free1(sz, p) g_free(p)
+#endif
 #endif
 
 #endif
