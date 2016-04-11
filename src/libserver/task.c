@@ -170,10 +170,19 @@ rspamd_task_free (struct rspamd_task *task)
 		for (i = 0; i < task->parts->len; i ++) {
 			p = g_ptr_array_index (task->parts, i);
 			g_byte_array_free (p->content, TRUE);
+
+			if (p->raw_headers_str) {
+				g_free (p->raw_headers_str);
+			}
+
+			if (p->raw_headers) {
+				g_hash_table_unref (p->raw_headers);
+			}
 		}
 
 		for (i = 0; i < task->text_parts->len; i ++) {
 			tp = g_ptr_array_index (task->text_parts, i);
+
 			if (tp->normalized_words) {
 				g_array_free (tp->normalized_words, TRUE);
 			}

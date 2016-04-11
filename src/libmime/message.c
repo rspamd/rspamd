@@ -1349,13 +1349,11 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 		hdrs = g_mime_object_get_headers (GMIME_OBJECT (part));
 		mime_part->raw_headers = g_hash_table_new (rspamd_strcase_hash,
 				rspamd_strcase_equal);
-		rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t) g_hash_table_unref,
-				mime_part->raw_headers);
+
 		if (hdrs != NULL) {
 			process_raw_headers (task, mime_part->raw_headers,
 					hdrs, strlen (hdrs));
-			g_free (hdrs);
+			mime_part->raw_headers_str = hdrs;
 		}
 
 		mime_part->type = type;
@@ -1415,13 +1413,11 @@ mime_foreach_callback (GMimeObject * part, gpointer user_data)
 				hdrs = g_mime_object_get_headers (GMIME_OBJECT (part));
 				mime_part->raw_headers = g_hash_table_new (rspamd_strcase_hash,
 						rspamd_strcase_equal);
-				rspamd_mempool_add_destructor (task->task_pool,
-					(rspamd_mempool_destruct_t) g_hash_table_unref,
-					mime_part->raw_headers);
+
 				if (hdrs != NULL) {
 					process_raw_headers (task, mime_part->raw_headers,
 							hdrs, strlen (hdrs));
-					g_free (hdrs);
+					mime_part->raw_headers_str = hdrs;
 				}
 
 				mime_part->type = type;
