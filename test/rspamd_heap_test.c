@@ -34,6 +34,39 @@ new_elt (guint pri)
 	return elt;
 }
 
+static gdouble
+heap_nelts_test (guint nelts)
+{
+	struct rspamd_min_heap *heap;
+	struct rspamd_min_heap_elt *elts;
+	gdouble t1, t2;
+	guint i;
+
+	heap = rspamd_min_heap_create (nelts);
+	/* Preallocate all elts */
+	elts = g_slice_alloc (sizeof (*elts) * nelts);
+
+	for (i = 0; i < nelts; i ++) {
+		elts[i].pri = ottery_rand_uint32 () % G_MAXINT32 + 1;
+		elts[i].idx = NULL;
+	}
+
+	t1 = rspamd_get_virtual_ticks ();
+	for (i = 0; i < nelts; i ++) {
+		rspamd_min_heap_push (heap, &elts[i]);
+	}
+
+	for (i = 0; i < nelts; i ++) {
+		(void)rspamd_min_heap_pop (heap);
+	}
+	t2 = rspamd_get_virtual_ticks ();
+
+	g_slice_free1 (sizeof (*elts) * nelts, elts);
+	rspamd_min_heap_destroy (heap);
+
+	return (t2 - t1);
+}
+
 void
 rspamd_heap_test_func (void)
 {
@@ -41,6 +74,7 @@ rspamd_heap_test_func (void)
 	struct rspamd_min_heap_elt *elt;
 	gint i;
 	guint prev;
+	gdouble t[16];
 
 	heap = rspamd_min_heap_create (32);
 
@@ -96,4 +130,14 @@ rspamd_heap_test_func (void)
 	rspamd_min_heap_update_elt (heap, elt, 0);
 	elt = rspamd_min_heap_pop (heap);
 	g_assert (elt->idx == GINT_TO_POINTER (3));
+
+	rspamd_min_heap_destroy (heap);
+
+	for (i = 1; i <= G_N_ELEMENTS (t); i ++) {
+		t[i - 1] = heap_nelts_test (0x1 << (i + 4));
+	}
+
+	for (i = 1; i <= G_N_ELEMENTS (t); i ++) {
+		rspamd_printf ("Elements: %d, time: %.4f\n", 0x1 << (i + 4), t[i - 1]);
+	}
 }
