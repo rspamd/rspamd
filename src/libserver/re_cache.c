@@ -723,6 +723,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 	guint *lenvec;
 	gboolean raw = FALSE;
 	struct mime_text_part *part;
+	struct mime_part *mime_part;
 	struct rspamd_url *url;
 	struct rspamd_re_cache *cache = rt->cache;
 	gpointer k, v;
@@ -920,6 +921,45 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		debug_task ("checking rawbody regexp: %s -> %d",
 				rspamd_regexp_get_pattern (re), ret);
 		break;
+	case RSPAMD_RE_SABODY:
+		/*
+		 * For SA body we get all parts and extract headers + body from them
+		 *
+		 */
+		if (task->parts->len > 0) {
+			scvec = g_malloc (sizeof (*scvec) * task->parts->len * 2);
+			lenvec = g_malloc (sizeof (*lenvec) * task->parts->len * 2);
+
+			for (i = 0; i < task->parts->len; i++) {
+				mime_part = g_ptr_array_index (task->parts, i);
+
+				if (mime_part->raw_headers_str) {
+					scvec[i * 2] = (guchar *)mime_part->raw_headers_str;
+					lenvec[i * 2] = strlen (mime_part->raw_headers_str);
+				}
+				else {
+					scvec[i * 2] = (guchar *)"";
+					lenvec[i * 2] = 0;
+				}
+
+				if (mime_part->content) {
+					scvec[i * 2 + 1] = (guchar *)mime_part->content->data;
+					lenvec[i * 2 + 1] = mime_part->content->len;
+				}
+				else {
+					scvec[i * 2 + 1] = (guchar *)"";
+					lenvec[i * 2 + 1] = 0;
+				}
+			}
+
+			ret = rspamd_re_cache_process_regexp_data (rt, re,
+					task->task_pool, scvec, lenvec, task->parts->len * 2, TRUE);
+			debug_task ("checking sa body regexp: %s -> %d",
+					rspamd_regexp_get_pattern (re), ret);
+			g_free (scvec);
+			g_free (lenvec);
+		}
+		break;
 	case RSPAMD_RE_MAX:
 		msg_err_task ("regexp of class invalid has been called: %s",
 				rspamd_regexp_get_pattern (re));
@@ -1057,6 +1097,9 @@ rspamd_re_cache_type_to_string (enum rspamd_re_type type)
 	case RSPAMD_RE_URL:
 		ret = "url";
 		break;
+	case RSPAMD_RE_SABODY:
+		ret = "sa body";
+		break;
 	case RSPAMD_RE_MAX:
 		ret = "invalid class";
 		break;
@@ -1094,6 +1137,9 @@ rspamd_re_cache_type_from_string (const char *str)
 		}
 		else if (strcmp (str, "mimeheader") == 0) {
 			ret = RSPAMD_RE_MIMEHEADER;
+		}
+		else if (strcmp (str, "sabody") == 0) {
+			ret = RSPAMD_RE_SABODY;
 		}
 	}
 

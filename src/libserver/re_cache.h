@@ -33,6 +33,7 @@ enum rspamd_re_type {
 	RSPAMD_RE_RAWMIME,
 	RSPAMD_RE_URL,
 	RSPAMD_RE_BODY,
+	RSPAMD_RE_SABODY,
 	RSPAMD_RE_MAX
 };
 
