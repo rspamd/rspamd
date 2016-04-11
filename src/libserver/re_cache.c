@@ -721,6 +721,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 {
 	guint ret = 0, i, re_id;
 	GPtrArray *headerlist;
+	GList *slist;
 	GHashTableIter it;
 	struct raw_header *rh;
 	const gchar *in, *end;
@@ -835,8 +836,9 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 	case RSPAMD_RE_RAWMIME:
 		/* Iterate through text parts */
 		if (task->text_parts->len > 0) {
-			scvec = g_malloc (sizeof (*scvec) * task->text_parts->len);
-			lenvec = g_malloc (sizeof (*lenvec) * task->text_parts->len);
+			cnt = task->text_parts->len;
+			scvec = g_malloc (sizeof (*scvec) * cnt);
+			lenvec = g_malloc (sizeof (*lenvec) * cnt);
 
 			for (i = 0; i < task->text_parts->len; i++) {
 				part = g_ptr_array_index (task->text_parts, i);
@@ -868,7 +870,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 			}
 
 			ret = rspamd_re_cache_process_regexp_data (rt, re,
-					task->task_pool, scvec, lenvec, task->text_parts->len, raw);
+					task->task_pool, scvec, lenvec, cnt, raw);
 			debug_task ("checking mime regexp: %s -> %d",
 					rspamd_regexp_get_pattern (re), ret);
 			g_free (scvec);
@@ -932,33 +934,52 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		 *
 		 */
 		if (task->parts->len > 0) {
-			scvec = g_malloc (sizeof (*scvec) * task->parts->len * 2);
-			lenvec = g_malloc (sizeof (*lenvec) * task->parts->len * 2);
+			cnt = task->parts->len * 2 + 1;
+			scvec = g_malloc (sizeof (*scvec) * cnt);
+			lenvec = g_malloc (sizeof (*lenvec) * cnt);
+
+			/*
+			 * Body rules also include the Subject as the first line
+			 * of the body content.
+			 */
+
+			slist = rspamd_message_get_header (task, "Subject", FALSE);
+
+			if (slist) {
+				rh = slist->data;
+
+				scvec[0] = (guchar *)rh->decoded;
+				lenvec[0] = strlen (rh->decoded);
+			}
+			else {
+				scvec[0] = (guchar *)"";
+				lenvec[0] = 0;
+			}
 
 			for (i = 0; i < task->parts->len; i++) {
 				mime_part = g_ptr_array_index (task->parts, i);
 
 				if (mime_part->raw_headers_str) {
-					scvec[i * 2] = (guchar *)mime_part->raw_headers_str;
-					lenvec[i * 2] = strlen (mime_part->raw_headers_str);
-				}
-				else {
-					scvec[i * 2] = (guchar *)"";
-					lenvec[i * 2] = 0;
-				}
-
-				if (mime_part->content) {
-					scvec[i * 2 + 1] = (guchar *)mime_part->content->data;
-					lenvec[i * 2 + 1] = mime_part->content->len;
+					scvec[i * 2 + 1] = (guchar *)mime_part->raw_headers_str;
+					lenvec[i * 2 + 1] = strlen (mime_part->raw_headers_str);
 				}
 				else {
 					scvec[i * 2 + 1] = (guchar *)"";
 					lenvec[i * 2 + 1] = 0;
 				}
+
+				if (mime_part->content) {
+					scvec[i * 2 + 2] = (guchar *)mime_part->content->data;
+					lenvec[i * 2 + 2] = mime_part->content->len;
+				}
+				else {
+					scvec[i * 2 + 2] = (guchar *)"";
+					lenvec[i * 2 + 2] = 0;
+				}
 			}
 
 			ret = rspamd_re_cache_process_regexp_data (rt, re,
-					task->task_pool, scvec, lenvec, task->parts->len * 2, TRUE);
+					task->task_pool, scvec, lenvec, cnt, TRUE);
 			debug_task ("checking sa body regexp: %s -> %d",
 					rspamd_regexp_get_pattern (re), ret);
 			g_free (scvec);
