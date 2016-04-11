@@ -1617,8 +1617,10 @@ lua_config_register_regexp (lua_State *L)
 		else {
 			type = rspamd_re_cache_type_from_string (type_str);
 
-			if ((type == RSPAMD_RE_HEADER || type == RSPAMD_RE_RAWHEADER)
-					&& header_str == NULL) {
+			if ((type == RSPAMD_RE_HEADER ||
+					type == RSPAMD_RE_RAWHEADER ||
+					type == RSPAMD_RE_MIMEHEADER) &&
+					header_str == NULL) {
 				msg_err_config (
 						"header argument is mandatory for header/rawheader regexps");
 			}

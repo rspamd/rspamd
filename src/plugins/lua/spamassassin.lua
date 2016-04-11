@@ -724,8 +724,9 @@ local function process_sa_conf(f)
         end
 
         if words[1] == 'mimeheader' then
-          cur_rule['ordinary'] = false
           cur_rule['mime'] = true
+        else
+          cur_rule['mime'] = false
         end
 
         if cur_rule['re'] and cur_rule['symbol'] and
@@ -735,27 +736,46 @@ local function process_sa_conf(f)
           if cur_rule['header'] and cur_rule['ordinary'] then
             for i,h in ipairs(cur_rule['header']) do
               if type(h) == 'string' then
-                rspamd_config:register_regexp({
-                  re = cur_rule['re'],
-                  type = 'header',
-                  header = h,
-                  pcre_only = is_pcre_only(cur_rule['symbol']),
-                })
-              else
-                if h['raw'] then
+                if cur_rule['mime'] then
                   rspamd_config:register_regexp({
                     re = cur_rule['re'],
-                    type = 'rawheader',
-                    header = h['header'],
+                    type = 'mimeheader',
+                    header = h,
                     pcre_only = is_pcre_only(cur_rule['symbol']),
                   })
                 else
                   rspamd_config:register_regexp({
                     re = cur_rule['re'],
                     type = 'header',
+                    header = h,
+                    pcre_only = is_pcre_only(cur_rule['symbol']),
+                  })
+                end
+              else
+                h['mime'] = cur_rule[mime]
+                if cur_rule['mime'] then
+                  rspamd_config:register_regexp({
+                    re = cur_rule['re'],
+                    type = 'mimeheader',
                     header = h['header'],
                     pcre_only = is_pcre_only(cur_rule['symbol']),
                   })
+                else
+                  if h['raw'] then
+                    rspamd_config:register_regexp({
+                      re = cur_rule['re'],
+                      type = 'rawheader',
+                      header = h['header'],
+                      pcre_only = is_pcre_only(cur_rule['symbol']),
+                    })
+                  else
+                    rspamd_config:register_regexp({
+                      re = cur_rule['re'],
+                      type = 'header',
+                      header = h['header'],
+                      pcre_only = is_pcre_only(cur_rule['symbol']),
+                    })
+                  end
                 end
               end
             end
