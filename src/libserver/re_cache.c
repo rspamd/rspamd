@@ -467,6 +467,10 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 	gdouble t1, t2;
 	const gdouble slow_time = 0.1;
 
+	if (in == NULL) {
+		return rt->results[id];
+	}
+
 	if (len == 0) {
 		len = strlen (in);
 	}
@@ -605,9 +609,10 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 				in[i],
 				lens[i],
 				is_raw);
+		rt->results[re_id] = ret;
 	}
+
 	setbit (rt->checked, re_id);
-	rt->results[re_id] = ret;
 #else
 	struct rspamd_re_cache_elt *elt;
 	struct rspamd_re_class *re_class;
@@ -624,10 +629,10 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 					in[i],
 					lens[i],
 					is_raw);
+			rt->results[re_id] = ret;
 		}
 
 		setbit (rt->checked, re_id);
-		rt->results[re_id] = ret;
 	}
 	else {
 		for (i = 0; i < count; i ++) {
