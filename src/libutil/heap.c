@@ -21,13 +21,15 @@ struct rspamd_min_heap {
 	GPtrArray *ar;
 };
 
+#define __SWAP(a, b) do { \
+	__typeof__(a) _a = (a); \
+	__typeof__(b) _b = (b); \
+	a = _b; \
+	b = _a; \
+} while (0)
 #define heap_swap(h,e1,e2) do { \
-	gpointer telt = (h)->ar->pdata[(e1)->idx - 1]; \
-	(h)->ar->pdata[(e1)->idx - 1] = (h)->ar->pdata[(e2)->idx - 1]; \
-	(h)->ar->pdata[(e2)->idx - 1] = telt; \
-	guint tidx = (e1)->idx; \
-	(e1)->idx = (e2)->idx; \
-	(e2)->idx = tidx; \
+	__SWAP((h)->ar->pdata[(e1)->idx - 1], (h)->ar->pdata[(e2)->idx - 1]); \
+	__SWAP((e1)->idx, (e2)->idx); \
 } while (0)
 
 #define min_elt(e1, e2) ((e1)->pri <= (e2)->pri ? (e1) : (e2))
