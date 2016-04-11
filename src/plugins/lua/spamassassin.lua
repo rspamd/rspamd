@@ -330,7 +330,8 @@ local function gen_eval_rule(arg)
     {
       'check_for_missing_to_header',
       function (task, remain)
-        if not task:get_recipients('mime') then
+        local th = task:get_recipients('mime')
+        if not th or #th == 0 then
           return 1
         end
 
