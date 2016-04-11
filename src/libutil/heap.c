@@ -150,11 +150,11 @@ rspamd_min_heap_update_elt (struct rspamd_min_heap *heap,
 	oldpri = elt->pri;
 	elt->pri = npri;
 
-	if (oldpri > npri) {
+	if (npri > oldpri) {
 		/* We might need to sink */
 		rspamd_min_heap_sink (heap, elt);
 	}
-	else if (oldpri < npri) {
+	else if (npri < oldpri) {
 		/* We might need to swim */
 		rspamd_min_heap_swim (heap, elt);
 	}
