@@ -21,9 +21,10 @@
  * LRU hashing
  */
 
+static const guint expire_aggressive_count = 10;
+
 struct rspamd_lru_hash_s {
-	gint maxsize;
-	gint maxage;
+	guint maxsize;
 	GDestroyNotify value_destroy;
 	GDestroyNotify key_destroy;
 	struct rspamd_min_heap *heap;
@@ -47,6 +48,19 @@ rspamd_lru_destroy_node (gpointer value)
 	}
 }
 
+static inline guint
+rspamd_lru_priority (guint ttl, guint usages)
+{
+	/* 1 day */
+	static const  guint max_ttl = 3600 * 24;
+
+	if (ttl > 0 && usages > 0) {
+		return G_MAXUINT / (MIN (max_ttl, ttl) * usages);
+	}
+
+	return G_MAXUINT;
+}
+
 static rspamd_lru_element_t *
 rspamd_lru_create_node (rspamd_lru_hash_t *hash,
 	gpointer key,
@@ -62,6 +76,9 @@ rspamd_lru_create_node (rspamd_lru_hash_t *hash,
 	node->ttl = ttl;
 	node->helt.pri = now;
 	node->hash = hash;
+	node->usages = 1;
+	node->storage = now;
+	node->helt.pri = rspamd_lru_priority (ttl, 1);
 
 	return node;
 }
@@ -112,7 +129,8 @@ rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash, gconstpointer key, time_t now)
 			}
 		}
 
-		rspamd_min_heap_update_elt (hash->heap, &res->helt, now);
+		rspamd_min_heap_update_elt (hash->heap, &res->helt,
+				rspamd_lru_priority (res->ttl, ++res->usages));
 
 		return res->data;
 	}
@@ -125,6 +143,7 @@ rspamd_lru_hash_insert (rspamd_lru_hash_t *hash, gpointer key, gpointer value,
 	time_t now, guint ttl)
 {
 	rspamd_lru_element_t *res;
+	guint i;
 
 	res = g_hash_table_lookup (hash->tbl, key);
 	if (res != NULL) {
@@ -132,9 +151,12 @@ rspamd_lru_hash_insert (rspamd_lru_hash_t *hash, gpointer key, gpointer value,
 	}
 	else {
 		if (hash->maxsize > 0 &&
-			(gint)g_hash_table_size (hash->tbl) >= hash->maxsize) {
-			res = (rspamd_lru_element_t *)rspamd_min_heap_pop (hash->heap);
-			g_hash_table_remove (hash->tbl, res->key);
+				g_hash_table_size (hash->tbl) >= hash->maxsize) {
+
+			for (i = 0; i < MIN (hash->maxsize, expire_aggressive_count); i ++) {
+				res = (rspamd_lru_element_t *)rspamd_min_heap_pop (hash->heap);
+				g_hash_table_remove (hash->tbl, res->key);
+			}
 		}
 	}
 

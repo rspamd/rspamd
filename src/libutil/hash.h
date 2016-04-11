@@ -16,6 +16,8 @@ typedef struct rspamd_lru_hash_s rspamd_lru_hash_t;
 typedef struct rspamd_lru_element_s {
 	struct rspamd_min_heap_elt helt;
 	guint ttl;
+	guint usages;
+	time_t storage;
 	gpointer data;
 	gpointer key;
 	rspamd_lru_hash_t *hash;
