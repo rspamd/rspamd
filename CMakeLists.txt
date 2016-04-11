@@ -60,6 +60,7 @@ OPTION(ENABLE_CLANG_PLUGIN "Enable clang static analysing plugin [default: OFF]"
 OPTION(ENABLE_HYPERSCAN    "Enable hyperscan for fast regexp processing [default: OFF]" OFF)
 OPTION(ENABLE_FANN         "Enable fann for neural network plugin [default: OFF]" OFF)
 OPTION(ENABLE_PCRE2        "Enable pcre2 instead of pcre  [default: OFF]"         OFF)
+OPTION(ENABLE_JEMALLOC     "Build rspamd with jemalloc allocator  [default: OFF]" OFF)
 
 INCLUDE(FindArch.cmake)
 TARGET_ARCHITECTURE(ARCH)
@@ -652,6 +653,11 @@ IF(ENABLE_PCRE2 MATCHES "ON")
 ELSE()
 	ProcessPackage(PCRE LIBRARY pcre INCLUDE pcre.h INCLUDE_SUFFIXES include/pcre
 		ROOT ${PCRE_ROOT_DIR} MODULES pcre libpcre pcre3 libpcre3)
+ENDIF()
+IF(ENABLE_JEMALLOC MATCHES "ON")
+	ProcessPackage(JEMALLOC LIBRARY jemalloc INCLUDE jemalloc.h INCLUDE_SUFFIXES include/jemalloc
+		ROOT ${JEMALLOC_ROOT_DIR} MODULES jemalloc)
+	SET(WITH_JEMALLOC "1")
 ENDIF()
 ProcessPackage(GMIME LIBRARY gmime-2.6 gmime-2.4 gmime-2.2 gmime-2 INCLUDE gmime.h INCLUDE_SUFFIXES include/gmime
 	ROOT ${GMIME_ROOT_DIR} MODULES gmime-2.6 gmime-2.4 gmime-2.0)

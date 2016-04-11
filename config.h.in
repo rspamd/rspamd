@@ -122,6 +122,7 @@
 #cmakedefine WITH_GPERF_TOOLS    1
 #cmakedefine WITH_HIREDIS        1
 #cmakedefine WITH_HYPERSCAN      1
+#cmakedefine WITH_JEMALLOC       1
 #cmakedefine WITH_JUDY           1
 #cmakedefine WITH_LUA            1
 #cmakedefine WITH_PCRE2          1
@@ -244,6 +245,10 @@
 #include <stdlib.h>
 #endif
 
+#ifdef WITH_JEMALLOC
+#include <jemalloc.h>
+#endif
+
 /* stdio */
 #ifdef HAVE_STDIO_H
 #include <stdio.h>
@@ -329,5 +334,13 @@ typedef off_t goffset;
 
 extern uint64_t ottery_rand_uint64(void);
 #define UCL_RANDOM_FUNCTION ottery_rand_uint64()
+
+/* Disable slab allocator if jemalloc is already in the system */
+#if defined(WITH_JEMALLOC) || defined(__FreeBSD__) || \
+	(defined(__NetBSD__) && __NetBSD_Version__ >= 500000000)
+	#define g_slice_alloc(sz) g_malloc(sz)
+	#define g_slice_alloc0(sz) g_malloc0(sz)
+	#define g_slice_free1(sz, p) g_free(p)
+#endif
 
 #endif
