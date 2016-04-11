@@ -123,10 +123,17 @@ rspamd_min_heap_pop (struct rspamd_min_heap *heap)
 
 	elt = g_ptr_array_index (heap->ar, 0);
 	last = g_ptr_array_index (heap->ar, heap->ar->len - 1);
-	/* Now replace elt with the last element and sink it if needed */
-	heap_swap (heap, elt, last);
-	g_ptr_array_remove_index_fast (heap->ar, heap->ar->len - 1);
-	rspamd_min_heap_sink (heap, last);
+
+	if (elt != last) {
+		/* Now replace elt with the last element and sink it if needed */
+		heap_swap (heap, elt, last);
+		g_ptr_array_remove_index_fast (heap->ar, heap->ar->len - 1);
+		rspamd_min_heap_sink (heap, last);
+	}
+	else {
+		g_ptr_array_remove_index_fast (heap->ar, heap->ar->len - 1);
+	}
+
 
 	return elt;
 }

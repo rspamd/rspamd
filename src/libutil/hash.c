@@ -146,7 +146,9 @@ rspamd_lru_hash_insert (rspamd_lru_hash_t *hash, gpointer key, gpointer value,
 	guint i;
 
 	res = g_hash_table_lookup (hash->tbl, key);
+
 	if (res != NULL) {
+		rspamd_min_heap_remove_elt (hash->heap, &res->helt);
 		g_hash_table_remove (hash->tbl, key);
 	}
 	else {
@@ -155,7 +157,13 @@ rspamd_lru_hash_insert (rspamd_lru_hash_t *hash, gpointer key, gpointer value,
 
 			for (i = 0; i < MIN (hash->maxsize, expire_aggressive_count); i ++) {
 				res = (rspamd_lru_element_t *)rspamd_min_heap_pop (hash->heap);
-				g_hash_table_remove (hash->tbl, res->key);
+
+				if (res) {
+					g_hash_table_remove (hash->tbl, res->key);
+				}
+				else {
+					break;
+				}
 			}
 		}
 	}
