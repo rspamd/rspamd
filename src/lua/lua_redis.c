@@ -116,7 +116,7 @@ lua_redis_free_args (char **args, guint nargs)
 			g_free (args[i]);
 		}
 
-		g_free (args);
+		g_slice_free1 (sizeof (gchar *) * nargs, args);
 	}
 }
 
@@ -345,7 +345,7 @@ lua_redis_parse_args (lua_State *L, gint idx, const gchar *cmd,
 			lua_pop (L, 1);
 		}
 
-		args = g_malloc ((top + 1) * sizeof (gchar *));
+		args = g_slice_alloc ((top + 1) * sizeof (gchar *));
 		lua_pushnil (L);
 		args[0] = g_strdup (cmd);
 		top = 1;
@@ -361,7 +361,7 @@ lua_redis_parse_args (lua_State *L, gint idx, const gchar *cmd,
 	}
 	else {
 		/* Use merely cmd */
-		args = g_malloc (sizeof (gchar *));
+		args = g_slice_alloc (sizeof (gchar *));
 		args[0] = g_strdup (cmd);
 		top = 1;
 	}
