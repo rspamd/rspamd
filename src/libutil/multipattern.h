@@ -1,0 +1,122 @@
+/*-
+ * Copyright 2016 Vsevolod Stakhov
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#ifndef SRC_LIBUTIL_MULTIPATTERN_H_
+#define SRC_LIBUTIL_MULTIPATTERN_H_
+
+#include "config.h"
+
+/**
+ * @file multipattern.h
+ *
+ * This file defines structure that acts like a transparent bridge between
+ * hyperscan and ac-trie
+ */
+
+enum rspamd_multipattern_flags {
+	RSPAMD_MULTIPATTERN_DEFAULT = 0,
+	RSPAMD_MULTIPATTERN_ICASE = (1 << 0),
+	RSPAMD_MULTIPATTERN_UTF8 = (1 << 1),
+	RSPAMD_MULTIPATTERN_TLD = (1 << 2),
+	/* Not supported by acism */
+	RSPAMD_MULTIPATTERN_GLOB = (1 << 3),
+	RSPAMD_MULTIPATTERN_RE = (1 << 4),
+};
+
+struct rspamd_multipattern;
+
+/**
+ * Called on pattern match
+ * @param mp multipattern structure
+ * @param strnum number of pattern matched
+ * @param textpos position in the text
+ * @param text input text
+ * @param len length of input text
+ * @param context userdata
+ * @return if 0 then search for another pattern, otherwise return this value to caller
+ */
+typedef gint (*rspamd_multipattern_cb_t) (struct rspamd_multipattern *mp,
+		guint strnum,
+		gint textpos,
+		const gchar *text,
+		gsize len,
+		void *context);
+
+/**
+ * Creates empty multipattern structure
+ * @param flags
+ * @return
+ */
+struct rspamd_multipattern *rspamd_multipattern_create (
+		enum rspamd_multipattern_flags flags);
+
+/**
+ * Creates multipattern with preallocated number of patterns to speed up loading
+ * @param flags
+ * @param reserved
+ * @return
+ */
+struct rspamd_multipattern *rspamd_multipattern_create_sized (
+		enum rspamd_multipattern_flags flags, guint reserved);
+
+/**
+ * Creates new multipattern structure
+ * @param patterns vector of null terminated strings
+ * @param npatterns number of patterns
+ * @param flags flags applied to all patterns
+ * @return new multipattern structure
+ */
+struct rspamd_multipattern *rspamd_multipattern_create_full (
+		const gchar **patterns,
+		guint npatterns,
+		enum rspamd_multipattern_flags flags);
+
+/**
+ * Adds new pattern to match engine
+ * @param mp
+ * @param pattern
+ */
+void rspamd_multipattern_add_pattern (struct rspamd_multipattern *mp,
+		const gchar *pattern);
+
+/**
+ * Compiles multipattern structure
+ * @param mp
+ * @return
+ */
+gboolean rspamd_multipattern_compile (struct rspamd_multipattern *mp,
+		GError **err);
+
+/**
+ * Lookups for patterns in a text using the specified callback function
+ * @param mp
+ * @param in
+ * @param len
+ * @param cb if callback returns non-zero, then search is terminated and that value is returned
+ * @param ud calback data
+ * @return
+ */
+gint rspamd_multipattern_lookup (struct rspamd_multipattern *mp,
+		const gchar *in, gsize len, rspamd_multipattern_cb_t cb,
+		gpointer ud, guint *pnfound);
+
+/**
+ * Destroys multipattern structure
+ * @param mp
+ */
+void rspamd_multipattern_destroy (struct rspamd_multipattern *mp);
+
+#endif /* SRC_LIBUTIL_MULTIPATTERN_H_ */
