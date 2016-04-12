@@ -176,7 +176,7 @@ local function handle_header_def(hline, cur_rule)
           return 0
         end
 
-        return task:process_regexp(r['re'], 'allheader')
+        return task:process_regexp(re, 'allheader')
       end
     else
       local args = split(h, '[^:]+')
