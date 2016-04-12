@@ -598,7 +598,7 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 		read_semicolon
 	} state = read_key;
 	gsize keylen = 0, *valuelen, clslen;
-	gint idx;
+	gint idx, t;
 
 	g_assert (extraction_pattern != NULL);
 
@@ -651,12 +651,14 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 				idx = -1;
 			}
 
+			t = lua_type (L, idx);
+
 			switch (g_ascii_toupper (*p)) {
 			case 'S':
-				if (lua_type (L, idx) == LUA_TSTRING) {
+				if (t == LUA_TSTRING) {
 					*(va_arg (ap, const gchar **)) = lua_tostring (L, idx);
 				}
-				else if (lua_type (L, idx) == LUA_TNIL) {
+				else if (t == LUA_TNIL || t == LUA_TNONE) {
 					failed = TRUE;
 					*(va_arg (ap, const gchar **)) = NULL;
 				}
@@ -668,7 +670,7 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 									" %.*s: '%s', '%s' is expected",
 							(gint) keylen,
 							key,
-							lua_typename (L, lua_type (L, -1)), "string");
+							lua_typename (L, lua_type (L, idx)), "string");
 					va_end (ap);
 
 					return FALSE;
@@ -680,10 +682,10 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 				break;
 
 			case 'I':
-				if (lua_type (L, idx) == LUA_TNUMBER) {
+				if (t == LUA_TNUMBER) {
 					*(va_arg (ap, gint64 *)) = lua_tonumber (L, idx);
 				}
-				else if (lua_type (L, idx) == LUA_TNIL) {
+				else if (t == LUA_TNIL || t == LUA_TNONE) {
 					failed = TRUE;
 					*(va_arg (ap,  gint64 *)) = 0;
 				}
@@ -707,14 +709,14 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 				break;
 
 			case 'F':
-				if (lua_type (L, idx) == LUA_TFUNCTION) {
+				if (t == LUA_TFUNCTION) {
 					if (!is_table) {
 						lua_pushvalue (L, idx);
 					}
 
 					*(va_arg (ap, gint *)) = luaL_ref (L, LUA_REGISTRYINDEX);
 				}
-				else if (lua_type (L, idx) == LUA_TNIL) {
+				else if (t == LUA_TNIL || t == LUA_TNONE) {
 					failed = TRUE;
 					*(va_arg (ap,  gint *)) = -1;
 					if (is_table) {
@@ -743,10 +745,10 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 				break;
 
 			case 'B':
-				if (lua_type (L, idx) == LUA_TBOOLEAN) {
-					*(va_arg (ap, gboolean *)) = lua_toboolean (L, -1);
+				if (t == LUA_TBOOLEAN) {
+					*(va_arg (ap, gboolean *)) = lua_toboolean (L, idx);
 				}
-				else if (lua_type (L, idx) == LUA_TNIL) {
+				else if (t == LUA_TNIL || t == LUA_TNONE) {
 					failed = TRUE;
 					*(va_arg (ap,  gboolean *)) = 0;
 				}
@@ -771,10 +773,10 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 				break;
 
 			case 'N':
-				if (lua_type (L, idx) == LUA_TNUMBER) {
+				if (t == LUA_TNUMBER) {
 					*(va_arg (ap, gdouble *)) = lua_tonumber (L, idx);
 				}
-				else if (lua_type (L, idx) == LUA_TNIL) {
+				else if (t == LUA_TNIL || t == LUA_TNONE) {
 					failed = TRUE;
 					*(va_arg (ap,  gdouble *)) = 0;
 				}
@@ -801,11 +803,11 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 			case 'V':
 				valuelen = va_arg (ap, gsize *);
 
-				if (lua_type (L, idx) == LUA_TSTRING) {
+				if (t == LUA_TSTRING) {
 					*(va_arg (ap, const gchar **)) = lua_tolstring (L, idx,
 							valuelen);
 				}
-				else if (lua_type (L, idx) == LUA_TNIL) {
+				else if (t == LUA_TNIL || t == LUA_TNONE) {
 					failed = TRUE;
 					*(va_arg (ap, const char **)) = NULL;
 					*valuelen = 0;
@@ -830,10 +832,10 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 				}
 				break;
 			case 'U':
-				if (lua_type (L, idx) == LUA_TNIL) {
+				if (t == LUA_TNIL || t == LUA_TNONE) {
 					failed = TRUE;
 				}
-				else if (lua_type (L, idx) != LUA_TUSERDATA) {
+				else if (t != LUA_TUSERDATA) {
 					g_set_error (err,
 							lua_error_quark (),
 							1,
@@ -841,7 +843,7 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 									" %.*s: '%s', '%s' is expected",
 							(gint) keylen,
 							key,
-							lua_typename (L, lua_type (L, -1)),
+							lua_typename (L, lua_type (L, idx)),
 							"int64");
 					va_end (ap);
 
@@ -921,13 +923,6 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 				rspamd_snprintf (classbuf, sizeof (classbuf), "rspamd{%*s}",
 						(gint) clslen, cls);
 
-				/*
-				 * Need to go to the previous index as we have increased it in
-				 * the previous state
-				 */
-				if (!is_table) {
-					idx --;
-				}
 
 				/*
 				 * We skip class check here for speed in non-table mode
@@ -952,7 +947,7 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 					}
 				}
 
-				if (!is_table) {
+				if (is_table) {
 					lua_pop (L, 1);
 				}
 				else {
