@@ -1137,36 +1137,52 @@ rspamd_re_cache_type_to_string (enum rspamd_re_type type)
 enum rspamd_re_type
 rspamd_re_cache_type_from_string (const char *str)
 {
-	enum rspamd_re_type ret = RSPAMD_RE_MAX;
+	enum rspamd_re_type ret;
+	guint64 h;
+
+	/*
+	 * To optimize this function, we apply hash to input string and
+	 * pre-select it from the values
+	 */
 
 	if (str != NULL) {
-		if (strcmp (str, "header") == 0) {
+		h = XXH64 (str, strlen (str), 0xdeadbabe);
+
+		switch (h) {
+		case 0x298b9c8a58887d44LLU:
 			ret = RSPAMD_RE_HEADER;
-		}
-		else if (strcmp (str, "rawheader") == 0) {
+			break;
+		case 0x467bfb5cd7ddf890LLU:
 			ret = RSPAMD_RE_RAWHEADER;
-		}
-		else if (strcmp (str, "mime") == 0) {
+			break;
+		case 0xda081341fb600389LLU:
 			ret = RSPAMD_RE_MIME;
-		}
-		else if (strcmp (str, "rawmime") == 0) {
+			break;
+		case 0xc35831e067a8221dLLU:
 			ret = RSPAMD_RE_RAWMIME;
-		}
-		else if (strcmp (str, "body") == 0) {
+			break;
+		case 0xc625e13dbe636de2LLU:
 			ret = RSPAMD_RE_BODY;
-		}
-		else if (strcmp (str, "url") == 0) {
+			break;
+		case 0x286edbe164c791d2LLU:
 			ret = RSPAMD_RE_URL;
-		}
-		else if (strcmp (str, "allheader") == 0) {
+			break;
+		case 0x796d62205a8778c7LLU:
 			ret = RSPAMD_RE_ALLHEADER;
-		}
-		else if (strcmp (str, "mimeheader") == 0) {
+			break;
+		case 0xa3c6c153b3b00a5eLLU:
 			ret = RSPAMD_RE_MIMEHEADER;
-		}
-		else if (strcmp (str, "sabody") == 0) {
+			break;
+		case 0x7794501506e604e9LLU:
 			ret = RSPAMD_RE_SABODY;
+			break;
+		default:
+			ret = RSPAMD_RE_MAX;
+			break;
 		}
+	}
+	else {
+		ret = RSPAMD_RE_MAX;
 	}
 
 	return ret;
