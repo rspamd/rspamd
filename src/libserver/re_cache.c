@@ -481,9 +481,9 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 
 	r = rt->results[id];
 
-	t1 = rspamd_get_ticks ();
-
 	if (max_hits == 0 || r < max_hits) {
+		t1 = rspamd_get_ticks ();
+
 		while (rspamd_regexp_search (re,
 				in,
 				len,
@@ -505,13 +505,13 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 		if (r > 0) {
 			rt->stat.regexp_matched += r;
 		}
-	}
 
-	t2 = rspamd_get_ticks ();
+		t2 = rspamd_get_ticks ();
 
-	if (t2 - t1 > slow_time) {
-		msg_info_pool ("regexp '%16s' took %.2f seconds to execute",
-				rspamd_regexp_get_pattern (re), t2 - t1);
+		if (t2 - t1 > slow_time) {
+			msg_info_pool ("regexp '%16s' took %.2f seconds to execute",
+					rspamd_regexp_get_pattern (re), t2 - t1);
+		}
 	}
 
 	return r;
