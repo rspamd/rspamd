@@ -922,7 +922,8 @@ rspamd_ast_node_done (struct rspamd_expression_elt *elt,
 }
 
 static gint
-rspamd_ast_do_op (struct rspamd_expression_elt *elt, gint val, gint acc, gint lim)
+rspamd_ast_do_op (struct rspamd_expression_elt *elt, gint val,
+		gint acc, gint lim, gboolean first_elt)
 {
 	gint ret = val;
 
@@ -936,23 +937,23 @@ rspamd_ast_do_op (struct rspamd_expression_elt *elt, gint val, gint acc, gint li
 		ret = acc + val;
 		break;
 	case OP_GE:
-		ret = acc >= lim;
+		ret = first_elt ? (val >= lim) : (acc >= lim);
 		break;
 	case OP_GT:
-		ret = acc > lim;
+		ret = first_elt ? (val > lim) : (acc > lim);
 		break;
 	case OP_LE:
-		ret = acc <= lim;
+		ret = first_elt ? (val <= lim) : (acc <= lim);
 		break;
 	case OP_LT:
-		ret = acc < lim;
+		ret = first_elt ? (val < lim) : (acc < lim);
 		break;
 	case OP_MULT:
 	case OP_AND:
-		ret = acc && val;
+		ret = first_elt ? (val) : (acc && val);
 		break;
 	case OP_OR:
-		ret = acc || val;
+		ret = first_elt ? (val) : (acc || val);
 		break;
 	default:
 		g_assert (0);
@@ -1040,10 +1041,11 @@ rspamd_ast_process_node (struct rspamd_expression *expr, gint flags, GNode *node
 			val = rspamd_ast_process_node (expr, flags, cld, data, track);
 
 			if (acc == G_MININT) {
-				acc = val;
+				acc = rspamd_ast_do_op (elt, val, 0, lim, TRUE);
 			}
-
-			acc = rspamd_ast_do_op (elt, val, acc, lim);
+			else {
+				acc = rspamd_ast_do_op (elt, val, acc, lim, FALSE);
+			}
 
 			if (!(flags & RSPAMD_EXPRESSION_FLAG_NOOPT)) {
 				if (rspamd_ast_node_done (elt, parelt, acc, lim)) {
