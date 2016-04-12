@@ -176,10 +176,7 @@ local function handle_header_def(hline, cur_rule)
           return 0
         end
 
-        return task:process_regexp({
-          re = re,
-          type = 'allheader'
-        })
+        return task:process_regexp(r['re'], 'allheader')
       end
     else
       local args = split(h, '[^:]+')
@@ -1169,13 +1166,7 @@ local function post_process()
           return 0
         end
 
-        local ret = task:process_regexp({
-          re = r['re'],
-          type = t,
-          strong = h['strong'],
-          header = h['header'],
-          raw = h['raw'],
-        })
+        local ret = task:process_regexp(r['re'], t, h['header'], h['strong'])
 
         if r['not'] then
           if ret ~= 0 then
@@ -1304,10 +1295,7 @@ local function post_process()
       local t = 'mime'
       if r['raw'] then t = 'rawmime' end
 
-      return task:process_regexp({
-        re = r['re'],
-        type = t,
-      })
+      return task:process_regexp(r['re'], t)
     end
     if r['score'] then
       local real_score = r['score'] * calculate_score(k, r)
@@ -1331,10 +1319,8 @@ local function post_process()
       end
 
       local t = 'sabody'
-      local ret = task:process_regexp({
-        re = r['re'],
-        type = t,
-      })
+
+      local ret = task:process_regexp(r['re'], t)
       return ret
     end
     if r['score'] then
@@ -1358,10 +1344,7 @@ local function post_process()
         return 0
       end
 
-      return task:process_regexp({
-        re = r['re'],
-        type = 'body',
-      })
+      return task:process_regexp(r['re'], 'body')
     end
     if r['score'] then
       local real_score = r['score'] * calculate_score(k, r)
@@ -1385,10 +1368,7 @@ local function post_process()
         return 0
       end
 
-      return task:process_regexp({
-        re = r['re'],
-        type = 'url',
-      })
+      return task:process_regexp(r['re'], 'url')
     end
     if r['score'] then
       local real_score = r['score'] * calculate_score(k, r)
