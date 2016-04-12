@@ -15,7 +15,8 @@
  */
 
 #include "config.h"
-#include "multipattern.h"
+#include "libutil/multipattern.h"
+#include "libutil/str_util.h"
 
 #ifdef WITH_HYPERSCAN
 #include "hs.h"
@@ -45,6 +46,275 @@ rspamd_multipattern_quark (void)
 	return g_quark_from_static_string ("multipattern");
 }
 
+#ifdef WITH_HYPERSCAN
+static gchar *
+rspamd_multipattern_escape_tld_hyperscan (const gchar *pattern)
+{
+	gsize len, slen;
+	const gchar *p, *prefix;
+	gchar *res;
+
+	/*
+	 * We understand the following cases
+	 * 1) blah -> \\.blah
+	 * 2) *.blah -> \\..*\\.blah
+	 * 3) ???
+	 */
+	slen = strlen (pattern);
+
+	if (pattern[0] == '*') {
+		len = slen + 4;
+		p = strchr (pattern, '.');
+
+		if (p == NULL) {
+			/* XXX: bad */
+			p = pattern;
+		}
+		else {
+			p ++;
+		}
+
+		prefix = "\\..*\\.";
+	}
+	else {
+		len = slen + 2;
+		prefix = "\\.";
+		p = pattern;
+	}
+
+	res = g_malloc (len + 1);
+	slen = rspamd_strlcpy (res, prefix, len + 1);
+	rspamd_strlcpy (res + slen, p, len + 1 - slen);
+
+	return res;
+}
+
+static gchar *
+rspamd_multipattern_escape_generic_hyperscan (const gchar *pattern)
+{
+	const gchar *p;
+	gchar *res, *d, t;
+	gsize len, slen;
+
+	slen = strlen (pattern);
+	len = slen;
+
+	p = pattern;
+
+	/* [-[\]{}()*+?.,\\^$|#\s] need to be escaped */
+	while (*p) {
+		t = *p ++;
+
+		switch (t) {
+		case '[':
+		case ']':
+		case '-':
+		case '\\':
+		case '{':
+		case '}':
+		case '(':
+		case ')':
+		case '*':
+		case '+':
+		case '?':
+		case '.':
+		case ',':
+		case '^':
+		case '$':
+		case '|':
+		case '#':
+			len ++;
+			break;
+		default:
+			if (g_ascii_isspace (t)) {
+				len ++;
+			}
+			break;
+		}
+	}
+
+	if (slen == len) {
+		return g_strdup (pattern);
+	}
+
+	res = g_malloc (len + 1);
+	p = pattern;
+	d = res;
+
+	while (*p) {
+		t = *p ++;
+
+		switch (t) {
+		case '[':
+		case ']':
+		case '-':
+		case '\\':
+		case '{':
+		case '}':
+		case '(':
+		case ')':
+		case '*':
+		case '+':
+		case '?':
+		case '.':
+		case ',':
+		case '^':
+		case '$':
+		case '|':
+		case '#':
+			*d++ = '\\';
+			break;
+		default:
+			if (g_ascii_isspace (t)) {
+				*d++ = '\\';
+			}
+			break;
+		}
+
+		*d++ = t;
+	}
+
+	*d = '\0';
+
+	return res;
+}
+
+static gchar *
+rspamd_multipattern_escape_glob_hyperscan (const gchar *pattern)
+{
+	const gchar *p;
+	gchar *res, *d, t;
+	gsize len, slen;
+
+	slen = strlen (pattern);
+	len = slen;
+
+	p = pattern;
+
+	/* [-[\]{}()*+?.,\\^$|#\s] need to be escaped */
+	while (*p) {
+		t = *p ++;
+
+		switch (t) {
+		case '[':
+		case ']':
+		case '-':
+		case '\\':
+		case '{':
+		case '}':
+		case '(':
+		case ')':
+		case '*':
+		case '+':
+		case '?':
+		case '.':
+		case ',':
+		case '^':
+		case '$':
+		case '|':
+		case '#':
+			len ++;
+			break;
+		default:
+			if (g_ascii_isspace (t)) {
+				len ++;
+			}
+			break;
+		}
+	}
+
+	if (slen == len) {
+		return g_strdup (pattern);
+	}
+
+	res = g_malloc (len + 1);
+	p = pattern;
+	d = res;
+
+	while (*p) {
+		t = *p ++;
+
+		switch (t) {
+		case '[':
+		case ']':
+		case '-':
+		case '\\':
+		case '{':
+		case '}':
+		case '(':
+		case ')':
+		case '+':
+		case '.':
+		case ',':
+		case '^':
+		case '$':
+		case '|':
+		case '#':
+			*d++ = '\\';
+			break;
+		case '*':
+		case '?':
+			/* Treat * as .* and ? as .? */
+			*d++ = '.';
+			break;
+		default:
+			if (g_ascii_isspace (t)) {
+				*d++ = '\\';
+			}
+			break;
+		}
+
+		*d++ = t;
+	}
+
+	*d = '\0';
+
+	return res;
+}
+
+#else
+static gchar *
+rspamd_multipattern_escape_tld_acism (const gchar *pattern)
+{
+	gsize len, slen;
+	const gchar *p, *prefix;
+	gchar *res;
+
+	/*
+	 * We understand the following cases
+	 * 1) blah -> \\.blah
+	 * 2) *.blah -> \\..*\\.blah
+	 * 3) ???
+	 */
+	slen = strlen (pattern);
+
+	if (pattern[0] == '*') {
+		len = slen;
+		p = strchr (pattern, '.');
+
+		if (p == NULL) {
+			/* XXX: bad */
+			p = pattern;
+		}
+		else {
+			p ++;
+		}
+
+		prefix = ".";
+	}
+	else {
+		len = slen + 1;
+		prefix = ".";
+		p = pattern;
+	}
+
+	res = g_malloc (len + 1);
+	slen = rspamd_strlcpy (res, prefix, len + 1);
+	rspamd_strlcpy (res + slen, p, len + 1 - slen);
+
+	return res;
+}
+#endif
 /*
  * Escapes special characters from specific pattern
  */
@@ -52,10 +322,25 @@ static gchar *
 rspamd_multipattern_pattern_filter (const gchar *pattern,
 		enum rspamd_multipattern_flags flags)
 {
-	/*
-	 * TODO: implement patterns filtering
-	 */
-	return strdup (pattern);
+#ifdef WITH_HYPERSCAN
+	if (flags & RSPAMD_MULTIPATTERN_TLD) {
+		return rspamd_multipattern_escape_tld_hyperscan (pattern);
+	}
+	else if (flags & RSPAMD_MULTIPATTERN_RE) {
+		return g_strdup (pattern);
+	}
+	else if (flags & RSPAMD_MULTIPATTERN_GLOB) {
+		return rspamd_multipattern_escape_glob_hyperscan (pattern);
+	}
+
+	return rspamd_multipattern_escape_generic_hyperscan (pattern);
+#else
+	if (flags & RSPAMD_MULTIPATTERN_TLD) {
+		return rspamd_multipattern_escape_tld_acism (pattern);
+	}
+
+	return g_strdup (pattern);
+#endif
 }
 
 struct rspamd_multipattern *
