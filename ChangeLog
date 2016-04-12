@@ -1,3 +1,55 @@
+1.2.3:
+	* New DCC module (by @smfreegard)
+	* Rework whitelist module:
+		- Now we check different elements for different checks
+		- MIME from for DMARC
+		- DKIM signature domain for DKIM
+		- SMTP from or HELO for SPF
+	* Fix regexps results combination (*critical*)
+	* Fix issue with expressions processing (*critical*)
+	* Optimize strlcpy for aligned input
+	* Add support of half-closed connection in lua_tcp
+	* Allow to print compact json in client
+	* Save required score in history (#581)
+	* Allow to attach file descriptors to control commands
+	* Allow to send descriptors from workers to main
+	* Allow to attach fd when broadcasting to workers
+	* Implement log pipe feature for rspamd logs analysis
+	* Add `log_helper` worker
+	* Add `URIBL_SBL_CSS` (by @smfreegard)
+	* Add worker scripts functionality
+	* Add on load hooks for rspamd_config
+	* Add lua scripts for log_helper worker
+	* Add generic maillist detector (#584)
+	* Implement FANN autolearn using log_helper worker
+	* Rework metrics configuration to allow includes
+	* Change default value of forced removal in composite rules
+	* Allow to use assembly version of blake2b on x86 cpu
+	* Use less precise (but faster) clock if possible
+	* Insert redirected URL to the urls list
+	* Allow to get and set callback data for rspamd symbols
+	* Add binary heap implementation
+	* Use binary heap for expire algorithms in the hash
+	* Use `least frequent used` expiration strategy
+	* Allow to get mime headers from a task
+	* Add support for mime headers in `regexp` module
+	* Update Exim patches (by @fatalbanana)
+	* Allow building rspamd with jemalloc
+	* Save multipart boundaries
+	* SA plugin changes:
+		- Properly handle MIME headers
+		- Fix eval:check_for_missing_to_header rule
+		- Implement SA compatible body regexps
+		- Use sabody rules in SA plugin
+	* LUA API changes:
+		- Add util.get_ticks function
+		- Add util.stat function
+		- Add task:get_symbols_numeric method
+		- Add method to get number of symbols in the cache
+		- Add lua methods to get redirected urls
+		- Allow to get callbacks for lua symbols
+		- Add config:set_symbol_callback function
+
 1.2.2:
 	* Use HTTP Content-Type on non mime input if possible
 	* Save log level when compressing log messages
