@@ -112,6 +112,21 @@ gboolean rspamd_multipattern_compile (struct rspamd_multipattern *mp,
 gint rspamd_multipattern_lookup (struct rspamd_multipattern *mp,
 		const gchar *in, gsize len, rspamd_multipattern_cb_t cb,
 		gpointer ud, guint *pnfound);
+/**
+ * Get pattern string from multipattern identified by index
+ * @param mp
+ * @param index
+ * @return
+ */
+const gchar* rspamd_multipattern_get_pattern (struct rspamd_multipattern *mp,
+		guint index);
+
+/**
+ * Returns number of patterns in a multipattern matcher
+ * @param mp
+ * @return
+ */
+guint rspamd_multipattern_get_npatterns (struct rspamd_multipattern *mp);
 
 /**
  * Destroys multipattern structure

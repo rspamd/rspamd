@@ -611,3 +611,30 @@ rspamd_multipattern_destroy (struct rspamd_multipattern *mp)
 		g_slice_free1 (sizeof (*mp), mp);
 	}
 }
+
+const gchar*
+rspamd_multipattern_get_pattern (struct rspamd_multipattern *mp,
+		guint index)
+{
+	g_assert (mp != NULL);
+	g_assert (index < mp->cnt);
+
+#ifdef WITH_HYPERSCAN
+	return g_array_index (mp->hs_pats, gchar *, index);
+#else
+
+	ac_trie_pat_t pat;
+
+	pat = g_array_index (mp->pats, ac_trie_pat_t, index);
+
+	return pat.ptr;
+#endif
+}
+
+guint
+rspamd_multipattern_get_npatterns (struct rspamd_multipattern *mp)
+{
+	g_assert (mp != NULL);
+
+	return mp->cnt;
+}
