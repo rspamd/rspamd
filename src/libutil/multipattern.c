@@ -368,8 +368,6 @@ rspamd_multipattern_create_sized (guint npatterns,
 {
 	struct rspamd_multipattern *mp;
 
-	g_assert (npatterns > 0);
-
 	mp = g_slice_alloc0 (sizeof (*mp));
 	mp->flags = flags;
 
@@ -449,29 +447,33 @@ rspamd_multipattern_compile (struct rspamd_multipattern *mp, GError **err)
 	hs_platform_info_t plt;
 	hs_compile_error_t *hs_errors;
 
-	g_assert (hs_populate_platform (&plt) == HS_SUCCESS);
+	if (mp->cnt > 0) {
+		g_assert (hs_populate_platform (&plt) == HS_SUCCESS);
 
-	if (hs_compile_multi ((const char *const *)mp->hs_pats->data,
-			(const unsigned int *)mp->hs_flags->data,
-			(const unsigned int *)mp->hs_ids->data,
-			mp->cnt,
-			HS_MODE_BLOCK,
-			&plt,
-			&mp->db,
-			&hs_errors) != HS_SUCCESS) {
+		if (hs_compile_multi ((const char *const *)mp->hs_pats->data,
+				(const unsigned int *)mp->hs_flags->data,
+				(const unsigned int *)mp->hs_ids->data,
+				mp->cnt,
+				HS_MODE_BLOCK,
+				&plt,
+				&mp->db,
+				&hs_errors) != HS_SUCCESS) {
 
-		g_set_error (err, rspamd_multipattern_quark (), EINVAL,
-				"cannot create tree of regexp when processing '%s': %s",
-				g_array_index (mp->hs_pats, char *, hs_errors->expression),
-				hs_errors->message);
-		hs_free_compile_error (hs_errors);
+			g_set_error (err, rspamd_multipattern_quark (), EINVAL,
+					"cannot create tree of regexp when processing '%s': %s",
+					g_array_index (mp->hs_pats, char *, hs_errors->expression),
+					hs_errors->message);
+			hs_free_compile_error (hs_errors);
 
-		return FALSE;
+			return FALSE;
+		}
+
+		g_assert (hs_alloc_scratch (mp->db, &mp->scratch) == HS_SUCCESS);
 	}
-
-	g_assert (hs_alloc_scratch (mp->db, &mp->scratch) == HS_SUCCESS);
 #else
-	mp->t = acism_create (mp->pats->data, mp->cnt);
+	if (mp->cnt > 0) {
+		mp->t = acism_create (mp->pats->data, mp->cnt);
+	}
 #endif
 	mp->compiled = TRUE;
 
@@ -533,6 +535,10 @@ rspamd_multipattern_lookup (struct rspamd_multipattern *mp,
 	g_assert (mp != NULL);
 	g_assert (mp->compiled);
 
+	if (mp->cnt == 0) {
+		return 0;
+	}
+
 	cbd.mp = mp;
 	cbd.in = in;
 	cbd.len = len;
@@ -575,7 +581,7 @@ rspamd_multipattern_destroy (struct rspamd_multipattern *mp)
 #ifdef WITH_HYPERSCAN
 		gchar *p;
 
-		if (mp->compiled) {
+		if (mp->compiled && mp->cnt > 0) {
 			hs_free_scratch (mp->scratch);
 			hs_free_database (mp->db);
 		}
@@ -591,7 +597,7 @@ rspamd_multipattern_destroy (struct rspamd_multipattern *mp)
 #else
 		ac_trie_pat_t pat;
 
-		if (mp->compiled) {
+		if (mp->compiled && mp->cnt > 0) {
 			acism_destroy (mp->t);
 		}
 
