@@ -392,7 +392,7 @@ rspamd_multipattern_add_pattern (struct rspamd_multipattern *mp,
 
 #ifdef WITH_HYPERSCAN
 	gchar *np;
-	gint fl = 0;
+	gint fl = HS_FLAG_SOM_LEFTMOST;
 
 	if (mp->flags & RSPAMD_MULTIPATTERN_ICASE) {
 		fl |= HS_FLAG_CASELESS;
@@ -501,7 +501,7 @@ rspamd_multipattern_hs_cb (unsigned int id,
 	struct rspamd_multipattern_cbdata *cbd = ud;
 	gint ret;
 
-	ret = cbd->cb (cbd->mp, id, to, cbd->in, cbd->len, cbd->ud);
+	ret = cbd->cb (cbd->mp, id, from, to, cbd->in, cbd->len, cbd->ud);
 
 	cbd->nfound ++;
 	cbd->ret = ret;
@@ -514,8 +514,11 @@ rspamd_multipattern_acism_cb (int strnum, int textpos, void *context)
 {
 	struct rspamd_multipattern_cbdata *cbd = context;
 	gint ret;
+	ac_trie_pat_t pat;
 
-	ret = cbd->cb (cbd->mp, strnum, textpos, cbd->in, cbd->len, cbd->ud);
+	pat = g_array_index (cbd->mp->pats, ac_trie_pat_t, strnum);
+	ret = cbd->cb (cbd->mp, strnum, textpos - pat.len,
+			textpos, cbd->in, cbd->len, cbd->ud);
 
 	cbd->nfound ++;
 	cbd->ret = ret;

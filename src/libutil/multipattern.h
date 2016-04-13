@@ -50,7 +50,8 @@ struct rspamd_multipattern;
  */
 typedef gint (*rspamd_multipattern_cb_t) (struct rspamd_multipattern *mp,
 		guint strnum,
-		gint textpos,
+		gint match_start,
+		gint match_pos,
 		const gchar *text,
 		gsize len,
 		void *context);
