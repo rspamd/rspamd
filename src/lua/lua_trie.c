@@ -140,6 +140,7 @@ lua_trie_create (lua_State *L)
 static gint
 lua_trie_callback (struct rspamd_multipattern *mp,
 		guint strnum,
+		gint match_start,
 		gint textpos,
 		const gchar *text,
 		gsize len,
