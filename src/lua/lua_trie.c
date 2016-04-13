@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 #include "lua_common.h"
-#include "acism.h"
 #include "message.h"
+#include "libutil/multipattern.h"
 
 /***
  * @module rspamd_trie
@@ -57,22 +57,22 @@ static const struct luaL_reg trielib_f[] = {
 	{NULL, NULL}
 };
 
-static ac_trie_t *
+static struct rspamd_multipattern *
 lua_check_trie (lua_State * L, gint idx)
 {
 	void *ud = luaL_checkudata (L, 1, "rspamd{trie}");
 
 	luaL_argcheck (L, ud != NULL, 1, "'trie' expected");
-	return ud ? *((ac_trie_t **)ud) : NULL;
+	return ud ? *((struct rspamd_multipattern **)ud) : NULL;
 }
 
 static gint
 lua_trie_destroy (lua_State *L)
 {
-	ac_trie_t *trie = lua_check_trie (L, 1);
+	struct rspamd_multipattern *trie = lua_check_trie (L, 1);
 
 	if (trie) {
-		acism_destroy (trie);
+		rspamd_multipattern_destroy (trie);
 	}
 
 	return 0;
@@ -87,10 +87,9 @@ lua_trie_destroy (lua_State *L)
 static gint
 lua_trie_create (lua_State *L)
 {
-	ac_trie_t *trie, **ptrie;
-	ac_trie_pat_t *pat;
+	struct rspamd_multipattern *trie, **ptrie;
 	gint npat = 0;
-	gsize sz;
+	GError *err = NULL;
 
 	if (!lua_istable (L, 1)) {
 		msg_err ("lua trie expects array of patterns for now");
@@ -104,49 +103,50 @@ lua_trie_create (lua_State *L)
 			if (lua_isstring (L, -1)) {
 				npat ++;
 			}
+
 			lua_pop (L, 1);
 		}
 
-		pat = g_new (ac_trie_pat_t, npat);
+		trie = rspamd_multipattern_create_sized (npat,
+				RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_GLOB);
 		lua_pushnil (L);
 
-		npat = 0;
 		while (lua_next (L, -2) != 0) {
 			if (lua_isstring (L, -1)) {
-				pat[npat].ptr = lua_tolstring (L, -1, &sz);
-				pat[npat].len = sz;
-				npat ++;
+				rspamd_multipattern_add_pattern (trie, lua_tostring (L, -1));
 			}
+
 			lua_pop (L, 1);
 		}
 
 		lua_pop (L, 1); /* table */
 
-		trie = acism_create (pat, npat);
-		ptrie = lua_newuserdata (L, sizeof (ac_trie_t *));
-		rspamd_lua_setclass (L, "rspamd{trie}", -1);
-		*ptrie = trie;
-
-		g_free (pat);
+		if (!rspamd_multipattern_compile (trie, &err)) {
+			msg_err ("cannot compile multipattern: %e", err);
+			g_error_free (err);
+			rspamd_multipattern_destroy (trie);
+			lua_pushnil (L);
+		}
+		else {
+			ptrie = lua_newuserdata (L, sizeof (void *));
+			rspamd_lua_setclass (L, "rspamd{trie}", -1);
+			*ptrie = trie;
+		}
 	}
 
 	return 1;
 }
 
-struct lua_trie_cbdata {
-	gboolean found;
-	lua_State *L;
-};
-
 static gint
-lua_trie_callback (int strnum, int textpos, void *context)
+lua_trie_callback (struct rspamd_multipattern *mp,
+		guint strnum,
+		gint textpos,
+		const gchar *text,
+		gsize len,
+		void *context)
 {
-	struct lua_trie_cbdata *cb = context;
-	lua_State *L;
+	lua_State *L = context;
 	gint ret;
-
-	L = cb->L;
-	cb->found = TRUE;
 
 	/* Function */
 	lua_pushvalue (L, 3);
@@ -171,23 +171,15 @@ lua_trie_callback (int strnum, int textpos, void *context)
  * We assume that callback argument is at pos 3 and icase is in position 4
  */
 static gint
-lua_trie_search_str (lua_State *L, ac_trie_t *trie, const gchar *str, gsize len,
-		gint *statep)
+lua_trie_search_str (lua_State *L, struct rspamd_multipattern *trie,
+		const gchar *str, gsize len)
 {
-	struct lua_trie_cbdata cb;
-	gboolean icase = FALSE;
 	gint ret;
+	guint nfound = 0;
 
-	if (lua_gettop (L) == 4) {
-		icase = lua_toboolean (L, 4);
-	}
-
-	cb.L = L;
-	cb.found = FALSE;
-
-	if ((ret = acism_lookup (trie, str, len,
-			lua_trie_callback, &cb, statep, icase)) == 0) {
-		return cb.found;
+	if ((ret = rspamd_multipattern_lookup (trie, str, len,
+			lua_trie_callback, L, &nfound)) == 0) {
+		return nfound;
 	}
 
 	return ret;
@@ -204,9 +196,8 @@ lua_trie_search_str (lua_State *L, ac_trie_t *trie, const gchar *str, gsize len,
 static gint
 lua_trie_match (lua_State *L)
 {
-	ac_trie_t *trie = lua_check_trie (L, 1);
+	struct rspamd_multipattern *trie = lua_check_trie (L, 1);
 	const gchar *text;
-	gint state = 0;
 	gsize len;
 	gboolean found = FALSE;
 
@@ -219,7 +210,7 @@ lua_trie_match (lua_State *L)
 				if (lua_isstring (L, -1)) {
 					text = lua_tolstring (L, -1, &len);
 
-					if (lua_trie_search_str (L, trie, text, len, &state)) {
+					if (lua_trie_search_str (L, trie, text, len)) {
 						found = TRUE;
 					}
 				}
@@ -231,7 +222,7 @@ lua_trie_match (lua_State *L)
 		else if (lua_type (L, 2) == LUA_TSTRING) {
 			text = lua_tolstring (L, 2, &len);
 
-			if (lua_trie_search_str (L, trie, text, len, &state)) {
+			if (lua_trie_search_str (L, trie, text, len)) {
 				found = TRUE;
 			}
 		}
@@ -252,11 +243,10 @@ lua_trie_match (lua_State *L)
 static gint
 lua_trie_search_mime (lua_State *L)
 {
-	ac_trie_t *trie = lua_check_trie (L, 1);
+	struct rspamd_multipattern *trie = lua_check_trie (L, 1);
 	struct rspamd_task *task = lua_check_task (L, 2);
 	struct mime_text_part *part;
 	const gchar *text;
-	gint state = 0;
 	gsize len, i;
 	gboolean found = FALSE;
 
@@ -268,7 +258,7 @@ lua_trie_search_mime (lua_State *L)
 				text = part->content->data;
 				len = part->content->len;
 
-				if (lua_trie_search_str (L, trie, text, len, &state) != 0) {
+				if (lua_trie_search_str (L, trie, text, len) != 0) {
 					found = TRUE;
 				}
 			}
@@ -290,10 +280,9 @@ lua_trie_search_mime (lua_State *L)
 static gint
 lua_trie_search_rawmsg (lua_State *L)
 {
-	ac_trie_t *trie = lua_check_trie (L, 1);
+	struct rspamd_multipattern *trie = lua_check_trie (L, 1);
 	struct rspamd_task *task = lua_check_task (L, 2);
 	const gchar *text;
-	gint state = 0;
 	gsize len;
 	gboolean found = FALSE;
 
@@ -301,7 +290,7 @@ lua_trie_search_rawmsg (lua_State *L)
 		text = task->msg.begin;
 		len = task->msg.len;
 
-		if (lua_trie_search_str (L, trie, text, len, &state) != 0) {
+		if (lua_trie_search_str (L, trie, text, len) != 0) {
 			found = TRUE;
 		}
 	}
