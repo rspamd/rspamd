@@ -454,6 +454,19 @@ lua_url_to_table (lua_State *L)
 	return 1;
 }
 
+static void
+lua_url_single_inserter (struct rspamd_url *url, gsize start_offset,
+		gsize end_offset, gpointer ud)
+{
+	lua_State *L = ud;
+	struct rspamd_lua_url *lua_url;
+
+	lua_url = lua_newuserdata (L, sizeof (struct rspamd_lua_url));
+	rspamd_lua_setclass (L, "rspamd{url}", -1);
+	lua_url->url = url;
+}
+
+
 /***
  * @function url.create(mempool, str)
  * @param {rspamd_mempool} memory pool for URL, e.g. `task:get_mempool()`
@@ -463,48 +476,9 @@ lua_url_to_table (lua_State *L)
 static gint
 lua_url_create (lua_State *L)
 {
-	struct rspamd_url *url;
-	struct rspamd_lua_url *lua_url;
 	rspamd_mempool_t *pool = rspamd_lua_check_mempool (L, 1);
 	const gchar *text;
-
-	if (pool == NULL) {
-		lua_pushnil (L);
-	}
-	else {
-		text = luaL_checkstring (L, 2);
-
-		if (text != NULL) {
-			url = rspamd_url_get_next (pool, text, NULL, NULL);
-
-			if (url == NULL) {
-				lua_pushnil (L);
-			}
-			else {
-				lua_url = lua_newuserdata (L, sizeof (struct rspamd_lua_url));
-				rspamd_lua_setclass (L, "rspamd{url}", -1);
-				lua_url->url = url;
-			}
-		}
-		else {
-			lua_pushnil (L);
-		}
-	}
-
-
-	return 1;
-}
-
-static gint
-lua_url_all (lua_State *L)
-{
-	struct rspamd_url *url;
-	struct rspamd_lua_url *lua_url;
-	rspamd_mempool_t *pool = rspamd_lua_check_mempool (L, 1);
-	const gchar *text,*end;
-	gint i = 1;
 	size_t length;
-	const gchar *pos;
 
 	if (pool == NULL) {
 		lua_pushnil (L);
@@ -513,25 +487,9 @@ lua_url_all (lua_State *L)
 		text = luaL_checklstring (L, 2, &length);
 
 		if (text != NULL) {
-			pos = text;
-			end = text + length;
 			lua_newtable (L);
-
-			while (pos <= end) {
-				url = rspamd_url_get_next (pool, text, &pos, NULL);
-
-				if (url != NULL) {
-					lua_url = lua_newuserdata (L, sizeof (struct rspamd_lua_url));
-					rspamd_lua_setclass (L, "rspamd{url}", -1);
-					lua_url->url = url;
-					lua_pushinteger (L, i++);
-					lua_pushlstring (L, url->string, url->urllen);
-					lua_settable (L, -3);
-				}
-				else{
-					break;
-				}
-			}
+			rspamd_url_find_single (pool, text, length, FALSE,
+					lua_url_single_inserter, L);
 
 		}
 		else {
@@ -539,9 +497,52 @@ lua_url_all (lua_State *L)
 		}
 	}
 
+	return 1;
+}
+
+static void
+lua_url_table_inserter (struct rspamd_url *url, gsize start_offset,
+		gsize end_offset, gpointer ud)
+{
+	lua_State *L = ud;
+	struct rspamd_lua_url *lua_url;
+	gint n;
+
+	n = rspamd_lua_table_size (L, -1);
+	lua_url = lua_newuserdata (L, sizeof (struct rspamd_lua_url));
+	rspamd_lua_setclass (L, "rspamd{url}", -1);
+	lua_url->url = url;
+	lua_pushinteger (L, n + 1);
+	lua_pushlstring (L, url->string, url->urllen);
+	lua_settable (L, -3);
+}
+
+
+static gint
+lua_url_all (lua_State *L)
+{
+	rspamd_mempool_t *pool = rspamd_lua_check_mempool (L, 1);
+	const gchar *text;
+	size_t length;
+
+	if (pool == NULL) {
+		lua_pushnil (L);
+	}
+	else {
+		text = luaL_checklstring (L, 2, &length);
+
+		if (text != NULL) {
+			lua_newtable (L);
+			rspamd_url_find_multiple (pool, text, length, FALSE,
+					lua_url_table_inserter, L);
+
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
 
 	return 1;
-
 }
 
 
