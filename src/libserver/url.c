@@ -1947,6 +1947,7 @@ url_email_end (struct url_callback_data *cb,
 		return TRUE;
 	}
 	else {
+#ifndef WITH_HYPERSCAN
 		/*
 		 * Here we have just '@', so we need to find both start and end of the
 		 * pattern
@@ -1990,6 +1991,9 @@ url_email_end (struct url_callback_data *cb,
 			match->m_len = p - c;
 			return TRUE;
 		}
+#else
+		return TRUE;
+#endif
 	}
 
 	return FALSE;
@@ -2144,7 +2148,7 @@ rspamd_url_trie_generic_callback_common (struct rspamd_multipattern *mp,
 		return 0;
 	}
 
-	pos = text + match_pos;
+	pos = text + match_start;
 
 	if (!rspamd_url_trie_is_match (matcher, pos, text + len)) {
 		return 0;
@@ -2175,7 +2179,7 @@ rspamd_url_trie_generic_callback_common (struct rspamd_multipattern *mp,
 		cb->fin = m.m_begin + m.m_len;
 		url = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_url));
 		g_strstrip (cb->url_str);
-		rc = rspamd_url_parse (url, cb->url_str, m.m_len + 1, pool);
+		rc = rspamd_url_parse (url, cb->url_str, m.m_len, pool);
 
 		if (rc == URI_ERRNO_OK && url->hostlen > 0) {
 			if (cb->func) {

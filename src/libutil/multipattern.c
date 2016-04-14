@@ -507,7 +507,7 @@ rspamd_multipattern_hs_cb (unsigned int id,
 			from = 0;
 		}
 
-		ret = cbd->cb (cbd->mp, id, from, to - 1, cbd->in, cbd->len, cbd->ud);
+		ret = cbd->cb (cbd->mp, id, from, to, cbd->in, cbd->len, cbd->ud);
 
 		cbd->nfound ++;
 		cbd->ret = ret;
