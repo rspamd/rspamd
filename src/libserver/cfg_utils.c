@@ -26,6 +26,7 @@
 #include "utlist.h"
 #include "stat_api.h"
 #include "unix-std.h"
+#include "libutil/multipattern.h"
 #include <math.h>
 
 #define DEFAULT_SCORE 10.0
@@ -641,6 +642,7 @@ rspamd_config_post_load (struct rspamd_config *cfg, gboolean validate_cache)
 #endif
 
 	rspamd_regexp_library_init ();
+	rspamd_multipattern_library_init (cfg->hs_cache_dir);
 
 	if ((def_metric =
 		g_hash_table_lookup (cfg->metrics, DEFAULT_METRIC)) == NULL) {
@@ -670,7 +672,6 @@ rspamd_config_post_load (struct rspamd_config *cfg, gboolean validate_cache)
 	}
 
 	init_dynamic_config (cfg);
-
 	rspamd_url_init (cfg->tld_file);
 
 	/* Insert classifiers symbols */

@@ -24,6 +24,7 @@
 #include "libserver/worker_util.h"
 #include "unix-std.h"
 #include "cryptobox.h"
+#include "libutil/multipattern.h"
 
 #ifdef HAVE_SYSLOG_H
 #include <syslog.h>
@@ -255,8 +256,15 @@ rspamd_rcl_options_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 	}
 
-	return rspamd_rcl_section_parse_defaults (section, cfg->cfg_pool, obj,
-			cfg, err);
+	if (rspamd_rcl_section_parse_defaults (section, cfg->cfg_pool, obj,
+			cfg, err)) {
+		/* We need to init this early */
+		rspamd_multipattern_library_init (cfg->hs_cache_dir);
+
+		return TRUE;
+	}
+
+	return FALSE;
 }
 
 struct rspamd_rcl_symbol_data {

@@ -57,6 +57,12 @@ typedef gint (*rspamd_multipattern_cb_t) (struct rspamd_multipattern *mp,
 		void *context);
 
 /**
+ * Init multipart library and set the appropriate cache dir
+ * @param cache_dir
+ */
+void rspamd_multipattern_library_init (const gchar *cache_dir);
+
+/**
  * Creates empty multipattern structure
  * @param flags
  * @return
