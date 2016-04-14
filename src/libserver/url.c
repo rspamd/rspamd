@@ -61,6 +61,7 @@ typedef struct url_match_s {
 #define URL_FLAG_NOHTML (1 << 0)
 #define URL_FLAG_TLD_MATCH (1 << 1)
 #define URL_FLAG_STAR_MATCH (1 << 2)
+#define URL_FLAG_REGEXP (1 << 3)
 
 struct url_callback_data;
 
@@ -145,8 +146,14 @@ struct url_matcher static_matchers[] = {
 		{"ftp.",      "ftp://",    url_web_start,   url_web_end,
 				URL_FLAG_NOHTML, 0},
 		/* Likely emails */
+#ifdef WITH_HYPERSCAN
+		{"\\b[\\w._%+-]+@[\\w.-]+\\.\\p{L}{2,}\\b", "mailto://",
+				url_email_start, url_email_end,
+				URL_FLAG_NOHTML | URL_FLAG_REGEXP, 0}
+#else
 		{"@",         "mailto://", url_email_start, url_email_end,
 				URL_FLAG_NOHTML, 0}
+#endif
 };
 
 struct url_callback_data {
@@ -412,9 +419,18 @@ rspamd_url_add_static_matchers (struct url_match_scanner *sc)
 	g_array_append_vals (sc->matchers, static_matchers, n);
 
 	for (i = 0; i < n; i++) {
-		rspamd_multipattern_add_pattern (url_scanner->search_trie,
-				static_matchers[i].pattern,
-				RSPAMD_MULTIPATTERN_ICASE);
+		if (static_matchers[i].flags & URL_FLAG_REGEXP) {
+			rspamd_multipattern_add_pattern (url_scanner->search_trie,
+					static_matchers[i].pattern,
+					RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8|RSPAMD_MULTIPATTERN_RE);
+		}
+		else {
+			rspamd_multipattern_add_pattern (url_scanner->search_trie,
+					static_matchers[i].pattern,
+					RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8);
+		}
+
+		static_matchers[i].patlen = strlen (static_matchers[i].pattern);
 	}
 }
 
