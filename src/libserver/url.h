@@ -139,4 +139,14 @@ void rspamd_url_find_multiple (rspamd_mempool_t *pool, const gchar *in,
 		gsize inlen, gboolean is_html,
 		url_insert_function func, gpointer ud);
 
+/**
+ * Generic callback to insert URLs into rspamd_task
+ * @param url
+ * @param start_offset
+ * @param end_offset
+ * @param ud
+ */
+void rspamd_url_task_callback (struct rspamd_url *url, gsize start_offset,
+		gsize end_offset, gpointer ud);
+
 #endif

@@ -2302,3 +2302,58 @@ rspamd_url_find_multiple (rspamd_mempool_t *pool, const gchar *in,
 			inlen,
 			rspamd_url_trie_generic_callback, &cb, NULL);
 }
+
+
+void
+rspamd_url_task_callback (struct rspamd_url *url, gsize start_offset,
+		gsize end_offset, gpointer ud)
+{
+	struct rspamd_task *task = ud;
+	gchar *url_str = NULL;
+	struct rspamd_url *query_url;
+	gint rc;
+
+	if (url->protocol == PROTOCOL_MAILTO) {
+		if (url->userlen > 0) {
+			if (!g_hash_table_lookup (task->emails, url)) {
+				g_hash_table_insert (task->emails, url,
+						url);
+			}
+		}
+	}
+	else {
+		if (!g_hash_table_lookup (task->urls, url)) {
+			g_hash_table_insert (task->urls, url, url);
+		}
+	}
+
+	/* We also search the query for additional url inside */
+	if (url->querylen > 0) {
+		if (rspamd_url_find (task->task_pool,
+				url->query,
+				url->querylen,
+				&url_str,
+				FALSE)) {
+
+			query_url = rspamd_mempool_alloc0 (task->task_pool,
+					sizeof (struct rspamd_url));
+			rc = rspamd_url_parse (query_url,
+					url_str,
+					strlen (url_str),
+					task->task_pool);
+
+			if (rc == URI_ERRNO_OK &&
+					url->hostlen > 0) {
+				msg_debug_task ("found url %s in query of url"
+						" %*s", url_str, url->querylen, url->query);
+
+				if (!g_hash_table_lookup (task->urls,
+						query_url)) {
+					g_hash_table_insert (task->urls,
+							query_url,
+							query_url);
+				}
+			}
+		}
+	}
+}
