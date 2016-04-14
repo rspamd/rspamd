@@ -2254,7 +2254,6 @@ rspamd_url_text_extract (rspamd_mempool_t *pool,
 		struct mime_text_part *part,
 		gboolean is_html)
 {
-	struct url_callback_data cb;
 	struct rspamd_url_mimepart_cbdata mcbd;
 
 	if (part->content == NULL || part->content->len == 0) {
@@ -2262,20 +2261,12 @@ rspamd_url_text_extract (rspamd_mempool_t *pool,
 		return;
 	}
 
-	memset (&cb, 0, sizeof (cb));
-	cb.begin = part->content->data;
-	cb.end = part->content->data + part->content->len;
-	cb.is_html = is_html;
-	cb.pool = pool;
-
 	mcbd.task = task;
 	mcbd.part = part;
-	cb.funcd = &mcbd;
-	cb.func = rspamd_url_text_part_callback;
 
-	rspamd_multipattern_lookup (url_scanner->search_trie, cb.begin,
-			part->content->len,
-			rspamd_url_trie_generic_callback, &cb, NULL);
+	rspamd_url_find_multiple (task->task_pool, part->content->data,
+			part->content->len, is_html,
+			rspamd_url_text_part_callback, &mcbd);
 
 	/* Handle offsets of this part */
 	if (part->urls_offset != NULL) {
@@ -2283,4 +2274,31 @@ rspamd_url_text_extract (rspamd_mempool_t *pool,
 		rspamd_mempool_add_destructor (task->task_pool,
 				(rspamd_mempool_destruct_t) g_list_free, part->urls_offset);
 	}
+}
+
+void
+rspamd_url_find_multiple (rspamd_mempool_t *pool, const gchar *in,
+		gsize inlen, gboolean is_html,
+		url_insert_function func, gpointer ud)
+{
+	struct url_callback_data cb;
+
+	g_assert (in != NULL);
+
+	if (inlen == 0) {
+		inlen = strlen (in);
+	}
+
+	memset (&cb, 0, sizeof (cb));
+	cb.begin = in;
+	cb.end = in + inlen;
+	cb.is_html = is_html;
+	cb.pool = pool;
+
+	cb.funcd = ud;
+	cb.func = func;
+
+	rspamd_multipattern_lookup (url_scanner->search_trie, in,
+			inlen,
+			rspamd_url_trie_generic_callback, &cb, NULL);
 }
