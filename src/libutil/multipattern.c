@@ -499,12 +499,14 @@ rspamd_multipattern_hs_cb (unsigned int id,
 		void *ud)
 {
 	struct rspamd_multipattern_cbdata *cbd = ud;
-	gint ret;
+	gint ret = 0;
 
-	ret = cbd->cb (cbd->mp, id, from, to, cbd->in, cbd->len, cbd->ud);
+	if (to > 0) {
+		ret = cbd->cb (cbd->mp, id, from, to - 1, cbd->in, cbd->len, cbd->ud);
 
-	cbd->nfound ++;
-	cbd->ret = ret;
+		cbd->nfound ++;
+		cbd->ret = ret;
+	}
 
 	return ret;
 }
