@@ -502,6 +502,11 @@ rspamd_multipattern_hs_cb (unsigned int id,
 	gint ret = 0;
 
 	if (to > 0) {
+
+		if (from == HS_OFFSET_PAST_HORIZON) {
+			from = 0;
+		}
+
 		ret = cbd->cb (cbd->mp, id, from, to - 1, cbd->in, cbd->len, cbd->ud);
 
 		cbd->nfound ++;
