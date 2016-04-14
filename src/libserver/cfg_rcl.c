@@ -1780,6 +1780,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			RSPAMD_CL_FLAG_STRING_PATH,
 			"Path to the TLD file for urls detector");
 	rspamd_rcl_add_default_handler (sub,
+			"hs_cache_dir",
+			rspamd_rcl_parse_struct_string,
+			G_STRUCT_OFFSET (struct rspamd_config, hs_cache_dir),
+			RSPAMD_CL_FLAG_STRING_PATH,
+			"Path directory where rspamd would save hyperscan cache");
+	rspamd_rcl_add_default_handler (sub,
 			"history_rows",
 			rspamd_rcl_parse_struct_integer,
 			G_STRUCT_OFFSET (struct rspamd_config, history_rows),

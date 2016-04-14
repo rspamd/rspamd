@@ -66,7 +66,7 @@ init_hs_helper (struct rspamd_config *cfg)
 
 	ctx->magic = rspamd_hs_helper_magic;
 	ctx->cfg = cfg;
-	ctx->hs_dir = RSPAMD_DBDIR "/";
+	ctx->hs_dir = NULL;
 	ctx->max_time = default_max_time;
 	ctx->recompile_time = default_recompile_time;
 
@@ -248,6 +248,14 @@ start_hs_helper (struct rspamd_worker *worker)
 	struct hs_helper_ctx *ctx = worker->ctx;
 	struct timeval tv;
 	double tim;
+
+
+	if (ctx->hs_dir == NULL) {
+		ctx->hs_dir = ctx->cfg->hs_cache_dir;
+	}
+	if (ctx->hs_dir == NULL) {
+		ctx->hs_dir = RSPAMD_DBDIR "/";
+	}
 
 	ctx->ev_base = rspamd_prepare_worker (worker,
 			"hs_helper",

@@ -368,6 +368,8 @@ struct rspamd_config {
 
 	gchar * tld_file;                               /**< file to load effective tld list from				*/
 
+	gchar * hs_cache_dir;                           /**< directory to save hyperscan databases				*/
+
 	gdouble dns_timeout;                            /**< timeout in milliseconds for waiting for dns reply	*/
 	guint32 dns_retransmits;                        /**< maximum retransmits count							*/
 	guint32 dns_throttling_errors;                  /**< maximum errors for starting resolver throttling	*/
