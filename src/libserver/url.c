@@ -416,8 +416,6 @@ rspamd_url_add_static_matchers (struct url_match_scanner *sc)
 {
 	gint n = G_N_ELEMENTS (static_matchers), i;
 
-	g_array_append_vals (sc->matchers, static_matchers, n);
-
 	for (i = 0; i < n; i++) {
 		if (static_matchers[i].flags & URL_FLAG_REGEXP) {
 			rspamd_multipattern_add_pattern (url_scanner->search_trie,
@@ -432,6 +430,8 @@ rspamd_url_add_static_matchers (struct url_match_scanner *sc)
 
 		static_matchers[i].patlen = strlen (static_matchers[i].pattern);
 	}
+
+	g_array_append_vals (sc->matchers, static_matchers, n);
 }
 
 void
@@ -2003,6 +2003,7 @@ static gboolean
 rspamd_url_trie_is_match (struct url_matcher *matcher, const gchar *pos,
 		const gchar *end)
 {
+#ifndef WITH_HYPERSCAN
 	if (matcher->flags & URL_FLAG_TLD_MATCH) {
 		/* Immediately check pos for valid chars */
 		if (pos < end) {
@@ -2024,7 +2025,7 @@ rspamd_url_trie_is_match (struct url_matcher *matcher, const gchar *pos,
 			}
 		}
 	}
-
+#endif
 	return TRUE;
 }
 

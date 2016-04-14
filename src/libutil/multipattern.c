@@ -17,6 +17,7 @@
 #include "config.h"
 #include "libutil/multipattern.h"
 #include "libutil/str_util.h"
+#include "logger.h"
 
 #ifdef WITH_HYPERSCAN
 #include "hs.h"
@@ -398,7 +399,7 @@ rspamd_multipattern_add_pattern (struct rspamd_multipattern *mp,
 		fl |= HS_FLAG_CASELESS;
 	}
 	if (mp->flags & RSPAMD_MULTIPATTERN_UTF8) {
-		fl |= HS_FLAG_UTF8;
+		fl |= HS_FLAG_UTF8|HS_FLAG_UCP;
 	}
 
 	g_array_append_val (mp->hs_flags, fl);
