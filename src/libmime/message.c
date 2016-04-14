@@ -1567,12 +1567,10 @@ rspamd_message_parse (struct rspamd_task *task)
 	struct mime_text_part *p1, *p2;
 	struct mime_foreach_data md;
 	struct received_header *recv, *trecv;
-	gchar *url_str;
-	const gchar *url_end, *p, *end;
-	struct rspamd_url *subject_url;
+	const gchar *p;
 	gsize len;
 	goffset hdr_pos;
-	gint rc, state = 0, diff, *pdiff, i;
+	gint diff, *pdiff, i;
 	guint tw, dw;
 
 	tmp = rspamd_mempool_alloc (task->task_pool, sizeof (GByteArray));
@@ -1821,42 +1819,13 @@ rspamd_message_parse (struct rspamd_task *task)
 
 	/* Parse urls inside Subject header */
 	cur = rspamd_message_get_header (task, "Subject", FALSE);
-	if (cur) {
-		p = cur->data;
+
+	for (; cur != NULL; cur = g_list_next (cur)) {
+		rh = cur->data;
+		p = rh->decoded;
 		len = strlen (p);
-		end = p + len;
-
-		while (p < end) {
-			/* Search to the end of url */
-			if (rspamd_url_find (task->task_pool, p, end - p, NULL, &url_end,
-				&url_str, FALSE, &state)) {
-				if (url_str != NULL) {
-					subject_url = rspamd_mempool_alloc0 (task->task_pool,
-							sizeof (struct rspamd_url));
-					rc = rspamd_url_parse (subject_url, url_str,
-							strlen (url_str), task->task_pool);
-
-					if ((rc == URI_ERRNO_OK) && subject_url->hostlen > 0) {
-						if (subject_url->protocol != PROTOCOL_MAILTO) {
-							if (!g_hash_table_lookup (task->urls, subject_url)) {
-								g_hash_table_insert (task->urls,
-										subject_url,
-										subject_url);
-							}
-						}
-					}
-					else if (rc != URI_ERRNO_OK) {
-						msg_info_task ("extract of url '%s' failed: %s",
-								url_str,
-								rspamd_url_strerror (rc));
-					}
-				}
-			}
-			else {
-				break;
-			}
-			p = url_end + 1;
-		}
+		rspamd_url_find_multiple (task->task_pool, p, len, FALSE,
+				rspamd_url_task_callback, task);
 	}
 
 	/* Calculate distance for 2-parts messages */
