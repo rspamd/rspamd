@@ -683,13 +683,12 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 	gboolean *url_found)
 {
 	struct rspamd_url *text_url;
-	gint rc, state = 0;
+	gint rc;
 	gchar *url_str = NULL;
 
 	*url_found = FALSE;
 
-	if (rspamd_url_find (pool, url_text, len, NULL, NULL, &url_str,
-		TRUE, &state) && url_str != NULL) {
+	if (rspamd_url_find (pool, url_text, len, &url_str, TRUE) && url_str != NULL) {
 		text_url = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_url));
 		rc = rspamd_url_parse (text_url, url_str, strlen (url_str), pool);
 
@@ -1235,15 +1234,13 @@ static void
 rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 		GHashTable *target)
 {
-	gint nstate = 0;
 	struct rspamd_url *query_url;
 	gchar *url_str;
 	gint rc;
 
 	if (url->querylen > 0) {
 
-		if (rspamd_url_find (pool, url->query, url->querylen, NULL, NULL,
-				&url_str, TRUE, &nstate)) {
+		if (rspamd_url_find (pool, url->query, url->querylen, &url_str, TRUE)) {
 			query_url = rspamd_mempool_alloc0 (pool,
 					sizeof (struct rspamd_url));
 

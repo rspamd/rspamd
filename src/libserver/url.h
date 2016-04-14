@@ -106,26 +106,13 @@ enum uri_errno rspamd_url_parse (struct rspamd_url *uri,
 gboolean rspamd_url_find (rspamd_mempool_t *pool,
 	const gchar *begin,
 	gsize len,
-	const gchar **start,
-	const gchar **end,
 	gchar **url_str,
-	gboolean is_html,
-	gint *statep);
+	gboolean is_html);
 /*
  * Return text representation of url parsing error
  */
 const gchar * rspamd_url_strerror (enum uri_errno err);
 
-/**
- * Convenience routine to extract urls from an arbitrarty text
- * @param pool
- * @param start
- * @param pos
- * @return url or NULL
- */
-struct rspamd_url *
-rspamd_url_get_next (rspamd_mempool_t *pool,
-		const gchar *start, gchar const **pos, gint *statep);
 
 /**
  * Find TLD for a specified host string
@@ -135,5 +122,8 @@ rspamd_url_get_next (rspamd_mempool_t *pool,
  * @return TRUE if tld has been found
  */
 gboolean rspamd_url_find_tld (const gchar *in, gsize inlen, rspamd_ftok_t *out);
+
+typedef void (*url_insert_function) (struct rspamd_url *url,
+		gsize start_offset, gsize end_offset, void *ud);
 
 #endif
