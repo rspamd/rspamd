@@ -138,6 +138,18 @@ typedef void (*url_insert_function) (struct rspamd_url *url,
 void rspamd_url_find_multiple (rspamd_mempool_t *pool, const gchar *in,
 		gsize inlen, gboolean is_html,
 		url_insert_function func, gpointer ud);
+/**
+ * Search for a single url in text and call `func` for each url found
+ * @param pool
+ * @param in
+ * @param inlen
+ * @param is_html
+ * @param func
+ * @param ud
+ */
+void rspamd_url_find_single (rspamd_mempool_t *pool, const gchar *in,
+		gsize inlen, gboolean is_html,
+		url_insert_function func, gpointer ud);
 
 /**
  * Generic callback to insert URLs into rspamd_task

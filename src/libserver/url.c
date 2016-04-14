@@ -2100,13 +2100,14 @@ rspamd_url_find (rspamd_mempool_t *pool,
 }
 
 static gint
-rspamd_url_trie_generic_callback (struct rspamd_multipattern *mp,
+rspamd_url_trie_generic_callback_common (struct rspamd_multipattern *mp,
 		guint strnum,
 		gint match_start,
 		gint match_pos,
 		const gchar *text,
 		gsize len,
-		void *context)
+		void *context,
+		gboolean multiple)
 {
 	struct rspamd_url *url;
 	struct url_matcher *matcher;
@@ -2173,8 +2174,34 @@ rspamd_url_trie_generic_callback (struct rspamd_multipattern *mp,
 		cb->url_str = NULL;
 	}
 
-	/* Continue search */
-	return 0;
+	/* Continue search if required (return 0 means continue) */
+	return !multiple;
+}
+
+static gint
+rspamd_url_trie_generic_callback_multiple (struct rspamd_multipattern *mp,
+		guint strnum,
+		gint match_start,
+		gint match_pos,
+		const gchar *text,
+		gsize len,
+		void *context)
+{
+	return rspamd_url_trie_generic_callback_common (mp, strnum, match_start,
+			match_pos, text, len, context, TRUE);
+}
+
+static gint
+rspamd_url_trie_generic_callback_single (struct rspamd_multipattern *mp,
+		guint strnum,
+		gint match_start,
+		gint match_pos,
+		const gchar *text,
+		gsize len,
+		void *context)
+{
+	return rspamd_url_trie_generic_callback_common (mp, strnum, match_start,
+			match_pos, text, len, context, FALSE);
 }
 
 struct rspamd_url_mimepart_cbdata {
@@ -2300,7 +2327,34 @@ rspamd_url_find_multiple (rspamd_mempool_t *pool, const gchar *in,
 
 	rspamd_multipattern_lookup (url_scanner->search_trie, in,
 			inlen,
-			rspamd_url_trie_generic_callback, &cb, NULL);
+			rspamd_url_trie_generic_callback_multiple, &cb, NULL);
+}
+
+void
+rspamd_url_find_single (rspamd_mempool_t *pool, const gchar *in,
+		gsize inlen, gboolean is_html,
+		url_insert_function func, gpointer ud)
+{
+	struct url_callback_data cb;
+
+	g_assert (in != NULL);
+
+	if (inlen == 0) {
+		inlen = strlen (in);
+	}
+
+	memset (&cb, 0, sizeof (cb));
+	cb.begin = in;
+	cb.end = in + inlen;
+	cb.is_html = is_html;
+	cb.pool = pool;
+
+	cb.funcd = ud;
+	cb.func = func;
+
+	rspamd_multipattern_lookup (url_scanner->search_trie, in,
+			inlen,
+			rspamd_url_trie_generic_callback_single, &cb, NULL);
 }
 
 
