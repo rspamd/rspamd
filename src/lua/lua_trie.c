@@ -88,7 +88,7 @@ static gint
 lua_trie_create (lua_State *L)
 {
 	struct rspamd_multipattern *trie, **ptrie;
-	gint npat = 0;
+	gint npat = 0, flags = RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_GLOB;
 	GError *err = NULL;
 
 	if (!lua_istable (L, 1)) {
@@ -107,13 +107,13 @@ lua_trie_create (lua_State *L)
 			lua_pop (L, 1);
 		}
 
-		trie = rspamd_multipattern_create_sized (npat,
-				RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_GLOB);
+		trie = rspamd_multipattern_create_sized (npat, flags);
 		lua_pushnil (L);
 
 		while (lua_next (L, -2) != 0) {
 			if (lua_isstring (L, -1)) {
-				rspamd_multipattern_add_pattern (trie, lua_tostring (L, -1));
+				rspamd_multipattern_add_pattern (trie, lua_tostring (L, -1),
+						flags);
 			}
 
 			lua_pop (L, 1);

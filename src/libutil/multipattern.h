@@ -91,7 +91,7 @@ struct rspamd_multipattern *rspamd_multipattern_create_full (
  * @param pattern
  */
 void rspamd_multipattern_add_pattern (struct rspamd_multipattern *mp,
-		const gchar *pattern);
+		const gchar *pattern, gint flags);
 
 /**
  * Compiles multipattern structure

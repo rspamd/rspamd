@@ -384,7 +384,7 @@ rspamd_multipattern_create_sized (guint npatterns,
 
 void
 rspamd_multipattern_add_pattern (struct rspamd_multipattern *mp,
-		const gchar *pattern)
+		const gchar *pattern, gint flags)
 {
 	g_assert (pattern != NULL);
 	g_assert (mp != NULL);
@@ -402,14 +402,14 @@ rspamd_multipattern_add_pattern (struct rspamd_multipattern *mp,
 	}
 
 	g_array_append_val (mp->hs_flags, fl);
-	np = rspamd_multipattern_pattern_filter (pattern, mp->flags);
+	np = rspamd_multipattern_pattern_filter (pattern, flags);
 	g_array_append_val (mp->hs_pats, np);
 	fl = mp->cnt;
 	g_array_append_val (mp->hs_ids, fl);
 #else
 	ac_trie_pat_t pat;
 
-	pat.ptr = rspamd_multipattern_pattern_filter (pattern, mp->flags);
+	pat.ptr = rspamd_multipattern_pattern_filter (pattern, flags);
 	pat.len = strlen (pat.ptr);
 
 	g_array_append_val (mp->pats, pat);
@@ -431,7 +431,7 @@ rspamd_multipattern_create_full (const gchar **patterns,
 	mp = rspamd_multipattern_create_sized (npatterns, flags);
 
 	for (i = 0; i < npatterns; i++) {
-		rspamd_multipattern_add_pattern (mp, patterns[i]);
+		rspamd_multipattern_add_pattern (mp, patterns[i], flags);
 	}
 
 	return mp;
