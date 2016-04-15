@@ -1259,6 +1259,164 @@ rspamd_substring_search_caseless (const gchar *in, gsize inlen,
 	return -1;
 }
 
+/* Computing of the maximal suffix for <= */
+static inline gint
+rspamd_two_way_max_suffix (const gchar *x, gint m, gint *p)
+{
+	gint ms, j, k;
+	gchar a, b;
+
+	ms = -1;
+	j = 0;
+	k = *p = 1;
+
+	while (j + k < m) {
+		a = x[j + k];
+		b = x[ms + k];
+
+		if (a < b) {
+			j += k;
+			k = 1;
+			*p = j - ms;
+		}
+		else if (a == b)
+			if (k != *p)
+				++k;
+			else {
+				j += *p;
+				k = 1;
+			}
+		else { /* a > b */
+			ms = j;
+			j = ms + 1;
+			k = *p = 1;
+		}
+	}
+
+	return (ms);
+}
+
+/* Computing of the maximal suffix for >= */
+static inline gint
+rspamd_two_way_max_suffix_tilde (const gchar *x, gint m, gint *p)
+{
+	gint ms, j, k;
+	gchar a, b;
+
+	ms = -1;
+	j = 0;
+	k = *p = 1;
+
+	while (j + k < m) {
+		a = x[j + k];
+		b = x[ms + k];
+
+		if (a > b) {
+			j += k;
+			k = 1;
+			*p = j - ms;
+		}
+		else if (a == b)
+			if (k != *p)
+				++k;
+			else {
+				j += *p;
+				k = 1;
+			}
+		else { /* a < b */
+			ms = j;
+			j = ms + 1;
+			k = *p = 1;
+		}
+	}
+	return (ms);
+}
+
+/* Two Way string matching algorithm. */
+goffset
+rspamd_substring_search_twoway (const gchar *in, gint inlen,
+		const gchar *srch, gint srchlen)
+{
+	int i, j, ell, memory, p, per, q;
+
+	/* Preprocessing */
+	i = rspamd_two_way_max_suffix (in, inlen, &p);
+	j = rspamd_two_way_max_suffix_tilde (in, inlen, &q);
+
+	if (i > j) {
+		ell = i;
+		per = p;
+	}
+	else {
+		ell = j;
+		per = q;
+	}
+
+	/* Searching */
+	if (memcmp (in, in + per, ell + 1) == 0) {
+		j = 0;
+		memory = -1;
+
+		while (j <= srchlen - inlen) {
+			i = MAX (ell, memory) + 1;
+
+			while (i < inlen && in[i] == srch[i + j]) {
+				i ++;
+			}
+
+			if (i >= inlen) {
+				i = ell;
+
+				while (i > memory && in[i] == srch[i + j]) {
+					i --;
+				}
+
+				if (i <= memory) {
+					return j;
+				}
+
+				j += per;
+				memory = inlen - per - 1;
+			}
+			else {
+				j += (i - ell);
+				memory = -1;
+			}
+		}
+	}
+	else {
+		per = MAX (ell + 1, inlen - ell - 1) + 1;
+		j = 0;
+
+		while (j <= srchlen - inlen) {
+			i = ell + 1;
+
+			while (i < inlen && in[i] == srch[i + j]) {
+				i ++;
+			}
+
+			if (i >= inlen) {
+				i = ell;
+
+				while (i >= 0 && in[i] == srch[i + j]) {
+					i --;
+				}
+
+				if (i < 0) {
+					return j;
+				}
+
+				j += per;
+			}
+			else
+				j += (i - ell);
+		}
+	}
+
+	return -1;
+}
+
+
 goffset
 rspamd_string_find_eoh (GString *input)
 {
