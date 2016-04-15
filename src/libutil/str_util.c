@@ -1261,7 +1261,7 @@ rspamd_substring_search_caseless (const gchar *in, gsize inlen,
 
 /* Computing of the maximal suffix for <= */
 static inline gint
-rspamd_two_way_max_suffix (const gchar *x, gint m, gint *p)
+rspamd_two_way_max_suffix (const gchar *srch, gint srchlen, gint *p)
 {
 	gint ms, j, k;
 	gchar a, b;
@@ -1270,9 +1270,9 @@ rspamd_two_way_max_suffix (const gchar *x, gint m, gint *p)
 	j = 0;
 	k = *p = 1;
 
-	while (j + k < m) {
-		a = x[j + k];
-		b = x[ms + k];
+	while (j + k < srchlen) {
+		a = srch[j + k];
+		b = srch[ms + k];
 
 		if (a < b) {
 			j += k;
@@ -1280,8 +1280,9 @@ rspamd_two_way_max_suffix (const gchar *x, gint m, gint *p)
 			*p = j - ms;
 		}
 		else if (a == b)
-			if (k != *p)
-				++k;
+			if (k != *p) {
+				k++;
+			}
 			else {
 				j += *p;
 				k = 1;
@@ -1298,7 +1299,7 @@ rspamd_two_way_max_suffix (const gchar *x, gint m, gint *p)
 
 /* Computing of the maximal suffix for >= */
 static inline gint
-rspamd_two_way_max_suffix_tilde (const gchar *x, gint m, gint *p)
+rspamd_two_way_max_suffix_tilde (const gchar *srch, gint srchlen, gint *p)
 {
 	gint ms, j, k;
 	gchar a, b;
@@ -1307,9 +1308,9 @@ rspamd_two_way_max_suffix_tilde (const gchar *x, gint m, gint *p)
 	j = 0;
 	k = *p = 1;
 
-	while (j + k < m) {
-		a = x[j + k];
-		b = x[ms + k];
+	while (j + k < srchlen) {
+		a = srch[j + k];
+		b = srch[ms + k];
 
 		if (a > b) {
 			j += k;
@@ -1317,8 +1318,9 @@ rspamd_two_way_max_suffix_tilde (const gchar *x, gint m, gint *p)
 			*p = j - ms;
 		}
 		else if (a == b)
-			if (k != *p)
-				++k;
+			if (k != *p) {
+				k ++;
+			}
 			else {
 				j += *p;
 				k = 1;
@@ -1340,8 +1342,8 @@ rspamd_substring_search_twoway (const gchar *in, gint inlen,
 	int i, j, ell, memory, p, per, q;
 
 	/* Preprocessing */
-	i = rspamd_two_way_max_suffix (in, inlen, &p);
-	j = rspamd_two_way_max_suffix_tilde (in, inlen, &q);
+	i = rspamd_two_way_max_suffix (srch, srchlen, &p);
+	j = rspamd_two_way_max_suffix_tilde (srch, srchlen, &q);
 
 	if (i > j) {
 		ell = i;
@@ -1353,21 +1355,21 @@ rspamd_substring_search_twoway (const gchar *in, gint inlen,
 	}
 
 	/* Searching */
-	if (memcmp (in, in + per, ell + 1) == 0) {
+	if (memcmp (srch, srch + per, ell + 1) == 0) {
 		j = 0;
 		memory = -1;
 
-		while (j <= srchlen - inlen) {
+		while (j <= inlen - srchlen) {
 			i = MAX (ell, memory) + 1;
 
-			while (i < inlen && in[i] == srch[i + j]) {
+			while (i < srchlen && srch[i] == in[i + j]) {
 				i ++;
 			}
 
-			if (i >= inlen) {
+			if (i >= srchlen) {
 				i = ell;
 
-				while (i > memory && in[i] == srch[i + j]) {
+				while (i > memory && srch[i] == in[i + j]) {
 					i --;
 				}
 
@@ -1376,7 +1378,7 @@ rspamd_substring_search_twoway (const gchar *in, gint inlen,
 				}
 
 				j += per;
-				memory = inlen - per - 1;
+				memory = srchlen - per - 1;
 			}
 			else {
 				j += (i - ell);
@@ -1385,20 +1387,20 @@ rspamd_substring_search_twoway (const gchar *in, gint inlen,
 		}
 	}
 	else {
-		per = MAX (ell + 1, inlen - ell - 1) + 1;
+		per = MAX (ell + 1, srchlen - ell - 1) + 1;
 		j = 0;
 
-		while (j <= srchlen - inlen) {
+		while (j <= inlen - srchlen) {
 			i = ell + 1;
 
-			while (i < inlen && in[i] == srch[i + j]) {
+			while (i < srchlen && srch[i] == in[i + j]) {
 				i ++;
 			}
 
-			if (i >= inlen) {
+			if (i >= srchlen) {
 				i = ell;
 
-				while (i >= 0 && in[i] == srch[i + j]) {
+				while (i >= 0 && srch[i] == in[i + j]) {
 					i --;
 				}
 
@@ -1408,8 +1410,9 @@ rspamd_substring_search_twoway (const gchar *in, gint inlen,
 
 				j += per;
 			}
-			else
+			else {
 				j += (i - ell);
+			}
 		}
 	}
 
