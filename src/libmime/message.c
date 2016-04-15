@@ -28,8 +28,6 @@
 #include "libstemmer.h"
 #endif
 
-#include "acism.h"
-
 #include <iconv.h>
 
 #define RECURSION_LIMIT 5
@@ -39,7 +37,6 @@
 #define SET_PART_RAW(part) ((part)->flags &= ~RSPAMD_MIME_PART_FLAG_UTF)
 #define SET_PART_UTF(part) ((part)->flags |= RSPAMD_MIME_PART_FLAG_UTF)
 
-static ac_trie_t *gtube_trie = NULL;
 static const gchar gtube_pattern[] = "XJS*C4JDBQADN1.NSBN3*2IDNEN*"
 		"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
 static rspamd_regexp_t *utf_compatible_re = NULL;
@@ -1078,32 +1075,17 @@ rspamd_words_levenshtein_distance (struct rspamd_task *task,
 	return column[s1len];
 }
 
-static int
-rspamd_gtube_cb (int strnum, int textpos, void *context)
-{
-	return TRUE;
-}
-
 static gboolean
 rspamd_check_gtube (struct rspamd_task *task, struct mime_text_part *part)
 {
-	static ac_trie_pat_t pat[1] = {
-		{
-			.ptr = gtube_pattern,
-			.len = sizeof (gtube_pattern) - 1
-		}
-	};
-	gint state = 0;
-
+	static const gsize max_check_size = 4 * 1024;
 	g_assert (part != NULL);
 
-	if (gtube_trie == NULL) {
-		gtube_trie = acism_create (pat, G_N_ELEMENTS (pat));
-	}
-
-	if (part->content && part->content->len > sizeof (gtube_pattern)) {
-		if (acism_lookup (gtube_trie, part->content->data, part->content->len,
-				rspamd_gtube_cb, NULL, &state, FALSE)) {
+	if (part->content && part->content->len > sizeof (gtube_pattern) &&
+			part->content->len <= max_check_size) {
+		if (rspamd_substring_search_twoway (part->content->data,
+				part->content->len,
+				gtube_pattern, sizeof (gtube_pattern) - 1) != -1) {
 			task->flags |= RSPAMD_TASK_FLAG_SKIP;
 			task->flags |= RSPAMD_TASK_FLAG_GTUBE;
 			msg_info_task ("<%s>: gtube pattern has been found in part of length %ud",
