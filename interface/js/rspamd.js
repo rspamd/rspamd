@@ -78,8 +78,8 @@
                 dataType: 'json',
                 type: 'GET',
                 url: 'auth',
-                data: {
-                    password: getPassword()
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader('Password', getPassword());
                 },
                 success: function (data) {
                     if (data.auth === 'failed') {
@@ -94,8 +94,8 @@
                 dataType: 'json',
                 type: 'GET',
                 url: 'auth',
-                data: {
-                    password: getPassword()
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader('Password', getPassword());
                 },
                 success: function (data) {
                     saveCredentials(data, password);
@@ -180,8 +180,8 @@
             $.ajax({
                 dataType: 'json',
                 url: 'maps',
-                data: {
-                    password: getPassword()
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader('Password', getPassword());
                 },
                 error: function () {
                     alertMessage('alert-modal alert-error', data.statusText);
@@ -374,8 +374,8 @@
                 dataType: 'json',
                 type: 'GET',
                 url: 'pie',
-                data: {
-                    password: getPassword()
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader('Password', getPassword());
                 },
                 success: function (data) {
                     if (pie) {
@@ -484,8 +484,8 @@
             $.ajax({
                 dataType: 'json',
                 url: 'history',
-                data: {
-                    password: getPassword()
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader('Password', getPassword());
                 },
                 error: function () {
                     alertMessage('alert-error', 'Cannot receive history');
@@ -549,8 +549,8 @@
                 dataType: 'json',
                 type: 'GET',
                 url: 'symbols',
-                data: {
-                    password: getPassword()
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader('Password', getPassword());
                 },
                 success: function (data) {
                     $('#modalBody').empty();
@@ -608,8 +608,8 @@
                 dataType: 'json',
                 type: 'GET',
                 url: 'historyreset',
-                data: {
-                    password: getPassword()
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader('Password', getPassword());
                 },
                 success: function (data) {
                     getHistory();
@@ -907,8 +907,8 @@
                 dataType: 'json',
                 type: 'GET',
                 url: 'actions',
-                data: {
-                    password: getPassword()
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader('Password', getPassword());
                 },
                 success: function (data) {
                     // Order of sliders greylist -> probable spam -> spam
@@ -1081,8 +1081,8 @@
                     dataType: 'json',
                     type: 'GET',
                     url: 'auth',
-                    data: {
-                        password: password
+                    beforeSend: function (xhr) {
+                        xhr.setRequestHeader('Password', password);
                     },
                     success: function (data) {
                         if (data.auth === 'failed') {
