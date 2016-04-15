@@ -28,16 +28,19 @@
 #include "acism.h"
 #endif
 
+#define MAX_SCRATCH 4
+
 static const char *hs_cache_dir = NULL;
 
 struct rspamd_multipattern {
 #ifdef WITH_HYPERSCAN
 	hs_database_t *db;
-	hs_scratch_t *scratch;
+	hs_scratch_t *scratch[MAX_SCRATCH];
 	GArray *hs_pats;
 	GArray *hs_ids;
 	GArray *hs_flags;
 	rspamd_cryptobox_hash_state_t hash_state;
+	guint scratch_used;
 #else
 	ac_trie_t *t;
 	GArray *pats;
@@ -517,6 +520,7 @@ rspamd_multipattern_compile (struct rspamd_multipattern *mp, GError **err)
 	g_assert (!mp->compiled);
 
 #ifdef WITH_HYPERSCAN
+	guint i;
 	hs_platform_info_t plt;
 	hs_compile_error_t *hs_errors;
 	guchar hash[rspamd_cryptobox_HASHBYTES];
@@ -547,7 +551,10 @@ rspamd_multipattern_compile (struct rspamd_multipattern *mp, GError **err)
 		}
 
 		rspamd_multipattern_try_save_hs (mp, hash);
-		g_assert (hs_alloc_scratch (mp->db, &mp->scratch) == HS_SUCCESS);
+
+		for (i = 0; i < MAX_SCRATCH; i ++) {
+			g_assert (hs_alloc_scratch (mp->db, &mp->scratch[i]) == HS_SUCCESS);
+		}
 	}
 #else
 	if (mp->cnt > 0) {
@@ -622,9 +629,8 @@ rspamd_multipattern_lookup (struct rspamd_multipattern *mp,
 	gint ret = 0;
 
 	g_assert (mp != NULL);
-	g_assert (mp->compiled);
 
-	if (mp->cnt == 0) {
+	if (mp->cnt == 0 || !mp->compiled) {
 		return 0;
 	}
 
@@ -637,8 +643,23 @@ rspamd_multipattern_lookup (struct rspamd_multipattern *mp,
 	cbd.ret = 0;
 
 #ifdef WITH_HYPERSCAN
-	ret = hs_scan (mp->db, in, len, 0, mp->scratch,
+	hs_scratch_t *scr = NULL;
+	guint i;
+
+	for (i = 0; i < MAX_SCRATCH; i ++) {
+		if (!(mp->scratch_used & (1 << i))) {
+			mp->scratch_used |= (1 << i);
+			scr = mp->scratch[i];
+			break;
+		}
+	}
+
+	g_assert (scr != NULL);
+
+	ret = hs_scan (mp->db, in, len, 0, scr,
 			rspamd_multipattern_hs_cb, &cbd);
+
+	mp->scratch_used &= ~(1 << i);
 
 	if (ret == HS_SUCCESS) {
 		ret = 0;
@@ -671,7 +692,10 @@ rspamd_multipattern_destroy (struct rspamd_multipattern *mp)
 		gchar *p;
 
 		if (mp->compiled && mp->cnt > 0) {
-			hs_free_scratch (mp->scratch);
+			for (i = 0; i < MAX_SCRATCH; i ++) {
+				hs_free_scratch (mp->scratch[i]);
+			}
+
 			hs_free_database (mp->db);
 		}
 
