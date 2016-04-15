@@ -545,15 +545,22 @@ process_raw_headers (struct rspamd_task *task, GHashTable *target,
 
 			new->value = tmp;
 			new->decoded = g_mime_utils_header_decode_text (new->value);
-			rspamd_mempool_add_destructor (task->task_pool,
-					(rspamd_mempool_destruct_t)g_free, new->decoded);
+
+			if (new->decoded != NULL) {
+				rspamd_mempool_add_destructor (task->task_pool,
+						(rspamd_mempool_destruct_t)g_free, new->decoded);
+			}
+			else {
+				new->decoded = "";
+			}
+
 			append_raw_header (task, target, new);
 			state = 0;
 			break;
 		case 5:
 			/* Header has only name, no value */
 			new->value = "";
-			new->decoded = NULL;
+			new->decoded = "";
 			append_raw_header (task, target, new);
 			state = 0;
 			break;
