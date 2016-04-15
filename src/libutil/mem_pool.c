@@ -625,7 +625,7 @@ rspamd_mempool_suggest_size (void)
 #endif
 }
 
-#ifndef HAVE_PTHREAD_PROCESS_SHARED
+#if !defined(HAVE_PTHREAD_PROCESS_SHARED) || defined(DISABLE_PTHREAD_MUTEX)
 /*
  * Own emulation
  */

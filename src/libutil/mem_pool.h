@@ -13,7 +13,7 @@
 #define RSPAMD_MEM_POOL_H
 
 #include "config.h"
-#ifdef HAVE_PTHREAD_PROCESS_SHARED
+#if defined(HAVE_PTHREAD_PROCESS_SHARED) && !defined(DISABLE_PTHREAD_MUTEX)
 #include <pthread.h>
 #endif
 
@@ -40,7 +40,7 @@ typedef void (*rspamd_mempool_destruct_t)(void *ptr);
 /**
  * Pool mutex structure
  */
-#ifndef HAVE_PTHREAD_PROCESS_SHARED
+#if !defined(HAVE_PTHREAD_PROCESS_SHARED) || defined(DISABLE_PTHREAD_MUTEX)
 typedef struct memory_pool_mutex_s {
 	gint lock;
 	pid_t owner;
