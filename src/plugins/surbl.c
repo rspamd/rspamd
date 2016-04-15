@@ -148,33 +148,24 @@ fin_exceptions_list (rspamd_mempool_t * pool, struct map_cb_data *data)
 	}
 }
 
-struct rspamd_redirector_map_cb {
-	GHashTable *re_hash;
-	GArray *patterns;
-};
-
 static void
 redirector_insert (gpointer st, gconstpointer key, gpointer value)
 {
-	struct rspamd_redirector_map_cb *cbdata = st;
-	GHashTable *t;
+	GHashTable *tld_hash = st;
 	const gchar *p = key, *begin = key;
-	gchar *pattern;
-	ac_trie_pat_t pat;
+	rspamd_fstring_t *pat;
+	rspamd_ftok_t *tok;
 	rspamd_regexp_t *re = NO_REGEXP;
 	GError *err = NULL;
 
-	t = cbdata->re_hash;
 	while (*p && !g_ascii_isspace (*p)) {
 		p++;
 	}
 
-	pat.len = p - begin;
-	pattern = g_malloc (pat.len + 1);
-	rspamd_strlcpy (pattern, begin, pat.len + 1);
-	pat.ptr = pattern;
-
-	g_array_append_val (cbdata->patterns, pat);
+	pat = rspamd_fstring_new_init (begin, p - begin);
+	tok = g_slice_alloc (sizeof (*tok));
+	tok->begin = pat->str;
+	tok->len = pat->len;
 
 	if (g_ascii_isspace (*p)) {
 		while (g_ascii_isspace (*p) && *p) {
@@ -191,17 +182,17 @@ redirector_insert (gpointer st, gconstpointer key, gpointer value)
 				g_error_free (err);
 				re = NO_REGEXP;
 			}
-			else {
-				g_hash_table_insert (t, pattern, re);
-			}
 		}
 	}
+
+	g_hash_table_replace (tld_hash, tok, re);
 }
 
 static void
 redirector_item_free (gpointer p)
 {
 	rspamd_regexp_t *re;
+
 	if (p != NULL && p != NO_REGEXP) {
 		re = (rspamd_regexp_t *)p;
 		rspamd_regexp_unref (re);
@@ -215,18 +206,15 @@ read_redirectors_list (rspamd_mempool_t * pool,
 	struct map_cb_data *data,
 	gboolean final)
 {
-	struct rspamd_redirector_map_cb *cbdata;
+	GHashTable *tld_hash;
 
 	if (data->cur_data == NULL) {
-		cbdata = g_slice_alloc0 (sizeof (*cbdata));
-		cbdata->patterns = g_array_sized_new (FALSE, FALSE,
-				sizeof (ac_trie_pat_t), 32);
-
-		cbdata->re_hash = g_hash_table_new_full (rspamd_strcase_hash,
-				rspamd_strcase_equal,
-				NULL,
+		tld_hash  = g_hash_table_new_full (rspamd_ftok_icase_hash,
+				rspamd_ftok_icase_equal,
+				rspamd_fstring_mapped_ftok_free,
 				redirector_item_free);
-		data->cur_data = cbdata;
+
+		data->cur_data = tld_hash;
 	}
 
 	return rspamd_parse_kv_list (pool,
@@ -241,31 +229,16 @@ read_redirectors_list (rspamd_mempool_t * pool,
 void
 fin_redirectors_list (rspamd_mempool_t * pool, struct map_cb_data *data)
 {
-	struct rspamd_redirector_map_cb *cbdata;
-	guint i;
-	ac_trie_pat_t *pat;
+	GHashTable *tld_hash;
 
 	if (data->prev_data) {
-		cbdata = data->prev_data;
+		tld_hash = data->prev_data;
 
-		for (i = 0; i < cbdata->patterns->len; i ++) {
-			pat = &g_array_index (cbdata->patterns, ac_trie_pat_t, i);
-			g_free ((gpointer)pat->ptr);
-		}
-
-		g_hash_table_unref (cbdata->re_hash);
-		g_array_free (cbdata->patterns, TRUE);
-		acism_destroy (surbl_module_ctx->redirector_trie);
-		g_slice_free1 (sizeof (*cbdata), cbdata);
+		g_hash_table_unref (tld_hash);
 	}
 
-	cbdata = data->cur_data;
-	surbl_module_ctx->redirector_ptrs = cbdata->patterns;
-	surbl_module_ctx->redirector_hosts = cbdata->re_hash;
-	surbl_module_ctx->redirector_trie = acism_create (
-			(const ac_trie_pat_t *)cbdata->patterns->data,
-			cbdata->patterns->len);
-	g_assert (surbl_module_ctx->redirector_trie != NULL);
+	tld_hash = data->cur_data;
+	surbl_module_ctx->redirector_tlds = tld_hash;
 }
 
 gint
@@ -820,7 +793,7 @@ surbl_module_reconfig (struct rspamd_config *cfg)
 		surbl_module_ctx->whitelist);
 	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
 		(rspamd_mempool_destruct_t) g_hash_table_destroy,
-		surbl_module_ctx->redirector_hosts);
+		surbl_module_ctx->redirector_tlds);
 
 	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
 		(rspamd_mempool_destruct_t) g_list_free,
@@ -1377,18 +1350,6 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 		rule);
 }
 
-static gint
-surbl_redirector_trie_cb (int strnum, int textpos, void *context)
-{
-	struct rspamd_url *url = context;
-
-	if (textpos == (gint)url->tldlen) {
-		return strnum + 1;
-	}
-
-	return 0;
-}
-
 static void
 surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 {
@@ -1396,9 +1357,9 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 	struct rspamd_task *task;
 	struct rspamd_url *url = value;
 	rspamd_regexp_t *re;
-	gint idx = 0, state = 0;
-	ac_trie_pat_t *pat;
+	rspamd_ftok_t srch;
 	gboolean found = FALSE;
+	gchar *found_tld;
 
 	task = param->task;
 	debug_task ("check url %*s", url->urllen, url->string);
@@ -1407,48 +1368,41 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 		return;
 	}
 
-	if (surbl_module_ctx->use_redirector) {
+	if (surbl_module_ctx->use_redirector && surbl_module_ctx->redirector_tlds) {
 		/* Search in trie */
-		if (surbl_module_ctx->redirector_trie) {
-			idx = acism_lookup (surbl_module_ctx->redirector_trie, url->tld,
-					url->tldlen, surbl_redirector_trie_cb, url, &state, true);
-			if (idx > 0) {
-				pat = &g_array_index (surbl_module_ctx->redirector_ptrs,
-						ac_trie_pat_t, idx - 1);
-				/* Try to find corresponding regexp */
-				re = g_hash_table_lookup (
-						surbl_module_ctx->redirector_hosts,
-						pat->ptr);
-				if (re == NULL) {
-					/* Perform exact match */
-					if (pat->len == url->tldlen && memcmp (pat->ptr,
-							url->tld, pat->len) == 0) {
-						found = TRUE;
-					}
-				}
-				else if (rspamd_regexp_search (re, url->string, 0,
-						NULL, NULL, TRUE, NULL)) {
-					found = TRUE;
+		srch.begin = url->tld;
+		srch.len = url->tldlen;
+		re = g_hash_table_lookup (surbl_module_ctx->redirector_tlds, &srch);
+
+		if (re) {
+			if (re == NO_REGEXP) {
+				found = TRUE;
+			}
+			else if (rspamd_regexp_search (re, url->string, 0,
+					NULL, NULL, TRUE, NULL)) {
+				found = TRUE;
+			}
+
+			if (found) {
+				found_tld = rspamd_mempool_ftokdup (task->task_pool, &srch);
+
+				if (surbl_module_ctx->redirector_symbol != NULL) {
+					rspamd_task_insert_result (param->task,
+							surbl_module_ctx->redirector_symbol,
+							1,
+							g_list_prepend (NULL, found_tld));
 				}
 
-				if (found) {
-					if (surbl_module_ctx->redirector_symbol != NULL) {
-						rspamd_task_insert_result (param->task,
-								surbl_module_ctx->redirector_symbol,
-								1,
-								g_list_prepend (NULL, rspamd_mempool_strdup
-										(task->task_pool, pat->ptr)));
-					}
-					register_redirector_call (url,
-							param->task,
-							param->suffix,
-							pat->ptr,
-							param->tree);
+				register_redirector_call (url,
+						param->task,
+						param->suffix,
+						found_tld,
+						param->tree);
 
-					return;
-				}
+				return;
 			}
 		}
+
 		make_surbl_requests (url, param->task, param->suffix, FALSE,
 			param->tree);
 	}

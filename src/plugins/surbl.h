@@ -2,7 +2,7 @@
 #define RSPAMD_MODULE_SURBL
 
 #include "config.h"
-#include "acism.h"
+#include "multipattern.h"
 
 #define DEFAULT_REDIRECTOR_PORT 8080
 #define DEFAULT_SURBL_WEIGHT 10
@@ -31,10 +31,8 @@ struct surbl_ctx {
 	const gchar *redirector_symbol;
 	GHashTable **exceptions;
 	GHashTable *whitelist;
-	GHashTable *redirector_hosts;
 	void *redirector_map_data;
-	ac_trie_t *redirector_trie;
-	GArray *redirector_ptrs;
+	GHashTable *redirector_tlds;
 	guint use_redirector;
 	struct upstream_list *redirectors;
 	rspamd_mempool_t *surbl_pool;
