@@ -19,6 +19,7 @@ the value of this option is 'postmaster, mailer-daemon'
 - `whitelisted_ip` - a map of ip addresses or networks whitelisted
 - `max_rcpts` - do not apply ratelimit if it contains more than this value of recipients (5 by default). This
 option allows to avoid too many work for setting buckets if there are a lot of recipients in a message).
+- `max_delay` - maximum lifetime for any limit bucket (1 day by default)
 - `rates` - a table of allowed rates in form:
 
     type = [burst,leak];
