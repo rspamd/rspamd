@@ -43,6 +43,8 @@ local whitelisted_ip
 local max_rcpt = 5
 local upstreams
 local ratelimit_symbol
+-- Do not delay mail after 1 day
+local max_delay = 24 * 3600
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_redis = require "rspamd_redis"
@@ -51,16 +53,48 @@ local rspamd_util = require "rspamd_util"
 local _ = require "fun"
 --local dumper = require 'pl.pretty'.dump
 
+--- Utility function for split string to table
+local function split(str, delim, maxNb)
+  -- Eliminate bad cases...
+  if string.find(str, delim) == nil then
+    return { str }
+  end
+  if maxNb == nil or maxNb < 1 then
+    maxNb = 0    -- No limit
+  end
+  local result = {}
+  local pat = "(.-)" .. delim .. "()"
+  local nb = 0
+  local lastPos
+  for part, pos in string.gmatch(str, pat) do
+    nb = nb + 1
+    result[nb] = part
+    lastPos = pos
+    if nb == maxNb then break end
+  end
+  -- Handle the last field
+  if nb ~= maxNb then
+    result[nb + 1] = string.sub(str, lastPos)
+  end
+  return result
+end
+
 --- Parse atime and bucket of limit
 local function parse_limits(data)
   local function parse_limit_elt(str)
-    local pos,_ = string.find(str, ':')
-    if not pos then
-      return {0, 0}
+    local elts = split(str, ':', 3)
+    if not elts or #elts < 2 then
+      return {0, 0, 0}
     else
-      local atime = tonumber(string.sub(str, 1, pos - 1))
-      local bucket = tonumber(string.sub(str, pos + 1))
-      return {atime,bucket}
+      local atime = tonumber(elts[1])
+      local bucket = tonumber(elts[2])
+      local ctime = atime
+
+      if elts[3] then
+        ctime = tonumber(elts[3])
+      end
+
+      return {atime,bucket,ctime}
     end
   end
 
@@ -68,7 +102,7 @@ local function parse_limits(data)
     if type(e) == 'string' then
       return parse_limit_elt(e)
     else
-      return {0, 0}
+      return {0, 0, 0}
     end
     end):totable()
 end
@@ -108,19 +142,25 @@ local function check_limits(task, args)
         local rate = limit[2]
         local threshold = limit[1]
         local atime = elt[1]
+        local ctime = elt[3]
 
-        bucket = bucket - rate * (ntime - atime);
-        if bucket > 0 then
-          if ratelimit_symbol then
-            local mult = 2 * rspamd_util.tanh(bucket / (threshold * 2))
+        if atime - ctime > max_delay then
+          rspamd_logger.infox(task, 'limit is too old: %1 seconds; ignore it',
+            atime - ctime)
+        else
+          bucket = bucket - rate * (ntime - atime);
+          if bucket > 0 then
+            if ratelimit_symbol then
+              local mult = 2 * rspamd_util.tanh(bucket / (threshold * 2))
 
-            if mult > 0.5 then
-              task:insert_result(ratelimit_symbol, mult,
-                tostring(mult))
-            end
-          else
-            if bucket > threshold then
+              if mult > 0.5 then
+                task:insert_result(ratelimit_symbol, mult,
+                  tostring(mult))
+              end
+            else
+              if bucket > threshold then
                 task:set_pre_result('soft reject', 'Ratelimit exceeded')
+              end
             end
           end
         end
@@ -164,16 +204,25 @@ local function set_limits(task, args)
         local rate = limit[1][2]
         local threshold = limit[1][1]
         local atime = elt[1]
+        local ctime = elt[3]
 
-        if bucket > 0 then
-          bucket = bucket - rate * (ntime - atime) + 1;
-          if bucket < 0 then
+        if atime - ctime > max_delay then
+          bucket = 1
+          ctime = atime
+          rspamd_logger.infox(task, 'limit is too old: %1 seconds; start it over',
+            atime - ctime)
+        else
+          if bucket > 0 then
+            bucket = bucket - rate * (ntime - atime) + 1;
+            if bucket < 0 then
+              bucket = 1
+            end
+          else
             bucket = 1
           end
-        else
-          bucket = 1
         end
-        local lstr = string.format('%.3f:%.3f', ntime, bucket)
+
+        local lstr = string.format('%.3f:%.3f:.3f', ntime, bucket, ctime)
         table.insert(values, limit[2])
         table.insert(values, lstr)
       end, _.zip(parse_limits(data), _.iter(args)))
@@ -293,32 +342,6 @@ local function rate_set(task)
 end
 
 
---- Utility function for split string to table
-local function split(str, delim, maxNb)
-  -- Eliminate bad cases...
-  if string.find(str, delim) == nil then
-    return { str }
-  end
-  if maxNb == nil or maxNb < 1 then
-    maxNb = 0    -- No limit
-  end
-  local result = {}
-  local pat = "(.-)" .. delim .. "()"
-  local nb = 0
-  local lastPos
-  for part, pos in string.gmatch(str, pat) do
-    nb = nb + 1
-    result[nb] = part
-    lastPos = pos
-    if nb == maxNb then break end
-  end
-  -- Handle the last field
-  if nb ~= maxNb then
-    result[nb + 1] = string.sub(str, lastPos)
-  end
-  return result
-end
-
 --- Parse a single limit description
 local function parse_limit(str)
   local params = split(str, ':', 0)
@@ -392,6 +415,10 @@ if opts then
 
   if opts['max_rcpt'] then
     max_rcpt = tonumber(opts['max_rcpt'])
+  end
+
+  if opts['max_delay'] then
+    max_rcpt = tonumber(opts['max_delay'])
   end
 
   if not opts['servers'] then
