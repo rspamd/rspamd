@@ -1068,6 +1068,7 @@ ucl_parser_process_object_element (struct ucl_parser *parser, ucl_object_t *nobj
 {
 	ucl_hash_t *container;
 	ucl_object_t *tobj;
+	char errmsg[256];
 
 	container = parser->stack->obj->value.ov;
 
@@ -1126,24 +1127,35 @@ ucl_parser_process_object_element (struct ucl_parser *parser, ucl_object_t *nobj
 			break;
 
 		case UCL_DUPLICATE_ERROR:
-			ucl_create_err (&parser->err, "error while parsing %s: "
-					"line: %d, column: %d: duplicate element for key '%s' "
-					"has been found",
-					parser->cur_file ? parser->cur_file : "<unknown>",
-					parser->chunks->line, parser->chunks->column, nobj->key);
+			snprintf(errmsg, sizeof(errmsg),
+					"duplicate element for key '%s' found",
+					nobj->key);
+			ucl_set_err (parser, UCL_EMERGE, errmsg, &parser->err);
 			return false;
 
 		case UCL_DUPLICATE_MERGE:
 			/*
 			 * Here we do have some old object so we just push it on top of objects stack
+			 * Check priority and then perform the merge on the remaining objects
 			 */
 			if (tobj->type == UCL_OBJECT || tobj->type == UCL_ARRAY) {
 				ucl_object_unref (nobj);
 				nobj = tobj;
 			}
-			else {
-				/* For other types we create implicit array as usual */
+			else if (priold == prinew) {
 				ucl_parser_append_elt (parser, container, tobj, nobj);
+			}
+			else if (priold > prinew) {
+				/*
+				 * We add this new object to a list of trash objects just to ensure
+				 * that it won't come to any real object
+				 * XXX: rather inefficient approach
+				 */
+				DL_APPEND (parser->trash_objs, nobj);
+			}
+			else {
+				ucl_hash_replace (container, tobj, nobj);
+				ucl_object_unref (tobj);
 			}
 			break;
 		}
@@ -2585,20 +2597,18 @@ ucl_parser_add_chunk_full (struct ucl_parser *parser, const unsigned char *data,
 		return false;
 	}
 
-	if (data == NULL) {
+	if (data == NULL && len != 0) {
 		ucl_create_err (&parser->err, "invalid chunk added");
 		return false;
 	}
-	if (len == 0) {
-		parser->top_obj = ucl_object_new_full (UCL_OBJECT, priority);
-		return true;
-	}
+
 	if (parser->state != UCL_STATE_ERROR) {
 		chunk = UCL_ALLOC (sizeof (struct ucl_chunk));
 		if (chunk == NULL) {
 			ucl_create_err (&parser->err, "cannot allocate chunk structure");
 			return false;
 		}
+
 		chunk->begin = data;
 		chunk->remain = len;
 		chunk->pos = chunk->begin;
@@ -2617,12 +2627,27 @@ ucl_parser_add_chunk_full (struct ucl_parser *parser, const unsigned char *data,
 			return false;
 		}
 
-		switch (parse_type) {
-		default:
-		case UCL_PARSE_UCL:
-			return ucl_state_machine (parser);
-		case UCL_PARSE_MSGPACK:
-			return ucl_parse_msgpack (parser);
+		if (len > 0) {
+			/* Need to parse something */
+			switch (parse_type) {
+			default:
+			case UCL_PARSE_UCL:
+				return ucl_state_machine (parser);
+			case UCL_PARSE_MSGPACK:
+				return ucl_parse_msgpack (parser);
+			}
+		}
+		else {
+			/* Just add empty chunk and go forward */
+			if (parser->top_obj == NULL) {
+				/*
+				 * In case of empty object, create one to indicate that we've
+				 * read something
+				 */
+				parser->top_obj = ucl_object_new_full (UCL_OBJECT, priority);
+			}
+
+			return true;
 		}
 	}
 

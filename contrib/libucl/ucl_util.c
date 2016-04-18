@@ -975,6 +975,7 @@ ucl_include_file_single (const unsigned char *data, size_t len,
 		if (params->soft_fail) {
 			return false;
 		}
+
 		return (!params->must_exist || false);
 	}
 
@@ -1172,11 +1173,14 @@ ucl_include_file_single (const unsigned char *data, size_t len,
 
 	res = ucl_parser_add_chunk_full (parser, buf, buflen, params->priority,
 			params->strat, params->parse_type);
-	if (!res && !params->must_exist) {
-		/* Free error */
-		utstring_free (parser->err);
-		parser->err = NULL;
-		parser->state = UCL_STATE_AFTER_VALUE;
+
+	if (!res) {
+		if (!params->must_exist) {
+			/* Free error */
+			utstring_free (parser->err);
+			parser->err = NULL;
+			res = true;
+		}
 	}
 
 	/* Stop nesting the include, take 1 level off the stack */
@@ -3449,4 +3453,40 @@ ucl_comments_find (const ucl_object_t *comments,
 	}
 
 	return NULL;
+}
+
+bool
+ucl_comments_move (ucl_object_t *comments,
+		const ucl_object_t *from, const ucl_object_t *to)
+{
+	const ucl_object_t *found;
+	ucl_object_t *obj;
+
+	if (comments && from && to) {
+		found = ucl_object_lookup_len (comments,
+				(const char *)&from, sizeof (void *));
+
+		if (found) {
+			/* Replace key */
+			obj = ucl_object_ref (found);
+			ucl_object_delete_keyl (comments, (const char *)&from,
+					sizeof (void *));
+			ucl_object_insert_key (comments, obj, (const char *)&to,
+					sizeof (void *), true);
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void
+ucl_comments_add (ucl_object_t *comments, const ucl_object_t *obj,
+		const char *comment)
+{
+	if (comments && obj && comment) {
+		ucl_object_insert_key (comments, ucl_object_fromstring (comment),
+				(const char *)&obj, sizeof (void *), true);
+	}
 }
