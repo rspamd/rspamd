@@ -411,7 +411,7 @@ local function process_settings_table(tbl)
     if elt['symbols'] then out['symbols'] = elt['symbols'] end
     if elt['id'] then
       out['id'] = elt['id']
-      settings[elt['id']] = out
+      settings_ids[elt['id']] = out
     end
 
     if elt['apply'] then
