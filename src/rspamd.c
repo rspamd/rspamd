@@ -76,6 +76,7 @@ static gint control_fd;
 /* Cmdline options */
 static gboolean config_test = FALSE;
 static gboolean no_fork = FALSE;
+static gboolean show_version = FALSE;
 static gchar **cfg_names = NULL;
 static gchar **lua_tests = NULL;
 static gchar **sign_configs = NULL;
@@ -130,9 +131,11 @@ static GOptionEntry entries[] =
 	{ "private-key", 0, 0, G_OPTION_ARG_FILENAME, &privkey,
 	  "Specify private key to sign", NULL },
 	{ "gen-keypair", 0, 0, G_OPTION_ARG_NONE, &gen_keypair, "Generate new encryption "
-			"keypair", NULL},
+	  "keypair", NULL},
 	{ "encrypt-password", 0, 0, G_OPTION_ARG_NONE, &encrypt_password, "Encrypt "
-			"controller password to store in the configuration file", NULL },
+	  "controller password to store in the configuration file", NULL },
+	{ "version", 'v', 0, G_OPTION_ARG_NONE, &show_version,
+	  "Show version and exit", NULL },
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -146,8 +149,13 @@ read_cmd_line (gint *argc, gchar ***argv, struct rspamd_config *cfg)
 	pid_t r;
 
 	context = g_option_context_new ("- run rspamd daemon");
+#if defined(GIT_VERSION) && GIT_VERSION == 1
 	g_option_context_set_summary (context,
-		"Summary:\n  Rspamd daemon version " RVERSION "\n  Release id: " RID);
+		"Summary:\n  Rspamd daemon version " RVERSION "-git\n  Git id: " RID);
+#else
+	g_option_context_set_summary (context,
+		"Summary:\n  Rspamd daemon version " RVERSION);
+#endif
 	g_option_context_add_main_entries (context, entries, NULL);
 
 	if (!g_option_context_parse (context, argc, argv, &error)) {
@@ -182,6 +190,7 @@ read_cmd_line (gint *argc, gchar ***argv, struct rspamd_config *cfg)
 			g_array_append_val (other_workers, r);
 		}
 	}
+
 	cfg->pid_file = rspamd_pidfile;
 }
 
@@ -969,6 +978,16 @@ rspamd_spair_close (gpointer p)
 	g_free (p);
 }
 
+static void
+version (void)
+{
+#if defined(GIT_VERSION) && GIT_VERSION == 1
+	rspamd_printf ("Rspamd daemon version " RVERSION "-git." RID "\n");
+#else
+	rspamd_printf ("Rspamd daemon version " RVERSION "\n");
+#endif
+}
+
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
@@ -1001,12 +1020,15 @@ main (gint argc, gchar **argv, gchar **env)
 #endif
 
 	rspamd_main->cfg->libs_ctx = rspamd_init_libs ();
-
 	memset (&signals, 0, sizeof (struct sigaction));
-
 	other_workers = g_array_new (FALSE, TRUE, sizeof (pid_t));
 
 	read_cmd_line (&argc, &argv, rspamd_main->cfg);
+
+	if (show_version) {
+		version ();
+		exit (EXIT_SUCCESS);
+	}
 
 	if (argc > 0) {
 		/* Parse variables */
