@@ -509,7 +509,7 @@ SET(POE_LOOP "Loop::IO_Poll")
 SET(TAR "tar")
 
 # Platform specific configuration
-IF(CMAKE_SYSTEM_NAME MATCHES "^.*BSD$")
+IF(CMAKE_SYSTEM_NAME MATCHES "^.*BSD$|DragonFly")
 	ADD_DEFINITIONS(-DFREEBSD -D_BSD_SOURCE)
 	CONFIGURE_FILE(freebsd/rspamd.sh.in freebsd/rspamd @ONLY)
 
