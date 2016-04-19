@@ -76,9 +76,12 @@ local function check_query_settings(task)
 
   local settings_id = task:get_request_header('settings-id')
   if settings_id and settings_initialized then
-    local elt = settings_ids[settings_id]
+    -- settings_id is rspamd text, so need to convert it to string for lua
+    local id_str = tostring(settings_id)
+    local elt = settings_ids[id_str]
     if elt and elt['apply'] then
       task:set_settings(elt['apply'])
+      rspamd_logger.infox(task, "applying settings id %s", id_str)
 
       return true
     end
