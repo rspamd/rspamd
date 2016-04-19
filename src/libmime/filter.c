@@ -106,16 +106,14 @@ insert_metric_result (struct rspamd_task *task,
 	}
 
 	if (task->settings) {
-		mobj = ucl_object_lookup (task->settings, metric->name);
-		if (mobj) {
-			gdouble corr;
+		mobj = task->settings;
+		gdouble corr;
 
-			sobj = ucl_object_lookup (mobj, symbol);
-			if (sobj != NULL && ucl_object_todouble_safe (sobj, &corr)) {
-				msg_debug ("settings: changed weight of symbol %s from %.2f to %.2f",
-						symbol, w, corr);
-				w = corr * flag;
-			}
+		sobj = ucl_object_lookup (mobj, symbol);
+		if (sobj != NULL && ucl_object_todouble_safe (sobj, &corr)) {
+			msg_debug ("settings: changed weight of symbol %s from %.2f to %.2f",
+					symbol, w, corr);
+			w = corr * flag;
 		}
 	}
 
