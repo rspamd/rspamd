@@ -146,14 +146,8 @@ struct url_matcher static_matchers[] = {
 		{"ftp.",      "ftp://",    url_web_start,   url_web_end,
 				URL_FLAG_NOHTML, 0},
 		/* Likely emails */
-#ifdef WITH_HYPERSCAN
-		{"\\b[\\w._%+-]+@[\\w.-]+\\.\\p{L}{2,}\\b", "mailto://",
-				url_email_start, url_email_end,
-				URL_FLAG_NOHTML | URL_FLAG_REGEXP, 0}
-#else
 		{"@",         "mailto://", url_email_start, url_email_end,
 				URL_FLAG_NOHTML, 0}
-#endif
 };
 
 struct url_callback_data {
@@ -1947,7 +1941,6 @@ url_email_end (struct url_callback_data *cb,
 		return TRUE;
 	}
 	else {
-#ifndef WITH_HYPERSCAN
 		const gchar *c, *p;
 		/*
 		 * Here we have just '@', so we need to find both start and end of the
@@ -1992,9 +1985,6 @@ url_email_end (struct url_callback_data *cb,
 			match->m_len = p - c;
 			return TRUE;
 		}
-#else
-		return TRUE;
-#endif
 	}
 
 	return FALSE;
@@ -2004,7 +1994,6 @@ static gboolean
 rspamd_url_trie_is_match (struct url_matcher *matcher, const gchar *pos,
 		const gchar *end)
 {
-#ifndef WITH_HYPERSCAN
 	if (matcher->flags & URL_FLAG_TLD_MATCH) {
 		/* Immediately check pos for valid chars */
 		if (pos < end) {
@@ -2026,7 +2015,7 @@ rspamd_url_trie_is_match (struct url_matcher *matcher, const gchar *pos,
 			}
 		}
 	}
-#endif
+
 	return TRUE;
 }
 
@@ -2178,14 +2167,14 @@ rspamd_url_trie_generic_callback_common (struct rspamd_multipattern *mp,
 		}
 		else {
 			cb->url_str = rspamd_mempool_alloc (cb->pool, m.m_len + 1);
-			rspamd_strlcpy (cb->url_str, m.m_begin, m.m_len + 1);
+			cb->len = rspamd_strlcpy (cb->url_str, m.m_begin, m.m_len + 1);
 		}
 
 		cb->start = m.m_begin;
 		cb->fin = m.m_begin + m.m_len;
 		url = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_url));
 		g_strstrip (cb->url_str);
-		rc = rspamd_url_parse (url, cb->url_str, m.m_len, pool);
+		rc = rspamd_url_parse (url, cb->url_str, strlen (cb->url_str), pool);
 
 		if (rc == URI_ERRNO_OK && url->hostlen > 0) {
 			if (cb->func) {
