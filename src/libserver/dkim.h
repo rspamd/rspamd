@@ -20,50 +20,12 @@
 #include "event.h"
 #include "dns.h"
 #include "ref.h"
-#ifdef HAVE_OPENSSL
-#include <openssl/rsa.h>
-#include <openssl/engine.h>
-#endif
 
 /* Main types and definitions */
 
 #define DKIM_SIGNHEADER     "DKIM-Signature"
 /* DKIM signature header */
 
-/* special DNS tokens */
-#define DKIM_DNSKEYNAME     "_domainkey"
-/* reserved DNS sub-zone */
-#define DKIM_DNSPOLICYNAME  "_adsp" /* reserved DNS sub-zone */
-
-/* Canonization methods */
-#define DKIM_CANON_UNKNOWN  (-1)    /* unknown method */
-#define DKIM_CANON_SIMPLE   0   /* as specified in DKIM spec */
-#define DKIM_CANON_RELAXED  1   /* as specified in DKIM spec */
-
-#define DKIM_CANON_DEFAULT  DKIM_CANON_SIMPLE
-
-/* Signature methods */
-#define DKIM_SIGN_UNKNOWN   (-2)    /* unknown method */
-#define DKIM_SIGN_DEFAULT   (-1)    /* use internal default */
-#define DKIM_SIGN_RSASHA1   0   /* an RSA-signed SHA1 digest */
-#define DKIM_SIGN_RSASHA256 1   /* an RSA-signed SHA256 digest */
-
-/* Params */
-#define DKIM_PARAM_UNKNOWN  (-1)    /* unknown */
-#define DKIM_PARAM_SIGNATURE    0   /* b */
-#define DKIM_PARAM_SIGNALG  1   /* a */
-#define DKIM_PARAM_DOMAIN   2   /* d */
-#define DKIM_PARAM_CANONALG 3   /* c */
-#define DKIM_PARAM_QUERYMETHOD  4   /* q */
-#define DKIM_PARAM_SELECTOR 5   /* s */
-#define DKIM_PARAM_HDRLIST  6   /* h */
-#define DKIM_PARAM_VERSION  7   /* v */
-#define DKIM_PARAM_IDENTITY 8   /* i */
-#define DKIM_PARAM_TIMESTAMP    9   /* t */
-#define DKIM_PARAM_EXPIRATION   10  /* x */
-#define DKIM_PARAM_COPIEDHDRS   11  /* z */
-#define DKIM_PARAM_BODYHASH 12  /* bh */
-#define DKIM_PARAM_BODYLENGTH   13  /* l */
 
 /* Errors (from OpenDKIM) */
 
@@ -122,40 +84,11 @@
 #define DKIM_NOTFOUND   3   /* requested record not found */
 #define DKIM_RECORD_ERROR   4   /* error requesting record */
 
-typedef struct rspamd_dkim_context_s {
-	rspamd_mempool_t *pool;
-	gint sig_alg;
-	gint header_canon_type;
-	gint body_canon_type;
-	gsize len;
-	gchar *domain;
-	gchar *selector;
-	time_t timestamp;
-	time_t expiration;
-	gint8 *b;
-	gint8 *bh;
-	guint bhlen;
-	guint blen;
-	GPtrArray *hlist;
-	guint ver;
-	gchar *dns_key;
-	const gchar *dkim_header;
-	GChecksum *headers_hash;
-	GChecksum *body_hash;
-} rspamd_dkim_context_t;
+struct rspamd_dkim_context_s;
+typedef struct rspamd_dkim_context_s rspamd_dkim_context_t;
 
-typedef struct rspamd_dkim_key_s {
-	guint8 *keydata;
-	guint keylen;
-	gsize decoded_len;
-	guint ttl;
-#ifdef HAVE_OPENSSL
-	RSA *key_rsa;
-	BIO *key_bio;
-	EVP_PKEY *key_evp;
-#endif
-	ref_entry_t ref;
-} rspamd_dkim_key_t;
+struct rspamd_dkim_key_s;
+typedef struct rspamd_dkim_key_s rspamd_dkim_key_t;
 
 struct rspamd_task;
 
@@ -198,6 +131,12 @@ gboolean rspamd_get_dkim_key (rspamd_dkim_context_t *ctx,
 gint rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	rspamd_dkim_key_t *key,
 	struct rspamd_task *task);
+
+rspamd_dkim_key_t * rspamd_dkim_key_ref (rspamd_dkim_key_t *k);
+void rspamd_dkim_key_unref (rspamd_dkim_key_t *k);
+const gchar* rspamd_dkim_get_domain (rspamd_dkim_context_t *ctx);
+const gchar* rspamd_dkim_get_dns_key (rspamd_dkim_context_t *ctx);
+guint rspamd_dkim_key_get_ttl (rspamd_dkim_key_t *k);
 
 /**
  * Free DKIM key
