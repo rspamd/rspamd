@@ -39,3 +39,6 @@ If you would like to support rspamd development, we are accepting donations via 
 <img alt="" border="0" src="https://www.paypalobjects.com/en_GB/i/scr/pixel.gif" width="1" height="1">
 </form>
 
+## Commercial support
+
+If you require additional level of support related to large or custom rspamd setup that could also require NDA signing, you might go with the commercial support option. Should you have any questions or queries about this option then please contact <support@rspamd.com> for options and quotes.
