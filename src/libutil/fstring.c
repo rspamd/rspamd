@@ -21,8 +21,6 @@ static const gsize default_initial_size = 48;
 static const gsize max_grow = 1024 * 1024;
 
 #define fstravail(s) ((s)->allocated - (s)->len)
-static rspamd_fstring_t * rspamd_fstring_grow (rspamd_fstring_t *str,
-		gsize needed_len) G_GNUC_WARN_UNUSED_RESULT;
 
 rspamd_fstring_t *
 rspamd_fstring_new (void)
@@ -87,7 +85,7 @@ rspamd_fstring_free (rspamd_fstring_t *str)
 	free (str);
 }
 
-static rspamd_fstring_t *
+rspamd_fstring_t *
 rspamd_fstring_grow (rspamd_fstring_t *str, gsize needed_len)
 {
 	gsize newlen;

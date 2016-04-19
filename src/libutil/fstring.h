@@ -144,4 +144,13 @@ void rspamd_fstring_mapped_ftok_free (gpointer p);
  */
 rspamd_ftok_t *rspamd_ftok_map (const rspamd_fstring_t *s);
 
+/**
+ * Grow the specified fixed string
+ * @param str
+ * @param needed_len
+ * @return
+ */
+rspamd_fstring_t * rspamd_fstring_grow (rspamd_fstring_t *str,
+		gsize needed_len) G_GNUC_WARN_UNUSED_RESULT;
+
 #endif
