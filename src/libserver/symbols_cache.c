@@ -1724,6 +1724,7 @@ rspamd_symbols_cache_disable_symbol (struct rspamd_task *task,
 {
 	struct cache_savepoint *checkpoint;
 	struct cache_item *item;
+	gint id;
 
 	if (task->checkpoint == NULL) {
 		checkpoint = rspamd_symbols_cache_make_checkpoint (task, cache);
@@ -1733,10 +1734,11 @@ rspamd_symbols_cache_disable_symbol (struct rspamd_task *task,
 		checkpoint = task->checkpoint;
 	}
 
-	item = g_hash_table_lookup (cache->items_by_symbol, symbol);
+	id = rspamd_symbols_cache_find_symbol_parent (cache, symbol);
 
-	if (item != NULL) {
+	if (id > 0) {
 		/* Set executed and finished flags */
+		item = g_ptr_array_index (cache->items_by_id, id);
 
 		setbit (checkpoint->processed_bits, item->id * 2);
 		setbit (checkpoint->processed_bits, item->id * 2 + 1);
