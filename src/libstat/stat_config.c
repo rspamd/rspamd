@@ -292,6 +292,8 @@ rspamd_stat_get_classifier (const gchar *name)
 		}
 	}
 
+	msg_err ("cannot find classifier named %s", name);
+
 	return NULL;
 }
 
@@ -309,6 +311,8 @@ rspamd_stat_get_backend (const gchar *name)
 			return &stat_ctx->backends_subrs[i];
 		}
 	}
+
+	msg_err ("cannot find backend named %s", name);
 
 	return NULL;
 }
@@ -328,6 +332,8 @@ rspamd_stat_get_tokenizer (const gchar *name)
 		}
 	}
 
+	msg_err ("cannot find tokenizer named %s", name);
+
 	return NULL;
 }
 
@@ -345,6 +351,8 @@ rspamd_stat_get_cache (const gchar *name)
 			return &stat_ctx->caches_subrs[i];
 		}
 	}
+
+	msg_err ("cannot find cache named %s", name);
 
 	return NULL;
 }
