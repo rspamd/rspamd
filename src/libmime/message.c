@@ -692,10 +692,11 @@ rspamd_text_to_utf8 (struct rspamd_task *task,
 		gchar *input, gsize len, const gchar *in_enc,
 		gsize *olen, GError **err)
 {
-	gchar *res, *s, *d;
+	gchar *s, *d;
 	gsize outlen;
 	iconv_t ic;
-	gsize processed, ret;
+	rspamd_fstring_t *dst;
+	gsize remain, ret, inremain = len;
 
 	ic = iconv_open (UTF8_CHARSET, in_enc);
 
@@ -705,32 +706,35 @@ rspamd_text_to_utf8 (struct rspamd_task *task,
 		return NULL;
 	}
 
-	/* For the most of charsets utf8 notation is larger than native one */
-	outlen = len * 2 + 1;
-
-	res = rspamd_mempool_alloc (task->task_pool, outlen);
+	/* Preallocate for half of characters to be converted */
+	outlen = len + len / 2 + 1;
+	dst = rspamd_fstring_sized_new (outlen);
 	s = input;
-	d = res;
-	processed = outlen - 1;
+	d = dst->str;
+	remain = outlen - 1;
 
-	while (len > 0 && processed > 0) {
-		ret = iconv (ic, &s, &len, &d, &processed);
+	while (inremain > 0 && remain > 0) {
+		ret = iconv (ic, &s, &inremain, &d, &remain);
+		dst->len = d - dst->str;
+
 		if (ret == (gsize)-1) {
 			switch (errno) {
 			case E2BIG:
-				g_set_error (err, converter_error_quark(), EINVAL,
-						"output of size %zd is not enough to handle "
-						"converison of %zd bytes", outlen, len);
-				iconv_close (ic);
-				return NULL;
+				/* Enlarge string */
+				if (inremain > 0) {
+					dst = rspamd_fstring_grow (dst, inremain * 2);
+					d = dst->str + dst->len;
+					remain = dst->allocated - dst->len - 1;
+				}
+				break;
 			case EILSEQ:
 			case EINVAL:
 				/* Ignore bad characters */
-				if (processed > 0 && len > 0) {
+				if (remain > 0 && inremain > 0) {
 					*d++ = '?';
 					s++;
-					len --;
-					processed --;
+					inremain --;
+					remain --;
 				}
 				break;
 			}
@@ -741,11 +745,14 @@ rspamd_text_to_utf8 (struct rspamd_task *task,
 	}
 
 	*d = '\0';
-	*olen = d - res;
-
+	*olen = dst->len;
 	iconv_close (ic);
+	rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t)rspamd_fstring_free, dst);
+	msg_info_task ("converted from %s to UTF-8 inlen: %z, outlen: %z",
+			in_enc, len, dst->len);
 
-	return res;
+	return dst->str;
 }
 
 
