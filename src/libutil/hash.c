@@ -122,7 +122,7 @@ rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash, gconstpointer key, time_t now)
 	res = g_hash_table_lookup (hash->tbl, key);
 	if (res != NULL) {
 		if (res->ttl != 0) {
-			if (((guint)now) - res->helt.pri > res->ttl) {
+			if (((guint)now) - res->storage > res->ttl) {
 				rspamd_min_heap_remove_elt (hash->heap, &res->helt);
 				g_hash_table_remove (hash->tbl, key);
 				return NULL;
