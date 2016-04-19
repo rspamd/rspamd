@@ -211,6 +211,24 @@ bayes_classify (struct rspamd_classifier * ctx,
 	memset (&cl, 0, sizeof (cl));
 	cl.task = task;
 
+	/* Check min learns */
+	if (ctx->cfg->min_learns > 0) {
+		if (ctx->ham_learns < ctx->cfg->min_learns) {
+			msg_info_task ("skip classification as ham class has not enough "
+					"learns: %ul, %ud required",
+					ctx->ham_learns, ctx->cfg->min_learns);
+
+			return TRUE;
+		}
+		if (ctx->spam_learns < ctx->cfg->min_learns) {
+			msg_info_task ("skip classification as spam class has not enough "
+					"learns: %ul, %ud required",
+					ctx->spam_learns, ctx->cfg->min_learns);
+
+			return TRUE;
+		}
+	}
+
 	for (i = 0; i < tokens->len; i ++) {
 		tok = g_ptr_array_index (tokens, i);
 

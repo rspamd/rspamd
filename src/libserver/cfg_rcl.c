@@ -2086,6 +2086,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			RSPAMD_CL_FLAG_INT_32,
 			"Maximum count of tokens (words) to be considered for statistics");
 	rspamd_rcl_add_default_handler (sub,
+			"max_tokens",
+			rspamd_rcl_parse_struct_integer,
+			G_STRUCT_OFFSET (struct rspamd_classifier_config, min_learns),
+			RSPAMD_CL_FLAG_UINT,
+			"Minimum number of learns for each statfile to use this classifier");
+	rspamd_rcl_add_default_handler (sub,
 			"backend",
 			rspamd_rcl_parse_struct_string,
 			G_STRUCT_OFFSET (struct rspamd_classifier_config, backend),
