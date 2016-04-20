@@ -1,3 +1,40 @@
+1.2.4:
+	* Implement new multipattern matcher that uses hyperscan if possible
+	* Use mutlipattern for lua_trie code
+	* Add utility methods for multipattern
+	* Use multipattern in url matcher
+	* Add escape functions for hyperscan
+	* Allow to optimize lua -> C transition by flattening table args
+	* Optimize hot paths in SA plugin
+	* Optimize rspamd_re_cache_type_from_string
+	* Allow empty tries
+	* Fix extraction of URLs from Subject
+	* Allow to have different flags for different patterns in multipattern
+	* Add common directory for hyperscan cache to config
+	* Implement caching for hyperscan multipattern
+	* Attach domain part to `R_SUSPICIOUS_URL` (by @moisseev)
+	* Allow multipattern scans to be nested for the case of hyperscan
+	* Simplify SURBL redirector search code and avoid ac_trie
+	* Add two way substring search algorithm
+	* Avoid acism usage to find gtube pattern
+	* Fix processing of empty headers
+	* Allow to disable pthread mutexes on broken platforms
+	* Make web interface not send password in query strings (#585) by @fatalbanana
+	* Add maximum delay to ratelimit module
+	* Backport fix for empty files inclusion from libucl
+	* Fix settings id setup
+	* Add min_learns option to classifiers
+	* Use more clever to utf8 conversion strategy
+	* Fix disabling of virtual symbols in the settings
+	* Rework settings to work properly in metric-less configuration
+	* Set the default limit for classifier
+	* Fix ttl based expiration from LRU cache
+	* Rework DKIM module to use OpenSSL for digests
+	* Fix mailto urls parsing with hyperscan
+	* Do not set obscured flag for urls starting with spaces
+	* Fix crash on redis learn
+	* Fix ratelimit ctime setting
+
 1.2.3:
 	* New DCC module (by @smfreegard)
 	* Rework whitelist module:
