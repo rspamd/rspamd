@@ -94,6 +94,10 @@ local function parse_limits(data)
         ctime = tonumber(elts[3])
       end
 
+      if not ctime then
+        ctime = atime
+      end
+
       return {atime,bucket,ctime}
     end
   end
@@ -222,7 +226,7 @@ local function set_limits(task, args)
           end
         end
 
-        local lstr = string.format('%.3f:%.3f:.3f', ntime, bucket, ctime)
+        local lstr = string.format('%.3f:%.3f:%.3f', ntime, bucket, ctime)
         table.insert(values, limit[2])
         table.insert(values, lstr)
       end, _.zip(parse_limits(data), _.iter(args)))
