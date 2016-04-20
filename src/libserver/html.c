@@ -1192,9 +1192,12 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 	if (rc == URI_ERRNO_OK) {
 
 		/* Spaces in href usually mean an attempt to obfuscate URL */
+		/* See https://github.com/vstakhov/rspamd/issues/593 */
+#if 0
 		if (has_spaces) {
 			url->flags |= RSPAMD_URL_FLAG_OBSCURED;
 		}
+#endif
 
 		return url;
 	}
