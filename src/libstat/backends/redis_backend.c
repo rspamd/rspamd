@@ -886,8 +886,10 @@ rspamd_redis_learned (redisAsyncContext *c, gpointer r, gpointer priv)
 		rspamd_session_remove_event (task->s, rspamd_redis_fin_learn, rt);
 	}
 
-	redisAsyncFree (rt->redis);
-	rt->conn_state = RSPAMD_REDIS_DISCONNECTED;
+	if (rt->conn_state == RSPAMD_REDIS_CONNECTED) {
+		redisAsyncFree (rt->redis);
+		rt->conn_state = RSPAMD_REDIS_DISCONNECTED;
+	}
 }
 
 static gboolean
