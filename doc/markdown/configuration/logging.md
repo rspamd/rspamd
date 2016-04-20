@@ -1,7 +1,7 @@
 # Rspamd logging settings
 
 ## Introduction
-Rspamd has a number of logging variants. First of all there are three types of logs that are supported by rspamd: console loggging (just output log messages to console), file logging (output log messages to file) and logging via syslog. Also it is possible to filter logging to specific level:
+Rspamd has a number of logging variants. First of all there are three types of logs that are supported by rspamd: console logging (just output log messages to console), file logging (output log messages to file) and logging via syslog. Also it is possible to filter logging to specific level:
 
 * `error` - log only critical errors
 * `warning` - log errors and warnings
@@ -30,7 +30,7 @@ Here is summary of logging parameters:
 - `type` - Defines logging type (file, console or syslog). For some types mandatory attribute is required:
     + `filename` - path to log file for file logging
     + `facility` - logging facility for syslog
-- `level` - Defines loggging level (error, warning, info or debug).
+- `level` - Defines logging level (error, warning, info or debug).
 - `log_buffer` - For file and console logging defines buffer size that will be used for logging output.
 - `log_urls` - Flag that defines whether all urls in message would be logged. Useful for testing.
 - `debug_ip` - List that contains ip addresses for which debugging would be turned on.
