@@ -346,7 +346,8 @@ Flap (const uint8_t x[H_LEN], const uint8_t lambda, const uint8_t garlic,
 	g_free (tmp);
 }
 
-static int __Catena(const uint8_t *pwd, const uint32_t pwdlen,
+static int
+__Catena (const uint8_t *pwd, const uint32_t pwdlen,
 		const uint8_t *salt, const uint8_t saltlen, const uint8_t *data,
 		const uint32_t datalen, const uint8_t lambda, const uint8_t min_garlic,
 		const uint8_t garlic, const uint8_t hashlen, const uint8_t client,
@@ -402,7 +403,7 @@ static int __Catena(const uint8_t *pwd, const uint32_t pwdlen,
 /***************************************************/
 
 int
-catena (uint8_t *pwd, const uint32_t pwdlen, const uint8_t *salt,
+catena (const uint8_t *pwd, const uint32_t pwdlen, const uint8_t *salt,
 		const uint8_t saltlen, const uint8_t *data, const uint32_t datalen,
 		const uint8_t lambda, const uint8_t min_garlic, const uint8_t garlic,
 		const uint8_t hashlen, uint8_t *hash)
@@ -413,12 +414,12 @@ catena (uint8_t *pwd, const uint32_t pwdlen, const uint8_t *salt,
 }
 
 int
-simple_catena (uint8_t *pwd,   const uint32_t pwdlen,
+simple_catena (const uint8_t *pwd,   const uint32_t pwdlen,
 		  const uint8_t *salt,  const uint8_t  saltlen,
 		  const uint8_t *data,  const uint32_t datalen,
 		  uint8_t hash[H_LEN])
 {
-  return __Catena(pwd, pwdlen, salt, saltlen, data, datalen,
+  return __Catena (pwd, pwdlen, salt, saltlen, data, datalen,
 		  LAMBDA, MIN_GARLIC, GARLIC, H_LEN,
 		  REGULAR, PASSWORD_HASHING_MODE, hash);
 }

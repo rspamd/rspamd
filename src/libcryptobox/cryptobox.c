@@ -1200,8 +1200,8 @@ rspamd_cryptobox_siphash (unsigned char *out, const unsigned char *in,
  * Password-Based Key Derivation Function 2 (PKCS #5 v2.0).
  * Code based on IEEE Std 802.11-2007, Annex H.4.2.
  */
-gboolean
-rspamd_cryptobox_pbkdf (const char *pass, gsize pass_len,
+static gboolean
+rspamd_cryptobox_pbkdf2 (const char *pass, gsize pass_len,
 		const guint8 *salt, gsize salt_len, guint8 *key, gsize key_len,
 		unsigned int rounds)
 {
@@ -1253,6 +1253,29 @@ rspamd_cryptobox_pbkdf (const char *pass, gsize pass_len,
 	return TRUE;
 }
 
+gboolean
+rspamd_cryptobox_pbkdf (const char *pass, gsize pass_len,
+		const guint8 *salt, gsize salt_len, guint8 *key, gsize key_len,
+		unsigned int complexity, enum rspamd_cryptobox_pbkdf_type type)
+{
+	gboolean ret = FALSE;
+
+	switch (type) {
+	case RSPAMD_CRYPTOBOX_CATENA:
+		if (catena (pass, pass_len, salt, salt_len, "rspamd", 6,
+				4, complexity, complexity, key_len, key) == 0) {
+			ret = TRUE;
+		}
+		break;
+	case RSPAMD_CRYPTOBOX_PBKDF2:
+	default:
+		ret = rspamd_cryptobox_pbkdf2 (pass, pass_len, salt, salt_len, key,
+				key_len, complexity);
+		break;
+	}
+
+	return ret;
+}
 
 guint
 rspamd_cryptobox_pk_bytes (enum rspamd_cryptobox_mode mode)

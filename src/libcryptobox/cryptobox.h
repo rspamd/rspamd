@@ -229,20 +229,29 @@ void rspamd_cryptobox_siphash (unsigned char *out, const unsigned char *in,
 		unsigned long long inlen,
 		const rspamd_sipkey_t k);
 
+enum rspamd_cryptobox_pbkdf_type {
+	RSPAMD_CRYPTOBOX_PBKDF2 = 0,
+	RSPAMD_CRYPTOBOX_CATENA
+};
+
+
 /**
- * Derive key from password using PKCS#5 and HMAC-blake2
+ * Derive key from password using the specified algorithm
  * @param pass input password
  * @param pass_len length of the password
  * @param salt input salt
  * @param salt_len length of salt
  * @param key output key
  * @param key_len size of the key
- * @param rounds number of rounds (should be reasonably high)
+ * @param complexity empiric number of complexity (rounds for pbkdf2 and garlic for catena)
  * @return TRUE in case of success and FALSE if failed
  */
-gboolean rspamd_cryptobox_pbkdf(const char *pass, gsize pass_len,
-		const guint8 *salt, gsize salt_len, guint8 *key, gsize key_len,
-		unsigned int rounds);
+gboolean rspamd_cryptobox_pbkdf (const char *pass, gsize pass_len,
+		const guint8 *salt, gsize salt_len,
+		guint8 *key, gsize key_len,
+		unsigned int complexity,
+		enum rspamd_cryptobox_pbkdf_type type);
+
 
 /**
  * Real size of rspamd cryptobox public key

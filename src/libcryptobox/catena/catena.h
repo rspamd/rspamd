@@ -25,7 +25,7 @@
 #define CATENA_HLEN 64
 
 int
-catena (uint8_t *pwd,   const uint32_t pwdlen,
+catena (const uint8_t *pwd,   const uint32_t pwdlen,
 	   const uint8_t *salt,  const uint8_t  saltlen,
 	   const uint8_t *data,  const uint32_t datalen,
 	   const uint8_t lambda, const uint8_t  min_garlic,
@@ -42,7 +42,7 @@ catena (uint8_t *pwd,   const uint32_t pwdlen,
  * @param hash output hash
  * @return 0 if hash is generated, -1 in case of error
  */
-int simple_catena(uint8_t *pwd, const uint32_t pwdlen,
+int simple_catena (const uint8_t *pwd, const uint32_t pwdlen,
 		   const uint8_t *salt, const uint8_t  saltlen,
 		   const uint8_t *data, const uint32_t datalen,
 		   uint8_t hash[CATENA_HLEN]);

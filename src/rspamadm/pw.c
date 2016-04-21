@@ -98,7 +98,7 @@ rspamadm_pw_encrypt (void)
 	ottery_rand_bytes (salt, pbkdf->salt_len);
 	/* Derive key */
 	rspamd_cryptobox_pbkdf (password, strlen (password),
-			salt, pbkdf->salt_len, key, pbkdf->key_len, pbkdf->rounds);
+			salt, pbkdf->salt_len, key, pbkdf->key_len, pbkdf->complexity);
 
 	encoded_salt = rspamd_encode_base32 (salt, pbkdf->salt_len);
 	encoded_key = rspamd_encode_base32 (key, pbkdf->key_len);
@@ -213,7 +213,7 @@ rspamadm_pw_check (void)
 		local_key = g_alloca (pbkdf->key_len);
 		rspamd_cryptobox_pbkdf (test_password, plen,
 				salt_decoded, salt_len,
-				local_key, pbkdf->key_len, pbkdf->rounds);
+				local_key, pbkdf->key_len, pbkdf->complexity);
 		rspamd_explicit_memzero (test_password, plen);
 
 		if (!rspamd_constant_memcmp (key_decoded, local_key, pbkdf->key_len)) {

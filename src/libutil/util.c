@@ -77,8 +77,16 @@
 
 const struct rspamd_controller_pbkdf pbkdf_list[] = {
 		{
+				.type = RSPAMD_CRYPTOBOX_PBKDF2,
 				.id = RSPAMD_PBKDF_ID_V1,
-				.rounds = 16000,
+				.complexity = 16000,
+				.salt_len = 20,
+				.key_len = rspamd_cryptobox_HASHBYTES / 2
+		},
+		{
+				.type = RSPAMD_CRYPTOBOX_CATENA,
+				.id = RSPAMD_PBKDF_ID_V2,
+				.complexity = 10,
 				.salt_len = 20,
 				.key_len = rspamd_cryptobox_HASHBYTES / 2
 		}

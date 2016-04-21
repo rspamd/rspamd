@@ -85,8 +85,9 @@ struct rspamd_worker_signal_handler {
 };
 
 struct rspamd_controller_pbkdf {
+	enum rspamd_cryptobox_pbkdf_type type;
 	gint id;
-	guint rounds;
+	guint complexity;
 	gsize salt_len;
 	gsize key_len;
 };
@@ -291,8 +292,14 @@ void register_custom_controller_command (const gchar *name,
 	gboolean privilleged,
 	gboolean require_message);
 
-#define RSPAMD_PBKDF_ID_V1 1
+enum rspamd_pbkdf_version_id {
+	RSPAMD_PBKDF_ID_V1 = 1,
+	RSPAMD_PBKDF_ID_V2= 2,
+	RSPAMD_PBKDF_ID_MAX
+};
+
 extern const struct rspamd_controller_pbkdf pbkdf_list[];
+
 
 #endif
 

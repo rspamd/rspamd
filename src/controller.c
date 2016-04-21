@@ -174,8 +174,9 @@ rspamd_is_encrypted_password (const gchar *password,
 {
 	const gchar *start, *end;
 	gint64 id;
-	gsize size;
+	gsize size, i;
 	gboolean ret = FALSE;
+	const struct rspamd_controller_pbkdf *p;
 
 	if (password[0] == '$') {
 		/* Parse id */
@@ -192,11 +193,18 @@ rspamd_is_encrypted_password (const gchar *password,
 			gchar *endptr;
 			id = strtoul (start, &endptr, 10);
 
-			if ((endptr == NULL || *endptr == *end) && id == RSPAMD_PBKDF_ID_V1) {
-				ret = TRUE;
+			if ((endptr == NULL || *endptr == *end)) {
+				for (i = 0; i < RSPAMD_PBKDF_ID_MAX - 1; i ++) {
+					p = &pbkdf_list[i];
 
-				if (pbkdf != NULL) {
-					*pbkdf = &pbkdf_list[0];
+					if (p->id == id) {
+						ret = TRUE;
+						if (pbkdf != NULL) {
+							*pbkdf = &pbkdf_list[0];
+						}
+
+						break;
+					}
 				}
 			}
 		}
@@ -298,7 +306,8 @@ rspamd_check_encrypted_password (struct rspamd_controller_worker_ctx *ctx,
 		local_key = g_alloca (pbkdf->key_len);
 		rspamd_cryptobox_pbkdf (password->begin, password->len,
 				salt_decoded, salt_len,
-				local_key, pbkdf->key_len, pbkdf->rounds);
+				local_key, pbkdf->key_len, pbkdf->complexity,
+				pbkdf->type);
 
 		if (!rspamd_constant_memcmp (key_decoded, local_key, pbkdf->key_len)) {
 			msg_info_ctx ("incorrect or absent password has been specified");
