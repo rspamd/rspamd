@@ -326,11 +326,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 		task->msg.len = len;
 
 		if (task->msg.len == 0) {
-			msg_warn_task ("message has invalid message length: %uz",
-					task->msg.len);
-			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
-					"Invalid length");
-			return FALSE;
+			task->flags |= RSPAMD_TASK_FLAG_EMPTY;
 		}
 
 		if (task->flags & RSPAMD_TASK_FLAG_HAS_CONTROL) {
@@ -447,10 +443,12 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 	case RSPAMD_TASK_STAGE_CLASSIFIERS:
 	case RSPAMD_TASK_STAGE_CLASSIFIERS_PRE:
 	case RSPAMD_TASK_STAGE_CLASSIFIERS_POST:
-		if (rspamd_stat_classify (task, task->cfg->lua_state, st, &stat_error) ==
-				RSPAMD_STAT_PROCESS_ERROR) {
-			msg_err_task ("classify error: %e", stat_error);
-			g_error_free (stat_error);
+		if (!RSPAMD_TASK_IS_EMPTY (task)) {
+			if (rspamd_stat_classify (task, task->cfg->lua_state, st, &stat_error) ==
+					RSPAMD_STAT_PROCESS_ERROR) {
+				msg_err_task ("classify error: %e", stat_error);
+				g_error_free (stat_error);
+			}
 		}
 		break;
 
@@ -460,7 +458,8 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 
 	case RSPAMD_TASK_STAGE_POST_FILTERS:
 		rspamd_lua_call_post_filters (task);
-		if (task->flags & RSPAMD_TASK_FLAG_LEARN_AUTO) {
+		if ((task->flags & RSPAMD_TASK_FLAG_LEARN_AUTO) &&
+				!RSPAMD_TASK_IS_EMPTY (task)) {
 			rspamd_stat_check_autolearn (task);
 		}
 		break;

@@ -1086,7 +1086,10 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 		/* Check has been started */
 		setbit (checkpoint->processed_bits, item->id * 2);
 
-		if (item->condition_cb != -1) {
+		if (RSPAMD_TASK_IS_EMPTY (task) && !(item->type & SYMBOL_TYPE_EMPTY)) {
+			check = FALSE;
+		}
+		else if (item->condition_cb != -1) {
 			/* We also executes condition callback to check if we need this symbol */
 			L = task->cfg->lua_state;
 			lua_rawgeti (L, LUA_REGISTRYINDEX, item->condition_cb);

@@ -1569,6 +1569,12 @@ rspamd_message_parse (struct rspamd_task *task)
 	gint diff, *pdiff, i;
 	guint tw, dw;
 
+	if (RSPAMD_TASK_IS_EMPTY (task)) {
+		/* Don't do anything with empty task */
+
+		return TRUE;
+	}
+
 	tmp = rspamd_mempool_alloc (task->task_pool, sizeof (GByteArray));
 	p = task->msg.begin;
 	len = task->msg.len;
