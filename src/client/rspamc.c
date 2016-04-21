@@ -55,6 +55,7 @@ static gboolean headers = FALSE;
 static gboolean raw = FALSE;
 static gboolean extended_urls = FALSE;
 static gboolean mime_output = FALSE;
+static gboolean empty_input = FALSE;
 static gchar *key = NULL;
 static GList *children;
 
@@ -125,6 +126,8 @@ static GOptionEntry entries[] =
 		"Add custom HTTP header to query (can be repeated)", NULL},
 	{"sort", 0, 0, G_OPTION_ARG_STRING, &sort,
 		"Sort output in a specific order (name, weight, time)", NULL},
+	{ "empty", 'E', 0, G_OPTION_ARG_NONE, &empty_input,
+	   "Allow empty input instead of reading from stdin", NULL },
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -1466,7 +1469,12 @@ main (gint argc, gchar **argv, gchar **env)
 
 	if (start_argc == argc) {
 		/* Do command without input or with stdin */
-		rspamc_process_input (ev_base, cmd, in, "stdin", kwattrs);
+		if (empty_input) {
+			rspamc_process_input (ev_base, cmd, NULL, "empty", kwattrs);
+		}
+		else {
+			rspamc_process_input (ev_base, cmd, in, "stdin", kwattrs);
+		}
 	}
 	else {
 		for (i = start_argc; i < argc; i++) {
