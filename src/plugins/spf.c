@@ -230,7 +230,7 @@ spf_module_config (struct rspamd_config *cfg)
 		0,
 		spf_symbol_callback,
 		NULL,
-		SYMBOL_TYPE_NORMAL|SYMBOL_TYPE_FINE, -1);
+		SYMBOL_TYPE_NORMAL|SYMBOL_TYPE_FINE|SYMBOL_TYPE_EMPTY, -1);
 	rspamd_symbols_cache_add_symbol (cfg->cache,
 			spf_module_ctx->symbol_softfail, 0,
 			NULL, NULL,
