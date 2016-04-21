@@ -28,6 +28,7 @@
 #include "ed25519/ed25519.h"
 #include "blake2/blake2.h"
 #include "siphash/siphash.h"
+#include "catena/catena.h"
 #include "ottery.h"
 #include "printf.h"
 
