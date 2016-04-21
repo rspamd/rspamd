@@ -85,6 +85,9 @@ struct rspamd_worker_signal_handler {
 };
 
 struct rspamd_controller_pbkdf {
+	const char *name;
+	const char *alias;
+	const char *description;
 	enum rspamd_cryptobox_pbkdf_type type;
 	gint id;
 	guint complexity;

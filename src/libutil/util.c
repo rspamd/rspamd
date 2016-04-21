@@ -77,6 +77,9 @@
 
 const struct rspamd_controller_pbkdf pbkdf_list[] = {
 		{
+				.name = "PBKDF2-blake2b",
+				.alias = "pbkdf2",
+				.description = "standard CPU intensive \"slow\" KDF using blake2b hash function",
 				.type = RSPAMD_CRYPTOBOX_PBKDF2,
 				.id = RSPAMD_PBKDF_ID_V1,
 				.complexity = 16000,
@@ -84,6 +87,9 @@ const struct rspamd_controller_pbkdf pbkdf_list[] = {
 				.key_len = rspamd_cryptobox_HASHBYTES / 2
 		},
 		{
+				.name = "Catena-Butterfly",
+				.alias = "catena",
+				.description = "modern CPU and memory intensive KDF",
 				.type = RSPAMD_CRYPTOBOX_CATENA,
 				.id = RSPAMD_PBKDF_ID_V2,
 				.complexity = 10,

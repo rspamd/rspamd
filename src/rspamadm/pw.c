@@ -27,6 +27,8 @@ static const char *rspamadm_pw_help (gboolean full_help);
 static gboolean do_encrypt = FALSE;
 static gboolean do_check = FALSE;
 static gboolean quiet = FALSE;
+static gboolean list = FALSE;
+static gchar *type = "catena";
 static gchar *password = NULL;
 
 struct rspamadm_command pw_command = {
@@ -45,6 +47,10 @@ static GOptionEntry entries[] = {
 				"Supress output", NULL},
 		{"password", 'p', 0, G_OPTION_ARG_STRING, &password,
 				"Input password", NULL},
+		{"type", 't', 0, G_OPTION_ARG_STRING, &type,
+				"PBKDF type", NULL},
+		{"list", 'l', 0, G_OPTION_ARG_NONE, &list,
+				"List available algorithms", NULL},
 		{NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -59,6 +65,8 @@ rspamadm_pw_help (gboolean full_help)
 				"Where commands are:\n\n"
 				"--encrypt: encrypt password (this is a default command)\n"
 				"--check: check encrypted password using encrypted password\n"
+				"--list: list available pbkdf algorithms\n"
+				"--type: select the specified pbkdf type\n"
 				"--help: shows available options and commands";
 	}
 	else {
@@ -66,6 +74,26 @@ rspamadm_pw_help (gboolean full_help)
 	}
 
 	return help_str;
+}
+
+static const struct rspamd_controller_pbkdf *
+rspamadm_get_pbkdf (void)
+{
+	const struct rspamd_controller_pbkdf *pbkdf;
+	guint i;
+
+	for (i = 0; i < RSPAMD_PBKDF_ID_MAX - 1; i ++) {
+		pbkdf = &pbkdf_list[i];
+
+		if (strcmp (type, pbkdf->alias) == 0) {
+			return pbkdf;
+		}
+	}
+
+	rspamd_fprintf (stderr, "Unknown PKDF type: %s\n", type);
+	exit (EXIT_FAILURE);
+
+	return NULL;
 }
 
 static void
@@ -76,7 +104,7 @@ rspamadm_pw_encrypt (void)
 	gchar *encoded_salt, *encoded_key;
 	gsize plen;
 
-	pbkdf = &pbkdf_list[0];
+	pbkdf = rspamadm_get_pbkdf ();
 	g_assert (pbkdf != NULL);
 
 	if (password == NULL) {
@@ -98,7 +126,8 @@ rspamadm_pw_encrypt (void)
 	ottery_rand_bytes (salt, pbkdf->salt_len);
 	/* Derive key */
 	rspamd_cryptobox_pbkdf (password, strlen (password),
-			salt, pbkdf->salt_len, key, pbkdf->key_len, pbkdf->complexity);
+			salt, pbkdf->salt_len, key, pbkdf->key_len, pbkdf->complexity,
+			pbkdf->type);
 
 	encoded_salt = rspamd_encode_base32 (salt, pbkdf->salt_len);
 	encoded_key = rspamd_encode_base32 (key, pbkdf->key_len);
@@ -142,19 +171,22 @@ rspamd_encrypted_password_get_str (const gchar *password, gsize skip,
 static void
 rspamadm_pw_check (void)
 {
-	const struct rspamd_controller_pbkdf *pbkdf;
+	const struct rspamd_controller_pbkdf *pbkdf = NULL;
 	GIOChannel *in;
 	GString *encrypted_pwd;
 	const gchar *salt, *hash;
+	const gchar *start, *end;
 	guchar *salt_decoded, *key_decoded, *local_key;
-	gsize salt_len, key_len;
+	gsize salt_len, key_len, size;
 	gchar test_password[8192];
-	gsize plen, term = 0;
+	gsize plen, term = 0, i;
+	gint id;
+	gboolean ret = FALSE;
 
 	if (password == NULL) {
 		encrypted_pwd = g_string_new ("");
 		in = g_io_channel_unix_new (STDIN_FILENO);
-		printf ("Enter encrypted password: ");
+		rspamd_printf ("Enter encrypted password: ");
 		fflush (stdout);
 		g_io_channel_read_line_string (in, encrypted_pwd, &term, NULL);
 
@@ -167,8 +199,38 @@ rspamadm_pw_check (void)
 		encrypted_pwd = g_string_new (password);
 	}
 
-	pbkdf = &pbkdf_list[0];
-	g_assert (pbkdf != NULL);
+	if (encrypted_pwd->str[0] == '$') {
+		/* Parse id */
+		start = encrypted_pwd->str + 1;
+		end = start;
+		size = 0;
+
+		while (*end != '\0' && g_ascii_isdigit (*end)) {
+			size++;
+			end++;
+		}
+
+		if (size > 0) {
+			gchar *endptr;
+			id = strtoul (start, &endptr, 10);
+
+			if ((endptr == NULL || *endptr == *end)) {
+				for (i = 0; i < RSPAMD_PBKDF_ID_MAX - 1; i ++) {
+					pbkdf = &pbkdf_list[i];
+
+					if (pbkdf->id == id) {
+						ret = TRUE;
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	if (!ret) {
+		rspamd_fprintf (stderr, "Invalid password format\n");
+		exit (EXIT_FAILURE);
+	}
 
 	if (encrypted_pwd->len < pbkdf->salt_len + pbkdf->key_len + 3) {
 		msg_err ("incorrect salt: password length: %z, must be at least %z characters",
@@ -213,12 +275,14 @@ rspamadm_pw_check (void)
 		local_key = g_alloca (pbkdf->key_len);
 		rspamd_cryptobox_pbkdf (test_password, plen,
 				salt_decoded, salt_len,
-				local_key, pbkdf->key_len, pbkdf->complexity);
+				local_key, pbkdf->key_len,
+				pbkdf->complexity,
+				pbkdf->type);
 		rspamd_explicit_memzero (test_password, plen);
 
 		if (!rspamd_constant_memcmp (key_decoded, local_key, pbkdf->key_len)) {
 			if (!quiet) {
-				printf ("password incorrect\n");
+				rspamd_printf ("password incorrect\n");
 			}
 			exit (EXIT_FAILURE);
 		}
@@ -233,7 +297,21 @@ rspamadm_pw_check (void)
 	}
 
 	if (!quiet) {
-		printf ("password correct\n");
+		rspamd_printf ("password correct\n");
+	}
+}
+
+static void
+rspamadm_alg_list (void)
+{
+	const struct rspamd_controller_pbkdf *pbkdf;
+	guint i;
+
+	for (i = 0; i < RSPAMD_PBKDF_ID_MAX - 1; i ++) {
+		pbkdf = &pbkdf_list[i];
+
+		rspamd_printf ("%s: %s - %s\n", pbkdf->alias, pbkdf->name,
+				pbkdf->description);
 	}
 }
 
@@ -257,6 +335,10 @@ rspamadm_pw (gint argc, gchar **argv)
 		exit (1);
 	}
 
+	if (list) {
+		rspamadm_alg_list ();
+		exit (EXIT_SUCCESS);
+	}
 
 	if (!do_encrypt && !do_check) {
 		do_encrypt = TRUE;
