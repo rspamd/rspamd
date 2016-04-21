@@ -6,7 +6,6 @@ adp.com
 airbnb.com
 airtel.in
 americanexpress.com
-aol.com
 avg.com
 battle.net
 booking.com
@@ -81,6 +80,5 @@ verizonwireless.com
 vk.com
 vk.me
 whatsapp.com
-yahoo.com
 zendesk.com
 zomato.com
