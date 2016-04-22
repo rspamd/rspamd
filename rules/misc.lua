@@ -237,3 +237,77 @@ rspamd_config.MULTIPLE_UNIQUE_HEADERS = {
   group = 'headers',
   description = 'Repeated unique headers'
 }
+
+rspamd_config.ENVFROM_PRVS = {
+    callback = function (task)
+        -- Detect PRVS/BATV addresses to avoid FORGED_SENDER
+        -- https://en.wikipedia.org/wiki/Bounce_Address_Tag_Validation
+        if not (task:has_from(1) and task:has_from(2)) then
+            return false
+        end
+        local envfrom = task:get_from(1)
+        local tag,ef = envfrom[1].addr:lower():match("^prvs=([^=]+)=(.+)$")
+        if not ef then return false end
+        -- See if it matches the From header
+        local from = task:get_from(2)
+        if ef == from[1].addr:lower() then
+            return true
+        end
+        return false
+    end,
+    score = 0.01,
+    description = "Envelope From is a PRVS address that matches the From address",
+    group = 'prvs'
+}
+
+rspamd_config.ENVFROM_VERP = {
+    callback = function (task)
+        if not (task:has_from(1) and task:has_recipients(1)) then
+            return false
+        end
+        local envfrom = task:get_from(1)
+        local envrcpts = task:get_recipients(1)
+        -- VERP only works for single recipient messages
+        if table.getn(envrcpts) > 1 then return false end
+        -- Get recipient and compute VERP address
+        local rcpt = envrcpts[1].addr:lower()
+        local verp = rcpt:gsub('@','=')
+        -- Get the user portion of the envfrom
+        local ef_user = envfrom[1].user:lower()
+        -- See if the VERP representation of the recipient appears in it
+        if ef_user:find(verp, 1, true)
+           and not ef_user:find('+caf_=' .. verp, 1, true) -- Google Forwarding
+           and not ef_user:find('^srs[01]=')               -- SRS
+        then
+            return true
+        end
+        return false
+    end,
+    score = 0.01,
+    description = "Envelope From is a VERP address",
+    group = "mailing_list"
+}
+
+rspamd_config.RCVD_TLS_ALL = {
+    callback = function (task)
+        local rcvds = task:get_header_full('Received')
+        local count = 0
+        local encrypted = 0
+        for _, rcvd in ipairs(rcvds) do
+            count = count + 1
+            local r = rcvd['decoded']:lower()
+            local by = r:match('^by%s+([^%s]+)') or r:match('%sby%s+([^%s]+)')
+            local with = r:match('%swith%s+(e?smtps?a?)')
+            if with and with:match('esmtps') then
+                encrypted = encrypted + 1
+            end
+        end
+        if (count > 0 and count == encrypted) then
+            return true
+        end
+    end,
+    score = 0.01,
+    description = "All hops used encrypted transports",
+    group = "encryption"
+}
+
