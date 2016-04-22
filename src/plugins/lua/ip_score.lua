@@ -355,6 +355,9 @@ if upstreams then
   if options['asn_provider'] then
     rspamd_config:register_pre_filter(asn_check)
   end
-  rspamd_config:register_symbol(options['symbol'], 1.0, ip_score_check)
+  rspamd_config:register_symbol({
+    name = options['symbol'],
+    callback = ip_score_check
+  })
   rspamd_config:register_post_filter(ip_score_set)
 end

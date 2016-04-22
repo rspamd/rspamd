@@ -116,7 +116,10 @@ end
 
 -- Configuration
 if opts and opts['host'] then
-  rspamd_config:register_symbol(symbol_bulk, 1.0, check_dcc)
+  rspamd_config:register_symbol({
+    name = symbol_bulk,
+    callback = check_dcc
+  })
   rspamd_config:set_metric_symbol({
     group = 'dcc',
     score = 2.0,

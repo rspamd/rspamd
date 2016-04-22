@@ -968,6 +968,9 @@ lua_parse_symbol_type (const gchar *str)
 		else if (strcmp (str, "normal") == 0) {
 			ret = SYMBOL_TYPE_NORMAL;
 		}
+		else {
+			msg_warn ("bad type: %s", str);
+		}
 	}
 
 	return ret;
@@ -1019,10 +1022,10 @@ lua_config_register_symbol (lua_State * L)
 
 		type = lua_parse_symbol_type (type_str);
 
-		if (!name && type != SYMBOL_TYPE_CALLBACK) {
+		if (!name && !(type & SYMBOL_TYPE_CALLBACK)) {
 			return luaL_error (L, "no symbol name but type is not callback");
 		}
-		else if (type != SYMBOL_TYPE_VIRTUAL && cbref == -1) {
+		else if (!(type & SYMBOL_TYPE_VIRTUAL) && cbref == -1) {
 			return luaL_error (L, "no callback for symbol %s", name);
 		}
 

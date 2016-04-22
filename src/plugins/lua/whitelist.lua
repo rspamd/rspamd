@@ -180,8 +180,11 @@ local configure_whitelist_module = function()
           return
         end
 
-        local id = rspamd_config:register_symbol(symbol, -1.0,
-          gen_whitelist_cb(symbol, rule))
+        local id = rspamd_config:register_symbol({
+          name = symbol,
+          flags = 'nice,empty',
+          callback = gen_whitelist_cb(symbol, rule)
+        })
 
         if rule['valid_spf'] then
           rspamd_config:register_dependency(id, options['spf_allow_symbol'])

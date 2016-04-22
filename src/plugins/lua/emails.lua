@@ -38,10 +38,10 @@ local function check_email_rule(task, rule, addr)
     else
       to_resolve = string.format('%s.%s.%s', addr:get_user(), addr:get_host(), rule['dnsbl'])
     end
-    
+
     task:get_resolver():resolve_a({
-      task=task, 
-      name = to_resolve, 
+      task=task,
+      name = to_resolve,
       callback = emails_dns_cb})
   elseif rule['map'] then
     if rule['domain_only'] then
@@ -74,7 +74,7 @@ local function check_emails(task)
           check_email_rule(task, rule, addr)
         end
         checked[to_check] = true
-      end 
+      end
     end
   end
 end
@@ -102,8 +102,15 @@ end
 
 if table.maxn(rules) > 0 then
   -- add fake symbol to check all maps inside a single callback
-  local id = rspamd_config:register_callback_symbol(1.0, check_emails)
+  local id = rspamd_config:register_symbol({
+    type = 'callback',
+    callback = check_emails
+  })
   for _,rule in ipairs(rules) do
-    rspamd_config:register_virtual_symbol(rule['symbol'], 1.0, id)
+    rspamd_config:register_symbol({
+      name = rule['symbol'],
+      type = 'virtual',
+      parent = id
+    })
   end
 end

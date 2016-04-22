@@ -108,21 +108,15 @@ local function phishing_map(mapname, phishmap)
   end
 end
 
--- Registration
-if type(rspamd_config.get_api_version) ~= 'nil' then
-  if rspamd_config:get_api_version() >= 1 then
-    rspamd_config:register_module_option('phishing', 'symbol', 'string')
-    rspamd_config:register_module_option('phishing', 'domains', 'map')
-    rspamd_config:register_module_option('phishing', 'strict_domains', 'string')
-    rspamd_config:register_module_option('phishing', 'redirector_domains', 'string')
-  end
-end
 
 if opts then
   if opts['symbol'] then
     symbol = opts['symbol']
     -- Register symbol's callback
-    rspamd_config:register_symbol(symbol, 1.0, phishing_cb)
+    rspamd_config:register_symbol({
+      name = symbol,
+      callback = phishing_cb
+    })
   end
   if opts['domains'] and type(opt['domains']) == 'string' then
     domains = rspamd_config:add_hash_map (opts['domains'])

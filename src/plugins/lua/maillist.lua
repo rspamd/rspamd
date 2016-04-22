@@ -267,16 +267,15 @@ local function check_maillist(task)
     task:insert_result(symbol, 0.5, 'generic')
   end
 end
--- Registration
-if type(rspamd_config.get_api_version) ~= 'nil' then
-  if rspamd_config:get_api_version() >= 1 then
-    rspamd_config:register_module_option('maillist', 'symbol', 'string')
-  end
-end
+
+
 -- Configuration
 local opts =  rspamd_config:get_all_opt('maillist')if opts then
   if opts['symbol'] then
     symbol = opts['symbol']
-    rspamd_config:register_symbol(symbol, 1.0, check_maillist)
+    rspamd_config:register_symbol({
+      name = symbol,
+      callback = check_maillist
+    })
   end
 end

@@ -144,7 +144,11 @@ if opts then
   if opts['symbol'] then
     local symbol = opts['symbol']
 
-    local id = rspamd_config:register_symbol(symbol, 1.0, check_quantity_received)
+    local id = rspamd_config:register_symbol({
+      name = symbol,
+      callback = check_quantity_received,
+      type = 'callback',
+    })
 
     for n,v in pairs(opts) do
       if n == 'symbol_strict' then
@@ -167,7 +171,16 @@ if opts then
         whitelist = rspamd_config:add_radix_map (v, 'once received whitelist')
       end
     end
-    rspamd_config:register_virtual_symbol(symbol_rdns, 1.0, id)
-    rspamd_config:register_virtual_symbol(symbol_strict, 1.0, id)
+
+    rspamd_config:register_symbol({
+      name = symbol_rdns,
+      type = 'virtual',
+      parent = id
+    })
+      rspamd_config:register_symbol({
+      name = symbol_strict,
+      type = 'virtual',
+      parent = id
+    })
   end
 end

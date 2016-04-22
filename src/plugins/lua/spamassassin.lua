@@ -1419,7 +1419,11 @@ local function post_process()
             one_shot = true })
           scores_added[k] = 1
         end
-        rspamd_config:register_symbol(k, calculate_score(k, r), meta_cb)
+        rspamd_config:register_symbol({
+          name = k,
+          weight = calculate_score(k, r),
+          callback = meta_cb
+        })
         r['expression'] = expression
         if not atoms[k] then
           atoms[k] = meta_cb

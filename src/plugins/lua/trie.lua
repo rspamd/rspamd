@@ -27,13 +27,13 @@ local raw_trie
 local mime_patterns = {}
 local raw_patterns = {}
 
--- here we store params for each pattern, so for each i = 1..n patterns[i] 
+-- here we store params for each pattern, so for each i = 1..n patterns[i]
 -- should have corresponding params[i]
 local mime_params = {}
 local raw_params = {}
 
 local function tries_callback(task)
-  
+
   local matched = {}
 
   local function gen_trie_cb(raw)
@@ -43,11 +43,11 @@ local function tries_callback(task)
       patterns = raw_patterns
       params = raw_params
     end
-    
+
     return function (idx, pos)
       local param = params[idx]
       local pattern = patterns[idx]
-      
+
       if param['multi'] or not matched[pattern] then
         rspamd_logger.debugx(task, "<%1> matched pattern %2 at pos %3",
           task:get_message_id(), pattern, pos)
@@ -58,7 +58,7 @@ local function tries_callback(task)
       end
     end
   end
-  
+
   if mime_trie then
     mime_trie:search_mime(task, gen_trie_cb(false))
   end
@@ -71,7 +71,7 @@ local function process_single_pattern(pat, symbol, cf)
   if pat then
     local multi = false
     if cf['multi'] then multi = true end
-    
+
     if cf['raw'] then
       table.insert(raw_patterns, pat)
       table.insert(raw_params, {symbol=symbol, multi=multi})
@@ -84,7 +84,7 @@ end
 
 local function process_trie_file(symbol, cf)
   file = io.open(cf['file'])
-  
+
   if not file then
     rspamd_logger.errx(rspamd_config, 'Cannot open trie file %1', cf['file'])
   else
@@ -102,15 +102,15 @@ end
 
 local function process_trie_conf(symbol, cf)
   local raw = false
-  
+
   if type(cf) ~= 'table' then
     rspamd_logger.errx(rspamd_config, 'invalid value for symbol %1: "%2", expected table',
       symbol, cf)
     return
   end
-  
+
   if cf['raw'] then raw = true end
-  
+
   if cf['file'] then
     process_trie_file(symbol, cf)
   elseif cf['patterns'] then
@@ -125,7 +125,7 @@ if opts then
   for sym, opt in pairs(opts) do
      process_trie_conf(sym, opt)
   end
-  
+
   if #raw_patterns > 0 then
     raw_trie = rspamd_trie.create(raw_patterns)
     rspamd_logger.infox(rspamd_config, 'registered raw search trie from %1 patterns', #raw_patterns)
@@ -135,17 +135,24 @@ if opts then
     mime_trie = rspamd_trie.create(mime_patterns)
     rspamd_logger.infox(rspamd_config, 'registered mime search trie from %1 patterns', #mime_patterns)
   end
-  
+
   local id = -1
   if mime_trie or raw_trie then
-    id = rspamd_config:register_callback_symbol('TRIE', 1.0, tries_callback)
+    id = rspamd_config:register_symbol({
+      type = 'callback',
+      callback = tries_callback
+    })
   else
     rspamd_logger.errx(rspamd_config, 'no tries defined')
   end
-  
+
   if id ~= -1 then
     for sym, opt in pairs(opts) do
-      rspamd_config:register_virtual_symbol(sym, 1.0, id)
+      rspamd_config:register_symbol({
+        name = sym,
+        type = 'virtual',
+        parent = id
+      })
     end
   end
 end

@@ -306,12 +306,33 @@ if dkim_opts then
   check_mopt('dkim_allow_symbol', 'symbol_allow')
 end
 
-local id = rspamd_config:register_callback_symbol('DMARC_CALLBACK', 1.0,
-  dmarc_callback)
-rspamd_config:register_virtual_symbol('DMARC_POLICY_ALLOW', -1, id)
-rspamd_config:register_virtual_symbol('DMARC_POLICY_REJECT', 1, id)
-rspamd_config:register_virtual_symbol('DMARC_POLICY_QUARANTINE', 1, id)
-rspamd_config:register_virtual_symbol('DMARC_POLICY_SOFTFAIL', 1, id)
+local id = rspamd_config:register_symbol({
+  name = 'DMARC_CALLBACK',
+  type = 'callback',
+  callback = dmarc_callback
+})
+rspamd_config:register_symbol({
+  name = 'DMARC_POLICY_ALLOW',
+  flags = 'nice',
+  parent = id,
+  type = 'virtual'
+})
+rspamd_config:register_symbol({
+  name = 'DMARC_POLICY_REJECT',
+  parent = id,
+  type = 'virtual'
+})
+rspamd_config:register_symbol({
+  name = 'DMARC_POLICY_QUARANTINE',
+  parent = id,
+  type = 'virtual'
+})
+rspamd_config:register_symbol({
+  name = 'DMARC_POLICY_SOFTFAIL',
+  parent = id,
+  type = 'virtual'
+})
+
 rspamd_config:register_dependency(id, symbols['spf_allow_symbol'])
 rspamd_config:register_dependency(id, symbols['dkim_allow_symbol'])
 

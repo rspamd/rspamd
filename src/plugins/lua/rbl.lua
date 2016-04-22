@@ -363,7 +363,11 @@ local white_symbols = {}
 local black_symbols = {}
 local need_dkim = false
 
-local id = rspamd_config:register_callback_symbol_priority(1.0, 0, rbl_cb)
+local id = rspamd_config:register_symbol({
+  type = 'callback',
+  callback = rbl_cb,
+  flags = 'empty,nice'
+})
 
 for key,rbl in pairs(opts['rbls']) do
   for default, default_v in pairs(default_defaults) do
@@ -374,7 +378,12 @@ for key,rbl in pairs(opts['rbls']) do
   if type(rbl['returncodes']) == 'table' then
     for s,_ in pairs(rbl['returncodes']) do
       if type(rspamd_config.get_api_version) ~= 'nil' then
-        rspamd_config:register_virtual_symbol(s, 1, id)
+        rspamd_config:register_symbol({
+          name = s,
+          parent = id,
+          type = 'virtual'
+        })
+
         if rbl['dkim'] then
           need_dkim = true
         end
@@ -411,7 +420,12 @@ for key,rbl in pairs(opts['rbls']) do
       rbl['symbol'] = key
   end
   if type(rspamd_config.get_api_version) ~= 'nil' and rbl['symbol'] then
-    rspamd_config:register_virtual_symbol(rbl['symbol'], 1, id)
+    rspamd_config:register_symbol({
+      name = rbl['symbol'],
+      parent = id,
+      type = 'virtual'
+    })
+
     if rbl['dkim'] then
       need_dkim = true
     end

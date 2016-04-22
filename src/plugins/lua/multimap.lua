@@ -482,10 +482,18 @@ if opts and type(opts) == 'table' then
   end
   -- add fake symbol to check all maps inside a single callback
   if _.any(function(r) return not r['prefilter'] end, rules) then
-    local id = rspamd_config:register_callback_symbol_priority(1.0, -1,
-      multimap_filter_callback)
+    local id = rspamd_config:register_symbol({
+      type = 'callback',
+      priority = -1,
+      callback = multimap_filter_callback,
+      flags = 'empty'
+    })
     for i,rule in ipairs(rules) do
-      rspamd_config:register_virtual_symbol(rule['symbol'], 1.0, id)
+      rspamd_config:register_symbol({
+        type = 'virtual',
+        name = rule['symbol'],
+        parent = id,
+      })
     end
   end
 

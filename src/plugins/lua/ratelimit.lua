@@ -435,7 +435,11 @@ if opts then
       if not ratelimit_symbol then
         rspamd_config:register_pre_filter(rate_test)
       else
-        rspamd_config:register_symbol(ratelimit_symbol, 1.0, rate_test)
+        rspamd_config:register_symbol({
+          name = ratelimit_symbol,
+          callback = rate_test,
+          flags = 'empty'
+        })
       end
 
       rspamd_config:register_post_filter(rate_set)

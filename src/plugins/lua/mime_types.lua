@@ -115,10 +115,26 @@ if opts then
         description = 'mime types map'
       })
     end
-    local id = rspamd_config:register_callback_symbol(1.0, check_mime_type)
-    rspamd_config:register_virtual_symbol(settings['symbol_unknown'], 1.0, id)
-    rspamd_config:register_virtual_symbol(settings['symbol_bad'], 1.0, id)
-    rspamd_config:register_virtual_symbol(settings['symbol_good'], 1.0, id)
-    rspamd_config:register_virtual_symbol(settings['symbol_attachment'], 1.0, id)
+    local id = rspamd_config:register_symbol({
+      callback = check_mime_type,
+      type = 'callback'
+    })
+
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      name = settings['symbol_unknown'],
+      parent = id
+    })
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      name = settings['symbol_good'],
+      flags = 'nice',
+      parent = id
+    })
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      name = settings['symbol_attachment'],
+      parent = id
+    })
   end
 end
