@@ -19,7 +19,7 @@ For those who are planning migration from their SpamAssassin setups, it might be
 
 ## Preparation steps
 
-First of all, you need a working MTA (Mail Trabnsfer Agent) that is able to serve SMTP protocol for your domain. In this guide, we discuss setup of [Postfix MTA](http://www.postfix.org/). However, rspamd can work with other MTA software - you could find details in the [itegration document](/integration.html).
+First of all, you need a working MTA (Mail Trabnsfer Agent) that is able to serve SMTP protocol for your domain. In this guide, we discuss setup of [Postfix MTA](http://www.postfix.org/). However, rspamd can work with other MTA software - you could find details in the [integration document](/doc/integration.html).
 
 We suppose that postfix is set using your OS packaging system (e.g. `apt-get install postfix`). Here is the desired configuration for Postfix:
 
