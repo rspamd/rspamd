@@ -110,5 +110,31 @@ GPtrArray *rspamd_message_get_mime_header_array (struct rspamd_task *task,
 		const gchar *field,
 		gboolean strong);
 
+/**
+ * Get array of all headers from the list specified
+ * @param task
+ * @param h1
+ * @return An array of headers (should not be freed as well)
+ */
+GPtrArray *rspamd_message_get_headers_array (struct rspamd_task *task, ...);
+
+/**
+ * Get an array of header's values with specified header's name returning decoded strings as values
+ * @param task worker task structure
+ * @param field header's name
+ * @param strong if this flag is TRUE header's name is case sensitive, otherwise it is not
+ * @return An array of header's values or NULL. It is NOT permitted to free array or values.
+ */
+GPtrArray *rspamd_message_get_header_array_str (struct rspamd_task *task,
+		const gchar *field,
+		gboolean strong);
+
+/**
+ * Get array of all headers from the list specified returning decoded strings as values
+ * @param task
+ * @param h1
+ * @return An array of headers (should not be freed as well)
+ */
+GPtrArray *rspamd_message_get_headers_array_str (struct rspamd_task *task, ...);
 
 #endif

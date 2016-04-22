@@ -2017,3 +2017,148 @@ rspamd_message_get_mime_header_array (struct rspamd_task *task,
 
 	return ret;
 }
+
+GPtrArray *
+rspamd_message_get_headers_array (struct rspamd_task *task, ...)
+{
+	va_list ap;
+	GPtrArray *ret;
+	struct raw_header *rh, *cur;
+	guint nelems = 0;
+	const gchar *hname;
+
+	va_start (ap, task);
+
+	for (hname = va_arg (ap, const char *); hname != NULL;) {
+		rh = g_hash_table_lookup (task->raw_headers, hname);
+
+		if (rh == NULL) {
+			continue;
+		}
+		LL_FOREACH (rh, cur) {
+			nelems ++;
+		}
+	}
+
+	va_end (ap);
+
+	if (nelems == 0) {
+		return NULL;
+	}
+
+	ret = g_ptr_array_sized_new (nelems);
+
+	/* Restart varargs processing */
+	va_start (ap, task);
+
+	for (hname = va_arg (ap, const char *); hname != NULL;) {
+		rh = g_hash_table_lookup (task->raw_headers, hname);
+
+		if (rh == NULL) {
+			continue;
+		}
+		LL_FOREACH (rh, cur) {
+			g_ptr_array_add (ret, cur);
+		}
+	}
+
+	va_end (ap);
+
+	rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard, ret);
+
+	return ret;
+}
+
+GPtrArray *
+rspamd_message_get_header_array_str (struct rspamd_task *task,
+		const gchar *field,
+		gboolean strong)
+{
+	GPtrArray *ret;
+	struct raw_header *rh, *cur;
+	guint nelems = 0;
+
+	rh = g_hash_table_lookup (task->raw_headers, field);
+
+	if (rh == NULL) {
+		return NULL;
+	}
+
+	LL_FOREACH (rh, cur) {
+		nelems ++;
+	}
+
+	ret = g_ptr_array_sized_new (nelems);
+
+	LL_FOREACH (rh, cur) {
+		if (strong) {
+			if (strcmp (rh->name, field) != 0) {
+				continue;
+			}
+		}
+
+		if (cur->decoded) {
+			g_ptr_array_add (ret, cur->decoded);
+		}
+	}
+
+	rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard, ret);
+
+	return ret;
+}
+
+GPtrArray *
+rspamd_message_get_headers_array_str (struct rspamd_task *task, ...)
+{
+	va_list ap;
+	GPtrArray *ret;
+	struct raw_header *rh, *cur;
+	guint nelems = 0;
+	const gchar *hname;
+
+	va_start (ap, task);
+
+	for (hname = va_arg (ap, const char *); hname != NULL;) {
+		rh = g_hash_table_lookup (task->raw_headers, hname);
+
+		if (rh == NULL) {
+			continue;
+		}
+		LL_FOREACH (rh, cur) {
+			nelems ++;
+		}
+	}
+
+	va_end (ap);
+
+	if (nelems == 0) {
+		return NULL;
+	}
+
+	ret = g_ptr_array_sized_new (nelems);
+
+	/* Restart varargs processing */
+	va_start (ap, task);
+
+	for (hname = va_arg (ap, const char *); hname != NULL;) {
+		rh = g_hash_table_lookup (task->raw_headers, hname);
+
+		if (rh == NULL) {
+			continue;
+		}
+		LL_FOREACH (rh, cur) {
+			if (cur->decoded) {
+				g_ptr_array_add (ret, cur->decoded);
+			}
+		}
+	}
+
+	va_end (ap);
+
+	rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard, ret);
+
+	return ret;
+}
