@@ -164,11 +164,21 @@ rspamd_config:add_map('http://example.com/map', "settings map", process_map)
  */
 LUA_FUNCTION_DEF (config, get_classifier);
 /***
- * @method rspamd_config:register_symbol(name, weight, callback)
- * Register callback function to be called for a specified symbol with initial weight.
- * @param {string} name symbol's name
- * @param {number} weight initial weight of symbol (can be less than zero to specify non-spam symbols)
- * @param {function} callback callback function to be called for a specified symbol
+ * @method rspamd_config:register_symbol(table)
+ * Register symbol of a specified type in rspamd. This function accepts table of arguments:
+ *
+ * - `name`: name of symbol (can be missing for callback symbols)
+ * - `callback`: function to be called for symbol's check (can be absent for virtual symbols)
+ * - `weight`: weight of symbol (should normally be 1 or missing)
+ * - `priority`: priority of symbol (normally 0 or missing)
+ * - `type`: type of symbol: `normal` (default), `virtual` or `callback`
+ * - `flags`: various flags splitted by commas or spaces:
+ *     + `nice` if symbol can produce negative score;
+ *     + `empty` if symbol can be called for empty messages
+ *     + `skip` if symbol should be skipped now
+ * - `parent`: id of parent symbol (useful for virtual symbols)
+ *
+ * @return {number} id of symbol registered
  */
 LUA_FUNCTION_DEF (config, register_symbol);
 /***
@@ -183,6 +193,8 @@ LUA_FUNCTION_DEF (config, register_symbols);
 /***
  * @method rspamd_config:register_virtual_symbol(name, weight,)
  * Register virtual symbol that is not associated with any callback.
+ *
+ * **This method is deprecated and should not be used in newly written code **
  * @param {string} virtual name symbol's name
  * @param {number} weight initial weight of symbol (can be less than zero to specify non-spam symbols)
  */
@@ -191,6 +203,8 @@ LUA_FUNCTION_DEF (config, register_virtual_symbol);
  * @method rspamd_config:register_callback_symbol(name, weight, callback)
  * Register callback function to be called for a specified symbol with initial weight. Symbol itself is
  * not registered in the metric and is not intended to be visible by a user.
+ *
+ * **This method is deprecated and should not be used in newly written code **
  * @param {string} name symbol's name (just for unique id purposes)
  * @param {number} weight initial weight of symbol (can be less than zero to specify non-spam symbols)
  * @param {function} callback callback function to be called for a specified symbol
@@ -940,34 +954,92 @@ rspamd_register_symbol_fromlua (lua_State *L,
 }
 
 static gint
+lua_parse_symbol_type (const gchar *str)
+{
+	gint ret = SYMBOL_TYPE_NORMAL;
+
+	if (str) {
+		if (strcmp (str, "virtual") == 0) {
+			ret = SYMBOL_TYPE_VIRTUAL;
+		}
+		else if (strcmp (str, "callback") == 0) {
+			ret = SYMBOL_TYPE_CALLBACK;
+		}
+		else if (strcmp (str, "normal") == 0) {
+			ret = SYMBOL_TYPE_NORMAL;
+		}
+	}
+
+	return ret;
+}
+
+static gint
+lua_parse_symbol_flags (const gchar *str)
+{
+	int ret = 0;
+
+	if (str) {
+		if (strstr (str, "fine") != NULL) {
+			ret |= SYMBOL_TYPE_FINE;
+		}
+		if (strstr (str, "nice") != NULL) {
+			ret |= SYMBOL_TYPE_FINE;
+		}
+		if (strstr (str, "empty") != NULL) {
+			ret |= SYMBOL_TYPE_EMPTY;
+		}
+		if (strstr (str, "skip") != NULL) {
+			ret |= SYMBOL_TYPE_SKIPPED;
+		}
+	}
+
+	return ret;
+}
+
+static gint
 lua_config_register_symbol (lua_State * L)
 {
 	struct rspamd_config *cfg = lua_check_config (L, 1);
-	gchar *name;
-	double weight;
-	gint ret = -1;
+	const gchar *name = NULL, *flags_str = NULL, *type_str = NULL;
+	double weight = 0;
+	gint ret = -1, cbref = -1, type;
+	gint64 parent = 0, priority = 0;
+	GError *err = NULL;
 
 	if (cfg) {
-		name = rspamd_mempool_strdup (cfg->cfg_pool, luaL_checkstring (L, 2));
-		weight = luaL_checknumber (L, 3);
+		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
+				"name=S;weigth=N;callback=F;flags=S;type=S;priority=I;parent=I",
+				&name, &weight, &cbref, &flags_str, &type_str,
+				&priority, &parent)) {
+			msg_err_config ("bad arguments: %e", err);
+			g_error_free (err);
 
-		if (lua_type (L, 4) == LUA_TSTRING) {
-			lua_getglobal (L, luaL_checkstring (L, 4));
+			return luaL_error (L, "invalid arguments");
 		}
-		else {
-			lua_pushvalue (L, 4);
+
+		type = lua_parse_symbol_type (type_str);
+
+		if (!name && type != SYMBOL_TYPE_CALLBACK) {
+			return luaL_error (L, "no symbol name but type is not callback");
 		}
-		if (name) {
-			ret = rspamd_register_symbol_fromlua (L,
-					cfg,
-					name,
-					luaL_ref (L, LUA_REGISTRYINDEX),
-					weight,
-					0,
-					SYMBOL_TYPE_NORMAL,
-					-1,
-					FALSE);
+		else if (type != SYMBOL_TYPE_VIRTUAL && cbref == -1) {
+			return luaL_error (L, "no callback for symbol %s", name);
 		}
+
+		type |= lua_parse_symbol_flags (flags_str);
+
+		ret = rspamd_register_symbol_fromlua (L,
+				cfg,
+				name,
+				cbref,
+				weight == 0 ? 1.0 : weight,
+				priority,
+				type,
+				parent == 0 ? -1 : parent,
+				FALSE);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
 	}
 
 	lua_pushnumber (L, ret);
