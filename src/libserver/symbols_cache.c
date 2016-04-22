@@ -600,15 +600,15 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 
 	g_assert (cache != NULL);
 
-	if (name == NULL && type != SYMBOL_TYPE_CALLBACK) {
+	if (name == NULL && !(type & SYMBOL_TYPE_CALLBACK)) {
 		msg_warn_cache ("no name for non-callback symbol!");
 	}
-	else if (type == SYMBOL_TYPE_VIRTUAL && parent == -1) {
+	else if ((type & SYMBOL_TYPE_VIRTUAL) && parent == -1) {
 		msg_warn_cache ("no parent symbol is associated with virtual symbol %s",
 			name);
 	}
 
-	if (name != NULL && type != SYMBOL_TYPE_CALLBACK) {
+	if (name != NULL && !(type & SYMBOL_TYPE_CALLBACK)) {
 		if (g_hash_table_lookup (cache->items_by_symbol, name) != NULL) {
 			msg_err_cache ("skip duplicate symbol registration for %s", name);
 			return -1;
