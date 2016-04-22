@@ -1,3 +1,7 @@
+1.2.5:
+	* Plug an important memory leak in headers getting code
+	* Remove some bad domains from whitelists
+
 1.2.4:
 	* Implement new multipattern matcher that uses hyperscan if possible
 	* Use mutlipattern for lua_trie code
