@@ -18,7 +18,7 @@ limitations under the License.
 
 reconf['PRECEDENCE_BULK'] = {
     re = 'Precedence=/bulk/Hi',
-    score = 3,
+    score = 0.1,
     description = "Message marked as bulk",
     group = 'upstream_spam_filters'
 }
