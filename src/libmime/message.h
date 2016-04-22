@@ -78,7 +78,7 @@ struct raw_header {
  */
 gboolean rspamd_message_parse (struct rspamd_task *task);
 
-/*
+/**
  * Get a list of header's values with specified header's name using raw headers
  * @param task worker task structure
  * @param field header's name
@@ -89,12 +89,26 @@ GList * rspamd_message_get_header (struct rspamd_task *task,
 	const gchar *field,
 	gboolean strong);
 
+/**
+ * Get an array of header's values with specified header's name using raw headers
+ * @param task worker task structure
+ * @param field header's name
+ * @param strong if this flag is TRUE header's name is case sensitive, otherwise it is not
+ * @return An array of header's values or NULL. It is NOT permitted to free array or values.
+ */
 GPtrArray *rspamd_message_get_header_array (struct rspamd_task *task,
 		const gchar *field,
 		gboolean strong);
-
+/**
+ * Get an array of mime parts header's values with specified header's name using raw headers
+ * @param task worker task structure
+ * @param field header's name
+ * @param strong if this flag is TRUE header's name is case sensitive, otherwise it is not
+ * @return An array of header's values or NULL. It is NOT permitted to free array or values.
+ */
 GPtrArray *rspamd_message_get_mime_header_array (struct rspamd_task *task,
 		const gchar *field,
 		gboolean strong);
+
 
 #endif

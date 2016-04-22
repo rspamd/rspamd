@@ -1956,6 +1956,9 @@ rspamd_message_get_header_array (struct rspamd_task *task,
 		g_ptr_array_add (ret, cur);
 	}
 
+	rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard, ret);
+
 	return ret;
 }
 
@@ -1982,6 +1985,10 @@ rspamd_message_get_mime_header_array (struct rspamd_task *task,
 		}
 	}
 
+	if (nelems == 0) {
+		return NULL;
+	}
+
 	ret = g_ptr_array_sized_new (nelems);
 
 	for (i = 0; i < task->parts->len; i ++) {
@@ -1998,6 +2005,9 @@ rspamd_message_get_mime_header_array (struct rspamd_task *task,
 			g_ptr_array_add (ret, cur);
 		}
 	}
+
+	rspamd_mempool_add_destructor (task->task_pool,
+		(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard, ret);
 
 	return ret;
 }
