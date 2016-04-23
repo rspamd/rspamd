@@ -1796,7 +1796,8 @@ url_tld_end (struct url_callback_data *cb,
 	const gchar *p;
 
 	/* A url must be finished by tld, so it must be followed by space character */
-	p = pos + strlen (match->pattern);
+	p = pos + match->m_len;
+
 	if (p == cb->end || g_ascii_isspace (*p) || *p == ',') {
 		match->m_len = p - match->m_begin;
 		return TRUE;
