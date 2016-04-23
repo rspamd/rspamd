@@ -127,6 +127,11 @@ if opts then
     })
     rspamd_config:register_symbol({
       type = 'virtual',
+      name = settings['symbol_bad'],
+      parent = id
+    })
+    rspamd_config:register_symbol({
+      type = 'virtual',
       name = settings['symbol_good'],
       flags = 'nice',
       parent = id
