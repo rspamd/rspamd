@@ -111,6 +111,9 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_IS_CLASSIFIED(task) (((task)->processed_stages & RSPAMD_TASK_STAGE_CLASSIFIERS))
 #define RSPAMD_TASK_IS_EMPTY(task) (((task)->flags & RSPAMD_TASK_FLAG_EMPTY))
 
+struct rspamd_email_address;
+
+
 /**
  * Worker task structure
  */
@@ -148,10 +151,17 @@ struct rspamd_task {
 	GHashTable *results;							/**< hash table of metric_result indexed by
 													 *    metric's name									*/
 	GPtrArray *tokens;								/**< statistics tokens */
-	InternetAddressList *rcpt_mime;					/**< list of all recipients							*/
-	InternetAddressList *rcpt_envelope;				/**< list of all recipients							*/
+#if 0
+	GPtrArray *rcpt_mime;							/**< list of all recipients (rspamd_email_address)	*/
+	GPtrArray *rcpt_envelope;						/**< list of all recipients	(rspamd_email_address)	*/
+	struct rspamd_email_address *from_mime;
+	struct rspamd_email_address *from_envelope;
+#else
+	InternetAddressList *rcpt_mime;
+	InternetAddressList *rcpt_envelope;
 	InternetAddressList *from_mime;
 	InternetAddressList *from_envelope;
+#endif
 
 	GList *messages;								/**< list of messages that would be reported		*/
 	struct rspamd_re_runtime *re_rt;				/**< regexp runtime									*/

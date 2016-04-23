@@ -22,6 +22,7 @@
 #include "images.h"
 #include "cfg_file.h"
 #include "utlist.h"
+#include "xxhash.h"
 
 /***
  * @module rspamd_task
@@ -1453,37 +1454,71 @@ lua_task_get_dns_req (lua_State *L)
 	return 1;
 }
 
+enum rspamd_address_type {
+	RSPAMD_ADDRESS_ANY = 0,
+	RSPAMD_ADDRESS_SMTP = 1,
+	RSPAMD_ADDRESS_MIME = 2,
+	RSPAMD_ADDRESS_RAW_ANY = 3,
+	RSPAMD_ADDRESS_RAW_SMTP = 4,
+	RSPAMD_ADDRESS_RAW_MIME = 5,
+	RSPAMD_ADDRESS_MAX
+};
+
 /*
  * Convert element at the specified position to the type
  * for get_from/get_recipients
  */
-static gint
+static enum rspamd_address_type
 lua_task_str_to_get_type (lua_State *L, gint pos)
 {
 	const gchar *type = NULL;
+	gint ret = RSPAMD_ADDRESS_ANY;
+	guint64 h;
+	gsize sz;
 
 	/* Get what value */
 
 	if (lua_type (L, pos) == LUA_TNUMBER) {
-		return lua_tonumber (L, pos);
+		ret = lua_tonumber (L, pos);
+
+		if (ret >= RSPAMD_ADDRESS_ANY && ret < RSPAMD_ADDRESS_MAX) {
+			return ret;
+		}
+
+		return RSPAMD_ADDRESS_ANY;
 	}
 	else if (lua_type (L, pos) == LUA_TSTRING) {
-		type = lua_tostring (L, pos);
+		type = lua_tolstring (L, pos, &sz);
 
-		if (type) {
-			if (strcmp (type, "mime") == 0) {
-				return 2;
-			}
-			else if (strcmp (type, "any") == 0) {
-				return 0;
-			}
-			else if (strcmp (type, "smtp") == 0 || strcmp (type, "envelope") == 0) {
-				return 1;
+		if (type && sz > 0) {
+			h = XXH64 (type, sz, 0xdeadbabe);
+
+			switch (h) {
+			case 0xDA081341FB600389ULL: /* mime */
+				ret = RSPAMD_ADDRESS_MIME;
+				break;
+			case 0xEEC8A7832F8C43ACULL: /* any */
+				ret = RSPAMD_ADDRESS_ANY;
+				break;
+			case 0x472274D5193B2A80ULL: /* smtp */
+			case 0xEFE0F586CC9F14A9ULL: /* envelope */
+				ret = RSPAMD_ADDRESS_SMTP;
+				break;
+			case 0x9DA887501690DE20ULL: /* raw_mime */
+				ret = RSPAMD_ADDRESS_RAW_MIME;
+				break;
+			case 0x6B54FE02DEB595A4ULL: /* raw_smtp */
+			case 0xE0E596C861777B02ULL: /* raw_envelope */
+				ret = RSPAMD_ADDRESS_RAW_SMTP;
+				break;
+			case 0x2C49DBE3A10A0197ULL: /* raw_any */
+				ret = RSPAMD_ADDRESS_RAW_ANY;
+				break;
 			}
 		}
 	}
 
-	return 0;
+	return ret;
 }
 
 static gint
@@ -1500,15 +1535,15 @@ lua_task_get_recipients (lua_State *L)
 		}
 
 		switch (what) {
-		case 1:
+		case RSPAMD_ADDRESS_SMTP:
 			/* Here we check merely envelope rcpt */
 			addrs = task->rcpt_envelope;
 			break;
-		case 2:
+		case RSPAMD_ADDRESS_MIME:
 			/* Here we check merely mime rcpt */
 			addrs = task->rcpt_mime;
 			break;
-		case 0:
+		case RSPAMD_ADDRESS_ANY:
 		default:
 			if (task->rcpt_envelope) {
 				addrs = task->rcpt_envelope;
