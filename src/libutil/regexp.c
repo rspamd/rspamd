@@ -176,20 +176,18 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 	}
 
 #ifdef HAVE_PCRE_JIT
-	if (!(r->flags & RSPAMD_REGEXP_FLAG_RAW)) {
-		jit_flags |= PCRE_FLAG(UTF);
-	}
 	if (pcre2_jit_compile (r->re, jit_flags) < 0) {
-		msg_err ("jit compilation of %s is not supported", r->pattern);
+		msg_err ("jit compilation of %s is not supported: %d", r->pattern, jit_flags);
 		r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
-	}
-
-	if (pcre2_pattern_info (r->re, PCRE2_INFO_JITSIZE, &jsz) >= 0 && jsz > 0) {
-		r->jstack = pcre2_jit_stack_create (32 * 1024, 512 * 1024, NULL);
 	}
 	else {
-		msg_err ("jit compilation of %s is not supported", r->pattern);
-		r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
+		if (pcre2_pattern_info (r->re, PCRE2_INFO_JITSIZE, &jsz) >= 0 && jsz > 0) {
+			r->jstack = pcre2_jit_stack_create (32 * 1024, 512 * 1024, NULL);
+		}
+		else {
+			msg_err ("jit compilation of %s is not supported", r->pattern);
+			r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
+		}
 	}
 
 	if (r->jstack && !(r->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT)) {
@@ -197,8 +195,6 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 	}
 
 	if (r->re != r->raw_re) {
-		jit_flags &= ~PCRE_FLAG(UTF);
-
 		if (pcre2_jit_compile (r->raw_re, jit_flags) < 0) {
 			msg_debug ("jit compilation of %s is not supported", r->pattern);
 			r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
