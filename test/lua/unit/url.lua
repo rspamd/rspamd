@@ -18,6 +18,8 @@ context("URL check functions", function()
     local pool = mpool.create()
     local cases = {
       {"test.com text", {"test.com", nil}},
+      {" test.com text", {"test.com", nil}},
+      {"<test.com> text", {"test.com", nil}},
       {"test.com. text", {"test.com", nil}},
       {"mailto:A.User@example.com text", {"example.com", "A.User"}},
       {"http://Тест.Рф:18 text", {"тест.рф", nil}},
@@ -60,6 +62,11 @@ context("URL check functions", function()
         host = 'www.google.com', path = 'foo', query = 'bar=baz', tld = 'google.com'
       }},
       {"http://[www.google.com]/", false},
+      {"<test.com", true, {
+        host = 'test.com', tld = 'test.com',
+      }},
+      {"test.com>", false},
+      {",test.com text", false},
       {"ht\ttp:@www.google.com:80/;p?#", false},
       {"http://user:pass@/", false},
       {"http://foo:-80/", false},
