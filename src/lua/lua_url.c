@@ -487,9 +487,13 @@ lua_url_create (lua_State *L)
 		text = luaL_checklstring (L, 2, &length);
 
 		if (text != NULL) {
-			lua_newtable (L);
 			rspamd_url_find_single (pool, text, length, FALSE,
 					lua_url_single_inserter, L);
+
+			if (lua_type (L, -1) != LUA_TUSERDATA) {
+				/* URL is actually not found */
+				lua_pushnil (L);
+			}
 
 		}
 		else {
