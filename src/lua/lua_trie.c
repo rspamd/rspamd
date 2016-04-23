@@ -112,8 +112,11 @@ lua_trie_create (lua_State *L)
 
 		while (lua_next (L, -2) != 0) {
 			if (lua_isstring (L, -1)) {
-				rspamd_multipattern_add_pattern (trie, lua_tostring (L, -1),
-						flags);
+				const gchar *pat;
+				gsize patlen;
+
+				pat = lua_tolstring (L, -1, &patlen);
+				rspamd_multipattern_add_pattern_len (trie, pat, patlen, flags);
 			}
 
 			lua_pop (L, 1);
