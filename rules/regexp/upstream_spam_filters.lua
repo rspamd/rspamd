@@ -16,6 +16,8 @@ limitations under the License.
 
 -- Rules for upstream services that have already run spam checks
 
+local reconf = config['regexp']
+
 reconf['PRECEDENCE_BULK'] = {
     re = 'Precedence=/bulk/Hi',
     score = 0.1,
