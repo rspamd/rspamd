@@ -2141,12 +2141,13 @@ rspamd_url_trie_generic_callback_common (struct rspamd_multipattern *mp,
 		return 0;
 	}
 
-	pos = text + match_start;
+	pos = text + match_pos;
 
 	if (!rspamd_url_trie_is_match (matcher, pos, text + len)) {
 		return 0;
 	}
 
+	pos = cb->begin + match_start;
 	m.pattern = matcher->pattern;
 	m.prefix = matcher->prefix;
 	m.add_prefix = FALSE;
