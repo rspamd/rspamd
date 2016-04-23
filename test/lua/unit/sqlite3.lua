@@ -41,7 +41,7 @@ context("Sqlite3 API", function()
     assert_true(ret, "should be able to insert row")
 
     for row in db:rows([[SELECT * FROM x;]]) do
-      assert_equal(row.id, 1)
+      assert_equal(row.id, '1')
       assert_equal(row.value, 'test')
     end
     os.remove('/tmp/rspamd_unit_test_sqlite3-2.sqlite')

@@ -9,13 +9,13 @@ context("Regexp unit tests", function()
   end)
   test("Regexp match", function()
     local cases = {
+      {'/Тест/iu', 'тест', true},
       {'/test$/m', '123test', true},
       {'/^test$/m', '123test', false},
       {'m,test,', 'test', true},
       {'m,test,', 'test123', false},
       {'m{https?://[^/?\\s]+?:\\d+(?<!:80)(?<!:443)(?<!:8080)(?:/|\\s|$)}', '', false},
       {'/test/i', 'TeSt123', true},
-      {'/ТесТ/iu', 'тест', true},
       -- Raw regexp
       {'/\\S<[-\\w\\.]+\\@[-\\w\\.]+>/r', 'some<example@example.com>', true},
       -- Cyrillic utf8 letter
