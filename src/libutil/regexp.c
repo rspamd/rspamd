@@ -701,8 +701,6 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 	else {
 		r = re->re;
 		mcontext = re->mcontext;
-		match_flags |= PCRE_FLAG(UTF);
-
 	}
 
 	match_data = pcre2_match_data_create (re->ncaptures + 1, NULL);
