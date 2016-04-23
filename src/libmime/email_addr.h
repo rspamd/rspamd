@@ -27,6 +27,7 @@ enum rspamd_email_address_flags {
 	RSPAMD_EMAIL_ADDR_BRACED = (1 << 2),
 	RSPAMD_EMAIL_ADDR_QUOTED = (1 << 3),
 	RSPAMD_EMAIL_ADDR_EMPTY = (1 << 4),
+	RSPAMD_EMAIL_ADDR_SMTP = (1 << 5)
 };
 
 /*
@@ -37,11 +38,13 @@ struct rspamd_email_address {
 	const gchar *addr;
 	const gchar *user;
 	const gchar *domain;
+	const gchar *name;
 
 	guint raw_len;
 	guint addr_len;
 	guint user_len;
 	guint domain_len;
+	guint name_len;
 	enum rspamd_email_address_flags flags;
 
 	ref_entry_t ref;
