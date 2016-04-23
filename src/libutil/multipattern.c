@@ -64,9 +64,10 @@ rspamd_multipattern_library_init (const gchar *cache_dir)
 
 #ifdef WITH_HYPERSCAN
 static gchar *
-rspamd_multipattern_escape_tld_hyperscan (const gchar *pattern)
+rspamd_multipattern_escape_tld_hyperscan (const gchar *pattern, gsize slen,
+		gsize *dst_len)
 {
-	gsize len, slen;
+	gsize len;
 	const gchar *p, *prefix;
 	gchar *res;
 
@@ -76,7 +77,6 @@ rspamd_multipattern_escape_tld_hyperscan (const gchar *pattern)
 	 * 2) *.blah -> \\..*\\.blah
 	 * 3) ???
 	 */
-	slen = strlen (pattern);
 
 	if (pattern[0] == '*') {
 		len = slen + 4;
@@ -100,25 +100,27 @@ rspamd_multipattern_escape_tld_hyperscan (const gchar *pattern)
 
 	res = g_malloc (len + 1);
 	slen = rspamd_strlcpy (res, prefix, len + 1);
-	rspamd_strlcpy (res + slen, p, len + 1 - slen);
+	slen += rspamd_strlcpy (res + slen, p, len + 1 - slen);
+
+	*dst_len = slen;
 
 	return res;
 }
 
 static gchar *
-rspamd_multipattern_escape_generic_hyperscan (const gchar *pattern)
+rspamd_multipattern_escape_hyperscan (const gchar *pattern, gsize slen,
+		gsize *dst_len, gboolean allow_glob)
 {
-	const gchar *p;
+	const gchar *p, *end = pattern + slen;
 	gchar *res, *d, t;
-	gsize len, slen;
+	gsize len;
+	static const gchar hexdigests[16] = "0123456789abcdef";
 
-	slen = strlen (pattern);
 	len = slen;
-
 	p = pattern;
 
 	/* [-[\]{}()*+?.,\\^$|#\s] need to be escaped */
-	while (*p) {
+	while (p < end) {
 		t = *p ++;
 
 		switch (t) {
@@ -145,11 +147,16 @@ rspamd_multipattern_escape_generic_hyperscan (const gchar *pattern)
 			if (g_ascii_isspace (t)) {
 				len ++;
 			}
+			else if (!g_ascii_isprint (t)) {
+				/* \\xHH -> 4 symbols */
+				len += 3;
+			}
 			break;
 		}
 	}
 
 	if (slen == len) {
+		*dst_len = slen;
 		return g_strdup (pattern);
 	}
 
@@ -169,97 +176,6 @@ rspamd_multipattern_escape_generic_hyperscan (const gchar *pattern)
 		case '}':
 		case '(':
 		case ')':
-		case '*':
-		case '+':
-		case '?':
-		case '.':
-		case ',':
-		case '^':
-		case '$':
-		case '|':
-		case '#':
-			*d++ = '\\';
-			break;
-		default:
-			if (g_ascii_isspace (t)) {
-				*d++ = '\\';
-			}
-			break;
-		}
-
-		*d++ = t;
-	}
-
-	*d = '\0';
-
-	return res;
-}
-
-static gchar *
-rspamd_multipattern_escape_glob_hyperscan (const gchar *pattern)
-{
-	const gchar *p;
-	gchar *res, *d, t;
-	gsize len, slen;
-
-	slen = strlen (pattern);
-	len = slen;
-
-	p = pattern;
-
-	/* [-[\]{}()*+?.,\\^$|#\s] need to be escaped */
-	while (*p) {
-		t = *p ++;
-
-		switch (t) {
-		case '[':
-		case ']':
-		case '-':
-		case '\\':
-		case '{':
-		case '}':
-		case '(':
-		case ')':
-		case '*':
-		case '+':
-		case '?':
-		case '.':
-		case ',':
-		case '^':
-		case '$':
-		case '|':
-		case '#':
-			len ++;
-			break;
-		default:
-			if (g_ascii_isspace (t)) {
-				len ++;
-			}
-			break;
-		}
-	}
-
-	if (slen == len) {
-		return g_strdup (pattern);
-	}
-
-	res = g_malloc (len + 1);
-	p = pattern;
-	d = res;
-
-	while (*p) {
-		t = *p ++;
-
-		switch (t) {
-		case '[':
-		case ']':
-		case '-':
-		case '\\':
-		case '{':
-		case '}':
-		case '(':
-		case ')':
-		case '+':
 		case '.':
 		case ',':
 		case '^':
@@ -270,12 +186,25 @@ rspamd_multipattern_escape_glob_hyperscan (const gchar *pattern)
 			break;
 		case '*':
 		case '?':
-			/* Treat * as .* and ? as .? */
-			*d++ = '.';
+		case '+':
+			if (allow_glob) {
+				/* Treat * as .* and ? as .? */
+				*d++ = '.';
+			}
+			else {
+				*d++ = '\\';
+			}
 			break;
 		default:
 			if (g_ascii_isspace (t)) {
 				*d++ = '\\';
+			}
+			else if (!g_ascii_isgraph (t)) {
+				*d++ = '\\';
+				*d++ = 'x';
+				*d++ = hexdigests[((t >> 4) & 0xF)];
+				*d++ = hexdigests[((t) & 0xF)];
+				continue; /* To avoid *d++ = t; */
 			}
 			break;
 		}
@@ -284,15 +213,17 @@ rspamd_multipattern_escape_glob_hyperscan (const gchar *pattern)
 	}
 
 	*d = '\0';
+	*dst_len = d - res;
 
 	return res;
 }
 
 #else
 static gchar *
-rspamd_multipattern_escape_tld_acism (const gchar *pattern)
+rspamd_multipattern_escape_tld_acism (const gchar *pattern, gsize len,
+		gsize *dst_len)
 {
-	gsize len, slen;
+	gsize dlen, slen;
 	const gchar *p, *prefix;
 	gchar *res;
 
@@ -302,11 +233,11 @@ rspamd_multipattern_escape_tld_acism (const gchar *pattern)
 	 * 2) *.blah -> \\..*\\.blah
 	 * 3) ???
 	 */
-	slen = strlen (pattern);
+	slen = len;
 
 	if (pattern[0] == '*') {
-		len = slen;
-		p = strchr (pattern, '.');
+		dlen = slen;
+		p = memchr (pattern, '.', len);
 
 		if (p == NULL) {
 			/* XXX: bad */
@@ -316,17 +247,22 @@ rspamd_multipattern_escape_tld_acism (const gchar *pattern)
 			p ++;
 		}
 
+		dlen -= p - pattern;
 		prefix = ".";
+		dlen ++;
 	}
 	else {
-		len = slen + 1;
+		dlen = slen + 1;
 		prefix = ".";
 		p = pattern;
 	}
 
-	res = g_malloc (len + 1);
-	slen = rspamd_strlcpy (res, prefix, len + 1);
-	rspamd_strlcpy (res + slen, p, len + 1 - slen);
+	res = g_malloc (dlen + 1);
+	slen = strlen (prefix);
+	memcpy (res, prefix, slen);
+	memcpy (res + slen, p, dlen - slen);
+
+	*dst_len = dlen;
 
 	return res;
 }
@@ -335,28 +271,37 @@ rspamd_multipattern_escape_tld_acism (const gchar *pattern)
  * Escapes special characters from specific pattern
  */
 static gchar *
-rspamd_multipattern_pattern_filter (const gchar *pattern,
-		enum rspamd_multipattern_flags flags)
+rspamd_multipattern_pattern_filter (const gchar *pattern, gsize len,
+		enum rspamd_multipattern_flags flags,
+		gsize *dst_len)
 {
+	gchar *ret = NULL;
 #ifdef WITH_HYPERSCAN
 	if (flags & RSPAMD_MULTIPATTERN_TLD) {
-		return rspamd_multipattern_escape_tld_hyperscan (pattern);
+		ret = rspamd_multipattern_escape_tld_hyperscan (pattern, len, dst_len);
 	}
 	else if (flags & RSPAMD_MULTIPATTERN_RE) {
-		return g_strdup (pattern);
+		ret = malloc (len + 1);
+		*dst_len = rspamd_strlcpy (ret, pattern, len + 1);
 	}
 	else if (flags & RSPAMD_MULTIPATTERN_GLOB) {
-		return rspamd_multipattern_escape_glob_hyperscan (pattern);
+		ret = rspamd_multipattern_escape_hyperscan (pattern, len, dst_len, TRUE);
 	}
-
-	return rspamd_multipattern_escape_generic_hyperscan (pattern);
+	else {
+		ret = rspamd_multipattern_escape_hyperscan (pattern, len, dst_len, FALSE);
+	}
 #else
 	if (flags & RSPAMD_MULTIPATTERN_TLD) {
-		return rspamd_multipattern_escape_tld_acism (pattern);
+		ret = rspamd_multipattern_escape_tld_acism (pattern, len, dst_len);
 	}
-
-	return g_strdup (pattern);
+	else {
+		ret = malloc (len);
+		memcpy (ret, pattern, len);
+		*dst_len = len;
+	}
 #endif
+
+	return ret;
 }
 
 struct rspamd_multipattern *
@@ -405,6 +350,17 @@ rspamd_multipattern_add_pattern (struct rspamd_multipattern *mp,
 		const gchar *pattern, gint flags)
 {
 	g_assert (pattern != NULL);
+
+	rspamd_multipattern_add_pattern_len (mp, pattern, strlen (pattern), flags);
+}
+
+void
+rspamd_multipattern_add_pattern_len (struct rspamd_multipattern *mp,
+		const gchar *pattern, gsize patlen, gint flags)
+{
+	gsize dlen;
+
+	g_assert (pattern != NULL);
 	g_assert (mp != NULL);
 	g_assert (!mp->compiled);
 
@@ -420,16 +376,16 @@ rspamd_multipattern_add_pattern (struct rspamd_multipattern *mp,
 	}
 
 	g_array_append_val (mp->hs_flags, fl);
-	np = rspamd_multipattern_pattern_filter (pattern, flags);
+	np = rspamd_multipattern_pattern_filter (pattern, patlen, flags, &dlen);
 	g_array_append_val (mp->hs_pats, np);
 	fl = mp->cnt;
 	g_array_append_val (mp->hs_ids, fl);
-	rspamd_cryptobox_hash_update (&mp->hash_state, np, strlen (np));
+	rspamd_cryptobox_hash_update (&mp->hash_state, np, dlen);
 #else
 	ac_trie_pat_t pat;
 
-	pat.ptr = rspamd_multipattern_pattern_filter (pattern, flags);
-	pat.len = strlen (pat.ptr);
+	pat.ptr = rspamd_multipattern_pattern_filter (pattern, patlen, flags, &dlen);
+	pat.len = dlen;
 
 	g_array_append_val (mp->pats, pat);
 #endif

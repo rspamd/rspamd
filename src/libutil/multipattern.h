@@ -92,12 +92,22 @@ struct rspamd_multipattern *rspamd_multipattern_create_full (
 		enum rspamd_multipattern_flags flags);
 
 /**
- * Adds new pattern to match engine
+ * Adds new pattern to match engine from zero-terminated string
  * @param mp
  * @param pattern
  */
 void rspamd_multipattern_add_pattern (struct rspamd_multipattern *mp,
 		const gchar *pattern, gint flags);
+
+/**
+ * Adds new pattern from arbitrary string
+ * @param mp
+ * @param pattern
+ * @param patlen
+ * @param flags
+ */
+void rspamd_multipattern_add_pattern_len (struct rspamd_multipattern *mp,
+		const gchar *pattern, gsize patlen, gint flags);
 
 /**
  * Compiles multipattern structure
