@@ -147,7 +147,6 @@ if opts then
     local id = rspamd_config:register_symbol({
       name = symbol,
       callback = check_quantity_received,
-      type = 'callback',
     })
 
     for n,v in pairs(opts) do
