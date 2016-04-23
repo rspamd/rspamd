@@ -164,7 +164,7 @@ rspamd_multipattern_escape_hyperscan (const gchar *pattern, gsize slen,
 	p = pattern;
 	d = res;
 
-	while (*p) {
+	while (p < end) {
 		t = *p ++;
 
 		switch (t) {
