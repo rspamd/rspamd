@@ -202,7 +202,6 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 
 		if (pcre2_pattern_info (r->raw_re, PCRE2_INFO_JITSIZE, &jsz) >= 0 && jsz > 0) {
 			r->raw_jstack = pcre2_jit_stack_create (32 * 1024, 512 * 1024, NULL);
-			r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
 		}
 		else {
 			msg_debug ("jit compilation of raw %s is not supported", r->pattern);
