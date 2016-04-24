@@ -425,7 +425,7 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 		return;
 	}
 
-	domain = get_spf_domain (task);
+	domain = rspamd_spf_get_domain (task);
 	if (domain) {
 		if ((l =
 			rspamd_lru_hash_lookup (spf_module_ctx->spf_hash, domain,

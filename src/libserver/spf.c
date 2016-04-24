@@ -20,6 +20,7 @@
 #include "message.h"
 #include "filter.h"
 #include "utlist.h"
+#include "email_addr.h"
 
 #define SPF_VER1_STR "v=spf1"
 #define SPF_VER2_STR "spf2."
@@ -1756,32 +1757,90 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 	rspamd_spf_maybe_return (rec);
 }
 
-const gchar *
-get_spf_domain (struct rspamd_task *task)
+struct rspamd_spf_cred {
+	gchar *local_part;
+	gchar *domain;
+	gchar *sender;
+};
+
+struct rspamd_spf_cred *
+rspamd_spf_cache_domain (struct rspamd_task *task)
 {
-	const gchar *domain, *res = NULL;
-	const gchar *sender;
+	struct rspamd_email_address *addr;
+	struct rspamd_spf_cred *cred = NULL;
 
-	sender = rspamd_task_get_sender (task);
+	addr = rspamd_task_get_sender (task);
+	if (!addr || (addr->flags & RSPAMD_EMAIL_ADDR_EMPTY)) {
+		/* Get domain from helo */
 
-	if (sender != NULL) {
-		domain = strchr (sender, '@');
-		if (domain) {
-			res = domain + 1;
+		if (task->helo) {
+			GString *fs = g_string_new ("");
+
+			cred = rspamd_mempool_alloc (task->task_pool, sizeof (*cred));
+			cred->domain = task->helo;
+			cred->local_part = "postmaster";
+			rspamd_printf_gstring (fs, "postmaster@%s", cred->domain);
+			cred->sender = fs->str;
+			rspamd_mempool_add_destructor (task->task_pool,
+					rspamd_gstring_free_hard, fs);
 		}
 	}
+	else {
+		rspamd_ftok_t tok;
 
-	return res;
+		cred = rspamd_mempool_alloc (task->task_pool, sizeof (*cred));
+		tok.begin = addr->domain;
+		tok.len = addr->domain_len;
+		cred->domain = rspamd_mempool_ftokdup (task->task_pool, &tok);
+		tok.begin = addr->user;
+		tok.len = addr->user_len;
+		cred->local_part = rspamd_mempool_ftokdup (task->task_pool, &tok);
+		tok.begin = addr->addr;
+		tok.len = addr->addr_len;
+		cred->sender = rspamd_mempool_ftokdup (task->task_pool, &tok);
+	}
+
+	if (cred) {
+		rspamd_mempool_set_variable (task->task_pool, "spf_domain", cred, NULL);
+	}
+
+	return cred;
+}
+
+const gchar *
+rspamd_spf_get_domain (struct rspamd_task *task)
+{
+	gchar *domain = NULL;
+	struct rspamd_spf_cred *cred;
+
+	cred = rspamd_mempool_get_variable (task->task_pool, "spf_domain");
+
+	if (!cred) {
+		cred = rspamd_spf_cache_domain (task);
+	}
+
+	if (cred) {
+		domain = cred->domain;
+	}
+
+	return domain;
 }
 
 gboolean
 resolve_spf (struct rspamd_task *task, spf_cb_t callback)
 {
 	struct spf_record *rec;
-	gchar *domain;
-	const gchar *sender;
+	struct rspamd_spf_cred *cred;
 
-	sender = rspamd_task_get_sender (task);
+	cred = rspamd_mempool_get_variable (task->task_pool, "spf_domain");
+
+	if (!cred) {
+		cred = rspamd_spf_cache_domain (task);
+	}
+
+	if (!cred || !cred->domain) {
+		return FALSE;
+	}
 
 	rec = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct spf_record));
 	rec->task = task;
@@ -1795,23 +1854,9 @@ resolve_spf (struct rspamd_task *task, spf_cb_t callback)
 			rec);
 
 	/* Extract from data */
-	if (sender != NULL && (domain = strchr (sender, '@')) != NULL) {
-		rec->sender = sender;
-
-		rec->local_part = rspamd_mempool_alloc (task->task_pool,
-				domain - sender);
-		rspamd_strlcpy (rec->local_part, sender, domain - sender);
-		rec->sender_domain = domain + 1;
-	}
-	else if (task->helo != NULL && strchr (task->helo, '.') != NULL) {
-		/* For notifies we can check HELO identity and check SPF accordingly */
-		/* XXX: very poor check */
-		rec->local_part = rspamd_mempool_strdup (task->task_pool, "postmaster");
-		rec->sender_domain = task->helo;
-	}
-	else {
-		return FALSE;
-	}
+	rec->sender = cred->sender;
+	rec->local_part = cred->local_part;
+	rec->sender_domain = cred->domain;
 
 	if (make_dns_request_task_forced (task,
 			spf_dns_callback,
