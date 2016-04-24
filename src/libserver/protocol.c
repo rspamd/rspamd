@@ -21,6 +21,7 @@
 #include "message.h"
 #include "utlist.h"
 #include "http.h"
+#include "email_addr.h"
 #include "worker_private.h"
 
 /* Max line size */
@@ -268,6 +269,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 	rspamd_ftok_t *hn_tok, *hv_tok, srch;
 	gboolean fl, has_ip = FALSE;
 	struct rspamd_http_header *h;
+	struct rspamd_email_address *addr;
 
 	LL_FOREACH (msg->headers, h)
 	{
@@ -305,8 +307,9 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		case 'f':
 		case 'F':
 			IF_HEADER (FROM_HEADER) {
-				if (!rspamd_task_add_sender (task,
-						rspamd_mempool_ftokdup (task->task_pool, hv_tok))) {
+				task->from_envelope = rspamd_email_address_from_smtp (hv->str,
+						hv->len);
+				if (!task->from_envelope) {
 					msg_err_task ("bad from header: '%V'", hv);
 				}
 			}
@@ -343,8 +346,12 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 		case 'r':
 		case 'R':
 			IF_HEADER (RCPT_HEADER) {
-				if (!rspamd_task_add_recipient (task,
-						rspamd_mempool_ftokdup (task->task_pool, hv_tok))) {
+				addr = rspamd_email_address_from_smtp (hv->str, hv->len);
+
+				if (addr) {
+					g_ptr_array_add (task->rcpt_envelope, addr);
+				}
+				else {
 					msg_err_task ("bad from header: '%T'", h->value);
 				}
 				debug_task ("read rcpt header, value: %V", hv);
@@ -656,15 +663,7 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 			has_user = TRUE;
 		}
 		else if (task->from_envelope) {
-			InternetAddress *ia;
-
-			ia = internet_address_list_get_address (task->from_envelope, 0);
-
-			if (ia && INTERNET_ADDRESS_IS_MAILBOX (ia)) {
-				InternetAddressMailbox *iamb = INTERNET_ADDRESS_MAILBOX (ia);
-
-				user_field = iamb->addr;
-			}
+			user_field = task->from_envelope->addr;
 		}
 
 		msg_info_task ("<%s> %s: %s; ip: %s; URL: %*s",

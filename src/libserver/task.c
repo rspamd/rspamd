@@ -19,6 +19,7 @@
 #include "protocol.h"
 #include "message.h"
 #include "lua/lua_common.h"
+#include "email_addr.h"
 #include "composites.h"
 #include "stat_api.h"
 #include "unix-std.h"
@@ -162,6 +163,7 @@ rspamd_task_free (struct rspamd_task *task)
 {
 	struct mime_part *p;
 	struct mime_text_part *tp;
+	struct rspamd_email_address *addr;
 	guint i;
 
 	if (task) {
@@ -186,6 +188,15 @@ rspamd_task_free (struct rspamd_task *task)
 			if (tp->normalized_words) {
 				g_array_free (tp->normalized_words, TRUE);
 			}
+		}
+
+		for (i = 0; i < task->rcpt_envelope->len; i ++) {
+			addr = g_ptr_array_index (task->rcpt_envelope, i);
+			rspamd_email_address_unref (addr);
+		}
+
+		if (task->from_envelope) {
+			rspamd_email_address_unref (task->from_envelope);
 		}
 
 		if (task->images) {
@@ -530,47 +541,21 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 	return ret;
 }
 
-const gchar *
+struct rspamd_email_address*
 rspamd_task_get_sender (struct rspamd_task *task)
 {
-	InternetAddress *iaelt = NULL;
-#ifdef GMIME24
-	InternetAddressMailbox *imb;
-
-	if (task->from_envelope != NULL) {
-		iaelt = internet_address_list_get_address (task->from_envelope, 0);
-	}
-	else if (task->from_mime != NULL) {
-		iaelt = internet_address_list_get_address (task->from_mime, 0);
-	}
-	imb = INTERNET_ADDRESS_IS_MAILBOX(iaelt) ?
-			INTERNET_ADDRESS_MAILBOX (iaelt) : NULL;
-
-	return (imb ? internet_address_mailbox_get_addr (imb) : NULL);
-#else
-	if (task->from_envelope != NULL) {
-		iaelt = internet_address_list_get_address (task->from_envelope);
-	}
-	else if (task->from_mime != NULL) {
-		iaelt = internet_address_list_get_address (task->from_mime);
-	}
-
-	return (iaelt != NULL ? internet_address_get_addr (iaelt) : NULL);
-#endif
+	return task->from_envelope;
 }
 
 static const gchar *
 rspamd_task_cache_principal_recipient (struct rspamd_task *task,
-		const gchar *rcpt)
+		const gchar *rcpt, gsize len)
 {
 	gchar *rcpt_lc;
-	gsize len;
 
 	if (rcpt == NULL) {
 		return NULL;
 	}
-
-	len = strlen (rcpt);
 
 	rcpt_lc = rspamd_mempool_alloc (task->task_pool, len + 1);
 	rspamd_strlcpy (rcpt_lc, rcpt, len + 1);
@@ -586,6 +571,7 @@ rspamd_task_get_principal_recipient (struct rspamd_task *task)
 {
 	InternetAddress *iaelt = NULL;
 	const gchar *val;
+	struct rspamd_email_address *addr;
 
 	val = rspamd_mempool_get_variable (task->task_pool, "recipient");
 
@@ -594,16 +580,22 @@ rspamd_task_get_principal_recipient (struct rspamd_task *task)
 	}
 
 	if (task->deliver_to) {
-		return rspamd_task_cache_principal_recipient (task, task->deliver_to);
+		return rspamd_task_cache_principal_recipient (task, task->deliver_to,
+				strlen (task->deliver_to));
+	}
+	if (task->rcpt_envelope != NULL) {
+		addr = g_ptr_array_index (task->rcpt_envelope, 0);
+
+		if (addr->addr) {
+			return rspamd_task_cache_principal_recipient (task, addr->addr,
+					addr->addr_len);
+		}
 	}
 
 #ifdef GMIME24
 	InternetAddressMailbox *imb;
 
-	if (task->rcpt_envelope != NULL) {
-		iaelt = internet_address_list_get_address (task->rcpt_envelope, 0);
-	}
-	else if (task->rcpt_mime != NULL) {
+	if (task->rcpt_mime != NULL) {
 		iaelt = internet_address_list_get_address (task->rcpt_mime, 0);
 	}
 
@@ -613,97 +605,21 @@ rspamd_task_get_principal_recipient (struct rspamd_task *task)
 	if (imb) {
 		val = internet_address_mailbox_get_addr (imb);
 
-		return rspamd_task_cache_principal_recipient (task, val);
+		return rspamd_task_cache_principal_recipient (task, val, strlen (val));
 	}
 #else
-	if (task->rcpt_envelope != NULL) {
-		iaelt = internet_address_list_get_address (task->rcpt_envelope);
-	}
-	else if (task->rcpt_mime != NULL) {
+	if (task->rcpt_mime != NULL) {
 		iaelt = internet_address_list_get_address (task->rcpt_mime);
 	}
 
 	if (iaelt) {
 		val = internet_address_get_addr (iaelt);
 
-		return rspamd_task_cache_principal_recipient (task, val);
+		return rspamd_task_cache_principal_recipient (task, val, strlen (val));
 	}
 #endif
 
 	return NULL;
-}
-
-gboolean
-rspamd_task_add_recipient (struct rspamd_task *task, const gchar *rcpt)
-{
-	InternetAddressList *tmp_addr;
-
-	if (task->rcpt_envelope == NULL) {
-		task->rcpt_envelope = internet_address_list_new ();
-#ifdef GMIME24
-		rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t) g_object_unref,
-				task->rcpt_envelope);
-#else
-		rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t) internet_address_list_destroy,
-				task->rcpt_envelope);
-#endif
-	}
-	tmp_addr = internet_address_list_parse_string (rcpt);
-
-	if (tmp_addr) {
-		internet_address_list_append (task->rcpt_envelope, tmp_addr);
-#ifdef GMIME24
-		g_object_unref (tmp_addr);
-#else
-		internet_address_list_destroy (tmp_addr);
-#endif
-		return TRUE;
-	}
-
-	return FALSE;
-}
-
-gboolean
-rspamd_task_add_sender (struct rspamd_task *task, const gchar *sender)
-{
-	InternetAddressList *tmp_addr;
-
-	if (task->from_envelope == NULL) {
-		task->from_envelope = internet_address_list_new ();
-#ifdef GMIME24
-		rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t) g_object_unref,
-				task->from_envelope);
-#else
-		rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t) internet_address_list_destroy,
-				task->from_envelope);
-#endif
-	}
-
-	if (strcmp (sender, "<>") == 0) {
-		/* Workaround for gmime */
-		internet_address_list_add (task->from_envelope,
-				internet_address_mailbox_new ("", ""));
-		return TRUE;
-	}
-	else {
-		tmp_addr = internet_address_list_parse_string (sender);
-
-		if (tmp_addr) {
-			internet_address_list_append (task->from_envelope, tmp_addr);
-#ifdef GMIME24
-			g_object_unref (tmp_addr);
-#else
-			internet_address_list_destroy (tmp_addr);
-#endif
-			return TRUE;
-		}
-	}
-
-	return FALSE;
 }
 
 gboolean
@@ -753,12 +669,7 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 		break;
 	case RSPAMD_LOG_SMTP_RCPT:
 	case RSPAMD_LOG_SMTP_RCPTS:
-		if (task->rcpt_envelope &&
-					internet_address_list_length (task->rcpt_envelope) > 0) {
-			ret = TRUE;
-		}
-		else if (task->rcpt_mime &&
-				internet_address_list_length (task->rcpt_mime) > 0) {
+		if (task->rcpt_envelope && task->rcpt_envelope->len > 0) {
 			ret = TRUE;
 		}
 		break;
@@ -770,12 +681,7 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_LOG_SMTP_FROM:
-		if (task->from_envelope &&
-				internet_address_list_length (task->from_envelope) > 0) {
-			ret = TRUE;
-		}
-		else if (task->from_mime &&
-				internet_address_list_length (task->from_mime) > 0) {
+		if (task->from_envelope) {
 			ret = TRUE;
 		}
 		break;
@@ -966,6 +872,49 @@ rspamd_task_write_ialist (struct rspamd_task *task,
 }
 
 static rspamd_fstring_t *
+rspamd_task_write_addr_list (struct rspamd_task *task,
+		GPtrArray *addrs, gint lim,
+		struct rspamd_log_format *lf,
+		rspamd_fstring_t *logbuf)
+{
+	rspamd_fstring_t *res = logbuf, *varbuf;
+	rspamd_ftok_t var = {.begin = NULL, .len = 0};
+	struct rspamd_email_address *addr;
+	gint i;
+
+	if (lim <= 0) {
+		lim = addrs->len;
+	}
+
+	varbuf = rspamd_fstring_new ();
+
+	for (i = 0; i < lim; i++) {
+		addr = g_ptr_array_index (addrs, i);
+
+		if (addr->addr) {
+			varbuf = rspamd_fstring_append (varbuf, addr->addr, addr->addr_len);
+		}
+
+		if (varbuf->len > 0) {
+			if (i != lim - 1) {
+				varbuf = rspamd_fstring_append (varbuf, ",", 1);
+			}
+		}
+	}
+
+	if (varbuf->len > 0) {
+		var.begin = varbuf->str;
+		var.len = varbuf->len;
+		res = rspamd_task_log_write_var (task, logbuf,
+				&var, (const rspamd_ftok_t *) lf->data);
+	}
+
+	rspamd_fstring_free (varbuf);
+
+	return res;
+}
+
+static rspamd_fstring_t *
 rspamd_task_log_variable (struct rspamd_task *task,
 		struct rspamd_log_format *lf, rspamd_fstring_t *logbuf)
 {
@@ -1040,12 +989,8 @@ rspamd_task_log_variable (struct rspamd_task *task,
 	/* InternetAddress vars */
 	case RSPAMD_LOG_SMTP_FROM:
 		if (task->from_envelope) {
-			return rspamd_task_write_ialist (task, task->from_envelope, 1, lf,
-					logbuf);
-		}
-		else if (task->from_mime) {
-			return rspamd_task_write_ialist (task, task->from_mime, 1, lf,
-					logbuf);
+			var.begin = task->from_envelope->addr;
+			var.len = task->from_envelope->addr_len;
 		}
 		break;
 	case RSPAMD_LOG_MIME_FROM:
@@ -1056,11 +1001,7 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		break;
 	case RSPAMD_LOG_SMTP_RCPT:
 		if (task->rcpt_envelope) {
-			return rspamd_task_write_ialist (task, task->rcpt_envelope, 1, lf,
-					logbuf);
-		}
-		else if (task->rcpt_mime) {
-			return rspamd_task_write_ialist (task, task->rcpt_mime, 1, lf,
+			return rspamd_task_write_addr_list (task, task->rcpt_envelope, 1, lf,
 					logbuf);
 		}
 		break;
@@ -1072,11 +1013,7 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		break;
 	case RSPAMD_LOG_SMTP_RCPTS:
 		if (task->rcpt_envelope) {
-			return rspamd_task_write_ialist (task, task->rcpt_envelope, -1, lf,
-					logbuf);
-		}
-		else if (task->rcpt_mime) {
-			return rspamd_task_write_ialist (task, task->rcpt_mime, -1, lf,
+			return rspamd_task_write_addr_list (task, task->rcpt_envelope, -1, lf,
 					logbuf);
 		}
 		break;

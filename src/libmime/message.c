@@ -21,6 +21,7 @@
 #include "libutil/regexp.h"
 #include "html.h"
 #include "images.h"
+#include "email_addr.h"
 #include "utlist.h"
 #include "tokenizers/tokenizers.h"
 
@@ -1475,14 +1476,21 @@ rspamd_message_from_data (struct rspamd_task *task, GByteArray *data,
 	const char *mb = NULL;
 	gchar *mid;
 	rspamd_ftok_t srch, *tok;
+	struct rspamd_email_address *addr;
 
 	g_assert (data != NULL);
 
 	message = g_mime_message_new (TRUE);
 	task->message = message;
 	if (task->from_envelope) {
-		g_mime_message_set_sender (task->message,
-				rspamd_task_get_sender (task));
+		addr = rspamd_task_get_sender (task);
+
+		if (addr->addr_len > 0) {
+			srch.begin = addr->addr;
+			srch.len = addr->addr_len;
+			g_mime_message_set_sender (task->message,
+					rspamd_mempool_ftokdup (task->task_pool, &srch));
+		}
 	}
 
 	srch.begin = "Content-Type";
@@ -1764,18 +1772,8 @@ rspamd_message_parse (struct rspamd_task *task)
 
 		if (first) {
 			rh = first->data;
-			task->from_envelope = internet_address_list_parse_string (rh->value);
-			if (task->from_envelope) {
-#ifdef GMIME24
-				rspamd_mempool_add_destructor (task->task_pool,
-						(rspamd_mempool_destruct_t) g_object_unref,
-						task->from_envelope);
-#else
-				rspamd_mempool_add_destructor (task->task_pool,
-					(rspamd_mempool_destruct_t) internet_address_list_destroy,
-					task->from_envelope);
-#endif
-			}
+			task->from_envelope = rspamd_email_address_from_smtp (rh->decoded,
+					strlen (rh->decoded));
 		}
 	}
 

@@ -20,6 +20,7 @@
 #include "message.h"
 #include "mime_expressions.h"
 #include "html.h"
+#include "email_addr.h"
 #include "lua/lua_common.h"
 
 gboolean rspamd_compare_encoding (struct rspamd_task *task,
@@ -1424,7 +1425,7 @@ rspamd_raw_header_exists (struct rspamd_task *task, GArray * args, void *unused)
 static gboolean
 match_smtp_data (struct rspamd_task *task,
 	struct expression_argument *arg,
-	const gchar *what)
+	const gchar *what, gsize len)
 {
 	rspamd_regexp_t *re;
 	gint r;
@@ -1438,12 +1439,12 @@ match_smtp_data (struct rspamd_task *task,
 		}
 
 
-		r = rspamd_regexp_search (re, what, 0, NULL, NULL, FALSE, NULL);
+		r = rspamd_regexp_search (re, what, len, NULL, NULL, FALSE, NULL);
 
 		return r;
 	}
 	else if (arg->type == EXPRESSION_ARGUMENT_NORMAL &&
-			g_ascii_strcasecmp (arg->data, what) == 0) {
+			g_ascii_strncasecmp (arg->data, what, len) == 0) {
 		return TRUE;
 	}
 
@@ -1454,9 +1455,10 @@ static gboolean
 rspamd_check_smtp_data (struct rspamd_task *task, GArray * args, void *unused)
 {
 	struct expression_argument *arg;
-	InternetAddressList *ia = NULL;
-	const gchar *type, *what = NULL;
-	gint i, ialen;
+	struct rspamd_email_address *addr;
+	GPtrArray *rcpts;
+	const gchar *type, *str = NULL;
+	guint i;
 
 	if (args == NULL) {
 		msg_warn_task ("no parameters to function");
@@ -1475,7 +1477,7 @@ rspamd_check_smtp_data (struct rspamd_task *task, GArray * args, void *unused)
 		case 'f':
 		case 'F':
 			if (g_ascii_strcasecmp (type, "from") == 0) {
-				what = rspamd_task_get_sender (task);
+				addr = rspamd_task_get_sender (task);
 			}
 			else {
 				msg_warn_task ("bad argument to function: %s", type);
@@ -1485,7 +1487,7 @@ rspamd_check_smtp_data (struct rspamd_task *task, GArray * args, void *unused)
 		case 'h':
 		case 'H':
 			if (g_ascii_strcasecmp (type, "helo") == 0) {
-				what = task->helo;
+				str = task->helo;
 			}
 			else {
 				msg_warn_task ("bad argument to function: %s", type);
@@ -1495,7 +1497,7 @@ rspamd_check_smtp_data (struct rspamd_task *task, GArray * args, void *unused)
 		case 'u':
 		case 'U':
 			if (g_ascii_strcasecmp (type, "user") == 0) {
-				what = task->user;
+				str = task->user;
 			}
 			else {
 				msg_warn_task ("bad argument to function: %s", type);
@@ -1505,7 +1507,7 @@ rspamd_check_smtp_data (struct rspamd_task *task, GArray * args, void *unused)
 		case 's':
 		case 'S':
 			if (g_ascii_strcasecmp (type, "subject") == 0) {
-				what = task->subject;
+				str = task->subject;
 			}
 			else {
 				msg_warn_task ("bad argument to function: %s", type);
@@ -1515,7 +1517,7 @@ rspamd_check_smtp_data (struct rspamd_task *task, GArray * args, void *unused)
 		case 'r':
 		case 'R':
 			if (g_ascii_strcasecmp (type, "rcpt") == 0) {
-				ia = task->rcpt_mime;
+				rcpts = task->rcpt_envelope;
 			}
 			else {
 				msg_warn_task ("bad argument to function: %s", type);
@@ -1528,7 +1530,7 @@ rspamd_check_smtp_data (struct rspamd_task *task, GArray * args, void *unused)
 		}
 	}
 
-	if (what == NULL && ia == NULL) {
+	if (str == NULL && addr == NULL && rcpts == NULL) {
 		/* Not enough data so regexp would NOT be found anyway */
 		return FALSE;
 	}
@@ -1536,22 +1538,22 @@ rspamd_check_smtp_data (struct rspamd_task *task, GArray * args, void *unused)
 	/* We would process only one more argument, others are ignored */
 	if (args->len >= 2) {
 		arg = &g_array_index (args, struct expression_argument, 1);
+
 		if (arg) {
-			if (what != NULL) {
-				return match_smtp_data (task, arg, what);
+			if (str != NULL) {
+				return match_smtp_data (task, arg, str, strlen (str));
+			}
+			else if (addr != NULL && addr->addr) {
+				return match_smtp_data (task, arg, addr->addr, addr->addr_len);
 			}
 			else {
-				if (ia != NULL) {
-					ialen = internet_address_list_length(ia);
-					for (i = 0; i < ialen; i ++) {
-						InternetAddress *iaelt =
-								internet_address_list_get_address(ia, i);
-						InternetAddressMailbox *iamb =
-							INTERNET_ADDRESS_IS_MAILBOX(iaelt) ?
-							INTERNET_ADDRESS_MAILBOX (iaelt) : NULL;
-						if (iamb &&
+				if (rcpts != NULL) {
+					for (i = 0; i < rcpts->len; i ++) {
+						addr = g_ptr_array_index (rcpts, i);
+
+						if (addr && addr->addr &&
 							match_smtp_data (task, arg,
-								internet_address_mailbox_get_addr(iamb))) {
+								addr->addr, addr->addr_len)) {
 							return TRUE;
 						}
 					}

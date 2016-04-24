@@ -151,17 +151,11 @@ struct rspamd_task {
 	GHashTable *results;							/**< hash table of metric_result indexed by
 													 *    metric's name									*/
 	GPtrArray *tokens;								/**< statistics tokens */
-#if 0
-	GPtrArray *rcpt_mime;							/**< list of all recipients (rspamd_email_address)	*/
-	GPtrArray *rcpt_envelope;						/**< list of all recipients	(rspamd_email_address)	*/
-	struct rspamd_email_address *from_mime;
-	struct rspamd_email_address *from_envelope;
-#else
+
 	InternetAddressList *rcpt_mime;
-	InternetAddressList *rcpt_envelope;
+	GPtrArray *rcpt_envelope;						/**< array of rspamd_email_address					*/
 	InternetAddressList *from_mime;
-	InternetAddressList *from_envelope;
-#endif
+	struct rspamd_email_address *from_envelope;
 
 	GList *messages;								/**< list of messages that would be reported		*/
 	struct rspamd_re_runtime *re_rt;				/**< regexp runtime									*/
@@ -237,7 +231,7 @@ gboolean rspamd_task_process (struct rspamd_task *task, guint stages);
  * @param task
  * @return
  */
-const gchar *rspamd_task_get_sender (struct rspamd_task *task);
+struct rspamd_email_address* rspamd_task_get_sender (struct rspamd_task *task);
 
 /**
  * Return addresses in the following precendence:
@@ -256,13 +250,6 @@ const gchar *rspamd_task_get_principal_recipient (struct rspamd_task *task);
  * @return TRUE if an address has been parsed and added
  */
 gboolean rspamd_task_add_recipient (struct rspamd_task *task, const gchar *rcpt);
-/**
- * Add a sender for a task
- * @param task task object
- * @param sender string representation of sender's address
- * @return TRUE if an address has been parsed and added
- */
-gboolean rspamd_task_add_sender (struct rspamd_task *task, const gchar *sender);
 
 /**
  * Learn specified statfile with message in a task
