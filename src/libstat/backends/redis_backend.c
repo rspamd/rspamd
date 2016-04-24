@@ -180,14 +180,6 @@ rspamd_redis_expand_object (const gchar *pattern,
 				tlen ++;
 				state = just_char;
 				break;
-			case 'f':
-				if (task) {
-					elt = rspamd_task_get_sender (task);
-					if (elt) {
-						tlen += strlen (elt);
-					}
-				}
-				break;
 			case 'u':
 				elt = GET_TASK_ELT (task, user);
 				if (elt) {
@@ -271,14 +263,6 @@ rspamd_redis_expand_object (const gchar *pattern,
 			case '%':
 				*d++ = *p;
 				state = just_char;
-				break;
-			case 'f':
-				if (task) {
-					elt = rspamd_task_get_sender (task);
-					if (elt) {
-						d += rspamd_strlcpy (d, elt, end - d);
-					}
-				}
 				break;
 			case 'u':
 				elt = GET_TASK_ELT (task, user);
