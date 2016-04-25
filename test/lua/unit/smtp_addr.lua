@@ -30,6 +30,7 @@ context("SMTP address check functions", function()
       {'a@example.com', {user = 'a', domain = 'example.com', addr = 'a@example.com'}},
       {'a+b@example.com', {user = 'a+b', domain = 'example.com', addr = 'a+b@example.com'}},
       {'"a"@example.com', {user = 'a', domain = 'example.com', addr = '"a"@example.com'}},
+      {'"a+b"@example.com', {user = 'a+b', domain = 'example.com', addr = '"a+b"@example.com'}},
     }
 
     each(function(case)
@@ -48,9 +49,8 @@ context("SMTP address check functions", function()
           local str = ffi.string(st.addr, st.addr_len)
           assert_equal(str, ex)
         end
-      end, case[1])
+      end, case[2])
       ffi.C.rspamd_email_address_unref(st)
     end, cases_valid)
   end)
-
 end)
