@@ -291,6 +291,7 @@ rspamd_config.ENVFROM_VERP = {
 rspamd_config.RCVD_TLS_ALL = {
     callback = function (task)
         local rcvds = task:get_header_full('Received')
+        if not rcvds then return false end
         local count = 0
         local encrypted = 0
         for _, rcvd in ipairs(rcvds) do
