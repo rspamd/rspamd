@@ -24,7 +24,7 @@
   Atom           = atext+;
   Dot_string     = Atom ("."  Atom)*;
 
-  QcontentSMTP   = qtextSMTP | quoted_pairSMTP;
+  QcontentSMTP   = qtextSMTP | quoted_pairSMTP %User_has_backslash;
   Quoted_string  = ( DQUOTE QcontentSMTP* >User_start %User_end DQUOTE ) %Quoted_addr;
   Local_part     = Dot_string >User_start %User_end | Quoted_string;
   String         = Atom | Quoted_string;

@@ -24,10 +24,42 @@
 static void
 rspamd_email_addr_dtor (struct rspamd_email_address *addr)
 {
-	if (addr->flags & RSPAMD_EMAIL_ADDR_ALLOCATED) {
+	if (addr->flags & RSPAMD_EMAIL_ADDR_ADDR_ALLOCATED) {
 		g_free ((void *)addr->addr);
 	}
+
+	if (addr->flags & RSPAMD_EMAIL_ADDR_USER_ALLOCATED) {
+		g_free ((void *)addr->user);
+	}
+
 	g_slice_free1 (sizeof (*addr), addr);
+}
+
+static void
+rspamd_email_address_unescape (struct rspamd_email_address *addr)
+{
+	const char *h, *end;
+	char *t, *d;
+
+	if (addr->user_len == 0) {
+		return;
+	}
+
+	d = g_malloc (addr->user_len);
+	t = d;
+	h = addr->user;
+	end = h + addr->user_len;
+
+	while (h < end) {
+		if (*h != '\\') {
+			*t++ = *h;
+		}
+		h ++;
+	}
+
+	addr->user = d;
+	addr->user_len = t - d;
+	addr->flags |= RSPAMD_EMAIL_ADDR_USER_ALLOCATED;
 }
 
 struct rspamd_email_address *
@@ -47,13 +79,18 @@ rspamd_email_address_from_smtp (const gchar *str, guint len)
 		memcpy (ret, &addr, sizeof (addr));
 
 		if ((ret->flags & RSPAMD_EMAIL_ADDR_QUOTED) && ret->addr[0] == '"') {
+			if (ret->flags & RSPAMD_EMAIL_ADDR_HAS_BACKSLASH) {
+				/* We also need to unquote user */
+				rspamd_email_address_unescape (ret);
+			}
+
 			/* We need to unquote addr */
 			nlen = ret->domain_len + ret->user_len + 2;
 			ret->addr = g_malloc (nlen + 1);
 			ret->addr_len = rspamd_snprintf ((char *)ret->addr, nlen, "%*s@%*s",
 					(gint)ret->user_len, ret->user,
 					(gint)ret->domain_len, ret->domain);
-			ret->flags |= RSPAMD_EMAIL_ADDR_ALLOCATED;
+			ret->flags |= RSPAMD_EMAIL_ADDR_ADDR_ALLOCATED;
 		}
 
 		REF_INIT_RETAIN (ret, rspamd_email_addr_dtor);

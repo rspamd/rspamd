@@ -33,6 +33,10 @@
     }
   }
 
+  action User_has_backslash {
+    addr->flags |= RSPAMD_EMAIL_ADDR_HAS_BACKSLASH;
+  }
+
   action Quoted_addr {
     addr->flags |= RSPAMD_EMAIL_ADDR_QUOTED;
   }
