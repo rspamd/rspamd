@@ -25,8 +25,8 @@
   Dot_string     = Atom ("."  Atom)*;
 
   QcontentSMTP   = qtextSMTP | quoted_pairSMTP;
-  Quoted_string  = ( DQUOTE QcontentSMTP* DQUOTE ) %Quoted_addr;
-  Local_part     = ( Dot_string | Quoted_string ) >User_start %User_end;
+  Quoted_string  = ( DQUOTE QcontentSMTP* >User_start %User_end DQUOTE ) %Quoted_addr;
+  Local_part     = Dot_string >User_start %User_end | Quoted_string;
   String         = Atom | Quoted_string;
 
   Standardized_tag = Ldh_str;
@@ -43,8 +43,8 @@
 
   Mailbox        = Local_part "@" (address_literal | Domain >Domain_start %Domain_end);
   UnangledPath = ( Adl ":" )? Mailbox;
-  AngledPath = "<" UnangledPath ">";
-  Path = AngledPath %Angled_addr | UnangledPath;
+  AngledPath = "<" UnangledPath >Angled_addr_start %Angled_addr_end ">";
+  Path = AngledPath | UnangledPath >Unangled_addr_start %Unangled_addr_end;
   SMTPAddr = space* (Path | "<>" %Empty_addr ) %Valid_addr space*;
 
 }%%

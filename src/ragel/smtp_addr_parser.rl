@@ -4,7 +4,6 @@
 
   action User_start {
     addr->user = p;
-    addr->addr = p;
   }
 
   action User_end {
@@ -41,14 +40,34 @@
   action Empty_addr {
     addr->flags |= RSPAMD_EMAIL_ADDR_EMPTY;
     addr->addr = "";
+    addr->user = addr->addr;
+    addr->domain = addr->addr;
   }
 
   action Valid_addr {
     addr->flags |= RSPAMD_EMAIL_ADDR_VALID;
   }
 
-  action Angled_addr {
+  action Angled_addr_start {
+    addr->addr = p;
+  }
+
+  action Unangled_addr_start {
+    addr->addr = p;
+  }
+
+  action Angled_addr_end {
     addr->flags |= RSPAMD_EMAIL_ADDR_BRACED;
+    if (addr->addr) {
+      addr->addr_len = p - addr->addr;
+    }
+  }
+
+  action Unangled_addr_end {
+    addr->flags |= RSPAMD_EMAIL_ADDR_BRACED;
+    if (addr->addr) {
+      addr->addr_len = p - addr->addr;
+    }
   }
 
   include smtp_address "smtp_address.rl";
