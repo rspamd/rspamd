@@ -1533,14 +1533,29 @@ lua_push_email_address (lua_State *L, struct rspamd_email_address *addr)
 			lua_pushlstring (L, addr->addr, addr->addr_len);
 			lua_settable (L, -3);
 		}
+		else {
+			lua_pushstring (L, "addr");
+			lua_pushstring (L, "");
+			lua_settable (L, -3);
+		}
 		if (addr->domain_len > 0) {
 			lua_pushstring (L, "domain");
 			lua_pushlstring (L, addr->domain, addr->domain_len);
 			lua_settable (L, -3);
 		}
+		else {
+			lua_pushstring (L, "domain");
+			lua_pushstring (L, "");
+			lua_settable (L, -3);
+		}
 		if (addr->user_len > 0) {
 			lua_pushstring (L, "user");
 			lua_pushlstring (L, addr->user, addr->user_len);
+			lua_settable (L, -3);
+		}
+		else {
+			lua_pushstring (L, "user");
+			lua_pushstring (L, "");
 			lua_settable (L, -3);
 		}
 	}
@@ -1760,9 +1775,14 @@ lua_task_get_from (lua_State *L)
 		}
 		else if (addr) {
 			/* Create table to preserve compatibility */
-			lua_createtable (L, 1, 0);
-			lua_push_email_address (L, addr);
-			lua_rawseti (L, -2, 1);
+			if (addr->addr) {
+				lua_createtable (L, 1, 0);
+				lua_push_email_address (L, addr);
+				lua_rawseti (L, -2, 1);
+			}
+			else {
+				lua_pushnil (L);
+			}
 		}
 		else {
 			lua_pushnil (L);
