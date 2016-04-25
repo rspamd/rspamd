@@ -13,11 +13,11 @@
 
   atext = alpha | digit | "!" | "#" | "$" | "%" | "&" |
           "'" | "*" | "+" | "_" | "/" | "=" | "?" | "^" |
-          "_" | "`" | "{" | "|" | "}" | "~";
+          "-" | "`" | "{" | "|" | "}" | "~";
 
   dcontent       = 33..90 | 94..126;
   Let_dig        = alpha | digit;
-  Ldh_str        = ( alpha | digit | "_" )* Let_dig;
+  Ldh_str        = ( alpha | digit | "_" | "-" )* Let_dig;
 
   quoted_pairSMTP  = "\\" 32..126;
   qtextSMTP      = 32..33 | 35..91 | 93..126;
