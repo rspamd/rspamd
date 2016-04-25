@@ -994,8 +994,6 @@ parse_spf_ip4 (struct spf_record *rec, struct spf_addr *addr)
 	gchar ipbuf[INET_ADDRSTRLEN + 1];
 	guint32 mask;
 
-	CHECK_REC (rec);
-
 	semicolon = strchr (addr->spf_string, ':');
 
 	if (semicolon == NULL) {
@@ -1043,8 +1041,6 @@ parse_spf_ip6 (struct spf_record *rec, struct spf_addr *addr)
 	gsize len;
 	gchar ipbuf[INET6_ADDRSTRLEN + 1];
 	guint32 mask;
-
-	CHECK_REC (rec);
 
 	semicolon = strchr (addr->spf_string, ':');
 
@@ -1128,8 +1124,6 @@ parse_spf_include (struct spf_record *rec, struct spf_addr *addr)
 static gboolean
 parse_spf_exp (struct spf_record *rec, struct spf_addr *addr)
 {
-	CHECK_REC (rec);
-
 	msg_info_spf ("exp record is ignored");
 	return TRUE;
 }
