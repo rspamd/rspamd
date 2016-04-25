@@ -252,6 +252,15 @@ LUA_FUNCTION_DEF (util, get_ticks);
  */
 LUA_FUNCTION_DEF (util, stat);
 
+/***
+ * @function util.unlink(fname)
+ * Removes the specified file from the filesystem
+ *
+ * @param {string} fname filename to remove
+ * @return {boolean,[string]} true if file has been deleted or false,'error string'
+ */
+LUA_FUNCTION_DEF (util, unlink);
+
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
 	LUA_INTERFACE_DEF (util, load_rspamd_config),
@@ -278,6 +287,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, strequal_caseless),
 	LUA_INTERFACE_DEF (util, get_ticks),
 	LUA_INTERFACE_DEF (util, stat),
+	LUA_INTERFACE_DEF (util, unlink),
 	{NULL, NULL}
 };
 
@@ -1140,6 +1150,33 @@ lua_util_stat (lua_State *L)
 	}
 
 	return 2;
+}
+
+static gint
+lua_util_unlink (lua_State *L)
+{
+	const gchar *fpath;
+	gint ret;
+
+	fpath = luaL_checkstring (L, 1);
+
+	if (fpath) {
+		ret = unlink (fpath);
+
+		if (ret == -1) {
+			lua_pushboolean (L, false);
+			lua_pushstring (L, strerror (errno));
+
+			return 2;
+		}
+
+		lua_pushboolean (L, true);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 static gint
