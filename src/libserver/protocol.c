@@ -349,6 +349,10 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				addr = rspamd_email_address_from_smtp (hv->str, hv->len);
 
 				if (addr) {
+					if (task->rcpt_envelope == NULL) {
+						task->rcpt_envelope = g_ptr_array_new ();
+					}
+
 					g_ptr_array_add (task->rcpt_envelope, addr);
 				}
 				else {

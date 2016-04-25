@@ -190,9 +190,11 @@ rspamd_task_free (struct rspamd_task *task)
 			}
 		}
 
-		for (i = 0; i < task->rcpt_envelope->len; i ++) {
-			addr = g_ptr_array_index (task->rcpt_envelope, i);
-			rspamd_email_address_unref (addr);
+		if (task->rcpt_envelope) {
+			for (i = 0; i < task->rcpt_envelope->len; i ++) {
+				addr = g_ptr_array_index (task->rcpt_envelope, i);
+				rspamd_email_address_unref (addr);
+			}
 		}
 
 		if (task->from_envelope) {
