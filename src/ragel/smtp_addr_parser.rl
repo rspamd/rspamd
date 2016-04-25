@@ -52,23 +52,15 @@
     addr->flags |= RSPAMD_EMAIL_ADDR_VALID;
   }
 
-  action Angled_addr_start {
+  action Addr_has_angle {
+    addr->flags |= RSPAMD_EMAIL_ADDR_BRACED;
+  }
+
+  action Addr_start {
     addr->addr = p;
   }
 
-  action Unangled_addr_start {
-    addr->addr = p;
-  }
-
-  action Angled_addr_end {
-    addr->flags |= RSPAMD_EMAIL_ADDR_BRACED;
-    if (addr->addr) {
-      addr->addr_len = p - addr->addr;
-    }
-  }
-
-  action Unangled_addr_end {
-    addr->flags |= RSPAMD_EMAIL_ADDR_BRACED;
+  action Addr_end {
     if (addr->addr) {
       addr->addr_len = p - addr->addr;
     }

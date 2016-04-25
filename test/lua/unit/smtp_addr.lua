@@ -35,6 +35,8 @@ context("SMTP address check functions", function()
       {'<"<>"@example.com>', {user = '<>', domain = 'example.com', addr = '<>@example.com'}},
       {'"\\""@example.com', {user = '"', domain = 'example.com', addr = '"@example.com'}},
       {'"\\"abc"@example.com', {user = '"abc', domain = 'example.com', addr = '"abc@example.com'}},
+      {'<@domain1,@domain2,@domain3:abc@example.com>',
+        {user = 'abc', domain = 'example.com', addr = 'abc@example.com'}},
 
     }
 

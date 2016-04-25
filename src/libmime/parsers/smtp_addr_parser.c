@@ -1,7 +1,7 @@
 
 #line 1 "src/ragel/smtp_addr_parser.rl"
 
-#line 80 "src/ragel/smtp_addr_parser.rl"
+#line 72 "src/ragel/smtp_addr_parser.rl"
 
 
 
@@ -503,85 +503,85 @@ static const char _smtp_addr_parser_indicies[] = {
 	1, 1, 93, 93, 93, 93, 93, 93,
 	93, 93, 93, 93, 93, 93, 93, 93,
 	93, 93, 93, 93, 93, 93, 93, 93,
-	93, 93, 93, 93, 1, 94, 1, 95,
+	93, 93, 93, 93, 1, 94, 1, 49,
 	1, 93, 93, 93, 93, 93, 93, 93,
-	93, 93, 93, 96, 1, 1, 1, 1,
+	93, 93, 93, 95, 1, 1, 1, 1,
 	1, 1, 93, 93, 93, 93, 93, 93,
 	93, 93, 93, 93, 93, 93, 93, 93,
 	93, 93, 93, 93, 93, 93, 93, 93,
 	93, 93, 93, 93, 1, 1, 1, 1,
-	97, 1, 93, 93, 93, 93, 93, 93,
+	96, 1, 93, 93, 93, 93, 93, 93,
 	93, 93, 93, 93, 93, 93, 93, 93,
 	93, 93, 93, 93, 93, 93, 93, 93,
-	93, 93, 93, 93, 1, 95, 1, 98,
-	99, 98, 98, 98, 98, 98, 1, 1,
-	98, 98, 1, 1, 1, 98, 98, 98,
-	98, 98, 98, 98, 98, 98, 98, 98,
-	1, 1, 1, 98, 1, 98, 1, 98,
-	98, 98, 98, 98, 98, 98, 98, 98,
-	98, 98, 98, 98, 98, 98, 98, 98,
-	98, 98, 98, 98, 98, 98, 98, 98,
-	98, 1, 1, 1, 98, 98, 98, 98,
-	98, 98, 98, 98, 98, 98, 98, 98,
-	98, 98, 98, 98, 98, 98, 98, 98,
-	98, 98, 98, 98, 98, 98, 98, 98,
-	98, 98, 98, 98, 98, 1, 93, 93,
+	93, 93, 93, 93, 1, 49, 1, 46,
+	47, 46, 46, 46, 46, 46, 1, 1,
+	46, 46, 1, 1, 1, 46, 46, 46,
+	46, 46, 46, 46, 46, 46, 46, 46,
+	1, 1, 1, 46, 1, 46, 1, 46,
+	46, 46, 46, 46, 46, 46, 46, 46,
+	46, 46, 46, 46, 46, 46, 46, 46,
+	46, 46, 46, 46, 46, 46, 46, 46,
+	46, 1, 1, 1, 46, 46, 46, 46,
+	46, 46, 46, 46, 46, 46, 46, 46,
+	46, 46, 46, 46, 46, 46, 46, 46,
+	46, 46, 46, 46, 46, 46, 46, 46,
+	46, 46, 46, 46, 46, 1, 93, 93,
 	93, 93, 93, 93, 93, 93, 93, 93,
 	1, 1, 1, 1, 1, 1, 1, 93,
 	93, 93, 93, 93, 93, 93, 93, 93,
 	93, 93, 93, 93, 93, 93, 93, 93,
 	93, 93, 93, 93, 93, 93, 93, 93,
-	93, 1, 1, 1, 1, 97, 1, 93,
+	93, 1, 1, 1, 1, 96, 1, 93,
 	93, 93, 93, 93, 93, 93, 93, 93,
 	93, 93, 93, 93, 93, 93, 93, 93,
 	93, 93, 93, 93, 93, 93, 93, 93,
-	93, 1, 100, 100, 100, 100, 100, 100,
-	100, 100, 100, 100, 1, 1, 1, 1,
-	1, 1, 1, 100, 100, 100, 100, 100,
-	100, 100, 100, 100, 100, 100, 100, 100,
-	100, 100, 100, 100, 100, 100, 100, 100,
-	100, 100, 100, 100, 100, 1, 1, 1,
-	1, 1, 1, 100, 100, 100, 100, 100,
-	100, 100, 100, 100, 100, 100, 100, 100,
-	100, 100, 100, 100, 100, 100, 100, 100,
-	100, 100, 100, 100, 100, 1, 101, 1,
-	102, 1, 100, 100, 100, 100, 100, 100,
-	100, 100, 100, 100, 103, 1, 1, 1,
-	1, 1, 1, 100, 100, 100, 100, 100,
-	100, 100, 100, 100, 100, 100, 100, 100,
-	100, 100, 100, 100, 100, 100, 100, 100,
-	100, 100, 100, 100, 100, 1, 1, 1,
-	1, 104, 1, 100, 100, 100, 100, 100,
-	100, 100, 100, 100, 100, 100, 100, 100,
-	100, 100, 100, 100, 100, 100, 100, 100,
-	100, 100, 100, 100, 100, 1, 102, 1,
-	105, 106, 105, 105, 105, 105, 105, 1,
-	1, 105, 105, 1, 1, 1, 105, 105,
-	105, 105, 105, 105, 105, 105, 105, 105,
-	105, 1, 1, 1, 105, 1, 105, 1,
-	105, 105, 105, 105, 105, 105, 105, 105,
-	105, 105, 105, 105, 105, 105, 105, 105,
-	105, 105, 105, 105, 105, 105, 105, 105,
-	105, 105, 1, 1, 1, 105, 105, 105,
-	105, 105, 105, 105, 105, 105, 105, 105,
-	105, 105, 105, 105, 105, 105, 105, 105,
-	105, 105, 105, 105, 105, 105, 105, 105,
-	105, 105, 105, 105, 105, 105, 1, 100,
-	100, 100, 100, 100, 100, 100, 100, 100,
-	100, 1, 1, 1, 1, 1, 1, 1,
-	100, 100, 100, 100, 100, 100, 100, 100,
-	100, 100, 100, 100, 100, 100, 100, 100,
-	100, 100, 100, 100, 100, 100, 100, 100,
-	100, 100, 1, 1, 1, 1, 104, 1,
-	100, 100, 100, 100, 100, 100, 100, 100,
-	100, 100, 100, 100, 100, 100, 100, 100,
-	100, 100, 100, 100, 100, 100, 100, 100,
-	100, 100, 1, 107, 107, 107, 107, 107,
+	93, 1, 97, 97, 97, 97, 97, 97,
+	97, 97, 97, 97, 1, 1, 1, 1,
+	1, 1, 1, 97, 97, 97, 97, 97,
+	97, 97, 97, 97, 97, 97, 97, 97,
+	97, 97, 97, 97, 97, 97, 97, 97,
+	97, 97, 97, 97, 97, 1, 1, 1,
+	1, 1, 1, 97, 97, 97, 97, 97,
+	97, 97, 97, 97, 97, 97, 97, 97,
+	97, 97, 97, 97, 97, 97, 97, 97,
+	97, 97, 97, 97, 97, 1, 98, 1,
+	5, 1, 97, 97, 97, 97, 97, 97,
+	97, 97, 97, 97, 99, 1, 1, 1,
+	1, 1, 1, 97, 97, 97, 97, 97,
+	97, 97, 97, 97, 97, 97, 97, 97,
+	97, 97, 97, 97, 97, 97, 97, 97,
+	97, 97, 97, 97, 97, 1, 1, 1,
+	1, 100, 1, 97, 97, 97, 97, 97,
+	97, 97, 97, 97, 97, 97, 97, 97,
+	97, 97, 97, 97, 97, 97, 97, 97,
+	97, 97, 97, 97, 97, 1, 5, 1,
+	2, 3, 2, 2, 2, 2, 2, 1,
+	1, 2, 2, 1, 1, 1, 2, 2,
+	2, 2, 2, 2, 2, 2, 2, 2,
+	2, 1, 1, 1, 2, 1, 2, 1,
+	2, 2, 2, 2, 2, 2, 2, 2,
+	2, 2, 2, 2, 2, 2, 2, 2,
+	2, 2, 2, 2, 2, 2, 2, 2,
+	2, 2, 1, 1, 1, 2, 2, 2,
+	2, 2, 2, 2, 2, 2, 2, 2,
+	2, 2, 2, 2, 2, 2, 2, 2,
+	2, 2, 2, 2, 2, 2, 2, 2,
+	2, 2, 2, 2, 2, 2, 1, 97,
+	97, 97, 97, 97, 97, 97, 97, 97,
+	97, 1, 1, 1, 1, 1, 1, 1,
+	97, 97, 97, 97, 97, 97, 97, 97,
+	97, 97, 97, 97, 97, 97, 97, 97,
+	97, 97, 97, 97, 97, 97, 97, 97,
+	97, 97, 1, 1, 1, 1, 100, 1,
+	97, 97, 97, 97, 97, 97, 97, 97,
+	97, 97, 97, 97, 97, 97, 97, 97,
+	97, 97, 97, 97, 97, 97, 97, 97,
+	97, 97, 1, 101, 101, 101, 101, 101,
 	1, 1, 1, 1, 1, 1, 1, 1,
 	1, 1, 1, 1, 1, 1, 1, 1,
-	1, 1, 107, 1, 1, 1, 1, 1,
+	1, 1, 101, 1, 1, 1, 1, 1,
 	1, 1, 1, 1, 1, 1, 1, 1,
-	108, 1, 11, 11, 11, 11, 11, 11,
+	102, 1, 11, 11, 11, 11, 11, 11,
 	11, 11, 11, 11, 1, 1, 1, 1,
 	1, 1, 1, 11, 11, 11, 11, 11,
 	11, 11, 11, 11, 11, 11, 11, 11,
@@ -590,20 +590,20 @@ static const char _smtp_addr_parser_indicies[] = {
 	1, 12, 1, 11, 11, 11, 11, 11,
 	11, 11, 11, 11, 11, 11, 11, 11,
 	11, 11, 11, 11, 11, 11, 11, 11,
-	11, 11, 11, 11, 11, 1, 109, 109,
-	109, 109, 109, 1, 1, 1, 1, 1,
+	11, 11, 11, 11, 11, 1, 103, 103,
+	103, 103, 103, 1, 1, 1, 1, 1,
 	1, 1, 1, 1, 1, 1, 1, 1,
-	1, 1, 1, 1, 1, 109, 1, 110,
-	110, 110, 110, 110, 1, 1, 1, 1,
+	1, 1, 1, 1, 1, 103, 1, 104,
+	104, 104, 104, 104, 1, 1, 1, 1,
 	1, 1, 1, 1, 1, 1, 1, 1,
-	1, 1, 1, 1, 1, 1, 110, 1,
-	111, 111, 111, 111, 111, 1, 1, 1,
+	1, 1, 1, 1, 1, 1, 104, 1,
+	105, 105, 105, 105, 105, 1, 1, 1,
 	1, 1, 1, 1, 1, 1, 1, 1,
-	1, 1, 1, 1, 1, 1, 1, 111,
-	1, 112, 112, 112, 112, 112, 1, 1,
+	1, 1, 1, 1, 1, 1, 1, 105,
+	1, 106, 106, 106, 106, 106, 1, 1,
 	1, 1, 1, 1, 1, 1, 1, 1,
 	1, 1, 1, 1, 1, 1, 1, 1,
-	112, 1, 0
+	106, 1, 0
 };
 
 static const char _smtp_addr_parser_trans_targs[] = {
@@ -618,28 +618,26 @@ static const char _smtp_addr_parser_trans_targs[] = {
 	57, 56, 59, 42, 43, 52, 44, 45,
 	50, 46, 47, 49, 48, 78, 51, 53,
 	55, 58, 61, 62, 63, 61, 62, 63,
-	35, 64, 61, 62, 63, 66, 67, 65,
-	68, 69, 33, 60, 71, 72, 70, 73,
-	74, 2, 27, 76, 5, 76, 76, 76,
-	76
+	35, 64, 61, 62, 63, 66, 67, 68,
+	69, 71, 72, 73, 74, 76, 5, 76,
+	76, 76, 76
 };
 
 static const char _smtp_addr_parser_trans_actions[] = {
-	0, 0, 1, 2, 0, 2, 0, 0,
+	0, 0, 1, 2, 0, 0, 0, 0,
 	3, 4, 0, 0, 0, 5, 5, 5,
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 6, 0, 0,
 	0, 0, 0, 7, 8, 7, 0, 3,
-	0, 9, 0, 10, 11, 10, 12, 13,
-	0, 13, 0, 0, 3, 4, 0, 0,
-	0, 14, 0, 5, 5, 5, 0, 0,
+	0, 9, 0, 10, 11, 10, 1, 2,
+	0, 0, 0, 0, 3, 4, 0, 0,
+	0, 12, 0, 5, 5, 5, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 6, 0, 15, 0, 0,
+	0, 0, 0, 6, 0, 13, 0, 0,
 	0, 0, 7, 8, 7, 0, 3, 0,
 	9, 0, 10, 11, 10, 0, 0, 0,
-	0, 0, 7, 0, 0, 0, 0, 0,
-	0, 7, 0, 16, 0, 0, 17, 18,
-	19
+	0, 0, 0, 0, 0, 14, 0, 0,
+	15, 16, 17
 };
 
 static const char _smtp_addr_parser_eof_actions[] = {
@@ -652,7 +650,7 @@ static const char _smtp_addr_parser_eof_actions[] = {
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 16, 0, 17, 18, 19
+	0, 0, 0, 14, 0, 15, 16, 17
 };
 
 static const int smtp_addr_parser_start = 1;
@@ -662,7 +660,7 @@ static const int smtp_addr_parser_error = 0;
 static const int smtp_addr_parser_en_main = 1;
 
 
-#line 83 "src/ragel/smtp_addr_parser.rl"
+#line 75 "src/ragel/smtp_addr_parser.rl"
 
 static int
 rspamd_smtp_addr_parse (const char *data, size_t len, struct rspamd_email_address *addr)
@@ -677,14 +675,14 @@ rspamd_smtp_addr_parse (const char *data, size_t len, struct rspamd_email_addres
   eof = pe;
 
 
-#line 681 "src/libmime/parsers/smtp_addr_parser.c"
+#line 679 "src/libmime/parsers/smtp_addr_parser.c"
 	{
 	cs = smtp_addr_parser_start;
 	}
 
-#line 97 "src/ragel/smtp_addr_parser.rl"
+#line 89 "src/ragel/smtp_addr_parser.rl"
 
-#line 688 "src/libmime/parsers/smtp_addr_parser.c"
+#line 686 "src/libmime/parsers/smtp_addr_parser.c"
 	{
 	int _slen;
 	int _trans;
@@ -756,28 +754,15 @@ _resume:
     addr->flags |= RSPAMD_EMAIL_ADDR_QUOTED;
   }
 	break;
-	case 18:
-#line 51 "src/ragel/smtp_addr_parser.rl"
-	{
-    addr->flags |= RSPAMD_EMAIL_ADDR_VALID;
-  }
-	break;
-	case 13:
-#line 55 "src/ragel/smtp_addr_parser.rl"
-	{
-    addr->addr = p;
-  }
-	break;
 	case 2:
 #line 59 "src/ragel/smtp_addr_parser.rl"
 	{
     addr->addr = p;
   }
 	break;
-	case 15:
+	case 13:
 #line 63 "src/ragel/smtp_addr_parser.rl"
 	{
-    addr->flags |= RSPAMD_EMAIL_ADDR_BRACED;
     if (addr->addr) {
       addr->addr_len = p - addr->addr;
     }
@@ -795,7 +780,7 @@ _resume:
     }
   }
 	break;
-	case 14:
+	case 12:
 #line 19 "src/ragel/smtp_addr_parser.rl"
 	{
     if (addr->domain) {
@@ -804,7 +789,6 @@ _resume:
   }
 #line 63 "src/ragel/smtp_addr_parser.rl"
 	{
-    addr->flags |= RSPAMD_EMAIL_ADDR_BRACED;
     if (addr->addr) {
       addr->addr_len = p - addr->addr;
     }
@@ -822,7 +806,7 @@ _resume:
     }
   }
 	break;
-	case 19:
+	case 17:
 #line 44 "src/ragel/smtp_addr_parser.rl"
 	{
     addr->flags |= RSPAMD_EMAIL_ADDR_EMPTY;
@@ -835,14 +819,14 @@ _resume:
     addr->flags |= RSPAMD_EMAIL_ADDR_VALID;
   }
 	break;
-	case 12:
+	case 16:
 #line 55 "src/ragel/smtp_addr_parser.rl"
 	{
-    addr->addr = p;
+    addr->flags |= RSPAMD_EMAIL_ADDR_BRACED;
   }
-#line 5 "src/ragel/smtp_addr_parser.rl"
+#line 51 "src/ragel/smtp_addr_parser.rl"
 	{
-    addr->user = p;
+    addr->flags |= RSPAMD_EMAIL_ADDR_VALID;
   }
 	break;
 	case 1:
@@ -855,10 +839,9 @@ _resume:
     addr->user = p;
   }
 	break;
-	case 17:
-#line 70 "src/ragel/smtp_addr_parser.rl"
+	case 15:
+#line 63 "src/ragel/smtp_addr_parser.rl"
 	{
-    addr->flags |= RSPAMD_EMAIL_ADDR_BRACED;
     if (addr->addr) {
       addr->addr_len = p - addr->addr;
     }
@@ -868,16 +851,15 @@ _resume:
     addr->flags |= RSPAMD_EMAIL_ADDR_VALID;
   }
 	break;
-	case 16:
+	case 14:
 #line 19 "src/ragel/smtp_addr_parser.rl"
 	{
     if (addr->domain) {
       addr->domain_len = p - addr->domain;
     }
   }
-#line 70 "src/ragel/smtp_addr_parser.rl"
+#line 63 "src/ragel/smtp_addr_parser.rl"
 	{
-    addr->flags |= RSPAMD_EMAIL_ADDR_BRACED;
     if (addr->addr) {
       addr->addr_len = p - addr->addr;
     }
@@ -887,7 +869,7 @@ _resume:
     addr->flags |= RSPAMD_EMAIL_ADDR_VALID;
   }
 	break;
-#line 891 "src/libmime/parsers/smtp_addr_parser.c"
+#line 873 "src/libmime/parsers/smtp_addr_parser.c"
 	}
 
 _again:
@@ -899,13 +881,7 @@ _again:
 	if ( p == eof )
 	{
 	switch ( _smtp_addr_parser_eof_actions[cs] ) {
-	case 18:
-#line 51 "src/ragel/smtp_addr_parser.rl"
-	{
-    addr->flags |= RSPAMD_EMAIL_ADDR_VALID;
-  }
-	break;
-	case 19:
+	case 17:
 #line 44 "src/ragel/smtp_addr_parser.rl"
 	{
     addr->flags |= RSPAMD_EMAIL_ADDR_EMPTY;
@@ -918,10 +894,19 @@ _again:
     addr->flags |= RSPAMD_EMAIL_ADDR_VALID;
   }
 	break;
-	case 17:
-#line 70 "src/ragel/smtp_addr_parser.rl"
+	case 16:
+#line 55 "src/ragel/smtp_addr_parser.rl"
 	{
     addr->flags |= RSPAMD_EMAIL_ADDR_BRACED;
+  }
+#line 51 "src/ragel/smtp_addr_parser.rl"
+	{
+    addr->flags |= RSPAMD_EMAIL_ADDR_VALID;
+  }
+	break;
+	case 15:
+#line 63 "src/ragel/smtp_addr_parser.rl"
+	{
     if (addr->addr) {
       addr->addr_len = p - addr->addr;
     }
@@ -931,16 +916,15 @@ _again:
     addr->flags |= RSPAMD_EMAIL_ADDR_VALID;
   }
 	break;
-	case 16:
+	case 14:
 #line 19 "src/ragel/smtp_addr_parser.rl"
 	{
     if (addr->domain) {
       addr->domain_len = p - addr->domain;
     }
   }
-#line 70 "src/ragel/smtp_addr_parser.rl"
+#line 63 "src/ragel/smtp_addr_parser.rl"
 	{
-    addr->flags |= RSPAMD_EMAIL_ADDR_BRACED;
     if (addr->addr) {
       addr->addr_len = p - addr->addr;
     }
@@ -950,14 +934,14 @@ _again:
     addr->flags |= RSPAMD_EMAIL_ADDR_VALID;
   }
 	break;
-#line 954 "src/libmime/parsers/smtp_addr_parser.c"
+#line 938 "src/libmime/parsers/smtp_addr_parser.c"
 	}
 	}
 
 	_out: {}
 	}
 
-#line 98 "src/ragel/smtp_addr_parser.rl"
+#line 90 "src/ragel/smtp_addr_parser.rl"
 
   return cs;
 }
