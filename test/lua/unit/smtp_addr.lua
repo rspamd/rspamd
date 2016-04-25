@@ -29,8 +29,8 @@ context("SMTP address check functions", function()
       {'<a@example.com>', {user = 'a', domain = 'example.com', addr = 'a@example.com'}},
       {'a@example.com', {user = 'a', domain = 'example.com', addr = 'a@example.com'}},
       {'a+b@example.com', {user = 'a+b', domain = 'example.com', addr = 'a+b@example.com'}},
-      {'"a"@example.com', {user = 'a', domain = 'example.com', addr = '"a"@example.com'}},
-      {'"a+b"@example.com', {user = 'a+b', domain = 'example.com', addr = '"a+b"@example.com'}},
+      {'"a"@example.com', {user = 'a', domain = 'example.com', addr = 'a@example.com'}},
+      {'"a+b"@example.com', {user = 'a+b', domain = 'example.com', addr = 'a+b@example.com'}},
     }
 
     each(function(case)
