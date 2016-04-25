@@ -69,11 +69,24 @@ local function load_fann()
 
     if n ~= fann:get_inputs() then
       rspamd_logger.infox(rspamd_config, 'fann has incorrect number of inputs: %s, %s symbols' ..
-      ' is found in the cache', fann:get_inputs(), n)
+      ' is found in the cache; removing', fann:get_inputs(), n)
       fann = nil
+
+      local ret,err = rspamd_util.unlink(fann_file)
+      if not ret then
+        rspamd_logger.errx(rspamd_config, 'cannot remove invalid fann from %s: %s',
+          fann_file, err)
+      end
     else
       rspamd_logger.infox(rspamd_config, 'loaded fann from %s', fann_file)
       return true
+    end
+  else
+    rspamd_logger.infox(rspamd_config, 'fann is invalid: "%s"; removing', fann_file)
+    local ret,err = rspamd_util.unlink(fann_file)
+    if not ret then
+      rspamd_logger.errx(rspamd_config, 'cannot remove invalid fann from %s: %s',
+        fann_file, err)
     end
   end
 
