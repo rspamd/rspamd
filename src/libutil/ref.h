@@ -46,13 +46,13 @@ typedef struct ref_entry_s {
 } while (0)
 
 #ifdef HAVE_ATOMIC_BUILTINS
-#define REF_RETAIN(obj) do {										\
+#define REF_RETAIN_ATOMIC(obj) do {										\
 	if ((obj) != NULL) {											\
     __atomic_add_fetch (&(obj)->ref.refcount, 1, __ATOMIC_RELEASE);	\
 	}																\
 } while (0)
 
-#define REF_RELEASE(obj) do {										\
+#define REF_RELEASE_ATOMIC(obj) do {										\
 	if ((obj) != NULL) {											\
 	unsigned int _rc_priv = __atomic_sub_fetch (&(obj)->ref.refcount, 1, __ATOMIC_ACQ_REL); \
 	if (_rc_priv == 0 && (obj)->ref.dtor) {								\
@@ -60,7 +60,12 @@ typedef struct ref_entry_s {
 	}																\
 	}																\
 } while (0)
+
 #else
+#define REF_RETAIN_ATOMIC REF_RETAIN
+#define REF_RELEASE_ATOMIC REF_RELEASE_ATOMIC
+#endif
+
 #define REF_RETAIN(obj) do {										\
 	if ((obj) != NULL) {											\
 	(obj)->ref.refcount ++;											\
@@ -74,6 +79,5 @@ typedef struct ref_entry_s {
 	}																\
 	}																\
 } while (0)
-#endif
 
 #endif /* REF_H_ */
