@@ -323,3 +323,15 @@ rspamd_config.RCVD_TLS_ALL = {
     group = "encryption"
 }
 
+rspamd_config.MISSING_FROM = {
+    callback = function(task)
+      local from = task:get_header('From')
+      if from == nil or from == '' then
+        return true
+      end
+      return false
+    end,
+    score = 2.0,
+    group = 'headers',
+    description = 'Missing From: header'
+}
