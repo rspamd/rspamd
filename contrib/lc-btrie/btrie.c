@@ -310,9 +310,27 @@
 #include "btrie.h"
 #include "libutil/mem_pool.h"
 
-#if __SIZEOF_POINTER__ == 4
+#ifdef __SIZEOF_POINTER__
+#define SIZEOF_VOID_P __SIZEOF_POINTER__
+#else
+#if defined(__ILP32__) || defined(__ILP32) || defined(_ILP32)
+#  define SIZEOF_VOID_P 4
+#elif defined(__ILP64__) || defined(__ILP64) || defined(_ILP64)
+#  define SIZEOF_VOID_P 8
+#elif defined(__LLP64__) || defined(__LLP64) || defined(_LLP64) || defined(_WIN64)
+#  define SIZEOF_VOID_P 8
+#elif defined(__LP64__) || defined(__LP64) || defined(_LP64)
+#  define SIZEOF_VOID_P 8
+#elif defined(UINTPTR_MAX) && defined(UINT64_MAX) && (UINTPTR_MAX == UINT64_MAX)
+#  define SIZEOF_VOID_P 8
+#else
+#  define SIZEOF_VOID_P 4
+#endif
+#endif
+
+#if SIZEOF_VOID_P == 4
 # define TBM_STRIDE      4
-#elif __SIZEOF_POINTER__ == 8
+#elif SIZEOF_VOID_P == 8
 # define TBM_STRIDE      5
 #else
 # error "Unsupported word size"
@@ -343,7 +361,7 @@ typedef long unsigned tbm_bitmap_t;
 #endif
 
 #define TBM_FANOUT         (1U << TBM_STRIDE)
-#define LC_BYTES_PER_NODE  (__SIZEOF_POINTER__ - 1)
+#define LC_BYTES_PER_NODE  (SIZEOF_VOID_P - 1)
 
 typedef union node_u node_t;
 
